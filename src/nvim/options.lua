@@ -162,7 +162,7 @@ local options = {
     },
     {
       abbreviation = 'arab',
-      cb = 'did_set_arabic',
+      cb = 'rs_did_set_arabic_cb',
       defaults = false,
       desc = [=[
         This option can be set to start editing Arabic text.
@@ -1343,7 +1343,7 @@ local options = {
     },
     {
       abbreviation = 'ch',
-      cb = 'did_set_cmdheight',
+      cb = 'rs_did_set_cmdheight_cb',
       defaults = 1,
       desc = [=[
         Number of screen lines to use for the command-line.  Helps avoiding
@@ -5191,7 +5191,7 @@ local options = {
     },
     {
       abbreviation = 'ls',
-      cb = 'did_set_laststatus',
+      cb = 'rs_did_set_laststatus_cb',
       defaults = 2,
       desc = [=[
         The value of this option influences when the last window will have a
@@ -9823,7 +9823,7 @@ local options = {
     },
     {
       abbreviation = 'udf',
-      cb = 'did_set_undofile',
+      cb = 'rs_did_set_undofile_cb',
       defaults = false,
       desc = [=[
         When on, Vim automatically saves undo history to an undo file when

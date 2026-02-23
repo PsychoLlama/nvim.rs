@@ -183,6 +183,10 @@ extern const char *rs_did_set_modified(optset_T *args);
 extern const char *rs_did_set_readonly(optset_T *args);
 extern const char *rs_did_set_scrollback(optset_T *args);
 extern const char *rs_did_set_undolevels_full(optset_T *args);
+extern const char *rs_did_set_arabic_cb(optset_T *args);
+extern const char *rs_did_set_cmdheight_cb(optset_T *args);
+extern const char *rs_did_set_laststatus_cb(optset_T *args);
+extern const char *rs_did_set_undofile_cb(optset_T *args);
 
 // Rust varp dispatch functions (from Rust varp.rs)
 extern void *rs_get_varp_from(vimoption_T *p, buf_T *buf, win_T *win);
@@ -428,6 +432,18 @@ void nvim_callback_for_all_tab_windows(void (*callback)(win_T *)) {
     callback(wp);
   }
 }
+
+// Iterate callback for all buffers (for undofile and paste callbacks)
+void nvim_for_all_buffers(void (*callback)(buf_T *)) {
+  FOR_ALL_BUFFERS(bp) {
+    callback(bp);
+  }
+}
+
+// Buffer field accessors for undofile callback
+int nvim_buf_is_changed(buf_T *buf) { return buf ? bufIsChanged(buf) : 0; }
+int nvim_buf_has_memfile(buf_T *buf) { return buf && buf->b_ml.ml_mfp != NULL; }
+int nvim_get_p_udf(void) { return p_udf; }
 
 // Langnoremap/langremap toggle accessors
 int nvim_callback_get_p_lnr(void) { return p_lnr; }
@@ -2229,66 +2245,6 @@ static void apply_optionset_autocmd(OptIndex opt_idx, int opt_flags, OptVal oldv
   reset_v_option_vars();
 }
 
-/// Process the updated 'arabic' option value.
-static const char *did_set_arabic(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  const char *errmsg = NULL;
-
-  if (win->w_p_arab) {
-    // 'arabic' is set, handle various sub-settings.
-    if (!p_tbidi) {
-      // set rightleft mode
-      if (!win->w_p_rl) {
-        win->w_p_rl = true;
-        changed_window_setting(win);
-      }
-
-      // Enable Arabic shaping (major part of what Arabic requires)
-      if (!p_arshape) {
-        p_arshape = true;
-        redraw_all_later(UPD_NOT_VALID);
-      }
-    }
-
-    // Arabic requires a utf-8 encoding, inform the user if it's not
-    // set.
-    if (strcmp(p_enc, "utf-8") != 0) {
-      static char *w_arabic = N_("W17: Arabic requires UTF-8, do ':set encoding=utf-8'");
-
-      msg_source(HLF_W);
-      msg(_(w_arabic), HLF_W);
-      set_vim_var_string(VV_WARNINGMSG, _(w_arabic), -1);
-    }
-
-    // set 'delcombine'
-    p_deco = true;
-
-    // Force-set the necessary keymap for arabic.
-    errmsg = set_option_value(kOptKeymap, STATIC_CSTR_AS_OPTVAL("arabic"), OPT_LOCAL);
-  } else {
-    // 'arabic' is reset, handle various sub-settings.
-    if (!p_tbidi) {
-      // reset rightleft mode
-      if (win->w_p_rl) {
-        win->w_p_rl = false;
-        changed_window_setting(win);
-      }
-
-      // 'arabicshape' isn't reset, it is a global option and
-      // another window may still need it "on".
-    }
-
-    // 'delcombine' isn't reset, it is a global option and another
-    // window may still want it "on".
-
-    // Revert to the default keymap
-    win->w_buffer->b_p_iminsert = B_IMODE_NONE;
-    win->w_buffer->b_p_imsearch = B_IMODE_USE_INSERT;
-  }
-
-  return errmsg;
-}
 
 /// Process the updated 'buflisted' option value.
 static const char *did_set_buflisted(optset_T *args)
@@ -2303,53 +2259,7 @@ static const char *did_set_buflisted(optset_T *args)
   return NULL;
 }
 
-/// Process the new 'cmdheight' option value.
-static const char *did_set_cmdheight(optset_T *args)
-{
-  OptInt old_value = args->os_oldval.number;
 
-  if (p_ch > Rows - rs_min_rows(curtab) + 1) {
-    p_ch = Rows - rs_min_rows(curtab) + 1;
-  }
-
-  // if p_ch changed value, change the command line height
-  // Only compute the new window layout when startup has been
-  // completed. Otherwise the frame sizes may be wrong.
-  if ((p_ch != old_value
-       || rs_tabline_height() + rs_global_stl_height() + topframe->fr_height != Rows - p_ch)
-      && full_screen) {
-    command_height();
-  }
-
-  return NULL;
-}
-
-/// Process the updated 'diff' option value.
-/// Process the new 'laststatus' option value.
-static const char *did_set_laststatus(optset_T *args)
-{
-  OptInt old_value = args->os_oldval.number;
-  OptInt value = args->os_newval.number;
-
-  // When switching to global statusline, decrease topframe height
-  // Also clear the cmdline to remove the ruler if there is one
-  if (value == 3 && old_value != 3) {
-    frame_new_height(topframe, topframe->fr_height - STATUS_HEIGHT, false, false, false);
-    rs_win_comp_pos();
-    clear_cmdline = true;
-  }
-  // When switching from global statusline, increase height of topframe by STATUS_HEIGHT
-  // in order to to re-add the space that was previously taken by the global statusline
-  if (old_value == 3 && value != 3) {
-    frame_new_height(topframe, topframe->fr_height + STATUS_HEIGHT, false, false, false);
-    rs_win_comp_pos();
-  }
-
-  status_redraw_curbuf();
-  rs_last_status(0);  // (re)set last window status line.
-  win_float_update_statusline();
-  return NULL;
-}
 
 /// Process the updated 'lines' or 'columns' option value.
 static const char *did_set_lines_or_columns(optset_T *args)
@@ -2591,36 +2501,6 @@ static const char *did_set_spell(optset_T *args)
   return NULL;
 }
 
-/// Process the updated 'swapfile' option value.
-/// Process the updated 'undofile' option value.
-static const char *did_set_undofile(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-
-  // Only take action when the option was set.
-  if (!buf->b_p_udf && !p_udf) {
-    return NULL;
-  }
-
-  // When reset we do not delete the undo file, the option may be set again
-  // without making any changes in between.
-  uint8_t hash[UNDO_HASH_SIZE];
-
-  FOR_ALL_BUFFERS(bp) {
-    // When 'undofile' is set globally: for every buffer, otherwise
-    // only for the current buffer: Try to read in the undofile,
-    // if one exists, the buffer wasn't changed and the buffer was
-    // loaded
-    if ((buf == bp
-         || (args->os_flags & OPT_GLOBAL) || args->os_flags == 0)
-        && !bufIsChanged(bp) && bp->b_ml.ml_mfp != NULL) {
-      u_compute_hash(bp, hash);
-      u_read_undo(NULL, hash, bp->b_fname);
-    }
-  }
-
-  return NULL;
-}
 
 /// Process the new global 'undolevels' option value.
 const char *did_set_global_undolevels(OptInt value, OptInt old_value)

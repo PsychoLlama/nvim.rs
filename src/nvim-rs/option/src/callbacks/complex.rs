@@ -849,13 +849,24 @@ extern "C" {
     fn u_compute_hash(buf: *mut std::ffi::c_void, hash: *mut u8);
     fn u_read_undo(name: *const c_char, hash: *const u8, orig_name: *const c_char) -> c_int;
     fn nvim_buf_get_b_ffname(buf: *const std::ffi::c_void) -> *const c_char;
+    fn nvim_get_p_udf() -> c_int;
+    fn nvim_buf_is_changed(buf: *mut c_void) -> c_int;
+    fn nvim_buf_has_memfile(buf: *mut c_void) -> c_int;
+    fn nvim_buf_get_b_fname(buf: *const c_void) -> *const c_char;
+    fn nvim_for_all_buffers(callback: unsafe extern "C" fn(*mut c_void));
+    fn nvim_optset_get_flags(args: *const c_void) -> c_int;
+    fn nvim_optset_get_oldval_number(args: *const c_void) -> crate::OptInt;
+    fn nvim_optset_get_newval_number(args: *const c_void) -> crate::OptInt;
 }
 
 /// SHA256 hash length
 const UNDO_HASH_SIZE: usize = 32;
 
+/// OPT_GLOBAL flag value (matches C option.h OPT_GLOBAL = 0x01)
+const OPT_GLOBAL: c_int = 0x01;
+
 /// Callback for 'undofile' option.
-/// When 'undofile' is set, attempt to read undo file.
+/// When 'undofile' is set, attempt to read undo file (single buffer version).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_undofile(buf: *mut std::ffi::c_void) -> CallbackResult {
     if buf.is_null() {
@@ -873,6 +884,93 @@ pub unsafe extern "C" fn rs_did_set_undofile(buf: *mut std::ffi::c_void) -> Call
     }
 
     callback_ok()
+}
+
+// State for the undofile all-buffers callback: the current buffer (the one
+// whose option was set) and the os_flags from the optset_T.
+static mut UNDOFILE_CB_BUF: *mut c_void = std::ptr::null_mut();
+static mut UNDOFILE_CB_FLAGS: c_int = 0;
+
+/// Per-buffer callback used by `rs_did_set_undofile_cb`.
+unsafe extern "C" fn undofile_buf_callback(bp: *mut c_void) {
+    let buf = UNDOFILE_CB_BUF;
+    let flags = UNDOFILE_CB_FLAGS;
+
+    // When 'undofile' is set globally: for every buffer, otherwise
+    // only for the current buffer: Try to read in the undofile,
+    // if one exists, the buffer wasn't changed and the buffer was loaded.
+    if (buf == bp || (flags & OPT_GLOBAL) != 0 || flags == 0)
+        && nvim_buf_is_changed(bp) == 0
+        && nvim_buf_has_memfile(bp) != 0
+    {
+        let fname = nvim_buf_get_b_fname(bp);
+        if !fname.is_null() && *fname != 0 {
+            let mut hash = [0u8; UNDO_HASH_SIZE];
+            u_compute_hash(bp, hash.as_mut_ptr());
+            u_read_undo(std::ptr::null(), hash.as_ptr(), fname);
+        }
+    }
+}
+
+/// Full optset_T callback for 'undofile' option.
+/// Iterates all buffers (matching the C FOR_ALL_BUFFERS behavior).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_undofile_cb(args: *mut c_void) -> CallbackResult {
+    // Use buf from args as the primary buffer
+    let buf = nvim_optset_get_buf(args);
+    let buf_udf = if buf.is_null() {
+        0
+    } else {
+        nvim_buf_get_p_udf(buf)
+    };
+    let global_udf = nvim_get_p_udf();
+
+    // Only take action when the option was set.
+    if buf_udf == 0 && global_udf == 0 {
+        return callback_ok();
+    }
+
+    let flags = nvim_optset_get_flags(args);
+    // Store state for the per-buffer callback (safe since single-threaded)
+    UNDOFILE_CB_BUF = buf;
+    UNDOFILE_CB_FLAGS = flags;
+    nvim_for_all_buffers(undofile_buf_callback);
+
+    callback_ok()
+}
+
+// =============================================================================
+// Arabic Option Callback (optset_T wrapper)
+// =============================================================================
+
+/// Wrapper for 'arabic' callback with standard optset_T signature.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_arabic_cb(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
+    rs_did_set_arabic(win)
+}
+
+// =============================================================================
+// Cmdheight Option Callback (optset_T wrapper)
+// =============================================================================
+
+/// Wrapper for 'cmdheight' callback with standard optset_T signature.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_cmdheight_cb(args: *mut c_void) -> CallbackResult {
+    let old_value = nvim_optset_get_oldval_number(args);
+    super::display::rs_did_set_cmdheight(old_value)
+}
+
+// =============================================================================
+// Laststatus Option Callback (optset_T wrapper)
+// =============================================================================
+
+/// Wrapper for 'laststatus' callback with standard optset_T signature.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_laststatus_cb(args: *mut c_void) -> CallbackResult {
+    let old_value = nvim_optset_get_oldval_number(args);
+    let new_value = nvim_optset_get_newval_number(args);
+    super::display::rs_did_set_laststatus_full(old_value, new_value)
 }
 
 // =============================================================================
