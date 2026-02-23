@@ -201,6 +201,10 @@ extern int rs_check_split_disallowed(win_T *wp);
 extern int rs_get_maximum_wincount(frame_T *fr, int height);
 extern int rs_make_windows(int count, int vertical);
 
+// Phase 2: win_split and win_splitmove orchestration
+extern int rs_win_split(int size, int flags);
+extern int rs_win_splitmove(win_T *wp, int size, int flags);
+
 // Status line management
 extern void rs_last_status(int morewin);
 extern int rs_resize_frame_for_winbar(frame_T *fr);
@@ -794,31 +798,7 @@ bool check_split_disallowed_err(const win_T *wp, Error *err)
 // return FAIL for failure, OK otherwise
 int win_split(int size, int flags)
 {
-  if (check_split_disallowed(curwin) == FAIL) {
-    return FAIL;
-  }
-
-  // When the ":tab" modifier was used open a new tab page instead.
-  if (may_open_tabpage() == OK) {
-    return OK;
-  }
-
-  // Add flags from ":vertical", ":topleft" and ":botright".
-  flags |= cmdmod.cmod_split;
-  if ((flags & WSP_TOP) && (flags & WSP_BOT)) {
-    emsg(_("E442: Can't split topleft and botright at the same time"));
-    return FAIL;
-  }
-
-  // When creating the help window make a snapshot of the window layout.
-  // Otherwise clear the snapshot, it's now invalid.
-  if (flags & WSP_HELP) {
-    rs_make_snapshot(SNAP_HELP_IDX);
-  } else {
-    rs_clear_snapshot(curtab, SNAP_HELP_IDX);
-  }
-
-  return win_split_ins(size, flags, NULL, 0, NULL) == NULL ? FAIL : OK;
+  return rs_win_split(size, flags);
 }
 
 /// When "new_wp" is NULL: split the current window in two.
@@ -974,53 +954,7 @@ static void win_rotate(bool upwards, int count)
 /// Returns FAIL for failure, OK otherwise.
 int win_splitmove(win_T *wp, int size, int flags)
 {
-  int dir = 0;
-  int height = wp->w_height;
-
-  if (rs_one_window_in_tab(wp, NULL)) {
-    return OK;  // nothing to do
-  }
-  if (is_aucmd_win(wp) || check_split_disallowed(wp) == FAIL) {
-    return FAIL;
-  }
-
-  frame_T *unflat_altfr = NULL;
-  if (wp->w_floating) {
-    rs_win_remove(wp, NULL);
-  } else {
-    // Remove the window and frame from the tree of frames.  Don't flatten any
-    // frames yet so we can restore things if win_split_ins fails.
-    winframe_remove(wp, &dir, NULL, &unflat_altfr);
-    assert(unflat_altfr != NULL);
-    rs_win_remove(wp, NULL);
-    rs_last_status(0);  // may need to remove last status line
-    rs_win_comp_pos();  // recompute window positions
-  }
-
-  // Split a window on the desired side and put "wp" there.
-  if (win_split_ins(size, flags, wp, dir, unflat_altfr) == NULL) {
-    if (!wp->w_floating) {
-      assert(unflat_altfr != NULL);
-      // win_split_ins doesn't change sizes or layout if it fails to insert an
-      // existing window, so just undo winframe_remove.
-      winframe_restore(wp, dir, unflat_altfr);
-    }
-    rs_win_append(wp->w_prev, wp, NULL);
-    return FAIL;
-  }
-
-  // If splitting horizontally, try to preserve height.
-  // Note that win_split_ins autocommands may have immediately closed "wp", or made it floating!
-  if (size == 0 && !(flags & WSP_VERT) && rs_win_valid(wp) && !wp->w_floating) {
-    rs_win_setheight_win(height, wp);
-    if (p_ea) {
-      // Equalize windows.  Note that win_split_ins autocommands may have
-      // made a window other than "wp" current.
-      rs_win_equal(curwin, curwin == wp, 'v');
-    }
-  }
-
-  return OK;
+  return rs_win_splitmove(wp, size, flags);
 }
 
 // Move window "win1" to below/right of "win2" and make "win1" the current
@@ -3560,6 +3494,15 @@ int nvim_get_split_disallowed(void) { return split_disallowed; }
 int nvim_win_buf_locked_split(win_T *wp) { return wp->w_buffer->b_locked_split ? 1 : 0; }
 void nvim_emsg_e242(void) { emsg(_("E242: Can't split a window while closing another")); }
 void nvim_emsg_e_cannot_split_when_closing(void) { emsg(_(e_cannot_split_window_when_closing_buffer)); }
+
+// Phase 2 accessors: win_split and win_splitmove orchestration
+int nvim_may_open_tabpage(void) { return may_open_tabpage(); }
+int nvim_get_cmdmod_split(void) { return cmdmod.cmod_split; }
+void nvim_emsg_e442(void) { emsg(_("E442: Can't split topleft and botright at the same time")); }
+/// Wrapper for win_split_ins callable from Rust (handles win_enter_ext and option restore).
+win_T *nvim_win_split_ins_wrapper(int size, int flags, win_T *new_wp, int dir, frame_T *to_flatten) { return win_split_ins(size, flags, new_wp, dir, to_flatten); }
+int nvim_win_get_floating_win(win_T *wp) { return (wp && wp->w_floating) ? 1 : 0; }
+win_T *nvim_win_get_prev_win(win_T *wp) { return wp ? wp->w_prev : NULL; }
 
 /// Wrapper: rs_win_valid(prevwin) check for 'p' command.
 /// Returns prevwin if valid and focusable, NULL otherwise.

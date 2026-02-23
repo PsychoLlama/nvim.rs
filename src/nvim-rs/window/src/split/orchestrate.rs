@@ -16,7 +16,8 @@
 use std::ffi::c_int;
 
 use crate::frame::constants::{
-    STATUS_HEIGHT, WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_NOENTER, WSP_ROOM, WSP_TOP, WSP_VERT,
+    STATUS_HEIGHT, WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HELP, WSP_NOENTER, WSP_ROOM, WSP_TOP,
+    WSP_VERT,
 };
 use crate::{Frame, TabpageHandle, WinHandle, FR_COL, FR_ROW};
 
@@ -932,4 +933,202 @@ pub unsafe extern "C" fn rs_win_split_ins(
     to_flatten: *mut Frame,
 ) -> SplitInsResult {
     win_split_ins_impl(size, flags, new_wp, dir, to_flatten)
+}
+
+// =============================================================================
+// Phase 2: win_split and win_splitmove orchestration
+// =============================================================================
+
+// Additional external C functions needed for Phase 2 that are not already
+// declared in the extern block above.
+extern "C" {
+    /// nvim_may_open_tabpage: opens a new tab page when :tab modifier was used.
+    fn nvim_may_open_tabpage() -> c_int;
+
+    /// nvim_get_cmdmod_split: get cmdmod.cmod_split flags.
+    fn nvim_get_cmdmod_split() -> c_int;
+
+    /// nvim_emsg_e442: emit E442 error.
+    fn nvim_emsg_e442();
+
+    /// nvim_get_curtab: get current tabpage.
+    fn nvim_get_curtab() -> TabpageHandle;
+
+    /// rs_check_split_disallowed: check split_disallowed counter and buffer lock.
+    fn rs_check_split_disallowed(wp: WinHandle) -> c_int;
+
+    /// rs_make_snapshot: create snapshot for help window.
+    fn rs_make_snapshot(idx: c_int);
+
+    /// rs_clear_snapshot: clear snapshot.
+    fn rs_clear_snapshot(tp: TabpageHandle, idx: c_int);
+
+    /// nvim_win_split_ins_wrapper: call win_split_ins from C (handles win_enter_ext + option restore).
+    fn nvim_win_split_ins_wrapper(
+        size: c_int,
+        flags: c_int,
+        new_wp: WinHandle,
+        dir: c_int,
+        to_flatten: *mut Frame,
+    ) -> WinHandle;
+
+    /// rs_winframe_remove: remove window from frame tree.
+    fn rs_winframe_remove(
+        win: WinHandle,
+        dirp: *mut c_int,
+        tp: TabpageHandle,
+        unflat_altfr: *mut *mut Frame,
+    ) -> WinHandle;
+
+    /// rs_winframe_restore: undo winframe_remove.
+    fn rs_winframe_restore(wp: WinHandle, dir: c_int, unflat_altfr: *mut Frame);
+
+    /// rs_win_remove: remove window from window list.
+    fn rs_win_remove(wp: WinHandle, tp: TabpageHandle);
+
+    /// rs_last_status: add/remove last status line.
+    fn rs_last_status(morewin: c_int);
+
+    /// rs_win_valid: check if window is valid.
+    fn rs_win_valid(wp: WinHandle) -> c_int;
+
+    /// nvim_win_get_floating_win: get w_floating from a win_T* (avoids conflict with nvim_win_get_floating).
+    fn nvim_win_get_floating_win(wp: WinHandle) -> c_int;
+}
+
+// rs_one_window_in_tab is already declared as nvim_one_window_firstwin (link_name) above.
+// rs_win_append, rs_win_comp_pos, rs_win_equal, nvim_get_p_ea are in the existing extern block.
+// nvim_win_get_w_height, nvim_win_get_prev, nvim_win_get_floating, nvim_is_aucmd_win are
+// declared in the existing extern block.
+// rs_win_setheight_win is nvim_win_setheight_win_wrapper (link_name) in existing block.
+
+/// SNAP_HELP_IDX constant.
+const SNAP_HELP_IDX: c_int = 0;
+
+/// OK/FAIL constants.
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+/// win_split implementation.
+///
+/// Implements `:split`, `:vsplit`, CTRL-W s, etc.
+/// Returns OK (1) or FAIL (0).
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn win_split_impl(size: c_int, flags: c_int) -> c_int {
+    let curwin = nvim_get_curwin();
+
+    // Check if split is allowed.
+    if rs_check_split_disallowed(curwin) == 0 {
+        return FAIL;
+    }
+
+    // When the :tab modifier was used, open a new tab page instead.
+    if nvim_may_open_tabpage() == OK {
+        return OK;
+    }
+
+    // Add flags from :vertical, :topleft, :botright.
+    let flags = flags | nvim_get_cmdmod_split();
+    if (flags & WSP_TOP) != 0 && (flags & WSP_BOT) != 0 {
+        nvim_emsg_e442();
+        return FAIL;
+    }
+
+    // When creating the help window, make a snapshot of the window layout.
+    // Otherwise clear the snapshot — it's now invalid.
+    if (flags & WSP_HELP) != 0 {
+        rs_make_snapshot(SNAP_HELP_IDX);
+    } else {
+        rs_clear_snapshot(nvim_get_curtab(), SNAP_HELP_IDX);
+    }
+
+    if nvim_win_split_ins_wrapper(size, flags, WinHandle::null(), 0, std::ptr::null_mut())
+        .is_null()
+    {
+        FAIL
+    } else {
+        OK
+    }
+}
+
+/// win_splitmove implementation.
+///
+/// Moves window `wp` into a new split position.
+/// Returns OK (1) or FAIL (0).
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn win_splitmove_impl(wp: WinHandle, size: c_int, flags: c_int) -> c_int {
+    let mut dir: c_int = 0;
+    let height = nvim_win_get_w_height(wp);
+
+    // Nothing to do if wp is the only window.
+    if nvim_one_window_firstwin(wp, TabpageHandle::null()) != 0 {
+        return OK;
+    }
+
+    // Validate: not aucmd_win and split is allowed.
+    if nvim_is_aucmd_win(wp) != 0 || rs_check_split_disallowed(wp) == 0 {
+        return FAIL;
+    }
+
+    let mut unflat_altfr: *mut Frame = std::ptr::null_mut();
+    if nvim_win_get_floating_win(wp) != 0 {
+        rs_win_remove(wp, TabpageHandle::null());
+    } else {
+        // Remove the window and frame from the tree of frames. Don't flatten
+        // any frames yet so we can restore things if win_split_ins fails.
+        rs_winframe_remove(wp, &mut dir, TabpageHandle::null(), &mut unflat_altfr);
+        rs_win_remove(wp, TabpageHandle::null());
+        rs_last_status(0); // may need to remove last status line
+        rs_win_comp_pos(); // recompute window positions
+    }
+
+    // Split on the desired side and put wp there.
+    if nvim_win_split_ins_wrapper(size, flags, wp, dir, unflat_altfr).is_null() {
+        if nvim_win_get_floating_win(wp) == 0 {
+            // win_split_ins doesn't change sizes or layout if it fails to insert
+            // an existing window, so just undo winframe_remove.
+            rs_winframe_restore(wp, dir, unflat_altfr);
+        }
+        rs_win_append(nvim_win_get_prev(wp), wp, WinHandle::null());
+        return FAIL;
+    }
+
+    // If splitting horizontally, try to preserve height.
+    // Note: win_split_ins autocommands may have closed wp or made it floating!
+    if size == 0
+        && (flags & WSP_VERT) == 0
+        && rs_win_valid(wp) != 0
+        && nvim_win_get_floating_win(wp) == 0
+    {
+        nvim_win_setheight_win_wrapper(height, wp);
+        if nvim_get_p_ea() != 0 {
+            // Equalize windows.
+            let curwin = nvim_get_curwin();
+            rs_win_equal(curwin, c_int::from(curwin == wp), i32::from(b'v'));
+        }
+    }
+
+    OK
+}
+
+/// FFI: win_split — top-level split function.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_win_split(size: c_int, flags: c_int) -> c_int {
+    win_split_impl(size, flags)
+}
+
+/// FFI: win_splitmove — move window into a new split position.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_win_splitmove(wp: WinHandle, size: c_int, flags: c_int) -> c_int {
+    win_splitmove_impl(wp, size, flags)
 }
