@@ -317,6 +317,13 @@ const OP_DELETE: c_int = 1;
 const OP_YANK: c_int = 2;
 const OP_LSHIFT: c_int = 4;
 const OP_RSHIFT: c_int = 5;
+const OP_ROT13: c_int = 15;
+
+// Search flag constants (must match search.h)
+const SEARCH_MARK: c_int = 0x200;
+
+// Redraw type constants (must match drawscreen.h)
+const UPD_SOME_VALID: c_int = 35;
 
 // NUL constant for motion_force
 const NUL_CHAR: c_int = 0;
@@ -2271,9 +2278,17 @@ pub unsafe extern "C" fn rs_nv_edit(cap: CapHandle) {
 // =============================================================================
 
 extern "C" {
-    // Phase 2 accessor functions
-    fn nvim_nv_search_impl(cap: CapHandle);
-    fn nvim_nv_next_impl(cap: CapHandle);
+    // Phase 4: nv_search / nv_next accessors
+    fn nvim_getcmdline_for_search(cap: CapHandle) -> *mut c_char;
+    fn nvim_normal_search_call(
+        cap: CapHandle,
+        dir: c_int,
+        pat: *mut c_char,
+        patlen: usize,
+        opt: c_int,
+        wrapped: *mut c_int,
+    ) -> c_int;
+    fn nvim_hls_active_and_hl_differs() -> bool;
 
     // nv_ident C wrappers (Phase 7)
     fn nvim_ident_init(
@@ -2333,8 +2348,43 @@ extern "C" {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_search(cap: CapHandle) {
-    // Delegate to C implementation which handles command-line input
-    nvim_nv_search_impl(cap);
+    let oap = nvim_cap_get_oap(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+
+    if cmdchar == c_int::from(b'?') && nvim_oap_get_op_type_ptr(oap) == OP_ROT13 {
+        // Translate "g??" to "g?g?"
+        nvim_cap_set_cmdchar(cap, c_int::from(b'g'));
+        nvim_cap_set_nchar(cap, c_int::from(b'?'));
+        rs_nv_operator(cap);
+        return;
+    }
+
+    // Save cursor position before getcmdline (incsearch may move cursor).
+    let save_lnum = nvim_get_cursor_lnum();
+    let save_col = nvim_get_cursor_col();
+    let save_coladd = nvim_get_cursor_coladd();
+
+    // When using 'incsearch' the cursor may be moved to set a different search start position.
+    let pat = nvim_getcmdline_for_search(cap);
+
+    if pat.is_null() {
+        rs_clearop(oap);
+        return;
+    }
+
+    // If cap->arg is set or cursor moved (incsearch), skip setting PC mark.
+    let cursor_moved = nvim_get_cursor_lnum() != save_lnum
+        || nvim_get_cursor_col() != save_col
+        || nvim_get_cursor_coladd() != save_coladd;
+    let arg = nvim_cap_get_arg(cap);
+    let opt = if arg != 0 || cursor_moved {
+        0
+    } else {
+        SEARCH_MARK
+    };
+
+    let patlen = std::ffi::CStr::from_ptr(pat).to_bytes().len();
+    nvim_normal_search_call(cap, cmdchar, pat, patlen, opt, core::ptr::null_mut());
 }
 
 /// Command handler for "n" and "N" commands: Repeat search.
@@ -2345,8 +2395,47 @@ pub unsafe extern "C" fn rs_nv_search(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_next(cap: CapHandle) {
-    // Delegate to C implementation which handles search state
-    nvim_nv_next_impl(cap);
+    // Save cursor position to detect if search left us in the same spot.
+    let old_lnum = nvim_get_cursor_lnum();
+    let old_col = nvim_get_cursor_col();
+    let old_coladd = nvim_get_cursor_coladd();
+
+    let arg = nvim_cap_get_arg(cap);
+    let mut wrapped: c_int = 0;
+    let i = nvim_normal_search_call(
+        cap,
+        0,
+        core::ptr::null_mut(),
+        0,
+        SEARCH_MARK | arg,
+        &raw mut wrapped,
+    );
+
+    if i == 1
+        && wrapped == 0
+        && nvim_get_cursor_lnum() == old_lnum
+        && nvim_get_cursor_col() == old_col
+        && nvim_get_cursor_coladd() == old_coladd
+    {
+        // Avoid getting stuck on current cursor position.
+        // Repeat with count + 1.
+        let count1 = nvim_cap_get_count1(cap);
+        nvim_cap_set_count1(cap, count1 + 1);
+        nvim_normal_search_call(
+            cap,
+            0,
+            core::ptr::null_mut(),
+            0,
+            SEARCH_MARK | arg,
+            core::ptr::null_mut(),
+        );
+        nvim_cap_set_count1(cap, count1);
+    }
+
+    // Redraw the window to refresh the highlighted matches.
+    if i > 0 && nvim_hls_active_and_hl_differs() {
+        nvim_redraw_later_curwin(UPD_SOME_VALID);
+    }
 }
 
 /// Command handler for identifier commands: *, #, K, CTRL-], g], g*.

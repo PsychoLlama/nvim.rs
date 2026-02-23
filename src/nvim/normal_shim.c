@@ -1320,14 +1320,33 @@ void nvim_nv_edit_impl(cmdarg_T *cap)
 // Search handler accessors for Rust FFI
 // =============================================================================
 
-// Forward declarations for search handlers
-static void nv_search_impl(cmdarg_T *cap);
-static void nv_next_impl(cmdarg_T *cap);
-// nv_ident_impl deleted -- migrated to Rust rs_nv_ident
+// Phase 4: nv_search_impl / nv_next_impl migrated to Rust; direct accessors below
 
-void nvim_nv_search_impl(cmdarg_T *cap) { nv_search_impl(cap); }
+/// Call getcmdline for search and set cap->searchbuf. Returns the searchbuf (or NULL).
+char *nvim_getcmdline_for_search(cmdarg_T *cap)
+{
+  cap->searchbuf = getcmdline(cap->cmdchar, cap->count1, 0, true);
+  return cap->searchbuf;
+}
 
-void nvim_nv_next_impl(cmdarg_T *cap) { nv_next_impl(cap); }
+/// Get cap->searchbuf.
+char *nvim_cap_get_searchbuf(cmdarg_T *cap) { return cap->searchbuf; }
+
+/// Wrapper for normal_search with wrapped output parameter.
+int nvim_normal_search_call(cmdarg_T *cap, int dir, char *pat, size_t patlen,
+                            int opt, int *wrapped)
+{
+  return normal_search(cap, dir, pat, patlen, opt, wrapped);
+}
+
+/// Check: p_hls && !no_hlsearch && win_hl_attr(curwin, HLF_LC) != win_hl_attr(curwin, HLF_L).
+bool nvim_hls_active_and_hl_differs(void)
+{
+  return p_hls && !no_hlsearch
+         && win_hl_attr(curwin, HLF_LC) != win_hl_attr(curwin, HLF_L);
+}
+
+static int normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int opt, int *wrapped);
 
 // C wrappers for nv_ident Rust migration (Phase 7)
 
@@ -1381,19 +1400,8 @@ int nvim_ident_init(cmdarg_T *cap, int *cmdchar_out, int *g_cmd_out,
 
 /// Wrapper for searchit using curwin/curbuf cursor (for find_decl pattern).
 /// Returns 1 on success, 0 on failure.
-int nvim_searchit_decl(const char *pat, size_t patlen, int searchflags)
-{
-  return searchit(curwin, curbuf, &curwin->w_cursor, NULL,
-                  FORWARD, (char *)pat, patlen, 1, searchflags, RE_LAST, NULL);
-}
-
-/// Wrapper for findpar for local decl search (BACKWARD, 1, '{', false).
-/// Returns true if found, sets cursor to result.
-int nvim_findpar_decl(void)
-{
-  bool incll;
-  return findpar(&incll, BACKWARD, 1, '{', false) ? 1 : 0;
-}
+int nvim_searchit_decl(const char *pat, size_t patlen, int searchflags) { return searchit(curwin, curbuf, &curwin->w_cursor, NULL, FORWARD, (char *)pat, patlen, 1, searchflags, RE_LAST, NULL); }
+int nvim_findpar_decl(void) { bool incll; return findpar(&incll, BACKWARD, 1, '{', false) ? 1 : 0; }
 
 /// Wrapper for vim_iswordp for the first char at ptr.
 int nvim_vim_iswordp_char(const char *ptr) { return vim_iswordp(ptr) ? 1 : 0; }
@@ -1568,20 +1576,8 @@ void nvim_bracket_do_mouse(cmdarg_T *cap)
            (cap->cmdchar == ']') ? FORWARD : BACKWARD,
            cap->count1, PUT_FIXINDENT);
 }
-void nvim_bracket_fold_move(cmdarg_T *cap)
-{
-  if (rs_foldMoveTo(false, cap->cmdchar == ']' ? FORWARD : BACKWARD,
-                    cap->count1) == false) {
-    rs_clearopbeep(cap->oap);
-  }
-}
-void nvim_bracket_diff_move(cmdarg_T *cap)
-{
-  if (rs_diff_move_to(cap->cmdchar == ']' ? FORWARD : BACKWARD,
-                      cap->count1) == false) {
-    rs_clearopbeep(cap->oap);
-  }
-}
+void nvim_bracket_fold_move(cmdarg_T *cap) { if (!rs_foldMoveTo(false, cap->cmdchar == ']' ? FORWARD : BACKWARD, cap->count1)) { rs_clearopbeep(cap->oap); } }
+void nvim_bracket_diff_move(cmdarg_T *cap) { if (!rs_diff_move_to(cap->cmdchar == ']' ? FORWARD : BACKWARD, cap->count1)) { rs_clearopbeep(cap->oap); } }
 void nvim_bracket_spell_move(cmdarg_T *cap)
 {
   setpcmark();
@@ -3318,58 +3314,7 @@ static void nv_gotofile(cmdarg_T *cap)
   }
 }
 
-/// Implementation of '?' and '/' commands.
-/// If cap->arg is true don't set PC mark.
-static void nv_search_impl(cmdarg_T *cap)
-{
-  oparg_T *oap = cap->oap;
-  pos_T save_cursor = curwin->w_cursor;
-
-  if (cap->cmdchar == '?' && cap->oap->op_type == OP_ROT13) {
-    // Translate "g??" to "g?g?"
-    cap->cmdchar = 'g';
-    cap->nchar = '?';
-    rs_nv_operator(cap);
-    return;
-  }
-
-  // When using 'incsearch' the cursor may be moved to set a different search
-  // start position.
-  cap->searchbuf = getcmdline(cap->cmdchar, cap->count1, 0, true);
-
-  if (cap->searchbuf == NULL) {
-    rs_clearop(oap);
-    return;
-  }
-
-  normal_search(cap, cap->cmdchar, cap->searchbuf, strlen(cap->searchbuf),
-                (cap->arg || !equalpos(save_cursor, curwin->w_cursor))
-                ? 0 : SEARCH_MARK, NULL);
-}
-
-/// Implementation of "N" and "n" commands.
-/// cap->arg is SEARCH_REV for "N", 0 for "n".
-static void nv_next_impl(cmdarg_T *cap)
-{
-  pos_T old = curwin->w_cursor;
-  int wrapped = false;
-  int i = normal_search(cap, 0, NULL, 0, SEARCH_MARK | cap->arg, &wrapped);
-
-  if (i == 1 && !wrapped && equalpos(old, curwin->w_cursor)) {
-    // Avoid getting stuck on the current cursor position, which can happen when
-    // an offset is given and the cursor is on the last char in the buffer:
-    // Repeat with count + 1.
-    cap->count1 += 1;
-    normal_search(cap, 0, NULL, 0, SEARCH_MARK | cap->arg, NULL);
-    cap->count1 -= 1;
-  }
-
-  // Redraw the window to refresh the highlighted matches.
-  if (i > 0 && p_hls && !no_hlsearch
-      && win_hl_attr(curwin, HLF_LC) != win_hl_attr(curwin, HLF_L)) {
-    redraw_later(curwin, UPD_SOME_VALID);
-  }
-}
+// nv_search_impl, nv_next_impl migrated to Rust in Phase 4
 
 /// Search for "pat" in direction "dir" ('/' or '?', 0 for repeat).
 /// Uses only cap->count1 and cap->oap from "cap".
@@ -3866,11 +3811,7 @@ char *nvim_ident_mb_prevptr(char *line, char *p) { return mb_prevptr(line, p); }
 /// Set g_tag_at_cursor.
 void nvim_ident_set_g_tag_at_cursor(bool val) { g_tag_at_cursor = val; }
 
-/// Wrapper for static normal_search (without wrapped output).
-void nvim_ident_normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int opt)
-{
-  normal_search(cap, dir, pat, patlen, opt, NULL);
-}
+void nvim_ident_normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int opt) { normal_search(cap, dir, pat, patlen, opt, NULL); }
 
 /// Emit the e_noident error message.
 void nvim_ident_emsg_noident(void) { emsg(_(e_noident)); }
