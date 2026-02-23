@@ -756,6 +756,88 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
 }
 
 // =============================================================================
+// Phase 1: rs_qf_msg — format and display quickfix list summary message
+// =============================================================================
+
+type QfInfoHandleConst = *const c_void;
+
+extern "C" {
+    fn nvim_qf_get_listcount(qi: QfInfoHandleConst) -> c_int;
+    fn nvim_qf_get_list_at(qi: QfInfoHandleConst, idx: c_int) -> *const c_void;
+    fn nvim_qf_get_title(qfl: *const c_void) -> *const c_char;
+    fn nvim_qf_trunc_and_msg(buf: *const c_char);
+}
+// Note: nvim_qf_get_count is already declared in the Phase 3 extern block above.
+
+/// FFI export: format and display the quickfix/location list summary message.
+///
+/// Equivalent to C `qf_msg`. Formats:
+///   "<lead>error list <which+1> of <listcount>; <count> errors [<title padded to col 34>]"
+/// then truncates to `Columns - 1` and calls `msg`.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T`
+/// - `lead` must be a valid null-terminated C string (may be empty)
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_msg(qi: QfInfoHandleConst, which: c_int, lead: *const c_char) {
+    if qi.is_null() {
+        return;
+    }
+
+    let lead_str = if lead.is_null() {
+        ""
+    } else {
+        std::ffi::CStr::from_ptr(lead).to_str().unwrap_or_default()
+    };
+
+    let listcount = nvim_qf_get_listcount(qi);
+    let qfl = nvim_qf_get_list_at(qi, which);
+    let count = if qfl.is_null() {
+        0
+    } else {
+        nvim_qf_get_count(qfl)
+    };
+    let title_ptr = if qfl.is_null() {
+        std::ptr::null()
+    } else {
+        nvim_qf_get_title(qfl)
+    };
+
+    // Build the base message: "<lead>error list <n> of <total>; <count> errors "
+    let base = format!(
+        "{}error list {} of {}; {} errors ",
+        lead_str,
+        which + 1,
+        listcount,
+        count
+    );
+
+    let mut msg_buf = base;
+
+    // Append title if present, padding base to at least 34 chars
+    if !title_ptr.is_null() {
+        let title = std::ffi::CStr::from_ptr(title_ptr);
+        if let Ok(title_str) = title.to_str() {
+            // Pad to 34 characters
+            if msg_buf.len() < 34 {
+                let padding = 34 - msg_buf.len();
+                for _ in 0..padding {
+                    msg_buf.push(' ');
+                }
+            }
+            msg_buf.push_str(title_str);
+        }
+    }
+
+    // Null-terminate for C
+    msg_buf.push('\0');
+
+    // Hand off to C for truncation and display
+    nvim_qf_trunc_and_msg(msg_buf.as_ptr().cast::<c_char>());
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
