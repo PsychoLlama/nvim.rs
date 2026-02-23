@@ -162,6 +162,12 @@ extern void rs_marktree_putp_aux(MarkTree *b, MTNode *x, MTKey k, uint32_t *meta
 extern void rs_marktree_put_key(MarkTree *b, MTKey k);
 extern void rs_marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_right);
 
+// Test helper operations
+extern void rs_marktree_put_test(MarkTree *b, uint32_t ns, uint32_t id, int row, int col,
+                                  bool right_gravity, int end_row, int end_col, bool end_right,
+                                  bool meta_inline);
+extern bool rs_mt_right_test(MTKey key);
+
 #define T MT_BRANCH_FACTOR
 #define ILEN (sizeof(MTNode) + sizeof(struct mtnode_inner_s))
 
@@ -1410,18 +1416,14 @@ void marktree_move_region(MarkTree *b, int start_row, colnr_T start_col, int ext
 void marktree_put_test(MarkTree *b, uint32_t ns, uint32_t id, int row, int col, bool right_gravity,
                        int end_row, int end_col, bool end_right, bool meta_inline)
 {
-  uint16_t flags = mt_flags(right_gravity, false, false, false);
-  // The specific choice is irrelevant here, we pick one counted decor
-  // type to test the counting and filtering logic.
-  flags |= meta_inline ? MT_FLAG_DECOR_VIRT_TEXT_INLINE : 0;
-  MTKey key = { { row, col }, ns, id, flags, { .hl = DECOR_HIGHLIGHT_INLINE_INIT } };
-  marktree_put(b, key, end_row, end_col, end_right);
+  rs_marktree_put_test(b, ns, id, row, col, right_gravity, end_row, end_col, end_right,
+                       meta_inline);
 }
 
 // for unit test
 bool mt_right_test(MTKey key)
 {
-  return mt_right(key);
+  return rs_mt_right_test(key);
 }
 
 // for unit test

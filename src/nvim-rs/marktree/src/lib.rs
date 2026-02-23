@@ -3893,6 +3893,46 @@ pub extern "C" fn rs_marktree_check(b: MarkTreeHandle) {
 }
 
 // ============================================================================
+// Phase 9: Test Helpers
+// ============================================================================
+
+/// Insert a mark for unit tests, ported from C `marktree_put_test`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_put_test(
+    b: MarkTreeHandle,
+    ns: u32,
+    id: u32,
+    row: c_int,
+    col: c_int,
+    right_gravity: bool,
+    end_row: c_int,
+    end_col: c_int,
+    end_right: bool,
+    meta_inline: bool,
+) {
+    let mut flags = mt_flags(right_gravity, false, false, false);
+    // The specific choice is irrelevant here, we pick one counted decor
+    // type to test the counting and filtering logic.
+    if meta_inline {
+        flags |= MT_FLAG_DECOR_VIRT_TEXT_INLINE;
+    }
+    let key = MTKey {
+        pos: MTPos { row, col },
+        ns,
+        id,
+        flags,
+        decor_data: DecorInlineData::zero(),
+    };
+    marktree_put(b, key, end_row, end_col, end_right);
+}
+
+/// Check right gravity for unit tests, ported from C `mt_right_test`.
+#[no_mangle]
+pub extern "C" fn rs_mt_right_test(key: MTKey) -> bool {
+    mt_right(&key)
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
