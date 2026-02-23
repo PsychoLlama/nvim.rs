@@ -18,6 +18,10 @@ extern "C" {
     fn nvim_compl_match_at_original_text(m: ComplMatch) -> c_int;
 
     fn nvim_get_compl_direction() -> c_int;
+
+    // Phase 4 compound accessors: implement the original C logic
+    fn nvim_ins_compl_update_shown_match_impl();
+    fn nvim_find_next_match_in_menu_impl();
 }
 
 // Direction constants
@@ -38,8 +42,34 @@ unsafe fn is_first_match(m: ComplMatch) -> bool {
 }
 
 // =============================================================================
-// Phase 2: Extended Navigation Functions
+// Phase 4: shown_match navigation
 // =============================================================================
+
+/// Update `compl_shown_match` to the actually shown match.
+///
+/// It may differ when `compl_leader` is used to omit some matches. Walks
+/// the match list forward (and optionally backward) until a matching entry
+/// is found.
+///
+/// # Safety
+/// Requires valid global completion state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_update_shown_match() {
+    nvim_ins_compl_update_shown_match_impl();
+}
+
+/// Advance `compl_shown_match` to the next match that is present in the
+/// popup menu match array (`cp_in_match_array`).
+///
+/// Used when `complete` ('cpt') includes a `max_matches` postfix so the menu
+/// only shows a subset of the full match list.
+///
+/// # Safety
+/// Requires valid global completion state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_next_match_in_menu() {
+    nvim_find_next_match_in_menu_impl();
+}
 
 #[cfg(test)]
 mod tests {

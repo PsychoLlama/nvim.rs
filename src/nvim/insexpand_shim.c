@@ -176,6 +176,9 @@ extern int rs_get_spell_compl_info(int startcol, int curs_col);
 // Phase 3 Rust exports
 extern void rs_ins_compl_continue_search(char *line);
 extern void rs_ins_compl_show_statusmsg(void);
+// Phase 4 Rust exports
+extern void rs_ins_compl_update_shown_match(void);
+extern void rs_find_next_match_in_menu(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -1571,6 +1574,9 @@ size_t nvim_compl_match_get_cp_str_size(void *m) { return m ? ((compl_T *)m)->cp
 int nvim_vim_strnicmp(const char *s1, const char *s2, size_t len) { return STRNICMP(s1, s2, len); }
 int nvim_fuzzy_match_str(char *str, const char *pat) { return fuzzy_match_str(str, pat); }
 const char *nvim_get_leader_for_startcol_data(void *match, int cached) { String *s = get_leader_for_startcol((compl_T *)match, cached != 0); return s ? s->data : NULL; }
+size_t nvim_get_leader_for_startcol_size(void *match, int cached) { String *s = get_leader_for_startcol((compl_T *)match, cached != 0); return s ? s->size : 0; }
+int nvim_compl_match_get_in_match_array(void *m) { return m ? (((compl_T *)m)->cp_in_match_array ? 1 : 0) : 0; }
+void nvim_get_leader_for_startcol_clear_cache(void) { get_leader_for_startcol(NULL, true); }
 
 _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 
@@ -3463,29 +3469,7 @@ static int ins_compl_get_exp(pos_T *ini)
 /// "compl_leader" is used to omit some of the matches.
 static void ins_compl_update_shown_match(void)
 {
-  (void)get_leader_for_startcol(NULL, true);  // Clear the cache
-  String *leader = get_leader_for_startcol(compl_shown_match, true);
-
-  while (!rs_ins_compl_equal(compl_shown_match, leader->data, leader->size)
-         && compl_shown_match->cp_next != NULL
-         && !is_first_match(compl_shown_match->cp_next)) {
-    compl_shown_match = compl_shown_match->cp_next;
-    leader = get_leader_for_startcol(compl_shown_match, true);
-  }
-
-  // If we didn't find it searching forward, and compl_shows_dir is
-  // backward, find the last match.
-  if (rs_compl_shows_dir_backward()
-      && !rs_ins_compl_equal(compl_shown_match, leader->data, leader->size)
-      && (compl_shown_match->cp_next == NULL
-          || is_first_match(compl_shown_match->cp_next))) {
-    while (!rs_ins_compl_equal(compl_shown_match, leader->data, leader->size)
-           && compl_shown_match->cp_prev != NULL
-           && !is_first_match(compl_shown_match->cp_prev)) {
-      compl_shown_match = compl_shown_match->cp_prev;
-      leader = get_leader_for_startcol(compl_shown_match, true);
-    }
-  }
+  rs_ins_compl_update_shown_match();
 }
 
 /// Insert a completion string that contains newlines.
@@ -3627,16 +3611,9 @@ static void ins_compl_show_filename(void)
 /// a 'max_matches' postfix. In this case, we search for a match where
 /// 'cp_in_match_array' is set, indicating that the match is also present
 /// in 'compl_match_array'.
-static compl_T *find_next_match_in_menu(void)
+static void find_next_match_in_menu(void)
 {
-  bool is_forward = rs_compl_shows_dir_forward();
-  compl_T *match = compl_shown_match;
-
-  do {
-    match = is_forward ? match->cp_next : match->cp_prev;
-  } while (match->cp_next && !match->cp_in_match_array
-           && !match_at_original_text(match));
-  return match;
+  rs_find_next_match_in_menu();
 }
 
 /// Find the next set of matches for completion. Repeat the completion "todo"
@@ -3663,7 +3640,7 @@ static int find_next_completion_match(bool allow_get_expansion, int todo, bool a
   while (--todo >= 0) {
     if (rs_compl_shows_dir_forward() && compl_shown_match->cp_next != NULL) {
       if (compl_match_array != NULL) {
-        compl_shown_match = find_next_match_in_menu();
+        find_next_match_in_menu();
       } else {
         compl_shown_match = compl_shown_match->cp_next;
       }
@@ -3674,7 +3651,7 @@ static int find_next_completion_match(bool allow_get_expansion, int todo, bool a
                && compl_shown_match->cp_prev != NULL) {
       found_end = is_first_match(compl_shown_match);
       if (compl_match_array != NULL) {
-        compl_shown_match = find_next_match_in_menu();
+        find_next_match_in_menu();
       } else {
         compl_shown_match = compl_shown_match->cp_prev;
       }
@@ -5241,5 +5218,47 @@ void nvim_ins_compl_show_statusmsg_impl(void)
       msg_clr_cmdline();  // necessary for "noshowmode"
     }
   }
+}
+
+// Compound accessors for Phase 4 (pass 3): ins_compl_update_shown_match,
+// find_next_match_in_menu. Logic moved here from the thin wrappers above.
+
+void nvim_ins_compl_update_shown_match_impl(void)
+{
+  (void)get_leader_for_startcol(NULL, true);  // Clear the cache
+  String *leader = get_leader_for_startcol(compl_shown_match, true);
+
+  while (!rs_ins_compl_equal(compl_shown_match, leader->data, leader->size)
+         && compl_shown_match->cp_next != NULL
+         && !is_first_match(compl_shown_match->cp_next)) {
+    compl_shown_match = compl_shown_match->cp_next;
+    leader = get_leader_for_startcol(compl_shown_match, true);
+  }
+
+  // If we didn't find it searching forward, and compl_shows_dir is
+  // backward, find the last match.
+  if (rs_compl_shows_dir_backward()
+      && !rs_ins_compl_equal(compl_shown_match, leader->data, leader->size)
+      && (compl_shown_match->cp_next == NULL
+          || is_first_match(compl_shown_match->cp_next))) {
+    while (!rs_ins_compl_equal(compl_shown_match, leader->data, leader->size)
+           && compl_shown_match->cp_prev != NULL
+           && !is_first_match(compl_shown_match->cp_prev)) {
+      compl_shown_match = compl_shown_match->cp_prev;
+      leader = get_leader_for_startcol(compl_shown_match, true);
+    }
+  }
+}
+
+void nvim_find_next_match_in_menu_impl(void)
+{
+  bool is_forward = rs_compl_shows_dir_forward() != 0;
+  compl_T *match = compl_shown_match;
+
+  do {
+    match = is_forward ? match->cp_next : match->cp_prev;
+  } while (match->cp_next && !match->cp_in_match_array
+           && !match_at_original_text(match));
+  compl_shown_match = match;
 }
 
