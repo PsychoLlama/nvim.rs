@@ -1913,6 +1913,710 @@ pub unsafe extern "C" fn rs_eval_method(
 }
 
 // =============================================================================
+// Phase 5: eval_lit_string, eval_string, eval_dict migration
+// =============================================================================
+
+extern "C" {
+    /// Copy one multibyte character from *fp to *tp, advancing both pointers.
+    fn mb_copy_char(fp: *mut *const c_char, tp: *mut *mut c_char);
+    /// Return the byte length of the multibyte character at p.
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    /// Encode a Unicode codepoint to UTF-8 bytes; returns bytes written.
+    fn rs_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    /// Find a special key sequence like <C-W>; returns key code or 0.
+    fn find_special_key(
+        srcp: *mut *const c_char,
+        src_len: usize,
+        modp: *mut c_int,
+        flags: c_int,
+        did_simplify: *mut bool,
+    ) -> c_int;
+    /// Translate a special key sequence to bytes; returns bytes written or 0.
+    fn trans_special(
+        srcp: *mut *const c_char,
+        src_len: usize,
+        dst: *mut c_char,
+        flags: c_int,
+        escape_ks: bool,
+        did_simplify: *mut bool,
+    ) -> c_uint;
+    /// Issue an internal error message.
+    fn iemsg(msg: *const c_char);
+    /// External error message string for stray '}'.
+    static e_stray_closing_curly_str: c_char;
+
+    // Dict operations
+    fn tv_dict_alloc() -> *mut c_void;
+    fn tv_dict_free(d: *mut c_void);
+    fn tv_dict_find(d: *const c_void, key: *const c_char, len: isize) -> *mut c_void;
+    fn tv_dict_item_alloc(key: *const c_char) -> *mut c_void;
+    fn tv_dict_add(d: *mut c_void, item: *mut c_void) -> c_int;
+    fn tv_dict_item_free(item: *mut c_void);
+    fn nvim_eval_tv_dict_set_ret(rettv: TypevalHandle, d: *mut c_void);
+    /// Accessor: set di->di_tv = *tv; di->di_tv.v_lock = VAR_UNLOCKED
+    fn nvim_eval_di_set_tv_from_typval(di: *mut c_void, tv: TypevalHandle);
+    /// Get the raw vval.v_string pointer from a typval (for dict dup key check via
+    /// tv_get_string_buf_chk).
+    fn nvim_tv_get_string(tv: TypevalHandle) -> *mut c_char;
+}
+
+// FSK flag constants (must match keycodes.h)
+const FSK_KEYCODE: c_int = 0x01;
+const FSK_IN_STRING: c_int = 0x04;
+const FSK_SIMPLIFY: c_int = 0x08;
+
+// c_uint is needed for trans_special return type
+use std::ffi::c_uint;
+
+/// Allocate a variable for a 'str''ing' constant.
+/// When `interpolate` is true, reduce `{{` to `{` and stop at a single `{`.
+///
+/// Migrated from C `eval_lit_string` in eval_shim.c.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer
+/// - `rettv` must be a valid typval handle
+pub unsafe fn eval_lit_string_impl(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evaluate: bool,
+    interpolate: bool,
+) -> c_int {
+    let mut reduce: isize = if interpolate { -1 } else { 0 };
+    let off: isize = if interpolate { 0 } else { 1 };
+
+    // First pass: find the end of the string, count reductions.
+    // Mirrors: for (p = *arg + off; *p != NUL; MB_PTR_ADV(p)) { ... }
+    let mut p: *const c_char = (*arg).offset(off);
+
+    loop {
+        let c = get_byte(p);
+        if c == 0 {
+            break;
+        }
+        if c == b'\'' {
+            if get_byte(p.add(1)) != b'\'' {
+                break;
+            }
+            reduce += 1;
+            p = p.add(1);
+        } else if interpolate {
+            if c == b'{' {
+                if get_byte(p.add(1)) != b'{' {
+                    // start of interpolated expression
+                    break;
+                }
+                p = p.add(1);
+                reduce += 1;
+            } else if c == b'}' {
+                p = p.add(1);
+                if get_byte(p) != b'}' {
+                    // single '}' is stray
+                    semsg(&e_stray_closing_curly_str as *const c_char, *arg);
+                    return FAIL;
+                }
+                reduce += 1;
+            }
+        }
+        // MB_PTR_ADV: advance by one multibyte char
+        let advance = utfc_ptr2len(p) as usize;
+        p = p.add(if advance > 0 { advance } else { 1 });
+    }
+
+    if get_byte(p) != b'\'' && !(interpolate && get_byte(p) == b'{') {
+        semsg(c"E115: Missing quote: %s".as_ptr(), *arg);
+        return FAIL;
+    }
+
+    // If only parsing, advance arg and return OK.
+    if !evaluate {
+        *arg = p.offset(off) as *mut c_char;
+        return OK;
+    }
+
+    // Compute allocation size: (p - *arg) - reduce
+    let raw_len = (p as isize) - (*arg as isize);
+    let alloc_len = (raw_len - reduce) as usize;
+
+    let str_buf = xmalloc(alloc_len) as *mut c_char;
+    nvim_tv_set_type(rettv, VAR_STRING);
+    nvim_tv_set_string(rettv, str_buf);
+
+    // Second pass: copy characters with reductions applied.
+    // Mirrors: for (p = *arg + off; *p != NUL;) { ... mb_copy_char(...) ... }
+    let mut dst: *mut c_char = str_buf;
+    let mut q: *const c_char = (*arg).offset(off);
+
+    loop {
+        let c = get_byte(q);
+        if c == 0 {
+            break;
+        }
+        if c == b'\'' {
+            if get_byte(q.add(1)) != b'\'' {
+                break;
+            }
+            // skip first of the '' pair; mb_copy_char copies the second one
+            q = q.add(1);
+        } else if interpolate && (c == b'{' || c == b'}') {
+            if c == b'{' && get_byte(q.add(1)) != b'{' {
+                break;
+            }
+            // skip first of {{ or }} pair; mb_copy_char copies second
+            q = q.add(1);
+        }
+        mb_copy_char(&mut q, &mut dst);
+    }
+
+    *dst = 0; // NUL terminate
+    *arg = q.offset(off) as *mut c_char;
+
+    OK
+}
+
+/// FFI export for eval_lit_string.
+///
+/// # Safety
+/// See `eval_lit_string_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_lit_string(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evaluate: bool,
+    interpolate: bool,
+) -> c_int {
+    eval_lit_string_impl(arg, rettv, evaluate, interpolate)
+}
+
+// =============================================================================
+// Phase 5b: eval_string migration
+// =============================================================================
+
+/// Evaluate a string constant and put the result in "rettv".
+/// `*arg` points to the double quote or to after it when `interpolate` is true.
+/// When `interpolate` is true, reduce `{{` to `{`, reduce `}}` to `}` and
+/// stop at a single `{`.
+///
+/// Migrated from C `eval_string` in eval_shim.c.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer
+/// - `rettv` must be a valid typval handle
+pub unsafe fn eval_string_impl(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evaluate: bool,
+    interpolate: bool,
+) -> c_int {
+    let arg_end: *const c_char = (*arg).add(libc_strlen(*arg));
+    let mut extra: usize = if interpolate { 1 } else { 0 };
+    let off: isize = if interpolate { 0 } else { 1 };
+
+    // First pass: find end of string, count extra space needed for special keys.
+    // Mirrors: for (p = *arg + off; *p != NUL && *p != '"'; MB_PTR_ADV(p)) { ... }
+    // NOTE: p is *const c_char so we can pass &mut p to find_special_key.
+    let mut p: *const c_char = (*arg).offset(off);
+
+    'first_pass: loop {
+        let c = get_byte(p);
+        if c == 0 || c == b'"' {
+            break;
+        }
+        if c == b'\\' && get_byte(p.add(1)) != 0 {
+            p = p.add(1); // skip backslash; now on escaped char
+            if get_byte(p) == b'<' {
+                let mut modifiers: c_int = 0;
+                let mut flags = FSK_KEYCODE | FSK_IN_STRING;
+                extra += 5;
+                if get_byte(p.add(1)) != b'*' {
+                    flags |= FSK_SIMPLIFY;
+                }
+                // find_special_key advances p to after '>' on success.
+                let src_len = (arg_end as usize).wrapping_sub(p as usize);
+                if find_special_key(&mut p, src_len, &mut modifiers, flags, std::ptr::null_mut())
+                    != 0
+                {
+                    // Leave p on ">"; MB_PTR_ADV at end advances past ">".
+                    // The C code does p-- here to back up from after ">".
+                    p = p.sub(1);
+                }
+                // Fall through to MB_PTR_ADV at end.
+            }
+        } else if interpolate && (c == b'{' || c == b'}') {
+            if c == b'{' && get_byte(p.add(1)) != b'{' {
+                // start of interpolated expression
+                break 'first_pass;
+            }
+            p = p.add(1); // move to second char of {{ or }}
+            if get_byte(p.sub(1)) == b'}' && get_byte(p) != b'}' {
+                // single '}' is stray
+                semsg(&e_stray_closing_curly_str as *const c_char, *arg);
+                return FAIL;
+            }
+            extra = extra.saturating_sub(1); // "{{" -> "{", "}}" -> "}"
+        }
+        // MB_PTR_ADV: p += utfc_ptr2len(p)
+        let advance = utfc_ptr2len(p) as usize;
+        p = p.add(if advance > 0 { advance } else { 1 });
+    }
+
+    let end_char = get_byte(p);
+    if end_char != b'"' && !(interpolate && end_char == b'{') {
+        semsg(c"E114: Missing quote: %s".as_ptr(), *arg);
+        return FAIL;
+    }
+
+    // If only parsing, advance arg and return OK.
+    if !evaluate {
+        *arg = p.offset(off) as *mut c_char;
+        return OK;
+    }
+
+    // Allocate result buffer.
+    nvim_tv_set_type(rettv, VAR_STRING);
+    let raw_len = (p as isize) - (*arg as isize);
+    let len = raw_len as usize + extra;
+    let vstring = xmalloc(len) as *mut c_char;
+    nvim_tv_set_string(rettv, vstring);
+    let mut end: *mut c_char = vstring;
+
+    // Second pass: copy with escape processing.
+    // Mirrors: for (p = *arg + off; *p != NUL && *p != '"';) { ... }
+    // NOTE: q is *const c_char so we can pass &mut q to mb_copy_char/trans_special.
+    let mut q: *const c_char = (*arg).offset(off);
+
+    'second_pass: loop {
+        let c = get_byte(q);
+        if c == 0 || c == b'"' {
+            break;
+        }
+        if c == b'\\' {
+            q = q.add(1); // skip backslash; now on escaped char
+            let ec = get_byte(q);
+            match ec {
+                b'b' => {
+                    *end = 0x08; // BS
+                    end = end.add(1);
+                    q = q.add(1);
+                }
+                b'e' => {
+                    *end = 0x1B; // ESC
+                    end = end.add(1);
+                    q = q.add(1);
+                }
+                b'f' => {
+                    *end = 0x0C; // FF
+                    end = end.add(1);
+                    q = q.add(1);
+                }
+                b'n' => {
+                    *end = b'\n' as c_char;
+                    end = end.add(1);
+                    q = q.add(1);
+                }
+                b'r' => {
+                    *end = b'\r' as c_char;
+                    end = end.add(1);
+                    q = q.add(1);
+                }
+                b't' => {
+                    *end = b'\t' as c_char;
+                    end = end.add(1);
+                    q = q.add(1);
+                }
+                escape @ (b'X' | b'x' | b'u' | b'U') => {
+                    if ascii_isxdigit(get_byte(q.add(1))) {
+                        let n = if escape == b'X' || escape == b'x' {
+                            2usize
+                        } else if escape == b'u' {
+                            4
+                        } else {
+                            8
+                        };
+                        let mut nr: i32 = 0;
+                        let mut cnt = n;
+                        while cnt > 0 && ascii_isxdigit(get_byte(q.add(1))) {
+                            q = q.add(1);
+                            nr = (nr << 4) + i32::from(hex2nr(get_byte(q)));
+                            cnt -= 1;
+                        }
+                        q = q.add(1);
+                        if escape == b'X' || escape == b'x' {
+                            *end = nr as c_char;
+                            end = end.add(1);
+                        } else {
+                            let written = rs_utf_char2bytes(nr, end);
+                            end = end.add(written as usize);
+                        }
+                    }
+                    // If no hex digit follows, no output (q remains on escape char;
+                    // it will be advanced below by going to the loop start where
+                    // MB_PTR_ADV... wait - the second pass has no MB_PTR_ADV).
+                    // Actually the C code's switch arms that produce no output still
+                    // end at the "break" of the switch, letting the for loop's
+                    // (empty) increment run. The source advance for this case is
+                    // zero (q stays on the 'x' char after no valid hex digit).
+                    // BUT: wait, this means no advance - infinite loop?
+                    // Looking at C: for case 'x': if no hex digit, we don't advance.
+                    // But the for loop has NO increment in the second pass (the C
+                    // code's 2nd pass for loop is bare: for(...;...;) {...}).
+                    // In that case, the default switch arm uses mb_copy_char which
+                    // advances. For the 'x' case with no hex digit: the switch breaks,
+                    // outer for loop iterates... with the same p. Infinite loop? No -
+                    // looking at C more carefully: the 'X'/'x'/'u'/'U' case does NOT
+                    // fall through and does NOT call mb_copy_char. If there's no valid
+                    // hex digit, the switch just breaks. Then the for loop's blank
+                    // increment runs (nothing happens), loop body runs again from same
+                    // p... Hmm, that IS an infinite loop in C too? Actually no - wait,
+                    // p was already advanced past the backslash (with ++p in *++p).
+                    // If no hex digit: p stays on 'x'/'u'/'U', the for loop iterates
+                    // again from that same character. That WOULD be an infinite loop.
+                    // But in practice, if there's no hex digit after \x, the code
+                    // just produces no output and q should advance past 'x'.
+                    // Since C doesn't advance here either, we match by doing nothing.
+                    // Actually looking more carefully: C increments n times, and if
+                    // no digit at all, the while loop runs 0 times, then p++ moves
+                    // past the escape char. That's what q = q.add(1) above does
+                    // after the while. So q does advance! (That line IS hit.)
+                }
+                oct @ b'0'..=b'7' => {
+                    let mut val = (oct - b'0') as c_char;
+                    q = q.add(1);
+                    if get_byte(q) >= b'0' && get_byte(q) <= b'7' {
+                        val = ((val as u8) << 3).wrapping_add(get_byte(q) - b'0') as c_char;
+                        q = q.add(1);
+                        if get_byte(q) >= b'0' && get_byte(q) <= b'7' {
+                            val = ((val as u8) << 3).wrapping_add(get_byte(q) - b'0') as c_char;
+                            q = q.add(1);
+                        }
+                    }
+                    *end = val;
+                    end = end.add(1);
+                }
+                b'<' => {
+                    let mut flags = FSK_KEYCODE | FSK_IN_STRING;
+                    if get_byte(q.add(1)) != b'*' {
+                        flags |= FSK_SIMPLIFY;
+                    }
+                    let src_len = (arg_end as usize).wrapping_sub(q as usize);
+                    // trans_special advances q past ">".
+                    let written =
+                        trans_special(&mut q, src_len, end, flags, false, std::ptr::null_mut());
+                    if written != 0 {
+                        end = end.add(written as usize);
+                        if end >= vstring.add(len) {
+                            iemsg(c"eval_string() used more space than allocated".as_ptr());
+                        }
+                        // q is past ">"; continue to top of loop.
+                        continue 'second_pass;
+                    }
+                    // FALLTHROUGH: trans_special returned 0, treat as default.
+                    // q is still on '<', copy it with mb_copy_char.
+                    mb_copy_char(&mut q, &mut end);
+                }
+                _ => {
+                    mb_copy_char(&mut q, &mut end);
+                }
+            }
+        } else if interpolate && (c == b'{' || c == b'}') {
+            if c == b'{' && get_byte(q.add(1)) != b'{' {
+                // start of expression
+                break 'second_pass;
+            }
+            q = q.add(1); // skip first of {{ or }}; copy second with mb_copy_char
+            mb_copy_char(&mut q, &mut end);
+        } else {
+            mb_copy_char(&mut q, &mut end);
+        }
+    }
+
+    *end = 0; // NUL terminate
+    if get_byte(q) == b'"' && !interpolate {
+        q = q.add(1);
+    }
+    *arg = q as *mut c_char;
+
+    OK
+}
+
+/// FFI export for eval_string.
+///
+/// # Safety
+/// See `eval_string_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_string(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evaluate: bool,
+    interpolate: bool,
+) -> c_int {
+    eval_string_impl(arg, rettv, evaluate, interpolate)
+}
+
+// =============================================================================
+// Phase 5c: eval_dict, get_literal_key, eval_lit_dict migration
+// =============================================================================
+
+/// VAR_UNLOCKED constant (must match C enum)
+const VAR_UNLOCKED: c_int = 0;
+
+/// Get the key for #{key: val} into `tv` and advance `arg`.
+///
+/// Returns FAIL when there is no valid key.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer
+/// - `tv` must be a valid typval handle
+unsafe fn get_literal_key_impl(arg: *mut *mut c_char, tv: TypevalHandle) -> c_int {
+    let first = get_byte(*arg);
+    if !first.is_ascii_alphanumeric() && first != b'_' && first != b'-' {
+        return FAIL;
+    }
+    let mut p = *arg;
+    loop {
+        let c = get_byte(p);
+        if !c.is_ascii_alphanumeric() && c != b'_' && c != b'-' {
+            break;
+        }
+        p = p.add(1);
+    }
+    let key_len = (p as usize) - (*arg as usize);
+    let key = xmemdupz(*arg as *const c_void, key_len);
+    nvim_tv_set_type(tv, VAR_STRING);
+    nvim_tv_set_string(tv, key);
+    *arg = skipwhite(p);
+    OK
+}
+
+/// Allocate a variable for a Dictionary and fill it from `*arg`.
+///
+/// `*arg` points to the `{`.
+/// `literal` is true for `#{key: val}`.
+///
+/// Returns OK, FAIL, or NOTDONE (for `{expr}`).
+///
+/// Migrated from C `eval_dict` in eval_shim.c.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer, pointing at `{`
+/// - `rettv` must be a valid typval handle
+/// - `evalarg` can be null
+pub unsafe fn eval_dict_impl(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+    literal: bool,
+) -> c_int {
+    let evaluate = should_evaluate(evalarg);
+    let mut key: *const c_char = std::ptr::null();
+    let mut curly_expr = skipwhite((*arg).add(1));
+    let mut buf = [0i8; 65]; // NUMBUFLEN
+
+    // Check if it's a curly-braces expression: {expr}.
+    // "{}  " is an empty Dictionary; "#{abc}" is never a curly-braces expr.
+    let is_curly_expr = if get_byte(curly_expr) != b'}' && !literal {
+        let check_tv = alloc_typval();
+        let result = eval1_impl(&mut curly_expr, check_tv, EvalargHandle::null()) == OK
+            && get_byte(skipwhite(curly_expr)) == b'}';
+        tv_clear(check_tv);
+        free_typval(check_tv);
+        result
+    } else {
+        false
+    };
+    if is_curly_expr {
+        return NOTDONE;
+    }
+
+    let mut d: *mut c_void = std::ptr::null_mut();
+    if evaluate {
+        d = tv_dict_alloc();
+    }
+
+    let tvkey = alloc_typval();
+    let tvval = alloc_typval();
+    nvim_tv_set_type(tvkey, VAR_UNKNOWN);
+    nvim_tv_set_type(tvval, VAR_UNKNOWN);
+
+    *arg = skipwhite((*arg).add(1));
+
+    while get_byte(*arg) != b'}' && get_byte(*arg) != 0 {
+        // Get the key
+        let key_result = if literal {
+            get_literal_key_impl(arg, tvkey)
+        } else {
+            eval1_impl(arg, tvkey, evalarg)
+        };
+        if key_result == FAIL {
+            tv_clear(tvkey);
+            tv_clear(tvval);
+            free_typval(tvkey);
+            free_typval(tvval);
+            if !d.is_null() {
+                tv_dict_free(d);
+            }
+            return FAIL;
+        }
+
+        if get_byte(*arg) != b':' {
+            semsg(c"E720: Missing colon in Dictionary: %s".as_ptr(), *arg);
+            tv_clear(tvkey);
+            tv_clear(tvval);
+            free_typval(tvkey);
+            free_typval(tvval);
+            if !d.is_null() {
+                tv_dict_free(d);
+            }
+            return FAIL;
+        }
+
+        if evaluate {
+            key = tv_get_string_buf_chk(tvkey, buf.as_mut_ptr());
+            if key.is_null() {
+                tv_clear(tvkey);
+                tv_clear(tvval);
+                free_typval(tvkey);
+                free_typval(tvval);
+                if !d.is_null() {
+                    tv_dict_free(d);
+                }
+                return FAIL;
+            }
+        }
+
+        *arg = skipwhite((*arg).add(1));
+        if eval1_impl(arg, tvval, evalarg) == FAIL {
+            if evaluate {
+                tv_clear(tvkey);
+            }
+            tv_clear(tvval);
+            free_typval(tvkey);
+            free_typval(tvval);
+            if !d.is_null() {
+                tv_dict_free(d);
+            }
+            return FAIL;
+        }
+
+        if evaluate {
+            let item = tv_dict_find(d, key, -1);
+            if !item.is_null() {
+                semsg(c"E721: Duplicate key in Dictionary: \"%s\"".as_ptr(), key);
+                tv_clear(tvkey);
+                tv_clear(tvval);
+                free_typval(tvkey);
+                free_typval(tvval);
+                tv_dict_free(d);
+                return FAIL;
+            }
+            let new_item = tv_dict_item_alloc(key);
+            // Transfer ownership: di->di_tv = *tvval; dict item now owns the content.
+            nvim_eval_di_set_tv_from_typval(new_item, tvval);
+            if tv_dict_add(d, new_item) == FAIL {
+                // Add failed; item (and its copy of tvval's content) is freed here.
+                tv_dict_item_free(new_item);
+            }
+            // Do NOT tv_clear(tvval) here: the dict item owns tvval's content.
+            // Just reset the type so the next iteration starts fresh.
+            nvim_tv_set_type(tvval, VAR_UNKNOWN);
+        } else {
+            // Not evaluating: tvval should be VAR_UNKNOWN, but clear defensively.
+            tv_clear(tvval);
+            nvim_tv_set_type(tvval, VAR_UNKNOWN);
+        }
+        tv_clear(tvkey);
+        nvim_tv_set_type(tvkey, VAR_UNKNOWN);
+
+        // comma must come after value
+        let had_comma = get_byte(*arg) == b',';
+        if had_comma {
+            *arg = skipwhite((*arg).add(1));
+        }
+
+        if get_byte(*arg) == b'}' {
+            break;
+        }
+
+        if !had_comma {
+            semsg(c"E722: Missing comma in Dictionary: %s".as_ptr(), *arg);
+            free_typval(tvkey);
+            free_typval(tvval);
+            if !d.is_null() {
+                tv_dict_free(d);
+            }
+            return FAIL;
+        }
+    }
+
+    free_typval(tvkey);
+    free_typval(tvval);
+
+    if get_byte(*arg) != b'}' {
+        semsg(c"E723: Missing end of Dictionary '}': %s".as_ptr(), *arg);
+        if !d.is_null() {
+            tv_dict_free(d);
+        }
+        return FAIL;
+    }
+
+    *arg = skipwhite((*arg).add(1));
+    if evaluate {
+        nvim_eval_tv_dict_set_ret(rettv, d);
+    }
+
+    OK
+}
+
+/// Evaluate a literal dictionary: #{key: val, key: val}
+/// `*arg` points to the `#`.
+///
+/// Migrated from C `eval_lit_dict` in eval_shim.c.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer, pointing at `#`
+/// - `rettv` must be a valid typval handle
+/// - `evalarg` can be null
+pub unsafe fn eval_lit_dict_impl(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+) -> c_int {
+    if get_byte((*arg).add(1)) == b'{' {
+        *arg = (*arg).add(1);
+        eval_dict_impl(arg, rettv, evalarg, true)
+    } else {
+        NOTDONE
+    }
+}
+
+/// FFI export for eval_dict.
+///
+/// # Safety
+/// See `eval_dict_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_dict(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+    literal: bool,
+) -> c_int {
+    eval_dict_impl(arg, rettv, evalarg, literal)
+}
+
+/// FFI export for eval_lit_dict.
+///
+/// # Safety
+/// See `eval_lit_dict_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_lit_dict(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+) -> c_int {
+    eval_lit_dict_impl(arg, rettv, evalarg)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

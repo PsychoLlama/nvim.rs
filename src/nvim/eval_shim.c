@@ -131,6 +131,10 @@ extern int rs_eval_index_inner(typval_T *rettv, bool is_range, typval_T *var1, t
                                bool exclusive, const char *key, ptrdiff_t keylen, bool verbose);
 extern void rs_f_slice(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern int rs_eval_method(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
+extern int rs_eval_lit_string(char **arg, typval_T *rettv, bool evaluate, bool interpolate);
+extern int rs_eval_string(char **arg, typval_T *rettv, bool evaluate, bool interpolate);
+extern int rs_eval_dict(char **arg, typval_T *rettv, evalarg_T *evalarg, bool literal);
+extern int rs_eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *evalarg);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -1872,12 +1876,12 @@ static int eval7(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool wan
 
   // String constant: "string".
   case '"':
-    ret = eval_string(arg, rettv, evaluate, false);
+    ret = rs_eval_string(arg, rettv, evaluate, false);
     break;
 
   // Literal string constant: 'str''ing'.
   case '\'':
-    ret = eval_lit_string(arg, rettv, evaluate, false);
+    ret = rs_eval_lit_string(arg, rettv, evaluate, false);
     break;
 
   // List: [expr, expr]
@@ -1887,7 +1891,7 @@ static int eval7(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool wan
 
   // Literal Dictionary: #{key: val, key: val}
   case '#':
-    ret = eval_lit_dict(arg, rettv, evalarg);
+    ret = rs_eval_lit_dict(arg, rettv, evalarg);
     break;
 
   // Lambda: {arg, arg -> expr}
@@ -1895,7 +1899,7 @@ static int eval7(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool wan
   case '{':
     ret = get_lambda_tv(arg, rettv, evalarg);
     if (ret == NOTDONE) {
-      ret = eval_dict(arg, rettv, evalarg, false);
+      ret = rs_eval_dict(arg, rettv, evalarg, false);
     }
     break;
 
@@ -2266,255 +2270,6 @@ int eval_option(const char **const arg, typval_T *const rettv, const bool evalua
 }
 
 
-/// Evaluate a string constant and put the result in "rettv".
-/// "*arg" points to the double quote or to after it when "interpolate" is true.
-/// When "interpolate" is true reduce "{{" to "{", reduce "}}" to "}" and stop
-/// at a single "{".
-///
-/// @return  OK or FAIL.
-static int eval_string(char **arg, typval_T *rettv, bool evaluate, bool interpolate)
-{
-  char *p;
-  const char *const arg_end = *arg + strlen(*arg);
-  unsigned extra = interpolate ? 1 : 0;
-  const int off = interpolate ? 0 : 1;
-
-  // Find the end of the string, skipping backslashed characters.
-  for (p = *arg + off; *p != NUL && *p != '"'; MB_PTR_ADV(p)) {
-    if (*p == '\\' && p[1] != NUL) {
-      p++;
-      // A "\<x>" form occupies at least 4 characters, and produces up
-      // to 9 characters (6 for the char and 3 for a modifier):
-      // reserve space for 5 extra.
-      if (*p == '<') {
-        int modifiers = 0;
-        int flags = FSK_KEYCODE | FSK_IN_STRING;
-
-        extra += 5;
-
-        // Skip to the '>' to avoid using '{' inside for string
-        // interpolation.
-        if (p[1] != '*') {
-          flags |= FSK_SIMPLIFY;
-        }
-        if (find_special_key((const char **)&p, (size_t)(arg_end - p),
-                             &modifiers, flags, NULL) != 0) {
-          p--;  // leave "p" on the ">"
-        }
-      }
-    } else if (interpolate && (*p == '{' || *p == '}')) {
-      if (*p == '{' && p[1] != '{') {  // start of expression
-        break;
-      }
-      p++;
-      if (p[-1] == '}' && *p != '}') {  // single '}' is an error
-        semsg(_(e_stray_closing_curly_str), *arg);
-        return FAIL;
-      }
-      extra--;  // "{{" becomes "{", "}}" becomes "}"
-    }
-  }
-
-  if (*p != '"' && !(interpolate && *p == '{')) {
-    semsg(_("E114: Missing quote: %s"), *arg);
-    return FAIL;
-  }
-
-  // If only parsing, set *arg and return here
-  if (!evaluate) {
-    *arg = p + off;
-    return OK;
-  }
-
-  // Copy the string into allocated memory, handling backslashed
-  // characters.
-  rettv->v_type = VAR_STRING;
-  const int len = (int)(p - *arg + extra);
-  rettv->vval.v_string = xmalloc((size_t)len);
-  char *end = rettv->vval.v_string;
-
-  for (p = *arg + off; *p != NUL && *p != '"';) {
-    if (*p == '\\') {
-      switch (*++p) {
-      case 'b':
-        *end++ = BS; ++p; break;
-      case 'e':
-        *end++ = ESC; ++p; break;
-      case 'f':
-        *end++ = FF; ++p; break;
-      case 'n':
-        *end++ = NL; ++p; break;
-      case 'r':
-        *end++ = CAR; ++p; break;
-      case 't':
-        *end++ = TAB; ++p; break;
-
-      case 'X':           // hex: "\x1", "\x12"
-      case 'x':
-      case 'u':           // Unicode: "\u0023"
-      case 'U':
-        if (ascii_isxdigit(p[1])) {
-          int n, nr;
-          int c = toupper((uint8_t)(*p));
-
-          if (c == 'X') {
-            n = 2;
-          } else if (*p == 'u') {
-            n = 4;
-          } else {
-            n = 8;
-          }
-          nr = 0;
-          while (--n >= 0 && ascii_isxdigit(p[1])) {
-            p++;
-            nr = (nr << 4) + hex2nr(*p);
-          }
-          p++;
-          // For "\u" store the number according to
-          // 'encoding'.
-          if (c != 'X') {
-            end += utf_char2bytes(nr, end);
-          } else {
-            *end++ = (char)nr;
-          }
-        }
-        break;
-
-      // octal: "\1", "\12", "\123"
-      case '0':
-      case '1':
-      case '2':
-      case '3':
-      case '4':
-      case '5':
-      case '6':
-      case '7':
-        *end = (char)(*p++ - '0');
-        if (*p >= '0' && *p <= '7') {
-          *end = (char)((*end << 3) + *p++ - '0');
-          if (*p >= '0' && *p <= '7') {
-            *end = (char)((*end << 3) + *p++ - '0');
-          }
-        }
-        end++;
-        break;
-
-      // Special key, e.g.: "\<C-W>"
-      case '<': {
-        int flags = FSK_KEYCODE | FSK_IN_STRING;
-
-        if (p[1] != '*') {
-          flags |= FSK_SIMPLIFY;
-        }
-        extra = trans_special((const char **)&p, (size_t)(arg_end - p),
-                              end, flags, false, NULL);
-        if (extra != 0) {
-          end += extra;
-          if (end >= rettv->vval.v_string + len) {
-            iemsg("eval_string() used more space than allocated");
-          }
-          break;
-        }
-      }
-        FALLTHROUGH;
-
-      default:
-        mb_copy_char((const char **)&p, &end);
-        break;
-      }
-    } else {
-      if (interpolate && (*p == '{' || *p == '}')) {
-        if (*p == '{' && p[1] != '{') {  // start of expression
-          break;
-        }
-        p++;  // reduce "{{" to "{" and "}}" to "}"
-      }
-      mb_copy_char((const char **)&p, &end);
-    }
-  }
-  *end = NUL;
-  if (*p == '"' && !interpolate) {
-    p++;
-  }
-  *arg = p;
-
-  return OK;
-}
-
-/// Allocate a variable for a 'str''ing' constant.
-/// When "interpolate" is true reduce "{{" to "{" and stop at a single "{".
-///
-/// @return  OK when a "rettv" was set to the string.
-///          FAIL on error, "rettv" is not set.
-static int eval_lit_string(char **arg, typval_T *rettv, bool evaluate, bool interpolate)
-{
-  char *p;
-  int reduce = interpolate ? -1 : 0;
-  const int off = interpolate ? 0 : 1;
-
-  // Find the end of the string, skipping ''.
-  for (p = *arg + off; *p != NUL; MB_PTR_ADV(p)) {
-    if (*p == '\'') {
-      if (p[1] != '\'') {
-        break;
-      }
-      reduce++;
-      p++;
-    } else if (interpolate) {
-      if (*p == '{') {
-        if (p[1] != '{') {
-          break;
-        }
-        p++;
-        reduce++;
-      } else if (*p == '}') {
-        p++;
-        if (*p != '}') {
-          semsg(_(e_stray_closing_curly_str), *arg);
-          return FAIL;
-        }
-        reduce++;
-      }
-    }
-  }
-
-  if (*p != '\'' && !(interpolate && *p == '{')) {
-    semsg(_("E115: Missing quote: %s"), *arg);
-    return FAIL;
-  }
-
-  // If only parsing return after setting "*arg"
-  if (!evaluate) {
-    *arg = p + off;
-    return OK;
-  }
-
-  // Copy the string into allocated memory, handling '' to ' reduction and
-  // any expressions.
-  char *str = xmalloc((size_t)((p - *arg) - reduce));
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = str;
-
-  for (p = *arg + off; *p != NUL;) {
-    if (*p == '\'') {
-      if (p[1] != '\'') {
-        break;
-      }
-      p++;
-    } else if (interpolate && (*p == '{' || *p == '}')) {
-      if (*p == '{' && p[1] != '{') {
-        break;
-      }
-      p++;
-    }
-    mb_copy_char((const char **)&p, &str);
-  }
-  *str = NUL;
-  *arg = p + off;
-
-  return OK;
-}
-
 /// Evaluate a single or double quoted string possibly containing expressions.
 /// "arg" points to the '$'.  The result is put in "rettv".
 ///
@@ -2536,9 +2291,9 @@ int eval_interp_string(char **arg, typval_T *rettv, bool evaluate)
     // Get the string up to the matching quote or to a single '{'.
     // "arg" is advanced to either the quote or the '{'.
     if (quote == '"') {
-      ret = eval_string(arg, &tv, evaluate, true);
+      ret = rs_eval_string(arg, &tv, evaluate, true);
     } else {
-      ret = eval_lit_string(arg, &tv, evaluate, true);
+      ret = rs_eval_lit_string(arg, &tv, evaluate, true);
     }
     if (ret == FAIL) {
       break;
@@ -2864,155 +2619,6 @@ static int free_unref_items(int copyID)
   }
   tv_in_free_unref_items = false;
   return did_free;
-}
-
-/// Get the key for #{key: val} into "tv" and advance "arg".
-///
-/// @return  FAIL when there is no valid key.
-static int get_literal_key(char **arg, typval_T *tv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char *p;
-
-  if (!ASCII_ISALNUM(**arg) && **arg != '_' && **arg != '-') {
-    return FAIL;
-  }
-  for (p = *arg; ASCII_ISALNUM(*p) || *p == '_' || *p == '-'; p++) {}
-  tv->v_type = VAR_STRING;
-  tv->vval.v_string = xmemdupz(*arg, (size_t)(p - *arg));
-
-  *arg = skipwhite(p);
-  return OK;
-}
-
-/// Allocate a variable for a Dictionary and fill it from "*arg".
-///
-/// @param arg  "*arg" points to the "{".
-/// @param literal  true for #{key: val}
-///
-/// @return  OK or FAIL.  Returns NOTDONE for {expr}.
-static int eval_dict(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool literal)
-{
-  const bool evaluate = evalarg == NULL ? false : evalarg->eval_flags & EVAL_EVALUATE;
-  typval_T tv;
-  char *key = NULL;
-  char *curly_expr = skipwhite(*arg + 1);
-  char buf[NUMBUFLEN];
-
-  // First check if it's not a curly-braces expression: {expr}.
-  // Must do this without evaluating, otherwise a function may be called
-  // twice.  Unfortunately this means we need to call eval1() twice for the
-  // first item.
-  // "{}" is an empty Dictionary.
-  // "#{abc}" is never a curly-braces expression.
-  if (*curly_expr != '}'
-      && !literal
-      && eval1(&curly_expr, &tv, NULL) == OK
-      && *skipwhite(curly_expr) == '}') {
-    return NOTDONE;
-  }
-
-  dict_T *d = NULL;
-  if (evaluate) {
-    d = tv_dict_alloc();
-  }
-  typval_T tvkey;
-  tvkey.v_type = VAR_UNKNOWN;
-  tv.v_type = VAR_UNKNOWN;
-
-  *arg = skipwhite(*arg + 1);
-  while (**arg != '}' && **arg != NUL) {
-    if ((literal
-         ? get_literal_key(arg, &tvkey)
-         : eval1(arg, &tvkey, evalarg)) == FAIL) {  // recursive!
-      goto failret;
-    }
-    if (**arg != ':') {
-      semsg(_("E720: Missing colon in Dictionary: %s"), *arg);
-      tv_clear(&tvkey);
-      goto failret;
-    }
-    if (evaluate) {
-      key = (char *)tv_get_string_buf_chk(&tvkey, buf);
-      if (key == NULL) {
-        // "key" is NULL when tv_get_string_buf_chk() gave an errmsg
-        tv_clear(&tvkey);
-        goto failret;
-      }
-    }
-
-    *arg = skipwhite(*arg + 1);
-    if (eval1(arg, &tv, evalarg) == FAIL) {  // Recursive!
-      if (evaluate) {
-        tv_clear(&tvkey);
-      }
-      goto failret;
-    }
-    if (evaluate) {
-      dictitem_T *item = tv_dict_find(d, key, -1);
-      if (item != NULL) {
-        semsg(_("E721: Duplicate key in Dictionary: \"%s\""), key);
-        tv_clear(&tvkey);
-        tv_clear(&tv);
-        goto failret;
-      }
-      item = tv_dict_item_alloc(key);
-      item->di_tv = tv;
-      item->di_tv.v_lock = VAR_UNLOCKED;
-      if (tv_dict_add(d, item) == FAIL) {
-        tv_dict_item_free(item);
-      }
-    }
-    tv_clear(&tvkey);
-
-    // the comma must come after the value
-    bool had_comma = **arg == ',';
-    if (had_comma) {
-      *arg = skipwhite(*arg + 1);
-    }
-
-    if (**arg == '}') {
-      break;
-    }
-    if (!had_comma) {
-      semsg(_("E722: Missing comma in Dictionary: %s"), *arg);
-      goto failret;
-    }
-  }
-
-  if (**arg != '}') {
-    semsg(_("E723: Missing end of Dictionary '}': %s"), *arg);
-failret:
-    if (d != NULL) {
-      tv_dict_free(d);
-    }
-    return FAIL;
-  }
-
-  *arg = skipwhite(*arg + 1);
-  if (evaluate) {
-    tv_dict_set_ret(rettv, d);
-  }
-
-  return OK;
-}
-
-/// Evaluate a literal dictionary: #{key: val, key: val}
-/// "*arg" points to the "#".
-/// On return, "*arg" points to the character after the Dict.
-/// Return OK or FAIL.  Returns NOTDONE for {expr}.
-static int eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *const evalarg)
-{
-  int ret = OK;
-
-  if ((*arg)[1] == '{') {
-    (*arg)++;
-    ret = eval_dict(arg, rettv, evalarg, true);
-  } else {
-    ret = NOTDONE;
-  }
-
-  return ret;
 }
 
 /// Convert the string to a floating point number
@@ -5249,6 +4855,19 @@ void nvim_eval_tv_list_append_owned_tv_ptr(list_T *l, typval_T *tv)
 void nvim_eval_tv_list_set_ret(typval_T *rettv, list_T *l)
 {
   tv_list_set_ret(rettv, l);
+}
+
+/// Set di->di_tv = *tv with v_lock = VAR_UNLOCKED - accessor for Rust eval_dict.
+void nvim_eval_di_set_tv_from_typval(dictitem_T *di, typval_T *tv)
+{
+  di->di_tv = *tv;
+  di->di_tv.v_lock = VAR_UNLOCKED;
+}
+
+/// Wrapper for tv_dict_set_ret inline function - accessor for Rust eval_dict.
+void nvim_eval_tv_dict_set_ret(typval_T *rettv, dict_T *d)
+{
+  tv_dict_set_ret(rettv, d);
 }
 
 // =============================================================================
