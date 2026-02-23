@@ -187,6 +187,11 @@ extern const char *rs_did_set_arabic_cb(optset_T *args);
 extern const char *rs_did_set_cmdheight_cb(optset_T *args);
 extern const char *rs_did_set_laststatus_cb(optset_T *args);
 extern const char *rs_did_set_undofile_cb(optset_T *args);
+extern const char *rs_did_set_buflisted(optset_T *args);
+extern const char *rs_did_set_previewwindow(optset_T *args);
+extern const char *rs_did_set_spell_full(optset_T *args);
+extern const char *rs_did_set_shiftwidth_tabstop(optset_T *args);
+extern const char *rs_did_set_xhistory(optset_T *args);
 
 // Rust varp dispatch functions (from Rust varp.rs)
 extern void *rs_get_varp_from(vimoption_T *p, buf_T *buf, win_T *win);
@@ -445,6 +450,32 @@ int nvim_buf_is_changed(buf_T *buf) { return buf ? bufIsChanged(buf) : 0; }
 int nvim_buf_has_memfile(buf_T *buf) { return buf && buf->b_ml.ml_mfp != NULL; }
 int nvim_get_p_udf(void) { return p_udf; }
 
+// Buflisted callback accessors
+int nvim_buf_get_p_bl(buf_T *buf) { return buf ? buf->b_p_bl : 0; }
+void nvim_apply_autocmds_buf_event(int event, buf_T *buf) {
+  apply_autocmds((event_T)event, NULL, NULL, true, buf);
+}
+
+// Previewwindow callback accessors and helpers
+int nvim_win_get_p_pvw(win_T *win) { return win ? win->w_p_pvw : 0; }
+void nvim_win_set_p_pvw(win_T *win, int val) { if (win) win->w_p_pvw = val != 0; }
+void nvim_for_all_windows_in_curtab(void (*callback)(win_T *, void *), void *ud) {
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    callback(wp, ud);
+  }
+}
+// Spell callback accessor
+int nvim_win_get_p_spell(win_T *win) { return win ? win->w_p_spell : 0; }
+const char *nvim_parse_spelllang(win_T *win) { return parse_spelllang(win); }
+
+// Shiftwidth/tabstop callback accessors
+void nvim_parse_cino(buf_T *buf) { parse_cino(buf); }
+void *nvim_buf_get_b_p_sw_addr(buf_T *buf) { return buf ? (void *)&buf->b_p_sw : NULL; }
+OptInt nvim_buf_get_b_p_sw(buf_T *buf) { return buf ? buf->b_p_sw : 0; }
+
+// Xhistory callback accessors
+void *nvim_get_p_chi_addr(void) { return (void *)&p_chi; }
+
 // Langnoremap/langremap toggle accessors
 int nvim_callback_get_p_lnr(void) { return p_lnr; }
 int nvim_callback_get_p_lrm(void) { return p_lrm; }
@@ -510,6 +541,7 @@ static const char e_number_required_after_equal[]
   = N_("E521: Number required after =");
 static const char e_preview_window_already_exists[]
   = N_("E590: A preview window already exists");
+const char *nvim_get_e_preview_window_exists(void) { return _(e_preview_window_already_exists); }
 static char *p_term = NULL;
 static char *p_ttytype = NULL;
 
@@ -547,6 +579,10 @@ extern void rs_foldUpdateAll(win_T *win);
 
 #include "options.generated.h"
 #include "options_map.generated.h"
+
+// Xhistory callback wrappers (after includes for qf_resize_stack/ll_resize_stack)
+void nvim_qf_resize_stack(int n) { qf_resize_stack(n); }
+void nvim_ll_resize_stack(win_T *win, int n) { ll_resize_stack(win, n); }
 
 // =============================================================================
 // Accessor functions for Rust setcmd module (require options array)
@@ -2246,19 +2282,6 @@ static void apply_optionset_autocmd(OptIndex opt_idx, int opt_flags, OptVal oldv
 }
 
 
-/// Process the updated 'buflisted' option value.
-static const char *did_set_buflisted(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-
-  // when 'buflisted' changes, trigger autocommands
-  if (args->os_oldval.boolean != buf->b_p_bl) {
-    apply_autocmds(buf->b_p_bl ? EVENT_BUFADD : EVENT_BUFDELETE,
-                   NULL, NULL, true, buf);
-  }
-  return NULL;
-}
-
 
 
 /// Process the updated 'lines' or 'columns' option value.
@@ -2428,79 +2451,6 @@ static const char *did_set_paste(optset_T *args FUNC_ATTR_UNUSED)
   return NULL;
 }
 
-/// Process the updated 'previewwindow' option value.
-static const char *did_set_previewwindow(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-
-  if (!win->w_p_pvw) {
-    return NULL;
-  }
-
-  // There can be only one window with 'previewwindow' set.
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_p_pvw && wp != win) {
-      win->w_p_pvw = false;
-      return e_preview_window_already_exists;
-    }
-  }
-
-  return NULL;
-}
-
-
-#ifdef BACKSLASH_IN_FILENAME
-/// Process the updated 'shellslash' option value.
-static const char *did_set_shellslash(optset_T *args FUNC_ATTR_UNUSED)
-{
-  if (p_ssl) {
-    psepc = '/';
-    psepcN = '\\';
-    pseps[0] = '/';
-  } else {
-    psepc = '\\';
-    psepcN = '/';
-    pseps[0] = '\\';
-  }
-
-  // need to adjust the file name arguments and buffer names.
-  buflist_slash_adjust();
-  alist_slash_adjust();
-  scriptnames_slash_adjust();
-  return NULL;
-}
-#endif
-
-/// Process the new 'shiftwidth' or the 'tabstop' option value.
-static const char *did_set_shiftwidth_tabstop(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  win_T *win = (win_T *)args->os_win;
-  OptInt *pp = (OptInt *)args->os_varp;
-
-  if (rs_foldmethodIsIndent(win)) {
-    rs_foldUpdateAll(win);
-  }
-  // When 'shiftwidth' changes, or it's zero and 'tabstop' changes:
-  // parse 'cinoptions'.
-  if (pp == &buf->b_p_sw || buf->b_p_sw == 0) {
-    parse_cino(buf);
-  }
-
-  return NULL;
-}
-
-/// Process the updated 'spell' option value.
-static const char *did_set_spell(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  if (win->w_p_spell) {
-    return parse_spelllang(win);
-  }
-
-  return NULL;
-}
-
 
 /// Process the new global 'undolevels' option value.
 const char *did_set_global_undolevels(OptInt value, OptInt old_value)
@@ -2523,22 +2473,6 @@ const char *did_set_buflocal_undolevels(buf_T *buf, OptInt value, OptInt old_val
   return NULL;
 }
 
-/// Process the new 'chistory' or 'lhistory' option value. 'chistory' will
-/// be used if args->os_varp is the same as p_chi, else 'lhistory'.
-static const char *did_set_xhistory(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  bool is_p_chi = (OptInt *)args->os_varp == &p_chi;
-  OptInt *arg = is_p_chi ? &p_chi : (OptInt *)args->os_varp;
-
-  if (is_p_chi) {
-    qf_resize_stack((int)(*arg));
-  } else {
-    ll_resize_stack(win, (int)(*arg));
-  }
-
-  return NULL;
-}
 
 // When 'syntax' is set, load the syntax of that name
 static void do_syntax_autocmd(buf_T *buf, bool value_changed)

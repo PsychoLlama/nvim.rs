@@ -85,6 +85,35 @@ extern "C" {
     // Binary callback
     fn set_options_bin(oldval: c_int, newval: c_int, opt_flags: c_int);
     fn nvim_option_buf_get_b_p_bin(buf: BufHandle) -> c_int;
+
+    // Buflisted callback
+    fn nvim_buf_get_p_bl(buf: BufHandle) -> c_int;
+    fn nvim_apply_autocmds_buf_event(event: c_int, buf: BufHandle);
+
+    // Previewwindow callback
+    fn nvim_win_get_p_pvw(win: WinHandle) -> c_int;
+    fn nvim_win_set_p_pvw(win: WinHandle, val: c_int);
+    fn nvim_for_all_windows_in_curtab(
+        callback: unsafe extern "C" fn(WinHandle, *mut c_void),
+        ud: *mut c_void,
+    );
+    fn nvim_get_e_preview_window_exists() -> *const std::ffi::c_char;
+
+    // Spell callback
+    fn nvim_win_get_p_spell(win: WinHandle) -> c_int;
+    fn nvim_parse_spelllang(win: WinHandle) -> CallbackResult;
+
+    // Shiftwidth/tabstop callback
+    fn nvim_parse_cino(buf: BufHandle);
+    fn nvim_buf_get_b_p_sw_addr(buf: BufHandle) -> *mut c_void;
+
+    // Xhistory callback
+    fn nvim_get_p_chi_addr() -> *mut c_void;
+    fn nvim_qf_resize_stack(n: c_int);
+    fn nvim_ll_resize_stack(win: WinHandle, n: c_int);
+
+    // Shiftwidth buffer-local value
+    fn nvim_buf_get_b_p_sw(buf: BufHandle) -> OptInt;
 }
 
 // =============================================================================
@@ -93,6 +122,11 @@ extern "C" {
 
 /// OPT_LOCAL flag from option.h
 const OPT_LOCAL: c_int = 0x02;
+
+/// EVENT_BUFADD = 0 (from auevents_enum.generated.h)
+const EVENT_BUFADD: c_int = 0;
+/// EVENT_BUFDELETE = 2 (from auevents_enum.generated.h)
+const EVENT_BUFDELETE: c_int = 2;
 
 // =============================================================================
 // Helper Functions
@@ -414,14 +448,115 @@ pub extern "C" fn rs_did_set_modifiable(_args: *mut c_void) -> CallbackResult {
     callback_ok()
 }
 
+/// Callback for 'buflisted' option.
+///
+/// When 'buflisted' changes, fire BufAdd or BufDelete autocmd.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_buflisted(args: *mut c_void) -> CallbackResult {
+    let buf = nvim_optset_get_buf(args);
+    let old_val = nvim_optset_get_oldval_boolean(args);
+    let new_val = nvim_buf_get_p_bl(buf);
+
+    if old_val != new_val {
+        let event = if new_val != 0 {
+            EVENT_BUFADD
+        } else {
+            EVENT_BUFDELETE
+        };
+        nvim_apply_autocmds_buf_event(event, buf);
+    }
+    callback_ok()
+}
+
+// State for previewwindow iteration: the window being set, and whether we found a conflict.
+static mut PVW_TARGET_WIN: WinHandle = std::ptr::null_mut();
+static mut PVW_CONFLICT: bool = false;
+
+/// Per-window callback for 'previewwindow' check.
+unsafe extern "C" fn pvw_check_callback(wp: WinHandle, _ud: *mut c_void) {
+    let target = PVW_TARGET_WIN;
+    if nvim_win_get_p_pvw(wp) != 0 && wp != target {
+        // Another window already has pvw set — conflict
+        PVW_CONFLICT = true;
+    }
+}
+
+/// Callback for 'previewwindow' option.
+///
+/// There can be only one preview window. If another window already has
+/// 'previewwindow' set, reset it and return an error.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_previewwindow(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
+    if nvim_win_get_p_pvw(win) == 0 {
+        return callback_ok();
+    }
+
+    // Check all windows in current tab for conflicts
+    PVW_TARGET_WIN = win;
+    PVW_CONFLICT = false;
+    nvim_for_all_windows_in_curtab(pvw_check_callback, std::ptr::null_mut());
+
+    if PVW_CONFLICT {
+        nvim_win_set_p_pvw(win, 0);
+        return nvim_get_e_preview_window_exists();
+    }
+
+    callback_ok()
+}
+
 /// Callback for 'spell' option.
 ///
 /// When spell is enabled, parse spelllang. Returns error message if parsing fails.
-/// Note: The actual spelllang parsing is done in C code.
 #[no_mangle]
-pub extern "C" fn rs_did_set_spell() -> CallbackResult {
-    // parse_spelllang() is called from C when spell is enabled
-    // This callback just acknowledges the change
+pub unsafe extern "C" fn rs_did_set_spell_full(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
+    if nvim_win_get_p_spell(win) != 0 {
+        return nvim_parse_spelllang(win);
+    }
+    callback_ok()
+}
+
+/// Callback for 'shiftwidth' or 'tabstop' option.
+///
+/// Updates fold if using indent fold method. Reparses cinoptions when
+/// shiftwidth changes or shiftwidth is 0 and tabstop changes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_shiftwidth_tabstop(args: *mut c_void) -> CallbackResult {
+    let buf = nvim_optset_get_buf(args);
+    let win = nvim_optset_get_win(args);
+    let varp = nvim_optset_get_varp(args);
+    let sw_addr = nvim_buf_get_b_p_sw_addr(buf);
+
+    if rs_foldmethodIsIndent(win) != 0 {
+        rs_foldUpdateAll(win);
+    }
+    // When 'shiftwidth' changes, or it's zero and 'tabstop' changes: parse 'cinoptions'.
+    if varp == sw_addr || nvim_buf_get_b_p_sw(buf) == 0 {
+        nvim_parse_cino(buf);
+    }
+    callback_ok()
+}
+
+/// Callback for 'chistory' or 'lhistory' option.
+///
+/// Resizes the quickfix or location list stack to the new size.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_did_set_xhistory(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
+    let varp = nvim_optset_get_varp(args);
+    let chi_addr = nvim_get_p_chi_addr();
+
+    if varp == chi_addr {
+        // 'chistory': resize the global quickfix stack
+        let n = *(chi_addr as *const OptInt);
+        nvim_qf_resize_stack(n as c_int);
+    } else {
+        // 'lhistory': resize the location list stack for this window
+        let n = *(varp as *const OptInt);
+        nvim_ll_resize_stack(win, n as c_int);
+    }
     callback_ok()
 }
 
@@ -471,7 +606,7 @@ mod tests {
         assert!(rs_did_set_hidden().is_null());
         assert!(rs_did_set_insertmode().is_null());
         // rs_did_set_modifiable now calls redraw_titles() (extern C)
-        assert!(rs_did_set_spell().is_null());
+        // rs_did_set_spell_full now calls parse_spelllang() (extern C, not testable standalone)
         assert!(rs_did_set_termguicolors().is_null());
         assert!(rs_did_set_virtualedit().is_null());
         assert!(rs_did_set_writebackup().is_null());

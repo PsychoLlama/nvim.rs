@@ -913,7 +913,7 @@ local options = {
     },
     {
       abbreviation = 'bl',
-      cb = 'did_set_buflisted',
+      cb = 'rs_did_set_buflisted',
       defaults = true,
       desc = [=[
         When this option is set, the buffer shows up in the buffer list.  If
@@ -1192,7 +1192,7 @@ local options = {
     },
     {
       abbreviation = 'chi',
-      cb = 'did_set_xhistory',
+      cb = 'rs_did_set_xhistory',
       defaults = 10,
       desc = [=[
         Number of quickfix lists that should be remembered for the quickfix
@@ -5230,7 +5230,7 @@ local options = {
     },
     {
       abbreviation = 'lhi',
-      cb = 'did_set_xhistory',
+      cb = 'rs_did_set_xhistory',
       defaults = 10,
       desc = [=[
         Like 'chistory', but for the location list stack associated with a
@@ -6608,7 +6608,7 @@ local options = {
     },
     {
       abbreviation = 'pvw',
-      cb = 'did_set_previewwindow',
+      cb = 'rs_did_set_previewwindow',
       defaults = false,
       desc = [=[
         Identifies the preview window.  Only one window can have this option
@@ -7929,7 +7929,7 @@ local options = {
     },
     {
       abbreviation = 'sw',
-      cb = 'did_set_shiftwidth_tabstop',
+      cb = 'rs_did_set_shiftwidth_tabstop',
       defaults = 8,
       desc = [=[
         Number of columns that make up one level of (auto)indentation.  Used
@@ -8384,7 +8384,7 @@ local options = {
       varname = 'p_sts',
     },
     {
-      cb = 'did_set_spell',
+      cb = 'rs_did_set_spell_full',
       defaults = false,
       desc = [=[
         When on spell checking will be done.  See |spell|.
@@ -9234,7 +9234,7 @@ local options = {
     },
     {
       abbreviation = 'ts',
-      cb = 'did_set_shiftwidth_tabstop',
+      cb = 'rs_did_set_shiftwidth_tabstop',
       defaults = 8,
       desc = [=[
         Defines the column multiple used to display the Horizontal Tab
