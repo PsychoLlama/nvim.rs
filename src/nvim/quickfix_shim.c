@@ -694,15 +694,7 @@ void nvim_qf_mark_buf_has_entry(int bufnum, bool is_location_list)
   }
 }
 
-/// Get buffer number for a file in quickfix context
-int nvim_qf_get_fnum_for_entry(void *qfl_void, char *directory, char *fname)
-{
-  if (qfl_void == NULL) {
-    return 0;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  return qf_get_fnum(qfl, directory, fname);
-}
+int nvim_qf_get_fnum_for_entry(void *qfl_void, char *directory, char *fname) { return qfl_void == NULL ? 0 : qf_get_fnum((qf_list_T *)qfl_void, directory, fname); }
 
 /// Returns allocated string or NULL (caller must free)
 char *nvim_qf_fix_fname(const char *fname, int bufnum)
@@ -734,35 +726,11 @@ char *nvim_qf_fix_fname(const char *fname, int bufnum)
 
 bool nvim_qf_is_printc(int c) { return vim_isprintc(c); }
 
-/// Set the quickfix list ID
-void nvim_qf_set_id(void *qfl_void, unsigned id)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_id = id;
-}
+void nvim_qf_set_id(void *qfl_void, unsigned id) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_id = id; }
 
-/// Set the quickfix list type
-void nvim_qf_set_qfl_type(void *qfl_void, int qfl_type)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qfl_type = (qfltype_T)qfl_type;
-}
+void nvim_qf_set_qfl_type(void *qfl_void, int qfl_type) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qfl_type = (qfltype_T)qfl_type; }
 
-/// Set has_user_data flag
-void nvim_qf_set_has_user_data(void *qfl_void, bool has_user_data)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_has_user_data = has_user_data;
-}
+void nvim_qf_set_has_user_data(void *qfl_void, bool has_user_data) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_has_user_data = has_user_data; }
 
 /// Get a mutable list handle at the specified index
 void *nvim_qf_get_list_at_mut(void *qi_void, int idx)
@@ -779,25 +747,9 @@ void *nvim_qf_get_list_at_mut(void *qi_void, int idx)
 
 unsigned nvim_qf_alloc_next_id(void) { return ++last_qf_id; }
 
-/// Clear a quickfix list structure (zero all fields)
-void nvim_qf_clear_list_struct(void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  memset(qfl, 0, sizeof(*qfl));
-}
+void nvim_qf_clear_list_struct(void *qfl_void) { if (qfl_void != NULL) memset(qfl_void, 0, sizeof(qf_list_T)); }
 
-/// Free the title of a quickfix list
-void nvim_qf_free_title(void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  XFREE_CLEAR(qfl->qf_title);
-}
+void nvim_qf_free_title(void *qfl_void) { if (qfl_void != NULL) XFREE_CLEAR(((qf_list_T *)qfl_void)->qf_title); }
 
 /// Free the context typval of a quickfix list
 void nvim_qf_free_ctx(void *qfl_void)
@@ -810,25 +762,9 @@ void nvim_qf_free_ctx(void *qfl_void)
   qfl->qf_ctx = NULL;
 }
 
-/// Free the quickfix text function callback
-void nvim_qf_free_callback(void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  callback_free(&qfl->qf_qftf_cb);
-}
+void nvim_qf_free_callback(void *qfl_void) { if (qfl_void != NULL) callback_free(&((qf_list_T *)qfl_void)->qf_qftf_cb); }
 
-/// Set the changedtick for a quickfix list
-void nvim_qf_set_changedtick(void *qfl_void, int changedtick)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_changedtick = changedtick;
-}
+void nvim_qf_set_changedtick(void *qfl_void, int changedtick) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_changedtick = changedtick; }
 
 /// Copies lists[1..count] to lists[0..count-1]
 void nvim_qf_shift_lists_down(void *qi_void)
