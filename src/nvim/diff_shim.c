@@ -93,6 +93,8 @@ extern bool rs_diff_change_parse(diffline_T *diffline, diffline_change_T *change
                                  int *change_start, int *change_end);
 extern bool rs_diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline);
 extern void rs_diff_ex_diffupdate(exarg_T *eap);
+extern int rs_xdiff_out(int start_a, int count_a, int start_b, int count_b, void *priv);
+extern void rs_f_diff_filler(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -1847,23 +1849,16 @@ static void diffgetput(const int addr_count, const int idx_cur, const int idx_fr
 /// Checks that the buffer is in diff-mode.
 
 /// Callback function for the xdl_diff() function.
-/// Stores the diff output in a grow array.
+/// Thin wrapper -- implementation moved to Rust (rs_xdiff_out in viml.rs).
 static int xdiff_out(int start_a, int count_a, int start_b, int count_b, void *priv)
 {
-  diffout_T *dout = (diffout_T *)priv;
-  GA_APPEND(diffhunk_T, &(dout->dout_ga), ((diffhunk_T){
-    .lnum_orig = (linenr_T)start_a + 1,
-    .count_orig = count_a,
-    .lnum_new = (linenr_T)start_b + 1,
-    .count_new = count_b,
-  }));
-  return 0;
+  return rs_xdiff_out(start_a, count_a, start_b, count_b, priv);
 }
 
-/// "diff_filler()" function
+/// "diff_filler()" function -- thin wrapper calling Rust rs_f_diff_filler.
 void f_diff_filler(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = MAX(0, rs_diff_check_fill(curwin, tv_get_lnum(argvars)));
+  rs_f_diff_filler(argvars, rettv, fptr);
 }
 
 /// "diff_hlID()" function
@@ -2066,4 +2061,7 @@ colnr_T nvim_diffchange_get_start(diffline_change_T *change, int idx) { if (chan
 colnr_T nvim_diffchange_get_end(diffline_change_T *change, int idx) { if (change == NULL || idx < 0 || idx >= DB_COUNT) { return 0; } return change->dc_end[idx]; }
 bool nvim_diff_is_simple_change(diffline_change_T *change) { return change == &simple_diffline_change; }
 const char *nvim_diff_skipwhite(const char *p) { return skipwhite(p); }
+// Phase 1 accessors: xdiff_out and f_diff_filler
+void nvim_diffout_append_hunk(void *dout, linenr_T lnum_orig, int count_orig, linenr_T lnum_new, int count_new) { diffout_T *d = (diffout_T *)dout; if (d == NULL) { return; } GA_APPEND(diffhunk_T, &(d->dout_ga), ((diffhunk_T){ .lnum_orig = lnum_orig, .count_orig = count_orig, .lnum_new = lnum_new, .count_new = count_new, })); }
+linenr_T nvim_diff_tv_get_lnum(typval_T *argvars) { return tv_get_lnum(argvars); }
 

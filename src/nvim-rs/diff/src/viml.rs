@@ -7,8 +7,9 @@
 //! - Caching for performance optimization
 
 use std::ffi::c_int;
+use std::ffi::c_void;
 
-use crate::buffer::{DiffBlockHandle, DB_COUNT};
+use crate::buffer::{DiffBlockHandle, WinHandle, DB_COUNT};
 
 // Line number type matching linenr_T (i32)
 type LinenrT = i32;
@@ -21,6 +22,19 @@ extern "C" {
     fn nvim_diffblock_get_lnum(dp: DiffBlockHandle, idx: c_int) -> LinenrT;
     fn nvim_diffblock_get_count(dp: DiffBlockHandle, idx: c_int) -> LinenrT;
     fn nvim_diffblock_get_next(dp: DiffBlockHandle) -> DiffBlockHandle;
+
+    // Phase 1: xdiff_out and f_diff_filler accessors
+    fn nvim_diffout_append_hunk(
+        dout: *mut c_void,
+        lnum_orig: LinenrT,
+        count_orig: c_int,
+        lnum_new: LinenrT,
+        count_new: c_int,
+    );
+    fn nvim_diff_tv_get_lnum(argvars: *mut c_void) -> LinenrT;
+    fn nvim_get_curwin() -> WinHandle;
+    fn rs_diff_check_fill(wp: WinHandle, lnum: LinenrT) -> c_int;
+    fn nvim_fold_rettv_set_number(rettv: *mut c_void, nr: i64);
 }
 
 // =============================================================================
@@ -383,6 +397,53 @@ pub unsafe extern "C" fn rs_diff_get_line_vim_info(
     }
 
     info
+}
+
+// =============================================================================
+// Phase 1 Migrations: xdiff_out callback and f_diff_filler
+// =============================================================================
+
+/// xdiff callback: appends a diff hunk to the diffout_T grow array.
+///
+/// This is the Rust implementation of the xdiff_out callback previously in C.
+/// Called by xdl_diff for each diff hunk found.
+///
+/// # Safety
+/// `priv_data` must be a valid pointer to a diffout_T (passed as void*).
+#[no_mangle]
+pub unsafe extern "C" fn rs_xdiff_out(
+    start_a: c_int,
+    count_a: c_int,
+    start_b: c_int,
+    count_b: c_int,
+    priv_data: *mut c_void,
+) -> c_int {
+    nvim_diffout_append_hunk(
+        priv_data,
+        start_a + 1,  // convert 0-based to 1-based line numbers
+        count_a,
+        start_b + 1,
+        count_b,
+    );
+    0
+}
+
+/// VimL diff_filler() function -- returns number of filler lines above {lnum}.
+///
+/// This is the Rust implementation of f_diff_filler previously in C.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid pointers to typval_T values.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_diff_filler(
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    let curwin = nvim_get_curwin();
+    let lnum = nvim_diff_tv_get_lnum(argvars);
+    let fill = rs_diff_check_fill(curwin, lnum);
+    nvim_fold_rettv_set_number(rettv, i64::from(fill.max(0)));
 }
 
 // =============================================================================
