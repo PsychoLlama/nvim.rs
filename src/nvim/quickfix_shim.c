@@ -545,8 +545,6 @@ enum { QF_WINHEIGHT = 10, };  ///< default height for quickfix window
        !got_int && (i) <= (qfl)->qf_count && (qfp) != NULL; \
        (i)++, (qfp) = (qfp)->qf_next)
 
-static win_T *qf_find_win(const qf_info_T *qi);
-
 bool nvim_win_valid(const void *wp_void) { return wp_void == NULL ? false : rs_win_valid((win_T *)wp_void) != 0; }
 
 void *nvim_win_get_loclist(const void *wp_void) { return wp_void == NULL ? NULL : (void *)GET_LOC_LIST((win_T *)wp_void); }
@@ -3580,12 +3578,6 @@ void *nvim_qf_get_curlist_mut(void *qi_void) { return (void *)&((qf_info_T *)qi_
 
 // Phase 3: qf_list_entry accessors
 // nvim_message_filtered already exists in ex_cmds_shim.c (returns int)
-void nvim_msg_putchar_nl(void) { msg_putchar('\n'); }
-void nvim_msg_outtrans_hl(const char *str, int hl_id) { msg_outtrans(str, hl_id, false); }
-void nvim_msg_puts_hl_qf(const char *str, int hl_id) { msg_puts_hl(str, hl_id, false); }
-void nvim_msg_puts_qf(const char *str) { msg_puts(str); }
-void nvim_msg_prt_line_qf(const char *str) { msg_prt_line(str, false); }
-int nvim_get_hlf_qfl(void) { return HLF_QFL; }
 
 /// Format quickfix entry prefix into IObuff and output the range+type+pattern+body
 /// fields via message API using garray for intermediate buffers.
