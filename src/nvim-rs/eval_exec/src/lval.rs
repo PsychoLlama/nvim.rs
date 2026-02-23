@@ -17,6 +17,7 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(unsafe_op_in_unsafe_fn)]
+#![allow(dead_code)]
 
 use std::ffi::{c_char, c_int, c_void};
 
@@ -164,17 +165,500 @@ extern "C" {
     // emsg_severe flag (already exists in message.c with int param)
     fn nvim_set_emsg_severe(val: c_int);
 
-    // subscript processing (promoted from static to non-static)
-    fn nvim_get_lval_subscript(
+}
+
+// =============================================================================
+// Phase 2: extern "C" declarations for subscript migration accessors
+// =============================================================================
+
+extern "C" {
+    // String utilities
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+
+    // Typval operations (not already in Phase 3 block)
+    fn tv_check_str(tv: TypevalHandle) -> bool;
+    fn tv_get_number(tv: TypevalHandle) -> i64;
+    fn tv_get_string(tv: TypevalHandle) -> *const c_char;
+
+    // Typval type query (nvim_tv_get_v_list is in Phase 3 block; get_blob here)
+    fn nvim_tv_get_blob(tv: TypevalHandle) -> *mut c_void;
+
+    // eval1 (recursive subscript parsing)
+    fn rs_eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: *mut c_void) -> c_int;
+
+    // ASCII predicates
+    fn rs_ascii_isalnum(c: c_int) -> c_int;
+
+    // lval_T setters (Phase 1) - nvim_lval_set_n2 is already in Phase 3 block
+    fn nvim_lval_set_list(lp: LvalHandle, list: *mut c_void);
+    fn nvim_lval_set_dict(lp: LvalHandle, dict: *mut c_void);
+    fn nvim_lval_set_di(lp: LvalHandle, di: *mut c_void);
+    fn nvim_lval_set_n1(lp: LvalHandle, n1: c_int);
+    fn nvim_lval_set_range(lp: LvalHandle, range: bool);
+    fn nvim_lval_set_empty2(lp: LvalHandle, empty2: bool);
+    fn nvim_lval_set_blob(lp: LvalHandle, blob: *mut c_void);
+    fn nvim_lval_set_li(lp: LvalHandle, li: *mut c_void);
+    fn nvim_lval_set_newkey(lp: LvalHandle, key: *mut c_char);
+
+    // lval_T composite accessors (Phase 1)
+    #[allow(dead_code)]
+    fn nvim_lval_get_li(lp: LvalHandle) -> *mut c_void;
+    fn nvim_lval_dict_is_v_or_a_scope(lp: LvalHandle) -> bool;
+    fn nvim_lval_dict_scope(lp: LvalHandle) -> c_int;
+    fn nvim_lval_di_check_ro_lock(lp: LvalHandle, name: *const c_char, name_len: usize) -> bool;
+    fn nvim_lval_set_tv_to_li_tv(lp: LvalHandle);
+
+    // lval_T composite accessors for subscript loop
+    fn nvim_lval_tv_get_type(lp: LvalHandle) -> c_int;
+    fn nvim_lval_tv_get_list(lp: LvalHandle) -> *mut c_void;
+    fn nvim_lval_tv_get_blob(lp: LvalHandle) -> *mut c_void;
+    fn nvim_lval_tv_list_alloc_ret(lp: LvalHandle);
+    fn nvim_lval_tv_blob_alloc_ret(lp: LvalHandle);
+    fn nvim_lval_tv_blob_len(lp: LvalHandle) -> c_int;
+    fn nvim_lval_alloc_dict_if_null(lp: LvalHandle);
+    fn nvim_lval_di_is_null(lp: LvalHandle) -> bool;
+    fn nvim_lval_di_is_luafunc(lp: LvalHandle) -> bool;
+    fn nvim_lval_dict_scope_check(
         lp: LvalHandle,
-        p: *mut c_char,
-        name: *mut c_char,
+        key: *mut c_char,
+        len: c_int,
         rettv: TypevalHandle,
-        ht: *mut c_void,
-        v: DictitemHandle,
-        unlet: bool,
-        flags: c_int,
-    ) -> *mut c_char;
+    ) -> bool;
+    fn nvim_lval_set_tv_from_ll_di(lp: LvalHandle);
+
+    // dict/list/blob check helpers
+    fn nvim_tv_blob_check_index(bloblen: c_int, n1: c_int, quiet: bool) -> c_int;
+    fn nvim_tv_blob_check_range(bloblen: c_int, n1: c_int, n2: c_int, quiet: bool) -> c_int;
+    fn nvim_tv_list_check_range_index_one(lp: LvalHandle, quiet: bool) -> *mut c_void;
+    fn nvim_tv_list_check_range_index_two(lp: LvalHandle, quiet: bool) -> c_int;
+
+    // EVALARG_EVALUATE accessor
+    fn nvim_get_evalarg_evaluate_ptr() -> *mut c_void;
+
+    // xstrdup / xmemdupz
+    fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
+    fn nvim_xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
+
+    // lval dict helpers
+    fn nvim_lval_set_di_from_dict(lp: LvalHandle, key: *const c_char, len: c_int);
+
+    // tv_is_func (int return, existing)
+    fn nvim_tv_is_func(tv: TypevalHandle) -> c_int;
+
+    // Error message wrappers (Phase 1)
+    fn nvim_emsg_e689();
+    fn nvim_emsg_e708();
+    fn nvim_emsg_e713();
+    fn nvim_emsg_e709();
+    fn nvim_semsg_e_dot_dict(name: *const c_char);
+    fn nvim_semsg_e_illvar_raw(name: *const c_char);
+    fn nvim_semsg_e_illvar(name: *const c_char);
+    fn nvim_semsg_e_cannot_slice_dict();
+    fn nvim_emsg_missbrac();
+}
+
+// VarType constants (must match C enum var_type_T)
+const VAR_LIST_TYPE: c_int = 4;
+const VAR_DICT_TYPE: c_int = 5;
+const VAR_BLOB_TYPE: c_int = 10;
+
+// GLV flag constants (must match C GetLvalFlags enum)
+const GLV_QUIET: c_int = 2; // TFN_QUIET = 2
+const GLV_READ_ONLY: c_int = 16; // TFN_READ_ONLY = 16
+
+/// GlvStatus mirrors the C `glv_status_T` enum for `get_lval_dict_item`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GlvStatus {
+    Fail,
+    Ok,
+    Stop,
+}
+
+// =============================================================================
+// get_lval_dict_item_impl - resolve dict subscript for an lvalue
+// =============================================================================
+
+/// Resolve a dict-key subscript for an lvalue.
+///
+/// Mirrors the C `get_lval_dict_item` function.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[allow(clippy::too_many_arguments)]
+unsafe fn get_lval_dict_item_impl(
+    lp: LvalHandle,
+    name: *mut c_char,
+    mut key: *mut c_char,
+    len: c_int,
+    key_end: *mut *mut c_char, // inout: current position in source
+    var1: TypevalHandle,
+    flags: c_int,
+    unlet: bool,
+    rettv: TypevalHandle,
+) -> GlvStatus {
+    let quiet = (flags & GLV_QUIET) != 0;
+    let p = *key_end;
+
+    if len == -1 {
+        // "[key]": get key from var1
+        key = tv_get_string(var1) as *mut c_char;
+    }
+
+    nvim_lval_set_list(lp, std::ptr::null_mut());
+
+    // NULL dict => allocate empty dict
+    nvim_lval_alloc_dict_if_null(lp);
+
+    // Find key in dict
+    nvim_lval_set_di_from_dict(lp, key, len);
+
+    // Scope check: when assigning to scope dict, validate name
+    if !rettv.is_null()
+        && nvim_lval_dict_scope(lp) != 0
+        && nvim_lval_dict_scope_check(lp, key, len, rettv)
+    {
+        return GlvStatus::Fail;
+    }
+
+    // Check if di is a luafunc (v:['lua'] case)
+    if !nvim_lval_di_is_null(lp) && nvim_lval_di_is_luafunc(lp) && len == -1 && rettv.is_null() {
+        nvim_semsg_e_illvar_raw(c"v:['lua']".as_ptr());
+        return GlvStatus::Fail;
+    }
+
+    if nvim_lval_di_is_null(lp) {
+        // Key not found -- check if we can add it
+        if nvim_lval_dict_is_v_or_a_scope(lp) {
+            nvim_semsg_e_illvar(name);
+            return GlvStatus::Fail;
+        }
+
+        // Key doesn't exist: need to add it
+        if *p == b'[' as c_char || *p == b'.' as c_char || unlet {
+            if !quiet {
+                nvim_semsg_dictkey(key);
+            }
+            return GlvStatus::Fail;
+        }
+
+        // Set newkey (duplicated key string)
+        let newkey = if len == -1 {
+            nvim_xstrdup(key)
+        } else {
+            nvim_xmemdupz(key, len as usize)
+        };
+        nvim_lval_set_newkey(lp, newkey);
+        *key_end = p;
+        return GlvStatus::Stop;
+    }
+
+    // Key exists: check read-only / lock flags unless GLV_READ_ONLY
+    if (flags & GLV_READ_ONLY) == 0 {
+        let p_minus_name = (p as usize).wrapping_sub(name as usize);
+        if nvim_lval_di_check_ro_lock(lp, name, p_minus_name) {
+            return GlvStatus::Fail;
+        }
+    }
+
+    nvim_lval_set_tv_from_ll_di(lp);
+
+    GlvStatus::Ok
+}
+
+// =============================================================================
+// get_lval_blob_impl - resolve blob subscript for an lvalue
+// =============================================================================
+
+/// Resolve a blob-index/range subscript for an lvalue.
+///
+/// Mirrors the C `get_lval_blob` function.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+unsafe fn get_lval_blob_impl(
+    lp: LvalHandle,
+    var1: TypevalHandle,
+    var2: TypevalHandle,
+    empty1: bool,
+    quiet: bool,
+) -> c_int {
+    let bloblen = nvim_lval_tv_blob_len(lp);
+
+    if empty1 {
+        nvim_lval_set_n1(lp, 0);
+    } else {
+        nvim_lval_set_n1(lp, tv_get_number(var1) as c_int);
+    }
+
+    if nvim_tv_blob_check_index(bloblen, nvim_lval_get_n1(lp), quiet) == FAIL {
+        return FAIL;
+    }
+
+    if nvim_lval_get_range(lp) && !nvim_lval_get_empty2(lp) {
+        nvim_lval_set_n2(lp, tv_get_number(var2) as c_int);
+        if nvim_tv_blob_check_range(bloblen, nvim_lval_get_n1(lp), nvim_lval_get_n2(lp), quiet)
+            == FAIL
+        {
+            return FAIL;
+        }
+    }
+
+    nvim_lval_set_blob(lp, nvim_lval_tv_get_blob(lp));
+    nvim_lval_set_tv(lp, TypevalHandle::null());
+
+    OK
+}
+
+// =============================================================================
+// get_lval_list_impl - resolve list subscript for an lvalue
+// =============================================================================
+
+/// Resolve a list-index/range subscript for an lvalue.
+///
+/// Mirrors the C `get_lval_list` function.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+unsafe fn get_lval_list_impl(
+    lp: LvalHandle,
+    var1: TypevalHandle,
+    var2: TypevalHandle,
+    empty1: bool,
+    quiet: bool,
+) -> c_int {
+    if empty1 {
+        nvim_lval_set_n1(lp, 0);
+    } else {
+        nvim_lval_set_n1(lp, tv_get_number(var1) as c_int);
+    }
+
+    nvim_lval_set_dict(lp, std::ptr::null_mut());
+    nvim_lval_set_list(lp, nvim_lval_tv_get_list(lp));
+
+    let li = nvim_tv_list_check_range_index_one(lp, quiet);
+    if li.is_null() {
+        return FAIL;
+    }
+    nvim_lval_set_li(lp, li);
+
+    if nvim_lval_get_range(lp) && !nvim_lval_get_empty2(lp) {
+        nvim_lval_set_n2(lp, tv_get_number(var2) as c_int);
+        if nvim_tv_list_check_range_index_two(lp, quiet) == FAIL {
+            return FAIL;
+        }
+    }
+
+    nvim_lval_set_tv_to_li_tv(lp);
+
+    OK
+}
+
+// =============================================================================
+// get_lval_subscript_impl - main subscript loop
+// =============================================================================
+
+/// Get the lval of a list/dict/blob subitem starting at "p". Loop
+/// until no more [idx] or .key is following.
+///
+/// Mirrors the C `nvim_get_lval_subscript` function.
+///
+/// Returns pointer to character after subscript on success, or NULL on failure.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::never_loop)]
+unsafe fn get_lval_subscript_impl(
+    lp: LvalHandle,
+    mut p: *mut c_char,
+    name: *mut c_char,
+    rettv: TypevalHandle,
+    _ht: *mut c_void,
+    _v: DictitemHandle,
+    unlet: bool,
+    flags: c_int,
+) -> *mut c_char {
+    let quiet = (flags & GLV_QUIET) != 0;
+
+    // Allocate var1/var2 on the heap (heap-allocated, cleaned up on all paths)
+    let var1 = nvim_tv_alloc_zero();
+    let var2 = nvim_tv_alloc_zero();
+    let mut rc = FAIL;
+    let mut empty1 = false;
+
+    // Macro-like helper: jump to 'done' (implemented as goto-via-loop-break)
+    'outer: loop {
+        // Main loop: while *p == '[' || (*p == '.' && p[1] != '=' && p[1] != '.')
+        while *p == b'[' as c_char
+            || (*p == b'.' as c_char && *p.add(1) != b'=' as c_char && *p.add(1) != b'.' as c_char)
+        {
+            if *p == b'.' as c_char && nvim_lval_tv_get_type(lp) != VAR_DICT_TYPE {
+                if !quiet {
+                    nvim_semsg_e_dot_dict(name);
+                }
+                break 'outer;
+            }
+
+            let tv_type = nvim_lval_tv_get_type(lp);
+            if tv_type != VAR_LIST_TYPE && tv_type != VAR_DICT_TYPE && tv_type != VAR_BLOB_TYPE {
+                if !quiet {
+                    nvim_emsg_e689();
+                }
+                break 'outer;
+            }
+
+            // Allocate null list/blob if needed
+            if tv_type == VAR_LIST_TYPE && nvim_lval_tv_get_list(lp).is_null() {
+                nvim_lval_tv_list_alloc_ret(lp);
+            } else if tv_type == VAR_BLOB_TYPE && nvim_lval_tv_get_blob(lp).is_null() {
+                nvim_lval_tv_blob_alloc_ret(lp);
+            }
+
+            if nvim_lval_get_range(lp) {
+                if !quiet {
+                    nvim_emsg_e708();
+                }
+                break 'outer; // goto done
+            }
+
+            let mut len: c_int = -1;
+            let mut key: *mut c_char = std::ptr::null_mut();
+
+            if *p == b'.' as c_char {
+                key = p.add(1);
+                len = 0;
+                // Count alphanumeric + underscore characters
+                while rs_ascii_isalnum(*key.add(len as usize) as c_int) != 0
+                    || *key.add(len as usize) == b'_' as c_char
+                {
+                    len += 1;
+                }
+                if len == 0 {
+                    if !quiet {
+                        nvim_emsg_e713();
+                    }
+                    // Return NULL immediately (no goto done, var1/var2 still clean)
+                    tv_clear(var1);
+                    tv_clear(var2);
+                    nvim_tv_free(var1);
+                    nvim_tv_free(var2);
+                    return std::ptr::null_mut();
+                }
+                p = key.add(len as usize);
+            } else {
+                // Get the index [expr] or first index [expr:]
+                p = skipwhite(p.add(1));
+                if *p == b':' as c_char {
+                    empty1 = true;
+                } else {
+                    empty1 = false;
+                    let evalarg = nvim_get_evalarg_evaluate_ptr();
+                    if rs_eval1(&mut p, var1, evalarg) == FAIL {
+                        break 'outer; // goto done
+                    }
+                    if !tv_check_str(var1) {
+                        break 'outer; // goto done
+                    }
+                    p = skipwhite(p);
+                }
+
+                // Optionally get the second index [:expr]
+                if *p == b':' as c_char {
+                    if nvim_lval_tv_get_type(lp) == VAR_DICT_TYPE {
+                        if !quiet {
+                            nvim_semsg_e_cannot_slice_dict();
+                        }
+                        break 'outer; // goto done
+                    }
+                    // Check rettv type for range
+                    if !rettv.is_null() {
+                        let rt = nvim_tv_get_type(rettv);
+                        let rv_list = nvim_tv_get_v_list(rettv);
+                        let rv_blob = nvim_tv_get_blob(rettv);
+                        let ok = (rt == VAR_LIST_TYPE && !rv_list.is_null())
+                            || (rt == VAR_BLOB_TYPE && !rv_blob.is_null());
+                        if !ok {
+                            if !quiet {
+                                nvim_emsg_e709();
+                            }
+                            break 'outer; // goto done
+                        }
+                    }
+                    p = skipwhite(p.add(1));
+                    if *p == b']' as c_char {
+                        nvim_lval_set_empty2(lp, true);
+                    } else {
+                        nvim_lval_set_empty2(lp, false);
+                        let evalarg = nvim_get_evalarg_evaluate_ptr();
+                        if rs_eval1(&mut p, var2, evalarg) == FAIL {
+                            break 'outer; // goto done
+                        }
+                        if !tv_check_str(var2) {
+                            break 'outer; // goto done
+                        }
+                    }
+                    nvim_lval_set_range(lp, true);
+                } else {
+                    nvim_lval_set_range(lp, false);
+                }
+
+                if *p != b']' as c_char {
+                    if !quiet {
+                        nvim_emsg_missbrac();
+                    }
+                    break 'outer; // goto done
+                }
+
+                // Skip past ']'
+                p = p.add(1);
+            }
+
+            // Handle each collection type
+            if nvim_lval_tv_get_type(lp) == VAR_DICT_TYPE {
+                let glv =
+                    get_lval_dict_item_impl(lp, name, key, len, &mut p, var1, flags, unlet, rettv);
+                match glv {
+                    GlvStatus::Fail => {
+                        break 'outer; // goto done
+                    }
+                    GlvStatus::Stop => {
+                        break; // break the while loop
+                    }
+                    GlvStatus::Ok => {}
+                }
+            } else if nvim_lval_tv_get_type(lp) == VAR_BLOB_TYPE {
+                if get_lval_blob_impl(lp, var1, var2, empty1, quiet) == FAIL {
+                    break 'outer; // goto done
+                }
+                break; // break the while loop (blob done)
+            } else {
+                // List
+                if get_lval_list_impl(lp, var1, var2, empty1, quiet) == FAIL {
+                    break 'outer; // goto done
+                }
+            }
+
+            // Clear and reset var1/var2 for next iteration
+            tv_clear(var1);
+            tv_clear(var2);
+            // Re-initialize to VAR_UNKNOWN (already zero from tv_clear)
+        } // end while
+
+        rc = OK;
+        break 'outer; // normal exit
+    }
+
+    // Cleanup
+    tv_clear(var1);
+    tv_clear(var2);
+    nvim_tv_free(var1);
+    nvim_tv_free(var2);
+
+    if rc == OK {
+        p
+    } else {
+        std::ptr::null_mut()
+    }
 }
 
 // =============================================================================
@@ -291,7 +775,7 @@ unsafe fn get_lval_impl(
     }
 
     // If the next character is a "." or a "[", then process the subitem.
-    let p2 = nvim_get_lval_subscript(lp, p, name, rettv, ht, v, unlet, flags);
+    let p2 = get_lval_subscript_impl(lp, p, name, rettv, ht, v, unlet, flags);
     if p2.is_null() {
         return std::ptr::null_mut();
     }
