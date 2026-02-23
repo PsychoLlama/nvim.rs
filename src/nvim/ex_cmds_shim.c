@@ -3553,32 +3553,54 @@ void free_old_sub(void)
 /// @param undo_sync  sync undo when leaving the window
 ///
 /// @return           true when it was created.
-bool prepare_tagpreview(bool undo_sync)
-{
-  if (curwin->w_p_pvw) {
-    return false;
-  }
+// --- prepare_tagpreview FFI accessors ---
 
-  // If there is already a preview window open, use that one.
+int nvim_excmds_curwin_get_pvw(void) { return curwin->w_p_pvw; }
+void nvim_excmds_curwin_set_pvw(int val) { curwin->w_p_pvw = (bool)val; }
+void nvim_excmds_curwin_set_wfh(int val) { curwin->w_p_wfh = (bool)val; }
+void nvim_excmds_curwin_set_diff(int val) { curwin->w_p_diff = (bool)val; }
+
+// Returns non-NULL win_T pointer to the first preview window found in curtab, or NULL.
+win_T *nvim_excmds_find_preview_win(void)
+{
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
     if (wp->w_p_pvw) {
-      win_enter(wp, undo_sync);
-      return false;
+      return wp;
     }
   }
+  return NULL;
+}
 
-  // There is no preview window open yet.  Create one.
-  if (win_split(g_do_tagpreview > 0 ? g_do_tagpreview : 0, 0)
-      == FAIL) {
-    return false;
-  }
-  curwin->w_p_pvw = true;
-  curwin->w_p_wfh = true;
-  RESET_BINDING(curwin);                // don't take over 'scrollbind' and 'cursorbind'
-  curwin->w_p_diff = false;             // no 'diff'
+void nvim_excmds_win_enter(win_T *wp, int undo_sync)
+{
+  win_enter(wp, (bool)undo_sync);
+}
 
-  set_option_direct(kOptFoldcolumn, STATIC_CSTR_AS_OPTVAL("0"), 0, SID_NONE);  // no 'foldcolumn'
-  return true;
+// Returns 0 on success (OK), -1 on failure (FAIL)
+int nvim_excmds_win_split(int size, int flags)
+{
+  return win_split(size, flags) == FAIL ? -1 : 0;
+}
+
+int nvim_excmds_get_g_do_tagpreview(void) { return g_do_tagpreview; }
+
+void nvim_excmds_reset_binding_curwin(void)
+{
+  RESET_BINDING(curwin);
+}
+
+void nvim_excmds_set_foldcolumn_zero(void)
+{
+  set_option_direct(kOptFoldcolumn, STATIC_CSTR_AS_OPTVAL("0"), 0, SID_NONE);
+}
+
+// prepare_tagpreview implemented in Rust (rs_prepare_tagpreview in ex_cmds/src/window.rs)
+extern bool rs_prepare_tagpreview(int undo_sync);
+
+/// Sets up the preview window for tag preview. Thin wrapper calling the Rust implementation.
+bool prepare_tagpreview(bool undo_sync)
+{
+  return rs_prepare_tagpreview((int)undo_sync);
 }
 
 /// Shows the effects of the :substitute command being typed ('inccommand').

@@ -352,6 +352,68 @@ pub extern "C" fn rs_min_window_width() -> c_int {
 }
 
 // =============================================================================
+// prepare_tagpreview FFI
+// =============================================================================
+
+extern "C" {
+    fn nvim_excmds_curwin_get_pvw() -> c_int;
+    fn nvim_excmds_curwin_set_pvw(val: c_int);
+    fn nvim_excmds_curwin_set_wfh(val: c_int);
+    fn nvim_excmds_curwin_set_diff(val: c_int);
+    fn nvim_excmds_find_preview_win() -> *mut std::ffi::c_void;
+    fn nvim_excmds_win_enter(wp: *mut std::ffi::c_void, undo_sync: c_int);
+    fn nvim_excmds_win_split(size: c_int, flags: c_int) -> c_int;
+    fn nvim_excmds_get_g_do_tagpreview() -> c_int;
+    fn nvim_excmds_reset_binding_curwin();
+    fn nvim_excmds_set_foldcolumn_zero();
+}
+
+/// Set up the preview window for tag preview (`:ptag`, CTRL-W }).
+///
+/// - If `curwin` is already a preview window, return false immediately.
+/// - If another preview window exists in the current tab, enter it and return false.
+/// - Otherwise create a new preview window and configure it, returning true.
+///
+/// Replaces the C `prepare_tagpreview` function.
+///
+/// # Safety
+/// Calls C window management functions; must be called on the main Neovim thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_prepare_tagpreview(undo_sync: c_int) -> bool {
+    // If current window is already the preview window, do nothing.
+    if nvim_excmds_curwin_get_pvw() != 0 {
+        return false;
+    }
+
+    // If a preview window already exists in the tab, enter it.
+    let pvw = nvim_excmds_find_preview_win();
+    if !pvw.is_null() {
+        nvim_excmds_win_enter(pvw, undo_sync);
+        return false;
+    }
+
+    // No preview window exists yet -- create one.
+    let tagpreview_size = nvim_excmds_get_g_do_tagpreview();
+    let split_size = if tagpreview_size > 0 {
+        tagpreview_size
+    } else {
+        0
+    };
+    if nvim_excmds_win_split(split_size, 0) < 0 {
+        return false;
+    }
+
+    // Configure the new window as a preview window.
+    nvim_excmds_curwin_set_pvw(1);
+    nvim_excmds_curwin_set_wfh(1);
+    nvim_excmds_reset_binding_curwin(); // don't take over 'scrollbind' and 'cursorbind'
+    nvim_excmds_curwin_set_diff(0); // no 'diff'
+    nvim_excmds_set_foldcolumn_zero(); // no 'foldcolumn'
+
+    true
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
