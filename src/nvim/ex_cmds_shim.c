@@ -416,6 +416,16 @@ void nvim_excmds_add_to_hist_search(const char *pat, size_t patlen)
   add_to_history(HIST_SEARCH, (char *)pat, patlen, true, NUL);
 }
 
+// --- make_filter_cmd FFI accessors ---
+// Get shell name tail (e.g., "bash" from "/bin/bash")
+const char *nvim_excmds_shell_name_tail(void) { return invocation_path_tail(p_sh, NULL); }
+// Get p_srr (shellredir option)
+const char *nvim_excmds_get_p_srr(void) { return p_srr; }
+// Get p_shq (shellquote option)
+const char *nvim_excmds_get_p_shq(void) { return p_shq; }
+// xmalloc wrapper for make_filter_cmd
+void *nvim_excmds_xmalloc(size_t size) { return xmalloc(size); }
+
 _Static_assert(ML_DEL_MESSAGE == 1, "ML_DEL_MESSAGE mismatch");
 
 // Verify sort-related constants for Rust
@@ -874,125 +884,14 @@ void do_shell(char *cmd, int flags)
   apply_autocmds(EVENT_SHELLCMDPOST, NULL, NULL, false, curbuf);
 }
 
-#if !defined(UNIX)
-static char *find_pipe(const char *cmd)
-{
-  bool inquote = false;
-
-  for (const char *p = cmd; *p != NUL; p++) {
-    if (!inquote && *p == '|') {
-      return (char *)p;
-    }
-    if (*p == '"') {
-      inquote = !inquote;
-    } else if (rem_backslash(p)) {
-      p++;
-    }
-  }
-  return NULL;
-}
-#endif
+// make_filter_cmd and find_pipe implemented in Rust (rs_make_filter_cmd in ex_cmds/src/shell.rs)
+extern char *rs_make_filter_cmd(const char *cmd, const char *itmp, const char *otmp, int do_in);
 
 /// Create a shell command from a command string, input redirection file and
-/// output redirection file.
-///
-/// @param cmd  Command to execute.
-/// @param itmp NULL or the input file.
-/// @param otmp NULL or the output file.
-/// @param do_in true if stdin is needed.
-/// @returns an allocated string with the shell command.
+/// output redirection file. Thin wrapper calling the Rust implementation.
 char *make_filter_cmd(char *cmd, char *itmp, char *otmp, bool do_in)
 {
-  bool is_fish_shell =
-#if defined(UNIX)
-    strncmp(invocation_path_tail(p_sh, NULL), "fish", 4) == 0;
-#else
-    false;
-#endif
-  bool is_pwsh = strncmp(invocation_path_tail(p_sh, NULL), "pwsh", 4) == 0
-                 || strncmp(invocation_path_tail(p_sh, NULL), "powershell",
-                            10) == 0;
-
-  size_t len = strlen(cmd) + 1;  // At least enough space for cmd + NULL.
-
-  len += is_fish_shell ? sizeof("begin; " "; end") - 1
-                       : !is_pwsh ? sizeof("(" ")") - 1
-                                  : 0;
-
-  if (itmp != NULL) {
-    len += is_pwsh ? strlen(itmp) + sizeof("& { Get-Content " " | & " " }") - 1 + 6  // +6: #20530
-                   : strlen(itmp) + sizeof(" { " " < " " } ") - 1;
-  }
-
-  if (do_in && is_pwsh) {
-    len += sizeof(" $input | ");
-  }
-
-  if (otmp != NULL) {
-    len += strlen(otmp) + strlen(p_srr) + 2;  // two extra spaces ("  "),
-  }
-
-  char *const buf = xmalloc(len);
-
-  if (is_pwsh) {
-    if (itmp != NULL) {
-      xstrlcpy(buf, "& { Get-Content ", len - 1);  // FIXME: should we add "-Encoding utf8"?
-      xstrlcat(buf, itmp, len - 1);
-      xstrlcat(buf, " | & ", len - 1);  // FIXME: add `&` ourself or leave to user?
-      xstrlcat(buf, cmd, len - 1);
-      xstrlcat(buf, " }", len - 1);
-    } else if (do_in) {
-      xstrlcpy(buf, " $input | ", len - 1);
-      xstrlcat(buf, cmd, len);
-    } else {
-      xstrlcpy(buf, cmd, len);
-    }
-  } else {
-#if defined(UNIX)
-    // Put delimiters around the command (for concatenated commands) when
-    // redirecting input and/or output.
-    if (itmp != NULL || otmp != NULL) {
-      char *fmt = is_fish_shell ? "begin; %s; end"
-                                : "(%s)";
-      vim_snprintf(buf, len, fmt, cmd);
-    } else {
-      xstrlcpy(buf, cmd, len);
-    }
-
-    if (itmp != NULL) {
-      xstrlcat(buf, " < ", len - 1);
-      xstrlcat(buf, itmp, len - 1);
-    }
-#else
-    // For shells that don't understand braces around commands, at least allow
-    // the use of commands in a pipe.
-    xstrlcpy(buf, cmd, len);
-    if (itmp != NULL) {
-      // If there is a pipe, we have to put the '<' in front of it.
-      // Don't do this when 'shellquote' is not empty, otherwise the
-      // redirection would be inside the quotes.
-      if (*p_shq == NUL) {
-        char *const p = find_pipe(buf);
-        if (p != NULL) {
-          *p = NUL;
-        }
-      }
-      xstrlcat(buf, " < ", len);
-      xstrlcat(buf, itmp, len);
-      if (*p_shq == NUL) {
-        const char *const p = find_pipe(cmd);
-        if (p != NULL) {
-          xstrlcat(buf, " ", len - 1);  // Insert a space before the '|' for DOS
-          xstrlcat(buf, p, len - 1);
-        }
-      }
-    }
-#endif
-  }
-  if (otmp != NULL) {
-    append_redir(buf, len, p_srr, otmp);
-  }
-  return buf;
+  return rs_make_filter_cmd(cmd, itmp, otmp, (int)do_in);
 }
 
 // append_redir implemented in Rust (rs_append_redir in ex_cmds/src/shell.rs)

@@ -13,7 +13,7 @@
 //! - Command argument processing helpers
 //! - Bang substitution (replacing `!` with previous command)
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 use crate::range::{LineNr, LineRange};
 
@@ -408,6 +408,171 @@ pub fn count_shell_special(s: &str) -> usize {
 // =============================================================================
 // FFI Exports
 // =============================================================================
+
+extern "C" {
+    // make_filter_cmd FFI
+    fn nvim_excmds_shell_name_tail() -> *const c_char;
+    fn nvim_excmds_get_p_srr() -> *const c_char;
+    fn nvim_excmds_get_p_shq() -> *const c_char;
+    fn nvim_excmds_xmalloc(size: usize) -> *mut std::ffi::c_void;
+}
+
+/// Find the position of an unquoted `|` character in a command string.
+///
+/// Skips characters inside double-quotes and after backslashes (rem_backslash behavior).
+/// Used for non-Unix shell redirection placement.
+fn find_pipe_pos(cmd: &[u8]) -> Option<usize> {
+    let mut in_quote = false;
+    let mut i = 0;
+    while i < cmd.len() {
+        match cmd[i] {
+            b'"' => in_quote = !in_quote,
+            b'|' if !in_quote => return Some(i),
+            b'\\' if !in_quote => {
+                // rem_backslash: skip next char if it would be a backslash-escape
+                // On non-Unix this skips the backslash for some chars
+                if i + 1 < cmd.len() {
+                    i += 1; // skip the escaped char
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Create a shell command from a command string, input redirection file and
+/// output redirection file. Replaces the C `make_filter_cmd` function.
+///
+/// Returns an xmalloc-allocated null-terminated C string.
+///
+/// # Safety
+/// - `cmd` must be a valid null-terminated C string.
+/// - `itmp` must be null or a valid null-terminated C string.
+/// - `otmp` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_make_filter_cmd(
+    cmd: *const c_char,
+    itmp: *const c_char,
+    otmp: *const c_char,
+    do_in: c_int,
+) -> *mut c_char {
+    use std::ffi::CStr;
+
+    let cmd_bytes = CStr::from_ptr(cmd).to_bytes();
+    let itmp_bytes = if itmp.is_null() {
+        None
+    } else {
+        Some(CStr::from_ptr(itmp).to_bytes())
+    };
+    let otmp_bytes = if otmp.is_null() {
+        None
+    } else {
+        Some(CStr::from_ptr(otmp).to_bytes())
+    };
+    let do_in = do_in != 0;
+
+    // Determine shell type from shell name tail
+    let shell_tail = CStr::from_ptr(nvim_excmds_shell_name_tail()).to_bytes();
+    let is_fish_shell = cfg!(unix) && shell_tail.starts_with(b"fish");
+    let is_pwsh = shell_tail.starts_with(b"pwsh") || shell_tail.starts_with(b"powershell");
+
+    // Build the command string in Rust
+    let mut result: Vec<u8> = Vec::new();
+
+    if is_pwsh {
+        if let Some(itmp_b) = itmp_bytes {
+            result.extend_from_slice(b"& { Get-Content ");
+            result.extend_from_slice(itmp_b);
+            result.extend_from_slice(b" | & ");
+            result.extend_from_slice(cmd_bytes);
+            result.extend_from_slice(b" }");
+        } else if do_in {
+            result.extend_from_slice(b" $input | ");
+            result.extend_from_slice(cmd_bytes);
+        } else {
+            result.extend_from_slice(cmd_bytes);
+        }
+    } else if cfg!(unix) {
+        // Unix: wrap command in parens/begin..end when redirecting
+        if itmp_bytes.is_some() || otmp_bytes.is_some() {
+            if is_fish_shell {
+                result.extend_from_slice(b"begin; ");
+                result.extend_from_slice(cmd_bytes);
+                result.extend_from_slice(b"; end");
+            } else {
+                result.push(b'(');
+                result.extend_from_slice(cmd_bytes);
+                result.push(b')');
+            }
+        } else {
+            result.extend_from_slice(cmd_bytes);
+        }
+        if let Some(itmp_b) = itmp_bytes {
+            result.extend_from_slice(b" < ");
+            result.extend_from_slice(itmp_b);
+        }
+    } else {
+        // Non-Unix: handle pipe redirection
+        result.extend_from_slice(cmd_bytes);
+
+        if let Some(itmp_b) = itmp_bytes {
+            let p_shq = CStr::from_ptr(nvim_excmds_get_p_shq()).to_bytes();
+            let shq_empty = p_shq.is_empty();
+
+            // If shellquote is empty, find a pipe in buf and truncate there
+            let pipe_pos_in_buf = if shq_empty {
+                find_pipe_pos(&result)
+            } else {
+                None
+            };
+
+            if let Some(pipe_pos) = pipe_pos_in_buf {
+                result.truncate(pipe_pos);
+            }
+
+            result.extend_from_slice(b" < ");
+            result.extend_from_slice(itmp_b);
+
+            // Re-append the pipe portion from the original cmd
+            if shq_empty {
+                if let Some(pipe_pos_in_cmd) = find_pipe_pos(cmd_bytes) {
+                    result.push(b' ');
+                    result.extend_from_slice(&cmd_bytes[pipe_pos_in_cmd..]);
+                }
+            }
+        }
+    }
+
+    // Handle output redirection: call rs_append_redir on the buffer
+    if let Some(otmp_b) = otmp_bytes {
+        let p_srr = CStr::from_ptr(nvim_excmds_get_p_srr()).to_bytes();
+
+        // We need to call rs_append_redir, which operates on a C string buffer.
+        // Build the null-terminated buffer first, then call rs_append_redir.
+        // Calculate extra space needed for the redirect.
+        let extra = p_srr.len() + otmp_b.len() + 4; // extra for " opt fname" or " %s substitute"
+        let total = result.len() + extra + 1;
+        let buf = nvim_excmds_xmalloc(total) as *mut c_char;
+
+        // Copy result into buf and null-terminate
+        std::ptr::copy_nonoverlapping(result.as_ptr().cast::<c_char>(), buf, result.len());
+        *buf.add(result.len()) = 0;
+
+        // Append the output redirect: opt=p_srr, fname=otmp
+        rs_append_redir(buf, total, nvim_excmds_get_p_srr(), otmp);
+
+        return buf;
+    }
+
+    // No output redirection: allocate and copy result
+    let total = result.len() + 1;
+    let buf = nvim_excmds_xmalloc(total) as *mut c_char;
+    std::ptr::copy_nonoverlapping(result.as_ptr().cast::<c_char>(), buf, result.len());
+    *buf.add(result.len()) = 0;
+    buf
+}
 
 /// Create shell flags from C integer.
 pub extern "C" fn rs_shell_flags_from_c(value: c_int) -> c_int {
