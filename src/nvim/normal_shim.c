@@ -1396,28 +1396,16 @@ int nvim_findpar_decl(void)
 }
 
 /// Wrapper for vim_iswordp for the first char at ptr.
-int nvim_vim_iswordp_char(const char *ptr)
-{
-  return vim_iswordp(ptr) ? 1 : 0;
-}
+int nvim_vim_iswordp_char(const char *ptr) { return vim_iswordp(ptr) ? 1 : 0; }
 
 /// Wrapper for get_leader_len on cursor line.
-int nvim_get_leader_len_cursor_line(void)
-{
-  return get_leader_len(get_cursor_line_ptr(), NULL, false, true);
-}
+int nvim_get_leader_len_cursor_line(void) { return get_leader_len(get_cursor_line_ptr(), NULL, false, true); }
 
 /// Check if first non-white char of cursor line is NUL (line is blank/whitespace).
-int nvim_cursor_line_is_blank(void)
-{
-  return *skipwhite(get_cursor_line_ptr()) == NUL ? 1 : 0;
-}
+int nvim_cursor_line_is_blank(void) { return *skipwhite(get_cursor_line_ptr()) == NUL ? 1 : 0; }
 
 /// Wrapper for reset_search_dir().
-void nvim_reset_search_dir(void)
-{
-  reset_search_dir();
-}
+void nvim_reset_search_dir(void) { reset_search_dir(); }
 
 /// Get p_ws as int.
 int nvim_get_p_ws_bool(void) { return p_ws ? 1 : 0; }
@@ -1484,17 +1472,14 @@ void nvim_nv_gd_impl(oparg_T *oap, int nchar, int thisblock)
 // Operator handler accessors for Rust FFI
 // =============================================================================
 
-// Forward declarations for operator handlers
+// Forward declarations for operator handlers (nv_tilde_impl migrated to Rust)
 static void nv_operator_impl(cmdarg_T *cap);
 static void nv_optrans_impl(cmdarg_T *cap);
-static void nv_tilde_impl(cmdarg_T *cap);
 static void nv_subst_impl(cmdarg_T *cap);
 
 void nvim_nv_operator_impl(cmdarg_T *cap) { nv_operator_impl(cap); }
 
 void nvim_nv_optrans_impl(cmdarg_T *cap) { nv_optrans_impl(cap); }
-
-void nvim_nv_tilde_impl(cmdarg_T *cap) { nv_tilde_impl(cap); }
 
 void nvim_nv_subst_impl(cmdarg_T *cap) { nv_subst_impl(cap); }
 
@@ -1502,10 +1487,7 @@ void nvim_nv_subst_impl(cmdarg_T *cap) { nv_subst_impl(cap); }
 // Text object handler accessors for Rust FFI
 // =============================================================================
 
-// Forward declarations for text object handlers
-static void nv_select_impl(cmdarg_T *cap);
-
-void nvim_nv_select_impl(cmdarg_T *cap) { nv_select_impl(cap); }
+// (nv_select_impl migrated to Rust)
 
 // nv_brackets_impl C accessors for Rust FFI
 /// Phase 3: findmatchlimit wrapper that copies pos_T fields to output params.
@@ -1623,19 +1605,14 @@ void nvim_bracket_spell_move(cmdarg_T *cap)
 // Undo/Redo handler accessors for Rust FFI
 // =============================================================================
 
-// Forward declarations for undo/redo handlers
-static void nv_undo_impl(cmdarg_T *cap);
-static void nv_Undo_impl(cmdarg_T *cap);
-static void nv_dot_impl(cmdarg_T *cap);
-static void nv_redo_or_register_impl(cmdarg_T *cap);
-
-void nvim_nv_undo_impl(cmdarg_T *cap) { nv_undo_impl(cap); }
-
-void nvim_nv_Undo_impl(cmdarg_T *cap) { nv_Undo_impl(cap); }
-
-void nvim_nv_dot_impl(cmdarg_T *cap) { nv_dot_impl(cap); }
-
-void nvim_nv_redo_or_register_impl(cmdarg_T *cap) { nv_redo_or_register_impl(cap); }
+// Accessors for undo/redo Rust implementations
+// nvim_get_arrow_used() is defined in edit.c (returns int)
+// nvim_get_restart_edit() is defined in cursor_shape.c (returns int)
+bool nvim_start_redo(int count, bool restart) { return start_redo(count, restart); }
+void nvim_u_redo_call(int count) { u_redo(count); }
+void nvim_u_undoline_call(void) { u_undoline(); }
+bool nvim_do_execreg_call(int regname) { return do_execreg(regname, false, false, false) != false; }
+bool nvim_get_p_to(void) { return p_to; }
 
 // =============================================================================
 // Insert mode entry handler accessors for Rust FFI
@@ -1797,16 +1774,10 @@ bool nvim_get_visual_text(cmdarg_T *cap, char **pp, size_t *lenp)
 }
 
 /// Wrapper for spell_move_to(curwin, dir, SMT_ALL, true, NULL) for Rust FFI.
-size_t nvim_spell_move_to_wrapper(int dir)
-{
-  return spell_move_to(curwin, dir, SMT_ALL, true, NULL);
-}
+size_t nvim_spell_move_to_wrapper(int dir) { return spell_move_to(curwin, dir, SMT_ALL, true, NULL); }
 
 /// Wrapper for ml_get_pos(&curwin->w_cursor) for Rust FFI.
-char *nvim_ml_get_pos_cursor(void)
-{
-  return ml_get_pos(&curwin->w_cursor);
-}
+char *nvim_ml_get_pos_cursor(void) { return ml_get_pos(&curwin->w_cursor); }
 
 /// nv_zg_zw: spell word add/remove for z commands -- now calls Rust.
 extern int rs_nv_zg_zw(cmdarg_T *cap, int nchar);
@@ -1840,8 +1811,7 @@ void nvim_nv_down_impl(cmdarg_T *cap) { nv_down_impl(cap); }
 // Miscellaneous handler accessors for Rust FFI
 // =============================================================================
 
-// Forward declarations for miscellaneous handlers
-static void nv_at_impl(cmdarg_T *cap);
+// Forward declarations for miscellaneous handlers (nv_at_impl migrated to Rust)
 static void nv_join_impl(cmdarg_T *cap);
 static void nv_open_impl(cmdarg_T *cap);
 
@@ -1908,7 +1878,7 @@ void nvim_set_b_op_start(int lnum, int col, int coladd) { curbuf->b_op_start.lnu
 void nvim_set_b_op_end_cursor(void) { curbuf->b_op_end = curwin->w_cursor; }
 void nvim_dec_b_op_end_col(void) { if (curbuf->b_op_end.col > 0) curbuf->b_op_end.col--; }
 
-void nvim_nv_at_impl(cmdarg_T *cap) { nv_at_impl(cap); }
+// (nvim_nv_at_impl migrated to Rust)
 
 void nvim_nv_join_impl(cmdarg_T *cap) { nv_join_impl(cap); }
 
@@ -3495,19 +3465,6 @@ static int normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int o
   return i;
 }
 
-/// "u" command: Undo or make lower case (implementation).
-static void nv_undo_impl(cmdarg_T *cap)
-{
-  if (cap->oap->op_type == OP_LOWER
-      || VIsual_active) {
-    // translate "<Visual>u" to "<Visual>gu" and "guu" to "gugu"
-    cap->cmdchar = 'g';
-    cap->nchar = 'u';
-    rs_nv_operator(cap);
-  } else {
-    rs_nv_kundo(cap);
-  }
-}
 
 /// Handle the "r" command (implementation).
 /// "R" (cap->arg is false) and "gR" (cap->arg is true) (implementation).
@@ -3817,81 +3774,6 @@ static void n_opencmd(cmdarg_T *cap)
   }
 }
 
-/// "." command: redo last change (implementation).
-static void nv_dot_impl(cmdarg_T *cap)
-{
-  if (rs_checkclearopq(cap->oap)) {
-    return;
-  }
-
-  // If "restart_edit" is true, the last but one command is repeated
-  // instead of the last command (inserting text). This is used for
-  // CTRL-O <.> in insert mode.
-  if (start_redo(cap->count0, restart_edit != 0 && !arrow_used) == false) {
-    rs_clearopbeep(cap->oap);
-  }
-}
-
-/// CTRL-R: undo undo or specify register in select mode (implementation)
-static void nv_redo_or_register_impl(cmdarg_T *cap)
-{
-  if (VIsual_select && VIsual_active) {
-    // Get register name
-    no_mapping++;
-    int reg = plain_vgetc();
-    LANGMAP_ADJUST(reg, true);
-    no_mapping--;
-
-    if (reg == '"') {
-      // the unnamed register is 0
-      reg = 0;
-    }
-
-    VIsual_select_reg = valid_yank_reg(reg, true) ? reg : 0;
-    return;
-  }
-
-  if (rs_checkclearopq(cap->oap)) {
-    return;
-  }
-
-  u_redo(cap->count1);
-  curwin->w_set_curswant = true;
-}
-
-/// Handle "U" command (implementation).
-static void nv_Undo_impl(cmdarg_T *cap)
-{
-  // In Visual mode and typing "gUU" triggers an operator
-  if (cap->oap->op_type == OP_UPPER || VIsual_active) {
-    // translate "gUU" to "gUgU"
-    cap->cmdchar = 'g';
-    cap->nchar = 'U';
-    rs_nv_operator(cap);
-    return;
-  }
-
-  if (rs_checkclearopq(cap->oap)) {
-    return;
-  }
-
-  u_undoline();
-  curwin->w_set_curswant = true;
-}
-
-/// Implementation of '~' command.
-static void nv_tilde_impl(cmdarg_T *cap)
-{
-  if (!p_to && !VIsual_active && cap->oap->op_type != OP_TILDE) {
-    if (bt_prompt(curbuf) && !prompt_curpos_editable()) {
-      rs_clearopbeep(cap->oap);
-      return;
-    }
-    rs_n_swapchar(cap);
-  } else {
-    nv_operator_impl(cap);
-  }
-}
 
 /// Implementation of operator command.
 static void nv_operator_impl(cmdarg_T *cap)
@@ -3992,18 +3874,6 @@ bool unadjust_for_sel_inner(pos_T *pp)
   return false;
 }
 
-/// SELECT key in Normal or Visual mode: end of Select mode mapping (implementation).
-static void nv_select_impl(cmdarg_T *cap)
-{
-  if (VIsual_active) {
-    VIsual_select = true;
-    VIsual_select_reg = 0;
-  } else if (VIsual_reselect) {
-    cap->nchar = 'v';               // fake "gv" command
-    cap->arg = true;
-    rs_nv_g_cmd(cap);
-  }
-}
 
 /// Move the cursor for the "A" command.
 void set_cursor_for_append_to_line(void)
@@ -4087,25 +3957,6 @@ static void nv_record(cmdarg_T *cap)
   }
 }
 
-/// Handle the "@r" command (implementation).
-static void nv_at_impl(cmdarg_T *cap)
-{
-  if (rs_checkclearop(cap->oap)) {
-    return;
-  }
-  if (cap->nchar == '=') {
-    if (get_expr_register() == NUL) {
-      return;
-    }
-  }
-  while (cap->count1-- && !got_int) {
-    if (do_execreg(cap->nchar, false, false, false) == false) {
-      rs_clearopbeep(cap->oap);
-      break;
-    }
-    line_breakcheck();
-  }
-}
 
 /// Handle "J" or "gJ" command (implementation).
 static void nv_join_impl(cmdarg_T *cap)

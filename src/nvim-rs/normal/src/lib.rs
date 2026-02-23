@@ -205,6 +205,7 @@ extern "C" {
 
     // Wave 2 Phase 1: Visual state accessors
     fn nvim_redraw_curbuf_inverted();
+    fn nvim_get_VIsual_reselect() -> c_int;
     fn nvim_set_VIsual_reselect(val: bool);
     fn nvim_get_VIsual_mode_orig() -> c_int;
     fn nvim_set_VIsual_mode_orig(val: c_int);
@@ -2687,12 +2688,15 @@ pub unsafe extern "C" fn rs_ident_build_and_exec(
 // =============================================================================
 
 extern "C" {
-    // Phase 3 accessor functions
+    // Phase 3 accessor functions (nv_tilde_impl migrated to Rust in Phase 1)
     fn nvim_nv_operator_impl(cap: CapHandle);
     fn nvim_nv_optrans_impl(cap: CapHandle);
-    fn nvim_nv_tilde_impl(cap: CapHandle);
     fn nvim_nv_subst_impl(cap: CapHandle);
+    fn nvim_get_p_to() -> bool;
 }
+
+// OP_TILDE constant
+const OP_TILDE: c_int = 7;
 
 /// Command handler for operator commands (d, c, y, >, <, !, =, gq, gw, g?, etc.).
 ///
@@ -2725,7 +2729,19 @@ pub unsafe extern "C" fn rs_nv_optrans(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_tilde(cap: CapHandle) {
-    nvim_nv_tilde_impl(cap);
+    let oap = nvim_cap_get_oap(cap);
+    if !nvim_get_p_to()
+        && nvim_get_VIsual_active() == 0
+        && nvim_oap_get_op_type_ptr(oap) != OP_TILDE
+    {
+        if nvim_replace_check_prompt() != 0 {
+            rs_clearopbeep(oap);
+            return;
+        }
+        rs_n_swapchar(cap);
+    } else {
+        rs_nv_operator(cap);
+    }
 }
 
 /// Command handler for "s" and "S" substitute commands.
@@ -2858,8 +2874,6 @@ extern "C" {
     // cursor crate
     fn adjust_cursor_col();
 
-    fn nvim_nv_select_impl(cap: CapHandle);
-
     // nv_brackets_impl C accessors
     fn nvim_bracket_find_ident(cap: CapHandle);
     // Phase 3: findmatchlimit accessor
@@ -2970,7 +2984,14 @@ pub unsafe extern "C" fn rs_nv_object(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_select(cap: CapHandle) {
-    nvim_nv_select_impl(cap);
+    if nvim_get_VIsual_active() != 0 {
+        nvim_set_VIsual_select(true);
+        nvim_set_VIsual_select_reg(0);
+    } else if nvim_get_VIsual_reselect() != 0 {
+        nvim_cap_set_nchar(cap, c_int::from(b'v')); // fake "gv" command
+        nvim_cap_set_arg(cap, 1);
+        rs_nv_g_cmd(cap);
+    }
 }
 
 /// Helper: call findmatchlimit and return position as Option<(lnum, col, coladd)>.
@@ -3404,15 +3425,19 @@ pub unsafe extern "C" fn rs_find_decl(
 }
 
 // =============================================================================
-// Phase 5: Undo/Redo handlers
+// Phase 5: Undo/Redo handlers (now real Rust implementations)
 // =============================================================================
 
 extern "C" {
-    fn nvim_nv_undo_impl(cap: CapHandle);
-    fn nvim_nv_Undo_impl(cap: CapHandle);
-    fn nvim_nv_dot_impl(cap: CapHandle);
-    fn nvim_nv_redo_or_register_impl(cap: CapHandle);
+    fn nvim_start_redo(count: c_int, restart: bool) -> bool;
+    fn nvim_u_redo_call(count: c_int);
+    fn nvim_u_undoline_call();
+    fn nvim_get_arrow_used() -> c_int; // defined in edit.c, returns int
 }
+
+// OP_ constants for undo/redo
+const OP_LOWER: c_int = 12;
+const OP_UPPER: c_int = 11;
 
 /// Command handler for "u" undo command.
 ///
@@ -3423,7 +3448,15 @@ extern "C" {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_undo(cap: CapHandle) {
-    nvim_nv_undo_impl(cap);
+    let oap = nvim_cap_get_oap(cap);
+    if nvim_oap_get_op_type_ptr(oap) == OP_LOWER || nvim_get_VIsual_active() != 0 {
+        // translate "<Visual>u" to "<Visual>gu" and "guu" to "gugu"
+        nvim_cap_set_cmdchar(cap, c_int::from(b'g'));
+        nvim_cap_set_nchar(cap, c_int::from(b'u'));
+        rs_nv_operator(cap);
+    } else {
+        rs_nv_kundo(cap);
+    }
 }
 
 /// Command handler for "U" line undo command.
@@ -3435,7 +3468,21 @@ pub unsafe extern "C" fn rs_nv_undo(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_Undo(cap: CapHandle) {
-    nvim_nv_Undo_impl(cap);
+    let oap = nvim_cap_get_oap(cap);
+    if nvim_oap_get_op_type_ptr(oap) == OP_UPPER || nvim_get_VIsual_active() != 0 {
+        // translate "gUU" to "gUgU"
+        nvim_cap_set_cmdchar(cap, c_int::from(b'g'));
+        nvim_cap_set_nchar(cap, c_int::from(b'U'));
+        rs_nv_operator(cap);
+        return;
+    }
+
+    if rs_checkclearopq(oap) {
+        return;
+    }
+
+    nvim_u_undoline_call();
+    nvim_curwin_set_curswant(true);
 }
 
 /// Command handler for "." repeat command.
@@ -3447,7 +3494,19 @@ pub unsafe extern "C" fn rs_nv_Undo(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_dot(cap: CapHandle) {
-    nvim_nv_dot_impl(cap);
+    let oap = nvim_cap_get_oap(cap);
+    if rs_checkclearopq(oap) {
+        return;
+    }
+
+    // If restart_edit is non-zero, the last but one command is repeated
+    // instead of the last command (inserting text). Used for CTRL-O <.>.
+    let restart_edit = nvim_get_restart_edit();
+    let arrow_used = nvim_get_arrow_used() != 0;
+    let count0 = nvim_cap_get_count0(cap);
+    if !nvim_start_redo(count0, restart_edit != 0 && !arrow_used) {
+        rs_clearopbeep(oap);
+    }
 }
 
 /// Command handler for CTRL-R (redo or register selection).
@@ -3459,7 +3518,31 @@ pub unsafe extern "C" fn rs_nv_dot(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_redo_or_register(cap: CapHandle) {
-    nvim_nv_redo_or_register_impl(cap);
+    if nvim_get_VIsual_select() && nvim_get_VIsual_active() != 0 {
+        // Get register name
+        nvim_inc_no_mapping();
+        let mut reg = nvim_plain_vgetc_wrapper();
+        reg = nvim_langmap_adjust(reg, true);
+        nvim_dec_no_mapping();
+
+        if reg == c_int::from(b'"') {
+            // the unnamed register is 0
+            reg = 0;
+        }
+
+        let valid = nvim_valid_yank_reg(reg, true);
+        nvim_set_VIsual_select_reg(if valid { reg } else { 0 });
+        return;
+    }
+
+    let oap = nvim_cap_get_oap(cap);
+    if rs_checkclearopq(oap) {
+        return;
+    }
+
+    let count1 = nvim_cap_get_count1(cap);
+    nvim_u_redo_call(count1);
+    nvim_curwin_set_curswant(true);
 }
 
 // =============================================================================
@@ -4652,9 +4735,10 @@ pub unsafe extern "C" fn rs_nv_down(cap: CapHandle) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_nv_at_impl(cap: CapHandle);
+    // nvim_nv_at_impl migrated to Rust in Phase 1
     fn nvim_nv_join_impl(cap: CapHandle);
     fn nvim_nv_open_impl(cap: CapHandle);
+    fn nvim_do_execreg_call(regname: c_int) -> bool;
 
     // g-command C accessors
     fn nvim_nv_addsub(cap: CapHandle);
@@ -5272,7 +5356,23 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_at(cap: CapHandle) {
-    nvim_nv_at_impl(cap);
+    let oap = nvim_cap_get_oap(cap);
+    if rs_checkclearop(oap) {
+        return;
+    }
+    let nchar = nvim_cap_get_nchar(cap);
+    if nchar == c_int::from(b'=') && nvim_get_expr_register() == NUL_CHAR {
+        return;
+    }
+    let mut count = nvim_cap_get_count1(cap);
+    while count > 0 && !nvim_normal_get_got_int() {
+        count -= 1;
+        if !nvim_do_execreg_call(nchar) {
+            rs_clearopbeep(oap);
+            break;
+        }
+        nvim_normal_line_breakcheck();
+    }
 }
 
 /// Command handler for "J" and "gJ" join commands.
