@@ -188,6 +188,9 @@ extern void rs_syn_cmd_match(exarg_T *eap, int syncing);
 // Rust keyword command FFI declaration
 extern void rs_syn_cmd_keyword(exarg_T *eap, int syncing);
 
+// Rust cluster command FFI declaration
+extern void rs_syn_cmd_cluster(exarg_T *eap, int syncing);
+
 static char *(spo_name_tab[SPO_COUNT]) =
 { "ms=", "me=", "hs=", "he=", "rs=", "re=", "lc=" };
 
@@ -1959,69 +1962,7 @@ static int syn_add_cluster(char *name)
 //              [add={groupname},..] [remove={groupname},..]".
 static void syn_cmd_cluster(exarg_T *eap, int syncing)
 {
-  char *arg = eap->arg;
-  char *group_name_end;
-  bool got_clstr = false;
-  int opt_len;
-  int list_op;
-
-  eap->nextcmd = find_nextcmd(arg);
-  if (eap->skip) {
-    return;
-  }
-
-  char *rest = get_group_name(arg, &group_name_end);
-
-  if (rest != NULL) {
-    int scl_id = syn_check_cluster(arg, (int)(group_name_end - arg));
-    if (scl_id == 0) {
-      return;
-    }
-    scl_id -= SYNID_CLUSTER;
-
-    while (true) {
-      if (STRNICMP(rest, "add", 3) == 0
-          && (ascii_iswhite(rest[3]) || rest[3] == '=')) {
-        opt_len = 3;
-        list_op = CLUSTER_ADD;
-      } else if (STRNICMP(rest, "remove", 6) == 0
-                 && (ascii_iswhite(rest[6]) || rest[6] == '=')) {
-        opt_len = 6;
-        list_op = CLUSTER_SUBTRACT;
-      } else if (STRNICMP(rest, "contains", 8) == 0
-                 && (ascii_iswhite(rest[8]) || rest[8] == '=')) {
-        opt_len = 8;
-        list_op = CLUSTER_REPLACE;
-      } else {
-        break;
-      }
-
-      int16_t *clstr_list = NULL;
-      if (get_id_list(&rest, opt_len, &clstr_list, eap->skip) == FAIL) {
-        semsg(_(e_invarg2), rest);
-        break;
-      }
-      if (scl_id >= 0) {
-        syn_combine_list(&SYN_CLSTR(curwin->w_s)[scl_id].scl_list,
-                         &clstr_list, list_op);
-      } else {
-        xfree(clstr_list);
-      }
-      got_clstr = true;
-    }
-
-    if (got_clstr) {
-      redraw_curbuf_later(UPD_SOME_VALID);
-      syn_stack_free_all(curwin->w_s);          // Need to recompute all.
-    }
-  }
-
-  if (!got_clstr) {
-    emsg(_("E400: No cluster specified"));
-  }
-  if (rest == NULL || !ends_excmd(*rest)) {
-    semsg(_(e_invarg2), arg);
-  }
+  rs_syn_cmd_cluster(eap, syncing);
 }
 
 // On first call for current buffer: Init growing array.
@@ -4737,4 +4678,34 @@ void nvim_syn_keyword_redraw_and_free(void)
 {
   redraw_curbuf_later(UPD_SOME_VALID);
   syn_stack_free_all(curwin->w_s);
+}
+
+// =============================================================================
+// Phase 4 accessors: syn_cmd_cluster migration
+// =============================================================================
+
+/// Return pointer to SYN_CLSTR(curwin->w_s)[scl_id].scl_list for Rust.
+int16_t **nvim_syn_get_cluster_list_ptr(int scl_id)
+{
+  return &SYN_CLSTR(curwin->w_s)[scl_id].scl_list;
+}
+
+/// Combine a cluster's ID list with a new list, consuming both.
+/// Calls syn_combine_list on the cluster's list and clstr_list.
+void nvim_syn_combine_cluster_list(int scl_id, int16_t **clstr_list, int list_op)
+{
+  syn_combine_list(&SYN_CLSTR(curwin->w_s)[scl_id].scl_list, clstr_list, list_op);
+}
+
+/// Trigger redraw and free all syntax state (used by cluster and other commands).
+void nvim_syn_redraw_and_free_all(void)
+{
+  redraw_curbuf_later(UPD_SOME_VALID);
+  syn_stack_free_all(curwin->w_s);
+}
+
+/// Set eap->nextcmd using find_nextcmd(arg).
+void nvim_syn_find_nextcmd(exarg_T *eap, char *arg)
+{
+  eap->nextcmd = find_nextcmd(arg);
 }

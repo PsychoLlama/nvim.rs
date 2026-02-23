@@ -647,6 +647,141 @@ pub unsafe extern "C" fn rs_syn_combine_list(
     *clstr2 = IdListHandle::null();
 }
 
+// =============================================================================
+// Phase 4: syn_cmd_cluster migration
+// =============================================================================
+
+extern "C" {
+    // Command argument access
+    fn nvim_syn_get_eap_arg(eap: *const c_void) -> *mut c_char;
+    fn nvim_syn_get_eap_skip(eap: *const c_void) -> c_int;
+
+    // Group name / cluster parsing
+    fn nvim_syn_get_group_name(arg: *mut c_char, name_end: *mut *mut c_char) -> *mut c_char;
+    fn nvim_syn_check_cluster(pp: *mut c_char, len: c_int) -> c_int;
+
+    // ID list from Rust opt_parse
+    fn rs_get_id_list(
+        arg: *mut *mut c_char,
+        keylen: c_int,
+        list: *mut *mut i16,
+        skip: c_int,
+    ) -> c_int;
+
+    // Cluster list combination (handles syn_combine_list call internally)
+    fn nvim_syn_combine_cluster_list(scl_id: c_int, clstr_list: *mut *mut i16, list_op: c_int);
+
+    // Redraw + free after cluster changes
+    fn nvim_syn_redraw_and_free_all();
+
+    // Set eap->nextcmd = find_nextcmd(arg)
+    fn nvim_syn_find_nextcmd(eap: *mut c_void, arg: *mut c_char);
+
+    // String helpers
+    fn nvim_syn_ends_excmd(c: c_int) -> c_int;
+    fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
+
+    // Error messages
+    fn nvim_syn_emsg(msg: *const c_char);
+    fn nvim_syn_semsg_1s(fmt: *const c_char, arg: *const c_char);
+}
+
+/// ASCII case-insensitive comparison of at most `n` bytes.
+/// Returns true if the first `n` bytes of `s` match `pat` (ASCII-only).
+///
+/// # Safety
+/// `s` must point to at least `n` readable bytes.
+unsafe fn ascii_strnicmp_n(s: *const c_char, pat: &[u8]) -> bool {
+    for (i, &expected) in pat.iter().enumerate() {
+        let c = *s.add(i) as u8;
+        let cl = if c.is_ascii_uppercase() { c | 0x20 } else { c };
+        if cl != expected {
+            return false;
+        }
+    }
+    true
+}
+
+/// Check if byte is ASCII whitespace or '='.
+#[inline]
+fn is_white_or_eq(c: u8) -> bool {
+    c == b' ' || c == b'\t' || c == b'='
+}
+
+/// Rust implementation of syn_cmd_cluster.
+unsafe fn syn_cmd_cluster_impl(eap: *mut c_void, _syncing: c_int) {
+    let arg = nvim_syn_get_eap_arg(eap);
+    let skip = nvim_syn_get_eap_skip(eap);
+
+    // Set nextcmd early (matches C behavior: `eap->nextcmd = find_nextcmd(arg)`)
+    nvim_syn_find_nextcmd(eap, arg);
+
+    if skip != 0 {
+        return;
+    }
+
+    // Parse the cluster name
+    let mut group_name_end: *mut c_char = std::ptr::null_mut();
+    let mut rest = nvim_syn_get_group_name(arg, &mut group_name_end);
+
+    if rest.is_null() {
+        nvim_syn_semsg_1s(c"E475: Invalid argument: %s".as_ptr(), arg);
+        return;
+    }
+
+    let full_scl_id = nvim_syn_check_cluster(arg, group_name_end.offset_from(arg) as c_int);
+    if full_scl_id == 0 {
+        return;
+    }
+    // Convert from SYNID_CLUSTER-based ID to array index
+    let scl_id = full_scl_id - crate::types::SYNID_CLUSTER;
+
+    let mut got_clstr = false;
+
+    loop {
+        // Determine which keyword follows and its length
+        let (opt_len, list_op) =
+            if ascii_strnicmp_n(rest, b"add") && is_white_or_eq(*rest.add(3) as u8) {
+                (3i32, CLUSTER_ADD)
+            } else if ascii_strnicmp_n(rest, b"remove") && is_white_or_eq(*rest.add(6) as u8) {
+                (6i32, CLUSTER_SUBTRACT)
+            } else if ascii_strnicmp_n(rest, b"contains") && is_white_or_eq(*rest.add(8) as u8) {
+                (8i32, CLUSTER_REPLACE)
+            } else {
+                break;
+            };
+
+        let mut clstr_list: *mut i16 = std::ptr::null_mut();
+        // FAIL == 0 in Neovim; OK == 1
+        if rs_get_id_list(&mut rest, opt_len, &mut clstr_list, skip) == 0 {
+            nvim_syn_semsg_1s(c"E475: Invalid argument: %s".as_ptr(), rest);
+            break;
+        }
+
+        // scl_id is always >= 0 here (checked above)
+        nvim_syn_combine_cluster_list(scl_id, &mut clstr_list, list_op);
+
+        got_clstr = true;
+    }
+
+    if got_clstr {
+        nvim_syn_redraw_and_free_all();
+    }
+
+    if !got_clstr {
+        nvim_syn_emsg(c"E400: No cluster specified".as_ptr());
+    }
+    if rest.is_null() || nvim_syn_ends_excmd(*rest as c_int) == 0 {
+        nvim_syn_semsg_1s(c"E475: Invalid argument: %s".as_ptr(), arg);
+    }
+}
+
+/// Rust implementation of syn_cmd_cluster.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_cluster(eap: *mut c_void, syncing: c_int) {
+    syn_cmd_cluster_impl(eap, syncing);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
