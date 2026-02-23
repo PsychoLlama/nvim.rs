@@ -277,6 +277,31 @@ void nvim_findtags_state_free_inner(void *st_void)
   xfree(st->orgpat);
 }
 
+// Forward declaration needed by nvim_findtags_state_new (defined later in file)
+extern void rs_findtags_state_init(findtags_state_T *st, char *pat, int flags, int mincount);
+
+/// Heap-allocate and initialize a findtags_state_T.
+/// Returned pointer must be freed with nvim_findtags_state_delete.
+void *nvim_findtags_state_new(char *pat, int flags, int mincount)
+{
+  findtags_state_T *st = xcalloc(1, sizeof(findtags_state_T));
+  rs_findtags_state_init(st, pat, flags, mincount);
+  return st;
+}
+
+/// Free the findtags_state_T struct itself (inner resources already freed).
+void nvim_findtags_state_delete(void *st_void)
+{
+  xfree(st_void);
+}
+
+/// Get the mutable tag_fname buffer from the state.
+char *nvim_findtags_get_tag_fname_buf(void *st_void)
+{
+  findtags_state_T *st = (findtags_state_T *)st_void;
+  return st->tag_fname;
+}
+
 // --- Rust FFI accessor functions for findtags_match_args_T ---
 /// Initialize findtags_match_args_T
 void nvim_findtags_matchargs_init(void *margs_void, int flags)
@@ -1369,158 +1394,14 @@ void do_tags(exarg_T *eap)
 /// @param mincount  MAXCOL: find all matches
 ///                  other: minimal number of matches
 /// @param buf_ffname  name of buffer for priority
+// Forward declaration for the Rust implementation
+int rs_find_tags(char *pat, int *num_matches, char ***matchesp, int flags, int mincount,
+                 char *buf_ffname);
+
 int find_tags(char *pat, int *num_matches, char ***matchesp, int flags, int mincount,
               char *buf_ffname)
 {
-  findtags_state_T st;
-  tagname_T tn;                         // info for get_tagfname()
-  int first_file;                       // trying first tag file
-  int retval = FAIL;                    // return value
-
-  int i;
-  char *saved_pat = NULL;                // copy of pat[]
-
-  int findall = (mincount == MAXCOL || mincount == TAG_MANY);  // find all matching tags
-  bool has_re = (flags & TAG_REGEXP);            // regexp used
-  int noic = (flags & TAG_NOIC);
-  int verbose = (flags & TAG_VERBOSE);
-  int save_p_ic = p_ic;
-
-  // uncrustify:off
-
-  // Change the value of 'ignorecase' according to 'tagcase' for the
-  // duration of this function.
-  switch (curbuf->b_tc_flags ? curbuf->b_tc_flags : tc_flags) {
-  case kOptTcFlagFollowic: break;
-  case kOptTcFlagIgnore:
-    p_ic = true;
-    break;
-  case kOptTcFlagMatch:
-    p_ic = false;
-    break;
-  case kOptTcFlagFollowscs:
-    p_ic = ignorecase(pat);
-    break;
-  case kOptTcFlagSmart:
-    p_ic = ignorecase_opt(pat, true, true);
-    break;
-  default:
-    abort();
-  }
-
-  // uncrustify:on
-
-  int help_save = curbuf->b_help;
-
-  rs_findtags_state_init(&st, pat, flags, mincount);
-
-  // Initialize a few variables
-  if (st.help_only) {                           // want tags from help file
-    curbuf->b_help = true;                      // will be restored later
-  }
-
-  if (curbuf->b_help) {
-    // When "@ab" is specified use only the "ab" language, otherwise
-    // search all languages.
-    if (st.orgpat->len > 3 && pat[st.orgpat->len - 3] == '@'
-        && ASCII_ISALPHA(pat[st.orgpat->len - 2])
-        && ASCII_ISALPHA(pat[st.orgpat->len - 1])) {
-      saved_pat = xstrnsave(pat, (size_t)st.orgpat->len - 3);
-      st.help_lang_find = &pat[st.orgpat->len - 2];
-      st.orgpat->pat = saved_pat;
-      st.orgpat->len -= 3;
-    }
-  }
-  if (p_tl != 0 && st.orgpat->len > p_tl) {  // adjust for 'taglength'
-    st.orgpat->len = (int)p_tl;
-  }
-
-  int save_emsg_off = emsg_off;
-  emsg_off = true;    // don't want error for invalid RE here
-  rs_prepare_pats(st.orgpat, has_re);
-  emsg_off = save_emsg_off;
-  if (has_re && st.orgpat->regmatch.regprog == NULL) {
-    goto findtag_end;
-  }
-
-  retval = nvim_findtags_apply_tfu(&st, pat, buf_ffname);
-  if (retval != NOTDONE) {
-    goto findtag_end;
-  }
-
-  // re-initialize the default return value
-  retval = FAIL;
-
-  // Set a flag if the file extension is .txt
-  if ((flags & TAG_KEEP_LANG)
-      && st.help_lang_find == NULL
-      && curbuf->b_fname != NULL
-      && (i = (int)strlen(curbuf->b_fname)) > 4
-      && STRICMP(curbuf->b_fname + i - 4, ".txt") == 0) {
-    st.is_txt = true;
-  }
-
-  // When finding a specified number of matches, first try with matching
-  // case, so binary search can be used, and try ignore-case matches in a
-  // second loop.
-  // When finding all matches, 'tagbsearch' is off, or there is no fixed
-  // string to look for, ignore case right away to avoid going though the
-  // tags files twice.
-  // When the tag file is case-fold sorted, it is either one or the other.
-  // Only ignore case when TAG_NOIC not used or 'ignorecase' set.
-  st.orgpat->regmatch.rm_ic = ((p_ic || !noic)
-                               && (findall || st.orgpat->headlen == 0 || !p_tbs));
-  for (int round = 1; round <= 2; round++) {
-    st.linear = (st.orgpat->headlen == 0 || !p_tbs || round == 2);
-
-    // Try tag file names from tags option one by one.
-    for (first_file = true;
-         rs_get_tagfname(&tn, first_file, st.tag_fname) == OK;
-         first_file = false) {
-      rs_findtags_in_file(&st, flags, buf_ffname);
-      if (st.stop_searching) {
-        retval = OK;
-        break;
-      }
-    }   // end of for-each-file loop
-
-    rs_tagname_free(&tn);
-
-    // stop searching when already did a linear search, or when TAG_NOIC
-    // used, and 'ignorecase' not set or already did case-ignore search
-    if (st.stop_searching || st.linear || (!p_ic && noic)
-        || st.orgpat->regmatch.rm_ic) {
-      break;
-    }
-
-    // try another time while ignoring case
-    st.orgpat->regmatch.rm_ic = true;
-  }
-
-  if (!st.stop_searching) {
-    if (!st.did_open && verbose) {  // never opened any tags file
-      emsg(_("E433: No tags file"));
-    }
-    retval = OK;                // It's OK even when no tag found
-  }
-
-findtag_end:
-  rs_findtags_state_free(&st);
-
-  // Move the matches from the ga_match[] arrays into one list of
-  // matches.  When retval == FAIL, free the matches.
-  if (retval == FAIL) {
-    st.match_count = 0;
-  }
-
-  *num_matches = rs_findtags_copy_matches(&st, matchesp);
-
-  curbuf->b_help = help_save;
-  xfree(saved_pat);
-
-  p_ic = save_p_ic;
-
-  return retval;
+  return rs_find_tags(pat, num_matches, matchesp, flags, mincount, buf_ffname);
 }
 
 static garray_T tag_fnames = GA_EMPTY_INIT_VALUE;

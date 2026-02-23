@@ -2435,6 +2435,212 @@ pub unsafe extern "C" fn rs_findtags_in_file(
 }
 
 // =============================================================================
+// Phase 2 tag.c migration: rs_find_tags
+// =============================================================================
+
+extern "C" {
+    /// Heap-allocate and initialize a findtags_state_T.
+    fn nvim_findtags_state_new(
+        pat: *mut c_char,
+        flags: c_int,
+        mincount: c_int,
+    ) -> FindTagsStateHandle;
+    /// Free the findtags_state_T struct itself (after rs_findtags_state_free).
+    fn nvim_findtags_state_delete(st: FindTagsStateHandle);
+    /// Get the mutable tag_fname buffer pointer from the state.
+    fn nvim_findtags_get_tag_fname_buf(st: FindTagsStateHandle) -> *mut c_char;
+}
+
+/// Top-level tag search orchestrator: Rust implementation of find_tags().
+///
+/// # Safety
+///
+/// - `pat` must be a valid, mutable C string
+/// - `num_matches` and `matchesp` must be valid output pointers
+/// - `buf_ffname` may be null
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_find_tags(
+    pat: *mut c_char,
+    num_matches: *mut c_int,
+    matchesp: *mut *mut *mut c_char,
+    flags: c_int,
+    mincount: c_int,
+    buf_ffname: *mut c_char,
+) -> c_int {
+    let save_p_ic = nvim_get_p_ic();
+
+    // Adjust p_ic per tagcase option
+    let effective_tc = if nvim_get_curbuf_tc_flags() != 0 {
+        nvim_get_curbuf_tc_flags()
+    } else {
+        nvim_get_tc_flags()
+    };
+    match effective_tc {
+        x if x == K_OPT_TC_FLAG_FOLLOWIC => {}
+        x if x == K_OPT_TC_FLAG_IGNORE => nvim_set_p_ic(1),
+        x if x == K_OPT_TC_FLAG_MATCH => nvim_set_p_ic(0),
+        x if x == K_OPT_TC_FLAG_FOLLOWSCS => {
+            nvim_set_p_ic(c_int::from(nvim_ignorecase(pat)));
+        }
+        x if x == K_OPT_TC_FLAG_SMART => {
+            nvim_set_p_ic(c_int::from(nvim_ignorecase_opt(pat, true, true)));
+        }
+        _ => {}
+    }
+
+    let help_save = nvim_get_curbuf_b_help();
+
+    // Heap-allocate and initialize the findtags state
+    let st = nvim_findtags_state_new(pat, flags, mincount);
+    if st.is_null() {
+        nvim_set_p_ic(save_p_ic);
+        *num_matches = 0;
+        return FAIL;
+    }
+
+    let mut saved_pat: *mut c_char = std::ptr::null_mut();
+    #[allow(unused_assignments)]
+    let mut retval: c_int = FAIL;
+
+    // If help_only, temporarily set b_help
+    if nvim_findtags_get_help_only(st) {
+        nvim_set_curbuf_b_help(1);
+    }
+
+    // Help language suffix extraction: "@ab" at end of pattern
+    if nvim_get_curbuf_b_help() != 0 {
+        let pat_len = nvim_findtags_get_orgpat_len(st);
+        if pat_len > 3 {
+            let p = pat.offset((pat_len - 3) as isize);
+            let at_char = *p as u8;
+            let c1 = *p.offset(1) as u8;
+            let c2 = *p.offset(2) as u8;
+            if at_char == b'@' && c1.is_ascii_alphabetic() && c2.is_ascii_alphabetic() {
+                saved_pat = nvim_xstrnsave(pat, (pat_len - 3) as usize);
+                nvim_findtags_set_help_lang_find(st, p.offset(1));
+                nvim_findtags_set_orgpat_pat(st, saved_pat);
+                nvim_findtags_set_orgpat_len(st, pat_len - 3);
+            }
+        }
+    }
+
+    // Adjust for 'taglength' option
+    {
+        let tl = nvim_get_p_tl();
+        let pat_len = nvim_findtags_get_orgpat_len(st);
+        if tl != 0 && (pat_len as i64) > tl {
+            nvim_findtags_set_orgpat_len(st, tl as c_int);
+        }
+    }
+
+    // Prepare patterns (regexp compilation), suppressing errors
+    let save_emsg_off = nvim_get_emsg_off();
+    nvim_set_emsg_off(1);
+    let has_re = (flags & find_tags_flags::TAG_REGEXP) != 0;
+    nvim_findtags_prepare_pats(st, has_re);
+    nvim_set_emsg_off(save_emsg_off);
+
+    if has_re && !nvim_findtags_has_regprog(st) {
+        retval = FAIL;
+    } else {
+        retval = nvim_findtags_apply_tfu(st, pat, buf_ffname);
+        if retval == NOTDONE {
+            retval = FAIL;
+
+            // Check .txt extension for help priority
+            let cur_fname = nvim_get_curbuf_b_fname();
+            if (flags & find_tags_flags::TAG_KEEP_LANG) != 0
+                && nvim_findtags_get_help_lang_find(st).is_null()
+                && !cur_fname.is_null()
+            {
+                let fname_len = strlen(cur_fname);
+                if fname_len > 4 {
+                    let ext = cur_fname.add(fname_len - 4);
+                    if rs_tag_strnicmp(ext, c".txt".as_ptr(), 4) == 0 {
+                        nvim_findtags_set_is_txt(st, true);
+                    }
+                }
+            }
+
+            // Two-round search loop
+            let p_ic = nvim_get_p_ic();
+            let noic = (flags & find_tags_flags::TAG_NOIC) != 0;
+            // MAXCOL = 0x7FFF_FFFF, TAG_MANY = 300
+            let findall = mincount == 0x7FFF_FFFF || mincount == 300;
+
+            let headlen = nvim_findtags_get_orgpat_headlen(st);
+            let p_tbs = nvim_get_p_tbs();
+            let initial_rm_ic = (p_ic != 0 || !noic) && (findall || headlen == 0 || !p_tbs);
+            nvim_findtags_set_orgpat_rm_ic(st, initial_rm_ic);
+
+            // Stack-allocate TagFileIterator (mirrors tagname_T)
+            let mut tn = crate::files::TagFileIterator::default();
+            let tn_ptr: *mut crate::files::TagFileIterator = &raw mut tn;
+
+            'outer: for round in 1..=2i32 {
+                let cur_headlen = nvim_findtags_get_orgpat_headlen(st);
+                let cur_p_tbs = nvim_get_p_tbs();
+                let linear = cur_headlen == 0 || !cur_p_tbs || round == 2;
+                nvim_findtags_set_linear(st, linear);
+
+                let mut first_file = 1i32;
+                loop {
+                    let tag_fname_buf = nvim_findtags_get_tag_fname_buf(st);
+                    if crate::files::rs_get_tagfname(tn_ptr, first_file, tag_fname_buf) != OK {
+                        break;
+                    }
+                    first_file = 0;
+                    rs_findtags_in_file(st, flags, buf_ffname);
+                    if nvim_findtags_get_stop_searching(st) {
+                        retval = OK;
+                        break;
+                    }
+                }
+
+                crate::rs_tagname_free(tn_ptr.cast::<c_void>());
+
+                let stop = nvim_findtags_get_stop_searching(st)
+                    || nvim_findtags_get_linear(st)
+                    || (nvim_get_p_ic() == 0 && noic)
+                    || nvim_findtags_get_orgpat_rm_ic(st);
+                if stop {
+                    break 'outer;
+                }
+                // Second round: ignore case
+                nvim_findtags_set_orgpat_rm_ic(st, true);
+            }
+
+            if !nvim_findtags_get_stop_searching(st) {
+                let verbose = (flags & find_tags_flags::TAG_VERBOSE) != 0;
+                if !nvim_findtags_get_did_open(st) && verbose {
+                    nvim_emsg_e433();
+                }
+                retval = OK;
+            }
+        }
+    }
+
+    // Free inner resources (tag_fname, lbuf, orgpat)
+    rs_findtags_state_free(st);
+
+    // If FAIL, discard matches
+    if retval == FAIL {
+        nvim_findtags_set_match_count(st, 0);
+    }
+    *num_matches = rs_findtags_copy_matches(st, matchesp);
+
+    nvim_set_curbuf_b_help(help_save);
+    xfree(saved_pat.cast::<c_void>());
+    nvim_set_p_ic(save_p_ic);
+
+    // Free the heap-allocated struct
+    nvim_findtags_state_delete(st);
+
+    retval
+}
+
+// =============================================================================
 // Phase 1 tag.c migration: rs_tag_call_tagfunc
 // =============================================================================
 
