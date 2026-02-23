@@ -1149,3 +1149,210 @@ pub unsafe extern "C" fn rs_set_var_lval(
 ) {
     set_var_lval_impl(lp, endp, rettv, copy, is_const, op)
 }
+
+// =============================================================================
+// Phase 3 (eval_shim pass 4): var_item_copy
+// =============================================================================
+
+use std::cell::Cell;
+
+extern "C" {
+    // vimconv_T accessor: returns conv->vc_type (0 = CONV_NONE)
+    fn nvim_vimconv_get_type(conv: *const c_void) -> c_int;
+    // Get tv->vval.v_string (read-only)
+    fn nvim_tv_get_vstring_const(tv: TypevalHandle) -> *const c_char;
+    // string_convert wrapper; returns allocated string or NULL
+    fn nvim_string_convert(conv: *const c_void, str: *const c_char) -> *mut c_char;
+    // xstrdup
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    // Set tv->vval.v_string (takes ownership)
+    fn nvim_tv_set_vstring_owned(tv: TypevalHandle, s: *mut c_char);
+    // tv type setter
+    fn nvim_tv_set_type(tv: TypevalHandle, vtype: c_int);
+
+    // List operations
+    fn nvim_tv_list_copyid(list: *const c_void) -> c_int;
+    fn nvim_tv_list_latest_copy(list: *const c_void) -> *mut c_void;
+    fn nvim_tv_list_ref(list: *mut c_void);
+    fn nvim_tv_list_copy(
+        conv: *const c_void,
+        list: *mut c_void,
+        deep: bool,
+        copy_id: c_int,
+    ) -> *mut c_void;
+    fn nvim_tv_set_list(tv: TypevalHandle, list: *mut c_void);
+
+    // Dict operations
+    fn nvim_dict_get_copyid(dict: *const c_void) -> c_int;
+    fn nvim_dict_get_copydict(dict: *const c_void) -> *mut c_void;
+    fn nvim_dict_refcount_inc(dict: *mut c_void);
+    fn nvim_tv_dict_copy(
+        conv: *const c_void,
+        dict: *mut c_void,
+        deep: bool,
+        copy_id: c_int,
+    ) -> *mut c_void;
+    fn nvim_tv_set_dict(tv: TypevalHandle, dict: *mut c_void);
+
+    // Blob operations
+    fn nvim_tv_blob_copy(from_blob: *mut c_void, to: TypevalHandle);
+
+    // Error: variable nested too deep
+    fn nvim_emsg_nested_too_deep();
+    // internal_error
+    fn internal_error(where_: *const c_char);
+}
+
+/// VAR_UNKNOWN type constant (for var_item_copy)
+const VAR_UNKNOWN: c_int = 0;
+/// VAR_NUMBER type constant (for var_item_copy)
+const VAR_NUMBER: c_int = 1;
+/// VAR_STRING type constant (for var_item_copy)
+const VAR_STRING: c_int = 2;
+/// VAR_FUNC type constant (for var_item_copy)
+const VAR_FUNC: c_int = 3;
+/// VAR_LIST type constant (for var_item_copy)
+const VAR_LIST: c_int = 4;
+/// VAR_DICT type constant (for var_item_copy)
+const VAR_DICT: c_int = 5;
+/// VAR_FLOAT type constant (for var_item_copy)
+const VAR_FLOAT: c_int = 6;
+/// VAR_BOOL type constant (for var_item_copy)
+const VAR_BOOL: c_int = 7;
+/// VAR_SPECIAL type constant (for var_item_copy)
+const VAR_SPECIAL: c_int = 8;
+/// VAR_PARTIAL type constant (for var_item_copy)
+const VAR_PARTIAL: c_int = 9;
+// Note: VAR_BLOB (10) is already defined above at the module level
+
+/// VAR_UNLOCKED constant (must match C enum)
+const VAR_UNLOCKED: c_int = 0;
+/// CONV_NONE constant (must match C)
+const CONV_NONE: c_int = 0;
+/// Maximum nesting depth for lists/dicts in copies
+const DICT_MAXNEST: c_int = 100;
+
+thread_local! {
+    /// Recursion counter for var_item_copy - prevents infinite recursion
+    /// on pathological nested structures.
+    static VAR_ITEM_COPY_RECURSE: Cell<c_int> = const { Cell::new(0) };
+}
+
+/// Deep copy a VimL value (var_item_copy).
+///
+/// # Safety
+/// - `from` and `to` must be valid non-null typval handles
+/// - `conv` may be null (no encoding conversion)
+///
+/// # C equivalent
+/// Replaces the C `var_item_copy` function in eval_shim.c.
+unsafe fn var_item_copy_impl(
+    conv: *const c_void,
+    from: TypevalHandle,
+    to: TypevalHandle,
+    deep: bool,
+    copy_id: c_int,
+) -> c_int {
+    let recurse = VAR_ITEM_COPY_RECURSE.with(|r| r.get());
+
+    if recurse >= DICT_MAXNEST {
+        nvim_emsg_nested_too_deep();
+        return FAIL;
+    }
+
+    VAR_ITEM_COPY_RECURSE.with(|r| r.set(recurse + 1));
+
+    let vtype = nvim_tv_get_type(from);
+    let mut ret = OK;
+
+    match vtype {
+        VAR_NUMBER | VAR_FLOAT | VAR_FUNC | VAR_PARTIAL | VAR_BOOL | VAR_SPECIAL => {
+            tv_copy(from, to);
+        }
+        VAR_STRING => {
+            let from_str = nvim_tv_get_vstring_const(from);
+            let conv_type = nvim_vimconv_get_type(conv);
+            if conv.is_null() || conv_type == CONV_NONE || from_str.is_null() {
+                tv_copy(from, to);
+            } else {
+                nvim_tv_set_type(to, VAR_STRING);
+                nvim_tv_set_v_lock(to, VAR_UNLOCKED);
+                let converted = nvim_string_convert(conv, from_str);
+                let s = if converted.is_null() {
+                    xstrdup(from_str)
+                } else {
+                    converted
+                };
+                nvim_tv_set_vstring_owned(to, s);
+            }
+        }
+        VAR_LIST => {
+            nvim_tv_set_type(to, VAR_LIST);
+            nvim_tv_set_v_lock(to, VAR_UNLOCKED);
+            let from_list = nvim_tv_get_v_list(from);
+            if from_list.is_null() {
+                nvim_tv_set_list(to, std::ptr::null_mut());
+            } else if copy_id != 0 && nvim_tv_list_copyid(from_list) == copy_id {
+                // Use the copy made earlier.
+                let existing_copy = nvim_tv_list_latest_copy(from_list);
+                nvim_tv_list_ref(existing_copy);
+                nvim_tv_set_list(to, existing_copy);
+            } else {
+                let new_list = nvim_tv_list_copy(conv, from_list, deep, copy_id);
+                nvim_tv_set_list(to, new_list);
+            }
+            let to_list = nvim_tv_get_v_list(to);
+            if to_list.is_null() && !nvim_tv_get_v_list(from).is_null() {
+                ret = FAIL;
+            }
+        }
+        VAR_BLOB => {
+            let from_blob = nvim_tv_get_blob(from);
+            nvim_tv_blob_copy(from_blob, to);
+        }
+        VAR_DICT => {
+            nvim_tv_set_type(to, VAR_DICT);
+            nvim_tv_set_v_lock(to, VAR_UNLOCKED);
+            let from_dict = nvim_tv_get_v_dict(from);
+            if from_dict.is_null() {
+                nvim_tv_set_dict(to, std::ptr::null_mut());
+            } else if copy_id != 0 && nvim_dict_get_copyid(from_dict) == copy_id {
+                // Use the copy made earlier.
+                let existing_copy = nvim_dict_get_copydict(from_dict);
+                nvim_dict_refcount_inc(existing_copy);
+                nvim_tv_set_dict(to, existing_copy);
+            } else {
+                let new_dict = nvim_tv_dict_copy(conv, from_dict, deep, copy_id);
+                nvim_tv_set_dict(to, new_dict);
+            }
+            let to_dict = nvim_tv_get_v_dict(to);
+            if to_dict.is_null() && !nvim_tv_get_v_dict(from).is_null() {
+                ret = FAIL;
+            }
+        }
+        _ => {
+            static MSG: &[u8] = b"var_item_copy(UNKNOWN)\0";
+            internal_error(MSG.as_ptr() as *const c_char);
+            ret = FAIL;
+        }
+    }
+
+    VAR_ITEM_COPY_RECURSE.with(|r| r.set(recurse));
+    ret
+}
+
+/// FFI export for var_item_copy.
+///
+/// # Safety
+/// - `from` and `to` must be valid non-null typval handles
+/// - `conv` may be null
+#[no_mangle]
+pub unsafe extern "C" fn rs_var_item_copy(
+    conv: *const c_void,
+    from: TypevalHandle,
+    to: TypevalHandle,
+    deep: bool,
+    copy_id: c_int,
+) -> c_int {
+    var_item_copy_impl(conv, from, to, deep, copy_id)
+}

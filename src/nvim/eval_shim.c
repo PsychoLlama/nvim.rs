@@ -149,6 +149,8 @@ extern void rs_ex_echo(exarg_T *eap);
 extern void rs_ex_execute(exarg_T *eap);
 extern int rs_eval_option(const char **arg, typval_T *rettv, bool evaluate);
 extern int rs_eval_env_var(char **arg, typval_T *rettv, int evaluate);
+extern int rs_var_item_copy(const void *conv, typval_T *from, typval_T *to, bool deep,
+                            int copyID);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -2470,80 +2472,7 @@ int var_item_copy(const vimconv_T *const conv, typval_T *const from, typval_T *c
                   const bool deep, const int copyID)
   FUNC_ATTR_NONNULL_ARG(2, 3)
 {
-  static int recurse = 0;
-  int ret = OK;
-
-  if (recurse >= DICT_MAXNEST) {
-    emsg(_(e_variable_nested_too_deep_for_making_copy));
-    return FAIL;
-  }
-  recurse++;
-
-  switch (from->v_type) {
-  case VAR_NUMBER:
-  case VAR_FLOAT:
-  case VAR_FUNC:
-  case VAR_PARTIAL:
-  case VAR_BOOL:
-  case VAR_SPECIAL:
-    tv_copy(from, to);
-    break;
-  case VAR_STRING:
-    if (conv == NULL || conv->vc_type == CONV_NONE
-        || from->vval.v_string == NULL) {
-      tv_copy(from, to);
-    } else {
-      to->v_type = VAR_STRING;
-      to->v_lock = VAR_UNLOCKED;
-      if ((to->vval.v_string = string_convert((vimconv_T *)conv,
-                                              from->vval.v_string,
-                                              NULL))
-          == NULL) {
-        to->vval.v_string = xstrdup(from->vval.v_string);
-      }
-    }
-    break;
-  case VAR_LIST:
-    to->v_type = VAR_LIST;
-    to->v_lock = VAR_UNLOCKED;
-    if (from->vval.v_list == NULL) {
-      to->vval.v_list = NULL;
-    } else if (copyID != 0 && tv_list_copyid(from->vval.v_list) == copyID) {
-      // Use the copy made earlier.
-      to->vval.v_list = tv_list_latest_copy(from->vval.v_list);
-      tv_list_ref(to->vval.v_list);
-    } else {
-      to->vval.v_list = tv_list_copy(conv, from->vval.v_list, deep, copyID);
-    }
-    if (to->vval.v_list == NULL && from->vval.v_list != NULL) {
-      ret = FAIL;
-    }
-    break;
-  case VAR_BLOB:
-    tv_blob_copy(from->vval.v_blob, to);
-    break;
-  case VAR_DICT:
-    to->v_type = VAR_DICT;
-    to->v_lock = VAR_UNLOCKED;
-    if (from->vval.v_dict == NULL) {
-      to->vval.v_dict = NULL;
-    } else if (copyID != 0 && from->vval.v_dict->dv_copyID == copyID) {
-      // use the copy made earlier
-      to->vval.v_dict = from->vval.v_dict->dv_copydict;
-      to->vval.v_dict->dv_refcount++;
-    } else {
-      to->vval.v_dict = tv_dict_copy(conv, from->vval.v_dict, deep, copyID);
-    }
-    if (to->vval.v_dict == NULL && from->vval.v_dict != NULL) {
-      ret = FAIL;
-    }
-    break;
-  case VAR_UNKNOWN:
-    internal_error("var_item_copy(UNKNOWN)");
-    ret = FAIL;
-  }
-  recurse--;
-  return ret;
+  return rs_var_item_copy(conv, from, to, deep, copyID);
 }
 
 /// ":echo expr1 ..."    print each argument separated with a space, add a
@@ -4551,5 +4480,86 @@ char *nvim_vim_getenv(const char *name)
 char *nvim_expand_env_save(const char *src)
 {
   return expand_env_save((char *)src);
+}
+
+// =============================================================================
+// Accessors for Phase 3 (eval_shim pass 4): var_item_copy
+// =============================================================================
+
+/// Get conv->vc_type; returns CONV_NONE (0) if conv is NULL.
+int nvim_vimconv_get_type(const vimconv_T *conv)
+{
+  return conv == NULL ? CONV_NONE : (int)conv->vc_type;
+}
+
+/// Get tv->vval.v_string (read-only const accessor).
+const char *nvim_tv_get_vstring_const(const typval_T *tv)
+{
+  return tv->vval.v_string;
+}
+
+/// Wrap string_convert(conv, str, NULL).
+/// Returns converted string (allocated) or NULL. Caller must xfree.
+char *nvim_string_convert(const vimconv_T *conv, const char *str)
+{
+  return string_convert((vimconv_T *)conv, (char *)str, NULL);
+}
+
+/// Get tv_list_copyid(list).
+int nvim_tv_list_copyid(const list_T *list)
+{
+  return tv_list_copyid(list);
+}
+
+/// Get tv_list_latest_copy(list).
+list_T *nvim_tv_list_latest_copy(const list_T *list)
+{
+  return tv_list_latest_copy(list);
+}
+
+/// Call tv_list_ref(list) to increment refcount.
+void nvim_tv_list_ref(list_T *list)
+{
+  tv_list_ref(list);
+}
+
+/// Call tv_list_copy(conv, list, deep, copyID) - deep copy a list.
+list_T *nvim_tv_list_copy(const vimconv_T *conv, list_T *list, bool deep, int copyID)
+{
+  return tv_list_copy(conv, list, deep, copyID);
+}
+
+/// Set tv->vval.v_list = list.
+void nvim_tv_set_list(typval_T *tv, list_T *list)
+{
+  tv->vval.v_list = list;
+}
+
+// nvim_dict_get_copyid already exists in eval/typval.c -- no duplicate needed here.
+
+/// Get dict->dv_copydict.
+dict_T *nvim_dict_get_copydict(const dict_T *dict)
+{
+  return dict->dv_copydict;
+}
+
+// nvim_dict_refcount_inc already exists above (line ~3863) -- no duplicate needed here.
+
+/// Call tv_dict_copy(conv, dict, deep, copyID) - deep copy a dict.
+dict_T *nvim_tv_dict_copy(const vimconv_T *conv, dict_T *dict, bool deep, int copyID)
+{
+  return tv_dict_copy(conv, dict, deep, copyID);
+}
+
+/// Set tv->vval.v_dict = dict.
+void nvim_tv_set_dict(typval_T *tv, dict_T *dict)
+{
+  tv->vval.v_dict = dict;
+}
+
+/// Emit "E698: variable nested too deep for making a copy" error.
+void nvim_emsg_nested_too_deep(void)
+{
+  emsg(_(e_variable_nested_too_deep_for_making_copy));
 }
 
