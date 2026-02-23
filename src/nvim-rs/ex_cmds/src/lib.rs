@@ -788,8 +788,12 @@ extern "C" {
     pub fn nvim_excmds_get_sub_nlines() -> c_int;
     /// Set sub_nlines global.
     pub fn nvim_excmds_set_sub_nlines(val: c_int);
-    /// Call do_sub_msg(count_only).
-    pub fn nvim_excmds_do_sub_msg(count_only: c_int) -> c_int;
+    /// Format and display the substitution count message (NGETTEXT in C).
+    pub fn nvim_excmds_format_sub_msg(count_only: c_int) -> c_int;
+    /// Return KeyTyped global.
+    pub fn nvim_excmds_get_KeyTyped() -> c_int;
+    /// Return messaging() result (1 = messaging on, 0 = off).
+    pub fn nvim_excmds_messaging() -> c_int;
     /// Call ex_may_print(eap).
     pub fn nvim_excmds_ex_may_print(eap: *mut ExArgHandle);
     /// Call save_re_pat(idx, pat, patlen, magic).

@@ -60,12 +60,29 @@ extern "C" {
     fn nvim_excmds_do_join(count: c_int) -> c_int;
     fn nvim_excmds_set_sub_nsubs(val: c_int);
     fn nvim_excmds_set_sub_nlines(val: c_int);
-    /// Full do_sub_msg implementation (formatting + messaging) in C.
-    fn nvim_excmds_do_sub_msg(count_only: c_int) -> c_int;
     fn nvim_excmds_ex_may_print(eap: *mut ExArgHandle);
     fn nvim_excmds_save_re_pat(idx: c_int, pat: *const c_char, patlen: usize, magic: c_int);
     fn nvim_excmds_add_to_hist_search(pat: *const c_char, patlen: usize);
     fn rs_magic_isset() -> c_int;
+
+    // do_sub_msg FFI -- control flow in Rust, formatting/messaging in C
+    /// Return sub_nsubs global.
+    fn nvim_excmds_get_sub_nsubs() -> c_int;
+    /// Return sub_nlines global.
+    fn nvim_excmds_get_sub_nlines() -> c_int;
+    /// Return p_report option value.
+    fn nvim_excmds_p_report() -> i64;
+    /// Return KeyTyped global.
+    fn nvim_excmds_get_KeyTyped() -> c_int;
+    /// Return messaging() result (1 = messaging on, 0 = off).
+    fn nvim_excmds_messaging() -> c_int;
+    /// Return got_int global.
+    fn nvim_excmds_got_int() -> c_int;
+    /// Format and display the substitution count message (NGETTEXT in C).
+    /// Returns true if message was displayed.
+    fn nvim_excmds_format_sub_msg(count_only: c_int) -> c_int;
+    /// emsg(_(e_interr)) wrapper.
+    fn nvim_excmds_emsg_interr();
 
     // sub_grow_buf FFI
     fn xcalloc(count: usize, size: usize) -> *mut std::ffi::c_void;
@@ -460,7 +477,7 @@ pub unsafe extern "C" fn rs_sub_joining_lines(
         nvim_excmds_do_join(joined_lines_count);
         nvim_excmds_set_sub_nsubs(joined_lines_count - 1);
         nvim_excmds_set_sub_nlines(1);
-        nvim_excmds_do_sub_msg(0); // count_only = false
+        rs_do_sub_msg(false);
         nvim_excmds_ex_may_print(eap);
     }
 
@@ -527,15 +544,34 @@ pub unsafe extern "C" fn rs_sub_grow_buf(
 
 /// Give message for number of substitutions.
 ///
-/// Replaces the C `do_sub_msg` function. Delegates the formatting
-/// and messaging to the C-side `nvim_excmds_do_sub_msg` helper which handles
-/// NGETTEXT internationalization and msg_buf formatting.
+/// Replaces the C `do_sub_msg` function. Contains the control-flow logic;
+/// delegates NGETTEXT formatting to `nvim_excmds_format_sub_msg` which keeps
+/// internationalization in C.
 ///
 /// # Safety
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_do_sub_msg(count_only: bool) -> bool {
-    nvim_excmds_do_sub_msg(c_int::from(count_only)) != 0
+    let sub_nsubs = nvim_excmds_get_sub_nsubs();
+    let sub_nlines = nvim_excmds_get_sub_nlines();
+    let p_report = nvim_excmds_p_report();
+    let key_typed = nvim_excmds_get_KeyTyped() != 0;
+    let messaging = nvim_excmds_messaging() != 0;
+    let got_int = nvim_excmds_got_int() != 0;
+
+    let threshold_met = (sub_nsubs as i64 > p_report
+        && (key_typed || sub_nlines > 1 || p_report < 1))
+        || count_only;
+
+    if threshold_met && messaging {
+        nvim_excmds_format_sub_msg(c_int::from(count_only));
+        return true;
+    }
+    if got_int {
+        nvim_excmds_emsg_interr();
+        return true;
+    }
+    false
 }
 
 /// Parse :substitute flags from a C command string. Replaces the C

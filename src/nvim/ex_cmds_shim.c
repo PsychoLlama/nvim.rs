@@ -3301,45 +3301,43 @@ skip:
 #undef PUSH_PREVIEW_LINES
 }
 
-/// Format the substitution count message into msg_buf.
+/// Format and display the substitution count message.
 ///
-/// Returns true if the message should be reported (thresholds met and messaging on).
-/// This is a helper for rs_do_sub_msg.
-bool nvim_excmds_do_sub_msg(bool count_only)
+/// Handles the NGETTEXT formatting (which must stay in C for i18n) and message
+/// display. This is called by rs_do_sub_msg when thresholds are met.
+/// Returns true if the message was displayed.
+bool nvim_excmds_format_sub_msg(bool count_only)
 {
-  if (((sub_nsubs > p_report && (KeyTyped || sub_nlines > 1 || p_report < 1))
-       || count_only)
-      && messaging()) {
-    if (got_int) {
-      STRCPY(msg_buf, _("(Interrupted) "));
-    } else {
-      *msg_buf = NUL;
-    }
-
-    char *msg_single = count_only
-                       ? NGETTEXT("%" PRId64 " match on %" PRId64 " line",
-                                  "%" PRId64 " matches on %" PRId64 " line", sub_nsubs)
-                       : NGETTEXT("%" PRId64 " substitution on %" PRId64 " line",
-                                  "%" PRId64 " substitutions on %" PRId64 " line", sub_nsubs);
-    char *msg_plural = count_only
-                       ? NGETTEXT("%" PRId64 " match on %" PRId64 " lines",
-                                  "%" PRId64 " matches on %" PRId64 " lines", sub_nsubs)
-                       : NGETTEXT("%" PRId64 " substitution on %" PRId64 " lines",
-                                  "%" PRId64 " substitutions on %" PRId64 " lines", sub_nsubs);
-    vim_snprintf_add(msg_buf, sizeof(msg_buf),
-                     NGETTEXT(msg_single, msg_plural, sub_nlines),
-                     (int64_t)sub_nsubs, (int64_t)sub_nlines);
-    if (msg(msg_buf, 0)) {
-      set_keep_msg(msg_buf, 0);
-    }
-    return true;
-  }
   if (got_int) {
-    emsg(_(e_interr));
-    return true;
+    STRCPY(msg_buf, _("(Interrupted) "));
+  } else {
+    *msg_buf = NUL;
   }
-  return false;
+
+  char *msg_single = count_only
+                     ? NGETTEXT("%" PRId64 " match on %" PRId64 " line",
+                                "%" PRId64 " matches on %" PRId64 " line", sub_nsubs)
+                     : NGETTEXT("%" PRId64 " substitution on %" PRId64 " line",
+                                "%" PRId64 " substitutions on %" PRId64 " line", sub_nsubs);
+  char *msg_plural = count_only
+                     ? NGETTEXT("%" PRId64 " match on %" PRId64 " lines",
+                                "%" PRId64 " matches on %" PRId64 " lines", sub_nsubs)
+                     : NGETTEXT("%" PRId64 " substitution on %" PRId64 " lines",
+                                "%" PRId64 " substitutions on %" PRId64 " lines", sub_nsubs);
+  vim_snprintf_add(msg_buf, sizeof(msg_buf),
+                   NGETTEXT(msg_single, msg_plural, sub_nlines),
+                   (int64_t)sub_nsubs, (int64_t)sub_nlines);
+  if (msg(msg_buf, 0)) {
+    set_keep_msg(msg_buf, 0);
+  }
+  return true;
 }
+
+/// Accessor: return KeyTyped global.
+int nvim_excmds_get_KeyTyped(void) { return KeyTyped ? 1 : 0; }
+
+/// Accessor: return messaging() result.
+int nvim_excmds_messaging(void) { return messaging() ? 1 : 0; }
 
 // do_sub_msg implemented in Rust (rs_do_sub_msg in ex_cmds/src/substitute.rs).
 // The Rust implementation calls nvim_excmds_do_sub_msg (above) for formatting.
