@@ -136,6 +136,19 @@ extern void rs_set_options_bin(int oldval, int newval, int opt_flags);
 extern void rs_set_fileformat(int eol_style, int opt_flags);
 extern void rs_set_helplang_default(const char *lang);
 
+// Rust query functions (from Rust query.rs, option pass 4 phase 1)
+extern int rs_can_bs(int what);
+extern const char *rs_get_equalprg(void);
+extern const char *rs_get_findfunc(void);
+extern unsigned rs_get_bkc_flags(buf_T *buf);
+extern char *rs_get_flp_value(buf_T *buf);
+extern unsigned rs_get_ve_flags(win_T *wp);
+extern void rs_redraw_titles(void);
+extern void rs_vimrc_found(const char *fname, const char *envname);
+extern void rs_set_iminsert_global(buf_T *buf);
+extern void rs_set_imsearch_global(buf_T *buf);
+extern void rs_reset_modifiable(void);
+
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
 _Static_assert(UPD_VALID == 10, "UPD_VALID mismatch with Rust UpdateType::Valid");
 _Static_assert(UPD_INVERTED == 20, "UPD_INVERTED mismatch with Rust UpdateType::Inverted");
@@ -1201,6 +1214,50 @@ int nvim_get_p_ml_nobin(void) { return p_ml_nobin; }
 void nvim_set_p_ml_nobin(int v) { p_ml_nobin = v != 0; }
 int nvim_get_p_et_nobin(void) { return p_et_nobin; }
 void nvim_set_p_et_nobin(int v) { p_et_nobin = v != 0; }
+
+// =============================================================================
+// Phase 4 (option pass 4) accessors for query.rs migration
+// =============================================================================
+
+// p_bs accessor (for can_bs)
+const char *nvim_option_get_p_bs(void) { return p_bs; }
+// bt_prompt(curbuf) accessor (for can_bs)
+int nvim_curbuf_is_prompt(void) { return bt_prompt(curbuf); }
+// b_p_ep / p_ep accessors (for get_equalprg)
+const char *nvim_curbuf_get_b_p_ep(void) { return curbuf->b_p_ep; }
+const char *nvim_option_get_p_ep(void) { return p_ep; }
+// b_p_ffu / p_ffu accessors (for get_findfunc)
+const char *nvim_curbuf_get_b_p_ffu(void) { return curbuf->b_p_ffu; }
+const char *nvim_option_get_p_ffu(void) { return p_ffu; }
+// p_flp / b_p_flp accessors (for get_flp_value)
+const char *nvim_option_get_p_flp(void) { return p_flp; }
+const char *nvim_buf_get_p_flp(buf_T *buf) { return buf->b_p_flp; }
+// ve_flags accessors (for get_ve_flags)
+unsigned nvim_get_ve_flags_global(void) { return ve_flags; }
+unsigned nvim_win_get_ve_flags(win_T *wp) { return wp->w_ve_flags; }
+// iminsert/imsearch global accessors (for set_iminsert/imsearch_global)
+OptInt nvim_get_p_iminsert(void) { return p_iminsert; }
+void nvim_set_p_iminsert(OptInt v) { p_iminsert = v; }
+OptInt nvim_get_p_imsearch(void) { return p_imsearch; }
+void nvim_set_p_imsearch(OptInt v) { p_imsearch = v; }
+// buf b_p_iminsert/imsearch accessors (for set_iminsert/imsearch_global)
+OptInt nvim_buf_get_b_p_iminsert(buf_T *buf) { return buf->b_p_iminsert; }
+OptInt nvim_buf_get_b_p_imsearch(buf_T *buf) { return buf->b_p_imsearch; }
+// p_ma / b_p_ma accessors (for reset_modifiable)
+int nvim_option_get_p_ma(void) { return p_ma; }
+void nvim_option_set_p_ma(int v) { p_ma = v != 0; }
+int nvim_curbuf_get_b_p_ma(void) { return curbuf->b_p_ma; }
+void nvim_curbuf_set_b_p_ma(int v) { curbuf->b_p_ma = v != 0; }
+// change_option_default wrapper (for reset_modifiable)
+void nvim_change_option_default_bool(OptIndex opt_idx, int value) { change_option_default(opt_idx, BOOLEAN_OPTVAL(value != 0)); }
+// kOptModifiable index accessor (for reset_modifiable)
+int nvim_get_opt_idx_modifiable(void) { return (int)kOptModifiable; }
+// FullName_save wrapper (for vimrc_found)
+char *nvim_option_FullName_save(const char *fname, bool force) { return FullName_save(fname, force); }
+// vim_getenv wrapper (for vimrc_found)
+char *nvim_option_vim_getenv(const char *envname) { return vim_getenv(envname); }
+// os_setenv wrapper (for vimrc_found)
+int nvim_option_os_setenv(const char *name, const char *value, int overwrite) { return os_setenv(name, value, overwrite); }
 
 void set_init_tablocal(void)
 {
@@ -2376,8 +2433,7 @@ uint32_t *insecure_flag(win_T *const wp, OptIndex opt_idx, int opt_flags)
 /// Redraw the window title and/or tab page text later.
 void redraw_titles(void)
 {
-  need_maketitle = true;
-  redraw_tabline = true;
+  rs_redraw_titles();
 }
 
 void check_blending(win_T *wp)
@@ -3971,19 +4027,13 @@ static inline void *get_varp(vimoption_T *p)
 /// Get the value of 'equalprg', either the buffer-local one or the global one.
 char *get_equalprg(void)
 {
-  if (*curbuf->b_p_ep == NUL) {
-    return p_ep;
-  }
-  return curbuf->b_p_ep;
+  return (char *)rs_get_equalprg();
 }
 
 /// Get the value of 'findfunc', either the buffer-local one or the global one.
 char *get_findfunc(void)
 {
-  if (*curbuf->b_p_ffu == NUL) {
-    return p_ffu;
-  }
-  return curbuf->b_p_ffu;
+  return (char *)rs_get_findfunc();
 }
 
 /// Copy options from one window to another.
@@ -4450,21 +4500,19 @@ void buf_copy_options(buf_T *buf, int flags)
 /// Reset the 'modifiable' option and its default value.
 void reset_modifiable(void)
 {
-  curbuf->b_p_ma = false;
-  p_ma = false;
-  change_option_default(kOptModifiable, BOOLEAN_OPTVAL(false));
+  rs_reset_modifiable();
 }
 
 /// Set the global value for 'iminsert' to the local value.
 void set_iminsert_global(buf_T *buf)
 {
-  p_iminsert = buf->b_p_iminsert;
+  rs_set_iminsert_global(buf);
 }
 
 /// Set the global value for 'imsearch' to the local value.
 void set_imsearch_global(buf_T *buf)
 {
-  p_imsearch = buf->b_p_imsearch;
+  rs_set_imsearch_global(buf);
 }
 
 static OptIndex expand_option_idx = kOptInvalid;
@@ -4836,19 +4884,7 @@ bool shortmess(int x)
 /// When "fname" is not NULL, use it to set $"envname" when it wasn't set yet.
 void vimrc_found(char *fname, char *envname)
 {
-  if (fname != NULL && envname != NULL) {
-    char *p = vim_getenv(envname);
-    if (p == NULL) {
-      // Set $MYVIMRC to the first vimrc file found.
-      p = FullName_save(fname, false);
-      if (p != NULL) {
-        os_setenv(envname, p, 1);
-        xfree(p);
-      }
-    } else {
-      xfree(p);
-    }
-  }
+  rs_vimrc_found(fname, envname);
 }
 
 /// Check whether global option has been set.
@@ -4932,17 +4968,7 @@ static void didset_options_sctx(int opt_flags, int *buf)
 /// @param  what  BS_INDENT, BS_EOL, BS_START, or BS_NOSTOP
 bool can_bs(int what)
 {
-  if (what == BS_START && bt_prompt(curbuf)) {
-    return false;
-  }
-
-  // support for number values was removed but we keep '2' since it is used in
-  // legacy tests
-  if (*p_bs == '2') {
-    return what != BS_NOSTOP;
-  }
-
-  return vim_strchr(p_bs, what) != NULL;
+  return rs_can_bs(what) != 0;
 }
 
 /// Get the local or global value of 'backupcopy' flags.
@@ -4950,7 +4976,7 @@ bool can_bs(int what)
 /// @param buf The buffer.
 unsigned get_bkc_flags(buf_T *buf)
 {
-  return buf->b_bkc_flags ? buf->b_bkc_flags : bkc_flags;
+  return rs_get_bkc_flags(buf);
 }
 
 /// Get the local or global value of 'formatlistpat'.
@@ -4958,17 +4984,13 @@ unsigned get_bkc_flags(buf_T *buf)
 /// @param buf The buffer.
 char *get_flp_value(buf_T *buf)
 {
-  if (buf->b_p_flp == NULL || *buf->b_p_flp == NUL) {
-    return p_flp;
-  }
-  return buf->b_p_flp;
+  return rs_get_flp_value(buf);
 }
 
 /// Get the local or global value of 'virtualedit' flags.
 unsigned get_ve_flags(win_T *wp)
 {
-  return (wp->w_ve_flags ? wp->w_ve_flags : ve_flags)
-         & ~(unsigned)(kOptVeFlagNone | kOptVeFlagNoneU);
+  return rs_get_ve_flags(wp);
 }
 
 /// Like get_fileformat(), but override 'fileformat' with "p" for "++opt=val"

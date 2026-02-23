@@ -26,6 +26,7 @@ pub mod init;
 pub mod modeline;
 pub mod opt_index;
 pub mod parsing;
+pub mod query;
 pub mod scope;
 pub mod set;
 pub mod setcmd;
