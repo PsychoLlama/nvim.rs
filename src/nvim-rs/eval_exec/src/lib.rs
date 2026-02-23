@@ -419,96 +419,6 @@ pub const fn checked_mod(a: i64, b: i64) -> Option<i64> {
     }
 }
 
-/// FFI export: checked integer add.
-///
-/// # Safety
-/// - `result` must be a valid pointer if non-null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_eval_checked_add(a: i64, b: i64, result: *mut i64) -> bool {
-    match checked_add(a, b) {
-        Some(r) => {
-            if !result.is_null() {
-                // SAFETY: Caller guarantees result is valid if non-null
-                unsafe { *result = r };
-            }
-            true
-        }
-        None => false,
-    }
-}
-
-/// FFI export: checked integer sub.
-///
-/// # Safety
-/// - `result` must be a valid pointer if non-null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_eval_checked_sub(a: i64, b: i64, result: *mut i64) -> bool {
-    match checked_sub(a, b) {
-        Some(r) => {
-            if !result.is_null() {
-                // SAFETY: Caller guarantees result is valid if non-null
-                unsafe { *result = r };
-            }
-            true
-        }
-        None => false,
-    }
-}
-
-/// FFI export: checked integer mul.
-///
-/// # Safety
-/// - `result` must be a valid pointer if non-null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_eval_checked_mul(a: i64, b: i64, result: *mut i64) -> bool {
-    match checked_mul(a, b) {
-        Some(r) => {
-            if !result.is_null() {
-                // SAFETY: Caller guarantees result is valid if non-null
-                unsafe { *result = r };
-            }
-            true
-        }
-        None => false,
-    }
-}
-
-/// FFI export: checked integer div.
-///
-/// # Safety
-/// - `result` must be a valid pointer if non-null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_eval_checked_div(a: i64, b: i64, result: *mut i64) -> bool {
-    match checked_div(a, b) {
-        Some(r) => {
-            if !result.is_null() {
-                // SAFETY: Caller guarantees result is valid if non-null
-                unsafe { *result = r };
-            }
-            true
-        }
-        None => false,
-    }
-}
-
-/// FFI export: checked integer mod.
-///
-/// # Safety
-/// - `result` must be a valid pointer if non-null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_eval_checked_mod(a: i64, b: i64, result: *mut i64) -> bool {
-    match checked_mod(a, b) {
-        Some(r) => {
-            if !result.is_null() {
-                // SAFETY: Caller guarantees result is valid if non-null
-                unsafe { *result = r };
-            }
-            true
-        }
-        None => false,
-    }
-}
-
 // =============================================================================
 // Float Arithmetic Helpers
 // =============================================================================
@@ -523,18 +433,6 @@ pub fn float_div(a: f64, b: f64) -> f64 {
 /// Perform float modulo.
 pub fn float_mod(a: f64, b: f64) -> f64 {
     a % b // Returns NaN for b == 0
-}
-
-/// FFI export: float division.
-#[no_mangle]
-pub extern "C" fn rs_eval_float_div(a: f64, b: f64) -> f64 {
-    float_div(a, b)
-}
-
-/// FFI export: float modulo.
-#[no_mangle]
-pub extern "C" fn rs_eval_float_mod(a: f64, b: f64) -> f64 {
-    float_mod(a, b)
 }
 
 // =============================================================================
@@ -558,18 +456,6 @@ pub const fn is_truthy_number(n: i64) -> bool {
 /// Convert float to boolean.
 pub fn is_truthy_float(f: f64) -> bool {
     f != 0.0 && !f.is_nan()
-}
-
-/// FFI export: check if number is truthy.
-#[no_mangle]
-pub extern "C" fn rs_eval_is_truthy_number(n: i64) -> bool {
-    is_truthy_number(n)
-}
-
-/// FFI export: check if float is truthy.
-#[no_mangle]
-pub extern "C" fn rs_eval_is_truthy_float(f: f64) -> bool {
-    is_truthy_float(f)
 }
 
 // =============================================================================
@@ -609,18 +495,6 @@ pub fn compare_floats(a: f64, b: f64) -> c_int {
     } else {
         0
     }
-}
-
-/// FFI export: compare numbers.
-#[no_mangle]
-pub extern "C" fn rs_eval_compare_numbers(a: i64, b: i64) -> c_int {
-    compare_numbers(a, b)
-}
-
-/// FFI export: compare floats.
-#[no_mangle]
-pub extern "C" fn rs_eval_compare_floats(a: f64, b: f64) -> c_int {
-    compare_floats(a, b)
 }
 
 // =============================================================================
@@ -695,21 +569,6 @@ pub fn string_to_number(s: &[u8]) -> i64 {
     }
 }
 
-/// FFI export: convert string to number.
-///
-/// # Safety
-/// - `s` must be a valid pointer to at least `len` bytes, or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_eval_string_to_number(s: *const u8, len: c_int) -> i64 {
-    if s.is_null() || len < 0 {
-        return 0;
-    }
-
-    // SAFETY: Caller guarantees s points to at least len bytes
-    let slice = unsafe { std::slice::from_raw_parts(s, len as usize) };
-    string_to_number(slice)
-}
-
 // =============================================================================
 // String to Float Conversion
 // =============================================================================
@@ -736,21 +595,6 @@ pub fn string_to_float(s: &[u8]) -> f64 {
     } else {
         0.0
     }
-}
-
-/// FFI export: convert string to float.
-///
-/// # Safety
-/// - `s` must be a valid pointer to at least `len` bytes, or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_eval_string_to_float(s: *const u8, len: c_int) -> f64 {
-    if s.is_null() || len < 0 {
-        return 0.0;
-    }
-
-    // SAFETY: Caller guarantees s points to at least len bytes
-    let slice = unsafe { std::slice::from_raw_parts(s, len as usize) };
-    string_to_float(slice)
 }
 
 // =============================================================================
