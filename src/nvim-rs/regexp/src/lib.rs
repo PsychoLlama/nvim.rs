@@ -2607,15 +2607,21 @@ extern "C" {
 pub unsafe extern "C" fn rs_prog_magic_wrong() -> c_int {
     // Inlined nvim_regexp_nfa_regexec_both_get_prog
     let prog: NfaProgHandle = if REX.reg_match.is_null() {
-        nvim_regmmatch_get_regprog(REX.reg_mmatch.cast_const().cast())
+        (*REX.reg_mmatch.cast::<RegmmatchT>())
+            .regprog
+            .cast::<c_void>()
     } else {
-        nvim_regmatch_get_regprog(REX.reg_match.cast_const().cast())
+        (*REX.reg_match.cast::<RegmatchT>())
+            .regprog
+            .cast::<c_void>()
     };
     if nvim_regexp_prog_is_nfa_engine(prog) != 0 {
         // For NFA matcher we don't check the magic
         return 0;
     }
-    let program = nvim_regexp_get_prog_program(prog);
+    let program = prog
+        .cast::<u8>()
+        .add(core::mem::offset_of!(BtRegprogT, reghasz) + 1);
     if *program as c_int != REGMAGIC {
         nvim_regexp_iemsg_re_corr();
         return 1;
@@ -4763,8 +4769,6 @@ pub unsafe extern "C" fn rs_restore_subexpr(bp: *const RegbehindT) {
 // --- regtry: attempt match at a given column ---
 
 extern "C" {
-    fn nvim_regexp_get_prog_reghasz(prog: *const c_void) -> u8;
-    fn nvim_regexp_get_prog_program(prog: *mut c_void) -> *mut u8;
     fn nvim_regexp_unref_re_extmatch_out();
     fn nvim_regexp_set_re_extmatch_out(em: *mut c_void);
 }
@@ -4782,11 +4786,13 @@ pub unsafe extern "C" fn rs_regtry(
     REX.input = REX.line.add(col as usize);
     REX.need_clear_subexpr = 1;
     // Clear the external match subpointers if necessary.
-    let reghasz = nvim_regexp_get_prog_reghasz(prog) as c_int;
+    let reghasz = (*prog.cast::<BtRegprogT>()).reghasz as c_int;
     REX.need_clear_zsubexpr = c_int::from(reghasz == REX_SET);
 
     // program[1] = skip past the first byte (REGMAGIC)
-    let program = nvim_regexp_get_prog_program(prog);
+    let program = prog
+        .cast::<u8>()
+        .add(core::mem::offset_of!(BtRegprogT, reghasz) + 1);
     if rs_regmatch_impl(program.add(1), tm.cast(), timed_out) == 0 {
         return 0;
     }
@@ -11037,6 +11043,72 @@ struct NfaRegprogT {
     // state[] flexible array member follows — access via pointer arithmetic
 }
 
+/// Matches C `struct regengine` — vtable for BT/NFA engines.
+#[repr(C)]
+struct RegengineT {
+    regcomp: unsafe extern "C" fn(*mut u8, c_int) -> *mut c_void,
+    regfree: unsafe extern "C" fn(*mut c_void),
+    regexec_nl: unsafe extern "C" fn(*mut c_void, *mut u8, i32, bool) -> c_int,
+    regexec_multi: unsafe extern "C" fn(
+        *mut c_void,
+        *mut c_void,
+        *mut c_void,
+        i32,
+        i32,
+        *mut c_void,
+        *mut c_int,
+    ) -> c_int,
+}
+
+/// Matches C `struct regprog` — common header for all regexp programs.
+#[repr(C)]
+struct RegprogT {
+    engine: *mut RegengineT,
+    regflags: c_uint,
+    re_engine: c_uint,
+    re_flags: c_uint,
+    re_in_use: bool,
+}
+
+/// Matches C `bt_regprog_T` — backtracking engine regexp program.
+#[repr(C)]
+struct BtRegprogT {
+    // Common regprog_T header
+    engine: *mut RegengineT,
+    regflags: c_uint,
+    re_engine: c_uint,
+    re_flags: c_uint,
+    re_in_use: bool,
+    // bt_regprog_T specific fields
+    regstart: c_int,
+    reganch: u8,
+    regmust: *mut u8,
+    regmlen: c_int,
+    reghasz: u8,
+    // program[] flexible array member follows — access via pointer arithmetic
+}
+
+/// Matches C `regmatch_T` — single-line match state.
+#[repr(C)]
+struct RegmatchT {
+    regprog: *mut RegprogT,
+    startp: [*mut u8; NSUBEXP],
+    endp: [*mut u8; NSUBEXP],
+    rm_matchcol: i32, // colnr_T
+    rm_ic: bool,
+}
+
+/// Matches C `regmmatch_T` — multi-line match state.
+#[repr(C)]
+struct RegmmatchT {
+    regprog: *mut RegprogT,
+    startpos: [LposT; NSUBEXP],
+    endpos: [LposT; NSUBEXP],
+    rmm_matchcol: i32, // colnr_T
+    rmm_ic: c_int,
+    rmm_maxcol: i32, // colnr_T
+}
+
 /// Type aliases for backward compatibility with opaque handle code.
 type RegsubHandle = *mut c_void; // regsub_T*
 type NfaPimHandle = *mut c_void; // nfa_pim_T*
@@ -14330,23 +14402,10 @@ const fn ascii_isdigit_i(c: c_int) -> c_int {
 
 // Extern declarations for Phase 8.5 / Phase 7 C accessors
 extern "C" {
-    // regsubs_T heap allocation
-
     // iemsg null error
     fn nvim_regexp_call_iemsg_null();
 
-    // Phase 7: regmatch/regmmatch field accessors for inlined setup functions
-    fn nvim_regmatch_get_rm_ic(rmp: *const c_void) -> c_int;
-    fn nvim_regmmatch_get_rmm_ic(rmp: *const c_void) -> c_int;
-    fn nvim_regmmatch_get_rmm_maxcol(rmp: *const c_void) -> i32;
-    fn nvim_regmmatch_set_rmm_matchcol(rmp: *mut c_void, v: i32);
-    fn nvim_regmatch_set_rm_matchcol(rmp: *mut c_void, v: i32);
-    fn nvim_regmmatch_get_startpos_ptr(rmp: *mut c_void) -> *mut LposT;
-    fn nvim_regmmatch_get_endpos_ptr(rmp: *mut c_void) -> *mut LposT;
-    fn nvim_regmatch_get_startp_ptr(rmp: *mut c_void) -> *mut *mut u8;
-    fn nvim_regmatch_get_endp_ptr(rmp: *mut c_void) -> *mut *mut u8;
     fn nvim_regexp_get_buf_ml_line_count(buf: *mut c_void) -> i32;
-    fn nvim_regmmatch_get_rmm_matchcol(rmp: *const c_void) -> i32;
     fn nvim_regexp_get_re_extmatch_out() -> *mut c_void;
     fn nvim_regexp_set_re_extmatch_out_match(i: c_int, v: *mut u8);
 }
@@ -14363,7 +14422,7 @@ unsafe fn nfa_regtry_extract_multi(subs: *mut RegsubsT, col: i32) {
         (*REX.reg_endpos.add(i)).col = norm.list.multi[i].end_col;
     }
     if !REX.reg_mmatch.is_null() {
-        nvim_regmmatch_set_rmm_matchcol(REX.reg_mmatch, norm.orig_start_col);
+        (*REX.reg_mmatch.cast::<RegmmatchT>()).rmm_matchcol = norm.orig_start_col;
     }
     if (*REX.reg_startpos).lnum < 0 {
         (*REX.reg_startpos).lnum = 0;
@@ -14523,9 +14582,9 @@ unsafe fn nfa_regexec_validate_match() {
 #[inline]
 unsafe fn nfa_regexec_set_matchcol(col: i32) {
     if REX.reg_match.is_null() {
-        nvim_regmmatch_set_rmm_matchcol(REX.reg_mmatch, col);
+        (*REX.reg_mmatch.cast::<RegmmatchT>()).rmm_matchcol = col;
     } else {
-        nvim_regmatch_set_rm_matchcol(REX.reg_match, col);
+        (*REX.reg_match.cast::<RegmatchT>()).rm_matchcol = col;
     }
 }
 
@@ -14546,9 +14605,13 @@ pub unsafe extern "C" fn rs_nfa_regexec_both(
     // Inlined nvim_regexp_nfa_regexec_both_get_prog:
     // get prog from reg_mmatch or reg_match
     let prog: NfaProgHandle = if REX.reg_match.is_null() {
-        nvim_regmmatch_get_regprog(REX.reg_mmatch.cast_const().cast())
+        (*REX.reg_mmatch.cast::<RegmmatchT>())
+            .regprog
+            .cast::<c_void>()
     } else {
-        nvim_regmatch_get_regprog(REX.reg_match.cast_const().cast())
+        (*REX.reg_match.cast::<RegmatchT>())
+            .regprog
+            .cast::<c_void>()
     };
 
     // Inlined nvim_regexp_nfa_regexec_both_get_line:
@@ -14562,11 +14625,11 @@ pub unsafe extern "C" fn rs_nfa_regexec_both(
     // Inlined nvim_regexp_nfa_regexec_both_setup_pointers:
     // set rex pointer fields from match structs
     if REX.reg_match.is_null() {
-        REX.reg_startpos = nvim_regmmatch_get_startpos_ptr(REX.reg_mmatch);
-        REX.reg_endpos = nvim_regmmatch_get_endpos_ptr(REX.reg_mmatch);
+        REX.reg_startpos = (*REX.reg_mmatch.cast::<RegmmatchT>()).startpos.as_mut_ptr();
+        REX.reg_endpos = (*REX.reg_mmatch.cast::<RegmmatchT>()).endpos.as_mut_ptr();
     } else {
-        REX.reg_startp = nvim_regmatch_get_startp_ptr(REX.reg_match);
-        REX.reg_endp = nvim_regmatch_get_endp_ptr(REX.reg_match);
+        REX.reg_startp = (*REX.reg_match.cast::<RegmatchT>()).startp.as_mut_ptr();
+        REX.reg_endp = (*REX.reg_match.cast::<RegmatchT>()).endp.as_mut_ptr();
     }
 
     // Be paranoid...
@@ -14692,10 +14755,12 @@ pub unsafe extern "C" fn rs_nfa_regexec_nl(
     REX.reg_line_lbr = line_lbr != 0;
     REX.reg_buf = nvim_regexp_get_curbuf().cast();
     REX.reg_win = core::ptr::null_mut();
-    REX.reg_ic = nvim_regmatch_get_rm_ic(rmp.cast_const()) != 0;
+    REX.reg_ic = (*rmp.cast::<RegmatchT>()).rm_ic as c_int != 0;
     REX.reg_icombine = false;
-    let prog = nvim_regmatch_get_regprog(rmp.cast_const());
-    REX.reg_nobreak = nvim_regprog_get_re_flags(prog) & 16 != 0; // 16 = RE_NOBREAK
+    let prog = (*rmp.cast_const().cast::<RegmatchT>())
+        .regprog
+        .cast::<c_void>();
+    REX.reg_nobreak = (*prog.cast::<RegprogT>()).re_flags & 16 != 0; // 16 = RE_NOBREAK
     REX.reg_maxcol = 0;
 
     rs_nfa_regexec_both(line, col, core::ptr::null_mut(), core::ptr::null_mut())
@@ -14721,11 +14786,13 @@ pub unsafe extern "C" fn rs_nfa_regexec_multi(
     REX.reg_firstlnum = lnum;
     REX.reg_maxline = nvim_regexp_get_buf_ml_line_count(buf) - lnum;
     REX.reg_line_lbr = false;
-    REX.reg_ic = nvim_regmmatch_get_rmm_ic(rmp.cast_const()) != 0;
+    REX.reg_ic = (*rmp.cast_const().cast::<RegmmatchT>()).rmm_ic != 0;
     REX.reg_icombine = false;
-    let prog = nvim_regmmatch_get_regprog(rmp.cast_const());
-    REX.reg_nobreak = nvim_regprog_get_re_flags(prog) & 16 != 0; // 16 = RE_NOBREAK
-    REX.reg_maxcol = nvim_regmmatch_get_rmm_maxcol(rmp.cast_const());
+    let prog = (*rmp.cast_const().cast::<RegmmatchT>())
+        .regprog
+        .cast::<c_void>();
+    REX.reg_nobreak = (*prog.cast::<RegprogT>()).re_flags & 16 != 0; // 16 = RE_NOBREAK
+    REX.reg_maxcol = (*rmp.cast_const().cast::<RegmmatchT>()).rmm_maxcol;
 
     rs_nfa_regexec_both(core::ptr::null_mut(), col, tm, timed_out)
 }
@@ -14735,11 +14802,6 @@ pub unsafe extern "C" fn rs_nfa_regexec_multi(
 // --- Phase 9.1: BT dispatch wrappers ---
 
 extern "C" {
-    // Phase 9.2: bt_regexec_both accessors
-    fn nvim_bt_prog_get_regmust(prog: *const c_void) -> *mut u8;
-    fn nvim_bt_prog_get_regmlen(prog: *const c_void) -> c_int;
-    fn nvim_bt_prog_get_regstart(prog: *const c_void) -> c_int;
-    fn nvim_bt_prog_get_reganch(prog: *const c_void) -> c_int;
     fn nvim_regexp_call_prog_magic_wrong() -> c_int;
 }
 
@@ -14759,10 +14821,12 @@ pub unsafe extern "C" fn rs_bt_regexec_nl(
     REX.reg_line_lbr = line_lbr != 0;
     REX.reg_buf = nvim_regexp_get_curbuf().cast();
     REX.reg_win = core::ptr::null_mut();
-    REX.reg_ic = nvim_regmatch_get_rm_ic(rmp.cast_const()) != 0;
+    REX.reg_ic = (*rmp.cast::<RegmatchT>()).rm_ic as c_int != 0;
     REX.reg_icombine = false;
-    let prog = nvim_regmatch_get_regprog(rmp.cast_const());
-    REX.reg_nobreak = nvim_regprog_get_re_flags(prog) & 16 != 0; // 16 = RE_NOBREAK
+    let prog = (*rmp.cast_const().cast::<RegmatchT>())
+        .regprog
+        .cast::<c_void>();
+    REX.reg_nobreak = (*prog.cast::<RegprogT>()).re_flags & 16 != 0; // 16 = RE_NOBREAK
     REX.reg_maxcol = 0;
     rs_bt_regexec_both(line, col, core::ptr::null_mut(), core::ptr::null_mut())
 }
@@ -14787,11 +14851,13 @@ pub unsafe extern "C" fn rs_bt_regexec_multi(
     REX.reg_firstlnum = lnum;
     REX.reg_maxline = nvim_regexp_get_buf_ml_line_count(buf) - lnum;
     REX.reg_line_lbr = false;
-    REX.reg_ic = nvim_regmmatch_get_rmm_ic(rmp.cast_const()) != 0;
+    REX.reg_ic = (*rmp.cast_const().cast::<RegmmatchT>()).rmm_ic != 0;
     REX.reg_icombine = false;
-    let prog = nvim_regmmatch_get_regprog(rmp.cast_const());
-    REX.reg_nobreak = nvim_regprog_get_re_flags(prog) & 16 != 0; // 16 = RE_NOBREAK
-    REX.reg_maxcol = nvim_regmmatch_get_rmm_maxcol(rmp.cast_const());
+    let prog = (*rmp.cast_const().cast::<RegmmatchT>())
+        .regprog
+        .cast::<c_void>();
+    REX.reg_nobreak = (*prog.cast::<RegprogT>()).re_flags & 16 != 0; // 16 = RE_NOBREAK
+    REX.reg_maxcol = (*rmp.cast_const().cast::<RegmmatchT>()).rmm_maxcol;
     rs_bt_regexec_both(core::ptr::null_mut(), col, tm, timed_out)
 }
 
@@ -14818,9 +14884,13 @@ pub unsafe extern "C" fn rs_bt_regexec_both(
 
     // Inlined nvim_regexp_nfa_regexec_both_get_prog: get prog from match struct
     let prog: NfaProgHandle = if REX.reg_match.is_null() {
-        nvim_regmmatch_get_regprog(REX.reg_mmatch.cast_const().cast())
+        (*REX.reg_mmatch.cast::<RegmmatchT>())
+            .regprog
+            .cast::<c_void>()
     } else {
-        nvim_regmatch_get_regprog(REX.reg_match.cast_const().cast())
+        (*REX.reg_match.cast::<RegmatchT>())
+            .regprog
+            .cast::<c_void>()
     };
 
     // Inlined nvim_regexp_nfa_regexec_both_get_line: get line for multi or use arg
@@ -14832,11 +14902,11 @@ pub unsafe extern "C" fn rs_bt_regexec_both(
 
     // Inlined nvim_regexp_nfa_regexec_both_setup_pointers
     if REX.reg_match.is_null() {
-        REX.reg_startpos = nvim_regmmatch_get_startpos_ptr(REX.reg_mmatch);
-        REX.reg_endpos = nvim_regmmatch_get_endpos_ptr(REX.reg_mmatch);
+        REX.reg_startpos = (*REX.reg_mmatch.cast::<RegmmatchT>()).startpos.as_mut_ptr();
+        REX.reg_endpos = (*REX.reg_mmatch.cast::<RegmmatchT>()).endpos.as_mut_ptr();
     } else {
-        REX.reg_startp = nvim_regmatch_get_startp_ptr(REX.reg_match);
-        REX.reg_endp = nvim_regmatch_get_endp_ptr(REX.reg_match);
+        REX.reg_startp = (*REX.reg_match.cast::<RegmatchT>()).startp.as_mut_ptr();
+        REX.reg_endp = (*REX.reg_match.cast::<RegmatchT>()).endp.as_mut_ptr();
     }
 
     // Be paranoid...
@@ -14874,7 +14944,7 @@ pub unsafe extern "C" fn rs_bt_regexec_both(
     }
 
     // If there is a "must appear" string, look for it
-    let regmust = nvim_bt_prog_get_regmust(prog);
+    let regmust = (*prog.cast::<BtRegprogT>()).regmust;
     if !regmust.is_null() && !bt_regmust_search(line, col, prog, regmust) {
         nvim_regexp_bt_cleanup_stacks_rust();
         return 0;
@@ -14885,8 +14955,8 @@ pub unsafe extern "C" fn rs_bt_regexec_both(
     REX.lnum = 0;
     REG_TOOLONG = 0;
 
-    let regstart = nvim_bt_prog_get_regstart(prog);
-    let reganch = nvim_bt_prog_get_reganch(prog);
+    let regstart = (*prog.cast::<BtRegprogT>()).regstart;
+    let reganch = (*prog.cast::<BtRegprogT>()).reganch as c_int;
 
     // Simplest case: Anchored match need be tried only once
     let retval = if reganch != 0 {
@@ -14926,7 +14996,7 @@ unsafe fn bt_regmust_search(
             if s.is_null() {
                 break;
             }
-            let mut regmlen = nvim_bt_prog_get_regmlen(prog);
+            let mut regmlen = (*prog.cast::<BtRegprogT>()).regmlen;
             if rs_cstrncmp(s.cast::<c_char>(), regmust.cast::<c_char>(), &mut regmlen) == 0 {
                 return true;
             }
@@ -14939,7 +15009,7 @@ unsafe fn bt_regmust_search(
             if s.is_null() {
                 break;
             }
-            let mut regmlen = nvim_bt_prog_get_regmlen(prog);
+            let mut regmlen = (*prog.cast::<BtRegprogT>()).regmlen;
             if rs_cstrncmp(s.cast::<c_char>(), regmust.cast::<c_char>(), &mut regmlen) == 0 {
                 return true;
             }
@@ -15041,7 +15111,6 @@ unsafe fn bt_try_unanchored(
 // --- Phase 9.3: vim_regfree + free_regexp_stuff ---
 
 extern "C" {
-    fn nvim_regexp_call_engine_regfree(prog: *mut c_void);
     fn nvim_regexp_call_free_regexp_stuff();
 }
 
@@ -15049,7 +15118,7 @@ extern "C" {
 #[no_mangle]
 pub unsafe extern "C" fn vim_regfree(prog: *mut c_void) {
     if !prog.is_null() {
-        nvim_regexp_call_engine_regfree(prog);
+        ((*(*prog.cast::<RegprogT>()).engine).regfree)(prog.cast::<c_void>());
     }
 }
 
@@ -15065,44 +15134,9 @@ const BACKTRACKING_ENGINE: c_int = 1;
 const REX_ALL: c_int = 3; // REX_SET(1) | REX_USE(2)
 
 extern "C" {
-    // Rex save/restore
-
-    // Engine vtable dispatch
-    fn nvim_regexp_call_engine_regexec_nl(
-        prog: *mut c_void,
-        rmp: *mut c_void,
-        line: *const u8,
-        col: i32,
-        nl: c_int,
-    ) -> c_int;
-    fn nvim_regexp_call_engine_regexec_multi(
-        prog: *mut c_void,
-        rmp: *mut c_void,
-        win: *mut c_void,
-        buf: *mut c_void,
-        lnum: i32,
-        col: i32,
-        tm: *mut c_void,
-        timed_out: *mut c_int,
-    ) -> c_int;
-
-    // regprog_T field accessors
-    fn nvim_regprog_get_re_in_use(prog: *const c_void) -> c_int;
-    fn nvim_regprog_set_re_in_use(prog: *mut c_void, v: c_int);
-    fn nvim_regprog_get_re_engine(prog: *const c_void) -> c_uint;
-    fn nvim_regprog_get_re_flags(prog: *const c_void) -> c_uint;
-
-    // regmatch_T / regmmatch_T field accessors
-    fn nvim_regmatch_get_regprog(rmp: *const c_void) -> *mut c_void;
-    fn nvim_regmatch_set_regprog(rmp: *mut c_void, prog: *mut c_void);
-    fn nvim_regmmatch_get_regprog(rmp: *const c_void) -> *mut c_void;
-    fn nvim_regmmatch_set_regprog(rmp: *mut c_void, prog: *mut c_void);
-
     // p_re option
     fn nvim_regexp_get_p_re() -> i32;
     fn nvim_regexp_set_p_re(v: i32);
-
-    // NFA pattern
 
     // reg_do_extmatch
     fn nvim_regexp_set_reg_do_extmatch(v: c_int);
@@ -15151,22 +15185,27 @@ unsafe fn report_re_switch(pat: *const c_char) {
 /// Returns the updated result after fallback attempt.
 #[allow(clippy::too_many_arguments)]
 unsafe fn handle_nfa_fallback_nl(rmp: *mut c_void, line: *const u8, col: i32, nl: c_int) -> c_int {
-    let prog = nvim_regmatch_get_regprog(rmp);
+    let prog = (*rmp.cast::<RegmatchT>()).regprog.cast::<c_void>();
     let save_p_re = nvim_regexp_get_p_re();
-    let re_flags = nvim_regprog_get_re_flags(prog) as c_int;
+    let re_flags = (*prog.cast::<RegprogT>()).re_flags as c_int;
     let pat = nvim_regexp_xstrdup((*prog.cast::<NfaRegprogT>()).pattern.cast_const());
 
     nvim_regexp_set_p_re(BACKTRACKING_ENGINE);
     nvim_regexp_call_vim_regfree(prog);
     report_re_switch(pat);
     let new_prog = nvim_regexp_call_vim_regcomp(pat, re_flags);
-    nvim_regmatch_set_regprog(rmp, new_prog);
+    (*rmp.cast::<RegmatchT>()).regprog = new_prog.cast::<RegprogT>();
 
     let mut result: c_int = 0;
     if !new_prog.is_null() {
-        nvim_regprog_set_re_in_use(new_prog, 1);
-        result = nvim_regexp_call_engine_regexec_nl(new_prog, rmp, line, col, nl);
-        nvim_regprog_set_re_in_use(new_prog, 0);
+        (*new_prog.cast::<RegprogT>()).re_in_use = true;
+        result = ((*(*new_prog.cast::<RegprogT>()).engine).regexec_nl)(
+            rmp.cast::<c_void>(),
+            line.cast_mut(),
+            col,
+            nl != 0,
+        );
+        (*new_prog.cast::<RegprogT>()).re_in_use = false;
     }
 
     xfree(pat.cast::<c_void>());
@@ -15185,9 +15224,9 @@ unsafe fn handle_nfa_fallback_multi(
     tm: *mut c_void,
     timed_out: *mut c_int,
 ) -> c_int {
-    let prog = nvim_regmmatch_get_regprog(rmp);
+    let prog = (*rmp.cast::<RegmmatchT>()).regprog.cast::<c_void>();
     let save_p_re = nvim_regexp_get_p_re();
-    let re_flags = nvim_regprog_get_re_flags(prog) as c_int;
+    let re_flags = (*prog.cast::<RegprogT>()).re_flags as c_int;
     let pat = nvim_regexp_xstrdup((*prog.cast::<NfaRegprogT>()).pattern.cast_const());
 
     nvim_regexp_set_p_re(BACKTRACKING_ENGINE);
@@ -15201,16 +15240,22 @@ unsafe fn handle_nfa_fallback_multi(
     let mut result: c_int = 0;
     if new_prog.is_null() {
         // Recompile failed, keep previous prog
-        nvim_regmmatch_set_regprog(rmp, prev_prog);
+        (*rmp.cast::<RegmmatchT>()).regprog = prev_prog.cast::<RegprogT>();
     } else {
-        nvim_regmmatch_set_regprog(rmp, new_prog);
+        (*rmp.cast::<RegmmatchT>()).regprog = new_prog.cast::<RegprogT>();
         nvim_regexp_call_vim_regfree(prev_prog);
 
-        nvim_regprog_set_re_in_use(new_prog, 1);
-        result = nvim_regexp_call_engine_regexec_multi(
-            new_prog, rmp, win, buf, lnum, col, tm, timed_out,
+        (*new_prog.cast::<RegprogT>()).re_in_use = true;
+        result = ((*(*new_prog.cast::<RegprogT>()).engine).regexec_multi)(
+            rmp.cast::<c_void>(),
+            win.cast::<c_void>(),
+            buf.cast::<c_void>(),
+            lnum,
+            col,
+            tm.cast::<c_void>(),
+            timed_out,
         );
-        nvim_regprog_set_re_in_use(new_prog, 0);
+        (*new_prog.cast::<RegprogT>()).re_in_use = false;
     }
 
     xfree(pat.cast::<c_void>());
@@ -15226,18 +15271,18 @@ pub unsafe extern "C" fn rs_vim_regexec_string(
     col: i32,
     nl: c_int,
 ) -> c_int {
-    let prog = nvim_regmatch_get_regprog(rmp);
+    let prog = (*rmp.cast::<RegmatchT>()).regprog.cast::<c_void>();
 
     if prog.is_null() {
         return 0;
     }
 
     // Cannot use the same prog recursively
-    if nvim_regprog_get_re_in_use(prog) != 0 {
+    if ((*prog.cast::<RegprogT>()).re_in_use as c_int) != 0 {
         nvim_regexp_call_emsg_recursive();
         return 0;
     }
-    nvim_regprog_set_re_in_use(prog, 1);
+    (*prog.cast::<RegprogT>()).re_in_use = true;
 
     let was_in_use = REX_IN_USE;
     let saved = save_rex_state();
@@ -15247,11 +15292,17 @@ pub unsafe extern "C" fn rs_vim_regexec_string(
     REX.reg_startpos = core::ptr::null_mut();
     REX.reg_endpos = core::ptr::null_mut();
 
-    let mut result = nvim_regexp_call_engine_regexec_nl(prog, rmp, line, col, nl);
-    nvim_regprog_set_re_in_use(prog, 0);
+    let mut result = ((*(*prog.cast::<RegprogT>()).engine).regexec_nl)(
+        rmp.cast::<c_void>(),
+        line.cast_mut(),
+        col,
+        nl != 0,
+    );
+    (*prog.cast::<RegprogT>()).re_in_use = false;
 
     // NFA_TOO_EXPENSIVE fallback
-    if nvim_regprog_get_re_engine(prog) == AUTOMATIC_ENGINE as c_uint && result == NFA_TOO_EXPENSIVE
+    if (*prog.cast::<RegprogT>()).re_engine == AUTOMATIC_ENGINE as c_uint
+        && result == NFA_TOO_EXPENSIVE
     {
         result = handle_nfa_fallback_nl(rmp, line, col, nl);
     }
@@ -15290,7 +15341,7 @@ pub unsafe extern "C" fn rs_vim_regexec_prog(
     let result = rs_vim_regexec_string(rmp, line, col, 0);
 
     // Extract potentially-updated prog pointer
-    *prog_ptr = nvim_regmatch_get_regprog(rmp);
+    *prog_ptr = (*rmp.cast::<RegmatchT>()).regprog.cast::<c_void>();
 
     result
 }
@@ -15306,28 +15357,36 @@ pub unsafe extern "C" fn rs_vim_regexec_multi(
     tm: *mut c_void,
     timed_out: *mut c_int,
 ) -> c_int {
-    let prog = nvim_regmmatch_get_regprog(rmp);
+    let prog = (*rmp.cast::<RegmmatchT>()).regprog.cast::<c_void>();
 
     if prog.is_null() {
         return 0;
     }
 
     // Cannot use the same prog recursively
-    if nvim_regprog_get_re_in_use(prog) != 0 {
+    if ((*prog.cast::<RegprogT>()).re_in_use as c_int) != 0 {
         nvim_regexp_call_emsg_recursive();
         return 0;
     }
-    nvim_regprog_set_re_in_use(prog, 1);
+    (*prog.cast::<RegprogT>()).re_in_use = true;
 
     let was_in_use = REX_IN_USE;
     let saved = save_rex_state();
 
-    let mut result =
-        nvim_regexp_call_engine_regexec_multi(prog, rmp, win, buf, lnum, col, tm, timed_out);
-    nvim_regprog_set_re_in_use(prog, 0);
+    let mut result = ((*(*prog.cast::<RegprogT>()).engine).regexec_multi)(
+        rmp.cast::<c_void>(),
+        win.cast::<c_void>(),
+        buf.cast::<c_void>(),
+        lnum,
+        col,
+        tm.cast::<c_void>(),
+        timed_out,
+    );
+    (*prog.cast::<RegprogT>()).re_in_use = false;
 
     // NFA_TOO_EXPENSIVE fallback
-    if nvim_regprog_get_re_engine(prog) == AUTOMATIC_ENGINE as c_uint && result == NFA_TOO_EXPENSIVE
+    if (*prog.cast::<RegprogT>()).re_engine == AUTOMATIC_ENGINE as c_uint
+        && result == NFA_TOO_EXPENSIVE
     {
         result = handle_nfa_fallback_multi(rmp, win, buf, lnum, col, tm, timed_out);
     }
@@ -15352,8 +15411,6 @@ extern "C" {
     fn nvim_regexp_get_called_emsg() -> c_int;
     fn nvim_regexp_call_nfa_regcomp(expr: *const u8, re_flags: c_int) -> *mut c_void;
     fn nvim_regexp_call_bt_regcomp(expr: *const u8, re_flags: c_int) -> *mut c_void;
-    fn nvim_regprog_set_re_engine(prog: *mut c_void, v: c_uint);
-    fn nvim_regprog_set_re_flags(prog: *mut c_void, v: c_uint);
     fn nvim_regexp_call_emsg_e864();
 }
 
@@ -15415,8 +15472,8 @@ pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) ->
     if !prog.is_null() {
         // Store engine and flags for later re-compilation
         let engine = REGEXP_ENGINE;
-        nvim_regprog_set_re_engine(prog, engine as c_uint);
-        nvim_regprog_set_re_flags(prog, re_flags as c_uint);
+        (*prog.cast::<RegprogT>()).re_engine = engine as c_uint;
+        (*prog.cast::<RegprogT>()).re_flags = re_flags as c_uint;
     }
 
     prog
@@ -15431,12 +15488,6 @@ const RF_LOOKBH: c_uint = 8;
 
 extern "C" {
     fn nvim_regexp_alloc_bt_regprog(regsize_val: i64) -> *mut c_void;
-    fn nvim_bt_prog_set_regstart(prog: *mut c_void, v: c_int);
-    fn nvim_bt_prog_set_reganch(prog: *mut c_void, v: c_int);
-    fn nvim_bt_prog_set_regmust(prog: *mut c_void, v: *mut u8);
-    fn nvim_bt_prog_set_regmlen(prog: *mut c_void, v: c_int);
-    fn nvim_bt_prog_set_regflags(prog: *mut c_void, v: c_uint);
-    fn nvim_bt_prog_set_reghasz(prog: *mut c_void, v: u8);
     fn nvim_bt_prog_set_engine_bt(prog: *mut c_void);
     fn nvim_regexp_call_emsg_e339();
 }
@@ -15465,7 +15516,9 @@ pub unsafe extern "C" fn rs_bt_regcomp(expr: *mut u8, re_flags: c_int) -> *mut c
 
     // Second pass: emit code.
     regcomp_start(expr, re_flags);
-    REGCODE = nvim_regexp_get_prog_program(r);
+    REGCODE = r
+        .cast::<u8>()
+        .add(core::mem::offset_of!(BtRegprogT, reghasz) + 1);
     rs_regc(REGMAGIC);
     flags = 0;
     if rs_reg(REG_NOPAREN, &mut flags).is_null() || REG_TOOLONG != 0 {
@@ -15486,10 +15539,10 @@ pub unsafe extern "C" fn rs_bt_regcomp(expr: *mut u8, re_flags: c_int) -> *mut c
 
 /// Extract optimization info from compiled BT program.
 unsafe fn bt_extract_optimizations(r: *mut c_void, flags: c_int) {
-    nvim_bt_prog_set_regstart(r, 0); // NUL = worst-case default
-    nvim_bt_prog_set_reganch(r, 0);
-    nvim_bt_prog_set_regmust(r, std::ptr::null_mut());
-    nvim_bt_prog_set_regmlen(r, 0);
+    (*r.cast::<BtRegprogT>()).regstart = 0; // NUL = worst-case default
+    (*r.cast::<BtRegprogT>()).reganch = 0_u8;
+    (*r.cast::<BtRegprogT>()).regmust = std::ptr::null_mut();
+    (*r.cast::<BtRegprogT>()).regmlen = 0;
 
     let mut rflags = REGFLAGS_COMPILE as c_uint;
     if flags & HASNL != 0 {
@@ -15498,14 +15551,16 @@ unsafe fn bt_extract_optimizations(r: *mut c_void, flags: c_int) {
     if flags & HASLOOKBH != 0 {
         rflags |= RF_LOOKBH;
     }
-    nvim_bt_prog_set_regflags(r, rflags);
+    (*r.cast::<BtRegprogT>()).regflags = rflags;
 
     // Remember whether this pattern has any \z specials in it.
     #[allow(clippy::cast_possible_truncation)]
     let re_has_z = RE_HAS_Z as u8;
-    nvim_bt_prog_set_reghasz(r, re_has_z);
+    (*r.cast::<BtRegprogT>()).reghasz = re_has_z;
 
-    let program = nvim_regexp_get_prog_program(r);
+    let program = r
+        .cast::<u8>()
+        .add(core::mem::offset_of!(BtRegprogT, reghasz) + 1);
     let mut scan = program.add(1); // First BRANCH.
 
     if op(rs_regnext(scan)) != END {
@@ -15516,12 +15571,12 @@ unsafe fn bt_extract_optimizations(r: *mut c_void, flags: c_int) {
 
     // Starting-point info.
     if op(scan) == BOL || op(scan) == RE_BOF {
-        nvim_bt_prog_set_reganch(r, 1);
+        (*r.cast::<BtRegprogT>()).reganch = 1_u8;
         scan = rs_regnext(scan);
     }
 
     if op(scan) == EXACTLY {
-        nvim_bt_prog_set_regstart(r, utf_ptr2char(operand(scan).cast::<c_char>()));
+        (*r.cast::<BtRegprogT>()).regstart = utf_ptr2char(operand(scan).cast::<c_char>());
     } else if op(scan) == BOW
         || op(scan) == EOW
         || op(scan) == NOTHING
@@ -15532,7 +15587,8 @@ unsafe fn bt_extract_optimizations(r: *mut c_void, flags: c_int) {
     {
         let regnext_scan = rs_regnext(scan);
         if op(regnext_scan) == EXACTLY {
-            nvim_bt_prog_set_regstart(r, utf_ptr2char(operand(regnext_scan).cast::<c_char>()));
+            (*r.cast::<BtRegprogT>()).regstart =
+                utf_ptr2char(operand(regnext_scan).cast::<c_char>());
         }
     }
 
@@ -15552,8 +15608,8 @@ unsafe fn bt_extract_optimizations(r: *mut c_void, flags: c_int) {
             }
             s = rs_regnext(s);
         }
-        nvim_bt_prog_set_regmust(r, longest);
-        nvim_bt_prog_set_regmlen(r, len);
+        (*r.cast::<BtRegprogT>()).regmust = longest;
+        (*r.cast::<BtRegprogT>()).regmlen = len;
     }
 }
 
