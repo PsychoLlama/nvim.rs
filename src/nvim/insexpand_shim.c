@@ -440,6 +440,7 @@ extern int rs_may_advance_cpt_index(const char *cpt);
 extern int rs_ins_compl_prep(int c);
 extern int rs_ins_compl_stop(int c, int prev_mode, int retval);
 extern int rs_ins_compl_cancel(void);
+extern int rs_ins_compl_bs(void);
 
 /// @return  true if "match" is the original text when the completion began.
 static bool match_at_original_text(const compl_T *const match)
@@ -1581,55 +1582,7 @@ _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 /// that match the word that is now before the cursor.
 /// Returns the character to be used, NUL if the work is done and another char
 /// to be got from the user.
-int ins_compl_bs(void)
-{
-  if (rs_ins_compl_preinsert_effect()) {
-    rs_ins_compl_delete(0);
-  }
-
-  char *line = get_cursor_line_ptr();
-  char *p = line + curwin->w_cursor.col;
-  MB_PTR_BACK(line, p);
-  ptrdiff_t p_off = p - line;
-
-  // Stop completion when the whole word was deleted.  For Omni completion
-  // allow the word to be deleted, we won't match everything.
-  // Respect the 'backspace' option.
-  if ((int)(p - line) - (int)compl_col < 0
-      || ((int)(p - line) - (int)compl_col == 0 && !rs_ctrl_x_mode_omni())
-      || rs_ctrl_x_mode_eval()
-      || (!can_bs(BS_START) && (int)(p - line) - (int)compl_col
-          - compl_length < 0)) {
-    return K_BS;
-  }
-
-  // Deleted more than what was used to find matches or didn't finish
-  // finding all matches: need to look for matches all over again.
-  if (curwin->w_cursor.col <= compl_col + compl_length
-      || rs_ins_compl_need_restart()) {
-    rs_ins_compl_restart();
-  }
-
-  // rs_ins_compl_restart() calls update_screen() which may invalidate the pointer
-  // TODO(bfredl): get rid of random update_screen() calls deep inside completion logic
-  line = get_cursor_line_ptr();
-
-  API_CLEAR_STRING(compl_leader);
-  compl_leader = cbuf_to_string(line + compl_col,
-                                (size_t)(p_off - (ptrdiff_t)compl_col));
-
-  // Clear selection if a menu item is currently selected in autocompletion
-  if (compl_autocomplete && compl_first_match && !rs_ins_compl_has_preinsert()) {
-    compl_shown_match = compl_first_match;
-  }
-
-  ins_compl_new_leader();
-  if (compl_shown_match != NULL) {
-    // Make sure current match is not a hidden item.
-    compl_curr_match = compl_shown_match;
-  }
-  return NUL;
-}
+int ins_compl_bs(void) { return rs_ins_compl_bs(); }
 
 /// Calculate fuzzy score and sort completion matches unless sorting is disabled.
 static void ins_compl_fuzzy_sort(void)
@@ -5248,4 +5201,19 @@ extern void rs_ins_compl_set_original_text(const char *str, size_t len);
 extern void rs_ins_compl_addleader(int c);
 // Compound accessor for ins_compl_check_keys
 extern void rs_ins_compl_check_keys(int frequency, int in_compl_func);
+
+// Accessors for Phase 2: ins_compl_bs migration
+// nvim_get_cursor_line_ptr: defined in change_ffi.c as char *nvim_get_cursor_line_ptr(void)
+const char *nvim_mb_ptr_back(const char *line, const char *p) {
+  const char *pp = p;
+  MB_PTR_BACK(line, pp);
+  return pp;
+}
+int nvim_can_bs_start(void) { return can_bs(BS_START) ? 1 : 0; }
+void nvim_api_clear_and_set_compl_leader(const char *data, size_t len) {
+  API_CLEAR_STRING(compl_leader);
+  compl_leader = cbuf_to_string(data, len);
+}
+int nvim_compl_shown_match_is_null(void) { return compl_shown_match == NULL ? 1 : 0; }
+void nvim_compl_set_shown_to_first(void) { compl_shown_match = compl_first_match; }
 

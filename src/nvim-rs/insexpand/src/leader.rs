@@ -248,6 +248,103 @@ pub unsafe extern "C" fn rs_leader_bytes_to_delete(cursor_col: c_int, compl_col:
     }
 }
 
+// =============================================================================
+// Phase 2: rs_ins_compl_bs
+// =============================================================================
+
+extern "C" {
+    // For ins_compl_bs
+    fn nvim_get_cursor_line_ptr() -> *mut c_char;
+    fn nvim_mb_ptr_back(line: *const c_char, p: *const c_char) -> *const c_char;
+    fn nvim_can_bs_start() -> c_int;
+    fn nvim_api_clear_and_set_compl_leader(data: *const c_char, len: usize);
+    fn nvim_compl_shown_match_is_null() -> c_int;
+    fn nvim_compl_set_shown_to_first();
+    fn nvim_ins_compl_new_leader_wrapper();
+    fn nvim_compl_set_curr_to_shown();
+    fn nvim_get_compl_autocomplete() -> c_int;
+    fn nvim_compl_first_match_is_null() -> c_int;
+    fn rs_ins_compl_preinsert_effect() -> c_int;
+    fn rs_ins_compl_delete(new_leader: c_int);
+    fn rs_ins_compl_need_restart() -> c_int;
+    fn rs_ins_compl_restart();
+    fn rs_ins_compl_has_preinsert() -> c_int;
+    fn rs_ctrl_x_mode_omni() -> c_int;
+    fn rs_ctrl_x_mode_eval() -> c_int;
+}
+
+const NUL: c_int = 0;
+
+/// Handle backspace during insert completion.
+///
+/// Deletes one character before the cursor and shows the subset of matches
+/// that match the word now before the cursor.
+///
+/// Returns K_BS if completion should stop, NUL if work is done.
+///
+/// # Safety
+/// Must be called from insert mode with valid completion state.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
+    if rs_ins_compl_preinsert_effect() != 0 {
+        rs_ins_compl_delete(0);
+    }
+
+    let line = nvim_get_cursor_line_ptr();
+    let cursor_col = nvim_get_cursor_col();
+    let p = line.add(cursor_col as usize);
+    let p = nvim_mb_ptr_back(line.cast_const(), p.cast_const());
+    let p_off = p.offset_from(line.cast_const()) as c_int;
+
+    let compl_col = nvim_get_compl_col();
+    let compl_length = nvim_get_compl_length();
+
+    // Stop completion when the whole word was deleted. For Omni completion
+    // allow the word to be deleted. Respect the 'backspace' option.
+    if p_off - compl_col < 0
+        || (p_off - compl_col == 0 && rs_ctrl_x_mode_omni() == 0)
+        || rs_ctrl_x_mode_eval() != 0
+        || (nvim_can_bs_start() == 0 && p_off - compl_col - compl_length < 0)
+    {
+        return K_BS;
+    }
+
+    // Deleted more than what was used to find matches or didn't finish
+    // finding all matches: need to look for matches all over again.
+    if nvim_get_cursor_col() <= compl_col + compl_length || rs_ins_compl_need_restart() != 0 {
+        rs_ins_compl_restart();
+    }
+
+    // rs_ins_compl_restart() calls update_screen() which may invalidate the pointer
+    let line = nvim_get_cursor_line_ptr();
+    let compl_col = nvim_get_compl_col();
+
+    nvim_api_clear_and_set_compl_leader(
+        line.add(compl_col as usize).cast_const(),
+        (p_off - compl_col) as usize,
+    );
+
+    // Clear selection if a menu item is currently selected in autocompletion
+    if nvim_get_compl_autocomplete() != 0
+        && nvim_compl_first_match_is_null() == 0
+        && rs_ins_compl_has_preinsert() == 0
+    {
+        nvim_compl_set_shown_to_first();
+    }
+
+    nvim_ins_compl_new_leader_wrapper();
+    if nvim_compl_shown_match_is_null() == 0 {
+        // Make sure current match is not a hidden item.
+        nvim_compl_set_curr_to_shown();
+    }
+    NUL
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
