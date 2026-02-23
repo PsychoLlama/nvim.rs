@@ -511,6 +511,8 @@ extern void rs_end_visual_mode(void);
 extern void rs_set_cursor_for_append_to_line(void);
 extern void rs_set_op_var(int optype);
 extern size_t rs_find_ident_under_cursor(char **text, int find_type);
+// Phase 4 Rust exports
+extern void rs_invoke_edit(cmdarg_T *cap, bool repl, int cmd, bool startln);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1199,132 +1201,9 @@ int nvim_getvcol_ce(int lnum, int col, int coladd) { pos_T pp = { lnum, col, col
 
 int nvim_ml_get_len_call(int lnum) { return (int)ml_get_len(lnum); }
 
-/// Wrapper for nv_Zet C implementation.
-void nvim_nv_Zet_impl(cmdarg_T *cap)
-{
-  if (rs_checkclearopq(cap->oap)) {
-    return;
-  }
-
-  switch (cap->nchar) {
-  // "ZZ": equivalent to ":x".
-  case 'Z':
-    do_cmdline_cmd("x");
-    break;
-
-  // "ZQ": equivalent to ":q!" (Elvis compatible).
-  case 'Q':
-    do_cmdline_cmd("q!");
-    break;
-
-  default:
-    rs_clearopbeep(cap->oap);
-  }
-}
-
-/// Wrapper for nv_esc C implementation.
-void nvim_nv_esc_impl(cmdarg_T *cap)
-{
-  bool no_reason = (cap->oap->op_type == OP_NOP
-                    && cap->opcount == 0
-                    && cap->count0 == 0
-                    && cap->oap->regname == 0);
-
-  if (cap->arg) {               // true for CTRL-C
-    if (restart_edit == 0 && cmdwin_type == 0 && !VIsual_active && no_reason) {
-      if (anyBufIsChanged()) {
-        msg(_("Type  :qa!  and press <Enter> to abandon all changes"
-              " and exit Nvim"), 0);
-      } else {
-        msg(_("Type  :qa  and press <Enter> to exit Nvim"), 0);
-      }
-    }
-
-    if (restart_edit != 0) {
-      redraw_mode = true;  // remove "-- (insert) --"
-    }
-
-    restart_edit = 0;
-
-    if (cmdwin_type != 0) {
-      cmdwin_result = K_IGNORE;
-      got_int = false;          // don't stop executing autocommands et al.
-      return;
-    }
-  } else if (cmdwin_type != 0 && ex_normal_busy && typebuf_was_empty) {
-    // When :normal runs out of characters while in the command line window
-    // vgetorpeek() will repeatedly return ESC.  Exit the cmdline window to
-    // break the loop.
-    cmdwin_result = K_IGNORE;
-    return;
-  }
-
-  if (VIsual_active) {
-    end_visual_mode();          // stop Visual
-    check_cursor_col(curwin);         // make sure cursor is not beyond EOL
-    curwin->w_set_curswant = true;
-    redraw_curbuf_later(UPD_INVERTED);
-  } else if (no_reason) {
-    vim_beep(kOptBoFlagEsc);
-  }
-  rs_clearop(cap->oap);
-}
-
-/// Wrapper for nv_edit C implementation.
-void nvim_nv_edit_impl(cmdarg_T *cap)
-{
-  // <Insert> is equal to "i"
-  if (cap->cmdchar == K_INS || cap->cmdchar == K_KINS) {
-    cap->cmdchar = 'i';
-  }
-
-  // in Visual mode "A" and "I" are an operator
-  if (VIsual_active && (cap->cmdchar == 'A' || cap->cmdchar == 'I')) {
-    rs_v_visop(cap);
-    // in Visual mode and after an operator "a" and "i" are for text objects
-  } else if ((cap->cmdchar == 'a' || cap->cmdchar == 'i')
-             && (cap->oap->op_type != OP_NOP || VIsual_active)) {
-    rs_nv_object(cap);
-  } else if (!curbuf->b_p_ma && !curbuf->terminal) {
-    emsg(_(e_modifiable));
-    rs_clearop(cap->oap);
-  } else if (!rs_checkclearopq(cap->oap)) {
-    switch (cap->cmdchar) {
-    case 'A':           // "A"ppend after the line
-      rs_set_cursor_for_append_to_line();
-      break;
-
-    case 'I':           // "I"nsert before the first non-blank
-      beginline(BL_WHITE);
-      break;
-
-    case 'a':           // "a"ppend is like "i"nsert on the next character.
-      // increment coladd when in virtual space, increment the
-      // column otherwise, also to append after an unprintable char
-      if (virtual_active(curwin)
-          && (curwin->w_cursor.coladd > 0
-              || *get_cursor_pos_ptr() == NUL
-              || *get_cursor_pos_ptr() == TAB)) {
-        curwin->w_cursor.coladd++;
-      } else if (*get_cursor_pos_ptr() != NUL) {
-        inc_cursor();
-      }
-      break;
-    }
-
-    if (curwin->w_cursor.coladd && cap->cmdchar != 'A') {
-      int save_State = State;
-
-      // Pretend Insert mode here to allow the cursor on the
-      // character past the end of the line
-      State = MODE_INSERT;
-      coladvance(curwin, getviscol());
-      State = save_State;
-    }
-
-    invoke_edit(cap, false, cap->cmdchar, false);
-  }
-}
+// nvim_nv_Zet_impl migrated to Rust (rs_nv_Zet) in Phase 4
+// nvim_nv_esc_impl migrated to Rust (rs_nv_esc) in Phase 4
+// nvim_nv_edit_impl migrated to Rust (rs_nv_edit) in Phase 4
 
 // =============================================================================
 // Search handler accessors for Rust FFI
@@ -1759,10 +1638,7 @@ void nvim_changed_window_setting_win(win_T *wp) { changed_window_setting(wp); }
 void nvim_spell_suggest_call(int count) { spell_suggest(count); }
 bool nvim_get_curwin_w_p_wrap(void) { return curwin->w_p_wrap; }
 
-/// nv_z_get_count: reads digit count for 'z' command from input.
-/// Returns true if the main z command should be processed with the new nchar.
-bool nvim_nv_z_get_count(cmdarg_T *cap, int *nchar_arg) { return nv_z_get_count(cap, nchar_arg); }
-
+// nvim_nv_z_get_count removed: nv_z_get_count migrated to Rust in Phase 4
 
 /// Wrapper for spell_move_to(curwin, dir, SMT_ALL, true, NULL) for Rust FFI.
 size_t nvim_spell_move_to_wrapper(int dir) { return spell_move_to(curwin, dir, SMT_ALL, true, NULL); }
@@ -3044,53 +2920,7 @@ bool nv_screengo(oparg_T *oap, int dir, int dist, bool skip_conceal)
   return rs_nv_screengo(oap, dir, dist, skip_conceal);
 }
 
-/// Get the count specified after a 'z' command. Only the 'z<CR>', 'zl', 'zh',
-/// 'z<Left>', and 'z<Right>' commands accept a count after 'z'.
-/// @return  true to process the 'z' command and false to skip it.
-static bool nv_z_get_count(cmdarg_T *cap, int *nchar_arg)
-{
-  int nchar = *nchar_arg;
-
-  // "z123{nchar}": edit the count before obtaining {nchar}
-  if (rs_checkclearop(cap->oap)) {
-    return false;
-  }
-  int n = nchar - '0';
-
-  while (true) {
-    no_mapping++;
-    allow_keys++;         // no mapping for nchar, but allow key codes
-    nchar = plain_vgetc();
-    LANGMAP_ADJUST(nchar, true);
-    no_mapping--;
-    allow_keys--;
-    add_to_showcmd(nchar);
-
-    if (nchar == K_DEL || nchar == K_KDEL) {
-      n /= 10;
-    } else if (ascii_isdigit(nchar)) {
-      if (vim_append_digit_int(&n, nchar - '0') == FAIL) {
-        rs_clearopbeep(cap->oap);
-        break;
-      }
-    } else if (nchar == CAR) {
-      rs_win_setheight(n);
-      break;
-    } else if (nchar == 'l'
-               || nchar == 'h'
-               || nchar == K_LEFT
-               || nchar == K_RIGHT) {
-      cap->count1 = n ? n * cap->count1 : cap->count1;
-      *nchar_arg = nchar;
-      return true;
-    } else {
-      rs_clearopbeep(cap->oap);
-      break;
-    }
-  }
-  cap->oap->op_type = OP_NOP;
-  return false;
-}
+// nv_z_get_count migrated to Rust (nv_z_get_count_impl in nv_zet_impl) in Phase 4
 
 
 /// Call nv_ident() as if "c1" was used, with "c2" as next character.
@@ -3297,37 +3127,10 @@ bool unadjust_for_sel_inner(pos_T *pp)
   return false;
 }
 
-/// Invoke edit() and take care of "restart_edit" and the return value.
-///
-/// @param repl  "r" or "gr" command
+/// Thin wrapper: invoke_edit migrated to Rust (rs_invoke_edit) in Phase 4.
 static void invoke_edit(cmdarg_T *cap, int repl, int cmd, int startln)
 {
-  int restart_edit_save = 0;
-
-  // Complicated: When the user types "a<C-O>a" we don't want to do Insert
-  // mode recursively.  But when doing "a<C-O>." or "a<C-O>rx" we do allow
-  // it.
-  if (repl || !stuff_empty()) {
-    restart_edit_save = restart_edit;
-  } else {
-    restart_edit_save = 0;
-  }
-
-  // Always reset "restart_edit", this is not a restarted edit.
-  restart_edit = 0;
-
-  // Reset Changedtick_i, so that TextChangedI will only be triggered for stuff
-  // from insert mode, for 'o/O' this has already been done in n_opencmd
-  if (cap->cmdchar != 'O' && cap->cmdchar != 'o') {
-    curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf);
-  }
-  if (edit(cmd, startln, cap->count1)) {
-    cap->retval |= CA_COMMAND_BUSY;
-  }
-
-  if (restart_edit == 0) {
-    restart_edit = restart_edit_save;
-  }
+  rs_invoke_edit(cap, repl, cmd, startln);
 }
 
 // nv_record, nv_paste, nv_event, nv_join_impl, nv_open_impl migrated to Rust
@@ -3552,3 +3355,46 @@ void nvim_curwin_set_old_visual_lnums(void)
 
 /// Call redraw_curbuf_later(UPD_VALID).
 void nvim_redraw_curbuf_later_valid(void) { redraw_curbuf_later(UPD_VALID); }
+
+// =============================================================================
+// Phase 4: impl wrappers + nv_z_get_count accessors for Rust FFI
+// =============================================================================
+
+/// Return typebuf_was_empty global.
+bool nvim_get_typebuf_was_empty(void) { return typebuf_was_empty; }
+
+/// Return anyBufIsChanged().
+bool nvim_anyBufIsChanged(void) { return anyBufIsChanged(); }
+
+/// Call vim_beep(kOptBoFlagEsc).
+void nvim_vim_beep_esc(void) { vim_beep(kOptBoFlagEsc); }
+
+/// Return true if curbuf is a terminal buffer.
+bool nvim_get_curbuf_terminal(void) { return curbuf->terminal != NULL; }
+
+/// Call edit(cmd, startln, count) and return bool result.
+bool nvim_edit_call(int cmd, bool startln, int count) { return edit(cmd, startln, count); }
+
+/// Set curbuf->b_last_changedtick_i to buf_get_changedtick(curbuf).
+void nvim_curbuf_set_last_changedtick_i(void)
+{
+  curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf);
+}
+
+/// Append digit to n (wraps vim_append_digit_int). Returns 0 (FAIL) or 1 (OK).
+/// The updated n is written back through n_ptr.
+int nvim_vim_append_digit_int(int *n_ptr, int digit)
+{
+  return vim_append_digit_int(n_ptr, digit);
+}
+
+/// Show "quit" or "abandon" hint message via msg() for ESC/CTRL-C.
+void nvim_esc_show_msg(void)
+{
+  if (anyBufIsChanged()) {
+    msg(_("Type  :qa!  and press <Enter> to abandon all changes"
+          " and exit Nvim"), 0);
+  } else {
+    msg(_("Type  :qa  and press <Enter> to exit Nvim"), 0);
+  }
+}

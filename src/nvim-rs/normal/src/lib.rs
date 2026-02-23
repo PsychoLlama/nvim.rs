@@ -74,6 +74,11 @@ const KE_KDEL: c_int = 80;
 const K_DEL: c_int = termcap2key(b'k' as c_int, b'D' as c_int);
 const K_KDEL: c_int = termcap2key(KS_EXTRA, KE_KDEL);
 
+// Insert key codes (from keycodes.h)
+const KE_KINS: c_int = 79;
+const K_INS: c_int = termcap2key(b'k' as c_int, b'I' as c_int);
+const K_KINS: c_int = termcap2key(KS_EXTRA, KE_KINS);
+
 // =============================================================================
 // C accessor functions for normal mode state
 // =============================================================================
@@ -2168,9 +2173,20 @@ extern "C" {
     fn nvim_buflist_getfile(n: c_int, lnum: c_int, flags: c_int, setpm: bool);
     fn nvim_get_GETF_SETMARK() -> c_int;
     fn nvim_get_GETF_ALT() -> c_int;
-    fn nvim_nv_Zet_impl(cap: CapHandle);
-    fn nvim_nv_esc_impl(cap: CapHandle);
-    fn nvim_nv_edit_impl(cap: CapHandle);
+    // Phase 4 accessors
+    fn nvim_get_ex_normal_busy() -> c_int;
+    fn nvim_get_typebuf_was_empty() -> bool;
+    fn nvim_vim_beep_esc();
+    fn nvim_get_curbuf_terminal() -> bool;
+    fn nvim_esc_show_msg();
+    fn nvim_set_redraw_mode(val: c_int);
+    fn nvim_get_State() -> c_int;
+    fn nvim_set_State(val: c_int);
+    fn nvim_getviscol() -> c_int;
+    fn nvim_edit_call(cmd: c_int, startln: bool, count: c_int) -> bool;
+    fn nvim_curbuf_set_last_changedtick_i();
+    fn nvim_vim_append_digit_int(n_ptr: *mut c_int, digit: c_int) -> c_int;
+    fn rs_win_setheight(height: c_int);
 }
 
 /// Command handler for CTRL-L: Clear and redraw screen.
@@ -2235,8 +2251,59 @@ pub unsafe extern "C" fn rs_nv_hat(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_Zet(cap: CapHandle) {
-    // Delegate to C implementation which handles the switch logic
-    nvim_nv_Zet_impl(cap);
+    let oap = nvim_cap_get_oap(cap);
+    if rs_checkclearopq(oap) {
+        return;
+    }
+    let nchar = nvim_cap_get_nchar(cap);
+    if nchar == c_int::from(b'Z') {
+        // "ZZ": equivalent to ":x".
+        do_cmdline_cmd(c"x".as_ptr());
+    } else if nchar == c_int::from(b'Q') {
+        // "ZQ": equivalent to ":q!" (Elvis compatible).
+        do_cmdline_cmd(c"q!".as_ptr());
+    } else {
+        rs_clearopbeep(oap);
+    }
+}
+
+/// Invoke edit() and take care of restart_edit and the return value.
+///
+/// Port of C `invoke_edit()`.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+unsafe fn invoke_edit_impl(cap: CapHandle, repl: bool, cmd: c_int, startln: bool) {
+    // Complicated: When the user types "a<C-O>a" we don't want to do Insert
+    // mode recursively.  But when doing "a<C-O>." or "a<C-O>rx" we do allow it.
+    let restart_edit_save = if repl || !nvim_stuff_empty() {
+        nvim_get_restart_edit()
+    } else {
+        0
+    };
+    // Always reset "restart_edit", this is not a restarted edit.
+    nvim_set_restart_edit(0);
+    // Reset b_last_changedtick_i, so that TextChangedI will only be triggered
+    // for stuff from insert mode; for 'o/O' this has already been done in n_opencmd.
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    if cmdchar != c_int::from(b'O') && cmdchar != c_int::from(b'o') {
+        nvim_curbuf_set_last_changedtick_i();
+    }
+    if nvim_edit_call(cmd, startln, nvim_cap_get_count1(cap)) {
+        nvim_cap_or_retval(cap, CA_COMMAND_BUSY);
+    }
+    if nvim_get_restart_edit() == 0 {
+        nvim_set_restart_edit(restart_edit_save);
+    }
+}
+
+/// FFI export for `invoke_edit` (used by C callers n_opencmd, nvim_invoke_edit_R, etc.).
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_invoke_edit(cap: CapHandle, repl: bool, cmd: c_int, startln: bool) {
+    invoke_edit_impl(cap, repl, cmd, startln);
 }
 
 /// Command handler for <Esc> and CTRL-C.
@@ -2248,8 +2315,50 @@ pub unsafe extern "C" fn rs_nv_Zet(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
-    // Delegate to C implementation which handles complex logic
-    nvim_nv_esc_impl(cap);
+    let oap = nvim_cap_get_oap(cap);
+    let no_reason = nvim_oap_get_op_type_ptr(oap) == OP_NOP
+        && nvim_cap_get_opcount(cap) == 0
+        && nvim_cap_get_count0(cap) == 0
+        && nvim_oap_get_regname_ptr(oap) == 0;
+
+    if nvim_cap_get_arg(cap) != 0 {
+        // true for CTRL-C
+        if nvim_get_restart_edit() == 0
+            && nvim_normal_get_cmdwin_type() == 0
+            && nvim_get_VIsual_active() == 0
+            && no_reason
+        {
+            nvim_esc_show_msg();
+        }
+        if nvim_get_restart_edit() != 0 {
+            nvim_set_redraw_mode(1); // remove "-- (insert) --"
+        }
+        nvim_set_restart_edit(0);
+        if nvim_normal_get_cmdwin_type() != 0 {
+            nvim_set_cmdwin_result(K_IGNORE);
+            nvim_set_got_int(0); // don't stop executing autocommands et al.
+            return;
+        }
+    } else if nvim_normal_get_cmdwin_type() != 0
+        && nvim_get_ex_normal_busy() != 0
+        && nvim_get_typebuf_was_empty()
+    {
+        // When :normal runs out of characters while in the command line window
+        // vgetorpeek() will repeatedly return ESC.  Exit the cmdline window to
+        // break the loop.
+        nvim_set_cmdwin_result(K_IGNORE);
+        return;
+    }
+
+    if nvim_get_VIsual_active() != 0 {
+        rs_end_visual_mode(); // stop Visual
+        nvim_check_cursor_col_call(); // make sure cursor is not beyond EOL
+        nvim_curwin_set_set_curswant(true);
+        nvim_redraw_curbuf_inverted();
+    } else if no_reason {
+        nvim_vim_beep_esc();
+    }
+    rs_clearop(oap);
 }
 
 /// Command handler for "A", "a", "I", "i" and <Insert> commands.
@@ -2264,8 +2373,57 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_edit(cap: CapHandle) {
-    // Delegate to C implementation which handles complex logic
-    nvim_nv_edit_impl(cap);
+    let mut cmdchar = nvim_cap_get_cmdchar(cap);
+    // <Insert> is equal to "i"
+    if cmdchar == K_INS || cmdchar == K_KINS {
+        cmdchar = c_int::from(b'i');
+        nvim_cap_set_cmdchar(cap, cmdchar);
+    }
+    let oap = nvim_cap_get_oap(cap);
+    // in Visual mode "A" and "I" are an operator
+    if nvim_get_VIsual_active() != 0
+        && (cmdchar == c_int::from(b'A') || cmdchar == c_int::from(b'I'))
+    {
+        rs_v_visop(cap);
+    // in Visual mode and after an operator "a" and "i" are for text objects
+    } else if (cmdchar == c_int::from(b'a') || cmdchar == c_int::from(b'i'))
+        && (nvim_oap_get_op_type_ptr(oap) != OP_NOP || nvim_get_VIsual_active() != 0)
+    {
+        rs_nv_object(cap);
+    } else if !nvim_curbuf_modifiable() && !nvim_get_curbuf_terminal() {
+        nvim_emsg_modifiable();
+        rs_clearop(oap);
+    } else if !rs_checkclearopq(oap) {
+        if cmdchar == c_int::from(b'A') {
+            // "A"ppend after the line
+            rs_set_cursor_for_append_to_line();
+        } else if cmdchar == c_int::from(b'I') {
+            // "I"nsert before the first non-blank
+            nvim_beginline(BL_WHITE);
+        } else if cmdchar == c_int::from(b'a') {
+            // "a"ppend is like "i"nsert on the next character.
+            // increment coladd when in virtual space, increment the
+            // column otherwise, also to append after an unprintable char
+            if nvim_virtual_active()
+                && (nvim_get_cursor_coladd() > 0
+                    || nvim_gchar_cursor_call() == NUL_CHAR
+                    || nvim_gchar_cursor_call() == nvim_get_TAB())
+            {
+                nvim_set_cursor_coladd(nvim_get_cursor_coladd() + 1);
+            } else if nvim_gchar_cursor_call() != NUL_CHAR {
+                nvim_inc_cursor();
+            }
+        }
+        if nvim_get_cursor_coladd() != 0 && cmdchar != c_int::from(b'A') {
+            let save_state = nvim_get_State();
+            // Pretend Insert mode here to allow the cursor on the
+            // character past the end of the line
+            nvim_set_State(MODE_INSERT);
+            nvim_coladvance_curwin(nvim_getviscol());
+            nvim_set_State(save_state);
+        }
+        invoke_edit_impl(cap, false, cmdchar, false);
+    }
 }
 
 // =============================================================================
@@ -2445,6 +2603,8 @@ const VSE_NONE: c_int = 0;
 // HIST_SEARCH: history type for search patterns.
 const HIST_SEARCH: c_int = 1;
 
+// MODE_INSERT: insert mode flag.
+const MODE_INSERT: c_int = 0x10;
 // MODE_TERMINAL: terminal mode flag.
 const MODE_TERMINAL: c_int = 0x80;
 
@@ -3955,7 +4115,6 @@ extern "C" {
     fn nvim_changed_window_setting_curwin();
     fn nvim_spell_suggest_call(count: c_int);
     fn nvim_get_curwin_w_p_wrap() -> bool;
-    fn nvim_nv_z_get_count(cap: CapHandle, nchar_arg: *mut c_int) -> bool;
     fn nvim_sync_fen_in_diff_windows();
     fn nvim_spell_move_to_wrapper(dir: c_int) -> usize;
     fn nvim_ml_get_pos_cursor() -> *mut c_char;
@@ -4099,6 +4258,61 @@ pub unsafe extern "C" fn rs_nv_zg_zw(cap: CapHandle, mut nchar: c_int) -> c_int 
     OK
 }
 
+/// Get the count specified after a 'z' command.
+///
+/// Only 'z<CR>', 'zl', 'zh', 'z<Left>', and 'z<Right>' commands accept a
+/// count after 'z'.
+///
+/// Returns `true` to process the 'z' command and `false` to skip it.
+/// Updates `nchar_arg` in place.
+///
+/// Port of C `nv_z_get_count()`.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer; `nchar_arg` must be a valid pointer.
+unsafe fn nv_z_get_count_impl(cap: CapHandle, nchar_arg: &mut c_int) -> bool {
+    let oap = nvim_cap_get_oap(cap);
+    if rs_checkclearop(oap) {
+        return false;
+    }
+    let mut n = *nchar_arg - c_int::from(b'0');
+    loop {
+        nvim_inc_no_mapping();
+        nvim_inc_allow_keys(); // no mapping for nchar, but allow key codes
+        let nchar = nvim_plain_vgetc_wrapper();
+        let nchar = nvim_langmap_adjust(nchar, true);
+        nvim_dec_no_mapping();
+        nvim_dec_allow_keys();
+        nvim_add_to_showcmd_wrapper(nchar);
+
+        if nchar == K_DEL || nchar == K_KDEL {
+            n /= 10;
+        } else if nvim_ascii_isdigit(nchar) {
+            if nvim_vim_append_digit_int(&raw mut n, nchar - c_int::from(b'0')) == FAIL {
+                rs_clearopbeep(oap);
+                break;
+            }
+        } else if nchar == CAR_CHAR {
+            rs_win_setheight(n);
+            break;
+        } else if nchar == c_int::from(b'l')
+            || nchar == c_int::from(b'h')
+            || nchar == K_LEFT
+            || nchar == K_RIGHT
+        {
+            let count1 = nvim_cap_get_count1(cap);
+            nvim_cap_set_count1(cap, if n != 0 { n * count1 } else { count1 });
+            *nchar_arg = nchar;
+            return true;
+        } else {
+            rs_clearopbeep(oap);
+            break;
+        }
+    }
+    nvim_oap_set_op_type(oap, OP_NOP);
+    false
+}
+
 /// Command handler for "z" commands.
 ///
 /// Handles various z-prefix commands for scrolling, folding, and window management:
@@ -4134,7 +4348,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
 
     let siso = rs_get_sidescrolloff_value(curwin);
 
-    if nvim_ascii_isdigit(nchar) && !nvim_nv_z_get_count(cap, &mut nchar) {
+    if nvim_ascii_isdigit(nchar) && !nv_z_get_count_impl(cap, &mut nchar) {
         return;
     }
 
@@ -6402,7 +6616,11 @@ pub unsafe extern "C" fn rs_nv_addsub(cap: CapHandle) {
         let cmdchar = nvim_cap_get_cmdchar(cap);
         nvim_oap_set_op_type(
             oap,
-            if cmdchar == CTRL_A { OP_NR_ADD } else { OP_NR_SUB },
+            if cmdchar == CTRL_A {
+                OP_NR_ADD
+            } else {
+                OP_NR_SUB
+            },
         );
         let count1 = nvim_cap_get_count1(cap);
         let arg = nvim_cap_get_arg(cap);
@@ -6439,7 +6657,7 @@ pub unsafe extern "C" fn rs_nv_colon(cap: CapHandle) {
         // translate "count:" into ":.,.+(count - 1)"
         nvim_stuffcharReadbuff(c_int::from(b'.'));
         if nvim_cap_get_count0(cap) > 1 {
-            nvim_stuffReadbuff(b",.+\0".as_ptr().cast::<std::ffi::c_char>());
+            nvim_stuffReadbuff(c",.+".as_ptr());
             nvim_stuffnumReadbuff(nvim_cap_get_count0(cap) - 1);
         }
     }
@@ -6460,8 +6678,7 @@ pub unsafe extern "C" fn rs_nv_colon(cap: CapHandle) {
         rs_clearop(oap);
     } else if nvim_oap_get_op_type_ptr(oap) != OP_NOP
         && (nvim_get_oap_start_lnum(cap) > nvim_get_line_count()
-            || nvim_get_oap_start_col(cap)
-                > nvim_ml_get_len_call(nvim_get_oap_start_lnum(cap))
+            || nvim_get_oap_start_col(cap) > nvim_ml_get_len_call(nvim_get_oap_start_lnum(cap))
             || nvim_did_emsg_check() != 0)
     {
         // The start of the operator has become invalid by the Ex command.
@@ -6556,8 +6773,7 @@ extern "C" {
         opt: c_int,
         wrapped: *mut c_int,
     ) -> c_int;
-    fn nvim_search_hls_needs_redraw(prev_lnum: c_int, prev_col: c_int, prev_coladd: c_int)
-        -> bool;
+    fn nvim_search_hls_needs_redraw(prev_lnum: c_int, prev_col: c_int, prev_coladd: c_int) -> bool;
 
     // Phase 2: nv_gotofile accessors
     fn nvim_grab_file_name(count1: c_int, lnum_out: *mut c_int) -> *mut std::ffi::c_char;
@@ -6635,6 +6851,11 @@ pub unsafe fn rs_normal_search(
 ///
 /// # Safety
 /// `cap` may be null. If non-null, must be a valid cmdarg_T pointer.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_get_visual_text(
     cap: CapHandle,
@@ -6699,7 +6920,9 @@ pub unsafe fn rs_nv_gotofile(cap: CapHandle) {
     let mut lnum: c_int = -1;
     let ptr = nvim_grab_file_name(count1, &raw mut lnum);
 
-    if !ptr.is_null() {
+    if ptr.is_null() {
+        rs_clearop(oap);
+    } else {
         if nvim_curbuf_needs_autowrite() {
             nvim_autowrite_curbuf();
         }
@@ -6711,8 +6934,6 @@ pub unsafe fn rs_nv_gotofile(cap: CapHandle) {
             nvim_beginline(BL_SOL | BL_FIX);
         }
         xfree(ptr.cast::<c_void>());
-    } else {
-        rs_clearop(oap);
     }
 }
 
@@ -6723,7 +6944,11 @@ pub unsafe fn rs_nv_gotofile(cap: CapHandle) {
 /// # Safety
 /// `cap` must be a valid cmdarg_T pointer, `fm` must be a valid fmark_T pointer.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_nv_mark_move_to(cap: CapHandle, flags: c_int, fm: FmarkHandle) -> c_int {
+pub unsafe extern "C" fn rs_nv_mark_move_to(
+    cap: CapHandle,
+    flags: c_int,
+    fm: FmarkHandle,
+) -> c_int {
     let oap = nvim_cap_get_oap(cap);
     let res = nvim_mark_move_to_call(fm, flags);
     if (res & K_MARK_MOVED_FAILED) != 0 {
@@ -6868,6 +7093,12 @@ pub unsafe extern "C" fn rs_set_cursor_for_append_to_line() {
 ///
 /// # Safety
 /// Calls C accessor functions.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::similar_names
+)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_set_op_var(optype: c_int) {
     if optype == OP_NOP {
@@ -6875,11 +7106,8 @@ pub unsafe extern "C" fn rs_set_op_var(optype: c_int) {
     } else {
         let opchar0 = nvim_get_op_char(optype) as u8;
         let opchar1 = nvim_get_extra_op_char(optype) as u8;
-        let opchars: [std::ffi::c_char; 3] = [
-            opchar0 as std::ffi::c_char,
-            opchar1 as std::ffi::c_char,
-            0,
-        ];
+        let opchars: [std::ffi::c_char; 3] =
+            [opchar0 as std::ffi::c_char, opchar1 as std::ffi::c_char, 0];
         nvim_set_vim_var_string_vv_op(opchars.as_ptr(), -1);
     }
 }
