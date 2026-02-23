@@ -858,10 +858,8 @@ pub unsafe extern "C" fn rs_show_sub(
 
                 // Reallocate str_buf if not large enough
                 if line_size > str_buf_size {
-                    str_buf = xrealloc(
-                        str_buf as *mut std::ffi::c_void,
-                        line_size + 1,
-                    ) as *mut c_char;
+                    str_buf =
+                        xrealloc(str_buf as *mut std::ffi::c_void, line_size + 1) as *mut c_char;
                     str_buf_size = line_size + 1;
                 }
 
@@ -934,7 +932,11 @@ pub unsafe extern "C" fn rs_show_sub(
 
     nvim_excmds_restore_shortmess(save_shm_p);
 
-    if preview { 2 } else { 1 }
+    if preview {
+        2
+    } else {
+        1
+    }
 }
 
 /// Parse substitute flags from a string.

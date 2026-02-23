@@ -150,6 +150,7 @@ extern void rs_diff_buf_add(buf_T *buf);
 extern void rs_diff_invalidate(buf_T *buf);
 extern int rs_check_regexp_delim(int c);
 extern char *rs_skip_substitute(char *start, int delimiter);
+extern bool rs_do_sub_msg(bool count_only);
 
 // ExArg accessors
 int nvim_exarg_get_cmdidx(exarg_T *eap) { return (int)eap->cmdidx; }
@@ -2039,41 +2040,12 @@ void sub_set_replacement(SubReplacementString sub)
   old_sub = sub;
 }
 
-// sub_joining_lines and sub_grow_buf implemented in Rust.
-// See rs_sub_joining_lines and rs_sub_grow_buf in ex_cmds/src/substitute.rs.
+// sub_joining_lines, sub_grow_buf, sub_parse_flags implemented in Rust.
+// See the corresponding rs_* functions in ex_cmds/src/substitute.rs.
 extern int rs_sub_joining_lines(exarg_T *eap, const char *pat, size_t patlen, const char *sub,
                                 const char *cmd, int save, int keeppatterns);
 extern char *rs_sub_grow_buf(char **new_start, int *new_start_len, int needed_len);
-
-/// Recognize ":%s/\n//" and turn it into a join command.
-/// Thin wrapper calling the Rust implementation.
-static bool sub_joining_lines(exarg_T *eap, char *pat, size_t patlen, const char *sub,
-                              const char *cmd, bool save, bool keeppatterns)
-  FUNC_ATTR_NONNULL_ARG(1, 4, 5)
-{
-  return rs_sub_joining_lines(eap, pat, patlen, sub, cmd, save ? 1 : 0,
-                              keeppatterns ? 1 : 0) != 0;
-}
-
-/// Allocate memory to store the replacement text for :substitute.
-/// Thin wrapper calling the Rust implementation.
-static char *sub_grow_buf(char **new_start, int *new_start_len, int needed_len)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
-{
-  return rs_sub_grow_buf(new_start, new_start_len, needed_len);
-}
-
-/// sub_parse_flags implemented in Rust.
-/// See rs_sub_parse_flags in nvim-ex-cmds/src/substitute.rs
 extern char *rs_sub_parse_flags(char *cmd, subflags_T *subflags, int *which_pat);
-
-/// Parse cmd string for :substitute's {flags} and update subflags accordingly
-/// Thin shim calling the Rust implementation.
-static char *sub_parse_flags(char *cmd, subflags_T *subflags, int *which_pat)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
-{
-  return rs_sub_parse_flags(cmd, subflags, which_pat);
-}
 
 /// Perform a substitution from line eap->line1 to line eap->line2 using the
 /// command pointed to by eap->arg which should be of the form:
@@ -2222,13 +2194,13 @@ static int do_sub(exarg_T *eap, const proftime_T timeout, const int cmdpreview_n
     endcolumn = (curwin->w_curswant == MAXCOL);
   }
 
-  if (sub != NULL && sub_joining_lines(eap, pat, patlen, sub, cmd, cmdpreview_ns <= 0,
-                                       keeppatterns)) {
+  if (sub != NULL && rs_sub_joining_lines(eap, pat, patlen, sub, cmd, cmdpreview_ns <= 0 ? 1 : 0,
+                                          keeppatterns ? 1 : 0) != 0) {
     xfree(sub);
     return 0;
   }
 
-  cmd = sub_parse_flags(cmd, &subflags, &which_pat);
+  cmd = rs_sub_parse_flags(cmd, &subflags, &which_pat);
 
   bool save_do_all = subflags.do_all;  // remember user specified 'g' flag
   bool save_do_ask = subflags.do_ask;  // remember user specified 'c' flag
@@ -2754,7 +2726,7 @@ static int do_sub(exarg_T *eap, const proftime_T timeout, const int cmdpreview_n
             nmatch_tl += nmatch - 1;
           }
           int copy_len = regmatch.startpos[0].col - copycol;
-          new_end = sub_grow_buf(&new_start, &new_start_len,
+          new_end = rs_sub_grow_buf(&new_start, &new_start_len,
                                  (colnr_T)strlen(p1) - regmatch.endpos[0].col
                                  + copy_len + sublen + 1);
 
@@ -3073,7 +3045,7 @@ skip:
           beginline(BL_WHITE | BL_FIX);
         }
       }
-      if (cmdpreview_ns <= 0 && !do_sub_msg(subflags.do_count) && subflags.do_ask && p_ch > 0) {
+      if (cmdpreview_ns <= 0 && !rs_do_sub_msg(subflags.do_count) && subflags.do_ask && p_ch > 0) {
         msg("", 0);
       }
     } else {
@@ -3166,10 +3138,6 @@ int nvim_excmds_get_KeyTyped(void) { return KeyTyped ? 1 : 0; }
 
 /// Accessor: return messaging() result.
 int nvim_excmds_messaging(void) { return messaging() ? 1 : 0; }
-
-// do_sub_msg implemented in Rust (rs_do_sub_msg in ex_cmds/src/substitute.rs).
-// The Rust implementation calls nvim_excmds_do_sub_msg (above) for formatting.
-extern bool rs_do_sub_msg(bool count_only);
 
 /// Give message for number of substitutions.
 /// Can also be used after a ":global" command.
@@ -3644,14 +3612,17 @@ void nvim_excmds_update_topline_curwin(void) { update_topline(curwin); }
 int nvim_excmds_orig_buf_line_count(void) { return curbuf->b_ml.ml_line_count; }
 
 /// Accessor: preview_lines->subresults.size
-size_t nvim_excmds_preview_lines_size(const PreviewLines *pl) { return pl->subresults.size; }
+size_t nvim_excmds_preview_lines_size(const void *pl)
+{
+  return ((const PreviewLines *)pl)->subresults.size;
+}
 /// Accessor: preview_lines->subresults.items[idx] fields
-void nvim_excmds_preview_lines_item(const PreviewLines *pl, size_t idx,
+void nvim_excmds_preview_lines_item(const void *pl, size_t idx,
                                      linenr_T *start_lnum, colnr_T *start_col,
                                      linenr_T *end_lnum, colnr_T *end_col,
                                      linenr_T *pre_match)
 {
-  SubResult item = pl->subresults.items[idx];
+  SubResult item = ((const PreviewLines *)pl)->subresults.items[idx];
   *start_lnum = item.start.lnum;
   *start_col = item.start.col;
   *end_lnum = item.end.lnum;

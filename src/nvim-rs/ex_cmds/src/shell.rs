@@ -804,10 +804,9 @@ pub unsafe extern "C" fn rs_do_shell(cmd: *mut c_char, flags: c_int) {
     if nvim_excmds_get_p_warn() != 0
         && nvim_excmds_get_autocmd_busy() == 0
         && nvim_excmds_get_msg_silent() == 0
+        && nvim_excmds_any_buf_changed() != 0
     {
-        if nvim_excmds_any_buf_changed() != 0 {
-            nvim_excmds_msg_puts_no_write_warning();
-        }
+        nvim_excmds_msg_puts_no_write_warning();
     }
 
     // This ui_cursor_goto is required for when the '\n' resulted in a
@@ -879,11 +878,7 @@ pub unsafe extern "C" fn rs_do_bang(
 
     loop {
         let trailarg_len = cstrlen(trailarg);
-        let newcmd_len: usize = if newcmd.is_null() {
-            0
-        } else {
-            cstrlen(newcmd)
-        };
+        let newcmd_len: usize = if newcmd.is_null() { 0 } else { cstrlen(newcmd) };
         let prevcmd_len: usize = if ins_prevcmd {
             match PREVCMD {
                 Some(ptr) if !ptr.is_null() => cstrlen(ptr),
