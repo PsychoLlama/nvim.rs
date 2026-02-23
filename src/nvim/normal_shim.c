@@ -1971,8 +1971,6 @@ void nvim_nv_vreplace_impl(cmdarg_T *cap) { nv_vreplace_impl(cap); }
 
 // Forward declarations for scroll/screen handlers
 static void nv_scroll_impl(cmdarg_T *cap);
-static void nv_right_impl(cmdarg_T *cap);
-static void nv_left_impl(cmdarg_T *cap);
 static void nv_up_impl(cmdarg_T *cap);
 static void nv_down_impl(cmdarg_T *cap);
 
@@ -2032,10 +2030,6 @@ const char *nvim_get_e352_msg(void) { return _("E352: Cannot erase folds with cu
 
 void nvim_nv_scroll_impl(cmdarg_T *cap) { nv_scroll_impl(cap); }
 
-void nvim_nv_right_impl(cmdarg_T *cap) { nv_right_impl(cap); }
-
-void nvim_nv_left_impl(cmdarg_T *cap) { nv_left_impl(cap); }
-
 void nvim_nv_up_impl(cmdarg_T *cap) { nv_up_impl(cap); }
 
 void nvim_nv_down_impl(cmdarg_T *cap) { nv_down_impl(cap); }
@@ -2085,6 +2079,23 @@ bool nvim_vim_isprintc(int c) { return vim_isprintc(c); }
 int nvim_vim_strsize_call(const char *s) { return vim_strsize((char *)s); }
 void nvim_adjust_skipcol_call(void) { adjust_skipcol(); }
 void nvim_dec_cursor_col(void) { curwin->w_cursor.col--; }
+
+// Phase 1 accessors: nv_right_impl / nv_left_impl
+bool nvim_cursor_pos_ptr_is_nul(void) { return *get_cursor_pos_ptr() == NUL; }
+bool nvim_lineempty_cursor(void) { return LINEEMPTY(curwin->w_cursor.lnum); }
+bool nvim_vim_strchr_p_ww(int c) { return vim_strchr(p_ww, c) != NULL; }
+int nvim_utfc_ptr2len_cursor(void) { return utfc_ptr2len(get_cursor_pos_ptr()); }
+int nvim_oneleft_call(void) { return oneleft(); }
+void nvim_cursor_col_inc_by_utfc(void)
+{
+  curwin->w_cursor.col += (colnr_T)utfc_ptr2len(get_cursor_pos_ptr());
+}
+void nvim_set_cursor_col_zero(void)
+{
+  curwin->w_cursor.col = 0;
+  curwin->w_cursor.coladd = 0;
+}
+void nvim_cursor_lnum_dec(void) { curwin->w_cursor.lnum--; }
 
 void nvim_nv_at_impl(cmdarg_T *cap) { nv_at_impl(cap); }
 
@@ -3827,141 +3838,6 @@ static void nv_scroll_impl(cmdarg_T *cap)
     cursor_correct(curwin);
   }
   beginline(BL_SOL | BL_FIX);
-}
-
-/// Cursor right commands (implementation).
-static void nv_right_impl(cmdarg_T *cap)
-{
-  int n;
-
-  if (mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL)) {
-    // <C-Right> and <S-Right> move a word or WORD right
-    if (mod_mask & MOD_MASK_CTRL) {
-      cap->arg = true;
-    }
-    rs_nv_wordcmd(cap);
-    return;
-  }
-
-  cap->oap->motion_type = kMTCharWise;
-  cap->oap->inclusive = false;
-  bool past_line = (VIsual_active && *p_sel != 'o');
-
-  // In virtual edit mode, there's no such thing as "past_line", as lines
-  // are (theoretically) infinitely long.
-  if (virtual_active(curwin)) {
-    past_line = false;
-  }
-
-  for (n = cap->count1; n > 0; n--) {
-    if ((!past_line && oneright() == false)
-        || (past_line && *get_cursor_pos_ptr() == NUL)) {
-      //    <Space> wraps to next line if 'whichwrap' has 's'.
-      //        'l' wraps to next line if 'whichwrap' has 'l'.
-      // CURS_RIGHT wraps to next line if 'whichwrap' has '>'.
-      if (((cap->cmdchar == ' ' && vim_strchr(p_ww, 's') != NULL)
-           || (cap->cmdchar == 'l' && vim_strchr(p_ww, 'l') != NULL)
-           || (cap->cmdchar == K_RIGHT && vim_strchr(p_ww, '>') != NULL))
-          && curwin->w_cursor.lnum < curbuf->b_ml.ml_line_count) {
-        // When deleting we also count the NL as a character.
-        // Set cap->oap->inclusive when last char in the line is
-        // included, move to next line after that
-        if (cap->oap->op_type != OP_NOP
-            && !cap->oap->inclusive
-            && !LINEEMPTY(curwin->w_cursor.lnum)) {
-          cap->oap->inclusive = true;
-        } else {
-          curwin->w_cursor.lnum++;
-          curwin->w_cursor.col = 0;
-          curwin->w_cursor.coladd = 0;
-          curwin->w_set_curswant = true;
-          cap->oap->inclusive = false;
-        }
-        continue;
-      }
-      if (cap->oap->op_type == OP_NOP) {
-        // Only beep and flush if not moved at all
-        if (n == cap->count1) {
-          beep_flush();
-        }
-      } else {
-        if (!LINEEMPTY(curwin->w_cursor.lnum)) {
-          cap->oap->inclusive = true;
-        }
-      }
-      break;
-    } else if (past_line) {
-      curwin->w_set_curswant = true;
-      if (virtual_active(curwin)) {
-        oneright();
-      } else {
-        curwin->w_cursor.col += utfc_ptr2len(get_cursor_pos_ptr());
-      }
-    }
-  }
-  if (n != cap->count1 && (fdo_flags & kOptFdoFlagHor) && KeyTyped
-      && cap->oap->op_type == OP_NOP) {
-    rs_foldOpenCursor();
-  }
-}
-
-/// Cursor left commands (implementation).
-///
-/// @return  true when operator end should not be adjusted.
-static void nv_left_impl(cmdarg_T *cap)
-{
-  int n;
-
-  if (mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL)) {
-    // <C-Left> and <S-Left> move a word or WORD left
-    if (mod_mask & MOD_MASK_CTRL) {
-      cap->arg = 1;
-    }
-    rs_nv_bck_word(cap);
-    return;
-  }
-
-  cap->oap->motion_type = kMTCharWise;
-  cap->oap->inclusive = false;
-  for (n = cap->count1; n > 0; n--) {
-    if (oneleft() == false) {
-      // <BS> and <Del> wrap to previous line if 'whichwrap' has 'b'.
-      //                 'h' wraps to previous line if 'whichwrap' has 'h'.
-      //           CURS_LEFT wraps to previous line if 'whichwrap' has '<'.
-      if ((((cap->cmdchar == K_BS || cap->cmdchar == Ctrl_H)
-            && vim_strchr(p_ww, 'b') != NULL)
-           || (cap->cmdchar == 'h' && vim_strchr(p_ww, 'h') != NULL)
-           || (cap->cmdchar == K_LEFT && vim_strchr(p_ww, '<') != NULL))
-          && curwin->w_cursor.lnum > 1) {
-        curwin->w_cursor.lnum--;
-        coladvance(curwin, MAXCOL);
-        curwin->w_set_curswant = true;
-
-        // When the NL before the first char has to be deleted we
-        // put the cursor on the NUL after the previous line.
-        // This is a very special case, be careful!
-        // Don't adjust op_end now, otherwise it won't work.
-        if ((cap->oap->op_type == OP_DELETE || cap->oap->op_type == OP_CHANGE)
-            && !LINEEMPTY(curwin->w_cursor.lnum)) {
-          char *cp = get_cursor_pos_ptr();
-
-          if (*cp != NUL) {
-            curwin->w_cursor.col += utfc_ptr2len(cp);
-          }
-          cap->retval |= CA_NO_ADJ_OP_END;
-        }
-        continue;
-      } else if (cap->oap->op_type == OP_NOP && n == cap->count1) {
-        // Only beep and flush if not moved at all
-        beep_flush();
-      }
-      break;
-    }
-  }
-  if (n != cap->count1 && (fdo_flags & kOptFdoFlagHor) && KeyTyped
-      && cap->oap->op_type == OP_NOP) {
-    rs_foldOpenCursor();
-  }
 }
 
 /// Cursor up commands (implementation).

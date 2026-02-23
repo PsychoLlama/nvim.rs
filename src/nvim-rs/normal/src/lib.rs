@@ -2584,9 +2584,20 @@ pub unsafe extern "C" fn rs_nv_vreplace(cap: CapHandle) {
 // =============================================================================
 
 extern "C" {
+    // Phase 1: nv_right_impl / nv_left_impl accessors
+    fn nvim_cursor_pos_ptr_is_nul() -> bool;
+    fn nvim_lineempty_cursor() -> bool;
+    fn nvim_vim_strchr_p_ww(c: c_int) -> bool;
+    #[allow(dead_code)]
+    fn nvim_utfc_ptr2len_cursor() -> c_int;
+    fn nvim_oneleft_call() -> c_int;
+    fn nvim_cursor_col_inc_by_utfc();
+    fn nvim_set_cursor_col_zero();
+    fn nvim_cursor_lnum_dec();
+}
+
+extern "C" {
     fn nvim_nv_scroll_impl(cap: CapHandle);
-    fn nvim_nv_right_impl(cap: CapHandle);
-    fn nvim_nv_left_impl(cap: CapHandle);
     fn nvim_nv_up_impl(cap: CapHandle);
     fn nvim_nv_down_impl(cap: CapHandle);
 
@@ -3148,6 +3159,10 @@ pub unsafe extern "C" fn rs_nv_scroll(cap: CapHandle) {
     nvim_nv_scroll_impl(cap);
 }
 
+// Phase 1 constants
+const MOD_MASK_SHIFT_P1: c_int = 0x02;
+const CA_NO_ADJ_OP_END_P1: c_int = 2;
+
 /// Command handler for cursor right commands.
 ///
 /// Handles 'l', space, and right arrow key movement.
@@ -3157,7 +3172,97 @@ pub unsafe extern "C" fn rs_nv_scroll(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
-    nvim_nv_right_impl(cap);
+    // <C-Right> and <S-Right> move a word or WORD right
+    if (nvim_get_mod_mask() & (MOD_MASK_SHIFT_P1 | MOD_MASK_CTRL)) != 0 {
+        if (nvim_get_mod_mask() & MOD_MASK_CTRL) != 0 {
+            nvim_cap_set_arg(cap, 1);
+        }
+        rs_nv_wordcmd(cap);
+        return;
+    }
+
+    let oap = nvim_cap_get_oap(cap);
+    nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
+    nvim_oap_set_inclusive(oap, false);
+
+    // past_line: in Visual mode with 'selection' != 'o', cursor can go past EOL
+    #[allow(clippy::cast_possible_wrap)]
+    let sel_o_p1 = b'o' as std::ffi::c_char;
+    let past_line = if nvim_virtual_active() {
+        // In virtual edit mode there is no past_line
+        false
+    } else {
+        nvim_get_VIsual_active() != 0 && nvim_get_p_sel_first() != sel_o_p1
+    };
+
+    let count1 = nvim_cap_get_count1(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    let mut n = count1;
+    loop {
+        if n <= 0 {
+            break;
+        }
+
+        // Check if we can move right; for non-past_line, oneright() moves the cursor
+        let cannot_move_right = if past_line {
+            nvim_cursor_pos_ptr_is_nul()
+        } else {
+            nvim_oneright_call() == 0
+        };
+
+        if cannot_move_right {
+            // Check whichwrap wrapping to next line
+            let wrap = (cmdchar == c_int::from(b' ') && nvim_vim_strchr_p_ww(c_int::from(b's')))
+                || (cmdchar == c_int::from(b'l') && nvim_vim_strchr_p_ww(c_int::from(b'l')))
+                || (cmdchar == K_RIGHT && nvim_vim_strchr_p_ww(c_int::from(b'>')));
+
+            if wrap && nvim_get_cursor_lnum() < nvim_get_line_count() {
+                // When deleting, count NL as a character
+                if nvim_oap_get_op_type_ptr(oap) != OP_NOP
+                    && !nvim_oap_get_inclusive(oap)
+                    && !nvim_lineempty_cursor()
+                {
+                    nvim_oap_set_inclusive(oap, true);
+                } else {
+                    // Move to start of next line
+                    let lnum = nvim_get_cursor_lnum();
+                    nvim_set_cursor_lnum(lnum + 1);
+                    nvim_set_cursor_col_zero();
+                    nvim_curwin_set_curswant(true);
+                    nvim_oap_set_inclusive(oap, false);
+                }
+                n -= 1;
+                continue;
+            }
+
+            if nvim_oap_get_op_type_ptr(oap) == OP_NOP {
+                // Only beep if not moved at all
+                if n == count1 {
+                    beep_flush();
+                }
+            } else if !nvim_lineempty_cursor() {
+                nvim_oap_set_inclusive(oap, true);
+            }
+            break;
+        } else if past_line {
+            // past_line move: set curswant and advance col
+            nvim_curwin_set_curswant(true);
+            if nvim_virtual_active() {
+                nvim_oneright_call();
+            } else {
+                nvim_cursor_col_inc_by_utfc();
+            }
+        }
+        n -= 1;
+    }
+
+    if n != count1
+        && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
+        && nvim_get_KeyTyped()
+        && nvim_oap_get_op_type_ptr(oap) == OP_NOP
+    {
+        rs_foldOpenCursor();
+    }
 }
 
 /// Command handler for cursor left commands.
@@ -3169,7 +3274,68 @@ pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_left(cap: CapHandle) {
-    nvim_nv_left_impl(cap);
+    // <C-Left> and <S-Left> move a word or WORD left
+    if (nvim_get_mod_mask() & (MOD_MASK_SHIFT_P1 | MOD_MASK_CTRL)) != 0 {
+        if (nvim_get_mod_mask() & MOD_MASK_CTRL) != 0 {
+            nvim_cap_set_arg(cap, 1);
+        }
+        rs_nv_bck_word(cap);
+        return;
+    }
+
+    let oap = nvim_cap_get_oap(cap);
+    nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
+    nvim_oap_set_inclusive(oap, false);
+
+    let count1 = nvim_cap_get_count1(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    let mut n = count1;
+    loop {
+        if n <= 0 {
+            break;
+        }
+
+        if nvim_oneleft_call() == 0 {
+            // Check whichwrap wrapping to previous line
+            let wrap = (((cmdchar == K_BS || cmdchar == CTRL_H_KEY)
+                && nvim_vim_strchr_p_ww(c_int::from(b'b')))
+                || (cmdchar == c_int::from(b'h') && nvim_vim_strchr_p_ww(c_int::from(b'h')))
+                || (cmdchar == K_LEFT && nvim_vim_strchr_p_ww(c_int::from(b'<'))))
+                && nvim_get_cursor_lnum() > 1;
+
+            if wrap {
+                nvim_cursor_lnum_dec();
+                nvim_coladvance_curwin(MAXCOL);
+                nvim_curwin_set_curswant(true);
+
+                // When deleting NL before first char: put cursor on NUL after prev line
+                if (nvim_oap_get_op_type_ptr(oap) == OP_DELETE
+                    || nvim_oap_get_op_type_ptr(oap) == OP_CHANGE)
+                    && !nvim_lineempty_cursor()
+                {
+                    if !nvim_cursor_pos_ptr_is_nul() {
+                        nvim_cursor_col_inc_by_utfc();
+                    }
+                    nvim_cap_or_retval(cap, CA_NO_ADJ_OP_END_P1);
+                }
+                n -= 1;
+                continue;
+            } else if nvim_oap_get_op_type_ptr(oap) == OP_NOP && n == count1 {
+                // Only beep if not moved at all
+                beep_flush();
+            }
+            break;
+        }
+        n -= 1;
+    }
+
+    if n != count1
+        && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
+        && nvim_get_KeyTyped()
+        && nvim_oap_get_op_type_ptr(oap) == OP_NOP
+    {
+        rs_foldOpenCursor();
+    }
 }
 
 /// Command handler for cursor up commands.
