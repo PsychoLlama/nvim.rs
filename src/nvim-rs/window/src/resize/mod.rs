@@ -18,6 +18,7 @@ pub mod fraction;
 pub mod frame;
 pub mod minsize;
 pub mod save_restore;
+pub mod screen;
 pub mod validate;
 
 // Re-export common items
@@ -27,4 +28,5 @@ pub use fraction::*;
 pub use frame::*;
 pub use minsize::*;
 pub use save_restore::*;
+pub use screen::*;
 pub use validate::*;

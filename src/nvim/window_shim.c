@@ -138,6 +138,13 @@ extern void rs_leaving_window(win_T *win);
 extern void rs_entering_window(win_T *win);
 extern void rs_win_init_empty(win_T *wp);
 
+// New Rust replacements for screen size and scroll helpers (Phase 4)
+extern void rs_win_comp_scroll(win_T *wp);
+extern void rs_win_new_screensize(void);
+extern void rs_win_new_screen_cols(void);
+extern void rs_win_init_size(void);
+extern void rs_snapshot_windows_scroll_size(void);
+
 extern int rs_frame_minheight(frame_T *topfrp, win_T *next_curwin);
 extern int rs_win_comp_pos(void);
 extern void rs_frame_comp_pos(frame_T *topfrp, int *row, int *col);
@@ -1913,19 +1920,7 @@ static void new_frame(win_T *wp)
 }
 
 // Initialize the window and frame size to the maximum.
-void win_init_size(void)
-{
-  firstwin->w_height = (int)ROWS_AVAIL;
-  firstwin->w_prev_height = (int)ROWS_AVAIL;
-  firstwin->w_view_height = firstwin->w_height - firstwin->w_winbar_height;
-  firstwin->w_height_outer = firstwin->w_height;
-  firstwin->w_winrow_off = firstwin->w_winbar_height;
-  topframe->fr_height = (int)ROWS_AVAIL;
-  firstwin->w_width = Columns;
-  firstwin->w_view_width = firstwin->w_width;
-  firstwin->w_width_outer = firstwin->w_width;
-  topframe->fr_width = Columns;
-}
+void win_init_size(void) { rs_win_init_size(); }
 
 // Allocate a new tabpage_T and init the values.
 static tabpage_T *alloc_tabpage(void)
@@ -2806,25 +2801,7 @@ void win_free_grid(win_T *wp, bool reinit)
   }
 }
 
-void win_new_screensize(void)
-{
-  static int old_Rows = 0;
-  static int old_Columns = 0;
-
-  if (old_Rows != Rows) {
-    // If 'window' uses the whole screen, keep it using that.
-    // Don't change it when set with "-w size" on the command line.
-    if (p_window == old_Rows - 1 || (old_Rows == 0 && !option_was_set(kOptWindow))) {
-      p_window = Rows - 1;
-    }
-    old_Rows = Rows;
-    win_new_screen_rows();  // update window sizes
-  }
-  if (old_Columns != Columns) {
-    old_Columns = Columns;
-    win_new_screen_cols();  // update window sizes
-  }
-}
+void win_new_screensize(void) { rs_win_new_screensize(); }
 /// Called from win_new_screensize() after Rows changed.
 ///
 /// This only does the current tab page, others must be done when made active.
@@ -2853,36 +2830,11 @@ void win_new_screen_rows(void)
 }
 
 /// Called from win_new_screensize() after Columns changed.
-void win_new_screen_cols(void)
-{
-  if (firstwin == NULL) {       // not initialized yet
-    return;
-  }
-
-  // First try setting the widths of windows with 'winfixwidth'.  If that
-  // doesn't result in the right width, forget about that option.
-  frame_new_width(topframe, Columns, false, true);
-  if (!rs_frame_check_width(topframe, Columns)) {
-    frame_new_width(topframe, Columns, false, false);
-  }
-
-  rs_win_comp_pos();  // recompute w_winrow and w_wincol
-  win_reconfig_floats();  // The size of floats might change
-}
+void win_new_screen_cols(void) { rs_win_new_screen_cols(); }
 
 /// Make a snapshot of all the window scroll positions and sizes of the current
 /// tab page.
-void snapshot_windows_scroll_size(void)
-{
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    wp->w_last_topline = wp->w_topline;
-    wp->w_last_topfill = wp->w_topfill;
-    wp->w_last_leftcol = wp->w_leftcol;
-    wp->w_last_skipcol = wp->w_skipcol;
-    wp->w_last_width = wp->w_width;
-    wp->w_last_height = wp->w_height;
-  }
-}
+void snapshot_windows_scroll_size(void) { rs_snapshot_windows_scroll_size(); }
 
 static bool did_initial_scroll_size_snapshot = false;
 
@@ -3273,17 +3225,7 @@ void win_set_inner_size(win_T *wp, bool valid_cursor)
   rs_win_set_inner_size(wp, valid_cursor ? 1 : 0);
 }
 
-void win_comp_scroll(win_T *wp)
-{
-  const OptInt old_w_p_scr = wp->w_p_scr;
-  wp->w_p_scr = rs_win_default_scroll(wp);
-
-  if (wp->w_p_scr != old_w_p_scr) {
-    // Used by "verbose set scroll".
-    wp->w_p_script_ctx[kWinOptScroll].sc_sid = SID_WINLAYOUT;
-    wp->w_p_script_ctx[kWinOptScroll].sc_lnum = 0;
-  }
-}
+void win_comp_scroll(win_T *wp) { rs_win_comp_scroll(wp); }
 
 /// command_height: called whenever p_ch has been changed.
 void command_height(void)
@@ -3499,7 +3441,7 @@ void nvim_win_set_winrow_off(win_T *wp, int val) { if (wp) { wp->w_winrow_off = 
 void nvim_win_set_wincol_off(win_T *wp, int val) { if (wp) { wp->w_wincol_off = val; } }
 int nvim_win_get_p_spk_char(void) { return (int)(unsigned char)*p_spk; }
 int nvim_get_exiting(void) { return exiting ? 1 : 0; }
-void nvim_win_comp_scroll_wrapper(win_T *wp) { if (wp) { win_comp_scroll(wp); } }
+void nvim_win_comp_scroll_wrapper(win_T *wp) { if (wp) { rs_win_comp_scroll(wp); } }
 // nvim_validate_cursor_win already defined in move.c
 // nvim_changed_line_abv_curs_win already defined in change_ffi.c
 // nvim_invalidate_botline already defined in move.c
@@ -4081,3 +4023,43 @@ void nvim_win_set_prev_pcmark(win_T *wp, linenr_T lnum, colnr_T col)
 
 /// Sync w_s to point to the window's buffer's b_s.
 void nvim_win_sync_s(win_T *wp) { if (wp && wp->w_buffer) { wp->w_s = &wp->w_buffer->b_s; } }
+
+// =============================================================================
+// C Accessors for Phase 4: win_comp_scroll / win_new_screensize / etc.
+// =============================================================================
+
+/// Set w_height field (inner height).
+void nvim_win_set_field_height(win_T *wp, int val) { if (wp) { wp->w_height = val; } }
+
+/// Set w_width field (inner width).
+void nvim_win_set_field_width(win_T *wp, int val) { if (wp) { wp->w_width = val; } }
+
+/// Set scroll option script context to SID_WINLAYOUT (for win_comp_scroll).
+void nvim_win_set_script_ctx_scroll(win_T *wp)
+{
+  if (wp) {
+    wp->w_p_script_ctx[kWinOptScroll].sc_sid = SID_WINLAYOUT;
+    wp->w_p_script_ctx[kWinOptScroll].sc_lnum = 0;
+  }
+}
+
+/// Call win_reconfig_floats() (for win_new_screen_cols).
+void nvim_win_reconfig_floats(void) { win_reconfig_floats(); }
+
+/// Set w_last_topline snapshot field.
+void nvim_win_set_last_topline(win_T *wp, linenr_T val) { if (wp) { wp->w_last_topline = val; } }
+
+/// Set w_last_topfill snapshot field.
+void nvim_win_set_last_topfill(win_T *wp, int val) { if (wp) { wp->w_last_topfill = val; } }
+
+/// Set w_last_leftcol snapshot field.
+void nvim_win_set_last_leftcol(win_T *wp, colnr_T val) { if (wp) { wp->w_last_leftcol = val; } }
+
+/// Set w_last_skipcol snapshot field.
+void nvim_win_set_last_skipcol(win_T *wp, colnr_T val) { if (wp) { wp->w_last_skipcol = val; } }
+
+/// Set w_last_width snapshot field.
+void nvim_win_set_last_width(win_T *wp, int val) { if (wp) { wp->w_last_width = val; } }
+
+/// Set w_last_height snapshot field.
+void nvim_win_set_last_height(win_T *wp, int val) { if (wp) { wp->w_last_height = val; } }
