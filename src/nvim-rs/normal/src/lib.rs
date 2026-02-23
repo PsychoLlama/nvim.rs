@@ -2879,6 +2879,25 @@ extern "C" {
     fn nvim_bracket_fold_move(cap: CapHandle);
     fn nvim_bracket_diff_move(cap: CapHandle);
     fn nvim_bracket_spell_move(cap: CapHandle);
+    // Phase 4: find_decl accessors
+    fn nvim_searchit_decl(pat: *const c_char, patlen: usize, searchflags: c_int) -> c_int;
+    fn nvim_findpar_decl() -> c_int;
+    fn nvim_vim_iswordp_char(ptr: *const c_char) -> c_int;
+    fn nvim_get_leader_len_cursor_line() -> c_int;
+    fn nvim_cursor_line_is_blank() -> c_int;
+    fn nvim_reset_search_dir();
+    fn nvim_get_p_ws_bool() -> c_int;
+    fn nvim_set_p_ws_bool(val: c_int);
+    fn nvim_get_p_scs_bool() -> c_int;
+    fn nvim_set_p_scs_bool(val: c_int);
+    fn nvim_set_cursor_col_zero_val();
+    fn nvim_cursor_lnum_dec_val();
+    fn nvim_findmatchlimit_forward(
+        maxtravel: i64,
+        out_lnum: *mut c_int,
+        out_col: *mut c_int,
+        out_coladd: *mut c_int,
+    ) -> bool;
 }
 
 // Phase 2 constants
@@ -3207,6 +3226,181 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
         // Not a valid cap->nchar
         rs_clearopbeep(oap);
     }
+}
+
+// =============================================================================
+// Phase 4 (nv_gd): find_decl migration
+// =============================================================================
+
+/// Constants for find_decl (from search.h)
+const SEARCH_START: c_int = 0x100; // start search without col offset
+
+/// Build the `\V`-escaped search pattern for `find_decl`.
+///
+/// Returns a NUL-terminated `Vec<u8>` and the pattern length (excluding NUL).
+///
+/// # Safety
+/// `ptr` must point to at least `len` valid bytes.
+unsafe fn find_decl_build_pat(ptr: *mut c_char, len: usize) -> (Vec<u8>, usize) {
+    let is_word = nvim_vim_iswordp_char(ptr) != 0;
+    let pat: Vec<u8> = if is_word {
+        let mut p = b"\\V\\<".to_vec();
+        p.extend_from_slice(std::slice::from_raw_parts(ptr.cast::<u8>(), len));
+        p.extend_from_slice(b"\\>");
+        p.push(0);
+        p
+    } else {
+        let mut p = b"\\V".to_vec();
+        p.extend_from_slice(std::slice::from_raw_parts(ptr.cast::<u8>(), len));
+        p.push(0);
+        p
+    };
+    let patlen = pat.len() - 1;
+    (pat, patlen)
+}
+
+/// Inner search loop for `rs_find_decl`.
+///
+/// Returns `true` if a match was found (cursor is at match position).
+///
+/// # Safety
+/// Caller must ensure cursor state is valid.
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+unsafe fn find_decl_search(
+    pat: &[u8],
+    patlen: usize,
+    old_lnum: c_int,
+    par_lnum: c_int,
+    locally: bool,
+    thisblock: bool,
+    flags_arg: c_int,
+) -> bool {
+    let mut found_lnum: c_int = 0;
+    let mut found_col: c_int = 0;
+    let mut found_coladd: c_int = 0;
+    let mut searchflags = flags_arg;
+    let mut t: bool;
+    loop {
+        t = nvim_searchit_decl(pat.as_ptr().cast(), patlen, searchflags) != 0;
+        if nvim_get_cursor_lnum() >= old_lnum {
+            t = false; // match after start is failure too
+        }
+        if thisblock && t {
+            let maxtravel = i64::from(old_lnum - nvim_get_cursor_lnum() + 1);
+            let mut blk_lnum: c_int = 0;
+            let mut blk_col: c_int = 0;
+            let mut blk_coladd: c_int = 0;
+            if nvim_findmatchlimit_forward(
+                maxtravel,
+                &raw mut blk_lnum,
+                &raw mut blk_col,
+                &raw mut blk_coladd,
+            ) && blk_lnum < old_lnum
+            {
+                nvim_set_cursor_pos(blk_lnum, blk_col, blk_coladd);
+                continue;
+            }
+        }
+        if !t {
+            if found_lnum != 0 {
+                nvim_set_cursor_pos(found_lnum, found_col, found_coladd);
+                t = true;
+            }
+            break;
+        }
+        if nvim_get_leader_len_cursor_line() > 0 {
+            // Ignore comment lines — continue at start of next line.
+            nvim_set_cursor_pos(nvim_get_cursor_lnum() + 1, 0, 0);
+            continue;
+        }
+        let cur_lnum = nvim_get_cursor_lnum();
+        let cur_col = nvim_get_cursor_col();
+        let valid = rs_is_ident(nvim_ident_get_cursor_line_ptr(), cur_col);
+        if !valid && found_lnum != 0 {
+            nvim_set_cursor_pos(found_lnum, found_col, found_coladd);
+            break;
+        }
+        // global search: use first match found
+        if valid && !locally {
+            break;
+        }
+        if valid && cur_lnum >= par_lnum {
+            if found_lnum != 0 {
+                nvim_set_cursor_pos(found_lnum, found_col, found_coladd);
+            }
+            break;
+        }
+        if valid {
+            found_lnum = cur_lnum;
+            found_col = cur_col;
+            found_coladd = nvim_get_cursor_coladd();
+        } else {
+            found_lnum = 0;
+            found_col = 0;
+            found_coladd = 0;
+        }
+        searchflags &= !SEARCH_START;
+    }
+    t
+}
+
+/// Search for variable declaration of `ptr[len]`.
+///
+/// When `locally` is true, searches within the current function ("gd");
+/// otherwise searches in the current file ("gD").
+///
+/// Returns true on success, false when not found.
+///
+/// # Safety
+/// `ptr` must be a valid pointer to at least `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_decl(
+    ptr: *mut c_char,
+    len: usize,
+    locally: bool,
+    thisblock: bool,
+    flags_arg: c_int,
+) -> bool {
+    let (pat, patlen) = find_decl_build_pat(ptr, len);
+
+    let old_lnum = nvim_get_cursor_lnum();
+    let old_col = nvim_get_cursor_col();
+    let old_coladd = nvim_get_cursor_coladd();
+
+    let save_p_ws = nvim_get_p_ws_bool();
+    let save_p_scs = nvim_get_p_scs_bool();
+    nvim_set_p_ws_bool(0);
+    nvim_set_p_scs_bool(0);
+
+    // Position cursor at start of search range.
+    let par_lnum: c_int;
+    if !locally || nvim_findpar_decl() == 0 {
+        nvim_setpcmark();
+        nvim_set_cursor_pos(1, 0, 0);
+        par_lnum = 1;
+    } else {
+        par_lnum = nvim_get_cursor_lnum();
+        while nvim_get_cursor_lnum() > 1 && nvim_cursor_line_is_blank() == 0 {
+            nvim_cursor_lnum_dec_val();
+        }
+    }
+    nvim_set_cursor_col_zero_val();
+
+    let found = find_decl_search(
+        &pat, patlen, old_lnum, par_lnum, locally, thisblock, flags_arg,
+    );
+
+    if found {
+        nvim_set_w_set_curswant(true);
+        nvim_reset_search_dir();
+    } else {
+        nvim_set_cursor_pos(old_lnum, old_col, old_coladd);
+    }
+
+    nvim_set_p_ws_bool(save_p_ws);
+    nvim_set_p_scs_bool(save_p_scs);
+
+    found
 }
 
 // =============================================================================

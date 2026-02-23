@@ -1377,13 +1377,96 @@ int nvim_ident_init(cmdarg_T *cap, int *cmdchar_out, int *g_cmd_out,
   return 0;
 }
 
-/// Wrapper for nv_gd C implementation (go to definition).
+/// Phase 4: find_decl accessors for Rust FFI
+
+/// Wrapper for searchit using curwin/curbuf cursor (for find_decl pattern).
+/// Returns 1 on success, 0 on failure.
+int nvim_searchit_decl(const char *pat, size_t patlen, int searchflags)
+{
+  return searchit(curwin, curbuf, &curwin->w_cursor, NULL,
+                  FORWARD, (char *)pat, patlen, 1, searchflags, RE_LAST, NULL);
+}
+
+/// Wrapper for findpar for local decl search (BACKWARD, 1, '{', false).
+/// Returns true if found, sets cursor to result.
+int nvim_findpar_decl(void)
+{
+  bool incll;
+  return findpar(&incll, BACKWARD, 1, '{', false) ? 1 : 0;
+}
+
+/// Wrapper for vim_iswordp for the first char at ptr.
+int nvim_vim_iswordp_char(const char *ptr)
+{
+  return vim_iswordp(ptr) ? 1 : 0;
+}
+
+/// Wrapper for get_leader_len on cursor line.
+int nvim_get_leader_len_cursor_line(void)
+{
+  return get_leader_len(get_cursor_line_ptr(), NULL, false, true);
+}
+
+/// Check if first non-white char of cursor line is NUL (line is blank/whitespace).
+int nvim_cursor_line_is_blank(void)
+{
+  return *skipwhite(get_cursor_line_ptr()) == NUL ? 1 : 0;
+}
+
+/// Wrapper for reset_search_dir().
+void nvim_reset_search_dir(void)
+{
+  reset_search_dir();
+}
+
+/// Get p_ws as int.
+int nvim_get_p_ws_bool(void) { return p_ws ? 1 : 0; }
+
+/// Set p_ws from int.
+void nvim_set_p_ws_bool(int val) { p_ws = val != 0; }
+
+/// Get p_scs as int.
+int nvim_get_p_scs_bool(void) { return p_scs ? 1 : 0; }
+
+/// Set p_scs from int.
+void nvim_set_p_scs_bool(int val) { p_scs = val != 0; }
+
+/// Set cursor col to 0.
+void nvim_set_cursor_col_zero_val(void) { curwin->w_cursor.col = 0; }
+
+/// Cursor lnum decrement.
+void nvim_cursor_lnum_dec_val(void) { curwin->w_cursor.lnum--; }
+
+/// Get cursor lnum.
+int nvim_get_cursor_lnum_val(void) { return (int)curwin->w_cursor.lnum; }
+
+/// findmatchlimit with NULL oap, FM_FORWARD, for block scope in find_decl.
+bool nvim_findmatchlimit_forward(int64_t maxtravel,
+                                  int *out_lnum, int *out_col, int *out_coladd)
+{
+  pos_T *pos = findmatchlimit(NULL, '}', FM_FORWARD, (long)maxtravel);
+  if (pos == NULL) {
+    return false;
+  }
+  *out_lnum = pos->lnum;
+  *out_col = pos->col;
+  *out_coladd = pos->coladd;
+  return true;
+}
+
+/// rs_is_ident wrapper (declared in Rust).
+extern bool rs_is_ident(const char *line, int offset);
+
+/// rs_find_decl Rust implementation.
+extern bool rs_find_decl(char *ptr, size_t len, bool locally, bool thisblock, int flags_arg);
+
+/// Wrapper for nv_gd -- now calls rs_find_decl.
 void nvim_nv_gd_impl(oparg_T *oap, int nchar, int thisblock)
 {
   size_t len;
   char *ptr;
   if ((len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0
-      || !find_decl(ptr, len, nchar == 'd', thisblock, SEARCH_START)) {
+      || !rs_find_decl(ptr, len, nchar == 'd', thisblock, SEARCH_START)) {
     rs_clearopbeep(oap);
     return;
   }
@@ -3054,159 +3137,11 @@ static void nv_addsub(cmdarg_T *cap)
   }
 }
 
-/// Implementation of "gd" and "gD" command.
-///
-/// @param thisblock  1 for "1gd" and "1gD"
-static void nv_gd(oparg_T *oap, int nchar, int thisblock)
-{
-  size_t len;
-  char *ptr;
-  if ((len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0
-      || !find_decl(ptr, len, nchar == 'd', thisblock, SEARCH_START)) {
-    rs_clearopbeep(oap);
-    return;
-  }
-
-  if ((fdo_flags & kOptFdoFlagSearch) && KeyTyped && oap->op_type == OP_NOP) {
-    rs_foldOpenCursor();
-  }
-  // clear any search statistics
-  if (messaging() && !msg_silent && !shortmess(SHM_SEARCHCOUNT)) {
-    clear_cmdline = true;
-  }
-}
-
-/// Search for variable declaration of "ptr[len]".
-/// When "locally" is true in the current function ("gd"), otherwise in the
-/// current file ("gD").
-///
-/// @param thisblock  when true check the {} block scope.
-/// @param flags_arg  flags passed to searchit()
-///
-/// @return           fail when not found.
+/// Search for variable declaration of "ptr[len]" (thin wrapper calling Rust).
+/// Used by nv_gd and the searchdecl() Vimscript function.
 bool find_decl(char *ptr, size_t len, bool locally, bool thisblock, int flags_arg)
 {
-  pos_T par_pos;
-  pos_T found_pos;
-  bool t;
-  bool retval = true;
-  bool incll;
-  int searchflags = flags_arg;
-
-  size_t patsize = len + 7;
-  char *pat = xmalloc(patsize);
-
-  // Put "\V" before the pattern to avoid that the special meaning of "."
-  // and "~" causes trouble.
-  assert(patsize <= INT_MAX);
-  size_t patlen = (size_t)snprintf(pat, patsize,
-                                   vim_iswordp(ptr) ? "\\V\\<%.*s\\>" : "\\V%.*s",
-                                   (int)len, ptr);
-  pos_T old_pos = curwin->w_cursor;
-  bool save_p_ws = p_ws;
-  bool save_p_scs = p_scs;
-  p_ws = false;         // don't wrap around end of file now
-  p_scs = false;        // don't switch ignorecase off now
-
-  // With "gD" go to line 1.
-  // With "gd" Search back for the start of the current function, then go
-  // back until a blank line.  If this fails go to line 1.
-  if (!locally || !findpar(&incll, BACKWARD, 1, '{', false)) {
-    setpcmark();                        // Set in findpar() otherwise
-    curwin->w_cursor.lnum = 1;
-    par_pos = curwin->w_cursor;
-  } else {
-    par_pos = curwin->w_cursor;
-    while (curwin->w_cursor.lnum > 1
-           && *skipwhite(get_cursor_line_ptr()) != NUL) {
-      curwin->w_cursor.lnum--;
-    }
-  }
-  curwin->w_cursor.col = 0;
-
-  // Search forward for the identifier, ignore comment lines.
-  clearpos(&found_pos);
-  while (true) {
-    t = searchit(curwin, curbuf, &curwin->w_cursor, NULL, FORWARD,
-                 pat, patlen, 1, searchflags, RE_LAST, NULL);
-    if (curwin->w_cursor.lnum >= old_pos.lnum) {
-      t = false;         // match after start is failure too
-    }
-
-    if (thisblock && t != false) {
-      const int64_t maxtravel = old_pos.lnum - curwin->w_cursor.lnum + 1;
-      const pos_T *pos = findmatchlimit(NULL, '}', FM_FORWARD, maxtravel);
-
-      // Check that the block the match is in doesn't end before the
-      // position where we started the search from.
-      if (pos != NULL && pos->lnum < old_pos.lnum) {
-        // There can't be a useful match before the end of this block.
-        // Skip to the end
-        curwin->w_cursor = *pos;
-        continue;
-      }
-    }
-
-    if (t == false) {
-      // If we previously found a valid position, use it.
-      if (found_pos.lnum != 0) {
-        curwin->w_cursor = found_pos;
-        t = true;
-      }
-      break;
-    }
-    if (get_leader_len(get_cursor_line_ptr(), NULL, false, true) > 0) {
-      // Ignore this line, continue at start of next line.
-      curwin->w_cursor.lnum++;
-      curwin->w_cursor.col = 0;
-      continue;
-    }
-    bool valid = rs_is_ident(get_cursor_line_ptr(), curwin->w_cursor.col);
-
-    // If the current position is not a valid identifier and a previous match is
-    // present, favor that one instead.
-    if (!valid && found_pos.lnum != 0) {
-      curwin->w_cursor = found_pos;
-      break;
-    }
-    // global search: use first match found
-    if (valid && !locally) {
-      break;
-    }
-    if (valid && curwin->w_cursor.lnum >= par_pos.lnum) {
-      // If we previously found a valid position, use it.
-      if (found_pos.lnum != 0) {
-        curwin->w_cursor = found_pos;
-      }
-      break;
-    }
-
-    // For finding a local variable and the match is before the "{" or
-    // inside a comment, continue searching.  For K&R style function
-    // declarations this skips the function header without types.
-    if (!valid) {
-      clearpos(&found_pos);
-    } else {
-      found_pos = curwin->w_cursor;
-    }
-    // Remove SEARCH_START from flags to avoid getting stuck at one position.
-    searchflags &= ~SEARCH_START;
-  }
-
-  if (t == false) {
-    retval = false;
-    curwin->w_cursor = old_pos;
-  } else {
-    curwin->w_set_curswant = true;
-    // "n" searches forward now
-    reset_search_dir();
-  }
-
-  xfree(pat);
-  p_ws = save_p_ws;
-  p_scs = save_p_scs;
-
-  return retval;
+  return rs_find_decl(ptr, len, locally, thisblock, flags_arg);
 }
 
 /// Move 'dist' lines in direction 'dir', counting lines by *screen*
