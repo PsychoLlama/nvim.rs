@@ -479,17 +479,6 @@ pub unsafe extern "C" fn rs_reset_tagpreview() {
 // Phase 10: rs_jumpto_tag — full tag jump orchestration
 // =============================================================================
 
-extern "C" {
-    fn nvim_tag_jumpto_execute(
-        fname: *mut c_char,
-        pbuf: *mut c_char,
-        pbuf_end: *mut c_char,
-        lbuf: *mut c_char,
-        forceit: c_int,
-        keep_help: bool,
-    ) -> c_int;
-}
-
 // Import Rust functions from sibling modules via extern "C"
 extern "C" {
     fn rs_parse_match(lbuf: *mut c_char, tagp: *mut c_void) -> c_int;
@@ -498,13 +487,136 @@ extern "C" {
         -> *mut c_char;
 }
 
+// =============================================================================
+// Phase 3: rs_tag_jumpto_execute — migrated from nvim_tag_jumpto_execute in C
+// =============================================================================
+
+extern "C" {
+    fn nvim_tag_get_old_key_typed() -> bool;
+    fn nvim_tag_get_curwin() -> *mut c_void;
+    fn nvim_tag_jumpto_preview_setup(fname: *mut c_char) -> *mut c_char;
+    fn nvim_tag_jumpto_check_swb(fname: *const c_char) -> c_int;
+    fn nvim_tag_jumpto_maybe_split(getfile_result: c_int) -> c_int;
+    fn nvim_tag_jumpto_set_keep_help(
+        keep_help: bool,
+        do_tagpreview: c_int,
+        curwin_save: *const c_void,
+    );
+    fn nvim_tag_jumpto_load_file(fname: *mut c_char, forceit: c_int) -> c_int;
+    fn nvim_tag_jumpto_run_search(
+        pbuf: *mut c_char,
+        pbuf_end: *mut c_char,
+        lbuf: *mut c_char,
+    ) -> c_int;
+    fn nvim_tag_jumpto_post_success(
+        getfile_result: c_int,
+        old_key_typed: bool,
+        do_tagpreview: c_int,
+        curwin_save: *const c_void,
+    );
+    fn nvim_tag_jumpto_post_fail();
+    fn nvim_tag_getfile_success(getfile_result: c_int) -> bool;
+    fn nvim_tag_getfile_open_other() -> c_int;
+    fn nvim_tag_getfile_unused() -> c_int;
+    fn nvim_tag_redrawing_disabled_inc();
+}
+
 use crate::parse::TagPtrs;
+
+/// Rust implementation of the jumpto_execute phase — migrated from C.
+///
+/// Handles:
+/// - RedrawingDisabled management
+/// - Preview window setup
+/// - Window splitting (swb + CTRL-W CTRL-])
+/// - File loading (getfile)
+/// - Search/command execution
+/// - Cursor positioning and fold opening
+/// - Cleanup on error
+///
+/// # Safety
+/// All pointer arguments must be valid C strings.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_tag_jumpto_execute(
+    mut fname: *mut c_char,
+    pbuf: *mut c_char,
+    pbuf_end: *mut c_char,
+    lbuf: *mut c_char,
+    forceit: c_int,
+    keep_help: bool,
+) -> c_int {
+    let old_key_typed = nvim_tag_get_old_key_typed();
+    let l_g_do_tagpreview = nvim_get_g_do_tagpreview();
+
+    // Increment RedrawingDisabled
+    nvim_tag_redrawing_disabled_inc();
+
+    // Save curwin for preview window tracking
+    let curwin_save = nvim_tag_get_curwin();
+
+    // Preview setup: if g_do_tagpreview && !curwin->w_p_pvw, expand fname and
+    // prepare_tagpreview. Returns heap-allocated full name (or NULL).
+    let full_fname = nvim_tag_jumpto_preview_setup(fname);
+    if !full_fname.is_null() {
+        fname = full_fname;
+    }
+
+    // Check swb flags: if postponed_split && swb allows switching to existing buf
+    let mut getfile_result = nvim_tag_jumpto_check_swb(fname);
+
+    // Maybe split window (postponed_split or cmdmod.cmod_tab)
+    if nvim_tag_jumpto_maybe_split(getfile_result) == FAIL {
+        // RedrawingDisabled was already decremented inside maybe_split on failure
+        xfree(full_fname.cast::<c_void>());
+        return FAIL;
+    }
+
+    // Set keep_help_flag
+    nvim_tag_jumpto_set_keep_help(keep_help, l_g_do_tagpreview, curwin_save);
+
+    // Load file if not already done by swb switch
+    if getfile_result == nvim_tag_getfile_unused() {
+        getfile_result = nvim_tag_jumpto_load_file(fname, forceit);
+    }
+
+    let retval = if nvim_tag_getfile_success(getfile_result) {
+        // Run search or ex-command (sets result to OK or FAIL).
+        // GETFILE_OPEN_OTHER always yields OK regardless of search outcome.
+        let raw_search = nvim_tag_jumpto_run_search(pbuf, pbuf_end, lbuf);
+        let search_retval = if getfile_result == nvim_tag_getfile_open_other() {
+            OK
+        } else {
+            raw_search
+        };
+
+        if search_retval == OK {
+            nvim_tag_jumpto_post_success(
+                getfile_result,
+                old_key_typed,
+                l_g_do_tagpreview,
+                curwin_save,
+            );
+        } else {
+            // RedrawingDisabled-- is done inside post_success; do it here on fail
+            nvim_tag_jumpto_post_fail();
+        }
+
+        search_retval
+    } else {
+        nvim_tag_jumpto_post_fail();
+        FAIL
+    };
+
+    xfree(full_fname.cast::<c_void>());
+    retval
+}
 
 /// Main tag jump function — replaces `jumpto_tag()` in C.
 ///
 /// Parses the match line, expands the filename, checks file existence,
 /// then delegates the complex execution phase (window management, search,
-/// command execution) to `nvim_tag_jumpto_execute` in C.
+/// command execution) to `rs_tag_jumpto_execute`.
 ///
 /// # Safety
 /// - `lbuf_arg` must be a valid match line string
@@ -540,7 +652,7 @@ pub unsafe extern "C" fn rs_jumpto_tag(
 
     // Temporarily truncate filename so it can be used as a string.
     // Save and restore the original character so lbuf remains intact for
-    // nvim_tag_jumpto_execute which re-parses it.
+    // rs_tag_jumpto_execute which re-parses it.
     let saved_fname_end = *tagp.fname_end;
     *tagp.fname_end = 0;
     let fname = tagp.fname;
@@ -581,9 +693,8 @@ pub unsafe extern "C" fn rs_jumpto_tag(
         return NOTAGFILE;
     }
 
-    // Delegate the complex execution to C (window splitting, file loading,
-    // search/command execution, cursor management)
-    let retval = nvim_tag_jumpto_execute(expanded_fname, pbuf, pbuf_end, lbuf, forceit, keep_help);
+    // Execute the jump: window management, file loading, search/command execution
+    let retval = rs_tag_jumpto_execute(expanded_fname, pbuf, pbuf_end, lbuf, forceit, keep_help);
 
     // Cleanup
     nvim_set_g_do_tagpreview(0);

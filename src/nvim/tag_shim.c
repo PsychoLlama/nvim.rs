@@ -1032,212 +1032,266 @@ _Static_assert(TAG_REGEXP == 4, "TAG_REGEXP value for Rust");
 _Static_assert(TAG_NAMES == 2, "TAG_NAMES value for Rust");
 
 // --- C accessor functions for jumpto_tag ---
-/// High-level executor for jumpto_tag.
-/// Rust handles preparation (parsing, filename expansion, file check).
-/// This function handles the complex execution phase:
-///   - RedrawingDisabled management
-///   - Preview window setup
-///   - Window splitting
-///   - File loading (getfile)
-///   - Search command execution
-///   - Cursor positioning and fold opening
-///   - Cleanup on error
-///
-/// @param fname       expanded filename (owned, will NOT be freed here)
-/// @param pbuf        search pattern buffer
-/// @param pbuf_end    pointer to end of pattern in pbuf
-/// @param lbuf        match line buffer (parsed)
-/// @param forceit     force flag
-/// @param keep_help   whether to preserve help flag
-///
-/// @return OK, FAIL, or NOTAGFILE
-int nvim_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
-                            char *lbuf, int forceit, bool keep_help)
+
+// Forward declaration for rs_tag_jumpto_execute
+int rs_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
+                          char *lbuf, int forceit, bool keep_help);
+
+/// Returns true if KeyTyped is set.
+bool nvim_tag_get_old_key_typed(void) { return KeyTyped; }
+
+/// Returns true if curwin == the saved win handle.
+bool nvim_tag_curwin_is(const void *win) { return curwin == (const win_T *)win; }
+
+/// Expand fname with FullName_save if g_do_tagpreview && !curwin->w_p_pvw.
+/// Also clears postponed_split to 0 if g_do_tagpreview.
+/// Returns heap-allocated full name on expansion (caller must xfree), or NULL.
+char *nvim_tag_jumpto_preview_setup(char *fname)
 {
-  int retval = FAIL;
-  int getfile_result = GETFILE_UNUSED;
-  int search_options;
-  win_T *curwin_save = NULL;
-  char *full_fname = NULL;
-  const bool old_KeyTyped = KeyTyped;
-  const int l_g_do_tagpreview = g_do_tagpreview;
-
-  tagptrs_T tagp;
-  if (rs_parse_match(lbuf, &tagp) == FAIL) {
-    return FAIL;
+  if (g_do_tagpreview == 0) {
+    return NULL;
   }
-
-  RedrawingDisabled++;
-
-  if (l_g_do_tagpreview != 0) {
-    postponed_split = 0;
-    curwin_save = curwin;
-
-    if (!curwin->w_p_pvw) {
-      full_fname = FullName_save(fname, false);
-      fname = full_fname;
-      prepare_tagpreview(true);
-    }
+  postponed_split = 0;
+  if (!curwin->w_p_pvw) {
+    char *full_fname = FullName_save(fname, false);
+    prepare_tagpreview(true);
+    return full_fname;
   }
+  return NULL;
+}
 
-  // If it was a CTRL-W CTRL-] command split window now.
+/// Check swb flags + buflist_findname_exp: if postponed_split and useopen/usetab
+/// flags match and existing buf is found, switch to that window.
+/// Returns GETFILE_SAME_FILE if switched, GETFILE_UNUSED otherwise.
+int nvim_tag_jumpto_check_swb(char *fname)
+{
   if (postponed_split && (swb_flags & (kOptSwbFlagUseopen | kOptSwbFlagUsetab))) {
     buf_T *const existing_buf = buflist_findname_exp(fname);
     if (existing_buf != NULL) {
       if (swbuf_goto_win_with_buf(existing_buf) != NULL) {
-        getfile_result = GETFILE_SAME_FILE;
+        return GETFILE_SAME_FILE;
       }
     }
   }
+  return GETFILE_UNUSED;
+}
+
+/// Split window if postponed_split or cmdmod.cmod_tab is set (and getfile_result
+/// is still GETFILE_UNUSED). Decrements RedrawingDisabled on win_split failure.
+/// Returns OK on success, FAIL if win_split failed.
+int nvim_tag_jumpto_maybe_split(int getfile_result)
+{
   if (getfile_result == GETFILE_UNUSED
       && (postponed_split || cmdmod.cmod_tab != 0)) {
     if (win_split(postponed_split > 0 ? postponed_split : 0,
                   postponed_split_flags) == FAIL) {
       RedrawingDisabled--;
-      goto erret;
+      return FAIL;
     }
     RESET_BINDING(curwin);
   }
+  return OK;
+}
 
-  if (keep_help) {
-    if (l_g_do_tagpreview != 0) {
-      keep_help_flag = bt_help(curwin_save->w_buffer);
-    } else {
-      keep_help_flag = curbuf->b_help;
-    }
+/// Set keep_help_flag based on keep_help argument and preview state.
+/// curwin_save_void: the saved curwin (only used when do_tagpreview != 0).
+void nvim_tag_jumpto_set_keep_help(bool keep_help, int do_tagpreview,
+                                   const void *curwin_save_void)
+{
+  if (!keep_help) {
+    return;
   }
+  if (do_tagpreview != 0) {
+    const win_T *curwin_save = (const win_T *)curwin_save_void;
+    keep_help_flag = bt_help(curwin_save->w_buffer);
+  } else {
+    keep_help_flag = curbuf->b_help;
+  }
+}
 
-  if (getfile_result == GETFILE_UNUSED) {
-    getfile_result = getfile(0, fname, NULL, true, 0, forceit);
-  }
+/// Call getfile(0, fname, NULL, true, 0, forceit) and clear keep_help_flag.
+/// Returns getfile result code.
+int nvim_tag_jumpto_load_file(char *fname, int forceit)
+{
+  int result = getfile(0, fname, NULL, true, 0, forceit);
   keep_help_flag = false;
+  return result;
+}
 
-  if (GETFILE_SUCCESS(getfile_result)) {
-    curwin->w_set_curswant = true;
-    postponed_split = 0;
+/// Execute the search/cmdline phase after a successful getfile.
+/// Sets curwin->w_set_curswant, saves/restores magic_overruled and no_hlsearch.
+/// Handles both regexp search and ex-command patterns in pbuf.
+/// Returns OK or FAIL.
+int nvim_tag_jumpto_run_search(char *pbuf, char *pbuf_end, char *lbuf)
+{
+  int retval = FAIL;
+  int search_options;
 
-    const optmagic_T save_magic_overruled = magic_overruled;
-    magic_overruled = OPTION_MAGIC_OFF;
-    const bool save_no_hlsearch = no_hlsearch;
+  curwin->w_set_curswant = true;
+  postponed_split = 0;
 
-    if (vim_strchr(p_cpo, CPO_TAGPAT) != NULL) {
-      search_options = 0;
+  const optmagic_T save_magic_overruled = magic_overruled;
+  magic_overruled = OPTION_MAGIC_OFF;
+  const bool save_no_hlsearch = no_hlsearch;
+
+  if (vim_strchr(p_cpo, CPO_TAGPAT) != NULL) {
+    search_options = 0;
+  } else {
+    search_options = SEARCH_KEEP;
+  }
+
+  // If the command is a search, try here.
+  char *str = pbuf;
+  if (pbuf[0] == '/' || pbuf[0] == '?') {
+    str = skip_regexp(pbuf + 1, pbuf[0], false) + 1;
+  }
+  if (str > pbuf_end - 1) {
+    tagptrs_T tagp;
+    // Re-parse lbuf to get tagp fields (tagline, tagname, tagname_end)
+    if (rs_parse_match(lbuf, &tagp) == FAIL) {
+      magic_overruled = save_magic_overruled;
+      if (search_options) {
+        set_no_hlsearch(save_no_hlsearch);
+      }
+      return FAIL;
+    }
+
+    size_t pbuflen = (size_t)(pbuf_end - pbuf);
+
+    bool save_p_ws = p_ws;
+    int save_p_ic = p_ic;
+    int save_p_scs = p_scs;
+    p_ws = true;
+    p_ic = false;
+    p_scs = false;
+    linenr_T save_lnum = curwin->w_cursor.lnum;
+
+    curwin->w_cursor.lnum = tagp.tagline > 0 ? tagp.tagline - 1 : 0;
+
+    if (do_search(NULL, pbuf[0], pbuf[0], pbuf + 1, pbuflen - 1, 1,
+                  search_options, NULL)) {
+      retval = OK;
     } else {
-      search_options = SEARCH_KEEP;
-    }
-
-    // If the command is a search, try here.
-    char *str = pbuf;
-    if (pbuf[0] == '/' || pbuf[0] == '?') {
-      str = skip_regexp(pbuf + 1, pbuf[0], false) + 1;
-    }
-    if (str > pbuf_end - 1) {
-      size_t pbuflen = (size_t)(pbuf_end - pbuf);
-
-      bool save_p_ws = p_ws;
-      int save_p_ic = p_ic;
-      int save_p_scs = p_scs;
-      p_ws = true;
-      p_ic = false;
-      p_scs = false;
-      linenr_T save_lnum = curwin->w_cursor.lnum;
-
-      curwin->w_cursor.lnum = tagp.tagline > 0 ? tagp.tagline - 1 : 0;
-
-      if (do_search(NULL, pbuf[0], pbuf[0], pbuf + 1, pbuflen - 1, 1,
-                    search_options, NULL)) {
-        retval = OK;
-      } else {
-        int found = 1;
-        p_ic = true;
-        if (!do_search(NULL, pbuf[0], pbuf[0], pbuf + 1, pbuflen - 1, 1,
-                       search_options, NULL)) {
-          found = 2;
-          rs_test_for_static(&tagp);
-          char cc = *tagp.tagname_end;
-          *tagp.tagname_end = NUL;
-          pbuflen = (size_t)snprintf(pbuf, LSIZE, "^%s\\s\\*(", tagp.tagname);
+      int found = 1;
+      p_ic = true;
+      if (!do_search(NULL, pbuf[0], pbuf[0], pbuf + 1, pbuflen - 1, 1,
+                     search_options, NULL)) {
+        found = 2;
+        rs_test_for_static(&tagp);
+        char cc = *tagp.tagname_end;
+        *tagp.tagname_end = NUL;
+        pbuflen = (size_t)snprintf(pbuf, LSIZE, "^%s\\s\\*(", tagp.tagname);
+        if (!do_search(NULL, '/', '/', pbuf, pbuflen, 1, search_options, NULL)) {
+          pbuflen = (size_t)snprintf(pbuf, LSIZE, "^\\[#a-zA-Z_]\\.\\*\\<%s\\s\\*(",
+                                     tagp.tagname);
           if (!do_search(NULL, '/', '/', pbuf, pbuflen, 1, search_options, NULL)) {
-            pbuflen = (size_t)snprintf(pbuf, LSIZE, "^\\[#a-zA-Z_]\\.\\*\\<%s\\s\\*(",
-                                       tagp.tagname);
-            if (!do_search(NULL, '/', '/', pbuf, pbuflen, 1, search_options, NULL)) {
-              found = 0;
-            }
+            found = 0;
           }
-          *tagp.tagname_end = cc;
         }
-        if (found == 0) {
-          emsg(_("E434: Can't find tag pattern"));
-          curwin->w_cursor.lnum = save_lnum;
-        } else {
-          if (found == 2 || !save_p_ic) {
-            msg(_("E435: Couldn't find tag, just guessing!"), 0);
-            if (!msg_scrolled && msg_silent == 0 && !ui_has(kUIMessages)) {
-              ui_flush();
-              os_delay(1010, true);
-            }
+        *tagp.tagname_end = cc;
+      }
+      if (found == 0) {
+        emsg(_("E434: Can't find tag pattern"));
+        curwin->w_cursor.lnum = save_lnum;
+      } else {
+        if (found == 2 || !save_p_ic) {
+          msg(_("E435: Couldn't find tag, just guessing!"), 0);
+          if (!msg_scrolled && msg_silent == 0 && !ui_has(kUIMessages)) {
+            ui_flush();
+            os_delay(1010, true);
           }
-          retval = OK;
         }
-      }
-      p_ws = save_p_ws;
-      p_ic = save_p_ic;
-      p_scs = save_p_scs;
-      check_cursor(curwin);
-    } else {
-      const int save_secure = secure;
-      secure = 1;
-      sandbox++;
-      curwin->w_cursor.lnum = 1;
-      curwin->w_cursor.col = 0;
-      curwin->w_cursor.coladd = 0;
-      do_cmdline_cmd(pbuf);
-      retval = OK;
-
-      if (secure == 2) {
-        wait_return(true);
-      }
-      secure = save_secure;
-      sandbox--;
-    }
-
-    magic_overruled = save_magic_overruled;
-    if (search_options) {
-      set_no_hlsearch(save_no_hlsearch);
-    }
-
-    if (getfile_result == GETFILE_OPEN_OTHER) {
-      retval = OK;
-    }
-
-    if (retval == OK) {
-      if (curbuf->b_help) {
-        set_topline(curwin, curwin->w_cursor.lnum);
-      }
-      if ((fdo_flags & kOptFdoFlagTag) && old_KeyTyped) {
-        rs_foldOpenCursor();
+        retval = OK;
       }
     }
+    p_ws = save_p_ws;
+    p_ic = save_p_ic;
+    p_scs = save_p_scs;
+    check_cursor(curwin);
+  } else {
+    const int save_secure = secure;
+    secure = 1;
+    sandbox++;
+    curwin->w_cursor.lnum = 1;
+    curwin->w_cursor.col = 0;
+    curwin->w_cursor.coladd = 0;
+    do_cmdline_cmd(pbuf);
+    retval = OK;
 
-    if (l_g_do_tagpreview != 0
-        && curwin != curwin_save && rs_win_valid(curwin_save)) {
+    if (secure == 2) {
+      wait_return(true);
+    }
+    secure = save_secure;
+    sandbox--;
+  }
+
+  magic_overruled = save_magic_overruled;
+  if (search_options) {
+    set_no_hlsearch(save_no_hlsearch);
+  }
+
+  return retval;
+}
+
+/// Post-success cleanup: set_topline for help bufs, open fold, return to preview win.
+/// Also calls RedrawingDisabled--.
+void nvim_tag_jumpto_post_success(int getfile_result, bool old_key_typed,
+                                  int do_tagpreview, const void *curwin_save_void)
+{
+  if (getfile_result == GETFILE_OPEN_OTHER) {
+    // retval already OK in caller; nothing extra needed here
+  }
+
+  if (curbuf->b_help) {
+    set_topline(curwin, curwin->w_cursor.lnum);
+  }
+  if ((fdo_flags & kOptFdoFlagTag) && old_key_typed) {
+    rs_foldOpenCursor();
+  }
+
+  if (do_tagpreview != 0) {
+    win_T *curwin_save = (win_T *)curwin_save_void;
+    if (curwin != curwin_save && rs_win_valid(curwin_save)) {
       validate_cursor(curwin);
       redraw_later(curwin, UPD_VALID);
       win_enter(curwin_save, true);
     }
-
-    RedrawingDisabled--;
-  } else {
-    RedrawingDisabled--;
-    if (postponed_split) {
-      win_close(curwin, false, false);
-      postponed_split = 0;
-    }
   }
 
-erret:
-  xfree(full_fname);
-  return retval;
+  RedrawingDisabled--;
+}
+
+/// Post-failure cleanup: RedrawingDisabled--, close any split window.
+void nvim_tag_jumpto_post_fail(void)
+{
+  RedrawingDisabled--;
+  if (postponed_split) {
+    win_close(curwin, false, false);
+    postponed_split = 0;
+  }
+}
+
+/// Returns true if GETFILE_SUCCESS(getfile_result).
+bool nvim_tag_getfile_success(int getfile_result)
+{
+  return GETFILE_SUCCESS(getfile_result);
+}
+
+/// Returns GETFILE_OPEN_OTHER constant.
+int nvim_tag_getfile_open_other(void) { return GETFILE_OPEN_OTHER; }
+/// Returns GETFILE_SAME_FILE constant.
+int nvim_tag_getfile_same_file(void) { return GETFILE_SAME_FILE; }
+/// Returns GETFILE_UNUSED constant.
+int nvim_tag_getfile_unused(void) { return GETFILE_UNUSED; }
+
+/// Increments RedrawingDisabled.
+void nvim_tag_redrawing_disabled_inc(void) { RedrawingDisabled++; }
+
+/// High-level executor for jumpto_tag (thin wrapper calling Rust).
+int nvim_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
+                            char *lbuf, int forceit, bool keep_help)
+{
+  return rs_tag_jumpto_execute(fname, pbuf, pbuf_end, lbuf, forceit, keep_help);
 }
 
 // --- End of jumpto_tag accessor functions ---
