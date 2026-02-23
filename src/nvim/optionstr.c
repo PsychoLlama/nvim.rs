@@ -676,42 +676,6 @@ const char *did_set_background(optset_T *args)
   return NULL;
 }
 
-/// The 'backupcopy' option is changed.
-const char *did_set_backupcopy(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  const char *oldval = args->os_oldval.string.data;
-  int opt_flags = args->os_flags;
-  char *bkc = p_bkc;
-  unsigned *flags = &bkc_flags;
-
-  if (opt_flags & OPT_LOCAL) {
-    bkc = buf->b_p_bkc;
-    flags = &buf->b_bkc_flags;
-  } else if (!(opt_flags & OPT_GLOBAL)) {
-    // When using :set, clear the local flags.
-    buf->b_bkc_flags = 0;
-  }
-
-  if ((opt_flags & OPT_LOCAL) && *bkc == NUL) {
-    // make the local value empty: use the global value
-    *flags = 0;
-  } else {
-    if (opt_strings_flags(bkc, opt_bkc_values, flags, true) != OK) {
-      return e_invarg;
-    }
-
-    if (((*flags & kOptBkcFlagAuto) != 0)
-        + ((*flags & kOptBkcFlagYes) != 0)
-        + ((*flags & kOptBkcFlagNo) != 0) != 1) {
-      // Must have exactly one of "auto", "yes"  and "no".
-      opt_strings_flags(oldval, opt_bkc_values, flags, true);
-      return e_invarg;
-    }
-  }
-
-  return NULL;
-}
 
 /// The 'backupext' or the 'patchmode' option is changed.
 const char *did_set_backupext_or_patchmode(optset_T *args FUNC_ATTR_UNUSED)
@@ -859,49 +823,6 @@ const char *did_set_colorcolumn(optset_T *args)
   return check_colorcolumn(*varp, varp == &win->w_p_cc ? win : NULL);
 }
 
-/// The 'comments' option is changed.
-const char *did_set_comments(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-  char *errmsg = NULL;
-  for (char *s = *varp; *s;) {
-    while (*s && *s != ':') {
-      if (vim_strchr(COM_ALL, (uint8_t)(*s)) == NULL
-          && !ascii_isdigit(*s) && *s != '-') {
-        errmsg = illegal_char(args->os_errbuf, args->os_errbuflen, (uint8_t)(*s));
-        break;
-      }
-      s++;
-    }
-    if (*s++ == NUL) {
-      errmsg = N_("E524: Missing colon");
-    } else if (*s == ',' || *s == NUL) {
-      errmsg = N_("E525: Zero length string");
-    }
-    if (errmsg != NULL) {
-      break;
-    }
-    while (*s && *s != ',') {
-      if (*s == '\\' && s[1] != NUL) {
-        s++;
-      }
-      s++;
-    }
-    s = (char *)rs_skip_to_option_part(s);
-  }
-  return errmsg;
-}
-
-/// The 'commentstring' option is changed.
-const char *did_set_commentstring(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  if (**varp != NUL && strstr(*varp, "%s") == NULL) {
-    return N_("E537: 'commentstring' must be empty or contain %s");
-  }
-  return NULL;
-}
 
 /// Check if value for 'complete' is valid when 'complete' option is changed.
 const char *did_set_complete(optset_T *args)
@@ -1075,15 +996,6 @@ const char *did_set_cursorlineopt(optset_T *args)
   return NULL;
 }
 
-/// The 'diffanchors' option is changed.
-const char *did_set_diffanchors(optset_T *args)
-{
-  if (rs_diffanchors_changed(args->os_flags & OPT_LOCAL) == FAIL) {
-    return e_invarg;
-  }
-
-  return NULL;
-}
 
 /// The 'diffopt' option is changed.
 const char *did_set_diffopt(optset_T *args FUNC_ATTR_UNUSED)
@@ -1478,32 +1390,6 @@ const char *did_set_keymodel(optset_T *args FUNC_ATTR_UNUSED)
   return NULL;
 }
 
-/// The 'matchpairs' option is changed.
-const char *did_set_matchpairs(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  for (char *p = *varp; *p != NUL; p++) {
-    int x2 = -1;
-    int x3 = -1;
-
-    p += utfc_ptr2len(p);
-    if (*p != NUL) {
-      x2 = (unsigned char)(*p++);
-    }
-    if (*p != NUL) {
-      x3 = utf_ptr2char(p);
-      p += utfc_ptr2len(p);
-    }
-    if (x2 != ':' || x3 == -1 || (*p != NUL && *p != ',')) {
-      return e_invarg;
-    }
-    if (*p == NUL) {
-      break;
-    }
-  }
-  return NULL;
-}
 
 /// Process the updated 'messagesopt' option value.
 const char *did_set_messagesopt(optset_T *args FUNC_ATTR_UNUSED)
@@ -1615,21 +1501,6 @@ const char *did_set_rulerformat(optset_T *args)
   return did_set_statustabline_rulerformat(args, true, false);
 }
 
-/// The 'sessionoptions' option is changed.
-const char *did_set_sessionoptions(optset_T *args)
-{
-  const char *errmsg = did_set_str_generic(args);
-  if (errmsg != NULL) {
-    return errmsg;
-  }
-  if ((ssop_flags & kOptSsopFlagCurdir) && (ssop_flags & kOptSsopFlagSesdir)) {
-    // Don't allow both "sesdir" and "curdir".
-    const char *oldval = args->os_oldval.string.data;
-    opt_strings_flags(oldval, opt_ssop_values, &ssop_flags, true);
-    return e_invarg;
-  }
-  return NULL;
-}
 
 const char *did_set_shada(optset_T *args)
 {
@@ -1750,23 +1621,6 @@ const char *did_set_spelllang(optset_T *args)
   return did_set_spell_option();
 }
 
-/// The 'spelloptions' option is changed.
-const char *did_set_spelloptions(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  int opt_flags = args->os_flags;
-  const char *val = args->os_newval.string.data;
-
-  if (!(opt_flags & OPT_LOCAL)
-      && opt_strings_flags(val, opt_spo_values, &spo_flags, true) != OK) {
-    return e_invarg;
-  }
-  if (!(opt_flags & OPT_GLOBAL)
-      && opt_strings_flags(val, opt_spo_values, &win->w_s->b_p_spo_flags, true) != OK) {
-    return e_invarg;
-  }
-  return NULL;
-}
 
 /// The 'spellsuggest' option is changed.
 const char *did_set_spellsuggest(optset_T *args FUNC_ATTR_UNUSED)

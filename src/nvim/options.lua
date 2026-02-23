@@ -444,7 +444,7 @@ local options = {
     },
     {
       abbreviation = 'bkc',
-      cb = 'did_set_backupcopy',
+      cb = 'rs_did_set_backupcopy',
       defaults = { condition = 'UNIX', if_false = 'auto', if_true = 'auto' },
       values = { 'yes', 'auto', 'no', 'breaksymlink', 'breakhardlink' },
       flags = true,
@@ -1436,7 +1436,7 @@ local options = {
     },
     {
       abbreviation = 'com',
-      cb = 'did_set_comments',
+      cb = 'rs_did_set_comments',
       defaults = 's1:/*,mb:*,ex:*/,://,b:#,:%,:XCOMM,n:>,fb:-,fb:•',
       deny_duplicates = true,
       desc = [=[
@@ -1454,7 +1454,7 @@ local options = {
     },
     {
       abbreviation = 'cms',
-      cb = 'did_set_commentstring',
+      cb = 'rs_did_set_commentstring',
       defaults = '',
       desc = [=[
         A template for a comment.  The "%s" in the value is replaced with the
@@ -2298,7 +2298,7 @@ local options = {
     },
     {
       abbreviation = 'dia',
-      cb = 'did_set_diffanchors',
+      cb = 'rs_did_set_diffanchors',
       defaults = '',
       desc = [=[
         List of {address} in each buffer, separated by commas, that are
@@ -5618,7 +5618,7 @@ local options = {
     },
     {
       abbreviation = 'mps',
-      cb = 'did_set_matchpairs',
+      cb = 'rs_did_set_matchpairs',
       defaults = '(:),{:},[:]',
       deny_duplicates = true,
       desc = [=[
@@ -7386,7 +7386,7 @@ local options = {
     },
     {
       abbreviation = 'ssop',
-      cb = 'did_set_sessionoptions',
+      cb = 'rs_did_set_sessionoptions',
       defaults = 'blank,buffers,curdir,folds,help,tabpages,winsize,terminal',
       -- Also used for 'viewoptions'.
       values = {
@@ -8509,7 +8509,7 @@ local options = {
     },
     {
       abbreviation = 'spo',
-      cb = 'did_set_spelloptions',
+      cb = 'rs_did_set_spelloptions',
       defaults = '',
       values = { 'camel', 'noplainbuffer' },
       flags = true,

@@ -203,6 +203,15 @@ extern const char *rs_did_set_paste_full(optset_T *args);
 extern const char *rs_did_set_shellslash(optset_T *args);
 #endif
 
+// Phase 2: Medium-complexity string callbacks (from Rust string_simple.rs)
+extern const char *rs_did_set_backupcopy(optset_T *args);
+extern const char *rs_did_set_commentstring(optset_T *args);
+extern const char *rs_did_set_comments(optset_T *args);
+extern const char *rs_did_set_matchpairs(optset_T *args);
+extern const char *rs_did_set_sessionoptions(optset_T *args);
+extern const char *rs_did_set_spelloptions(optset_T *args);
+extern const char *rs_did_set_diffanchors(optset_T *args);
+
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
 extern const char *rs_did_set_cpoptions(optset_T *args);
@@ -566,6 +575,42 @@ int nvim_get_cmdpreview(void) { return cmdpreview; }
 const void *nvim_win_get_p_briopt_addr(win_T *win) { return win ? (const void *)&win->w_p_briopt : NULL; }
 // Return varp from optset_T (as void*)
 const void *nvim_optset_get_varp_ptr(const void *args) { return ((const optset_T *)args)->os_varp; }
+
+// =============================================================================
+// Phase 2 accessors for medium-complexity string callback migration
+// =============================================================================
+
+// Return os_newval.string.data from optset_T
+const char *nvim_optset_get_newval_str(const void *args)
+{
+  return ((const optset_T *)args)->os_newval.string.data;
+}
+// Return os_oldval.string.data from optset_T
+const char *nvim_optset_get_oldval_str(const void *args)
+{
+  return ((const optset_T *)args)->os_oldval.string.data;
+}
+// Global bkc_flags accessors
+unsigned nvim_get_bkc_flags(void) { return bkc_flags; }
+void nvim_set_bkc_flags(unsigned val) { bkc_flags = val; }
+// Buffer-local bkc accessors
+unsigned nvim_buf_get_bkc_flags(buf_T *buf) { return buf->b_bkc_flags; }
+void nvim_buf_set_bkc_flags(buf_T *buf, unsigned val) { buf->b_bkc_flags = val; }
+const char *nvim_buf_get_p_bkc(buf_T *buf) { return buf->b_p_bkc; }
+const char *nvim_get_p_bkc(void) { return p_bkc; }
+// Global ssop_flags accessors
+unsigned nvim_get_ssop_flags(void) { return ssop_flags; }
+void nvim_set_ssop_flags(unsigned val) { ssop_flags = val; }
+// Global spo_flags accessors
+unsigned nvim_get_spo_flags(void) { return spo_flags; }
+void nvim_set_spo_flags(unsigned val) { spo_flags = val; }
+// Window-local spo_flags accessors
+unsigned nvim_win_get_spo_flags(win_T *win) { return win->w_s->b_p_spo_flags; }
+void nvim_win_set_spo_flags(win_T *win, unsigned val) { win->w_s->b_p_spo_flags = val; }
+// Pointer accessors for option value arrays (return pointer to NULL-terminated array)
+const char **nvim_get_opt_bkc_values(void) { return (const char **)opt_bkc_values; }
+const char **nvim_get_opt_ssop_values(void) { return (const char **)opt_ssop_values; }
+const char **nvim_get_opt_spo_values(void) { return (const char **)opt_spo_values; }
 
 // =============================================================================
 // Simple accessor functions for Rust (don't require options array)
