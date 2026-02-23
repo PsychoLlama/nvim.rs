@@ -864,6 +864,7 @@ pub mod callback;
 pub mod context;
 pub mod errors;
 pub mod eval;
+pub mod ex_echo;
 pub mod for_loop;
 pub mod gc;
 pub mod index;
@@ -896,6 +897,9 @@ pub use for_loop::{rs_eval_for_line, rs_free_for_info, rs_next_for_item};
 
 // Re-export GC function
 pub use gc::rs_free_unref_items;
+
+// Re-export ex_echo FFI functions
+pub use ex_echo::{rs_ex_echo, rs_ex_execute};
 
 // Re-export error types
 pub use errors::{

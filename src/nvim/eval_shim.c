@@ -145,6 +145,8 @@ extern bool rs_callback_call(const void *callback, int argcount, void *argvars, 
 extern int rs_free_unref_items(int copyID);
 extern int rs_handle_subscript(const char **arg, typval_T *rettv, evalarg_T *evalarg,
                                bool verbose);
+extern void rs_ex_echo(exarg_T *eap);
+extern void rs_ex_execute(exarg_T *eap);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -3126,80 +3128,7 @@ int var_item_copy(const vimconv_T *const conv, typval_T *const from, typval_T *c
 /// ":echon expr1 ..."   print each argument plain.
 void ex_echo(exarg_T *eap)
 {
-  char *arg = eap->arg;
-  typval_T rettv;
-  bool atstart = true;
-  bool need_clear = true;
-  const int did_emsg_before = did_emsg;
-  const int called_emsg_before = called_emsg;
-  evalarg_T evalarg;
-
-  fill_evalarg_from_eap(&evalarg, eap, eap->skip);
-
-  if (eap->skip) {
-    emsg_skip++;
-  }
-  while (*arg != NUL && *arg != '|' && *arg != '\n' && !got_int) {
-    // If eval1() causes an error message the text from the command may
-    // still need to be cleared. E.g., "echo 22,44".
-    need_clr_eos = true;
-
-    {
-      char *p = arg;
-      if (eval1(&arg, &rettv, &evalarg) == FAIL) {
-        // Report the invalid expression unless the expression evaluation
-        // has been cancelled due to an aborting error, an interrupt, or an
-        // exception.
-        if (!aborting() && did_emsg == did_emsg_before
-            && called_emsg == called_emsg_before) {
-          semsg(_(e_invexpr2), p);
-        }
-        need_clr_eos = false;
-        break;
-      }
-      need_clr_eos = false;
-    }
-
-    if (!eap->skip) {
-      if (atstart) {
-        atstart = false;
-        msg_ext_set_kind("echo");
-        // Call msg_start() after eval1(), evaluating the expression
-        // may cause a message to appear.
-        if (eap->cmdidx == CMD_echo) {
-          if (!msg_didout) {
-            // Mark the saved text as finishing the line, so that what
-            // follows is displayed on a new line when scrolling back
-            // at the more prompt.
-            msg_sb_eol();
-          }
-          msg_start();
-        }
-      } else if (eap->cmdidx == CMD_echo) {
-        msg_puts_hl(" ", echo_hl_id, false);
-      }
-      char *tofree = encode_tv2echo(&rettv, NULL);
-      msg_ext_append = eap->cmdidx == CMD_echon;
-      msg_multiline(cstr_as_string(tofree), echo_hl_id, true, false, &need_clear);
-      xfree(tofree);
-    }
-    tv_clear(&rettv);
-    arg = skipwhite(arg);
-  }
-  eap->nextcmd = check_nextcmd(arg);
-  clear_evalarg(&evalarg, eap);
-
-  if (eap->skip) {
-    emsg_skip--;
-  } else {
-    // remove text that may still be there from the command
-    if (need_clear) {
-      msg_clr_eos();
-    }
-    if (eap->cmdidx == CMD_echo) {
-      msg_end();
-    }
-  }
+  rs_ex_echo(eap);
 }
 
 /// ":echohl {name}".
@@ -3221,67 +3150,7 @@ int nvim_get_echo_hl_id(void)
 /// echo commands
 void ex_execute(exarg_T *eap)
 {
-  char *arg = eap->arg;
-  typval_T rettv;
-  int ret = OK;
-  garray_T ga;
-
-  ga_init(&ga, 1, 80);
-
-  if (eap->skip) {
-    emsg_skip++;
-  }
-  while (*arg != NUL && *arg != '|' && *arg != '\n') {
-    ret = eval1_emsg(&arg, &rettv, eap);
-    if (ret == FAIL) {
-      break;
-    }
-
-    if (!eap->skip) {
-      const char *const argstr = eap->cmdidx == CMD_execute
-                                 ? tv_get_string(&rettv)
-                                 : rettv.v_type == VAR_STRING
-                                 ? encode_tv2echo(&rettv, NULL)
-                                 : encode_tv2string(&rettv, NULL);
-      const size_t len = strlen(argstr);
-      ga_grow(&ga, (int)len + 2);
-      if (!GA_EMPTY(&ga)) {
-        ((char *)(ga.ga_data))[ga.ga_len++] = ' ';
-      }
-      memcpy((char *)(ga.ga_data) + ga.ga_len, argstr, len + 1);
-      if (eap->cmdidx != CMD_execute) {
-        xfree((void *)argstr);
-      }
-      ga.ga_len += (int)len;
-    }
-
-    tv_clear(&rettv);
-    arg = skipwhite(arg);
-  }
-
-  if (ret != FAIL && ga.ga_data != NULL) {
-    if (eap->cmdidx == CMD_echomsg) {
-      msg_ext_set_kind("echomsg");
-      msg(ga.ga_data, echo_hl_id);
-    } else if (eap->cmdidx == CMD_echoerr) {
-      // We don't want to abort following commands, restore did_emsg.
-      int save_did_emsg = did_emsg;
-      emsg_multiline(ga.ga_data, "echoerr", HLF_E, true);
-      if (!force_abort) {
-        did_emsg = save_did_emsg;
-      }
-    } else if (eap->cmdidx == CMD_execute) {
-      do_cmdline(ga.ga_data, eap->ea_getline, eap->cookie, DOCMD_NOWAIT|DOCMD_VERBOSE);
-    }
-  }
-
-  ga_clear(&ga);
-
-  if (eap->skip) {
-    emsg_skip--;
-  }
-
-  eap->nextcmd = check_nextcmd(arg);
+  rs_ex_execute(eap);
 }
 
 /// Skip over the name of an option variable: "&option", "&g:option" or "&l:option".
@@ -4710,4 +4579,165 @@ bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *
   }
   return wrong;
 }
+
+// =============================================================================
+// Phase 6 (ex_echo + ex_execute): new C accessor/wrapper functions
+// =============================================================================
+
+/// Allocate and fill an evalarg_T from eap on the heap.
+/// Caller must call nvim_evalarg_clear_and_free after use.
+evalarg_T *nvim_evalarg_alloc_from_eap(exarg_T *eap, bool skip)
+{
+  evalarg_T *ea = xcalloc(1, sizeof(evalarg_T));
+  fill_evalarg_from_eap(ea, eap, skip);
+  return ea;
+}
+
+/// Clear evalarg and free it.
+void nvim_evalarg_clear_and_free(evalarg_T *ea, exarg_T *eap)
+{
+  clear_evalarg(ea, eap);
+  xfree(ea);
+}
+
+/// Non-static wrapper for eval1_emsg.
+int nvim_eval1_emsg_wrapper(char **arg, typval_T *rettv, exarg_T *eap)
+{
+  return eval1_emsg(arg, rettv, eap);
+}
+
+/// encode_tv2echo wrapper - accessor for Rust.
+char *nvim_encode_tv2echo(typval_T *tv)
+{
+  return encode_tv2echo(tv, NULL);
+}
+
+/// encode_tv2string wrapper - accessor for Rust.
+char *nvim_encode_tv2string_wrapper(typval_T *tv)
+{
+  return encode_tv2string(tv, NULL);
+}
+
+/// tv_get_string wrapper for ex_execute - accessor for Rust.
+/// Uses nvim_eval_tv_get_str to avoid conflict with nvim_tv_get_string in eval/typval.c.
+const char *nvim_eval_tv_get_str(const typval_T *tv)
+{
+  return tv_get_string(tv);
+}
+
+/// msg_sb_eol wrapper - accessor for Rust.
+void nvim_msg_sb_eol(void)
+{
+  msg_sb_eol();
+}
+
+// nvim_msg_start already defined in undo.c -- no duplicate needed here.
+
+/// Set msg_ext_append global - accessor for Rust.
+void nvim_set_msg_ext_append(bool val)
+{
+  msg_ext_append = val;
+}
+
+/// emsg_multiline for echoerr - accessor for Rust.
+/// Wraps: emsg_multiline(str, "echoerr", HLF_E, true)
+void nvim_emsg_multiline_echoerr(const char *str)
+{
+  emsg_multiline(str, "echoerr", HLF_E, true);
+}
+
+/// Get force_abort global - accessor for Rust.
+int nvim_get_force_abort(void);  // forward: defined in ex_eval.c
+
+/// msg() wrapper for echomsg - accessor for Rust.
+void nvim_msg_echomsg(const char *str, int hl_id)
+{
+  msg(str, hl_id);
+}
+
+/// do_cmdline wrapper for :execute - accessor for Rust.
+void nvim_do_cmdline_execute(char *cmd, exarg_T *eap)
+{
+  do_cmdline(cmd, eap->ea_getline, eap->cookie, DOCMD_NOWAIT|DOCMD_VERBOSE);
+}
+
+/// Heap-allocate a char garray (ga_init(&ga, 1, 80)).
+garray_T *nvim_ga_alloc_execute(void)
+{
+  garray_T *ga = xcalloc(1, sizeof(garray_T));
+  ga_init(ga, 1, 80);
+  return ga;
+}
+
+/// Grow a garray - accessor for Rust.
+void nvim_ga_grow_wrapper(garray_T *ga, int n)
+{
+  ga_grow(ga, n);
+}
+
+/// Check if ga_data is NULL (GA_EMPTY equivalent for data ptr) - accessor for Rust.
+bool nvim_ga_data_is_null(const garray_T *ga)
+{
+  return ga->ga_data == NULL;
+}
+
+/// Append a space character to garray data[ga_len++] - accessor for Rust.
+void nvim_ga_append_space(garray_T *ga)
+{
+  ((char *)(ga->ga_data))[ga->ga_len++] = ' ';
+}
+
+/// Copy len+1 bytes from str to garray data[ga_len], advance ga_len - accessor for Rust.
+void nvim_ga_append_str_len(garray_T *ga, const char *str, int len)
+{
+  memcpy((char *)(ga->ga_data) + ga->ga_len, str, (size_t)len + 1);
+  ga->ga_len += len;
+}
+
+/// Get ga_data pointer - accessor for Rust.
+char *nvim_ga_get_data(const garray_T *ga)
+{
+  return (char *)ga->ga_data;
+}
+
+/// ga_clear and xfree the garray - accessor for Rust.
+void nvim_ga_clear_and_free(garray_T *ga)
+{
+  ga_clear(ga);
+  xfree(ga);
+}
+
+/// Get eap->skip - accessor for Rust (local, avoids dependency on ex_docmd).
+int nvim_eap_get_skip_local(const exarg_T *eap)
+{
+  return eap->skip;
+}
+
+/// Get eap->arg - accessor for Rust (local).
+char *nvim_eap_get_arg_local(const exarg_T *eap)
+{
+  return eap->arg;
+}
+
+/// Set eap->nextcmd from check_nextcmd - accessor for Rust.
+void nvim_eap_set_nextcmd_checked(exarg_T *eap, char *arg)
+{
+  eap->nextcmd = check_nextcmd(arg);
+}
+
+/// semsg with e_invexpr2 format - accessor for Rust.
+void nvim_semsg_invexpr2(const char *p)
+{
+  semsg(_(e_invexpr2), p);
+}
+
+/// GA_EMPTY check (ga_len == 0) for ex_execute - accessor for Rust.
+/// Uses nvim_ga_is_empty_execute to avoid conflict with fold_shim.c's nvim_ga_is_empty.
+bool nvim_ga_is_empty_execute(garray_T *ga)
+{
+  return GA_EMPTY(ga);
+}
+
+/// Set did_emsg global - accessor for Rust.
+// nvim_set_did_emsg already defined in message.c -- no duplicate needed here.
 
