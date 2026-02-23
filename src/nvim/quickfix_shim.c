@@ -397,6 +397,9 @@ extern void rs_qf_jump_first(void *qi, unsigned save_qfid, int forceit);
 extern void rs_qf_list_entry(const void *qfp, int qf_idx, bool cursel,
                               int qfFile_hl_id, int qfSep_hl_id, int qfLine_hl_id);
 
+// Phase 4: qf_list (:clist/:llist)
+extern void rs_ex_clist(void *eap);
+
 bool nvim_qf_get_multiline(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_multiline; }
 
 void nvim_qf_set_multiline(void *qfl_void, bool multiline) { ((qf_list_T *)qfl_void)->qf_multiline = multiline; }
@@ -2896,75 +2899,7 @@ static void qf_list_entry(qfline_T *qfp, int qf_idx, bool cursel)
 // ":llist": list all locations
 void qf_list(exarg_T *eap)
 {
-  char *arg = eap->arg;
-  int all = eap->forceit;     // if not :cl!, only show recognised errors
-  qf_info_T *qi = qf_cmd_get_stack(eap, true);
-
-  if (qi == NULL) {
-    return;
-  }
-
-  if (rs_qf_stack_empty(qi) || rs_qf_list_empty(qf_get_curlist(qi))) {
-    emsg(_(e_no_errors));
-    return;
-  }
-
-  bool plus = false;
-  if (*arg == '+') {
-    arg++;
-    plus = true;
-  }
-  int idx1 = 1;
-  int idx2 = -1;
-  if (!get_list_range(&arg, &idx1, &idx2) || *arg != NUL) {
-    semsg(_(e_trailing_arg), arg);
-    return;
-  }
-  qf_list_T *qfl = qf_get_curlist(qi);
-  int i;
-  if (plus) {
-    i = qfl->qf_index;
-    idx2 = i + idx1;
-    idx1 = i;
-  } else {
-    i = qfl->qf_count;
-    if (idx1 < 0) {
-      idx1 = (-idx1 > i) ? 0 : idx1 + i + 1;
-    }
-    if (idx2 < 0) {
-      idx2 = (-idx2 > i) ? 0 : idx2 + i + 1;
-    }
-  }
-
-  // Shorten all the file names, so that it is easy to read.
-  shorten_fnames(false);
-
-  // Get the attributes for the different quickfix highlight items.  Note
-  // that this depends on syntax items defined in the qf.vim syntax file
-  qfFile_hl_id = syn_name2id("qfFileName");
-  if (qfFile_hl_id == 0) {
-    qfFile_hl_id = HLF_D;
-  }
-  qfSep_hl_id = syn_name2id("qfSeparator");
-  if (qfSep_hl_id == 0) {
-    qfSep_hl_id = HLF_D;
-  }
-  qfLine_hl_id = syn_name2id("qfLineNr");
-  if (qfLine_hl_id == 0) {
-    qfLine_hl_id = HLF_N;
-  }
-
-  if (qfl->qf_nonevalid) {
-    all = true;
-  }
-  qfline_T *qfp;
-  FOR_ALL_QFL_ITEMS(qfl, qfp, i) {
-    if ((qfp->qf_valid || all) && idx1 <= i && i <= idx2) {
-      qf_list_entry(qfp, i, i == qfl->qf_index);
-    }
-    os_breakcheck();
-  }
-  qfga_clear();
+  rs_ex_clist(eap);
 }
 
 /// quickfix/location list.
@@ -3705,6 +3640,18 @@ void nvim_qf_format_prefix(char *buf, size_t bufsz, int idx, const char *name)
     snprintf(buf, bufsz, "%2d", idx);
   }
 }
+
+// Phase 4: qf_list (:clist/:llist) accessors
+// nvim_eap_get_arg already exists in ex_docmd.c
+// nvim_semsg_trailing_arg already exists in eval_shim.c
+// nvim_eap_get_forceit already exists in indent_ffi.c (returns bool)
+bool nvim_get_list_range(char **arg, int *idx1, int *idx2) { return get_list_range(arg, idx1, idx2); }
+void nvim_shorten_fnames_qf(void) { shorten_fnames(false); }
+int nvim_syn_name2id_qf(const char *name) { return syn_name2id(name); }
+int nvim_hlf_d(void) { return HLF_D; }
+int nvim_hlf_n(void) { return HLF_N; }
+bool nvim_got_int_qf(void) { return got_int; }
+void nvim_os_breakcheck_qf(void) { os_breakcheck(); }
 
 // ":cfile"/":cgetfile"/":caddfile" commands.
 // ":lfile"/":lgetfile"/":laddfile" commands.

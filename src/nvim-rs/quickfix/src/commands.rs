@@ -2007,3 +2007,130 @@ pub unsafe extern "C" fn rs_qf_cmdtitle(
     slice[end] = 0;
     end
 }
+
+// =============================================================================
+// Phase 4: rs_ex_clist — :clist/:llist command
+// =============================================================================
+
+extern "C" {
+    // nvim_eap_get_arg from ex_docmd.c — returns mut char* (we only read)
+    fn nvim_eap_get_arg(eap: EapHandle) -> *mut std::ffi::c_char;
+    // nvim_eap_get_forceit from indent_ffi.c — returns bool
+    // (already declared in the existing extern block above)
+    fn nvim_get_list_range(arg: *mut *mut std::ffi::c_char, idx1: *mut c_int, idx2: *mut c_int) -> bool;
+    // nvim_semsg_trailing_arg from eval_shim.c
+    fn nvim_semsg_trailing_arg(arg: *const std::ffi::c_char);
+    fn nvim_shorten_fnames_qf();
+    fn nvim_syn_name2id_qf(name: *const std::ffi::c_char) -> c_int;
+    fn nvim_hlf_d() -> c_int;
+    fn nvim_hlf_n() -> c_int;
+    fn nvim_got_int_qf() -> bool;
+    fn nvim_os_breakcheck_qf();
+    #[link_name = "nvim_qfga_clear"]
+    fn nvim_qfga_clear_clist();
+    fn rs_qf_list_entry(
+        qfp: *const c_void,
+        qf_idx: c_int,
+        cursel: bool,
+        qf_file_hl_id: c_int,
+        qf_sep_hl_id: c_int,
+        qf_line_hl_id: c_int,
+    );
+}
+
+/// `:clist` / `:llist` — list all quickfix/location list entries.
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
+    let qi = nvim_qf_cmd_get_stack(eap, true);
+    if qi.is_null() {
+        return;
+    }
+
+    let qfl = crate::nvim_qf_get_curlist(qi);
+    if crate::rs_qf_stack_empty(qi) || crate::rs_qf_list_empty(qfl) {
+        nvim_emsg_no_errors();
+        return;
+    }
+
+    // Get the arg pointer (mutable C string for get_list_range)
+    let mut arg = nvim_eap_get_arg(eap);
+    let forceit = nvim_eap_get_forceit(eap);
+
+    // Handle '+' prefix: list from current entry
+    let mut plus = false;
+    if !arg.is_null() && *arg == b'+' as std::ffi::c_char {
+        arg = arg.add(1);
+        plus = true;
+    }
+
+    let mut idx1: c_int = 1;
+    let mut idx2: c_int = -1;
+
+    if !nvim_get_list_range(&raw mut arg, &raw mut idx1, &raw mut idx2)
+        || (!arg.is_null() && *arg != 0)
+    {
+        nvim_semsg_trailing_arg(arg.cast_const());
+        return;
+    }
+
+    // Compute range
+    let (idx1, idx2) = if plus {
+        let cur = crate::nvim_qf_get_index(qfl);
+        let new_idx2 = cur + idx1;
+        (cur, new_idx2)
+    } else {
+        let count = crate::nvim_qf_get_count(qfl);
+        let i1 = if idx1 < 0 {
+            if -idx1 > count { 0 } else { idx1 + count + 1 }
+        } else {
+            idx1
+        };
+        let i2 = if idx2 < 0 {
+            if -idx2 > count { 0 } else { idx2 + count + 1 }
+        } else {
+            idx2
+        };
+        (i1, i2)
+    };
+
+    // Shorten all file names for display
+    nvim_shorten_fnames_qf();
+
+    // Set up highlight IDs
+    let mut qf_file_hl_id = nvim_syn_name2id_qf(c"qfFileName".as_ptr());
+    if qf_file_hl_id == 0 {
+        qf_file_hl_id = nvim_hlf_d();
+    }
+    let mut qf_sep_hl_id = nvim_syn_name2id_qf(c"qfSeparator".as_ptr());
+    if qf_sep_hl_id == 0 {
+        qf_sep_hl_id = nvim_hlf_d();
+    }
+    let mut qf_line_hl_id = nvim_syn_name2id_qf(c"qfLineNr".as_ptr());
+    if qf_line_hl_id == 0 {
+        qf_line_hl_id = nvim_hlf_n();
+    }
+
+    // If nonevalid is set, show all entries (forceit is bool from nvim_eap_get_forceit)
+    let all = forceit || crate::nvim_qf_get_nonevalid(qfl);
+
+    // Iterate: FOR_ALL_QFL_ITEMS equivalent
+    let qf_index = crate::nvim_qf_get_index(qfl);
+    let qf_count = crate::nvim_qf_get_count(qfl);
+    let mut i: c_int = 1;
+    let mut qfp = crate::nvim_qf_get_start(qfl);
+    while !nvim_got_int_qf() && i <= qf_count && !qfp.is_null() {
+        let valid = crate::nvim_qfline_get_valid(qfp);
+        if (valid || all) && idx1 <= i && i <= idx2 {
+            rs_qf_list_entry(qfp, i, i == qf_index, qf_file_hl_id, qf_sep_hl_id, qf_line_hl_id);
+        }
+        nvim_os_breakcheck_qf();
+        i += 1;
+        qfp = crate::nvim_qfline_get_next(qfp);
+    }
+    nvim_qfga_clear_clist();
+}
