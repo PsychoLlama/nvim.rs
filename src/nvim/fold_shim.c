@@ -98,6 +98,7 @@ extern int rs_foldLevelWin(win_T *wp, linenr_T lnum);
 extern void rs_foldUpdateIEMS(win_T *wp, linenr_T top, linenr_T bot);
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
 extern void rs_foldtext_cleanup(char *str);
+extern char *rs_f_foldtext_impl(void);
 
 // Struct returned by rs_hasFoldingWin
 typedef struct {
@@ -850,46 +851,7 @@ void f_foldlevel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 void f_foldtext(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-
-  linenr_T foldstart = (linenr_T)get_vim_var_nr(VV_FOLDSTART);
-  linenr_T foldend = (linenr_T)get_vim_var_nr(VV_FOLDEND);
-  char *dashes = get_vim_var_str(VV_FOLDDASHES);
-  if (foldstart > 0 && foldend <= curbuf->b_ml.ml_line_count) {
-    // Find first non-empty line in the fold.
-    linenr_T lnum;
-    for (lnum = foldstart; lnum < foldend; lnum++) {
-      if (!linewhite(lnum)) {
-        break;
-      }
-    }
-
-    // Find interesting text in this line.
-    char *s = skipwhite(ml_get(lnum));
-    // skip C comment-start
-    if (s[0] == '/' && (s[1] == '*' || s[1] == '/')) {
-      s = skipwhite(s + 2);
-      if (*skipwhite(s) == NUL && lnum + 1 < foldend) {
-        s = skipwhite(ml_get(lnum + 1));
-        if (*s == '*') {
-          s = skipwhite(s + 1);
-        }
-      }
-    }
-    int count = foldend - foldstart + 1;
-    char *txt = NGETTEXT("+-%s%3d line: ", "+-%s%3d lines: ", count);
-    size_t len = strlen(txt)
-                 + strlen(dashes)  // for %s
-                 + 20              // for %3ld
-                 + strlen(s);      // concatenated
-    char *r = xmalloc(len);
-    snprintf(r, len, txt, dashes, count);
-    len = strlen(r);
-    strcat(r, s);
-    // remove 'foldmarker' and 'commentstring'
-    rs_foldtext_cleanup(r + len);
-    rettv->vval.v_string = r;
-  }
+  rettv->vval.v_string = rs_f_foldtext_impl();
 }
 
 /// "foldtextresult(lnum)" function
@@ -1588,3 +1550,67 @@ void nvim_foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
 }
 
 // Note: nvim_win_get_p_fen is defined in window.c
+
+// ============================================================================
+// Accessors for f_foldtext Rust implementation
+// ============================================================================
+
+/// Get VV_FOLDSTART vim variable as line number.
+linenr_T nvim_fold_get_foldstart(void)
+{
+  return (linenr_T)get_vim_var_nr(VV_FOLDSTART);
+}
+
+/// Get VV_FOLDEND vim variable as line number.
+linenr_T nvim_fold_get_foldend(void)
+{
+  return (linenr_T)get_vim_var_nr(VV_FOLDEND);
+}
+
+/// Get VV_FOLDDASHES vim variable as string.
+char *nvim_fold_get_folddashes(void)
+{
+  return get_vim_var_str(VV_FOLDDASHES);
+}
+
+/// Check if a line contains only whitespace (wraps linewhite).
+bool nvim_fold_linewhite(linenr_T lnum)
+{
+  return linewhite(lnum);
+}
+
+/// Get a buffer line from curbuf (wraps ml_get).
+char *nvim_fold_ml_get(linenr_T lnum)
+{
+  return ml_get(lnum);
+}
+
+/// Get the localized fold text format string (wraps NGETTEXT).
+const char *nvim_fold_ngettext_foldtext(int count)
+{
+  return NGETTEXT("+-%s%3d line: ", "+-%s%3d lines: ", count);
+}
+
+/// Get curbuf's line count.
+linenr_T nvim_fold_get_curbuf_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
+}
+
+/// Allocate and format fold text header, appending line text, then return
+/// the xmalloc'd string ready for foldtext_cleanup.
+/// `out_header_len` receives the byte length of the formatted header part
+/// (before the line text is appended).
+char *nvim_fold_build_foldtext(const char *txt, const char *dashes, int count,
+                               const char *line_text, size_t *out_header_len)
+{
+  size_t len = strlen(txt)
+               + strlen(dashes)
+               + 20
+               + strlen(line_text);
+  char *r = xmalloc(len);
+  snprintf(r, len, txt, dashes, count);
+  *out_header_len = strlen(r);
+  strcat(r, line_text);
+  return r;
+}

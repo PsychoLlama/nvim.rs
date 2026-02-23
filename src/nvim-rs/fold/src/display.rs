@@ -36,6 +36,30 @@ extern "C" {
     fn nvim_get_curwin() -> WinHandle;
     /// Skip whitespace at the beginning of a string.
     fn nvim_skipwhite(s: *const c_char) -> *const c_char;
+
+    // Accessors for f_foldtext
+    /// Get VV_FOLDSTART vim variable as line number.
+    fn nvim_fold_get_foldstart() -> LinenrT;
+    /// Get VV_FOLDEND vim variable as line number.
+    fn nvim_fold_get_foldend() -> LinenrT;
+    /// Get VV_FOLDDASHES vim variable as string.
+    fn nvim_fold_get_folddashes() -> *const c_char;
+    /// Check if a line contains only whitespace.
+    fn nvim_fold_linewhite(lnum: LinenrT) -> bool;
+    /// Get a buffer line from curbuf.
+    fn nvim_fold_ml_get(lnum: LinenrT) -> *const c_char;
+    /// Get the localized fold text format string.
+    fn nvim_fold_ngettext_foldtext(count: c_int) -> *const c_char;
+    /// Get curbuf's line count.
+    fn nvim_fold_get_curbuf_line_count() -> LinenrT;
+    /// Allocate, format, and concatenate fold text. Returns xmalloc'd string.
+    fn nvim_fold_build_foldtext(
+        txt: *const c_char,
+        dashes: *const c_char,
+        count: c_int,
+        line_text: *const c_char,
+        out_header_len: *mut usize,
+    ) -> *mut c_char;
 }
 
 // =============================================================================
@@ -503,6 +527,61 @@ unsafe fn foldtext_cleanup_impl(s: *mut c_char) {
 }
 
 // =============================================================================
+// f_foldtext implementation
+// =============================================================================
+
+/// Implement the `foldtext()` VimL function.
+///
+/// Returns an xmalloc'd string (caller must xfree), or NULL if conditions
+/// are not met (e.g., foldstart/foldend out of range).
+unsafe fn f_foldtext_impl() -> *mut c_char {
+    let foldstart = nvim_fold_get_foldstart();
+    let foldend = nvim_fold_get_foldend();
+    let dashes = nvim_fold_get_folddashes();
+    let line_count = nvim_fold_get_curbuf_line_count();
+
+    if foldstart <= 0 || foldend > line_count {
+        return ptr::null_mut();
+    }
+
+    // Find first non-empty line in the fold.
+    let mut lnum = foldstart;
+    while lnum < foldend {
+        if !nvim_fold_linewhite(lnum) {
+            break;
+        }
+        lnum += 1;
+    }
+
+    // Find interesting text in this line, skip C comment-start.
+    let raw_line = nvim_fold_ml_get(lnum);
+    let mut s = nvim_skipwhite(raw_line);
+
+    // Skip C comment-start: "/*" or "//"
+    if *s == b'/' as c_char && (*s.add(1) == b'*' as c_char || *s.add(1) == b'/' as c_char) {
+        s = nvim_skipwhite(s.add(2));
+        // If nothing remains and there's a next line, try it
+        if *nvim_skipwhite(s) == 0 && lnum + 1 < foldend {
+            s = nvim_skipwhite(nvim_fold_ml_get(lnum + 1));
+            if *s == b'*' as c_char {
+                s = nvim_skipwhite(s.add(1));
+            }
+        }
+    }
+
+    let count = foldend - foldstart + 1;
+    let txt = nvim_fold_ngettext_foldtext(count);
+
+    let mut header_len: usize = 0;
+    let r = nvim_fold_build_foldtext(txt, dashes, count, s, &raw mut header_len);
+
+    // Remove 'foldmarker' and 'commentstring' from the appended line text
+    rs_foldtext_cleanup(r.add(header_len));
+
+    r
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -513,6 +592,18 @@ unsafe fn foldtext_cleanup_impl(s: *mut c_char) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_foldtext_cleanup(str: *mut c_char) {
     foldtext_cleanup_impl(str);
+}
+
+/// Implement the `foldtext()` VimL function.
+///
+/// Returns an xmalloc'd string that must be xfree'd by C, or NULL if the
+/// fold variables are out of range.
+///
+/// # Safety
+/// Must be called with valid C global state (curbuf, curwin, vvars set).
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_foldtext_impl() -> *mut c_char {
+    f_foldtext_impl()
 }
 
 /// FFI export: Get fold column character
