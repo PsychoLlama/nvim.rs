@@ -90,6 +90,8 @@ extern var_flavour_T rs_var_flavour(const char *varname);
 extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack);
 extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stack);
 extern int rs_get_copyID(void);
+extern int rs_shada_pack_entry(PackerBuffer *packer, const ShadaEntry *entry, size_t max_kbyte);
+extern int rs_shada_pack_pfreed_entry(PackerBuffer *packer, ShadaEntry *entry, size_t max_kbyte);
 
 #ifdef HAVE_BE64TOH
 # define _BSD_SOURCE 1  // NOLINT(bugprone-reserved-identifier)
@@ -551,280 +553,30 @@ static buf_T *find_buffer(PMap(cstr_t) *const fname_bufs, const char *const fnam
 
 #define SHADA_MPACK_FREE_SPACE (4 * MPACK_ITEM_SIZE)
 
-static void shada_check_buffer(PackerBuffer *packer)
-{
-  if (mpack_remaining(packer) < SHADA_MPACK_FREE_SPACE) {
-    packer->packer_flush(packer);
-  }
-}
-
-static uint32_t additional_data_len(AdditionalData *src)
-{
-  return src ? src->nitems : 0;
-}
-
-static void dump_additional_data(AdditionalData *src, PackerBuffer *sbuf)
-{
-  if (src != NULL) {
-    mpack_raw(src->data, src->nbytes, sbuf);
-  }
-}
-
-/// Write single ShaDa entry
+/// Write single ShaDa entry (thin wrapper over Rust rs_shada_pack_entry).
 ///
 /// @param[in]  packer     Packer used to write entry.
-/// @param[in]  entry      Entry written.
+/// @param[in]  entry      Entry written (by value; address passed to Rust).
 /// @param[in]  max_kbyte  Maximum size of an item in KiB. Zero means no
 ///                        restrictions.
 ///
 /// @return kSDWriteSuccessful, kSDWriteFailed or kSDWriteIgnError.
 static ShaDaWriteResult shada_pack_entry(PackerBuffer *const packer, ShadaEntry entry,
                                          const size_t max_kbyte)
-  FUNC_ATTR_NONNULL_ALL
 {
-  ShaDaWriteResult ret = kSDWriteFailed;
-  PackerBuffer sbuf = packer_string_buffer();
-
-#define CHECK_DEFAULT(entry, attr) \
-  (sd_default_values[(entry).type].data.attr == (entry).data.attr)
-#define ONE_IF_NOT_DEFAULT(entry, attr) \
-  ((uint32_t)(!CHECK_DEFAULT(entry, attr)))
-
-#define PACK_BOOL(entry, name, attr) \
-  do { \
-    if (!CHECK_DEFAULT(entry, search_pattern.attr)) { \
-      PACK_KEY(name); \
-      mpack_bool(&sbuf.ptr, !sd_default_values[(entry).type].data.search_pattern.attr); \
-    } \
-  } while (0)
-
-  shada_check_buffer(&sbuf);
-  switch (entry.type) {
-  case kSDItemMissing:
-    abort();
-  case kSDItemUnknown:
-    mpack_raw(entry.data.unknown_item.contents, entry.data.unknown_item.size, &sbuf);
-    break;
-  case kSDItemHistoryEntry: {
-    const bool is_hist_search =
-      entry.data.history_item.histtype == HIST_SEARCH;
-    uint32_t arr_size = (2 + (uint32_t)is_hist_search
-                         + additional_data_len(entry.additional_data));
-    mpack_array(&sbuf.ptr, arr_size);
-    mpack_uint(&sbuf.ptr, entry.data.history_item.histtype);
-    mpack_bin(cstr_as_string(entry.data.history_item.string), &sbuf);
-    if (is_hist_search) {
-      mpack_uint(&sbuf.ptr, (uint8_t)entry.data.history_item.sep);
-    }
-    dump_additional_data(entry.additional_data, &sbuf);
-    break;
-  }
-  case kSDItemVariable: {
-    bool is_blob = (entry.data.global_var.value.v_type == VAR_BLOB);
-    uint32_t arr_size = 2 + (is_blob ? 1 : 0) + additional_data_len(entry.additional_data);
-    mpack_array(&sbuf.ptr, arr_size);
-    const String varname = cstr_as_string(entry.data.global_var.name);
-    mpack_bin(varname, &sbuf);
-    char vardesc[256] = "variable g:";
-    memcpy(&vardesc[sizeof("variable g:") - 1], varname.data,
-           varname.size + 1);
-    if (encode_vim_to_msgpack(&sbuf, &entry.data.global_var.value, vardesc)
-        == FAIL) {
-      ret = kSDWriteIgnError;
-      semsg(_(WERR "Failed to write variable %s"),
-            entry.data.global_var.name);
-      goto shada_pack_entry_error;
-    }
-    if (is_blob) {
-      mpack_check_buffer(&sbuf);
-      mpack_integer(&sbuf.ptr, VAR_TYPE_BLOB);
-    }
-    dump_additional_data(entry.additional_data, &sbuf);
-    break;
-  }
-  case kSDItemSubString: {
-    uint32_t arr_size = 1 + additional_data_len(entry.additional_data);
-    mpack_array(&sbuf.ptr, arr_size);
-    mpack_bin(cstr_as_string(entry.data.sub_string.sub), &sbuf);
-    dump_additional_data(entry.additional_data, &sbuf);
-    break;
-  }
-  case kSDItemSearchPattern: {
-    uint32_t entry_map_size = (1  // Search pattern is always present
-                               + ONE_IF_NOT_DEFAULT(entry, search_pattern.magic)
-                               + ONE_IF_NOT_DEFAULT(entry, search_pattern.is_last_used)
-                               + ONE_IF_NOT_DEFAULT(entry, search_pattern.smartcase)
-                               + ONE_IF_NOT_DEFAULT(entry, search_pattern.has_line_offset)
-                               + ONE_IF_NOT_DEFAULT(entry, search_pattern.place_cursor_at_end)
-                               + ONE_IF_NOT_DEFAULT(entry,
-                                                    search_pattern.is_substitute_pattern)
-                               + ONE_IF_NOT_DEFAULT(entry, search_pattern.highlighted)
-                               + ONE_IF_NOT_DEFAULT(entry, search_pattern.offset)
-                               + ONE_IF_NOT_DEFAULT(entry, search_pattern.search_backward)
-                               + additional_data_len(entry.additional_data));
-    mpack_map(&sbuf.ptr, entry_map_size);
-    PACK_KEY(SEARCH_KEY_PAT);
-    mpack_bin(entry.data.search_pattern.pat, &sbuf);
-    PACK_BOOL(entry, SEARCH_KEY_MAGIC, magic);
-    PACK_BOOL(entry, SEARCH_KEY_IS_LAST_USED, is_last_used);
-    PACK_BOOL(entry, SEARCH_KEY_SMARTCASE, smartcase);
-    PACK_BOOL(entry, SEARCH_KEY_HAS_LINE_OFFSET, has_line_offset);
-    PACK_BOOL(entry, SEARCH_KEY_PLACE_CURSOR_AT_END, place_cursor_at_end);
-    PACK_BOOL(entry, SEARCH_KEY_IS_SUBSTITUTE_PATTERN, is_substitute_pattern);
-    PACK_BOOL(entry, SEARCH_KEY_HIGHLIGHTED, highlighted);
-    PACK_BOOL(entry, SEARCH_KEY_BACKWARD, search_backward);
-    if (!CHECK_DEFAULT(entry, search_pattern.offset)) {
-      PACK_KEY(SEARCH_KEY_OFFSET);
-      mpack_integer(&sbuf.ptr, entry.data.search_pattern.offset);
-    }
-#undef PACK_BOOL
-    dump_additional_data(entry.additional_data, &sbuf);
-    break;
-  }
-  case kSDItemChange:
-  case kSDItemGlobalMark:
-  case kSDItemLocalMark:
-  case kSDItemJump: {
-    size_t entry_map_size = (1  // File name
-                             + ONE_IF_NOT_DEFAULT(entry, filemark.mark.lnum)
-                             + ONE_IF_NOT_DEFAULT(entry, filemark.mark.col)
-                             + ONE_IF_NOT_DEFAULT(entry, filemark.name)
-                             + additional_data_len(entry.additional_data));
-    mpack_map(&sbuf.ptr, (uint32_t)entry_map_size);
-    PACK_KEY(KEY_FILE);
-    mpack_bin(cstr_as_string(entry.data.filemark.fname), &sbuf);
-    if (!CHECK_DEFAULT(entry, filemark.mark.lnum)) {
-      PACK_KEY(KEY_LNUM);
-      mpack_integer(&sbuf.ptr, entry.data.filemark.mark.lnum);
-    }
-    if (!CHECK_DEFAULT(entry, filemark.mark.col)) {
-      PACK_KEY(KEY_COL);
-      mpack_integer(&sbuf.ptr, entry.data.filemark.mark.col);
-    }
-    assert(entry.type == kSDItemJump || entry.type == kSDItemChange
-           ? CHECK_DEFAULT(entry, filemark.name)
-           : true);
-    if (!CHECK_DEFAULT(entry, filemark.name)) {
-      PACK_KEY(KEY_NAME_CHAR);
-      mpack_uint(&sbuf.ptr, (uint8_t)entry.data.filemark.name);
-    }
-    dump_additional_data(entry.additional_data, &sbuf);
-    break;
-  }
-  case kSDItemRegister: {
-    uint32_t entry_map_size = (2  // Register contents and name
-                               + ONE_IF_NOT_DEFAULT(entry, reg.type)
-                               + ONE_IF_NOT_DEFAULT(entry, reg.width)
-                               + ONE_IF_NOT_DEFAULT(entry, reg.is_unnamed)
-                               + additional_data_len(entry.additional_data));
-
-    mpack_map(&sbuf.ptr, entry_map_size);
-    PACK_KEY(REG_KEY_CONTENTS);
-    mpack_array(&sbuf.ptr, (uint32_t)entry.data.reg.contents_size);
-    for (size_t i = 0; i < entry.data.reg.contents_size; i++) {
-      mpack_bin(entry.data.reg.contents[i], &sbuf);
-    }
-    PACK_KEY(KEY_NAME_CHAR);
-    mpack_uint(&sbuf.ptr, (uint8_t)entry.data.reg.name);
-    if (!CHECK_DEFAULT(entry, reg.type)) {
-      PACK_KEY(REG_KEY_TYPE);
-      mpack_uint(&sbuf.ptr, (uint8_t)entry.data.reg.type);
-    }
-    if (!CHECK_DEFAULT(entry, reg.width)) {
-      PACK_KEY(REG_KEY_WIDTH);
-      mpack_uint64(&sbuf.ptr, (uint64_t)entry.data.reg.width);
-    }
-    if (!CHECK_DEFAULT(entry, reg.is_unnamed)) {
-      PACK_KEY(REG_KEY_UNNAMED);
-      mpack_bool(&sbuf.ptr, entry.data.reg.is_unnamed);
-    }
-    dump_additional_data(entry.additional_data, &sbuf);
-    break;
-  }
-  case kSDItemBufferList:
-    mpack_array(&sbuf.ptr, (uint32_t)entry.data.buffer_list.size);
-    for (size_t i = 0; i < entry.data.buffer_list.size; i++) {
-      size_t entry_map_size = (1  // Buffer name
-                               + (size_t)(entry.data.buffer_list.buffers[i].pos.lnum
-                                          != default_pos.lnum)
-                               + (size_t)(entry.data.buffer_list.buffers[i].pos.col
-                                          != default_pos.col)
-                               + additional_data_len(entry.data.buffer_list.buffers[i].
-                                                     additional_data));
-      mpack_map(&sbuf.ptr, (uint32_t)entry_map_size);
-      PACK_KEY(KEY_FILE);
-      mpack_bin(cstr_as_string(entry.data.buffer_list.buffers[i].fname), &sbuf);
-      if (entry.data.buffer_list.buffers[i].pos.lnum != 1) {
-        PACK_KEY(KEY_LNUM);
-        mpack_uint64(&sbuf.ptr, (uint64_t)entry.data.buffer_list.buffers[i].pos.lnum);
-      }
-      if (entry.data.buffer_list.buffers[i].pos.col != 0) {
-        PACK_KEY(KEY_COL);
-        mpack_uint64(&sbuf.ptr, (uint64_t)entry.data.buffer_list.buffers[i].pos.col);
-      }
-      dump_additional_data(entry.data.buffer_list.buffers[i].additional_data, &sbuf);
-    }
-    break;
-  case kSDItemHeader:
-    mpack_map(&sbuf.ptr, (uint32_t)entry.data.header.size);
-    for (size_t i = 0; i < entry.data.header.size; i++) {
-      mpack_str(entry.data.header.items[i].key, &sbuf);
-      const Object obj = entry.data.header.items[i].value;
-      switch (obj.type) {
-      case kObjectTypeString:
-        mpack_bin(obj.data.string, &sbuf);
-        break;
-      case kObjectTypeInteger:
-        mpack_integer(&sbuf.ptr, obj.data.integer);
-        break;
-      default:
-        abort();
-      }
-    }
-    break;
-  }
-#undef CHECK_DEFAULT
-#undef ONE_IF_NOT_DEFAULT
-  String packed = packer_take_string(&sbuf);
-  if (!max_kbyte || packed.size <= max_kbyte * 1024) {
-    shada_check_buffer(packer);
-
-    if (entry.type == kSDItemUnknown) {
-      mpack_uint64(&packer->ptr, entry.data.unknown_item.type);
-    } else {
-      mpack_uint64(&packer->ptr, (uint64_t)entry.type);
-    }
-    mpack_uint64(&packer->ptr, (uint64_t)entry.timestamp);
-    if (packed.size > 0) {
-      mpack_uint64(&packer->ptr, (uint64_t)packed.size);
-      mpack_raw(packed.data, packed.size, packer);
-    }
-
-    if (packer->anyint != 0) {  // error code
-      goto shada_pack_entry_error;
-    }
-  }
-  ret = kSDWriteSuccessful;
-shada_pack_entry_error:
-  xfree(sbuf.startptr);
-  return ret;
+  return (ShaDaWriteResult)rs_shada_pack_entry(packer, &entry, max_kbyte);
 }
 
-/// Write single ShaDa entry and free it afterwards
-///
-/// Will not free if entry could not be freed.
+/// Write single ShaDa entry and free it afterwards (thin wrapper).
 ///
 /// @param[in]  packer     Packer used to write entry.
-/// @param[in]  entry      Entry written.
+/// @param[in]  entry      Entry written (by value; address passed to Rust).
 /// @param[in]  max_kbyte  Maximum size of an item in KiB. Zero means no
 ///                        restrictions.
 static inline ShaDaWriteResult shada_pack_pfreed_entry(PackerBuffer *const packer, ShadaEntry entry,
                                                        const size_t max_kbyte)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_ALWAYS_INLINE
 {
-  ShaDaWriteResult ret = shada_pack_entry(packer, entry, max_kbyte);
-  shada_free_shada_entry(&entry);
-  return ret;
+  return (ShaDaWriteResult)rs_shada_pack_pfreed_entry(packer, &entry, max_kbyte);
 }
 
 /// Parse msgpack object that has given length
@@ -3365,3 +3117,194 @@ void *nvim_shada_hist_get_array(int i, int **out_hisidx, int **out_hisnum)
 {
   return hist_get_array((uint8_t)i, out_hisidx, out_hisnum);
 }
+
+// =============================================================================
+// Phase 1 accessors: shada_pack_entry migration
+// =============================================================================
+
+/// Create a string-backed packer buffer. Writes the resulting buffer to *out.
+void nvim_shada_packer_string_buffer(PackerBuffer *out)
+{
+  if (out) {
+    *out = packer_string_buffer();
+  }
+}
+
+/// Take the packed string from a string-backed packer buffer.
+/// Returns the String value and zeroes out the buffer.
+String nvim_shada_packer_take_string(PackerBuffer *buf)
+{
+  return buf ? packer_take_string(buf) : (String)STRING_INIT;
+}
+
+/// Wrapper for encode_vim_to_msgpack (for encoding typval_T variables).
+int nvim_encode_vim_to_msgpack(PackerBuffer *packer, void *tv, const char *desc)
+{
+  return encode_vim_to_msgpack(packer, (typval_T *)tv, desc);
+}
+
+/// Get cstr_as_string equivalent: returns {s, strlen(s)} or STRING_INIT if NULL.
+String nvim_shada_cstr_as_string(const char *s)
+{
+  return s ? cstr_as_string((char *)s) : (String)STRING_INIT;
+}
+
+/// Return the number of additional data items in an AdditionalData struct.
+uint32_t nvim_shada_additional_data_len(const void *ad_ptr)
+{
+  const AdditionalData *ad = (const AdditionalData *)ad_ptr;
+  return ad ? ad->nitems : 0;
+}
+
+/// Write additional data raw bytes to a packer buffer.
+void nvim_shada_dump_additional_data(const void *ad_ptr, PackerBuffer *sbuf)
+{
+  const AdditionalData *ad = (const AdditionalData *)ad_ptr;
+  if (ad != NULL) {
+    mpack_raw(ad->data, ad->nbytes, sbuf);
+  }
+}
+
+/// Get v_type from a typval_T stored inline in a ShadaEntry variable slot.
+int nvim_shada_entry_var_type(const ShadaEntry *entry)
+{
+  return entry ? (int)entry->data.global_var.value.v_type : 0;
+}
+
+/// Check if a ShadaEntry variable is a blob (v_type == VAR_BLOB).
+int nvim_shada_entry_is_blob_var(const ShadaEntry *entry)
+{
+  return (entry && entry->data.global_var.value.v_type == VAR_BLOB) ? 1 : 0;
+}
+
+/// Get the pointer to the typval_T in a variable entry (for encode_vim_to_msgpack).
+void *nvim_shada_entry_var_value_ptr(ShadaEntry *entry)
+{
+  return entry ? &entry->data.global_var.value : NULL;
+}
+
+/// Get number of items in a header Dict.
+size_t nvim_shada_header_size(const ShadaEntry *entry)
+{
+  return entry ? entry->data.header.size : 0;
+}
+
+/// Get key data pointer for header item i.
+const char *nvim_shada_header_item_key_data(const ShadaEntry *entry, size_t i)
+{
+  return (entry && i < entry->data.header.size) ? entry->data.header.items[i].key.data : NULL;
+}
+
+/// Get key size for header item i.
+size_t nvim_shada_header_item_key_size(const ShadaEntry *entry, size_t i)
+{
+  return (entry && i < entry->data.header.size) ? entry->data.header.items[i].key.size : 0;
+}
+
+/// Get object type for header item i.
+int nvim_shada_header_item_value_type(const ShadaEntry *entry, size_t i)
+{
+  return (entry && i < entry->data.header.size) ? (int)entry->data.header.items[i].value.type : 0;
+}
+
+/// Get string data pointer for a string-typed header item i.
+const char *nvim_shada_header_item_value_str_data(const ShadaEntry *entry, size_t i)
+{
+  return (entry && i < entry->data.header.size) ? entry->data.header.items[i].value.data.string.data : NULL;
+}
+
+/// Get string size for a string-typed header item i.
+size_t nvim_shada_header_item_value_str_size(const ShadaEntry *entry, size_t i)
+{
+  return (entry && i < entry->data.header.size) ? entry->data.header.items[i].value.data.string.size : 0;
+}
+
+/// Get integer value for an integer-typed header item i.
+int64_t nvim_shada_header_item_value_integer(const ShadaEntry *entry, size_t i)
+{
+  return (entry && i < entry->data.header.size) ? entry->data.header.items[i].value.data.integer : 0;
+}
+
+/// Get data pointer for register contents[i] (a String struct's .data).
+const char *nvim_shada_reg_contents_data(const ShadaEntry *entry, size_t i)
+{
+  if (!entry || i >= entry->data.reg.contents_size || !entry->data.reg.contents) {
+    return NULL;
+  }
+  return entry->data.reg.contents[i].data;
+}
+
+/// Get size for register contents[i] (a String struct's .size).
+size_t nvim_shada_reg_contents_size(const ShadaEntry *entry, size_t i)
+{
+  if (!entry || i >= entry->data.reg.contents_size || !entry->data.reg.contents) {
+    return 0;
+  }
+  return entry->data.reg.contents[i].size;
+}
+
+/// Get the number of register contents entries.
+size_t nvim_shada_reg_contents_count(const ShadaEntry *entry)
+{
+  return entry ? entry->data.reg.contents_size : 0;
+}
+
+/// Get the anyint error field from a packer buffer (non-zero means error).
+int64_t nvim_shada_packer_get_anyint(PackerBuffer *packer)
+{
+  return packer ? packer->anyint : 0;
+}
+
+// Search pattern field accessors (Dict(_shada_search_pat) has OptionalKeys prefix)
+bool nvim_shada_sp_get_magic(const ShadaEntry *e) { return e->data.search_pattern.magic; }
+bool nvim_shada_sp_get_smartcase(const ShadaEntry *e) { return e->data.search_pattern.smartcase; }
+bool nvim_shada_sp_get_has_line_offset(const ShadaEntry *e) { return e->data.search_pattern.has_line_offset; }
+bool nvim_shada_sp_get_place_cursor_at_end(const ShadaEntry *e) { return e->data.search_pattern.place_cursor_at_end; }
+bool nvim_shada_sp_get_is_last_used(const ShadaEntry *e) { return e->data.search_pattern.is_last_used; }
+bool nvim_shada_sp_get_is_substitute_pattern(const ShadaEntry *e) { return e->data.search_pattern.is_substitute_pattern; }
+bool nvim_shada_sp_get_highlighted(const ShadaEntry *e) { return e->data.search_pattern.highlighted; }
+bool nvim_shada_sp_get_search_backward(const ShadaEntry *e) { return e->data.search_pattern.search_backward; }
+int64_t nvim_shada_sp_get_offset(const ShadaEntry *e) { return e->data.search_pattern.offset; }
+const char *nvim_shada_sp_get_pat_data(const ShadaEntry *e) { return e->data.search_pattern.pat.data; }
+size_t nvim_shada_sp_get_pat_size(const ShadaEntry *e) { return e->data.search_pattern.pat.size; }
+
+// Filemark field accessors (pos_T uses linenr_T=int32 but Rust Position.lnum is i64)
+int64_t nvim_shada_fm_get_lnum(const ShadaEntry *e) { return (int64_t)e->data.filemark.mark.lnum; }
+int32_t nvim_shada_fm_get_col(const ShadaEntry *e) { return (int32_t)e->data.filemark.mark.col; }
+char nvim_shada_fm_get_name(const ShadaEntry *e) { return e->data.filemark.name; }
+const char *nvim_shada_fm_get_fname(const ShadaEntry *e) { return e->data.filemark.fname; }
+
+// Register field accessors (MotionType enum and String* layout differ from Rust)
+int32_t nvim_shada_reg_get_type(const ShadaEntry *e) { return (int32_t)e->data.reg.type; }
+char nvim_shada_reg_get_name(const ShadaEntry *e) { return e->data.reg.name; }
+bool nvim_shada_reg_get_is_unnamed(const ShadaEntry *e) { return e->data.reg.is_unnamed; }
+size_t nvim_shada_reg_get_width(const ShadaEntry *e) { return e->data.reg.width; }
+
+// BufferList per-buffer position accessors
+int64_t nvim_shada_bl_buf_get_lnum(const ShadaEntry *e, size_t i) { return (int64_t)e->data.buffer_list.buffers[i].pos.lnum; }
+int32_t nvim_shada_bl_buf_get_col(const ShadaEntry *e, size_t i) { return (int32_t)e->data.buffer_list.buffers[i].pos.col; }
+const char *nvim_shada_bl_buf_get_fname(const ShadaEntry *e, size_t i) { return e->data.buffer_list.buffers[i].fname; }
+size_t nvim_shada_bl_buf_fname_size(const ShadaEntry *e, size_t i)
+{
+  const char *f = e->data.buffer_list.buffers[i].fname;
+  return f ? strlen(f) : 0;
+}
+const void *nvim_shada_bl_buf_get_additional_data(const ShadaEntry *e, size_t i) { return e->data.buffer_list.buffers[i].additional_data; }
+size_t nvim_shada_bl_get_size(const ShadaEntry *e) { return e->data.buffer_list.size; }
+
+// UnknownItem field accessors (avoid Rust implicit autoref through union)
+uint64_t nvim_shada_unknown_get_type_num(const ShadaEntry *e) { return e->data.unknown_item.type; }
+const char *nvim_shada_unknown_get_contents(const ShadaEntry *e) { return e->data.unknown_item.contents; }
+size_t nvim_shada_unknown_get_size(const ShadaEntry *e) { return e->data.unknown_item.size; }
+
+// HistoryItem field accessors
+uint8_t nvim_shada_hist_get_histtype(const ShadaEntry *e) { return e->data.history_item.histtype; }
+const char *nvim_shada_hist_get_string(const ShadaEntry *e) { return e->data.history_item.string; }
+char nvim_shada_hist_get_sep(const ShadaEntry *e) { return e->data.history_item.sep; }
+
+// GlobalVar field accessors
+const char *nvim_shada_gvar_get_name(const ShadaEntry *e) { return e->data.global_var.name; }
+
+// SubString field accessors
+const char *nvim_shada_sub_get_string(const ShadaEntry *e) { return e->data.sub_string.sub; }
+

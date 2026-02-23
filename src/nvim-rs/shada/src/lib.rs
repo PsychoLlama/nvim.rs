@@ -4395,6 +4395,646 @@ pub unsafe extern "C" fn rs_close_file(cookie: FileDescriptorHandle) {
 }
 
 // =============================================================================
+// Phase 1: shada_pack_entry migration
+// =============================================================================
+
+// C accessor functions for packing
+extern "C" {
+    /// Create a string-backed packer buffer.
+    fn nvim_shada_packer_string_buffer(out: *mut ShadaPackerBuffer);
+    /// Take the packed string from a string-backed packer buffer.
+    fn nvim_shada_packer_take_string(buf: *mut ShadaPackerBuffer) -> NvimString;
+    /// Encode a typval_T to msgpack.
+    fn nvim_encode_vim_to_msgpack(
+        packer: *mut ShadaPackerBuffer,
+        tv: *mut c_void,
+        desc: *const c_char,
+    ) -> c_int;
+    /// Get number of additional data items.
+    fn nvim_shada_additional_data_len(ad_ptr: *const c_void) -> u32;
+    /// Write additional data raw bytes to a packer buffer.
+    fn nvim_shada_dump_additional_data(ad_ptr: *const c_void, sbuf: *mut ShadaPackerBuffer);
+    /// Check if entry variable is a blob.
+    fn nvim_shada_entry_is_blob_var(entry: *const ShadaEntry) -> c_int;
+    /// Get typval_T pointer from a variable entry.
+    fn nvim_shada_entry_var_value_ptr(entry: *mut ShadaEntry) -> *mut c_void;
+    /// Get number of items in header Dict.
+    fn nvim_shada_header_size(entry: *const ShadaEntry) -> usize;
+    /// Get key data pointer for header item i.
+    fn nvim_shada_header_item_key_data(entry: *const ShadaEntry, i: usize) -> *const c_char;
+    /// Get key size for header item i.
+    fn nvim_shada_header_item_key_size(entry: *const ShadaEntry, i: usize) -> usize;
+    /// Get object type for header item i.
+    fn nvim_shada_header_item_value_type(entry: *const ShadaEntry, i: usize) -> c_int;
+    /// Get string data pointer for a string-typed header item i.
+    fn nvim_shada_header_item_value_str_data(entry: *const ShadaEntry, i: usize) -> *const c_char;
+    /// Get string size for a string-typed header item i.
+    fn nvim_shada_header_item_value_str_size(entry: *const ShadaEntry, i: usize) -> usize;
+    /// Get integer value for an integer-typed header item i.
+    fn nvim_shada_header_item_value_integer(entry: *const ShadaEntry, i: usize) -> i64;
+    /// Get data pointer for register contents[i].
+    fn nvim_shada_reg_contents_data(entry: *const ShadaEntry, i: usize) -> *const c_char;
+    /// Get size for register contents[i].
+    fn nvim_shada_reg_contents_size(entry: *const ShadaEntry, i: usize) -> usize;
+    /// Get number of register contents entries.
+    fn nvim_shada_reg_contents_count(entry: *const ShadaEntry) -> usize;
+
+    /// Get the anyint error field from a packer buffer (non-zero means error).
+    fn nvim_shada_packer_get_anyint(packer: *mut ShadaPackerBuffer) -> i64;
+
+    // Search pattern field accessors (Dict has OptionalKeys prefix, layout differs)
+    fn nvim_shada_sp_get_magic(entry: *const ShadaEntry) -> bool;
+    fn nvim_shada_sp_get_smartcase(entry: *const ShadaEntry) -> bool;
+    fn nvim_shada_sp_get_has_line_offset(entry: *const ShadaEntry) -> bool;
+    fn nvim_shada_sp_get_place_cursor_at_end(entry: *const ShadaEntry) -> bool;
+    fn nvim_shada_sp_get_is_last_used(entry: *const ShadaEntry) -> bool;
+    fn nvim_shada_sp_get_is_substitute_pattern(entry: *const ShadaEntry) -> bool;
+    fn nvim_shada_sp_get_highlighted(entry: *const ShadaEntry) -> bool;
+    fn nvim_shada_sp_get_search_backward(entry: *const ShadaEntry) -> bool;
+    fn nvim_shada_sp_get_offset(entry: *const ShadaEntry) -> i64;
+    fn nvim_shada_sp_get_pat_data(entry: *const ShadaEntry) -> *const c_char;
+    fn nvim_shada_sp_get_pat_size(entry: *const ShadaEntry) -> usize;
+
+    // Filemark field accessors (pos_T.lnum is i32 but Rust Position.lnum is i64)
+    fn nvim_shada_fm_get_lnum(entry: *const ShadaEntry) -> i64;
+    fn nvim_shada_fm_get_col(entry: *const ShadaEntry) -> i32;
+    fn nvim_shada_fm_get_name(entry: *const ShadaEntry) -> c_char;
+    fn nvim_shada_fm_get_fname(entry: *const ShadaEntry) -> *const c_char;
+
+    // Register field accessors (MotionType enum layout differs from Rust c_int)
+    fn nvim_shada_reg_get_type(entry: *const ShadaEntry) -> i32;
+    fn nvim_shada_reg_get_name(entry: *const ShadaEntry) -> c_char;
+    fn nvim_shada_reg_get_is_unnamed(entry: *const ShadaEntry) -> bool;
+    fn nvim_shada_reg_get_width(entry: *const ShadaEntry) -> usize;
+
+    // BufferList per-buffer accessors (pos_T layout differs)
+    fn nvim_shada_bl_get_size(entry: *const ShadaEntry) -> usize;
+    fn nvim_shada_bl_buf_get_lnum(entry: *const ShadaEntry, i: usize) -> i64;
+    fn nvim_shada_bl_buf_get_col(entry: *const ShadaEntry, i: usize) -> i32;
+    fn nvim_shada_bl_buf_get_fname(entry: *const ShadaEntry, i: usize) -> *const c_char;
+    fn nvim_shada_bl_buf_fname_size(entry: *const ShadaEntry, i: usize) -> usize;
+    fn nvim_shada_bl_buf_get_additional_data(entry: *const ShadaEntry, i: usize) -> *const c_void;
+
+    // MessagePack primitives (from nvim-msgpack crate, callable as extern "C")
+    fn rs_mpack_array(ptr: *mut *mut u8, size: u32);
+    fn rs_mpack_map(ptr: *mut *mut u8, size: u32);
+    fn rs_mpack_uint(ptr: *mut *mut u8, val: u32);
+    fn rs_mpack_bool(ptr: *mut *mut u8, val: c_int);
+    fn rs_mpack_uint64(ptr: *mut *mut u8, val: u64);
+    fn rs_mpack_integer(ptr: *mut *mut u8, val: i64);
+    fn rs_mpack_bin(data: *const u8, len: usize, packer: *mut ShadaPackerBuffer);
+    fn rs_mpack_str(data: *const u8, len: usize, packer: *mut ShadaPackerBuffer);
+    fn rs_mpack_raw(data: *const u8, len: usize, packer: *mut ShadaPackerBuffer);
+    fn rs_mpack_check_buffer(packer: *mut ShadaPackerBuffer);
+
+    // UnknownItem field accessors (avoid implicit autoref through union)
+    fn nvim_shada_unknown_get_type_num(entry: *const ShadaEntry) -> u64;
+    fn nvim_shada_unknown_get_contents(entry: *const ShadaEntry) -> *const c_char;
+    fn nvim_shada_unknown_get_size(entry: *const ShadaEntry) -> usize;
+
+    // HistoryItem field accessors
+    fn nvim_shada_hist_get_histtype(entry: *const ShadaEntry) -> u8;
+    fn nvim_shada_hist_get_string(entry: *const ShadaEntry) -> *const c_char;
+    fn nvim_shada_hist_get_sep(entry: *const ShadaEntry) -> c_char;
+
+    // GlobalVar field accessor
+    fn nvim_shada_gvar_get_name(entry: *const ShadaEntry) -> *const c_char;
+
+    // SubString field accessor
+    fn nvim_shada_sub_get_string(entry: *const ShadaEntry) -> *const c_char;
+}
+
+/// ObjectType constants matching C's enum.
+const OBJECT_TYPE_INTEGER: c_int = 2;
+const OBJECT_TYPE_STRING: c_int = 4;
+
+/// VAR_BLOB constant value matching C's VarType enum.
+const VAR_TYPE_BLOB: i64 = 10;
+
+/// Pack a key string (2-char byte literal) into the packer.
+///
+/// # Safety
+///
+/// packer must be a valid packer buffer pointer.
+#[inline]
+unsafe fn pack_key(key: &[u8], sbuf: *mut ShadaPackerBuffer) {
+    rs_mpack_str(key.as_ptr(), key.len(), sbuf);
+}
+
+/// Write a single ShaDa entry to a packer buffer.
+///
+/// This is the Rust implementation of the C `shada_pack_entry` function.
+/// Serializes a ShadaEntry to msgpack format, writing to both a temporary
+/// string buffer (sbuf) and the outer packer.
+///
+/// Returns SD_WRITE_SUCCESSFUL, SD_WRITE_FAILED, or SD_WRITE_IGN_ERROR.
+///
+/// # Safety
+///
+/// - `packer` must be a valid PackerBuffer pointer
+/// - `entry` must be a valid ShadaEntry pointer
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::similar_names)] // packer/packed and fm_name/fm_fname are intentionally distinct
+#[allow(clippy::cast_possible_wrap)] // b'"' as c_char is intentional
+#[allow(clippy::cast_lossless)] // char-as-u8-as-u32 casts for register/mark char fields
+pub unsafe extern "C" fn rs_shada_pack_entry(
+    packer: *mut ShadaPackerBuffer,
+    entry: *const ShadaEntry,
+    max_kbyte: usize,
+) -> c_int {
+    if packer.is_null() || entry.is_null() {
+        return SD_WRITE_FAILED;
+    }
+
+    // Create a temporary string buffer for the entry body
+    let mut sbuf = std::mem::MaybeUninit::<ShadaPackerBuffer>::uninit();
+    nvim_shada_packer_string_buffer(sbuf.as_mut_ptr());
+    let sbuf = sbuf.as_mut_ptr();
+
+    let entry_type = (*entry).entry_type;
+    let timestamp = (*entry).timestamp;
+    let additional_data = (*entry).additional_data;
+    let ad_len = nvim_shada_additional_data_len(additional_data);
+
+    rs_mpack_check_buffer(sbuf);
+
+    match entry_type {
+        ShadaEntryType::Missing => {
+            // abort() equivalent - should never happen
+            nvim_xfree(nvim_shada_packer_take_string(sbuf).data.cast::<c_void>());
+            return SD_WRITE_FAILED;
+        }
+        ShadaEntryType::Unknown => {
+            // Pack raw unknown data using C accessors to avoid Rust implicit autoref
+            let contents = nvim_shada_unknown_get_contents(entry);
+            let size = nvim_shada_unknown_get_size(entry);
+            if !contents.is_null() {
+                rs_mpack_raw(contents.cast::<u8>(), size, sbuf);
+            }
+        }
+        ShadaEntryType::HistoryEntry => {
+            let histtype = nvim_shada_hist_get_histtype(entry);
+            let string = nvim_shada_hist_get_string(entry);
+            let sep = nvim_shada_hist_get_sep(entry);
+            let is_hist_search = histtype == HIST_SEARCH;
+            let arr_size = 2u32 + u32::from(is_hist_search) + ad_len;
+            let mut ptr = nvim_shada_packer_get_ptr(sbuf);
+            rs_mpack_array(&raw mut ptr, arr_size);
+            rs_mpack_uint(&raw mut ptr, u32::from(histtype));
+            nvim_shada_packer_set_ptr(sbuf, ptr);
+            // Pack binary string (the history string)
+            let slen = if string.is_null() {
+                0
+            } else {
+                libc::strlen(string)
+            };
+            rs_mpack_bin(string.cast::<u8>(), slen, sbuf);
+            if is_hist_search {
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_uint(&raw mut ptr2, u32::from(sep as u8));
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            nvim_shada_dump_additional_data(additional_data.cast::<c_void>(), sbuf);
+        }
+        ShadaEntryType::Variable => {
+            // Check if it's a blob type
+            let is_blob = nvim_shada_entry_is_blob_var(entry) != 0;
+            let arr_size = 2u32 + u32::from(is_blob) + ad_len;
+            let name = nvim_shada_gvar_get_name(entry);
+            let name_len = if name.is_null() {
+                0
+            } else {
+                libc::strlen(name)
+            };
+            let mut ptr = nvim_shada_packer_get_ptr(sbuf);
+            rs_mpack_array(&raw mut ptr, arr_size);
+            nvim_shada_packer_set_ptr(sbuf, ptr);
+            // Pack variable name as binary
+            rs_mpack_bin(name.cast::<u8>(), name_len, sbuf);
+            // Build vardesc for error messages
+            let mut vardesc = [0u8; 256];
+            let prefix = b"variable g:";
+            let copy_len = name_len.min(vardesc.len() - prefix.len() - 1);
+            vardesc[..prefix.len()].copy_from_slice(prefix);
+            if !name.is_null() && copy_len > 0 {
+                std::ptr::copy_nonoverlapping(
+                    name.cast::<u8>(),
+                    vardesc[prefix.len()..].as_mut_ptr(),
+                    copy_len,
+                );
+            }
+            vardesc[prefix.len() + copy_len] = 0;
+            // Encode the typval_T
+            let tv_ptr = nvim_shada_entry_var_value_ptr(entry.cast_mut());
+            let encode_ret =
+                nvim_encode_vim_to_msgpack(sbuf, tv_ptr, vardesc.as_ptr().cast::<c_char>());
+            if encode_ret != 0 {
+                // encode_vim_to_msgpack returns FAIL for non-serializable values
+                let sbuf_str = nvim_shada_packer_take_string(sbuf);
+                nvim_xfree(sbuf_str.data.cast::<c_void>());
+                return SD_WRITE_IGN_ERROR;
+            }
+            if is_blob {
+                rs_mpack_check_buffer(sbuf);
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_integer(&raw mut ptr2, VAR_TYPE_BLOB);
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            nvim_shada_dump_additional_data(additional_data.cast::<c_void>(), sbuf);
+        }
+        ShadaEntryType::SubString => {
+            let sub = nvim_shada_sub_get_string(entry);
+            let arr_size = 1u32 + ad_len;
+            let mut ptr = nvim_shada_packer_get_ptr(sbuf);
+            rs_mpack_array(&raw mut ptr, arr_size);
+            nvim_shada_packer_set_ptr(sbuf, ptr);
+            let sub_len = if sub.is_null() { 0 } else { libc::strlen(sub) };
+            rs_mpack_bin(sub.cast::<u8>(), sub_len, sbuf);
+            nvim_shada_dump_additional_data(additional_data.cast::<c_void>(), sbuf);
+        }
+        ShadaEntryType::SearchPattern => {
+            // Default values for comparison
+            let def_magic = true;
+            let def_is_last_used = true;
+            let def_smartcase = false;
+            let def_has_line_offset = false;
+            let def_place_cursor_at_end = false;
+            let def_is_substitute_pattern = false;
+            let def_highlighted = false;
+            let def_offset: i64 = 0;
+            let def_search_backward = false;
+
+            // Use C accessor functions - Dict(_shada_search_pat) has an OptionalKeys
+            // prefix that makes direct struct field access incorrect from Rust.
+            let sp_magic = nvim_shada_sp_get_magic(entry);
+            let sp_is_last_used = nvim_shada_sp_get_is_last_used(entry);
+            let sp_smartcase = nvim_shada_sp_get_smartcase(entry);
+            let sp_has_line_offset = nvim_shada_sp_get_has_line_offset(entry);
+            let sp_place_cursor_at_end = nvim_shada_sp_get_place_cursor_at_end(entry);
+            let sp_is_substitute_pattern = nvim_shada_sp_get_is_substitute_pattern(entry);
+            let sp_highlighted = nvim_shada_sp_get_highlighted(entry);
+            let sp_search_backward = nvim_shada_sp_get_search_backward(entry);
+            let sp_offset = nvim_shada_sp_get_offset(entry);
+            let sp_pat = nvim_shada_sp_get_pat_data(entry);
+            let sp_pat_len = nvim_shada_sp_get_pat_size(entry);
+
+            let mut map_size: u32 = 1; // pattern is always present
+            if sp_magic != def_magic {
+                map_size += 1;
+            }
+            if sp_is_last_used != def_is_last_used {
+                map_size += 1;
+            }
+            if sp_smartcase != def_smartcase {
+                map_size += 1;
+            }
+            if sp_has_line_offset != def_has_line_offset {
+                map_size += 1;
+            }
+            if sp_place_cursor_at_end != def_place_cursor_at_end {
+                map_size += 1;
+            }
+            if sp_is_substitute_pattern != def_is_substitute_pattern {
+                map_size += 1;
+            }
+            if sp_highlighted != def_highlighted {
+                map_size += 1;
+            }
+            if sp_offset != def_offset {
+                map_size += 1;
+            }
+            if sp_search_backward != def_search_backward {
+                map_size += 1;
+            }
+            map_size += ad_len;
+
+            let mut ptr = nvim_shada_packer_get_ptr(sbuf);
+            rs_mpack_map(&raw mut ptr, map_size);
+            nvim_shada_packer_set_ptr(sbuf, ptr);
+
+            // Always pack pattern
+            pack_key(SEARCH_KEY_PAT, sbuf);
+            rs_mpack_bin(sp_pat.cast::<u8>(), sp_pat_len, sbuf);
+
+            if sp_magic != def_magic {
+                pack_key(SEARCH_KEY_MAGIC, sbuf);
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_bool(&raw mut ptr2, c_int::from(!def_magic));
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            if sp_is_last_used != def_is_last_used {
+                pack_key(SEARCH_KEY_IS_LAST_USED, sbuf);
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_bool(&raw mut ptr2, c_int::from(!def_is_last_used));
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            if sp_smartcase != def_smartcase {
+                pack_key(SEARCH_KEY_SMARTCASE, sbuf);
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_bool(&raw mut ptr2, c_int::from(!def_smartcase));
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            if sp_has_line_offset != def_has_line_offset {
+                pack_key(SEARCH_KEY_HAS_LINE_OFFSET, sbuf);
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_bool(&raw mut ptr2, c_int::from(!def_has_line_offset));
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            if sp_place_cursor_at_end != def_place_cursor_at_end {
+                pack_key(SEARCH_KEY_PLACE_CURSOR_AT_END, sbuf);
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_bool(&raw mut ptr2, c_int::from(!def_place_cursor_at_end));
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            if sp_is_substitute_pattern != def_is_substitute_pattern {
+                pack_key(SEARCH_KEY_IS_SUBSTITUTE_PATTERN, sbuf);
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_bool(&raw mut ptr2, c_int::from(!def_is_substitute_pattern));
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            if sp_highlighted != def_highlighted {
+                pack_key(SEARCH_KEY_HIGHLIGHTED, sbuf);
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_bool(&raw mut ptr2, c_int::from(!def_highlighted));
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            if sp_search_backward != def_search_backward {
+                pack_key(SEARCH_KEY_BACKWARD, sbuf);
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_bool(&raw mut ptr2, c_int::from(!def_search_backward));
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            if sp_offset != def_offset {
+                pack_key(SEARCH_KEY_OFFSET, sbuf);
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_integer(&raw mut ptr2, sp_offset);
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            nvim_shada_dump_additional_data(additional_data.cast::<c_void>(), sbuf);
+        }
+        ShadaEntryType::Change
+        | ShadaEntryType::GlobalMark
+        | ShadaEntryType::LocalMark
+        | ShadaEntryType::Jump => {
+            // Use C accessor functions - pos_T.lnum is i32 but Rust Position.lnum is i64,
+            // so direct struct access would read wrong values.
+            let fm_lnum = nvim_shada_fm_get_lnum(entry);
+            let fm_col = nvim_shada_fm_get_col(entry);
+            let fm_name = nvim_shada_fm_get_name(entry);
+            let fm_fname = nvim_shada_fm_get_fname(entry);
+
+            let def_lnum: i64 = 1;
+            let def_col: i32 = 0;
+            // Default name depends on type
+            let def_name: c_char = match entry_type {
+                ShadaEntryType::GlobalMark | ShadaEntryType::LocalMark => b'"' as c_char,
+                _ => 0,
+            };
+            let mut map_size: u32 = 1; // fname always present
+            if fm_lnum != def_lnum {
+                map_size += 1;
+            }
+            if fm_col != def_col {
+                map_size += 1;
+            }
+            let include_name =
+                entry_type == ShadaEntryType::GlobalMark || entry_type == ShadaEntryType::LocalMark;
+            if include_name && fm_name != def_name {
+                map_size += 1;
+            }
+            map_size += ad_len;
+
+            let mut ptr = nvim_shada_packer_get_ptr(sbuf);
+            rs_mpack_map(&raw mut ptr, map_size);
+            nvim_shada_packer_set_ptr(sbuf, ptr);
+
+            // Always pack filename
+            pack_key(KEY_FILE, sbuf);
+            let fname_len = if fm_fname.is_null() {
+                0
+            } else {
+                libc::strlen(fm_fname)
+            };
+            rs_mpack_bin(fm_fname.cast::<u8>(), fname_len, sbuf);
+
+            if fm_lnum != def_lnum {
+                pack_key(KEY_LNUM, sbuf);
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_integer(&raw mut ptr2, fm_lnum);
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            if fm_col != def_col {
+                pack_key(KEY_COL, sbuf);
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_integer(&raw mut ptr2, i64::from(fm_col));
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            if include_name && fm_name != def_name {
+                pack_key(KEY_NAME_CHAR, sbuf);
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_uint(&raw mut ptr2, fm_name as u8 as u32);
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+            }
+            nvim_shada_dump_additional_data(additional_data.cast::<c_void>(), sbuf);
+        }
+        ShadaEntryType::Register => {
+            // Use C accessor functions - MotionType is a C enum with different
+            // representation than Rust c_int, and String* layout differs.
+            let reg_type = nvim_shada_reg_get_type(entry);
+            let reg_name = nvim_shada_reg_get_name(entry);
+            let reg_is_unnamed = nvim_shada_reg_get_is_unnamed(entry);
+            let reg_width = nvim_shada_reg_get_width(entry);
+            let contents_count = nvim_shada_reg_contents_count(entry);
+
+            let def_reg_type: i32 = MT_CHAR_WISE;
+            let def_width: usize = 0;
+            let def_is_unnamed = false;
+
+            let mut map_size: u32 = 2; // contents + name always present
+            if reg_type != def_reg_type {
+                map_size += 1;
+            }
+            if reg_width != def_width {
+                map_size += 1;
+            }
+            if reg_is_unnamed != def_is_unnamed {
+                map_size += 1;
+            }
+            map_size += ad_len;
+
+            let mut ptr = nvim_shada_packer_get_ptr(sbuf);
+            rs_mpack_map(&raw mut ptr, map_size);
+            nvim_shada_packer_set_ptr(sbuf, ptr);
+
+            // Pack register contents (rc key)
+            pack_key(REG_KEY_CONTENTS, sbuf);
+            let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+            rs_mpack_array(&raw mut ptr2, contents_count as u32);
+            nvim_shada_packer_set_ptr(sbuf, ptr2);
+            for i in 0..contents_count {
+                let data = nvim_shada_reg_contents_data(entry, i);
+                let size = nvim_shada_reg_contents_size(entry, i);
+                rs_mpack_bin(data.cast::<u8>(), size, sbuf);
+            }
+
+            // Pack register name (n key)
+            pack_key(KEY_NAME_CHAR, sbuf);
+            let mut ptr3 = nvim_shada_packer_get_ptr(sbuf);
+            rs_mpack_uint(&raw mut ptr3, reg_name as u8 as u32);
+            nvim_shada_packer_set_ptr(sbuf, ptr3);
+
+            if reg_type != def_reg_type {
+                pack_key(REG_KEY_TYPE, sbuf);
+                let mut ptr4 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_uint(&raw mut ptr4, reg_type as u8 as u32);
+                nvim_shada_packer_set_ptr(sbuf, ptr4);
+            }
+            if reg_width != def_width {
+                pack_key(REG_KEY_WIDTH, sbuf);
+                let mut ptr4 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_uint64(&raw mut ptr4, reg_width as u64);
+                nvim_shada_packer_set_ptr(sbuf, ptr4);
+            }
+            if reg_is_unnamed != def_is_unnamed {
+                pack_key(REG_KEY_UNNAMED, sbuf);
+                let mut ptr4 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_bool(&raw mut ptr4, c_int::from(reg_is_unnamed));
+                nvim_shada_packer_set_ptr(sbuf, ptr4);
+            }
+            nvim_shada_dump_additional_data(additional_data.cast::<c_void>(), sbuf);
+        }
+        ShadaEntryType::BufferList => {
+            // Use C accessor functions - buffer_list_buffer.pos is pos_T (i32 lnum),
+            // but Rust BufferListBuffer.pos is Position (i64 lnum). Direct access is wrong.
+            let bl_size = nvim_shada_bl_get_size(entry);
+            let def_lnum: i64 = 1;
+            let def_col: i32 = 0;
+            let mut ptr = nvim_shada_packer_get_ptr(sbuf);
+            rs_mpack_array(&raw mut ptr, bl_size as u32);
+            nvim_shada_packer_set_ptr(sbuf, ptr);
+            for i in 0..bl_size {
+                let buf_ad_ptr = nvim_shada_bl_buf_get_additional_data(entry, i);
+                let buf_ad = nvim_shada_additional_data_len(buf_ad_ptr);
+                let buf_lnum = nvim_shada_bl_buf_get_lnum(entry, i);
+                let buf_col = nvim_shada_bl_buf_get_col(entry, i);
+                let buf_fname = nvim_shada_bl_buf_get_fname(entry, i);
+                let buf_fname_len = nvim_shada_bl_buf_fname_size(entry, i);
+
+                let mut entry_map_size: u32 = 1; // fname always present
+                if buf_lnum != def_lnum {
+                    entry_map_size += 1;
+                }
+                if buf_col != def_col {
+                    entry_map_size += 1;
+                }
+                entry_map_size += buf_ad;
+
+                let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                rs_mpack_map(&raw mut ptr2, entry_map_size);
+                nvim_shada_packer_set_ptr(sbuf, ptr2);
+
+                pack_key(KEY_FILE, sbuf);
+                rs_mpack_bin(buf_fname.cast::<u8>(), buf_fname_len, sbuf);
+
+                if buf_lnum != def_lnum {
+                    pack_key(KEY_LNUM, sbuf);
+                    let mut ptr3 = nvim_shada_packer_get_ptr(sbuf);
+                    rs_mpack_uint64(&raw mut ptr3, buf_lnum as u64);
+                    nvim_shada_packer_set_ptr(sbuf, ptr3);
+                }
+                if buf_col != def_col {
+                    pack_key(KEY_COL, sbuf);
+                    let mut ptr3 = nvim_shada_packer_get_ptr(sbuf);
+                    rs_mpack_uint64(&raw mut ptr3, buf_col as u64);
+                    nvim_shada_packer_set_ptr(sbuf, ptr3);
+                }
+                nvim_shada_dump_additional_data(buf_ad_ptr, sbuf);
+            }
+        }
+        ShadaEntryType::Header => {
+            let header_size = nvim_shada_header_size(entry);
+            let mut ptr = nvim_shada_packer_get_ptr(sbuf);
+            rs_mpack_map(&raw mut ptr, header_size as u32);
+            nvim_shada_packer_set_ptr(sbuf, ptr);
+            for i in 0..header_size {
+                let key_data = nvim_shada_header_item_key_data(entry, i);
+                let key_size = nvim_shada_header_item_key_size(entry, i);
+                rs_mpack_str(key_data.cast::<u8>(), key_size, sbuf);
+                let val_type = nvim_shada_header_item_value_type(entry, i);
+                if val_type == OBJECT_TYPE_STRING {
+                    let str_data = nvim_shada_header_item_value_str_data(entry, i);
+                    let str_size = nvim_shada_header_item_value_str_size(entry, i);
+                    rs_mpack_bin(str_data.cast::<u8>(), str_size, sbuf);
+                } else if val_type == OBJECT_TYPE_INTEGER {
+                    let int_val = nvim_shada_header_item_value_integer(entry, i);
+                    let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+                    rs_mpack_integer(&raw mut ptr2, int_val);
+                    nvim_shada_packer_set_ptr(sbuf, ptr2);
+                }
+                // Other types abort() in C; we skip them
+            }
+        }
+    }
+
+    // Take the packed body string
+    let packed = nvim_shada_packer_take_string(sbuf);
+
+    // Check size limit and write to outer packer
+    if max_kbyte == 0 || packed.size <= max_kbyte * 1024 {
+        rs_shada_check_buffer(packer);
+
+        // Write header: type, timestamp, packed size
+        let mut outer_ptr = nvim_shada_packer_get_ptr(packer);
+        if entry_type == ShadaEntryType::Unknown {
+            let type_num = nvim_shada_unknown_get_type_num(entry);
+            rs_mpack_uint64_inline(&raw mut outer_ptr, type_num);
+        } else {
+            rs_mpack_uint64_inline(&raw mut outer_ptr, entry_type as u64);
+        }
+        rs_mpack_uint64_inline(&raw mut outer_ptr, timestamp);
+        if packed.size > 0 {
+            rs_mpack_uint64_inline(&raw mut outer_ptr, packed.size as u64);
+        }
+        nvim_shada_packer_set_ptr(packer, outer_ptr);
+
+        // Write raw body if non-empty
+        if packed.size > 0 {
+            rs_mpack_raw(packed.data.cast::<u8>(), packed.size, packer);
+        }
+
+        // Check for write errors (anyint != 0)
+        let anyint = nvim_shada_packer_get_anyint(packer);
+        if anyint != 0 {
+            nvim_xfree(packed.data.cast::<c_void>());
+            return SD_WRITE_FAILED;
+        }
+    }
+
+    nvim_xfree(packed.data.cast::<c_void>());
+    SD_WRITE_SUCCESSFUL
+}
+
+/// Write a single ShaDa entry and free it afterwards.
+///
+/// Calls rs_shada_pack_entry and then rs_shada_free_entry_contents.
+///
+/// # Safety
+///
+/// - `packer` must be a valid PackerBuffer pointer
+/// - `entry` must be a valid ShadaEntry pointer (will be freed)
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_pack_pfreed_entry(
+    packer: *mut ShadaPackerBuffer,
+    entry: *mut ShadaEntry,
+    max_kbyte: usize,
+) -> c_int {
+    let ret = rs_shada_pack_entry(packer, entry, max_kbyte);
+    rs_shada_free_entry_contents(entry);
+    ret
+}
+
+// =============================================================================
 // Unit Tests
 // =============================================================================
 
