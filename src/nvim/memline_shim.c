@@ -244,6 +244,12 @@ extern int rs_swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname
 extern void rs_set_b0_dir_flag(ZeroBlock *b0p, buf_T *buf);
 extern void rs_add_b0_fenc(ZeroBlock *b0p, buf_T *buf);
 extern bool rs_swapfile_unchanged(char *fname);
+// Phase 4 Rust function declarations
+extern void rs_ml_upd_block0(buf_T *buf, int what);
+extern void rs_set_b0_fname(ZeroBlock *b0p, buf_T *buf);
+extern void *rs_ml_new_data(memfile_T *mfp, bool negative, int page_count);
+extern void *rs_ml_new_ptr(memfile_T *mfp);
+extern void rs_ml_lineadd(buf_T *buf, int count);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -603,78 +609,11 @@ void ml_timestamp(buf_T *buf)
 }
 
 /// Update the timestamp or the B0_SAME_DIR flag of the .swp file.
-static void ml_upd_block0(buf_T *buf, upd_block0_T what)
-{
-  bhdr_T *hp;
+/// Update block 0 (thin wrapper calling Rust).
+static void ml_upd_block0(buf_T *buf, upd_block0_T what) { rs_ml_upd_block0(buf, what); }
 
-  memfile_T *mfp = buf->b_ml.ml_mfp;
-  if (mfp == NULL || (hp = mf_get(mfp, 0, 1)) == NULL) {
-    return;
-  }
-  ZeroBlock *b0p = hp->bh_data;
-  if (rs_ml_check_b0_id(b0p) != 0) {
-    iemsg(_("E304: ml_upd_block0(): Didn't get block 0??"));
-  } else {
-    if (what == UB_FNAME) {
-      set_b0_fname(b0p, buf);
-    } else {    // what == UB_SAME_DIR
-      rs_set_b0_dir_flag(b0p, buf);
-    }
-  }
-  mf_put(mfp, hp, true, false);
-}
-
-/// Write file name and timestamp into block 0 of a swapfile.
-/// Also set buf->b_mtime.
-/// Don't use NameBuff[]!!!
-static void set_b0_fname(ZeroBlock *b0p, buf_T *buf)
-{
-  if (buf->b_ffname == NULL) {
-    b0p->b0_fname[0] = NUL;
-  } else {
-    char uname[B0_UNAME_SIZE];
-
-    // For a file under the home directory of the current user, we try to
-    // replace the home directory path with "~user". This helps when
-    // editing the same file on different machines over a network.
-    // First replace home dir path with "~/" with home_replace().
-    // Then insert the user name to get "~user/".
-    home_replace(NULL, buf->b_ffname, b0p->b0_fname,
-                 B0_FNAME_SIZE_CRYPT, true);
-    if (b0p->b0_fname[0] == '~') {
-      // If there is no user name or it is too long, don't use "~/"
-      int retval = os_get_username(uname, B0_UNAME_SIZE);
-      size_t ulen = strlen(uname);
-      size_t flen = strlen(b0p->b0_fname);
-      if (retval == FAIL || ulen + flen > B0_FNAME_SIZE_CRYPT - 1) {
-        xstrlcpy(b0p->b0_fname, buf->b_ffname, B0_FNAME_SIZE_CRYPT);
-      } else {
-        memmove(b0p->b0_fname + ulen + 1, b0p->b0_fname + 1, flen);
-        memmove(b0p->b0_fname + 1, uname, ulen);
-      }
-    }
-    FileInfo file_info;
-    if (os_fileinfo(buf->b_ffname, &file_info)) {
-      rs_long_to_char(file_info.stat.st_mtim.tv_sec, b0p->b0_mtime);
-      rs_long_to_char((long)os_fileinfo_inode(&file_info), b0p->b0_ino);
-      buf_store_file_info(buf, &file_info);
-      buf->b_mtime_read = buf->b_mtime;
-      buf->b_mtime_read_ns = buf->b_mtime_ns;
-    } else {
-      rs_long_to_char(0, b0p->b0_mtime);
-      rs_long_to_char(0, b0p->b0_ino);
-      buf->b_mtime = 0;
-      buf->b_mtime_ns = 0;
-      buf->b_mtime_read = 0;
-      buf->b_mtime_read_ns = 0;
-      buf->b_orig_size = 0;
-      buf->b_orig_mode = 0;
-    }
-  }
-
-  // Also add the 'fileencoding' if there is room.
-  rs_add_b0_fenc(b0p, curbuf);
-}
+/// Write file name and timestamp into block 0 (thin wrapper calling Rust).
+static void set_b0_fname(ZeroBlock *b0p, buf_T *buf) { rs_set_b0_fname(b0p, buf); }
 
 // Forward declaration for Rust implementation (migrated from C)
 extern int rs_recover_names(const char *fname, int do_list, void *ret_list, int nr,
@@ -1671,6 +1610,74 @@ void nvim_swapfile_info_and_print(char *fname)
   bool need_clear = false;
   msg_multiline(cbuf_as_string(msg.items, msg.size), 0, false, false, &need_clear);
   kv_destroy(msg);
+}
+
+// Phase 4 accessors for Rust FFI (ml_new_ptr, ml_new_data, ml_lineadd, ml_upd_block0)
+
+// B-tree stack accessors
+int nvim_buf_get_ml_stack_top(buf_T *buf) { return buf->b_ml.ml_stack_top; }
+infoptr_T *nvim_buf_get_ml_stack_ip(buf_T *buf, int idx) { return &(buf->b_ml.ml_stack[idx]); }
+int64_t nvim_ip_get_bnum(const infoptr_T *ip) { return (int64_t)ip->ip_bnum; }
+int nvim_ip_get_index(const infoptr_T *ip) { return ip->ip_index; }
+void nvim_ip_add_high(infoptr_T *ip, int count) { ip->ip_high += count; }
+
+// PointerBlock field accessors
+uint16_t nvim_pp_get_id(const void *pp) { return ((const PointerBlock *)pp)->pb_id; }
+void nvim_pp_pe_linecount_add(void *pp, int idx, int count)
+{
+  ((PointerBlock *)pp)->pb_pointer[idx].pe_line_count += count;
+}
+
+// upd_block0_T enum constants
+int nvim_get_ub_fname(void) { return UB_FNAME; }
+void nvim_iemsg_pointer_block_id_wrong_two(void) { iemsg(_(e_pointer_block_id_wrong_two)); }
+void nvim_iemsg_e304_upd_block0(void) { iemsg(_("E304: ml_upd_block0(): Didn't get block 0??")); }
+
+// buf->b_ffname accessor (use existing buffer.c version)
+// buf->b_mtime accessors
+int64_t nvim_buf_get_b_mtime(const buf_T *buf) { return buf->b_mtime; }
+void nvim_buf_set_b_mtime(buf_T *buf, int64_t val) { buf->b_mtime = val; }
+int64_t nvim_buf_get_b_mtime_ns(const buf_T *buf) { return buf->b_mtime_ns; }
+void nvim_buf_set_b_mtime_ns(buf_T *buf, int64_t val) { buf->b_mtime_ns = val; }
+int64_t nvim_buf_get_b_mtime_read(const buf_T *buf) { return buf->b_mtime_read; }
+void nvim_buf_set_b_mtime_read(buf_T *buf, int64_t val) { buf->b_mtime_read = val; }
+int64_t nvim_buf_get_b_mtime_read_ns(const buf_T *buf) { return buf->b_mtime_read_ns; }
+void nvim_buf_set_b_mtime_read_ns(buf_T *buf, int64_t val) { buf->b_mtime_read_ns = val; }
+int64_t nvim_buf_get_b_orig_size(const buf_T *buf) { return (int64_t)buf->b_orig_size; }
+void nvim_buf_set_b_orig_size(buf_T *buf, int64_t val) { buf->b_orig_size = (uint64_t)val; }
+int nvim_buf_get_b_orig_mode(const buf_T *buf) { return buf->b_orig_mode; }
+void nvim_buf_set_b_orig_mode(buf_T *buf, int val) { buf->b_orig_mode = val; }
+
+// ZeroBlock field setters for set_b0_fname
+void nvim_b0_set_fname0(ZeroBlock *b0p) { b0p->b0_fname[0] = NUL; }
+char *nvim_b0_get_fname_for_replace(ZeroBlock *b0p) { return b0p->b0_fname; }
+int nvim_b0_get_fname0(const ZeroBlock *b0p) { return (unsigned char)b0p->b0_fname[0]; }
+// mtime/ino setters for set_b0_fname
+char *nvim_b0_get_mtime(ZeroBlock *b0p) { return b0p->b0_mtime; }
+char *nvim_b0_get_ino(ZeroBlock *b0p) { return b0p->b0_ino; }
+
+// home_replace wrapper: write home-replaced path into b0_fname
+void nvim_home_replace_b0_fname(const buf_T *buf, ZeroBlock *b0p, size_t maxlen)
+{
+  home_replace(NULL, buf->b_ffname, b0p->b0_fname, maxlen, true);
+}
+
+// os_get_username wrapper
+int nvim_os_get_username(char *buf, size_t len) { return os_get_username(buf, len); }
+
+// Wrapper: fills b0_mtime and b0_ino from buf->b_ffname, returns 1 on success
+int nvim_set_b0_mtime_ino(buf_T *buf, ZeroBlock *b0p)
+{
+  FileInfo fi;
+  if (os_fileinfo(buf->b_ffname, &fi)) {
+    rs_long_to_char(fi.stat.st_mtim.tv_sec, b0p->b0_mtime);
+    rs_long_to_char((long)os_fileinfo_inode(&fi), b0p->b0_ino);
+    buf_store_file_info(buf, &fi);
+    buf->b_mtime_read = buf->b_mtime;
+    buf->b_mtime_read_ns = buf->b_mtime_ns;
+    return 1;
+  }
+  return 0;
 }
 
 // Position accessors/setters
@@ -2706,27 +2713,13 @@ void ml_flush_line(buf_T *buf, bool noalloc)
 /// create a new, empty, data block
 static bhdr_T *ml_new_data(memfile_T *mfp, bool negative, int page_count)
 {
-  assert(page_count >= 0);
-  bhdr_T *hp = mf_new(mfp, negative, (unsigned)page_count);
-  DataBlock *dp = hp->bh_data;
-  dp->db_id = DATA_ID;
-  dp->db_txt_start = dp->db_txt_end = (unsigned)page_count * mfp->mf_page_size;
-  dp->db_free = dp->db_txt_start - (unsigned)HEADER_SIZE;
-  dp->db_line_count = 0;
-
-  return hp;
+  return rs_ml_new_data(mfp, negative, page_count);
 }
 
 /// create a new, empty, pointer block
 static bhdr_T *ml_new_ptr(memfile_T *mfp)
 {
-  bhdr_T *hp = mf_new(mfp, false, 1);
-  PointerBlock *pp = hp->bh_data;
-  pp->pb_id = PTR_ID;
-  pp->pb_count = 0;
-  pp->pb_count_max = PB_COUNT_MAX(mfp);
-
-  return hp;
+  return rs_ml_new_ptr(mfp);
 }
 
 /// Lookup line 'lnum' in a memline.
@@ -2938,24 +2931,7 @@ static int ml_add_stack(buf_T *buf)
 /// Count is the number of lines added, negative if lines have been deleted.
 static void ml_lineadd(buf_T *buf, int count)
 {
-  memfile_T *mfp = buf->b_ml.ml_mfp;
-
-  for (int idx = buf->b_ml.ml_stack_top - 1; idx >= 0; idx--) {
-    infoptr_T *ip = &(buf->b_ml.ml_stack[idx]);
-    bhdr_T *hp;
-    if ((hp = mf_get(mfp, ip->ip_bnum, 1)) == NULL) {
-      break;
-    }
-    PointerBlock *pp = hp->bh_data;       // must be pointer block
-    if (pp->pb_id != PTR_ID) {
-      mf_put(mfp, hp, false, false);
-      iemsg(_(e_pointer_block_id_wrong_two));
-      break;
-    }
-    pp->pb_pointer[ip->ip_index].pe_line_count += count;
-    ip->ip_high += count;
-    mf_put(mfp, hp, true, false);
-  }
+  rs_ml_lineadd(buf, count);
 }
 
 #if defined(HAVE_READLINK)

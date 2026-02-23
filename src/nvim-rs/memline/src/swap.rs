@@ -16,6 +16,7 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::rs_long_to_char;
 use crate::types::{BufHandle, UB_FNAME, UB_SAME_DIR};
 
 // =============================================================================
@@ -513,6 +514,12 @@ extern "C" {
 
     /// Get buf->b_p_fenc
     fn nvim_buf_get_b_p_fenc(buf: *mut BufHandle) -> *const c_char;
+
+    /// Get mutable pointer to b0_mtime field
+    fn nvim_b0_get_mtime(b0p: *mut c_void) -> *mut c_char;
+
+    /// Get mutable pointer to b0_ino field
+    fn nvim_b0_get_ino(b0p: *mut c_void) -> *mut c_char;
 }
 
 use std::ffi::c_void;
@@ -582,6 +589,157 @@ pub unsafe extern "C" fn rs_add_b0_fenc(b0p: *mut c_void, buf: *mut BufHandle) {
         *fname_ptr.offset(size - fenc_len - 1) = 0;
         nvim_b0_set_flags_byte(b0p, flags | B0_HAS_FENC);
     }
+}
+
+// =============================================================================
+// Phase 4: Block 0 Update and File Name (ml_upd_block0, set_b0_fname)
+// =============================================================================
+
+extern "C" {
+    // Phase 4: set_b0_fname accessors
+    fn nvim_get_curbuf() -> *mut BufHandle;
+    fn nvim_home_replace_b0_fname(buf: *const BufHandle, b0p: *mut c_void, maxlen: usize);
+    fn nvim_os_get_username(buf: *mut c_char, len: usize) -> c_int;
+    fn nvim_set_b0_mtime_ino(buf: *mut BufHandle, b0p: *mut c_void) -> c_int;
+    fn nvim_buf_set_b_mtime(buf: *mut BufHandle, val: i64);
+    fn nvim_buf_set_b_mtime_ns(buf: *mut BufHandle, val: i64);
+    fn nvim_buf_set_b_mtime_read(buf: *mut BufHandle, val: i64);
+    fn nvim_buf_set_b_mtime_read_ns(buf: *mut BufHandle, val: i64);
+    fn nvim_buf_set_b_orig_size(buf: *mut BufHandle, val: i64);
+    fn nvim_buf_set_b_orig_mode(buf: *mut BufHandle, val: c_int);
+}
+
+use crate::types::B0_FNAME_SIZE_CRYPT;
+
+/// Write file name and timestamp into block 0 of a swap file.
+///
+/// Also sets `buf->b_mtime` and related fields.
+///
+/// # Safety
+/// - `b0p` must be a valid ZeroBlock pointer
+/// - `buf` must be a valid buffer pointer
+#[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+pub unsafe extern "C" fn rs_set_b0_fname(b0p: *mut c_void, buf: *mut BufHandle) {
+    let ffname = nvim_buf_get_ffname(buf);
+
+    if ffname.is_null() {
+        // No file name: clear b0_fname
+        let fname_ptr = nvim_b0_get_fname_mut(b0p);
+        *fname_ptr = 0;
+    } else {
+        // Write home-replaced path into b0_fname
+        nvim_home_replace_b0_fname(buf.cast(), b0p, B0_FNAME_SIZE_CRYPT);
+
+        // If starts with '~', try to insert username: "~user/"
+        let fname_ptr = nvim_b0_get_fname_mut(b0p);
+        if *fname_ptr == b'~' as c_char {
+            let mut uname = [0i8; 40]; // B0_UNAME_SIZE
+            let retval = nvim_os_get_username(uname.as_mut_ptr(), 40);
+
+            // Calculate string lengths
+            let mut ulen = 0usize;
+            while *uname.as_ptr().add(ulen) != 0 {
+                ulen += 1;
+            }
+            let mut flen = 0usize;
+            while *fname_ptr.add(flen) != 0 {
+                flen += 1;
+            }
+
+            if retval == 0 || ulen + flen > B0_FNAME_SIZE_CRYPT - 1 {
+                // Too long or failed: just copy ffname directly
+                let max = B0_FNAME_SIZE_CRYPT;
+                let src_len = {
+                    let mut n = 0usize;
+                    while *ffname.add(n) != 0 {
+                        n += 1;
+                    }
+                    n.min(max - 1)
+                };
+                std::ptr::copy_nonoverlapping(ffname, fname_ptr, src_len);
+                *fname_ptr.add(src_len) = 0;
+            } else {
+                // Insert username: shift "~content" to "~user/content"
+                // Move existing content (starting at [1]) right by ulen positions
+                std::ptr::copy(fname_ptr.add(1), fname_ptr.add(ulen + 1), flen);
+                // Copy username at position 1
+                std::ptr::copy_nonoverlapping(uname.as_ptr(), fname_ptr.add(1), ulen);
+            }
+        }
+
+        // Write timestamps and inode into block 0
+        if nvim_set_b0_mtime_ino(buf, b0p) == 0 {
+            // File not found: zero out timestamps
+            let mtime_ptr = nvim_b0_get_mtime(b0p);
+            rs_long_to_char(0, mtime_ptr);
+            let ino_ptr = nvim_b0_get_ino(b0p);
+            rs_long_to_char(0, ino_ptr);
+            nvim_buf_set_b_mtime(buf, 0);
+            nvim_buf_set_b_mtime_ns(buf, 0);
+            nvim_buf_set_b_mtime_read(buf, 0);
+            nvim_buf_set_b_mtime_read_ns(buf, 0);
+            nvim_buf_set_b_orig_size(buf, 0);
+            nvim_buf_set_b_orig_mode(buf, 0);
+        }
+    }
+
+    // Also add the 'fileencoding' if there is room (use curbuf like the C implementation)
+    rs_add_b0_fenc(b0p, nvim_get_curbuf());
+}
+
+extern "C" {
+    /// Get memfile from buffer
+    fn nvim_buf_get_ml_mfp(buf: *mut BufHandle) -> *mut c_void;
+
+    /// Get block from memfile
+    fn mf_get(mfp: *mut c_void, bnum: i64, count: c_int) -> *mut c_void;
+
+    /// Release block back to memfile
+    fn mf_put(mfp: *mut c_void, hp: *mut c_void, dirty: bool, release: bool);
+
+    /// Get bh_data pointer from block header
+    fn nvim_bhdr_get_bh_data(hp: *mut c_void) -> *mut c_void;
+
+    /// Check block 0 ID (returns nonzero if bad)
+    fn rs_ml_check_b0_id(b0p: *const c_void) -> c_int;
+
+    /// Print "E304: ml_upd_block0(): Didn't get block 0??" error
+    fn nvim_iemsg_e304_upd_block0();
+}
+
+/// Update block 0 of the swap file with filename or same-dir flag.
+///
+/// Called after the swap file is opened to update block 0 metadata.
+/// - `what == UB_FNAME (0)`: update timestamp and filename
+/// - `what == UB_SAME_DIR (1)`: update the B0_SAME_DIR flag
+///
+/// # Safety
+/// - `buf` must be a valid buffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_upd_block0(buf: *mut BufHandle, what: c_int) {
+    let mfp = nvim_buf_get_ml_mfp(buf);
+    if mfp.is_null() {
+        return;
+    }
+    let hp = mf_get(mfp, 0, 1);
+    if hp.is_null() {
+        return;
+    }
+    let b0p = nvim_bhdr_get_bh_data(hp);
+    if rs_ml_check_b0_id(b0p) != 0 {
+        nvim_iemsg_e304_upd_block0();
+    } else if what == UB_FNAME as c_int {
+        rs_set_b0_fname(b0p, buf);
+    } else {
+        // what == UB_SAME_DIR
+        rs_set_b0_dir_flag(b0p, buf);
+    }
+    mf_put(mfp, hp, true, false);
 }
 
 #[cfg(test)]

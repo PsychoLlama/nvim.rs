@@ -76,7 +76,7 @@ extern "C" {
     fn nvim_buf_get_ml_chunksize_is_null(buf: *mut BufHandle) -> c_int;
 
     /// Get bh_data pointer from block header
-    fn nvim_bhdr_get_bh_data(hp: *mut BlockHeaderHandle) -> *mut std::ffi::c_void;
+    fn nvim_bhdr_get_bh_data(hp: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
 
     /// Get b_p_fixeol
     fn nvim_buf_get_b_p_fixeol(buf: *mut BufHandle) -> c_int;
@@ -185,6 +185,45 @@ extern "C" {
         codepoints: *mut usize,
         codeunits: *mut usize,
     ) -> usize;
+}
+
+extern "C" {
+    // -------------------------------------------------------------------------
+    // Phase 4: ml_lineadd accessors
+    // -------------------------------------------------------------------------
+
+    /// Get top of B-tree stack (buf->b_ml.ml_stack_top)
+    fn nvim_buf_get_ml_stack_top(buf: *mut BufHandle) -> c_int;
+
+    /// Get pointer to stack entry at idx (buf->b_ml.ml_stack[idx])
+    fn nvim_buf_get_ml_stack_ip(buf: *mut BufHandle, idx: c_int) -> *mut InfoPtrHandle;
+
+    /// Get ip_bnum from stack entry
+    fn nvim_ip_get_bnum(ip: *const InfoPtrHandle) -> BlockNr;
+
+    /// Get ip_index from stack entry
+    fn nvim_ip_get_index(ip: *const InfoPtrHandle) -> c_int;
+
+    /// Add count to ip_high in stack entry
+    fn nvim_ip_add_high(ip: *mut InfoPtrHandle, count: c_int);
+
+    /// Get id field from pointer block (first u16 field)
+    fn nvim_pp_get_id(pp: *const std::ffi::c_void) -> u16;
+
+    /// Add count to pb_pointer[idx].pe_line_count
+    fn nvim_pp_pe_linecount_add(pp: *mut std::ffi::c_void, idx: c_int, count: c_int);
+
+    /// Get memfile from buffer
+    fn nvim_buf_get_ml_mfp(buf: *mut BufHandle) -> *mut std::ffi::c_void;
+
+    /// Get block from memfile
+    fn mf_get(mfp: *mut std::ffi::c_void, bnum: BlockNr, count: c_int) -> *mut std::ffi::c_void;
+
+    /// Release block back to memfile
+    fn mf_put(mfp: *mut std::ffi::c_void, hp: *mut std::ffi::c_void, dirty: bool, release: bool);
+
+    /// Print "E317: Pointer block id wrong 2" error
+    fn nvim_iemsg_pointer_block_id_wrong_two();
 }
 
 // EOL_DOS constant (matches buffer crate definition)
@@ -470,7 +509,7 @@ pub unsafe extern "C" fn rs_ml_find_line_or_offset(
             return -1;
         }
 
-        let dp_raw = nvim_bhdr_get_bh_data(hp);
+        let dp_raw = nvim_bhdr_get_bh_data(hp.cast::<std::ffi::c_void>());
         let dp = dp_raw.cast::<DataBlockHeader>();
 
         let locked_high = nvim_buf_get_ml_locked_high(buf);
@@ -1011,6 +1050,42 @@ pub extern "C" fn rs_ml_error_correction(action: c_int) -> c_int {
         x if x == ML_INSERT => -1,
         x if x == ML_DELETE => 1,
         _ => 0,
+    }
+}
+
+// =============================================================================
+// Line Count Update in Parent Pointer Blocks
+// =============================================================================
+
+/// Update the line count in all parent pointer blocks.
+///
+/// Walks the B-tree stack from top to bottom and adds `count` to
+/// `pb_pointer[idx].pe_line_count` and `ip_high` for each level.
+///
+/// # Safety
+/// - `buf` must be a valid buffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_lineadd(buf: *mut BufHandle, count: c_int) {
+    let mfp = nvim_buf_get_ml_mfp(buf);
+    let stack_top = nvim_buf_get_ml_stack_top(buf);
+
+    for idx in (0..stack_top).rev() {
+        let ip = nvim_buf_get_ml_stack_ip(buf, idx);
+        let bnum = nvim_ip_get_bnum(ip);
+        let hp = mf_get(mfp, bnum, 1);
+        if hp.is_null() {
+            break;
+        }
+        let pp = nvim_bhdr_get_bh_data(hp);
+        if nvim_pp_get_id(pp) != crate::types::PTR_ID {
+            mf_put(mfp, hp, false, false);
+            nvim_iemsg_pointer_block_id_wrong_two();
+            break;
+        }
+        let ip_index = nvim_ip_get_index(ip);
+        nvim_pp_pe_linecount_add(pp, ip_index, count);
+        nvim_ip_add_high(ip, count);
+        mf_put(mfp, hp, true, false);
     }
 }
 

@@ -20,12 +20,12 @@
 //! provides helper functions for calculating split positions and managing the
 //! resulting block allocations.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::types::{
-    BufHandle, ColNr, DataBlockHeader, LineNr, DB_INDEX_MASK, INDEX_SIZE, ML_ALLOCATED,
-    ML_APPEND_MARK, ML_APPEND_NEW, ML_DEL_MESSAGE, ML_EMPTY, ML_LINE_DIRTY, ML_LOCKED_DIRTY,
-    ML_LOCKED_POS,
+    BufHandle, ColNr, DataBlockHeader, LineNr, PointerBlockHeader, DB_INDEX_MASK, INDEX_SIZE,
+    ML_ALLOCATED, ML_APPEND_MARK, ML_APPEND_NEW, ML_DEL_MESSAGE, ML_EMPTY, ML_LINE_DIRTY,
+    ML_LOCKED_DIRTY, ML_LOCKED_POS,
 };
 
 // =============================================================================
@@ -115,6 +115,25 @@ extern "C" {
 
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
+}
+
+extern "C" {
+    // -------------------------------------------------------------------------
+    // Phase 4: Block allocation (ml_new_ptr, ml_new_data)
+    // -------------------------------------------------------------------------
+
+    /// Allocate a new block in the memfile
+    fn mf_new(
+        mfp: *mut std::ffi::c_void,
+        negative: bool,
+        page_count: c_uint,
+    ) -> *mut std::ffi::c_void;
+
+    /// Get the page size of a memfile
+    fn nvim_mf_get_page_size(mfp: *mut std::ffi::c_void) -> c_uint;
+
+    /// Get bh_data pointer from block header
+    fn nvim_bhdr_get_bh_data(hp: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
 }
 
 // =============================================================================
@@ -1080,6 +1099,50 @@ pub unsafe extern "C" fn rs_ml_set_index_entry(
     if mark != 0 {
         *entry |= !DB_INDEX_MASK;
     }
+}
+
+// =============================================================================
+// Block Allocation Functions
+// =============================================================================
+
+/// Allocate a new data block in the memfile and initialize its header.
+///
+/// Sets `db_id`, `db_txt_start`, `db_txt_end`, `db_free`, and `db_line_count`.
+///
+/// # Safety
+/// - `mfp` must be a valid memfile pointer
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_ml_new_data(
+    mfp: *mut c_void,
+    negative: bool,
+    page_count: c_int,
+) -> *mut c_void {
+    debug_assert!(page_count >= 0);
+    let hp = mf_new(mfp, negative, page_count as c_uint);
+    let page_size = nvim_mf_get_page_size(mfp);
+    let block_size = page_count as u32 * page_size;
+    let header = DataBlockHeader::new(block_size);
+    let dp = nvim_bhdr_get_bh_data(hp).cast::<DataBlockHeader>();
+    std::ptr::write(dp, header);
+    hp
+}
+
+/// Allocate a new pointer block in the memfile and initialize its header.
+///
+/// Sets `pb_id`, `pb_count` (0), and `pb_count_max`.
+///
+/// # Safety
+/// - `mfp` must be a valid memfile pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_new_ptr(mfp: *mut c_void) -> *mut c_void {
+    let hp = mf_new(mfp, false, 1);
+    let page_size = nvim_mf_get_page_size(mfp);
+    let count_max = crate::types::pb_count_max(page_size as usize);
+    let header = PointerBlockHeader::new(count_max);
+    let pp = nvim_bhdr_get_bh_data(hp).cast::<PointerBlockHeader>();
+    std::ptr::write(pp, header);
+    hp
 }
 
 #[cfg(test)]
