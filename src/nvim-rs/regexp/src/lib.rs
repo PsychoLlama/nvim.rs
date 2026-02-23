@@ -2601,9 +2601,15 @@ extern "C" {
 
 /// Check the regexp program for its magic number.
 /// Returns 1 if the magic is wrong (error emitted), 0 if OK.
+/// (Phase 7: inlined `get_prog` logic directly)
 #[no_mangle]
 pub unsafe extern "C" fn rs_prog_magic_wrong() -> c_int {
-    let prog = nvim_regexp_nfa_regexec_both_get_prog();
+    // Inlined nvim_regexp_nfa_regexec_both_get_prog
+    let prog: NfaProgHandle = if REX.reg_match.is_null() {
+        nvim_regmmatch_get_regprog(REX.reg_mmatch.cast_const().cast())
+    } else {
+        nvim_regmatch_get_regprog(REX.reg_match.cast_const().cast())
+    };
     if nvim_regexp_prog_is_nfa_engine(prog) != 0 {
         // For NFA matcher we don't check the magic
         return 0;
@@ -2629,8 +2635,8 @@ extern "C" {
         flags: c_int,
         nested: c_int,
     ) -> c_int;
-    fn nvim_regexp_setup_vim_regsub(rmp: *mut c_void);
-    fn nvim_regexp_setup_vim_regsub_multi(rmp: *mut c_void, lnum: i32);
+    fn nvim_regexp_get_curbuf() -> *mut c_void;
+    fn nvim_regexp_get_curbuf_ml_line_count() -> i32;
 }
 
 /// Core substitution function: handles both literal and `\=` expression paths.
@@ -2720,7 +2726,12 @@ pub unsafe extern "C" fn rs_vim_regsub(
 ) -> c_int {
     let was_in_use = REX_IN_USE;
     let saved = save_rex_state();
-    nvim_regexp_setup_vim_regsub(rmp);
+    // setup_vim_regsub: single-line substitution
+    REX.reg_match = rmp.cast();
+    REX.reg_mmatch = core::ptr::null_mut();
+    REX.reg_maxline = 0;
+    REX.reg_buf = nvim_regexp_get_curbuf().cast();
+    REX.reg_line_lbr = true;
 
     let result = rs_vim_regsub_both(source, expr, dest, destlen, flags);
 
@@ -2742,7 +2753,13 @@ pub unsafe extern "C" fn rs_vim_regsub_multi(
 ) -> c_int {
     let was_in_use = REX_IN_USE;
     let saved = save_rex_state();
-    nvim_regexp_setup_vim_regsub_multi(rmp, lnum);
+    // setup_vim_regsub_multi: multi-line substitution
+    REX.reg_match = core::ptr::null_mut();
+    REX.reg_mmatch = rmp.cast();
+    REX.reg_buf = nvim_regexp_get_curbuf().cast();
+    REX.reg_firstlnum = lnum;
+    REX.reg_maxline = nvim_regexp_get_curbuf_ml_line_count() - lnum;
+    REX.reg_line_lbr = false;
 
     let result = rs_vim_regsub_both(source, core::ptr::null_mut(), dest, destlen, flags);
 
@@ -14043,54 +14060,117 @@ const fn ascii_isdigit_i(c: c_int) -> c_int {
 
 // --- Phase 8.5: NFA Entry Points ---
 
-// Extern declarations for Phase 8.5 C accessors
+// Extern declarations for Phase 8.5 / Phase 7 C accessors
 extern "C" {
     // regsubs_T heap allocation
     fn nvim_regexp_alloc_regsubs() -> RegsubsHandle;
     fn nvim_regexp_free_regsubs(s: RegsubsHandle);
 
-    // nfa_regtry setup
-    fn nvim_regexp_nfa_regtry_setup(
-        prog: NfaProgHandle,
-        col: i32,
-        tm: *mut c_void,
-        timed_out: *mut c_int,
-    );
-
-    // nfa_regtry submatch extraction
-    fn nvim_regexp_nfa_regtry_extract_multi(subs: RegsubsHandle, col: i32);
-    fn nvim_regexp_nfa_regtry_extract_single(subs: RegsubsHandle, col: i32);
-    fn nvim_regexp_nfa_regtry_extract_extmatch(subs: RegsubsHandle);
-
-    // nfa_regexec_both helpers
-    fn nvim_regexp_nfa_regexec_both_get_prog() -> NfaProgHandle;
-    fn nvim_regexp_nfa_regexec_both_get_line(line: *mut u8) -> *mut u8;
-    fn nvim_regexp_nfa_regexec_both_setup_pointers();
-    fn nvim_regexp_nfa_regexec_both_apply_flags(prog: NfaProgHandle);
-    fn nvim_regexp_nfa_regexec_both_setup_nfa(prog: NfaProgHandle);
-    fn nvim_regexp_nfa_regexec_both_init_states(prog: NfaProgHandle);
-    fn nvim_regexp_nfa_regexec_both_validate_match();
-    fn nvim_regexp_nfa_regexec_both_set_matchcol(col: i32);
-
-    // nfa_regexec_nl setup
-    fn nvim_regexp_nfa_regexec_nl_setup(rmp: *mut c_void, line_lbr: c_int);
-
-    // nfa_regexec_multi setup
-    fn nvim_regexp_call_init_regexec_multi(
-        rmp: *mut c_void,
-        win: *mut c_void,
-        buf: *mut c_void,
-        lnum: i32,
-    );
-
     // iemsg null error
     fn nvim_regexp_call_iemsg_null();
+
+    // Phase 7: regmatch/regmmatch field accessors for inlined setup functions
+    fn nvim_regmatch_get_rm_ic(rmp: *const c_void) -> c_int;
+    fn nvim_regmmatch_get_rmm_ic(rmp: *const c_void) -> c_int;
+    fn nvim_regmmatch_get_rmm_maxcol(rmp: *const c_void) -> i32;
+    fn nvim_regmmatch_set_rmm_matchcol(rmp: *mut c_void, v: i32);
+    fn nvim_regmatch_set_rm_matchcol(rmp: *mut c_void, v: i32);
+    fn nvim_regmmatch_get_startpos_ptr(rmp: *mut c_void) -> *mut LposT;
+    fn nvim_regmmatch_get_endpos_ptr(rmp: *mut c_void) -> *mut LposT;
+    fn nvim_regmatch_get_startp_ptr(rmp: *mut c_void) -> *mut *mut u8;
+    fn nvim_regmatch_get_endp_ptr(rmp: *mut c_void) -> *mut *mut u8;
+    fn nvim_regexp_get_buf_ml_line_count(buf: *mut c_void) -> i32;
+    fn nvim_regmmatch_get_rmm_matchcol(rmp: *const c_void) -> i32;
+    fn nvim_regexp_get_re_extmatch_out() -> *mut c_void;
+    fn nvim_regexp_set_re_extmatch_out_match(i: c_int, v: *mut u8);
+}
+
+/// Inlined: `nvim_regexp_nfa_regtry_extract_multi`
+/// Extracts multi-line submatch positions from subs into REX fields.
+#[inline]
+unsafe fn nfa_regtry_extract_multi(subs: *mut RegsubsT, col: i32) {
+    let norm = &(*subs).norm;
+    for i in 0..norm.in_use as usize {
+        (*REX.reg_startpos.add(i)).lnum = norm.list.multi[i].start_lnum;
+        (*REX.reg_startpos.add(i)).col = norm.list.multi[i].start_col;
+        (*REX.reg_endpos.add(i)).lnum = norm.list.multi[i].end_lnum;
+        (*REX.reg_endpos.add(i)).col = norm.list.multi[i].end_col;
+    }
+    if !REX.reg_mmatch.is_null() {
+        nvim_regmmatch_set_rmm_matchcol(REX.reg_mmatch, norm.orig_start_col);
+    }
+    if (*REX.reg_startpos).lnum < 0 {
+        (*REX.reg_startpos).lnum = 0;
+        (*REX.reg_startpos).col = col;
+    }
+    if (*REX.reg_endpos).lnum < 0 {
+        (*REX.reg_endpos).lnum = REX.lnum;
+        #[allow(clippy::cast_possible_truncation)]
+        let off = REX.input.offset_from(REX.line) as c_int;
+        (*REX.reg_endpos).col = off;
+    } else {
+        REX.lnum = (*REX.reg_endpos).lnum;
+    }
+}
+
+/// Inlined: `nvim_regexp_nfa_regtry_extract_single`
+/// Extracts single-line submatch positions from subs into REX fields.
+#[inline]
+unsafe fn nfa_regtry_extract_single(subs: *mut RegsubsT, col: i32) {
+    let norm = &(*subs).norm;
+    for i in 0..norm.in_use as usize {
+        *REX.reg_startp.add(i) = norm.list.line[i].start;
+        *REX.reg_endp.add(i) = norm.list.line[i].end;
+    }
+    if (*REX.reg_startp).is_null() {
+        *REX.reg_startp = REX.line.add(col as usize);
+    }
+    if (*REX.reg_endp).is_null() {
+        *REX.reg_endp = REX.input;
+    }
+}
+
+/// Inlined: `nvim_regexp_nfa_regtry_extract_extmatch`
+/// Extracts `\z(...\)` extmatch positions into `re_extmatch_out`.
+#[inline]
+unsafe fn nfa_regtry_extract_extmatch(subs: *mut RegsubsT) {
+    rs_cleanup_zsubexpr();
+    let em = rs_make_extmatch();
+    nvim_regexp_set_re_extmatch_out(em.cast());
+    let synt = &(*subs).synt;
+    for i in 1..synt.in_use as usize {
+        if REX.reg_match.is_null() {
+            // multi-line
+            let mpos = &synt.list.multi[i];
+            if mpos.start_lnum >= 0
+                && mpos.start_lnum == mpos.end_lnum
+                && mpos.end_col >= mpos.start_col
+            {
+                let line = nvim_regexp_call_reg_getline(mpos.start_lnum);
+                let src = line.add(mpos.start_col as usize);
+                let len = (mpos.end_col - mpos.start_col) as usize;
+                let saved = xstrnsave(src, len);
+                #[allow(clippy::cast_possible_truncation)]
+                nvim_regexp_set_re_extmatch_out_match(i as c_int, saved.cast::<u8>());
+            }
+        } else {
+            // single-line
+            let lpos = &synt.list.line[i];
+            if !lpos.start.is_null() && !lpos.end.is_null() {
+                let len = lpos.end.offset_from(lpos.start) as usize;
+                let saved = xstrnsave(lpos.start.cast::<c_char>(), len);
+                #[allow(clippy::cast_possible_truncation)]
+                nvim_regexp_set_re_extmatch_out_match(i as c_int, saved.cast::<u8>());
+            }
+        }
+    }
 }
 
 /// NFA regexp try matching at a specific column.
 ///
-/// Sets up rex.input and time fields, allocates subs on heap (opaque to Rust),
+/// Sets up rex.input and time fields, allocates subs on heap,
 /// calls `rs_nfa_regmatch`, then extracts submatch data back into rex fields.
+/// (Phase 7: formerly delegated to C compound functions; now fully inlined)
 #[no_mangle]
 #[allow(unused_variables)]
 pub unsafe extern "C" fn rs_nfa_regtry(
@@ -14101,27 +14181,25 @@ pub unsafe extern "C" fn rs_nfa_regtry(
 ) -> c_int {
     let start = nvim_nfa_prog_get_start(prog);
 
-    // Set up rex.input, time limit, time count
-    nvim_regexp_nfa_regtry_setup(prog, col, tm, timed_out);
+    // Inlined nvim_regexp_nfa_regtry_setup: set rex.input and NFA time globals
+    REX.input = REX.line.add(col as usize);
+    nvim_regexp_set_nfa_time_globals(tm, timed_out);
 
     // Allocate subs and m on the heap (Rust can't stack-allocate opaque C structs)
     let subs = nvim_regexp_alloc_regsubs();
     let m = nvim_regexp_alloc_regsubs();
 
-    // Clear sub fields
-    let subs_norm = nvim_regexp_regsubs_get_norm(subs);
-    let subs_synt = nvim_regexp_regsubs_get_synt(subs);
-    let m_norm = nvim_regexp_regsubs_get_norm(m);
-    let m_synt = nvim_regexp_regsubs_get_synt(m);
-    clear_sub_o(subs_norm);
-    clear_sub_o(m_norm);
-    clear_sub_o(subs_synt);
-    clear_sub_o(m_synt);
+    // Clear sub fields using typed pointers
+    let subs_typed = subs.cast::<RegsubsT>();
+    let m_typed = m.cast::<RegsubsT>();
+    clear_sub_o(core::ptr::addr_of_mut!((*subs_typed).norm).cast());
+    clear_sub_o(core::ptr::addr_of_mut!((*m_typed).norm).cast());
+    clear_sub_o(core::ptr::addr_of_mut!((*subs_typed).synt).cast());
+    clear_sub_o(core::ptr::addr_of_mut!((*m_typed).synt).cast());
 
     let result = rs_nfa_regmatch(prog, start, subs, m);
 
     if result == 0 {
-        // No match
         nvim_regexp_free_regsubs(subs);
         nvim_regexp_free_regsubs(m);
         return 0;
@@ -14134,19 +14212,18 @@ pub unsafe extern "C" fn rs_nfa_regtry(
 
     // Extract submatch data
     rs_cleanup_subexpr();
-    if (REX.reg_match.is_null() as c_int) != 0 {
-        nvim_regexp_nfa_regtry_extract_multi(subs, col);
+    if REX.reg_match.is_null() {
+        nfa_regtry_extract_multi(subs_typed, col);
     } else {
-        nvim_regexp_nfa_regtry_extract_single(subs, col);
+        nfa_regtry_extract_single(subs_typed, col);
     }
 
     // Handle \z(...\) extmatch
-    // C code: unref_extmatch(re_extmatch_out); re_extmatch_out = NULL;
     nvim_regexp_unref_re_extmatch_out();
     nvim_regexp_set_re_extmatch_out(core::ptr::null_mut());
     let reghasz = nvim_nfa_prog_get_reghasz(prog);
     if reghasz == REX_SET as c_int {
-        nvim_regexp_nfa_regtry_extract_extmatch(subs);
+        nfa_regtry_extract_extmatch(subs_typed);
     }
 
     let ret = 1 + REX.lnum;
@@ -14155,13 +14232,42 @@ pub unsafe extern "C" fn rs_nfa_regtry(
     ret
 }
 
+/// Inlined: validate match positions (end >= start).
+/// Called after a successful match to fix up bogus end positions.
+#[inline]
+unsafe fn nfa_regexec_validate_match() {
+    if REX.reg_match.is_null() {
+        // multi-line: use REX.reg_startpos / REX.reg_endpos (point into regmmatch)
+        let start = REX.reg_startpos;
+        let end = REX.reg_endpos;
+        if (*end).lnum < (*start).lnum
+            || ((*end).lnum == (*start).lnum && (*end).col < (*start).col)
+        {
+            *REX.reg_endpos = *REX.reg_startpos;
+        }
+    } else {
+        // single-line: use REX.reg_startp / REX.reg_endp (point into regmatch)
+        if *REX.reg_endp < *REX.reg_startp {
+            *REX.reg_endp = *REX.reg_startp;
+        }
+    }
+}
+
+/// Inlined: set `rmm_matchcol` or `rm_matchcol` after a match.
+#[inline]
+unsafe fn nfa_regexec_set_matchcol(col: i32) {
+    if REX.reg_match.is_null() {
+        nvim_regmmatch_set_rmm_matchcol(REX.reg_mmatch, col);
+    } else {
+        nvim_regmatch_set_rm_matchcol(REX.reg_match, col);
+    }
+}
+
 /// Core NFA regexp execution for both single-line and multi-line modes.
 ///
-/// Sets up prog, rex fields, applies flags, optionally skips to start char
-/// or uses `match_text` optimization, initializes state array, then calls
-/// `nfa_regtry`.
+/// (Phase 7: formerly delegated to C compound functions; now fully inlined)
 #[no_mangle]
-#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_sign_loss, clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_nfa_regexec_both(
     line: *mut u8,
     startcol: i32,
@@ -14171,27 +14277,75 @@ pub unsafe extern "C" fn rs_nfa_regexec_both(
     let mut col = startcol;
     let mut retval: c_int = 0;
 
-    let prog = nvim_regexp_nfa_regexec_both_get_prog();
-    let line = nvim_regexp_nfa_regexec_both_get_line(line);
+    // Inlined nvim_regexp_nfa_regexec_both_get_prog:
+    // get prog from reg_mmatch or reg_match
+    let prog: NfaProgHandle = if REX.reg_match.is_null() {
+        nvim_regmmatch_get_regprog(REX.reg_mmatch.cast_const().cast())
+    } else {
+        nvim_regmatch_get_regprog(REX.reg_match.cast_const().cast())
+    };
 
-    // Set up rex pointer fields
-    nvim_regexp_nfa_regexec_both_setup_pointers();
+    // Inlined nvim_regexp_nfa_regexec_both_get_line:
+    // for multi-line, get line 0 from reg_getline; for single-line use `line`
+    let line: *mut u8 = if REX.reg_match.is_null() {
+        nvim_regexp_call_reg_getline(0).cast::<u8>()
+    } else {
+        line
+    };
+
+    // Inlined nvim_regexp_nfa_regexec_both_setup_pointers:
+    // set rex pointer fields from match structs
+    if REX.reg_match.is_null() {
+        REX.reg_startpos = nvim_regmmatch_get_startpos_ptr(REX.reg_mmatch);
+        REX.reg_endpos = nvim_regmmatch_get_endpos_ptr(REX.reg_mmatch);
+    } else {
+        REX.reg_startp = nvim_regmatch_get_startp_ptr(REX.reg_match);
+        REX.reg_endp = nvim_regmatch_get_endp_ptr(REX.reg_match);
+    }
 
     // Be paranoid...
     if prog.is_null() || line.is_null() {
         nvim_regexp_call_iemsg_null();
         if retval > 0 {
-            nvim_regexp_nfa_regexec_both_validate_match();
+            nfa_regexec_validate_match();
         }
         return retval;
     }
 
-    // Apply regflags overrides (\c, \C, \Z)
-    nvim_regexp_nfa_regexec_both_apply_flags(prog);
+    // Inlined nvim_regexp_nfa_regexec_both_apply_flags: apply regflags overrides (\c, \C, \Z)
+    {
+        let prog_typed = prog.cast::<NfaRegprogT>();
+        let regflags = (*prog_typed).regflags;
+        if regflags & RF_ICASE != 0 {
+            REX.reg_ic = true;
+        } else if regflags & RF_NOICASE != 0 {
+            REX.reg_ic = false;
+        }
+        if regflags & RF_ICOMBINE != 0 {
+            REX.reg_icombine = true;
+        }
+    }
 
-    // Set up rex fields: lnum, NFA fields, need_clear flags
-    nvim_regexp_nfa_regexec_both_setup_nfa(prog);
-    // Set rex.line (setup_nfa set it to NULL as placeholder; now set the real value)
+    // Inlined nvim_regexp_nfa_regexec_both_setup_nfa: set rex NFA fields
+    {
+        let prog_typed = prog.cast::<NfaRegprogT>();
+        REX.line = core::ptr::null_mut(); // will be set below
+        REX.lnum = 0;
+        REX.nfa_has_zend = (*prog_typed).has_zend;
+        REX.nfa_has_backref = (*prog_typed).has_backref;
+        REX.nfa_nsubexpr = (*prog_typed).nsubexp;
+        REX.nfa_listid = 1;
+        REX.nfa_alt_listid = 2;
+        REX.need_clear_subexpr = 1;
+        if (*prog_typed).reghasz == REX_SET {
+            REX.nfa_has_zsubexpr = 1;
+            REX.need_clear_zsubexpr = 1;
+        } else {
+            REX.nfa_has_zsubexpr = 0;
+            REX.need_clear_zsubexpr = 0;
+        }
+    }
+    // Set rex.line (setup_nfa left it NULL)
     REX.line = line;
 
     // If anchored and col > 0, no match possible
@@ -14209,10 +14363,9 @@ pub unsafe extern "C" fn rs_nfa_regexec_both(
 
         // If match_text is set, try the fast path
         let match_text = nvim_nfa_prog_get_match_text(prog);
-        let reg_icombine = REX.reg_icombine as c_int;
-        if !match_text.is_null() && *match_text != 0 && reg_icombine == 0 {
+        if !match_text.is_null() && *match_text != 0 && !REX.reg_icombine {
             retval = rs_find_match_text(core::ptr::from_mut::<i32>(&mut col), regstart, match_text);
-            nvim_regexp_nfa_regexec_both_set_matchcol(col);
+            nfa_regexec_set_matchcol(col);
             return retval;
         }
     }
@@ -14220,25 +14373,37 @@ pub unsafe extern "C" fn rs_nfa_regexec_both(
     // If start column past max column, no match
     let reg_maxcol = REX.reg_maxcol;
     if reg_maxcol > 0 && col >= reg_maxcol {
-        // Skip to theend
         if retval > 0 {
-            nvim_regexp_nfa_regexec_both_validate_match();
+            nfa_regexec_validate_match();
         }
         return retval;
     }
 
-    // Initialize state array
-    nvim_regexp_nfa_regexec_both_init_states(prog);
+    // Inlined nvim_regexp_nfa_regexec_both_init_states: initialize state array
+    {
+        nvim_regexp_reset_nstate();
+        let prog_typed = prog.cast::<NfaRegprogT>();
+        // state[] is a flexible array after the struct — access via pointer arithmetic
+        let states_ptr = prog_typed.add(1).cast::<NfaStateT>();
+        for i in 0..(*prog_typed).nstate as usize {
+            let s = states_ptr.add(i);
+            #[allow(clippy::cast_possible_truncation)]
+            let id = i as c_int;
+            (*s).id = id;
+            (*s).lastlist[0] = 0;
+            (*s).lastlist[1] = 0;
+        }
+    }
 
     // Try matching
     retval = rs_nfa_regtry(prog, col, tm, timed_out);
 
     // theend: validate match positions
     if retval > 0 {
-        nvim_regexp_nfa_regexec_both_validate_match();
-        if (REX.reg_match.is_null() as c_int) == 0 {
+        nfa_regexec_validate_match();
+        if !REX.reg_match.is_null() {
             // Set rm_matchcol for single-line mode
-            nvim_regexp_nfa_regexec_both_set_matchcol(col);
+            nfa_regexec_set_matchcol(col);
         }
     }
 
@@ -14246,6 +14411,7 @@ pub unsafe extern "C" fn rs_nfa_regexec_both(
 }
 
 /// NFA regexp execution for single-line matching.
+/// (Phase 7: formerly delegated to C `nvim_regexp_nfa_regexec_nl_setup`; now inlined)
 #[no_mangle]
 pub unsafe extern "C" fn rs_nfa_regexec_nl(
     rmp: *mut c_void,
@@ -14253,11 +14419,24 @@ pub unsafe extern "C" fn rs_nfa_regexec_nl(
     col: i32,
     line_lbr: c_int,
 ) -> c_int {
-    nvim_regexp_nfa_regexec_nl_setup(rmp, line_lbr);
+    // Inlined nvim_regexp_nfa_regexec_nl_setup
+    REX.reg_match = rmp.cast();
+    REX.reg_mmatch = core::ptr::null_mut();
+    REX.reg_maxline = 0;
+    REX.reg_line_lbr = line_lbr != 0;
+    REX.reg_buf = nvim_regexp_get_curbuf().cast();
+    REX.reg_win = core::ptr::null_mut();
+    REX.reg_ic = nvim_regmatch_get_rm_ic(rmp.cast_const()) != 0;
+    REX.reg_icombine = false;
+    let prog = nvim_regmatch_get_regprog(rmp.cast_const());
+    REX.reg_nobreak = nvim_regprog_get_re_flags(prog) & 16 != 0; // 16 = RE_NOBREAK
+    REX.reg_maxcol = 0;
+
     rs_nfa_regexec_both(line, col, core::ptr::null_mut(), core::ptr::null_mut())
 }
 
 /// NFA regexp execution for multi-line matching.
+/// (Phase 7: formerly delegated to C `nvim_regexp_call_init_regexec_multi`; now inlined)
 #[no_mangle]
 pub unsafe extern "C" fn rs_nfa_regexec_multi(
     rmp: *mut c_void,
@@ -14268,7 +14447,20 @@ pub unsafe extern "C" fn rs_nfa_regexec_multi(
     tm: *mut c_void,
     timed_out: *mut c_int,
 ) -> c_int {
-    nvim_regexp_call_init_regexec_multi(rmp, win, buf, lnum);
+    // Inlined init_regexec_multi
+    REX.reg_match = core::ptr::null_mut();
+    REX.reg_mmatch = rmp.cast();
+    REX.reg_buf = buf.cast();
+    REX.reg_win = win.cast();
+    REX.reg_firstlnum = lnum;
+    REX.reg_maxline = nvim_regexp_get_buf_ml_line_count(buf) - lnum;
+    REX.reg_line_lbr = false;
+    REX.reg_ic = nvim_regmmatch_get_rmm_ic(rmp.cast_const()) != 0;
+    REX.reg_icombine = false;
+    let prog = nvim_regmmatch_get_regprog(rmp.cast_const());
+    REX.reg_nobreak = nvim_regprog_get_re_flags(prog) & 16 != 0; // 16 = RE_NOBREAK
+    REX.reg_maxcol = nvim_regmmatch_get_rmm_maxcol(rmp.cast_const());
+
     rs_nfa_regexec_both(core::ptr::null_mut(), col, tm, timed_out)
 }
 
@@ -14278,8 +14470,6 @@ pub unsafe extern "C" fn rs_nfa_regexec_multi(
 
 extern "C" {
     // Phase 9.2: bt_regexec_both accessors
-    fn nvim_regexp_bt_init_stacks();
-    fn nvim_regexp_bt_cleanup_stacks();
     fn nvim_bt_prog_get_regmust(prog: *const c_void) -> *mut u8;
     fn nvim_bt_prog_get_regmlen(prog: *const c_void) -> c_int;
     fn nvim_bt_prog_get_regstart(prog: *const c_void) -> c_int;
@@ -14287,18 +14477,8 @@ extern "C" {
     fn nvim_regexp_call_prog_magic_wrong() -> c_int;
 }
 
-/// Initialize rex state for multi-line matching.
-#[no_mangle]
-pub unsafe extern "C" fn rs_init_regexec_multi(
-    rmp: *mut c_void,
-    win: *mut c_void,
-    buf: *mut c_void,
-    lnum: i32,
-) {
-    nvim_regexp_call_init_regexec_multi(rmp, win, buf, lnum);
-}
-
 /// BT regexp execution for single-line matching.
+/// (Phase 7: inlined `nfa_regexec_nl_setup` logic)
 #[no_mangle]
 pub unsafe extern "C" fn rs_bt_regexec_nl(
     rmp: *mut c_void,
@@ -14306,11 +14486,23 @@ pub unsafe extern "C" fn rs_bt_regexec_nl(
     col: i32,
     line_lbr: c_int,
 ) -> c_int {
-    nvim_regexp_nfa_regexec_nl_setup(rmp, line_lbr);
+    // Inlined nvim_regexp_nfa_regexec_nl_setup (shared with NFA path)
+    REX.reg_match = rmp.cast();
+    REX.reg_mmatch = core::ptr::null_mut();
+    REX.reg_maxline = 0;
+    REX.reg_line_lbr = line_lbr != 0;
+    REX.reg_buf = nvim_regexp_get_curbuf().cast();
+    REX.reg_win = core::ptr::null_mut();
+    REX.reg_ic = nvim_regmatch_get_rm_ic(rmp.cast_const()) != 0;
+    REX.reg_icombine = false;
+    let prog = nvim_regmatch_get_regprog(rmp.cast_const());
+    REX.reg_nobreak = nvim_regprog_get_re_flags(prog) & 16 != 0; // 16 = RE_NOBREAK
+    REX.reg_maxcol = 0;
     rs_bt_regexec_both(line, col, core::ptr::null_mut(), core::ptr::null_mut())
 }
 
 /// BT regexp execution for multi-line matching.
+/// (Phase 7: inlined `init_regexec_multi` logic)
 #[no_mangle]
 pub unsafe extern "C" fn rs_bt_regexec_multi(
     rmp: *mut c_void,
@@ -14321,7 +14513,19 @@ pub unsafe extern "C" fn rs_bt_regexec_multi(
     tm: *mut c_void,
     timed_out: *mut c_int,
 ) -> c_int {
-    rs_init_regexec_multi(rmp, win, buf, lnum);
+    // Inlined init_regexec_multi
+    REX.reg_match = core::ptr::null_mut();
+    REX.reg_mmatch = rmp.cast();
+    REX.reg_buf = buf.cast();
+    REX.reg_win = win.cast();
+    REX.reg_firstlnum = lnum;
+    REX.reg_maxline = nvim_regexp_get_buf_ml_line_count(buf) - lnum;
+    REX.reg_line_lbr = false;
+    REX.reg_ic = nvim_regmmatch_get_rmm_ic(rmp.cast_const()) != 0;
+    REX.reg_icombine = false;
+    let prog = nvim_regmmatch_get_regprog(rmp.cast_const());
+    REX.reg_nobreak = nvim_regprog_get_re_flags(prog) & 16 != 0; // 16 = RE_NOBREAK
+    REX.reg_maxcol = nvim_regmmatch_get_rmm_maxcol(rmp.cast_const());
     rs_bt_regexec_both(core::ptr::null_mut(), col, tm, timed_out)
 }
 
@@ -14343,43 +14547,70 @@ pub unsafe extern "C" fn rs_bt_regexec_both(
 ) -> c_int {
     let mut col = startcol;
 
-    // Init regstack and backpos
-    nvim_regexp_bt_init_stacks();
+    // Init regstack and backpos (Phase 7: call Rust directly instead of through C wrapper)
+    nvim_regexp_bt_init_stacks_rust();
 
-    // Get prog and line
-    let prog = nvim_regexp_nfa_regexec_both_get_prog();
-    let line = nvim_regexp_nfa_regexec_both_get_line(line);
+    // Inlined nvim_regexp_nfa_regexec_both_get_prog: get prog from match struct
+    let prog: NfaProgHandle = if REX.reg_match.is_null() {
+        nvim_regmmatch_get_regprog(REX.reg_mmatch.cast_const().cast())
+    } else {
+        nvim_regmatch_get_regprog(REX.reg_match.cast_const().cast())
+    };
 
-    // Set up rex pointer fields (startpos/endpos or startp/endp)
-    nvim_regexp_nfa_regexec_both_setup_pointers();
+    // Inlined nvim_regexp_nfa_regexec_both_get_line: get line for multi or use arg
+    let line: *mut u8 = if REX.reg_match.is_null() {
+        nvim_regexp_call_reg_getline(0).cast::<u8>()
+    } else {
+        line
+    };
+
+    // Inlined nvim_regexp_nfa_regexec_both_setup_pointers
+    if REX.reg_match.is_null() {
+        REX.reg_startpos = nvim_regmmatch_get_startpos_ptr(REX.reg_mmatch);
+        REX.reg_endpos = nvim_regmmatch_get_endpos_ptr(REX.reg_mmatch);
+    } else {
+        REX.reg_startp = nvim_regmatch_get_startp_ptr(REX.reg_match);
+        REX.reg_endp = nvim_regmatch_get_endp_ptr(REX.reg_match);
+    }
 
     // Be paranoid...
     if prog.is_null() || line.is_null() {
         nvim_regexp_call_iemsg_null();
-        nvim_regexp_bt_cleanup_stacks();
+        nvim_regexp_bt_cleanup_stacks_rust();
         return 0;
     }
 
     // Check validity of program
     if nvim_regexp_call_prog_magic_wrong() != 0 {
-        nvim_regexp_bt_cleanup_stacks();
+        nvim_regexp_bt_cleanup_stacks_rust();
         return 0;
     }
 
     // If the start column is past the maximum column: no need to try
     let reg_maxcol = REX.reg_maxcol;
     if reg_maxcol > 0 && col >= reg_maxcol {
-        nvim_regexp_bt_cleanup_stacks();
+        nvim_regexp_bt_cleanup_stacks_rust();
         return 0;
     }
 
-    // Apply regflags overrides (\c, \C, \Z) — works for bt_regprog_T too
-    nvim_regexp_nfa_regexec_both_apply_flags(prog);
+    // Inlined nvim_regexp_nfa_regexec_both_apply_flags: apply regflags overrides
+    {
+        let prog_typed = prog.cast::<NfaRegprogT>();
+        let regflags = (*prog_typed).regflags;
+        if regflags & RF_ICASE != 0 {
+            REX.reg_ic = true;
+        } else if regflags & RF_NOICASE != 0 {
+            REX.reg_ic = false;
+        }
+        if regflags & RF_ICOMBINE != 0 {
+            REX.reg_icombine = true;
+        }
+    }
 
     // If there is a "must appear" string, look for it
     let regmust = nvim_bt_prog_get_regmust(prog);
     if !regmust.is_null() && !bt_regmust_search(line, col, prog, regmust) {
-        nvim_regexp_bt_cleanup_stacks();
+        nvim_regexp_bt_cleanup_stacks_rust();
         return 0;
     }
 
@@ -14399,12 +14630,12 @@ pub unsafe extern "C" fn rs_bt_regexec_both(
     };
 
     // Cleanup stacks
-    nvim_regexp_bt_cleanup_stacks();
+    nvim_regexp_bt_cleanup_stacks_rust();
 
-    // Validate and set matchcol
+    // Validate and set matchcol (inlined)
     if retval > 0 {
-        nvim_regexp_nfa_regexec_both_validate_match();
-        nvim_regexp_nfa_regexec_both_set_matchcol(col);
+        nfa_regexec_validate_match();
+        nfa_regexec_set_matchcol(col);
     }
 
     retval
