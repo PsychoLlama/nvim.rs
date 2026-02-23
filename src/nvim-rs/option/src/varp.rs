@@ -14,6 +14,7 @@
 #![allow(clippy::unreadable_literal)]
 
 use std::ffi::{c_char, c_int, c_void};
+use std::sync::OnceLock;
 
 use crate::index::OptIndex;
 use crate::opt_index::*;
@@ -57,8 +58,8 @@ extern "C" {
     /// Check if option is window-local
     fn nvim_option_is_window_local(opt_idx: OptIndex) -> c_int;
 
-    /// Get address of a buf_T option field by OptIndex
-    fn nvim_buf_get_opt_field_addr(buf: BufHandle, idx: OptIndex) -> *mut c_void;
+    /// Fill offset table for buf_T option fields (kOptCount entries)
+    fn nvim_buf_opt_field_offsets(out: *mut isize, len: c_int);
 
     /// Get address of a win_T option field by OptIndex
     fn nvim_win_get_opt_field_addr(win: WinHandle, idx: OptIndex) -> *mut c_void;
@@ -69,6 +70,52 @@ extern "C" {
 
 // Error message for unknown option in get_varp_from
 static E356_MSG: &[u8] = b"E356: get_varp ERROR\0";
+
+// =============================================================================
+// buf_T option field offset table (replaces C nvim_buf_get_opt_field_addr)
+// =============================================================================
+
+/// Lazily-initialized table mapping OptIndex -> byte offset into buf_T.
+/// Initialized once from C via `nvim_buf_opt_field_offsets`.
+/// Sentinel value -1 means "not a buf field for this index".
+static BUF_FIELD_OFFSETS: OnceLock<[isize; crate::opt_index::K_OPT_COUNT as usize]> =
+    OnceLock::new();
+
+/// Get (and lazily initialize) the buf_T field offset table.
+fn buf_field_offsets() -> &'static [isize; crate::opt_index::K_OPT_COUNT as usize] {
+    BUF_FIELD_OFFSETS.get_or_init(|| {
+        let mut table = [-1isize; crate::opt_index::K_OPT_COUNT as usize];
+        // Safety: nvim_buf_opt_field_offsets writes exactly K_OPT_COUNT entries.
+        unsafe {
+            nvim_buf_opt_field_offsets(table.as_mut_ptr(), crate::opt_index::K_OPT_COUNT as c_int);
+        }
+        table
+    })
+}
+
+/// Rust implementation: get address of a buf_T option field by OptIndex.
+///
+/// Replaces C `nvim_buf_get_opt_field_addr`. Uses a precomputed offset table
+/// so no FFI round-trip is needed per call.
+///
+/// # Safety
+/// `buf` must be a valid `buf_T*` and `idx` must be a valid `OptIndex`.
+unsafe fn buf_get_opt_field_addr(buf: BufHandle, idx: OptIndex) -> *mut c_void {
+    if buf.is_null() {
+        return std::ptr::null_mut();
+    }
+    let offsets = buf_field_offsets();
+    let idx_usize = idx as usize;
+    if idx_usize >= offsets.len() {
+        std::process::abort();
+    }
+    let offset = offsets[idx_usize];
+    if offset < 0 {
+        // Unhandled index: mirror the C `default: abort()`.
+        std::process::abort();
+    }
+    buf.cast::<u8>().add(offset as usize).cast::<c_void>()
+}
 
 // =============================================================================
 // Helper: check if a global-local buf string option is set locally (non-NUL)
@@ -86,7 +133,7 @@ unsafe fn buf_str_local_or_global(
     // The field is a `char*`, so the address is `char**`.
     // We dereference to get `char*` (the string), then dereference again to
     // get the first byte. Non-NUL first byte means the local value is set.
-    let field = nvim_buf_get_opt_field_addr(buf, opt_idx).cast::<*mut c_char>();
+    let field = buf_get_opt_field_addr(buf, opt_idx).cast::<*mut c_char>();
     // *field: the char* string pointer; **field: first char of that string
     if *(*field) != 0 {
         field.cast::<c_void>()
@@ -121,7 +168,7 @@ unsafe fn buf_num_local_or_global(
     opt_idx: OptIndex,
     p_var: *mut c_void,
 ) -> *mut c_void {
-    let field = nvim_buf_get_opt_field_addr(buf, opt_idx).cast::<i64>();
+    let field = buf_get_opt_field_addr(buf, opt_idx).cast::<i64>();
     if *field >= 0 {
         field.cast::<c_void>()
     } else {
@@ -209,7 +256,7 @@ pub unsafe extern "C" fn rs_get_varp_from(
         // Undolevels: global-local with a special sentinel value
         // -----------------------------------------------------------------------
         K_OPT_UNDOLEVELS => {
-            let field = nvim_buf_get_opt_field_addr(buf, opt_idx).cast::<i64>();
+            let field = buf_get_opt_field_addr(buf, opt_idx).cast::<i64>();
             // NO_LOCAL_UNDOLEVEL is the sentinel meaning "use global value"
             if *field == NO_LOCAL_UNDOLEVEL {
                 p_var
@@ -251,12 +298,12 @@ pub unsafe extern "C" fn rs_get_varp_from(
         | K_OPT_SMARTINDENT | K_OPT_SOFTTABSTOP | K_OPT_SUFFIXESADD | K_OPT_SWAPFILE
         | K_OPT_SYNMAXCOL | K_OPT_SYNTAX | K_OPT_SHIFTWIDTH | K_OPT_TAGFUNC | K_OPT_TABSTOP
         | K_OPT_TEXTWIDTH | K_OPT_UNDOFILE | K_OPT_WRAPMARGIN | K_OPT_VARSOFTTABSTOP
-        | K_OPT_VARTABSTOP | K_OPT_KEYMAP => nvim_buf_get_opt_field_addr(buf, opt_idx),
+        | K_OPT_VARTABSTOP | K_OPT_KEYMAP => buf_get_opt_field_addr(buf, opt_idx),
 
         _ => {
             iemsg(E356_MSG.as_ptr().cast::<c_char>());
             // Fallback: always return a valid pointer (same as C)
-            nvim_buf_get_opt_field_addr(buf, K_OPT_WRAPMARGIN)
+            buf_get_opt_field_addr(buf, K_OPT_WRAPMARGIN)
         }
     }
 }
@@ -309,7 +356,7 @@ pub unsafe extern "C" fn rs_get_varp_scope_from(
             | K_OPT_INCLUDE | K_OPT_COMPLETEOPT | K_OPT_DICTIONARY | K_OPT_DIFFANCHORS
             | K_OPT_THESAURUS | K_OPT_THESAURUSFUNC | K_OPT_TAGFUNC | K_OPT_UNDOLEVELS
             | K_OPT_LISPWORDS | K_OPT_BACKUPCOPY | K_OPT_MAKEENCODING => {
-                nvim_buf_get_opt_field_addr(buf, opt_idx)
+                buf_get_opt_field_addr(buf, opt_idx)
             }
 
             K_OPT_SIDESCROLLOFF | K_OPT_SCROLLOFF | K_OPT_SHOWBREAK | K_OPT_STATUSLINE

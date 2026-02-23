@@ -571,106 +571,107 @@ int nvim_get_sizeof_winopt_T(void) { return (int)sizeof(winopt_T); }
 // Get is_option_hidden as an int (for Rust FFI)
 int nvim_opt_is_hidden(OptIndex opt_idx) { return (int)is_option_hidden(opt_idx); }
 
-// Get the address of a buf_T option field by OptIndex.
-// Returns NULL for unknown/unhandled indices.
-void *nvim_buf_get_opt_field_addr(buf_T *buf, OptIndex idx)
+// Fill offset table for buf_T option fields indexed by OptIndex.
+// Writes offsetof(buf_T, field) into out[idx] for each handled OptIndex.
+// Unhandled indices receive -1 (sentinel). len must equal kOptCount.
+void nvim_buf_opt_field_offsets(ptrdiff_t *out, int len)
 {
-  if (!buf) { return NULL; }
-  switch (idx) {
-  // global-local string options (return address to buf field)
-  case kOptEqualprg: return &buf->b_p_ep;
-  case kOptKeywordprg: return &buf->b_p_kp;
-  case kOptPath: return &buf->b_p_path;
-  case kOptTags: return &buf->b_p_tags;
-  case kOptTagcase: return &buf->b_p_tc;
-  case kOptBackupcopy: return &buf->b_p_bkc;
-  case kOptDefine: return &buf->b_p_def;
-  case kOptInclude: return &buf->b_p_inc;
-  case kOptCompleteopt: return &buf->b_p_cot;
-  case kOptDictionary: return &buf->b_p_dict;
-  case kOptDiffanchors: return &buf->b_p_dia;
-  case kOptThesaurus: return &buf->b_p_tsr;
-  case kOptThesaurusfunc: return &buf->b_p_tsrfu;
-  case kOptFormatprg: return &buf->b_p_fp;
-  case kOptFindfunc: return &buf->b_p_ffu;
-  case kOptErrorformat: return &buf->b_p_efm;
-  case kOptGrepformat: return &buf->b_p_gefm;
-  case kOptGrepprg: return &buf->b_p_gp;
-  case kOptMakeprg: return &buf->b_p_mp;
-  case kOptLispwords: return &buf->b_p_lw;
-  case kOptMakeencoding: return &buf->b_p_menc;
-  // global-local numeric options
-  case kOptAutocomplete: return &buf->b_p_ac;
-  case kOptAutoread: return &buf->b_p_ar;
-  case kOptUndolevels: return &buf->b_p_ul;
-  // buf-local options (non-global-local)
-  case kOptAutoindent: return &buf->b_p_ai;
-  case kOptBinary: return &buf->b_p_bin;
-  case kOptBomb: return &buf->b_p_bomb;
-  case kOptBufhidden: return &buf->b_p_bh;
-  case kOptBuftype: return &buf->b_p_bt;
-  case kOptBuflisted: return &buf->b_p_bl;
-  case kOptBusy: return &buf->b_p_busy;
-  case kOptChannel: return &buf->b_p_channel;
-  case kOptCopyindent: return &buf->b_p_ci;
-  case kOptCindent: return &buf->b_p_cin;
-  case kOptCinkeys: return &buf->b_p_cink;
-  case kOptCinoptions: return &buf->b_p_cino;
-  case kOptCinscopedecls: return &buf->b_p_cinsd;
-  case kOptCinwords: return &buf->b_p_cinw;
-  case kOptComments: return &buf->b_p_com;
-  case kOptCommentstring: return &buf->b_p_cms;
-  case kOptComplete: return &buf->b_p_cpt;
-#ifdef BACKSLASH_IN_FILENAME
-  case kOptCompleteslash: return &buf->b_p_csl;
-#endif
-  case kOptCompletefunc: return &buf->b_p_cfu;
-  case kOptOmnifunc: return &buf->b_p_ofu;
-  case kOptEndoffile: return &buf->b_p_eof;
-  case kOptEndofline: return &buf->b_p_eol;
-  case kOptFixendofline: return &buf->b_p_fixeol;
-  case kOptExpandtab: return &buf->b_p_et;
-  case kOptFileencoding: return &buf->b_p_fenc;
-  case kOptFileformat: return &buf->b_p_ff;
-  case kOptFiletype: return &buf->b_p_ft;
-  case kOptFormatoptions: return &buf->b_p_fo;
-  case kOptFormatlistpat: return &buf->b_p_flp;
-  case kOptIminsert: return &buf->b_p_iminsert;
-  case kOptImsearch: return &buf->b_p_imsearch;
-  case kOptInfercase: return &buf->b_p_inf;
-  case kOptIskeyword: return &buf->b_p_isk;
-  case kOptIncludeexpr: return &buf->b_p_inex;
-  case kOptIndentexpr: return &buf->b_p_inde;
-  case kOptIndentkeys: return &buf->b_p_indk;
-  case kOptFormatexpr: return &buf->b_p_fex;
-  case kOptLisp: return &buf->b_p_lisp;
-  case kOptLispoptions: return &buf->b_p_lop;
-  case kOptModeline: return &buf->b_p_ml;
-  case kOptMatchpairs: return &buf->b_p_mps;
-  case kOptModifiable: return &buf->b_p_ma;
-  case kOptModified: return &buf->b_changed;
-  case kOptNrformats: return &buf->b_p_nf;
-  case kOptPreserveindent: return &buf->b_p_pi;
-  case kOptQuoteescape: return &buf->b_p_qe;
-  case kOptReadonly: return &buf->b_p_ro;
-  case kOptScrollback: return &buf->b_p_scbk;
-  case kOptSmartindent: return &buf->b_p_si;
-  case kOptSofttabstop: return &buf->b_p_sts;
-  case kOptSuffixesadd: return &buf->b_p_sua;
-  case kOptSwapfile: return &buf->b_p_swf;
-  case kOptSynmaxcol: return &buf->b_p_smc;
-  case kOptSyntax: return &buf->b_p_syn;
-  case kOptShiftwidth: return &buf->b_p_sw;
-  case kOptTagfunc: return &buf->b_p_tfu;
-  case kOptTabstop: return &buf->b_p_ts;
-  case kOptTextwidth: return &buf->b_p_tw;
-  case kOptUndofile: return &buf->b_p_udf;
-  case kOptWrapmargin: return &buf->b_p_wm;
-  case kOptVarsofttabstop: return &buf->b_p_vsts;
-  case kOptVartabstop: return &buf->b_p_vts;
-  case kOptKeymap: return &buf->b_p_keymap;
-  default: abort();
+  // Initialize all to -1 (unhandled)
+  for (int i = 0; i < len; i++) {
+    out[i] = -1;
   }
+  // global-local string options
+  out[kOptEqualprg]      = offsetof(buf_T, b_p_ep);
+  out[kOptKeywordprg]    = offsetof(buf_T, b_p_kp);
+  out[kOptPath]          = offsetof(buf_T, b_p_path);
+  out[kOptTags]          = offsetof(buf_T, b_p_tags);
+  out[kOptTagcase]       = offsetof(buf_T, b_p_tc);
+  out[kOptBackupcopy]    = offsetof(buf_T, b_p_bkc);
+  out[kOptDefine]        = offsetof(buf_T, b_p_def);
+  out[kOptInclude]       = offsetof(buf_T, b_p_inc);
+  out[kOptCompleteopt]   = offsetof(buf_T, b_p_cot);
+  out[kOptDictionary]    = offsetof(buf_T, b_p_dict);
+  out[kOptDiffanchors]   = offsetof(buf_T, b_p_dia);
+  out[kOptThesaurus]     = offsetof(buf_T, b_p_tsr);
+  out[kOptThesaurusfunc] = offsetof(buf_T, b_p_tsrfu);
+  out[kOptFormatprg]     = offsetof(buf_T, b_p_fp);
+  out[kOptFindfunc]      = offsetof(buf_T, b_p_ffu);
+  out[kOptErrorformat]   = offsetof(buf_T, b_p_efm);
+  out[kOptGrepformat]    = offsetof(buf_T, b_p_gefm);
+  out[kOptGrepprg]       = offsetof(buf_T, b_p_gp);
+  out[kOptMakeprg]       = offsetof(buf_T, b_p_mp);
+  out[kOptLispwords]     = offsetof(buf_T, b_p_lw);
+  out[kOptMakeencoding]  = offsetof(buf_T, b_p_menc);
+  // global-local numeric options
+  out[kOptAutocomplete]  = offsetof(buf_T, b_p_ac);
+  out[kOptAutoread]      = offsetof(buf_T, b_p_ar);
+  out[kOptUndolevels]    = offsetof(buf_T, b_p_ul);
+  // buf-local options (non-global-local)
+  out[kOptAutoindent]    = offsetof(buf_T, b_p_ai);
+  out[kOptBinary]        = offsetof(buf_T, b_p_bin);
+  out[kOptBomb]          = offsetof(buf_T, b_p_bomb);
+  out[kOptBufhidden]     = offsetof(buf_T, b_p_bh);
+  out[kOptBuftype]       = offsetof(buf_T, b_p_bt);
+  out[kOptBuflisted]     = offsetof(buf_T, b_p_bl);
+  out[kOptBusy]          = offsetof(buf_T, b_p_busy);
+  out[kOptChannel]       = offsetof(buf_T, b_p_channel);
+  out[kOptCopyindent]    = offsetof(buf_T, b_p_ci);
+  out[kOptCindent]       = offsetof(buf_T, b_p_cin);
+  out[kOptCinkeys]       = offsetof(buf_T, b_p_cink);
+  out[kOptCinoptions]    = offsetof(buf_T, b_p_cino);
+  out[kOptCinscopedecls] = offsetof(buf_T, b_p_cinsd);
+  out[kOptCinwords]      = offsetof(buf_T, b_p_cinw);
+  out[kOptComments]      = offsetof(buf_T, b_p_com);
+  out[kOptCommentstring] = offsetof(buf_T, b_p_cms);
+  out[kOptComplete]      = offsetof(buf_T, b_p_cpt);
+#ifdef BACKSLASH_IN_FILENAME
+  out[kOptCompleteslash] = offsetof(buf_T, b_p_csl);
+#endif
+  out[kOptCompletefunc]  = offsetof(buf_T, b_p_cfu);
+  out[kOptOmnifunc]      = offsetof(buf_T, b_p_ofu);
+  out[kOptEndoffile]     = offsetof(buf_T, b_p_eof);
+  out[kOptEndofline]     = offsetof(buf_T, b_p_eol);
+  out[kOptFixendofline]  = offsetof(buf_T, b_p_fixeol);
+  out[kOptExpandtab]     = offsetof(buf_T, b_p_et);
+  out[kOptFileencoding]  = offsetof(buf_T, b_p_fenc);
+  out[kOptFileformat]    = offsetof(buf_T, b_p_ff);
+  out[kOptFiletype]      = offsetof(buf_T, b_p_ft);
+  out[kOptFormatoptions] = offsetof(buf_T, b_p_fo);
+  out[kOptFormatlistpat] = offsetof(buf_T, b_p_flp);
+  out[kOptIminsert]      = offsetof(buf_T, b_p_iminsert);
+  out[kOptImsearch]      = offsetof(buf_T, b_p_imsearch);
+  out[kOptInfercase]     = offsetof(buf_T, b_p_inf);
+  out[kOptIskeyword]     = offsetof(buf_T, b_p_isk);
+  out[kOptIncludeexpr]   = offsetof(buf_T, b_p_inex);
+  out[kOptIndentexpr]    = offsetof(buf_T, b_p_inde);
+  out[kOptIndentkeys]    = offsetof(buf_T, b_p_indk);
+  out[kOptFormatexpr]    = offsetof(buf_T, b_p_fex);
+  out[kOptLisp]          = offsetof(buf_T, b_p_lisp);
+  out[kOptLispoptions]   = offsetof(buf_T, b_p_lop);
+  out[kOptModeline]      = offsetof(buf_T, b_p_ml);
+  out[kOptMatchpairs]    = offsetof(buf_T, b_p_mps);
+  out[kOptModifiable]    = offsetof(buf_T, b_p_ma);
+  out[kOptModified]      = offsetof(buf_T, b_changed);
+  out[kOptNrformats]     = offsetof(buf_T, b_p_nf);
+  out[kOptPreserveindent]= offsetof(buf_T, b_p_pi);
+  out[kOptQuoteescape]   = offsetof(buf_T, b_p_qe);
+  out[kOptReadonly]      = offsetof(buf_T, b_p_ro);
+  out[kOptScrollback]    = offsetof(buf_T, b_p_scbk);
+  out[kOptSmartindent]   = offsetof(buf_T, b_p_si);
+  out[kOptSofttabstop]   = offsetof(buf_T, b_p_sts);
+  out[kOptSuffixesadd]   = offsetof(buf_T, b_p_sua);
+  out[kOptSwapfile]      = offsetof(buf_T, b_p_swf);
+  out[kOptSynmaxcol]     = offsetof(buf_T, b_p_smc);
+  out[kOptSyntax]        = offsetof(buf_T, b_p_syn);
+  out[kOptShiftwidth]    = offsetof(buf_T, b_p_sw);
+  out[kOptTagfunc]       = offsetof(buf_T, b_p_tfu);
+  out[kOptTabstop]       = offsetof(buf_T, b_p_ts);
+  out[kOptTextwidth]     = offsetof(buf_T, b_p_tw);
+  out[kOptUndofile]      = offsetof(buf_T, b_p_udf);
+  out[kOptWrapmargin]    = offsetof(buf_T, b_p_wm);
+  out[kOptVarsofttabstop]= offsetof(buf_T, b_p_vsts);
+  out[kOptVartabstop]    = offsetof(buf_T, b_p_vts);
+  out[kOptKeymap]        = offsetof(buf_T, b_p_keymap);
 }
 
 // Get the address of a win_T option field by OptIndex.
