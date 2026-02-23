@@ -1014,7 +1014,7 @@ pub unsafe extern "C" fn rs_did_set_autochdir(_args: *mut c_void) -> CallbackRes
 
 extern "C" {
     fn nvim_get_p_paste() -> c_int;
-    fn nvim_get_p_sm() -> c_int;
+    fn nvim_option_get_sm() -> c_int;
     fn nvim_get_p_sta() -> c_int;
     fn nvim_get_p_ru() -> c_int;
     fn nvim_get_p_ri() -> c_int;
@@ -1062,7 +1062,7 @@ pub unsafe extern "C" fn rs_did_set_paste_full(_args: *mut c_void) -> CallbackRe
         if PASTE_OLD_P_PASTE == 0 {
             // First time paste is turned on: save current values.
             nvim_for_all_buffers(paste_buf_save_and_activate_cb);
-            PASTE_SAVE_SM = nvim_get_p_sm();
+            PASTE_SAVE_SM = nvim_option_get_sm();
             PASTE_SAVE_STA = nvim_get_p_sta();
             PASTE_SAVE_RU = nvim_get_p_ru();
             PASTE_SAVE_RI = nvim_get_p_ri();

@@ -63,7 +63,7 @@ extern "C" {
 
     // State accessors
     fn nvim_callback_get_starting() -> c_int;
-    fn nvim_callback_get_p_hls() -> c_int;
+    fn nvim_option_get_hls() -> c_int;
     fn nvim_callback_get_p_titlelen() -> OptInt;
     fn nvim_callback_get_no_hlsearch() -> c_int;
 
@@ -148,7 +148,7 @@ fn screen_available() -> bool {
 /// Get 'hlsearch' option value.
 #[inline]
 fn get_hlsearch() -> bool {
-    unsafe { nvim_callback_get_p_hls() != 0 }
+    unsafe { nvim_option_get_hls() != 0 }
 }
 
 /// Get 'titlelen' option value.

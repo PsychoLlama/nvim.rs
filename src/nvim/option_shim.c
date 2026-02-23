@@ -394,7 +394,7 @@ void nvim_option_set_magic_overruled(int value) { magic_overruled = (optmagic_T)
 
 // State accessors for callbacks
 int nvim_callback_get_starting(void) { return starting; }
-int nvim_callback_get_p_hls(void) { return p_hls; }
+// nvim_option_get_hls (line ~302) is the canonical accessor; nvim_callback_get_p_hls removed
 OptInt nvim_callback_get_p_titlelen(void) { return p_titlelen; }
 int nvim_callback_get_no_hlsearch(void) { return no_hlsearch; }
 
@@ -450,7 +450,7 @@ void nvim_option_win_set_skipcol(win_T *win, int value) { if (win) win->w_skipco
 
 // Behavior callback accessors
 OptInt nvim_callback_get_p_uc(void) { return p_uc; }
-int nvim_callback_get_p_ea(void) { return p_ea; }
+// nvim_option_get_ea (line ~312) is the canonical accessor; nvim_callback_get_p_ea removed
 int nvim_callback_is_one_window(void) { return ONE_WINDOW; }
 int nvim_callback_is_curbuf_help(void) { return curbuf->b_help; }
 int nvim_callback_get_curwin_height(void) { return curwin->w_height; }
@@ -689,8 +689,7 @@ int nvim_option_was_set_window(void) { return option_was_set(kOptWindow); }
 
 // Paste callback accessors (nvim_get_p_paste defined in indent_c.c,
 //   nvim_get_p_ru defined in drawscreen.c, nvim_get_p_ri defined in edit.c)
-int nvim_get_p_sm(void) { return p_sm; }
-void nvim_set_p_sm(int val) { p_sm = val != 0; }
+// nvim_option_get_sm / nvim_option_set_sm are the canonical accessors; nvim_get_p_sm/nvim_set_p_sm removed
 int nvim_get_p_sta(void) { return p_sta; }
 void nvim_set_p_sta(int val) { p_sta = val != 0; }
 void nvim_set_p_ru(int val) { p_ru = val != 0; }
@@ -707,10 +706,8 @@ OptInt nvim_get_p_tw(void) { return p_tw; }
 void nvim_set_p_tw(OptInt v) { p_tw = v; }
 OptInt nvim_get_p_wm(void) { return p_wm; }
 void nvim_set_p_wm(OptInt v) { p_wm = v; }
-int nvim_get_p_ml(void) { return p_ml; }
-void nvim_set_p_ml(int v) { p_ml = v != 0; }
-int nvim_get_p_et(void) { return p_et; }
-void nvim_set_p_et(int v) { p_et = v != 0; }
+// nvim_option_get_ml / nvim_option_set_ml and nvim_option_get_et / nvim_option_set_et
+// are the canonical accessors; nvim_get_p_ml/nvim_set_p_ml/nvim_get_p_et/nvim_set_p_et removed
 void nvim_set_p_bin(int v) { p_bin = v != 0; }
 
 // set_helplang_default accessors

@@ -43,7 +43,7 @@ extern "C" {
 
     // State accessors
     fn nvim_callback_get_p_uc() -> OptInt;
-    fn nvim_callback_get_p_ea() -> c_int;
+    fn nvim_option_get_ea() -> c_int;
     fn nvim_callback_is_one_window() -> c_int;
     fn nvim_callback_is_curbuf_help() -> c_int;
     fn nvim_callback_get_curwin_height() -> c_int;
@@ -124,10 +124,10 @@ extern "C" {
     fn nvim_set_p_tw(v: OptInt);
     fn nvim_get_p_wm() -> OptInt;
     fn nvim_set_p_wm(v: OptInt);
-    fn nvim_get_p_ml() -> c_int;
-    fn nvim_set_p_ml(v: c_int);
-    fn nvim_get_p_et() -> c_int;
-    fn nvim_set_p_et(v: c_int);
+    fn nvim_option_get_ml() -> c_int;
+    fn nvim_option_set_ml(v: c_int);
+    fn nvim_option_get_et() -> c_int;
+    fn nvim_option_set_et(v: c_int);
     fn nvim_set_p_bin(v: c_int);
     fn nvim_get_p_tw_nobin() -> OptInt;
     fn nvim_set_p_tw_nobin(v: OptInt);
@@ -181,7 +181,7 @@ fn get_updatecount() -> OptInt {
 /// Get 'equalalways' option value.
 #[inline]
 fn get_equalalways() -> bool {
-    unsafe { nvim_callback_get_p_ea() != 0 }
+    unsafe { nvim_option_get_ea() != 0 }
 }
 
 /// Check if there's only one window.
@@ -759,8 +759,8 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
                 // save global options
                 nvim_set_p_tw_nobin(nvim_get_p_tw());
                 nvim_set_p_wm_nobin(nvim_get_p_wm());
-                nvim_set_p_ml_nobin(nvim_get_p_ml());
-                nvim_set_p_et_nobin(nvim_get_p_et());
+                nvim_set_p_ml_nobin(nvim_option_get_ml());
+                nvim_set_p_et_nobin(nvim_option_get_et());
             }
         }
 
@@ -775,8 +775,8 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
             // set bin-compatible global values
             nvim_set_p_tw(0);
             nvim_set_p_wm(0);
-            nvim_set_p_ml(0);
-            nvim_set_p_et(0);
+            nvim_option_set_ml(0);
+            nvim_option_set_et(0);
             nvim_set_p_bin(1); // needed when called for the "-b" argument
         }
     } else if oldval != 0 {
@@ -790,8 +790,8 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
         if (opt_flags & OPT_LOCAL_BIN) == 0 {
             nvim_set_p_tw(nvim_get_p_tw_nobin());
             nvim_set_p_wm(nvim_get_p_wm_nobin());
-            nvim_set_p_ml(nvim_get_p_ml_nobin());
-            nvim_set_p_et(nvim_get_p_et_nobin());
+            nvim_option_set_ml(nvim_get_p_ml_nobin());
+            nvim_option_set_et(nvim_get_p_et_nobin());
         }
     }
 
