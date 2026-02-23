@@ -275,6 +275,11 @@ extern int rs_qf_getprop_qfidx(const void *qi, const void *what);
 extern int rs_qf_getprop_defaults(const void *qi, int flags, bool locstack, void *retdict);
 extern int rs_qf_setprop_get_qfidx(const void *qi, const void *what, int action, bool *newlist);
 
+// Phase 5: Stack mutation helpers (migrated to Rust)
+extern void rs_qf_decr_curlist(void *qi);
+extern void rs_qf_decr_listcount(void *qi);
+extern void rs_qf_zero_top_list(void *qi);
+
 // Phase 4: mark_adjust and valid counting (migrated to Rust)
 extern bool rs_qf_mark_adjust(void *qi, int buf_fnum, int buf_has_flag, int32_t line1,
                                int32_t line2, int32_t amount, int32_t amount_after);
@@ -814,42 +819,13 @@ void nvim_qf_shift_lists_down(void *qi_void)
 }
 
 /// Zero the list at index (listcount - 1)
-void nvim_qf_zero_top_list(void *qi_void)
-{
-  if (qi_void == NULL) {
-    return;
-  }
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  if (qi->qf_listcount > 0) {
-    memset(&qi->qf_lists[qi->qf_listcount - 1], 0, sizeof(qf_list_T));
-  }
-}
+void nvim_qf_zero_top_list(void *qi_void) { rs_qf_zero_top_list(qi_void); }
 
 /// Decrement curlist, handling wrap to max
-void nvim_qf_decr_curlist(void *qi_void)
-{
-  if (qi_void == NULL) {
-    return;
-  }
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  if (qi->qf_curlist == 0) {
-    qi->qf_curlist = qi->qf_listcount - 1;
-  } else {
-    qi->qf_curlist--;
-  }
-}
+void nvim_qf_decr_curlist(void *qi_void) { rs_qf_decr_curlist(qi_void); }
 
 /// Decrement listcount
-void nvim_qf_decr_listcount(void *qi_void)
-{
-  if (qi_void == NULL) {
-    return;
-  }
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  if (qi->qf_listcount > 0) {
-    qi->qf_listcount--;
-  }
-}
+void nvim_qf_decr_listcount(void *qi_void) { rs_qf_decr_listcount(qi_void); }
 
 static int qf_get_fnum(qf_list_T *qfl, char *directory, char *fname);
 
@@ -4685,24 +4661,6 @@ _Static_assert(QF_GETLIST_QFBUFNR == 0x400, "QF_GETLIST_QFBUFNR mismatch");
 _Static_assert(QF_GETLIST_QFTF == 0x800, "QF_GETLIST_QFTF mismatch");
 _Static_assert(QF_GETLIST_ALL == 0xFFF, "QF_GETLIST_ALL mismatch");
 
-/// Convert the keys in 'what' to quickfix list property flags.
-static int qf_getprop_keys2flags(const dict_T *what, bool loclist)
-{
-  return rs_qf_getprop_keys2flags(what, loclist);
-}
-
-/// Return -1, if quickfix list is not present or if the stack is empty.
-static int qf_getprop_qfidx(qf_info_T *qi, dict_T *what)
-{
-  return rs_qf_getprop_qfidx(qi, what);
-}
-
-/// Return default values for quickfix list properties in retdict.
-static int qf_getprop_defaults(qf_info_T *qi, int flags, int locstack, dict_T *retdict)
-{
-  return rs_qf_getprop_defaults(qi, flags, (bool)locstack, retdict);
-}
-
 static int qf_getprop_title(qf_list_T *qfl, dict_T *retdict) { return tv_dict_add_str(retdict, S_LEN("title"), qfl->qf_title); }
 
 // Returns the identifier of the window used to display files from a location
@@ -4792,15 +4750,15 @@ static int qf_get_properties(win_T *wp, dict_T *what, dict_T *retdict)
     qi = GET_LOC_LIST(wp);
   }
 
-  const int flags = qf_getprop_keys2flags(what, wp != NULL);
+  const int flags = rs_qf_getprop_keys2flags(what, wp != NULL);
 
   if (!rs_qf_stack_empty(qi)) {
-    qf_idx = qf_getprop_qfidx(qi, what);
+    qf_idx = rs_qf_getprop_qfidx(qi, what);
   }
 
   // List is not present or is empty
   if (rs_qf_stack_empty(qi) || qf_idx == INVALID_QFIDX) {
-    return qf_getprop_defaults(qi, flags, wp != NULL, retdict);
+    return rs_qf_getprop_defaults(qi, flags, wp != NULL, retdict);
   }
 
   qf_list_T *qfl = qf_get_list(qi, qf_idx);
@@ -5006,12 +4964,6 @@ bool nvim_tv_list_item_is_first(const void *list, const void *li)
   return li == tv_list_first((const list_T *)list);
 }
 
-/// Get the quickfix list index from 'nr' or 'id'
-static int qf_setprop_get_qfidx(const qf_info_T *qi, const dict_T *what, int action, bool *newlist)
-{
-  return rs_qf_setprop_get_qfidx(qi, what, action, newlist);
-}
-
 // Set the quickfix list title.
 static int qf_setprop_title(qf_info_T *qi, int qf_idx, const dict_T *what, const dictitem_T *di)
   FUNC_ATTR_NONNULL_ALL
@@ -5137,7 +5089,7 @@ static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char
   FUNC_ATTR_NONNULL_ALL
 {
   bool newlist = action == ' ' || rs_qf_stack_empty(qi);
-  int qf_idx = qf_setprop_get_qfidx(qi, what, action, &newlist);
+  int qf_idx = rs_qf_setprop_get_qfidx(qi, what, action, &newlist);
   if (qf_idx == INVALID_QFIDX) {  // List not found
     return FAIL;
   }

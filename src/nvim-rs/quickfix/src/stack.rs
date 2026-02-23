@@ -54,6 +54,10 @@ impl QfStackHandle {
 extern "C" {
     fn nvim_qf_get_listcount(qi: QfStackHandle) -> c_int;
     fn nvim_qf_get_curlist_idx(qi: QfStackHandle) -> c_int;
+    fn nvim_qf_set_curlist_idx(qi: QfStackHandle, idx: c_int);
+    fn nvim_qf_set_listcount(qi: QfStackHandle, count: c_int);
+    fn nvim_qf_get_list_at_mut(qi: QfStackHandle, idx: c_int) -> *mut c_void;
+    fn nvim_qf_clear_list_struct(qfl: *mut c_void);
 }
 
 // =============================================================================
@@ -373,6 +377,70 @@ pub extern "C" fn rs_qf_nav_result_at_oldest() -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_qf_nav_result_at_newest() -> c_int {
     QfStackNavResult::AtNewest as c_int
+}
+
+// =============================================================================
+// Phase 5: Stack mutation helpers
+// =============================================================================
+
+/// Decrement qf_curlist with wrap-around to qf_listcount - 1 when at 0.
+///
+/// Mirrors C `nvim_qf_decr_curlist`.
+///
+/// # Safety
+///
+/// - `qi` must be a valid non-null pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_decr_curlist(qi: QfStackHandle) {
+    if qi.is_null() {
+        return;
+    }
+    let curlist = nvim_qf_get_curlist_idx(qi);
+    let listcount = nvim_qf_get_listcount(qi);
+    if curlist == 0 {
+        nvim_qf_set_curlist_idx(qi, listcount - 1);
+    } else {
+        nvim_qf_set_curlist_idx(qi, curlist - 1);
+    }
+}
+
+/// Decrement qf_listcount if it is greater than zero.
+///
+/// Mirrors C `nvim_qf_decr_listcount`.
+///
+/// # Safety
+///
+/// - `qi` must be a valid non-null pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_decr_listcount(qi: QfStackHandle) {
+    if qi.is_null() {
+        return;
+    }
+    let listcount = nvim_qf_get_listcount(qi);
+    if listcount > 0 {
+        nvim_qf_set_listcount(qi, listcount - 1);
+    }
+}
+
+/// Zero (memset) the list slot at index `qf_listcount - 1`.
+///
+/// Mirrors C `nvim_qf_zero_top_list`.
+///
+/// # Safety
+///
+/// - `qi` must be a valid non-null pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_zero_top_list(qi: QfStackHandle) {
+    if qi.is_null() {
+        return;
+    }
+    let listcount = nvim_qf_get_listcount(qi);
+    if listcount > 0 {
+        let qfl = nvim_qf_get_list_at_mut(qi, listcount - 1);
+        if !qfl.is_null() {
+            nvim_qf_clear_list_struct(qfl);
+        }
+    }
 }
 
 // =============================================================================
