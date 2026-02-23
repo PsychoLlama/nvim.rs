@@ -1831,6 +1831,142 @@ pub const extern "C" fn rs_vgr_get_auname(cmdidx: c_int) -> *const std::ffi::c_c
 }
 
 // =============================================================================
+// Phase 4 pass: Stack query entry points
+// =============================================================================
+
+// CMD_* constants for valid-size counting (from ex_cmds_enum.generated.h,
+// validated by _Static_assert in quickfix_shim.c)
+const CMD_CDO_P4: c_int = 62;   // CMD_cdo
+const CMD_LDO_P4: c_int = 228;  // CMD_ldo
+const CMD_CFDO_P4: c_int = 66;  // CMD_cfdo
+const CMD_LFDO_P4: c_int = 234; // CMD_lfdo
+
+// CMD_* constants for grep_internal (validated by _Static_assert in quickfix_shim.c)
+const CMD_GREP_P4: c_int = 172;
+const CMD_LGREP_P4: c_int = 239;
+const CMD_GREPADD_P4: c_int = 173;
+const CMD_LGREPADD_P4: c_int = 240;
+
+extern "C" {
+    fn nvim_grep_uses_internal() -> bool;
+}
+
+/// Returns the number of entries in the current quickfix/location list.
+///
+/// Thin Rust wrapper around `qf_cmd_get_stack` + list count.
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_size_eap(eap: EapHandle) -> usize {
+    let qi = nvim_qf_cmd_get_stack(eap, false);
+    if qi.is_null() {
+        return 0;
+    }
+    let qfl = nvim_qf_get_curlist_mut(qi).cast_const();
+    nvim_qf_get_count(qfl).max(0) as usize
+}
+
+/// Returns the number of valid entries in the current quickfix/location list.
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_valid_size_eap(eap: EapHandle) -> usize {
+    let qi = nvim_qf_cmd_get_stack(eap, false);
+    if qi.is_null() {
+        return 0;
+    }
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let count_files = !(cmdidx == CMD_CDO_P4 || cmdidx == CMD_LDO_P4);
+    let qfl = nvim_qf_get_curlist_mut(qi).cast_const();
+    crate::navigate::rs_qf_get_valid_size(qfl, count_files).max(0) as usize
+}
+
+/// Returns the current entry index (0 if error).
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_cur_idx_eap(eap: EapHandle) -> usize {
+    let qi = nvim_qf_cmd_get_stack(eap, false);
+    if qi.is_null() {
+        return 0;
+    }
+    let qfl = nvim_qf_get_curlist_mut(qi).cast_const();
+    let idx = nvim_qf_get_index(qfl);
+    debug_assert!(idx >= 0);
+    idx.max(0) as usize
+}
+
+/// Returns the current valid entry index (1 if no valid entries).
+///
+/// # Safety
+///
+/// `eap` must be a valid pointer to a C `exarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_cur_valid_idx_eap(eap: EapHandle) -> c_int {
+    let qi = nvim_qf_cmd_get_stack(eap, false);
+    if qi.is_null() {
+        return 1;
+    }
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let count_files = cmdidx == CMD_CFDO_P4 || cmdidx == CMD_LFDO_P4;
+    let qfl = nvim_qf_get_curlist_mut(qi).cast_const();
+    let qf_index = nvim_qf_get_index(qfl);
+    crate::navigate::rs_qf_get_cur_valid_idx(qfl, qf_index, count_files)
+}
+
+/// Opaque window handle
+type WinHandle = *const c_void;
+
+extern "C" {
+    fn nvim_qf_is_ll_window(wp: WinHandle) -> bool;
+    fn nvim_win_get_llist_ref(wp: WinHandle) -> QfInfoHandle;
+}
+
+/// Returns the line number of the current entry in the quickfix/location list
+/// for the given window (used for cursor positioning in the qf window).
+///
+/// # Safety
+///
+/// `wp` must be a valid pointer to a C `win_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_current_entry(wp: WinHandle) -> i32 {
+    let mut qi: QfInfoHandleMut = nvim_get_ql_info();
+    assert!(!qi.is_null());
+
+    if nvim_qf_is_ll_window(wp) {
+        qi = nvim_win_get_llist_ref(wp).cast_mut();
+    }
+
+    let qfl = nvim_qf_get_curlist_mut(qi).cast_const();
+    nvim_qf_get_index(qfl)
+}
+
+/// Returns true when using `:vimgrep` for `:grep`
+/// (i.e., cmdidx is a grep command and 'grepprg' is "internal").
+///
+/// # Safety
+///
+/// Always safe — reads global state only.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grep_internal(cmdidx: c_int) -> c_int {
+    let is_grep_cmd = cmdidx == CMD_GREP_P4
+        || cmdidx == CMD_LGREP_P4
+        || cmdidx == CMD_GREPADD_P4
+        || cmdidx == CMD_LGREPADD_P4;
+    if is_grep_cmd && nvim_grep_uses_internal() {
+        1
+    } else {
+        0
+    }
+}
+
+// =============================================================================
 // Phase 2: qf_cmdtitle helper
 // =============================================================================
 

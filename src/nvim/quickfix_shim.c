@@ -336,6 +336,15 @@ extern int rs_qf_init_ext(void *qi, int qf_idx, const char *efile, void *buf,
 
 extern void rs_ex_vimgrep(void *eap);
 
+// Pass 4: stack query entry points (Phase 1)
+extern size_t rs_qf_get_size_eap(void *eap);
+extern size_t rs_qf_get_valid_size_eap(void *eap);
+extern size_t rs_qf_get_cur_idx_eap(void *eap);
+extern int rs_qf_get_cur_valid_idx_eap(void *eap);
+extern linenr_T rs_qf_current_entry(void *wp);
+extern int rs_grep_internal(int cmdidx);
+extern void rs_qf_incr_changedtick(void *qfl);
+
 void nvim_qf_set_curlist_idx(void *qi_void, int idx) { ((qf_info_T *)qi_void)->qf_curlist = idx; }
 
 void nvim_qf_set_listcount(void *qi_void, int count) { ((qf_info_T *)qi_void)->qf_listcount = count; }
@@ -3154,15 +3163,7 @@ static void qf_win_goto(win_T *win, linenr_T lnum)
 // window).
 linenr_T qf_current_entry(win_T *wp)
 {
-  qf_info_T *qi = ql_info;
-  assert(qi != NULL);
-
-  if (IS_LL_WINDOW(wp)) {
-    // In the location list window, use the referenced location list
-    qi = wp->w_llist_ref;
-  }
-
-  return qf_get_curlist(qi)->qf_index;
+  return rs_qf_current_entry(wp);
 }
 
 linenr_T nvim_qf_current_entry(win_T *wp) { return qf_current_entry(wp); }
@@ -3472,7 +3473,7 @@ void nvim_qf_fill_buffer_internal_error(void) { internal_error("rs_qf_fill_buffe
 
 void *nvim_qf_get_start_nonnull(const void *qfl) { return qfl == NULL ? NULL : ((const qf_list_T *)qfl)->qf_start; }
 
-static void qf_list_changed(qf_list_T *qfl) { qfl->qf_changedtick++; }
+static void qf_list_changed(qf_list_T *qfl) { rs_qf_incr_changedtick(qfl); }
 
 // Jump to the first entry if there is one.
 static void qf_jump_first(qf_info_T *qi, unsigned save_qfid, int forceit)
@@ -3495,11 +3496,7 @@ static void qf_jump_first(qf_info_T *qi, unsigned save_qfid, int forceit)
 // Return true when using ":vimgrep" for ":grep".
 int grep_internal(cmdidx_T cmdidx)
 {
-  return (cmdidx == CMD_grep
-          || cmdidx == CMD_lgrep
-          || cmdidx == CMD_grepadd
-          || cmdidx == CMD_lgrepadd)
-         && strcmp("internal", *curbuf->b_p_gp == NUL ? p_gp : curbuf->b_p_gp) == 0;
+  return rs_grep_internal(cmdidx);
 }
 
 
@@ -3663,51 +3660,27 @@ static char *get_mef_name(void)
 size_t qf_get_size(exarg_T *eap)
   FUNC_ATTR_NONNULL_ALL
 {
-  qf_info_T *qi;
-
-  if ((qi = qf_cmd_get_stack(eap, false)) == NULL) {
-    return 0;
-  }
-  return (size_t)qf_get_curlist(qi)->qf_count;
+  return rs_qf_get_size_eap(eap);
 }
 
 /// Returns the number of valid entries in the current quickfix/location list.
 size_t qf_get_valid_size(exarg_T *eap)
 {
-  qf_info_T *qi;
-  if ((qi = qf_cmd_get_stack(eap, false)) == NULL) {
-    return 0;
-  }
-  qf_list_T *qfl = qf_get_curlist(qi);
-  bool count_files = !(eap->cmdidx == CMD_cdo || eap->cmdidx == CMD_ldo);
-  return (size_t)rs_qf_get_valid_size(qfl, count_files);
+  return rs_qf_get_valid_size_eap(eap);
 }
 
 /// Returns 0 if there is an error.
 size_t qf_get_cur_idx(exarg_T *eap)
   FUNC_ATTR_NONNULL_ALL
 {
-  qf_info_T *qi;
-
-  if ((qi = qf_cmd_get_stack(eap, false)) == NULL) {
-    return 0;
-  }
-
-  assert(qf_get_curlist(qi)->qf_index >= 0);
-  return (size_t)qf_get_curlist(qi)->qf_index;
+  return rs_qf_get_cur_idx_eap(eap);
 }
 
 /// Returns 1 if there are no valid entries.
 int qf_get_cur_valid_idx(exarg_T *eap)
   FUNC_ATTR_NONNULL_ALL
 {
-  qf_info_T *qi;
-  if ((qi = qf_cmd_get_stack(eap, false)) == NULL) {
-    return 1;
-  }
-  qf_list_T *qfl = qf_get_curlist(qi);
-  bool count_files = eap->cmdidx == CMD_cfdo || eap->cmdidx == CMD_lfdo;
-  return rs_qf_get_cur_valid_idx(qfl, qfl->qf_index, count_files);
+  return rs_qf_get_cur_valid_idx_eap(eap);
 }
 
 /// For :cfdo and :lfdo, returns the 'n'th valid file entry.
@@ -3742,6 +3715,8 @@ void nvim_do_cmdline_cmd(const char *cmd) { do_cmdline_cmd(cmd); }
 bool nvim_qf_curbuf_has_flag(int flag) { return (curbuf->b_has_qf_entry & flag) != 0; }
 
 int nvim_qf_curbuf_fnum(void) { return curbuf->b_fnum; }
+
+bool nvim_grep_uses_internal(void) { return strcmp("internal", *curbuf->b_p_gp == NUL ? p_gp : curbuf->b_p_gp) == 0; }
 
 /// Returns pointer to static storage; only valid until next call.
 const void *nvim_qf_curwin_pos_adj(void)
