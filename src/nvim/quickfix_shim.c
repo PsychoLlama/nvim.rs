@@ -175,6 +175,8 @@ extern void rs_qf_msg(const void *qi, int which, const char *lead);
 extern int rs_qf_get_nth_valid_entry_do(const void *qfl, int n, bool fdo);
 extern int rs_qf_getprop_filewinid(const void *wp, const void *qi);
 extern int rs_qf_getprop_qfbufnr(const void *qi);
+extern int rs_copy_loclist_entries(const void *from_qfl, void *to_qfl);
+extern int rs_copy_loclist(const void *from_qfl, void *to_qfl);
 extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
 extern void rs_reset_VIsual_and_resel(void);
 
@@ -357,15 +359,19 @@ const char *nvim_qfline_get_fname(const void *qfp_void) { return ((const qfline_
 bool nvim_qf_get_has_user_data(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_has_user_data; }
 
 // Forward declarations for static functions
-static void qf_store_title(qf_list_T *qfl, const char *title);
-
 void nvim_qf_store_title(void *qfl_void, const char *title)
 {
   qf_list_T *qfl = (qf_list_T *)qfl_void;
   if (qfl == NULL) {
     return;
   }
-  qf_store_title(qfl, title);
+  XFREE_CLEAR(qfl->qf_title);
+  if (title != NULL) {
+    size_t len = strlen(title) + 1;
+    char *p = xmallocz(len);
+    qfl->qf_title = p;
+    xstrlcpy(p, title, len + 1);
+  }
 }
 
 void *nvim_get_ql_info(void) { return (void *)ql_info; }
@@ -771,6 +777,27 @@ void nvim_qf_free_ctx(void *qfl_void)
 }
 
 void nvim_qf_free_callback(void *qfl_void) { if (qfl_void != NULL) callback_free(&((qf_list_T *)qfl_void)->qf_qftf_cb); }
+
+void nvim_qf_copy_ctx(const void *from_qfl_void, void *to_qfl_void)
+{
+  if (from_qfl_void == NULL || to_qfl_void == NULL) { return; }
+  const qf_list_T *from_qfl = (const qf_list_T *)from_qfl_void;
+  qf_list_T *to_qfl = (qf_list_T *)to_qfl_void;
+  if (from_qfl->qf_ctx != NULL) {
+    to_qfl->qf_ctx = xcalloc(1, sizeof(*to_qfl->qf_ctx));
+    tv_copy(from_qfl->qf_ctx, to_qfl->qf_ctx);
+  } else {
+    to_qfl->qf_ctx = NULL;
+  }
+}
+
+void nvim_qf_copy_callback(const void *from_qfl_void, void *to_qfl_void)
+{
+  if (from_qfl_void == NULL || to_qfl_void == NULL) { return; }
+  callback_copy(&((qf_list_T *)to_qfl_void)->qf_qftf_cb, &((const qf_list_T *)from_qfl_void)->qf_qftf_cb);
+}
+
+const void *nvim_qfline_get_user_data_ptr(const void *qfp_void) { return qfp_void == NULL ? NULL : (const void *)&((const qfline_T *)qfp_void)->qf_user_data; }
 
 void nvim_qf_set_changedtick(void *qfl_void, int changedtick) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_changedtick = changedtick; }
 
@@ -1721,23 +1748,6 @@ void nvim_qf_init_emsg_readerrf(void) { emsg(_(e_readerrf)); }
 _Static_assert(QF_END_OF_INPUT == 2, "QF_END_OF_INPUT must be 2");
 _Static_assert(QF_FAIL == 0, "QF_FAIL must be 0");
 
-/// Prepends ':' to the title.
-static void qf_store_title(qf_list_T *qfl, const char *title)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  XFREE_CLEAR(qfl->qf_title);
-
-  if (title == NULL) {
-    return;
-  }
-
-  size_t len = strlen(title) + 1;
-  char *p = xmallocz(len);
-
-  qfl->qf_title = p;
-  xstrlcpy(p, title, len + 1);
-}
-
 /// Returns a pointer to a static buffer with the title.
 static char *qf_cmdtitle(char *cmd)
 {
@@ -2438,94 +2448,10 @@ static qf_info_T *qf_cmd_get_or_alloc_stack(const exarg_T *eap, win_T **pwinp)
 }
 
 /// Copy location list entries from 'from_qfl' to 'to_qfl'.
-static int copy_loclist_entries(const qf_list_T *from_qfl, qf_list_T *to_qfl)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int i;
-  qfline_T *from_qfp;
-
-  // copy all the location entries in this list
-  FOR_ALL_QFL_ITEMS(from_qfl, from_qfp, i) {
-    if (rs_qf_add_entry(to_qfl,
-                     NULL,
-                     NULL,
-                     from_qfp->qf_module,
-                     0,
-                     from_qfp->qf_text,
-                     from_qfp->qf_lnum,
-                     from_qfp->qf_end_lnum,
-                     from_qfp->qf_col,
-                     from_qfp->qf_end_col,
-                     from_qfp->qf_viscol,
-                     from_qfp->qf_pattern,
-                     from_qfp->qf_nr,
-                     0,
-                     &from_qfp->qf_user_data,
-                     from_qfp->qf_valid) == QF_FAIL) {
-      return FAIL;
-    }
-
-    // qf_add_entry() will not set the qf_num field, as the
-    // directory and file names are not supplied. So the qf_fnum
-    // field is copied here.
-    qfline_T *const prevp = to_qfl->qf_last;
-    prevp->qf_fnum = from_qfp->qf_fnum;  // file number
-    prevp->qf_type = from_qfp->qf_type;  // error type
-    if (from_qfl->qf_ptr == from_qfp) {
-      to_qfl->qf_ptr = prevp;  // current location
-    }
-  }
-
-  return OK;
-}
+static int copy_loclist_entries(const qf_list_T *from_qfl, qf_list_T *to_qfl) { return rs_copy_loclist_entries(from_qfl, to_qfl); }
 
 /// Copy the specified location list 'from_qfl' to 'to_qfl'.
-static int copy_loclist(qf_list_T *from_qfl, qf_list_T *to_qfl)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // Some of the fields are populated by qf_add_entry()
-  to_qfl->qfl_type = from_qfl->qfl_type;
-  to_qfl->qf_nonevalid = from_qfl->qf_nonevalid;
-  to_qfl->qf_has_user_data = from_qfl->qf_has_user_data;
-  to_qfl->qf_count = 0;
-  to_qfl->qf_index = 0;
-  to_qfl->qf_start = NULL;
-  to_qfl->qf_last = NULL;
-  to_qfl->qf_ptr = NULL;
-  if (from_qfl->qf_title != NULL) {
-    to_qfl->qf_title = xstrdup(from_qfl->qf_title);
-  } else {
-    to_qfl->qf_title = NULL;
-  }
-  if (from_qfl->qf_ctx != NULL) {
-    to_qfl->qf_ctx = xcalloc(1, sizeof(*to_qfl->qf_ctx));
-    tv_copy(from_qfl->qf_ctx, to_qfl->qf_ctx);
-  } else {
-    to_qfl->qf_ctx = NULL;
-  }
-  callback_copy(&to_qfl->qf_qftf_cb, &from_qfl->qf_qftf_cb);
-
-  if (from_qfl->qf_count) {
-    if (copy_loclist_entries(from_qfl, to_qfl) == FAIL) {
-      return FAIL;
-    }
-  }
-
-  to_qfl->qf_index = from_qfl->qf_index;  // current index in the list
-
-  // Assign a new ID for the location list
-  to_qfl->qf_id = ++last_qf_id;
-  to_qfl->qf_changedtick = 0;
-
-  // When no valid entries are present in the list, qf_ptr points to
-  // the first item in the list
-  if (to_qfl->qf_nonevalid) {
-    to_qfl->qf_ptr = to_qfl->qf_start;
-    to_qfl->qf_index = 1;
-  }
-
-  return OK;
-}
+static int copy_loclist(qf_list_T *from_qfl, qf_list_T *to_qfl) { return rs_copy_loclist(from_qfl, to_qfl); }
 
 // Copy the location list stack 'from' window to 'to' window.
 void copy_loclist_stack(win_T *from, win_T *to)

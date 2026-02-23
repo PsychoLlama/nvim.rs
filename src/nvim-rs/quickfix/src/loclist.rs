@@ -730,6 +730,174 @@ pub unsafe extern "C" fn rs_ll_cmd_age_result(
 }
 
 // =============================================================================
+// Phase 3: copy_loclist_entries, copy_loclist
+// =============================================================================
+
+use std::ffi::{c_char, c_void};
+
+use crate::{
+    nvim_qf_alloc_next_id, nvim_qf_get_has_user_data, nvim_qf_get_index, nvim_qf_get_last,
+    nvim_qf_get_nonevalid, nvim_qf_get_ptr, nvim_qf_get_qfl_type, nvim_qf_get_start,
+    nvim_qf_get_title, nvim_qf_set_changedtick, nvim_qf_set_count, nvim_qf_set_has_user_data,
+    nvim_qf_set_id, nvim_qf_set_index, nvim_qf_set_last, nvim_qf_set_nonevalid, nvim_qf_set_ptr,
+    nvim_qf_set_qfl_type, nvim_qf_set_start, nvim_qf_store_title, nvim_qfline_get_col,
+    nvim_qfline_get_end_col, nvim_qfline_get_end_lnum, nvim_qfline_get_fnum, nvim_qfline_get_lnum,
+    nvim_qfline_get_module, nvim_qfline_get_next, nvim_qfline_get_nr, nvim_qfline_get_pattern,
+    nvim_qfline_get_text, nvim_qfline_get_type, nvim_qfline_get_valid, nvim_qfline_get_viscol,
+    nvim_qfline_set_fnum, nvim_qfline_set_type,
+};
+
+extern "C" {
+    fn nvim_qf_copy_ctx(from_qfl: *const c_void, to_qfl: *mut c_void);
+    fn nvim_qf_copy_callback(from_qfl: *const c_void, to_qfl: *mut c_void);
+    fn nvim_qfline_get_user_data_ptr(qfp: *const c_void) -> *const c_void;
+}
+
+const QF_FAIL: c_int = 0;
+const OK: c_int = 1;
+
+/// Copy all entries from `from_qfl` to `to_qfl`.
+///
+/// After copying each entry, also copies `qf_fnum` and `qf_type` fields (which
+/// `rs_qf_add_entry` does not set when no file/directory is supplied).
+/// Also tracks the current entry pointer (`qf_ptr`) from the source.
+///
+/// Returns OK on success, FAIL on allocation error.
+///
+/// Mirrors C `copy_loclist_entries`.
+///
+/// # Safety
+///
+/// - `from_qfl` must be a valid non-null pointer to `qf_list_T`
+/// - `to_qfl` must be a valid non-null pointer to `qf_list_T`
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_loclist_entries(
+    from_qfl: *const c_void,
+    to_qfl: *mut c_void,
+) -> c_int {
+    if from_qfl.is_null() || to_qfl.is_null() {
+        return QF_FAIL;
+    }
+
+    let from_ptr = nvim_qf_get_ptr(from_qfl);
+    let mut qfp = nvim_qf_get_start(from_qfl);
+
+    while !qfp.is_null() {
+        let module = nvim_qfline_get_module(qfp);
+        let text = nvim_qfline_get_text(qfp);
+        let lnum = nvim_qfline_get_lnum(qfp);
+        let end_lnum = nvim_qfline_get_end_lnum(qfp);
+        let col = nvim_qfline_get_col(qfp);
+        let end_col = nvim_qfline_get_end_col(qfp);
+        let viscol: c_char = c_char::from(nvim_qfline_get_viscol(qfp));
+        let pattern = nvim_qfline_get_pattern(qfp);
+        let nr = nvim_qfline_get_nr(qfp);
+        let user_data = nvim_qfline_get_user_data_ptr(qfp);
+        let valid: c_char = c_char::from(nvim_qfline_get_valid(qfp));
+
+        let ret = crate::rs_qf_add_entry(
+            to_qfl,
+            std::ptr::null_mut(), // dir
+            std::ptr::null(),     // fname
+            module,
+            0, // bufnum
+            text,
+            lnum,
+            end_lnum,
+            col,
+            end_col,
+            viscol,
+            pattern,
+            nr,
+            0, // type (set below)
+            user_data,
+            valid,
+        );
+
+        if ret == QF_FAIL {
+            return QF_FAIL;
+        }
+
+        // Copy fnum and type (not set by rs_qf_add_entry without fname/dir)
+        let prevp = nvim_qf_get_last(to_qfl.cast_const());
+        if !prevp.is_null() {
+            let prevp_mut = prevp.cast_mut();
+            nvim_qfline_set_fnum(prevp_mut, nvim_qfline_get_fnum(qfp));
+            nvim_qfline_set_type(prevp_mut, nvim_qfline_get_type(qfp));
+            // Track current entry pointer
+            if std::ptr::eq(qfp, from_ptr) {
+                nvim_qf_set_ptr(to_qfl, prevp);
+            }
+        }
+
+        qfp = nvim_qfline_get_next(qfp);
+    }
+
+    OK
+}
+
+/// Copy location list metadata and entries from `from_qfl` to `to_qfl`.
+///
+/// Copies: type, nonevalid, `has_user_data`, title, ctx, callback, entries,
+/// index, a fresh ID, and resets changedtick. When no valid entries exist,
+/// sets ptr to start and index to 1.
+///
+/// Returns OK on success, FAIL on error.
+///
+/// Mirrors C `copy_loclist`.
+///
+/// # Safety
+///
+/// - `from_qfl` must be a valid non-null pointer to `qf_list_T`
+/// - `to_qfl` must be a valid non-null pointer to `qf_list_T`
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_loclist(from_qfl: *const c_void, to_qfl: *mut c_void) -> c_int {
+    if from_qfl.is_null() || to_qfl.is_null() {
+        return QF_FAIL;
+    }
+
+    // Copy metadata fields
+    nvim_qf_set_qfl_type(to_qfl, nvim_qf_get_qfl_type(from_qfl));
+    nvim_qf_set_nonevalid(to_qfl, nvim_qf_get_nonevalid(from_qfl));
+    nvim_qf_set_has_user_data(to_qfl, nvim_qf_get_has_user_data(from_qfl));
+    nvim_qf_set_count(to_qfl, 0);
+    nvim_qf_set_index(to_qfl, 0);
+    nvim_qf_set_start(to_qfl, std::ptr::null());
+    nvim_qf_set_last(to_qfl, std::ptr::null());
+    nvim_qf_set_ptr(to_qfl, std::ptr::null());
+
+    // Copy title
+    nvim_qf_store_title(to_qfl, nvim_qf_get_title(from_qfl));
+
+    // Copy context (typval)
+    nvim_qf_copy_ctx(from_qfl, to_qfl);
+
+    // Copy callback
+    nvim_qf_copy_callback(from_qfl, to_qfl);
+
+    // Copy entries if any
+    if nvim_qf_get_count(from_qfl) > 0 && rs_copy_loclist_entries(from_qfl, to_qfl) == QF_FAIL {
+        return QF_FAIL;
+    }
+
+    // Restore index (copy_loclist_entries may change it)
+    nvim_qf_set_index(to_qfl, nvim_qf_get_index(from_qfl));
+
+    // Assign a new ID and reset changedtick
+    let new_id = nvim_qf_alloc_next_id();
+    nvim_qf_set_id(to_qfl, new_id);
+    nvim_qf_set_changedtick(to_qfl, 0);
+
+    // When no valid entries: ptr -> start, index = 1
+    if nvim_qf_get_nonevalid(to_qfl.cast_const()) {
+        nvim_qf_set_ptr(to_qfl, nvim_qf_get_start(to_qfl.cast_const()));
+        nvim_qf_set_index(to_qfl, 1);
+    }
+
+    OK
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
