@@ -706,101 +706,41 @@ oparg_T *nvim_cap_get_oap(cmdarg_T *cap) { return cap ? cap->oap : NULL; }
 
 int nvim_cap_get_retval(cmdarg_T *cap) { return cap ? cap->retval : 0; }
 
-/// Set cap->retval.
-void nvim_cap_set_retval(cmdarg_T *cap, int val)
-{
-  if (cap) {
-    cap->retval = val;
-  }
-}
+void nvim_cap_set_retval(cmdarg_T *cap, int val) { if (cap) cap->retval = val; }
 
-/// OR val into cap->retval.
-void nvim_cap_or_retval(cmdarg_T *cap, int val)
-{
-  if (cap) {
-    cap->retval |= val;
-  }
-}
+void nvim_cap_or_retval(cmdarg_T *cap, int val) { if (cap) cap->retval |= val; }
 
 int nvim_cap_get_cmdchar(cmdarg_T *cap) { return cap ? cap->cmdchar : 0; }
 
-/// Set cap->cmdchar.
-void nvim_cap_set_cmdchar(cmdarg_T *cap, int val)
-{
-  if (cap) {
-    cap->cmdchar = val;
-  }
-}
+void nvim_cap_set_cmdchar(cmdarg_T *cap, int val) { if (cap) cap->cmdchar = val; }
 
 int nvim_cap_get_nchar(cmdarg_T *cap) { return cap ? cap->nchar : 0; }
 
-/// Set cap->nchar.
-void nvim_cap_set_nchar(cmdarg_T *cap, int val)
-{
-  if (cap) {
-    cap->nchar = val;
-  }
-}
+void nvim_cap_set_nchar(cmdarg_T *cap, int val) { if (cap) cap->nchar = val; }
 
 int nvim_cap_get_extra_char(cmdarg_T *cap) { return cap ? cap->extra_char : 0; }
 
-/// Set cap->extra_char.
-void nvim_cap_set_extra_char(cmdarg_T *cap, int val)
-{
-  if (cap) {
-    cap->extra_char = val;
-  }
-}
+void nvim_cap_set_extra_char(cmdarg_T *cap, int val) { if (cap) cap->extra_char = val; }
 
 int nvim_cap_get_count0(cmdarg_T *cap) { return cap ? cap->count0 : 0; }
 
-/// Set cap->count0.
-void nvim_cap_set_count0(cmdarg_T *cap, int val)
-{
-  if (cap) {
-    cap->count0 = val;
-  }
-}
+void nvim_cap_set_count0(cmdarg_T *cap, int val) { if (cap) cap->count0 = val; }
 
 int nvim_cap_get_count1(cmdarg_T *cap) { return cap ? cap->count1 : 0; }
 
-/// Set cap->count1.
-void nvim_cap_set_count1(cmdarg_T *cap, int val)
-{
-  if (cap) {
-    cap->count1 = val;
-  }
-}
+void nvim_cap_set_count1(cmdarg_T *cap, int val) { if (cap) cap->count1 = val; }
 
 int nvim_cap_get_opcount(cmdarg_T *cap) { return cap ? cap->opcount : 0; }
 
-/// Set cap->opcount.
-void nvim_cap_set_opcount(cmdarg_T *cap, int val)
-{
-  if (cap) {
-    cap->opcount = val;
-  }
-}
+void nvim_cap_set_opcount(cmdarg_T *cap, int val) { if (cap) cap->opcount = val; }
 
 int nvim_cap_get_arg(cmdarg_T *cap) { return cap ? cap->arg : 0; }
 
-/// Set cap->arg.
-void nvim_cap_set_arg(cmdarg_T *cap, int val)
-{
-  if (cap) {
-    cap->arg = val;
-  }
-}
+void nvim_cap_set_arg(cmdarg_T *cap, int val) { if (cap) cap->arg = val; }
 
 int nvim_cap_get_prechar(cmdarg_T *cap) { return cap ? cap->prechar : 0; }
 
-/// Set cap->prechar.
-void nvim_cap_set_prechar(cmdarg_T *cap, int val)
-{
-  if (cap) {
-    cap->prechar = val;
-  }
-}
+void nvim_cap_set_prechar(cmdarg_T *cap, int val) { if (cap) cap->prechar = val; }
 
 // =============================================================================
 // Word motion accessors for Rust FFI
@@ -1245,14 +1185,7 @@ int nvim_mark_mb_adjustpos_cursor(void) { mark_mb_adjustpos(curbuf, &curwin->w_c
 
 int nvim_mark_mb_adjustpos_visual(void) { mark_mb_adjustpos(curbuf, &VIsual); return VIsual.col; }
 
-/// Wrapper for getvcol on a position, returns ce (end virtual column).
-int nvim_getvcol_ce(int lnum, int col, int coladd)
-{
-  pos_T pp = { lnum, col, coladd };
-  colnr_T cs, ce;
-  getvcol(curwin, &pp, &cs, NULL, &ce);
-  return ce - cs;
-}
+int nvim_getvcol_ce(int lnum, int col, int coladd) { pos_T pp = { lnum, col, coladd }; colnr_T cs, ce; getvcol(curwin, &pp, &cs, NULL, &ce); return ce - cs; }
 
 int nvim_ml_get_len_call(int lnum) { return (int)ml_get_len(lnum); }
 
@@ -1493,10 +1426,7 @@ void nvim_nv_select_impl(cmdarg_T *cap) { nv_select_impl(cap); }
 
 // nv_brackets_impl C accessors for Rust FFI
 static void nv_bracket_block(cmdarg_T *cap, const pos_T *old_pos);
-void nvim_nv_bracket_block_call(cmdarg_T *cap)
-{
-  nv_bracket_block(cap, &curwin->w_cursor);
-}
+void nvim_nv_bracket_block_call(cmdarg_T *cap) { nv_bracket_block(cap, &curwin->w_cursor); }
 void nvim_bracket_find_ident(cmdarg_T *cap)
 {
   char *ptr;
