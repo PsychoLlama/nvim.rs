@@ -22,7 +22,13 @@ const fn ascii_iswhite(c: c_int) -> c_int {
     (c == b' ' as c_int || c == b'\t' as c_int) as c_int
 }
 
-#[allow(dead_code)]
+// garray operations needed for regstack/backpos management
+extern "C" {
+    fn ga_init(gap: *mut GarrayT, itemsize: c_int, growsize: c_int);
+    fn ga_grow(gap: *mut GarrayT, n: c_int);
+    fn ga_clear(gap: *mut GarrayT);
+    fn ga_set_growsize(gap: *mut GarrayT, growsize: c_int);
+}
 extern "C" {
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn nvim_regexp_get_char_class(pp: *mut *mut c_char) -> c_int;
@@ -82,10 +88,6 @@ extern "C" {
     fn nvim_regexp_clear_rex_endpos();
     fn nvim_regexp_clear_rex_startp();
     fn nvim_regexp_clear_rex_endp();
-    fn nvim_regexp_clear_reg_startzpos();
-    fn nvim_regexp_clear_reg_endzpos();
-    fn nvim_regexp_clear_reg_startzp();
-    fn nvim_regexp_clear_reg_endzp();
 
 }
 
@@ -183,6 +185,54 @@ static mut NFA_TIMED_OUT: *mut c_int = std::ptr::null_mut();
 static mut NFA_TIME_COUNT: c_int = 0;
 static mut REGEXP_ENGINE: c_int = 0;
 
+// --- Phase 4: regstack/backpos/z-subexpr/eval_result globals (moved from C to Rust) ---
+
+/// Matches C `garray_T` exactly.
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct GarrayT {
+    pub ga_len: c_int,
+    pub ga_maxlen: c_int,
+    pub ga_itemsize: c_int,
+    pub ga_growsize: c_int,
+    pub ga_data: *mut c_void,
+}
+impl GarrayT {
+    const fn empty() -> Self {
+        Self {
+            ga_len: 0,
+            ga_maxlen: 0,
+            ga_itemsize: 0,
+            ga_growsize: 1,
+            ga_data: core::ptr::null_mut(),
+        }
+    }
+}
+
+const MAX_REGSUB_NESTING: usize = 4;
+
+static mut REGSTACK: GarrayT = GarrayT::empty();
+static mut BACKPOS: GarrayT = GarrayT::empty();
+static mut BEHIND_POS: RegsaveT = RegsaveT {
+    rs_u: RegsaveUnion {
+        pos: LposT { lnum: 0, col: 0 },
+    },
+    rs_len: 0,
+};
+static mut REG_TOFREE: *mut u8 = std::ptr::null_mut();
+static mut REG_TOFREELEN: c_uint = 0;
+
+// z-subexpr arrays
+static mut REG_STARTZP: [*mut u8; NSUBEXP] = [std::ptr::null_mut(); NSUBEXP];
+static mut REG_ENDZP: [*mut u8; NSUBEXP] = [std::ptr::null_mut(); NSUBEXP];
+static mut REG_STARTZPOS: [LposT; NSUBEXP] = [LposT { lnum: 0, col: 0 }; NSUBEXP];
+static mut REG_ENDZPOS: [LposT; NSUBEXP] = [LposT { lnum: 0, col: 0 }; NSUBEXP];
+
+// Substitution nesting
+static mut EVAL_RESULT: [*mut c_char; MAX_REGSUB_NESTING] =
+    [std::ptr::null_mut(); MAX_REGSUB_NESTING];
+static mut REGSUB_NESTING: c_int = 0;
+
 /// Expose `HAD_EOL` for external crates (e.g. search crate) that need
 /// `nvim_regexp_get_had_eol()` -- now backed by the Rust static.
 #[no_mangle]
@@ -209,6 +259,66 @@ pub unsafe extern "C" fn nvim_regexp_set_nfa_time_globals(tm: *mut c_void, timed
 #[no_mangle]
 pub unsafe extern "C" fn nvim_regexp_reset_nstate() {
     NSTATE = 0;
+}
+
+/// Called from C `nvim_regexp_eval_regsub_expr()` to get a pointer to `EVAL_RESULT`[i].
+/// C can then read and write through this pointer.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_regexp_get_eval_result_ptr(i: c_int) -> *mut *mut c_char {
+    &raw mut EVAL_RESULT[i as usize]
+}
+
+/// Called from C `nvim_regexp_eval_regsub_expr()` to get a pointer to `REGSUB_NESTING`.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_regexp_get_regsub_nesting_ptr() -> *mut c_int {
+    &raw mut REGSUB_NESTING
+}
+
+/// Called from C `nvim_regexp_bt_init_stacks()` to initialise REGSTACK/BACKPOS.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn nvim_regexp_bt_init_stacks_rust() {
+    if REGSTACK.ga_data.is_null() {
+        ga_init(&raw mut REGSTACK, 1, REGSTACK_INITIAL as c_int);
+        ga_grow(&raw mut REGSTACK, REGSTACK_INITIAL as c_int);
+        ga_set_growsize(&raw mut REGSTACK, (REGSTACK_INITIAL * 8) as c_int);
+    }
+    if BACKPOS.ga_data.is_null() {
+        ga_init(
+            &raw mut BACKPOS,
+            std::mem::size_of::<BackposT>() as c_int,
+            BACKPOS_INITIAL as c_int,
+        );
+        ga_grow(&raw mut BACKPOS, BACKPOS_INITIAL as c_int);
+        ga_set_growsize(&raw mut BACKPOS, (BACKPOS_INITIAL * 8) as c_int);
+    }
+}
+
+/// Called from C `nvim_regexp_bt_cleanup_stacks()` to shrink/free REGSTACK/BACKPOS.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn nvim_regexp_bt_cleanup_stacks_rust() {
+    if REG_TOFREELEN > 400 {
+        xfree(REG_TOFREE.cast::<c_void>());
+        REG_TOFREE = core::ptr::null_mut();
+        REG_TOFREELEN = 0;
+    }
+    if REGSTACK.ga_maxlen > REGSTACK_INITIAL as c_int {
+        ga_clear(&raw mut REGSTACK);
+    }
+    if BACKPOS.ga_maxlen > BACKPOS_INITIAL as c_int {
+        ga_clear(&raw mut BACKPOS);
+    }
+}
+
+/// Called from C `nvim_regexp_call_free_regexp_stuff()` to release all stacks/buffers.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_regexp_free_regexp_stuff_rust() {
+    ga_clear(&raw mut REGSTACK);
+    ga_clear(&raw mut BACKPOS);
+    xfree(REG_TOFREE.cast::<c_void>());
+    REG_TOFREE = core::ptr::null_mut();
+    REG_TOFREELEN = 0;
 }
 
 /// Check for an equivalence class name "[=a=]".  `pp` points to the '['.
@@ -1295,11 +1405,11 @@ pub unsafe extern "C" fn rs_cleanup_zsubexpr() {
         return;
     }
     if nvim_regexp_is_reg_multi() != 0 {
-        nvim_regexp_clear_reg_startzpos();
-        nvim_regexp_clear_reg_endzpos();
+        REG_STARTZPOS = [LposT { lnum: -1, col: -1 }; NSUBEXP];
+        REG_ENDZPOS = [LposT { lnum: -1, col: -1 }; NSUBEXP];
     } else {
-        nvim_regexp_clear_reg_startzp();
-        nvim_regexp_clear_reg_endzp();
+        REG_STARTZP = [core::ptr::null_mut(); NSUBEXP];
+        REG_ENDZP = [core::ptr::null_mut(); NSUBEXP];
     }
     nvim_regexp_set_rex_need_clear_zsubexpr(0);
 }
@@ -1892,10 +2002,6 @@ const RA_MATCH: c_int = 4;
 const RA_NOMATCH: c_int = 5;
 
 extern "C" {
-    fn nvim_regexp_get_reg_tofree() -> *mut u8;
-    fn nvim_regexp_set_reg_tofree(p: *mut u8);
-    fn nvim_regexp_get_reg_tofreelen() -> c_uint;
-    fn nvim_regexp_set_reg_tofreelen(v: c_uint);
     fn nvim_regexp_get_got_int() -> c_int;
     fn mb_strnicmp(s1: *const c_char, s2: *const c_char, nn: usize) -> c_int;
     fn nvim_regexp_get_rex_line_strlen() -> c_int;
@@ -1925,18 +2031,18 @@ pub unsafe extern "C" fn rs_match_with_backref(
     loop {
         // Since getting one line may invalidate the other, need to make copy.
         let line = nvim_regexp_get_rex_line();
-        let reg_tofree = nvim_regexp_get_reg_tofree();
+        let reg_tofree = REG_TOFREE;
         if line != reg_tofree {
             let len = nvim_regexp_get_rex_line_strlen();
-            let reg_tofreelen = nvim_regexp_get_reg_tofreelen() as c_int;
+            let reg_tofreelen = REG_TOFREELEN as c_int;
             if reg_tofree.is_null() || len >= reg_tofreelen {
                 let newlen = len + 50;
-                xfree(nvim_regexp_get_reg_tofree().cast());
+                xfree(REG_TOFREE.cast());
                 let new_buf = xmalloc(newlen as usize).cast::<u8>();
-                nvim_regexp_set_reg_tofree(new_buf);
-                nvim_regexp_set_reg_tofreelen(newlen as c_uint);
+                REG_TOFREE = new_buf;
+                REG_TOFREELEN = newlen as c_uint;
             }
-            let tofree = nvim_regexp_get_reg_tofree();
+            let tofree = REG_TOFREE;
             let cur_line = nvim_regexp_get_rex_line();
             let cur_input = nvim_regexp_get_rex_input();
             // STRCPY: copy including NUL
@@ -2434,12 +2540,6 @@ pub unsafe extern "C" fn rs_prog_magic_wrong() -> c_int {
 extern "C" {
     fn nvim_regexp_emsg_e_null();
     fn nvim_regexp_emsg_e_substitute_nesting();
-    fn nvim_regexp_get_max_regsub_nesting() -> c_int;
-    fn nvim_regexp_get_regsub_nesting() -> c_int;
-    fn nvim_regexp_set_regsub_nesting(v: c_int);
-    fn nvim_regexp_get_eval_result(i: c_int) -> *mut c_char;
-    fn nvim_regexp_set_eval_result(i: c_int, v: *mut c_char);
-    fn nvim_regexp_free_eval_result(i: c_int);
     fn nvim_regexp_eval_regsub_expr(
         source: *mut c_char,
         expr_ptr: *mut c_void,
@@ -2474,8 +2574,9 @@ pub unsafe extern "C" fn rs_vim_regsub_both(
     if nvim_regexp_call_prog_magic_wrong() != 0 {
         return 0;
     }
-    let max_nesting = nvim_regexp_get_max_regsub_nesting();
-    let nesting = nvim_regexp_get_regsub_nesting();
+    #[allow(clippy::cast_possible_truncation)]
+    let max_nesting = MAX_REGSUB_NESTING as c_int;
+    let nesting = REGSUB_NESTING;
     if nesting == max_nesting {
         nvim_regexp_emsg_e_substitute_nesting();
         return 0;
@@ -2488,7 +2589,7 @@ pub unsafe extern "C" fn rs_vim_regsub_both(
     {
         if copy {
             // Copy from previously evaluated result
-            let eval_res = nvim_regexp_get_eval_result(nested);
+            let eval_res = EVAL_RESULT[nested as usize];
             if !eval_res.is_null() {
                 let eval_len = strlen(eval_res);
                 if eval_len < destlen as usize {
@@ -2498,7 +2599,10 @@ pub unsafe extern "C" fn rs_vim_regsub_both(
                         eval_len + 1,
                     );
                     let end = dest.add(eval_len);
-                    nvim_regexp_free_eval_result(nested);
+                    {
+                        xfree(EVAL_RESULT[nested as usize].cast::<c_void>());
+                        EVAL_RESULT[nested as usize] = core::ptr::null_mut();
+                    };
                     *end = 0;
                     #[allow(clippy::cast_possible_truncation)]
                     return (end.offset_from(dest) + 1) as c_int;
@@ -4570,12 +4674,6 @@ extern "C" {
     fn nvim_regexp_get_prog_program(prog: *mut c_void) -> *mut u8;
     fn nvim_regexp_unref_re_extmatch_out();
     fn nvim_regexp_set_re_extmatch_out(em: *mut c_void);
-    fn nvim_regexp_get_reg_startzpos_lnum(i: c_int) -> i32;
-    fn nvim_regexp_get_reg_startzpos_col(i: c_int) -> i32;
-    fn nvim_regexp_get_reg_endzpos_lnum(i: c_int) -> i32;
-    fn nvim_regexp_get_reg_endzpos_col(i: c_int) -> i32;
-    fn nvim_regexp_get_reg_startzp(i: c_int) -> *mut u8;
-    fn nvim_regexp_get_reg_endzp(i: c_int) -> *mut u8;
 }
 
 /// Try match of "prog" at rex.line[col].
@@ -4644,10 +4742,10 @@ pub unsafe extern "C" fn rs_regtry(
             let idx = i as c_int;
             if nvim_regexp_is_reg_multi() != 0 {
                 // Only accept single line matches.
-                let start_lnum = nvim_regexp_get_reg_startzpos_lnum(idx);
-                let start_col = nvim_regexp_get_reg_startzpos_col(idx);
-                let end_lnum = nvim_regexp_get_reg_endzpos_lnum(idx);
-                let end_col = nvim_regexp_get_reg_endzpos_col(idx);
+                let start_lnum = REG_STARTZPOS[idx as usize].lnum;
+                let start_col = REG_STARTZPOS[idx as usize].col;
+                let end_lnum = REG_ENDZPOS[idx as usize].lnum;
+                let end_col = REG_ENDZPOS[idx as usize].col;
                 if start_lnum >= 0 && end_lnum == start_lnum && end_col >= start_col {
                     let line = nvim_regexp_call_reg_getline(start_lnum);
                     (*em).matches[i] =
@@ -4655,8 +4753,8 @@ pub unsafe extern "C" fn rs_regtry(
                             .cast::<u8>();
                 }
             } else {
-                let sp = nvim_regexp_get_reg_startzp(idx);
-                let ep = nvim_regexp_get_reg_endzp(idx);
+                let sp = REG_STARTZP[idx as usize];
+                let ep = REG_ENDZP[idx as usize];
                 if !sp.is_null() && !ep.is_null() {
                     (*em).matches[i] =
                         xstrnsave(sp.cast(), ep.offset_from(sp) as usize).cast::<u8>();
@@ -5144,21 +5242,10 @@ pub struct BackposT {
 #[allow(dead_code)]
 extern "C" {
     // Regstack/backpos management
-    fn nvim_regexp_get_regstack_data() -> *mut u8;
-    fn nvim_regexp_get_regstack_len() -> c_int;
-    fn nvim_regexp_get_regstack_maxlen() -> c_int;
-    fn nvim_regexp_set_regstack_len(v: c_int);
-    fn nvim_regexp_call_ga_grow_regstack(n: c_int);
-
-    fn nvim_regexp_get_backpos_data() -> *mut u8;
-    fn nvim_regexp_get_backpos_len() -> c_int;
-    fn nvim_regexp_set_backpos_len(v: c_int);
-    fn nvim_regexp_call_ga_grow_backpos(n: c_int);
 
     // Brace statics
 
     // Behind position (C returns void*, cast to RegsaveT* on Rust side)
-    fn nvim_regexp_get_behind_pos() -> *mut RegsaveT;
 
     // maxmempattern
     fn nvim_regexp_get_p_mmp() -> i64;
@@ -5194,10 +5281,6 @@ extern "C" {
     // rex.reg_firstlnum: reuse existing nvim_regexp_get_rex_reg_firstlnum (declared above)
 
     // z-subexpr element-pointer accessors for save_se/restore_se
-    fn nvim_regexp_get_reg_startzpos_ptr(i: c_int) -> *mut LposT;
-    fn nvim_regexp_get_reg_endzpos_ptr(i: c_int) -> *mut LposT;
-    fn nvim_regexp_get_reg_startzp_ptr(i: c_int) -> *mut *mut u8;
-    fn nvim_regexp_get_reg_endzp_ptr(i: c_int) -> *mut *mut u8;
 
     // internal_error
     fn nvim_regexp_internal_error(msg: *const c_char);
@@ -5275,20 +5358,19 @@ fn re_num_cmp(val: u32, scan: *const u8) -> bool {
     clippy::cast_ptr_alignment
 )]
 unsafe fn regstack_push(state: c_int, scan: *mut u8) -> *mut RegitemT {
-    if (nvim_regexp_get_regstack_len() as u32 >> 10) as i64 >= nvim_regexp_get_p_mmp() {
+    if (REGSTACK.ga_len as u32 >> 10) as i64 >= nvim_regexp_get_p_mmp() {
         nvim_regexp_emsg_maxmempattern();
         return std::ptr::null_mut();
     }
-    nvim_regexp_call_ga_grow_regstack(std::mem::size_of::<RegitemT>() as c_int);
+    ga_grow(&raw mut REGSTACK, std::mem::size_of::<RegitemT>() as c_int);
 
-    let rp = (nvim_regexp_get_regstack_data().add(nvim_regexp_get_regstack_len() as usize))
-        .cast::<RegitemT>();
+    let rp = (REGSTACK.ga_data.cast::<u8>().add(REGSTACK.ga_len as usize)).cast::<RegitemT>();
     (*rp).rs_state = state;
     (*rp).rs_scan = scan;
 
-    nvim_regexp_set_regstack_len(
-        nvim_regexp_get_regstack_len() + std::mem::size_of::<RegitemT>() as c_int,
-    );
+    {
+        REGSTACK.ga_len += std::mem::size_of::<RegitemT>() as c_int;
+    }
     rp
 }
 
@@ -5301,13 +5383,13 @@ unsafe fn regstack_push(state: c_int, scan: *mut u8) -> *mut RegitemT {
     clippy::cast_ptr_alignment
 )]
 unsafe fn regstack_pop(scan_out: *mut *mut u8) {
-    let rp = (nvim_regexp_get_regstack_data().add(nvim_regexp_get_regstack_len() as usize))
+    let rp = (REGSTACK.ga_data.cast::<u8>().add(REGSTACK.ga_len as usize))
         .cast::<RegitemT>()
         .sub(1);
     *scan_out = (*rp).rs_scan;
-    nvim_regexp_set_regstack_len(
-        nvim_regexp_get_regstack_len() - std::mem::size_of::<RegitemT>() as c_int,
-    );
+    {
+        REGSTACK.ga_len -= std::mem::size_of::<RegitemT>() as c_int;
+    }
 }
 
 /// Save sub-expression start/end: multi-line or single-line.
@@ -5384,8 +5466,12 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
     let mut tm_count: c_int = 0;
 
     // Make "regstack" and "backpos" empty.
-    nvim_regexp_set_regstack_len(0);
-    nvim_regexp_set_backpos_len(0);
+    {
+        REGSTACK.ga_len = 0;
+    };
+    {
+        BACKPOS.ga_len = 0;
+    };
 
     // Cache flags that don't change during matching.
     let is_reg_multi = nvim_regexp_is_reg_multi() != 0;
@@ -5492,7 +5578,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                     }
 
                     BHPOS => {
-                        let bp = nvim_regexp_get_behind_pos();
+                        let bp = &raw mut BEHIND_POS;
                         if is_reg_multi {
                             if (*bp).rs_u.pos.col
                                 != (nvim_regexp_get_rex_input()
@@ -5521,9 +5607,8 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
 
                     BACK => {
                         // Check if we don't keep looping without matching input.
-                        let bp_data = nvim_regexp_get_backpos_data().cast::<BackposT>();
-                        let bp_len = nvim_regexp_get_backpos_len()
-                            / std::mem::size_of::<BackposT>() as c_int;
+                        let bp_data = BACKPOS.ga_data.cast::<u8>().cast::<BackposT>();
+                        let bp_len = BACKPOS.ga_len / std::mem::size_of::<BackposT>() as c_int;
                         let mut i = 0;
                         while i < bp_len {
                             if (*bp_data.add(i as usize)).bp_scan == scan {
@@ -5533,15 +5618,10 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         }
                         if i == bp_len {
                             // First time: add new entry.
-                            nvim_regexp_call_ga_grow_backpos(
-                                std::mem::size_of::<BackposT>() as c_int
-                            );
-                            let bp_data = nvim_regexp_get_backpos_data().cast::<BackposT>();
+                            ga_grow(&raw mut BACKPOS, std::mem::size_of::<BackposT>() as c_int);
+                            let bp_data = BACKPOS.ga_data.cast::<u8>().cast::<BackposT>();
                             (*bp_data.add(i as usize)).bp_scan = scan;
-                            nvim_regexp_set_backpos_len(
-                                nvim_regexp_get_backpos_len()
-                                    + std::mem::size_of::<BackposT>() as c_int,
-                            );
+                            BACKPOS.ga_len += std::mem::size_of::<BackposT>() as c_int;
                         } else if rs_reg_save_equal(std::ptr::from_ref::<RegsaveT>(
                             &(*bp_data.add(i as usize)).bp_pos,
                         )) != 0
@@ -5556,7 +5636,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                                 std::ptr::from_mut::<RegsaveT>(
                                     &mut (*bp_data.add(i as usize)).bp_pos,
                                 ),
-                                nvim_regexp_get_backpos_len(),
+                                BACKPOS.ga_len,
                             );
                         }
                     }
@@ -5945,8 +6025,8 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                             (*rp).rs_no = no as i16;
                             save_se(
                                 &mut (*rp).rs_un.sesave,
-                                nvim_regexp_get_reg_startzpos_ptr(no),
-                                nvim_regexp_get_reg_startzp_ptr(no),
+                                &raw mut REG_STARTZPOS[no as usize],
+                                &raw mut REG_STARTZP[no as usize],
                             );
                         }
                     }
@@ -5975,8 +6055,8 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                             (*rp).rs_no = no as i16;
                             save_se(
                                 &mut (*rp).rs_un.sesave,
-                                nvim_regexp_get_reg_endzpos_ptr(no),
-                                nvim_regexp_get_reg_endzp_ptr(no),
+                                &raw mut REG_ENDZPOS[no as usize],
+                                &raw mut REG_ENDZP[no as usize],
                             );
                         }
                     }
@@ -6113,10 +6193,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                                 status = RA_FAIL;
                             } else {
                                 (*rp).rs_no = no as i16;
-                                rs_reg_save(
-                                    &mut (*rp).rs_un.regsave,
-                                    nvim_regexp_get_backpos_len(),
-                                );
+                                rs_reg_save(&mut (*rp).rs_un.regsave, BACKPOS.ga_len);
                                 next = operand(scan);
                                 // Continue and handle the result when done.
                             }
@@ -6128,10 +6205,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                                     status = RA_FAIL;
                                 } else {
                                     (*rp).rs_no = no as i16;
-                                    rs_reg_save(
-                                        &mut (*rp).rs_un.regsave,
-                                        nvim_regexp_get_backpos_len(),
-                                    );
+                                    rs_reg_save(&mut (*rp).rs_un.regsave, BACKPOS.ga_len);
                                     next = operand(scan);
                                 }
                             }
@@ -6143,10 +6217,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                                 if rp.is_null() {
                                     status = RA_FAIL;
                                 } else {
-                                    rs_reg_save(
-                                        &mut (*rp).rs_un.regsave,
-                                        nvim_regexp_get_backpos_len(),
-                                    );
+                                    rs_reg_save(&mut (*rp).rs_un.regsave, BACKPOS.ga_len);
                                     // Continue with next item (shortest first).
                                 }
                             }
@@ -6194,19 +6265,17 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                             rst.count >= rst.maxval
                         } {
                             // It could match. Push regstar_T + regitem_T.
-                            if (nvim_regexp_get_regstack_len() as u32 >> 10) as i64
-                                >= nvim_regexp_get_p_mmp()
-                            {
+                            if (REGSTACK.ga_len as u32 >> 10) as i64 >= nvim_regexp_get_p_mmp() {
                                 nvim_regexp_emsg_maxmempattern();
                                 status = RA_FAIL;
                             } else {
-                                nvim_regexp_call_ga_grow_regstack(
-                                    std::mem::size_of::<RegstarT>() as c_int
+                                ga_grow(
+                                    &raw mut REGSTACK,
+                                    std::mem::size_of::<RegstarT>() as c_int,
                                 );
-                                nvim_regexp_set_regstack_len(
-                                    nvim_regexp_get_regstack_len()
-                                        + std::mem::size_of::<RegstarT>() as c_int,
-                                );
+                                {
+                                    REGSTACK.ga_len += std::mem::size_of::<RegstarT>() as c_int;
+                                }
                                 let state = if rst.minval <= rst.maxval {
                                     RS_STAR_LONG
                                 } else {
@@ -6232,7 +6301,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                             status = RA_FAIL;
                         } else {
                             (*rp).rs_no = opc as i16;
-                            rs_reg_save(&mut (*rp).rs_un.regsave, nvim_regexp_get_backpos_len());
+                            rs_reg_save(&mut (*rp).rs_un.regsave, BACKPOS.ga_len);
                             next = operand(scan);
                             // Continue and handle the result when done.
                         }
@@ -6240,19 +6309,17 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
 
                     BEHIND | NOBEHIND => {
                         // Need a bit of room to store extra positions.
-                        if (nvim_regexp_get_regstack_len() as u32 >> 10) as i64
-                            >= nvim_regexp_get_p_mmp()
-                        {
+                        if (REGSTACK.ga_len as u32 >> 10) as i64 >= nvim_regexp_get_p_mmp() {
                             nvim_regexp_emsg_maxmempattern();
                             status = RA_FAIL;
                         } else {
-                            nvim_regexp_call_ga_grow_regstack(
-                                std::mem::size_of::<RegbehindT>() as c_int
+                            ga_grow(
+                                &raw mut REGSTACK,
+                                std::mem::size_of::<RegbehindT>() as c_int,
                             );
-                            nvim_regexp_set_regstack_len(
-                                nvim_regexp_get_regstack_len()
-                                    + std::mem::size_of::<RegbehindT>() as c_int,
-                            );
+                            {
+                                REGSTACK.ga_len += std::mem::size_of::<RegbehindT>() as c_int;
+                            }
                             let rp = regstack_push(RS_BEHIND1, scan);
                             if rp.is_null() {
                                 status = RA_FAIL;
@@ -6260,10 +6327,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                                 // Save subexpr to restore if match is not used.
                                 rs_save_subexpr(rp.cast::<RegbehindT>().sub(1));
                                 (*rp).rs_no = opc as i16;
-                                rs_reg_save(
-                                    &mut (*rp).rs_un.regsave,
-                                    nvim_regexp_get_backpos_len(),
-                                );
+                                rs_reg_save(&mut (*rp).rs_un.regsave, BACKPOS.ga_len);
                                 // First try if what follows matches. If it does
                                 // then we check the behind match by looping.
                             }
@@ -6413,8 +6477,8 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
         } // end of inner loop
 
         // If there is something on the regstack, execute backtracking handlers.
-        while nvim_regexp_get_regstack_len() > 0 && status != RA_FAIL {
-            let rp = (nvim_regexp_get_regstack_data().add(nvim_regexp_get_regstack_len() as usize))
+        while REGSTACK.ga_len > 0 && status != RA_FAIL {
+            let rp = (REGSTACK.ga_data.cast::<u8>().add(REGSTACK.ga_len as usize))
                 .cast::<RegitemT>()
                 .sub(1);
 
@@ -6443,8 +6507,8 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         let no = (*rp).rs_no as c_int;
                         restore_se(
                             &(*rp).rs_un.sesave,
-                            nvim_regexp_get_reg_startzpos_ptr(no),
-                            nvim_regexp_get_reg_startzp_ptr(no),
+                            &raw mut REG_STARTZPOS[no as usize],
+                            &raw mut REG_STARTZP[no as usize],
                         );
                     }
                     regstack_pop(&mut scan);
@@ -6469,8 +6533,8 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         let no = (*rp).rs_no as c_int;
                         restore_se(
                             &(*rp).rs_un.sesave,
-                            nvim_regexp_get_reg_endzpos_ptr(no),
-                            nvim_regexp_get_reg_endzp_ptr(no),
+                            &raw mut REG_ENDZPOS[no as usize],
+                            &raw mut REG_ENDZP[no as usize],
                         );
                     }
                     regstack_pop(&mut scan);
@@ -6483,9 +6547,11 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                     } else {
                         if status != RA_BREAK {
                             // After a non-matching branch: try next one.
-                            let mut bp_len = nvim_regexp_get_backpos_len();
+                            let mut bp_len = BACKPOS.ga_len;
                             rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
-                            nvim_regexp_set_backpos_len(bp_len);
+                            {
+                                BACKPOS.ga_len = bp_len;
+                            };
                             scan = (*rp).rs_scan;
                         }
                         if scan.is_null() || op(scan) != BRANCH {
@@ -6495,7 +6561,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         } else {
                             // Prepare to try a branch.
                             (*rp).rs_scan = rs_regnext(scan);
-                            rs_reg_save(&mut (*rp).rs_un.regsave, nvim_regexp_get_backpos_len());
+                            rs_reg_save(&mut (*rp).rs_un.regsave, BACKPOS.ga_len);
                             scan = operand(scan);
                         }
                     }
@@ -6517,9 +6583,11 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         status = RA_CONT;
                         if (*rp).rs_no != SUBPAT as i16 {
                             // zero-width
-                            let mut bp_len = nvim_regexp_get_backpos_len();
+                            let mut bp_len = BACKPOS.ga_len;
                             rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
-                            nvim_regexp_set_backpos_len(bp_len);
+                            {
+                                BACKPOS.ga_len = bp_len;
+                            };
                         }
                     }
                     regstack_pop(&mut scan);
@@ -6531,10 +6599,9 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                 RS_BEHIND1 => {
                     if status == RA_NOMATCH {
                         regstack_pop(&mut scan);
-                        nvim_regexp_set_regstack_len(
-                            nvim_regexp_get_regstack_len()
-                                - std::mem::size_of::<RegbehindT>() as c_int,
-                        );
+                        {
+                            REGSTACK.ga_len -= std::mem::size_of::<RegbehindT>() as c_int;
+                        }
                     } else {
                         // The stuff after BEHIND/NOBEHIND matches. Now try if
                         // the behind part does (not) match before the current
@@ -6542,44 +6609,47 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         let rbp = rp.cast::<RegbehindT>().sub(1);
 
                         // Save the position after the found match for next.
-                        rs_reg_save(&mut (*rbp).save_after, nvim_regexp_get_backpos_len());
+                        rs_reg_save(&mut (*rbp).save_after, BACKPOS.ga_len);
 
                         // Set behind_pos to where the match should end, BHPOS
                         // will match it. Save the current value.
-                        let bp = nvim_regexp_get_behind_pos();
+                        let bp = &raw mut BEHIND_POS;
                         (*rbp).save_behind = *bp;
                         *bp = (*rp).rs_un.regsave;
 
                         (*rp).rs_state = RS_BEHIND2;
 
-                        let mut bp_len = nvim_regexp_get_backpos_len();
+                        let mut bp_len = BACKPOS.ga_len;
                         rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
-                        nvim_regexp_set_backpos_len(bp_len);
+                        {
+                            BACKPOS.ga_len = bp_len;
+                        };
                         scan = operand((*rp).rs_scan).add(4);
                     }
                 }
 
                 RS_BEHIND2 => {
                     // Looping for BEHIND / NOBEHIND match.
-                    let bp = nvim_regexp_get_behind_pos();
+                    let bp = &raw mut BEHIND_POS;
                     let rbp = rp.cast::<RegbehindT>().sub(1);
                     if status == RA_MATCH && rs_reg_save_equal(bp) != 0 {
                         // Found a match that ends where "next" started.
                         *bp = (*rbp).save_behind;
                         if (*rp).rs_no == BEHIND as i16 {
-                            let mut bp_len = nvim_regexp_get_backpos_len();
+                            let mut bp_len = BACKPOS.ga_len;
                             rs_reg_restore(&(*rbp).save_after, &mut bp_len);
-                            nvim_regexp_set_backpos_len(bp_len);
+                            {
+                                BACKPOS.ga_len = bp_len;
+                            };
                         } else {
                             // NOBEHIND: we didn't want a match. Restore subexpr.
                             status = RA_NOMATCH;
                             rs_restore_subexpr(rbp);
                         }
                         regstack_pop(&mut scan);
-                        nvim_regexp_set_regstack_len(
-                            nvim_regexp_get_regstack_len()
-                                - std::mem::size_of::<RegbehindT>() as c_int,
-                        );
+                        {
+                            REGSTACK.ga_len -= std::mem::size_of::<RegbehindT>() as c_int;
+                        }
                     } else {
                         // No match or match doesn't end where we want it.
                         // Go back one character. May go to previous line once.
@@ -6607,9 +6677,11 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                                 {
                                     no_advance = true;
                                 } else {
-                                    let mut bp_len = nvim_regexp_get_backpos_len();
+                                    let mut bp_len = BACKPOS.ga_len;
                                     rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
-                                    nvim_regexp_set_backpos_len(bp_len);
+                                    {
+                                        BACKPOS.ga_len = bp_len;
+                                    };
                                     #[allow(clippy::cast_possible_truncation)]
                                     let line_len =
                                         strlen(nvim_regexp_get_rex_line().cast::<c_char>()) as i32;
@@ -6648,9 +6720,11 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                             // Can't advance. For NOBEHIND that's a match.
                             *bp = (*rbp).save_behind;
                             if (*rp).rs_no == NOBEHIND as i16 {
-                                let mut bp_len = nvim_regexp_get_backpos_len();
+                                let mut bp_len = BACKPOS.ga_len;
                                 rs_reg_restore(&(*rbp).save_after, &mut bp_len);
-                                nvim_regexp_set_backpos_len(bp_len);
+                                {
+                                    BACKPOS.ga_len = bp_len;
+                                };
                                 status = RA_MATCH;
                             } else {
                                 // We do want a proper match. Restore subexpr if
@@ -6661,15 +6735,16 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                                 }
                             }
                             regstack_pop(&mut scan);
-                            nvim_regexp_set_regstack_len(
-                                nvim_regexp_get_regstack_len()
-                                    - std::mem::size_of::<RegbehindT>() as c_int,
-                            );
+                            {
+                                REGSTACK.ga_len -= std::mem::size_of::<RegbehindT>() as c_int;
+                            }
                         } else {
                             // Advanced, prepare for finding match again.
-                            let mut bp_len = nvim_regexp_get_backpos_len();
+                            let mut bp_len = BACKPOS.ga_len;
                             rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
-                            nvim_regexp_set_backpos_len(bp_len);
+                            {
+                                BACKPOS.ga_len = bp_len;
+                            };
                             scan = operand((*rp).rs_scan).add(4);
                             if status == RA_MATCH {
                                 // We did match, so subexpr may have been changed,
@@ -6685,9 +6760,11 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                 RS_BRCPLX_MORE => {
                     // Pop the state. Restore pointers when there is no match.
                     if status == RA_NOMATCH {
-                        let mut bp_len = nvim_regexp_get_backpos_len();
+                        let mut bp_len = BACKPOS.ga_len;
                         rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
-                        nvim_regexp_set_backpos_len(bp_len);
+                        {
+                            BACKPOS.ga_len = bp_len;
+                        };
                         let no = (*rp).rs_no as c_int;
                         BRACE_COUNT[no as usize] -= 1;
                     }
@@ -6698,9 +6775,11 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                     // Pop the state. Restore pointers when there is no match.
                     if status == RA_NOMATCH {
                         // There was no match, but we did find enough matches.
-                        let mut bp_len = nvim_regexp_get_backpos_len();
+                        let mut bp_len = BACKPOS.ga_len;
                         rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
-                        nvim_regexp_set_backpos_len(bp_len);
+                        {
+                            BACKPOS.ga_len = bp_len;
+                        };
                         let no = (*rp).rs_no as c_int;
                         BRACE_COUNT[no as usize] -= 1;
                         // Continue with the items after "\{}".
@@ -6716,9 +6795,11 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                     // Pop the state. Restore pointers when there is no match.
                     if status == RA_NOMATCH {
                         // There was no match, try to match one more item.
-                        let mut bp_len = nvim_regexp_get_backpos_len();
+                        let mut bp_len = BACKPOS.ga_len;
                         rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
-                        nvim_regexp_set_backpos_len(bp_len);
+                        {
+                            BACKPOS.ga_len = bp_len;
+                        };
                     }
                     regstack_pop(&mut scan);
                     if status == RA_NOMATCH {
@@ -6732,18 +6813,19 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
 
                     if status == RA_MATCH {
                         regstack_pop(&mut scan);
-                        nvim_regexp_set_regstack_len(
-                            nvim_regexp_get_regstack_len()
-                                - std::mem::size_of::<RegstarT>() as c_int,
-                        );
+                        {
+                            REGSTACK.ga_len -= std::mem::size_of::<RegstarT>() as c_int;
+                        }
                     } else {
                         // Tried once already, restore input pointers.
                         if status == RA_BREAK {
                             // First time through — skip restore.
                         } else {
-                            let mut bp_len = nvim_regexp_get_backpos_len();
+                            let mut bp_len = BACKPOS.ga_len;
                             rs_reg_restore(&(*rp).rs_un.regsave, &mut bp_len);
-                            nvim_regexp_set_backpos_len(bp_len);
+                            {
+                                BACKPOS.ga_len = bp_len;
+                            };
                         }
 
                         // Repeat until we found a position where it could match.
@@ -6806,10 +6888,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                                 || c_int::from(*nvim_regexp_get_rex_input()) == (*rst).nextb
                                 || c_int::from(*nvim_regexp_get_rex_input()) == (*rst).nextb_ic
                             {
-                                rs_reg_save(
-                                    &mut (*rp).rs_un.regsave,
-                                    nvim_regexp_get_backpos_len(),
-                                );
+                                rs_reg_save(&mut (*rp).rs_un.regsave, BACKPOS.ga_len);
                                 scan = rs_regnext((*rp).rs_scan);
                                 status = RA_CONT;
                                 found = true;
@@ -6819,10 +6898,9 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         if !found && status != RA_CONT {
                             // Failed.
                             regstack_pop(&mut scan);
-                            nvim_regexp_set_regstack_len(
-                                nvim_regexp_get_regstack_len()
-                                    - std::mem::size_of::<RegstarT>() as c_int,
-                            );
+                            {
+                                REGSTACK.ga_len -= std::mem::size_of::<RegstarT>() as c_int;
+                            }
                             status = RA_NOMATCH;
                         }
                     }
@@ -6840,10 +6918,12 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
             // If we want to continue the inner loop or didn't pop a state, break.
             if status == RA_CONT
                 || rp
-                    == (nvim_regexp_get_regstack_data()
-                        .add(nvim_regexp_get_regstack_len() as usize))
-                    .cast::<RegitemT>()
-                    .sub(1)
+                    == REGSTACK
+                        .ga_data
+                        .cast::<u8>()
+                        .add(REGSTACK.ga_len as usize)
+                        .cast::<RegitemT>()
+                        .sub(1)
             {
                 break;
             }
@@ -6855,7 +6935,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
         }
 
         // If the regstack is empty or something failed we are done.
-        if nvim_regexp_get_regstack_len() == 0 || status == RA_FAIL {
+        if REGSTACK.ga_len == 0 || status == RA_FAIL {
             if scan.is_null() {
                 nvim_regexp_iemsg_re_corr();
             }

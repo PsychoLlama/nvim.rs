@@ -335,12 +335,6 @@ char *skip_regexp_ex(char *startp, int dirc, int magic, char **newp, int *droppe
 
 // Global work variables for vim_regexec().
 
-// Sometimes need to save a copy of a line.  Since alloc()/free() is very
-// slow, we keep one allocated piece of memory and only re-allocate it when
-// it's too small.  It's freed in bt_regexec_both() when finished.
-static uint8_t *reg_tofree = NULL;
-static unsigned reg_tofreelen;
-
 // Structure used to store the execution state of the regex engine.
 // Which ones are set depends on whether a single-line or multi-line match is
 // done:
@@ -471,11 +465,6 @@ static colnr_T reg_getline_len(linenr_T lnum)
   return length;
 }
 
-static uint8_t *reg_startzp[NSUBEXP];  // Workspace to mark beginning
-static uint8_t *reg_endzp[NSUBEXP];    //   and end of \z(...\) matches
-static lpos_T reg_startzpos[NSUBEXP];   // idem, beginning pos
-static lpos_T reg_endzpos[NSUBEXP];     // idem, end pos
-
 // true if using multi-line regexp.
 #define REG_MULTI       (rex.reg_match == NULL)
 
@@ -495,11 +484,6 @@ void nvim_regexp_clear_rex_startpos(void) { memset(rex.reg_startpos, 0xff, sizeo
 void nvim_regexp_clear_rex_endpos(void) { memset(rex.reg_endpos, 0xff, sizeof(lpos_T) * NSUBEXP); }
 void nvim_regexp_clear_rex_startp(void) { memset(rex.reg_startp, 0, sizeof(char *) * NSUBEXP); }
 void nvim_regexp_clear_rex_endp(void) { memset(rex.reg_endp, 0, sizeof(char *) * NSUBEXP); }
-void nvim_regexp_clear_reg_startzpos(void) { memset(reg_startzpos, 0xff, sizeof(lpos_T) * NSUBEXP); }
-void nvim_regexp_clear_reg_endzpos(void) { memset(reg_endzpos, 0xff, sizeof(lpos_T) * NSUBEXP); }
-void nvim_regexp_clear_reg_startzp(void) { memset(reg_startzp, 0, sizeof(char *) * NSUBEXP); }
-void nvim_regexp_clear_reg_endzp(void) { memset(reg_endzp, 0, sizeof(char *) * NSUBEXP); }
-
 // reg_prev_class accessors for Rust FFI
 uint8_t *nvim_regexp_get_rex_input(void) { return rex.input; }
 uint8_t *nvim_regexp_get_rex_line(void) { return rex.line; }
@@ -511,11 +495,6 @@ void nvim_regexp_set_rex_lnum(int32_t v) { rex.lnum = (linenr_T)v; }
 void nvim_regexp_set_rex_line_and_input(uint8_t *line) { rex.line = line; rex.input = line; }
 char *nvim_regexp_call_reg_getline(int32_t lnum) { return reg_getline((linenr_T)lnum); }
 
-// match_with_backref accessors for Rust FFI
-uint8_t *nvim_regexp_get_reg_tofree(void) { return reg_tofree; }
-void nvim_regexp_set_reg_tofree(uint8_t *p) { reg_tofree = p; }
-unsigned nvim_regexp_get_reg_tofreelen(void) { return reg_tofreelen; }
-void nvim_regexp_set_reg_tofreelen(unsigned v) { reg_tofreelen = v; }
 void nvim_regexp_set_rex_line(uint8_t *line) { rex.line = line; }
 void nvim_regexp_set_rex_input(uint8_t *input) { rex.input = input; }
 int nvim_regexp_get_got_int(void) { return got_int; }
@@ -532,13 +511,6 @@ uint8_t nvim_regexp_get_prog_reghasz(const void *prog) { return ((const bt_regpr
 uint8_t *nvim_regexp_get_prog_program(void *prog) { return ((bt_regprog_T *)prog)->program; }
 void nvim_regexp_unref_re_extmatch_out(void) { unref_extmatch(re_extmatch_out); }
 void nvim_regexp_set_re_extmatch_out(void *em) { re_extmatch_out = (reg_extmatch_T *)em; }
-int32_t nvim_regexp_get_reg_startzpos_lnum(int i) { return (int32_t)reg_startzpos[i].lnum; }
-int32_t nvim_regexp_get_reg_startzpos_col(int i) { return (int32_t)reg_startzpos[i].col; }
-int32_t nvim_regexp_get_reg_endzpos_lnum(int i) { return (int32_t)reg_endzpos[i].lnum; }
-int32_t nvim_regexp_get_reg_endzpos_col(int i) { return (int32_t)reg_endzpos[i].col; }
-uint8_t *nvim_regexp_get_reg_startzp(int i) { return reg_startzp[i]; }
-uint8_t *nvim_regexp_get_reg_endzp(int i) { return reg_endzp[i]; }
-
 // reg_breakcheck / reg_iswordc accessors for Rust FFI
 int nvim_regexp_get_rex_reg_nobreak(void) { return rex.reg_nobreak; }
 void *nvim_regexp_get_rex_reg_buf(void) { return (void *)rex.reg_buf; }
@@ -740,27 +712,9 @@ int vim_regsub_multi(regmmatch_T *rmp, linenr_T lnum, char *source, char *dest, 
   return rs_vim_regsub_multi(rmp, (int32_t)lnum, source, dest, destlen, flags);
 }
 
-// When nesting more than a couple levels it's probably a mistake.
-#define MAX_REGSUB_NESTING 4
-static char *eval_result[MAX_REGSUB_NESTING] = { NULL, NULL, NULL, NULL };
-static int regsub_nesting = 0;
-
-#if defined(EXITFREE)
-void free_resub_eval_result(void)
-{
-  for (int i = 0; i < MAX_REGSUB_NESTING; i++) {
-    XFREE_CLEAR(eval_result[i]);
-  }
-}
-#endif
-
-// --- eval_result accessors for Rust FFI ---
-int nvim_regexp_get_max_regsub_nesting(void) { return MAX_REGSUB_NESTING; }
-int nvim_regexp_get_regsub_nesting(void) { return regsub_nesting; }
-void nvim_regexp_set_regsub_nesting(int v) { regsub_nesting = v; }
-char *nvim_regexp_get_eval_result(int i) { return eval_result[i]; }
-void nvim_regexp_set_eval_result(int i, char *v) { eval_result[i] = v; }
-void nvim_regexp_free_eval_result(int i) { XFREE_CLEAR(eval_result[i]); }
+// Forward declarations for Rust-exported state accessors
+char **nvim_regexp_get_eval_result_ptr(int i);
+int *nvim_regexp_get_regsub_nesting_ptr(void);
 
 /// Compound accessor: evaluate a \= substitution expression.
 /// Handles all VimL type interactions (call_func, eval_to_string, typval_T, etc.)
@@ -769,17 +723,21 @@ void nvim_regexp_free_eval_result(int i) { XFREE_CLEAR(eval_result[i]); }
 /// @param source     the substitution string (for eval_to_string path, source+2 is used)
 /// @param expr       opaque pointer to typval_T* (or NULL for string \= path)
 /// @param flags      REGSUB_* flags
-/// @param nested     nesting level (index into eval_result[])
+/// @param nested     nesting level (index into EVAL_RESULT[] in Rust)
 ///
-/// Stores result in eval_result[nested] and returns its strlen, or -1 on error.
-/// Side effects: saves/restores can_f_submatch and rsm; increments/decrements nesting.
+/// Stores result in EVAL_RESULT[nested] (Rust static) and returns its strlen, or 0 on error.
+/// Side effects: saves/restores can_f_submatch and rsm; increments/decrements REGSUB_NESTING.
 int nvim_regexp_eval_regsub_expr(char *source, void *expr_ptr, int flags, int nested)
 {
   typval_T *expr = (typval_T *)expr_ptr;
   const bool prev_can_f_submatch = can_f_submatch;
   regsubmatch_T rsm_save;
 
-  XFREE_CLEAR(eval_result[nested]);
+  // Access eval_result and regsub_nesting via Rust-exported pointers
+  char **eval_result_p = nvim_regexp_get_eval_result_ptr(nested);
+  int *regsub_nesting_p = nvim_regexp_get_regsub_nesting_ptr();
+
+  XFREE_CLEAR(*eval_result_p);
 
   // The expression may contain substitute(), which calls us
   // recursively.  Make sure submatch() gets the text from the first
@@ -797,7 +755,7 @@ int nvim_regexp_eval_regsub_expr(char *source, void *expr_ptr, int flags, int ne
   // Although unlikely, it is possible that the expression invokes a
   // substitute command (it might fail, but still).  Therefore keep
   // an array of eval results.
-  regsub_nesting++;
+  (*regsub_nesting_p)++;
 
   if (expr != NULL) {
     typval_T argv[2];
@@ -827,24 +785,24 @@ int nvim_regexp_eval_regsub_expr(char *source, void *expr_ptr, int flags, int ne
     }
     if (rettv.v_type == VAR_UNKNOWN) {
       // something failed, no need to report another error
-      eval_result[nested] = NULL;
+      *eval_result_p = NULL;
     } else {
       char buf[NUMBUFLEN];
-      eval_result[nested] = (char *)tv_get_string_buf_chk(&rettv, buf);
-      if (eval_result[nested] != NULL) {
-        eval_result[nested] = xstrdup(eval_result[nested]);
+      *eval_result_p = (char *)tv_get_string_buf_chk(&rettv, buf);
+      if (*eval_result_p != NULL) {
+        *eval_result_p = xstrdup(*eval_result_p);
       }
     }
     tv_clear(&rettv);
   } else {
-    eval_result[nested] = eval_to_string(source + 2, true, false);
+    *eval_result_p = eval_to_string(source + 2, true, false);
   }
-  regsub_nesting--;
+  (*regsub_nesting_p)--;
 
-  if (eval_result[nested] != NULL) {
+  if (*eval_result_p != NULL) {
     int had_backslash = false;
 
-    for (char *s = eval_result[nested]; *s != NUL; MB_PTR_ADV(s)) {
+    for (char *s = *eval_result_p; *s != NUL; MB_PTR_ADV(s)) {
       // Change NL to CR, so that it becomes a line break,
       // unless called from vim_regexec_nl().
       // Skip over a backslashed character.
@@ -865,9 +823,9 @@ int nvim_regexp_eval_regsub_expr(char *source, void *expr_ptr, int flags, int ne
     }
     if (had_backslash && (flags & REGSUB_BACKSLASH)) {
       // Backslashes will be consumed, need to double them.
-      char *s = vim_strsave_escaped(eval_result[nested], "\\");
-      xfree(eval_result[nested]);
-      eval_result[nested] = s;
+      char *s = vim_strsave_escaped(*eval_result_p, "\\");
+      xfree(*eval_result_p);
+      *eval_result_p = s;
     }
   }
 
@@ -876,8 +834,8 @@ int nvim_regexp_eval_regsub_expr(char *source, void *expr_ptr, int flags, int ne
     rsm = rsm_save;
   }
 
-  if (eval_result[nested] != NULL) {
-    return (int)strlen(eval_result[nested]);
+  if (*eval_result_p != NULL) {
+    return (int)strlen(*eval_result_p);
   }
   return 0;
 }
@@ -1139,19 +1097,6 @@ void nvim_regexp_emsg2_e369(int m)
   rc_did_emsg = true;
 }
 
-// used to store input position when a BACK was encountered, so that we now if
-// we made any progress since the last time.
-typedef struct backpos_S {
-  uint8_t *bp_scan;         // "scan" where BACK was encountered
-  regsave_T bp_pos;           // last input position
-} backpos_T;
-
-static garray_T regstack = GA_EMPTY_INIT_VALUE;
-static garray_T backpos = GA_EMPTY_INIT_VALUE;
-static regsave_T behind_pos;
-#define REGSTACK_INITIAL        2048
-#define BACKPOS_INITIAL         64
-
 // Thin wrapper: compile via Rust BT engine.
 static regprog_T *bt_regcomp(uint8_t *expr, int re_flags)
 {
@@ -1168,21 +1113,6 @@ static void bt_regfree(regprog_T *prog)
 }
 
 // --- regmatch accessor functions for Rust FFI (rs_regmatch) ---
-
-// Regstack/backpos management
-uint8_t *nvim_regexp_get_regstack_data(void) { return (uint8_t *)regstack.ga_data; }
-int nvim_regexp_get_regstack_len(void) { return regstack.ga_len; }
-int nvim_regexp_get_regstack_maxlen(void) { return regstack.ga_maxlen; }
-void nvim_regexp_set_regstack_len(int v) { regstack.ga_len = v; }
-void nvim_regexp_call_ga_grow_regstack(int n) { ga_grow(&regstack, n); }
-
-uint8_t *nvim_regexp_get_backpos_data(void) { return (uint8_t *)backpos.ga_data; }
-int nvim_regexp_get_backpos_len(void) { return backpos.ga_len; }
-void nvim_regexp_set_backpos_len(int v) { backpos.ga_len = v; }
-void nvim_regexp_call_ga_grow_backpos(int n) { ga_grow(&backpos, n); }
-
-// Behind position (return void* to avoid exposing local regsave_T type in generated header)
-void *nvim_regexp_get_behind_pos(void) { return (void *)&behind_pos; }
 
 // maxmempattern option
 int64_t nvim_regexp_get_p_mmp(void) { return p_mmp; }
@@ -1230,12 +1160,6 @@ int nvim_regexp_call_mb_get_class_tab(uint8_t *p) {
 }
 
 void nvim_regexp_internal_error(const char *msg) { internal_error(msg); }
-
-// z-subexpr element-pointer accessors for save_se/restore_se in rs_regmatch
-lpos_T *nvim_regexp_get_reg_startzpos_ptr(int i) { return &reg_startzpos[i]; }
-lpos_T *nvim_regexp_get_reg_endzpos_ptr(int i) { return &reg_endzpos[i]; }
-uint8_t **nvim_regexp_get_reg_startzp_ptr(int i) { return &reg_startzp[i]; }
-uint8_t **nvim_regexp_get_reg_endzp_ptr(int i) { return &reg_endzp[i]; }
 
 // Thin wrappers: BT engine vtable entry points delegate to Rust.
 static int bt_regexec_nl(regmatch_T *rmp, uint8_t *line, colnr_T col, bool line_lbr)
@@ -1947,31 +1871,18 @@ void nvim_regexp_call_iemsg_null(void) { iemsg(_(e_null)); }
 
 // bt_regexec_both accessors
 
-// Init regstack and backpos if not allocated yet
+// Forward declarations for Rust-exported stack management
+void nvim_regexp_bt_init_stacks_rust(void);
+void nvim_regexp_bt_cleanup_stacks_rust(void);
+
+// Init regstack and backpos if not allocated yet (delegates to Rust)
 void nvim_regexp_bt_init_stacks(void) {
-  if (regstack.ga_data == NULL) {
-    ga_init(&regstack, 1, REGSTACK_INITIAL);
-    ga_grow(&regstack, REGSTACK_INITIAL);
-    ga_set_growsize(&regstack, REGSTACK_INITIAL * 8);
-  }
-  if (backpos.ga_data == NULL) {
-    ga_init(&backpos, sizeof(backpos_T), BACKPOS_INITIAL);
-    ga_grow(&backpos, BACKPOS_INITIAL);
-    ga_set_growsize(&backpos, BACKPOS_INITIAL * 8);
-  }
+  nvim_regexp_bt_init_stacks_rust();
 }
 
-// Cleanup stacks and reg_tofree after bt_regexec_both
+// Cleanup stacks and reg_tofree after bt_regexec_both (delegates to Rust)
 void nvim_regexp_bt_cleanup_stacks(void) {
-  if (reg_tofreelen > 400) {
-    XFREE_CLEAR(reg_tofree);
-  }
-  if (regstack.ga_maxlen > REGSTACK_INITIAL) {
-    ga_clear(&regstack);
-  }
-  if (backpos.ga_maxlen > BACKPOS_INITIAL) {
-    ga_clear(&backpos);
-  }
+  nvim_regexp_bt_cleanup_stacks_rust();
 }
 
 // bt_regprog_T field getters
@@ -1984,10 +1895,9 @@ void nvim_regexp_call_engine_regfree(void *prog) {
   ((regprog_T *)prog)->engine->regfree((regprog_T *)prog);
 }
 
+void nvim_regexp_free_regexp_stuff_rust(void);
 void nvim_regexp_call_free_regexp_stuff(void) {
-  ga_clear(&regstack);
-  ga_clear(&backpos);
-  xfree(reg_tofree);
+  nvim_regexp_free_regexp_stuff_rust();
   xfree(reg_prev_sub);
 }
 // vim_regexec public API accessors
