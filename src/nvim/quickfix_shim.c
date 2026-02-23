@@ -811,49 +811,11 @@ EfmHandle nvim_qf_parse_efm_option(char *efm) { return efm == NULL ? NULL : pars
 void nvim_qf_free_efm_list(EfmHandle efm_first) { efm_T *efm = (efm_T *)efm_first; free_efm_list(&efm); }
 
 /// Get the next pattern in the errorformat list
-EfmHandle nvim_efm_get_next(EfmHandle efm)
-{
-  if (efm == NULL) {
-    return NULL;
-  }
-  return ((efm_T *)efm)->next;
-}
-
-/// Get the prefix character of an errorformat pattern
-char nvim_efm_get_prefix(EfmHandle efm)
-{
-  if (efm == NULL) {
-    return '\0';
-  }
-  return ((efm_T *)efm)->prefix;
-}
-
-/// Get the flags character of an errorformat pattern
-char nvim_efm_get_flags(EfmHandle efm)
-{
-  if (efm == NULL) {
-    return '\0';
-  }
-  return ((efm_T *)efm)->flags;
-}
-
-/// Check if an errorformat pattern has a conthere marker (%>)
-int nvim_efm_get_conthere(EfmHandle efm)
-{
-  if (efm == NULL) {
-    return 0;
-  }
-  return ((efm_T *)efm)->conthere;
-}
-
-/// Returns the capture group number (1-based) or 0 if not used
-char nvim_efm_get_addr(EfmHandle efm, int idx)
-{
-  if (efm == NULL || idx < 0 || idx >= FMT_PATTERNS) {
-    return 0;
-  }
-  return ((efm_T *)efm)->addr[idx];
-}
+EfmHandle nvim_efm_get_next(EfmHandle efm) { return efm == NULL ? NULL : ((efm_T *)efm)->next; }
+char nvim_efm_get_prefix(EfmHandle efm) { return efm == NULL ? '\0' : ((efm_T *)efm)->prefix; }
+char nvim_efm_get_flags(EfmHandle efm) { return efm == NULL ? '\0' : ((efm_T *)efm)->flags; }
+int nvim_efm_get_conthere(EfmHandle efm) { return efm == NULL ? 0 : ((efm_T *)efm)->conthere; }
+char nvim_efm_get_addr(EfmHandle efm, int idx) { return (efm == NULL || idx < 0 || idx >= FMT_PATTERNS) ? 0 : ((efm_T *)efm)->addr[idx]; }
 
 static int qf_get_nextline(qfstate_T *state);
 static int qf_setup_state(qfstate_T *pstate, char *restrict enc, const char *restrict efile,
@@ -892,50 +854,11 @@ int nvim_qf_state_setup_buffer(QfStateHandle state, void *buf, int lnumfirst, in
                         (buf_T *)buf, lnumfirst, lnumlast);
 }
 
-/// Returns QF_OK, QF_END_OF_INPUT, or QF_FAIL
-int nvim_qf_state_get_nextline(QfStateHandle state)
-{
-  if (state == NULL) {
-    return QF_FAIL;
-  }
-  return qf_get_nextline((qfstate_T *)state);
-}
-
-/// Get the current line buffer from the parser state
-const char *nvim_qf_state_get_linebuf(QfStateHandle state)
-{
-  if (state == NULL) {
-    return NULL;
-  }
-  return ((qfstate_T *)state)->linebuf;
-}
-
-/// Get the current line length from the parser state
-size_t nvim_qf_state_get_linelen(QfStateHandle state)
-{
-  if (state == NULL) {
-    return 0;
-  }
-  return ((qfstate_T *)state)->linelen;
-}
-
-/// Check if the parser state has a file handle
-bool nvim_qf_state_has_fd(QfStateHandle state)
-{
-  if (state == NULL) {
-    return false;
-  }
-  return ((qfstate_T *)state)->fd != NULL;
-}
-
-/// Check if the parser state has a typval
-bool nvim_qf_state_has_tv(QfStateHandle state)
-{
-  if (state == NULL) {
-    return false;
-  }
-  return ((qfstate_T *)state)->tv != NULL;
-}
+int nvim_qf_state_get_nextline(QfStateHandle state) { return state == NULL ? QF_FAIL : qf_get_nextline((qfstate_T *)state); }
+const char *nvim_qf_state_get_linebuf(QfStateHandle state) { return state == NULL ? NULL : ((qfstate_T *)state)->linebuf; }
+size_t nvim_qf_state_get_linelen(QfStateHandle state) { return state == NULL ? 0 : ((qfstate_T *)state)->linelen; }
+bool nvim_qf_state_has_fd(QfStateHandle state) { return state == NULL ? false : ((qfstate_T *)state)->fd != NULL; }
+bool nvim_qf_state_has_tv(QfStateHandle state) { return state == NULL ? false : ((qfstate_T *)state)->tv != NULL; }
 
 /// Check if the parser state has a buffer
 bool nvim_qf_state_has_buf(QfStateHandle state)
