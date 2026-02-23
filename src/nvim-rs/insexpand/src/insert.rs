@@ -436,6 +436,220 @@ pub unsafe extern "C" fn rs_insert_typed_len_valid() -> c_int {
     c_int::from(cursor_col >= compl_col)
 }
 
+// =============================================================================
+// Phase 3: rs_ins_compl_delete and rs_ins_compl_insert
+// =============================================================================
+
+extern "C" {
+    // Accessors for rs_ins_compl_delete
+    fn nvim_ins_compl_delete_body(col: c_int) -> c_int;
+    fn nvim_set_cursor_col_to_ins_end();
+
+    // Accessors for rs_ins_compl_insert
+    fn nvim_compl_shown_cp_str_data() -> *const c_char;
+    fn nvim_compl_shown_cp_str_size() -> usize;
+    fn nvim_find_common_prefix_data(len_out: *mut usize, icase: c_int) -> *const c_char;
+    fn nvim_compl_shown_cp_cpt_source_idx() -> c_int;
+    fn nvim_get_cpt_source_startcol(idx: c_int) -> c_int;
+    fn nvim_cpt_sources_array_exists() -> c_int;
+    fn nvim_ins_compl_expand_multiple_skip(str_ptr: *const c_char, skip: c_int);
+    fn nvim_ins_compl_insert_bytes_len(cp_str: *const c_char, compl_len: c_int, ins_len: c_int);
+    fn nvim_cursor_col_sub(n: c_int);
+    fn nvim_compl_shown_match_at_orig_text() -> c_int;
+    fn nvim_ins_compl_dict_alloc_set_shown();
+    fn nvim_set_compl_hi_on_longest(val: c_int);
+    fn nvim_set_compl_used_match(val: c_int);
+    fn rs_compl_status_adding() -> c_int;
+    fn rs_ins_compl_preinsert_effect() -> c_int;
+    fn rs_ins_compl_leader_len() -> usize;
+    fn rs_get_compl_len() -> c_int;
+}
+
+/// Delete old completion text before inserting new match.
+///
+/// This is the Rust implementation of ins_compl_delete(). Orchestrates
+/// the deletion via C callbacks for all buffer mutations.
+///
+/// # Safety
+/// Requires valid completion state; called from insert mode only.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_delete(new_leader: c_int) {
+    // Calculate orig_col: the common prefix length between orig_text and leader
+    let mut orig_col: c_int = 0;
+    if new_leader != 0 && rs_compl_status_adding() == 0 {
+        let orig = nvim_get_compl_orig_text_data();
+        let leader = nvim_get_compl_leader_data();
+        let leader = if leader.is_null() { orig } else { leader };
+
+        if !orig.is_null() && !leader.is_null() {
+            let mut orig_ptr = orig;
+            let mut leader_ptr = leader;
+            while *orig_ptr != 0 {
+                let c1 = *orig_ptr;
+                let c2 = *leader_ptr;
+                if c1 == 0 || c2 == 0 || c1 != c2 {
+                    let orig_len = rs_utfc_ptr2len(orig_ptr);
+                    let leader_len = rs_utfc_ptr2len(leader_ptr);
+                    if orig_len != leader_len {
+                        break;
+                    }
+                    let mut same = true;
+                    #[allow(clippy::cast_sign_loss)]
+                    for i in 0..orig_len as usize {
+                        if *orig_ptr.add(i) != *leader_ptr.add(i) {
+                            same = false;
+                            break;
+                        }
+                    }
+                    if !same {
+                        break;
+                    }
+                    #[allow(clippy::cast_sign_loss)]
+                    {
+                        orig_ptr = orig_ptr.add(orig_len as usize);
+                        leader_ptr = leader_ptr.add(leader_len as usize);
+                    }
+                } else {
+                    orig_ptr = orig_ptr.add(1);
+                    leader_ptr = leader_ptr.add(1);
+                }
+            }
+            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+            {
+                orig_col = orig_ptr.offset_from(orig) as c_int;
+            }
+        }
+    }
+
+    let compl_col = nvim_get_compl_col();
+    let compl_length = nvim_get_compl_length();
+    let mut col = compl_col
+        + if rs_compl_status_adding() != 0 {
+            compl_length
+        } else {
+            orig_col
+        };
+
+    if rs_ins_compl_preinsert_effect() != 0 {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        {
+            col += rs_ins_compl_leader_len() as c_int;
+        }
+        nvim_set_cursor_col_to_ins_end();
+    }
+
+    // Delegate the buffer mutation to C
+    nvim_ins_compl_delete_body(col);
+}
+
+/// Insert the new completion text.
+///
+/// This is the Rust implementation of ins_compl_insert(). Orchestrates
+/// the insertion via C callbacks for all buffer mutations.
+///
+/// # Safety
+/// Requires valid completion state; called from insert mode only.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: c_int) {
+    if nvim_compl_shown_match_exists() == 0 {
+        return;
+    }
+
+    let compl_len = rs_get_compl_len();
+    let preinsert = rs_ins_compl_has_preinsert();
+    let leader_len = rs_ins_compl_leader_len();
+
+    let mut cp_str = nvim_compl_shown_cp_str_data();
+    let mut cp_str_len = nvim_compl_shown_cp_str_size();
+
+    if insert_prefix != 0 {
+        let mut plen: usize = cp_str_len;
+        let p = nvim_find_common_prefix_data(&raw mut plen, 0);
+        if p.is_null() {
+            let mut plen2: usize = cp_str_len;
+            let p2 = nvim_find_common_prefix_data(&raw mut plen2, 1);
+            if p2.is_null() {
+                // keep original cp_str/cp_str_len
+            } else {
+                cp_str = p2;
+                cp_str_len = plen2;
+            }
+        } else {
+            cp_str = p;
+            cp_str_len = plen;
+        }
+    } else if nvim_cpt_sources_array_exists() != 0 {
+        let cpt_idx = nvim_compl_shown_cp_cpt_source_idx();
+        let compl_col = nvim_get_compl_col();
+        if cpt_idx >= 0 && compl_col >= 0 {
+            let startcol = nvim_get_cpt_source_startcol(cpt_idx);
+            if startcol >= 0 && startcol < compl_col {
+                let skip = compl_col - startcol;
+                #[allow(clippy::cast_sign_loss)]
+                if (skip as usize) <= cp_str_len {
+                    #[allow(clippy::cast_sign_loss)]
+                    {
+                        cp_str_len -= skip as usize;
+                        cp_str = cp_str.add(skip as usize);
+                    }
+                }
+            }
+        }
+    }
+
+    // Insert the bytes if there are more characters than already typed
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap
+    )]
+    if compl_len < cp_str_len as c_int {
+        // Check for newlines
+        let has_newline = {
+            let mut ptr = cp_str;
+            let mut found = false;
+            while *ptr != 0 {
+                if *ptr == b'\n' as i8 {
+                    found = true;
+                    break;
+                }
+                ptr = ptr.add(1);
+            }
+            found
+        };
+
+        if has_newline {
+            nvim_ins_compl_expand_multiple_skip(cp_str, compl_len);
+        } else {
+            let ins_len = if insert_prefix != 0 {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                {
+                    cp_str_len as c_int - compl_len
+                }
+            } else {
+                -1
+            };
+            nvim_ins_compl_insert_bytes_len(cp_str, compl_len, ins_len);
+            if (preinsert != 0 || insert_prefix != 0) && move_cursor != 0 {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                {
+                    let adjust = (cp_str_len - leader_len) as c_int;
+                    if adjust > 0 {
+                        nvim_cursor_col_sub(adjust);
+                    }
+                }
+            }
+        }
+    }
+
+    let used_match =
+        nvim_compl_shown_match_at_orig_text() == 0 && (preinsert == 0 || insert_prefix != 0);
+    nvim_set_compl_used_match(c_int::from(used_match));
+
+    nvim_ins_compl_dict_alloc_set_shown();
+    nvim_set_compl_hi_on_longest(c_int::from(insert_prefix != 0 && move_cursor != 0));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

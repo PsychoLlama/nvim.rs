@@ -147,6 +147,8 @@ extern int rs_ins_compl_equal(void *m, const char *str, size_t len);
 extern void rs_ins_compl_update_sequence_numbers(void);
 extern int rs_ins_compl_col_range_attr(int lnum, int col);
 extern void rs_ins_compl_show_pum(void);
+extern void rs_ins_compl_delete(int new_leader);
+extern void rs_ins_compl_insert(int move_cursor, int insert_prefix);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -3828,71 +3830,7 @@ static void ins_compl_update_shown_match(void)
 /// Delete the old text being completed.
 void ins_compl_delete(bool new_leader)
 {
-  // Avoid deleting text that will be reinserted when changing leader. This
-  // allows marks present on the original text to shrink/grow appropriately.
-  int orig_col = 0;
-  if (new_leader) {
-    char *orig = compl_orig_text.data;
-    char *leader = (char *)rs_ins_compl_leader();
-    while (*orig != NUL && utf_ptr2char(orig) == utf_ptr2char(leader)) {
-      leader += utf_ptr2len(leader);
-      orig += utf_ptr2len(orig);
-    }
-    orig_col = (int)(orig - compl_orig_text.data);
-  }
-
-  // In insert mode: Delete the typed part.
-  // In replace mode: Put the old characters back, if any.
-  int col = compl_col + (rs_compl_status_adding() ? compl_length : orig_col);
-
-  if (rs_ins_compl_preinsert_effect()) {
-    col += (int)rs_ins_compl_leader_len();
-    curwin->w_cursor.col = compl_ins_end_col;
-  }
-
-  String remaining = STRING_INIT;
-  if (curwin->w_cursor.lnum > compl_lnum) {
-    if (curwin->w_cursor.col < get_cursor_line_len()) {
-      remaining = cbuf_to_string(get_cursor_pos_ptr(), (size_t)get_cursor_pos_len());
-    }
-
-    while (curwin->w_cursor.lnum > compl_lnum) {
-      if (ml_delete(curwin->w_cursor.lnum) == FAIL) {
-        if (remaining.data) {
-          xfree(remaining.data);
-        }
-        return;
-      }
-      deleted_lines_mark(curwin->w_cursor.lnum, 1);
-      curwin->w_cursor.lnum--;
-    }
-    // move cursor to end of line
-    curwin->w_cursor.col = get_cursor_line_len();
-  }
-
-  if ((int)curwin->w_cursor.col > col) {
-    if (stop_arrow() == FAIL) {
-      if (remaining.data) {
-        xfree(remaining.data);
-      }
-      return;
-    }
-    backspace_until_column(col);
-    compl_ins_end_col = curwin->w_cursor.col;
-  }
-
-  if (remaining.data != NULL) {
-    orig_col = curwin->w_cursor.col;
-    ins_str(remaining.data, remaining.size);
-    curwin->w_cursor.col = orig_col;
-    xfree(remaining.data);
-  }
-
-  // TODO(vim): is this sufficient for redrawing?  Redrawing everything
-  // causes flicker, thus we can't do that.
-  changed_cline_bef_curs(curwin);
-  // clear v:completed_item
-  set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
+  rs_ins_compl_delete(new_leader ? 1 : 0);
 }
 
 /// Insert a completion string that contains newlines.
@@ -4030,58 +3968,7 @@ static char *find_common_prefix(size_t *prefix_len, bool curbuf_only)
 /// of shown match.
 void ins_compl_insert(bool move_cursor, bool insert_prefix)
 {
-  int compl_len = rs_get_compl_len();
-  bool preinsert = rs_ins_compl_has_preinsert();
-  char *cp_str = compl_shown_match->cp_str.data;
-  size_t cp_str_len = compl_shown_match->cp_str.size;
-  size_t leader_len = rs_ins_compl_leader_len();
-  char *has_multiple = strchr(cp_str, '\n');
-
-  if (insert_prefix) {
-    cp_str = find_common_prefix(&cp_str_len, false);
-    if (cp_str == NULL) {
-      cp_str = find_common_prefix(&cp_str_len, true);
-      if (cp_str == NULL) {
-        cp_str = compl_shown_match->cp_str.data;
-        cp_str_len = compl_shown_match->cp_str.size;
-      }
-    }
-  } else if (cpt_sources_array != NULL) {
-    // Since completion sources may provide matches with varying start
-    // positions, insert only the portion of the match that corresponds to the
-    // intended replacement range.
-    int cpt_idx = compl_shown_match->cp_cpt_source_idx;
-    if (cpt_idx >= 0 && compl_col >= 0) {
-      int startcol = cpt_sources_array[cpt_idx].cs_startcol;
-      if (startcol >= 0 && startcol < (int)compl_col) {
-        int skip = (int)compl_col - startcol;
-        if ((size_t)skip <= cp_str_len) {
-          cp_str_len -= (size_t)skip;
-          cp_str += skip;
-        }
-      }
-    }
-  }
-
-  // Make sure we don't go over the end of the string, this can happen with
-  // illegal bytes.
-  if (compl_len < (int)cp_str_len) {
-    if (has_multiple) {
-      ins_compl_expand_multiple(cp_str + compl_len);
-    } else {
-      ins_compl_insert_bytes(cp_str + compl_len,
-                             insert_prefix ? (int)cp_str_len - compl_len : -1);
-      if ((preinsert || insert_prefix) && move_cursor) {
-        curwin->w_cursor.col -= (colnr_T)(cp_str_len - leader_len);
-      }
-    }
-  }
-  compl_used_match = !(match_at_original_text(compl_shown_match)
-                       || (preinsert && !insert_prefix));
-
-  dict_T *dict = ins_compl_dict_alloc(compl_shown_match);
-  set_vim_var_dict(VV_COMPLETED_ITEM, dict);
-  compl_hi_on_autocompl_longest = insert_prefix && move_cursor;
+  rs_ins_compl_insert(move_cursor ? 1 : 0, insert_prefix ? 1 : 0);
 }
 
 /// show the file name for the completion match (if any).  Truncate the file
@@ -5473,4 +5360,57 @@ void nvim_restore_cursor_col(int col) { curwin->w_cursor.col = (colnr_T)col; }
 void nvim_pum_display_compl(int cur, int array_changed) { pum_display(compl_match_array, compl_match_arraysize, cur, array_changed != 0, 0); }
 int nvim_compl_curr_neq_shown(void) { return (compl_curr_match != compl_shown_match) ? 1 : 0; }
 void nvim_compl_set_curr_to_shown(void) { compl_curr_match = compl_shown_match; }
+
+// Compound accessors for ins_compl_delete (Phase 3)
+int nvim_ins_compl_delete_body(int col) {
+  String remaining = STRING_INIT;
+  if (curwin->w_cursor.lnum > compl_lnum) {
+    if (curwin->w_cursor.col < get_cursor_line_len()) {
+      remaining = cbuf_to_string(get_cursor_pos_ptr(), (size_t)get_cursor_pos_len());
+    }
+    while (curwin->w_cursor.lnum > compl_lnum) {
+      if (ml_delete(curwin->w_cursor.lnum) == FAIL) {
+        xfree(remaining.data);
+        return 0;
+      }
+      deleted_lines_mark(curwin->w_cursor.lnum, 1);
+      curwin->w_cursor.lnum--;
+    }
+    curwin->w_cursor.col = get_cursor_line_len();
+  }
+  if ((int)curwin->w_cursor.col > col) {
+    if (stop_arrow() == FAIL) {
+      xfree(remaining.data);
+      return 0;
+    }
+    backspace_until_column(col);
+    compl_ins_end_col = curwin->w_cursor.col;
+  }
+  if (remaining.data != NULL) {
+    int orig_col = curwin->w_cursor.col;
+    ins_str(remaining.data, remaining.size);
+    curwin->w_cursor.col = orig_col;
+    xfree(remaining.data);
+  }
+  changed_cline_bef_curs(curwin);
+  set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
+  return 1;
+}
+void nvim_set_cursor_col_to_ins_end(void) { curwin->w_cursor.col = (colnr_T)compl_ins_end_col; }
+
+// Compound accessors for ins_compl_insert (Phase 3)
+const char *nvim_compl_shown_cp_str_data(void) { return compl_shown_match ? compl_shown_match->cp_str.data : NULL; }
+size_t nvim_compl_shown_cp_str_size(void) { return compl_shown_match ? compl_shown_match->cp_str.size : 0; }
+const char *nvim_find_common_prefix_data(size_t *len_out, int icase) {
+  return find_common_prefix(len_out, icase != 0);
+}
+int nvim_compl_shown_cp_cpt_source_idx(void) { return compl_shown_match ? compl_shown_match->cp_cpt_source_idx : -1; }
+int nvim_get_cpt_source_startcol(int idx) { return (cpt_sources_array && idx >= 0) ? cpt_sources_array[idx].cs_startcol : -1; }
+int nvim_cpt_sources_array_exists(void) { return cpt_sources_array != NULL ? 1 : 0; }
+void nvim_ins_compl_expand_multiple_skip(const char *str, int skip) { ins_compl_expand_multiple((char *)str + skip); }
+void nvim_ins_compl_insert_bytes_len(const char *cp_str, int compl_len, int ins_len) { ins_compl_insert_bytes((char *)cp_str + compl_len, ins_len); }
+void nvim_cursor_col_sub(int n) { curwin->w_cursor.col -= (colnr_T)n; }
+int nvim_compl_shown_match_at_orig_text(void) { return compl_shown_match ? (match_at_original_text(compl_shown_match) ? 1 : 0) : 0; }
+void nvim_ins_compl_dict_alloc_set_shown(void) { set_vim_var_dict(VV_COMPLETED_ITEM, ins_compl_dict_alloc(compl_shown_match)); }
+void nvim_set_compl_hi_on_longest(int val) { compl_hi_on_autocompl_longest = val != 0; }
 
