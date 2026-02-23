@@ -583,15 +583,6 @@ extern "C" {
         end_right: bool,
     );
 
-    /// Mark intersections between paired marks.
-    fn nvim_marktree_intersect_pair(
-        b: MarkTreeHandle,
-        id: u64,
-        itr: MarkTreeIterHandle,
-        end_itr: MarkTreeIterHandle,
-        delete: bool,
-    );
-
     // ========================================================================
     // B-tree Deletion Operations (Phase 5)
     // ========================================================================
@@ -3174,6 +3165,13 @@ pub fn marktree_put(b: MarkTreeHandle, key: MTKey, end_row: i32, end_col: i32, e
 ///
 /// Traverses from itr to end_itr, adding (or removing if delete=true)
 /// intersection markers for the paired mark identified by id.
+/// Mark intersections between paired marks.
+///
+/// `itr` is the iterator for the start mark (mutated during traversal).
+/// `end_itr` is the iterator for the end mark (not mutated).
+/// For every internal-node child between the two marks, adds (or removes
+/// if `delete`) `id` from the child's intersection list.
+/// Ported from C `marktree_intersect_pair`.
 pub fn marktree_intersect_pair(
     b: MarkTreeHandle,
     id: u64,
@@ -3181,7 +3179,75 @@ pub fn marktree_intersect_pair(
     end_itr: MarkTreeIterHandle,
     delete: bool,
 ) {
-    unsafe { nvim_marktree_intersect_pair(b, id, itr, end_itr, delete) }
+    // iat(it, l, q) = if l == it->lvl { it->i + q } else { it->s[l].i }
+    let iat = |it: MarkTreeIterHandle, l: i32, q: i32| -> i32 {
+        let lvl = unsafe { nvim_mtitr_get_lvl(it) };
+        if l == lvl {
+            (unsafe { nvim_mtitr_get_i(it) }) + q
+        } else {
+            unsafe { nvim_mtitr_get_s_i(it, l) }
+        }
+    };
+
+    let itr_lvl_init = unsafe { nvim_mtitr_get_lvl(itr) };
+    let end_lvl = unsafe { nvim_mtitr_get_lvl(end_itr) };
+    let maxlvl = itr_lvl_init.min(end_lvl);
+
+    let mut lvl = 0i32;
+    while lvl < maxlvl {
+        let si = unsafe { nvim_mtitr_get_s_i(itr, lvl) };
+        let esi = unsafe { nvim_mtitr_get_s_i(end_itr, lvl) };
+        if si > esi {
+            return; // empty range
+        } else if si < esi {
+            break; // work to do
+        }
+        lvl += 1;
+    }
+    if lvl == maxlvl && iat(itr, lvl, 1) > iat(end_itr, lvl, 0) {
+        return; // empty range
+    }
+
+    loop {
+        let itr_x = unsafe { nvim_mtitr_get_x(itr) };
+        if itr_x.is_null() {
+            break;
+        }
+        let end_x = unsafe { nvim_mtitr_get_x(end_itr) };
+        let itr_i = unsafe { nvim_mtitr_get_i(itr) };
+        let end_i = unsafe { nvim_mtitr_get_i(end_itr) };
+        let itr_level = unsafe { nvim_mtnode_get_level(itr_x) };
+        let itr_cur_lvl = unsafe { nvim_mtitr_get_lvl(itr) };
+
+        let skip = if itr_x == end_x {
+            if itr_level == 0 || itr_i >= end_i {
+                break;
+            }
+            true
+        } else if itr_cur_lvl > lvl || iat(itr, lvl, 1) < iat(end_itr, lvl, 1) {
+            true
+        } else {
+            lvl += 1;
+            false
+        };
+
+        if skip && itr_level != 0 {
+            let child = unsafe { nvim_mtnode_get_ptr(itr_x, itr_i + 1) };
+            if delete {
+                unintersect_node(b, child, id, true);
+            } else {
+                intersect_node(b, child, id);
+            }
+        }
+        let _ = marktree_itr_next_skip(
+            b,
+            itr,
+            skip,
+            true,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+    }
 }
 
 /// Bubble up common intersections to parent.

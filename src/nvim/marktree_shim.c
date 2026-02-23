@@ -152,6 +152,10 @@ extern uint64_t rs_pseudo_index_for_id(MarkTree *b, uint64_t id, bool sloppy);
 // Binary search
 extern int rs_marktree_getp_aux(const MTNode *x, MTKey k, bool *match);
 
+// Intersection pair
+extern void rs_marktree_intersect_pair(MarkTree *b, uint64_t id, MarkTreeIter *itr,
+                                       MarkTreeIter *end_itr, bool delete);
+
 #define T MT_BRANCH_FACTOR
 #define ILEN (sizeof(MTNode) + sizeof(struct mtnode_inner_s))
 
@@ -333,50 +337,7 @@ void marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_rig
 void marktree_intersect_pair(MarkTree *b, uint64_t id, MarkTreeIter *itr, MarkTreeIter *end_itr,
                              bool delete)
 {
-  int lvl = 0, maxlvl = MIN(itr->lvl, end_itr->lvl);
-#define iat(itr, l, q) ((l == itr->lvl) ? itr->i + q : itr->s[l].i)
-  for (; lvl < maxlvl; lvl++) {
-    if (itr->s[lvl].i > end_itr->s[lvl].i) {
-      return;  // empty range
-    } else if (itr->s[lvl].i < end_itr->s[lvl].i) {
-      break;  // work to do
-    }
-  }
-  if (lvl == maxlvl && iat(itr, lvl, 1) > iat(end_itr, lvl, 0)) {
-    return;  // empty range
-  }
-
-  while (itr->x) {
-    bool skip = false;
-    if (itr->x == end_itr->x) {
-      if (itr->x->level == 0 || itr->i >= end_itr->i) {
-        break;
-      } else {
-        skip = true;
-      }
-    } else if (itr->lvl > lvl) {
-      skip = true;
-    } else {
-      if (iat(itr, lvl, 1) < iat(end_itr, lvl, 1)) {
-        skip = true;
-      } else {
-        lvl++;
-      }
-    }
-
-    if (skip) {
-      if (itr->x->level) {
-        MTNode *x = itr->x->ptr[itr->i + 1];
-        if (delete) {
-          rs_unintersect_node(b, x, id, true);
-        } else {
-          rs_intersect_node(b, x, id);
-        }
-      }
-    }
-    rs_marktree_itr_next_skip(b, itr,skip, true, NULL, NULL);
-  }
-#undef iat
+  rs_marktree_intersect_pair(b, id, itr, end_itr, delete);
 }
 
 static MTNode *marktree_alloc_node(MarkTree *b, bool internal)
@@ -2083,8 +2044,6 @@ void nvim_split_node(MarkTree *b, MTNode *x, int i, MTKey next) { split_node(b, 
 void nvim_marktree_putp_aux(MarkTree *b, MTNode *x, MTKey k, uint32_t *meta_inc) { marktree_putp_aux(b, x, k, meta_inc); }
 void nvim_marktree_put_key(MarkTree *b, MTKey k) { marktree_put_key(b, k); }
 void nvim_marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_right) { marktree_put(b, key, end_row, end_col, end_right); }
-void nvim_marktree_intersect_pair(MarkTree *b, uint64_t id, MarkTreeIter *itr,
-                                  MarkTreeIter *end_itr, bool delete) { marktree_intersect_pair(b, id, itr, end_itr, delete); }
 
 // ============================================================================
 // B-tree Deletion Operations (for Rust FFI)
