@@ -1990,7 +1990,7 @@ void nvim_diff_semsg_e96(void) { semsg(_("E96: Cannot diff more than %" PRId64 "
 void nvim_redraw_later_win(win_T *wp, int type) { if (wp != NULL) { redraw_later(wp, type); } }
 win_T *nvim_tabpage_first_win(tabpage_T *tp) { if (tp == NULL) { return NULL; } if (tp == curtab) { return firstwin; } return tp->tp_firstwin; }
 win_T *nvim_win_next(win_T *wp) { if (wp == NULL) { return NULL; } return wp->w_next; }
-void nvim_diff_foldUpdate(win_T *wp, linenr_T top, linenr_T bot) { if (wp != NULL) { foldUpdate(wp, top, bot); } }
+void nvim_diff_foldUpdate(win_T *wp, linenr_T top, linenr_T bot) { if (wp != NULL) { rs_foldUpdate(wp, top, bot); } }
 void nvim_diff_set_diff_option(win_T *wp, bool value) { if (wp == NULL) { return; } win_T *old_curwin = curwin; curwin = wp; curbuf = curwin->w_buffer; curbuf->b_ro_locked++; set_option_value_give_err(kOptDiff, BOOLEAN_OPTVAL(value), OPT_LOCAL); curbuf->b_ro_locked--; curwin = old_curwin; curbuf = curwin->w_buffer; }
 const char *nvim_diff_ml_get_buf(buf_T *buf, linenr_T lnum) { if (buf == NULL) { return ""; } return ml_get_buf(buf, lnum); }
 char *nvim_diff_xstrdup(const char *s) { if (s == NULL) { return NULL; } return xstrdup(s); }

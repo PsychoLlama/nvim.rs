@@ -188,45 +188,7 @@ int nvim_lineFolded(win_T *wp, linenr_T lnum)
   return rs_lineFolded(wp, lnum);
 }
 
-// foldUpdate() {{{2
-/// Update folds for changes in the buffer of a window.
-/// Note that inserted/deleted lines must have already been taken care of by
-/// calling foldMarkAdjust().
-/// The changes in lines from top to bot (inclusive).
-void foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
-{
-  if (disable_fold_update || (State & MODE_INSERT && !rs_foldmethodIsIndent(wp))) {
-    return;
-  }
-
-  if (need_diff_redraw) {
-    // will update later
-    return;
-  }
-
-  if (wp->w_folds.ga_len > 0) {
-    // Mark all folds from top to bot (or bot to top) as maybe-small.
-    linenr_T maybe_small_start = MIN(top, bot);
-    linenr_T maybe_small_end = MAX(top, bot);
-
-    fold_T *fp;
-    foldFind(&wp->w_folds, maybe_small_start, &fp);
-    while (fp < (fold_T *)wp->w_folds.ga_data + wp->w_folds.ga_len
-           && fp->fd_top <= maybe_small_end) {
-      fp->fd_small = kNone;
-      fp++;
-    }
-  }
-
-  if (rs_foldmethodIsIndent(wp) || rs_foldmethodIsDiff(wp)
-      || rs_foldmethodIsExpr(wp) || rs_foldmethodIsMarker(wp)
-      || rs_foldmethodIsSyntax(wp)) {
-    int save_got_int = got_int;
-    got_int = false;
-    rs_foldUpdateIEMS(wp, top, bot);
-    got_int |= save_got_int;
-  }
-}
+// foldUpdate() -- migrated to Rust (update.rs: fold_update_impl / rs_foldUpdate)
 
 // C accessor for foldUpdateAll (for Rust to call from foldUpdateAfterInsert)
 void nvim_foldUpdateAll_c(win_T *win)
@@ -237,42 +199,7 @@ void nvim_foldUpdateAll_c(win_T *win)
 
 // Internal functions for "fold_T" {{{1
 
-// foldFind() {{{2
-/// Search for line "lnum" in folds of growarray "gap".
-/// Set "*fpp" to the fold struct for the fold that contains "lnum" or
-/// the first fold below it (careful: it can be beyond the end of the array!).
-///
-/// @return  false when there is no fold that contains "lnum".
-static bool foldFind(const garray_T *gap, linenr_T lnum, fold_T **fpp)
-{
-  if (gap->ga_len == 0) {
-    *fpp = NULL;
-    return false;
-  }
-
-  // Perform a binary search.
-  // "low" is lowest index of possible match.
-  // "high" is highest index of possible match.
-  fold_T *fp = (fold_T *)gap->ga_data;
-  linenr_T low = 0;
-  linenr_T high = gap->ga_len - 1;
-  while (low <= high) {
-    linenr_T i = (low + high) / 2;
-    if (fp[i].fd_top > lnum) {
-      // fold below lnum, adjust high
-      high = i - 1;
-    } else if (fp[i].fd_top + fp[i].fd_len <= lnum) {
-      // fold above lnum, adjust low
-      low = i + 1;
-    } else {
-      // lnum is inside this fold
-      *fpp = fp + i;
-      return true;
-    }
-  }
-  *fpp = fp + low;
-  return false;
-}
+// foldFind() -- migrated to Rust (update.rs: fold_find_impl)
 
 // deleteFoldRecurse() {{{2
 /// Delete nested folds in a fold.
@@ -1277,15 +1204,7 @@ void nvim_redraw_win_range_later(win_T *wp, linenr_T top, linenr_T bot)
 
 // nvim_foldlevelIndent/Diff/Expr/Syntax -- deleted (Rust calls level.rs directly)
 
-/// Wrapper for foldFind that returns index.
-/// Returns 1 if found, 0 if not found. Sets found_idx to the index.
-int nvim_foldFind(garray_T *gap, linenr_T lnum, int *found_idx)
-{
-  fold_T *fp;
-  int result = foldFind(gap, lnum, &fp);
-  *found_idx = (int)(fp - (fold_T *)gap->ga_data);
-  return result ? 1 : 0;
-}
+// nvim_foldFind -- deleted (Rust uses fold_find_impl directly)
 
 // Accessors for fold statics
 linenr_T nvim_get_invalid_top(void) { return invalid_top; }
@@ -1306,11 +1225,7 @@ int nvim_get_disable_fold_update(void) { return disable_fold_update; }
 /// Get the need_diff_redraw flag.
 int nvim_get_need_diff_redraw(void) { return need_diff_redraw; }
 
-/// Call foldUpdate from Rust.
-void nvim_foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
-{
-  foldUpdate(wp, top, bot);
-}
+// nvim_foldUpdate -- deleted (Rust calls rs_foldUpdate directly)
 
 // Note: nvim_win_get_p_fen is defined in window.c
 

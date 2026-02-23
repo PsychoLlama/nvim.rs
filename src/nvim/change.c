@@ -247,7 +247,7 @@ void changed_common(buf_T *buf, linenr_T lnum, colnr_T col, linenr_T lnume, line
       // values for the cursor.
       // Update the folds for this window.  Can't postpone this, because
       // a following operator might work on the whole fold: ">>dd".
-      foldUpdate(wp, lnum, last);
+      rs_foldUpdate(wp, lnum, last);
 
       // The change may cause lines above or below the change to become
       // included in a fold.  Set lnum/lnume to the first/last line that

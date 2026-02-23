@@ -786,7 +786,7 @@ static void do_filter(linenr_T line1, linenr_T line2, exarg_T *eap, char *cmd, b
       curbuf->b_op_end.lnum -= linecount;               // adjust ']
       write_lnum_adjust(-linecount);                    // adjust last line
                                                         // for next write
-      foldUpdate(curwin, curbuf->b_op_start.lnum, curbuf->b_op_end.lnum);
+      rs_foldUpdate(curwin, curbuf->b_op_start.lnum, curbuf->b_op_end.lnum);
     } else {
       // Put cursor on last new line for ":r !cmd".
       linecount = curbuf->b_op_end.lnum - curbuf->b_op_start.lnum + 1;

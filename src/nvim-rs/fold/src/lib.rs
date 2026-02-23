@@ -375,9 +375,6 @@ extern "C" {
 
     /// Get the p_fcl option value (pointer to NUL-terminated string).
     fn nvim_get_p_fcl() -> *const c_char;
-
-    /// Call foldUpdate from Rust.
-    fn nvim_foldUpdate(wp: WinHandle, top: LineNr, bot: LineNr);
 }
 
 // ============================================================================
@@ -2580,6 +2577,18 @@ pub extern "C" fn rs_foldUpdateIEMS(wp: WinHandle, top: LineNr, bot: LineNr) {
     update::fold_update_iems_all_impl(wp, top, bot);
 }
 
+/// Update folds for changes in the buffer of a window.
+///
+/// Replaces the C `foldUpdate` function. Checks disable flags,
+/// marks folds as maybe-small, and invokes the IEMS algorithm.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_foldUpdate(wp: WinHandle, top: LineNr, bot: LineNr) {
+    update::fold_update_impl(wp, top, bot);
+}
+
 // ============================================================================
 // Phase 5: Navigation and Display
 // ============================================================================
@@ -3450,10 +3459,8 @@ pub(crate) fn checkupdate_impl(wp: WinHandle) {
     if !foldinvalid {
         return;
     }
-    unsafe {
-        nvim_foldUpdate(wp, 1, MAXLNUM);
-        nvim_win_set_w_foldinvalid(wp, false);
-    }
+    update::fold_update_impl(wp, 1, MAXLNUM);
+    unsafe { nvim_win_set_w_foldinvalid(wp, false) };
 }
 
 /// Get fold level at line number "lnum" in the current window.

@@ -574,7 +574,7 @@ static int nlua_foldupdate(lua_State *lstate)
     return luaL_error(lstate, "invalid bot");
   }
 
-  foldUpdate(win, top, bot);
+  rs_foldUpdate(win, top, bot);
 
   return 0;
 }

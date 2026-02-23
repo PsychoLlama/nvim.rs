@@ -323,17 +323,57 @@ extern "C" {
     // Diff context
     fn nvim_get_diff_context() -> LinenrT;
 
-    // Fold manipulation
-
-    // foldFind - returns index or -1 if not found
-    fn nvim_foldFind(gap: GArrayHandle, lnum: LinenrT, found_idx: *mut c_int) -> c_int;
-
     // Window option: w_p_fen (fold enable)
     fn nvim_win_get_p_fen(wp: WinHandle) -> c_int;
+
+    // Global state for foldUpdate
+    fn nvim_get_State() -> c_int;
+    fn nvim_get_disable_fold_update() -> c_int;
+    fn nvim_get_need_diff_redraw() -> c_int;
+    fn nvim_set_got_int(val: c_int);
 }
+
+/// MODE_INSERT flag value (from state_defs.h).
+const MODE_INSERT: c_int = 0x10;
 
 /// MAXLNUM constant
 const MAXLNUM: LinenrT = 0x7fff_ffff;
+
+/// Binary search for line `lnum` in folds of growarray `gap`.
+///
+/// Returns `(found, idx)` where:
+/// - `found` is true if lnum is inside a fold
+/// - `idx` is the index of the fold containing lnum (if found) or the
+///   first fold below lnum (careful: may equal ga_len if beyond the end)
+///
+/// Mirrors the C `nvim_foldFind` / `foldFind` behavior exactly.
+fn fold_find_impl(gap: GArrayHandle, lnum: LinenrT) -> (bool, c_int) {
+    let len = unsafe { nvim_ga_len(gap) };
+    if len == 0 {
+        return (false, 0);
+    }
+
+    // Binary search: low..=high are inclusive candidate indices
+    let mut low: c_int = 0;
+    let mut high: c_int = len - 1;
+    while low <= high {
+        let i = i32::midpoint(low, high);
+        let fp = unsafe { nvim_ga_fold_at(gap, i) };
+        let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+        let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+        if fd_top > lnum {
+            // fold below lnum, adjust high
+            high = i - 1;
+        } else if fd_top + fd_len <= lnum {
+            // fold above lnum, adjust low
+            low = i + 1;
+        } else {
+            // lnum is inside this fold
+            return (true, i);
+        }
+    }
+    (false, low)
+}
 
 /// Minimum of two values
 #[inline]
@@ -502,6 +542,69 @@ pub fn fold_update_iems_all_impl(wp: WinHandle, top: LinenrT, bot: LinenrT) {
     fold_update_iems_impl(wp, top, bot, kind);
 }
 
+/// Update folds for changes in the buffer of a window.
+///
+/// Mirrors the C `foldUpdate` function. Note that inserted/deleted lines
+/// must have already been taken care of by calling foldMarkAdjust().
+/// The changes are in lines from top to bot (inclusive).
+pub fn fold_update_impl(wp: WinHandle, top: LinenrT, bot: LinenrT) {
+    if wp.is_null() {
+        return;
+    }
+
+    // Skip update when disabled or in insert mode with non-indent foldmethod.
+    let disable = unsafe { nvim_get_disable_fold_update() };
+    if disable != 0 {
+        return;
+    }
+    let state = unsafe { nvim_get_State() };
+    if state & MODE_INSERT != 0 && !crate::foldmethod_is_indent_impl(wp) {
+        return;
+    }
+
+    // Skip when a diff redraw is pending (will update later).
+    if unsafe { nvim_get_need_diff_redraw() } != 0 {
+        return;
+    }
+
+    // Mark all folds from top to bot (or bot to top) as maybe-small.
+    let gap = unsafe { nvim_win_get_folds(wp) };
+    let gap_len = unsafe { nvim_ga_len(gap) };
+    if gap_len > 0 {
+        let maybe_small_start = top.min(bot);
+        let maybe_small_end = top.max(bot);
+
+        let (_, start_idx) = fold_find_impl(gap, maybe_small_start);
+        let mut idx = start_idx;
+        loop {
+            if idx >= gap_len {
+                break;
+            }
+            let fp = unsafe { nvim_ga_fold_at(gap, idx) };
+            let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+            if fd_top > maybe_small_end {
+                break;
+            }
+            unsafe { nvim_fold_set_fd_small(fp, tristate::K_NONE) };
+            idx += 1;
+        }
+    }
+
+    // Run the IEMS algorithm if applicable.
+    if crate::foldmethod_is_indent_impl(wp)
+        || crate::foldmethod_is_diff_impl(wp)
+        || crate::foldmethod_is_expr_impl(wp)
+        || crate::foldmethod_is_marker_impl(wp)
+        || crate::foldmethod_is_syntax_impl(wp)
+    {
+        let save_got_int = unsafe { nvim_get_got_int() };
+        unsafe { nvim_set_got_int(0) };
+        fold_update_iems_all_impl(wp, top, bot);
+        let cur_got_int = unsafe { nvim_get_got_int() };
+        unsafe { nvim_set_got_int(cur_got_int | save_got_int) };
+    }
+}
+
 /// Unified IEMS update for all fold methods (indent, diff, marker, expr, syntax).
 ///
 /// This function handles the top-level IEMS algorithm, dispatching to the
@@ -617,8 +720,8 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
         let mut found = false;
 
         while current_fdl < flp.lvl {
-            let mut inner_idx: c_int = 0;
-            if unsafe { nvim_foldFind(cur_gap, lnum_rel, &raw mut inner_idx) } == 0 {
+            let (ff, inner_idx) = fold_find_impl(cur_gap, lnum_rel);
+            if !ff {
                 break;
             }
             current_fdl += 1;
@@ -661,23 +764,35 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
             }
 
             let mut should_break = true;
-            let mut found_idx: c_int = 0;
-            if (start <= end && unsafe { nvim_foldFind(gap, end, &raw mut found_idx) } != 0 && {
-                let fp = unsafe { nvim_ga_fold_at(gap, found_idx) };
+            // Try to find fold at 'end' that extends beyond it
+            let (ff1, idx1) = fold_find_impl(gap, end);
+            // Try to find fold at flp.lnum (for level 0 check)
+            let (ff2, idx2) = fold_find_impl(gap, flp.lnum);
+            let extend_end = if start <= end && ff1 {
+                let fp = unsafe { nvim_ga_fold_at(gap, idx1) };
                 let ft = unsafe { nvim_fold_get_fd_top(fp) };
                 let fl = unsafe { nvim_fold_get_fd_len(fp) };
-                ft + fl - 1 > end
-            }) || (flp.lvl == 0
-                && unsafe { nvim_foldFind(gap, flp.lnum, &raw mut found_idx) } != 0
-                && {
-                    let fp = unsafe { nvim_ga_fold_at(gap, found_idx) };
-                    let ft = unsafe { nvim_fold_get_fd_top(fp) };
-                    ft < flp.lnum
-                })
-            {
-                let fp = unsafe { nvim_ga_fold_at(gap, found_idx) };
+                if ft + fl - 1 > end {
+                    Some((ft, fl))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            let extend_lnum = if flp.lvl == 0 && ff2 {
+                let fp = unsafe { nvim_ga_fold_at(gap, idx2) };
                 let ft = unsafe { nvim_fold_get_fd_top(fp) };
                 let fl = unsafe { nvim_fold_get_fd_len(fp) };
+                if ft < flp.lnum {
+                    Some((ft, fl))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            if let Some((ft, fl)) = extend_end.or(extend_lnum) {
                 end = ft + fl - 1;
                 should_break = false;
             } else if kind == LevelGetterKind::Syntax
@@ -786,8 +901,7 @@ fn fold_update_iems_recurse(
     // at the level we're dealing with and the level is non-zero, we must use
     // the previous fold. But ignore a fold that starts at or below startlnum.
     if kind == LevelGetterKind::Marker && flp.start <= flp.lvl - level && flp.lvl > 0 {
-        let mut found_idx: c_int = 0;
-        unsafe { nvim_foldFind(gap, startlnum - 1, &raw mut found_idx) };
+        let (_, found_idx) = fold_find_impl(gap, startlnum - 1);
         let gap_len = unsafe { nvim_ga_len(gap) };
         if found_idx < gap_len {
             let fp = unsafe { nvim_ga_fold_at(gap, found_idx) };
@@ -828,22 +942,24 @@ fn fold_update_iems_recurse(
                 // Compute how deep the folds currently are
                 let mut ll = flp.lnum - fd_top;
                 let mut nested = unsafe { nvim_fold_get_fd_nested(fp) };
-                let mut inner_idx: c_int = 0;
-                while unsafe { nvim_foldFind(nested, ll, &raw mut inner_idx) } != 0 {
+                let (mut ff_inner, mut inner_idx) = fold_find_impl(nested, ll);
+                while ff_inner {
                     i += 1;
                     let inner_fp = unsafe { nvim_ga_fold_at(nested, inner_idx) };
                     let inner_top = unsafe { nvim_fold_get_fd_top(inner_fp) };
                     ll -= inner_top;
                     nested = unsafe { nvim_fold_get_fd_nested(inner_fp) };
-                    inner_idx = 0;
+                    let (nff, nidx) = fold_find_impl(nested, ll);
+                    ff_inner = nff;
+                    inner_idx = nidx;
                 }
             }
 
             if lvl < level + i {
                 // Need to delete a nested fold - extend bot
                 let nested = unsafe { nvim_fold_get_fd_nested(fp) };
-                let mut fp2_idx: c_int = 0;
-                if unsafe { nvim_foldFind(nested, flp.lnum - fd_top, &raw mut fp2_idx) } != 0 {
+                let (ff2, fp2_idx) = fold_find_impl(nested, flp.lnum - fd_top);
+                if ff2 {
                     let fp2 = unsafe { nvim_ga_fold_at(nested, fp2_idx) };
                     let fp2_top = unsafe { nvim_fold_get_fd_top(fp2) };
                     let fp2_len = unsafe { nvim_fold_get_fd_len(fp2) };
@@ -877,24 +993,32 @@ fn fold_update_iems_recurse(
                 let gap_len = unsafe { nvim_ga_len(gap) };
 
                 if gap_len > 0 {
-                    let mut found_idx: c_int = 0;
-                    let found = unsafe { nvim_foldFind(gap, startlnum, &raw mut found_idx) };
-
-                    if found != 0
-                        || (found_idx < gap_len && {
-                            let fp = unsafe { nvim_ga_fold_at(gap, found_idx) };
+                    let (found1, idx1) = fold_find_impl(gap, startlnum);
+                    let (found2, idx2) = fold_find_impl(gap, firstlnum - concat);
+                    // Pick the matching index: first check idx1 conditions,
+                    // then idx2 conditions (mirrors C's sequential found_idx mutation).
+                    let idx1_matches = found1
+                        || (idx1 < gap_len && {
+                            let fp = unsafe { nvim_ga_fold_at(gap, idx1) };
                             let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
                             fd_top <= firstlnum
-                        })
-                        || unsafe { nvim_foldFind(gap, firstlnum - concat, &raw mut found_idx) }
-                            != 0
-                        || (found_idx < gap_len && {
-                            let fp = unsafe { nvim_ga_fold_at(gap, found_idx) };
+                        });
+                    let idx2_matches = found2
+                        || (idx2 < gap_len && {
+                            let fp = unsafe { nvim_ga_fold_at(gap, idx2) };
                             let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
                             (lvl < level && fd_top < flp.lnum)
                                 || (lvl >= level && fd_top <= flp.lnum_save)
-                        })
-                    {
+                        });
+                    let matched_idx = if idx1_matches {
+                        Some(idx1)
+                    } else if idx2_matches {
+                        Some(idx2)
+                    } else {
+                        None
+                    };
+
+                    if let Some(found_idx) = matched_idx {
                         let fp = unsafe { nvim_ga_fold_at(gap, found_idx) };
                         let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
                         let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
@@ -1012,8 +1136,7 @@ fn fold_update_iems_recurse(
                         let mut idx = 0;
 
                         if gap_len2 > 0 {
-                            let mut fi: c_int = 0;
-                            unsafe { nvim_foldFind(gap, startlnum, &raw mut fi) };
+                            let (_, fi) = fold_find_impl(gap, startlnum);
                             idx = fi;
                         }
 
