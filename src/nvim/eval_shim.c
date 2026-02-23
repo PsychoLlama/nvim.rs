@@ -141,6 +141,7 @@ extern int rs_eval_interp_string(char **arg, typval_T *rettv, bool evaluate);
 extern void *rs_eval_for_line(const char *arg, bool *errp, exarg_T *eap, evalarg_T *evalarg);
 extern bool rs_next_for_item(void *fi_void, char *arg);
 extern void rs_free_for_info(void *fi_void);
+extern bool rs_callback_call(const void *callback, int argcount, void *argvars, void *rettv);
 extern int rs_free_unref_items(int copyID);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
@@ -2304,62 +2305,96 @@ int nvim_get_callback_depth(void)
   return callback_depth;
 }
 
+// =============================================================================
+// Accessors for rs_callback_call (Phase 4)
+// =============================================================================
 
-
-/// @return  whether the callback could be called.
-bool callback_call(Callback *const callback, const int argcount_in, typval_T *const argvars_in,
-                   typval_T *const rettv)
-  FUNC_ATTR_NONNULL_ALL
+/// Get callback->data.funcref name string.
+char *nvim_cb_get_funcref_name(const Callback *cb)
 {
-  if (callback_depth > p_mfd) {
-    emsg(_(e_command_too_recursive));
-    return false;
-  }
+  return cb->data.funcref;
+}
 
-  partial_T *partial;
-  char *name;
-  Array args = ARRAY_DICT_INIT;
-  Object rv;
-  switch (callback->type) {
-  case kCallbackFuncref:
-    name = callback->data.funcref;
-    int len = (int)strlen(name);
-    if (len >= 6 && !memcmp(name, "v:lua.", 6)) {
-      name += 6;
-      len = rs_check_luafunc_name(name, false);
-      if (len == 0) {
-        return false;
-      }
-      partial = get_vim_var_partial(VV_LUA);
-    } else {
-      partial = NULL;
+/// Get callback->data.luaref.
+LuaRef nvim_cb_get_luaref(const Callback *cb)
+{
+  return cb->data.luaref;
+}
+
+/// Increment callback_depth.
+void nvim_callback_depth_inc(void)
+{
+  callback_depth++;
+}
+
+/// Decrement callback_depth.
+void nvim_callback_depth_dec(void)
+{
+  callback_depth--;
+}
+
+/// Check if callback_depth > p_mfd.
+bool nvim_callback_depth_exceeded(void)
+{
+  return callback_depth > p_mfd;
+}
+
+/// Check if name is a v:lua funcref and return the Lua function name portion.
+/// Returns NULL if not a v:lua funcref or if name is invalid.
+/// Caller must not free the returned pointer.
+const char *nvim_cb_check_vlua_funcref(const char *name)
+{
+  int len = (int)strlen(name);
+  if (len >= 6 && !memcmp(name, "v:lua.", 6)) {
+    const char *luaname = name + 6;
+    int lualen = rs_check_luafunc_name(luaname, false);
+    if (lualen == 0) {
+      return NULL;
     }
-    break;
-
-  case kCallbackPartial:
-    partial = callback->data.partial;
-    name = rs_partial_name(partial);
-    break;
-
-  case kCallbackLua:
-    rv = nlua_call_ref(callback->data.luaref, NULL, args, kRetNilBool, NULL, NULL);
-    return LUARET_TRUTHY(rv);
-
-  case kCallbackNone:
-    return false;
-    break;
+    return luaname;
   }
+  return NULL;
+}
 
+/// Get the VV_LUA partial.
+partial_T *nvim_get_vv_lua_partial(void)
+{
+  return get_vim_var_partial(VV_LUA);
+}
+
+/// Handle the kCallbackLua case: call nlua_call_ref and return LUARET_TRUTHY.
+bool nvim_callback_call_lua(LuaRef luaref)
+{
+  Array args = ARRAY_DICT_INIT;
+  Object rv = nlua_call_ref(luaref, NULL, args, kRetNilBool, NULL, NULL);
+  return LUARET_TRUTHY(rv);
+}
+
+/// Call a funcref or partial callback (handles funcexe_T construction).
+/// @param name     Function name
+/// @param partial  partial_T * or NULL
+/// @param argcount Number of arguments
+/// @param argvars  Argument typvals
+/// @param rettv    Result typval
+/// @return  true on success (call_func returned OK)
+bool nvim_callback_call_func(const char *name, partial_T *partial,
+                             int argcount, typval_T *argvars, typval_T *rettv)
+{
   funcexe_T funcexe = FUNCEXE_INIT;
   funcexe.fe_firstline = curwin->w_cursor.lnum;
   funcexe.fe_lastline = curwin->w_cursor.lnum;
   funcexe.fe_evaluate = true;
   funcexe.fe_partial = partial;
 
-  callback_depth++;
-  int ret = call_func(name, -1, rettv, argcount_in, argvars_in, &funcexe);
-  callback_depth--;
-  return ret;
+  return call_func(name, -1, rettv, argcount, argvars, &funcexe);
+}
+
+/// @return  whether the callback could be called.
+bool callback_call(Callback *const callback, const int argcount_in, typval_T *const argvars_in,
+                   typval_T *const rettv)
+  FUNC_ATTR_NONNULL_ALL
+{
+  return rs_callback_call(callback, argcount_in, argvars_in, rettv);
 }
 
 timer_T *find_timer_by_nr(varnumber_T xx)

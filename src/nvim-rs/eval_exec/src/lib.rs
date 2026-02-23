@@ -860,6 +860,7 @@ impl EvalFlags {
 // Expression Evaluator Module
 // =============================================================================
 
+pub mod callback;
 pub mod context;
 pub mod errors;
 pub mod eval;
@@ -886,6 +887,9 @@ pub use index::{rs_check_can_index, rs_eval_index, rs_eval_index_inner, rs_f_sli
 pub use operators::{
     rs_apply_comparison, rs_compare_floats, rs_compare_numbers, rs_typval_compare, CompareResult,
 };
+
+// Re-export callback FFI functions
+pub use callback::rs_callback_call;
 
 // Re-export for-loop FFI functions
 pub use for_loop::{rs_eval_for_line, rs_free_for_info, rs_next_for_item};
