@@ -2396,6 +2396,93 @@ pub unsafe extern "C" fn rs_nv_subst(cap: CapHandle) {
 }
 
 // =============================================================================
+// Phase 4 (n_swapchar): Rust implementation of n_swapchar
+// =============================================================================
+
+extern "C" {
+    // Phase 4: n_swapchar accessors
+    fn nvim_swapchar_call(op_type: c_int, lnum: c_int, col: c_int) -> bool;
+    fn nvim_u_savesub_call(lnum: c_int) -> bool;
+    fn nvim_u_clearline_curbuf();
+    fn nvim_changed_lines_call(lnum: c_int, col: c_int, lnum_end: c_int, do_concealed: bool);
+    fn nvim_set_b_op_start(lnum: c_int, col: c_int, coladd: c_int);
+    fn nvim_set_b_op_end_cursor();
+    fn nvim_dec_b_op_end_col();
+}
+
+/// Swap case of character under cursor (implementation of "~" without tildeop).
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_n_swapchar(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+
+    if rs_checkclearopq(oap) {
+        return;
+    }
+
+    if nvim_lineempty_cursor() && !nvim_vim_strchr_p_ww(c_int::from(b'~')) {
+        rs_clearopbeep(oap);
+        return;
+    }
+
+    rs_prep_redo_cmd(cap);
+
+    if u_save_cursor() == 0 {
+        return;
+    }
+
+    let start_lnum = nvim_get_cursor_lnum();
+    let start_col = nvim_get_cursor_col();
+    let start_coladd = nvim_get_cursor_coladd();
+
+    let count1 = nvim_cap_get_count1(cap);
+    let op_type = nvim_oap_get_op_type_ptr(oap);
+    let mut did_change = false;
+    let mut n = count1;
+    loop {
+        if n <= 0 {
+            break;
+        }
+        let lnum = nvim_get_cursor_lnum();
+        let col = nvim_get_cursor_col();
+        if nvim_swapchar_call(op_type, lnum, col) {
+            did_change = true;
+        }
+        nvim_inc_cursor();
+        if nvim_gchar_cursor_call() == NUL_CHAR {
+            if nvim_vim_strchr_p_ww(c_int::from(b'~'))
+                && nvim_get_cursor_lnum() < nvim_get_line_count()
+            {
+                let new_lnum = nvim_get_cursor_lnum() + 1;
+                nvim_set_cursor_lnum(new_lnum);
+                nvim_set_cursor_col(0);
+                if n > 1 {
+                    if !nvim_u_savesub_call(nvim_get_cursor_lnum()) {
+                        break;
+                    }
+                    nvim_u_clearline_curbuf();
+                }
+            } else {
+                break;
+            }
+        }
+        n -= 1;
+    }
+
+    nvim_check_cursor();
+    nvim_curwin_set_curswant(true);
+    if did_change {
+        let end_lnum = nvim_get_cursor_lnum();
+        nvim_changed_lines_call(start_lnum, start_col, end_lnum + 1, true);
+        nvim_set_b_op_start(start_lnum, start_col, start_coladd);
+        nvim_set_b_op_end_cursor();
+        nvim_dec_b_op_end_col();
+    }
+}
+
+// =============================================================================
 // Phase 4: Text object handlers
 // =============================================================================
 

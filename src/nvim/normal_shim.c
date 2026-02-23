@@ -226,6 +226,7 @@ extern void rs_nv_vreplace(cmdarg_T *cap);
 extern void rs_nv_g_underscore_cmd(cmdarg_T *cap);
 extern void rs_nv_gi_cmd(cmdarg_T *cap);
 extern void rs_nv_gv_cmd(cmdarg_T *cap);
+extern void rs_n_swapchar(cmdarg_T *cap);
 
 /// This table contains one entry for every Normal or Visual mode command.
 /// The order doesn't matter, init_normal_cmds() will create a sorted index.
@@ -2105,6 +2106,35 @@ bool nvim_current_tagblock_call(oparg_T *oap, int count, bool include)
 bool nvim_current_quote_call(oparg_T *oap, int count, bool include, int quotechar)
 {
   return current_quote(oap, count, include, (char)quotechar);
+}
+
+// Phase 4 accessors: n_swapchar
+bool nvim_swapchar_call(int op_type, int lnum, int col)
+{
+  pos_T pos = { .lnum = (linenr_T)lnum, .col = (colnr_T)col, .coladd = 0 };
+  return swapchar(op_type, &pos);
+}
+bool nvim_u_savesub_call(int lnum) { return u_savesub((linenr_T)lnum); }
+void nvim_u_clearline_curbuf(void) { u_clearline(curbuf); }
+void nvim_changed_lines_call(int lnum, int col, int lnum_end, bool do_concealed)
+{
+  changed_lines(curbuf, (linenr_T)lnum, (colnr_T)col, (linenr_T)lnum_end, 0, do_concealed);
+}
+void nvim_set_b_op_start(int lnum, int col, int coladd)
+{
+  curbuf->b_op_start.lnum = (linenr_T)lnum;
+  curbuf->b_op_start.col = (colnr_T)col;
+  curbuf->b_op_start.coladd = (colnr_T)coladd;
+}
+void nvim_set_b_op_end_cursor(void)
+{
+  curbuf->b_op_end = curwin->w_cursor;
+}
+void nvim_dec_b_op_end_col(void)
+{
+  if (curbuf->b_op_end.col > 0) {
+    curbuf->b_op_end.col--;
+  }
 }
 
 void nvim_nv_at_impl(cmdarg_T *cap) { nv_at_impl(cap); }
@@ -4230,59 +4260,6 @@ static void nv_vreplace_impl(cmdarg_T *cap)
 }
 
 /// Swap case for "~" command, when it does not work like an operator.
-static void n_swapchar(cmdarg_T *cap)
-{
-  bool did_change = false;
-
-  if (rs_checkclearopq(cap->oap)) {
-    return;
-  }
-
-  if (LINEEMPTY(curwin->w_cursor.lnum) && vim_strchr(p_ww, '~') == NULL) {
-    rs_clearopbeep(cap->oap);
-    return;
-  }
-
-  rs_prep_redo_cmd(cap);
-
-  if (u_save_cursor() == false) {
-    return;
-  }
-
-  pos_T startpos = curwin->w_cursor;
-  for (int n = cap->count1; n > 0; n--) {
-    did_change |= swapchar(cap->oap->op_type, &curwin->w_cursor);
-    inc_cursor();
-    if (gchar_cursor() == NUL) {
-      if (vim_strchr(p_ww, '~') != NULL
-          && curwin->w_cursor.lnum < curbuf->b_ml.ml_line_count) {
-        curwin->w_cursor.lnum++;
-        curwin->w_cursor.col = 0;
-        if (n > 1) {
-          if (u_savesub(curwin->w_cursor.lnum) == false) {
-            break;
-          }
-          u_clearline(curbuf);
-        }
-      } else {
-        break;
-      }
-    }
-  }
-
-  check_cursor(curwin);
-  curwin->w_set_curswant = true;
-  if (did_change) {
-    changed_lines(curbuf, startpos.lnum, startpos.col, curwin->w_cursor.lnum + 1,
-                  0, true);
-    curbuf->b_op_start = startpos;
-    curbuf->b_op_end = curwin->w_cursor;
-    if (curbuf->b_op_end.col > 0) {
-      curbuf->b_op_end.col--;
-    }
-  }
-}
-
 /// Move the cursor to the mark position
 ///
 /// Wrapper to mark_move_to() that also handles normal mode command arguments.
@@ -4598,7 +4575,7 @@ static void nv_tilde_impl(cmdarg_T *cap)
       rs_clearopbeep(cap->oap);
       return;
     }
-    n_swapchar(cap);
+    rs_n_swapchar(cap);
   } else {
     nv_operator_impl(cap);
   }
