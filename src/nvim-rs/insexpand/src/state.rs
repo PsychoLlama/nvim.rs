@@ -506,6 +506,39 @@ pub unsafe extern "C" fn rs_can_start_completion() -> c_int {
     c_int::from(mode == CTRL_X_NOT_DEFINED_YET || (mode == CTRL_X_NORMAL && !started))
 }
 
+// =============================================================================
+// Phase 4: rs_ins_compl_restart
+// =============================================================================
+
+extern "C" {
+    fn nvim_update_screen();
+    fn rs_ins_compl_free();
+    fn nvim_set_compl_cont_mode(val: c_int);
+}
+
+/// Setup for finding completions again without leaving CTRL-X mode.
+///
+/// Used when BS or a key was typed while still searching for matches.
+/// Updates screen, frees completion data, and resets all state counters.
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_restart() {
+    // update screen before restart so if complete is blocked,
+    // will stay to the last popup menu and reduce flicker
+    nvim_update_screen();
+    rs_ins_compl_free();
+    nvim_set_compl_started(0);
+    nvim_set_compl_matches(0);
+    nvim_set_compl_cont_status(0);
+    nvim_set_compl_cont_mode(0);
+    nvim_cpt_sources_clear();
+    nvim_set_compl_autocomplete(0);
+    nvim_set_compl_from_nonkeyword(0);
+    nvim_set_compl_num_bests(0);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

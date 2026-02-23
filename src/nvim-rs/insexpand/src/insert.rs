@@ -650,6 +650,82 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
     nvim_set_compl_hi_on_longest(c_int::from(insert_prefix != 0 && move_cursor != 0));
 }
 
+// =============================================================================
+// Phase 4: rs_ins_compl_set_original_text and rs_ins_compl_addleader
+// =============================================================================
+
+extern "C" {
+    // Accessors for rs_ins_compl_set_original_text
+    fn nvim_ins_compl_set_original_text_impl(str_ptr: *const c_char, len: usize);
+
+    // Accessors for rs_ins_compl_addleader
+    fn nvim_stop_arrow() -> c_int;
+    fn nvim_utf_char2len(c: c_int) -> c_int;
+    fn nvim_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn nvim_ins_char(c: c_int);
+    fn nvim_ins_char_bytes(buf: *const c_char, len: usize);
+    fn rs_ins_compl_need_restart() -> c_int;
+    fn rs_ins_compl_restart();
+    fn nvim_api_clear_compl_leader();
+    fn nvim_set_compl_leader_from_cursor();
+    fn nvim_ins_compl_new_leader_wrapper();
+    fn ins_compl_delete(revert: bool);
+}
+
+/// Set the original text for the first completion match.
+///
+/// Replaces `compl_first_match->cp_str` (or its `cp_prev` if that's the
+/// original text entry) with a copy of `str`.
+///
+/// # Safety
+/// Requires valid completion list state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_set_original_text(str_ptr: *const c_char, len: usize) {
+    nvim_ins_compl_set_original_text_impl(str_ptr, len);
+}
+
+// Maximum multi-byte character size in bytes
+const MB_MAXCHAR: usize = 4;
+
+/// Append one character to the completion match leader.
+///
+/// May reduce the number of matches. Called when the user types a character
+/// while completion is active.
+///
+/// # Safety
+/// Requires valid completion state; called from insert mode only.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_ins_compl_addleader(c: c_int) {
+    if rs_ins_compl_preinsert_effect() != 0 {
+        ins_compl_delete(false);
+    }
+
+    if nvim_stop_arrow() != 0 {
+        // stop_arrow() returned FAIL
+        return;
+    }
+
+    let cc = nvim_utf_char2len(c);
+    if cc > 1 {
+        let mut buf = [0i8; MB_MAXCHAR + 1];
+        nvim_utf_char2bytes(c, buf.as_mut_ptr());
+        buf[cc as usize] = 0;
+        nvim_ins_char_bytes(buf.as_ptr(), cc as usize);
+    } else {
+        nvim_ins_char(c);
+    }
+
+    // If we didn't complete finding matches we must search again.
+    if rs_ins_compl_need_restart() != 0 {
+        rs_ins_compl_restart();
+    }
+
+    nvim_api_clear_compl_leader();
+    nvim_set_compl_leader_from_cursor();
+    nvim_ins_compl_new_leader_wrapper();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

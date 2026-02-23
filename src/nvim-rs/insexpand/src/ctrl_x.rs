@@ -149,6 +149,8 @@ extern "C" {
     fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c_char);
     fn may_trigger_modechanged();
     fn rs_ins_compl_pum_key(c: c_int) -> c_int;
+    // rs_* functions from lib.rs accessible via no_mangle extern "C"
+    fn rs_ctrl_x_mode_cmdline() -> c_int;
 
     // Phase 3 state accessors
     fn nvim_get_compl_enter_selects() -> c_int;
@@ -626,6 +628,105 @@ pub unsafe extern "C" fn rs_ins_compl_cancel() -> c_int {
 
 extern "C" {
     fn inindent(extra: c_int) -> bool;
+}
+
+// =============================================================================
+// Phase 4: rs_ins_ctrl_x
+// =============================================================================
+
+// Additional extern "C" declarations for Phase 4
+extern "C" {
+    fn nvim_set_edit_submode_ctrl_x_msg(mode: c_int);
+    fn nvim_set_edit_submode_pre_null();
+    fn nvim_may_trigger_modechanged();
+}
+
+// Additional constants for ins_ctrl_x
+const CONT_N_ADDS: c_int = 4; // next ^X<> will add-new or expand-current
+                              // CONT_INTRPT is already defined above as 6
+
+/// Handle CTRL-X keypress in insert mode.
+///
+/// If not in cmdline CTRL-X mode: resets or sets interrupt flag in compl_cont_status,
+/// sets ctrl_x_mode to NOT_DEFINED_YET, updates edit_submode and triggers modechanged.
+/// If in cmdline CTRL-X mode: sets ctrl_x_mode to CTRL_X_CMDLINE_CTRL_X.
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_ctrl_x() {
+    if rs_ctrl_x_mode_cmdline() == 0 {
+        // if the next ^X<> won't ADD nothing, then reset compl_cont_status
+        let status = nvim_get_compl_cont_status();
+        if (status & CONT_N_ADDS) != 0 {
+            nvim_set_compl_cont_status(status | CONT_INTRPT);
+        } else {
+            nvim_set_compl_cont_status(0);
+        }
+        // We're not sure which CTRL-X mode it will be yet
+        nvim_set_ctrl_x_mode(CTRL_X_NOT_DEFINED_YET);
+        nvim_set_edit_submode_ctrl_x_msg(CTRL_X_NOT_DEFINED_YET);
+        nvim_set_edit_submode_pre_null();
+        nvim_set_redraw_mode_true();
+    } else {
+        // CTRL-X in CTRL-X CTRL-V mode behaves differently to make CTRL-X
+        // CTRL-V look like CTRL-N
+        nvim_set_ctrl_x_mode(CTRL_X_CMDLINE_CTRL_X);
+    }
+
+    nvim_may_trigger_modechanged();
+}
+
+// =============================================================================
+// Phase 4: rs_check_compl_option
+// =============================================================================
+
+// Additional extern "C" declarations for check_compl_option
+extern "C" {
+    fn nvim_check_compl_option_dict() -> c_int;
+    fn nvim_check_compl_option_tsr() -> c_int;
+    fn nvim_emsg_dict_empty(is_dict: c_int);
+    fn nvim_emsg_silent_is_zero() -> c_int;
+    fn nvim_in_assert_fails() -> bool;
+    fn nvim_vim_beep_complete();
+    fn nvim_setcursor();
+    fn nvim_ui_has_messages() -> c_int;
+    fn nvim_ui_flush();
+    fn nvim_os_delay(ms: std::os::raw::c_long, allow_input: bool);
+}
+
+/// Check that the 'dictionary' or 'thesaurus' option can be used.
+///
+/// Returns 1 if the option is usable, 0 if it is empty.
+/// If empty: resets ctrl_x_mode, clears edit_submode, emits error, shows beep.
+///
+/// `dict_opt` is 1 for 'dictionary', 0 for 'thesaurus'.
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_compl_option(dict_opt: c_int) -> c_int {
+    let is_empty = if dict_opt != 0 {
+        nvim_check_compl_option_dict()
+    } else {
+        nvim_check_compl_option_tsr()
+    };
+
+    if is_empty != 0 {
+        nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
+        nvim_set_edit_submode_null();
+        nvim_emsg_dict_empty(dict_opt);
+        if nvim_emsg_silent_is_zero() != 0 && !nvim_in_assert_fails() {
+            nvim_vim_beep_complete();
+            nvim_setcursor();
+            if nvim_ui_has_messages() == 0 {
+                nvim_ui_flush();
+                nvim_os_delay(2004, false);
+            }
+        }
+        return 0;
+    }
+    1
 }
 
 #[cfg(test)]

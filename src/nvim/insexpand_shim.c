@@ -149,6 +149,13 @@ extern int rs_ins_compl_col_range_attr(int lnum, int col);
 extern void rs_ins_compl_show_pum(void);
 extern void rs_ins_compl_delete(int new_leader);
 extern void rs_ins_compl_insert(int move_cursor, int insert_prefix);
+// Phase 4 Rust exports
+extern void rs_ins_ctrl_x(void);
+extern int rs_check_compl_option(int dict_opt);
+extern void rs_ins_compl_restart(void);
+extern void rs_ins_compl_set_original_text(const char *str, size_t len);
+extern void rs_ins_compl_addleader(int c);
+extern void rs_ins_compl_check_keys(int frequency, int in_compl_func);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -421,53 +428,12 @@ static pumitem_T *compl_match_array = NULL;
 static int compl_match_arraysize;
 
 /// CTRL-X pressed in Insert mode.
-void ins_ctrl_x(void)
-{
-  if (!rs_ctrl_x_mode_cmdline()) {
-    // if the next ^X<> won't ADD nothing, then reset compl_cont_status
-    if (compl_cont_status & CONT_N_ADDS) {
-      compl_cont_status |= CONT_INTRPT;
-    } else {
-      compl_cont_status = 0;
-    }
-    // We're not sure which CTRL-X mode it will be yet
-    ctrl_x_mode = CTRL_X_NOT_DEFINED_YET;
-    edit_submode = _(CTRL_X_MSG(ctrl_x_mode));
-    edit_submode_pre = NULL;
-    redraw_mode = true;
-  } else {
-    // CTRL-X in CTRL-X CTRL-V mode behaves differently to make CTRL-X
-    // CTRL-V look like CTRL-N
-    ctrl_x_mode = CTRL_X_CMDLINE_CTRL_X;
-  }
-
-  may_trigger_modechanged();
-}
+void ins_ctrl_x(void) { rs_ins_ctrl_x(); }
 
 /// Check that the 'dictionary' or 'thesaurus' option can be used.
 ///
 /// @param  dict_opt  check 'dictionary' when true, 'thesaurus' when false.
-bool check_compl_option(bool dict_opt)
-{
-  if (dict_opt
-      ? (*curbuf->b_p_dict == NUL && *p_dict == NUL && !curwin->w_p_spell)
-      : (*curbuf->b_p_tsr == NUL && *p_tsr == NUL
-         && *curbuf->b_p_tsrfu == NUL && *p_tsrfu == NUL)) {
-    ctrl_x_mode = CTRL_X_NORMAL;
-    edit_submode = NULL;
-    emsg(dict_opt ? _("'dictionary' option is empty") : _("'thesaurus' option is empty"));
-    if (emsg_silent == 0 && !in_assert_fails) {
-      vim_beep(kOptBoFlagComplete);
-      setcursor();
-      if (!ui_has(kUIMessages)) {
-        ui_flush();
-        os_delay(2004, false);
-      }
-    }
-    return false;
-  }
-  return true;
-}
+bool check_compl_option(bool dict_opt) { return rs_check_compl_option(dict_opt ? 1 : 0) != 0; }
 
 extern int rs_vim_is_ctrl_x_key(int c);
 extern int rs_may_advance_cpt_index(const char *cpt);
@@ -1777,107 +1743,20 @@ static void ins_compl_new_leader(void)
 
 /// Append one character to the match leader.  May reduce the number of
 /// matches.
-void ins_compl_addleader(int c)
-{
-  int cc;
-
-  if (rs_ins_compl_preinsert_effect()) {
-    ins_compl_delete(false);
-  }
-
-  if (stop_arrow() == FAIL) {
-    return;
-  }
-  if ((cc = utf_char2len(c)) > 1) {
-    char buf[MB_MAXCHAR + 1];
-
-    utf_char2bytes(c, buf);
-    buf[cc] = NUL;
-    ins_char_bytes(buf, (size_t)cc);
-  } else {
-    ins_char(c);
-  }
-
-  // If we didn't complete finding matches we must search again.
-  if (rs_ins_compl_need_restart()) {
-    ins_compl_restart();
-  }
-
-  API_CLEAR_STRING(compl_leader);
-  compl_leader = cbuf_to_string(get_cursor_line_ptr() + compl_col,
-                                (size_t)(curwin->w_cursor.col - compl_col));
-  ins_compl_new_leader();
-}
+void ins_compl_addleader(int c) { rs_ins_compl_addleader(c); }
 
 /// Setup for finding completions again without leaving CTRL-X mode.  Used when
 /// BS or a key was typed while still searching for matches.
-static void ins_compl_restart(void)
-{
-  // update screen before restart.
-  // so if complete is blocked,
-  // will stay to the last popup menu and reduce flicker
-  update_screen();  // TODO(bfredl): no.
-  rs_ins_compl_free();
-  compl_started = false;
-  compl_matches = 0;
-  compl_cont_status = 0;
-  compl_cont_mode = 0;
-  cpt_sources_clear();
-  compl_autocomplete = false;
-  compl_from_nonkeyword = false;
-  compl_num_bests = 0;
-}
+static void ins_compl_restart(void) { rs_ins_compl_restart(); }
 
 /// Set the first match, the original text.
 static void ins_compl_set_original_text(char *str, size_t len)
   FUNC_ATTR_NONNULL_ALL
-{
-  // Replace the original text entry.
-  // The CP_ORIGINAL_TEXT flag is either at the first item or might possibly
-  // be at the last item for backward completion
-  if (match_at_original_text(compl_first_match)) {  // safety check
-    API_CLEAR_STRING(compl_first_match->cp_str);
-    compl_first_match->cp_str = cbuf_to_string(str, len);
-  } else if (compl_first_match->cp_prev != NULL
-             && match_at_original_text(compl_first_match->cp_prev)) {
-    API_CLEAR_STRING(compl_first_match->cp_prev->cp_str);
-    compl_first_match->cp_prev->cp_str = cbuf_to_string(str, len);
-  }
-}
+{ rs_ins_compl_set_original_text(str, len); }
 
 /// Append one character to the match leader.  May reduce the number of
 /// matches.
-void ins_compl_addfrommatch(void)
-{
-  int len = (int)curwin->w_cursor.col - (int)compl_col;
-  assert(compl_shown_match != NULL);
-  char *p = compl_shown_match->cp_str.data;
-  if ((int)compl_shown_match->cp_str.size <= len) {   // the match is too short
-    // When still at the original match use the first entry that matches
-    // the leader.
-    if (!match_at_original_text(compl_shown_match)) {
-      return;
-    }
-
-    p = NULL;
-    size_t plen = 0;
-    for (compl_T *cp = compl_shown_match->cp_next; cp != NULL
-         && !is_first_match(cp); cp = cp->cp_next) {
-      if (compl_leader.data == NULL
-          || ins_compl_equal(cp, compl_leader.data, compl_leader.size)) {
-        p = cp->cp_str.data;
-        plen = cp->cp_str.size;
-        break;
-      }
-    }
-    if (p == NULL || (int)plen <= len) {
-      return;
-    }
-  }
-  p += len;
-  int c = utf_ptr2char(p);
-  ins_compl_addleader(c);
-}
+void ins_compl_addfrommatch(void) { nvim_ins_compl_addfrommatch_body(); }
 
 /// Stop insert completion mode
 bool ins_compl_stop(const int c, const int prev_mode, bool retval)
@@ -4261,63 +4140,7 @@ static int ins_compl_next(bool allow_get_expansion, int count, bool insert_match
 ///                       compl_curr_match.
 void ins_compl_check_keys(int frequency, bool in_compl_func)
 {
-  static int count = 0;
-
-  // Don't check when reading keys from a script, :normal or feedkeys().
-  // That would break the test scripts.  But do check for keys when called
-  // from complete_check().
-  if (!in_compl_func && (using_script() || ex_normal_busy)) {
-    return;
-  }
-
-  // Only do this at regular intervals
-  if (++count < frequency) {
-    return;
-  }
-  count = 0;
-
-  // Check for a typed key.  Do use mappings, otherwise vim_is_ctrl_x_key()
-  // can't do its work correctly.
-  int c = vpeekc_any();
-  if (c != NUL && !test_disable_char_avail) {
-    if (vim_is_ctrl_x_key(c) && c != Ctrl_X && c != Ctrl_R) {
-      c = safe_vgetc();         // Eat the character
-      compl_shows_dir = rs_ins_compl_key2dir(c);
-      ins_compl_next(false, rs_ins_compl_key2count(c), c != K_UP && c != K_DOWN);
-    } else {
-      // Need to get the character to have KeyTyped set.  We'll put it
-      // back with vungetc() below.  But skip K_IGNORE.
-      c = safe_vgetc();
-      if (c != K_IGNORE) {
-        // Don't interrupt completion when the character wasn't typed,
-        // e.g., when doing @q to replay keys.
-        if (c != Ctrl_R && KeyTyped) {
-          compl_interrupted = true;
-        }
-
-        vungetc(c);
-      }
-    }
-  } else {
-    bool normal_mode_strict = rs_ctrl_x_mode_normal() && !rs_ctrl_x_mode_line_or_eval()
-                              && !(compl_cont_status & CONT_LOCAL)
-                              && cpt_sources_array != NULL && cpt_sources_index >= 0;
-    if (normal_mode_strict && (compl_autocomplete || p_cto > 0)) {
-      rs_check_elapsed_time();
-    }
-  }
-
-  if (compl_pending
-      && !got_int
-      && !(cot_flags & (kOptCotFlagNoinsert | kOptCotFlagFuzzy))
-      && (!compl_autocomplete || rs_ins_compl_has_preinsert())) {
-    // Insert the first match immediately and advance compl_shown_match,
-    // before finding other matches.
-    int todo = compl_pending > 0 ? compl_pending : -compl_pending;
-
-    compl_pending = 0;
-    ins_compl_next(false, todo, true);
-  }
+  rs_ins_compl_check_keys(frequency, in_compl_func ? 1 : 0);
 }
 
 /// Get the pattern, column and length for normal completion (CTRL-N CTRL-P
@@ -5413,4 +5236,118 @@ void nvim_cursor_col_sub(int n) { curwin->w_cursor.col -= (colnr_T)n; }
 int nvim_compl_shown_match_at_orig_text(void) { return compl_shown_match ? (match_at_original_text(compl_shown_match) ? 1 : 0) : 0; }
 void nvim_ins_compl_dict_alloc_set_shown(void) { set_vim_var_dict(VV_COMPLETED_ITEM, ins_compl_dict_alloc(compl_shown_match)); }
 void nvim_set_compl_hi_on_longest(int val) { compl_hi_on_autocompl_longest = val != 0; }
+
+// Compound accessors for Phase 4 (ins_compl_restart, ins_ctrl_x, check_compl_option,
+// ins_compl_addleader, ins_compl_addfrommatch, ins_compl_set_original_text,
+// ins_compl_check_keys)
+void nvim_compl_cont_status_or(int mask) { compl_cont_status |= mask; }
+void nvim_set_edit_submode_ctrl_x_msg(int mode) { edit_submode = _(CTRL_X_MSG(mode)); }
+// nvim_may_trigger_modechanged: defined in normal_shim.c
+int nvim_stop_arrow(void) { return stop_arrow(); }
+// nvim_utf_char2bytes: defined in change_ffi.c (int nvim_utf_char2bytes(int c, char *buf))
+int nvim_utf_char2len(int c) { return utf_char2len(c); }
+void nvim_ins_char(int c) { ins_char(c); }
+void nvim_ins_char_bytes(const char *buf, size_t len) { ins_char_bytes((char *)buf, len); }
+void nvim_api_clear_compl_leader(void) { API_CLEAR_STRING(compl_leader); }
+void nvim_set_compl_leader_from_cursor(void) {
+  compl_leader = cbuf_to_string(get_cursor_line_ptr() + compl_col,
+                                (size_t)(curwin->w_cursor.col - compl_col));
+}
+void nvim_ins_compl_set_original_text_impl(const char *str, size_t len) {
+  if (match_at_original_text(compl_first_match)) {
+    API_CLEAR_STRING(compl_first_match->cp_str);
+    compl_first_match->cp_str = cbuf_to_string(str, len);
+  } else if (compl_first_match->cp_prev != NULL
+             && match_at_original_text(compl_first_match->cp_prev)) {
+    API_CLEAR_STRING(compl_first_match->cp_prev->cp_str);
+    compl_first_match->cp_prev->cp_str = cbuf_to_string(str, len);
+  }
+}
+int nvim_check_compl_option_dict(void) {
+  return (*curbuf->b_p_dict == NUL && *p_dict == NUL && !curwin->w_p_spell) ? 1 : 0;
+}
+int nvim_check_compl_option_tsr(void) {
+  return (*curbuf->b_p_tsr == NUL && *p_tsr == NUL
+          && *curbuf->b_p_tsrfu == NUL && *p_tsrfu == NUL) ? 1 : 0;
+}
+void nvim_emsg_dict_empty(int is_dict) {
+  emsg(is_dict ? _("'dictionary' option is empty") : _("'thesaurus' option is empty"));
+}
+int nvim_emsg_silent_is_zero(void) { return emsg_silent == 0 ? 1 : 0; }
+// nvim_in_assert_fails: defined in change_ffi.c (bool nvim_in_assert_fails(void))
+void nvim_vim_beep_complete(void) { vim_beep(kOptBoFlagComplete); }
+void nvim_setcursor(void) { setcursor(); }
+// nvim_ui_has_messages: defined in message.c (int nvim_ui_has_messages(void))
+// nvim_ui_flush: defined in change_ffi.c (void nvim_ui_flush(void))
+// nvim_os_delay: defined in change_ffi.c (void nvim_os_delay(long ms, bool allow_input))
+int nvim_compl_first_match_at_orig_text(void) { return compl_first_match ? (match_at_original_text(compl_first_match) ? 1 : 0) : 0; }
+int nvim_vpeekc_any(void) { return vpeekc_any(); }
+int nvim_test_disable_char_avail(void) { return test_disable_char_avail ? 1 : 0; }
+int nvim_vim_is_ctrl_x_key(int c) { return vim_is_ctrl_x_key(c) ? 1 : 0; }
+int nvim_safe_vgetc(void) { return safe_vgetc(); }
+void nvim_vungetc(int c) { vungetc(c); }
+int nvim_got_int(void) { return got_int ? 1 : 0; }
+int nvim_key_typed(void) { return KeyTyped ? 1 : 0; }
+void nvim_set_compl_interrupted(int val) { compl_interrupted = val != 0; }
+int nvim_using_script(void) { return using_script() ? 1 : 0; }
+int nvim_ex_normal_busy(void) { return ex_normal_busy ? 1 : 0; }
+int nvim_get_compl_pending(void) { return compl_pending; }
+void nvim_set_compl_pending(int val) { compl_pending = val; }
+int nvim_cot_flags_has_noinsert_fuzzy(void) { return (cot_flags & (kOptCotFlagNoinsert | kOptCotFlagFuzzy)) ? 1 : 0; }
+// nvim_get_compl_shows_dir: already defined above (line 5277)
+void nvim_set_compl_shows_dir(int val) { compl_shows_dir = val; }
+int nvim_ins_compl_key2dir(int c) { return rs_ins_compl_key2dir(c); }
+int nvim_ins_compl_key2count(int c) { return rs_ins_compl_key2count(c); }
+void nvim_ins_compl_next_wrap(int allow_get_expansion, int todo, int advance) {
+  ins_compl_next(allow_get_expansion != 0, todo, advance != 0);
+}
+int nvim_cpt_sources_index_non_neg(void) { return cpt_sources_index >= 0 ? 1 : 0; }
+int nvim_p_cto(void) { return (int)p_cto; }
+
+// Additional accessors for Phase 4 Rust migrations
+// nvim_set_compl_cont_mode: already defined above (line 5315)
+void nvim_ins_compl_new_leader_wrapper(void) { ins_compl_new_leader(); }
+// ins_compl_addfrommatch compound accessor: handles match traversal in C
+// then calls rs_ins_compl_addleader for the actual insertion.
+extern void rs_ins_compl_addleader(int c);
+void nvim_ins_compl_addfrommatch_body(void) {
+  int len = (int)curwin->w_cursor.col - (int)compl_col;
+  assert(compl_shown_match != NULL);
+  char *p = compl_shown_match->cp_str.data;
+  if ((int)compl_shown_match->cp_str.size <= len) {
+    if (!match_at_original_text(compl_shown_match)) {
+      return;
+    }
+    p = NULL;
+    size_t plen = 0;
+    for (compl_T *cp = compl_shown_match->cp_next; cp != NULL
+         && !is_first_match(cp); cp = cp->cp_next) {
+      if (compl_leader.data == NULL
+          || ins_compl_equal(cp, compl_leader.data, compl_leader.size)) {
+        p = cp->cp_str.data;
+        plen = cp->cp_str.size;
+        break;
+      }
+    }
+    if (p == NULL || (int)plen <= len) {
+      return;
+    }
+  }
+  p += len;
+  int c = utf_ptr2char(p);
+  rs_ins_compl_addleader(c);
+}
+// Compound accessor for ins_compl_restart (calls update_screen then delegates
+// state reset to Rust).
+extern void rs_ins_compl_restart(void);
+// Compound accessor for ins_ctrl_x
+extern void rs_ins_ctrl_x(void);
+// Compound accessor for check_compl_option
+extern int rs_check_compl_option(int dict_opt);
+// Compound accessor for ins_compl_set_original_text
+extern void rs_ins_compl_set_original_text(const char *str, size_t len);
+// Compound accessor for ins_compl_addleader
+extern void rs_ins_compl_addleader(int c);
+// Compound accessor for ins_compl_check_keys
+extern void rs_ins_compl_check_keys(int frequency, int in_compl_func);
 
