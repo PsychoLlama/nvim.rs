@@ -1837,6 +1837,47 @@ pub extern "C" fn rs_meta_describe_key_inc(meta_inc: *mut u32, k: *mut MTKey) {
     }
 }
 
+/// Compute meta counts for a node (sum over keys and children).
+///
+/// For internal nodes, also adds the meta counts from all children.
+/// Ported from C `meta_describe_node`.
+#[must_use]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+pub fn meta_describe_node(x: MTNodeHandle) -> [u32; K_MT_META_COUNT] {
+    let n = unsafe { nvim_mtnode_get_n(x) };
+    let level = unsafe { nvim_mtnode_get_level(x) };
+    let mut meta_node = [0u32; K_MT_META_COUNT];
+    for i in 0..n {
+        let k = unsafe { nvim_mtnode_get_key(x, i) };
+        meta_describe_key_inc(&mut meta_node, &k);
+    }
+    if level != 0 {
+        for i in 0..=(n as usize) {
+            for (m, slot) in meta_node.iter_mut().enumerate() {
+                *slot += unsafe { nvim_mtnode_get_meta(x, i as c_int, m as c_int) };
+            }
+        }
+    }
+    meta_node
+}
+
+/// Exported FFI version of `meta_describe_node`.
+#[no_mangle]
+pub extern "C" fn rs_meta_describe_node(meta_out: *mut u32, x: MTNodeHandle) {
+    let result = meta_describe_node(x);
+    unsafe {
+        if !meta_out.is_null() {
+            for (i, &val) in result.iter().enumerate() {
+                *meta_out.add(i) = val;
+            }
+        }
+    }
+}
+
 /// Compute pseudo-index for a position in the tree.
 ///
 /// Pseudo-indices allow efficient ordering comparisons between positions

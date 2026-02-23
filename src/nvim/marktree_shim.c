@@ -142,6 +142,13 @@ extern void rs_unintersect_node(MarkTree *b, MTNode *x, uint64_t id, bool strict
 extern bool rs_intersection_has(MTNode *x, uint64_t id);
 extern void rs_bubble_up(MTNode *x);
 
+// Meta description and pseudo-index operations
+extern void rs_meta_describe_key(MTKey k, uint32_t *meta_out);
+extern void rs_meta_describe_key_inc(uint32_t *meta_inc, MTKey *k);
+extern void rs_meta_describe_node(uint32_t *meta_out, MTNode *x);
+extern uint64_t rs_pseudo_index(MTNode *x, int i);
+extern uint64_t rs_pseudo_index_for_id(MarkTree *b, uint64_t id, bool sloppy);
+
 // Binary search
 extern int rs_marktree_getp_aux(const MTNode *x, MTKey k, bool *match);
 
@@ -195,10 +202,10 @@ static inline void split_node(MarkTree *b, MTNode *x, const int i, MTKey next)
   kvi_copy(z->intersect, y->intersect);
 
   if (!y->level) {
-    uint64_t pi = pseudo_index(y, 0);  // note: sloppy pseudo-index
+    uint64_t pi = rs_pseudo_index(y, 0);  // note: sloppy pseudo-index
     for (int j = 0; j < T; j++) {
       MTKey k = y->key[j];
-      uint64_t pi_end = pseudo_index_for_id(b, mt_lookup_id(k.ns, k.id, true), true);
+      uint64_t pi_end = rs_pseudo_index_for_id(b, mt_lookup_id(k.ns, k.id, true), true);
       if (mt_start(k) && pi_end > pi && mt_lookup_key(k) != last_start) {
         rs_intersect_node(b, z, mt_lookup_id(k.ns, k.id, false));
       }
@@ -207,7 +214,7 @@ static inline void split_node(MarkTree *b, MTNode *x, const int i, MTKey next)
     // note: y->key[T-1] is moved up and thus checked for both
     for (int j = T - 1; j < (T * 2) - 1; j++) {
       MTKey k = y->key[j];
-      uint64_t pi_start = pseudo_index_for_id(b, mt_lookup_id(k.ns, k.id, false), true);
+      uint64_t pi_start = rs_pseudo_index_for_id(b, mt_lookup_id(k.ns, k.id, false), true);
       if (mt_end(k) && pi_start > 0 && pi_start < pi) {
         rs_intersect_node(b, y, mt_lookup_id(k.ns, k.id, false));
       }
@@ -230,7 +237,7 @@ static inline void split_node(MarkTree *b, MTNode *x, const int i, MTKey next)
   memmove(&x->ptr[i + 2], &x->ptr[i + 1], sizeof(MTNode *) * (size_t)(x->n - i));
   memmove(&x->meta[i + 2], &x->meta[i + 1], sizeof(x->meta[0]) * (size_t)(x->n - i));
   x->ptr[i + 1] = z;
-  meta_describe_node(x->meta[i + 1], z);
+  rs_meta_describe_node(x->meta[i + 1], z);
   z->parent = x;  // == y->parent
   for (int j = i + 1; j < x->n + 2; j++) {
     x->ptr[j]->p_idx = (int16_t)j;
@@ -243,7 +250,7 @@ static inline void split_node(MarkTree *b, MTNode *x, const int i, MTKey next)
   x->n++;
 
   uint32_t meta_inc[kMTMetaCount];
-  meta_describe_key(meta_inc, x->key[i]);
+  rs_meta_describe_key(x->key[i], meta_inc);
   for (int m = 0; m < kMTMetaCount; m++) {
     // y used contain all of z and x->key[i], discount those
     x->meta[i][m] -= (x->meta[i + 1][m] + meta_inc[m]);
@@ -380,39 +387,6 @@ static MTNode *marktree_alloc_node(MarkTree *b, bool internal)
   return x;
 }
 
-// really meta_inc[kMTMetaCount]
-static void meta_describe_key_inc(uint32_t *meta_inc, MTKey *k)
-{
-  if (!mt_end(*k) && !mt_invalid(*k)) {
-    meta_inc[kMTMetaInline] += (k->flags & MT_FLAG_DECOR_VIRT_TEXT_INLINE) ? 1 : 0;
-    meta_inc[kMTMetaLines] += (k->flags & MT_FLAG_DECOR_VIRT_LINES) ? 1 : 0;
-    meta_inc[kMTMetaSignHL] += (k->flags & MT_FLAG_DECOR_SIGNHL) ? 1 : 0;
-    meta_inc[kMTMetaSignText] += (k->flags & MT_FLAG_DECOR_SIGNTEXT) ? 1 : 0;
-    meta_inc[kMTMetaConcealLines] += (k->flags & MT_FLAG_DECOR_CONCEAL_LINES) ? 1 : 0;
-  }
-}
-
-static void meta_describe_key(uint32_t *meta_inc, MTKey k)
-{
-  memset(meta_inc, 0, kMTMetaCount * sizeof(*meta_inc));
-  meta_describe_key_inc(meta_inc, &k);
-}
-
-// if x is internal, assumes x->meta[..] of children are correct
-static void meta_describe_node(uint32_t *meta_node, MTNode *x)
-{
-  memset(meta_node, 0, kMTMetaCount * sizeof(meta_node[0]));
-  for (int i = 0; i < x->n; i++) {
-    meta_describe_key_inc(meta_node, &x->key[i]);
-  }
-  if (x->level) {
-    for (int i = 0; i < x->n + 1; i++) {
-      for (int m = 0; m < kMTMetaCount; m++) {
-        meta_node[m] += x->meta[i][m];
-      }
-    }
-  }
-}
 
 void marktree_put_key(MarkTree *b, MTKey k)
 {
@@ -435,7 +409,7 @@ void marktree_put_key(MarkTree *b, MTKey k)
   }
 
   uint32_t meta_inc[kMTMetaCount];
-  meta_describe_key(meta_inc, k);
+  rs_meta_describe_key(k, meta_inc);
   marktree_putp_aux(b, r, k, meta_inc);
   for (int m = 0; m < kMTMetaCount; m++) {
     b->meta_root[m] += meta_inc[m];
@@ -509,7 +483,7 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
   MTKey intkey = x->key[itr->i];
 
   uint32_t meta_inc[kMTMetaCount];
-  meta_describe_key(meta_inc, intkey);
+  rs_meta_describe_key(intkey, meta_inc);
   if (x->n > itr->i + 1) {
     memmove(&x->key[itr->i], &x->key[itr->i + 1],
             sizeof(MTKey) * (size_t)(x->n - itr->i - 1));
@@ -564,13 +538,13 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
     } while (lnode != cur);
 
     MTKey deleted = cur->key[curi];
-    meta_describe_key(meta_inc, deleted);
+    rs_meta_describe_key(deleted, meta_inc);
     cur->key[curi] = intkey;
     refkey(b, cur, curi);
     // if `did_bubble` then we already added `start_id` to some parent
     if (mt_end(cur->key[curi]) && !did_bubble) {
-      uint64_t pi = pseudo_index(x, 0);  // note: sloppy pseudo-index
-      uint64_t pi_start = pseudo_index_for_id(b, start_id, true);
+      uint64_t pi = rs_pseudo_index(x, 0);  // note: sloppy pseudo-index
+      uint64_t pi_start = rs_pseudo_index_for_id(b, start_id, true);
       if (pi_start > 0 && pi_start < pi) {
         rs_intersect_node(b, x, start_id);
       }
@@ -706,8 +680,8 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
 void marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key)
 {
   uint32_t meta_old[kMTMetaCount], meta_new[kMTMetaCount];
-  meta_describe_key(meta_old, old_key);
-  meta_describe_key(meta_new, rawkey(itr));
+  rs_meta_describe_key(old_key, meta_old);
+  rs_meta_describe_key(rawkey(itr), meta_new);
 
   if (!memcmp(meta_old, meta_new, sizeof(meta_old))) {
     return;
@@ -949,7 +923,7 @@ static MTNode *merge_node(MarkTree *b, MTNode *p, int i)
   }
 
   uint32_t meta_inc[kMTMetaCount];
-  meta_describe_key(meta_inc, x->key[x->n]);
+  rs_meta_describe_key(x->key[x->n], meta_inc);
 
   memmove(&x->key[x->n + 1], y->key, (size_t)y->n * sizeof(MTKey));
   for (int k = 0; k < y->n; k++) {
@@ -1039,9 +1013,9 @@ static void pivot_right(MarkTree *b, MTPos p_pos, MTNode *p, const int i)
   refkey(b, p, i);
 
   uint32_t meta_inc_y[kMTMetaCount];
-  meta_describe_key(meta_inc_y, y->key[0]);
+  rs_meta_describe_key(y->key[0], meta_inc_y);
   uint32_t meta_inc_x[kMTMetaCount];
-  meta_describe_key(meta_inc_x, p->key[i]);
+  rs_meta_describe_key(p->key[i], meta_inc_x);
 
   for (int m = 0; m < kMTMetaCount; m++) {
     p->meta[i + 1][m] += meta_inc_y[m];
@@ -1089,9 +1063,9 @@ static void pivot_right(MarkTree *b, MTPos p_pos, MTNode *p, const int i)
   } else {
     // if the last element of x used to be an end node, check if it now covers all of x
     if (mt_end(p->key[i])) {
-      uint64_t pi = pseudo_index(x, 0);  // note: sloppy pseudo-index
+      uint64_t pi = rs_pseudo_index(x, 0);  // note: sloppy pseudo-index
       uint64_t start_id = mt_lookup_key_side(p->key[i], false);
-      uint64_t pi_start = pseudo_index_for_id(b, start_id, true);
+      uint64_t pi_start = rs_pseudo_index_for_id(b, start_id, true);
       if (pi_start > 0 && pi_start < pi) {
         rs_intersect_node(b, x, start_id);
       }
@@ -1125,9 +1099,9 @@ static void pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i)
   refkey(b, p, i);
 
   uint32_t meta_inc_x[kMTMetaCount];
-  meta_describe_key(meta_inc_x, x->key[x->n]);
+  rs_meta_describe_key(x->key[x->n], meta_inc_x);
   uint32_t meta_inc_y[kMTMetaCount];
-  meta_describe_key(meta_inc_y, p->key[i]);
+  rs_meta_describe_key(p->key[i], meta_inc_y);
   for (int m = 0; m < kMTMetaCount; m++) {
     p->meta[i][m] += meta_inc_x[m];
     p->meta[i + 1][m] -= meta_inc_y[m];
@@ -1175,10 +1149,10 @@ static void pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i)
   } else {
     // if the first element of y used to be an start node, check if it now covers all of y
     if (mt_start(p->key[i])) {
-      uint64_t pi = pseudo_index(y, 0);  // note: sloppy pseudo-index
+      uint64_t pi = rs_pseudo_index(y, 0);  // note: sloppy pseudo-index
 
       uint64_t end_id = mt_lookup_key_side(p->key[i], true);
-      uint64_t pi_end = pseudo_index_for_id(b, end_id, true);
+      uint64_t pi_end = rs_pseudo_index_for_id(b, end_id, true);
 
       if (pi_end > pi) {
         rs_intersect_node(b, y, mt_lookup_key(p->key[i]));
@@ -1316,9 +1290,9 @@ static void swap_keys(MarkTree *b, MarkTreeIter *itr1, MarkTreeIter *itr2, Damag
     }
 
     uint32_t meta_inc_1[kMTMetaCount];
-    meta_describe_key(meta_inc_1, rawkey(itr1));
+    rs_meta_describe_key(rawkey(itr1), meta_inc_1);
     uint32_t meta_inc_2[kMTMetaCount];
-    meta_describe_key(meta_inc_2, rawkey(itr2));
+    rs_meta_describe_key(rawkey(itr2), meta_inc_2);
 
     if (memcmp(meta_inc_1, meta_inc_2, sizeof(meta_inc_1)) != 0) {
       MTNode *x1 = itr1->x;
@@ -1613,45 +1587,6 @@ void marktree_move_region(MarkTree *b, int start_row, colnr_T start_col, int ext
   kv_destroy(saved);
 }
 
-static uint64_t pseudo_index(MTNode *x, int i)
-{
-  int off = MT_LOG2_BRANCH * x->level;
-  uint64_t index = 0;
-
-  while (x) {
-    index |= (uint64_t)(i + 1) << off;
-    off += MT_LOG2_BRANCH;
-    i = x->p_idx;
-    x = x->parent;
-  }
-
-  return index;
-}
-
-/// @param itr OPTIONAL. set itr to pos.
-/// if sloppy, two keys at the same _leaf_ node has the same index
-static uint64_t pseudo_index_for_id(MarkTree *b, uint64_t id, bool sloppy)
-{
-  MTNode *n = id2node(b, id);
-  if (n == NULL) {
-    return 0;  // a valid pseudo-index is never zero!
-  }
-
-  int i = 0;
-  if (n->level || !sloppy) {
-    for (i = 0; i < n->n; i++) {
-      if (mt_lookup_key(n->key[i]) == id) {
-        break;
-      }
-    }
-    assert(i < n->n);
-    if (n->level) {
-      i += 1;  // internal key i comes after ptr[i]
-    }
-  }
-
-  return pseudo_index(n, i);
-}
 
 // for unit test
 void marktree_put_test(MarkTree *b, uint32_t ns, uint32_t id, int row, int col, bool right_gravity,
@@ -1749,7 +1684,7 @@ size_t marktree_check_node(MarkTree *b, MTNode *x, MTPos *last, bool *last_right
   }
 
   uint32_t meta_node[kMTMetaCount];
-  meta_describe_node(meta_node, x);
+  rs_meta_describe_node(meta_node, x);
   for (int m = 0; m < kMTMetaCount; m++) {
     assert(meta_node_ref[m] == meta_node[m]);
   }
