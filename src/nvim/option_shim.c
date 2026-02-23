@@ -148,6 +148,9 @@ extern void rs_vimrc_found(const char *fname, const char *envname);
 extern void rs_set_iminsert_global(buf_T *buf);
 extern void rs_set_imsearch_global(buf_T *buf);
 extern void rs_reset_modifiable(void);
+extern OptVal rs_get_tty_option(const char *name);
+extern bool rs_set_tty_option(const char *name, char *value);
+extern int rs_string_to_key(char *arg);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
 _Static_assert(UPD_VALID == 10, "UPD_VALID mismatch with Rust UpdateType::Valid");
@@ -1252,6 +1255,13 @@ void nvim_curbuf_set_b_p_ma(int v) { curbuf->b_p_ma = v != 0; }
 void nvim_change_option_default_bool(OptIndex opt_idx, int value) { change_option_default(opt_idx, BOOLEAN_OPTVAL(value != 0)); }
 // kOptModifiable index accessor (for reset_modifiable)
 int nvim_get_opt_idx_modifiable(void) { return (int)kOptModifiable; }
+
+// Phase 4 pass 1 Phase 2: TTY and key accessors
+int nvim_option_get_t_colors(void) { return t_colors; }
+const char *nvim_option_get_p_term(void) { return p_term; }
+const char *nvim_option_get_p_ttytype(void) { return p_ttytype; }
+void nvim_option_set_p_term(char *val) { p_term = val; }
+void nvim_option_set_p_ttytype(char *val) { p_ttytype = val; }
 // FullName_save wrapper (for vimrc_found)
 char *nvim_option_FullName_save(const char *fname, bool force) { return FullName_save(fname, force); }
 // vim_getenv wrapper (for vimrc_found)
@@ -2217,47 +2227,11 @@ int do_set(char *arg, int opt_flags)
   return OK;
 }
 
-// Translate a string like "t_xx", "<t_xx>" or "<S-Tab>" to a key number.
-// When "has_lt" is true there is a '<' before "*arg_arg".
-// Returns 0 when the key is not recognized.
-static int find_key_len(const char *arg_arg, size_t len, bool has_lt)
-{
-  int key = 0;
-  const char *arg = arg_arg;
-
-  // Don't use get_special_key_code() for t_xx, we don't want it to call
-  // add_termcap_entry().
-  if (len >= 4 && arg[0] == 't' && arg[1] == '_') {
-    if (!has_lt || arg[4] == '>') {
-      key = TERMCAP2KEY((uint8_t)arg[2], (uint8_t)arg[3]);
-    }
-  } else if (has_lt) {
-    arg--;  // put arg at the '<'
-    int modifiers = 0;
-    key = find_special_key(&arg, len + 1, &modifiers, FSK_KEYCODE | FSK_KEEP_X_KEY | FSK_SIMPLIFY,
-                           NULL);
-    if (modifiers) {  // can't handle modifiers here
-      key = 0;
-    }
-  }
-  return key;
-}
-
 /// Convert a key name or string into a key value.
 /// Used for 'cedit', 'wildchar' and 'wildcharm' options.
 int string_to_key(char *arg)
 {
-  if (*arg == '<' && arg[1]) {
-    return find_key_len(arg + 1, strlen(arg), true);
-  }
-  if (*arg == '^' && arg[1]) {
-    int key = CTRL_CHR((uint8_t)arg[1]);
-    if (key == 0) {  // ^@ is <Nul>
-      key = K_ZERO;
-    }
-    return key;
-  }
-  return (uint8_t)(*arg);
+  return rs_string_to_key(arg);
 }
 
 // When changing 'title', 'titlestring', 'icon' or 'iconstring', call
@@ -2632,46 +2606,12 @@ void check_redraw(uint32_t flags)
 /// @return [allocated] TTY option value. Returns NIL_OPTVAL if option isn't a TTY option.
 OptVal get_tty_option(const char *name)
 {
-  char *value = NULL;
-
-  if (strequal(name, "t_Co")) {
-    if (t_colors <= 1) {
-      value = xstrdup("");
-    } else {
-      value = xmalloc(NUMBUFLEN);
-      snprintf(value, NUMBUFLEN, "%d", t_colors);
-    }
-  } else if (strequal(name, "term")) {
-    value = p_term ? xstrdup(p_term) : xstrdup("nvim");
-  } else if (strequal(name, "ttytype")) {
-    value = p_ttytype ? xstrdup(p_ttytype) : xstrdup("nvim");
-  } else if (rs_is_tty_option(name)) {
-    // XXX: All other t_* options were removed in 3baba1e7.
-    value = xstrdup("");
-  }
-
-  return value == NULL ? NIL_OPTVAL : CSTR_AS_OPTVAL(value);
+  return rs_get_tty_option(name);
 }
 
 bool set_tty_option(const char *name, char *value)
 {
-  if (strequal(name, "term")) {
-    if (p_term) {
-      xfree(p_term);
-    }
-    p_term = value;
-    return true;
-  }
-
-  if (strequal(name, "ttytype")) {
-    if (p_ttytype) {
-      xfree(p_ttytype);
-    }
-    p_ttytype = value;
-    return true;
-  }
-
-  return false;
+  return rs_set_tty_option(name, value);
 }
 
 /// Find index for an option. Don't go beyond `len` length.

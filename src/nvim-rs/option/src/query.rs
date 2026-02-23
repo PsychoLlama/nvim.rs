@@ -1,4 +1,4 @@
-//! Option query utility functions (Phase 4, pass 1)
+//! Option query utility functions (Phase 4, pass 1 and 2)
 //!
 //! Rust implementations of small utility/query functions from option_shim.c.
 
@@ -9,7 +9,8 @@
 
 use std::ffi::{c_char, c_int, c_uint};
 
-use crate::{BufHandle, WinHandle};
+use crate::storage::{OptVal, String_};
+use crate::{BufHandle, OptValType, WinHandle};
 
 // =============================================================================
 // C Function Declarations
@@ -63,6 +64,31 @@ extern "C" {
     fn nvim_curbuf_set_b_p_ma(v: c_int);
     fn nvim_change_option_default_bool(opt_idx: c_int, value: c_int);
     fn nvim_get_opt_idx_modifiable() -> c_int;
+
+    // TTY options (Phase 2)
+    fn nvim_option_get_t_colors() -> c_int;
+    fn nvim_option_get_p_term() -> *const c_char;
+    fn nvim_option_get_p_ttytype() -> *const c_char;
+    fn nvim_option_set_p_term(val: *mut c_char);
+    fn nvim_option_set_p_ttytype(val: *mut c_char);
+    fn rs_is_tty_option(name: *const c_char) -> c_int;
+    fn xmalloc(size: usize) -> *mut c_char;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
+
+    // key functions (Phase 2)
+    fn find_special_key(
+        srcp: *mut *const c_char,
+        src_len: usize,
+        modp: *mut c_int,
+        flags: c_int,
+        did_simplify: *mut bool,
+    ) -> c_int;
+    fn rs_ctrl_chr(c: c_int) -> c_int;
+
+    // C string functions (avoid libc dep)
+    fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+    fn strlen(s: *const c_char) -> usize;
 }
 
 // BS constants matching option_vars.h (BS_INDENT='i', BS_EOL='l' are valid but not compared directly)
@@ -198,4 +224,162 @@ pub unsafe extern "C" fn rs_reset_modifiable() {
     nvim_option_set_p_ma(0);
     let opt_idx = nvim_get_opt_idx_modifiable();
     nvim_change_option_default_bool(opt_idx, 0);
+}
+
+// =============================================================================
+// Phase 2: TTY and key-related functions
+// =============================================================================
+
+// NUMBUFLEN matches vim_defs.h
+const NUMBUFLEN: usize = 65;
+
+/// Return allocated OptVal for a TTY option name (t_Co, term, ttytype, t_xx).
+///
+/// Returns NIL_OPTVAL if name is not a TTY option.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_tty_option(name: *const c_char) -> OptVal {
+    if name.is_null() {
+        return OptVal::nil();
+    }
+
+    let value: *mut c_char;
+
+    // "t_Co"
+    if strcmp(name, c"t_Co".as_ptr()) == 0 {
+        let t_colors = nvim_option_get_t_colors();
+        if t_colors <= 1 {
+            value = xstrdup(c"".as_ptr());
+        } else {
+            value = xmalloc(NUMBUFLEN);
+            snprintf(value, NUMBUFLEN, c"%d".as_ptr(), t_colors);
+        }
+    } else if strcmp(name, c"term".as_ptr()) == 0 {
+        let p_term = nvim_option_get_p_term();
+        value = if !p_term.is_null() {
+            xstrdup(p_term)
+        } else {
+            xstrdup(c"nvim".as_ptr())
+        };
+    } else if strcmp(name, c"ttytype".as_ptr()) == 0 {
+        let p_ttytype = nvim_option_get_p_ttytype();
+        value = if !p_ttytype.is_null() {
+            xstrdup(p_ttytype)
+        } else {
+            xstrdup(c"nvim".as_ptr())
+        };
+    } else if rs_is_tty_option(name) != 0 {
+        // All other t_* options were removed; return empty string
+        value = xstrdup(c"".as_ptr());
+    } else {
+        return OptVal::nil();
+    }
+
+    // Build string OptVal (CSTR_AS_OPTVAL semantics: owns the string)
+    let len = strlen(value);
+    OptVal {
+        type_: OptValType::String,
+        data: crate::storage::OptValData {
+            string: String_ { data: value, size: len },
+        },
+    }
+}
+
+/// Set a TTY option. Returns true if the name is a settable TTY option.
+///
+/// Takes ownership of `value` on success (as in the C implementation).
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_tty_option(name: *const c_char, value: *mut c_char) -> bool {
+    if name.is_null() {
+        return false;
+    }
+    if strcmp(name, c"term".as_ptr()) == 0 {
+        let old = nvim_option_get_p_term();
+        if !old.is_null() {
+            xfree(old.cast_mut());
+        }
+        nvim_option_set_p_term(value);
+        return true;
+    }
+    if strcmp(name, c"ttytype".as_ptr()) == 0 {
+        let old = nvim_option_get_p_ttytype();
+        if !old.is_null() {
+            xfree(old.cast_mut());
+        }
+        nvim_option_set_p_ttytype(value);
+        return true;
+    }
+    false
+}
+
+// FSK_* flags matching keycodes/src/lib.rs
+const FSK_KEYCODE: c_int = 0x01;
+const FSK_KEEP_X_KEY: c_int = 0x02;
+const FSK_SIMPLIFY: c_int = 0x08;
+
+// TERMCAP2KEY macro: -(a + (b << 8))
+#[inline]
+const fn termcap2key(a: u8, b: u8) -> c_int {
+    -((a as c_int) + ((b as c_int) << 8))
+}
+
+// KS_ZERO = 255, KE_FILLER = b'X'
+const K_ZERO: c_int = termcap2key(255, b'X');
+
+/// Translate a <> key name or t_xx string into a key code.
+///
+/// `arg_arg` points after the '<' (or to start of "t_xx").
+/// `len` is the length available.
+/// `has_lt` indicates whether the '<' was present.
+///
+/// Returns key code, or 0 if not recognized.
+unsafe fn find_key_len(arg_arg: *const c_char, len: usize, has_lt: bool) -> c_int {
+    let mut key: c_int = 0;
+    let arg = arg_arg;
+
+    // t_xx format: don't use get_special_key_code (it calls add_termcap_entry)
+    if len >= 4
+        && *arg as u8 == b't'
+        && *arg.add(1) as u8 == b'_'
+    {
+        if !has_lt || *arg.add(4) as u8 == b'>' {
+            key = termcap2key(*arg.add(2) as u8, *arg.add(3) as u8);
+        }
+    } else if has_lt {
+        // Put arg at the '<'
+        let at_lt = arg.sub(1);
+        let mut p: *const c_char = at_lt;
+        let mut modifiers: c_int = 0;
+        key = find_special_key(
+            &mut p,
+            len + 1,
+            &mut modifiers,
+            FSK_KEYCODE | FSK_KEEP_X_KEY | FSK_SIMPLIFY,
+            std::ptr::null_mut(),
+        );
+        if modifiers != 0 {
+            // can't handle modifiers here
+            key = 0;
+        }
+    }
+    key
+}
+
+/// Convert a key name or string into a key value.
+///
+/// Used for 'cedit', 'wildchar' and 'wildcharm' options.
+#[no_mangle]
+pub unsafe extern "C" fn rs_string_to_key(arg: *mut c_char) -> c_int {
+    if arg.is_null() || *arg == 0 {
+        return 0;
+    }
+    if *arg as u8 == b'<' && *arg.add(1) != 0 {
+        return find_key_len(arg.add(1), strlen(arg), true);
+    }
+    if *arg as u8 == b'^' && *arg.add(1) != 0 {
+        let key = rs_ctrl_chr(c_int::from(*arg.add(1) as u8));
+        // ^@ is <Nul>
+        if key == 0 { K_ZERO } else { key }
+    } else {
+        c_int::from(*arg as u8)
+    }
 }
