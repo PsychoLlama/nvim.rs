@@ -2435,18 +2435,165 @@ pub unsafe extern "C" fn rs_findtags_in_file(
 }
 
 // =============================================================================
+// Phase 1 tag.c migration: rs_tag_call_tagfunc
+// =============================================================================
+
+extern "C" {
+    // Accessor: check if curbuf tagfunc is configured and ready
+    fn nvim_tag_curbuf_tfu_is_ready() -> bool;
+    // Accessor: get g_tag_at_cursor flag
+    fn nvim_tag_get_g_tag_at_cursor() -> bool;
+    // Accessor: get user_data from current tagstack entry (or null)
+    fn nvim_tag_get_curwin_tagstack_user_data() -> *const c_char;
+    // Accessor: allocate a VAR_FIXED-locked dict
+    fn nvim_tag_dict_alloc_lock_fixed() -> *mut c_void;
+    // Accessor: increment/decrement dict refcount
+    fn nvim_tag_dict_refcount_inc(dict: *mut c_void);
+    fn nvim_tag_dict_refcount_dec(dict: *mut c_void);
+    // Accessor: invoke the curbuf tagfunc callback
+    fn nvim_tag_do_callback_call_tfu(
+        pat: *const c_char,
+        flag_str: *const c_char,
+        dict: *mut c_void,
+        rettv_storage: *mut c_void,
+    ) -> c_int;
+    // Accessor: save/restore cursor with check
+    fn nvim_tag_save_cursor(pos_storage: *mut c_void);
+    fn nvim_tag_restore_cursor_check(pos_storage: *mut c_void);
+    // Accessor: rettv type inspection
+    fn nvim_tag_rettv_is_null_special(rettv_storage: *const c_void) -> bool;
+    fn nvim_tag_rettv_get_list(rettv_storage: *const c_void) -> *mut c_void;
+    // Accessor: size of pos_T for stack allocation
+    fn nvim_tag_pos_size() -> usize;
+    // Accessor: add string to dict
+    fn nvim_tag_tv_dict_add_str(
+        dict: *mut c_void,
+        key: *const c_char,
+        key_len: usize,
+        val: *mut c_char,
+    ) -> c_int;
+    // Accessor: emit error message for invalid tagfunc return
+    fn nvim_tag_emsg_invalid_tagfunc();
+    // tv_clear for rettv storage
+    fn nvim_tag_tv_clear_rettv(rettv_storage: *mut c_void);
+}
+
+/// Implement the tagfunc callback invocation in Rust.
+///
+/// Calls the VimL `tagfunc` callback with pattern, flags, and buf_ffname.
+/// Validates the return value.
+///
+/// Returns:
+///   0 (OK) with *out_list set to the returned list
+///   1 (FAIL) if callback call failed
+///   2 (NOTDONE) if result was v:null
+///   3 if result was not a list (emsg already shown)
+///   4 if curbuf tfu is empty or callback is none
+///
+/// # Safety
+/// - `pat` must be a valid C string
+/// - `buf_ffname` may be null
+/// - `out_list` must be a valid pointer to store the result list
+/// - `rettv_storage` must point to at least `sizeof(typval_T)` bytes of zeroed storage
+///
+/// # Panics
+/// Panics if `pos_T` is larger than 16 bytes (should never happen in practice).
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_call_tagfunc(
+    pat: *const c_char,
+    flags: c_int,
+    buf_ffname: *const c_char,
+    out_list: *mut *mut c_void,
+    rettv_storage: *mut c_void,
+) -> c_int {
+    // Check prerequisites: curbuf must have a non-empty tagfunc with a valid callback
+    if !nvim_tag_curbuf_tfu_is_ready() {
+        return 4;
+    }
+
+    // Build the flag string: "c" for at-cursor, "i" for insert-completion, "r" for regexp
+    let at_cursor = nvim_tag_get_g_tag_at_cursor();
+    let ins_comp = (flags & find_tags_flags::TAG_INS_COMP) != 0;
+    let regexp = (flags & find_tags_flags::TAG_REGEXP) != 0;
+
+    // Build flag string into a 4-byte buffer (max "cir\0")
+    let mut flag_buf = [0u8; 4];
+    let mut fpos = 0usize;
+    if at_cursor {
+        flag_buf[fpos] = b'c';
+        fpos += 1;
+    }
+    if ins_comp {
+        flag_buf[fpos] = b'i';
+        fpos += 1;
+    }
+    if regexp {
+        flag_buf[fpos] = b'r';
+        fpos += 1;
+    }
+    let _ = fpos; // null terminator already in place (initialized to 0)
+    let flag_str = flag_buf.as_ptr().cast::<c_char>();
+
+    // Allocate the info dict with VAR_FIXED lock
+    let d = nvim_tag_dict_alloc_lock_fixed();
+
+    // Add user_data if the current tagstack entry has one
+    let user_data = nvim_tag_get_curwin_tagstack_user_data();
+    if !user_data.is_null() {
+        // key = "user_data", key_len = 9
+        nvim_tag_tv_dict_add_str(d, c"user_data".as_ptr(), 9, user_data.cast_mut());
+    }
+
+    // Add buf_ffname if provided
+    if !buf_ffname.is_null() {
+        nvim_tag_tv_dict_add_str(d, c"buf_ffname".as_ptr(), 10, buf_ffname.cast_mut());
+    }
+
+    // Increment dict refcount to keep it alive during the call
+    nvim_tag_dict_refcount_inc(d);
+
+    // Save cursor position (pos_T on stack via byte array)
+    let pos_sz = nvim_tag_pos_size();
+    assert!(pos_sz <= 16, "pos_T too large");
+    let mut pos_buf = [0u8; 16];
+    nvim_tag_save_cursor(pos_buf.as_mut_ptr().cast::<c_void>());
+
+    // Invoke the callback
+    let result = nvim_tag_do_callback_call_tfu(pat, flag_str, d, rettv_storage);
+
+    // Restore cursor and check
+    nvim_tag_restore_cursor_check(pos_buf.as_mut_ptr().cast::<c_void>());
+
+    // Decrement dict refcount
+    nvim_tag_dict_refcount_dec(d);
+
+    // FAIL (0) from C callback_call means failure
+    if result == 0 {
+        return 1;
+    }
+
+    // Check rettv result type
+    if nvim_tag_rettv_is_null_special(rettv_storage) {
+        nvim_tag_tv_clear_rettv(rettv_storage);
+        return 2;
+    }
+
+    let list = nvim_tag_rettv_get_list(rettv_storage);
+    if list.is_null() {
+        nvim_tag_tv_clear_rettv(rettv_storage);
+        nvim_tag_emsg_invalid_tagfunc();
+        return 3;
+    }
+
+    *out_list = list;
+    0
+}
+
+// =============================================================================
 // Phase 9: find_tagfunc_tags — invoke user tagfunc and build match strings
 // =============================================================================
 
 extern "C" {
-    fn nvim_tag_call_tagfunc(
-        pat: *const c_char,
-        flags: c_int,
-        buf_ffname: *const c_char,
-        out_list: *mut *mut c_void,
-        rettv_storage: *mut c_void,
-    ) -> c_int;
-    fn nvim_tag_tv_clear_rettv(rettv_storage: *mut c_void);
     fn nvim_tag_rettv_size() -> usize;
     fn nvim_tag_tv_list_first(list: *const c_void) -> *mut c_void;
     fn nvim_tag_tv_list_item_next(list: *const c_void, li: *const c_void) -> *mut c_void;
@@ -2500,7 +2647,7 @@ pub unsafe extern "C" fn rs_find_tagfunc_tags(
 
     let mut list: *mut c_void = std::ptr::null_mut();
 
-    let call_result = nvim_tag_call_tagfunc(pat, flags, buf_ffname, &raw mut list, rettv_ptr);
+    let call_result = rs_tag_call_tagfunc(pat, flags, buf_ffname, &raw mut list, rettv_ptr);
 
     match call_result {
         0 => {} // OK, list is valid

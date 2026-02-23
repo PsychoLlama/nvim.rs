@@ -748,6 +748,125 @@ bool nvim_tag_tfu_cb_is_none(void) { return tfu_cb.type == kCallbackNone; }
 bool nvim_tag_set_ref_in_tfu_callback(int copyID) { return rs_set_ref_in_callback(&tfu_cb, copyID, NULL, NULL); }
 void *nvim_tag_optset_get_buf(const void *args_void) { const optset_T *args = (const optset_T *)args_void; return (void *)args->os_buf; }
 const char *nvim_tag_get_e_invarg(void) { return e_invarg; }
+
+// --- Accessor functions for rs_tag_call_tagfunc ---
+
+/// Returns true if curbuf has a non-empty tagfunc option and a valid callback.
+bool nvim_tag_curbuf_tfu_is_ready(void)
+{
+  return *curbuf->b_p_tfu != NUL && curbuf->b_tfu_cb.type != kCallbackNone;
+}
+
+/// Returns the global g_tag_at_cursor flag.
+bool nvim_tag_get_g_tag_at_cursor(void)
+{
+  return g_tag_at_cursor;
+}
+
+/// Returns the user_data string from the current tagstack entry, or NULL.
+/// The returned pointer is owned by C and must not be freed.
+const char *nvim_tag_get_curwin_tagstack_user_data(void)
+{
+  if (curwin->w_tagstacklen <= 0) {
+    return NULL;
+  }
+  taggy_T *tag;
+  if (curwin->w_tagstackidx == curwin->w_tagstacklen) {
+    tag = &curwin->w_tagstack[curwin->w_tagstackidx - 1];
+  } else {
+    tag = &curwin->w_tagstack[curwin->w_tagstackidx];
+  }
+  return tag->user_data;
+}
+
+/// Allocate a VAR_FIXED-locked dict and return it as an opaque handle.
+void *nvim_tag_dict_alloc_lock_fixed(void)
+{
+  return (void *)tv_dict_alloc_lock(VAR_FIXED);
+}
+
+/// Increment the refcount of a dict (opaque handle).
+void nvim_tag_dict_refcount_inc(void *dict_void)
+{
+  dict_T *d = (dict_T *)dict_void;
+  d->dv_refcount++;
+}
+
+/// Decrement the refcount of a dict (opaque handle).
+void nvim_tag_dict_refcount_dec(void *dict_void)
+{
+  dict_T *d = (dict_T *)dict_void;
+  d->dv_refcount--;
+}
+
+/// Set up the args and invoke the curbuf tagfunc callback.
+/// - pat: the tag pattern (VAR_STRING arg 0)
+/// - flag_str: the flag string (VAR_STRING arg 1)
+/// - dict: the info dict (VAR_DICT arg 2), refcount already managed by caller
+/// - rettv_storage: storage for typval_T result (must be zeroed, will be filled)
+/// Returns FAIL (0) or OK (1) matching C callback_call return value.
+int nvim_tag_do_callback_call_tfu(const char *pat, const char *flag_str,
+                                   void *dict, void *rettv_storage)
+{
+  typval_T args[4];
+  args[0].v_type = VAR_STRING;
+  args[0].vval.v_string = (char *)pat;
+  args[1].v_type = VAR_STRING;
+  args[1].vval.v_string = (char *)flag_str;
+  args[2].v_type = VAR_DICT;
+  args[2].vval.v_dict = (dict_T *)dict;
+  args[3].v_type = VAR_UNKNOWN;
+  return callback_call(&curbuf->b_tfu_cb, 3, args, (typval_T *)rettv_storage);
+}
+
+/// Save curwin->w_cursor into the provided storage (a pos_T*).
+void nvim_tag_save_cursor(void *pos_storage)
+{
+  *(pos_T *)pos_storage = curwin->w_cursor;
+}
+
+/// Restore curwin->w_cursor from storage and call check_cursor.
+void nvim_tag_restore_cursor_check(void *pos_storage)
+{
+  curwin->w_cursor = *(pos_T *)pos_storage;
+  check_cursor(curwin);
+}
+
+/// Returns the type of the typval_T rettv result.
+/// 0=VAR_UNKNOWN, 1=VAR_NUMBER, 2=VAR_STRING, 3=VAR_FUNC, 4=VAR_LIST,
+/// 5=VAR_DICT, 10=VAR_SPECIAL, etc. (matches var_type_T enum).
+int nvim_tag_rettv_get_type(const void *rettv_storage)
+{
+  return (int)((const typval_T *)rettv_storage)->v_type;
+}
+
+/// Returns true if rettv is VAR_SPECIAL with kSpecialVarNull.
+bool nvim_tag_rettv_is_null_special(const void *rettv_storage)
+{
+  const typval_T *rettv = (const typval_T *)rettv_storage;
+  return rettv->v_type == VAR_SPECIAL && rettv->vval.v_special == kSpecialVarNull;
+}
+
+/// Returns the list pointer from rettv (NULL if not a non-empty VAR_LIST).
+void *nvim_tag_rettv_get_list(const void *rettv_storage)
+{
+  const typval_T *rettv = (const typval_T *)rettv_storage;
+  if (rettv->v_type != VAR_LIST || !rettv->vval.v_list) {
+    return NULL;
+  }
+  return (void *)rettv->vval.v_list;
+}
+
+/// Size in bytes of pos_T (for stack allocation in Rust).
+size_t nvim_tag_pos_size(void) { return sizeof(pos_T); }
+
+/// Emit the "invalid return value from tagfunc" error.
+void nvim_tag_emsg_invalid_tagfunc(void) { emsg(_(e_invalid_return_value_from_tagfunc)); }
+
+// Forward declaration for the Rust implementation
+int rs_tag_call_tagfunc(const char *pat, int flags, const char *buf_ffname,
+                        void **out_list, void *rettv_storage);
+
 /// Call the tagfunc callback and validate the result.
 /// Returns:
 ///   0 (OK) with *out_list set to the returned list (caller must call nvim_tag_tv_clear_rettv)
@@ -758,72 +877,7 @@ const char *nvim_tag_get_e_invarg(void) { return e_invarg; }
 int nvim_tag_call_tagfunc(const char *pat, int flags, const char *buf_ffname,
                           void **out_list, void *rettv_storage)
 {
-  typval_T *rettv = (typval_T *)rettv_storage;
-  typval_T args[4];
-  char flagString[4];
-
-  // Check prerequisites
-  if (*curbuf->b_p_tfu == NUL || curbuf->b_tfu_cb.type == kCallbackNone) {
-    return 4;
-  }
-
-  args[0].v_type = VAR_STRING;
-  args[0].vval.v_string = (char *)pat;
-  args[1].v_type = VAR_STRING;
-  args[1].vval.v_string = flagString;
-
-  // create 'info' dict argument
-  dict_T *const d = tv_dict_alloc_lock(VAR_FIXED);
-
-  // Get tag entry for user_data
-  taggy_T *tag = NULL;
-  if (curwin->w_tagstacklen > 0) {
-    if (curwin->w_tagstackidx == curwin->w_tagstacklen) {
-      tag = &curwin->w_tagstack[curwin->w_tagstackidx - 1];
-    } else {
-      tag = &curwin->w_tagstack[curwin->w_tagstackidx];
-    }
-  }
-  if (tag != NULL && tag->user_data != NULL) {
-    tv_dict_add_str(d, S_LEN("user_data"), tag->user_data);
-  }
-  if (buf_ffname != NULL) {
-    tv_dict_add_str(d, S_LEN("buf_ffname"), (char *)buf_ffname);
-  }
-
-  d->dv_refcount++;
-  args[2].v_type = VAR_DICT;
-  args[2].vval.v_dict = d;
-
-  args[3].v_type = VAR_UNKNOWN;
-
-  vim_snprintf(flagString, sizeof(flagString),
-               "%s%s%s",
-               g_tag_at_cursor ? "c" : "",
-               flags & TAG_INS_COMP ? "i" : "",
-               flags & TAG_REGEXP ? "r" : "");
-
-  pos_T save_pos = curwin->w_cursor;
-  int result = callback_call(&curbuf->b_tfu_cb, 3, args, rettv);
-  curwin->w_cursor = save_pos;
-  check_cursor(curwin);
-  d->dv_refcount--;
-
-  if (result == FAIL) {
-    return 1;
-  }
-  if (rettv->v_type == VAR_SPECIAL && rettv->vval.v_special == kSpecialVarNull) {
-    tv_clear(rettv);
-    return 2;
-  }
-  if (rettv->v_type != VAR_LIST || !rettv->vval.v_list) {
-    tv_clear(rettv);
-    emsg(_(e_invalid_return_value_from_tagfunc));
-    return 3;
-  }
-
-  *out_list = (void *)rettv->vval.v_list;
-  return 0;
+  return rs_tag_call_tagfunc(pat, flags, buf_ffname, out_list, rettv_storage);
 }
 
 void nvim_tag_tv_clear_rettv(void *rettv_storage) { tv_clear((typval_T *)rettv_storage); }
