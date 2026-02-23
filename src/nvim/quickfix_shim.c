@@ -3619,14 +3619,7 @@ void nvim_qf_u_clearallandblockfree(void) { u_clearallandblockfree(curbuf); }
 
 void *nvim_call_qftf_func(void *qfl, int qf_winid, linenr_T start, int count) { return call_qftf_func((qf_list_T *)qfl, qf_winid, start, count); }
 
-/// Get string from a list item, or NULL if not a string
-char *nvim_tv_list_item_string(const void *li)
-{
-  if (li == NULL) {
-    return NULL;
-  }
-  return (char *)tv_get_string_chk(TV_LIST_ITEM_TV((const listitem_T *)li));
-}
+char *nvim_tv_list_item_string(const void *li) { return li == NULL ? NULL : (char *)tv_get_string_chk(TV_LIST_ITEM_TV((const listitem_T *)li)); }
 
 // C accessor wrappers for rs_qf_buf_add_line (Phase 3)
 // Note: nvim_buflist_findnr is in buffer.c (returns buf_T*)
