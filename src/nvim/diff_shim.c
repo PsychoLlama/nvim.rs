@@ -95,6 +95,8 @@ extern bool rs_diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline);
 extern void rs_diff_ex_diffupdate(exarg_T *eap);
 extern int rs_xdiff_out(int start_a, int count_a, int start_b, int count_b, void *priv);
 extern void rs_f_diff_filler(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_nv_diffgetput(bool put, size_t count);
+extern void rs_ex_diffthis(exarg_T *eap);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -757,11 +759,10 @@ void ex_diffsplit(exarg_T *eap)
   scroll_to_fraction(curwin, curwin->w_height);
 }
 
-// Set options to show diffs for the current window.
+// Set options to show diffs for the current window -- thin wrapper calling Rust rs_ex_diffthis.
 void ex_diffthis(exarg_T *eap)
 {
-  // Set 'diff', 'scrollbind' on and 'wrap' off.
-  diff_win_options(curwin, true);
+  rs_ex_diffthis(eap);
 }
 
 /// Set options in window "wp" for diff mode.
@@ -1467,33 +1468,10 @@ done:
   }
 }
 
-/// "dp" and "do" commands.
+/// "dp" and "do" commands -- thin wrapper calling Rust rs_nv_diffgetput.
 void nv_diffgetput(bool put, size_t count)
 {
-  if (bt_prompt(curbuf)) {
-    vim_beep(kOptBoFlagOperator);
-    return;
-  }
-
-  exarg_T ea;
-  char buf[30];
-  if (count == 0) {
-    ea.arg = "";
-  } else {
-    vim_snprintf(buf, sizeof(buf), "%zu", count);
-    ea.arg = buf;
-  }
-
-  if (put) {
-    ea.cmdidx = CMD_diffput;
-  } else {
-    ea.cmdidx = CMD_diffget;
-  }
-
-  ea.addr_count = 0;
-  ea.line1 = curwin->w_cursor.lnum;
-  ea.line2 = curwin->w_cursor.lnum;
-  ex_diffgetput(&ea);
+  rs_nv_diffgetput(put, count);
 }
 
 /// ":diffget" and ":diffput"
@@ -2064,4 +2042,8 @@ const char *nvim_diff_skipwhite(const char *p) { return skipwhite(p); }
 // Phase 1 accessors: xdiff_out and f_diff_filler
 void nvim_diffout_append_hunk(void *dout, linenr_T lnum_orig, int count_orig, linenr_T lnum_new, int count_new) { diffout_T *d = (diffout_T *)dout; if (d == NULL) { return; } GA_APPEND(diffhunk_T, &(d->dout_ga), ((diffhunk_T){ .lnum_orig = lnum_orig, .count_orig = count_orig, .lnum_new = lnum_new, .count_new = count_new, })); }
 linenr_T nvim_diff_tv_get_lnum(typval_T *argvars) { return tv_get_lnum(argvars); }
+// Phase 2 accessors: nv_diffgetput and ex_diffthis
+void nvim_vim_beep_operator(void) { vim_beep(kOptBoFlagOperator); }
+void nvim_diff_win_options(win_T *wp, bool addbuf) { diff_win_options(wp, addbuf); }
+void nvim_call_ex_diffgetput(int cmdidx, const char *arg, int addr_count, linenr_T line1, linenr_T line2) { exarg_T ea; CLEAR_FIELD(ea); ea.cmdidx = (cmdidx_T)cmdidx; ea.arg = (char *)arg; ea.addr_count = addr_count; ea.line1 = line1; ea.line2 = line2; ex_diffgetput(&ea); }
 

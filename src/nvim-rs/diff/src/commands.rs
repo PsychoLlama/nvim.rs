@@ -5,9 +5,10 @@
 
 #![allow(clippy::must_use_candidate)]
 
+use std::ffi::c_void;
 use std::os::raw::c_int;
 
-use crate::buffer::{BufHandle, DiffBlockHandle, DB_COUNT};
+use crate::buffer::{BufHandle, DiffBlockHandle, WinHandle, DB_COUNT};
 
 /// Line number type matching linenr_T (i32).
 type LinenrT = i32;
@@ -27,6 +28,22 @@ extern "C" {
     fn nvim_diffblock_get_lnum(dp: DiffBlockHandle, idx: c_int) -> LinenrT;
     fn nvim_diffblock_get_count(dp: DiffBlockHandle, idx: c_int) -> LinenrT;
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
+
+    // Phase 2: nv_diffgetput and ex_diffthis accessors
+    fn nvim_bt_prompt_curbuf() -> bool;
+    fn nvim_vim_beep_operator();
+    fn nvim_get_curwin_cursor_lnum() -> c_int;
+    fn nvim_docmd_cmd_diffget() -> c_int;
+    fn nvim_docmd_cmd_diffput() -> c_int;
+    fn nvim_call_ex_diffgetput(
+        cmdidx: c_int,
+        arg: *const u8,
+        addr_count: c_int,
+        line1: LinenrT,
+        line2: LinenrT,
+    );
+    fn nvim_get_curwin() -> WinHandle;
+    fn nvim_diff_win_options(wp: WinHandle, addbuf: bool);
 }
 
 // =============================================================================
@@ -470,6 +487,75 @@ pub extern "C" fn rs_diff_get_corresponding_line_clamped(
 #[no_mangle]
 pub extern "C" fn rs_diff_get_block_info(dp: DiffBlockHandle) -> DiffBlockInfo {
     unsafe { DiffBlockInfo::from_handle(dp) }
+}
+
+// =============================================================================
+// Phase 2 Migrations: nv_diffgetput and ex_diffthis
+// =============================================================================
+
+/// Normal mode "dp" and "do" commands -- Rust implementation.
+///
+/// Checks for prompt buffer, then builds an exarg_T and calls ex_diffgetput.
+///
+/// # Safety
+/// Calls C functions that access global state (curbuf, curwin).
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_diffgetput(put: bool, count: usize) {
+    if nvim_bt_prompt_curbuf() {
+        nvim_vim_beep_operator();
+        return;
+    }
+
+    let lnum = nvim_get_curwin_cursor_lnum();
+    let cmdidx = if put {
+        nvim_docmd_cmd_diffput()
+    } else {
+        nvim_docmd_cmd_diffget()
+    };
+
+    if count == 0 {
+        // Empty arg string (null-terminated empty string)
+        let empty: &[u8] = &[0u8];
+        nvim_call_ex_diffgetput(cmdidx, empty.as_ptr(), 0, lnum, lnum);
+    } else {
+        // Format count as a null-terminated string in a small buffer
+        let mut buf = [0u8; 32];
+        let s = format_usize_to_buf(count, &mut buf);
+        nvim_call_ex_diffgetput(cmdidx, s.as_ptr(), 0, lnum, lnum);
+    }
+}
+
+/// Format a usize into a fixed buffer as ASCII digits, null-terminated.
+/// Returns a slice pointing to the formatted string.
+#[allow(clippy::cast_possible_truncation)]
+fn format_usize_to_buf(mut n: usize, buf: &mut [u8; 32]) -> &[u8] {
+    if n == 0 {
+        buf[0] = b'0';
+        buf[1] = 0;
+        return &buf[..2];
+    }
+    let mut end = 0usize;
+    while n > 0 {
+        // n % 10 is always 0-9, safe to cast to u8
+        buf[end] = b'0' + (n % 10) as u8;
+        n /= 10;
+        end += 1;
+    }
+    buf[..end].reverse();
+    buf[end] = 0;
+    &buf[..=end]
+}
+
+/// ":diffthis" command -- Rust implementation.
+///
+/// Calls diff_win_options(curwin, true).
+///
+/// # Safety
+/// Calls C functions that access global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_diffthis(_eap: *mut c_void) {
+    let curwin = nvim_get_curwin();
+    nvim_diff_win_options(curwin, true);
 }
 
 #[cfg(test)]
