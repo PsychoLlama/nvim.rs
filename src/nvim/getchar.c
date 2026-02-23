@@ -1606,7 +1606,8 @@ static bool at_ins_compl_key(void)
   if (typebuf.tb_len > 3 && c == K_SPECIAL && p[1] == KS_MODIFIER && (p[2] & MOD_MASK_CTRL)) {
     c = p[3] & 0x1f;
   }
-  return (rs_ctrl_x_mode_not_default() && vim_is_ctrl_x_key(c))
+  return (rs_ctrl_x_mode_not_default()
+          && (rs_ins_compl_pum_key(c) || rs_vim_is_ctrl_x_key(c)))
          || (rs_compl_status_local() && (c == Ctrl_N || c == Ctrl_P));
 }
 

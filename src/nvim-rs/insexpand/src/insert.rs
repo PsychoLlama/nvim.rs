@@ -4,6 +4,7 @@
 //! The core operations remain in C due to heavy buffer interaction, but Rust provides
 //! the logic and utilities for common operations.
 
+#![allow(dead_code, unused_imports)]
 use std::os::raw::{c_char, c_int};
 
 // C accessor functions
@@ -40,173 +41,6 @@ const CONT_ADDING: c_int = 1;
 #[inline]
 unsafe fn is_compl_adding() -> bool {
     (nvim_get_compl_cont_status() & CONT_ADDING) != 0
-}
-
-/// Get the completion length from start column to cursor column.
-///
-/// This is how much text has been typed for the completion.
-/// Returns 0 if the result would be negative.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_get_compl_len() -> c_int {
-    let cursor_col = nvim_get_cursor_col();
-    let compl_col = nvim_get_compl_col();
-    let off = cursor_col - compl_col;
-    if off < 0 {
-        0
-    } else {
-        off
-    }
-}
-
-/// Calculate the column where deletion should start.
-///
-/// Used by ins_compl_delete to calculate the target column.
-/// If new_leader is true and we're not adding, calculates the common
-/// prefix length between original text and leader.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_calc_delete_col(new_leader: c_int) -> c_int {
-    let mut orig_col = 0;
-
-    if new_leader != 0 && !is_compl_adding() {
-        let orig = nvim_get_compl_orig_text_data();
-        let leader = nvim_get_compl_leader_data();
-
-        // Use original text if leader is not set
-        let leader = if leader.is_null() { orig } else { leader };
-
-        if !orig.is_null() && !leader.is_null() {
-            let mut orig_ptr = orig;
-            let mut leader_ptr = leader;
-
-            // Find common prefix
-            while *orig_ptr != 0 {
-                // Compare characters (simplified - full UTF-8 comparison in C)
-                if *orig_ptr != *leader_ptr {
-                    break;
-                }
-
-                let orig_len = rs_utfc_ptr2len(orig_ptr);
-                let leader_len = rs_utfc_ptr2len(leader_ptr);
-
-                if orig_len != leader_len {
-                    break;
-                }
-
-                // Check full multi-byte character
-                let mut same = true;
-                #[allow(clippy::cast_sign_loss)]
-                for i in 0..orig_len as usize {
-                    if *orig_ptr.add(i) != *leader_ptr.add(i) {
-                        same = false;
-                        break;
-                    }
-                }
-
-                if !same {
-                    break;
-                }
-
-                #[allow(clippy::cast_sign_loss)]
-                {
-                    orig_ptr = orig_ptr.add(orig_len as usize);
-                    leader_ptr = leader_ptr.add(leader_len as usize);
-                }
-            }
-
-            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-            {
-                orig_col = orig_ptr.offset_from(orig) as c_int;
-            }
-        }
-    }
-
-    let compl_col = nvim_get_compl_col();
-    let compl_length = nvim_get_compl_length();
-
-    compl_col
-        + if is_compl_adding() {
-            compl_length
-        } else {
-            orig_col
-        }
-}
-
-/// Check if the completion string is longer than what's been typed.
-///
-/// Returns true if we need to insert more characters.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_needs_more_chars() -> c_int {
-    if nvim_compl_shown_match_exists() == 0 {
-        return 0;
-    }
-
-    let compl_len = rs_insert_get_compl_len();
-    let str_size = nvim_compl_shown_match_str_size();
-
-    #[allow(clippy::cast_sign_loss)]
-    {
-        c_int::from((compl_len as usize) < str_size)
-    }
-}
-
-/// Calculate how many characters to insert from the completion string.
-///
-/// Returns the number of bytes to insert (completion string length minus typed length).
-/// Returns 0 if nothing needs to be inserted.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_calc_bytes_to_insert() -> c_int {
-    if nvim_compl_shown_match_exists() == 0 {
-        return 0;
-    }
-
-    let compl_len = rs_insert_get_compl_len();
-    let str_size = nvim_compl_shown_match_str_size();
-
-    #[allow(
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation,
-        clippy::cast_possible_wrap
-    )]
-    {
-        let to_insert = str_size.saturating_sub(compl_len as usize);
-        to_insert as c_int
-    }
-}
-
-/// Get the leader length for cursor adjustment.
-///
-/// Returns the leader length, falling back to original text length if not set.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_get_leader_len() -> usize {
-    let leader_data = nvim_get_compl_leader_data();
-    if leader_data.is_null() {
-        nvim_get_compl_orig_text_size()
-    } else {
-        nvim_get_compl_leader_size()
-    }
-}
-
-/// Calculate cursor adjustment for preinsert mode.
-///
-/// Returns the amount to move the cursor back after insertion.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_calc_cursor_adjust(cp_str_len: usize) -> c_int {
-    let leader_len = rs_insert_get_leader_len();
-
-    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    {
-        cp_str_len.saturating_sub(leader_len) as c_int
-    }
-}
-
-/// Check if the insertion column is valid.
-///
-/// Returns true if the insertion end column is greater than the completion column.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_col_is_valid() -> c_int {
-    let compl_col = nvim_get_compl_col();
-    let ins_end_col = nvim_get_compl_ins_end_col();
-    c_int::from(ins_end_col > compl_col)
 }
 
 /// Find the common prefix length between two strings.
@@ -319,122 +153,6 @@ extern "C" {
 // CTRL-X mode constants
 const CTRL_X_OMNI: c_int = 13;
 const CTRL_X_EVAL: c_int = 16;
-
-/// Check if deletion should stop completion.
-///
-/// Returns true if the position is past the completion start in a mode
-/// that should stop on delete.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_deletion_stops(new_col: c_int) -> c_int {
-    let compl_col = nvim_get_compl_col();
-    let mode = nvim_get_ctrl_x_mode();
-
-    // Eval mode always stops on backspace
-    if mode == CTRL_X_EVAL {
-        return 1;
-    }
-
-    // Stop if we delete past the completion start, except omni
-    if new_col < compl_col {
-        return 1;
-    }
-
-    // Stop at the start column for non-omni modes
-    if new_col == compl_col && mode != CTRL_X_OMNI {
-        return 1;
-    }
-
-    0
-}
-
-/// Check if we can use backspace during completion.
-///
-/// Takes into account the backspace option (bs_start flag) and completion length.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_can_bs(new_col: c_int, can_bs_start: c_int) -> c_int {
-    let compl_col = nvim_get_compl_col();
-    let compl_length = nvim_get_compl_length();
-
-    // If can't backspace before start, check against completion length
-    if can_bs_start == 0 {
-        let diff = new_col - compl_col - compl_length;
-        if diff < 0 {
-            return 0; // Would delete into original text
-        }
-    }
-
-    1
-}
-
-/// Check if completion was stopped by interrupt.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_was_interrupted() -> c_int {
-    nvim_get_compl_interrupted()
-}
-
-/// Check if we should restart completion after backspace.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_needs_restart(new_col: c_int) -> c_int {
-    let compl_col = nvim_get_compl_col();
-    let compl_length = nvim_get_compl_length();
-
-    // Need restart if we deleted into the completed area
-    c_int::from(new_col <= compl_col + compl_length)
-}
-
-/// Check if the completion has preinsert enabled.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_has_preinsert() -> c_int {
-    rs_ins_compl_has_preinsert()
-}
-
-/// Calculate new leader length after deletion.
-///
-/// The leader is the text from completion start to cursor.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_new_leader_len(new_col: c_int) -> c_int {
-    let compl_col = nvim_get_compl_col();
-    let len = new_col - compl_col;
-    if len < 0 {
-        0
-    } else {
-        len
-    }
-}
-
-/// Check if completion should clear selection after backspace.
-///
-/// Returns true in autocomplete mode when selection should be reset.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_should_clear_selection() -> c_int {
-    let autocomplete = nvim_get_compl_autocomplete();
-    let started = nvim_get_compl_started();
-    let has_preinsert = rs_ins_compl_has_preinsert();
-
-    // Clear selection in autocomplete mode when not using preinsert
-    c_int::from(autocomplete != 0 && started != 0 && has_preinsert == 0)
-}
-
-/// Get the typed text length relative to completion start.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_typed_len() -> c_int {
-    let cursor_col = nvim_get_cursor_col();
-    let compl_col = nvim_get_compl_col();
-    let len = cursor_col - compl_col;
-    if len < 0 {
-        0
-    } else {
-        len
-    }
-}
-
-/// Check if the typed length is within valid bounds.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_typed_len_valid() -> c_int {
-    let cursor_col = nvim_get_cursor_col();
-    let compl_col = nvim_get_compl_col();
-    c_int::from(cursor_col >= compl_col)
-}
 
 // =============================================================================
 // Phase 3: rs_ins_compl_delete and rs_ins_compl_insert
@@ -669,7 +387,6 @@ extern "C" {
     fn nvim_api_clear_compl_leader();
     fn nvim_set_compl_leader_from_cursor();
     fn nvim_ins_compl_new_leader_wrapper();
-    fn ins_compl_delete(revert: bool);
 }
 
 /// Set the original text for the first completion match.
@@ -698,7 +415,7 @@ const MB_MAXCHAR: usize = 4;
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_ins_compl_addleader(c: c_int) {
     if rs_ins_compl_preinsert_effect() != 0 {
-        ins_compl_delete(false);
+        rs_ins_compl_delete(0);
     }
 
     if nvim_stop_arrow() != 0 {

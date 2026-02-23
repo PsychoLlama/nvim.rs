@@ -1926,7 +1926,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
         // Check if ComplMatchIns highlight is needed.
         if ((State & MODE_INSERT) && rs_ins_compl_win_active(wp)
             && (in_curline || rs_ins_compl_lnum_in_range((int)lnum))) {
-          int ins_match_attr = ins_compl_col_range_attr(lnum, (int)(ptr - line));
+          int ins_match_attr = rs_ins_compl_col_range_attr((int)lnum, (int)(ptr - line));
           if (ins_match_attr > 0) {
             search_attr = hl_combine_attr(search_attr, ins_match_attr);
           }

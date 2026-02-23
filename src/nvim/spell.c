@@ -3580,7 +3580,7 @@ void spell_dump_compl(char *pat, int ic, Direction *dir, int dumpflags_arg)
           // Done all bytes at this node, go up one level.
           depth--;
           line_breakcheck();
-          ins_compl_check_keys(50, false);
+          rs_ins_compl_check_keys(50, 0);
         } else {
           // Do one more byte at this node.
           int n = arridx[depth] + curi[depth];

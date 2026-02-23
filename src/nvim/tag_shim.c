@@ -593,7 +593,7 @@ void nvim_set_curbuf_b_help(int val) { curbuf->b_help = val; }
 int nvim_get_curbuf_b_help(void) { return curbuf->b_help; }
 // Function wrappers for search orchestration
 
-void nvim_ins_compl_check_keys(int interval, bool pum_wanted) { ins_compl_check_keys(interval, pum_wanted); }
+void nvim_ins_compl_check_keys(int interval, bool pum_wanted) { rs_ins_compl_check_keys(interval, pum_wanted ? 1 : 0); }
 /// verbose_enter/leave + smsg for "Searching tags file %s"
 void nvim_verbose_searching_tags(const char *tag_fname)
 {

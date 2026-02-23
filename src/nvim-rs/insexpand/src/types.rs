@@ -3,6 +3,7 @@
 //! This module defines the core types for the insert-mode completion system,
 //! including completion modes, state, and item representations.
 
+#![allow(dead_code, unused_imports)]
 #![allow(clippy::missing_const_for_fn)]
 
 use std::ffi::c_int;
@@ -602,55 +603,6 @@ impl CompleteoptFlags {
 // =============================================================================
 // FFI Exports
 // =============================================================================
-
-/// Get the name of a CTRL-X mode.
-#[no_mangle]
-pub extern "C" fn rs_ctrl_x_mode_name(mode: c_int) -> *const std::ffi::c_char {
-    static NAMES: &[&[u8]] = &[
-        b"keyword\0",
-        b"ctrl_x\0",
-        b"scroll\0",
-        b"whole_line\0",
-        b"files\0",
-        b"tags\0",
-        b"path_patterns\0",
-        b"path_defines\0",
-        b"unknown\0",
-        b"dictionary\0",
-        b"thesaurus\0",
-        b"cmdline\0",
-        b"function\0",
-        b"omni\0",
-        b"spell\0",
-        b"unknown\0",
-        b"eval\0",
-        b"cmdline\0",
-        b"bufnames\0",
-        b"register\0",
-    ];
-
-    // Get base mode (strip WANT_IDENT flag)
-    let base = mode & !CTRL_X_WANT_IDENT;
-    #[allow(clippy::cast_sign_loss)]
-    if base >= 0 && (base as usize) < NAMES.len() {
-        #[allow(clippy::cast_sign_loss)]
-        NAMES[base as usize].as_ptr().cast()
-    } else {
-        NAMES[8].as_ptr().cast() // "unknown"
-    }
-}
-
-/// Check if a CTRL-X mode wants an identifier.
-#[no_mangle]
-pub extern "C" fn rs_ctrl_x_mode_wants_ident(mode: c_int) -> c_int {
-    c_int::from((mode & CTRL_X_WANT_IDENT) != 0)
-}
-
-/// Get the base CTRL-X mode without the WANT_IDENT flag.
-#[no_mangle]
-pub extern "C" fn rs_ctrl_x_mode_base(mode: c_int) -> c_int {
-    mode & !CTRL_X_WANT_IDENT
-}
 
 // =============================================================================
 // Tests

@@ -2447,7 +2447,7 @@ exit_matched:
     }
     line_breakcheck();
     if (action == ACTION_EXPAND) {
-      ins_compl_check_keys(30, false);
+      rs_ins_compl_check_keys(30, 0);
     }
     if (got_int || rs_ins_compl_interrupted()) {
       break;
@@ -3036,7 +3036,7 @@ exit_matched:
     }
     line_breakcheck();
     if (action == ACTION_EXPAND) {
-      ins_compl_check_keys(30, false);
+      rs_ins_compl_check_keys(30, 0);
     }
     if (got_int || rs_ins_compl_interrupted()) {
       break;

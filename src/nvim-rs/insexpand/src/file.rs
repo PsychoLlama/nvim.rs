@@ -4,6 +4,7 @@
 //! The core wildcard expansion and file matching remain in C, but Rust
 //! provides utilities for path manipulation and state management.
 
+#![allow(dead_code, unused_imports)]
 use std::os::raw::{c_char, c_int};
 
 // C accessor functions
@@ -24,46 +25,6 @@ const CTRL_X_PATH_DEFINES: c_int = 7 + 0x100; // 7 + CTRL_X_WANT_IDENT
 // Path separator (Unix)
 #[allow(clippy::cast_possible_wrap)]
 const PATH_SEP: c_char = b'/' as c_char;
-
-/// Check if we're in filename completion mode.
-#[no_mangle]
-pub unsafe extern "C" fn rs_file_is_files_mode() -> c_int {
-    let mode = nvim_get_ctrl_x_mode();
-    c_int::from(mode == CTRL_X_FILES)
-}
-
-/// Check if we're in path patterns mode (include file completion).
-#[no_mangle]
-pub unsafe extern "C" fn rs_file_is_path_patterns_mode() -> c_int {
-    let mode = nvim_get_ctrl_x_mode();
-    c_int::from(mode == CTRL_X_PATH_PATTERNS)
-}
-
-/// Check if we're in path defines mode.
-#[no_mangle]
-pub unsafe extern "C" fn rs_file_is_path_defines_mode() -> c_int {
-    let mode = nvim_get_ctrl_x_mode();
-    c_int::from(mode == CTRL_X_PATH_DEFINES)
-}
-
-/// Check if we're in any file/path completion mode.
-#[no_mangle]
-pub unsafe extern "C" fn rs_file_is_file_mode() -> c_int {
-    let mode = nvim_get_ctrl_x_mode();
-    c_int::from(mode == CTRL_X_FILES || mode == CTRL_X_PATH_PATTERNS || mode == CTRL_X_PATH_DEFINES)
-}
-
-/// Check if completion was interrupted during file search.
-#[no_mangle]
-pub unsafe extern "C" fn rs_file_was_interrupted() -> c_int {
-    nvim_get_compl_interrupted()
-}
-
-/// Get the current completion direction for file search.
-#[no_mangle]
-pub unsafe extern "C" fn rs_file_get_direction() -> c_int {
-    nvim_get_compl_direction()
-}
 
 /// Find the last path separator in a string.
 ///
@@ -246,40 +207,6 @@ extern "C" {
     fn nvim_get_compl_started() -> c_int;
     fn nvim_get_compl_col() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
-}
-
-/// Check if file completion is active.
-#[no_mangle]
-pub unsafe extern "C" fn rs_file_is_active() -> c_int {
-    let started = nvim_get_compl_started();
-    let mode = nvim_get_ctrl_x_mode();
-    c_int::from(
-        started != 0
-            && (mode == CTRL_X_FILES
-                || mode == CTRL_X_PATH_PATTERNS
-                || mode == CTRL_X_PATH_DEFINES),
-    )
-}
-
-/// Check if file completion can continue.
-#[no_mangle]
-pub unsafe extern "C" fn rs_file_can_continue() -> c_int {
-    let started = nvim_get_compl_started();
-    let interrupted = nvim_get_compl_interrupted();
-    c_int::from(started != 0 && interrupted == 0)
-}
-
-/// Get the length of text typed for file completion.
-#[no_mangle]
-pub unsafe extern "C" fn rs_file_typed_len() -> c_int {
-    let cursor_col = nvim_get_cursor_col();
-    let compl_col = nvim_get_compl_col();
-    let len = cursor_col - compl_col;
-    if len < 0 {
-        0
-    } else {
-        len
-    }
 }
 
 /// Check if path has a wildcard character.

@@ -3,6 +3,7 @@
 //! This module provides helper functions for managing completion sources
 //! and the 'complete' option.
 
+#![allow(dead_code, unused_imports)]
 #![allow(clippy::missing_const_for_fn)]
 
 use std::os::raw::{c_char, c_int, c_uint};
@@ -31,60 +32,6 @@ extern "C" {
 // CTRL-X mode constants
 const CTRL_X_NORMAL: c_int = 0;
 const CTRL_X_NOT_DEFINED_YET: c_int = 1;
-
-/// Check if completion needs to start scanning sources.
-///
-/// Returns true if completion has started but no matches found yet.
-#[no_mangle]
-pub unsafe extern "C" fn rs_source_needs_scan() -> c_int {
-    let started = nvim_get_compl_started();
-    let matches = nvim_get_compl_matches();
-    c_int::from(started != 0 && matches == 0)
-}
-
-/// Check if we're in initial completion mode (before CTRL-X pressed).
-#[no_mangle]
-pub unsafe extern "C" fn rs_source_is_initial_mode() -> c_int {
-    let mode = nvim_get_ctrl_x_mode();
-    c_int::from(mode == CTRL_X_NORMAL || mode == CTRL_X_NOT_DEFINED_YET)
-}
-
-/// Check if completion has any matches.
-#[no_mangle]
-pub unsafe extern "C" fn rs_source_has_matches() -> c_int {
-    let matches = nvim_get_compl_matches();
-    c_int::from(matches > 0)
-}
-
-/// Get the current match count.
-#[no_mangle]
-pub unsafe extern "C" fn rs_source_match_count() -> c_int {
-    nvim_get_compl_matches()
-}
-
-/// FFI export: Get CTRL_X_NORMAL constant.
-#[no_mangle]
-pub extern "C" fn rs_ctrl_x_normal() -> c_int {
-    CTRL_X_NORMAL
-}
-
-/// FFI export: Get CTRL_X_NOT_DEFINED_YET constant.
-#[no_mangle]
-pub extern "C" fn rs_ctrl_x_not_defined_yet() -> c_int {
-    CTRL_X_NOT_DEFINED_YET
-}
-
-/// FFI export: Get current CTRL-X mode.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_ctrl_x_mode() -> c_int {
-    nvim_get_ctrl_x_mode()
-}
-
-/// FFI export: Check if completion started.
-#[no_mangle]
-pub unsafe extern "C" fn rs_compl_is_started() -> c_int {
-    nvim_get_compl_started()
-}
 
 #[allow(clippy::cast_possible_wrap)]
 const COMMA: c_char = b',' as c_char;

@@ -4,6 +4,7 @@
 //! The core file I/O and regex operations remain in C due to their complexity,
 //! but Rust provides utilities for string processing and state management.
 
+#![allow(dead_code, unused_imports)]
 use std::os::raw::{c_char, c_int};
 
 // C accessor functions
@@ -24,39 +25,6 @@ extern "C" {
 const CTRL_X_WANT_IDENT: c_int = 0x100;
 const CTRL_X_DICTIONARY: c_int = 9 + CTRL_X_WANT_IDENT;
 const CTRL_X_THESAURUS: c_int = 10 + CTRL_X_WANT_IDENT;
-
-/// Check if we're in dictionary completion mode.
-#[no_mangle]
-pub unsafe extern "C" fn rs_dict_is_dictionary_mode() -> c_int {
-    let mode = nvim_get_ctrl_x_mode();
-    c_int::from(mode == CTRL_X_DICTIONARY)
-}
-
-/// Check if we're in thesaurus completion mode.
-#[no_mangle]
-pub unsafe extern "C" fn rs_dict_is_thesaurus_mode() -> c_int {
-    let mode = nvim_get_ctrl_x_mode();
-    c_int::from(mode == CTRL_X_THESAURUS)
-}
-
-/// Check if we're in any dictionary-like mode (dictionary or thesaurus).
-#[no_mangle]
-pub unsafe extern "C" fn rs_dict_is_dict_like_mode() -> c_int {
-    let mode = nvim_get_ctrl_x_mode();
-    c_int::from(mode == CTRL_X_DICTIONARY || mode == CTRL_X_THESAURUS)
-}
-
-/// Check if completion was interrupted during dictionary search.
-#[no_mangle]
-pub unsafe extern "C" fn rs_dict_was_interrupted() -> c_int {
-    nvim_get_compl_interrupted()
-}
-
-/// Get the current completion direction for dictionary search.
-#[no_mangle]
-pub unsafe extern "C" fn rs_dict_get_direction() -> c_int {
-    nvim_get_compl_direction()
-}
 
 /// Skip whitespace and punctuation to find word start.
 ///
@@ -217,35 +185,6 @@ extern "C" {
     fn nvim_get_compl_length() -> c_int;
 }
 
-/// Check if dictionary completion is active.
-#[no_mangle]
-pub unsafe extern "C" fn rs_dict_is_active() -> c_int {
-    let started = nvim_get_compl_started();
-    let mode = nvim_get_ctrl_x_mode();
-    c_int::from(started != 0 && (mode == CTRL_X_DICTIONARY || mode == CTRL_X_THESAURUS))
-}
-
-/// Check if dictionary completion can continue.
-#[no_mangle]
-pub unsafe extern "C" fn rs_dict_can_continue() -> c_int {
-    let started = nvim_get_compl_started();
-    let interrupted = nvim_get_compl_interrupted();
-    c_int::from(started != 0 && interrupted == 0)
-}
-
-/// Get minimum word length for dictionary matches.
-#[no_mangle]
-pub unsafe extern "C" fn rs_dict_min_length() -> c_int {
-    nvim_get_compl_length()
-}
-
-/// Check if a word is long enough for dictionary match.
-#[no_mangle]
-pub unsafe extern "C" fn rs_dict_word_is_long_enough(len: c_int) -> c_int {
-    let min_len = nvim_get_compl_length();
-    c_int::from(len >= min_len)
-}
-
 /// Compare two strings case-insensitively (ASCII only).
 #[no_mangle]
 #[allow(
@@ -391,15 +330,6 @@ pub unsafe extern "C" fn rs_dict_get_nth_word(
     }
 
     0
-}
-
-/// Check if character is a thesaurus word separator.
-///
-/// In thesaurus files, commas and semicolons can separate synonyms.
-#[no_mangle]
-pub extern "C" fn rs_dict_is_thesaurus_sep(c: c_char) -> c_int {
-    // ASCII: comma=44, semicolon=59, space=32, tab=9
-    c_int::from(c == 44 || c == 59 || c == 32 || c == 9)
 }
 
 #[cfg(test)]

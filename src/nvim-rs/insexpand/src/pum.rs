@@ -3,6 +3,7 @@
 //! This module provides Rust implementations for popup menu related
 //! functionality, including match counting and selection logic.
 
+#![allow(dead_code, unused_imports)]
 #![allow(clippy::missing_const_for_fn)]
 
 use std::os::raw::{c_int, c_uint};
@@ -40,46 +41,27 @@ unsafe fn match_at_original_text(m: ComplMatch) -> bool {
     !m.is_null() && nvim_compl_match_at_original_text(m) != 0
 }
 
-/// Check if the popup menu array exists.
-///
-/// Returns true if compl_match_array is not NULL.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_array_exists() -> c_int {
-    nvim_get_compl_match_array_exists()
-}
-
-/// Count visible matches (excluding original text entry).
-///
-/// Used to determine if there are enough matches to show the popup menu.
-///
-/// # Safety
-/// Requires valid completion list state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_count_visible_matches() -> c_int {
+/// Count visible matches (non-original-text entries), stopping at 2.
+unsafe fn pum_count_visible_matches() -> c_int {
     let first = nvim_compl_get_first_match();
     if first.is_null() {
         return 0;
     }
-
     let mut count = 0;
     let mut comp = first;
-
     loop {
         if !match_at_original_text(comp) {
             count += 1;
-            // Early exit if we found 2 (enough for most cases)
             if count >= 2 {
                 break;
             }
         }
-
         let next = nvim_compl_match_get_next(comp);
         if next.is_null() || is_first_match(next) {
             break;
         }
         comp = next;
     }
-
     count
 }
 
@@ -92,25 +74,13 @@ pub unsafe extern "C" fn rs_pum_count_visible_matches() -> c_int {
 /// Requires valid completion list state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_enough_matches(menuone: c_int) -> c_int {
-    let count = rs_pum_count_visible_matches();
+    let count = pum_count_visible_matches();
     let threshold = if menuone != 0 || nvim_get_compl_autocomplete() != 0 {
         1
     } else {
         2
     };
     c_int::from(count >= threshold)
-}
-
-/// Determine the minimum number of matches needed for popup display.
-///
-/// Returns 1 if menuone is set or autocomplete is active, otherwise 2.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_min_matches_needed() -> c_int {
-    if nvim_get_compl_autocomplete() != 0 {
-        1
-    } else {
-        2
-    }
 }
 
 /// Calculate the selected item index when building the popup menu.
@@ -143,55 +113,6 @@ pub const extern "C" fn rs_pum_calculate_selected(
     }
 
     -1
-}
-
-/// Check if we should skip showing the popup menu.
-///
-/// The popup menu should be skipped if:
-/// - pum_wanted is false, OR
-/// - there aren't enough matches
-#[no_mangle]
-pub unsafe extern "C" fn rs_should_skip_pum(pum_wanted: c_int, menuone: c_int) -> c_int {
-    if pum_wanted == 0 {
-        return 1;
-    }
-    c_int::from(rs_pum_enough_matches(menuone) == 0)
-}
-
-/// FFI export: Default minimum matches needed for popup (2).
-#[no_mangle]
-pub extern "C" fn rs_pum_default_min_matches() -> c_int {
-    2
-}
-
-/// FFI export: Minimum matches needed for popup with menuone (1).
-#[no_mangle]
-pub extern "C" fn rs_pum_menuone_min_matches() -> c_int {
-    1
-}
-
-/// FFI export: Check if autocomplete is active.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_is_autocomplete() -> c_int {
-    nvim_get_compl_autocomplete()
-}
-
-/// FFI export: Check if first match is null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_first_match_is_null() -> c_int {
-    c_int::from(nvim_compl_get_first_match().is_null())
-}
-
-/// FFI export: Constant for no selection (-1).
-#[no_mangle]
-pub extern "C" fn rs_pum_no_selection() -> c_int {
-    -1
-}
-
-/// FFI export: Check if match array exists.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_match_array_exists() -> c_int {
-    nvim_get_compl_match_array_exists()
 }
 
 // =============================================================================
@@ -344,46 +265,6 @@ pub unsafe extern "C" fn rs_ins_compl_show_pum() {
     }
 }
 
-/// Check if the popup menu is visible.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_is_visible() -> c_int {
-    nvim_pum_visible()
-}
-
-/// Check if the popup menu needs to be updated.
-///
-/// Returns true if completion is active but popup isn't visible.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_needs_update() -> c_int {
-    let started = nvim_get_compl_started();
-    let visible = nvim_pum_visible();
-    c_int::from(started != 0 && visible == 0)
-}
-
-/// Check if the popup menu should be hidden.
-///
-/// Returns true if completion is not active but popup is visible.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_should_hide() -> c_int {
-    let started = nvim_get_compl_started();
-    let visible = nvim_pum_visible();
-    c_int::from(started == 0 && visible != 0)
-}
-
-/// Get the current selected item in the popup menu.
-///
-/// Returns -1 if nothing is selected.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_selected_item() -> c_int {
-    nvim_get_compl_selected_item()
-}
-
-/// Check if an item is selected in the popup menu.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_has_selection() -> c_int {
-    c_int::from(nvim_get_compl_selected_item() >= 0)
-}
-
 /// Calculate the new selected index after navigation.
 ///
 /// Parameters:
@@ -419,20 +300,6 @@ pub const extern "C" fn rs_pum_calc_new_selection(
     } else {
         new_idx
     }
-}
-
-/// Check if the popup menu selection changed.
-///
-/// Compares old selection with current.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_selection_changed(old_selected: c_int) -> c_int {
-    c_int::from(nvim_get_compl_selected_item() != old_selected)
-}
-
-/// Check if the popup is active (visible and has selection).
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_is_active() -> c_int {
-    c_int::from(nvim_pum_visible() != 0 && nvim_get_compl_selected_item() >= 0)
 }
 
 #[cfg(test)]

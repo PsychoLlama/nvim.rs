@@ -93,12 +93,7 @@ const CONT_LOCAL: c_int = 32;
 const K_OPT_COT_FLAG_MENU: c_uint = 0x01;
 const K_OPT_COT_FLAG_MENUONE: c_uint = 0x02;
 const K_OPT_COT_FLAG_LONGEST: c_uint = 0x04;
-const K_OPT_COT_FLAG_PREVIEW: c_uint = 0x08;
-const K_OPT_COT_FLAG_POPUP: c_uint = 0x10;
-const K_OPT_COT_FLAG_NOINSERT: c_uint = 0x20;
-const K_OPT_COT_FLAG_NOSELECT: c_uint = 0x40;
 const K_OPT_COT_FLAG_FUZZY: c_uint = 0x80;
-const K_OPT_COT_FLAG_NOSORT: c_uint = 0x100;
 const K_OPT_COT_FLAG_PREINSERT: c_uint = 0x200;
 const K_OPT_COT_FLAG_NEAREST: c_uint = 0x400;
 
@@ -164,13 +159,6 @@ extern "C" {
     fn nvim_compl_shown_match_is_first() -> c_int;
     fn nvim_compl_shown_match_str_size() -> usize;
     fn nvim_compl_shown_match_has_newline() -> c_int;
-
-    // Match list accessors (Phase 4)
-    fn nvim_compl_first_match_is_null() -> c_int;
-    fn nvim_compl_curr_match_is_null() -> c_int;
-    fn nvim_compl_curr_match_at_original_text() -> c_int;
-    fn nvim_get_compl_matches() -> c_int;
-    fn nvim_compl_curr_match_has_str() -> c_int;
 
     // Popup menu and selection accessors
     fn nvim_get_compl_selected_item() -> c_int;
@@ -907,48 +895,6 @@ pub unsafe extern "C" fn rs_is_nearest_active() -> c_int {
     c_int::from((autocomplete || nearest_flag) && !cot_fuzzy_impl(flags))
 }
 
-/// Check if "longest" option is enabled in completeopt.
-#[no_mangle]
-pub unsafe extern "C" fn rs_cot_longest() -> c_int {
-    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_LONGEST) != 0)
-}
-
-/// Check if "noinsert" option is enabled in completeopt.
-#[no_mangle]
-pub unsafe extern "C" fn rs_cot_noinsert() -> c_int {
-    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_NOINSERT) != 0)
-}
-
-/// Check if "noselect" option is enabled in completeopt.
-#[no_mangle]
-pub unsafe extern "C" fn rs_cot_noselect() -> c_int {
-    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_NOSELECT) != 0)
-}
-
-/// Check if "nosort" option is enabled in completeopt.
-#[no_mangle]
-pub unsafe extern "C" fn rs_cot_nosort() -> c_int {
-    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_NOSORT) != 0)
-}
-
-/// Check if "menuone" option is enabled in completeopt.
-#[no_mangle]
-pub unsafe extern "C" fn rs_cot_menuone() -> c_int {
-    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_MENUONE) != 0)
-}
-
-/// Check if "popup" option is enabled in completeopt.
-#[no_mangle]
-pub unsafe extern "C" fn rs_cot_popup() -> c_int {
-    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_POPUP) != 0)
-}
-
-/// Check if "preview" option is enabled in completeopt.
-#[no_mangle]
-pub unsafe extern "C" fn rs_cot_preview() -> c_int {
-    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_PREVIEW) != 0)
-}
-
 /// Get the raw completeopt flags.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_cot_flags() -> c_uint {
@@ -977,36 +923,6 @@ pub unsafe extern "C" fn rs_get_compl_len() -> c_int {
 // =============================================================================
 // Match list queries (Phase 4)
 // =============================================================================
-
-/// Check if the match list has any matches (compl_first_match != NULL).
-#[no_mangle]
-pub unsafe extern "C" fn rs_ins_compl_has_matches() -> c_int {
-    c_int::from(nvim_compl_first_match_is_null() == 0)
-}
-
-/// Get the number of matches in the completion list.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ins_compl_match_count() -> c_int {
-    nvim_get_compl_matches()
-}
-
-/// Check if there's a current match selected (compl_curr_match != NULL).
-#[no_mangle]
-pub unsafe extern "C" fn rs_ins_compl_has_curr_match() -> c_int {
-    c_int::from(nvim_compl_curr_match_is_null() == 0)
-}
-
-/// Check if the current match is at original text position.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ins_compl_at_original() -> c_int {
-    nvim_compl_curr_match_at_original_text()
-}
-
-/// Check if the current match has valid string data.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ins_compl_curr_has_str() -> c_int {
-    nvim_compl_curr_match_has_str()
-}
 
 #[cfg(test)]
 mod tests {

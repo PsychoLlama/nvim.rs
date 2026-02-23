@@ -414,11 +414,11 @@ void screen_resize(int width, int height)
       } else {
         update_topline(curwin);
         if (pum_drawn()) {
-          // TODO(bfredl): ins_compl_show_pum wants to redraw the screen first.
+          // TODO(bfredl): rs_ins_compl_show_pum wants to redraw the screen first.
           // For now make sure the nested update_screen() won't redraw the
           // pum at the old position. Try to untangle this later.
           redraw_popupmenu = false;
-          ins_compl_show_pum();
+          rs_ins_compl_show_pum();
         }
         update_screen();
         if (redrawing()) {

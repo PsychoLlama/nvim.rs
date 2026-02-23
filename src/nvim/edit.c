@@ -2043,7 +2043,7 @@ static int insert_execute(VimState *state, int key)
     }
     s->count = 0;
     s->nomove = true;
-    ins_compl_prep(ESC);
+    rs_ins_compl_prep(ESC);
     return 0;
   }
 
@@ -2077,7 +2077,7 @@ static int insert_execute(VimState *state, int key)
       if (s->c == Ctrl_L
           && (!rs_ctrl_x_mode_line_or_eval()
               || rs_ins_compl_long_shown_match())) {
-        ins_compl_addfrommatch();
+        nvim_ins_compl_addfrommatch_body();
         return 1;  // continue
       }
 
@@ -2089,11 +2089,11 @@ static int insert_execute(VimState *state, int key)
 
         if (str != NULL) {
           for (char *p = str; *p != NUL; MB_PTR_ADV(p)) {
-            ins_compl_addleader(utf_ptr2char(p));
+            rs_ins_compl_addleader(utf_ptr2char(p));
           }
           xfree(str);
         } else {
-          ins_compl_addleader(s->c);
+          rs_ins_compl_addleader(s->c);
         }
         return 1;  // continue
       }
@@ -2104,17 +2104,17 @@ static int insert_execute(VimState *state, int key)
            || (rs_ins_compl_enter_selects()
                && (s->c == CAR || s->c == K_KENTER || s->c == NL)))
           && stop_arrow() == OK) {
-        ins_compl_delete(false);
+        rs_ins_compl_delete(0);
         if (rs_ins_compl_preinsert_longest() && !rs_ins_compl_is_match_selected()) {
-          ins_compl_insert(false, true);
+          rs_ins_compl_insert(0, 1);
           rs_ins_compl_init_get_longest();
           return 1;  // continue
         } else {
-          ins_compl_insert(false, false);
+          rs_ins_compl_insert(0, 0);
         }
       } else if (ascii_iswhite_nl_or_nul(s->c) && rs_ins_compl_preinsert_effect()) {
         // Delete preinserted text when typing special chars
-        ins_compl_delete(false);
+        rs_ins_compl_delete(0);
       }
     }
   }
@@ -2122,7 +2122,7 @@ static int insert_execute(VimState *state, int key)
   // Prepare for or stop CTRL-X mode. This doesn't do completion, but it does
   // fix up the text when finishing completion.
   rs_ins_compl_init_get_longest();
-  if (ins_compl_prep(s->c)) {
+  if (rs_ins_compl_prep(s->c)) {
     return 1;  // continue
   }
 
@@ -2461,7 +2461,7 @@ check_pum:
         insert_do_complete(s);
         if (pum_want.finish) {
           // accept the item and stop completion
-          ins_compl_prep(Ctrl_Y);
+          rs_ins_compl_prep(Ctrl_Y);
         }
       }
       pum_want.active = false;
@@ -2784,7 +2784,7 @@ static void insert_handle_key_post(InsertState *s)
   // Check if we need to cancel completion mode because the window
   // or tab page was changed
   if (rs_ins_compl_active() && !rs_ins_compl_win_active(curwin)) {
-    ins_compl_cancel();
+    rs_ins_compl_cancel();
   }
 
   // If the cursor was moved we didn't just insert a space

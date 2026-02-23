@@ -4,6 +4,7 @@
 //! and original text. The leader is the text typed while completing, and the
 //! original text is the text that was present before completion started.
 
+#![allow(dead_code, unused_imports)]
 use std::os::raw::{c_char, c_int};
 
 // C accessor functions for leader and original text
@@ -29,12 +30,9 @@ extern "C" {
 const CAR: c_char = 0x0D; // '\015' carriage return
 const NL: c_char = 0x0A; // '\012' newline
 
-/// Get the completion leader string data pointer.
-///
-/// Returns compl_leader.data if set, otherwise compl_orig_text.data.
-/// This is the text that has been typed so far during completion.
-#[no_mangle]
-pub unsafe extern "C" fn rs_leader_get_data() -> *const c_char {
+/// Get the completion leader data pointer (or orig_text if leader is not set).
+#[inline]
+unsafe fn leader_get_data() -> *const c_char {
     let leader_data = nvim_get_compl_leader_data();
     if leader_data.is_null() {
         nvim_get_compl_orig_text_data()
@@ -43,50 +41,14 @@ pub unsafe extern "C" fn rs_leader_get_data() -> *const c_char {
     }
 }
 
-/// Get the length of the completion leader.
-///
-/// Returns compl_leader.size if leader is set, otherwise compl_orig_text.size.
-#[no_mangle]
-pub unsafe extern "C" fn rs_leader_get_len() -> usize {
+/// Get the length of the completion leader (or orig_text length if leader is not set).
+#[inline]
+unsafe fn leader_get_len() -> usize {
     let leader_data = nvim_get_compl_leader_data();
     if leader_data.is_null() {
         nvim_get_compl_orig_text_size()
     } else {
         nvim_get_compl_leader_size()
-    }
-}
-
-/// Check if the leader is set (not using original text as fallback).
-#[no_mangle]
-pub unsafe extern "C" fn rs_leader_is_set() -> c_int {
-    c_int::from(!nvim_get_compl_leader_data().is_null())
-}
-
-/// Get the length of the original text.
-#[no_mangle]
-pub unsafe extern "C" fn rs_orig_text_get_len() -> usize {
-    nvim_get_compl_orig_text_size()
-}
-
-/// Get the original text data pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_orig_text_get_data() -> *const c_char {
-    nvim_get_compl_orig_text_data()
-}
-
-/// Get the completion length (cursor column - completion start column).
-///
-/// This is how much text has been typed from the completion start.
-/// Returns 0 if the result would be negative.
-#[no_mangle]
-pub unsafe extern "C" fn rs_leader_compl_len() -> c_int {
-    let cursor_col = nvim_get_cursor_col();
-    let compl_col = nvim_get_compl_col();
-    let off = cursor_col - compl_col;
-    if off < 0 {
-        0
-    } else {
-        off
     }
 }
 
@@ -122,23 +84,6 @@ pub unsafe extern "C" fn rs_leader_find_word_end(mut ptr: *mut c_char) -> *mut c
     ptr
 }
 
-/// Find the end of the line, omitting CR and NL at the end.
-///
-/// Returns a pointer to just after the line content (before trailing CR/NL).
-#[no_mangle]
-pub unsafe extern "C" fn rs_leader_find_line_end(ptr: *mut c_char) -> *mut c_char {
-    // Find end of string
-    let mut s = ptr;
-    while *s != 0 {
-        s = s.add(1);
-    }
-    // Back up over trailing CR and NL
-    while s > ptr && (*s.sub(1) == CAR || *s.sub(1) == NL) {
-        s = s.sub(1);
-    }
-    s
-}
-
 /// Calculate the common prefix length between two strings.
 ///
 /// Returns the byte length of the common prefix.
@@ -158,42 +103,6 @@ pub unsafe extern "C" fn rs_common_prefix_len(s1: *const c_char, s2: *const c_ch
     {
         len as c_int
     }
-}
-
-/// Compare the leader with original text to check if they match.
-///
-/// Returns 1 if they match (same content and length), 0 otherwise.
-#[no_mangle]
-pub unsafe extern "C" fn rs_leader_matches_orig() -> c_int {
-    let leader_data = nvim_get_compl_leader_data();
-    let orig_data = nvim_get_compl_orig_text_data();
-
-    // If leader is not set, they "match" (leader falls back to orig)
-    if leader_data.is_null() {
-        return 1;
-    }
-
-    // If orig is null but leader is set, no match
-    if orig_data.is_null() {
-        return 0;
-    }
-
-    let leader_size = nvim_get_compl_leader_size();
-    let orig_size = nvim_get_compl_orig_text_size();
-
-    // Different lengths means no match
-    if leader_size != orig_size {
-        return 0;
-    }
-
-    // Compare byte by byte
-    for i in 0..leader_size {
-        if *leader_data.add(i) != *orig_data.add(i) {
-            return 0;
-        }
-    }
-
-    1
 }
 
 // =============================================================================
@@ -267,17 +176,6 @@ extern "C" {
     fn nvim_get_compl_length() -> c_int;
 }
 
-/// Check if the new leader needs to update the completion.
-///
-/// Returns true if the leader differs from the original and completion is active.
-#[no_mangle]
-pub unsafe extern "C" fn rs_leader_needs_update() -> c_int {
-    if nvim_get_compl_started() == 0 {
-        return 0;
-    }
-    c_int::from(rs_leader_matches_orig() == 0)
-}
-
 /// Calculate how much extra text was typed beyond the original.
 ///
 /// Returns the byte difference between leader and original text lengths.
@@ -285,7 +183,7 @@ pub unsafe extern "C" fn rs_leader_needs_update() -> c_int {
 #[no_mangle]
 #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_leader_extra_len() -> c_int {
-    let leader_len = rs_leader_get_len();
+    let leader_len = leader_get_len();
     let orig_len = nvim_get_compl_orig_text_size();
     (leader_len as c_int) - (orig_len as c_int)
 }
@@ -296,7 +194,7 @@ pub unsafe extern "C" fn rs_leader_extra_len() -> c_int {
 #[no_mangle]
 #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_leader_insert_len(compl_len: c_int) -> c_int {
-    let leader_len = rs_leader_get_len();
+    let leader_len = leader_get_len();
 
     #[allow(clippy::cast_sign_loss)]
     {
@@ -308,18 +206,6 @@ pub unsafe extern "C" fn rs_leader_insert_len(compl_len: c_int) -> c_int {
     }
 }
 
-/// Check if the leader is longer than the minimum completion length.
-#[no_mangle]
-pub unsafe extern "C" fn rs_leader_above_min_len() -> c_int {
-    let leader_len = rs_leader_get_len();
-    let min_len = nvim_get_compl_length();
-
-    #[allow(clippy::cast_sign_loss)]
-    {
-        c_int::from(leader_len >= min_len as usize)
-    }
-}
-
 /// Compare a string with the leader.
 ///
 /// Returns 1 if the string matches the leader up to the leader's length.
@@ -327,8 +213,8 @@ pub unsafe extern "C" fn rs_leader_above_min_len() -> c_int {
 #[no_mangle]
 #[allow(clippy::missing_const_for_fn)]
 pub unsafe extern "C" fn rs_leader_str_matches(s: *const c_char, s_len: usize) -> c_int {
-    let leader_data = rs_leader_get_data();
-    let leader_len = rs_leader_get_len();
+    let leader_data = leader_get_data();
+    let leader_len = leader_get_len();
 
     if leader_data.is_null() || leader_len == 0 {
         return 1; // Empty leader matches everything
@@ -348,12 +234,6 @@ pub unsafe extern "C" fn rs_leader_str_matches(s: *const c_char, s_len: usize) -
     1
 }
 
-/// Check if the leader is empty.
-#[no_mangle]
-pub unsafe extern "C" fn rs_leader_is_empty() -> c_int {
-    c_int::from(rs_leader_get_len() == 0)
-}
-
 /// Calculate bytes to delete when updating leader.
 ///
 /// Returns how many bytes need to be deleted before inserting new leader text.
@@ -366,34 +246,6 @@ pub unsafe extern "C" fn rs_leader_bytes_to_delete(cursor_col: c_int, compl_col:
     } else {
         diff
     }
-}
-
-/// Get the byte offset into the leader where new text starts.
-///
-/// This is used when inserting the portion of leader that follows the common prefix.
-#[no_mangle]
-pub unsafe extern "C" fn rs_leader_new_text_offset(compl_len: c_int) -> usize {
-    if compl_len < 0 {
-        return 0;
-    }
-
-    #[allow(clippy::cast_sign_loss)]
-    {
-        let leader_len = rs_leader_get_len();
-        let offset = compl_len as usize;
-        offset.min(leader_len)
-    }
-}
-
-/// Check if we need to update original text after leader change.
-///
-/// Returns true when completion started and leader was updated.
-#[no_mangle]
-pub unsafe extern "C" fn rs_leader_should_update_orig() -> c_int {
-    if nvim_get_compl_started() == 0 {
-        return 0;
-    }
-    rs_leader_is_set()
 }
 
 #[cfg(test)]

@@ -4,6 +4,7 @@
 //! The actual VimL function implementations remain in C (eval/funcs.c),
 //! but Rust provides utilities for completion info gathering.
 
+#![allow(dead_code, unused_imports)]
 use std::os::raw::{c_char, c_int};
 
 // C accessor functions
@@ -92,79 +93,6 @@ pub unsafe extern "C" fn rs_viml_get_mode_str() -> *const c_char {
     };
 
     s.as_ptr().cast::<c_char>()
-}
-
-/// Check if completion info can be retrieved.
-///
-/// Returns true if completion is active and has data.
-#[no_mangle]
-pub unsafe extern "C" fn rs_viml_has_info() -> c_int {
-    c_int::from(nvim_get_compl_started() != 0 && nvim_compl_first_match_is_null() == 0)
-}
-
-/// Get the selected item index for complete_info().
-///
-/// Returns -1 if nothing is selected, otherwise the index.
-#[no_mangle]
-pub unsafe extern "C" fn rs_viml_get_selected() -> c_int {
-    if nvim_get_compl_started() == 0 {
-        return -1;
-    }
-    if nvim_compl_curr_match_is_null() != 0 {
-        return -1;
-    }
-    nvim_get_compl_selected_item()
-}
-
-/// Get the completion start column for complete_info().
-#[no_mangle]
-pub unsafe extern "C" fn rs_viml_get_startcol() -> c_int {
-    if nvim_get_compl_started() == 0 {
-        return 0;
-    }
-    nvim_get_compl_col()
-}
-
-/// Get the match count for complete_info().
-#[no_mangle]
-pub unsafe extern "C" fn rs_viml_get_match_count() -> c_int {
-    if nvim_get_compl_started() == 0 {
-        return 0;
-    }
-    nvim_get_compl_matches()
-}
-
-/// Check if popup menu is showing.
-#[no_mangle]
-pub unsafe extern "C" fn rs_viml_pum_visible() -> c_int {
-    c_int::from(nvim_get_compl_started() != 0 && nvim_pum_visible() != 0)
-}
-
-/// Check if complete_check() should return true.
-///
-/// Returns true if completion was interrupted.
-#[no_mangle]
-pub unsafe extern "C" fn rs_viml_check_interrupted() -> c_int {
-    nvim_get_compl_interrupted()
-}
-
-/// Get the prefix length for complete().
-///
-/// Used to determine what prefix was typed before calling complete().
-#[no_mangle]
-pub unsafe extern "C" fn rs_viml_get_prefix_len() -> c_int {
-    nvim_get_compl_length()
-}
-
-/// Check if preinserted text is active.
-///
-/// Returns true if there's preinserted text from the completion.
-#[no_mangle]
-pub unsafe extern "C" fn rs_viml_has_preinserted() -> c_int {
-    // Check if pum_want.item differs from selected (preinsert state)
-    let selected = nvim_get_compl_selected_item();
-    let want_item = nvim_get_pum_want_item();
-    c_int::from(nvim_get_compl_started() != 0 && want_item != selected)
 }
 
 #[cfg(test)]

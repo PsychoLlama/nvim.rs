@@ -145,7 +145,6 @@ extern "C" {
     fn nvim_clear_edit_submode_extra();
 
     // Phase 2: C functions called (not pure accessors)
-    fn vim_is_ctrl_x_key(c: c_int) -> bool;
     fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c_char);
     fn may_trigger_modechanged();
     fn rs_ins_compl_pum_key(c: c_int) -> c_int;
@@ -190,7 +189,6 @@ extern "C" {
     fn rs_ins_compl_fixRedoBufForLeader(ptr: *const c_char);
     fn rs_ins_compl_free();
     fn rs_get_compl_len() -> c_int;
-    fn ins_compl_delete(revert: bool);
     fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
     fn nvim_restore_orig_extmarks();
     fn get_can_cindent() -> bool;
@@ -212,63 +210,35 @@ extern "C" {
 
 /// Set the CTRL-X completion mode based on the key typed after CTRL-X.
 ///
-/// Translates a key character into the appropriate completion mode and updates
-/// global state (ctrl_x_mode, edit_submode, compl_cont_mode, compl_cont_status).
-///
 /// Returns 1 when the character is not to be inserted (i.e., CTRL-Z was typed),
 /// 0 otherwise.
-#[no_mangle]
-pub unsafe extern "C" fn rs_set_ctrl_x_mode(c: c_int) -> c_int {
+unsafe fn rs_set_ctrl_x_mode(c: c_int) -> c_int {
     let mut retval = false;
 
     match c {
         CTRL_E | CTRL_Y => {
-            // scroll the window one line up or down
             nvim_set_ctrl_x_mode(CTRL_X_SCROLL);
             nvim_set_edit_submode_scroll(nvim_get_state_replace_flag());
-            // edit_submode_pre = NULL and redraw_mode = true are set by the accessor
         }
-        CTRL_L => {
-            nvim_set_ctrl_x_mode(CTRL_X_WHOLE_LINE);
-        }
-        CTRL_F => {
-            nvim_set_ctrl_x_mode(CTRL_X_FILES);
-        }
-        CTRL_K => {
-            nvim_set_ctrl_x_mode(CTRL_X_DICTIONARY);
-        }
+        CTRL_L => nvim_set_ctrl_x_mode(CTRL_X_WHOLE_LINE),
+        CTRL_F => nvim_set_ctrl_x_mode(CTRL_X_FILES),
+        CTRL_K => nvim_set_ctrl_x_mode(CTRL_X_DICTIONARY),
         CTRL_R => {
-            // When CTRL-R is followed by '=', don't trigger register completion.
             if nvim_vpeekc() != i32::from(b'=') {
                 nvim_set_ctrl_x_mode(CTRL_X_REGISTER);
             }
-            // else: do nothing, retval stays false
         }
-        CTRL_T => {
-            nvim_set_ctrl_x_mode(CTRL_X_THESAURUS);
-        }
-        CTRL_U => {
-            nvim_set_ctrl_x_mode(CTRL_X_FUNCTION);
-        }
-        CTRL_O => {
-            nvim_set_ctrl_x_mode(CTRL_X_OMNI);
-        }
+        CTRL_T => nvim_set_ctrl_x_mode(CTRL_X_THESAURUS),
+        CTRL_U => nvim_set_ctrl_x_mode(CTRL_X_FUNCTION),
+        CTRL_O => nvim_set_ctrl_x_mode(CTRL_X_OMNI),
         x if x == i32::from(b's') || x == CTRL_S => {
             nvim_set_ctrl_x_mode(CTRL_X_SPELL);
             nvim_spell_back_safe();
         }
-        CTRL_RSB => {
-            nvim_set_ctrl_x_mode(CTRL_X_TAGS);
-        }
-        CTRL_I | K_S_TAB => {
-            nvim_set_ctrl_x_mode(CTRL_X_PATH_PATTERNS);
-        }
-        CTRL_D => {
-            nvim_set_ctrl_x_mode(CTRL_X_PATH_DEFINES);
-        }
-        CTRL_V | CTRL_Q => {
-            nvim_set_ctrl_x_mode(CTRL_X_CMDLINE);
-        }
+        CTRL_RSB => nvim_set_ctrl_x_mode(CTRL_X_TAGS),
+        CTRL_I | K_S_TAB => nvim_set_ctrl_x_mode(CTRL_X_PATH_PATTERNS),
+        CTRL_D => nvim_set_ctrl_x_mode(CTRL_X_PATH_DEFINES),
+        CTRL_V | CTRL_Q => nvim_set_ctrl_x_mode(CTRL_X_CMDLINE),
         CTRL_Z => {
             nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
             nvim_set_edit_submode_null();
@@ -276,21 +246,15 @@ pub unsafe extern "C" fn rs_set_ctrl_x_mode(c: c_int) -> c_int {
             retval = true;
         }
         CTRL_P | CTRL_N => {
-            // ^X^P means LOCAL expansion if nothing interrupted.
-            // Do normal expansion when interrupting a different mode.
-            // Nothing changes if interrupting mode 0.
             let cont_status = nvim_get_compl_cont_status();
             if (cont_status & CONT_INTRPT) == 0 {
                 nvim_set_compl_cont_status(cont_status | CONT_LOCAL);
             } else if nvim_get_compl_cont_mode() != 0 {
                 nvim_set_compl_cont_status(cont_status & !CONT_LOCAL);
             }
-            // FALLTHROUGH to default logic
             set_ctrl_x_mode_default(c);
         }
-        _ => {
-            set_ctrl_x_mode_default(c);
-        }
+        _ => set_ctrl_x_mode_default(c),
     }
 
     c_int::from(retval)
@@ -366,7 +330,7 @@ pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
 
     // Forget any previous 'special' messages if this is actually a ^X mode key
     // - bar ^R, in which case we wait to see what it gives us.
-    if c != CTRL_R && vim_is_ctrl_x_key(c) {
+    if c != CTRL_R && crate::rs_vim_is_ctrl_x_key(c) != 0 {
         nvim_clear_edit_submode_extra();
     }
 
@@ -391,7 +355,7 @@ pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
             || c == CTRL_Q
             || c == CTRL_Z
             || rs_ins_compl_pum_key(c) != 0
-            || !vim_is_ctrl_x_key(c)
+            || crate::rs_vim_is_ctrl_x_key(c) == 0
         {
             // Not starting another completion mode.
             // CTRL-X CTRL-Z should stop completion without inserting anything.
@@ -420,7 +384,7 @@ pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
         retval = rs_set_ctrl_x_mode(c) != 0;
     } else if nvim_get_ctrl_x_mode() != CTRL_X_NORMAL {
         // We're already in CTRL-X mode, do we stay in it?
-        if !vim_is_ctrl_x_key(c) {
+        if crate::rs_vim_is_ctrl_x_key(c) == 0 {
             let new_mode = if nvim_get_ctrl_x_mode() == CTRL_X_SCROLL {
                 CTRL_X_NORMAL
             } else {
@@ -455,7 +419,7 @@ pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
 
     // reset continue_* if we left expansion mode; if we stay they'll be
     // (re)set properly in ins_complete()
-    if !vim_is_ctrl_x_key(c) {
+    if crate::rs_vim_is_ctrl_x_key(c) == 0 {
         nvim_set_compl_cont_status(0);
         nvim_set_compl_cont_mode(0);
     }
@@ -481,7 +445,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
 
     // Remove pre-inserted text when present.
     if rs_ins_compl_preinsert_effect() != 0 && rs_ins_compl_win_active(nvim_get_curwin()) != 0 {
-        ins_compl_delete(false);
+        crate::insert::rs_ins_compl_delete(0);
     }
 
     // Get here when we have finished typing a sequence of ^N and ^P or other
@@ -549,7 +513,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     // CTRL-E means completion is Ended, go back to the typed text.
     // but only do this if the popup is still visible.
     if c == CTRL_E {
-        ins_compl_delete(false);
+        crate::insert::rs_ins_compl_delete(0);
         let mut p: *const c_char = std::ptr::null();
         let mut plen: usize = 0;
         let leader = nvim_get_compl_leader_data();
