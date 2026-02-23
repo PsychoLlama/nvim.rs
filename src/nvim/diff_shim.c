@@ -1835,7 +1835,6 @@ void nvim_diffblock_init_new(diff_T *dp) { if (dp != NULL) { dp->is_linematched 
 void nvim_set_need_diff_redraw(bool val) { need_diff_redraw = val; }
 int nvim_diff_get_linematch_lines(void) { return linematch_lines; }
 int nvim_diff_get_diff_flags(void) { return diff_flags; }
-void nvim_diff_redraw(bool dofold) { diff_redraw(dofold); }
 void nvim_diff_semsg_e96(void) { semsg(_("E96: Cannot diff more than %" PRId64 " buffers"), (int64_t)DB_COUNT); }
 void nvim_redraw_later_win(win_T *wp, int type) { if (wp != NULL) { redraw_later(wp, type); } }
 win_T *nvim_tabpage_first_win(tabpage_T *tp) { if (tp == NULL) { return NULL; } if (tp == curtab) { return firstwin; } return tp->tp_firstwin; }
@@ -1931,8 +1930,6 @@ int nvim_diff_hlf_add(void) { return (int)HLF_ADD; }
 int nvim_diff_hlf_chd(void) { return (int)HLF_CHD; }
 int nvim_diff_hlf_txd(void) { return (int)HLF_TXD; }
 int nvim_diff_hlf_txa(void) { return (int)HLF_TXA; }
-int nvim_diff_diffline_num_changes(diffline_T *dl) { return dl ? dl->num_changes : 0; }
-int nvim_diff_diffline_bufidx(diffline_T *dl) { return dl ? dl->bufidx : 0; }
 diffline_change_T *nvim_diff_diffline_get_change(diffline_T *dl, int i) { if (!dl || i < 0 || i >= dl->num_changes) { return NULL; } return &dl->changes[i]; }
 colnr_T nvim_diff_change_dc_start(diffline_change_T *dc, int idx) { if (!dc || idx < 0 || idx >= DB_COUNT) { return 0; } return dc->dc_start[idx]; }
 colnr_T nvim_diff_change_dc_end(diffline_change_T *dc, int idx) { if (!dc || idx < 0 || idx >= DB_COUNT) { return 0; } return dc->dc_end[idx]; }

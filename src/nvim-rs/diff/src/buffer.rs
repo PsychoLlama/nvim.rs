@@ -167,7 +167,7 @@ extern "C" {
     fn nvim_set_need_diff_redraw(val: bool);
     fn nvim_diff_get_linematch_lines() -> c_int;
     fn nvim_diff_get_diff_flags() -> c_int;
-    fn nvim_diff_redraw(dofold: bool);
+    fn rs_diff_redraw(dofold: bool);
     fn nvim_diff_semsg_e96();
     fn nvim_redraw_later_win(wp: WinHandle, typ: c_int);
     fn nvim_upd_valid() -> c_int;
@@ -914,7 +914,7 @@ pub unsafe extern "C" fn rs_diff_buf_clear() {
         if !nvim_get_curtab_diffbuf(i).is_null() {
             nvim_curtab_set_diffbuf(i, BufHandle::null());
             nvim_tabpage_set_diff_invalid(tp, 1);
-            nvim_diff_redraw(true);
+            rs_diff_redraw(true);
         }
     }
 }
@@ -934,7 +934,7 @@ pub unsafe extern "C" fn rs_diff_invalidate(buf: BufHandle) {
         if i != DB_COUNT {
             nvim_tabpage_set_diff_invalid(tp, 1);
             if tp == curtab {
-                nvim_diff_redraw(true);
+                rs_diff_redraw(true);
             }
         }
         tp = nvim_tabpage_get_next(tp);
@@ -986,7 +986,7 @@ pub unsafe extern "C" fn rs_diff_buf_add(buf: BufHandle) {
         if nvim_get_curtab_diffbuf(i).is_null() {
             nvim_curtab_set_diffbuf(i, buf);
             nvim_tabpage_set_diff_invalid(tp, 1);
-            nvim_diff_redraw(true);
+            rs_diff_redraw(true);
             return;
         }
     }
@@ -1025,7 +1025,7 @@ pub unsafe extern "C" fn rs_diff_buf_adjust(win: WinHandle) {
             if i != DB_COUNT {
                 nvim_curtab_set_diffbuf(i, BufHandle::null());
                 nvim_tabpage_set_diff_invalid(tp, 1);
-                nvim_diff_redraw(true);
+                rs_diff_redraw(true);
             }
         }
     } else {
@@ -1701,7 +1701,7 @@ pub unsafe extern "C" fn rs_diffopt_changed() -> c_int {
         parsed.diff_algorithm,
     );
 
-    nvim_diff_redraw(true);
+    rs_diff_redraw(true);
     nvim_diff_check_scrollbind();
     OK
 }
@@ -3469,7 +3469,7 @@ pub unsafe extern "C" fn rs_diff_ex_diffupdate(eap: ExargHandle) {
     // are diffs now, which means they got updated.
     let curtab = nvim_get_curtab();
     if had_diffs || !nvim_tabpage_get_first_diff(curtab).is_null() {
-        nvim_diff_redraw(true);
+        rs_diff_redraw(true);
         nvim_diff_fire_diffupdated();
     }
 }
