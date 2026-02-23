@@ -29,6 +29,7 @@ pub mod parsing;
 pub mod query;
 pub mod scope;
 pub mod security;
+pub mod session;
 pub mod set;
 pub mod setcmd;
 pub mod setops;

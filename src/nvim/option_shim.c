@@ -155,6 +155,11 @@ extern void rs_check_redraw_for(buf_T *buf, win_T *win, uint32_t flags);
 extern uint32_t *rs_insecure_flag(win_T *wp, OptIndex opt_idx, int opt_flags);
 extern int rs_was_set_insecurely(win_T *wp, OptIndex opt_idx, int opt_flags);
 extern void rs_set_option_sctx(OptIndex opt_idx, int opt_flags, sctx_T script_ctx);
+extern int rs_optval_default(OptIndex opt_idx, void *varp);
+extern int rs_wc_use_keyname(const void *varp, OptInt *wcp);
+extern void rs_option_value2string(OptIndex opt_idx, int opt_flags);
+extern int rs_put_set(FILE *fd, char *cmd, OptIndex opt_idx, void *varp);
+extern int rs_makefoldset(FILE *fd);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
 _Static_assert(UPD_VALID == 10, "UPD_VALID mismatch with Rust UpdateType::Valid");
@@ -1309,6 +1314,53 @@ void nvim_curbuf_set_p_script_ctx(int idx, sctx_T sctx) { curbuf->b_p_script_ctx
 void nvim_curwin_set_p_script_ctx(int idx, sctx_T sctx) { curwin->w_p_script_ctx[idx] = sctx; }
 void nvim_curwin_set_allbuf_opt_script_ctx(int idx, sctx_T sctx) { curwin->w_allbuf_opt.wo_script_ctx[idx] = sctx; }
 void nvim_option_set_script_ctx(OptIndex opt_idx, sctx_T sctx) { options[opt_idx].script_ctx = sctx; }
+
+// Phase 4 (session.rs) accessors
+OptVal nvim_optval_from_varp(OptIndex opt_idx, void *varp) { return optval_from_varp(opt_idx, varp); }
+OptVal nvim_get_option_unset_value(OptIndex opt_idx) { return get_option_unset_value(opt_idx); }
+int nvim_option_has_type(OptIndex opt_idx, int type) { return (int)option_has_type(opt_idx, (OptValType)type); }
+void *nvim_get_varp_scope_by_idx(OptIndex opt_idx, int opt_flags)
+{
+  return get_varp_scope(&options[opt_idx], opt_flags);
+}
+// nvim_get_namebuff is defined in buffer.c
+size_t nvim_get_namebuff_size(void) { return MAXPATHL; }
+void nvim_option_home_replace(const char *src, char *dst, size_t dstlen)
+{
+  home_replace(NULL, src, dst, dstlen, false);
+}
+int nvim_call_put_escstr(FILE *fd, const char *str, int what) { return put_escstr(fd, str, what); }
+int nvim_call_put_eol(FILE *fd) { return put_eol(fd); }
+const void *nvim_option_get_p_wc_ptr(void) { return &p_wc; }
+const void *nvim_option_get_p_wcm_ptr(void) { return &p_wcm; }
+// opt idx constants for makefoldset (nvim_get_opt_idx_foldmethod already defined above)
+int nvim_get_opt_idx_foldmarker(void) { return (int)kOptFoldmarker; }
+int nvim_get_opt_idx_foldignore(void) { return (int)kOptFoldignore; }
+int nvim_get_opt_idx_foldlevel(void) { return (int)kOptFoldlevel; }
+int nvim_get_opt_idx_foldminlines(void) { return (int)kOptFoldminlines; }
+int nvim_get_opt_idx_foldnestmax(void) { return (int)kOptFoldnestmax; }
+int nvim_get_opt_idx_foldenable(void) { return (int)kOptFoldenable; }
+// curwin fold option varp pointers for rs_makefoldset
+void *nvim_curwin_p_fdm_varp(void) { return &curwin->w_p_fdm; }
+void *nvim_curwin_p_fde_varp(void) { return &curwin->w_p_fde; }
+void *nvim_curwin_p_fmr_varp(void) { return &curwin->w_p_fmr; }
+void *nvim_curwin_p_fdi_varp(void) { return &curwin->w_p_fdi; }
+void *nvim_curwin_p_fdl_varp(void) { return &curwin->w_p_fdl; }
+void *nvim_curwin_p_fml_varp(void) { return &curwin->w_p_fml; }
+void *nvim_curwin_p_fdn_varp(void) { return &curwin->w_p_fdn; }
+void *nvim_curwin_p_fen_varp(void) { return &curwin->w_p_fen; }
+int nvim_call_fprintf(FILE *fd, const char *str) { return fputs(str, fd); }
+int nvim_call_fprintf_int(FILE *fd, const char *fmt, int64_t val)
+{
+  return fprintf(fd, fmt, val);
+}
+void nvim_put_set_get_opt_name_flags(OptIndex opt_idx, const char **name, uint64_t *flags)
+{
+  *name = options[opt_idx].fullname;
+  *flags = options[opt_idx].flags;
+}
+void *nvim_option_get_var_ptr(OptIndex opt_idx) { return options[opt_idx].var; }
+OptVal nvim_option_get_def_val(OptIndex opt_idx) { return options[opt_idx].def_val; }
 
 void set_init_tablocal(void)
 {
@@ -3564,17 +3616,7 @@ static void showoptions(bool all, int opt_flags)
 /// Return true if option "p" has its default value.
 static int optval_default(OptIndex opt_idx, void *varp)
 {
-  vimoption_T *opt = &options[opt_idx];
-
-  // Hidden options always use their default value.
-  if (is_option_hidden(opt_idx)) {
-    return true;
-  }
-
-  OptVal current_val = optval_from_varp(opt_idx, varp);
-  OptVal default_val = opt->def_val;
-
-  return rs_optval_equal(current_val, default_val) != 0;
+  return rs_optval_default(opt_idx, varp);
 }
 
 /// Send update to UIs with values of UI relevant options
@@ -3750,18 +3792,7 @@ int makeset(FILE *fd, int opt_flags, int local_only)
 /// 'sessionoptions' or 'viewoptions' contains "folds" but not "options".
 int makefoldset(FILE *fd)
 {
-  if (put_set(fd, "setlocal", kOptFoldmethod, &curwin->w_p_fdm) == FAIL
-      || put_set(fd, "setlocal", kOptFoldexpr, &curwin->w_p_fde) == FAIL
-      || put_set(fd, "setlocal", kOptFoldmarker, &curwin->w_p_fmr) == FAIL
-      || put_set(fd, "setlocal", kOptFoldignore, &curwin->w_p_fdi) == FAIL
-      || put_set(fd, "setlocal", kOptFoldlevel, &curwin->w_p_fdl) == FAIL
-      || put_set(fd, "setlocal", kOptFoldminlines, &curwin->w_p_fml) == FAIL
-      || put_set(fd, "setlocal", kOptFoldnestmax, &curwin->w_p_fdn) == FAIL
-      || put_set(fd, "setlocal", kOptFoldenable, &curwin->w_p_fen) == FAIL) {
-    return FAIL;
-  }
-
-  return OK;
+  return rs_makefoldset(fd);
 }
 
 /// Print the ":set" command to set a single option to file.
@@ -3774,112 +3805,7 @@ int makefoldset(FILE *fd)
 /// @return FAIL on error, OK otherwise.
 static int put_set(FILE *fd, char *cmd, OptIndex opt_idx, void *varp)
 {
-  OptVal value = optval_from_varp(opt_idx, varp);
-  vimoption_T *opt = &options[opt_idx];
-  char *name = opt->fullname;
-  uint64_t flags = opt->flags;
-
-  if (option_is_global_local(opt_idx) && varp != opt->var
-      && rs_optval_equal(value, get_option_unset_value(opt_idx)) != 0) {
-    // Processing unset local value of global-local option. Do nothing.
-    return OK;
-  }
-
-  switch (value.type) {
-  case kOptValTypeNil:
-    abort();
-  case kOptValTypeBoolean: {
-    assert(value.data.boolean != kNone);
-    bool value_bool = TRISTATE_TO_BOOL(value.data.boolean, false);
-
-    if (fprintf(fd, "%s %s%s", cmd, value_bool ? "" : "no", name) < 0) {
-      return FAIL;
-    }
-    break;
-  }
-  case kOptValTypeNumber: {
-    if (fprintf(fd, "%s %s=", cmd, name) < 0) {
-      return FAIL;
-    }
-
-    OptInt value_num = value.data.number;
-
-    OptInt wc;
-    if (wc_use_keyname(varp, &wc)) {
-      // print 'wildchar' and 'wildcharm' as a key name
-      if (fputs(get_special_key_name((int)wc, 0), fd) < 0) {
-        return FAIL;
-      }
-    } else if (fprintf(fd, "%" PRId64, value_num) < 0) {
-      return FAIL;
-    }
-    break;
-  }
-  case kOptValTypeString: {
-    if (fprintf(fd, "%s %s=", cmd, name) < 0) {
-      return FAIL;
-    }
-
-    const char *value_str = value.data.string.data;
-    char *buf = NULL;
-    char *part = NULL;
-
-    if (value_str != NULL) {
-      if ((flags & kOptFlagExpand) != 0) {
-        size_t size = (size_t)strlen(value_str) + 1;
-
-        // replace home directory in the whole option value into "buf"
-        buf = xmalloc(size);
-        home_replace(NULL, value_str, buf, size, false);
-
-        // If the option value is longer than MAXPATHL, we need to append
-        // each comma separated part of the option separately, so that it
-        // can be expanded when read back.
-        if (size >= MAXPATHL && (flags & kOptFlagComma) != 0
-            && vim_strchr(value_str, ',') != NULL) {
-          part = xmalloc(size);
-
-          // write line break to clear the option, e.g. ':set rtp='
-          if (put_eol(fd) == FAIL) {
-            goto fail;
-          }
-          char *p = buf;
-          while (*p != NUL) {
-            // for each comma separated option part, append value to
-            // the option, :set rtp+=value
-            if (fprintf(fd, "%s %s+=", cmd, name) < 0) {
-              goto fail;
-            }
-            copy_option_part(&p, part, size, ",");
-            if (put_escstr(fd, part, 2) == FAIL || put_eol(fd) == FAIL) {
-              goto fail;
-            }
-          }
-          xfree(buf);
-          xfree(part);
-          return OK;
-        }
-        if (put_escstr(fd, buf, 2) == FAIL) {
-          xfree(buf);
-          return FAIL;
-        }
-        xfree(buf);
-      } else if (put_escstr(fd, value_str, 2) == FAIL) {
-        return FAIL;
-      }
-    }
-    break;
-  fail:
-    xfree(buf);
-    xfree(part);
-    return FAIL;
-  }
-  }
-
-  if (put_eol(fd) < 0) {
-    return FAIL;
-  }
-  return OK;
+  return rs_put_set(fd, cmd, opt_idx, varp);
 }
 
 void *get_varp_scope_from(vimoption_T *p, int opt_flags, buf_T *buf, win_T *win)
@@ -4723,31 +4649,7 @@ int ExpandStringSetting(expand_T *xp, regmatch_T *regmatch, int *numMatches, cha
 /// TODO(famiu): Replace this with optval_to_cstr() if possible.
 static void option_value2string(vimoption_T *opt, int opt_flags)
 {
-  void *varp = get_varp_scope(opt, opt_flags);
-  assert(varp != NULL);
-
-  if (option_has_type(get_opt_idx(opt), kOptValTypeNumber)) {
-    OptInt wc = 0;
-
-    if (wc_use_keyname(varp, &wc)) {
-      xstrlcpy(NameBuff, get_special_key_name((int)wc, 0), sizeof(NameBuff));
-    } else if (wc != 0) {
-      xstrlcpy(NameBuff, transchar((int)wc), sizeof(NameBuff));
-    } else {
-      snprintf(NameBuff,
-               sizeof(NameBuff),
-               "%" PRId64,
-               (int64_t)(*(OptInt *)varp));
-    }
-  } else {  // string
-    varp = *(char **)(varp);
-
-    if (opt->flags & kOptFlagExpand) {
-      home_replace(NULL, varp, NameBuff, MAXPATHL, false);
-    } else {
-      xstrlcpy(NameBuff, varp, MAXPATHL);
-    }
-  }
+  rs_option_value2string((int)get_opt_idx(opt), opt_flags);
 }
 
 /// Return true if "varp" points to 'wildchar' or 'wildcharm' and it can be
@@ -4755,13 +4657,7 @@ static void option_value2string(vimoption_T *opt, int opt_flags)
 /// "*wcp" is set to the value of the option if it's 'wildchar' or 'wildcharm'.
 static int wc_use_keyname(const void *varp, OptInt *wcp)
 {
-  if (((OptInt *)varp == &p_wc) || ((OptInt *)varp == &p_wcm)) {
-    *wcp = *(OptInt *)varp;
-    if (IS_SPECIAL(*wcp) || find_special_key_in_table((int)(*wcp)) >= 0) {
-      return true;
-    }
-  }
-  return false;
+  return rs_wc_use_keyname(varp, wcp);
 }
 
 /// @returns true if "x" is present in 'shortmess' option, or

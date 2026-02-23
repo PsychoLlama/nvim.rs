@@ -6,6 +6,8 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
+#![allow(clippy::if_not_else)]
+#![allow(clippy::borrow_as_ptr)]
 
 use std::ffi::{c_char, c_int, c_uint};
 
@@ -279,7 +281,10 @@ pub unsafe extern "C" fn rs_get_tty_option(name: *const c_char) -> OptVal {
     OptVal {
         type_: OptValType::String,
         data: crate::storage::OptValData {
-            string: String_ { data: value, size: len },
+            string: String_ {
+                data: value,
+                size: len,
+            },
         },
     }
 }
@@ -337,10 +342,7 @@ unsafe fn find_key_len(arg_arg: *const c_char, len: usize, has_lt: bool) -> c_in
     let arg = arg_arg;
 
     // t_xx format: don't use get_special_key_code (it calls add_termcap_entry)
-    if len >= 4
-        && *arg as u8 == b't'
-        && *arg.add(1) as u8 == b'_'
-    {
+    if len >= 4 && *arg as u8 == b't' && *arg.add(1) as u8 == b'_' {
         if !has_lt || *arg.add(4) as u8 == b'>' {
             key = termcap2key(*arg.add(2) as u8, *arg.add(3) as u8);
         }
@@ -378,7 +380,11 @@ pub unsafe extern "C" fn rs_string_to_key(arg: *mut c_char) -> c_int {
     if *arg as u8 == b'^' && *arg.add(1) != 0 {
         let key = rs_ctrl_chr(c_int::from(*arg.add(1) as u8));
         // ^@ is <Nul>
-        if key == 0 { K_ZERO } else { key }
+        if key == 0 {
+            K_ZERO
+        } else {
+            key
+        }
     } else {
         c_int::from(*arg as u8)
     }

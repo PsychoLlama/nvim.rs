@@ -7,6 +7,8 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
+#![allow(clippy::branches_sharing_code)]
+#![allow(clippy::borrow_as_ptr)]
 
 use std::ffi::{c_int, c_uint};
 
@@ -106,10 +108,7 @@ pub unsafe extern "C" fn rs_check_redraw_for(buf: BufHandle, win: WinHandle, fla
         nvim_set_redraw_tabline(1);
     }
 
-    if (flags & OptFlags::REDR_BUF.0) != 0
-        || (flags & OptFlags::REDR_WIN.0) != 0
-        || all
-    {
+    if (flags & OptFlags::REDR_BUF.0) != 0 || (flags & OptFlags::REDR_WIN.0) != 0 || all {
         if (flags & OptFlags::HL_ONLY.0) != 0 {
             nvim_call_redraw_later(win, UPD_NOT_VALID);
         } else {
