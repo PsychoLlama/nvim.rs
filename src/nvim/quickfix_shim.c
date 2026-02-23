@@ -860,73 +860,19 @@ size_t nvim_qf_state_get_linelen(QfStateHandle state) { return state == NULL ? 0
 bool nvim_qf_state_has_fd(QfStateHandle state) { return state == NULL ? false : ((qfstate_T *)state)->fd != NULL; }
 bool nvim_qf_state_has_tv(QfStateHandle state) { return state == NULL ? false : ((qfstate_T *)state)->tv != NULL; }
 
-/// Check if the parser state has a buffer
-bool nvim_qf_state_has_buf(QfStateHandle state)
-{
-  if (state == NULL) {
-    return false;
-  }
-  return ((qfstate_T *)state)->buf != NULL;
-}
+bool nvim_qf_state_has_buf(QfStateHandle state) { return state == NULL ? false : ((qfstate_T *)state)->buf != NULL; }
 
 static win_T *qf_find_win(const qf_info_T *qi);
 static buf_T *qf_find_buf(qf_info_T *qi);
 static bool qf_win_pos_update(qf_info_T *qi, int old_qf_index);
 static void qf_update_buffer(qf_info_T *qi, qfline_T *old_last);
 
-/// Returns the window handle or NULL if not found
-void *nvim_qf_find_win_for_stack(const void *qi_void)
-{
-  if (qi_void == NULL) {
-    return NULL;
-  }
-  return qf_find_win((const qf_info_T *)qi_void);
-}
-
-/// Returns the buffer handle or NULL if not found
-void *nvim_qf_find_buf_for_stack(void *qi_void)
-{
-  if (qi_void == NULL) {
-    return NULL;
-  }
-  return qf_find_buf((qf_info_T *)qi_void);
-}
-
-/// Returns true if there is a quickfix window
-bool nvim_qf_win_pos_update(void *qi_void, int old_qf_index)
-{
-  if (qi_void == NULL) {
-    return false;
-  }
-  return qf_win_pos_update((qf_info_T *)qi_void, old_qf_index);
-}
-
-/// Update the quickfix buffer contents
-void nvim_qf_update_buffer(void *qi_void, void *old_last)
-{
-  if (qi_void == NULL) {
-    return;
-  }
-  qf_update_buffer((qf_info_T *)qi_void, (qfline_T *)old_last);
-}
-
-/// Get the buffer number from a quickfix info struct
-int nvim_qf_get_bufnr(const void *qi_void)
-{
-  if (qi_void == NULL) {
-    return -1;  // INVALID_QFBUFNR
-  }
-  return ((const qf_info_T *)qi_void)->qf_bufnr;
-}
-
-/// Set the buffer number in a quickfix info struct
-void nvim_qf_set_bufnr(void *qi_void, int bufnr)
-{
-  if (qi_void == NULL) {
-    return;
-  }
-  ((qf_info_T *)qi_void)->qf_bufnr = bufnr;
-}
+void *nvim_qf_find_win_for_stack(const void *qi_void) { return qi_void == NULL ? NULL : qf_find_win((const qf_info_T *)qi_void); }
+void *nvim_qf_find_buf_for_stack(void *qi_void) { return qi_void == NULL ? NULL : qf_find_buf((qf_info_T *)qi_void); }
+bool nvim_qf_win_pos_update(void *qi_void, int old_qf_index) { return qi_void == NULL ? false : qf_win_pos_update((qf_info_T *)qi_void, old_qf_index); }
+void nvim_qf_update_buffer(void *qi_void, void *old_last) { if (qi_void != NULL) qf_update_buffer((qf_info_T *)qi_void, (qfline_T *)old_last); }
+int nvim_qf_get_bufnr(const void *qi_void) { return qi_void == NULL ? -1 : ((const qf_info_T *)qi_void)->qf_bufnr; }
+void nvim_qf_set_bufnr(void *qi_void, int bufnr) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_bufnr = bufnr; }
 
 /// Check if a window is a quickfix window
 bool nvim_win_is_qf_win(const void *win_void)
@@ -941,53 +887,15 @@ bool nvim_win_is_qf_win(const void *win_void)
   return bt_quickfix(win->w_buffer);
 }
 
-/// Get the w_llist_ref field from a window (location list reference)
-void *nvim_win_get_llist_ref(const void *win_void)
-{
-  if (win_void == NULL) {
-    return NULL;
-  }
-  return ((const win_T *)win_void)->w_llist_ref;
-}
+void *nvim_win_get_llist_ref(const void *win_void) { return win_void == NULL ? NULL : ((const win_T *)win_void)->w_llist_ref; }
 
 static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char *title);
 static int qf_get_properties(win_T *wp, dict_T *what, dict_T *retdict);
 
-/// Check if the quickfix stack is for the global quickfix list
-bool nvim_qf_is_qf_stack(const void *qi_void)
-{
-  if (qi_void == NULL) {
-    return false;
-  }
-  return qi_void == ql_info;
-}
-
-/// Check if the quickfix stack is for a location list
-bool nvim_qf_is_ll_stack(const void *qi_void)
-{
-  if (qi_void == NULL) {
-    return false;
-  }
-  return qi_void != ql_info;
-}
-
-/// Get the reference count of a quickfix info struct
-int nvim_qf_get_refcount(const void *qi_void)
-{
-  if (qi_void == NULL) {
-    return 0;
-  }
-  return ((const qf_info_T *)qi_void)->qf_refcount;
-}
-
-/// Increment the reference count of a quickfix info struct
-void nvim_qf_incr_refcount(void *qi_void)
-{
-  if (qi_void == NULL) {
-    return;
-  }
-  ((qf_info_T *)qi_void)->qf_refcount++;
-}
+bool nvim_qf_is_qf_stack(const void *qi_void) { return qi_void == NULL ? false : qi_void == ql_info; }
+bool nvim_qf_is_ll_stack(const void *qi_void) { return qi_void == NULL ? false : qi_void != ql_info; }
+int nvim_qf_get_refcount(const void *qi_void) { return qi_void == NULL ? 0 : ((const qf_info_T *)qi_void)->qf_refcount; }
+void nvim_qf_incr_refcount(void *qi_void) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_refcount++; }
 
 /// Decrement the reference count of a quickfix info struct
 void nvim_qf_decr_refcount(void *qi_void)
@@ -1001,32 +909,9 @@ void nvim_qf_decr_refcount(void *qi_void)
   }
 }
 
-/// Get the context of a quickfix list
-void *nvim_qf_get_ctx(const void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return NULL;
-  }
-  return ((const qf_list_T *)qfl_void)->qf_ctx;
-}
-
-/// Check if a quickfix list has user data
-bool nvim_qf_has_user_data(const void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return false;
-  }
-  return ((const qf_list_T *)qfl_void)->qf_has_user_data;
-}
-
-/// Increment the changedtick of a quickfix list
-void nvim_qf_incr_changedtick(void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  ((qf_list_T *)qfl_void)->qf_changedtick++;
-}
+void *nvim_qf_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
+bool nvim_qf_has_user_data(const void *qfl_void) { return qfl_void == NULL ? false : ((const qf_list_T *)qfl_void)->qf_has_user_data; }
+void nvim_qf_incr_changedtick(void *qfl_void) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_changedtick++; }
 
 // Looking up a buffer can be slow if there are many.  Remember the last one
 // to make this a lot faster if there are multiple matches in the same file.
@@ -3871,14 +3756,7 @@ void nvim_qf_set_key_typed(bool val) { KeyTyped = val; }
 
 void nvim_qf_fill_buffer_internal_error(void) { internal_error("rs_qf_fill_buffer()"); }
 
-/// Get qf_start from a list (returns NULL if qfl is NULL)
-void *nvim_qf_get_start_nonnull(const void *qfl)
-{
-  if (qfl == NULL) {
-    return NULL;
-  }
-  return ((const qf_list_T *)qfl)->qf_start;
-}
+void *nvim_qf_get_start_nonnull(const void *qfl) { return qfl == NULL ? NULL : ((const qf_list_T *)qfl)->qf_start; }
 
 static void qf_list_changed(qf_list_T *qfl) { qfl->qf_changedtick++; }
 
