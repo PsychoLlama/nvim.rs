@@ -556,15 +556,7 @@ const char *nvim_qf_types(int c, int nr) { return qf_types(c, nr); }
 
 void nvim_emsg_e_no_more_items(void) { emsg(_(e_no_more_items)); }
 
-/// Increment the list count after adding a list
-void nvim_qf_increment_listcount(void *qi_void)
-{
-  if (qi_void == NULL) {
-    return;
-  }
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  qi->qf_listcount++;
-}
+void nvim_qf_increment_listcount(void *qi_void) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_listcount++; }
 
 /// Decrement the list count after removing a list
 void nvim_qf_decrement_listcount(void *qi_void)
@@ -578,75 +570,19 @@ void nvim_qf_decrement_listcount(void *qi_void)
   }
 }
 
-/// Set the start pointer for a quickfix list
-void nvim_qf_set_start(void *qfl_void, void *start)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_start = (qfline_T *)start;
-}
+void nvim_qf_set_start(void *qfl_void, void *start) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_start = (qfline_T *)start; }
 
-/// Set the last pointer for a quickfix list
-void nvim_qf_set_last(void *qfl_void, void *last)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_last = (qfline_T *)last;
-}
+void nvim_qf_set_last(void *qfl_void, void *last) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_last = (qfline_T *)last; }
 
-/// Set the entry count for a quickfix list
-void nvim_qf_set_count(void *qfl_void, int count)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_count = count;
-}
+void nvim_qf_set_count(void *qfl_void, int count) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_count = count; }
 
-/// Increment the entry count
-void nvim_qf_increment_count(void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_count++;
-}
+void nvim_qf_increment_count(void *qfl_void) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_count++; }
 
-/// Set the nonevalid flag for a quickfix list
-void nvim_qf_set_nonevalid(void *qfl_void, bool nonevalid)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_nonevalid = nonevalid;
-}
+void nvim_qf_set_nonevalid(void *qfl_void, bool nonevalid) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_nonevalid = nonevalid; }
 
-/// Set the next pointer for a quickfix entry
-void nvim_qfline_set_next(void *qfp_void, void *next)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  qfp->qf_next = (qfline_T *)next;
-}
+void nvim_qfline_set_next(void *qfp_void, void *next) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_next = (qfline_T *)next; }
 
-/// Set the prev pointer for a quickfix entry
-void nvim_qfline_set_prev(void *qfp_void, void *prev)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  qfp->qf_prev = (qfline_T *)prev;
-}
+void nvim_qfline_set_prev(void *qfp_void, void *prev) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_prev = (qfline_T *)prev; }
 
 void *nvim_qfline_alloc(void) { return xcalloc(1, sizeof(qfline_T)); }
 
@@ -665,105 +601,25 @@ void nvim_qfline_free(void *qfp_void)
   xfree(qfp);
 }
 
-/// Set qf_fnum field
-void nvim_qfline_set_fnum(void *qfp_void, int fnum)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  qfp->qf_fnum = fnum;
-}
+void nvim_qfline_set_fnum(void *qfp_void, int fnum) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_fnum = fnum; }
 
-/// Set qf_lnum field
-void nvim_qfline_set_lnum(void *qfp_void, linenr_T lnum)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  qfp->qf_lnum = lnum;
-}
+void nvim_qfline_set_lnum(void *qfp_void, linenr_T lnum) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_lnum = lnum; }
 
-/// Set qf_end_lnum field
-void nvim_qfline_set_end_lnum(void *qfp_void, linenr_T end_lnum)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  qfp->qf_end_lnum = end_lnum;
-}
+void nvim_qfline_set_end_lnum(void *qfp_void, linenr_T end_lnum) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_end_lnum = end_lnum; }
 
-/// Set qf_col field
-void nvim_qfline_set_col(void *qfp_void, int col)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  qfp->qf_col = col;
-}
+void nvim_qfline_set_col(void *qfp_void, int col) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_col = col; }
 
-/// Set qf_end_col field
-void nvim_qfline_set_end_col(void *qfp_void, int end_col)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  qfp->qf_end_col = end_col;
-}
+void nvim_qfline_set_end_col(void *qfp_void, int end_col) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_end_col = end_col; }
 
-/// Set qf_nr field
-void nvim_qfline_set_nr(void *qfp_void, int nr)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  qfp->qf_nr = nr;
-}
+void nvim_qfline_set_nr(void *qfp_void, int nr) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_nr = nr; }
 
-/// Set qf_type field
-void nvim_qfline_set_type(void *qfp_void, char type)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  qfp->qf_type = type;
-}
+void nvim_qfline_set_type(void *qfp_void, char type) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_type = type; }
 
-/// Set qf_viscol field
-void nvim_qfline_set_viscol(void *qfp_void, char viscol)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  qfp->qf_viscol = viscol;
-}
+void nvim_qfline_set_viscol(void *qfp_void, char viscol) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_viscol = viscol; }
 
-/// Set qf_valid field
-void nvim_qfline_set_valid(void *qfp_void, char valid)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  qfp->qf_valid = valid;
-}
+void nvim_qfline_set_valid(void *qfp_void, char valid) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_valid = valid; }
 
-/// Set qf_cleared field
-void nvim_qfline_set_cleared(void *qfp_void, char cleared)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  qfp->qf_cleared = cleared;
-}
+void nvim_qfline_set_cleared(void *qfp_void, char cleared) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_cleared = cleared; }
 
 /// Set qf_text field (duplicates the string)
 void nvim_qfline_set_text(void *qfp_void, const char *text)
