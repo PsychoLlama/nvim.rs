@@ -130,6 +130,7 @@ extern int rs_check_can_index(typval_T *rettv, bool evaluate, bool verbose);
 extern int rs_eval_index_inner(typval_T *rettv, bool is_range, typval_T *var1, typval_T *var2,
                                bool exclusive, const char *key, ptrdiff_t keylen, bool verbose);
 extern void rs_f_slice(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern int rs_eval_method(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -2167,131 +2168,7 @@ static int eval_method(char **const arg, typval_T *const rettv, evalarg_T *const
                        const bool verbose)
   FUNC_ATTR_NONNULL_ARG(1, 2)
 {
-  const bool evaluate = evalarg != NULL && (evalarg->eval_flags & EVAL_EVALUATE);
-
-  // Skip over the ->.
-  *arg += 2;
-  typval_T base = *rettv;
-  rettv->v_type = VAR_UNKNOWN;
-
-  // Locate the method name.
-  int len;
-  char *name = *arg;
-  char *lua_funcname = NULL;
-  char *alias = NULL;
-  if (strnequal(name, "v:lua.", 6)) {
-    lua_funcname = name + 6;
-    *arg = (char *)rs_skip_luafunc_name(lua_funcname);
-    *arg = skipwhite(*arg);  // to detect trailing whitespace later
-    len = (int)(*arg - lua_funcname);
-  } else {
-    len = get_name_len((const char **)arg, &alias, evaluate, true);
-    if (alias != NULL) {
-      name = alias;
-    }
-  }
-
-  char *tofree = NULL;
-  int ret = OK;
-
-  if (len <= 0) {
-    if (verbose) {
-      if (lua_funcname == NULL) {
-        emsg(_("E260: Missing name after ->"));
-      } else {
-        semsg(_(e_invexpr2), name);
-      }
-    }
-    ret = FAIL;
-  } else {
-    *arg = skipwhite(*arg);
-
-    // If there is no "(" immediately following, but there is further on,
-    // it can be "dict.Func()", "list[nr]", etc.
-    // Does not handle anything where "(" is part of the expression.
-    char *paren;
-    if (**arg != '(' && lua_funcname == NULL && alias == NULL
-        && (paren = vim_strchr(*arg, '(')) != NULL) {
-      *arg = name;
-      *paren = NUL;
-      typval_T ref;
-      ref.v_type = VAR_UNKNOWN;
-      if (eval7(arg, &ref, evalarg, false) == FAIL) {
-        *arg = name + len;
-        ret = FAIL;
-      } else if (*skipwhite(*arg) != NUL) {
-        if (verbose) {
-          semsg(_(e_trailing_arg), *arg);
-        }
-        ret = FAIL;
-      } else if (ref.v_type == VAR_FUNC && ref.vval.v_string != NULL) {
-        name = ref.vval.v_string;
-        ref.vval.v_string = NULL;
-        tofree = name;
-        len = (int)strlen(name);
-      } else if (ref.v_type == VAR_PARTIAL && ref.vval.v_partial != NULL) {
-        if (ref.vval.v_partial->pt_argc > 0 || ref.vval.v_partial->pt_dict != NULL) {
-          if (verbose) {
-            emsg(_(e_cannot_use_partial_here));
-          }
-          ret = FAIL;
-        } else {
-          name = xstrdup(rs_partial_name(ref.vval.v_partial));
-          tofree = name;
-          if (name == NULL) {
-            ret = FAIL;
-            name = *arg;
-          } else {
-            len = (int)strlen(name);
-          }
-        }
-      } else {
-        if (verbose) {
-          semsg(_(e_not_callable_type_str), name);
-        }
-        ret = FAIL;
-      }
-      tv_clear(&ref);
-      *paren = '(';
-    }
-
-    if (ret == OK) {
-      if (**arg != '(') {
-        if (verbose) {
-          semsg(_(e_missingparen), name);
-        }
-        ret = FAIL;
-      } else if (ascii_iswhite((*arg)[-1])) {
-        if (verbose) {
-          emsg(_(e_nowhitespace));
-        }
-        ret = FAIL;
-      } else if (lua_funcname != NULL) {
-        if (evaluate) {
-          rettv->v_type = VAR_PARTIAL;
-          rettv->vval.v_partial = get_vim_var_partial(VV_LUA);
-          rettv->vval.v_partial->pt_refcount++;
-        }
-        ret = call_func_rettv(arg, evalarg, rettv, evaluate, NULL, &base, lua_funcname);
-      } else {
-        ret = eval_func(arg, evalarg, name, len, rettv,
-                        evaluate ? EVAL_EVALUATE : 0, &base);
-      }
-    }
-  }
-
-  // Clear the funcref afterwards, so that deleting it while
-  // evaluating the arguments is possible (see test55).
-  if (evaluate) {
-    tv_clear(&base);
-  }
-  xfree(tofree);
-
-  if (alias != NULL) {
-    xfree(alias);
-  }
-
-  return ret;
+  return rs_eval_method(arg, rettv, evalarg, verbose);
 }
 
 /// Evaluate an "[expr]" or "[expr:expr]" index.  Also "dict.key".
@@ -5424,4 +5301,33 @@ typval_T *nvim_f_slice_get_arg1(typval_T *argvars)
 typval_T *nvim_f_slice_get_arg2(typval_T *argvars)
 {
   return &argvars[2];
+}
+
+// =============================================================================
+// Phase 1 (eval_method): new C accessor/wrapper functions
+// =============================================================================
+
+/// Increment pt->pt_refcount - accessor for Rust rs_eval_method.
+void nvim_partial_incref(partial_T *pt)
+{
+  pt->pt_refcount++;
+}
+
+/// Set tv->vval.v_partial = pt without clearing - accessor for Rust rs_eval_method.
+void nvim_tv_set_partial_raw(typval_T *tv, partial_T *pt)
+{
+  tv->vval.v_partial = pt;
+}
+
+/// Non-static wrapper for call_func_rettv with selfdict=NULL - accessor for Rust rs_eval_method.
+int nvim_call_func_rettv_wrapper(char **arg, evalarg_T *evalarg, typval_T *rettv, bool evaluate,
+                                 typval_T *basetv, const char *lua_funcname)
+{
+  return call_func_rettv(arg, evalarg, rettv, evaluate, NULL, basetv, lua_funcname);
+}
+
+/// Non-static wrapper for static eval7 - accessor for Rust rs_eval_method.
+int nvim_eval7_wrapper(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string)
+{
+  return eval7(arg, rettv, evalarg, want_string);
 }

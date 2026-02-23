@@ -1638,6 +1638,281 @@ pub unsafe extern "C" fn rs_eval_list(
 }
 
 // =============================================================================
+// Phase 4: eval_method migration
+// =============================================================================
+
+extern "C" {
+    // Name resolution
+    fn get_name_len(
+        arg: *mut *const c_char,
+        alias: *mut *mut c_char,
+        evaluate: bool,
+        verbose: bool,
+    ) -> c_int;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+
+    // Lua function helpers (from eval crate)
+    fn rs_skip_luafunc_name(p: *const c_char) -> *const c_char;
+    fn rs_partial_name(pt: *const c_void) -> *mut c_char;
+
+    // Partial accessors
+    fn nvim_get_vlua_partial() -> *mut c_void;
+    fn nvim_partial_get_argc(pt: *const c_void) -> c_int;
+    fn nvim_partial_get_dict(pt: *const c_void) -> *mut c_void;
+    fn nvim_partial_incref(pt: *mut c_void);
+
+    // Typval partial accessor/setter
+    fn nvim_tv_get_partial(tv: TypevalHandle) -> *mut c_void;
+    fn nvim_tv_set_partial_raw(tv: TypevalHandle, pt: *mut c_void);
+
+    // Typval string accessor
+    fn nvim_eval_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
+
+    // Typval direct assign (struct copy)
+    fn nvim_tv_assign_direct(dst: TypevalHandle, src: TypevalHandle);
+
+    // ASCII whitespace check
+    fn rs_ascii_iswhite(c: c_int) -> c_int;
+
+    // String duplication
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+
+    // call_func_rettv wrapper (selfdict always NULL from eval_method)
+    fn nvim_call_func_rettv_wrapper(
+        arg: *mut *mut c_char,
+        evalarg: EvalargHandle,
+        rettv: TypevalHandle,
+        evaluate: bool,
+        basetv: TypevalHandle,
+        lua_funcname: *const c_char,
+    ) -> c_int;
+
+    // eval7 wrapper (eval7 is static in C, so we wrap it)
+    fn nvim_eval7_wrapper(
+        arg: *mut *mut c_char,
+        rettv: TypevalHandle,
+        evalarg: EvalargHandle,
+        want_string: bool,
+    ) -> c_int;
+}
+
+/// Error: missing name after ->
+static E_MISSING_NAME_AFTER_ARROW: &[u8] = b"E260: Missing name after ->\0";
+/// Error: cannot use a partial here
+static E_CANNOT_USE_PARTIAL_HERE: &[u8] = b"E1265: Cannot use a partial here\0";
+/// Error: not a callable type
+static E_NOT_CALLABLE_TYPE: &[u8] = b"E1085: Not a callable type: %s\0";
+/// Error: missing parentheses
+static E_MISSING_PAREN: &[u8] = b"E107: Missing parentheses: %s\0";
+/// Error: no white space allowed before parenthesis
+static E_NO_WHITESPACE: &[u8] = b"E274: No white space allowed before parenthesis\0";
+
+/// Implementation of eval_method: evaluates "->method()" or "->v:lua.method()".
+///
+/// Migrated from C `eval_method` static function in eval_shim.c.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer, pointing at '-'
+/// - `rettv` must be a valid typval handle
+/// - `evalarg` can be null
+pub unsafe fn eval_method_impl(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+    verbose: bool,
+) -> c_int {
+    let evaluate = should_evaluate(evalarg);
+
+    // Skip over the ->
+    *arg = (*arg).add(2);
+
+    // Move rettv into base: base = *rettv, rettv->v_type = VAR_UNKNOWN
+    let base = alloc_typval();
+    nvim_tv_assign_direct(base, rettv);
+    nvim_tv_set_type(rettv, VAR_UNKNOWN);
+
+    // Locate the method name.
+    let mut len: c_int;
+    let mut name: *mut c_char = *arg;
+    let mut lua_funcname: *const c_char = std::ptr::null();
+    let mut alias: *mut c_char = std::ptr::null_mut();
+
+    // Check for "v:lua." prefix (6 bytes) using pure Rust byte comparison.
+    // We read one byte at a time via get_byte to avoid reading past the string end.
+    let prefix_match = !(*arg).is_null() && {
+        let p = *arg as *const u8;
+        get_byte(p as *const c_char) == b'v'
+            && get_byte(p.add(1) as *const c_char) == b':'
+            && get_byte(p.add(2) as *const c_char) == b'l'
+            && get_byte(p.add(3) as *const c_char) == b'u'
+            && get_byte(p.add(4) as *const c_char) == b'a'
+            && get_byte(p.add(5) as *const c_char) == b'.'
+    };
+
+    if prefix_match {
+        lua_funcname = (*arg).add(6) as *const c_char;
+        *arg = rs_skip_luafunc_name(lua_funcname) as *mut c_char;
+        *arg = skipwhite(*arg); // to detect trailing whitespace later
+        len = (*arg as usize).wrapping_sub(lua_funcname as usize) as c_int;
+    } else {
+        len = get_name_len(arg as *mut *const c_char, &mut alias, evaluate, true);
+        if !alias.is_null() {
+            name = alias;
+        }
+    }
+
+    let mut tofree: *mut c_char = std::ptr::null_mut();
+    let mut ret = OK;
+
+    if len <= 0 {
+        if verbose {
+            if lua_funcname.is_null() {
+                emsg(E_MISSING_NAME_AFTER_ARROW.as_ptr() as *const c_char);
+            } else {
+                semsg(E_INVEXPR2.as_ptr() as *const c_char, name);
+            }
+        }
+        ret = FAIL;
+    } else {
+        *arg = skipwhite(*arg);
+
+        // If there is no "(" immediately following, but there is further on,
+        // it can be "dict.Func()", "list[nr]", etc.
+        // Does not handle anything where "(" is part of the expression.
+        let paren = if get_byte(*arg) != b'(' && lua_funcname.is_null() && alias.is_null() {
+            vim_strchr(*arg, b'(' as c_int)
+        } else {
+            std::ptr::null_mut()
+        };
+
+        if !paren.is_null() {
+            *arg = name;
+            *paren = 0; // NUL out the '('
+            let ref_tv = alloc_typval();
+            nvim_tv_set_type(ref_tv, VAR_UNKNOWN);
+            if nvim_eval7_wrapper(arg, ref_tv, evalarg, false) == FAIL {
+                *arg = name.add(len as usize);
+                ret = FAIL;
+            } else if get_byte(skipwhite(*arg)) != 0 {
+                if verbose {
+                    semsg(E_TRAILING_ARG.as_ptr() as *const c_char, *arg);
+                }
+                ret = FAIL;
+            } else if nvim_tv_get_type(ref_tv) == VAR_FUNC
+                && !nvim_eval_tv_get_vstring(ref_tv).is_null()
+            {
+                name = nvim_eval_tv_get_vstring(ref_tv);
+                // Steal the string: set ref.vval.v_string = NULL so tv_clear won't free it
+                nvim_tv_set_vstring_raw(ref_tv, std::ptr::null_mut());
+                tofree = name;
+                len = libc_strlen(name) as c_int;
+            } else if nvim_tv_get_type(ref_tv) == VAR_PARTIAL
+                && !nvim_tv_get_partial(ref_tv).is_null()
+            {
+                let pt = nvim_tv_get_partial(ref_tv);
+                if nvim_partial_get_argc(pt) > 0 || !nvim_partial_get_dict(pt).is_null() {
+                    if verbose {
+                        emsg(E_CANNOT_USE_PARTIAL_HERE.as_ptr() as *const c_char);
+                    }
+                    ret = FAIL;
+                } else {
+                    name = xstrdup(rs_partial_name(pt));
+                    tofree = name;
+                    if name.is_null() {
+                        ret = FAIL;
+                        name = *arg;
+                    } else {
+                        len = libc_strlen(name) as c_int;
+                    }
+                }
+            } else {
+                if verbose {
+                    semsg(E_NOT_CALLABLE_TYPE.as_ptr() as *const c_char, name);
+                }
+                ret = FAIL;
+            }
+            tv_clear(ref_tv);
+            free_typval(ref_tv);
+            *paren = b'(' as c_char; // restore the '('
+        }
+
+        if ret == OK {
+            if get_byte(*arg) != b'(' {
+                if verbose {
+                    semsg(E_MISSING_PAREN.as_ptr() as *const c_char, name);
+                }
+                ret = FAIL;
+            } else if rs_ascii_iswhite((*arg).sub(1).read() as c_int) != 0 {
+                if verbose {
+                    emsg(E_NO_WHITESPACE.as_ptr() as *const c_char);
+                }
+                ret = FAIL;
+            } else if !lua_funcname.is_null() {
+                if evaluate {
+                    let vlua = nvim_get_vlua_partial();
+                    nvim_tv_set_type(rettv, VAR_PARTIAL);
+                    nvim_tv_set_partial_raw(rettv, vlua);
+                    nvim_partial_incref(vlua);
+                }
+                ret =
+                    nvim_call_func_rettv_wrapper(arg, evalarg, rettv, evaluate, base, lua_funcname);
+            } else {
+                ret = eval_func_impl(
+                    arg,
+                    evalarg,
+                    name,
+                    len,
+                    rettv,
+                    if evaluate { EVAL_EVALUATE } else { 0 },
+                    base,
+                );
+            }
+        }
+    }
+
+    // Clear the funcref afterwards, so that deleting it while
+    // evaluating the arguments is possible (see test55).
+    if evaluate {
+        tv_clear(base);
+    }
+    free_typval(base);
+    xfree(tofree as *mut c_void);
+
+    if !alias.is_null() {
+        xfree(alias as *mut c_void);
+    }
+
+    ret
+}
+
+/// Compute strlen for a C string (not calling libc directly, using pointer arithmetic).
+#[inline]
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    if s.is_null() {
+        return 0;
+    }
+    let mut p = s;
+    while *p != 0 {
+        p = p.add(1);
+    }
+    (p as usize).wrapping_sub(s as usize)
+}
+
+/// FFI export for eval_method.
+///
+/// # Safety
+/// See `eval_method_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_method(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+    verbose: bool,
+) -> c_int {
+    eval_method_impl(arg, rettv, evalarg, verbose)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
