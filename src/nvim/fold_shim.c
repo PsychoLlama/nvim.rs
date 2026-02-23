@@ -127,9 +127,7 @@ static linenr_T invalid_bot = 0;
 static linenr_T prev_lnum = 0;
 static int prev_lnum_lvl = -1;
 
-static size_t foldstartmarkerlen;
-static char *foldendmarker;
-static size_t foldendmarkerlen;
+// foldstartmarkerlen/foldendmarker/foldendmarkerlen -- deleted (Rust uses parse_marker_impl directly)
 
 // Exported folding functions. {{{1
 
@@ -209,135 +207,10 @@ void deleteFoldRecurse(buf_T *bp, garray_T *gap)
   GA_DEEP_CLEAR(gap, fold_T, DELETE_FOLD_NESTED);
 }
 
-// foldCreateMarkers() {{{2
-/// Create a fold from line "start" to line "end" (inclusive) in window `wp`
-/// by adding markers.
-static void foldCreateMarkers(win_T *wp, pos_T start, pos_T end)
-{
-  buf_T *buf = wp->w_buffer;
-  if (!MODIFIABLE(buf)) {
-    emsg(_(e_modifiable));
-    return;
-  }
-  parseMarker(wp);
-
-  foldAddMarker(buf, start, wp->w_p_fmr, foldstartmarkerlen);
-  foldAddMarker(buf, end, foldendmarker, foldendmarkerlen);
-
-  // Update both changes here, to avoid all folds after the start are
-  // changed when the start marker is inserted and the end isn't.
-  changed_lines(buf, start.lnum, 0, end.lnum, 0, false);
-
-  // Note: foldAddMarker() may not actually change start and/or end if
-  // u_save() is unable to save the buffer line, but we send the
-  // nvim_buf_lines_event anyway since it won't do any harm.
-  int64_t num_changed = 1 + end.lnum - start.lnum;
-  buf_updates_send_changes(buf, start.lnum, num_changed, num_changed);
-}
-
-// foldAddMarker() {{{2
-/// Add "marker[markerlen]" in 'commentstring' to position `pos`.
-static void foldAddMarker(buf_T *buf, pos_T pos, const char *marker, size_t markerlen)
-{
-  char *cms = buf->b_p_cms;
-  char *p = strstr(buf->b_p_cms, "%s");
-  bool line_is_comment = false;
-  linenr_T lnum = pos.lnum;
-
-  // Allocate a new line: old-line + 'cms'-start + marker + 'cms'-end
-  char *line = ml_get_buf(buf, lnum);
-  size_t line_len = (size_t)ml_get_buf_len(buf, lnum);
-  size_t added = 0;
-
-  if (u_save(lnum - 1, lnum + 1) != OK) {
-    return;
-  }
-
-  // Check if the line ends with an unclosed comment
-  skip_comment(line, false, false, &line_is_comment);
-  char *newline = xmalloc(line_len + markerlen + strlen(cms) + 1);
-  STRCPY(newline, line);
-  // Append the marker to the end of the line
-  if (p == NULL || line_is_comment) {
-    xmemcpyz(newline + line_len, marker, markerlen);
-    added = markerlen;
-  } else {
-    STRCPY(newline + line_len, cms);
-    memcpy(newline + line_len + (p - cms), marker, markerlen);
-    STRCPY(newline + line_len + (p - cms) + markerlen, p + 2);
-    added = markerlen + strlen(cms) - 2;
-  }
-  ml_replace_buf(buf, lnum, newline, false, false);
-  if (added) {
-    extmark_splice_cols(buf, (int)lnum - 1, (int)line_len,
-                        0, (int)added, kExtmarkUndo);
-  }
-}
-
-// deleteFoldMarkers() {{{2
-/// Delete the markers for a fold, causing it to be deleted.
-///
-/// @param lnum_off  offset for fp->fd_top
-static void deleteFoldMarkers(win_T *wp, fold_T *fp, bool recursive, linenr_T lnum_off)
-{
-  if (recursive) {
-    for (int i = 0; i < fp->fd_nested.ga_len; i++) {
-      deleteFoldMarkers(wp, (fold_T *)fp->fd_nested.ga_data + i, true,
-                        lnum_off + fp->fd_top);
-    }
-  }
-  foldDelMarker(wp->w_buffer, fp->fd_top + lnum_off, wp->w_p_fmr,
-                foldstartmarkerlen);
-  foldDelMarker(wp->w_buffer, fp->fd_top + lnum_off + fp->fd_len - 1,
-                foldendmarker, foldendmarkerlen);
-}
-
-// foldDelMarker() {{{2
-/// Delete marker "marker[markerlen]" at the end of line "lnum".
-/// Delete 'commentstring' if it matches.
-/// If the marker is not found, there is no error message.  Could be a missing
-/// close-marker.
-static void foldDelMarker(buf_T *buf, linenr_T lnum, char *marker, size_t markerlen)
-{
-  // end marker may be missing and fold extends below the last line
-  if (lnum > buf->b_ml.ml_line_count) {
-    return;
-  }
-
-  char *cms = buf->b_p_cms;
-  char *line = ml_get_buf(buf, lnum);
-  for (char *p = line; *p != NUL; p++) {
-    if (strncmp(p, marker, markerlen) != 0) {
-      continue;
-    }
-    // Found the marker, include a digit if it's there.
-    size_t len = markerlen;
-    if (ascii_isdigit(p[len])) {
-      len++;
-    }
-    if (*cms != NUL) {
-      // Also delete 'commentstring' if it matches.
-      char *cms2 = strstr(cms, "%s");
-      if (cms2 != NULL && p - line >= cms2 - cms
-          && strncmp(p - (cms2 - cms), cms, (size_t)(cms2 - cms)) == 0
-          && strncmp(p + len, cms2 + 2, strlen(cms2 + 2)) == 0) {
-        p -= cms2 - cms;
-        len += strlen(cms) - 2;
-      }
-    }
-    if (u_save(lnum - 1, lnum + 1) == OK) {
-      // Make new line: text-before-marker + text-after-marker
-      char *newline = xmalloc((size_t)ml_get_buf_len(buf, lnum) - len + 1);
-      assert(p >= line);
-      memcpy(newline, line, (size_t)(p - line));
-      STRCPY(newline + (p - line), p + len);
-      ml_replace_buf(buf, lnum, newline, false, false);
-      extmark_splice_cols(buf, (int)lnum - 1, (int)(p - line),
-                          (int)len, 0, kExtmarkUndo);
-    }
-    break;
-  }
-}
+// foldCreateMarkers() -- migrated to Rust (markers.rs: fold_create_markers_impl)
+// foldAddMarker() -- migrated to Rust (markers.rs: fold_add_marker_impl)
+// deleteFoldMarkers() -- migrated to Rust (markers.rs: delete_fold_markers_impl)
+// foldDelMarker() -- migrated to Rust (markers.rs: fold_del_marker_impl)
 
 // get_foldtext() {{{2
 /// Generates text to display
@@ -471,16 +344,7 @@ char *get_foldtext(win_T *wp, linenr_T lnum, linenr_T lnume, foldinfo_T foldinfo
 
 // foldlevelExpr() -- migrated to Rust (level.rs: foldlevel_expr_result)
 
-// parseMarker() {{{2
-/// Parse 'foldmarker' and set "foldendmarker", "foldstartmarkerlen" and
-/// "foldendmarkerlen".
-/// Relies on the option value to have been checked for correctness already.
-static void parseMarker(win_T *wp)
-{
-  foldendmarker = vim_strchr(wp->w_p_fmr, ',');
-  foldstartmarkerlen = (size_t)(foldendmarker++ - wp->w_p_fmr);
-  foldendmarkerlen = strlen(foldendmarker);
-}
+// parseMarker() -- migrated to Rust (markers.rs: parse_marker_impl)
 
 // foldlevelSyntax() -- migrated to Rust (level.rs: foldlevel_syntax_result)
 
@@ -904,6 +768,53 @@ char *nvim_ml_get_buf(buf_T *buf, linenr_T lnum)
   return ml_get_buf(buf, lnum);
 }
 
+/// Get the length of a buffer line (wrapper for ml_get_buf_len).
+colnr_T nvim_fold_ml_get_buf_len(buf_T *buf, linenr_T lnum)
+{
+  return ml_get_buf_len(buf, lnum);
+}
+
+/// Replace a buffer line, transferring ownership of newline (wrapper for ml_replace_buf).
+/// The newline pointer must be heap-allocated; this call takes ownership.
+int nvim_fold_ml_replace_buf(buf_T *buf, linenr_T lnum, char *newline)
+{
+  return ml_replace_buf(buf, lnum, newline, false, false);
+}
+
+/// Save undo for a line range common to fold operations: u_save(lnum-1, lnum+1).
+int nvim_fold_u_save(linenr_T lnum)
+{
+  return u_save(lnum - 1, lnum + 1);
+}
+
+/// Wrapper for extmark_splice_cols for fold marker operations.
+void nvim_fold_extmark_splice_cols(buf_T *buf, int lnum_0, colnr_T col, colnr_T old_col,
+                                   colnr_T new_col)
+{
+  extmark_splice_cols(buf, lnum_0, col, old_col, new_col, kExtmarkUndo);
+}
+
+/// Check if a buffer line ends with an unclosed comment.
+/// Wraps skip_comment(line, false, false, out_is_comment).
+void nvim_fold_skip_comment(const char *line, int *out_is_comment)
+{
+  bool is_comment = false;
+  skip_comment((char *)line, false, false, &is_comment);
+  *out_is_comment = is_comment ? 1 : 0;
+}
+
+/// Get the commentstring option for a buffer (b_p_cms).
+char *nvim_fold_get_buf_b_p_cms(buf_T *buf)
+{
+  return buf->b_p_cms;
+}
+
+/// Allocate memory using xmalloc (for Rust to build buffer lines with correct allocator).
+void *nvim_fold_xmalloc(size_t size)
+{
+  return xmalloc(size);
+}
+
 // ============================================================================
 // Fold Level Calculation accessors
 // ============================================================================
@@ -1104,29 +1015,13 @@ bool nvim_ga_is_empty(garray_T *gap)
   return GA_EMPTY(gap);
 }
 
+// nvim_foldCreateMarkers -- deleted (Rust calls markers::fold_create_markers_impl directly)
+// nvim_parseMarker -- deleted (Rust calls markers::parse_marker_impl directly)
+// nvim_deleteFoldMarkers -- deleted (Rust calls markers::delete_fold_markers_impl directly)
+
 // ============================================================================
 // Manual Fold Operations accessors
 // ============================================================================
-
-/// Wrapper for foldCreateMarkers for Rust.
-void nvim_foldCreateMarkers(win_T *wp, linenr_T start_lnum, linenr_T end_lnum)
-{
-  pos_T start = { start_lnum, 0, 0 };
-  pos_T end = { end_lnum, 0, 0 };
-  foldCreateMarkers(wp, start, end);
-}
-
-/// Wrapper for parseMarker for Rust.
-void nvim_parseMarker(win_T *wp)
-{
-  parseMarker(wp);
-}
-
-/// Wrapper for deleteFoldMarkers for Rust.
-void nvim_deleteFoldMarkers(win_T *wp, fold_T *fp, bool recursive, linenr_T lnum_off)
-{
-  deleteFoldMarkers(wp, fp, recursive, lnum_off);
-}
 
 /// Check if buffer is modifiable (for fold operations).
 int nvim_fold_buf_is_modifiable(buf_T *buf)

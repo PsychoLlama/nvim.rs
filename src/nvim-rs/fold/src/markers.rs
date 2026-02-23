@@ -4,13 +4,13 @@
 //! Fold markers are special text patterns (default `{{{` and `}}}`) that define
 //! fold boundaries in the buffer text.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
 use nvim_buffer::BufHandle;
 use nvim_window::WinHandle;
 
-use crate::LineNr;
+use crate::{FoldHandle, GArrayHandle, LineNr};
 
 /// Maximum fold level supported by Neovim.
 pub const MAX_LEVEL: c_int = 20;
@@ -52,6 +52,77 @@ extern "C" {
 
     /// Get a line from a buffer.
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LineNr) -> *const c_char;
+
+    // ---- Phase 3: new accessors for marker manipulation ----
+
+    /// Get the length of a buffer line.
+    fn nvim_fold_ml_get_buf_len(buf: BufHandle, lnum: LineNr) -> c_int;
+
+    /// Replace a buffer line, consuming ownership of newline (must be xmalloc'd).
+    fn nvim_fold_ml_replace_buf(buf: BufHandle, lnum: LineNr, newline: *mut c_char) -> c_int;
+
+    /// Save undo for lnum range: u_save(lnum-1, lnum+1). Returns OK(1) or FAIL(0).
+    fn nvim_fold_u_save(lnum: LineNr) -> c_int;
+
+    /// Wrapper for extmark_splice_cols (lnum_0 is 0-based row).
+    fn nvim_fold_extmark_splice_cols(
+        buf: BufHandle,
+        lnum_0: c_int,
+        col: c_int,
+        old_col: c_int,
+        new_col: c_int,
+    );
+
+    /// Check if a line ends with an unclosed comment; sets *out_is_comment.
+    fn nvim_fold_skip_comment(line: *const c_char, out_is_comment: *mut c_int);
+
+    /// Get the commentstring option (b_p_cms) for a buffer.
+    fn nvim_fold_get_buf_b_p_cms(buf: BufHandle) -> *const c_char;
+
+    /// Allocate size bytes via xmalloc (Neovim's allocator; never returns null).
+    fn nvim_fold_xmalloc(size: usize) -> *mut c_void;
+
+    /// Check if buffer is modifiable.
+    fn nvim_fold_buf_is_modifiable(buf: BufHandle) -> c_int;
+
+    /// Emit the "not modifiable" error message.
+    fn nvim_fold_emsg_modifiable();
+
+    /// Notify changed lines.
+    fn nvim_changed_lines(
+        buf: BufHandle,
+        first: LineNr,
+        col: c_int,
+        last: LineNr,
+        xtra: LineNr,
+        add_undo: bool,
+    );
+
+    /// Send buffer update events.
+    fn nvim_buf_updates_send_changes(
+        buf: BufHandle,
+        firstlnum: LineNr,
+        num_added: i64,
+        num_removed: i64,
+    );
+
+    /// Get number of items in a garray.
+    fn nvim_ga_len(gap: GArrayHandle) -> c_int;
+
+    /// Get fold_T at index in garray.
+    fn nvim_ga_fold_at(gap: GArrayHandle, idx: c_int) -> FoldHandle;
+
+    /// Get fd_top from a fold.
+    fn nvim_fold_get_fd_top(fp: FoldHandle) -> LineNr;
+
+    /// Get fd_len from a fold.
+    fn nvim_fold_get_fd_len(fp: FoldHandle) -> LineNr;
+
+    /// Get fd_nested garray from a fold.
+    fn nvim_fold_get_fd_nested(fp: FoldHandle) -> GArrayHandle;
+
+    /// Get line count for a buffer.
+    fn nvim_fold_buf_get_line_count(buf: BufHandle) -> LineNr;
 }
 
 /// Parse the 'foldmarker' option into start and end markers.
@@ -319,6 +390,362 @@ const unsafe fn mb_ptr_adv(s: *const c_char) -> *const c_char {
         s
     } else {
         s.add(1)
+    }
+}
+
+/// C OK/FAIL constants.
+const OK: c_int = 1;
+
+// ============================================================================
+// Phase 3: Marker Manipulation Functions
+// ============================================================================
+
+/// Add `marker[0..marker_len]` to the end of line `lnum` in `buf`,
+/// wrapped in `'commentstring'` if applicable.
+///
+/// Mirrors the C `foldAddMarker` function.
+///
+/// # Safety
+/// `marker` must be a valid pointer to at least `marker_len` bytes.
+pub unsafe fn fold_add_marker_impl(
+    buf: BufHandle,
+    lnum: LineNr,
+    marker: *const c_char,
+    marker_len: usize,
+) {
+    if buf.is_null() || marker.is_null() || marker_len == 0 {
+        return;
+    }
+
+    // Save undo before modifying the line.
+    if unsafe { nvim_fold_u_save(lnum) } != OK {
+        return;
+    }
+
+    let line = unsafe { nvim_ml_get_buf(buf, lnum) };
+    if line.is_null() {
+        return;
+    }
+
+    #[allow(clippy::cast_sign_loss)]
+    let line_len = unsafe { nvim_fold_ml_get_buf_len(buf, lnum) } as usize;
+
+    let cms_raw = unsafe { nvim_fold_get_buf_b_p_cms(buf) };
+    // Find "%s" placeholder in commentstring.
+    let (cms_before, cms_after): (&[u8], &[u8]) = if cms_raw.is_null() {
+        (&[], &[])
+    } else {
+        find_percent_s_in_cms(cms_raw)
+    };
+
+    let mut is_comment_c: c_int = 0;
+    unsafe { nvim_fold_skip_comment(line, &raw mut is_comment_c) };
+    let line_is_comment = is_comment_c != 0;
+
+    // Calculate size: original line + marker + optional cms wrapper + NUL
+    let added: usize;
+    let new_len: usize;
+    if cms_before.is_empty() || line_is_comment {
+        // No commentstring wrapping: just append marker directly.
+        new_len = line_len + marker_len + 1;
+        added = marker_len;
+    } else {
+        // Append commentstring around marker: cms_before + marker + cms_after
+        new_len = line_len + cms_before.len() + marker_len + cms_after.len() + 1;
+        added = marker_len + cms_before.len() + cms_after.len();
+    }
+
+    // Allocate with xmalloc so C can free it via xfree.
+    let newline = unsafe { nvim_fold_xmalloc(new_len).cast::<u8>() };
+    if newline.is_null() {
+        return;
+    }
+
+    unsafe {
+        // Copy the original line content.
+        std::ptr::copy_nonoverlapping(line.cast::<u8>(), newline, line_len);
+
+        let dst = newline.add(line_len);
+        if cms_before.is_empty() || line_is_comment {
+            // Append marker directly.
+            std::ptr::copy_nonoverlapping(marker.cast::<u8>(), dst, marker_len);
+            *dst.add(marker_len) = 0;
+        } else {
+            // Append: cms_before + marker + cms_after + NUL
+            std::ptr::copy_nonoverlapping(cms_before.as_ptr(), dst, cms_before.len());
+            let dst2 = dst.add(cms_before.len());
+            std::ptr::copy_nonoverlapping(marker.cast::<u8>(), dst2, marker_len);
+            let dst3 = dst2.add(marker_len);
+            std::ptr::copy_nonoverlapping(cms_after.as_ptr(), dst3, cms_after.len());
+            *dst3.add(cms_after.len()) = 0;
+        }
+
+        // ml_replace_buf takes ownership of newline (copy=false).
+        nvim_fold_ml_replace_buf(buf, lnum, newline.cast::<c_char>());
+
+        if added > 0 {
+            #[allow(clippy::cast_possible_truncation)]
+            nvim_fold_extmark_splice_cols(buf, lnum - 1, line_len as c_int, 0, added as c_int);
+        }
+    }
+}
+
+/// Find the `%s` placeholder in a commentstring and return (before, after) slices.
+///
+/// For example `"/* %s */"` returns `(b"/* ", b" */")`.
+/// If there is no `%s`, returns `(&[], &[])`.
+fn find_percent_s_in_cms(cms_raw: *const c_char) -> (&'static [u8], &'static [u8]) {
+    // SAFETY: cms_raw is a valid C string (from buf->b_p_cms).
+    let cms_bytes = unsafe {
+        let len = {
+            let mut p = cms_raw;
+            while *p != 0 {
+                p = p.add(1);
+            }
+            #[allow(clippy::cast_sign_loss)]
+            (p.offset_from(cms_raw) as usize)
+        };
+        std::slice::from_raw_parts(cms_raw.cast::<u8>(), len)
+    };
+
+    // Find "%s" in cms_bytes.
+    cms_bytes
+        .windows(2)
+        .position(|w| w == b"%s")
+        .map_or((&[], &[]), |pos| {
+            let before = &cms_bytes[..pos];
+            let after = &cms_bytes[pos + 2..];
+            (before, after)
+        })
+}
+
+/// Delete marker `marker[0..marker_len]` from the end of line `lnum` in `buf`.
+///
+/// Also removes the surrounding `'commentstring'` if it matches.
+/// If the marker is not found, no error is emitted.
+///
+/// Mirrors the C `foldDelMarker` function.
+///
+/// # Safety
+/// `marker` must be a valid pointer to at least `marker_len` bytes.
+pub unsafe fn fold_del_marker_impl(
+    buf: BufHandle,
+    lnum: LineNr,
+    marker: *const c_char,
+    marker_len: usize,
+) {
+    if buf.is_null() || marker.is_null() || marker_len == 0 {
+        return;
+    }
+
+    // End marker may be missing; fold extends below last line.
+    let line_count = unsafe { nvim_fold_buf_get_line_count(buf) };
+    if lnum > line_count {
+        return;
+    }
+
+    let line = unsafe { nvim_ml_get_buf(buf, lnum) };
+    if line.is_null() {
+        return;
+    }
+
+    let cms_raw = unsafe { nvim_fold_get_buf_b_p_cms(buf) };
+    let (cms_before, cms_after): (&[u8], &[u8]) = if cms_raw.is_null() {
+        (&[], &[])
+    } else {
+        find_percent_s_in_cms(cms_raw)
+    };
+
+    // Scan through the line to find the marker.
+    unsafe {
+        let mut p = line;
+        while *p != 0 {
+            // Check if marker starts here.
+            let matches = if marker_len == 1 {
+                *p == *marker
+            } else {
+                strncmp_impl(p, marker, marker_len)
+            };
+
+            if !matches {
+                p = p.add(1);
+                continue;
+            }
+
+            // Found the marker. Include trailing digit if present.
+            let mut len = marker_len;
+            if is_ascii_digit(*p.add(len)) {
+                len += 1;
+            }
+
+            // Calculate start of deletion (may expand to include commentstring).
+            #[allow(clippy::cast_sign_loss)]
+            let p_offset = p.offset_from(line) as usize;
+            let mut del_start = p_offset;
+            let mut del_len = len;
+
+            if !cms_before.is_empty() {
+                // Check if commentstring wraps this marker.
+                if p_offset >= cms_before.len()
+                    && strncmp_bytes(line.add(p_offset - cms_before.len()), cms_before)
+                    && strncmp_bytes(p.add(len), cms_after)
+                {
+                    del_start = p_offset - cms_before.len();
+                    del_len = cms_before.len() + len + cms_after.len();
+                }
+            }
+
+            if nvim_fold_u_save(lnum) == OK {
+                #[allow(clippy::cast_sign_loss)]
+                let line_len = nvim_fold_ml_get_buf_len(buf, lnum) as usize;
+                let new_len = line_len - del_len + 1;
+                let newline = nvim_fold_xmalloc(new_len).cast::<u8>();
+                if newline.is_null() {
+                    break;
+                }
+                // Copy: text before marker + text after marker + NUL.
+                std::ptr::copy_nonoverlapping(line.cast::<u8>(), newline, del_start);
+                let src_after = line.add(del_start + del_len);
+                let remaining = line_len - del_start - del_len;
+                std::ptr::copy_nonoverlapping(
+                    src_after.cast::<u8>(),
+                    newline.add(del_start),
+                    remaining,
+                );
+                *newline.add(del_start + remaining) = 0;
+
+                nvim_fold_ml_replace_buf(buf, lnum, newline.cast::<c_char>());
+                #[allow(clippy::cast_possible_truncation)]
+                nvim_fold_extmark_splice_cols(
+                    buf,
+                    lnum - 1,
+                    del_start as c_int,
+                    del_len as c_int,
+                    0,
+                );
+            }
+            break;
+        }
+    }
+}
+
+/// Compare bytes at `s1` with the slice `expected`.
+#[inline]
+unsafe fn strncmp_bytes(s1: *const c_char, expected: &[u8]) -> bool {
+    for (i, &exp_byte) in expected.iter().enumerate() {
+        if (*s1.add(i)).cast_unsigned() != exp_byte {
+            return false;
+        }
+    }
+    true
+}
+
+/// Delete markers for fold `fp` (and nested folds if `recursive`).
+///
+/// Mirrors C `deleteFoldMarkers`.
+pub fn delete_fold_markers_impl(wp: WinHandle, fp: FoldHandle, recursive: bool, lnum_off: LineNr) {
+    if wp.is_null() || fp.is_null() {
+        return;
+    }
+
+    let marker_info = parse_marker_impl(wp);
+    if marker_info.start_marker.is_null() || marker_info.end_marker.is_null() {
+        return;
+    }
+
+    delete_fold_markers_recurse(wp, fp, recursive, lnum_off, &marker_info);
+}
+
+/// Internal recursive implementation for `delete_fold_markers_impl`.
+fn delete_fold_markers_recurse(
+    wp: WinHandle,
+    fp: FoldHandle,
+    recursive: bool,
+    lnum_off: LineNr,
+    marker_info: &FoldMarkerInfo,
+) {
+    if recursive {
+        let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+        let count = unsafe { nvim_ga_len(nested) };
+        for i in 0..count {
+            let child_fp = unsafe { nvim_ga_fold_at(nested, i) };
+            if !child_fp.is_null() {
+                let child_top = unsafe { nvim_fold_get_fd_top(fp) };
+                delete_fold_markers_recurse(wp, child_fp, true, lnum_off + child_top, marker_info);
+            }
+        }
+    }
+
+    let buf = unsafe { nvim_win_get_buffer(wp) };
+    let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+    let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+
+    // Delete start marker.
+    // SAFETY: marker_info fields are valid pointers from parse_marker_impl.
+    unsafe {
+        fold_del_marker_impl(
+            buf,
+            fd_top + lnum_off,
+            marker_info.start_marker,
+            marker_info.start_marker_len,
+        );
+        // Delete end marker.
+        fold_del_marker_impl(
+            buf,
+            fd_top + lnum_off + fd_len - 1,
+            marker_info.end_marker,
+            marker_info.end_marker_len,
+        );
+    }
+}
+
+/// Create a fold from `start_lnum` to `end_lnum` (inclusive) by adding markers.
+///
+/// Mirrors C `foldCreateMarkers`.
+pub fn fold_create_markers_impl(wp: WinHandle, start_lnum: LineNr, end_lnum: LineNr) {
+    if wp.is_null() {
+        return;
+    }
+
+    let buf = unsafe { nvim_win_get_buffer(wp) };
+    if buf.is_null() {
+        return;
+    }
+
+    if unsafe { nvim_fold_buf_is_modifiable(buf) } == 0 {
+        unsafe { nvim_fold_emsg_modifiable() };
+        return;
+    }
+
+    let marker_info = parse_marker_impl(wp);
+    if marker_info.start_marker.is_null() || marker_info.end_marker.is_null() {
+        return;
+    }
+
+    // SAFETY: marker_info fields are valid pointers from parse_marker_impl.
+    unsafe {
+        // Add start marker to start_lnum.
+        fold_add_marker_impl(
+            buf,
+            start_lnum,
+            marker_info.start_marker,
+            marker_info.start_marker_len,
+        );
+        // Add end marker to end_lnum.
+        fold_add_marker_impl(
+            buf,
+            end_lnum,
+            marker_info.end_marker,
+            marker_info.end_marker_len,
+        );
+    }
+
+    // Update both changes here to avoid cascading fold updates.
+    unsafe {
+        nvim_changed_lines(buf, start_lnum, 0, end_lnum, 0, false);
+
+        let num_changed = i64::from(1 + end_lnum - start_lnum);
+        nvim_buf_updates_send_changes(buf, start_lnum, num_changed, num_changed);
     }
 }
 

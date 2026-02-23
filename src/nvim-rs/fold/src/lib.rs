@@ -2967,26 +2967,9 @@ pub extern "C" fn rs_foldMoveTo(updown: bool, dir: c_int, count: c_int) -> c_int
 // ============================================================================
 
 extern "C" {
-    /// Call foldCreateMarkers in C (for marker method).
-    fn nvim_foldCreateMarkers(wp: WinHandle, start_lnum: LineNr, end_lnum: LineNr);
-
     /// Check if foldmethod is marker for the window.
     #[allow(dead_code)]
     fn nvim_foldmethodIsMarker(wp: WinHandle) -> c_int;
-
-    /// Call parseMarker for the window (sets global foldstartmarkerlen/foldendmarker).
-    fn nvim_parseMarker(wp: WinHandle);
-
-    /// Delete fold markers in C.
-    fn nvim_deleteFoldMarkers(wp: WinHandle, fp: FoldHandle, recursive: bool, lnum_off: LineNr);
-
-    /// Check if buffer is modifiable (for fold operations).
-    #[allow(dead_code)]
-    fn nvim_fold_buf_is_modifiable(buf: BufHandle) -> c_int;
-
-    /// Emit error message for buffer not modifiable (for fold operations).
-    #[allow(dead_code)]
-    fn nvim_fold_emsg_modifiable();
 
     /// Call check_cursor_col for window.
     fn nvim_check_cursor_col(wp: WinHandle);
@@ -3033,7 +3016,7 @@ fn fold_create_impl(wp: WinHandle, mut start_lnum: LineNr, mut end_lnum: LineNr)
 
     // When 'foldmethod' is "marker" add markers, which creates the folds.
     if foldmethod_is_marker_impl(wp) {
-        unsafe { nvim_foldCreateMarkers(wp, start_lnum, end_lnum) };
+        markers::fold_create_markers_impl(wp, start_lnum, end_lnum);
         return;
     }
 
@@ -3274,10 +3257,7 @@ fn delete_fold_impl(wp: WinHandle, start: LineNr, end: LineNr, recursive: bool, 
             } else {
                 first_lnum = first_lnum.min(fd_top + found_off);
                 last_lnum = last_lnum.max(lnum);
-                if !did_one {
-                    unsafe { nvim_parseMarker(wp) };
-                }
-                unsafe { nvim_deleteFoldMarkers(wp, found_fp, recursive, found_off) };
+                markers::delete_fold_markers_impl(wp, found_fp, recursive, found_off);
             }
             did_one = true;
 
