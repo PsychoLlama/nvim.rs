@@ -52,7 +52,6 @@ extern "C" {
     // libc
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
 
-    // Memory allocation
     fn xcalloc(count: usize, size: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
 
@@ -319,8 +318,10 @@ pub unsafe extern "C" fn nvim_regexp_get_had_eol() -> c_int {
     HAD_EOL
 }
 
-/// Called from C `nvim_regexp_alloc_nfa_prog()` to update the Rust-owned `STATE_PTR`.
-/// The C function allocates the prog struct and then calls this to set `state_ptr`.
+/// Called by the NFA prog allocator to update the Rust-owned `STATE_PTR`.
+///
+/// The caller allocates the prog struct and then calls this to set `STATE_PTR`
+/// to point at the inline state array that follows the prog header.
 #[no_mangle]
 pub unsafe extern "C" fn nvim_regexp_set_state_ptr(v: *mut c_void) {
     STATE_PTR = v;
@@ -9524,23 +9525,6 @@ struct FragT {
 extern "C" {
     // state_ptr global (points into nfa_regprog_T.state[])
 
-    // nfa_state_T field accessors
-    fn nvim_nfa_state_get_c(s: NfaStateHandle) -> c_int;
-    fn nvim_nfa_state_set_c(s: NfaStateHandle, v: c_int);
-    fn nvim_nfa_state_get_out(s: NfaStateHandle) -> NfaStateHandle;
-    fn nvim_nfa_state_set_out(s: NfaStateHandle, v: NfaStateHandle);
-    fn nvim_nfa_state_get_out1(s: NfaStateHandle) -> NfaStateHandle;
-    fn nvim_nfa_state_set_out1(s: NfaStateHandle, v: NfaStateHandle);
-    fn nvim_nfa_state_get_val(s: NfaStateHandle) -> c_int;
-    fn nvim_nfa_state_set_val(s: NfaStateHandle, v: c_int);
-    fn nvim_nfa_state_set_id(s: NfaStateHandle, v: c_int);
-    fn nvim_nfa_state_clear_lastlist(s: NfaStateHandle);
-
-    // Address-of accessors for Ptrlist pointer punning.
-    // Returns `&s->out` / `&s->out1` as `nfa_state_T**`.
-    fn nvim_nfa_state_out_addr(s: NfaStateHandle) -> *mut NfaStateHandle;
-    fn nvim_nfa_state_out1_addr(s: NfaStateHandle) -> *mut NfaStateHandle;
-
     // Error messages for post2nfa
     fn nvim_regexp_emsg_e874(); // E874: Could not pop the stack
     fn nvim_regexp_emsg_e875(); // E875: too many states left on stack
@@ -9558,12 +9542,15 @@ unsafe fn nfa_alloc_state(c: c_int, out: NfaStateHandle, out1: NfaStateHandle) -
         .add(istate as usize)
         .cast::<c_void>();
     ISTATE = istate + 1;
-    nvim_nfa_state_set_c(s, c);
-    nvim_nfa_state_set_out(s, out);
-    nvim_nfa_state_set_out1(s, out1);
-    nvim_nfa_state_set_val(s, 0);
-    nvim_nfa_state_set_id(s, istate + 1); // id = istate after increment
-    nvim_nfa_state_clear_lastlist(s);
+    (*s.cast::<NfaStateT>()).c = c;
+    (*s.cast::<NfaStateT>()).out = out.cast::<NfaStateT>();
+    (*s.cast::<NfaStateT>()).out1 = out1.cast::<NfaStateT>();
+    (*s.cast::<NfaStateT>()).val = 0;
+    (*s.cast::<NfaStateT>()).id = istate + 1; // id = istate after increment
+    {
+        (*s.cast::<NfaStateT>()).lastlist[0] = 0;
+        (*s.cast::<NfaStateT>()).lastlist[1] = 0;
+    }
     s
 }
 
@@ -9649,13 +9636,16 @@ unsafe fn nfa_max_width(startstate: NfaStateHandle, depth: c_int) -> c_int {
     let mut len: c_int = 0;
 
     while !state.is_null() {
-        let c = nvim_nfa_state_get_c(state);
+        let c = (*state.cast::<NfaStateT>()).c;
         match c {
             NFA_END_INVISIBLE | NFA_END_INVISIBLE_NEG => return len,
 
             NFA_SPLIT => {
-                let l = nfa_max_width(nvim_nfa_state_get_out(state), depth + 1);
-                let r = nfa_max_width(nvim_nfa_state_get_out1(state), depth + 1);
+                let l = nfa_max_width((*state.cast::<NfaStateT>()).out.cast::<c_void>(), depth + 1);
+                let r = nfa_max_width(
+                    (*state.cast::<NfaStateT>()).out1.cast::<c_void>(),
+                    depth + 1,
+                );
                 if l < 0 || r < 0 {
                     return -1;
                 }
@@ -9669,8 +9659,8 @@ unsafe fn nfa_max_width(startstate: NfaStateHandle, depth: c_int) -> c_int {
                 }
                 if c != NFA_ANY {
                     // Skip over the collection characters.
-                    let out1 = nvim_nfa_state_get_out1(state);
-                    state = nvim_nfa_state_get_out(out1);
+                    let out1 = (*state.cast::<NfaStateT>()).out1.cast::<c_void>();
+                    state = (*out1.cast::<NfaStateT>()).out.cast::<c_void>();
                     continue;
                 }
             }
@@ -9693,7 +9683,12 @@ unsafe fn nfa_max_width(startstate: NfaStateHandle, depth: c_int) -> c_int {
             | NFA_START_INVISIBLE_BEFORE
             | NFA_START_INVISIBLE_BEFORE_NEG => {
                 // zero-width, out1 points to the END state
-                state = nvim_nfa_state_get_out(nvim_nfa_state_get_out1(state));
+                state = (*(*state.cast::<NfaStateT>())
+                    .out1
+                    .cast::<c_void>()
+                    .cast::<NfaStateT>())
+                .out
+                .cast::<c_void>();
                 continue;
             }
 
@@ -9729,7 +9724,7 @@ unsafe fn nfa_max_width(startstate: NfaStateHandle, depth: c_int) -> c_int {
         }
 
         // normal way to continue
-        state = nvim_nfa_state_get_out(state);
+        state = (*state.cast::<NfaStateT>()).out.cast::<c_void>();
     }
 
     // unrecognized, "cannot happen"
@@ -9847,7 +9842,10 @@ pub unsafe extern "C" fn rs_post2nfa(
                 }
                 nfa_patch(e.out_list, s);
                 st_push(
-                    frag_new(s, list1(nvim_nfa_state_out1_addr(s))),
+                    frag_new(
+                        s,
+                        list1((&raw mut (*s.cast::<NfaStateT>()).out1).cast::<*mut c_void>()),
+                    ),
                     &mut stackp,
                     stack_end,
                 );
@@ -9873,7 +9871,10 @@ pub unsafe extern "C" fn rs_post2nfa(
                 }
                 nfa_patch(e.out_list, s);
                 st_push(
-                    frag_new(s, list1(nvim_nfa_state_out_addr(s))),
+                    frag_new(
+                        s,
+                        list1((&raw mut (*s.cast::<NfaStateT>()).out).cast::<*mut c_void>()),
+                    ),
                     &mut stackp,
                     stack_end,
                 );
@@ -9900,7 +9901,10 @@ pub unsafe extern "C" fn rs_post2nfa(
                 st_push(
                     frag_new(
                         s,
-                        ptrlist_append(e.out_list, list1(nvim_nfa_state_out1_addr(s))),
+                        ptrlist_append(
+                            e.out_list,
+                            list1((&raw mut (*s.cast::<NfaStateT>()).out1).cast::<*mut c_void>()),
+                        ),
                     ),
                     &mut stackp,
                     stack_end,
@@ -9928,7 +9932,10 @@ pub unsafe extern "C" fn rs_post2nfa(
                 st_push(
                     frag_new(
                         s,
-                        ptrlist_append(e.out_list, list1(nvim_nfa_state_out_addr(s))),
+                        ptrlist_append(
+                            e.out_list,
+                            list1((&raw mut (*s.cast::<NfaStateT>()).out).cast::<*mut c_void>()),
+                        ),
                     ),
                     &mut stackp,
                     stack_end,
@@ -9954,9 +9961,12 @@ pub unsafe extern "C" fn rs_post2nfa(
                     return core::ptr::null_mut();
                 }
                 nfa_patch(e.out_list, s);
-                nvim_nfa_state_set_out1(e.start, s);
+                (*e.start.cast::<NfaStateT>()).out1 = s.cast::<NfaStateT>();
                 st_push(
-                    frag_new(e.start, list1(nvim_nfa_state_out_addr(s))),
+                    frag_new(
+                        e.start,
+                        list1((&raw mut (*s.cast::<NfaStateT>()).out).cast::<*mut c_void>()),
+                    ),
                     &mut stackp,
                     stack_end,
                 );
@@ -9982,12 +9992,12 @@ pub unsafe extern "C" fn rs_post2nfa(
                     return core::ptr::null_mut();
                 }
                 // Move character code to val, set c to RANGE_MIN/MAX
-                let c2 = nvim_nfa_state_get_c(e2.start);
-                nvim_nfa_state_set_val(e2.start, c2);
-                nvim_nfa_state_set_c(e2.start, NFA_RANGE_MAX);
-                let c1 = nvim_nfa_state_get_c(e1.start);
-                nvim_nfa_state_set_val(e1.start, c1);
-                nvim_nfa_state_set_c(e1.start, NFA_RANGE_MIN);
+                let c2 = (*e2.start.cast::<NfaStateT>()).c;
+                (*e2.start.cast::<NfaStateT>()).val = c2;
+                (*e2.start.cast::<NfaStateT>()).c = NFA_RANGE_MAX;
+                let c1 = (*e1.start.cast::<NfaStateT>()).c;
+                (*e1.start.cast::<NfaStateT>()).val = c1;
+                (*e1.start.cast::<NfaStateT>()).c = NFA_RANGE_MIN;
                 nfa_patch(e1.out_list, e2.start);
                 st_push(frag_new(e1.start, e2.out_list), &mut stackp, stack_end);
             }
@@ -10004,7 +10014,10 @@ pub unsafe extern "C" fn rs_post2nfa(
                     return core::ptr::null_mut();
                 }
                 st_push(
-                    frag_new(s, list1(nvim_nfa_state_out_addr(s))),
+                    frag_new(
+                        s,
+                        list1((&raw mut (*s.cast::<NfaStateT>()).out).cast::<*mut c_void>()),
+                    ),
                     &mut stackp,
                     stack_end,
                 );
@@ -10038,7 +10051,10 @@ pub unsafe extern "C" fn rs_post2nfa(
                         e1_out = e.out_list;
                     }
                     nfa_patch(e.out_list, s1);
-                    e1_out = ptrlist_append(e1_out, list1(nvim_nfa_state_out1_addr(s)));
+                    e1_out = ptrlist_append(
+                        e1_out,
+                        list1((&raw mut (*s.cast::<NfaStateT>()).out1).cast::<*mut c_void>()),
+                    );
                     s1 = s;
                     n -= 1;
                 }
@@ -10101,17 +10117,23 @@ pub unsafe extern "C" fn rs_post2nfa(
                         xfree(stack.cast());
                         return core::ptr::null_mut();
                     }
-                    nvim_nfa_state_set_out(s1, skip);
+                    (*s1.cast::<NfaStateT>()).out = skip.cast::<NfaStateT>();
                     nfa_patch(e.out_list, zend);
                     st_push(
-                        frag_new(s, list1(nvim_nfa_state_out_addr(skip))),
+                        frag_new(
+                            s,
+                            list1((&raw mut (*skip.cast::<NfaStateT>()).out).cast::<*mut c_void>()),
+                        ),
                         &mut stackp,
                         stack_end,
                     );
                 } else {
                     nfa_patch(e.out_list, s1);
                     st_push(
-                        frag_new(s, list1(nvim_nfa_state_out_addr(s1))),
+                        frag_new(
+                            s,
+                            list1((&raw mut (*s1.cast::<NfaStateT>()).out).cast::<*mut c_void>()),
+                        ),
                         &mut stackp,
                         stack_end,
                     );
@@ -10119,7 +10141,7 @@ pub unsafe extern "C" fn rs_post2nfa(
                         if n <= 0 {
                             n = nfa_max_width(e.start, 0);
                         }
-                        nvim_nfa_state_set_val(s, n);
+                        (*s.cast::<NfaStateT>()).val = n;
                     }
                 }
             }
@@ -10162,9 +10184,15 @@ pub unsafe extern "C" fn rs_post2nfa(
                         xfree(stack.cast());
                         return core::ptr::null_mut();
                     }
-                    nfa_patch(list1(nvim_nfa_state_out_addr(s)), s1);
+                    nfa_patch(
+                        list1((&raw mut (*s.cast::<NfaStateT>()).out).cast::<*mut c_void>()),
+                        s1,
+                    );
                     st_push(
-                        frag_new(s, list1(nvim_nfa_state_out_addr(s1))),
+                        frag_new(
+                            s,
+                            list1((&raw mut (*s1.cast::<NfaStateT>()).out).cast::<*mut c_void>()),
+                        ),
                         &mut stackp,
                         stack_end,
                     );
@@ -10188,10 +10216,16 @@ pub unsafe extern "C" fn rs_post2nfa(
                     }
                     nfa_patch(e.out_list, s1);
                     if mopen == NFA_COMPOSING {
-                        nfa_patch(list1(nvim_nfa_state_out1_addr(s)), s1);
+                        nfa_patch(
+                            list1((&raw mut (*s.cast::<NfaStateT>()).out1).cast::<*mut c_void>()),
+                            s1,
+                        );
                     }
                     st_push(
-                        frag_new(s, list1(nvim_nfa_state_out_addr(s1))),
+                        frag_new(
+                            s,
+                            list1((&raw mut (*s1.cast::<NfaStateT>()).out).cast::<*mut c_void>()),
+                        ),
                         &mut stackp,
                         stack_end,
                     );
@@ -10216,9 +10250,15 @@ pub unsafe extern "C" fn rs_post2nfa(
                     xfree(stack.cast());
                     return core::ptr::null_mut();
                 }
-                nfa_patch(list1(nvim_nfa_state_out_addr(s)), s1);
+                nfa_patch(
+                    list1((&raw mut (*s.cast::<NfaStateT>()).out).cast::<*mut c_void>()),
+                    s1,
+                );
                 st_push(
-                    frag_new(s, list1(nvim_nfa_state_out_addr(s1))),
+                    frag_new(
+                        s,
+                        list1((&raw mut (*s1.cast::<NfaStateT>()).out).cast::<*mut c_void>()),
+                    ),
                     &mut stackp,
                     stack_end,
                 );
@@ -10239,9 +10279,12 @@ pub unsafe extern "C" fn rs_post2nfa(
                     xfree(stack.cast());
                     return core::ptr::null_mut();
                 }
-                nvim_nfa_state_set_val(s, n);
+                (*s.cast::<NfaStateT>()).val = n;
                 st_push(
-                    frag_new(s, list1(nvim_nfa_state_out_addr(s))),
+                    frag_new(
+                        s,
+                        list1((&raw mut (*s.cast::<NfaStateT>()).out).cast::<*mut c_void>()),
+                    ),
                     &mut stackp,
                     stack_end,
                 );
@@ -10260,7 +10303,10 @@ pub unsafe extern "C" fn rs_post2nfa(
                     return core::ptr::null_mut();
                 }
                 st_push(
-                    frag_new(s, list1(nvim_nfa_state_out_addr(s))),
+                    frag_new(
+                        s,
+                        list1((&raw mut (*s.cast::<NfaStateT>()).out).cast::<*mut c_void>()),
+                    ),
                     &mut stackp,
                     stack_end,
                 );
@@ -10302,10 +10348,10 @@ pub unsafe extern "C" fn rs_post2nfa(
         .add(istate as usize)
         .cast::<c_void>();
     ISTATE = istate + 1;
-    nvim_nfa_state_set_c(matchstate, NFA_MATCH);
-    nvim_nfa_state_set_out(matchstate, core::ptr::null_mut());
-    nvim_nfa_state_set_out1(matchstate, core::ptr::null_mut());
-    nvim_nfa_state_set_id(matchstate, 0);
+    (*matchstate.cast::<NfaStateT>()).c = NFA_MATCH;
+    (*matchstate.cast::<NfaStateT>()).out = core::ptr::null_mut::<NfaStateT>();
+    (*matchstate.cast::<NfaStateT>()).out1 = core::ptr::null_mut::<NfaStateT>();
+    (*matchstate.cast::<NfaStateT>()).id = 0;
 
     nfa_patch(e.out_list, matchstate);
     let ret = e.start;
@@ -10322,21 +10368,6 @@ pub unsafe extern "C" fn rs_post2nfa(
 type NfaProgHandle = *mut c_void;
 
 // ---- Phase 6 C accessors ----
-extern "C" {
-    // nfa_regprog_T field accessors
-    fn nvim_nfa_prog_get_nstate(prog: NfaProgHandle) -> c_int;
-    fn nvim_nfa_prog_get_state(prog: NfaProgHandle, i: c_int) -> NfaStateHandle;
-    fn nvim_nfa_prog_get_start(prog: NfaProgHandle) -> NfaStateHandle;
-    fn nvim_nfa_prog_set_has_zend(prog: NfaProgHandle, v: c_int);
-    fn nvim_nfa_prog_set_has_backref(prog: NfaProgHandle, v: c_int);
-    fn nvim_nfa_prog_set_nsubexp(prog: NfaProgHandle, v: c_int);
-    fn nvim_nfa_prog_set_regflags(prog: NfaProgHandle, v: c_int);
-    fn nvim_nfa_prog_set_reganch(prog: NfaProgHandle, v: c_int);
-    fn nvim_nfa_prog_set_regstart(prog: NfaProgHandle, v: c_int);
-    fn nvim_nfa_prog_set_match_text(prog: NfaProgHandle, v: *mut u8);
-    fn nvim_nfa_prog_set_reghasz(prog: NfaProgHandle, v: c_int);
-    fn nvim_nfa_prog_set_pattern(prog: NfaProgHandle, v: *mut c_char);
-}
 
 /// Check if the match endpoint can directly follow a given NFA state.
 /// Used by `nfa_postprocess` to decide whether to try the invisible match first.
@@ -10347,7 +10378,7 @@ unsafe fn match_follows(startstate: NfaStateHandle, depth: c_int) -> bool {
     }
     let mut state = startstate;
     while !state.is_null() {
-        let c = nvim_nfa_state_get_c(state);
+        let c = (*state.cast::<NfaStateT>()).c;
         match c {
             NFA_MATCH
             | NFA_MCLOSE
@@ -10356,8 +10387,11 @@ unsafe fn match_follows(startstate: NfaStateHandle, depth: c_int) -> bool {
             | NFA_END_PATTERN => return true,
 
             NFA_SPLIT => {
-                return match_follows(nvim_nfa_state_get_out(state), depth + 1)
-                    || match_follows(nvim_nfa_state_get_out1(state), depth + 1);
+                return match_follows((*state.cast::<NfaStateT>()).out.cast::<c_void>(), depth + 1)
+                    || match_follows(
+                        (*state.cast::<NfaStateT>()).out1.cast::<c_void>(),
+                        depth + 1,
+                    );
             }
 
             NFA_START_INVISIBLE
@@ -10370,7 +10404,12 @@ unsafe fn match_follows(startstate: NfaStateHandle, depth: c_int) -> bool {
             | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
             | NFA_COMPOSING => {
                 // skip ahead to next state
-                state = nvim_nfa_state_get_out(nvim_nfa_state_get_out1(state));
+                state = (*(*state.cast::<NfaStateT>())
+                    .out1
+                    .cast::<c_void>()
+                    .cast::<NfaStateT>())
+                .out
+                .cast::<c_void>();
                 continue;
             }
 
@@ -10391,7 +10430,7 @@ unsafe fn match_follows(startstate: NfaStateHandle, depth: c_int) -> bool {
                 // zero-width or possibly zero-width, keep looking
             }
         }
-        state = nvim_nfa_state_get_out(state);
+        state = (*state.cast::<NfaStateT>()).out.cast::<c_void>();
     }
     false
 }
@@ -10400,7 +10439,7 @@ unsafe fn match_follows(startstate: NfaStateHandle, depth: c_int) -> bool {
 /// Higher values mean more likely to fail (and thus cheaper to try first).
 #[allow(clippy::too_many_lines)]
 unsafe fn failure_chance(state: NfaStateHandle, depth: c_int) -> c_int {
-    let c = nvim_nfa_state_get_c(state);
+    let c = (*state.cast::<NfaStateT>()).c;
 
     // detect looping
     if depth > 4 {
@@ -10409,9 +10448,11 @@ unsafe fn failure_chance(state: NfaStateHandle, depth: c_int) -> c_int {
 
     match c {
         NFA_SPLIT => {
-            let out = nvim_nfa_state_get_out(state);
-            let out1 = nvim_nfa_state_get_out1(state);
-            if nvim_nfa_state_get_c(out) == NFA_SPLIT || nvim_nfa_state_get_c(out1) == NFA_SPLIT {
+            let out = (*state.cast::<NfaStateT>()).out.cast::<c_void>();
+            let out1 = (*state.cast::<NfaStateT>()).out1.cast::<c_void>();
+            if (*out.cast::<NfaStateT>()).c == NFA_SPLIT
+                || (*out1.cast::<NfaStateT>()).c == NFA_SPLIT
+            {
                 return 1; // avoid recursive stuff
             }
             let l = failure_chance(out, depth + 1);
@@ -10450,7 +10491,7 @@ unsafe fn failure_chance(state: NfaStateHandle, depth: c_int) -> c_int {
         | NFA_ZCLOSE5 | NFA_ZCLOSE6 | NFA_ZCLOSE7 | NFA_ZCLOSE8 | NFA_ZCLOSE9 | NFA_NOPEN
         | NFA_MCLOSE1 | NFA_MCLOSE2 | NFA_MCLOSE3 | NFA_MCLOSE4 | NFA_MCLOSE5 | NFA_MCLOSE6
         | NFA_MCLOSE7 | NFA_MCLOSE8 | NFA_MCLOSE9 | NFA_NCLOSE => {
-            failure_chance(nvim_nfa_state_get_out(state), depth + 1)
+            failure_chance((*state.cast::<NfaStateT>()).out.cast::<c_void>(), depth + 1)
         }
 
         NFA_BACKREF1 | NFA_BACKREF2 | NFA_BACKREF3 | NFA_BACKREF4 | NFA_BACKREF5 | NFA_BACKREF6
@@ -10477,26 +10518,31 @@ unsafe fn failure_chance(state: NfaStateHandle, depth: c_int) -> c_int {
 /// Decides whether invisible matches should be tried first or postponed.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nfa_postprocess(prog: NfaProgHandle) {
-    let nstate = nvim_nfa_prog_get_nstate(prog);
+    let nstate = (*prog.cast::<NfaRegprogT>()).nstate;
     for i in 0..nstate {
-        let state = nvim_nfa_prog_get_state(prog, i);
-        let c = nvim_nfa_state_get_c(state);
+        let state = prog
+            .cast::<NfaRegprogT>()
+            .add(1)
+            .cast::<NfaStateT>()
+            .add(i as usize)
+            .cast::<c_void>();
+        let c = (*state.cast::<NfaStateT>()).c;
         if c == NFA_START_INVISIBLE
             || c == NFA_START_INVISIBLE_NEG
             || c == NFA_START_INVISIBLE_BEFORE
             || c == NFA_START_INVISIBLE_BEFORE_NEG
         {
             let directly;
-            let out1 = nvim_nfa_state_get_out1(state);
-            let out1_out = nvim_nfa_state_get_out(out1);
+            let out1 = (*state.cast::<NfaStateT>()).out1.cast::<c_void>();
+            let out1_out = (*out1.cast::<NfaStateT>()).out.cast::<c_void>();
             if match_follows(out1_out, 0) {
                 directly = true;
             } else {
-                let out = nvim_nfa_state_get_out(state);
+                let out = (*state.cast::<NfaStateT>()).out.cast::<c_void>();
                 let ch_invisible = failure_chance(out, 0);
                 let ch_follows = failure_chance(out1_out, 0);
                 if c == NFA_START_INVISIBLE_BEFORE || c == NFA_START_INVISIBLE_BEFORE_NEG {
-                    let val = nvim_nfa_state_get_val(state);
+                    let val = (*state.cast::<NfaStateT>()).val;
                     directly = if val <= 0 && ch_follows > 0 {
                         false
                     } else {
@@ -10508,7 +10554,7 @@ pub unsafe extern "C" fn rs_nfa_postprocess(prog: NfaProgHandle) {
             }
             if directly {
                 // switch to the _FIRST state variant (c + 1)
-                nvim_nfa_state_set_c(state, c + 1);
+                (*state.cast::<NfaStateT>()).c = c + 1;
             }
         }
     }
@@ -10522,7 +10568,7 @@ pub unsafe extern "C" fn rs_nfa_get_reganch(start: NfaStateHandle, depth: c_int)
     }
     let mut p = start;
     while !p.is_null() {
-        let c = nvim_nfa_state_get_c(p);
+        let c = (*p.cast::<NfaStateT>()).c;
         match c {
             NFA_BOL | NFA_BOF => return 1,
 
@@ -10531,13 +10577,18 @@ pub unsafe extern "C" fn rs_nfa_get_reganch(start: NfaStateHandle, depth: c_int)
             | NFA_MOPEN8 | NFA_MOPEN9 | NFA_NOPEN | NFA_ZOPEN | NFA_ZOPEN1 | NFA_ZOPEN2
             | NFA_ZOPEN3 | NFA_ZOPEN4 | NFA_ZOPEN5 | NFA_ZOPEN6 | NFA_ZOPEN7 | NFA_ZOPEN8
             | NFA_ZOPEN9 => {
-                p = nvim_nfa_state_get_out(p);
+                p = (*p.cast::<NfaStateT>()).out.cast::<c_void>();
             }
 
             NFA_SPLIT => {
-                return (rs_nfa_get_reganch(nvim_nfa_state_get_out(p), depth + 1) != 0
-                    && rs_nfa_get_reganch(nvim_nfa_state_get_out1(p), depth + 1) != 0)
-                    as c_int;
+                return (rs_nfa_get_reganch(
+                    (*p.cast::<NfaStateT>()).out.cast::<c_void>(),
+                    depth + 1,
+                ) != 0
+                    && rs_nfa_get_reganch(
+                        (*p.cast::<NfaStateT>()).out1.cast::<c_void>(),
+                        depth + 1,
+                    ) != 0) as c_int;
             }
 
             _ => return 0,
@@ -10555,7 +10606,7 @@ pub unsafe extern "C" fn rs_nfa_get_regstart(start: NfaStateHandle, depth: c_int
     }
     let mut p = start;
     while !p.is_null() {
-        let c = nvim_nfa_state_get_c(p);
+        let c = (*p.cast::<NfaStateT>()).c;
         match c {
             NFA_BOL | NFA_BOF | NFA_BOW | NFA_EOW | NFA_ZSTART | NFA_ZEND | NFA_CURSOR
             | NFA_VISUAL | NFA_LNUM | NFA_LNUM_GT | NFA_LNUM_LT | NFA_COL | NFA_COL_GT
@@ -10564,12 +10615,14 @@ pub unsafe extern "C" fn rs_nfa_get_regstart(start: NfaStateHandle, depth: c_int
             | NFA_MOPEN5 | NFA_MOPEN6 | NFA_MOPEN7 | NFA_MOPEN8 | NFA_MOPEN9 | NFA_NOPEN
             | NFA_ZOPEN | NFA_ZOPEN1 | NFA_ZOPEN2 | NFA_ZOPEN3 | NFA_ZOPEN4 | NFA_ZOPEN5
             | NFA_ZOPEN6 | NFA_ZOPEN7 | NFA_ZOPEN8 | NFA_ZOPEN9 => {
-                p = nvim_nfa_state_get_out(p);
+                p = (*p.cast::<NfaStateT>()).out.cast::<c_void>();
             }
 
             NFA_SPLIT => {
-                let c1 = rs_nfa_get_regstart(nvim_nfa_state_get_out(p), depth + 1);
-                let c2 = rs_nfa_get_regstart(nvim_nfa_state_get_out1(p), depth + 1);
+                let c1 =
+                    rs_nfa_get_regstart((*p.cast::<NfaStateT>()).out.cast::<c_void>(), depth + 1);
+                let c2 =
+                    rs_nfa_get_regstart((*p.cast::<NfaStateT>()).out1.cast::<c_void>(), depth + 1);
                 if c1 == c2 {
                     return c1;
                 }
@@ -10591,33 +10644,33 @@ pub unsafe extern "C" fn rs_nfa_get_regstart(start: NfaStateHandle, depth: c_int
 /// Returns a freshly allocated string (or NULL).
 #[no_mangle]
 pub unsafe extern "C" fn rs_nfa_get_match_text(start: NfaStateHandle) -> *mut u8 {
-    if nvim_nfa_state_get_c(start) != NFA_MOPEN {
+    if (*start.cast::<NfaStateT>()).c != NFA_MOPEN {
         return core::ptr::null_mut();
     }
-    let mut p = nvim_nfa_state_get_out(start);
+    let mut p = (*start.cast::<NfaStateT>()).out.cast::<c_void>();
     let mut len: c_int = 0;
 
     // Count total byte length of literal characters.
-    while nvim_nfa_state_get_c(p) > 0 {
-        len += utf_char2len(nvim_nfa_state_get_c(p));
-        p = nvim_nfa_state_get_out(p);
+    while (*p.cast::<NfaStateT>()).c > 0 {
+        len += utf_char2len((*p.cast::<NfaStateT>()).c);
+        p = (*p.cast::<NfaStateT>()).out.cast::<c_void>();
     }
 
-    if nvim_nfa_state_get_c(p) != NFA_MCLOSE {
+    if (*p.cast::<NfaStateT>()).c != NFA_MCLOSE {
         return core::ptr::null_mut();
     }
-    let next = nvim_nfa_state_get_out(p);
-    if nvim_nfa_state_get_c(next) != NFA_MATCH {
+    let next = (*p.cast::<NfaStateT>()).out.cast::<c_void>();
+    if (*next.cast::<NfaStateT>()).c != NFA_MATCH {
         return core::ptr::null_mut();
     }
 
     let ret = xmalloc(len as usize).cast::<u8>();
     // Skip first char (it goes into regstart), start from out->out
-    p = nvim_nfa_state_get_out(nvim_nfa_state_get_out(start));
+    p = (*(*start.cast::<NfaStateT>()).out).out.cast::<c_void>();
     let mut s = ret;
-    while nvim_nfa_state_get_c(p) > 0 {
-        s = s.add(utf_char2bytes(nvim_nfa_state_get_c(p), s.cast::<c_char>()) as usize);
-        p = nvim_nfa_state_get_out(p);
+    while (*p.cast::<NfaStateT>()).c > 0 {
+        s = s.add(utf_char2bytes((*p.cast::<NfaStateT>()).c, s.cast::<c_char>()) as usize);
+        p = (*p.cast::<NfaStateT>()).out.cast::<c_void>();
     }
     *s = 0; // NUL terminate
     ret
@@ -10629,11 +10682,7 @@ pub unsafe extern "C" fn rs_nfa_get_match_text(start: NfaStateHandle) -> *mut u8
 
 // ---- Phase 7 C accessors ----
 extern "C" {
-    fn nvim_regexp_alloc_nfa_prog(nstate_count: c_int) -> NfaProgHandle;
     fn nvim_regexp_set_nfa_prog_engine(prog: NfaProgHandle);
-    fn nvim_nfa_prog_set_re_in_use(prog: NfaProgHandle, v: c_int);
-    fn nvim_nfa_prog_set_start(prog: NfaProgHandle, s: NfaStateHandle);
-    fn nvim_nfa_prog_set_nstate(prog: NfaProgHandle, v: c_int);
     fn nvim_regexp_xstrdup(s: *const c_char) -> *mut c_char;
 }
 
@@ -10671,8 +10720,16 @@ pub unsafe extern "C" fn rs_nfa_regcomp(expr: *mut u8, re_flags: c_int) -> NfaPr
     // Allocate the regprog with space for the compiled regexp.
     // This also sets state_ptr = prog->state.
     let nstate_val = NSTATE;
-    let prog = nvim_regexp_alloc_nfa_prog(nstate_val);
-    nvim_nfa_prog_set_re_in_use(prog, 0);
+    let prog = {
+        let sz = core::mem::size_of::<NfaRegprogT>()
+            + nstate_val as usize * core::mem::size_of::<NfaStateT>();
+        let p = xmalloc(sz).cast::<NfaRegprogT>();
+        core::ptr::write_bytes(p.cast::<u8>(), 0, sz);
+        (*p).nstate = nstate_val;
+        STATE_PTR = p.add(1).cast::<NfaStateT>().cast::<c_void>();
+        p.cast::<c_void>()
+    };
+    (*prog.cast::<NfaRegprogT>()).re_in_use = false;
 
     // PASS 2: Build the NFA.
     let start = rs_post2nfa(postfix, post_ptr_val, 0);
@@ -10688,24 +10745,24 @@ pub unsafe extern "C" fn rs_nfa_regcomp(expr: *mut u8, re_flags: c_int) -> NfaPr
         return core::ptr::null_mut();
     }
 
-    nvim_nfa_prog_set_start(prog, start);
-    nvim_nfa_prog_set_regflags(prog, REGFLAGS_COMPILE as c_int);
+    (*prog.cast::<NfaRegprogT>()).start = start.cast::<NfaStateT>();
+    (*prog.cast::<NfaRegprogT>()).regflags = REGFLAGS_COMPILE as c_int as c_uint;
     nvim_regexp_set_nfa_prog_engine(prog);
-    nvim_nfa_prog_set_nstate(prog, nstate_val);
-    nvim_nfa_prog_set_has_zend(prog, REX.nfa_has_zend);
-    nvim_nfa_prog_set_has_backref(prog, REX.nfa_has_backref);
-    nvim_nfa_prog_set_nsubexp(prog, REGNPAR);
+    (*prog.cast::<NfaRegprogT>()).nstate = nstate_val;
+    (*prog.cast::<NfaRegprogT>()).has_zend = REX.nfa_has_zend;
+    (*prog.cast::<NfaRegprogT>()).has_backref = REX.nfa_has_backref;
+    (*prog.cast::<NfaRegprogT>()).nsubexp = REGNPAR;
 
     rs_nfa_postprocess(prog);
 
-    let prog_start = nvim_nfa_prog_get_start(prog);
-    nvim_nfa_prog_set_reganch(prog, rs_nfa_get_reganch(prog_start, 0));
-    nvim_nfa_prog_set_regstart(prog, rs_nfa_get_regstart(prog_start, 0));
-    nvim_nfa_prog_set_match_text(prog, rs_nfa_get_match_text(prog_start));
+    let prog_start = (*prog.cast::<NfaRegprogT>()).start.cast::<c_void>();
+    (*prog.cast::<NfaRegprogT>()).reganch = rs_nfa_get_reganch(prog_start, 0);
+    (*prog.cast::<NfaRegprogT>()).regstart = rs_nfa_get_regstart(prog_start, 0);
+    (*prog.cast::<NfaRegprogT>()).match_text = rs_nfa_get_match_text(prog_start);
 
     // Remember whether this pattern has any \z specials in it.
-    nvim_nfa_prog_set_reghasz(prog, RE_HAS_Z);
-    nvim_nfa_prog_set_pattern(prog, nvim_regexp_xstrdup(expr.cast()));
+    (*prog.cast::<NfaRegprogT>()).reghasz = RE_HAS_Z;
+    (*prog.cast::<NfaRegprogT>()).pattern = nvim_regexp_xstrdup(expr.cast());
 
     // Clean up
     let post_start = POST_START;
@@ -10724,24 +10781,12 @@ pub unsafe extern "C" fn rs_nfa_regcomp(expr: *mut u8, re_flags: c_int) -> NfaPr
 
 extern "C" {
     // nfa_state_T id/lastlist accessors
-    fn nvim_nfa_state_get_id(s: NfaStateHandle) -> c_int;
-    fn nvim_nfa_state_get_lastlist(s: NfaStateHandle, idx: c_int) -> c_int;
-    fn nvim_nfa_state_set_lastlist(s: NfaStateHandle, idx: c_int, val: c_int);
 
     // nfa_regprog_T execution field accessors
-    fn nvim_nfa_prog_get_has_zend(prog: NfaProgHandle) -> c_int;
-    fn nvim_nfa_prog_get_has_backref(prog: NfaProgHandle) -> c_int;
-    fn nvim_nfa_prog_get_nsubexp(prog: NfaProgHandle) -> c_int;
-    fn nvim_nfa_prog_get_reghasz(prog: NfaProgHandle) -> c_int;
     #[allow(dead_code)]
-    fn nvim_nfa_prog_get_regflags(prog: NfaProgHandle) -> c_int;
     #[allow(dead_code)]
-    fn nvim_nfa_prog_get_regstart(prog: NfaProgHandle) -> c_int;
     #[allow(dead_code)]
-    fn nvim_nfa_prog_get_reganch(prog: NfaProgHandle) -> c_int;
     #[allow(dead_code)]
-    fn nvim_nfa_prog_get_match_text(prog: NfaProgHandle) -> *mut u8;
-
     // Error wrapper
     fn nvim_regexp_siemsg_ill_char_class(cls: i64);
 }
@@ -11002,44 +11047,12 @@ type RegsubsHandle = *mut c_void; // regsubs_T*
 const NFA_PIM_UNUSED: c_int = 0;
 
 extern "C" {
-    // regsub_T field accessors
-    fn nvim_regexp_regsub_get_in_use(sub: *mut c_void) -> c_int;
-    fn nvim_regexp_regsub_get_multi_start_lnum(sub: *mut c_void, idx: c_int) -> i32;
-    fn nvim_regexp_regsub_get_multi_start_col(sub: *mut c_void, idx: c_int) -> i32;
-    fn nvim_regexp_regsub_get_multi_end_lnum(sub: *mut c_void, idx: c_int) -> i32;
-    fn nvim_regexp_regsub_get_multi_end_col(sub: *mut c_void, idx: c_int) -> i32;
-    fn nvim_regexp_regsub_get_line_start(sub: *mut c_void, idx: c_int) -> *mut u8;
-    fn nvim_regexp_regsub_get_line_end(sub: *mut c_void, idx: c_int) -> *mut u8;
-
-    // nfa_pim_T field accessors
-    fn nvim_nfa_pim_get_result(pim: NfaPimHandle) -> c_int;
-    fn nvim_nfa_pim_get_state_id(pim: NfaPimHandle) -> c_int;
-    fn nvim_nfa_pim_get_end_pos_lnum(pim: NfaPimHandle) -> i32;
-    fn nvim_nfa_pim_get_end_pos_col(pim: NfaPimHandle) -> i32;
-    fn nvim_nfa_pim_get_end_ptr(pim: NfaPimHandle) -> *mut u8;
-
-    // nfa_list_T / nfa_thread_T read accessors
-    fn nvim_nfa_list_get_n(l: NfaListHandle) -> c_int;
-    fn nvim_nfa_thread_get_state_id(l: NfaListHandle, idx: c_int) -> c_int;
-    fn nvim_nfa_thread_get_subs_norm(l: NfaListHandle, idx: c_int) -> *mut c_void;
-    fn nvim_nfa_thread_get_subs_synt(l: NfaListHandle, idx: c_int) -> *mut c_void;
-    fn nvim_nfa_thread_get_pim_ptr(l: NfaListHandle, idx: c_int) -> NfaPimHandle;
 
     // C wrapper functions for complex operations
     // (match_backref, match_zref, find_match_text, skip_to_start
     //  migrated to Rust -- extern declarations removed)
-    // rex NFA state accessors
     fn nvim_regexp_get_nfa_has_zsubexpr() -> c_int;
-    fn nvim_nfa_list_get_id(l: NfaListHandle) -> c_int;
 
-    // NFA execution globals
-
-    // Memory allocation
-    fn nvim_regexp_xmalloc(size: u64) -> *mut c_void;
-
-    // nfa_list_T memory management
-    fn nvim_nfa_list_alloc_threads(nstate: c_int) -> *mut c_void;
-    fn nvim_nfa_list_free_threads(t: *mut c_void);
 }
 
 // ============================================================================
@@ -11940,8 +11953,8 @@ unsafe fn addstate_here_t(
 /// That includes when both are unused (not set).
 #[no_mangle]
 pub unsafe extern "C" fn rs_pim_equal(one: NfaPimHandle, two: NfaPimHandle) -> c_int {
-    let one_unused = one.is_null() || nvim_nfa_pim_get_result(one) == NFA_PIM_UNUSED;
-    let two_unused = two.is_null() || nvim_nfa_pim_get_result(two) == NFA_PIM_UNUSED;
+    let one_unused = one.is_null() || (*one.cast::<NfaPimT>()).result == NFA_PIM_UNUSED;
+    let two_unused = two.is_null() || (*two.cast::<NfaPimT>()).result == NFA_PIM_UNUSED;
 
     if one_unused {
         return two_unused as c_int;
@@ -11950,16 +11963,16 @@ pub unsafe extern "C" fn rs_pim_equal(one: NfaPimHandle, two: NfaPimHandle) -> c
         return 0;
     }
     // compare state id
-    if nvim_nfa_pim_get_state_id(one) != nvim_nfa_pim_get_state_id(two) {
+    if (*(*one.cast::<NfaPimT>()).state).id != (*(*two.cast::<NfaPimT>()).state).id {
         return 0;
     }
     // compare position
     if (REX.reg_match.is_null() as c_int) != 0 {
-        return (nvim_nfa_pim_get_end_pos_lnum(one) == nvim_nfa_pim_get_end_pos_lnum(two)
-            && nvim_nfa_pim_get_end_pos_col(one) == nvim_nfa_pim_get_end_pos_col(two))
+        return ((*one.cast::<NfaPimT>()).end.pos.lnum == (*two.cast::<NfaPimT>()).end.pos.lnum
+            && (*one.cast::<NfaPimT>()).end.pos.col == (*two.cast::<NfaPimT>()).end.pos.col)
             as c_int;
     }
-    (nvim_nfa_pim_get_end_ptr(one) == nvim_nfa_pim_get_end_ptr(two)) as c_int
+    ((*one.cast::<NfaPimT>()).end.ptr == (*two.cast::<NfaPimT>()).end.ptr) as c_int
 }
 
 /// Check if "state" with "subs" is already in list "l", considering PIM.
@@ -11971,20 +11984,30 @@ pub unsafe extern "C" fn rs_has_state_with_pos(
     subs_synt: *mut c_void,
     pim: NfaPimHandle,
 ) -> c_int {
-    let n = nvim_nfa_list_get_n(l);
+    let n = (*l.cast::<NfaListT>()).n;
     for i in 0..n {
-        if nvim_nfa_thread_get_state_id(l, i) != state_id {
+        if (*(*l.cast::<NfaListT>()).t.add(i as usize)).state.read().id != state_id {
             continue;
         }
-        if !sub_equal_o(nvim_nfa_thread_get_subs_norm(l, i), subs_norm) {
+        if !sub_equal_o(
+            (&raw mut (*(*l.cast::<NfaListT>()).t.add(i as usize)).subs.norm).cast::<c_void>(),
+            subs_norm,
+        ) {
             continue;
         }
         if nvim_regexp_get_nfa_has_zsubexpr() != 0
-            && !sub_equal_o(nvim_nfa_thread_get_subs_synt(l, i), subs_synt)
+            && !sub_equal_o(
+                (&raw mut (*(*l.cast::<NfaListT>()).t.add(i as usize)).subs.synt).cast::<c_void>(),
+                subs_synt,
+            )
         {
             continue;
         }
-        if rs_pim_equal(nvim_nfa_thread_get_pim_ptr(l, i), pim) != 0 {
+        if rs_pim_equal(
+            (&raw mut (*(*l.cast::<NfaListT>()).t.add(i as usize)).pim).cast::<c_void>(),
+            pim,
+        ) != 0
+        {
             return 1;
         }
     }
@@ -12000,11 +12023,11 @@ pub unsafe extern "C" fn rs_state_in_list(
     subs_synt: *mut c_void,
 ) -> c_int {
     let ll_index = NFA_LL_INDEX;
-    if nvim_nfa_state_get_lastlist(state, ll_index) == nvim_nfa_list_get_id(l)
+    if (*state.cast::<NfaStateT>()).lastlist[ll_index as usize] == (*l.cast::<NfaListT>()).id
         && (REX.nfa_has_backref == 0
             || rs_has_state_with_pos(
                 l,
-                nvim_nfa_state_get_id(state),
+                (*state.cast::<NfaStateT>()).id,
                 subs_norm,
                 subs_synt,
                 core::ptr::null_mut(),
@@ -12218,10 +12241,15 @@ pub unsafe extern "C" fn rs_nfa_did_time_out() -> c_int {
 /// Also reset the IDs to zero. Only used for the recursive value `lastlist[1]`.
 /// Migrated from C `nfa_save_listids()`.
 unsafe fn nfa_save_listids_t(prog: NfaProgHandle, list: *mut c_int) {
-    let nstate = nvim_nfa_prog_get_nstate(prog);
+    let nstate = (*prog.cast::<NfaRegprogT>()).nstate;
     // Iterate in reverse, accessing states via accessor (opaque prog handle).
     for i in (0..nstate).rev() {
-        let state = nvim_nfa_prog_get_state(prog, i);
+        let state = prog
+            .cast::<NfaRegprogT>()
+            .add(1)
+            .cast::<NfaStateT>()
+            .add(i as usize)
+            .cast::<c_void>();
         let state_ptr = state.cast::<NfaStateT>();
         *list.offset(i as isize) = (*state_ptr).lastlist[1];
         (*state_ptr).lastlist[1] = 0;
@@ -12231,9 +12259,14 @@ unsafe fn nfa_save_listids_t(prog: NfaProgHandle, list: *mut c_int) {
 /// Restore list IDs from `list` to all NFA states.
 /// Migrated from C `nfa_restore_listids()`.
 unsafe fn nfa_restore_listids_t(prog: NfaProgHandle, list: *const c_int) {
-    let nstate = nvim_nfa_prog_get_nstate(prog);
+    let nstate = (*prog.cast::<NfaRegprogT>()).nstate;
     for i in (0..nstate).rev() {
-        let state = nvim_nfa_prog_get_state(prog, i);
+        let state = prog
+            .cast::<NfaRegprogT>()
+            .add(1)
+            .cast::<NfaStateT>()
+            .add(i as usize)
+            .cast::<c_void>();
         let state_ptr = state.cast::<NfaStateT>();
         (*state_ptr).lastlist[1] = *list.offset(i as isize);
     }
@@ -12353,12 +12386,10 @@ unsafe fn recursive_regmatch_t(
     if nfa_ll_index == 1 {
         // Already calling nfa_regmatch() recursively.  Save the lastlist[1]
         // values and clear them.
-        let nstate = nvim_nfa_prog_get_nstate(prog);
+        let nstate = (*prog.cast::<NfaRegprogT>()).nstate;
         if (*listids).is_null() || *listids_len < nstate {
             nvim_regexp_xfree((*listids).cast::<c_void>());
-            *listids =
-                nvim_regexp_xmalloc((core::mem::size_of::<c_int>() * nstate as usize) as u64)
-                    .cast::<c_int>();
+            *listids = xmalloc(core::mem::size_of::<c_int>() * nstate as usize).cast::<c_int>();
             *listids_len = nstate;
         }
         nfa_save_listids_t(prog, *listids);
@@ -12417,63 +12448,22 @@ const MAX_MCO: usize = 6;
 
 // Extern declarations for Phase 8.4 C accessors
 extern "C" {
-    // Thread field accessors
-    fn nvim_nfa_thread_get_state_c(l: NfaListHandle, idx: c_int) -> c_int;
-    fn nvim_nfa_thread_get_state_ptr(l: NfaListHandle, idx: c_int) -> NfaStateHandle;
-    fn nvim_nfa_thread_get_state_out(l: NfaListHandle, idx: c_int) -> NfaStateHandle;
-    fn nvim_nfa_thread_get_state_out1(l: NfaListHandle, idx: c_int) -> NfaStateHandle;
-    fn nvim_nfa_thread_get_state_val(l: NfaListHandle, idx: c_int) -> c_int;
-    fn nvim_nfa_thread_get_count(l: NfaListHandle, idx: c_int) -> c_int;
-    fn nvim_nfa_thread_get_subs_ptr(l: NfaListHandle, idx: c_int) -> RegsubsHandle;
 
     // Thread PIM field accessors
-    fn nvim_nfa_thread_get_pim_result(l: NfaListHandle, idx: c_int) -> c_int;
-    fn nvim_nfa_thread_get_pim_state(l: NfaListHandle, idx: c_int) -> NfaStateHandle;
-    fn nvim_nfa_thread_get_pim_state_c(l: NfaListHandle, idx: c_int) -> c_int;
 
     // nfa_list_T management
-    fn nvim_nfa_list_set_n(l: NfaListHandle, n: c_int);
-    fn nvim_nfa_list_set_has_pim(l: NfaListHandle, v: c_int);
-    fn nvim_nfa_list_set_id(l: NfaListHandle, id: c_int);
 
     // regsubs_T operations
-    fn nvim_regexp_regsubs_get_norm(s: RegsubsHandle) -> *mut c_void;
-    fn nvim_regexp_regsubs_get_synt(s: RegsubsHandle) -> *mut c_void;
-    fn nvim_regexp_regsubs_get_norm_in_use(s: RegsubsHandle) -> c_int;
-    fn nvim_regexp_regsubs_set_norm_in_use(s: RegsubsHandle, v: c_int);
-    fn nvim_regexp_regsubs_set_multi_start(s: RegsubsHandle, idx: c_int, lnum: i32, col: i32);
-    fn nvim_regexp_regsubs_get_multi_start_col(s: RegsubsHandle, idx: c_int) -> i32;
-    fn nvim_regexp_regsubs_get_multi_end_col(s: RegsubsHandle, idx: c_int) -> i32;
-    fn nvim_regexp_regsubs_set_norm_orig_start_col(s: RegsubsHandle, v: i32);
-    fn nvim_regexp_regsubs_set_line_start(s: RegsubsHandle, idx: c_int, ptr: *mut u8);
-    fn nvim_regexp_regsubs_get_line_end(s: RegsubsHandle, idx: c_int) -> *mut u8;
 
     // rex execution field accessors
 
     // Character/utility functions
 
     // NFA prog field accessor
-    fn nvim_nfa_prog_get_re_engine(prog: NfaProgHandle) -> c_int;
 
     // PIM operations
-    fn nvim_nfa_pim_set_result(pim: NfaPimHandle, v: c_int);
-    fn nvim_nfa_pim_get_state(pim: NfaPimHandle) -> NfaStateHandle;
-    fn nvim_nfa_pim_get_state_c(pim: NfaPimHandle) -> c_int;
-    fn nvim_nfa_pim_get_subs_norm(pim: NfaPimHandle) -> *mut c_void;
-    fn nvim_nfa_pim_get_subs_synt(pim: NfaPimHandle) -> *mut c_void;
 
     // PIM allocation/init
-    fn nvim_regexp_alloc_pim() -> NfaPimHandle;
-    fn nvim_regexp_free_pim(p: NfaPimHandle);
-    fn nvim_regexp_pim_init(
-        p: NfaPimHandle,
-        state: NfaStateHandle,
-        result: c_int,
-        lnum: i32,
-        col: i32,
-        ptr: *mut u8,
-        is_multi: c_int,
-    );
 
     // win_T and buffer accessors for VCOL/MARK
     fn nvim_regexp_get_curwin() -> *mut c_void;
@@ -12492,7 +12482,6 @@ extern "C" {
     fn nvim_regexp_fmark_get_col_adj(fm: *mut c_void, lnum_match: i32) -> i32;
 
     // List thread count setter
-    fn nvim_nfa_list_set_last_thread_count(l: NfaListHandle, count: c_int);
 
     // Memory free wrapper
     fn nvim_regexp_xfree(p: *mut c_void);
@@ -12547,7 +12536,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
     let mut add_here: bool;
     let mut add_count: c_int;
     let mut add_off: c_int;
-    let toplevel: bool = nvim_nfa_state_get_c(start) == NFA_MOPEN;
+    let toplevel: bool = (*start.cast::<NfaStateT>()).c == NFA_MOPEN;
     let mut r: RegsubsHandle;
 
     // Allow interrupting with CTRL-C.
@@ -12562,34 +12551,48 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
     MATCH_FOUND = 0; // nfa_match = false
 
     // Allocate memory for the lists of nodes.
-    let nstate = nvim_nfa_prog_get_nstate(prog);
-    let list0 = nvim_nfa_list_alloc_threads(nstate + 1);
-    let list1 = nvim_nfa_list_alloc_threads(nstate + 1);
+    let nstate = (*prog.cast::<NfaRegprogT>()).nstate;
+    let list0 = {
+        let l = xcalloc(1, core::mem::size_of::<NfaListT>()).cast::<NfaListT>();
+        (*l).t =
+            xcalloc((nstate + 1) as usize, core::mem::size_of::<NfaThreadT>()).cast::<NfaThreadT>();
+        l.cast::<c_void>()
+    };
+    let list1 = {
+        let l = xcalloc(1, core::mem::size_of::<NfaListT>()).cast::<NfaListT>();
+        (*l).t =
+            xcalloc((nstate + 1) as usize, core::mem::size_of::<NfaThreadT>()).cast::<NfaThreadT>();
+        l.cast::<c_void>()
+    };
 
     // Initialize thislist and nextlist
     let mut thislist = list0;
-    nvim_nfa_list_set_n(thislist, 0);
-    nvim_nfa_list_set_has_pim(thislist, 0);
+    (*thislist.cast::<NfaListT>()).n = 0;
+    (*thislist.cast::<NfaListT>()).has_pim = 0;
     let mut nextlist = list1;
-    nvim_nfa_list_set_n(nextlist, 0);
-    nvim_nfa_list_set_has_pim(nextlist, 0);
+    (*nextlist.cast::<NfaListT>()).n = 0;
+    (*nextlist.cast::<NfaListT>()).has_pim = 0;
 
-    nvim_nfa_list_set_id(thislist, REX.nfa_listid + 1);
+    (*thislist.cast::<NfaListT>()).id = REX.nfa_listid + 1;
 
     // Inline optimized code for addstate(thislist, start, m, 0) if we know
     // it's the first MOPEN.
     if toplevel {
         if (REX.reg_match.is_null() as c_int) != 0 {
             let col = REX.input as isize - REX.line as isize;
-            nvim_regexp_regsubs_set_multi_start(m, 0, REX.lnum, col as i32);
-            nvim_regexp_regsubs_set_norm_orig_start_col(m, col as i32);
+            {
+                let _t = m.cast::<RegsubsT>();
+                (*_t).norm.list.multi[0_usize].start_lnum = REX.lnum;
+                (*_t).norm.list.multi[0_usize].start_col = col as i32;
+            }
+            (*m.cast::<RegsubsT>()).norm.orig_start_col = col as i32;
         } else {
-            nvim_regexp_regsubs_set_line_start(m, 0, REX.input);
+            (*m.cast::<RegsubsT>()).norm.list.line[0_usize].start = REX.input;
         }
-        nvim_regexp_regsubs_set_norm_in_use(m, 1);
+        (*m.cast::<RegsubsT>()).norm.in_use = 1;
         r = addstate_o(
             thislist,
-            nvim_nfa_state_get_out(start),
+            (*start.cast::<NfaStateT>()).out.cast::<c_void>(),
             m,
             core::ptr::null_mut(),
             0,
@@ -12600,10 +12603,18 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
     if r.is_null() {
         MATCH_FOUND = NFA_TOO_EXPENSIVE;
         // goto theend
-        nvim_nfa_list_free_threads(list0);
-        nvim_nfa_list_free_threads(list1);
+        {
+            let l0 = list0.cast::<NfaListT>();
+            xfree((*l0).t.cast::<c_void>());
+            xfree(l0.cast::<c_void>());
+        }
+        {
+            let l1 = list1.cast::<NfaListT>();
+            xfree((*l1).t.cast::<c_void>());
+            xfree(l1.cast::<c_void>());
+        }
         if !listids.is_null() {
-            nvim_regexp_xfree(listids as *mut c_void);
+            nvim_regexp_xfree(listids.cast::<c_void>());
         }
         return MATCH_FOUND;
     }
@@ -12622,27 +12633,29 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
         thislist = if flag != 0 { list1 } else { list0 };
         flag ^= 1;
         nextlist = if flag != 0 { list1 } else { list0 };
-        nvim_nfa_list_set_n(nextlist, 0);
-        nvim_nfa_list_set_has_pim(nextlist, 0);
+        (*nextlist.cast::<NfaListT>()).n = 0;
+        (*nextlist.cast::<NfaListT>()).has_pim = 0;
 
         let nfa_listid = REX.nfa_listid + 1;
         REX.nfa_listid = nfa_listid;
-        if nvim_nfa_prog_get_re_engine(prog) == AUTOMATIC_ENGINE && nfa_listid >= NFA_MAX_STATES {
+        if (*prog.cast::<NfaRegprogT>()).re_engine as c_int == AUTOMATIC_ENGINE
+            && nfa_listid >= NFA_MAX_STATES
+        {
             MATCH_FOUND = NFA_TOO_EXPENSIVE;
             break 'outer;
         }
 
-        nvim_nfa_list_set_id(thislist, nfa_listid);
-        nvim_nfa_list_set_id(nextlist, nfa_listid + 1);
+        (*thislist.cast::<NfaListT>()).id = nfa_listid;
+        (*nextlist.cast::<NfaListT>()).id = nfa_listid + 1;
 
         // If the state lists are empty we can stop.
-        if nvim_nfa_list_get_n(thislist) == 0 {
+        if (*thislist.cast::<NfaListT>()).n == 0 {
             break 'outer;
         }
 
         // compute nextlist
         let mut listidx: c_int = 0;
-        while listidx < nvim_nfa_list_get_n(thislist) {
+        while listidx < (*thislist.cast::<NfaListT>()).n {
             // Allow interrupting with CTRL-C.
             rs_reg_breakcheck();
             if nvim_regexp_get_got_int() != 0 {
@@ -12666,7 +12679,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
             add_off = 0;
             result = 0;
 
-            let state_c = nvim_nfa_thread_get_state_c(thislist, listidx);
+            let state_c = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).state).c;
 
             match state_c {
                 x if x == NFA_MATCH => {
@@ -12681,22 +12694,26 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     } else {
                         MATCH_FOUND = 1; // true
                         copy_sub_o(
-                            nvim_regexp_regsubs_get_norm(submatch),
-                            nvim_nfa_thread_get_subs_norm(thislist, listidx),
+                            &raw mut (*submatch.cast::<RegsubsT>()).norm as *mut c_void,
+                            &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                                .subs
+                                .norm as *mut c_void,
                         );
                         if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
                             copy_sub_o(
-                                nvim_regexp_regsubs_get_synt(submatch),
-                                nvim_nfa_thread_get_subs_synt(thislist, listidx),
+                                &raw mut (*submatch.cast::<RegsubsT>()).synt as *mut c_void,
+                                &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                                    .subs
+                                    .synt as *mut c_void,
                             );
                         }
                         // Found left-most longest match.
-                        if nvim_nfa_list_get_n(nextlist) == 0 {
+                        if (*nextlist.cast::<NfaListT>()).n == 0 {
                             clen = 0;
                         }
                         // goto nextchar: break inner loop, let outer loop's
                         // bottom-of-loop code do the input advancement
-                        listidx = nvim_nfa_list_get_n(thislist);
+                        listidx = (*thislist.cast::<NfaListT>()).n;
                         continue;
                     }
                 }
@@ -12740,22 +12757,26 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     // do not set submatches for \@!
                     if state_c != NFA_END_INVISIBLE_NEG {
                         copy_sub_o(
-                            nvim_regexp_regsubs_get_norm(m),
-                            nvim_nfa_thread_get_subs_norm(thislist, listidx),
+                            &raw mut (*m.cast::<RegsubsT>()).norm as *mut c_void,
+                            &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                                .subs
+                                .norm as *mut c_void,
                         );
                         if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
                             copy_sub_o(
-                                nvim_regexp_regsubs_get_synt(m),
-                                nvim_nfa_thread_get_subs_synt(thislist, listidx),
+                                &raw mut (*m.cast::<RegsubsT>()).synt as *mut c_void,
+                                &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                                    .subs
+                                    .synt as *mut c_void,
                             );
                         }
                     }
                     MATCH_FOUND = 1; // true
-                    if nvim_nfa_list_get_n(nextlist) == 0 {
+                    if (*nextlist.cast::<NfaListT>()).n == 0 {
                         clen = 0;
                     }
                     // goto nextchar: break inner loop, let outer loop handle advancement
-                    listidx = nvim_nfa_list_get_n(thislist);
+                    listidx = (*thislist.cast::<NfaListT>()).n;
                     continue;
                 }
 
@@ -12768,8 +12789,12 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     || x == NFA_START_INVISIBLE_BEFORE_NEG
                     || x == NFA_START_INVISIBLE_BEFORE_NEG_FIRST =>
                 {
-                    let t_state = nvim_nfa_thread_get_state_ptr(thislist, listidx);
-                    let pim_result = nvim_nfa_thread_get_pim_result(thislist, listidx);
+                    let t_state = (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                        .state
+                        .cast::<c_void>();
+                    let pim_result = (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                        .pim
+                        .result;
 
                     if pim_result != NFA_PIM_UNUSED
                         || state_c == NFA_START_INVISIBLE_FIRST
@@ -12777,17 +12802,21 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         || state_c == NFA_START_INVISIBLE_BEFORE_FIRST
                         || state_c == NFA_START_INVISIBLE_BEFORE_NEG_FIRST
                     {
-                        let in_use = nvim_regexp_regsubs_get_norm_in_use(m);
+                        let in_use = (*m.cast::<RegsubsT>()).norm.in_use;
 
                         // Copy submatch info for the recursive call
                         copy_sub_off_o(
-                            nvim_regexp_regsubs_get_norm(m),
-                            nvim_nfa_thread_get_subs_norm(thislist, listidx),
+                            &raw mut (*m.cast::<RegsubsT>()).norm as *mut c_void,
+                            &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                                .subs
+                                .norm as *mut c_void,
                         );
                         if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
                             copy_sub_off_o(
-                                nvim_regexp_regsubs_get_synt(m),
-                                nvim_nfa_thread_get_subs_synt(thislist, listidx),
+                                &raw mut (*m.cast::<RegsubsT>()).synt as *mut c_void,
+                                &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                                    .subs
+                                    .synt as *mut c_void,
                             );
                         }
                         // First try matching the invisible match
@@ -12813,64 +12842,96 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         if result != is_neg as c_int {
                             // Copy submatch info from the recursive call
                             copy_sub_off_o(
-                                nvim_nfa_thread_get_subs_norm(thislist, listidx),
-                                nvim_regexp_regsubs_get_norm(m),
+                                &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                                    .subs
+                                    .norm as *mut c_void,
+                                &raw mut (*m.cast::<RegsubsT>()).norm as *mut c_void,
                             );
                             if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
                                 copy_sub_off_o(
-                                    nvim_nfa_thread_get_subs_synt(thislist, listidx),
-                                    nvim_regexp_regsubs_get_synt(m),
+                                    &raw mut (*(*thislist.cast::<NfaListT>())
+                                        .t
+                                        .add(listidx as usize))
+                                    .subs
+                                    .synt as *mut c_void,
+                                    &raw mut (*m.cast::<RegsubsT>()).synt as *mut c_void,
                                 );
                             }
                             // If the pattern has \ze and it matched, use it.
                             copy_ze_off_o(
-                                nvim_nfa_thread_get_subs_norm(thislist, listidx),
-                                nvim_regexp_regsubs_get_norm(m),
+                                &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                                    .subs
+                                    .norm as *mut c_void,
+                                &raw mut (*m.cast::<RegsubsT>()).norm as *mut c_void,
                             );
 
                             // t->state->out1 is the corresponding END_INVISIBLE node
                             add_here = true;
-                            add_state = nvim_nfa_state_get_out(nvim_nfa_state_get_out1(t_state));
+                            add_state = (*(*t_state.cast::<NfaStateT>())
+                                .out1
+                                .cast::<c_void>()
+                                .cast::<NfaStateT>())
+                            .out
+                            .cast::<c_void>();
                         }
-                        nvim_regexp_regsubs_set_norm_in_use(m, in_use);
+                        (*m.cast::<RegsubsT>()).norm.in_use = in_use;
                     } else {
                         // First try matching what follows. Add a nfa_pim_T.
-                        let pim = nvim_regexp_alloc_pim();
+                        let pim = xcalloc(1, core::mem::size_of::<NfaPimT>());
                         let input = REX.input;
                         let line = REX.line;
                         let is_multi = REX.reg_match.is_null() as c_int;
-                        nvim_regexp_pim_init(
-                            pim,
-                            t_state,
-                            NFA_PIM_TODO,
-                            REX.lnum,
-                            (input as isize - line as isize) as i32,
-                            input,
-                            is_multi,
-                        );
+                        {
+                            let _p = pim.cast::<NfaPimT>();
+                            (*_p).result = NFA_PIM_TODO;
+                            (*_p).state = t_state.cast::<NfaStateT>();
+                            if is_multi != 0 {
+                                (*_p).end.pos.lnum = REX.lnum;
+                                (*_p).end.pos.col = (input as isize - line as isize) as i32;
+                            } else {
+                                (*_p).end.ptr = input;
+                            }
+                        }
 
                         // Add out1->out to thislist with PIM
-                        let out1_out = nvim_nfa_state_get_out(nvim_nfa_state_get_out1(t_state));
-                        let subs_ptr = nvim_nfa_thread_get_subs_ptr(thislist, listidx);
+                        let out1_out = (*(*t_state.cast::<NfaStateT>())
+                            .out1
+                            .cast::<c_void>()
+                            .cast::<NfaStateT>())
+                        .out
+                        .cast::<c_void>();
+                        let subs_ptr =
+                            &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).subs
+                                as *mut c_void;
                         if addstate_here_o(thislist, out1_out, subs_ptr, pim, &mut listidx)
                             .is_null()
                         {
-                            nvim_regexp_free_pim(pim);
+                            xfree(pim);
                             MATCH_FOUND = NFA_TOO_EXPENSIVE;
                             break 'outer;
                         }
-                        nvim_regexp_free_pim(pim);
+                        xfree(pim);
                     }
                 }
 
                 x if x == NFA_START_PATTERN => {
-                    let t_state = nvim_nfa_thread_get_state_ptr(thislist, listidx);
-                    let out1 = nvim_nfa_state_get_out1(t_state);
-                    let out1_out = nvim_nfa_state_get_out(out1);
-                    let out1_out_out = nvim_nfa_state_get_out(out1_out);
-                    let subs_norm = nvim_nfa_thread_get_subs_norm(thislist, listidx);
-                    let subs_synt = nvim_nfa_thread_get_subs_synt(thislist, listidx);
-                    let subs_ptr = nvim_nfa_thread_get_subs_ptr(thislist, listidx);
+                    let t_state = (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                        .state
+                        .cast::<c_void>();
+                    let out1 = (*t_state.cast::<NfaStateT>()).out1.cast::<c_void>();
+                    let out1_out = (*out1.cast::<NfaStateT>()).out.cast::<c_void>();
+                    let out1_out_out = (*out1_out.cast::<NfaStateT>()).out.cast::<c_void>();
+                    let subs_norm =
+                        &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .subs
+                            .norm as *mut c_void;
+                    let subs_synt =
+                        &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .subs
+                            .synt as *mut c_void;
+                    let subs_ptr =
+                        &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).subs
+                            as *mut c_void;
 
                     // Check if output state is already in list
                     let mut skip = false;
@@ -12885,9 +12946,15 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         // Don't try to match pattern
                     } else {
                         // Copy submatch info to the recursive call
-                        copy_sub_off_o(nvim_regexp_regsubs_get_norm(m), subs_norm);
+                        copy_sub_off_o(
+                            &raw mut (*m.cast::<RegsubsT>()).norm as *mut c_void,
+                            subs_norm,
+                        );
                         if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
-                            copy_sub_off_o(nvim_regexp_regsubs_get_synt(m), subs_synt);
+                            copy_sub_off_o(
+                                &raw mut (*m.cast::<RegsubsT>()).synt as *mut c_void,
+                                subs_synt,
+                            );
                         }
 
                         result = recursive_regmatch_t(
@@ -12906,21 +12973,27 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         if result != 0 {
                             // Copy submatch info from the recursive call
                             copy_sub_off_o(
-                                nvim_nfa_thread_get_subs_norm(thislist, listidx),
-                                nvim_regexp_regsubs_get_norm(m),
+                                &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                                    .subs
+                                    .norm as *mut c_void,
+                                &raw mut (*m.cast::<RegsubsT>()).norm as *mut c_void,
                             );
                             if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
                                 copy_sub_off_o(
-                                    nvim_nfa_thread_get_subs_synt(thislist, listidx),
-                                    nvim_regexp_regsubs_get_synt(m),
+                                    &raw mut (*(*thislist.cast::<NfaListT>())
+                                        .t
+                                        .add(listidx as usize))
+                                    .subs
+                                    .synt as *mut c_void,
+                                    &raw mut (*m.cast::<RegsubsT>()).synt as *mut c_void,
                                 );
                             }
                             // Skip over matched text
                             let bytelen = if (REX.reg_match.is_null() as c_int) != 0 {
-                                nvim_regexp_regsubs_get_multi_end_col(m, 0)
+                                (*m.cast::<RegsubsT>()).norm.list.multi[0_usize].end_col
                                     - (REX.input as isize - REX.line as isize) as i32
                             } else {
-                                nvim_regexp_regsubs_get_line_end(m, 0) as isize as i32
+                                (*m.cast::<RegsubsT>()).norm.list.line[0_usize].end as isize as i32
                                     - REX.input as isize as i32
                             };
 
@@ -12942,14 +13015,20 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_BOL => {
                     if REX.input == REX.line {
                         add_here = true;
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                     }
                 }
 
                 x if x == NFA_EOL => {
                     if curc == 0 {
                         add_here = true;
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                     }
                 }
 
@@ -12967,7 +13046,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     }
                     if result != 0 {
                         add_here = true;
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                     }
                 }
 
@@ -12984,7 +13066,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     }
                     if result != 0 {
                         add_here = true;
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                     }
                 }
 
@@ -12994,41 +13079,49 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         && ((REX.reg_match.is_null() as c_int) == 0 || REX.reg_firstlnum == 1)
                     {
                         add_here = true;
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                     }
                 }
 
                 x if x == NFA_EOF => {
                     if REX.lnum == REX.reg_maxline && curc == 0 {
                         add_here = true;
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                     }
                 }
 
                 x if x == NFA_COMPOSING => {
-                    let t_state = nvim_nfa_thread_get_state_ptr(thislist, listidx);
+                    let t_state = (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                        .state
+                        .cast::<c_void>();
                     let mc = curc;
                     let mut len: c_int = 0;
-                    let mut sta = nvim_nfa_state_get_out(t_state);
+                    let mut sta = (*t_state.cast::<NfaStateT>()).out.cast::<c_void>();
                     let mut cchars: [c_int; MAX_MCO] = [0; MAX_MCO];
                     let mut ccount: usize = 0;
 
-                    if utf_iscomposing_legacy(nvim_nfa_state_get_c(sta)) != 0 {
+                    if utf_iscomposing_legacy((*sta.cast::<NfaStateT>()).c) != 0 {
                         len += utf_char2len(mc);
                     }
                     if REX.reg_icombine as c_int != 0 && len == 0 {
-                        if nvim_nfa_state_get_c(sta) != curc {
+                        if (*sta.cast::<NfaStateT>()).c != curc {
                             result = FAIL;
                         } else {
                             result = OK;
                         }
-                        while nvim_nfa_state_get_c(sta) != NFA_END_COMPOSING {
-                            sta = nvim_nfa_state_get_out(sta);
+                        while (*sta.cast::<NfaStateT>()).c != NFA_END_COMPOSING {
+                            sta = (*sta.cast::<NfaStateT>()).out.cast::<c_void>();
                         }
-                    } else if len > 0 || mc == nvim_nfa_state_get_c(sta) {
+                    } else if len > 0 || mc == (*sta.cast::<NfaStateT>()).c {
                         if len == 0 {
                             len += utf_char2len(mc);
-                            sta = nvim_nfa_state_get_out(sta);
+                            sta = (*sta.cast::<NfaStateT>()).out.cast::<c_void>();
                         }
                         // Get composing chars into cchars[]
                         while len < clen {
@@ -13046,10 +13139,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         }
                         // Check composing chars match
                         result = OK;
-                        while nvim_nfa_state_get_c(sta) != NFA_END_COMPOSING {
+                        while (*sta.cast::<NfaStateT>()).c != NFA_END_COMPOSING {
                             let mut found = false;
                             for j in 0..ccount {
-                                if cchars[j] == nvim_nfa_state_get_c(sta) {
+                                if cchars[j] == (*sta.cast::<NfaStateT>()).c {
                                     found = true;
                                     break;
                                 }
@@ -13058,16 +13151,16 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                                 result = FAIL;
                                 break;
                             }
-                            sta = nvim_nfa_state_get_out(sta);
+                            sta = (*sta.cast::<NfaStateT>()).out.cast::<c_void>();
                         }
                     } else {
                         result = FAIL;
                     }
 
                     // ADD_STATE_IF_MATCH(end)
-                    let end = nvim_nfa_state_get_out1(t_state); // NFA_END_COMPOSING
+                    let end = (*t_state.cast::<NfaStateT>()).out1.cast::<c_void>(); // NFA_END_COMPOSING
                     if result != 0 {
-                        add_state = nvim_nfa_state_get_out(end);
+                        add_state = (*end.cast::<NfaStateT>()).out.cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13079,10 +13172,16 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         && REX.lnum <= REX.reg_maxline
                     {
                         go_to_nextline = true;
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = -1;
                     } else if curc == b'\n' as c_int && REX.reg_line_lbr as c_int != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = 1;
                     }
                 }
@@ -13092,38 +13191,40 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     if curc == 0 {
                         // break - no match
                     } else {
-                        let t_state = nvim_nfa_thread_get_state_ptr(thislist, listidx);
-                        let mut col_state = nvim_nfa_state_get_out(t_state);
+                        let t_state = (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state
+                            .cast::<c_void>();
+                        let mut col_state = (*t_state.cast::<NfaStateT>()).out.cast::<c_void>();
                         let result_if_matched = if state_c == NFA_START_COLL { 1 } else { 0 };
                         result = 0;
 
                         loop {
-                            let col_c = nvim_nfa_state_get_c(col_state);
+                            let col_c = (*col_state.cast::<NfaStateT>()).c;
                             if col_c == NFA_COMPOSING {
                                 // Composing inside collection - complex case
                                 let mc = curc;
                                 let mut len: c_int = 0;
                                 let mut sta =
-                                    nvim_nfa_state_get_out(nvim_nfa_state_get_out(t_state));
+                                    (*(*t_state.cast::<NfaStateT>()).out).out.cast::<c_void>();
                                 let mut cchars: [c_int; MAX_MCO] = [0; MAX_MCO];
                                 let mut ccount: usize = 0;
 
-                                if utf_iscomposing_legacy(nvim_nfa_state_get_c(sta)) != 0 {
+                                if utf_iscomposing_legacy((*sta.cast::<NfaStateT>()).c) != 0 {
                                     len += utf_char2len(mc);
                                 }
                                 if REX.reg_icombine as c_int != 0 && len == 0 {
-                                    if nvim_nfa_state_get_c(sta) != curc {
+                                    if (*sta.cast::<NfaStateT>()).c != curc {
                                         result = FAIL;
                                     } else {
                                         result = OK;
                                     }
-                                    while nvim_nfa_state_get_c(sta) != NFA_END_COMPOSING {
-                                        sta = nvim_nfa_state_get_out(sta);
+                                    while (*sta.cast::<NfaStateT>()).c != NFA_END_COMPOSING {
+                                        sta = (*sta.cast::<NfaStateT>()).out.cast::<c_void>();
                                     }
-                                } else if len > 0 || mc == nvim_nfa_state_get_c(sta) {
+                                } else if len > 0 || mc == (*sta.cast::<NfaStateT>()).c {
                                     if len == 0 {
                                         len += utf_char2len(mc);
-                                        sta = nvim_nfa_state_get_out(sta);
+                                        sta = (*sta.cast::<NfaStateT>()).out.cast::<c_void>();
                                     }
                                     while len < clen {
                                         let mc2 = utf_ptr2char(
@@ -13140,10 +13241,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                                         }
                                     }
                                     result = OK;
-                                    while nvim_nfa_state_get_c(sta) != NFA_END_COMPOSING {
+                                    while (*sta.cast::<NfaStateT>()).c != NFA_END_COMPOSING {
                                         let mut found = false;
                                         for j in 0..ccount {
-                                            if cchars[j] == nvim_nfa_state_get_c(sta) {
+                                            if cchars[j] == (*sta.cast::<NfaStateT>()).c {
                                                 found = true;
                                                 break;
                                             }
@@ -13152,17 +13253,22 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                                             result = FAIL;
                                             break;
                                         }
-                                        sta = nvim_nfa_state_get_out(sta);
+                                        sta = (*sta.cast::<NfaStateT>()).out.cast::<c_void>();
                                     }
                                 } else {
                                     result = FAIL;
                                 }
 
-                                let out_out1 =
-                                    nvim_nfa_state_get_out1(nvim_nfa_state_get_out(t_state));
-                                if nvim_nfa_state_get_c(out_out1) == NFA_END_COMPOSING {
+                                let out_out1 = (*(*t_state.cast::<NfaStateT>())
+                                    .out
+                                    .cast::<c_void>()
+                                    .cast::<NfaStateT>())
+                                .out1
+                                .cast::<c_void>();
+                                if (*out_out1.cast::<NfaStateT>()).c == NFA_END_COMPOSING {
                                     if result != 0 {
-                                        add_state = nvim_nfa_state_get_out(out_out1);
+                                        add_state =
+                                            (*out_out1.cast::<NfaStateT>()).out.cast::<c_void>();
                                         add_off = clen;
                                     }
                                 }
@@ -13173,9 +13279,9 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                                 break;
                             }
                             if col_c == NFA_RANGE_MIN {
-                                let c1 = nvim_nfa_state_get_val(col_state);
-                                col_state = nvim_nfa_state_get_out(col_state);
-                                let c2 = nvim_nfa_state_get_val(col_state);
+                                let c1 = (*col_state.cast::<NfaStateT>()).val;
+                                col_state = (*col_state.cast::<NfaStateT>()).out.cast::<c_void>();
+                                let c2 = (*col_state.cast::<NfaStateT>()).val;
 
                                 if curc >= c1 && curc <= c2 {
                                     result = result_if_matched;
@@ -13208,10 +13314,15 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                                 result = result_if_matched;
                                 break;
                             }
-                            col_state = nvim_nfa_state_get_out(col_state);
+                            col_state = (*col_state.cast::<NfaStateT>()).out.cast::<c_void>();
                         }
                         if result != 0 {
-                            add_state = nvim_nfa_state_get_out(nvim_nfa_state_get_out1(t_state));
+                            add_state = (*(*t_state.cast::<NfaStateT>())
+                                .out1
+                                .cast::<c_void>()
+                                .cast::<NfaStateT>())
+                            .out
+                            .cast::<c_void>();
                             add_off = clen;
                         }
                     }
@@ -13219,7 +13330,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
 
                 x if x == NFA_ANY => {
                     if curc > 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13231,13 +13345,18 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         add_here = true;
                         add_off = 0;
                     }
-                    add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                    add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).state)
+                        .out
+                        .cast::<c_void>();
                 }
 
                 x if x == NFA_IDENT => {
                     result = vim_isIDc(curc);
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13249,7 +13368,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13257,7 +13379,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_KWORD => {
                     result = nvim_regexp_call_vim_iswordp_buf(REX.input as *const c_char);
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13271,7 +13396,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13279,7 +13407,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_FNAME => {
                     result = vim_isfilec(curc);
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13291,7 +13422,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13299,7 +13433,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_PRINT => {
                     result = vim_isprintc(utf_ptr2char(REX.input as *const c_char));
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13313,7 +13450,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13321,7 +13461,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_WHITE => {
                     result = ascii_iswhite(curc);
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13333,7 +13476,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13341,7 +13487,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_DIGIT => {
                     result = ri_digit(curc);
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13353,7 +13502,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13361,7 +13513,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_HEX => {
                     result = ri_hex(curc);
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13369,7 +13524,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_NHEX => {
                     result = if curc != 0 && ri_hex(curc) == 0 { 1 } else { 0 };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13377,7 +13535,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_OCTAL => {
                     result = ri_octal(curc);
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13389,7 +13550,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13397,7 +13561,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_WORD => {
                     result = ri_word(curc);
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13409,7 +13576,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13417,7 +13587,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_HEAD => {
                     result = ri_head(curc);
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13429,7 +13602,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13437,7 +13613,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_ALPHA => {
                     result = ri_alpha(curc);
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13449,7 +13628,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13457,7 +13639,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_LOWER => {
                     result = ri_lower(curc);
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13469,7 +13654,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13477,7 +13665,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 x if x == NFA_UPPER => {
                     result = ri_upper(curc);
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13489,7 +13680,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13503,7 +13697,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13518,7 +13715,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13532,7 +13732,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13547,7 +13750,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         0
                     };
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13556,7 +13762,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     || (NFA_ZREF1..=NFA_ZREF9).contains(&x) =>
                 {
                     let mut bytelen: c_int = 0;
-                    let t_subs_norm = nvim_nfa_thread_get_subs_norm(thislist, listidx);
+                    let t_subs_norm =
+                        &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .subs
+                            .norm as *mut c_void;
 
                     if state_c >= NFA_BACKREF1 && state_c <= NFA_BACKREF9 {
                         let subidx = state_c - NFA_BACKREF1 + 1;
@@ -13568,12 +13777,15 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     }
 
                     if result != 0 {
-                        let t_state_out = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        let t_state_out =
+                            (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).state)
+                                .out
+                                .cast::<c_void>();
                         if bytelen == 0 {
                             add_here = true;
-                            add_state = nvim_nfa_state_get_out(t_state_out);
+                            add_state = (*t_state_out.cast::<NfaStateT>()).out.cast::<c_void>();
                         } else if bytelen <= clen {
-                            add_state = nvim_nfa_state_get_out(t_state_out);
+                            add_state = (*t_state_out.cast::<NfaStateT>()).out.cast::<c_void>();
                             add_off = clen;
                         } else {
                             add_state = t_state_out;
@@ -13584,19 +13796,25 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_SKIP => {
-                    let t_count = nvim_nfa_thread_get_count(thislist, listidx);
+                    let t_count = (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).count;
                     if t_count - clen <= 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     } else {
-                        add_state = nvim_nfa_thread_get_state_ptr(thislist, listidx);
+                        add_state = (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state
+                            .cast::<c_void>();
                         add_off = 0;
                         add_count = t_count - clen;
                     }
                 }
 
                 x if x == NFA_LNUM || x == NFA_LNUM_GT || x == NFA_LNUM_LT => {
-                    let val = nvim_nfa_thread_get_state_val(thislist, listidx);
+                    let val =
+                        (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).state).val;
                     result = if (REX.reg_match.is_null() as c_int) != 0 {
                         rs_nfa_re_num_cmp(
                             val as usize,
@@ -13608,12 +13826,16 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     };
                     if result != 0 {
                         add_here = true;
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                     }
                 }
 
                 x if x == NFA_COL || x == NFA_COL_GT || x == NFA_COL_LT => {
-                    let val = nvim_nfa_thread_get_state_val(thislist, listidx);
+                    let val =
+                        (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).state).val;
                     let col_offset = (REX.input as usize).wrapping_sub(REX.line as usize);
                     result = rs_nfa_re_num_cmp(
                         val as usize,
@@ -13622,12 +13844,16 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     );
                     if result != 0 {
                         add_here = true;
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                     }
                 }
 
                 x if x == NFA_VCOL || x == NFA_VCOL_GT || x == NFA_VCOL_LT => {
-                    let val = nvim_nfa_thread_get_state_val(thislist, listidx);
+                    let val =
+                        (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).state).val;
                     let op = state_c - NFA_VCOL;
                     let col = (REX.input as isize - REX.line as isize) as i32;
 
@@ -13670,13 +13896,17 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         }
                         if result != 0 {
                             add_here = true;
-                            add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                            add_state =
+                                (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).state)
+                                    .out
+                                    .cast::<c_void>();
                         }
                     }
                 }
 
                 x if x == NFA_MARK || x == NFA_MARK_GT || x == NFA_MARK_LT => {
-                    let val = nvim_nfa_thread_get_state_val(thislist, listidx);
+                    let val =
+                        (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).state).val;
                     let col_sz = if (REX.reg_match.is_null() as c_int) != 0 {
                         (REX.input as isize - REX.line as isize) as usize
                     } else {
@@ -13733,7 +13963,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         };
                         if result != 0 {
                             add_here = true;
-                            add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                            add_state =
+                                (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).state)
+                                    .out
+                                    .cast::<c_void>();
                         }
                     }
                 }
@@ -13751,7 +13984,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     };
                     if result != 0 {
                         add_here = true;
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                     }
                 }
 
@@ -13759,7 +13995,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     result = rs_reg_match_visual();
                     if result != 0 {
                         add_here = true;
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                     }
                 }
 
@@ -13788,7 +14027,10 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
 
                     // ADD_STATE_IF_MATCH(t->state)
                     if result != 0 {
-                        add_state = nvim_nfa_thread_get_state_out(thislist, listidx);
+                        add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                            .state)
+                            .out
+                            .cast::<c_void>();
                         add_off = clen;
                     }
                 }
@@ -13796,7 +14038,9 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
 
             // Post-switch: handle add_state with PIM resolution
             if !add_state.is_null() {
-                let pim_result = nvim_nfa_thread_get_pim_result(thislist, listidx);
+                let pim_result = (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                    .pim
+                    .result;
                 let mut use_pim: bool = pim_result != NFA_PIM_UNUSED;
                 let mut pim_ptr: NfaPimHandle = core::ptr::null_mut();
                 let mut pim_copy: NfaPimHandle = core::ptr::null_mut();
@@ -13804,16 +14048,17 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 if !use_pim {
                     pim_ptr = core::ptr::null_mut();
                 } else {
-                    pim_ptr = nvim_nfa_thread_get_pim_ptr(thislist, listidx);
+                    pim_ptr = &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).pim
+                        as *mut c_void;
                 }
 
                 // Handle the postponed invisible match if the match might end
                 // without advancing and before the end of the line.
                 if use_pim && (clen == 0 || match_follows(add_state, 0)) {
-                    let pim_res = nvim_nfa_pim_get_result(pim_ptr);
+                    let pim_res = (*pim_ptr.cast::<NfaPimT>()).result;
                     if pim_res == NFA_PIM_TODO {
                         result = recursive_regmatch_t(
-                            nvim_nfa_pim_get_state(pim_ptr),
+                            (*pim_ptr.cast::<NfaPimT>()).state.cast::<c_void>(),
                             pim_ptr,
                             prog,
                             submatch,
@@ -13821,15 +14066,12 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                             &mut listids,
                             &mut listids_len,
                         );
-                        nvim_nfa_pim_set_result(
-                            pim_ptr,
-                            if result != 0 {
-                                NFA_PIM_MATCH
-                            } else {
-                                NFA_PIM_NOMATCH
-                            },
-                        );
-                        let pim_state_c = nvim_nfa_pim_get_state_c(pim_ptr);
+                        (*pim_ptr.cast::<NfaPimT>()).result = if result != 0 {
+                            NFA_PIM_MATCH
+                        } else {
+                            NFA_PIM_NOMATCH
+                        };
+                        let pim_state_c = (*(*pim_ptr.cast::<NfaPimT>()).state).c;
                         let is_neg = pim_state_c == NFA_START_INVISIBLE_NEG
                             || pim_state_c == NFA_START_INVISIBLE_NEG_FIRST
                             || pim_state_c == NFA_START_INVISIBLE_BEFORE_NEG
@@ -13837,13 +14079,13 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         if result != is_neg as c_int {
                             // Copy submatch info from the recursive call
                             copy_sub_off_o(
-                                nvim_nfa_pim_get_subs_norm(pim_ptr),
-                                nvim_regexp_regsubs_get_norm(m),
+                                &raw mut (*pim_ptr.cast::<NfaPimT>()).subs.norm as *mut c_void,
+                                &raw mut (*m.cast::<RegsubsT>()).norm as *mut c_void,
                             );
                             if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
                                 copy_sub_off_o(
-                                    nvim_nfa_pim_get_subs_synt(pim_ptr),
-                                    nvim_regexp_regsubs_get_synt(m),
+                                    &raw mut (*pim_ptr.cast::<NfaPimT>()).subs.synt as *mut c_void,
+                                    &raw mut (*m.cast::<RegsubsT>()).synt as *mut c_void,
                                 );
                             }
                         }
@@ -13852,7 +14094,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     }
 
                     // for \@! and \@<! it is a match when result is false
-                    let pim_state_c = nvim_nfa_pim_get_state_c(pim_ptr);
+                    let pim_state_c = (*(*pim_ptr.cast::<NfaPimT>()).state).c;
                     let is_neg = pim_state_c == NFA_START_INVISIBLE_NEG
                         || pim_state_c == NFA_START_INVISIBLE_NEG_FIRST
                         || pim_state_c == NFA_START_INVISIBLE_BEFORE_NEG
@@ -13860,13 +14102,17 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     if result != is_neg as c_int {
                         // Copy submatch info
                         copy_sub_off_o(
-                            nvim_nfa_thread_get_subs_norm(thislist, listidx),
-                            nvim_nfa_pim_get_subs_norm(pim_ptr),
+                            &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                                .subs
+                                .norm as *mut c_void,
+                            &raw mut (*pim_ptr.cast::<NfaPimT>()).subs.norm as *mut c_void,
                         );
                         if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
                             copy_sub_off_o(
-                                nvim_nfa_thread_get_subs_synt(thislist, listidx),
-                                nvim_nfa_pim_get_subs_synt(pim_ptr),
+                                &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
+                                    .subs
+                                    .synt as *mut c_void,
+                                &raw mut (*pim_ptr.cast::<NfaPimT>()).subs.synt as *mut c_void,
                             );
                         }
                     } else {
@@ -13883,24 +14129,31 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 // If "pim" points into l->t it may become invalid when
                 // adding the state causes the list to be reallocated.
                 if use_pim {
-                    pim_copy = nvim_regexp_alloc_pim();
+                    pim_copy = xcalloc(1, core::mem::size_of::<NfaPimT>());
                     copy_pim_o(pim_copy, pim_ptr);
                     pim_ptr = pim_copy;
                 }
 
                 if add_here {
-                    let subs_ptr = nvim_nfa_thread_get_subs_ptr(thislist, listidx);
+                    let subs_ptr =
+                        &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).subs
+                            as *mut c_void;
                     r = addstate_here_o(thislist, add_state, subs_ptr, pim_ptr, &mut listidx);
                 } else {
-                    let subs_ptr = nvim_nfa_thread_get_subs_ptr(thislist, listidx);
+                    let subs_ptr =
+                        &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize)).subs
+                            as *mut c_void;
                     r = addstate_o(nextlist, add_state, subs_ptr, pim_ptr, add_off);
                     if add_count > 0 {
-                        nvim_nfa_list_set_last_thread_count(nextlist, add_count);
+                        (*(*nextlist.cast::<NfaListT>())
+                            .t
+                            .add(((*nextlist.cast::<NfaListT>()).n - 1) as usize))
+                        .count = add_count;
                     }
                 }
 
                 if !pim_copy.is_null() {
-                    nvim_regexp_free_pim(pim_copy);
+                    xfree(pim_copy);
                 }
 
                 if r.is_null() {
@@ -13951,10 +14204,12 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
             if toplevel {
                 let mut add = true;
 
-                if nvim_nfa_prog_get_regstart(prog) != 0 && clen != 0 {
-                    if nvim_nfa_list_get_n(nextlist) == 0 {
+                if (*prog.cast::<NfaRegprogT>()).regstart != 0 && clen != 0 {
+                    if (*nextlist.cast::<NfaListT>()).n == 0 {
                         let mut col = (REX.input as isize - REX.line as isize) as i32 + clen;
-                        if rs_skip_to_start(nvim_nfa_prog_get_regstart(prog), &mut col) == FAIL {
+                        if rs_skip_to_start((*prog.cast::<NfaRegprogT>()).regstart, &mut col)
+                            == FAIL
+                        {
                             break 'outer;
                         }
                         // rex.input = rex.line + col - clen
@@ -13962,9 +14217,9 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                         REX.input = new_input;
                     } else {
                         let c = utf_ptr2char(REX.input.offset(clen as isize) as *const c_char);
-                        if c != nvim_nfa_prog_get_regstart(prog)
+                        if c != (*prog.cast::<NfaRegprogT>()).regstart
                             && (REX.reg_ic as c_int == 0
-                                || utf_fold(c) != utf_fold(nvim_nfa_prog_get_regstart(prog)))
+                                || utf_fold(c) != utf_fold((*prog.cast::<NfaRegprogT>()).regstart))
                         {
                             add = false;
                         }
@@ -13974,14 +14229,19 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 if add {
                     if (REX.reg_match.is_null() as c_int) != 0 {
                         let start_col = (REX.input as isize - REX.line as isize) as i32 + clen;
-                        nvim_regexp_regsubs_set_multi_start(m, 0, REX.lnum, start_col);
-                        nvim_regexp_regsubs_set_norm_orig_start_col(m, start_col);
+                        {
+                            let _t = m.cast::<RegsubsT>();
+                            (*_t).norm.list.multi[0_usize].start_lnum = REX.lnum;
+                            (*_t).norm.list.multi[0_usize].start_col = start_col;
+                        }
+                        (*m.cast::<RegsubsT>()).norm.orig_start_col = start_col;
                     } else {
-                        nvim_regexp_regsubs_set_line_start(m, 0, REX.input.offset(clen as isize));
+                        (*m.cast::<RegsubsT>()).norm.list.line[0_usize].start =
+                            REX.input.offset(clen as isize);
                     }
                     if addstate_o(
                         nextlist,
-                        nvim_nfa_state_get_out(start),
+                        (*start.cast::<NfaStateT>()).out.cast::<c_void>(),
                         m,
                         core::ptr::null_mut(),
                         clen,
@@ -14037,10 +14297,18 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
     } // loop (outer)
 
     // theend: Free memory
-    nvim_nfa_list_free_threads(list0);
-    nvim_nfa_list_free_threads(list1);
+    {
+        let l0 = list0.cast::<NfaListT>();
+        xfree((*l0).t.cast::<c_void>());
+        xfree(l0.cast::<c_void>());
+    }
+    {
+        let l1 = list1.cast::<NfaListT>();
+        xfree((*l1).t.cast::<c_void>());
+        xfree(l1.cast::<c_void>());
+    }
     if !listids.is_null() {
-        nvim_regexp_xfree(listids as *mut c_void);
+        nvim_regexp_xfree(listids.cast::<c_void>());
     }
 
     MATCH_FOUND
@@ -14063,8 +14331,6 @@ const fn ascii_isdigit_i(c: c_int) -> c_int {
 // Extern declarations for Phase 8.5 / Phase 7 C accessors
 extern "C" {
     // regsubs_T heap allocation
-    fn nvim_regexp_alloc_regsubs() -> RegsubsHandle;
-    fn nvim_regexp_free_regsubs(s: RegsubsHandle);
 
     // iemsg null error
     fn nvim_regexp_call_iemsg_null();
@@ -14179,15 +14445,15 @@ pub unsafe extern "C" fn rs_nfa_regtry(
     tm: *mut c_void,
     timed_out: *mut c_int,
 ) -> c_int {
-    let start = nvim_nfa_prog_get_start(prog);
+    let start = (*prog.cast::<NfaRegprogT>()).start.cast::<c_void>();
 
     // Inlined nvim_regexp_nfa_regtry_setup: set rex.input and NFA time globals
     REX.input = REX.line.add(col as usize);
     nvim_regexp_set_nfa_time_globals(tm, timed_out);
 
     // Allocate subs and m on the heap (Rust can't stack-allocate opaque C structs)
-    let subs = nvim_regexp_alloc_regsubs();
-    let m = nvim_regexp_alloc_regsubs();
+    let subs = xcalloc(1, core::mem::size_of::<RegsubsT>());
+    let m = xcalloc(1, core::mem::size_of::<RegsubsT>());
 
     // Clear sub fields using typed pointers
     let subs_typed = subs.cast::<RegsubsT>();
@@ -14200,13 +14466,13 @@ pub unsafe extern "C" fn rs_nfa_regtry(
     let result = rs_nfa_regmatch(prog, start, subs, m);
 
     if result == 0 {
-        nvim_regexp_free_regsubs(subs);
-        nvim_regexp_free_regsubs(m);
+        xfree(subs);
+        xfree(m);
         return 0;
     }
     if result == NFA_TOO_EXPENSIVE {
-        nvim_regexp_free_regsubs(subs);
-        nvim_regexp_free_regsubs(m);
+        xfree(subs);
+        xfree(m);
         return NFA_TOO_EXPENSIVE;
     }
 
@@ -14221,14 +14487,14 @@ pub unsafe extern "C" fn rs_nfa_regtry(
     // Handle \z(...\) extmatch
     nvim_regexp_unref_re_extmatch_out();
     nvim_regexp_set_re_extmatch_out(core::ptr::null_mut());
-    let reghasz = nvim_nfa_prog_get_reghasz(prog);
+    let reghasz = (*prog.cast::<NfaRegprogT>()).reghasz;
     if reghasz == REX_SET as c_int {
         nfa_regtry_extract_extmatch(subs_typed);
     }
 
     let ret = 1 + REX.lnum;
-    nvim_regexp_free_regsubs(subs);
-    nvim_regexp_free_regsubs(m);
+    xfree(subs);
+    xfree(m);
     ret
 }
 
@@ -14349,20 +14615,20 @@ pub unsafe extern "C" fn rs_nfa_regexec_both(
     REX.line = line;
 
     // If anchored and col > 0, no match possible
-    let reganch = nvim_nfa_prog_get_reganch(prog);
+    let reganch = (*prog.cast::<NfaRegprogT>()).reganch;
     if reganch != 0 && col > 0 {
         return 0;
     }
 
     // Skip ahead to start character
-    let regstart = nvim_nfa_prog_get_regstart(prog);
+    let regstart = (*prog.cast::<NfaRegprogT>()).regstart;
     if regstart != 0 {
         if rs_skip_to_start(regstart, core::ptr::from_mut::<i32>(&mut col)) == FAIL {
             return 0;
         }
 
         // If match_text is set, try the fast path
-        let match_text = nvim_nfa_prog_get_match_text(prog);
+        let match_text = (*prog.cast::<NfaRegprogT>()).match_text;
         if !match_text.is_null() && *match_text != 0 && !REX.reg_icombine {
             retval = rs_find_match_text(core::ptr::from_mut::<i32>(&mut col), regstart, match_text);
             nfa_regexec_set_matchcol(col);
@@ -14837,7 +15103,6 @@ extern "C" {
     fn nvim_regexp_set_p_re(v: i32);
 
     // NFA pattern
-    fn nvim_nfa_prog_get_pattern(prog: *const c_void) -> *const c_char;
 
     // reg_do_extmatch
     fn nvim_regexp_set_reg_do_extmatch(v: c_int);
@@ -14889,7 +15154,7 @@ unsafe fn handle_nfa_fallback_nl(rmp: *mut c_void, line: *const u8, col: i32, nl
     let prog = nvim_regmatch_get_regprog(rmp);
     let save_p_re = nvim_regexp_get_p_re();
     let re_flags = nvim_regprog_get_re_flags(prog) as c_int;
-    let pat = nvim_regexp_xstrdup(nvim_nfa_prog_get_pattern(prog));
+    let pat = nvim_regexp_xstrdup((*prog.cast::<NfaRegprogT>()).pattern.cast_const());
 
     nvim_regexp_set_p_re(BACKTRACKING_ENGINE);
     nvim_regexp_call_vim_regfree(prog);
@@ -14923,7 +15188,7 @@ unsafe fn handle_nfa_fallback_multi(
     let prog = nvim_regmmatch_get_regprog(rmp);
     let save_p_re = nvim_regexp_get_p_re();
     let re_flags = nvim_regprog_get_re_flags(prog) as c_int;
-    let pat = nvim_regexp_xstrdup(nvim_nfa_prog_get_pattern(prog));
+    let pat = nvim_regexp_xstrdup((*prog.cast::<NfaRegprogT>()).pattern.cast_const());
 
     nvim_regexp_set_p_re(BACKTRACKING_ENGINE);
     let prev_prog = prog;
