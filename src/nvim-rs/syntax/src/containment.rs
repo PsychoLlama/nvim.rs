@@ -40,7 +40,7 @@ extern "C" {
     fn nvim_synpat_has_next_list(pat: SynPatHandle) -> c_int;
     fn nvim_synpat_has_cont_in_list(pat: SynPatHandle) -> c_int;
 
-    // ID list check (main containment function)
+    // ID list check (old C delegation - kept for reference during migration)
     fn nvim_syn_in_id_list(
         cur_si: StateItemHandle,
         list: IdListHandle,
@@ -49,6 +49,16 @@ extern "C" {
         cont_in_list: IdListHandle,
         flags: c_int,
     ) -> c_int;
+
+    // New accessors for Phase 2: rs_syn_in_id_list implementation
+    fn nvim_stateitem_prev_if_trans_cont(item: StateItemHandle) -> StateItemHandle;
+    fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
+    fn nvim_syn_get_pattern_sp_syn_id(idx: c_int) -> i16;
+    fn nvim_syn_get_pattern_sp_syn_inc_tag(idx: c_int) -> c_int;
+    fn nvim_syn_get_pattern_sp_syn_cont_in_list(idx: c_int) -> IdListHandle;
+    fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
+    fn nvim_syn_get_cluster_scl_list(idx: c_int) -> IdListHandle;
+    fn nvim_syn_is_id_list_all(list: IdListHandle) -> c_int;
 }
 
 // =============================================================================
@@ -297,6 +307,125 @@ impl IdListCheckParams {
     }
 }
 
+// =============================================================================
+// Phase 2: Full in_id_list implementation in Rust
+// =============================================================================
+
+/// Core recursive implementation of the in_id_list check.
+///
+/// `depth` tracks the recursion level for cluster expansion (limit: 30).
+///
+/// # Safety
+/// All handle arguments must be null or valid C pointers.
+unsafe fn in_id_list_inner(
+    cur_si: StateItemHandle,
+    list: IdListHandle,
+    id: i16,
+    inc_tag: c_int,
+    cont_in_list: IdListHandle,
+    flags: c_int,
+    depth: i32,
+) -> bool {
+    // If ssp has a "containedin" list and "cur_si" is in it, return true.
+    if !cur_si.is_null() && !cont_in_list.is_null() && (flags & HL_MATCH) == 0 {
+        // Walk back through transparent items without a contains argument.
+        let actual_si = nvim_stateitem_prev_if_trans_cont(cur_si);
+
+        // cur_si->si_idx is -1 for keywords; keywords never contain anything.
+        let si_idx = nvim_stateitem_get_idx(actual_si);
+        if si_idx >= 0 {
+            let pat_id = nvim_syn_get_pattern_sp_syn_id(si_idx);
+            let pat_inc_tag = nvim_syn_get_pattern_sp_syn_inc_tag(si_idx);
+            let pat_cont_in = nvim_syn_get_pattern_sp_syn_cont_in_list(si_idx);
+            let pat_flags = nvim_syn_get_pattern_flags(si_idx);
+            if in_id_list_inner(
+                StateItemHandle(std::ptr::null_mut()),
+                cont_in_list,
+                pat_id,
+                pat_inc_tag,
+                pat_cont_in,
+                pat_flags,
+                depth,
+            ) {
+                return true;
+            }
+        }
+    }
+
+    if list.is_null() {
+        return false;
+    }
+
+    // If list is ID_LIST_ALL, we are in a transparent item that isn't
+    // inside anything. Only allow not-contained groups.
+    if nvim_syn_is_id_list_all(list) != 0 {
+        return (flags & HL_CONTAINED) == 0;
+    }
+
+    // Is this top-level (not 'contained') in the file it was declared in?
+    let toplevel = (flags & HL_CONTAINED) == 0 || (flags & HL_INCLUDED_TOPLEVEL) != 0;
+
+    // The first item may be a special marker (ALLBUT/TOP/CONTAINED).
+    let mut list_ptr = list.0;
+    let first_item = *list_ptr;
+    let retval: bool;
+
+    if first_item >= SYNID_ALLBUT as i16 && (first_item as c_int) < SYNID_CLUSTER {
+        let item_int = first_item as c_int;
+        if item_int < SYNID_TOP {
+            // ALL or ALLBUT: accept all groups in the same file
+            if item_int - SYNID_ALLBUT != inc_tag {
+                return false;
+            }
+        } else if item_int < SYNID_CONTAINED {
+            // TOP: accept all not-contained groups in the same file
+            if item_int - SYNID_TOP != inc_tag || !toplevel {
+                return false;
+            }
+        } else {
+            // CONTAINED: accept all contained groups in the same file
+            if item_int - SYNID_CONTAINED != inc_tag || toplevel {
+                return false;
+            }
+        }
+        list_ptr = list_ptr.add(1);
+        retval = false;
+    } else {
+        retval = true;
+    }
+
+    // Return `retval` if id is in the contains list.
+    let mut item = *list_ptr;
+    while item != 0 {
+        if item == id {
+            return retval;
+        }
+        if (item as c_int) >= SYNID_CLUSTER {
+            let cluster_idx = (item as c_int) - SYNID_CLUSTER;
+            let scl_list = nvim_syn_get_cluster_scl_list(cluster_idx);
+            // Restrict recursiveness to 30 to avoid an endless loop for a
+            // cluster that includes itself (indirectly).
+            if !scl_list.is_null() && depth < 30 {
+                let r = in_id_list_inner(
+                    StateItemHandle(std::ptr::null_mut()),
+                    scl_list,
+                    id,
+                    inc_tag,
+                    IdListHandle::null(),
+                    flags,
+                    depth + 1,
+                );
+                if r {
+                    return retval;
+                }
+            }
+        }
+        list_ptr = list_ptr.add(1);
+        item = *list_ptr;
+    }
+    !retval
+}
+
 /// Check if a syntax ID is in an ID list.
 ///
 /// This is the core containment check used throughout syntax highlighting.
@@ -318,15 +447,42 @@ impl IdListCheckParams {
 #[must_use]
 pub fn in_id_list(cur_si: StateItemHandle, list: IdListHandle, params: &IdListCheckParams) -> bool {
     unsafe {
-        nvim_syn_in_id_list(
+        in_id_list_inner(
             cur_si,
             list,
-            params.id as c_int,
+            params.id,
             params.inc_tag,
             params.cont_in_list,
             params.flags,
-        ) != 0
+            0,
+        )
     }
+}
+
+/// FFI export: check if a syntax ID is in an ID list.
+///
+/// This is called from C wrappers (nvim_syn_in_id_list and in_id_list shim).
+///
+/// # Safety
+/// All pointer arguments must be null or valid C pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_in_id_list(
+    cur_si: StateItemHandle,
+    list: IdListHandle,
+    id: c_int,
+    inc_tag: c_int,
+    cont_in_list: IdListHandle,
+    flags: c_int,
+) -> c_int {
+    c_int::from(in_id_list_inner(
+        cur_si,
+        list,
+        id as i16,
+        inc_tag,
+        cont_in_list,
+        flags,
+        0,
+    ))
 }
 
 /// Check if a syntax ID is in an ID list (simple version).

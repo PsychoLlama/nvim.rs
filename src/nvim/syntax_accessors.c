@@ -2453,102 +2453,16 @@ static int16_t *copy_id_list(const int16_t *const list)
   return retval;
 }
 
+/// in_id_list implemented in Rust.
+/// See rs_syn_in_id_list in nvim-syntax/src/containment.rs
+extern int rs_syn_in_id_list(stateitem_T *cur_si, int16_t *list, int id, int inc_tag,
+                              int16_t *cont_in_list, int flags);
+
 /// Check if syntax group "ssp" is in the ID list "list" of "cur_si".
-/// "cur_si" can be NULL if not checking the "containedin" list.
-/// Used to check if a syntax item is in the "contains" or "nextgroup" list of
-/// the current item.
-/// This function is called very often, keep it fast!!
-///
-/// @param cur_si     current item or NULL
-/// @param list       id list
-/// @param ssp        group id and ":syn include" tag of group
-/// @param flags      group flags
+/// Thin shim calling the Rust implementation.
 static int in_id_list(stateitem_T *cur_si, int16_t *list, struct sp_syn *ssp, int flags)
 {
-  int retval;
-  int16_t id = ssp->id;
-  static int depth = 0;
-
-  // If ssp has a "containedin" list and "cur_si" is in it, return true.
-  if (cur_si != NULL && ssp->cont_in_list != NULL
-      && !(cur_si->si_flags & HL_MATCH)) {
-    // Ignore transparent items without a contains argument.  Double check
-    // that we don't go back past the first one.
-    while ((cur_si->si_flags & HL_TRANS_CONT)
-           && cur_si > (stateitem_T *)(current_state.ga_data)) {
-      cur_si--;
-    }
-    // cur_si->si_idx is -1 for keywords, these never contain anything.
-    if (cur_si->si_idx >= 0 && in_id_list(NULL, ssp->cont_in_list,
-                                          &(SYN_ITEMS(syn_block)[cur_si->si_idx].sp_syn),
-                                          SYN_ITEMS(syn_block)[cur_si->si_idx].sp_flags)) {
-      return true;
-    }
-  }
-
-  if (list == NULL) {
-    return false;
-  }
-
-  // If list is ID_LIST_ALL, we are in a transparent item that isn't
-  // inside anything.  Only allow not-contained groups.
-  if (list == ID_LIST_ALL) {
-    return !(flags & HL_CONTAINED);
-  }
-
-  // Is this top-level (i.e. not 'contained') in the file it was declared in?
-  // For included files, this is different from HL_CONTAINED, which is set
-  // unconditionally.
-  bool toplevel = !(flags & HL_CONTAINED) || (flags & HL_INCLUDED_TOPLEVEL);
-
-  // If the first item is "ALLBUT", return true if "id" is NOT in the
-  // contains list.  We also require that "id" is at the same ":syn include"
-  // level as the list.
-  int16_t item = *list;
-  if (item >= SYNID_ALLBUT && item < SYNID_CLUSTER) {
-    if (item < SYNID_TOP) {
-      // ALL or ALLBUT: accept all groups in the same file
-      if (item - SYNID_ALLBUT != ssp->inc_tag) {
-        return false;
-      }
-    } else if (item < SYNID_CONTAINED) {
-      // TOP: accept all not-contained groups in the same file
-      if (item - SYNID_TOP != ssp->inc_tag || !toplevel) {
-        return false;
-      }
-    } else {
-      // CONTAINED: accept all contained groups in the same file
-      if (item - SYNID_CONTAINED != ssp->inc_tag || toplevel) {
-        return false;
-      }
-    }
-    item = *++list;
-    retval = false;
-  } else {
-    retval = true;
-  }
-
-  // Return "retval" if id is in the contains list.
-  while (item != 0) {
-    if (item == id) {
-      return retval;
-    }
-    if (item >= SYNID_CLUSTER) {
-      int16_t *scl_list = SYN_CLSTR(syn_block)[item - SYNID_CLUSTER].scl_list;
-      // restrict recursiveness to 30 to avoid an endless loop for a
-      // cluster that includes itself (indirectly)
-      if (scl_list != NULL && depth < 30) {
-        depth++;
-        int r = in_id_list(NULL, scl_list, ssp, flags);
-        depth--;
-        if (r) {
-          return retval;
-        }
-      }
-    }
-    item = *++list;
-  }
-  return !retval;
+  return rs_syn_in_id_list(cur_si, list, ssp->id, ssp->inc_tag, ssp->cont_in_list, flags);
 }
 
 struct subcommand {
@@ -3768,6 +3682,59 @@ void nvim_stateitem_set_next_list(stateitem_T *item, int16_t *list)
 
 int nvim_syn_is_id_list_all(int16_t *list) { return list == ID_LIST_ALL ? 1 : 0; }
 int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
+
+/// Walk back through transparent items in current_state starting from item.
+/// Returns the previous item if:
+///   - item has HL_TRANS_CONT flag AND
+///   - item is not the first element of current_state
+/// Otherwise returns item unchanged.
+stateitem_T *nvim_stateitem_prev_if_trans_cont(stateitem_T *item)
+{
+  if (item == NULL) {
+    return NULL;
+  }
+  while ((item->si_flags & HL_TRANS_CONT)
+         && item > (stateitem_T *)(current_state.ga_data)) {
+    item--;
+  }
+  return item;
+}
+
+/// Get SYN_ITEMS(syn_block)[idx].sp_syn.id
+int16_t nvim_syn_get_pattern_sp_syn_id(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_syn.id;
+}
+
+/// Get SYN_ITEMS(syn_block)[idx].sp_syn.inc_tag
+int nvim_syn_get_pattern_sp_syn_inc_tag(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_syn.inc_tag;
+}
+
+/// Get SYN_ITEMS(syn_block)[idx].sp_syn.cont_in_list
+int16_t *nvim_syn_get_pattern_sp_syn_cont_in_list(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return NULL;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_syn.cont_in_list;
+}
+
+/// Get SYN_CLSTR(syn_block)[idx].scl_list
+int16_t *nvim_syn_get_cluster_scl_list(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_clusters.ga_len) {
+    return NULL;
+  }
+  return SYN_CLSTR(syn_block)[idx].scl_list;
+}
 
 /// Call check_keyword_id from Rust
 
