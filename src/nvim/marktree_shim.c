@@ -1891,11 +1891,6 @@ void nvim_mtnode_intersect_push(MTNode *x, uint64_t id)
   kvi_push(x->intersect, id);
 }
 
-// nvim_marktree_put is still used by the extmark Rust crate
-void nvim_marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_right)
-{
-  rs_marktree_put(b, key, end_row, end_col, end_right);
-}
 
 // ============================================================================
 // B-tree Deletion Operations (for Rust FFI)

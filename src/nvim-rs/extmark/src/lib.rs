@@ -403,8 +403,8 @@ extern "C" {
     // Marktree put (insert mark)
     // ========================================================================
 
-    /// Insert a mark into the marktree with optional end position.
-    fn nvim_marktree_put(
+    /// Insert a mark into the marktree with optional end position (Rust implementation).
+    fn rs_marktree_put(
         b: MarkTreeHandle,
         key: MTKey,
         end_row: c_int,
@@ -748,7 +748,7 @@ pub extern "C" fn rs_extmark_set(
             decor_data: decor.data,
         };
         let tree = unsafe { nvim_buf_get_marktree(buf) };
-        unsafe { nvim_marktree_put(tree, mark, end_row, end_col, end_right_gravity) };
+        unsafe { rs_marktree_put(tree, mark, end_row, end_col, end_right_gravity) };
         unsafe { nvim_decor_state_invalidate(buf) };
     }
 
