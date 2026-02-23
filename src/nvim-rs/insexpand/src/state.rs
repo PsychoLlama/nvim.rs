@@ -222,6 +222,142 @@ pub unsafe extern "C" fn rs_ins_compl_restart() {
     nvim_set_compl_num_bests(0);
 }
 
+// =============================================================================
+// Phase 1: ins_compl_mode and thesaurus_func_complete
+// =============================================================================
+
+// ctrl_x_mode_names[] indexed by (ctrl_x_mode & ~CTRL_X_WANT_IDENT)
+// Must match the C static array definition exactly.
+// NULL entries are represented as empty strings since they shouldn't be returned.
+static CTRL_X_MODE_NAMES: [Option<&'static [u8]>; 20] = [
+    Some(b"keyword"),       // 0  CTRL_X_NORMAL
+    Some(b"ctrl_x"),        // 1  CTRL_X_NOT_DEFINED_YET
+    Some(b"scroll"),        // 2  CTRL_X_SCROLL
+    Some(b"whole_line"),    // 3  CTRL_X_WHOLE_LINE
+    Some(b"files"),         // 4  CTRL_X_FILES
+    Some(b"tags"),          // 5  CTRL_X_TAGS (base)
+    Some(b"path_patterns"), // 6  CTRL_X_PATH_PATTERNS (base)
+    Some(b"path_defines"),  // 7  CTRL_X_PATH_DEFINES (base)
+    Some(b"unknown"),       // 8  CTRL_X_FINISHED
+    Some(b"dictionary"),    // 9  CTRL_X_DICTIONARY (base)
+    Some(b"thesaurus"),     // 10 CTRL_X_THESAURUS (base)
+    Some(b"cmdline"),       // 11 CTRL_X_CMDLINE
+    Some(b"function"),      // 12 CTRL_X_FUNCTION
+    Some(b"omni"),          // 13 CTRL_X_OMNI
+    Some(b"spell"),         // 14 CTRL_X_SPELL
+    None,                   // 15 CTRL_X_LOCAL_MSG (NULL in C)
+    Some(b"eval"),          // 16 CTRL_X_EVAL
+    Some(b"cmdline"),       // 17 CTRL_X_CMDLINE_CTRL_X
+    None,                   // 18 CTRL_X_BUFNAMES (NULL in C)
+    Some(b"register"),      // 19 CTRL_X_REGISTER
+];
+
+use std::os::raw::c_char;
+
+extern "C" {
+    // New accessors for Phase 1
+    fn nvim_get_p_tsrfu_nonempty() -> c_int;
+    fn nvim_get_curbuf_b_p_tsrfu_nonempty() -> c_int;
+    // Compound accessors for complex functions
+    fn nvim_get_next_include_file_completion(compl_type: c_int);
+    fn nvim_get_next_cmdline_completion_impl();
+    fn nvim_get_next_spell_completion_impl(lnum: c_int);
+    fn nvim_do_autocmd_completedone_impl(c: c_int, mode: c_int, word: *const c_char);
+    fn nvim_ins_compl_show_filename_impl();
+}
+
+/// Return the Insert completion mode name string.
+///
+/// Returns a pointer to a static NUL-terminated string, or a pointer to an
+/// empty string if no mode is active. Never returns NULL.
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_mode() -> *const c_char {
+    let mode = nvim_get_ctrl_x_mode();
+    let started = nvim_get_compl_started();
+
+    // Check conditions: not-defined-yet, scroll, or compl_started
+    let not_defined_yet = mode == CTRL_X_NOT_DEFINED_YET;
+    let is_scroll = mode == CTRL_X_SCROLL;
+
+    if not_defined_yet || is_scroll || started != 0 {
+        // Index into mode names array: mode & ~CTRL_X_WANT_IDENT
+        let masked = mode & !CTRL_X_WANT_IDENT;
+        if masked >= 0 {
+            #[allow(clippy::cast_sign_loss)]
+            let idx = masked as usize;
+            if idx < CTRL_X_MODE_NAMES.len() {
+                if let Some(name) = CTRL_X_MODE_NAMES[idx] {
+                    // Return a pointer to the static NUL-terminated byte string
+                    return name.as_ptr().cast::<c_char>();
+                }
+            }
+        }
+    }
+
+    // Return pointer to a static empty string (not NULL)
+    c"".as_ptr()
+}
+
+/// Returns true when using a user-defined function for thesaurus completion.
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_thesaurus_func_complete(compl_type: c_int) -> c_int {
+    c_int::from(
+        compl_type == CTRL_X_THESAURUS
+            && (nvim_get_curbuf_b_p_tsrfu_nonempty() != 0 || nvim_get_p_tsrfu_nonempty() != 0),
+    )
+}
+
+/// Get the next set of identifiers or defines matching compl_pattern in included files.
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_next_include_file_completion(compl_type: c_int) {
+    nvim_get_next_include_file_completion(compl_type);
+}
+
+/// Get the next set of command-line completions matching compl_pattern.
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_next_cmdline_completion() {
+    nvim_get_next_cmdline_completion_impl();
+}
+
+/// Get the next set of spell suggestions matching compl_pattern.
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_next_spell_completion(lnum: c_int) {
+    nvim_get_next_spell_completion_impl(lnum);
+}
+
+/// Build v_event dict and fire EVENT_COMPLETEDONE autocmd.
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_autocmd_completedone(c: c_int, mode: c_int, word: *const c_char) {
+    nvim_do_autocmd_completedone_impl(c, mode, word);
+}
+
+/// Show the file name for the completion match (if any).
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_show_filename() {
+    nvim_ins_compl_show_filename_impl();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

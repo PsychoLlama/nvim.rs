@@ -160,6 +160,14 @@ extern void rs_ins_compl_fuzzy_sort(void);
 extern void rs_sort_compl_match_list(int compare_type);
 extern void rs_ins_compl_new_leader(void);
 extern void rs_ins_compl_del_pum(void);
+// Phase 1 Rust exports
+extern const char *rs_ins_compl_mode(void);
+extern int rs_thesaurus_func_complete(int type);
+extern void rs_get_next_include_file_completion(int compl_type);
+extern void rs_get_next_cmdline_completion(void);
+extern void rs_get_next_spell_completion(int lnum);
+extern void rs_do_autocmd_completedone(int c, int mode, char *word);
+extern void rs_ins_compl_show_filename(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -460,23 +468,7 @@ static bool is_first_match(const compl_T *const match)
 
 void do_autocmd_completedone(int c, int mode, char *word)
 {
-  save_v_event_T save_v_event;
-  dict_T *v_event = get_v_event(&save_v_event);
-
-  mode = mode & ~CTRL_X_WANT_IDENT;
-  char *mode_str = NULL;
-  if (ctrl_x_mode_names[mode]) {
-    mode_str = ctrl_x_mode_names[mode];
-  }
-  tv_dict_add_str(v_event, S_LEN("complete_word"), word != NULL ? word : "");
-  tv_dict_add_str(v_event, S_LEN("complete_type"), mode_str != NULL ? mode_str : "");
-
-  tv_dict_add_str(v_event, S_LEN("reason"),
-                  (c == Ctrl_Y ? "accept" : (c == Ctrl_E ? "cancel" : "discard")));
-  tv_dict_set_keys_readonly(v_event);
-
-  ins_apply_autocmds(EVENT_COMPLETEDONE);
-  restore_v_event(v_event, &save_v_event);
+  rs_do_autocmd_completedone(c, mode, word);
 }
 
 /// Get the completed text by inferring the case of the originally typed text.
@@ -2197,10 +2189,7 @@ void f_complete_check(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// Return Insert completion mode name string
 static char *ins_compl_mode(void)
 {
-  if (rs_ctrl_x_mode_not_defined_yet() || rs_ctrl_x_mode_scroll() || compl_started) {
-    return ctrl_x_mode_names[ctrl_x_mode & ~CTRL_X_WANT_IDENT];
-  }
-  return "";
+  return (char *)rs_ins_compl_mode();
 }
 
 /// Fill the dict of complete_info
@@ -2354,8 +2343,7 @@ void f_complete_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// Returns true when using a user-defined function for thesaurus completion.
 static bool thesaurus_func_complete(int type)
 {
-  return type == CTRL_X_THESAURUS
-         && (*curbuf->b_p_tsrfu != NUL || *p_tsrfu != NUL);
+  return rs_thesaurus_func_complete(type) != 0;
 }
 
 /// Return value of process_next_cpt_value()
@@ -2505,12 +2493,7 @@ done:
 /// included files.
 static void get_next_include_file_completion(int compl_type)
 {
-  find_pattern_in_path(compl_pattern.data, compl_direction,
-                       compl_pattern.size, false, false,
-                       ((compl_type == CTRL_X_PATH_DEFINES
-                         && !(compl_cont_status & CONT_SOL))
-                        ? FIND_DEFINE : FIND_ANY),
-                       1, ACTION_EXPAND, 1, MAXLNUM, false, compl_autocomplete);
+  rs_get_next_include_file_completion(compl_type);
 }
 
 /// Get the next set of words matching "compl_pattern" in dictionary or
@@ -2777,24 +2760,13 @@ static void get_next_filename_completion(void)
 /// Get the next set of command-line completions matching "compl_pattern".
 static void get_next_cmdline_completion(void)
 {
-  char **matches;
-  int num_matches;
-  if (expand_cmdline(&compl_xp, compl_pattern.data,
-                     (int)compl_pattern.size, &num_matches, &matches) == EXPAND_OK) {
-    ins_compl_add_matches(num_matches, matches, false);
-  }
+  rs_get_next_cmdline_completion();
 }
 
 /// Get the next set of spell suggestions matching "compl_pattern".
 static void get_next_spell_completion(linenr_T lnum)
 {
-  char **matches;
-  int num_matches = expand_spelling(lnum, compl_pattern.data, &matches);
-  if (num_matches > 0) {
-    ins_compl_add_matches(num_matches, matches, p_ic);
-  } else {
-    xfree(matches);
-  }
+  rs_get_next_spell_completion((int)lnum);
 }
 
 /// Return the next word or line from buffer "ins_buf" at position
@@ -3640,32 +3612,7 @@ static char *find_common_prefix(size_t *prefix_len, bool curbuf_only)
 /// name to avoid a wait for return.
 static void ins_compl_show_filename(void)
 {
-  char *const lead = _("match in file");
-  int space = sc_col - vim_strsize(lead) - 2;
-  if (space <= 0) {
-    return;
-  }
-
-  // We need the tail that fits.  With double-byte encoding going
-  // back from the end is very slow, thus go from the start and keep
-  // the text that fits in "space" between "s" and "e".
-  char *s;
-  char *e;
-  for (s = e = compl_shown_match->cp_fname; *e != NUL; MB_PTR_ADV(e)) {
-    space -= ptr2cells(e);
-    while (space < 0) {
-      space += ptr2cells(s);
-      MB_PTR_ADV(s);
-    }
-  }
-  if (!compl_autocomplete) {
-    msg_hist_off = true;
-    vim_snprintf(IObuff, IOSIZE, "%s %s%s", lead,
-                 s > compl_shown_match->cp_fname ? "<" : "", s);
-    msg(IObuff, 0);
-    msg_hist_off = false;
-    redraw_cmdline = false;  // don't overwrite!
-  }
+  rs_ins_compl_show_filename();
 }
 
 /// Find the appropriate completion item when 'complete' ('cpt') includes
@@ -5173,4 +5120,89 @@ void nvim_update_compl_enter_selects(void) {
 
 // Accessor for Phase 5: ins_compl_del_pum migration
 void nvim_xfree_compl_match_array(void) { XFREE_CLEAR(compl_match_array); }
+
+// Accessors for Phase 1 (pass 3): ins_compl_mode, thesaurus_func_complete,
+// get_next_*_completion, do_autocmd_completedone, ins_compl_show_filename
+int nvim_get_p_tsrfu_nonempty(void) { return *p_tsrfu != NUL ? 1 : 0; }
+int nvim_get_curbuf_b_p_tsrfu_nonempty(void) { return *curbuf->b_p_tsrfu != NUL ? 1 : 0; }
+
+// Compound accessor: delegates to the original C implementation logic
+void nvim_get_next_include_file_completion(int compl_type)
+{
+  find_pattern_in_path(compl_pattern.data, compl_direction,
+                       compl_pattern.size, false, false,
+                       ((compl_type == CTRL_X_PATH_DEFINES
+                         && !(compl_cont_status & CONT_SOL))
+                        ? FIND_DEFINE : FIND_ANY),
+                       1, ACTION_EXPAND, 1, MAXLNUM, false, compl_autocomplete);
+}
+
+void nvim_get_next_cmdline_completion_impl(void)
+{
+  char **matches;
+  int num_matches;
+  if (expand_cmdline(&compl_xp, compl_pattern.data,
+                     (int)compl_pattern.size, &num_matches, &matches) == EXPAND_OK) {
+    ins_compl_add_matches(num_matches, matches, false);
+  }
+}
+
+void nvim_get_next_spell_completion_impl(int lnum)
+{
+  char **matches;
+  int num_matches = expand_spelling((linenr_T)lnum, compl_pattern.data, &matches);
+  if (num_matches > 0) {
+    ins_compl_add_matches(num_matches, matches, p_ic);
+  } else {
+    xfree(matches);
+  }
+}
+
+void nvim_do_autocmd_completedone_impl(int c, int mode, char *word)
+{
+  save_v_event_T save_v_event;
+  dict_T *v_event = get_v_event(&save_v_event);
+
+  mode = mode & ~CTRL_X_WANT_IDENT;
+  char *mode_str = NULL;
+  if (ctrl_x_mode_names[mode]) {
+    mode_str = ctrl_x_mode_names[mode];
+  }
+  tv_dict_add_str(v_event, S_LEN("complete_word"), word != NULL ? word : "");
+  tv_dict_add_str(v_event, S_LEN("complete_type"), mode_str != NULL ? mode_str : "");
+
+  tv_dict_add_str(v_event, S_LEN("reason"),
+                  (c == Ctrl_Y ? "accept" : (c == Ctrl_E ? "cancel" : "discard")));
+  tv_dict_set_keys_readonly(v_event);
+
+  ins_apply_autocmds(EVENT_COMPLETEDONE);
+  restore_v_event(v_event, &save_v_event);
+}
+
+void nvim_ins_compl_show_filename_impl(void)
+{
+  char *const lead = _("match in file");
+  int space = sc_col - vim_strsize(lead) - 2;
+  if (space <= 0) {
+    return;
+  }
+
+  char *s;
+  char *e;
+  for (s = e = compl_shown_match->cp_fname; *e != NUL; MB_PTR_ADV(e)) {
+    space -= ptr2cells(e);
+    while (space < 0) {
+      space += ptr2cells(s);
+      MB_PTR_ADV(s);
+    }
+  }
+  if (!compl_autocomplete) {
+    msg_hist_off = true;
+    vim_snprintf(IObuff, IOSIZE, "%s %s%s", lead,
+                 s > compl_shown_match->cp_fname ? "<" : "", s);
+    msg(IObuff, 0);
+    msg_hist_off = false;
+    redraw_cmdline = false;  // don't overwrite!
+  }
+}
 
