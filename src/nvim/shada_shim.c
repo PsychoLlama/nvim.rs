@@ -1954,105 +1954,6 @@ shada_read_next_item_error:
   goto shada_read_next_item_end;
 }
 
-/// Write registers ShaDa entries in given msgpack_sbuffer.
-///
-/// @param[in]  sbuf  target msgpack_sbuffer to write to.
-String nvim_shada_encode_regs(void)
-  FUNC_ATTR_NONNULL_ALL
-{
-  WriteMergerState *const wms = xcalloc(1, sizeof(*wms));
-  rs_shada_initialize_registers(wms, -1);
-  PackerBuffer packer = packer_string_buffer();
-  for (size_t i = 0; i < ARRAY_SIZE(wms->registers); i++) {
-    if (wms->registers[i].type == kSDItemRegister) {
-      if (kSDWriteFailed
-          == shada_pack_pfreed_entry(&packer, wms->registers[i], 0)) {
-        abort();
-      }
-    }
-  }
-  xfree(wms);
-  return packer_take_string(&packer);
-}
-
-/// Write jumplist ShaDa entries in given msgpack_sbuffer.
-///
-/// @param[in]  sbuf            target msgpack_sbuffer to write to.
-String nvim_shada_encode_jumps(void)
-  FUNC_ATTR_NONNULL_ALL
-{
-  Set(ptr_t) removable_bufs = SET_INIT;
-  rs_find_removable_bufs(&removable_bufs);
-  ShadaEntry jumps[JUMPLISTSIZE];
-  size_t jumps_size = rs_shada_init_jumps(jumps, &removable_bufs);
-  PackerBuffer packer = packer_string_buffer();
-  for (size_t i = 0; i < jumps_size; i++) {
-    if (kSDWriteFailed == shada_pack_pfreed_entry(&packer, jumps[i], 0)) {
-      abort();
-    }
-  }
-  return packer_take_string(&packer);
-}
-
-/// Write buffer list ShaDa entry in given msgpack_sbuffer.
-///
-/// @param[in]  sbuf            target msgpack_sbuffer to write to.
-String nvim_shada_encode_buflist(void)
-  FUNC_ATTR_NONNULL_ALL
-{
-  Set(ptr_t) removable_bufs = SET_INIT;
-  rs_find_removable_bufs(&removable_bufs);
-  ShadaEntry buflist_entry = rs_shada_get_buflist(&removable_bufs);
-
-  PackerBuffer packer = packer_string_buffer();
-  if (kSDWriteFailed == shada_pack_entry(&packer, buflist_entry, 0)) {
-    abort();
-  }
-  xfree(buflist_entry.data.buffer_list.buffers);
-  return packer_take_string(&packer);
-}
-
-/// Write global variables ShaDa entries in given msgpack_sbuffer.
-///
-/// @param[in]  sbuf            target msgpack_sbuffer to write to.
-String nvim_shada_encode_gvars(void)
-  FUNC_ATTR_NONNULL_ALL
-{
-  PackerBuffer packer = packer_string_buffer();
-  const void *var_iter = NULL;
-  const Timestamp cur_timestamp = os_time();
-  do {
-    typval_T vartv;
-    const char *name = NULL;
-    var_iter = var_shada_iter(var_iter, &name, &vartv,
-                              VAR_FLAVOUR_DEFAULT | VAR_FLAVOUR_SESSION | VAR_FLAVOUR_SHADA);
-    if (name == NULL) {
-      break;
-    }
-    if (vartv.v_type != VAR_FUNC && vartv.v_type != VAR_PARTIAL) {
-      typval_T tgttv;
-      tv_copy(&vartv, &tgttv);
-      ShaDaWriteResult r = shada_pack_entry(&packer, (ShadaEntry) {
-        .type = kSDItemVariable,
-        .timestamp = cur_timestamp,
-        .data = {
-          .global_var = {
-            .name = (char *)name,
-            .value = tgttv,
-          }
-        },
-        .additional_data = NULL,
-      }, 0);
-      if (kSDWriteFailed == r) {
-        abort();
-      }
-      tv_clear(&tgttv);
-    }
-    tv_clear(&vartv);
-  } while (var_iter != NULL);
-  return packer_take_string(&packer);
-}
-
 /// Read ShaDa from String.
 ///
 /// @param[in]  string   string to read from.
@@ -3307,4 +3208,59 @@ const char *nvim_shada_gvar_get_name(const ShadaEntry *e) { return e->data.globa
 
 // SubString field accessors
 const char *nvim_shada_sub_get_string(const ShadaEntry *e) { return e->data.sub_string.sub; }
+
+// Global variable iteration accessor (wraps var_shada_iter).
+// flavour is a bitmask of VAR_FLAVOUR_DEFAULT | VAR_FLAVOUR_SESSION | VAR_FLAVOUR_SHADA.
+// On each call: *out_name set to variable name (static, do not free); *out_tv set to a
+// freshly xmalloc'd typval_T copy (caller must pass to nvim_shada_pack_gvar_entry which frees it).
+// Returns the next iter pointer (NULL when exhausted).
+const void *nvim_shada_var_shada_iter(const void *iter, const char **out_name, void **out_tv,
+                                      unsigned flavour)
+{
+  typval_T vartv;
+  const char *name = NULL;
+  const void *next = var_shada_iter(iter, &name, &vartv, (var_flavour_T)flavour);
+  *out_name = name;
+  if (name == NULL) {
+    *out_tv = NULL;
+    return next;
+  }
+  typval_T *tv_copy_ptr = xmalloc(sizeof(typval_T));
+  *tv_copy_ptr = vartv;
+  *out_tv = tv_copy_ptr;
+  return next;
+}
+
+// Get the v_type field of a typval_T pointer.
+int nvim_shada_tv_get_type(const void *tv)
+{
+  return tv ? ((const typval_T *)tv)->v_type : 0;
+}
+
+// Pack a global variable entry via rs_shada_pack_entry.
+// Builds the ShadaEntry inline (C layout: inline typval_T), calls rs_shada_pack_entry,
+// then clears and frees tv (which was xmalloc'd by nvim_shada_var_shada_iter).
+// Returns SD_WRITE_SUCCESSFUL (1), SD_WRITE_FAILED (0), or SD_WRITE_IGN_ERROR (-1).
+int nvim_shada_pack_gvar_entry(PackerBuffer *packer, const char *name, void *tv,
+                               Timestamp ts)
+{
+  typval_T tgttv;
+  tv_copy((typval_T *)tv, &tgttv);
+  tv_clear((typval_T *)tv);
+  xfree(tv);
+  ShadaEntry entry = {
+    .type = kSDItemVariable,
+    .timestamp = ts,
+    .data = {
+      .global_var = {
+        .name = (char *)name,
+        .value = tgttv,
+      }
+    },
+    .additional_data = NULL,
+  };
+  int r = rs_shada_pack_entry(packer, &entry, 0);
+  tv_clear(&entry.data.global_var.value);
+  return r;
+}
 

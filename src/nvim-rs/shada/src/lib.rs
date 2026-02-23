@@ -3147,52 +3147,179 @@ impl Default for NvimString {
 
 // C accessor functions for encoding/decoding
 extern "C" {
-    /// Encode registers to string (calls C implementation).
-    fn nvim_shada_encode_regs() -> NvimString;
-    /// Encode jump list to string (calls C implementation).
-    fn nvim_shada_encode_jumps() -> NvimString;
-    /// Encode buffer list to string (calls C implementation).
-    fn nvim_shada_encode_buflist() -> NvimString;
-    /// Encode global variables to string (calls C implementation).
-    fn nvim_shada_encode_gvars() -> NvimString;
     /// Read ShaDa from string (calls C implementation).
     fn nvim_shada_read_string(string: NvimString, flags: c_int);
+    /// Iterate over shada-saveable global variables.
+    /// flavour: bitmask of VAR_FLAVOUR_DEFAULT(1)|VAR_FLAVOUR_SESSION(2)|VAR_FLAVOUR_SHADA(4).
+    /// On each call: *out_name set to variable name (static lifetime, do not free),
+    /// *out_tv set to a freshly xmalloc'd typval_T copy (must be passed to nvim_shada_pack_gvar_entry).
+    /// Returns next iter pointer (NULL when exhausted).
+    fn nvim_shada_var_shada_iter(
+        iter: *const c_void,
+        out_name: *mut *const c_char,
+        out_tv: *mut *mut c_void,
+        flavour: c_uint,
+    ) -> *const c_void;
+    /// Get the v_type field of a typval_T pointer.
+    fn nvim_shada_tv_get_type(tv: *const c_void) -> c_int;
+    /// Pack a global variable entry. Builds ShadaEntry inline in C (needed for inline typval_T
+    /// layout), calls rs_shada_pack_entry, then clears+frees tv.
+    fn nvim_shada_pack_gvar_entry(
+        packer: *mut ShadaPackerBuffer,
+        name: *const c_char,
+        tv: *mut c_void,
+        ts: Timestamp,
+    ) -> c_int;
 }
 
 /// Encode registers to a ShaDa-format string.
 ///
 /// Returns a newly allocated string containing all register entries
 /// in MessagePack format suitable for ShaDa storage.
+///
+/// # Panics
+///
+/// Panics if packing a register entry fails (mirrors C `abort()` on failure).
 #[no_mangle]
 pub unsafe extern "C" fn rs_shada_encode_regs() -> NvimString {
-    nvim_shada_encode_regs()
+    let wms_size = std::mem::size_of::<WriteMergerState>();
+    let wms = nvim_xcalloc(1, wms_size).cast::<WriteMergerState>();
+    // Initialize the struct with safe defaults
+    std::ptr::write(wms, WriteMergerState::default());
+    rs_shada_initialize_registers(wms, -1);
+
+    let mut packer = std::mem::MaybeUninit::<ShadaPackerBuffer>::uninit();
+    nvim_shada_packer_string_buffer(packer.as_mut_ptr());
+    let packer = packer.as_mut_ptr();
+
+    for i in 0..NUM_SAVED_REGISTERS {
+        if (*wms).registers[i].entry_type == ShadaEntryType::Register {
+            let entry_ptr = std::ptr::addr_of_mut!((*wms).registers[i]);
+            assert!(
+                rs_shada_pack_pfreed_entry(packer, entry_ptr, 0) != SD_WRITE_FAILED,
+                "shada_encode_regs: pack failed"
+            );
+        }
+    }
+    // Free the WriteMergerState (register contents not owned by WMS, can_free_entry is false)
+    nvim_xfree(wms.cast::<c_void>());
+
+    nvim_shada_packer_take_string(packer)
 }
 
 /// Encode jump list to a ShaDa-format string.
 ///
 /// Returns a newly allocated string containing jump list entries
 /// in MessagePack format suitable for ShaDa storage.
+///
+/// # Panics
+///
+/// Panics if packing a jump entry fails (mirrors C `abort()` on failure).
 #[no_mangle]
 pub unsafe extern "C" fn rs_shada_encode_jumps() -> NvimString {
-    nvim_shada_encode_jumps()
+    let removable_bufs = nvim_shada_set_init_ptr();
+    rs_find_removable_bufs(removable_bufs);
+
+    let mut jumps = [const { std::mem::MaybeUninit::<ShadaEntry>::uninit() }; JUMPLISTSIZE];
+    let jumps_ptr = jumps.as_mut_ptr().cast::<ShadaEntry>();
+    let jumps_size = rs_shada_init_jumps(jumps_ptr, removable_bufs);
+    nvim_shada_set_destroy_ptr(removable_bufs);
+
+    let mut packer = std::mem::MaybeUninit::<ShadaPackerBuffer>::uninit();
+    nvim_shada_packer_string_buffer(packer.as_mut_ptr());
+    let packer = packer.as_mut_ptr();
+
+    for i in 0..jumps_size {
+        let entry_ptr = jumps_ptr.add(i);
+        assert!(
+            rs_shada_pack_pfreed_entry(packer, entry_ptr, 0) != SD_WRITE_FAILED,
+            "shada_encode_jumps: pack failed"
+        );
+    }
+
+    nvim_shada_packer_take_string(packer)
 }
 
 /// Encode buffer list to a ShaDa-format string.
 ///
 /// Returns a newly allocated string containing the buffer list entry
 /// in MessagePack format suitable for ShaDa storage.
+///
+/// # Panics
+///
+/// Panics if packing the buffer list entry fails (mirrors C `abort()` on failure).
 #[no_mangle]
 pub unsafe extern "C" fn rs_shada_encode_buflist() -> NvimString {
-    nvim_shada_encode_buflist()
+    let removable_bufs = nvim_shada_set_init_ptr();
+    rs_find_removable_bufs(removable_bufs);
+    let buflist_entry = rs_shada_get_buflist(removable_bufs);
+    nvim_shada_set_destroy_ptr(removable_bufs);
+
+    let mut packer = std::mem::MaybeUninit::<ShadaPackerBuffer>::uninit();
+    nvim_shada_packer_string_buffer(packer.as_mut_ptr());
+    let packer = packer.as_mut_ptr();
+
+    assert!(
+        rs_shada_pack_entry(packer, &raw const buflist_entry, 0) != SD_WRITE_FAILED,
+        "shada_encode_buflist: pack failed"
+    );
+    // Free the buffer list array allocated by rs_shada_get_buflist.
+    // Access via addr_of to avoid implicit autoref through ManuallyDrop union field.
+    let buffers_ptr = std::ptr::read(std::ptr::addr_of!(
+        (*buflist_entry.data.buffer_list).buffers
+    ));
+    nvim_xfree(buffers_ptr.cast::<c_void>());
+
+    nvim_shada_packer_take_string(packer)
 }
 
 /// Encode global variables to a ShaDa-format string.
 ///
 /// Returns a newly allocated string containing global variable entries
 /// in MessagePack format suitable for ShaDa storage.
+///
+/// # Panics
+///
+/// Panics if packing a variable entry fails (mirrors C `abort()` on failure).
 #[no_mangle]
 pub unsafe extern "C" fn rs_shada_encode_gvars() -> NvimString {
-    nvim_shada_encode_gvars()
+    // VAR_FLAVOUR_DEFAULT=1 | VAR_FLAVOUR_SESSION=2 | VAR_FLAVOUR_SHADA=4
+    const VAR_FLAVOUR_ALL: c_uint = 7;
+    // v_type values: VAR_FUNC=3, VAR_PARTIAL=9
+    const VAR_FUNC: c_int = 3;
+    const VAR_PARTIAL: c_int = 9;
+
+    let mut packer = std::mem::MaybeUninit::<ShadaPackerBuffer>::uninit();
+    nvim_shada_packer_string_buffer(packer.as_mut_ptr());
+    let packer = packer.as_mut_ptr();
+
+    let cur_timestamp = nvim_shada_os_time();
+
+    let mut var_iter: *const c_void = std::ptr::null();
+    loop {
+        let mut name: *const c_char = std::ptr::null();
+        let mut tv: *mut c_void = std::ptr::null_mut();
+        var_iter = nvim_shada_var_shada_iter(var_iter, &raw mut name, &raw mut tv, VAR_FLAVOUR_ALL);
+        if name.is_null() {
+            break;
+        }
+        // tv is non-null when name is non-null
+        let vtype = nvim_shada_tv_get_type(tv);
+        if vtype != VAR_FUNC && vtype != VAR_PARTIAL {
+            // nvim_shada_pack_gvar_entry copies tv, clears it, and frees the pointer
+            let r = nvim_shada_pack_gvar_entry(packer, name, tv, cur_timestamp);
+            assert!(r != SD_WRITE_FAILED, "shada_encode_gvars: pack failed");
+        } else {
+            // Free the typval without packing it (we skip func/partial types)
+            nvim_shada_tv_clear(tv.cast());
+            nvim_xfree(tv);
+        }
+        if var_iter.is_null() {
+            break;
+        }
+    }
+
+    nvim_shada_packer_take_string(packer)
 }
 
 /// Read ShaDa entries from a string.

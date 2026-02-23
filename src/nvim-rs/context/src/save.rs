@@ -21,16 +21,16 @@ pub unsafe extern "C" fn rs_ctx_save(ctx: *mut Context, flags: c_int) {
     let c = &mut *ctx;
 
     if flags & KCTX_REGS != 0 {
-        c.regs = ffi::nvim_shada_encode_regs();
+        c.regs = ffi::rs_shada_encode_regs();
     }
     if flags & KCTX_JUMPS != 0 {
-        c.jumps = ffi::nvim_shada_encode_jumps();
+        c.jumps = ffi::rs_shada_encode_jumps();
     }
     if flags & KCTX_BUFS != 0 {
-        c.bufs = ffi::nvim_shada_encode_buflist();
+        c.bufs = ffi::rs_shada_encode_buflist();
     }
     if flags & KCTX_GVARS != 0 {
-        c.gvars = ffi::nvim_shada_encode_gvars();
+        c.gvars = ffi::rs_shada_encode_gvars();
     }
 
     if flags & KCTX_FUNCS != 0 {
