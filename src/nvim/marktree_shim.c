@@ -136,6 +136,12 @@ extern void rs_marktree_put_key(MarkTree *b, MTKey k);
 extern void rs_marktree_clear(MarkTree *b);
 extern void rs_marktree_check(MarkTree *b);
 
+// Intersection operations
+extern void rs_intersect_node(MarkTree *b, MTNode *x, uint64_t id);
+extern void rs_unintersect_node(MarkTree *b, MTNode *x, uint64_t id, bool strict);
+extern bool rs_intersection_has(MTNode *x, uint64_t id);
+extern void rs_bubble_up(MTNode *x);
+
 // Binary search
 extern int rs_marktree_getp_aux(const MTNode *x, MTKey k, bool *match);
 
@@ -194,7 +200,7 @@ static inline void split_node(MarkTree *b, MTNode *x, const int i, MTKey next)
       MTKey k = y->key[j];
       uint64_t pi_end = pseudo_index_for_id(b, mt_lookup_id(k.ns, k.id, true), true);
       if (mt_start(k) && pi_end > pi && mt_lookup_key(k) != last_start) {
-        intersect_node(b, z, mt_lookup_id(k.ns, k.id, false));
+        rs_intersect_node(b, z, mt_lookup_id(k.ns, k.id, false));
       }
     }
 
@@ -203,7 +209,7 @@ static inline void split_node(MarkTree *b, MTNode *x, const int i, MTKey next)
       MTKey k = y->key[j];
       uint64_t pi_start = pseudo_index_for_id(b, mt_lookup_id(k.ns, k.id, false), true);
       if (mt_end(k) && pi_start > 0 && pi_start < pi) {
-        intersect_node(b, y, mt_lookup_id(k.ns, k.id, false));
+        rs_intersect_node(b, y, mt_lookup_id(k.ns, k.id, false));
       }
     }
   }
@@ -251,8 +257,8 @@ static inline void split_node(MarkTree *b, MTNode *x, const int i, MTKey next)
   }
 
   if (y->level) {
-    bubble_up(y);
-    bubble_up(z);
+    rs_bubble_up(y);
+    rs_bubble_up(z);
   } else {
     // code above goose here
   }
@@ -314,67 +320,6 @@ void marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_rig
   }
 }
 
-// this is currently not used very often, but if it was it should use binary search
-static bool intersection_has(Intersection *x, uint64_t id)
-{
-  for (size_t i = 0; i < kv_size(*x); i++) {
-    if (kv_A(*x, i) == id) {
-      return true;
-    } else if (kv_A(*x, i) >= id) {
-      return false;
-    }
-  }
-  return false;
-}
-
-static void intersect_node(MarkTree *b, MTNode *x, uint64_t id)
-{
-  assert(!(id & MARKTREE_END_FLAG));
-  kvi_pushp(x->intersect);
-  // optimized for the common case: new key is always in the end
-  for (ssize_t i = (ssize_t)kv_size(x->intersect) - 1; i >= 0; i--) {
-    if (i > 0 && kv_A(x->intersect, i - 1) > id) {
-      kv_A(x->intersect, i) = kv_A(x->intersect, i - 1);
-    } else {
-      kv_A(x->intersect, i) = id;
-      break;
-    }
-  }
-}
-
-static void unintersect_node(MarkTree *b, MTNode *x, uint64_t id, bool strict)
-{
-  assert(!(id & MARKTREE_END_FLAG));
-  bool seen = false;
-  size_t i;
-  for (i = 0; i < kv_size(x->intersect); i++) {
-    if (kv_A(x->intersect, i) < id) {
-      continue;
-    } else if (kv_A(x->intersect, i) == id) {
-      seen = true;
-      break;
-    } else {  // (kv_A(x->intersect, i) > id)
-      break;
-    }
-  }
-  if (strict) {
-#ifndef RELDEBUG
-    // TODO(bfredl): This assert has been seen to fail for end users
-    // using RelWithDebInfo builds. While indicating an invalid state for
-    // the marktree, this error doesn't need to be fatal. The assert still
-    // needs to present in Debug builds to be able to detect regressions in tests.
-    assert(seen);
-#endif
-  }
-
-  if (seen) {
-    if (i < kv_size(x->intersect) - 1) {
-      memmove(&kv_A(x->intersect, i), &kv_A(x->intersect, i + 1), (kv_size(x->intersect) - i - 1) *
-              sizeof(kv_A(x->intersect, i)));
-    }
-    kv_size(x->intersect)--;
-  }
-}
 
 /// @param itr mutated
 /// @param end_itr not mutated
@@ -416,9 +361,9 @@ void marktree_intersect_pair(MarkTree *b, uint64_t id, MarkTreeIter *itr, MarkTr
       if (itr->x->level) {
         MTNode *x = itr->x->ptr[itr->i + 1];
         if (delete) {
-          unintersect_node(b, x, id, true);
+          rs_unintersect_node(b, x, id, true);
         } else {
-          intersect_node(b, x, id);
+          rs_intersect_node(b, x, id);
         }
       }
     }
@@ -598,14 +543,14 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
       }
 
       if (p != cur && start_id) {
-        if (intersection_has(&p->ptr[0]->intersect, start_id)) {
+        if (rs_intersection_has(p->ptr[0], start_id)) {
           // if not the first time, we need to undo the addition in the
-          // previous step (`intersect_node` just below)
+          // previous step (`rs_intersect_node` just below)
           int last = (lnode != x) ? 1 : 0;
           for (int k = 0; k < p->n + last; k++) {  // one less as p->ptr[n] is the last
-            unintersect_node(b, p->ptr[k], start_id, true);
+            rs_unintersect_node(b, p->ptr[k], start_id, true);
           }
-          intersect_node(b, p, start_id);
+          rs_intersect_node(b, p, start_id);
           did_bubble = true;
         }
       }
@@ -627,7 +572,7 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
       uint64_t pi = pseudo_index(x, 0);  // note: sloppy pseudo-index
       uint64_t pi_start = pseudo_index_for_id(b, start_id, true);
       if (pi_start > 0 && pi_start < pi) {
-        intersect_node(b, x, start_id);
+        rs_intersect_node(b, x, start_id);
       }
     }
 
@@ -987,25 +932,6 @@ static void intersect_sub(Intersection *restrict x, Intersection *restrict y)
   kv_size(*x) = xn;
 }
 
-/// x is a node which shrunk, or the half of a split
-///
-/// this means that intervals which previously intersected all the (current)
-/// child nodes, now instead intersects `x` itself.
-static void bubble_up(MTNode *x)
-{
-  Intersection xi;
-  kvi_init(xi);
-  // due to invariants, the largest subset of _all_ subnodes is the intersection
-  // between the first and the last
-  intersect_common(&xi, &x->ptr[0]->intersect, &x->ptr[x->n]->intersect);
-  if (kv_size(xi)) {
-    for (int i = 0; i < x->n + 1; i++) {
-      intersect_sub(&x->ptr[i]->intersect, &xi);
-    }
-    intersect_add(&x->intersect, &xi);
-  }
-  kvi_destroy(xi);
-}
 
 static MTNode *merge_node(MarkTree *b, MTNode *p, int i)
 {
@@ -1038,7 +964,7 @@ static MTNode *merge_node(MarkTree *b, MTNode *p, int i)
     for (int k = 0; k < x->n + 1; k++) {
       // TODO(bfredl): dedicated impl for "Z |= Y"
       for (size_t idx = 0; idx < kv_size(x->intersect); idx++) {
-        intersect_node(b, x->ptr[k], kv_A(x->intersect, idx));
+        rs_intersect_node(b, x->ptr[k], kv_A(x->intersect, idx));
       }
     }
     for (int ky = 0; ky < y->n + 1; ky++) {
@@ -1048,7 +974,7 @@ static MTNode *merge_node(MarkTree *b, MTNode *p, int i)
       x->ptr[k]->p_idx = (int16_t)k;
       // TODO(bfredl): dedicated impl for "Z |= X"
       for (size_t idx = 0; idx < kv_size(y->intersect); idx++) {
-        intersect_node(b, x->ptr[k], kv_A(y->intersect, idx));
+        rs_intersect_node(b, x->ptr[k], kv_A(y->intersect, idx));
       }
     }
   }
@@ -1159,7 +1085,7 @@ static void pivot_right(MarkTree *b, MTPos p_pos, MTNode *p, const int i)
     }
     kvi_destroy(d);
 
-    bubble_up(x);
+    rs_bubble_up(x);
   } else {
     // if the last element of x used to be an end node, check if it now covers all of x
     if (mt_end(p->key[i])) {
@@ -1167,13 +1093,13 @@ static void pivot_right(MarkTree *b, MTPos p_pos, MTNode *p, const int i)
       uint64_t start_id = mt_lookup_key_side(p->key[i], false);
       uint64_t pi_start = pseudo_index_for_id(b, start_id, true);
       if (pi_start > 0 && pi_start < pi) {
-        intersect_node(b, x, start_id);
+        rs_intersect_node(b, x, start_id);
       }
     }
 
     if (mt_start(y->key[0])) {
       // no need for a check, just delet it if it was there
-      unintersect_node(b, y, mt_lookup_key(y->key[0]), false);
+      rs_unintersect_node(b, y, mt_lookup_key(y->key[0]), false);
     }
   }
 }
@@ -1245,7 +1171,7 @@ static void pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i)
     }
     kvi_destroy(d);
 
-    bubble_up(y);
+    rs_bubble_up(y);
   } else {
     // if the first element of y used to be an start node, check if it now covers all of y
     if (mt_start(p->key[i])) {
@@ -1255,13 +1181,13 @@ static void pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i)
       uint64_t pi_end = pseudo_index_for_id(b, end_id, true);
 
       if (pi_end > pi) {
-        intersect_node(b, y, mt_lookup_key(p->key[i]));
+        rs_intersect_node(b, y, mt_lookup_key(p->key[i]));
       }
     }
 
     if (mt_end(x->key[x->n - 1])) {
       // no need for a check, just delet it if it was there
-      unintersect_node(b, x, mt_lookup_key_side(x->key[x->n - 1], false), false);
+      rs_unintersect_node(b, x, mt_lookup_key_side(x->key[x->n - 1], false), false);
     }
   }
 }
@@ -2199,11 +2125,20 @@ void nvim_marktree_set_meta_root(MarkTree *b, int m, uint32_t val) { b->meta_roo
 // Intersection Operations (for Rust FFI)
 // ============================================================================
 
-void nvim_intersect_node(MarkTree *b, MTNode *x, uint64_t id) { intersect_node(b, x, id); }
-void nvim_unintersect_node(MarkTree *b, MTNode *x, uint64_t id, bool strict) { unintersect_node(b, x, id, strict); }
 void nvim_kvi_copy_intersect(MTNode *dst, MTNode *src) { kvi_copy(dst->intersect, src->intersect); }
 void nvim_kvi_init_intersect(MTNode *x) { kvi_init(x->intersect); }
-bool nvim_intersection_has(MTNode *x, uint64_t id) { return intersection_has(&x->intersect, id); }
+
+// Intersection list mutation accessors for Rust to implement set operations
+void nvim_mtnode_intersect_clear(MTNode *x)
+{
+  kvi_destroy(x->intersect);
+  kvi_init(x->intersect);
+}
+
+void nvim_mtnode_intersect_push(MTNode *x, uint64_t id)
+{
+  kvi_push(x->intersect, id);
+}
 
 // ============================================================================
 // B-tree Operations (for Rust FFI)
@@ -2215,7 +2150,6 @@ void nvim_marktree_put_key(MarkTree *b, MTKey k) { marktree_put_key(b, k); }
 void nvim_marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_right) { marktree_put(b, key, end_row, end_col, end_right); }
 void nvim_marktree_intersect_pair(MarkTree *b, uint64_t id, MarkTreeIter *itr,
                                   MarkTreeIter *end_itr, bool delete) { marktree_intersect_pair(b, id, itr, end_itr, delete); }
-void nvim_bubble_up(MTNode *x) { bubble_up(x); }
 
 // ============================================================================
 // B-tree Deletion Operations (for Rust FFI)

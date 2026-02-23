@@ -544,12 +544,6 @@ extern "C" {
     // Intersection Operations (Phase 4)
     // ========================================================================
 
-    /// Add an intersection to a node (sorted insert).
-    fn nvim_intersect_node(b: MarkTreeHandle, x: MTNodeHandle, id: u64);
-
-    /// Remove an intersection from a node.
-    fn nvim_unintersect_node(b: MarkTreeHandle, x: MTNodeHandle, id: u64, strict: bool);
-
     /// Copy intersections from one node to another.
     fn nvim_kvi_copy_intersect(dst: MTNodeHandle, src: MTNodeHandle);
 
@@ -557,8 +551,15 @@ extern "C" {
     #[allow(dead_code)]
     fn nvim_kvi_init_intersect(x: MTNodeHandle);
 
-    /// Check if a node's intersect list contains the given ID.
-    fn nvim_intersection_has(x: MTNodeHandle, id: u64) -> bool;
+    // ========================================================================
+    // Intersection Mutation Accessors (Phase 1)
+    // ========================================================================
+
+    /// Clear and reinitialize a node's intersection list (destroy + kvi_init).
+    fn nvim_mtnode_intersect_clear(x: MTNodeHandle);
+
+    /// Push an ID onto a node's intersection list (unsorted, for rebuilding).
+    fn nvim_mtnode_intersect_push(x: MTNodeHandle, id: u64);
 
     // ========================================================================
     // B-tree Operations (Phase 4)
@@ -590,9 +591,6 @@ extern "C" {
         end_itr: MarkTreeIterHandle,
         delete: bool,
     );
-
-    /// Bubble up common intersections to parent.
-    fn nvim_bubble_up(x: MTNodeHandle);
 
     // ========================================================================
     // B-tree Deletion Operations (Phase 5)
@@ -2794,13 +2792,13 @@ pub fn marktree_add_meta_root(b: MarkTreeHandle, m: i32, val: u32) {
 // ============================================================================
 
 /// Add an intersection to a node (sorted insert).
-pub fn intersect_node(b: MarkTreeHandle, x: MTNodeHandle, id: u64) {
-    unsafe { nvim_intersect_node(b, x, id) }
+pub fn intersect_node(_b: MarkTreeHandle, x: MTNodeHandle, id: u64) {
+    intersect_node_rs(x, id);
 }
 
 /// Remove an intersection from a node.
-pub fn unintersect_node(b: MarkTreeHandle, x: MTNodeHandle, id: u64, strict: bool) {
-    unsafe { nvim_unintersect_node(b, x, id, strict) }
+pub fn unintersect_node(_b: MarkTreeHandle, x: MTNodeHandle, id: u64, strict: bool) {
+    unintersect_node_rs(x, id, strict);
 }
 
 /// Copy intersections from one node to another.
@@ -2811,7 +2809,284 @@ pub fn kvi_copy_intersect(dst: MTNodeHandle, src: MTNodeHandle) {
 /// Check if a node's intersect list contains the given ID.
 #[must_use]
 pub fn intersection_has(x: MTNodeHandle, id: u64) -> bool {
-    unsafe { nvim_intersection_has(x, id) }
+    let v = read_intersect(x);
+    v.binary_search(&id).is_ok()
+}
+
+/// Read the intersection list of a node into a Vec.
+fn read_intersect(x: MTNodeHandle) -> Vec<u64> {
+    let size = unsafe { nvim_mtnode_get_intersect_size(x) };
+    let mut v = Vec::with_capacity(size);
+    for i in 0..size {
+        v.push(unsafe { nvim_mtnode_get_intersect_elem(x, i) });
+    }
+    v
+}
+
+/// Write a Vec back into a node's intersection list (clear then push).
+fn write_intersect(x: MTNodeHandle, v: &[u64]) {
+    unsafe { nvim_mtnode_intersect_clear(x) };
+    for &id in v {
+        unsafe { nvim_mtnode_intersect_push(x, id) };
+    }
+}
+
+// ============================================================================
+// Phase 1: Native Rust intersection set operations
+// ============================================================================
+
+/// Sorted insert of `id` into node `x`'s intersection list.
+///
+/// Ported from C `intersect_node`. The list remains sorted after insert.
+pub fn intersect_node_rs(x: MTNodeHandle, id: u64) {
+    debug_assert!(
+        id & MARKTREE_END_FLAG == 0,
+        "intersect id must not be end flag"
+    );
+    let mut v = read_intersect(x);
+    // Binary search for insertion point (or existing element)
+    match v.binary_search(&id) {
+        Ok(_) => {} // already present (shouldn't happen in correct code)
+        Err(pos) => v.insert(pos, id),
+    }
+    write_intersect(x, &v);
+}
+
+/// Remove `id` from node `x`'s intersection list.
+///
+/// Ported from C `unintersect_node`. If `strict` is true, panics if not found
+/// (in debug builds only; release builds silently skip).
+pub fn unintersect_node_rs(x: MTNodeHandle, id: u64, strict: bool) {
+    debug_assert!(
+        id & MARKTREE_END_FLAG == 0,
+        "unintersect id must not be end flag"
+    );
+    let mut v = read_intersect(x);
+    match v.binary_search(&id) {
+        Ok(pos) => {
+            v.remove(pos);
+        }
+        Err(_) => {
+            // In C, strict mode has a conditional assert that is disabled in RelWithDebInfo.
+            // We mirror the same behavior: panic only in debug builds.
+            debug_assert!(!strict, "unintersect_node: id {id} not found in node");
+        }
+    }
+    write_intersect(x, &v);
+}
+
+/// Compute set intersection: i = x & y (pure Rust, no node handle needed).
+///
+/// Ported from C `intersect_common`.
+fn intersect_common_vecs(x: &[u64], y: &[u64]) -> Vec<u64> {
+    let mut result = Vec::new();
+    let mut xi = 0;
+    let mut yi = 0;
+    while xi < x.len() && yi < y.len() {
+        match x[xi].cmp(&y[yi]) {
+            std::cmp::Ordering::Equal => {
+                result.push(x[xi]);
+                xi += 1;
+                yi += 1;
+            }
+            std::cmp::Ordering::Less => xi += 1,
+            std::cmp::Ordering::Greater => yi += 1,
+        }
+    }
+    result
+}
+
+/// In-place set union: x |= y (pure Rust).
+///
+/// Ported from C `intersect_add`.
+fn intersect_add_vecs(x: &mut Vec<u64>, y: &[u64]) {
+    let mut xi = 0;
+    let mut yi = 0;
+    while xi < x.len() && yi < y.len() {
+        match x[xi].cmp(&y[yi]) {
+            std::cmp::Ordering::Equal => {
+                xi += 1;
+                yi += 1;
+            }
+            std::cmp::Ordering::Greater => {
+                x.insert(xi, y[yi]);
+                xi += 1; // skip newly inserted element
+                yi += 1;
+            }
+            std::cmp::Ordering::Less => xi += 1,
+        }
+    }
+    // Append remaining y elements
+    x.extend_from_slice(&y[yi..]);
+}
+
+/// In-place asymmetric difference: x &= ~y (pure Rust).
+///
+/// Ported from C `intersect_sub`.
+fn intersect_sub_vecs(x: &mut Vec<u64>, y: &[u64]) {
+    let mut xi = 0;
+    let mut yi = 0;
+    let mut xn = 0;
+    while xi < x.len() && yi < y.len() {
+        match x[xi].cmp(&y[yi]) {
+            std::cmp::Ordering::Equal => {
+                xi += 1;
+                yi += 1;
+            }
+            std::cmp::Ordering::Less => {
+                x[xn] = x[xi];
+                xn += 1;
+                xi += 1;
+            }
+            std::cmp::Ordering::Greater => yi += 1,
+        }
+    }
+    // Copy remaining x elements
+    while xi < x.len() {
+        x[xn] = x[xi];
+        xn += 1;
+        xi += 1;
+    }
+    x.truncate(xn);
+}
+
+/// Extract common elements from x and y, removing them from both.
+///
+/// After: m = old_x & old_y, x = old_x - m, y = old_y - m.
+/// Ported from C `intersect_merge`.
+#[allow(dead_code)]
+fn intersect_merge_vecs(m: &mut Vec<u64>, x: &mut Vec<u64>, y: &mut Vec<u64>) {
+    let mut xi = 0;
+    let mut yi = 0;
+    let mut xn = 0;
+    let mut yn = 0;
+    while xi < x.len() && yi < y.len() {
+        match x[xi].cmp(&y[yi]) {
+            std::cmp::Ordering::Equal => {
+                m.push(x[xi]);
+                xi += 1;
+                yi += 1;
+            }
+            std::cmp::Ordering::Less => {
+                x[xn] = x[xi];
+                xn += 1;
+                xi += 1;
+            }
+            std::cmp::Ordering::Greater => {
+                y[yn] = y[yi];
+                yn += 1;
+                yi += 1;
+            }
+        }
+    }
+    // Copy remaining elements
+    while xi < x.len() {
+        x[xn] = x[xi];
+        xn += 1;
+        xi += 1;
+    }
+    while yi < y.len() {
+        y[yn] = y[yi];
+        yn += 1;
+        yi += 1;
+    }
+    x.truncate(xn);
+    y.truncate(yn);
+}
+
+/// Adjust intersections when child `w` moves from parent `x` to parent `y`.
+///
+/// `d` receives intersections that must be added to all other children of `y`.
+/// Ported from C `intersect_mov`.
+///
+/// Invariant: x, y, w, d are sorted.
+#[allow(dead_code)]
+fn intersect_mov_vecs(x: &[u64], y: &mut Vec<u64>, w: &mut Vec<u64>, d: &mut Vec<u64>) {
+    let mut wi: usize = 0;
+    let mut yi: usize = 0;
+    let mut wn: usize = 0;
+    let mut yn: usize = 0;
+    let mut xi: usize = 0;
+
+    while wi < w.len() || xi < x.len() {
+        if wi < w.len() && (xi >= x.len() || x[xi] >= w[wi]) {
+            if xi < x.len() && x[xi] == w[wi] {
+                xi += 1;
+            }
+            // now w[wi] not in x strictly (or xi exhausted)
+            while yi < y.len() && y[yi] < w[wi] {
+                d.push(y[yi]);
+                yi += 1;
+            }
+            if yi < y.len() && y[yi] == w[wi] {
+                w[wn] = y[yi]; // keep w[wi] in w (it's also in y)
+                yi += 1;
+            } else {
+                // w[wi] not in y, keep it in w
+                w[wn] = w[wi];
+            }
+            wn += 1;
+            wi += 1;
+        } else {
+            // x[xi] < w[wi] strictly (or wi exhausted)
+            while yi < y.len() && y[yi] < x[xi] {
+                d.push(y[yi]);
+                yi += 1;
+            }
+            if yi < y.len() && y[yi] == x[xi] {
+                y[yn] = y[yi]; // keep in y (it's also in x)
+                yn += 1;
+                yi += 1;
+            } else {
+                // x[xi] not in y: add x[xi] to w at position wn
+                if wi == wn {
+                    w.insert(wn, x[xi]);
+                    wn += 1;
+                    wi += 1; // skip newly added element
+                } else {
+                    // wn < wi: just store at wn without shifting
+                    w[wn] = x[xi];
+                    wn += 1;
+                }
+            }
+            xi += 1;
+        }
+    }
+    // Move remaining y elements to d
+    while yi < y.len() {
+        d.push(y[yi]);
+        yi += 1;
+    }
+    w.truncate(wn);
+    y.truncate(yn);
+}
+
+/// Bubble up intersections common to all children of `x` into `x` itself.
+///
+/// `x` is a node which shrunk or is the half of a split.
+/// Ported from C `bubble_up`.
+pub fn bubble_up_rs(x: MTNodeHandle) {
+    let n = mtnode_n(x);
+    // The largest common subset is the intersection of first and last child
+    let first_child = mtnode_ptr(x, 0);
+    let last_child = mtnode_ptr(x, n);
+    let first_v = read_intersect(first_child);
+    let last_v = read_intersect(last_child);
+    let common = intersect_common_vecs(&first_v, &last_v);
+    if common.is_empty() {
+        return;
+    }
+    // Remove common from all children
+    for i in 0..=n {
+        let child = mtnode_ptr(x, i);
+        let mut child_v = read_intersect(child);
+        intersect_sub_vecs(&mut child_v, &common);
+        write_intersect(child, &child_v);
+    }
+    // Add common to x itself
+    let mut x_v = read_intersect(x);
+    intersect_add_vecs(&mut x_v, &common);
+    write_intersect(x, &x_v);
 }
 
 // ============================================================================
@@ -2870,7 +3145,7 @@ pub fn marktree_intersect_pair(
 
 /// Bubble up common intersections to parent.
 pub fn bubble_up(x: MTNodeHandle) {
-    unsafe { nvim_bubble_up(x) }
+    bubble_up_rs(x);
 }
 
 // ============================================================================
