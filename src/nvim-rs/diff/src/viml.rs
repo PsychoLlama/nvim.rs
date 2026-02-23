@@ -463,7 +463,7 @@ pub unsafe extern "C" fn rs_xdiff_out(
 ) -> c_int {
     nvim_diffout_append_hunk(
         priv_data,
-        start_a + 1,  // convert 0-based to 1-based line numbers
+        start_a + 1, // convert 0-based to 1-based line numbers
         count_a,
         start_b + 1,
         count_b,
@@ -615,7 +615,11 @@ pub unsafe extern "C" fn rs_f_diff_hlID(
                     std::ptr::addr_of_mut!(ce),
                 );
                 if col >= cs && col < ce {
-                    HLID_VALUE = if added { hlf_text_added } else { hlf_text_changed };
+                    HLID_VALUE = if added {
+                        hlf_text_added
+                    } else {
+                        hlf_text_changed
+                    };
                     break;
                 }
                 if col < cs {
