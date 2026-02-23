@@ -138,6 +138,9 @@ extern int rs_eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *evalarg);
 extern int rs_eval6(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
 extern int rs_eval7(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
 extern int rs_eval_interp_string(char **arg, typval_T *rettv, bool evaluate);
+extern void *rs_eval_for_line(const char *arg, bool *errp, exarg_T *eap, evalarg_T *evalarg);
+extern bool rs_next_for_item(void *fi_void, char *arg);
+extern void rs_free_for_info(void *fi_void);
 extern int rs_free_unref_items(int copyID);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
@@ -1157,73 +1160,7 @@ void set_var_lval(lval_T *lp, char *endp, typval_T *rettv, bool copy, const bool
 /// @return  a pointer that holds the info.  Null when there is an error.
 void *eval_for_line(const char *arg, bool *errp, exarg_T *eap, evalarg_T *const evalarg)
 {
-  forinfo_T *fi = xcalloc(1, sizeof(forinfo_T));
-  typval_T tv;
-  list_T *l;
-  const bool skip = !(evalarg->eval_flags & EVAL_EVALUATE);
-
-  *errp = true;  // Default: there is an error.
-
-  const char *expr = skip_var_list(arg, &fi->fi_varcount, &fi->fi_semicolon, false);
-  if (expr == NULL) {
-    return fi;
-  }
-
-  expr = skipwhite(expr);
-  if (expr[0] != 'i' || expr[1] != 'n'
-      || !(expr[2] == NUL || ascii_iswhite(expr[2]))) {
-    emsg(_("E690: Missing \"in\" after :for"));
-    return fi;
-  }
-
-  if (skip) {
-    emsg_skip++;
-  }
-  expr = skipwhite(expr + 2);
-  if (eval0((char *)expr, &tv, eap, evalarg) == OK) {
-    *errp = false;
-    if (!skip) {
-      if (tv.v_type == VAR_LIST) {
-        l = tv.vval.v_list;
-        if (l == NULL) {
-          // a null list is like an empty list: do nothing
-          tv_clear(&tv);
-        } else {
-          // No need to increment the refcount, it's already set for
-          // the list being used in "tv".
-          fi->fi_list = l;
-          tv_list_watch_add(l, &fi->fi_lw);
-          fi->fi_lw.lw_item = tv_list_first(l);
-        }
-      } else if (tv.v_type == VAR_BLOB) {
-        fi->fi_bi = 0;
-        if (tv.vval.v_blob != NULL) {
-          typval_T btv;
-
-          // Make a copy, so that the iteration still works when the
-          // blob is changed.
-          tv_blob_copy(tv.vval.v_blob, &btv);
-          fi->fi_blob = btv.vval.v_blob;
-        }
-        tv_clear(&tv);
-      } else if (tv.v_type == VAR_STRING) {
-        fi->fi_byte_idx = 0;
-        fi->fi_string = tv.vval.v_string;
-        tv.vval.v_string = NULL;
-        if (fi->fi_string == NULL) {
-          fi->fi_string = xstrdup("");
-        }
-      } else {
-        emsg(_(e_string_list_or_blob_required));
-        tv_clear(&tv);
-      }
-    }
-  }
-  if (skip) {
-    emsg_skip--;
-  }
-
-  return fi;
+  return rs_eval_for_line(arg, errp, eap, evalarg);
 }
 
 /// Use the first item in a ":for" list.  Advance to the next.
@@ -1233,62 +1170,235 @@ void *eval_for_line(const char *arg, bool *errp, exarg_T *eap, evalarg_T *const 
 ///          something wrong.
 bool next_for_item(void *fi_void, char *arg)
 {
-  forinfo_T *fi = (forinfo_T *)fi_void;
-
-  if (fi->fi_blob != NULL) {
-    if (fi->fi_bi >= tv_blob_len(fi->fi_blob)) {
-      return false;
-    }
-    typval_T tv;
-    tv.v_type = VAR_NUMBER;
-    tv.v_lock = VAR_FIXED;
-    tv.vval.v_number = tv_blob_get(fi->fi_blob, fi->fi_bi);
-    fi->fi_bi++;
-    return ex_let_vars(arg, &tv, true, fi->fi_semicolon, fi->fi_varcount, false, NULL) == OK;
-  }
-
-  if (fi->fi_string != NULL) {
-    const int len = utfc_ptr2len(fi->fi_string + fi->fi_byte_idx);
-    if (len == 0) {
-      return false;
-    }
-    typval_T tv;
-    tv.v_type = VAR_STRING;
-    tv.v_lock = VAR_FIXED;
-    tv.vval.v_string = xmemdupz(fi->fi_string + fi->fi_byte_idx, (size_t)len);
-    fi->fi_byte_idx += len;
-    const int result
-      = ex_let_vars(arg, &tv, true, fi->fi_semicolon, fi->fi_varcount, false, NULL) == OK;
-    xfree(tv.vval.v_string);
-    return result;
-  }
-
-  listitem_T *item = fi->fi_lw.lw_item;
-  if (item == NULL) {
-    return false;
-  }
-  fi->fi_lw.lw_item = TV_LIST_ITEM_NEXT(fi->fi_list, item);
-  return (ex_let_vars(arg, TV_LIST_ITEM_TV(item), true,
-                      fi->fi_semicolon, fi->fi_varcount, false, NULL) == OK);
+  return rs_next_for_item(fi_void, arg);
 }
 
 /// Free the structure used to store info used by ":for".
 void free_for_info(void *fi_void)
 {
-  forinfo_T *fi = (forinfo_T *)fi_void;
+  rs_free_for_info(fi_void);
+}
 
-  if (fi == NULL) {
-    return;
-  }
-  if (fi->fi_list != NULL) {
-    tv_list_watch_remove(fi->fi_list, &fi->fi_lw);
-    tv_list_unref(fi->fi_list);
-  } else if (fi->fi_blob != NULL) {
-    tv_blob_unref(fi->fi_blob);
-  } else {
-    xfree(fi->fi_string);
-  }
-  xfree(fi);
+// =============================================================================
+// Accessors for rs_eval_for_line / rs_next_for_item / rs_free_for_info (Phase 3)
+// All use void* to avoid exposing the local forinfo_T typedef in generated headers.
+// =============================================================================
+
+/// Allocate a zeroed forinfo_T and return as opaque pointer.
+void *nvim_forinfo_alloc(void)
+{
+  return xcalloc(1, sizeof(forinfo_T));
+}
+
+/// Free a forinfo_T struct (does NOT free list/blob/string refs).
+void nvim_forinfo_free(void *fi_void)
+{
+  xfree(fi_void);
+}
+
+/// Get fi->fi_varcount.
+int nvim_forinfo_get_varcount(void *fi_void)
+{
+  return ((forinfo_T *)fi_void)->fi_varcount;
+}
+
+/// Set fi->fi_varcount.
+void nvim_forinfo_set_varcount(void *fi_void, int n)
+{
+  ((forinfo_T *)fi_void)->fi_varcount = n;
+}
+
+/// Get fi->fi_semicolon.
+int nvim_forinfo_get_semicolon(void *fi_void)
+{
+  return ((forinfo_T *)fi_void)->fi_semicolon;
+}
+
+/// Set fi->fi_semicolon.
+void nvim_forinfo_set_semicolon(void *fi_void, int v)
+{
+  ((forinfo_T *)fi_void)->fi_semicolon = v;
+}
+
+/// Return true if fi->fi_list != NULL.
+bool nvim_forinfo_has_list(void *fi_void)
+{
+  return ((forinfo_T *)fi_void)->fi_list != NULL;
+}
+
+/// Return true if fi->fi_blob != NULL.
+bool nvim_forinfo_has_blob(void *fi_void)
+{
+  return ((forinfo_T *)fi_void)->fi_blob != NULL;
+}
+
+/// Return true if fi->fi_string != NULL.
+bool nvim_forinfo_has_string(void *fi_void)
+{
+  return ((forinfo_T *)fi_void)->fi_string != NULL;
+}
+
+/// Get fi->fi_bi.
+int nvim_forinfo_get_bi(void *fi_void)
+{
+  return ((forinfo_T *)fi_void)->fi_bi;
+}
+
+/// Set fi->fi_bi.
+void nvim_forinfo_set_bi(void *fi_void, int n)
+{
+  ((forinfo_T *)fi_void)->fi_bi = n;
+}
+
+/// Get fi->fi_byte_idx.
+int nvim_forinfo_get_byte_idx(void *fi_void)
+{
+  return ((forinfo_T *)fi_void)->fi_byte_idx;
+}
+
+/// Set fi->fi_byte_idx.
+void nvim_forinfo_set_byte_idx(void *fi_void, int n)
+{
+  ((forinfo_T *)fi_void)->fi_byte_idx = n;
+}
+
+/// Get fi->fi_string.
+char *nvim_forinfo_get_string(void *fi_void)
+{
+  return ((forinfo_T *)fi_void)->fi_string;
+}
+
+/// Set fi->fi_string (takes ownership).
+void nvim_forinfo_set_string(void *fi_void, char *s)
+{
+  ((forinfo_T *)fi_void)->fi_string = s;
+}
+
+/// Get fi->fi_list as void *.
+void *nvim_forinfo_get_list(void *fi_void)
+{
+  return ((forinfo_T *)fi_void)->fi_list;
+}
+
+/// Set fi->fi_list.
+void nvim_forinfo_set_list(void *fi_void, void *l)
+{
+  ((forinfo_T *)fi_void)->fi_list = (list_T *)l;
+}
+
+/// Get fi->fi_blob as void *.
+void *nvim_forinfo_get_blob(void *fi_void)
+{
+  return ((forinfo_T *)fi_void)->fi_blob;
+}
+
+/// Set fi->fi_blob.
+void nvim_forinfo_set_blob(void *fi_void, void *b)
+{
+  ((forinfo_T *)fi_void)->fi_blob = (blob_T *)b;
+}
+
+/// Get the lw_item (listitem_T *) from fi->fi_lw as void *.
+void *nvim_forinfo_get_lw_item(void *fi_void)
+{
+  return ((forinfo_T *)fi_void)->fi_lw.lw_item;
+}
+
+/// Set fi->fi_lw.lw_item.
+void nvim_forinfo_set_lw_item(void *fi_void, void *item)
+{
+  ((forinfo_T *)fi_void)->fi_lw.lw_item = (listitem_T *)item;
+}
+
+/// Call tv_list_watch_add(l, &fi->fi_lw).
+void nvim_forinfo_list_watch_add(void *fi_void, void *l)
+{
+  forinfo_T *fi = (forinfo_T *)fi_void;
+  tv_list_watch_add((list_T *)l, &fi->fi_lw);
+}
+
+/// Call tv_list_watch_remove(fi->fi_list, &fi->fi_lw).
+void nvim_forinfo_list_watch_remove(void *fi_void)
+{
+  forinfo_T *fi = (forinfo_T *)fi_void;
+  tv_list_watch_remove(fi->fi_list, &fi->fi_lw);
+}
+
+/// Get TV_LIST_ITEM_NEXT(fi->fi_list, item).
+listitem_T *nvim_list_item_next(list_T *l, listitem_T *item)
+{
+  return TV_LIST_ITEM_NEXT(l, item);
+}
+
+/// Get TV_LIST_ITEM_TV(item) (typval_T *).
+typval_T *nvim_list_item_tv(listitem_T *item)
+{
+  return TV_LIST_ITEM_TV(item);
+}
+
+/// Call tv_list_unref(l).
+void nvim_tv_list_unref(list_T *l)
+{
+  tv_list_unref(l);
+}
+
+/// Call tv_blob_unref(b).
+void nvim_tv_blob_unref(blob_T *b)
+{
+  tv_blob_unref(b);
+}
+
+/// Call tv_blob_copy(from, to).
+void nvim_tv_blob_copy(blob_T *from, typval_T *to)
+{
+  tv_blob_copy(from, to);
+}
+
+/// Call skip_var_list(arg, &varcount, &semicolon, nested).
+const char *nvim_skip_var_list(const char *arg, int *varcount, int *semicolon, bool nested)
+{
+  return skip_var_list(arg, varcount, semicolon, nested);
+}
+
+/// Call ex_let_vars with a number typval.
+bool nvim_ex_let_vars_number(char *arg, varnumber_T n, bool copy, int semicolon,
+                             int varcount)
+{
+  typval_T tv;
+  tv.v_type = VAR_NUMBER;
+  tv.v_lock = VAR_FIXED;
+  tv.vval.v_number = n;
+  return ex_let_vars(arg, &tv, copy, semicolon, varcount, false, NULL) == OK;
+}
+
+/// Call ex_let_vars with a string typval (takes ownership of s).
+bool nvim_ex_let_vars_string_owned(char *arg, char *s, int semicolon, int varcount)
+{
+  typval_T tv;
+  tv.v_type = VAR_STRING;
+  tv.v_lock = VAR_FIXED;
+  tv.vval.v_string = s;
+  bool result = ex_let_vars(arg, &tv, true, semicolon, varcount, false, NULL) == OK;
+  xfree(tv.vval.v_string);
+  return result;
+}
+
+/// Call ex_let_vars with a list item typval.
+bool nvim_ex_let_vars_list_item(char *arg, listitem_T *item, int semicolon, int varcount)
+{
+  return ex_let_vars(arg, TV_LIST_ITEM_TV(item), true, semicolon, varcount, false, NULL) == OK;
+}
+
+/// Increment emsg_skip.
+void nvim_emsg_skip_inc(void)
+{
+  emsg_skip++;
+}
+
+/// Decrement emsg_skip.
+void nvim_emsg_skip_dec(void)
+{
+  emsg_skip--;
 }
 
 extern void rs_set_context_for_expression(expand_T *xp, char *arg, int cmdidx);
