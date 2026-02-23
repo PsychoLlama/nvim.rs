@@ -246,23 +246,11 @@ void nvim_win_set_prev(win_T *wp, win_T *prev) { wp->w_prev = prev; }
 
 /// Set the firstwin global variable (accessor for Rust).
 /// Also syncs curtab->tp_firstwin if curtab is not NULL.
-void nvim_set_firstwin(win_T *wp)
-{
-  firstwin = wp;
-  if (curtab != NULL) {
-    curtab->tp_firstwin = wp;
-  }
-}
+void nvim_set_firstwin(win_T *wp) { firstwin = wp; if (curtab != NULL) { curtab->tp_firstwin = wp; } }
 
 /// Set the lastwin global variable (accessor for Rust).
 /// Also syncs curtab->tp_lastwin if curtab is not NULL.
-void nvim_set_lastwin(win_T *wp)
-{
-  lastwin = wp;
-  if (curtab != NULL) {
-    curtab->tp_lastwin = wp;
-  }
-}
+void nvim_set_lastwin(win_T *wp) { lastwin = wp; if (curtab != NULL) { curtab->tp_lastwin = wp; } }
 
 void nvim_tabpage_set_firstwin(tabpage_T *tp, win_T *wp) { tp->tp_firstwin = wp; }
 void nvim_tabpage_set_lastwin(tabpage_T *tp, win_T *wp) { tp->tp_lastwin = wp; }
@@ -275,59 +263,20 @@ int nvim_get_curwin_handle(void) { return curwin->handle; }
 
 /// Get the current window's cursor position for incsearch state (accessor for Rust).
 /// Fills the provided pos struct with lnum, col, coladd.
-void nvim_get_curwin_cursor_pos(void *pos)
-{
-  // pos is a pointer to a struct with lnum (int32), col (int), coladd (int)
-  int32_t *p = (int32_t *)pos;
-  p[0] = (int32_t)curwin->w_cursor.lnum;
-  p[1] = (int32_t)curwin->w_cursor.col;
-  p[2] = (int32_t)curwin->w_cursor.coladd;
-}
+void nvim_get_curwin_cursor_pos(void *pos) { int32_t *p = (int32_t *)pos; p[0] = (int32_t)curwin->w_cursor.lnum; p[1] = (int32_t)curwin->w_cursor.col; p[2] = (int32_t)curwin->w_cursor.coladd; }
 
 /// Save current window view state (accessor for Rust).
 /// Fills the provided viewstate struct.
-void nvim_save_viewstate(void *vs)
-{
-  // vs is a pointer to a struct matching viewstate_T layout
-  int32_t *p = (int32_t *)vs;
-  p[0] = (int32_t)curwin->w_curswant;
-  p[1] = (int32_t)curwin->w_leftcol;
-  p[2] = (int32_t)curwin->w_skipcol;
-  p[3] = (int32_t)curwin->w_topline;
-  p[4] = (int32_t)curwin->w_topfill;
-  p[5] = (int32_t)curwin->w_botline;
-  p[6] = (int32_t)curwin->w_empty_rows;
-}
+void nvim_save_viewstate(void *vs) { int32_t *p = (int32_t *)vs; p[0] = (int32_t)curwin->w_curswant; p[1] = (int32_t)curwin->w_leftcol; p[2] = (int32_t)curwin->w_skipcol; p[3] = (int32_t)curwin->w_topline; p[4] = (int32_t)curwin->w_topfill; p[5] = (int32_t)curwin->w_botline; p[6] = (int32_t)curwin->w_empty_rows; }
 
 /// Restore current window view state (accessor for Rust).
-void nvim_restore_viewstate(const void *vs)
-{
-  const int32_t *p = (const int32_t *)vs;
-  curwin->w_curswant = (colnr_T)p[0];
-  curwin->w_leftcol = (colnr_T)p[1];
-  curwin->w_skipcol = (colnr_T)p[2];
-  curwin->w_topline = (linenr_T)p[3];
-  curwin->w_topfill = (int)p[4];
-  curwin->w_botline = (linenr_T)p[5];
-  curwin->w_empty_rows = (int)p[6];
-}
+void nvim_restore_viewstate(const void *vs) { const int32_t *p = (const int32_t *)vs; curwin->w_curswant = (colnr_T)p[0]; curwin->w_leftcol = (colnr_T)p[1]; curwin->w_skipcol = (colnr_T)p[2]; curwin->w_topline = (linenr_T)p[3]; curwin->w_topfill = (int)p[4]; curwin->w_botline = (linenr_T)p[5]; curwin->w_empty_rows = (int)p[6]; }
 
 /// Set the current window's cursor position (accessor for Rust).
-void nvim_set_curwin_cursor_pos(const void *pos)
-{
-  const int32_t *p = (const int32_t *)pos;
-  curwin->w_cursor.lnum = (linenr_T)p[0];
-  curwin->w_cursor.col = (colnr_T)p[1];
-  curwin->w_cursor.coladd = (colnr_T)p[2];
-}
+void nvim_set_curwin_cursor_pos(const void *pos) { const int32_t *p = (const int32_t *)pos; curwin->w_cursor.lnum = (linenr_T)p[0]; curwin->w_cursor.col = (colnr_T)p[1]; curwin->w_cursor.coladd = (colnr_T)p[2]; }
 
 /// Compare two positions for equality (accessor for Rust).
-int nvim_equalpos(const void *pos1, const void *pos2)
-{
-  const int32_t *p1 = (const int32_t *)pos1;
-  const int32_t *p2 = (const int32_t *)pos2;
-  return p1[0] == p2[0] && p1[1] == p2[1] && p1[2] == p2[2];
-}
+int nvim_equalpos(const void *pos1, const void *pos2) { const int32_t *p1 = (const int32_t *)pos1; const int32_t *p2 = (const int32_t *)pos2; return p1[0] == p2[0] && p1[1] == p2[1] && p1[2] == p2[2]; }
 
 void nvim_validate_cursor(void) { validate_cursor(curwin); }
 buf_T *nvim_get_curbuf(void) { return curbuf; }
@@ -451,10 +400,7 @@ int nvim_win_get_config_relative(win_T *wp) { return (int)wp->w_config.relative;
 int nvim_win_get_config_window(win_T *wp) { return wp ? wp->w_config.window : 0; }
 
 /// Get the w_config.zindex field.
-int nvim_win_get_config_zindex(win_T *wp)
-{
-  return wp ? wp->w_config.zindex : 50;  // Default zindex
-}
+int nvim_win_get_config_zindex(win_T *wp) { return wp ? wp->w_config.zindex : 50; }
 
 int nvim_win_get_config_focusable(win_T *wp) { return wp ? wp->w_config.focusable : 0; }
 frame_T *nvim_get_topframe(void) { return topframe; }
@@ -528,12 +474,7 @@ colnr_T nvim_win_get_valid_cursor_col(win_T *wp) { return wp->w_valid_cursor.col
 colnr_T nvim_win_get_valid_cursor_coladd(win_T *wp) { return wp->w_valid_cursor.coladd; }
 
 /// Set the valid cursor position (all fields).
-void nvim_win_set_valid_cursor(win_T *wp, linenr_T lnum, colnr_T col, colnr_T coladd)
-{
-  wp->w_valid_cursor.lnum = lnum;
-  wp->w_valid_cursor.col = col;
-  wp->w_valid_cursor.coladd = coladd;
-}
+void nvim_win_set_valid_cursor(win_T *wp, linenr_T lnum, colnr_T col, colnr_T coladd) { wp->w_valid_cursor.lnum = lnum; wp->w_valid_cursor.col = col; wp->w_valid_cursor.coladd = coladd; }
 
 void nvim_win_set_valid_cursor_col(win_T *wp, colnr_T col) { wp->w_valid_cursor.col = col; }
 void nvim_win_set_valid_cursor_coladd(win_T *wp, colnr_T coladd) { wp->w_valid_cursor.coladd = coladd; }
@@ -567,13 +508,7 @@ const char *nvim_win_ml_get_buf(win_T *wp, linenr_T lnum) { return ml_get_buf(wp
 int nvim_ui_has_tabline(void) { return ui_has(kUITabline); }
 
 /// Get a specific border adjustment value for a window.
-int nvim_win_get_border_adj(win_T *wp, int idx)
-{
-  if (idx < 0 || idx >= 4) {
-    return 0;
-  }
-  return wp->w_border_adj[idx];
-}
+int nvim_win_get_border_adj(win_T *wp, int idx) { return (wp && idx >= 0 && idx < 4) ? wp->w_border_adj[idx] : 0; }
 
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
@@ -3937,52 +3872,22 @@ void nvim_win_save_cursor_to_corr(win_T *wp) { if (wp) { wp->w_save_cursor.w_cur
 void nvim_win_save_topline_to_corr(win_T *wp) { if (wp) { wp->w_save_cursor.w_topline_corr = wp->w_topline; } }
 
 /// Check if w_save_cursor.w_cursor_corr equals w_cursor (via equalpos).
-int nvim_win_cursor_eq_save_corr(win_T *wp)
-{
-  if (!wp) {
-    return 0;
-  }
-  return equalpos(wp->w_save_cursor.w_cursor_corr, wp->w_cursor);
-}
+int nvim_win_cursor_eq_save_corr(win_T *wp) { return wp ? equalpos(wp->w_save_cursor.w_cursor_corr, wp->w_cursor) : 0; }
 
 /// Check if w_save_cursor.w_topline_corr equals w_topline.
-int nvim_win_topline_eq_save_corr(win_T *wp)
-{
-  if (!wp) {
-    return 0;
-  }
-  return wp->w_save_cursor.w_topline_corr == wp->w_topline;
-}
+int nvim_win_topline_eq_save_corr(win_T *wp) { return wp ? wp->w_save_cursor.w_topline_corr == wp->w_topline : 0; }
 
 /// Get w_save_cursor.w_cursor_save.lnum.
-linenr_T nvim_win_get_save_cursor_save_lnum(win_T *wp)
-{
-  if (!wp) {
-    return 0;
-  }
-  return wp->w_save_cursor.w_cursor_save.lnum;
-}
+linenr_T nvim_win_get_save_cursor_save_lnum(win_T *wp) { return wp ? wp->w_save_cursor.w_cursor_save.lnum : 0; }
 
 /// Get w_save_cursor.w_topline_save.
-linenr_T nvim_win_get_save_topline_save(win_T *wp)
-{
-  if (!wp) {
-    return 0;
-  }
-  return wp->w_save_cursor.w_topline_save;
-}
+linenr_T nvim_win_get_save_topline_save(win_T *wp) { return wp ? wp->w_save_cursor.w_topline_save : 0; }
 
 void nvim_win_restore_cursor_from_save(win_T *wp) { if (wp) { wp->w_cursor = wp->w_save_cursor.w_cursor_save; } }
 void nvim_win_restore_topline_from_save(win_T *wp) { if (wp) { wp->w_topline = wp->w_save_cursor.w_topline_save; } }
 
 /// Check if w_save_cursor.w_topline_save > buffer line count.
-int nvim_win_save_topline_gt_buf_line_count(win_T *wp)
-{
-  if (!wp || !wp->w_buffer) {
-    return 0;
-  }
-  return wp->w_save_cursor.w_topline_save > wp->w_buffer->b_ml.ml_line_count;
-}
+int nvim_win_save_topline_gt_buf_line_count(win_T *wp) { return (wp && wp->w_buffer) ? wp->w_save_cursor.w_topline_save > wp->w_buffer->b_ml.ml_line_count : 0; }
 
 void nvim_ga_init_int(garray_T *gap) { ga_init(gap, (int)sizeof(int), 1); }
 void nvim_ga_grow(garray_T *gap, int n) { ga_grow(gap, n); }
@@ -3991,13 +3896,7 @@ int nvim_ga_get_len(garray_T *gap) { return gap ? gap->ga_len : 0; }
 // nvim_ga_set_len() — already defined in fold.c
 
 /// Get an int item from a growarray by index.
-int nvim_ga_get_int(garray_T *gap, int idx)
-{
-  if (!gap || !gap->ga_data || idx < 0 || idx >= gap->ga_len) {
-    return 0;
-  }
-  return ((int *)gap->ga_data)[idx];
-}
+int nvim_ga_get_int(garray_T *gap, int idx) { return (gap && gap->ga_data && idx >= 0 && idx < gap->ga_len) ? ((int *)gap->ga_data)[idx] : 0; }
 
 void nvim_ga_set_int(garray_T *gap, int idx, int val) { if (gap && gap->ga_data && idx >= 0) { ((int *)gap->ga_data)[idx] = val; } }
 void nvim_comp_col(void) { comp_col(); }
@@ -4090,13 +3989,7 @@ void nvim_set_curbuf_from_curwin(void) { curbuf = curwin->w_buffer; }
 void nvim_check_cursor_win_wrapper(win_T *wp) { check_cursor(wp); }
 
 /// Get w_frame->fr_parent from a window (for win_close frame comparison).
-frame_T *nvim_win_get_frame_parent(win_T *wp)
-{
-  if (wp && wp->w_frame) {
-    return wp->w_frame->fr_parent;
-  }
-  return NULL;
-}
+frame_T *nvim_win_get_frame_parent(win_T *wp) { return (wp && wp->w_frame) ? wp->w_frame->fr_parent : NULL; }
 
 buf_T *nvim_get_firstbuf_wrapper(void) { return firstbuf; }
 int nvim_can_close_floating_windows(tabpage_T *tp) { return can_close_floating_windows(tp) ? 1 : 0; }
