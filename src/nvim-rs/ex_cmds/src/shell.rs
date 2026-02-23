@@ -17,6 +17,9 @@ use std::ffi::{c_char, c_int};
 
 use crate::range::{LineNr, LineRange};
 
+// libc for strlen
+extern crate libc;
+
 // =============================================================================
 // Shell Flags
 // =============================================================================
@@ -415,6 +418,45 @@ extern "C" {
     fn nvim_excmds_get_p_srr() -> *const c_char;
     fn nvim_excmds_get_p_shq() -> *const c_char;
     fn nvim_excmds_xmalloc(size: usize) -> *mut std::ffi::c_void;
+
+    // do_bang FFI
+    fn rs_check_secure() -> c_int;
+    fn nvim_excmds_get_msg_scroll() -> c_int;
+    fn nvim_excmds_set_msg_scroll(val: c_int);
+    fn nvim_excmds_autowrite_all();
+    fn nvim_excmds_get_bangredo() -> c_int;
+    fn nvim_excmds_set_bangredo(val: c_int);
+    fn nvim_excmds_vim_strsave_escaped(s: *const c_char, chars: *const c_char) -> *mut c_char;
+    fn nvim_excmds_append_to_redobuff_lit(s: *const c_char, len: c_int);
+    fn nvim_excmds_append_to_redobuff(s: *const c_char);
+    fn nvim_excmds_ui_cursor_goto(row: c_int, col: c_int);
+    fn nvim_excmds_get_msg_row() -> c_int;
+    fn nvim_excmds_get_msg_col() -> c_int;
+    fn nvim_excmds_do_shell_wrapper(cmd: *mut c_char, flags: c_int);
+    fn nvim_excmds_do_filter_wrapper(
+        line1: c_int,
+        line2: c_int,
+        eap: *mut crate::ExArgHandle,
+        cmd: *mut c_char,
+        do_in: bool,
+        do_out: bool,
+    );
+    fn nvim_excmds_apply_autocmds_shellfilterpost();
+    fn nvim_excmds_emsg_e_noprev();
+    fn nvim_excmds_msg_ext_set_kind_shell_cmd();
+    fn msg_start();
+    fn msg_putchar(c: c_int);
+    fn nvim_excmds_msg_outtrans(s: *const c_char);
+    fn msg_clr_eos();
+    pub fn xmalloc(size: usize) -> *mut std::ffi::c_void;
+    pub fn xfree(ptr: *mut std::ffi::c_void);
+    fn skipwhite(p: *const c_char) -> *const c_char;
+}
+
+/// Inline wrapper for strlen to avoid extern declarations of libc.
+#[inline(always)]
+unsafe fn cstrlen(s: *const c_char) -> usize {
+    libc::strlen(s)
 }
 
 /// Find the position of an unquoted `|` character in a command string.
@@ -700,6 +742,240 @@ pub unsafe extern "C" fn rs_append_redir(
         *buf.add(end_offset) = 0;
     } else if buflen > 0 {
         *buf.add(buflen - 1) = 0;
+    }
+}
+
+// =============================================================================
+// do_bang / prevcmd management
+// =============================================================================
+
+/// The previous shell command for `!` substitution.
+///
+/// Managed with C allocator (`xmalloc`/`xfree`) so the pointer is compatible
+/// with any C code that might read it.
+static mut PREVCMD: Option<*mut c_char> = None;
+
+/// Free the previous shell command. Called from EXITFREE cleanup.
+///
+/// # Safety
+/// Must only be called once during process exit.
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_prev_shellcmd() {
+    #[allow(static_mut_refs)]
+    if let Some(ptr) = PREVCMD.take() {
+        xfree(ptr as *mut std::ffi::c_void);
+    }
+}
+
+/// Handle the `:!cmd` command. Also for `:r !cmd` and `:w !cmd`.
+///
+/// Bangs in the argument are replaced with the previously entered command.
+/// Manages the `prevcmd` static. Dispatches to `do_shell` or `do_filter`.
+///
+/// # Safety
+/// All pointer arguments must be non-null and valid.
+#[no_mangle]
+#[allow(static_mut_refs)]
+pub unsafe extern "C" fn rs_do_bang(
+    addr_count: c_int,
+    eap: *mut crate::ExArgHandle,
+    forceit: bool,
+    do_in: bool,
+    do_out: bool,
+) {
+    // Disallow shell commands in secure mode
+    if rs_check_secure() != 0 {
+        return;
+    }
+
+    let arg = crate::nvim_exarg_get_arg(eap as *const _);
+    let line1 = crate::nvim_exarg_get_line1(eap as *const _);
+    let line2 = crate::nvim_exarg_get_line2(eap as *const _);
+
+    if addr_count == 0 {
+        // :! -- don't scroll here
+        let scroll_save = nvim_excmds_get_msg_scroll();
+        nvim_excmds_set_msg_scroll(0);
+        nvim_excmds_autowrite_all();
+        nvim_excmds_set_msg_scroll(scroll_save);
+    }
+
+    // Build the command by bang-substituting.
+    // We work entirely with xmalloc-allocated C strings so we can transfer
+    // ownership to PREVCMD without copying.
+
+    let mut ins_prevcmd = forceit;
+
+    // Skip leading whitespace
+    let mut trailarg: *const c_char = skipwhite(arg);
+
+    // `newcmd` is the accumulated command string (xmalloc-allocated or NULL)
+    let mut newcmd: *mut c_char = std::ptr::null_mut();
+
+    loop {
+        let trailarg_len = cstrlen(trailarg);
+        let newcmd_len: usize = if newcmd.is_null() {
+            0
+        } else {
+            cstrlen(newcmd)
+        };
+        let prevcmd_len: usize = if ins_prevcmd {
+            match PREVCMD {
+                Some(ptr) if !ptr.is_null() => cstrlen(ptr),
+                _ => {
+                    // Need prevcmd but it's not set
+                    nvim_excmds_emsg_e_noprev();
+                    if !newcmd.is_null() {
+                        xfree(newcmd as *mut std::ffi::c_void);
+                    }
+                    return;
+                }
+            }
+        } else {
+            0
+        };
+
+        let len = trailarg_len + newcmd_len + prevcmd_len + 1;
+        let t = xmalloc(len) as *mut c_char;
+        *t = 0; // NUL-terminate
+
+        // Concatenate: newcmd + prevcmd + trailarg
+        if !newcmd.is_null() {
+            let nlen = newcmd_len;
+            std::ptr::copy_nonoverlapping(newcmd, t, nlen);
+        }
+        if ins_prevcmd {
+            if let Some(ptr) = PREVCMD {
+                let nlen = newcmd_len;
+                std::ptr::copy_nonoverlapping(ptr, t.add(nlen), prevcmd_len);
+            }
+        }
+        let base_len = newcmd_len + prevcmd_len;
+        std::ptr::copy_nonoverlapping(trailarg, t.add(base_len), trailarg_len);
+        *t.add(base_len + trailarg_len) = 0;
+
+        if !newcmd.is_null() {
+            xfree(newcmd as *mut std::ffi::c_void);
+        }
+        newcmd = t;
+
+        // Scan the suffix (starting right after the previously appended newcmd+prevcmd)
+        // for '!', which is replaced by the previous command. "\!" becomes "!".
+        let mut p: *mut c_char = newcmd.add(base_len);
+        trailarg = std::ptr::null();
+        while *p != 0 {
+            if *p == b'!' as c_char {
+                if p > newcmd && *p.sub(1) == b'\\' as c_char {
+                    // STRMOVE(p-1, p): shift string left by 1 at p-1
+                    let src = p;
+                    let dst = p.sub(1);
+                    let remaining = cstrlen(src) + 1; // include NUL
+                    std::ptr::copy(src, dst, remaining);
+                    // p stays at the same address (which is now the char after '!')
+                    // but we don't advance -- the '!' was moved to p-1 and
+                    // we continue scanning from p (which shifted left)
+                } else {
+                    // Split at this '!': null-terminate here, mark trailarg
+                    trailarg = p.add(1);
+                    *p = 0;
+                    ins_prevcmd = true;
+                    break;
+                }
+            } else {
+                p = p.add(1);
+            }
+        }
+
+        if trailarg.is_null() {
+            break;
+        }
+    }
+
+    // Only update PREVCMD if there's actually a command to run.
+    let newcmd_empty = *newcmd == 0;
+    let mut free_newcmd = false;
+    if !newcmd_empty {
+        if let Some(old) = PREVCMD.take() {
+            xfree(old as *mut std::ffi::c_void);
+        }
+        PREVCMD = Some(newcmd);
+    } else {
+        free_newcmd = true;
+    }
+
+    // Handle bangredo: put cmd in redo buffer
+    if nvim_excmds_get_bangredo() != 0 {
+        let prevcmd_ptr = match PREVCMD {
+            Some(ptr) if !ptr.is_null() => ptr,
+            _ => {
+                nvim_excmds_emsg_e_noprev();
+                if free_newcmd {
+                    xfree(newcmd as *mut std::ffi::c_void);
+                }
+                return;
+            }
+        };
+
+        // Escape % and # in the command for redo buffer
+        let escaped = nvim_excmds_vim_strsave_escaped(prevcmd_ptr, c"%#".as_ptr());
+        nvim_excmds_append_to_redobuff_lit(escaped, -1);
+        xfree(escaped as *mut std::ffi::c_void);
+        nvim_excmds_append_to_redobuff(c"\n".as_ptr());
+        nvim_excmds_set_bangredo(0);
+    }
+
+    // Add shell quotes if p_shq is non-empty
+    let p_shq = nvim_excmds_get_p_shq();
+    if *p_shq != 0 {
+        let prevcmd_ptr = match PREVCMD {
+            Some(ptr) if !ptr.is_null() => ptr,
+            _ => {
+                if free_newcmd {
+                    xfree(newcmd as *mut std::ffi::c_void);
+                }
+                return;
+            }
+        };
+
+        if free_newcmd {
+            xfree(newcmd as *mut std::ffi::c_void);
+        }
+
+        let shq_len = cstrlen(p_shq);
+        let prevcmd_len = cstrlen(prevcmd_ptr);
+        let quoted_len = prevcmd_len + 2 * shq_len + 1;
+        newcmd = xmalloc(quoted_len) as *mut c_char;
+
+        // Build: p_shq + prevcmd + p_shq
+        std::ptr::copy_nonoverlapping(p_shq, newcmd, shq_len);
+        std::ptr::copy_nonoverlapping(prevcmd_ptr, newcmd.add(shq_len), prevcmd_len);
+        std::ptr::copy_nonoverlapping(p_shq, newcmd.add(shq_len + prevcmd_len), shq_len);
+        *newcmd.add(shq_len + prevcmd_len + shq_len) = 0;
+        free_newcmd = true;
+    }
+
+    if addr_count == 0 {
+        // :! -- echo the command and execute
+        msg_start();
+        nvim_excmds_msg_ext_set_kind_shell_cmd();
+        msg_putchar(b':' as c_int);
+        msg_putchar(b'!' as c_int);
+        nvim_excmds_msg_outtrans(newcmd);
+        msg_clr_eos();
+        let row = nvim_excmds_get_msg_row();
+        let col = nvim_excmds_get_msg_col();
+        nvim_excmds_ui_cursor_goto(row, col);
+
+        nvim_excmds_do_shell_wrapper(newcmd, 0);
+    } else {
+        // :range! -- filter through shell command
+        // Note: This may recursively call do_bang() again (via autocommands).
+        nvim_excmds_do_filter_wrapper(line1, line2, eap, newcmd, do_in, do_out);
+        nvim_excmds_apply_autocmds_shellfilterpost();
+    }
+
+    if free_newcmd {
+        xfree(newcmd as *mut std::ffi::c_void);
     }
 }
 

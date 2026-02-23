@@ -457,158 +457,24 @@ _Static_assert(MODE_NORMAL == 0x01, "MODE_NORMAL mismatch");
 _Static_assert(B_IMODE_LMAP == 1, "B_IMODE_LMAP mismatch");
 _Static_assert(BL_SOL == 2, "BL_SOL mismatch");
 
-static char *prevcmd = NULL;        // the previous command
+// do_bang, prevcmd management implemented in Rust (rs_do_bang, rs_free_prev_shellcmd)
+extern void rs_do_bang(int addr_count, exarg_T *eap, bool forceit, bool do_in, bool do_out);
+extern void rs_free_prev_shellcmd(void);
+
+/// Handle the ":!cmd" command. Thin wrapper calling the Rust implementation.
+void do_bang(int addr_count, exarg_T *eap, bool forceit, bool do_in, bool do_out)
+  FUNC_ATTR_NONNULL_ALL
+{
+  rs_do_bang(addr_count, eap, forceit, do_in, do_out);
+}
 
 #if defined(EXITFREE)
 void free_prev_shellcmd(void)
 {
-  xfree(prevcmd);
+  rs_free_prev_shellcmd();
 }
 
 #endif
-
-/// Check that "prevcmd" is not NULL.  If it is NULL then give an error message
-/// and return false.
-static int prevcmd_is_set(void)
-{
-  if (prevcmd == NULL) {
-    emsg(_(e_noprev));
-    return false;
-  }
-  return true;
-}
-
-/// Handle the ":!cmd" command.  Also for ":r !cmd" and ":w !cmd"
-/// Bangs in the argument are replaced with the previously entered command.
-/// Remember the argument.
-void do_bang(int addr_count, exarg_T *eap, bool forceit, bool do_in, bool do_out)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char *arg = eap->arg;             // command
-  linenr_T line1 = eap->line1;        // start of range
-  linenr_T line2 = eap->line2;        // end of range
-  char *newcmd = NULL;              // the new command
-  bool free_newcmd = false;           // need to free() newcmd
-  int scroll_save = msg_scroll;
-
-  // Disallow shell commands in secure mode
-  if (rs_check_secure()) {
-    return;
-  }
-
-  if (addr_count == 0) {                // :!
-    msg_scroll = false;             // don't scroll here
-    autowrite_all();
-    msg_scroll = scroll_save;
-  }
-
-  // Try to find an embedded bang, like in ":!<cmd> ! [args]"
-  // ":!!" is indicated by the 'forceit' variable.
-  bool ins_prevcmd = forceit;
-
-  // Skip leading white space to avoid a strange error with some shells.
-  char *trailarg = skipwhite(arg);
-  do {
-    size_t len = strlen(trailarg) + 1;
-    if (newcmd != NULL) {
-      len += strlen(newcmd);
-    }
-    if (ins_prevcmd) {
-      if (!prevcmd_is_set()) {
-        xfree(newcmd);
-        return;
-      }
-      len += strlen(prevcmd);
-    }
-    char *t = xmalloc(len);
-    *t = NUL;
-    if (newcmd != NULL) {
-      strcat(t, newcmd);
-    }
-    if (ins_prevcmd) {
-      strcat(t, prevcmd);
-    }
-    char *p = t + strlen(t);
-    strcat(t, trailarg);
-    xfree(newcmd);
-    newcmd = t;
-
-    // Scan the rest of the argument for '!', which is replaced by the
-    // previous command.  "\!" is replaced by "!" (this is vi compatible).
-    trailarg = NULL;
-    while (*p) {
-      if (*p == '!') {
-        if (p > newcmd && p[-1] == '\\') {
-          STRMOVE(p - 1, p);
-        } else {
-          trailarg = p;
-          *trailarg++ = NUL;
-          ins_prevcmd = true;
-          break;
-        }
-      }
-      p++;
-    }
-  } while (trailarg != NULL);
-
-  // Only set "prevcmd" if there is a command to run, otherwise keep te one
-  // we have.
-  if (strlen(newcmd) > 0) {
-    xfree(prevcmd);
-    prevcmd = newcmd;
-  } else {
-    free_newcmd = true;
-  }
-
-  if (bangredo) {  // put cmd in redo buffer for ! command
-    if (!prevcmd_is_set()) {
-      goto theend;
-    }
-
-    // If % or # appears in the command, it must have been escaped.
-    // Reescape them, so that redoing them does not substitute them by the
-    // buffername.
-    char *cmd = vim_strsave_escaped(prevcmd, "%#");
-
-    AppendToRedobuffLit(cmd, -1);
-    xfree(cmd);
-    AppendToRedobuff("\n");
-    bangredo = false;
-  }
-  // Add quotes around the command, for shells that need them.
-  if (*p_shq != NUL) {
-    if (free_newcmd) {
-      xfree(newcmd);
-    }
-    newcmd = xmalloc(strlen(prevcmd) + 2 * strlen(p_shq) + 1);
-    STRCPY(newcmd, p_shq);
-    strcat(newcmd, prevcmd);
-    strcat(newcmd, p_shq);
-    free_newcmd = true;
-  }
-  if (addr_count == 0) {                // :!
-    // echo the command
-    msg_start();
-    msg_ext_set_kind("shell_cmd");
-    msg_putchar(':');
-    msg_putchar('!');
-    msg_outtrans(newcmd, 0, false);
-    msg_clr_eos();
-    ui_cursor_goto(msg_row, msg_col);
-
-    do_shell(newcmd, 0);
-  } else {                            // :range!
-    // Careful: This may recursively call do_bang() again! (because of
-    // autocommands)
-    do_filter(line1, line2, eap, newcmd, do_in, do_out);
-    apply_autocmds(EVENT_SHELLFILTERPOST, NULL, NULL, false, curbuf);
-  }
-
-theend:
-  if (free_newcmd) {
-    xfree(newcmd);
-  }
-}
 
 /// do_filter: filter lines through a command given by the user
 ///
@@ -3836,3 +3702,34 @@ void ex_oldfiles(exarg_T *eap)
 {
   rs_ex_oldfiles(eap);
 }
+
+// --- do_bang FFI accessors ---
+
+int nvim_excmds_get_msg_scroll(void) { return msg_scroll ? 1 : 0; }
+void nvim_excmds_autowrite_all(void) { autowrite_all(); }
+int nvim_excmds_get_bangredo(void) { return bangredo ? 1 : 0; }
+void nvim_excmds_set_bangredo(int val) { bangredo = (bool)val; }
+char *nvim_excmds_vim_strsave_escaped(const char *s, const char *chars)
+{
+  return vim_strsave_escaped((char *)s, (char *)chars);
+}
+void nvim_excmds_append_to_redobuff_lit(const char *s, int len)
+{
+  AppendToRedobuffLit((char *)s, len);
+}
+void nvim_excmds_append_to_redobuff(const char *s) { AppendToRedobuff((char *)s); }
+void nvim_excmds_ui_cursor_goto(int row, int col) { ui_cursor_goto(row, col); }
+int nvim_excmds_get_msg_row(void) { return msg_row; }
+int nvim_excmds_get_msg_col(void) { return msg_col; }
+void nvim_excmds_do_shell_wrapper(char *cmd, int flags) { do_shell(cmd, flags); }
+void nvim_excmds_do_filter_wrapper(linenr_T line1, linenr_T line2, exarg_T *eap,
+                                    char *cmd, bool do_in, bool do_out)
+{
+  do_filter(line1, line2, eap, cmd, do_in, do_out);
+}
+void nvim_excmds_apply_autocmds_shellfilterpost(void)
+{
+  apply_autocmds(EVENT_SHELLFILTERPOST, NULL, NULL, false, curbuf);
+}
+void nvim_excmds_emsg_e_noprev(void) { emsg(_(e_noprev)); }
+void nvim_excmds_msg_ext_set_kind_shell_cmd(void) { msg_ext_set_kind("shell_cmd"); }
