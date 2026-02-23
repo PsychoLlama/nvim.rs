@@ -137,6 +137,7 @@ extern int rs_eval_dict(char **arg, typval_T *rettv, evalarg_T *evalarg, bool li
 extern int rs_eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *evalarg);
 extern int rs_eval6(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
 extern int rs_eval7(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
+extern int rs_eval_interp_string(char **arg, typval_T *rettv, bool evaluate);
 extern int rs_free_unref_items(int copyID);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
@@ -1642,52 +1643,69 @@ int eval_option(const char **const arg, typval_T *const rettv, const bool evalua
 /// @return  OK or FAIL.
 int eval_interp_string(char **arg, typval_T *rettv, bool evaluate)
 {
-  int ret = OK;
+  return rs_eval_interp_string(arg, rettv, evaluate);
+}
 
-  garray_T ga;
-  ga_init(&ga, 1, 80);
+// =============================================================================
+// Accessors for rs_eval_interp_string (Rust Phase 2)
+// =============================================================================
 
-  // *arg is on the '$' character, move it to the first string character.
-  (*arg)++;
-  const int quote = (uint8_t)(**arg);
-  (*arg)++;
+/// Allocate and initialize a char garray with given growth size.
+/// Returns an opaque pointer to be passed to other nvim_ga_* functions.
+garray_T *nvim_ga_alloc_char(int growsize)
+{
+  garray_T *ga = xmalloc(sizeof(garray_T));
+  ga_init(ga, 1, growsize);
+  return ga;
+}
 
-  while (true) {
-    typval_T tv;
-    // Get the string up to the matching quote or to a single '{'.
-    // "arg" is advanced to either the quote or the '{'.
-    if (quote == '"') {
-      ret = rs_eval_string(arg, &tv, evaluate, true);
-    } else {
-      ret = rs_eval_lit_string(arg, &tv, evaluate, true);
-    }
-    if (ret == FAIL) {
-      break;
-    }
-    if (evaluate) {
-      ga_concat(&ga, tv.vval.v_string);
-      tv_clear(&tv);
-    }
-
-    if (**arg != '{') {
-      // found terminating quote
-      (*arg)++;
-      break;
-    }
-    char *p = eval_one_expr_in_str(*arg, &ga, evaluate);
-    if (p == NULL) {
-      ret = FAIL;
-      break;
-    }
-    *arg = p;
+/// Concatenate a C string into the garray.
+void nvim_ga_concat_str(garray_T *ga, const char *s)
+{
+  if (s != NULL) {
+    ga_concat(ga, s);
   }
+}
 
-  rettv->v_type = VAR_STRING;
-  if (ret != FAIL && evaluate) {
-    ga_append(&ga, NUL);
-  }
-  rettv->vval.v_string = ga.ga_data;
-  return OK;
+/// Append a NUL byte to the garray.
+void nvim_ga_append_nul(garray_T *ga)
+{
+  ga_append(ga, NUL);
+}
+
+/// Take the ga_data pointer and free the garray struct.
+/// The caller owns the returned string.
+char *nvim_ga_take_data(garray_T *ga)
+{
+  char *data = ga->ga_data;
+  xfree(ga);
+  return data;
+}
+
+/// Free the garray (including data) and the struct.
+void nvim_ga_free(garray_T *ga)
+{
+  ga_clear(ga);
+  xfree(ga);
+}
+
+/// Non-static wrapper for eval_one_expr_in_str -- used by rs_eval_interp_string.
+char *nvim_eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate)
+{
+  return eval_one_expr_in_str(p, gap, evaluate);
+}
+
+/// Get tv->vval.v_string (accessor for Rust interp_string).
+char *nvim_tv_get_vstring(typval_T *tv)
+{
+  return tv->vval.v_string;
+}
+
+/// Set tv->v_type = VAR_STRING and tv->vval.v_string = s (takes ownership of s).
+void nvim_tv_set_vstring_owned(typval_T *tv, char *s)
+{
+  tv->v_type = VAR_STRING;
+  tv->vval.v_string = s;
 }
 
 /// Get partial_T->pt_name (accessor for Rust).

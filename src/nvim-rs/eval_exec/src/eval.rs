@@ -1019,6 +1019,101 @@ pub unsafe extern "C" fn rs_eval6(
 }
 
 // =============================================================================
+// eval_interp_string - Interpolated string expressions ($"..." and $'...')
+// =============================================================================
+
+extern "C" {
+    // Garray operations (opaque handle approach)
+    fn nvim_ga_alloc_char(growsize: c_int) -> *mut c_void;
+    fn nvim_ga_concat_str(ga: *mut c_void, s: *const c_char);
+    fn nvim_ga_append_nul(ga: *mut c_void);
+    fn nvim_ga_take_data(ga: *mut c_void) -> *mut c_char;
+    fn nvim_ga_free(ga: *mut c_void);
+    // eval_one_expr_in_str wrapper
+    fn nvim_eval_one_expr_in_str(p: *mut c_char, gap: *mut c_void, evaluate: bool) -> *mut c_char;
+    // TV string field accessor
+    fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
+    fn nvim_tv_set_vstring_owned(tv: TypevalHandle, s: *mut c_char);
+}
+
+/// Evaluate a single or double quoted string possibly containing expressions.
+/// `arg` points to the `$`. The result is put in `rettv`.
+///
+/// Migrated from C `eval_interp_string` in eval_shim.c.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer, pointing at `$`
+/// - `rettv` must be a valid typval handle
+pub unsafe fn eval_interp_string_impl(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evaluate: bool,
+) -> c_int {
+    let ga = nvim_ga_alloc_char(80);
+
+    // *arg is on the '$' character, move it to the first string character.
+    *arg = (*arg).add(1);
+    let quote = get_byte(*arg);
+    *arg = (*arg).add(1);
+
+    // Loop result: OK if successful, FAIL on any error.
+    let result = 'interp: {
+        loop {
+            let tv = alloc_typval();
+            // Get the string up to the matching quote or to a single '{'.
+            let ret = if quote == b'"' {
+                eval_string_impl(arg, tv, evaluate, true)
+            } else {
+                eval_lit_string_impl(arg, tv, evaluate, true)
+            };
+            if ret == FAIL {
+                free_typval(tv);
+                break 'interp FAIL;
+            }
+            if evaluate {
+                let s = nvim_tv_get_vstring(tv);
+                nvim_ga_concat_str(ga, s);
+                tv_clear(tv);
+            }
+            free_typval(tv);
+
+            if get_byte(*arg) != b'{' {
+                // Found terminating quote
+                *arg = (*arg).add(1);
+                break 'interp OK;
+            }
+            let p = nvim_eval_one_expr_in_str(*arg, ga, evaluate);
+            if p.is_null() {
+                break 'interp FAIL;
+            }
+            *arg = p;
+        }
+    };
+
+    nvim_tv_set_type(rettv, VAR_STRING);
+    if result != FAIL && evaluate {
+        nvim_ga_append_nul(ga);
+    }
+    // Take ownership of the string data
+    let data = nvim_ga_take_data(ga);
+    nvim_tv_set_vstring_owned(rettv, data);
+    OK
+}
+
+/// FFI export for eval_interp_string.
+///
+/// # Safety
+/// See `eval_interp_string_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_interp_string(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evaluate: bool,
+) -> c_int {
+    eval_interp_string_impl(arg, rettv, evaluate)
+}
+
+// =============================================================================
 // Helper implementations for eval5
 // =============================================================================
 
