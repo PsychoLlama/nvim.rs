@@ -1127,6 +1127,51 @@ pub unsafe extern "C" fn rs_qf_setprop_get_qfidx(
 }
 
 // =============================================================================
+// Phase 2: qf_getprop_filewinid, qf_getprop_qfbufnr helpers
+// =============================================================================
+
+extern "C" {
+    fn nvim_qf_is_ll_window(wp: *const c_void) -> bool;
+    fn nvim_qf_find_win_with_loclist(ll: *const c_void) -> *mut c_void;
+    fn nvim_qf_win_get_handle(wp: *const c_void) -> c_int;
+}
+
+/// Get the window ID for the file-display window associated with a location list.
+///
+/// Returns 0 if `wp` is not a location list window, or if no associated window
+/// is found. Mirrors the logic of C `qf_getprop_filewinid`.
+///
+/// # Safety
+///
+/// - `wp` may be null (returns 0)
+/// - `qi` may be null (returns 0)
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_getprop_filewinid(wp: *const c_void, qi: *const c_void) -> c_int {
+    if wp.is_null() || qi.is_null() {
+        return 0;
+    }
+    if !nvim_qf_is_ll_window(wp) {
+        return 0;
+    }
+    let ll_wp = nvim_qf_find_win_with_loclist(qi);
+    if ll_wp.is_null() {
+        return 0;
+    }
+    nvim_qf_win_get_handle(ll_wp.cast_const())
+}
+
+/// Get the quickfix buffer number for the given quickfix stack, or 0 if the
+/// buffer is not valid. Mirrors the logic of C `qf_getprop_qfbufnr`.
+///
+/// # Safety
+///
+/// - `qi` may be null (returns 0)
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_getprop_qfbufnr(qi: *const c_void) -> c_int {
+    nvim_qf_get_valid_bufnr(qi)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

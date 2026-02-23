@@ -1139,7 +1139,6 @@ extern "C" {
     fn nvim_eap_get_line2(eap: EapHandle) -> LinenrT;
     fn nvim_eap_get_forceit(eap: EapHandle) -> bool;
     fn nvim_qf_msg(qi: QfInfoHandleMut, which: c_int, lead: *const u8);
-    fn nvim_qf_get_nth_valid_entry(qfl: *mut c_void, n: c_int, fdo: bool) -> c_int;
     fn nvim_emsg_loclist();
     fn nvim_emsg_no_errors();
     fn nvim_emsg_at_bottom();
@@ -1205,7 +1204,7 @@ pub unsafe extern "C" fn rs_ex_cc(eap: EapHandle) {
         };
         let fdo = cmdidx == CMD_CFDO || cmdidx == CMD_LFDO;
         let qfl = nvim_qf_get_curlist_mut(qi);
-        nvim_qf_get_nth_valid_entry(qfl, n, fdo)
+        crate::filter::rs_qf_get_nth_valid_entry_do(qfl.cast_const(), n, fdo)
     } else if addr_count > 0 {
         nvim_eap_get_line2(eap) as c_int
     } else {

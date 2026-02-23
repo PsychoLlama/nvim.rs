@@ -632,6 +632,76 @@ pub unsafe extern "C" fn rs_qf_find_in_range(
 }
 
 // =============================================================================
+// Phase 2: qf_get_nth_valid_entry with fdo (file-do) mode
+// =============================================================================
+
+/// Get the 1-based index of the n-th valid entry.
+///
+/// When `fdo` is true (for `:cfdo`/`:lfdo`), counts unique file numbers rather
+/// than individual valid entries.
+///
+/// Returns 1 if the list has no valid entries.
+///
+/// Mirrors C `qf_get_nth_valid_entry`.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T`
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_nth_valid_entry_do(
+    qfl: QfListHandle,
+    n: c_int,
+    fdo: bool,
+) -> c_int {
+    if qfl.is_null() {
+        return 1;
+    }
+
+    // Return 1 if the list has no valid entries
+    if nvim_qf_get_nonevalid(qfl) {
+        return 1;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    if count <= 0 || n <= 0 {
+        return 1;
+    }
+
+    let n = n.unsigned_abs() as usize;
+    let mut prev_fnum: c_int = 0;
+    let mut eidx: usize = 0;
+    let mut i: c_int = 1;
+    let mut qfp = nvim_qf_get_start(qfl);
+
+    while !qfp.is_null() && i <= count {
+        if nvim_qfline_get_valid(qfp) {
+            if fdo {
+                let fnum = nvim_qfline_get_fnum(qfp);
+                if fnum > 0 && fnum != prev_fnum {
+                    eidx += 1;
+                    prev_fnum = fnum;
+                }
+            } else {
+                eidx += 1;
+            }
+        }
+
+        if eidx == n {
+            break;
+        }
+
+        qfp = nvim_qfline_get_next(qfp);
+        i += 1;
+    }
+
+    if i <= count {
+        i
+    } else {
+        1
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

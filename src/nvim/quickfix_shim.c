@@ -172,6 +172,9 @@ extern bool rs_qf_stack_empty(const void *qi);
 extern bool rs_qf_list_empty(const void *qfl);
 extern bool rs_qflist_valid(const void *wp, unsigned qf_id);
 extern void rs_qf_msg(const void *qi, int which, const char *lead);
+extern int rs_qf_get_nth_valid_entry_do(const void *qfl, int n, bool fdo);
+extern int rs_qf_getprop_filewinid(const void *wp, const void *qi);
+extern int rs_qf_getprop_qfbufnr(const void *qi);
 extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
 extern void rs_reset_VIsual_and_resel(void);
 
@@ -3867,45 +3870,11 @@ int qf_get_cur_valid_idx(exarg_T *eap)
 }
 
 /// For :cfdo and :lfdo, returns the 'n'th valid file entry.
-static size_t qf_get_nth_valid_entry(qf_list_T *qfl, size_t n, bool fdo)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // Check if the list has valid errors.
-  if (!rs_qf_list_has_valid_entries(qfl)) {
-    return 1;
-  }
-
-  int prev_fnum = 0;
-  size_t eidx = 0;
-  int i;
-  qfline_T *qfp;
-  assert(qfl->qf_count >= 0);
-  FOR_ALL_QFL_ITEMS(qfl, qfp, i) {
-    if (qfp->qf_valid) {
-      if (fdo) {
-        if (qfp->qf_fnum > 0 && qfp->qf_fnum != prev_fnum) {
-          // Count the number of files.
-          eidx++;
-          prev_fnum = qfp->qf_fnum;
-        }
-      } else {
-        eidx++;
-      }
-    }
-
-    if (eidx == n) {
-      break;
-    }
-  }
-
-  return i <= qfl->qf_count ? (size_t)i : 1;
-}
-
 void *nvim_qf_cmd_get_stack(void *eap_void, bool print_emsg) { return qf_cmd_get_stack((exarg_T *)eap_void, print_emsg); }
 
 void nvim_qf_msg(void *qi_void, int which, const char *lead) { qf_msg((qf_info_T *)qi_void, which, (char *)lead); }
 
-int nvim_qf_get_nth_valid_entry(void *qfl_void, int n, bool fdo) { return (int)qf_get_nth_valid_entry((qf_list_T *)qfl_void, (size_t)n, fdo); }
+int nvim_qf_get_nth_valid_entry(void *qfl_void, int n, bool fdo) { return rs_qf_get_nth_valid_entry_do(qfl_void, n, fdo); }
 
 void nvim_emsg_loclist(void) { emsg(_(e_loclist)); }
 
@@ -3922,6 +3891,8 @@ void nvim_emsg_invrange(void) { emsg(_(e_invrange)); }
 void nvim_qf_trunc_and_msg(const char *buf_in) { char buf[IOSIZE]; xstrlcpy(buf, buf_in, IOSIZE); trunc_string(buf, buf, Columns - 1, IOSIZE); msg(buf, 0); }
 
 bool nvim_qf_curwin_is_ll(void) { return IS_LL_WINDOW(curwin); }
+
+bool nvim_qf_is_ll_window(const void *wp_void) { return wp_void != NULL && IS_LL_WINDOW((const win_T *)wp_void); }
 
 void *nvim_qf_curwin_get_loclist(void) { return GET_LOC_LIST(curwin); }
 
@@ -4769,13 +4740,7 @@ int nvim_qf_winid(const void *qi_void) { return qf_winid((qf_info_T *)(uintptr_t
 static int qf_getprop_qfbufnr(const qf_info_T *qi, dict_T *retdict)
   FUNC_ATTR_NONNULL_ARG(2)
 {
-  int bufnum = 0;
-
-  if (qi != NULL && buflist_findnr(qi->qf_bufnr) != NULL) {
-    bufnum = qi->qf_bufnr;
-  }
-
-  return tv_dict_add_nr(retdict, S_LEN("qfbufnr"), bufnum);
+  return tv_dict_add_nr(retdict, S_LEN("qfbufnr"), rs_qf_getprop_qfbufnr(qi));
 }
 
 // _Static_assert for Phase 3 QF_GETLIST_* constants used in Rust property functions
@@ -4820,16 +4785,7 @@ static int qf_getprop_title(qf_list_T *qfl, dict_T *retdict) { return tv_dict_ad
 static int qf_getprop_filewinid(const win_T *wp, const qf_info_T *qi, dict_T *retdict)
   FUNC_ATTR_NONNULL_ARG(3)
 {
-  handle_T winid = 0;
-
-  if (wp != NULL && IS_LL_WINDOW(wp)) {
-    win_T *ll_wp = qf_find_win_with_loclist(qi);
-    if (ll_wp != NULL) {
-      winid = ll_wp->handle;
-    }
-  }
-
-  return tv_dict_add_nr(retdict, S_LEN("filewinid"), winid);
+  return tv_dict_add_nr(retdict, S_LEN("filewinid"), rs_qf_getprop_filewinid(wp, qi));
 }
 
 /// If eidx is not 0, then return the item at the specified index.
