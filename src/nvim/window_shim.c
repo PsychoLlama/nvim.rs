@@ -205,6 +205,12 @@ extern int rs_make_windows(int count, int vertical);
 extern int rs_win_split(int size, int flags);
 extern int rs_win_splitmove(win_T *wp, int size, int flags);
 
+// Phase 3: win_fix_scroll, win_fix_cursor, may_make_initial_scroll_size_snapshot
+extern void rs_win_fix_scroll(int resize);
+extern void rs_win_fix_cursor(int normal);
+extern void rs_may_make_initial_scroll_size_snapshot(void);
+extern int rs_get_did_initial_scroll_size_snapshot(void);
+
 // Status line management
 extern void rs_last_status(int morewin);
 extern int rs_resize_frame_for_winbar(frame_T *fr);
@@ -2709,15 +2715,7 @@ void win_new_screen_cols(void) { rs_win_new_screen_cols(); }
 /// tab page.
 void snapshot_windows_scroll_size(void) { rs_snapshot_windows_scroll_size(); }
 
-static bool did_initial_scroll_size_snapshot = false;
-
-void may_make_initial_scroll_size_snapshot(void)
-{
-  if (!did_initial_scroll_size_snapshot) {
-    did_initial_scroll_size_snapshot = true;
-    snapshot_windows_scroll_size();
-  }
-}
+void may_make_initial_scroll_size_snapshot(void) { rs_may_make_initial_scroll_size_snapshot(); }
 
 /// Create a dictionary with information about size and scroll changes in a
 /// window.
@@ -2891,7 +2889,7 @@ void may_trigger_win_scrolled_resized(void)
 
   if (recursive
       || !(do_scroll || do_resize)
-      || !did_initial_scroll_size_snapshot) {
+      || !rs_get_did_initial_scroll_size_snapshot()) {
     return;
   }
 
@@ -2977,114 +2975,8 @@ void may_trigger_win_scrolled_resized(void)
 
 #define FRACTION_MULT   16384
 
-/// Handle scroll position, depending on 'splitkeep'.  Replaces the
-/// scroll_to_fraction() call from win_new_height() if 'splitkeep' is "screen"
-/// or "topline".  Instead we iterate over all windows in a tabpage and
-/// calculate the new scroll position.
-/// TODO(vim): Ensure this also works with wrapped lines.
-/// Requires a not fully visible cursor line to be allowed at the bottom of
-/// a window ("zb"), probably only when 'smoothscroll' is also set.
-void win_fix_scroll(bool resize)
-{
-  if (*p_spk == 'c') {
-    return;  // 'splitkeep' is "cursor"
-  }
-
-  skip_update_topline = true;
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    // Skip when window height has not changed or when floating.
-    if (!wp->w_floating && wp->w_height != wp->w_prev_height) {
-      // Cursor position in this window may now be invalid.  It is kept
-      // potentially invalid until the window is made the current window.
-      wp->w_do_win_fix_cursor = true;
-
-      // If window has moved update botline to keep the same screenlines.
-      if (*p_spk == 's' && wp->w_winrow != wp->w_prev_winrow
-          && wp->w_botline - 1 <= wp->w_buffer->b_ml.ml_line_count) {
-        int diff = (wp->w_winrow - wp->w_prev_winrow)
-                   + (wp->w_height - wp->w_prev_height);
-        pos_T cursor = wp->w_cursor;
-        wp->w_cursor.lnum = wp->w_botline - 1;
-
-        // Add difference in height and row to botline.
-        if (diff > 0) {
-          cursor_down_inner(wp, diff, false);
-        } else {
-          cursor_up_inner(wp, -diff, false);
-        }
-
-        // Scroll to put the new cursor position at the bottom of the
-        // screen.
-        wp->w_fraction = FRACTION_MULT;
-        scroll_to_fraction(wp, wp->w_prev_height);
-        wp->w_cursor = cursor;
-        wp->w_valid &= ~VALID_WCOL;
-      } else if (wp == curwin) {
-        wp->w_valid &= ~VALID_CROW;
-      }
-
-      invalidate_botline(wp);
-      validate_botline(wp);
-    }
-    wp->w_prev_height = wp->w_height;
-    wp->w_prev_winrow = wp->w_winrow;
-  }
-  skip_update_topline = false;
-  // Ensure cursor is valid when not in normal mode or when resized.
-  if (!(get_real_state() & (MODE_NORMAL|MODE_CMDLINE|MODE_TERMINAL))) {
-    win_fix_cursor(false);
-  } else if (resize) {
-    win_fix_cursor(true);
-  }
-}
-
-/// Make sure the cursor position is valid for 'splitkeep'.
-/// If it is not, put the cursor position in the jumplist and move it.
-/// If we are not in normal mode ("normal" is false), make it valid by scrolling
-/// instead.
-static void win_fix_cursor(bool normal)
-{
-  win_T *wp = curwin;
-
-  if (skip_win_fix_cursor
-      || !wp->w_do_win_fix_cursor
-      || wp->w_buffer->b_ml.ml_line_count < wp->w_view_height) {
-    return;
-  }
-
-  wp->w_do_win_fix_cursor = false;
-  // Determine valid cursor range.
-  int so = MIN(wp->w_view_height / 2, rs_get_scrolloff_value(wp));
-  linenr_T lnum = wp->w_cursor.lnum;
-
-  wp->w_cursor.lnum = wp->w_topline;
-  cursor_down_inner(wp, so, false);
-  linenr_T top = wp->w_cursor.lnum;
-
-  wp->w_cursor.lnum = wp->w_botline - 1;
-  cursor_up_inner(wp, so, false);
-  linenr_T bot = wp->w_cursor.lnum;
-
-  wp->w_cursor.lnum = lnum;
-  // Check if cursor position is above or below valid cursor range.
-  linenr_T nlnum = 0;
-  if (lnum > bot && (wp->w_botline - wp->w_buffer->b_ml.ml_line_count) != 1) {
-    nlnum = bot;
-  } else if (lnum < top && wp->w_topline != 1) {
-    nlnum = (so == wp->w_view_height / 2) ? bot : top;
-  }
-
-  if (nlnum != 0) {  // Cursor is invalid for current scroll position.
-    if (normal) {    // Save to jumplist and set cursor to avoid scrolling.
-      setmark('\'');
-      wp->w_cursor.lnum = nlnum;
-    } else {         // Scroll instead when not in normal mode.
-      wp->w_fraction = (nlnum == bot) ? FRACTION_MULT : 0;
-      scroll_to_fraction(wp, wp->w_prev_height);
-      validate_botline(curwin);
-    }
-  }
-}
+void win_fix_scroll(bool resize) { rs_win_fix_scroll(resize ? 1 : 0); }
+static void win_fix_cursor(bool normal) { rs_win_fix_cursor(normal ? 1 : 0); }
 
 void scroll_to_fraction(win_T *wp, int prev_height)
 {
@@ -3953,3 +3845,10 @@ void nvim_win_set_last_width(win_T *wp, int val) { if (wp) { wp->w_last_width = 
 
 /// Set w_last_height snapshot field.
 void nvim_win_set_last_height(win_T *wp, int val) { if (wp) { wp->w_last_height = val; } }
+
+// Phase 3 accessors: win_fix_scroll, win_fix_cursor, may_make_initial_scroll_size_snapshot
+int nvim_get_skip_win_fix_cursor(void) { return skip_win_fix_cursor ? 1 : 0; }
+int nvim_win_get_do_win_fix_cursor(win_T *wp) { return wp ? (wp->w_do_win_fix_cursor ? 1 : 0) : 0; }
+void nvim_win_set_do_win_fix_cursor(win_T *wp, int val) { if (wp) { wp->w_do_win_fix_cursor = val != 0; } }
+int nvim_win_get_prev_winrow(win_T *wp) { return wp ? wp->w_prev_winrow : 0; }
+void nvim_win_set_prev_winrow(win_T *wp, int val) { if (wp) { wp->w_prev_winrow = val; } }

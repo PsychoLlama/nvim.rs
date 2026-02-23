@@ -20,6 +20,7 @@
 //! - [`navigate`]: Window finding and movement navigation
 //! - [`preview`]: Preview window finding and state queries
 //! - [`resize`]: Window resize calculations and execution helpers
+//! - [`scroll`]: Window scroll position management for 'splitkeep' (win_fix_scroll, win_fix_cursor)
 //! - [`snapshot`]: Window layout snapshot helpers
 //! - [`split`]: Window splitting functions (placeholder)
 //! - [`state`]: Window state accessors for layout fields
@@ -51,6 +52,7 @@ pub mod preview;
 pub mod resize;
 pub mod snapshot;
 pub mod split;
+pub mod scroll;
 pub mod state;
 pub mod state_validation;
 pub mod statusline;

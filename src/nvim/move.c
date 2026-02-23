@@ -371,6 +371,12 @@ int nvim_get_skip_update_topline(void)
   return skip_update_topline ? 1 : 0;
 }
 
+/// Set skip_update_topline flag (accessor for Rust).
+void nvim_set_skip_update_topline(int val)
+{
+  skip_update_topline = val != 0;
+}
+
 /// Wrapper for changed_cline_bef_curs (accessor for Rust).
 void nvim_changed_cline_bef_curs(win_T *wp)
 {
