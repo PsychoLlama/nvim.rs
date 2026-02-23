@@ -11,6 +11,45 @@ use std::ffi::c_int;
 
 use crate::buffer::{BufHandle, TabpageHandle, WinHandle, DB_COUNT};
 
+// =============================================================================
+// C FFI declarations for Phase 4 (diff_redraw migration)
+// =============================================================================
+
+extern "C" {
+    // Window iteration
+    fn nvim_tabpage_first_win(tp: TabpageHandle) -> WinHandle;
+    fn nvim_win_next(wp: WinHandle) -> WinHandle;
+
+    // Window field accessors
+    fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
+    fn nvim_win_get_topline(wp: WinHandle) -> c_int;
+    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
+    fn nvim_win_set_topfill(wp: WinHandle, val: c_int);
+    fn nvim_win_get_p_scb(wp: WinHandle) -> bool;
+
+    // Validity checks
+    fn nvim_diff_buf_valid(buf: BufHandle) -> bool;
+
+    // Redraw
+    fn nvim_redraw_later_win(wp: WinHandle, typ: c_int);
+    fn nvim_upd_some_valid() -> c_int;
+
+    // Fold
+    fn rs_foldmethodIsDiff(wp: WinHandle) -> c_int;
+    fn rs_foldUpdateAll(wp: WinHandle);
+
+    // Diff-specific
+    fn rs_diff_check_fill(wp: WinHandle, lnum: c_int) -> c_int;
+    fn nvim_diff_check_topfill(wp: WinHandle, down: bool);
+    fn rs_diff_set_topline(fromwin: WinHandle, towin: WinHandle);
+
+    // Global state accessors
+    fn nvim_get_curwin() -> WinHandle;
+    fn nvim_get_curtab() -> TabpageHandle;
+    fn nvim_set_need_diff_redraw(val: bool);
+}
+
 // Line number type matching linenr_T (i32)
 type LinenrT = i32;
 
@@ -330,6 +369,88 @@ pub const extern "C" fn rs_diff_line_update_complete(
 ) {
     state.in_progress = false;
     state.succeeded = success;
+}
+
+// =============================================================================
+// Phase 4 Migration: diff_redraw
+// =============================================================================
+
+/// Mark all diff buffers in the current tab page for redraw.
+///
+/// Rust implementation of the C diff_redraw() function. Iterates over all
+/// windows in the current tab, redraws diff windows, recomputes folds,
+/// and adjusts topfill/filler lines.
+///
+/// # Safety
+/// Accesses C globals (curtab, curwin, need_diff_redraw).
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_redraw(dofold: bool) {
+    let mut wp_other = WinHandle::null();
+    let mut used_max_fill_other = false;
+    let mut used_max_fill_curwin = false;
+
+    nvim_set_need_diff_redraw(false);
+
+    let curtab = nvim_get_curtab();
+    let curwin = nvim_get_curwin();
+    let upd_some_valid = nvim_upd_some_valid();
+
+    // FOR_ALL_WINDOWS_IN_TAB: iterate from firstwin via w_next
+    let mut wp = nvim_tabpage_first_win(curtab);
+    while !wp.is_null() {
+        let buf = nvim_win_get_w_buffer(wp);
+
+        // Skip windows where w_p_diff is not set or buffer is invalid
+        if nvim_win_get_p_diff(wp) == 0 || !nvim_diff_buf_valid(buf) {
+            wp = nvim_win_next(wp);
+            continue;
+        }
+
+        nvim_redraw_later_win(wp, upd_some_valid);
+
+        if wp != curwin {
+            wp_other = wp;
+        }
+
+        if dofold && rs_foldmethodIsDiff(wp) != 0 {
+            rs_foldUpdateAll(wp);
+        }
+
+        // Check if filler lines need updating
+        let topline = nvim_win_get_topline(wp);
+        let n = rs_diff_check_fill(wp, topline);
+        let topfill = nvim_win_get_topfill(wp);
+
+        let should_update = (wp != curwin && topfill > 0) || n > 0;
+        if should_update {
+            if topfill > n {
+                // Reduce topfill to available (but not below 0)
+                nvim_win_set_topfill(wp, n.max(0));
+            } else if n > 0 && n > topfill {
+                // Increase topfill to fill available lines
+                nvim_win_set_topfill(wp, n);
+                if wp == curwin {
+                    used_max_fill_curwin = true;
+                } else if !wp_other.is_null() {
+                    used_max_fill_other = true;
+                }
+            }
+            nvim_diff_check_topfill(wp, false);
+        }
+
+        wp = nvim_win_next(wp);
+    }
+
+    // Handle scroll binding after updating all windows
+    if !wp_other.is_null() && nvim_win_get_p_scb(curwin) {
+        if used_max_fill_curwin {
+            // Current window used max filler lines, may need to reduce them
+            rs_diff_set_topline(wp_other, curwin);
+        } else if used_max_fill_other {
+            // Other window used max filler lines, may need to reduce them
+            rs_diff_set_topline(curwin, wp_other);
+        }
+    }
 }
 
 // =============================================================================

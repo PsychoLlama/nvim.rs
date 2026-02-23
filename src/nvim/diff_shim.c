@@ -98,6 +98,7 @@ extern void rs_f_diff_filler(typval_T *argvars, typval_T *rettv, EvalFuncData fp
 extern void rs_nv_diffgetput(bool put, size_t count);
 extern void rs_ex_diffthis(exarg_T *eap);
 extern void rs_f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_diff_redraw(bool dofold);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -189,59 +190,12 @@ extern void rs_foldUpdateAll(win_T *win);
   for ((dp) = (tp)->tp_first_diff; (dp) != NULL; (dp) = (dp)->df_next)
 
 /// Mark all diff buffers in the current tab page for redraw.
+/// Thin wrapper -- implementation moved to Rust (rs_diff_redraw in update.rs).
 ///
 /// @param dofold Also recompute the folds
 void diff_redraw(bool dofold)
 {
-  win_T *wp_other = NULL;
-  bool used_max_fill_other = false;
-  bool used_max_fill_curwin = false;
-
-  need_diff_redraw = false;
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    // when closing windows or wiping buffers skip invalid window
-    if (!wp->w_p_diff || !buf_valid(wp->w_buffer)) {
-      continue;
-    }
-
-    redraw_later(wp, UPD_SOME_VALID);
-    if (wp != curwin) {
-      wp_other = wp;
-    }
-    if (dofold && rs_foldmethodIsDiff(wp)) {
-      rs_foldUpdateAll(wp);
-    }
-
-    // A change may have made filler lines invalid, need to take care of
-    // that for other windows.
-    int n = rs_diff_check_fill(wp, wp->w_topline);
-
-    if (((wp != curwin) && (wp->w_topfill > 0)) || (n > 0)) {
-      if (wp->w_topfill > n) {
-        wp->w_topfill = MAX(n, 0);
-      } else if ((n > 0) && (n > wp->w_topfill)) {
-        wp->w_topfill = n;
-        if (wp == curwin) {
-          used_max_fill_curwin = true;
-        } else if (wp_other != NULL) {
-          used_max_fill_other = true;
-        }
-      }
-      check_topfill(wp, false);
-    }
-  }
-
-  if (wp_other != NULL && curwin->w_p_scb) {
-    if (used_max_fill_curwin) {
-      // The current window was set to use the maximum number of filler
-      // lines, may need to reduce them.
-      rs_diff_set_topline(wp_other, curwin);
-    } else if (used_max_fill_other) {
-      // The other window was set to use the maximum number of filler
-      // lines, may need to reduce them.
-      rs_diff_set_topline(curwin, wp_other);
-    }
-  }
+  rs_diff_redraw(dofold);
 }
 
 static void clear_diffin(diffin_T *din)
@@ -1892,6 +1846,7 @@ const char *nvim_diff_ml_get_buf(buf_T *buf, linenr_T lnum) { if (buf == NULL) {
 char *nvim_diff_xstrdup(const char *s) { if (s == NULL) { return NULL; } return xstrdup(s); }
 void nvim_diff_xfree(void *p) { xfree(p); }
 int nvim_upd_valid(void) { return UPD_VALID; }
+int nvim_upd_some_valid(void) { return UPD_SOME_VALID; }
 bool nvim_diff_get_busy(void) { return diff_busy; }
 bool nvim_diff_get_need_scrollbind(void) { return diff_need_scrollbind; }
 void nvim_diff_set_need_scrollbind(bool val) { diff_need_scrollbind = val; }
