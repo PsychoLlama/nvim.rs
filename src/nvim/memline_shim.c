@@ -267,6 +267,10 @@ extern void rs_ml_close(buf_T *buf, int del_file);
 extern void rs_check_need_swap(int newfile);
 extern void rs_ml_timestamp(buf_T *buf);
 extern size_t rs_ml_flush_deleted_bytes(buf_T *buf, size_t *codepoints, size_t *codeunits);
+// Pass 2 Phase 4: Deleted-length tracking and stack Rust function declarations
+extern void rs_ml_add_deleted_len(char *ptr, ssize_t len);
+extern void rs_ml_add_deleted_len_buf(buf_T *buf, char *ptr, ssize_t len);
+extern int rs_ml_add_stack(buf_T *buf);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1726,6 +1730,22 @@ void nvim_buf_set_deleted_codeunits(buf_T *buf, size_t val) { buf->deleted_codeu
 bhdr_T *nvim_mf_get_block0_hp(memfile_T *mfp) { return pmap_get(int64_t)(&mfp->mf_hash, 0); }
 void nvim_bhdr_set_bh_flags_dirty(bhdr_T *hp) { hp->bh_flags |= BH_DIRTY; }
 
+// Pass 2 Phase 4: Deleted-length tracking and stack accessors for Rust FFI
+// nvim_get_inhibit_delete_count - already in change_ffi.c
+// nvim_buf_get_deleted_bytes2 / nvim_buf_set_deleted_bytes2 - already in buffer.c
+void nvim_buf_add_deleted_bytes(buf_T *buf, size_t n) { buf->deleted_bytes += n; }
+void nvim_buf_add_deleted_bytes2(buf_T *buf, size_t n) { buf->deleted_bytes2 += n; }
+bool nvim_buf_get_update_need_codepoints(buf_T *buf) { return buf->update_need_codepoints; }
+void nvim_buf_add_deleted_codepoints(buf_T *buf, size_t n) { buf->deleted_codepoints += n; }
+void nvim_buf_add_deleted_codeunits(buf_T *buf, size_t n) { buf->deleted_codeunits += n; }
+int nvim_buf_get_ml_stack_size(buf_T *buf) { return buf->b_ml.ml_stack_size; }
+void nvim_buf_set_ml_stack_size(buf_T *buf, int n) { buf->b_ml.ml_stack_size = n; }
+void nvim_buf_set_ml_stack_top(buf_T *buf, int n) { buf->b_ml.ml_stack_top = n; }
+int nvim_buf_inc_ml_stack_top(buf_T *buf) { return buf->b_ml.ml_stack_top++; }
+void *nvim_buf_get_ml_stack(buf_T *buf) { return buf->b_ml.ml_stack; }
+void nvim_buf_set_ml_stack(buf_T *buf, void *ptr) { buf->b_ml.ml_stack = ptr; }
+size_t nvim_get_infoptr_size(void) { return sizeof(infoptr_T); }
+
 // Phase 2 accessors for Rust FFI
 uint8_t nvim_b0_get_flags_byte(const ZeroBlock *b0p) { return (uint8_t)b0p->b0_flags; }
 void nvim_b0_set_flags_byte(ZeroBlock *b0p, uint8_t val) { b0p->b0_flags = (char)val; }
@@ -2236,28 +2256,13 @@ int ml_append_buf(buf_T *buf, linenr_T lnum, char *line, colnr_T len, bool newfi
   return ml_append_flush(buf, lnum, line, len, newfile ? ML_APPEND_NEW : 0);
 }
 
-void ml_add_deleted_len(char *ptr, ssize_t len)
-{
-  ml_add_deleted_len_buf(curbuf, ptr, len);
-}
+/// Track deleted text length for the current buffer (thin wrapper calling Rust).
+void ml_add_deleted_len(char *ptr, ssize_t len) { rs_ml_add_deleted_len(ptr, len); }
 
+/// Track deleted text length for a specific buffer (thin wrapper calling Rust).
 void ml_add_deleted_len_buf(buf_T *buf, char *ptr, ssize_t len)
 {
-  if (inhibit_delete_count) {
-    return;
-  }
-  ssize_t maxlen = (ssize_t)strlen(ptr);
-  if (len == -1 || len > maxlen) {
-    len = maxlen;
-  }
-  buf->deleted_bytes += (size_t)len + 1;
-  buf->deleted_bytes2 += (size_t)len + 1;
-  if (buf->update_need_codepoints) {
-    mb_utflen(ptr, (size_t)len, &buf->deleted_codepoints,
-              &buf->deleted_codeunits);
-    buf->deleted_codepoints++;  // NL char
-    buf->deleted_codeunits++;
-  }
+  rs_ml_add_deleted_len_buf(buf, ptr, len);
 }
 
 /// Replace line "lnum", with buffering, in current buffer.
@@ -2814,22 +2819,8 @@ bhdr_T *nvim_ml_find_line(buf_T *buf, linenr_T lnum, int action)
 /// add an entry to the info pointer stack
 ///
 /// @return  number of the new entry
-static int ml_add_stack(buf_T *buf)
-{
-  int top = buf->b_ml.ml_stack_top;
-
-  // may have to increase the stack size
-  if (top == buf->b_ml.ml_stack_size) {
-    CHECK(top > 0, _("Stack size increases"));     // more than 5 levels???
-
-    buf->b_ml.ml_stack_size += STACK_INCR;
-    size_t new_size = sizeof(infoptr_T) * (size_t)buf->b_ml.ml_stack_size;
-    buf->b_ml.ml_stack = xrealloc(buf->b_ml.ml_stack, new_size);
-  }
-
-  buf->b_ml.ml_stack_top++;
-  return top;
-}
+/// Add entry to B-tree info pointer stack (thin wrapper calling Rust).
+static int ml_add_stack(buf_T *buf) { return rs_ml_add_stack(buf); }
 
 /// Update the pointer blocks on the stack for inserted/deleted lines.
 /// The stack itself is also updated.

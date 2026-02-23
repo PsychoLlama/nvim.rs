@@ -25,7 +25,7 @@ use std::ffi::{c_char, c_int, c_uint, c_void};
 use crate::types::{
     BufHandle, ColNr, DataBlockHeader, LineNr, PointerBlockHeader, DATA_BLOCK_HEADER_SIZE,
     DB_INDEX_MASK, DB_MARKED, INDEX_SIZE, ML_ALLOCATED, ML_APPEND_MARK, ML_APPEND_NEW,
-    ML_DEL_MESSAGE, ML_EMPTY, ML_LINE_DIRTY, ML_LOCKED_DIRTY, ML_LOCKED_POS,
+    ML_DEL_MESSAGE, ML_EMPTY, ML_LINE_DIRTY, ML_LOCKED_DIRTY, ML_LOCKED_POS, STACK_INCR,
 };
 
 // =============================================================================
@@ -116,14 +116,60 @@ extern "C" {
     /// Flush cached line to data block (C implementation)
     fn ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
 
-    /// Add deleted length tracking (C implementation)
-    fn ml_add_deleted_len(ptr: *mut c_char, len: isize);
-
-    /// Add deleted length tracking for a specific buffer (C implementation)
-    fn ml_add_deleted_len_buf(buf: *mut BufHandle, ptr: *mut c_char, len: isize);
-
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
+
+    // -------------------------------------------------------------------------
+    // Phase 4: Deleted-length tracking and stack accessors
+    // -------------------------------------------------------------------------
+
+    /// Get inhibit_delete_count global
+    fn nvim_get_inhibit_delete_count() -> c_int;
+
+    /// Get string length (libc)
+    fn strlen(s: *const c_char) -> usize;
+
+    /// Add n to buf->deleted_bytes
+    fn nvim_buf_add_deleted_bytes(buf: *mut BufHandle, n: usize);
+
+    /// Add n to buf->deleted_bytes2
+    fn nvim_buf_add_deleted_bytes2(buf: *mut BufHandle, n: usize);
+
+    /// Get buf->update_need_codepoints
+    fn nvim_buf_get_update_need_codepoints(buf: *mut BufHandle) -> bool;
+
+    /// Add n to buf->deleted_codepoints
+    fn nvim_buf_add_deleted_codepoints(buf: *mut BufHandle, n: usize);
+
+    /// Add n to buf->deleted_codeunits
+    fn nvim_buf_add_deleted_codeunits(buf: *mut BufHandle, n: usize);
+
+    /// Get UTF codepoint/codeunit length of string
+    fn mb_utflen(s: *const c_char, len: usize, codepoints: *mut usize, codeunits: *mut usize);
+
+    /// Get buf->b_ml.ml_stack_top
+    fn nvim_buf_get_ml_stack_top(buf: *mut BufHandle) -> c_int;
+
+    /// Get buf->b_ml.ml_stack_size
+    fn nvim_buf_get_ml_stack_size(buf: *mut BufHandle) -> c_int;
+
+    /// Set buf->b_ml.ml_stack_size
+    fn nvim_buf_set_ml_stack_size(buf: *mut BufHandle, n: c_int);
+
+    /// Increment buf->b_ml.ml_stack_top and return old value
+    fn nvim_buf_inc_ml_stack_top(buf: *mut BufHandle) -> c_int;
+
+    /// Get buf->b_ml.ml_stack as void* (same as nvim_buf_get_ml_stack_void)
+    fn nvim_buf_get_ml_stack(buf: *mut BufHandle) -> *mut std::ffi::c_void;
+
+    /// Set buf->b_ml.ml_stack
+    fn nvim_buf_set_ml_stack(buf: *mut BufHandle, ptr: *mut std::ffi::c_void);
+
+    /// Get sizeof(infoptr_T)
+    fn nvim_get_infoptr_size() -> usize;
+
+    /// Reallocate memory
+    fn xrealloc(ptr: *mut std::ffi::c_void, size: usize) -> *mut std::ffi::c_void;
 }
 
 // =============================================================================
@@ -515,10 +561,14 @@ pub unsafe extern "C" fn rs_ml_clear_cached_line(buf: *mut BufHandle) {
 /// - `ptr` must be a valid C string
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_add_deleted_len(ptr: *mut c_char, len: isize) {
-    ml_add_deleted_len(ptr, len);
+    let buf = nvim_get_curbuf();
+    rs_ml_add_deleted_len_buf(buf, ptr, len);
 }
 
 /// Track deleted text length for a specific buffer.
+///
+/// Checks inhibit_delete_count; uses strlen if len == -1 or len > maxlen.
+/// Updates deleted_bytes, deleted_bytes2, and optionally codepoints/codeunits.
 ///
 /// # Arguments
 /// * `buf` - Buffer to track for
@@ -534,9 +584,45 @@ pub unsafe extern "C" fn rs_ml_add_deleted_len_buf(
     ptr: *mut c_char,
     len: isize,
 ) {
-    if !buf.is_null() {
-        ml_add_deleted_len_buf(buf, ptr, len);
+    if buf.is_null() {
+        return;
     }
+    if nvim_get_inhibit_delete_count() != 0 {
+        return;
+    }
+    let maxlen = strlen(ptr) as isize;
+    let actual_len = if len == -1 || len > maxlen { maxlen } else { len };
+    let nbytes = actual_len as usize + 1; // +1 for NL
+    nvim_buf_add_deleted_bytes(buf, nbytes);
+    nvim_buf_add_deleted_bytes2(buf, nbytes);
+    if nvim_buf_get_update_need_codepoints(buf) {
+        let mut cp: usize = 0;
+        let mut cu: usize = 0;
+        mb_utflen(ptr, actual_len as usize, &mut cp, &mut cu);
+        nvim_buf_add_deleted_codepoints(buf, cp + 1); // +1 for NL char
+        nvim_buf_add_deleted_codeunits(buf, cu + 1);
+    }
+}
+
+/// Add a new entry to the B-tree info pointer stack for a buffer.
+///
+/// Grows the stack array if needed (by STACK_INCR entries at a time).
+/// Returns the index of the new top entry (the old stack_top value).
+///
+/// # Safety
+/// - `buf` must be a valid buffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_add_stack(buf: *mut BufHandle) -> c_int {
+    let top = nvim_buf_get_ml_stack_top(buf);
+    let stack_size = nvim_buf_get_ml_stack_size(buf);
+    if top == stack_size {
+        let new_size = (stack_size as usize + STACK_INCR) * nvim_get_infoptr_size();
+        let old_ptr = nvim_buf_get_ml_stack(buf);
+        let new_ptr = xrealloc(old_ptr, new_size);
+        nvim_buf_set_ml_stack(buf, new_ptr);
+        nvim_buf_set_ml_stack_size(buf, stack_size + STACK_INCR as c_int);
+    }
+    nvim_buf_inc_ml_stack_top(buf)
 }
 
 // =============================================================================
