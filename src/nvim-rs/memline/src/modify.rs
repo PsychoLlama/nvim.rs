@@ -23,9 +23,9 @@
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::types::{
-    BufHandle, ColNr, DataBlockHeader, LineNr, PointerBlockHeader, DB_INDEX_MASK, INDEX_SIZE,
-    ML_ALLOCATED, ML_APPEND_MARK, ML_APPEND_NEW, ML_DEL_MESSAGE, ML_EMPTY, ML_LINE_DIRTY,
-    ML_LOCKED_DIRTY, ML_LOCKED_POS,
+    BufHandle, ColNr, DataBlockHeader, LineNr, PointerBlockHeader, DATA_BLOCK_HEADER_SIZE,
+    DB_INDEX_MASK, DB_MARKED, INDEX_SIZE, ML_ALLOCATED, ML_APPEND_MARK, ML_APPEND_NEW,
+    ML_DEL_MESSAGE, ML_EMPTY, ML_LINE_DIRTY, ML_LOCKED_DIRTY, ML_LOCKED_POS,
 };
 
 // =============================================================================
@@ -43,6 +43,9 @@ extern "C" {
     /// Get buffer's ml_flags (`buf->b_ml.ml_flags`)
     fn nvim_buf_get_ml_flags(buf: *mut BufHandle) -> c_int;
 
+    /// Set buffer's ml_flags (`buf->b_ml.ml_flags`)
+    fn nvim_buf_set_ml_flags(buf: *mut BufHandle, flags: c_int);
+
     /// Get buffer's cached line number (`buf->b_ml.ml_line_lnum`)
     fn nvim_buf_get_ml_line_lnum(buf: *mut BufHandle) -> LineNr;
 
@@ -51,6 +54,21 @@ extern "C" {
 
     /// Check if buffer has a valid memfile (`buf->b_ml.ml_mfp != NULL`)
     fn nvim_buf_has_ml_mfp(buf: *mut BufHandle) -> c_int;
+
+    /// Get buffer's ml_locked_low
+    fn nvim_buf_get_ml_locked_low(buf: *mut BufHandle) -> LineNr;
+
+    /// Get buffer's ml_locked_high
+    fn nvim_buf_get_ml_locked_high(buf: *mut BufHandle) -> LineNr;
+
+    /// Get current buffer (curbuf)
+    fn nvim_get_curbuf() -> *mut BufHandle;
+
+    /// Find data block containing a line (public wrapper around ml_find_line)
+    fn nvim_ml_find_line(buf: *mut BufHandle, lnum: LineNr, action: c_int) -> *mut c_void;
+
+    /// Get bh_data pointer from block header
+    fn nvim_bhdr_get_bh_data(hp: *mut c_void) -> *mut c_void;
 
     // -------------------------------------------------------------------------
     // C Implementation Functions
@@ -104,17 +122,80 @@ extern "C" {
     /// Add deleted length tracking for a specific buffer (C implementation)
     fn ml_add_deleted_len_buf(buf: *mut BufHandle, ptr: *mut c_char, len: isize);
 
-    /// Set marked flag on a line (C implementation)
-    fn ml_setmarked(lnum: LineNr);
-
-    /// Find first marked line (C implementation)
-    fn ml_firstmarked() -> LineNr;
-
-    /// Clear all marked lines (C implementation)
-    fn ml_clearmarked();
-
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
+}
+
+// =============================================================================
+// Mark Tracking State (Phase 1 migration)
+// =============================================================================
+
+/// The lowest line number where a mark may exist (0 means no marks).
+///
+/// This mirrors the C static `lowest_marked`. It is only used for curbuf
+/// (the :global command never changes buffers while marks are live).
+///
+/// # Safety
+/// Only written from the main Nvim thread. No concurrent access.
+static mut LOWEST_MARKED: LineNr = 0;
+
+/// Get the value of `LOWEST_MARKED`.
+///
+/// # Safety
+/// Must only be called from the main Nvim thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_get_lowest_marked() -> LineNr {
+    LOWEST_MARKED
+}
+
+/// Set the value of `LOWEST_MARKED`.
+///
+/// # Safety
+/// Must only be called from the main Nvim thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_set_lowest_marked(lnum: LineNr) {
+    LOWEST_MARKED = lnum;
+}
+
+/// Adjust `LOWEST_MARKED` after inserting a line at `lnum`.
+///
+/// Implements: `if (lowest_marked && lowest_marked > lnum) { lowest_marked = lnum + 1; }`
+///
+/// # Safety
+/// Must only be called from the main Nvim thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_adjust_lowest_marked_for_insert(lnum: LineNr) {
+    if LOWEST_MARKED != 0 && LOWEST_MARKED > lnum {
+        LOWEST_MARKED = lnum + 1;
+    }
+}
+
+/// Adjust `LOWEST_MARKED` after deleting a line at `lnum`.
+///
+/// Implements: `if (lowest_marked && lowest_marked > lnum) { lowest_marked--; }`
+///
+/// # Safety
+/// Must only be called from the main Nvim thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_adjust_lowest_marked_for_delete(lnum: LineNr) {
+    if LOWEST_MARKED != 0 && LOWEST_MARKED > lnum {
+        LOWEST_MARKED -= 1;
+    }
+}
+
+/// Get a mutable pointer to the db_index array inside a data block.
+///
+/// The db_index array immediately follows the `DataBlockHeader` in memory,
+/// matching the C flexible array member `db_index[]`.
+///
+/// # Safety
+/// - `dp` must be a valid pointer to a `DataBlock` (DataBlockHeader + db_index[])
+#[inline]
+unsafe fn db_index_ptr(dp: *mut c_void) -> *mut u32 {
+    #[allow(clippy::cast_ptr_alignment)]
+    dp.cast::<u8>()
+        .add(DATA_BLOCK_HEADER_SIZE)
+        .cast::<u32>()
 }
 
 extern "C" {
@@ -131,9 +212,6 @@ extern "C" {
 
     /// Get the page size of a memfile
     fn nvim_mf_get_page_size(mfp: *mut std::ffi::c_void) -> c_uint;
-
-    /// Get bh_data pointer from block header
-    fn nvim_bhdr_get_bh_data(hp: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
 }
 
 // =============================================================================
@@ -465,40 +543,134 @@ pub unsafe extern "C" fn rs_ml_add_deleted_len_buf(
 // Line Marking (for :global command)
 // =============================================================================
 
-/// Set the DB_MARKED flag for a line.
+/// Set the DB_MARKED flag for a line (Rust implementation).
 ///
 /// Used by the :global command to mark lines for later processing.
+/// Mirrors the C `ml_setmarked` function.
 ///
 /// # Arguments
 /// * `lnum` - Line number to mark
 ///
 /// # Safety
-/// Modifies buffer state.
+/// Modifies buffer state. Only call from main Nvim thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_setmarked(lnum: LineNr) {
-    ml_setmarked(lnum);
+    let buf = nvim_get_curbuf();
+    if lnum < 1
+        || lnum > nvim_buf_get_ml_line_count(buf)
+        || nvim_buf_has_ml_mfp(buf) == 0
+    {
+        return;
+    }
+
+    if LOWEST_MARKED == 0 || LOWEST_MARKED > lnum {
+        LOWEST_MARKED = lnum;
+    }
+
+    // Find the data block containing the line.
+    let hp = nvim_ml_find_line(buf, lnum, crate::types::ML_FIND);
+    if hp.is_null() {
+        return;
+    }
+    let dp = nvim_bhdr_get_bh_data(hp);
+    let db_idx = db_index_ptr(dp);
+    #[allow(clippy::cast_sign_loss)]
+    let i = (lnum - nvim_buf_get_ml_locked_low(buf)) as usize;
+    *db_idx.add(i) |= DB_MARKED;
+
+    // Mark the block dirty
+    let flags = nvim_buf_get_ml_flags(buf);
+    nvim_buf_set_ml_flags(buf, flags | ML_LOCKED_DIRTY);
 }
 
-/// Find the first marked line.
+/// Find the first marked line (Rust implementation).
 ///
-/// Returns the line number of the first marked line, or 0 if none.
+/// Returns the line number of the first marked line, clearing its mark.
+/// Mirrors the C `ml_firstmarked` function.
 ///
 /// # Safety
-/// Reads buffer state.
+/// Modifies buffer state. Only call from main Nvim thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_firstmarked() -> LineNr {
-    ml_firstmarked()
+    let buf = nvim_get_curbuf();
+    if nvim_buf_has_ml_mfp(buf) == 0 {
+        return 0;
+    }
+
+    let mut lnum = LOWEST_MARKED;
+    let line_count = nvim_buf_get_ml_line_count(buf);
+
+    while lnum <= line_count {
+        let hp = nvim_ml_find_line(buf, lnum, crate::types::ML_FIND);
+        if hp.is_null() {
+            return 0;
+        }
+        let dp = nvim_bhdr_get_bh_data(hp);
+        let db_idx = db_index_ptr(dp);
+
+        let locked_low = nvim_buf_get_ml_locked_low(buf);
+        let locked_high = nvim_buf_get_ml_locked_high(buf);
+
+        #[allow(clippy::cast_sign_loss)]
+        let mut i = (lnum - locked_low) as usize;
+        while lnum <= locked_high {
+            if (*db_idx.add(i)) & DB_MARKED != 0 {
+                *db_idx.add(i) &= DB_INDEX_MASK;
+                let flags = nvim_buf_get_ml_flags(buf);
+                nvim_buf_set_ml_flags(buf, flags | ML_LOCKED_DIRTY);
+                LOWEST_MARKED = lnum + 1;
+                return lnum;
+            }
+            i += 1;
+            lnum += 1;
+        }
+    }
+
+    0
 }
 
-/// Clear all marked lines.
+/// Clear all marked lines (Rust implementation).
 ///
 /// Removes the DB_MARKED flag from all lines.
+/// Mirrors the C `ml_clearmarked` function.
 ///
 /// # Safety
-/// Modifies buffer state.
+/// Modifies buffer state. Only call from main Nvim thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_clearmarked() {
-    ml_clearmarked();
+    let buf = nvim_get_curbuf();
+    if nvim_buf_has_ml_mfp(buf) == 0 {
+        return;
+    }
+
+    let mut lnum = LOWEST_MARKED;
+    let line_count = nvim_buf_get_ml_line_count(buf);
+
+    while lnum <= line_count {
+        let hp = nvim_ml_find_line(buf, lnum, crate::types::ML_FIND);
+        if hp.is_null() {
+            return;
+        }
+        let dp = nvim_bhdr_get_bh_data(hp);
+        let db_idx = db_index_ptr(dp);
+
+        let locked_low = nvim_buf_get_ml_locked_low(buf);
+        let locked_high = nvim_buf_get_ml_locked_high(buf);
+
+        #[allow(clippy::cast_sign_loss)]
+        let mut i = (lnum - locked_low) as usize;
+        while lnum <= locked_high {
+            if (*db_idx.add(i)) & DB_MARKED != 0 {
+                *db_idx.add(i) &= DB_INDEX_MASK;
+                let flags = nvim_buf_get_ml_flags(buf);
+                nvim_buf_set_ml_flags(buf, flags | ML_LOCKED_DIRTY);
+            }
+            i += 1;
+            lnum += 1;
+        }
+    }
+
+    LOWEST_MARKED = 0;
 }
 
 // =============================================================================

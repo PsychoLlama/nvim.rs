@@ -198,11 +198,8 @@ enum {
 
 #define STACK_INCR      5       // nr of entries added to ml_stack at a time
 
-// The line number where the first mark may be is remembered.
-// If it is 0 there are no marks at all.
-// (always used for the current buffer only, no buffer change possible while
-// executing a global command).
-static linenr_T lowest_marked = 0;
+// lowest_marked is now owned by Rust (LOWEST_MARKED in modify.rs).
+// Use rs_ml_get_lowest_marked() / rs_ml_set_lowest_marked() to access it.
 
 // arguments for ml_find_line()
 enum {
@@ -250,6 +247,14 @@ extern void rs_set_b0_fname(ZeroBlock *b0p, buf_T *buf);
 extern void *rs_ml_new_data(memfile_T *mfp, bool negative, int page_count);
 extern void *rs_ml_new_ptr(memfile_T *mfp);
 extern void rs_ml_lineadd(buf_T *buf, int count);
+// Pass 2 Phase 1: Mark tracking Rust function declarations
+extern void rs_ml_setmarked(linenr_T lnum);
+extern linenr_T rs_ml_firstmarked(void);
+extern void rs_ml_clearmarked(void);
+extern linenr_T rs_ml_get_lowest_marked(void);
+extern void rs_ml_set_lowest_marked(linenr_T lnum);
+extern void rs_ml_adjust_lowest_marked_for_insert(linenr_T lnum);
+extern void rs_ml_adjust_lowest_marked_for_delete(linenr_T lnum);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1764,9 +1769,7 @@ static int ml_append_int(buf_T *buf, linenr_T lnum, char *line_arg, colnr_T len_
     return FAIL;  // lnum out of range
   }
 
-  if (lowest_marked && lowest_marked > lnum) {
-    lowest_marked = lnum + 1;
-  }
+  rs_ml_adjust_lowest_marked_for_insert(lnum);
 
   if (len == 0) {
     len = (colnr_T)strlen(line) + 1;            // space needed for the text
@@ -2370,9 +2373,7 @@ int ml_delete_buf(buf_T *buf, linenr_T lnum, bool message)
 static int ml_delete_int(buf_T *buf, linenr_T lnum, int flags)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (lowest_marked && lowest_marked > lnum) {
-    lowest_marked--;
-  }
+  rs_ml_adjust_lowest_marked_for_delete(lnum);
 
   // If the file becomes empty the last line is replaced by an empty line.
   if (buf->b_ml.ml_line_count == 1) {       // file becomes empty
@@ -2520,92 +2521,14 @@ int ml_delete_flags(linenr_T lnum, int flags)
   return ml_delete_int(curbuf, lnum, flags);
 }
 
-/// set the DB_MARKED flag for line 'lnum'
-void ml_setmarked(linenr_T lnum)
-{
-  // invalid line number
-  if (lnum < 1 || lnum > curbuf->b_ml.ml_line_count
-      || curbuf->b_ml.ml_mfp == NULL) {
-    return;                         // give error message?
-  }
-  if (lowest_marked == 0 || lowest_marked > lnum) {
-    lowest_marked = lnum;
-  }
+/// set the DB_MARKED flag for line 'lnum' (thin wrapper calling Rust)
+void ml_setmarked(linenr_T lnum) { rs_ml_setmarked(lnum); }
 
-  // find the data block containing the line
-  // This also fills the stack with the blocks from the root to the data block
-  // This also releases any locked block.
-  bhdr_T *hp;
-  if ((hp = ml_find_line(curbuf, lnum, ML_FIND)) == NULL) {
-    return;                 // give error message?
-  }
-  DataBlock *dp = hp->bh_data;
-  dp->db_index[lnum - curbuf->b_ml.ml_locked_low] |= DB_MARKED;
-  curbuf->b_ml.ml_flags |= ML_LOCKED_DIRTY;
-}
+/// find the first line with its DB_MARKED flag set (thin wrapper calling Rust)
+linenr_T ml_firstmarked(void) { return rs_ml_firstmarked(); }
 
-/// find the first line with its DB_MARKED flag set
-linenr_T ml_firstmarked(void)
-{
-  if (curbuf->b_ml.ml_mfp == NULL) {
-    return 0;
-  }
-
-  // The search starts with lowest_marked line. This is the last line where
-  // a mark was found, adjusted by inserting/deleting lines.
-  for (linenr_T lnum = lowest_marked; lnum <= curbuf->b_ml.ml_line_count;) {
-    // Find the data block containing the line.
-    // This also fills the stack with the blocks from the root to the data
-    // block This also releases any locked block.
-    bhdr_T *hp;
-    if ((hp = ml_find_line(curbuf, lnum, ML_FIND)) == NULL) {
-      return 0;                   // give error message?
-    }
-    DataBlock *dp = hp->bh_data;
-
-    for (int i = lnum - curbuf->b_ml.ml_locked_low;
-         lnum <= curbuf->b_ml.ml_locked_high; i++, lnum++) {
-      if ((dp->db_index[i]) & DB_MARKED) {
-        (dp->db_index[i]) &= DB_INDEX_MASK;
-        curbuf->b_ml.ml_flags |= ML_LOCKED_DIRTY;
-        lowest_marked = lnum + 1;
-        return lnum;
-      }
-    }
-  }
-
-  return 0;
-}
-
-/// clear all DB_MARKED flags
-void ml_clearmarked(void)
-{
-  if (curbuf->b_ml.ml_mfp == NULL) {        // nothing to do
-    return;
-  }
-
-  // The search starts with line lowest_marked.
-  for (linenr_T lnum = lowest_marked; lnum <= curbuf->b_ml.ml_line_count;) {
-    // Find the data block containing the line.
-    // This also fills the stack with the blocks from the root to the data
-    // block and releases any locked block.
-    bhdr_T *hp;
-    if ((hp = ml_find_line(curbuf, lnum, ML_FIND)) == NULL) {
-      return;                   // give error message?
-    }
-    DataBlock *dp = hp->bh_data;
-
-    for (int i = lnum - curbuf->b_ml.ml_locked_low;
-         lnum <= curbuf->b_ml.ml_locked_high; i++, lnum++) {
-      if ((dp->db_index[i]) & DB_MARKED) {
-        (dp->db_index[i]) &= DB_INDEX_MASK;
-        curbuf->b_ml.ml_flags |= ML_LOCKED_DIRTY;
-      }
-    }
-  }
-
-  lowest_marked = 0;
-}
+/// clear all DB_MARKED flags (thin wrapper calling Rust)
+void ml_clearmarked(void) { rs_ml_clearmarked(); }
 
 size_t ml_flush_deleted_bytes(buf_T *buf, size_t *codepoints, size_t *codeunits)
 {
