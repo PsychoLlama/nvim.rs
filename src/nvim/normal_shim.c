@@ -1689,9 +1689,29 @@ bool nvim_get_curwin_w_p_wrap(void) { return curwin->w_p_wrap; }
 /// Returns true if the main z command should be processed with the new nchar.
 bool nvim_nv_z_get_count(cmdarg_T *cap, int *nchar_arg) { return nv_z_get_count(cap, nchar_arg); }
 
-/// nv_zg_zw: spell word add/remove for z commands.
-/// Returns OK or FAIL.
-int nvim_nv_zg_zw(cmdarg_T *cap, int nchar) { return nv_zg_zw(cap, nchar); }
+/// Phase 2: nv_zg_zw accessors for Rust FFI
+
+/// Wrapper for get_visual_text for Rust FFI (get_visual_text is static).
+bool nvim_get_visual_text(cmdarg_T *cap, char **pp, size_t *lenp)
+{
+  return get_visual_text(cap, pp, lenp);
+}
+
+/// Wrapper for spell_move_to(curwin, dir, SMT_ALL, true, NULL) for Rust FFI.
+size_t nvim_spell_move_to_wrapper(int dir)
+{
+  return spell_move_to(curwin, dir, SMT_ALL, true, NULL);
+}
+
+/// Wrapper for ml_get_pos(&curwin->w_cursor) for Rust FFI.
+char *nvim_ml_get_pos_cursor(void)
+{
+  return ml_get_pos(&curwin->w_cursor);
+}
+
+/// nv_zg_zw: spell word add/remove for z commands -- now calls Rust.
+extern int rs_nv_zg_zw(cmdarg_T *cap, int nchar);
+int nvim_nv_zg_zw(cmdarg_T *cap, int nchar) { return rs_nv_zg_zw(cap, nchar); }
 
 /// Sync w_p_fen in diff-synced windows for 'z' commands.
 void nvim_sync_fen_in_diff_windows(void)
@@ -3234,61 +3254,6 @@ static bool nv_z_get_count(cmdarg_T *cap, int *nchar_arg)
 /// "zw": add wrong word to word list
 /// "zG": add good word to temp word list
 /// "zW": add wrong word to temp word list
-static int nv_zg_zw(cmdarg_T *cap, int nchar)
-{
-  bool undo = false;
-
-  if (nchar == 'u') {
-    no_mapping++;
-    allow_keys++;               // no mapping for nchar, but allow key codes
-    nchar = plain_vgetc();
-    LANGMAP_ADJUST(nchar, true);
-    no_mapping--;
-    allow_keys--;
-    add_to_showcmd(nchar);
-
-    if (vim_strchr("gGwW", nchar) == NULL) {
-      rs_clearopbeep(cap->oap);
-      return OK;
-    }
-    undo = true;
-  }
-
-  if (rs_checkclearop(cap->oap)) {
-    return OK;
-  }
-  char *ptr = NULL;
-  size_t len;
-  if (VIsual_active && !get_visual_text(cap, &ptr, &len)) {
-    return FAIL;
-  }
-  if (ptr == NULL) {
-    pos_T pos = curwin->w_cursor;
-
-    // Find bad word under the cursor.  When 'spell' is
-    // off this fails and find_ident_under_cursor() is
-    // used below.
-    emsg_off++;
-    len = spell_move_to(curwin, FORWARD, SMT_ALL, true, NULL);
-    emsg_off--;
-    if (len != 0 && curwin->w_cursor.col <= pos.col) {
-      ptr = ml_get_pos(&curwin->w_cursor);
-    }
-    curwin->w_cursor = pos;
-  }
-
-  if (ptr == NULL && (len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0) {
-    return FAIL;
-  }
-  assert(len <= INT_MAX);
-  spell_add_word(ptr, (int)len,
-                 nchar == 'w' || nchar == 'W' ? SPELL_ADD_BAD : SPELL_ADD_GOOD,
-                 (nchar == 'G' || nchar == 'W') ? 0 : cap->count1,
-                 undo);
-
-  return OK;
-}
-
 /// Handle a ":" command and <Cmd> or Lua mappings.
 static void nv_colon(cmdarg_T *cap)
 {

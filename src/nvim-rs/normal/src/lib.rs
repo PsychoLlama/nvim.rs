@@ -3272,8 +3272,22 @@ extern "C" {
     fn nvim_spell_suggest_call(count: c_int);
     fn nvim_get_curwin_w_p_wrap() -> bool;
     fn nvim_nv_z_get_count(cap: CapHandle, nchar_arg: *mut c_int) -> bool;
-    fn nvim_nv_zg_zw(cap: CapHandle, nchar: c_int) -> c_int;
     fn nvim_sync_fen_in_diff_windows();
+    // Phase 2: nv_zg_zw accessors
+    fn nvim_get_visual_text(cap: CapHandle, pp: *mut *mut c_char, lenp: *mut usize) -> bool;
+    fn nvim_spell_move_to_wrapper(dir: c_int) -> usize;
+    fn nvim_ml_get_pos_cursor() -> *mut c_char;
+    fn find_ident_under_cursor(text: *mut *mut c_char, find_type: c_int) -> usize;
+    fn nvim_inc_emsg_off();
+    fn nvim_dec_emsg_off();
+    fn spell_add_word(word: *mut c_char, len: c_int, what: c_int, idx: c_int, undo: bool);
+    fn nvim_plain_vgetc_wrapper() -> c_int;
+    fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int;
+    fn nvim_add_to_showcmd_wrapper(c: c_int) -> bool;
+    fn nvim_inc_no_mapping();
+    fn nvim_dec_no_mapping();
+    fn nvim_inc_allow_keys();
+    fn nvim_dec_allow_keys();
     fn nvim_vim_strchr_str(s: *const c_char, c: c_int) -> bool;
     fn nvim_ascii_isdigit(c: c_int) -> bool;
     fn nvim_get_curwin() -> WinHandle;
@@ -3304,6 +3318,98 @@ const K_KENTER: c_int = termcap2key(b'K' as c_int, b'A' as c_int);
 const OP_FOLD: c_int = 19;
 const UPD_VALID: c_int = 10;
 const UPD_NOT_VALID: c_int = 40;
+
+// Phase 2: spell constants (from spell_defs.h)
+const OK: c_int = 1;
+const SPELL_ADD_GOOD: c_int = 0;
+const SPELL_ADD_BAD: c_int = 1;
+const SMT_ALL_DIR: c_int = 1; // FORWARD direction for spell_move_to
+
+/// Command handler for "z" commands.
+///
+/// Handle zg/zw/zG/zW/zug/zuw commands for adding/removing words to spell lists.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_zg_zw(cap: CapHandle, mut nchar: c_int) -> c_int {
+    let undo = if nchar == c_int::from(b'u') {
+        // Get the next character to determine which word list to affect.
+        nvim_inc_no_mapping();
+        nvim_inc_allow_keys();
+        nchar = nvim_plain_vgetc_wrapper();
+        nchar = nvim_langmap_adjust(nchar, true);
+        nvim_dec_no_mapping();
+        nvim_dec_allow_keys();
+        nvim_add_to_showcmd_wrapper(nchar);
+
+        // Must be one of g/G/w/W.
+        let valid = nchar == c_int::from(b'g')
+            || nchar == c_int::from(b'G')
+            || nchar == c_int::from(b'w')
+            || nchar == c_int::from(b'W');
+        if !valid {
+            let oap = nvim_cap_get_oap(cap);
+            rs_clearopbeep(oap);
+            return OK;
+        }
+        true
+    } else {
+        false
+    };
+
+    let oap = nvim_cap_get_oap(cap);
+    if rs_checkclearop(oap) {
+        return OK;
+    }
+
+    let mut ptr: *mut c_char = std::ptr::null_mut();
+    let mut len: usize = 0;
+
+    if nvim_get_VIsual_active() != 0 && !nvim_get_visual_text(cap, &raw mut ptr, &raw mut len) {
+        return FAIL;
+    }
+
+    if ptr.is_null() {
+        // Save cursor position.
+        let saved_col = nvim_get_cursor_col();
+        let saved_lnum = nvim_get_cursor_lnum();
+
+        // Find bad word under the cursor. When 'spell' is off this fails
+        // and find_ident_under_cursor() is used below.
+        nvim_inc_emsg_off();
+        len = nvim_spell_move_to_wrapper(SMT_ALL_DIR);
+        nvim_dec_emsg_off();
+
+        if len != 0 && nvim_get_cursor_col() <= saved_col {
+            ptr = nvim_ml_get_pos_cursor();
+        }
+        // Restore cursor position.
+        nvim_set_cursor_pos(saved_lnum, saved_col, 0);
+    }
+
+    if ptr.is_null() {
+        len = find_ident_under_cursor(&raw mut ptr, FIND_IDENT);
+        if len == 0 {
+            return FAIL;
+        }
+    }
+
+    let what = if nchar == c_int::from(b'w') || nchar == c_int::from(b'W') {
+        SPELL_ADD_BAD
+    } else {
+        SPELL_ADD_GOOD
+    };
+    let idx = if nchar == c_int::from(b'G') || nchar == c_int::from(b'W') {
+        0
+    } else {
+        nvim_cap_get_count1(cap)
+    };
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    spell_add_word(ptr, len as c_int, what, idx, undo);
+
+    OK
+}
 
 /// Command handler for "z" commands.
 ///
@@ -3760,7 +3866,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
             || n == b'G' as c_int
             || n == b'W' as c_int =>
         {
-            if nvim_nv_zg_zw(cap, nchar) == FAIL {
+            if rs_nv_zg_zw(cap, nchar) == FAIL {
                 return;
             }
         }
