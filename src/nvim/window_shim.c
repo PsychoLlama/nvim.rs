@@ -157,6 +157,7 @@ extern int rs_diffopt_closeoff(void);
 // Pure calculations and thin wrappers
 extern void rs_set_fraction(win_T *wp);
 extern int64_t rs_win_default_scroll(win_T *wp);
+extern void rs_scroll_to_fraction(win_T *wp, int prev_height);
 extern void rs_win_setheight(int height);
 extern void rs_win_setwidth(int width);
 
@@ -3895,94 +3896,7 @@ static void win_fix_cursor(bool normal)
 
 void scroll_to_fraction(win_T *wp, int prev_height)
 {
-  int height = wp->w_view_height;
-
-  // Don't change w_topline in any of these cases:
-  // - window height is 0
-  // - 'scrollbind' is set and this isn't the current window
-  // - window height is sufficient to display the whole buffer and first line
-  //   is visible.
-  if (height > 0
-      && (!wp->w_p_scb || wp == curwin)
-      && (height < wp->w_buffer->b_ml.ml_line_count
-          || wp->w_topline > 1)) {
-    // Find a value for w_topline that shows the cursor at the same
-    // relative position in the window as before (more or less).
-    linenr_T lnum = wp->w_cursor.lnum;
-    // can happen when starting up
-    lnum = MAX(lnum, 1);
-    wp->w_wrow = (wp->w_fraction * height - 1) / FRACTION_MULT;
-    int line_size = plines_win_col(wp, lnum, wp->w_cursor.col) - 1;
-    int sline = wp->w_wrow - line_size;
-
-    if (sline >= 0) {
-      // Make sure the whole cursor line is visible, if possible.
-      const int rows = plines_win(wp, lnum, false);
-
-      if (sline > wp->w_view_height - rows) {
-        sline = wp->w_view_height - rows;
-        wp->w_wrow -= rows - line_size;
-      }
-    }
-
-    if (sline < 0) {
-      // Cursor line would go off top of screen if w_wrow was this high.
-      // Make cursor line the first line in the window.  If not enough
-      // room use w_skipcol;
-      wp->w_wrow = line_size;
-      if (wp->w_wrow >= wp->w_view_height
-          && (wp->w_view_width - win_col_off(wp)) > 0) {
-        wp->w_skipcol += wp->w_view_width - win_col_off(wp);
-        wp->w_wrow--;
-        while (wp->w_wrow >= wp->w_view_height) {
-          wp->w_skipcol += wp->w_view_width - win_col_off(wp)
-                           + win_col_off2(wp);
-          wp->w_wrow--;
-        }
-      }
-    } else if (sline > 0) {
-      while (sline > 0 && lnum > 1) {
-        hasFolding(wp, lnum, &lnum, NULL);
-        if (lnum == 1) {
-          // first line in buffer is folded
-          line_size = !decor_conceal_line(wp, lnum - 1, false);
-          sline--;
-          break;
-        }
-        lnum--;
-        if (lnum == wp->w_topline) {
-          line_size = plines_win_nofill(wp, lnum, true)
-                      + wp->w_topfill;
-        } else {
-          line_size = plines_win(wp, lnum, true);
-        }
-        sline -= line_size;
-      }
-
-      if (sline < 0) {
-        // Line we want at top would go off top of screen.  Use next
-        // line instead.
-        hasFolding(wp, lnum, NULL, &lnum);
-        lnum++;
-        wp->w_wrow -= line_size + sline;
-      } else if (sline > 0) {
-        // First line of file reached, use that as topline.
-        lnum = 1;
-        wp->w_wrow -= sline;
-      }
-    }
-    set_topline(wp, lnum);
-  }
-
-  if (wp == curwin) {
-    curs_columns(wp, false);        // validate w_wrow
-  }
-  if (prev_height > 0) {
-    wp->w_prev_fraction_row = wp->w_wrow;
-  }
-
-  redraw_later(wp, UPD_SOME_VALID);
-  invalidate_botline(wp);
+  rs_scroll_to_fraction(wp, prev_height);
 }
 
 void win_set_inner_size(win_T *wp, bool valid_cursor)
@@ -4374,6 +4288,7 @@ void nvim_win_set_prev_height(win_T *wp, int val) { if (wp) { wp->w_prev_height 
 void nvim_win_float_anchor_laststatus(void) { win_float_anchor_laststatus(); }
 void nvim_win_set_floating(win_T *wp, int val) { if (wp) { wp->w_floating = val; } }
 int nvim_win_get_fraction(win_T *wp) { return wp ? wp->w_fraction : 0; }
+void nvim_win_set_prev_fraction_row(win_T *wp, int val) { if (wp) { wp->w_prev_fraction_row = val; } }
 int nvim_get_p_ea(void) { return p_ea ? 1 : 0; }
 int nvim_get_p_ead_char(void) { return (p_ead && *p_ead) ? (int)(unsigned char)*p_ead : 0; }
 

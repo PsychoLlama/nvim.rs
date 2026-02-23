@@ -758,6 +758,12 @@ int nvim_plines_win(win_T *wp, linenr_T lnum, int limit)
   return plines_win(wp, lnum, limit != 0);
 }
 
+/// Wrapper for plines_win_col() (accessor for Rust).
+int nvim_plines_win_col(win_T *wp, linenr_T lnum, long column)
+{
+  return plines_win_col(wp, lnum, column);
+}
+
 /// Wrapper for win_may_fill() (accessor for Rust).
 int nvim_win_may_fill(win_T *wp)
 {
