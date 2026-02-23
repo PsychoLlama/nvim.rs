@@ -24,7 +24,7 @@ pub mod pending;
 pub mod showcmd;
 pub mod visual;
 
-use std::ffi::{c_char, c_int, c_uint};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 // =============================================================================
 // Key Constants (from keycodes.h)
@@ -2277,12 +2277,45 @@ extern "C" {
         ptr_out: *mut *mut c_char,
         n_out: *mut usize,
     ) -> c_int;
-    fn nvim_ident_build_and_exec(
+
+    // Accessors for rs_ident_build_and_exec (Phase 2 migration)
+    fn nvim_ident_get_kp() -> *mut c_char;
+    fn nvim_ident_curbuf_is_help() -> bool;
+    fn nvim_ident_get_curbuf_ft() -> *mut c_char;
+    fn nvim_ident_set_cursor_col(col: c_int);
+    fn nvim_ident_get_cursor_line_ptr() -> *mut c_char;
+    fn nvim_ident_vim_iswordp(p: *const c_char) -> bool;
+    fn nvim_ident_mb_prevptr(line: *mut c_char, p: *mut c_char) -> *mut c_char;
+    fn nvim_ident_set_g_tag_at_cursor(val: bool);
+    fn nvim_ident_normal_search(
         cap: CapHandle,
-        cmdchar: c_int,
-        g_cmd: c_int,
-        ptr: *mut c_char,
-        n: usize,
+        dir: c_int,
+        pat: *mut c_char,
+        patlen: usize,
+        opt: c_int,
+    );
+    fn nvim_ident_emsg_noident();
+
+    fn nvim_set_no_smartcase(val: c_int);
+    fn rs_magic_isset() -> c_int;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn vim_strsave_fnameescape(s: *const c_char, what: c_int) -> *mut c_char;
+    fn vim_strsave_shellescape(s: *const c_char, do_special: bool, do_newline: bool)
+        -> *mut c_char;
+    fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+    fn xfree(p: *mut c_void);
+    fn add_map(lhs: *mut c_char, rhs: *mut c_char, mode: c_int, buffer: bool);
+
+    // History functions (Rust exports from cmdhist crate)
+    fn init_history();
+    fn add_to_history(
+        histype: c_int,
+        new_entry: *const c_char,
+        new_entrylen: usize,
+        in_map: bool,
+        sep: c_int,
     );
 }
 
@@ -2334,7 +2367,315 @@ pub unsafe extern "C" fn rs_nv_ident(cap: CapHandle) {
         return;
     }
 
-    nvim_ident_build_and_exec(cap, cmdchar, g_cmd, ptr, n);
+    rs_ident_build_and_exec(cap, cmdchar, g_cmd, ptr, n);
+}
+
+// VSE_NONE: flag for vim_strsave_fnameescape (no special escaping).
+const VSE_NONE: c_int = 0;
+
+// HIST_SEARCH: history type for search patterns.
+const HIST_SEARCH: c_int = 1;
+
+// MODE_TERMINAL: terminal mode flag.
+const MODE_TERMINAL: c_int = 0x80;
+
+/// Append a C string (char*) to a Vec<u8>, up to `len` bytes.
+///
+/// # Safety
+/// `s` must point to at least `len` valid bytes.
+#[allow(clippy::ptr_as_ptr)]
+unsafe fn append_cptr_bytes(buf: &mut Vec<u8>, s: *const c_char, len: usize) {
+    // SAFETY: Caller guarantees s points to len valid bytes.
+    unsafe {
+        buf.extend_from_slice(std::slice::from_raw_parts(s.cast::<u8>(), len));
+    }
+}
+
+/// Private helper: implements the K command's keywordprg logic (was nv_K_getcmd).
+///
+/// Returns the (possibly adjusted) `n` on success, or `None` to abort.
+/// `ptr` may be advanced past leading dashes for external programs.
+///
+/// # Safety
+/// All pointers must be valid.
+unsafe fn nv_k_getcmd(
+    cap: CapHandle,
+    kp: *const c_char,
+    kp_help: bool,
+    kp_ex: bool,
+    ptr: &mut *mut c_char,
+    mut n: usize,
+    buf: &mut Vec<u8>,
+) -> Option<usize> {
+    // SAFETY: All pointer ops use valid pointers from caller.
+    unsafe {
+        if kp_help {
+            // In the help buffer: use "he! " prefix
+            buf.extend_from_slice(b"he! ");
+            return Some(n);
+        }
+
+        if kp_ex {
+            // 'keywordprg' is an ex command
+            buf.clear();
+            let count0 = nvim_cap_get_count0(cap);
+            if count0 != 0 {
+                // Send count to the ex command
+                let count_str = format!("{count0}");
+                buf.extend_from_slice(count_str.as_bytes());
+            }
+            let kp_len = libc::strlen(kp);
+            append_cptr_bytes(buf, kp, kp_len);
+            buf.push(b' ');
+            return Some(n);
+        }
+
+        // External command: skip leading dashes
+        #[allow(clippy::cast_sign_loss)]
+        while *(*ptr).cast::<u8>() == b'-' && n > 0 {
+            *ptr = (*ptr).add(1);
+            n -= 1;
+        }
+        if n == 0 {
+            // found dashes only
+            nvim_ident_emsg_noident();
+            return None;
+        }
+
+        // When a count is given, turn it into a range.
+        let kp_cstr = std::ffi::CStr::from_ptr(kp);
+        let kp_bytes = kp_cstr.to_bytes();
+        let isman = kp_bytes == b"man";
+        let isman_s = kp_bytes == b"man -s";
+
+        let count0 = nvim_cap_get_count0(cap);
+        if count0 != 0 && !(isman || isman_s) {
+            let range_str = format!(".,.+{}", count0 - 1);
+            buf.extend_from_slice(range_str.as_bytes());
+        }
+
+        // Open a new tab for the terminal
+        do_cmdline_cmd(c"tabnew".as_ptr());
+
+        // Add "terminal " prefix
+        buf.extend_from_slice(b"terminal ");
+
+        if count0 == 0 && isman_s {
+            buf.extend_from_slice(b"man ");
+        } else {
+            let kp_len = libc::strlen(kp);
+            append_cptr_bytes(buf, kp, kp_len);
+            buf.push(b' ');
+        }
+
+        if count0 != 0 && (isman || isman_s) {
+            let count_str = format!("{count0} ");
+            buf.extend_from_slice(count_str.as_bytes());
+        }
+
+        Some(n)
+    }
+}
+
+/// Build and execute the command for *, #, K, CTRL-], g], g* commands.
+///
+/// Translated from C `nvim_ident_build_and_exec` in `normal_shim.c`.
+/// Absorbs `nv_K_getcmd` (formerly a static C helper).
+///
+/// # Safety
+/// - `cap` must be a valid `cmdarg_T*`.
+/// - `ptr` must point to at least `n` bytes of identifier text.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_ident_build_and_exec(
+    cap: CapHandle,
+    cmdchar: c_int,
+    g_cmd: c_int,
+    mut ptr: *mut c_char,
+    mut n: usize,
+) {
+    // SAFETY: All pointer operations assume valid pointers from C callers.
+    unsafe {
+        let kp = nvim_ident_get_kp();
+        #[allow(clippy::cast_sign_loss)]
+        let kp_help = *kp.cast::<u8>() == 0
+            || libc::strcmp(kp, c":he".as_ptr()) == 0
+            || libc::strcmp(kp, c":help".as_ptr()) == 0;
+
+        #[allow(clippy::cast_sign_loss)]
+        if kp_help && *skipwhite(ptr.cast_const()).cast::<u8>() == 0 {
+            nvim_ident_emsg_noident();
+            return;
+        }
+        #[allow(clippy::cast_sign_loss)]
+        let kp_ex = *kp.cast::<u8>() == b':';
+
+        // Build command buffer (replaces xmalloc)
+        let kp_len = libc::strlen(kp);
+        let initial_cap = n * 2 + 30 + kp_len;
+        let mut buf: Vec<u8> = Vec::with_capacity(initial_cap);
+
+        let mut tag_cmd = false;
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let cmdchar_byte = cmdchar as u8;
+
+        match cmdchar_byte {
+            b'*' | b'#' => {
+                nvim_setpcmark();
+                // Compute column as byte offset from line start
+                let line_start = nvim_ident_get_cursor_line_ptr();
+                #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                let cursor_col = (ptr as usize).wrapping_sub(line_start as usize) as c_int;
+                nvim_ident_set_cursor_col(cursor_col);
+                if g_cmd == 0 && nvim_ident_vim_iswordp(ptr) {
+                    buf.extend_from_slice(b"\\<");
+                }
+                nvim_set_no_smartcase(1);
+            }
+            b'K' => match nv_k_getcmd(cap, kp, kp_help, kp_ex, &mut ptr, n, &mut buf) {
+                None => return,
+                Some(new_n) => n = new_n,
+            },
+            b']' => {
+                tag_cmd = true;
+                buf.extend_from_slice(b"ts ");
+            }
+            _ => {
+                tag_cmd = true;
+                if nvim_ident_curbuf_is_help() {
+                    buf.extend_from_slice(b"he! ");
+                } else if g_cmd != 0 {
+                    buf.extend_from_slice(b"tj ");
+                } else {
+                    let count0 = nvim_cap_get_count0(cap);
+                    if count0 == 0 {
+                        buf.extend_from_slice(b"ta ");
+                    } else {
+                        let count_str = format!(":{count0}ta ");
+                        buf.extend_from_slice(count_str.as_bytes());
+                    }
+                }
+            }
+        }
+
+        // Grab the chars in the identifier
+        if cmdchar_byte == b'K' && !kp_help {
+            // Save ptr as a C string for escaping
+            let saved_ptr = xstrnsave(ptr, n);
+            let escaped = if kp_ex {
+                vim_strsave_fnameescape(saved_ptr, VSE_NONE)
+            } else {
+                vim_strsave_shellescape(saved_ptr, true, true)
+            };
+            xfree(saved_ptr.cast::<c_void>());
+            let plen = libc::strlen(escaped);
+            append_cptr_bytes(&mut buf, escaped, plen);
+            xfree(escaped.cast::<c_void>());
+        } else {
+            let magic = rs_magic_isset() != 0;
+            // We need a NUL-terminated aux string for vim_strchr.
+            // Build it as a Vec<u8> to avoid repeated allocations.
+            let aux_bytes: &[u8] = if cmdchar_byte == b'*' {
+                if magic {
+                    b"/.*~[^$\\"
+                } else {
+                    b"/^$\\"
+                }
+            } else if cmdchar_byte == b'#' {
+                if magic {
+                    b"/?.*~[^$\\"
+                } else {
+                    b"/?^$\\"
+                }
+            } else if tag_cmd {
+                let ft = nvim_ident_get_curbuf_ft();
+                let ft_cstr = std::ffi::CStr::from_ptr(ft);
+                if ft_cstr.to_bytes() == b"help" {
+                    b""
+                } else {
+                    b"\\|\"\n["
+                }
+            } else {
+                b"\\|\"\n*?["
+            };
+
+            let mut aux_c_str: Vec<u8> = aux_bytes.to_vec();
+            aux_c_str.push(0);
+
+            let mut remaining = n;
+            let mut src = ptr;
+            while remaining > 0 {
+                #[allow(clippy::cast_sign_loss)]
+                let ch = *src.cast::<u8>();
+                // Check if this char needs escaping
+                #[allow(clippy::cast_possible_wrap)]
+                if !vim_strchr(aux_c_str.as_ptr().cast(), c_int::from(ch)).is_null() {
+                    buf.push(b'\\');
+                }
+                #[allow(clippy::cast_sign_loss)]
+                let char_len = utfc_ptr2len(src) as usize;
+                let multi_len = char_len.saturating_sub(1);
+                // Copy multi-byte continuation bytes (all but the last)
+                for i in 0..multi_len {
+                    if remaining == 0 {
+                        break;
+                    }
+                    #[allow(clippy::cast_sign_loss)]
+                    buf.push(*src.add(i).cast::<u8>());
+                    remaining -= 1;
+                }
+                src = src.add(multi_len);
+                // Copy the final byte of this char
+                #[allow(clippy::cast_sign_loss)]
+                buf.push(*src.cast::<u8>());
+                src = src.add(1);
+                remaining -= 1;
+            }
+        }
+
+        // Execute the command
+        if cmdchar_byte == b'*' || cmdchar_byte == b'#' {
+            let line_ptr = nvim_ident_get_cursor_line_ptr();
+            if g_cmd == 0 && nvim_ident_vim_iswordp(nvim_ident_mb_prevptr(line_ptr, ptr)) {
+                buf.extend_from_slice(b"\\>");
+            }
+            init_history();
+            // add_to_history reads but doesn't own the bytes
+            add_to_history(
+                HIST_SEARCH,
+                buf.as_ptr().cast::<c_char>(),
+                buf.len(),
+                true,
+                0,
+            );
+            nvim_ident_normal_search(
+                cap,
+                if cmdchar_byte == b'*' {
+                    c_int::from(b'/')
+                } else {
+                    c_int::from(b'?')
+                },
+                buf.as_mut_ptr().cast::<c_char>(),
+                buf.len(),
+                0,
+            );
+        } else {
+            nvim_ident_set_g_tag_at_cursor(true);
+            buf.push(0); // NUL terminate
+            do_cmdline_cmd(buf.as_ptr().cast::<c_char>());
+            buf.pop(); // remove NUL
+            nvim_ident_set_g_tag_at_cursor(false);
+            if cmdchar_byte == b'K' && !kp_ex && !kp_help {
+                nvim_set_restart_edit(c_int::from(b'i'));
+                add_map(
+                    c"<esc>".as_ptr().cast_mut(),
+                    c"<Cmd>bdelete!<CR>".as_ptr().cast_mut(),
+                    MODE_TERMINAL,
+                    true,
+                );
+            }
+        }
+    }
 }
 
 // =============================================================================
