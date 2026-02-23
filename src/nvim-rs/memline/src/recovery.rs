@@ -644,14 +644,95 @@ pub unsafe extern "C" fn rs_make_percent_swname(
 // =============================================================================
 
 extern "C" {
-    /// Check if block 0 has valid ID bytes
-    fn ml_check_b0_id_c(b0: *const c_void) -> c_int;
+    /// Get b0_magic_long field from ZeroBlock
+    fn nvim_b0_get_magic_long(b0: *const c_void) -> i64;
 
-    /// Check if block 0 has valid strings
-    fn ml_check_b0_strings_c(b0: *const c_void) -> c_int;
+    /// Get b0_magic_int field from ZeroBlock
+    fn nvim_b0_get_magic_int(b0: *const c_void) -> i32;
 
-    /// Check if block 0 has wrong magic number (endianness)
-    fn b0_magic_wrong_c(b0: *const c_void) -> c_int;
+    /// Get b0_magic_short field from ZeroBlock
+    fn nvim_b0_get_magic_short(b0: *const c_void) -> i16;
+
+    /// Get b0_magic_char field from ZeroBlock
+    fn nvim_b0_get_magic_char(b0: *const c_void) -> u8;
+
+    /// Get b0_id[idx] byte from ZeroBlock
+    fn nvim_b0_get_id(b0: *const c_void, idx: c_int) -> u8;
+
+    /// Get pointer to b0_version field (10 bytes)
+    fn nvim_b0_get_version_ptr(b0: *const c_void) -> *const c_char;
+
+    /// Get size of b0_version field
+    fn nvim_b0_get_version_size() -> usize;
+
+    /// Get pointer to b0_uname field (B0_UNAME_SIZE bytes)
+    fn nvim_b0_get_uname_ptr(b0: *const c_void) -> *const c_char;
+
+    /// Get pointer to b0_hname field (B0_HNAME_SIZE bytes)
+    fn nvim_b0_get_hname_ptr(b0: *const c_void) -> *const c_char;
+
+    /// Get pointer to b0_fname field (B0_FNAME_SIZE_ORG bytes)
+    fn nvim_b0_get_fname_ptr(b0: *const c_void) -> *const c_char;
+
+    /// Get file inode number, or 0 if file doesn't exist
+    fn nvim_get_file_inode(fname: *const c_char) -> u64;
+
+    /// Resolve full path (vim_FullName): returns OK(1) on success
+    fn vim_FullName(fname: *const c_char, buf: *mut c_char, len: c_int, force: c_int) -> c_int;
+}
+
+use crate::types::{
+    B0_FNAME_SIZE_CRYPT, B0_HNAME_SIZE, B0_MAGIC_CHAR, B0_MAGIC_INT, B0_MAGIC_LONG, B0_MAGIC_SHORT,
+    B0_UNAME_SIZE, BLOCK0_ID0, BLOCK0_ID1,
+};
+
+/// Native 4-byte check: is b0_magic_wrong?
+///
+/// Returns non-zero if any magic number doesn't match the expected value,
+/// indicating the swap file was created on a system with a different byte order.
+///
+/// # Safety
+/// - `b0` must be a valid pointer to a ZeroBlock
+unsafe fn b0_magic_wrong_native(b0: *const c_void) -> bool {
+    nvim_b0_get_magic_long(b0) != B0_MAGIC_LONG
+        || nvim_b0_get_magic_int(b0) != B0_MAGIC_INT
+        || nvim_b0_get_magic_short(b0) != B0_MAGIC_SHORT
+        || nvim_b0_get_magic_char(b0) != B0_MAGIC_CHAR
+}
+
+/// Native check: does b0 have valid ID bytes?
+///
+/// # Safety
+/// - `b0` must be a valid pointer to a ZeroBlock
+unsafe fn ml_check_b0_id_native(b0: *const c_void) -> bool {
+    nvim_b0_get_id(b0, 0) == BLOCK0_ID0 && nvim_b0_get_id(b0, 1) == BLOCK0_ID1
+}
+
+/// Native check: are all NUL-terminated strings in b0 valid?
+///
+/// # Safety
+/// - `b0` must be a valid pointer to a ZeroBlock
+unsafe fn ml_check_b0_strings_native(b0: *const c_void) -> bool {
+    let version = nvim_b0_get_version_ptr(b0);
+    let version_size = nvim_b0_get_version_size();
+    let uname = nvim_b0_get_uname_ptr(b0);
+    let hname = nvim_b0_get_hname_ptr(b0);
+    let fname = nvim_b0_get_fname_ptr(b0);
+
+    has_nul(version, version_size)
+        && has_nul(uname, B0_UNAME_SIZE)
+        && has_nul(hname, B0_HNAME_SIZE)
+        && has_nul(fname, B0_FNAME_SIZE_CRYPT)
+}
+
+/// Check whether a byte sequence of `len` bytes contains a NUL byte.
+unsafe fn has_nul(ptr: *const c_char, len: usize) -> bool {
+    for i in 0..len {
+        if *ptr.add(i) == 0 {
+            return true;
+        }
+    }
+    false
 }
 
 /// Check if a block 0 has valid identification bytes.
@@ -665,7 +746,7 @@ pub unsafe extern "C" fn rs_ml_check_b0_id(b0: *const c_void) -> c_int {
     if b0.is_null() {
         return 1; // FAIL
     }
-    ml_check_b0_id_c(b0)
+    c_int::from(!ml_check_b0_id_native(b0))
 }
 
 /// Check if block 0 strings are valid (NUL-terminated).
@@ -677,12 +758,12 @@ pub unsafe extern "C" fn rs_ml_check_b0_strings(b0: *const c_void) -> c_int {
     if b0.is_null() {
         return 1; // FAIL
     }
-    ml_check_b0_strings_c(b0)
+    c_int::from(!ml_check_b0_strings_native(b0))
 }
 
 /// Check if block 0 has wrong byte order (magic number check).
 ///
-/// Returns true if the magic numbers don't match expected values,
+/// Returns non-zero if the magic numbers don't match expected values,
 /// indicating the swap file was created on a system with different
 /// byte order.
 ///
@@ -693,94 +774,133 @@ pub unsafe extern "C" fn rs_b0_magic_wrong(b0: *const c_void) -> c_int {
     if b0.is_null() {
         return 1; // true, it's wrong
     }
-    b0_magic_wrong_c(b0)
+    c_int::from(b0_magic_wrong_native(b0))
 }
 
 // =============================================================================
 // Byte Order Utilities
 // =============================================================================
 
-extern "C" {
-    /// Convert long to char array (for swap file)
-    fn long_to_char_c(n: i64, s: *mut c_char);
-
-    /// Convert char array to long (from swap file)
-    fn char_to_long_c(s: *const c_char) -> i64;
-}
-
-/// Convert a long integer to a byte array for swap file storage.
+/// Convert a long integer to a 4-byte array for swap file storage.
 ///
-/// The bytes are stored in a portable format that can be read
-/// regardless of the machine's byte order.
+/// Writes the 4 low bytes of `n` in little-endian order, matching the
+/// C `long_to_char()` behavior (which only encodes 4 bytes).
 ///
 /// # Arguments
-/// * `n` - The number to convert
-/// * `s` - Output buffer (must be at least 8 bytes)
+/// * `n` - The number to convert (only low 32 bits used)
+/// * `s` - Output buffer (must be at least 4 bytes)
 ///
 /// # Safety
-/// - `s` must be a valid buffer of at least 8 bytes
+/// - `s` must be a valid buffer of at least 4 bytes
 #[no_mangle]
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
 pub unsafe extern "C" fn rs_long_to_char(n: i64, s: *mut c_char) {
     if s.is_null() {
         return;
     }
-    long_to_char_c(n, s);
+    // Match C behavior: write 4 bytes, low byte first (little-endian)
+    *s.add(0) = (n & 0xFF) as c_char;
+    *s.add(1) = ((n >> 8) & 0xFF) as c_char;
+    *s.add(2) = ((n >> 16) & 0xFF) as c_char;
+    *s.add(3) = ((n >> 24) & 0xFF) as c_char;
 }
 
-/// Convert a byte array from swap file storage to a long integer.
+/// Convert a 4-byte array from swap file storage to a long integer.
 ///
-/// Reverses the `long_to_char()` operation.
+/// Reverses the `rs_long_to_char()` operation, reading 4 bytes in
+/// little-endian order, matching C `char_to_long()`.
 ///
 /// # Arguments
-/// * `s` - Input buffer (must be at least 8 bytes)
+/// * `s` - Input buffer (must be at least 4 bytes)
 ///
 /// # Returns
 /// The decoded integer value
 ///
 /// # Safety
-/// - `s` must be a valid buffer of at least 8 bytes
+/// - `s` must be a valid buffer of at least 4 bytes
 #[no_mangle]
+#[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_char_to_long(s: *const c_char) -> i64 {
     if s.is_null() {
         return 0;
     }
-    char_to_long_c(s)
+    // Match C behavior: read 4 bytes, little-endian
+    let b0 = *s.add(0) as u8;
+    let b1 = *s.add(1) as u8;
+    let b2 = *s.add(2) as u8;
+    let b3 = *s.add(3) as u8;
+    i64::from(b3) << 24 | i64::from(b2) << 16 | i64::from(b1) << 8 | i64::from(b0)
 }
 
 // =============================================================================
 // File Name Comparison
 // =============================================================================
 
-extern "C" {
-    /// Compare file names considering inode
-    fn fnamecmp_ino_c(fname_c: *const c_char, fname_s: *const c_char, ino_block0: i64) -> c_int;
-}
-
 /// Compare two file names, considering inode number.
 ///
 /// Used during recovery to match the current file with the file
-/// recorded in the swap file's block 0.
+/// recorded in the swap file's block 0.  Returns non-zero if the files
+/// are different (i.e. they do NOT match).
 ///
 /// # Arguments
 /// * `fname_c` - Current file name
 /// * `fname_s` - File name from swap file
-/// * `ino_block0` - Inode from block 0
-///
-/// # Returns
-/// true if files match, false otherwise
+/// * `ino_block0` - Inode stored in block 0
 ///
 /// # Safety
 /// - Both file name pointers must be valid C strings or NULL
 #[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_fnamecmp_ino(
     fname_c: *const c_char,
     fname_s: *const c_char,
     ino_block0: i64,
 ) -> c_int {
     if fname_c.is_null() || fname_s.is_null() {
-        return 0; // false, don't match
+        return 1; // differ = true when pointers invalid
     }
-    fnamecmp_ino_c(fname_c, fname_s, ino_block0)
+
+    // Get inodes for both files
+    let ino_c = nvim_get_file_inode(fname_c);
+    let ino_s_live = nvim_get_file_inode(fname_s);
+    // Use live inode for fname_s if available, fall back to block 0 value
+    #[allow(clippy::cast_sign_loss)]
+    let ino_s: u64 = if ino_s_live != 0 {
+        ino_s_live
+    } else {
+        ino_block0 as u64
+    };
+
+    // Both inodes known: compare directly
+    if ino_c != 0 && ino_s != 0 {
+        return c_int::from(ino_c != ino_s);
+    }
+
+    // Fall back to full path comparison
+    let mut buf_c = [0i8; MAXPATHL];
+    let mut buf_s = [0i8; MAXPATHL];
+    #[allow(clippy::cast_possible_truncation)]
+    let ok_c = vim_FullName(fname_c, buf_c.as_mut_ptr(), MAXPATHL as c_int, 1);
+    #[allow(clippy::cast_possible_truncation)]
+    let ok_s = vim_FullName(fname_s, buf_s.as_mut_ptr(), MAXPATHL as c_int, 1);
+
+    // OK == 1 in Vim (not 0 which would be FAIL)
+    if ok_c == 1 && ok_s == 1 {
+        // Compare the resolved paths
+        return c_int::from(libc_strcmp(buf_c.as_ptr(), buf_s.as_ptr()) != 0);
+    }
+
+    // Both unknown inodes, both full name resolutions failed: compare raw names
+    if ino_s == 0 && ino_c == 0 && ok_c != 1 && ok_s != 1 {
+        return c_int::from(libc_strcmp(fname_c, fname_s) != 0);
+    }
+
+    // Can't determine equivalence; assume different
+    1
 }
 
 // =============================================================================
@@ -808,17 +928,17 @@ pub unsafe extern "C" fn rs_swap_file_recoverable(b0: *const c_void) -> c_int {
     }
 
     // Check ID bytes
-    if ml_check_b0_id_c(b0) != 0 {
+    if !ml_check_b0_id_native(b0) {
         return 0;
     }
 
     // Check strings are valid
-    if ml_check_b0_strings_c(b0) != 0 {
+    if !ml_check_b0_strings_native(b0) {
         return 0;
     }
 
     // Check byte order
-    if b0_magic_wrong_c(b0) != 0 {
+    if b0_magic_wrong_native(b0) {
         return 0;
     }
 

@@ -232,6 +232,13 @@ typedef enum {
 #include "memline_shim.c.generated.h"
 
 extern int rs_get_fileformat(buf_T *buf);
+// Phase 1 Rust function declarations
+extern void rs_long_to_char(long n, char *s);
+extern long rs_char_to_long(const char *s);
+extern int rs_b0_magic_wrong(const ZeroBlock *b0p);
+extern int rs_ml_check_b0_id(const ZeroBlock *b0p);
+extern int rs_ml_check_b0_strings(const ZeroBlock *b0p);
+extern int rs_fnamecmp_ino(const char *fname_c, const char *fname_s, long ino_block0);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -307,7 +314,7 @@ int ml_open(buf_T *buf)
   b0p->b0_magic_short = (int16_t)B0_MAGIC_SHORT;
   b0p->b0_magic_char = B0_MAGIC_CHAR;
   xstrlcpy(xstpcpy(b0p->b0_version, "VIM "), Versions[0], 6);
-  long_to_char((long)mfp->mf_page_size, b0p->b0_page_size);
+  rs_long_to_char((long)mfp->mf_page_size, b0p->b0_page_size);
 
   if (!buf->b_spell) {
     b0p->b0_dirty = buf->b_changed ? B0_DIRTY : 0;
@@ -317,7 +324,7 @@ int ml_open(buf_T *buf)
     b0p->b0_uname[B0_UNAME_SIZE - 1] = NUL;
     os_get_hostname(b0p->b0_hname, B0_HNAME_SIZE);
     b0p->b0_hname[B0_HNAME_SIZE - 1] = NUL;
-    long_to_char((long)os_get_pid(), b0p->b0_pid);
+    rs_long_to_char((long)os_get_pid(), b0p->b0_pid);
   }
 
   // Always sync block number 0 to disk, so we can check the file name in
@@ -590,23 +597,6 @@ void ml_timestamp(buf_T *buf)
   ml_upd_block0(buf, UB_FNAME);
 }
 
-/// Checks whether the IDs in b0 are valid.
-static bool ml_check_b0_id(ZeroBlock *b0p)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return b0p->b0_id[0] == BLOCK0_ID0 && b0p->b0_id[1] == BLOCK0_ID1;
-}
-
-/// Checks whether all strings in b0 are valid (i.e. nul-terminated).
-static bool ml_check_b0_strings(ZeroBlock *b0p)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return (memchr(b0p->b0_version, NUL, 10)
-          && memchr(b0p->b0_uname, NUL, B0_UNAME_SIZE)
-          && memchr(b0p->b0_hname, NUL, B0_HNAME_SIZE)
-          && memchr(b0p->b0_fname, NUL, B0_FNAME_SIZE_CRYPT));
-}
-
 /// Update the timestamp or the B0_SAME_DIR flag of the .swp file.
 static void ml_upd_block0(buf_T *buf, upd_block0_T what)
 {
@@ -617,7 +607,7 @@ static void ml_upd_block0(buf_T *buf, upd_block0_T what)
     return;
   }
   ZeroBlock *b0p = hp->bh_data;
-  if (ml_check_b0_id(b0p) == FAIL) {
+  if (rs_ml_check_b0_id(b0p) != 0) {
     iemsg(_("E304: ml_upd_block0(): Didn't get block 0??"));
   } else {
     if (what == UB_FNAME) {
@@ -660,14 +650,14 @@ static void set_b0_fname(ZeroBlock *b0p, buf_T *buf)
     }
     FileInfo file_info;
     if (os_fileinfo(buf->b_ffname, &file_info)) {
-      long_to_char(file_info.stat.st_mtim.tv_sec, b0p->b0_mtime);
-      long_to_char((long)os_fileinfo_inode(&file_info), b0p->b0_ino);
+      rs_long_to_char(file_info.stat.st_mtim.tv_sec, b0p->b0_mtime);
+      rs_long_to_char((long)os_fileinfo_inode(&file_info), b0p->b0_ino);
       buf_store_file_info(buf, &file_info);
       buf->b_mtime_read = buf->b_mtime;
       buf->b_mtime_read_ns = buf->b_mtime_ns;
     } else {
-      long_to_char(0, b0p->b0_mtime);
-      long_to_char(0, b0p->b0_ino);
+      rs_long_to_char(0, b0p->b0_mtime);
+      rs_long_to_char(0, b0p->b0_ino);
       buf->b_mtime = 0;
       buf->b_mtime_ns = 0;
       buf->b_mtime_read = 0;
@@ -727,7 +717,7 @@ static int swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname)
       && (Timestamp)st.stat.st_mtim.tv_sec < os_time() - (Timestamp)uptime) {
     return 0;
   }
-  int pid = (int)char_to_long(b0p->b0_pid);
+  int pid = (int)rs_char_to_long(b0p->b0_pid);
   return os_proc_running(pid) ? pid : 0;
 }
 
@@ -848,11 +838,11 @@ void ml_recover(bool checkext)
     msg_end();
     goto theend;
   }
-  if (ml_check_b0_id(b0p) == FAIL) {
+  if (rs_ml_check_b0_id(b0p) != 0) {
     semsg(_("E307: %s does not look like a Nvim swap file"), mfp->mf_fname);
     goto theend;
   }
-  if (b0_magic_wrong(b0p)) {
+  if (rs_b0_magic_wrong(b0p)) {
     msg_start();
     msg_outtrans(mfp->mf_fname, hl_id, true);
     msg_puts_hl(_(" cannot be used on this computer.\n"), hl_id, true);
@@ -867,10 +857,10 @@ void ml_recover(bool checkext)
 
   // If we guessed the wrong page size, we have to recalculate the
   // highest block number in the file.
-  if (mfp->mf_page_size != (unsigned)char_to_long(b0p->b0_page_size)) {
+  if (mfp->mf_page_size != (unsigned)rs_char_to_long(b0p->b0_page_size)) {
     unsigned previous_page_size = mfp->mf_page_size;
 
-    mf_new_page_size(mfp, (unsigned)char_to_long(b0p->b0_page_size));
+    mf_new_page_size(mfp, (unsigned)rs_char_to_long(b0p->b0_page_size));
     if (mfp->mf_page_size < previous_page_size) {
       msg_start();
       msg_outtrans(mfp->mf_fname, hl_id, true);
@@ -913,7 +903,7 @@ void ml_recover(bool checkext)
   // check date of swapfile and original file
   FileInfo org_file_info;
   FileInfo swp_file_info;
-  int mtime = (int)char_to_long(b0p->b0_mtime);
+  int mtime = (int)rs_char_to_long(b0p->b0_mtime);
   if (curbuf->b_ffname != NULL
       && os_fileinfo(curbuf->b_ffname, &org_file_info)
       && ((os_fileinfo(mfp->mf_fname, &swp_file_info)
@@ -1191,7 +1181,7 @@ void ml_recover(bool checkext)
       // Warn there could be an active Vim on the same file, the user may
       // want to kill it.
       msg_puts(_("\nNote: process STILL RUNNING: "));
-      msg_outnum((int)char_to_long(b0p->b0_pid));
+      msg_outnum((int)rs_char_to_long(b0p->b0_pid));
     }
     msg_puts("\n\n");
     cmdline_row = msg_row;
@@ -1262,9 +1252,9 @@ void swapfile_dict(const char *fname, dict_T *d)
 
   if ((fd = os_open(fname, O_RDONLY, 0)) >= 0) {
     if (read_eintr(fd, &b0, sizeof(b0)) == sizeof(b0)) {
-      if (ml_check_b0_id(&b0) == FAIL) {
+      if (rs_ml_check_b0_id(&b0) != 0) {
         tv_dict_add_str(d, S_LEN("error"), "Not a swap file");
-      } else if (b0_magic_wrong(&b0)) {
+      } else if (rs_b0_magic_wrong(&b0)) {
         tv_dict_add_str(d, S_LEN("error"), "Magic number mismatch");
       } else {
         // We have swap information.
@@ -1277,9 +1267,9 @@ void swapfile_dict(const char *fname, dict_T *d)
                             B0_FNAME_SIZE_ORG);
 
         tv_dict_add_nr(d, S_LEN("pid"), swapfile_proc_running(&b0, fname));
-        tv_dict_add_nr(d, S_LEN("mtime"), char_to_long(b0.b0_mtime));
+        tv_dict_add_nr(d, S_LEN("mtime"), rs_char_to_long(b0.b0_mtime));
         tv_dict_add_nr(d, S_LEN("dirty"), b0.b0_dirty ? 1 : 0);
-        tv_dict_add_nr(d, S_LEN("inode"), char_to_long(b0.b0_ino));
+        tv_dict_add_nr(d, S_LEN("inode"), rs_char_to_long(b0.b0_ino));
       }
     } else {
       tv_dict_add_str(d, S_LEN("error"), "Cannot read file");
@@ -1327,9 +1317,9 @@ static time_t swapfile_info(char *fname, StringBuilder *msg)
     if (read_eintr(fd, &b0, sizeof(b0)) == sizeof(b0)) {
       if (strncmp(b0.b0_version, "VIM 3.0", 7) == 0) {
         kv_printf(*msg, _("         [from Vim version 3.0]"));
-      } else if (ml_check_b0_id(&b0) == FAIL) {
+      } else if (rs_ml_check_b0_id(&b0) != 0) {
         kv_printf(*msg, _("         [does not look like a Nvim swap file]"));
-      } else if (!ml_check_b0_strings(&b0)) {
+      } else if (rs_ml_check_b0_strings(&b0) != 0) {
         kv_printf(*msg, _("         [garbled strings (not nul terminated)]"));
       } else {
         kv_printf(*msg, _("         file name: "));
@@ -1356,15 +1346,15 @@ static time_t swapfile_info(char *fname, StringBuilder *msg)
           kv_printf(*msg, "%s", b0.b0_hname);
         }
 
-        if (char_to_long(b0.b0_pid) != 0) {
+        if (rs_char_to_long(b0.b0_pid) != 0) {
           kv_printf(*msg, _("\n        process ID: "));
-          kv_printf(*msg, "%d", (int)char_to_long(b0.b0_pid));
+          kv_printf(*msg, "%d", (int)rs_char_to_long(b0.b0_pid));
           if ((proc_running = swapfile_proc_running(&b0, fname))) {
             kv_printf(*msg, _(" (STILL RUNNING)"));
           }
         }
 
-        if (b0_magic_wrong(&b0)) {
+        if (rs_b0_magic_wrong(&b0)) {
           kv_printf(*msg, _("\n         [not usable on this computer]"));
         }
       }
@@ -1403,7 +1393,7 @@ static bool swapfile_unchanged(char *fname)
   bool ret = true;
 
   // the ID and magic number must be correct
-  if (ml_check_b0_id(&b0) == FAIL || b0_magic_wrong(&b0)) {
+  if (rs_ml_check_b0_id(&b0) != 0 || rs_b0_magic_wrong(&b0)) {
     ret = false;
   }
 
@@ -1427,7 +1417,7 @@ static bool swapfile_unchanged(char *fname)
   }
 
   // process must be known and not running.
-  if (char_to_long(b0.b0_pid) == 0 || swapfile_proc_running(&b0, fname)) {
+  if (rs_char_to_long(b0.b0_pid) == 0 || swapfile_proc_running(&b0, fname)) {
     ret = false;
   }
 
@@ -1812,15 +1802,27 @@ colnr_T nvim_buf_get_line_len(void *buf, linenr_T lnum)
   return ml_get_buf_len(b, lnum);
 }
 
-// Block 0 validation wrappers for Rust (static functions need wrappers)
-int ml_check_b0_id_c(ZeroBlock *b0p) { return ml_check_b0_id(b0p) ? 0 : 1; }
-int ml_check_b0_strings_c(ZeroBlock *b0p) { return ml_check_b0_strings(b0p) ? 0 : 1; }
-int b0_magic_wrong_c(ZeroBlock *b0p) { return b0_magic_wrong(b0p); }
-bool fnamecmp_ino_c(char *fname_c, char *fname_s, long ino_block0) {
-  return fnamecmp_ino(fname_c, fname_s, ino_block0);
+// ZeroBlock field accessors for Rust FFI (Phase 1 migration)
+int64_t nvim_b0_get_magic_long(const ZeroBlock *b0p) { return (int64_t)b0p->b0_magic_long; }
+int32_t nvim_b0_get_magic_int(const ZeroBlock *b0p) { return (int32_t)b0p->b0_magic_int; }
+int16_t nvim_b0_get_magic_short(const ZeroBlock *b0p) { return b0p->b0_magic_short; }
+uint8_t nvim_b0_get_magic_char(const ZeroBlock *b0p) { return (uint8_t)b0p->b0_magic_char; }
+uint8_t nvim_b0_get_id(const ZeroBlock *b0p, int idx) { return (uint8_t)b0p->b0_id[idx]; }
+const char *nvim_b0_get_version_ptr(const ZeroBlock *b0p) { return b0p->b0_version; }
+size_t nvim_b0_get_version_size(void) { return sizeof(((ZeroBlock *)NULL)->b0_version); }
+const char *nvim_b0_get_uname_ptr(const ZeroBlock *b0p) { return b0p->b0_uname; }
+const char *nvim_b0_get_hname_ptr(const ZeroBlock *b0p) { return b0p->b0_hname; }
+const char *nvim_b0_get_fname_ptr(const ZeroBlock *b0p) { return b0p->b0_fname; }
+
+// File inode accessor for fnamecmp_ino native Rust implementation
+uint64_t nvim_get_file_inode(const char *fname)
+{
+  FileInfo file_info;
+  if (os_fileinfo(fname, &file_info)) {
+    return os_fileinfo_inode(&file_info);
+  }
+  return 0;
 }
-void long_to_char_c(long n, char *s) { long_to_char(n, s); }
-long char_to_long_c(const char *s) { return char_to_long(s); }
 
 /// @param lnum  append after this line (can be 0)
 /// @param line_arg  text of the new line
@@ -3348,16 +3350,16 @@ static char *findswapname(buf_T *buf, char **dirp, char *old_fname, bool *found_
                 // when the name differs, need to check the
                 // inode too.
                 expand_env(b0.b0_fname, NameBuff, MAXPATHL);
-                if (fnamecmp_ino(buf->b_ffname, NameBuff,
-                                 char_to_long(b0.b0_ino))) {
+                if (rs_fnamecmp_ino(buf->b_ffname, NameBuff,
+                                    rs_char_to_long(b0.b0_ino))) {
                   differ = true;
                 }
               }
             } else {
               // The name in the swapfile may be "~user/path/file".  Expand it first.
               expand_env(b0.b0_fname, NameBuff, MAXPATHL);
-              if (fnamecmp_ino(buf->b_ffname, NameBuff,
-                               char_to_long(b0.b0_ino))) {
+              if (rs_fnamecmp_ino(buf->b_ffname, NameBuff,
+                                  rs_char_to_long(b0.b0_ino))) {
                 differ = true;
               }
             }
@@ -3501,135 +3503,6 @@ static char *findswapname(buf_T *buf, char **dirp, char *old_fname, bool *found_
 
   xfree(dir_name);
   return fname;
-}
-
-static int b0_magic_wrong(ZeroBlock *b0p)
-{
-  return b0p->b0_magic_long != B0_MAGIC_LONG
-         || b0p->b0_magic_int != B0_MAGIC_INT
-         || b0p->b0_magic_short != (int16_t)B0_MAGIC_SHORT
-         || b0p->b0_magic_char != B0_MAGIC_CHAR;
-}
-
-/// Compare current file name with file name from swapfile.
-/// Try to use inode numbers when possible.
-/// Return non-zero when files are different.
-///
-/// When comparing file names a few things have to be taken into consideration:
-/// - When working over a network the full path of a file depends on the host.
-///   We check the inode number if possible.  It is not 100% reliable though,
-///   because the device number cannot be used over a network.
-/// - When a file does not exist yet (editing a new file) there is no inode
-///   number.
-/// - The file name in a swapfile may not be valid on the current host.  The
-///   "~user" form is used whenever possible to avoid this.
-///
-/// This is getting complicated, let's make a table:
-///
-///              ino_c  ino_s  fname_c  fname_s  differ =
-///
-/// both files exist -> compare inode numbers:
-///              != 0   != 0     X        X      ino_c != ino_s
-///
-/// inode number(s) unknown, file names available -> compare file names
-///              == 0    X       OK       OK     fname_c != fname_s
-///               X     == 0     OK       OK     fname_c != fname_s
-///
-/// current file doesn't exist, file for swapfile exist, file name(s) not
-/// available -> probably different
-///              == 0   != 0    FAIL      X      true
-///              == 0   != 0     X       FAIL    true
-///
-/// current file exists, inode for swap unknown, file name(s) not
-/// available -> probably different
-///              != 0   == 0    FAIL      X      true
-///              != 0   == 0     X       FAIL    true
-///
-/// current file doesn't exist, inode for swap unknown, one file name not
-/// available -> probably different
-///              == 0   == 0    FAIL      OK     true
-///              == 0   == 0     OK      FAIL    true
-///
-/// current file doesn't exist, inode for swap unknown, both file names not
-/// available -> compare file names
-///              == 0   == 0    FAIL     FAIL    fname_c != fname_s
-///
-/// Only the last 32 bits of the inode will be used. This can't be changed
-/// without making the block 0 incompatible with 32 bit versions.
-///
-/// @param fname_c  current file name
-/// @param fname_s  file name from swapfile
-static bool fnamecmp_ino(char *fname_c, char *fname_s, long ino_block0)
-{
-  uint64_t ino_c = 0;               // ino of current file
-  uint64_t ino_s;                   // ino of file from swapfile
-  char buf_c[MAXPATHL];             // full path of fname_c
-  char buf_s[MAXPATHL];             // full path of fname_s
-  int retval_c;                     // flag: buf_c valid
-  int retval_s;                     // flag: buf_s valid
-
-  FileInfo file_info;
-  if (os_fileinfo(fname_c, &file_info)) {
-    ino_c = os_fileinfo_inode(&file_info);
-  }
-
-  // First we try to get the inode from the file name, because the inode in
-  // the swapfile may be outdated.  If that fails (e.g. this path is not
-  // valid on this machine), use the inode from block 0.
-  if (os_fileinfo(fname_s, &file_info)) {
-    ino_s = os_fileinfo_inode(&file_info);
-  } else {
-    ino_s = (uint64_t)ino_block0;
-  }
-
-  if (ino_c && ino_s) {
-    return ino_c != ino_s;
-  }
-
-  // One of the inode numbers is unknown, try a forced vim_FullName() and
-  // compare the file names.
-  retval_c = vim_FullName(fname_c, buf_c, MAXPATHL, true);
-  retval_s = vim_FullName(fname_s, buf_s, MAXPATHL, true);
-  if (retval_c == OK && retval_s == OK) {
-    return strcmp(buf_c, buf_s) != 0;
-  }
-
-  // Can't compare inodes or file names, guess that the files are different,
-  // unless both appear not to exist at all, then compare with the file name
-  // in the swapfile.
-  if (ino_s == 0 && ino_c == 0 && retval_c == FAIL && retval_s == FAIL) {
-    return strcmp(fname_c, fname_s) != 0;
-  }
-  return true;
-}
-
-/// Move a long integer into a four byte character array.
-/// Used for machine independency in block zero.
-static void long_to_char(long n, char *s_in)
-{
-  uint8_t *s = (uint8_t *)s_in;
-  s[0] = (uint8_t)(n & 0xff);
-  n = (unsigned)n >> 8;
-  s[1] = (uint8_t)(n & 0xff);
-  n = (unsigned)n >> 8;
-  s[2] = (uint8_t)(n & 0xff);
-  n = (unsigned)n >> 8;
-  s[3] = (uint8_t)(n & 0xff);
-}
-
-static long char_to_long(const char *s_in)
-{
-  const uint8_t *s = (uint8_t *)s_in;
-
-  long retval = s[3];
-  retval <<= 8;
-  retval |= s[2];
-  retval <<= 8;
-  retval |= s[1];
-  retval <<= 8;
-  retval |= s[0];
-
-  return retval;
 }
 
 /// Set the flags in the first block of the swapfile:
