@@ -575,6 +575,12 @@ extern int rs_eval_expr_typval(const typval_T *expr, bool want_func, typval_T *a
                                typval_T *rettv);
 extern bool rs_eval_expr_to_bool(const typval_T *expr, bool *error);
 
+// Rust implementations for Phase 1 (eval_shim pass 4, eval_exec crate)
+extern int rs_call_func_rettv(char **arg, evalarg_T *evalarg, typval_T *rettv, bool evaluate,
+                              void *selfdict, typval_T *basetv, const char *lua_funcname);
+extern int rs_eval_lambda(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
+extern int rs_eval1_emsg(char **arg, typval_T *rettv, exarg_T *eap);
+
 // Rust implementations for Phase 3 (in eval crate, indexing module)
 extern bool rs_var2fpos(const typval_T *tv, bool dollar_lnum, int *ret_fnum, bool charcol,
                         pos_T *out);
@@ -592,32 +598,7 @@ bool eval_to_bool(char *arg, bool *error, exarg_T *eap, const bool skip,
   return rs_eval_to_bool(arg, error, eap, skip, use_simple_function);
 }
 
-/// Call eval1() and give an error message if not done at a lower level.
-static int eval1_emsg(char **arg, typval_T *rettv, exarg_T *eap)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  const char *const start = *arg;
-  const int did_emsg_before = did_emsg;
-  const int called_emsg_before = called_emsg;
-  evalarg_T evalarg;
-
-  fill_evalarg_from_eap(&evalarg, eap, eap != NULL && eap->skip);
-
-  const int ret = eval1(arg, rettv, &evalarg);
-  if (ret == FAIL) {
-    // Report the invalid expression unless the expression evaluation has
-    // been cancelled due to an aborting error, an interrupt, or an
-    // exception, or we already gave a more specific error.
-    // Also check called_emsg for when using assert_fails().
-    if (!aborting()
-        && did_emsg == did_emsg_before
-        && called_emsg == called_emsg_before) {
-      semsg(_(e_invexpr2), start);
-    }
-  }
-  clear_evalarg(&evalarg, eap);
-  return ret;
-}
+// eval1_emsg migrated to Rust (rs_eval1_emsg in eval_exec crate, eval.rs).
 
 /// Evaluate an expression, which can be a function, partial or string.
 /// Pass arguments "argv[argc]".
@@ -1339,108 +1320,9 @@ int eval6(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool want_strin
 }
 
 // eval7 and eval7_leader migrated to Rust (rs_eval7 in eval_exec crate).
+// call_func_rettv migrated to Rust (rs_call_func_rettv in eval_exec crate, eval.rs).
 
-/// Call the function referred to in "rettv".
-/// @param lua_funcname  If `rettv` refers to a v:lua function, this must point
-///                      to the name of the Lua function to call (after the
-///                      "v:lua." prefix).
-/// @return  OK on success, FAIL on failure.
-static int call_func_rettv(char **const arg, evalarg_T *const evalarg, typval_T *const rettv,
-                           const bool evaluate, dict_T *const selfdict, typval_T *const basetv,
-                           const char *const lua_funcname)
-  FUNC_ATTR_NONNULL_ARG(1, 3)
-{
-  partial_T *pt = NULL;
-  typval_T functv;
-  const char *funcname;
-  bool is_lua = false;
-  int ret;
-
-  // need to copy the funcref so that we can clear rettv
-  if (evaluate) {
-    functv = *rettv;
-    rettv->v_type = VAR_UNKNOWN;
-
-    // Invoke the function.  Recursive!
-    if (functv.v_type == VAR_PARTIAL) {
-      pt = functv.vval.v_partial;
-      is_lua = rs_is_luafunc(pt);
-      funcname = is_lua ? lua_funcname : rs_partial_name(pt);
-    } else {
-      funcname = functv.vval.v_string;
-      if (funcname == NULL || *funcname == NUL) {
-        emsg(_(e_empty_function_name));
-        ret = FAIL;
-        goto theend;
-      }
-    }
-  } else {
-    funcname = "";
-  }
-
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_firstline = curwin->w_cursor.lnum;
-  funcexe.fe_lastline = curwin->w_cursor.lnum;
-  funcexe.fe_evaluate = evaluate;
-  funcexe.fe_partial = pt;
-  funcexe.fe_selfdict = selfdict;
-  funcexe.fe_basetv = basetv;
-  ret = get_func_tv(funcname, is_lua ? (int)(*arg - funcname) : -1, rettv,
-                    arg, evalarg, &funcexe);
-
-theend:
-  // Clear the funcref afterwards, so that deleting it while
-  // evaluating the arguments is possible (see test55).
-  if (evaluate) {
-    tv_clear(&functv);
-  }
-
-  return ret;
-}
-
-/// Evaluate "->method()".
-///
-/// @param verbose  if true, give error messages.
-/// @param *arg     points to the '-'.
-///
-/// @return  FAIL or OK.
-///
-/// @note "*arg" is advanced to after the ')'.
-static int eval_lambda(char **const arg, typval_T *const rettv, evalarg_T *const evalarg,
-                       const bool verbose)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  const bool evaluate = evalarg != NULL && (evalarg->eval_flags & EVAL_EVALUATE);
-  // Skip over the ->.
-  *arg += 2;
-  typval_T base = *rettv;
-  rettv->v_type = VAR_UNKNOWN;
-
-  int ret = get_lambda_tv(arg, rettv, evalarg);
-  if (ret != OK) {
-    return FAIL;
-  } else if (**arg != '(') {
-    if (verbose) {
-      if (*skipwhite(*arg) == '(') {
-        emsg(_(e_nowhitespace));
-      } else {
-        semsg(_(e_missingparen), "lambda");
-      }
-    }
-    tv_clear(rettv);
-    ret = FAIL;
-  } else {
-    ret = call_func_rettv(arg, evalarg, rettv, evaluate, NULL, &base, NULL);
-  }
-
-  // Clear the funcref afterwards, so that deleting it while
-  // evaluating the arguments is possible (see test55).
-  if (evaluate) {
-    tv_clear(&base);
-  }
-
-  return ret;
-}
+// eval_lambda migrated to Rust (rs_eval_lambda in eval_exec crate, eval.rs).
 
 /// Evaluate "->method()" or "->v:lua.method()".
 ///
@@ -3831,11 +3713,11 @@ void nvim_tv_set_partial_raw(typval_T *tv, partial_T *pt)
   tv->vval.v_partial = pt;
 }
 
-/// Non-static wrapper for call_func_rettv with selfdict=NULL - accessor for Rust rs_eval_method.
+/// Thin wrapper for rs_call_func_rettv with selfdict=NULL - accessor for Rust rs_eval_method.
 int nvim_call_func_rettv_wrapper(char **arg, evalarg_T *evalarg, typval_T *rettv, bool evaluate,
                                  typval_T *basetv, const char *lua_funcname)
 {
-  return call_func_rettv(arg, evalarg, rettv, evaluate, NULL, basetv, lua_funcname);
+  return rs_call_func_rettv(arg, evalarg, rettv, evaluate, NULL, basetv, lua_funcname);
 }
 
 /// Non-static wrapper for rs_eval7 - accessor for Rust rs_eval_method.
@@ -4141,18 +4023,18 @@ void nvim_dict_unref(dict_T *dict)
   tv_dict_unref(dict);
 }
 
-/// Non-static wrapper for call_func_rettv with selfdict - accessor for Rust rs_handle_subscript.
+/// Thin wrapper for rs_call_func_rettv with selfdict - accessor for Rust rs_handle_subscript.
 int nvim_call_func_rettv_with_selfdict(char **arg, evalarg_T *evalarg, typval_T *rettv,
                                        bool evaluate, dict_T *selfdict,
                                        const char *lua_funcname)
 {
-  return call_func_rettv(arg, evalarg, rettv, evaluate, selfdict, NULL, lua_funcname);
+  return rs_call_func_rettv(arg, evalarg, rettv, evaluate, selfdict, NULL, lua_funcname);
 }
 
-/// Non-static wrapper for eval_lambda - accessor for Rust rs_handle_subscript.
+/// Thin wrapper for rs_eval_lambda - accessor for Rust rs_handle_subscript.
 int nvim_eval_lambda_wrapper(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose)
 {
-  return eval_lambda(arg, rettv, evalarg, verbose);
+  return rs_eval_lambda(arg, rettv, evalarg, verbose);
 }
 
 /// make_partial wrapper - accessor for Rust rs_handle_subscript.
@@ -4220,10 +4102,10 @@ void nvim_evalarg_clear_and_free(evalarg_T *ea, exarg_T *eap)
   xfree(ea);
 }
 
-/// Non-static wrapper for eval1_emsg.
+/// Non-static wrapper for eval1_emsg -- now delegates to Rust rs_eval1_emsg.
 int nvim_eval1_emsg_wrapper(char **arg, typval_T *rettv, exarg_T *eap)
 {
-  return eval1_emsg(arg, rettv, eap);
+  return rs_eval1_emsg(arg, rettv, eap);
 }
 
 /// encode_tv2echo wrapper - accessor for Rust.
@@ -4629,4 +4511,63 @@ int nvim_get_cursor_line_charlen(void)
   return mb_charlen(get_cursor_line_ptr());
 }
 
+// =============================================================================
+// Phase 1 (eval_shim pass 4): C accessors for rs_call_func_rettv / rs_eval_lambda
+// =============================================================================
+
+/// Construct funcexe_T with selfdict and call get_func_tv.
+/// Used by rs_call_func_rettv to handle both selfdict and non-selfdict cases.
+int nvim_call_func_tv_with_selfdict(char *name, int len, typval_T *rettv, char **arg,
+                                    evalarg_T *evalarg, bool evaluate,
+                                    partial_T *pt, dict_T *selfdict, typval_T *basetv,
+                                    linenr_T lnum)
+{
+  funcexe_T funcexe = FUNCEXE_INIT;
+  funcexe.fe_firstline = lnum;
+  funcexe.fe_lastline = lnum;
+  funcexe.fe_evaluate = evaluate;
+  funcexe.fe_partial = pt;
+  funcexe.fe_selfdict = selfdict;
+  funcexe.fe_basetv = basetv;
+  return get_func_tv(name, len, rettv, arg, evalarg, &funcexe);
+}
+
+/// Wrap get_lambda_tv for Rust rs_eval_lambda.
+int nvim_get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg)
+{
+  return get_lambda_tv(arg, rettv, evalarg);
+}
+
+/// Emit "E274: No white space allowed before parenthesis" error.
+void nvim_emsg_e_nowhitespace(void)
+{
+  emsg(_(e_nowhitespace));
+}
+
+/// Emit "E15: Invalid expression: %s" with semsg.
+void nvim_semsg_e_missingparen(const char *name)
+{
+  semsg(_(e_missingparen), name);
+}
+
+/// Get vval.v_string from a const typval - accessor for rs_call_func_rettv.
+const char *nvim_tv_get_vstring_ro(const typval_T *tv)
+{
+  return tv->vval.v_string;
+}
+
+/// Emit "E117: Unknown function" / empty function name error.
+void nvim_emsg_e_empty_function_name(void)
+{
+  emsg(_(e_empty_function_name));
+}
+
+/// Raw-copy a typval_T by value from src to dst (memcpy of sizeof(typval_T)).
+/// Sets src->v_type to VAR_UNKNOWN after the copy.
+/// Used by rs_call_func_rettv to implement `functv = *rettv; rettv->v_type = VAR_UNKNOWN`.
+void nvim_tv_raw_copy_and_reset(typval_T *dst, typval_T *src)
+{
+  *dst = *src;
+  src->v_type = VAR_UNKNOWN;
+}
 

@@ -119,6 +119,11 @@ extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn nvim_semsg_invexpr2(p: *const c_char);
     fn nvim_eap_get_skip_local(eap: ExargHandle) -> c_int;
+
+    // Error globals
+    fn aborting() -> c_int;
+    fn did_emsg_get() -> c_int;
+    fn called_emsg_get() -> c_int;
 }
 
 // eval_to_string delegates to rs_eval_to_string (defined here) -- but eval_to_string_safe
@@ -502,7 +507,7 @@ pub unsafe extern "C" fn rs_skip_expr(pp: *mut *mut c_char, evalarg: EvalargHand
 
 /// Call eval1() and give an error message if not done at a lower level.
 ///
-/// Equivalent to C `eval1_emsg`.
+/// Equivalent to C `eval1_emsg`. Real implementation (no longer delegates to C).
 ///
 /// # Safety
 /// - `arg` must be a valid pointer to a mutable C string pointer.
@@ -514,7 +519,24 @@ pub unsafe extern "C" fn rs_eval1_emsg(
     rettv: TypevalHandle,
     eap: ExargHandle,
 ) -> c_int {
-    nvim_eval1_emsg_wrapper(arg, rettv, eap)
+    let start = *arg;
+    let did_emsg_before = did_emsg_get();
+    let called_emsg_before = called_emsg_get();
+
+    let skip = !eap.is_null() && nvim_eap_get_skip_local(eap) != 0;
+    let evalarg = nvim_evalarg_alloc_from_eap(eap, skip);
+
+    let ret = rs_eval1(arg, rettv, evalarg);
+    if ret == FAIL
+        && aborting() == 0
+        && did_emsg_get() == did_emsg_before
+        && called_emsg_get() == called_emsg_before
+    {
+        nvim_semsg_invexpr2(start);
+    }
+
+    nvim_evalarg_clear_and_free(evalarg, eap);
+    ret
 }
 
 /// Evaluate an expression which can be a function, partial or string.

@@ -3274,6 +3274,235 @@ pub unsafe extern "C" fn rs_handle_subscript(
 }
 
 // =============================================================================
+// Phase 1 (eval_shim pass 4): call_func_rettv + eval_lambda + eval1_emsg
+// =============================================================================
+
+extern "C" {
+    // rs_is_luafunc from eval crate
+    fn rs_is_luafunc(pt: *const c_void) -> bool;
+
+    // New accessor: get_func_tv with selfdict support
+    fn nvim_call_func_tv_with_selfdict(
+        name: *mut c_char,
+        len: c_int,
+        rettv: TypevalHandle,
+        arg: *mut *mut c_char,
+        evalarg: EvalargHandle,
+        evaluate: bool,
+        pt: *mut c_void,       // partial_T*
+        selfdict: *mut c_void, // dict_T*
+        basetv: TypevalHandle,
+        lnum: i32,
+    ) -> c_int;
+    // Wrap get_lambda_tv
+    fn nvim_get_lambda_tv(
+        arg: *mut *mut c_char,
+        rettv: TypevalHandle,
+        evalarg: EvalargHandle,
+    ) -> c_int;
+    // Emit e_nowhitespace
+    fn nvim_emsg_e_nowhitespace();
+    // semsg e_missingparen
+    fn nvim_semsg_e_missingparen(name: *const c_char);
+    // Get vval.v_string read-only
+    fn nvim_tv_get_vstring_ro(tv: TypevalHandle) -> *const c_char;
+    // Emit e_empty_function_name
+    fn nvim_emsg_e_empty_function_name();
+    // Raw copy typval bytes from src to dst, sets src type to VAR_UNKNOWN
+    fn nvim_tv_raw_copy_and_reset(dst: TypevalHandle, src: TypevalHandle);
+}
+
+/// Implementation of call_func_rettv: invoke a funcref/partial stored in rettv.
+///
+/// Equivalent to the C `call_func_rettv` static function in eval_shim.c.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer (NONNULL)
+/// - `rettv` must be a valid typval handle (NONNULL)
+/// - `evalarg` may be null
+/// - `selfdict` may be null
+/// - `basetv` may be null
+/// - `lua_funcname` may be null
+unsafe fn call_func_rettv_impl(
+    arg: *mut *mut c_char,
+    evalarg: EvalargHandle,
+    rettv: TypevalHandle,
+    evaluate: bool,
+    selfdict: *mut c_void,
+    basetv: TypevalHandle,
+    lua_funcname: *const c_char,
+) -> c_int {
+    let mut pt: *mut c_void = std::ptr::null_mut();
+    let mut is_lua = false;
+
+    // Allocate a temporary typval for saving rettv contents
+    let functv = alloc_typval();
+
+    let funcname: *const c_char;
+    if evaluate {
+        // Copy *rettv into functv, then reset rettv to VAR_UNKNOWN
+        nvim_tv_raw_copy_and_reset(functv, rettv);
+
+        let tv_type = nvim_tv_get_type(functv);
+        if tv_type == VAR_PARTIAL {
+            pt = nvim_tv_get_partial(functv);
+            is_lua = rs_is_luafunc(pt);
+            funcname = if is_lua {
+                lua_funcname
+            } else {
+                rs_partial_name(pt) as *const c_char
+            };
+        } else {
+            let vstr = nvim_tv_get_vstring_ro(functv);
+            if vstr.is_null() || *vstr == 0 {
+                nvim_emsg_e_empty_function_name();
+                // jump to theend
+                tv_clear(functv);
+                free_typval(functv);
+                return FAIL;
+            }
+            funcname = vstr;
+        }
+    } else {
+        // Not evaluating: use empty string as funcname
+        funcname = c"".as_ptr();
+    }
+
+    let lnum = nvim_curwin_get_cursor_lnum();
+    let name_len: c_int = if is_lua {
+        // lua funcname length: from funcname to current *arg
+        ((*arg as usize).wrapping_sub(funcname as usize)) as c_int
+    } else {
+        -1
+    };
+
+    let ret = nvim_call_func_tv_with_selfdict(
+        funcname as *mut c_char,
+        name_len,
+        rettv,
+        arg,
+        evalarg,
+        evaluate,
+        pt,
+        selfdict,
+        basetv,
+        lnum,
+    );
+
+    // theend: clear the saved funcref
+    if evaluate {
+        tv_clear(functv);
+    }
+    free_typval(functv);
+
+    ret
+}
+
+/// FFI export for call_func_rettv (selfdict=NULL, basetv provided).
+///
+/// Replaces `nvim_call_func_rettv_wrapper` (selfdict=NULL variant).
+///
+/// # Safety
+/// See `call_func_rettv_impl`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_call_func_rettv(
+    arg: *mut *mut c_char,
+    evalarg: EvalargHandle,
+    rettv: TypevalHandle,
+    evaluate: bool,
+    selfdict: *mut c_void,
+    basetv: TypevalHandle,
+    lua_funcname: *const c_char,
+) -> c_int {
+    call_func_rettv_impl(
+        arg,
+        evalarg,
+        rettv,
+        evaluate,
+        selfdict,
+        basetv,
+        lua_funcname,
+    )
+}
+
+/// Error message: "lambda"
+static E_LAMBDA_NAME: &[u8] = b"lambda\0";
+
+/// Implementation of eval_lambda: evaluate "->{ ... }()".
+///
+/// Equivalent to the C `eval_lambda` static function in eval_shim.c.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer (NONNULL)
+/// - `rettv` must be a valid typval handle (NONNULL)
+/// - `evalarg` may be null
+unsafe fn eval_lambda_impl(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+    verbose: bool,
+) -> c_int {
+    let evaluate = !evalarg.is_null() && (evalarg_get_flags(evalarg) & EVAL_EVALUATE) != 0;
+
+    // Skip over the ->
+    *arg = (*arg).add(2);
+
+    // Save base typval and reset rettv
+    let base = alloc_typval();
+    nvim_tv_raw_copy_and_reset(base, rettv);
+
+    let ret;
+    let lambda_ret = nvim_get_lambda_tv(arg, rettv, evalarg);
+    if lambda_ret != OK {
+        ret = FAIL;
+    } else if get_byte(*arg) != b'(' {
+        if verbose {
+            if get_byte(skipwhite(*arg)) == b'(' {
+                nvim_emsg_e_nowhitespace();
+            } else {
+                nvim_semsg_e_missingparen(E_LAMBDA_NAME.as_ptr() as *const c_char);
+            }
+        }
+        tv_clear(rettv);
+        ret = FAIL;
+    } else {
+        ret = call_func_rettv_impl(
+            arg,
+            evalarg,
+            rettv,
+            evaluate,
+            std::ptr::null_mut(),
+            base,
+            std::ptr::null(),
+        );
+    }
+
+    // Clear the funcref afterwards
+    if evaluate {
+        tv_clear(base);
+    }
+    free_typval(base);
+
+    ret
+}
+
+/// FFI export for eval_lambda.
+///
+/// # Safety
+/// See `eval_lambda_impl`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_lambda(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+    verbose: bool,
+) -> c_int {
+    eval_lambda_impl(arg, rettv, evalarg, verbose)
+}
+
+// eval1_emsg implementation is in eval_top.rs (rs_eval1_emsg).
+
+// =============================================================================
 // Tests
 // =============================================================================
 
