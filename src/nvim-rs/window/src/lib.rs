@@ -26,6 +26,7 @@
 //! - [`state_validation`]: Cursor line number validation (check_lnums/reset_lnums)
 //! - [`statusline`]: Status line and window bar (placeholder)
 //! - [`tabpage`]: Tab page management operations
+//! - [`utility`]: Small utility and validation helpers (check_can_set_curbuf_*, check_split_disallowed, make_windows)
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(dead_code)] // Some FFI declarations are pre-declared for future use
@@ -54,6 +55,7 @@ pub mod state;
 pub mod state_validation;
 pub mod statusline;
 pub mod tabpage;
+pub mod utility;
 
 use std::ffi::{c_char, c_int};
 

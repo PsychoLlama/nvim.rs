@@ -193,6 +193,14 @@ extern void rs_make_snapshot(int idx);
 extern int rs_check_snapshot_rec(frame_T *sn, frame_T *fr);
 extern win_T *rs_restore_snapshot_rec(frame_T *sn, frame_T *fr);
 
+// Phase 1: Utility and validation helpers
+extern bool rs_check_can_set_curbuf_disabled(void);
+extern bool rs_check_can_set_curbuf_forceit(int forceit);
+extern win_T *rs_prevwin_curwin(void);
+extern int rs_check_split_disallowed(win_T *wp);
+extern int rs_get_maximum_wincount(frame_T *fr, int height);
+extern int rs_make_windows(int count, int vertical);
+
 // Status line management
 extern void rs_last_status(int morewin);
 extern int rs_resize_frame_for_winbar(frame_T *fr);
@@ -552,12 +560,7 @@ static int split_disallowed = 0;
 /// @return If the window has 'winfixbuf', or this function will return false.
 bool check_can_set_curbuf_disabled(void)
 {
-  if (curwin->w_p_wfb) {
-    emsg(_(e_winfixbuf_cannot_go_to_buffer));
-    return false;
-  }
-
-  return true;
+  return rs_check_can_set_curbuf_disabled();
 }
 
 /// Check if the current window is allowed to move to a different buffer.
@@ -568,12 +571,7 @@ bool check_can_set_curbuf_disabled(void)
 ///     or this function will return false.
 bool check_can_set_curbuf_forceit(int forceit)
 {
-  if (!forceit && curwin->w_p_wfb) {
-    emsg(_(e_winfixbuf_cannot_go_to_buffer));
-    return false;
-  }
-
-  return true;
+  return rs_check_can_set_curbuf_forceit(forceit);
 }
 
 /// @return the current window, unless in the cmdline window and "prevwin" is
@@ -581,8 +579,7 @@ bool check_can_set_curbuf_forceit(int forceit)
 win_T *prevwin_curwin(void)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  // In cmdwin, the alternative buffer should be used.
-  return is_in_cmdwin() && prevwin != NULL ? prevwin : curwin;
+  return rs_prevwin_curwin();
 }
 
 /// If the 'switchbuf' option contains "useopen" or "usetab", then try to jump
@@ -761,13 +758,7 @@ void ui_ext_win_viewport(win_T *wp)
 int check_split_disallowed(const win_T *wp)
   FUNC_ATTR_NONNULL_ALL
 {
-  Error err = ERROR_INIT;
-  const bool ok = check_split_disallowed_err(wp, &err);
-  if (ERROR_SET(&err)) {
-    emsg(_(err.msg));
-    api_clear_error(&err);
-  }
-  return ok ? OK : FAIL;
+  return rs_check_split_disallowed((win_T *)wp);
 }
 
 /// Like `check_split_disallowed`, but set `err` to the (untranslated) error message on failure and
@@ -961,34 +952,7 @@ static void win_init_some(win_T *newp, win_T *oldp)
 /// @return actual number of windows on the screen.
 int make_windows(int count, bool vertical)
 {
-  // Calculate maximum number of windows using Rust helper
-  int maxcount = rs_split_max_windows(vertical);
-  count = MIN(count, maxcount);
-
-  // add status line now, otherwise first window will be too big
-  if (count > 1) {
-    rs_last_status(1);
-  }
-
-  // Don't execute autocommands while creating the windows.  Must do that
-  // when putting the buffers in the windows.
-  block_autocmds();
-
-  int todo;
-  int flags = rs_split_make_windows_flags(vertical);
-
-  // todo is number of windows left to create
-  for (todo = count - 1; todo > 0; todo--) {
-    int split_size = rs_split_iteration_size(vertical, todo);
-    if (win_split(split_size, flags) == FAIL) {
-      break;
-    }
-  }
-
-  unblock_autocmds();
-
-  // return actual number of windows
-  return count - todo;
+  return rs_make_windows(count, vertical ? 1 : 0);
 }
 
 // Exchange current and next window — implemented in Rust (rs_win_exchange).
@@ -1069,32 +1033,7 @@ void win_move_after(win_T *win1, win_T *win2)
 /// Compute maximum number of windows that can fit within "height" in frame "fr".
 static int get_maximum_wincount(frame_T *fr, int height)
 {
-  if (fr->fr_layout != FR_COL) {
-    return (height / ((int)p_wmh + STATUS_HEIGHT + rs_frame2win(fr)->w_winbar_height));
-  } else if (rs_global_winbar_height()) {
-    // If winbar is globally enabled, no need to check each window for it.
-    return (height / ((int)p_wmh + STATUS_HEIGHT + 1));
-  }
-
-  frame_T *frp;
-  int total_wincount = 0;
-
-  // First, try to fit all child frames of "fr" into "height"
-  FOR_ALL_FRAMES(frp, fr->fr_child) {
-    win_T *wp = rs_frame2win(frp);
-
-    if (height < (p_wmh + STATUS_HEIGHT + wp->w_winbar_height)) {
-      break;
-    }
-    height -= (int)p_wmh + STATUS_HEIGHT + wp->w_winbar_height;
-    total_wincount += 1;
-  }
-
-  // If we still have enough room for more windows, just use the default winbar height (which is 0)
-  // in order to get the amount of windows that'd fit in the remaining space
-  total_wincount += height / ((int)p_wmh + STATUS_HEIGHT);
-
-  return total_wincount;
+  return rs_get_maximum_wincount(fr, height);
 }
 
 void leaving_window(win_T *const win) { rs_leaving_window(win); }
@@ -3613,6 +3552,14 @@ int nvim_do_cmdline_cmd_wrapper(const char *cmd) { return do_cmdline_cmd(cmd); }
 void nvim_emsg_e_cmdwin(void) { emsg(_(e_cmdwin)); }
 int nvim_bt_quickfix_curbuf(void) { return bt_quickfix(curbuf) ? 1 : 0; }
 void nvim_msg_onlyone(void) { msg(_(m_onlyone), 0); }
+
+// Phase 1 accessors: curbuf/winfixbuf, split_disallowed, cmdwin state
+int nvim_get_curwin_p_wfb(void) { return curwin->w_p_wfb ? 1 : 0; }
+void nvim_emsg_e_winfixbuf(void) { emsg(_(e_winfixbuf_cannot_go_to_buffer)); }
+int nvim_get_split_disallowed(void) { return split_disallowed; }
+int nvim_win_buf_locked_split(win_T *wp) { return wp->w_buffer->b_locked_split ? 1 : 0; }
+void nvim_emsg_e242(void) { emsg(_("E242: Can't split a window while closing another")); }
+void nvim_emsg_e_cannot_split_when_closing(void) { emsg(_(e_cannot_split_window_when_closing_buffer)); }
 
 /// Wrapper: rs_win_valid(prevwin) check for 'p' command.
 /// Returns prevwin if valid and focusable, NULL otherwise.
