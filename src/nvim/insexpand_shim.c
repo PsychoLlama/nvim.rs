@@ -173,6 +173,9 @@ extern int rs_get_normal_compl_info(char *line, int startcol, int curs_col);
 extern int rs_get_wholeline_compl_info(char *line, int curs_col);
 extern int rs_get_filename_compl_info(char *line, int startcol, int curs_col);
 extern int rs_get_spell_compl_info(int startcol, int curs_col);
+// Phase 3 Rust exports
+extern void rs_ins_compl_continue_search(char *line);
+extern void rs_ins_compl_show_statusmsg(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -4082,48 +4085,7 @@ static int compl_get_info(char *line, int startcol, colnr_T curs_col, bool *line
 /// at the beginning of the line has been inserted, we'll look for that.
 static void ins_compl_continue_search(char *line)
 {
-  // it is a continued search
-  compl_cont_status &= ~CONT_INTRPT;  // remove INTRPT
-  if (rs_ctrl_x_mode_normal()
-      || rs_ctrl_x_mode_path_patterns()
-      || rs_ctrl_x_mode_path_defines()) {
-    if (compl_startpos.lnum != curwin->w_cursor.lnum) {
-      // line (probably) wrapped, set compl_startpos to the
-      // first non_blank in the line, if it is not a wordchar
-      // include it to get a better pattern, but then we don't
-      // want the "\\<" prefix, check it below.
-      compl_col = (colnr_T)getwhitecols(line);
-      compl_startpos.col = compl_col;
-      compl_startpos.lnum = curwin->w_cursor.lnum;
-      compl_cont_status &= ~CONT_SOL;  // clear SOL if present
-    } else {
-      // S_IPOS was set when we inserted a word that was at the
-      // beginning of the line, which means that we'll go to SOL
-      // mode but first we need to redefine compl_startpos
-      if (compl_cont_status & CONT_S_IPOS) {
-        compl_cont_status |= CONT_SOL;
-        compl_startpos.col = (colnr_T)(skipwhite(line + compl_length + compl_startpos.col) - line);
-      }
-      compl_col = compl_startpos.col;
-    }
-    compl_length = curwin->w_cursor.col - (int)compl_col;
-    // IObuff is used to add a "word from the next line" would we
-    // have enough space?  just being paranoid
-#define MIN_SPACE 75
-    if (compl_length > (IOSIZE - MIN_SPACE)) {
-      compl_cont_status &= ~CONT_SOL;
-      compl_length = (IOSIZE - MIN_SPACE);
-      compl_col = curwin->w_cursor.col - compl_length;
-    }
-    compl_cont_status |= CONT_ADDING | CONT_N_ADDS;
-    if (compl_length < 1) {
-      compl_cont_status &= CONT_LOCAL;
-    }
-  } else if (rs_ctrl_x_mode_line_or_eval() || rs_ctrl_x_mode_register()) {
-    compl_cont_status = CONT_ADDING | CONT_N_ADDS;
-  } else {
-    compl_cont_status = 0;
-  }
+  rs_ins_compl_continue_search(line);
 }
 
 /// start insert mode completion
@@ -4255,69 +4217,7 @@ static int ins_compl_start(void)
 /// display the completion status message
 static void ins_compl_show_statusmsg(void)
 {
-  // we found no match if the list has only the "compl_orig_text"-entry
-  if (is_first_match(compl_first_match->cp_next)) {
-    edit_submode_extra = rs_compl_status_adding() && compl_length > 1 ? _(e_hitend) : _(e_patnotf);
-    edit_submode_highl = HLF_E;
-  }
-
-  if (edit_submode_extra == NULL) {
-    if (match_at_original_text(compl_curr_match)) {
-      edit_submode_extra = _("Back at original");
-      edit_submode_highl = HLF_W;
-    } else if (compl_cont_status & CONT_S_IPOS) {
-      edit_submode_extra = _("Word from other line");
-      edit_submode_highl = HLF_COUNT;
-    } else if (compl_curr_match->cp_next == compl_curr_match->cp_prev) {
-      edit_submode_extra = _("The only match");
-      edit_submode_highl = HLF_COUNT;
-      compl_curr_match->cp_number = 1;
-    } else {
-      // Update completion sequence number when needed.
-      if (compl_curr_match->cp_number == -1) {
-        rs_ins_compl_update_sequence_numbers();
-      }
-
-      // The match should always have a sequence number now, this is
-      // just a safety check.
-      if (compl_curr_match->cp_number != -1) {
-        // Space for 10 text chars. + 2x10-digit no.s = 31.
-        // Translations may need more than twice that.
-        static char match_ref[81];
-
-        if (compl_matches > 0) {
-          vim_snprintf(match_ref, sizeof(match_ref),
-                       _("match %d of %d"),
-                       compl_curr_match->cp_number, compl_matches);
-        } else {
-          vim_snprintf(match_ref, sizeof(match_ref),
-                       _("match %d"),
-                       compl_curr_match->cp_number);
-        }
-        edit_submode_extra = match_ref;
-        edit_submode_highl = HLF_R;
-        if (dollar_vcol >= 0) {
-          curs_columns(curwin, false);
-        }
-      }
-    }
-  }
-
-  // Show a message about what (completion) mode we're in.
-  redraw_mode = true;
-  if (!shortmess(SHM_COMPLETIONMENU)) {
-    if (edit_submode_extra != NULL) {
-      if (!p_smd) {
-        msg_hist_off = true;
-        msg_ext_set_kind("completion");
-        msg(edit_submode_extra, (edit_submode_highl < HLF_COUNT
-                                 ? (int)edit_submode_highl + 1 : 0));
-        msg_hist_off = false;
-      }
-    } else {
-      msg_clr_cmdline();  // necessary for "noshowmode"
-    }
-  }
+  rs_ins_compl_show_statusmsg();
 }
 
 /// Do Insert mode completion.
@@ -5234,5 +5134,112 @@ int nvim_get_spell_compl_info_impl(int startcol, int curs_col)
   compl_pattern = cbuf_to_string(line + compl_col, (size_t)compl_length);
 
   return OK;
+}
+
+// Compound accessors for Phase 3 (pass 3): ins_compl_continue_search,
+// ins_compl_show_statusmsg. Logic moved here from the thin wrappers above.
+
+void nvim_ins_compl_continue_search_impl(char *line)
+{
+  // it is a continued search
+  compl_cont_status &= ~CONT_INTRPT;  // remove INTRPT
+  if (rs_ctrl_x_mode_normal()
+      || rs_ctrl_x_mode_path_patterns()
+      || rs_ctrl_x_mode_path_defines()) {
+    if (compl_startpos.lnum != curwin->w_cursor.lnum) {
+      compl_col = (colnr_T)getwhitecols(line);
+      compl_startpos.col = compl_col;
+      compl_startpos.lnum = curwin->w_cursor.lnum;
+      compl_cont_status &= ~CONT_SOL;  // clear SOL if present
+    } else {
+      if (compl_cont_status & CONT_S_IPOS) {
+        compl_cont_status |= CONT_SOL;
+        compl_startpos.col = (colnr_T)(skipwhite(line + compl_length + compl_startpos.col) - line);
+      }
+      compl_col = compl_startpos.col;
+    }
+    compl_length = curwin->w_cursor.col - (int)compl_col;
+#define MIN_SPACE 75
+    if (compl_length > (IOSIZE - MIN_SPACE)) {
+      compl_cont_status &= ~CONT_SOL;
+      compl_length = (IOSIZE - MIN_SPACE);
+      compl_col = curwin->w_cursor.col - compl_length;
+    }
+    compl_cont_status |= CONT_ADDING | CONT_N_ADDS;
+    if (compl_length < 1) {
+      compl_cont_status &= CONT_LOCAL;
+    }
+  } else if (rs_ctrl_x_mode_line_or_eval() || rs_ctrl_x_mode_register()) {
+    compl_cont_status = CONT_ADDING | CONT_N_ADDS;
+  } else {
+    compl_cont_status = 0;
+  }
+}
+
+void nvim_ins_compl_show_statusmsg_impl(void)
+{
+  // we found no match if the list has only the "compl_orig_text"-entry
+  if (is_first_match(compl_first_match->cp_next)) {
+    edit_submode_extra = rs_compl_status_adding() && compl_length > 1 ? _(e_hitend) : _(e_patnotf);
+    edit_submode_highl = HLF_E;
+  }
+
+  if (edit_submode_extra == NULL) {
+    if (match_at_original_text(compl_curr_match)) {
+      edit_submode_extra = _("Back at original");
+      edit_submode_highl = HLF_W;
+    } else if (compl_cont_status & CONT_S_IPOS) {
+      edit_submode_extra = _("Word from other line");
+      edit_submode_highl = HLF_COUNT;
+    } else if (compl_curr_match->cp_next == compl_curr_match->cp_prev) {
+      edit_submode_extra = _("The only match");
+      edit_submode_highl = HLF_COUNT;
+      compl_curr_match->cp_number = 1;
+    } else {
+      // Update completion sequence number when needed.
+      if (compl_curr_match->cp_number == -1) {
+        rs_ins_compl_update_sequence_numbers();
+      }
+
+      // The match should always have a sequence number now, this is
+      // just a safety check.
+      if (compl_curr_match->cp_number != -1) {
+        // Space for 10 text chars. + 2x10-digit no.s = 31.
+        // Translations may need more than twice that.
+        static char match_ref[81];
+
+        if (compl_matches > 0) {
+          vim_snprintf(match_ref, sizeof(match_ref),
+                       _("match %d of %d"),
+                       compl_curr_match->cp_number, compl_matches);
+        } else {
+          vim_snprintf(match_ref, sizeof(match_ref),
+                       _("match %d"),
+                       compl_curr_match->cp_number);
+        }
+        edit_submode_extra = match_ref;
+        edit_submode_highl = HLF_R;
+        if (dollar_vcol >= 0) {
+          curs_columns(curwin, false);
+        }
+      }
+    }
+  }
+
+  // Show a message about what (completion) mode we're in.
+  redraw_mode = true;
+  if (!shortmess(SHM_COMPLETIONMENU)) {
+    if (edit_submode_extra != NULL) {
+      if (!p_smd) {
+        msg_hist_off = true;
+        msg_ext_set_kind("completion");
+        msg(edit_submode_extra, (edit_submode_highl < HLF_COUNT
+                                 ? (int)edit_submode_highl + 1 : 0));
+        msg_hist_off = false;
+      }
+    } else {
+      msg_clr_cmdline();  // necessary for "noshowmode"
+    }
+  }
 }
 

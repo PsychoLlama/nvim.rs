@@ -358,6 +358,35 @@ pub unsafe extern "C" fn rs_ins_compl_show_filename() {
     nvim_ins_compl_show_filename_impl();
 }
 
+// =============================================================================
+// Phase 3: ins_compl_continue_search and ins_compl_show_statusmsg
+// =============================================================================
+
+extern "C" {
+    fn nvim_ins_compl_continue_search_impl(line: *mut c_char);
+    fn nvim_ins_compl_show_statusmsg_impl();
+}
+
+/// Resume interrupted completion: adjust compl_startpos, compl_col,
+/// compl_length, and compl_cont_status.
+///
+/// # Safety
+/// Requires valid global state; line must be a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_continue_search(line: *mut c_char) {
+    nvim_ins_compl_continue_search_impl(line);
+}
+
+/// Construct and display the completion status message
+/// ("match N of M", "Back at original", etc.).
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
+    nvim_ins_compl_show_statusmsg_impl();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
