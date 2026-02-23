@@ -273,7 +273,7 @@ int nvim_ses_makeset(FILE *fd, int opt, bool local_only)
   return makeset(fd, opt, local_only);
 }
 int nvim_ses_makefoldset(FILE *fd) { return makefoldset(fd); }
-int nvim_ses_put_folds(FILE *fd, win_T *wp) { return put_folds(fd, wp); }
+int nvim_ses_put_folds(FILE *fd, win_T *wp) { return rs_put_folds(fd, wp); }
 
 // _Static_assert for Phase 6 constants
 _Static_assert(kOptSsopFlagCursor == 0x4000, "kOptSsopFlagCursor");

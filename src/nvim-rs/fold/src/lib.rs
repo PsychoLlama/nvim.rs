@@ -14,6 +14,7 @@ pub mod display;
 pub mod level;
 pub mod markers;
 pub mod methods;
+pub mod session;
 pub mod tree;
 pub mod update;
 

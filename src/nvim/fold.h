@@ -30,5 +30,6 @@ extern int rs_foldmethodIsMarker(win_T *wp);
 extern int rs_foldmethodIsSyntax(win_T *wp);
 extern int rs_foldmethodIsDiff(win_T *wp);
 extern void rs_foldUpdate(win_T *wp, linenr_T top, linenr_T bot);
+extern int rs_put_folds(FILE *fd, win_T *wp);
 
 #include "fold_shim.h.generated.h"
