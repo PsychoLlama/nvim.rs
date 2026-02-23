@@ -5,7 +5,7 @@
 
 #![allow(clippy::missing_const_for_fn)]
 
-use std::os::raw::c_int;
+use std::os::raw::{c_int, c_uint};
 
 use crate::match_list::ComplMatch;
 
@@ -260,6 +260,88 @@ extern "C" {
     fn nvim_pum_visible() -> c_int;
     fn nvim_get_compl_selected_item() -> c_int;
     fn nvim_get_compl_started() -> c_int;
+}
+
+// Accessors for rs_ins_compl_show_pum
+extern "C" {
+    fn nvim_update_screen();
+    fn nvim_ins_compl_build_pum() -> c_int;
+    fn nvim_find_shown_match_in_array() -> c_int;
+    fn nvim_trigger_complete_changed(cur: c_int);
+    fn nvim_has_completechanged_event() -> c_int;
+    fn nvim_set_dollar_vcol_minus_one();
+    fn nvim_get_cursor_col() -> c_int;
+    fn nvim_set_cursor_col_to_compl_col();
+    fn nvim_restore_cursor_col(col: c_int);
+    fn nvim_pum_display_compl(cur: c_int, array_changed: c_int);
+    fn nvim_compl_curr_neq_shown() -> c_int;
+    fn nvim_compl_set_curr_to_shown();
+    fn nvim_set_compl_selected_item(val: c_int);
+}
+
+/// Show the popup menu for completion matches.
+///
+/// This is the Rust implementation of ins_compl_show_pum(). It orchestrates
+/// the popup menu display by calling back into C for all state mutations.
+///
+/// # Safety
+/// Requires valid completion state; called from insert mode only.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_show_pum() {
+    // kOptCotFlagMenuone = 0x001 (matches C constant)
+    const K_OPT_COT_FLAG_MENUONE: c_uint = 0x001;
+
+    if crate::rs_pum_wanted() == 0
+        || rs_pum_enough_matches(c_int::from(
+            (crate::rs_get_cot_flags() & K_OPT_COT_FLAG_MENUONE) != 0
+                || nvim_get_compl_autocomplete() != 0,
+        )) == 0
+    {
+        return;
+    }
+
+    // Update the screen before drawing the popup menu over it.
+    nvim_update_screen();
+
+    let (cur, array_changed): (c_int, c_int);
+
+    if nvim_get_compl_match_array_exists() == 0 {
+        array_changed = 1;
+        // Need to build the popup menu list.
+        cur = nvim_ins_compl_build_pum();
+    } else {
+        array_changed = 0;
+        // popup menu already exists, only need to find the current item.
+        cur = nvim_find_shown_match_in_array();
+    }
+
+    if nvim_get_compl_match_array_exists() == 0 {
+        if nvim_get_compl_started() != 0 && nvim_has_completechanged_event() != 0 {
+            nvim_trigger_complete_changed(cur);
+        }
+        return;
+    }
+
+    // In Replace mode when a $ is displayed at the end of the line only
+    // part of the screen would be updated.  We do need to redraw here.
+    nvim_set_dollar_vcol_minus_one();
+
+    // Compute the screen column of the start of the completed text.
+    // Use the cursor to get all wrapping and other settings right.
+    let col = nvim_get_cursor_col();
+    nvim_set_cursor_col_to_compl_col();
+    nvim_set_compl_selected_item(cur);
+    nvim_pum_display_compl(cur, array_changed);
+    nvim_restore_cursor_col(col);
+
+    // After adding leader, set the current match to shown match.
+    if nvim_get_compl_started() != 0 && nvim_compl_curr_neq_shown() != 0 {
+        nvim_compl_set_curr_to_shown();
+    }
+
+    if nvim_has_completechanged_event() != 0 {
+        nvim_trigger_complete_changed(cur);
+    }
 }
 
 /// Check if the popup menu is visible.

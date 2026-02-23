@@ -146,6 +146,7 @@ extern unsigned rs_quote_meta(char *dest, char *src, int len);
 extern int rs_ins_compl_equal(void *m, const char *str, size_t len);
 extern void rs_ins_compl_update_sequence_numbers(void);
 extern int rs_ins_compl_col_range_attr(int lnum, int col);
+extern void rs_ins_compl_show_pum(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -1312,60 +1313,7 @@ static int ins_compl_build_pum(void)
 /// Also adjusts "compl_shown_match" to an entry that is actually displayed.
 void ins_compl_show_pum(void)
 {
-  if (!rs_pum_wanted()
-      || !rs_pum_enough_matches(((rs_get_cot_flags() & kOptCotFlagMenuone) != 0)
-                                || compl_autocomplete)) {
-    return;
-  }
-
-  // Update the screen before drawing the popup menu over it.
-  update_screen();
-
-  int cur = -1;
-  bool array_changed = false;
-
-  if (compl_match_array == NULL) {
-    array_changed = true;
-    // Need to build the popup menu list.
-    cur = ins_compl_build_pum();
-  } else {
-    // popup menu already exists, only need to find the current item.
-    for (int i = 0; i < compl_match_arraysize; i++) {
-      if (compl_match_array[i].pum_text == compl_shown_match->cp_str.data
-          || compl_match_array[i].pum_text == compl_shown_match->cp_text[CPT_ABBR]) {
-        cur = i;
-        break;
-      }
-    }
-  }
-
-  if (compl_match_array == NULL) {
-    if (compl_started && has_event(EVENT_COMPLETECHANGED)) {
-      trigger_complete_changed_event(cur);
-    }
-    return;
-  }
-
-  // In Replace mode when a $ is displayed at the end of the line only
-  // part of the screen would be updated.  We do need to redraw here.
-  dollar_vcol = -1;
-
-  // Compute the screen column of the start of the completed text.
-  // Use the cursor to get all wrapping and other settings right.
-  const colnr_T col = curwin->w_cursor.col;
-  curwin->w_cursor.col = compl_col;
-  compl_selected_item = cur;
-  pum_display(compl_match_array, compl_match_arraysize, cur, array_changed, 0);
-  curwin->w_cursor.col = col;
-
-  // After adding leader, set the current match to shown match.
-  if (compl_started && compl_curr_match != compl_shown_match) {
-    compl_curr_match = compl_shown_match;
-  }
-
-  if (has_event(EVENT_COMPLETECHANGED)) {
-    trigger_complete_changed_event(cur);
-  }
+  rs_ins_compl_show_pum();
 }
 
 #define DICT_FIRST      (1)     ///< use just first element in "dict"
@@ -5502,4 +5450,27 @@ bool nvim_in_cinkeys_key_complete(int when, bool line_is_empty) { return in_cink
 void nvim_set_edit_submode_null_if_set(void) { if (edit_submode != NULL) { edit_submode = NULL; redraw_mode = true; } }
 void nvim_ins_compl_insert_bytes(const char *p, int len) { ins_compl_insert_bytes((char *)p, len); }
 void nvim_restore_orig_extmarks(void) { restore_orig_extmarks(); }
+
+// Compound accessors for ins_compl_show_pum (Phase 2)
+// nvim_update_screen() already exists in drawscreen.c
+// nvim_get_cursor_col() already exists in normal_shim.c
+int nvim_ins_compl_build_pum(void) { return ins_compl_build_pum(); }
+int nvim_find_shown_match_in_array(void) {
+  if (!compl_match_array || !compl_shown_match) { return -1; }
+  for (int i = 0; i < compl_match_arraysize; i++) {
+    if (compl_match_array[i].pum_text == compl_shown_match->cp_str.data
+        || compl_match_array[i].pum_text == compl_shown_match->cp_text[CPT_ABBR]) {
+      return i;
+    }
+  }
+  return -1;
+}
+void nvim_trigger_complete_changed(int cur) { trigger_complete_changed_event(cur); }
+int nvim_has_completechanged_event(void) { return has_event(EVENT_COMPLETECHANGED) ? 1 : 0; }
+void nvim_set_dollar_vcol_minus_one(void) { dollar_vcol = -1; }
+void nvim_set_cursor_col_to_compl_col(void) { curwin->w_cursor.col = (colnr_T)compl_col; }
+void nvim_restore_cursor_col(int col) { curwin->w_cursor.col = (colnr_T)col; }
+void nvim_pum_display_compl(int cur, int array_changed) { pum_display(compl_match_array, compl_match_arraysize, cur, array_changed != 0, 0); }
+int nvim_compl_curr_neq_shown(void) { return (compl_curr_match != compl_shown_match) ? 1 : 0; }
+void nvim_compl_set_curr_to_shown(void) { compl_curr_match = compl_shown_match; }
 
