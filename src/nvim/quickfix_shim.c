@@ -268,6 +268,12 @@ extern int rs_qf_getprop_qfidx(const void *qi, const void *what);
 extern int rs_qf_getprop_defaults(const void *qi, int flags, bool locstack, void *retdict);
 extern int rs_qf_setprop_get_qfidx(const void *qi, const void *what, int action, bool *newlist);
 
+// Phase 4: mark_adjust and valid counting (migrated to Rust)
+extern bool rs_qf_mark_adjust(void *qi, int buf_fnum, int buf_has_flag, int32_t line1,
+                               int32_t line2, int32_t amount, int32_t amount_after);
+extern int rs_qf_get_valid_size(const void *qfl, bool count_files);
+extern int rs_qf_get_cur_valid_idx(const void *qfl, int qf_index, bool count_files);
+
 /// Result of the full errorformat-to-regex conversion
 typedef struct {
   size_t bytes_written;
@@ -883,6 +889,17 @@ int nvim_qf_get_valid_bufnr(const void *qi_void)
     return qi->qf_bufnr;
   }
   return 0;
+}
+
+// Phase 4 accessors: qfl empty check for mark_adjust / valid counting
+
+/// Check if a qf_list_T is empty (no entries).
+bool nvim_qf_list_is_empty(const void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return true;
+  }
+  return rs_qf_list_empty(qfl_void);
 }
 
 static efm_T *parse_efm_option(char *efm);
@@ -3206,44 +3223,21 @@ static void qf_msg(qf_info_T *qi, int which, char *lead)
 bool qf_mark_adjust(buf_T *buf, win_T *wp, linenr_T line1, linenr_T line2, linenr_T amount,
                     linenr_T amount_after)
 {
-  qf_info_T *qi = ql_info;
-  assert(qi != NULL);
   int buf_has_flag = wp == NULL ? BUF_HAS_QF_ENTRY : BUF_HAS_LL_ENTRY;
-
   if (!(buf->b_has_qf_entry & buf_has_flag)) {
     return false;
   }
+  void *qi;
   if (wp != NULL) {
     if (wp->w_llist == NULL) {
       return false;
     }
     qi = wp->w_llist;
+  } else {
+    assert(ql_info != NULL);
+    qi = ql_info;
   }
-
-  int i;
-  qfline_T *qfp;
-  bool found_one = false;
-  for (int idx = 0; idx < qi->qf_listcount; idx++) {
-    qf_list_T *qfl = qf_get_list(qi, idx);
-    if (!rs_qf_list_empty(qfl)) {
-      FOR_ALL_QFL_ITEMS(qfl, qfp, i) {
-        if (qfp->qf_fnum == buf->b_fnum) {
-          found_one = true;
-          if (qfp->qf_lnum >= line1 && qfp->qf_lnum <= line2) {
-            if (amount == MAXLNUM) {
-              qfp->qf_cleared = true;
-            } else {
-              qfp->qf_lnum += amount;
-            }
-          } else if (amount_after && qfp->qf_lnum > line2) {
-            qfp->qf_lnum += amount_after;
-          }
-        }
-      }
-    }
-  }
-
-  return found_one;
+  return rs_qf_mark_adjust(qi, buf->b_fnum, buf_has_flag, line1, line2, amount, amount_after);
 }
 
 // Make a nice message out of the error character and the error number:
@@ -3900,33 +3894,12 @@ size_t qf_get_size(exarg_T *eap)
 size_t qf_get_valid_size(exarg_T *eap)
 {
   qf_info_T *qi;
-
   if ((qi = qf_cmd_get_stack(eap, false)) == NULL) {
     return 0;
   }
-
-  int prev_fnum = 0;
-  size_t sz = 0;
-  qfline_T *qfp;
-  int i;
-  assert(qf_get_curlist(qi)->qf_count >= 0);
   qf_list_T *qfl = qf_get_curlist(qi);
-  FOR_ALL_QFL_ITEMS(qfl, qfp, i) {
-    if (!qfp->qf_valid) {
-      continue;
-    }
-
-    if (eap->cmdidx == CMD_cdo || eap->cmdidx == CMD_ldo) {
-      // Count all valid entries.
-      sz++;
-    } else if (qfp->qf_fnum > 0 && qfp->qf_fnum != prev_fnum) {
-      // Count the number of files.
-      sz++;
-      prev_fnum = qfp->qf_fnum;
-    }
-  }
-
-  return sz;
+  bool count_files = !(eap->cmdidx == CMD_cdo || eap->cmdidx == CMD_ldo);
+  return (size_t)rs_qf_get_valid_size(qfl, count_files);
 }
 
 /// Returns 0 if there is an error.
@@ -3948,42 +3921,12 @@ int qf_get_cur_valid_idx(exarg_T *eap)
   FUNC_ATTR_NONNULL_ALL
 {
   qf_info_T *qi;
-
   if ((qi = qf_cmd_get_stack(eap, false)) == NULL) {
     return 1;
   }
-
   qf_list_T *qfl = qf_get_curlist(qi);
-
-  // Check if the list has valid errors.
-  if (!rs_qf_list_has_valid_entries(qfl)) {
-    return 1;
-  }
-
-  int prev_fnum = 0;
-  int eidx = 0;
-  qfline_T *qfp;
-  size_t i;
-  assert(qfl->qf_index >= 0);
-  for (i = 1, qfp = qfl->qf_start;
-       i <= (size_t)qfl->qf_index && qfp != NULL;
-       i++, qfp = qfp->qf_next) {
-    if (!qfp->qf_valid) {
-      continue;
-    }
-
-    if (eap->cmdidx == CMD_cfdo || eap->cmdidx == CMD_lfdo) {
-      if (qfp->qf_fnum > 0 && qfp->qf_fnum != prev_fnum) {
-        // Count the number of files.
-        eidx++;
-        prev_fnum = qfp->qf_fnum;
-      }
-    } else {
-      eidx++;
-    }
-  }
-
-  return eidx != 0 ? eidx : 1;
+  bool count_files = eap->cmdidx == CMD_cfdo || eap->cmdidx == CMD_lfdo;
+  return rs_qf_get_cur_valid_idx(qfl, qfl->qf_index, count_files);
 }
 
 /// For :cfdo and :lfdo, returns the 'n'th valid file entry.
@@ -4261,6 +4204,12 @@ _Static_assert(CMD_vimgrep == 509, "CMD_vimgrep mismatch");
 _Static_assert(CMD_lvimgrep == 267, "CMD_lvimgrep mismatch");
 _Static_assert(CMD_vimgrepadd == 510, "CMD_vimgrepadd mismatch");
 _Static_assert(CMD_lvimgrepadd == 268, "CMD_lvimgrepadd mismatch");
+
+// _Static_assert for Phase 4 CMD_* constants used in Rust valid counting functions
+_Static_assert(CMD_cdo == 62, "CMD_cdo mismatch");
+_Static_assert(CMD_ldo == 228, "CMD_ldo mismatch");
+_Static_assert(CMD_cfdo == 66, "CMD_cfdo mismatch");
+_Static_assert(CMD_lfdo == 234, "CMD_lfdo mismatch");
 
 /// Jump to the first match and update the directory.
 static void vgr_jump_to_match(qf_info_T *qi, int forceit, bool *redraw_for_dummy,

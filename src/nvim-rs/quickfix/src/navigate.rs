@@ -1995,6 +1995,168 @@ pub mod jump_machinery {
 }
 
 // =============================================================================
+// Phase 4: qf_mark_adjust, qf_get_valid_size, qf_get_cur_valid_idx
+// =============================================================================
+
+/// Maximum valid line number (sentinel for deletion: same as C MAXLNUM = 0x7fffffff)
+const MAXLNUM: LinenrT = i32::MAX;
+
+extern "C" {
+    // qfl list-level accessors (additional to those in the main extern block above)
+    fn nvim_qf_get_listcount(qi: *const c_void) -> c_int;
+    fn nvim_qf_get_list_at(qi: *const c_void, idx: c_int) -> *const c_void;
+    fn nvim_qf_list_is_empty(qfl: *const c_void) -> bool;
+
+    // entry setters (mutable variants)
+    fn nvim_qfline_set_lnum(qfp: *mut c_void, lnum: LinenrT);
+    fn nvim_qfline_set_cleared(qfp: *mut c_void, cleared: i8);
+
+    // rs_qf_list_has_valid_entries is in lib.rs but we need it here too
+    fn rs_qf_list_has_valid_entries(qfl: *const c_void) -> bool;
+}
+
+/// Adjust quickfix entry line numbers when buffer lines are added/deleted.
+///
+/// Iterates all lists in `qi` and adjusts entries that match `buf_fnum`.
+///
+/// # Safety
+/// `qi` must be a valid non-null `qf_info_T *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_mark_adjust(
+    qi: *mut c_void,
+    buf_fnum: c_int,
+    _buf_has_flag: c_int,
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+) -> bool {
+    let listcount = nvim_qf_get_listcount(qi);
+    let mut found_one = false;
+
+    for idx in 0..listcount {
+        let qfl = nvim_qf_get_list_at(qi, idx);
+        if nvim_qf_list_is_empty(qfl) {
+            continue;
+        }
+
+        let count = nvim_qf_get_count(qfl);
+        let mut qfp = nvim_qf_get_start(qfl);
+        let mut i = 1;
+        while i <= count && !qfp.is_null() {
+            if nvim_qfline_get_fnum(qfp) == buf_fnum {
+                found_one = true;
+                let lnum = nvim_qfline_get_lnum(qfp);
+                if lnum >= line1 && lnum <= line2 {
+                    if amount == MAXLNUM {
+                        nvim_qfline_set_cleared(qfp.cast_mut(), 1);
+                    } else {
+                        nvim_qfline_set_lnum(qfp.cast_mut(), lnum + amount);
+                    }
+                } else if amount_after != 0 && lnum > line2 {
+                    nvim_qfline_set_lnum(qfp.cast_mut(), lnum + amount_after);
+                }
+            }
+            qfp = nvim_qfline_get_next(qfp);
+            i += 1;
+        }
+    }
+
+    found_one
+}
+
+/// Count valid entries (or unique valid files) in the current quickfix list.
+///
+/// `count_files`: if true, count unique files instead of all valid entries.
+///
+/// # Safety
+/// `qfl` must be a valid non-null `qf_list_T *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_valid_size(qfl: *const c_void, count_files: bool) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut sz: c_int = 0;
+    let mut prev_fnum: c_int = 0;
+    let mut i = 1;
+
+    while i <= count && !qfp.is_null() {
+        if nvim_qfline_get_valid(qfp) {
+            if count_files {
+                let fnum = nvim_qfline_get_fnum(qfp);
+                if fnum > 0 && fnum != prev_fnum {
+                    // Count unique files
+                    sz += 1;
+                    prev_fnum = fnum;
+                }
+            } else {
+                // Count all valid entries
+                sz += 1;
+            }
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        i += 1;
+    }
+
+    sz
+}
+
+/// Compute the 1-based valid entry index at the current cursor position.
+///
+/// `qf_index`: the current 1-based index (qfl->qf_index).
+/// `count_files`: if true, count unique files (for :cfdo/:lfdo).
+///
+/// Returns 1 if there are no valid entries before the cursor.
+///
+/// # Safety
+/// `qfl` must be a valid non-null `qf_list_T *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_cur_valid_idx(
+    qfl: *const c_void,
+    qf_index: c_int,
+    count_files: bool,
+) -> c_int {
+    if qfl.is_null() {
+        return 1;
+    }
+
+    // Check if the list has valid entries
+    if !rs_qf_list_has_valid_entries(qfl) {
+        return 1;
+    }
+
+    let mut prev_fnum: c_int = 0;
+    let mut eidx: c_int = 0;
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut i: c_int = 1;
+
+    while i <= qf_index && !qfp.is_null() {
+        if nvim_qfline_get_valid(qfp) {
+            if count_files {
+                let fnum = nvim_qfline_get_fnum(qfp);
+                if fnum > 0 && fnum != prev_fnum {
+                    eidx += 1;
+                    prev_fnum = fnum;
+                }
+            } else {
+                eidx += 1;
+            }
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        i += 1;
+    }
+
+    if eidx != 0 {
+        eidx
+    } else {
+        1
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
