@@ -1673,7 +1673,8 @@ void nvim_swapfile_info_and_print(char *fname)
   kv_destroy(msg);
 }
 
-// Position setters
+// Position accessors/setters
+colnr_T nvim_pos_get_coladd(const pos_T *pos) { return pos->coladd; }
 void nvim_pos_set_lnum(pos_T *pos, linenr_T lnum) { pos->lnum = lnum; }
 void nvim_pos_set_col(pos_T *pos, colnr_T col) { pos->col = col; }
 void nvim_pos_set_coladd(pos_T *pos, colnr_T coladd) { pos->coladd = coladd; }
@@ -3632,85 +3633,23 @@ static void ml_updatechunk(buf_T *buf, linenr_T line, int len, int updtype)
 
 // ml_find_line_or_offset and goto_byte migrated to Rust (navigate.rs)
 
-/// Increment the line pointer "lp" crossing line boundaries as necessary.
-///
-/// @return   1 when going to the next line.
-///           2 when moving forward onto a NUL at the end of the line).
-///          -1 when at the end of file.
-///           0 otherwise.
-int inc(pos_T *lp)
-{
-  // when searching position may be set to end of a line
-  if (lp->col != MAXCOL) {
-    const char *const p = ml_get_pos(lp);
-    if (*p != NUL) {  // still within line, move to next char (may be NUL)
-      const int l = utfc_ptr2len(p);
+// inc/incl/dec/decl migrated to Rust (navigate.rs); thin wrappers below.
+extern int rs_inc(pos_T *lp);
+extern int rs_incl(pos_T *lp);
+extern int rs_dec(pos_T *lp);
+extern int rs_decl(pos_T *lp);
 
-      lp->col += l;
-      return ((p[l] != NUL) ? 0 : 2);
-    }
-  }
-  if (lp->lnum != curbuf->b_ml.ml_line_count) {     // there is a next line
-    lp->col = 0;
-    lp->lnum++;
-    lp->coladd = 0;
-    return 1;
-  }
-  return -1;
-}
+/// Increment position (thin wrapper calling Rust).
+int inc(pos_T *lp) { return rs_inc(lp); }
 
-/// Same as inc(), but skip NUL at the end of non-empty lines.
-int incl(pos_T *lp)
-{
-  int r;
+/// Increment position, skipping NUL at end of non-empty lines (thin wrapper calling Rust).
+int incl(pos_T *lp) { return rs_incl(lp); }
 
-  if ((r = inc(lp)) >= 1 && lp->col) {
-    r = inc(lp);
-  }
-  return r;
-}
+/// Decrement position (thin wrapper calling Rust).
+int dec(pos_T *lp) { return rs_dec(lp); }
 
-int dec(pos_T *lp)
-{
-  lp->coladd = 0;
-  if (lp->col == MAXCOL) {
-    // past end of line
-    char *p = ml_get(lp->lnum);
-    lp->col = ml_get_len(lp->lnum);
-    lp->col -= utf_head_off(p, p + lp->col);
-    return 0;
-  }
-
-  if (lp->col > 0) {
-    // still within line
-    lp->col--;
-    char *p = ml_get(lp->lnum);
-    lp->col -= utf_head_off(p, p + lp->col);
-    return 0;
-  }
-  if (lp->lnum > 1) {
-    // there is a prior line
-    lp->lnum--;
-    char *p = ml_get(lp->lnum);
-    lp->col = ml_get_len(lp->lnum);
-    lp->col -= utf_head_off(p, p + lp->col);
-    return 1;
-  }
-
-  // at start of file
-  return -1;
-}
-
-/// Same as dec(), but skip NUL at the end of non-empty lines.
-int decl(pos_T *lp)
-{
-  int r;
-
-  if ((r = dec(lp)) == 1 && lp->col) {
-    r = dec(lp);
-  }
-  return r;
-}
+/// Decrement position, skipping NUL at end of non-empty lines (thin wrapper calling Rust).
+int decl(pos_T *lp) { return rs_decl(lp); }
 
 // ============================================================================
 // Extmark Accessor Functions (for Rust FFI - extmark crate)

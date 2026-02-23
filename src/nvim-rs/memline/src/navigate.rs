@@ -18,7 +18,7 @@
 //! The memline B-tree uses a stack to track the path from root to the current
 //! data block. This module provides helpers for stack management and tree traversal.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 use crate::types::{
     BlockHeaderHandle, BlockNr, BufHandle, ColNr, DataBlockHeader, InfoPtrHandle, LineNr,
@@ -97,11 +97,32 @@ extern "C" {
     /// Get column from position (`pos->col`)
     fn nvim_pos_get_col(pos: *const PosHandle) -> ColNr;
 
-    // Note: nvim_pos_set_lnum, nvim_pos_set_col, nvim_pos_set_coladd are available
-    // in C but currently the inc/dec functions handle position updates internally.
+    /// Set line number in position (`pos->lnum = lnum`)
+    fn nvim_pos_set_lnum(pos: *mut PosHandle, lnum: LineNr);
+
+    /// Set column in position (`pos->col = col`)
+    fn nvim_pos_set_col(pos: *mut PosHandle, col: ColNr);
+
+    /// Set coladd in position (`pos->coladd = coladd`)
+    fn nvim_pos_set_coladd(pos: *mut PosHandle, coladd: ColNr);
 
     /// MAXCOL constant
     fn nvim_get_maxcol() -> ColNr;
+
+    /// Get character at position (uses ml_get_pos internally)
+    fn ml_get_pos(pos: *const PosHandle) -> *const c_char;
+
+    /// Get contents of line lnum (pointer valid until next ml_get call)
+    fn ml_get(lnum: LineNr) -> *mut c_char;
+
+    /// Get length of line lnum
+    fn ml_get_len(lnum: LineNr) -> ColNr;
+
+    /// Get length of UTF-8 character sequence at p
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+
+    /// Get how many bytes the char at `q` is from a char start (0 if at start)
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
 
     // -------------------------------------------------------------------------
     // B-tree Traversal
@@ -158,22 +179,6 @@ extern "C" {
     /// mb_adjust_cursor()
     fn nvim_mb_adjust_cursor();
 
-    // -------------------------------------------------------------------------
-    // C Implementation Functions (still called from wrappers below)
-    // -------------------------------------------------------------------------
-
-    /// Increment position (C implementation)
-    fn inc(lp: *mut PosHandle) -> c_int;
-
-    /// Increment position, skipping NUL at end of non-empty lines (C implementation)
-    fn incl(lp: *mut PosHandle) -> c_int;
-
-    /// Decrement position (C implementation)
-    fn dec(lp: *mut PosHandle) -> c_int;
-
-    /// Decrement position, skipping NUL at end of non-empty lines (C implementation)
-    fn decl(lp: *mut PosHandle) -> c_int;
-
     /// Flush deleted bytes counter (C implementation)
     fn ml_flush_deleted_bytes(
         buf: *mut BufHandle,
@@ -188,6 +193,86 @@ const EOL_DOS: c_int = 1;
 // =============================================================================
 // Position Increment/Decrement Functions
 // =============================================================================
+
+/// Native Rust implementation of `inc`: increment position across line boundaries.
+///
+/// Returns:
+/// - `1` when moving to the next line
+/// - `2` when moving forward onto a NUL at end of line
+/// - `-1` when at end of file
+/// - `0` otherwise
+#[allow(clippy::cast_sign_loss)]
+unsafe fn inc_native(lp: *mut PosHandle) -> c_int {
+    let maxcol = nvim_get_maxcol();
+    let col = nvim_pos_get_col(lp);
+
+    // When searching, position may be set to end of a line (MAXCOL)
+    if col != maxcol {
+        let p = ml_get_pos(lp);
+        if *p != 0 {
+            // Still within line: move to next char (may be NUL)
+            let l = utfc_ptr2len(p);
+            nvim_pos_set_col(lp, col + l);
+            return if *p.add(l as usize) != 0 { 0 } else { 2 };
+        }
+    }
+
+    let lnum = nvim_pos_get_lnum(lp);
+    let line_count = nvim_buf_get_ml_line_count(nvim_get_curbuf());
+    if lnum != line_count {
+        // There is a next line
+        nvim_pos_set_col(lp, 0);
+        nvim_pos_set_lnum(lp, lnum + 1);
+        nvim_pos_set_coladd(lp, 0);
+        return 1;
+    }
+    -1
+}
+
+/// Native Rust implementation of `dec`: decrement position across line boundaries.
+///
+/// Returns:
+/// - `1` when moving to the previous line
+/// - `-1` when at start of file
+/// - `0` otherwise
+#[allow(clippy::cast_sign_loss)]
+unsafe fn dec_native(lp: *mut PosHandle) -> c_int {
+    nvim_pos_set_coladd(lp, 0);
+
+    let maxcol = nvim_get_maxcol();
+    let lnum = nvim_pos_get_lnum(lp);
+    let col = nvim_pos_get_col(lp);
+
+    if col == maxcol {
+        // Past end of line: move to actual end
+        let p = ml_get(lnum);
+        let len = ml_get_len(lnum);
+        let head = utf_head_off(p, p.add(len as usize));
+        nvim_pos_set_col(lp, len - head);
+        return 0;
+    }
+
+    if col > 0 {
+        // Still within line
+        let p = ml_get(lnum);
+        let head = utf_head_off(p, p.add(col as usize - 1));
+        nvim_pos_set_col(lp, col - 1 - head);
+        return 0;
+    }
+
+    if lnum > 1 {
+        // There is a prior line
+        nvim_pos_set_lnum(lp, lnum - 1);
+        let p = ml_get(lnum - 1);
+        let len = ml_get_len(lnum - 1);
+        let head = utf_head_off(p, p.add(len as usize));
+        nvim_pos_set_col(lp, len - head);
+        return 1;
+    }
+
+    // At start of file
+    -1
+}
 
 /// Increment a position, crossing line boundaries as necessary.
 ///
@@ -204,10 +289,10 @@ pub unsafe extern "C" fn rs_inc(lp: *mut PosHandle) -> c_int {
     if lp.is_null() {
         return -1;
     }
-    inc(lp)
+    inc_native(lp)
 }
 
-/// Like `inc()`, but skip NUL at the end of non-empty lines.
+/// Like `rs_inc()`, but skip NUL at the end of non-empty lines.
 ///
 /// # Safety
 /// - `lp` must be a valid position pointer or NULL
@@ -216,7 +301,12 @@ pub unsafe extern "C" fn rs_incl(lp: *mut PosHandle) -> c_int {
     if lp.is_null() {
         return -1;
     }
-    incl(lp)
+    let r = inc_native(lp);
+    if r >= 1 && nvim_pos_get_col(lp) != 0 {
+        inc_native(lp)
+    } else {
+        r
+    }
 }
 
 /// Decrement a position, crossing line boundaries as necessary.
@@ -233,10 +323,10 @@ pub unsafe extern "C" fn rs_dec(lp: *mut PosHandle) -> c_int {
     if lp.is_null() {
         return -1;
     }
-    dec(lp)
+    dec_native(lp)
 }
 
-/// Like `dec()`, but skip NUL at the end of non-empty lines.
+/// Like `rs_dec()`, but skip NUL at the end of non-empty lines.
 ///
 /// # Safety
 /// - `lp` must be a valid position pointer or NULL
@@ -245,7 +335,12 @@ pub unsafe extern "C" fn rs_decl(lp: *mut PosHandle) -> c_int {
     if lp.is_null() {
         return -1;
     }
-    decl(lp)
+    let r = dec_native(lp);
+    if r == 1 && nvim_pos_get_col(lp) != 0 {
+        dec_native(lp)
+    } else {
+        r
+    }
 }
 
 // =============================================================================
