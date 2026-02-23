@@ -136,6 +136,7 @@ extern int rs_eval_string(char **arg, typval_T *rettv, bool evaluate, bool inter
 extern int rs_eval_dict(char **arg, typval_T *rettv, evalarg_T *evalarg, bool literal);
 extern int rs_eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *evalarg);
 extern int rs_eval7(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
+extern int rs_free_unref_items(int copyID);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -1954,64 +1955,7 @@ bool garbage_collect(bool testing)
 /// @return  true, if something was freed.
 static int free_unref_items(int copyID)
 {
-  bool did_free = false;
-
-  // Let all "free" functions know that we are here. This means no
-  // dictionaries, lists, or jobs are to be freed, because we will
-  // do that here.
-  tv_in_free_unref_items = true;
-
-  // PASS 1: free the contents of the items. We don't free the items
-  // themselves yet, so that it is possible to decrement refcount counters.
-
-  // Go through the list of dicts and free items without the copyID.
-  // Don't free dicts that are referenced internally.
-  for (dict_T *dd = gc_first_dict; dd != NULL; dd = dd->dv_used_next) {
-    if ((dd->dv_copyID & COPYID_MASK) != (copyID & COPYID_MASK)) {
-      // Free the Dictionary and ordinary items it contains, but don't
-      // recurse into Lists and Dictionaries, they will be in the list
-      // of dicts or list of lists.
-      tv_dict_free_contents(dd);
-      did_free = true;
-    }
-  }
-
-  // Go through the list of lists and free items without the copyID.
-  // But don't free a list that has a watcher (used in a for loop), these
-  // are not referenced anywhere.
-  for (list_T *ll = gc_first_list; ll != NULL; ll = ll->lv_used_next) {
-    if ((tv_list_copyid(ll) & COPYID_MASK) != (copyID & COPYID_MASK)
-        && !tv_list_has_watchers(ll)) {
-      // Free the List and ordinary items it contains, but don't recurse
-      // into Lists and Dictionaries, they will be in the list of dicts
-      // or list of lists.
-      tv_list_free_contents(ll);
-      did_free = true;
-    }
-  }
-
-  // PASS 2: free the items themselves.
-  dict_T *dd_next;
-  for (dict_T *dd = gc_first_dict; dd != NULL; dd = dd_next) {
-    dd_next = dd->dv_used_next;
-    if ((dd->dv_copyID & COPYID_MASK) != (copyID & COPYID_MASK)) {
-      tv_dict_free_dict(dd);
-    }
-  }
-
-  list_T *ll_next;
-  for (list_T *ll = gc_first_list; ll != NULL; ll = ll_next) {
-    ll_next = ll->lv_used_next;
-    if ((ll->lv_copyID & COPYID_MASK) != (copyID & COPYID_MASK)
-        && !tv_list_has_watchers(ll)) {
-      // Free the List and ordinary items it contains, but don't recurse
-      // into Lists and Dictionaries, they will be in the list of dicts
-      // or list of lists.
-      tv_list_free_list(ll);
-    }
-  }
-  tv_in_free_unref_items = false;
-  return did_free;
+  return rs_free_unref_items(copyID);
 }
 
 /// Convert the string to a floating point number

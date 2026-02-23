@@ -533,6 +533,8 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_eval_emsg_silent", "rs_eval_has_emsg", "rs_eval_is_aborting",
            "rs_eval_error_number", "rs_eval_is_type_error", "rs_eval_is_function_error",
            "rs_eval_is_lock_error", "EvalErrorCode", "ErrorState",
+           # eval_exec gc (Phase 1)
+           "rs_free_unref_items",
            # vars lookup (Phase 3)
            "rs_find_var_ht", "rs_get_var_value", "rs_parse_scope_prefix", "rs_skip_scope_prefix",
            "HashtabHandle", "DictitemHandle", "DictHandle", "ScopePrefix",

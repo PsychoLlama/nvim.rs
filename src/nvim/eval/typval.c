@@ -4924,6 +4924,36 @@ int nvim_dict_get_len(const dict_T *d)
   return (int)d->dv_hashtab.ht_used;
 }
 
+/// Get dv_copyID from a dict (accessor for Rust).
+int nvim_dict_get_copyid(const dict_T *d)
+{
+  return d->dv_copyID;
+}
+
+/// Get dv_used_next from a dict (accessor for Rust).
+dict_T *nvim_dict_get_used_next(const dict_T *d)
+{
+  return d->dv_used_next;
+}
+
+/// Get lv_used_next from a list (accessor for Rust).
+list_T *nvim_list_get_used_next(const list_T *l)
+{
+  return l->lv_used_next;
+}
+
+/// Set tv_in_free_unref_items global (accessor for Rust).
+void nvim_set_tv_in_free_unref_items(int val)
+{
+  tv_in_free_unref_items = (bool)val;
+}
+
+/// Get tv_in_free_unref_items global (accessor for Rust).
+int nvim_get_tv_in_free_unref_items(void)
+{
+  return (int)tv_in_free_unref_items;
+}
+
 // =============================================================================
 // Blob accessor functions for Rust
 // =============================================================================
