@@ -148,6 +148,46 @@ pub unsafe extern "C" fn rs_check_elapsed_time() {
     }
 }
 
+/// Strip `^<digits>` segments from a 'complete' option string in place.
+///
+/// Removes max-matches notation (e.g., `^5`) from comma-separated entries
+/// in the 'cpt' option string. Walks the string byte-by-byte, skipping
+/// any `^<digits>` sequence that appears before a comma or NUL terminator.
+///
+/// # Safety
+/// `str` must point to a valid NUL-terminated C string, or be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_strip_caret_numbers_in_place(str: *mut c_char) {
+    if str.is_null() {
+        return;
+    }
+
+    let mut read = str;
+    let mut write = str;
+
+    while *read != 0 {
+        #[allow(clippy::cast_possible_wrap)]
+        if *read == b'^' as c_char {
+            // Check if followed by one or more digits and then comma/NUL
+            let mut p = read.add(1);
+            #[allow(clippy::cast_sign_loss)]
+            while *p != 0 && (*p as u8).is_ascii_digit() {
+                p = p.add(1);
+            }
+            // Valid ^N suffix: at least one digit, followed by comma or NUL
+            #[allow(clippy::cast_possible_wrap)]
+            if (*p == b',' as c_char || *p == 0) && p != read.add(1) {
+                read = p;
+                continue;
+            }
+        }
+        *write = *read;
+        write = write.add(1);
+        read = read.add(1);
+    }
+    *write = 0;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,6 +257,50 @@ mod tests {
     fn test_count_cpt_segments_leading_commas() {
         unsafe {
             assert_eq!(count(b",,.\0"), 1);
+        }
+    }
+
+    unsafe fn strip(s: &[u8]) -> String {
+        let mut buf = s.to_vec();
+        rs_strip_caret_numbers_in_place(buf.as_mut_ptr().cast::<c_char>());
+        let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+        String::from_utf8_lossy(&buf[..end]).into_owned()
+    }
+
+    #[test]
+    fn test_strip_caret_numbers_basic() {
+        unsafe {
+            assert_eq!(strip(b".,w^5,b\0"), ".,w,b");
+        }
+    }
+
+    #[test]
+    fn test_strip_caret_numbers_at_end() {
+        unsafe {
+            assert_eq!(strip(b".,w^10\0"), ".,w");
+        }
+    }
+
+    #[test]
+    fn test_strip_caret_numbers_no_digits() {
+        unsafe {
+            // "^" not followed by digits should be preserved
+            assert_eq!(strip(b".,^w\0"), ".,^w");
+        }
+    }
+
+    #[test]
+    fn test_strip_caret_numbers_null() {
+        unsafe {
+            // Should not crash
+            rs_strip_caret_numbers_in_place(std::ptr::null_mut());
+        }
+    }
+
+    #[test]
+    fn test_strip_caret_numbers_multiple() {
+        unsafe {
+            assert_eq!(strip(b"a^3,b^12,c\0"), "a,b,c");
         }
     }
 }

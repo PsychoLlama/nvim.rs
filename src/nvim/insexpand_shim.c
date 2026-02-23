@@ -141,6 +141,7 @@ extern void rs_ins_compl_free(void);
 extern void rs_compl_status_clear(void);
 extern void rs_ins_compl_init_get_longest(void);
 extern void rs_ins_compl_enable_autocomplete(void);
+extern void rs_strip_caret_numbers_in_place(char *str);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -3676,29 +3677,7 @@ static void get_next_bufname_token(void)
 /// max_matches setting.
 static void strip_caret_numbers_in_place(char *str)
 {
-  char *read = str, *write = str, *p;
-
-  if (str == NULL) {
-    return;
-  }
-
-  while (*read) {
-    if (*read == '^') {
-      p = read + 1;
-      while (ascii_isdigit(*p)) {
-        p++;
-      }
-      if ((*p == ',' || *p == '\0') && p != read + 1) {
-        read = p;
-        continue;
-      } else {
-        *write++ = *read++;
-      }
-    } else {
-      *write++ = *read++;
-    }
-  }
-  *write = '\0';
+  rs_strip_caret_numbers_in_place(str);
 }
 
 /// Call functions specified in the 'cpt' option with findstart=1,
