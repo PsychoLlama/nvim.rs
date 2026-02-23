@@ -145,6 +145,7 @@ extern void rs_strip_caret_numbers_in_place(char *str);
 extern unsigned rs_quote_meta(char *dest, char *src, int len);
 extern int rs_ins_compl_equal(void *m, const char *str, size_t len);
 extern void rs_ins_compl_update_sequence_numbers(void);
+extern int rs_ins_compl_col_range_attr(int lnum, int col);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -887,28 +888,7 @@ static void ins_compl_insert_bytes(char *p, int len)
 /// -1 means normal item.
 int ins_compl_col_range_attr(linenr_T lnum, int col)
 {
-  const bool has_preinsert = rs_ins_compl_has_preinsert() || rs_ins_compl_preinsert_longest();
-
-  int attr;
-  if (rs_cot_fuzzy()
-      || (!compl_hi_on_autocompl_longest && rs_ins_compl_preinsert_longest())
-      || (attr = syn_name2attr(has_preinsert ? "PreInsert" : "ComplMatchIns")) == 0) {
-    return -1;
-  }
-
-  int start_col = compl_col + (int)rs_ins_compl_leader_len();
-  if (!rs_ins_compl_has_multiple()) {
-    return (col >= start_col && col < compl_ins_end_col) ? attr : -1;
-  }
-
-  // Multiple lines
-  if ((lnum == compl_lnum && col >= start_col && col < MAXCOL)
-      || (lnum > compl_lnum && lnum < curwin->w_cursor.lnum)
-      || (lnum == curwin->w_cursor.lnum && col <= compl_ins_end_col)) {
-    return attr;
-  }
-
-  return -1;
+  return rs_ins_compl_col_range_attr((int)lnum, col);
 }
 
 /// Reduce the longest common string for match "match".
@@ -5511,6 +5491,8 @@ int nvim_get_p_ac(void) { return p_ac ? 1 : 0; }
 int nvim_curbuf_get_b_p_ac(void) { return curbuf->b_p_ac; }
 int nvim_get_compl_lnum(void) { return (int)compl_lnum; }
 int nvim_get_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
+int nvim_get_compl_hi_on_autocompl_longest(void) { return compl_hi_on_autocompl_longest ? 1 : 0; }
+int nvim_syn_name2attr(const char *name) { return syn_name2attr(name); }
 const char *nvim_get_compl_leader_data(void) { return compl_leader.data; }
 size_t nvim_get_compl_leader_size(void) { return compl_leader.size; }
 const char *nvim_get_compl_orig_text_data(void) { return compl_orig_text.data; }

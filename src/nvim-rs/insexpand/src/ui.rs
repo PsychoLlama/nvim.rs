@@ -243,12 +243,28 @@ pub extern "C" fn rs_ctrl_x_eval() -> c_int {
 // Phase 6: Extended UI Integration Functions
 // =============================================================================
 
+use std::os::raw::c_char;
+
 // Additional C accessor functions
 extern "C" {
     fn nvim_get_compl_col() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_compl_shown_match_exists() -> c_int;
     fn nvim_get_compl_autocomplete() -> c_int;
+
+    // For ins_compl_col_range_attr
+    fn nvim_get_compl_hi_on_autocompl_longest() -> c_int;
+    fn nvim_syn_name2attr(name: *const c_char) -> c_int;
+    fn nvim_get_compl_ins_end_col() -> c_int;
+    fn nvim_get_compl_lnum() -> c_int;
+    fn nvim_get_curwin_cursor_lnum() -> c_int;
+
+    // Already in Rust (lib.rs), declare as C for cross-module call
+    fn rs_ins_compl_has_preinsert() -> c_int;
+    fn rs_ins_compl_preinsert_longest() -> c_int;
+    fn rs_cot_fuzzy() -> c_int;
+    fn rs_ins_compl_leader_len() -> usize;
+    fn rs_ins_compl_has_multiple() -> c_int;
 }
 
 /// Check if completion should update the UI.
@@ -392,6 +408,69 @@ pub unsafe extern "C" fn rs_ui_show_mode_name() -> c_int {
     let mode = nvim_get_ctrl_x_mode();
     // Show mode name for all modes except NORMAL and SCROLL
     c_int::from(mode >= CTRL_X_WHOLE_LINE)
+}
+
+/// MAXCOL: maximum column value (0x7fffffff).
+const MAXCOL: c_int = 0x7fff_ffff;
+
+/// Determine if a (lnum, col) position falls within the completion highlight range.
+///
+/// Returns the highlight attribute to use, or -1 if no highlight applies.
+/// Mirrors `ins_compl_col_range_attr` in C.
+///
+/// # Safety
+/// Requires valid completion state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_col_range_attr(lnum: c_int, col: c_int) -> c_int {
+    let has_preinsert = rs_ins_compl_has_preinsert() != 0 || rs_ins_compl_preinsert_longest() != 0;
+
+    // Return -1 (no highlight) if:
+    // - fuzzy mode is active, or
+    // - preinsert_longest is active but compl_hi_on_autocompl_longest is false, or
+    // - the highlight group doesn't exist (syn_name2attr returns 0)
+    if rs_cot_fuzzy() != 0 {
+        return -1;
+    }
+
+    if nvim_get_compl_hi_on_autocompl_longest() == 0 && rs_ins_compl_preinsert_longest() != 0 {
+        return -1;
+    }
+
+    let hl_name = if has_preinsert {
+        c"PreInsert".as_ptr()
+    } else {
+        c"ComplMatchIns".as_ptr()
+    };
+
+    let attr = nvim_syn_name2attr(hl_name);
+    if attr == 0 {
+        return -1;
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let start_col = nvim_get_compl_col() + rs_ins_compl_leader_len() as c_int;
+    let compl_ins_end_col = nvim_get_compl_ins_end_col();
+    let compl_lnum = nvim_get_compl_lnum();
+    let cursor_lnum = nvim_get_curwin_cursor_lnum();
+
+    if rs_ins_compl_has_multiple() == 0 {
+        // Single-line case
+        return if col >= start_col && col < compl_ins_end_col {
+            attr
+        } else {
+            -1
+        };
+    }
+
+    // Multiple lines case
+    if (lnum == compl_lnum && col >= start_col && col < MAXCOL)
+        || (lnum > compl_lnum && lnum < cursor_lnum)
+        || (lnum == cursor_lnum && col <= compl_ins_end_col)
+    {
+        return attr;
+    }
+
+    -1
 }
 
 #[cfg(test)]
