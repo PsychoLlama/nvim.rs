@@ -7,7 +7,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::{OptFlags, OptValType};
 
@@ -521,6 +521,247 @@ pub unsafe extern "C" fn rs_expand_needs_env(ctx: *const ExpandContext) -> c_int
 #[no_mangle]
 pub extern "C" fn rs_expand_is_filesystem(expand_type: c_int) -> c_int {
     c_int::from(ExpandType::from_c_int(expand_type).is_filesystem())
+}
+
+// =============================================================================
+// ExpandSettingSubtract migration
+// =============================================================================
+
+/// Growing array structure matching C `garray_T`.
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct GArray {
+    ga_len: c_int,
+    ga_maxlen: c_int,
+    ga_itemsize: c_int,
+    ga_growsize: c_int,
+    ga_data: *mut c_void,
+}
+
+impl GArray {
+    const fn new() -> Self {
+        Self {
+            ga_len: 0,
+            ga_maxlen: 0,
+            ga_itemsize: 0,
+            ga_growsize: 1,
+            ga_data: std::ptr::null_mut(),
+        }
+    }
+}
+
+use crate::index::OptIndex;
+use crate::opt_index::K_OPT_INVALID;
+use crate::{BufHandle, WinHandle, FAIL, OK};
+
+extern "C" {
+    // expand_option static variable accessors
+    fn nvim_get_expand_option_idx() -> OptIndex;
+    fn nvim_get_expand_option_flags() -> c_int;
+
+    // option varp scope accessor
+    fn get_option_varp_scope_from(
+        opt_idx: OptIndex,
+        opt_flags: c_int,
+        buf: BufHandle,
+        win: WinHandle,
+    ) -> *mut c_void;
+
+    // option type checking
+    fn option_has_type(opt_idx: OptIndex, val_type: c_int) -> c_int;
+
+    // option flags
+    fn get_option_flags(opt_idx: OptIndex) -> u32;
+
+    // xp_pattern accessor
+    fn nvim_xp_get_pattern(xp: *mut c_void) -> *mut c_char;
+
+    // ExpandOldSetting: delegate for terminal options and numbers
+    fn ExpandOldSetting(num_matches: *mut c_int, matches: *mut *mut *mut c_char) -> c_int;
+
+    // escape_option_str_cmdline wrapper
+    fn nvim_escape_option_str_cmdline(var: *mut c_char) -> *mut c_char;
+
+    // vim_strchr: search for character in string (returns *const, cast to mut as needed)
+    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+
+    // vim_regexec: single-line regex match (regmatch_T* passed as *mut c_void)
+    fn vim_regexec(rmp: *mut c_void, line: *const c_char, col: c_int) -> c_int;
+
+    // curbuf/curwin accessors
+    fn nvim_opt_get_curbuf() -> BufHandle;
+    fn nvim_opt_get_curwin() -> WinHandle;
+
+    // garray operations
+    fn ga_init(gap: *mut GArray, itemsize: c_int, growsize: c_int);
+    fn ga_grow(gap: *mut GArray, n: c_int);
+
+    // xfree for cleanup (use *mut c_char to match other declarations in this crate)
+    fn xfree(ptr: *mut c_char);
+
+    // xstrdup, xmemdupz, xmalloc for allocation
+    fn xstrdup(str_: *const c_char) -> *mut c_char;
+    fn xmemdupz(data: *const c_char, len: usize) -> *mut c_char;
+    fn xmalloc(size: usize) -> *mut c_char;
+}
+
+/// kOptValTypeNumber value (must match C kOptValTypeNumber = 1)
+const K_OPT_VAL_TYPE_NUMBER: c_int = 1;
+
+/// Rust port of `ExpandSettingSubtract`.
+///
+/// Expansion handler for `:set-=`. Splits comma-separated or flag-list option
+/// values and returns matching completions filtered by `regmatch`.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_expand_setting_subtract(
+    xp: *mut c_void,
+    regmatch: *mut c_void, // regmatch_T* passed as opaque pointer
+    num_matches: *mut c_int,
+    matches: *mut *mut *mut c_char,
+) -> c_int {
+    let expand_option_idx = nvim_get_expand_option_idx();
+
+    if expand_option_idx == K_OPT_INVALID {
+        // Terminal option: delegate to ExpandOldSetting.
+        return ExpandOldSetting(num_matches, matches);
+    }
+
+    let expand_option_flags = nvim_get_expand_option_flags();
+    let curbuf = nvim_opt_get_curbuf();
+    let curwin = nvim_opt_get_curwin();
+
+    let option_val_ptr =
+        get_option_varp_scope_from(expand_option_idx, expand_option_flags, curbuf, curwin);
+    let option_val = *(option_val_ptr.cast::<*mut c_char>());
+
+    let option_flags = OptFlags(get_option_flags(expand_option_idx));
+
+    if option_has_type(expand_option_idx, K_OPT_VAL_TYPE_NUMBER) != 0 {
+        return ExpandOldSetting(num_matches, matches);
+    } else if option_flags.contains(OptFlags::COMMA) {
+        // Split by comma (respecting "\," escapes), filter by regexec, escape each.
+        // kOptFlagComma check goes first because 'whichwrap' has both COMMA and FLAG_LIST.
+
+        if *option_val == 0 {
+            return FAIL;
+        }
+
+        // Make a copy as we need to null-terminate items destructively.
+        let option_copy = xstrdup(option_val);
+        let mut next_val = option_copy;
+
+        let mut ga = GArray::new();
+        ga_init(
+            std::ptr::addr_of_mut!(ga),
+            c_int::try_from(std::mem::size_of::<*mut c_char>()).unwrap_or(8),
+            10,
+        );
+
+        loop {
+            let item = next_val;
+
+            // Find next comma (skipping escaped commas "\,")
+            // vim_strchr returns *const, cast to *mut since we own the copy.
+            let mut comma = vim_strchr(next_val, c_int::from(b',')).cast_mut();
+            while !comma.is_null() && comma != next_val && *comma.offset(-1) == b'\\' as c_char {
+                comma = vim_strchr(comma.add(1), c_int::from(b',')).cast_mut();
+            }
+
+            if comma.is_null() {
+                next_val = std::ptr::null_mut();
+            } else {
+                // Null-terminate this item.
+                *comma = 0;
+                next_val = comma.add(1);
+            }
+
+            if *item == 0 {
+                // Empty value, skip.
+                if next_val.is_null() {
+                    break;
+                }
+                continue;
+            }
+
+            if vim_regexec(regmatch, item, 0) == 0 {
+                if next_val.is_null() {
+                    break;
+                }
+                continue;
+            }
+
+            let escaped = nvim_escape_option_str_cmdline(item);
+            // GA_APPEND: grow by 1 and store pointer.
+            ga_grow(std::ptr::addr_of_mut!(ga), 1);
+            #[allow(clippy::cast_ptr_alignment)]
+            let slot = ga.ga_data.cast::<*mut c_char>().add(ga.ga_len as usize);
+            *slot = escaped;
+            ga.ga_len += 1;
+
+            if next_val.is_null() {
+                break;
+            }
+        }
+
+        xfree(option_copy);
+
+        #[allow(clippy::cast_ptr_alignment)]
+        {
+            *matches = ga.ga_data.cast::<*mut c_char>();
+        }
+        *num_matches = ga.ga_len;
+        return OK;
+    } else if option_flags.contains(OptFlags::FLAG_LIST) {
+        // Flag-list: expose individual flags (and full value) as choices.
+        // Only when xp_pattern is empty.
+
+        let xp_pattern = nvim_xp_get_pattern(xp);
+        if *xp_pattern != 0 {
+            // Non-empty pattern: don't suggest anything.
+            return FAIL;
+        }
+
+        let mut len = 0usize;
+        let mut p = option_val;
+        while *p != 0 {
+            len += 1;
+            p = p.add(1);
+        }
+
+        if len == 0 {
+            return FAIL;
+        }
+
+        // Allocate: 1 for full value + len individual flags (+ 1 for safety)
+        let arr_size = if len > 1 { len + 1 } else { 1 };
+        #[allow(clippy::cast_ptr_alignment)]
+        let arr = xmalloc(arr_size * std::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
+
+        let mut count: usize = 0;
+
+        // First entry: the whole current value
+        *arr.add(count) = xmemdupz(option_val, len);
+        count += 1;
+
+        if len > 1 {
+            // Individual flag characters
+            let mut flag = option_val;
+            while *flag != 0 {
+                *arr.add(count) = xmemdupz(flag, 1);
+                count += 1;
+                flag = flag.add(1);
+            }
+        }
+
+        *matches = arr;
+        *num_matches = count as c_int;
+        return OK;
+    }
+
+    ExpandOldSetting(num_matches, matches)
 }
 
 // =============================================================================

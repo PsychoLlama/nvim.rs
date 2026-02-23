@@ -4878,6 +4878,16 @@ static char *escape_option_str_cmdline(char *var)
   return buf;
 }
 
+/// Non-static wrapper for escape_option_str_cmdline (for Rust FFI).
+char *nvim_escape_option_str_cmdline(char *var)
+{
+  return escape_option_str_cmdline(var);
+}
+
+/// curbuf/curwin accessors for option expansion Rust code.
+buf_T *nvim_opt_get_curbuf(void) { return curbuf; }
+win_T *nvim_opt_get_curwin(void) { return curwin; }
+
 /// Expansion handler for :set= when we just want to fill in with the existing value.
 int ExpandOldSetting(int *numMatches, char ***matches)
 {
@@ -4939,110 +4949,6 @@ int ExpandStringSetting(expand_T *xp, regmatch_T *regmatch, int *numMatches, cha
   return num_ret;
 }
 
-/// Expansion handler for :set-=
-int ExpandSettingSubtract(expand_T *xp, regmatch_T *regmatch, int *numMatches, char ***matches)
-{
-  if (expand_option_idx == kOptInvalid) {
-    // term option
-    return ExpandOldSetting(numMatches, matches);
-  }
-
-  char *option_val = *(char **)get_option_varp_scope_from(expand_option_idx,
-                                                          expand_option_flags,
-                                                          curbuf, curwin);
-
-  uint32_t option_flags = options[expand_option_idx].flags;
-
-  if (option_has_type(expand_option_idx, kOptValTypeNumber)) {
-    return ExpandOldSetting(numMatches, matches);
-  } else if (option_flags & kOptFlagComma) {
-    // Split the option by comma, then present each option to the user if
-    // it matches the pattern.
-    // This condition needs to go first, because 'whichwrap' has both
-    // kOptFlagComma and kOptFlagFlagList.
-
-    if (*option_val == NUL) {
-      return FAIL;
-    }
-
-    // Make a copy as we need to inject null characters destructively.
-    char *option_copy = xstrdup(option_val);
-    char *next_val = option_copy;
-
-    garray_T ga;
-    ga_init(&ga, sizeof(char *), 10);
-
-    do {
-      char *item = next_val;
-      char *comma = vim_strchr(next_val, ',');
-      while (comma != NULL && comma != next_val && *(comma - 1) == '\\') {
-        // "\," is interpreted as a literal comma rather than option
-        // separator when reading options in copy_option_part(). Skip
-        // it.
-        comma = vim_strchr(comma + 1, ',');
-      }
-      if (comma != NULL) {
-        *comma = NUL;  // null-terminate this value, required by later functions
-        next_val = comma + 1;
-      } else {
-        next_val = NULL;
-      }
-
-      if (*item == NUL) {
-        // empty value, don't add to list
-        continue;
-      }
-
-      if (!vim_regexec(regmatch, item, 0)) {
-        continue;
-      }
-
-      char *buf = escape_option_str_cmdline(item);
-      GA_APPEND(char *, &ga, buf);
-    } while (next_val != NULL);
-
-    xfree(option_copy);
-
-    *matches = ga.ga_data;
-    *numMatches = ga.ga_len;
-    return OK;
-  } else if (option_flags & kOptFlagFlagList) {
-    // Only present the flags that are set on the option as the other flags
-    // are not meaningful to do set-= on.
-
-    if (*xp->xp_pattern != NUL) {
-      // Don't suggest anything if cmdline is non-empty. Vim's set-=
-      // behavior requires consecutive strings and it's usually
-      // unintuitive to users if they try to subtract multiple flags at
-      // once.
-      return FAIL;
-    }
-
-    size_t num_flags = strlen(option_val);
-    if (num_flags == 0) {
-      return FAIL;
-    }
-
-    *matches = xmalloc(sizeof(char *) * (num_flags + 1));
-
-    int count = 0;
-
-    (*matches)[count++] = xmemdupz(option_val, num_flags);
-
-    if (num_flags > 1) {
-      // If more than one flags, split the flags up and expose each
-      // character as individual choice.
-      for (char *flag = option_val; *flag != NUL; flag++) {
-        (*matches)[count++] = xmemdupz(flag, 1);
-      }
-    }
-
-    *numMatches = count;
-    return OK;
-  }
-
-  return ExpandOldSetting(numMatches, matches);
-}
 
 /// Get the value for the numeric or string option///opp in a nice format into
 /// NameBuff[].  Must not be called with a hidden option!

@@ -88,6 +88,9 @@ typedef void *(*user_expand_func_T)(const char *, int, typval_T *);
 // Rust FFI declarations (tag module)
 extern int rs_expand_tags(bool tagnames, char *pat, int *num_file, char ***file);
 
+// Rust FFI declarations (option expand module)
+extern int rs_expand_setting_subtract(void *xp, void *regmatch, int *numMatches, char ***matches);
+
 // Rust FFI declarations (window wrappers removed)
 extern int rs_global_stl_height(void);
 extern void rs_last_status(int morewin);
@@ -3239,7 +3242,7 @@ static int ExpandFromContext(expand_T *xp, char *pat, char ***matches, int *numM
   } else if (xp->xp_context == EXPAND_STRING_SETTING) {
     ret = ExpandStringSetting(xp, &regmatch, numMatches, matches);
   } else if (xp->xp_context == EXPAND_SETTING_SUBTRACT) {
-    ret = ExpandSettingSubtract(xp, &regmatch, numMatches, matches);
+    ret = rs_expand_setting_subtract(xp, &regmatch, numMatches, matches);
   } else if (xp->xp_context == EXPAND_MAPPINGS) {
     ret = ExpandMappings(pat, &regmatch, numMatches, matches);
   } else if (xp->xp_context == EXPAND_ARGOPT) {
