@@ -2071,9 +2071,6 @@ extern "C" {
     fn nvim_qf_free_callback(qfl: QfListHandleMut);
     fn nvim_qf_set_changedtick(qfl: QfListHandleMut, changedtick: c_int);
     fn nvim_qf_shift_lists_down(qi: QfInfoHandleMut);
-    fn nvim_qf_zero_top_list(qi: QfInfoHandleMut);
-    fn nvim_qf_decr_curlist(qi: QfInfoHandleMut);
-    fn nvim_qf_decr_listcount(qi: QfInfoHandleMut);
 }
 
 /// Opaque handle to buffer (Phase 7)
@@ -2418,12 +2415,12 @@ pub unsafe extern "C" fn rs_qf_pop_stack(qi: QfInfoHandleMut, adjust: bool) {
     nvim_qf_shift_lists_down(qi);
 
     // Zero the now-unused top list
-    nvim_qf_zero_top_list(qi);
+    stack::rs_qf_zero_top_list(stack::QfStackHandle(qi));
 
     // Adjust listcount and curlist if requested
     if adjust {
-        nvim_qf_decr_listcount(qi);
-        nvim_qf_decr_curlist(qi);
+        stack::rs_qf_decr_listcount(stack::QfStackHandle(qi));
+        stack::rs_qf_decr_curlist(stack::QfStackHandle(qi));
     }
 }
 

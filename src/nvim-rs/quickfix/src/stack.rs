@@ -30,7 +30,7 @@ pub const INVALID_QFIDX: c_int = -1;
 /// Opaque handle to quickfix stack (`qf_info_T`)
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct QfStackHandle(*mut c_void);
+pub struct QfStackHandle(pub *mut c_void);
 
 impl QfStackHandle {
     /// Check if the handle is null

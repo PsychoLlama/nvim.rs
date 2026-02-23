@@ -172,7 +172,6 @@ extern bool rs_qf_stack_empty(const void *qi);
 extern bool rs_qf_list_empty(const void *qfl);
 extern bool rs_qflist_valid(const void *wp, unsigned qf_id);
 extern void rs_qf_msg(const void *qi, int which, const char *lead);
-extern int rs_qf_get_nth_valid_entry_do(const void *qfl, int n, bool fdo);
 extern int rs_qf_getprop_filewinid(const void *wp, const void *qi);
 extern int rs_qf_getprop_qfbufnr(const void *qi);
 extern int rs_copy_loclist_entries(const void *from_qfl, void *to_qfl);
@@ -274,12 +273,6 @@ extern int rs_qf_getprop_keys2flags(const void *what, bool loclist);
 extern int rs_qf_getprop_qfidx(const void *qi, const void *what);
 extern int rs_qf_getprop_defaults(const void *qi, int flags, bool locstack, void *retdict);
 extern int rs_qf_setprop_get_qfidx(const void *qi, const void *what, int action, bool *newlist);
-
-// Phase 5: Stack mutation helpers (migrated to Rust)
-extern void rs_qf_decr_curlist(void *qi);
-extern void rs_qf_decr_listcount(void *qi);
-extern void rs_qf_zero_top_list(void *qi);
-extern void rs_qf_decr_refcount(void *qi);
 
 // Phase 4: mark_adjust and valid counting (migrated to Rust)
 extern bool rs_qf_mark_adjust(void *qi, int buf_fnum, int buf_has_flag, int32_t line1,
@@ -818,14 +811,6 @@ void nvim_qf_shift_lists_down(void *qi_void)
   }
 }
 
-/// Zero the list at index (listcount - 1)
-void nvim_qf_zero_top_list(void *qi_void) { rs_qf_zero_top_list(qi_void); }
-
-/// Decrement curlist, handling wrap to max
-void nvim_qf_decr_curlist(void *qi_void) { rs_qf_decr_curlist(qi_void); }
-
-/// Decrement listcount
-void nvim_qf_decr_listcount(void *qi_void) { rs_qf_decr_listcount(qi_void); }
 
 static int qf_get_fnum(qf_list_T *qfl, char *directory, char *fname);
 
@@ -1009,8 +994,6 @@ int nvim_qf_get_refcount(const void *qi_void) { return qi_void == NULL ? 0 : ((c
 void nvim_qf_incr_refcount(void *qi_void) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_refcount++; }
 void nvim_qf_set_refcount(void *qi_void, int v) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_refcount = v; }
 
-/// Decrement the reference count of a quickfix info struct
-void nvim_qf_decr_refcount(void *qi_void) { rs_qf_decr_refcount(qi_void); }
 
 void *nvim_qf_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
 bool nvim_qf_has_user_data(const void *qfl_void) { return qfl_void == NULL ? false : ((const qf_list_T *)qfl_void)->qf_has_user_data; }
@@ -3738,8 +3721,6 @@ int qf_get_cur_valid_idx(exarg_T *eap)
 void *nvim_qf_cmd_get_stack(void *eap_void, bool print_emsg) { return qf_cmd_get_stack((exarg_T *)eap_void, print_emsg); }
 
 void nvim_qf_msg(void *qi_void, int which, const char *lead) { qf_msg((qf_info_T *)qi_void, which, (char *)lead); }
-
-int nvim_qf_get_nth_valid_entry(void *qfl_void, int n, bool fdo) { return rs_qf_get_nth_valid_entry_do(qfl_void, n, fdo); }
 
 void nvim_emsg_loclist(void) { emsg(_(e_loclist)); }
 
