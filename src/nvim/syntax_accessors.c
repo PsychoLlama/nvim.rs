@@ -185,6 +185,9 @@ extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
 // Rust match command FFI declaration
 extern void rs_syn_cmd_match(exarg_T *eap, int syncing);
 
+// Rust keyword command FFI declaration
+extern void rs_syn_cmd_keyword(exarg_T *eap, int syncing);
+
 static char *(spo_name_tab[SPO_COUNT]) =
 { "ms=", "me=", "hs=", "he=", "rs=", "re=", "lc=" };
 
@@ -1835,110 +1838,7 @@ static void syn_cmd_include(exarg_T *eap, int syncing)
 // Handle ":syntax keyword {group-name} [{option}] keyword .." command.
 static void syn_cmd_keyword(exarg_T *eap, int syncing)
 {
-  char *arg = eap->arg;
-  char *group_name_end;
-  int syn_id;
-  char *keyword_copy = NULL;
-  syn_opt_arg_T syn_opt_arg;
-  int conceal_char = NUL;
-
-  char *rest = get_group_name(arg, &group_name_end);
-
-  if (rest != NULL) {
-    if (eap->skip) {
-      syn_id = -1;
-    } else {
-      syn_id = syn_check_group(arg, (size_t)(group_name_end - arg));
-    }
-    if (syn_id != 0) {
-      // Allocate a buffer, for removing backslashes in the keyword.
-      keyword_copy = xmalloc(strlen(rest) + 1);
-    }
-    if (keyword_copy != NULL) {
-      syn_opt_arg.flags = 0;
-      syn_opt_arg.keyword = true;
-      syn_opt_arg.sync_idx = NULL;
-      syn_opt_arg.has_cont_list = false;
-      syn_opt_arg.cont_in_list = NULL;
-      syn_opt_arg.next_list = NULL;
-
-      // The options given apply to ALL keywords, so all options must be
-      // found before keywords can be created.
-      // 1: collect the options and copy the keywords to keyword_copy.
-      int cnt = 0;
-      char *p = keyword_copy;
-      for (; rest != NULL && !ends_excmd(*rest); rest = skipwhite(rest)) {
-        rest = get_syn_options(rest, &syn_opt_arg, &conceal_char, eap->skip);
-        if (rest == NULL || ends_excmd(*rest)) {
-          break;
-        }
-        // Copy the keyword, removing backslashes, and add a NUL.
-        while (*rest != NUL && !ascii_iswhite(*rest)) {
-          if (*rest == '\\' && rest[1] != NUL) {
-            rest++;
-          }
-          *p++ = *rest++;
-        }
-        *p++ = NUL;
-        cnt++;
-      }
-
-      if (!eap->skip) {
-        // Adjust flags for use of ":syn include".
-        syn_incl_toplevel(syn_id, &syn_opt_arg.flags);
-
-        // 2: Add an entry for each keyword.
-        size_t kwlen = 0;
-        for (char *kw = keyword_copy; --cnt >= 0; kw += kwlen + 1) {
-          for (p = vim_strchr(kw, '[');;) {
-            if (p == NULL) {
-              kwlen = strlen(kw);
-            } else {
-              *p = NUL;
-              kwlen = (size_t)(p - kw);
-            }
-            add_keyword(kw, kwlen, syn_id, syn_opt_arg.flags,
-                        syn_opt_arg.cont_in_list,
-                        syn_opt_arg.next_list, conceal_char);
-            if (p == NULL) {
-              break;
-            }
-            if (p[1] == NUL) {
-              semsg(_("E789: Missing ']': %s"), kw);
-              goto error;
-            }
-            if (p[1] == ']') {
-              if (p[2] != NUL) {
-                semsg(_(e_trailing_char_after_rsb_str_str), kw, &p[2]);
-                goto error;
-              }
-              kw = p + 1;
-              kwlen = 1;
-              break;   // skip over the "]"
-            }
-            const int l = utfc_ptr2len(p + 1);
-
-            memmove(p, p + 1, (size_t)l);
-            p += l;
-          }
-        }
-      }
-
-error:
-      xfree(keyword_copy);
-      xfree(syn_opt_arg.cont_in_list);
-      xfree(syn_opt_arg.next_list);
-    }
-  }
-
-  if (rest != NULL) {
-    eap->nextcmd = check_nextcmd(rest);
-  } else {
-    semsg(_(e_invarg2), arg);
-  }
-
-  redraw_curbuf_later(UPD_SOME_VALID);
-  syn_stack_free_all(curwin->w_s);              // Need to recompute all syntax.
+  rs_syn_cmd_keyword(eap, syncing);
 }
 
 /// Handle ":syntax match {name} [{options}] {pattern} [{options}]".
@@ -4811,6 +4711,30 @@ void nvim_syn_store_match_pattern(synpat_T *pat, int flags, int syn_id, int sync
     curwin->w_s->b_syn_folditems++;
   }
 
+  redraw_curbuf_later(UPD_SOME_VALID);
+  syn_stack_free_all(curwin->w_s);
+}
+
+// =============================================================================
+// Phase 3 accessors: syn_cmd_keyword migration
+// =============================================================================
+
+void nvim_syn_semsg_2s(const char *fmt, const char *arg1, const char *arg2)
+{
+  semsg(fmt, arg1, arg2);
+}
+
+/// Wrapper for add_keyword.
+void nvim_syn_add_keyword(char *name, int namelen, int id, int flags,
+                           int16_t *cont_in_list, int16_t *next_list,
+                           int conceal_char)
+{
+  add_keyword(name, (size_t)namelen, id, flags, cont_in_list, next_list, conceal_char);
+}
+
+/// Trigger redraw and free syntax state after keyword changes.
+void nvim_syn_keyword_redraw_and_free(void)
+{
   redraw_curbuf_later(UPD_SOME_VALID);
   syn_stack_free_all(curwin->w_s);
 }
