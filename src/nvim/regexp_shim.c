@@ -304,30 +304,6 @@ extern int rs_get_char_class(char **pp);
 #define RF_NOICASE  2   // don't ignore case
 #define RF_ICOMBINE 8   // ignore combining characters
 
-// Global work variables for vim_regcomp().
-
-static char *regparse;          ///< Input-scan pointer.
-static int regnpar;             ///< () count.
-static bool wants_nfa;          ///< regex should use NFA engine
-static int regnzpar;            ///< \z() count.
-static int re_has_z;            ///< \z item detected
-static unsigned regflags;       ///< RF_ flags for prog
-static int had_eol;             ///< true when EOL found by vim_regcomp()
-
-static magic_T reg_magic;       ///< magicness of the pattern
-
-static int reg_string;          // matching with a string instead of a buffer
-                                // line
-static int reg_strict;          // "[abc" is illegal
-
-static int curchr;              // currently parsed character
-// Previous character.  Note: prevchr is sometimes -1 when we are not at the
-// start, eg in /[ ^I]^ the pattern was never found even if it existed,
-// because ^ was taken to be magic -- webb
-static int prevchr;
-static int prevprevchr;         // previous-previous character
-static int nextchr;             // used for ungetchr()
-
 static regengine_T bt_regengine;
 static regengine_T nfa_regengine;
 
@@ -337,10 +313,6 @@ static regengine_T nfa_regengine;
 int nvim_regexp_get_char_class(char **pp) { return rs_get_char_class(pp); }
 
 unsigned int nvim_regexp_get_regflags(const regprog_T *prog) { return prog->regflags; }
-
-static int reg_cpo_lit;  // 'cpoptions' contains 'l' flag
-int nvim_regexp_get_reg_cpo_lit(void) { return reg_cpo_lit; }
-void nvim_regexp_set_reg_cpo_lit(int v) { reg_cpo_lit = v; }
 
 void nvim_regexp_semsg_e654(const char *startp) { semsg(_(e_missing_delimiter_after_search_pattern_str), startp); }
 
@@ -362,38 +334,6 @@ char *skip_regexp_ex(char *startp, int dirc, int magic, char **newp, int *droppe
   return rs_skip_regexp_ex(startp, dirc, magic, newp, dropped, (int *)magic_val);
 }
 
-// variables used for parsing
-static int prevchr_len;    // byte length of previous char
-static int at_start;       // True when on the first character
-static int prev_at_start;  // True when on the second character
-static int after_slash;    // for peekchr() recursive call depth tracking
-
-// --- Parse state accessors for Rust FFI ---
-
-char *nvim_regexp_get_regparse(void) { return regparse; }
-void nvim_regexp_set_regparse(char *p) { regparse = p; }
-int nvim_regexp_get_prevchr_len(void) { return prevchr_len; }
-void nvim_regexp_set_prevchr_len(int v) { prevchr_len = v; }
-int nvim_regexp_get_curchr(void) { return curchr; }
-void nvim_regexp_set_curchr(int v) { curchr = v; }
-int nvim_regexp_get_prevchr(void) { return prevchr; }
-void nvim_regexp_set_prevchr(int v) { prevchr = v; }
-int nvim_regexp_get_prevprevchr(void) { return prevprevchr; }
-void nvim_regexp_set_prevprevchr(int v) { prevprevchr = v; }
-int nvim_regexp_get_nextchr(void) { return nextchr; }
-void nvim_regexp_set_nextchr(int v) { nextchr = v; }
-int nvim_regexp_get_at_start(void) { return at_start; }
-void nvim_regexp_set_at_start(int v) { at_start = v; }
-int nvim_regexp_get_prev_at_start(void) { return prev_at_start; }
-void nvim_regexp_set_prev_at_start(int v) { prev_at_start = v; }
-int nvim_regexp_get_regnpar(void) { return regnpar; }
-void nvim_regexp_set_regnpar(int v) { regnpar = v; }
-int nvim_regexp_get_reg_magic(void) { return (int)reg_magic; }
-void nvim_regexp_set_reg_magic(int v) { reg_magic = (magic_T)v; }
-int nvim_regexp_get_after_slash(void) { return after_slash; }
-void nvim_regexp_set_after_slash(int v) { after_slash = v; }
-unsigned int nvim_regexp_get_regflags_compile(void) { return regflags; }
-void nvim_regexp_set_regflags_compile(unsigned int v) { regflags = v; }
 // vim_regexec and friends
 
 // Global work variables for vim_regexec().
@@ -1077,8 +1017,6 @@ void nvim_regexp_emsg3_e62(int m, int c)
   semsg(_("E62: Nested %s%c"), m ? "" : "\\", c);
   rc_did_emsg = true;
 }
-int nvim_regexp_get_regnzpar(void) { return regnzpar; }
-void nvim_regexp_set_regnzpar(int v) { regnzpar = v; }
 void nvim_regexp_set_had_endbrace(int parno, int v) { had_endbrace[parno] = (uint8_t)v; }
 void nvim_regexp_emsg_e50(void)
 {
@@ -1116,19 +1054,12 @@ void nvim_regexp_emsg_e488(void)
   rc_did_emsg = true;
 }
 
-int nvim_regexp_get_had_eol(void) { return had_eol; }
-void nvim_regexp_set_had_eol(int v) { had_eol = v; }
-int nvim_regexp_get_one_exactly(void) { return one_exactly; }
-void nvim_regexp_set_one_exactly(int v) { one_exactly = v; }
-int nvim_regexp_get_reg_string(void) { return reg_string; }
-void nvim_regexp_set_reg_string(int v) { reg_string = v; }
-int nvim_regexp_get_reg_do_extmatch(void) { return reg_do_extmatch; }
-int nvim_regexp_get_re_has_z(void) { return re_has_z; }
-void nvim_regexp_set_re_has_z(int v) { re_has_z = v; }
-int nvim_regexp_get_reg_strict(void) { return reg_strict; }
-void nvim_regexp_set_reg_strict(int v) { reg_strict = v; }
 int nvim_regexp_get_had_endbrace(int refnum) { return had_endbrace[refnum]; }
 void nvim_regexp_clear_had_endbrace(void) { CLEAR_FIELD(had_endbrace); }
+// reg_do_extmatch is a global (globals.h), not a C static -- accessor kept for Rust FFI
+int nvim_regexp_get_reg_do_extmatch(void) { return reg_do_extmatch; }
+// reg_prev_sub is a C static (kept here until it is moved to Rust in a later phase)
+char *nvim_regexp_get_reg_prev_sub_ptr(void) { return reg_prev_sub; }
 int32_t nvim_regexp_get_curwin_lnum(void) { return (int32_t)curwin->w_cursor.lnum; }
 int32_t nvim_regexp_get_curwin_col(void) { return (int32_t)curwin->w_cursor.col; }
 int32_t nvim_regexp_get_curwin_vcol(void)
@@ -1137,7 +1068,6 @@ int32_t nvim_regexp_get_curwin_vcol(void)
   getvvcol(curwin, &curwin->w_cursor, NULL, NULL, &vcol);
   return (int32_t)(++vcol);
 }
-char *nvim_regexp_get_reg_prev_sub_ptr(void) { return reg_prev_sub; }
 
 void nvim_regexp_emsg_e63_underscore(void)
 {
@@ -1770,8 +1700,6 @@ void nvim_regexp_set_istate(int v) { istate = v; }
 
 int nvim_regexp_get_nfa_re_flags(void) { return nfa_re_flags; }
 void nvim_regexp_set_nfa_re_flags(int v) { nfa_re_flags = v; }
-int nvim_regexp_get_wants_nfa(void) { return (int)wants_nfa; }
-void nvim_regexp_set_wants_nfa(int v) { wants_nfa = (bool)v; }
 
 void nvim_regexp_set_rex_nfa_has_zend(int v) { rex.nfa_has_zend = v; }
 void nvim_regexp_set_rex_nfa_has_backref(int v) { rex.nfa_has_backref = v; }
