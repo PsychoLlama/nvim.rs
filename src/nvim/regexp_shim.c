@@ -501,9 +501,6 @@ int nvim_regexp_get_rex_reg_line_lbr(void) { return REX_PTR->reg_line_lbr; }
 int nvim_regexp_call_vim_iswordp_buf(const char *p) { return vim_iswordp_buf(p, REX_PTR->reg_buf); }
 void nvim_regexp_iemsg_re_corr(void) { iemsg(_(e_re_corr)); }
 
-// regtry accessors for Rust FFI
-uint8_t nvim_regexp_get_prog_reghasz(const void *prog) { return ((const bt_regprog_T *)prog)->reghasz; }
-uint8_t *nvim_regexp_get_prog_program(void *prog) { return ((bt_regprog_T *)prog)->program; }
 void nvim_regexp_unref_re_extmatch_out(void) { unref_extmatch(re_extmatch_out); }
 void nvim_regexp_set_re_extmatch_out(void *em) { re_extmatch_out = (reg_extmatch_T *)em; }
 void *nvim_regexp_get_re_extmatch_out(void) { return (void *)re_extmatch_out; }
@@ -1281,64 +1278,11 @@ void nvim_regexp_bt_cleanup_stacks(void) {
   nvim_regexp_bt_cleanup_stacks_rust();
 }
 
-// bt_regprog_T field getters
-uint8_t *nvim_bt_prog_get_regmust(const void *prog) { return ((const bt_regprog_T *)prog)->regmust; }
-int nvim_bt_prog_get_regmlen(const void *prog) { return ((const bt_regprog_T *)prog)->regmlen; }
-int nvim_bt_prog_get_regstart(const void *prog) { return ((const bt_regprog_T *)prog)->regstart; }
-int nvim_bt_prog_get_reganch(const void *prog) { return ((const bt_regprog_T *)prog)->reganch; }
-// vim_regfree + free_regexp_stuff accessors
-void nvim_regexp_call_engine_regfree(void *prog) {
-  ((regprog_T *)prog)->engine->regfree((regprog_T *)prog);
-}
-
 void nvim_regexp_free_regexp_stuff_rust(void);
 void nvim_regexp_call_free_regexp_stuff(void) {
   nvim_regexp_free_regexp_stuff_rust();
   xfree(reg_prev_sub);
 }
-// vim_regexec public API accessors
-
-// rex, rex_in_use, rsm, can_f_submatch: moved to Rust statics.
-// save/restore is now done entirely in Rust (save_rex_state / restore_rex_state).
-// The C functions nvim_regexp_get_rex_in_use, nvim_regexp_set_rex_in_use,
-// nvim_regexp_save_rex, nvim_regexp_restore_rex, nvim_regexp_get_rex_save_size
-// are no longer needed and have been deleted.
-
-// Engine vtable dispatch
-int nvim_regexp_call_engine_regexec_nl(void *prog, void *rmp, uint8_t *line, int32_t col, int nl) {
-  return ((regprog_T *)prog)->engine->regexec_nl(
-    (regmatch_T *)rmp, line, (colnr_T)col, (bool)nl);
-}
-
-int nvim_regexp_call_engine_regexec_multi(void *prog, void *rmp, void *win, void *buf,
-                                          int32_t lnum, int32_t col, void *tm, int *timed_out) {
-  return ((regprog_T *)prog)->engine->regexec_multi(
-    (regmmatch_T *)rmp, (win_T *)win, (buf_T *)buf, (linenr_T)lnum, (colnr_T)col,
-    (proftime_T *)tm, timed_out);
-}
-
-// regprog_T field accessors
-int nvim_regprog_get_re_in_use(const void *prog) { return ((const regprog_T *)prog)->re_in_use ? 1 : 0; }
-void nvim_regprog_set_re_in_use(void *prog, int v) { ((regprog_T *)prog)->re_in_use = (bool)v; }
-unsigned nvim_regprog_get_re_engine(const void *prog) { return ((const regprog_T *)prog)->re_engine; }
-unsigned nvim_regprog_get_re_flags(const void *prog) { return ((const regprog_T *)prog)->re_flags; }
-
-// regmatch_T field accessors
-void *nvim_regmatch_get_regprog(const void *rmp) { return ((const regmatch_T *)rmp)->regprog; }
-void nvim_regmatch_set_regprog(void *rmp, void *prog) { ((regmatch_T *)rmp)->regprog = (regprog_T *)prog; }
-int nvim_regmatch_get_rm_ic(const void *rmp) { return ((const regmatch_T *)rmp)->rm_ic ? 1 : 0; }
-
-// regmmatch_T field accessors
-void *nvim_regmmatch_get_regprog(const void *rmp) { return ((const regmmatch_T *)rmp)->regprog; }
-void nvim_regmmatch_set_regprog(void *rmp, void *prog) { ((regmmatch_T *)rmp)->regprog = (regprog_T *)prog; }
-int nvim_regmmatch_get_rmm_ic(const void *rmp) { return ((const regmmatch_T *)rmp)->rmm_ic; }
-int32_t nvim_regmmatch_get_rmm_maxcol(const void *rmp) { return (int32_t)((const regmmatch_T *)rmp)->rmm_maxcol; }
-void nvim_regmmatch_set_rmm_matchcol(void *rmp, int32_t v) { ((regmmatch_T *)rmp)->rmm_matchcol = (colnr_T)v; }
-void nvim_regmatch_set_rm_matchcol(void *rmp, int32_t v) { ((regmatch_T *)rmp)->rm_matchcol = (colnr_T)v; }
-lpos_T *nvim_regmmatch_get_startpos_ptr(void *rmp) { return ((regmmatch_T *)rmp)->startpos; }
-lpos_T *nvim_regmmatch_get_endpos_ptr(void *rmp) { return ((regmmatch_T *)rmp)->endpos; }
-uint8_t **nvim_regmatch_get_startp_ptr(void *rmp) { return (uint8_t **)((regmatch_T *)rmp)->startp; }
-uint8_t **nvim_regmatch_get_endp_ptr(void *rmp) { return (uint8_t **)((regmatch_T *)rmp)->endp; }
 
 // curbuf and buf_T accessors
 void *nvim_regexp_get_curbuf(void) { return (void *)curbuf; }
@@ -1393,10 +1337,6 @@ void *nvim_regexp_call_bt_regcomp(const uint8_t *expr, int re_flags) {
   return bt_regengine.regcomp(expr, re_flags);
 }
 
-// regprog_T field setters
-void nvim_regprog_set_re_engine(void *prog, unsigned v) { ((regprog_T *)prog)->re_engine = v; }
-void nvim_regprog_set_re_flags(void *prog, unsigned v) { ((regprog_T *)prog)->re_flags = v; }
-
 // E864 error message
 void nvim_regexp_call_emsg_e864(void) {
   emsg(_("E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used "));
@@ -1410,13 +1350,6 @@ void *nvim_regexp_alloc_bt_regprog(int64_t regsize_val) {
   return r;
 }
 
-// bt_regprog_T field setters
-void nvim_bt_prog_set_regstart(void *prog, int v) { ((bt_regprog_T *)prog)->regstart = v; }
-void nvim_bt_prog_set_reganch(void *prog, int v) { ((bt_regprog_T *)prog)->reganch = v; }
-void nvim_bt_prog_set_regmust(void *prog, uint8_t *v) { ((bt_regprog_T *)prog)->regmust = v; }
-void nvim_bt_prog_set_regmlen(void *prog, int v) { ((bt_regprog_T *)prog)->regmlen = v; }
-void nvim_bt_prog_set_regflags(void *prog, unsigned v) { ((bt_regprog_T *)prog)->regflags = v; }
-void nvim_bt_prog_set_reghasz(void *prog, uint8_t v) { ((bt_regprog_T *)prog)->reghasz = v; }
 void nvim_bt_prog_set_engine_bt(void *prog) { ((bt_regprog_T *)prog)->engine = &bt_regengine; }
 
 // E339 error + rc_did_emsg
