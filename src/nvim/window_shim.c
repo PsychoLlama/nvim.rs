@@ -3663,76 +3663,11 @@ void scroll_to_fraction(win_T *wp, int prev_height)
   rs_scroll_to_fraction(wp, prev_height);
 }
 
+extern void rs_win_set_inner_size(win_T *wp, int valid_cursor);
+
 void win_set_inner_size(win_T *wp, bool valid_cursor)
 {
-  int width = wp->w_width_request;
-  if (width == 0) {
-    width = wp->w_width;
-  }
-
-  int prev_height = wp->w_view_height;
-  int height = wp->w_height_request;
-  if (height == 0) {
-    height = MAX(0, wp->w_height - wp->w_winbar_height);
-  }
-
-  if (height != prev_height) {
-    if (height > 0 && valid_cursor) {
-      if (wp == curwin && (*p_spk == 'c' || wp->w_floating)) {
-        // w_wrow needs to be valid. When setting 'laststatus' this may
-        // call win_new_height() recursively.
-        validate_cursor(curwin);
-      }
-      if (wp->w_view_height != prev_height) {
-        return;  // Recursive call already changed the size, bail out.
-      }
-      if (wp->w_wrow != wp->w_prev_fraction_row) {
-        rs_set_fraction(wp);
-      }
-    }
-    wp->w_view_height = height;
-    win_comp_scroll(wp);
-
-    // There is no point in adjusting the scroll position when exiting.  Some
-    // values might be invalid.
-    if (valid_cursor && !exiting && (*p_spk == 'c' || wp->w_floating)) {
-      wp->w_skipcol = 0;
-      scroll_to_fraction(wp, prev_height);
-    }
-    redraw_later(wp, UPD_SOME_VALID);
-  }
-
-  if (width != wp->w_view_width) {
-    wp->w_view_width = width;
-    wp->w_lines_valid = 0;
-    if (valid_cursor) {
-      changed_line_abv_curs_win(wp);
-      invalidate_botline(wp);
-      if (wp == curwin && (*p_spk == 'c' || wp->w_floating)) {
-        curs_columns(wp, true);  // validate w_wrow
-      }
-    }
-    redraw_later(wp, UPD_NOT_VALID);
-  }
-
-  if (wp->w_buffer->terminal) {
-    terminal_check_size(wp->w_buffer->terminal);
-  }
-
-  int float_stl_height = wp->w_floating && wp->w_status_height ? STATUS_HEIGHT : 0;
-  wp->w_height_outer = (wp->w_view_height + win_border_height(wp) + wp->w_winbar_height +
-                        float_stl_height);
-  wp->w_width_outer = (wp->w_view_width + win_border_width(wp));
-  wp->w_winrow_off = wp->w_border_adj[0] + wp->w_winbar_height;
-  wp->w_wincol_off = wp->w_border_adj[3];
-
-  if (ui_has(kUIMultigrid)) {
-    ui_call_win_viewport_margins(wp->w_grid_alloc.handle, wp->handle,
-                                 wp->w_winrow_off, wp->w_border_adj[2],
-                                 wp->w_wincol_off, wp->w_border_adj[1]);
-  }
-
-  wp->w_redr_status = true;
+  rs_win_set_inner_size(wp, valid_cursor ? 1 : 0);
 }
 
 void win_comp_scroll(win_T *wp)
@@ -3948,7 +3883,39 @@ int nvim_win_has_winnr(win_T *wp, tabpage_T *tp) { return (wp && tp) ? (int)win_
 void nvim_set_p_wmh(int64_t val) { p_wmh = val; }
 void nvim_set_p_wmw(int64_t val) { p_wmw = val; }
 void nvim_emsg_noroom(void) { emsg(_(e_noroom)); }
-void nvim_win_set_inner_size(win_T *wp, int valid_cursor) { if (wp) { win_set_inner_size(wp, valid_cursor != 0); } }
+
+// Accessors for rs_win_set_inner_size (Phase 4)
+int nvim_win_get_width_request(win_T *wp) { return wp ? wp->w_width_request : 0; }
+int nvim_win_get_height_request(win_T *wp) { return wp ? wp->w_height_request : 0; }
+int nvim_win_get_prev_fraction_row(win_T *wp) { return wp ? wp->w_prev_fraction_row : 0; }
+void nvim_win_set_view_height(win_T *wp, int val) { if (wp) { wp->w_view_height = val; } }
+void nvim_win_set_view_width(win_T *wp, int val) { if (wp) { wp->w_view_width = val; } }
+void nvim_win_set_height_outer(win_T *wp, int val) { if (wp) { wp->w_height_outer = val; } }
+void nvim_win_set_width_outer(win_T *wp, int val) { if (wp) { wp->w_width_outer = val; } }
+void nvim_win_set_winrow_off(win_T *wp, int val) { if (wp) { wp->w_winrow_off = val; } }
+void nvim_win_set_wincol_off(win_T *wp, int val) { if (wp) { wp->w_wincol_off = val; } }
+int nvim_win_get_p_spk_char(void) { return (int)(unsigned char)*p_spk; }
+int nvim_get_exiting(void) { return exiting ? 1 : 0; }
+void nvim_win_comp_scroll_wrapper(win_T *wp) { if (wp) { win_comp_scroll(wp); } }
+// nvim_validate_cursor_win already defined in move.c
+// nvim_changed_line_abv_curs_win already defined in change_ffi.c
+// nvim_invalidate_botline already defined in move.c
+void nvim_curs_columns_win(win_T *wp) { if (wp) { curs_columns(wp, true); } }
+void nvim_terminal_check_size_win(win_T *wp) { if (wp && wp->w_buffer->terminal) { terminal_check_size(wp->w_buffer->terminal); } }
+int nvim_win_border_height_wrapper(win_T *wp) { return wp ? win_border_height(wp) : 0; }
+int nvim_win_border_width_wrapper(win_T *wp) { return wp ? win_border_width(wp) : 0; }
+int nvim_win_get_grid_alloc_handle(win_T *wp) { return wp ? wp->w_grid_alloc.handle : 0; }
+int nvim_win_get_w_handle(win_T *wp) { return wp ? wp->handle : 0; }
+// nvim_win_get_border_adj already defined earlier in this file
+int nvim_ui_has_multigrid(void) { return ui_has(kUIMultigrid) ? 1 : 0; }
+void nvim_ui_call_win_viewport_margins_wrapper(win_T *wp) {
+  if (wp && ui_has(kUIMultigrid)) {
+    ui_call_win_viewport_margins(wp->w_grid_alloc.handle, wp->handle,
+                                 wp->w_winrow_off, wp->w_border_adj[2],
+                                 wp->w_wincol_off, wp->w_border_adj[1]);
+  }
+}
+void nvim_win_set_inner_size(win_T *wp, int valid_cursor) { if (wp) { rs_win_set_inner_size(wp, valid_cursor != 0); } }
 
 /// Get a snapshot pointer from a tabpage.
 frame_T *nvim_tabpage_get_snapshot(tabpage_T *tp, int idx)
@@ -4067,7 +4034,6 @@ void nvim_win_init_wrapper(win_T *wp, win_T *oldwin, int flags) { win_init(wp, o
 void nvim_frame_flatten_wrapper(frame_T *frp) { frame_flatten(frp); }
 frame_T *nvim_xcalloc_frame(void) { return xcalloc(1, sizeof(frame_T)); }
 void nvim_ui_comp_remove_grid_win(win_T *wp) { if (wp) { ui_comp_remove_grid(&wp->w_grid_alloc); } }
-int nvim_ui_has_multigrid(void) { return ui_has(kUIMultigrid) ? 1 : 0; }
 void nvim_ui_call_win_hide_win(win_T *wp) { if (wp) { ui_call_win_hide(wp->w_grid_alloc.handle); } }
 void nvim_win_free_grid_wrapper(win_T *wp, int reinit) { if (wp) { win_free_grid(wp, reinit != 0); } }
 

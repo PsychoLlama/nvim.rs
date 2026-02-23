@@ -387,6 +387,46 @@ pub extern "C" fn rs_resize_curwin_total_width() -> c_int {
 }
 
 // =============================================================================
+// Inner Size Accessors
+// =============================================================================
+
+extern "C" {
+    fn nvim_win_get_width_request(wp: WinHandle) -> c_int;
+    fn nvim_win_get_height_request(wp: WinHandle) -> c_int;
+    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
+    fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
+    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
+    fn nvim_win_get_wrow(wp: WinHandle) -> c_int;
+    fn nvim_win_get_prev_fraction_row(wp: WinHandle) -> c_int;
+    fn nvim_win_set_view_height(wp: WinHandle, val: c_int);
+    fn nvim_win_set_view_width(wp: WinHandle, val: c_int);
+    fn nvim_win_set_height_outer(wp: WinHandle, val: c_int);
+    fn nvim_win_set_width_outer(wp: WinHandle, val: c_int);
+    fn nvim_win_set_winrow_off(wp: WinHandle, val: c_int);
+    fn nvim_win_set_wincol_off(wp: WinHandle, val: c_int);
+    fn nvim_win_set_lines_valid(wp: WinHandle, val: c_int);
+    fn nvim_win_set_skipcol(wp: WinHandle, val: c_int);
+    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
+    fn nvim_win_get_p_spk_char() -> c_int;
+    fn nvim_get_exiting() -> c_int;
+    fn nvim_win_comp_scroll_wrapper(wp: WinHandle);
+    fn nvim_validate_cursor_win(wp: WinHandle);
+    fn nvim_changed_line_abv_curs_win(wp: WinHandle);
+    fn nvim_invalidate_botline(wp: WinHandle);
+    fn nvim_curs_columns_win(wp: WinHandle);
+    fn nvim_terminal_check_size_win(wp: WinHandle);
+    fn nvim_win_border_height_wrapper(wp: WinHandle) -> c_int;
+    fn nvim_win_border_width_wrapper(wp: WinHandle) -> c_int;
+    fn nvim_win_get_grid_alloc_handle(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_handle(wp: WinHandle) -> c_int;
+    fn nvim_win_get_border_adj(wp: WinHandle, idx: c_int) -> c_int;
+    fn nvim_ui_has_multigrid() -> c_int;
+    fn nvim_ui_call_win_viewport_margins_wrapper(wp: WinHandle);
+    fn nvim_redraw_later_wrapper(wp: WinHandle, update_type: c_int);
+    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
+}
+
+// =============================================================================
 // Height/Width Setter Wrappers
 // =============================================================================
 
@@ -396,7 +436,129 @@ extern "C" {
     fn nvim_win_field_set_height(wp: WinHandle, val: c_int);
     fn nvim_win_field_set_width(wp: WinHandle, val: c_int);
     fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
-    fn nvim_win_set_inner_size(wp: WinHandle, valid_cursor: c_int);
+}
+
+// =============================================================================
+// Inner Size Implementation
+// =============================================================================
+
+/// Update view dimensions, outer dimensions, and border offsets for window wp.
+///
+/// Handles height/width changes, cursor validation, scroll fractions, and
+/// viewport margins. Also triggers terminal size checks.
+///
+/// Equivalent to C `win_set_inner_size()` (window.c).
+fn win_set_inner_size_impl(wp: WinHandle, valid_cursor: bool) {
+    // UPD_SOME_VALID = 35, UPD_NOT_VALID = 40, STATUS_HEIGHT = 1
+    const UPD_SOME_VALID: c_int = 35;
+    const UPD_NOT_VALID: c_int = 40;
+    const STATUS_HEIGHT: c_int = 1;
+    const CH_C: c_int = b'c' as c_int;
+
+    if wp.is_null() {
+        return;
+    }
+
+    unsafe {
+        let width_request = nvim_win_get_width_request(wp);
+        let width = if width_request == 0 {
+            nvim_win_field_width(wp)
+        } else {
+            width_request
+        };
+
+        let prev_height = nvim_win_get_view_height(wp);
+        let height_request = nvim_win_get_height_request(wp);
+        let height = if height_request == 0 {
+            0_i32.max(nvim_win_field_height(wp) - nvim_win_get_winbar_height(wp))
+        } else {
+            height_request
+        };
+
+        if height != prev_height {
+            if height > 0 && valid_cursor {
+                let spk_char = nvim_win_get_p_spk_char();
+                let is_curwin = nvim_win_is_curwin(wp) != 0;
+                let is_floating = nvim_win_get_floating(wp) != 0;
+                if is_curwin && (spk_char == CH_C || is_floating) {
+                    nvim_validate_cursor_win(wp);
+                }
+                // Recursion guard: if view_height changed during validate_cursor, bail out
+                if nvim_win_get_view_height(wp) != prev_height {
+                    return;
+                }
+                if nvim_win_get_wrow(wp) != nvim_win_get_prev_fraction_row(wp) {
+                    crate::resize::rs_set_fraction(wp);
+                }
+            }
+            nvim_win_set_view_height(wp, height);
+            nvim_win_comp_scroll_wrapper(wp);
+            if valid_cursor && nvim_get_exiting() == 0 {
+                let spk_char = nvim_win_get_p_spk_char();
+                let is_floating = nvim_win_get_floating(wp) != 0;
+                if spk_char == CH_C || is_floating {
+                    nvim_win_set_skipcol(wp, 0);
+                    crate::resize::rs_scroll_to_fraction(wp, prev_height);
+                }
+            }
+            nvim_redraw_later_wrapper(wp, UPD_SOME_VALID);
+        }
+
+        let view_width = nvim_win_get_view_width(wp);
+        if width != view_width {
+            nvim_win_set_view_width(wp, width);
+            nvim_win_set_lines_valid(wp, 0);
+            if valid_cursor {
+                nvim_changed_line_abv_curs_win(wp);
+                nvim_invalidate_botline(wp);
+                let spk_char = nvim_win_get_p_spk_char();
+                let is_curwin = nvim_win_is_curwin(wp) != 0;
+                let is_floating = nvim_win_get_floating(wp) != 0;
+                if is_curwin && (spk_char == CH_C || is_floating) {
+                    nvim_curs_columns_win(wp);
+                }
+            }
+            nvim_redraw_later_wrapper(wp, UPD_NOT_VALID);
+        }
+
+        // Terminal size check
+        nvim_terminal_check_size_win(wp);
+
+        // Outer dimensions
+        let float_stl_height =
+            if nvim_win_get_floating(wp) != 0 && nvim_win_get_status_height(wp) != 0 {
+                STATUS_HEIGHT
+            } else {
+                0
+            };
+        let view_height = nvim_win_get_view_height(wp);
+        let border_h = nvim_win_border_height_wrapper(wp);
+        let winbar_h = nvim_win_get_winbar_height(wp);
+        nvim_win_set_height_outer(wp, view_height + border_h + winbar_h + float_stl_height);
+
+        let view_w = nvim_win_get_view_width(wp);
+        let border_w = nvim_win_border_width_wrapper(wp);
+        nvim_win_set_width_outer(wp, view_w + border_w);
+
+        // Border offsets
+        let border_adj_0 = nvim_win_get_border_adj(wp, 0);
+        nvim_win_set_winrow_off(wp, border_adj_0 + nvim_win_get_winbar_height(wp));
+        let border_adj_3 = nvim_win_get_border_adj(wp, 3);
+        nvim_win_set_wincol_off(wp, border_adj_3);
+
+        // Viewport margins
+        if nvim_ui_has_multigrid() != 0 {
+            nvim_ui_call_win_viewport_margins_wrapper(wp);
+        }
+
+        nvim_win_set_redr_status(wp, 1);
+    }
+}
+
+/// FFI: Update view dimensions, outer dimensions, and border offsets for window wp.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_win_set_inner_size(wp: WinHandle, valid_cursor: c_int) {
+    win_set_inner_size_impl(wp, valid_cursor != 0);
 }
 
 /// Set current window height and take care of repositioning other windows.
@@ -446,8 +608,8 @@ pub(crate) fn win_new_height_impl(wp: WinHandle, height: c_int) {
 
         nvim_win_field_set_height(wp, height);
         nvim_win_set_pos_changed(wp, 1);
-        nvim_win_set_inner_size(wp, 1);
     }
+    win_set_inner_size_impl(wp, true);
 }
 
 /// Set the width of a window.
@@ -462,8 +624,8 @@ pub(crate) fn win_new_width_impl(wp: WinHandle, width: c_int) {
         let w = if width < 0 { 0 } else { width };
         nvim_win_field_set_width(wp, w);
         nvim_win_set_pos_changed(wp, 1);
-        nvim_win_set_inner_size(wp, 1);
     }
+    win_set_inner_size_impl(wp, true);
 }
 
 /// FFI: Set the height of a window.
