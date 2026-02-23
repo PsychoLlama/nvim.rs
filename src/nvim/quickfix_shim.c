@@ -174,7 +174,6 @@ extern bool rs_qflist_valid(const void *wp, unsigned qf_id);
 extern void rs_qf_msg(const void *qi, int which, const char *lead);
 extern int rs_qf_getprop_filewinid(const void *wp, const void *qi);
 extern int rs_qf_getprop_qfbufnr(const void *qi);
-extern int rs_copy_loclist_entries(const void *from_qfl, void *to_qfl);
 extern int rs_copy_loclist(const void *from_qfl, void *to_qfl);
 extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
 extern void rs_reset_VIsual_and_resel(void);
@@ -2398,11 +2397,6 @@ static qf_info_T *qf_cmd_get_or_alloc_stack(const exarg_T *eap, win_T **pwinp)
   return qi;
 }
 
-/// Copy location list entries from 'from_qfl' to 'to_qfl'.
-static int copy_loclist_entries(const qf_list_T *from_qfl, qf_list_T *to_qfl) { return rs_copy_loclist_entries(from_qfl, to_qfl); }
-
-/// Copy the specified location list 'from_qfl' to 'to_qfl'.
-static int copy_loclist(qf_list_T *from_qfl, qf_list_T *to_qfl) { return rs_copy_loclist(from_qfl, to_qfl); }
 
 // Copy the location list stack 'from' window to 'to' window.
 void copy_loclist_stack(win_T *from, win_T *to)
@@ -2428,8 +2422,8 @@ void copy_loclist_stack(win_T *from, win_T *to)
   for (int idx = 0; idx < qi->qf_listcount; idx++) {
     to->w_llist->qf_curlist = idx;
 
-    if (copy_loclist(qf_get_list(qi, idx),
-                     qf_get_list(to->w_llist, idx)) == FAIL) {
+    if (rs_copy_loclist(qf_get_list(qi, idx),
+                        qf_get_list(to->w_llist, idx)) == FAIL) {
       qf_free_all(to);
       return;
     }
@@ -3026,7 +3020,6 @@ void qf_list(exarg_T *eap)
 }
 
 /// quickfix/location list.
-static void qf_msg(qf_info_T *qi, int which, char *lead) { rs_qf_msg(qi, which, lead); }
 
 /// into that buffer, or NULL to check the quickfix list.
 bool qf_mark_adjust(buf_T *buf, win_T *wp, linenr_T line1, linenr_T line2, linenr_T amount,
@@ -3720,7 +3713,7 @@ int qf_get_cur_valid_idx(exarg_T *eap)
 /// For :cfdo and :lfdo, returns the 'n'th valid file entry.
 void *nvim_qf_cmd_get_stack(void *eap_void, bool print_emsg) { return qf_cmd_get_stack((exarg_T *)eap_void, print_emsg); }
 
-void nvim_qf_msg(void *qi_void, int which, const char *lead) { qf_msg((qf_info_T *)qi_void, which, (char *)lead); }
+void nvim_qf_msg(void *qi_void, int which, const char *lead) { rs_qf_msg(qi_void, which, lead); }
 
 void nvim_emsg_loclist(void) { emsg(_(e_loclist)); }
 
