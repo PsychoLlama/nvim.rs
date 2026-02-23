@@ -135,6 +135,7 @@ extern int rs_eval_lit_string(char **arg, typval_T *rettv, bool evaluate, bool i
 extern int rs_eval_string(char **arg, typval_T *rettv, bool evaluate, bool interpolate);
 extern int rs_eval_dict(char **arg, typval_T *rettv, evalarg_T *evalarg, bool literal);
 extern int rs_eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *evalarg);
+extern int rs_eval7(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -1762,7 +1763,7 @@ int eval1(char **arg, typval_T *rettv, evalarg_T *const evalarg)
 int eval6(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool want_string)
 {
   // Get the first variable.
-  if (eval7(arg, rettv, evalarg, want_string) == FAIL) {
+  if (rs_eval7(arg, rettv, evalarg, want_string) == FAIL) {
     return FAIL;
   }
 
@@ -1778,7 +1779,7 @@ int eval6(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool want_strin
     // Get the second variable.
     *arg = skipwhite(*arg + 1);
     typval_T var2;
-    if (eval7(arg, &var2, evalarg, false) == FAIL) {
+    if (rs_eval7(arg, &var2, evalarg, false) == FAIL) {
       return FAIL;
     }
 
@@ -1793,273 +1794,7 @@ int eval6(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool want_strin
   return OK;
 }
 
-/// Handle sixth level expression:
-///  number  number constant
-///  0zFFFFFFFF  Blob constant
-///  "string"  string constant
-///  'string'  literal string constant
-///  &option-name option value
-///  @r   register contents
-///  identifier  variable value
-///  function()  function call
-///  $VAR  environment variable
-///  (expression) nested expression
-///  [expr, expr] List
-///  {key: val, key: val}  Dictionary
-///  #{key: val, key: val}  Dictionary with literal keys
-///
-///  Also handle:
-///  ! in front  logical NOT
-///  - in front  unary minus
-///  + in front  unary plus (ignored)
-///  trailing []  subscript in String or List
-///  trailing .name entry in Dictionary
-///  trailing ->name()  method call
-///
-/// "arg" must point to the first non-white of the expression.
-/// "arg" is advanced to the next non-white after the recognized expression.
-///
-/// @param want_string  after "." operator
-///
-/// @return  OK or FAIL.
-static int eval7(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool want_string)
-{
-  const bool evaluate = evalarg != NULL && (evalarg->eval_flags & EVAL_EVALUATE);
-  int ret = OK;
-  static int recurse = 0;
-
-  // Initialise variable so that tv_clear() can't mistake this for a
-  // string and free a string that isn't there.
-  rettv->v_type = VAR_UNKNOWN;
-
-  // Skip '!', '-' and '+' characters.  They are handled later.
-  const char *start_leader = *arg;
-  while (**arg == '!' || **arg == '-' || **arg == '+') {
-    *arg = skipwhite(*arg + 1);
-  }
-  const char *end_leader = *arg;
-
-  // Limit recursion to 1000 levels.  At least at 10000 we run out of stack
-  // and crash.  With MSVC the stack is smaller.
-  if (recurse ==
-#ifdef _MSC_VER
-      300
-#else
-      1000
-#endif
-      ) {
-    semsg(_(e_expression_too_recursive_str), *arg);
-    return FAIL;
-  }
-  recurse++;
-
-  switch (**arg) {
-  // Number constant.
-  case '0':
-  case '1':
-  case '2':
-  case '3':
-  case '4':
-  case '5':
-  case '6':
-  case '7':
-  case '8':
-  case '9':
-    ret = rs_eval_number(arg, rettv, evaluate, want_string);
-
-    // Apply prefixed "-" and "+" now.  Matters especially when
-    // "->" follows.
-    if (ret == OK && evaluate && end_leader > start_leader) {
-      ret = eval7_leader(rettv, true, start_leader, &end_leader);
-    }
-    break;
-
-  // String constant: "string".
-  case '"':
-    ret = rs_eval_string(arg, rettv, evaluate, false);
-    break;
-
-  // Literal string constant: 'str''ing'.
-  case '\'':
-    ret = rs_eval_lit_string(arg, rettv, evaluate, false);
-    break;
-
-  // List: [expr, expr]
-  case '[':
-    ret = rs_eval_list(arg, rettv, evalarg);
-    break;
-
-  // Literal Dictionary: #{key: val, key: val}
-  case '#':
-    ret = rs_eval_lit_dict(arg, rettv, evalarg);
-    break;
-
-  // Lambda: {arg, arg -> expr}
-  // Dictionary: {'key': val, 'key': val}
-  case '{':
-    ret = get_lambda_tv(arg, rettv, evalarg);
-    if (ret == NOTDONE) {
-      ret = rs_eval_dict(arg, rettv, evalarg, false);
-    }
-    break;
-
-  // Option value: &name
-  case '&':
-    ret = eval_option((const char **)arg, rettv, evaluate);
-    break;
-  // Environment variable: $VAR.
-  // Interpolated string: $"string" or $'string'.
-  case '$':
-    if ((*arg)[1] == '"' || (*arg)[1] == '\'') {
-      ret = eval_interp_string(arg, rettv, evaluate);
-    } else {
-      ret = eval_env_var(arg, rettv, evaluate);
-    }
-    break;
-
-  // Register contents: @r.
-  case '@':
-    (*arg)++;
-    if (evaluate) {
-      rettv->v_type = VAR_STRING;
-      rettv->vval.v_string = get_reg_contents(**arg, kGRegExprSrc);
-    }
-    if (**arg != NUL) {
-      (*arg)++;
-    }
-    break;
-
-  // nested expression: (expression).
-  case '(':
-    *arg = skipwhite(*arg + 1);
-
-    ret = eval1(arg, rettv, evalarg);  // recursive!
-    if (**arg == ')') {
-      (*arg)++;
-    } else if (ret == OK) {
-      emsg(_("E110: Missing ')'"));
-      tv_clear(rettv);
-      ret = FAIL;
-    }
-    break;
-
-  default:
-    ret = NOTDONE;
-    break;
-  }
-
-  if (ret == NOTDONE) {
-    // Must be a variable or function name.
-    // Can also be a curly-braces kind of name: {expr}.
-    char *s = *arg;
-    char *alias;
-    int len = get_name_len((const char **)arg, &alias, evaluate, true);
-    if (alias != NULL) {
-      s = alias;
-    }
-
-    if (len <= 0) {
-      ret = FAIL;
-    } else {
-      const int flags = evalarg == NULL ? 0 : evalarg->eval_flags;
-      if (*skipwhite(*arg) == '(') {
-        // "name(..."  recursive!
-        *arg = skipwhite(*arg);
-        ret = eval_func(arg, evalarg, s, len, rettv, flags, NULL);
-      } else if (evaluate) {
-        // get value of variable
-        ret = eval_variable(s, len, rettv, NULL, true, false);
-      } else {
-        // skip the name
-        check_vars(s, (size_t)len);
-        // If evaluate is false rettv->v_type was not set, but it's needed
-        // in handle_subscript() to parse v:lua, so set it here.
-        if (rettv->v_type == VAR_UNKNOWN && !evaluate && strnequal(s, "v:lua.", 6)) {
-          rettv->v_type = VAR_PARTIAL;
-          rettv->vval.v_partial = get_vim_var_partial(VV_LUA);
-          rettv->vval.v_partial->pt_refcount++;
-        }
-        ret = OK;
-      }
-    }
-    xfree(alias);
-  }
-
-  *arg = skipwhite(*arg);
-
-  // Handle following '[', '(' and '.' for expr[expr], expr.name,
-  // expr(expr), expr->name(expr)
-  if (ret == OK) {
-    ret = handle_subscript((const char **)arg, rettv, evalarg, true);
-  }
-
-  // Apply logical NOT and unary '-', from right to left, ignore '+'.
-  if (ret == OK && evaluate && end_leader > start_leader) {
-    ret = eval7_leader(rettv, false, start_leader, &end_leader);
-  }
-
-  recurse--;
-  return ret;
-}
-
-/// Apply the leading "!" and "-" before an eval7 expression to "rettv".
-/// Adjusts "end_leaderp" until it is at "start_leader".
-///
-/// @param numeric_only  if true only handle "+" and "-".
-///
-/// @return  OK on success, FAIL on failure.
-static int eval7_leader(typval_T *const rettv, const bool numeric_only,
-                        const char *const start_leader, const char **const end_leaderp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  const char *end_leader = *end_leaderp;
-  int ret = OK;
-  bool error = false;
-  varnumber_T val = 0;
-  float_T f = 0.0;
-
-  if (rettv->v_type == VAR_FLOAT) {
-    f = rettv->vval.v_float;
-  } else {
-    val = tv_get_number_chk(rettv, &error);
-  }
-  if (error) {
-    tv_clear(rettv);
-    ret = FAIL;
-  } else {
-    while (end_leader > start_leader) {
-      end_leader--;
-      if (*end_leader == '!') {
-        if (numeric_only) {
-          end_leader++;
-          break;
-        }
-        if (rettv->v_type == VAR_FLOAT) {
-          f = !(bool)f;
-        } else {
-          val = !val;
-        }
-      } else if (*end_leader == '-') {
-        if (rettv->v_type == VAR_FLOAT) {
-          f = -f;
-        } else {
-          val = -val;
-        }
-      }
-    }
-    if (rettv->v_type == VAR_FLOAT) {
-      tv_clear(rettv);
-      rettv->vval.v_float = f;
-    } else {
-      tv_clear(rettv);
-      rettv->v_type = VAR_NUMBER;
-      rettv->vval.v_number = val;
-    }
-  }
-
-  *end_leaderp = end_leader;
-  return ret;
-}
+// eval7 and eval7_leader migrated to Rust (rs_eval7 in eval_exec crate).
 
 /// Call the function referred to in "rettv".
 /// @param lua_funcname  If `rettv` refers to a v:lua function, this must point
@@ -2663,6 +2398,12 @@ static int eval_env_var(char **arg, typval_T *rettv, int evaluate)
   }
 
   return OK;
+}
+
+/// Non-static wrapper for static eval_env_var - accessor for Rust rs_eval7.
+int nvim_eval_env_var_wrapper(char **arg, typval_T *rettv, int evaluate)
+{
+  return eval_env_var(arg, rettv, evaluate);
 }
 
 /// Builds a process argument vector from a Vimscript object (typval_T).
@@ -4945,8 +4686,8 @@ int nvim_call_func_rettv_wrapper(char **arg, evalarg_T *evalarg, typval_T *rettv
   return call_func_rettv(arg, evalarg, rettv, evaluate, NULL, basetv, lua_funcname);
 }
 
-/// Non-static wrapper for static eval7 - accessor for Rust rs_eval_method.
+/// Non-static wrapper for rs_eval7 - accessor for Rust rs_eval_method.
 int nvim_eval7_wrapper(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string)
 {
-  return eval7(arg, rettv, evalarg, want_string);
+  return rs_eval7(arg, rettv, evalarg, want_string);
 }

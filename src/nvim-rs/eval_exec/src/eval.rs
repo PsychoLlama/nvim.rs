@@ -181,14 +181,8 @@ extern "C" {
     fn rs_num_divide(n1: i64, n2: i64) -> i64;
     fn rs_num_modulus(n1: i64, n2: i64) -> i64;
 
-    // Forward declarations for eval6 and eval7 (still in C for now)
+    // Forward declaration for eval6 (still in C)
     fn eval6(
-        arg: *mut *mut c_char,
-        rettv: TypevalHandle,
-        evalarg: EvalargHandle,
-        want_string: c_int,
-    ) -> c_int;
-    fn eval7(
         arg: *mut *mut c_char,
         rettv: TypevalHandle,
         evalarg: EvalargHandle,
@@ -1687,13 +1681,6 @@ extern "C" {
         lua_funcname: *const c_char,
     ) -> c_int;
 
-    // eval7 wrapper (eval7 is static in C, so we wrap it)
-    fn nvim_eval7_wrapper(
-        arg: *mut *mut c_char,
-        rettv: TypevalHandle,
-        evalarg: EvalargHandle,
-        want_string: bool,
-    ) -> c_int;
 }
 
 /// Error: missing name after ->
@@ -1790,7 +1777,7 @@ pub unsafe fn eval_method_impl(
             *paren = 0; // NUL out the '('
             let ref_tv = alloc_typval();
             nvim_tv_set_type(ref_tv, VAR_UNKNOWN);
-            if nvim_eval7_wrapper(arg, ref_tv, evalarg, false) == FAIL {
+            if eval7_impl(arg, ref_tv, evalarg, false) == FAIL {
                 *arg = name.add(len as usize);
                 ret = FAIL;
             } else if get_byte(skipwhite(*arg)) != 0 {
@@ -2614,6 +2601,326 @@ pub unsafe extern "C" fn rs_eval_lit_dict(
     evalarg: EvalargHandle,
 ) -> c_int {
     eval_lit_dict_impl(arg, rettv, evalarg)
+}
+
+// =============================================================================
+// Phase 6: eval7 and eval7_leader migration
+// =============================================================================
+
+extern "C" {
+    // eval7 C dependencies
+    fn eval_option(arg: *mut *const c_char, rettv: TypevalHandle, evaluate: bool) -> c_int;
+    fn nvim_eval_env_var_wrapper(
+        arg: *mut *mut c_char,
+        rettv: TypevalHandle,
+        evaluate: c_int,
+    ) -> c_int;
+    fn eval_interp_string(arg: *mut *mut c_char, rettv: TypevalHandle, evaluate: bool) -> c_int;
+    fn handle_subscript(
+        arg: *mut *const c_char,
+        rettv: TypevalHandle,
+        evalarg: EvalargHandle,
+        verbose: bool,
+    ) -> c_int;
+    fn get_lambda_tv(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: EvalargHandle) -> c_int;
+    fn eval_variable(
+        name: *const c_char,
+        len: c_int,
+        rettv: TypevalHandle,
+        dip: *mut *mut c_void,
+        verbose: bool,
+        no_autoload: bool,
+    ) -> c_int;
+    fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_char;
+}
+
+/// Error: missing ')'
+static E_MISSING_PAREN_CLOSE: &[u8] = b"E110: Missing ')'\0";
+
+/// Register flag: use expression register source
+const K_G_REG_EXPR_SRC: c_int = 2;
+
+/// Apply the leading "!" and "-" before an eval7 expression to "rettv".
+/// Adjusts "end_leaderp" until it is at "start_leader".
+///
+/// If `numeric_only` is true, only handle "+" and "-" (not "!").
+///
+/// # Safety
+/// - `rettv` must be a valid typval handle
+/// - `start_leader` and `*end_leaderp` must be valid pointers into the same buffer
+unsafe fn eval7_leader_impl(
+    rettv: TypevalHandle,
+    numeric_only: bool,
+    start_leader: *const c_char,
+    end_leaderp: *mut *const c_char,
+) -> c_int {
+    let mut end_leader = *end_leaderp;
+    let mut ret = OK;
+    let mut error = false;
+
+    let is_float = nvim_tv_get_type(rettv) == VAR_FLOAT;
+    let mut f: f64 = 0.0;
+    let mut val: i64 = 0;
+
+    if is_float {
+        f = nvim_tv_get_float(rettv);
+    } else {
+        val = tv_get_number_chk(rettv, &mut error);
+    }
+
+    if error {
+        tv_clear(rettv);
+        ret = FAIL;
+    } else {
+        while end_leader > start_leader {
+            end_leader = end_leader.sub(1);
+            if *end_leader == b'!' as c_char {
+                if numeric_only {
+                    end_leader = end_leader.add(1);
+                    break;
+                }
+                if is_float {
+                    f = if f != 0.0 { 0.0 } else { 1.0 };
+                } else {
+                    val = if val != 0 { 0 } else { 1 };
+                }
+            } else if *end_leader == b'-' as c_char {
+                if is_float {
+                    f = -f;
+                } else {
+                    val = val.wrapping_neg();
+                }
+            }
+            // '+' is ignored
+        }
+
+        if is_float {
+            tv_clear(rettv);
+            nvim_tv_set_type(rettv, VAR_FLOAT);
+            nvim_tv_set_float(rettv, f);
+        } else {
+            tv_clear(rettv);
+            nvim_tv_set_type(rettv, VAR_NUMBER);
+            nvim_tv_set_number(rettv, val);
+        }
+    }
+
+    *end_leaderp = end_leader;
+    ret
+}
+
+/// Handle seventh level expression (lowest-precedence primaries).
+///
+/// Dispatches on the first character of `*arg` to parse numbers, strings,
+/// lists, dicts, lambdas, options, env vars, registers, nested expressions,
+/// function calls, and variable lookups. Also handles leading `!`/`-`/`+`
+/// operators and trailing subscript/method chains.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer
+/// - `rettv` must be a valid typval handle
+/// - `evalarg` can be null
+pub unsafe fn eval7_impl(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+    want_string: bool,
+) -> c_int {
+    // Static recursion counter - safe because Neovim is single-threaded
+    #[allow(static_mut_refs)]
+    static mut RECURSE: i32 = 0;
+
+    let evaluate = should_evaluate(evalarg);
+    let mut ret = OK;
+
+    // Initialize rettv so tv_clear() won't mistake it for a string
+    nvim_tv_set_type(rettv, VAR_UNKNOWN);
+
+    // Skip '!', '-' and '+' characters. They are handled later.
+    let start_leader = *arg as *const c_char;
+    while get_byte(*arg) == b'!' || get_byte(*arg) == b'-' || get_byte(*arg) == b'+' {
+        *arg = skipwhite((*arg).add(1));
+    }
+    let mut end_leader = *arg as *const c_char;
+
+    // Limit recursion to prevent stack overflow
+    #[allow(static_mut_refs)]
+    if RECURSE == MAX_RECURSION {
+        semsg(E_EXPRESSION_TOO_RECURSIVE.as_ptr() as *const c_char, *arg);
+        return FAIL;
+    }
+    #[allow(static_mut_refs)]
+    {
+        RECURSE += 1;
+    }
+
+    let first_byte = get_byte(*arg);
+    match first_byte {
+        // Number constant: 0-9
+        b'0'..=b'9' => {
+            ret = eval_number_impl(arg, rettv, evaluate, want_string);
+            // Apply prefixed "-" and "+" now. Matters especially when "->" follows.
+            if ret == OK && evaluate && end_leader > start_leader {
+                ret = eval7_leader_impl(rettv, true, start_leader, &mut end_leader);
+            }
+        }
+
+        // String constant: "string"
+        b'"' => {
+            ret = eval_string_impl(arg, rettv, evaluate, false);
+        }
+
+        // Literal string constant: 'str''ing'
+        b'\'' => {
+            ret = eval_lit_string_impl(arg, rettv, evaluate, false);
+        }
+
+        // List: [expr, expr]
+        b'[' => {
+            ret = eval_list_impl(arg, rettv, evalarg);
+        }
+
+        // Literal Dictionary: #{key: val, key: val}
+        b'#' => {
+            ret = eval_lit_dict_impl(arg, rettv, evalarg);
+        }
+
+        // Lambda: {arg, arg -> expr} or Dictionary: {'key': val, 'key': val}
+        b'{' => {
+            ret = get_lambda_tv(arg, rettv, evalarg);
+            if ret == NOTDONE {
+                ret = eval_dict_impl(arg, rettv, evalarg, false);
+            }
+        }
+
+        // Option value: &name
+        b'&' => {
+            ret = eval_option(arg as *mut *const c_char, rettv, evaluate);
+        }
+
+        // Environment variable: $VAR or interpolated string: $"string" / $'string'
+        b'$' => {
+            let next = get_byte((*arg).add(1));
+            if next == b'"' || next == b'\'' {
+                ret = eval_interp_string(arg, rettv, evaluate);
+            } else {
+                ret = nvim_eval_env_var_wrapper(arg, rettv, if evaluate { 1 } else { 0 });
+            }
+        }
+
+        // Register contents: @r
+        b'@' => {
+            *arg = (*arg).add(1);
+            if evaluate {
+                nvim_tv_set_type(rettv, VAR_STRING);
+                let contents = get_reg_contents(get_byte(*arg) as c_int, K_G_REG_EXPR_SRC);
+                nvim_tv_set_vstring_raw(rettv, contents);
+            }
+            if get_byte(*arg) != 0 {
+                *arg = (*arg).add(1);
+            }
+        }
+
+        // Nested expression: (expression)
+        b'(' => {
+            *arg = skipwhite((*arg).add(1));
+            ret = eval1_impl(arg, rettv, evalarg); // recursive!
+            if get_byte(*arg) == b')' {
+                *arg = (*arg).add(1);
+            } else if ret == OK {
+                emsg(E_MISSING_PAREN_CLOSE.as_ptr() as *const c_char);
+                tv_clear(rettv);
+                ret = FAIL;
+            }
+        }
+
+        // Default: variable or function name
+        _ => {
+            ret = NOTDONE;
+        }
+    }
+
+    if ret == NOTDONE {
+        // Must be a variable or function name.
+        // Can also be a curly-braces kind of name: {expr}.
+        let mut s = *arg;
+        let mut alias: *mut c_char = ptr::null_mut();
+        let len = get_name_len(arg as *mut *const c_char, &mut alias, evaluate, true);
+        if !alias.is_null() {
+            s = alias;
+        }
+
+        if len <= 0 {
+            ret = FAIL;
+        } else {
+            let flags = get_eval_flags(evalarg);
+            if get_byte(skipwhite(*arg)) == b'(' {
+                // "name(..."  recursive!
+                *arg = skipwhite(*arg);
+                ret = eval_func_impl(arg, evalarg, s, len, rettv, flags, TypevalHandle::null());
+            } else if evaluate {
+                // get value of variable
+                ret = eval_variable(s, len, rettv, ptr::null_mut(), true, false);
+            } else {
+                // skip the name
+                check_vars(s, len as usize);
+                // If evaluate is false rettv->v_type was not set, but it's needed
+                // in handle_subscript() to parse v:lua, so set it here.
+                if nvim_tv_get_type(rettv) == VAR_UNKNOWN && !evaluate {
+                    // Check for "v:lua." prefix (6 bytes)
+                    let p = s as *const u8;
+                    let is_vlua = get_byte(p as *const c_char) == b'v'
+                        && get_byte(p.add(1) as *const c_char) == b':'
+                        && get_byte(p.add(2) as *const c_char) == b'l'
+                        && get_byte(p.add(3) as *const c_char) == b'u'
+                        && get_byte(p.add(4) as *const c_char) == b'a'
+                        && get_byte(p.add(5) as *const c_char) == b'.';
+                    if is_vlua {
+                        let vlua = nvim_get_vlua_partial();
+                        nvim_tv_set_type(rettv, VAR_PARTIAL);
+                        nvim_tv_set_partial_raw(rettv, vlua);
+                        nvim_partial_incref(vlua);
+                    }
+                }
+                ret = OK;
+            }
+        }
+
+        xfree(alias as *mut c_void);
+    }
+
+    *arg = skipwhite(*arg);
+
+    // Handle following '[', '(', '.' and '->' for expr[expr], expr.name,
+    // expr(expr), expr->name(expr)
+    if ret == OK {
+        ret = handle_subscript(arg as *mut *const c_char, rettv, evalarg, true);
+    }
+
+    // Apply logical NOT and unary '-', from right to left, ignore '+'.
+    if ret == OK && evaluate && end_leader > start_leader {
+        ret = eval7_leader_impl(rettv, false, start_leader, &mut end_leader);
+    }
+
+    #[allow(static_mut_refs)]
+    {
+        RECURSE -= 1;
+    }
+    ret
+}
+
+/// FFI export for eval7.
+///
+/// # Safety
+/// See `eval7_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval7(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+    want_string: bool,
+) -> c_int {
+    eval7_impl(arg, rettv, evalarg, want_string)
 }
 
 // =============================================================================

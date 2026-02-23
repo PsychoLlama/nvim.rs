@@ -522,7 +522,7 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_eval_compare_numbers", "rs_eval_compare_floats",
            "rs_eval_string_to_number", "rs_eval_string_to_float",
            # eval_exec expression evaluators (Phase 1)
-           "rs_eval0", "rs_eval1", "rs_eval2", "rs_eval3", "rs_eval4", "rs_eval5",
+           "rs_eval0", "rs_eval1", "rs_eval2", "rs_eval3", "rs_eval4", "rs_eval5", "rs_eval7",
            "EvalargHandle", "ExargHandle",
            # eval_exec multdiv (Phase 3)
            "rs_eval_multdiv_number",
