@@ -28,6 +28,7 @@ pub mod opt_index;
 pub mod parsing;
 pub mod query;
 pub mod scope;
+pub mod security;
 pub mod set;
 pub mod setcmd;
 pub mod setops;

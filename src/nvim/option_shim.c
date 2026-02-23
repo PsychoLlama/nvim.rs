@@ -151,6 +151,10 @@ extern void rs_reset_modifiable(void);
 extern OptVal rs_get_tty_option(const char *name);
 extern bool rs_set_tty_option(const char *name, char *value);
 extern int rs_string_to_key(char *arg);
+extern void rs_check_redraw_for(buf_T *buf, win_T *win, uint32_t flags);
+extern uint32_t *rs_insecure_flag(win_T *wp, OptIndex opt_idx, int opt_flags);
+extern int rs_was_set_insecurely(win_T *wp, OptIndex opt_idx, int opt_flags);
+extern void rs_set_option_sctx(OptIndex opt_idx, int opt_flags, sctx_T script_ctx);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
 _Static_assert(UPD_VALID == 10, "UPD_VALID mismatch with Rust UpdateType::Valid");
@@ -1256,7 +1260,7 @@ void nvim_change_option_default_bool(OptIndex opt_idx, int value) { change_optio
 // kOptModifiable index accessor (for reset_modifiable)
 int nvim_get_opt_idx_modifiable(void) { return (int)kOptModifiable; }
 
-// Phase 4 pass 1 Phase 2: TTY and key accessors
+// Phase 4 pass 2: TTY and key accessors
 int nvim_option_get_t_colors(void) { return t_colors; }
 const char *nvim_option_get_p_term(void) { return p_term; }
 const char *nvim_option_get_p_ttytype(void) { return p_ttytype; }
@@ -1268,6 +1272,43 @@ char *nvim_option_FullName_save(const char *fname, bool force) { return FullName
 char *nvim_option_vim_getenv(const char *envname) { return vim_getenv(envname); }
 // os_setenv wrapper (for vimrc_found)
 int nvim_option_os_setenv(const char *name, const char *value, int overwrite) { return os_setenv(name, value, overwrite); }
+
+// Phase 4 pass 3: check_redraw_for accessors
+void nvim_call_status_redraw_all(void) { status_redraw_all(); }
+void nvim_call_changed_window_setting(win_T *win) { changed_window_setting(win); }
+void nvim_call_redraw_later(win_T *win, int type) { redraw_later(win, type); }
+void nvim_call_redraw_buf_later(buf_T *buf, int type) { redraw_buf_later(buf, type); }
+void nvim_call_redraw_all_later(int type) { redraw_all_later(type); }
+
+// insecure_flag pointer accessors
+uint32_t *nvim_win_get_p_wrap_flags_ptr(win_T *wp) { return &wp->w_p_wrap_flags; }
+uint32_t *nvim_win_get_p_stl_flags_ptr(win_T *wp) { return &wp->w_p_stl_flags; }
+uint32_t *nvim_win_get_p_wbr_flags_ptr(win_T *wp) { return &wp->w_p_wbr_flags; }
+uint32_t *nvim_win_get_p_fde_flags_ptr(win_T *wp) { return &wp->w_p_fde_flags; }
+uint32_t *nvim_win_get_p_fdt_flags_ptr(win_T *wp) { return &wp->w_p_fdt_flags; }
+uint32_t *nvim_win_get_buf_p_inde_flags_ptr(win_T *wp) { return &wp->w_buffer->b_p_inde_flags; }
+uint32_t *nvim_win_get_buf_p_fex_flags_ptr(win_T *wp) { return &wp->w_buffer->b_p_fex_flags; }
+uint32_t *nvim_win_get_buf_p_inex_flags_ptr(win_T *wp) { return &wp->w_buffer->b_p_inex_flags; }
+uint32_t *nvim_win_allbuf_p_wrap_flags_ptr(win_T *wp) { return &wp->w_allbuf_opt.wo_wrap_flags; }
+uint32_t *nvim_win_allbuf_p_fde_flags_ptr(win_T *wp) { return &wp->w_allbuf_opt.wo_fde_flags; }
+uint32_t *nvim_win_allbuf_p_fdt_flags_ptr(win_T *wp) { return &wp->w_allbuf_opt.wo_fdt_flags; }
+uint32_t *nvim_option_get_flags_ptr(OptIndex opt_idx) { return &options[opt_idx].flags; }
+// Option index constants for insecure_flag (nvim_get_opt_idx_wrap already defined above)
+int nvim_get_opt_idx_statusline(void) { return (int)kOptStatusline; }
+int nvim_get_opt_idx_winbar(void) { return (int)kOptWinbar; }
+int nvim_get_opt_idx_foldexpr(void) { return (int)kOptFoldexpr; }
+int nvim_get_opt_idx_foldtext(void) { return (int)kOptFoldtext; }
+int nvim_get_opt_idx_indentexpr(void) { return (int)kOptIndentexpr; }
+int nvim_get_opt_idx_formatexpr(void) { return (int)kOptFormatexpr; }
+int nvim_get_opt_idx_includeexpr(void) { return (int)kOptIncludeexpr; }
+
+// set_option_sctx accessors (nvim_get_sourcing_lnum already defined in ex_docmd.c as int)
+int64_t nvim_option_get_sourcing_lnum(void) { return (int64_t)SOURCING_LNUM; }
+void nvim_call_nlua_set_sctx(sctx_T *sctx) { nlua_set_sctx(sctx); }
+void nvim_curbuf_set_p_script_ctx(int idx, sctx_T sctx) { curbuf->b_p_script_ctx[idx] = sctx; }
+void nvim_curwin_set_p_script_ctx(int idx, sctx_T sctx) { curwin->w_p_script_ctx[idx] = sctx; }
+void nvim_curwin_set_allbuf_opt_script_ctx(int idx, sctx_T sctx) { curwin->w_allbuf_opt.wo_script_ctx[idx] = sctx; }
+void nvim_option_set_script_ctx(OptIndex opt_idx, sctx_T sctx) { options[opt_idx].script_ctx = sctx; }
 
 void set_init_tablocal(void)
 {
@@ -2353,10 +2394,7 @@ void check_options(void)
 /// @return  True if option was set from a modeline or in secure mode, false if it wasn't.
 int was_set_insecurely(win_T *const wp, OptIndex opt_idx, int opt_flags)
 {
-  assert(opt_idx != kOptInvalid);
-
-  uint32_t *flagp = insecure_flag(wp, opt_idx, opt_flags);
-  return (*flagp & kOptFlagInsecure) != 0;
+  return rs_was_set_insecurely(wp, opt_idx, opt_flags);
 }
 
 /// Get a pointer to the flags used for the kOptFlagInsecure flag of option
@@ -2365,43 +2403,7 @@ int was_set_insecurely(win_T *const wp, OptIndex opt_idx, int opt_flags)
 /// the option is used.
 uint32_t *insecure_flag(win_T *const wp, OptIndex opt_idx, int opt_flags)
 {
-  if (opt_flags & OPT_LOCAL) {
-    assert(wp != NULL);
-    switch (opt_idx) {
-    case kOptWrap:
-      return &wp->w_p_wrap_flags;
-    case kOptStatusline:
-      return &wp->w_p_stl_flags;
-    case kOptWinbar:
-      return &wp->w_p_wbr_flags;
-    case kOptFoldexpr:
-      return &wp->w_p_fde_flags;
-    case kOptFoldtext:
-      return &wp->w_p_fdt_flags;
-    case kOptIndentexpr:
-      return &wp->w_buffer->b_p_inde_flags;
-    case kOptFormatexpr:
-      return &wp->w_buffer->b_p_fex_flags;
-    case kOptIncludeexpr:
-      return &wp->w_buffer->b_p_inex_flags;
-    default:
-      break;
-    }
-  } else {
-    // For global value of window-local options, use flags in w_allbuf_opt.
-    switch (opt_idx) {
-    case kOptWrap:
-      return &wp->w_allbuf_opt.wo_wrap_flags;
-    case kOptFoldexpr:
-      return &wp->w_allbuf_opt.wo_fde_flags;
-    case kOptFoldtext:
-      return &wp->w_allbuf_opt.wo_fdt_flags;
-    default:
-      break;
-    }
-  }
-  // Nothing special, return global flags field.
-  return &options[opt_idx].flags;
+  return rs_insecure_flag(wp, opt_idx, opt_flags);
 }
 
 /// Redraw the window title and/or tab page text later.
@@ -2434,30 +2436,7 @@ sctx_T *get_option_sctx(OptIndex opt_idx)
 /// window-local value.
 void set_option_sctx(OptIndex opt_idx, int opt_flags, sctx_T script_ctx)
 {
-  bool both = (opt_flags & (OPT_LOCAL | OPT_GLOBAL)) == 0;
-
-  // Modeline already has the line number set.
-  if (!(opt_flags & OPT_MODELINE)) {
-    script_ctx.sc_lnum += SOURCING_LNUM;
-  }
-  nlua_set_sctx(&script_ctx);
-
-  // Remember where the option was set.  For local options need to do that
-  // in the buffer or window structure.
-  if (both || (opt_flags & OPT_GLOBAL) || option_is_global_only(opt_idx)) {
-    options[opt_idx].script_ctx = script_ctx;
-  }
-  if (both || (opt_flags & OPT_LOCAL)) {
-    if (option_has_scope(opt_idx, kOptScopeBuf)) {
-      curbuf->b_p_script_ctx[option_scope_idx(opt_idx, kOptScopeBuf)] = script_ctx;
-    } else if ((option_has_scope(opt_idx, kOptScopeWin))) {
-      curwin->w_p_script_ctx[option_scope_idx(opt_idx, kOptScopeWin)] = script_ctx;
-      if (both) {
-        // also setting the "all buffers" value
-        curwin->w_allbuf_opt.wo_script_ctx[option_scope_idx(opt_idx, kOptScopeWin)] = script_ctx;
-      }
-    }
-  }
+  rs_set_option_sctx(opt_idx, opt_flags, script_ctx);
 }
 
 /// Apply the OptionSet autocommand.
@@ -2568,30 +2547,7 @@ static void do_spelllang_source(win_T *win)
 /// Called after an option changed: check if something needs to be redrawn.
 void check_redraw_for(buf_T *buf, win_T *win, uint32_t flags)
 {
-  // Careful: kOptFlagRedrAll is a combination of other redraw flags
-  bool all = (flags & kOptFlagRedrAll) == kOptFlagRedrAll;
-
-  if ((flags & kOptFlagRedrStat) || all) {  // mark all status lines and window bars dirty
-    status_redraw_all();
-  }
-
-  if ((flags & kOptFlagRedrTabl) || all) {  // mark tablines dirty
-    redraw_tabline = true;
-  }
-
-  if ((flags & kOptFlagRedrBuf) || (flags & kOptFlagRedrWin) || all) {
-    if (flags & kOptFlagHLOnly) {
-      redraw_later(win, UPD_NOT_VALID);
-    } else {
-      changed_window_setting(win);
-    }
-  }
-  if (flags & kOptFlagRedrBuf) {
-    redraw_buf_later(buf, UPD_NOT_VALID);
-  }
-  if (all) {
-    redraw_all_later(UPD_NOT_VALID);
-  }
+  rs_check_redraw_for(buf, win, flags);
 }
 
 void check_redraw(uint32_t flags)
