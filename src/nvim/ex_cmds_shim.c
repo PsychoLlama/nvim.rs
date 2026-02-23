@@ -703,51 +703,13 @@ filterend:
   xfree(otmp);
 }
 
-/// Call a shell to execute a command.
-/// When "cmd" is NULL start an interactive shell.
-///
-/// @param flags  may be SHELL_DOOUT when output is redirected
+// do_shell implemented in Rust (rs_do_shell in ex_cmds/src/shell.rs)
+extern void rs_do_shell(char *cmd, int flags);
+
+/// Call a shell to execute a command. Thin wrapper calling the Rust implementation.
 void do_shell(char *cmd, int flags)
 {
-  // Disallow shell commands in secure mode
-  if (rs_check_secure()) {
-    msg_end();
-    return;
-  }
-
-  // For autocommands we want to get the output on the current screen, to
-  // avoid having to type return below.
-  msg_putchar('\r');                    // put cursor at start of line
-  msg_putchar('\n');                    // may shift screen one line up
-
-  // warning message before calling the shell
-  if (p_warn
-      && !autocmd_busy
-      && msg_silent == 0) {
-    FOR_ALL_BUFFERS(buf) {
-      if (bufIsChanged(buf)) {
-        msg_puts(_("[No write since last change]\n"));
-        break;
-      }
-    }
-  }
-
-  // This ui_cursor_goto is required for when the '\n' resulted in a "delete line
-  // 1" command to the terminal.
-  ui_cursor_goto(msg_row, msg_col);
-  call_shell(cmd, flags, NULL);
-  if (msg_silent == 0) {
-    msg_didout = true;
-  }
-  did_check_timestamps = false;
-  need_check_timestamps = true;
-
-  // put the message cursor at the end of the screen, avoids wait_return()
-  // to overwrite the text that the external command showed
-  msg_row = Rows - 1;
-  msg_col = 0;
-
-  apply_autocmds(EVENT_SHELLCMDPOST, NULL, NULL, false, curbuf);
+  rs_do_shell(cmd, flags);
 }
 
 // make_filter_cmd and find_pipe implemented in Rust (rs_make_filter_cmd in ex_cmds/src/shell.rs)
@@ -3733,3 +3695,34 @@ void nvim_excmds_apply_autocmds_shellfilterpost(void)
 }
 void nvim_excmds_emsg_e_noprev(void) { emsg(_(e_noprev)); }
 void nvim_excmds_msg_ext_set_kind_shell_cmd(void) { msg_ext_set_kind("shell_cmd"); }
+
+// --- do_shell FFI accessors ---
+int nvim_excmds_get_p_warn(void) { return p_warn ? 1 : 0; }
+int nvim_excmds_get_autocmd_busy(void) { return autocmd_busy ? 1 : 0; }
+int nvim_excmds_get_msg_silent(void) { return msg_silent; }
+int nvim_excmds_any_buf_changed(void)
+{
+  FOR_ALL_BUFFERS(buf) {
+    if (bufIsChanged(buf)) {
+      return 1;
+    }
+  }
+  return 0;
+}
+void nvim_excmds_msg_puts_no_write_warning(void)
+{
+  msg_puts(_("[No write since last change]\n"));
+}
+void nvim_excmds_call_shell(char *cmd, int flags)
+{
+  call_shell(cmd, flags, NULL);
+}
+void nvim_excmds_set_msg_didout(int val) { msg_didout = (bool)val; }
+void nvim_excmds_set_did_check_timestamps(int val) { did_check_timestamps = (bool)val; }
+void nvim_excmds_set_need_check_timestamps(int val) { need_check_timestamps = (bool)val; }
+void nvim_excmds_set_msg_row(int val) { msg_row = val; }
+void nvim_excmds_set_msg_col(int val) { msg_col = val; }
+void nvim_excmds_apply_autocmds_shellcmdpost(void)
+{
+  apply_autocmds(EVENT_SHELLCMDPOST, NULL, NULL, false, curbuf);
+}

@@ -419,6 +419,21 @@ extern "C" {
     fn nvim_excmds_get_p_shq() -> *const c_char;
     fn nvim_excmds_xmalloc(size: usize) -> *mut std::ffi::c_void;
 
+    // do_shell FFI
+    fn nvim_excmds_get_p_warn() -> c_int;
+    fn nvim_excmds_get_autocmd_busy() -> c_int;
+    fn nvim_excmds_get_msg_silent() -> c_int;
+    fn nvim_excmds_any_buf_changed() -> c_int;
+    fn nvim_excmds_msg_puts_no_write_warning();
+    fn nvim_excmds_call_shell(cmd: *mut c_char, flags: c_int);
+    fn nvim_excmds_set_msg_didout(val: c_int);
+    fn nvim_excmds_set_did_check_timestamps(val: c_int);
+    fn nvim_excmds_set_need_check_timestamps(val: c_int);
+    fn nvim_excmds_set_msg_row(val: c_int);
+    fn nvim_excmds_set_msg_col(val: c_int);
+    fn nvim_excmds_apply_autocmds_shellcmdpost();
+    fn nvim_get_Rows() -> c_int;
+
     // do_bang FFI
     fn rs_check_secure() -> c_int;
     fn nvim_excmds_get_msg_scroll() -> c_int;
@@ -765,6 +780,56 @@ pub unsafe extern "C" fn rs_free_prev_shellcmd() {
     if let Some(ptr) = PREVCMD.take() {
         xfree(ptr as *mut std::ffi::c_void);
     }
+}
+
+/// Execute a shell command. Replaces the C `do_shell` function.
+///
+/// When `cmd` is NULL, starts an interactive shell.
+///
+/// # Safety
+/// `cmd` must be null or a valid null-terminated C string (mutable for call_shell).
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_shell(cmd: *mut c_char, flags: c_int) {
+    // Disallow shell commands in secure mode
+    if rs_check_secure() != 0 {
+        crate::msg_end();
+        return;
+    }
+
+    // For autocommands we want to get the output on the current screen.
+    crate::msg_putchar(b'\r' as c_int); // put cursor at start of line
+    crate::msg_putchar(b'\n' as c_int); // may shift screen one line up
+
+    // Warning message before calling the shell
+    if nvim_excmds_get_p_warn() != 0
+        && nvim_excmds_get_autocmd_busy() == 0
+        && nvim_excmds_get_msg_silent() == 0
+    {
+        if nvim_excmds_any_buf_changed() != 0 {
+            nvim_excmds_msg_puts_no_write_warning();
+        }
+    }
+
+    // This ui_cursor_goto is required for when the '\n' resulted in a
+    // "delete line 1" command to the terminal.
+    let row = nvim_excmds_get_msg_row();
+    let col = nvim_excmds_get_msg_col();
+    nvim_excmds_ui_cursor_goto(row, col);
+    nvim_excmds_call_shell(cmd, flags);
+
+    if nvim_excmds_get_msg_silent() == 0 {
+        nvim_excmds_set_msg_didout(1);
+    }
+    nvim_excmds_set_did_check_timestamps(0);
+    nvim_excmds_set_need_check_timestamps(1);
+
+    // Put the message cursor at the end of the screen to avoid wait_return()
+    // overwriting the text the external command showed.
+    let rows = nvim_get_Rows();
+    nvim_excmds_set_msg_row(rows - 1);
+    nvim_excmds_set_msg_col(0);
+
+    nvim_excmds_apply_autocmds_shellcmdpost();
 }
 
 /// Handle the `:!cmd` command. Also for `:r !cmd` and `:w !cmd`.
