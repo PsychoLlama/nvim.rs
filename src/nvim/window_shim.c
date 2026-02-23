@@ -107,11 +107,7 @@ extern int rs_win_valid_any_tab(win_T *win);
 extern int rs_valid_tabpage(tabpage_T *tpc);
 extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
 extern int rs_last_window(win_T *win);
-extern int rs_last_stl_height(int morewin);
 extern int rs_tabpage_index(tabpage_T *ftp);
-extern int rs_frame_fixed_height(frame_T *frp);
-extern int rs_frame_fixed_width(frame_T *frp);
-extern int rs_is_bottom_win(win_T *wp);
 extern int rs_frame_check_height(frame_T *topfrp, int height);
 extern int rs_frame_check_width(frame_T *topfrp, int width);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
@@ -137,8 +133,12 @@ extern tabpage_T *rs_alt_tabpage(void);
 extern void rs_tabpage_move(int nr);
 extern void rs_goto_tabpage(int n);
 
+// New Rust replacements for window transition helpers (Phase 3)
+extern void rs_leaving_window(win_T *win);
+extern void rs_entering_window(win_T *win);
+extern void rs_win_init_empty(win_T *wp);
+
 extern int rs_frame_minheight(frame_T *topfrp, win_T *next_curwin);
-extern int rs_frame_minwidth(frame_T *topfrp, win_T *next_curwin);
 extern int rs_win_comp_pos(void);
 extern void rs_frame_comp_pos(frame_T *topfrp, int *row, int *col);
 extern void rs_win_setheight_win(int height, win_T *win);
@@ -146,8 +146,6 @@ extern void rs_frame_add_height(frame_T *frp, int n);
 extern void rs_frame_add_statusline(frame_T *frp);
 extern void rs_frame_set_vsep(const frame_T *frp, int add);
 extern void rs_frame_add_hsep(const frame_T *frp);
-extern void rs_frame_fix_width(win_T *wp);
-extern void rs_frame_fix_height(win_T *wp);
 extern void rs_frame_append(frame_T *after, frame_T *frp);
 extern void rs_frame_insert(frame_T *before, frame_T *frp);
 extern void rs_frame_remove(frame_T *frp);
@@ -165,15 +163,12 @@ extern void rs_diff_clear(tabpage_T *tp);
 extern int rs_diffopt_closeoff(void);
 
 // Pure calculations and thin wrappers
-extern void rs_set_fraction(win_T *wp);
 extern int64_t rs_win_default_scroll(win_T *wp);
 extern void rs_scroll_to_fraction(win_T *wp, int prev_height);
 extern void rs_win_setheight(int height);
 extern void rs_win_setwidth(int width);
 
 // Height/width setters
-extern void rs_win_new_height(win_T *wp, int height);
-extern void rs_win_new_width(win_T *wp, int width);
 extern void rs_frame_new_width(frame_T *topfrp, int width, int leftfirst, int wfw);
 extern void rs_frame_new_height(frame_T *topfrp, int height, int topfirst, int wfh, int set_ch);
 
@@ -544,30 +539,6 @@ static char *m_onlyone = N_("Already only one window");
 /// autocommands mess up the window structure.
 static int split_disallowed = 0;
 
-// #define WIN_DEBUG
-#ifdef WIN_DEBUG
-/// Call this method to log the current window layout.
-static void log_frame_layout(frame_T *frame)
-{
-  DLOG("layout %s, wi: %d, he: %d, wwi: %d, whe: %d, id: %d",
-       frame->fr_layout == FR_LEAF ? "LEAF" : frame->fr_layout == FR_ROW ? "ROW" : "COL",
-       frame->fr_width,
-       frame->fr_height,
-       frame->fr_win == NULL ? -1 : frame->fr_win->w_width,
-       frame->fr_win == NULL ? -1 : frame->fr_win->w_height,
-       frame->fr_win == NULL ? -1 : frame->fr_win->w_id);
-  if (frame->fr_child != NULL) {
-    DLOG("children");
-    log_frame_layout(frame->fr_child);
-    if (frame->fr_next != NULL) {
-      DLOG("END of children");
-    }
-  }
-  if (frame->fr_next != NULL) {
-    log_frame_layout(frame->fr_next);
-  }
-}
-#endif
 
 /// Check if the current window is allowed to move to a different buffer.
 ///
@@ -1119,73 +1090,13 @@ static int get_maximum_wincount(frame_T *fr, int height)
   return total_wincount;
 }
 
-void leaving_window(win_T *const win)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // Only matters for a prompt window.
-  if (!bt_prompt(win->w_buffer)) {
-    return;
-  }
+void leaving_window(win_T *const win) { rs_leaving_window(win); }
 
-  // When leaving a prompt window stop Insert mode and perhaps restart
-  // it when entering that window again.
-  win->w_buffer->b_prompt_insert = restart_edit;
-  if (restart_edit != NUL && mode_displayed) {
-    clear_cmdline = true;  // unshow mode later
-  }
-  restart_edit = NUL;
+void entering_window(win_T *const win) { rs_entering_window(win); }
 
-  // When leaving the window (or closing the window) was done from a
-  // callback we need to break out of the Insert mode loop and restart Insert
-  // mode when entering the window again.
-  if ((State & MODE_INSERT) && !stop_insert_mode) {
-    stop_insert_mode = true;
-    if (win->w_buffer->b_prompt_insert == NUL) {
-      win->w_buffer->b_prompt_insert = 'A';
-    }
-  }
-}
+void win_init_empty(win_T *wp) { rs_win_init_empty(wp); }
 
-void entering_window(win_T *const win)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // Only matters for a prompt window.
-  if (!bt_prompt(win->w_buffer)) {
-    return;
-  }
-
-  // When switching to a prompt buffer that was in Insert mode, don't stop
-  // Insert mode, it may have been set in leaving_window().
-  if (win->w_buffer->b_prompt_insert != NUL) {
-    stop_insert_mode = false;
-  }
-
-  // When entering the prompt window restart Insert mode if we were in Insert
-  // mode when we left it and not already in Insert mode.
-  if ((State & MODE_INSERT) == 0) {
-    restart_edit = win->w_buffer->b_prompt_insert;
-  }
-}
-
-void win_init_empty(win_T *wp)
-{
-  redraw_later(wp, UPD_NOT_VALID);
-  wp->w_lines_valid = 0;
-  wp->w_cursor.lnum = 1;
-  wp->w_curswant = wp->w_cursor.col = 0;
-  wp->w_cursor.coladd = 0;
-  wp->w_pcmark.lnum = 1;        // pcmark not cleared but set to line 1
-  wp->w_pcmark.col = 0;
-  wp->w_prev_pcmark.lnum = 0;
-  wp->w_prev_pcmark.col = 0;
-  wp->w_topline = 1;
-  wp->w_topfill = 0;
-  wp->w_botline = 2;
-  wp->w_valid = 0;
-  wp->w_s = &wp->w_buffer->b_s;
-}
-
-void curwin_init(void) { win_init_empty(curwin); }
+void curwin_init(void) { rs_win_init_empty(curwin); }
 
 /// Closes all windows for buffer `buf` unless there is only one non-floating window.
 ///
@@ -3727,7 +3638,7 @@ void nvim_tabpage_set_next(tabpage_T *tp, tabpage_T *next) { tp->tp_next = next;
 int nvim_win_get_tcl_flags(void) { return (int)tcl_flags; }
 void nvim_win_set_buffer_raw(win_T *wp, buf_T *buf) { wp->w_buffer = buf; }
 void nvim_buf_inc_nwindows(buf_T *buf) { buf->b_nwindows++; }
-void nvim_win_init_empty_wrapper(win_T *wp) { win_init_empty(wp); }
+void nvim_win_init_empty_wrapper(win_T *wp) { rs_win_init_empty(wp); }
 void nvim_emsg_e_floatonly(void) { emsg(e_floatonly); }
 void nvim_emsg_e_floatexchange(void) { emsg(e_floatexchange); }
 void nvim_emsg_e443(void) { emsg(_("E443: Cannot rotate when another window is split")); }
@@ -4127,3 +4038,46 @@ int nvim_screengrid_get_handle_from_win_grid_alloc(win_T *wp)
 {
   return wp ? wp->w_grid_alloc.handle : 0;
 }
+
+// =============================================================================
+// C Accessors for Phase 3: leaving_window / entering_window / win_init_empty
+// =============================================================================
+
+/// Check if window's buffer is a prompt buffer.
+int nvim_win_bt_prompt(win_T *wp) { return (wp && wp->w_buffer) ? (bt_prompt(wp->w_buffer) ? 1 : 0) : 0; }
+
+/// Get b_prompt_insert from a buffer (restart_edit value for prompt buffer).
+int nvim_buf_get_prompt_insert(buf_T *buf) { return buf ? buf->b_prompt_insert : 0; }
+
+/// Set b_prompt_insert on a buffer.
+void nvim_buf_set_prompt_insert(buf_T *buf, int val) { if (buf) { buf->b_prompt_insert = val; } }
+
+/// Get the stop_insert_mode global.
+int nvim_get_stop_insert_mode(void) { return stop_insert_mode ? 1 : 0; }
+
+/// Set the stop_insert_mode global.
+void nvim_set_stop_insert_mode(int val) { stop_insert_mode = val != 0; }
+
+/// Get the window's buffer pointer.
+buf_T *nvim_win_get_buf_ptr(win_T *wp) { return wp ? wp->w_buffer : NULL; }
+
+/// Set w_pcmark (lnum and col).
+void nvim_win_set_pcmark(win_T *wp, linenr_T lnum, colnr_T col)
+{
+  if (wp) {
+    wp->w_pcmark.lnum = lnum;
+    wp->w_pcmark.col = col;
+  }
+}
+
+/// Set w_prev_pcmark (lnum and col).
+void nvim_win_set_prev_pcmark(win_T *wp, linenr_T lnum, colnr_T col)
+{
+  if (wp) {
+    wp->w_prev_pcmark.lnum = lnum;
+    wp->w_prev_pcmark.col = col;
+  }
+}
+
+/// Sync w_s to point to the window's buffer's b_s.
+void nvim_win_sync_s(win_T *wp) { if (wp && wp->w_buffer) { wp->w_s = &wp->w_buffer->b_s; } }

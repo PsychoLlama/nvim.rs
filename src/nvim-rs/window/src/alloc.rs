@@ -22,6 +22,8 @@
 // However, window list operations (win_append, win_remove) can be migrated
 // since they are pure linked-list manipulations that use accessor functions.
 
+use std::ffi::c_int;
+
 use crate::{TabpageHandle, WinHandle};
 
 // C accessor functions for window list manipulation.
@@ -166,6 +168,88 @@ pub extern "C" fn rs_win_remove(wp: WinHandle, tp: TabpageHandle) {
         debug_assert!(tp.is_null() || tp != nvim_get_curtab());
     }
     win_remove_impl(wp, tp);
+}
+
+// =============================================================================
+// win_init_empty -- initialize an empty window's cursor/topline state
+// =============================================================================
+
+/// UPD_NOT_VALID value (buffer needs complete redraw).
+const UPD_NOT_VALID: c_int = 40;
+
+/// linenr_T is int32_t in C.
+type LinenrT = i32;
+
+extern "C" {
+    /// Schedule a later redraw for the window.
+    fn nvim_redraw_later_wrapper(wp: WinHandle, update_type: c_int);
+
+    /// Set w_lines_valid field.
+    fn nvim_win_set_lines_valid(wp: WinHandle, val: c_int);
+
+    /// Set cursor lnum (linenr_T = i32).
+    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
+
+    /// Set cursor col (colnr_T = c_int).
+    fn nvim_win_set_cursor_col(wp: WinHandle, col: c_int);
+
+    /// Set cursor coladd (colnr_T = c_int).
+    fn nvim_win_set_cursor_coladd(wp: WinHandle, val: c_int);
+
+    /// Set w_curswant (colnr_T = c_int).
+    fn nvim_win_set_curswant(wp: WinHandle, val: c_int);
+
+    /// Set w_topline (linenr_T = i32).
+    fn nvim_win_set_topline(wp: WinHandle, val: LinenrT);
+
+    /// Set w_topfill.
+    fn nvim_win_set_topfill(wp: WinHandle, val: c_int);
+
+    /// Set w_botline (takes int in C, casts to linenr_T).
+    fn nvim_win_set_botline(wp: WinHandle, val: c_int);
+
+    /// Set w_valid.
+    fn nvim_win_set_valid(wp: WinHandle, val: c_int);
+
+    /// Set w_pcmark (lnum: linenr_T = i32, col: colnr_T = c_int).
+    fn nvim_win_set_pcmark(wp: WinHandle, lnum: LinenrT, col: c_int);
+
+    /// Set w_prev_pcmark (lnum: linenr_T = i32, col: colnr_T = c_int).
+    fn nvim_win_set_prev_pcmark(wp: WinHandle, lnum: LinenrT, col: c_int);
+
+    /// Sync w_s to point to the window buffer's b_s.
+    fn nvim_win_sync_s(wp: WinHandle);
+}
+
+/// Initialize an empty window's cursor and scroll state.
+///
+/// Port of C `win_init_empty()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn win_init_empty_impl(wp: WinHandle) {
+    nvim_redraw_later_wrapper(wp, UPD_NOT_VALID);
+    nvim_win_set_lines_valid(wp, 0);
+    nvim_win_set_cursor_lnum(wp, 1);
+    nvim_win_set_cursor_col(wp, 0);
+    nvim_win_set_cursor_coladd(wp, 0);
+    nvim_win_set_curswant(wp, 0);
+    nvim_win_set_pcmark(wp, 1, 0); // pcmark not cleared but set to line 1
+    nvim_win_set_prev_pcmark(wp, 0, 0);
+    nvim_win_set_topline(wp, 1);
+    nvim_win_set_topfill(wp, 0);
+    nvim_win_set_botline(wp, 2);
+    nvim_win_set_valid(wp, 0);
+    nvim_win_sync_s(wp);
+}
+
+/// FFI export for `win_init_empty`.
+///
+/// # Safety
+/// Calls C accessor functions with a valid window handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_win_init_empty(wp: WinHandle) {
+    win_init_empty_impl(wp);
 }
 
 #[cfg(test)]

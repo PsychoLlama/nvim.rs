@@ -219,6 +219,125 @@ pub(crate) fn win_horz_neighbor_impl(
 
 // Note: FFI wrappers rs_win_vert_neighbor and rs_win_horz_neighbor are in lib.rs
 
+// =============================================================================
+// leaving_window / entering_window -- prompt buffer state management
+// =============================================================================
+
+/// MODE_INSERT state flag (same value as in C: 0x10).
+const MODE_INSERT: c_int = 0x10;
+
+/// NUL character value.
+const NUL: c_int = 0;
+
+extern "C" {
+    /// Check if a window's buffer is a prompt buffer.
+    fn nvim_win_bt_prompt(wp: WinHandle) -> c_int;
+
+    /// Get b_prompt_insert from window's buffer.
+    fn nvim_buf_get_prompt_insert(buf: *mut std::ffi::c_void) -> c_int;
+
+    /// Set b_prompt_insert on window's buffer.
+    fn nvim_buf_set_prompt_insert(buf: *mut std::ffi::c_void, val: c_int);
+
+    /// Get the restart_edit global.
+    fn nvim_get_restart_edit() -> c_int;
+
+    /// Set the restart_edit global.
+    fn nvim_set_restart_edit(val: c_int);
+
+    /// Get the mode_displayed global (returns bool from C).
+    fn nvim_get_mode_displayed() -> bool;
+
+    /// Set clear_cmdline global (takes bool in C).
+    fn nvim_set_clear_cmdline(val: bool);
+
+    /// Get stop_insert_mode global.
+    fn nvim_get_stop_insert_mode() -> c_int;
+
+    /// Set stop_insert_mode global.
+    fn nvim_set_stop_insert_mode(val: c_int);
+
+    /// Get win's buffer pointer.
+    fn nvim_win_get_buf_ptr(wp: WinHandle) -> *mut std::ffi::c_void;
+
+    /// Get the State global.
+    fn nvim_get_State() -> c_int;
+}
+
+/// Handle prompt buffer state when leaving a window.
+///
+/// Port of C `leaving_window()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn leaving_window_impl(win: WinHandle) {
+    if nvim_win_bt_prompt(win) == 0 {
+        return;
+    }
+
+    let buf = nvim_win_get_buf_ptr(win);
+    let restart_edit = nvim_get_restart_edit();
+
+    // Save restart_edit into b_prompt_insert.
+    nvim_buf_set_prompt_insert(buf, restart_edit);
+
+    // If we were showing Insert mode, unshow it later.
+    if restart_edit != NUL && nvim_get_mode_displayed() {
+        nvim_set_clear_cmdline(true);
+    }
+    nvim_set_restart_edit(NUL);
+
+    // If in Insert mode and not stopping already, break out and restart on re-entry.
+    if (nvim_get_State() & MODE_INSERT) != 0 && nvim_get_stop_insert_mode() == 0 {
+        nvim_set_stop_insert_mode(1);
+        if nvim_buf_get_prompt_insert(buf) == NUL {
+            nvim_buf_set_prompt_insert(buf, c_int::from(b'A'));
+        }
+    }
+}
+
+/// Handle prompt buffer state when entering a window.
+///
+/// Port of C `entering_window()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn entering_window_impl(win: WinHandle) {
+    if nvim_win_bt_prompt(win) == 0 {
+        return;
+    }
+
+    let buf = nvim_win_get_buf_ptr(win);
+
+    // Don't stop Insert mode if we were in it when we left.
+    if nvim_buf_get_prompt_insert(buf) != NUL {
+        nvim_set_stop_insert_mode(0);
+    }
+
+    // Restart Insert mode if we were in it and not already in Insert mode.
+    if (nvim_get_State() & MODE_INSERT) == 0 {
+        nvim_set_restart_edit(nvim_buf_get_prompt_insert(buf));
+    }
+}
+
+/// FFI export for `leaving_window`.
+///
+/// # Safety
+/// Calls C accessor functions with a valid window handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_leaving_window(win: WinHandle) {
+    leaving_window_impl(win);
+}
+
+/// FFI export for `entering_window`.
+///
+/// # Safety
+/// Calls C accessor functions with a valid window handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_entering_window(win: WinHandle) {
+    entering_window_impl(win);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
