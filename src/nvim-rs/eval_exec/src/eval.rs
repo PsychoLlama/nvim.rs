@@ -1332,6 +1332,307 @@ pub unsafe extern "C" fn rs_eval_func(
 }
 
 // =============================================================================
+// Phase 2: eval_number migration
+// =============================================================================
+
+extern "C" {
+    // Float parsing (from eval crate)
+    fn rs_string2float(text: *const c_char, ret_value: *mut f64) -> usize;
+
+    // vim_str2nr (from charset crate, exported as vim_str2nr)
+    fn vim_str2nr(
+        start: *const c_char,
+        prep: *mut *mut c_char,
+        len: *mut c_int,
+        what: c_int,
+        nptr: *mut i64,
+        unptr: *mut u64,
+        maxlen: c_int,
+        strict: bool,
+        overflow: *mut bool,
+    );
+
+    // skipdigits - advance past digit characters
+    fn skipdigits(p: *const c_char) -> *mut c_char;
+
+    // Blob cleanup for error path
+    fn nvim_blob_ga_clear_and_free(b: *mut c_void);
+}
+
+/// STR2NR_ALL = STR2NR_BIN | STR2NR_OCT | STR2NR_HEX | STR2NR_OOCT = 0x0F
+const STR2NR_ALL: c_int = 0x0F;
+
+/// Error: invalid expression
+static E_INVEXPR2_FMT: &[u8] = b"E15: Invalid expression: \"%s\"\0";
+/// Error: blob literal must have even hex digits
+static E_BLOB_ODD_HEX: &[u8] = b"E973: Blob literal should have an even number of hex characters\0";
+
+/// Test if a byte is an ASCII digit (0-9)
+#[inline]
+fn ascii_isdigit(c: u8) -> bool {
+    c.is_ascii_digit()
+}
+
+/// Test if a byte is an ASCII hex digit (0-9, a-f, A-F)
+#[inline]
+fn ascii_isxdigit(c: u8) -> bool {
+    c.is_ascii_hexdigit()
+}
+
+/// Test if a byte is an ASCII alpha character (a-z, A-Z)
+#[inline]
+fn ascii_isalpha(c: u8) -> bool {
+    c.is_ascii_alphabetic()
+}
+
+/// Convert a hex digit character to its numeric value (0-15).
+/// The caller must ensure `c` is a valid hex digit.
+#[inline]
+fn hex2nr(c: u8) -> u8 {
+    match c {
+        b'0'..=b'9' => c - b'0',
+        b'a'..=b'f' => c - b'a' + 10,
+        b'A'..=b'F' => c - b'A' + 10,
+        _ => 0,
+    }
+}
+
+/// Allocate a variable for a number constant. Also deals with "0z" for blob.
+///
+/// Migrated from C `eval_number` in eval_shim.c.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer
+/// - `rettv` must be a valid typval handle
+pub unsafe fn eval_number_impl(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evaluate: bool,
+    want_string: bool,
+) -> c_int {
+    // Skip past first digit to detect float format
+    let mut p = skipdigits((*arg).add(1));
+    let mut get_float = false;
+
+    // We accept a float when the format matches
+    // "[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?". Very strict.
+    // Don't look for a float after "." operator to avoid
+    // ":let vers = 1.2.3" failing.
+    if !want_string && get_byte(p) == b'.' && ascii_isdigit(get_byte(p.add(1))) {
+        get_float = true;
+        p = skipdigits(p.add(2));
+        let e = get_byte(p);
+        if e == b'e' || e == b'E' {
+            p = p.add(1);
+            let sign = get_byte(p);
+            if sign == b'-' || sign == b'+' {
+                p = p.add(1);
+            }
+            if !ascii_isdigit(get_byte(p)) {
+                get_float = false;
+            } else {
+                p = skipdigits(p.add(1));
+            }
+        }
+        // Reject if followed by alpha or another '.' (would be method call)
+        let next = get_byte(p);
+        if ascii_isalpha(next) || next == b'.' {
+            get_float = false;
+        }
+    }
+
+    if get_float {
+        let mut f: f64 = 0.0;
+        let consumed = rs_string2float(*arg, &mut f);
+        *arg = (*arg).add(consumed);
+        if evaluate {
+            nvim_tv_set_type(rettv, VAR_FLOAT);
+            nvim_tv_set_float(rettv, f);
+        }
+    } else if get_byte(*arg) == b'0'
+        && (get_byte((*arg).add(1)) == b'z' || get_byte((*arg).add(1)) == b'Z')
+    {
+        // Blob constant: 0z0123456789abcdef
+        let mut blob: *mut c_void = std::ptr::null_mut();
+        if evaluate {
+            blob = nvim_blob_alloc();
+        }
+        let mut bp = (*arg).add(2);
+        while ascii_isxdigit(get_byte(bp)) {
+            if !ascii_isxdigit(get_byte(bp.add(1))) {
+                if !blob.is_null() {
+                    emsg(E_BLOB_ODD_HEX.as_ptr() as *const c_char);
+                    nvim_blob_ga_clear_and_free(blob);
+                }
+                return FAIL;
+            }
+            if !blob.is_null() {
+                let byte_val = (hex2nr(get_byte(bp)) << 4) | hex2nr(get_byte(bp.add(1)));
+                ga_append(blob_get_ga(blob), byte_val as c_int);
+            }
+            bp = bp.add(2);
+            // Optional '.' separator between pairs
+            if get_byte(bp) == b'.' && ascii_isxdigit(get_byte(bp.add(1))) {
+                bp = bp.add(1);
+            }
+        }
+        if !blob.is_null() {
+            nvim_blob_set_ret(rettv, blob);
+        }
+        *arg = bp;
+    } else {
+        // Decimal, hex, octal, or binary number
+        let mut len: c_int = 0;
+        let mut n: i64 = 0;
+        vim_str2nr(
+            *arg,
+            std::ptr::null_mut(),
+            &mut len,
+            STR2NR_ALL,
+            &mut n,
+            std::ptr::null_mut(),
+            0,
+            true,
+            std::ptr::null_mut(),
+        );
+        if len == 0 {
+            if evaluate {
+                semsg(E_INVEXPR2_FMT.as_ptr() as *const c_char, *arg);
+            }
+            return FAIL;
+        }
+        *arg = (*arg).add(len as usize);
+        if evaluate {
+            nvim_tv_set_type(rettv, VAR_NUMBER);
+            nvim_tv_set_number(rettv, n);
+        }
+    }
+    OK
+}
+
+/// FFI export for eval_number.
+///
+/// # Safety
+/// See `eval_number_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_number(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evaluate: bool,
+    want_string: bool,
+) -> c_int {
+    eval_number_impl(arg, rettv, evaluate, want_string)
+}
+
+// =============================================================================
+// Phase 3: eval_list migration
+// =============================================================================
+
+extern "C" {
+    // List operations - new C accessors
+    fn nvim_eval_tv_list_alloc(len: isize) -> *mut c_void;
+    fn nvim_eval_tv_list_free(l: *mut c_void);
+    fn nvim_eval_tv_list_append_owned_tv_ptr(l: *mut c_void, tv: TypevalHandle);
+    fn nvim_eval_tv_list_set_ret(rettv: TypevalHandle, l: *mut c_void);
+}
+
+/// kListLenShouldKnow = -2 as ptrdiff_t
+const K_LIST_LEN_SHOULD_KNOW: isize = -2;
+
+/// Error: missing comma in List
+static E_MISSING_COMMA_LIST: &[u8] = b"E696: Missing comma in List: %s\0";
+/// Error: missing ] in List
+static E_LIST_END: &[u8] = b"E697: Missing end of List ']': %s\0";
+
+/// Allocate a variable for a List and fill it from `*arg`.
+///
+/// `*arg` points to the "[".
+/// Migrated from C `eval_list` in eval_shim.c.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a mutable C string pointer, pointing at '['
+/// - `rettv` must be a valid typval handle
+/// - `evalarg` can be null
+pub unsafe fn eval_list_impl(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+) -> c_int {
+    let evaluate = should_evaluate(evalarg);
+    let mut l: *mut c_void = std::ptr::null_mut();
+
+    if evaluate {
+        l = nvim_eval_tv_list_alloc(K_LIST_LEN_SHOULD_KNOW);
+    }
+
+    // Skip past the '['
+    *arg = skipwhite((*arg).add(1));
+
+    while get_byte(*arg) != b']' && get_byte(*arg) != 0 {
+        let tv = alloc_typval();
+        if eval1_impl(arg, tv, evalarg) == FAIL {
+            free_typval(tv);
+            if !l.is_null() {
+                nvim_eval_tv_list_free(l);
+            }
+            return FAIL;
+        }
+        if evaluate {
+            nvim_eval_tv_list_append_owned_tv_ptr(l, tv);
+        } else {
+            tv_clear(tv);
+        }
+        free_typval(tv);
+
+        // The comma must come after the value
+        let had_comma = get_byte(*arg) == b',';
+        if had_comma {
+            *arg = skipwhite((*arg).add(1));
+        }
+
+        if get_byte(*arg) == b']' {
+            break;
+        }
+
+        if !had_comma {
+            semsg(E_MISSING_COMMA_LIST.as_ptr() as *const c_char, *arg);
+            if !l.is_null() {
+                nvim_eval_tv_list_free(l);
+            }
+            return FAIL;
+        }
+    }
+
+    if get_byte(*arg) != b']' {
+        semsg(E_LIST_END.as_ptr() as *const c_char, *arg);
+        if !l.is_null() {
+            nvim_eval_tv_list_free(l);
+        }
+        return FAIL;
+    }
+
+    *arg = skipwhite((*arg).add(1));
+    if evaluate {
+        nvim_eval_tv_list_set_ret(rettv, l);
+    }
+
+    OK
+}
+
+/// FFI export for eval_list.
+///
+/// # Safety
+/// See `eval_list_impl` for safety requirements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_list(
+    arg: *mut *mut c_char,
+    rettv: TypevalHandle,
+    evalarg: EvalargHandle,
+) -> c_int {
+    eval_list_impl(arg, rettv, evalarg)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

@@ -123,6 +123,8 @@ extern char *rs_get_lval(char *name, typval_T *rettv, lval_T *lp, bool unlet, bo
 extern void rs_clear_lval(lval_T *lp);
 extern void rs_set_var_lval(lval_T *lp, char *endp, typval_T *rettv, bool copy,
                             bool is_const, const char *op);
+extern int rs_eval_number(char **arg, typval_T *rettv, bool evaluate, bool want_string);
+extern int rs_eval_list(char **arg, typval_T *rettv, void *evalarg);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -1945,7 +1947,7 @@ static int eval7(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool wan
   case '7':
   case '8':
   case '9':
-    ret = eval_number(arg, rettv, evaluate, want_string);
+    ret = rs_eval_number(arg, rettv, evaluate, want_string);
 
     // Apply prefixed "-" and "+" now.  Matters especially when
     // "->" follows.
@@ -1966,7 +1968,7 @@ static int eval7(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool wan
 
   // List: [expr, expr]
   case '[':
-    ret = eval_list(arg, rettv, evalarg);
+    ret = rs_eval_list(arg, rettv, evalarg);
     break;
 
   // Literal Dictionary: #{key: val, key: val}
@@ -2714,90 +2716,6 @@ int eval_option(const char **const arg, typval_T *const rettv, const bool evalua
   return ret;
 }
 
-/// Allocate a variable for a number constant.  Also deals with "0z" for blob.
-///
-/// @return  OK or FAIL.
-static int eval_number(char **arg, typval_T *rettv, bool evaluate, bool want_string)
-{
-  char *p = skipdigits(*arg + 1);
-  bool get_float = false;
-
-  // We accept a float when the format matches
-  // "[0-9]\+\.[0-9]\+\([eE][+-]\?[0-9]\+\)\?".  This is very
-  // strict to avoid backwards compatibility problems.
-  // Don't look for a float after the "." operator, so that
-  // ":let vers = 1.2.3" doesn't fail.
-  if (!want_string && p[0] == '.' && ascii_isdigit(p[1])) {
-    get_float = true;
-    p = skipdigits(p + 2);
-    if (*p == 'e' || *p == 'E') {
-      p++;
-      if (*p == '-' || *p == '+') {
-        p++;
-      }
-      if (!ascii_isdigit(*p)) {
-        get_float = false;
-      } else {
-        p = skipdigits(p + 1);
-      }
-    }
-    if (ASCII_ISALPHA(*p) || *p == '.') {
-      get_float = false;
-    }
-  }
-  if (get_float) {
-    float_T f;
-    *arg += rs_string2float(*arg, &f);
-    if (evaluate) {
-      rettv->v_type = VAR_FLOAT;
-      rettv->vval.v_float = f;
-    }
-  } else if (**arg == '0' && ((*arg)[1] == 'z' || (*arg)[1] == 'Z')) {
-    // Blob constant: 0z0123456789abcdef
-    blob_T *blob = NULL;
-    if (evaluate) {
-      blob = tv_blob_alloc();
-    }
-    char *bp;
-    for (bp = *arg + 2; ascii_isxdigit(bp[0]); bp += 2) {
-      if (!ascii_isxdigit(bp[1])) {
-        if (blob != NULL) {
-          emsg(_("E973: Blob literal should have an even number of hex characters"));
-          ga_clear(&blob->bv_ga);
-          XFREE_CLEAR(blob);
-        }
-        return FAIL;
-      }
-      if (blob != NULL) {
-        ga_append(&blob->bv_ga, (uint8_t)((hex2nr(*bp) << 4) + hex2nr(*(bp + 1))));
-      }
-      if (bp[2] == '.' && ascii_isxdigit(bp[3])) {
-        bp++;
-      }
-    }
-    if (blob != NULL) {
-      tv_blob_set_ret(rettv, blob);
-    }
-    *arg = bp;
-  } else {
-    // decimal, hex or octal number
-    int len;
-    varnumber_T n;
-    vim_str2nr(*arg, NULL, &len, STR2NR_ALL, &n, NULL, 0, true, NULL);
-    if (len == 0) {
-      if (evaluate) {
-        semsg(_(e_invexpr2), *arg);
-      }
-      return FAIL;
-    }
-    *arg += len;
-    if (evaluate) {
-      rettv->v_type = VAR_NUMBER;
-      rettv->vval.v_number = n;
-    }
-  }
-  return OK;
-}
 
 /// Evaluate a string constant and put the result in "rettv".
 /// "*arg" points to the double quote or to after it when "interpolate" is true.
@@ -3146,62 +3064,6 @@ void partial_unref(partial_T *pt)
   }
 }
 
-/// Allocate a variable for a List and fill it from "*arg".
-///
-/// @param arg  "*arg" points to the "[".
-/// @return  OK or FAIL.
-static int eval_list(char **arg, typval_T *rettv, evalarg_T *const evalarg)
-{
-  const bool evaluate = evalarg == NULL ? false : evalarg->eval_flags & EVAL_EVALUATE;
-  list_T *l = NULL;
-
-  if (evaluate) {
-    l = tv_list_alloc(kListLenShouldKnow);
-  }
-
-  *arg = skipwhite(*arg + 1);
-  while (**arg != ']' && **arg != NUL) {
-    typval_T tv;
-    if (eval1(arg, &tv, evalarg) == FAIL) {  // Recursive!
-      goto failret;
-    }
-    if (evaluate) {
-      tv.v_lock = VAR_UNLOCKED;
-      tv_list_append_owned_tv(l, tv);
-    }
-
-    // the comma must come after the value
-    bool had_comma = **arg == ',';
-    if (had_comma) {
-      *arg = skipwhite(*arg + 1);
-    }
-
-    if (**arg == ']') {
-      break;
-    }
-
-    if (!had_comma) {
-      semsg(_("E696: Missing comma in List: %s"), *arg);
-      goto failret;
-    }
-  }
-
-  if (**arg != ']') {
-    semsg(_(e_list_end), *arg);
-failret:
-    if (evaluate) {
-      tv_list_free(l);
-    }
-    return FAIL;
-  }
-
-  *arg = skipwhite(*arg + 1);
-  if (evaluate) {
-    tv_list_set_ret(rettv, l);
-  }
-
-  return OK;
-}
 
 /// Garbage collection for lists and dictionaries.
 ///
@@ -5398,6 +5260,15 @@ blob_T *nvim_blob_alloc(void)
   return tv_blob_alloc();
 }
 
+/// Clear blob's ga and free the blob - for error path in Rust eval_exec.
+void nvim_blob_ga_clear_and_free(blob_T *b)
+{
+  if (b != NULL) {
+    ga_clear(&b->bv_ga);
+    xfree(b);
+  }
+}
+
 /// Wrapper for tv_blob_set_ret inline function (accessor for Rust eval_exec).
 void nvim_blob_set_ret(typval_T *tv, blob_T *b)
 {
@@ -5799,4 +5670,34 @@ int nvim_call_func_tv_wrapper(char *name, int len, typval_T *rettv, char **arg,
   funcexe.fe_basetv = basetv;
   funcexe.fe_found_var = found_var;
   return get_func_tv(name, len, rettv, arg, evalarg, &funcexe);
+}
+
+// =============================================================================
+// Phase 3: eval_list accessor wrappers for Rust
+// =============================================================================
+
+/// Wrapper for tv_list_alloc - accessor for Rust eval_exec.
+list_T *nvim_eval_tv_list_alloc(ptrdiff_t len)
+{
+  return tv_list_alloc(len);
+}
+
+/// Wrapper for tv_list_free - accessor for Rust eval_exec.
+void nvim_eval_tv_list_free(list_T *l)
+{
+  tv_list_free(l);
+}
+
+/// Wrapper for tv_list_append_owned_tv taking a pointer - accessor for Rust eval_exec.
+/// Takes a typval_T pointer and copies by value, avoiding FFI struct-by-value issues.
+void nvim_eval_tv_list_append_owned_tv_ptr(list_T *l, typval_T *tv)
+{
+  tv->v_lock = VAR_UNLOCKED;
+  tv_list_append_owned_tv(l, *tv);
+}
+
+/// Wrapper for tv_list_set_ret inline function - accessor for Rust eval_exec.
+void nvim_eval_tv_list_set_ret(typval_T *rettv, list_T *l)
+{
+  tv_list_set_ret(rettv, l);
 }
