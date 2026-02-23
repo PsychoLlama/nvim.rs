@@ -708,6 +708,7 @@ pub mod callback;
 pub mod context;
 pub mod errors;
 pub mod eval;
+pub mod eval_top;
 pub mod ex_echo;
 pub mod for_loop;
 pub mod gc;

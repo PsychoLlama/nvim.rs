@@ -561,6 +561,20 @@ void fill_evalarg_from_eap(evalarg_T *evalarg, exarg_T *eap, bool skip)
   }
 }
 
+// Rust implementations (in eval_exec crate, eval_top module)
+extern bool rs_eval_to_bool(char *arg, bool *error, exarg_T *eap, bool skip,
+                             bool use_simple_function);
+extern char *rs_eval_to_string_skip(char *arg, exarg_T *eap, bool skip);
+extern char *rs_eval_to_string_eap(char *arg, bool join_list, exarg_T *eap,
+                                   bool use_simple_function);
+extern char *rs_eval_to_string(char *arg, bool join_list, bool use_simple_function);
+extern char *rs_eval_to_string_safe(char *arg, bool use_sandbox, bool use_simple_function);
+extern int64_t rs_eval_to_number(char *expr, bool use_simple_function);
+extern int rs_skip_expr(char **pp, evalarg_T *evalarg);
+extern int rs_eval_expr_typval(const typval_T *expr, bool want_func, typval_T *argv, int argc,
+                               typval_T *rettv);
+extern bool rs_eval_expr_to_bool(const typval_T *expr, bool *error);
+
 /// Top level evaluation function, returning a boolean.
 /// Sets "error" to true if there was an error.
 ///
@@ -570,32 +584,7 @@ void fill_evalarg_from_eap(evalarg_T *evalarg, exarg_T *eap, bool skip)
 bool eval_to_bool(char *arg, bool *error, exarg_T *eap, const bool skip,
                   const bool use_simple_function)
 {
-  typval_T tv;
-  bool retval = false;
-  evalarg_T evalarg;
-
-  fill_evalarg_from_eap(&evalarg, eap, skip);
-
-  if (skip) {
-    emsg_skip++;
-  }
-  int r = use_simple_function ? eval0_simple_funccal(arg, &tv, eap, &evalarg)
-                              : eval0(arg, &tv, eap, &evalarg);
-  if (r == FAIL) {
-    *error = true;
-  } else {
-    *error = false;
-    if (!skip) {
-      retval = (tv_get_number_chk(&tv, error) != 0);
-      tv_clear(&tv);
-    }
-  }
-  if (skip) {
-    emsg_skip--;
-  }
-  clear_evalarg(&evalarg, eap);
-
-  return retval;
+  return rs_eval_to_bool(arg, error, eap, skip, use_simple_function);
 }
 
 /// Call eval1() and give an error message if not done at a lower level.
@@ -625,80 +614,6 @@ static int eval1_emsg(char **arg, typval_T *rettv, exarg_T *eap)
   return ret;
 }
 
-/// Evaluate a partial.
-/// Pass arguments "argv[argc]".
-/// Return the result in "rettv" and OK or FAIL.
-static int eval_expr_partial(const typval_T *expr, typval_T *argv, int argc, typval_T *rettv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  partial_T *const partial = expr->vval.v_partial;
-  if (partial == NULL) {
-    return FAIL;
-  }
-
-  const char *const s = rs_partial_name(partial);
-  if (s == NULL || *s == NUL) {
-    return FAIL;
-  }
-
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_evaluate = true;
-  funcexe.fe_partial = partial;
-  if (call_func(s, -1, rettv, argc, argv, &funcexe) == FAIL) {
-    return FAIL;
-  }
-
-  return OK;
-}
-
-/// Evaluate an expression which is a function.
-/// Pass arguments "argv[argc]".
-/// Return the result in "rettv" and OK or FAIL.
-static int eval_expr_func(const typval_T *expr, typval_T *argv, int argc, typval_T *rettv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char buf[NUMBUFLEN];
-  const char *const s = (expr->v_type == VAR_FUNC
-                         ? expr->vval.v_string
-                         : tv_get_string_buf_chk(expr, buf));
-  if (s == NULL || *s == NUL) {
-    return FAIL;
-  }
-
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_evaluate = true;
-  if (call_func(s, -1, rettv, argc, argv, &funcexe) == FAIL) {
-    return FAIL;
-  }
-
-  return OK;
-}
-
-/// Evaluate an expression, which is a string.
-/// Return the result in "rettv" and OK or FAIL.
-static int eval_expr_string(const typval_T *expr, typval_T *rettv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char buf[NUMBUFLEN];
-  char *s = (char *)tv_get_string_buf_chk(expr, buf);
-  if (s == NULL) {
-    return FAIL;
-  }
-
-  s = skipwhite(s);
-  if (eval1_emsg(&s, rettv, NULL) == FAIL) {
-    return FAIL;
-  }
-
-  if (*skipwhite(s) != NUL) {  // check for trailing chars after expr
-    tv_clear(rettv);
-    semsg(_(e_invexpr2), s);
-    return FAIL;
-  }
-
-  return OK;
-}
-
 /// Evaluate an expression, which can be a function, partial or string.
 /// Pass arguments "argv[argc]".
 /// Return the result in "rettv" and OK or FAIL.
@@ -708,14 +623,7 @@ int eval_expr_typval(const typval_T *expr, bool want_func, typval_T *argv, int a
                      typval_T *rettv)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (expr->v_type == VAR_PARTIAL) {
-    return eval_expr_partial(expr, argv, argc, rettv);
-  }
-  if (expr->v_type == VAR_FUNC || want_func) {
-    return eval_expr_func(expr, argv, argc, rettv);
-  }
-
-  return eval_expr_string(expr, rettv);
+  return rs_eval_expr_typval(expr, want_func, argv, argc, rettv);
 }
 
 /// Like eval_to_bool() but using a typval_T instead of a string.
@@ -723,15 +631,7 @@ int eval_expr_typval(const typval_T *expr, bool want_func, typval_T *argv, int a
 bool eval_expr_to_bool(const typval_T *expr, bool *error)
   FUNC_ATTR_NONNULL_ARG(1, 2)
 {
-  typval_T argv, rettv;
-
-  if (eval_expr_typval(expr, false, &argv, 0, &rettv) == FAIL) {
-    *error = true;
-    return false;
-  }
-  const bool res = (tv_get_number_chk(&rettv, error) != 0);
-  tv_clear(&rettv);
-  return res;
+  return rs_eval_expr_to_bool(expr, error);
 }
 
 /// Top level evaluation function, returning a string
@@ -745,26 +645,7 @@ bool eval_expr_to_bool(const typval_T *expr, bool *error)
 char *eval_to_string_skip(char *arg, exarg_T *eap, const bool skip)
   FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  typval_T tv;
-  char *retval;
-  evalarg_T evalarg;
-
-  fill_evalarg_from_eap(&evalarg, eap, skip);
-  if (skip) {
-    emsg_skip++;
-  }
-  if (eval0(arg, &tv, eap, &evalarg) == FAIL || skip) {
-    retval = NULL;
-  } else {
-    retval = xstrdup(tv_get_string(&tv));
-    tv_clear(&tv);
-  }
-  if (skip) {
-    emsg_skip--;
-  }
-  clear_evalarg(&evalarg, eap);
-
-  return retval;
+  return rs_eval_to_string_skip(arg, eap, skip);
 }
 
 /// Skip over an expression at "*pp".
@@ -772,46 +653,7 @@ char *eval_to_string_skip(char *arg, exarg_T *eap, const bool skip)
 /// @return  FAIL for an error, OK otherwise.
 int skip_expr(char **pp, evalarg_T *const evalarg)
 {
-  const int save_flags = evalarg == NULL ? 0 : evalarg->eval_flags;
-
-  // Don't evaluate the expression.
-  if (evalarg != NULL) {
-    evalarg->eval_flags &= ~EVAL_EVALUATE;
-  }
-
-  *pp = skipwhite(*pp);
-  typval_T rettv;
-  int res = eval1(pp, &rettv, NULL);
-
-  if (evalarg != NULL) {
-    evalarg->eval_flags = save_flags;
-  }
-
-  return res;
-}
-
-/// Convert "tv" to a string.
-///
-/// @param join_list  when true convert a List into a sequence of lines.
-///
-/// @return  an allocated string.
-static char *typval2string(typval_T *tv, bool join_list)
-{
-  if (join_list && tv->v_type == VAR_LIST) {
-    garray_T ga;
-    ga_init(&ga, (int)sizeof(char), 80);
-    if (tv->vval.v_list != NULL) {
-      tv_list_join(&ga, tv->vval.v_list, "\n");
-      if (tv_list_len(tv->vval.v_list) > 0) {
-        ga_append(&ga, NL);
-      }
-    }
-    ga_append(&ga, NUL);
-    return (char *)ga.ga_data;
-  } else if (tv->v_type == VAR_LIST || tv->v_type == VAR_DICT) {
-    return encode_tv2string(tv, NULL);
-  }
-  return xstrdup(tv_get_string(tv));
+  return rs_skip_expr(pp, evalarg);
 }
 
 /// Top level evaluation function, returning a string.
@@ -822,27 +664,12 @@ static char *typval2string(typval_T *tv, bool join_list)
 char *eval_to_string_eap(char *arg, const bool join_list, exarg_T *eap,
                          const bool use_simple_function)
 {
-  typval_T tv;
-  char *retval;
-
-  evalarg_T evalarg;
-  fill_evalarg_from_eap(&evalarg, eap, eap != NULL && eap->skip);
-  int r = use_simple_function ? eval0_simple_funccal(arg, &tv, NULL, &evalarg)
-                              : eval0(arg, &tv, NULL, &evalarg);
-  if (r == FAIL) {
-    retval = NULL;
-  } else {
-    retval = typval2string(&tv, join_list);
-    tv_clear(&tv);
-  }
-  clear_evalarg(&evalarg, NULL);
-
-  return retval;
+  return rs_eval_to_string_eap(arg, join_list, eap, use_simple_function);
 }
 
 char *eval_to_string(char *arg, const bool join_list, const bool use_simple_function)
 {
-  return eval_to_string_eap(arg, join_list, NULL, use_simple_function);
+  return rs_eval_to_string(arg, join_list, use_simple_function);
 }
 
 /// Call eval_to_string() without using current local variables and using
@@ -851,21 +678,7 @@ char *eval_to_string(char *arg, const bool join_list, const bool use_simple_func
 /// @param use_sandbox  when true, use the sandbox.
 char *eval_to_string_safe(char *arg, const bool use_sandbox, const bool use_simple_function)
 {
-  char *retval;
-  funccal_entry_T funccal_entry;
-
-  save_funccal(&funccal_entry);
-  if (use_sandbox) {
-    sandbox++;
-  }
-  textlock++;
-  retval = eval_to_string(arg, false, use_simple_function);
-  if (use_sandbox) {
-    sandbox--;
-  }
-  textlock--;
-  restore_funccal();
-  return retval;
+  return rs_eval_to_string_safe(arg, use_sandbox, use_simple_function);
 }
 
 /// Top level evaluation function, returning a number.
@@ -874,28 +687,7 @@ char *eval_to_string_safe(char *arg, const bool use_sandbox, const bool use_simp
 /// @return  -1 for an error.
 varnumber_T eval_to_number(char *expr, const bool use_simple_function)
 {
-  typval_T rettv;
-  varnumber_T retval;
-  char *p = skipwhite(expr);
-  int r = NOTDONE;
-
-  emsg_off++;
-
-  if (use_simple_function) {
-    r = may_call_simple_func(expr, &rettv);
-  }
-  if (r == NOTDONE) {
-    r = eval1(&p, &rettv, &EVALARG_EVALUATE);
-  }
-  if (r == FAIL) {
-    retval = -1;
-  } else {
-    retval = tv_get_number_chk(&rettv, NULL);
-    tv_clear(&rettv);
-  }
-  emsg_off--;
-
-  return retval;
+  return rs_eval_to_number(expr, use_simple_function);
 }
 
 /// Top level evaluation function.
@@ -4740,4 +4532,138 @@ bool nvim_ga_is_empty_execute(garray_T *ga)
 
 /// Set did_emsg global - accessor for Rust.
 // nvim_set_did_emsg already defined in message.c -- no duplicate needed here.
+
+// =============================================================================
+// Phase 2 eval_top accessors - eval_to_* and eval_expr_* family
+// =============================================================================
+
+/// Increment emsg_off - accessor for Rust eval_top.
+void nvim_eval_emsg_off_inc(void)
+{
+  emsg_off++;
+}
+
+/// Decrement emsg_off - accessor for Rust eval_top.
+void nvim_eval_emsg_off_dec(void)
+{
+  emsg_off--;
+}
+
+/// Increment sandbox - accessor for Rust eval_top.
+void nvim_eval_sandbox_inc(void)
+{
+  sandbox++;
+}
+
+/// Decrement sandbox - accessor for Rust eval_top.
+void nvim_eval_sandbox_dec(void)
+{
+  sandbox--;
+}
+
+/// Increment textlock - accessor for Rust eval_top.
+void nvim_eval_textlock_inc(void)
+{
+  textlock++;
+}
+
+/// Decrement textlock - accessor for Rust eval_top.
+void nvim_eval_textlock_dec(void)
+{
+  textlock--;
+}
+
+/// Heap-allocate a funccal_entry_T and call save_funccal - accessor for Rust.
+/// Returns opaque void* so callers don't need the full type definition.
+void *nvim_eval_save_funccal(void)
+{
+  funccal_entry_T *entry = xcalloc(1, sizeof(funccal_entry_T));
+  save_funccal(entry);
+  return entry;
+}
+
+/// Call restore_funccal and free the entry - accessor for Rust.
+/// Takes opaque void* matching the return type of nvim_eval_save_funccal.
+void nvim_eval_restore_funccal(void *entry)
+{
+  restore_funccal();
+  xfree(entry);
+}
+
+/// may_call_simple_func wrapper - accessor for Rust eval_top.
+int nvim_eval_may_call_simple_func(const char *arg, typval_T *rettv)
+{
+  return may_call_simple_func(arg, rettv);
+}
+
+/// tv_list_join with newline separator - wrapper for typval2string.
+/// Appends all list items joined by "\n" followed by NL if list non-empty, then NUL.
+/// Returns heap-allocated string (caller must xfree).
+char *nvim_eval_tv_list_join_nl(list_T *l)
+{
+  garray_T ga;
+  ga_init(&ga, (int)sizeof(char), 80);
+  if (l != NULL) {
+    tv_list_join(&ga, l, "\n");
+    if (tv_list_len(l) > 0) {
+      ga_append(&ga, NL);
+    }
+  }
+  ga_append(&ga, NUL);
+  return (char *)ga.ga_data;
+}
+
+/// Get v_type from typval - accessor for eval_top.
+int nvim_eval_tv_vtype(const typval_T *tv)
+{
+  return (int)tv->v_type;
+}
+
+/// Get vval.v_list from typval - accessor for eval_top.
+list_T *nvim_eval_tv_vlist(const typval_T *tv)
+{
+  return tv->vval.v_list;
+}
+
+/// call_func wrapper for eval_expr_partial - accessor for Rust eval_top.
+int nvim_eval_call_func_partial(const char *s, partial_T *partial,
+                                typval_T *argv, int argc, typval_T *rettv)
+{
+  funcexe_T funcexe = FUNCEXE_INIT;
+  funcexe.fe_evaluate = true;
+  funcexe.fe_partial = partial;
+  return call_func(s, -1, rettv, argc, argv, &funcexe);
+}
+
+/// call_func wrapper for eval_expr_func - accessor for Rust eval_top.
+int nvim_eval_call_func_simple(const char *s, typval_T *argv, int argc, typval_T *rettv)
+{
+  funcexe_T funcexe = FUNCEXE_INIT;
+  funcexe.fe_evaluate = true;
+  return call_func(s, -1, rettv, argc, argv, &funcexe);
+}
+
+/// Get vval.v_partial from typval - accessor for eval_top.
+partial_T *nvim_eval_tv_vpartial(const typval_T *tv)
+{
+  return tv->vval.v_partial;
+}
+
+/// Get vval.v_string from typval (read-only) - accessor for eval_top.
+const char *nvim_eval_tv_vstring_ro(const typval_T *tv)
+{
+  return tv->vval.v_string;
+}
+
+/// tv_get_string wrapper - accessor for eval_top.
+const char *nvim_eval_tv_get_string(const typval_T *tv)
+{
+  return tv_get_string(tv);
+}
+
+/// xstrdup wrapper - accessor for eval_top.
+char *nvim_eval_xstrdup(const char *s)
+{
+  return xstrdup(s);
+}
 
