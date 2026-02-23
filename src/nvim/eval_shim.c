@@ -4691,3 +4691,302 @@ int nvim_eval7_wrapper(char **arg, typval_T *rettv, evalarg_T *evalarg, bool wan
 {
   return rs_eval7(arg, rettv, evalarg, want_string);
 }
+
+// =============================================================================
+// Phase 1 (lval subscript): new C accessor/wrapper functions for rs_get_lval_subscript
+// =============================================================================
+
+/// Set lp->ll_list - accessor for Rust.
+void nvim_lval_set_list(lval_T *lp, list_T *list)
+{
+  lp->ll_list = list;
+}
+
+/// Set lp->ll_dict - accessor for Rust.
+void nvim_lval_set_dict(lval_T *lp, dict_T *dict)
+{
+  lp->ll_dict = dict;
+}
+
+/// Set lp->ll_di - accessor for Rust.
+void nvim_lval_set_di(lval_T *lp, dictitem_T *di)
+{
+  lp->ll_di = di;
+}
+
+/// Set lp->ll_n1 - accessor for Rust.
+void nvim_lval_set_n1(lval_T *lp, int n1)
+{
+  lp->ll_n1 = n1;
+}
+
+/// Set lp->ll_range - accessor for Rust.
+void nvim_lval_set_range(lval_T *lp, bool range)
+{
+  lp->ll_range = range;
+}
+
+/// Set lp->ll_empty2 - accessor for Rust.
+void nvim_lval_set_empty2(lval_T *lp, bool empty2)
+{
+  lp->ll_empty2 = empty2;
+}
+
+/// Set lp->ll_blob - accessor for Rust.
+void nvim_lval_set_blob(lval_T *lp, blob_T *blob)
+{
+  lp->ll_blob = blob;
+}
+
+/// Set lp->ll_li - accessor for Rust.
+void nvim_lval_set_li(lval_T *lp, listitem_T *li)
+{
+  lp->ll_li = li;
+}
+
+/// Set lp->ll_newkey - accessor for Rust.
+void nvim_lval_set_newkey(lval_T *lp, char *key)
+{
+  lp->ll_newkey = key;
+}
+
+/// Get lp->ll_li as opaque void* - accessor for Rust.
+listitem_T *nvim_lval_get_li(const lval_T *lp)
+{
+  return lp->ll_li;
+}
+
+/// Returns true if ll_dict is v: or a: scope dict - composite accessor for Rust.
+bool nvim_lval_dict_is_v_or_a_scope(const lval_T *lp)
+{
+  return lp->ll_dict == get_vimvar_dict()
+         || &lp->ll_dict->dv_hashtab == get_funccal_args_ht();
+}
+
+/// Returns dv_scope from ll_dict - accessor for Rust.
+int nvim_lval_dict_scope(const lval_T *lp)
+{
+  return lp->ll_dict->dv_scope;
+}
+
+/// Composite: var_check_ro || var_check_lock on di_flags - accessor for Rust.
+bool nvim_lval_di_check_ro_lock(const lval_T *lp, const char *name, size_t name_len)
+{
+  return var_check_ro(lp->ll_di->di_flags, name, name_len)
+         || var_check_lock(lp->ll_di->di_flags, name, name_len);
+}
+
+/// Set lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li) - composite setter for Rust.
+void nvim_lval_set_tv_to_li_tv(lval_T *lp)
+{
+  lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li);
+}
+
+/// Emit "E689: Can only index a List, Dictionary or Blob" - accessor for Rust.
+void nvim_emsg_e689(void)
+{
+  emsg(_("E689: Can only index a List, Dictionary or Blob"));
+}
+
+/// Emit "E708: [:] must come last" - accessor for Rust.
+void nvim_emsg_e708(void)
+{
+  emsg(_("E708: [:] must come last"));
+}
+
+/// Emit "E713: Cannot use empty key after ." - accessor for Rust.
+void nvim_emsg_e713(void)
+{
+  emsg(_("E713: Cannot use empty key after ."));
+}
+
+/// Emit "E709: [:] requires a List or Blob value" - accessor for Rust.
+void nvim_emsg_e709(void)
+{
+  emsg(_("E709: [:] requires a List or Blob value"));
+}
+
+/// Emit e_dot_can_only_be_used_on_dictionary_str with name - accessor for Rust.
+void nvim_semsg_e_dot_dict(const char *name)
+{
+  semsg(_(e_dot_can_only_be_used_on_dictionary_str), name);
+}
+
+/// Emit e_illvar with name (no translation - used for v:lua case) - accessor for Rust.
+void nvim_semsg_e_illvar_raw(const char *name)
+{
+  semsg(e_illvar, name);
+}
+
+/// Emit e_illvar with name (with translation) - accessor for Rust.
+void nvim_semsg_e_illvar(const char *name)
+{
+  semsg(_(e_illvar), name);
+}
+
+/// Emit e_cannot_slice_dictionary - accessor for Rust.
+void nvim_semsg_e_cannot_slice_dict(void)
+{
+  emsg(_(e_cannot_slice_dictionary));
+}
+
+/// Increment dict refcount and assign to ll_tv->vval.v_dict; set ll_dict = dict - accessor for Rust.
+/// Replicates: lp->ll_tv->vval.v_dict = tv_dict_alloc(); lp->ll_tv->vval.v_dict->dv_refcount++;
+/// lp->ll_dict = lp->ll_tv->vval.v_dict
+void nvim_lval_alloc_dict_if_null(lval_T *lp)
+{
+  if (lp->ll_tv->vval.v_dict == NULL) {
+    lp->ll_tv->vval.v_dict = tv_dict_alloc();
+    lp->ll_tv->vval.v_dict->dv_refcount++;
+  }
+  lp->ll_dict = lp->ll_tv->vval.v_dict;
+}
+
+/// Get tv->vval.v_dict from the ll_tv - composite accessor for Rust.
+dict_T *nvim_lval_tv_get_dict(const lval_T *lp)
+{
+  return lp->ll_tv->vval.v_dict;
+}
+
+/// Get tv->vval.v_blob from the ll_tv - composite accessor for Rust.
+blob_T *nvim_lval_tv_get_blob(const lval_T *lp)
+{
+  return lp->ll_tv->vval.v_blob;
+}
+
+/// Get tv->vval.v_list from the ll_tv - composite accessor for Rust.
+list_T *nvim_lval_tv_get_list(const lval_T *lp)
+{
+  return lp->ll_tv->vval.v_list;
+}
+
+/// Get v_type from the ll_tv - composite accessor for Rust.
+int nvim_lval_tv_get_type(const lval_T *lp)
+{
+  return lp->ll_tv->v_type;
+}
+
+/// Alloc list and set ll_tv - composite accessor for Rust.
+void nvim_lval_tv_list_alloc_ret(lval_T *lp)
+{
+  tv_list_alloc_ret(lp->ll_tv, kListLenUnknown);
+}
+
+/// Alloc blob and set ll_tv - composite accessor for Rust.
+void nvim_lval_tv_blob_alloc_ret(lval_T *lp)
+{
+  tv_blob_alloc_ret(lp->ll_tv);
+}
+
+/// Get tv->v_type from ll_tv - same as nvim_lval_tv_get_type but returns int - accessor for Rust.
+/// Also get tv_blob_len from ll_tv blob.
+int nvim_lval_tv_blob_len(const lval_T *lp)
+{
+  return tv_blob_len(lp->ll_tv->vval.v_blob);
+}
+
+/// tv_dict_find wrapper accepting key_len as int for ll_dict - composite for Rust.
+dictitem_T *nvim_lval_dict_find(const lval_T *lp, const char *key, int len)
+{
+  return tv_dict_find(lp->ll_dict, key, (ptrdiff_t)len);
+}
+
+/// Set lp->ll_di = tv_dict_find(lp->ll_dict, key, len) - composite setter for Rust.
+void nvim_lval_set_di_from_dict(lval_T *lp, const char *key, int len)
+{
+  lp->ll_di = tv_dict_find(lp->ll_dict, key, (ptrdiff_t)len);
+}
+
+/// Get di->di_tv from lp->ll_di - composite accessor for Rust.
+typval_T *nvim_lval_di_get_tv(const lval_T *lp)
+{
+  return &lp->ll_di->di_tv;
+}
+
+/// Set lp->ll_tv = &lp->ll_di->di_tv - composite setter for Rust.
+void nvim_lval_set_tv_from_ll_di(lval_T *lp)
+{
+  lp->ll_tv = &lp->ll_di->di_tv;
+}
+
+/// Check if lp->ll_di->di_tv is a lua func wrapper - composite accessor for Rust.
+bool nvim_lval_di_is_luafunc(const lval_T *lp)
+{
+  return tv_is_luafunc(&lp->ll_di->di_tv);
+}
+
+/// var_check_ro for ll_di->di_flags - composite for Rust.
+bool nvim_lval_di_var_check_ro(const lval_T *lp, const char *name, size_t name_len)
+{
+  return var_check_ro(lp->ll_di->di_flags, name, name_len);
+}
+
+/// var_check_lock for ll_di->di_flags - composite for Rust.
+bool nvim_lval_di_var_check_lock(const lval_T *lp, const char *name, size_t name_len)
+{
+  return var_check_lock(lp->ll_di->di_flags, name, name_len);
+}
+
+/// Check if lp->ll_di is NULL - accessor for Rust.
+bool nvim_lval_di_is_null(const lval_T *lp)
+{
+  return lp->ll_di == NULL;
+}
+
+/// tv_blob_check_index wrapper - accessor for Rust.
+int nvim_tv_blob_check_index(int bloblen, int n1, bool quiet)
+{
+  return tv_blob_check_index(bloblen, (varnumber_T)n1, quiet);
+}
+
+/// tv_blob_check_range wrapper - accessor for Rust.
+int nvim_tv_blob_check_range(int bloblen, int n1, int n2, bool quiet)
+{
+  return tv_blob_check_range(bloblen, (varnumber_T)n1, (varnumber_T)n2, quiet);
+}
+
+/// tv_list_check_range_index_one returning opaque listitem_T* - accessor for Rust.
+listitem_T *nvim_tv_list_check_range_index_one(lval_T *lp, bool quiet)
+{
+  return tv_list_check_range_index_one(lp->ll_list, &lp->ll_n1, quiet);
+}
+
+/// tv_list_check_range_index_two via lp fields - accessor for Rust.
+int nvim_tv_list_check_range_index_two(lval_T *lp, bool quiet)
+{
+  return tv_list_check_range_index_two(lp->ll_list, &lp->ll_n1, lp->ll_li, &lp->ll_n2, quiet);
+}
+
+/// valid_varname wrapper - accessor for Rust.
+bool nvim_valid_varname(const char *varname)
+{
+  return valid_varname(varname);
+}
+
+/// var_wrong_func_name wrapper - accessor for Rust.
+bool nvim_var_wrong_func_name(const char *name, bool new_var)
+{
+  return var_wrong_func_name(name, new_var);
+}
+
+/// Scope check for get_lval_dict_item: set key[len]=NUL, check scope, restore.
+/// Returns true if the variable is 'wrong' (validation failed).
+bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *rettv)
+{
+  char prevval;
+  if (len != -1) {
+    prevval = key[len];
+    key[len] = NUL;
+  } else {
+    prevval = 0;
+  }
+  bool wrong = ((lp->ll_dict->dv_scope == VAR_DEF_SCOPE
+                 && tv_is_func(*rettv)
+                 && var_wrong_func_name(key, lp->ll_di == NULL))
+                || !valid_varname(key));
+  if (len != -1) {
+    key[len] = prevval;
+  }
+  return wrong;
+}
+
