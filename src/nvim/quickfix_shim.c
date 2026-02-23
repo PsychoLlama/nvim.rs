@@ -279,6 +279,7 @@ extern int rs_qf_setprop_get_qfidx(const void *qi, const void *what, int action,
 extern void rs_qf_decr_curlist(void *qi);
 extern void rs_qf_decr_listcount(void *qi);
 extern void rs_qf_zero_top_list(void *qi);
+extern void rs_qf_decr_refcount(void *qi);
 
 // Phase 4: mark_adjust and valid counting (migrated to Rust)
 extern bool rs_qf_mark_adjust(void *qi, int buf_fnum, int buf_has_flag, int32_t line1,
@@ -526,7 +527,6 @@ enum { QF_WINHEIGHT = 10, };  ///< default height for quickfix window
        !got_int && (i) <= (qfl)->qf_count && (qfp) != NULL; \
        (i)++, (qfp) = (qfp)->qf_next)
 
-static char *qf_types(int c, int nr);
 static win_T *qf_find_win(const qf_info_T *qi);
 
 bool nvim_win_valid(const void *wp_void) { return wp_void == NULL ? false : rs_win_valid((win_T *)wp_void) != 0; }
@@ -571,7 +571,7 @@ bool nvim_qf_entry_present(const void *qfl_void, const void *qf_ptr_void)
   return false;
 }
 
-const char *nvim_qf_types(int c, int nr) { return qf_types(c, nr); }
+const char *nvim_qf_types(int c, int nr) { static char buf[20]; return rs_qf_types(c, nr, buf, sizeof(buf)); }
 
 void nvim_emsg_e_no_more_items(void) { emsg(_(e_no_more_items)); }
 
@@ -1007,18 +1007,10 @@ bool nvim_qf_is_qf_stack(const void *qi_void) { return qi_void == NULL ? false :
 bool nvim_qf_is_ll_stack(const void *qi_void) { return qi_void == NULL ? false : qi_void != ql_info; }
 int nvim_qf_get_refcount(const void *qi_void) { return qi_void == NULL ? 0 : ((const qf_info_T *)qi_void)->qf_refcount; }
 void nvim_qf_incr_refcount(void *qi_void) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_refcount++; }
+void nvim_qf_set_refcount(void *qi_void, int v) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_refcount = v; }
 
 /// Decrement the reference count of a quickfix info struct
-void nvim_qf_decr_refcount(void *qi_void)
-{
-  if (qi_void == NULL) {
-    return;
-  }
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  if (qi->qf_refcount > 0) {
-    qi->qf_refcount--;
-  }
-}
+void nvim_qf_decr_refcount(void *qi_void) { rs_qf_decr_refcount(qi_void); }
 
 void *nvim_qf_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
 bool nvim_qf_has_user_data(const void *qfl_void) { return qfl_void == NULL ? false : ((const qf_list_T *)qfl_void)->qf_has_user_data; }
@@ -2816,13 +2808,16 @@ void nvim_qf_jump_print_msg(void *qi_void, int qf_index, void *qf_ptr_void,
       update_screen();
     }
   }
+  char qf_types_buf[20];
   vim_snprintf(IObuff, IOSIZE, _("(%d of %d)%s%s: "), qf_index,
                qf_get_curlist(qi)->qf_count,
                qf_ptr->qf_cleared ? _(" (line deleted)") : "",
-               qf_types(qf_ptr->qf_type, qf_ptr->qf_nr));
+               rs_qf_types(qf_ptr->qf_type, qf_ptr->qf_nr, qf_types_buf, sizeof(qf_types_buf)));
   // Add the message, skipping leading whitespace and newlines.
   ga_concat(gap, IObuff);
-  qf_fmt_text(gap, skipwhite(qf_ptr->qf_text));
+  char fmt_buf[IOSIZE];
+  size_t fmt_len = rs_qf_fmt_text(skipwhite(qf_ptr->qf_text), fmt_buf, sizeof(fmt_buf));
+  ga_concat_len(gap, fmt_buf, fmt_len);
   ga_append(gap, NUL);
 
   // Output the message.  Overwrite to avoid scrolling when the 'O'
@@ -2939,17 +2934,22 @@ static void qf_list_entry(qfline_T *qfp, int qf_idx, bool cursel)
   if (qfp->qf_lnum != 0) {
     msg_puts_hl(":", qfSep_hl_id, false);
   }
+  char rs_buf[IOSIZE];
   garray_T *gap = qfga_get();
   if (qfp->qf_lnum != 0) {
-    qf_range_text(gap, qfp);
+    size_t rlen = rs_qf_range_text(qfp->qf_lnum, qfp->qf_end_lnum, qfp->qf_col, qfp->qf_end_col,
+                                   rs_buf, sizeof(rs_buf));
+    ga_concat_len(gap, rs_buf, rlen);
   }
-  ga_concat(gap, qf_types(qfp->qf_type, qfp->qf_nr));
+  char qf_types_buf[20];
+  ga_concat(gap, rs_qf_types(qfp->qf_type, qfp->qf_nr, qf_types_buf, sizeof(qf_types_buf)));
   ga_append(gap, NUL);
   msg_puts_hl(gap->ga_data, qfLine_hl_id, false);
   msg_puts_hl(":", qfSep_hl_id, false);
   if (qfp->qf_pattern != NULL) {
     gap = qfga_get();
-    qf_fmt_text(gap, qfp->qf_pattern);
+    size_t plen = rs_qf_fmt_text(qfp->qf_pattern, rs_buf, sizeof(rs_buf));
+    ga_concat_len(gap, rs_buf, plen);
     ga_append(gap, NUL);
     msg_puts(gap->ga_data);
     msg_puts_hl(":", qfSep_hl_id, false);
@@ -2960,7 +2960,9 @@ static void qf_list_entry(qfline_T *qfp, int qf_idx, bool cursel)
   // unrecognized line keep the indent, the compiler may mark a word
   // with ^^^^.
   gap = qfga_get();
-  qf_fmt_text(gap, (fname != NULL || qfp->qf_lnum != 0) ? skipwhite(qfp->qf_text) : qfp->qf_text);
+  const char *body = (fname != NULL || qfp->qf_lnum != 0) ? skipwhite(qfp->qf_text) : qfp->qf_text;
+  size_t blen = rs_qf_fmt_text(body, rs_buf, sizeof(rs_buf));
+  ga_concat_len(gap, rs_buf, blen);
   ga_append(gap, NUL);
   msg_prt_line(gap->ga_data, false);
 }
@@ -3040,24 +3042,6 @@ void qf_list(exarg_T *eap)
   qfga_clear();
 }
 
-/// Add the result to the grow array "gap".
-static void qf_fmt_text(garray_T *gap, const char *restrict text)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char buf[IOSIZE];
-  size_t len = rs_qf_fmt_text(text, buf, sizeof(buf));
-  ga_concat_len(gap, buf, len);
-}
-
-/// of a quickfix entry to the grow array "gap".
-static void qf_range_text(garray_T *gap, const qfline_T *qfp)
-{
-  char buf[IOSIZE];
-  size_t len = rs_qf_range_text(qfp->qf_lnum, qfp->qf_end_lnum, qfp->qf_col, qfp->qf_end_col,
-                                buf, sizeof(buf));
-  ga_concat_len(gap, buf, len);
-}
-
 /// quickfix/location list.
 static void qf_msg(qf_info_T *qi, int which, char *lead) { rs_qf_msg(qi, which, lead); }
 
@@ -3080,27 +3064,6 @@ bool qf_mark_adjust(buf_T *buf, win_T *wp, linenr_T line1, linenr_T line2, linen
     qi = ql_info;
   }
   return rs_qf_mark_adjust(qi, buf->b_fnum, buf_has_flag, line1, line2, amount, amount_after);
-}
-
-// Make a nice message out of the error character and the error number:
-//  char    number  message
-//  e or E    0     " error"
-//  w or W    0     " warning"
-//  i or I    0     " info"
-//  n or N    0     " note"
-//  0         0     ""
-//  other     0     " c"
-//  e or E    n     " error n"
-//  w or W    n     " warning n"
-//  i or I    n     " info n"
-//  n or N    n     " note n"
-//  0         n     " error n"
-//  other     n     " c n"
-//  1         x     ""          :helpgrep
-static char *qf_types(int c, int nr)
-{
-  static char buf[20];
-  return (char *)rs_qf_types(c, nr, buf, sizeof(buf));
 }
 
 // Set options for the buffer in the quickfix or location list window.

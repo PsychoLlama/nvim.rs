@@ -2024,7 +2024,7 @@ extern "C" {
     fn nvim_qf_is_ll_stack(qi: QfInfoHandle) -> bool;
     fn nvim_qf_get_refcount(qi: QfInfoHandle) -> c_int;
     fn nvim_qf_incr_refcount(qi: QfInfoHandleMut);
-    fn nvim_qf_decr_refcount(qi: QfInfoHandleMut);
+    fn nvim_qf_set_refcount(qi: QfInfoHandleMut, v: c_int);
     fn nvim_qf_get_ctx(qfl: QfListHandle) -> *mut c_void;
     fn nvim_qf_incr_changedtick(qfl: QfListHandleMut);
 
@@ -3534,7 +3534,10 @@ pub unsafe extern "C" fn rs_qf_decr_refcount(qi: QfInfoHandleMut) {
     if qi.is_null() {
         return;
     }
-    nvim_qf_decr_refcount(qi);
+    let refcount = nvim_qf_get_refcount(qi.cast_const());
+    if refcount > 0 {
+        nvim_qf_set_refcount(qi, refcount - 1);
+    }
 }
 
 /// Get the context of a quickfix list.
