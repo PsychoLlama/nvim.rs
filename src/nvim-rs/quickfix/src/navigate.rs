@@ -2157,6 +2157,96 @@ pub unsafe extern "C" fn rs_qf_get_cur_valid_idx(
 }
 
 // =============================================================================
+// Phase 2: qf_mark_adjust entry and qf_jump_first
+// =============================================================================
+
+type QfInfoHandleMut = *mut c_void;
+type BufHandle = *const c_void;
+type WinHandleP2 = *const c_void;
+
+const BUF_HAS_QF_ENTRY_P2: c_int = 1;
+const BUF_HAS_LL_ENTRY_P2: c_int = 2;
+const FAIL_VAL: c_int = 0;
+
+extern "C" {
+    fn nvim_buf_get_has_qf_entry(buf: BufHandle) -> c_int;
+    fn nvim_qf_buf_get_fnum(buf: BufHandle) -> c_int;
+    fn nvim_buf_win_get_llist(wp: WinHandleP2) -> QfInfoHandleMut;
+    fn nvim_check_can_set_curbuf_forceit(forceit: c_int) -> bool;
+    fn nvim_get_ql_info() -> QfInfoHandleMut;
+    #[link_name = "nvim_qf_get_curlist"]
+    fn nvim_qf_get_curlist_nav(qi: *const c_void) -> QfListHandle;
+}
+
+/// Entry point for `qf_mark_adjust`: resolves `buf_T`/`win_T` to qi and
+/// delegates to `rs_qf_mark_adjust`.
+///
+/// Returns false if buf has no qf entry, or if wp != NULL but has no llist.
+///
+/// # Safety
+///
+/// - `buf` must be a valid `buf_T *`
+/// - `wp` may be null (indicates global quickfix list)
+/// - If `wp` is non-null, it must be a valid `win_T *`
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_mark_adjust_entry(
+    buf: BufHandle,
+    wp: WinHandleP2,
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+) -> bool {
+    let buf_has_flag = if wp.is_null() {
+        BUF_HAS_QF_ENTRY_P2
+    } else {
+        BUF_HAS_LL_ENTRY_P2
+    };
+
+    if (nvim_buf_get_has_qf_entry(buf) & buf_has_flag) == 0 {
+        return false;
+    }
+
+    let qi: QfInfoHandleMut = if !wp.is_null() {
+        let llist = nvim_buf_win_get_llist(wp);
+        if llist.is_null() {
+            return false;
+        }
+        llist
+    } else {
+        let ql = nvim_get_ql_info();
+        assert!(!ql.is_null());
+        ql
+    };
+
+    let buf_fnum = nvim_qf_buf_get_fnum(buf);
+    rs_qf_mark_adjust(qi, buf_fnum, buf_has_flag, line1, line2, amount, amount_after)
+}
+
+/// Rust implementation of `qf_jump_first`: restores list, checks curbuf
+/// safety, and jumps to the first entry.
+///
+/// # Safety
+///
+/// - `qi` must be a valid `qf_info_T *`
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_jump_first(qi: QfInfoHandleMut, save_qfid: u32, forceit: c_int) {
+    if crate::rs_qf_restore_list(qi, save_qfid) == FAIL_VAL {
+        return;
+    }
+
+    if !nvim_check_can_set_curbuf_forceit(forceit) {
+        return;
+    }
+
+    // Autocommands might have cleared the list — check for that
+    let qfl = nvim_qf_get_curlist_nav(qi.cast_const());
+    if !crate::rs_qf_list_empty(qfl) {
+        jump_machinery::rs_qf_jump_newwin(qi, 0, 0, forceit, false);
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

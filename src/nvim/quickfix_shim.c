@@ -383,6 +383,16 @@ void nvim_qf_store_title(void *qfl_void, const char *title)
 
 void *nvim_get_ql_info(void) { return (void *)ql_info; }
 
+// Phase 2 accessors: buf_T/win_T field access for qf_mark_adjust_entry and qf_jump_first
+int nvim_buf_get_has_qf_entry(const void *buf_void) { return ((const buf_T *)buf_void)->b_has_qf_entry; }
+int nvim_qf_buf_get_fnum(const void *buf_void) { return ((const buf_T *)buf_void)->b_fnum; }
+void *nvim_buf_win_get_llist(const void *win_void) { return ((const win_T *)win_void)->w_llist; }
+// nvim_check_can_set_curbuf_forceit already defined in tag_shim.c
+
+// Phase 2: rs_qf_mark_adjust and rs_qf_jump_first
+extern bool rs_qf_mark_adjust_entry(const void *buf, const void *wp, int32_t line1, int32_t line2, int32_t amount, int32_t amount_after);
+extern void rs_qf_jump_first(void *qi, unsigned save_qfid, int forceit);
+
 bool nvim_qf_get_multiline(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_multiline; }
 
 void nvim_qf_set_multiline(void *qfl_void, bool multiline) { ((qf_list_T *)qfl_void)->qf_multiline = multiline; }
@@ -3034,21 +3044,7 @@ void qf_list(exarg_T *eap)
 bool qf_mark_adjust(buf_T *buf, win_T *wp, linenr_T line1, linenr_T line2, linenr_T amount,
                     linenr_T amount_after)
 {
-  int buf_has_flag = wp == NULL ? BUF_HAS_QF_ENTRY : BUF_HAS_LL_ENTRY;
-  if (!(buf->b_has_qf_entry & buf_has_flag)) {
-    return false;
-  }
-  void *qi;
-  if (wp != NULL) {
-    if (wp->w_llist == NULL) {
-      return false;
-    }
-    qi = wp->w_llist;
-  } else {
-    assert(ql_info != NULL);
-    qi = ql_info;
-  }
-  return rs_qf_mark_adjust(qi, buf->b_fnum, buf_has_flag, line1, line2, amount, amount_after);
+  return rs_qf_mark_adjust_entry(buf, wp, line1, line2, amount, amount_after);
 }
 
 // Set options for the buffer in the quickfix or location list window.
@@ -3479,18 +3475,7 @@ static void qf_list_changed(qf_list_T *qfl) { rs_qf_incr_changedtick(qfl); }
 static void qf_jump_first(qf_info_T *qi, unsigned save_qfid, int forceit)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (rs_qf_restore_list(qi, save_qfid) == FAIL) {
-    return;
-  }
-
-  if (!check_can_set_curbuf_forceit(forceit)) {
-    return;
-  }
-
-  // Autocommands might have cleared the list, check for that
-  if (!rs_qf_list_empty(qf_get_curlist(qi))) {
-    rs_qf_jump_newwin(qi, 0, 0, forceit, false);
-  }
+  rs_qf_jump_first(qi, save_qfid, forceit);
 }
 
 // Return true when using ":vimgrep" for ":grep".
