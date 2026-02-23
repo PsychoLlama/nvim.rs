@@ -679,6 +679,46 @@ extern "C" {
 
     /// Resolve full path (vim_FullName): returns OK(1) on success
     fn vim_FullName(fname: *const c_char, buf: *mut c_char, len: c_int, force: c_int) -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Phase 2: Swap file utility accessors
+    // -------------------------------------------------------------------------
+
+    /// Get mtime of a file (returns 0 if not found)
+    fn nvim_get_file_mtime(fname: *const c_char) -> i64;
+
+    /// Get the current uptime in seconds
+    fn uv_uptime(uptime: *mut f64) -> c_int;
+
+    /// Get current time in seconds
+    fn os_time() -> i64;
+
+    /// Check if process with pid is running; returns nonzero if yes
+    fn os_proc_running(pid: c_int) -> c_int;
+
+    /// Open file (returns fd or negative on error)
+    fn os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int;
+
+    /// Read from fd with EINTR retry (returns bytes read)
+    fn read_eintr(fd: c_int, buf: *mut c_void, count: usize) -> isize;
+
+    /// Close file descriptor
+    fn close(fd: c_int) -> c_int;
+
+    /// Get the size of a ZeroBlock struct
+    fn nvim_b0_get_struct_size() -> usize;
+
+    /// Get b0_dirty byte from ZeroBlock
+    fn nvim_b0_get_dirty(b0: *const c_void) -> u8;
+
+    /// Force NUL at end of b0_hname (for corruption safety)
+    fn nvim_b0_set_hname_end(b0: *mut c_void);
+
+    /// Get current hostname
+    fn os_get_hostname(hostname: *mut c_char, size: usize);
+
+    /// Case-insensitive string comparison
+    fn strcasecmp(a: *const c_char, b: *const c_char) -> c_int;
 }
 
 use crate::types::{
@@ -901,6 +941,130 @@ pub unsafe extern "C" fn rs_fnamecmp_ino(
 
     // Can't determine equivalence; assume different
     1
+}
+
+// =============================================================================
+// Phase 2: Swap File Utility Functions
+// =============================================================================
+
+/// Check if the process that owns a swap file is still running.
+///
+/// Returns the PID if the process is running, 0 otherwise.
+/// Also returns 0 if the swap file predates the last system reboot.
+///
+/// # Safety
+/// - `b0p` must be a valid ZeroBlock pointer
+/// - `swap_fname` must be a valid C string
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_swapfile_proc_running(
+    b0p: *const c_void,
+    swap_fname: *const c_char,
+) -> c_int {
+    // If the system rebooted after the swapfile was written, the process
+    // can't be running now.
+    let file_mtime = nvim_get_file_mtime(swap_fname);
+    if file_mtime > 0 {
+        let mut uptime: f64 = 0.0;
+        if uv_uptime(&raw mut uptime) == 0 {
+            let now = os_time();
+            if file_mtime < now - uptime as i64 {
+                return 0;
+            }
+        }
+    }
+
+    // Get PID from block 0 and check if it's still running
+    let b0_pid_ptr = nvim_b0_get_pid_ptr(b0p);
+    let pid = rs_char_to_long(b0_pid_ptr) as c_int;
+    if os_proc_running(pid) != 0 {
+        pid
+    } else {
+        0
+    }
+}
+
+extern "C" {
+    /// Get pointer to b0_pid field (4 bytes, char_to_long encoding)
+    fn nvim_b0_get_pid_ptr(b0: *const c_void) -> *const c_char;
+}
+
+/// Inner check logic for `rs_swapfile_unchanged`. Called after b0 is read.
+/// Returns true if block 0 is valid, not dirty, hostname matches, and process is not running.
+unsafe fn check_b0_unchanged(b0_ptr: *const c_void, fname: *mut c_char) -> bool {
+    // ID and magic must be correct
+    if !ml_check_b0_id_native(b0_ptr) || b0_magic_wrong_native(b0_ptr) {
+        return false;
+    }
+
+    // Must be unchanged (b0_dirty == 0)
+    if nvim_b0_get_dirty(b0_ptr) != 0 {
+        return false;
+    }
+
+    // Host name must be known and match current host
+    let hname_ptr = nvim_b0_get_hname_ptr(b0_ptr);
+    if *hname_ptr == 0 {
+        return false;
+    }
+    let mut cur_hostname = [0i8; 40]; // B0_HNAME_SIZE
+    os_get_hostname(cur_hostname.as_mut_ptr(), 40);
+    cur_hostname[39] = 0; // ensure NUL-terminated
+                          // Force NUL at end of stored name (in case of corruption)
+    nvim_b0_set_hname_end(b0_ptr.cast_mut());
+    if strcasecmp(hname_ptr, cur_hostname.as_ptr()) != 0 {
+        return false;
+    }
+
+    // Process must be known and not running
+    if rs_char_to_long(nvim_b0_get_pid_ptr(b0_ptr)) == 0
+        || rs_swapfile_proc_running(b0_ptr, fname) != 0
+    {
+        return false;
+    }
+
+    true
+}
+
+/// Check if a swap file has no changes (is unchanged since last save).
+///
+/// Returns true if the swap file exists, has valid block 0, is not dirty,
+/// the hostname matches, and the owning process is not running.
+///
+/// Only called from `findswapname()`.
+///
+/// # Safety
+/// - `fname` must be a valid C string
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_swapfile_unchanged(fname: *mut c_char) -> bool {
+    // Swap file must exist
+    if os_path_exists(fname) == 0 {
+        return false;
+    }
+
+    // Must be able to read the first block
+    // O_RDONLY = 0
+    let fd = os_open(fname, 0, 0);
+    if fd < 0 {
+        return false;
+    }
+
+    // Allocate a zero block on the stack-equivalent heap allocation
+    let b0_size = nvim_b0_get_struct_size();
+    let b0_ptr = xmalloc(b0_size).cast::<c_void>();
+    let bytes_read = read_eintr(fd, b0_ptr, b0_size);
+    close(fd);
+
+    if bytes_read as usize != b0_size {
+        xfree(b0_ptr);
+        return false;
+    }
+
+    // All checks below; cleanup b0_ptr on exit via a helper result
+    let ok = check_b0_unchanged(b0_ptr, fname);
+    xfree(b0_ptr);
+    ok
 }
 
 // =============================================================================

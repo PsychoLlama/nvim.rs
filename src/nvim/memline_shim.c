@@ -239,6 +239,11 @@ extern int rs_b0_magic_wrong(const ZeroBlock *b0p);
 extern int rs_ml_check_b0_id(const ZeroBlock *b0p);
 extern int rs_ml_check_b0_strings(const ZeroBlock *b0p);
 extern int rs_fnamecmp_ino(const char *fname_c, const char *fname_s, long ino_block0);
+// Phase 2 Rust function declarations
+extern int rs_swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname);
+extern void rs_set_b0_dir_flag(ZeroBlock *b0p, buf_T *buf);
+extern void rs_add_b0_fenc(ZeroBlock *b0p, buf_T *buf);
+extern bool rs_swapfile_unchanged(char *fname);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -613,7 +618,7 @@ static void ml_upd_block0(buf_T *buf, upd_block0_T what)
     if (what == UB_FNAME) {
       set_b0_fname(b0p, buf);
     } else {    // what == UB_SAME_DIR
-      set_b0_dir_flag(b0p, buf);
+      rs_set_b0_dir_flag(b0p, buf);
     }
   }
   mf_put(mfp, hp, true, false);
@@ -668,57 +673,7 @@ static void set_b0_fname(ZeroBlock *b0p, buf_T *buf)
   }
 
   // Also add the 'fileencoding' if there is room.
-  add_b0_fenc(b0p, curbuf);
-}
-
-/// Update the B0_SAME_DIR flag of the swapfile.  It's set if the file and the
-/// swapfile for "buf" are in the same directory.
-/// This is fail safe: if we are not sure the directories are equal the flag is
-/// not set.
-static void set_b0_dir_flag(ZeroBlock *b0p, buf_T *buf)
-{
-  if (same_directory(buf->b_ml.ml_mfp->mf_fname, buf->b_ffname)) {
-    b0p->b0_flags |= B0_SAME_DIR;
-  } else {
-    b0p->b0_flags = (char)(b0p->b0_flags & ~B0_SAME_DIR);
-  }
-}
-
-/// When there is room, add the 'fileencoding' to block zero.
-static void add_b0_fenc(ZeroBlock *b0p, buf_T *buf)
-{
-  const int size = B0_FNAME_SIZE_NOCRYPT;
-
-  int n = (int)strlen(buf->b_p_fenc);
-  if ((int)strlen(b0p->b0_fname) + n + 1 > size) {
-    b0p->b0_flags = (char)(b0p->b0_flags & ~B0_HAS_FENC);
-  } else {
-    memmove(b0p->b0_fname + size - n,
-            buf->b_p_fenc, (size_t)n);
-    *(b0p->b0_fname + size - n - 1) = NUL;
-    b0p->b0_flags |= B0_HAS_FENC;
-  }
-}
-
-/// Returns the PID of the process that owns the swapfile, if it is running.
-///
-/// @param b0p swapfile data
-/// @param swap_fname Name of the swapfile. If it's from before a reboot, the result is 0.
-///
-/// @return PID, or 0 if process is not running or the swapfile is from before a reboot.
-static int swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname)
-{
-  FileInfo st;
-  double uptime;
-  // If the system rebooted after when the swapfile was written then the
-  // process can't be running now.
-  if (os_fileinfo(swap_fname, &st)
-      && uv_uptime(&uptime) == 0
-      && (Timestamp)st.stat.st_mtim.tv_sec < os_time() - (Timestamp)uptime) {
-    return 0;
-  }
-  int pid = (int)rs_char_to_long(b0p->b0_pid);
-  return os_proc_running(pid) ? pid : 0;
+  rs_add_b0_fenc(b0p, curbuf);
 }
 
 // Forward declaration for Rust implementation (migrated from C)
@@ -1177,7 +1132,7 @@ void ml_recover(bool checkext)
       msg(_("Recovery completed. Buffer contents equals file contents."), 0);
     }
     msg_puts(_("\nYou may want to delete the .swp file now."));
-    if (swapfile_proc_running(b0p, fname_used)) {
+    if (rs_swapfile_proc_running(b0p, fname_used)) {
       // Warn there could be an active Vim on the same file, the user may
       // want to kill it.
       msg_puts(_("\nNote: process STILL RUNNING: "));
@@ -1266,7 +1221,7 @@ void swapfile_dict(const char *fname, dict_T *d)
         tv_dict_add_str_len(d, S_LEN("fname"), b0.b0_fname,
                             B0_FNAME_SIZE_ORG);
 
-        tv_dict_add_nr(d, S_LEN("pid"), swapfile_proc_running(&b0, fname));
+        tv_dict_add_nr(d, S_LEN("pid"), rs_swapfile_proc_running(&b0, fname));
         tv_dict_add_nr(d, S_LEN("mtime"), rs_char_to_long(b0.b0_mtime));
         tv_dict_add_nr(d, S_LEN("dirty"), b0.b0_dirty ? 1 : 0);
         tv_dict_add_nr(d, S_LEN("inode"), rs_char_to_long(b0.b0_ino));
@@ -1349,7 +1304,7 @@ static time_t swapfile_info(char *fname, StringBuilder *msg)
         if (rs_char_to_long(b0.b0_pid) != 0) {
           kv_printf(*msg, _("\n        process ID: "));
           kv_printf(*msg, "%d", (int)rs_char_to_long(b0.b0_pid));
-          if ((proc_running = swapfile_proc_running(&b0, fname))) {
+          if ((proc_running = rs_swapfile_proc_running(&b0, fname))) {
             kv_printf(*msg, _(" (STILL RUNNING)"));
           }
         }
@@ -1368,64 +1323,6 @@ static time_t swapfile_info(char *fname, StringBuilder *msg)
   kv_printf(*msg, "\n");
 
   return x;
-}
-
-/// @return  true if the swapfile looks OK and there are no changes, thus it can be safely deleted.
-static bool swapfile_unchanged(char *fname)
-{
-  ZeroBlock b0;
-
-  // Swapfile must exist.
-  if (!os_path_exists(fname)) {
-    return false;
-  }
-
-  // must be able to read the first block
-  int fd = os_open(fname, O_RDONLY, 0);
-  if (fd < 0) {
-    return false;
-  }
-  if (read_eintr(fd, &b0, sizeof(b0)) != sizeof(b0)) {
-    close(fd);
-    return false;
-  }
-
-  bool ret = true;
-
-  // the ID and magic number must be correct
-  if (rs_ml_check_b0_id(&b0) != 0 || rs_b0_magic_wrong(&b0)) {
-    ret = false;
-  }
-
-  // must be unchanged
-  if (b0.b0_dirty) {
-    ret = false;
-  }
-
-  // Host name must be known and must equal the current host name, otherwise
-  // comparing pid is meaningless.
-  if (*(b0.b0_hname) == NUL) {
-    ret = false;
-  } else {
-    char hostname[B0_HNAME_SIZE];
-    os_get_hostname(hostname, B0_HNAME_SIZE);
-    hostname[B0_HNAME_SIZE - 1] = NUL;
-    b0.b0_hname[B0_HNAME_SIZE - 1] = NUL;  // in case of corruption
-    if (STRICMP(b0.b0_hname, hostname) != 0) {
-      ret = false;
-    }
-  }
-
-  // process must be known and not running.
-  if (rs_char_to_long(b0.b0_pid) == 0 || swapfile_proc_running(&b0, fname)) {
-    ret = false;
-  }
-
-  // We do not check the user, it should be irrelevant for whether the swap
-  // file is still useful.
-
-  close(fd);
-  return ret;
 }
 
 // recov_file_names migrated to Rust (recovery.rs)
@@ -1820,6 +1717,25 @@ uint64_t nvim_get_file_inode(const char *fname)
   FileInfo file_info;
   if (os_fileinfo(fname, &file_info)) {
     return os_fileinfo_inode(&file_info);
+  }
+  return 0;
+}
+
+// Phase 2 accessors for Rust FFI
+uint8_t nvim_b0_get_flags_byte(const ZeroBlock *b0p) { return (uint8_t)b0p->b0_flags; }
+void nvim_b0_set_flags_byte(ZeroBlock *b0p, uint8_t val) { b0p->b0_flags = (char)val; }
+char *nvim_b0_get_fname_mut(ZeroBlock *b0p) { return b0p->b0_fname; }
+const char *nvim_b0_get_pid_ptr(const ZeroBlock *b0p) { return b0p->b0_pid; }
+uint8_t nvim_b0_get_dirty(const ZeroBlock *b0p) { return (uint8_t)b0p->b0_dirty; }
+void nvim_b0_set_hname_end(ZeroBlock *b0p) { b0p->b0_hname[B0_HNAME_SIZE - 1] = NUL; }
+size_t nvim_b0_get_struct_size(void) { return sizeof(ZeroBlock); }
+
+// Get mtime of a file (returns 0 if file not found)
+int64_t nvim_get_file_mtime(const char *fname)
+{
+  FileInfo file_info;
+  if (os_fileinfo(fname, &file_info)) {
+    return (int64_t)file_info.stat.st_mtim.tv_sec;
   }
   return 0;
 }
@@ -3337,7 +3253,7 @@ static char *findswapname(buf_T *buf, char **dirp, char *old_fname, bool *found_
         fd = os_open(fname, O_RDONLY, 0);
         if (fd >= 0) {
           if (read_eintr(fd, &b0, sizeof(b0)) == sizeof(b0)) {
-            proc_running = swapfile_proc_running(&b0, fname);
+            proc_running = rs_swapfile_proc_running(&b0, fname);
 
             // If the swapfile has the same directory as the
             // buffer don't compare the directory names, they can
@@ -3377,7 +3293,7 @@ static char *findswapname(buf_T *buf, char **dirp, char *old_fname, bool *found_
           // It's safe to delete the swapfile if all these are true:
           // - the edited file exists
           // - the swapfile has no changes and looks OK
-          if (os_path_exists(buf->b_fname) && swapfile_unchanged(fname)) {
+          if (os_path_exists(buf->b_fname) && rs_swapfile_unchanged(fname)) {
             choice = SEA_CHOICE_DELETE;
             if (p_verbose > 0) {
               verb_msg(_("Found a swap file that is not useful, deleting it"));
@@ -3519,7 +3435,7 @@ void ml_setflags(buf_T *buf)
     ZeroBlock *b0p = hp->bh_data;
     b0p->b0_dirty = buf->b_changed ? B0_DIRTY : 0;
     b0p->b0_flags = (char)((b0p->b0_flags & ~B0_FF_MASK) | (uint8_t)(rs_get_fileformat((buf_T *)buf) + 1));
-    add_b0_fenc(b0p, buf);
+    rs_add_b0_fenc(b0p, buf);
     hp->bh_flags |= BH_DIRTY;
     mf_sync(buf->b_ml.ml_mfp, MFS_ZERO);
   }

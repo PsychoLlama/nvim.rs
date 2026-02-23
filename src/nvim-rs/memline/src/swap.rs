@@ -488,6 +488,102 @@ pub unsafe extern "C" fn rs_is_swap_file_name(fname: *const c_char) -> c_int {
     0
 }
 
+// =============================================================================
+// Phase 2: Swap File Utility Implementations
+// =============================================================================
+
+extern "C" {
+    /// Check if two paths are in the same directory
+    fn same_directory(p1: *const c_char, p2: *const c_char) -> c_int;
+
+    /// Get b0_flags byte from ZeroBlock
+    fn nvim_b0_get_flags_byte(b0: *const c_void) -> u8;
+
+    /// Set b0_flags byte in ZeroBlock
+    fn nvim_b0_set_flags_byte(b0: *mut c_void, val: u8);
+
+    /// Get mutable pointer to b0_fname in ZeroBlock
+    fn nvim_b0_get_fname_mut(b0: *mut c_void) -> *mut c_char;
+
+    /// Get buf->b_ml.ml_mfp->mf_fname
+    fn nvim_buf_get_ml_mfp_fname(buf: *mut BufHandle) -> *mut c_char;
+
+    /// Get buf->b_ffname
+    fn nvim_buf_get_ffname(buf: *mut BufHandle) -> *const c_char;
+
+    /// Get buf->b_p_fenc
+    fn nvim_buf_get_b_p_fenc(buf: *mut BufHandle) -> *const c_char;
+}
+
+use std::ffi::c_void;
+
+use crate::types::{B0_FNAME_SIZE_NOCRYPT, B0_HAS_FENC, B0_SAME_DIR};
+
+/// Update the B0_SAME_DIR flag of the swap file.
+///
+/// The flag is set if the swap file and the edited file are in the same directory.
+/// This is fail-safe: when uncertain, the flag is not set.
+///
+/// # Safety
+/// - `b0p` must be a valid ZeroBlock pointer
+/// - `buf` must be a valid buffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_b0_dir_flag(b0p: *mut c_void, buf: *mut BufHandle) {
+    let mfp_fname = nvim_buf_get_ml_mfp_fname(buf);
+    let ffname = nvim_buf_get_ffname(buf);
+    let flags = nvim_b0_get_flags_byte(b0p);
+    if same_directory(mfp_fname, ffname) != 0 {
+        nvim_b0_set_flags_byte(b0p, flags | B0_SAME_DIR);
+    } else {
+        nvim_b0_set_flags_byte(b0p, flags & !B0_SAME_DIR);
+    }
+}
+
+/// Add the 'fileencoding' to block 0 when there is room.
+///
+/// The encoding is stored at the end of b0_fname, with a NUL byte before it.
+/// The B0_HAS_FENC flag is set if encoding was stored, cleared otherwise.
+///
+/// # Safety
+/// - `b0p` must be a valid ZeroBlock pointer
+/// - `buf` must be a valid buffer pointer
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+pub unsafe extern "C" fn rs_add_b0_fenc(b0p: *mut c_void, buf: *mut BufHandle) {
+    let size = B0_FNAME_SIZE_NOCRYPT as isize;
+    let fenc = nvim_buf_get_b_p_fenc(buf);
+
+    // Calculate length of fenc string
+    let mut fenc_len: isize = 0;
+    while *fenc.offset(fenc_len) != 0 {
+        fenc_len += 1;
+    }
+
+    // Calculate length of existing b0_fname
+    let fname_ptr = nvim_b0_get_fname_mut(b0p);
+    let mut fname_len: isize = 0;
+    while *fname_ptr.offset(fname_len) != 0 {
+        fname_len += 1;
+    }
+
+    let flags = nvim_b0_get_flags_byte(b0p);
+    if fname_len + fenc_len + 1 > size {
+        // Not enough room: clear the flag
+        nvim_b0_set_flags_byte(b0p, flags & !B0_HAS_FENC);
+    } else {
+        // Copy fenc at end of fname buffer (size - fenc_len from start)
+        let dest = fname_ptr.offset(size - fenc_len);
+        std::ptr::copy_nonoverlapping(fenc, dest, fenc_len as usize);
+        // Place NUL before the encoding
+        *fname_ptr.offset(size - fenc_len - 1) = 0;
+        nvim_b0_set_flags_byte(b0p, flags | B0_HAS_FENC);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
