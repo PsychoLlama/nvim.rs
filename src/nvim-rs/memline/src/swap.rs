@@ -70,18 +70,6 @@ extern "C" {
 
     /// Set memline flags for swap file
     fn ml_setflags(buf: *mut BufHandle);
-
-    /// Make swap file name
-    #[allow(clippy::similar_names)]
-    fn makeswapname(
-        fname: *mut c_char,
-        full_fname: *mut c_char,
-        buf: *mut BufHandle,
-        dir_name: *mut c_char,
-    ) -> *mut c_char;
-
-    /// Get file name for swap/backup in a directory
-    fn get_file_in_dir(fname: *mut c_char, dname: *mut c_char) -> *mut c_char;
 }
 
 // =============================================================================
@@ -256,55 +244,313 @@ pub unsafe extern "C" fn rs_ml_setflags(buf: *mut BufHandle) {
 }
 
 // =============================================================================
-// Swap File Name Generation
+// Phase 2: Swap File Path Helpers (Rust implementations)
 // =============================================================================
 
-/// Make a swap file name from a file name and directory.
+extern "C" {
+    /// Fix a file name (expand to absolute, etc.)
+    fn fix_fname(fname: *const c_char) -> *mut c_char;
+
+    /// Check if a character is a path separator
+    fn vim_ispathsep(c: c_int) -> c_int;
+
+    /// Concatenate two file names with a separator if needed
+    fn concat_fnames(fname1: *const c_char, fname2: *const c_char, sep: c_int) -> *mut c_char;
+
+    /// Get the tail (filename part) of a path
+    fn path_tail(fname: *const c_char) -> *mut c_char;
+
+    /// Check if a path is absolute
+    fn path_is_absolute(fname: *const c_char) -> c_int;
+
+    /// Get the full name of a file (resolve relative paths)
+    fn vim_FullName(fname: *const c_char, buf: *mut c_char, len: c_int, force: c_int) -> c_int;
+
+    /// Compute a modified filename (like replacing extension)
+    fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: c_int) -> *mut c_char;
+
+    /// Check if a pointer is after a path separator
+    fn after_pathsep(b: *const c_char, p: *const c_char) -> c_int;
+
+    /// Duplicate a string (allocate and copy)
+    fn xstrdup(str: *const c_char) -> *mut c_char;
+
+    /// Copy at most n bytes
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize) -> usize;
+
+    /// Get length of multibyte char at pointer
+    fn utf_ptr2len(p: *const c_char) -> c_int;
+
+    /// Semsg (error message with format)
+    fn semsg(msg: *const c_char, ...);
+
+    /// Get MAXPATHL constant value
+    fn nvim_get_maxpathl() -> usize;
+
+    /// Free a heap-allocated pointer
+    fn xfree(ptr: *mut std::ffi::c_void);
+}
+
+#[cfg(unix)]
+extern "C" {
+    fn readlink(path: *const c_char, buf: *mut c_char, bufsiz: usize) -> isize;
+}
+
+// Errno access
+#[cfg(unix)]
+extern "C" {
+    fn __errno_location() -> *mut c_int;
+}
+
+#[cfg(unix)]
+unsafe fn errno() -> c_int {
+    *__errno_location()
+}
+
+#[cfg(unix)]
+const EINVAL: c_int = 22;
+#[cfg(unix)]
+const ENOENT: c_int = 2;
+
+/// Append full path to dir with path separators replaced by `%` signs.
 ///
-/// # Arguments
-/// * `fname` - The file name
-/// * `full_fname` - The full file name
-/// * `buf` - The buffer
-/// * `dir_name` - The directory name
-///
-/// # Returns
-/// Allocated swap file name, or NULL
+/// The last character in "dir" must be an extra slash, which is removed.
+/// Mirrors the C `make_percent_swname` function.
 ///
 /// # Safety
-/// - All pointers must be valid C strings or NULL
-/// - The returned pointer must be freed by the caller
+/// - `dir`, `dir_end` must be valid C string pointers into the same allocation
+/// - `name` may be NULL (treated as "")
+/// - Returns allocated string or NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_make_percent_swname(
+    dir: *mut c_char,
+    dir_end: *mut c_char,
+    name: *const c_char,
+) -> *mut c_char {
+    let f = fix_fname(if name.is_null() {
+        c"".as_ptr()
+    } else {
+        name
+    });
+    if f.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let s = xstrdup(f);
+    xfree(f.cast());
+
+    // Replace path separators with '%', advancing by multibyte char lengths
+    let mut d = s;
+    loop {
+        let ch = *d;
+        if ch == 0 {
+            break;
+        }
+        if vim_ispathsep(c_int::from(ch as u8)) != 0 {
+            *d = b'%' as c_char;
+        }
+        let adv = utf_ptr2len(d);
+        d = d.add(adv as usize);
+    }
+
+    // Remove one trailing slash from dir (dir_end[-1] = NUL)
+    *dir_end.sub(1) = 0;
+
+    let result = concat_fnames(dir, s, 1);
+    xfree(s.cast());
+    result
+}
+
+/// Resolve a symlink to get the real path.
+///
+/// Only resolves the last component of the path. Returns OK if the symlink
+/// was resolved (even partially), FAIL if not a symlink.
+///
+/// Mirrors the C `resolve_symlink` function (HAVE_READLINK).
+///
+/// # Safety
+/// - `fname` must be a valid C string
+/// - `buf` must be a buffer of at least MAXPATHL bytes
+#[cfg(unix)]
+#[no_mangle]
+pub unsafe extern "C" fn rs_resolve_symlink(fname: *const c_char, buf: *mut c_char) -> c_int {
+    const OK: c_int = 1;
+    const FAIL: c_int = 0;
+
+    if fname.is_null() {
+        return FAIL;
+    }
+
+    let maxpathl = nvim_get_maxpathl();
+    let mut tmp = vec![0i8; maxpathl];
+    let tmp_ptr = tmp.as_mut_ptr();
+
+    // Start with the original name in tmp
+    xstrlcpy(tmp_ptr, fname, maxpathl);
+
+    let mut depth = 0i32;
+    loop {
+        depth += 1;
+        if depth == 100 {
+            let msg = c"E773: Symlink loop for \"%s\"".as_ptr();
+            semsg(msg, fname);
+            return FAIL;
+        }
+
+        let ret = readlink(tmp_ptr, buf, maxpathl - 1);
+        if ret <= 0 {
+            let err = errno();
+            if err == EINVAL || err == ENOENT {
+                // Found non-symlink or not-existing file, stop here.
+                if depth == 1 {
+                    return FAIL;
+                }
+                // Use the resolved name in tmp[]
+                break;
+            }
+            // Some other error
+            return FAIL;
+        }
+        *buf.add(ret as usize) = 0;
+
+        // Check whether the symlink is relative or absolute
+        if path_is_absolute(buf) != 0 {
+            // Absolute: copy to tmp
+            xstrlcpy(tmp_ptr, buf, maxpathl);
+        } else {
+            // Relative: build new path from directory part of tmp + symlink target
+            let tail = path_tail(tmp_ptr);
+            let tail_offset = tail.offset_from(tmp_ptr) as usize;
+            let buf_len = {
+                let mut n = 0usize;
+                while *buf.add(n) != 0 {
+                    n += 1;
+                }
+                n
+            };
+            if tail_offset + buf_len >= maxpathl {
+                return FAIL;
+            }
+            // Copy symlink target over the tail of tmp
+            std::ptr::copy_nonoverlapping(buf, tail, buf_len + 1);
+        }
+    }
+
+    // Resolve the full name for consistency
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    vim_FullName(tmp_ptr, buf, maxpathl as c_int, 1)
+}
+
+/// Get file name for swap/backup file in a directory.
+///
+/// - If dname is ".", return xstrdup(fname)
+/// - If dname starts with "./", insert path relative to dir of fname
+/// - Otherwise prepend dname to tail of fname
+///
+/// Mirrors the C `get_file_in_dir` function.
+///
+/// # Safety
+/// - `fname` and `dname` must be valid C strings
+/// - Returns allocated string or NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_file_in_dir(
+    fname: *mut c_char,
+    dname: *mut c_char,
+) -> *mut c_char {
+    if fname.is_null() || dname.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let tail = path_tail(fname);
+
+    // dname == "." means use the file's own directory
+    if *dname == b'.' as c_char && *dname.add(1) == 0 {
+        return xstrdup(fname);
+    }
+
+    // dname starts with "./" means relative to the file's directory
+    if *dname == b'.' as c_char && vim_ispathsep(c_int::from(*dname.add(1) as u8)) != 0 {
+        if tail == fname {
+            // No path before file name: use dname+2 + tail
+            return concat_fnames(dname.add(2), tail, 1);
+        }
+        // Has a path: use dir/dname_rel/tail
+        let save_char = *tail;
+        *tail = 0;
+        let t = concat_fnames(fname, dname.add(2), 1);
+        *tail = save_char;
+        let retval = concat_fnames(t, tail, 1);
+        xfree(t.cast());
+        return retval;
+    }
+
+    // Otherwise: prepend dname to tail
+    concat_fnames(dname, tail, 1)
+}
+
+/// Make swap file name from file name and directory.
+///
+/// Mirrors the C `makeswapname` function.
+///
+/// # Safety
+/// - `fname`, `buf`, `dir_name` must be valid C strings or NULL for `buf`
+/// - Returns allocated string or NULL
 #[no_mangle]
 #[allow(clippy::similar_names)]
 pub unsafe extern "C" fn rs_makeswapname(
     fname: *mut c_char,
-    full_fname: *mut c_char,
-    buf: *mut BufHandle,
+    _ffname: *mut c_char,
+    _buf: *mut BufHandle,
     dir_name: *mut c_char,
 ) -> *mut c_char {
     if fname.is_null() || dir_name.is_null() {
         return std::ptr::null_mut();
     }
-    makeswapname(fname, full_fname, buf, dir_name)
-}
 
-/// Get the swap/backup file name in a directory.
-///
-/// # Arguments
-/// * `fname` - The file name
-/// * `dname` - The directory name
-///
-/// # Returns
-/// Allocated file path, or NULL
-///
-/// # Safety
-/// - All pointers must be valid C strings or NULL
-/// - The returned pointer must be freed by the caller
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_file_in_dir(fname: *mut c_char, dname: *mut c_char) -> *mut c_char {
-    if fname.is_null() || dname.is_null() {
+    let maxpathl = nvim_get_maxpathl();
+
+    // Resolve symlinks if supported
+    #[allow(unused_mut)]
+    let mut fname_res = fname;
+
+    #[cfg(unix)]
+    let mut fname_buf = vec![0i8; maxpathl];
+    #[cfg(unix)]
+    {
+        if rs_resolve_symlink(fname, fname_buf.as_mut_ptr()) == 1 {
+            fname_res = fname_buf.as_mut_ptr();
+        }
+    }
+
+    // Compute length of dir_name
+    let mut len = 0usize;
+    while *dir_name.add(len) != 0 {
+        len += 1;
+    }
+
+    let s = dir_name.add(len);
+    // Check if it ends with '//' (full-path mode)
+    if after_pathsep(dir_name, s) != 0 && len > 1 && *s.sub(1) == *s.sub(2) {
+        // Use full path: replace '/' with '%'
+        let swname = rs_make_percent_swname(dir_name, s, fname_res);
+        if swname.is_null() {
+            return std::ptr::null_mut();
+        }
+        let r = modname(swname, c".swp".as_ptr(), 0);
+        xfree(swname.cast());
+        return r;
+    }
+
+    // Prepend a '.' to the swap file name for the current directory
+    let prepend_dot = c_int::from(*dir_name == b'.' as c_char && *dir_name.add(1) == 0);
+    let r = modname(fname_res, c".swp".as_ptr(), prepend_dot);
+    if r.is_null() {
         return std::ptr::null_mut();
     }
-    get_file_in_dir(fname, dname)
+
+    let result = rs_get_file_in_dir(r, dir_name);
+    xfree(r.cast());
+    result
 }
 
 // =============================================================================

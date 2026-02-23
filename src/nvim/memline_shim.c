@@ -255,6 +255,13 @@ extern linenr_T rs_ml_get_lowest_marked(void);
 extern void rs_ml_set_lowest_marked(linenr_T lnum);
 extern void rs_ml_adjust_lowest_marked_for_insert(linenr_T lnum);
 extern void rs_ml_adjust_lowest_marked_for_delete(linenr_T lnum);
+// Pass 2 Phase 2: Swap file path helper Rust function declarations
+extern char *rs_make_percent_swname(char *dir, char *dir_end, const char *name);
+#ifdef HAVE_READLINK
+extern int rs_resolve_symlink(const char *fname, char *buf);
+#endif
+extern char *rs_get_file_in_dir(char *fname, char *dname);
+extern char *rs_makeswapname(char *fname, char *ffname, buf_T *buf, char *dir_name);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1110,32 +1117,12 @@ theend:
 
 // recover_names and recov_file_names migrated to Rust (recovery.rs)
 
-/// Append the full path to name with path separators made into percent
-/// signs, to dir. An unnamed buffer is handled as "" (<currentdir>/"")
-/// signs, to "dir". An unnamed buffer is handled as "" (<currentdir>/"")
-/// The last character in "dir" must be an extra slash or backslash, it is
-/// removed.
+/// Append the full path to name with path separators made into percent signs.
+/// (thin wrapper calling Rust)
 char *make_percent_swname(char *dir, char *dir_end, const char *name)
   FUNC_ATTR_NONNULL_ARG(1, 2)
 {
-  char *d = NULL;
-  char *f = fix_fname(name != NULL ? name : "");
-  if (f == NULL) {
-    return NULL;
-  }
-
-  char *s = xstrdup(f);
-  for (d = s; *d != NUL; MB_PTR_ADV(d)) {
-    if (vim_ispathsep(*d)) {
-      *d = '%';
-    }
-  }
-
-  dir_end[-1] = NUL;  // remove one trailing slash
-  d = concat_fnames(dir, s, true);
-  xfree(s);
-  xfree(f);
-  return d;
+  return rs_make_percent_swname(dir, dir_end, name);
 }
 
 // PID of swapfile owner, or zero if not running.
@@ -1577,6 +1564,7 @@ colnr_T nvim_pos_get_col(const pos_T *pos) { return pos->col; }
 
 // Constants
 colnr_T nvim_get_maxcol(void) { return MAXCOL; }
+size_t nvim_get_maxpathl(void) { return MAXPATHL; }
 
 // Validation helpers
 int nvim_buf_has_ml_mfp(buf_T *buf) { return buf->b_ml.ml_mfp != NULL; }
@@ -2858,147 +2846,22 @@ static void ml_lineadd(buf_T *buf, int count)
 }
 
 #if defined(HAVE_READLINK)
-
-/// Resolve a symlink in the last component of a file name.
-/// Note that f_resolve() does it for every part of the path, we don't do that
-/// here.
-///
-/// @return  OK if it worked and the resolved link in "buf[MAXPATHL]",
-///          FAIL otherwise
-int resolve_symlink(const char *fname, char *buf)
-{
-  char tmp[MAXPATHL];
-  int depth = 0;
-
-  if (fname == NULL) {
-    return FAIL;
-  }
-
-  // Put the result so far in tmp[], starting with the original name.
-  xstrlcpy(tmp, fname, MAXPATHL);
-
-  while (true) {
-    // Limit symlink depth to 100, catch recursive loops.
-    if (++depth == 100) {
-      semsg(_("E773: Symlink loop for \"%s\""), fname);
-      return FAIL;
-    }
-
-    int ret = (int)readlink(tmp, buf, MAXPATHL - 1);
-    if (ret <= 0) {
-      if (errno == EINVAL || errno == ENOENT) {
-        // Found non-symlink or not existing file, stop here.
-        // When at the first level use the unmodified name, skip the
-        // call to vim_FullName().
-        if (depth == 1) {
-          return FAIL;
-        }
-
-        // Use the resolved name in tmp[].
-        break;
-      }
-
-      // There must be some error reading links, use original name.
-      return FAIL;
-    }
-    buf[ret] = NUL;
-
-    // Check whether the symlink is relative or absolute.
-    // If it's relative, build a new path based on the directory
-    // portion of the filename (if any) and the path the symlink
-    // points to.
-    if (path_is_absolute(buf)) {
-      STRCPY(tmp, buf);
-    } else {
-      char *tail = path_tail(tmp);
-      if (strlen(tail) + strlen(buf) >= MAXPATHL) {
-        return FAIL;
-      }
-      STRCPY(tail, buf);
-    }
-  }
-
-  // Try to resolve the full name of the file so that the swapfile name will
-  // be consistent even when opening a relative symlink from different
-  // working directories.
-  return vim_FullName(tmp, buf, MAXPATHL, true);
-}
+/// Resolve a symlink in the last component of a file name. (thin wrapper calling Rust)
+int resolve_symlink(const char *fname, char *buf) { return rs_resolve_symlink(fname, buf); }
 #endif
 
-/// Make swapfile name out of the file name and a directory name.
+/// Make swapfile name out of the file name and a directory name. (thin wrapper calling Rust)
 ///
 /// @return  pointer to allocated memory or NULL.
 char *makeswapname(char *fname, char *ffname, buf_T *buf, char *dir_name)
 {
-  char *fname_res = fname;
-#ifdef HAVE_READLINK
-  char fname_buf[MAXPATHL];
-
-  // Expand symlink in the file name, so that we put the swapfile with the
-  // actual file instead of with the symlink.
-  if (resolve_symlink(fname, fname_buf) == OK) {
-    fname_res = fname_buf;
-  }
-#endif
-  int len = (int)strlen(dir_name);
-
-  char *s = dir_name + len;
-  if (after_pathsep(dir_name, s) && len > 1 && s[-1] == s[-2]) {
-    // Ends with '//', Use Full path
-    char *r = NULL;
-    s = make_percent_swname(dir_name, s, fname_res);
-    if (s != NULL) {
-      r = modname(s, ".swp", false);
-      xfree(s);
-    }
-    return r;
-  }
-
-  // Prepend a '.' to the swapfile name for the current directory.
-  char *r = modname(fname_res, ".swp",
-                    dir_name[0] == '.' && dir_name[1] == NUL);
-  if (r == NULL) {          // out of memory
-    return NULL;
-  }
-
-  s = get_file_in_dir(r, dir_name);
-  xfree(r);
-  return s;
+  return rs_makeswapname(fname, ffname, buf, dir_name);
 }
 
-/// Get file name to use for swapfile or backup file.
-/// Use the name of the edited file "fname" and an entry in the 'dir' or 'bdir' option "dname".
-/// - If "dname" is ".", return "fname" (swapfile in dir of file).
-/// - If "dname" starts with "./", insert "dname" in "fname" (swapfile relative to dir of file).
-/// - Otherwise, prepend "dname" to the tail of "fname" (swapfile in specific dir).
-///
-/// The return value is an allocated string and can be NULL.
-///
-/// @param dname  don't use "dirname", it is a global for Alpha
+/// Get file name to use for swapfile or backup file. (thin wrapper calling Rust)
 char *get_file_in_dir(char *fname, char *dname)
 {
-  char *retval;
-
-  char *tail = path_tail(fname);
-
-  if (dname[0] == '.' && dname[1] == NUL) {
-    retval = xstrdup(fname);
-  } else if (dname[0] == '.' && vim_ispathsep(dname[1])) {
-    if (tail == fname) {            // no path before file name
-      retval = concat_fnames(dname + 2, tail, true);
-    } else {
-      char save_char = *tail;
-      *tail = NUL;
-      char *t = concat_fnames(fname, dname + 2, true);
-      *tail = save_char;
-      retval = concat_fnames(t, tail, true);
-      xfree(t);
-    }
-  } else {
-    retval = concat_fnames(dname, tail, true);
-  }
-
-  return retval;
+  return rs_get_file_in_dir(fname, dname);
 }
 
 /// Build the ATTENTION message: info about an existing swapfile.

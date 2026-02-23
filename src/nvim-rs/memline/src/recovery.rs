@@ -39,16 +39,6 @@ extern "C" {
     /// Write swap file info to a dictionary
     fn swapfile_dict(fname: *const c_char, d: *mut c_void);
 
-    /// Resolve symlinks in a path
-    fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> c_int;
-
-    /// Make a percent-encoded swap file name
-    fn make_percent_swname(
-        dir: *mut c_char,
-        dir_end: *mut c_char,
-        name: *const c_char,
-    ) -> *mut c_char;
-
     // -------------------------------------------------------------------------
     // recover_names helpers (called from rs_recover_names)
     // -------------------------------------------------------------------------
@@ -373,8 +363,8 @@ pub unsafe extern "C" fn rs_recover_names(
     let mut fname_buf = [0i8; MAXPATHL];
     let fname_res: *const c_char = if fname.is_null() {
         std::ptr::null()
-    } else if resolve_symlink(fname, fname_buf.as_mut_ptr()) == 1 {
-        // resolve_symlink returns OK (1) on success
+    } else if crate::swap::rs_resolve_symlink(fname, fname_buf.as_mut_ptr()) == 1 {
+        // rs_resolve_symlink returns OK (1) on success
         fname_buf.as_ptr()
     } else {
         fname
@@ -425,7 +415,7 @@ pub unsafe extern "C" fn rs_recover_names(
                 let p = dir_name.add(len);
                 let tail = if after_pathsep(dir_name, p) != 0 && len > 1 && *p.sub(1) == *p.sub(2) {
                     // Ends with '//', use full path for swap name
-                    make_percent_swname(dir_name, p, fname_res)
+                    crate::swap::rs_make_percent_swname(dir_name, p, fname_res)
                 } else {
                     let t = path_tail(fname_res);
                     concat_fnames(dir_name, t, 1)
@@ -582,61 +572,6 @@ pub unsafe extern "C" fn rs_swapfile_dict(fname: *const c_char, d: *mut c_void) 
         return;
     }
     swapfile_dict(fname, d);
-}
-
-// =============================================================================
-// Path Utilities
-// =============================================================================
-
-/// Resolve symlinks in a file path.
-///
-/// If the file is a symlink, resolves it to the actual file.
-/// This is important because swap files use the real path.
-///
-/// # Arguments
-/// * `fname` - Input file path
-/// * `buf` - Output buffer for resolved path (must be MAXPATHL bytes)
-///
-/// # Returns
-/// OK if resolved, FAIL otherwise
-///
-/// # Safety
-/// - `fname` must be a valid C string
-/// - `buf` must be a valid buffer of at least MAXPATHL bytes
-#[no_mangle]
-pub unsafe extern "C" fn rs_resolve_symlink(fname: *const c_char, buf: *mut c_char) -> c_int {
-    if fname.is_null() || buf.is_null() {
-        return 1; // FAIL
-    }
-    resolve_symlink(fname, buf)
-}
-
-/// Make a percent-encoded swap file name for a full path.
-///
-/// When swap files are stored in a single directory with `//` at the end,
-/// the full path is encoded with `%` characters to avoid conflicts.
-///
-/// # Arguments
-/// * `dir` - Directory path
-/// * `dir_end` - Pointer to end of significant part of dir
-/// * `name` - File name to encode
-///
-/// # Returns
-/// Allocated swap file name, or NULL on error
-///
-/// # Safety
-/// - All pointers must be valid C strings
-/// - The returned pointer must be freed by the caller
-#[no_mangle]
-pub unsafe extern "C" fn rs_make_percent_swname(
-    dir: *mut c_char,
-    dir_end: *mut c_char,
-    name: *const c_char,
-) -> *mut c_char {
-    if dir.is_null() || dir_end.is_null() || name.is_null() {
-        return std::ptr::null_mut();
-    }
-    make_percent_swname(dir, dir_end, name)
 }
 
 // =============================================================================
