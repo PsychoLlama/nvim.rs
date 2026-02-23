@@ -28,6 +28,33 @@ extern "C" {
 
     /// Get w_floating from window.
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
+
+    /// Get tabpage_move_disallowed global.
+    fn nvim_al_get_tabpage_move_disallowed() -> c_int;
+
+    /// Set redraw_tabline global.
+    fn nvim_set_redraw_tabline(val: c_int);
+
+    /// Set tp_next field on a tabpage.
+    fn nvim_tabpage_set_next(tp: TabpageHandle, next: TabpageHandle);
+
+    /// Set first_tabpage global.
+    fn nvim_set_first_tabpage(tp: TabpageHandle);
+
+    /// Call text_locked().
+    fn nvim_text_locked() -> bool;
+
+    /// Call text_locked_msg().
+    fn nvim_text_locked_msg();
+
+    /// Call beep_flush().
+    fn nvim_beep_flush();
+
+    /// Call goto_tabpage_tp() (triggers autocmds, stays in C).
+    fn nvim_al_goto_tabpage_tp(tp: TabpageHandle, trigger_enter: c_int, trigger_leave: c_int);
+
+    /// Get tcl_flags (tabclose option flags).
+    fn nvim_win_get_tcl_flags() -> c_int;
 }
 
 // =============================================================================
@@ -606,6 +633,236 @@ pub unsafe extern "C" fn rs_win_get_tabwin(id: c_int, tabnr: *mut c_int, winnr: 
 // - rs_valid_tabpage_win - validate tabpage has valid window
 // - rs_one_tabpage - check if only one tabpage
 // - rs_find_tabpage - find tabpage by index
+
+// =============================================================================
+// alt_tabpage implementation
+// =============================================================================
+
+// Constants for tcl_flags ('tabclose' option)
+const TCL_FLAG_LEFT: c_int = 0x01;
+const TCL_FLAG_USELAST: c_int = 0x02;
+
+/// Find the alternate tabpage when closing the current one.
+///
+/// Port of the C `alt_tabpage()` static function.
+fn alt_tabpage_impl() -> TabpageHandle {
+    unsafe {
+        let flags = nvim_win_get_tcl_flags();
+
+        // Use the last accessed tab page, if possible.
+        if (flags & TCL_FLAG_USELAST) != 0 {
+            let lastused = nvim_get_lastused_tabpage();
+            if valid_tabpage_impl(lastused) {
+                return lastused;
+            }
+        }
+
+        let curtab = nvim_get_curtab();
+        let first = nvim_get_first_tabpage();
+
+        // Use the next tab page if possible (forward), unless 'left' flag is set
+        // or we're already at the first tab.
+        let forward = !nvim_tabpage_get_next(curtab).is_null()
+            && ((flags & TCL_FLAG_LEFT) == 0 || curtab == first);
+
+        if forward {
+            nvim_tabpage_get_next(curtab)
+        } else {
+            // Use the previous tab page.
+            let mut tp = first;
+            while !nvim_tabpage_get_next(tp).is_null() && nvim_tabpage_get_next(tp) != curtab {
+                tp = nvim_tabpage_get_next(tp);
+            }
+            tp
+        }
+    }
+}
+
+// =============================================================================
+// tabpage_move implementation
+// =============================================================================
+
+/// Move the current tab page to after tab page number `nr`.
+///
+/// Port of the C `tabpage_move()` function.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn tabpage_move_impl(nr: c_int) {
+    let first = nvim_get_first_tabpage();
+    let curtab = nvim_get_curtab();
+
+    // Only one tabpage or move disallowed: nothing to do.
+    if nvim_tabpage_get_next(first).is_null() {
+        return;
+    }
+    if nvim_al_get_tabpage_move_disallowed() != 0 {
+        return;
+    }
+
+    // Find the target position (tp_dst).
+    let mut n: c_int = 1;
+    let mut tp = first;
+    while !nvim_tabpage_get_next(tp).is_null() && n < nr {
+        tp = nvim_tabpage_get_next(tp);
+        n += 1;
+    }
+
+    // No-op: already at the target position or one before.
+    if tp == curtab
+        || (nr > 0 && !nvim_tabpage_get_next(tp).is_null() && nvim_tabpage_get_next(tp) == curtab)
+    {
+        return;
+    }
+
+    let tp_dst = tp;
+
+    // Remove curtab from the list.
+    if curtab == first {
+        let next = nvim_tabpage_get_next(curtab);
+        nvim_set_first_tabpage(next);
+    } else {
+        // Find the tabpage before curtab.
+        let mut prev = first;
+        let mut tp2 = nvim_tabpage_get_next(first);
+        while !tp2.is_null() && tp2 != curtab {
+            prev = tp2;
+            tp2 = nvim_tabpage_get_next(tp2);
+        }
+        if tp2.is_null() {
+            // "cannot happen"
+            return;
+        }
+        nvim_tabpage_set_next(prev, nvim_tabpage_get_next(curtab));
+    }
+
+    // Re-insert curtab at the target position.
+    if nr <= 0 {
+        // Move to front.
+        nvim_tabpage_set_next(curtab, nvim_get_first_tabpage());
+        nvim_set_first_tabpage(curtab);
+    } else {
+        nvim_tabpage_set_next(curtab, nvim_tabpage_get_next(tp_dst));
+        nvim_tabpage_set_next(tp_dst, curtab);
+    }
+
+    // Signal that the tabline needs redrawing.
+    nvim_set_redraw_tabline(1);
+}
+
+// =============================================================================
+// goto_tabpage implementation
+// =============================================================================
+
+/// Navigate to a tab page by number.
+///
+/// Port of the C `goto_tabpage()` function.
+///
+/// # Safety
+/// Calls C accessor functions including goto_tabpage_tp.
+unsafe fn goto_tabpage_impl(n: c_int) {
+    if nvim_text_locked() {
+        nvim_text_locked_msg();
+        return;
+    }
+
+    let first = nvim_get_first_tabpage();
+    // If there is only one tabpage, it can't work.
+    if nvim_tabpage_get_next(first).is_null() {
+        if n > 1 {
+            nvim_beep_flush();
+        }
+        return;
+    }
+
+    let curtab = nvim_get_curtab();
+    let tp;
+
+    if n == 0 {
+        // No count: go to next tab page, wrap around end.
+        let next = nvim_tabpage_get_next(curtab);
+        tp = if next.is_null() { first } else { next };
+    } else if n < 0 {
+        // "gT": go to previous tab page, wrap around. N times.
+        let mut ttp = curtab;
+        let mut i = n;
+        while i < 0 {
+            let mut prev = first;
+            // Find the tabpage before ttp
+            while !nvim_tabpage_get_next(prev).is_null() && nvim_tabpage_get_next(prev) != ttp {
+                prev = nvim_tabpage_get_next(prev);
+            }
+            // If ttp was first_tabpage, there's no tabpage "before" it
+            // in a simple scan - but the C code finds the prev going from
+            // first. If first == ttp, the loop terminates immediately with
+            // prev = first, so ttp = first (wrap). Actually the C code:
+            //   for (tp = first; tp->tp_next != ttp && tp->tp_next != NULL; tp = tp->tp_next) {}
+            // This gives prev = the last tab before ttp OR the last tab if ttp is first.
+            // If ttp is first, the loop finds the last tab (tp->tp_next is NULL when all checked).
+            // Our code: if first == ttp, inner loop doesn't advance, prev stays first.
+            // That's correct since prev->tp_next != ttp (first->tp_next != first) would be false only
+            // if it's a circular list. Let me re-check:
+            // In C: `for (tp=first; tp->tp_next != ttp && tp->tp_next != NULL; tp=tp->tp_next) {}`
+            // This iterates while tp->tp_next != ttp (not found prev yet) AND not at end.
+            // So it finds the tabpage whose next is ttp, or the last one if ttp is first.
+            // Our code finds the same thing.
+            ttp = prev;
+            i += 1;
+        }
+        tp = ttp;
+    } else if n == 9999 {
+        // Go to last tab page.
+        let mut t = first;
+        while !nvim_tabpage_get_next(t).is_null() {
+            t = nvim_tabpage_get_next(t);
+        }
+        tp = t;
+    } else {
+        // Go to tab page "n".
+        let found = find_tabpage_impl(n);
+        if found.is_null() {
+            nvim_beep_flush();
+            return;
+        }
+        tp = found;
+    }
+
+    nvim_al_goto_tabpage_tp(tp, 1, 1);
+}
+
+// =============================================================================
+// FFI exports for Phase 2 functions
+// =============================================================================
+
+/// FFI: Find the alternate tabpage when closing the current one.
+///
+/// Replaces C `alt_tabpage()`.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_alt_tabpage() -> TabpageHandle {
+    alt_tabpage_impl()
+}
+
+/// FFI: Move the current tab page to after position `nr`.
+///
+/// Replaces C `tabpage_move()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_tabpage_move(nr: c_int) {
+    tabpage_move_impl(nr);
+}
+
+/// FFI: Navigate to tab page number `n`.
+///
+/// Replaces C `goto_tabpage()`.
+///
+/// # Safety
+/// Calls C accessor functions including goto_tabpage_tp.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_goto_tabpage(n: c_int) {
+    goto_tabpage_impl(n);
+}
 
 // =============================================================================
 // Tabpage Transition Validation

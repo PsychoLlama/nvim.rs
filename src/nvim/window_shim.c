@@ -132,6 +132,11 @@ extern void rs_frame_flatten(frame_T *frp);
 extern win_T *rs_winframe_remove(win_T *win, int *dirp, tabpage_T *tp, frame_T **unflat_altfr);
 extern void rs_winframe_restore(win_T *wp, int dir, frame_T *unflat_altfr);
 
+// New Rust replacements for tabpage operations (Phase 2)
+extern tabpage_T *rs_alt_tabpage(void);
+extern void rs_tabpage_move(int nr);
+extern void rs_goto_tabpage(int n);
+
 extern int rs_frame_minheight(frame_T *topfrp, win_T *next_curwin);
 extern int rs_frame_minwidth(frame_T *topfrp, win_T *next_curwin);
 extern int rs_win_comp_pos(void);
@@ -1803,24 +1808,7 @@ static frame_T *win_altframe(win_T *win, tabpage_T *tp)
 // Return the tabpage that will be used if the current one is closed.
 static tabpage_T *alt_tabpage(void)
 {
-  // Use the last accessed tab page, if possible.
-  if ((tcl_flags & kOptTclFlagUselast) && rs_valid_tabpage(lastused_tabpage)) {
-    return lastused_tabpage;
-  }
-
-  // Use the next tab page, if possible.
-  bool forward = curtab->tp_next != NULL
-                 && ((tcl_flags & kOptTclFlagLeft) == 0 || curtab == first_tabpage);
-
-  tabpage_T *tp;
-  if (forward) {
-    tp = curtab->tp_next;
-  } else {
-    // Use the previous tab page.
-    for (tp = first_tabpage; tp->tp_next != curtab; tp = tp->tp_next) {}
-  }
-
-  return tp;
+  return rs_alt_tabpage();
 }
 
 /// Set a new height for a frame.  Recursively sets the height for contained
@@ -2369,51 +2357,7 @@ static void tabpage_check_windows(tabpage_T *old_curtab)
 // When "n" is 9999 go to the last tab page.
 void goto_tabpage(int n)
 {
-  if (text_locked()) {
-    // Not allowed when editing the command line.
-    text_locked_msg();
-    return;
-  }
-
-  // If there is only one it can't work.
-  if (first_tabpage->tp_next == NULL) {
-    if (n > 1) {
-      beep_flush();
-    }
-    return;
-  }
-
-  tabpage_T *tp = NULL;  // shut up compiler
-
-  if (n == 0) {
-    // No count, go to next tab page, wrap around end.
-    if (curtab->tp_next == NULL) {
-      tp = first_tabpage;
-    } else {
-      tp = curtab->tp_next;
-    }
-  } else if (n < 0) {
-    // "gT": go to previous tab page, wrap around end.  "N gT" repeats
-    // this N times.
-    tabpage_T *ttp = curtab;
-    for (int i = n; i < 0; i++) {
-      for (tp = first_tabpage; tp->tp_next != ttp && tp->tp_next != NULL;
-           tp = tp->tp_next) {}
-      ttp = tp;
-    }
-  } else if (n == 9999) {
-    // Go to last tab page.
-    for (tp = first_tabpage; tp->tp_next != NULL; tp = tp->tp_next) {}
-  } else {
-    // Go to tab page "n".
-    tp = rs_find_tabpage(n);
-    if (tp == NULL) {
-      beep_flush();
-      return;
-    }
-  }
-
-  goto_tabpage_tp(tp, true, true);
+  rs_goto_tabpage(n);
 }
 
 /// Go to tabpage "tp".
@@ -2472,58 +2416,7 @@ void goto_tabpage_win(tabpage_T *tp, win_T *wp)
 // Move the current tab page to after tab page "nr".
 void tabpage_move(int nr)
 {
-  assert(curtab != NULL);
-
-  if (first_tabpage->tp_next == NULL) {
-    return;
-  }
-
-  if (tabpage_move_disallowed) {
-    return;
-  }
-
-  int n = 1;
-  tabpage_T *tp;
-
-  for (tp = first_tabpage; tp->tp_next != NULL && n < nr; tp = tp->tp_next) {
-    n++;
-  }
-
-  if (tp == curtab || (nr > 0 && tp->tp_next != NULL
-                       && tp->tp_next == curtab)) {
-    return;
-  }
-
-  tabpage_T *tp_dst = tp;
-
-  // Remove the current tab page from the list of tab pages.
-  if (curtab == first_tabpage) {
-    first_tabpage = curtab->tp_next;
-  } else {
-    tp = NULL;
-    FOR_ALL_TABS(tp2) {
-      if (tp2->tp_next == curtab) {
-        tp = tp2;
-        break;
-      }
-    }
-    if (tp == NULL) {   // "cannot happen"
-      return;
-    }
-    tp->tp_next = curtab->tp_next;
-  }
-
-  // Re-insert it at the specified position.
-  if (nr <= 0) {
-    curtab->tp_next = first_tabpage;
-    first_tabpage = curtab;
-  } else {
-    curtab->tp_next = tp_dst->tp_next;
-    tp_dst->tp_next = curtab;
-  }
-
-  // Need to redraw the tabline.  Tab page contents doesn't change.
-  redraw_tabline = true;
+  rs_tabpage_move(nr);
 }
 
 /// Go to another window.
@@ -3831,6 +3724,7 @@ void nvim_set_msg_col_val(int val) { msg_col = val; }
 void nvim_win_set_frame(win_T *wp, frame_T *frp) { if (wp) { wp->w_frame = frp; } }
 void nvim_set_first_tabpage(tabpage_T *tp) { first_tabpage = tp; }
 void nvim_tabpage_set_next(tabpage_T *tp, tabpage_T *next) { tp->tp_next = next; }
+int nvim_win_get_tcl_flags(void) { return (int)tcl_flags; }
 void nvim_win_set_buffer_raw(win_T *wp, buf_T *buf) { wp->w_buffer = buf; }
 void nvim_buf_inc_nwindows(buf_T *buf) { buf->b_nwindows++; }
 void nvim_win_init_empty_wrapper(win_T *wp) { win_init_empty(wp); }
