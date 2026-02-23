@@ -1836,9 +1836,9 @@ pub const extern "C" fn rs_vgr_get_auname(cmdidx: c_int) -> *const std::ffi::c_c
 
 // CMD_* constants for valid-size counting (from ex_cmds_enum.generated.h,
 // validated by _Static_assert in quickfix_shim.c)
-const CMD_CDO_P4: c_int = 62;   // CMD_cdo
-const CMD_LDO_P4: c_int = 228;  // CMD_ldo
-const CMD_CFDO_P4: c_int = 66;  // CMD_cfdo
+const CMD_CDO_P4: c_int = 62; // CMD_cdo
+const CMD_LDO_P4: c_int = 228; // CMD_ldo
+const CMD_CFDO_P4: c_int = 66; // CMD_cfdo
 const CMD_LFDO_P4: c_int = 234; // CMD_lfdo
 
 // CMD_* constants for grep_internal (validated by _Static_assert in quickfix_shim.c)
@@ -1865,7 +1865,10 @@ pub unsafe extern "C" fn rs_qf_get_size_eap(eap: EapHandle) -> usize {
         return 0;
     }
     let qfl = nvim_qf_get_curlist_mut(qi).cast_const();
-    nvim_qf_get_count(qfl).max(0) as usize
+    #[allow(clippy::cast_sign_loss)]
+    {
+        nvim_qf_get_count(qfl).max(0) as usize
+    }
 }
 
 /// Returns the number of valid entries in the current quickfix/location list.
@@ -1882,7 +1885,10 @@ pub unsafe extern "C" fn rs_qf_get_valid_size_eap(eap: EapHandle) -> usize {
     let cmdidx = nvim_eap_get_cmdidx(eap);
     let count_files = !(cmdidx == CMD_CDO_P4 || cmdidx == CMD_LDO_P4);
     let qfl = nvim_qf_get_curlist_mut(qi).cast_const();
-    crate::navigate::rs_qf_get_valid_size(qfl, count_files).max(0) as usize
+    #[allow(clippy::cast_sign_loss)]
+    {
+        crate::navigate::rs_qf_get_valid_size(qfl, count_files).max(0) as usize
+    }
 }
 
 /// Returns the current entry index (0 if error).
@@ -1899,7 +1905,10 @@ pub unsafe extern "C" fn rs_qf_get_cur_idx_eap(eap: EapHandle) -> usize {
     let qfl = nvim_qf_get_curlist_mut(qi).cast_const();
     let idx = nvim_qf_get_index(qfl);
     debug_assert!(idx >= 0);
-    idx.max(0) as usize
+    #[allow(clippy::cast_sign_loss)]
+    {
+        idx.max(0) as usize
+    }
 }
 
 /// Returns the current valid entry index (1 if no valid entries).
@@ -1931,6 +1940,10 @@ extern "C" {
 /// Returns the line number of the current entry in the quickfix/location list
 /// for the given window (used for cursor positioning in the qf window).
 ///
+/// # Panics
+///
+/// Panics if the global quickfix info pointer is null.
+///
 /// # Safety
 ///
 /// `wp` must be a valid pointer to a C `win_T`.
@@ -1959,11 +1972,7 @@ pub unsafe extern "C" fn rs_grep_internal(cmdidx: c_int) -> c_int {
         || cmdidx == CMD_LGREP_P4
         || cmdidx == CMD_GREPADD_P4
         || cmdidx == CMD_LGREPADD_P4;
-    if is_grep_cmd && nvim_grep_uses_internal() {
-        1
-    } else {
-        0
-    }
+    i32::from(is_grep_cmd && nvim_grep_uses_internal())
 }
 
 // =============================================================================
@@ -2017,7 +2026,11 @@ extern "C" {
     fn nvim_eap_get_arg(eap: EapHandle) -> *mut std::ffi::c_char;
     // nvim_eap_get_forceit from indent_ffi.c — returns bool
     // (already declared in the existing extern block above)
-    fn nvim_get_list_range(arg: *mut *mut std::ffi::c_char, idx1: *mut c_int, idx2: *mut c_int) -> bool;
+    fn nvim_get_list_range(
+        arg: *mut *mut std::ffi::c_char,
+        idx1: *mut c_int,
+        idx2: *mut c_int,
+    ) -> bool;
     // nvim_semsg_trailing_arg from eval_shim.c
     fn nvim_semsg_trailing_arg(arg: *const std::ffi::c_char);
     fn nvim_shorten_fnames_qf();
@@ -2062,11 +2075,13 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
     let forceit = nvim_eap_get_forceit(eap);
 
     // Handle '+' prefix: list from current entry
-    let mut plus = false;
-    if !arg.is_null() && *arg == b'+' as std::ffi::c_char {
+    #[allow(clippy::cast_possible_wrap)]
+    let plus = if !arg.is_null() && *arg == b'+' as std::ffi::c_char {
         arg = arg.add(1);
-        plus = true;
-    }
+        true
+    } else {
+        false
+    };
 
     let mut idx1: c_int = 1;
     let mut idx2: c_int = -1;
@@ -2086,12 +2101,20 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
     } else {
         let count = crate::nvim_qf_get_count(qfl);
         let i1 = if idx1 < 0 {
-            if -idx1 > count { 0 } else { idx1 + count + 1 }
+            if -idx1 > count {
+                0
+            } else {
+                idx1 + count + 1
+            }
         } else {
             idx1
         };
         let i2 = if idx2 < 0 {
-            if -idx2 > count { 0 } else { idx2 + count + 1 }
+            if -idx2 > count {
+                0
+            } else {
+                idx2 + count + 1
+            }
         } else {
             idx2
         };
@@ -2126,7 +2149,14 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
     while !nvim_got_int_qf() && i <= qf_count && !qfp.is_null() {
         let valid = crate::nvim_qfline_get_valid(qfp);
         if (valid || all) && idx1 <= i && i <= idx2 {
-            rs_qf_list_entry(qfp, i, i == qf_index, qf_file_hl_id, qf_sep_hl_id, qf_line_hl_id);
+            rs_qf_list_entry(
+                qfp,
+                i,
+                i == qf_index,
+                qf_file_hl_id,
+                qf_sep_hl_id,
+                qf_line_hl_id,
+            );
         }
         nvim_os_breakcheck_qf();
         i += 1;

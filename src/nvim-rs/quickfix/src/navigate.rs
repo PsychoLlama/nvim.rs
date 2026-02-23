@@ -2183,6 +2183,10 @@ extern "C" {
 ///
 /// Returns false if buf has no qf entry, or if wp != NULL but has no llist.
 ///
+/// # Panics
+///
+/// Panics if the global quickfix info pointer is null.
+///
 /// # Safety
 ///
 /// - `buf` must be a valid `buf_T *`
@@ -2207,20 +2211,28 @@ pub unsafe extern "C" fn rs_qf_mark_adjust_entry(
         return false;
     }
 
-    let qi: QfInfoHandleMut = if !wp.is_null() {
+    let qi: QfInfoHandleMut = if wp.is_null() {
+        let ql = nvim_get_ql_info();
+        assert!(!ql.is_null());
+        ql
+    } else {
         let llist = nvim_buf_win_get_llist(wp);
         if llist.is_null() {
             return false;
         }
         llist
-    } else {
-        let ql = nvim_get_ql_info();
-        assert!(!ql.is_null());
-        ql
     };
 
     let buf_fnum = nvim_qf_buf_get_fnum(buf);
-    rs_qf_mark_adjust(qi, buf_fnum, buf_has_flag, line1, line2, amount, amount_after)
+    rs_qf_mark_adjust(
+        qi,
+        buf_fnum,
+        buf_has_flag,
+        line1,
+        line2,
+        amount,
+        amount_after,
+    )
 }
 
 /// Rust implementation of `qf_jump_first`: restores list, checks curbuf

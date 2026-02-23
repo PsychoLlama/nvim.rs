@@ -908,6 +908,7 @@ extern "C" {
 ///
 /// - `qfp` must be a valid pointer to a `qfline_T` struct
 #[no_mangle]
+#[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_qf_list_entry(
     qfp: QfLinePtr,
     qf_idx: c_int,
@@ -916,6 +917,8 @@ pub unsafe extern "C" fn rs_qf_list_entry(
     qf_sep_hl_id: c_int,
     qf_line_hl_id: c_int,
 ) {
+    use std::io::Write;
+
     // --- Determine the filename or module to display as prefix ---
     let module = qfline_get_module_p3(qfp);
     let module_nonempty =
@@ -928,11 +931,19 @@ pub unsafe extern "C" fn rs_qf_list_entry(
         let fnum = qfline_get_fnum_p3(qfp);
         if fnum != 0 {
             let buf = buflist_findnr_p3(fnum);
-            if !buf.is_null() {
+            if buf.is_null() {
+                std::ptr::null()
+            } else {
                 let b_fname = buf_get_fname_p3(buf);
-                if !b_fname.is_null() {
+                if b_fname.is_null() {
+                    std::ptr::null()
+                } else {
                     let qf_fname = qfline_get_fname_p3(qfp);
-                    let fname = if qf_fname.is_null() { b_fname } else { qf_fname };
+                    let fname = if qf_fname.is_null() {
+                        b_fname
+                    } else {
+                        qf_fname
+                    };
                     let qf_type = qfline_get_type_p3(qfp);
                     if qf_type == 1 {
                         // :helpgrep — use tail only
@@ -940,11 +951,7 @@ pub unsafe extern "C" fn rs_qf_list_entry(
                     } else {
                         fname
                     }
-                } else {
-                    std::ptr::null()
                 }
-            } else {
-                std::ptr::null()
             }
         } else {
             std::ptr::null()
@@ -957,7 +964,11 @@ pub unsafe extern "C" fn rs_qf_list_entry(
         prefix_buf.as_mut_ptr(),
         IOSIZE,
         qf_idx,
-        if display_name.is_null() { std::ptr::null() } else { display_name },
+        if display_name.is_null() {
+            std::ptr::null()
+        } else {
+            display_name
+        },
     );
 
     // --- Filtering ---
@@ -990,7 +1001,6 @@ pub unsafe extern "C" fn rs_qf_list_entry(
         let col = qfline_get_col_p3(qfp);
         let end_col = qfline_get_end_col_p3(qfp);
         // Replicate qf_range_text logic inline
-        use std::io::Write;
         let mut cur = std::io::Cursor::new(&mut range_buf[..]);
         let _ = write!(cur, "{lnum}");
         if end_lnum > 0 && lnum != end_lnum {
@@ -1018,7 +1028,9 @@ pub unsafe extern "C" fn rs_qf_list_entry(
     let type_text_ptr: *const c_char = type_buf_arr.as_ptr().cast();
 
     let mut pattern_buf = [0u8; IOSIZE];
-    let pattern_len = if !pattern.is_null() {
+    let pattern_len = if pattern.is_null() {
+        0
+    } else {
         // Replicate qf_fmt_text logic: replace newlines with spaces, collapse whitespace
         let src_bytes = std::ffi::CStr::from_ptr(pattern).to_bytes();
         let mut i = 0usize;
@@ -1028,7 +1040,9 @@ pub unsafe extern "C" fn rs_qf_list_entry(
                 pattern_buf[out_pos] = b' ';
                 out_pos += 1;
                 i += 1;
-                while i < src_bytes.len() && (src_bytes[i] == b' ' || src_bytes[i] == b'\t' || src_bytes[i] == b'\n') {
+                while i < src_bytes.len()
+                    && (src_bytes[i] == b' ' || src_bytes[i] == b'\t' || src_bytes[i] == b'\n')
+                {
                     i += 1;
                 }
             } else {
@@ -1039,22 +1053,20 @@ pub unsafe extern "C" fn rs_qf_list_entry(
         }
         pattern_buf[out_pos] = 0;
         out_pos
-    } else {
-        0
     };
 
     // body: skip leading whitespace if we have a file or line
-    let body_src = if !text.is_null() {
-        if !display_name.is_null() || lnum != 0 {
-            skipwhite_p3(text)
-        } else {
-            text
-        }
-    } else {
+    let body_src = if text.is_null() {
         std::ptr::null()
+    } else if !display_name.is_null() || lnum != 0 {
+        skipwhite_p3(text)
+    } else {
+        text
     };
     let mut body_buf = [0u8; IOSIZE];
-    let body_len = if !body_src.is_null() {
+    let body_len = if body_src.is_null() {
+        0
+    } else {
         let src_bytes = std::ffi::CStr::from_ptr(body_src).to_bytes();
         let mut i = 0usize;
         let mut out_pos = 0usize;
@@ -1063,7 +1075,9 @@ pub unsafe extern "C" fn rs_qf_list_entry(
                 body_buf[out_pos] = b' ';
                 out_pos += 1;
                 i += 1;
-                while i < src_bytes.len() && (src_bytes[i] == b' ' || src_bytes[i] == b'\t' || src_bytes[i] == b'\n') {
+                while i < src_bytes.len()
+                    && (src_bytes[i] == b' ' || src_bytes[i] == b'\t' || src_bytes[i] == b'\n')
+                {
                     i += 1;
                 }
             } else {
@@ -1074,8 +1088,6 @@ pub unsafe extern "C" fn rs_qf_list_entry(
         }
         body_buf[out_pos] = 0;
         out_pos
-    } else {
-        0
     };
 
     // --- Delegate message output to C ---
@@ -1086,13 +1098,25 @@ pub unsafe extern "C" fn rs_qf_list_entry(
         qf_sep_hl_id,
         qf_line_hl_id,
         c_int::from(lnum != 0),
-        if range_len > 0 { range_buf.as_ptr().cast::<c_char>() } else { std::ptr::null() },
+        if range_len > 0 {
+            range_buf.as_ptr().cast::<c_char>()
+        } else {
+            std::ptr::null()
+        },
         range_len,
         type_text_ptr,
         c_int::from(!pattern.is_null()),
-        if pattern_len > 0 { pattern_buf.as_ptr().cast::<c_char>() } else { std::ptr::null() },
+        if pattern_len > 0 {
+            pattern_buf.as_ptr().cast::<c_char>()
+        } else {
+            std::ptr::null()
+        },
         pattern_len,
-        if body_len > 0 { body_buf.as_ptr().cast::<c_char>() } else { std::ptr::null() },
+        if body_len > 0 {
+            body_buf.as_ptr().cast::<c_char>()
+        } else {
+            std::ptr::null()
+        },
         body_len,
     );
 }
