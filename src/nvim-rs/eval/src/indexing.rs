@@ -3,13 +3,16 @@
 //! - `buf_byteidx_to_charidx`: Byte→char index in buffer line
 //! - `buf_charidx_to_byteidx`: Char→byte index in buffer line
 //! - `pattern_match`: Regex pattern match wrapper
+//! - `var2fpos`: Convert typval to buffer position
+//! - `list2fpos`: Convert list typval to position
 
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr,
-    clippy::borrow_as_ptr
+    clippy::borrow_as_ptr,
+    unsafe_op_in_unsafe_fn
 )]
 
 use std::ffi::{c_char, c_int, c_void};
@@ -180,6 +183,366 @@ pub unsafe extern "C" fn rs_pattern_match(
 
     nvim_eval_restore_cpo();
     matches
+}
+
+// =============================================================================
+// Position conversion: var2fpos / list2fpos
+// =============================================================================
+
+/// pos_T structure matching Neovim's pos_defs.h
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PosT {
+    /// line number
+    pub lnum: i32,
+    /// column number
+    pub col: i32,
+    /// column add (for virtual columns)
+    pub coladd: i32,
+}
+
+/// VAR_LIST type constant (verified by _Static_assert in eval.c)
+const VAR_LIST: c_int = 4;
+/// OK return value
+const OK: c_int = 1;
+/// FAIL return value
+const FAIL: c_int = 0;
+
+/// Opaque list handle (list_T*)
+type ListHandle = *mut c_void;
+
+extern "C" {
+    // Typval field accessors (Phase 3)
+    fn nvim_eval_tv_vtype(tv: *const c_void) -> c_int;
+    fn nvim_eval_tv_vlist(tv: *const c_void) -> ListHandle;
+    fn nvim_eval_tv_string_chk(tv: *const c_void) -> *const c_char;
+    fn nvim_tv_list_find_nr(l: ListHandle, n: c_int, error_out: *mut bool) -> i64;
+    fn nvim_tv_list_item_is_dollar(l: ListHandle, idx: c_int) -> bool;
+    fn nvim_tv_list_len(l: *const c_void) -> c_int;
+
+    // Buffer accessors (Phase 3)
+    fn nvim_curbuf_fnum() -> c_int;
+    fn nvim_curbuf_ml_line_count() -> i32;
+    fn nvim_buflist_findnr(fnum: c_int) -> BufHandle;
+
+    // Window/cursor accessors (Phase 3)
+    fn nvim_curwin_cursor_lnum() -> i32;
+    fn nvim_curwin_cursor_col() -> c_int;
+    fn nvim_curwin_cursor_coladd() -> c_int;
+    fn nvim_curwin_topline() -> i32;
+    fn nvim_curwin_botline() -> i32;
+
+    // Visual mode accessors (Phase 3)
+    fn nvim_visual_active() -> bool;
+    fn nvim_visual_lnum() -> i32;
+    fn nvim_visual_col() -> c_int;
+    fn nvim_visual_coladd() -> c_int;
+
+    // Mark accessor (Phase 3)
+    fn nvim_mark_get_wrapper(
+        mname: c_int,
+        lnum_out: *mut i32,
+        col_out: *mut c_int,
+        coladd_out: *mut c_int,
+        fnum_out: *mut c_int,
+    ) -> bool;
+
+    // Window validation (Phase 3)
+    fn nvim_update_topline_curwin();
+    fn nvim_validate_botline_curwin();
+    fn nvim_check_cursor_moved_curwin();
+
+    // Line length helpers (Phase 3)
+    fn nvim_ml_get_len(lnum: i32) -> c_int;
+    fn nvim_mb_charlen_ml(lnum: i32) -> c_int;
+    fn nvim_get_cursor_line_len() -> c_int;
+    fn nvim_get_cursor_line_charlen() -> c_int;
+}
+
+/// Check if a character is an ASCII uppercase letter (A-Z).
+#[inline]
+const fn ascii_isupper(c: u8) -> bool {
+    c >= b'A' && c <= b'Z'
+}
+
+/// Check if a character is an ASCII digit (0-9).
+#[inline]
+const fn ascii_isdigit(c: u8) -> bool {
+    c >= b'0' && c <= b'9'
+}
+
+/// Convert a typval to a buffer position.
+///
+/// Migrated from `var2fpos` in eval_shim.c.
+///
+/// Returns true and fills `out` if the position is valid, false otherwise.
+/// `ret_fnum` is updated with the file number if a global/numbered mark is resolved.
+///
+/// # Safety
+///
+/// `tv` must be a valid typval_T pointer, `ret_fnum` and `out` must be valid.
+#[allow(clippy::too_many_lines)]
+#[no_mangle]
+pub unsafe extern "C" fn rs_var2fpos(
+    tv: *const c_void,
+    dollar_lnum: bool,
+    ret_fnum: *mut c_int,
+    charcol: bool,
+    out: *mut PosT,
+) -> bool {
+    // Argument can be [lnum, col, coladd].
+    if nvim_eval_tv_vtype(tv) == VAR_LIST {
+        let l = nvim_eval_tv_vlist(tv);
+        if l.is_null() {
+            return false;
+        }
+
+        let mut error = false;
+
+        // Get the line number.
+        let lnum = nvim_tv_list_find_nr(l, 0, &raw mut error) as i32;
+        if error || lnum <= 0 || lnum > nvim_curbuf_ml_line_count() {
+            // Invalid line number.
+            return false;
+        }
+
+        // Get the column number.
+        let mut col = nvim_tv_list_find_nr(l, 1, &raw mut error) as i32;
+        if error {
+            return false;
+        }
+
+        let len = if charcol {
+            nvim_mb_charlen_ml(lnum)
+        } else {
+            nvim_ml_get_len(lnum)
+        };
+
+        // We accept "$" for the column number: last column.
+        if nvim_tv_list_item_is_dollar(l, 1) {
+            col = len + 1;
+        }
+
+        // Accept a position up to the NUL after the line.
+        if col == 0 || col > len + 1 {
+            // Invalid column number.
+            return false;
+        }
+        col -= 1;
+
+        // Get the virtual offset. Defaults to zero.
+        let coladd = nvim_tv_list_find_nr(l, 2, &raw mut error) as i32;
+        let coladd = if error { 0 } else { coladd };
+
+        *out = PosT { lnum, col, coladd };
+        return true;
+    }
+
+    let name_ptr = nvim_eval_tv_string_chk(tv);
+    if name_ptr.is_null() {
+        return false;
+    }
+
+    // SAFETY: name_ptr is a valid NUL-terminated C string from nvim_tv_get_string_chk
+    let name = std::slice::from_raw_parts(name_ptr as *const u8, {
+        let mut len = 0usize;
+        while *name_ptr.add(len) != 0 {
+            len += 1;
+        }
+        len + 1 // include NUL
+    });
+
+    let mut pos = PosT::default();
+
+    if name[0] == b'.' {
+        // cursor
+        pos.lnum = nvim_curwin_cursor_lnum();
+        pos.col = nvim_curwin_cursor_col();
+        pos.coladd = nvim_curwin_cursor_coladd();
+    } else if name[0] == b'v' && name[1] == 0 {
+        // Visual start
+        if nvim_visual_active() {
+            pos.lnum = nvim_visual_lnum();
+            pos.col = nvim_visual_col();
+            pos.coladd = nvim_visual_coladd();
+        } else {
+            pos.lnum = nvim_curwin_cursor_lnum();
+            pos.col = nvim_curwin_cursor_col();
+            pos.coladd = nvim_curwin_cursor_coladd();
+        }
+    } else if name[0] == b'\'' {
+        // mark
+        let mname = c_int::from(name[1]);
+        let mut mark_line: i32 = 0;
+        let mut mark_col: c_int = 0;
+        let mut mark_coladd: c_int = 0;
+        let mut mark_filenum: c_int = 0;
+        if !nvim_mark_get_wrapper(
+            mname,
+            &raw mut mark_line,
+            &raw mut mark_col,
+            &raw mut mark_coladd,
+            &raw mut mark_filenum,
+        ) {
+            return false;
+        }
+        pos.lnum = mark_line;
+        pos.col = mark_col;
+        pos.coladd = mark_coladd;
+        // Vimscript behavior: only provide fnum if mark is global.
+        if ascii_isupper(name[1]) || ascii_isdigit(name[1]) {
+            *ret_fnum = mark_filenum;
+        }
+    }
+
+    if pos.lnum != 0 {
+        if charcol {
+            // Convert byte column to character column using current buffer.
+            // We can reuse rs_buf_byteidx_to_charidx but it takes a BufHandle.
+            // Instead replicate the logic: just call through the existing Rust fn.
+            // Use curbuf (accessed via nvim_curbuf_fnum to get fnum, then buflist_findnr).
+            let curbuf = nvim_buflist_findnr(nvim_curbuf_fnum());
+            pos.col = rs_buf_byteidx_to_charidx(curbuf, pos.lnum, pos.col);
+        }
+        *out = pos;
+        return true;
+    }
+
+    pos.coladd = 0;
+
+    if name[0] == b'w' && dollar_lnum {
+        // the "w_valid" flags are not reset when moving the cursor, but they
+        // do matter for update_topline() and validate_botline().
+        nvim_check_cursor_moved_curwin();
+
+        pos.col = 0;
+        if name[1] == b'0' {
+            // "w0": first visible line
+            nvim_update_topline_curwin();
+            // In silent Ex mode topline is zero, but that's not a valid line
+            // number; use one instead.
+            let topline = nvim_curwin_topline();
+            pos.lnum = if topline > 0 { topline } else { 1 };
+            *out = pos;
+            return true;
+        } else if name[1] == b'$' {
+            // "w$": last visible line
+            nvim_validate_botline_curwin();
+            // In silent Ex mode botline is zero, return zero then.
+            let botline = nvim_curwin_botline();
+            pos.lnum = if botline > 0 { botline - 1 } else { 0 };
+            *out = pos;
+            return true;
+        }
+    } else if name[0] == b'$' {
+        // last column or line
+        if dollar_lnum {
+            pos.lnum = nvim_curbuf_ml_line_count();
+            pos.col = 0;
+        } else {
+            pos.lnum = nvim_curwin_cursor_lnum();
+            if charcol {
+                pos.col = nvim_get_cursor_line_charlen();
+            } else {
+                pos.col = nvim_get_cursor_line_len();
+            }
+        }
+        *out = pos;
+        return true;
+    }
+
+    false
+}
+
+/// Convert a list typval to a buffer position.
+///
+/// Migrated from `list2fpos` in eval_shim.c.
+///
+/// # Safety
+///
+/// `arg`, `posp` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_list2fpos(
+    arg: *const c_void,
+    posp: *mut PosT,
+    fnump: *mut c_int,
+    curswantp: *mut c_int,
+    charcol: bool,
+) -> c_int {
+    // Validate: must be a list
+    if nvim_eval_tv_vtype(arg) != VAR_LIST {
+        return FAIL;
+    }
+    let l = nvim_eval_tv_vlist(arg);
+    if l.is_null() {
+        return FAIL;
+    }
+
+    let list_len = nvim_tv_list_len(l);
+
+    // List must be: [fnum, lnum, col, coladd, curswant], where "fnum" is only
+    // there when "fnump" isn't NULL; "coladd" and "curswant" are optional.
+    let min_len = if fnump.is_null() { 2 } else { 3 };
+    let max_len = if fnump.is_null() { 4 } else { 5 };
+    if list_len < min_len || list_len > max_len {
+        return FAIL;
+    }
+
+    let mut i: c_int = 0;
+
+    if !fnump.is_null() {
+        let n = nvim_tv_list_find_nr(l, i, std::ptr::null_mut()) as c_int;
+        i += 1;
+        if n < 0 {
+            return FAIL;
+        }
+        let n = if n == 0 { nvim_curbuf_fnum() } else { n };
+        *fnump = n;
+    }
+
+    let lnum = nvim_tv_list_find_nr(l, i, std::ptr::null_mut()) as i32;
+    i += 1;
+    if lnum < 0 {
+        return FAIL;
+    }
+    (*posp).lnum = lnum;
+
+    let mut col = nvim_tv_list_find_nr(l, i, std::ptr::null_mut()) as c_int;
+    i += 1;
+    if col < 0 {
+        return FAIL;
+    }
+
+    // If character position is specified, then convert to byte position.
+    // If the line number is zero use the cursor line.
+    if charcol {
+        // Get the text for the specified line in a loaded buffer.
+        let fnum = if fnump.is_null() {
+            nvim_curbuf_fnum()
+        } else {
+            *fnump
+        };
+        let buf = nvim_buflist_findnr(fnum);
+        if buf.is_null() || nvim_eval_buf_ml_valid(buf) == 0 {
+            return FAIL;
+        }
+        let use_lnum = if lnum == 0 {
+            nvim_curwin_cursor_lnum()
+        } else {
+            lnum
+        };
+        col = rs_buf_charidx_to_byteidx(buf, use_lnum, col) + 1;
+    }
+    (*posp).col = col;
+
+    let off = nvim_tv_list_find_nr(l, i, std::ptr::null_mut()) as c_int;
+    (*posp).coladd = if off < 0 { 0 } else { off };
+
+    if !curswantp.is_null() {
+        *curswantp = nvim_tv_list_find_nr(l, i + 1, std::ptr::null_mut()) as c_int;
+    }
+
+    OK
 }
 
 #[cfg(test)]

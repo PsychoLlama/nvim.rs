@@ -575,6 +575,11 @@ extern int rs_eval_expr_typval(const typval_T *expr, bool want_func, typval_T *a
                                typval_T *rettv);
 extern bool rs_eval_expr_to_bool(const typval_T *expr, bool *error);
 
+// Rust implementations for Phase 3 (in eval crate, indexing module)
+extern bool rs_var2fpos(const typval_T *tv, bool dollar_lnum, int *ret_fnum, bool charcol,
+                        pos_T *out);
+extern int rs_list2fpos(typval_T *arg, pos_T *posp, int *fnump, int *curswantp, bool charcol);
+
 /// Top level evaluation function, returning a boolean.
 /// Sets "error" to true if there was an error.
 ///
@@ -2454,125 +2459,7 @@ pos_T *var2fpos(const typval_T *const tv, const bool dollar_lnum, int *const ret
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
   static pos_T pos;
-
-  // Argument can be [lnum, col, coladd].
-  if (tv->v_type == VAR_LIST) {
-    bool error = false;
-
-    list_T *l = tv->vval.v_list;
-    if (l == NULL) {
-      return NULL;
-    }
-
-    // Get the line number.
-    pos.lnum = (linenr_T)tv_list_find_nr(l, 0, &error);
-    if (error || pos.lnum <= 0 || pos.lnum > curbuf->b_ml.ml_line_count) {
-      // Invalid line number.
-      return NULL;
-    }
-
-    // Get the column number.
-    pos.col = (colnr_T)tv_list_find_nr(l, 1, &error);
-    if (error) {
-      return NULL;
-    }
-    int len;
-    if (charcol) {
-      len = mb_charlen(ml_get(pos.lnum));
-    } else {
-      len = ml_get_len(pos.lnum);
-    }
-
-    // We accept "$" for the column number: last column.
-    listitem_T *li = tv_list_find(l, 1);
-    if (li != NULL && TV_LIST_ITEM_TV(li)->v_type == VAR_STRING
-        && TV_LIST_ITEM_TV(li)->vval.v_string != NULL
-        && strcmp(TV_LIST_ITEM_TV(li)->vval.v_string, "$") == 0) {
-      pos.col = len + 1;
-    }
-
-    // Accept a position up to the NUL after the line.
-    if (pos.col == 0 || (int)pos.col > len + 1) {
-      // Invalid column number.
-      return NULL;
-    }
-    pos.col--;
-
-    // Get the virtual offset.  Defaults to zero.
-    pos.coladd = (colnr_T)tv_list_find_nr(l, 2, &error);
-    if (error) {
-      pos.coladd = 0;
-    }
-
-    return &pos;
-  }
-
-  const char *const name = tv_get_string_chk(tv);
-  if (name == NULL) {
-    return NULL;
-  }
-
-  pos.lnum = 0;
-  if (name[0] == '.') {
-    // cursor
-    pos = curwin->w_cursor;
-  } else if (name[0] == 'v' && name[1] == NUL) {
-    // Visual start
-    if (VIsual_active) {
-      pos = VIsual;
-    } else {
-      pos = curwin->w_cursor;
-    }
-  } else if (name[0] == '\'') {
-    // mark
-    int mname = (uint8_t)name[1];
-    const fmark_T *const fm = mark_get(curbuf, curwin, NULL, kMarkAll, mname);
-    if (fm == NULL || fm->mark.lnum <= 0) {
-      return NULL;
-    }
-    pos = fm->mark;
-    // Vimscript behavior, only provide fnum if mark is global.
-    *ret_fnum = ASCII_ISUPPER(mname) || ascii_isdigit(mname) ? fm->fnum : *ret_fnum;
-  }
-  if (pos.lnum != 0) {
-    if (charcol) {
-      pos.col = rs_buf_byteidx_to_charidx(curbuf, pos.lnum, pos.col);
-    }
-    return &pos;
-  }
-
-  pos.coladd = 0;
-
-  if (name[0] == 'w' && dollar_lnum) {
-    // the "w_valid" flags are not reset when moving the cursor, but they
-    // do matter for update_topline() and validate_botline().
-    check_cursor_moved(curwin);
-
-    pos.col = 0;
-    if (name[1] == '0') {               // "w0": first visible line
-      update_topline(curwin);
-      // In silent Ex mode topline is zero, but that's not a valid line
-      // number; use one instead.
-      pos.lnum = curwin->w_topline > 0 ? curwin->w_topline : 1;
-      return &pos;
-    } else if (name[1] == '$') {      // "w$": last visible line
-      validate_botline(curwin);
-      // In silent Ex mode botline is zero, return zero then.
-      pos.lnum = curwin->w_botline > 0 ? curwin->w_botline - 1 : 0;
-      return &pos;
-    }
-  } else if (name[0] == '$') {        // last column or line
-    if (dollar_lnum) {
-      pos.lnum = curbuf->b_ml.ml_line_count;
-      pos.col = 0;
-    } else {
-      pos.lnum = curwin->w_cursor.lnum;
-      if (charcol) {
-        pos.col = (colnr_T)mb_charlen(get_cursor_line_ptr());
-      } else {
-        pos.col = get_cursor_line_len();
-      }
-    }
+  if (rs_var2fpos(tv, dollar_lnum, ret_fnum, charcol, &pos)) {
     return &pos;
   }
   return NULL;
@@ -2590,66 +2477,7 @@ pos_T *var2fpos(const typval_T *const tv, const bool dollar_lnum, int *const ret
 ///          validity.
 int list2fpos(typval_T *arg, pos_T *posp, int *fnump, colnr_T *curswantp, bool charcol)
 {
-  list_T *l;
-
-  // List must be: [fnum, lnum, col, coladd, curswant], where "fnum" is only
-  // there when "fnump" isn't NULL; "coladd" and "curswant" are optional.
-  if (arg->v_type != VAR_LIST
-      || (l = arg->vval.v_list) == NULL
-      || tv_list_len(l) < (fnump == NULL ? 2 : 3)
-      || tv_list_len(l) > (fnump == NULL ? 4 : 5)) {
-    return FAIL;
-  }
-
-  int i = 0;
-  int n;
-  if (fnump != NULL) {
-    n = (int)tv_list_find_nr(l, i++, NULL);  // fnum
-    if (n < 0) {
-      return FAIL;
-    }
-    if (n == 0) {
-      n = curbuf->b_fnum;  // Current buffer.
-    }
-    *fnump = n;
-  }
-
-  n = (int)tv_list_find_nr(l, i++, NULL);  // lnum
-  if (n < 0) {
-    return FAIL;
-  }
-  posp->lnum = n;
-
-  n = (int)tv_list_find_nr(l, i++, NULL);  // col
-  if (n < 0) {
-    return FAIL;
-  }
-  // If character position is specified, then convert to byte position
-  // If the line number is zero use the cursor line.
-  if (charcol) {
-    // Get the text for the specified line in a loaded buffer
-    buf_T *buf = buflist_findnr(fnump == NULL ? curbuf->b_fnum : *fnump);
-    if (buf == NULL || buf->b_ml.ml_mfp == NULL) {
-      return FAIL;
-    }
-    n = rs_buf_charidx_to_byteidx(buf,
-                               posp->lnum == 0 ? curwin->w_cursor.lnum : posp->lnum,
-                               n) + 1;
-  }
-  posp->col = n;
-
-  n = (int)tv_list_find_nr(l, i, NULL);  // off
-  if (n < 0) {
-    posp->coladd = 0;
-  } else {
-    posp->coladd = n;
-  }
-
-  if (curswantp != NULL) {
-    *curswantp = (colnr_T)tv_list_find_nr(l, i + 1, NULL);  // curswant
-  }
-
-  return OK;
+  return rs_list2fpos(arg, posp, fnump, (int *)curswantp, charcol);
 }
 
 /// Get the length of the name of a variable or function.
@@ -4666,4 +4494,139 @@ char *nvim_eval_xstrdup(const char *s)
 {
   return xstrdup(s);
 }
+
+// ============================================================================
+// Phase 3: C accessors for var2fpos / list2fpos (used by Rust indexing module)
+// ============================================================================
+
+/// Get curwin->w_cursor.lnum.
+int32_t nvim_curwin_cursor_lnum(void)
+{
+  return curwin->w_cursor.lnum;
+}
+
+/// Get curwin->w_cursor.col.
+int nvim_curwin_cursor_col(void)
+{
+  return curwin->w_cursor.col;
+}
+
+/// Get curwin->w_cursor.coladd.
+int nvim_curwin_cursor_coladd(void)
+{
+  return curwin->w_cursor.coladd;
+}
+
+/// Get curwin->w_topline.
+int32_t nvim_curwin_topline(void)
+{
+  return curwin->w_topline;
+}
+
+/// Get curwin->w_botline.
+int32_t nvim_curwin_botline(void)
+{
+  return curwin->w_botline;
+}
+
+/// Get VIsual_active flag.
+bool nvim_visual_active(void)
+{
+  return VIsual_active;
+}
+
+/// Get VIsual.lnum.
+int32_t nvim_visual_lnum(void)
+{
+  return VIsual.lnum;
+}
+
+/// Get VIsual.col.
+int nvim_visual_col(void)
+{
+  return VIsual.col;
+}
+
+/// Get VIsual.coladd.
+int nvim_visual_coladd(void)
+{
+  return VIsual.coladd;
+}
+
+/// Get curbuf->b_fnum.
+int nvim_curbuf_fnum(void)
+{
+  return curbuf->b_fnum;
+}
+
+/// mark_get wrapper for Rust var2fpos.
+/// Returns true if mark was found and is valid (lnum > 0).
+/// Fills lnum_out, col_out, coladd_out, fnum_out when returning true.
+bool nvim_mark_get_wrapper(int mname, int32_t *lnum_out, int *col_out, int *coladd_out,
+                           int *fnum_out)
+{
+  const fmark_T *const fm = mark_get(curbuf, curwin, NULL, kMarkAll, mname);
+  if (fm == NULL || fm->mark.lnum <= 0) {
+    return false;
+  }
+  *lnum_out = fm->mark.lnum;
+  *col_out = fm->mark.col;
+  *coladd_out = fm->mark.coladd;
+  *fnum_out = fm->fnum;
+  return true;
+}
+
+/// Call update_topline(curwin).
+void nvim_update_topline_curwin(void)
+{
+  update_topline(curwin);
+}
+
+/// Call check_cursor_moved(curwin).
+void nvim_check_cursor_moved_curwin(void)
+{
+  check_cursor_moved(curwin);
+}
+
+/// tv_list_find_nr wrapper with bool error output.
+/// Returns the number at list index n. Sets *error_out to true on error.
+int64_t nvim_tv_list_find_nr(list_T *l, int n, bool *error_out)
+{
+  return (int64_t)tv_list_find_nr(l, n, error_out);
+}
+
+/// Returns true if the list item at index idx is a string equal to "$".
+bool nvim_tv_list_item_is_dollar(list_T *l, int idx)
+{
+  listitem_T *li = tv_list_find(l, idx);
+  return li != NULL
+         && TV_LIST_ITEM_TV(li)->v_type == VAR_STRING
+         && TV_LIST_ITEM_TV(li)->vval.v_string != NULL
+         && strcmp(TV_LIST_ITEM_TV(li)->vval.v_string, "$") == 0;
+}
+
+/// tv_list_len wrapper.
+int nvim_tv_list_len(const list_T *l)
+{
+  return tv_list_len(l);
+}
+
+/// tv_get_string_chk wrapper for Rust (Phase 3 accessor, no out_len).
+const char *nvim_eval_tv_string_chk(const typval_T *tv)
+{
+  return tv_get_string_chk(tv);
+}
+
+/// mb_charlen(ml_get(lnum)) for current buffer.
+int nvim_mb_charlen_ml(int32_t lnum)
+{
+  return mb_charlen(ml_get(lnum));
+}
+
+/// mb_charlen(get_cursor_line_ptr()) wrapper.
+int nvim_get_cursor_line_charlen(void)
+{
+  return mb_charlen(get_cursor_line_ptr());
+}
+
 
