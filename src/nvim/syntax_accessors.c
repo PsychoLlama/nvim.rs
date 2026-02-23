@@ -179,6 +179,9 @@ typedef struct {
 // Rust fold FFI declaration
 extern void rs_foldUpdateAll(win_T *win);
 
+// Rust pattern parse FFI declaration
+extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
+
 static char *(spo_name_tab[SPO_COUNT]) =
 { "ms=", "me=", "hs=", "he=", "rs=", "re=", "lc=" };
 
@@ -2213,89 +2216,7 @@ static void init_syn_patterns(void)
 /// @return  a pointer to the next argument, or NULL in case of an error.
 static char *get_syn_pattern(char *arg, synpat_T *ci)
 {
-  int idx;
-
-  // need at least three chars
-  if (arg == NULL || arg[0] == NUL || arg[1] == NUL || arg[2] == NUL) {
-    return NULL;
-  }
-
-  char *end = skip_regexp(arg + 1, *arg, true);
-  if (*end != *arg) {                       // end delimiter not found
-    semsg(_("E401: Pattern delimiter not found: %s"), arg);
-    return NULL;
-  }
-  // store the pattern and compiled regexp program
-  ci->sp_pattern = xstrnsave(arg + 1, (size_t)(end - arg) - 1);
-
-  // Make 'cpoptions' empty, to avoid the 'l' flag
-  char *cpo_save = p_cpo;
-  p_cpo = empty_string_option;
-  ci->sp_prog = vim_regcomp(ci->sp_pattern, RE_MAGIC);
-  p_cpo = cpo_save;
-
-  if (ci->sp_prog == NULL) {
-    return NULL;
-  }
-  ci->sp_ic = curwin->w_s->b_syn_ic;
-  syn_clear_time(&ci->sp_time);
-
-  // Check for a match, highlight or region offset.
-  end++;
-  do {
-    for (idx = SPO_COUNT; --idx >= 0;) {
-      if (strncmp(end, spo_name_tab[idx], 3) == 0) {
-        break;
-      }
-    }
-    if (idx >= 0) {
-      int *p = &(ci->sp_offsets[idx]);
-      if (idx != SPO_LC_OFF) {
-        switch (end[3]) {
-        case 's':
-          break;
-        case 'b':
-          break;
-        case 'e':
-          idx += SPO_COUNT; break;
-        default:
-          idx = -1; break;
-        }
-      }
-      if (idx >= 0) {
-        ci->sp_off_flags |= (int16_t)(1 << idx);
-        if (idx == SPO_LC_OFF) {            // lc=99
-          end += 3;
-          *p = getdigits_int(&end, true, 0);
-
-          // "lc=" offset automatically sets "ms=" offset
-          if (!(ci->sp_off_flags & (1 << SPO_MS_OFF))) {
-            ci->sp_off_flags |= (1 << SPO_MS_OFF);
-            ci->sp_offsets[SPO_MS_OFF] = *p;
-          }
-        } else {                          // yy=x+99
-          end += 4;
-          if (*end == '+') {
-            end++;
-            *p = getdigits_int(&end, true, 0);    // positive offset
-          } else if (*end == '-') {
-            end++;
-            *p = -getdigits_int(&end, true, 0);   // negative offset
-          }
-        }
-        if (*end != ',') {
-          break;
-        }
-        end++;
-      }
-    }
-  } while (idx >= 0);
-
-  if (!ends_excmd(*end) && !ascii_iswhite(*end)) {
-    semsg(_("E402: Garbage after pattern: %s"), arg);
-    return NULL;
-  }
-  return skipwhite(end);
+  return rs_get_syn_pattern(arg, ci);
 }
 
 /// Handle ":syntax sync .." command.
@@ -4902,3 +4823,31 @@ _Static_assert(HL_INCLUDED_TOPLEVEL == 0x80000, "HL_INCLUDED_TOPLEVEL");
 _Static_assert(SPTYPE_START == 2, "SPTYPE_START");
 _Static_assert(SPTYPE_SKIP == 4, "SPTYPE_SKIP");
 _Static_assert(SPTYPE_END == 3, "SPTYPE_END");
+
+// =============================================================================
+// Phase 1 accessors: get_syn_pattern migration
+// =============================================================================
+
+char *nvim_syn_skip_regexp(char *arg, int delim, int magic)
+{
+  return skip_regexp(arg, delim, magic);
+}
+
+int nvim_syn_getdigits_int(char **pp, int strict, int def)
+{
+  return getdigits_int(pp, (bool)strict, def);
+}
+
+char *nvim_syn_get_p_cpo(void) { return p_cpo; }
+void nvim_syn_set_p_cpo(char *val) { p_cpo = val; }
+char *nvim_syn_get_empty_string_option(void) { return empty_string_option; }
+int nvim_syn_get_curwin_syn_ic(void) { return curwin->w_s->b_syn_ic; }
+
+void nvim_synpat_set_pattern(synpat_T *pat, char *pattern) { pat->sp_pattern = pattern; }
+void nvim_synpat_set_prog(synpat_T *pat, void *prog) { pat->sp_prog = prog; }
+void nvim_synpat_set_ic(synpat_T *pat, int ic) { pat->sp_ic = ic; }
+void nvim_synpat_set_off_flags(synpat_T *pat, int16_t flags) { pat->sp_off_flags = flags; }
+// nvim_synpat_get_off_flags already defined at line 2875
+void nvim_synpat_set_offset(synpat_T *pat, int idx, int val) { pat->sp_offsets[idx] = val; }
+int nvim_synpat_get_offset(synpat_T *pat, int idx) { return pat->sp_offsets[idx]; }
+void nvim_synpat_clear_time(synpat_T *pat) { syn_clear_time(&pat->sp_time); }
