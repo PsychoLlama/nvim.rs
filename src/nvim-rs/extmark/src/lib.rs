@@ -345,8 +345,8 @@ extern "C" {
         itr: MarkTreeIterHandle,
     );
 
-    /// Clear all marks from tree.
-    fn nvim_marktree_clear(b: MarkTreeHandle);
+    /// Clear all marks from tree (Rust implementation).
+    fn rs_marktree_clear(b: MarkTreeHandle);
 
     /// Splice marks for text change.
     fn nvim_marktree_splice(
@@ -1045,7 +1045,7 @@ pub fn extmark_free_all(buf: BufHandle) {
 
     unsafe { nvim_marktree_itr_free(itr) };
 
-    unsafe { nvim_marktree_clear(tree) };
+    unsafe { rs_marktree_clear(tree) };
     unsafe { nvim_buf_signcols_clear(buf) };
     unsafe { nvim_extmark_ns_destroy(buf) };
 }

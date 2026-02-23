@@ -132,9 +132,12 @@ extern bool rs_marktree_itr_get_overlap(MarkTree *b, int row, int col, MarkTreeI
 extern bool rs_marktree_itr_step_overlap(MarkTree *b, MarkTreeIter *itr, MTPair *pair);
 
 // Tree operations
-extern void rs_marktree_put_key(MarkTree *b, MTKey k);
 extern void rs_marktree_clear(MarkTree *b);
 extern void rs_marktree_check(MarkTree *b);
+
+// Memory management operations
+extern void rs_marktree_free_node(MarkTree *b, MTNode *x);
+extern void rs_marktree_free_subtree(MarkTree *b, MTNode *x);
 
 // Intersection operations
 extern void rs_intersect_node(MarkTree *b, MTNode *x, uint64_t id);
@@ -993,31 +996,17 @@ static void pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i)
 /// frees all mem, resets tree to valid empty state
 void marktree_clear(MarkTree *b)
 {
-  if (b->root) {
-    marktree_free_subtree(b, b->root);
-    b->root = NULL;
-  }
-  map_destroy(uint64_t, b->id2node);
-  b->n_keys = 0;
-  memset(b->meta_root, 0, kMTMetaCount * sizeof(b->meta_root[0]));
-  assert(b->n_nodes == 0);
+  rs_marktree_clear(b);
 }
 
 void marktree_free_subtree(MarkTree *b, MTNode *x)
 {
-  if (x->level) {
-    for (int i = 0; i < x->n + 1; i++) {
-      marktree_free_subtree(b, x->ptr[i]);
-    }
-  }
-  marktree_free_node(b, x);
+  rs_marktree_free_subtree(b, x);
 }
 
 static void marktree_free_node(MarkTree *b, MTNode *x)
 {
-  kvi_destroy(x->intersect);
-  xfree(x);
-  b->n_nodes--;
+  rs_marktree_free_node(b, x);
 }
 
 /// @param itr iterator is invalid after call
@@ -1876,6 +1865,13 @@ void nvim_marktree_inc_n_keys(MarkTree *b) { b->n_keys++; }
 void nvim_marktree_add_meta_root(MarkTree *b, int m, uint32_t val) { b->meta_root[m] += val; }
 void nvim_marktree_set_meta_root(MarkTree *b, int m, uint32_t val) { b->meta_root[m] = val; }
 
+// Memory management accessors for Phase 7
+void nvim_kvi_destroy_intersect(MTNode *x) { kvi_destroy(x->intersect); }
+void nvim_xfree_node(MTNode *x) { xfree(x); }
+void nvim_marktree_dec_n_nodes(MarkTree *b) { b->n_nodes--; }
+void nvim_marktree_set_n_keys(MarkTree *b, size_t n) { b->n_keys = n; }
+void nvim_marktree_destroy_id2node(MarkTree *b) { map_destroy(uint64_t, b->id2node); }
+
 // ============================================================================
 // Intersection Operations (for Rust FFI)
 // ============================================================================
@@ -1921,14 +1917,6 @@ MTKey nvim_rawkey(MarkTreeIter *itr) { return rawkey(itr); }
 void nvim_rawkey_set_flags(MarkTreeIter *itr, uint16_t flags) { rawkey(itr).flags = flags; }
 void nvim_rawkey_or_flags(MarkTreeIter *itr, uint16_t flags) { rawkey(itr).flags |= flags; }
 void nvim_rawkey_clear_flags(MarkTreeIter *itr, uint16_t flags) { rawkey(itr).flags &= (uint16_t)~flags; }
-
-// ============================================================================
-// Memory Management Operations (for Rust FFI)
-// ============================================================================
-
-void nvim_marktree_free_node(MarkTree *b, MTNode *x) { marktree_free_node(b, x); }
-void nvim_marktree_free_subtree(MarkTree *b, MTNode *x) { marktree_free_subtree(b, x); }
-void nvim_marktree_clear(MarkTree *b) { marktree_clear(b); }
 
 // ============================================================================
 // Splice Operations (for Rust FFI)

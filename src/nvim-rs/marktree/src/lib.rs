@@ -616,19 +616,6 @@ extern "C" {
     fn nvim_free_marktreeiter(itr: MarkTreeIterHandle);
 
     // ========================================================================
-    // Memory Management Operations (Phase 7)
-    // ========================================================================
-
-    /// Free a single node.
-    fn nvim_marktree_free_node(b: MarkTreeHandle, x: MTNodeHandle);
-
-    /// Free an entire subtree.
-    fn nvim_marktree_free_subtree(b: MarkTreeHandle, x: MTNodeHandle);
-
-    /// Clear the entire marktree.
-    fn nvim_marktree_clear(b: MarkTreeHandle);
-
-    // ========================================================================
     // Splice Operations (Phase 6)
     // ========================================================================
 
@@ -660,6 +647,25 @@ extern "C" {
 
     /// Check marktree invariants.
     fn nvim_marktree_check(b: MarkTreeHandle);
+
+    // ========================================================================
+    // Memory Management Accessors (Phase 7)
+    // ========================================================================
+
+    /// Destroy the intersection kvec of a node (free heap storage).
+    fn nvim_kvi_destroy_intersect(x: MTNodeHandle);
+
+    /// Free a node's raw memory.
+    fn nvim_xfree_node(x: MTNodeHandle);
+
+    /// Decrement the node count on a marktree.
+    fn nvim_marktree_dec_n_nodes(b: MarkTreeHandle);
+
+    /// Set the number of keys in a marktree.
+    fn nvim_marktree_set_n_keys(b: MarkTreeHandle, n: usize);
+
+    /// Destroy the id2node hash map.
+    fn nvim_marktree_destroy_id2node(b: MarkTreeHandle);
 }
 
 // ============================================================================
@@ -3666,19 +3672,42 @@ pub fn rawkey_clear_flags(itr: MarkTreeIterHandle, flags: u16) {
 // Phase 7: Memory Management
 // ============================================================================
 
-/// Free a single node.
+/// Free a single node (destroy its intersection list, free memory, dec n_nodes).
 pub fn marktree_free_node(b: MarkTreeHandle, x: MTNodeHandle) {
-    unsafe { nvim_marktree_free_node(b, x) }
+    unsafe {
+        nvim_kvi_destroy_intersect(x);
+        nvim_xfree_node(x);
+        nvim_marktree_dec_n_nodes(b);
+    }
 }
 
-/// Free an entire subtree.
+/// Free an entire subtree recursively.
 pub fn marktree_free_subtree(b: MarkTreeHandle, x: MTNodeHandle) {
-    unsafe { nvim_marktree_free_subtree(b, x) }
+    let x_level = unsafe { nvim_mtnode_get_level(x) };
+    if x_level != 0 {
+        let x_n = unsafe { nvim_mtnode_get_n(x) };
+        for i in 0..=(x_n) {
+            let child = unsafe { nvim_mtnode_get_ptr(x, i) };
+            marktree_free_subtree(b, child);
+        }
+    }
+    marktree_free_node(b, x);
 }
 
 /// Clear the entire marktree.
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub fn marktree_clear(b: MarkTreeHandle) {
-    unsafe { nvim_marktree_clear(b) }
+    let root = unsafe { nvim_marktree_get_root(b) };
+    if !root.is_null() {
+        marktree_free_subtree(b, root);
+        marktree_set_root(b, MTNodeHandle::null());
+    }
+    unsafe { nvim_marktree_destroy_id2node(b) };
+    unsafe { nvim_marktree_set_n_keys(b, 0) };
+    for m in 0..K_MT_META_COUNT {
+        unsafe { nvim_marktree_set_meta_root(b, m as i32, 0) };
+    }
+    // assert!(b->n_nodes == 0) - validated by C clear function
 }
 
 // ============================================================================
