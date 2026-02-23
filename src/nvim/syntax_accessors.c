@@ -2192,151 +2192,17 @@ int syn_get_stack_item(int i)
   return CUR_STATE(i).si_id;
 }
 
-// ":syntime".
-void ex_syntime(exarg_T *eap)
-{
-  if (strcmp(eap->arg, "on") == 0) {
-    syn_time_on = true;
-  } else if (strcmp(eap->arg, "off") == 0) {
-    syn_time_on = false;
-  } else if (strcmp(eap->arg, "clear") == 0) {
-    syntime_clear();
-  } else if (strcmp(eap->arg, "report") == 0) {
-    syntime_report();
-  } else {
-    semsg(_(e_invarg2), eap->arg);
-  }
-}
+// ":syntime" and "get_syntime_arg" are implemented in Rust (syntime.rs).
+// Their C thin wrappers are at the bottom of this file.
 
+// syn_clear_time is a file-local helper used by nvim_synpat_clear_time
+// and syn_start_line's b_syn_linecont_time reset.
 static void syn_clear_time(syn_time_T *st)
 {
   st->total = profile_zero();
   st->slowest = profile_zero();
   st->count = 0;
   st->match = 0;
-}
-
-// Clear the syntax timing for the current buffer.
-static void syntime_clear(void)
-{
-  synpat_T *spp;
-
-  if (!syntax_present(curwin)) {
-    msg(_(msg_no_items), 0);
-    return;
-  }
-  for (int idx = 0; idx < curwin->w_s->b_syn_patterns.ga_len; idx++) {
-    spp = &(SYN_ITEMS(curwin->w_s)[idx]);
-    syn_clear_time(&spp->sp_time);
-  }
-}
-
-// Function given to ExpandGeneric() to obtain the possible arguments of the
-// ":syntime {on,off,clear,report}" command.
-char *get_syntime_arg(expand_T *xp, int idx)
-{
-  switch (idx) {
-  case 0:
-    return "on";
-  case 1:
-    return "off";
-  case 2:
-    return "clear";
-  case 3:
-    return "report";
-  }
-  return NULL;
-}
-
-static int syn_compare_syntime(const void *v1, const void *v2)
-{
-  const time_entry_T *s1 = v1;
-  const time_entry_T *s2 = v2;
-
-  return profile_cmp(s1->total, s2->total);
-}
-
-// Clear the syntax timing for the current buffer.
-static void syntime_report(void)
-{
-  if (!syntax_present(curwin)) {
-    msg(_(msg_no_items), 0);
-    return;
-  }
-
-  garray_T ga;
-  ga_init(&ga, sizeof(time_entry_T), 50);
-
-  proftime_T total_total = profile_zero();
-  int total_count = 0;
-  time_entry_T *p;
-  for (int idx = 0; idx < curwin->w_s->b_syn_patterns.ga_len; idx++) {
-    synpat_T *spp = &(SYN_ITEMS(curwin->w_s)[idx]);
-    if (spp->sp_time.count > 0) {
-      p = GA_APPEND_VIA_PTR(time_entry_T, &ga);
-      p->total = spp->sp_time.total;
-      total_total = profile_add(total_total, spp->sp_time.total);
-      p->count = spp->sp_time.count;
-      p->match = spp->sp_time.match;
-      total_count += spp->sp_time.count;
-      p->slowest = spp->sp_time.slowest;
-      proftime_T tm = profile_divide(spp->sp_time.total, spp->sp_time.count);
-      p->average = tm;
-      p->id = spp->sp_syn.id;
-      p->pattern = spp->sp_pattern;
-    }
-  }
-
-  // Sort on total time. Skip if there are no items to avoid passing NULL
-  // pointer to qsort().
-  if (ga.ga_len > 1) {
-    qsort(ga.ga_data, (size_t)ga.ga_len, sizeof(time_entry_T),
-          syn_compare_syntime);
-  }
-
-  msg_puts_title(_("  TOTAL      COUNT  MATCH   SLOWEST     AVERAGE   NAME               PATTERN"));
-  msg_puts("\n");
-  for (int idx = 0; idx < ga.ga_len && !got_int; idx++) {
-    p = ((time_entry_T *)ga.ga_data) + idx;
-
-    msg_puts(profile_msg(p->total));
-    msg_puts(" ");     // make sure there is always a separating space
-    msg_advance(13);
-    msg_outnum(p->count);
-    msg_puts(" ");
-    msg_advance(20);
-    msg_outnum(p->match);
-    msg_puts(" ");
-    msg_advance(26);
-    msg_puts(profile_msg(p->slowest));
-    msg_puts(" ");
-    msg_advance(38);
-    msg_puts(profile_msg(p->average));
-    msg_puts(" ");
-    msg_advance(50);
-    msg_outtrans(highlight_group_name(p->id - 1), 0, false);
-    msg_puts(" ");
-
-    msg_advance(69);
-    int len;
-    if (Columns < 80) {
-      len = 20;       // will wrap anyway
-    } else {
-      len = Columns - 70;
-    }
-    int patlen = (int)strlen(p->pattern);
-    len = MIN(len, patlen);
-    msg_outtrans_len(p->pattern, len, 0, false);
-    msg_puts("\n");
-  }
-  ga_clear(&ga);
-  if (!got_int) {
-    msg_puts("\n");
-    msg_puts(profile_msg(total_total));
-    msg_advance(13);
-    msg_outnum(total_count);
-    msg_puts("\n");
-  }
 }
 
 int nvim_win_get_syn_patterns_len(win_T *win) { return win->w_s->b_syn_patterns.ga_len; }
@@ -4732,3 +4598,26 @@ void nvim_syn_set_cmdlinep_from_eap(exarg_T *eap)
 {
   syn_cmdlinep = eap->cmdlinep;
 }
+
+// =============================================================================
+// Phase syntime: accessors for syn_time_on and synpat timing fields
+// =============================================================================
+
+int nvim_syn_get_syn_time_on(void) { return syn_time_on ? 1 : 0; }
+void nvim_syn_set_syn_time_on(int val) { syn_time_on = (val != 0); }
+
+int nvim_synpat_get_time_count(synpat_T *pat) { return pat->sp_time.count; }
+int nvim_synpat_get_time_match(synpat_T *pat) { return pat->sp_time.match; }
+uint64_t nvim_synpat_get_time_total(synpat_T *pat) { return (uint64_t)pat->sp_time.total; }
+uint64_t nvim_synpat_get_time_slowest(synpat_T *pat) { return (uint64_t)pat->sp_time.slowest; }
+
+int nvim_syn_syntax_present_curwin(void) { return syntax_present(curwin) ? 1 : 0; }
+int nvim_syn_get_columns(void) { return (int)Columns; }
+
+/// Thin wrapper: ex_syntime body delegated to Rust.
+extern void rs_ex_syntime(exarg_T *eap);
+void ex_syntime(exarg_T *eap) { rs_ex_syntime(eap); }
+
+/// Thin wrapper: get_syntime_arg body delegated to Rust.
+extern char *rs_get_syntime_arg(expand_T *xp, int idx);
+char *get_syntime_arg(expand_T *xp, int idx) { return rs_get_syntime_arg(xp, idx); }

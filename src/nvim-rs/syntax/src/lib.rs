@@ -48,6 +48,7 @@ pub mod pattern_parse;
 pub mod region;
 pub mod state;
 pub mod sync;
+pub mod syntime;
 pub mod types;
 
 // =============================================================================
