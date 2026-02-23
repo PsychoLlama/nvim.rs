@@ -9,7 +9,8 @@
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr,
-    clippy::borrow_as_ptr
+    clippy::borrow_as_ptr,
+    clashing_extern_declarations
 )]
 
 use std::ffi::{c_char, c_int, c_void};
@@ -21,6 +22,170 @@ extern "C" {
     fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
     fn rs_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn xmemdupz(data: *const c_void, len: usize) -> *mut c_char;
+}
+
+// =============================================================================
+// Phase 4 (eval_shim pass 4): save_tv_as_string
+// =============================================================================
+
+extern "C" {
+    fn nvim_tv_get_type(tv: *mut c_void) -> c_int;
+    fn nvim_eval_tv_string_chk(tv: *mut c_void) -> *const c_char;
+    fn nvim_tv_get_vnumber(tv: *mut c_void) -> i64;
+    fn nvim_buflist_findnr(nr: c_int) -> *mut c_void; // buf_T*
+    fn nvim_eval_buf_line_count(buf: *mut c_void) -> c_int;
+    fn nvim_eval_ml_get_buf(buf: *mut c_void, lnum: i32) -> *const c_char;
+    fn nvim_semsg_e_nobufnr(nr: i64);
+    fn nvim_tv_get_v_list(tv: *mut c_void) -> *mut c_void; // list_T*
+    fn nvim_list_first_item(list: *mut c_void) -> *mut c_void; // listitem_T*
+    fn nvim_list_item_next(list: *mut c_void, item: *mut c_void) -> *mut c_void; // listitem_T*
+    fn nvim_list_item_get_string(item: *mut c_void) -> *const c_char;
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn strlen(s: *const c_char) -> usize;
+}
+
+/// VAR_UNKNOWN type constant
+const VAR_UNKNOWN_S: c_int = 0;
+/// VAR_NUMBER type constant
+const VAR_NUMBER_S: c_int = 1;
+/// VAR_LIST type constant
+const VAR_LIST_S: c_int = 4;
+
+/// Saves a typval_T as a string.
+///
+/// For lists or buffers, replaces NLs with NUL and separates items with NLs.
+///
+/// # Safety
+/// - `tv` must be a valid non-null typval pointer
+/// - `len` must be a valid non-null pointer
+///
+/// # C equivalent
+/// Replaces the C `save_tv_as_string` function in eval_shim.c.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_save_tv_as_string(
+    tv: *mut c_void,
+    len: *mut isize,
+    endnl: bool,
+    crlf: bool,
+) -> *mut c_char {
+    *len = 0;
+
+    let vtype = nvim_tv_get_type(tv);
+
+    if vtype == VAR_UNKNOWN_S {
+        return std::ptr::null_mut();
+    }
+
+    // For non-list, non-number types: convert to string.
+    if vtype != VAR_LIST_S && vtype != VAR_NUMBER_S {
+        let ret_str = nvim_eval_tv_string_chk(tv);
+        if ret_str.is_null() {
+            *len = -1;
+            return std::ptr::null_mut();
+        }
+        let slen = strlen(ret_str);
+        *len = slen as isize;
+        return xmemdupz(ret_str as *const c_void, slen);
+    }
+
+    // VAR_NUMBER: treat as buffer-id.
+    if vtype == VAR_NUMBER_S {
+        let bufnr = nvim_tv_get_vnumber(tv);
+        let buf = nvim_buflist_findnr(bufnr as c_int);
+        if buf.is_null() {
+            nvim_semsg_e_nobufnr(bufnr);
+            *len = -1;
+            return std::ptr::null_mut();
+        }
+
+        // First pass: calculate length.
+        let line_count = nvim_eval_buf_line_count(buf);
+        for lnum in 1..=line_count {
+            let p = nvim_eval_ml_get_buf(buf, lnum);
+            let mut pp = p;
+            while *pp != 0 {
+                *len += 1;
+                pp = pp.add(1);
+            }
+            *len += 1; // newline per line
+        }
+
+        if *len == 0 {
+            return std::ptr::null_mut();
+        }
+
+        // Allocate and fill.
+        let ret = xmalloc((*len) as usize + 1) as *mut c_char;
+        let mut end = ret;
+        for lnum in 1..=line_count {
+            let p = nvim_eval_ml_get_buf(buf, lnum);
+            let mut pp = p;
+            while *pp != 0 {
+                *end = if *pp == b'\n' as c_char { 0 } else { *pp };
+                end = end.add(1);
+                pp = pp.add(1);
+            }
+            *end = b'\n' as c_char;
+            end = end.add(1);
+        }
+        *end = 0;
+        *len = end.offset_from(ret) as isize;
+        return ret;
+    }
+
+    // VAR_LIST: iterate items, replacing NL with NUL.
+    let list = nvim_tv_get_v_list(tv);
+
+    // First pass: calculate total length.
+    let mut item = nvim_list_first_item(list);
+    while !item.is_null() {
+        let s = nvim_list_item_get_string(item);
+        *len += strlen(s) as isize + if crlf { 2 } else { 1 };
+        item = nvim_list_item_next(list, item);
+    }
+
+    if *len == 0 {
+        return std::ptr::null_mut();
+    }
+
+    let extra = if endnl {
+        if crlf {
+            2
+        } else {
+            1
+        }
+    } else {
+        0
+    };
+    let ret = xmalloc((*len) as usize + extra) as *mut c_char;
+    let mut end = ret;
+
+    let mut item = nvim_list_first_item(list);
+    while !item.is_null() {
+        let next = nvim_list_item_next(list, item);
+        let s = nvim_list_item_get_string(item);
+        let mut p = s;
+        while *p != 0 {
+            *end = if *p == b'\n' as c_char { 0 } else { *p };
+            end = end.add(1);
+            p = p.add(1);
+        }
+        if endnl || !next.is_null() {
+            if crlf {
+                *end = b'\r' as c_char;
+                end = end.add(1);
+            }
+            *end = b'\n' as c_char;
+            end = end.add(1);
+        }
+        item = next;
+    }
+    *end = 0;
+    *len = end.offset_from(ret) as isize;
+    ret
 }
 
 /// Case-insensitive prefix check for ASCII bytes.

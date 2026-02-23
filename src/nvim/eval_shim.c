@@ -151,6 +151,7 @@ extern int rs_eval_option(const char **arg, typval_T *rettv, bool evaluate);
 extern int rs_eval_env_var(char **arg, typval_T *rettv, int evaluate);
 extern int rs_var_item_copy(const void *conv, typval_T *from, typval_T *to, bool deep,
                             int copyID);
+extern char *rs_save_tv_as_string(typval_T *tv, ptrdiff_t *len, bool endnl, bool crlf);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -2169,83 +2170,7 @@ void timer_teardown(void)
 char *save_tv_as_string(typval_T *tv, ptrdiff_t *const len, bool endnl, bool crlf)
   FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
 {
-  *len = 0;
-  if (tv->v_type == VAR_UNKNOWN) {
-    return NULL;
-  }
-
-  // For other types, let tv_get_string_buf_chk() get the value or
-  // print an error.
-  if (tv->v_type != VAR_LIST && tv->v_type != VAR_NUMBER) {
-    const char *ret = tv_get_string_chk(tv);
-    if (ret) {
-      *len = (ptrdiff_t)strlen(ret);
-      return xmemdupz(ret, (size_t)(*len));
-    } else {
-      *len = -1;
-      return NULL;
-    }
-  }
-
-  if (tv->v_type == VAR_NUMBER) {  // Treat number as a buffer-id.
-    buf_T *buf = buflist_findnr((int)tv->vval.v_number);
-    if (buf) {
-      for (linenr_T lnum = 1; lnum <= buf->b_ml.ml_line_count; lnum++) {
-        for (char *p = ml_get_buf(buf, lnum); *p != NUL; p++) {
-          *len += 1;
-        }
-        *len += 1;
-      }
-    } else {
-      semsg(_(e_nobufnr), tv->vval.v_number);
-      *len = -1;
-      return NULL;
-    }
-
-    if (*len == 0) {
-      return NULL;
-    }
-
-    char *ret = xmalloc((size_t)(*len) + 1);
-    char *end = ret;
-    for (linenr_T lnum = 1; lnum <= buf->b_ml.ml_line_count; lnum++) {
-      for (char *p = ml_get_buf(buf, lnum); *p != NUL; p++) {
-        *end++ = (*p == '\n') ? NUL : *p;
-      }
-      *end++ = '\n';
-    }
-    *end = NUL;
-    *len = end - ret;
-    return ret;
-  }
-
-  assert(tv->v_type == VAR_LIST);
-  // Pre-calculate the resulting length.
-  list_T *list = tv->vval.v_list;
-  TV_LIST_ITER_CONST(list, li, {
-    *len += (ptrdiff_t)strlen(tv_get_string(TV_LIST_ITEM_TV(li))) + (crlf ? 2 : 1);
-  });
-
-  if (*len == 0) {
-    return NULL;
-  }
-
-  char *ret = xmalloc((size_t)(*len) + (endnl ? (crlf ? 2 : 1) : 0));
-  char *end = ret;
-  TV_LIST_ITER_CONST(list, li, {
-    for (const char *s = tv_get_string(TV_LIST_ITEM_TV(li)); *s != NUL; s++) {
-      *end++ = (*s == '\n') ? NUL : *s;
-    }
-    if (endnl || TV_LIST_ITEM_NEXT(list, li) != NULL) {
-      if (crlf) {
-        *end++ = '\r';
-      }
-      *end++ = '\n';
-    }
-  });
-  *end = NUL;
-  *len = end - ret;
-  return ret;
+  return rs_save_tv_as_string(tv, len, endnl, crlf);
 }
 
 /// Translate a Vimscript object into a position
@@ -4561,5 +4486,35 @@ void nvim_tv_set_dict(typval_T *tv, dict_T *dict)
 void nvim_emsg_nested_too_deep(void)
 {
   emsg(_(e_variable_nested_too_deep_for_making_copy));
+}
+
+// =============================================================================
+// Accessors for Phase 4 (eval_shim pass 4): save_tv_as_string
+// =============================================================================
+
+// nvim_buflist_findnr already exists in buffer.c -- no duplicate needed here.
+
+/// Get tv->vval.v_number (integer field) - for VAR_NUMBER branch.
+varnumber_T nvim_tv_get_vnumber(const typval_T *tv)
+{
+  return tv->vval.v_number;
+}
+
+/// Emit "E86: Buffer % does not exist" semsg.
+void nvim_semsg_e_nobufnr(varnumber_T nr)
+{
+  semsg(_(e_nobufnr), nr);
+}
+
+/// Get first item of list (tv_list_first). Returns NULL for empty/NULL list.
+listitem_T *nvim_list_first_item(const list_T *l)
+{
+  return tv_list_first(l);
+}
+
+/// Call tv_get_string on a listitem's tv.
+const char *nvim_list_item_get_string(listitem_T *item)
+{
+  return tv_get_string(TV_LIST_ITEM_TV(item));
 }
 
