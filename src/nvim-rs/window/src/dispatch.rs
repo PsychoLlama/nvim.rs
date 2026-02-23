@@ -96,6 +96,8 @@ const CH_F_UPPER: c_int = b'F' as c_int;
 const CH_I: c_int = b'i' as c_int;
 const CH_D: c_int = b'd' as c_int;
 const CH_G: c_int = b'g' as c_int;
+const CH_E: c_int = b'e' as c_int;
+const TAB: c_int = 9;
 
 // WSP flags (verified by _Static_assert in window.c)
 const WSP_VERT: c_int = 0x02;
@@ -117,8 +119,28 @@ extern "C" {
     fn nvim_do_window_tag(nchar: c_int, prenum: c_int);
     fn nvim_do_window_goto_file(nchar: c_int, prenum1: c_int);
     fn nvim_do_window_find_in_path(nchar: c_int, prenum: c_int, prenum1: c_int);
-    fn nvim_do_window_g(prenum: c_int, xchar: c_int);
+    // nvim_do_window_g removed: replaced by rs_do_window_g
     fn rs_qf_view_result(split: bool);
+
+    // --- 'g' sub-dispatch wrappers (Phase 3) ---
+    // These exist in normal_shim.c / tag_shim.c / window_shim.c:
+    fn nvim_inc_no_mapping(); // normal_shim.c
+    fn nvim_dec_no_mapping(); // normal_shim.c
+    fn nvim_inc_allow_keys(); // normal_shim.c
+    fn nvim_dec_allow_keys(); // normal_shim.c
+    fn nvim_plain_vgetc_wrapper() -> c_int; // normal_shim.c
+    /// Applies LANGMAP_ADJUST(c, condition). Defined in normal_shim.c.
+    fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int; // normal_shim.c
+    fn nvim_add_to_showcmd_wrapper(c: c_int) -> bool; // normal_shim.c
+    fn nvim_set_g_do_tagpreview(val: c_int); // tag_shim.c
+    fn nvim_get_p_pvh() -> c_int; // window_shim.c
+    fn nvim_set_postponed_split(val: c_int); // tag_shim.c
+    fn nvim_do_nv_ident(prefix: c_int, xchar: c_int); // window_shim.c
+    fn nvim_goto_tabpage(n: c_int); // normal_shim.c
+    /// goto_tabpage_lastused(). Defined in normal_shim.c.
+    fn nvim_goto_tabpage_lastused() -> bool; // normal_shim.c
+    fn nvim_set_cmdmod_tab_to_curtab_idx(); // window_shim.c
+    fn nvim_do_window_g_external(); // window_shim.c
 
     // --- Simple wrappers ---
     fn nvim_emsg_e_cmdwin();
@@ -556,7 +578,116 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if check_cmdwin() {
                     return;
                 }
-                nvim_do_window_g(prenum, xchar);
+                rs_do_window_g(prenum, xchar);
+            }
+
+            // =================================================================
+            // Default: beep
+            // =================================================================
+            _ => {
+                nvim_beep_flush_wrapper();
+            }
+        }
+    }
+}
+
+// =============================================================================
+// 'g' sub-dispatcher
+// =============================================================================
+
+/// Rust dispatcher for CTRL-W g commands.
+///
+/// This replaces the C `nvim_do_window_g()` function.
+///
+/// # Safety
+///
+/// Called from C via FFI. All pointer-based operations go through C wrappers.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub extern "C" fn rs_do_window_g(prenum: c_int, mut xchar: c_int) {
+    let prenum1 = if prenum == 0 { 1 } else { prenum };
+
+    unsafe {
+        nvim_inc_no_mapping();
+        nvim_inc_allow_keys();
+        if xchar == NUL {
+            xchar = nvim_plain_vgetc_wrapper();
+        }
+        xchar = nvim_langmap_adjust(xchar, true);
+        nvim_dec_no_mapping();
+        nvim_dec_allow_keys();
+        nvim_add_to_showcmd_wrapper(xchar);
+
+        match xchar {
+            // =================================================================
+            // Tag preview: '}' -- set g_do_tagpreview, then handle like ']'
+            // =================================================================
+            CH_RBRACE => {
+                // Convert to Ctrl_RSB for tag handling
+                let tag_xchar = CTRL_RSB;
+                if prenum != 0 {
+                    nvim_set_g_do_tagpreview(prenum);
+                } else {
+                    nvim_set_g_do_tagpreview(nvim_get_p_pvh());
+                }
+                if prenum != 0 {
+                    nvim_set_postponed_split(prenum);
+                } else {
+                    nvim_set_postponed_split(-1);
+                }
+                nvim_do_nv_ident(c_int::from(b'g'), tag_xchar);
+                nvim_set_postponed_split(0);
+            }
+
+            // =================================================================
+            // Tag jump: ']', Ctrl-]
+            // =================================================================
+            CH_RBRACKET | CTRL_RSB => {
+                if prenum != 0 {
+                    nvim_set_postponed_split(prenum);
+                } else {
+                    nvim_set_postponed_split(-1);
+                }
+                nvim_do_nv_ident(c_int::from(b'g'), xchar);
+                nvim_set_postponed_split(0);
+            }
+
+            // =================================================================
+            // Goto file in new tab: 'f', 'F'
+            // =================================================================
+            CH_F | CH_F_UPPER => {
+                nvim_set_cmdmod_tab_to_curtab_idx();
+                nvim_do_window_goto_file(xchar, prenum1);
+            }
+
+            // =================================================================
+            // Goto tabpage: 't'
+            // =================================================================
+            CH_T => {
+                nvim_goto_tabpage(prenum);
+            }
+
+            // =================================================================
+            // Goto tabpage backwards: 'T'
+            // =================================================================
+            CH_T_UPPER => {
+                nvim_goto_tabpage(-prenum1);
+            }
+
+            // =================================================================
+            // Goto last used tabpage: Tab
+            // =================================================================
+            TAB => {
+                if !nvim_goto_tabpage_lastused() {
+                    nvim_beep_flush_wrapper();
+                }
+            }
+
+            // =================================================================
+            // External window: 'e'
+            // =================================================================
+            CH_E => {
+                nvim_do_window_g_external();
             }
 
             // =================================================================

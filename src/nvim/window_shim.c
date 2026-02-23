@@ -4386,80 +4386,31 @@ void nvim_do_window_find_in_path(int nchar, int Prenum, int Prenum1)
   curwin->w_set_curswant = true;
 }
 
-/// Wrapper: The 'g' sub-switch.
-void nvim_do_window_g(int Prenum, int xchar)
+// New one-liner wrappers for rs_do_window_g (Phase 3)
+// (nvim_inc/dec_no_mapping, nvim_inc/dec_allow_keys, nvim_goto_tabpage,
+//  nvim_langmap_adjust, nvim_goto_tabpage_lastused, nvim_set_g_do_tagpreview,
+//  nvim_set_postponed_split already exist in normal_shim.c / tag_shim.c)
+int nvim_get_p_pvh(void) { return (int)p_pvh; }
+void nvim_do_nv_ident(int prefix, int xchar) { do_nv_ident(prefix, xchar); }
+void nvim_set_cmdmod_tab_to_curtab_idx(void) { cmdmod.cmod_tab = rs_tabpage_index(curtab) + 1; }
+
+/// External window case for 'g' sub-switch ('e' command).
+/// Kept in C to avoid marshalling WinConfig and Error types.
+void nvim_do_window_g_external(void)
 {
-  int Prenum1 = Prenum == 0 ? 1 : Prenum;
-
-  no_mapping++;
-  allow_keys++;
-  if (xchar == NUL) {
-    xchar = plain_vgetc();
-  }
-  LANGMAP_ADJUST(xchar, true);
-  no_mapping--;
-  allow_keys--;
-  add_to_showcmd(xchar);
-
-  switch (xchar) {
-  case '}':
-    xchar = Ctrl_RSB;
-    if (Prenum) {
-      g_do_tagpreview = Prenum;
-    } else {
-      g_do_tagpreview = (int)p_pvh;
-    }
-    FALLTHROUGH;
-  case ']':
-  case Ctrl_RSB:
-    if (Prenum) {
-      postponed_split = Prenum;
-    } else {
-      postponed_split = -1;
-    }
-    do_nv_ident('g', xchar);
-    postponed_split = 0;
-    break;
-
-  case 'f':
-  case 'F':
-    cmdmod.cmod_tab = rs_tabpage_index(curtab) + 1;
-    nvim_do_window_goto_file(xchar, Prenum1);
-    break;
-
-  case 't':
-    goto_tabpage(Prenum);
-    break;
-
-  case 'T':
-    goto_tabpage(-Prenum1);
-    break;
-
-  case TAB:
-    if (!goto_tabpage_lastused()) {
-      beep_flush();
-    }
-    break;
-
-  case 'e':
-    if (curwin->w_floating || !ui_has(kUIMultigrid)) {
-      beep_flush();
-      break;
-    }
-    WinConfig config = WIN_CONFIG_INIT;
-    config.width = curwin->w_width;
-    config.height = curwin->w_height;
-    config.external = true;
-    Error err = ERROR_INIT;
-    if (!win_new_float(curwin, false, config, &err)) {
-      emsg(err.msg);
-      api_clear_error(&err);
-      beep_flush();
-    }
-    break;
-  default:
+  if (curwin->w_floating || !ui_has(kUIMultigrid)) {
     beep_flush();
-    break;
+    return;
+  }
+  WinConfig config = WIN_CONFIG_INIT;
+  config.width = curwin->w_width;
+  config.height = curwin->w_height;
+  config.external = true;
+  Error err = ERROR_INIT;
+  if (!win_new_float(curwin, false, config, &err)) {
+    emsg(err.msg);
+    api_clear_error(&err);
+    beep_flush();
   }
 }
 
