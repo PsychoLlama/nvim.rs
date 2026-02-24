@@ -273,6 +273,8 @@ extern void rs_ml_add_deleted_len_buf(buf_T *buf, char *ptr, ssize_t len);
 extern int rs_ml_add_stack(buf_T *buf);
 // Pass 2 Phase 5: ml_setflags Rust function declaration
 extern void rs_ml_setflags(buf_T *buf);
+// Pass 3 Phase 1: swapfile_dict Rust function declaration
+extern void rs_swapfile_dict(const char *fname, dict_T *d);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1115,37 +1117,7 @@ static int proc_running;
 /// @return  information found in swapfile "fname" in dictionary "d".
 void swapfile_dict(const char *fname, dict_T *d)
 {
-  int fd;
-  ZeroBlock b0;
-
-  if ((fd = os_open(fname, O_RDONLY, 0)) >= 0) {
-    if (read_eintr(fd, &b0, sizeof(b0)) == sizeof(b0)) {
-      if (rs_ml_check_b0_id(&b0) != 0) {
-        tv_dict_add_str(d, S_LEN("error"), "Not a swap file");
-      } else if (rs_b0_magic_wrong(&b0)) {
-        tv_dict_add_str(d, S_LEN("error"), "Magic number mismatch");
-      } else {
-        // We have swap information.
-        tv_dict_add_str_len(d, S_LEN("version"), b0.b0_version, 10);
-        tv_dict_add_str_len(d, S_LEN("user"), b0.b0_uname,
-                            B0_UNAME_SIZE);
-        tv_dict_add_str_len(d, S_LEN("host"), b0.b0_hname,
-                            B0_HNAME_SIZE);
-        tv_dict_add_str_len(d, S_LEN("fname"), b0.b0_fname,
-                            B0_FNAME_SIZE_ORG);
-
-        tv_dict_add_nr(d, S_LEN("pid"), rs_swapfile_proc_running(&b0, fname));
-        tv_dict_add_nr(d, S_LEN("mtime"), rs_char_to_long(b0.b0_mtime));
-        tv_dict_add_nr(d, S_LEN("dirty"), b0.b0_dirty ? 1 : 0);
-        tv_dict_add_nr(d, S_LEN("inode"), rs_char_to_long(b0.b0_ino));
-      }
-    } else {
-      tv_dict_add_str(d, S_LEN("error"), "Cannot read file");
-    }
-    close(fd);
-  } else {
-    tv_dict_add_str(d, S_LEN("error"), "Cannot open file");
-  }
+  rs_swapfile_dict(fname, d);
 }
 
 /// Loads info from swapfile `fname`, and displays it to the user.

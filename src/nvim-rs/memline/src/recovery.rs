@@ -36,9 +36,6 @@ extern "C" {
     /// Recover from a swap file
     fn ml_recover(checkext: c_int);
 
-    /// Write swap file info to a dictionary
-    fn swapfile_dict(fname: *const c_char, d: *mut c_void);
-
     // -------------------------------------------------------------------------
     // recover_names helpers (called from rs_recover_names)
     // -------------------------------------------------------------------------
@@ -557,7 +554,7 @@ pub unsafe extern "C" fn rs_recover_names(
 /// Write swap file information to a dictionary.
 ///
 /// Reads the block 0 header from the swap file and populates the
-/// dictionary with version, user, host, filename, pid, mtime, etc.
+/// dictionary with version, user, host, filename, pid, mtime, dirty, inode.
 ///
 /// # Arguments
 /// * `fname` - Path to the swap file
@@ -567,11 +564,73 @@ pub unsafe extern "C" fn rs_recover_names(
 /// - `fname` must be a valid C string or NULL
 /// - `d` must be a valid dict_T pointer or NULL
 #[no_mangle]
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_swapfile_dict(fname: *const c_char, d: *mut c_void) {
     if fname.is_null() || d.is_null() {
         return;
     }
-    swapfile_dict(fname, d);
+
+    // O_RDONLY = 0
+    let fd = os_open(fname, 0, 0);
+    if fd < 0 {
+        tv_dict_add_str(d, c"error".as_ptr(), 5, c"Cannot open file".as_ptr());
+        return;
+    }
+
+    let b0_size = nvim_b0_get_struct_size();
+    let b0_ptr = xmalloc(b0_size);
+    let bytes_read = read_eintr(fd, b0_ptr, b0_size);
+    close(fd);
+
+    if bytes_read as usize != b0_size {
+        xfree(b0_ptr);
+        tv_dict_add_str(d, c"error".as_ptr(), 5, c"Cannot read file".as_ptr());
+        return;
+    }
+
+    let b0 = b0_ptr.cast::<c_void>();
+
+    if rs_ml_check_b0_id(b0) != 0 {
+        tv_dict_add_str(d, c"error".as_ptr(), 5, c"Not a swap file".as_ptr());
+    } else if rs_b0_magic_wrong(b0) != 0 {
+        tv_dict_add_str(d, c"error".as_ptr(), 5, c"Magic number mismatch".as_ptr());
+    } else {
+        // version: 10 bytes
+        let version_ptr = nvim_b0_get_version_ptr(b0);
+        tv_dict_add_str_len(d, c"version".as_ptr(), 7, version_ptr, 10);
+
+        // user: B0_UNAME_SIZE bytes
+        let uname_ptr = nvim_b0_get_uname_ptr(b0);
+        tv_dict_add_str_len(d, c"user".as_ptr(), 4, uname_ptr, crate::types::B0_UNAME_SIZE as c_int);
+
+        // host: B0_HNAME_SIZE bytes
+        let hname_ptr = nvim_b0_get_hname_ptr(b0);
+        tv_dict_add_str_len(d, c"host".as_ptr(), 4, hname_ptr, crate::types::B0_HNAME_SIZE as c_int);
+
+        // fname: B0_FNAME_SIZE_ORG bytes
+        let fname_ptr = nvim_b0_get_fname_ptr(b0);
+        tv_dict_add_str_len(d, c"fname".as_ptr(), 5, fname_ptr, crate::types::B0_FNAME_SIZE_ORG as c_int);
+
+        // pid: process ID derived from b0_pid
+        let pid = rs_swapfile_proc_running(b0, fname);
+        tv_dict_add_nr(d, c"pid".as_ptr(), 3, i64::from(pid));
+
+        // mtime: file modification time from b0_mtime
+        let mtime_ptr = nvim_b0_get_mtime(b0_ptr);
+        let mtime = rs_char_to_long(mtime_ptr);
+        tv_dict_add_nr(d, c"mtime".as_ptr(), 5, mtime);
+
+        // dirty: whether the file was unsaved
+        let dirty = nvim_b0_get_dirty(b0);
+        tv_dict_add_nr(d, c"dirty".as_ptr(), 5, i64::from(if dirty != 0 { 1i32 } else { 0i32 }));
+
+        // inode: stored inode number from b0_ino
+        let ino_ptr = nvim_b0_get_ino(b0_ptr);
+        let inode = rs_char_to_long(ino_ptr);
+        tv_dict_add_nr(d, c"inode".as_ptr(), 5, inode);
+    }
+
+    xfree(b0_ptr);
 }
 
 // =============================================================================
@@ -654,6 +713,41 @@ extern "C" {
 
     /// Case-insensitive string comparison
     fn strcasecmp(a: *const c_char, b: *const c_char) -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Phase 1 (pass 3): Vimscript dict helpers for swapfile_dict
+    // -------------------------------------------------------------------------
+
+    /// Add a string entry to a Vim dictionary (copies val)
+    fn tv_dict_add_str(
+        d: *mut c_void,
+        key: *const c_char,
+        key_len: usize,
+        val: *const c_char,
+    ) -> c_int;
+
+    /// Add a string entry with explicit length to a Vim dictionary
+    fn tv_dict_add_str_len(
+        d: *mut c_void,
+        key: *const c_char,
+        key_len: usize,
+        val: *const c_char,
+        len: c_int,
+    ) -> c_int;
+
+    /// Add an integer (number) entry to a Vim dictionary
+    fn tv_dict_add_nr(
+        d: *mut c_void,
+        key: *const c_char,
+        key_len: usize,
+        nr: i64,
+    ) -> c_int;
+
+    /// Get pointer to b0_mtime field (4 bytes, char_to_long encoding)
+    fn nvim_b0_get_mtime(b0: *mut c_void) -> *mut c_char;
+
+    /// Get pointer to b0_ino field (4 bytes, char_to_long encoding)
+    fn nvim_b0_get_ino(b0: *mut c_void) -> *mut c_char;
 }
 
 use crate::types::{
