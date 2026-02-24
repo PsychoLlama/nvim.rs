@@ -64,10 +64,6 @@ extern char *rs_get_syn_options(char *arg, int *opt_flags, int opt_keyword,
                                 int16_t **opt_next_list, int *conceal_char, int skip);
 extern int rs_get_id_list(char **arg, int keylen, int16_t **list, int skip);
 extern void rs_syn_cmd_region(exarg_T *eap, int syncing);
-extern int rs_syn_cmd_case(synblock_T *block, const char *arg, const char *arg_end);
-extern int rs_syn_cmd_conceal(synblock_T *block, const char *arg, const char *arg_end);
-extern int rs_syn_cmd_spell(synblock_T *block, const char *arg, const char *arg_end);
-extern int rs_syn_cmd_foldlevel(synblock_T *block, const char *arg, const char *arg_end);
 
 static bool did_syntax_onoff = false;
 
@@ -204,6 +200,15 @@ extern void rs_syn_cmd_include(exarg_T *eap, int syncing);
 extern void rs_syn_cmd_reset(exarg_T *eap, int syncing);
 extern void rs_syn_cmd_onoff(exarg_T *eap, const char *name, int syncing);
 extern void rs_syn_maybe_enable(void);
+
+// Rust dispatch wrappers (Phase 1 of pass 4): replace C thin wrappers
+extern void rs_syn_cmd_case_dispatch(exarg_T *eap, int syncing);
+extern void rs_syn_cmd_conceal_dispatch(exarg_T *eap, int syncing);
+extern void rs_syn_cmd_foldlevel_dispatch(exarg_T *eap, int syncing);
+extern void rs_syn_cmd_spell_dispatch(exarg_T *eap, int syncing);
+extern void rs_syn_cmd_on_dispatch(exarg_T *eap, int syncing);
+extern void rs_syn_cmd_manual_dispatch(exarg_T *eap, int syncing);
+extern void rs_syn_cmd_off_dispatch(exarg_T *eap, int syncing);
 
 static char *(spo_name_tab[SPO_COUNT]) =
 { "ms=", "me=", "hs=", "he=", "rs=", "re=", "lc=" };
@@ -831,65 +836,6 @@ static bool syn_regexec(regmmatch_T *rmp, linenr_T lnum, colnr_T col, syn_time_T
   return false;
 }
 
-// Handle ":syntax conceal" command.
-static void syn_cmd_conceal(exarg_T *eap, int syncing)
-{
-  char *arg = eap->arg;
-
-  eap->nextcmd = find_nextcmd(arg);
-  if (eap->skip) {
-    return;
-  }
-
-  char *next = skiptowhite(arg);
-  rs_syn_cmd_conceal(curwin->w_s, arg, next);
-}
-
-/// Handle ":syntax case" command.
-static void syn_cmd_case(exarg_T *eap, int syncing)
-{
-  char *arg = eap->arg;
-
-  eap->nextcmd = find_nextcmd(arg);
-  if (eap->skip) {
-    return;
-  }
-
-  char *next = skiptowhite(arg);
-  rs_syn_cmd_case(curwin->w_s, arg, next);
-}
-
-/// Handle ":syntax foldlevel" command.
-static void syn_cmd_foldlevel(exarg_T *eap, int syncing)
-{
-  char *arg = eap->arg;
-
-  eap->nextcmd = find_nextcmd(arg);
-  if (eap->skip) {
-    return;
-  }
-
-  char *arg_end = skiptowhite(arg);
-  rs_syn_cmd_foldlevel(curwin->w_s, arg, arg_end);
-}
-
-/// Handle ":syntax spell" command.
-static void syn_cmd_spell(exarg_T *eap, int syncing)
-{
-  char *arg = eap->arg;
-
-  eap->nextcmd = find_nextcmd(arg);
-  if (eap->skip) {
-    return;
-  }
-
-  char *next = skiptowhite(arg);
-  rs_syn_cmd_spell(curwin->w_s, arg, next);
-
-  // assume spell checking changed, force a redraw
-  redraw_later(curwin, UPD_NOT_VALID);
-}
-
 /// Handle ":syntax iskeyword" command.
 static void syn_cmd_iskeyword(exarg_T *eap, int syncing)
 {
@@ -1069,31 +1015,6 @@ static void syn_clear_one(const int id, const bool syncing)
     }
     syn_remove_pattern(curwin->w_s, idx);
   }
-}
-
-// Handle ":syntax on" command.
-static void syn_cmd_on(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_onoff(eap, "syntax", syncing);
-}
-
-
-// Handle ":syntax manual" command.
-static void syn_cmd_manual(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_onoff(eap, "manual", syncing);
-}
-
-// Handle ":syntax off" command.
-static void syn_cmd_off(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_onoff(eap, "nosyntax", syncing);
-}
-
-static void syn_cmd_onoff(exarg_T *eap, char *name)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_syn_cmd_onoff(eap, name, false);
 }
 
 void syn_maybe_enable(void)
@@ -1410,23 +1331,23 @@ struct subcommand {
 };
 
 static struct subcommand subcommands[] = {
-  { "case",      syn_cmd_case },
+  { "case",      rs_syn_cmd_case_dispatch },
   { "clear",     rs_syn_cmd_clear },
   { "cluster",   rs_syn_cmd_cluster },
-  { "conceal",   syn_cmd_conceal },
-  { "enable",    syn_cmd_on },
-  { "foldlevel", syn_cmd_foldlevel },
+  { "conceal",   rs_syn_cmd_conceal_dispatch },
+  { "enable",    rs_syn_cmd_on_dispatch },
+  { "foldlevel", rs_syn_cmd_foldlevel_dispatch },
   { "include",   rs_syn_cmd_include },
   { "iskeyword", syn_cmd_iskeyword },
   { "keyword",   rs_syn_cmd_keyword },
   { "list",      syn_cmd_list },
-  { "manual",    syn_cmd_manual },
+  { "manual",    rs_syn_cmd_manual_dispatch },
   { "match",     rs_syn_cmd_match },
-  { "on",        syn_cmd_on },
-  { "off",       syn_cmd_off },
+  { "on",        rs_syn_cmd_on_dispatch },
+  { "off",       rs_syn_cmd_off_dispatch },
   { "region",    rs_syn_cmd_region },
   { "reset",     rs_syn_cmd_reset },
-  { "spell",     syn_cmd_spell },
+  { "spell",     rs_syn_cmd_spell_dispatch },
   { "sync",      rs_syn_cmd_sync },
   { "",          syn_cmd_list },
 };
@@ -3977,13 +3898,19 @@ void nvim_syn_do_onoff(exarg_T *eap, const char *name)
   }
 }
 
-/// Enable syntax (syn_maybe_enable helper): create minimal exarg_T and call syn_cmd_on.
+/// Enable syntax (syn_maybe_enable helper): create minimal exarg_T and call rs_syn_cmd_on_dispatch.
 void nvim_syn_do_maybe_enable(void)
 {
   exarg_T ea;
   ea.arg = "";
   ea.skip = false;
-  syn_cmd_on(&ea, false);
+  rs_syn_cmd_on_dispatch(&ea, false);
+}
+
+/// Redraw curwin with UPD_NOT_VALID (used after :syntax spell dispatch from Rust).
+void nvim_syn_redraw_later_curwin(void)
+{
+  redraw_later(curwin, UPD_NOT_VALID);
 }
 
 /// Set syn_cmdlinep from eap->cmdlinep.

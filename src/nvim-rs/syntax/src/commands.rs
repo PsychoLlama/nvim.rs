@@ -988,6 +988,111 @@ pub unsafe extern "C" fn rs_syn_maybe_enable() {
     }
 }
 
+// =============================================================================
+// Phase 1: Dispatch wrappers for syn_cmd_case/conceal/foldlevel/spell/on/off/manual
+// =============================================================================
+
+extern "C" {
+    /// Set eap->nextcmd = find_nextcmd(arg).
+    fn nvim_syn_find_nextcmd(eap: *mut c_void, arg: *mut c_char);
+
+    /// Redraw curwin (UPD_NOT_VALID) -- used after :syntax spell.
+    fn nvim_syn_redraw_later_curwin();
+}
+
+/// Dispatch for `:syntax case` -- signature matches subcommands[] table.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_case_dispatch(eap: *mut c_void, _syncing: c_int) {
+    let arg = nvim_syn_get_eap_arg(eap);
+    nvim_syn_find_nextcmd(eap, arg);
+    if nvim_syn_get_eap_skip(eap) != 0 {
+        return;
+    }
+    let block = nvim_get_curwin_synblock();
+    let next = skiptowhite(arg);
+    rs_syn_cmd_case(block, arg, next);
+}
+
+/// Dispatch for `:syntax conceal` -- signature matches subcommands[] table.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_conceal_dispatch(eap: *mut c_void, _syncing: c_int) {
+    let arg = nvim_syn_get_eap_arg(eap);
+    nvim_syn_find_nextcmd(eap, arg);
+    if nvim_syn_get_eap_skip(eap) != 0 {
+        return;
+    }
+    let block = nvim_get_curwin_synblock();
+    let next = skiptowhite(arg);
+    rs_syn_cmd_conceal(block, arg, next);
+}
+
+/// Dispatch for `:syntax foldlevel` -- signature matches subcommands[] table.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_foldlevel_dispatch(eap: *mut c_void, _syncing: c_int) {
+    let arg = nvim_syn_get_eap_arg(eap);
+    nvim_syn_find_nextcmd(eap, arg);
+    if nvim_syn_get_eap_skip(eap) != 0 {
+        return;
+    }
+    let block = nvim_get_curwin_synblock();
+    let arg_end = skiptowhite(arg);
+    rs_syn_cmd_foldlevel(block, arg, arg_end);
+}
+
+/// Dispatch for `:syntax spell` -- signature matches subcommands[] table.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_spell_dispatch(eap: *mut c_void, _syncing: c_int) {
+    let arg = nvim_syn_get_eap_arg(eap);
+    nvim_syn_find_nextcmd(eap, arg);
+    if nvim_syn_get_eap_skip(eap) != 0 {
+        return;
+    }
+    let block = nvim_get_curwin_synblock();
+    let next = skiptowhite(arg);
+    rs_syn_cmd_spell(block, arg, next);
+    // assume spell checking changed, force a redraw
+    nvim_syn_redraw_later_curwin();
+}
+
+/// Dispatch for `:syntax on` -- signature matches subcommands[] table.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_on_dispatch(eap: *mut c_void, syncing: c_int) {
+    rs_syn_cmd_onoff(eap, b"syntax\0".as_ptr().cast(), syncing);
+}
+
+/// Dispatch for `:syntax manual` -- signature matches subcommands[] table.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_manual_dispatch(eap: *mut c_void, syncing: c_int) {
+    rs_syn_cmd_onoff(eap, b"manual\0".as_ptr().cast(), syncing);
+}
+
+/// Dispatch for `:syntax off` -- signature matches subcommands[] table.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_off_dispatch(eap: *mut c_void, syncing: c_int) {
+    rs_syn_cmd_onoff(eap, b"nosyntax\0".as_ptr().cast(), syncing);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
