@@ -171,6 +171,15 @@ extern void rs_marktree_put_test(MarkTree *b, uint32_t ns, uint32_t id, int row,
                                   bool meta_inline);
 extern bool rs_mt_right_test(MTKey key);
 
+// Phase 1 (pass 2) migrations
+extern void rs_marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key);
+extern void rs_marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col);
+extern void rs_marktree_restore_pair(MarkTree *b, MTKey key);
+extern void rs_marktree_del_pair_test(MarkTree *b, uint32_t ns, uint32_t id);
+extern void rs_marktree_move_region(MarkTree *b, int start_row, colnr_T start_col,
+                                    int extent_row, colnr_T extent_col,
+                                    int new_row, colnr_T new_col);
+
 #define T MT_BRANCH_FACTOR
 #define ILEN (sizeof(MTNode) + sizeof(struct mtnode_inner_s))
 
@@ -506,27 +515,7 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
 
 void marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key)
 {
-  uint32_t meta_old[kMTMetaCount], meta_new[kMTMetaCount];
-  rs_meta_describe_key(old_key, meta_old);
-  rs_meta_describe_key(rawkey(itr), meta_new);
-
-  if (!memcmp(meta_old, meta_new, sizeof(meta_old))) {
-    return;
-  }
-
-  MTNode *lnode = itr->x;
-  while (lnode->parent) {
-    uint32_t *meta_p = lnode->parent->meta[lnode->p_idx];
-    for (int m = 0; m < kMTMetaCount; m++) {
-      meta_p[m] += meta_new[m] - meta_old[m];
-    }
-
-    lnode = lnode->parent;
-  }
-
-  for (int m = 0; m < kMTMetaCount; m++) {
-    b->meta_root[m] += meta_new[m] - meta_old[m];
-  }
+  rs_marktree_revise_meta(b, itr, old_key);
 }
 
 /// similar to intersect_common but modify x and y in place to retain
@@ -1012,77 +1001,12 @@ static void marktree_free_node(MarkTree *b, MTNode *x)
 /// @param itr iterator is invalid after call
 void marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col)
 {
-  MTKey key = rawkey(itr);
-  MTNode *x = itr->x;
-  if (!x->level) {
-    bool internal = false;
-    MTPos newpos = MTPos(row, col);
-    if (x->parent != NULL) {
-      // strictly _after_ key before `x`
-      // (not optimal when x is very first leaf of the entire tree, but that's fine)
-      if (rs_pos_less(itr->pos, newpos)) {
-        rs_relative(itr->pos, &newpos);
-
-        // strictly before the end of x. (this could be made sharper by
-        // finding the internal key just after x, but meh)
-        if (rs_pos_less(newpos, x->key[x->n - 1].pos)) {
-          internal = true;
-        }
-      }
-    } else {
-      // tree is one node. newpos thus is already "relative" itr->pos
-      internal = true;
-    }
-
-    if (internal) {
-      if (key.pos.row == newpos.row && key.pos.col == newpos.col) {
-        return;
-      }
-      key.pos = newpos;
-      bool match;
-      // tricky: could minimize movement in either direction better
-      int new_i = rs_marktree_getp_aux(x, key, &match);
-      if (!match) {
-        new_i++;
-      }
-      if (new_i == itr->i) {
-        x->key[itr->i].pos = newpos;
-      } else if (new_i < itr->i) {
-        memmove(&x->key[new_i + 1], &x->key[new_i], sizeof(MTKey) * (size_t)(itr->i - new_i));
-        x->key[new_i] = key;
-      } else if (new_i > itr->i) {
-        memmove(&x->key[itr->i], &x->key[itr->i + 1], sizeof(MTKey) * (size_t)(new_i - itr->i - 1));
-        x->key[new_i - 1] = key;
-      }
-      return;
-    }
-  }
-  uint64_t other = marktree_del_itr(b, itr, false);
-  key.pos = (MTPos){ row, col };
-
-  marktree_put_key(b, key);
-
-  if (other) {
-    marktree_restore_pair(b, key);
-  }
-  itr->x = NULL;  // itr might become invalid by put
+  rs_marktree_move(b, itr, row, col);
 }
 
 void marktree_restore_pair(MarkTree *b, MTKey key)
 {
-  MarkTreeIter itr[1];
-  MarkTreeIter end_itr[1];
-  rs_marktree_lookup(b, mt_lookup_key_side(key, false), itr);
-  rs_marktree_lookup(b, mt_lookup_key_side(key, true), end_itr);
-  if (!itr->x || !end_itr->x) {
-    // this could happen if the other end is waiting to be restored later
-    // this function will be called again for the other end.
-    return;
-  }
-  rawkey(itr).flags &= (uint16_t) ~MT_FLAG_ORPHANED;
-  rawkey(end_itr).flags &= (uint16_t) ~MT_FLAG_ORPHANED;
-
-  marktree_intersect_pair(b, mt_lookup_key_side(key, false), itr, end_itr, false);
+  rs_marktree_restore_pair(b, key);
 }
 
 static bool itr_eq(MarkTreeIter *itr1, MarkTreeIter *itr2)
@@ -1365,39 +1289,7 @@ past_continue_same_node:
 void marktree_move_region(MarkTree *b, int start_row, colnr_T start_col, int extent_row,
                           colnr_T extent_col, int new_row, colnr_T new_col)
 {
-  MTPos start = { start_row, start_col };
-  MTPos size = { extent_row, extent_col };
-  MTPos end = size;
-  rs_unrelative(start, &end);
-  MarkTreeIter itr[1] = { 0 };
-  rs_marktree_itr_get_ext_full(b, start, itr, false, true, NULL, NULL);
-  kvec_t(MTKey) saved = KV_INITIAL_VALUE;
-  while (itr->x) {
-    MTKey k = rs_marktree_itr_current(itr);
-    if (!rs_pos_leq(k.pos, end) || (k.pos.row == end.row && k.pos.col == end.col
-                                 && mt_right(k))) {
-      break;
-    }
-    rs_relative(start, &k.pos);
-    kv_push(saved, k);
-    marktree_del_itr(b, itr, false);
-  }
-
-  marktree_splice(b, start.row, start.col, size.row, size.col, 0, 0);
-  MTPos new = { new_row, new_col };
-  marktree_splice(b, new.row, new.col,
-                  0, 0, size.row, size.col);
-
-  for (size_t i = 0; i < kv_size(saved); i++) {
-    MTKey item = kv_A(saved, i);
-    rs_unrelative(new, &item.pos);
-    marktree_put_key(b, item);
-    if (mt_paired(item)) {
-      // other end might be later in `saved`, this will safely bail out then
-      marktree_restore_pair(b, item);
-    }
-  }
-  kv_destroy(saved);
+  rs_marktree_move_region(b, start_row, start_col, extent_row, extent_col, new_row, new_col);
 }
 
 
@@ -1418,13 +1310,7 @@ bool mt_right_test(MTKey key)
 // for unit test
 void marktree_del_pair_test(MarkTree *b, uint32_t ns, uint32_t id)
 {
-  MarkTreeIter itr[1];
-  rs_marktree_lookup_ns(b, ns, id, false, itr);
-
-  uint64_t other = marktree_del_itr(b, itr, false);
-  assert(other);
-  rs_marktree_lookup(b, other, itr);
-  marktree_del_itr(b, itr, false);
+  rs_marktree_del_pair_test(b, ns, id);
 }
 
 void marktree_check(MarkTree *b)
