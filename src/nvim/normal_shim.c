@@ -455,6 +455,8 @@ extern void rs_goto_byte(int cnt);
 extern int rs_normal_check(void *s);
 extern int rs_normal_execute(void *s, int key);
 extern void rs_normal_prepare(void *s);
+extern bool rs_normal_get_command_count(void *s);
+extern bool rs_normal_handle_special_visual_command(void *s);
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 
 // Operator/command helpers
@@ -1695,33 +1697,7 @@ void normal_enter(bool cmdwin, bool noexmode)
 
 // normal_prepare migrated to Rust (rs_normal_prepare) in Phase 5
 
-static bool normal_handle_special_visual_command(NormalState *s)
-{
-  // when 'keymodel' contains "stopsel" may stop Select/Visual mode
-  if (km_stopsel
-      && (nv_cmds[s->idx].cmd_flags & NV_STS)
-      && !(mod_mask & MOD_MASK_SHIFT)) {
-    end_visual_mode();
-    redraw_curbuf_later(UPD_INVERTED);
-  }
-
-  // Keys that work different when 'keymodel' contains "startsel"
-  if (km_startsel) {
-    if (nv_cmds[s->idx].cmd_flags & NV_SS) {
-      s->ca.cmdchar = rs_unshift_special(s->ca.cmdchar, &mod_mask);
-      s->idx = rs_find_command(s->ca.cmdchar);
-      if (s->idx < 0) {
-        // Just in case
-        rs_clearopbeep(&s->oa);
-        return true;
-      }
-    } else if ((nv_cmds[s->idx].cmd_flags & NV_SSS)
-               && (mod_mask & MOD_MASK_SHIFT)) {
-      mod_mask &= ~MOD_MASK_SHIFT;
-    }
-  }
-  return false;
-}
+// normal_handle_special_visual_command migrated to Rust (Phase 5) -- see normal_execute.rs
 
 static bool normal_need_additional_char(NormalState *s) { bool pending_op = s->oa.op_type != OP_NOP; return rs_need_additional_char(s->idx, s->ca.cmdchar, pending_op); }
 
@@ -1916,65 +1892,7 @@ void nvim_normal_handle_composing_chars(void *sp)
 
 static void normal_invert_horizontal(NormalState *s) { s->ca.cmdchar = rs_invert_horizontal(s->ca.cmdchar); s->idx = rs_find_command(s->ca.cmdchar); }
 
-static bool normal_get_command_count(NormalState *s)
-{
-  if (VIsual_active && VIsual_select) {
-    return false;
-  }
-  // Handle a count before a command and compute ca.count0.
-  // Note that '0' is a command and not the start of a count, but it's
-  // part of a count after other digits.
-  while ((s->c >= '1' && s->c <= '9')
-         || (s->ca.count0 != 0 && (s->c == K_DEL || s->c == K_KDEL || s->c == '0'))) {
-    if (s->c == K_DEL || s->c == K_KDEL) {
-      s->ca.count0 /= 10;
-      del_from_showcmd(4);            // delete the digit and ~@%
-    } else if (s->ca.count0 > 99999999) {
-      s->ca.count0 = 999999999;
-    } else {
-      s->ca.count0 = s->ca.count0 * 10 + (s->c - '0');
-    }
-
-    // Set v:count here, when called from main() and not a stuffed
-    // command, so that v:count can be used in an expression mapping
-    // right after the count. Do set it for redo.
-    if (s->toplevel && readbuf1_empty()) {
-      rs_set_vcount_ca(&s->ca, &s->set_prevcount);
-    }
-
-    if (s->ctrl_w) {
-      no_mapping++;
-      allow_keys++;                   // no mapping for nchar, but keys
-    }
-
-    no_zero_mapping++;                // don't map zero here
-    s->c = plain_vgetc();
-    LANGMAP_ADJUST(s->c, true);
-    no_zero_mapping--;
-    if (s->ctrl_w) {
-      no_mapping--;
-      allow_keys--;
-    }
-    s->need_flushbuf |= add_to_showcmd(s->c);
-  }
-
-  // If we got CTRL-W there may be a/another count
-  if (s->c == Ctrl_W && !s->ctrl_w && s->oa.op_type == OP_NOP) {
-    s->ctrl_w = true;
-    s->ca.opcount = s->ca.count0;           // remember first count
-    s->ca.count0 = 0;
-    no_mapping++;
-    allow_keys++;                        // no mapping for nchar, but keys
-    s->c = plain_vgetc();                // get next character
-    LANGMAP_ADJUST(s->c, true);
-    no_mapping--;
-    allow_keys--;
-    s->need_flushbuf |= add_to_showcmd(s->c);
-    return true;
-  }
-
-  return false;
-}
+// normal_get_command_count migrated to Rust (Phase 5) -- see normal_execute.rs
 
 // =============================================================================
 // normal_finish_command accessors for Rust FFI
@@ -2053,6 +1971,7 @@ _Static_assert(NV_NCW == 0x200, "NV_NCW changed");
 _Static_assert(NV_RL == 0x80, "NV_RL changed");
 _Static_assert(NV_SS == 0x10, "NV_SS changed");
 _Static_assert(NV_SSS == 0x20, "NV_SSS changed");
+_Static_assert(NV_STS == 0x40, "NV_STS changed");
 
 /// Get curwin->w_curswant.
 int nvim_get_curwin_w_curswant(void) { return curwin->w_curswant; }
@@ -2066,6 +1985,14 @@ int nvim_get_vgetc_mod_mask(void) { return vgetc_mod_mask; }
 /// Get km_startsel global.
 bool nvim_get_km_startsel(void) { return km_startsel; }
 
+/// Get km_stopsel global.
+bool nvim_get_km_stopsel(void) { return km_stopsel; }
+
+/// Increment no_zero_mapping.
+void nvim_inc_no_zero_mapping(void) { no_zero_mapping++; }
+/// Decrement no_zero_mapping.
+void nvim_dec_no_zero_mapping(void) { no_zero_mapping--; }
+
 /// Get curwin->w_p_rl.
 bool nvim_get_curwin_w_p_rl(void) { return curwin->w_p_rl; }
 
@@ -2075,9 +2002,8 @@ void nvim_oap_set_prev_opcount(oparg_T *oap, int val) { oap->prev_opcount = val;
 /// Set oa->prev_count0 via oap handle.
 void nvim_oap_set_prev_count0(oparg_T *oap, int val) { oap->prev_count0 = val; }
 
-void nvim_normal_get_command_count_loop(void *sp) { while (normal_get_command_count((NormalState *)sp)) {} }
-
-bool nvim_normal_handle_special_visual_command_wrapper(void *sp) { return normal_handle_special_visual_command((NormalState *)sp); }
+// nvim_normal_get_command_count_loop removed (migrated to Rust in Phase 5)
+// nvim_normal_handle_special_visual_command_wrapper removed (migrated to Rust in Phase 5)
 
 void nvim_normal_invert_horizontal_wrapper(void *sp) { normal_invert_horizontal((NormalState *)sp); }
 

@@ -30,6 +30,12 @@ const NV_NCW: c_int = 0x200;
 const NV_RL: c_int = 0x80;
 const NV_SS: c_int = 0x10;
 const NV_SSS: c_int = 0x20;
+const NV_STS: c_int = 0x40;
+const OP_NOP: c_int = 0;
+// K_DEL = TERMCAP2KEY('k','D') = -((107) + (68 << 8)) = -17515
+const K_DEL: c_int = -17515;
+// K_KDEL = TERMCAP2KEY(KS_EXTRA=253, KE_KDEL=80) = -((253) + (80 << 8)) = -20733
+const K_KDEL: c_int = -20733;
 
 // =============================================================================
 // FFI declarations
@@ -108,12 +114,10 @@ extern "C" {
     fn ungetchars(len: c_int);
     fn readbuf1_empty() -> bool;
     fn nvim_add_to_showcmd_wrapper(c: c_int) -> bool;
-    fn nvim_normal_get_command_count_loop(s: NormalStateHandle);
     fn nvim_set_vcount_call(count: i64, count1: i64, set_prevcount: bool);
     fn rs_find_command(cmdchar: c_int) -> c_int;
     fn rs_clearopbeep(oap: OapHandle);
     fn rs_check_text_or_curbuf_locked(oap: OapHandle) -> bool;
-    fn nvim_normal_handle_special_visual_command_wrapper(s: NormalStateHandle) -> bool;
     fn nvim_normal_invert_horizontal_wrapper(s: NormalStateHandle);
     fn nvim_normal_need_additional_char_wrapper(s: NormalStateHandle) -> bool;
     fn rs_normal_get_additional_char(s: NormalStateHandle);
@@ -122,6 +126,23 @@ extern "C" {
     fn nvim_unshift_special_wrapper(ca: CapHandle);
     fn nvim_mod_mask_clear_shift();
     fn nvim_execute_nv_cmd(idx: c_int, ca: CapHandle);
+
+    // Phase 5 count/visual accessors
+    fn nvim_oap_get_op_type_ptr(oap: OapHandle) -> c_int;
+    fn nvim_del_from_showcmd_wrapper(len: c_int);
+    fn nvim_inc_no_mapping();
+    fn nvim_dec_no_mapping();
+    fn nvim_inc_allow_keys();
+    fn nvim_dec_allow_keys();
+    fn nvim_inc_no_zero_mapping();
+    fn nvim_dec_no_zero_mapping();
+    fn nvim_plain_vgetc_wrapper() -> c_int;
+    fn nvim_ns_set_need_flushbuf_or(s: NormalStateHandle, val: bool);
+    fn nvim_ns_set_set_prevcount(s: NormalStateHandle, val: bool);
+    fn nvim_get_km_stopsel() -> bool;
+    fn nvim_redraw_curbuf_inverted();
+    fn rs_end_visual_mode();
+    fn rs_set_vcount_ca(cap: CapHandle, set_prevcount: *mut bool);
 }
 
 /// Per-key callback for normal mode.
@@ -184,7 +205,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
 
     nvim_ns_set_need_flushbuf(s, nvim_add_to_showcmd_wrapper(nvim_ns_get_c(s)));
 
-    nvim_normal_get_command_count_loop(s);
+    while rs_normal_get_command_count(s) {}
 
     if nvim_ns_get_c(s) == K_EVENT {
         // Save count values for K_EVENT re-entry.
@@ -243,7 +264,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         }
 
         // In Visual/Select mode, a few keys are handled in a special way.
-        if nvim_get_VIsual_active() != 0 && nvim_normal_handle_special_visual_command_wrapper(s) {
+        if nvim_get_VIsual_active() != 0 && rs_normal_handle_special_visual_command(s) {
             nvim_ns_set_command_finished(s, true);
             break 'finish;
         }
@@ -308,3 +329,129 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
     rs_normal_finish_command(s);
     1
 }
+
+/// Rust implementation of normal_get_command_count.
+///
+/// Reads digit keys to build ca.count0, handles CTRL-W prefix.
+/// Returns true if the outer loop should iterate again (CTRL-W case).
+///
+/// # Safety
+/// `s` must be a valid NormalState pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bool {
+    if nvim_get_VIsual_active() != 0 && nvim_get_VIsual_select() {
+        return false;
+    }
+
+    let ca = nvim_ns_get_ca_ptr(s);
+    let oa = nvim_ns_get_oa_ptr(s);
+
+    // Handle a count before a command and compute ca.count0.
+    // Note that '0' is a command and not the start of a count, but it's
+    // part of a count after other digits.
+    while {
+        let c = nvim_ns_get_c(s);
+        (c >= c_int::from(b'1') && c <= c_int::from(b'9'))
+            || (nvim_cap_get_count0(ca) != 0 && (c == K_DEL || c == K_KDEL || c == c_int::from(b'0')))
+    } {
+        let c = nvim_ns_get_c(s);
+        if c == K_DEL || c == K_KDEL {
+            let new_count0 = nvim_cap_get_count0(ca) / 10;
+            nvim_cap_set_count0(ca, new_count0);
+            nvim_del_from_showcmd_wrapper(4); // delete the digit and ~@%
+        } else if nvim_cap_get_count0(ca) > 99_999_999 {
+            nvim_cap_set_count0(ca, 999_999_999);
+        } else {
+            let new_count0 = nvim_cap_get_count0(ca) * 10 + (c - c_int::from(b'0'));
+            nvim_cap_set_count0(ca, new_count0);
+        }
+
+        // Set v:count here, when called from main() and not a stuffed
+        // command, so that v:count can be used in an expression mapping
+        // right after the count. Do set it for redo.
+        if nvim_ns_get_toplevel(s) && readbuf1_empty() {
+            let mut set_prevcount = nvim_ns_get_set_prevcount(s);
+            rs_set_vcount_ca(ca, &mut set_prevcount);
+            nvim_ns_set_set_prevcount(s, set_prevcount);
+        }
+
+        if nvim_ns_get_ctrl_w(s) {
+            nvim_inc_no_mapping();
+            nvim_inc_allow_keys(); // no mapping for nchar, but keys
+        }
+
+        nvim_inc_no_zero_mapping(); // don't map zero here
+        let new_c = nvim_plain_vgetc_wrapper();
+        let adjusted = nvim_langmap_adjust(new_c, true);
+        nvim_ns_set_c(s, adjusted);
+        nvim_dec_no_zero_mapping();
+        if nvim_ns_get_ctrl_w(s) {
+            nvim_dec_no_mapping();
+            nvim_dec_allow_keys();
+        }
+        nvim_ns_set_need_flushbuf_or(s, nvim_add_to_showcmd_wrapper(nvim_ns_get_c(s)));
+    }
+
+    // If we got CTRL-W there may be a/another count
+    if nvim_ns_get_c(s) == CTRL_W
+        && !nvim_ns_get_ctrl_w(s)
+        && nvim_oap_get_op_type_ptr(oa) == OP_NOP
+    {
+        nvim_ns_set_ctrl_w(s, true);
+        nvim_cap_set_opcount(ca, nvim_cap_get_count0(ca)); // remember first count
+        nvim_cap_set_count0(ca, 0);
+        nvim_inc_no_mapping();
+        nvim_inc_allow_keys(); // no mapping for nchar, but keys
+        let new_c = nvim_plain_vgetc_wrapper(); // get next character
+        let adjusted = nvim_langmap_adjust(new_c, true);
+        nvim_ns_set_c(s, adjusted);
+        nvim_dec_no_mapping();
+        nvim_dec_allow_keys();
+        nvim_ns_set_need_flushbuf_or(s, nvim_add_to_showcmd_wrapper(nvim_ns_get_c(s)));
+        return true;
+    }
+
+    false
+}
+
+/// Rust implementation of normal_handle_special_visual_command.
+///
+/// Handles keymodel stopsel/startsel in visual mode.
+/// Returns true if the command was consumed (clearopbeep case).
+///
+/// # Safety
+/// `s` must be a valid NormalState pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_normal_handle_special_visual_command(s: NormalStateHandle) -> bool {
+    let ca = nvim_ns_get_ca_ptr(s);
+    let oa = nvim_ns_get_oa_ptr(s);
+    let idx = nvim_ns_get_idx(s);
+
+    // When 'keymodel' contains "stopsel" may stop Select/Visual mode
+    if nvim_get_km_stopsel()
+        && (nvim_get_nv_cmd_flags(idx) & NV_STS != 0)
+        && (nvim_get_mod_mask() & MOD_MASK_SHIFT == 0)
+    {
+        rs_end_visual_mode();
+        nvim_redraw_curbuf_inverted();
+    }
+
+    // Keys that work differently when 'keymodel' contains "startsel"
+    if nvim_get_km_startsel() {
+        let flags = nvim_get_nv_cmd_flags(idx);
+        if flags & NV_SS != 0 {
+            nvim_unshift_special_wrapper(ca);
+            let new_idx = rs_find_command(nvim_cap_get_cmdchar(ca));
+            nvim_ns_set_idx(s, new_idx);
+            if new_idx < 0 {
+                // Just in case
+                rs_clearopbeep(oa);
+                return true;
+            }
+        } else if (flags & NV_SSS != 0) && (nvim_get_mod_mask() & MOD_MASK_SHIFT != 0) {
+            nvim_mod_mask_clear_shift();
+        }
+    }
+    false
+}
+
