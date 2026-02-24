@@ -288,6 +288,12 @@ extern colnr_T rs_ml_get_len(linenr_T lnum);
 extern colnr_T rs_ml_get_pos_len(pos_T *pos);
 extern colnr_T rs_ml_get_buf_len(buf_T *buf, linenr_T lnum);
 extern int rs_gchar_pos(pos_T *pos);
+// Pass 4 Phase 2: modification dispatch _impl Rust function declarations
+extern int rs_ml_append_flags_impl(linenr_T lnum, char *line, colnr_T len, int flags);
+extern int rs_ml_append_buf_impl(buf_T *buf, linenr_T lnum, char *line, colnr_T len, bool newfile);
+extern int rs_ml_delete_flags_impl(linenr_T lnum, int flags);
+extern int rs_ml_delete_buf_impl(buf_T *buf, linenr_T lnum, bool message);
+extern int rs_ml_replace_buf_impl(buf_T *buf, linenr_T lnum, char *line, bool copy, bool noalloc);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -2163,6 +2169,13 @@ static int ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, i
   return ml_append_int(buf, lnum, line, len, flags);
 }
 
+/// Public wrapper around static ml_append_flush, used by Rust _impl functions.
+int nvim_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags)
+  FUNC_ATTR_NONNULL_ARG(1)
+{
+  return ml_append_flush(buf, lnum, line, len, flags);
+}
+
 /// Append a line after lnum (may be 0 to insert a line in front of the file).
 /// "line" does not need to be allocated, but can't be another line in a
 /// buffer, unlocking may make it invalid.
@@ -2191,12 +2204,7 @@ int ml_append(linenr_T lnum, char *line, colnr_T len, bool newfile)
 /// @return  FAIL for failure, OK otherwise
 int ml_append_flags(linenr_T lnum, char *line, colnr_T len, int flags)
 {
-  // When starting up, we might still need to create the memfile
-  if (curbuf->b_ml.ml_mfp == NULL && open_buffer(false, NULL, 0) == FAIL) {
-    return FAIL;
-  }
-
-  return ml_append_flush(curbuf, lnum, line, len, flags);
+  return rs_ml_append_flags_impl(lnum, line, len, flags);
 }
 
 /// Like ml_append() but for an arbitrary buffer.  The buffer must already have
@@ -2209,11 +2217,7 @@ int ml_append_flags(linenr_T lnum, char *line, colnr_T len, int flags)
 int ml_append_buf(buf_T *buf, linenr_T lnum, char *line, colnr_T len, bool newfile)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  if (buf->b_ml.ml_mfp == NULL) {
-    return FAIL;
-  }
-
-  return ml_append_flush(buf, lnum, line, len, newfile ? ML_APPEND_NEW : 0);
+  return rs_ml_append_buf_impl(buf, lnum, line, len, newfile);
 }
 
 /// Track deleted text length for the current buffer (thin wrapper calling Rust).
@@ -2241,8 +2245,7 @@ int ml_replace_len(linenr_T lnum, char *line, size_t len, bool copy)
 int ml_replace_buf(buf_T *buf, linenr_T lnum, char *line, bool copy, bool noalloc)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  size_t len = line != NULL ? strlen(line) : (size_t)-1;
-  return rs_ml_replace_buf_len(buf, lnum, line, len, copy, noalloc);
+  return rs_ml_replace_buf_impl(buf, lnum, line, copy, noalloc);
 }
 
 /// Replace line "lnum", with buffering.
@@ -2275,8 +2278,7 @@ int ml_replace_buf_len(buf_T *buf, linenr_T lnum, char *line_arg, size_t len_arg
 int ml_delete_buf(buf_T *buf, linenr_T lnum, bool message)
   FUNC_ATTR_NONNULL_ALL
 {
-  ml_flush_line(buf, false);
-  return ml_delete_int(buf, lnum, message ? ML_DEL_MESSAGE : 0);
+  return rs_ml_delete_buf_impl(buf, lnum, message);
 }
 
 /// Delete line `lnum` in the current buffer.
@@ -2412,6 +2414,13 @@ theend:
   return ret;
 }
 
+/// Public wrapper around static ml_delete_int, used by Rust _impl functions.
+int nvim_ml_delete_int(buf_T *buf, linenr_T lnum, int flags)
+  FUNC_ATTR_NONNULL_ALL
+{
+  return ml_delete_int(buf, lnum, flags);
+}
+
 /// Delete line "lnum" in the current buffer.
 ///
 /// @note The caller of this function should probably also call
@@ -2428,12 +2437,7 @@ int ml_delete(linenr_T lnum)
 /// @return  FAIL for failure, OK otherwise
 int ml_delete_flags(linenr_T lnum, int flags)
 {
-  ml_flush_line(curbuf, false);
-  if (lnum < 1 || lnum > curbuf->b_ml.ml_line_count) {
-    return FAIL;
-  }
-
-  return ml_delete_int(curbuf, lnum, flags);
+  return rs_ml_delete_flags_impl(lnum, flags);
 }
 
 /// set the DB_MARKED flag for line 'lnum' (thin wrapper calling Rust)

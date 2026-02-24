@@ -281,6 +281,22 @@ extern "C" {
 
     /// Get the page size of a memfile
     fn nvim_mf_get_page_size(mfp: *mut std::ffi::c_void) -> c_uint;
+
+    // -------------------------------------------------------------------------
+    // Pass 4 Phase 2: Public wrappers for static C functions
+    // -------------------------------------------------------------------------
+
+    /// Public wrapper around static ml_append_flush
+    fn nvim_ml_append_flush(
+        buf: *mut BufHandle,
+        lnum: LineNr,
+        line: *mut c_char,
+        len: ColNr,
+        flags: c_int,
+    ) -> c_int;
+
+    /// Public wrapper around static ml_delete_int
+    fn nvim_ml_delete_int(buf: *mut BufHandle, lnum: LineNr, flags: c_int) -> c_int;
 }
 
 // =============================================================================
@@ -584,6 +600,118 @@ pub unsafe extern "C" fn rs_ml_delete_buf(
         return 0; // FAIL
     }
     ml_delete_buf(buf, lnum, message)
+}
+
+// =============================================================================
+// Pass 4 Phase 2: Modification Dispatch _impl Functions
+//
+// These implement the guard/dispatch logic that was in the multi-line C
+// functions. The C public functions now become thin wrappers calling these.
+// The existing rs_ml_append / rs_ml_delete / rs_ml_replace wrappers continue
+// to call the C public functions unchanged — there are no circular calls.
+// =============================================================================
+
+/// Implement `ml_append_flags`: open buffer if needed, then call
+/// `nvim_ml_append_flush` (public wrapper for the static `ml_append_flush`).
+///
+/// # Safety
+/// Modifies buffer state. Only call from main Nvim thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_append_flags_impl(
+    lnum: LineNr,
+    line: *mut c_char,
+    len: ColNr,
+    flags: c_int,
+) -> c_int {
+    // When starting up, we might still need to create the memfile.
+    let buf = nvim_get_curbuf();
+    if nvim_buf_open_buffer_if_needed(buf) == FAIL {
+        return FAIL;
+    }
+    nvim_ml_append_flush(buf, lnum, line, len, flags)
+}
+
+/// Implement `ml_append_buf`: guard on ml_mfp, then call
+/// `nvim_ml_append_flush` for the specified buffer.
+///
+/// # Safety
+/// - `buf` must be a valid buffer pointer or NULL
+/// Modifies buffer state. Only call from main Nvim thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_append_buf_impl(
+    buf: *mut BufHandle,
+    lnum: LineNr,
+    line: *mut c_char,
+    len: ColNr,
+    newfile: c_int,
+) -> c_int {
+    if buf.is_null() {
+        return FAIL;
+    }
+    if nvim_buf_has_ml_mfp(buf) == 0 {
+        return FAIL;
+    }
+    let flags = if newfile != 0 { ML_APPEND_NEW } else { 0 };
+    nvim_ml_append_flush(buf, lnum, line, len, flags)
+}
+
+/// Implement `ml_delete_flags`: flush cached line, range-check, then delete.
+///
+/// # Safety
+/// Modifies buffer state. Only call from main Nvim thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_delete_flags_impl(lnum: LineNr, flags: c_int) -> c_int {
+    let buf = nvim_get_curbuf();
+    ml_flush_line(buf, 0);
+    let line_count = nvim_buf_get_ml_line_count(buf);
+    if lnum < 1 || lnum > line_count {
+        return FAIL;
+    }
+    nvim_ml_delete_int(buf, lnum, flags)
+}
+
+/// Implement `ml_delete_buf`: flush cached line, then delete from given buffer.
+///
+/// # Safety
+/// - `buf` must be a valid buffer pointer or NULL
+/// Modifies buffer state. Only call from main Nvim thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_delete_buf_impl(
+    buf: *mut BufHandle,
+    lnum: LineNr,
+    message: c_int,
+) -> c_int {
+    if buf.is_null() {
+        return FAIL;
+    }
+    ml_flush_line(buf, 0);
+    let flags = if message != 0 { ML_DEL_MESSAGE } else { 0 };
+    nvim_ml_delete_int(buf, lnum, flags)
+}
+
+/// Implement `ml_replace_buf`: compute strlen, then call rs_ml_replace_buf_len.
+///
+/// # Safety
+/// - `buf` must be a valid buffer pointer or NULL
+/// - `line` must be a valid C string or NULL
+/// Modifies buffer state. Only call from main Nvim thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_replace_buf_impl(
+    buf: *mut BufHandle,
+    lnum: LineNr,
+    line: *mut c_char,
+    copy: c_int,
+    noalloc: c_int,
+) -> c_int {
+    if buf.is_null() {
+        return FAIL;
+    }
+    let len = if line.is_null() {
+        usize::MAX
+    } else {
+        strlen(line)
+    };
+    rs_ml_replace_buf_len(buf, lnum, line, len, copy, noalloc)
 }
 
 // =============================================================================
