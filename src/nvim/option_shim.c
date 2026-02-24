@@ -2517,10 +2517,11 @@ void redraw_titles(void)
   rs_redraw_titles();
 }
 
+extern void rs_check_blending(win_T *wp);
+
 void check_blending(win_T *wp)
 {
-  wp->w_grid_alloc.blending =
-    wp->w_p_winbl > 0 || (wp->w_floating && wp->w_config.shadow);
+  rs_check_blending(wp);
 }
 
 /// Handle setting `winhighlight' in window "wp"
@@ -2609,44 +2610,18 @@ const char *did_set_buflocal_undolevels(buf_T *buf, OptInt value, OptInt old_val
 }
 
 
+extern void rs_do_syntax_autocmd(buf_T *buf, int value_changed);
+extern void rs_do_spelllang_source(win_T *win);
+
 // When 'syntax' is set, load the syntax of that name
 static void do_syntax_autocmd(buf_T *buf, bool value_changed)
 {
-  static int syn_recursive = 0;
-
-  syn_recursive++;
-  // Only pass true for "force" when the value changed or not used
-  // recursively, to avoid endless recurrence.
-  apply_autocmds(EVENT_SYNTAX, buf->b_p_syn, buf->b_fname,
-                 value_changed || syn_recursive == 1, buf);
-  buf->b_flags |= BF_SYN_SET;
-  syn_recursive--;
+  rs_do_syntax_autocmd(buf, value_changed ? 1 : 0);
 }
 
 static void do_spelllang_source(win_T *win)
 {
-  char fname[200];
-  char *q = win->w_s->b_p_spl;
-
-  // Skip the first name if it is "cjk".
-  if (strncmp(q, "cjk,", 4) == 0) {
-    q += 4;
-  }
-
-  // Source the spell/LANG.{vim,lua} in 'runtimepath'.
-  // They could set 'spellcapcheck' depending on the language.
-  // Use the first name in 'spelllang' up to '_region' or
-  // '.encoding'.
-  char *p;
-  for (p = q; *p != NUL; p++) {
-    if (!ASCII_ISALNUM(*p) && *p != '-') {
-      break;
-    }
-  }
-  if (p > q) {
-    vim_snprintf(fname, sizeof(fname), "spell/%.*s.*", (int)(p - q), q);
-    source_runtime_vim_lua(fname, DIP_ALL);
-  }
+  rs_do_spelllang_source(win);
 }
 
 /// Called after an option changed: check if something needs to be redrawn.
@@ -4629,6 +4604,8 @@ unsigned get_ve_flags(win_T *wp)
   return rs_get_ve_flags(wp);
 }
 
+extern int rs_get_fileformat_force(const buf_T *buf, const exarg_T *eap);
+
 /// Like get_fileformat(), but override 'fileformat' with "p" for "++opt=val"
 /// argument.
 ///
@@ -4636,24 +4613,7 @@ unsigned get_ve_flags(win_T *wp)
 int get_fileformat_force(const buf_T *buf, const exarg_T *eap)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  int c;
-
-  if (eap != NULL && eap->force_ff != 0) {
-    c = eap->force_ff;
-  } else {
-    if ((eap != NULL && eap->force_bin != 0)
-        ? (eap->force_bin == FORCE_BIN) : buf->b_p_bin) {
-      return EOL_UNIX;
-    }
-    c = (unsigned char)(*buf->b_p_ff);
-  }
-  if (c == 'u') {
-    return EOL_UNIX;
-  }
-  if (c == 'm') {
-    return EOL_MAC;
-  }
-  return EOL_DOS;
+  return rs_get_fileformat_force(buf, eap);
 }
 
 /// Set the current end-of-line type to EOL_UNIX, EOL_MAC, or EOL_DOS.
@@ -4812,3 +4772,42 @@ const char *nvim_rs_set_option(OptIndex opt_idx, OptVal value, int opt_flags,
 }
 
 OptInt nvim_get_p_ss(void) { return p_ss; }
+
+// =============================================================================
+// Phase 6 accessors: do_syntax_autocmd, do_spelllang_source, get_fileformat_force
+// =============================================================================
+
+/// Get buf->b_p_syn (the 'syntax' option value for this buffer).
+const char *nvim_buf_get_b_p_syn(buf_T *buf)
+{
+  return buf ? buf->b_p_syn : NULL;
+}
+
+/// Set BF_SYN_SET flag in buf->b_flags.
+void nvim_buf_set_b_flags_syn_set(buf_T *buf)
+{
+  if (buf) {
+    buf->b_flags |= BF_SYN_SET;
+  }
+}
+
+/// Apply EVENT_SYNTAX autocmds for the given buffer.
+/// @param force  whether to force the autocmd (value_changed || syn_recursive == 1)
+void nvim_apply_syntax_autocmd(buf_T *buf, bool force)
+{
+  apply_autocmds(EVENT_SYNTAX, buf->b_p_syn, buf->b_fname, force, buf);
+}
+
+/// Get win->w_s->b_p_spl (spelllang option for this window's wordlist).
+const char *nvim_win_get_b_p_spl(win_T *win)
+{
+  return (win && win->w_s) ? win->w_s->b_p_spl : NULL;
+}
+
+/// Get first character of buf->b_p_ff as an unsigned char.
+int nvim_buf_get_b_p_ff_first(const buf_T *buf)
+{
+  return (buf && buf->b_p_ff) ? (unsigned char)(*buf->b_p_ff) : 0;
+}
+
+

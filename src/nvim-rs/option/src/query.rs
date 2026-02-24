@@ -9,7 +9,7 @@
 #![allow(clippy::if_not_else)]
 #![allow(clippy::borrow_as_ptr)]
 
-use std::ffi::{c_char, c_int, c_uint};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::storage::{OptVal, String_};
 use crate::{BufHandle, OptValType, WinHandle};
@@ -387,5 +387,152 @@ pub unsafe extern "C" fn rs_string_to_key(arg: *mut c_char) -> c_int {
         }
     } else {
         c_int::from(*arg as u8)
+    }
+}
+
+// =============================================================================
+// Phase 6: Utility functions (check_blending, do_syntax_autocmd,
+//           do_spelllang_source, get_fileformat_force)
+// =============================================================================
+
+extern "C" {
+    // check_blending
+    fn nvim_win_get_p_winbl(wp: WinHandle) -> c_int;
+    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_shadow(wp: WinHandle) -> bool;
+    fn nvim_win_set_grid_blending(wp: WinHandle, val: bool);
+
+    // do_syntax_autocmd
+    fn nvim_buf_set_b_flags_syn_set(buf: BufHandle);
+    fn nvim_apply_syntax_autocmd(buf: BufHandle, force: bool);
+
+    // do_spelllang_source
+    fn nvim_win_get_b_p_spl(win: WinHandle) -> *const c_char;
+    fn nvim_ex2_source_runtime_vim_lua(name: *const c_char, flags: c_int) -> c_int;
+
+    // get_fileformat_force (nvim_eap_get_force_ff/bin are in ex_docmd.c)
+    fn nvim_eap_get_force_ff(eap: *const c_void) -> c_int;
+    fn nvim_eap_get_force_bin(eap: *const c_void) -> c_int;
+    fn nvim_option_buf_get_b_p_bin(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_b_p_ff_first(buf: BufHandle) -> c_int;
+}
+
+/// EOL constants matching option_vars.h
+const EOL_UNIX: c_int = 0;
+const EOL_DOS: c_int = 1;
+const EOL_MAC: c_int = 2;
+
+/// FORCE_BIN constant matching ex_cmds_defs.h
+const FORCE_BIN: c_int = 1;
+
+/// DIP_ALL constant matching runtime.h
+const DIP_ALL: c_int = 0x01;
+
+/// Update w_grid_alloc.blending based on winbl and floating/shadow config.
+///
+/// Translation of C `check_blending`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_blending(wp: WinHandle) {
+    let winbl = nvim_win_get_p_winbl(wp);
+    let floating = nvim_win_get_floating(wp) != 0;
+    let shadow = nvim_win_get_config_shadow(wp);
+    let blending = winbl > 0 || (floating && shadow);
+    nvim_win_set_grid_blending(wp, blending);
+}
+
+/// Recursion counter for do_syntax_autocmd (safe: single-threaded).
+static mut SYN_RECURSIVE: c_int = 0;
+
+/// When 'syntax' is set, trigger EVENT_SYNTAX autocmds.
+///
+/// Translation of C `do_syntax_autocmd`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_syntax_autocmd(buf: BufHandle, value_changed: c_int) {
+    SYN_RECURSIVE += 1;
+    let force = value_changed != 0 || SYN_RECURSIVE == 1;
+    nvim_apply_syntax_autocmd(buf, force);
+    nvim_buf_set_b_flags_syn_set(buf);
+    SYN_RECURSIVE -= 1;
+}
+
+/// Source spell/LANG.* runtime files for the window's current spelllang.
+///
+/// Translation of C `do_spelllang_source`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_spelllang_source(win: WinHandle) {
+    let q_ptr = nvim_win_get_b_p_spl(win);
+    if q_ptr.is_null() {
+        return;
+    }
+
+    // Skip "cjk," prefix if present
+    let q = if *q_ptr as u8 == b'c'
+        && *q_ptr.add(1) as u8 == b'j'
+        && *q_ptr.add(2) as u8 == b'k'
+        && *q_ptr.add(3) as u8 == b','
+    {
+        q_ptr.add(4)
+    } else {
+        q_ptr
+    };
+
+    // Find end of first language name (alphanumeric or '-' only)
+    let mut p = q;
+    while *p != 0 {
+        let c = *p as u8;
+        if !c.is_ascii_alphanumeric() && c != b'-' {
+            break;
+        }
+        p = p.add(1);
+    }
+
+    if p > q {
+        let lang_len = p.offset_from(q) as usize;
+        // Build "spell/<lang>.*" path
+        let mut fname = [0u8; 200];
+        let prefix = b"spell/";
+        let suffix = b".*";
+        let prefix_len = prefix.len();
+        let total_len = prefix_len + lang_len + suffix.len();
+        if total_len < fname.len() {
+            fname[..prefix_len].copy_from_slice(prefix);
+            std::ptr::copy_nonoverlapping(q, fname.as_mut_ptr().add(prefix_len).cast(), lang_len);
+            fname[prefix_len + lang_len..prefix_len + lang_len + suffix.len()]
+                .copy_from_slice(suffix);
+            fname[total_len] = 0;
+            nvim_ex2_source_runtime_vim_lua(fname.as_ptr().cast(), DIP_ALL);
+        }
+    }
+}
+
+/// Get file format override considering ++ff and ++bin command arguments.
+///
+/// Translation of C `get_fileformat_force`. Returns EOL_UNIX, EOL_DOS, or EOL_MAC.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_fileformat_force(
+    buf: BufHandle,
+    eap: *const c_void,
+) -> c_int {
+    let force_ff = nvim_eap_get_force_ff(eap);
+    let c = if force_ff != 0 {
+        force_ff
+    } else {
+        let force_bin = nvim_eap_get_force_bin(eap);
+        let b_p_bin = nvim_option_buf_get_b_p_bin(buf);
+        let is_bin = if force_bin != 0 {
+            force_bin == FORCE_BIN
+        } else {
+            b_p_bin != 0
+        };
+        if is_bin {
+            return EOL_UNIX;
+        }
+        nvim_buf_get_b_p_ff_first(buf)
+    };
+
+    match c as u8 {
+        b'u' => EOL_UNIX,
+        b'm' => EOL_MAC,
+        _ => EOL_DOS,
     }
 }
