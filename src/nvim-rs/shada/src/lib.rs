@@ -566,15 +566,26 @@ extern "C" {
     fn nvim_shada_tv_list_len(list: *mut c_void) -> c_int;
     fn nvim_shada_create_oldfiles_list() -> *mut c_void;
     fn nvim_shada_argcount() -> c_int;
-    fn nvim_shada_apply_entry(
+    // Phase 1 (plan 92c8078e): compound accessors replacing nvim_shada_apply_entry
+    fn nvim_shada_apply_search_pattern(entry: *mut ShadaEntry, force: bool) -> c_int;
+    fn nvim_shada_apply_sub_string(entry: *mut ShadaEntry, force: bool) -> c_int;
+    fn nvim_shada_apply_register(entry: *mut ShadaEntry, force: bool) -> c_int;
+    fn nvim_shada_apply_variable(entry: *mut ShadaEntry);
+    fn nvim_shada_apply_mark_or_jump(
+        entry: *mut ShadaEntry,
+        fname_bufs: *mut c_void,
         force: bool,
-        want_marks: bool,
-        get_old_files: bool,
+    ) -> c_int;
+    fn nvim_shada_apply_buffer_list(entry: *mut ShadaEntry);
+    fn nvim_shada_apply_local_or_change(
         entry: *mut ShadaEntry,
         fname_bufs: *mut c_void,
         cl_bufs: *mut c_void,
         oldfiles_set: *mut c_void,
         oldfiles_list: *mut c_void,
+        force: bool,
+        want_marks: bool,
+        get_old_files: bool,
     ) -> c_int;
     fn nvim_shada_for_all_tab_windows_update_changelist(cl_bufs_handle: *mut c_void);
     fn nvim_shada_clr_history(i: c_int);
@@ -4202,6 +4213,66 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
     OK
 }
 
+/// Dispatch a single ShaDa entry to Neovim's in-memory state.
+///
+/// This is the Rust replacement for the C `nvim_shada_apply_entry` function.
+/// It delegates to per-type compound C accessors that bundle the C-level
+/// struct manipulation for each entry kind.
+///
+/// # Safety
+///
+/// All pointer arguments must be valid.
+#[allow(clippy::too_many_arguments)]
+unsafe fn rs_shada_apply_entry(
+    force: bool,
+    want_marks: bool,
+    get_old_files: bool,
+    entry: *mut ShadaEntry,
+    fname_bufs: *mut c_void,
+    cl_bufs: *mut c_void,
+    oldfiles_set: *mut c_void,
+    oldfiles_list: *mut c_void,
+) {
+    match (*entry).entry_type {
+        // Missing: should never happen. Unknown: caller handles freeing.
+        // HistoryEntry: handled by caller via rs_hms_insert before this call.
+        ShadaEntryType::Missing | ShadaEntryType::Unknown | ShadaEntryType::HistoryEntry => {}
+        ShadaEntryType::Header => {
+            rs_shada_free_entry_contents(entry);
+        }
+        ShadaEntryType::SearchPattern => {
+            nvim_shada_apply_search_pattern(entry, force);
+        }
+        ShadaEntryType::SubString => {
+            nvim_shada_apply_sub_string(entry, force);
+        }
+        ShadaEntryType::Register => {
+            nvim_shada_apply_register(entry, force);
+        }
+        ShadaEntryType::Variable => {
+            nvim_shada_apply_variable(entry);
+        }
+        ShadaEntryType::GlobalMark | ShadaEntryType::Jump => {
+            nvim_shada_apply_mark_or_jump(entry, fname_bufs, force);
+        }
+        ShadaEntryType::BufferList => {
+            nvim_shada_apply_buffer_list(entry);
+        }
+        ShadaEntryType::LocalMark | ShadaEntryType::Change => {
+            nvim_shada_apply_local_or_change(
+                entry,
+                fname_bufs,
+                cl_bufs,
+                oldfiles_set,
+                oldfiles_list,
+                force,
+                want_marks,
+                get_old_files,
+            );
+        }
+    }
+}
+
 /// Read ShaDa data and merge it into Neovim's in-memory state.
 ///
 /// This is the Rust replacement for the C `shada_read` function.
@@ -4275,8 +4346,8 @@ pub unsafe extern "C" fn rs_shada_read(sd_reader: *mut c_void, flags: c_int) {
             continue 'read_loop;
         }
 
-        // Dispatch all other entry types through the C composite handler.
-        nvim_shada_apply_entry(
+        // Dispatch all other entry types through the Rust dispatcher.
+        rs_shada_apply_entry(
             force,
             want_marks,
             get_old_files,
