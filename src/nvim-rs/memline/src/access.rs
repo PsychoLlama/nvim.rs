@@ -111,8 +111,8 @@ extern "C" {
     /// Get block header's data pointer (`hp->bh_data`)
     fn nvim_bhdr_get_bh_data(hp: *mut c_void) -> *mut c_void;
 
-    /// Find data block containing a line
-    fn nvim_ml_find_line(buf: *mut BufHandle, lnum: LineNr, action: c_int) -> *mut c_void;
+    /// Find data block containing a line (Rust implementation)
+    fn rs_ml_find_line(buf: *mut BufHandle, lnum: LineNr, action: c_int) -> *mut c_void;
 
     /// Flush the cached line to the data block
     fn ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
@@ -481,7 +481,7 @@ pub unsafe extern "C" fn rs_ml_get_buf_impl(
         ml_flush_line(buf, 0);
 
         // Find the data block containing the line.
-        let hp = nvim_ml_find_line(buf, lnum, crate::types::ML_FIND);
+        let hp = rs_ml_find_line(buf, lnum, crate::types::ML_FIND);
         if hp.is_null() {
             if RECURSIVE == 0 {
                 RECURSIVE += 1;

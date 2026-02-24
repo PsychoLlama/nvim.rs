@@ -296,6 +296,8 @@ extern int rs_ml_delete_buf_impl(buf_T *buf, linenr_T lnum, bool message);
 extern int rs_ml_replace_buf_impl(buf_T *buf, linenr_T lnum, char *line, bool copy, bool noalloc);
 // Pass 4 Phase 3: ml_append_flush Rust function declaration
 extern int rs_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags);
+// Pass 5 Phase 1: ml_find_line Rust function declaration
+extern void *rs_ml_find_line(buf_T *buf, linenr_T lnum, int action);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1574,6 +1576,69 @@ int nvim_get_ub_fname(void) { return UB_FNAME; }
 void nvim_iemsg_pointer_block_id_wrong_two(void) { iemsg(_(e_pointer_block_id_wrong_two)); }
 void nvim_iemsg_e304_upd_block0(void) { iemsg(_("E304: ml_upd_block0(): Didn't get block 0??")); }
 
+// Pass 5 Phase 1: ml_find_line accessors for Rust FFI
+
+// ml_locked block pointer accessors
+void *nvim_buf_get_ml_locked(buf_T *buf) { return buf->b_ml.ml_locked; }
+void nvim_buf_set_ml_locked(buf_T *buf, void *hp) { buf->b_ml.ml_locked = hp; }
+
+// ml_locked_lineadd accessors
+int nvim_buf_get_ml_locked_lineadd(buf_T *buf) { return buf->b_ml.ml_locked_lineadd; }
+void nvim_buf_set_ml_locked_lineadd(buf_T *buf, int val) { buf->b_ml.ml_locked_lineadd = val; }
+
+// ml_locked_low and ml_locked_high setters (getters already exist above)
+void nvim_buf_set_ml_locked_low(buf_T *buf, linenr_T val) { buf->b_ml.ml_locked_low = val; }
+void nvim_buf_set_ml_locked_high(buf_T *buf, linenr_T val) { buf->b_ml.ml_locked_high = val; }
+
+// infoptr_T ip_low / ip_high getters and ip_bnum / ip_low / ip_high / ip_index setters
+linenr_T nvim_ip_get_low(const infoptr_T *ip) { return ip->ip_low; }
+linenr_T nvim_ip_get_high(const infoptr_T *ip) { return ip->ip_high; }
+void nvim_ip_set_bnum(infoptr_T *ip, int64_t bnum) { ip->ip_bnum = (blocknr_T)bnum; }
+void nvim_ip_set_low(infoptr_T *ip, linenr_T lnum) { ip->ip_low = lnum; }
+void nvim_ip_set_high(infoptr_T *ip, linenr_T lnum) { ip->ip_high = lnum; }
+void nvim_ip_set_index(infoptr_T *ip, int idx) { ip->ip_index = idx; }
+
+// PointerBlock field accessors for ml_find_line
+uint16_t nvim_pp_get_count(const void *pp) { return ((const PointerBlock *)pp)->pb_count; }
+int64_t nvim_pp_pe_get_bnum(const void *pp, int idx)
+{
+  return (int64_t)((const PointerBlock *)pp)->pb_pointer[idx].pe_bnum;
+}
+linenr_T nvim_pp_pe_get_line_count(const void *pp, int idx)
+{
+  return ((const PointerBlock *)pp)->pb_pointer[idx].pe_line_count;
+}
+int nvim_pp_pe_get_page_count(const void *pp, int idx)
+{
+  return ((const PointerBlock *)pp)->pb_pointer[idx].pe_page_count;
+}
+void nvim_pp_pe_set_bnum(void *pp, int idx, int64_t bnum)
+{
+  ((PointerBlock *)pp)->pb_pointer[idx].pe_bnum = (blocknr_T)bnum;
+}
+void nvim_pp_pe_dec_line_count(void *pp, int idx)
+{
+  ((PointerBlock *)pp)->pb_pointer[idx].pe_line_count--;
+}
+void nvim_pp_pe_inc_line_count(void *pp, int idx)
+{
+  ((PointerBlock *)pp)->pb_pointer[idx].pe_line_count++;
+}
+
+// uint16_t db_id accessor for DataBlock (to distinguish from PointerBlock)
+uint16_t nvim_dp_get_id(const void *dp) { return ((const DataBlock *)dp)->db_id; }
+
+// Error message wrappers for ml_find_line
+void nvim_iemsg_pointer_block_id_wrong(void) { iemsg(_(e_pointer_block_id_wrong)); }
+void nvim_siemsg_line_number_out_of_range(int64_t lnum_past)
+{
+  siemsg(_(e_line_number_out_of_range_nr_past_the_end), lnum_past);
+}
+void nvim_siemsg_line_count_wrong_in_block(int64_t bnum)
+{
+  siemsg(_(e_line_count_wrong_in_block_nr), bnum);
+}
+
 // buf->b_ffname accessor (use existing buffer.c version)
 // buf->b_mtime accessors
 int64_t nvim_buf_get_b_mtime(const buf_T *buf) { return buf->b_mtime; }
@@ -2560,183 +2625,16 @@ static bhdr_T *ml_new_ptr(memfile_T *mfp)
   return rs_ml_new_ptr(mfp);
 }
 
-/// Lookup line 'lnum' in a memline.
-///
-/// @param action: if ML_DELETE or ML_INSERT the line count is updated while searching
-///                if ML_FLUSH only flush a locked block
-///                if ML_FIND just find the line
-///
-/// If the block was found it is locked and put in ml_locked.
-/// The stack is updated to lead to the locked block. The ip_high field in
-/// the stack is updated to reflect the last line in the block AFTER the
-/// insert or delete, also if the pointer block has not been updated yet. But
-/// if ml_locked != NULL ml_locked_lineadd must be added to ip_high.
-///
-/// @return  NULL for failure, pointer to block header otherwise
+/// Lookup line 'lnum' in a memline (thin wrapper calling Rust).
 static bhdr_T *ml_find_line(buf_T *buf, linenr_T lnum, int action)
 {
-  bhdr_T *hp;
-  int top;
-
-  memfile_T *mfp = buf->b_ml.ml_mfp;
-
-  // If there is a locked block check if the wanted line is in it.
-  // If not, flush and release the locked block.
-  // Don't do this for ML_INSERT_SAME, because the stack need to be updated.
-  // Don't do this for ML_FLUSH, because we want to flush the locked block.
-  // Don't do this when 'swapfile' is reset, we want to load all the blocks.
-  if (buf->b_ml.ml_locked) {
-    if (ML_SIMPLE(action)
-        && buf->b_ml.ml_locked_low <= lnum
-        && buf->b_ml.ml_locked_high >= lnum) {
-      // remember to update pointer blocks and stack later
-      if (action == ML_INSERT) {
-        (buf->b_ml.ml_locked_lineadd)++;
-        (buf->b_ml.ml_locked_high)++;
-      } else if (action == ML_DELETE) {
-        (buf->b_ml.ml_locked_lineadd)--;
-        (buf->b_ml.ml_locked_high)--;
-      }
-      return buf->b_ml.ml_locked;
-    }
-
-    mf_put(mfp, buf->b_ml.ml_locked, buf->b_ml.ml_flags & ML_LOCKED_DIRTY,
-           buf->b_ml.ml_flags & ML_LOCKED_POS);
-    buf->b_ml.ml_locked = NULL;
-
-    // If lines have been added or deleted in the locked block, need to
-    // update the line count in pointer blocks.
-    if (buf->b_ml.ml_locked_lineadd != 0) {
-      ml_lineadd(buf, buf->b_ml.ml_locked_lineadd);
-    }
-  }
-
-  if (action == ML_FLUSH) {         // nothing else to do
-    return NULL;
-  }
-
-  blocknr_T bnum = 1;                         // start at the root of the tree
-  blocknr_T bnum2;
-  int page_count = 1;
-  linenr_T low = 1;
-  linenr_T high = buf->b_ml.ml_line_count;
-
-  if (action == ML_FIND) {      // first try stack entries
-    for (top = buf->b_ml.ml_stack_top - 1; top >= 0; top--) {
-      infoptr_T *ip = &(buf->b_ml.ml_stack[top]);
-      if (ip->ip_low <= lnum && ip->ip_high >= lnum) {
-        bnum = ip->ip_bnum;
-        low = ip->ip_low;
-        high = ip->ip_high;
-        buf->b_ml.ml_stack_top = top;           // truncate stack at prev entry
-        break;
-      }
-    }
-    if (top < 0) {
-      buf->b_ml.ml_stack_top = 0;               // not found, start at the root
-    }
-  } else {  // ML_DELETE or ML_INSERT
-    buf->b_ml.ml_stack_top = 0;         // start at the root
-  }
-  // search downwards in the tree until a data block is found
-  while (true) {
-    if ((hp = mf_get(mfp, bnum, (unsigned)page_count)) == NULL) {
-      goto error_noblock;
-    }
-
-    // update high for insert/delete
-    if (action == ML_INSERT) {
-      high++;
-    } else if (action == ML_DELETE) {
-      high--;
-    }
-
-    DataBlock *dp = hp->bh_data;
-    if (dp->db_id == DATA_ID) {         // data block
-      buf->b_ml.ml_locked = hp;
-      buf->b_ml.ml_locked_low = low;
-      buf->b_ml.ml_locked_high = high;
-      buf->b_ml.ml_locked_lineadd = 0;
-      buf->b_ml.ml_flags &= ~(ML_LOCKED_DIRTY | ML_LOCKED_POS);
-      return hp;
-    }
-
-    PointerBlock *pp = (PointerBlock *)(dp);                // must be pointer block
-    if (pp->pb_id != PTR_ID) {
-      iemsg(_(e_pointer_block_id_wrong));
-      goto error_block;
-    }
-
-    top = ml_add_stack(buf);  // add new entry to stack
-    infoptr_T *ip = &(buf->b_ml.ml_stack[top]);
-    ip->ip_bnum = bnum;
-    ip->ip_low = low;
-    ip->ip_high = high;
-    ip->ip_index = -1;                  // index not known yet
-
-    bool dirty = false;
-    int idx;
-    for (idx = 0; idx < (int)pp->pb_count; idx++) {
-      linenr_T t = pp->pb_pointer[idx].pe_line_count;
-      CHECK(t == 0, _("pe_line_count is zero"));
-      if ((low += t) > lnum) {
-        ip->ip_index = idx;
-        bnum = pp->pb_pointer[idx].pe_bnum;
-        page_count = pp->pb_pointer[idx].pe_page_count;
-        high = low - 1;
-        low -= t;
-
-        // a negative block number may have been changed
-        if (bnum < 0) {
-          bnum2 = mf_trans_del(mfp, bnum);
-          if (bnum != bnum2) {
-            bnum = bnum2;
-            pp->pb_pointer[idx].pe_bnum = bnum;
-            dirty = true;
-          }
-        }
-
-        break;
-      }
-    }
-    if (idx >= (int)pp->pb_count) {         // past the end: something wrong!
-      if (lnum > buf->b_ml.ml_line_count) {
-        siemsg(_(e_line_number_out_of_range_nr_past_the_end),
-               (int64_t)lnum - buf->b_ml.ml_line_count);
-      } else {
-        siemsg(_(e_line_count_wrong_in_block_nr), bnum);
-      }
-      goto error_block;
-    }
-    if (action == ML_DELETE) {
-      pp->pb_pointer[idx].pe_line_count--;
-      dirty = true;
-    } else if (action == ML_INSERT) {
-      pp->pb_pointer[idx].pe_line_count++;
-      dirty = true;
-    }
-    mf_put(mfp, hp, dirty, false);
-  }
-
-error_block:
-  mf_put(mfp, hp, false, false);
-error_noblock:
-  // If action is ML_DELETE or ML_INSERT we have to correct the tree for
-  // the incremented/decremented line counts, because there won't be a line
-  // inserted/deleted after all.
-  if (action == ML_DELETE) {
-    ml_lineadd(buf, 1);
-  } else if (action == ML_INSERT) {
-    ml_lineadd(buf, -1);
-  }
-  buf->b_ml.ml_stack_top = 0;
-  return NULL;
+  return rs_ml_find_line(buf, lnum, action);
 }
 
 /// Public wrapper around the static ml_find_line, for Rust FFI.
 bhdr_T *nvim_ml_find_line(buf_T *buf, linenr_T lnum, int action)
 {
-  return ml_find_line(buf, lnum, action);
+  return rs_ml_find_line(buf, lnum, action);
 }
 
 /// add an entry to the info pointer stack

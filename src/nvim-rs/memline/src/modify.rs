@@ -64,8 +64,8 @@ extern "C" {
     /// Get current buffer (curbuf)
     fn nvim_get_curbuf() -> *mut BufHandle;
 
-    /// Find data block containing a line (public wrapper around ml_find_line)
-    fn nvim_ml_find_line(buf: *mut BufHandle, lnum: LineNr, action: c_int) -> *mut c_void;
+    /// Find data block containing a line (Rust implementation)
+    fn rs_ml_find_line(buf: *mut BufHandle, lnum: LineNr, action: c_int) -> *mut c_void;
 
     /// Get bh_data pointer from block header
     fn nvim_bhdr_get_bh_data(hp: *mut c_void) -> *mut c_void;
@@ -940,7 +940,7 @@ pub unsafe extern "C" fn rs_ml_setmarked(lnum: LineNr) {
     }
 
     // Find the data block containing the line.
-    let hp = nvim_ml_find_line(buf, lnum, crate::types::ML_FIND);
+    let hp = rs_ml_find_line(buf, lnum, crate::types::ML_FIND);
     if hp.is_null() {
         return;
     }
@@ -973,7 +973,7 @@ pub unsafe extern "C" fn rs_ml_firstmarked() -> LineNr {
     let line_count = nvim_buf_get_ml_line_count(buf);
 
     while lnum <= line_count {
-        let hp = nvim_ml_find_line(buf, lnum, crate::types::ML_FIND);
+        let hp = rs_ml_find_line(buf, lnum, crate::types::ML_FIND);
         if hp.is_null() {
             return 0;
         }
@@ -1019,7 +1019,7 @@ pub unsafe extern "C" fn rs_ml_clearmarked() {
     let line_count = nvim_buf_get_ml_line_count(buf);
 
     while lnum <= line_count {
-        let hp = nvim_ml_find_line(buf, lnum, crate::types::ML_FIND);
+        let hp = rs_ml_find_line(buf, lnum, crate::types::ML_FIND);
         if hp.is_null() {
             return;
         }
