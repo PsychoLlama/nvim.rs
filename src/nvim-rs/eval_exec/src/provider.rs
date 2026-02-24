@@ -338,7 +338,7 @@ pub unsafe extern "C" fn rs_eval_call_provider(
 /// - `name` must be a valid null-terminated C string.
 /// - `argvars` must point to at least 1 typval_T.
 /// - `rettv` must be a valid typval_T pointer.
-#[no_mangle]
+#[export_name = "script_host_eval"]
 pub unsafe extern "C" fn rs_script_host_eval(
     name: *const c_char,
     argvars: *mut c_void,

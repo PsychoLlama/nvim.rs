@@ -67,7 +67,7 @@ extern "C" {
 /// # Safety
 /// - `xp` must be a valid `expand_T*`.
 /// - `arg` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[export_name = "set_context_for_expression"]
 pub unsafe extern "C" fn rs_set_context_for_expression(
     xp: ExpandHandle,
     arg: *mut c_char,

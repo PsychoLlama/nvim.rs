@@ -130,7 +130,8 @@ const FAIL: c_int = 0;
 ///
 /// # Safety
 /// Safe to call from C.
-#[no_mangle]
+#[must_use]
+#[export_name = "find_timer_by_nr"]
 pub unsafe extern "C" fn rs_find_timer_by_nr(xx: i64) -> TimerHandle {
     nvim_timers_get(xx)
 }
@@ -140,7 +141,7 @@ pub unsafe extern "C" fn rs_find_timer_by_nr(xx: i64) -> TimerHandle {
 /// # Safety
 /// `rettv` must be a valid typval_T pointer with v_list set.
 /// `timer` must be a valid timer_T pointer.
-#[no_mangle]
+#[export_name = "add_timer_info"]
 pub unsafe extern "C" fn rs_add_timer_info(rettv: TvHandle, timer: TimerHandle) {
     let list = nvim_eval_tv_get_list(rettv.cast_const());
 
@@ -177,7 +178,7 @@ pub unsafe extern "C" fn rs_add_timer_info(rettv: TvHandle, timer: TimerHandle) 
 ///
 /// # Safety
 /// `rettv` must be a valid typval_T pointer.
-#[no_mangle]
+#[export_name = "add_timer_info_all"]
 pub unsafe extern "C" fn rs_add_timer_info_all(rettv: TvHandle) {
     unsafe extern "C" fn foreach_cb(timer: TimerHandle, userdata: *mut c_void) {
         let stopped = nvim_timer_get_stopped(timer) != 0;
@@ -224,7 +225,7 @@ pub unsafe extern "C" fn rs_timer_close_cb(_tw: TimeWatcherHandle, data: *mut c_
 ///
 /// # Safety
 /// `timer` must be a valid timer_T pointer.
-#[no_mangle]
+#[export_name = "timer_stop"]
 pub unsafe extern "C" fn rs_timer_stop(timer: TimerHandle) {
     if nvim_timer_get_stopped(timer) != 0 {
         // avoid double free
@@ -241,7 +242,7 @@ pub unsafe extern "C" fn rs_timer_stop(timer: TimerHandle) {
 ///
 /// # Safety
 /// Called from libuv. `_tw` is the TimeWatcher, `data` is the timer_T pointer.
-#[no_mangle]
+#[export_name = "timer_due_cb"]
 pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_void) {
     let timer = data as TimerHandle;
 
@@ -319,7 +320,7 @@ pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_vo
 ///
 /// # Safety
 /// `callback` must be a valid Callback pointer.
-#[no_mangle]
+#[export_name = "timer_start"]
 pub unsafe extern "C" fn rs_timer_start(
     timeout: i64,
     repeat_count: c_int,
@@ -349,7 +350,7 @@ pub unsafe extern "C" fn rs_timer_start(
 ///
 /// # Safety
 /// Safe to call from C.
-#[no_mangle]
+#[export_name = "timer_stop_all"]
 pub unsafe extern "C" fn rs_timer_stop_all() {
     unsafe extern "C" fn foreach_cb(timer: TimerHandle, _userdata: *mut c_void) {
         rs_timer_stop(timer);
@@ -361,7 +362,7 @@ pub unsafe extern "C" fn rs_timer_stop_all() {
 ///
 /// # Safety
 /// Safe to call from C.
-#[no_mangle]
+#[export_name = "timer_teardown"]
 pub unsafe extern "C" fn rs_timer_teardown() {
     rs_timer_stop_all();
 }

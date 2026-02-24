@@ -1063,7 +1063,7 @@ const K_CALLBACK_NONE: c_int = 0;
 ///
 /// # Safety
 /// `buf` must be a valid `buf_T *`.
-#[no_mangle]
+#[export_name = "prompt_get_input"]
 pub unsafe extern "C" fn rs_prompt_get_input(buf: *mut c_void) -> *mut c_char {
     if nvim_mark_bt_prompt(buf) == 0 {
         return std::ptr::null_mut();
@@ -1106,7 +1106,7 @@ pub unsafe extern "C" fn rs_prompt_get_input(buf: *mut c_void) -> *mut c_char {
 ///
 /// # Safety
 /// Uses global `curbuf` and `curwin`. Must be called from main thread.
-#[no_mangle]
+#[export_name = "prompt_invoke_callback"]
 pub unsafe extern "C" fn rs_prompt_invoke_callback() {
     let curbuf = nvim_get_curbuf_ptr();
     let lnum: i32 = nvim_curbuf_get_ml_line_count_lnr();
@@ -1145,7 +1145,7 @@ pub unsafe extern "C" fn rs_prompt_invoke_callback() {
 ///
 /// # Safety
 /// Uses global `curbuf`. Must be called from main thread.
-#[no_mangle]
+#[export_name = "invoke_prompt_interrupt"]
 pub unsafe extern "C" fn rs_invoke_prompt_interrupt() -> bool {
     let callback = nvim_curbuf_get_prompt_interrupt();
     let cb_type = nvim_eval_cb_get_type(callback);

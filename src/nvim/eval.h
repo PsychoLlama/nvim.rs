@@ -206,4 +206,23 @@ char *do_string_sub(char *str, size_t len, char *pat, char *sub, typval_T *expr,
                     const char *flags, size_t *ret_len);
 void var_set_global(const char *name, typval_T *vartv);
 
+/// Rust-exported FFI symbols (renamed from rs_* in Phase 4, eval_shim pass 9).
+/// These replace C thin wrappers that were deleted from eval_shim.c.
+timer_T *find_timer_by_nr(varnumber_T xx);
+void add_timer_info(typval_T *rettv, timer_T *timer);
+void add_timer_info_all(typval_T *rettv);
+void timer_due_cb(TimeWatcher *tw, void *data);
+uint64_t timer_start(int64_t timeout, int repeat_count, const Callback *callback);
+void timer_stop(timer_T *timer);
+void timer_stop_all(void);
+void timer_teardown(void);
+bool common_job_callbacks(dict_T *vopts, CallbackReader *on_stdout, CallbackReader *on_stderr,
+                          Callback *on_exit);
+Channel *find_job(uint64_t id, bool show_error);
+void script_host_eval(char *name, typval_T *argvars, typval_T *rettv);
+void set_context_for_expression(expand_T *xp, char *arg, int cmdidx);
+char *prompt_get_input(buf_T *buf);
+void prompt_invoke_callback(void);
+bool invoke_prompt_interrupt(void);
+
 #include "eval_shim.h.generated.h"

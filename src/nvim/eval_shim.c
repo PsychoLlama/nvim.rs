@@ -145,9 +145,9 @@ extern int rs_free_unref_items(int copyID);
 // eval_fmt_source_name_line: renamed Rust export (Phase 3 pass 9).
 extern const char *rs_find_option_var_end(const char **arg, int *opt_idxp, int *opt_flags);
 // Phase 2 (eval_shim pass 5)
-extern char *rs_prompt_get_input(buf_T *buf);
-extern void rs_prompt_invoke_callback(void);
-extern bool rs_invoke_prompt_interrupt(void);
+// prompt_get_input: renamed Rust export (Phase 4 pass 9).
+// prompt_invoke_callback: renamed Rust export (Phase 4 pass 9).
+// invoke_prompt_interrupt: renamed Rust export (Phase 4 pass 9).
 // Phase 3 (eval_shim pass 5)
 // eval_foldexpr: renamed Rust export (Phase 3 pass 9).
 extern void rs_eval_foldtext(win_T *wp, Object *out);
@@ -161,19 +161,11 @@ extern char *rs_make_expanded_name(const char *in_start, char *expr_start, char 
 extern void rs_ex_echohl(exarg_T *eap);
 extern int rs_get_echo_hl_id(void);
 // Phase 1 (eval_shim pass 8): timer functions
-extern timer_T *rs_find_timer_by_nr(int64_t xx);
-extern void rs_add_timer_info(typval_T *rettv, timer_T *timer);
-extern void rs_add_timer_info_all(typval_T *rettv);
-extern void rs_timer_due_cb(TimeWatcher *tw, void *data);
-extern uint64_t rs_timer_start(int64_t timeout, int repeat_count, const Callback *callback);
-extern void rs_timer_stop(timer_T *timer);
+// find_timer_by_nr, add_timer_info, add_timer_info_all: renamed Rust exports (Phase 4 pass 9).
+// timer_due_cb, timer_start, timer_stop, timer_stop_all, timer_teardown: renamed (Phase 4 pass 9).
 extern void rs_timer_close_cb(TimeWatcher *tw, void *data);
-extern void rs_timer_stop_all(void);
-extern void rs_timer_teardown(void);
 // Phase 2 (eval_shim pass 8): job helper functions
-extern bool rs_common_job_callbacks(dict_T *vopts, CallbackReader *on_stdout,
-                                     CallbackReader *on_stderr, Callback *on_exit);
-extern Channel *rs_find_job(uint64_t id, bool show_error);
+// common_job_callbacks, find_job: renamed Rust exports (Phase 4 pass 9).
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -611,7 +603,7 @@ extern void rs_last_set_msg(int sc_sid, int sc_lnum, uint64_t sc_chan);
 // eval_has_provider: renamed Rust export (Phase 3 pass 9).
 extern void rs_eval_call_provider(const char *provider, const char *method,
                                   list_T *arguments, bool discard, typval_T *out_rettv);
-extern void rs_script_host_eval(char *name, typval_T *argvars, typval_T *rettv);
+// script_host_eval: renamed Rust export (Phase 4 pass 9).
 
 // eval_to_bool, eval_expr_typval, eval_expr_to_bool, eval_to_string_skip,
 // skip_expr, eval_to_string_eap, eval_to_string, eval_to_string_safe,
@@ -886,12 +878,8 @@ void nvim_emsg_skip_dec(void)
   emsg_skip--;
 }
 
-extern void rs_set_context_for_expression(expand_T *xp, char *arg, int cmdidx);
-void set_context_for_expression(expand_T *xp, char *arg, cmdidx_T cmdidx)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_set_context_for_expression(xp, arg, (int)cmdidx);
-}
+// set_context_for_expression: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
+// Note: C callers pass cmdidx_T which implicitly converts to int (the Rust parameter type).
 
 // pattern_match: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
 // eval_func: deleted -- replaced by rs_eval_func (Rust, Phase 3 pass 8).
@@ -1283,46 +1271,14 @@ bool nvim_callback_call_func(const char *name, partial_T *partial,
 
 // callback_call: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
 
-timer_T *find_timer_by_nr(varnumber_T xx)
-{
-  return rs_find_timer_by_nr((int64_t)xx);
-}
-
-void add_timer_info(typval_T *rettv, timer_T *timer)
-{
-  rs_add_timer_info(rettv, timer);
-}
-
-void add_timer_info_all(typval_T *rettv)
-{
-  rs_add_timer_info_all(rettv);
-}
-
-/// invoked on the main loop
-void timer_due_cb(TimeWatcher *tw, void *data)
-{
-  rs_timer_due_cb(tw, data);
-}
-
-uint64_t timer_start(const int64_t timeout, const int repeat_count, const Callback *const callback)
-{
-  return rs_timer_start(timeout, repeat_count, callback);
-}
-
-void timer_stop(timer_T *timer)
-{
-  rs_timer_stop(timer);
-}
-
-void timer_stop_all(void)
-{
-  rs_timer_stop_all();
-}
-
-void timer_teardown(void)
-{
-  rs_timer_teardown();
-}
+// find_timer_by_nr: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
+// add_timer_info: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
+// add_timer_info_all: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
+// timer_due_cb: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
+// timer_start: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
+// timer_stop: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
+// timer_stop_all: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
+// timer_teardown: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
 
 // save_tv_as_string: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
@@ -1402,24 +1358,9 @@ void last_set_msg(sctx_T script_ctx)
 
 // do_string_sub: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
-/// Common code for getting job callbacks for `jobstart`.
-///
-/// @return true/false on success/failure.
-bool common_job_callbacks(dict_T *vopts, CallbackReader *on_stdout, CallbackReader *on_stderr,
-                          Callback *on_exit)
-{
-  return rs_common_job_callbacks(vopts, on_stdout, on_stderr, on_exit);
-}
-
-Channel *find_job(uint64_t id, bool show_error)
-{
-  return rs_find_job(id, show_error);
-}
-
-void script_host_eval(char *name, typval_T *argvars, typval_T *rettv)
-{
-  rs_script_host_eval(name, argvars, rettv);
-}
+// common_job_callbacks: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
+// find_job: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
+// script_host_eval: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
 
 /// @param discard  Clears the value returned by the provider and returns
 ///                 an empty typval_T.
@@ -1434,23 +1375,9 @@ typval_T eval_call_provider(char *provider, char *method, list_T *arguments, boo
 
 // eval_fmt_source_name_line: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
-/// Gets the current user-input in prompt buffer `buf`, or NULL if buffer is not a prompt buffer.
-char *prompt_get_input(buf_T *buf)
-{
-  return rs_prompt_get_input(buf);
-}
-
-/// Invokes the user-defined callback defined for the current prompt-buffer.
-void prompt_invoke_callback(void)
-{
-  rs_prompt_invoke_callback();
-}
-
-/// @return  true when the interrupt callback was invoked.
-bool invoke_prompt_interrupt(void)
-{
-  return rs_invoke_prompt_interrupt();
-}
+// prompt_get_input: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
+// prompt_invoke_callback: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
+// invoke_prompt_interrupt: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
 
 
 // typval_tostring: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
@@ -3714,10 +3641,10 @@ void nvim_timer_tw_init(timer_T *timer)
   time_watcher_init(&main_loop, &timer->tw, timer);
 }
 
-/// Start the TimeWatcher (calls time_watcher_start with rs_timer_due_cb).
+/// Start the TimeWatcher (calls time_watcher_start with timer_due_cb).
 void nvim_timer_tw_start(timer_T *timer, uint64_t timeout, uint64_t repeat)
 {
-  time_watcher_start(&timer->tw, rs_timer_due_cb, timeout, repeat);
+  time_watcher_start(&timer->tw, timer_due_cb, timeout, repeat);
 }
 
 /// Stop the TimeWatcher (calls time_watcher_stop).

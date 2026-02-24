@@ -73,7 +73,7 @@ const K_CALLBACK_NONE: c_int = 0;
 /// - `vopts` must be a valid dict_T pointer.
 /// - `on_stdout`, `on_stderr` must be valid CallbackReader pointers.
 /// - `on_exit` must be a valid Callback pointer.
-#[no_mangle]
+#[export_name = "common_job_callbacks"]
 pub unsafe extern "C" fn rs_common_job_callbacks(
     vopts: DictHandle,
     on_stdout: CallbackReaderHandle,
@@ -121,7 +121,8 @@ pub unsafe extern "C" fn rs_common_job_callbacks(
 ///
 /// # Safety
 /// Safe to call from C.
-#[no_mangle]
+#[must_use]
+#[export_name = "find_job"]
 pub unsafe extern "C" fn rs_find_job(id: u64, show_error: bool) -> ChannelHandle {
     let data = nvim_find_channel(id);
     if nvim_channel_is_valid_job(data) == 0 {
