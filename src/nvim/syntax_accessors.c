@@ -73,6 +73,9 @@ extern void rs_syn_clear_one(int id, int syncing);
 extern void rs_syntax_clear(synblock_T *block);
 extern void rs_reset_synblock(win_T *wp);
 extern void rs_syntax_sync_clear(void);
+extern void rs_syn_clear_keyword(int id, hashtab_T *ht);
+extern void rs_clear_keywtab(hashtab_T *ht);
+extern void rs_invalidate_current_state(void);
 
 static bool did_syntax_onoff = false;
 
@@ -772,10 +775,7 @@ static synstate_T *syn_stack_find_entry(linenr_T lnum)
 
 static void invalidate_current_state(void)
 {
-  nvim_syn_clear_current_state();
-  current_state.ga_itemsize = 0;        // mark current_state invalid
-  current_next_list = NULL;
-  keepend_level = -1;
+  rs_invalidate_current_state();
 }
 
 static void validate_current_state(void)
@@ -909,58 +909,13 @@ void syn_maybe_enable(void)
 
 static void syn_clear_keyword(int id, hashtab_T *ht)
 {
-  hash_lock(ht);
-  int todo = (int)ht->ht_used;
-  for (hashitem_T *hi = ht->ht_array; todo > 0; hi++) {
-    if (HASHITEM_EMPTY(hi)) {
-      continue;
-    }
-    todo--;
-    keyentry_T *kp_prev = NULL;
-    for (keyentry_T *kp = HI2KE(hi); kp != NULL;) {
-      if (kp->k_syn.id == id) {
-        keyentry_T *kp_next = kp->ke_next;
-        if (kp_prev == NULL) {
-          if (kp_next == NULL) {
-            hash_remove(ht, hi);
-          } else {
-            hi->hi_key = KE2HIKEY(kp_next);
-          }
-        } else {
-          kp_prev->ke_next = kp_next;
-        }
-        xfree(kp->next_list);
-        xfree(kp->k_syn.cont_in_list);
-        xfree(kp);
-        kp = kp_next;
-      } else {
-        kp_prev = kp;
-        kp = kp->ke_next;
-      }
-    }
-  }
-  hash_unlock(ht);
+  rs_syn_clear_keyword(id, ht);
 }
 
 // Clear a whole keyword table.
 static void clear_keywtab(hashtab_T *ht)
 {
-  keyentry_T *kp_next;
-
-  int todo = (int)ht->ht_used;
-  for (hashitem_T *hi = ht->ht_array; todo > 0; hi++) {
-    if (!HASHITEM_EMPTY(hi)) {
-      todo--;
-      for (keyentry_T *kp = HI2KE(hi); kp != NULL; kp = kp_next) {
-        kp_next = kp->ke_next;
-        xfree(kp->next_list);
-        xfree(kp->k_syn.cont_in_list);
-        xfree(kp);
-      }
-    }
-  }
-  hash_clear(ht);
-  hash_init(ht);
+  rs_clear_keywtab(ht);
 }
 
 /// Add a keyword to the list of keywords.
@@ -4054,9 +4009,40 @@ void nvim_synblock_dec_folditems(synblock_T *block)
 
 /// Clear keyword entries with given syn id from a hashtab.
 /// Keeps all HI2KE/KE2HIKEY/hash_remove pointer arithmetic in C.
+/// NOTE: This must NOT call syn_clear_keyword() to avoid circular calls.
 void nvim_syn_clear_keyword_in_ht(int id, hashtab_T *ht)
 {
-  syn_clear_keyword(id, ht);
+  hash_lock(ht);
+  int todo = (int)ht->ht_used;
+  for (hashitem_T *hi = ht->ht_array; todo > 0; hi++) {
+    if (HASHITEM_EMPTY(hi)) {
+      continue;
+    }
+    todo--;
+    keyentry_T *kp_prev = NULL;
+    for (keyentry_T *kp = HI2KE(hi); kp != NULL;) {
+      if (kp->k_syn.id == id) {
+        keyentry_T *kp_next = kp->ke_next;
+        if (kp_prev == NULL) {
+          if (kp_next == NULL) {
+            hash_remove(ht, hi);
+          } else {
+            hi->hi_key = KE2HIKEY(kp_next);
+          }
+        } else {
+          kp_prev->ke_next = kp_next;
+        }
+        xfree(kp->next_list);
+        xfree(kp->k_syn.cont_in_list);
+        xfree(kp);
+        kp = kp_next;
+      } else {
+        kp_prev = kp;
+        kp = kp->ke_next;
+      }
+    }
+  }
+  hash_unlock(ht);
 }
 
 // =============================================================================
@@ -4064,10 +4050,12 @@ void nvim_syn_clear_keyword_in_ht(int id, hashtab_T *ht)
 // =============================================================================
 
 /// Clear both keyword tables for a synblock.
+/// NOTE: Calls nvim_syn_clear_keywtab_ht directly to avoid circular calls
+/// through clear_keywtab -> rs_clear_keywtab -> nvim_syn_clear_keywtab_ht.
 void nvim_synblock_clear_keytabs(synblock_T *block)
 {
-  clear_keywtab(&block->b_keywtab);
-  clear_keywtab(&block->b_keywtab_ic);
+  nvim_syn_clear_keywtab_ht(&block->b_keywtab);
+  nvim_syn_clear_keywtab_ht(&block->b_keywtab_ic);
 }
 
 /// ga_clear on b_syn_patterns.
@@ -4145,4 +4133,35 @@ void nvim_win_release_synblock(win_T *wp)
 void nvim_syn_clear_syn_state(synstate_T *p)
 {
   clear_syn_state(p);
+}
+
+// =============================================================================
+// Phase 5 pass 5 Phase 3 accessors: syn_clear_keyword / clear_keywtab / invalidate_current_state
+// =============================================================================
+
+/// Clear a whole keyword hashtable (free entries, then hash_clear + hash_init).
+/// NOTE: This must NOT call clear_keywtab() to avoid circular calls.
+void nvim_syn_clear_keywtab_ht(hashtab_T *ht)
+{
+  keyentry_T *kp_next;
+  int todo = (int)ht->ht_used;
+  for (hashitem_T *hi = ht->ht_array; todo > 0; hi++) {
+    if (!HASHITEM_EMPTY(hi)) {
+      todo--;
+      for (keyentry_T *kp = HI2KE(hi); kp != NULL; kp = kp_next) {
+        kp_next = kp->ke_next;
+        xfree(kp->next_list);
+        xfree(kp->k_syn.cont_in_list);
+        xfree(kp);
+      }
+    }
+  }
+  hash_clear(ht);
+  hash_init(ht);
+}
+
+/// Set current_state.ga_itemsize = 0 to mark state as invalid.
+void nvim_syn_set_current_state_invalid(void)
+{
+  current_state.ga_itemsize = 0;
 }

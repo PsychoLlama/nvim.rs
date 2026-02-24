@@ -95,6 +95,23 @@ extern "C" {
 
     /// Release ownsyntax block: clear it, free it, reset to buf's b_s.
     fn nvim_win_release_synblock(wp: WinHandle);
+
+    // Phase 3 accessors: syn_clear_keyword / clear_keywtab / invalidate_current_state
+
+    /// Clear a whole keyword hashtable (free all entries, reinitialize).
+    fn nvim_syn_clear_keywtab_ht(ht: *mut c_void);
+
+    /// Set current_state.ga_itemsize = 0 to mark current state invalid.
+    fn nvim_syn_set_current_state_invalid();
+
+    /// Clear the current state garray (deep clear with extmatch unref).
+    fn nvim_syn_clear_current_state();
+
+    /// Set current_next_list.
+    fn nvim_syn_set_current_next_list(list: *mut i16);
+
+    /// Set keepend_level.
+    fn nvim_syn_set_keepend_level(level: c_int);
 }
 
 // SPTYPE_START = 2 (must match C define)
@@ -210,6 +227,47 @@ pub unsafe extern "C" fn rs_syn_clear_one(id: c_int, syncing: c_int) {
         }
         idx -= 1;
     }
+}
+
+// =============================================================================
+// Phase 3 implementations
+// =============================================================================
+
+/// Clear keyword entries with the given id from a hashtable.
+/// The HI2KE/KE2HIKEY pointer arithmetic stays in C (nvim_syn_clear_keyword_in_ht).
+///
+/// # Safety
+/// ht must be a valid hashtab_T pointer. Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_clear_keyword(id: c_int, ht: *mut c_void) {
+    if ht.is_null() {
+        return;
+    }
+    nvim_syn_clear_keyword_in_ht(id, ht);
+}
+
+/// Clear a whole keyword table: free all entries and reinitialize.
+///
+/// # Safety
+/// ht must be a valid hashtab_T pointer. Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_keywtab(ht: *mut c_void) {
+    if ht.is_null() {
+        return;
+    }
+    nvim_syn_clear_keywtab_ht(ht);
+}
+
+/// Mark current_state invalid, clear next_list and keepend_level.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_invalidate_current_state() {
+    nvim_syn_clear_current_state();
+    nvim_syn_set_current_state_invalid();
+    nvim_syn_set_current_next_list(std::ptr::null_mut());
+    nvim_syn_set_keepend_level(-1);
 }
 
 // =============================================================================
