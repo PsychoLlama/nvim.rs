@@ -61,6 +61,7 @@
 // Rust FFI declarations (window wrappers removed)
 extern const char *rs_skip_to_option_part(const char *p);
 extern int rs_global_stl_height(void);
+extern int rs_get_shada_parameter(int type);
 
 // Rust fold FFI declarations
 extern void rs_foldUpdateAll(win_T *win);
@@ -1545,7 +1546,7 @@ const char *did_set_shada(optset_T *args)
       }
     }
   }
-  if (*p_shada && get_shada_parameter('\'') < 0) {
+  if (*p_shada && rs_get_shada_parameter('\'') < 0) {
     return N_("E528: Must specify a ' value");
   }
   return NULL;

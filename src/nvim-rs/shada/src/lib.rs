@@ -359,10 +359,6 @@ extern "C" {
     // History type to char conversion (C version)
     fn rs_hist_type2char_c(hist_type: c_int) -> c_int;
 
-    // ShaDa parameter functions
-    fn nvim_get_shada_parameter(typ: c_int) -> c_int;
-    fn nvim_find_shada_parameter(typ: c_int) -> *const c_char;
-
     // File operations
     fn nvim_file_skip(fd: FileDescriptorHandle, offset: usize) -> isize;
     fn nvim_file_eof(fd: FileDescriptorHandle) -> c_int;
@@ -460,7 +456,6 @@ extern "C" {
         out_additional_data: *mut *mut c_void,
     ) -> *const c_void;
     fn nvim_shada_op_reg_index(name: c_char) -> c_int;
-    fn nvim_shada_get_percent_param() -> c_int;
     fn nvim_shada_buf_get_cursor(buf: *const c_void, pos: *mut Position);
     fn nvim_shada_buf_get_additional_data(buf: *const c_void) -> *mut c_void;
     fn nvim_shada_os_time() -> Timestamp;
@@ -655,21 +650,78 @@ pub extern "C" fn rs_marks_equal(a: Position, b: Position) -> c_int {
     c_int::from(marks_equal(a, b))
 }
 
+/// Find the position after a given parameter character in the 'shada' option string.
+///
+/// Iterates through `p_shada` looking for a character matching `typ`. Stops at 'n'
+/// (always the last parameter) or if no more commas are found.
+///
+/// Returns a pointer to the character immediately after `typ` in the option string,
+/// or NULL if `typ` is not found.
+///
+/// Pure Rust implementation; does not call back into C.
+///
+/// # Safety
+///
+/// `nvim_shada_get_p_shada()` must return a valid NUL-terminated C string.
+unsafe fn find_shada_parameter_impl(typ: c_int) -> *const c_char {
+    let p_shada = nvim_shada_get_p_shada();
+    if p_shada.is_null() {
+        return std::ptr::null();
+    }
+    let target = typ as u8;
+    let mut p = p_shada;
+    while *p != 0 {
+        if *p as u8 == target {
+            // Return pointer to the character after the type char
+            return p.add(1);
+        }
+        if *p as u8 == b'n' {
+            // 'n' is always the last parameter
+            break;
+        }
+        // Skip forward to the next ',' delimiter
+        let comma = libc::strchr(p, c_int::from(b','));
+        if comma.is_null() {
+            break;
+        }
+        // The for-loop `p++` in C advances past the comma; replicate that
+        p = comma.add(1).cast_const();
+    }
+    std::ptr::null()
+}
+
 /// Get the shada parameter value for a given type character.
 ///
-/// This wraps the C function `get_shada_parameter`.
+/// Returns the integer value following `typ` in 'shada', or -1 if not found or
+/// not followed by a digit.
+///
+/// Pure Rust implementation; does not call back into C.
+///
+/// # Safety
+///
+/// `nvim_shada_get_p_shada()` must return a valid NUL-terminated C string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_shada_parameter(typ: c_int) -> c_int {
-    nvim_get_shada_parameter(typ)
+    let p = find_shada_parameter_impl(typ);
+    if !p.is_null() && (*p as u8).is_ascii_digit() {
+        return libc::atoi(p);
+    }
+    -1
 }
 
 /// Find the shada parameter string for a given type character.
 ///
-/// This wraps the C function `find_shada_parameter`.
-/// Returns NULL if the parameter is not found.
+/// Returns a pointer into the 'shada' option string pointing to the character
+/// immediately after `typ`, or NULL if `typ` is not found.
+///
+/// Pure Rust implementation; does not call back into C.
+///
+/// # Safety
+///
+/// `nvim_shada_get_p_shada()` must return a valid NUL-terminated C string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_find_shada_parameter(typ: c_int) -> *const c_char {
-    nvim_find_shada_parameter(typ)
+    find_shada_parameter_impl(typ)
 }
 
 // =============================================================================
@@ -762,12 +814,12 @@ pub unsafe extern "C" fn rs_shada_build_read_flags(flags: c_int, local_marks_par
         }
 
         // Check for '!' in shada option
-        if !nvim_find_shada_parameter(c_int::from(b'!')).is_null() {
+        if !find_shada_parameter_impl(c_int::from(b'!')).is_null() {
             srni_flags |= SD_READ_VARIABLES;
         }
 
         // Check for '%' in shada option
-        if !nvim_find_shada_parameter(c_int::from(b'%')).is_null() {
+        if !find_shada_parameter_impl(c_int::from(b'%')).is_null() {
             srni_flags |= SD_READ_BUFFER_LIST;
         }
     }
@@ -2611,7 +2663,7 @@ pub unsafe extern "C" fn rs_shada_filename(file: *const c_char) -> *mut c_char {
             p_shadafile
         } else {
             // Check for -n parameter or use default
-            let param_file = nvim_find_shada_parameter(c_int::from(b'n'));
+            let param_file = find_shada_parameter_impl(c_int::from(b'n'));
             if param_file.is_null() || *param_file == 0 {
                 let default_file = rs_shada_get_default_file();
                 // Expand environment variables
@@ -2694,7 +2746,7 @@ pub unsafe extern "C" fn rs_shada_read_everything(
 #[no_mangle]
 pub unsafe extern "C" fn rs_check_marks_read() {
     if nvim_shada_curbuf_marks_read() == 0
-        && nvim_get_shada_parameter(c_int::from(b'\'')) > 0
+        && rs_get_shada_parameter(c_int::from(b'\'')) > 0
         && !nvim_shada_curbuf_ffname().is_null()
     {
         rs_shada_read_marks();
@@ -2999,7 +3051,7 @@ pub unsafe extern "C" fn rs_shada_read(sd_reader: *mut c_void, flags: c_int) {
         let oldfiles_list = nvim_shada_get_oldfiles_list();
         force || oldfiles_list.is_null() || nvim_shada_tv_list_len(oldfiles_list) == 0
     };
-    let local_marks_param = nvim_get_shada_parameter(c_int::from(b'\''));
+    let local_marks_param = rs_get_shada_parameter(c_int::from(b'\''));
     let argcount = nvim_shada_argcount();
     let srni_flags = nvim_shada_get_srni_flags(flags, local_marks_param, get_old_files, argcount);
     if srni_flags == 0 {
@@ -4357,7 +4409,7 @@ pub unsafe extern "C" fn rs_shada_initialize_registers(
 /// `removable_bufs` must be a valid Set(ptr_t) handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_shada_get_buflist(removable_bufs: SetPtrHandle) -> ShadaEntry {
-    let max_bufs = nvim_shada_get_percent_param();
+    let max_bufs = rs_get_shada_parameter(c_int::from(b'%'));
     let mut buf_count: usize = 0;
 
     // Count buffers

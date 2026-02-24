@@ -92,6 +92,8 @@ extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stac
 extern int rs_get_copyID(void);
 extern int rs_shada_pack_entry(PackerBuffer *packer, const ShadaEntry *entry, size_t max_kbyte);
 extern int rs_shada_pack_pfreed_entry(PackerBuffer *packer, ShadaEntry *entry, size_t max_kbyte);
+extern int rs_get_shada_parameter(int type);
+extern const char *rs_find_shada_parameter(int type);
 
 #ifdef HAVE_BE64TOH
 # define _BSD_SOURCE 1  // NOLINT(bugprone-reserved-identifier)
@@ -919,7 +921,7 @@ static ShaDaWriteResult shada_write(FileDescriptor *const sd_writer,
   FUNC_ATTR_NONNULL_ARG(1)
 {
   ShaDaWriteResult ret = kSDWriteSuccessful;
-  int max_kbyte_i = get_shada_parameter('s');
+  int max_kbyte_i = rs_get_shada_parameter('s');
   if (max_kbyte_i < 0) {
     max_kbyte_i = 10;
   }
@@ -929,21 +931,21 @@ static ShaDaWriteResult shada_write(FileDescriptor *const sd_writer,
 
   WriteMergerState *const wms = xcalloc(1, sizeof(*wms));
   bool dump_one_history[HIST_COUNT];
-  const bool dump_global_vars = (find_shada_parameter('!') != NULL);
-  int max_reg_lines = get_shada_parameter('<');
+  const bool dump_global_vars = (rs_find_shada_parameter('!') != NULL);
+  int max_reg_lines = rs_get_shada_parameter('<');
   if (max_reg_lines < 0) {
-    max_reg_lines = get_shada_parameter('"');
+    max_reg_lines = rs_get_shada_parameter('"');
   }
   const bool dump_registers = (max_reg_lines != 0);
   Set(ptr_t) removable_bufs = SET_INIT;
   const size_t max_kbyte = (size_t)max_kbyte_i;
-  const size_t num_marked_files = (size_t)get_shada_parameter('\'');
-  const bool dump_global_marks = get_shada_parameter('f') != 0;
+  const size_t num_marked_files = (size_t)rs_get_shada_parameter('\'');
+  const bool dump_global_marks = rs_get_shada_parameter('f') != 0;
   bool dump_history = false;
 
   // Initialize history merger
   for (int i = 0; i < HIST_COUNT; i++) {
-    int num_saved = get_shada_parameter(rs_shada_hist_type2char(i));
+    int num_saved = rs_get_shada_parameter(rs_shada_hist_type2char(i));
     if (num_saved == -1) {
       num_saved = (int)p_hi;
     }
@@ -1006,7 +1008,7 @@ static ShaDaWriteResult shada_write(FileDescriptor *const sd_writer,
   }
 
   // Write buffer list
-  if (find_shada_parameter('%') != NULL) {
+  if (rs_find_shada_parameter('%') != NULL) {
     ShadaEntry buflist_entry = rs_shada_get_buflist(&removable_bufs);
     if (shada_pack_entry(&packer, buflist_entry, 0) == kSDWriteFailed) {
       xfree(buflist_entry.data.buffer_list.buffers);
@@ -1089,7 +1091,7 @@ static ShaDaWriteResult shada_write(FileDescriptor *const sd_writer,
 
   if (dump_one_history[HIST_SEARCH] > 0) {  // Skip if /0 in 'shada'
     const bool search_highlighted = !(no_hlsearch
-                                      || find_shada_parameter('h') != NULL);
+                                      || rs_find_shada_parameter('h') != NULL);
     const bool search_last_used = search_was_last_used();
 
     // Initialize search pattern
@@ -1970,40 +1972,6 @@ void nvim_shada_read_string(String string, const int flags)
   rs_close_file(&sd_reader);
 }
 
-/// Find the parameter represented by the given character (eg ', :, ", or /),
-/// and return its associated value in the 'shada' string.
-/// Only works for number parameters, not for 'r' or 'n'.
-/// If the parameter is not specified in the string or there is no following
-/// number, return -1.
-int get_shada_parameter(int type)
-{
-  char *p = find_shada_parameter(type);
-  if (p != NULL && ascii_isdigit(*p)) {
-    return atoi(p);
-  }
-  return -1;
-}
-
-/// Find the parameter represented by the given character (eg ''', ':', '"', or
-/// '/') in the 'shada' option and return a pointer to the string after it.
-/// Return NULL if the parameter is not specified in the string.
-char *find_shada_parameter(int type)
-{
-  for (char *p = p_shada; *p; p++) {
-    if (*p == type) {
-      return p + 1;
-    }
-    if (*p == 'n') {                // 'n' is always the last one
-      break;
-    }
-    p = vim_strchr(p, ',');         // skip until next ','
-    if (p == NULL) {                // hit the end without finding parameter
-      break;
-    }
-  }
-  return NULL;
-}
-
 // =============================================================================
 // Accessor functions for Rust shada crate (ShadaPackerBuffer == PackerBuffer)
 // =============================================================================
@@ -2035,10 +2003,6 @@ void nvim_shada_packer_flush(PackerBuffer *packer)
     packer->packer_flush(packer);
   }
 }
-
-// Wrapper functions for existing shada functions (nvim_ prefix for Rust FFI)
-int nvim_get_shada_parameter(int type) { return get_shada_parameter(type); }
-char *nvim_find_shada_parameter(int type) { return find_shada_parameter(type); }
 
 // Map operations for Rust hmll implementation (operate on inline PMap(cstr_t))
 void nvim_hmll_map_init(PMap(cstr_t) *map)
@@ -2241,7 +2205,6 @@ const void *nvim_shada_reg_iter(const void *iter, char *out_name, int *out_type,
 int nvim_shada_op_reg_index(char name) { return op_reg_index(name); }
 
 // Buffer list accessors
-int nvim_shada_get_percent_param(void) { return get_shada_parameter('%'); }
 void nvim_shada_buf_get_cursor(const void *buf, pos_T *pos)
 {
   if (buf) {
@@ -2615,7 +2578,7 @@ int nvim_shada_read_next_item(void *sd_reader, ShadaEntry *entry,
 
 /// Compute srni_flags from ShaDa read flags (same logic as C shada_read).
 /// @param flags         ShaDaReadFileFlags
-/// @param local_marks   get_shada_parameter('\'') value
+/// @param local_marks   rs_get_shada_parameter('\'') value
 /// @param get_old_files whether oldfiles should be gathered
 /// @param argcount      ARGCOUNT value
 unsigned nvim_shada_get_srni_flags(int flags, int local_marks,
@@ -2629,8 +2592,8 @@ unsigned nvim_shada_get_srni_flags(int flags, int local_marks,
         | kSDReadRegisters
         | kSDReadGlobalMarks
         | (p_hi ? kSDReadHistory : 0)
-        | (find_shada_parameter('!') != NULL ? kSDReadVariables : 0)
-        | (find_shada_parameter('%') != NULL && argcount == 0
+        | (rs_find_shada_parameter('!') != NULL ? kSDReadVariables : 0)
+        | (rs_find_shada_parameter('%') != NULL && argcount == 0
            ? kSDReadBufferList
            : 0))
      : 0)
