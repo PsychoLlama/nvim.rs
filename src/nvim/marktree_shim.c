@@ -134,6 +134,7 @@ extern bool rs_marktree_itr_step_overlap(MarkTree *b, MarkTreeIter *itr, MTPair 
 // Tree operations
 extern void rs_marktree_clear(MarkTree *b);
 extern void rs_marktree_check(MarkTree *b);
+extern bool rs_marktree_check_intersections(MarkTree *b);
 
 // Memory management operations
 extern void rs_marktree_free_node(MarkTree *b, MTNode *x);
@@ -1022,104 +1023,7 @@ void marktree_check(MarkTree *b)
 
 bool marktree_check_intersections(MarkTree *b)
 {
-  if (!b->root) {
-    return true;
-  }
-  PMap(ptr_t) checked = MAP_INIT;
-
-  // 1. move x->intersect to checked[x] and reinit x->intersect
-  mt_recurse_nodes(b->root, &checked);
-
-  // 2. iterate over all marks. for each START mark of a pair,
-  // intersect the nodes between the pair
-  MarkTreeIter itr[1];
-  rs_marktree_itr_first(b, itr);
-  while (true) {
-    MTKey mark = rs_marktree_itr_current(itr);
-    if (mark.pos.row < 0) {
-      break;
-    }
-
-    if (mt_start(mark)) {
-      MarkTreeIter start_itr[1];
-      MarkTreeIter end_itr[1];
-      uint64_t end_id = mt_lookup_id(mark.ns, mark.id, true);
-      MTKey k = rs_marktree_lookup(b, end_id, end_itr);
-      if (k.pos.row >= 0) {
-        *start_itr = *itr;
-        rs_marktree_intersect_pair(b, mt_lookup_key(mark), start_itr, end_itr, false);
-      }
-    }
-
-    rs_marktree_itr_next(b, itr);
-  }
-
-  // 3. for each node check if the recreated intersection
-  // matches the old checked[x] intersection.
-  bool status = mt_recurse_nodes_compare(b->root, &checked);
-
-  uint64_t *val;
-  map_foreach_value(&checked, val, {
-    xfree(val);
-  });
-  map_destroy(ptr_t, &checked);
-
-  return status;
-}
-
-void mt_recurse_nodes(MTNode *x, PMap(ptr_t) *checked)
-{
-  if (kv_size(x->intersect)) {
-    kvi_push(x->intersect, (uint64_t)-1);  // sentinel
-    uint64_t *val;
-    if (x->intersect.items == x->intersect.init_array) {
-      val = xmemdup(x->intersect.items, x->intersect.size * sizeof(*x->intersect.items));
-    } else {
-      val = x->intersect.items;
-    }
-    pmap_put(ptr_t)(checked, x, val);
-    kvi_init(x->intersect);
-  }
-
-  if (x->level) {
-    for (int i = 0; i < x->n + 1; i++) {
-      mt_recurse_nodes(x->ptr[i], checked);
-    }
-  }
-}
-
-bool mt_recurse_nodes_compare(MTNode *x, PMap(ptr_t) *checked)
-{
-  uint64_t *ref = pmap_get(ptr_t)(checked, x);
-  if (ref != NULL) {
-    for (size_t i = 0;; i++) {
-      if (ref[i] == (uint64_t)-1) {
-        if (i != kv_size(x->intersect)) {
-          return false;
-        }
-
-        break;
-      } else {
-        if (kv_size(x->intersect) <= i || ref[i] != kv_A(x->intersect, i)) {
-          return false;
-        }
-      }
-    }
-  } else {
-    if (kv_size(x->intersect)) {
-      return false;
-    }
-  }
-
-  if (x->level) {
-    for (int i = 0; i < x->n + 1; i++) {
-      if (!mt_recurse_nodes_compare(x->ptr[i], checked)) {
-        return false;
-      }
-    }
-  }
-
-  return true;
+  return rs_marktree_check_intersections(b);
 }
 
 // TODO(bfredl): kv_print

@@ -601,6 +601,9 @@ extern "C" {
     /// Free a heap-allocated MarkTreeIter.
     fn nvim_free_marktreeiter(itr: MarkTreeIterHandle);
 
+    /// Copy iterator contents from src to dst (equivalent to `*dst = *src`).
+    fn nvim_marktree_itr_copy(dst: MarkTreeIterHandle, src: MarkTreeIterHandle);
+
     // ========================================================================
     // Splice Operations (Phase 6)
     // ========================================================================
@@ -4151,6 +4154,163 @@ pub fn marktree_check(b: MarkTreeHandle) {
     );
 }
 
+/// Recursively save and clear intersection lists for all nodes in the subtree.
+///
+/// Saves each non-empty intersection list (with a sentinel `u64::MAX`) into `saved`,
+/// then clears the node's intersection list.
+fn mt_recurse_nodes_handle(
+    x: MTNodeHandle,
+    saved: &mut std::collections::HashMap<usize, Vec<u64>>,
+) {
+    let size = unsafe { nvim_mtnode_get_intersect_size(x) };
+    if size > 0 {
+        let mut list = Vec::with_capacity(size + 1);
+        for i in 0..size {
+            list.push(unsafe { nvim_mtnode_get_intersect_elem(x, i) });
+        }
+        list.push(u64::MAX); // sentinel
+        saved.insert(x.0 as usize, list);
+        unsafe { nvim_mtnode_intersect_clear(x) };
+    }
+
+    let level = unsafe { nvim_mtnode_get_level(x) };
+    if level != 0 {
+        let n = unsafe { nvim_mtnode_get_n(x) };
+        for i in 0..=n {
+            let child = unsafe { nvim_mtnode_get_ptr(x, i) };
+            mt_recurse_nodes_handle(child, saved);
+        }
+    }
+}
+
+/// Recursively compare rebuilt intersection lists against saved ones.
+///
+/// Returns `true` if all nodes match, `false` otherwise.
+fn mt_recurse_nodes_compare_handle(
+    x: MTNodeHandle,
+    saved: &std::collections::HashMap<usize, Vec<u64>>,
+) -> bool {
+    let current_size = unsafe { nvim_mtnode_get_intersect_size(x) };
+
+    match saved.get(&(x.0 as usize)) {
+        Some(ref_list) => {
+            // ref_list ends with u64::MAX sentinel; check element-by-element
+            let mut i = 0usize;
+            loop {
+                let sentinel = ref_list[i] == u64::MAX;
+                if sentinel {
+                    if i != current_size {
+                        return false;
+                    }
+                    break;
+                }
+                if current_size <= i {
+                    return false;
+                }
+                let cur_elem = unsafe { nvim_mtnode_get_intersect_elem(x, i) };
+                if ref_list[i] != cur_elem {
+                    return false;
+                }
+                i += 1;
+            }
+        }
+        None => {
+            if current_size != 0 {
+                return false;
+            }
+        }
+    }
+
+    let level = unsafe { nvim_mtnode_get_level(x) };
+    if level != 0 {
+        let n = unsafe { nvim_mtnode_get_n(x) };
+        for i in 0..=n {
+            let child = unsafe { nvim_mtnode_get_ptr(x, i) };
+            if !mt_recurse_nodes_compare_handle(child, saved) {
+                return false;
+            }
+        }
+    }
+
+    true
+}
+
+/// Validate intersection markers by rebuilding them from scratch and comparing.
+///
+/// Returns `true` if all intersection lists are consistent, `false` otherwise.
+///
+/// # Panics
+///
+/// Does not panic (returns false on mismatch).
+#[must_use]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+pub fn marktree_check_intersections(b: MarkTreeHandle) -> bool {
+    let root = unsafe { nvim_marktree_get_root(b) };
+    if root.is_null() {
+        return true;
+    }
+
+    // Step 1: save and clear all intersection lists
+    let mut saved: std::collections::HashMap<usize, Vec<u64>> = std::collections::HashMap::new();
+    mt_recurse_nodes_handle(root, &mut saved);
+
+    // Step 2: iterate over all marks; for each start mark of a pair,
+    // rebuild intersections
+    let itr = unsafe { nvim_alloc_marktreeiter() };
+    let _ = marktree_itr_first(b, itr);
+    loop {
+        let mark = marktree_itr_current(itr);
+        if mark.pos.row < 0 {
+            break;
+        }
+
+        if mt_start(&mark) {
+            let end_id = mt_lookup_id(mark.ns, mark.id, true);
+            let end_itr = unsafe { nvim_alloc_marktreeiter() };
+            let k = marktree_lookup(b, end_id, end_itr);
+            if k.pos.row >= 0 {
+                let start_itr = unsafe { nvim_alloc_marktreeiter() };
+                // Copy current iterator to start_itr (equivalent to `*start_itr = *itr`)
+                unsafe { nvim_marktree_itr_copy(start_itr, itr) };
+                marktree_intersect_pair(b, mt_lookup_key(&mark), start_itr, end_itr, false);
+                unsafe { nvim_free_marktreeiter(start_itr) };
+            }
+            unsafe { nvim_free_marktreeiter(end_itr) };
+        }
+
+        let _ = marktree_itr_next(b, itr);
+    }
+    unsafe { nvim_free_marktreeiter(itr) };
+
+    // Step 3: compare rebuilt intersections against saved ones
+    let status = mt_recurse_nodes_compare_handle(root, &saved);
+
+    // Step 4: restore original intersection lists
+    restore_intersections(root, &saved);
+
+    status
+}
+
+/// Restore saved intersection lists to all nodes.
+fn restore_intersections(x: MTNodeHandle, saved: &std::collections::HashMap<usize, Vec<u64>>) {
+    unsafe { nvim_mtnode_intersect_clear(x) };
+    if let Some(list) = saved.get(&(x.0 as usize)) {
+        // list ends with u64::MAX sentinel; push all elements before sentinel
+        for &id in list.iter().take_while(|&&v| v != u64::MAX) {
+            unsafe { nvim_mtnode_intersect_push(x, id) };
+        }
+    }
+
+    let level = unsafe { nvim_mtnode_get_level(x) };
+    if level != 0 {
+        let n = unsafe { nvim_mtnode_get_n(x) };
+        for i in 0..=n {
+            let child = unsafe { nvim_mtnode_get_ptr(x, i) };
+            restore_intersections(child, saved);
+        }
+    }
+}
+
 // ============================================================================
 // FFI Exports for Phase 6 & 8
 // ============================================================================
@@ -4197,6 +4357,12 @@ pub extern "C" fn rs_marktree_move_region(
 #[no_mangle]
 pub extern "C" fn rs_marktree_check(b: MarkTreeHandle) {
     marktree_check(b);
+}
+
+/// Exported FFI version of `marktree_check_intersections`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_check_intersections(b: MarkTreeHandle) -> bool {
+    marktree_check_intersections(b)
 }
 
 // ============================================================================
