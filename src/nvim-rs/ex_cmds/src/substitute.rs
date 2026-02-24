@@ -182,8 +182,7 @@ extern "C" {
     /// Free the regmmatch_T opaque handle (vim_regfree + xfree)
     pub fn nvim_do_sub_vim_regfree(rm: *mut crate::RegmmatchHandle);
     /// Wrap regtilde for do_sub
-    pub fn nvim_do_sub_regtilde(sub_str: *mut c_char, magic: c_int, preview: c_int)
-        -> *mut c_char;
+    pub fn nvim_do_sub_regtilde(sub_str: *mut c_char, magic: c_int, preview: c_int) -> *mut c_char;
 }
 
 /// C-compatible layout for subflags_T.
@@ -1113,6 +1112,186 @@ pub unsafe extern "C" fn rs_skip_substitute(
 }
 
 // =============================================================================
+// Phase 2: Additional global/struct accessor declarations for do_sub
+// =============================================================================
+
+#[allow(dead_code)]
+extern "C" {
+    fn nvim_do_sub_get_RedrawingDisabled() -> c_int;
+    fn nvim_do_sub_set_RedrawingDisabled(val: c_int);
+    fn nvim_do_sub_no_u_sync_inc();
+    fn nvim_do_sub_no_u_sync_dec();
+    fn nvim_do_sub_set_need_wait_return(val: c_int);
+    fn nvim_do_sub_set_msg_didout(val: c_int);
+    fn nvim_do_sub_set_highlight_match(val: c_int);
+    fn nvim_do_sub_set_search_match_lines(val: c_int);
+    fn nvim_do_sub_set_search_match_endcol(val: c_int);
+    fn nvim_do_sub_get_ex_normal_busy() -> c_int;
+    fn nvim_do_sub_get_exmode_active() -> c_int;
+    fn nvim_do_sub_get_sandbox() -> c_int;
+    fn nvim_do_sub_sandbox_inc();
+    fn nvim_do_sub_sandbox_dec();
+    fn nvim_do_sub_get_textlock() -> c_int;
+    fn nvim_do_sub_textlock_inc();
+    fn nvim_do_sub_textlock_dec();
+    fn nvim_do_sub_get_p_ch() -> c_int;
+    fn nvim_do_sub_get_p_lz() -> c_int;
+    fn nvim_do_sub_set_p_lz(val: c_int);
+    fn nvim_do_sub_get_p_cpo_has_undo() -> c_int;
+    fn nvim_curwin_get_w_curswant() -> c_int;
+    fn nvim_curwin_get_w_botline() -> c_int;
+    fn nvim_curwin_get_w_p_crb() -> c_int;
+    fn nvim_curwin_get_w_p_fen() -> c_int;
+    fn nvim_curwin_set_w_p_fen(val: c_int);
+    fn nvim_curbuf_get_b_p_ma() -> c_int;
+    fn nvim_curbuf_set_b_p_ma(val: c_int);
+    fn nvim_curbuf_set_deleted_bytes2(val: c_int);
+    fn nvim_do_sub_get_CMD_tilde() -> c_int;
+    fn nvim_do_sub_get_MAXCOL() -> c_int;
+    fn nvim_do_sub_get_CMOD_KEEPPATTERNS() -> c_int;
+    fn nvim_do_sub_coladvance(col: c_int);
+    fn nvim_do_sub_changed_bytes(lnum: c_int, col: c_int);
+    fn nvim_do_sub_deleted_lines(lnum: c_int, count: c_int);
+    fn nvim_do_sub_u_inssub(lnum: c_int) -> c_int;
+    fn nvim_do_sub_u_savesub(lnum: c_int) -> c_int;
+    fn nvim_do_sub_u_savedel(lnum: c_int, count: c_int) -> c_int;
+    fn nvim_do_sub_u_save_cursor();
+    fn nvim_do_sub_do_check_cursorbind();
+    fn nvim_do_sub_scrollup_clamp();
+    fn nvim_do_sub_scrolldown_clamp();
+    fn nvim_do_sub_setmouse();
+    fn nvim_do_sub_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
+    fn nvim_do_sub_ml_replace(lnum: c_int, line: *mut c_char, copy: c_int);
+    fn nvim_do_sub_getdigits_int(pp: *mut *mut c_char) -> c_int;
+    fn nvim_do_sub_profile_passed_limit(timeout: u64) -> c_int;
+    fn nvim_do_sub_profile_setlimit(ms: i64) -> u64;
+    fn nvim_do_sub_profile_zero() -> u64;
+    fn nvim_do_sub_get_p_rdt() -> i64;
+    fn nvim_do_sub_skip_regexp_ex(
+        cmd: *mut c_char,
+        delim: c_int,
+        arg_ptr: *mut *mut c_char,
+    ) -> *mut c_char;
+    fn nvim_do_sub_check_nextcmd(cmd: *const c_char) -> *mut c_char;
+    fn nvim_do_sub_get_search_pat() -> *const c_char;
+    fn nvim_do_sub_changed_window_setting();
+    fn nvim_curwin_get_cursor_col() -> c_int;
+    fn nvim_do_sub_get_p_cwh() -> c_int;
+    fn nvim_do_sub_aborting() -> c_int;
+    fn nvim_do_sub_os_time() -> u64;
+    fn nvim_do_sub_setpcmark();
+    fn nvim_do_sub_buf_line_count() -> c_int;
+    fn nvim_do_sub_getvcol_startcol(lnum: c_int, col: c_int, sc_out: *mut c_int);
+    fn nvim_do_sub_getvcol_endcol(lnum: c_int, col: c_int, ec_out: *mut c_int);
+    fn nvim_do_sub_getcmdline_prompt(prompt_str: *const c_char) -> c_int;
+    fn nvim_do_sub_prompt_for_input(str_: *const c_char) -> c_int;
+    fn nvim_do_sub_update_screen_for_confirm();
+    fn nvim_do_sub_gotocmdline();
+    fn nvim_do_sub_number_width() -> c_int;
+    fn nvim_do_sub_syn_check_sub_group() -> c_int;
+    fn nvim_do_sub_disable_inccommand();
+    fn nvim_do_sub_get_p_icm_notnul() -> c_int;
+    fn nvim_do_sub_set_op_start(lnum: c_int);
+    fn nvim_do_sub_set_op_end(lnum: c_int);
+    fn nvim_do_sub_modifiable() -> c_int;
+    fn nvim_do_sub_emsg_nopresub();
+    fn nvim_do_sub_emsg_invcmd();
+    fn nvim_do_sub_emsg_modifiable();
+    fn nvim_do_sub_emsg_zerocount();
+    fn nvim_do_sub_emsg_backslash();
+    fn nvim_do_sub_semsg_patnotf2(pat: *const c_char);
+    fn nvim_do_sub_semsg_trailing(cmd: *const c_char);
+    fn nvim_do_sub_format_confirm_prompt(sub_str: *const c_char) -> *mut c_char;
+    fn nvim_do_sub_format_val_too_large_str(val: c_int) -> *mut c_char;
+    fn nvim_do_sub_semsg_val_too_large(buf: *const c_char);
+    fn nvim_do_sub_RE_LAST() -> c_int;
+    fn nvim_do_sub_RE_SUBST() -> c_int;
+    fn nvim_do_sub_RE_SEARCH() -> c_int;
+    fn nvim_do_sub_SEARCH_HIS() -> c_int;
+    fn nvim_do_sub_REGSUB_BACKSLASH() -> c_int;
+    fn nvim_do_sub_REGSUB_MAGIC() -> c_int;
+    fn nvim_do_sub_REGSUB_COPY() -> c_int;
+    fn nvim_do_sub_MAXLNUM() -> c_int;
+    fn nvim_do_sub_kExtmarkNOOP() -> c_int;
+    fn nvim_do_sub_kExtmarkUndo() -> c_int;
+    fn nvim_do_sub_extmark_splice(
+        start_row: c_int,
+        start_col: c_int,
+        old_row: c_int,
+        old_col: c_int,
+        old_bytes: i64,
+        new_row: c_int,
+        new_col: c_int,
+        new_bytes: i64,
+        etype: c_int,
+    );
+    fn nvim_do_sub_mark_adjust_insert(lnum: c_int);
+    fn nvim_do_sub_mark_adjust_delete(lnum: c_int, count: c_int);
+    fn nvim_do_sub_appended_lines(lnum: c_int);
+    fn nvim_do_sub_ml_delete(lnum: c_int);
+    fn nvim_do_sub_changed_lines(first: c_int, last: c_int, xtra: c_int);
+    fn nvim_do_sub_buf_updates_send_changes(first: c_int, num_added: i64, num_removed: i64);
+    fn nvim_do_sub_line_breakcheck();
+    fn nvim_do_sub_ml_get_len(lnum: c_int) -> c_int;
+    fn nvim_do_sub_ml_get(lnum: c_int) -> *const c_char;
+    fn nvim_do_sub_eap_cmd_is_s(eap: *const ExArgHandle) -> c_int;
+    fn nvim_do_sub_ascii_iswhite(c: c_int) -> c_int;
+    fn nvim_do_sub_is_sub_flag_or_digit(c: c_int) -> c_int;
+    fn nvim_do_sub_is_backslash_delim(cmd: *const c_char) -> c_int;
+    fn nvim_do_sub_ascii_isdigit(c: c_int) -> c_int;
+    fn nvim_do_sub_set_eap_nextcmd(eap: *mut ExArgHandle, p: *mut c_char);
+    fn nvim_do_sub_get_sub_nsubs() -> c_int;
+    fn nvim_do_sub_set_sub_nsubs(val: c_int);
+    fn nvim_do_sub_sub_nsubs_inc();
+    fn nvim_do_sub_get_sub_nlines() -> c_int;
+    fn nvim_do_sub_set_sub_nlines(val: c_int);
+    fn nvim_do_sub_sub_nlines_inc();
+    fn nvim_do_sub_get_global_busy() -> c_int;
+    fn nvim_do_sub_set_global_need_beginline(val: c_int);
+    fn nvim_do_sub_msg_empty();
+    fn nvim_do_sub_emsg_interr();
+    fn nvim_do_sub_save_pat(pat: *const c_char, patlen: usize, which_pat: c_int);
+    fn nvim_do_sub_set_replacement(sub_str: *const c_char);
+    fn nvim_do_sub_get_old_sub() -> *const c_char;
+}
+
+// Additional C functions used by do_sub
+#[allow(dead_code)]
+extern "C" {
+    fn nvim_exarg_get_cmdidx(eap: *mut ExArgHandle) -> c_int;
+    fn nvim_exarg_get_arg(eap: *const ExArgHandle) -> *const c_char;
+    fn nvim_exarg_set_line2(eap: *mut ExArgHandle, line2: c_int);
+    fn nvim_curwin_get_cursor_lnum() -> c_int;
+    fn semsg(fmt: *const c_char, ...);
+    fn rs_hasAnyFolding(win: *mut crate::WinHandle) -> c_int;
+    fn nvim_get_curwin() -> *mut crate::WinHandle;
+    fn rs_print_line(lnum: c_int, use_number: c_int, list: c_int, first: c_int);
+    fn rs_print_line_no_prefix(lnum: c_int, use_number: c_int, list: c_int);
+    fn xfree(ptr: *mut std::ffi::c_void);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn xstrnsave(string: *const c_char, len: usize) -> *mut c_char;
+    fn ml_get(lnum: c_int) -> *const c_char;
+    fn ml_get_len(lnum: c_int) -> c_int;
+    fn ml_append(lnum: c_int, line: *const c_char, len: c_int, newfile: c_int) -> c_int;
+    fn skipwhite(p: *const c_char) -> *const c_char;
+    fn vim_strchr(string: *const c_char, c: c_int) -> *const c_char;
+    fn beginline(flags: c_int);
+    fn changed_lines(
+        buf: *mut crate::BufHandle,
+        lnum: c_int,
+        col: c_int,
+        lnume: c_int,
+        xtra: c_int,
+        do_buf_event: c_int,
+    );
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn msg(s: *const c_char, hl_id: c_int) -> c_int;
+    fn emsg(s: *const c_char) -> c_int;
+    fn nvim_cmdmod_has_lockmarks() -> c_int;
+    fn fast_breakcheck();
+}
+
+// =============================================================================
 // Substitute lifecycle (Phase 4 migration)
 // =============================================================================
 
@@ -1127,19 +1306,1442 @@ extern "C" {
         additional_data: *mut std::ffi::c_void,
     );
 
-    // do_sub accessor
-    fn nvim_excmds_do_sub(
-        eap: *mut ExArgHandle,
-        cmdpreview_ns: c_int,
-        cmdpreview_bufnr: c_int,
-        use_rdt: c_int,
-    ) -> c_int;
-
     // ex_substitute_preview accessors
     fn nvim_excmds_arg_has_valid_delim(eap: *const ExArgHandle) -> c_int;
     fn nvim_excmds_eap_arg_save(eap: *mut ExArgHandle) -> *mut c_char;
     fn nvim_excmds_eap_arg_restore(eap: *mut ExArgHandle, saved: *mut c_char);
 }
+
+// =============================================================================
+// Phase 3: do_sub Rust implementation
+// =============================================================================
+
+/// Static flags that persist across :substitute calls (matches C `static subflags_T subflags`).
+static SUBFLAGS: std::sync::Mutex<CSubFlags> = std::sync::Mutex::new(CSubFlags {
+    do_all: false,
+    do_ask: false,
+    do_count: false,
+    do_error: true,
+    do_print: false,
+    do_list: false,
+    do_number: false,
+    do_ic: 0, // kSubHonorOptions
+});
+
+/// Static highlight group id for inccommand preview (matches C `static int pre_hl_id`).
+static PRE_HL_ID: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+
+/// SubResult holds a single match result for preview.
+struct DoSubResult {
+    start_lnum: c_int,
+    start_col: c_int,
+    end_lnum: c_int,
+    end_col: c_int,
+    pre_match: c_int,
+}
+
+/// PreviewLines accumulates match results for inccommand preview.
+pub(crate) struct PreviewLines {
+    subresults: Vec<DoSubResult>,
+    lines_needed: c_int,
+}
+
+impl PreviewLines {
+    fn new() -> Self {
+        Self {
+            subresults: Vec::new(),
+            lines_needed: 0,
+        }
+    }
+
+    fn push(&mut self, result: DoSubResult) {
+        let match_lines = result.end_lnum - result.start_lnum + 1;
+        if let Some(last) = self.subresults.last() {
+            if last.end_lnum == result.start_lnum {
+                self.lines_needed += match_lines - 1;
+            } else {
+                self.lines_needed += match_lines;
+            }
+        } else {
+            self.lines_needed += match_lines;
+        }
+        self.subresults.push(result);
+    }
+}
+
+/// C-compatible accessor for PreviewLines (used by rs_show_sub).
+/// Returns the size of the subresults vector.
+///
+/// # Safety
+/// `pl` must be a valid non-null pointer to a `PreviewLines` value.
+#[no_mangle]
+#[allow(private_interfaces)]
+pub unsafe extern "C" fn nvim_excmds_preview_lines_size_rust(pl: *const PreviewLines) -> usize {
+    (*pl).subresults.len()
+}
+
+/// C-compatible accessor for a PreviewLines item.
+///
+/// # Safety
+/// `pl` must be valid and `idx` must be in bounds. All output pointers must be valid.
+#[no_mangle]
+#[allow(private_interfaces)]
+pub unsafe extern "C" fn nvim_excmds_preview_lines_item_rust(
+    pl: *const PreviewLines,
+    idx: usize,
+    start_lnum: *mut c_int,
+    start_col: *mut c_int,
+    end_lnum: *mut c_int,
+    end_col: *mut c_int,
+    pre_match: *mut c_int,
+) {
+    let item = &(&(*pl).subresults)[idx];
+    *start_lnum = item.start_lnum;
+    *start_col = item.start_col;
+    *end_lnum = item.end_lnum;
+    *end_col = item.end_col;
+    *pre_match = item.pre_match;
+}
+
+/// LineData holds per-match extmark data for batch processing.
+#[allow(dead_code)]
+struct LineData {
+    start_col: c_int,
+    start_lnum: c_int,
+    start_lnum_endpos: c_int,
+    start_col_endpos: c_int,
+    matchcols: c_int,
+    matchbytes: i64,
+    subcols: c_int,
+    subbytes: i64,
+    lnum_before: c_int,
+    lnum_after: c_int,
+}
+
+/// Perform the :substitute command. This is the Rust port of C `do_sub`.
+///
+/// Returns 0 normally, or 1/2 for inccommand preview.
+///
+/// # Safety
+/// All pointers must be valid. Calls numerous C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_sub(
+    eap: *mut ExArgHandle,
+    cmdpreview_ns: c_int,
+    cmdpreview_bufnr: c_int,
+    use_rdt: c_int,
+) -> c_int {
+    // Set up the timeout
+    let timeout: u64 = if use_rdt != 0 {
+        nvim_do_sub_profile_setlimit(nvim_do_sub_get_p_rdt())
+    } else {
+        nvim_do_sub_profile_zero()
+    };
+
+    let re_last = nvim_do_sub_RE_LAST();
+    let re_subst = nvim_do_sub_RE_SUBST();
+    let re_search = nvim_do_sub_RE_SEARCH();
+    let maxcol = nvim_do_sub_get_MAXCOL();
+    let _maxlnum = nvim_do_sub_MAXLNUM();
+    let kextmark_noop = nvim_do_sub_kExtmarkNOOP();
+    let kextmark_undo = nvim_do_sub_kExtmarkUndo();
+    let regsub_backslash = nvim_do_sub_REGSUB_BACKSLASH();
+    let regsub_magic = nvim_do_sub_REGSUB_MAGIC();
+    let regsub_copy = nvim_do_sub_REGSUB_COPY();
+    let search_his = nvim_do_sub_SEARCH_HIS();
+
+    let mut which_pat: c_int;
+    let cmd_tilde = nvim_do_sub_get_CMD_tilde();
+
+    // Determine which_pat
+    let cmdidx = nvim_exarg_get_cmdidx(eap);
+    if cmdidx == cmd_tilde {
+        which_pat = re_last;
+    } else {
+        which_pat = re_subst;
+    }
+
+    let mut cmd = nvim_exarg_get_arg(eap) as *mut c_char;
+    let keeppatterns = nvim_do_sub_get_CMOD_KEEPPATTERNS() != 0;
+
+    let mut pat: *const c_char = std::ptr::null();
+    let mut patlen: usize = 0;
+    let mut sub: *mut c_char = std::ptr::null_mut();
+    let mut _has_second_delim = false;
+    #[allow(unused_assignments)]
+    let mut delimiter: c_int = 0;
+
+    // Check if we have a new pattern
+    let is_s_cmd = nvim_do_sub_eap_cmd_is_s(eap) != 0;
+    let cmd0 = *cmd as u8;
+    let cmd_is_new_pattern = is_s_cmd
+        && cmd0 != 0
+        && nvim_do_sub_ascii_iswhite(cmd0 as c_int) == 0
+        && nvim_do_sub_is_sub_flag_or_digit(cmd0 as c_int) == 0;
+
+    if cmd_is_new_pattern {
+        // Check delimiter validity
+        if rs_check_regexp_delim(*cmd as c_int) == 0 {
+            return 0;
+        }
+
+        if nvim_do_sub_is_backslash_delim(cmd) != 0 {
+            // "\/ sub/" or "\? sub?" style
+            cmd = cmd.add(1);
+            let dc = *cmd as u8;
+            if dc != b'&' {
+                which_pat = re_search;
+            }
+            pat = c"".as_ptr();
+            patlen = 0;
+            delimiter = *cmd as c_int;
+            cmd = cmd.add(1);
+            _has_second_delim = true;
+        } else {
+            which_pat = re_last;
+            delimiter = *cmd as c_int;
+            cmd = cmd.add(1);
+            pat = cmd;
+            // Skip to end of pattern, updating eap->arg in place
+            let mut arg_ptr = nvim_exarg_get_arg(eap) as *mut c_char;
+            cmd = nvim_do_sub_skip_regexp_ex(cmd, delimiter, &mut arg_ptr);
+            if *cmd == delimiter as i8 {
+                *cmd = 0; // replace end delimiter with NUL
+                cmd = cmd.add(1);
+                _has_second_delim = true;
+            }
+            patlen = strlen_c(pat);
+        }
+
+        // Skip the substitution string
+        let sub_start = cmd;
+        cmd = rs_skip_substitute(cmd, delimiter);
+        sub = xstrdup(sub_start);
+
+        if nvim_exarg_get_skip(eap) == 0 && !keeppatterns && cmdpreview_ns <= 0 {
+            nvim_do_sub_set_replacement(sub);
+        }
+    } else if nvim_exarg_get_skip(eap) == 0 {
+        // Use previous pattern and substitution
+        let old_sub = nvim_do_sub_get_old_sub();
+        if old_sub.is_null() {
+            nvim_do_sub_emsg_nopresub();
+            return 0;
+        }
+        pat = std::ptr::null();
+        patlen = 0;
+        sub = xstrdup(old_sub);
+
+        // Vi compatibility: if last command used "$", keep cursor in last column
+        let endcolumn = nvim_curwin_get_w_curswant() == maxcol;
+        let _ = endcolumn; // Used later after loop
+    }
+
+    // Determine endcolumn now (before sub_joining_lines)
+    let endcolumn = if !cmd_is_new_pattern && nvim_exarg_get_skip(eap) == 0 {
+        nvim_curwin_get_w_curswant() == maxcol
+    } else {
+        false
+    };
+
+    // Check for join optimization (:%s/\n//g -> join)
+    if !sub.is_null()
+        && rs_sub_joining_lines(
+            eap,
+            pat,
+            patlen,
+            sub,
+            cmd,
+            if cmdpreview_ns <= 0 { 1 } else { 0 },
+            if keeppatterns { 1 } else { 0 },
+        ) != 0
+    {
+        xfree(sub as *mut std::ffi::c_void);
+        return 0;
+    }
+
+    // Parse flags
+    let mut subflags_local: CSubFlags;
+    {
+        let mut sf = SUBFLAGS.lock().unwrap();
+        // Clone current flags to local
+        subflags_local = CSubFlags {
+            do_all: sf.do_all,
+            do_ask: sf.do_ask,
+            do_count: sf.do_count,
+            do_error: sf.do_error,
+            do_print: sf.do_print,
+            do_list: sf.do_list,
+            do_number: sf.do_number,
+            do_ic: sf.do_ic,
+        };
+        // Parse flags from cmd, modifying subflags_local and which_pat
+        cmd = rs_sub_parse_flags(cmd, &mut subflags_local, &mut which_pat);
+        // Write back to static
+        sf.do_all = subflags_local.do_all;
+        sf.do_ask = subflags_local.do_ask;
+        sf.do_count = subflags_local.do_count;
+        sf.do_error = subflags_local.do_error;
+        sf.do_print = subflags_local.do_print;
+        sf.do_list = subflags_local.do_list;
+        sf.do_number = subflags_local.do_number;
+        sf.do_ic = subflags_local.do_ic;
+    }
+
+    let save_do_all = subflags_local.do_all;
+    let save_do_ask = subflags_local.do_ask;
+
+    // Parse trailing count
+    cmd = skipwhite(cmd) as *mut c_char;
+    if nvim_do_sub_ascii_isdigit(*cmd as c_int) != 0 {
+        let i = nvim_do_sub_getdigits_int(&mut cmd);
+        if i <= 0 && nvim_exarg_get_skip(eap) == 0 && subflags_local.do_error {
+            nvim_do_sub_emsg_zerocount();
+            xfree(sub as *mut std::ffi::c_void);
+            return 0;
+        } else if i == c_int::MAX {
+            let buf = nvim_do_sub_format_val_too_large_str(i);
+            nvim_do_sub_semsg_val_too_large(buf);
+            xfree(buf as *mut std::ffi::c_void);
+            xfree(sub as *mut std::ffi::c_void);
+            return 0;
+        }
+        let line1 = nvim_exarg_get_line1(eap);
+        nvim_exarg_set_line2(eap, line1); // eap->line1 = eap->line2
+        let new_line2 = line1 + i - 1;
+        let buf_line_count = nvim_do_sub_buf_line_count();
+        nvim_exarg_set_line2(eap, new_line2.min(buf_line_count));
+    }
+
+    // Check for trailing command or garbage
+    cmd = skipwhite(cmd) as *mut c_char;
+    if *cmd != 0 && *cmd != b'"' as i8 {
+        let nextcmd = nvim_do_sub_check_nextcmd(cmd);
+        if nextcmd.is_null() {
+            nvim_do_sub_semsg_trailing(cmd);
+            xfree(sub as *mut std::ffi::c_void);
+            return 0;
+        }
+        nvim_do_sub_set_eap_nextcmd(eap, nextcmd);
+    }
+
+    if nvim_exarg_get_skip(eap) != 0 {
+        xfree(sub as *mut std::ffi::c_void);
+        return 0;
+    }
+
+    if !subflags_local.do_count && nvim_do_sub_modifiable() == 0 {
+        nvim_do_sub_emsg_modifiable();
+        xfree(sub as *mut std::ffi::c_void);
+        return 0;
+    }
+
+    // Compile the regex
+    let regmatch = nvim_do_sub_search_regcomp(
+        pat,
+        patlen,
+        which_pat,
+        if cmdpreview_ns > 0 { 0 } else { search_his },
+    );
+    if regmatch.is_null() {
+        if subflags_local.do_error {
+            nvim_do_sub_emsg_invcmd();
+        }
+        xfree(sub as *mut std::ffi::c_void);
+        return 0;
+    }
+
+    // Apply i/I flags to ignore-case setting
+    let do_ic = subflags_local.do_ic;
+    if do_ic == 1 {
+        // kSubIgnoreCase
+        nvim_regmmatch_set_rmm_ic(regmatch, 1);
+    } else if do_ic == 2 {
+        // kSubMatchCase
+        nvim_regmmatch_set_rmm_ic(regmatch, 0);
+    }
+
+    // Save sub_firstline (not allocated yet)
+    let mut sub_firstline: *mut c_char = std::ptr::null_mut();
+
+    // Process the substitution string: expand ~ or copy
+    let sub = if !sub.is_null() && *sub == b'\\' as i8 && *sub.add(1) == b'=' as i8 {
+        // Expression substitute: copy it
+        let p = xstrdup(sub);
+        xfree(sub as *mut std::ffi::c_void);
+        p
+    } else {
+        let p = nvim_do_sub_regtilde(sub, rs_magic_isset(), if cmdpreview_ns > 0 { 1 } else { 0 });
+        if p != sub {
+            xfree(sub as *mut std::ffi::c_void);
+        }
+        p
+    };
+
+    // Save current globals for the loop
+    let old_line_count = nvim_do_sub_buf_line_count();
+    let start_nsubs = nvim_do_sub_get_sub_nsubs();
+
+    if nvim_do_sub_get_global_busy() == 0 {
+        nvim_do_sub_set_sub_nsubs(0);
+        nvim_do_sub_set_sub_nlines(0);
+    }
+
+    let mut first_line: c_int = 0;
+    let mut last_line: c_int = 0;
+    let mut got_quit = false;
+    let mut got_match = false;
+    let mut did_save = false;
+
+    // Save old cursor position
+    let old_cursor_lnum = nvim_curwin_get_cursor_lnum();
+    let old_cursor_col = nvim_curwin_get_cursor_col();
+
+    // Inccommand preview data
+    let mut preview_lines = PreviewLines::new();
+
+    let mut line2 = nvim_exarg_get_line2(eap);
+
+    // Main substitution loop
+    let mut lnum = nvim_exarg_get_line1(eap);
+    while lnum <= line2
+        && !got_quit
+        && nvim_do_sub_aborting() == 0
+        && (cmdpreview_ns <= 0
+            || preview_lines.lines_needed <= nvim_do_sub_get_p_cwh()
+            || lnum <= nvim_curwin_get_w_botline())
+    {
+        let nmatch = nvim_do_sub_vim_regexec_multi(regmatch, lnum, 0);
+        if nmatch > 0 {
+            // Track per-line extmark data
+            let mut line_matches: Vec<LineData> = Vec::new();
+
+            let mut copycol: c_int = 0;
+            let mut matchcol: c_int = 0;
+            let mut prev_matchcol: c_int = maxcol;
+            let mut new_start: *mut c_char = std::ptr::null_mut();
+            let mut new_start_len: c_int = 0;
+            let mut did_sub = false;
+            let mut lastone: bool;
+            let mut nmatch_tl: c_int = 0;
+            let mut nmatch = nmatch;
+            let mut do_again: bool;
+            let mut skip_match = false;
+            let mut sub_firstlnum: c_int = lnum;
+            let mut lnum_start: c_int = 0;
+
+            if !got_match {
+                nvim_do_sub_setpcmark();
+                got_match = true;
+            }
+
+            // Inner loop: process all matches on this line
+            loop {
+                #[allow(unused_assignments)]
+                let mut cur_start_lnum: c_int = 0;
+                let mut cur_start_col: c_int = 0;
+                let mut cur_end_lnum: c_int = 0;
+                let mut cur_end_col: c_int = 0;
+                let mut cur_pre_match: c_int = 0;
+
+                // Advance lnum to where match starts
+                let startpos0_lnum = nvim_regmmatch_startpos0_lnum(regmatch);
+                if startpos0_lnum > 0 {
+                    cur_pre_match = lnum;
+                    lnum += startpos0_lnum;
+                    sub_firstlnum += startpos0_lnum;
+                    nmatch -= startpos0_lnum;
+                    xfree(sub_firstline as *mut std::ffi::c_void);
+                    sub_firstline = std::ptr::null_mut();
+                }
+
+                cur_start_lnum = sub_firstlnum;
+
+                // Check if match is after last line
+                if lnum > nvim_do_sub_buf_line_count() {
+                    break;
+                }
+
+                if sub_firstline.is_null() {
+                    let line = nvim_do_sub_ml_get(sub_firstlnum);
+                    sub_firstline = xstrnsave(line, nvim_do_sub_ml_get_len(sub_firstlnum) as usize);
+                }
+
+                nvim_curwin_set_cursor_lnum(lnum);
+                do_again = false;
+
+                // 1. Empty match handling
+                let endpos0_lnum = nvim_regmmatch_endpos0_lnum(regmatch);
+                let endpos0_col = nvim_regmmatch_endpos0_col(regmatch);
+                let startpos0_col = nvim_regmmatch_startpos0_col(regmatch);
+
+                if matchcol == prev_matchcol && endpos0_lnum == 0 && matchcol == endpos0_col {
+                    let c = *sub_firstline.add(matchcol as usize) as u8;
+                    if c == 0 {
+                        skip_match = true;
+                    } else {
+                        matchcol += utfc_ptr2len(sub_firstline.add(matchcol as usize));
+                    }
+                    cur_start_col = matchcol;
+                    cur_end_lnum = sub_firstlnum;
+                    cur_end_col = matchcol;
+                    // goto skip
+                    // fall through to skip section
+                } else {
+                    matchcol = endpos0_col;
+                    prev_matchcol = matchcol;
+
+                    // 2. Count-only mode
+                    if subflags_local.do_count {
+                        if nmatch > 1 {
+                            matchcol = strlen_c(sub_firstline) as c_int;
+                            nmatch = 1;
+                            skip_match = true;
+                        }
+                        nvim_do_sub_sub_nsubs_inc();
+                        did_sub = true;
+                        if !(*sub == b'\\' as i8 && *sub.add(1) == b'=' as i8) {
+                            // goto skip
+                            cur_start_col = startpos0_col;
+                            cur_end_lnum = sub_firstlnum;
+                            cur_end_col = endpos0_col;
+                            // fall through to skip
+                        } else {
+                            goto_sub_main(
+                                &mut subflags_local,
+                                regmatch,
+                                sub,
+                                &mut sub_firstlnum,
+                                &mut sub_firstline,
+                                &mut lnum,
+                                &mut line2,
+                                &mut matchcol,
+                                &mut copycol,
+                                &mut new_start,
+                                &mut new_start_len,
+                                &mut nmatch,
+                                &mut nmatch_tl,
+                                &mut did_sub,
+                                &mut did_save,
+                                &mut skip_match,
+                                &mut first_line,
+                                &mut last_line,
+                                &mut line_matches,
+                                &mut do_again,
+                                &mut lnum_start,
+                                &mut cur_start_lnum,
+                                &mut cur_start_col,
+                                &mut cur_end_lnum,
+                                &mut cur_end_col,
+                                cmdpreview_ns,
+                                regsub_backslash,
+                                regsub_magic,
+                                regsub_copy,
+                                kextmark_noop,
+                                kextmark_undo,
+                                eap,
+                            );
+                        }
+                    } else {
+                        // do_ask handling and substitution
+                        if subflags_local.do_ask && cmdpreview_ns <= 0 {
+                            let typed = handle_do_ask(
+                                &mut subflags_local,
+                                regmatch,
+                                sub,
+                                lnum,
+                                sub_firstlnum,
+                                &mut lnum_start,
+                                &mut copycol,
+                                new_start,
+                                sub_firstline,
+                                &mut line2,
+                                &mut nmatch,
+                                &mut matchcol,
+                                &mut skip_match,
+                                &mut got_quit,
+                                eap,
+                            );
+                            if typed < 0 || got_quit {
+                                cur_start_col = startpos0_col;
+                                cur_end_lnum = sub_firstlnum;
+                                cur_end_col = endpos0_col;
+                            } else if typed == b'n' as c_int {
+                                if nmatch > 1 {
+                                    matchcol = strlen_c(sub_firstline) as c_int;
+                                    skip_match = true;
+                                }
+                                cur_start_col = startpos0_col;
+                                cur_end_lnum = sub_firstlnum;
+                                cur_end_col = endpos0_col;
+                            } else {
+                                // y or a - do substitution
+                                goto_sub_main(
+                                    &mut subflags_local,
+                                    regmatch,
+                                    sub,
+                                    &mut sub_firstlnum,
+                                    &mut sub_firstline,
+                                    &mut lnum,
+                                    &mut line2,
+                                    &mut matchcol,
+                                    &mut copycol,
+                                    &mut new_start,
+                                    &mut new_start_len,
+                                    &mut nmatch,
+                                    &mut nmatch_tl,
+                                    &mut did_sub,
+                                    &mut did_save,
+                                    &mut skip_match,
+                                    &mut first_line,
+                                    &mut last_line,
+                                    &mut line_matches,
+                                    &mut do_again,
+                                    &mut lnum_start,
+                                    &mut cur_start_lnum,
+                                    &mut cur_start_col,
+                                    &mut cur_end_lnum,
+                                    &mut cur_end_col,
+                                    cmdpreview_ns,
+                                    regsub_backslash,
+                                    regsub_magic,
+                                    regsub_copy,
+                                    kextmark_noop,
+                                    kextmark_undo,
+                                    eap,
+                                );
+                            }
+                        } else {
+                            // Normal substitution
+                            goto_sub_main(
+                                &mut subflags_local,
+                                regmatch,
+                                sub,
+                                &mut sub_firstlnum,
+                                &mut sub_firstline,
+                                &mut lnum,
+                                &mut line2,
+                                &mut matchcol,
+                                &mut copycol,
+                                &mut new_start,
+                                &mut new_start_len,
+                                &mut nmatch,
+                                &mut nmatch_tl,
+                                &mut did_sub,
+                                &mut did_save,
+                                &mut skip_match,
+                                &mut first_line,
+                                &mut last_line,
+                                &mut line_matches,
+                                &mut do_again,
+                                &mut lnum_start,
+                                &mut cur_start_lnum,
+                                &mut cur_start_col,
+                                &mut cur_end_lnum,
+                                &mut cur_end_col,
+                                cmdpreview_ns,
+                                regsub_backslash,
+                                regsub_magic,
+                                regsub_copy,
+                                kextmark_noop,
+                                kextmark_undo,
+                                eap,
+                            );
+                        }
+                    }
+                }
+
+                // Skip label equivalent - determine lastone
+                lastone = skip_match
+                    || nvim_excmds_got_int() != 0
+                    || got_quit
+                    || lnum > line2
+                    || !(subflags_local.do_all || do_again)
+                    || (*sub_firstline.add(matchcol as usize) == 0
+                        && nmatch <= 1
+                        && nvim_regmmatch_re_multiline(regmatch) == 0);
+                let prev_nmatch = nmatch;
+                nmatch = -1;
+
+                // Replace line if needed
+                if lastone
+                    || nmatch_tl > 0
+                    || {
+                        let m = nvim_do_sub_vim_regexec_multi(regmatch, sub_firstlnum, matchcol);
+                        nmatch = m;
+                        m == 0
+                    }
+                    || nvim_regmmatch_startpos0_lnum(regmatch) > 0
+                {
+                    if !new_start.is_null() {
+                        // Append rest of line
+                        let rest = sub_firstline.add(copycol as usize);
+                        let new_start_len_str = strlen_c(new_start);
+                        let rest_len = strlen_c(rest);
+                        // Manually append (we need to strcat equivalent)
+                        let dst = new_start.add(new_start_len_str);
+                        std::ptr::copy_nonoverlapping(rest, dst, rest_len + 1);
+
+                        matchcol = strlen_c(sub_firstline) as c_int - matchcol;
+                        prev_matchcol = strlen_c(sub_firstline) as c_int - prev_matchcol;
+
+                        if nvim_do_sub_u_savesub(lnum) == 0 {
+                            break;
+                        }
+                        nvim_do_sub_ml_replace(lnum, new_start, 1);
+
+                        // Process extmarks
+                        for md in &line_matches {
+                            nvim_do_sub_extmark_splice(
+                                md.lnum_before - 1,
+                                md.start_col,
+                                md.start_lnum_endpos - md.start_lnum,
+                                md.matchcols,
+                                md.matchbytes,
+                                md.lnum_after - md.lnum_before,
+                                md.subcols,
+                                md.subbytes,
+                                kextmark_undo,
+                            );
+                        }
+                        line_matches.clear();
+
+                        if nmatch_tl > 0 {
+                            lnum += 1;
+                            if nvim_do_sub_u_savedel(lnum, nmatch_tl) == 0 {
+                                break;
+                            }
+                            for _ in 0..nmatch_tl {
+                                nvim_do_sub_ml_delete(lnum);
+                            }
+                            nvim_do_sub_mark_adjust_delete(lnum, nmatch_tl);
+                            if subflags_local.do_ask {
+                                nvim_do_sub_deleted_lines(lnum, nmatch_tl);
+                            }
+                            lnum -= 1;
+                            line2 -= nmatch_tl;
+                            nmatch_tl = 0;
+                        }
+
+                        if subflags_local.do_ask {
+                            nvim_do_sub_changed_bytes(lnum, 0);
+                        } else {
+                            if first_line == 0 {
+                                first_line = lnum;
+                            }
+                            last_line = lnum + 1;
+                        }
+
+                        sub_firstlnum = lnum;
+                        xfree(sub_firstline as *mut std::ffi::c_void);
+                        sub_firstline = new_start;
+                        new_start = std::ptr::null_mut();
+                        matchcol = strlen_c(sub_firstline) as c_int - matchcol;
+                        prev_matchcol = strlen_c(sub_firstline) as c_int - prev_matchcol;
+                        copycol = 0;
+                    }
+
+                    if nmatch == -1 && !lastone {
+                        nmatch = nvim_do_sub_vim_regexec_multi(regmatch, sub_firstlnum, matchcol);
+                    }
+
+                    // Break if no more matches
+                    if nmatch <= 0 {
+                        if prev_nmatch == -1 {
+                            lnum -= nvim_regmmatch_startpos0_lnum(regmatch);
+                        }
+                        // PUSH_PREVIEW_LINES
+                        if cmdpreview_ns > 0 {
+                            if cur_end_lnum == 0 {
+                                cur_end_lnum = cur_start_lnum;
+                            }
+                            preview_lines.push(DoSubResult {
+                                start_lnum: cur_start_lnum,
+                                start_col: cur_start_col,
+                                end_lnum: cur_end_lnum,
+                                end_col: cur_end_col,
+                                pre_match: cur_pre_match,
+                            });
+                        }
+                        break;
+                    }
+                }
+
+                // PUSH_PREVIEW_LINES (for when we're continuing)
+                if cmdpreview_ns > 0 {
+                    if cur_end_lnum == 0 {
+                        cur_end_lnum = cur_start_lnum;
+                    }
+                    preview_lines.push(DoSubResult {
+                        start_lnum: cur_start_lnum,
+                        start_col: cur_start_col,
+                        end_lnum: cur_end_lnum,
+                        end_col: cur_end_col,
+                        pre_match: cur_pre_match,
+                    });
+                }
+
+                nvim_do_sub_line_breakcheck();
+            } // end inner while
+
+            if did_sub {
+                nvim_do_sub_sub_nlines_inc();
+            }
+            xfree(new_start as *mut std::ffi::c_void);
+            xfree(sub_firstline as *mut std::ffi::c_void);
+            sub_firstline = std::ptr::null_mut();
+        }
+
+        nvim_do_sub_line_breakcheck();
+
+        if nvim_do_sub_profile_passed_limit(timeout) != 0 {
+            got_quit = true;
+        }
+
+        lnum += 1;
+    }
+
+    // Post-loop cleanup
+    nvim_curbuf_set_deleted_bytes2(0);
+
+    if first_line != 0 {
+        let i = nvim_do_sub_buf_line_count() - old_line_count;
+        nvim_do_sub_changed_lines(first_line, last_line - i, i);
+
+        let num_added = (last_line - first_line) as i64;
+        let num_removed = num_added - i as i64;
+        nvim_do_sub_buf_updates_send_changes(first_line, num_added, num_removed);
+    }
+
+    xfree(sub_firstline as *mut std::ffi::c_void);
+
+    // Restore cursor if count-only
+    if subflags_local.do_count {
+        nvim_curwin_set_cursor_lnum(old_cursor_lnum);
+        nvim_curwin_set_cursor_col(old_cursor_col);
+    }
+
+    let cur_sub_nsubs = nvim_do_sub_get_sub_nsubs();
+    if cur_sub_nsubs > start_nsubs {
+        if nvim_cmdmod_has_lockmarks() == 0 {
+            nvim_do_sub_set_op_start(nvim_exarg_get_line1(eap));
+            nvim_do_sub_set_op_end(line2);
+        }
+
+        if nvim_do_sub_get_global_busy() == 0 {
+            if !subflags_local.do_ask {
+                if endcolumn {
+                    nvim_do_sub_coladvance(maxcol);
+                } else {
+                    // BL_WHITE | BL_FIX = 1 | 4 = 5
+                    beginline(5);
+                }
+            }
+            if cmdpreview_ns <= 0
+                && !rs_do_sub_msg(subflags_local.do_count)
+                && subflags_local.do_ask
+                && nvim_do_sub_get_p_ch() > 0
+            {
+                nvim_do_sub_msg_empty();
+            }
+        } else {
+            nvim_do_sub_set_global_need_beginline(1);
+        }
+        if subflags_local.do_print {
+            rs_print_line(
+                nvim_curwin_get_cursor_lnum(),
+                subflags_local.do_number as c_int,
+                subflags_local.do_list as c_int,
+                1,
+            );
+        }
+    } else if nvim_do_sub_get_global_busy() == 0 {
+        if nvim_excmds_got_int() != 0 {
+            nvim_do_sub_emsg_interr();
+        } else if got_match {
+            if nvim_do_sub_get_p_ch() > 0 {
+                nvim_do_sub_msg_empty();
+            }
+        } else if subflags_local.do_error {
+            let pat_str = nvim_do_sub_get_search_pat();
+            nvim_do_sub_semsg_patnotf2(pat_str);
+        }
+    }
+
+    if subflags_local.do_ask && rs_hasAnyFolding(nvim_get_curwin()) != 0 {
+        nvim_do_sub_changed_window_setting();
+    }
+
+    nvim_do_sub_vim_regfree(regmatch);
+    xfree(sub as *mut std::ffi::c_void);
+
+    // Restore saved flags
+    {
+        let mut sf = SUBFLAGS.lock().unwrap();
+        sf.do_all = save_do_all;
+        sf.do_ask = save_do_ask;
+    }
+
+    let mut retv: c_int = 0;
+
+    // Show inccommand preview
+    if cmdpreview_ns > 0 && nvim_do_sub_aborting() == 0 {
+        if got_quit || nvim_do_sub_profile_passed_limit(timeout) != 0 {
+            nvim_do_sub_disable_inccommand();
+        } else if nvim_do_sub_get_p_icm_notnul() != 0 && !pat.is_null() {
+            let mut hl_id = PRE_HL_ID.load(std::sync::atomic::Ordering::Relaxed);
+            if hl_id == 0 {
+                hl_id = nvim_do_sub_syn_check_sub_group();
+                PRE_HL_ID.store(hl_id, std::sync::atomic::Ordering::Relaxed);
+            }
+            // Call rs_show_sub with the preview_lines
+            retv = rs_show_sub(
+                eap,
+                old_cursor_lnum,
+                old_cursor_col,
+                &preview_lines as *const PreviewLines as *const std::ffi::c_void,
+                hl_id,
+                cmdpreview_ns,
+                cmdpreview_bufnr,
+            );
+        }
+    }
+
+    retv
+}
+
+/// Helper: strlen for a C string pointer.
+unsafe fn strlen_c(s: *const c_char) -> usize {
+    if s.is_null() {
+        return 0;
+    }
+    let mut len = 0usize;
+    while *s.add(len) != 0 {
+        len += 1;
+    }
+    len
+}
+
+/// Handle the do_ask UI loop for :s/foo/bar/c interactive confirmation.
+/// Returns the typed character, or -1 if got_quit.
+#[allow(clippy::too_many_arguments)]
+unsafe fn handle_do_ask(
+    subflags: &mut CSubFlags,
+    regmatch: *mut crate::RegmmatchHandle,
+    sub: *const c_char,
+    lnum: c_int,
+    _sub_firstlnum: c_int,
+    lnum_start: &mut c_int,
+    copycol: &mut c_int,
+    new_start: *mut c_char,
+    sub_firstline: *const c_char,
+    line2: &mut c_int,
+    nmatch: &mut c_int,
+    matchcol: &mut c_int,
+    skip_match: &mut bool,
+    got_quit: &mut bool,
+    eap: *mut ExArgHandle,
+) -> c_int {
+    let _ = eap;
+    let _ = lnum_start;
+
+    let save_state = nvim_curwin_get_cursor_col(); // store State proxy
+    let startpos0_col = nvim_regmmatch_startpos0_col(regmatch);
+    nvim_curwin_set_cursor_col(startpos0_col);
+
+    if nvim_curwin_get_w_p_crb() != 0 {
+        nvim_do_sub_do_check_cursorbind();
+    }
+
+    if nvim_do_sub_get_p_cpo_has_undo() != 0 {
+        nvim_do_sub_no_u_sync_inc();
+    }
+
+    let mut typed: c_int = 0;
+
+    while subflags.do_ask {
+        if nvim_do_sub_get_exmode_active() != 0 {
+            // Exmode: use getcmdline_prompt
+            rs_print_line_no_prefix(lnum, subflags.do_number as c_int, subflags.do_list as c_int);
+
+            let mut sc: c_int = 0;
+            let mut ec: c_int = 0;
+            nvim_do_sub_getvcol_startcol(lnum, startpos0_col, &mut sc);
+            let endpos0_col = nvim_regmmatch_endpos0_col(regmatch);
+            nvim_do_sub_getvcol_endcol(lnum, 0_i32.max(endpos0_col - 1), &mut ec);
+            nvim_curwin_set_cursor_col(startpos0_col);
+
+            if subflags.do_number || nvim_curwin_get_w_p_nu() != 0 {
+                // We can't easily get w_p_nu in isolation - use nvim_curwin_get_w_p_nu from lib
+                let numw = nvim_do_sub_number_width() + 1;
+                sc += numw;
+                ec += numw;
+            }
+
+            // Build prompt: sc spaces + (ec-sc+1) carets
+            let prompt_len = (ec + 1) as usize + 1;
+            let prompt = libc_alloc(prompt_len);
+            std::ptr::write_bytes(prompt, b' ', sc as usize);
+            std::ptr::write_bytes(prompt.add(sc as usize), b'^', (ec - sc + 1) as usize);
+            *prompt.add(ec as usize + 1) = 0;
+
+            typed = nvim_do_sub_getcmdline_prompt(prompt);
+            libc_free(prompt);
+
+            if nvim_do_sub_get_ex_normal_busy() != 0 && typed == 0 {
+                typed = b'q' as c_int;
+            }
+        } else {
+            // Normal mode: show highlighted match, then prompt
+            let mut orig_line: *mut c_char = std::ptr::null_mut();
+            let mut len_change: c_int = 0;
+            let save_p_lz = nvim_do_sub_get_p_lz();
+            let save_p_fen = nvim_curwin_get_w_p_fen();
+
+            nvim_curwin_set_w_p_fen(0);
+
+            let temp = nvim_do_sub_get_RedrawingDisabled();
+            nvim_do_sub_set_RedrawingDisabled(0);
+
+            nvim_do_sub_set_p_lz(0);
+
+            if !new_start.is_null() {
+                let orig = nvim_do_sub_ml_get(lnum);
+                let orig_len = nvim_do_sub_ml_get_len(lnum);
+                orig_line = xstrnsave(orig, orig_len as usize);
+                let new_line =
+                    nvim_do_sub_concat_str(new_start, sub_firstline.add(*copycol as usize));
+                len_change = strlen_c(new_line) as c_int - strlen_c(orig_line) as c_int;
+                let cur_col = nvim_curwin_get_cursor_col() + len_change;
+                nvim_curwin_set_cursor_col(cur_col);
+                nvim_do_sub_ml_replace(lnum, new_line, 0);
+            }
+
+            let endpos0_lnum = nvim_regmmatch_endpos0_lnum(regmatch);
+            let endpos0_col = nvim_regmmatch_endpos0_col(regmatch);
+            let match_endcol = endpos0_col + len_change;
+            let match_lines = endpos0_lnum - startpos0_col; // actually endpos0_lnum - startpos0_lnum
+            nvim_do_sub_set_search_match_lines(
+                endpos0_lnum - nvim_regmmatch_startpos0_lnum(regmatch),
+            );
+            nvim_do_sub_set_search_match_endcol(match_endcol);
+            if nvim_regmmatch_endpos0_lnum(regmatch) - nvim_regmmatch_startpos0_lnum(regmatch) == 0
+                && match_endcol == 0
+            {
+                nvim_do_sub_set_search_match_endcol(1);
+            }
+            nvim_do_sub_set_highlight_match(1);
+
+            nvim_do_sub_update_screen_for_confirm();
+
+            nvim_curwin_set_w_p_fen(save_p_fen);
+
+            let prompt_str = nvim_do_sub_format_confirm_prompt(sub);
+            typed = nvim_do_sub_prompt_for_input(prompt_str);
+            nvim_do_sub_set_highlight_match(0);
+            xfree(prompt_str as *mut std::ffi::c_void);
+
+            nvim_do_sub_set_msg_didout(0);
+            nvim_do_sub_gotocmdline();
+            nvim_do_sub_set_p_lz(save_p_lz);
+            nvim_do_sub_set_RedrawingDisabled(temp);
+
+            if !orig_line.is_null() {
+                nvim_do_sub_ml_replace(lnum, orig_line, 0);
+            }
+            let _ = match_lines;
+            let _ = save_state;
+        }
+
+        nvim_do_sub_set_need_wait_return(0);
+        if typed == b'q' as c_int || typed == 27 /* ESC */ || typed == 3
+        /* Ctrl-C */
+        {
+            *got_quit = true;
+            break;
+        }
+        if typed == b'n' as c_int {
+            break;
+        }
+        if typed == b'y' as c_int {
+            break;
+        }
+        if typed == b'l' as c_int {
+            subflags.do_all = false;
+            *line2 = lnum;
+            break;
+        }
+        if typed == b'a' as c_int {
+            subflags.do_ask = false;
+            break;
+        }
+        if typed == 5
+        /* Ctrl-E */
+        {
+            nvim_do_sub_scrollup_clamp();
+        } else if typed == 25
+        /* Ctrl-Y */
+        {
+            nvim_do_sub_scrolldown_clamp();
+        }
+    }
+
+    // Restore state
+    nvim_do_sub_setmouse();
+    if nvim_do_sub_get_p_cpo_has_undo() != 0 {
+        nvim_do_sub_no_u_sync_dec();
+    }
+
+    if typed == b'n' as c_int && *nmatch > 1 {
+        *matchcol = strlen_c(sub_firstline) as c_int;
+        *skip_match = true;
+    }
+
+    typed
+}
+
+/// Allocate a zero-initialized buffer of size n bytes using C xcalloc.
+unsafe fn libc_alloc(n: usize) -> *mut c_char {
+    xcalloc(n, 1) as *mut c_char
+}
+
+/// Free memory allocated by C.
+unsafe fn libc_free(p: *mut c_char) {
+    xfree(p as *mut std::ffi::c_void);
+}
+
+/// Helper: get w_p_nu from curwin.
+unsafe fn nvim_curwin_get_w_p_nu() -> c_int {
+    extern "C" {
+        fn nvim_curwin_get_w_p_nu() -> c_int;
+    }
+    nvim_curwin_get_w_p_nu()
+}
+
+/// Do the actual substitution for one match. This is the "step 3" logic
+/// from do_sub. Returns (cur_end_lnum, cur_end_col) via out params.
+#[allow(clippy::too_many_arguments)]
+unsafe fn goto_sub_main(
+    subflags: &mut CSubFlags,
+    regmatch: *mut crate::RegmmatchHandle,
+    sub: *const c_char,
+    sub_firstlnum: &mut c_int,
+    sub_firstline: &mut *mut c_char,
+    lnum: &mut c_int,
+    line2: &mut c_int,
+    _matchcol: &mut c_int,
+    copycol: &mut c_int,
+    new_start: &mut *mut c_char,
+    new_start_len: &mut c_int,
+    nmatch: &mut c_int,
+    nmatch_tl: &mut c_int,
+    did_sub: &mut bool,
+    did_save: &mut bool,
+    skip_match: &mut bool,
+    first_line: &mut c_int,
+    last_line: &mut c_int,
+    line_matches: &mut Vec<LineData>,
+    do_again: &mut bool,
+    lnum_start: &mut c_int,
+    _cur_start_lnum: &mut c_int,
+    cur_start_col: &mut c_int,
+    cur_end_lnum: &mut c_int,
+    cur_end_col: &mut c_int,
+    cmdpreview_ns: c_int,
+    regsub_backslash: c_int,
+    regsub_magic: c_int,
+    regsub_copy: c_int,
+    _kextmark_noop: c_int,
+    _kextmark_undo: c_int,
+    _eap: *mut ExArgHandle,
+) {
+    let startpos0_col = nvim_regmmatch_startpos0_col(regmatch);
+    let startpos0_lnum = nvim_regmmatch_startpos0_lnum(regmatch);
+    let endpos0_col = nvim_regmmatch_endpos0_col(regmatch);
+    let endpos0_lnum = nvim_regmmatch_endpos0_lnum(regmatch);
+
+    // Move cursor to start of match
+    nvim_curwin_set_cursor_col(startpos0_col);
+
+    // Clamp nmatch to available lines
+    let buf_line_count = nvim_do_sub_buf_line_count();
+    if *nmatch > buf_line_count - *sub_firstlnum + 1 {
+        *nmatch = buf_line_count - *sub_firstlnum + 1;
+        *cur_end_lnum = *sub_firstlnum + *nmatch;
+        *skip_match = true;
+        if *nmatch < 0 {
+            return;
+        }
+    }
+
+    // Preview mode: just record the match, don't substitute
+    if cmdpreview_ns > 0 && !(*sub == b'\\' as i8 && *sub.add(1) == b'=' as i8) {
+        *cur_start_col = startpos0_col;
+        if *cur_end_lnum == 0 {
+            *cur_end_lnum = *sub_firstlnum + *nmatch - 1;
+        }
+        *cur_end_col = endpos0_col;
+
+        // ADJUST_SUB_FIRSTLNUM
+        adjust_sub_firstlnum(
+            nmatch,
+            sub_firstlnum,
+            sub_firstline,
+            line2,
+            do_again,
+            skip_match,
+        );
+        *lnum += *nmatch - 1;
+        return;
+    }
+
+    // 3. Do actual substitution
+    *lnum_start = *lnum;
+    let save_ma = nvim_curbuf_get_b_p_ma();
+    let save_sandbox = nvim_do_sub_get_sandbox();
+
+    if subflags.do_count {
+        nvim_curbuf_set_b_p_ma(0);
+        nvim_do_sub_sandbox_inc();
+    }
+
+    let subflags_save = CSubFlags {
+        do_all: subflags.do_all,
+        do_ask: subflags.do_ask,
+        do_count: subflags.do_count,
+        do_error: subflags.do_error,
+        do_print: subflags.do_print,
+        do_list: subflags.do_list,
+        do_number: subflags.do_number,
+        do_ic: subflags.do_ic,
+    };
+
+    nvim_do_sub_textlock_inc();
+    let source_lnum = *sub_firstlnum - startpos0_lnum;
+    // Measurement call: pass sub_firstline as dest with destlen=0 to avoid null-dest error.
+    // vim_regsub_multi with destlen=0 just measures the required length without modifying dest.
+    let mut sublen = nvim_do_sub_vim_regsub_multi(
+        regmatch,
+        source_lnum,
+        sub,
+        *sub_firstline,
+        0,
+        regsub_backslash
+            | if rs_magic_isset() != 0 {
+                regsub_magic
+            } else {
+                0
+            },
+    );
+    nvim_do_sub_textlock_dec();
+
+    // Restore flags from any recursive call
+    subflags.do_all = subflags_save.do_all;
+    subflags.do_ask = subflags_save.do_ask;
+    subflags.do_count = subflags_save.do_count;
+    subflags.do_error = subflags_save.do_error;
+    subflags.do_print = subflags_save.do_print;
+    subflags.do_list = subflags_save.do_list;
+    subflags.do_number = subflags_save.do_number;
+    subflags.do_ic = subflags_save.do_ic;
+
+    if sublen == 0 || nvim_do_sub_aborting() != 0 || subflags.do_count {
+        nvim_curbuf_set_b_p_ma(save_ma);
+        nvim_do_sub_sandbox_dec();
+        // Undo sandbox increment
+        for _ in 0..(nvim_do_sub_get_sandbox() - save_sandbox) {
+            nvim_do_sub_sandbox_dec();
+        }
+        return;
+    }
+
+    // Restore sandbox
+    nvim_curbuf_set_b_p_ma(save_ma);
+    while nvim_do_sub_get_sandbox() > save_sandbox {
+        nvim_do_sub_sandbox_dec();
+    }
+
+    // Get the line for the last matched line
+    let p1: *const c_char = if *nmatch == 1 {
+        *sub_firstline
+    } else {
+        let tl_lnum = *sub_firstlnum + *nmatch - 1;
+        *nmatch_tl += *nmatch - 1;
+        nvim_do_sub_ml_get(tl_lnum)
+    };
+
+    let copy_len = startpos0_col - *copycol;
+    let p1_len = strlen_c(p1) as c_int;
+    let needed = p1_len - endpos0_col + copy_len + sublen + 1;
+    let mut new_end = rs_sub_grow_buf(new_start, new_start_len, needed);
+
+    // Copy text before match
+    std::ptr::copy_nonoverlapping(
+        (*sub_firstline).add(*copycol as usize),
+        new_end,
+        copy_len as usize,
+    );
+    new_end = new_end.add(copy_len as usize);
+
+    if *new_start_len - copy_len < sublen {
+        sublen = *new_start_len - copy_len - 1;
+    }
+
+    let start_col = new_end.offset_from(*new_start) as c_int;
+    *cur_start_col = start_col;
+
+    nvim_do_sub_textlock_inc();
+    nvim_do_sub_vim_regsub_multi(
+        regmatch,
+        source_lnum,
+        sub,
+        new_end,
+        sublen,
+        regsub_copy
+            | regsub_backslash
+            | if rs_magic_isset() != 0 {
+                regsub_magic
+            } else {
+                0
+            },
+    );
+    nvim_do_sub_textlock_dec();
+    nvim_do_sub_sub_nsubs_inc();
+    *did_sub = true;
+
+    // Move cursor to start of line
+    nvim_curwin_set_cursor_col(0);
+
+    // Remember next char to copy
+    *copycol = endpos0_col;
+
+    // ADJUST_SUB_FIRSTLNUM
+    adjust_sub_firstlnum(
+        nmatch,
+        sub_firstlnum,
+        sub_firstline,
+        line2,
+        do_again,
+        skip_match,
+    );
+
+    // Calculate bytes replaced
+    let mut replaced_bytes: i64 = 0;
+    for i in 0..(*nmatch - 1) {
+        let line_len = nvim_do_sub_ml_get_len(*lnum_start + i);
+        replaced_bytes += line_len as i64 + 1;
+    }
+    replaced_bytes += endpos0_col as i64 - startpos0_col as i64;
+
+    let lnum_before_newlines = *lnum;
+
+    // Process CTRL-M chars -> actual line breaks
+    let mut p_iter = new_end;
+    while *p_iter != 0 {
+        if *p_iter == b'\\' as i8 && *p_iter.add(1) != 0 {
+            sublen -= 1;
+            // STRMOVE(p_iter, p_iter+1)
+            let src = p_iter.add(1);
+            let len = strlen_c(src) + 1;
+            std::ptr::copy(src, p_iter, len);
+        } else if *p_iter == b'\r' as i8 {
+            if nvim_do_sub_u_inssub(*lnum) != 0 {
+                *p_iter = 0; // truncate at CR
+                let new_start_ptr = *new_start;
+                let append_len = (p_iter.offset_from(new_start_ptr) + 1) as c_int;
+                ml_append(*lnum - 1, new_start_ptr, append_len, 0);
+                nvim_do_sub_mark_adjust_insert(*lnum);
+
+                if subflags.do_ask {
+                    nvim_do_sub_appended_lines(*lnum);
+                } else {
+                    if *first_line == 0 {
+                        *first_line = *lnum;
+                    }
+                    *last_line = *lnum + 1;
+                }
+                *sub_firstlnum += 1;
+                *lnum += 1;
+                *line2 += 1;
+                nvim_curwin_set_cursor_lnum(nvim_curwin_get_cursor_lnum() + 1);
+
+                // STRMOVE(new_start, p_iter+1)
+                let src = p_iter.add(1);
+                let len = strlen_c(src) + 1;
+                std::ptr::copy(src, *new_start, len);
+                p_iter = (*new_start).sub(1); // will be incremented
+            }
+        } else {
+            let advance = utfc_ptr2len(p_iter) - 1;
+            if advance > 0 {
+                p_iter = p_iter.add(advance as usize);
+            }
+        }
+        p_iter = p_iter.add(1);
+    }
+
+    let new_endcol = strlen_c(*new_start) as c_int;
+    *cur_end_col = new_endcol;
+    *cur_end_lnum = *lnum;
+
+    let matchcols = endpos0_col
+        - if endpos0_lnum == startpos0_lnum {
+            startpos0_col
+        } else {
+            0
+        };
+    let subcols = new_endcol - if *lnum == *lnum_start { start_col } else { 0 };
+
+    if !*did_save {
+        nvim_do_sub_u_save_cursor();
+        *did_save = true;
+    }
+
+    // Store extmark data for this match
+    line_matches.push(LineData {
+        start_col,
+        start_lnum: startpos0_lnum,
+        start_lnum_endpos: endpos0_lnum,
+        start_col_endpos: endpos0_col,
+        matchcols,
+        matchbytes: replaced_bytes,
+        subcols,
+        subbytes: sublen as i64 - 1,
+        lnum_before: lnum_before_newlines,
+        lnum_after: *lnum,
+    });
+}
+
+/// Inline ADJUST_SUB_FIRSTLNUM macro logic.
+unsafe fn adjust_sub_firstlnum(
+    nmatch: &mut c_int,
+    sub_firstlnum: &mut c_int,
+    sub_firstline: &mut *mut c_char,
+    line2: &mut c_int,
+    do_again: &mut bool,
+    skip_match: &mut bool,
+) {
+    if *nmatch > 1 {
+        *sub_firstlnum += *nmatch - 1;
+        xfree(*sub_firstline as *mut std::ffi::c_void);
+        let line = nvim_do_sub_ml_get(*sub_firstlnum);
+        *sub_firstline = xstrnsave(line, nvim_do_sub_ml_get_len(*sub_firstlnum) as usize);
+        if *sub_firstlnum <= *line2 {
+            *do_again = true;
+        } else {
+            // subflags.do_all = false -- handled by caller
+        }
+    }
+    if *skip_match {
+        xfree(*sub_firstline as *mut std::ffi::c_void);
+        *sub_firstline = xstrdup(c"".as_ptr());
+    }
+}
+
+// =============================================================================
+// C-compatible opaque type matching SubReplacementString:
+// char*, uint64_t (Timestamp), AdditionalData* (opaque).
+// =============================================================================
 
 /// C-compatible opaque type matching SubReplacementString:
 /// char*, uint64_t (Timestamp), AdditionalData* (opaque).
@@ -1192,7 +2794,7 @@ pub unsafe extern "C" fn rs_free_old_sub() {
 /// `eap` must be a valid exarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_substitute(eap: *mut ExArgHandle) {
-    nvim_excmds_do_sub(eap, 0, 0, 0);
+    rs_do_sub(eap, 0, 0, 0);
 }
 
 /// `:substitute` inccommand preview callback. Replaces C `ex_substitute_preview`.
@@ -1211,7 +2813,7 @@ pub unsafe extern "C" fn rs_ex_substitute_preview(
     // proceed when *eap->arg is non-NUL and NOT alphanumeric (a valid delimiter).
     if nvim_excmds_arg_has_valid_delim(eap) != 0 {
         let save_eap = nvim_excmds_eap_arg_save(eap);
-        let retv = nvim_excmds_do_sub(eap, cmdpreview_ns, cmdpreview_bufnr, 1);
+        let retv = rs_do_sub(eap, cmdpreview_ns, cmdpreview_bufnr, 1);
         nvim_excmds_eap_arg_restore(eap, save_eap);
         return retv;
     }
