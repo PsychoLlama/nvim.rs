@@ -192,8 +192,8 @@ unsafe fn clear_showcmd_visual_info() -> bool {
             showcmd_buf.cast(),
             SHOWCMD_BUFLEN,
             c"%ldx%ld".as_ptr(),
-            lines as libc::c_long,
-            cols as libc::c_long,
+            libc::c_long::from(lines),
+            libc::c_long::from(cols),
         );
     } else if vmode == c_int::from(b'V') || visual_lnum != cursor_lnum {
         // Linewise or multi-line charwise
@@ -201,7 +201,7 @@ unsafe fn clear_showcmd_visual_info() -> bool {
             showcmd_buf.cast(),
             SHOWCMD_BUFLEN,
             c"%ld".as_ptr(),
-            lines as libc::c_long,
+            libc::c_long::from(lines),
         );
     } else {
         // Single-line charwise: count bytes and chars
@@ -237,16 +237,13 @@ unsafe fn clear_showcmd_visual_info() -> bool {
             }
             bytes += l;
             chars += 1;
-            s = s.add(l as usize);
+            #[allow(clippy::cast_sign_loss)] // utfc_ptr2len returns >= 0
+            let l_usize = l as usize;
+            s = s.add(l_usize);
         }
 
         if bytes == chars {
-            libc::snprintf(
-                showcmd_buf.cast(),
-                SHOWCMD_BUFLEN,
-                c"%d".as_ptr(),
-                chars,
-            );
+            libc::snprintf(showcmd_buf.cast(), SHOWCMD_BUFLEN, c"%d".as_ptr(), chars);
         } else {
             libc::snprintf(
                 showcmd_buf.cast(),
@@ -468,6 +465,10 @@ pub unsafe extern "C" fn rs_del_from_showcmd(len: c_int) {
 /// grid rendering based on the `showcmdloc` option.
 ///
 /// Rust port of the C `display_showcmd` function.
+///
+/// # Safety
+/// Calls C accessor functions for rendering. All pointers returned by the
+/// C accessors are valid for the duration of this call.
 #[no_mangle]
 pub unsafe extern "C" fn rs_display_showcmd() {
     let buf_ptr = nvim_normal_showcmd_buf_ptr();
