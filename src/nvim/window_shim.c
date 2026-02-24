@@ -605,31 +605,7 @@ win_T *prevwin_curwin(void)
   return rs_prevwin_curwin();
 }
 
-/// If the 'switchbuf' option contains "useopen" or "usetab", then try to jump
-/// to a window containing "buf".
-/// Returns the pointer to the window that was jumped to or NULL.
-win_T *swbuf_goto_win_with_buf(buf_T *buf)
-{
-  win_T *wp = NULL;
-
-  if (buf == NULL) {
-    return wp;
-  }
-
-  // If 'switchbuf' contains "useopen": jump to first window in the current
-  // tab page containing "buf" if one exists.
-  if (swb_flags & kOptSwbFlagUseopen) {
-    wp = buf_jump_open_win(buf);
-  }
-
-  // If 'switchbuf' contains "usetab": jump to first window in any tab page
-  // containing "buf" if one exists.
-  if (wp == NULL && (swb_flags & kOptSwbFlagUsetab)) {
-    wp = buf_jump_open_tab(buf);
-  }
-
-  return wp;
-}
+// swbuf_goto_win_with_buf: thin wrapper defined in Phase 2 accessors section.
 
 // 'cmdheight' value explicitly set by the user: window commands are allowed to
 // resize the topframe to values higher than this minimum, but not lower.
@@ -2212,110 +2188,8 @@ void win_enter(win_T *wp, bool undo_sync)
 extern void rs_win_enter_ext(win_T *wp, int flags);
 static void win_enter_ext(win_T *const wp, const int flags) { rs_win_enter_ext(wp, flags); }
 
-/// Used after making another window the current one: change directory if needed.
-void win_fix_current_dir(void)
-{
-  // New directory is either the local directory of the window, tab or NULL.
-  char *new_dir = curwin->w_localdir ? curwin->w_localdir : curtab->tp_localdir;
-  char cwd[MAXPATHL];
-  if (os_dirname(cwd, MAXPATHL) != OK) {
-    cwd[0] = NUL;
-  }
-
-  if (new_dir) {
-    // Window/tab has a local directory: Save current directory as global
-    // (unless that was done already) and change to the local directory.
-    if (globaldir == NULL) {
-      if (cwd[0] != NUL) {
-        globaldir = xstrdup(cwd);
-      }
-    }
-    bool dir_differs = pathcmp(new_dir, cwd, -1) != 0;
-    if (!p_acd && dir_differs) {
-      do_autocmd_dirchanged(new_dir, curwin->w_localdir ? kCdScopeWindow : kCdScopeTabpage,
-                            kCdCauseWindow, true);
-    }
-    if (os_chdir(new_dir) == 0) {
-      if (!p_acd && dir_differs) {
-        do_autocmd_dirchanged(new_dir, curwin->w_localdir ? kCdScopeWindow : kCdScopeTabpage,
-                              kCdCauseWindow, false);
-      }
-    }
-    last_chdir_reason = NULL;
-    shorten_fnames(true);
-  } else if (globaldir != NULL) {
-    // Window doesn't have a local directory and we are not in the global
-    // directory: Change to the global directory.
-    bool dir_differs = pathcmp(globaldir, cwd, -1) != 0;
-    if (!p_acd && dir_differs) {
-      do_autocmd_dirchanged(globaldir, kCdScopeGlobal, kCdCauseWindow, true);
-    }
-    if (os_chdir(globaldir) == 0) {
-      if (!p_acd && dir_differs) {
-        do_autocmd_dirchanged(globaldir, kCdScopeGlobal, kCdCauseWindow, false);
-      }
-    }
-    XFREE_CLEAR(globaldir);
-    last_chdir_reason = NULL;
-    shorten_fnames(true);
-  }
-}
-
-/// Jump to the first open window that contains buffer "buf", if one exists.
-/// Returns a pointer to the window found, otherwise NULL.
-win_T *buf_jump_open_win(buf_T *buf)
-{
-  if (curwin->w_buffer == buf) {
-    win_enter(curwin, false);
-    return curwin;
-  }
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_buffer == buf) {
-      win_enter(wp, false);
-      return wp;
-    }
-  }
-
-  return NULL;
-}
-
-/// Jump to the first open window in any tab page that contains buffer "buf",
-/// if one exists. First search in the windows present in the current tab page.
-/// @return the found window, or NULL.
-win_T *buf_jump_open_tab(buf_T *buf)
-{
-  // First try the current tab page.
-  {
-    win_T *wp = buf_jump_open_win(buf);
-    if (wp != NULL) {
-      return wp;
-    }
-  }
-
-  FOR_ALL_TABS(tp) {
-    // Skip the current tab since we already checked it.
-    if (tp == curtab) {
-      continue;
-    }
-    FOR_ALL_WINDOWS_IN_TAB(wp, tp) {
-      if (wp->w_buffer == buf) {
-        goto_tabpage_win(tp, wp);
-
-        // If we the current window didn't switch,
-        // something went wrong.
-        if (curwin != wp) {
-          wp = NULL;
-        }
-
-        // Return the window we switched to.
-        return wp;
-      }
-    }
-  }
-
-  // If we made it this far, we didn't find the buffer.
-  return NULL;
-}
+// win_fix_current_dir, buf_jump_open_win, buf_jump_open_tab: thin wrappers
+// defined below in Phase 2 accessors section.
 
 static int last_win_id = LOWEST_WIN_ID - 1;
 
@@ -3702,3 +3576,65 @@ int nvim_get_restart_edit_bool(void) { return restart_edit ? 1 : 0; }
 int nvim_win_get_hl_attr_normal_wrap(win_T *wp) { return wp ? wp->w_hl_attr_normal : 0; }
 /// Get w_hl_attr_normalnc field.
 int nvim_win_get_hl_attr_normalnc_wrap(win_T *wp) { return wp ? wp->w_hl_attr_normalnc : 0; }
+
+// =============================================================================
+// Phase 2 accessors: win_fix_current_dir, buf_jump_open_win/tab, swbuf_goto
+// =============================================================================
+
+/// Get curwin->w_localdir (or NULL if not set).
+const char *nvim_curwin_get_localdir(void) { return curwin->w_localdir; }
+/// Get curtab->tp_localdir (or NULL if not set).
+const char *nvim_curtab_get_localdir(void) { return curtab->tp_localdir; }
+/// Get globaldir global (or NULL).
+const char *nvim_get_globaldir(void) { return globaldir; }
+/// Set globaldir to a copy of cwd string.
+void nvim_set_globaldir_from_str(const char *s) { globaldir = xstrdup(s); }
+/// XFREE_CLEAR(globaldir): free and set to NULL.
+void nvim_clear_globaldir(void) { XFREE_CLEAR(globaldir); }
+/// Get the current working directory (os_dirname). Returns non-zero on success.
+int nvim_os_dirname_maxpathl(char *buf) { return (int)os_dirname(buf, MAXPATHL); }
+/// Attempt to chdir to dir. Returns 0 on success.
+int nvim_os_chdir(const char *dir) { return os_chdir(dir); }
+/// pathcmp(a, b, -1): returns 0 if equal.
+int nvim_pathcmp_unlen(const char *a, const char *b) { return pathcmp(a, b, -1); }
+/// p_acd option.
+int nvim_get_p_acd(void) { return p_acd ? 1 : 0; }
+/// Set last_chdir_reason to NULL.
+void nvim_set_last_chdir_reason_null(void) { last_chdir_reason = NULL; }
+/// shorten_fnames(true).
+void nvim_shorten_fnames_force(void) { shorten_fnames(true); }
+/// do_autocmd_dirchanged for window-scoped dir change (kCdScopeWindow or kCdScopeTabpage).
+/// localdir==1 means window scope, localdir==0 means tabpage scope.
+/// pre==1 means pre-change, pre==0 means post-change.
+void nvim_do_autocmd_dirchanged_win(const char *new_dir, int localdir, int pre) {
+  do_autocmd_dirchanged(new_dir,
+                        localdir ? kCdScopeWindow : kCdScopeTabpage,
+                        kCdCauseWindow, pre != 0);
+}
+/// do_autocmd_dirchanged for global scope (kCdScopeGlobal).
+void nvim_do_autocmd_dirchanged_global(const char *new_dir, int pre) {
+  do_autocmd_dirchanged(new_dir, kCdScopeGlobal, kCdCauseWindow, pre != 0);
+}
+/// get curtab.
+tabpage_T *nvim_get_curtab_ptr(void) { return curtab; }
+/// goto_tabpage_win wrapper.
+void nvim_goto_tabpage_win_wrapper(tabpage_T *tp, win_T *wp) { goto_tabpage_win(tp, wp); }
+/// swb_flags & kOptSwbFlagUseopen.
+int nvim_swb_has_useopen(void) { return (swb_flags & kOptSwbFlagUseopen) ? 1 : 0; }
+/// swb_flags & kOptSwbFlagUsetab.
+int nvim_swb_has_usetab(void) { return (swb_flags & kOptSwbFlagUsetab) ? 1 : 0; }
+/// win_fix_current_dir thin wrapper.
+extern void rs_win_fix_current_dir(void);
+void win_fix_current_dir(void) { rs_win_fix_current_dir(); }
+
+/// buf_jump_open_win thin wrapper.
+extern win_T *rs_buf_jump_open_win(buf_T *buf);
+win_T *buf_jump_open_win(buf_T *buf) { return rs_buf_jump_open_win(buf); }
+
+/// buf_jump_open_tab thin wrapper.
+extern win_T *rs_buf_jump_open_tab(buf_T *buf);
+win_T *buf_jump_open_tab(buf_T *buf) { return rs_buf_jump_open_tab(buf); }
+
+/// swbuf_goto_win_with_buf thin wrapper.
+extern win_T *rs_swbuf_goto_win_with_buf(buf_T *buf);
+win_T *swbuf_goto_win_with_buf(buf_T *buf) { return rs_swbuf_goto_win_with_buf(buf); }

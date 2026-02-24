@@ -10,6 +10,7 @@
 //! - [`alloc`]: Window allocation functions (placeholder)
 //! - [`close`]: Window closing validation and execution helpers
 //! - [`commands`]: CTRL-W command handler (placeholder)
+//! - [`directory`]: Window directory management (win_fix_current_dir)
 //! - [`enter`]: Window enter orchestrator (win_enter_ext)
 //! - [`equalize`]: Window equalization functions (placeholder)
 //! - [`events`]: Window events and UI updates (placeholder)
@@ -39,6 +40,7 @@ pub mod alloc;
 pub mod close;
 pub mod colorcolumn;
 pub mod commands;
+pub mod directory;
 pub mod dispatch;
 pub mod enter;
 pub mod equalize;

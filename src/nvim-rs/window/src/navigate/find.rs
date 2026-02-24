@@ -443,6 +443,143 @@ pub extern "C" fn rs_nav_get_lastwin() -> WinHandle {
     unsafe { nvim_get_lastwin() }
 }
 
+// =============================================================================
+// buf_jump_open_win / buf_jump_open_tab / swbuf_goto_win_with_buf (Phase 2)
+// =============================================================================
+
+extern "C" {
+    /// win_enter(wp, false) -- enter window without undo sync.
+    fn nvim_win_enter(wp: WinHandle, undo_sync: c_int);
+
+    /// goto_tabpage_win(tp, wp).
+    fn nvim_goto_tabpage_win_wrapper(tp: crate::TabpageHandle, wp: WinHandle);
+
+    /// swb_flags & kOptSwbFlagUseopen.
+    fn nvim_swb_has_useopen() -> c_int;
+
+    /// swb_flags & kOptSwbFlagUsetab.
+    fn nvim_swb_has_usetab() -> c_int;
+}
+
+/// Jump to the first open window that contains buffer "buf", if one exists.
+///
+/// Rust port of C `buf_jump_open_win()`.
+fn buf_jump_open_win_impl(buf: BufHandle) -> WinHandle {
+    if buf.is_null() {
+        return WinHandle::null();
+    }
+
+    unsafe {
+        let curtab = nvim_get_curtab();
+        // Check curwin first.
+        let curwin = nvim_get_curwin();
+        if !curwin.is_null() && nvim_win_get_buffer(curwin) == buf {
+            nvim_win_enter(curwin, 0);
+            return nvim_get_curwin(); // re-read after enter
+        }
+
+        // Iterate all windows in current tab.
+        let first = if curtab.is_null() {
+            nvim_get_firstwin()
+        } else {
+            nvim_tabpage_get_firstwin(curtab)
+        };
+        let mut wp = first;
+        while !wp.is_null() {
+            if nvim_win_get_buffer(wp) == buf {
+                nvim_win_enter(wp, 0);
+                return wp;
+            }
+            wp = nvim_win_get_next(wp);
+        }
+        WinHandle::null()
+    }
+}
+
+/// Jump to the first open window in any tab page that contains buffer "buf".
+///
+/// Rust port of C `buf_jump_open_tab()`.
+fn buf_jump_open_tab_impl(buf: BufHandle) -> WinHandle {
+    if buf.is_null() {
+        return WinHandle::null();
+    }
+
+    // First try current tab.
+    let wp = buf_jump_open_win_impl(buf);
+    if !wp.is_null() {
+        return wp;
+    }
+
+    unsafe {
+        let curtab = nvim_get_curtab();
+        let mut tp = nvim_get_first_tabpage();
+        while !tp.is_null() {
+            // Skip the current tab since we already checked it.
+            if tp != curtab {
+                let first = nvim_tabpage_get_firstwin(tp);
+                let mut wp = first;
+                while !wp.is_null() {
+                    if nvim_win_get_buffer(wp) == buf {
+                        nvim_goto_tabpage_win_wrapper(tp, wp);
+                        // If curwin didn't switch, something went wrong.
+                        let curwin = nvim_get_curwin();
+                        if curwin != wp {
+                            return WinHandle::null();
+                        }
+                        return wp;
+                    }
+                    wp = nvim_win_get_next(wp);
+                }
+            }
+            tp = nvim_tabpage_get_next(tp);
+        }
+        WinHandle::null()
+    }
+}
+
+/// If 'switchbuf' contains "useopen" or "usetab", jump to a window containing "buf".
+///
+/// Rust port of C `swbuf_goto_win_with_buf()`.
+fn swbuf_goto_win_with_buf_impl(buf: BufHandle) -> WinHandle {
+    if buf.is_null() {
+        return WinHandle::null();
+    }
+
+    unsafe {
+        let mut wp = WinHandle::null();
+
+        // If 'switchbuf' contains "useopen": jump to first window in current tab.
+        if nvim_swb_has_useopen() != 0 {
+            wp = buf_jump_open_win_impl(buf);
+        }
+
+        // If 'switchbuf' contains "usetab": jump to first window in any tab.
+        if wp.is_null() && nvim_swb_has_usetab() != 0 {
+            wp = buf_jump_open_tab_impl(buf);
+        }
+
+        wp
+    }
+}
+
+/// FFI: Jump to first open window for buffer in current tab.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_buf_jump_open_win(buf: BufHandle) -> WinHandle {
+    buf_jump_open_win_impl(buf)
+}
+
+/// FFI: Jump to first open window for buffer in any tab.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_buf_jump_open_tab(buf: BufHandle) -> WinHandle {
+    buf_jump_open_tab_impl(buf)
+}
+
+/// FFI: Jump to window with buf using 'switchbuf' flags.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_swbuf_goto_win_with_buf(buf: BufHandle) -> WinHandle {
+    swbuf_goto_win_with_buf_impl(buf)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
