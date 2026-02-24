@@ -1659,28 +1659,7 @@ void goto_tabpage(int n)
 /// @param trigger_leave_autocmds  when true trigger *Leave autocommands.
 void goto_tabpage_tp(tabpage_T *tp, bool trigger_enter_autocmds, bool trigger_leave_autocmds)
 {
-  if (trigger_enter_autocmds || trigger_leave_autocmds) {
-    if (cmdwin_type != 0) {
-      emsg(_(e_cmdwin));
-      return;
-    }
-  }
-
-  // Don't repeat a message in another tab page.
-  set_keep_msg(NULL, 0);
-
-  skip_win_fix_scroll = true;
-  if (tp != curtab && leave_tabpage(tp->tp_curwin->w_buffer,
-                                    trigger_leave_autocmds) == OK) {
-    if (rs_valid_tabpage(tp)) {
-      enter_tabpage(tp, curbuf, trigger_enter_autocmds,
-                    trigger_leave_autocmds);
-    } else {
-      enter_tabpage(curtab, curbuf, trigger_enter_autocmds,
-                    trigger_leave_autocmds);
-    }
-  }
-  skip_win_fix_scroll = false;
+  rs_goto_tabpage_tp_impl(tp, trigger_enter_autocmds ? 1 : 0, trigger_leave_autocmds ? 1 : 0);
 }
 
 /// Go to the last accessed tab page, if there is one.
