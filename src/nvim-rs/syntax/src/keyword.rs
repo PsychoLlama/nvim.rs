@@ -32,14 +32,10 @@ extern "C" {
 
     // Keyword matching functions
     fn nvim_syn_keyword_find(keyword: *mut c_char, use_ic: c_int) -> KeyEntryHandle;
-    fn nvim_syn_match_keyword(
-        keyword: *mut c_char,
-        use_ic: c_int,
-        cur_si: StateItemHandle,
-    ) -> KeyEntryHandle;
     fn nvim_syn_keyword_foldcase(src: *mut c_char, srclen: c_int, dst: *mut c_char, dstlen: c_int);
     fn nvim_syn_utfc_ptr2len(p: *mut c_char) -> c_int;
     fn nvim_syn_get_maxkeywlen() -> c_int;
+    fn nvim_syn_vim_iswordp_buf(p: *mut c_char) -> c_int;
 
     // Keyword table accessors
     fn nvim_syn_has_keywords() -> c_int;
@@ -54,6 +50,10 @@ extern "C" {
     // Window-level keyword accessors
     fn nvim_win_get_keywtab_used(win: WinHandle) -> c_int;
     fn nvim_win_get_keywtab_ic_used(win: WinHandle) -> c_int;
+
+    // current_next_list access
+    fn nvim_syn_has_current_next_list() -> c_int;
+    fn nvim_syn_get_current_next_list() -> IdListHandle;
 }
 
 // =============================================================================
@@ -211,6 +211,8 @@ pub unsafe fn keyword_find(keyword: *mut c_char, use_ic: bool) -> KeyEntryHandle
 /// Match a keyword considering the current syntax state.
 /// This respects contained/containedin lists.
 ///
+/// Ported from C `nvim_syn_match_keyword`.
+///
 /// # Arguments
 /// * `keyword` - The keyword to match (C string pointer)
 /// * `use_ic` - If true, use case-insensitive matching
@@ -224,7 +226,112 @@ pub unsafe fn match_keyword(
     use_ic: bool,
     cur_si: StateItemHandle,
 ) -> KeyEntryHandle {
-    nvim_syn_match_keyword(keyword, if use_ic { 1 } else { 0 }, cur_si)
+    let kp = keyword_find(keyword, use_ic);
+    if kp.is_null() {
+        return KeyEntryHandle::null();
+    }
+    let has_next_list = nvim_syn_has_current_next_list() != 0;
+    let current_next_list = if has_next_list {
+        nvim_syn_get_current_next_list()
+    } else {
+        IdListHandle::null()
+    };
+    let mut entry = kp;
+    while !entry.is_null() {
+        let kp_id = nvim_keyentry_get_syn_id(entry) as c_int;
+        let kp_inc_tag = nvim_keyentry_get_syn_inc_tag(entry);
+        let kp_cont_in = nvim_keyentry_get_cont_in_list(entry);
+        let kp_flags = nvim_keyentry_get_flags(entry);
+        let matched = if has_next_list {
+            crate::containment::rs_syn_in_id_list(
+                StateItemHandle(std::ptr::null_mut()),
+                current_next_list,
+                kp_id,
+                kp_inc_tag,
+                kp_cont_in,
+                0,
+            ) != 0
+        } else if cur_si.is_null() {
+            (kp_flags & HL_CONTAINED) == 0
+        } else {
+            let cont_list = crate::containment::stateitem_cont_list(cur_si);
+            crate::containment::rs_syn_in_id_list(
+                cur_si, cont_list, kp_id, kp_inc_tag, kp_cont_in, kp_flags,
+            ) != 0
+        };
+        if matched {
+            return entry;
+        }
+        entry = nvim_keyentry_get_next(entry);
+    }
+    KeyEntryHandle::null()
+}
+
+/// Check keyword at the given position in line and return its syntax ID.
+///
+/// Ported from C `nvim_syn_check_keyword_id`. Finds the first word starting at
+/// `startcol`, checks both case-sensitive and case-insensitive hash tables, and
+/// returns the matching syntax ID (or 0 if no match).
+///
+/// Output parameters are only written on a successful match.
+///
+/// # Safety
+/// - `line` must be a valid pointer to the current syntax line.
+/// - `endcolp`, `flagsp`, `next_listp`, `ccharp` must be valid writable pointers.
+/// - `cur_si` may be null (checked internally).
+#[must_use]
+pub unsafe fn check_keyword_id(
+    line: *mut c_char,
+    startcol: c_int,
+    endcolp: *mut c_int,
+    flagsp: *mut c_int,
+    next_listp: *mut IdListHandle,
+    cur_si: StateItemHandle,
+    ccharp: *mut c_int,
+) -> c_int {
+    let kwp = line.add(startcol as usize);
+
+    // Scan forward to find end of keyword.  First character was already checked.
+    let mut kwlen: c_int = 0;
+    loop {
+        kwlen += nvim_syn_utfc_ptr2len(kwp.add(kwlen as usize));
+        if nvim_syn_vim_iswordp_buf(kwp.add(kwlen as usize)) == 0 {
+            break;
+        }
+    }
+
+    if kwlen > MAXKEYWLEN {
+        return 0;
+    }
+
+    // Copy keyword into a NUL-terminated stack buffer.
+    let mut keyword = [0u8; (MAXKEYWLEN + 1) as usize];
+    std::ptr::copy_nonoverlapping(kwp.cast::<u8>(), keyword.as_mut_ptr(), kwlen as usize);
+    // NUL is already 0 from initialization.
+
+    let kw_ptr = keyword.as_mut_ptr().cast::<c_char>();
+
+    // Case-sensitive match.
+    let mut kp = KeyEntryHandle::null();
+    if nvim_syn_has_keywords() != 0 {
+        kp = match_keyword(kw_ptr, false, cur_si);
+    }
+
+    // Case-insensitive match.
+    if kp.is_null() && nvim_syn_has_keywords_ic() != 0 {
+        nvim_syn_keyword_foldcase(kwp, kwlen, kw_ptr, MAXKEYWLEN + 1);
+        kp = match_keyword(kw_ptr, true, cur_si);
+    }
+
+    if !kp.is_null() {
+        *endcolp = startcol + kwlen;
+        *flagsp = nvim_keyentry_get_flags(kp);
+        *next_listp = nvim_keyentry_get_next_list(kp);
+        *ccharp = nvim_keyentry_get_char(kp);
+        return nvim_keyentry_get_syn_id(kp) as c_int;
+    }
+
+    0
 }
 
 /// Fold case for keyword comparison.

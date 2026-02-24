@@ -1835,94 +1835,18 @@ int16_t *nvim_syn_get_cluster_scl_list(int idx)
   }
   return SYN_CLSTR(syn_block)[idx].scl_list;
 }
-
-/// Call check_keyword_id from Rust
-
-/// Returns the syntax ID if matched, 0 otherwise
-
-int nvim_syn_check_keyword_id(char *line, int startcol, int *endcolp,
-
-                               int *flagsp, int16_t **next_listp,
-
-                               stateitem_T *cur_si, int *ccharp)
-
-{
-
-  // Find first character after the keyword.  First character was already
-
-  // checked.
-
-  char *const kwp = line + startcol;
-
-  int kwlen = 0;
-
-  do {
-
-    kwlen += utfc_ptr2len(kwp + kwlen);
-
-  } while (vim_iswordp_buf(kwp + kwlen, syn_buf));
-
-  if (kwlen > MAXKEYWLEN) {
-
-    return 0;
-
-  }
-
-  // Must make a copy of the keyword, so we can add a NUL and make it
-
-  // lowercase.
-
-  char keyword[MAXKEYWLEN + 1];         // assume max. keyword len is 80
-
-  xmemcpyz(keyword, kwp, (size_t)kwlen);
-
-  keyentry_T *kp = NULL;
-
-  // matching case
-
-  if (syn_block->b_keywtab.ht_used != 0) {
-
-    kp = nvim_syn_match_keyword(keyword, 0, cur_si);
-
-  }
-
-  // ignoring case
-
-  if (kp == NULL && syn_block->b_keywtab_ic.ht_used != 0) {
-
-    str_foldcase(kwp, kwlen, keyword, MAXKEYWLEN + 1);
-
-    kp = nvim_syn_match_keyword(keyword, 1, cur_si);
-
-  }
-
-  if (kp != NULL) {
-
-    *endcolp = startcol + kwlen;
-
-    *flagsp = kp->flags;
-
-    *next_listp = kp->next_list;
-
-    *ccharp = kp->k_char;
-
-    return kp->k_syn.id;
-
-  }
-
-  return 0;
-
-}
-
-/// Thin wrapper: call rs_syn_in_id_list directly.
-int nvim_syn_in_id_list(stateitem_T *cur_si, int16_t *list, int id, int inc_tag,
-                         int16_t *cont_in_list, int flags)
-{
-  return rs_syn_in_id_list(cur_si, list, id, inc_tag, cont_in_list, flags);
-}
-
 int nvim_syn_has_keywords(void) { return syn_block != NULL && syn_block->b_keywtab.ht_used > 0 ? 1 : 0; }
 int nvim_syn_has_keywords_ic(void) { return syn_block != NULL && syn_block->b_keywtab_ic.ht_used > 0 ? 1 : 0; }
+
+keyentry_T *nvim_syn_keyword_find(char *keyword, int use_ic)
+{
+  if (syn_block == NULL) { return NULL; }
+  hashtab_T *ht = use_ic ? &syn_block->b_keywtab_ic : &syn_block->b_keywtab;
+  if (ht->ht_used == 0) { return NULL; }
+  hashitem_T *hi = hash_find(ht, keyword);
+  if (HASHITEM_EMPTY(hi)) { return NULL; }
+  return HI2KE(hi);
+}
 
 char *nvim_syn_getcurline(void) { return syn_getcurline(); }
 
@@ -1931,48 +1855,6 @@ void nvim_syn_save_chartab(char *buf) { save_chartab(buf); }
 void nvim_syn_restore_chartab(char *buf) { restore_chartab(buf); }
 
 int nvim_syn_get_maxkeywlen(void) { return MAXKEYWLEN; }
-
-/// Call hash_find for keyword hashtab
-keyentry_T *nvim_syn_keyword_find(char *keyword, int use_ic)
-{
-  if (syn_block == NULL) {
-    return NULL;
-  }
-  hashtab_T *ht = use_ic ? &syn_block->b_keywtab_ic : &syn_block->b_keywtab;
-  if (ht->ht_used == 0) {
-    return NULL;
-  }
-  hashitem_T *hi = hash_find(ht, keyword);
-  if (HASHITEM_EMPTY(hi)) {
-    return NULL;
-  }
-  return HI2KE(hi);
-}
-
-/// Call match_keyword from Rust
-keyentry_T *nvim_syn_match_keyword(char *keyword, int use_ic, stateitem_T *cur_si)
-{
-  if (syn_block == NULL) {
-    return NULL;
-  }
-  hashtab_T *ht = use_ic ? &syn_block->b_keywtab_ic : &syn_block->b_keywtab;
-  hashitem_T *hi = hash_find(ht, keyword);
-  if (!HASHITEM_EMPTY(hi)) {
-    for (keyentry_T *kp = HI2KE(hi); kp != NULL; kp = kp->ke_next) {
-      if (current_next_list != 0
-          ? rs_syn_in_id_list(NULL, current_next_list, kp->k_syn.id, kp->k_syn.inc_tag,
-                              kp->k_syn.cont_in_list, 0)
-          : (cur_si == NULL
-             ? !(kp->flags & HL_CONTAINED)
-             : rs_syn_in_id_list(cur_si, cur_si->si_cont_list, kp->k_syn.id, kp->k_syn.inc_tag,
-                                 kp->k_syn.cont_in_list, kp->flags))) {
-        return kp;
-      }
-    }
-  }
-  return NULL;
-}
-
 void nvim_syn_keyword_foldcase(char *src, int srclen, char *dst, int dstlen) { str_foldcase(src, srclen, dst, dstlen); }
 
 int nvim_syn_utfc_ptr2len(char *p) { return utfc_ptr2len(p); }

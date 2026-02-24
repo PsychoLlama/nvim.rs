@@ -131,17 +131,6 @@ extern "C" {
     fn nvim_syn_take_re_extmatch_out() -> ExtMatchHandle;
     fn nvim_syn_clear_re_extmatch_out();
 
-    // Keyword matching
-    fn nvim_syn_check_keyword_id(
-        line_ptr: *mut i8,
-        startcol: c_int,
-        endcolp: *mut c_int,
-        flagsp: *mut c_int,
-        next_listp: *mut IdListHandle,
-        cur_si: StateItemHandle,
-        ccharp: *mut c_int,
-    ) -> c_int;
-
     // ID to attribute
     fn nvim_syn_id2attr_wrapper(syn_id: c_int) -> c_int;
 
@@ -307,7 +296,7 @@ pub unsafe fn syn_current_attr(
                     let mut next_list = IdListHandle(std::ptr::null_mut());
                     let mut cchar: c_int = 0;
 
-                    syn_id = nvim_syn_check_keyword_id(
+                    syn_id = crate::keyword::check_keyword_id(
                         line,
                         current_col,
                         &mut endcol,
