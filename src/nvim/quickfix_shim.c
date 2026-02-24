@@ -1134,6 +1134,35 @@ extern void *rs_ll_get_or_alloc_list(void *wp);
 extern void *rs_qf_cmd_get_stack(void *eap, bool print_emsg);
 extern void *rs_qf_cmd_get_or_alloc_stack(const void *eap, void **pwinp);
 
+// ---- Phase 4 accessors ----
+
+/// Set wp->w_llist_ref = qi (raw assignment; caller manages refcount separately).
+void nvim_win_set_llist_ref(void *wp_void, void *qi_void)
+{
+  if (wp_void != NULL) {
+    ((win_T *)wp_void)->w_llist_ref = (qf_info_T *)qi_void;
+  }
+}
+
+/// Emit "cannot have both a list and a 'what' argument" error.
+void nvim_semsg_list_and_what(void)
+{
+  semsg(_(e_invarg2), _("cannot have both a list and a \"what\" argument"));
+}
+
+/// Call qf_set_properties(qi, what, action, title).
+int nvim_qf_set_properties(void *qi, const void *what, int action, void *title)
+{
+  return qf_set_properties((qf_info_T *)qi, (const dict_T *)what, action, (char *)title);
+}
+
+/// Call qf_list_changed(qfl) -> rs_qf_incr_changedtick.
+void nvim_qf_list_changed(void *qfl) { if (qfl != NULL) rs_qf_incr_changedtick(qfl); }
+
+// ---- Rust Phase 4 forward declarations ----
+extern void rs_qf_free_stack(void *wp, void *qi);
+extern int rs_set_errorlist(void *wp, void *list, int action, char *title, void *what);
+
 void *nvim_qf_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
 bool nvim_qf_has_user_data(const void *qfl_void) { return qfl_void == NULL ? false : ((const qf_list_T *)qfl_void)->qf_has_user_data; }
 void nvim_qf_incr_changedtick(void *qfl_void) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_changedtick++; }
@@ -4651,88 +4680,10 @@ static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char
   return retval;
 }
 
-// Free the entire quickfix/location list stack.
-// If the quickfix/location list window is open, then clear it.
-static void qf_free_stack(win_T *wp, qf_info_T *qi)
-{
-  win_T *qfwin = qf_find_win(qi);
-
-  if (qfwin != NULL) {
-    // If the quickfix/location list window is open, then clear it
-    if (qi->qf_curlist < qi->qf_listcount) {
-      rs_qf_free_list(qf_get_curlist(qi));
-    }
-    qf_update_buffer(qi, NULL);
-  }
-
-  if (wp != NULL && IS_LL_WINDOW(wp)) {
-    // If in the location list window, then use the non-location list
-    // window with this location list (if present)
-    win_T *const llwin = qf_find_win_with_loclist(qi);
-    if (llwin != NULL) {
-      wp = llwin;
-    }
-  }
-
-  qf_free_all(wp);
-  if (wp == NULL) {
-    // quickfix list
-    qi->qf_curlist = 0;
-    qi->qf_listcount = 0;
-  } else if (qfwin != NULL) {
-    // If the location list window is open, then create a new empty location
-    // list
-    qf_info_T *new_ll = qf_alloc_stack(QFLT_LOCATION, (int)wp->w_p_lhi);
-    new_ll->qf_bufnr = qfwin->w_buffer->b_fnum;
-
-    // first free the list reference in the location list window
-    ll_free_all(&qfwin->w_llist_ref);
-
-    qfwin->w_llist_ref = new_ll;
-    if (wp != qfwin) {
-      win_set_loclist(wp, new_ll);
-    }
-  }
-}
-
 /// When "what" is not NULL then only set some properties.
 int set_errorlist(win_T *wp, list_T *list, int action, char *title, dict_T *what)
 {
-  qf_info_T *qi;
-  if (wp != NULL) {
-    qi = ll_get_or_alloc_list(wp);
-  } else {
-    qi = ql_info;
-  }
-  assert(qi != NULL);
-
-  if (action == 'f') {
-    // Free the entire quickfix or location list stack
-    qf_free_stack(wp, qi);
-    return OK;
-  }
-
-  // A dict argument cannot be specified with a non-empty list argument
-  if (list != NULL && tv_list_len(list) != 0 && what != NULL) {
-    semsg(_(e_invarg2), _("cannot have both a list and a \"what\" argument"));
-    return FAIL;
-  }
-
-  incr_quickfix_busy();
-
-  int retval = OK;
-  if (what != NULL) {
-    retval = qf_set_properties(qi, what, action, title);
-  } else {
-    retval = rs_qf_add_entries(qi, qi->qf_curlist, list, title, action);
-    if (retval == OK) {
-      qf_list_changed(qf_get_curlist(qi));
-    }
-  }
-
-  decr_quickfix_busy();
-
-  return retval;
+  return rs_set_errorlist((void *)wp, (void *)list, action, title, (void *)what);
 }
 
 static bool mark_quickfix_user_data(qf_info_T *qi, int copyID)

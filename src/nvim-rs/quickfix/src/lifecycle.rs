@@ -18,7 +18,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clashing_extern_declarations)]
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
 use std::sync::Mutex;
 
 // =============================================================================
@@ -102,6 +102,39 @@ extern "C" {
     fn nvim_is_loclist_cmd(cmdidx: c_int) -> bool;
     fn nvim_eap_get_cmdidx(eap: *const c_void) -> c_int;
     fn nvim_emsg_loclist();
+
+    // --- Phase 4: set_errorlist + qf_free_stack ---
+    /// Find the quickfix/location list window for a stack.
+    fn nvim_qf_find_win_handle(qi: *const c_void) -> *const c_void;
+    /// Call `qf_update_buffer(qi, old_last)`.
+    fn nvim_qf_update_buffer(qi: *mut c_void, old_last: *mut c_void);
+    /// Get curlist index (`qi->qf_curlist`).
+    fn nvim_qf_get_curlist_idx(qi: *const c_void) -> c_int;
+    /// Get the mutable curlist pointer.
+    fn nvim_qf_get_curlist(qi: *const c_void) -> *const c_void;
+    /// Set `qi->qf_curlist`.
+    fn nvim_qf_set_curlist_idx(qi: *mut c_void, idx: c_int);
+    /// Set `qi->qf_listcount`.
+    fn nvim_qf_set_listcount(qi: *mut c_void, count: c_int);
+    /// Find the window that owns a location list (via `w_llist`).
+    fn nvim_qf_find_win_with_loclist(ll: *const c_void) -> *mut c_void;
+    /// Return `win->w_buffer->b_fnum`.
+    fn nvim_qf_win_buf_fnum(win: *const c_void) -> c_int;
+    /// Set `wp->w_llist_ref = qi`.
+    fn nvim_win_set_llist_ref(wp: *mut c_void, qi: *mut c_void);
+    /// Return `tv_list_len(list)` -- 0 if list is NULL.
+    fn nvim_tv_list_len(list: *const c_void) -> c_int;
+    /// Emit "cannot have both a list and a 'what' argument" error.
+    fn nvim_semsg_list_and_what();
+    /// Call `qf_set_properties(qi, what, action, title)`.
+    fn nvim_qf_set_properties(
+        qi: *mut c_void,
+        what: *const c_void,
+        action: c_int,
+        title: *mut c_void,
+    ) -> c_int;
+    /// Call `qf_list_changed(qfl)`.
+    fn nvim_qf_list_changed(qfl: *mut c_void);
 }
 
 // =============================================================================
@@ -473,4 +506,152 @@ pub unsafe extern "C" fn rs_qf_cmd_get_or_alloc_stack(
     }
 
     qi
+}
+
+// =============================================================================
+// Phase 4: set_errorlist and qf_free_stack orchestrators
+// =============================================================================
+
+/// C OK / FAIL constants (mirror `nvim_c_decls.h`).
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+/// Free the entire quickfix/location list stack, including updating any open
+/// quickfix window and re-assigning an empty stack to the window.
+///
+/// Corresponds to C `qf_free_stack`.
+///
+/// # Safety
+///
+/// `wp` must be NULL or a valid `*mut win_T`.
+/// `qi` must be a valid non-null `*mut qf_info_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_free_stack(wp: *mut c_void, qi: *mut c_void) {
+    // nvim_qf_find_win_handle returns *const but the window pointer is mutable;
+    // cast to *mut so we can pass it to functions that require *mut.
+    let qfwin = nvim_qf_find_win_handle(qi).cast_mut();
+
+    if !qfwin.is_null() {
+        // Quickfix/location window is open: free the current list's items so
+        // the buffer gets cleared, then trigger a buffer update.
+        if nvim_qf_get_curlist_idx(qi) < nvim_qf_get_listcount(qi) {
+            rs_qf_free_list(nvim_qf_get_curlist(qi).cast_mut());
+        }
+        nvim_qf_update_buffer(qi, std::ptr::null_mut());
+    }
+
+    // If wp is a location list window, redirect to the normal window that owns
+    // this location list (if there is one).
+    let wp = if !wp.is_null() && nvim_qf_is_ll_window(wp) {
+        let llwin = nvim_qf_find_win_with_loclist(qi);
+        if llwin.is_null() {
+            wp
+        } else {
+            llwin
+        }
+    } else {
+        wp
+    };
+
+    rs_qf_free_all(wp);
+
+    if wp.is_null() {
+        // Global quickfix list: reset counters (struct is static, not freed).
+        nvim_qf_set_curlist_idx(qi, 0);
+        nvim_qf_set_listcount(qi, 0);
+    } else if !qfwin.is_null() {
+        // Location list window is open: create a new empty location list for
+        // both the source window and the location list window.
+        let n = nvim_win_get_p_lhi(wp);
+        let new_ll = rs_qf_alloc_stack(QFLT_LOCATION, n);
+
+        // Record the quickfix window's buffer number in the new stack.
+        nvim_qf_set_bufnr(new_ll, nvim_qf_win_buf_fnum(qfwin));
+
+        // Free the old llist_ref in the location list window.
+        let mut old_ref = nvim_win_take_llist_ref(qfwin);
+        if !old_ref.is_null() {
+            rs_ll_free_all(std::ptr::addr_of_mut!(old_ref));
+        }
+
+        // Assign new_ll to the location list window as its llist_ref.
+        nvim_win_set_llist_ref(qfwin, new_ll);
+
+        // If the source window is not the location list window itself, also
+        // update its w_llist.
+        if wp != qfwin {
+            nvim_qf_win_set_loclist(wp, new_ll);
+        }
+    }
+}
+
+/// Top-level API for `setqflist()`/`setloclist()` `VimL` functions.
+///
+/// Corresponds to C `set_errorlist`.
+///
+/// - `wp == NULL`: operate on the global quickfix list.
+/// - `wp != NULL`: operate on `wp`'s location list.
+/// - `action == 'f'`: free the entire stack.
+/// - `action == 'a'`/`'r'`/`'u'`: add/replace/undo entries.
+/// - `what != NULL`: set properties via `qf_set_properties`.
+///
+/// Returns `OK` (1) on success, `FAIL` (0) on error.
+///
+/// # Safety
+///
+/// All pointer arguments must be valid (or NULL where noted).
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_errorlist(
+    wp: *mut c_void,
+    list: *mut c_void,
+    action: c_int,
+    title: *mut c_char,
+    what: *mut c_void,
+) -> c_int {
+    let qi = if wp.is_null() {
+        nvim_get_ql_info()
+    } else {
+        rs_ll_get_or_alloc_list(wp)
+    };
+    debug_assert!(!qi.is_null(), "set_errorlist: qi must not be NULL");
+
+    if action == c_int::from(b'f') {
+        // Free the entire quickfix or location list stack.
+        rs_qf_free_stack(wp, qi);
+        return OK;
+    }
+
+    // A dict argument cannot be combined with a non-empty list argument.
+    if !list.is_null() && nvim_tv_list_len(list) != 0 && !what.is_null() {
+        nvim_semsg_list_and_what();
+        return FAIL;
+    }
+
+    rs_incr_quickfix_busy();
+
+    let retval = if what.is_null() {
+        let retval = rs_qf_add_entries(qi, nvim_qf_get_curlist_idx(qi), list, title, action);
+        if retval == OK {
+            nvim_qf_list_changed(nvim_qf_get_curlist(qi).cast_mut());
+        }
+        retval
+    } else {
+        nvim_qf_set_properties(qi, what, action, title.cast())
+    };
+
+    rs_decr_quickfix_busy();
+
+    retval
+}
+
+// Declare rs_qf_add_entries (defined in list.rs / Rust crate) so we can call
+// it from this module without an `extern` block inside a function.
+extern "C" {
+    fn rs_qf_add_entries(
+        qi: *mut c_void,
+        qf_idx: c_int,
+        list: *const c_void,
+        title: *const c_char,
+        action: c_int,
+    ) -> c_int;
 }
