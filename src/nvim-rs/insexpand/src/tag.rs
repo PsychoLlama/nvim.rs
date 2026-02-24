@@ -11,10 +11,29 @@ extern "C" {
     fn nvim_get_ctrl_x_mode() -> c_int;
     fn nvim_get_compl_direction() -> c_int;
     fn nvim_get_compl_interrupted() -> c_int;
+
+    // Compound accessor for tag completion
+    fn nvim_get_next_tag_completion_impl();
 }
 
 // CTRL-X mode constant
 const CTRL_X_TAGS: c_int = 5 + 0x100; // 5 + CTRL_X_WANT_IDENT
+
+// =============================================================================
+// Phase 3 (pass 4): get_next_tag_completion
+// =============================================================================
+
+/// Get the next set of tag completion matches.
+///
+/// Saves/restores p_ic, calls find_tags with tag-completion flags,
+/// and adds any matches found via ins_compl_add_matches.
+///
+/// # Safety
+/// Requires valid completion state; called from insert mode completion only.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_next_tag_completion() {
+    nvim_get_next_tag_completion_impl();
+}
 
 #[cfg(test)]
 mod tests {

@@ -181,6 +181,8 @@ extern void rs_ins_compl_update_shown_match(void);
 extern void rs_find_next_match_in_menu(void);
 // Phase 2 (pass 4) Rust exports
 extern void rs_get_next_bufname_token(void);
+// Phase 3 (pass 4) Rust exports
+extern void rs_get_next_tag_completion(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -2498,28 +2500,6 @@ static void get_next_dict_tsr_completion(int compl_type, char *dict, int dict_f)
   }
 }
 
-/// Get the next set of tag names matching "compl_pattern".
-static void get_next_tag_completion(void)
-{
-  // set p_ic according to p_ic, p_scs and pat for find_tags().
-  const int save_p_ic = p_ic;
-  p_ic = ignorecase(compl_pattern.data);
-
-  // Find up to TAG_MANY matches.  Avoids that an enormous number
-  // of matches is found when compl_pattern is empty
-  g_tag_at_cursor = true;
-  char **matches;
-  int num_matches;
-  if (find_tags(compl_pattern.data, &num_matches, &matches,
-                TAG_REGEXP | TAG_NAMES | TAG_NOIC | TAG_INS_COMP
-                | (rs_ctrl_x_mode_not_default() ? TAG_VERBOSE : 0),
-                TAG_MANY, curbuf->b_ffname) == OK && num_matches > 0) {
-    ins_compl_add_matches(num_matches, matches, p_ic);
-  }
-  g_tag_at_cursor = false;
-  p_ic = save_p_ic;
-}
-
 /// Compare function for qsort
 static int compare_scores(const void *a, const void *b)
 {
@@ -3095,7 +3075,7 @@ static bool get_next_completion_match(int type, ins_compl_next_state_T *st, pos_
     break;
 
   case CTRL_X_TAGS:
-    get_next_tag_completion();
+    rs_get_next_tag_completion();
     break;
 
   case CTRL_X_FILES:
@@ -5141,5 +5121,27 @@ void nvim_get_next_bufname_token_impl(void)
       }
     }
   }
+}
+
+// Compound accessor for Phase 3 (pass 4): get_next_tag_completion
+void nvim_get_next_tag_completion_impl(void)
+{
+  // set p_ic according to p_ic, p_scs and pat for find_tags().
+  const int save_p_ic = p_ic;
+  p_ic = ignorecase(compl_pattern.data);
+
+  // Find up to TAG_MANY matches.  Avoids that an enormous number
+  // of matches is found when compl_pattern is empty
+  g_tag_at_cursor = true;
+  char **matches;
+  int num_matches;
+  if (find_tags(compl_pattern.data, &num_matches, &matches,
+                TAG_REGEXP | TAG_NAMES | TAG_NOIC | TAG_INS_COMP
+                | (rs_ctrl_x_mode_not_default() ? TAG_VERBOSE : 0),
+                TAG_MANY, curbuf->b_ffname) == OK && num_matches > 0) {
+    ins_compl_add_matches(num_matches, matches, p_ic);
+  }
+  g_tag_at_cursor = false;
+  p_ic = save_p_ic;
 }
 
