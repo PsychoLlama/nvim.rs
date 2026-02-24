@@ -16,13 +16,13 @@ const ITEM_MATCHGROUP: c_int = 3;
 
 extern "C" {
     // Phase 5 C wrappers
-    fn nvim_syn_get_group_name(arg: *mut c_char, name_end: *mut *mut c_char) -> *mut c_char;
-    fn nvim_syn_init_patterns();
+    fn rs_get_group_name(arg: *mut c_char, name_end: *mut *mut c_char) -> *mut c_char;
+    fn rs_init_syn_patterns();
     fn nvim_syn_vim_strnsave_up(str: *const c_char, len: c_int) -> *mut c_char;
     fn nvim_syn_set_nextcmd(eap: *mut c_void, rest: *mut c_char);
     fn nvim_syn_get_eap_arg(eap: *const c_void) -> *mut c_char;
     fn nvim_syn_get_eap_skip(eap: *const c_void) -> c_int;
-    fn nvim_syn_incl_toplevel(id: c_int, flagsp: *mut c_int);
+    fn rs_syn_incl_toplevel(id: c_int, flagsp: *mut c_int);
 
     // Standard C library
     fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
@@ -56,9 +56,9 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
 
     // Isolate the group name, check for validity
     let mut group_name_end: *mut c_char = std::ptr::null_mut();
-    let mut rest = nvim_syn_get_group_name(arg, &mut group_name_end);
+    let mut rest = rs_get_group_name(arg, &mut group_name_end);
 
-    nvim_syn_init_patterns();
+    rs_init_syn_patterns();
 
     // Initialize option struct fields
     let mut opt_flags: c_int = 0;
@@ -201,7 +201,7 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
             let syn_id =
                 nvim_syn_check_group_wrapper(arg, group_name_end.offset_from(arg) as c_int);
             if syn_id != 0 {
-                nvim_syn_incl_toplevel(syn_id, &mut opt_flags);
+                rs_syn_incl_toplevel(syn_id, &mut opt_flags);
 
                 // Build the ordered list for Rust storage:
                 // START reversed, SKIP reversed, END reversed

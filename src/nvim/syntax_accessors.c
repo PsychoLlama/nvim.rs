@@ -193,6 +193,9 @@ extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
 // Rust match command FFI declaration
 extern void rs_syn_cmd_match(exarg_T *eap, int syncing);
 
+// Rust list command FFI declaration
+extern void rs_syn_cmd_list(exarg_T *eap, int syncing);
+
 // Rust keyword command FFI declaration
 extern void rs_syn_cmd_keyword(exarg_T *eap, int syncing);
 
@@ -773,11 +776,6 @@ static synstate_T *syn_stack_find_entry(linenr_T lnum)
 // End of handling of the state stack.
 // **************************************
 
-static void invalidate_current_state(void)
-{
-  rs_invalidate_current_state();
-}
-
 static void validate_current_state(void)
 {
   current_state.ga_itemsize = sizeof(stateitem_T);
@@ -849,12 +847,6 @@ static bool syn_regexec(regmmatch_T *rmp, linenr_T lnum, colnr_T col, syn_time_T
   return false;
 }
 
-/// Handle ":syntax iskeyword" command.
-static void syn_cmd_iskeyword(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_iskeyword(eap, syncing);
-}
-
 // Clear all syntax info for one buffer.
 void syntax_clear(synblock_T *block)
 {
@@ -867,58 +859,14 @@ void reset_synblock(win_T *wp)
   rs_reset_synblock(wp);
 }
 
-// Clear syncing info for one buffer.
-static void syntax_sync_clear(void)
-{
-  rs_syntax_sync_clear();
-}
-
-// Remove one pattern from the buffer's pattern list.
-static void syn_remove_pattern(synblock_T *block, int idx)
-{
-  rs_syn_remove_pattern(block, idx);
-}
-
-// Clear and free one syntax pattern.  When clearing all, must be called from
-// last to first!
-static void syn_clear_pattern(synblock_T *block, int i)
-{
-  rs_syn_clear_pattern(block, i);
-}
-
-// Clear and free one syntax cluster.
-static void syn_clear_cluster(synblock_T *block, int i)
-{
-  rs_syn_clear_cluster(block, i);
-}
-
-// Clear one syntax group for the current buffer.
-static void syn_clear_one(const int id, const bool syncing)
-{
-  rs_syn_clear_one(id, (int)syncing);
-}
-
 void syn_maybe_enable(void)
 {
   rs_syn_maybe_enable();
 }
 
-// syn_cmd_list and helper listing functions are implemented in Rust (listing.rs).
-// The C stub syn_cmd_list is at the bottom of this file.
-// Listing functions (syn_cmd_list, syn_list_one, etc.) are implemented in Rust (listing.rs).
+// syn_cmd_list and listing functions are implemented in Rust (listing.rs).
 
-static void syn_clear_keyword(int id, hashtab_T *ht)
-{
-  rs_syn_clear_keyword(id, ht);
-}
-
-// Clear a whole keyword table.
-static void clear_keywtab(hashtab_T *ht)
-{
-  rs_clear_keywtab(ht);
-}
-
-// Phase 6: Forward declarations for Rust functions used below
+// Phase 6+7: Forward declarations for Rust functions used below
 extern void rs_add_keyword(char *name, int namelen, int id, int flags,
                             int16_t *cont_in_list, int16_t *next_list, int conceal_char);
 extern int16_t *rs_copy_id_list(const int16_t *list);
@@ -929,127 +877,16 @@ extern int rs_syn_scl_name2id(char *name);
 extern int rs_syn_scl_namen2id(char *linep, int len);
 extern int rs_syn_check_cluster(char *pp, int len);
 extern int rs_syn_add_cluster(char *name);
-
-/// Add a keyword to the list of keywords.
-///
-/// @param name name of keyword
-/// @param id group ID for this keyword
-/// @param flags flags for this keyword
-/// @param cont_in_list containedin for this keyword
-/// @param next_list nextgroup for this keyword
-static void add_keyword(char *const name, size_t namelen, const int id, const int flags,
-                        int16_t *const cont_in_list, int16_t *const next_list,
-                        const int conceal_char)
-{
-  rs_add_keyword(name, (int)namelen, id, flags, cont_in_list, next_list, conceal_char);
-}
-
-/// Get the start and end of the group name argument.
-///
-/// @param arg       start of the argument
-/// @param name_end  pointer to end of the name
-///
-/// @return          a pointer to the first argument.
-///                  Return NULL if the end of the command was found instead of further args.
-static char *get_group_name(char *arg, char **name_end)
-{
-  return rs_get_group_name(arg, name_end);
-}
-
-
-// Adjustments to syntax item when declared in a ":syn include"'d file.
-// Set the contained flag, and if the item is not already contained, add it
-// to the specified top-level group, if any.
-static void syn_incl_toplevel(int id, int *flagsp)
-{
-  rs_syn_incl_toplevel(id, flagsp);
-}
-
-
-
-
+extern void rs_syn_combine_list(int16_t **clstr1, int16_t **clstr2, int list_op);
+extern int rs_syn_in_id_list(stateitem_T *cur_si, int16_t *list, int id, int inc_tag,
+                              int16_t *cont_in_list, int flags);
+extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
 
 // Keep ITEM_* defines available for C wrappers
 #define ITEM_START          0
 #define ITEM_SKIP           1
 #define ITEM_END            2
 #define ITEM_MATCHGROUP     3
-
-// Combines lists of syntax clusters.
-// *clstr1 and *clstr2 must both be allocated memory; they will be consumed.
-// Implemented in Rust: see rs_syn_combine_list in nvim-syntax/src/cluster.rs
-extern void rs_syn_combine_list(int16_t **clstr1, int16_t **clstr2, int list_op);
-static void syn_combine_list(int16_t **const clstr1, int16_t **const clstr2, const int list_op)
-{
-  rs_syn_combine_list(clstr1, clstr2, list_op);
-}
-
-/// Lookup a syntax cluster name and return its ID.
-/// If it is not found, 0 is returned.
-static int syn_scl_name2id(char *name)
-{
-  return rs_syn_scl_name2id(name);
-}
-
-/// Like syn_scl_name2id(), but take a pointer + length argument.
-static int syn_scl_namen2id(char *linep, int len)
-{
-  return rs_syn_scl_namen2id(linep, len);
-}
-
-/// Find syntax cluster name in the table and return its ID.
-/// The argument is a pointer to the name and the length of the name.
-/// If it doesn't exist yet, a new entry is created.
-///
-/// @return  0 for failure.
-static int syn_check_cluster(char *pp, int len)
-{
-  return rs_syn_check_cluster(pp, len);
-}
-
-/// Add new syntax cluster and return its ID.
-/// "name" must be an allocated string, it will be consumed.
-///
-/// @return  0 for failure.
-static int syn_add_cluster(char *name)
-{
-  return rs_syn_add_cluster(name);
-}
-
-// On first call for current buffer: Init growing array.
-static void init_syn_patterns(void)
-{
-  rs_init_syn_patterns();
-}
-
-/// Get one pattern for a ":syntax match" or ":syntax region" command.
-/// Stores the pattern and program in a synpat_T.
-///
-/// @return  a pointer to the next argument, or NULL in case of an error.
-static char *get_syn_pattern(char *arg, synpat_T *ci)
-{
-  return rs_get_syn_pattern(arg, ci);
-}
-
-
-
-// Make a copy of an ID list.
-static int16_t *copy_id_list(const int16_t *const list)
-{
-  return rs_copy_id_list(list);
-}
-
-/// in_id_list implemented in Rust.
-/// See rs_syn_in_id_list in nvim-syntax/src/containment.rs
-extern int rs_syn_in_id_list(stateitem_T *cur_si, int16_t *list, int id, int inc_tag,
-                              int16_t *cont_in_list, int flags);
-
-/// Check if syntax group "ssp" is in the ID list "list" of "cur_si".
-/// Thin shim calling the Rust implementation.
-static int in_id_list(stateitem_T *cur_si, int16_t *list, struct sp_syn *ssp, int flags)
-{
-  return rs_syn_in_id_list(cur_si, list, ssp->id, ssp->inc_tag, ssp->cont_in_list, flags);
-}
 
 /// Rust implementation of the `:syntax` dispatcher.
 extern void rs_ex_syntax(exarg_T *eap);
@@ -1557,7 +1394,7 @@ void nvim_syn_clear_current_state(void)
 
 void nvim_syn_validate_current_state(void) { validate_current_state(); }
 
-void nvim_syn_invalidate_current_state(void) { invalidate_current_state(); }
+void nvim_syn_invalidate_current_state(void) { rs_invalidate_current_state(); }
 
 void nvim_syn_set_keepend_level(int level) { keepend_level = level; }
 
@@ -2077,26 +1914,11 @@ int nvim_syn_check_keyword_id(char *line, int startcol, int *endcolp,
 
 }
 
-/// Call in_id_list from Rust
-
-/// Returns 1 if in list, 0 otherwise
-
+/// Thin wrapper: call rs_syn_in_id_list directly.
 int nvim_syn_in_id_list(stateitem_T *cur_si, int16_t *list, int id, int inc_tag,
-
                          int16_t *cont_in_list, int flags)
-
 {
-
-  struct sp_syn ssp;
-
-  ssp.id = (int16_t)id;
-
-  ssp.inc_tag = inc_tag;
-
-  ssp.cont_in_list = cont_in_list;
-
-  return in_id_list(cur_si, list, &ssp, flags);
-
+  return rs_syn_in_id_list(cur_si, list, id, inc_tag, cont_in_list, flags);
 }
 
 int nvim_syn_has_keywords(void) { return syn_block != NULL && syn_block->b_keywtab.ht_used > 0 ? 1 : 0; }
@@ -2138,11 +1960,12 @@ keyentry_T *nvim_syn_match_keyword(char *keyword, int use_ic, stateitem_T *cur_s
   if (!HASHITEM_EMPTY(hi)) {
     for (keyentry_T *kp = HI2KE(hi); kp != NULL; kp = kp->ke_next) {
       if (current_next_list != 0
-          ? in_id_list(NULL, current_next_list, &kp->k_syn, 0)
+          ? rs_syn_in_id_list(NULL, current_next_list, kp->k_syn.id, kp->k_syn.inc_tag,
+                              kp->k_syn.cont_in_list, 0)
           : (cur_si == NULL
              ? !(kp->flags & HL_CONTAINED)
-             : in_id_list(cur_si, cur_si->si_cont_list,
-                          &kp->k_syn, kp->flags))) {
+             : rs_syn_in_id_list(cur_si, cur_si->si_cont_list, kp->k_syn.id, kp->k_syn.inc_tag,
+                                 kp->k_syn.cont_in_list, kp->flags))) {
         return kp;
       }
     }
@@ -2431,11 +2254,6 @@ void nvim_synstate_set_lnum(synstate_T *state, int lnum) { state->sst_lnum = lnu
 
 int nvim_synstate_next_list_eq(synstate_T *a, synstate_T *b) { return a->sst_next_list == b->sst_next_list; }
 
-/// Forward declaration for syn_scl_name2id
-
-static int syn_scl_name2id(char *name);
-
-int nvim_syn_cluster_name2id(const char *name) { return syn_scl_name2id((char *)name); }
 
 int nvim_synblock_has_containedin(synblock_T *block) { return block->b_syn_containedin ? 1 : 0; }
 
@@ -2772,23 +2590,21 @@ int nvim_syn_check_pattern_containment(int pat_idx, int si_idx, int has_next_lis
 {
   synpat_T *spp = &(SYN_ITEMS(syn_block)[pat_idx]);
   if (has_next_list) {
-    return in_id_list(NULL, current_next_list, &spp->sp_syn, 0);
+    return rs_syn_in_id_list(NULL, current_next_list, spp->sp_syn.id, spp->sp_syn.inc_tag,
+                             spp->sp_syn.cont_in_list, 0);
   } else if (!has_cur_si) {
     return !(spp->sp_flags & HL_CONTAINED);
   } else {
     stateitem_T *cur_si = &CUR_STATE(si_idx);
-    return in_id_list(cur_si, cur_si->si_cont_list, &spp->sp_syn, spp->sp_flags);
+    return rs_syn_in_id_list(cur_si, cur_si->si_cont_list, spp->sp_syn.id, spp->sp_syn.inc_tag,
+                             spp->sp_syn.cont_in_list, spp->sp_flags);
   }
 }
 
 /// Check in_id_list with a specific sp_syn (for spell checking)
 int nvim_syn_in_id_list_spell(stateitem_T *sip, int16_t *list, int id)
 {
-  struct sp_syn sps;
-  sps.inc_tag = 0;
-  sps.id = (int16_t)id;
-  sps.cont_in_list = NULL;
-  return in_id_list(sip, list, &sps, 0);
+  return rs_syn_in_id_list(sip, list, id, 0, NULL, 0);
 }
 
 int nvim_syn_get_spell_cluster_id(void) { return syn_block->b_spell_cluster_id; }
@@ -2959,8 +2775,6 @@ _Static_assert(KEYWORD_IDX == -1, "KEYWORD_IDX");
 
 int nvim_syn_get_current_inc_tag(void) { return current_syn_inc_tag; }
 int nvim_syn_get_b_syn_conceal(void) { return curwin->w_s->b_syn_conceal; }
-int nvim_syn_check_cluster(char *pp, int len) { return syn_check_cluster(pp, len); }
-
 int nvim_syn_name2id_wrapper(const char *name) { return syn_name2id(name); }
 
 int nvim_syn_check_group_wrapper(const char *name, int len) { return syn_check_group(name, (size_t)len); }
@@ -3031,18 +2845,11 @@ int nvim_syn_ascii_iswhite_char(int c) { return ascii_iswhite(c); }
 
 int nvim_syn_toupper_asc(int c) { return TOUPPER_ASC(c); }
 
-char *nvim_syn_get_group_name(char *arg, char **name_end) { return get_group_name(arg, name_end); }
-
-void nvim_syn_init_patterns(void) { init_syn_patterns(); }
-
 char *nvim_syn_vim_strnsave_up(const char *str, int len) { return vim_strnsave_up(str, (size_t)len); }
 
 void nvim_syn_set_nextcmd(exarg_T *eap, char *rest) { eap->nextcmd = check_nextcmd(rest); }
 char *nvim_syn_get_eap_arg(const exarg_T *eap) { return eap->arg; }
 int nvim_syn_get_eap_skip(const exarg_T *eap) { return eap->skip; }
-
-void nvim_syn_incl_toplevel(int id, int *flagsp) { syn_incl_toplevel(id, flagsp); }
-
 
 _Static_assert(SF_CCOMMENT == 0x01, "SF_CCOMMENT");
 _Static_assert(SF_MATCH == 0x02, "SF_MATCH");
@@ -3149,14 +2956,6 @@ void nvim_syn_semsg_2s(const char *fmt, const char *arg1, const char *arg2)
   semsg(fmt, arg1, arg2);
 }
 
-/// Wrapper for add_keyword.
-void nvim_syn_add_keyword(char *name, int namelen, int id, int flags,
-                           int16_t *cont_in_list, int16_t *next_list,
-                           int conceal_char)
-{
-  add_keyword(name, (size_t)namelen, id, flags, cont_in_list, next_list, conceal_char);
-}
-
 // nvim_syn_keyword_redraw_and_free removed in pass 5 Phase 4 (replaced by
 // nvim_syn_redraw_curbuf_later + nvim_syn_stack_free_all calls from Rust).
 
@@ -3174,7 +2973,7 @@ int16_t **nvim_syn_get_cluster_list_ptr(int scl_id)
 /// Calls syn_combine_list on the cluster's list and clstr_list.
 void nvim_syn_combine_cluster_list(int scl_id, int16_t **clstr_list, int list_op)
 {
-  syn_combine_list(&SYN_CLSTR(curwin->w_s)[scl_id].scl_list, clstr_list, list_op);
+  rs_syn_combine_list(&SYN_CLSTR(curwin->w_s)[scl_id].scl_list, clstr_list, list_op);
 }
 
 // nvim_syn_redraw_and_free_all removed in pass 5 Phase 4 (replaced by
@@ -3279,12 +3078,6 @@ void nvim_syn_cmd_clear_wrapper(exarg_T *eap, int syncing)
   rs_syn_cmd_clear(eap, syncing);
 }
 
-/// Forward to syn_cmd_list.
-void nvim_syn_cmd_list_wrapper(exarg_T *eap, int syncing)
-{
-  syn_cmd_list(eap, syncing);
-}
-
 // =============================================================================
 // Phase 2 accessors: syn_cmd_clear migration
 // =============================================================================
@@ -3292,7 +3085,7 @@ void nvim_syn_cmd_list_wrapper(exarg_T *eap, int syncing)
 /// Look up a syntax cluster name+length and return its ID (with SYNID_CLUSTER offset).
 int nvim_syn_scl_namen2id(const char *arg, int len)
 {
-  return syn_scl_namen2id((char *)arg, len);
+  return rs_syn_scl_namen2id((char *)arg, len);
 }
 
 /// Look up a syntax group name+length and return its ID.
@@ -3750,18 +3543,6 @@ void nvim_syn_do_unlet_b_current_syntax(void)
   do_unlet(S_LEN("b:current_syntax"), true);
 }
 
-/// Forward syn_cmd_iskeyword (static) for Rust dispatch table.
-void nvim_syn_cmd_iskeyword_wrapper(exarg_T *eap, int syncing)
-{
-  syn_cmd_iskeyword(eap, syncing);
-}
-
-/// Thin wrapper: syn_cmd_list body delegated to Rust.
-extern void rs_syn_cmd_list(exarg_T *eap, int syncing);
-static void syn_cmd_list(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_list(eap, syncing);
-}
 
 // =============================================================================
 // Phase 5 (pass 5) accessors: clearing.rs support

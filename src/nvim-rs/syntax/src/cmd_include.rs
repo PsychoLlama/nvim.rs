@@ -17,8 +17,8 @@ extern "C" {
     fn nvim_syn_set_eap_arg(eap: *mut c_void, arg: *mut c_char);
 
     // Group name parsing
-    fn nvim_syn_get_group_name(arg: *mut c_char, name_end: *mut *mut c_char) -> *mut c_char;
-    fn nvim_syn_check_cluster(pp: *mut c_char, len: c_int) -> c_int;
+    fn rs_get_group_name(arg: *mut c_char, name_end: *mut *mut c_char) -> *mut c_char;
+    fn rs_syn_check_cluster(pp: *mut c_char, len: c_int) -> c_int;
 
     // State management
     fn nvim_syn_get_current_inc_tag() -> c_int;
@@ -70,12 +70,12 @@ unsafe fn syn_cmd_include_impl(eap: *mut c_void, _syncing: c_int) {
     if *arg == b'@' as c_char {
         let arg_after = arg.add(1);
         let mut group_name_end: *mut c_char = std::ptr::null_mut();
-        let rest = nvim_syn_get_group_name(arg_after, &mut group_name_end);
+        let rest = rs_get_group_name(arg_after, &mut group_name_end);
         if rest.is_null() {
             emsg(EMSG_E397.as_ptr().cast());
             return;
         }
-        sgl_id = nvim_syn_check_cluster(arg_after, group_name_end.offset_from(arg_after) as c_int);
+        sgl_id = rs_syn_check_cluster(arg_after, group_name_end.offset_from(arg_after) as c_int);
         if sgl_id == 0 {
             return;
         }

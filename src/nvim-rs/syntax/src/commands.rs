@@ -1117,7 +1117,7 @@ extern "C" {
     fn nvim_syn_emsg_skip_dec();
 
     // Subcommand handlers that are still C functions (static wrappers)
-    fn nvim_syn_cmd_list_wrapper(eap: *mut c_void, syncing: c_int);
+    fn rs_syn_cmd_list(eap: *mut c_void, syncing: c_int);
 }
 
 /// Type alias for subcommand handler function pointers.
@@ -1136,7 +1136,7 @@ static SUBCOMMANDS: &[(&str, SynCmdFn)] = &[
     ("include", crate::cmd_include::rs_syn_cmd_include),
     ("iskeyword", rs_syn_cmd_iskeyword),
     ("keyword", crate::cmd_keyword::rs_syn_cmd_keyword),
-    ("list", nvim_syn_cmd_list_wrapper),
+    ("list", rs_syn_cmd_list),
     ("manual", rs_syn_cmd_manual_dispatch),
     ("match", crate::cmd_match::rs_syn_cmd_match),
     ("on", rs_syn_cmd_on_dispatch),
@@ -1145,7 +1145,7 @@ static SUBCOMMANDS: &[(&str, SynCmdFn)] = &[
     ("reset", rs_syn_cmd_reset),
     ("spell", rs_syn_cmd_spell_dispatch),
     ("sync", crate::cmd_sync::rs_syn_cmd_sync),
-    ("", nvim_syn_cmd_list_wrapper),
+    ("", rs_syn_cmd_list),
 ];
 
 /// Error message for invalid :syntax subcommand.

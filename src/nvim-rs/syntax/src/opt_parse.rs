@@ -46,7 +46,7 @@ extern "C" {
     // Syntax functions
     fn nvim_syn_get_b_syn_conceal() -> c_int;
     fn nvim_syn_get_current_inc_tag() -> c_int;
-    fn nvim_syn_check_cluster(pp: *mut c_char, len: c_int) -> c_int;
+    fn rs_syn_check_cluster(pp: *mut c_char, len: c_int) -> c_int;
     fn nvim_syn_name2id_wrapper(name: *const c_char) -> c_int;
     fn nvim_syn_check_group_wrapper(name: *const c_char, len: c_int) -> c_int;
     fn nvim_syn_highlight_num_groups() -> c_int;
@@ -447,7 +447,7 @@ pub unsafe fn get_id_list_impl(
             if skip != 0 {
                 id = -1;
             } else {
-                id = nvim_syn_check_cluster(name.add(2) as *mut c_char, item_len - 1);
+                id = rs_syn_check_cluster(name.add(2) as *mut c_char, item_len - 1);
             }
         } else {
             // Group name - check for regexp metacharacters

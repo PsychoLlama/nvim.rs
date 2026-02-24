@@ -60,7 +60,7 @@ extern "C" {
     fn nvim_syn_set_nextcmd(eap: *mut c_void, rest: *mut c_char);
 
     // Listing (for empty arg case)
-    fn nvim_syn_cmd_list_wrapper(eap: *mut c_void, syncing: c_int);
+    fn rs_syn_cmd_list(eap: *mut c_void, syncing: c_int);
 
     // Error messages
     fn semsg(fmt: *const c_char, ...);
@@ -92,7 +92,7 @@ unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
 
     // No argument: list sync items
     if nvim_syn_ends_excmd(*arg_start as c_int) != 0 {
-        nvim_syn_cmd_list_wrapper(eap, 1);
+        rs_syn_cmd_list(eap, 1);
         return;
     }
 

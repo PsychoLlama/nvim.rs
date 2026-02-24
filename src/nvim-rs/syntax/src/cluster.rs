@@ -45,7 +45,6 @@ extern "C" {
     fn nvim_id_list_count(list: IdListHandle) -> c_int;
 
     // Phase 32.3: Cluster lookup and containedin
-    fn nvim_syn_cluster_name2id(name: *const c_char) -> c_int;
     fn nvim_synblock_has_containedin(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_pattern_count(block: SynBlockHandle) -> c_int;
     fn nvim_synpat_get_inc_tag(pat: crate::types::SynPatHandle) -> c_int;
@@ -346,7 +345,7 @@ pub unsafe fn cluster_name_to_id(name: *const c_char) -> i32 {
     if name.is_null() {
         return 0;
     }
-    nvim_syn_cluster_name2id(name)
+    rs_syn_scl_name2id(name as *mut c_char)
 }
 
 /// Lookup a cluster by name (Rust string version).
@@ -357,7 +356,7 @@ pub fn cluster_lookup(name: &str) -> i32 {
     let Ok(cname) = CString::new(name) else {
         return 0;
     };
-    unsafe { nvim_syn_cluster_name2id(cname.as_ptr()) }
+    unsafe { rs_syn_scl_name2id(cname.as_ptr() as *mut c_char) }
 }
 
 /// Check if the synblock has any containedin items.
@@ -656,10 +655,6 @@ extern "C" {
     fn nvim_syn_get_eap_arg(eap: *const c_void) -> *mut c_char;
     fn nvim_syn_get_eap_skip(eap: *const c_void) -> c_int;
 
-    // Group name / cluster parsing
-    fn nvim_syn_get_group_name(arg: *mut c_char, name_end: *mut *mut c_char) -> *mut c_char;
-    fn nvim_syn_check_cluster(pp: *mut c_char, len: c_int) -> c_int;
-
     // ID list from Rust opt_parse
     fn rs_get_id_list(
         arg: *mut *mut c_char,
@@ -724,14 +719,14 @@ unsafe fn syn_cmd_cluster_impl(eap: *mut c_void, _syncing: c_int) {
 
     // Parse the cluster name
     let mut group_name_end: *mut c_char = std::ptr::null_mut();
-    let mut rest = nvim_syn_get_group_name(arg, &mut group_name_end);
+    let mut rest = rs_get_group_name(arg, &mut group_name_end);
 
     if rest.is_null() {
         nvim_syn_semsg_1s(c"E475: Invalid argument: %s".as_ptr(), arg);
         return;
     }
 
-    let full_scl_id = nvim_syn_check_cluster(arg, group_name_end.offset_from(arg) as c_int);
+    let full_scl_id = rs_syn_check_cluster(arg, group_name_end.offset_from(arg) as c_int);
     if full_scl_id == 0 {
         return;
     }

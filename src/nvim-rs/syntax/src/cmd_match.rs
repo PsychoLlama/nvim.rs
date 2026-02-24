@@ -19,10 +19,10 @@ extern "C" {
     fn nvim_syn_set_nextcmd(eap: *mut c_void, rest: *mut c_char);
 
     // Group name parsing
-    fn nvim_syn_get_group_name(arg: *mut c_char, name_end: *mut *mut c_char) -> *mut c_char;
+    fn rs_get_group_name(arg: *mut c_char, name_end: *mut *mut c_char) -> *mut c_char;
 
     // Pattern initialization
-    fn nvim_syn_init_patterns();
+    fn rs_init_syn_patterns();
     fn nvim_syn_vim_regcomp_had_eol() -> c_int;
 
     // Option parsing (Rust)
@@ -41,7 +41,7 @@ extern "C" {
 
     // Group checking
     fn nvim_syn_check_group_wrapper(name: *const c_char, len: c_int) -> c_int;
-    fn nvim_syn_incl_toplevel(id: c_int, flagsp: *mut c_int);
+    fn rs_syn_incl_toplevel(id: c_int, flagsp: *mut c_int);
 
     // Helpers
     fn nvim_syn_ends_excmd(c: c_int) -> c_int;
@@ -59,7 +59,7 @@ unsafe fn syn_cmd_match_impl(eap: *mut c_void, syncing: c_int) {
 
     // Isolate the group name
     let mut group_name_end: *mut c_char = std::ptr::null_mut();
-    let mut rest = nvim_syn_get_group_name(arg, &mut group_name_end);
+    let mut rest = rs_get_group_name(arg, &mut group_name_end);
 
     // Initialize option parsing fields
     let mut opt_flags: c_int = 0;
@@ -89,7 +89,7 @@ unsafe fn syn_cmd_match_impl(eap: *mut c_void, syncing: c_int) {
     );
 
     // Get the pattern (compile step -- Rust)
-    nvim_syn_init_patterns();
+    rs_init_syn_patterns();
     let mut pattern_rest: *mut c_char = std::ptr::null_mut();
     let pat = pattern_store::compile_pattern(rest, ITEM_START, opt_flags, &mut pattern_rest);
 
@@ -126,7 +126,7 @@ unsafe fn syn_cmd_match_impl(eap: *mut c_void, syncing: c_int) {
             let syn_id =
                 nvim_syn_check_group_wrapper(arg, group_name_end.offset_from(arg) as c_int);
             if syn_id != 0 {
-                nvim_syn_incl_toplevel(syn_id, &mut opt_flags);
+                rs_syn_incl_toplevel(syn_id, &mut opt_flags);
 
                 pattern_store::store_match_pattern(
                     pat,

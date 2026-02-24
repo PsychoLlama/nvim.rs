@@ -85,7 +85,7 @@ extern "C" {
     fn nvim_curwin_syn_sync_linebreaks() -> c_int;
 
     // Group name/ID lookup
-    fn nvim_syn_scl_namen2id(arg: *const c_char, len: c_int) -> c_int;
+    fn rs_syn_scl_namen2id(arg: *const c_char, len: c_int) -> c_int;
     fn nvim_syn_name2id_len(name: *const c_char, len: c_int) -> c_int;
 
     // vim_strchr wrapper
@@ -731,7 +731,7 @@ unsafe fn syn_cmd_list_impl(eap: *mut c_void, syncing: c_int) {
             if *cur == b'@' as c_char {
                 // Cluster reference
                 let len = arg_end.offset_from(cur) as c_int - 1;
-                let cluster_id = nvim_syn_scl_namen2id(cur.add(1), len);
+                let cluster_id = rs_syn_scl_namen2id(cur.add(1), len);
                 if cluster_id == 0 {
                     semsg(c"E392: No such syntax cluster: %s".as_ptr(), cur);
                 } else {

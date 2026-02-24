@@ -18,11 +18,11 @@ extern "C" {
     fn nvim_syn_set_nextcmd(eap: *mut c_void, rest: *mut c_char);
 
     // Group name parsing
-    fn nvim_syn_get_group_name(arg: *mut c_char, name_end: *mut *mut c_char) -> *mut c_char;
+    fn rs_get_group_name(arg: *mut c_char, name_end: *mut *mut c_char) -> *mut c_char;
 
     // Group checking
     fn nvim_syn_check_group_wrapper(name: *const c_char, len: c_int) -> c_int;
-    fn nvim_syn_incl_toplevel(id: c_int, flagsp: *mut c_int);
+    fn rs_syn_incl_toplevel(id: c_int, flagsp: *mut c_int);
 
     // Option parsing (Rust)
     fn rs_get_syn_options(
@@ -39,7 +39,7 @@ extern "C" {
     ) -> *mut c_char;
 
     // Keyword storage
-    fn nvim_syn_add_keyword(
+    fn rs_add_keyword(
         name: *mut c_char,
         namelen: c_int,
         id: c_int,
@@ -101,7 +101,7 @@ unsafe fn add_keyword_with_optional(
             p.offset_from(kw) as c_int
         };
 
-        nvim_syn_add_keyword(
+        rs_add_keyword(
             kw,
             kwlen,
             syn_id,
@@ -157,7 +157,7 @@ unsafe fn syn_cmd_keyword_impl(eap: *mut c_void, _syncing: c_int) {
 
     // Isolate the group name
     let mut group_name_end: *mut c_char = std::ptr::null_mut();
-    let rest_after_group = nvim_syn_get_group_name(arg, &mut group_name_end);
+    let rest_after_group = rs_get_group_name(arg, &mut group_name_end);
 
     // If group name parsing fails, rest_after_group is NULL.
     let syn_id: c_int = if rest_after_group.is_null() {
@@ -223,7 +223,7 @@ unsafe fn syn_cmd_keyword_impl(eap: *mut c_void, _syncing: c_int) {
 
         // Phase 2: add an entry for each keyword (only if not skipping).
         if skip == 0 {
-            nvim_syn_incl_toplevel(syn_id, &mut opt_flags);
+            rs_syn_incl_toplevel(syn_id, &mut opt_flags);
 
             let mut kw = keyword_copy;
             let mut i = cnt;

@@ -28,7 +28,7 @@ extern "C" {
     fn nvim_synblock_get_topgrp(block: SynBlockHandle) -> c_int;
 
     // Group lookup
-    fn nvim_syn_scl_namen2id(arg: *const c_char, len: c_int) -> c_int;
+    fn rs_syn_scl_namen2id(arg: *const c_char, len: c_int) -> c_int;
     fn nvim_syn_name2id_len_wrapper(arg: *const c_char, len: c_int) -> c_int;
 
     // Group-level clear operations (kept in C due to hashtab coupling)
@@ -101,10 +101,8 @@ unsafe fn syn_cmd_clear_impl(eap: *mut c_void, syncing: c_int) {
         while nvim_syn_ends_excmd(*cur_arg as c_int) == 0 {
             let arg_end = nvim_syn_skiptowhite(cur_arg);
             if *cur_arg == b'@' as c_char {
-                let id = nvim_syn_scl_namen2id(
-                    cur_arg.add(1),
-                    arg_end.offset_from(cur_arg) as c_int - 1,
-                );
+                let id =
+                    rs_syn_scl_namen2id(cur_arg.add(1), arg_end.offset_from(cur_arg) as c_int - 1);
                 if id == 0 {
                     semsg(EMSG_E391.as_ptr().cast(), cur_arg);
                     break;
