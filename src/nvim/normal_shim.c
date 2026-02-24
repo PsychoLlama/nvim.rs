@@ -985,15 +985,19 @@ int nvim_cap_dec_count1(cmdarg_T *cap) { return cap ? --cap->count1 : 0; }
 // Command handler accessors for Rust FFI
 // =============================================================================
 
-/// Clear all syntax states and redraw for nv_clear.
-void nvim_nv_clear_impl(void)
-{
-  syn_stack_free_all(curwin->w_s);
+// nvim_nv_clear_impl: migrated to Rust (rs_nv_clear_impl), calls individual C accessors.
+extern void rs_nv_clear_impl(void);
+void nvim_nv_clear_impl(void) { rs_nv_clear_impl(); }
+
+/// Clear b_syn_slow for all windows in current tab (for nv_clear).
+void nvim_clear_b_syn_slow_all_windows(void) {
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
     wp->w_s->b_syn_slow = false;
   }
-  redraw_later(curwin, UPD_CLEAR);
 }
+
+/// syn_stack_free_all(curwin->w_s) wrapper.
+void nvim_syn_stack_free_all_curwin(void) { syn_stack_free_all(curwin->w_s); }
 
 int nvim_get_restart_VIsual_select(void) { return restart_VIsual_select; }
 

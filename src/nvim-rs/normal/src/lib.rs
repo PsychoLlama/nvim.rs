@@ -2258,7 +2258,9 @@ pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
 
 extern "C" {
     // Phase 1 accessor functions
-    fn nvim_nv_clear_impl();
+    // nvim_nv_clear_impl migrated to Rust rs_nv_clear_impl (Phase 6)
+    fn nvim_syn_stack_free_all_curwin();
+    fn nvim_clear_b_syn_slow_all_windows();
     #[allow(dead_code)]
     fn nvim_get_restart_VIsual_select() -> c_int;
     fn nvim_set_restart_VIsual_select(val: c_int);
@@ -2281,6 +2283,19 @@ extern "C" {
     fn rs_win_setheight(height: c_int);
 }
 
+/// Inner implementation of CTRL-L clear: frees syntax states and redraws.
+///
+/// Migrated from `nvim_nv_clear_impl` in normal_shim.c (Phase 6).
+///
+/// # Safety
+/// Calls C functions to free syntax state and mark for redraw.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_clear_impl() {
+    nvim_syn_stack_free_all_curwin();
+    nvim_clear_b_syn_slow_all_windows();
+    nvim_redraw_later_curwin(UPD_CLEAR);
+}
+
 /// Command handler for CTRL-L: Clear and redraw screen.
 ///
 /// Clears all syntax states to force resyncing and redraws the screen.
@@ -2293,7 +2308,7 @@ pub unsafe extern "C" fn rs_nv_clear(cap: CapHandle) {
     if rs_checkclearop(oap) {
         return;
     }
-    nvim_nv_clear_impl();
+    rs_nv_clear_impl();
 }
 
 /// Command handler for CTRL-O: Switch to Visual mode for one command or go to older pcmark.
@@ -4455,6 +4470,7 @@ const CAR_CHAR: c_int = 0o15; // '\015' = carriage return
 const K_KENTER: c_int = termcap2key(b'K' as c_int, b'A' as c_int);
 const OP_FOLD: c_int = 19;
 const UPD_VALID: c_int = 10;
+const UPD_CLEAR: c_int = 50;
 const UPD_NOT_VALID: c_int = 40;
 
 // Phase 2: spell constants (from spell_defs.h)
