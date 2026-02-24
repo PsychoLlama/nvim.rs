@@ -2031,6 +2031,7 @@ const PUT_LINE_FORWARD: c_int = 16;
 /// # Safety
 /// `cap` must be a valid cmdarg_T pointer.
 #[allow(clippy::cast_lossless)]
+#[allow(clippy::too_many_lines)]
 unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
     let oap = nvim_cap_get_oap(cap);
 
@@ -2042,7 +2043,7 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
         if op_type == OP_DELETE && cmdchar == b'p' as c_int {
             rs_clearop(oap);
             assert!(opcount >= 0);
-            nvim_nv_diffgetput_call(true, opcount as usize);
+            nvim_nv_diffgetput_call(true, opcount.unsigned_abs() as usize);
         } else {
             rs_clearopbeep(oap);
         }
@@ -2120,7 +2121,11 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
         if nvim_check_vd_condition(regname) {
             nvim_cap_set_cmdchar(cap, b'd' as c_int);
             nvim_cap_set_nchar(cap, NUL_CHAR);
-            let underscore = if keep_registers { b'_' as c_int } else { NUL_CHAR };
+            let underscore = if keep_registers {
+                b'_' as c_int
+            } else {
+                NUL_CHAR
+            };
             nvim_oap_set_regname(oap, underscore);
             nvim_inc_msg_silent();
             rs_nv_operator(cap);
@@ -2141,10 +2146,8 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
             flags |= PUT_LINE_FORWARD;
         }
         dir = BACKWARD;
-        if (vis_mode != b'V' as c_int
-            && nvim_get_cursor_col_vs_b_op_start_col() < 0)
-            || (vis_mode == b'V' as c_int
-                && nvim_get_cursor_lnum_vs_b_op_start_lnum() < 0)
+        if (vis_mode != b'V' as c_int && nvim_get_cursor_col_vs_b_op_start_col() < 0)
+            || (vis_mode == b'V' as c_int && nvim_get_cursor_lnum_vs_b_op_start_lnum() < 0)
         {
             dir = FORWARD;
         }
@@ -3353,8 +3356,8 @@ extern "C" {
 const CA_NO_ADJ_OP_END_P2: c_int = 2;
 
 // SMT (spell move type) constants from spell.h
-const SMT_ALL: c_int = 0;  // move to "all" words
-const SMT_BAD: c_int = 1;  // move to "bad" words only
+const SMT_ALL: c_int = 0; // move to "all" words
+const SMT_BAD: c_int = 1; // move to "bad" words only
 const SMT_RARE: c_int = 2; // move to "rare" words only
 
 /// Command handler for "a" or "i" text objects.
@@ -3635,6 +3638,8 @@ unsafe fn bracket_method_nav(
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 #[allow(clippy::cast_lossless)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::missing_panics_doc)]
 pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
     nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
@@ -3666,14 +3671,7 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
             let count1 = nvim_cap_get_count1(cap);
             let from_rbracket = cmdchar == c_int::from(b']');
             // xmemdupz is called inside the C wrapper since find_pattern_in_path takes ownership
-            nvim_find_pattern_in_path_call(
-                ptr,
-                len,
-                count0,
-                nchar,
-                count1 as i64,
-                from_rbracket,
-            );
+            nvim_find_pattern_in_path_call(ptr, len, count0, nchar, count1 as i64, from_rbracket);
             nvim_curwin_set_curswant(true);
         }
     } else if (cmdchar == b'[' as c_int && nvim_vim_strchr_str(c"{(*/#mM".as_ptr(), nchar))
@@ -3702,9 +3700,7 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
             op_type != OP_NOP && arg == FORWARD && flag == c_int::from(b'{'),
         );
         nvim_oap_set_inclusive(oap, pincl);
-        if !found {
-            rs_clearopbeep(oap);
-        } else {
+        if found {
             if op_type == OP_NOP {
                 nvim_beginline(BL_WHITE | BL_FIX);
             }
@@ -3714,6 +3710,8 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
             {
                 rs_foldOpenCursor();
             }
+        } else {
+            rs_clearopbeep(oap);
         }
     } else if nchar == b'p' as c_int || nchar == b'P' as c_int {
         // "[p", "[P", "]P" and "]p": put with indent adjustment
@@ -4129,6 +4127,7 @@ const DEL_CHAR: c_int = 127; // DEL character value
 /// # Safety
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
+#[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
 
@@ -4146,7 +4145,11 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
         if nch == CTRL_V || nch == CTRL_Q_P3 {
             let new_nchar = nvim_get_literal_call(false);
             nvim_cap_set_nchar(cap, new_nchar);
-            if new_nchar > DEL_CHAR { NUL_CHAR } else { CTRL_V }
+            if new_nchar > DEL_CHAR {
+                NUL_CHAR
+            } else {
+                CTRL_V
+            }
         } else {
             NUL_CHAR
         }
@@ -4196,18 +4199,17 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
 
     // Inlined nvim_replace_check_length: abort if not enough chars to replace
     let count1 = nvim_cap_get_count1(cap);
-    if (nvim_get_cursor_pos_len_check() as usize) < (count1 as usize)
-        || nvim_mb_charlen_cursor() < count1
-    {
+    if nvim_get_cursor_pos_len_check() < count1 || nvim_mb_charlen_cursor() < count1 {
         rs_clearopbeep(oap);
         return;
     }
 
     // Inlined nvim_replace_tab_expand: TAB with expandtab/smarttab via edit()
     let nchar = nvim_cap_get_nchar(cap);
-    if had_ctrl_v != CTRL_V && nchar == TAB_CHAR && (nvim_curbuf_b_p_et() || nvim_get_p_sta() != 0) {
+    if had_ctrl_v != CTRL_V && nchar == TAB_CHAR && (nvim_curbuf_b_p_et() || nvim_get_p_sta() != 0)
+    {
         nvim_stuffnumReadbuff(count1);
-        nvim_stuffcharReadbuff(b'R' as c_int);
+        nvim_stuffcharReadbuff(c_int::from(b'R'));
         nvim_stuffcharReadbuff(TAB_CHAR);
         nvim_stuffcharReadbuff(ESC_CHAR);
         return;
@@ -4256,10 +4258,10 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
             if nchar == ctrl_e || nchar == ctrl_y {
                 let lnum = nvim_get_cursor_lnum() + if nchar == ctrl_y { -1 } else { 1 };
                 let c = nvim_ins_copychar_val(lnum);
-                if c != NUL_CHAR {
-                    nvim_ins_char_call(c);
-                } else {
+                if c == NUL_CHAR {
                     nvim_set_cursor_col(nvim_get_cursor_col() + 1);
+                } else {
+                    nvim_ins_char_call(c);
                 }
             } else if nchar_len > 0 {
                 nvim_ins_char_bytes_from_cap(cap);
@@ -5816,9 +5818,14 @@ pub unsafe extern "C" fn rs_nv_g_home_m_cmd(cap: CapHandle) {
     if nchar == c_int::from(b'm') {
         let col_off1 = nvim_win_col_off_curwin();
         let col_off2 = col_off1 - nvim_win_col_off2_curwin();
-        i += (nvim_get_curwin_w_view_width() - col_off1
-            + if nvim_get_curwin_w_p_wrap() && i > 0 { col_off2 } else { 0 })
-            / 2;
+        i += i32::midpoint(
+            nvim_get_curwin_w_view_width() - col_off1,
+            if nvim_get_curwin_w_p_wrap() && i > 0 {
+                col_off2
+            } else {
+                0
+            },
+        );
     }
 
     nvim_coladvance_curwin(i);
@@ -6337,7 +6344,13 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
                 FIND_IDENT,
             );
             if len == 0
-                || !rs_find_decl(ptr, len, nchar == c_int::from(b'd'), thisblock != 0, SEARCH_START)
+                || !rs_find_decl(
+                    ptr,
+                    len,
+                    nchar == c_int::from(b'd'),
+                    thisblock != 0,
+                    SEARCH_START,
+                )
             {
                 rs_clearopbeep(oap);
             } else {
