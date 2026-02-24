@@ -23,6 +23,7 @@
 use std::ffi::c_int;
 
 use crate::range::{LineNr, LineRange};
+use crate::ExArgHandle;
 
 /// Result of a write operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -248,6 +249,92 @@ pub extern "C" fn rs_validate_write_range(start: c_int, end: c_int, line_count: 
 /// Returns 1 if should write, 0 if should skip.
 pub extern "C" fn rs_should_write_update(is_modified: c_int) -> c_int {
     c_int::from(should_write(is_modified != 0, WriteMode::Update))
+}
+
+// =============================================================================
+// ex_update, ex_write, ex_wnext (Phase 3 migration)
+// =============================================================================
+
+extern "C" {
+    fn nvim_excmds_curbufIsChanged() -> c_int;
+    fn nvim_excmds_bt_nofilename_curbuf() -> c_int;
+    fn nvim_excmds_curbuf_ffname_not_null() -> c_int;
+    fn nvim_excmds_os_path_exists_curbuf_ffname() -> c_int;
+    fn nvim_excmds_do_write(eap: *mut ExArgHandle) -> c_int;
+    fn nvim_excmds_do_bang_write_filter(eap: *mut ExArgHandle);
+    fn nvim_exarg_cmdidx_is_saveas(eap: *const ExArgHandle) -> c_int;
+    fn nvim_exarg_get_usefilter(eap: *const ExArgHandle) -> c_int;
+    fn nvim_exarg_set_line1(eap: *mut ExArgHandle, line1: c_int);
+    fn nvim_exarg_set_line2(eap: *mut ExArgHandle, line2: c_int);
+    fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
+    fn nvim_excmds_curwin_get_w_arg_idx() -> c_int;
+    fn nvim_exarg_get_cmd_byte1(eap: *const ExArgHandle) -> c_int;
+    fn nvim_exarg_get_line2(eap: *const ExArgHandle) -> c_int;
+    fn nvim_excmds_do_argfile(eap: *mut ExArgHandle, i: c_int);
+}
+
+/// Implement `:update` command. Replaces C `ex_update`.
+///
+/// Writes the buffer only if it has been changed or if the file does not exist.
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_update(eap: *mut ExArgHandle) {
+    let is_changed = nvim_excmds_curbufIsChanged() != 0;
+    let no_filename = nvim_excmds_bt_nofilename_curbuf() != 0;
+    let has_ffname = nvim_excmds_curbuf_ffname_not_null() != 0;
+    let path_exists = nvim_excmds_os_path_exists_curbuf_ffname() != 0;
+
+    if is_changed || (!no_filename && has_ffname && !path_exists) {
+        nvim_excmds_do_write(eap);
+    }
+}
+
+/// Implement `:write` and `:saveas` commands. Replaces C `ex_write`.
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_write(eap: *mut ExArgHandle) {
+    if nvim_exarg_cmdidx_is_saveas(eap) != 0 {
+        // :saveas does not take a range, uses all lines.
+        nvim_exarg_set_line1(eap, 1);
+        let line_count = nvim_curbuf_get_b_ml_ml_line_count();
+        nvim_exarg_set_line2(eap, line_count);
+    }
+
+    if nvim_exarg_get_usefilter(eap) != 0 {
+        // input lines to shell command
+        nvim_excmds_do_bang_write_filter(eap);
+    } else {
+        nvim_excmds_do_write(eap);
+    }
+}
+
+/// Implement `:wnext`, `:wNext`, `:wprevious` commands. Replaces C `ex_wnext`.
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_wnext(eap: *mut ExArgHandle) {
+    let cmd_byte1 = nvim_exarg_get_cmd_byte1(eap);
+    let line2_count = nvim_exarg_get_line2(eap);
+    let w_arg_idx = nvim_excmds_curwin_get_w_arg_idx();
+
+    let i = if cmd_byte1 == b'n' as c_int {
+        w_arg_idx + line2_count
+    } else {
+        w_arg_idx - line2_count
+    };
+
+    nvim_exarg_set_line1(eap, 1);
+    let line_count = nvim_curbuf_get_b_ml_ml_line_count();
+    nvim_exarg_set_line2(eap, line_count);
+
+    if nvim_excmds_do_write(eap) != 0 {
+        nvim_excmds_do_argfile(eap, i);
+    }
 }
 
 // =============================================================================

@@ -750,30 +750,21 @@ void ex_file(exarg_T *eap)
   rs_ex_file(eap);
 }
 
-/// ":update".
+// ex_update, ex_write, ex_wnext implemented in Rust (ex_cmds/src/write.rs)
+extern void rs_ex_update(exarg_T *eap);
+extern void rs_ex_write(exarg_T *eap);
+extern void rs_ex_wnext(exarg_T *eap);
+
+/// ":update". Thin wrapper calling Rust.
 void ex_update(exarg_T *eap)
 {
-  if (curbufIsChanged()
-      || (!bt_nofilename(curbuf) && curbuf->b_ffname != NULL
-          && !os_path_exists(curbuf->b_ffname))) {
-    do_write(eap);
-  }
+  rs_ex_update(eap);
 }
 
-/// ":write" and ":saveas".
+/// ":write" and ":saveas". Thin wrapper calling Rust.
 void ex_write(exarg_T *eap)
 {
-  if (eap->cmdidx == CMD_saveas) {
-    // :saveas does not take a range, uses all lines.
-    eap->line1 = 1;
-    eap->line2 = curbuf->b_ml.ml_line_count;
-  }
-
-  if (eap->usefilter) {  // input lines to shell command
-    do_bang(1, eap, false, true, false);
-  } else {
-    do_write(eap);
-  }
+  rs_ex_write(eap);
 }
 
 #ifdef UNIX
@@ -1054,21 +1045,10 @@ int check_overwrite(exarg_T *eap, buf_T *buf, char *fname, char *ffname, bool ot
   return OK;
 }
 
-/// Handle ":wnext", ":wNext" and ":wprevious" commands.
+/// Handle ":wnext", ":wNext" and ":wprevious" commands. Thin wrapper calling Rust.
 void ex_wnext(exarg_T *eap)
 {
-  int i;
-
-  if (eap->cmd[1] == 'n') {
-    i = curwin->w_arg_idx + (int)eap->line2;
-  } else {
-    i = curwin->w_arg_idx - (int)eap->line2;
-  }
-  eap->line1 = 1;
-  eap->line2 = curbuf->b_ml.ml_line_count;
-  if (do_write(eap) != FAIL) {
-    do_argfile(eap, i);
-  }
+  rs_ex_wnext(eap);
 }
 
 /// ":wall", ":wqall" and ":xall": Write all changed files (and exit).
@@ -3683,3 +3663,50 @@ int nvim_exarg_get_addr_count_val(const exarg_T *eap) { return (int)eap->addr_co
 
 /// Get eap->arg (mutable).
 char *nvim_exarg_get_arg_mutable(exarg_T *eap) { return eap->arg; }
+
+// --- ex_update, ex_write, ex_wnext FFI accessors ---
+
+/// Check if current buffer has been changed (curbufIsChanged).
+int nvim_excmds_curbufIsChanged(void) { return curbufIsChanged() ? 1 : 0; }
+
+/// Check if current buffer has no file name (bt_nofilename(curbuf)).
+int nvim_excmds_bt_nofilename_curbuf(void) { return bt_nofilename(curbuf) ? 1 : 0; }
+
+/// Check if curbuf->b_ffname is not NULL.
+int nvim_excmds_curbuf_ffname_not_null(void) { return curbuf->b_ffname != NULL ? 1 : 0; }
+
+/// Check if curbuf->b_ffname path exists.
+int nvim_excmds_os_path_exists_curbuf_ffname(void)
+{
+  return curbuf->b_ffname != NULL && os_path_exists(curbuf->b_ffname) ? 1 : 0;
+}
+
+/// Wrapper for do_write(eap). Returns OK (1) or FAIL (0).
+int nvim_excmds_do_write(exarg_T *eap) { return do_write(eap) == OK ? 1 : 0; }
+
+/// Wrapper for do_bang with the specific args used by ex_write filter.
+void nvim_excmds_do_bang_write_filter(exarg_T *eap)
+{
+  do_bang(1, eap, false, true, false);
+}
+
+/// Check if eap->cmdidx == CMD_saveas.
+int nvim_exarg_cmdidx_is_saveas(const exarg_T *eap)
+{
+  return eap->cmdidx == CMD_saveas ? 1 : 0;
+}
+
+/// Get eap->usefilter.
+int nvim_exarg_get_usefilter(const exarg_T *eap) { return eap->usefilter ? 1 : 0; }
+
+/// Set eap->line1 to a value.
+void nvim_exarg_set_line1(exarg_T *eap, int line1) { eap->line1 = (linenr_T)line1; }
+
+/// Get curwin->w_arg_idx.
+int nvim_excmds_curwin_get_w_arg_idx(void) { return curwin->w_arg_idx; }
+
+/// Get second byte of eap->cmd (eap->cmd[1]).
+int nvim_exarg_get_cmd_byte1(const exarg_T *eap) { return (unsigned char)eap->cmd[1]; }
+
+/// Wrapper for do_argfile(eap, i).
+void nvim_excmds_do_argfile(exarg_T *eap, int i) { do_argfile(eap, i); }
