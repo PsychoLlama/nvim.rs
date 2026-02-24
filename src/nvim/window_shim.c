@@ -396,7 +396,6 @@ void nvim_win_field_set_width(win_T *wp, int val) { wp->w_width = val; }
 void nvim_win_set_vsep_width(win_T *wp, int val) { wp->w_vsep_width = val; }
 void nvim_frame_set_height(frame_T *frp, int val) { frp->fr_height = val; }
 void nvim_frame_set_width(frame_T *frp, int val) { frp->fr_width = val; }
-void nvim_frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool set_ch) { frame_new_height(topfrp, height, topfirst, wfh, set_ch); }
 void nvim_win_config_float(win_T *wp) { win_config_float(wp, wp->w_config); }
 void nvim_win_fix_scroll(bool upd_topline) { win_fix_scroll(upd_topline); }
 void nvim_redraw_all_later(int type) { redraw_all_later(type); }
@@ -476,9 +475,7 @@ void nvim_win_set_p_sms(win_T *wp, int val) { if (wp) { wp->w_p_sms = val; } }
 frame_T *nvim_tabpage_get_topframe(tabpage_T *tp) { return tp->tp_topframe; }
 win_T *nvim_get_prevwin(void) { return prevwin; }
 int nvim_win_get_endrow(win_T *wp) { return W_ENDROW(wp); }
-size_t nvim_win_get_status_click_defs_size(win_T *wp) { return wp ? wp->w_status_click_defs_size : 0; }
 int nvim_win_get_redr_status(win_T *wp) { return wp ? wp->w_redr_status : 0; }
-size_t nvim_get_tab_page_click_defs_size(void) { return tab_page_click_defs_size; }
 int nvim_win_get_endcol(win_T *wp) { return W_ENDCOL(wp); }
 schar_T nvim_win_get_fcs_vert(win_T *wp) { return wp->w_p_fcs_chars.vert; }
 schar_T nvim_win_get_fcs_horiz(win_T *wp) { return wp->w_p_fcs_chars.horiz; }
@@ -2416,7 +2413,6 @@ void nvim_ui_call_win_viewport_margins_wrapper(win_T *wp) {
                                  wp->w_wincol_off, wp->w_border_adj[1]);
   }
 }
-void nvim_win_set_inner_size(win_T *wp, int valid_cursor) { if (wp) { rs_win_set_inner_size(wp, valid_cursor != 0); } }
 
 /// Get a snapshot pointer from a tabpage.
 frame_T *nvim_tabpage_get_snapshot(tabpage_T *tp, int idx)
@@ -2560,7 +2556,6 @@ frame_T *nvim_win_get_frame_parent(win_T *wp) { return (wp && wp->w_frame) ? wp-
 
 buf_T *nvim_get_firstbuf_wrapper(void) { return firstbuf; }
 int nvim_can_close_floating_windows(tabpage_T *tp) { return can_close_floating_windows(tp) ? 1 : 0; }
-unsigned nvim_get_swb_flags(void) { return swb_flags; }
 void nvim_win_goto_wrapper(win_T *wp) { win_goto(wp); }
 int nvim_win_split_wrapper(int size, int flags) { return win_split(size, flags); }
 int nvim_win_splitmove_wrapper(win_T *wp, int size, int flags) { return win_splitmove(wp, size, flags); }
@@ -2807,11 +2802,6 @@ void nvim_win_ui_call_win_external_pos(int grid_handle, int win_handle)
 
 void nvim_win_ui_check_cursor_grid(int grid_handle) { ui_check_cursor_grid(grid_handle); }
 
-// Accessor: get the 'handle' integer field from a ScreenGrid pointer
-int nvim_screengrid_get_handle_from_win_grid_alloc(win_T *wp)
-{
-  return wp ? wp->w_grid_alloc.handle : 0;
-}
 
 // =============================================================================
 // C Accessors for Phase 3: leaving_window / entering_window / win_init_empty
@@ -3062,8 +3052,6 @@ void nvim_set_p_ch(int64_t val) { p_ch = val; }
 /// Get command_frame_height static.
 int nvim_get_command_frame_height(void) { return command_frame_height ? 1 : 0; }
 /// Set command_frame_height static.
-void nvim_set_command_frame_height(int val) { command_frame_height = (val != 0); }
-
 /// Get curtab->tp_ch_used as int.
 int nvim_get_curtab_ch_used(void) { return curtab ? (int)curtab->tp_ch_used : 0; }
 /// Set curtab->tp_ch_used from Rust.
@@ -3075,8 +3063,6 @@ void nvim_set_min_set_ch(int64_t val) { min_set_ch = val; }
 /// Set cmdline_row = Rows - p_ch.
 void nvim_update_cmdline_row(void) { cmdline_row = Rows - (int)p_ch; }
 
-/// Get cmdline_row.
-int nvim_get_cmdline_row_val(void) { return cmdline_row; }
 
 /// Wrapper: grid_clear for cmdheight area. Selects msg_grid_adj or default_gridview
 /// depending on ui_has(kUIMessages). Also sets msg_row = cmdline_row.
@@ -3160,9 +3146,6 @@ void nvim_free_tabpage_wrapper(tabpage_T *tp)
 
 /// Get p_tpm (tabpagemax option).
 int64_t nvim_get_p_tpm(void) { return p_tpm; }
-
-/// Set lastused_tabpage global.
-void nvim_set_lastused_tabpage(tabpage_T *tp) { lastused_tabpage = tp; }
 
 /// api_set_error for E242 (split while closing).
 void nvim_api_set_err_e242(Error *err)
