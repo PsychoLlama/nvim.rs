@@ -67,33 +67,15 @@
 
 // Rust rs_* function declarations (from src/nvim-rs/shada/src/lib.rs)
 extern int rs_magic_isset(void);
-extern int rs_shada_hist_type2char(int hist_type);
 extern uint64_t rs_vim_be64toh(uint64_t big_endian_64_bits);
 extern int rs_marks_equal(pos_T a, pos_T b);
 extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i);
 extern int rs_compare_file_marks(const void *a, const void *b);
-extern int rs_shada_removable(const char *name);
-extern int rs_ignore_buf(const void *buf, const void *removable_bufs);
-extern void rs_find_removable_bufs(void *removable_bufs);
-extern const void *rs_shada_hist_iter(const void *iter, uint8_t history_type,
-                                      int zero, ShadaEntry *hist);
-extern void rs_add_search_pattern(ShadaEntry *ret_pse, int is_substitute,
-                                  int search_last_used, int search_highlighted);
-extern ShadaEntry rs_shada_get_buflist(void *removable_bufs);
-extern size_t rs_shada_init_jumps(ShadaEntry *jumps, void *removable_bufs);
-extern void rs_close_file(void *cookie);
-extern const char *rs_shada_get_default_file(void);
 extern void rs_shada_free_entry_contents(ShadaEntry *entry);
 extern int rs_shada_write_file(const char *file, bool nomerge);
 extern void rs_shada_read(void *sd_reader, int flags);
 extern var_flavour_T rs_var_flavour(const char *varname);
-extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack);
-extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stack);
-extern int rs_get_copyID(void);
 extern int rs_shada_pack_entry(PackerBuffer *packer, const ShadaEntry *entry, size_t max_kbyte);
-extern int rs_shada_pack_pfreed_entry(PackerBuffer *packer, ShadaEntry *entry, size_t max_kbyte);
-extern int rs_get_shada_parameter(int type);
-extern const char *rs_find_shada_parameter(int type);
 
 #ifdef HAVE_BE64TOH
 # define _BSD_SOURCE 1  // NOLINT(bugprone-reserved-identifier)
@@ -318,14 +300,6 @@ typedef struct {
   uint8_t history_type;
 } HistoryMergerState;
 
-// Rust rs_* declarations (need HMLList, HMLListEntry, HistoryMergerState types)
-extern void rs_hms_init(HistoryMergerState *hms_p, uint8_t history_type,
-                        size_t num_elements, int do_merge, int reading);
-extern void rs_hms_insert(HistoryMergerState *hms_p, ShadaEntry entry, int do_iter);
-extern void rs_hms_insert_whole_neovim_history(HistoryMergerState *hms_p);
-extern void rs_hms_dealloc(HistoryMergerState *hms_p);
-extern void rs_hms_to_he_array(const HistoryMergerState *hms_p, void *hist_array,
-                               int *new_hisidx, int *new_hisnum);
 
 /// Structure that holds one file marks.
 typedef struct {
@@ -354,9 +328,6 @@ typedef struct {
   PMap(cstr_t) file_marks;  ///< All file marks.
 } WriteMergerState;
 
-// Rust rs_* declarations (need WriteMergerState type)
-extern void rs_replace_numbered_mark(WriteMergerState *wms, size_t idx, ShadaEntry entry);
-extern void rs_shada_initialize_registers(WriteMergerState *wms, int max_reg_lines);
 
 #include "shada_shim.c.generated.h"
 
@@ -2161,12 +2132,6 @@ void nvim_shada_dump_additional_data(const void *ad_ptr, PackerBuffer *sbuf)
   if (ad != NULL) {
     mpack_raw(ad->data, ad->nbytes, sbuf);
   }
-}
-
-/// Get v_type from a typval_T stored inline in a ShadaEntry variable slot.
-int nvim_shada_entry_var_type(const ShadaEntry *entry)
-{
-  return entry ? (int)entry->data.global_var.value.v_type : 0;
 }
 
 /// Check if a ShadaEntry variable is a blob (v_type == VAR_BLOB).
