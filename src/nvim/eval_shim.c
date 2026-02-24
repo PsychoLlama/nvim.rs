@@ -607,6 +607,10 @@ extern bool rs_var2fpos(const typval_T *tv, bool dollar_lnum, int *ret_fnum, boo
                         pos_T *out);
 extern int rs_list2fpos(typval_T *arg, pos_T *posp, int *fnump, int *curswantp, bool charcol);
 
+// Rust implementations for Phase 1 (eval_shim pass 6)
+extern void rs_last_set_msg(int sc_sid, int sc_lnum, uint64_t sc_chan);
+extern void rs_set_selfdict(typval_T *rettv, dict_T *selfdict);
+
 /// Top level evaluation function, returning a boolean.
 /// Sets "error" to true if there was an error.
 ///
@@ -2136,14 +2140,7 @@ int handle_subscript(const char **const arg, typval_T *rettv, evalarg_T *const e
 
 void set_selfdict(typval_T *const rettv, dict_T *const selfdict)
 {
-  // Inlined into rs_handle_subscript in Rust.
-  // Don't do this when "dict.Func" is already a partial that was bound
-  // explicitly (pt_auto is false).
-  if (rettv->v_type == VAR_PARTIAL && !rettv->vval.v_partial->pt_auto
-      && rettv->vval.v_partial->pt_dict != NULL) {
-    return;
-  }
-  make_partial(selfdict, rettv);
+  rs_set_selfdict(rettv, selfdict);
 }
 
 /// Make a copy of an item
@@ -2224,26 +2221,7 @@ void var_set_global(const char *const name, typval_T vartv)
 /// Should only be invoked when 'verbose' is non-zero.
 void last_set_msg(sctx_T script_ctx)
 {
-  if (script_ctx.sc_sid == 0) {
-    return;
-  }
-
-  bool should_free;
-  char *p = get_scriptname(script_ctx, &should_free);
-
-  verbose_enter();
-  msg_puts(_("\n\tLast set from "));
-  msg_puts(p);
-  if (script_ctx.sc_lnum > 0) {
-    msg_puts(_(line_msg));
-    msg_outnum(script_ctx.sc_lnum);
-  } else if (script_is_lua(script_ctx.sc_sid)) {
-    msg_puts(_(" (run Nvim with -V1 for more details)"));
-  }
-  if (should_free) {
-    xfree(p);
-  }
-  verbose_leave();
+  rs_last_set_msg(script_ctx.sc_sid, script_ctx.sc_lnum, script_ctx.sc_chan);
 }
 
 /// Perform a substitution on "str" with pattern "pat" and substitute "sub".

@@ -3142,6 +3142,18 @@ unsafe fn set_selfdict_impl(rettv: TypevalHandle, selfdict: *mut c_void) {
     nvim_make_partial(selfdict, rettv);
 }
 
+/// FFI export for set_selfdict: bind selfdict to a funcref/partial.
+///
+/// Called from the thin C wrapper `set_selfdict()` in `eval_shim.c`.
+///
+/// # Safety
+/// - `rettv` must be a valid typval handle
+/// - `selfdict` must be a valid dict pointer (may be null)
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_selfdict(rettv: TypevalHandle, selfdict: *mut c_void) {
+    set_selfdict_impl(rettv, selfdict);
+}
+
 /// Implementation of handle_subscript: dispatch loop for subscripts, calls, lambdas, methods.
 ///
 /// Migrated from C `handle_subscript` + `set_selfdict` in eval_shim.c.

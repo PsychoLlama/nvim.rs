@@ -723,7 +723,7 @@ pub use context::rs_set_context_for_expression;
 pub use eval::{
     rs_eval0, rs_eval1, rs_eval2, rs_eval3, rs_eval4, rs_eval5, rs_eval6, rs_eval_dict,
     rs_eval_interp_string, rs_eval_lit_dict, rs_eval_lit_string, rs_eval_method, rs_eval_string,
-    rs_handle_subscript, EvalargHandle, ExargHandle, TypevalHandle,
+    rs_handle_subscript, rs_set_selfdict, EvalargHandle, ExargHandle, TypevalHandle,
 };
 
 // Re-export FFI functions from the index module
