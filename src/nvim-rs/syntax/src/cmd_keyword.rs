@@ -5,6 +5,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::types::SynBlockHandle;
+
 // =============================================================================
 // FFI declarations
 // =============================================================================
@@ -47,8 +49,10 @@ extern "C" {
         conceal_char: c_int,
     );
 
-    // Redraw after keyword changes
-    fn nvim_syn_keyword_redraw_and_free();
+    // Redraw and free syntax state (Phase 4: decomposed from nvim_syn_keyword_redraw_and_free)
+    fn nvim_syn_redraw_curbuf_later();
+    fn nvim_get_curwin_synblock() -> SynBlockHandle;
+    fn nvim_syn_stack_free_all(block: SynBlockHandle);
 
     // String helpers
     fn nvim_syn_skipwhite(p: *const c_char) -> *mut c_char;
@@ -255,7 +259,9 @@ unsafe fn syn_cmd_keyword_impl(eap: *mut c_void, _syncing: c_int) {
         nvim_syn_semsg_1s(c"E475: Invalid argument: %s".as_ptr(), arg);
     }
 
-    nvim_syn_keyword_redraw_and_free();
+    // Redraw and free syntax state (Phase 4: replaces nvim_syn_keyword_redraw_and_free)
+    nvim_syn_redraw_curbuf_later();
+    nvim_syn_stack_free_all(nvim_get_curwin_synblock());
 }
 
 // =============================================================================

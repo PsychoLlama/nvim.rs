@@ -5,6 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::clearing::{rs_syn_clear_one, rs_syntax_clear, rs_syntax_sync_clear};
 use crate::types::SynBlockHandle;
 
 // =============================================================================
@@ -32,14 +33,14 @@ extern "C" {
 
     // Group-level clear operations (kept in C due to hashtab coupling)
     fn nvim_synblock_clear_cluster_scl_list(block: SynBlockHandle, scl_id: c_int);
-    fn nvim_syn_clear_one_wrapper(id: c_int, syncing: c_int);
 
-    // Full clear operations
-    fn nvim_syntax_clear_wrapper(block: SynBlockHandle);
-    fn nvim_syntax_sync_clear_wrapper();
+    // Redraw and free syntax state (Phase 4: decomposed wrappers)
+    fn nvim_syn_redraw_curbuf_later();
+    fn nvim_syn_stack_free_all(block: SynBlockHandle);
 
-    // Redraw and free all
-    fn nvim_syn_redraw_and_free_all();
+    // Unlet helpers (Phase 4: replaces nvim_syn_clear_unlet_vars)
+    fn nvim_syn_do_unlet(name: *const c_char, len: c_int);
+    fn nvim_synblock_is_buf_block(block: SynBlockHandle) -> c_int;
 
     // Error messages
     fn semsg(fmt: *const c_char, ...);
@@ -50,6 +51,10 @@ const SYNID_CLUSTER: c_int = 23000;
 
 static EMSG_E391: &[u8] = b"E391: No such syntax cluster: %s\0";
 static EMSG_E_NOGROUP: &[u8] = b"E28: No such highlight group name: %s\0";
+
+// Lengths of the string literals (not counting the NUL terminator)
+const B_CURRENT_SYNTAX: &[u8] = b"b:current_syntax";
+const W_CURRENT_SYNTAX: &[u8] = b"w:current_syntax";
 
 /// Rust implementation of syn_cmd_clear.
 ///
@@ -74,12 +79,21 @@ unsafe fn syn_cmd_clear_impl(eap: *mut c_void, syncing: c_int) {
     if nvim_syn_ends_excmd(*arg as c_int) != 0 {
         // No argument: clear all syntax items
         if syncing != 0 {
-            nvim_syntax_sync_clear_wrapper();
+            rs_syntax_sync_clear();
         } else {
-            nvim_syntax_clear_wrapper(block);
-            // do_unlet("b:current_syntax") if synblock is the buffer's block
-            // do_unlet("w:current_syntax")
-            nvim_syn_clear_unlet_vars(block);
+            rs_syntax_clear(block);
+            // Unlet b:current_syntax if this is the buffer's own synblock
+            if nvim_synblock_is_buf_block(block) != 0 {
+                nvim_syn_do_unlet(
+                    B_CURRENT_SYNTAX.as_ptr().cast(),
+                    B_CURRENT_SYNTAX.len() as c_int,
+                );
+            }
+            // Always unlet w:current_syntax
+            nvim_syn_do_unlet(
+                W_CURRENT_SYNTAX.as_ptr().cast(),
+                W_CURRENT_SYNTAX.len() as c_int,
+            );
         }
     } else {
         // Clear the group IDs listed in the argument
@@ -105,16 +119,14 @@ unsafe fn syn_cmd_clear_impl(eap: *mut c_void, syncing: c_int) {
                     semsg(EMSG_E_NOGROUP.as_ptr().cast(), cur_arg);
                     break;
                 }
-                nvim_syn_clear_one_wrapper(id, syncing);
+                rs_syn_clear_one(id, syncing);
             }
             cur_arg = nvim_syn_skipwhite(arg_end);
         }
     }
-    nvim_syn_redraw_and_free_all();
-}
-
-extern "C" {
-    fn nvim_syn_clear_unlet_vars(block: SynBlockHandle);
+    // Redraw and free syntax state (replaces nvim_syn_redraw_and_free_all)
+    nvim_syn_redraw_curbuf_later();
+    nvim_syn_stack_free_all(block);
 }
 
 /// Entry point called from C thin wrapper.

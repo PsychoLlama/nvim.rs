@@ -52,8 +52,9 @@ extern "C" {
     fn nvim_syn_cmd_region_wrapper(eap: *mut c_void, syncing: c_int);
     fn nvim_syn_cmd_clear_wrapper(eap: *mut c_void, syncing: c_int);
 
-    // Redraw and state reset
-    fn nvim_syn_redraw_and_free_all();
+    // Redraw and state reset (Phase 4: decomposed from nvim_syn_redraw_and_free_all)
+    fn nvim_syn_redraw_curbuf_later();
+    fn nvim_syn_stack_free_all(block: SynBlockHandle);
 
     // nextcmd via check_nextcmd
     fn nvim_syn_set_nextcmd(eap: *mut c_void, rest: *mut c_char);
@@ -234,7 +235,9 @@ unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
         semsg(EMSG_E404_ILLEGAL.as_ptr().cast(), arg_start);
     } else if !finished {
         nvim_syn_set_nextcmd(eap, arg_start);
-        nvim_syn_redraw_and_free_all();
+        // Phase 4: replaces nvim_syn_redraw_and_free_all
+        nvim_syn_redraw_curbuf_later();
+        nvim_syn_stack_free_all(nvim_get_curwin_synblock());
     }
 }
 

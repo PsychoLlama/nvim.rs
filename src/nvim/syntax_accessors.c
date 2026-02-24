@@ -3363,12 +3363,8 @@ void nvim_syn_add_keyword(char *name, int namelen, int id, int flags,
   add_keyword(name, (size_t)namelen, id, flags, cont_in_list, next_list, conceal_char);
 }
 
-/// Trigger redraw and free syntax state after keyword changes.
-void nvim_syn_keyword_redraw_and_free(void)
-{
-  redraw_curbuf_later(UPD_SOME_VALID);
-  syn_stack_free_all(curwin->w_s);
-}
+// nvim_syn_keyword_redraw_and_free removed in pass 5 Phase 4 (replaced by
+// nvim_syn_redraw_curbuf_later + nvim_syn_stack_free_all calls from Rust).
 
 // =============================================================================
 // Phase 4 accessors: syn_cmd_cluster migration
@@ -3387,12 +3383,8 @@ void nvim_syn_combine_cluster_list(int scl_id, int16_t **clstr_list, int list_op
   syn_combine_list(&SYN_CLSTR(curwin->w_s)[scl_id].scl_list, clstr_list, list_op);
 }
 
-/// Trigger redraw and free all syntax state (used by cluster and other commands).
-void nvim_syn_redraw_and_free_all(void)
-{
-  redraw_curbuf_later(UPD_SOME_VALID);
-  syn_stack_free_all(curwin->w_s);
-}
+// nvim_syn_redraw_and_free_all removed in pass 5 Phase 4 (replaced by
+// nvim_syn_redraw_curbuf_later + nvim_syn_stack_free_all calls from Rust).
 
 /// Set eap->nextcmd using find_nextcmd(arg).
 void nvim_syn_find_nextcmd(exarg_T *eap, char *arg)
@@ -3521,33 +3513,8 @@ void nvim_synblock_clear_cluster_scl_list(synblock_T *block, int scl_id)
   XFREE_CLEAR(SYN_CLSTR(block)[scl_id].scl_list);
 }
 
-/// Clear one syntax group for the current buffer (wrapper around syn_clear_one).
-void nvim_syn_clear_one_wrapper(int id, int syncing)
-{
-  syn_clear_one(id, (bool)syncing);
-}
-
-/// Full syntax clear (wrapper around syntax_clear for the current synblock).
-void nvim_syntax_clear_wrapper(synblock_T *block)
-{
-  syntax_clear(block);
-}
-
-/// Sync-only clear (wrapper around syntax_sync_clear).
-void nvim_syntax_sync_clear_wrapper(void)
-{
-  syntax_sync_clear();
-}
-
-/// Unlet b:current_syntax and/or w:current_syntax after a full clear.
-/// Only unlets b:current_syntax if the synblock is the buffer's own block.
-void nvim_syn_clear_unlet_vars(synblock_T *block)
-{
-  if (block == &curwin->w_buffer->b_s) {
-    do_unlet(S_LEN("b:current_syntax"), true);
-  }
-  do_unlet(S_LEN("w:current_syntax"), true);
-}
+// nvim_syn_clear_one_wrapper, nvim_syntax_clear_wrapper, nvim_syntax_sync_clear_wrapper,
+// and nvim_syn_clear_unlet_vars removed in pass 5 Phase 4 (Rust now calls rs_* directly).
 
 // =============================================================================
 // Phase 3 accessors: syn_cmd_include migration
@@ -3660,6 +3627,24 @@ void nvim_syn_redraw_later_curwin(void)
 void nvim_syn_set_cmdlinep_from_eap(exarg_T *eap)
 {
   syn_cmdlinep = eap->cmdlinep;
+}
+
+/// Call do_unlet(name, len, true) -- wrapper for Rust use.
+void nvim_syn_do_unlet(const char *name, int len)
+{
+  do_unlet(name, (size_t)len, true);
+}
+
+/// Return 1 if block is the buffer's own synblock (block == &curwin->w_buffer->b_s).
+int nvim_synblock_is_buf_block(synblock_T *block)
+{
+  return (block == &curwin->w_buffer->b_s) ? 1 : 0;
+}
+
+/// Trigger redraw_curbuf_later(UPD_SOME_VALID).
+void nvim_syn_redraw_curbuf_later(void)
+{
+  redraw_curbuf_later(UPD_SOME_VALID);
 }
 
 // =============================================================================

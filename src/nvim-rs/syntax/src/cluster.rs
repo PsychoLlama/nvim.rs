@@ -671,8 +671,10 @@ extern "C" {
     // Cluster list combination (handles syn_combine_list call internally)
     fn nvim_syn_combine_cluster_list(scl_id: c_int, clstr_list: *mut *mut i16, list_op: c_int);
 
-    // Redraw + free after cluster changes
-    fn nvim_syn_redraw_and_free_all();
+    // Redraw + free after cluster changes (Phase 4: decomposed)
+    fn nvim_syn_redraw_curbuf_later();
+    fn nvim_get_curwin_synblock() -> SynBlockHandle;
+    fn nvim_syn_stack_free_all(block: SynBlockHandle);
 
     // Set eap->nextcmd = find_nextcmd(arg)
     fn nvim_syn_find_nextcmd(eap: *mut c_void, arg: *mut c_char);
@@ -765,7 +767,9 @@ unsafe fn syn_cmd_cluster_impl(eap: *mut c_void, _syncing: c_int) {
     }
 
     if got_clstr {
-        nvim_syn_redraw_and_free_all();
+        // Phase 4: replaces nvim_syn_redraw_and_free_all
+        nvim_syn_redraw_curbuf_later();
+        nvim_syn_stack_free_all(nvim_get_curwin_synblock());
     }
 
     if !got_clstr {
