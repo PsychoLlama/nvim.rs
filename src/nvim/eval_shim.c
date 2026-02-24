@@ -616,6 +616,12 @@ extern char **rs_tv_to_argv(typval_T *cmd_tv, const char **cmd, bool *executable
 extern void rs_f_system(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void rs_f_systemlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust implementations for Phase 3 (eval_shim pass 6): provider infrastructure
+extern bool rs_eval_has_provider(const char *feat, bool throw_if_fast);
+extern void rs_eval_call_provider(const char *provider, const char *method,
+                                  list_T *arguments, bool discard, typval_T *out_rettv);
+extern void rs_script_host_eval(char *name, typval_T *argvars, typval_T *rettv);
+
 /// Top level evaluation function, returning a boolean.
 /// Sets "error" to true if there was an error.
 ///
@@ -2217,141 +2223,22 @@ Channel *find_job(uint64_t id, bool show_error)
 
 void script_host_eval(char *name, typval_T *argvars, typval_T *rettv)
 {
-  if (rs_check_secure()) {
-    return;
-  }
-
-  if (argvars[0].v_type != VAR_STRING) {
-    emsg(_(e_invarg));
-    return;
-  }
-
-  list_T *args = tv_list_alloc(1);
-  tv_list_append_string(args, argvars[0].vval.v_string, -1);
-  *rettv = eval_call_provider(name, "eval", args, false);
+  rs_script_host_eval(name, argvars, rettv);
 }
 
 /// @param discard  Clears the value returned by the provider and returns
 ///                 an empty typval_T.
 typval_T eval_call_provider(char *provider, char *method, list_T *arguments, bool discard)
 {
-  if (!eval_has_provider(provider, false)) {
-    semsg("E319: No \"%s\" provider found. Run \":checkhealth vim.provider\"",
-          provider);
-    return (typval_T){
-      .v_type = VAR_NUMBER,
-      .v_lock = VAR_UNLOCKED,
-      .vval.v_number = 0
-    };
-  }
-
-  char func[256];
-  int name_len = snprintf(func, sizeof(func), "provider#%s#Call", provider);
-
-  // Save caller scope information
-  struct caller_scope saved_provider_caller_scope = provider_caller_scope;
-  provider_caller_scope = (struct caller_scope) {
-    .script_ctx = current_sctx,
-    .es_entry = ((estack_T *)exestack.ga_data)[exestack.ga_len - 1],
-    .autocmd_fname = autocmd_fname,
-    .autocmd_match = autocmd_match,
-    .autocmd_fname_full = autocmd_fname_full,
-    .autocmd_bufnr = autocmd_bufnr,
-    .funccalp = (void *)get_current_funccal()
-  };
-  funccal_entry_T funccal_entry;
-  save_funccal(&funccal_entry);
-  provider_call_nesting++;
-
-  typval_T argvars[3] = {
-    { .v_type = VAR_STRING, .vval.v_string = method,
-      .v_lock = VAR_UNLOCKED },
-    { .v_type = VAR_LIST, .vval.v_list = arguments, .v_lock = VAR_UNLOCKED },
-    { .v_type = VAR_UNKNOWN }
-  };
-  typval_T rettv = { .v_type = VAR_UNKNOWN, .v_lock = VAR_UNLOCKED };
-  tv_list_ref(arguments);
-
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_firstline = curwin->w_cursor.lnum;
-  funcexe.fe_lastline = curwin->w_cursor.lnum;
-  funcexe.fe_evaluate = true;
-  call_func(func, name_len, &rettv, 2, argvars, &funcexe);
-
-  tv_list_unref(arguments);
-  // Restore caller scope information
-  restore_funccal();
-  provider_caller_scope = saved_provider_caller_scope;
-  provider_call_nesting--;
-  assert(provider_call_nesting >= 0);
-
-  if (discard) {
-    tv_clear(&rettv);
-  }
-
+  typval_T rettv;
+  rs_eval_call_provider(provider, method, arguments, discard, &rettv);
   return rettv;
 }
 
 /// Checks if provider for feature `feat` is enabled.
 bool eval_has_provider(const char *feat, bool throw_if_fast)
 {
-  if (!strequal(feat, "clipboard")
-      && !strequal(feat, "python3")
-      && !strequal(feat, "python3_compiled")
-      && !strequal(feat, "python3_dynamic")
-      && !strequal(feat, "perl")
-      && !strequal(feat, "ruby")
-      && !strequal(feat, "node")) {
-    // Avoid autoload for non-provider has() features.
-    return false;
-  }
-
-  if (throw_if_fast && !nlua_is_deferred_safe()) {
-    semsg(e_fast_api_disabled, "Vimscript function");
-    return false;
-  }
-
-  char name[32];  // Normalized: "python3_compiled" => "python3".
-  snprintf(name, sizeof(name), "%s", feat);
-  strchrsub(name, '_', NUL);  // Chop any "_xx" suffix.
-
-  char buf[256];
-  typval_T tv;
-  // Get the g:loaded_xx_provider variable.
-  int len = snprintf(buf, sizeof(buf), "g:loaded_%s_provider", name);
-  if (eval_variable(buf, len, &tv, NULL, false, true) == FAIL) {
-    // Trigger autoload once.
-    len = snprintf(buf, sizeof(buf), "provider#%s#bogus", name);
-    script_autoload(buf, (size_t)len, false);
-
-    // Retry the (non-autoload-style) variable.
-    len = snprintf(buf, sizeof(buf), "g:loaded_%s_provider", name);
-    if (eval_variable(buf, len, &tv, NULL, false, true) == FAIL) {
-      // Show a hint if Call() is defined but g:loaded_xx_provider is missing.
-      snprintf(buf, sizeof(buf), "provider#%s#Call", name);
-      if (!!find_func(buf) && p_lpl) {
-        semsg("provider: %s: missing required variable g:loaded_%s_provider",
-              name, name);
-      }
-      return false;
-    }
-  }
-
-  bool ok = (tv.v_type == VAR_NUMBER)
-            ? 2 == tv.vval.v_number  // Value of 2 means "loaded and working".
-            : false;
-
-  if (ok) {
-    // Call() must be defined if provider claims to be working.
-    snprintf(buf, sizeof(buf), "provider#%s#Call", name);
-    if (!find_func(buf)) {
-      semsg("provider: %s: g:loaded_%s_provider=2 but %s is not defined",
-            name, name, buf);
-      ok = false;
-    }
-  }
-
-  return ok;
+  return rs_eval_has_provider(feat, throw_if_fast);
 }
 
 /// Writes "<sourcing_name>:<sourcing_lnum>" to `buf[bufsize]`.
@@ -4493,5 +4380,182 @@ void nvim_semsg_tv_to_argv_notexe(const char *msg)
 bool nvim_eval_os_can_exe(const char *name, char **abspath)
 {
   return os_can_exe(name, abspath, true);
+}
+
+// =============================================================================
+// Accessors for Phase 3 (eval_shim pass 6): provider infrastructure
+// =============================================================================
+
+/// eval_variable wrapper for Rust.
+int nvim_eval_variable(const char *name, int len, typval_T *rettv, bool verbose,
+                       bool import_script)
+{
+  return eval_variable(name, len, rettv, NULL, verbose, import_script);
+}
+
+/// script_autoload wrapper for Rust.
+bool nvim_script_autoload(const char *name, size_t name_len, bool reload)
+{
+  return script_autoload(name, name_len, reload);
+}
+
+/// find_func wrapper for Rust -- returns non-NULL if function is defined.
+bool nvim_eval_find_func(const char *name)
+{
+  return find_func(name) != NULL;
+}
+
+/// p_lpl accessor for Rust.
+bool nvim_eval_get_p_lpl(void)
+{
+  return p_lpl;
+}
+
+/// nlua_is_deferred_safe accessor for Rust.
+bool nvim_eval_nlua_is_deferred_safe(void)
+{
+  return nlua_is_deferred_safe();
+}
+
+/// semsg(e_fast_api_disabled, "Vimscript function") wrapper for Rust.
+void nvim_semsg_fast_api_disabled(void)
+{
+  semsg(e_fast_api_disabled, "Vimscript function");
+}
+
+/// provider: emit "provider: %s: missing required variable" error.
+void nvim_semsg_provider_missing_var(const char *name)
+{
+  semsg("provider: %s: missing required variable g:loaded_%s_provider", name, name);
+}
+
+/// provider: emit "provider: %s: g:loaded_..._provider=2 but %s is not defined" error.
+void nvim_semsg_provider_no_call(const char *name, const char *funcname)
+{
+  semsg("provider: %s: g:loaded_%s_provider=2 but %s is not defined", name, name, funcname);
+}
+
+/// tv_get_vnumber wrapper -- get the numeric value of a typval.
+int64_t nvim_tv_get_vnumber_sys(const typval_T *tv)
+{
+  return tv->vval.v_number;
+}
+
+/// Save the provider_caller_scope and related globals to an opaque heap blob.
+/// Returns a pointer that must be passed to nvim_restore_provider_caller_scope.
+void *nvim_save_provider_caller_scope(void)
+{
+  struct caller_scope *saved = xmalloc(sizeof(struct caller_scope));
+  *saved = provider_caller_scope;
+  provider_caller_scope = (struct caller_scope){
+    .script_ctx = current_sctx,
+    .es_entry = ((estack_T *)exestack.ga_data)[exestack.ga_len - 1],
+    .autocmd_fname = autocmd_fname,
+    .autocmd_match = autocmd_match,
+    .autocmd_fname_full = autocmd_fname_full,
+    .autocmd_bufnr = autocmd_bufnr,
+    .funccalp = (void *)get_current_funccal()
+  };
+  return saved;
+}
+
+/// Restore the provider_caller_scope from the saved blob and free it.
+void nvim_restore_provider_caller_scope(void *saved)
+{
+  provider_caller_scope = *(struct caller_scope *)saved;
+  xfree(saved);
+}
+
+/// Increment provider_call_nesting.
+void nvim_provider_call_nesting_inc(void)
+{
+  provider_call_nesting++;
+}
+
+/// Decrement provider_call_nesting (with assertion).
+void nvim_provider_call_nesting_dec(void)
+{
+  provider_call_nesting--;
+  assert(provider_call_nesting >= 0);
+}
+
+/// tv_list_append_string wrapper for Rust.
+void nvim_eval_list_append_string(list_T *l, const char *str, ptrdiff_t len)
+{
+  tv_list_append_string(l, str, len);
+}
+
+/// tv_list_alloc with kListLenMayKnow (for provider args list).
+list_T *nvim_eval_list_alloc_maykno(void)
+{
+  return tv_list_alloc(kListLenMayKnow);
+}
+
+/// tv_list_alloc with explicit count (for provider args list).
+list_T *nvim_eval_list_alloc_n(int n)
+{
+  return tv_list_alloc((ptrdiff_t)n);
+}
+
+/// tv_list_unref wrapper for provider list argument cleanup.
+void nvim_eval_list_unref(list_T *l)
+{
+  tv_list_unref(l);
+}
+
+/// tv_list_ref wrapper for provider list argument.
+void nvim_eval_list_ref(list_T *l)
+{
+  tv_list_ref(l);
+}
+
+// nvim_eval_save_funccal and nvim_eval_restore_funccal already defined above (line 3567).
+
+/// Call a provider function by name with method and list args.
+/// Returns the typval_T result via out_rettv.
+void nvim_eval_provider_call_func(const char *funcname, int name_len,
+                                  const char *method, list_T *arguments,
+                                  typval_T *out_rettv)
+{
+  typval_T argvars[3] = {
+    { .v_type = VAR_STRING, .vval.v_string = (char *)method,
+      .v_lock = VAR_UNLOCKED },
+    { .v_type = VAR_LIST, .vval.v_list = arguments, .v_lock = VAR_UNLOCKED },
+    { .v_type = VAR_UNKNOWN }
+  };
+  out_rettv->v_type = VAR_UNKNOWN;
+  out_rettv->v_lock = VAR_UNLOCKED;
+
+  funcexe_T funcexe = FUNCEXE_INIT;
+  funcexe.fe_firstline = curwin->w_cursor.lnum;
+  funcexe.fe_lastline = curwin->w_cursor.lnum;
+  funcexe.fe_evaluate = true;
+  call_func(funcname, name_len, out_rettv, 2, argvars, &funcexe);
+}
+
+/// Get curwin->w_cursor.lnum for use in FUNCEXE init.
+int32_t nvim_eval_curwin_lnum(void)
+{
+  return (int32_t)curwin->w_cursor.lnum;
+}
+
+/// semsg E319 "No X provider found" wrapper.
+void nvim_semsg_no_provider(const char *provider)
+{
+  semsg("E319: No \"%s\" provider found. Run \":checkhealth vim.provider\"", provider);
+}
+
+/// Set typval_T to a VAR_NUMBER 0 return (provider not found fallback).
+void nvim_tv_set_number_zero(typval_T *tv)
+{
+  tv->v_type = VAR_NUMBER;
+  tv->v_lock = VAR_UNLOCKED;
+  tv->vval.v_number = 0;
+}
+
+/// Raw memcpy typval_T from src to dst (for returning by value from Rust).
+void nvim_tv_rawcopy(typval_T *dst, const typval_T *src)
+{
+  *dst = *src;
 }
 

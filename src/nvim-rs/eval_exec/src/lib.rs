@@ -715,6 +715,7 @@ pub mod gc;
 pub mod index;
 pub mod lval;
 pub mod operators;
+pub mod provider;
 
 // Re-export FFI functions from the context module
 pub use context::rs_set_context_for_expression;
@@ -745,6 +746,9 @@ pub use gc::rs_free_unref_items;
 
 // Re-export ex_echo FFI functions
 pub use ex_echo::{rs_ex_echo, rs_ex_execute};
+
+// Re-export provider FFI functions
+pub use provider::{rs_eval_call_provider, rs_eval_has_provider, rs_script_host_eval};
 
 // Re-export error types
 pub use errors::{

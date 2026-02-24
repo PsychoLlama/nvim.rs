@@ -113,7 +113,7 @@ const TYPVAL_SIZE: usize = 16;
 /// argvars must point to at least (idx+1) typval_T entries.
 #[inline]
 unsafe fn argvars_at(argvars: *mut c_void, idx: usize) -> *mut c_void {
-    (argvars as *mut u8).add(idx * TYPVAL_SIZE) as *mut c_void
+    argvars.cast::<u8>().add(idx * TYPVAL_SIZE).cast::<c_void>()
 }
 
 // =============================================================================
@@ -176,24 +176,24 @@ pub unsafe extern "C" fn rs_tv_to_argv(
         return ptr::null_mut();
     }
 
-    let argl = nvim_tv_get_v_list(cmd_tv);
-    let argc = nvim_tv_list_len(argl);
-    if argc == 0 {
+    let cmd_list = nvim_tv_get_v_list(cmd_tv);
+    let list_len = nvim_tv_list_len(cmd_list);
+    if list_len == 0 {
         nvim_emsg_tv_to_argv_empty();
         return ptr::null_mut();
     }
 
     // Get string value of first list element
-    let first_item = nvim_tv_list_first(argl);
+    let first_item = nvim_tv_list_first(cmd_list);
     let first_tv = nvim_list_item_tv(first_item);
-    let arg0 = nvim_eval_tv_string_chk(first_tv);
+    let cmd0 = nvim_eval_tv_string_chk(first_tv);
 
     let mut exe_resolved: *mut c_char = ptr::null_mut();
-    if arg0.is_null() || !nvim_eval_os_can_exe(arg0, &raw mut exe_resolved) {
-        if !arg0.is_null() && !executable.is_null() {
+    if cmd0.is_null() || !nvim_eval_os_can_exe(cmd0, &raw mut exe_resolved) {
+        if !cmd0.is_null() && !executable.is_null() {
             // Emit "'<cmd>' is not executable" error
-            let msg = build_not_executable_msg(arg0);
-            nvim_semsg_tv_to_argv_notexe(msg.as_ptr() as *const c_char);
+            let msg = build_not_executable_msg(cmd0);
+            nvim_semsg_tv_to_argv_notexe(msg.as_ptr().cast::<c_char>());
             *executable = false;
         }
         return ptr::null_mut();
@@ -203,39 +203,37 @@ pub unsafe extern "C" fn rs_tv_to_argv(
         *cmd_out = exe_resolved;
     }
 
-    // Allocate argv with (argc + 1) slots (zero-initialized = null-terminated)
-    let argv = nvim_xcalloc(
-        (argc + 1) as usize,
-        std::mem::size_of::<*mut c_char>(),
-    ) as *mut *mut c_char;
+    // Allocate result_argv with (list_len + 1) slots (zero-initialized = null-terminated)
+    let result_argv = nvim_xcalloc((list_len + 1) as usize, std::mem::size_of::<*mut c_char>())
+        .cast::<*mut c_char>();
 
-    if argv.is_null() {
-        xfree(exe_resolved as *mut c_void);
+    if result_argv.is_null() {
+        xfree(exe_resolved.cast::<c_void>());
         return ptr::null_mut();
     }
 
     // Iterate list items and duplicate strings
     let mut i = 0usize;
-    let mut item = nvim_tv_list_first(argl);
+    let mut item = nvim_tv_list_first(cmd_list);
     while !item.is_null() {
         let tv = nvim_list_item_tv(item);
         let s = nvim_eval_tv_string_chk(tv);
         if s.is_null() {
             // tv_get_string_chk already emitted an error
-            nvim_shell_free_argv(argv);
-            xfree(exe_resolved as *mut c_void);
+            nvim_shell_free_argv(result_argv);
+            xfree(exe_resolved.cast::<c_void>());
             return ptr::null_mut();
         }
-        *argv.add(i) = nvim_xstrdup(s);
+        *result_argv.add(i) = nvim_xstrdup(s);
         i += 1;
-        item = nvim_list_item_next(argl, item);
+        item = nvim_list_item_next(cmd_list, item);
     }
 
-    // Replace argv[0] with the absolute resolved path
-    xfree(*argv as *mut c_void);
-    *argv = exe_resolved;
+    // Replace result_argv[0] with the absolute resolved path
+    xfree((*result_argv).cast::<c_void>());
+    *result_argv = exe_resolved;
 
-    argv
+    result_argv
 }
 
 /// Build "'<name>' is not executable" as a null-terminated byte string.
@@ -244,7 +242,7 @@ unsafe fn build_not_executable_msg(name: *const c_char) -> Vec<u8> {
     while *name.add(len) != 0 {
         len += 1;
     }
-    let name_bytes = std::slice::from_raw_parts(name as *const u8, len);
+    let name_bytes = std::slice::from_raw_parts(name.cast::<u8>(), len);
     let mut msg = Vec::with_capacity(1 + len + 20);
     msg.push(b'\'');
     msg.extend_from_slice(name_bytes);
@@ -282,25 +280,25 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
         return;
     }
 
-    // Build argv from argvars[0]
+    // Build cmd_argv from argvars[0]
     let mut executable = true;
-    let argv = rs_tv_to_argv(arg0, ptr::null_mut(), &raw mut executable);
-    if argv.is_null() {
+    let cmd_argv = rs_tv_to_argv(arg0, ptr::null_mut(), &raw mut executable);
+    if cmd_argv.is_null() {
         if !executable {
             nvim_set_shell_error(-1);
         }
-        xfree(input as *mut c_void);
+        xfree(input.cast::<c_void>());
         return;
     }
 
     // Verbose output: log command if p_verbose > 3
     if nvim_p_verbose_get() > 3 {
-        let cmdstr = nvim_shell_argv_to_str(argv);
+        let cmdstr = nvim_shell_argv_to_str(cmd_argv);
         verbose_enter_scroll();
         nvim_smsg_system_cmd(cmdstr);
-        msg_puts(b"\n\n\0".as_ptr() as *const c_char);
+        msg_puts(c"\n\n".as_ptr());
         verbose_leave_scroll();
-        xfree(cmdstr as *mut c_void);
+        xfree(cmdstr.cast::<c_void>());
     }
 
     // Profiling
@@ -314,7 +312,7 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
     let mut nread: usize = 0;
     let mut res: *mut c_char = ptr::null_mut();
     let status = nvim_os_system(
-        argv,
+        cmd_argv,
         input,
         input_len as usize,
         &raw mut res,
@@ -325,7 +323,7 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
         nvim_prof_child_exit(&raw mut wait_time);
     }
 
-    xfree(input as *mut c_void);
+    xfree(input.cast::<c_void>());
     nvim_set_shell_error(status);
 
     if res.is_null() {
@@ -335,7 +333,7 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
             nvim_tv_set_type(rettv, VAR_LIST);
         } else {
             // Empty string
-            let empty = nvim_xstrdup(b"\0".as_ptr() as *const c_char);
+            let empty = nvim_xstrdup(c"".as_ptr());
             nvim_tv_set_vstring_raw(rettv, empty);
         }
         return;
@@ -343,18 +341,17 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
 
     if retlist {
         // Check keepempty from argvars[2] (only if argvars[1] and [2] are set)
-        let keepempty = if nvim_tv_get_type(arg1) != VAR_UNKNOWN
-            && nvim_tv_get_type(arg2) != VAR_UNKNOWN
-        {
-            nvim_tv_get_number(arg2) != 0
-        } else {
-            false
-        };
+        let keepempty =
+            if nvim_tv_get_type(arg1) != VAR_UNKNOWN && nvim_tv_get_type(arg2) != VAR_UNKNOWN {
+                nvim_tv_get_number(arg2) != 0
+            } else {
+                false
+            };
         let list = string_to_list(res, nread, keepempty);
         nvim_tv_list_ref(list);
         nvim_tv_set_type(rettv, VAR_LIST);
         nvim_tv_set_v_list(rettv, list);
-        xfree(res as *mut c_void);
+        xfree(res.cast::<c_void>());
     } else {
         // Replace NUL bytes with SOH (1) to avoid string truncation
         nvim_eval_memchrsub(res, 0, 1, nread);
@@ -395,11 +392,7 @@ unsafe fn translate_crnl(res: *mut c_char, _nread: usize) {
 /// - `rettv` must be a valid typval pointer.
 /// - `fptr` is unused (VimL EvalFuncData).
 #[no_mangle]
-pub unsafe extern "C" fn rs_f_system(
-    argvars: *mut c_void,
-    rettv: *mut c_void,
-    _fptr: *mut c_void,
-) {
+pub unsafe extern "C" fn rs_f_system(argvars: *mut c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     get_system_output_impl(argvars, rettv, false);
 }
 
