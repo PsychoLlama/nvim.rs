@@ -158,9 +158,11 @@ pub unsafe extern "C" fn rs_do_string_sub(
     ga_init(&mut ga, 1, 200);
 
     let p_ic = p_ic_get();
-    let mut regmatch = RegMatch::default();
-    regmatch.rm_ic = p_ic != 0;
-    regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
+    let mut regmatch = RegMatch {
+        rm_ic: p_ic != 0,
+        regprog: vim_regcomp(pat, RE_MAGIC + RE_STRING),
+        ..RegMatch::default()
+    };
 
     if !regmatch.regprog.is_null() {
         let mut tail = str;
@@ -195,14 +197,7 @@ pub unsafe extern "C" fn rs_do_string_sub(
             }
 
             // Measure substitution size (pass with destlen=0)
-            let sublen = rs_vim_regsub(
-                &mut regmatch,
-                sub,
-                expr,
-                tail,
-                0,
-                REGSUB_MAGIC,
-            );
+            let sublen = rs_vim_regsub(&mut regmatch, sub, expr, tail, 0, REGSUB_MAGIC);
             if sublen <= 0 {
                 ga_clear(&mut ga);
                 break;
