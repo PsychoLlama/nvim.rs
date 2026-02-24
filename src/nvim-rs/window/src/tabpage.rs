@@ -1220,6 +1220,63 @@ pub unsafe extern "C" fn rs_goto_tabpage_win(tp: TabpageHandle, wp: WinHandle) {
     goto_tabpage_win_impl(tp, wp);
 }
 
+// =============================================================================
+// may_open_tabpage implementation
+// =============================================================================
+
+extern "C" {
+    /// Get postponed_split_tab global.
+    fn nvim_get_postponed_split_tab() -> c_int;
+
+    /// Set postponed_split_tab global.
+    fn nvim_set_postponed_split_tab(val: c_int);
+
+    /// Get cmdmod.cmod_tab.
+    fn nvim_get_cmdmod_tab() -> c_int;
+
+    /// Set cmdmod.cmod_tab.
+    fn nvim_set_cmdmod_tab(val: c_int);
+
+    /// Call apply_autocmds(EVENT_TABNEWENTERED, ...).
+    fn nvim_apply_autocmds_tabnewentered();
+}
+
+/// Open a new tab page if `:tab cmd` was used.
+///
+/// Port of C `may_open_tabpage()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn may_open_tabpage_impl() -> c_int {
+    let cmod_tab = nvim_get_cmdmod_tab();
+    let postponed = nvim_get_postponed_split_tab();
+    let n = if cmod_tab == 0 { postponed } else { cmod_tab };
+
+    if n == 0 {
+        return FAIL;
+    }
+
+    nvim_set_cmdmod_tab(0); // reset it to avoid doing it twice
+    nvim_set_postponed_split_tab(0);
+
+    let status = nvim_win_new_tabpage_wrapper(n, std::ptr::null());
+    if status != FAIL {
+        nvim_apply_autocmds_tabnewentered();
+    }
+    status
+}
+
+/// FFI: Open a new tab page if `:tab cmd` was used.
+///
+/// Replaces C `may_open_tabpage()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_may_open_tabpage() -> c_int {
+    may_open_tabpage_impl()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

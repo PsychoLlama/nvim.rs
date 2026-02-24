@@ -1599,23 +1599,6 @@ int win_new_tabpage(int after, char *filename)
 // Open a new tab page if ":tab cmd" was used.  It will edit the same buffer,
 // like with ":split".
 // Returns OK if a new tab page was created, FAIL otherwise.
-static int may_open_tabpage(void)
-{
-  int n = (cmdmod.cmod_tab == 0) ? postponed_split_tab : cmdmod.cmod_tab;
-
-  if (n == 0) {
-    return FAIL;
-  }
-
-  cmdmod.cmod_tab = 0;         // reset it to avoid doing it twice
-  postponed_split_tab = 0;
-  int status = win_new_tabpage(n, NULL);
-  if (status == OK) {
-    apply_autocmds(EVENT_TABNEWENTERED, NULL, NULL, false, curbuf);
-  }
-  return status;
-}
-
 // Create up to "maxcount" tabpages with empty windows.
 // Returns the number of resulting tab pages.
 int make_tabpages(int maxcount)
@@ -3339,3 +3322,20 @@ static void tabpage_check_windows(tabpage_T *old_curtab) { rs_tabpage_check_wind
 
 extern void rs_win_ui_flush(int validate);
 void win_ui_flush(bool validate) { rs_win_ui_flush(validate ? 1 : 0); }
+
+// Phase 6 accessors: may_open_tabpage
+
+/// Get postponed_split_tab global.
+int nvim_get_postponed_split_tab(void) { return postponed_split_tab; }
+
+/// Set postponed_split_tab global.
+void nvim_set_postponed_split_tab(int val) { postponed_split_tab = val; }
+
+/// Get cmdmod.cmod_tab.
+int nvim_get_cmdmod_tab(void) { return (int)cmdmod.cmod_tab; }
+
+/// Set cmdmod.cmod_tab.
+void nvim_set_cmdmod_tab(int val) { cmdmod.cmod_tab = val; }
+
+extern int rs_may_open_tabpage(void);
+static int may_open_tabpage(void) { return rs_may_open_tabpage(); }
