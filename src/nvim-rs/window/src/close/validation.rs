@@ -39,6 +39,9 @@ extern "C" {
     /// Get w_prev from window.
     fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
 
+    /// Get tp_lastwin from tabpage.
+    fn nvim_tabpage_get_lastwin(tp: TabpageHandle) -> WinHandle;
+
     /// Get w_floating from window.
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
 
@@ -321,10 +324,51 @@ pub extern "C" fn rs_close_in_cmdwin() -> c_int {
     c_int::from(in_cmdwin_impl())
 }
 
+/// Check if floating windows in a non-current tabpage can be closed.
+///
+/// Iterates from tp_lastwin backwards while windows are floating,
+/// checking if each buffer can be hidden or is unchanged.
+fn can_close_floating_windows_tp_impl(tp: TabpageHandle) -> bool {
+    if tp.is_null() {
+        // For current tabpage, use the existing impl.
+        return can_close_floating_windows_impl();
+    }
+
+    unsafe {
+        let lastwin = nvim_tabpage_get_lastwin(tp);
+        if lastwin.is_null() {
+            return true;
+        }
+
+        let mut wp = lastwin;
+        while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
+            let buf = nvim_win_get_buffer(wp);
+            if !buf.is_null() {
+                let is_changed = bufIsChanged(buf) != 0;
+                let nwindows = nvim_buf_get_nwindows(buf);
+                let need_hide = is_changed && nwindows <= 1;
+                if need_hide && buf_hide(buf) == 0 {
+                    return false;
+                }
+            }
+            wp = nvim_win_get_prev(wp);
+        }
+        true
+    }
+}
+
 /// FFI: Check if floating windows can be closed in current tabpage.
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_close_can_close_floating() -> c_int {
     c_int::from(can_close_floating_windows_impl())
+}
+
+/// FFI: Check if floating windows can be closed in the given tabpage.
+///
+/// When tp is null, checks the current tabpage.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_can_close_floating_windows_tp(tp: TabpageHandle) -> c_int {
+    c_int::from(can_close_floating_windows_tp_impl(tp))
 }
 
 /// FFI: Check if window is the only non-floating in tabpage.

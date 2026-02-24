@@ -8,7 +8,7 @@
 
 use std::ffi::c_int;
 
-use crate::{Frame, WinHandle, FR_COL, FR_LEAF, FR_ROW};
+use crate::{Frame, TabpageHandle, WinHandle, FR_COL, FR_LEAF, FR_ROW};
 
 // =============================================================================
 // External C Functions
@@ -649,6 +649,12 @@ extern "C" {
 
     /// Get w_p_wfw from window.
     fn nvim_win_get_wfw(wp: WinHandle) -> c_int;
+
+    /// Get the alternate tabpage for closing.
+    fn rs_alt_tabpage() -> TabpageHandle;
+
+    /// Get tp_curwin from a tabpage.
+    fn nvim_tabpage_get_curwin(tp: TabpageHandle) -> WinHandle;
 }
 
 /// Find the best alternate frame considering winfixheight/winfixwidth constraints.
@@ -819,6 +825,53 @@ pub extern "C" fn rs_winframe_find_altwin(
     altfr_initial: *mut Frame,
 ) -> WinframeResult {
     winframe_find_altwin_impl(wp, altfr_initial)
+}
+
+/// Full winframe_find_altwin implementation absorbing win_altframe and C wrapper.
+///
+/// Equivalent to the C `winframe_find_altwin()` function. Replaces the C body.
+///
+/// - When there is only one non-floating window (`rs_one_window_in_tab`), returns null.
+/// - Finds the initial alternate frame via `win_altframe` logic (including alt_tabpage
+///   for the one-window case, which however returns NULL before reaching that).
+/// - Calls `winframe_find_altwin_impl` to refine with wfh/wfw constraints.
+/// - Returns the window that will receive the freed space (via rs_frame2win).
+/// - Writes `dir` to `*dirp` and optionally `altfr` to `*altfr_out`.
+///
+/// # Safety
+/// `win` must be valid. `dirp` must be a valid non-null pointer.
+/// `tp` and `altfr_out` may be null.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_winframe_find_altwin_full(
+    win: WinHandle,
+    dirp: *mut c_int,
+    tp: TabpageHandle,
+    altfr_out: *mut *mut Frame,
+) -> WinHandle {
+    // Guard: if there is only one non-floating window, nothing to remove.
+    if rs_one_window_in_tab(win, tp.as_ptr()) != 0 {
+        return WinHandle::null();
+    }
+
+    // Get the initial alternate frame via win_altframe logic.
+    // (win_altframe never returns the alt_tabpage path here since we guarded above.)
+    let frp2 = win_altframe_impl(win);
+
+    // Refine: find the best altframe considering wfh/wfw constraints.
+    let result = winframe_find_altwin_impl(win, frp2);
+    let frp2 = result.altfr;
+    if !dirp.is_null() {
+        *dirp = result.dir;
+    }
+
+    let wp = rs_frame2win(frp2);
+
+    if !altfr_out.is_null() {
+        *altfr_out = frp2;
+    }
+
+    wp
 }
 
 /// FFI: Check if frame should be flattened after removal.

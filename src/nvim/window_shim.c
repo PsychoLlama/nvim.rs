@@ -209,6 +209,11 @@ extern int rs_make_tabpages(int maxcount);
 extern int rs_goto_tabpage_lastused(void);
 extern void rs_goto_tabpage_win(tabpage_T *tp, win_T *wp);
 extern int rs_check_split_disallowed_err(const win_T *wp, Error *err);
+
+// Phase 3: winframe_find_altwin, can_close_floating_windows
+extern win_T *rs_winframe_find_altwin_full(win_T *win, int *dirp, tabpage_T *tp,
+                                           frame_T **altfr);
+extern int rs_can_close_floating_windows_tp(tabpage_T *tp);
 extern int rs_get_maximum_wincount(frame_T *fr, int height);
 extern int rs_make_windows(int count, int vertical);
 
@@ -988,21 +993,7 @@ void close_windows(buf_T *buf, bool keep_curwin)
 /// @return true if all floating windows can be closed
 static bool can_close_floating_windows(tabpage_T *tp)
 {
-  assert(tp != curtab && (tp || !is_aucmd_win(lastwin)));
-  // Use Rust helper for current tabpage
-  if (tp == NULL) {
-    return rs_close_can_close_floating() != 0;
-  }
-  // For other tabpages, iterate in C (since we need tp_lastwin access)
-  for (win_T *wp = tp->tp_lastwin; wp->w_floating; wp = wp->w_prev) {
-    buf_T *buf = wp->w_buffer;
-    int need_hide = (bufIsChanged(buf) && buf->b_nwindows <= 1);
-
-    if (need_hide && !buf_hide(buf)) {
-      return false;
-    }
-  }
-  return true;
+  return rs_can_close_floating_windows_tp(tp) != 0;
 }
 
 /// @return true if, considering the cmdwin, `win` is safe to close.
@@ -1163,7 +1154,7 @@ int win_close(win_T *win, bool free_buf, bool force)
   if (win == curwin) {
     leaving_window(curwin);
 
-    wp = win->w_floating ? win_float_find_altwin(win, NULL) : rs_frame2win(win_altframe(win, NULL));
+    wp = win->w_floating ? win_float_find_altwin(win, NULL) : rs_frame2win(rs_win_altframe(win));
 
     if (wp->w_buffer != curbuf) {
       rs_reset_VIsual_and_resel();
@@ -1473,29 +1464,7 @@ win_T *winframe_remove(win_T *win, int *dirp, tabpage_T *tp, frame_T **unflat_al
 win_T *winframe_find_altwin(win_T *win, int *dirp, tabpage_T *tp, frame_T **altfr)
   FUNC_ATTR_NONNULL_ARG(1, 2)
 {
-  assert(tp == NULL || tp != curtab);
-
-  // If there is only one non-floating window there is nothing to remove.
-  if (rs_one_window_in_tab(win, tp)) {
-    return NULL;
-  }
-
-  // Find the initial window and frame that gets the space.
-  frame_T *frp2 = win_altframe(win, tp);
-
-  // Call Rust to find the best altframe considering wfh/wfw constraints.
-  WinframeResult result = rs_winframe_find_altwin(win, frp2);
-  frp2 = result.altfr;
-  *dirp = result.dir;
-
-  win_T *wp = rs_frame2win(frp2);
-
-  assert(wp != win && frp2 != win->w_frame);
-  if (altfr != NULL) {
-    *altfr = frp2;
-  }
-
-  return wp;
+  return rs_winframe_find_altwin_full(win, dirp, tp, altfr);
 }
 
 
@@ -1507,28 +1476,6 @@ void winframe_restore(win_T *wp, int dir, frame_T *unflat_altfr)
   FUNC_ATTR_NONNULL_ALL
 {
   rs_winframe_restore(wp, dir, unflat_altfr);
-}
-
-/// If 'splitbelow' or 'splitright' is set, the space goes above or to the left
-/// by default.  Otherwise, the free space goes below or to the right.  The
-/// result is that opening a window and then immediately closing it will
-/// preserve the initial window layout.  The 'wfh' and 'wfw' settings are
-/// respected when possible.
-///
-/// @param  tp  tab page "win" is in, NULL for current
-///
-/// @return a pointer to the frame that will receive the empty screen space that
-/// is left over after "win" is closed.
-static frame_T *win_altframe(win_T *win, tabpage_T *tp)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  assert(tp == NULL || tp != curtab);
-
-  if (rs_one_window_in_tab(win, tp)) {
-    return alt_tabpage()->tp_curwin->w_frame;
-  }
-
-  return rs_win_altframe(win);
 }
 
 // Return the tabpage that will be used if the current one is closed.
