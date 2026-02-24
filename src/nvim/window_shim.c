@@ -2209,123 +2209,8 @@ void win_enter(win_T *wp, bool undo_sync)
 ///
 /// @param flags  if contains WEE_CURWIN_INVALID, it means curwin has just been
 ///               closed and isn't valid.
-static void win_enter_ext(win_T *const wp, const int flags)
-{
-  bool other_buffer = false;
-  const bool curwin_invalid = (flags & WEE_CURWIN_INVALID);
-
-  if (wp == curwin && !curwin_invalid) {        // nothing to do
-    return;
-  }
-
-  if (!curwin_invalid) {
-    leaving_window(curwin);
-  }
-
-  if (!curwin_invalid && (flags & WEE_TRIGGER_LEAVE_AUTOCMDS)) {
-    // Be careful: If autocommands delete the window, return now.
-    if (wp->w_buffer != curbuf) {
-      apply_autocmds(EVENT_BUFLEAVE, NULL, NULL, false, curbuf);
-      other_buffer = true;
-      if (!rs_win_valid(wp)) {
-        return;
-      }
-    }
-    apply_autocmds(EVENT_WINLEAVE, NULL, NULL, false, curbuf);
-    if (!rs_win_valid(wp)) {
-      return;
-    }
-    // autocmds may abort script processing
-    if (aborting()) {
-      return;
-    }
-  }
-
-  // sync undo before leaving the current buffer
-  if ((flags & WEE_UNDO_SYNC) && curbuf != wp->w_buffer) {
-    u_sync(false);
-  }
-
-  // Might need to scroll the old window before switching, e.g., when the
-  // cursor was moved.
-  if (*p_spk == 'c' && !curwin_invalid) {
-    update_topline(curwin);
-  }
-
-  // may have to copy the buffer options when 'cpo' contains 'S'
-  if (wp->w_buffer != curbuf) {
-    buf_copy_options(wp->w_buffer, BCO_ENTER | BCO_NOHELP);
-  }
-  if (!curwin_invalid) {
-    prevwin = curwin;           // remember for CTRL-W p
-    curwin->w_redr_status = true;
-  }
-  curwin = wp;
-  curbuf = wp->w_buffer;
-
-  check_cursor(curwin);
-  if (!virtual_active(curwin)) {
-    curwin->w_cursor.coladd = 0;
-  }
-  if (*p_spk == 'c') {
-    changed_line_abv_curs();      // assume cursor position needs updating
-  } else {
-    // Make sure the cursor position is valid, either by moving the cursor
-    // or by scrolling the text.
-    win_fix_cursor(get_real_state() & (MODE_NORMAL|MODE_CMDLINE|MODE_TERMINAL));
-  }
-
-  win_fix_current_dir();
-
-  entering_window(curwin);
-  // Careful: autocommands may close the window and make "wp" invalid
-  if (flags & WEE_TRIGGER_NEW_AUTOCMDS) {
-    apply_autocmds(EVENT_WINNEW, NULL, NULL, false, curbuf);
-  }
-  if (flags & WEE_TRIGGER_ENTER_AUTOCMDS) {
-    apply_autocmds(EVENT_WINENTER, NULL, NULL, false, curbuf);
-    if (other_buffer) {
-      apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf);
-    }
-  }
-
-  maketitle();
-  curwin->w_redr_status = true;
-  redraw_tabline = true;
-  if (restart_edit) {
-    redraw_later(curwin, UPD_VALID);  // causes status line redraw
-  }
-
-  // change background color according to NormalNC,
-  // but only if actually defined (otherwise no extra redraw)
-  if (curwin->w_hl_attr_normal != curwin->w_hl_attr_normalnc) {
-    // TODO(bfredl): eventually we should be smart enough
-    // to only recompose the window, not redraw it.
-    redraw_later(curwin, UPD_NOT_VALID);
-  }
-  if (prevwin) {
-    if (prevwin->w_hl_attr_normal != prevwin->w_hl_attr_normalnc) {
-      redraw_later(prevwin, UPD_NOT_VALID);
-    }
-  }
-
-  // set window height to desired minimal value
-  if (curwin->w_height < p_wh && !curwin->w_p_wfh && !curwin->w_floating) {
-    rs_win_setheight((int)p_wh);
-  } else if (curwin->w_height == 0) {
-    rs_win_setheight(1);
-  }
-
-  // set window width to desired minimal value
-  if (curwin->w_width < p_wiw && !curwin->w_p_wfw && !curwin->w_floating) {
-    rs_win_setwidth((int)p_wiw);
-  }
-
-  setmouse();                   // in case jumped to/from help buffer
-
-  // Change directories when the 'acd' option is set.
-  do_autochdir();
-}
+extern void rs_win_enter_ext(win_T *wp, int flags);
+static void win_enter_ext(win_T *const wp, const int flags) { rs_win_enter_ext(wp, flags); }
 
 /// Used after making another window the current one: change directory if needed.
 void win_fix_current_dir(void)
@@ -3779,3 +3664,41 @@ void nvim_win_clear_winbar_click_defs(win_T *wp)
   wp->w_winbar_click_defs_size = 0;
   wp->w_winbar_click_defs = NULL;
 }
+
+// =============================================================================
+// Phase 1 accessors: win_enter_ext migration
+// =============================================================================
+
+/// Apply BufLeave autocmd for current buffer.
+void nvim_apply_autocmds_bufleave(void) { apply_autocmds(EVENT_BUFLEAVE, NULL, NULL, false, curbuf); }
+/// Apply WinLeave autocmd for current buffer.
+void nvim_apply_autocmds_winleave(void) { apply_autocmds(EVENT_WINLEAVE, NULL, NULL, false, curbuf); }
+/// Apply WinNew autocmd for current buffer.
+void nvim_apply_autocmds_winnew(void) { apply_autocmds(EVENT_WINNEW, NULL, NULL, false, curbuf); }
+/// Apply WinEnter autocmd for current buffer.
+void nvim_apply_autocmds_winenter(void) { apply_autocmds(EVENT_WINENTER, NULL, NULL, false, curbuf); }
+/// Apply BufEnter autocmd for current buffer.
+void nvim_apply_autocmds_bufenter(void) { apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf); }
+
+/// Set prevwin global.
+void nvim_set_prevwin(win_T *wp) { prevwin = wp; }
+
+/// Update topline for curwin (used in win_enter_ext).
+void nvim_update_topline_curwin_enter(void) { update_topline(curwin); }
+
+/// Copy buffer options on enter: buf_copy_options(buf, BCO_ENTER | BCO_NOHELP).
+void nvim_buf_copy_options_enter(buf_T *buf) { buf_copy_options(buf, BCO_ENTER | BCO_NOHELP); }
+
+/// Call changed_line_abv_curs().
+void nvim_changed_line_abv_curs_wrap(void) { changed_line_abv_curs(); }
+
+/// Call do_autochdir().
+void nvim_do_autochdir_wrap(void) { do_autochdir(); }
+
+/// Get restart_edit global (non-zero if in restart-edit mode).
+int nvim_get_restart_edit_bool(void) { return restart_edit ? 1 : 0; }
+
+/// Get w_hl_attr_normal field.
+int nvim_win_get_hl_attr_normal_wrap(win_T *wp) { return wp ? wp->w_hl_attr_normal : 0; }
+/// Get w_hl_attr_normalnc field.
+int nvim_win_get_hl_attr_normalnc_wrap(win_T *wp) { return wp ? wp->w_hl_attr_normalnc : 0; }
