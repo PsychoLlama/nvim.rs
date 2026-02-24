@@ -136,7 +136,7 @@ impl SyntaxInfo {
 // Phase 3: syn_get_id and query API (Rust implementations)
 // =============================================================================
 
-use crate::types::{StateItemHandle, WinHandle, BufHandle, HL_CONCEAL};
+use crate::types::{BufHandle, StateItemHandle, WinHandle, HL_CONCEAL};
 
 extern "C" {
     fn nvim_syn_get_win() -> WinHandle;

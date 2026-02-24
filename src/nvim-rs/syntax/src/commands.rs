@@ -1072,7 +1072,7 @@ pub unsafe extern "C" fn rs_syn_cmd_spell_dispatch(eap: *mut c_void, _syncing: c
 /// Must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_cmd_on_dispatch(eap: *mut c_void, syncing: c_int) {
-    rs_syn_cmd_onoff(eap, b"syntax\0".as_ptr().cast(), syncing);
+    rs_syn_cmd_onoff(eap, c"syntax".as_ptr(), syncing);
 }
 
 /// Dispatch for `:syntax manual` -- signature matches subcommands[] table.
@@ -1081,7 +1081,7 @@ pub unsafe extern "C" fn rs_syn_cmd_on_dispatch(eap: *mut c_void, syncing: c_int
 /// Must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_cmd_manual_dispatch(eap: *mut c_void, syncing: c_int) {
-    rs_syn_cmd_onoff(eap, b"manual\0".as_ptr().cast(), syncing);
+    rs_syn_cmd_onoff(eap, c"manual".as_ptr(), syncing);
 }
 
 /// Dispatch for `:syntax off` -- signature matches subcommands[] table.
@@ -1090,7 +1090,7 @@ pub unsafe extern "C" fn rs_syn_cmd_manual_dispatch(eap: *mut c_void, syncing: c
 /// Must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_cmd_off_dispatch(eap: *mut c_void, syncing: c_int) {
-    rs_syn_cmd_onoff(eap, b"nosyntax\0".as_ptr().cast(), syncing);
+    rs_syn_cmd_onoff(eap, c"nosyntax".as_ptr(), syncing);
 }
 
 // =============================================================================
@@ -1178,8 +1178,7 @@ pub unsafe extern "C" fn rs_ex_syntax(eap: *mut c_void) {
     }
 
     // Build a Rust string slice for comparison (no allocation)
-    let name_bytes =
-        std::slice::from_raw_parts(subcmd_name as *const u8, name_len as usize);
+    let name_bytes = std::slice::from_raw_parts(subcmd_name as *const u8, name_len as usize);
     let name_str = std::str::from_utf8_unchecked(name_bytes);
 
     let mut found = false;
@@ -1281,8 +1280,7 @@ pub unsafe extern "C" fn rs_syn_cmd_iskeyword(eap: *mut c_void, _syncing: c_int)
     } else {
         // Check for "clear"
         let arg_str = CStr::from_ptr(arg).to_bytes();
-        let is_clear = arg_str.len() >= 5
-            && arg_str[..5].eq_ignore_ascii_case(b"clear");
+        let is_clear = arg_str.len() >= 5 && arg_str[..5].eq_ignore_ascii_case(b"clear");
 
         if is_clear {
             nvim_syn_iskeyword_clear(block);
@@ -1304,8 +1302,8 @@ pub unsafe extern "C" fn rs_ex_ownsyntax(eap: *mut c_void) {
     let arg = nvim_syn_get_eap_arg(eap);
 
     // Save b:current_syntax
-    let b_current_syntax_key = b"b:current_syntax\0".as_ptr().cast::<c_char>();
-    let w_current_syntax_key = b"w:current_syntax\0".as_ptr().cast::<c_char>();
+    let b_current_syntax_key = c"b:current_syntax".as_ptr();
+    let w_current_syntax_key = c"w:current_syntax".as_ptr();
 
     let old_raw = nvim_syn_get_var_value(b_current_syntax_key);
     let old_value: *mut c_char = if old_raw.is_null() {
