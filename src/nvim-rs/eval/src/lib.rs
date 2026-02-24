@@ -22,6 +22,7 @@ pub mod funcref;
 pub mod funcs;
 pub mod gc;
 pub mod indexing;
+pub mod job;
 pub mod list;
 pub mod names;
 pub mod operator;

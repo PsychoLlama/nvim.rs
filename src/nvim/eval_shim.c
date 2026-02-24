@@ -187,6 +187,10 @@ extern void rs_timer_stop(timer_T *timer);
 extern void rs_timer_close_cb(TimeWatcher *tw, void *data);
 extern void rs_timer_stop_all(void);
 extern void rs_timer_teardown(void);
+// Phase 2 (eval_shim pass 8): job helper functions
+extern bool rs_common_job_callbacks(dict_T *vopts, CallbackReader *on_stdout,
+                                     CallbackReader *on_stderr, Callback *on_exit);
+extern Channel *rs_find_job(uint64_t id, bool show_error);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -1939,42 +1943,12 @@ char *do_string_sub(char *str, size_t len, char *pat, char *sub, typval_T *expr,
 bool common_job_callbacks(dict_T *vopts, CallbackReader *on_stdout, CallbackReader *on_stderr,
                           Callback *on_exit)
 {
-  if (tv_dict_get_callback(vopts, S_LEN("on_stdout"), &on_stdout->cb)
-      && tv_dict_get_callback(vopts, S_LEN("on_stderr"), &on_stderr->cb)
-      && tv_dict_get_callback(vopts, S_LEN("on_exit"), on_exit)) {
-    on_stdout->buffered = tv_dict_get_number(vopts, "stdout_buffered");
-    on_stderr->buffered = tv_dict_get_number(vopts, "stderr_buffered");
-    if (on_stdout->buffered && on_stdout->cb.type == kCallbackNone) {
-      on_stdout->self = vopts;
-    }
-    if (on_stderr->buffered && on_stderr->cb.type == kCallbackNone) {
-      on_stderr->self = vopts;
-    }
-    vopts->dv_refcount++;
-    return true;
-  }
-
-  callback_reader_free(on_stdout);
-  callback_reader_free(on_stderr);
-  callback_free(on_exit);
-  return false;
+  return rs_common_job_callbacks(vopts, on_stdout, on_stderr, on_exit);
 }
 
 Channel *find_job(uint64_t id, bool show_error)
 {
-  Channel *data = find_channel(id);
-  if (!data || data->streamtype != kChannelStreamProc
-      || proc_is_stopped(&data->stream.proc)) {
-    if (show_error) {
-      if (data && data->streamtype != kChannelStreamProc) {
-        emsg(_(e_invchanjob));
-      } else {
-        emsg(_(e_invchan));
-      }
-    }
-    return NULL;
-  }
-  return data;
+  return rs_find_job(id, show_error);
 }
 
 void script_host_eval(char *name, typval_T *argvars, typval_T *rettv)
@@ -4545,5 +4519,94 @@ void nvim_set_pressedreturn(int val)
 void nvim_discard_current_exception(void)
 {
   discard_current_exception();
+}
+
+// =============================================================================
+// Job helper accessors for Rust Phase 2 (eval_shim pass 8)
+// =============================================================================
+
+/// Get a pointer to the cb field of a CallbackReader.
+Callback *nvim_cbr_get_cb_ptr(CallbackReader *reader)
+{
+  return &reader->cb;
+}
+
+/// Get the buffered field of a CallbackReader.
+int nvim_cbr_get_buffered(const CallbackReader *reader)
+{
+  return reader->buffered ? 1 : 0;
+}
+
+/// Set the buffered field of a CallbackReader.
+void nvim_cbr_set_buffered(CallbackReader *reader, int buffered)
+{
+  reader->buffered = buffered != 0;
+}
+
+/// Get the self field of a CallbackReader.
+dict_T *nvim_cbr_get_self(const CallbackReader *reader)
+{
+  return reader->self;
+}
+
+/// Set the self field of a CallbackReader.
+void nvim_cbr_set_self(CallbackReader *reader, dict_T *self)
+{
+  reader->self = self;
+}
+
+/// Wrapper for callback_reader_free.
+void nvim_callback_reader_free(CallbackReader *reader)
+{
+  callback_reader_free(reader);
+}
+
+// nvim_dict_refcount_inc already defined above.
+
+/// Wrapper for tv_dict_get_callback.
+bool nvim_tv_dict_get_callback(dict_T *dict, const char *key, ptrdiff_t key_len,
+                                Callback *result)
+{
+  return tv_dict_get_callback(dict, key, key_len, result);
+}
+
+/// Wrapper for tv_dict_get_number.
+int64_t nvim_tv_dict_get_number(const dict_T *dict, const char *key)
+{
+  return tv_dict_get_number(dict, key);
+}
+
+/// Check if a Channel is a proc stream and not stopped.
+/// Returns 1 if it is a valid job channel, 0 otherwise.
+int nvim_channel_is_valid_job(Channel *chan)
+{
+  if (chan == NULL) {
+    return 0;
+  }
+  if (chan->streamtype != kChannelStreamProc) {
+    return 0;
+  }
+  if (proc_is_stopped(&chan->stream.proc)) {
+    return 0;
+  }
+  return 1;
+}
+
+/// Check if a Channel is NOT a proc stream (for find_job error reporting).
+int nvim_channel_is_not_proc(Channel *chan)
+{
+  return (chan != NULL && chan->streamtype != kChannelStreamProc) ? 1 : 0;
+}
+
+/// Emit e_invchan error.
+void nvim_emsg_invchan(void)
+{
+  emsg(_(e_invchan));
+}
+
+/// Emit e_invchanjob error.
+void nvim_emsg_invchanjob(void)
+{
+  emsg(_(e_invchanjob));
 }
 
