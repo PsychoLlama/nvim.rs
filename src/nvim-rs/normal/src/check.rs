@@ -16,7 +16,9 @@ use crate::WinHandle;
 
 const MODE_NORMAL: c_int = 0x01;
 const MODE_NORMAL_BUSY: c_int = 0x1001;
+const MODE_INSERT: c_int = 0x10;
 const OP_NOP: c_int = 0;
+const CA_COMMAND_BUSY: c_int = 1;
 
 // =============================================================================
 // FFI declarations
@@ -28,6 +30,28 @@ extern "C" {
     fn nvim_ns_get_noexmode(s: NormalStateHandle) -> bool;
     fn nvim_ns_get_previous_got_int(s: NormalStateHandle) -> bool;
     fn nvim_ns_set_previous_got_int(s: NormalStateHandle, val: bool);
+    fn nvim_ns_get_toplevel(s: NormalStateHandle) -> bool;
+    fn nvim_ns_get_set_prevcount(s: NormalStateHandle) -> bool;
+    fn nvim_ns_set_set_prevcount(s: NormalStateHandle, val: bool);
+    fn nvim_ns_prepare_ca(s: NormalStateHandle);
+    fn nvim_ns_set_mapped_len(s: NormalStateHandle, val: c_int);
+    fn nvim_ns_get_ca_ptr(s: NormalStateHandle) -> *mut std::ffi::c_void;
+    fn nvim_ns_get_oa_ptr(s: NormalStateHandle) -> *mut std::ffi::c_void;
+    fn nvim_ns_get_old_pos_lnum(s: NormalStateHandle) -> c_int;
+    fn nvim_ns_get_old_pos_col(s: NormalStateHandle) -> c_int;
+
+    // oparg_T accessors
+    fn nvim_oap_get_op_type_ptr(oap: *mut std::ffi::c_void) -> c_int;
+    fn nvim_oap_get_regname_ptr(oap: *mut std::ffi::c_void) -> c_int;
+    fn nvim_oap_get_prev_opcount_ptr(oap: *mut std::ffi::c_void) -> c_int;
+    fn nvim_oap_get_prev_count0_ptr(oap: *mut std::ffi::c_void) -> c_int;
+    fn nvim_oap_set_prev_opcount(oap: *mut std::ffi::c_void, val: c_int);
+    fn nvim_oap_set_prev_count0(oap: *mut std::ffi::c_void, val: c_int);
+
+    // cmdarg_T accessors
+    fn nvim_cap_get_retval(cap: *mut std::ffi::c_void) -> c_int;
+    fn nvim_cap_set_opcount(cap: *mut std::ffi::c_void, val: c_int);
+    fn nvim_cap_set_count0(cap: *mut std::ffi::c_void, val: c_int);
 
     // Global accessors
     fn nvim_get_did_throw_direct() -> bool;
@@ -48,6 +72,7 @@ extern "C" {
     fn nvim_set_may_garbage_collect(val: bool);
     fn nvim_stuff_empty() -> bool;
     fn nvim_get_finish_op() -> c_int;
+    fn nvim_set_finish_op(val: bool);
     fn nvim_get_got_int() -> c_int;
     fn nvim_set_got_int(val: c_int);
     fn nvim_get_global_busy() -> bool;
@@ -56,6 +81,39 @@ extern "C" {
     fn nvim_get_need_wait_return() -> c_int;
     fn nvim_wait_return(redraw: bool);
     fn nvim_get_restart_edit() -> c_int;
+    fn nvim_get_opcount() -> c_int;
+    fn nvim_get_VIsual_active() -> c_int;
+    fn nvim_get_KeyTyped() -> bool;
+    fn nvim_get_State() -> c_int;
+
+    // Message/display globals
+    fn nvim_get_p_smd() -> c_int;
+    fn nvim_get_msg_silent() -> c_int;
+    fn nvim_get_clear_cmdline() -> bool;
+    fn nvim_get_redraw_cmdline() -> bool;
+    fn nvim_get_redraw_mode() -> bool;
+    fn nvim_get_msg_didout() -> bool;
+    fn nvim_get_msg_didany() -> bool;
+    fn nvim_set_msg_didany(val: bool);
+    fn nvim_get_msg_scroll_val() -> bool;
+    fn nvim_set_msg_scroll_val(val: bool);
+    fn nvim_get_msg_nowait_val() -> bool;
+    fn nvim_get_emsg_on_display() -> bool;
+    fn nvim_set_emsg_on_display(val: bool);
+    fn nvim_get_emsg_silent() -> c_int;
+    fn nvim_get_in_assert_fails() -> bool;
+    fn nvim_get_did_wait_return_val() -> bool;
+    fn nvim_set_did_emsg(val: bool);
+
+    // Cursor globals
+    fn nvim_get_cursor_lnum() -> c_int;
+    fn nvim_get_cursor_col() -> c_int;
+
+    // Redraw/display globals
+    fn nvim_get_must_redraw() -> c_int;
+    fn nvim_get_keep_msg_not_null() -> bool;
+    fn nvim_get_need_fileinfo() -> bool;
+    fn nvim_set_need_fileinfo(val: bool);
 
     // Function wrappers
     fn nvim_discard_current_exception_wrapper();
@@ -79,6 +137,25 @@ extern "C" {
     fn nvim_vgetc_and_discard();
     fn nvim_set_State(val: c_int);
     fn rs_op_pending() -> bool;
+    fn nvim_ui_cursor_shape_wrapper();
+    fn nvim_ui_flush_wrapper();
+    fn nvim_may_trigger_modechanged();
+    fn nvim_typebuf_maplen_wrapper() -> c_int;
+    fn nvim_typebuf_typed_wrapper() -> bool;
+    fn nvim_ui_has_messages() -> bool;
+    fn nvim_os_delay_wrapper(ms: c_int, can_interrupt: bool);
+    fn nvim_showmode_wrapper();
+    fn nvim_show_cursor_info_later();
+    fn nvim_update_screen_call();
+    fn nvim_redraw_statuslines_call();
+    fn nvim_curbuf_set_b_last_used();
+    fn nvim_keep_msg_display_and_free();
+    fn nvim_shortmess_fileinfo() -> bool;
+    fn nvim_fileinfo_call();
+    fn nvim_may_clear_sb_text_call();
+    fn nvim_redraw_mode_msg_keep_msg();
+    fn readbuf1_empty() -> bool;
+    fn rs_set_vcount_ca(cap: *mut std::ffi::c_void, set_prevcount: *mut bool);
 
     // Fold functions (from fold crate)
     fn rs_foldAdjustVisual();
@@ -100,32 +177,7 @@ extern "C" {
     fn nvim_apply_autocmds_bufmodifiedset();
     fn nvim_curbuf_b_changed_invalid_clear();
 
-    fn nvim_normal_redraw_impl(s: NormalStateHandle);
     fn nvim_get_curwin() -> WinHandle;
-
-    // Phase 5 normal_prepare accessors
-    fn nvim_ns_prepare_ca(s: NormalStateHandle);
-    fn nvim_ns_set_mapped_len(s: NormalStateHandle, val: c_int);
-    fn nvim_ns_get_oa_ptr(s: NormalStateHandle) -> *mut std::ffi::c_void;
-    fn nvim_ns_get_ca_ptr(s: NormalStateHandle) -> *mut std::ffi::c_void;
-    fn nvim_ns_get_toplevel(s: NormalStateHandle) -> bool;
-    fn nvim_ns_get_set_prevcount(s: NormalStateHandle) -> bool;
-    fn nvim_ns_set_set_prevcount(s: NormalStateHandle, val: bool);
-    fn nvim_get_opcount() -> c_int;
-    fn nvim_set_finish_op(val: bool);
-    fn nvim_oap_get_op_type_ptr(oap: *mut std::ffi::c_void) -> c_int;
-    fn nvim_oap_get_regname_ptr(oap: *mut std::ffi::c_void) -> c_int;
-    fn nvim_oap_get_prev_opcount_ptr(oap: *mut std::ffi::c_void) -> c_int;
-    fn nvim_oap_get_prev_count0_ptr(oap: *mut std::ffi::c_void) -> c_int;
-    fn nvim_oap_set_prev_opcount(oap: *mut std::ffi::c_void, val: c_int);
-    fn nvim_oap_set_prev_count0(oap: *mut std::ffi::c_void, val: c_int);
-    fn nvim_cap_set_opcount(cap: *mut std::ffi::c_void, val: c_int);
-    fn nvim_cap_set_count0(cap: *mut std::ffi::c_void, val: c_int);
-    fn nvim_ui_cursor_shape_wrapper();
-    fn nvim_may_trigger_modechanged();
-    fn nvim_typebuf_maplen_wrapper() -> c_int;
-    fn readbuf1_empty() -> bool;
-    fn rs_set_vcount_ca(cap: *mut std::ffi::c_void, set_prevcount: *mut bool);
 }
 
 // =============================================================================
@@ -235,6 +287,129 @@ unsafe fn normal_check_folds(_s: NormalStateHandle) {
             rs_foldOpenCursor();
         }
     }
+}
+
+/// Rust implementation of normal_redraw.
+///
+/// Before each redraw in normal mode: update topline, cursor, draw screen,
+/// display keep_msg, show fileinfo, clear error state.
+///
+/// # Safety
+/// `s` is unused (no NormalState fields accessed).
+#[no_mangle]
+pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
+    // Before redrawing, ensure w_topline and cursor are up to date.
+    nvim_update_topline_curwin_wrapper();
+    nvim_validate_cursor();
+
+    nvim_show_cursor_info_later();
+
+    if nvim_get_must_redraw() != 0 {
+        nvim_update_screen_call();
+    } else {
+        nvim_redraw_statuslines_call();
+        if nvim_get_redraw_cmdline() || nvim_get_clear_cmdline() || nvim_get_redraw_mode() {
+            nvim_showmode_wrapper();
+        }
+    }
+
+    nvim_curbuf_set_b_last_used();
+
+    // Display message after redraw.
+    if nvim_get_keep_msg_not_null() {
+        nvim_keep_msg_display_and_free();
+    }
+
+    // Show fileinfo after redraw.
+    if nvim_get_need_fileinfo() && !nvim_shortmess_fileinfo() {
+        nvim_fileinfo_call();
+        nvim_set_need_fileinfo(false);
+    }
+
+    nvim_set_emsg_on_display(false); // can delete error message now
+    nvim_set_did_emsg(false);
+    nvim_set_msg_didany(false); // reset lines_left in msg_start()
+    nvim_may_clear_sb_text_call(); // clear scroll-back text on next msg
+
+    nvim_setcursor_wrapper();
+}
+
+/// Rust implementation of normal_need_redraw_mode_message.
+///
+/// Returns true if we need to wait before showing the mode message.
+///
+/// # Safety
+/// `s` must be a valid NormalState pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle) -> bool {
+    let ca = nvim_ns_get_ca_ptr(s);
+    let oa = nvim_ns_get_oa_ptr(s);
+
+    (
+        // 'showmode' is set and messages can be printed
+        (nvim_get_p_smd() != 0
+            && nvim_get_msg_silent() == 0
+            // must restart insert mode or just entered visual mode
+            && (nvim_get_restart_edit() != 0
+                || (nvim_get_VIsual_active() != 0
+                    && nvim_ns_get_old_pos_lnum(s) == nvim_get_cursor_lnum()
+                    && nvim_ns_get_old_pos_col(s) == nvim_get_cursor_col()))
+            // command-line must be cleared or redrawn
+            && (nvim_get_clear_cmdline() || nvim_get_redraw_cmdline())
+            // some message was printed or scrolled
+            && (nvim_get_msg_didout() || (nvim_get_msg_didany() && nvim_get_msg_scroll_val()))
+            // it is fine to remove the current message
+            && !nvim_get_msg_nowait_val()
+            // the command was the result of direct user input and not a mapping
+            && nvim_get_KeyTyped())
+            // must restart insert mode, not in visual mode and error message showing
+            || (nvim_get_restart_edit() != 0
+                && nvim_get_VIsual_active() == 0
+                && nvim_get_msg_scroll_val()
+                && nvim_get_emsg_on_display())
+    )
+    // no register was used
+    && nvim_oap_get_regname_ptr(oa) == 0
+    && (nvim_cap_get_retval(ca) & CA_COMMAND_BUSY == 0)
+    && nvim_stuff_empty()
+    && nvim_typebuf_typed_wrapper()
+    && nvim_get_emsg_silent() == 0
+    && !nvim_get_in_assert_fails()
+    && !nvim_get_did_wait_return_val()
+    && nvim_oap_get_op_type_ptr(oa) == OP_NOP
+}
+
+/// Rust implementation of normal_redraw_mode_message.
+///
+/// Waits for user input before the mode message is drawn.
+///
+/// # Safety
+/// `s` must be a valid NormalState pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
+    let save_state = nvim_get_State();
+
+    // Draw the cursor with the right shape here
+    if nvim_get_restart_edit() != 0 {
+        nvim_set_State(MODE_INSERT);
+    }
+
+    // If need to redraw and there is a keep_msg, redraw before the delay
+    nvim_redraw_mode_msg_keep_msg();
+
+    nvim_setcursor_wrapper();
+    nvim_ui_cursor_shape_wrapper(); // show different cursor shape
+    nvim_ui_flush_wrapper();
+    if !nvim_ui_has_messages() && (nvim_get_msg_scroll_val() || nvim_get_emsg_on_display()) {
+        nvim_os_delay_wrapper(1003, true); // wait at least one second
+    }
+    if nvim_ui_has_messages() {
+        nvim_os_delay_wrapper(3003, false); // wait up to three seconds
+    }
+    nvim_set_State(save_state);
+
+    nvim_set_msg_scroll_val(false);
+    nvim_set_emsg_on_display(false);
 }
 
 /// Rust implementation of normal_prepare.
@@ -352,7 +527,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
         }
 
         normal_check_folds(s);
-        nvim_normal_redraw_impl(s);
+        rs_normal_redraw(s);
         nvim_set_do_redraw(false);
 
         // Now that we have drawn the first screen all the startup stuff

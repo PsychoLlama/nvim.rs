@@ -457,6 +457,9 @@ extern int rs_normal_execute(void *s, int key);
 extern void rs_normal_prepare(void *s);
 extern bool rs_normal_get_command_count(void *s);
 extern bool rs_normal_handle_special_visual_command(void *s);
+extern bool rs_normal_need_redraw_mode_message(void *s);
+extern void rs_normal_redraw_mode_message(void *s);
+extern void rs_normal_redraw(void *s);
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 
 // Operator/command helpers
@@ -1701,87 +1704,7 @@ void normal_enter(bool cmdwin, bool noexmode)
 
 static bool normal_need_additional_char(NormalState *s) { bool pending_op = s->oa.op_type != OP_NOP; return rs_need_additional_char(s->idx, s->ca.cmdchar, pending_op); }
 
-static bool normal_need_redraw_mode_message(NormalState *s)
-{
-  // In Visual mode and with "^O" in Insert mode, a short message will be
-  // overwritten by the mode message.  Wait a bit, until a key is hit.
-  // In Visual mode, it's more important to keep the Visual area updated
-  // than keeping a message (e.g. from a /pat search).
-  // Only do this if the command was typed, not from a mapping.
-  // Don't wait when emsg_silent is non-zero.
-  // Also wait a bit after an error message, e.g. for "^O:".
-  // Don't redraw the screen, it would remove the message.
-  return (
-          // 'showmode' is set and messages can be printed
-          ((p_smd && msg_silent == 0
-            // must restart insert mode (ctrl+o or ctrl+l) or just entered visual mode
-            && (restart_edit != 0 || (VIsual_active
-                                      && s->old_pos.lnum == curwin->w_cursor.lnum
-                                      && s->old_pos.col == curwin->w_cursor.col))
-            // command-line must be cleared or redrawn
-            && (clear_cmdline || redraw_cmdline)
-            // some message was printed or scrolled
-            && (msg_didout || (msg_didany && msg_scroll))
-            // it is fine to remove the current message
-            && !msg_nowait
-            // the command was the result of direct user input and not a mapping
-            && KeyTyped)
-           // must restart insert mode, not in visual mode and error message is
-           // being shown
-           || (restart_edit != 0 && !VIsual_active && msg_scroll
-               && emsg_on_display))
-          // no register was used
-          && s->oa.regname == 0
-          && !(s->ca.retval & CA_COMMAND_BUSY)
-          && stuff_empty()
-          && typebuf_typed()
-          && emsg_silent == 0
-          && !in_assert_fails
-          && !did_wait_return
-          && s->oa.op_type == OP_NOP);
-}
-
-static void normal_redraw_mode_message(NormalState *s)
-{
-  int save_State = State;
-
-  // Draw the cursor with the right shape here
-  if (restart_edit != 0) {
-    State = MODE_INSERT;
-  }
-
-  // If need to redraw, and there is a "keep_msg", redraw before the
-  // delay
-  if (must_redraw && keep_msg != NULL && !emsg_on_display) {
-    char *kmsg;
-
-    kmsg = keep_msg;
-    keep_msg = NULL;
-    // Showmode() will clear keep_msg, but we want to use it anyway.
-    // First update w_topline.
-    setcursor();
-    update_screen();
-    // now reset it, otherwise it's put in the history again
-    keep_msg = kmsg;
-
-    kmsg = xstrdup(keep_msg);
-    msg(kmsg, keep_msg_hl_id);
-    xfree(kmsg);
-  }
-  setcursor();
-  ui_cursor_shape();                  // show different cursor shape
-  ui_flush();
-  if (!ui_has(kUIMessages) && (msg_scroll || emsg_on_display)) {
-    os_delay(1003, true);            // wait at least one second
-  }
-  if (ui_has(kUIMessages)) {
-    os_delay(3003, false);           // wait up to three seconds
-  }
-  State = save_State;
-
-  msg_scroll = false;
-  emsg_on_display = false;
-}
+// normal_need_redraw_mode_message and normal_redraw_mode_message migrated to Rust (Phase 5)
 
 // =============================================================================
 // normal_get_additional_char accessors for Rust FFI
@@ -1914,9 +1837,145 @@ int nvim_typebuf_maplen_wrapper(void) { return typebuf_maplen(); }
 
 void nvim_do_pending_operator_call(cmdarg_T *ca, int old_col, bool gui_yank) { do_pending_operator(ca, old_col, gui_yank); }
 
-bool nvim_normal_need_redraw_mode_message_wrapper(void *sp) { return normal_need_redraw_mode_message((NormalState *)sp); }
+// Phase 5 accessors for normal_need_redraw_mode_message, normal_redraw_mode_message,
+// and normal_redraw (all three migrated to Rust)
 
-void nvim_normal_redraw_mode_message_wrapper(void *sp) { normal_redraw_mode_message((NormalState *)sp); }
+// nvim_get_p_smd already defined at line 977
+
+/// Get msg_silent global.
+int nvim_get_msg_silent(void) { return msg_silent; }
+
+/// Get clear_cmdline global.
+bool nvim_get_clear_cmdline(void) { return clear_cmdline; }
+
+/// Get redraw_cmdline global.
+bool nvim_get_redraw_cmdline(void) { return redraw_cmdline; }
+
+/// Get msg_didout global.
+bool nvim_get_msg_didout(void) { return msg_didout; }
+
+/// Get msg_didany global.
+bool nvim_get_msg_didany(void) { return msg_didany; }
+
+/// Get msg_scroll global.
+bool nvim_get_msg_scroll_val(void) { return msg_scroll; }
+
+/// Set msg_scroll global.
+void nvim_set_msg_scroll_val(bool val) { msg_scroll = val; }
+
+/// Get msg_nowait global.
+bool nvim_get_msg_nowait_val(void) { return msg_nowait; }
+
+/// Get emsg_on_display global.
+bool nvim_get_emsg_on_display(void) { return emsg_on_display; }
+
+/// Set emsg_on_display global.
+void nvim_set_emsg_on_display(bool val) { emsg_on_display = val; }
+
+/// Get emsg_silent global.
+int nvim_get_emsg_silent(void) { return emsg_silent; }
+
+/// Get in_assert_fails global.
+bool nvim_get_in_assert_fails(void) { return in_assert_fails; }
+
+/// Get did_wait_return global.
+bool nvim_get_did_wait_return_val(void) { return did_wait_return; }
+
+/// Get typebuf_typed() result.
+bool nvim_typebuf_typed_wrapper(void) { return typebuf_typed(); }
+
+/// Get s->old_pos.col.
+int nvim_ns_get_old_pos_col(void *s) { return NS(s)->old_pos.col; }
+
+/// Get curwin->w_cursor.lnum.
+int nvim_get_cursor_lnum(void) { return curwin->w_cursor.lnum; }
+
+/// Get curwin->w_cursor.col.
+int nvim_get_cursor_col(void) { return curwin->w_cursor.col; }
+
+// For normal_redraw_mode_message
+/// Get must_redraw global.
+int nvim_get_must_redraw(void) { return must_redraw; }
+
+/// Get keep_msg != NULL.
+bool nvim_get_keep_msg_not_null(void) { return keep_msg != NULL; }
+
+/// Copy keep_msg, display via msg(), free the copy.
+/// Sets msg_hist_off true around the call to prevent history recording.
+void nvim_keep_msg_display_and_free(void)
+{
+  char *p = xstrdup(keep_msg);
+  msg_hist_off = true;
+  msg(p, keep_msg_hl_id);
+  msg_hist_off = false;
+  xfree(p);
+}
+
+/// Get need_fileinfo global.
+bool nvim_get_need_fileinfo(void) { return need_fileinfo; }
+
+/// Set need_fileinfo global.
+void nvim_set_need_fileinfo(bool val) { need_fileinfo = val; }
+
+/// Check shortmess(SHM_FILEINFO).
+bool nvim_shortmess_fileinfo(void) { return shortmess(SHM_FILEINFO); }
+
+/// fileinfo(false, true, false) call.
+void nvim_fileinfo_call(void) { fileinfo(false, true, false); }
+
+/// Set did_emsg global.
+void nvim_set_did_emsg(bool val) { did_emsg = val; }
+
+/// Set msg_didany global.
+void nvim_set_msg_didany(bool val) { msg_didany = val; }
+
+/// may_clear_sb_text() call.
+void nvim_may_clear_sb_text_call(void) { may_clear_sb_text(); }
+
+/// show_cursor_info_later(false) call.
+void nvim_show_cursor_info_later(void) { show_cursor_info_later(false); }
+
+/// update_screen() call.
+void nvim_update_screen_call(void) { update_screen(); }
+
+/// redraw_statuslines() call.
+void nvim_redraw_statuslines_call(void) { redraw_statuslines(); }
+
+/// Set curbuf->b_last_used to time(NULL).
+void nvim_curbuf_set_b_last_used(void) { curbuf->b_last_used = time(NULL); }
+
+/// Get ui_has(kUIMessages).
+bool nvim_ui_has_messages(void) { return ui_has(kUIMessages); }
+
+/// Compound: display keep_msg if must_redraw and not emsg_on_display.
+/// This wraps the "if (must_redraw && keep_msg != NULL && !emsg_on_display)"
+/// block in normal_redraw_mode_message.
+void nvim_redraw_mode_msg_keep_msg(void)
+{
+  if (must_redraw && keep_msg != NULL && !emsg_on_display) {
+    char *kmsg = keep_msg;
+    keep_msg = NULL;
+    setcursor();
+    update_screen();
+    keep_msg = kmsg;
+    kmsg = xstrdup(keep_msg);
+    msg(kmsg, keep_msg_hl_id);
+    xfree(kmsg);
+  }
+}
+
+/// Get State global.
+int nvim_get_State(void) { return State; }
+
+/// Get redraw_mode global.
+bool nvim_get_redraw_mode(void) { return redraw_mode; }
+
+/// os_delay(ms, can_interrupt) wrapper.
+void nvim_os_delay_wrapper(int ms, bool can_interrupt) { os_delay(ms, can_interrupt); }
+
+// Wrappers removed (migrated to Rust in Phase 5):
+// nvim_normal_need_redraw_mode_message_wrapper → Rust normal_need_redraw_mode_message
+// nvim_normal_redraw_mode_message_wrapper → Rust normal_redraw_mode_message
 
 /// ui_cursor_shape() wrapper.
 void nvim_ui_cursor_shape_wrapper(void) { ui_cursor_shape(); }
@@ -2030,53 +2089,7 @@ static int normal_execute(VimState *state, int key) { return rs_normal_execute((
 
 // normal_check_safe_state, normal_check_folds migrated to Rust (Phase 4)
 
-static void normal_redraw(NormalState *s)
-{
-  // Before redrawing, make sure w_topline is correct, and w_leftcol
-  // if lines don't wrap, and w_skipcol if lines wrap.
-  update_topline(curwin);
-  validate_cursor(curwin);
-
-  show_cursor_info_later(false);
-
-  if (must_redraw) {
-    update_screen();
-  } else {
-    redraw_statuslines();
-    if (redraw_cmdline || clear_cmdline || redraw_mode) {
-      showmode();
-    }
-  }
-
-  curbuf->b_last_used = time(NULL);
-
-  // Display message after redraw.
-  if (keep_msg != NULL) {
-    char *const p = xstrdup(keep_msg);
-
-    // msg_start() will set keep_msg to NULL, make a copy
-    // first.  Don't reset keep_msg, msg_attr_keep() uses it to
-    // check for duplicates.  Never put this message in
-    // history.
-    msg_hist_off = true;
-    msg(p, keep_msg_hl_id);
-    msg_hist_off = false;
-    xfree(p);
-  }
-
-  // show fileinfo after redraw
-  if (need_fileinfo && !shortmess(SHM_FILEINFO)) {
-    fileinfo(false, true, false);
-    need_fileinfo = false;
-  }
-
-  emsg_on_display = false;  // can delete error message now
-  did_emsg = false;
-  msg_didany = false;  // reset lines_left in msg_start()
-  may_clear_sb_text();  // clear scroll-back text on next msg
-
-  setcursor();
-}
+// normal_redraw migrated to Rust (Phase 5) -- see check.rs
 
 // =============================================================================
 // normal_check accessors for Rust FFI
@@ -2244,7 +2257,7 @@ void nvim_curbuf_b_changed_invalid_clear(void) { curbuf->b_changed_invalid = fal
 // nvim_normal_check_text_changed_impl → Rust normal_check_text_changed
 // nvim_normal_check_buffer_modified_impl → Rust normal_check_buffer_modified
 
-void nvim_normal_redraw_impl(void *sp) { normal_redraw((NormalState *)sp); }
+// nvim_normal_redraw_impl removed (migrated to Rust in Phase 5: rs_normal_redraw)
 
 static int normal_check(VimState *state) { return rs_normal_check((NormalState *)state); }
 

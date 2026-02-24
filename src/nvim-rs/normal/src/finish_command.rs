@@ -68,8 +68,8 @@ extern "C" {
     fn nvim_set_reg_var_default();
     fn nvim_typebuf_maplen_wrapper() -> c_int;
     fn nvim_do_pending_operator_call(ca: CapHandle, old_col: c_int, gui_yank: bool);
-    fn nvim_normal_need_redraw_mode_message_wrapper(s: NormalStateHandle) -> bool;
-    fn nvim_normal_redraw_mode_message_wrapper(s: NormalStateHandle);
+    fn rs_normal_need_redraw_mode_message(s: NormalStateHandle) -> bool;
+    fn rs_normal_redraw_mode_message(s: NormalStateHandle);
     fn nvim_may_trigger_modechanged();
     fn nvim_ui_cursor_shape_wrapper();
     fn rs_clear_showcmd();
@@ -135,8 +135,8 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
 
         // Wait for a moment when a message is displayed that will be
         // overwritten by the mode message.
-        if nvim_normal_need_redraw_mode_message_wrapper(s) {
-            nvim_normal_redraw_mode_message_wrapper(s);
+        if rs_normal_need_redraw_mode_message(s) {
+            rs_normal_redraw_mode_message(s);
         }
     }
     // normal_end:
