@@ -169,11 +169,7 @@ unsafe fn close_others_impl(message: c_int, forceit: c_int) {
             }
         }
 
-        let free_buf = if nvim_win_buf_hide(wp) == 0 && nvim_win_bufIsChanged(wp) == 0 {
-            1
-        } else {
-            0
-        };
+        let free_buf = i32::from(nvim_win_buf_hide(wp) == 0 && nvim_win_bufIsChanged(wp) == 0);
         nvim_win_close_wrapper(wp, free_buf);
 
         // After closing a window, restart from firstwin since autocommands

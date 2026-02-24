@@ -460,7 +460,7 @@ unsafe fn handle_internal_float(wp: WinHandle, validate: bool) {
 static DO_AUTOCMD_WINCLOSED_RECURSIVE: AtomicBool = AtomicBool::new(false);
 
 extern "C" {
-        /// Check whether EVENT_WINCLOSED has any autocmds registered.
+    /// Check whether EVENT_WINCLOSED has any autocmds registered.
     fn nvim_has_event_winclosed() -> c_int;
 
     /// Apply WinClosed autocmds for window `win`.
@@ -530,9 +530,9 @@ extern "C" {
     fn nvim_win_get_topline(wp: WinHandle) -> i32;
     fn nvim_win_get_botline(wp: WinHandle) -> i32;
     fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
-    fn nvim_win_get_skipcol(wp: WinHandle) -> u32;
+    fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> i32;
-    fn nvim_win_get_cursor_col(wp: WinHandle) -> u32;
+    fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
     fn nvim_win_get_empty_rows(wp: WinHandle) -> c_int;
     fn nvim_win_get_viewport_invalid(wp: WinHandle) -> c_int;
     fn nvim_win_set_viewport_invalid(wp: WinHandle, val: c_int);
@@ -599,24 +599,24 @@ unsafe fn ui_ext_win_viewport_impl(wp: WinHandle) {
 
     let mut delta: i64 = 0;
 
-    let mut last_topline = nvim_win_get_viewport_last_topline(wp);
+    let raw_last_topline = nvim_win_get_viewport_last_topline(wp);
     let mut last_botline = nvim_win_get_viewport_last_botline(wp);
-    let mut last_topfill = nvim_win_get_viewport_last_topfill(wp);
-    let mut last_skipcol = nvim_win_get_viewport_last_skipcol(wp);
 
-    if last_topline > line_count {
-        delta -= i64::from(last_topline - line_count);
-        last_topline = line_count;
-        last_topfill = 0;
-        last_skipcol = MAXCOL;
-    }
+    let (last_topline, last_topfill, last_skipcol) = if raw_last_topline > line_count {
+        delta -= i64::from(raw_last_topline - line_count);
+        (line_count, 0_i32, MAXCOL)
+    } else {
+        (
+            raw_last_topline,
+            nvim_win_get_viewport_last_topfill(wp),
+            nvim_win_get_viewport_last_skipcol(wp),
+        )
+    };
     last_botline = last_botline.min(line_count);
 
     let skipcol = i64::from(nvim_win_get_skipcol(wp));
 
-    if cur_topline < last_topline
-        || (cur_topline == last_topline && skipcol < last_skipcol)
-    {
+    if cur_topline < last_topline || (cur_topline == last_topline && skipcol < last_skipcol) {
         let mut vcole: i64 = last_skipcol;
         let mut lnume: c_int = last_topline;
         if last_topline > 0 && cur_botline < last_topline {
@@ -634,8 +634,7 @@ unsafe fn ui_ext_win_viewport_impl(wp: WinHandle) {
             std::ptr::null_mut(),
             i64::MAX,
         );
-    } else if cur_topline > last_topline
-        || (cur_topline == last_topline && skipcol > last_skipcol)
+    } else if cur_topline > last_topline || (cur_topline == last_topline && skipcol > last_skipcol)
     {
         let mut vcole: i64 = skipcol;
         let mut lnume: c_int = cur_topline;
@@ -674,10 +673,7 @@ unsafe fn ui_ext_win_viewport_impl(wp: WinHandle) {
         nvim_win_get_topline(wp) - 1,
         ev_botline,
         nvim_win_get_cursor_lnum(wp) - 1,
-        #[allow(clippy::cast_possible_wrap)]
-        {
-            nvim_win_get_cursor_col(wp) as c_int
-        },
+        nvim_win_get_cursor_col(wp),
         line_count,
         delta,
     );

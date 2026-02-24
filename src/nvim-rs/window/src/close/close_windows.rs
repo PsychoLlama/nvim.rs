@@ -118,7 +118,9 @@ unsafe fn close_windows_impl(buf: BufHandle, keep_curwin: c_int) {
         let nexttp = nvim_tabpage_get_next(tp);
 
         let curtab = nvim_get_curtab();
-        if tp != curtab {
+        if tp == curtab {
+            tp = nexttp;
+        } else {
             // Start from tp_lastwin to close floating windows with the same buffer first.
             let mut inner_wp = nvim_tabpage_get_lastwin(tp);
             let mut restarted = false;
@@ -143,8 +145,6 @@ unsafe fn close_windows_impl(buf: BufHandle, keep_curwin: c_int) {
             if !restarted {
                 tp = nexttp;
             }
-        } else {
-            tp = nexttp;
         }
     }
 
