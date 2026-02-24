@@ -277,6 +277,9 @@ extern void rs_ml_setflags(buf_T *buf);
 extern void rs_swapfile_dict(const char *fname, dict_T *d);
 // Pass 3 Phase 2: swapfile_info Rust function declaration
 extern int64_t rs_swapfile_info(char *fname, void *sb, int *proc_running_out);
+// Pass 3 Phase 3: ml_replace_buf_len Rust function declaration
+extern int rs_ml_replace_buf_len(buf_T *buf, linenr_T lnum, char *line_arg, size_t len_arg,
+                                  bool copy, bool noalloc);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1471,6 +1474,18 @@ char *nvim_buf_get_ml_mfp_fname(buf_T *buf)
 }
 char *nvim_get_p_dir(void) { return p_dir; }
 
+// Pass 3 Phase 3: ml_replace_buf_len accessors
+void nvim_buf_set_ml_line_ptr(buf_T *buf, char *ptr) { buf->b_ml.ml_line_ptr = ptr; }
+void nvim_buf_set_ml_line_lnum(buf_T *buf, linenr_T lnum) { buf->b_ml.ml_line_lnum = lnum; }
+/// open_buffer() if ml_mfp is NULL. Returns FAIL if it fails.
+int nvim_buf_open_buffer_if_needed(buf_T *buf)
+{
+  if (buf->b_ml.ml_mfp == NULL) {
+    return open_buffer(false, NULL, 0);
+  }
+  return OK;
+}
+
 // Print swapfile info (wraps swapfile_info which uses StringBuilder internally)
 void nvim_swapfile_info_and_print(char *fname)
 {
@@ -2304,7 +2319,7 @@ int ml_replace_buf(buf_T *buf, linenr_T lnum, char *line, bool copy, bool noallo
   FUNC_ATTR_NONNULL_ARG(1)
 {
   size_t len = line != NULL ? strlen(line) : (size_t)-1;
-  return ml_replace_buf_len(buf, lnum, line, len, copy, noalloc);
+  return rs_ml_replace_buf_len(buf, lnum, line, len, copy, noalloc);
 }
 
 /// Replace line "lnum", with buffering.
@@ -2324,49 +2339,7 @@ int ml_replace_buf_len(buf_T *buf, linenr_T lnum, char *line_arg, size_t len_arg
                        bool noalloc)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  char *line = line_arg;
-  colnr_T len = (colnr_T)len_arg;
-
-  if (line == NULL) {           // just checking...
-    return FAIL;
-  }
-
-  // When starting up, we might still need to create the memfile
-  if (buf->b_ml.ml_mfp == NULL && open_buffer(false, NULL, 0) == FAIL) {
-    return FAIL;
-  }
-
-  if (copy) {
-    assert(!noalloc);
-    line = xmemdupz(line, len_arg);
-  }
-
-  if (buf->b_ml.ml_line_lnum != lnum) {
-    // another line is buffered, flush it
-    ml_flush_line(buf, false);
-  }
-
-  if (kv_size(buf->update_callbacks)) {
-    ml_add_deleted_len_buf(buf, ml_get_buf(buf, lnum), -1);
-  }
-
-  if (buf->b_ml.ml_flags & (ML_LINE_DIRTY | ML_ALLOCATED)) {
-    xfree(buf->b_ml.ml_line_ptr);  // free allocated line
-  }
-
-  buf->b_ml.ml_line_ptr = line;
-  buf->b_ml.ml_line_len = len + 1;
-  buf->b_ml.ml_line_lnum = lnum;
-  buf->b_ml.ml_flags = (buf->b_ml.ml_flags | ML_LINE_DIRTY) & ~ML_EMPTY;
-  if (noalloc) {
-    // TODO(bfredl): this is a bit of a hack. but replacing lines in a loop is really common,
-    // and allocating a separate scratch buffer for each line which is immediately freed adds
-    // a lot of noise. A more general refactor could be to use a _fixed_ scratch buffer for
-    // all lines up to $REASONABLE_SIZE .
-    ml_flush_line(buf, true);
-  }
-
-  return OK;
+  return rs_ml_replace_buf_len(buf, lnum, line_arg, len_arg, copy, noalloc);
 }
 
 /// Delete line `lnum` in buffer

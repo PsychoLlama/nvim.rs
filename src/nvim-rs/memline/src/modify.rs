@@ -170,6 +170,34 @@ extern "C" {
 
     /// Reallocate memory
     fn xrealloc(ptr: *mut std::ffi::c_void, size: usize) -> *mut std::ffi::c_void;
+
+    // -------------------------------------------------------------------------
+    // Pass 3 Phase 3: ml_replace_buf_len accessors
+    // -------------------------------------------------------------------------
+
+    /// Set buffer's cached line pointer (`buf->b_ml.ml_line_ptr = ptr`)
+    fn nvim_buf_set_ml_line_ptr(buf: *mut BufHandle, ptr: *mut c_char);
+
+    /// Set buffer's cached line number (`buf->b_ml.ml_line_lnum = lnum`)
+    fn nvim_buf_set_ml_line_lnum(buf: *mut BufHandle, lnum: LineNr);
+
+    /// Get number of update callbacks for a buffer
+    fn nvim_buf_get_update_callbacks_size(buf: *mut BufHandle) -> usize;
+
+    /// Open the buffer's memfile if needed; returns FAIL if open_buffer fails
+    fn nvim_buf_open_buffer_if_needed(buf: *mut BufHandle) -> c_int;
+
+    /// Get a line from a specific buffer (C implementation)
+    fn ml_get_buf(buf: *mut BufHandle, lnum: LineNr) -> *mut c_char;
+
+    /// Duplicate a memory region, NUL-terminated (xmalloc + memcpy + NUL)
+    fn xmemdupz(data: *const c_void, len: usize) -> *mut c_void;
+
+    /// Get buffer's cached line length (`buf->b_ml.ml_line_len`)
+    fn nvim_buf_get_ml_line_len(buf: *mut BufHandle) -> ColNr;
+
+    /// Set buffer's cached line length (`buf->b_ml.ml_line_len = len`)
+    fn nvim_buf_set_ml_line_len(buf: *mut BufHandle, len: ColNr);
 }
 
 // =============================================================================
@@ -415,6 +443,90 @@ pub unsafe extern "C" fn rs_ml_replace_buf(
         return 0; // FAIL
     }
     ml_replace_buf(buf, lnum, line, copy, noalloc)
+}
+
+// OK and FAIL constants (matching C vim_defs.h)
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+/// Replace line `lnum` in buffer `buf` with explicit text length.
+///
+/// This is the Rust port of the C `ml_replace_buf_len` function.
+///
+/// # Arguments
+/// * `buf` - Buffer to modify
+/// * `lnum` - Line number to replace (1-based)
+/// * `line_arg` - New line text
+/// * `len_arg` - Length of `line_arg`, excluding NUL
+/// * `copy` - If true, make a copy of `line_arg` via `xmemdupz`
+/// * `noalloc` - If true, flush the line immediately via `ml_flush_line(buf, true)`
+///
+/// # Returns
+/// OK (1) on success, FAIL (0) on failure
+///
+/// # Safety
+/// - `buf` must be a valid buffer pointer
+/// - `line_arg` must point to at least `len_arg` bytes
+/// - If `copy` is false, the caller must not use `line_arg` after this call
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+pub unsafe extern "C" fn rs_ml_replace_buf_len(
+    buf: *mut BufHandle,
+    lnum: LineNr,
+    line_arg: *mut c_char,
+    len_arg: usize,
+    copy: c_int,
+    noalloc: c_int,
+) -> c_int {
+    if line_arg.is_null() {
+        return FAIL;
+    }
+
+    // When starting up, might still need to create the memfile
+    if nvim_buf_open_buffer_if_needed(buf) == FAIL {
+        return FAIL;
+    }
+
+    let mut line = line_arg;
+    let len = len_arg as ColNr;
+
+    if copy != 0 {
+        // assert(!noalloc) is guaranteed by the caller
+        line = xmemdupz(line_arg.cast(), len_arg).cast::<c_char>();
+    }
+
+    if nvim_buf_get_ml_line_lnum(buf) != lnum {
+        // Another line is buffered - flush it
+        ml_flush_line(buf, 0);
+    }
+
+    if nvim_buf_get_update_callbacks_size(buf) > 0 {
+        // Track deleted bytes for update callbacks
+        let current_line = ml_get_buf(buf, lnum);
+        rs_ml_add_deleted_len_buf(buf, current_line, -1);
+    }
+
+    let flags = nvim_buf_get_ml_flags(buf);
+    if (flags & (ML_LINE_DIRTY | ML_ALLOCATED)) != 0 {
+        // Free previously allocated line
+        xfree(nvim_buf_get_ml_line_ptr(buf).cast());
+    }
+
+    nvim_buf_set_ml_line_ptr(buf, line);
+    nvim_buf_set_ml_line_len(buf, len + 1);
+    nvim_buf_set_ml_line_lnum(buf, lnum);
+    let new_flags = (nvim_buf_get_ml_flags(buf) | ML_LINE_DIRTY) & !ML_EMPTY;
+    nvim_buf_set_ml_flags(buf, new_flags);
+
+    if noalloc != 0 {
+        ml_flush_line(buf, 1);
+    }
+
+    OK
 }
 
 // =============================================================================
