@@ -935,6 +935,53 @@ pub unsafe extern "C" fn rs_win_split_ins(
     win_split_ins_impl(size, flags, new_wp, dir, to_flatten)
 }
 
+/// FFI: Full win_split_ins entry point — absorbs post-processing from C wrapper.
+///
+/// Computes oldwin, calls the core implementation, then performs:
+/// - `rs_win_enter_ext` if needed,
+/// - restores `p_wiw` or `p_wh`,
+/// - sets `oldwin->w_pos_changed`.
+///
+/// Returns the new window handle, or null on failure.
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_win_split_ins_full(
+    size: c_int,
+    flags: c_int,
+    new_wp: WinHandle,
+    dir: c_int,
+    to_flatten: *mut Frame,
+) -> WinHandle {
+    extern "C" {
+        fn rs_win_enter_ext(wp: WinHandle, flags: c_int);
+    }
+
+    let oldwin = get_oldwin(flags);
+    let res = win_split_ins_impl(size, flags, new_wp, dir, to_flatten);
+    if res.wp.is_null() {
+        return WinHandle::null();
+    }
+
+    if res.do_enter != 0 {
+        rs_win_enter_ext(res.wp, res.enter_flags);
+    }
+
+    // Restore p_wiw or p_wh.
+    if res.vertical != 0 {
+        nvim_set_p_wiw(i64::from(res.saved_option));
+    } else {
+        nvim_set_p_wh(i64::from(res.saved_option));
+    }
+
+    if rs_win_valid(oldwin) != 0 {
+        nvim_win_set_pos_changed(oldwin, 1);
+    }
+
+    res.wp
+}
+
 // =============================================================================
 // Phase 2: win_split and win_splitmove orchestration
 // =============================================================================

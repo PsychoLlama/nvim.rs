@@ -187,6 +187,10 @@ extern void rs_win_exchange(int prenum);
 extern void rs_win_rotate(int upwards, int count);
 extern void rs_win_move_after(win_T *win1, win_T *win2);
 
+// Phase 1: rs_win_split_ins_full absorbs C post-processing
+extern win_T *rs_win_split_ins_full(int size, int flags, win_T *new_wp, int dir,
+                                    frame_T *to_flatten);
+
 // Snapshot lifecycle
 extern void rs_clear_snapshot(tabpage_T *tp, int idx);
 extern void rs_make_snapshot(int idx);
@@ -621,14 +625,6 @@ void nvim_set_cmdheight_option(int64_t new_ch)
 
 extern void rs_win_equal(win_T *next_curwin, int current, int dir);
 
-static void cmd_with_count(char *cmd, char *bufp, size_t bufsize, int64_t Prenum)
-{
-  size_t len = xstrlcpy(bufp, cmd, bufsize);
-
-  if (Prenum > 0 && len < bufsize) {
-    vim_snprintf(bufp + len, bufsize - len, "%" PRId64, Prenum);
-  }
-}
 
 void win_set_buf(win_T *win, buf_T *buf, Error *err)
   FUNC_ATTR_NONNULL_ALL
@@ -807,33 +803,7 @@ int win_split(int size, int flags)
 /// @return  NULL for failure, or pointer to new window
 win_T *win_split_ins(int size, int flags, win_T *new_wp, int dir, frame_T *to_flatten)
 {
-  win_T *oldwin;
-  if (flags & WSP_TOP) {
-    oldwin = firstwin;
-  } else if (flags & WSP_BOT || curwin->w_floating) {
-    oldwin = rs_lastwin_nofloating();
-  } else {
-    oldwin = curwin;
-  }
-
-  SplitInsResult res = rs_win_split_ins(size, flags, new_wp, dir, to_flatten);
-  if (res.wp == NULL) {
-    return NULL;
-  }
-
-  if (res.do_enter) {
-    win_enter_ext(res.wp, res.enter_flags);
-  }
-  // restore p_wiw or p_wh
-  if (res.vertical) {
-    p_wiw = res.saved_option;
-  } else {
-    p_wh = res.saved_option;
-  }
-  if (rs_win_valid(oldwin)) {
-    oldwin->w_pos_changed = true;
-  }
-  return res.wp;
+  return rs_win_split_ins_full(size, flags, new_wp, dir, to_flatten);
 }
 
 // Initialize window "newp" from window "oldp".
@@ -930,18 +900,6 @@ int make_windows(int count, bool vertical)
   return rs_make_windows(count, vertical ? 1 : 0);
 }
 
-// Exchange current and next window — implemented in Rust (rs_win_exchange).
-static void win_exchange(int Prenum)
-{
-  rs_win_exchange(Prenum);
-}
-
-// rotate windows: if upwards true the second window becomes the first one
-//                 if upwards false the first window becomes the second one
-static void win_rotate(bool upwards, int count)
-{
-  rs_win_rotate(upwards ? 1 : 0, count);
-}
 
 /// Move "wp" into a new split in a given direction, possibly relative to the
 /// current window.
@@ -2954,7 +2912,6 @@ frame_T *nvim_win_get_frame_parent(win_T *wp) { return (wp && wp->w_frame) ? wp-
 
 buf_T *nvim_get_firstbuf_wrapper(void) { return firstbuf; }
 int nvim_can_close_floating_windows(tabpage_T *tp) { return can_close_floating_windows(tp) ? 1 : 0; }
-void nvim_win_exchange_wrapper(int Prenum) { win_exchange(Prenum); }
 unsigned nvim_get_swb_flags(void) { return swb_flags; }
 void nvim_win_goto_wrapper(win_T *wp) { win_goto(wp); }
 int nvim_win_split_wrapper(int size, int flags) { return win_split(size, flags); }
