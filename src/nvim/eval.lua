@@ -2965,6 +2965,7 @@ M.funcs = {
       line, "'m" mark m, etc.
 
     ]=],
+    func = 'rs_f_foldclosed',
     name = 'foldclosed',
     params = { { 'lnum', 'integer|string' } },
     returns = 'integer',
@@ -2981,6 +2982,7 @@ M.funcs = {
       line, "'m" mark m, etc.
 
     ]=],
+    func = 'rs_f_foldclosedend',
     name = 'foldclosedend',
     params = { { 'lnum', 'integer|string' } },
     returns = 'integer',
@@ -3002,6 +3004,7 @@ M.funcs = {
       line, "'m" mark m, etc.
 
     ]=],
+    func = 'rs_f_foldlevel',
     name = 'foldlevel',
     params = { { 'lnum', 'integer|string' } },
     returns = 'integer',
@@ -3025,6 +3028,7 @@ M.funcs = {
       setting.
       Returns an empty string when there is no fold.
     ]=],
+    func = 'rs_f_foldtext',
     name = 'foldtext',
     params = {},
     returns = 'string',

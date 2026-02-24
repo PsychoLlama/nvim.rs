@@ -32,4 +32,10 @@ extern int rs_foldmethodIsDiff(win_T *wp);
 extern void rs_foldUpdate(win_T *wp, linenr_T top, linenr_T bot);
 extern int rs_put_folds(FILE *fd, win_T *wp);
 
+// Rust FFI: VimL fold functions (direct Rust implementations, no C wrapper needed)
+extern void rs_f_foldclosed(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_f_foldclosedend(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_f_foldlevel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_f_foldtext(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 #include "fold_shim.h.generated.h"

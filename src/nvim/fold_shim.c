@@ -355,35 +355,7 @@ char *get_foldtext(win_T *wp, linenr_T lnum, linenr_T lnume, foldinfo_T foldinfo
 
 // foldclosed_both/f_foldclosed/f_foldclosedend/f_foldlevel/f_foldtext
 // -- migrated to Rust (lib.rs: rs_f_foldclosed, rs_f_foldclosedend, rs_f_foldlevel, rs_f_foldtext)
-
-extern void rs_f_foldclosed(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-extern void rs_f_foldclosedend(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-extern void rs_f_foldlevel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-extern void rs_f_foldtext(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-
-/// "foldclosed()" function -- thin wrapper calling Rust.
-void f_foldclosed(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_foldclosed(argvars, rettv, fptr);
-}
-
-/// "foldclosedend()" function -- thin wrapper calling Rust.
-void f_foldclosedend(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_foldclosedend(argvars, rettv, fptr);
-}
-
-/// "foldlevel()" function -- thin wrapper calling Rust.
-void f_foldlevel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_foldlevel(argvars, rettv, fptr);
-}
-
-/// "foldtext()" function -- thin wrapper calling Rust.
-void f_foldtext(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_foldtext(argvars, rettv, fptr);
-}
+// -- dispatch table wired directly to rs_* via eval.lua func = 'rs_f_*' entries
 
 /// "foldtextresult(lnum)" function
 void f_foldtextresult(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
