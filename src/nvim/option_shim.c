@@ -160,6 +160,12 @@ extern void rs_set_string_default_opt(int opt_idx, char *val, int allocated);
 extern void rs_set_init_tablocal(void);
 extern void rs_check_options(void);
 
+// Rust validate_option_value cluster (option pass 8 phase 3)
+extern OptVal rs_get_option_unset_value(int opt_idx);
+extern OptVal rs_get_option_default(int opt_idx, int opt_flags);
+extern const char *rs_validate_option_value(int opt_idx, OptVal *newval, int opt_flags,
+                                            char *errbuf, size_t errbuflen);
+
 // Rust parsing helpers and query functions (option pass 7 phase 1)
 extern int rs_get_op(const char *arg);
 extern int rs_get_option_prefix(char **argp);
@@ -1027,6 +1033,27 @@ void *nvim_get_option_varp_for_check(OptIndex opt_idx) { return get_varp(&option
 // Get the cmdheight default value as a number for set_init_tablocal
 int64_t nvim_get_cmdheight_def_number(void) { return options[kOptCmdheight].def_val.data.number; }
 
+// =============================================================================
+// Phase 8 validate_option_value cluster accessors (Phase 3)
+// =============================================================================
+// Returns 1 if the current user is root (getuid() == ROOT_UID), 0 otherwise.
+int nvim_is_root_user(void)
+{
+#ifdef UNIX
+  return getuid() == ROOT_UID ? 1 : 0;
+#else
+  return 0;
+#endif
+}
+// Returns the NO_LOCAL_UNDOLEVEL sentinel constant.
+int64_t nvim_get_no_local_undolevel(void) { return NO_LOCAL_UNDOLEVEL; }
+// Returns a static C string naming the OptValType: "nil", "boolean", "number", "string".
+const char *nvim_optval_type_get_name(int type) { return optval_type_get_name((OptValType)type); }
+// Allocates and returns a string representation of an OptVal (caller must xfree).
+char *nvim_optval_to_cstr_alloc(OptVal o) { return optval_to_cstr(o); }
+// Returns translated "Cannot unset global option value" string pointer.
+const char *nvim_errmsg_no_unset_global(void) { return _("Cannot unset global option value"); }
+
 
 // Fill offset table for buf_T option fields indexed by OptIndex.
 // Writes offsetof(buf_T, field) into out[idx] for each handled OptIndex.
@@ -1769,27 +1796,7 @@ void set_init_1(bool clean_arg)
 /// @return Default value of option for the scope specified in opt_flags.
 OptVal get_option_default(const OptIndex opt_idx, int opt_flags)
 {
-  vimoption_T *opt = &options[opt_idx];
-  bool is_global_local_option = option_is_global_local(opt_idx);
-
-#ifdef UNIX
-  if (opt_idx == kOptModeline && getuid() == ROOT_UID) {
-    // 'modeline' defaults to off for root.
-    return BOOLEAN_OPTVAL(false);
-  }
-#endif
-
-  if ((opt_flags & OPT_LOCAL) && is_global_local_option) {
-    // Use unset local value instead of default value for local scope of global-local options.
-    return get_option_unset_value(opt_idx);
-  } else if (option_has_type(opt_idx, kOptValTypeString) && !(opt->flags & kOptFlagNoDefExp)) {
-    // For string options, expand environment variables and ~ since the default value was already
-    // expanded, only required when an environment variable was set later.
-    char *s = option_expand(opt_idx, opt->def_val.data.string.data);
-    return s == NULL ? opt->def_val : CSTR_AS_OPTVAL(s);
-  } else {
-    return opt->def_val;
-  }
+  return rs_get_option_default(opt_idx, opt_flags);
 }
 
 /// Allocate the default values for all options by copying them from the stack.
@@ -2838,32 +2845,7 @@ vimoption_T *get_option(OptIndex opt_idx)
 /// @return Option value equal to the unset value for the option.
 static OptVal get_option_unset_value(OptIndex opt_idx)
 {
-  assert(opt_idx != kOptInvalid);
-  vimoption_T *opt = &options[opt_idx];
-
-  // For global-local options, use the unset value of the local value.
-  if (option_is_global_local(opt_idx)) {
-    // String global-local options always use an empty string for the unset value.
-    if (option_has_type(opt_idx, kOptValTypeString)) {
-      return STATIC_CSTR_AS_OPTVAL("");
-    }
-
-    switch (opt_idx) {
-    case kOptAutocomplete:
-    case kOptAutoread:
-      return BOOLEAN_OPTVAL(kNone);
-    case kOptScrolloff:
-    case kOptSidescrolloff:
-      return NUMBER_OPTVAL(-1);
-    case kOptUndolevels:
-      return NUMBER_OPTVAL(NO_LOCAL_UNDOLEVEL);
-    default:
-      abort();
-    }
-  }
-
-  // For options that aren't global-local, use the global value to represent an unset local value.
-  return optval_from_varp(opt_idx, get_varp_scope(opt, OPT_GLOBAL));
+  return rs_get_option_unset_value(opt_idx);
 }
 
 /// Check if local value of global-local option is unset for current buffer / window.
@@ -3064,37 +3046,7 @@ static const char *did_set_option(OptIndex opt_idx, void *varp, OptVal old_value
 static const char *validate_option_value(const OptIndex opt_idx, OptVal *newval, int opt_flags,
                                          char *errbuf, size_t errbuflen)
 {
-  const char *errmsg = NULL;
-  vimoption_T *opt = &options[opt_idx];
-
-  // Always allow unsetting local value of global-local option.
-  if (option_is_global_local(opt_idx) && (opt_flags & OPT_LOCAL)
-      && rs_optval_equal(*newval, get_option_unset_value(opt_idx)) != 0) {
-    return NULL;
-  }
-
-  if (newval->type == kOptValTypeNil) {
-    // Don't try to unset local value if scope is global.
-    // TODO(famiu): Change this to forbid changing all non-local scopes when the API scope bug is
-    // fixed.
-    if (opt_flags == OPT_GLOBAL) {
-      errmsg = _("Cannot unset global option value");
-    } else {
-      *newval = rs_optval_copy(get_option_unset_value(opt_idx));
-    }
-  } else if (!option_has_type(opt_idx, newval->type)) {
-    char *rep = optval_to_cstr(*newval);
-    const char *type_str = optval_type_get_name(opt->type);
-    snprintf(errbuf, IOSIZE, _("Invalid value for option '%s': expected %s, got %s %s"),
-             opt->fullname, type_str, optval_type_get_name(newval->type), rep);
-    xfree(rep);
-    errmsg = errbuf;
-  } else if (newval->type == kOptValTypeNumber) {
-    // Validate and bound check num option values.
-    errmsg = rs_validate_num_option(opt_idx, &newval->data.number, errbuf, errbuflen);
-  }
-
-  return errmsg;
+  return rs_validate_option_value(opt_idx, newval, opt_flags, errbuf, errbuflen);
 }
 
 /// Set the value of an option using an OptVal.

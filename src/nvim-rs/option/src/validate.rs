@@ -909,6 +909,115 @@ pub unsafe extern "C" fn rs_validate_path(path: *const c_char, flags: c_int) -> 
 }
 
 // =============================================================================
+// Phase 8: validate_option_value (Phase 3)
+// =============================================================================
+
+#[cfg(not(test))]
+use crate::index::OptIndex;
+
+#[cfg(not(test))]
+use crate::storage::OptVal;
+
+#[cfg(not(test))]
+use crate::OptValType;
+
+#[cfg(not(test))]
+extern "C" {
+    fn rs_option_is_global_local(opt_idx: OptIndex) -> c_int;
+    fn rs_get_option_unset_value(opt_idx: OptIndex) -> OptVal;
+    fn rs_optval_equal(a: OptVal, b: OptVal) -> c_int;
+    fn rs_optval_copy(o: OptVal) -> OptVal;
+    fn rs_option_has_type(opt_idx: OptIndex, type_: c_int) -> c_int;
+    fn nvim_get_option_type(opt_idx: OptIndex) -> c_int;
+    fn nvim_optval_type_get_name(type_: c_int) -> *const c_char;
+    fn nvim_optval_to_cstr_alloc(o: OptVal) -> *mut c_char;
+    fn nvim_option_get_fullname(opt_idx: OptIndex) -> *const c_char;
+    fn nvim_errmsg_no_unset_global() -> *const c_char;
+    fn rs_validate_num_option(
+        opt_idx: OptIndex,
+        newval: *mut i64,
+        errbuf: *mut c_char,
+        errbuflen: usize,
+    ) -> *const c_char;
+    fn xfree(ptr: *mut c_char);
+    fn gettext(s: *const c_char) -> *const c_char;
+}
+
+/// kOptValTypeNil constant (must match C kOptValTypeNil = -1)
+#[cfg(not(test))]
+const K_OPT_VAL_TYPE_NIL: c_int = -1;
+/// OPT_GLOBAL flag (must match C OPT_GLOBAL = 0x01)
+#[cfg(not(test))]
+const OPT_GLOBAL_VAL: c_int = 0x01;
+/// OPT_LOCAL flag (must match C OPT_LOCAL = 0x02)
+#[cfg(not(test))]
+const OPT_LOCAL_VAL: c_int = 0x02;
+
+/// Validate the new value for an option.
+///
+/// Mirrors C `validate_option_value`.
+///
+/// # Safety
+/// Calls C accessor functions. `newval` must be a valid pointer to an OptVal.
+/// `errbuf` must be a valid buffer of at least `errbuflen` bytes if non-null.
+#[cfg(not(test))]
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_option_value(
+    opt_idx: OptIndex,
+    newval: *mut OptVal,
+    opt_flags: c_int,
+    errbuf: *mut c_char,
+    errbuflen: usize,
+) -> *const c_char {
+    // Always allow unsetting local value of global-local option.
+    if rs_option_is_global_local(opt_idx) != 0
+        && (opt_flags & OPT_LOCAL_VAL) != 0
+        && rs_optval_equal(*newval, rs_get_option_unset_value(opt_idx)) != 0
+    {
+        return std::ptr::null();
+    }
+
+    let newval_type = (*newval).type_ as c_int;
+
+    if newval_type == K_OPT_VAL_TYPE_NIL {
+        // Don't try to unset local value if scope is global.
+        if opt_flags == OPT_GLOBAL_VAL {
+            return nvim_errmsg_no_unset_global();
+        }
+        *newval = rs_optval_copy(rs_get_option_unset_value(opt_idx));
+        return std::ptr::null();
+    }
+
+    // Check for type mismatch.
+    if rs_option_has_type(opt_idx, newval_type) == 0 {
+        let opt_type = nvim_get_option_type(opt_idx);
+        let type_str = nvim_optval_type_get_name(opt_type);
+        let newval_type_str = nvim_optval_type_get_name(newval_type);
+        let rep = nvim_optval_to_cstr_alloc(*newval);
+        let fullname = nvim_option_get_fullname(opt_idx);
+        let fmt = gettext(c"Invalid value for option '%s': expected %s, got %s %s".as_ptr());
+        libc::snprintf(
+            errbuf,
+            errbuflen,
+            fmt,
+            fullname,
+            type_str,
+            newval_type_str,
+            rep,
+        );
+        xfree(rep);
+        return errbuf;
+    }
+
+    // Validate numeric bounds.
+    if (*newval).type_ == OptValType::Number {
+        return rs_validate_num_option(opt_idx, &raw mut (*newval).data.number, errbuf, errbuflen);
+    }
+
+    std::ptr::null()
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

@@ -133,6 +133,156 @@ pub unsafe extern "C" fn rs_check_options() {
 }
 
 // =============================================================================
+// Phase 8 validate_option_value cluster (Phase 3)
+// =============================================================================
+
+use crate::index::OptIndex;
+use crate::opt_index::{
+    K_OPT_AUTOCOMPLETE, K_OPT_AUTOREAD, K_OPT_MODELINE, K_OPT_SCROLLOFF, K_OPT_SIDESCROLLOFF,
+    K_OPT_UNDOLEVELS,
+};
+
+extern "C" {
+    /// Check if running as root user (getuid() == ROOT_UID)
+    fn nvim_is_root_user() -> c_int;
+    /// Get NO_LOCAL_UNDOLEVEL constant (-123456)
+    fn nvim_get_no_local_undolevel() -> i64;
+    /// Check if option is global-local (scope_flags is not a power of two)
+    fn rs_option_is_global_local(opt_idx: c_int) -> c_int;
+    /// Check if option has the given type
+    fn rs_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
+    /// Get options[opt_idx].flags (as u32)
+    fn nvim_get_option_flags(opt_idx: c_int) -> u32;
+    /// Get options[opt_idx].def_val.data.string.data
+    fn nvim_option_expand(opt_idx: c_int, val: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    /// Get the varp for the given scope (OPT_GLOBAL=1, OPT_LOCAL=2)
+    fn nvim_get_varp_scope_by_idx(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
+    /// Convert varp to OptVal
+    fn nvim_optval_from_varp(opt_idx: c_int, varp: *mut std::ffi::c_void) -> OptVal;
+    /// Get empty_string_option pointer (for STATIC_CSTR_AS_OPTVAL(""))
+    fn nvim_get_empty_string_option() -> *mut std::ffi::c_char;
+}
+
+/// kOptValTypeString constant (matches C kOptValTypeString = 2)
+const K_OPT_VAL_TYPE_STRING_P3: c_int = 2;
+/// kOptFlagNoDefExp: bit 1 - don't expand default value
+const K_OPT_FLAG_NO_DEF_EXP: u32 = 1 << 1;
+/// OPT_LOCAL flag (must match C OPT_LOCAL = 0x02)
+const OPT_LOCAL: c_int = 0x02;
+/// OPT_GLOBAL flag (must match C OPT_GLOBAL = 0x01)
+const OPT_GLOBAL: c_int = 0x01;
+
+/// Get the "unset" sentinel value for a global-local option's local scope.
+///
+/// Mirrors C `get_option_unset_value`.
+///
+/// # Panics
+/// Panics if `opt_idx` is a global-local option not handled by the switch
+/// (i.e., not autocomplete, autoread, scrolloff, sidescrolloff, or undolevels).
+///
+/// # Safety
+/// Calls C accessor functions. opt_idx must be valid (not kOptInvalid).
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_option_unset_value(opt_idx: OptIndex) -> OptVal {
+    // For global-local options, return the unset sentinel for the local scope.
+    if rs_option_is_global_local(opt_idx) != 0 {
+        // String global-local options use empty string as the unset value.
+        if rs_option_has_type(opt_idx, K_OPT_VAL_TYPE_STRING_P3) != 0 {
+            let empty = nvim_get_empty_string_option();
+            return OptVal {
+                type_: OptValType::String,
+                data: OptValData {
+                    string: String_ {
+                        data: empty,
+                        size: 0,
+                    },
+                },
+            };
+        }
+
+        // Non-string global-local options have specific unset sentinels.
+        if opt_idx == K_OPT_AUTOCOMPLETE || opt_idx == K_OPT_AUTOREAD {
+            // kNone = -1 as TriState boolean
+            return OptVal {
+                type_: OptValType::Boolean,
+                data: OptValData { boolean: -1 },
+            };
+        }
+        if opt_idx == K_OPT_SCROLLOFF || opt_idx == K_OPT_SIDESCROLLOFF {
+            return OptVal {
+                type_: OptValType::Number,
+                data: OptValData { number: -1 },
+            };
+        }
+        if opt_idx == K_OPT_UNDOLEVELS {
+            return OptVal {
+                type_: OptValType::Number,
+                data: OptValData {
+                    number: nvim_get_no_local_undolevel(),
+                },
+            };
+        }
+        // Unknown global-local option - this should not happen.
+        // Mirror C's abort() behavior via panic.
+        panic!("rs_get_option_unset_value: unhandled global-local opt_idx {opt_idx}");
+    }
+
+    // For non-global-local options, return the global value as the unset sentinel.
+    let varp = nvim_get_varp_scope_by_idx(opt_idx, OPT_GLOBAL);
+    nvim_optval_from_varp(opt_idx, varp)
+}
+
+/// Get the default value for an option, with scope and root-user awareness.
+///
+/// Mirrors C `get_option_default`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_option_default(opt_idx: OptIndex, opt_flags: c_int) -> OptVal {
+    // On Unix, modeline defaults to off for root.
+    if opt_idx == K_OPT_MODELINE && nvim_is_root_user() != 0 {
+        return OptVal {
+            type_: OptValType::Boolean,
+            data: OptValData { boolean: 0 }, // false
+        };
+    }
+
+    let is_global_local = rs_option_is_global_local(opt_idx) != 0;
+
+    if (opt_flags & OPT_LOCAL) != 0 && is_global_local {
+        // Use unset local value instead of default for local scope of global-local options.
+        rs_get_option_unset_value(opt_idx)
+    } else if rs_option_has_type(opt_idx, K_OPT_VAL_TYPE_STRING_P3) != 0
+        && (nvim_get_option_flags(opt_idx) & K_OPT_FLAG_NO_DEF_EXP) == 0
+    {
+        // For string options, expand environment variables and ~ if needed.
+        let def_val = nvim_option_get_def_val(opt_idx);
+        let def_str = def_val.data.string.data;
+        let s = nvim_option_expand(opt_idx, def_str);
+        if s.is_null() {
+            return def_val;
+        }
+        // Build a string OptVal from the expanded (xmalloc'd) string.
+        let len = {
+            let mut p = s.cast_const();
+            while *p != 0 {
+                p = p.add(1);
+            }
+            p.offset_from(s.cast_const()) as usize
+        };
+        OptVal {
+            type_: OptValType::String,
+            data: OptValData {
+                string: String_ { data: s, size: len },
+            },
+        }
+    } else {
+        nvim_option_get_def_val(opt_idx)
+    }
+}
+
+// =============================================================================
 // Internal helpers
 // =============================================================================
 
