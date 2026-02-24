@@ -369,6 +369,25 @@ unsafe fn make_expanded_name_impl(
     retval
 }
 
+/// Exported wrapper for `make_expanded_name_impl`.
+///
+/// Called from C `make_expanded_name` and from Rust `lval.rs`.
+/// Matches the signature of C `nvim_make_expanded_name`.
+///
+/// Returns newly allocated string (caller must free) or NULL on failure.
+///
+/// # Safety
+/// All pointer arguments must be valid C pointers (see `make_expanded_name_impl`).
+#[no_mangle]
+pub unsafe extern "C" fn rs_make_expanded_name(
+    in_start: *const c_char,
+    expr_start: *mut c_char,
+    expr_end: *mut c_char,
+    in_end: *mut c_char,
+) -> *mut c_char {
+    make_expanded_name_impl(in_start, expr_start, expr_end, in_end)
+}
+
 /// Get the length of a variable or function name.
 ///
 /// Handles `<SNR>`, `<SID>`, `s:` prefixes and `{expr}` brace expansion.

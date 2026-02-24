@@ -169,6 +169,8 @@ extern int rs_eval_foldexpr(win_T *wp, int *cp);
 extern void rs_eval_foldtext(win_T *wp, Object *out);
 // Phase 4 (eval_shim pass 5)
 extern int rs_get_name_len(const char **arg, char **alias, bool evaluate, bool verbose);
+extern char *rs_make_expanded_name(const char *in_start, char *expr_start, char *expr_end,
+                                    char *in_end);
 // Phase 2 (eval_shim pass 7)
 extern char *rs_do_string_sub(char *str, size_t len, char *pat, char *sub, typval_T *expr,
                                const char *flags, size_t *ret_len);
@@ -1904,59 +1906,10 @@ int get_name_len(const char **const arg, char **alias, bool evaluate, bool verbo
   return rs_get_name_len(arg, alias, evaluate, verbose);
 }
 
-/// Expands out the 'magic' {}'s in a variable/function name.
-/// Note that this can call itself recursively, to deal with
-/// constructs like foo{bar}{baz}{bam}
-/// The four pointer arguments point to "foo{expre}ss{ion}bar"
-///                      "in_start"      ^
-///                      "expr_start"       ^
-///                      "expr_end"               ^
-///                      "in_end"                            ^
-///
-/// @return  a new allocated string, which the caller must free or
-///          NULL for failure.
 static char *make_expanded_name(const char *in_start, char *expr_start, char *expr_end,
                                 char *in_end)
 {
-  if (expr_end == NULL || in_end == NULL) {
-    return NULL;
-  }
-
-  char *retval = NULL;
-
-  *expr_start = NUL;
-  *expr_end = NUL;
-  char c1 = *in_end;
-  *in_end = NUL;
-
-  char *temp_result = eval_to_string(expr_start + 1, false, false);
-  if (temp_result != NULL) {
-    size_t retvalsize = (size_t)(expr_start - in_start)
-                        + strlen(temp_result)
-                        + (size_t)(in_end - expr_end) + 1;
-    retval = xmalloc(retvalsize);
-    vim_snprintf(retval, retvalsize, "%s%s%s", in_start, temp_result, expr_end + 1);
-  }
-  xfree(temp_result);
-
-  *in_end = c1;                 // put char back for error messages
-  *expr_start = '{';
-  *expr_end = '}';
-
-  if (retval != NULL) {
-    temp_result = (char *)rs_find_name_end(retval,
-                                        (const char **)&expr_start,
-                                        (const char **)&expr_end, 0);
-    if (expr_start != NULL) {
-      // Further expansion!
-      temp_result = make_expanded_name(retval, expr_start,
-                                       expr_end, temp_result);
-      xfree(retval);
-      retval = temp_result;
-    }
-  }
-
-  return retval;
+  return rs_make_expanded_name(in_start, expr_start, expr_end, in_end);
 }
 
 /// Set the v:argv list.
@@ -2377,13 +2330,6 @@ char *nvim_lval_get_newkey(const lval_T *lp)
 bool nvim_lval_name_is_null(const lval_T *lp)
 {
   return lp->ll_name == NULL;
-}
-
-/// Wrapper for the static make_expanded_name - accessor for Rust.
-char *nvim_make_expanded_name(const char *in_start, char *expr_start, char *expr_end,
-                              char *in_end)
-{
-  return make_expanded_name(in_start, expr_start, expr_end, in_end);
 }
 
 /// Wrapper for find_var with no-write mode - accessor for Rust.

@@ -140,8 +140,8 @@ extern "C" {
     fn nvim_semsg_invarg2(name: *const c_char);
     fn nvim_semsg_undef_var(len: c_int, name: *const c_char);
 
-    // make_expanded_name wrapper
-    fn nvim_make_expanded_name(
+    // make_expanded_name (Rust implementation in eval/src/names.rs)
+    fn rs_make_expanded_name(
         in_start: *const c_char,
         expr_start: *mut c_char,
         expr_end: *mut c_char,
@@ -716,7 +716,7 @@ unsafe fn get_lval_impl(
         }
 
         let exp_name =
-            nvim_make_expanded_name(name, expr_start as *mut c_char, expr_end as *mut c_char, p);
+            rs_make_expanded_name(name, expr_start as *mut c_char, expr_end as *mut c_char, p);
         nvim_lval_set_exp_name(lp, exp_name);
         nvim_lval_set_name(lp, exp_name);
 
