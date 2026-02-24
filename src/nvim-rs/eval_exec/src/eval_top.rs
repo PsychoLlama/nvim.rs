@@ -782,3 +782,241 @@ pub unsafe extern "C" fn rs_eval_expr_ext(
     nvim_evalarg_clear_and_free(evalarg, eap);
     tv
 }
+
+// =============================================================================
+// Phase 1 (eval_shim pass 5): call_vim_function family + small utilities
+// =============================================================================
+
+extern "C" {
+    // Phase 1: call_vim_function accessors
+    fn nvim_call_func_with_partial(
+        func: *const c_char,
+        len: c_int,
+        rettv: TypevalHandle,
+        argc: c_int,
+        argv: TypevalHandle,
+        partial: *mut c_void,
+    ) -> c_int;
+    fn nvim_get_vv_lua_partial_p1() -> *mut c_void; // partial_T*
+    fn rs_check_luafunc_name(s: *const c_char, paren: bool) -> c_int;
+
+    // Phase 1: set_argv_var accessors
+    fn nvim_eval_tv_list_alloc(len: isize) -> *mut c_void; // list_T*
+    fn nvim_tv_list_set_lock(l: *mut c_void, lock: c_int);
+    fn nvim_tv_list_append_string(l: *mut c_void, s: *const c_char, len: isize);
+    fn nvim_tv_list_last_fix_lock(l: *mut c_void);
+    fn nvim_set_vim_var_argv_list(list: *mut c_void);
+
+    // Phase 1: var_set_global accessors
+    fn nvim_set_var_wrapper(name: *const c_char, name_len: usize, tv: TypevalHandle);
+
+    // Phase 1: eval_fmt_source_name_line accessors
+    fn nvim_sourcing_name_get() -> *const c_char;
+    fn nvim_sourcing_lnum_get() -> i64; // linenr_T
+    fn nvim_snprintf_source_line(buf: *mut c_char, bufsize: usize, name: *const c_char, lnum: i64);
+    fn nvim_snprintf_question(buf: *mut c_char, bufsize: usize);
+
+    // Phase 1: find_option_var_end accessors
+    fn nvim_find_option_end_wrapper(p: *const c_char, opt_idxp: *mut c_int) -> *const c_char;
+
+    // Phase 1: call_func_retstr helper
+    fn nvim_shim_tv_get_string(tv: TypevalHandle) -> *const c_char;
+    fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
+    fn nvim_tv_set_type(tv: TypevalHandle, vtype: c_int);
+}
+
+// VAR_FIXED lock constant (from typval_defs.h: VAR_FIXED = 2)
+const VAR_FIXED: c_int = 2;
+
+/// Call a VimL function by name and place the result in `rettv`.
+///
+/// Equivalent to C `call_vim_function`.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_call_vim_function(
+    func: *const c_char,
+    argc: c_int,
+    argv: TypevalHandle,
+    rettv: TypevalHandle,
+) -> c_int {
+    let len = libc_strlen(func) as c_int;
+
+    // Check for "v:lua.FuncName" prefix
+    let vlua_prefix = b"v:lua.\0";
+    let mut actual_func = func;
+    let mut actual_len = len;
+    let mut partial: *mut c_void = std::ptr::null_mut();
+
+    if len >= 6 && strncmp(func, vlua_prefix.as_ptr() as *const c_char, 6) == 0 {
+        let lua_name = func.add(6);
+        let lua_len = rs_check_luafunc_name(lua_name, false);
+        if lua_len == 0 {
+            tv_clear(rettv);
+            return FAIL;
+        }
+        actual_func = lua_name;
+        actual_len = lua_len;
+        partial = nvim_get_vv_lua_partial_p1();
+    }
+
+    // Initialize rettv: set v_type = VAR_UNKNOWN (0) so tv_clear works on failure
+    nvim_tv_set_type(rettv, 0); // VAR_UNKNOWN = 0
+
+    let ret = nvim_call_func_with_partial(actual_func, actual_len, rettv, argc, argv, partial);
+
+    if ret == FAIL {
+        tv_clear(rettv);
+    }
+    ret
+}
+
+/// Call a VimL function and return the result as an allocated string.
+///
+/// Equivalent to C `call_func_retstr`.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_call_func_retstr(
+    func: *const c_char,
+    argc: c_int,
+    argv: TypevalHandle,
+) -> *mut c_char {
+    let mut tv_storage = [0u64; 8];
+    let rettv = TypevalHandle::from_ptr(tv_storage.as_mut_ptr() as *mut c_void);
+
+    if rs_call_vim_function(func, argc, argv, rettv) == FAIL {
+        return std::ptr::null_mut();
+    }
+
+    let s = nvim_shim_tv_get_string(rettv);
+    let result = nvim_xstrdup(s);
+    tv_clear(rettv);
+    result
+}
+
+/// Call a VimL function and return the result as a list_T.
+///
+/// Equivalent to C `call_func_retlist`.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_call_func_retlist(
+    func: *const c_char,
+    argc: c_int,
+    argv: TypevalHandle,
+) -> *mut c_void {
+    let mut tv_storage = [0u64; 8];
+    let rettv = TypevalHandle::from_ptr(tv_storage.as_mut_ptr() as *mut c_void);
+
+    if rs_call_vim_function(func, argc, argv, rettv) == FAIL {
+        return std::ptr::null_mut();
+    }
+
+    let vtype = nvim_eval_tv_vtype(rettv.as_ptr() as *const c_void);
+    if vtype != VAR_LIST {
+        tv_clear(rettv);
+        return std::ptr::null_mut();
+    }
+
+    nvim_eval_tv_vlist(rettv.as_ptr() as *const c_void)
+}
+
+/// Set the v:argv list from argc/argv.
+///
+/// Equivalent to C `set_argv_var`.
+///
+/// # Safety
+/// `argv` must be an array of `argc` valid C string pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_argv_var(argv: *mut *mut c_char, argc: c_int) {
+    let l = nvim_eval_tv_list_alloc(argc as isize);
+    nvim_tv_list_set_lock(l, VAR_FIXED);
+    for i in 0..argc {
+        let s = *argv.add(i as usize);
+        nvim_tv_list_append_string(l, s, -1);
+        nvim_tv_list_last_fix_lock(l);
+    }
+    nvim_set_vim_var_argv_list(l);
+}
+
+/// Set a global variable via save_funccal/set_var/restore_funccal.
+///
+/// Equivalent to C `var_set_global`.
+///
+/// # Safety
+/// `name` must be a valid C string. `vartv` must be a valid typval_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_var_set_global(name: *const c_char, vartv: TypevalHandle) {
+    let entry = nvim_eval_save_funccal();
+    let name_len = libc_strlen(name);
+    nvim_set_var_wrapper(name, name_len, vartv);
+    nvim_eval_restore_funccal(entry);
+}
+
+/// Write "<sourcing_name>:<sourcing_lnum>" to buf[bufsize].
+///
+/// Equivalent to C `eval_fmt_source_name_line`.
+///
+/// # Safety
+/// `buf` must be a valid writable buffer of at least `bufsize` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_fmt_source_name_line(buf: *mut c_char, bufsize: usize) {
+    let name = nvim_sourcing_name_get();
+    if !name.is_null() {
+        let lnum = nvim_sourcing_lnum_get();
+        nvim_snprintf_source_line(buf, bufsize, name, lnum);
+    } else {
+        nvim_snprintf_question(buf, bufsize);
+    }
+}
+
+/// Skip over the name of an option variable: "&option", "&g:option" or "&l:option".
+///
+/// Equivalent to C `find_option_var_end`.
+///
+/// # Safety
+/// `arg` must be a valid pointer to a mutable C string pointer.
+/// `opt_idxp` and `opt_flags` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_option_var_end(
+    arg: *mut *const c_char,
+    opt_idxp: *mut c_int,
+    opt_flags: *mut c_int,
+) -> *const c_char {
+    let mut p = *arg;
+
+    // Skip past the leading '&' or '+'
+    p = p.add(1);
+
+    // Check for g: or l: scope prefix
+    if *p == b'g' as c_char && *p.add(1) == b':' as c_char {
+        *opt_flags = 1; // OPT_GLOBAL = 0x01
+        p = p.add(2);
+    } else if *p == b'l' as c_char && *p.add(1) == b':' as c_char {
+        *opt_flags = 2; // OPT_LOCAL = 0x02
+        p = p.add(2);
+    } else {
+        *opt_flags = 0;
+    }
+
+    let end = nvim_find_option_end_wrapper(p, opt_idxp);
+    if end.is_null() {
+        // Leave *arg unchanged on failure
+    } else {
+        *arg = p;
+    }
+    end
+}
+
+// Helper: compute strlen of a C string without linking libc explicitly.
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    let mut len = 0usize;
+    while *s.add(len) != 0 {
+        len += 1;
+    }
+    len
+}

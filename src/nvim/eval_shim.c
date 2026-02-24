@@ -152,6 +152,14 @@ extern int rs_eval_env_var(char **arg, typval_T *rettv, int evaluate);
 extern int rs_var_item_copy(const void *conv, typval_T *from, typval_T *to, bool deep,
                             int copyID);
 extern char *rs_save_tv_as_string(typval_T *tv, ptrdiff_t *len, bool endnl, bool crlf);
+// Phase 1 (eval_shim pass 5)
+extern int rs_call_vim_function(const char *func, int argc, typval_T *argv, typval_T *rettv);
+extern void *rs_call_func_retstr(const char *func, int argc, typval_T *argv);
+extern void *rs_call_func_retlist(const char *func, int argc, typval_T *argv);
+extern void rs_set_argv_var(char **argv, int argc);
+extern void rs_var_set_global(const char *name, typval_T *vartv);
+extern void rs_eval_fmt_source_name_line(char *buf, size_t bufsize);
+extern const char *rs_find_option_var_end(const char **arg, int *opt_idxp, int *opt_flags);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -702,34 +710,7 @@ typval_T *eval_expr_ext(char *arg, exarg_T *eap, const bool use_simple_function)
 int call_vim_function(const char *func, int argc, typval_T *argv, typval_T *rettv)
   FUNC_ATTR_NONNULL_ALL
 {
-  int ret;
-  int len = (int)strlen(func);
-  partial_T *pt = NULL;
-
-  if (len >= 6 && !memcmp(func, "v:lua.", 6)) {
-    func += 6;
-    len = rs_check_luafunc_name(func, false);
-    if (len == 0) {
-      ret = FAIL;
-      goto fail;
-    }
-    pt = get_vim_var_partial(VV_LUA);
-  }
-
-  rettv->v_type = VAR_UNKNOWN;  // tv_clear() uses this.
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_firstline = curwin->w_cursor.lnum;
-  funcexe.fe_lastline = curwin->w_cursor.lnum;
-  funcexe.fe_evaluate = true;
-  funcexe.fe_partial = pt;
-  ret = call_func(func, len, rettv, argc, argv, &funcexe);
-
-fail:
-  if (ret == FAIL) {
-    tv_clear(rettv);
-  }
-
-  return ret;
+  return rs_call_vim_function(func, argc, argv, rettv);
 }
 
 /// Call Vim script function and return the result as a string.
@@ -745,16 +726,7 @@ fail:
 void *call_func_retstr(const char *const func, int argc, typval_T *argv)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_MALLOC
 {
-  typval_T rettv;
-  // All arguments are passed as strings, no conversion to number.
-  if (call_vim_function(func, argc, argv, &rettv)
-      == FAIL) {
-    return NULL;
-  }
-
-  char *const retval = xstrdup(tv_get_string(&rettv));
-  tv_clear(&rettv);
-  return retval;
+  return rs_call_func_retstr(func, argc, argv);
 }
 
 /// Call Vim script function and return the result as a List.
@@ -769,19 +741,7 @@ void *call_func_retstr(const char *const func, int argc, typval_T *argv)
 void *call_func_retlist(const char *func, int argc, typval_T *argv)
   FUNC_ATTR_NONNULL_ALL
 {
-  typval_T rettv;
-
-  // All arguments are passed as strings, no conversion to number.
-  if (call_vim_function(func, argc, argv, &rettv) == FAIL) {
-    return NULL;
-  }
-
-  if (rettv.v_type != VAR_LIST) {
-    tv_clear(&rettv);
-    return NULL;
-  }
-
-  return rettv.vval.v_list;
+  return rs_call_func_retlist(func, argc, argv);
 }
 
 /// Evaluate 'foldexpr'.  Returns the foldlevel, and any character preceding
@@ -2250,14 +2210,7 @@ static char *make_expanded_name(const char *in_start, char *expr_start, char *ex
 /// Set the v:argv list.
 void set_argv_var(char **argv, int argc)
 {
-  list_T *l = tv_list_alloc(argc);
-
-  tv_list_set_lock(l, VAR_FIXED);
-  for (int i = 0; i < argc; i++) {
-    tv_list_append_string(l, (const char *const)argv[i], -1);
-    TV_LIST_ITEM_TV(tv_list_last(l))->v_lock = VAR_FIXED;
-  }
-  set_vim_var_list(VV_ARGV, l);
+  rs_set_argv_var(argv, argc);
 }
 
 /// Get v:lua partial pointer (accessor for Rust).
@@ -2364,31 +2317,15 @@ void ex_execute(exarg_T *eap)
 const char *find_option_var_end(const char **const arg, OptIndex *const opt_idxp,
                                 int *const opt_flags)
 {
-  const char *p = *arg;
-
-  p++;
-  if (*p == 'g' && p[1] == ':') {
-    *opt_flags = OPT_GLOBAL;
-    p += 2;
-  } else if (*p == 'l' && p[1] == ':') {
-    *opt_flags = OPT_LOCAL;
-    p += 2;
-  } else {
-    *opt_flags = 0;
-  }
-
-  const char *end = find_option_end(p, opt_idxp);
-  *arg = end == NULL ? *arg : p;
+  int opt_idx_int = 0;
+  const char *end = rs_find_option_var_end(arg, &opt_idx_int, opt_flags);
+  *opt_idxp = (OptIndex)opt_idx_int;
   return end;
 }
 
 void var_set_global(const char *const name, typval_T vartv)
 {
-  funccal_entry_T funccall_entry;
-
-  save_funccal(&funccall_entry);
-  set_var(name, strlen(name), &vartv, false);
-  restore_funccal();
+  rs_var_set_global(name, &vartv);
 }
 
 /// Display script name where an item was last set.
@@ -2708,11 +2645,7 @@ bool eval_has_provider(const char *feat, bool throw_if_fast)
 /// Writes "<sourcing_name>:<sourcing_lnum>" to `buf[bufsize]`.
 void eval_fmt_source_name_line(char *buf, size_t bufsize)
 {
-  if (SOURCING_NAME) {
-    snprintf(buf, bufsize, "%s:%" PRIdLINENR, SOURCING_NAME, SOURCING_LNUM);
-  } else {
-    snprintf(buf, bufsize, "?");
-  }
+  rs_eval_fmt_source_name_line(buf, bufsize);
 }
 
 /// Gets the current user-input in prompt buffer `buf`, or NULL if buffer is not a prompt buffer.
@@ -4533,4 +4466,102 @@ bool nvim_partial_decref_and_check(partial_T *pt)
 {
   return --pt->pt_refcount <= 0;
 }
+
+// =============================================================================
+// Accessors for Phase 1 (eval_shim pass 5): call_vim_function family +
+//   set_argv_var, var_set_global, eval_fmt_source_name_line, find_option_var_end
+// =============================================================================
+
+/// Construct funcexe_T and call call_func - accessor for rs_call_vim_function.
+/// Avoids replicating funcexe_T struct layout in Rust.
+int nvim_call_func_with_partial(const char *func, int len, typval_T *rettv,
+                                int argc, typval_T *argv, partial_T *partial)
+{
+  funcexe_T funcexe = FUNCEXE_INIT;
+  funcexe.fe_firstline = curwin->w_cursor.lnum;
+  funcexe.fe_lastline = curwin->w_cursor.lnum;
+  funcexe.fe_evaluate = true;
+  funcexe.fe_partial = partial;
+  return call_func(func, len, rettv, argc, argv, &funcexe);
+}
+
+/// Get VV_LUA partial - accessor for rs_call_vim_function.
+partial_T *nvim_get_vv_lua_partial_p1(void)
+{
+  return get_vim_var_partial(VV_LUA);
+}
+
+/// Wrap set_var(name, name_len, tv, false) - accessor for rs_var_set_global.
+void nvim_set_var_wrapper(const char *name, size_t name_len, typval_T *tv)
+{
+  set_var(name, name_len, tv, false);
+}
+
+/// Wrap set_vim_var_list(VV_ARGV, list) - accessor for rs_set_argv_var.
+void nvim_set_vim_var_argv_list(list_T *list)
+{
+  set_vim_var_list(VV_ARGV, list);
+}
+
+/// Return SOURCING_NAME - accessor for rs_eval_fmt_source_name_line.
+const char *nvim_sourcing_name_get(void)
+{
+  return SOURCING_NAME;
+}
+
+/// Return SOURCING_LNUM - accessor for rs_eval_fmt_source_name_line.
+linenr_T nvim_sourcing_lnum_get(void)
+{
+  return SOURCING_LNUM;
+}
+
+/// Wrap find_option_end(p, opt_idxp) - accessor for rs_find_option_var_end.
+/// Returns pointer after option name, or NULL on failure.
+const char *nvim_find_option_end_wrapper(const char *p, int *opt_idxp)
+{
+  OptIndex opt_idx = kOptInvalid;
+  const char *end = find_option_end(p, &opt_idx);
+  *opt_idxp = (int)opt_idx;
+  return end;
+}
+
+/// Wrap tv_list_set_lock - accessor for rs_set_argv_var.
+void nvim_tv_list_set_lock(list_T *l, int lock)
+{
+  tv_list_set_lock(l, (VarLockStatus)lock);
+}
+
+/// Wrap tv_list_append_string - accessor for rs_set_argv_var.
+void nvim_tv_list_append_string(list_T *l, const char *str, ssize_t len)
+{
+  tv_list_append_string(l, str, len);
+}
+
+/// Get tv_list_last item's typval v_lock field address - accessor for rs_set_argv_var.
+/// Sets VAR_FIXED lock on the last item's tv.
+void nvim_tv_list_last_fix_lock(list_T *l)
+{
+  TV_LIST_ITEM_TV(tv_list_last(l))->v_lock = VAR_FIXED;
+}
+
+/// snprintf wrapper for eval_fmt_source_name_line - accessor for Rust.
+void nvim_snprintf_source_line(char *buf, size_t bufsize, const char *name, linenr_T lnum)
+{
+  snprintf(buf, bufsize, "%s:%" PRIdLINENR, name, lnum);
+}
+
+/// snprintf single char wrapper - for "?" fallback in eval_fmt_source_name_line.
+void nvim_snprintf_question(char *buf, size_t bufsize)
+{
+  snprintf(buf, bufsize, "?");
+}
+
+/// Wrap tv_get_string - accessor for rs_call_func_retstr.
+/// Named nvim_shim_tv_get_string to avoid conflict with nvim_tv_get_string in typval.c.
+const char *nvim_shim_tv_get_string(const typval_T *tv)
+{
+  return tv_get_string(tv);
+}
+
+// nvim_xstrdup is defined in register.c - no duplicate needed here.
 

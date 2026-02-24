@@ -2,8 +2,8 @@
 //!
 //! This module implements Ex commands for buffer management and navigation.
 
-use std::ffi::{c_char, c_int};
 use crate::ExArgHandle;
+use std::ffi::{c_char, c_int};
 
 // =============================================================================
 // Buffer Action Types

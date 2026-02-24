@@ -574,9 +574,7 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
 
     // When nesting the command works on one line. This allows for
     // ":g/found/v/notfound/command".
-    if nvim_excmds_global_busy() != 0
-        && (line1 != 1 || line2 != ml_line_count)
-    {
+    if nvim_excmds_global_busy() != 0 && (line1 != 1 || line2 != ml_line_count) {
         // will increment global_busy to break out of the loop
         nvim_excmds_emsg_e147();
         return;
@@ -585,11 +583,7 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
     // Determine type: 'g' (global) or 'v' (vglobal)
     // forceit means ":global!" => treat as 'v'
     let cmd_ptr = nvim_exarg_get_cmd(eap);
-    let type_char: u8 = if forceit != 0 {
-        b'v'
-    } else {
-        *cmd_ptr as u8
-    };
+    let type_char: u8 = if forceit != 0 { b'v' } else { *cmd_ptr as u8 };
 
     // cmd starts at eap->arg (mutable for skip_regexp_ex)
     let mut cmd = nvim_excmds_get_arg_mut(eap);
