@@ -60,9 +60,9 @@ const FAIL: c_int = 0;
 
 extern "C" {
     // curbuf field accessors
-    fn nvim_ecmd_curbuf_get_b_fnum() -> c_int;
-    fn nvim_ecmd_curbuf_get_ffname() -> *const c_char;
-    fn nvim_ecmd_curbuf_get_fname() -> *const c_char;
+    fn nvim_excmds_curbuf_get_b_fnum() -> c_int;
+    fn nvim_excmds_curbuf_get_ffname() -> *mut c_char;
+    fn nvim_excmds_curbuf_get_fname() -> *mut c_char;
     fn nvim_ecmd_curbuf_get_nwindows() -> c_int;
     fn nvim_ecmd_curbuf_get_b_flags() -> c_int;
     fn nvim_ecmd_curbuf_get_terminal() -> c_int;
@@ -72,14 +72,14 @@ extern "C" {
     fn nvim_ecmd_curbuf_set_last_used();
     fn nvim_ecmd_curbuf_get_kmap_state() -> c_int;
     fn nvim_ecmd_curbuf_get_help() -> c_int;
-    fn nvim_ecmd_curbuf_get_line_count() -> c_int;
+    fn nvim_excmds_curbuf_ml_line_count() -> c_int;
     fn nvim_ecmd_curbuf_clear_op_marks();
 
     // curwin field accessors
     fn nvim_ecmd_curwin_get_cursor(lnum_out: *mut c_int, col_out: *mut c_int);
     fn nvim_ecmd_curwin_set_cursor(lnum: c_int, col: c_int);
     fn nvim_ecmd_curwin_get_cursor_col() -> c_int;
-    fn nvim_ecmd_curwin_get_cursor_lnum() -> c_int;
+    fn nvim_excmds_curwin_cursor_lnum() -> c_int;
     fn nvim_ecmd_curwin_set_cursor_coladd(val: c_int);
     fn nvim_ecmd_curwin_set_w_set_curswant(val: c_int);
     fn nvim_ecmd_curwin_get_topline() -> c_int;
@@ -176,13 +176,13 @@ extern "C" {
     fn nvim_ecmd_cmdwin_buf_is_nonnull() -> c_int;
     fn nvim_ecmd_cmdwin_save_clear() -> *mut std::ffi::c_void;
     fn nvim_ecmd_cmdwin_restore_free(bundle: *mut std::ffi::c_void);
-    fn nvim_ecmd_get_exmode_active() -> c_int;
+    fn nvim_do_sub_get_exmode_active() -> c_int;
     fn nvim_ecmd_get_skip_redraw() -> c_int;
     fn nvim_ecmd_get_keep_help_flag() -> c_int;
     fn nvim_ecmd_cmdmod_has_keepalt() -> c_int;
     fn nvim_ecmd_get_p_awa() -> c_int;
     fn nvim_ecmd_get_p_sol() -> c_int;
-    fn nvim_ecmd_get_msg_scroll() -> c_int;
+    fn nvim_excmds_get_msg_scroll() -> c_int;
     fn nvim_ecmd_set_msg_scroll(val: c_int);
     fn nvim_ecmd_set_msg_scrolled_ign(val: c_int);
     fn nvim_ecmd_get_msg_listdo_overwrite() -> c_int;
@@ -313,7 +313,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
         // Determine other_file
         // ----------------------------------------------------------------
         if fnum != 0 {
-            if fnum == nvim_ecmd_curbuf_get_b_fnum() {
+            if fnum == nvim_excmds_curbuf_get_b_fnum() {
                 // File already being edited -- nothing to do
                 retval = OK;
                 break 'outer;
@@ -331,13 +331,13 @@ pub unsafe extern "C" fn rs_do_ecmd(
             }
             if ffname.is_null() {
                 other_file = true;
-            } else if *ffname == 0 && nvim_ecmd_curbuf_get_ffname().is_null() {
+            } else if *ffname == 0 && nvim_excmds_curbuf_get_ffname().is_null() {
                 other_file = false;
             } else {
                 if *ffname == 0 {
                     // Re-edit with same file name
-                    ffname = nvim_ecmd_curbuf_get_ffname() as *mut c_char;
-                    sfname = nvim_ecmd_curbuf_get_fname() as *mut c_char;
+                    ffname = nvim_excmds_curbuf_get_ffname() as *mut c_char;
+                    sfname = nvim_excmds_curbuf_get_fname() as *mut c_char;
                 }
                 free_fname = nvim_ecmd_fix_fname(ffname);
                 if !free_fname.is_null() {
@@ -402,7 +402,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
 
             if (flags & (ECMD_ADDBUF | ECMD_ALTBUF)) == 0 {
                 if nvim_ecmd_cmdmod_has_keepalt() == 0 {
-                    nvim_ecmd_curwin_set_alt_fnum(nvim_ecmd_curbuf_get_b_fnum());
+                    nvim_ecmd_curwin_set_alt_fnum(nvim_excmds_curbuf_get_b_fnum());
                 }
                 if !oldwin.is_null() {
                     nvim_ecmd_buflist_altfpos(oldwin);
@@ -659,18 +659,18 @@ pub unsafe extern "C" fn rs_do_ecmd(
         if !other_file && oldbuf == 0 {
             nvim_ecmd_set_last_cursor();
             if newlnum == ECMD_LAST || newlnum == ECMD_LASTL {
-                newlnum = nvim_ecmd_curwin_get_cursor_lnum();
+                newlnum = nvim_excmds_curwin_cursor_lnum();
                 solcol = nvim_ecmd_curwin_get_cursor_col();
             }
             buf = nvim_get_curbuf();
-            let fname = nvim_ecmd_curbuf_get_fname();
+            let fname = nvim_excmds_curbuf_get_fname();
             if !fname.is_null() {
                 new_name = nvim_ecmd_xstrdup(fname);
             }
             nvim_ecmd_set_bufref_to_curbuf(bufref);
 
             // Store current contents for undo if buffer was used before
-            let line_count = nvim_ecmd_curbuf_get_line_count();
+            let line_count = nvim_excmds_curbuf_ml_line_count();
             let p_ur = nvim_ecmd_get_p_ur();
             if (nvim_ecmd_curbuf_get_b_flags() & BF_NEVERLOADED) == 0
                 && (p_ur < 0 || line_count as i64 <= p_ur)
@@ -765,7 +765,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             // If autocommands changed cursor position or topline, keep it.
             // But not if cursor moved to first non-blank.
             if nvim_ecmd_cursor_eq(orig_lnum, orig_col) == 0 {
-                let cur_lnum = nvim_ecmd_curwin_get_cursor_lnum();
+                let cur_lnum = nvim_excmds_curwin_cursor_lnum();
                 let cur_col = nvim_ecmd_curwin_get_cursor_col();
                 let skipwhite_col = nvim_ecmd_cursor_col_skipwhite();
                 if cur_lnum != orig_lnum || cur_col != skipwhite_col {
@@ -809,7 +809,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 nvim_ecmd_check_cursor_lnum();
                 if solcol >= 0 && nvim_ecmd_get_p_sol() == 0 {
                     // 'sol' is off: use last known column
-                    nvim_ecmd_curwin_set_cursor(nvim_ecmd_curwin_get_cursor_lnum(), solcol);
+                    nvim_ecmd_curwin_set_cursor(nvim_excmds_curwin_cursor_lnum(), solcol);
                     nvim_ecmd_check_cursor_col();
                     nvim_ecmd_curwin_set_cursor_coladd(0);
                     nvim_ecmd_curwin_set_w_set_curswant(1);
@@ -818,8 +818,8 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 }
             } else {
                 // No line number -- go to last line in Ex mode
-                if nvim_ecmd_get_exmode_active() != 0 {
-                    nvim_ecmd_curwin_set_cursor(nvim_ecmd_curbuf_get_line_count(), 0);
+                if nvim_do_sub_get_exmode_active() != 0 {
+                    nvim_ecmd_curwin_set_cursor(nvim_excmds_curbuf_ml_line_count(), 0);
                 }
                 nvim_ecmd_beginline(BL_WHITE | BL_FIX);
             }
@@ -830,7 +830,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
 
         // Show file info for old buffers that weren't re-read
         if oldbuf != 0 && !auto_buf {
-            let msg_scroll_save = nvim_ecmd_get_msg_scroll();
+            let msg_scroll_save = nvim_excmds_get_msg_scroll();
 
             // 'O' flag in 'cpoptions': overwrite previous file message
             if nvim_ecmd_shortmess_overall() != 0
@@ -840,7 +840,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             {
                 nvim_ecmd_set_msg_scroll(0);
             }
-            if nvim_ecmd_get_msg_scroll() == 0 {
+            if nvim_excmds_get_msg_scroll() == 0 {
                 nvim_ecmd_msg_check_for_delay();
             }
             nvim_ecmd_msg_start();

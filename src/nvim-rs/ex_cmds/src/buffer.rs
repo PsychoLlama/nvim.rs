@@ -365,7 +365,7 @@ extern "C" {
     fn nvim_excmds_cmdmod_has_keepalt() -> c_int;
     fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
     fn nvim_excmds_do_autochdir();
-    fn nvim_excmds_curwin_cursor_lnum_raw() -> c_int;
+    fn nvim_excmds_curwin_cursor_lnum() -> c_int;
     fn xfree(ptr: *mut std::ffi::c_void);
 
     // ex_file FFI
@@ -423,7 +423,7 @@ pub unsafe extern "C" fn rs_rename_buffer(new_fname: *const c_char) -> c_int {
 
     // Make a new unlisted buffer for the old name (becomes alternate file)
     if !xfname.is_null() && *xfname != 0 {
-        let lnum = nvim_excmds_curwin_cursor_lnum_raw();
+        let lnum = nvim_excmds_curwin_cursor_lnum();
         let buf = nvim_excmds_buflist_new_rename(fname, xfname, lnum);
         if !buf.is_null() && nvim_excmds_cmdmod_has_keepalt() == 0 {
             let fnum = nvim_excmds_buf_get_fnum(buf);

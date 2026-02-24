@@ -80,7 +80,7 @@ extern "C" {
         offset: c_int,
     );
     fn nvim_excmds_update_topline_curwin();
-    fn nvim_excmds_orig_buf_line_count() -> c_int;
+    fn nvim_excmds_curbuf_ml_line_count() -> c_int;
     fn nvim_excmds_preview_lines_size(pl: *const std::ffi::c_void) -> usize;
     fn nvim_excmds_preview_lines_item(
         pl: *const std::ffi::c_void,
@@ -887,7 +887,7 @@ pub unsafe extern "C" fn rs_show_sub(
                 p_end_lnum = linenr_preview;
             }
 
-            let orig_buf_line_count = nvim_excmds_orig_buf_line_count();
+            let orig_buf_line_count = nvim_excmds_curbuf_ml_line_count();
 
             while next_linenr <= end_lnum {
                 if next_linenr == start_lnum {
@@ -1184,7 +1184,6 @@ extern "C" {
     fn nvim_do_sub_get_p_cwh() -> c_int;
     fn nvim_do_sub_os_time() -> u64;
     fn nvim_do_sub_setpcmark();
-    fn nvim_do_sub_buf_line_count() -> c_int;
     fn nvim_do_sub_getvcol_startcol(lnum: c_int, col: c_int, sc_out: *mut c_int);
     fn nvim_do_sub_getvcol_endcol(lnum: c_int, col: c_int, ec_out: *mut c_int);
     fn nvim_do_sub_getcmdline_prompt(prompt_str: *const c_char) -> c_int;
@@ -1605,7 +1604,7 @@ pub unsafe extern "C" fn rs_do_sub(
         let line1 = nvim_exarg_get_line1(eap);
         nvim_exarg_set_line2(eap, line1); // eap->line1 = eap->line2
         let new_line2 = line1 + i - 1;
-        let buf_line_count = nvim_do_sub_buf_line_count();
+        let buf_line_count = nvim_excmds_curbuf_ml_line_count();
         nvim_exarg_set_line2(eap, new_line2.min(buf_line_count));
     }
 
@@ -1675,7 +1674,7 @@ pub unsafe extern "C" fn rs_do_sub(
     };
 
     // Save current globals for the loop
-    let old_line_count = nvim_do_sub_buf_line_count();
+    let old_line_count = nvim_excmds_curbuf_ml_line_count();
     let start_nsubs = nvim_excmds_get_sub_nsubs();
 
     if nvim_excmds_global_busy() == 0 {
@@ -1754,7 +1753,7 @@ pub unsafe extern "C" fn rs_do_sub(
                 cur_start_lnum = sub_firstlnum;
 
                 // Check if match is after last line
-                if lnum > nvim_do_sub_buf_line_count() {
+                if lnum > nvim_excmds_curbuf_ml_line_count() {
                     break;
                 }
 
@@ -2101,7 +2100,7 @@ pub unsafe extern "C" fn rs_do_sub(
     nvim_curbuf_set_deleted_bytes2(0);
 
     if first_line != 0 {
-        let i = nvim_do_sub_buf_line_count() - old_line_count;
+        let i = nvim_excmds_curbuf_ml_line_count() - old_line_count;
         nvim_do_sub_changed_lines(first_line, last_line - i, i);
 
         let num_added = (last_line - first_line) as i64;
@@ -2460,7 +2459,7 @@ unsafe fn goto_sub_main(
     nvim_curwin_set_cursor_col(startpos0_col);
 
     // Clamp nmatch to available lines
-    let buf_line_count = nvim_do_sub_buf_line_count();
+    let buf_line_count = nvim_excmds_curbuf_ml_line_count();
     if *nmatch > buf_line_count - *sub_firstlnum + 1 {
         *nmatch = buf_line_count - *sub_firstlnum + 1;
         *cur_end_lnum = *sub_firstlnum + *nmatch;

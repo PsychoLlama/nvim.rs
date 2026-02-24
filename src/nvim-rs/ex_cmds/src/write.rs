@@ -833,8 +833,8 @@ extern "C" {
     fn nvim_excmds_dialog_write_partial() -> c_int;
     fn nvim_excmds_emsg_e140();
     fn nvim_excmds_emsg_e_argreq();
-    fn nvim_excmds_curbuf_get_b_ffname() -> *const c_char;
-    fn nvim_excmds_curbuf_get_b_fname() -> *const c_char;
+    fn nvim_excmds_curbuf_get_ffname() -> *mut c_char;
+    fn nvim_excmds_curbuf_get_fname() -> *mut c_char;
     fn nvim_get_curbuf() -> *mut BufHandle;
     fn nvim_excmds_check_overwrite(
         eap: *mut ExArgHandle,
@@ -937,8 +937,8 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
 
     if other == 0 {
         // Writing to current file; use curbuf's names
-        ffname = nvim_excmds_curbuf_get_b_ffname() as *mut c_char;
-        fname = nvim_excmds_curbuf_get_b_fname() as *mut c_char;
+        ffname = nvim_excmds_curbuf_get_ffname() as *mut c_char;
+        fname = nvim_excmds_curbuf_get_fname() as *mut c_char;
 
         // Partial write check
         let line1 = nvim_excmds_eap_get_line1(eap);

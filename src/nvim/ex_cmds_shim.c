@@ -1114,8 +1114,6 @@ void nvim_excmds_bufhl_add_hl_pos_offset(buf_T *buf, int ns_id, int hl_id,
 }
 /// Wrapper for update_topline(curwin).
 void nvim_excmds_update_topline_curwin(void) { update_topline(curwin); }
-/// Return b_ml.ml_line_count of orig_buf (curbuf).
-int nvim_excmds_orig_buf_line_count(void) { return curbuf->b_ml.ml_line_count; }
 
 /// Accessor: preview_lines->subresults.size
 size_t nvim_excmds_preview_lines_size(const void *pl)
@@ -1324,9 +1322,6 @@ void nvim_excmds_set_curwin_alt_fnum(int fnum) { curwin->w_alt_fnum = fnum; }
 
 /// Wrapper for do_autochdir().
 void nvim_excmds_do_autochdir(void) { do_autochdir(); }
-
-/// Get curwin->w_cursor.lnum (for buflist_new lnum argument).
-int nvim_excmds_curwin_cursor_lnum_raw(void) { return (int)curwin->w_cursor.lnum; }
 
 /// Set redraw_tabline = true.
 void nvim_excmds_set_redraw_tabline(void) { redraw_tabline = true; }
@@ -1999,12 +1994,6 @@ void nvim_excmds_emsg_e140(void)
 /// emsg(_(e_argreq)): Argument required.
 void nvim_excmds_emsg_e_argreq(void) { emsg(_(e_argreq)); }
 
-/// Get curbuf->b_ffname (may be NULL).
-const char *nvim_excmds_curbuf_get_b_ffname(void) { return curbuf->b_ffname; }
-
-/// Get curbuf->b_fname (may be NULL).
-const char *nvim_excmds_curbuf_get_b_fname(void) { return curbuf->b_fname; }
-
 /// Wrap check_overwrite via rs_ (call it directly). Returns 1=OK, 0=FAIL.
 int nvim_excmds_check_overwrite(exarg_T *eap, buf_T *buf, const char *fname,
                                 const char *ffname, int other)
@@ -2388,9 +2377,6 @@ uint64_t nvim_do_sub_os_time(void) { return (uint64_t)os_time(); }
 /// Wrap setpcmark().
 void nvim_do_sub_setpcmark(void) { setpcmark(); }
 
-/// Get curbuf->b_ml.ml_line_count.
-int nvim_do_sub_buf_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
-
 /// Wrap getvcol for start column (sc). Returns sc via out pointer.
 void nvim_do_sub_getvcol_startcol(int lnum, int col, int *sc_out)
 {
@@ -2770,15 +2756,6 @@ char *nvim_do_sub_regtilde(char *sub, int magic, int preview)
 
 // --- curbuf field accessors ---
 
-/// Get curbuf->b_fnum
-int nvim_ecmd_curbuf_get_b_fnum(void) { return curbuf->b_fnum; }
-
-/// Get curbuf->b_ffname (full file name)
-const char *nvim_ecmd_curbuf_get_ffname(void) { return curbuf->b_ffname; }
-
-/// Get curbuf->b_fname (short file name)
-const char *nvim_ecmd_curbuf_get_fname(void) { return curbuf->b_fname; }
-
 /// Get curbuf->b_nwindows
 int nvim_ecmd_curbuf_get_nwindows(void) { return curbuf->b_nwindows; }
 
@@ -2806,9 +2783,6 @@ int nvim_ecmd_curbuf_get_kmap_state(void) { return curbuf->b_kmap_state; }
 /// Get curbuf->b_help
 int nvim_ecmd_curbuf_get_help(void) { return curbuf->b_help ? 1 : 0; }
 
-/// Get curbuf->b_ml.ml_line_count
-int nvim_ecmd_curbuf_get_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
-
 /// Set curbuf->b_op_start.lnum and col to 0
 void nvim_ecmd_curbuf_clear_op_marks(void)
 {
@@ -2834,9 +2808,6 @@ void nvim_ecmd_curwin_set_cursor(int lnum, int col)
 
 /// Get curwin->w_cursor.col
 int nvim_ecmd_curwin_get_cursor_col(void) { return (int)curwin->w_cursor.col; }
-
-/// Get curwin->w_cursor.lnum
-int nvim_ecmd_curwin_get_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
 
 /// Set curwin->w_cursor.coladd
 void nvim_ecmd_curwin_set_cursor_coladd(int val) { curwin->w_cursor.coladd = (colnr_T)val; }
@@ -3166,9 +3137,6 @@ void nvim_ecmd_cmdwin_restore_free(void *bundle)
   xfree(s);
 }
 
-/// Get exmode_active
-int nvim_ecmd_get_exmode_active(void) { return exmode_active; }
-
 /// Get skip_redraw
 int nvim_ecmd_get_skip_redraw(void) { return skip_redraw ? 1 : 0; }
 
@@ -3183,9 +3151,6 @@ int nvim_ecmd_get_p_awa(void) { return p_awa ? 1 : 0; }
 
 /// Get p_sol (startofline)
 int nvim_ecmd_get_p_sol(void) { return p_sol ? 1 : 0; }
-
-/// Get msg_scroll
-int nvim_ecmd_get_msg_scroll(void) { return msg_scroll; }
 
 /// Set msg_scroll
 void nvim_ecmd_set_msg_scroll(int val) { msg_scroll = (bool)val; }
