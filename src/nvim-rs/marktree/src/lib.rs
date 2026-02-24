@@ -18,6 +18,7 @@
 pub mod delete;
 pub mod ffi;
 pub mod insert;
+pub mod intersect_ops;
 pub mod intersection;
 pub mod iter;
 pub mod node;

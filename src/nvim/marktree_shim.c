@@ -180,6 +180,14 @@ extern void rs_marktree_move_region(MarkTree *b, int start_row, colnr_T start_co
                                     int extent_row, colnr_T extent_col,
                                     int new_row, colnr_T new_col);
 
+// Phase 2 (pass 2): intersection set operations
+extern void rs_merge_node_intersect(MarkTree *b, MTNode *x, int x_old_n, MTNode *y, int y_n);
+extern void rs_pivot_right_intersect(MarkTree *b, MTNode *x, MTNode *y, int y_n);
+extern void rs_pivot_left_intersect(MarkTree *b, MTNode *x, int x_n, MTNode *y);
+extern bool rs_intersect_mov_test(const uint64_t *x, size_t nx, const uint64_t *y, size_t ny,
+                                  const uint64_t *win, size_t nwin, uint64_t *wout, size_t *nwout,
+                                  uint64_t *dout, size_t *ndout);
+
 #define T MT_BRANCH_FACTOR
 #define ILEN (sizeof(MTNode) + sizeof(struct mtnode_inner_s))
 
@@ -518,208 +526,11 @@ void marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key)
   rs_marktree_revise_meta(b, itr, old_key);
 }
 
-/// similar to intersect_common but modify x and y in place to retain
-/// only the items which are NOT in common
-static void intersect_merge(Intersection *restrict m, Intersection *restrict x,
-                            Intersection *restrict y)
-{
-  size_t xi = 0;
-  size_t yi = 0;
-  size_t xn = 0;
-  size_t yn = 0;
-  while (xi < kv_size(*x) && yi < kv_size(*y)) {
-    if (kv_A(*x, xi) == kv_A(*y, yi)) {
-      // TODO(bfredl): kvi_pushp is actually quite complex, break out kvi_resize() to a function?
-      kvi_push(*m, kv_A(*x, xi));
-      xi++;
-      yi++;
-    } else if (kv_A(*x, xi) < kv_A(*y, yi)) {
-      kv_A(*x, xn++) = kv_A(*x, xi++);
-    } else {
-      kv_A(*y, yn++) = kv_A(*y, yi++);
-    }
-  }
-
-  if (xi < kv_size(*x)) {
-    memmove(&kv_A(*x, xn), &kv_A(*x, xi), sizeof(kv_A(*x, xn)) * (kv_size(*x) - xi));
-    xn += kv_size(*x) - xi;
-  }
-  if (yi < kv_size(*y)) {
-    memmove(&kv_A(*y, yn), &kv_A(*y, yi), sizeof(kv_A(*y, yn)) * (kv_size(*y) - yi));
-    yn += kv_size(*y) - yi;
-  }
-
-  kv_size(*x) = xn;
-  kv_size(*y) = yn;
-}
-
-// w used to be a child of x but it is now a child of y, adjust intersections accordingly
-// @param[out] d are intersections which should be added to the old children of y
-static void intersect_mov(Intersection *restrict x, Intersection *restrict y,
-                          Intersection *restrict w, Intersection *restrict d)
-{
-  size_t wi = 0;
-  size_t yi = 0;
-  size_t wn = 0;
-  size_t yn = 0;
-  size_t xi = 0;
-  while (wi < kv_size(*w) || xi < kv_size(*x)) {
-    if (wi < kv_size(*w) && (xi >= kv_size(*x) || kv_A(*x, xi) >= kv_A(*w, wi))) {
-      if (xi < kv_size(*x) && kv_A(*x, xi) == kv_A(*w, wi)) {
-        xi++;
-      }
-      // now w < x strictly
-      while (yi < kv_size(*y) && kv_A(*y, yi) < kv_A(*w, wi)) {
-        kvi_push(*d, kv_A(*y, yi));
-        yi++;
-      }
-      if (yi < kv_size(*y) && kv_A(*y, yi) == kv_A(*w, wi)) {
-        kv_A(*y, yn++) = kv_A(*y, yi++);
-        wi++;
-      } else {
-        kv_A(*w, wn++) = kv_A(*w, wi++);
-      }
-    } else {
-      // x < w strictly
-      while (yi < kv_size(*y) && kv_A(*y, yi) < kv_A(*x, xi)) {
-        kvi_push(*d, kv_A(*y, yi));
-        yi++;
-      }
-      if (yi < kv_size(*y) && kv_A(*y, yi) == kv_A(*x, xi)) {
-        kv_A(*y, yn++) = kv_A(*y, yi++);
-        xi++;
-      } else {
-        // add kv_A(x, xi) at kv_A(w, wn), pushing up wi if wi == wn
-        if (wi == wn) {
-          size_t n = kv_size(*w) - wn;
-          kvi_pushp(*w);
-          if (n > 0) {
-            memmove(&kv_A(*w, wn + 1), &kv_A(*w, wn), n * sizeof(kv_A(*w, 0)));
-          }
-          kv_A(*w, wi) = kv_A(*x, xi);
-          wn++;
-          wi++;  // no need to consider the added element again
-        } else {
-          assert(wn < wi);
-          kv_A(*w, wn++) = kv_A(*x, xi);
-        }
-        xi++;
-      }
-    }
-  }
-  if (yi < kv_size(*y)) {
-    // move remaining items to d
-    size_t n = kv_size(*y) - yi;  // at least one
-    kvi_ensure_more_space(*d, n);
-    memcpy(&kv_A(*d, kv_size(*d)), &kv_A(*y, yi), n * sizeof(kv_A(*d, 0)));
-    kv_size(*d) += n;
-  }
-  kv_size(*w) = wn;
-  kv_size(*y) = yn;
-}
-
 bool intersect_mov_test(const uint64_t *x, size_t nx, const uint64_t *y, size_t ny,
                         const uint64_t *win, size_t nwin, uint64_t *wout, size_t *nwout,
                         uint64_t *dout, size_t *ndout)
 {
-  // x is immutable in the context of intersect_mov. y might shrink, but we
-  // don't care about it (we get it the deleted ones in d)
-  Intersection xi = { .items = (uint64_t *)x, .size = nx };
-  Intersection yi = { .items = (uint64_t *)y, .size = ny };
-
-  Intersection w;
-  kvi_init(w);
-  for (size_t i = 0; i < nwin; i++) {
-    kvi_push(w, win[i]);
-  }
-  Intersection d;
-  kvi_init(d);
-
-  intersect_mov(&xi, &yi, &w, &d);
-
-  if (w.size > *nwout || d.size > *ndout) {
-    return false;
-  }
-
-  memcpy(wout, w.items, sizeof(w.items[0]) * w.size);
-  *nwout = w.size;
-
-  memcpy(dout, d.items, sizeof(d.items[0]) * d.size);
-  *ndout = d.size;
-
-  return true;
-}
-
-/// intersection: i = x & y
-static void intersect_common(Intersection *i, Intersection *x, Intersection *y)
-{
-  size_t xi = 0;
-  size_t yi = 0;
-  while (xi < kv_size(*x) && yi < kv_size(*y)) {
-    if (kv_A(*x, xi) == kv_A(*y, yi)) {
-      kvi_push(*i, kv_A(*x, xi));
-      xi++;
-      yi++;
-    } else if (kv_A(*x, xi) < kv_A(*y, yi)) {
-      xi++;
-    } else {
-      yi++;
-    }
-  }
-}
-
-// inplace union: x |= y
-static void intersect_add(Intersection *x, Intersection *y)
-{
-  size_t xi = 0;
-  size_t yi = 0;
-  while (xi < kv_size(*x) && yi < kv_size(*y)) {
-    if (kv_A(*x, xi) == kv_A(*y, yi)) {
-      xi++;
-      yi++;
-    } else if (kv_A(*y, yi) < kv_A(*x, xi)) {
-      size_t n = kv_size(*x) - xi;  // at least one
-      kvi_pushp(*x);
-      memmove(&kv_A(*x, xi + 1), &kv_A(*x, xi), n * sizeof(kv_A(*x, 0)));
-      kv_A(*x, xi) = kv_A(*y, yi);
-      xi++;  // newly added element
-      yi++;
-    } else {
-      xi++;
-    }
-  }
-  if (yi < kv_size(*y)) {
-    size_t n = kv_size(*y) - yi;  // at least one
-    kvi_ensure_more_space(*x, n);
-    memcpy(&kv_A(*x, kv_size(*x)), &kv_A(*y, yi), n * sizeof(kv_A(*x, 0)));
-    kv_size(*x) += n;
-  }
-}
-
-// inplace asymmetric difference: x &= ~y
-static void intersect_sub(Intersection *restrict x, Intersection *restrict y)
-{
-  size_t xi = 0;
-  size_t yi = 0;
-  size_t xn = 0;
-  while (xi < kv_size(*x) && yi < kv_size(*y)) {
-    if (kv_A(*x, xi) == kv_A(*y, yi)) {
-      xi++;
-      yi++;
-    } else if (kv_A(*x, xi) < kv_A(*y, yi)) {
-      kv_A(*x, xn++) = kv_A(*x, xi++);
-    } else {
-      yi++;
-    }
-  }
-  if (xi < kv_size(*x)) {
-    size_t n = kv_size(*x) - xi;
-    if (xn < xi) {  // otherwise xn == xi
-      memmove(&kv_A(*x, xn), &kv_A(*x, xi), n * sizeof(kv_A(*x, 0)));
-    }
-    xn += n;
-  }
-  kv_size(*x) = xn;
+  return rs_intersect_mov_test(x, nx, y, ny, win, nwin, wout, nwout, dout, ndout);
 }
 
 
@@ -727,10 +538,7 @@ static MTNode *merge_node(MarkTree *b, MTNode *p, int i)
 {
   MTNode *x = p->ptr[i];
   MTNode *y = p->ptr[i + 1];
-  Intersection mi;
-  kvi_init(mi);
-
-  intersect_merge(&mi, &x->intersect, &y->intersect);
+  int x_old_n = x->n;  // save before modification
 
   x->key[x->n] = p->key[i];
   refkey(b, x, x->n);
@@ -751,22 +559,14 @@ static MTNode *merge_node(MarkTree *b, MTNode *p, int i)
     // must be moved to their respective children
     memmove(&x->ptr[x->n + 1], y->ptr, ((size_t)y->n + 1) * sizeof(MTNode *));
     memmove(&x->meta[x->n + 1], y->meta, ((size_t)y->n + 1) * sizeof(y->meta[0]));
-    for (int k = 0; k < x->n + 1; k++) {
-      // TODO(bfredl): dedicated impl for "Z |= Y"
-      for (size_t idx = 0; idx < kv_size(x->intersect); idx++) {
-        rs_intersect_node(b, x->ptr[k], kv_A(x->intersect, idx));
-      }
-    }
+    // Fix parent/p_idx for y's children (now in x's second half)
     for (int ky = 0; ky < y->n + 1; ky++) {
-      int k = x->n + ky + 1;
-      // nodes that used to be in y, now the second half of x
+      int k = x_old_n + ky + 1;
       x->ptr[k]->parent = x;
       x->ptr[k]->p_idx = (int16_t)k;
-      // TODO(bfredl): dedicated impl for "Z |= X"
-      for (size_t idx = 0; idx < kv_size(y->intersect); idx++) {
-        rs_intersect_node(b, x->ptr[k], kv_A(y->intersect, idx));
-      }
     }
+    // Compute intersection merge and apply to children (Rust)
+    rs_merge_node_intersect(b, x, x_old_n, y, y->n);
   }
   x->n += y->n + 1;
   for (int m = 0; m < kMTMetaCount; m++) {
@@ -783,27 +583,7 @@ static MTNode *merge_node(MarkTree *b, MTNode *p, int i)
   p->n--;
   marktree_free_node(b, y);
 
-  kvi_destroy(x->intersect);
-
-  // move of a kvec_withinit_t, messy!
-  // TODO(bfredl): special case version of intersect_merge(x_out, x_in_m_out, y) to avoid this
-  kvi_move(&x->intersect, &mi);
-
   return x;
-}
-
-/// @param dest is overwritten (assumed to already been freed/moved)
-/// @param src consumed (don't free or use)
-void kvi_move(Intersection *dest, Intersection *src)
-{
-  dest->size = src->size;
-  dest->capacity = src->capacity;
-  if (src->items == src->init_array) {
-    memcpy(dest->init_array, src->init_array, src->size * sizeof(*src->init_array));
-    dest->items = dest->init_array;
-  } else {
-    dest->items = src->items;
-  }
 }
 
 // TODO(bfredl): as a potential "micro" optimization, pivoting should balance
@@ -860,20 +640,8 @@ static void pivot_right(MarkTree *b, MTPos p_pos, MTNode *p, const int i)
 
   // repair intersections of x
   if (x->level) {
-    // handle y and first new y->ptr[0]
-    Intersection d;
-    kvi_init(d);
-    // y->ptr[0] was moved from x to y
-    // adjust y->ptr[0] for a difference between the parents
-    // in addition, this might cause some intersection of the old y
-    // to bubble down to the old children of y (if y->ptr[0] wasn't intersected)
-    intersect_mov(&x->intersect, &y->intersect, &y->ptr[0]->intersect, &d);
-    if (kv_size(d)) {
-      for (int yi = 1; yi < y->n + 1; yi++) {
-        intersect_add(&y->ptr[yi]->intersect, &d);
-      }
-    }
-    kvi_destroy(d);
+    // y->ptr[0] was moved from x to y; adjust intersections via Rust
+    rs_pivot_right_intersect(b, x, y, y->n);
 
     rs_bubble_up(x);
   } else {
@@ -946,20 +714,8 @@ static void pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i)
 
   // repair intersections of x,y
   if (x->level) {
-    // handle y and first new y->ptr[0]
-    Intersection d;
-    kvi_init(d);
-    // x->ptr[x->n] was moved from y to x
-    // adjust x->ptr[x->n] for a difference between the parents
-    // in addition, this might cause some intersection of the old x
-    // to bubble down to the old children of x (if x->ptr[n] wasn't intersected)
-    intersect_mov(&y->intersect, &x->intersect, &x->ptr[x->n]->intersect, &d);
-    if (kv_size(d)) {
-      for (int xi = 0; xi < x->n; xi++) {  // ptr[x->n| deliberately skipped
-        intersect_add(&x->ptr[xi]->intersect, &d);
-      }
-    }
-    kvi_destroy(d);
+    // x->ptr[x->n] was moved from y to x; adjust intersections via Rust
+    rs_pivot_left_intersect(b, x, x->n, y);
 
     rs_bubble_up(y);
   } else {
