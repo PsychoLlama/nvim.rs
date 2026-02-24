@@ -1113,6 +1113,7 @@ pub unsafe extern "C" fn rs_showoneopt(opt_idx: c_int, opt_flags: c_int) {
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
     let kopt_count = nvim_get_kopt_count();
+    #[allow(clippy::cast_ptr_alignment)]
     let items: *mut c_int =
         xmalloc((kopt_count as usize) * std::mem::size_of::<c_int>()).cast::<c_int>();
 
@@ -1148,15 +1149,16 @@ pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
                 continue;
             }
 
-            let varp: *mut std::ffi::c_void;
-            if (opt_flags & (set_flags::OPT_LOCAL | set_flags::OPT_GLOBAL)) != 0 {
-                if nvim_option_is_global_only(opt_idx) != 0 {
-                    continue;
-                }
-                varp = nvim_get_varp_scope_by_idx(opt_idx, opt_flags);
-            } else {
-                varp = nvim_get_varp_by_idx(opt_idx);
-            }
+            #[allow(clippy::if_then_some_else_none)]
+            let varp: *mut std::ffi::c_void =
+                if (opt_flags & (set_flags::OPT_LOCAL | set_flags::OPT_GLOBAL)) != 0 {
+                    if nvim_option_is_global_only(opt_idx) != 0 {
+                        continue;
+                    }
+                    nvim_get_varp_scope_by_idx(opt_idx, opt_flags)
+                } else {
+                    nvim_get_varp_by_idx(opt_idx)
+                };
 
             if varp.is_null() {
                 continue;
@@ -1182,17 +1184,16 @@ pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
             }
         }
 
-        let rows: c_int;
-        if run == 1 {
+        let rows: c_int = if run == 1 {
             let columns = nvim_get_Columns();
             let mut cols = (columns + GAP - 3) / INC;
             if cols == 0 {
                 cols = 1;
             }
-            rows = (item_count + cols - 1) / cols;
+            (item_count + cols - 1) / cols
         } else {
-            rows = item_count;
-        }
+            item_count
+        };
 
         let mut row: c_int = 0;
         while row < rows && nvim_get_got_int() == 0 {

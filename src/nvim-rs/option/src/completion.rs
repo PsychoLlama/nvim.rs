@@ -516,7 +516,7 @@ extern "C" {
     fn nvim_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;
     fn nvim_get_kopt_count() -> c_int;
-    fn nvim_xp_get_context(xp: *const std::ffi::c_void) -> c_int;
+    fn nvim_xp_get_context(xp: *mut std::ffi::c_void) -> c_int;
     fn nvim_regmatch_get_rm_ic(regmatch: *const std::ffi::c_void) -> c_int;
     fn nvim_regmatch_set_rm_ic(regmatch: *mut std::ffi::c_void, val: c_int);
     fn nvim_excmds_regexec(rm: *mut std::ffi::c_void, line: *const c_char) -> c_int;
@@ -535,9 +535,7 @@ extern "C" {
         score: c_int,
     );
     fn xstrdup(s: *const c_char) -> *mut c_char;
-    fn xmalloc(size: usize) -> *mut std::ffi::c_void;
-    fn xfree(ptr: *mut std::ffi::c_void);
-    fn strlen(s: *const c_char) -> usize;
+    fn xmalloc(size: usize) -> *mut c_char;
 }
 
 /// Option boolean type value (kOptValTypeBoolean = 0)
@@ -551,6 +549,12 @@ const FUZZY_SCORE_NONE: c_int = i32::MIN;
 
 /// Match a string against a regex or fuzzy pattern.
 ///
+/// Fuzzy match context passed to `match_str_impl`.
+struct FuzzyCtx {
+    fuzzystr: *const c_char,
+    fuzmatch: *mut std::ffi::c_void,
+}
+
 /// If not fuzzy: calls vim_regexec; on match, stores str in matches[idx] (unless test_only).
 /// If fuzzy: calls fuzzy_match_str; on match, stores fuzmatch entry (unless test_only).
 ///
@@ -565,25 +569,21 @@ unsafe fn match_str_impl(
     matches: *mut *mut c_char,
     idx: c_int,
     test_only: bool,
-    fuzzy: bool,
-    fuzzystr: *const c_char,
-    fuzmatch: *mut std::ffi::c_void,
+    fuzzy_ctx: Option<&FuzzyCtx>,
 ) -> bool {
-    if !fuzzy {
-        if nvim_excmds_regexec(regmatch, str_) != 0 {
-            if !test_only && !matches.is_null() {
-                *matches.add(idx as usize) = xstrdup(str_);
-            }
-            return true;
-        }
-    } else {
-        let score = nvim_option_fuzzy_match_str(str_, fuzzystr);
+    if let Some(ctx) = fuzzy_ctx {
+        let score = nvim_option_fuzzy_match_str(str_, ctx.fuzzystr);
         if score != FUZZY_SCORE_NONE {
-            if !test_only && !fuzmatch.is_null() {
-                nvim_option_fuzmatch_set(fuzmatch, idx, str_, score);
+            if !test_only && !ctx.fuzmatch.is_null() {
+                nvim_option_fuzmatch_set(ctx.fuzmatch, idx, str_, score);
             }
             return true;
         }
+    } else if nvim_excmds_regexec(regmatch, str_) != 0 {
+        if !test_only && !matches.is_null() {
+            *matches.add(idx as usize) = xstrdup(str_);
+        }
+        return true;
     }
     false
 }
@@ -620,24 +620,26 @@ pub unsafe extern "C" fn rs_expand_option_settings(
     let mut loop_: c_int = 0;
     while loop_ <= 1 {
         nvim_regmatch_set_rm_ic(regmatch, ic);
+        let fuzzy_ctx = fuzzy.then_some(FuzzyCtx { fuzzystr, fuzmatch });
+        let fill_matches = if loop_ == 1 {
+            *matches
+        } else {
+            std::ptr::null_mut()
+        };
+        let test_only = loop_ == 0;
+
         // Match "all" keyword (only for non-bool-settings context)
         if nvim_xp_get_context(xp) != EXPAND_BOOL_SETTINGS {
             let all_ptr = KEYWORD_ALL.as_ptr().cast::<c_char>();
-            let matched = match_str_impl(
+            let kw_matched = match_str_impl(
                 all_ptr,
                 regmatch,
-                if loop_ == 1 {
-                    *matches
-                } else {
-                    std::ptr::null_mut()
-                },
+                fill_matches,
                 count,
-                loop_ == 0,
-                fuzzy,
-                fuzzystr,
-                fuzmatch,
+                test_only,
+                fuzzy_ctx.as_ref(),
             );
-            if matched {
+            if kw_matched {
                 if loop_ == 0 {
                     num_normal += 1;
                 } else {
@@ -660,27 +662,21 @@ pub unsafe extern "C" fn rs_expand_option_settings(
 
             let fullname = nvim_option_get_fullname(opt_idx);
 
-            let matched_full = match_str_impl(
+            let name_matched = match_str_impl(
                 fullname,
                 regmatch,
-                if loop_ == 1 {
-                    *matches
-                } else {
-                    std::ptr::null_mut()
-                },
+                fill_matches,
                 count,
-                loop_ == 0,
-                fuzzy,
-                fuzzystr,
-                fuzmatch,
+                test_only,
+                fuzzy_ctx.as_ref(),
             );
-            if matched_full {
+            if name_matched {
                 if loop_ == 0 {
                     num_normal += 1;
                 } else {
                     count += 1;
                 }
-            } else if !fuzzy {
+            } else if fuzzy_ctx.is_none() {
                 // Also try shortname for regex (not fuzzy - fuzzy already matches both)
                 let shortname = nvim_option_get_shortname(opt_idx);
                 if !shortname.is_null() && nvim_excmds_regexec(regmatch, shortname) != 0 {
@@ -700,12 +696,16 @@ pub unsafe extern "C" fn rs_expand_option_settings(
                 return 0; // OK
             }
             *num_matches = num_normal;
-            if !fuzzy {
-                *matches = xmalloc((*num_matches as usize) * std::mem::size_of::<*mut c_char>())
-                    .cast::<*mut c_char>();
-            } else {
+            if fuzzy {
                 let fm_size = nvim_option_get_fuzmatch_size();
-                fuzmatch = xmalloc((*num_matches as usize) * fm_size);
+                fuzmatch = xmalloc((*num_matches as usize) * fm_size).cast();
+            } else {
+                #[allow(clippy::cast_ptr_alignment)]
+                {
+                    *matches =
+                        xmalloc((*num_matches as usize) * std::mem::size_of::<*mut c_char>())
+                            .cast::<*mut c_char>();
+                }
             }
         }
         loop_ += 1;

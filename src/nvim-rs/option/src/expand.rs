@@ -814,7 +814,9 @@ pub unsafe extern "C" fn rs_expand_old_setting(
     matches: *mut *mut *mut c_char,
 ) -> c_int {
     *num_matches = 0;
-    *matches = xmalloc(std::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
+    #[allow(clippy::cast_ptr_alignment)]
+    let matches_arr = xmalloc(std::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
+    *matches = matches_arr;
 
     let mut expand_option_idx = nvim_get_expand_option_idx();
     let expand_option_flags = nvim_get_expand_option_flags();
@@ -826,12 +828,12 @@ pub unsafe extern "C" fn rs_expand_old_setting(
         nvim_set_expand_option_idx(expand_option_idx);
     }
 
-    let var: *const c_char = if expand_option_idx != K_OPT_INVALID {
+    let var: *const c_char = if expand_option_idx == K_OPT_INVALID {
+        c"".as_ptr()
+    } else {
         // Put string of option value in NameBuff.
         rs_option_value2string(expand_option_idx as c_int, expand_option_flags);
         nvim_get_namebuff()
-    } else {
-        c"".as_ptr()
     };
 
     let buf = rs_escape_option_str_cmdline(var);
