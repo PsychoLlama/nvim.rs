@@ -136,6 +136,13 @@ extern void rs_set_options_bin(int oldval, int newval, int opt_flags);
 extern void rs_set_fileformat(int eol_style, int opt_flags);
 extern void rs_set_helplang_default(const char *lang);
 
+// Rust parsing helpers and query functions (option pass 7 phase 1)
+extern int rs_get_op(const char *arg);
+extern int rs_get_option_prefix(char **argp);
+extern int rs_shortmess(int x);
+typedef struct { const char *end; int opt_idx; } FindOptionEndResult;
+extern FindOptionEndResult rs_find_option_end(const char *arg);
+
 // Rust query functions (from Rust query.rs, option pass 4 phase 1)
 extern int rs_can_bs(int what);
 extern const char *rs_get_equalprg(void);
@@ -1932,30 +1939,12 @@ static char *stropt_get_newval(int nextchar, OptIndex opt_idx, char **argp, void
 
 static set_op_T get_op(const char *arg)
 {
-  set_op_T op = OP_NONE;
-  if (*arg != NUL && *(arg + 1) == '=') {
-    if (*arg == '+') {
-      op = OP_ADDING;          // "+="
-    } else if (*arg == '^') {
-      op = OP_PREPENDING;      // "^="
-    } else if (*arg == '-') {
-      op = OP_REMOVING;        // "-="
-    }
-  }
-  return op;
+  return (set_op_T)rs_get_op(arg);
 }
 
 static set_prefix_T get_option_prefix(char **argp)
 {
-  if (strncmp(*argp, "no", 2) == 0) {
-    *argp += 2;
-    return PREFIX_NO;
-  } else if (strncmp(*argp, "inv", 3) == 0) {
-    *argp += 3;
-    return PREFIX_INV;
-  }
-
-  return PREFIX_NONE;
+  return (set_prefix_T)rs_get_option_prefix(argp);
 }
 
 static int validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
@@ -2015,26 +2004,9 @@ static int validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_
 /// @return NULL when no option name found. Otherwise pointer to the char after the option name.
 const char *find_option_end(const char *arg, OptIndex *opt_idxp)
 {
-  const char *p;
-
-  // Handle TTY and keycode options separately.
-  if ((p = rs_find_tty_option_end(arg)) != NULL) {
-    *opt_idxp = kOptInvalid;
-    return p;
-  } else {
-    p = arg;
-  }
-
-  if (!ASCII_ISALPHA(*p)) {
-    *opt_idxp = kOptInvalid;
-    return NULL;
-  }
-  while (ASCII_ISALPHA(*p)) {
-    p++;
-  }
-
-  *opt_idxp = find_option_len(arg, (size_t)(p - arg));
-  return p;
+  FindOptionEndResult r = rs_find_option_end(arg);
+  *opt_idxp = (OptIndex)r.opt_idx;
+  return r.end;
 }
 
 /// Get new option value from argp. Allocated OptVal must be freed by caller.
@@ -4200,10 +4172,7 @@ static int wc_use_keyname(const void *varp, OptInt *wcp)
 /// 'shortmess' contains 'a' and "x" is present in SHM_ALL_ABBREVIATIONS.
 bool shortmess(int x)
 {
-  return (p_shm != NULL
-          && (vim_strchr(p_shm, x) != NULL
-              || (vim_strchr(p_shm, 'a') != NULL
-                  && vim_strchr(SHM_ALL_ABBREVIATIONS, x) != NULL)));
+  return rs_shortmess(x) != 0;
 }
 
 /// vimrc_found() - Called when a vimrc or "VIMINIT" has been found.

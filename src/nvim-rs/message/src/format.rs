@@ -27,8 +27,12 @@ extern "C" {
     fn nvim_get_msg_scroll() -> c_int;
     /// Get `need_wait_return` flag
     fn nvim_get_need_wait_return() -> c_int;
-    /// Check shortmess option flag
+    /// Check shortmess option flag (used by other message code that has not been migrated)
     fn nvim_shortmess(flag: c_int) -> c_int;
+    /// Get the 'shortmess' option string value
+    fn nvim_option_get_shm() -> *const c_char;
+    /// Search for character in string (returns pointer or NULL)
+    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
     /// Get `exmode_active` flag
     fn nvim_get_exmode_active() -> bool;
     /// Get `msg_silent` count
@@ -149,13 +153,33 @@ pub unsafe extern "C" fn rs_msg_should_truncate() -> c_int {
     )
 }
 
-/// Check if a specific shortmess flag is set.
+/// Characters abbreviated by the 'a' flag in 'shortmess'.
+/// Matches SHM_ALL_ABBREVIATIONS in option_vars.h: SHM_RO='r', SHM_MOD='m', SHM_LINES='l', SHM_WRI='w'.
+const SHM_ALL_ABBREVIATIONS: &[u8] = b"rmlw\0";
+
+/// Check if character `x` is present in 'shortmess' option.
+///
+/// Returns 1 (true) if `x` is in `p_shm`, or if 'a' is in `p_shm` and `x`
+/// is one of the abbreviated chars (`SHM_ALL_ABBREVIATIONS`).
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Calls C accessor functions.
 #[no_mangle]
-pub unsafe extern "C" fn rs_shortmess(flag: c_int) -> c_int {
-    nvim_shortmess(flag)
+pub unsafe extern "C" fn rs_shortmess(x: c_int) -> c_int {
+    let p_shm = nvim_option_get_shm();
+    if p_shm.is_null() {
+        return 0;
+    }
+    if !vim_strchr(p_shm, x).is_null() {
+        return 1;
+    }
+    // Check if 'a' flag enables abbreviation for x
+    if !vim_strchr(p_shm, c_int::from(b'a')).is_null()
+        && !vim_strchr(SHM_ALL_ABBREVIATIONS.as_ptr().cast(), x).is_null()
+    {
+        return 1;
+    }
+    0
 }
 
 /// Calculate the width a string would take on screen.
