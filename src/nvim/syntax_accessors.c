@@ -3041,116 +3041,8 @@ void nvim_syn_set_nextcmd(exarg_T *eap, char *rest) { eap->nextcmd = check_nextc
 char *nvim_syn_get_eap_arg(const exarg_T *eap) { return eap->arg; }
 int nvim_syn_get_eap_skip(const exarg_T *eap) { return eap->skip; }
 
-/// Allocate and compile a syntax pattern via get_syn_pattern().
-/// Returns an opaque handle to a heap-allocated synpat_T (or NULL on error).
-/// The caller must free with nvim_syn_free_compiled_pattern() on error.
-/// item_type: 0=START, 1=SKIP, 2=END
-/// current_flags: current syn_opt_arg.flags at the time of pattern compilation
-synpat_T *nvim_syn_compile_pattern(char *arg, int item_type, int opt_flags, char **rest_out)
-{
-  // Enable the appropriate \z specials.
-  if (item_type == ITEM_START) {
-    reg_do_extmatch = REX_SET;
-  } else {
-    reg_do_extmatch = REX_USE;
-  }
-
-  synpat_T *pat = xcalloc(1, sizeof(synpat_T));
-  char *rest = get_syn_pattern(arg, pat);
-  reg_do_extmatch = 0;
-
-  if (rest == NULL) {
-    xfree(pat);
-    *rest_out = NULL;
-    return NULL;
-  }
-
-  // Check for HL_HAS_EOL on end patterns (only if HL_EXCLUDENL not set)
-  if (item_type == ITEM_END && vim_regcomp_had_eol()
-      && !(opt_flags & HL_EXCLUDENL)) {
-    pat->sp_flags |= HL_HAS_EOL;
-  }
-
-  *rest_out = rest;
-  return pat;
-}
-
-/// Free a compiled pattern on error.
-void nvim_syn_free_compiled_pattern(synpat_T *pat)
-{
-  if (pat != NULL) {
-    vim_regfree(pat->sp_prog);
-    xfree(pat->sp_pattern);
-    xfree(pat);
-  }
-}
-
 void nvim_syn_incl_toplevel(int id, int *flagsp) { syn_incl_toplevel(id, flagsp); }
 
-/// Store completed region patterns into the synblock.
-/// pat_data is an array of {synpat_T *pat, int matchgroup_id, int item_type} triples.
-/// pat_count is the number of entries.
-/// flags, syn_id, conceal_char are from option parsing.
-/// cont_list, cont_in_list, next_list are from option parsing (ownership transferred on success).
-/// Returns 1 on success (don't free patterns), 0 on failure.
-int nvim_syn_store_region_patterns(
-
-  synpat_T **pats,
-
-  int *matchgroup_ids,
-
-  int *item_types,
-
-  int pat_count,
-
-  int flags,
-
-  int syn_id,
-
-  int conceal_char,
-
-  int16_t *cont_list,
-
-  int16_t *cont_in_list,
-
-  int16_t *next_list,
-
-  int syncing)
-
-{
-  ga_grow(&(curwin->w_s->b_syn_patterns), pat_count);
-
-  int idx = curwin->w_s->b_syn_patterns.ga_len;
-  for (int i = 0; i < pat_count; i++) {
-    SYN_ITEMS(curwin->w_s)[idx] = *(pats[i]);
-    SYN_ITEMS(curwin->w_s)[idx].sp_syncing = syncing;
-    SYN_ITEMS(curwin->w_s)[idx].sp_type =
-      (item_types[i] == ITEM_START) ? SPTYPE_START
-                                    : (item_types[i] == ITEM_SKIP) ? SPTYPE_SKIP : SPTYPE_END;
-    SYN_ITEMS(curwin->w_s)[idx].sp_flags |= flags;
-    SYN_ITEMS(curwin->w_s)[idx].sp_syn.id = (int16_t)syn_id;
-    SYN_ITEMS(curwin->w_s)[idx].sp_syn.inc_tag = current_syn_inc_tag;
-    SYN_ITEMS(curwin->w_s)[idx].sp_syn_match_id = (int16_t)matchgroup_ids[i];
-    SYN_ITEMS(curwin->w_s)[idx].sp_cchar = conceal_char;
-    if (item_types[i] == ITEM_START) {
-      SYN_ITEMS(curwin->w_s)[idx].sp_cont_list = cont_list;
-      SYN_ITEMS(curwin->w_s)[idx].sp_syn.cont_in_list = cont_in_list;
-      if (cont_in_list != NULL) {
-        curwin->w_s->b_syn_containedin = true;
-      }
-      SYN_ITEMS(curwin->w_s)[idx].sp_next_list = next_list;
-    }
-    curwin->w_s->b_syn_patterns.ga_len++;
-    idx++;
-    if (flags & HL_FOLD) {
-      curwin->w_s->b_syn_folditems++;
-    }
-  }
-
-  redraw_curbuf_later(UPD_SOME_VALID);
-  syn_stack_free_all(curwin->w_s);
-  return 1;
-}
 
 _Static_assert(SF_CCOMMENT == 0x01, "SF_CCOMMENT");
 _Static_assert(SF_MATCH == 0x02, "SF_MATCH");
@@ -3200,41 +3092,53 @@ void nvim_synpat_clear_time(synpat_T *pat) { syn_clear_time(&pat->sp_time); }
 
 int nvim_syn_vim_regcomp_had_eol(void) { return vim_regcomp_had_eol(); }
 
-/// Store a compiled match pattern into b_syn_patterns and trigger redraw.
-/// The synpat_T pointed to by pat is copied into the garray.
-/// On success, cont_list, cont_in_list, and next_list ownership is transferred
-/// to the stored pattern (do not free them afterward).
-void nvim_syn_store_match_pattern(synpat_T *pat, int flags, int syn_id, int sync_idx,
-                                   int conceal_char,
-                                   int16_t *cont_list, int16_t *cont_in_list,
-                                   int16_t *next_list, int syncing)
+// =============================================================================
+// Phase 7 (pass 7) accessors: pattern_store migration
+// =============================================================================
+
+/// Grow the curwin b_syn_patterns garray by count slots.
+void nvim_synblock_ga_grow_patterns(int count) { ga_grow(&curwin->w_s->b_syn_patterns, count); }
+
+/// Append one slot to curwin b_syn_patterns and return a pointer to it.
+synpat_T *nvim_synblock_ga_append_pattern(void)
 {
-  synpat_T *spp = GA_APPEND_VIA_PTR(synpat_T, &curwin->w_s->b_syn_patterns);
-  *spp = *pat;
-  spp->sp_syncing = syncing;
-  spp->sp_type = SPTYPE_MATCH;
-  spp->sp_syn.id = (int16_t)syn_id;
-  spp->sp_syn.inc_tag = current_syn_inc_tag;
-  spp->sp_flags = flags;
-  spp->sp_sync_idx = sync_idx;
-  spp->sp_cont_list = cont_list;
-  spp->sp_syn.cont_in_list = cont_in_list;
-  spp->sp_cchar = conceal_char;
-  if (cont_in_list != NULL) {
-    curwin->w_s->b_syn_containedin = true;
-  }
-  spp->sp_next_list = next_list;
-
-  if (flags & (HL_SYNC_HERE | HL_SYNC_THERE)) {
-    curwin->w_s->b_syn_sync_flags |= SF_MATCH;
-  }
-  if (flags & HL_FOLD) {
-    curwin->w_s->b_syn_folditems++;
-  }
-
-  redraw_curbuf_later(UPD_SOME_VALID);
-  syn_stack_free_all(curwin->w_s);
+  return GA_APPEND_VIA_PTR(synpat_T, &curwin->w_s->b_syn_patterns);
 }
+
+/// Copy synpat_T: *dst = *src.
+void nvim_synpat_copy_from(synpat_T *dst, synpat_T *src) { *dst = *src; }
+
+void nvim_synpat_set_syncing(synpat_T *pat, int syncing) { pat->sp_syncing = syncing; }
+void nvim_synpat_set_type(synpat_T *pat, int type) { pat->sp_type = type; }
+void nvim_synpat_set_flags(synpat_T *pat, int flags) { pat->sp_flags = flags; }
+void nvim_synpat_or_flags(synpat_T *pat, int flags) { pat->sp_flags |= flags; }
+void nvim_synpat_set_syn_id(synpat_T *pat, int id) { pat->sp_syn.id = (int16_t)id; }
+void nvim_synpat_set_syn_inc_tag(synpat_T *pat, int tag) { pat->sp_syn.inc_tag = tag; }
+void nvim_synpat_set_syn_match_id(synpat_T *pat, int id) { pat->sp_syn_match_id = (int16_t)id; }
+void nvim_synpat_set_cchar(synpat_T *pat, int c) { pat->sp_cchar = c; }
+void nvim_synpat_set_sync_idx(synpat_T *pat, int idx) { pat->sp_sync_idx = idx; }
+void nvim_synpat_set_cont_list(synpat_T *pat, int16_t *list) { pat->sp_cont_list = list; }
+void nvim_synpat_set_cont_in_list(synpat_T *pat, int16_t *list) { pat->sp_syn.cont_in_list = list; }
+void nvim_synpat_set_next_list(synpat_T *pat, int16_t *list) { pat->sp_next_list = list; }
+void nvim_synblock_set_containedin(int val) { curwin->w_s->b_syn_containedin = (bool)val; }
+void nvim_synblock_or_sync_flags_curwin(int flags) { curwin->w_s->b_syn_sync_flags |= flags; }
+void nvim_synblock_inc_folditems(void) { curwin->w_s->b_syn_folditems++; }
+
+/// Allocate a zeroed synpat_T on the heap and return it.
+synpat_T *nvim_syn_xcalloc_synpat(void) { return xcalloc(1, sizeof(synpat_T)); }
+
+/// Free a heap-allocated synpat_T including sp_prog and sp_pattern.
+void nvim_syn_free_synpat(synpat_T *pat)
+{
+  if (pat != NULL) {
+    vim_regfree(pat->sp_prog);
+    xfree(pat->sp_pattern);
+    xfree(pat);
+  }
+}
+
+/// Set the global reg_do_extmatch variable (REX_SET=1, REX_USE=2, 0=off).
+void nvim_syn_set_reg_do_extmatch(int val) { reg_do_extmatch = val; }
 
 // =============================================================================
 // Phase 3 accessors: syn_cmd_keyword migration

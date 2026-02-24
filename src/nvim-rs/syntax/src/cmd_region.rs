@@ -5,6 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::pattern_store;
 use crate::types::SynPatHandle;
 
 // Item types matching C #defines
@@ -21,27 +22,7 @@ extern "C" {
     fn nvim_syn_set_nextcmd(eap: *mut c_void, rest: *mut c_char);
     fn nvim_syn_get_eap_arg(eap: *const c_void) -> *mut c_char;
     fn nvim_syn_get_eap_skip(eap: *const c_void) -> c_int;
-    fn nvim_syn_compile_pattern(
-        arg: *mut c_char,
-        item_type: c_int,
-        current_flags: c_int,
-        rest_out: *mut *mut c_char,
-    ) -> SynPatHandle;
-    fn nvim_syn_free_compiled_pattern(pat: SynPatHandle);
     fn nvim_syn_incl_toplevel(id: c_int, flagsp: *mut c_int);
-    fn nvim_syn_store_region_patterns(
-        pats: *mut SynPatHandle,
-        matchgroup_ids: *mut c_int,
-        item_types: *mut c_int,
-        pat_count: c_int,
-        flags: c_int,
-        syn_id: c_int,
-        conceal_char: c_int,
-        cont_list: *mut i16,
-        cont_in_list: *mut i16,
-        next_list: *mut i16,
-        syncing: c_int,
-    ) -> c_int;
 
     // Standard C library
     fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
@@ -170,11 +151,11 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
             }
             rest = nvim_syn_skipwhite(p);
         } else {
-            // Compile the pattern
+            // Compile the pattern (Rust)
             let mut pattern_rest: *mut c_char = std::ptr::null_mut();
-            let pat = nvim_syn_compile_pattern(rest, item, opt_flags, &mut pattern_rest);
+            let pat = pattern_store::compile_pattern(rest, item, opt_flags, &mut pattern_rest);
 
-            if pat.0.is_null() {
+            if pat.is_null() {
                 rest = std::ptr::null_mut();
                 break;
             }
@@ -222,29 +203,22 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
             if syn_id != 0 {
                 nvim_syn_incl_toplevel(syn_id, &mut opt_flags);
 
-                // Build arrays for C storage function.
-                // The C code stores patterns grouped by type (START, SKIP, END)
-                // and within each type in reverse order (linked list push-to-front).
-                let mut ordered: Vec<&CollectedPat> = Vec::with_capacity(patterns.len());
+                // Build the ordered list for Rust storage:
+                // START reversed, SKIP reversed, END reversed
+                let mut ordered: Vec<(SynPatHandle, c_int, c_int)> =
+                    Vec::with_capacity(patterns.len());
                 for item_type in [ITEM_START, ITEM_SKIP, ITEM_END] {
-                    let group: Vec<&CollectedPat> = patterns
+                    let group: Vec<_> = patterns
                         .iter()
                         .filter(|p| p.item_type == item_type)
                         .collect();
                     for p in group.iter().rev() {
-                        ordered.push(p);
+                        ordered.push((p.pat, p.matchgroup_id, p.item_type));
                     }
                 }
-                let pat_count = ordered.len() as c_int;
-                let mut pats: Vec<SynPatHandle> = ordered.iter().map(|p| p.pat).collect();
-                let mut mg_ids: Vec<c_int> = ordered.iter().map(|p| p.matchgroup_id).collect();
-                let mut types: Vec<c_int> = ordered.iter().map(|p| p.item_type).collect();
 
-                let result = nvim_syn_store_region_patterns(
-                    pats.as_mut_ptr(),
-                    mg_ids.as_mut_ptr(),
-                    types.as_mut_ptr(),
-                    pat_count,
+                let result = pattern_store::store_region_patterns(
+                    &ordered,
                     opt_flags,
                     syn_id,
                     conceal_char,
@@ -264,7 +238,7 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
     // Free patterns on error
     if !success {
         for cp in &patterns {
-            nvim_syn_free_compiled_pattern(cp.pat);
+            pattern_store::free_compiled_pattern(cp.pat);
         }
         nvim_syn_xfree(cont_list as *mut c_void);
         nvim_syn_xfree(cont_in_list as *mut c_void);
@@ -278,12 +252,13 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
             nvim_syn_semsg_1s(c"E475: Invalid argument: %s".as_ptr(), arg);
         }
     } else {
-        // On success, free only the pat_ptr wrappers (patterns are owned by garray now)
-        // The SynPatHandle memory was copied into the garray by nvim_syn_store_region_patterns,
-        // so we need to free the wrapper allocations
+        // On success, free only the heap-allocated synpat_T wrapper shells.
+        // The data was copied into the garray by store_region_patterns, so we
+        // only need to free the outer allocation (not sp_prog or sp_pattern).
         for cp in &patterns {
-            // Free the heap-allocated synpat_T wrapper (data was already memcpy'd into garray)
-            nvim_syn_xfree(cp.pat.0);
+            // Free the outer synpat_T allocation only (data already in garray).
+            // We use nvim_syn_xfree to free just the struct allocation.
+            crate::pattern_store::free_compiled_pattern_shell(cp.pat);
         }
     }
 }
