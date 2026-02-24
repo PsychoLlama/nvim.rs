@@ -673,9 +673,10 @@ void nvim_tag_snprintf_iobuff(const char *fmt, ...)
   va_end(ap);
 }
 
-/// Format do_tags line into IObuff and output it
-void nvim_tag_do_tags_line(int is_current, int idx, int cur_match,
-                           const char *tagname, int64_t lnum)
+/// Format do_tags line into IObuff and return IObuff pointer.
+/// Rust calls this then nvim_tag_msg_outtrans separately (Phase 3).
+const char *nvim_tag_format_tags_line(int is_current, int idx, int cur_match,
+                                      const char *tagname, int64_t lnum)
 {
   vim_snprintf(IObuff, IOSIZE, "%c%2d %2d %-15s %5" PRIdLINENR "  ",
                is_current ? '>' : ' ',
@@ -683,7 +684,22 @@ void nvim_tag_do_tags_line(int is_current, int idx, int cur_match,
                cur_match + 1,
                tagname,
                (linenr_T)lnum);
-  msg_outtrans(IObuff, 0, false);
+  return IObuff;
+}
+
+/// Decrement RedrawingDisabled.
+void nvim_tag_dec_RedrawingDisabled(void) { RedrawingDisabled--; }
+
+/// set_topline(curwin, curwin->w_cursor.lnum) wrapper.
+void nvim_tag_set_topline_curwin(void)
+{
+  set_topline(curwin, curwin->w_cursor.lnum);
+}
+
+/// win_close(curwin, false, false) wrapper for post_fail.
+void nvim_tag_win_close_curwin(void)
+{
+  win_close(curwin, false, false);
 }
 
 char *nvim_tag_fm_getname(const void *tg_void, int lead_len) { const taggy_T *tg = (const taggy_T *)tg_void; return fm_getname(&((taggy_T *)tg)->fmark, lead_len); }
@@ -1201,43 +1217,7 @@ int nvim_tag_jumpto_run_search(char *pbuf, char *pbuf_end, char *lbuf)
   return retval;
 }
 
-/// Post-success cleanup: set_topline for help bufs, open fold, return to preview win.
-/// Also calls RedrawingDisabled--.
-void nvim_tag_jumpto_post_success(int getfile_result, bool old_key_typed,
-                                  int do_tagpreview, const void *curwin_save_void)
-{
-  if (getfile_result == GETFILE_OPEN_OTHER) {
-    // retval already OK in caller; nothing extra needed here
-  }
-
-  if (curbuf->b_help) {
-    set_topline(curwin, curwin->w_cursor.lnum);
-  }
-  if ((fdo_flags & kOptFdoFlagTag) && old_key_typed) {
-    rs_foldOpenCursor();
-  }
-
-  if (do_tagpreview != 0) {
-    win_T *curwin_save = (win_T *)curwin_save_void;
-    if (curwin != curwin_save && rs_win_valid(curwin_save)) {
-      validate_cursor(curwin);
-      redraw_later(curwin, UPD_VALID);
-      win_enter(curwin_save, true);
-    }
-  }
-
-  RedrawingDisabled--;
-}
-
-/// Post-failure cleanup: RedrawingDisabled--, close any split window.
-void nvim_tag_jumpto_post_fail(void)
-{
-  RedrawingDisabled--;
-  if (postponed_split) {
-    win_close(curwin, false, false);
-    postponed_split = 0;
-  }
-}
+// nvim_tag_jumpto_post_success and nvim_tag_jumpto_post_fail migrated to Rust (Phase 3)
 
 /// Returns true if GETFILE_SUCCESS(getfile_result).
 bool nvim_tag_getfile_success(int getfile_result)

@@ -953,13 +953,13 @@ extern "C" {
     fn nvim_tag_fm_getname(tg: *const c_void, lead_len: c_int) -> *mut c_char;
     fn nvim_taggy_get_fmark_fnum(tg: *const c_void) -> c_int;
     fn nvim_tag_list_format_entry(is_current: bool, i: c_int, mt_name: *const c_char);
-    fn nvim_tag_do_tags_line(
+    fn nvim_tag_format_tags_line(
         is_current: c_int,
         idx: c_int,
         cur_match: c_int,
         tagname: *const c_char,
         lnum: i64,
-    );
+    ) -> *const c_char;
 
     // Dictionary/list operations
     fn nvim_tag_tv_dict_alloc() -> DictHandle;
@@ -1440,7 +1440,10 @@ pub unsafe extern "C" fn rs_do_tags() {
         let lnum = nvim_fmark_get_lnum(fmark) as i64;
         let cur_match = nvim_taggy_get_cur_match(entry);
 
-        nvim_tag_do_tags_line((i == tagstackidx) as c_int, i, cur_match, tagname, lnum);
+        // Inline Rust port of nvim_tag_do_tags_line (Phase 3)
+        let line_str =
+            nvim_tag_format_tags_line((i == tagstackidx) as c_int, i, cur_match, tagname, lnum);
+        nvim_tag_msg_outtrans(line_str, 0, false);
 
         let fmark_fnum = nvim_taggy_get_fmark_fnum(entry);
         let curbuf_fnum = nvim_get_curbuf_fnum();

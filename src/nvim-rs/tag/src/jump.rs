@@ -508,13 +508,17 @@ extern "C" {
         pbuf_end: *mut c_char,
         lbuf: *mut c_char,
     ) -> c_int;
-    fn nvim_tag_jumpto_post_success(
-        getfile_result: c_int,
-        old_key_typed: bool,
-        do_tagpreview: c_int,
-        curwin_save: *const c_void,
-    );
-    fn nvim_tag_jumpto_post_fail();
+    // Post-jump helpers (Phase 3 — migrated to Rust inline)
+    fn nvim_curbuf_is_help() -> bool;
+    fn nvim_tag_set_topline_curwin();
+    fn nvim_get_fdo_flags() -> u32;
+    fn rs_foldOpenCursor();
+    fn rs_win_valid(win: *const c_void) -> bool;
+    fn nvim_validate_cursor();
+    fn nvim_redraw_later_wrapper(wp: *mut c_void, typ: c_int);
+    fn nvim_win_enter(wp: *mut c_void, undo_sync: c_int);
+    fn nvim_tag_dec_RedrawingDisabled();
+    fn nvim_tag_win_close_curwin();
     fn nvim_tag_getfile_success(getfile_result: c_int) -> bool;
     fn nvim_tag_getfile_open_other() -> c_int;
     fn nvim_tag_getfile_unused() -> c_int;
@@ -591,20 +595,41 @@ pub unsafe extern "C" fn rs_tag_jumpto_execute(
         };
 
         if search_retval == OK {
-            nvim_tag_jumpto_post_success(
-                getfile_result,
-                old_key_typed,
-                l_g_do_tagpreview,
-                curwin_save,
-            );
+            // Inline Rust port of nvim_tag_jumpto_post_success (Phase 3)
+            if nvim_curbuf_is_help() {
+                nvim_tag_set_topline_curwin();
+            }
+            // kOptFdoFlagTag = 0x80 (verified by _Static_assert in tag_shim.c)
+            if (nvim_get_fdo_flags() & 0x80) != 0 && old_key_typed {
+                rs_foldOpenCursor();
+            }
+            if l_g_do_tagpreview != 0 {
+                let curwin_now = nvim_tag_get_curwin();
+                if curwin_now != curwin_save && rs_win_valid(curwin_save) {
+                    // UPD_VALID = 10 (from drawscreen.h)
+                    nvim_validate_cursor();
+                    nvim_redraw_later_wrapper(curwin_now, 10);
+                    nvim_win_enter(curwin_save, 1);
+                }
+            }
+            nvim_tag_dec_RedrawingDisabled();
         } else {
-            // RedrawingDisabled-- is done inside post_success; do it here on fail
-            nvim_tag_jumpto_post_fail();
+            // Inline Rust port of nvim_tag_jumpto_post_fail (Phase 3)
+            nvim_tag_dec_RedrawingDisabled();
+            if nvim_get_postponed_split() != 0 {
+                nvim_tag_win_close_curwin();
+                nvim_set_postponed_split(0);
+            }
         }
 
         search_retval
     } else {
-        nvim_tag_jumpto_post_fail();
+        // Inline Rust port of nvim_tag_jumpto_post_fail (Phase 3)
+        nvim_tag_dec_RedrawingDisabled();
+        if nvim_get_postponed_split() != 0 {
+            nvim_tag_win_close_curwin();
+            nvim_set_postponed_split(0);
+        }
         FAIL
     };
 
