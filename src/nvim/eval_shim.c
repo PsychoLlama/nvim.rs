@@ -459,12 +459,7 @@ void nvim_eval_restore_cpo(void)
 
 #define loop_get_events(l) rs_loop_get_events(l)
 
-// TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
-
-#define DICT_MAXNEST 100        // maximum nesting of lists and dicts
-
 static const char *e_missbrac = N_("E111: Missing ']'");
-static const char *e_list_end = N_("E697: Missing end of List ']': %s");
 static const char e_cannot_slice_dictionary[]
   = N_("E719: Cannot slice a Dictionary");
 static const char e_cannot_index_special_variable[]
@@ -475,18 +470,10 @@ static const char e_cannot_index_a_funcref[]
   = N_("E695: Cannot index a Funcref");
 static const char e_variable_nested_too_deep_for_making_copy[]
   = N_("E698: Variable nested too deep for making a copy");
-static const char e_string_list_or_blob_required[]
-  = N_("E1098: String, List or Blob required");
-static const char e_expression_too_recursive_str[]
-  = N_("E1169: Expression too recursive: %s");
 static const char e_dot_can_only_be_used_on_dictionary_str[]
   = N_("E1203: Dot can only be used on a dictionary: %s");
 static const char e_empty_function_name[]
   = N_("E1192: Empty function name");
-static const char e_cannot_use_partial_here[]
-  = N_("E1265: Cannot use a partial here");
-
-static char * const namespace_char = "abglstvw";
 
 /// Used for checking if local variables or arguments used in a lambda.
 bool *eval_lavars_used = NULL;
@@ -1138,17 +1125,6 @@ int eval0(char *arg, typval_T *rettv, exarg_T *eap, evalarg_T *const evalarg)
 int may_call_simple_func(const char *arg, typval_T *rettv)
 {
   return rs_may_call_simple_func(arg, rettv);
-}
-
-/// Thin wrapper for remaining C callers (eval_foldexpr, eval_foldtext).
-/// Logic migrated to Rust eval0_simple_funccal_impl.
-static int eval0_simple_funccal(char *arg, typval_T *rettv, exarg_T *eap, evalarg_T *const evalarg)
-{
-  int r = rs_may_call_simple_func(arg, rettv);
-  if (r == NOTDONE) {
-    r = eval0(arg, rettv, eap, evalarg);
-  }
-  return r;
 }
 
 /// Handle top level expression:
