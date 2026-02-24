@@ -164,6 +164,9 @@ extern const char *rs_find_option_var_end(const char **arg, int *opt_idxp, int *
 extern char *rs_prompt_get_input(buf_T *buf);
 extern void rs_prompt_invoke_callback(void);
 extern bool rs_invoke_prompt_interrupt(void);
+// Phase 3 (eval_shim pass 5)
+extern int rs_eval_foldexpr(win_T *wp, int *cp);
+extern void rs_eval_foldtext(win_T *wp, Object *out);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -752,87 +755,14 @@ void *call_func_retlist(const char *func, int argc, typval_T *argv)
 /// it in "*cp".  Doesn't give error messages.
 int eval_foldexpr(win_T *wp, int *cp)
 {
-  const sctx_T saved_sctx = current_sctx;
-  const bool use_sandbox = was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL);
-
-  char *arg = skipwhite(wp->w_p_fde);
-  current_sctx = wp->w_p_script_ctx[kWinOptFoldexpr];
-
-  emsg_off++;
-  if (use_sandbox) {
-    sandbox++;
-  }
-  textlock++;
-  *cp = NUL;
-
-  typval_T tv;
-  varnumber_T retval;
-  // Evaluate the expression.  If the expression is "FuncName()" call the
-  // function directly.
-  if (eval0_simple_funccal(arg, &tv, NULL, &EVALARG_EVALUATE) == FAIL) {
-    retval = 0;
-  } else {
-    // If the result is a number, just return the number.
-    if (tv.v_type == VAR_NUMBER) {
-      retval = tv.vval.v_number;
-    } else if (tv.v_type != VAR_STRING || tv.vval.v_string == NULL) {
-      retval = 0;
-    } else {
-      // If the result is a string, check if there is a non-digit before
-      // the number.
-      char *s = tv.vval.v_string;
-      if (*s != NUL && !ascii_isdigit(*s) && *s != '-') {
-        *cp = (uint8_t)(*s++);
-      }
-      retval = atol(s);
-    }
-    tv_clear(&tv);
-  }
-
-  emsg_off--;
-  if (use_sandbox) {
-    sandbox--;
-  }
-  textlock--;
-  clear_evalarg(&EVALARG_EVALUATE, NULL);
-  current_sctx = saved_sctx;
-
-  return (int)retval;
+  return rs_eval_foldexpr(wp, cp);
 }
 
 /// Evaluate 'foldtext', returning an Array or a String (NULL_STRING on failure).
 Object eval_foldtext(win_T *wp)
 {
-  const bool use_sandbox = was_set_insecurely(wp, kOptFoldtext, OPT_LOCAL);
-  char *arg = wp->w_p_fdt;
-  funccal_entry_T funccal_entry;
-
-  save_funccal(&funccal_entry);
-  if (use_sandbox) {
-    sandbox++;
-  }
-  textlock++;
-
-  typval_T tv;
   Object retval;
-  if (eval0_simple_funccal(arg, &tv, NULL, &EVALARG_EVALUATE) == FAIL) {
-    retval = STRING_OBJ(NULL_STRING);
-  } else {
-    if (tv.v_type == VAR_LIST) {
-      retval = vim_to_object(&tv, NULL, false);
-    } else {
-      retval = STRING_OBJ(cstr_to_string(tv_get_string(&tv)));
-    }
-    tv_clear(&tv);
-  }
-  clear_evalarg(&EVALARG_EVALUATE, NULL);
-
-  if (use_sandbox) {
-    sandbox--;
-  }
-  textlock--;
-  restore_funccal();
-
+  rs_eval_foldtext(wp, &retval);
   return retval;
 }
 
@@ -4583,5 +4513,72 @@ int nvim_curbuf_prompt_interrupt_call(void)
   int ret = callback_call(&curbuf->b_prompt_interrupt, 0, argv, &rettv);
   tv_clear(&rettv);
   return ret;
+}
+
+// =============================================================================
+// Accessors for Phase 3 (eval_shim pass 5): eval_foldexpr and eval_foldtext
+// =============================================================================
+
+/// Check was_set_insecurely for 'foldexpr' - accessor for rs_eval_foldexpr.
+bool nvim_win_was_set_insecurely_foldexpr(win_T *wp)
+{
+  return was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL);
+}
+
+/// Check was_set_insecurely for 'foldtext' - accessor for rs_eval_foldtext.
+bool nvim_win_was_set_insecurely_foldtext(win_T *wp)
+{
+  return was_set_insecurely(wp, kOptFoldtext, OPT_LOCAL);
+}
+
+/// Return skipwhite(wp->w_p_fde) - accessor for rs_eval_foldexpr.
+char *nvim_win_get_foldexpr(win_T *wp)
+{
+  return skipwhite(wp->w_p_fde);
+}
+
+/// Return wp->w_p_fdt - accessor for rs_eval_foldtext.
+char *nvim_win_get_foldtext(win_T *wp)
+{
+  return wp->w_p_fdt;
+}
+
+/// Set current_sctx = wp->w_p_script_ctx[kWinOptFoldexpr] - accessor for rs_eval_foldexpr.
+void nvim_win_set_current_sctx_foldexpr(win_T *wp)
+{
+  current_sctx = wp->w_p_script_ctx[kWinOptFoldexpr];
+}
+
+/// Heap-allocate a copy of current_sctx and return it opaquely - for rs_eval_foldexpr save.
+sctx_T *nvim_save_current_sctx(void)
+{
+  sctx_T *saved = xmalloc(sizeof(sctx_T));
+  *saved = current_sctx;
+  return saved;
+}
+
+/// Restore current_sctx from an opaque pointer and free it.
+void nvim_restore_current_sctx(sctx_T *saved)
+{
+  current_sctx = *saved;
+  xfree(saved);
+}
+
+/// Write STRING_OBJ(NULL_STRING) into *out - for rs_eval_foldtext failure case.
+void nvim_foldtext_make_nil_obj(Object *out)
+{
+  *out = STRING_OBJ(NULL_STRING);
+}
+
+/// Write STRING_OBJ(cstr_to_string(tv_get_string(tv))) into *out.
+void nvim_foldtext_make_string_obj(typval_T *tv, Object *out)
+{
+  *out = STRING_OBJ(cstr_to_string(tv_get_string(tv)));
+}
+
+/// Write vim_to_object(tv, NULL, false) into *out.
+void nvim_foldtext_make_array_obj(typval_T *tv, Object *out)
+{
+  *out = vim_to_object(tv, NULL, false);
 }
 

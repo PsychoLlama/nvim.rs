@@ -1160,3 +1160,164 @@ pub unsafe extern "C" fn rs_invoke_prompt_interrupt() -> bool {
     let ret = nvim_curbuf_prompt_interrupt_call();
     ret != FAIL
 }
+
+// =============================================================================
+// Phase 3 (eval_shim pass 5): eval_foldexpr and eval_foldtext
+// =============================================================================
+
+extern "C" {
+    // Phase 3: foldexpr accessors
+    fn nvim_win_was_set_insecurely_foldexpr(wp: *mut c_void) -> bool;
+    fn nvim_win_was_set_insecurely_foldtext(wp: *mut c_void) -> bool;
+    fn nvim_win_get_foldexpr(wp: *mut c_void) -> *mut c_char;
+    fn nvim_win_get_foldtext(wp: *mut c_void) -> *mut c_char;
+    fn nvim_win_set_current_sctx_foldexpr(wp: *mut c_void);
+    fn nvim_save_current_sctx() -> *mut c_void; // returns sctx_T*
+    fn nvim_restore_current_sctx(saved: *mut c_void); // frees saved sctx_T*
+
+    // Phase 3: typval field accessors
+    fn nvim_eval_tv_get_vnumber(tv: *const c_void) -> i64;
+    fn nvim_eval_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
+
+    // Phase 3: foldtext Object construction helpers
+    fn nvim_foldtext_make_nil_obj(out: *mut c_void);
+    fn nvim_foldtext_make_string_obj(tv: TypevalHandle, out: *mut c_void);
+    fn nvim_foldtext_make_array_obj(tv: TypevalHandle, out: *mut c_void);
+}
+
+// typval type constants for fold functions
+const VAR_NUMBER: c_int = 1;
+const VAR_STRING: c_int = 2;
+
+/// Evaluate 'foldexpr' for a window. Returns the fold level; sets *cp to any
+/// prefix character (e.g., '>' or '<').
+///
+/// Equivalent to C `eval_foldexpr`.
+///
+/// # Safety
+/// - `wp` must be a valid win_T pointer.
+/// - `cp` must be a valid writable int pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_int {
+    let saved_sctx = nvim_save_current_sctx();
+    let use_sandbox = nvim_win_was_set_insecurely_foldexpr(wp);
+
+    let arg = nvim_win_get_foldexpr(wp);
+    nvim_win_set_current_sctx_foldexpr(wp);
+
+    nvim_eval_emsg_off_inc();
+    if use_sandbox {
+        nvim_eval_sandbox_inc();
+    }
+    nvim_eval_textlock_inc();
+    *cp = 0; // NUL
+
+    let tv = nvim_alloc_typval();
+    let tv_handle = TypevalHandle::from_ptr(tv);
+
+    let evalarg = nvim_get_evalarg_evaluate_ptr();
+    let retval: i64 = if eval0_simple_funccal_impl(arg, tv_handle, ExargHandle::null(), evalarg)
+        == FAIL
+    {
+        0
+    } else {
+        let vtype = nvim_eval_tv_vtype(tv);
+        let result = if vtype == VAR_NUMBER {
+            nvim_eval_tv_get_vnumber(tv)
+        } else if vtype != VAR_STRING {
+            0
+        } else {
+            let s = nvim_eval_tv_get_vstring(TypevalHandle::from_ptr(tv));
+            if s.is_null() {
+                0
+            } else {
+                // If string starts with non-digit, non-minus: that char is the prefix
+                let first = *s as u8;
+                let s_num = if first != 0
+                    && !(first >= b'0' && first <= b'9')
+                    && first != b'-'
+                {
+                    *cp = first as c_int;
+                    s.add(1)
+                } else {
+                    s
+                };
+                // atol equivalent: parse decimal integer from s_num
+                let mut n: i64 = 0;
+                let mut neg = false;
+                let mut p = s_num;
+                if *p == b'-' as i8 {
+                    neg = true;
+                    p = p.add(1);
+                }
+                while *p != 0 {
+                    let c = *p as u8;
+                    if c >= b'0' && c <= b'9' {
+                        n = n * 10 + (c - b'0') as i64;
+                        p = p.add(1);
+                    } else {
+                        break;
+                    }
+                }
+                if neg { -n } else { n }
+            }
+        };
+        tv_clear(tv_handle);
+        result
+    };
+
+    nvim_eval_emsg_off_dec();
+    if use_sandbox {
+        nvim_eval_sandbox_dec();
+    }
+    nvim_eval_textlock_dec();
+    rs_clear_evalarg(evalarg, ExargHandle::null());
+    nvim_restore_current_sctx(saved_sctx);
+    xfree(tv);
+
+    retval as c_int
+}
+
+/// Evaluate 'foldtext' for a window. Writes result into *out (an Object).
+///
+/// Equivalent to C `eval_foldtext`.
+///
+/// # Safety
+/// - `wp` must be a valid win_T pointer.
+/// - `out` must be a valid pointer to an Object (at least sizeof(Object) bytes).
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void) {
+    let use_sandbox = nvim_win_was_set_insecurely_foldtext(wp);
+    let arg = nvim_win_get_foldtext(wp);
+
+    let funccal = nvim_eval_save_funccal();
+    if use_sandbox {
+        nvim_eval_sandbox_inc();
+    }
+    nvim_eval_textlock_inc();
+
+    let tv = nvim_alloc_typval();
+    let tv_handle = TypevalHandle::from_ptr(tv);
+
+    let evalarg = nvim_get_evalarg_evaluate_ptr();
+    if eval0_simple_funccal_impl(arg, tv_handle, ExargHandle::null(), evalarg) == FAIL {
+        nvim_foldtext_make_nil_obj(out);
+    } else {
+        let vtype = nvim_eval_tv_vtype(tv);
+        if vtype == VAR_LIST {
+            nvim_foldtext_make_array_obj(tv_handle, out);
+        } else {
+            nvim_foldtext_make_string_obj(tv_handle, out);
+        }
+        tv_clear(tv_handle);
+    }
+
+    rs_clear_evalarg(evalarg, ExargHandle::null());
+
+    if use_sandbox {
+        nvim_eval_sandbox_dec();
+    }
+    nvim_eval_textlock_dec();
+    nvim_eval_restore_funccal(funccal);
+    xfree(tv);
+}
