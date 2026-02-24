@@ -2,10 +2,8 @@
 
 #include <assert.h>
 #include <ctype.h>
-#include <float.h>
 #include <inttypes.h>
 #include <limits.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -1508,19 +1506,6 @@ bool prepare_tagpreview(bool undo_sync)
   return rs_prepare_tagpreview((int)undo_sync);
 }
 
-// show_sub implemented in Rust (rs_show_sub in ex_cmds/src/substitute.rs)
-extern int rs_show_sub(exarg_T *eap, linenr_T old_cusr_lnum, colnr_T old_cusr_col,
-                       const PreviewLines *preview_lines, int hl_id,
-                       int cmdpreview_ns, handle_T cmdpreview_bufnr);
-
-/// Shows the effects of :substitute for inccommand. Thin wrapper calling Rust.
-static int show_sub(exarg_T *eap, pos_T old_cusr, PreviewLines *preview_lines, int hl_id,
-                    int cmdpreview_ns, handle_T cmdpreview_bufnr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_show_sub(eap, old_cusr.lnum, old_cusr.col, preview_lines, hl_id,
-                     cmdpreview_ns, cmdpreview_bufnr);
-}
 
 /// :substitute command.
 /// :substitute command. Thin wrapper calling Rust.
