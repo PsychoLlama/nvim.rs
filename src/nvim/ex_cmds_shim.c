@@ -734,71 +734,20 @@ void append_redir(char *const buf, const size_t buflen, const char *const opt,
   rs_append_redir(buf, buflen, opt, fname);
 }
 
+// rename_buffer + ex_file implemented in Rust (rs_rename_buffer, rs_ex_file in ex_cmds/src/buffer.rs)
+extern int rs_rename_buffer(const char *new_fname);
+extern void rs_ex_file(exarg_T *eap);
+
+/// Rename the current buffer to a new file name. Thin wrapper calling Rust.
 int rename_buffer(char *new_fname)
 {
-  buf_T *buf = curbuf;
-  apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, curbuf);
-  // buffer changed, don't change name now
-  if (buf != curbuf) {
-    return FAIL;
-  }
-  if (aborting()) {         // autocmds may abort script processing
-    return FAIL;
-  }
-  // The name of the current buffer will be changed.
-  // A new (unlisted) buffer entry needs to be made to hold the old file
-  // name, which will become the alternate file name.
-  // But don't set the alternate file name if the buffer didn't have a
-  // name.
-  char *fname = curbuf->b_ffname;
-  char *sfname = curbuf->b_sfname;
-  char *xfname = curbuf->b_fname;
-  curbuf->b_ffname = NULL;
-  curbuf->b_sfname = NULL;
-  if (setfname(curbuf, new_fname, NULL, true) == FAIL) {
-    curbuf->b_ffname = fname;
-    curbuf->b_sfname = sfname;
-    return FAIL;
-  }
-  curbuf->b_flags |= BF_NOTEDITED;
-  if (xfname != NULL && *xfname != NUL) {
-    buf = buflist_new(fname, xfname, curwin->w_cursor.lnum, 0);
-    if (buf != NULL && (cmdmod.cmod_flags & CMOD_KEEPALT) == 0) {
-      curwin->w_alt_fnum = buf->b_fnum;
-    }
-  }
-  xfree(fname);
-  xfree(sfname);
-  apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, curbuf);
-  // Change directories when the 'acd' option is set.
-  do_autochdir();
-  return OK;
+  return rs_rename_buffer(new_fname) ? OK : FAIL;
 }
 
-/// ":file[!] [fname]".
+/// ":file[!] [fname]". Thin wrapper calling Rust.
 void ex_file(exarg_T *eap)
 {
-  // ":0file" removes the file name.  Check for illegal uses ":3file",
-  // "0file name", etc.
-  if (eap->addr_count > 0
-      && (*eap->arg != NUL
-          || eap->line2 > 0
-          || eap->addr_count > 1)) {
-    emsg(_(e_invarg));
-    return;
-  }
-
-  if (*eap->arg != NUL || eap->addr_count == 1) {
-    if (rename_buffer(eap->arg) == FAIL) {
-      return;
-    }
-    redraw_tabline = true;
-  }
-
-  // print file name if no argument or 'F' is not in 'shortmess'
-  if (*eap->arg == NUL || !shortmess(SHM_FILEINFO)) {
-    fileinfo(false, false, eap->forceit);
-  }
+  rs_ex_file(eap);
 }
 
 /// ":update".
@@ -3638,3 +3587,99 @@ void nvim_excmds_curwin_set_col_zero(void) { curwin->w_cursor.col = 0; }
 
 // rs_ex_global implemented in Rust (ex_cmds/src/global.rs)
 extern void rs_ex_global(exarg_T *eap);
+
+// --- rename_buffer + ex_file FFI accessors ---
+
+/// Save and return curbuf identity (opaque pointer for comparison).
+void *nvim_excmds_get_curbuf_identity(void) { return (void *)curbuf; }
+
+/// Apply BufFilePre autocmd on curbuf.
+void nvim_excmds_apply_autocmds_buffilepre(void)
+{
+  apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, curbuf);
+}
+
+/// Apply BufFilePost autocmd on curbuf.
+void nvim_excmds_apply_autocmds_buffilepost(void)
+{
+  apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, curbuf);
+}
+
+/// Check if curbuf matches a saved identity pointer.
+int nvim_excmds_curbuf_is(void *ptr) { return curbuf == (buf_T *)ptr ? 1 : 0; }
+
+/// Wrapper for aborting().
+int nvim_excmds_aborting(void) { return aborting() ? 1 : 0; }
+
+/// Get curbuf->b_ffname (full file name).
+char *nvim_excmds_curbuf_get_ffname(void) { return curbuf->b_ffname; }
+
+/// Get curbuf->b_sfname (short file name).
+char *nvim_excmds_curbuf_get_sfname(void) { return curbuf->b_sfname; }
+
+/// Get curbuf->b_fname (file name).
+char *nvim_excmds_curbuf_get_fname(void) { return curbuf->b_fname; }
+
+/// Set curbuf->b_ffname directly (used for save/restore on failure).
+void nvim_excmds_curbuf_set_ffname(char *p) { curbuf->b_ffname = p; }
+
+/// Set curbuf->b_sfname directly (used for save/restore on failure).
+void nvim_excmds_curbuf_set_sfname(char *p) { curbuf->b_sfname = p; }
+
+/// Set curbuf->b_ffname and b_sfname to NULL (before setfname).
+void nvim_excmds_curbuf_clear_filenames(void)
+{
+  curbuf->b_ffname = NULL;
+  curbuf->b_sfname = NULL;
+}
+
+/// Call setfname(curbuf, name, NULL, true). Returns OK (1) or FAIL (0).
+int nvim_excmds_setfname(const char *name)
+{
+  return setfname(curbuf, (char *)name, NULL, true) == OK ? 1 : 0;
+}
+
+/// Set BF_NOTEDITED flag on curbuf.
+void nvim_excmds_curbuf_set_bf_notedited(void)
+{
+  curbuf->b_flags |= BF_NOTEDITED;
+}
+
+/// Call buflist_new(fname, xfname, lnum, 0). Returns opaque buf pointer (may be NULL).
+void *nvim_excmds_buflist_new_rename(const char *fname, const char *xfname, int lnum)
+{
+  return (void *)buflist_new((char *)fname, (char *)xfname, (linenr_T)lnum, 0);
+}
+
+/// Get b_fnum from an opaque buf pointer.
+int nvim_excmds_buf_get_fnum(void *buf) { return ((buf_T *)buf)->b_fnum; }
+
+/// Check if CMOD_KEEPALT is set.
+int nvim_excmds_cmdmod_has_keepalt(void)
+{
+  return (cmdmod.cmod_flags & CMOD_KEEPALT) != 0 ? 1 : 0;
+}
+
+/// Set curwin->w_alt_fnum.
+void nvim_excmds_set_curwin_alt_fnum(int fnum) { curwin->w_alt_fnum = fnum; }
+
+/// Wrapper for do_autochdir().
+void nvim_excmds_do_autochdir(void) { do_autochdir(); }
+
+/// Get curwin->w_cursor.lnum (for buflist_new lnum argument).
+int nvim_excmds_curwin_cursor_lnum_raw(void) { return (int)curwin->w_cursor.lnum; }
+
+/// Set redraw_tabline = true.
+void nvim_excmds_set_redraw_tabline(void) { redraw_tabline = true; }
+
+/// Check !shortmess(SHM_FILEINFO): returns 1 if fileinfo should be shown.
+int nvim_excmds_shortmess_not_fileinfo(void) { return !shortmess(SHM_FILEINFO) ? 1 : 0; }
+
+/// Wrapper for fileinfo(false, false, forceit).
+void nvim_excmds_fileinfo(int forceit) { fileinfo(false, false, (bool)forceit); }
+
+/// Get eap->addr_count.
+int nvim_exarg_get_addr_count_val(const exarg_T *eap) { return (int)eap->addr_count; }
+
+/// Get eap->arg (mutable).
+char *nvim_exarg_get_arg_mutable(exarg_T *eap) { return eap->arg; }

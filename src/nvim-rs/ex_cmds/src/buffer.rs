@@ -2,7 +2,8 @@
 //!
 //! This module implements Ex commands for buffer management and navigation.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
+use crate::ExArgHandle;
 
 // =============================================================================
 // Buffer Action Types
@@ -334,6 +335,141 @@ pub unsafe extern "C" fn rs_is_numeric_bufarg(arg: *const u8, len: c_int) -> c_i
 
     let slice = std::slice::from_raw_parts(arg, len as usize);
     c_int::from(is_numeric_bufarg(slice))
+}
+
+// =============================================================================
+// rename_buffer + ex_file (Phase 2 migration)
+// =============================================================================
+
+extern "C" {
+    // rename_buffer FFI
+    fn nvim_excmds_get_curbuf_identity() -> *mut std::ffi::c_void;
+    fn nvim_excmds_apply_autocmds_buffilepre();
+    fn nvim_excmds_apply_autocmds_buffilepost();
+    fn nvim_excmds_curbuf_is(ptr: *mut std::ffi::c_void) -> c_int;
+    fn nvim_excmds_aborting() -> c_int;
+    fn nvim_excmds_curbuf_get_ffname() -> *mut c_char;
+    fn nvim_excmds_curbuf_get_sfname() -> *mut c_char;
+    fn nvim_excmds_curbuf_get_fname() -> *mut c_char;
+    fn nvim_excmds_curbuf_set_ffname(p: *mut c_char);
+    fn nvim_excmds_curbuf_set_sfname(p: *mut c_char);
+    fn nvim_excmds_curbuf_clear_filenames();
+    fn nvim_excmds_setfname(name: *const c_char) -> c_int;
+    fn nvim_excmds_curbuf_set_bf_notedited();
+    fn nvim_excmds_buflist_new_rename(
+        fname: *const c_char,
+        xfname: *const c_char,
+        lnum: c_int,
+    ) -> *mut std::ffi::c_void;
+    fn nvim_excmds_buf_get_fnum(buf: *mut std::ffi::c_void) -> c_int;
+    fn nvim_excmds_cmdmod_has_keepalt() -> c_int;
+    fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
+    fn nvim_excmds_do_autochdir();
+    fn nvim_excmds_curwin_cursor_lnum_raw() -> c_int;
+    fn xfree(ptr: *mut std::ffi::c_void);
+
+    // ex_file FFI
+    fn nvim_exarg_get_addr_count(eap: *const ExArgHandle) -> c_int;
+    fn nvim_exarg_get_arg(eap: *const ExArgHandle) -> *const c_char;
+    fn nvim_exarg_get_line2(eap: *const ExArgHandle) -> c_int;
+    fn nvim_exarg_get_forceit(eap: *const ExArgHandle) -> c_int;
+    fn nvim_excmds_set_redraw_tabline();
+    fn nvim_excmds_shortmess_not_fileinfo() -> c_int;
+    fn nvim_excmds_fileinfo(forceit: c_int);
+    fn nvim_excmds_emsg_invarg();
+}
+
+/// Rename the current buffer to a new file name. Replaces C `rename_buffer`.
+///
+/// Returns 1 (OK) on success, 0 (FAIL) on failure.
+///
+/// # Safety
+/// `new_fname` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_rename_buffer(new_fname: *const c_char) -> c_int {
+    const OK: c_int = 1;
+    const FAIL: c_int = 0;
+
+    // Save curbuf identity before autocmds can change it
+    let saved_buf = nvim_excmds_get_curbuf_identity();
+
+    nvim_excmds_apply_autocmds_buffilepre();
+
+    // Buffer changed (autocmd), don't change name now
+    if nvim_excmds_curbuf_is(saved_buf) == 0 {
+        return FAIL;
+    }
+
+    if nvim_excmds_aborting() != 0 {
+        return FAIL;
+    }
+
+    // Save the current file names before clearing
+    let fname = nvim_excmds_curbuf_get_ffname();
+    let sfname = nvim_excmds_curbuf_get_sfname();
+    let xfname = nvim_excmds_curbuf_get_fname();
+
+    // Clear ffname and sfname before setfname
+    nvim_excmds_curbuf_clear_filenames();
+
+    if nvim_excmds_setfname(new_fname) == 0 {
+        // setfname failed: restore original names
+        nvim_excmds_curbuf_set_ffname(fname);
+        nvim_excmds_curbuf_set_sfname(sfname);
+        return FAIL;
+    }
+
+    nvim_excmds_curbuf_set_bf_notedited();
+
+    // Make a new unlisted buffer for the old name (becomes alternate file)
+    if !xfname.is_null() && *xfname != 0 {
+        let lnum = nvim_excmds_curwin_cursor_lnum_raw();
+        let buf = nvim_excmds_buflist_new_rename(fname, xfname, lnum);
+        if !buf.is_null() && nvim_excmds_cmdmod_has_keepalt() == 0 {
+            let fnum = nvim_excmds_buf_get_fnum(buf);
+            nvim_excmds_set_curwin_alt_fnum(fnum);
+        }
+    }
+
+    xfree(fname as *mut std::ffi::c_void);
+    xfree(sfname as *mut std::ffi::c_void);
+
+    nvim_excmds_apply_autocmds_buffilepost();
+    // Change directories when the 'acd' option is set.
+    nvim_excmds_do_autochdir();
+
+    OK
+}
+
+/// Implement `:file[!] [fname]` command. Replaces C `ex_file`.
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_file(eap: *mut ExArgHandle) {
+    let addr_count = nvim_exarg_get_addr_count(eap);
+    let arg = nvim_exarg_get_arg(eap);
+    let line2 = nvim_exarg_get_line2(eap);
+
+    // ":0file" removes the file name. Check for illegal uses ":3file",
+    // "0file name", etc.
+    if addr_count > 0 && (*arg != 0 || line2 > 0 || addr_count > 1) {
+        nvim_excmds_emsg_invarg();
+        return;
+    }
+
+    if *arg != 0 || addr_count == 1 {
+        if rs_rename_buffer(arg) == 0 {
+            return;
+        }
+        nvim_excmds_set_redraw_tabline();
+    }
+
+    // Print file name if no argument or 'F' is not in 'shortmess'
+    if *arg == 0 || nvim_excmds_shortmess_not_fileinfo() != 0 {
+        let forceit = nvim_exarg_get_forceit(eap);
+        nvim_excmds_fileinfo(forceit);
+    }
 }
 
 // =============================================================================
