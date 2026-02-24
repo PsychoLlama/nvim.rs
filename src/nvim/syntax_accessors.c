@@ -1325,66 +1325,13 @@ static int in_id_list(stateitem_T *cur_si, int16_t *list, struct sp_syn *ssp, in
   return rs_syn_in_id_list(cur_si, list, ssp->id, ssp->inc_tag, ssp->cont_in_list, flags);
 }
 
-struct subcommand {
-  char *name;                                // subcommand name
-  void (*func)(exarg_T *, int);              // function to call
-};
+/// Rust implementation of the `:syntax` dispatcher.
+extern void rs_ex_syntax(exarg_T *eap);
 
-static struct subcommand subcommands[] = {
-  { "case",      rs_syn_cmd_case_dispatch },
-  { "clear",     rs_syn_cmd_clear },
-  { "cluster",   rs_syn_cmd_cluster },
-  { "conceal",   rs_syn_cmd_conceal_dispatch },
-  { "enable",    rs_syn_cmd_on_dispatch },
-  { "foldlevel", rs_syn_cmd_foldlevel_dispatch },
-  { "include",   rs_syn_cmd_include },
-  { "iskeyword", syn_cmd_iskeyword },
-  { "keyword",   rs_syn_cmd_keyword },
-  { "list",      syn_cmd_list },
-  { "manual",    rs_syn_cmd_manual_dispatch },
-  { "match",     rs_syn_cmd_match },
-  { "on",        rs_syn_cmd_on_dispatch },
-  { "off",       rs_syn_cmd_off_dispatch },
-  { "region",    rs_syn_cmd_region },
-  { "reset",     rs_syn_cmd_reset },
-  { "spell",     rs_syn_cmd_spell_dispatch },
-  { "sync",      rs_syn_cmd_sync },
-  { "",          syn_cmd_list },
-};
-
-/// ":syntax".
-/// This searches the subcommands[] table for the subcommand name, and calls a
-/// syntax_subcommand() function to do the rest.
+/// ":syntax" -- thin wrapper delegating to Rust.
 void ex_syntax(exarg_T *eap)
 {
-  char *arg = eap->arg;
-  char *subcmd_end;
-
-  syn_cmdlinep = eap->cmdlinep;
-
-  // isolate subcommand name
-  for (subcmd_end = arg; ASCII_ISALPHA(*subcmd_end); subcmd_end++) {}
-  char *const subcmd_name = xstrnsave(arg, (size_t)(subcmd_end - arg));
-  if (eap->skip) {  // skip error messages for all subcommands
-    emsg_skip++;
-  }
-  size_t i;
-  for (i = 0; i < ARRAY_SIZE(subcommands); i++) {
-    if (strcmp(subcmd_name, subcommands[i].name) == 0) {
-      eap->arg = skipwhite(subcmd_end);
-      (subcommands[i].func)(eap, false);
-      break;
-    }
-  }
-
-  if (i == ARRAY_SIZE(subcommands)) {
-    semsg(_("E410: Invalid :syntax subcommand: %s"), subcmd_name);
-  }
-
-  xfree(subcmd_name);
-  if (eap->skip) {
-    emsg_skip--;
-  }
+  rs_ex_syntax(eap);
 }
 
 /// @deprecated
@@ -1731,16 +1678,27 @@ void nvim_syn_set_topgrp(int topgrp) { curwin->w_s->b_syn_topgrp = topgrp; }
 int nvim_synblock_get_conceal_setting(synblock_T *block) { return block->b_syn_conceal; }
 int nvim_synblock_get_ic_setting(synblock_T *block) { return block->b_syn_ic; }
 
-int nvim_syn_get_subcommand_count(void) { return (int)(sizeof(subcommands) / sizeof(subcommands[0])); }
+/// Subcommand names list (mirrors SUBCOMMANDS in Rust commands.rs).
+/// Used by tab-completion (expand.rs) to iterate subcommand names.
+static const char *const subcommand_names[] = {
+  "case", "clear", "cluster", "conceal", "enable", "foldlevel",
+  "include", "iskeyword", "keyword", "list", "manual", "match",
+  "on", "off", "region", "reset", "spell", "sync", "",
+};
+
+int nvim_syn_get_subcommand_count(void)
+{
+  return (int)(sizeof(subcommand_names) / sizeof(subcommand_names[0]));
+}
 
 /// Get subcommand name by index
 const char *nvim_syn_get_subcommand_name(int idx)
 {
-  int count = (int)(sizeof(subcommands) / sizeof(subcommands[0]));
+  int count = (int)(sizeof(subcommand_names) / sizeof(subcommand_names[0]));
   if (idx < 0 || idx >= count) {
     return NULL;
   }
-  return subcommands[idx].name;
+  return subcommand_names[idx];
 }
 
 /// Check if a pattern at index is for syncing
@@ -4114,6 +4072,28 @@ void nvim_syn_eap_check_nextcmd(exarg_T *eap, char *arg)
 }
 
 // nvim_syn_get_eap_arg and nvim_syn_get_eap_skip already defined above.
+
+// =============================================================================
+// Phase 2 (pass 4): ex_syntax dispatcher migration accessors
+// =============================================================================
+
+/// Increment emsg_skip (suppress error messages during :syntax with skip set).
+void nvim_syn_emsg_skip_inc(void)
+{
+  emsg_skip++;
+}
+
+/// Decrement emsg_skip.
+void nvim_syn_emsg_skip_dec(void)
+{
+  emsg_skip--;
+}
+
+/// Forward syn_cmd_iskeyword (static) for Rust dispatch table.
+void nvim_syn_cmd_iskeyword_wrapper(exarg_T *eap, int syncing)
+{
+  syn_cmd_iskeyword(eap, syncing);
+}
 
 /// Thin wrapper: syn_cmd_list body delegated to Rust.
 extern void rs_syn_cmd_list(exarg_T *eap, int syncing);

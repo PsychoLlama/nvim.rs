@@ -1093,6 +1093,118 @@ pub unsafe extern "C" fn rs_syn_cmd_off_dispatch(eap: *mut c_void, syncing: c_in
     rs_syn_cmd_onoff(eap, b"nosyntax\0".as_ptr().cast(), syncing);
 }
 
+// =============================================================================
+// Phase 2: ex_syntax dispatcher in Rust
+// =============================================================================
+
+extern "C" {
+    /// Set syn_cmdlinep from eap->cmdlinep.
+    fn nvim_syn_set_cmdlinep_from_eap(eap: *mut c_void);
+
+    /// Set eap->arg.
+    fn nvim_syn_set_eap_arg(eap: *mut c_void, arg: *mut c_char);
+
+    /// Allocate a copy of `s[0..len]`.
+    fn nvim_syn_xstrnsave(s: *const c_char, len: c_int) -> *mut c_char;
+
+    /// Free memory allocated with xmalloc/xstrdup/etc.
+    fn xfree(ptr: *mut c_void);
+
+    /// Increment emsg_skip (suppress errors for this subcommand).
+    fn nvim_syn_emsg_skip_inc();
+
+    /// Decrement emsg_skip.
+    fn nvim_syn_emsg_skip_dec();
+
+    // Subcommand handlers that are still C functions (static wrappers)
+    fn nvim_syn_cmd_iskeyword_wrapper(eap: *mut c_void, syncing: c_int);
+    fn nvim_syn_cmd_list_wrapper(eap: *mut c_void, syncing: c_int);
+}
+
+/// Type alias for subcommand handler function pointers.
+type SynCmdFn = unsafe extern "C" fn(*mut c_void, c_int);
+
+/// Static dispatch table: (name, handler) pairs.
+///
+/// This mirrors the C `subcommands[]` table, now maintained in Rust.
+static SUBCOMMANDS: &[(&str, SynCmdFn)] = &[
+    ("case", rs_syn_cmd_case_dispatch),
+    ("clear", crate::cmd_clear::rs_syn_cmd_clear),
+    ("cluster", crate::cluster::rs_syn_cmd_cluster),
+    ("conceal", rs_syn_cmd_conceal_dispatch),
+    ("enable", rs_syn_cmd_on_dispatch),
+    ("foldlevel", rs_syn_cmd_foldlevel_dispatch),
+    ("include", crate::cmd_include::rs_syn_cmd_include),
+    ("iskeyword", nvim_syn_cmd_iskeyword_wrapper),
+    ("keyword", crate::cmd_keyword::rs_syn_cmd_keyword),
+    ("list", nvim_syn_cmd_list_wrapper),
+    ("manual", rs_syn_cmd_manual_dispatch),
+    ("match", crate::cmd_match::rs_syn_cmd_match),
+    ("on", rs_syn_cmd_on_dispatch),
+    ("off", rs_syn_cmd_off_dispatch),
+    ("region", crate::cmd_region::rs_syn_cmd_region),
+    ("reset", rs_syn_cmd_reset),
+    ("spell", rs_syn_cmd_spell_dispatch),
+    ("sync", crate::cmd_sync::rs_syn_cmd_sync),
+    ("", nvim_syn_cmd_list_wrapper),
+];
+
+/// Error message for invalid :syntax subcommand.
+static E410_FMT: &[u8] = b"E410: Invalid :syntax subcommand: %s\0";
+
+/// `:syntax` command dispatcher -- Rust implementation.
+///
+/// This replaces the C `ex_syntax` function and the `subcommands[]` table.
+///
+/// # Safety
+/// Must be called from the main thread during command execution.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_syntax(eap: *mut c_void) {
+    // Set syn_cmdlinep for error messages
+    nvim_syn_set_cmdlinep_from_eap(eap);
+
+    let arg = nvim_syn_get_eap_arg(eap);
+
+    // Isolate subcommand name (skip alpha chars)
+    let mut subcmd_end = arg;
+    while *subcmd_end != 0 && (*subcmd_end as u8).is_ascii_alphabetic() {
+        subcmd_end = subcmd_end.add(1);
+    }
+
+    let name_len = subcmd_end.offset_from(arg) as c_int;
+    let subcmd_name = nvim_syn_xstrnsave(arg, name_len);
+
+    if nvim_syn_get_eap_skip(eap) != 0 {
+        nvim_syn_emsg_skip_inc();
+    }
+
+    // Build a Rust string slice for comparison (no allocation)
+    let name_bytes =
+        std::slice::from_raw_parts(subcmd_name as *const u8, name_len as usize);
+    let name_str = std::str::from_utf8_unchecked(name_bytes);
+
+    let mut found = false;
+    for &(entry_name, handler) in SUBCOMMANDS {
+        if entry_name == name_str {
+            // Advance eap->arg past the subcommand name + whitespace
+            nvim_syn_set_eap_arg(eap, skipwhite(subcmd_end));
+            handler(eap, 0);
+            found = true;
+            break;
+        }
+    }
+
+    if !found {
+        semsg(E410_FMT.as_ptr().cast(), subcmd_name);
+    }
+
+    xfree(subcmd_name as *mut c_void);
+
+    if nvim_syn_get_eap_skip(eap) != 0 {
+        nvim_syn_emsg_skip_dec();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
