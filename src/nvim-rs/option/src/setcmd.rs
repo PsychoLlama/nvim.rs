@@ -459,10 +459,6 @@ pub extern "C" fn rs_copy_direction_local_to_global() -> c_int {
 // =============================================================================
 
 extern "C" {
-    // Option display functions (wrappers for static functions)
-    fn nvim_showoptions(all: c_int, opt_flags: c_int);
-    fn nvim_showoneopt(opt: *const std::ffi::c_void, opt_flags: c_int);
-
     // Option setting functions (wrappers for static functions)
     fn nvim_set_options_default(opt_flags: c_int);
     fn nvim_didset_options();
@@ -632,7 +628,7 @@ mod errmsg {
 pub unsafe extern "C" fn rs_do_set(arg: *mut c_char, opt_flags: c_int) -> c_int {
     let did_show: c_int = if arg.is_null() || *arg == 0 {
         // ":set" without arguments - show modified options
-        nvim_showoptions(0, opt_flags);
+        rs_showoptions(0, opt_flags);
         1
     } else {
         do_set_process_args(arg, opt_flags)
@@ -764,7 +760,7 @@ unsafe fn check_set_all(argp: *mut *mut c_char, opt_flags: c_int, did_show: &mut
             redraw_all_later(UPD_CLEAR);
         } else {
             // ":set all" - show all options
-            nvim_showoptions(1, opt_flags);
+            rs_showoptions(1, opt_flags);
             *did_show = 1;
         }
 
@@ -884,7 +880,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
             gotocmdline(1);
             *did_show = 1;
         }
-        nvim_showoneopt(opt.cast(), opt_flags);
+        rs_showoneopt(opt_idx, opt_flags);
 
         // Verbose mode: show where option was last set
         if nvim_get_p_verbose() > 0 {
@@ -1004,6 +1000,225 @@ const fn get_option_struct_size() -> usize {
     // vimoption_T is roughly 120 bytes on 64-bit systems
     // This should match the C struct size
     128
+}
+
+// =============================================================================
+// Phase 1: showoptions / showoneopt FFI declarations
+// =============================================================================
+
+extern "C" {
+    fn msg_puts(s: *const c_char);
+    fn msg_puts_title(s: *const c_char);
+    fn msg_outtrans(s: *const c_char, hl_id: c_int, hist: bool) -> c_int;
+    fn nvim_message_filtered(msg: *const c_char) -> c_int;
+    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn nvim_excmds_os_breakcheck();
+    fn nvim_get_got_int() -> c_int;
+    fn nvim_get_Columns() -> c_int;
+    fn nvim_excmds_set_msg_col(val: c_int);
+    fn nvim_get_namebuff() -> *mut c_char;
+    fn nvim_excmds_curbufIsChanged() -> c_int;
+    fn nvim_varp_is_curbuf_b_changed(varp: *const std::ffi::c_void) -> c_int;
+    fn nvim_get_varp_by_idx(opt_idx: c_int) -> *mut std::ffi::c_void;
+    fn nvim_get_varp_scope_by_idx(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
+    fn nvim_option_get_fullname(opt_idx: c_int) -> *const c_char;
+    fn nvim_option_is_global_only(opt_idx: c_int) -> c_int;
+    fn nvim_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
+    fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;
+    fn nvim_get_kopt_count() -> c_int;
+    fn xmalloc(size: usize) -> *mut c_char;
+    fn xfree(ptr: *mut c_char);
+    fn strlen(s: *const c_char) -> usize;
+}
+
+// Constants for Phase 1
+const INC: c_int = 20; // Column increment for showoptions
+const GAP: c_int = 3; // Gap between columns
+
+// Call rs_option_value2string/rs_optval_default by their exported names (#[no_mangle] in session.rs).
+extern "C" {
+    fn rs_option_value2string(opt_idx: c_int, opt_flags: c_int);
+    fn rs_optval_default(opt_idx: c_int, varp: *mut std::ffi::c_void) -> c_int;
+}
+
+// =============================================================================
+// Phase 1: rs_showoneopt implementation
+// =============================================================================
+
+/// Display a single option value (translation of C showoneopt).
+///
+/// # Safety
+/// opt_idx must be a valid option index. opt_flags must be valid.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_showoneopt(opt_idx: c_int, opt_flags: c_int) {
+    let save_silent = nvim_get_silent_mode();
+
+    nvim_set_silent_mode(0);
+    nvim_set_info_message(1); // use stdout, not stderr
+
+    let varp = nvim_get_varp_scope_by_idx(opt_idx, opt_flags);
+    let is_bool = nvim_option_has_type(opt_idx, K_OPT_VAL_TYPE_BOOLEAN) != 0;
+
+    // Matches C logic:
+    //   if (boolean && (is_modified_opt ? !curbufIsChanged() : !val)) -> "no"
+    //   else if (boolean && val < 0) -> "--"
+    //   else -> "  "
+    if is_bool {
+        let val = *(varp as *const c_int);
+        let show_false = if nvim_varp_is_curbuf_b_changed(varp) != 0 {
+            // 'modified' option: false when buffer not actually changed
+            nvim_excmds_curbufIsChanged() == 0
+        } else {
+            val == 0
+        };
+        if show_false {
+            msg_puts(c"no".as_ptr());
+        } else if val < 0 {
+            msg_puts(c"--".as_ptr());
+        } else {
+            msg_puts(c"  ".as_ptr());
+        }
+    } else {
+        msg_puts(c"  ".as_ptr());
+    }
+
+    let fullname = nvim_option_get_fullname(opt_idx);
+    msg_puts(fullname);
+
+    if !is_bool {
+        msg_putchar(c_int::from(b'='));
+        // put value string in NameBuff
+        rs_option_value2string(opt_idx, opt_flags);
+        let namebuff = nvim_get_namebuff();
+        msg_outtrans(namebuff, 0, false);
+    }
+
+    nvim_set_silent_mode(save_silent);
+    nvim_set_info_message(0);
+}
+
+// =============================================================================
+// Phase 1: rs_showoptions implementation
+// =============================================================================
+
+/// Display all or changed options (translation of C showoptions).
+///
+/// # Safety
+/// opt_flags must be valid OPT_* flags.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
+    let kopt_count = nvim_get_kopt_count();
+    let items: *mut c_int = xmalloc(
+        (kopt_count as usize) * std::mem::size_of::<c_int>(),
+    )
+    .cast::<c_int>();
+
+    msg_ext_set_kind(c"list_cmd".as_ptr());
+    // Highlight title
+    if (opt_flags & set_flags::OPT_GLOBAL) != 0 {
+        msg_puts_title(c"\n--- Global option values ---".as_ptr());
+    } else if (opt_flags & set_flags::OPT_LOCAL) != 0 {
+        msg_puts_title(c"\n--- Local option values ---".as_ptr());
+    } else {
+        msg_puts_title(c"\n--- Options ---".as_ptr());
+    }
+
+    // Two-pass loop:
+    // 1. display the short items
+    // 2. display the long items (only strings and numbers)
+    // When OPT_ONECOLUMN, do everything in run 2.
+    let mut run: c_int = 1;
+    while run <= 2 {
+        if nvim_get_got_int() != 0 {
+            break;
+        }
+        // Collect the items in items[]
+        let mut item_count: c_int = 0;
+        for opt_idx in 0..kopt_count {
+            // Skip hidden options
+            if nvim_opt_is_hidden(opt_idx) != 0 {
+                continue;
+            }
+            let fullname = nvim_option_get_fullname(opt_idx);
+            // apply :filter /pat/
+            if nvim_message_filtered(fullname) != 0 {
+                continue;
+            }
+
+            let varp: *mut std::ffi::c_void;
+            if (opt_flags & (set_flags::OPT_LOCAL | set_flags::OPT_GLOBAL)) != 0 {
+                if nvim_option_is_global_only(opt_idx) != 0 {
+                    continue;
+                }
+                varp = nvim_get_varp_scope_by_idx(opt_idx, opt_flags);
+            } else {
+                varp = nvim_get_varp_by_idx(opt_idx);
+            }
+
+            if varp.is_null() {
+                continue;
+            }
+            if all == 0 && rs_optval_default(opt_idx, varp) != 0 {
+                continue;
+            }
+
+            let len: c_int;
+            if (opt_flags & set_flags::OPT_ONECOLUMN) != 0 {
+                len = nvim_get_Columns();
+            } else if nvim_option_has_type(opt_idx, K_OPT_VAL_TYPE_BOOLEAN) != 0 {
+                len = 1; // a toggle option fits always
+            } else {
+                rs_option_value2string(opt_idx, opt_flags);
+                let namebuff = nvim_get_namebuff();
+                len = strlen(fullname) as c_int + nvim_vim_strsize(namebuff) + 1;
+            }
+
+            if (len <= INC - GAP && run == 1) || (len > INC - GAP && run == 2) {
+                *items.add(item_count as usize) = opt_idx;
+                item_count += 1;
+            }
+        }
+
+        let rows: c_int;
+        if run == 1 {
+            let columns = nvim_get_Columns();
+            let mut cols = (columns + GAP - 3) / INC;
+            if cols == 0 {
+                cols = 1;
+            }
+            rows = (item_count + cols - 1) / cols;
+        } else {
+            rows = item_count;
+        }
+
+        let mut row: c_int = 0;
+        while row < rows && nvim_get_got_int() == 0 {
+            msg_putchar(c_int::from(b'\n')); // go to next line
+            if nvim_get_got_int() != 0 {
+                // 'q' typed in more
+                break;
+            }
+            let mut col: c_int = 0;
+            let mut i = row;
+            while i < item_count {
+                nvim_excmds_set_msg_col(col); // make columns
+                let show_opt_idx = *items.add(i as usize);
+                rs_showoneopt(show_opt_idx, opt_flags);
+                col += INC;
+                i += rows;
+            }
+            nvim_excmds_os_breakcheck();
+            row += 1;
+        }
+        run += 1;
+    }
+
+    xfree(items.cast::<c_char>());
 }
 
 // =============================================================================

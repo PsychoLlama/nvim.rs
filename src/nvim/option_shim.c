@@ -3551,94 +3551,10 @@ void set_option_value_for(const char *name, OptIndex opt_idx, OptVal value, cons
 /// if 'all' == true: show all normal options
 ///
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
+extern void rs_showoptions(int all, int opt_flags);
 static void showoptions(bool all, int opt_flags)
 {
-#define INC 20
-#define GAP 3
-
-  vimoption_T **items = xmalloc(sizeof(vimoption_T *) * OPTION_COUNT);
-
-  msg_ext_set_kind("list_cmd");
-  // Highlight title
-  if (opt_flags & OPT_GLOBAL) {
-    msg_puts_title(_("\n--- Global option values ---"));
-  } else if (opt_flags & OPT_LOCAL) {
-    msg_puts_title(_("\n--- Local option values ---"));
-  } else {
-    msg_puts_title(_("\n--- Options ---"));
-  }
-
-  // Do the loop two times:
-  // 1. display the short items
-  // 2. display the long items (only strings and numbers)
-  // When "opt_flags" has OPT_ONECOLUMN do everything in run 2.
-  for (int run = 1; run <= 2 && !got_int; run++) {
-    // collect the items in items[]
-    int item_count = 0;
-    vimoption_T *opt;
-    for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
-      opt = &options[opt_idx];
-      // apply :filter /pat/
-      if (message_filtered(opt->fullname)) {
-        continue;
-      }
-
-      void *varp = NULL;
-      if ((opt_flags & (OPT_LOCAL | OPT_GLOBAL)) != 0) {
-        if (!option_is_global_only(opt_idx)) {
-          varp = get_varp_scope(opt, opt_flags);
-        }
-      } else {
-        varp = get_varp(opt);
-      }
-      if (varp != NULL && (all || !optval_default(opt_idx, varp))) {
-        int len;
-        if (opt_flags & OPT_ONECOLUMN) {
-          len = Columns;
-        } else if (option_has_type(opt_idx, kOptValTypeBoolean)) {
-          len = 1;                      // a toggle option fits always
-        } else {
-          option_value2string(opt, opt_flags);
-          len = (int)strlen(opt->fullname) + vim_strsize(NameBuff) + 1;
-        }
-        if ((len <= INC - GAP && run == 1)
-            || (len > INC - GAP && run == 2)) {
-          items[item_count++] = opt;
-        }
-      }
-    }
-
-    int rows;
-
-    // display the items
-    if (run == 1) {
-      assert(Columns <= INT_MAX - GAP
-             && Columns + GAP >= INT_MIN + 3
-             && (Columns + GAP - 3) / INC >= INT_MIN
-             && (Columns + GAP - 3) / INC <= INT_MAX);
-      int cols = (Columns + GAP - 3) / INC;
-      if (cols == 0) {
-        cols = 1;
-      }
-      rows = (item_count + cols - 1) / cols;
-    } else {    // run == 2
-      rows = item_count;
-    }
-    for (int row = 0; row < rows && !got_int; row++) {
-      msg_putchar('\n');                        // go to next line
-      if (got_int) {                            // 'q' typed in more
-        break;
-      }
-      int col = 0;
-      for (int i = row; i < item_count; i += rows) {
-        msg_col = col;                          // make columns
-        showoneopt(items[i], opt_flags);
-        col += INC;
-      }
-      os_breakcheck();
-    }
-  }
-  xfree(items);
+  rs_showoptions(all ? 1 : 0, opt_flags);
 }
 
 /// Return true if option "p" has its default value.
@@ -3668,35 +3584,10 @@ void ui_refresh_options(void)
 /// must not be called with a hidden option!
 ///
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
+extern void rs_showoneopt(int opt_idx, int opt_flags);
 static void showoneopt(vimoption_T *opt, int opt_flags)
 {
-  int save_silent = silent_mode;
-
-  silent_mode = false;
-  info_message = true;          // use stdout, not stderr
-
-  OptIndex opt_idx = get_opt_idx(opt);
-  void *varp = get_varp_scope(opt, opt_flags);
-
-  // for 'modified' we also need to check if 'ff' or 'fenc' changed.
-  if (option_has_type(opt_idx, kOptValTypeBoolean)
-      && ((int *)varp == &curbuf->b_changed ? !curbufIsChanged() : !*(int *)varp)) {
-    msg_puts("no");
-  } else if (option_has_type(opt_idx, kOptValTypeBoolean) && *(int *)varp < 0) {
-    msg_puts("--");
-  } else {
-    msg_puts("  ");
-  }
-  msg_puts(opt->fullname);
-  if (!(option_has_type(opt_idx, kOptValTypeBoolean))) {
-    msg_putchar('=');
-    // put value string in NameBuff
-    option_value2string(opt, opt_flags);
-    msg_outtrans(NameBuff, 0, false);
-  }
-
-  silent_mode = save_silent;
-  info_message = false;
+  rs_showoneopt((int)get_opt_idx(opt), opt_flags);
 }
 
 /// Write modified options as ":set" commands to a file.
@@ -4808,6 +4699,23 @@ const char *nvim_win_get_b_p_spl(win_T *win)
 int nvim_buf_get_b_p_ff_first(const buf_T *buf)
 {
   return (buf && buf->b_p_ff) ? (unsigned char)(*buf->b_p_ff) : 0;
+}
+
+// =============================================================================
+// Phase 6 accessors: showoptions / showoneopt
+// =============================================================================
+
+/// Get the varp for an option by index (using get_varp for the current/global value).
+void *nvim_get_varp_by_idx(OptIndex opt_idx)
+{
+  return get_varp(&options[opt_idx]);
+}
+
+/// Check if varp points to curbuf->b_changed.
+/// Used by showoneopt to detect the 'modified' pseudo-boolean option.
+int nvim_varp_is_curbuf_b_changed(const void *varp)
+{
+  return (const int *)varp == &curbuf->b_changed ? 1 : 0;
 }
 
 
