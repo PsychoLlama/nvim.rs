@@ -23,6 +23,7 @@ pub mod attr;
 pub mod buffer;
 pub mod cache;
 pub mod check_ends;
+pub mod clearing;
 pub mod cluster;
 pub mod cmd_clear;
 pub mod cmd_include;

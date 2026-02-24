@@ -65,6 +65,12 @@ extern char *rs_get_syn_options(char *arg, int *opt_flags, int opt_keyword,
 extern int rs_get_id_list(char **arg, int keylen, int16_t **list, int skip);
 extern void rs_syn_cmd_region(exarg_T *eap, int syncing);
 
+// Pass 5: clearing.rs Rust functions
+extern void rs_syn_clear_pattern(synblock_T *block, int i);
+extern void rs_syn_clear_cluster(synblock_T *block, int i);
+extern void rs_syn_remove_pattern(synblock_T *block, int idx);
+extern void rs_syn_clear_one(int id, int syncing);
+
 static bool did_syntax_onoff = false;
 
 // different types of offsets that are possible
@@ -932,59 +938,26 @@ static void syntax_sync_clear(void)
 // Remove one pattern from the buffer's pattern list.
 static void syn_remove_pattern(synblock_T *block, int idx)
 {
-  synpat_T *spp;
-
-  spp = &(SYN_ITEMS(block)[idx]);
-  if (spp->sp_flags & HL_FOLD) {
-    block->b_syn_folditems--;
-  }
-  syn_clear_pattern(block, idx);
-  memmove(spp, spp + 1, sizeof(synpat_T) * (size_t)(block->b_syn_patterns.ga_len - idx - 1));
-  block->b_syn_patterns.ga_len--;
+  rs_syn_remove_pattern(block, idx);
 }
 
 // Clear and free one syntax pattern.  When clearing all, must be called from
 // last to first!
 static void syn_clear_pattern(synblock_T *block, int i)
 {
-  xfree(SYN_ITEMS(block)[i].sp_pattern);
-  vim_regfree(SYN_ITEMS(block)[i].sp_prog);
-  // Only free sp_cont_list and sp_next_list of first start pattern
-  if (i == 0 || SYN_ITEMS(block)[i - 1].sp_type != SPTYPE_START) {
-    xfree(SYN_ITEMS(block)[i].sp_cont_list);
-    xfree(SYN_ITEMS(block)[i].sp_next_list);
-    xfree(SYN_ITEMS(block)[i].sp_syn.cont_in_list);
-  }
+  rs_syn_clear_pattern(block, i);
 }
 
 // Clear and free one syntax cluster.
 static void syn_clear_cluster(synblock_T *block, int i)
 {
-  xfree(SYN_CLSTR(block)[i].scl_name);
-  xfree(SYN_CLSTR(block)[i].scl_name_u);
-  xfree(SYN_CLSTR(block)[i].scl_list);
+  rs_syn_clear_cluster(block, i);
 }
-
 
 // Clear one syntax group for the current buffer.
 static void syn_clear_one(const int id, const bool syncing)
 {
-  synpat_T *spp;
-
-  // Clear keywords only when not ":syn sync clear group-name"
-  if (!syncing) {
-    syn_clear_keyword(id, &curwin->w_s->b_keywtab);
-    syn_clear_keyword(id, &curwin->w_s->b_keywtab_ic);
-  }
-
-  // clear the patterns for "id"
-  for (int idx = curwin->w_s->b_syn_patterns.ga_len; --idx >= 0;) {
-    spp = &(SYN_ITEMS(curwin->w_s)[idx]);
-    if (spp->sp_syn.id != id || spp->sp_syncing != syncing) {
-      continue;
-    }
-    syn_remove_pattern(curwin->w_s, idx);
-  }
+  rs_syn_clear_one(id, (int)syncing);
 }
 
 void syn_maybe_enable(void)
@@ -4116,4 +4089,34 @@ extern void rs_syn_cmd_list(exarg_T *eap, int syncing);
 static void syn_cmd_list(exarg_T *eap, int syncing)
 {
   rs_syn_cmd_list(eap, syncing);
+}
+
+// =============================================================================
+// Phase 5 (pass 5) accessors: clearing.rs support
+// =============================================================================
+
+/// Set b_syn_patterns.ga_len (used by rs_syn_remove_pattern to compact).
+void nvim_synblock_set_pattern_count(synblock_T *block, int len)
+{
+  block->b_syn_patterns.ga_len = len;
+}
+
+/// Memmove within SYN_ITEMS array: copy [src_idx..src_idx+count) to dst_idx.
+void nvim_synblock_memmove_patterns(synblock_T *block, int dst_idx, int src_idx, int count)
+{
+  synpat_T *base = SYN_ITEMS(block);
+  memmove(base + dst_idx, base + src_idx, sizeof(synpat_T) * (size_t)count);
+}
+
+/// Decrement b_syn_folditems.
+void nvim_synblock_dec_folditems(synblock_T *block)
+{
+  block->b_syn_folditems--;
+}
+
+/// Clear keyword entries with given syn id from a hashtab.
+/// Keeps all HI2KE/KE2HIKEY/hash_remove pointer arithmetic in C.
+void nvim_syn_clear_keyword_in_ht(int id, hashtab_T *ht)
+{
+  syn_clear_keyword(id, ht);
 }
