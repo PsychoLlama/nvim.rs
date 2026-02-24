@@ -1014,75 +1014,10 @@ void marktree_del_pair_test(MarkTree *b, uint32_t ns, uint32_t id)
 void marktree_check(MarkTree *b)
 {
 #ifndef NDEBUG
-  if (b->root == NULL) {
-    assert(b->n_keys == 0);
-    assert(b->n_nodes == 0);
-    assert(b->id2node == NULL || map_size(b->id2node) == 0);
-    return;
-  }
-
-  MTPos dummy;
-  bool last_right = false;
-
-  size_t nkeys = marktree_check_node(b, b->root, &dummy, &last_right, b->meta_root);
-  assert(b->n_keys == nkeys);
-  assert(b->n_keys == map_size(b->id2node));
+  rs_marktree_check(b);
 #else
-  // Do nothing, as assertions are required
   (void)b;
 #endif
-}
-
-size_t marktree_check_node(MarkTree *b, MTNode *x, MTPos *last, bool *last_right,
-                           const uint32_t *meta_node_ref)
-{
-  assert(x->n <= 2 * T - 1);
-  // TODO(bfredl): too strict if checking "in repair" post-delete tree.
-  assert(x->n >= (x != b->root ? T - 1 : 0));
-  size_t n_keys = (size_t)x->n;
-
-  for (int i = 0; i < x->n; i++) {
-    if (x->level) {
-      n_keys += marktree_check_node(b, x->ptr[i], last, last_right, x->meta[i]);
-    } else {
-      *last = (MTPos) { 0, 0 };
-    }
-    if (i > 0) {
-      rs_unrelative(x->key[i - 1].pos, last);
-    }
-    assert(rs_pos_leq(*last, x->key[i].pos));
-    if (last->row == x->key[i].pos.row && last->col == x->key[i].pos.col) {
-      assert(!*last_right || mt_right(x->key[i]));
-    }
-    *last_right = mt_right(x->key[i]);
-    assert(x->key[i].pos.col >= 0);
-    assert(pmap_get(uint64_t)(b->id2node, mt_lookup_key(x->key[i])) == x);
-  }
-
-  if (x->level) {
-    n_keys += marktree_check_node(b, x->ptr[x->n], last, last_right, x->meta[x->n]);
-    rs_unrelative(x->key[x->n - 1].pos, last);
-
-    for (int i = 0; i < x->n + 1; i++) {
-      assert(x->ptr[i]->parent == x);
-      assert(x->ptr[i]->p_idx == i);
-      assert(x->ptr[i]->level == x->level - 1);
-      // PARANOIA: check no double node ref
-      for (int j = 0; j < i; j++) {
-        assert(x->ptr[i] != x->ptr[j]);
-      }
-    }
-  } else if (x->n > 0) {
-    *last = x->key[x->n - 1].pos;
-  }
-
-  uint32_t meta_node[kMTMetaCount];
-  rs_meta_describe_node(meta_node, x);
-  for (int m = 0; m < kMTMetaCount; m++) {
-    assert(meta_node_ref[m] == meta_node[m]);
-  }
-
-  return n_keys;
 }
 
 bool marktree_check_intersections(MarkTree *b)
@@ -1412,6 +1347,7 @@ uint64_t nvim_mtnode_intersect_id(MTNode *x, size_t idx)
 }
 
 MTNode *nvim_marktree_id2node(MarkTree *b, uint64_t id) { return id2node(b, id); }
+size_t nvim_marktree_id2node_count(MarkTree *b) { return b->id2node ? map_size(b->id2node) : 0; }
 
 // ============================================================================
 // Helper Functions (for Rust FFI)

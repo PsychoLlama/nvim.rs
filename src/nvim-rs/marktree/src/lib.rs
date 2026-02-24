@@ -440,6 +440,9 @@ extern "C" {
     /// Lookup node by id.
     fn nvim_marktree_id2node(b: MarkTreeHandle, id: u64) -> MTNodeHandle;
 
+    /// Return the number of entries in the id2node map.
+    fn nvim_marktree_id2node_count(b: MarkTreeHandle) -> usize;
+
     // ========================================================================
     // Helper Functions
     // ========================================================================
@@ -612,13 +615,6 @@ extern "C" {
         new_extent_line: c_int,
         new_extent_col: c_int,
     ) -> bool;
-
-    // ========================================================================
-    // Debug and Validation (Phase 8)
-    // ========================================================================
-
-    /// Check marktree invariants.
-    fn nvim_marktree_check(b: MarkTreeHandle);
 
     // ========================================================================
     // Memory Management Accessors (Phase 7)
@@ -4003,12 +3999,156 @@ pub fn marktree_del_pair_test(b: MarkTreeHandle, ns: u32, id: u32) {
 // Phase 8: Debug and Validation
 // ============================================================================
 
+/// Recursive node validator.
+///
+/// Returns the total number of keys in the subtree rooted at `x`.
+///
+/// # Panics
+///
+/// Panics if any B-tree invariant is violated.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::missing_panics_doc
+)]
+fn marktree_check_node_handle(
+    b: MarkTreeHandle,
+    x: MTNodeHandle,
+    root: MTNodeHandle,
+    last: &mut MTPos,
+    last_right: &mut bool,
+    meta_node_ref: &[u32; K_MT_META_COUNT],
+) -> usize {
+    let n = unsafe { nvim_mtnode_get_n(x) } as usize;
+    let level = unsafe { nvim_mtnode_get_level(x) };
+    let ni = n as c_int;
+
+    assert!(n < 2 * MT_BRANCH_FACTOR, "node has too many keys: {n}");
+    if x != root {
+        assert!(
+            n >= MT_BRANCH_FACTOR - 1,
+            "non-root node has too few keys: {n}"
+        );
+    }
+
+    let mut count = n;
+
+    for i in 0..ni {
+        let iu = i as usize;
+        if level != 0 {
+            let child = unsafe { nvim_mtnode_get_ptr(x, i) };
+            let child_meta = mtnode_meta(x, i);
+            count += marktree_check_node_handle(b, child, root, last, last_right, &child_meta);
+        } else {
+            *last = MTPos { row: 0, col: 0 };
+        }
+        if iu > 0 {
+            let prev_key = unsafe { nvim_mtnode_get_key(x, i - 1) };
+            unrelative(prev_key.pos, last);
+        }
+        let key = unsafe { nvim_mtnode_get_key(x, i) };
+        assert!(
+            pos_leq(*last, key.pos),
+            "key ordering violated at index {iu}: last={last:?} key={:?}",
+            key.pos
+        );
+        if last.row == key.pos.row && last.col == key.pos.col {
+            assert!(
+                !*last_right || mt_right(&key),
+                "right-gravity ordering violated at index {iu}"
+            );
+        }
+        *last_right = mt_right(&key);
+        assert!(key.pos.col >= 0, "key has negative col at index {iu}");
+        let looked_up_node = unsafe { nvim_marktree_id2node(b, mt_lookup_key(&key)) };
+        assert!(
+            looked_up_node == x,
+            "id2node mismatch at key index {iu}: expected {x:?}, got {looked_up_node:?}"
+        );
+    }
+
+    if level != 0 {
+        let last_child = unsafe { nvim_mtnode_get_ptr(x, ni) };
+        let last_child_meta = mtnode_meta(x, ni);
+        count +=
+            marktree_check_node_handle(b, last_child, root, last, last_right, &last_child_meta);
+        let last_key = unsafe { nvim_mtnode_get_key(x, ni - 1) };
+        unrelative(last_key.pos, last);
+
+        for i in 0..=ni {
+            let child = unsafe { nvim_mtnode_get_ptr(x, i) };
+            let child_parent = unsafe { nvim_mtnode_get_parent(child) };
+            let child_p_idx = unsafe { nvim_mtnode_get_p_idx(child) };
+            let child_level = unsafe { nvim_mtnode_get_level(child) };
+            assert!(child_parent == x, "child {i} has wrong parent");
+            assert!(child_p_idx == i, "child {i} has wrong p_idx: {child_p_idx}");
+            assert!(
+                child_level == level - 1,
+                "child {i} has wrong level: {child_level} (expected {})",
+                level - 1
+            );
+            // PARANOIA: check no double node ref
+            for j in 0..i {
+                let other_child = unsafe { nvim_mtnode_get_ptr(x, j) };
+                assert!(
+                    child != other_child,
+                    "duplicate child pointer at {i} and {j}"
+                );
+            }
+        }
+    } else if n > 0 {
+        let last_key = unsafe { nvim_mtnode_get_key(x, ni - 1) };
+        *last = last_key.pos;
+    }
+
+    let meta_node = meta_describe_node(x);
+    for m in 0..K_MT_META_COUNT {
+        assert!(
+            meta_node_ref[m] == meta_node[m],
+            "meta mismatch at m={m}: ref={} got={}",
+            meta_node_ref[m],
+            meta_node[m]
+        );
+    }
+
+    count
+}
+
 /// Check marktree invariants.
 ///
 /// Validates the B-tree structure, intersection markers, and meta counts.
+///
+/// # Panics
+///
 /// Panics if any invariant is violated.
 pub fn marktree_check(b: MarkTreeHandle) {
-    unsafe { nvim_marktree_check(b) }
+    let root = unsafe { nvim_marktree_get_root(b) };
+    if root.is_null() {
+        let n_keys = unsafe { nvim_marktree_get_n_keys(b) };
+        assert!(n_keys == 0, "empty tree has non-zero n_keys: {n_keys}");
+        let id2node_count = unsafe { nvim_marktree_id2node_count(b) };
+        assert!(
+            id2node_count == 0,
+            "empty tree has non-zero id2node count: {id2node_count}"
+        );
+        return;
+    }
+
+    let mut last = MTPos { row: 0, col: 0 };
+    let mut last_right = false;
+    let meta_root = marktree_meta_root(b);
+    let counted = marktree_check_node_handle(b, root, root, &mut last, &mut last_right, &meta_root);
+    let stored = unsafe { nvim_marktree_get_n_keys(b) };
+    assert!(
+        stored == counted,
+        "n_keys mismatch: stored={stored}, counted={counted}"
+    );
+    let id2node_count = unsafe { nvim_marktree_id2node_count(b) };
+    assert!(
+        stored == id2node_count,
+        "n_keys ({stored}) != id2node count ({id2node_count})"
+    );
 }
 
 // ============================================================================
