@@ -1064,6 +1064,162 @@ pub extern "C" fn rs_tabpage_close_alternate() -> TabpageHandle {
     }
 }
 
+// =============================================================================
+// Phase 2 migrations: close_tabpage, make_tabpages, goto_tabpage_lastused,
+// goto_tabpage_win
+// =============================================================================
+
+extern "C" {
+    /// free_tabpage wrapper.
+    fn nvim_free_tabpage_wrapper(tp: TabpageHandle);
+
+    /// Get p_tpm (tabpagemax option).
+    fn nvim_get_p_tpm() -> i64;
+
+    /// win_new_tabpage wrapper.
+    fn nvim_win_new_tabpage_wrapper(after: c_int, filename: *const u8) -> c_int;
+
+    /// block_autocmds.
+    fn nvim_block_autocmds();
+
+    /// unblock_autocmds.
+    fn nvim_unblock_autocmds();
+
+    /// win_enter wrapper.
+    fn nvim_win_enter(wp: WinHandle, undo_sync: c_int);
+
+    /// rs_win_valid.
+    fn rs_win_valid(wp: WinHandle) -> c_int;
+}
+
+/// FAIL constant.
+const FAIL: c_int = 0;
+
+/// Close tabpage `tab` which has no windows.
+/// There must be another tabpage or this will crash.
+/// Equivalent to C `close_tabpage()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn close_tabpage_impl(tab: TabpageHandle) {
+    let first = nvim_get_first_tabpage();
+    let ptp;
+
+    if tab == first {
+        let next = nvim_tabpage_get_next(tab);
+        nvim_set_first_tabpage(next);
+        ptp = next;
+    } else {
+        // Find the tabpage before tab.
+        let mut p = first;
+        while !nvim_tabpage_get_next(p).is_null() && nvim_tabpage_get_next(p) != tab {
+            p = nvim_tabpage_get_next(p);
+        }
+        // assert: nvim_tabpage_get_next(p) == tab
+        nvim_tabpage_set_next(p, nvim_tabpage_get_next(tab));
+        ptp = p;
+    }
+
+    nvim_al_goto_tabpage_tp(ptp, 0, 0);
+    nvim_free_tabpage_wrapper(tab);
+}
+
+/// Create up to `maxcount` tabpages with empty windows.
+/// Returns the actual number of tabpages created.
+/// Equivalent to C `make_tabpages()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn make_tabpages_impl(maxcount: c_int) -> c_int {
+    // Limit to 'tabpagemax' tabs.
+    let p_tpm = nvim_get_p_tpm() as c_int;
+    let count = maxcount.min(p_tpm);
+
+    // Don't execute autocommands while creating the tab pages.
+    nvim_block_autocmds();
+
+    let mut todo = count - 1;
+    while todo > 0 {
+        if nvim_win_new_tabpage_wrapper(0, std::ptr::null()) == FAIL {
+            break;
+        }
+        todo -= 1;
+    }
+
+    nvim_unblock_autocmds();
+
+    // Return actual number of tab pages.
+    count - todo
+}
+
+/// Go to the last used tabpage if valid.
+/// Returns true on success, false if lastused_tabpage is not valid.
+/// Equivalent to C `goto_tabpage_lastused()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn goto_tabpage_lastused_impl() -> bool {
+    let lastused = nvim_get_lastused_tabpage();
+    if !valid_tabpage_impl(lastused) {
+        return false;
+    }
+    nvim_al_goto_tabpage_tp(lastused, 1, 1);
+    true
+}
+
+/// Enter window `wp` in tab page `tp`.
+/// Equivalent to C `goto_tabpage_win()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn goto_tabpage_win_impl(tp: TabpageHandle, wp: WinHandle) {
+    nvim_al_goto_tabpage_tp(tp, 1, 1);
+    let curtab = nvim_get_curtab();
+    if curtab == tp && rs_win_valid(wp) != 0 {
+        nvim_win_enter(wp, 1);
+    }
+}
+
+/// FFI: Close tabpage `tab` which has no windows.
+///
+/// # Safety
+/// tab must be a valid, non-null tabpage with no windows.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_close_tabpage(tab: TabpageHandle) {
+    close_tabpage_impl(tab);
+}
+
+/// FFI: Create up to `maxcount` tabpages with empty windows.
+///
+/// Returns the actual number of tabpages.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_make_tabpages(maxcount: c_int) -> c_int {
+    make_tabpages_impl(maxcount)
+}
+
+/// FFI: Go to the last used tabpage.
+///
+/// Returns 1 on success, 0 if last used tabpage is not valid.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_goto_tabpage_lastused() -> c_int {
+    c_int::from(goto_tabpage_lastused_impl())
+}
+
+/// FFI: Enter window `wp` in tab page `tp`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_goto_tabpage_win(tp: TabpageHandle, wp: WinHandle) {
+    goto_tabpage_win_impl(tp, wp);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

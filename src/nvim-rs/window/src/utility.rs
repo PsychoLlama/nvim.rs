@@ -82,6 +82,12 @@ extern "C" {
 
     /// unblock_autocmds wrapper.
     fn nvim_unblock_autocmds();
+
+    /// api_set_error for E242 (split while closing another).
+    fn nvim_api_set_err_e242(err: *mut std::ffi::c_void);
+
+    /// api_set_error for e_cannot_split_window_when_closing_buffer.
+    fn nvim_api_set_err_cannot_split_closing(err: *mut std::ffi::c_void);
 }
 
 // OK / FAIL constants (matching C values from vim_defs.h)
@@ -274,6 +280,43 @@ pub unsafe extern "C" fn rs_get_maximum_wincount(fr: *const Frame, height: c_int
         return 0;
     }
     get_maximum_wincount_impl(fr, height)
+}
+
+// =============================================================================
+// check_split_disallowed_err (Phase 2)
+// =============================================================================
+
+/// Check if split is disallowed, setting the API error struct on failure.
+///
+/// Returns true if split is allowed, false otherwise.
+/// Equivalent to C `check_split_disallowed_err()`.
+///
+/// # Safety
+/// `err` must be a valid pointer to a C `Error` struct, or null.
+unsafe fn check_split_disallowed_err_impl(wp: WinHandle, err: *mut std::ffi::c_void) -> bool {
+    if nvim_get_split_disallowed() > 0 {
+        nvim_api_set_err_e242(err);
+        return false;
+    }
+    if !wp.is_null() && nvim_win_buf_locked_split(wp) != 0 {
+        nvim_api_set_err_cannot_split_closing(err);
+        return false;
+    }
+    true
+}
+
+/// FFI export for `check_split_disallowed_err`.
+///
+/// Returns 1 if split is allowed, 0 otherwise. Sets the API error on failure.
+///
+/// # Safety
+/// `err` must be a valid pointer to a C `Error` struct.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_check_split_disallowed_err(
+    wp: WinHandle,
+    err: *mut std::ffi::c_void,
+) -> c_int {
+    c_int::from(check_split_disallowed_err_impl(wp, err))
 }
 
 // =============================================================================

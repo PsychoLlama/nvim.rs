@@ -202,6 +202,13 @@ extern bool rs_check_can_set_curbuf_disabled(void);
 extern bool rs_check_can_set_curbuf_forceit(int forceit);
 extern win_T *rs_prevwin_curwin(void);
 extern int rs_check_split_disallowed(win_T *wp);
+
+// Phase 2: Tabpage helpers and check_split_disallowed_err
+extern void rs_close_tabpage(tabpage_T *tab);
+extern int rs_make_tabpages(int maxcount);
+extern int rs_goto_tabpage_lastused(void);
+extern void rs_goto_tabpage_win(tabpage_T *tp, win_T *wp);
+extern int rs_check_split_disallowed_err(const win_T *wp, Error *err);
 extern int rs_get_maximum_wincount(frame_T *fr, int height);
 extern int rs_make_windows(int count, int vertical);
 
@@ -762,15 +769,7 @@ int check_split_disallowed(const win_T *wp)
 bool check_split_disallowed_err(const win_T *wp, Error *err)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (split_disallowed > 0) {
-    api_set_error(err, kErrorTypeException, "E242: Can't split a window while closing another");
-    return false;
-  }
-  if (wp->w_buffer->b_locked_split) {
-    api_set_error(err, kErrorTypeException, "%s", e_cannot_split_window_when_closing_buffer);
-    return false;
-  }
-  return true;
+  return rs_check_split_disallowed_err(wp, err);
 }
 
 // split the current window, implements CTRL-W s and :split
@@ -1865,48 +1864,14 @@ static int may_open_tabpage(void)
 // Returns the number of resulting tab pages.
 int make_tabpages(int maxcount)
 {
-  int count = maxcount;
-
-  // Limit to 'tabpagemax' tabs.
-  count = MIN(count, (int)p_tpm);
-
-  // Don't execute autocommands while creating the tab pages.  Must do that
-  // when putting the buffers in the windows.
-  block_autocmds();
-
-  int todo;
-  for (todo = count - 1; todo > 0; todo--) {
-    if (win_new_tabpage(0, NULL) == FAIL) {
-      break;
-    }
-  }
-
-  unblock_autocmds();
-
-  // return actual number of tab pages
-  return count - todo;
+  return rs_make_tabpages(maxcount);
 }
 
 /// Close tabpage `tab`, assuming it has no windows in it.
 /// There must be another tabpage or this will crash.
 void close_tabpage(tabpage_T *tab)
 {
-  tabpage_T *ptp;
-
-  if (tab == first_tabpage) {
-    first_tabpage = tab->tp_next;
-    ptp = first_tabpage;
-  } else {
-    for (ptp = first_tabpage; ptp != NULL && ptp->tp_next != tab;
-         ptp = ptp->tp_next) {
-      // do nothing
-    }
-    assert(ptp != NULL);
-    ptp->tp_next = tab->tp_next;
-  }
-
-  goto_tabpage_tp(ptp, false, false);
-  free_tabpage(tab);
+  rs_close_tabpage(tab);
 }
 
 /// Prepare for leaving the current tab page.
@@ -2097,22 +2062,14 @@ void goto_tabpage_tp(tabpage_T *tp, bool trigger_enter_autocmds, bool trigger_le
 /// @return true if the tab page is valid, false otherwise.
 bool goto_tabpage_lastused(void)
 {
-  if (!rs_valid_tabpage(lastused_tabpage)) {
-    return false;
-  }
-
-  goto_tabpage_tp(lastused_tabpage, true, true);
-  return true;
+  return rs_goto_tabpage_lastused();
 }
 
 // Enter window "wp" in tab page "tp".
 // Also updates the GUI tab.
 void goto_tabpage_win(tabpage_T *tp, win_T *wp)
 {
-  goto_tabpage_tp(tp, true, true);
-  if (curtab == tp && rs_win_valid(wp)) {
-    win_enter(wp, true);
-  }
+  rs_goto_tabpage_win(tp, wp);
 }
 
 // Move the current tab page to after tab page "nr".
@@ -3501,3 +3458,29 @@ void nvim_do_window_new(int nchar, int Prenum) { rs_do_window_new(nchar, Prenum)
 
 extern void rs_cmd_with_count_exec(const char *cmd, int64_t prenum);
 void nvim_cmd_with_count_exec(const char *cmd, int64_t Prenum) { rs_cmd_with_count_exec(cmd, Prenum); }
+
+// Phase 2 accessors: tabpage helpers and check_split_disallowed_err migration
+
+/// free_tabpage wrapper for Rust.
+void nvim_free_tabpage_wrapper(tabpage_T *tp)
+{
+  free_tabpage(tp);
+}
+
+/// Get p_tpm (tabpagemax option).
+int64_t nvim_get_p_tpm(void) { return p_tpm; }
+
+/// Set lastused_tabpage global.
+void nvim_set_lastused_tabpage(tabpage_T *tp) { lastused_tabpage = tp; }
+
+/// api_set_error for E242 (split while closing).
+void nvim_api_set_err_e242(Error *err)
+{
+  api_set_error(err, kErrorTypeException, "E242: Can't split a window while closing another");
+}
+
+/// api_set_error for e_cannot_split_window_when_closing_buffer.
+void nvim_api_set_err_cannot_split_closing(Error *err)
+{
+  api_set_error(err, kErrorTypeException, "%s", e_cannot_split_window_when_closing_buffer);
+}
