@@ -674,624 +674,7 @@ bool set_swapcommand(char *command, linenr_T newlnum)
 int do_ecmd(int fnum, char *ffname, char *sfname, exarg_T *eap, linenr_T newlnum, int flags,
             win_T *oldwin)
 {
-  bool other_file;                      // true if editing another file
-  int oldbuf;                           // true if using existing buffer
-  bool auto_buf = false;                // true if autocommands brought us
-                                        // into the buffer unexpectedly
-  char *new_name = NULL;
-  bool did_set_swapcommand = false;
-  buf_T *buf;
-  bufref_T bufref;
-  bufref_T old_curbuf;
-  char *free_fname = NULL;
-  int retval = FAIL;
-  linenr_T topline = 0;
-  int newcol = -1;
-  int solcol = -1;
-  char *command = NULL;
-  bool did_get_winopts = false;
-  int readfile_flags = 0;
-  bool did_inc_redrawing_disabled = false;
-  OptInt *so_ptr = curwin->w_p_so >= 0 ? &curwin->w_p_so : &p_so;
-
-  if (eap != NULL) {
-    command = eap->do_ecmd_cmd;
-  }
-
-  set_bufref(&old_curbuf, curbuf);
-
-  if (fnum != 0) {
-    if (fnum == curbuf->b_fnum) {       // file is already being edited
-      return OK;                        // nothing to do
-    }
-    other_file = true;
-  } else {
-    // if no short name given, use ffname for short name
-    if (sfname == NULL) {
-      sfname = ffname;
-    }
-#ifdef CASE_INSENSITIVE_FILENAME
-    if (sfname != NULL) {
-      path_fix_case(sfname);             // set correct case for sfname
-    }
-#endif
-
-    if ((flags & (ECMD_ADDBUF | ECMD_ALTBUF))
-        && (ffname == NULL || *ffname == NUL)) {
-      goto theend;
-    }
-
-    if (ffname == NULL) {
-      other_file = true;
-    } else if (*ffname == NUL && curbuf->b_ffname == NULL) {  // there is no file name
-      other_file = false;
-    } else {
-      if (*ffname == NUL) {                 // re-edit with same file name
-        ffname = curbuf->b_ffname;
-        sfname = curbuf->b_fname;
-      }
-      free_fname = fix_fname(ffname);       // may expand to full path name
-      if (free_fname != NULL) {
-        ffname = free_fname;
-      }
-      other_file = otherfile(ffname);
-    }
-  }
-
-  // Re-editing a terminal buffer: skip most buffer re-initialization.
-  if (!other_file && curbuf->terminal) {
-    check_arg_idx(curwin);  // Needed when called from do_argfile().
-    maketitle();            // Title may show the arg index, e.g. "(2 of 5)".
-    retval = OK;
-    goto theend;
-  }
-
-  // If the file was changed we may not be allowed to abandon it:
-  // - if we are going to re-edit the same file
-  // - or if we are the only window on this file and if ECMD_HIDE is false
-  if (((!other_file && !(flags & ECMD_OLDBUF))
-       || (curbuf->b_nwindows == 1
-           && !(flags & (ECMD_HIDE | ECMD_ADDBUF | ECMD_ALTBUF))))
-      && check_changed(curbuf, (p_awa ? CCGD_AW : 0)
-                       | (other_file ? 0 : CCGD_MULTWIN)
-                       | ((flags & ECMD_FORCEIT) ? CCGD_FORCEIT : 0)
-                       | (eap == NULL ? 0 : CCGD_EXCMD))) {
-    if (fnum == 0 && other_file && ffname != NULL) {
-      setaltfname(ffname, sfname, newlnum < 0 ? 0 : newlnum);
-    }
-    goto theend;
-  }
-
-  // End Visual mode before switching to another buffer, so the text can be
-  // copied into the GUI selection buffer.
-  // Careful: may trigger ModeChanged() autocommand
-
-  // Should we block autocommands here?
-  rs_reset_VIsual();
-
-  // autocommands freed window :(
-  if (oldwin != NULL && !rs_win_valid(oldwin)) {
-    oldwin = NULL;
-  }
-
-  did_set_swapcommand = set_swapcommand(command, newlnum);
-
-  // If we are starting to edit another file, open a (new) buffer.
-  // Otherwise we re-use the current buffer.
-  if (other_file) {
-    const int prev_alt_fnum = curwin->w_alt_fnum;
-
-    if (!(flags & (ECMD_ADDBUF | ECMD_ALTBUF))) {
-      if ((cmdmod.cmod_flags & CMOD_KEEPALT) == 0) {
-        curwin->w_alt_fnum = curbuf->b_fnum;
-      }
-      if (oldwin != NULL) {
-        buflist_altfpos(oldwin);
-      }
-    }
-
-    if (fnum) {
-      buf = buflist_findnr(fnum);
-    } else {
-      if (flags & (ECMD_ADDBUF | ECMD_ALTBUF)) {
-        // Default the line number to zero to avoid that a wininfo item
-        // is added for the current window.
-        linenr_T tlnum = 0;
-
-        if (command != NULL) {
-          tlnum = (linenr_T)atol(command);
-          if (tlnum <= 0) {
-            tlnum = 1;
-          }
-        }
-        // Add BLN_NOCURWIN to avoid a new wininfo items are associated
-        // with the current window.
-        const buf_T *const newbuf
-          = buflist_new(ffname, sfname, tlnum, BLN_LISTED | BLN_NOCURWIN);
-        if (newbuf != NULL && (flags & ECMD_ALTBUF)) {
-          curwin->w_alt_fnum = newbuf->b_fnum;
-        }
-        goto theend;
-      }
-      buf = buflist_new(ffname, sfname, 0,
-                        BLN_CURBUF | (flags & ECMD_SET_HELP ? 0 : BLN_LISTED));
-      // Autocmds may change curwin and curbuf.
-      if (oldwin != NULL) {
-        oldwin = curwin;
-      }
-      set_bufref(&old_curbuf, curbuf);
-    }
-    if (buf == NULL) {
-      goto theend;
-    }
-    // autocommands try to edit a closing buffer, which like splitting, can
-    // result in more windows displaying it; abort
-    if (buf->b_locked_split) {
-      // window was split, but not editing the new buffer, reset b_nwindows again
-      if (oldwin == NULL
-          && curwin->w_buffer != NULL
-          && curwin->w_buffer->b_nwindows > 1) {
-        curwin->w_buffer->b_nwindows--;
-      }
-      emsg(_(e_cannot_switch_to_a_closing_buffer));
-      goto theend;
-    }
-    if (curwin->w_alt_fnum == buf->b_fnum && prev_alt_fnum != 0) {
-      // reusing the buffer, keep the old alternate file
-      curwin->w_alt_fnum = prev_alt_fnum;
-    }
-    if (buf->b_ml.ml_mfp == NULL) {
-      // No memfile yet.
-      oldbuf = false;
-    } else {
-      // Existing memfile.
-      oldbuf = true;
-      set_bufref(&bufref, buf);
-      buf_check_timestamp(buf);
-      // Check if autocommands made buffer invalid or changed the current
-      // buffer.
-      if (!bufref_valid(&bufref) || curbuf != old_curbuf.br_buf) {
-        goto theend;
-      }
-      if (aborting()) {
-        // Autocmds may abort script processing.
-        goto theend;
-      }
-    }
-
-    // May jump to last used line number for a loaded buffer or when asked
-    // for explicitly
-    if ((oldbuf && newlnum == ECMD_LASTL) || newlnum == ECMD_LAST) {
-      pos_T *pos = &buflist_findfmark(buf)->mark;
-      newlnum = pos->lnum;
-      solcol = pos->col;
-    }
-
-    // Make the (new) buffer the one used by the current window.
-    // If the old buffer becomes unused, free it if ECMD_HIDE is false.
-    // If the current buffer was empty and has no file name, curbuf
-    // is returned by buflist_new(), nothing to do here.
-    if (buf != curbuf) {
-      // Should only be possible to get here if the cmdwin is closed, or
-      // if it's opening and its buffer hasn't been set yet (the new
-      // buffer is for it).
-      assert(cmdwin_buf == NULL);
-
-      const int save_cmdwin_type = cmdwin_type;
-      win_T *const save_cmdwin_win = cmdwin_win;
-      win_T *const save_cmdwin_old_curwin = cmdwin_old_curwin;
-
-      // BufLeave applies to the old buffer.
-      cmdwin_type = 0;
-      cmdwin_win = NULL;
-      cmdwin_old_curwin = NULL;
-
-      // Be careful: The autocommands may delete any buffer and change
-      // the current buffer.
-      // - If the buffer we are going to edit is deleted, give up.
-      // - If the current buffer is deleted, prefer to load the new
-      //   buffer when loading a buffer is required.  This avoids
-      //   loading another buffer which then must be closed again.
-      // - If we ended up in the new buffer already, need to skip a few
-      //         things, set auto_buf.
-      if (buf->b_fname != NULL) {
-        new_name = xstrdup(buf->b_fname);
-      }
-      const bufref_T save_au_new_curbuf = au_new_curbuf;
-      set_bufref(&au_new_curbuf, buf);
-      apply_autocmds(EVENT_BUFLEAVE, NULL, NULL, false, curbuf);
-
-      cmdwin_type = save_cmdwin_type;
-      cmdwin_win = save_cmdwin_win;
-      cmdwin_old_curwin = save_cmdwin_old_curwin;
-
-      if (!bufref_valid(&au_new_curbuf)) {
-        // New buffer has been deleted.
-        delbuf_msg(new_name);  // Frees new_name.
-        au_new_curbuf = save_au_new_curbuf;
-        goto theend;
-      }
-      if (aborting()) {             // autocmds may abort script processing
-        xfree(new_name);
-        au_new_curbuf = save_au_new_curbuf;
-        goto theend;
-      }
-      if (buf == curbuf) {  // already in new buffer
-        auto_buf = true;
-      } else {
-        win_T *the_curwin = curwin;
-        buf_T *was_curbuf = curbuf;
-
-        // Set w_locked to avoid that autocommands close the window.
-        // Set b_locked for the same reason.
-        the_curwin->w_locked = true;
-        buf->b_locked++;
-
-        if (curbuf == old_curbuf.br_buf) {
-          buf_copy_options(buf, BCO_ENTER);
-        }
-
-        // Close the link to the current buffer. This will set
-        // oldwin->w_buffer to NULL.
-        u_sync(false);
-        const bool did_decrement
-          = close_buffer(oldwin, curbuf, (flags & ECMD_HIDE) || curbuf->terminal ? 0 : DOBUF_UNLOAD,
-                         false, false);
-
-        // Autocommands may have closed the window.
-        if (rs_win_valid(the_curwin)) {
-          the_curwin->w_locked = false;
-        }
-        buf->b_locked--;
-
-        // autocmds may abort script processing
-        if (aborting() && curwin->w_buffer != NULL) {
-          xfree(new_name);
-          au_new_curbuf = save_au_new_curbuf;
-          goto theend;
-        }
-        // Be careful again, like above.
-        if (!bufref_valid(&au_new_curbuf)) {
-          // New buffer has been deleted.
-          delbuf_msg(new_name);  // Frees new_name.
-          au_new_curbuf = save_au_new_curbuf;
-          goto theend;
-        }
-        if (buf == curbuf) {  // already in new buffer
-          // close_buffer() has decremented the window count,
-          // increment it again here and restore w_buffer.
-          if (did_decrement && buf_valid(was_curbuf)) {
-            was_curbuf->b_nwindows++;
-          }
-          if (rs_win_valid_any_tab(oldwin) && oldwin->w_buffer == NULL) {
-            oldwin->w_buffer = was_curbuf;
-          }
-          auto_buf = true;
-        } else {
-          // <VN> We could instead free the synblock
-          // and re-attach to buffer, perhaps.
-          if (curwin->w_buffer == NULL
-              || curwin->w_s == &(curwin->w_buffer->b_s)) {
-            curwin->w_s = &(buf->b_s);
-          }
-
-          curwin->w_buffer = buf;
-          curbuf = buf;
-          curbuf->b_nwindows++;
-
-          // Set 'fileformat', 'binary' and 'fenc' when forced.
-          if (!oldbuf && eap != NULL) {
-            set_file_options(true, eap);
-            set_forced_fenc(eap);
-          }
-        }
-
-        // May get the window options from the last time this buffer
-        // was in this window (or another window).  If not used
-        // before, reset the local window options to the global
-        // values.  Also restores old folding stuff.
-        get_winopts(curbuf);
-        did_get_winopts = true;
-      }
-      xfree(new_name);
-      au_new_curbuf = save_au_new_curbuf;
-    }
-
-    curwin->w_pcmark.lnum = 1;
-    curwin->w_pcmark.col = 0;
-  } else {  // !other_file
-    if ((flags & (ECMD_ADDBUF | ECMD_ALTBUF)) || check_fname() == FAIL) {
-      goto theend;
-    }
-    oldbuf = (flags & ECMD_OLDBUF);
-  }
-
-  // Don't redraw until the cursor is in the right line, otherwise
-  // autocommands may cause ml_get errors.
-  RedrawingDisabled++;
-  did_inc_redrawing_disabled = true;
-
-  buf = curbuf;
-  if ((flags & ECMD_SET_HELP) || keep_help_flag) {
-    prepare_help_buffer();
-  } else if (!curbuf->b_help) {
-    // Don't make a buffer listed if it's a help buffer.  Useful when using
-    // CTRL-O to go back to a help file.
-    set_buflisted(true);
-  }
-
-  // If autocommands change buffers under our fingers, forget about
-  // editing the file.
-  if (buf != curbuf) {
-    goto theend;
-  }
-  if (aborting()) {         // autocmds may abort script processing
-    goto theend;
-  }
-
-  // Since we are starting to edit a file, consider the filetype to be
-  // unset.  Helps for when an autocommand changes files and expects syntax
-  // highlighting to work in the other file.
-  curbuf->b_did_filetype = false;
-
-  // other_file oldbuf
-  //  false     false       re-edit same file, buffer is re-used
-  //  false     true        re-edit same file, nothing changes
-  //  true      false       start editing new file, new buffer
-  //  true      true        start editing in existing buffer (nothing to do)
-  if (!other_file && !oldbuf) {         // re-use the buffer
-    set_last_cursor(curwin);            // may set b_last_cursor
-    if (newlnum == ECMD_LAST || newlnum == ECMD_LASTL) {
-      newlnum = curwin->w_cursor.lnum;
-      solcol = curwin->w_cursor.col;
-    }
-    buf = curbuf;
-    if (buf->b_fname != NULL) {
-      new_name = xstrdup(buf->b_fname);
-    } else {
-      new_name = NULL;
-    }
-    set_bufref(&bufref, buf);
-
-    // If the buffer was used before, store the current contents so that
-    // the reload can be undone.  Do not do this if the (empty) buffer is
-    // being re-used for another file.
-    if (!(curbuf->b_flags & BF_NEVERLOADED)
-        && (p_ur < 0 || curbuf->b_ml.ml_line_count <= p_ur)) {
-      // Sync first so that this is a separate undo-able action.
-      u_sync(false);
-      if (u_savecommon(curbuf, 0, curbuf->b_ml.ml_line_count + 1, 0, true)
-          == FAIL) {
-        xfree(new_name);
-        goto theend;
-      }
-      u_unchanged(curbuf);
-      buf_freeall(curbuf, BFA_KEEP_UNDO);
-
-      // Tell readfile() not to clear or reload undo info.
-      readfile_flags = READ_KEEP_UNDO;
-    } else {
-      buf_freeall(curbuf, 0);  // Free all things for buffer.
-    }
-    // If autocommands deleted the buffer we were going to re-edit, give
-    // up and jump to the end.
-    if (!bufref_valid(&bufref)) {
-      delbuf_msg(new_name);  // Frees new_name.
-      goto theend;
-    }
-    xfree(new_name);
-
-    // If autocommands change buffers under our fingers, forget about
-    // re-editing the file.  Should do the buf_clear_file(), but perhaps
-    // the autocommands changed the buffer...
-    if (buf != curbuf) {
-      goto theend;
-    }
-    if (aborting()) {       // autocmds may abort script processing
-      goto theend;
-    }
-    buf_clear_file(curbuf);
-    curbuf->b_op_start.lnum = 0;        // clear '[ and '] marks
-    curbuf->b_op_end.lnum = 0;
-  }
-
-  // If we get here we are sure to start editing
-
-  // Assume success now
-  retval = OK;
-
-  // If the file name was changed, reset the not-edit flag so that ":write"
-  // works.
-  if (!other_file) {
-    curbuf->b_flags &= ~BF_NOTEDITED;
-  }
-
-  // Check if we are editing the w_arg_idx file in the argument list.
-  check_arg_idx(curwin);
-
-  if (!auto_buf) {
-    // Set cursor and init window before reading the file and executing
-    // autocommands.  This allows for the autocommands to position the
-    // cursor.
-    curwin_init();
-
-    // It's possible that all lines in the buffer changed.  Need to update
-    // automatic folding for all windows where it's used.
-    FOR_ALL_TAB_WINDOWS(tp, win) {
-      if (win->w_buffer == curbuf) {
-        rs_foldUpdateAll(win);
-      }
-    }
-
-    // Change directories when the 'acd' option is set.
-    do_autochdir();
-
-    // Careful: open_buffer() and apply_autocmds() may change the current
-    // buffer and window.
-    pos_T orig_pos = curwin->w_cursor;
-    topline = curwin->w_topline;
-    if (!oldbuf) {                          // need to read the file
-      swap_exists_action = SEA_DIALOG;
-      curbuf->b_flags |= BF_CHECK_RO;       // set/reset 'ro' flag
-
-      // Open the buffer and read the file.
-      if (flags & ECMD_NOWINENTER) {
-        readfile_flags |= READ_NOWINENTER;
-      }
-      if (should_abort(open_buffer(false, eap, readfile_flags))) {
-        retval = FAIL;
-      }
-
-      if (swap_exists_action == SEA_QUIT) {
-        retval = FAIL;
-      }
-      handle_swap_exists(&old_curbuf);
-    } else {
-      // Read the modelines, but only to set window-local options.  Any
-      // buffer-local options have already been set and may have been
-      // changed by the user.
-      do_modelines(OPT_WINONLY);
-
-      apply_autocmds_retval(EVENT_BUFENTER, NULL, NULL, false, curbuf,
-                            &retval);
-      if ((flags & ECMD_NOWINENTER) == 0) {
-        apply_autocmds_retval(EVENT_BUFWINENTER, NULL, NULL, false, curbuf,
-                              &retval);
-      }
-    }
-    check_arg_idx(curwin);
-
-    // If autocommands change the cursor position or topline, we should
-    // keep it.  Also when it moves within a line. But not when it moves
-    // to the first non-blank.
-    if (!equalpos(curwin->w_cursor, orig_pos)) {
-      const char *text = get_cursor_line_ptr();
-
-      if (curwin->w_cursor.lnum != orig_pos.lnum
-          || curwin->w_cursor.col != (int)(skipwhite(text) - text)) {
-        newlnum = curwin->w_cursor.lnum;
-        newcol = curwin->w_cursor.col;
-      }
-    }
-    if (curwin->w_topline == topline) {
-      topline = 0;
-    }
-
-    // Even when cursor didn't move we need to recompute topline.
-    changed_line_abv_curs();
-
-    maketitle();
-  }
-
-  // Tell the diff stuff that this buffer is new and/or needs updating.
-  // Also needed when re-editing the same buffer, because unloading will
-  // have removed it as a diff buffer.
-  if (curwin->w_p_diff) {
-    rs_diff_buf_add(curbuf);
-    rs_diff_invalidate(curbuf);
-  }
-
-  // If the window options were changed may need to set the spell language.
-  // Can only do this after the buffer has been properly setup.
-  if (did_get_winopts && curwin->w_p_spell && *curwin->w_s->b_p_spl != NUL) {
-    parse_spelllang(curwin);
-  }
-
-  if (command == NULL) {
-    if (newcol >= 0) {          // position set by autocommands
-      curwin->w_cursor.lnum = newlnum;
-      curwin->w_cursor.col = newcol;
-      check_cursor(curwin);
-    } else if (newlnum > 0) {  // line number from caller or old position
-      curwin->w_cursor.lnum = newlnum;
-      check_cursor_lnum(curwin);
-      if (solcol >= 0 && !p_sol) {
-        // 'sol' is off: Use last known column.
-        curwin->w_cursor.col = solcol;
-        check_cursor_col(curwin);
-        curwin->w_cursor.coladd = 0;
-        curwin->w_set_curswant = true;
-      } else {
-        beginline(BL_SOL | BL_FIX);
-      }
-    } else {                  // no line number, go to last line in Ex mode
-      if (exmode_active) {
-        curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
-      }
-      beginline(BL_WHITE | BL_FIX);
-    }
-  }
-
-  // Check if cursors in other windows on the same buffer are still valid
-  rs_check_lnums(0);
-
-  // Did not read the file, need to show some info about the file.
-  // Do this after setting the cursor.
-  if (oldbuf
-      && !auto_buf) {
-    int msg_scroll_save = msg_scroll;
-
-    // Obey the 'O' flag in 'cpoptions': overwrite any previous file
-    // message.
-    if (shortmess(SHM_OVERALL) && !msg_listdo_overwrite && !exiting && p_verbose == 0) {
-      msg_scroll = false;
-    }
-    if (!msg_scroll) {          // wait a bit when overwriting an error msg
-      msg_check_for_delay(false);
-    }
-    msg_start();
-    msg_scroll = msg_scroll_save;
-    msg_scrolled_ign = true;
-
-    if (!shortmess(SHM_FILEINFO)) {
-      fileinfo(false, true, false);
-    }
-
-    msg_scrolled_ign = false;
-  }
-
-  curbuf->b_last_used = time(NULL);
-
-  if (command != NULL) {
-    do_cmdline(command, NULL, NULL, DOCMD_VERBOSE);
-  }
-
-  if (curbuf->b_kmap_state & KEYMAP_INIT) {
-    keymap_init();
-  }
-
-  RedrawingDisabled--;
-  did_inc_redrawing_disabled = false;
-  if (!skip_redraw) {
-    OptInt n = *so_ptr;
-    if (topline == 0 && command == NULL) {
-      *so_ptr = 999;    // force cursor to be vertically centered in the window
-    }
-    update_topline(curwin);
-    curwin->w_scbind_pos = plines_m_win_fill(curwin, 1, curwin->w_topline);
-    *so_ptr = n;
-    redraw_curbuf_later(UPD_NOT_VALID);  // redraw this buffer later
-  }
-
-  // Change directories when the 'acd' option is set.
-  do_autochdir();
-
-theend:
-  if (bufref_valid(&old_curbuf) && old_curbuf.br_buf->terminal != NULL) {
-    terminal_check_size(old_curbuf.br_buf->terminal);
-  }
-  if ((!bufref_valid(&old_curbuf) || curbuf != old_curbuf.br_buf) && curbuf->terminal != NULL) {
-    terminal_check_size(curbuf->terminal);
-  }
-
-  if (did_inc_redrawing_disabled) {
-    RedrawingDisabled--;
-  }
-  if (did_set_swapcommand) {
-    set_vim_var_string(VV_SWAPCOMMAND, NULL, -1);
-  }
-  xfree(free_fname);
-  return retval;
+  return rs_do_ecmd(fnum, ffname, sfname, eap, (int)newlnum, flags, oldwin);
 }
 
 /// Thin wrapper calling Rust rs_delbuf_msg.
@@ -4054,3 +3437,90 @@ _Static_assert(KEYMAP_INIT == 1, "KEYMAP_INIT mismatch");
 _Static_assert(DOBUF_UNLOAD == 2, "DOBUF_UNLOAD mismatch");
 _Static_assert(READ_KEEP_UNDO == 0x20, "READ_KEEP_UNDO mismatch");
 _Static_assert(READ_NOWINENTER == 0x80, "READ_NOWINENTER mismatch");
+_Static_assert(BFA_KEEP_UNDO == 4, "BFA_KEEP_UNDO mismatch");
+
+// Additional accessors for do_ecmd that weren't in the initial Phase 2 list
+
+/// Get p_ur (undoreload option). Returns -1 if unlimited.
+int64_t nvim_ecmd_get_p_ur(void) { return (int64_t)p_ur; }
+
+/// Emit emsg(_(e_cannot_switch_to_a_closing_buffer))
+void nvim_ecmd_emsg_closing_buffer(void) { emsg(_(e_cannot_switch_to_a_closing_buffer)); }
+
+/// Decrement curwin->w_buffer->b_nwindows (used after b_locked_split error)
+void nvim_ecmd_dec_curwin_buf_nwindows(void)
+{
+  if (curwin->w_buffer != NULL && curwin->w_buffer->b_nwindows > 1) {
+    curwin->w_buffer->b_nwindows--;
+  }
+}
+
+/// Get curwin->w_buffer->b_nwindows (for locked_split check)
+int nvim_ecmd_curwin_buf_nwindows(void)
+{
+  return curwin->w_buffer != NULL ? curwin->w_buffer->b_nwindows : 0;
+}
+
+/// Get curwin->w_buffer != NULL && oldwin == NULL check for b_locked_split
+int nvim_ecmd_should_dec_nwindows_on_locked(win_T *oldwin)
+{
+  return (oldwin == NULL && curwin->w_buffer != NULL
+          && curwin->w_buffer->b_nwindows > 1) ? 1 : 0;
+}
+
+/// xstrdup(s) wrapper -- allocate a copy of string
+char *nvim_ecmd_xstrdup(const char *s) { return xstrdup(s); }
+
+/// xfree wrapper
+void nvim_ecmd_xfree(void *p) { xfree(p); }
+
+/// atol wrapper for command line number parsing
+int nvim_ecmd_atol(const char *s) { return (int)atol(s); }
+
+/// Get was_curbuf == old_curbuf.br_buf check. Takes the old_curbuf bufref and was_curbuf.
+int nvim_ecmd_curbuf_was_old(void *old_curbuf_ref, buf_T *was_curbuf)
+{
+  bufref_T *ref = (bufref_T *)old_curbuf_ref;
+  return was_curbuf == ref->br_buf ? 1 : 0;
+}
+
+/// Check if curbuf == old_curbuf.br_buf using the old_curbuf bufref
+int nvim_ecmd_curbuf_is_old_buf(void *old_curbuf_ref)
+{
+  bufref_T *ref = (bufref_T *)old_curbuf_ref;
+  return curbuf == ref->br_buf ? 1 : 0;
+}
+
+/// Get buf->b_fnum == curwin->w_alt_fnum
+int nvim_ecmd_buf_is_alt(buf_T *buf) { return buf->b_fnum == curwin->w_alt_fnum ? 1 : 0; }
+
+/// Get curbuf == old_curbuf.br_buf via bufref. Returns 1 if changed.
+/// Used to check if autocommands changed the buffer.
+int nvim_ecmd_curbuf_changed_from_bufref(void *old_curbuf_ref)
+{
+  bufref_T *ref = (bufref_T *)old_curbuf_ref;
+  return curbuf != ref->br_buf ? 1 : 0;
+}
+
+/// Get curwin->w_buffer == curbuf (after setting)
+int nvim_ecmd_curwin_buf_is_curbuf(void) { return curwin->w_buffer == curbuf ? 1 : 0; }
+
+/// curwin->w_s = &buf->b_s (set synblock to buf)
+void nvim_ecmd_curwin_set_ws_to_buf(buf_T *buf) { curwin->w_s = &(buf->b_s); }
+
+/// curwin->w_buffer = buf (without incrementing b_nwindows)
+void nvim_ecmd_curwin_set_buffer(buf_T *buf) { curwin->w_buffer = buf; curbuf = buf; }
+
+/// Shortmess flag 'O' check for SHM_OVERALL
+int nvim_ecmd_shortmess_overall(void) { return shortmess(SHM_OVERALL) ? 1 : 0; }
+
+/// Shortmess flag 'F' check for SHM_FILEINFO
+int nvim_ecmd_shortmess_fileinfo(void) { return shortmess(SHM_FILEINFO) ? 1 : 0; }
+
+/// Decrement curwin->w_buffer->b_nwindows if nwindows > 1 (for b_locked_split case)
+void nvim_ecmd_dec_curwin_buf_nwindows_safe(void)
+{
+  if (curwin->w_buffer != NULL && curwin->w_buffer->b_nwindows > 1) {
+    curwin->w_buffer->b_nwindows--;
+  }
+}

@@ -34,5 +34,7 @@ extern void rs_ex_z(exarg_T *eap);
 extern int rs_check_secure(void);
 extern void rs_print_line(int lnum, int use_number, int list, int first);
 extern void rs_print_line_no_prefix(int lnum, int use_number, int list);
+extern int rs_do_ecmd(int fnum, char *ffname, char *sfname, exarg_T *eap,
+                      int newlnum, int flags, win_T *oldwin);
 
 #include "ex_cmds_shim.h.generated.h"

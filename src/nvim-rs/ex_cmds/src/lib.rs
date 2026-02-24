@@ -31,6 +31,7 @@ use std::ffi::{c_char, c_int, c_uint};
 
 pub mod buffer;
 pub mod display;
+pub mod edit;
 pub mod format;
 pub mod global;
 pub mod lines;
