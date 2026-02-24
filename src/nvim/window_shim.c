@@ -1752,30 +1752,6 @@ static void enter_tabpage(tabpage_T *tp, buf_T *old_curbuf, bool trigger_enter_a
 ///
 /// External floats are considered independent of tabpages. This is
 /// implemented by always moving them to curtab.
-static void tabpage_check_windows(tabpage_T *old_curtab)
-{
-  win_T *next_wp;
-  for (win_T *wp = old_curtab->tp_firstwin; wp; wp = next_wp) {
-    next_wp = wp->w_next;
-    if (wp->w_floating) {
-      if (wp->w_config.external) {
-        rs_win_remove(wp, old_curtab);
-        rs_win_append(rs_lastwin_nofloating(), wp, NULL);
-      } else {
-        ui_comp_remove_grid(&wp->w_grid_alloc);
-      }
-    }
-    wp->w_pos_changed = true;
-  }
-
-  for (win_T *wp = firstwin; wp; wp = wp->w_next) {
-    if (wp->w_floating && !wp->w_config.external) {
-      win_config_float(wp, wp->w_config);
-    }
-    wp->w_pos_changed = true;
-  }
-}
-
 // Go to tab page "n".  For ":tab N" and "Ngt".
 // When "n" is 9999 go to the last tab page.
 void goto_tabpage(int n)
@@ -2399,30 +2375,6 @@ void restore_snapshot(int idx, int close_curwin) { rs_restore_snapshot(idx, clos
 const char *check_colorcolumn(char *cc, win_T *wp)
 {
   return rs_check_colorcolumn(cc, wp);
-}
-
-void win_ui_flush(bool validate)
-{
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if ((wp->w_pos_changed || wp->w_grid_alloc.pending_comp_index_update)
-        && wp->w_grid_alloc.chars != NULL) {
-      if (tp == curtab) {
-        ui_ext_win_position(wp, validate);
-      } else {
-        ui_call_win_hide(wp->w_grid_alloc.handle);
-        wp->w_pos_changed = false;
-      }
-      wp->w_grid_alloc.pending_comp_index_update = false;
-    }
-    if (tp == curtab) {
-      ui_ext_win_viewport(wp);
-    }
-  }
-  // The popupmenu could also have moved or changed its comp_index
-  pum_ui_flush();
-
-  // And the message
-  msg_ui_flush();
 }
 
 int nvim_win_get_empty_rows(win_T *wp) { return wp ? wp->w_empty_rows : 0; }
@@ -3353,3 +3305,37 @@ void nvim_ui_call_win_viewport_wrapper(int grid, int win, int topline, int botli
 
 extern void rs_ui_ext_win_viewport(win_T *wp);
 void ui_ext_win_viewport(win_T *wp) { rs_ui_ext_win_viewport(wp); }
+
+// Phase 6 accessors: tabpage_check_windows + win_ui_flush
+
+/// Wrap pum_ui_flush() for Rust.
+void nvim_pum_ui_flush_wrapper(void) { pum_ui_flush(); }
+
+/// Wrap msg_ui_flush() for Rust.
+void nvim_msg_ui_flush_wrapper(void) { msg_ui_flush(); }
+
+/// Get wp->w_grid_alloc.pending_comp_index_update.
+int nvim_win_get_grid_pending_comp(win_T *wp)
+{
+  return (wp && wp->w_grid_alloc.pending_comp_index_update) ? 1 : 0;
+}
+
+/// Set wp->w_grid_alloc.pending_comp_index_update.
+void nvim_win_set_grid_pending_comp(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_grid_alloc.pending_comp_index_update = (val != 0);
+  }
+}
+
+/// Check if wp->w_grid_alloc.chars != NULL.
+int nvim_win_get_grid_chars_valid(win_T *wp)
+{
+  return (wp && wp->w_grid_alloc.chars != NULL) ? 1 : 0;
+}
+
+extern void rs_tabpage_check_windows(tabpage_T *old_curtab);
+static void tabpage_check_windows(tabpage_T *old_curtab) { rs_tabpage_check_windows(old_curtab); }
+
+extern void rs_win_ui_flush(int validate);
+void win_ui_flush(bool validate) { rs_win_ui_flush(validate ? 1 : 0); }

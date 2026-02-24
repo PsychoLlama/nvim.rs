@@ -61,6 +61,7 @@ pub mod state;
 pub mod state_validation;
 pub mod statusline;
 pub mod tabpage;
+pub mod ui_flush;
 pub mod utility;
 
 use std::ffi::{c_char, c_int};
