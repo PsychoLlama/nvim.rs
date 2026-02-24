@@ -746,7 +746,7 @@ pub use for_loop::{rs_eval_for_line, rs_free_for_info, rs_next_for_item};
 pub use gc::rs_free_unref_items;
 
 // Re-export ex_echo FFI functions
-pub use ex_echo::{rs_ex_echo, rs_ex_execute};
+pub use ex_echo::{rs_ex_echo, rs_ex_echohl, rs_ex_execute, rs_get_echo_hl_id};
 
 // Re-export provider FFI functions
 pub use provider::{rs_eval_call_provider, rs_eval_has_provider, rs_script_host_eval};

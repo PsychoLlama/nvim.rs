@@ -44,7 +44,6 @@ extern "C" {
     fn nvim_get_msg_didout() -> c_int;
     fn nvim_emsg_skip_inc();
     fn nvim_emsg_skip_dec();
-    fn nvim_get_echo_hl_id() -> c_int;
     fn nvim_get_did_emsg() -> c_int;
     fn nvim_set_did_emsg(val: c_int);
     fn nvim_get_force_abort() -> c_int;
@@ -103,7 +102,44 @@ extern "C" {
 
     // do_cmdline for :execute
     fn nvim_do_cmdline_execute(cmd: *mut c_char, eap: ExargHandle);
+
+    // syn_name2id wrapper for ex_echohl
+    fn nvim_syn_name2id_wrapper(name: *const c_char) -> c_int;
 }
+
+// =============================================================================
+// echo_hl_id state (migrated from C echo_hl_id static in eval_shim.c)
+// =============================================================================
+
+/// Highlight ID used for `:echo`. Equivalent to C `echo_hl_id` in eval_shim.c.
+static mut ECHO_HL_ID: c_int = 0;
+
+/// Get the current echo highlight ID.
+///
+/// Called from C (replaces nvim_get_echo_hl_id accessor) and from Rust.
+///
+/// # Safety
+/// Safe to call from C; accesses a static mut (single-threaded).
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_echo_hl_id() -> c_int {
+    ECHO_HL_ID
+}
+
+/// Implementation of `:echohl {name}`.
+///
+/// Migrated from C `ex_echohl` in eval_shim.c.
+///
+/// # Safety
+/// - `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_echohl(eap: ExargHandle) {
+    let arg = nvim_eap_get_arg_local(eap);
+    ECHO_HL_ID = nvim_syn_name2id_wrapper(arg);
+}
+
+// =============================================================================
+// Constants
+// =============================================================================
 
 // Constants
 const OK: c_int = 1;
@@ -211,7 +247,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
         nvim_set_need_clr_eos(0);
 
         if !skip {
-            let echo_hl_id = nvim_get_echo_hl_id();
+            let echo_hl_id = ECHO_HL_ID;
             if atstart {
                 atstart = false;
                 nvim_msg_ext_set_kind(KIND_ECHO.as_ptr() as *const c_char);
@@ -333,7 +369,7 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
 
     if ret != FAIL && !nvim_ga_data_is_null(ga) {
         let data = nvim_ga_get_data(ga);
-        let echo_hl_id = nvim_get_echo_hl_id();
+        let echo_hl_id = ECHO_HL_ID;
         if cmdidx == cmd_echomsg {
             nvim_msg_ext_set_kind(KIND_ECHOMSG.as_ptr() as *const c_char);
             nvim_msg_echomsg(data, echo_hl_id);

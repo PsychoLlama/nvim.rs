@@ -868,7 +868,7 @@ M.cmds = {
     command = 'echohl',
     flags = bit.bor(EXTRA, TRLBAR, SBOXOK, CMDWIN, LOCK_OK),
     addr_type = 'ADDR_NONE',
-    func = 'ex_echohl',
+    func = 'rs_ex_echohl',
   },
   {
     command = 'echomsg',

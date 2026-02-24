@@ -174,6 +174,9 @@ extern char *rs_make_expanded_name(const char *in_start, char *expr_start, char 
 // Phase 2 (eval_shim pass 7)
 extern char *rs_do_string_sub(char *str, size_t len, char *pat, char *sub, typval_T *expr,
                                const char *flags, size_t *ret_len);
+// Phase 4 (eval_shim pass 7)
+extern void rs_ex_echohl(exarg_T *eap);
+extern int rs_get_echo_hl_id(void);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -511,8 +514,6 @@ static const char e_empty_function_name[]
 
 /// Used for checking if local variables or arguments used in a lambda.
 bool *eval_lavars_used = NULL;
-
-static int echo_hl_id = 0;   // highlight id used for ":echo"
 
 /// Info used by a ":for" loop.
 typedef struct {
@@ -1981,18 +1982,6 @@ int var_item_copy(const vimconv_T *const conv, typval_T *const from, typval_T *c
 void ex_echo(exarg_T *eap)
 {
   rs_ex_echo(eap);
-}
-
-/// ":echohl {name}".
-void ex_echohl(exarg_T *eap)
-{
-  echo_hl_id = syn_name2id(eap->arg);
-}
-
-/// C accessor for echo_hl_id static.
-int nvim_get_echo_hl_id(void)
-{
-  return echo_hl_id;
 }
 
 /// ":execute expr1 ..." execute the result of an expression.
