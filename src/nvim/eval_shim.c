@@ -611,6 +611,11 @@ extern int rs_list2fpos(typval_T *arg, pos_T *posp, int *fnump, int *curswantp, 
 extern void rs_last_set_msg(int sc_sid, int sc_lnum, uint64_t sc_chan);
 extern void rs_set_selfdict(typval_T *rettv, dict_T *selfdict);
 
+// Rust implementations for Phase 2 (eval_shim pass 6): tv_to_argv + system output
+extern char **rs_tv_to_argv(typval_T *cmd_tv, const char **cmd, bool *executable);
+extern void rs_f_system(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_f_systemlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 /// Top level evaluation function, returning a boolean.
 /// Sets "error" to true if there was an error.
 ///
@@ -1551,181 +1556,18 @@ int nvim_eval_env_var_wrapper(char **arg, typval_T *rettv, int evaluate)
 ///          argv[0] resolved to full path ($PATHEXT-resolved on Windows).
 char **tv_to_argv(typval_T *cmd_tv, const char **cmd, bool *executable)
 {
-  if (cmd_tv->v_type == VAR_STRING) {  // String => "shell semantics".
-    const char *cmd_str = tv_get_string(cmd_tv);
-    if (cmd) {
-      *cmd = cmd_str;
-    }
-    return shell_build_argv(cmd_str, NULL);
-  }
-
-  if (cmd_tv->v_type != VAR_LIST) {
-    semsg(_(e_invarg2), "expected String or List");
-    return NULL;
-  }
-
-  list_T *argl = cmd_tv->vval.v_list;
-  int argc = tv_list_len(argl);
-  if (!argc) {
-    emsg(_(e_invarg));  // List must have at least one item.
-    return NULL;
-  }
-
-  const char *arg0 = tv_get_string_chk(TV_LIST_ITEM_TV(tv_list_first(argl)));
-  char *exe_resolved = NULL;
-  if (!arg0 || !os_can_exe(arg0, &exe_resolved, true)) {
-    if (arg0 && executable) {
-      char buf[IOSIZE];
-      snprintf(buf, sizeof(buf), "'%s' is not executable", arg0);
-      semsg(_(e_invargNval), "cmd", buf);
-      *executable = false;
-    }
-    return NULL;
-  }
-
-  if (cmd) {
-    *cmd = exe_resolved;
-  }
-
-  // Build the argument vector
-  int i = 0;
-  char **argv = xcalloc((size_t)argc + 1, sizeof(char *));
-  TV_LIST_ITER_CONST(argl, arg, {
-    const char *a = tv_get_string_chk(TV_LIST_ITEM_TV(arg));
-    if (!a) {
-      // Did emsg in tv_get_string_chk; just deallocate argv.
-      shell_free_argv(argv);
-      xfree(exe_resolved);
-      return NULL;
-    }
-    argv[i++] = xstrdup(a);
-  });
-  // Replace argv[0] with absolute path. The only reason for this is to make
-  // $PATHEXT work on Windows with jobstart([…]). #9569
-  xfree(argv[0]);
-  argv[0] = exe_resolved;
-
-  return argv;
-}
-
-static list_T *string_to_list(const char *str, size_t len, const bool keepempty)
-{
-  if (!keepempty && str[len - 1] == NL) {
-    len--;
-  }
-  list_T *const list = tv_list_alloc(kListLenMayKnow);
-  encode_list_write(list, str, len);
-  return list;
-}
-
-/// os_system wrapper. Handles 'verbose', :profile, and v:shell_error.
-static void get_system_output_as_rettv(typval_T *argvars, typval_T *rettv, bool retlist)
-{
-  proftime_T wait_time;
-  bool profiling = do_profiling == PROF_YES;
-
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-
-  if (rs_check_secure()) {
-    return;
-  }
-
-  // get input to the shell command (if any), and its length
-  ptrdiff_t input_len;
-  char *input = save_tv_as_string(&argvars[1], &input_len, false, false);
-  if (input_len < 0) {
-    assert(input == NULL);
-    return;
-  }
-
-  // get shell command to execute
-  bool executable = true;
-  char **argv = tv_to_argv(&argvars[0], NULL, &executable);
-  if (!argv) {
-    if (!executable) {
-      set_vim_var_nr(VV_SHELL_ERROR, -1);
-    }
-    xfree(input);
-    return;  // Already did emsg.
-  }
-
-  if (p_verbose > 3) {
-    char *cmdstr = shell_argv_to_str(argv);
-    verbose_enter_scroll();
-    smsg(0, _("Executing command: \"%s\""), cmdstr);
-    msg_puts("\n\n");
-    verbose_leave_scroll();
-    xfree(cmdstr);
-  }
-
-  if (profiling) {
-    prof_child_enter(&wait_time);
-  }
-
-  // execute the command
-  size_t nread = 0;
-  char *res = NULL;
-  int status = os_system(argv, input, (size_t)input_len, &res, &nread);
-
-  if (profiling) {
-    prof_child_exit(&wait_time);
-  }
-
-  xfree(input);
-
-  set_vim_var_nr(VV_SHELL_ERROR, status);
-
-  if (res == NULL) {
-    if (retlist) {
-      // return an empty list when there's no output
-      tv_list_alloc_ret(rettv, 0);
-    } else {
-      rettv->vval.v_string = xstrdup("");
-    }
-    return;
-  }
-
-  if (retlist) {
-    int keepempty = 0;
-    if (argvars[1].v_type != VAR_UNKNOWN && argvars[2].v_type != VAR_UNKNOWN) {
-      keepempty = (int)tv_get_number(&argvars[2]);
-    }
-    rettv->vval.v_list = string_to_list(res, nread, (bool)keepempty);
-    tv_list_ref(rettv->vval.v_list);
-    rettv->v_type = VAR_LIST;
-
-    xfree(res);
-  } else {
-    // res may contain several NULs before the final terminating one.
-    // Replace them with SOH (1) like in get_cmd_output() to avoid truncation.
-    memchrsub(res, NUL, 1, nread);
-#ifdef USE_CRNL
-    // translate <CR><NL> into <NL>
-    char *d = res;
-    for (char *s = res; *s; s++) {
-      if (s[0] == CAR && s[1] == NL) {
-        s++;
-      }
-
-      *d++ = *s;
-    }
-
-    *d = NUL;
-#endif
-    rettv->vval.v_string = res;
-  }
+  return rs_tv_to_argv(cmd_tv, cmd, executable);
 }
 
 /// f_system - the Vimscript system() function
 void f_system(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  get_system_output_as_rettv(argvars, rettv, false);
+  rs_f_system(argvars, rettv, fptr);
 }
 
 void f_systemlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  get_system_output_as_rettv(argvars, rettv, true);
+  rs_f_systemlist(argvars, rettv, fptr);
 }
 
 static int callback_depth = 0;
@@ -2963,6 +2805,12 @@ dict_T *nvim_tv_get_v_dict(const typval_T *tv)
 list_T *nvim_tv_get_v_list(const typval_T *tv)
 {
   return tv->vval.v_list;
+}
+
+/// Set vval.v_list in typval_T (raw assignment, does not update type) - accessor for Rust.
+void nvim_tv_set_v_list(typval_T *tv, list_T *l)
+{
+  tv->vval.v_list = l;
 }
 
 /// Allocate and initialize a zero typval_T on the heap - accessor for Rust.
@@ -4532,5 +4380,118 @@ int nvim_eval_fname_script(const char *p)
 void nvim_snprintf_three(char *buf, size_t bufsize, const char *a, const char *b, const char *c)
 {
   vim_snprintf(buf, bufsize, "%s%s%s", a, b, c);
+}
+
+// =============================================================================
+// Accessors for Phase 2 (eval_shim pass 6): tv_to_argv + system output
+// =============================================================================
+
+/// shell_build_argv wrapper -- build an argument vector from a shell command string.
+char **nvim_shell_build_argv(const char *cmd, const char *extra)
+{
+  return shell_build_argv(cmd, extra);
+}
+
+/// shell_free_argv wrapper -- free an argument vector built by nvim_shell_build_argv.
+void nvim_shell_free_argv(char **argv)
+{
+  shell_free_argv(argv);
+}
+
+/// shell_argv_to_str wrapper -- convert argv to a printable string (caller must free).
+char *nvim_shell_argv_to_str(char **const argv)
+{
+  return shell_argv_to_str(argv);
+}
+
+/// os_system wrapper -- run command and capture output.
+/// Returns exit status. On success, *output_out and *nread_out are set.
+int nvim_os_system(char **argv, const char *input, size_t input_len,
+                   char **output_out, size_t *nread_out)
+{
+  return os_system(argv, input, input_len, output_out, nread_out);
+}
+
+/// encode_list_write wrapper -- write a NL-separated string into a VimL list.
+void nvim_encode_list_write(list_T *list, const char *str, size_t len)
+{
+  encode_list_write(list, str, len);
+}
+
+/// set_vim_var_nr wrapper for VV_SHELL_ERROR.
+void nvim_set_shell_error(int status)
+{
+  set_vim_var_nr(VV_SHELL_ERROR, (varnumber_T)status);
+}
+
+/// memchrsub wrapper for system output -- replace all occurrences of c with x.
+void nvim_eval_memchrsub(char *data, char c, char x, size_t len)
+{
+  memchrsub(data, c, x, len);
+}
+
+/// Emit the "Executing command: ..." verbose message.
+void nvim_smsg_system_cmd(const char *cmdstr)
+{
+  smsg(0, _("Executing command: \"%s\""), cmdstr);
+}
+
+/// Get p_verbose (the 'verbose' option value).
+int nvim_p_verbose_get(void)
+{
+  return (int)p_verbose;
+}
+
+/// do_profiling accessor -- returns true when profiling is active (PROF_YES).
+bool nvim_do_profiling_active(void)
+{
+  return do_profiling == PROF_YES;
+}
+
+/// prof_child_enter wrapper -- record start of child profiling.
+void nvim_prof_child_enter(uint64_t *tm)
+{
+  prof_child_enter((proftime_T *)tm);
+}
+
+/// prof_child_exit wrapper -- record end of child profiling.
+void nvim_prof_child_exit(uint64_t *tm)
+{
+  prof_child_exit((proftime_T *)tm);
+}
+
+/// tv_list_alloc_ret wrapper -- alloc list and assign it to rettv.
+list_T *nvim_tv_list_alloc_ret(typval_T *rettv, ptrdiff_t count_hint)
+{
+  return tv_list_alloc_ret(rettv, count_hint);
+}
+
+// nvim_xcalloc and nvim_xstrdup are already defined in register.c
+
+/// emit semsg(e_invarg2, "expected String or List")
+void nvim_semsg_tv_to_argv_type(void)
+{
+  semsg(_(e_invarg2), "expected String or List");
+}
+
+/// emit emsg(e_invarg) (list must have at least one item)
+void nvim_emsg_tv_to_argv_empty(void)
+{
+  emsg(_(e_invarg));
+}
+
+/// emit semsg(e_invargNval, "cmd", buf) for non-executable
+void nvim_semsg_tv_to_argv_notexe(const char *msg)
+{
+  semsg(_(e_invargNval), "cmd", msg);
+}
+
+// nvim_shim_tv_get_string already defined above for tv_get_string().
+
+/// os_can_exe wrapper for tv_to_argv -- check if the command is executable.
+/// Returns true if executable. Sets *abspath to the resolved path (caller must free).
+bool nvim_eval_os_can_exe(const char *name, char **abspath)
+{
+  return os_can_exe(name, abspath, true);
 }
 
