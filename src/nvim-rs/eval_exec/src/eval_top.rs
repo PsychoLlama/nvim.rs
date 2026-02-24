@@ -680,10 +680,7 @@ pub unsafe extern "C" fn clear_evalarg(evalarg: EvalargHandle, eap: ExargHandle)
 /// - `arg` must be a valid null-terminated C string.
 /// - `rettv` must be a valid typval handle.
 #[no_mangle]
-pub unsafe extern "C" fn may_call_simple_func(
-    arg: *const c_char,
-    rettv: TypevalHandle,
-) -> c_int {
+pub unsafe extern "C" fn may_call_simple_func(arg: *const c_char, rettv: TypevalHandle) -> c_int {
     // Look for "()" in the argument string.
     let parens_needle = b"()\0";
     let parens = strstr(arg, parens_needle.as_ptr() as *const c_char);

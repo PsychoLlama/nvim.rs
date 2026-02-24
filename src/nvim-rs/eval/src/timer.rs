@@ -67,7 +67,10 @@ extern "C" {
     fn nvim_timers_del(id: i64);
     fn nvim_timers_size() -> usize;
     fn nvim_timers_next_id() -> u64;
-    fn nvim_timers_foreach(cb: unsafe extern "C" fn(TimerHandle, *mut c_void), userdata: *mut c_void);
+    fn nvim_timers_foreach(
+        cb: unsafe extern "C" fn(TimerHandle, *mut c_void),
+        userdata: *mut c_void,
+    );
 
     // -- typval operations --
     fn nvim_tv_set_number(tv: TvHandle, num: i64);
@@ -88,7 +91,12 @@ extern "C" {
     // -- Callback operations --
     fn nvim_callback_free(cb: CallbackHandle);
     fn nvim_callback_put(cb: CallbackHandle, tv: TvHandle);
-    fn callback_call(callback: CallbackHandle, argcount: c_int, argvars: TvHandle, rettv: TvHandle) -> bool;
+    fn callback_call(
+        callback: CallbackHandle,
+        argcount: c_int,
+        argvars: TvHandle,
+        rettv: TvHandle,
+    ) -> bool;
 
     // -- Error state accessors --
     fn nvim_get_did_emsg() -> c_int;
@@ -139,11 +147,15 @@ pub unsafe extern "C" fn rs_add_timer_info(rettv: TvHandle, timer: TimerHandle) 
     let dict = nvim_tv_dict_alloc();
     nvim_tv_list_append_dict(list, dict);
 
-    let id = nvim_timer_get_id(timer) as i64;
+    let id = i64::from(nvim_timer_get_id(timer));
     let timeout = nvim_timer_get_timeout(timer);
-    let paused = nvim_timer_get_paused(timer) as i64;
+    let paused = i64::from(nvim_timer_get_paused(timer));
     let repeat_count = nvim_timer_get_repeat_count(timer);
-    let repeat_val = if repeat_count < 0 { -1i64 } else { repeat_count as i64 };
+    let repeat_val = if repeat_count < 0 {
+        -1i64
+    } else {
+        i64::from(repeat_count)
+    };
 
     nvim_tv_dict_add_nr(dict, c"id".as_ptr(), 2, id);
     nvim_tv_dict_add_nr(dict, c"time".as_ptr(), 4, timeout);
@@ -167,8 +179,6 @@ pub unsafe extern "C" fn rs_add_timer_info(rettv: TvHandle, timer: TimerHandle) 
 /// `rettv` must be a valid typval_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_add_timer_info_all(rettv: TvHandle) {
-    nvim_tv_list_alloc_ret(rettv, nvim_timers_size() as isize);
-
     unsafe extern "C" fn foreach_cb(timer: TimerHandle, userdata: *mut c_void) {
         let stopped = nvim_timer_get_stopped(timer) != 0;
         let refcount = nvim_timer_get_refcount(timer);
@@ -177,6 +187,7 @@ pub unsafe extern "C" fn rs_add_timer_info_all(rettv: TvHandle) {
         }
     }
 
+    nvim_tv_list_alloc_ret(rettv, nvim_timers_size() as isize);
     nvim_timers_foreach(foreach_cb, rettv);
 }
 
@@ -204,7 +215,7 @@ pub unsafe extern "C" fn rs_timer_close_cb(_tw: TimeWatcherHandle, data: *mut c_
     nvim_timer_tw_free_events(timer);
     let cb_ptr = nvim_timer_get_callback_ptr(timer);
     nvim_callback_free(cb_ptr);
-    let id = nvim_timer_get_id(timer) as i64;
+    let id = i64::from(nvim_timer_get_id(timer));
     nvim_timers_del(id);
     timer_decref(timer);
 }
@@ -266,7 +277,7 @@ pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_vo
     nvim_tv_init(argv1);
 
     // Set argv[0] = timer->timer_id as VAR_NUMBER
-    let timer_id = nvim_timer_get_id(timer) as i64;
+    let timer_id = i64::from(nvim_timer_get_id(timer));
     nvim_tv_set_number(argv0, timer_id);
 
     // rettv

@@ -90,8 +90,8 @@ pub unsafe extern "C" fn rs_common_job_callbacks(
         let stdout_buffered = nvim_tv_dict_get_number(vopts, c"stdout_buffered".as_ptr()) != 0;
         let stderr_buffered = nvim_tv_dict_get_number(vopts, c"stderr_buffered".as_ptr()) != 0;
 
-        nvim_cbr_set_buffered(on_stdout, stdout_buffered as c_int);
-        nvim_cbr_set_buffered(on_stderr, stderr_buffered as c_int);
+        nvim_cbr_set_buffered(on_stdout, c_int::from(stdout_buffered));
+        nvim_cbr_set_buffered(on_stderr, c_int::from(stderr_buffered));
 
         if stdout_buffered && nvim_eval_cb_get_type(stdout_cb) == K_CALLBACK_NONE {
             nvim_cbr_set_self(on_stdout, vopts);

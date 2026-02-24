@@ -160,11 +160,7 @@ pub unsafe extern "C" fn rs_buf_charidx_to_byteidx(
 ///
 /// `pat` and `text` must be valid null-terminated C strings.
 #[no_mangle]
-pub unsafe extern "C" fn pattern_match(
-    pat: *const c_char,
-    text: *const c_char,
-    ic: bool,
-) -> c_int {
+pub unsafe extern "C" fn pattern_match(pat: *const c_char, text: *const c_char, ic: bool) -> c_int {
     let mut matches: c_int = 0;
 
     // avoid 'l' flag in 'cpoptions'

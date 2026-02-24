@@ -581,11 +581,7 @@ extern "C" {
 /// # Safety
 /// See `f_slice_impl` for safety requirements.
 #[no_mangle]
-pub unsafe extern "C" fn f_slice(
-    argvars: TypevalHandle,
-    rettv: TypevalHandle,
-    _fptr: *mut c_void,
-) {
+pub unsafe extern "C" fn f_slice(argvars: TypevalHandle, rettv: TypevalHandle, _fptr: *mut c_void) {
     f_slice_impl(argvars, rettv);
 }
 
