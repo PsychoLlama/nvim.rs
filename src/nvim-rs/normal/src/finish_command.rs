@@ -82,7 +82,7 @@ extern "C" {
     fn nvim_do_check_scrollbind_wrapper(flag: bool);
     fn nvim_do_check_cursorbind_wrapper();
     fn nvim_edit_wrapper(cmd: c_int, startln: bool, count: c_int);
-    fn nvim_showmode_wrapper();
+    fn nvim_showmode();
 }
 
 /// Finish a normal-mode command: operator resolution, mode messages,
@@ -202,7 +202,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
             nvim_set_VIsual_select(true);
             nvim_set_VIsual_select_reg(0);
             nvim_may_trigger_modechanged();
-            nvim_showmode_wrapper();
+            nvim_showmode();
             nvim_set_restart_VIsual_select(0);
         }
         if nvim_get_restart_edit() != 0

@@ -1288,7 +1288,7 @@ pub unsafe extern "C" fn rs_nv_pipe(cap: CapHandle) {
 
 extern "C" {
     // Word motion functions
-    fn nvim_curwin_set_set_curswant(val: bool);
+    // nvim_curwin_set_set_curswant consolidated into nvim_curwin_set_curswant (Phase 4)
     fn nvim_fwd_word(count: c_int, bigword: bool, eol: bool) -> c_int;
     fn nvim_bck_word(count: c_int, bigword: bool, stop: bool) -> c_int;
     fn nvim_end_word(count: c_int, bigword: bool, stop: bool, empty: bool) -> c_int;
@@ -1487,7 +1487,7 @@ pub unsafe extern "C" fn rs_nv_bck_word(cap: CapHandle) {
 
     nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
     nvim_oap_set_inclusive(oap, false);
-    nvim_curwin_set_set_curswant(true);
+    nvim_curwin_set_curswant(true);
 
     if nvim_bck_word(count1, arg != 0, false) == FAIL {
         rs_clearopbeep(oap);
@@ -1543,7 +1543,7 @@ pub unsafe extern "C" fn rs_nv_wordcmd(cap: CapHandle) {
     }
 
     nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
-    nvim_curwin_set_set_curswant(true);
+    nvim_curwin_set_curswant(true);
 
     let n = if word_end {
         nvim_end_word(count1, arg != 0, flag, false)
@@ -1585,7 +1585,7 @@ pub unsafe extern "C" fn rs_nv_findpar(cap: CapHandle) {
     nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
     nvim_oap_set_inclusive(oap, false);
     nvim_oap_set_use_reg_one(oap, true);
-    nvim_curwin_set_set_curswant(true);
+    nvim_curwin_set_curswant(true);
 
     let mut inclusive = false;
     if !nvim_findpar(&raw mut inclusive, arg, count1, NUL_CHAR, false) {
@@ -1619,7 +1619,7 @@ pub unsafe extern "C" fn rs_nv_brace(cap: CapHandle) {
     nvim_oap_set_use_reg_one(oap, true);
     // The motion used to be inclusive for "(", but that is not what Vi does.
     nvim_oap_set_inclusive(oap, false);
-    nvim_curwin_set_set_curswant(true);
+    nvim_curwin_set_curswant(true);
 
     if nvim_findsent(arg, count1) == FAIL {
         rs_clearopbeep(oap);
@@ -2232,7 +2232,7 @@ pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
         return;
     }
 
-    nvim_curwin_set_set_curswant(true);
+    nvim_curwin_set_curswant(true);
     // Include a Tab for "tx" and for "dfx".
     if nvim_gchar_cursor_call() == nvim_get_TAB()
         && nvim_virtual_active()
@@ -2463,7 +2463,7 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
     if nvim_get_VIsual_active() != 0 {
         rs_end_visual_mode(); // stop Visual
         nvim_check_cursor_col_call(); // make sure cursor is not beyond EOL
-        nvim_curwin_set_set_curswant(true);
+        nvim_curwin_set_curswant(true);
         nvim_redraw_curbuf_inverted();
     } else if no_reason {
         nvim_vim_beep_esc();
@@ -5547,7 +5547,7 @@ extern "C" {
     fn nvim_show_utf8_call();
     fn nvim_utf_find_illegal_call();
     fn nvim_set_oap_cursor_start(oap: OapHandle);
-    fn nvim_set_curwin_w_set_curswant(val: bool);
+    // nvim_curwin_set_curswant already declared above (consolidated, Phase 4)
     // Phase 3: nv_g_home_m_cmd / nv_g_dollar_cmd / n_opencmd / unadjust_for_sel_inner
     fn nvim_sms_marker_overlap_curwin(width: c_int) -> c_int;
     fn nvim_validate_cheight_curwin();
@@ -6219,7 +6219,7 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
             } else {
                 nvim_coladvance_curwin(i / 2);
             }
-            nvim_set_curwin_w_set_curswant(true);
+            nvim_curwin_set_curswant(true);
         }
 
         // "g_": to the last non-blank character
@@ -6245,7 +6245,7 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
         // ge and gE: go back to end of word
         n if n == b'e' as c_int || n == b'E' as c_int => {
             nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
-            nvim_set_curwin_w_set_curswant(true);
+            nvim_curwin_set_curswant(true);
             nvim_oap_set_inclusive(oap, true);
             if nvim_bckend_word(nvim_cap_get_count1(cap), nchar == b'E' as c_int, false) == 0 {
                 rs_clearopbeep(oap);
@@ -7452,7 +7452,7 @@ pub unsafe fn rs_normal_search(
     nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
     nvim_oap_set_inclusive(oap, false);
     nvim_oap_set_use_reg_one(oap, true);
-    nvim_curwin_set_set_curswant(true);
+    nvim_curwin_set_curswant(true);
 
     let i = nvim_do_search_call(oap, dir, pat, patlen, count1, opt, wrapped);
 
@@ -7602,7 +7602,7 @@ pub unsafe extern "C" fn rs_nv_mark_move_to(
         nvim_oap_set_use_reg_one(oap, true);
     }
     nvim_oap_set_inclusive(oap, false);
-    nvim_curwin_set_set_curswant(true);
+    nvim_curwin_set_curswant(true);
     res
 }
 
@@ -7713,7 +7713,7 @@ pub unsafe extern "C" fn rs_end_visual_mode() {
 /// Calls C accessor functions.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_set_cursor_for_append_to_line() {
-    nvim_curwin_set_set_curswant(true);
+    nvim_curwin_set_curswant(true);
     if nvim_get_ve_flags() == K_OPT_VE_FLAG_ALL {
         // Pretend Insert mode to allow cursor past end of line
         nvim_coladvance_append_mode();

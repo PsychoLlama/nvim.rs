@@ -622,11 +622,9 @@ void nvim_oap_set_inclusive(oparg_T *oap, bool val) { if (oap) oap->inclusive = 
 // Additional oparg_T accessors for Rust ops crate
 // =============================================================================
 
-int nvim_oap_get_op_type_raw(oparg_T *oap) { return oap ? oap->op_type : OP_NOP; }
-
-int nvim_oap_get_regname_raw(oparg_T *oap) { return oap ? oap->regname : NUL; }
-
-int nvim_oap_get_motion_type_raw(oparg_T *oap) { return oap ? oap->motion_type : kMTUnknown; }
+// nvim_oap_get_op_type_raw removed: callers updated to use nvim_oap_get_op_type_ptr (Phase 4)
+// nvim_oap_get_regname_raw removed: callers updated to use nvim_oap_get_regname_ptr (Phase 4)
+// nvim_oap_get_motion_type_raw removed: callers updated to use nvim_oap_get_motion_type (Phase 4)
 
 int nvim_oap_get_use_reg_one(oparg_T *oap) { return oap ? oap->use_reg_one : false; }
 
@@ -767,7 +765,7 @@ void nvim_cap_set_prechar(cmdarg_T *cap, int val) { if (cap) cap->prechar = val;
 // Word motion accessors for Rust FFI
 // =============================================================================
 
-void nvim_curwin_set_set_curswant(bool val) { curwin->w_set_curswant = val; }
+// nvim_curwin_set_set_curswant removed: callers updated to use nvim_curwin_set_curswant (Phase 4)
 
 int nvim_fwd_word(int count, bool bigword, bool eol) { return fwd_word(count, bigword, eol); }
 
@@ -829,9 +827,8 @@ int nvim_get_TAB(void) { return TAB; }
 
 bool nvim_setmark(int name) { return setmark(name); }
 
-int nvim_cap_get_nchar_call(cmdarg_T *cap) { return cap ? cap->nchar : 0; }
-
-int nvim_cap_get_extra_char_call(cmdarg_T *cap) { return cap ? cap->extra_char : 0; }
+// nvim_cap_get_nchar_call removed: duplicate of nvim_cap_get_nchar, no Rust callers (Phase 4)
+// nvim_cap_get_extra_char_call removed: duplicate of nvim_cap_get_extra_char, no Rust callers (Phase 4)
 
 unsigned int nvim_get_jop_flags(void) { return jop_flags; }
 
@@ -1533,7 +1530,7 @@ void nvim_show_sb_text_call(void) { show_sb_text(); }
 void nvim_show_utf8_call(void) { show_utf8(); }
 void nvim_utf_find_illegal_call(void) { utf_find_illegal(); }
 void nvim_set_oap_cursor_start(oparg_T *oap) { oap->cursor_start = curwin->w_cursor; }
-void nvim_set_curwin_w_set_curswant(bool val) { curwin->w_set_curswant = val; }
+// nvim_set_curwin_w_set_curswant removed: callers updated to use nvim_curwin_set_curswant (Phase 4)
 // nv_g_home_m_cmd and nv_g_dollar_cmd migrated to Rust (rs_nv_g_home_m_cmd, rs_nv_g_dollar_cmd)
 
 // nv_screengo C accessors for Rust FFI
@@ -1974,8 +1971,7 @@ void nvim_do_check_cursorbind_wrapper(void) { do_check_cursorbind(); }
 /// edit(cmd, startln, count) wrapper.
 void nvim_edit_wrapper(int cmd, bool startln, int count) { edit(cmd, startln, count); }
 
-/// showmode() wrapper.
-void nvim_showmode_wrapper(void) { showmode(); }
+// nvim_showmode_wrapper removed: callers updated to use nvim_showmode (Phase 4 cleanup)
 
 // =============================================================================
 // normal_execute accessors for Rust FFI

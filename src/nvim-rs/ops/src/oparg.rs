@@ -41,9 +41,9 @@ impl OpArgHandle {
 // FFI accessor functions - these are implemented in C
 extern "C" {
     // Getters
-    fn nvim_oap_get_op_type_raw(oap: *const std::ffi::c_void) -> c_int;
-    fn nvim_oap_get_regname_raw(oap: *const std::ffi::c_void) -> c_int;
-    fn nvim_oap_get_motion_type_raw(oap: *const std::ffi::c_void) -> c_int;
+    fn nvim_oap_get_op_type_ptr(oap: *const std::ffi::c_void) -> c_int;
+    fn nvim_oap_get_regname_ptr(oap: *const std::ffi::c_void) -> c_int;
+    fn nvim_oap_get_motion_type(oap: *const std::ffi::c_void) -> c_int;
     fn nvim_oap_get_motion_force(oap: *const std::ffi::c_void) -> c_int;
     fn nvim_oap_get_inclusive(oap: *const std::ffi::c_void) -> bool;
     fn nvim_oap_get_use_reg_one(oap: *const std::ffi::c_void) -> c_int;
@@ -94,7 +94,7 @@ impl OpArgRef {
     #[inline]
     #[must_use]
     pub fn op_type(&self) -> OpType {
-        let raw = unsafe { nvim_oap_get_op_type_raw(self.handle.as_ptr()) };
+        let raw = unsafe { nvim_oap_get_op_type_ptr(self.handle.as_ptr()) };
         OpType::from_raw(raw).unwrap_or(OpType::Nop)
     }
 
@@ -102,14 +102,14 @@ impl OpArgRef {
     #[inline]
     #[must_use]
     pub fn regname(&self) -> c_int {
-        unsafe { nvim_oap_get_regname_raw(self.handle.as_ptr()) }
+        unsafe { nvim_oap_get_regname_ptr(self.handle.as_ptr()) }
     }
 
     /// Get the motion type
     #[inline]
     #[must_use]
     pub fn motion_type(&self) -> MotionType {
-        let raw = unsafe { nvim_oap_get_motion_type_raw(self.handle.as_ptr()) };
+        let raw = unsafe { nvim_oap_get_motion_type(self.handle.as_ptr()) };
         MotionType::from_raw(raw)
     }
 

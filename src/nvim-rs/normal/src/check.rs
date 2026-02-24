@@ -144,7 +144,7 @@ extern "C" {
     fn nvim_typebuf_typed_wrapper() -> bool;
     fn nvim_ui_has_messages() -> c_int; // defined in message.c
     fn nvim_os_delay_wrapper(ms: c_int, can_interrupt: bool);
-    fn nvim_showmode_wrapper();
+    fn nvim_showmode();
     fn nvim_show_cursor_info_later();
     fn nvim_update_screen_call();
     fn nvim_redraw_statuslines_call();
@@ -306,7 +306,7 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
     } else {
         nvim_redraw_statuslines_call();
         if nvim_get_redraw_cmdline() || nvim_get_clear_cmdline() || nvim_get_redraw_mode() != 0 {
-            nvim_showmode_wrapper();
+            nvim_showmode();
         }
     }
 
