@@ -266,7 +266,7 @@ pub unsafe fn eval_for_line_impl(
 ///
 /// # Safety
 /// See `eval_for_line_impl` for safety requirements.
-#[no_mangle]
+#[export_name = "eval_for_line"]
 pub unsafe extern "C" fn rs_eval_for_line(
     arg: *const c_char,
     errp: *mut bool,
@@ -329,7 +329,7 @@ pub unsafe fn next_for_item_impl(fi_void: *mut c_void, arg: *mut c_char) -> bool
 ///
 /// # Safety
 /// See `next_for_item_impl` for safety requirements.
-#[no_mangle]
+#[export_name = "next_for_item"]
 pub unsafe extern "C" fn rs_next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
     next_for_item_impl(fi_void, arg)
 }
@@ -366,7 +366,7 @@ pub unsafe fn free_for_info_impl(fi_void: *mut c_void) {
 ///
 /// # Safety
 /// See `free_for_info_impl` for safety requirements.
-#[no_mangle]
+#[export_name = "free_for_info"]
 pub unsafe extern "C" fn rs_free_for_info(fi_void: *mut c_void) {
     free_for_info_impl(fi_void);
 }

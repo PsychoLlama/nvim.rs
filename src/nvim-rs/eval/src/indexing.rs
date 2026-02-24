@@ -457,7 +457,7 @@ pub unsafe extern "C" fn rs_var2fpos(
 /// # Safety
 ///
 /// `arg`, `posp` must be valid pointers.
-#[no_mangle]
+#[export_name = "list2fpos"]
 pub unsafe extern "C" fn rs_list2fpos(
     arg: *const c_void,
     posp: *mut PosT,

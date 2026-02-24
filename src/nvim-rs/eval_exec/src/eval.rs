@@ -3145,7 +3145,7 @@ unsafe fn set_selfdict_impl(rettv: TypevalHandle, selfdict: *mut c_void) {
 /// # Safety
 /// - `rettv` must be a valid typval handle
 /// - `selfdict` must be a valid dict pointer (may be null)
-#[no_mangle]
+#[export_name = "set_selfdict"]
 pub unsafe extern "C" fn rs_set_selfdict(rettv: TypevalHandle, selfdict: *mut c_void) {
     set_selfdict_impl(rettv, selfdict);
 }
@@ -3265,7 +3265,7 @@ pub unsafe fn handle_subscript_impl(
 ///
 /// # Safety
 /// See `handle_subscript_impl` for safety requirements.
-#[no_mangle]
+#[export_name = "handle_subscript"]
 pub unsafe extern "C" fn rs_handle_subscript(
     arg: *mut *const c_char,
     rettv: TypevalHandle,

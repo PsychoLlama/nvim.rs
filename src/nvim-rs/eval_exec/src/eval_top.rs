@@ -928,7 +928,7 @@ pub unsafe extern "C" fn rs_call_func_retlist(
 ///
 /// # Safety
 /// `argv` must be an array of `argc` valid C string pointers.
-#[no_mangle]
+#[export_name = "set_argv_var"]
 pub unsafe extern "C" fn rs_set_argv_var(argv: *mut *mut c_char, argc: c_int) {
     let l = nvim_eval_tv_list_alloc(argc as isize);
     nvim_tv_list_set_lock(l, VAR_FIXED);
@@ -946,7 +946,7 @@ pub unsafe extern "C" fn rs_set_argv_var(argv: *mut *mut c_char, argc: c_int) {
 ///
 /// # Safety
 /// `name` must be a valid C string. `vartv` must be a valid typval_T.
-#[no_mangle]
+#[export_name = "var_set_global"]
 pub unsafe extern "C" fn rs_var_set_global(name: *const c_char, vartv: TypevalHandle) {
     let entry = nvim_eval_save_funccal();
     let name_len = libc_strlen(name);
@@ -960,7 +960,7 @@ pub unsafe extern "C" fn rs_var_set_global(name: *const c_char, vartv: TypevalHa
 ///
 /// # Safety
 /// `buf` must be a valid writable buffer of at least `bufsize` bytes.
-#[no_mangle]
+#[export_name = "eval_fmt_source_name_line"]
 pub unsafe extern "C" fn rs_eval_fmt_source_name_line(buf: *mut c_char, bufsize: usize) {
     let name = nvim_sourcing_name_get();
     if !name.is_null() {
@@ -1194,7 +1194,7 @@ const VAR_STRING: c_int = 2;
 /// # Safety
 /// - `wp` must be a valid win_T pointer.
 /// - `cp` must be a valid writable int pointer.
-#[no_mangle]
+#[export_name = "eval_foldexpr"]
 pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_int {
     let saved_sctx = nvim_save_current_sctx();
     let use_sandbox = nvim_win_was_set_insecurely_foldexpr(wp);

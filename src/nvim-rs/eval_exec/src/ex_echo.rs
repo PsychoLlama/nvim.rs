@@ -295,7 +295,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
 ///
 /// # Safety
 /// See `ex_echo_impl` for safety requirements.
-#[no_mangle]
+#[export_name = "ex_echo"]
 pub unsafe extern "C" fn rs_ex_echo(eap: ExargHandle) {
     ex_echo_impl(eap);
 }
@@ -398,7 +398,7 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
 ///
 /// # Safety
 /// See `ex_execute_impl` for safety requirements.
-#[no_mangle]
+#[export_name = "ex_execute"]
 pub unsafe extern "C" fn rs_ex_execute(eap: ExargHandle) {
     ex_execute_impl(eap);
 }

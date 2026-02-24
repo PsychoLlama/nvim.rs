@@ -139,7 +139,7 @@ extern "C" {
 /// `expr` may be null if `sub` is non-null.
 /// `flags` must be a valid null-terminated C string.
 /// `ret_len` may be null.
-#[no_mangle]
+#[export_name = "do_string_sub"]
 pub unsafe extern "C" fn rs_do_string_sub(
     str: *mut c_char,
     len: usize,

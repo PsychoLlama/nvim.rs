@@ -182,4 +182,28 @@ int get_name_len(const char **arg, char **alias, bool evaluate, bool verbose);
 char *typval_tostring(typval_T *arg, bool quotes);
 char *save_tv_as_string(typval_T *tv, ptrdiff_t *len, bool endnl, bool crlf);
 
+/// Rust-exported FFI symbols (renamed from rs_* in Phase 3, eval_shim pass 9).
+/// These replace C thin wrappers that were deleted from eval_shim.c.
+char *get_lval(char *name, typval_T *rettv, lval_T *lp, bool unlet, bool skip, int flags,
+               int fne_flags);
+void clear_lval(lval_T *lp);
+void set_var_lval(lval_T *lp, char *endp, typval_T *rettv, bool copy, bool is_const,
+                  const char *op);
+void *eval_for_line(const char *arg, bool *errp, exarg_T *eap, evalarg_T *evalarg);
+bool next_for_item(void *fi_void, char *arg);
+void free_for_info(void *fi_void);
+int handle_subscript(const char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
+void set_selfdict(typval_T *rettv, dict_T *selfdict);
+void ex_echo(exarg_T *eap);
+void ex_execute(exarg_T *eap);
+int eval_foldexpr(win_T *wp, int *cp);
+char **tv_to_argv(typval_T *cmd_tv, const char **cmd, bool *executable);
+int list2fpos(typval_T *arg, pos_T *posp, int *fnump, colnr_T *curswantp, bool charcol);
+void set_argv_var(char **argv, int argc);
+bool eval_has_provider(const char *feat, bool throw_if_fast);
+void eval_fmt_source_name_line(char *buf, size_t bufsize);
+char *do_string_sub(char *str, size_t len, char *pat, char *sub, typval_T *expr,
+                    const char *flags, size_t *ret_len);
+void var_set_global(const char *name, typval_T *vartv);
+
 #include "eval_shim.h.generated.h"

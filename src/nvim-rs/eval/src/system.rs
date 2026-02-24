@@ -149,7 +149,7 @@ unsafe fn string_to_list(str: *const c_char, len: usize, keepempty: bool) -> *mu
 /// # Safety
 /// - `cmd_tv` must be a valid non-null typval pointer.
 /// - `cmd_out` and `executable` may be null.
-#[no_mangle]
+#[export_name = "tv_to_argv"]
 pub unsafe extern "C" fn rs_tv_to_argv(
     cmd_tv: *mut c_void,
     cmd_out: *mut *const c_char,

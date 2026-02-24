@@ -117,11 +117,7 @@ extern bool rs_set_ref_in_callback_reader(CallbackReader *reader, int copyID,
 extern int rs_eval_multdiv_number(typval_T *tv1, typval_T *tv2, int op);
 extern int rs_eval_func(char **arg, evalarg_T *evalarg, char *name, int name_len,
                         typval_T *rettv, int flags, typval_T *basetv);
-extern char *rs_get_lval(char *name, typval_T *rettv, lval_T *lp, bool unlet, bool skip,
-                         int flags, int fne_flags);
-extern void rs_clear_lval(lval_T *lp);
-extern void rs_set_var_lval(lval_T *lp, char *endp, typval_T *rettv, bool copy,
-                            bool is_const, const char *op);
+// get_lval, clear_lval, set_var_lval: renamed Rust exports (Phase 3 pass 9).
 extern int rs_eval_number(char **arg, typval_T *rettv, bool evaluate, bool want_string);
 extern int rs_eval_list(char **arg, typval_T *rettv, void *evalarg);
 extern int rs_eval_index(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
@@ -137,35 +133,30 @@ extern int rs_eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *evalarg);
 // eval6: renamed Rust export (Phase 3 pass 8).
 extern int rs_eval7(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
 // eval_interp_string: renamed Rust export (Phase 2 pass 9).
-extern void *rs_eval_for_line(const char *arg, bool *errp, exarg_T *eap, evalarg_T *evalarg);
-extern bool rs_next_for_item(void *fi_void, char *arg);
-extern void rs_free_for_info(void *fi_void);
+// eval_for_line, next_for_item, free_for_info: renamed Rust exports (Phase 3 pass 9).
 // callback_call: renamed Rust export (Phase 3 pass 8).
 extern int rs_free_unref_items(int copyID);
-extern int rs_handle_subscript(const char **arg, typval_T *rettv, evalarg_T *evalarg,
-                               bool verbose);
-extern void rs_ex_echo(exarg_T *eap);
-extern void rs_ex_execute(exarg_T *eap);
+// handle_subscript: renamed Rust export (Phase 3 pass 9).
+// ex_echo, ex_execute: renamed Rust exports (Phase 3 pass 9).
 // eval_option, var_item_copy, save_tv_as_string: renamed Rust exports (Phase 2 pass 9).
 // call_vim_function, call_func_retstr, call_func_retlist: renamed Rust exports (Phase 2 pass 9).
-extern void rs_set_argv_var(char **argv, int argc);
-extern void rs_var_set_global(const char *name, typval_T *vartv);
-extern void rs_eval_fmt_source_name_line(char *buf, size_t bufsize);
+// set_argv_var: renamed Rust export (Phase 3 pass 9).
+// var_set_global: renamed Rust export (Phase 3 pass 9).
+// eval_fmt_source_name_line: renamed Rust export (Phase 3 pass 9).
 extern const char *rs_find_option_var_end(const char **arg, int *opt_idxp, int *opt_flags);
 // Phase 2 (eval_shim pass 5)
 extern char *rs_prompt_get_input(buf_T *buf);
 extern void rs_prompt_invoke_callback(void);
 extern bool rs_invoke_prompt_interrupt(void);
 // Phase 3 (eval_shim pass 5)
-extern int rs_eval_foldexpr(win_T *wp, int *cp);
+// eval_foldexpr: renamed Rust export (Phase 3 pass 9).
 extern void rs_eval_foldtext(win_T *wp, Object *out);
 // Phase 4 (eval_shim pass 5)
 // get_name_len: renamed Rust export (Phase 2 pass 9).
 extern char *rs_make_expanded_name(const char *in_start, char *expr_start, char *expr_end,
                                     char *in_end);
 // Phase 2 (eval_shim pass 7)
-extern char *rs_do_string_sub(char *str, size_t len, char *pat, char *sub, typval_T *expr,
-                               const char *flags, size_t *ret_len);
+// do_string_sub: renamed Rust export (Phase 3 pass 9).
 // Phase 4 (eval_shim pass 7)
 extern void rs_ex_echohl(exarg_T *eap);
 extern int rs_get_echo_hl_id(void);
@@ -606,18 +597,18 @@ extern int rs_eval1_emsg(char **arg, typval_T *rettv, exarg_T *eap);
 // Rust implementations for Phase 3 (in eval crate, indexing module)
 extern bool rs_var2fpos(const typval_T *tv, bool dollar_lnum, int *ret_fnum, bool charcol,
                         pos_T *out);
-extern int rs_list2fpos(typval_T *arg, pos_T *posp, int *fnump, int *curswantp, bool charcol);
+// list2fpos: renamed Rust export (Phase 3 pass 9).
 
 // Rust implementations for Phase 1 (eval_shim pass 6)
 extern void rs_last_set_msg(int sc_sid, int sc_lnum, uint64_t sc_chan);
-extern void rs_set_selfdict(typval_T *rettv, dict_T *selfdict);
+// set_selfdict: renamed Rust export (Phase 3 pass 9).
 
 // Rust implementations for Phase 2 (eval_shim pass 6): tv_to_argv + system output
-extern char **rs_tv_to_argv(typval_T *cmd_tv, const char **cmd, bool *executable);
+// tv_to_argv: renamed Rust export (Phase 3 pass 9).
 // f_system, f_systemlist: renamed Rust exports (Phase 3 pass 8).
 
 // Rust implementations for Phase 3 (eval_shim pass 6): provider infrastructure
-extern bool rs_eval_has_provider(const char *feat, bool throw_if_fast);
+// eval_has_provider: renamed Rust export (Phase 3 pass 9).
 extern void rs_eval_call_provider(const char *provider, const char *method,
                                   list_T *arguments, bool discard, typval_T *out_rettv);
 extern void rs_script_host_eval(char *name, typval_T *argvars, typval_T *rettv);
@@ -638,12 +629,7 @@ typval_T *eval_expr(char *arg, exarg_T *eap)
   return eval_expr_ext(arg, eap, false);
 }
 
-/// Evaluate 'foldexpr'.  Returns the foldlevel, and any character preceding
-/// it in "*cp".  Doesn't give error messages.
-int eval_foldexpr(win_T *wp, int *cp)
-{
-  return rs_eval_foldexpr(wp, cp);
-}
+// eval_foldexpr: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
 /// Evaluate 'foldtext', returning an Array or a String (NULL_STRING on failure).
 Object eval_foldtext(win_T *wp)
@@ -675,61 +661,11 @@ Object eval_foldtext(win_T *wp)
 /// @param[in]  flags  @see GetLvalFlags.
 /// @param[in]  fne_flags  Flags for find_name_end().
 ///
-/// @return A pointer to just after the name, including indexes. Returns NULL
-///         for a parsing error, but it is still needed to free items in lp.
-char *get_lval(char *const name, typval_T *const rettv, lval_T *const lp, const bool unlet,
-               const bool skip, const int flags, const int fne_flags)
-  FUNC_ATTR_NONNULL_ARG(1, 3)
-{
-  return rs_get_lval(name, rettv, lp, unlet, skip, flags, fne_flags);
-}
-
-/// Clear lval "lp" that was filled by get_lval().
-void clear_lval(lval_T *lp)
-{
-  rs_clear_lval(lp);
-}
-
-/// Set a variable that was parsed by get_lval() to "rettv".
-///
-/// @param endp  points to just after the parsed name.
-/// @param op    NULL, "+" for "+=", "-" for "-=", "*" for "*=", "/" for "/=",
-///              "%" for "%=", "." for ".=" or "=" for "=".
-void set_var_lval(lval_T *lp, char *endp, typval_T *rettv, bool copy, const bool is_const,
-                  const char *op)
-{
-  rs_set_var_lval(lp, endp, rettv, copy, is_const, op);
-}
-
-/// Evaluate the expression used in a ":for var in expr" command.
-/// "arg" points to "var".
-///
-/// @param[out] *errp  set to true for an error, false otherwise;
-///
-/// @return  a pointer that holds the info.  Null when there is an error.
-void *eval_for_line(const char *arg, bool *errp, exarg_T *eap, evalarg_T *const evalarg)
-{
-  return rs_eval_for_line(arg, errp, eap, evalarg);
-}
-
-/// Use the first item in a ":for" list.  Advance to the next.
-/// Assign the values to the variable (list).  "arg" points to the first one.
-///
-/// @return  true when a valid item was found, false when at end of list or
-///          something wrong.
-bool next_for_item(void *fi_void, char *arg)
-{
-  return rs_next_for_item(fi_void, arg);
-}
-
-/// Free the structure used to store info used by ":for".
-void free_for_info(void *fi_void)
-{
-  rs_free_for_info(fi_void);
-}
+// get_lval, clear_lval, set_var_lval: deleted -- Rust exports renamed to match C symbols (Phase 3 pass 9).
+// eval_for_line, next_for_item, free_for_info: deleted -- Rust exports renamed (Phase 3 pass 9).
 
 // =============================================================================
-// Accessors for rs_eval_for_line / rs_next_for_item / rs_free_for_info (Phase 3)
+// Accessors for eval_for_line / next_for_item / free_for_info (Rust)
 // All use void* to avoid exposing the local forinfo_T typedef in generated headers.
 // =============================================================================
 
@@ -1248,19 +1184,7 @@ bool garbage_collect(bool testing)
 ///
 // eval_env_var: deleted -- replaced by rs_eval_env_var (Rust, Phase 2).
 
-/// Builds a process argument vector from a Vimscript object (typval_T).
-///
-/// @param[in]  cmd_tv      Vimscript object
-/// @param[out] cmd         Returns the command or executable name.
-/// @param[out] executable  Returns `false` if argv[0] is not executable.
-///
-/// @return  Result of `shell_build_argv()` if `cmd_tv` is a String.
-///          Else, string values of `cmd_tv` copied to a (char **) list with
-///          argv[0] resolved to full path ($PATHEXT-resolved on Windows).
-char **tv_to_argv(typval_T *cmd_tv, const char **cmd, bool *executable)
-{
-  return rs_tv_to_argv(cmd_tv, cmd, executable);
-}
+// tv_to_argv: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
 // f_system: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
 // f_systemlist: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
@@ -1424,30 +1348,13 @@ pos_T *var2fpos(const typval_T *const tv, const bool dollar_lnum, int *const ret
   return NULL;
 }
 
-/// Convert list in "arg" into position "posp" and optional file number "fnump".
-/// When "fnump" is NULL there is no file number, only 3 items: [lnum, col, off]
-/// Note that the column is passed on as-is, the caller may want to decrement
-/// it to use 1 for the first column.
-///
-/// @param charcol  if true, use the column as the character index instead of the
-///                 byte index.
-///
-/// @return  FAIL when conversion is not possible, doesn't check the position for
-///          validity.
-int list2fpos(typval_T *arg, pos_T *posp, int *fnump, colnr_T *curswantp, bool charcol)
-{
-  return rs_list2fpos(arg, posp, fnump, (int *)curswantp, charcol);
-}
+// list2fpos: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
 // get_name_len: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
 // make_expanded_name: deleted -- replaced by rs_make_expanded_name (Rust, Phase 3 pass 8).
 
-/// Set the v:argv list.
-void set_argv_var(char **argv, int argc)
-{
-  rs_set_argv_var(argv, argc);
-}
+// set_argv_var: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
 /// Get v:lua partial pointer (accessor for Rust).
 partial_T *nvim_get_vlua_partial(void)
@@ -1457,47 +1364,15 @@ partial_T *nvim_get_vlua_partial(void)
 
 // tv_is_luafunc: deleted -- inlined into callers (Phase 3 pass 8).
 
-/// Handle:
-/// - expr[expr], expr[expr:expr] subscript
-/// - ".name" lookup
-/// - function call with Funcref variable: func(expr)
-/// - method call: var->method()
-///
-/// Can all be combined in any order: dict.func(expr)[idx]['func'](expr)->len()
-///
-/// @param verbose  give error messages
-/// @param start_leader  start of '!' and '-' prefixes
-/// @param end_leaderp  end of '!' and '-' prefixes
-int handle_subscript(const char **const arg, typval_T *rettv, evalarg_T *const evalarg,
-                     bool verbose)
-{
-  return rs_handle_subscript(arg, rettv, evalarg, verbose);
-}
+// handle_subscript: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
-void set_selfdict(typval_T *const rettv, dict_T *const selfdict)
-{
-  rs_set_selfdict(rettv, selfdict);
-}
+// set_selfdict: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
 // var_item_copy: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
-/// ":echo expr1 ..."    print each argument separated with a space, add a
-///                      newline at the end.
-/// ":echon expr1 ..."   print each argument plain.
-void ex_echo(exarg_T *eap)
-{
-  rs_ex_echo(eap);
-}
+// ex_echo: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
-/// ":execute expr1 ..." execute the result of an expression.
-/// ":echomsg expr1 ..." Print a message
-/// ":echoerr expr1 ..." Print an error
-/// Each gets spaces around each argument and a newline at the end for
-/// echo commands
-void ex_execute(exarg_T *eap)
-{
-  rs_ex_execute(eap);
-}
+// ex_execute: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
 /// Skip over the name of an option variable: "&option", "&g:option" or "&l:option".
 ///
@@ -1515,10 +1390,8 @@ const char *find_option_var_end(const char **const arg, OptIndex *const opt_idxp
   return end;
 }
 
-void var_set_global(const char *const name, typval_T vartv)
-{
-  rs_var_set_global(name, &vartv);
-}
+// var_set_global: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
+// Callers now pass a pointer to typval_T instead of by value.
 
 /// Display script name where an item was last set.
 /// Should only be invoked when 'verbose' is non-zero.
@@ -1527,18 +1400,7 @@ void last_set_msg(sctx_T script_ctx)
   rs_last_set_msg(script_ctx.sc_sid, script_ctx.sc_lnum, script_ctx.sc_chan);
 }
 
-/// Perform a substitution on "str" with pattern "pat" and substitute "sub".
-/// When "sub" is NULL "expr" is used, must be a VAR_FUNC or VAR_PARTIAL.
-/// "flags" can be "g" to do a global substitute.
-///
-/// @param ret_len  length of returned buffer
-///
-/// @return  an allocated string, NULL for error.
-char *do_string_sub(char *str, size_t len, char *pat, char *sub, typval_T *expr, const char *flags,
-                    size_t *ret_len)
-{
-  return rs_do_string_sub(str, len, pat, sub, expr, flags, ret_len);
-}
+// do_string_sub: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
 /// Common code for getting job callbacks for `jobstart`.
 ///
@@ -1568,17 +1430,9 @@ typval_T eval_call_provider(char *provider, char *method, list_T *arguments, boo
   return rettv;
 }
 
-/// Checks if provider for feature `feat` is enabled.
-bool eval_has_provider(const char *feat, bool throw_if_fast)
-{
-  return rs_eval_has_provider(feat, throw_if_fast);
-}
+// eval_has_provider: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
-/// Writes "<sourcing_name>:<sourcing_lnum>" to `buf[bufsize]`.
-void eval_fmt_source_name_line(char *buf, size_t bufsize)
-{
-  rs_eval_fmt_source_name_line(buf, bufsize);
-}
+// eval_fmt_source_name_line: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
 /// Gets the current user-input in prompt buffer `buf`, or NULL if buffer is not a prompt buffer.
 char *prompt_get_input(buf_T *buf)

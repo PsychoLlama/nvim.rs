@@ -2037,7 +2037,7 @@ int nvim_shada_apply_register(ShadaEntry *entry, bool force)
 /// @param entry   The ShaDa entry (kSDItemVariable).
 void nvim_shada_apply_variable(ShadaEntry *entry)
 {
-  var_set_global(entry->data.global_var.name, entry->data.global_var.value);
+  var_set_global(entry->data.global_var.name, &entry->data.global_var.value);
   entry->data.global_var.value.v_type = VAR_UNKNOWN;
   rs_shada_free_entry_contents(entry);
 }

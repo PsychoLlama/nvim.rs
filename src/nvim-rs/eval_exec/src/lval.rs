@@ -788,7 +788,7 @@ unsafe fn get_lval_impl(
 ///
 /// # Safety
 /// See `get_lval_impl` for safety requirements.
-#[no_mangle]
+#[export_name = "get_lval"]
 pub unsafe extern "C" fn rs_get_lval(
     name: *mut c_char,
     rettv: TypevalHandle,
@@ -826,7 +826,7 @@ unsafe fn clear_lval_impl(lp: LvalHandle) {
 ///
 /// # Safety
 /// See `clear_lval_impl` for safety requirements.
-#[no_mangle]
+#[export_name = "clear_lval"]
 pub unsafe extern "C" fn rs_clear_lval(lp: LvalHandle) {
     clear_lval_impl(lp)
 }
@@ -1139,7 +1139,7 @@ unsafe fn set_var_lval_impl(
 ///
 /// # Safety
 /// See `set_var_lval_impl` for safety requirements.
-#[no_mangle]
+#[export_name = "set_var_lval"]
 pub unsafe extern "C" fn rs_set_var_lval(
     lp: LvalHandle,
     endp: *mut c_char,

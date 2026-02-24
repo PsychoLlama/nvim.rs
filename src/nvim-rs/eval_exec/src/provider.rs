@@ -117,7 +117,7 @@ fn is_known_provider(feat: &[u8]) -> bool {
 /// # Safety
 /// - `feat` must be a valid null-terminated C string.
 /// - `throw_if_fast` controls whether a "fast API disabled" error is thrown.
-#[no_mangle]
+#[export_name = "eval_has_provider"]
 pub unsafe extern "C" fn rs_eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> bool {
     let feat_bytes = unsafe { CStr::from_ptr(feat) }.to_bytes();
 
