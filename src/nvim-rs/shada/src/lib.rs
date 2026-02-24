@@ -550,12 +550,7 @@ extern "C" {
     fn nvim_shada_semsg_remove_reminder(tempname: *const c_char, fname: *const c_char);
 
     // Phase 3 (plan 11dd3cf4): shada_read migration accessors
-    fn nvim_shada_read_next_item(
-        sd_reader: *mut c_void,
-        entry: *mut ShadaEntry,
-        srni_flags: c_uint,
-        max_kbyte: usize,
-    ) -> c_int;
+    // nvim_shada_read_next_item removed (Phase 2 plan 92c8078e): Rust uses rs_shada_read_next_item.
     fn nvim_shada_fname_bufs_new() -> *mut c_void;
     fn nvim_shada_fname_bufs_destroy(handle: *mut c_void);
     fn nvim_shada_cl_bufs_new() -> *mut c_void;
@@ -594,6 +589,83 @@ extern "C" {
         out_hisidx: *mut *mut c_int,
         out_hisnum: *mut *mut c_int,
     ) -> *mut c_void;
+    // Phase 2 (plan 92c8078e): compound parsing accessors for rs_shada_read_next_item
+    fn nvim_shada_file_try_read_buffered(fd: *mut c_void, len: usize) -> *mut c_char;
+    fn nvim_shada_file_bytes_read(fd: *mut c_void) -> u64;
+    fn nvim_shada_set_entry_default_data(entry: *mut ShadaEntry, type_u64: u64);
+    fn nvim_shada_verify_skip(buf: *const c_char, size: usize, parse_pos: u64) -> c_int;
+    fn nvim_shada_set_unknown_item(
+        entry: *mut ShadaEntry,
+        type_u64: u64,
+        buf: *mut c_char,
+        length: usize,
+        buf_allocated: bool,
+        read_ptr: *const c_char,
+        read_size: usize,
+        initial_fpos: u64,
+        parse_pos: u64,
+    ) -> c_int;
+    fn nvim_shada_parse_search_pattern(
+        entry: *mut ShadaEntry,
+        buf: *const c_char,
+        size: usize,
+        initial_fpos: u64,
+    ) -> c_int;
+    fn nvim_shada_parse_mark(
+        entry: *mut ShadaEntry,
+        buf: *const c_char,
+        size: usize,
+        initial_fpos: u64,
+        type_u64: u64,
+    ) -> c_int;
+    fn nvim_shada_parse_register(
+        entry: *mut ShadaEntry,
+        buf: *const c_char,
+        size: usize,
+        initial_fpos: u64,
+    ) -> c_int;
+    fn nvim_shada_parse_history(
+        entry: *mut ShadaEntry,
+        buf: *const c_char,
+        size: usize,
+        initial_fpos: u64,
+        num_additional: *mut u32,
+        read_ptr_out: *mut *const c_char,
+        read_size_out: *mut usize,
+    ) -> c_int;
+    fn nvim_shada_parse_variable(
+        entry: *mut ShadaEntry,
+        buf: *const c_char,
+        size: usize,
+        initial_fpos: u64,
+        num_additional: *mut u32,
+        read_ptr_out: *mut *const c_char,
+        read_size_out: *mut usize,
+    ) -> c_int;
+    fn nvim_shada_parse_substr(
+        entry: *mut ShadaEntry,
+        buf: *const c_char,
+        size: usize,
+        initial_fpos: u64,
+        num_additional: *mut u32,
+        read_ptr_out: *mut *const c_char,
+        read_size_out: *mut usize,
+    ) -> c_int;
+    fn nvim_shada_parse_buflist(
+        entry: *mut ShadaEntry,
+        buf: *const c_char,
+        size: usize,
+        initial_fpos: u64,
+    ) -> c_int;
+    fn nvim_shada_parse_additional_data(
+        entry: *mut ShadaEntry,
+        read_ptr: *const c_char,
+        read_size: usize,
+        num_additional: u32,
+        initial_fpos: u64,
+    ) -> c_int;
+    fn nvim_shada_semsg_rcerr_too_long(initial_fpos: u64);
+    fn nvim_shada_semsg_rcerr_missing(initial_fpos: u64);
 }
 
 // =============================================================================
@@ -3070,7 +3142,7 @@ unsafe fn shada_read_when_writing(
     let mut entry = ShadaEntry::default();
 
     loop {
-        let srni_ret = nvim_shada_read_next_item(sd_reader, &raw mut entry, srni_flags, max_kbyte);
+        let srni_ret = rs_shada_read_next_item(sd_reader, &raw mut entry, srni_flags, max_kbyte);
         match srni_ret {
             r if r == SD_READ_STATUS_FINISHED => break,
             r if r == SD_READ_STATUS_SUCCESS => {}
@@ -4273,6 +4345,246 @@ unsafe fn rs_shada_apply_entry(
     }
 }
 
+// =============================================================================
+// Phase 2 (plan 92c8078e): rs_shada_read_next_item
+// =============================================================================
+
+/// Read and parse the next ShaDa file entry from sd_reader into entry.
+///
+/// This is the Rust replacement for the C `shada_read_next_item` function.
+/// Mirrors the C logic exactly: reads header (type/timestamp/length), reads
+/// body bytes, delegates body parsing to C compound accessors, handles the
+/// verify_but_ignore path, unknown entries, and additional data.
+///
+/// Returns SD_READ_STATUS_* constants.
+///
+/// # Safety
+///
+/// - `sd_reader` must be a valid FileDescriptor handle
+/// - `entry` must be a valid pointer to a zero-initialised ShadaEntry
+#[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
+unsafe fn rs_shada_read_next_item(
+    sd_reader: *mut c_void,
+    entry: *mut ShadaEntry,
+    flags: u32,
+    max_kbyte: usize,
+) -> c_int {
+    let fd = FileDescriptorHandle(sd_reader);
+    loop {
+        // Zero-initialise entry so all pointers are NULL (safe to free on error)
+        std::ptr::write(entry, ShadaEntry::default());
+
+        if nvim_file_eof(fd) != 0 {
+            return SD_READ_STATUS_FINISHED;
+        }
+
+        let mut verify_but_ignore = false;
+
+        let mut type_u64: u64 = SD_ITEM_MISSING as u64;
+        let mut timestamp_u64: u64 = 0;
+        let mut length_u64: u64 = 0;
+
+        let initial_fpos = nvim_shada_file_bytes_read(sd_reader);
+
+        // Read type / timestamp / length
+        let mru_ret = rs_msgpack_read_uint64(fd, true, &raw mut type_u64);
+        if mru_ret != SD_READ_STATUS_SUCCESS {
+            return mru_ret;
+        }
+        let mru_ret = rs_msgpack_read_uint64(fd, false, &raw mut timestamp_u64);
+        if mru_ret != SD_READ_STATUS_SUCCESS {
+            return mru_ret;
+        }
+        let mru_ret = rs_msgpack_read_uint64(fd, false, &raw mut length_u64);
+        if mru_ret != SD_READ_STATUS_SUCCESS {
+            return mru_ret;
+        }
+
+        if length_u64 > isize::MAX as u64 {
+            nvim_shada_semsg_rcerr_too_long(initial_fpos);
+            return SD_READ_STATUS_NOT_SHADA;
+        }
+
+        let length = length_u64 as usize;
+        (*entry).timestamp = timestamp_u64;
+        (*entry).can_free_entry = true;
+
+        if type_u64 == 0 {
+            nvim_shada_semsg_rcerr_missing(initial_fpos);
+            return SD_READ_STATUS_NOT_SHADA;
+        }
+
+        // Decide whether to read or skip this entry
+        let should_read = {
+            let type_flag_ok = if type_u64 > SHADA_LAST_ENTRY {
+                (flags & SD_READ_UNKNOWN) != 0
+            } else {
+                (flags & (1u32 << type_u64 as u32)) != 0
+            };
+            let size_ok = max_kbyte == 0 || length <= max_kbyte * 1024;
+            type_flag_ok && size_ok
+        };
+
+        if !should_read {
+            // Check for non-ShaDa file at position 0
+            if initial_fpos == 0 && (type_u64 == u64::from(b'\n') || type_u64 > SHADA_LAST_ENTRY) {
+                verify_but_ignore = true;
+            } else {
+                let srs_ret = rs_sd_reader_skip_bytes(fd, length);
+                if srs_ret != SD_READ_STATUS_SUCCESS {
+                    return srs_ret;
+                }
+                // loop back to start
+                continue;
+            }
+        }
+
+        let parse_pos = nvim_shada_file_bytes_read(sd_reader);
+
+        // Try zero-alloc read from internal buffer, else malloc+read
+        let buf_from_file = nvim_shada_file_try_read_buffered(sd_reader, length);
+        let (buf, buf_allocated) = if buf_from_file.is_null() {
+            let b = nvim_xmalloc(length).cast::<c_char>();
+            let fl_ret = rs_fread_len(fd, b, length);
+            if fl_ret != SD_READ_STATUS_SUCCESS {
+                nvim_xfree(b.cast::<c_void>());
+                return fl_ret;
+            }
+            (b, true)
+        } else {
+            (buf_from_file, false)
+        };
+
+        let read_ptr = buf.cast_const();
+        let read_size = length;
+
+        if verify_but_ignore {
+            let spm_ret = nvim_shada_verify_skip(read_ptr, read_size, parse_pos);
+            if buf_allocated {
+                nvim_xfree(buf.cast::<c_void>());
+            }
+            if spm_ret != SD_READ_STATUS_SUCCESS {
+                return spm_ret;
+            }
+            continue; // loop back to start
+        }
+
+        if type_u64 > SHADA_LAST_ENTRY {
+            let r = nvim_shada_set_unknown_item(
+                entry,
+                type_u64,
+                buf,
+                length,
+                buf_allocated,
+                read_ptr,
+                read_size,
+                initial_fpos,
+                parse_pos,
+            );
+            return r;
+        }
+
+        // Set default data for this entry type
+        nvim_shada_set_entry_default_data(entry, type_u64);
+
+        // Parse the entry body using per-type C compound accessors
+        let mut num_additional: u32 = 0;
+        let mut body_read_ptr = read_ptr;
+        let mut body_read_size = read_size;
+
+        let parse_ret = match type_u64 {
+            t if t == SD_ITEM_HEADER as u64 => {
+                // Header: no parsing needed (nvim never reads header contents)
+                SD_READ_STATUS_SUCCESS
+            }
+            t if t == SD_ITEM_SEARCH_PATTERN as u64 => {
+                nvim_shada_parse_search_pattern(entry, read_ptr, read_size, initial_fpos)
+            }
+            t if t == SD_ITEM_CHANGE as u64
+                || t == SD_ITEM_JUMP as u64
+                || t == SD_ITEM_GLOBAL_MARK as u64
+                || t == SD_ITEM_LOCAL_MARK as u64 =>
+            {
+                nvim_shada_parse_mark(entry, read_ptr, read_size, initial_fpos, type_u64)
+            }
+            t if t == SD_ITEM_REGISTER as u64 => {
+                nvim_shada_parse_register(entry, read_ptr, read_size, initial_fpos)
+            }
+            t if t == SD_ITEM_HISTORY_ENTRY as u64 => nvim_shada_parse_history(
+                entry,
+                read_ptr,
+                read_size,
+                initial_fpos,
+                &raw mut num_additional,
+                &raw mut body_read_ptr,
+                &raw mut body_read_size,
+            ),
+            t if t == SD_ITEM_VARIABLE as u64 => nvim_shada_parse_variable(
+                entry,
+                read_ptr,
+                read_size,
+                initial_fpos,
+                &raw mut num_additional,
+                &raw mut body_read_ptr,
+                &raw mut body_read_size,
+            ),
+            t if t == SD_ITEM_SUB_STRING as u64 => nvim_shada_parse_substr(
+                entry,
+                read_ptr,
+                read_size,
+                initial_fpos,
+                &raw mut num_additional,
+                &raw mut body_read_ptr,
+                &raw mut body_read_size,
+            ),
+            t if t == SD_ITEM_BUFFER_LIST as u64 => {
+                nvim_shada_parse_buflist(entry, read_ptr, read_size, initial_fpos)
+            }
+            _ => {
+                // kSDItemMissing / kSDItemUnknown should not reach here
+                SD_READ_STATUS_MALFORMED
+            }
+        };
+
+        if parse_ret != SD_READ_STATUS_SUCCESS {
+            // Error: free partial entry data and return Malformed
+            (*entry).entry_type = ShadaEntryType::from_raw(type_u64 as c_int);
+            rs_shada_free_entry_contents(entry);
+            (*entry).entry_type = ShadaEntryType::Missing;
+            if buf_allocated {
+                nvim_xfree(buf.cast::<c_void>());
+            }
+            return SD_READ_STATUS_MALFORMED;
+        }
+
+        // Parse additional data (for array-based entry types with extra elements)
+        if num_additional > 0 || body_read_size > 0 {
+            let ad_ret = nvim_shada_parse_additional_data(
+                entry,
+                body_read_ptr,
+                body_read_size,
+                num_additional,
+                initial_fpos,
+            );
+            if ad_ret != SD_READ_STATUS_SUCCESS {
+                (*entry).entry_type = ShadaEntryType::from_raw(type_u64 as c_int);
+                rs_shada_free_entry_contents(entry);
+                (*entry).entry_type = ShadaEntryType::Missing;
+                if buf_allocated {
+                    nvim_xfree(buf.cast::<c_void>());
+                }
+                return SD_READ_STATUS_MALFORMED;
+            }
+        }
+
+        (*entry).entry_type = ShadaEntryType::from_raw(type_u64 as c_int);
+        if buf_allocated {
+            nvim_xfree(buf.cast::<c_void>());
+        }
+        return SD_READ_STATUS_SUCCESS;
+    }
+}
+
 /// Read ShaDa data and merge it into Neovim's in-memory state.
 ///
 /// This is the Rust replacement for the C `shada_read` function.
@@ -4319,7 +4631,7 @@ pub unsafe extern "C" fn rs_shada_read(sd_reader: *mut c_void, flags: c_int) {
 
     let mut cur_entry = ShadaEntry::default();
     'read_loop: loop {
-        let srni_ret = nvim_shada_read_next_item(sd_reader, &raw mut cur_entry, srni_flags, 0);
+        let srni_ret = rs_shada_read_next_item(sd_reader, &raw mut cur_entry, srni_flags, 0);
         match srni_ret {
             r if r == SD_READ_STATUS_FINISHED => break 'read_loop,
             r if r == SD_READ_STATUS_SUCCESS => {}

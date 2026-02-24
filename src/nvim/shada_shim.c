@@ -394,35 +394,7 @@ static const ShadaEntry sd_default_values[] = {
 #undef DEFAULT_POS
 #undef DEF_SDE
 
-/// Wrapper for read that can be used when lseek cannot be used
-///
-/// E.g. when trying to read from a pipe.
-///
-/// @param[in,out]  sd_reader  File read.
-/// @param[in]      offset     Amount of bytes to skip.
-///
-/// @return kSDReadStatusReadError, kSDReadStatusNotShaDa or
-///         kSDReadStatusSuccess.
-static ShaDaReadResult sd_reader_skip(FileDescriptor *const sd_reader, const size_t offset)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  const ptrdiff_t skip_bytes = file_skip(sd_reader, offset);
-  if (skip_bytes < 0) {
-    semsg(_(SERR "System error while skipping in ShaDa file: %s"), os_strerror((int)skip_bytes));
-    return kSDReadStatusReadError;
-  } else if (skip_bytes != (ptrdiff_t)offset) {
-    assert(skip_bytes < (ptrdiff_t)offset);
-    if (file_eof(sd_reader)) {
-      semsg(_(RCERR "Reading ShaDa file: last entry specified that it occupies %" PRIu64 " bytes, "
-              "but file ended earlier"),
-            (uint64_t)offset);
-    } else {
-      semsg(_(SERR "System error while skipping in ShaDa file: %s"), _("too few bytes read"));
-    }
-    return kSDReadStatusNotShaDa;
-  }
-  return kSDReadStatusSuccess;
-}
+// sd_reader_skip deleted (Phase 2 plan 92c8078e): Rust rs_sd_reader_skip_bytes replaces it.
 
 /// Iterate over global variables
 ///
@@ -504,612 +476,24 @@ static buf_T *find_buffer(PMap(cstr_t) *const fname_bufs, const char *const fnam
 #define SHADA_MPACK_FREE_SPACE (4 * MPACK_ITEM_SIZE)
 
 
-/// Parse msgpack object that has given length
-///
-/// @param[in]   sd_reader     Structure containing file reader definition.
-/// @param[in]   length        Object length.
-/// @param[out]  ret_unpacked  Location where read result should be saved. If
-///                            NULL then unpacked data will be freed. Must be
-///                            NULL if `ret_buf` is NULL.
-/// @param[out]  ret_buf       Buffer containing parsed string.
-///
-/// @return kSDReadStatusNotShaDa, kSDReadStatusReadError or
-///         kSDReadStatusSuccess.
-static ShaDaReadResult shada_check_status(uintmax_t initial_fpos, int status, size_t remaining)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  switch (status) {
-  case MPACK_OK:
-    if (remaining) {
-      semsg(_(RCERR "Failed to parse ShaDa file: extra bytes in msgpack string "
-              "at position %" PRIu64),
-            (uint64_t)initial_fpos);
-      return kSDReadStatusNotShaDa;
-    }
-    return kSDReadStatusSuccess;
-  case MPACK_EOF:
-    semsg(_(RCERR "Failed to parse ShaDa file: incomplete msgpack string "
-            "at position %" PRIu64),
-          (uint64_t)initial_fpos);
-    return kSDReadStatusNotShaDa;
-  default:
-    semsg(_(RCERR "Failed to parse ShaDa file due to a msgpack parser error "
-            "at position %" PRIu64),
-          (uint64_t)initial_fpos);
-    return kSDReadStatusNotShaDa;
-  }
-}
+// shada_check_status deleted (Phase 2 plan 92c8078e): only used by shada_read_next_item.
 
 
 
 
 
-#ifndef HAVE_BE64TOH
-// Use Rust implementation for byte order conversion
-static inline uint64_t vim_be64toh(uint64_t big_endian_64_bits)
-{
-  return rs_vim_be64toh(big_endian_64_bits);
-}
-# define be64toh vim_be64toh
-#endif
+// vim_be64toh deleted (Phase 2 plan 92c8078e): only used by msgpack_read_uint64.
 
-/// Read given number of bytes into given buffer, display error if needed
-///
-/// @param[in]   sd_reader  Structure containing file reader definition.
-/// @param[out]  buffer     Where to save the results.
-/// @param[in]   length     How many bytes should be read.
-///
-/// @return kSDReadStatusSuccess if everything was OK, kSDReadStatusNotShaDa if
-///         there were not enough bytes to read or kSDReadStatusReadError if
-///         there was some error while reading.
-static ShaDaReadResult fread_len(FileDescriptor *const sd_reader, char *const buffer,
-                                 const size_t length)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  const ptrdiff_t read_bytes = file_read(sd_reader, buffer, length);
-  if (read_bytes < 0) {
-    semsg(_(SERR "System error while reading ShaDa file: %s"),
-          os_strerror((int)read_bytes));
-    return kSDReadStatusReadError;
-  }
+// fread_len deleted (Phase 2 plan 92c8078e): Rust rs_fread_len replaces it.
 
-  if (read_bytes != (ptrdiff_t)length) {
-    semsg(_(RCERR "Error while reading ShaDa file: "
-            "last entry specified that it occupies %" PRIu64 " bytes, "
-            "but file ended earlier"),
-          (uint64_t)length);
-    return kSDReadStatusNotShaDa;
-  }
-  return kSDReadStatusSuccess;
-}
-
-/// Read next unsigned integer from file
-///
-/// Errors out if the result is not an unsigned integer.
-///
-/// Unlike msgpack own function this one works with `FILE *` and reads *exactly*
-/// as much bytes as needed, making it possible to avoid both maintaining own
-/// buffer and calling `fseek`.
-///
-/// One byte from file stream is always consumed, even if it is not correct.
-///
-/// @param[in]   sd_reader  Structure containing file reader definition.
-/// @param[out]  result     Location where result is saved.
-///
-/// @return kSDReadStatusSuccess if reading was successful,
-///         kSDReadStatusNotShaDa if there were not enough bytes to read or
-///         kSDReadStatusReadError if reading failed for whatever reason.
-///         kSDReadStatusFinished if eof and that was allowed
-static ShaDaReadResult msgpack_read_uint64(FileDescriptor *const sd_reader, bool allow_eof,
-                                           uint64_t *const result)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  const uintmax_t fpos = sd_reader->bytes_read;
-
-  uint8_t ret;
-  ptrdiff_t read_bytes = file_read(sd_reader, (char *)&ret, 1);
-
-  if (read_bytes < 0) {
-    semsg(_(SERR "System error while reading integer from ShaDa file: %s"),
-          os_strerror((int)read_bytes));
-    return kSDReadStatusReadError;
-  } else if (read_bytes == 0) {
-    if (allow_eof && file_eof(sd_reader)) {
-      return kSDReadStatusFinished;
-    }
-    semsg(_(RCERR "Error while reading ShaDa file: "
-            "expected positive integer at position %" PRIu64
-            ", but got nothing"),
-          (uint64_t)fpos);
-    return kSDReadStatusNotShaDa;
-  }
-
-  int first_char = (int)ret;
-  if (~first_char & 0x80) {
-    // Positive fixnum
-    *result = (uint64_t)((uint8_t)first_char);
-  } else {
-    size_t length = 0;
-    switch (first_char) {
-    case 0xCC:    // uint8
-      length = 1;
-      break;
-    case 0xCD:    // uint16
-      length = 2;
-      break;
-    case 0xCE:    // uint32
-      length = 4;
-      break;
-    case 0xCF:    // uint64
-      length = 8;
-      break;
-    default:
-      semsg(_(RCERR "Error while reading ShaDa file: "
-              "expected positive integer at position %" PRIu64),
-            (uint64_t)fpos);
-      return kSDReadStatusNotShaDa;
-    }
-    uint64_t buf = 0;
-    char *buf_u8 = (char *)&buf;
-    ShaDaReadResult fl_ret;
-    if ((fl_ret = fread_len(sd_reader, &(buf_u8[sizeof(buf) - length]), length))
-        != kSDReadStatusSuccess) {
-      return fl_ret;
-    }
-    *result = be64toh(buf);
-  }
-  return kSDReadStatusSuccess;
-}
+// msgpack_read_uint64 deleted (Phase 2 plan 92c8078e): Rust rs_msgpack_read_uint64 replaces it.
 
 #define READERR(entry_name, error_desc) \
   RERR "Error while reading ShaDa file: " \
   entry_name " entry at position %" PRIu64 " " \
   error_desc
 
-/// Iterate over shada file contents
-///
-/// @param[in]   sd_reader  Structure containing file reader definition.
-/// @param[out]  entry      Address where next entry contents will be saved.
-/// @param[in]   flags      Flags, determining whether and which items should be
-///                         skipped (see SRNIFlags enum).
-/// @param[in]   max_kbyte  If non-zero, skip reading entries which have length
-///                         greater then given.
-///
-/// @return Any value from ShaDaReadResult enum.
-static ShaDaReadResult shada_read_next_item(FileDescriptor *const sd_reader,
-                                            ShadaEntry *const entry, const unsigned flags,
-                                            const size_t max_kbyte)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  ShaDaReadResult ret = kSDReadStatusMalformed;
-shada_read_next_item_start:
-  // Set entry type to kSDItemMissing and also make sure that all pointers in
-  // data union are NULL so they are safe to xfree(). This is needed in case
-  // somebody calls goto shada_read_next_item_error before anything is set in
-  // the switch.
-  CLEAR_POINTER(entry);
-  if (file_eof(sd_reader)) {
-    return kSDReadStatusFinished;
-  }
-
-  bool verify_but_ignore = false;
-
-  // First: manually unpack type, timestamp and length.
-  // This is needed to avoid both seeking and having to maintain a buffer.
-  uint64_t type_u64 = (uint64_t)kSDItemMissing;
-  uint64_t timestamp_u64;
-  uint64_t length_u64;
-
-  const uint64_t initial_fpos = sd_reader->bytes_read;
-  AdditionalDataBuilder ad = KV_INITIAL_VALUE;
-  uint32_t read_additional_array_elements = 0;
-  char *error_alloc = NULL;
-
-  ShaDaReadResult mru_ret;
-  if (((mru_ret = msgpack_read_uint64(sd_reader, true, &type_u64))
-       != kSDReadStatusSuccess)
-      || ((mru_ret = msgpack_read_uint64(sd_reader, false,
-                                         &timestamp_u64))
-          != kSDReadStatusSuccess)
-      || ((mru_ret = msgpack_read_uint64(sd_reader, false,
-                                         &length_u64))
-          != kSDReadStatusSuccess)) {
-    return mru_ret;
-  }
-
-  if (length_u64 > PTRDIFF_MAX) {
-    semsg(_(RCERR "Error while reading ShaDa file: "
-            "there is an item at position %" PRIu64 " "
-            "that is stated to be too long"),
-          initial_fpos);
-    return kSDReadStatusNotShaDa;
-  }
-
-  const size_t length = (size_t)length_u64;
-  entry->timestamp = (Timestamp)timestamp_u64;
-  entry->can_free_entry = true;  // all allocations are owned by the entry
-
-  if (type_u64 == 0) {
-    // kSDItemUnknown cannot possibly pass that far because it is -1 and that
-    // will fail in msgpack_read_uint64. But kSDItemMissing may and it will
-    // otherwise be skipped because (1 << 0) will never appear in flags.
-    semsg(_(RCERR "Error while reading ShaDa file: "
-            "there is an item at position %" PRIu64 " "
-            "that must not be there: Missing items are "
-            "for internal uses only"),
-          initial_fpos);
-    return kSDReadStatusNotShaDa;
-  }
-
-  if ((type_u64 > SHADA_LAST_ENTRY
-       ? !(flags & kSDReadUnknown)
-       : !((unsigned)(1 << type_u64) & flags))
-      || (max_kbyte && length > max_kbyte * 1024)) {
-    // First entry is unknown or equal to "\n" (10)? Most likely this means that
-    // current file is not a ShaDa file because first item should normally be
-    // a header (excluding tests where first item is tested item). Check this by
-    // parsing entry contents: in non-ShaDa files this will most likely result
-    // in incomplete MessagePack string.
-    if (initial_fpos == 0
-        && (type_u64 == '\n' || type_u64 > SHADA_LAST_ENTRY)) {
-      verify_but_ignore = true;
-    } else {
-      const ShaDaReadResult srs_ret = sd_reader_skip(sd_reader, length);
-      if (srs_ret != kSDReadStatusSuccess) {
-        return srs_ret;
-      }
-      goto shada_read_next_item_start;
-    }
-  }
-
-  const uint64_t parse_pos = sd_reader->bytes_read;
-  bool buf_allocated = false;
-  // try to avoid allocation for small items which fits entirely
-  // in the internal buffer of sd_reader
-  char *buf = file_try_read_buffered(sd_reader, length);
-  if (!buf) {
-    buf_allocated = true;
-    buf = xmalloc(length);
-    const ShaDaReadResult fl_ret = fread_len(sd_reader, buf, length);
-    if (fl_ret != kSDReadStatusSuccess) {
-      ret = fl_ret;
-      goto shada_read_next_item_error;
-    }
-  }
-
-  const char *read_ptr = buf;
-  size_t read_size = length;
-
-  if (verify_but_ignore) {
-    int status = unpack_skip(&read_ptr, &read_size);
-    ShaDaReadResult spm_ret = shada_check_status(parse_pos, status, read_size);
-    if (buf_allocated) {
-      xfree(buf);
-    }
-    if (spm_ret != kSDReadStatusSuccess) {
-      return spm_ret;
-    }
-    goto shada_read_next_item_start;
-  }
-
-  if (type_u64 > SHADA_LAST_ENTRY) {
-    entry->type = kSDItemUnknown;
-    entry->data.unknown_item.size = length;
-    entry->data.unknown_item.type = type_u64;
-    if (initial_fpos == 0) {
-      int status = unpack_skip(&read_ptr, &read_size);
-      ShaDaReadResult spm_ret = shada_check_status(parse_pos, status, read_size);
-      if (spm_ret != kSDReadStatusSuccess) {
-        if (buf_allocated) {
-          xfree(buf);
-        }
-        entry->type = kSDItemMissing;
-        return spm_ret;
-      }
-    }
-    entry->data.unknown_item.contents = buf_allocated ? buf : xmemdup(buf, length);
-    return kSDReadStatusSuccess;
-  }
-
-  entry->data = sd_default_values[type_u64].data;
-  switch ((ShadaEntryType)type_u64) {
-  case kSDItemHeader:
-    // TODO(bfredl): header is written to file and provides useful debugging
-    // info. It is never read by nvim (earlier we parsed it back to a
-    // Dict, but that value was never used)
-    break;
-  case kSDItemSearchPattern: {
-    Dict(_shada_search_pat) *it = &entry->data.search_pattern;
-    if (!unpack_keydict(it, DictHash(_shada_search_pat), &ad, &read_ptr, &read_size,
-                        &error_alloc)) {
-      semsg(_(READERR("search pattern", "%s")), initial_fpos, error_alloc);
-      it->pat = NULL_STRING;
-      goto shada_read_next_item_error;
-    }
-
-    if (!HAS_KEY(it, _shada_search_pat, sp)) {  // SEARCH_KEY_PAT
-      semsg(_(READERR("search pattern", "has no pattern")), initial_fpos);
-      goto shada_read_next_item_error;
-    }
-    entry->data.search_pattern.pat = copy_string(entry->data.search_pattern.pat, NULL);
-
-    break;
-  }
-  case kSDItemChange:
-  case kSDItemJump:
-  case kSDItemGlobalMark:
-  case kSDItemLocalMark: {
-    Dict(_shada_mark) it = { 0 };
-    if (!unpack_keydict(&it, DictHash(_shada_mark), &ad, &read_ptr, &read_size, &error_alloc)) {
-      semsg(_(READERR("mark", "%s")), initial_fpos, error_alloc);
-      goto shada_read_next_item_error;
-    }
-
-    if (HAS_KEY(&it, _shada_mark, n)) {
-      if (type_u64 == kSDItemJump || type_u64 == kSDItemChange) {
-        semsg(_(READERR("mark", "has n key which is only valid for "
-                        "local and global mark entries")), initial_fpos);
-        goto shada_read_next_item_error;
-      }
-      entry->data.filemark.name = (char)it.n;
-    }
-
-    if (HAS_KEY(&it, _shada_mark, l)) {
-      entry->data.filemark.mark.lnum = (linenr_T)it.l;
-    }
-    if (HAS_KEY(&it, _shada_mark, c)) {
-      entry->data.filemark.mark.col = (colnr_T)it.c;
-    }
-    if (HAS_KEY(&it, _shada_mark, f)) {
-      entry->data.filemark.fname = xmemdupz(it.f.data, it.f.size);
-    }
-
-    if (entry->data.filemark.fname == NULL) {
-      semsg(_(READERR("mark", "is missing file name")), initial_fpos);
-      goto shada_read_next_item_error;
-    }
-    if (entry->data.filemark.mark.lnum <= 0) {
-      semsg(_(READERR("mark", "has invalid line number")), initial_fpos);
-      goto shada_read_next_item_error;
-    }
-    if (entry->data.filemark.mark.col < 0) {
-      semsg(_(READERR("mark", "has invalid column number")), initial_fpos);
-      goto shada_read_next_item_error;
-    }
-    break;
-  }
-  case kSDItemRegister: {
-    Dict(_shada_register) it = { 0 };
-    if (!unpack_keydict(&it, DictHash(_shada_register), &ad, &read_ptr, &read_size, &error_alloc)) {
-      semsg(_(READERR("register", "%s")), initial_fpos, error_alloc);
-      kv_destroy(it.rc);
-      goto shada_read_next_item_error;
-    }
-    if (it.rc.size == 0) {
-      semsg(_(READERR("register",
-                      "has " KEY_NAME(REG_KEY_CONTENTS) " key with missing or empty array")),
-            initial_fpos);
-      goto shada_read_next_item_error;
-    }
-    entry->data.reg.contents_size = it.rc.size;
-    entry->data.reg.contents = xmalloc(it.rc.size * sizeof(String));
-    for (size_t j = 0; j < it.rc.size; j++) {
-      entry->data.reg.contents[j] = copy_string(it.rc.items[j], NULL);
-    }
-    kv_destroy(it.rc);
-
-#define REGISTER_VAL(name, loc, type) \
-  if (HAS_KEY(&it, _shada_register, name)) { \
-    loc = (type)it.name; \
-  }
-    REGISTER_VAL(REG_KEY_UNNAMED, entry->data.reg.is_unnamed, bool)
-    REGISTER_VAL(REG_KEY_TYPE, entry->data.reg.type, uint8_t)
-    REGISTER_VAL(KEY_NAME_CHAR, entry->data.reg.name, char)
-    REGISTER_VAL(REG_KEY_WIDTH, entry->data.reg.width, size_t)
-    break;
-  }
-  case kSDItemHistoryEntry: {
-    ssize_t len = unpack_array(&read_ptr, &read_size);
-
-    if (len < 2) {
-      semsg(_(READERR("history", "is not an array with enough elements")), initial_fpos);
-      goto shada_read_next_item_error;
-    }
-    Integer hist_type;
-    if (!unpack_integer(&read_ptr, &read_size, &hist_type)) {
-      semsg(_(READERR("history", "has wrong history type type")), initial_fpos);
-      goto shada_read_next_item_error;
-    }
-    const String item = unpack_string(&read_ptr, &read_size);
-    if (!item.data) {
-      semsg(_(READERR("history", "has wrong history string type")), initial_fpos);
-      goto shada_read_next_item_error;
-    }
-    if (memchr(item.data, 0, item.size) != NULL) {
-      semsg(_(READERR("history", "contains string with zero byte inside")), initial_fpos);
-      goto shada_read_next_item_error;
-    }
-    entry->data.history_item.histtype = (uint8_t)hist_type;
-    const bool is_hist_search = entry->data.history_item.histtype == HIST_SEARCH;
-    if (is_hist_search) {
-      if (len < 3) {
-        semsg(_(READERR("search history",
-                        "does not have separator character")), initial_fpos);
-        goto shada_read_next_item_error;
-      }
-      Integer sep_type;
-      if (!unpack_integer(&read_ptr, &read_size, &sep_type)) {
-        semsg(_(READERR("search history", "has wrong history separator type")), initial_fpos);
-        goto shada_read_next_item_error;
-      }
-      entry->data.history_item.sep = (char)sep_type;
-    }
-    size_t strsize = (item.size
-                      + 1  // Zero byte
-                      + 1);  // Separator character
-    entry->data.history_item.string = xmalloc(strsize);
-    memcpy(entry->data.history_item.string, item.data, item.size);
-    entry->data.history_item.string[strsize - 2] = 0;
-    entry->data.history_item.string[strsize - 1] = entry->data.history_item.sep;
-    read_additional_array_elements = (uint32_t)(len - (2 + is_hist_search));
-    break;
-  }
-  case kSDItemVariable: {
-    ssize_t len = unpack_array(&read_ptr, &read_size);
-
-    if (len < 2) {
-      semsg(_(READERR("variable", "is not an array with enough elements")), initial_fpos);
-      goto shada_read_next_item_error;
-    }
-
-    String name = unpack_string(&read_ptr, &read_size);
-
-    if (!name.data) {
-      semsg(_(READERR("variable", "has wrong variable name type")), initial_fpos);
-      goto shada_read_next_item_error;
-    }
-    entry->data.global_var.name = xmemdupz(name.data, name.size);
-
-    String binval = unpack_string(&read_ptr, &read_size);
-
-    bool is_blob = false;
-    if (binval.data) {
-      if (len > 2) {
-        // A msgpack BIN could be a String or Blob; an additional VAR_TYPE_BLOB
-        // element is stored with Blobs which can be used to differentiate them
-        Integer type;
-        if (!unpack_integer(&read_ptr, &read_size, &type) || type != VAR_TYPE_BLOB) {
-          semsg(_(READERR("variable", "has wrong variable type")),
-                initial_fpos);
-          goto shada_read_next_item_error;
-        }
-        is_blob = true;
-      }
-      entry->data.global_var.value = decode_string(binval.data, binval.size, is_blob, false);
-    } else {
-      int status = unpack_typval(&read_ptr, &read_size, &entry->data.global_var.value);
-      if (status != MPACK_OK) {
-        semsg(_(READERR("variable", "has value that cannot "
-                        "be converted to the Vimscript value")), initial_fpos);
-        goto shada_read_next_item_error;
-      }
-    }
-    read_additional_array_elements = (uint32_t)(len - 2 - (is_blob ? 1 : 0));
-    break;
-  }
-  case kSDItemSubString: {
-    ssize_t len = unpack_array(&read_ptr, &read_size);
-
-    if (len < 1) {
-      semsg(_(READERR("sub string", "is not an array with enough elements")), initial_fpos);
-      goto shada_read_next_item_error;
-    }
-
-    String sub = unpack_string(&read_ptr, &read_size);
-    if (!sub.data) {
-      semsg(_(READERR("sub string", "has wrong sub string type")), initial_fpos);
-      goto shada_read_next_item_error;
-    }
-    entry->data.sub_string.sub = xmemdupz(sub.data, sub.size);
-    read_additional_array_elements = (uint32_t)(len - 1);
-    break;
-  }
-  case kSDItemBufferList: {
-    ssize_t len = unpack_array(&read_ptr, &read_size);
-    if (len < 0) {
-      semsg(_(READERR("buffer list", "is not an array")), initial_fpos);
-      goto shada_read_next_item_error;
-    }
-    if (len == 0) {
-      break;
-    }
-    entry->data.buffer_list.buffers = xcalloc((size_t)len,
-                                              sizeof(*entry->data.buffer_list.buffers));
-    for (size_t i = 0; i < (size_t)len; i++) {
-      entry->data.buffer_list.size++;
-      Dict(_shada_buflist_item) it = { 0 };
-      AdditionalDataBuilder it_ad = KV_INITIAL_VALUE;
-      if (!unpack_keydict(&it, DictHash(_shada_buflist_item), &it_ad, &read_ptr, &read_size,
-                          &error_alloc)) {
-        semsg(_(RERR "Error while reading ShaDa file: "
-                "buffer list at position %" PRIu64 " contains entry that %s"),
-              initial_fpos, error_alloc);
-        kv_destroy(it_ad);
-        goto shada_read_next_item_error;
-      }
-      struct buffer_list_buffer *e = &entry->data.buffer_list.buffers[i];
-      e->additional_data = (AdditionalData *)it_ad.items;
-      e->pos = default_pos;
-      if (HAS_KEY(&it, _shada_buflist_item, l)) {
-        e->pos.lnum = (linenr_T)it.l;
-      }
-      if (HAS_KEY(&it, _shada_buflist_item, c)) {
-        e->pos.col = (colnr_T)it.c;
-      }
-      if (HAS_KEY(&it, _shada_buflist_item, f)) {
-        e->fname = xmemdupz(it.f.data, it.f.size);
-      }
-
-      if (e->pos.lnum <= 0) {
-        semsg(_(RERR "Error while reading ShaDa file: "
-                "buffer list at position %" PRIu64 " "
-                "contains entry with invalid line number"),
-              initial_fpos);
-        goto shada_read_next_item_error;
-      }
-      if (e->pos.col < 0) {
-        semsg(_(RERR "Error while reading ShaDa file: "
-                "buffer list at position %" PRIu64 " "
-                "contains entry with invalid column number"),
-              initial_fpos);
-        goto shada_read_next_item_error;
-      }
-      if (e->fname == NULL) {
-        semsg(_(RERR "Error while reading ShaDa file: "
-                "buffer list at position %" PRIu64 " "
-                "contains entry that does not have a file name"),
-              initial_fpos);
-        goto shada_read_next_item_error;
-      }
-    }
-    break;
-  }
-  case kSDItemMissing:
-  case kSDItemUnknown:
-    abort();
-  }
-
-  for (uint32_t i = 0; i < read_additional_array_elements; i++) {
-    const char *item_start = read_ptr;
-    int status = unpack_skip(&read_ptr, &read_size);
-    if (status) {
-      goto shada_read_next_item_error;
-    }
-
-    push_additional_data(&ad, item_start, (size_t)(read_ptr - item_start));
-  }
-
-  if (read_size) {
-    semsg(_(READERR("item", "additional bytes")), initial_fpos);
-    goto shada_read_next_item_error;
-  }
-
-  entry->type = (ShadaEntryType)type_u64;
-  entry->additional_data = (AdditionalData *)ad.items;
-  ret = kSDReadStatusSuccess;
-shada_read_next_item_end:
-  if (buf_allocated) {
-    xfree(buf);
-  }
-  return ret;
-shada_read_next_item_error:
-  entry->type = (ShadaEntryType)type_u64;
-  rs_shada_free_entry_contents(entry);
-  entry->type = kSDItemMissing;
-  xfree(error_alloc);
-  kv_destroy(ad);
-  goto shada_read_next_item_end;
-}
+// shada_read_next_item deleted (Phase 2 plan 92c8078e): Rust rs_shada_read_next_item replaces it.
 
 // =============================================================================
 // Accessor functions for Rust shada crate (ShadaPackerBuffer == PackerBuffer)
@@ -1703,14 +1087,7 @@ void nvim_shada_semsg_remove_reminder(const char *tempname, const char *fname)
 // Phase 3 (plan 11dd3cf4): shada_read migration accessors
 // =============================================================================
 
-/// Wrapper for shada_read_next_item().
-/// Returns the ShaDaReadResult as int.
-int nvim_shada_read_next_item(void *sd_reader, ShadaEntry *entry,
-                              unsigned srni_flags, size_t max_kbyte)
-{
-  return (int)shada_read_next_item((FileDescriptor *)sd_reader, entry,
-                                   srni_flags, max_kbyte);
-}
+// nvim_shada_read_next_item deleted (Phase 2 plan 92c8078e): Rust calls rs_shada_read_next_item directly.
 
 /// Allocate and initialize a PMap(cstr_t) for fname_bufs caching.
 void *nvim_shada_fname_bufs_new(void)
@@ -2845,5 +2222,452 @@ int nvim_shada_apply_local_or_change(ShadaEntry *entry,
   }
   xfree(entry->data.filemark.fname);
   return 0;
+}
+
+// =============================================================================
+// Phase 2 (plan 92c8078e): shada_read_next_item migration accessors
+// =============================================================================
+
+/// Thin wrapper for file_try_read_buffered.
+/// Returns pointer to buffered data or NULL if not available.
+char *nvim_shada_file_try_read_buffered(void *fd, size_t len)
+{
+  return file_try_read_buffered((FileDescriptor *)fd, len);
+}
+
+/// Thin wrapper to read bytes_read from a FileDescriptor.
+uint64_t nvim_shada_file_bytes_read(void *fd)
+{
+  return (uint64_t)((FileDescriptor *)fd)->bytes_read;
+}
+
+/// Set entry->data to the default values for the given type from sd_default_values.
+void nvim_shada_set_entry_default_data(ShadaEntry *entry, uint64_t type_u64)
+{
+  entry->data = sd_default_values[type_u64].data;
+}
+
+/// Verify that the buffer contains a valid msgpack value (for verify_but_ignore path).
+/// Returns kSDReadStatusSuccess or kSDReadStatusNotShaDa.
+int nvim_shada_verify_skip(const char *buf, size_t size, uint64_t parse_pos)
+{
+  size_t read_size = size;
+  int status = unpack_skip(&buf, &read_size);
+  // Inlined from shada_check_status (deleted in Phase 2 plan 92c8078e)
+  switch (status) {
+  case MPACK_OK:
+    if (read_size) {
+      semsg(_(RCERR "Failed to parse ShaDa file: extra bytes in msgpack string "
+              "at position %" PRIu64),
+            (uint64_t)parse_pos);
+      return (int)kSDReadStatusNotShaDa;
+    }
+    return (int)kSDReadStatusSuccess;
+  case MPACK_EOF:
+    semsg(_(RCERR "Failed to parse ShaDa file: incomplete msgpack string "
+            "at position %" PRIu64),
+          (uint64_t)parse_pos);
+    return (int)kSDReadStatusNotShaDa;
+  default:
+    semsg(_(RCERR "Failed to parse ShaDa file due to a msgpack parser error "
+            "at position %" PRIu64),
+          (uint64_t)parse_pos);
+    return (int)kSDReadStatusNotShaDa;
+  }
+}
+
+/// Set entry as an unknown item, copying buf if needed.
+/// buf_allocated: if true, caller owns buf; if false, a copy is made.
+/// For unknown items at initial_fpos==0, also verifies the buffer is valid msgpack.
+/// Returns kSDReadStatusSuccess on success, kSDReadStatusNotShaDa on parse failure.
+int nvim_shada_set_unknown_item(ShadaEntry *entry, uint64_t type_u64, char *buf,
+                                size_t length, bool buf_allocated,
+                                const char *read_ptr, size_t read_size,
+                                uint64_t initial_fpos, uint64_t parse_pos)
+{
+  entry->type = kSDItemUnknown;
+  entry->data.unknown_item.size = length;
+  entry->data.unknown_item.type = type_u64;
+  if (initial_fpos == 0) {
+    // Verify parse_pos is valid msgpack (inlined shada_check_status, deleted Phase 2 plan 92c8078e)
+    int status = unpack_skip(&read_ptr, &read_size);
+    ShaDaReadResult spm_ret;
+    switch (status) {
+    case MPACK_OK:
+      spm_ret = read_size ? kSDReadStatusNotShaDa : kSDReadStatusSuccess;
+      if (read_size) {
+        semsg(_(RCERR "Failed to parse ShaDa file: extra bytes in msgpack string "
+                "at position %" PRIu64),
+              (uint64_t)parse_pos);
+      }
+      break;
+    case MPACK_EOF:
+      semsg(_(RCERR "Failed to parse ShaDa file: incomplete msgpack string "
+              "at position %" PRIu64),
+            (uint64_t)parse_pos);
+      spm_ret = kSDReadStatusNotShaDa;
+      break;
+    default:
+      semsg(_(RCERR "Failed to parse ShaDa file due to a msgpack parser error "
+              "at position %" PRIu64),
+            (uint64_t)parse_pos);
+      spm_ret = kSDReadStatusNotShaDa;
+      break;
+    }
+    if (spm_ret != kSDReadStatusSuccess) {
+      if (buf_allocated) {
+        xfree(buf);
+      }
+      entry->type = kSDItemMissing;
+      return (int)spm_ret;
+    }
+  }
+  entry->data.unknown_item.contents = buf_allocated ? buf : xmemdup(buf, length);
+  return (int)kSDReadStatusSuccess;
+}
+
+/// Parse a SearchPattern entry body from a msgpack buffer.
+/// Populates entry->data.search_pattern. Returns kSDReadStatusSuccess,
+/// kSDReadStatusNotShaDa, or kSDReadStatusMalformed on error.
+int nvim_shada_parse_search_pattern(ShadaEntry *entry, const char *buf,
+                                    size_t size, uint64_t initial_fpos)
+{
+  size_t read_size = size;
+  char *error_alloc = NULL;
+  Dict(_shada_search_pat) *it = &entry->data.search_pattern;
+  if (!unpack_keydict(it, DictHash(_shada_search_pat), NULL, &buf, &read_size, &error_alloc)) {
+    semsg(_(READERR("search pattern", "%s")), initial_fpos, error_alloc);
+    xfree(error_alloc);
+    it->pat = NULL_STRING;
+    return (int)kSDReadStatusMalformed;
+  }
+  if (!HAS_KEY(it, _shada_search_pat, sp)) {
+    semsg(_(READERR("search pattern", "has no pattern")), initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  entry->data.search_pattern.pat = copy_string(entry->data.search_pattern.pat, NULL);
+  return (int)kSDReadStatusSuccess;
+}
+
+/// Parse a Mark/Jump/GlobalMark/Change/LocalMark entry body from a msgpack buffer.
+/// Populates entry->data.filemark. Returns kSDReadStatusSuccess or kSDReadStatusMalformed.
+int nvim_shada_parse_mark(ShadaEntry *entry, const char *buf, size_t size,
+                          uint64_t initial_fpos, uint64_t type_u64)
+{
+  size_t read_size = size;
+  char *error_alloc = NULL;
+  Dict(_shada_mark) it = { 0 };
+  if (!unpack_keydict(&it, DictHash(_shada_mark), NULL, &buf, &read_size, &error_alloc)) {
+    semsg(_(READERR("mark", "%s")), initial_fpos, error_alloc);
+    xfree(error_alloc);
+    return (int)kSDReadStatusMalformed;
+  }
+
+  if (HAS_KEY(&it, _shada_mark, n)) {
+    if (type_u64 == kSDItemJump || type_u64 == kSDItemChange) {
+      semsg(_(READERR("mark", "has n key which is only valid for "
+                      "local and global mark entries")), initial_fpos);
+      return (int)kSDReadStatusMalformed;
+    }
+    entry->data.filemark.name = (char)it.n;
+  }
+
+  if (HAS_KEY(&it, _shada_mark, l)) {
+    entry->data.filemark.mark.lnum = (linenr_T)it.l;
+  }
+  if (HAS_KEY(&it, _shada_mark, c)) {
+    entry->data.filemark.mark.col = (colnr_T)it.c;
+  }
+  if (HAS_KEY(&it, _shada_mark, f)) {
+    entry->data.filemark.fname = xmemdupz(it.f.data, it.f.size);
+  }
+
+  if (entry->data.filemark.fname == NULL) {
+    semsg(_(READERR("mark", "is missing file name")), initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  if (entry->data.filemark.mark.lnum <= 0) {
+    semsg(_(READERR("mark", "has invalid line number")), initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  if (entry->data.filemark.mark.col < 0) {
+    semsg(_(READERR("mark", "has invalid column number")), initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  return (int)kSDReadStatusSuccess;
+}
+
+/// Parse a Register entry body from a msgpack buffer.
+/// Populates entry->data.reg. Returns kSDReadStatusSuccess or kSDReadStatusMalformed.
+int nvim_shada_parse_register(ShadaEntry *entry, const char *buf, size_t size,
+                              uint64_t initial_fpos)
+{
+  size_t read_size = size;
+  char *error_alloc = NULL;
+  Dict(_shada_register) it = { 0 };
+  if (!unpack_keydict(&it, DictHash(_shada_register), NULL, &buf, &read_size, &error_alloc)) {
+    semsg(_(READERR("register", "%s")), initial_fpos, error_alloc);
+    xfree(error_alloc);
+    kv_destroy(it.rc);
+    return (int)kSDReadStatusMalformed;
+  }
+  if (it.rc.size == 0) {
+    semsg(_(READERR("register",
+                    "has " KEY_NAME(REG_KEY_CONTENTS) " key with missing or empty array")),
+          initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  entry->data.reg.contents_size = it.rc.size;
+  entry->data.reg.contents = xmalloc(it.rc.size * sizeof(String));
+  for (size_t j = 0; j < it.rc.size; j++) {
+    entry->data.reg.contents[j] = copy_string(it.rc.items[j], NULL);
+  }
+  kv_destroy(it.rc);
+
+#define REGISTER_VAL(name, loc, type) \
+  if (HAS_KEY(&it, _shada_register, name)) { \
+    loc = (type)it.name; \
+  }
+  REGISTER_VAL(REG_KEY_UNNAMED, entry->data.reg.is_unnamed, bool)
+  REGISTER_VAL(REG_KEY_TYPE, entry->data.reg.type, uint8_t)
+  REGISTER_VAL(KEY_NAME_CHAR, entry->data.reg.name, char)
+  REGISTER_VAL(REG_KEY_WIDTH, entry->data.reg.width, size_t)
+#undef REGISTER_VAL
+  return (int)kSDReadStatusSuccess;
+}
+
+/// Parse a HistoryEntry body from a msgpack buffer.
+/// Populates entry->data.history_item and sets *num_additional to the number
+/// of additional array elements remaining.
+/// Returns kSDReadStatusSuccess or kSDReadStatusMalformed.
+int nvim_shada_parse_history(ShadaEntry *entry, const char *buf, size_t size,
+                             uint64_t initial_fpos, uint32_t *num_additional,
+                             const char **read_ptr_out, size_t *read_size_out)
+{
+  size_t read_size = size;
+  ssize_t len = unpack_array(&buf, &read_size);
+  if (len < 2) {
+    semsg(_(READERR("history", "is not an array with enough elements")), initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  Integer hist_type;
+  if (!unpack_integer(&buf, &read_size, &hist_type)) {
+    semsg(_(READERR("history", "has wrong history type type")), initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  const String item = unpack_string(&buf, &read_size);
+  if (!item.data) {
+    semsg(_(READERR("history", "has wrong history string type")), initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  if (memchr(item.data, 0, item.size) != NULL) {
+    semsg(_(READERR("history", "contains string with zero byte inside")), initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  entry->data.history_item.histtype = (uint8_t)hist_type;
+  const bool is_hist_search = entry->data.history_item.histtype == HIST_SEARCH;
+  if (is_hist_search) {
+    if (len < 3) {
+      semsg(_(READERR("search history", "does not have separator character")), initial_fpos);
+      return (int)kSDReadStatusMalformed;
+    }
+    Integer sep_type;
+    if (!unpack_integer(&buf, &read_size, &sep_type)) {
+      semsg(_(READERR("search history", "has wrong history separator type")), initial_fpos);
+      return (int)kSDReadStatusMalformed;
+    }
+    entry->data.history_item.sep = (char)sep_type;
+  }
+  size_t strsize = (item.size + 1 + 1);
+  entry->data.history_item.string = xmalloc(strsize);
+  memcpy(entry->data.history_item.string, item.data, item.size);
+  entry->data.history_item.string[strsize - 2] = 0;
+  entry->data.history_item.string[strsize - 1] = entry->data.history_item.sep;
+  *num_additional = (uint32_t)(len - (2 + is_hist_search));
+  *read_ptr_out = buf;
+  *read_size_out = read_size;
+  return (int)kSDReadStatusSuccess;
+}
+
+/// Parse a Variable entry body from a msgpack buffer.
+/// Populates entry->data.global_var and sets *num_additional.
+/// Returns kSDReadStatusSuccess or kSDReadStatusMalformed.
+int nvim_shada_parse_variable(ShadaEntry *entry, const char *buf, size_t size,
+                              uint64_t initial_fpos, uint32_t *num_additional,
+                              const char **read_ptr_out, size_t *read_size_out)
+{
+  size_t read_size = size;
+  ssize_t len = unpack_array(&buf, &read_size);
+  if (len < 2) {
+    semsg(_(READERR("variable", "is not an array with enough elements")), initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  String name = unpack_string(&buf, &read_size);
+  if (!name.data) {
+    semsg(_(READERR("variable", "has wrong variable name type")), initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  entry->data.global_var.name = xmemdupz(name.data, name.size);
+
+  String binval = unpack_string(&buf, &read_size);
+  bool is_blob = false;
+  if (binval.data) {
+    if (len > 2) {
+      Integer type;
+      if (!unpack_integer(&buf, &read_size, &type) || type != VAR_TYPE_BLOB) {
+        semsg(_(READERR("variable", "has wrong variable type")), initial_fpos);
+        return (int)kSDReadStatusMalformed;
+      }
+      is_blob = true;
+    }
+    entry->data.global_var.value = decode_string(binval.data, binval.size, is_blob, false);
+  } else {
+    int status = unpack_typval(&buf, &read_size, &entry->data.global_var.value);
+    if (status != MPACK_OK) {
+      semsg(_(READERR("variable", "has value that cannot "
+                      "be converted to the Vimscript value")), initial_fpos);
+      return (int)kSDReadStatusMalformed;
+    }
+  }
+  *num_additional = (uint32_t)(len - 2 - (is_blob ? 1 : 0));
+  *read_ptr_out = buf;
+  *read_size_out = read_size;
+  return (int)kSDReadStatusSuccess;
+}
+
+/// Parse a SubString entry body from a msgpack buffer.
+/// Populates entry->data.sub_string and sets *num_additional.
+/// Returns kSDReadStatusSuccess or kSDReadStatusMalformed.
+int nvim_shada_parse_substr(ShadaEntry *entry, const char *buf, size_t size,
+                            uint64_t initial_fpos, uint32_t *num_additional,
+                            const char **read_ptr_out, size_t *read_size_out)
+{
+  size_t read_size = size;
+  ssize_t len = unpack_array(&buf, &read_size);
+  if (len < 1) {
+    semsg(_(READERR("sub string", "is not an array with enough elements")), initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  String sub = unpack_string(&buf, &read_size);
+  if (!sub.data) {
+    semsg(_(READERR("sub string", "has wrong sub string type")), initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  entry->data.sub_string.sub = xmemdupz(sub.data, sub.size);
+  *num_additional = (uint32_t)(len - 1);
+  *read_ptr_out = buf;
+  *read_size_out = read_size;
+  return (int)kSDReadStatusSuccess;
+}
+
+/// Parse a BufferList entry body from a msgpack buffer.
+/// Populates entry->data.buffer_list.
+/// Returns kSDReadStatusSuccess or kSDReadStatusMalformed.
+int nvim_shada_parse_buflist(ShadaEntry *entry, const char *buf, size_t size,
+                             uint64_t initial_fpos)
+{
+  size_t read_size = size;
+  char *error_alloc = NULL;
+  ssize_t len = unpack_array(&buf, &read_size);
+  if (len < 0) {
+    semsg(_(READERR("buffer list", "is not an array")), initial_fpos);
+    return (int)kSDReadStatusMalformed;
+  }
+  if (len == 0) {
+    return (int)kSDReadStatusSuccess;
+  }
+  entry->data.buffer_list.buffers = xcalloc((size_t)len,
+                                            sizeof(*entry->data.buffer_list.buffers));
+  for (size_t i = 0; i < (size_t)len; i++) {
+    entry->data.buffer_list.size++;
+    Dict(_shada_buflist_item) it = { 0 };
+    AdditionalDataBuilder it_ad = KV_INITIAL_VALUE;
+    if (!unpack_keydict(&it, DictHash(_shada_buflist_item), &it_ad, &buf, &read_size,
+                        &error_alloc)) {
+      semsg(_(RERR "Error while reading ShaDa file: "
+              "buffer list at position %" PRIu64 " contains entry that %s"),
+            initial_fpos, error_alloc);
+      xfree(error_alloc);
+      kv_destroy(it_ad);
+      return (int)kSDReadStatusMalformed;
+    }
+    struct buffer_list_buffer *e = &entry->data.buffer_list.buffers[i];
+    e->additional_data = (AdditionalData *)it_ad.items;
+    e->pos = default_pos;
+    if (HAS_KEY(&it, _shada_buflist_item, l)) {
+      e->pos.lnum = (linenr_T)it.l;
+    }
+    if (HAS_KEY(&it, _shada_buflist_item, c)) {
+      e->pos.col = (colnr_T)it.c;
+    }
+    if (HAS_KEY(&it, _shada_buflist_item, f)) {
+      e->fname = xmemdupz(it.f.data, it.f.size);
+    }
+    if (e->pos.lnum <= 0) {
+      semsg(_(RERR "Error while reading ShaDa file: "
+              "buffer list at position %" PRIu64 " "
+              "contains entry with invalid line number"), initial_fpos);
+      return (int)kSDReadStatusMalformed;
+    }
+    if (e->pos.col < 0) {
+      semsg(_(RERR "Error while reading ShaDa file: "
+              "buffer list at position %" PRIu64 " "
+              "contains entry with invalid column number"), initial_fpos);
+      return (int)kSDReadStatusMalformed;
+    }
+    if (e->fname == NULL) {
+      semsg(_(RERR "Error while reading ShaDa file: "
+              "buffer list at position %" PRIu64 " "
+              "contains entry that does not have a file name"), initial_fpos);
+      return (int)kSDReadStatusMalformed;
+    }
+  }
+  return (int)kSDReadStatusSuccess;
+}
+
+/// Push additional data elements from read_ptr into entry->additional_data.
+/// num_additional is the count of extra elements. read_size is remaining bytes.
+/// Returns kSDReadStatusSuccess or kSDReadStatusMalformed.
+/// On success, sets *remaining_size_out to remaining bytes after additional data.
+int nvim_shada_parse_additional_data(ShadaEntry *entry, const char *read_ptr,
+                                     size_t read_size, uint32_t num_additional,
+                                     uint64_t initial_fpos)
+{
+  AdditionalDataBuilder ad = KV_INITIAL_VALUE;
+  for (uint32_t i = 0; i < num_additional; i++) {
+    const char *item_start = read_ptr;
+    int status = unpack_skip(&read_ptr, &read_size);
+    if (status) {
+      kv_destroy(ad);
+      return (int)kSDReadStatusMalformed;
+    }
+    push_additional_data(&ad, item_start, (size_t)(read_ptr - item_start));
+  }
+  if (read_size) {
+    semsg(_(READERR("item", "additional bytes")), initial_fpos);
+    kv_destroy(ad);
+    return (int)kSDReadStatusMalformed;
+  }
+  entry->additional_data = (AdditionalData *)ad.items;
+  return (int)kSDReadStatusSuccess;
+}
+
+/// Emit RCERR "too long" error message (used by rs_shada_read_next_item).
+void nvim_shada_semsg_rcerr_too_long(uint64_t initial_fpos)
+{
+  semsg(_(RCERR "Error while reading ShaDa file: "
+          "there is an item at position %" PRIu64 " "
+          "that is stated to be too long"),
+        initial_fpos);
+}
+
+/// Emit RCERR "missing item" error message (used by rs_shada_read_next_item).
+void nvim_shada_semsg_rcerr_missing(uint64_t initial_fpos)
+{
+  semsg(_(RCERR "Error while reading ShaDa file: "
+          "there is an item at position %" PRIu64 " "
+          "that must not be there: Missing items are "
+          "for internal uses only"),
+        initial_fpos);
 }
 
