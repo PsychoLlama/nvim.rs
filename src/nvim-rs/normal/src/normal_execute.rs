@@ -352,7 +352,8 @@ pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bo
     while {
         let c = nvim_ns_get_c(s);
         (c >= c_int::from(b'1') && c <= c_int::from(b'9'))
-            || (nvim_cap_get_count0(ca) != 0 && (c == K_DEL || c == K_KDEL || c == c_int::from(b'0')))
+            || (nvim_cap_get_count0(ca) != 0
+                && (c == K_DEL || c == K_KDEL || c == c_int::from(b'0')))
     } {
         let c = nvim_ns_get_c(s);
         if c == K_DEL || c == K_KDEL {
@@ -371,7 +372,7 @@ pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bo
         // right after the count. Do set it for redo.
         if nvim_ns_get_toplevel(s) && readbuf1_empty() {
             let mut set_prevcount = nvim_ns_get_set_prevcount(s);
-            rs_set_vcount_ca(ca, &mut set_prevcount);
+            rs_set_vcount_ca(ca, std::ptr::addr_of_mut!(set_prevcount));
             nvim_ns_set_set_prevcount(s, set_prevcount);
         }
 
@@ -454,4 +455,3 @@ pub unsafe extern "C" fn rs_normal_handle_special_visual_command(s: NormalStateH
     }
     false
 }
-

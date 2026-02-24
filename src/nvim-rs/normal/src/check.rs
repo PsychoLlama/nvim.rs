@@ -91,19 +91,19 @@ extern "C" {
     fn nvim_get_msg_silent() -> c_int;
     fn nvim_get_clear_cmdline() -> bool;
     fn nvim_get_redraw_cmdline() -> bool;
-    fn nvim_get_redraw_mode() -> bool;
-    fn nvim_get_msg_didout() -> bool;
-    fn nvim_get_msg_didany() -> bool;
-    fn nvim_set_msg_didany(val: bool);
+    fn nvim_get_redraw_mode() -> c_int; // defined in drawscreen.c
+    fn nvim_get_msg_didout() -> c_int; // defined in message.c
+    fn nvim_get_msg_didany() -> c_int; // defined in message.c
+    fn nvim_set_msg_didany(val: c_int); // defined in message.c
     fn nvim_get_msg_scroll_val() -> bool;
     fn nvim_set_msg_scroll_val(val: bool);
     fn nvim_get_msg_nowait_val() -> bool;
-    fn nvim_get_emsg_on_display() -> bool;
-    fn nvim_set_emsg_on_display(val: bool);
+    fn nvim_get_emsg_on_display() -> c_int; // defined in message.c
+    fn nvim_set_emsg_on_display(val: c_int); // defined in message.c
     fn nvim_get_emsg_silent() -> c_int;
     fn nvim_get_in_assert_fails() -> bool;
     fn nvim_get_did_wait_return_val() -> bool;
-    fn nvim_set_did_emsg(val: bool);
+    fn nvim_set_did_emsg(val: c_int); // defined in message.c
 
     // Cursor globals
     fn nvim_get_cursor_lnum() -> c_int;
@@ -112,8 +112,8 @@ extern "C" {
     // Redraw/display globals
     fn nvim_get_must_redraw() -> c_int;
     fn nvim_get_keep_msg_not_null() -> bool;
-    fn nvim_get_need_fileinfo() -> bool;
-    fn nvim_set_need_fileinfo(val: bool);
+    fn nvim_get_need_fileinfo() -> c_int; // defined in message.c
+    fn nvim_set_need_fileinfo(val: c_int); // defined in message.c
 
     // Function wrappers
     fn nvim_discard_current_exception_wrapper();
@@ -142,7 +142,7 @@ extern "C" {
     fn nvim_may_trigger_modechanged();
     fn nvim_typebuf_maplen_wrapper() -> c_int;
     fn nvim_typebuf_typed_wrapper() -> bool;
-    fn nvim_ui_has_messages() -> bool;
+    fn nvim_ui_has_messages() -> c_int; // defined in message.c
     fn nvim_os_delay_wrapper(ms: c_int, can_interrupt: bool);
     fn nvim_showmode_wrapper();
     fn nvim_show_cursor_info_later();
@@ -240,10 +240,7 @@ unsafe fn normal_check_safe_state(_s: NormalStateHandle) {
 
 /// Inline of normal_check_cursor_moved.
 unsafe fn normal_check_cursor_moved() {
-    if nvim_get_finish_op() == 0
-        && nvim_has_event_cursormoved()
-        && nvim_last_cursormoved_check()
-    {
+    if nvim_get_finish_op() == 0 && nvim_has_event_cursormoved() && nvim_last_cursormoved_check() {
         nvim_apply_autocmds_cursormoved();
         nvim_update_last_cursormoved();
     }
@@ -308,7 +305,7 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
         nvim_update_screen_call();
     } else {
         nvim_redraw_statuslines_call();
-        if nvim_get_redraw_cmdline() || nvim_get_clear_cmdline() || nvim_get_redraw_mode() {
+        if nvim_get_redraw_cmdline() || nvim_get_clear_cmdline() || nvim_get_redraw_mode() != 0 {
             nvim_showmode_wrapper();
         }
     }
@@ -321,14 +318,14 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
     }
 
     // Show fileinfo after redraw.
-    if nvim_get_need_fileinfo() && !nvim_shortmess_fileinfo() {
+    if nvim_get_need_fileinfo() != 0 && !nvim_shortmess_fileinfo() {
         nvim_fileinfo_call();
-        nvim_set_need_fileinfo(false);
+        nvim_set_need_fileinfo(0);
     }
 
-    nvim_set_emsg_on_display(false); // can delete error message now
-    nvim_set_did_emsg(false);
-    nvim_set_msg_didany(false); // reset lines_left in msg_start()
+    nvim_set_emsg_on_display(0); // can delete error message now
+    nvim_set_did_emsg(0);
+    nvim_set_msg_didany(0); // reset lines_left in msg_start()
     nvim_may_clear_sb_text_call(); // clear scroll-back text on next msg
 
     nvim_setcursor_wrapper();
@@ -357,7 +354,8 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
             // command-line must be cleared or redrawn
             && (nvim_get_clear_cmdline() || nvim_get_redraw_cmdline())
             // some message was printed or scrolled
-            && (nvim_get_msg_didout() || (nvim_get_msg_didany() && nvim_get_msg_scroll_val()))
+            && (nvim_get_msg_didout() != 0
+                || (nvim_get_msg_didany() != 0 && nvim_get_msg_scroll_val()))
             // it is fine to remove the current message
             && !nvim_get_msg_nowait_val()
             // the command was the result of direct user input and not a mapping
@@ -366,7 +364,7 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
             || (nvim_get_restart_edit() != 0
                 && nvim_get_VIsual_active() == 0
                 && nvim_get_msg_scroll_val()
-                && nvim_get_emsg_on_display())
+                && nvim_get_emsg_on_display() != 0)
     )
     // no register was used
     && nvim_oap_get_regname_ptr(oa) == 0
@@ -400,16 +398,17 @@ pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
     nvim_setcursor_wrapper();
     nvim_ui_cursor_shape_wrapper(); // show different cursor shape
     nvim_ui_flush_wrapper();
-    if !nvim_ui_has_messages() && (nvim_get_msg_scroll_val() || nvim_get_emsg_on_display()) {
+    if nvim_ui_has_messages() == 0 && (nvim_get_msg_scroll_val() || nvim_get_emsg_on_display() != 0)
+    {
         nvim_os_delay_wrapper(1003, true); // wait at least one second
     }
-    if nvim_ui_has_messages() {
+    if nvim_ui_has_messages() != 0 {
         nvim_os_delay_wrapper(3003, false); // wait up to three seconds
     }
     nvim_set_State(save_state);
 
     nvim_set_msg_scroll_val(false);
-    nvim_set_emsg_on_display(false);
+    nvim_set_emsg_on_display(0);
 }
 
 /// Rust implementation of normal_prepare.
@@ -462,7 +461,7 @@ pub unsafe extern "C" fn rs_normal_prepare(s: NormalStateHandle) {
     // Set v:count here when called from main() and not a stuffed command.
     if nvim_ns_get_toplevel(s) && readbuf1_empty() {
         let mut set_prevcount = nvim_ns_get_set_prevcount(s);
-        rs_set_vcount_ca(ca, &mut set_prevcount);
+        rs_set_vcount_ca(ca, std::ptr::addr_of_mut!(set_prevcount));
         nvim_ns_set_set_prevcount(s, set_prevcount);
     }
 }

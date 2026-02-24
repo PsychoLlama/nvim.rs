@@ -1649,6 +1649,7 @@ oparg_T *nvim_ns_get_oa_ptr(void *s) { return &NS(s)->oa; }
 cmdarg_T *nvim_ns_get_ca_ptr(void *s) { return &NS(s)->ca; }
 
 int nvim_ns_get_old_pos_lnum(void *s) { return NS(s)->old_pos.lnum; }
+int nvim_ns_get_old_pos_col(void *s) { return NS(s)->old_pos.col; }
 void nvim_ns_set_old_pos(void *s) { NS(s)->old_pos = curwin->w_cursor; }
 
 void nvim_ns_save_opcount(void *s) { NS(s)->oa.prev_opcount = NS(s)->ca.opcount; }
@@ -1842,8 +1843,7 @@ void nvim_do_pending_operator_call(cmdarg_T *ca, int old_col, bool gui_yank) { d
 
 // nvim_get_p_smd already defined at line 977
 
-/// Get msg_silent global.
-int nvim_get_msg_silent(void) { return msg_silent; }
+// nvim_get_msg_silent: defined in message.c (int nvim_get_msg_silent(void))
 
 /// Get clear_cmdline global.
 bool nvim_get_clear_cmdline(void) { return clear_cmdline; }
@@ -1851,11 +1851,8 @@ bool nvim_get_clear_cmdline(void) { return clear_cmdline; }
 /// Get redraw_cmdline global.
 bool nvim_get_redraw_cmdline(void) { return redraw_cmdline; }
 
-/// Get msg_didout global.
-bool nvim_get_msg_didout(void) { return msg_didout; }
-
-/// Get msg_didany global.
-bool nvim_get_msg_didany(void) { return msg_didany; }
+// nvim_get_msg_didout: defined in message.c (int nvim_get_msg_didout(void))
+// nvim_get_msg_didany: defined in message.c (int nvim_get_msg_didany(void))
 
 /// Get msg_scroll global.
 bool nvim_get_msg_scroll_val(void) { return msg_scroll; }
@@ -1866,14 +1863,10 @@ void nvim_set_msg_scroll_val(bool val) { msg_scroll = val; }
 /// Get msg_nowait global.
 bool nvim_get_msg_nowait_val(void) { return msg_nowait; }
 
-/// Get emsg_on_display global.
-bool nvim_get_emsg_on_display(void) { return emsg_on_display; }
+// nvim_get_emsg_on_display: defined in message.c (int nvim_get_emsg_on_display(void))
+// nvim_set_emsg_on_display: defined in message.c (void nvim_set_emsg_on_display(int val))
 
-/// Set emsg_on_display global.
-void nvim_set_emsg_on_display(bool val) { emsg_on_display = val; }
-
-/// Get emsg_silent global.
-int nvim_get_emsg_silent(void) { return emsg_silent; }
+// nvim_get_emsg_silent: defined in message.c (int nvim_get_emsg_silent(void))
 
 /// Get in_assert_fails global.
 bool nvim_get_in_assert_fails(void) { return in_assert_fails; }
@@ -1884,18 +1877,12 @@ bool nvim_get_did_wait_return_val(void) { return did_wait_return; }
 /// Get typebuf_typed() result.
 bool nvim_typebuf_typed_wrapper(void) { return typebuf_typed(); }
 
-/// Get s->old_pos.col.
-int nvim_ns_get_old_pos_col(void *s) { return NS(s)->old_pos.col; }
-
-/// Get curwin->w_cursor.lnum.
-int nvim_get_cursor_lnum(void) { return curwin->w_cursor.lnum; }
-
-/// Get curwin->w_cursor.col.
-int nvim_get_cursor_col(void) { return curwin->w_cursor.col; }
+// nvim_ns_get_old_pos_col: defined before #undef NS below
+// nvim_get_cursor_lnum: defined at line 685
+// nvim_get_cursor_col: defined at line 784
 
 // For normal_redraw_mode_message
-/// Get must_redraw global.
-int nvim_get_must_redraw(void) { return must_redraw; }
+// nvim_get_must_redraw: defined in drawscreen.c (int nvim_get_must_redraw(void))
 
 /// Get keep_msg != NULL.
 bool nvim_get_keep_msg_not_null(void) { return keep_msg != NULL; }
@@ -1911,11 +1898,8 @@ void nvim_keep_msg_display_and_free(void)
   xfree(p);
 }
 
-/// Get need_fileinfo global.
-bool nvim_get_need_fileinfo(void) { return need_fileinfo; }
-
-/// Set need_fileinfo global.
-void nvim_set_need_fileinfo(bool val) { need_fileinfo = val; }
+// nvim_get_need_fileinfo: defined in message.c (int nvim_get_need_fileinfo(void))
+// nvim_set_need_fileinfo: defined in message.c (void nvim_set_need_fileinfo(int val))
 
 /// Check shortmess(SHM_FILEINFO).
 bool nvim_shortmess_fileinfo(void) { return shortmess(SHM_FILEINFO); }
@@ -1923,11 +1907,8 @@ bool nvim_shortmess_fileinfo(void) { return shortmess(SHM_FILEINFO); }
 /// fileinfo(false, true, false) call.
 void nvim_fileinfo_call(void) { fileinfo(false, true, false); }
 
-/// Set did_emsg global.
-void nvim_set_did_emsg(bool val) { did_emsg = val; }
-
-/// Set msg_didany global.
-void nvim_set_msg_didany(bool val) { msg_didany = val; }
+// nvim_set_did_emsg: defined in message.c (void nvim_set_did_emsg(int val))
+// nvim_set_msg_didany: defined in message.c (void nvim_set_msg_didany(int val))
 
 /// may_clear_sb_text() call.
 void nvim_may_clear_sb_text_call(void) { may_clear_sb_text(); }
@@ -1944,8 +1925,7 @@ void nvim_redraw_statuslines_call(void) { redraw_statuslines(); }
 /// Set curbuf->b_last_used to time(NULL).
 void nvim_curbuf_set_b_last_used(void) { curbuf->b_last_used = time(NULL); }
 
-/// Get ui_has(kUIMessages).
-bool nvim_ui_has_messages(void) { return ui_has(kUIMessages); }
+// nvim_ui_has_messages: defined in message.c (int nvim_ui_has_messages(void))
 
 /// Compound: display keep_msg if must_redraw and not emsg_on_display.
 /// This wraps the "if (must_redraw && keep_msg != NULL && !emsg_on_display)"
@@ -1964,11 +1944,8 @@ void nvim_redraw_mode_msg_keep_msg(void)
   }
 }
 
-/// Get State global.
-int nvim_get_State(void) { return State; }
-
-/// Get redraw_mode global.
-bool nvim_get_redraw_mode(void) { return redraw_mode; }
+// nvim_get_State: defined in window_shim.c (int nvim_get_State(void))
+// nvim_get_redraw_mode: defined in drawscreen.c (int nvim_get_redraw_mode(void))
 
 /// os_delay(ms, can_interrupt) wrapper.
 void nvim_os_delay_wrapper(int ms, bool can_interrupt) { os_delay(ms, can_interrupt); }
@@ -2298,6 +2275,26 @@ size_t nvim_showcmd_buflen(void) { return SHOWCMD_BUFLEN; }
 
 void nvim_normal_display_showcmd(void) { display_showcmd(); }
 
+// Phase 5 accessors for rs_add_to_showcmd and rs_del_from_showcmd
+
+/// transchar(c) wrapper -- result is a static buffer valid until next call.
+const char *nvim_transchar_wrapper(int c) { return transchar(c); }
+
+/// utf_char2bytes(c, buf) -- writes UTF-8 encoding of c into buf, returns length.
+int nvim_utf_char2bytes_wrapper(int c, char *buf) { return utf_char2bytes(c, buf); }
+
+/// vim_isprintc(c) wrapper.
+bool nvim_vim_isprintc_wrapper(int c) { return vim_isprintc(c); }
+
+/// Get msg_silent for showcmd (same as nvim_get_msg_silent but needed here).
+int nvim_showcmd_msg_silent(void) { return msg_silent; }
+
+/// ui_has(kUIMessages) for showcmd.
+bool nvim_showcmd_ui_has_messages(void) { return ui_has(kUIMessages); }
+
+/// char_avail() for showcmd.
+bool nvim_showcmd_char_avail(void) { return char_avail(); }
+
 /// Compute Visual area info and write result into showcmd_buf.
 /// Returns true if in Visual mode and char_avail() is false.
 bool nvim_clear_showcmd_visual_info(void)
@@ -2371,82 +2368,19 @@ bool nvim_clear_showcmd_visual_info(void)
 /// Add 'c' to string of shown command chars.
 ///
 /// @return  true if output has been written (and setcursor() has been called).
+extern bool rs_add_to_showcmd(int c);
 bool add_to_showcmd(int c)
 {
-  static int ignore[] = {
-    K_IGNORE,
-    K_LEFTMOUSE, K_LEFTDRAG, K_LEFTRELEASE, K_MOUSEMOVE,
-    K_MIDDLEMOUSE, K_MIDDLEDRAG, K_MIDDLERELEASE,
-    K_RIGHTMOUSE, K_RIGHTDRAG, K_RIGHTRELEASE,
-    K_MOUSEDOWN, K_MOUSEUP, K_MOUSELEFT, K_MOUSERIGHT,
-    K_X1MOUSE, K_X1DRAG, K_X1RELEASE, K_X2MOUSE, K_X2DRAG, K_X2RELEASE,
-    K_EVENT,
-    0
-  };
-
-  if (!p_sc || msg_silent != 0) {
-    return false;
-  }
-
-  if (showcmd_visual) {
-    showcmd_buf[0] = NUL;
-    showcmd_visual = false;
-  }
-
-  // Ignore keys that are scrollbar updates and mouse clicks
-  if (IS_SPECIAL(c)) {
-    for (int i = 0; ignore[i] != 0; i++) {
-      if (ignore[i] == c) {
-        return false;
-      }
-    }
-  }
-
-  char *p;
-  char mbyte_buf[MB_MAXCHAR + 1];
-  if (c <= 0x7f || !vim_isprintc(c)) {
-    p = transchar(c);
-    if (*p == ' ') {
-      STRCPY(p, "<20>");
-    }
-  } else {
-    mbyte_buf[utf_char2bytes(c, mbyte_buf)] = NUL;
-    p = mbyte_buf;
-  }
-  size_t old_len = strlen(showcmd_buf);
-  size_t extra_len = strlen(p);
-  size_t limit = ui_has(kUIMessages) ? SHOWCMD_BUFLEN - 1 : SHOWCMD_COLS;
-  if (old_len + extra_len > limit) {
-    size_t overflow = old_len + extra_len - limit;
-    memmove(showcmd_buf, showcmd_buf + overflow, old_len - overflow + 1);
-  }
-  strcat(showcmd_buf, p);
-
-  if (char_avail()) {
-    return false;
-  }
-
-  display_showcmd();
-
-  return true;
+  return rs_add_to_showcmd(c);
 }
 
 void add_to_showcmd_c(int c) { add_to_showcmd(c); setcursor(); }
 
 /// Delete 'len' characters from the end of the shown command.
+extern void rs_del_from_showcmd(int len);
 static void del_from_showcmd(int len)
 {
-  if (!p_sc) {
-    return;
-  }
-
-  int old_len = (int)strlen(showcmd_buf);
-  len = MIN(len, old_len);
-  showcmd_buf[old_len - len] = NUL;
-
-  if (!char_avail()) {
-    display_showcmd();
-  }
+  rs_del_from_showcmd(len);
 }
 
 /// push_showcmd() and pop_showcmd() are used when waiting for the user to type
