@@ -935,10 +935,14 @@ pub unsafe extern "C" fn rs_win_split_ins(
     win_split_ins_impl(size, flags, new_wp, dir, to_flatten)
 }
 
-/// FFI: Full win_split_ins entry point — absorbs post-processing from C wrapper.
+extern "C" {
+    fn rs_win_enter_ext(wp: WinHandle, flags: c_int);
+}
+
+/// Internal: full win_split_ins with post-processing.
 ///
-/// Computes oldwin, calls the core implementation, then performs:
-/// - `rs_win_enter_ext` if needed,
+/// Computes oldwin, calls the core implementation, then:
+/// - calls `rs_win_enter_ext` if needed,
 /// - restores `p_wiw` or `p_wh`,
 /// - sets `oldwin->w_pos_changed`.
 ///
@@ -946,18 +950,13 @@ pub unsafe extern "C" fn rs_win_split_ins(
 ///
 /// # Safety
 /// Caller must ensure all pointer arguments are valid or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_win_split_ins_full(
+pub(crate) unsafe fn win_split_ins_full_impl(
     size: c_int,
     flags: c_int,
     new_wp: WinHandle,
     dir: c_int,
     to_flatten: *mut Frame,
 ) -> WinHandle {
-    extern "C" {
-        fn rs_win_enter_ext(wp: WinHandle, flags: c_int);
-    }
-
     let oldwin = get_oldwin(flags);
     let res = win_split_ins_impl(size, flags, new_wp, dir, to_flatten);
     if res.wp.is_null() {
@@ -980,6 +979,21 @@ pub unsafe extern "C" fn rs_win_split_ins_full(
     }
 
     res.wp
+}
+
+/// FFI: Full win_split_ins entry point — absorbs post-processing from C wrapper.
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_win_split_ins_full(
+    size: c_int,
+    flags: c_int,
+    new_wp: WinHandle,
+    dir: c_int,
+    to_flatten: *mut Frame,
+) -> WinHandle {
+    win_split_ins_full_impl(size, flags, new_wp, dir, to_flatten)
 }
 
 // =============================================================================
@@ -1009,15 +1023,6 @@ extern "C" {
 
     /// rs_clear_snapshot: clear snapshot.
     fn rs_clear_snapshot(tp: TabpageHandle, idx: c_int);
-
-    /// nvim_win_split_ins_wrapper: call win_split_ins from C (handles win_enter_ext + option restore).
-    fn nvim_win_split_ins_wrapper(
-        size: c_int,
-        flags: c_int,
-        new_wp: WinHandle,
-        dir: c_int,
-        to_flatten: *mut Frame,
-    ) -> WinHandle;
 
     /// rs_winframe_remove: remove window from frame tree.
     fn rs_winframe_remove(
@@ -1091,8 +1096,7 @@ unsafe fn win_split_impl(size: c_int, flags: c_int) -> c_int {
         rs_clear_snapshot(nvim_get_curtab(), SNAP_HELP_IDX);
     }
 
-    if nvim_win_split_ins_wrapper(size, flags, WinHandle::null(), 0, std::ptr::null_mut()).is_null()
-    {
+    if win_split_ins_full_impl(size, flags, WinHandle::null(), 0, std::ptr::null_mut()).is_null() {
         FAIL
     } else {
         OK
@@ -1138,7 +1142,7 @@ unsafe fn win_splitmove_impl(wp: WinHandle, size: c_int, flags: c_int) -> c_int 
     }
 
     // Split on the desired side and put wp there.
-    if nvim_win_split_ins_wrapper(size, flags, wp, dir, unflat_altfr).is_null() {
+    if win_split_ins_full_impl(size, flags, wp, dir, unflat_altfr).is_null() {
         if nvim_win_get_floating_win(wp) == 0 {
             // win_split_ins doesn't change sizes or layout if it fails to insert
             // an existing window, so just undo winframe_remove.

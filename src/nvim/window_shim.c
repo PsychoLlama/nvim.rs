@@ -874,15 +874,6 @@ void win_init(win_T *newp, win_T *oldp, int flags)
 
   rs_copyFoldingState(oldp, newp);
 
-  win_init_some(newp, oldp);
-
-  newp->w_winbar_height = oldp->w_winbar_height;
-}
-
-// Initialize window "newp" from window "old".
-// Only the essential things are copied.
-static void win_init_some(win_T *newp, win_T *oldp)
-{
   // Use the same argument list.
   newp->w_alist = oldp->w_alist;
   newp->w_alist->al_refcount++;
@@ -890,6 +881,8 @@ static void win_init_some(win_T *newp, win_T *oldp)
 
   // copy options from existing window
   win_copy_options(oldp, newp);
+
+  newp->w_winbar_height = oldp->w_winbar_height;
 }
 
 /// Make "count" windows on the screen.
@@ -919,12 +912,6 @@ int win_splitmove(win_T *wp, int size, int flags)
 void win_move_after(win_T *win1, win_T *win2)
 {
   rs_win_move_after(win1, win2);
-}
-
-/// Compute maximum number of windows that can fit within "height" in frame "fr".
-static int get_maximum_wincount(frame_T *fr, int height)
-{
-  return rs_get_maximum_wincount(fr, height);
 }
 
 void leaving_window(win_T *const win) { rs_leaving_window(win); }
@@ -2838,7 +2825,7 @@ int nvim_may_open_tabpage(void) { return may_open_tabpage(); }
 int nvim_get_cmdmod_split(void) { return cmdmod.cmod_split; }
 void nvim_emsg_e442(void) { emsg(_("E442: Can't split topleft and botright at the same time")); }
 /// Wrapper for win_split_ins callable from Rust (handles win_enter_ext and option restore).
-win_T *nvim_win_split_ins_wrapper(int size, int flags, win_T *new_wp, int dir, frame_T *to_flatten) { return win_split_ins(size, flags, new_wp, dir, to_flatten); }
+win_T *nvim_win_split_ins_wrapper(int size, int flags, win_T *new_wp, int dir, frame_T *to_flatten) { return rs_win_split_ins_full(size, flags, new_wp, dir, to_flatten); }
 int nvim_win_get_floating_win(win_T *wp) { return (wp && wp->w_floating) ? 1 : 0; }
 win_T *nvim_win_get_prev_win(win_T *wp) { return wp ? wp->w_prev : NULL; }
 
