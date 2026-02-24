@@ -919,104 +919,71 @@ void *nvim_tag_listitem_get_dict(const void *li)
   return (void *)tv->vval.v_dict;
 }
 
-/// Count string-valued entries in a dict, and compute total length
-/// needed for match string building. Returns count of string entries.
-int nvim_tag_dict_string_entry_count(const void *dict_void)
+/// Dict iteration API for Rust (hashitem-pointer approach).
+/// Each item in the array is a hashitem_T; we return these as opaque void* so Rust
+/// can hold them between calls. We also expose the dict's ht_array start and
+/// ht_mask so Rust can do arithmetic to advance the pointer without C involvement.
+/// However, to keep this simple and correct, we use a helper that advances past
+/// tombstones (HASHITEM_EMPTY slots) to return the next live dictitem.
+
+/// Return pointer to the first live hashitem_T in the dict, or NULL if empty.
+void *nvim_tag_dict_iter_start(const void *dict_void)
 {
   const dict_T *dict = (const dict_T *)dict_void;
-  int count = 0;
-  TV_DICT_ITER(dict, di, {
-    if (di->di_tv.v_type == VAR_STRING && di->di_tv.vval.v_string != NULL) {
-      count++;
+  const hashtab_T *ht = &dict->dv_hashtab;
+  size_t todo = ht->ht_used;
+  for (hashitem_T *hi = ht->ht_array; todo; hi++) {
+    if (!HASHITEM_EMPTY(hi)) {
+      return (void *)hi;
     }
-  });
-  return count;
+  }
+  return NULL;
 }
 
-/// Compute total length needed for tagfunc match string from dict entries.
-/// Counts: sum of strlen(key) + 1 + strlen(value) + 1 for each string entry.
-size_t nvim_tag_dict_compute_match_len(const void *dict_void)
+/// Given the current hashitem_T pointer, advance to the next live hashitem_T.
+/// Returns NULL when there are no more items.
+void *nvim_tag_dict_iter_next(const void *dict_void, const void *hi_void)
 {
   const dict_T *dict = (const dict_T *)dict_void;
-  size_t len = 2;  // base overhead
-  TV_DICT_ITER(dict, di, {
-    if (di->di_tv.v_type == VAR_STRING && di->di_tv.vval.v_string != NULL) {
-      len += strlen(di->di_tv.vval.v_string) + 1;  // "\tVALUE"
-      // Non-standard keys also need key + ":"
-      if (strcmp(di->di_key, "name") != 0
-          && strcmp(di->di_key, "filename") != 0
-          && strcmp(di->di_key, "cmd") != 0
-          && strcmp(di->di_key, "kind") != 0) {
-        len += strlen(di->di_key) + 1;  // "KEY:"
-      }
+  const hashtab_T *ht = &dict->dv_hashtab;
+  // Count remaining live items after current position.
+  const hashitem_T *cur = (const hashitem_T *)hi_void;
+  // Scan from the slot AFTER cur to find the next non-empty slot.
+  // The array size is ht_mask + 1.
+  size_t array_size = ht->ht_mask + 1;
+  const hashitem_T *start = ht->ht_array;
+  for (const hashitem_T *hi = cur + 1; hi < start + array_size; hi++) {
+    if (!HASHITEM_EMPTY(hi)) {
+      return (void *)hi;
     }
-  });
-  return len;
+  }
+  return NULL;
 }
 
-/// Get specific fields from a tagfunc result dict.
-/// Fills in name, filename, cmd, kind pointers (NULL if missing).
-/// Also sets has_extra to true if there are extra fields beyond the standard 4.
-void nvim_tag_dict_get_tag_fields(const void *dict_void,
-                                  const char **res_name,
-                                  const char **res_fname,
-                                  const char **res_cmd,
-                                  const char **res_kind,
-                                  bool *has_extra)
+/// Return the key of the current hashitem (as dictitem_T's di_key).
+const char *nvim_tag_dict_iter_key(const void *hi_void)
 {
-  const dict_T *dict = (const dict_T *)dict_void;
-  *res_name = NULL;
-  *res_fname = NULL;
-  *res_cmd = NULL;
-  *res_kind = NULL;
-  *has_extra = false;
-
-  TV_DICT_ITER(dict, di, {
-    if (di->di_tv.v_type != VAR_STRING || di->di_tv.vval.v_string == NULL) {
-      continue;
-    }
-    if (!strcmp(di->di_key, "name")) {
-      *res_name = di->di_tv.vval.v_string;
-    } else if (!strcmp(di->di_key, "filename")) {
-      *res_fname = di->di_tv.vval.v_string;
-    } else if (!strcmp(di->di_key, "cmd")) {
-      *res_cmd = di->di_tv.vval.v_string;
-    } else if (!strcmp(di->di_key, "kind")) {
-      *res_kind = di->di_tv.vval.v_string;
-      *has_extra = true;
-    } else {
-      *has_extra = true;
-    }
-  });
+  const hashitem_T *hi = (const hashitem_T *)hi_void;
+  return TV_DICT_HI2DI(hi)->di_key;
 }
 
-/// Build the extra fields portion of a tagfunc match string.
-/// Writes extra tab-separated "KEY:VALUE" entries for non-standard fields.
-/// Returns number of bytes written.
-size_t nvim_tag_dict_write_extra_fields(const void *dict_void, char *p)
+/// Return true if the current hashitem has a non-null string value.
+bool nvim_tag_dict_iter_value_is_string(const void *hi_void)
 {
-  const dict_T *dict = (const dict_T *)dict_void;
-  char *start = p;
+  const hashitem_T *hi = (const hashitem_T *)hi_void;
+  const dictitem_T *di = TV_DICT_HI2DI(hi);
+  return di->di_tv.v_type == VAR_STRING && di->di_tv.vval.v_string != NULL;
+}
 
-  TV_DICT_ITER(dict, di, {
-    if (di->di_tv.v_type != VAR_STRING || di->di_tv.vval.v_string == NULL) {
-      continue;
-    }
-    const char *key = di->di_key;
-    if (!strcmp(key, "name") || !strcmp(key, "filename")
-        || !strcmp(key, "cmd") || !strcmp(key, "kind")) {
-      continue;
-    }
-    *p++ = TAB;
-    STRCPY(p, key);
-    p += strlen(p);
-    STRCPY(p, ":");
-    p += 1;
-    STRCPY(p, di->di_tv.vval.v_string);
-    p += strlen(p);
-  });
-
-  return (size_t)(p - start);
+/// Return the string value of the current hashitem, or NULL if not a string.
+const char *nvim_tag_dict_iter_value_string(const void *hi_void)
+{
+  const hashitem_T *hi = (const hashitem_T *)hi_void;
+  const dictitem_T *di = TV_DICT_HI2DI(hi);
+  if (di->di_tv.v_type != VAR_STRING) {
+    return NULL;
+  }
+  return di->di_tv.vval.v_string;
 }
 
 void nvim_tag_emsg_invalid_tagfunc_return(void) { emsg(_(e_invalid_return_value_from_tagfunc)); }

@@ -2805,19 +2805,119 @@ extern "C" {
     fn nvim_tag_tv_list_item_next(list: *const c_void, li: *const c_void) -> *mut c_void;
     fn nvim_tag_listitem_is_dict(li: *const c_void) -> bool;
     fn nvim_tag_listitem_get_dict(li: *const c_void) -> *mut c_void;
-    fn nvim_tag_dict_compute_match_len(dict: *const c_void) -> usize;
-    fn nvim_tag_dict_get_tag_fields(
-        dict: *const c_void,
-        res_name: *mut *const c_char,
-        res_fname: *mut *const c_char,
-        res_cmd: *mut *const c_char,
-        res_kind: *mut *const c_char,
-        has_extra: *mut bool,
-    );
-    fn nvim_tag_dict_write_extra_fields(dict: *const c_void, p: *mut c_char) -> usize;
+    // Dict iteration API (Phase 2)
+    fn nvim_tag_dict_iter_start(dict: *const c_void) -> *mut c_void;
+    fn nvim_tag_dict_iter_next(dict: *const c_void, cur: *const c_void) -> *mut c_void;
+    fn nvim_tag_dict_iter_key(iter: *const c_void) -> *const c_char;
+    fn nvim_tag_dict_iter_value_is_string(iter: *const c_void) -> bool;
+    fn nvim_tag_dict_iter_value_string(iter: *const c_void) -> *const c_char;
     fn nvim_tag_emsg_invalid_tagfunc_return();
     fn nvim_tag_ga_grow_append(ga: *mut c_void, mfp: *mut c_char);
     fn xstrdup(s: *const c_char) -> *mut c_char;
+}
+
+/// Check if a key (C string) matches one of the 4 standard tag fields.
+unsafe fn is_standard_field(key: *const c_char) -> bool {
+    use std::ffi::CStr;
+    let k = CStr::from_ptr(key).to_bytes();
+    k == b"name" || k == b"filename" || k == b"cmd" || k == b"kind"
+}
+
+/// Rust port of nvim_tag_dict_compute_match_len:
+/// Compute total byte length needed for building the tagfunc match string.
+unsafe fn dict_compute_match_len(dict: *const c_void) -> usize {
+    let mut len = 2usize; // base overhead
+    let mut iter = nvim_tag_dict_iter_start(dict);
+    while !iter.is_null() {
+        if nvim_tag_dict_iter_value_is_string(iter) {
+            let val = nvim_tag_dict_iter_value_string(iter);
+            if !val.is_null() {
+                len += std::ffi::CStr::from_ptr(val).to_bytes().len() + 1; // "\tVALUE"
+                let key = nvim_tag_dict_iter_key(iter);
+                if !is_standard_field(key) {
+                    len += std::ffi::CStr::from_ptr(key).to_bytes().len() + 1; // "KEY:"
+                }
+            }
+        }
+        iter = nvim_tag_dict_iter_next(dict, iter);
+    }
+    len
+}
+
+/// Rust port of nvim_tag_dict_get_tag_fields:
+/// Fill in name/filename/cmd/kind pointers and has_extra flag from a dict.
+#[allow(clippy::similar_names)]
+unsafe fn dict_get_tag_fields(
+    dict: *const c_void,
+    res_name: *mut *const c_char,
+    res_fname: *mut *const c_char,
+    res_cmd: *mut *const c_char,
+    res_kind: *mut *const c_char,
+    has_extra: *mut bool,
+) {
+    *res_name = std::ptr::null();
+    *res_fname = std::ptr::null();
+    *res_cmd = std::ptr::null();
+    *res_kind = std::ptr::null();
+    *has_extra = false;
+
+    let mut iter = nvim_tag_dict_iter_start(dict);
+    while !iter.is_null() {
+        if nvim_tag_dict_iter_value_is_string(iter) {
+            let key = nvim_tag_dict_iter_key(iter);
+            let val = nvim_tag_dict_iter_value_string(iter);
+            let k = std::ffi::CStr::from_ptr(key).to_bytes();
+            if k == b"name" {
+                *res_name = val;
+            } else if k == b"filename" {
+                *res_fname = val;
+            } else if k == b"cmd" {
+                *res_cmd = val;
+            } else if k == b"kind" {
+                *res_kind = val;
+                *has_extra = true;
+            } else {
+                *has_extra = true;
+            }
+        }
+        iter = nvim_tag_dict_iter_next(dict, iter);
+    }
+}
+
+/// Rust port of nvim_tag_dict_write_extra_fields:
+/// Write non-standard key:value pairs as tab-separated entries.
+/// Returns the number of bytes written.
+unsafe fn dict_write_extra_fields(dict: *const c_void, mut p: *mut c_char) -> usize {
+    let start = p;
+    let mut iter = nvim_tag_dict_iter_start(dict);
+    while !iter.is_null() {
+        if nvim_tag_dict_iter_value_is_string(iter) {
+            let key = nvim_tag_dict_iter_key(iter);
+            let val = nvim_tag_dict_iter_value_string(iter);
+            if !val.is_null() && !is_standard_field(key) {
+                let key_bytes = std::ffi::CStr::from_ptr(key).to_bytes();
+                let val_bytes = std::ffi::CStr::from_ptr(val).to_bytes();
+                *p = b'\t' as c_char;
+                p = p.add(1);
+                std::ptr::copy_nonoverlapping(
+                    key_bytes.as_ptr().cast::<c_char>(),
+                    p,
+                    key_bytes.len(),
+                );
+                p = p.add(key_bytes.len());
+                *p = b':' as c_char;
+                p = p.add(1);
+                std::ptr::copy_nonoverlapping(
+                    val_bytes.as_ptr().cast::<c_char>(),
+                    p,
+                    val_bytes.len(),
+                );
+                p = p.add(val_bytes.len());
+            }
+        }
+        iter = nvim_tag_dict_iter_next(dict, iter);
+    }
+    p.offset_from(start) as usize
 }
 
 /// Invoke the user-defined tagfunc to get tag matches.
@@ -2886,7 +2986,7 @@ pub unsafe extern "C" fn rs_find_tagfunc_tags(
         let mut tag_kind: *const c_char = std::ptr::null();
         let mut has_extra = false;
 
-        nvim_tag_dict_get_tag_fields(
+        dict_get_tag_fields(
             dict,
             &raw mut tag_name,
             &raw mut tag_file,
@@ -2906,7 +3006,7 @@ pub unsafe extern "C" fn rs_find_tagfunc_tags(
             nvim_tag_ga_grow_append(ga, mfp);
         } else {
             // Compute total length needed
-            let mut len = nvim_tag_dict_compute_match_len(dict);
+            let mut len = dict_compute_match_len(dict);
             if has_extra {
                 len += 2; // for ;\"
             }
@@ -2956,7 +3056,7 @@ pub unsafe extern "C" fn rs_find_tagfunc_tags(
                 }
 
                 // Extra fields (KEY:VALUE)
-                let extra_written = nvim_tag_dict_write_extra_fields(dict, p);
+                let extra_written = dict_write_extra_fields(dict, p);
                 p = p.add(extra_written);
             }
 
