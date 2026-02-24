@@ -257,6 +257,63 @@ pub unsafe extern "C" fn rs_advance_cpt_sources_index_safe() -> c_int {
     nvim_advance_cpt_sources_index_safe_impl()
 }
 
+// =============================================================================
+// Phase 3 (pass 6): setup_cpt_sources, prepare_cpt_compl_funcs,
+//                   get_cpt_func_completion_matches
+// =============================================================================
+
+use std::os::raw::c_void;
+
+extern "C" {
+    // Compound accessor: frees old array, resets counts, allocates new array
+    fn nvim_setup_cpt_sources_impl();
+
+    // Compound accessor: iterates 'cpt', calls get_userdefined_compl_info for func entries
+    fn nvim_prepare_cpt_compl_funcs_impl();
+
+    // Compound accessor: sets globals, inserts leader, calls expand_by_function, cleans up
+    fn nvim_get_cpt_func_completion_matches_impl(cb_opaque: *mut c_void);
+}
+
+/// Setup completion sources from the 'complete' option.
+///
+/// Rust entry point for C `setup_cpt_sources()`. Delegates to the C compound
+/// accessor which manages `cpt_sources_array` allocation and initialization.
+///
+/// # Safety
+/// Requires valid `curbuf` state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_setup_cpt_sources() {
+    nvim_setup_cpt_sources_impl();
+}
+
+/// Call user-defined completion function(s) with findstart=1 to get startcols.
+///
+/// Rust entry point for C `prepare_cpt_compl_funcs()`. Delegates to the C
+/// compound accessor because this function uses `Callback *` which is opaque
+/// from Rust.
+///
+/// # Safety
+/// Requires valid `cpt_sources_array` and `curbuf` state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_prepare_cpt_compl_funcs() {
+    nvim_prepare_cpt_compl_funcs_impl();
+}
+
+/// Retrieve completion matches from a specific 'cpt' function source.
+///
+/// Rust entry point for C `get_cpt_func_completion_matches()`. Delegates to
+/// the C compound accessor because this function calls `expand_by_function`
+/// with a `Callback *` that cannot be represented in Rust.
+///
+/// # Safety
+/// `cb_opaque` must be a valid `Callback *` (or null for the default callback).
+/// Requires valid `cpt_sources_array` and `cpt_sources_index` state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_cpt_func_completion_matches(cb_opaque: *mut c_void) {
+    nvim_get_cpt_func_completion_matches_impl(cb_opaque);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
