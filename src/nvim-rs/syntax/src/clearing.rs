@@ -361,4 +361,3 @@ pub unsafe extern "C" fn rs_syntax_sync_clear() {
     // Need to recompute all syntax
     nvim_syn_stack_free_all(block);
 }
-
