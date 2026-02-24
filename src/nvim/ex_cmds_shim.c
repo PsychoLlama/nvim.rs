@@ -542,6 +542,7 @@ extern int rs_not_writing(void);
 extern int rs_check_writable(const char *fname);
 extern int rs_handle_mkdir_p_arg(exarg_T *eap, const char *fname);
 extern int rs_check_readonly(exarg_T *eap, buf_T *buf);
+extern int rs_do_write(exarg_T *eap);
 
 /// ":update". Thin wrapper calling Rust.
 void ex_update(exarg_T *eap)
@@ -567,170 +568,15 @@ static int handle_mkdir_p_arg(exarg_T *eap, char *fname)
   return rs_handle_mkdir_p_arg(eap, fname) == 1 ? OK : FAIL;
 }
 
+/// Thin wrapper calling Rust rs_do_write.
+///
 /// Write current buffer to file "eap->arg".
 /// If "eap->append" is true, append to the file.
-///
-/// If "*eap->arg == NUL" write to current file.
 ///
 /// @return  FAIL for failure, OK otherwise.
 int do_write(exarg_T *eap)
 {
-  bool other;
-  char *fname = NULL;            // init to shut up gcc
-  int retval = FAIL;
-  char *free_fname = NULL;
-  buf_T *alt_buf = NULL;
-
-  if (not_writing()) {          // check 'write' option
-    return FAIL;
-  }
-
-  char *ffname = eap->arg;
-  if (*ffname == NUL) {
-    if (eap->cmdidx == CMD_saveas) {
-      emsg(_(e_argreq));
-      goto theend;
-    }
-    other = false;
-  } else {
-    fname = ffname;
-    free_fname = fix_fname(ffname);
-    // When out-of-memory, keep unexpanded file name, because we MUST be
-    // able to write the file in this situation.
-    if (free_fname != NULL) {
-      ffname = free_fname;
-    }
-    other = otherfile(ffname);
-  }
-
-  // If we have a new file, put its name in the list of alternate file names.
-  if (other) {
-    if (vim_strchr(p_cpo, CPO_ALTWRITE) != NULL
-        || eap->cmdidx == CMD_saveas) {
-      alt_buf = setaltfname(ffname, fname, 1);
-    } else {
-      alt_buf = buflist_findname(ffname);
-    }
-    if (alt_buf != NULL && alt_buf->b_ml.ml_mfp != NULL) {
-      // Overwriting a file that is loaded in another buffer is not a
-      // good idea.
-      emsg(_(e_bufloaded));
-      goto theend;
-    }
-  }
-
-  // Writing to the current file is not allowed in readonly mode
-  // and a file name is required.
-  // "nofile" and "nowrite" buffers cannot be written implicitly either.
-  if (!other && (bt_dontwrite_msg(curbuf)
-                 || check_fname() == FAIL
-#ifdef UNIX
-                 || check_writable(curbuf->b_ffname) == FAIL
-#endif
-                 || check_readonly(&eap->forceit, curbuf))) {
-    goto theend;
-  }
-
-  if (!other) {
-    ffname = curbuf->b_ffname;
-    fname = curbuf->b_fname;
-    // Not writing the whole file is only allowed with '!'.
-    if ((eap->line1 != 1
-         || eap->line2 != curbuf->b_ml.ml_line_count)
-        && !eap->forceit
-        && !eap->append
-        && !p_wa) {
-      if (p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) {
-        if (vim_dialog_yesno(VIM_QUESTION, NULL,
-                             _("Write partial file?"), 2) != VIM_YES) {
-          goto theend;
-        }
-        eap->forceit = true;
-      } else {
-        emsg(_("E140: Use ! to write partial buffer"));
-        goto theend;
-      }
-    }
-  }
-
-  if (check_overwrite(eap, curbuf, fname, ffname, other) == OK) {
-    if (eap->cmdidx == CMD_saveas && alt_buf != NULL) {
-      buf_T *was_curbuf = curbuf;
-
-      apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, curbuf);
-      apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, alt_buf);
-      if (curbuf != was_curbuf || aborting()) {
-        // buffer changed, don't change name now
-        retval = FAIL;
-        goto theend;
-      }
-      // Exchange the file names for the current and the alternate
-      // buffer.  This makes it look like we are now editing the buffer
-      // under the new name.  Must be done before buf_write(), because
-      // if there is no file name and 'cpo' contains 'F', it will set
-      // the file name.
-      fname = alt_buf->b_fname;
-      alt_buf->b_fname = curbuf->b_fname;
-      curbuf->b_fname = fname;
-      fname = alt_buf->b_ffname;
-      alt_buf->b_ffname = curbuf->b_ffname;
-      curbuf->b_ffname = fname;
-      fname = alt_buf->b_sfname;
-      alt_buf->b_sfname = curbuf->b_sfname;
-      curbuf->b_sfname = fname;
-      buf_name_changed(curbuf);
-      apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, curbuf);
-      apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, alt_buf);
-      if (!alt_buf->b_p_bl) {
-        alt_buf->b_p_bl = true;
-        apply_autocmds(EVENT_BUFADD, NULL, NULL, false, alt_buf);
-      }
-      if (curbuf != was_curbuf || aborting()) {
-        // buffer changed, don't write the file
-        retval = FAIL;
-        goto theend;
-      }
-
-      // If 'filetype' was empty try detecting it now.
-      if (*curbuf->b_p_ft == NUL) {
-        if (augroup_exists("filetypedetect")) {
-          do_doautocmd("filetypedetect BufRead", true, NULL);
-        }
-        do_modelines(0);
-      }
-
-      // Autocommands may have changed buffer names, esp. when
-      // 'autochdir' is set.
-      fname = curbuf->b_sfname;
-    }
-
-    if (handle_mkdir_p_arg(eap, fname) == FAIL) {
-      retval = FAIL;
-      goto theend;
-    }
-
-    int name_was_missing = curbuf->b_ffname == NULL;
-    retval = buf_write(curbuf, ffname, fname, eap->line1, eap->line2,
-                       eap, eap->append, eap->forceit, true, false);
-
-    // After ":saveas fname" reset 'readonly'.
-    if (eap->cmdidx == CMD_saveas) {
-      if (retval == OK) {
-        curbuf->b_p_ro = false;
-        redraw_tabline = true;
-      }
-    }
-
-    // Change directories when the 'acd' option is set and the file name
-    // got changed or set.
-    if (eap->cmdidx == CMD_saveas || name_was_missing) {
-      do_autochdir();
-    }
-  }
-
-theend:
-  xfree(free_fname);
-  return retval;
+  return rs_do_write(eap) != 0 ? OK : FAIL;
 }
 
 /// Check if it is allowed to overwrite a file.  If b_flags has BF_NOTEDITED,
@@ -3696,6 +3542,168 @@ int nvim_excmds_kShellOptDoOut(void) { return kShellOptDoOut; }
 
 /// Get curbuf->b_ml.ml_line_count.
 int nvim_excmds_curbuf_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
+
+// --- Phase 2: do_write FFI accessors ---
+
+/// Get eap->arg (the argument string, mutable).
+char *nvim_excmds_eap_get_arg_rw(exarg_T *eap) { return eap->arg; }
+
+/// Get eap->append.
+int nvim_excmds_eap_get_append(const exarg_T *eap) { return eap->append ? 1 : 0; }
+
+/// Get eap->line1.
+int nvim_excmds_eap_get_line1(const exarg_T *eap) { return (int)eap->line1; }
+
+/// Get eap->line2.
+int nvim_excmds_eap_get_line2_val(const exarg_T *eap) { return (int)eap->line2; }
+
+/// Wrap fix_fname(ffname). Returns allocated string or NULL. Caller must free.
+char *nvim_excmds_fix_fname(const char *ffname) { return fix_fname((char *)ffname); }
+
+/// Wrap otherfile(ffname). Returns 1 if it's a different file than current.
+int nvim_excmds_otherfile(const char *ffname) { return otherfile((char *)ffname) ? 1 : 0; }
+
+/// Check vim_strchr(p_cpo, CPO_ALTWRITE) != NULL.
+int nvim_excmds_vim_strchr_cpo_altwrite(void)
+{
+  return vim_strchr(p_cpo, CPO_ALTWRITE) != NULL ? 1 : 0;
+}
+
+/// Wrap setaltfname(ffname, fname, 1). Returns opaque buf pointer (may be NULL).
+void *nvim_excmds_setaltfname(const char *ffname, const char *fname, int lnum)
+{
+  return setaltfname((char *)ffname, (char *)fname, (linenr_T)lnum);
+}
+
+/// Wrap buflist_findname(ffname). Returns opaque buf pointer (may be NULL).
+void *nvim_excmds_buflist_findname(const char *ffname)
+{
+  return buflist_findname((char *)ffname);
+}
+
+/// Check buf->b_ml.ml_mfp != NULL (buffer has memfile).
+int nvim_excmds_buf_has_mfp(const void *buf)
+{
+  return ((const buf_T *)buf)->b_ml.ml_mfp != NULL ? 1 : 0;
+}
+
+/// emsg(_(e_bufloaded)).
+void nvim_excmds_emsg_e_bufloaded(void) { emsg(_(e_bufloaded)); }
+
+/// Wrap bt_dontwrite_msg(curbuf). Returns 1 if true.
+int nvim_excmds_bt_dontwrite_msg_curbuf(void) { return bt_dontwrite_msg(curbuf) ? 1 : 0; }
+
+/// Wrap check_fname(). Returns 1=OK, 0=FAIL.
+int nvim_excmds_check_fname(void) { return check_fname() == OK ? 1 : 0; }
+
+/// Check curbuf->b_ffname writable (Unix: check_writable).
+int nvim_excmds_curbuf_check_writable(void)
+{
+#ifdef UNIX
+  return check_writable(curbuf->b_ffname) == OK ? 1 : 0;
+#else
+  return 1;
+#endif
+}
+
+/// Get p_wa option.
+int nvim_excmds_get_p_wa(void) { return p_wa ? 1 : 0; }
+
+/// Dialog: "Write partial file?" Returns 1 if user said yes.
+int nvim_excmds_dialog_write_partial(void)
+{
+  return vim_dialog_yesno(VIM_QUESTION, NULL, _("Write partial file?"), 2) == VIM_YES ? 1 : 0;
+}
+
+/// emsg E140: Use ! to write partial buffer.
+void nvim_excmds_emsg_e140(void)
+{
+  emsg(_("E140: Use ! to write partial buffer"));
+}
+
+/// emsg(_(e_argreq)): Argument required.
+void nvim_excmds_emsg_e_argreq(void) { emsg(_(e_argreq)); }
+
+/// Get curbuf->b_ffname (may be NULL).
+const char *nvim_excmds_curbuf_get_b_ffname(void) { return curbuf->b_ffname; }
+
+/// Get curbuf->b_fname (may be NULL).
+const char *nvim_excmds_curbuf_get_b_fname(void) { return curbuf->b_fname; }
+
+/// Wrap check_overwrite via rs_ (call it directly). Returns 1=OK, 0=FAIL.
+int nvim_excmds_check_overwrite(exarg_T *eap, buf_T *buf, const char *fname,
+                                const char *ffname, int other)
+{
+  return check_overwrite(eap, buf, (char *)fname, (char *)ffname, (bool)other) == OK ? 1 : 0;
+}
+
+/// Do saveas: apply BufFilePre, swap names, BufFilePost, BufAdd autocmds.
+/// Returns 1=OK (write can proceed), 0=FAIL (buffer changed, abort).
+/// Updates curbuf->b_sfname; returns the sfname via out_sfname (borrowed from curbuf).
+int nvim_excmds_do_saveas_swap(buf_T *alt_buf, const char **out_sfname)
+{
+  buf_T *was_curbuf = curbuf;
+
+  apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, curbuf);
+  apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, alt_buf);
+  if (curbuf != was_curbuf || aborting()) {
+    return 0;
+  }
+  // Exchange the file names
+  char *tmp;
+  tmp = alt_buf->b_fname;
+  alt_buf->b_fname = curbuf->b_fname;
+  curbuf->b_fname = tmp;
+  tmp = alt_buf->b_ffname;
+  alt_buf->b_ffname = curbuf->b_ffname;
+  curbuf->b_ffname = tmp;
+  tmp = alt_buf->b_sfname;
+  alt_buf->b_sfname = curbuf->b_sfname;
+  curbuf->b_sfname = tmp;
+  buf_name_changed(curbuf);
+  apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, curbuf);
+  apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, alt_buf);
+  if (!alt_buf->b_p_bl) {
+    alt_buf->b_p_bl = true;
+    apply_autocmds(EVENT_BUFADD, NULL, NULL, false, alt_buf);
+  }
+  if (curbuf != was_curbuf || aborting()) {
+    return 0;
+  }
+  // If 'filetype' was empty try detecting it now.
+  if (*curbuf->b_p_ft == NUL) {
+    if (augroup_exists("filetypedetect")) {
+      do_doautocmd("filetypedetect BufRead", true, NULL);
+    }
+    do_modelines(0);
+  }
+  // Autocommands may have changed buffer names.
+  *out_sfname = curbuf->b_sfname;
+  return 1;
+}
+
+/// Wrap buf_write for do_write. Returns 1=OK, 0=FAIL.
+int nvim_excmds_buf_write_do_write(const char *ffname, const char *fname,
+                                   int line1, int line2,
+                                   exarg_T *eap, int append, int forceit)
+{
+  return buf_write(curbuf, (char *)ffname, (char *)fname,
+                   (linenr_T)line1, (linenr_T)line2,
+                   eap, (bool)append, (bool)forceit, true, false) == OK ? 1 : 0;
+}
+
+/// After saveas: set curbuf->b_p_ro=false, redraw_tabline=true.
+void nvim_excmds_saveas_post_success(void)
+{
+  curbuf->b_p_ro = false;
+  redraw_tabline = true;
+}
+
+/// Check curbuf->b_ffname == NULL (name was missing before write).
+int nvim_excmds_curbuf_ffname_null(void) { return curbuf->b_ffname == NULL ? 1 : 0; }
+
+/// Wrap do_autochdir().
+void nvim_excmds_do_autochdir_wrapper(void) { do_autochdir(); }
 
 // --- Phase 1: Write Validation Helpers FFI accessors ---
 

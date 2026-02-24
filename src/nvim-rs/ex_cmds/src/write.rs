@@ -379,6 +379,201 @@ pub unsafe extern "C" fn rs_check_readonly(eap: *mut ExArgHandle, buf: *mut BufH
 }
 
 // =============================================================================
+// Phase 2: do_write FFI declarations and implementation
+// =============================================================================
+
+extern "C" {
+    fn nvim_excmds_eap_get_arg_rw(eap: *mut ExArgHandle) -> *mut c_char;
+    fn nvim_excmds_eap_get_append(eap: *const ExArgHandle) -> c_int;
+    fn nvim_excmds_eap_get_line1(eap: *const ExArgHandle) -> c_int;
+    fn nvim_excmds_eap_get_line2_val(eap: *const ExArgHandle) -> c_int;
+    fn nvim_excmds_fix_fname(ffname: *const c_char) -> *mut c_char;
+    fn nvim_excmds_otherfile(ffname: *const c_char) -> c_int;
+    fn nvim_excmds_vim_strchr_cpo_altwrite() -> c_int;
+    fn nvim_excmds_setaltfname(
+        ffname: *const c_char,
+        fname: *const c_char,
+        lnum: c_int,
+    ) -> *mut BufHandle;
+    fn nvim_excmds_buflist_findname(ffname: *const c_char) -> *mut BufHandle;
+    fn nvim_excmds_buf_has_mfp(buf: *const BufHandle) -> c_int;
+    fn nvim_excmds_emsg_e_bufloaded();
+    fn nvim_excmds_bt_dontwrite_msg_curbuf() -> c_int;
+    fn nvim_excmds_check_fname() -> c_int;
+    fn nvim_excmds_curbuf_check_writable() -> c_int;
+    fn nvim_excmds_get_p_wa() -> c_int;
+    fn nvim_excmds_dialog_write_partial() -> c_int;
+    fn nvim_excmds_emsg_e140();
+    fn nvim_excmds_emsg_e_argreq();
+    fn nvim_excmds_curbuf_get_b_ffname() -> *const c_char;
+    fn nvim_excmds_curbuf_get_b_fname() -> *const c_char;
+    fn nvim_get_curbuf() -> *mut BufHandle;
+    fn nvim_excmds_check_overwrite(
+        eap: *mut ExArgHandle,
+        buf: *mut BufHandle,
+        fname: *const c_char,
+        ffname: *const c_char,
+        other: c_int,
+    ) -> c_int;
+    fn nvim_excmds_do_saveas_swap(
+        alt_buf: *mut BufHandle,
+        out_sfname: *mut *const c_char,
+    ) -> c_int;
+    fn nvim_excmds_buf_write_do_write(
+        ffname: *const c_char,
+        fname: *const c_char,
+        line1: c_int,
+        line2: c_int,
+        eap: *mut ExArgHandle,
+        append: c_int,
+        forceit: c_int,
+    ) -> c_int;
+    fn nvim_excmds_saveas_post_success();
+    fn nvim_excmds_curbuf_ffname_null() -> c_int;
+    fn nvim_excmds_do_autochdir_wrapper();
+    fn nvim_exarg_cmdidx_is_saveas(eap: *const ExArgHandle) -> c_int;
+}
+
+/// Implement `do_write`. Replaces C `do_write`.
+///
+/// Write current buffer to file specified in `eap->arg`.
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
+    let mut retval: c_int = 0; // FAIL
+
+    // Check 'write' option
+    if rs_not_writing() != 0 {
+        return 0; // FAIL
+    }
+
+    let arg = nvim_excmds_eap_get_arg_rw(eap);
+    // Determine file names
+    let (mut ffname, mut fname, free_fname, other) = {
+        // Read first char of arg
+        let first_char = if arg.is_null() { 0u8 } else { *arg as u8 };
+        if first_char == 0 {
+            // No argument
+            if nvim_exarg_cmdidx_is_saveas(eap) != 0 {
+                nvim_excmds_emsg_e_argreq();
+                return 0; // FAIL (goto theend with free_fname=NULL)
+            }
+            (std::ptr::null_mut::<c_char>(), std::ptr::null_mut::<c_char>(), std::ptr::null_mut::<c_char>(), 0)
+        } else {
+            // Has argument
+            let fname_ptr = arg;
+            let free_ptr = nvim_excmds_fix_fname(fname_ptr);
+            let ff = if !free_ptr.is_null() { free_ptr } else { fname_ptr };
+            let other = nvim_excmds_otherfile(ff);
+            (ff, fname_ptr, free_ptr, other)
+        }
+    };
+
+    let mut alt_buf: *mut BufHandle = std::ptr::null_mut();
+
+    // If we have a new file, put its name in the list of alternate file names.
+    if other != 0 {
+        if nvim_excmds_vim_strchr_cpo_altwrite() != 0 || nvim_exarg_cmdidx_is_saveas(eap) != 0 {
+            alt_buf = nvim_excmds_setaltfname(ffname, fname, 1);
+        } else {
+            alt_buf = nvim_excmds_buflist_findname(ffname);
+        }
+        if !alt_buf.is_null() && nvim_excmds_buf_has_mfp(alt_buf) != 0 {
+            nvim_excmds_emsg_e_bufloaded();
+            xfree(free_fname.cast());
+            return 0; // FAIL
+        }
+    }
+
+    // Writing to the current file checks
+    if other == 0 {
+        let curbuf = nvim_get_curbuf();
+        if nvim_excmds_bt_dontwrite_msg_curbuf() != 0
+            || nvim_excmds_check_fname() == 0
+            || nvim_excmds_curbuf_check_writable() == 0
+            || rs_check_readonly(eap, curbuf) != 0
+        {
+            xfree(free_fname.cast());
+            return 0; // FAIL
+        }
+    }
+
+    if other == 0 {
+        // Writing to current file; use curbuf's names
+        ffname = nvim_excmds_curbuf_get_b_ffname() as *mut c_char;
+        fname = nvim_excmds_curbuf_get_b_fname() as *mut c_char;
+
+        // Partial write check
+        let line1 = nvim_excmds_eap_get_line1(eap);
+        let line2 = nvim_excmds_eap_get_line2_val(eap);
+        let line_count = nvim_curbuf_get_b_ml_ml_line_count();
+        let forceit = nvim_excmds_eap_get_forceit(eap);
+        let append = nvim_excmds_eap_get_append(eap);
+        let p_wa = nvim_excmds_get_p_wa();
+
+        if (line1 != 1 || line2 != line_count) && forceit == 0 && append == 0 && p_wa == 0 {
+            if nvim_excmds_p_confirm_or_cmod_confirm() != 0 {
+                if nvim_excmds_dialog_write_partial() == 0 {
+                    xfree(free_fname.cast());
+                    return 0; // FAIL
+                }
+                nvim_excmds_set_forceit(eap, 1);
+            } else {
+                nvim_excmds_emsg_e140();
+                xfree(free_fname.cast());
+                return 0; // FAIL
+            }
+        }
+    }
+
+    let curbuf = nvim_get_curbuf();
+    if nvim_excmds_check_overwrite(eap, curbuf, fname, ffname, other) != 0 {
+        // check_overwrite returned OK
+        let is_saveas = nvim_exarg_cmdidx_is_saveas(eap) != 0;
+
+        if is_saveas && !alt_buf.is_null() {
+            let mut sfname_out: *const c_char = std::ptr::null();
+            if nvim_excmds_do_saveas_swap(alt_buf, &mut sfname_out) == 0 {
+                // Buffer changed, abort
+                xfree(free_fname.cast());
+                return 0; // FAIL
+            }
+            // Use the updated sfname from curbuf
+            fname = sfname_out as *mut c_char;
+        }
+
+        if rs_handle_mkdir_p_arg(eap, fname) == 0 {
+            xfree(free_fname.cast());
+            return 0; // FAIL
+        }
+
+        let name_was_missing = nvim_excmds_curbuf_ffname_null();
+        let append = nvim_excmds_eap_get_append(eap);
+        let forceit = nvim_excmds_eap_get_forceit(eap);
+        let line1 = nvim_excmds_eap_get_line1(eap);
+        let line2 = nvim_excmds_eap_get_line2_val(eap);
+
+        let write_ok = nvim_excmds_buf_write_do_write(
+            ffname, fname, line1, line2, eap, append, forceit,
+        );
+        retval = write_ok;
+
+        if is_saveas && write_ok != 0 {
+            nvim_excmds_saveas_post_success();
+        }
+
+        if is_saveas || name_was_missing != 0 {
+            nvim_excmds_do_autochdir_wrapper();
+        }
+    }
+
+    xfree(free_fname.cast());
+    retval
+}
+
+// =============================================================================
 // ex_update, ex_write, ex_wnext (Phase 3 migration)
 // =============================================================================
 
@@ -389,7 +584,6 @@ extern "C" {
     fn nvim_excmds_os_path_exists_curbuf_ffname() -> c_int;
     fn nvim_excmds_do_write(eap: *mut ExArgHandle) -> c_int;
     fn nvim_excmds_do_bang_write_filter(eap: *mut ExArgHandle);
-    fn nvim_exarg_cmdidx_is_saveas(eap: *const ExArgHandle) -> c_int;
     fn nvim_exarg_get_usefilter(eap: *const ExArgHandle) -> c_int;
     fn nvim_exarg_set_line1(eap: *mut ExArgHandle, line1: c_int);
     fn nvim_exarg_set_line2(eap: *mut ExArgHandle, line2: c_int);
