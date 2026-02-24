@@ -6,8 +6,160 @@
 //! - Reset to defaults
 
 #![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::missing_safety_doc)]
 
 use std::ffi::c_int;
+
+// =============================================================================
+// Phase 8 Option Default Value Management (Phase 2)
+// =============================================================================
+
+use crate::storage::OptVal;
+
+extern "C" {
+    /// Get the number of options (kOptCount)
+    fn nvim_get_kopt_count() -> c_int;
+    /// Get options[opt_idx].def_val
+    fn nvim_option_get_def_val(opt_idx: c_int) -> OptVal;
+    /// Set options[opt_idx].def_val
+    fn nvim_set_option_def_val(opt_idx: c_int, val: OptVal);
+    /// Copy an OptVal (allocates new storage for strings)
+    fn rs_optval_copy(o: OptVal) -> OptVal;
+    /// Free an OptVal (releases string storage)
+    fn rs_optval_free(o: OptVal);
+    /// Get options[opt_idx].type as c_int (kOptValTypeString == 2)
+    fn nvim_get_option_type(opt_idx: c_int) -> c_int;
+    /// Get options[opt_idx].var pointer
+    fn nvim_get_option_var(opt_idx: c_int) -> *mut std::ffi::c_void;
+    /// Returns get_varp(&options[opt_idx]) for check_options loop
+    fn nvim_get_option_varp_for_check(opt_idx: c_int) -> *mut std::ffi::c_void;
+    /// Call check_string_option on the given pointer
+    fn nvim_call_check_string_option(ptr: *mut *mut std::ffi::c_char);
+    /// Get cmdheight default value as number
+    fn nvim_get_cmdheight_def_number() -> i64;
+    /// Set p_ch (cmdheight) global variable
+    fn nvim_set_p_ch(value: i64);
+    /// Copy a C string (xstrdup equivalent via copy_option_val)
+    fn nvim_call_copy_option_val(val: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+}
+
+/// kOptValTypeString constant (must match C kOptValTypeString = 2)
+const K_OPT_VAL_TYPE_STRING: c_int = 2;
+
+/// Allocate (copy) all option default values.
+///
+/// Mirrors C `alloc_options_default`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_alloc_options_default() {
+    let count = nvim_get_kopt_count();
+    for opt_idx in 0..count {
+        let def_val = nvim_option_get_def_val(opt_idx);
+        let copied = rs_optval_copy(def_val);
+        nvim_set_option_def_val(opt_idx, copied);
+    }
+}
+
+/// Change the default value for an option.
+///
+/// Mirrors C `change_option_default`.
+/// Takes ownership of `value`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_change_option_default(opt_idx: c_int, value: OptVal) {
+    let old = nvim_option_get_def_val(opt_idx);
+    rs_optval_free(old);
+    nvim_set_option_def_val(opt_idx, value);
+}
+
+/// Set the Vi-default value of a string option.
+///
+/// Mirrors C `set_string_default`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_string_default_opt(
+    opt_idx: c_int,
+    val: *mut std::ffi::c_char,
+    allocated: c_int,
+) {
+    // Build an OptVal from the string. If not already allocated, copy it.
+    let ptr = if allocated != 0 {
+        val
+    } else {
+        nvim_call_copy_option_val(val)
+    };
+    // Build a string OptVal wrapping ptr. This mirrors CSTR_AS_OPTVAL(ptr).
+    // OptVal layout: type=2 (String), data.string = { ptr, strlen(ptr) }
+    let len = if ptr.is_null() { 0 } else { libc_strlen(ptr) };
+    let val = build_string_optval(ptr, len);
+    rs_change_option_default(opt_idx, val);
+}
+
+/// Set p_ch to the cmdheight default value.
+///
+/// Mirrors C `set_init_tablocal`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_init_tablocal() {
+    let ch_default = nvim_get_cmdheight_def_number();
+    nvim_set_p_ch(ch_default);
+}
+
+/// Check all string options for NULL values.
+///
+/// Mirrors C `check_options`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_options() {
+    let count = nvim_get_kopt_count();
+    for opt_idx in 0..count {
+        if nvim_get_option_type(opt_idx) == K_OPT_VAL_TYPE_STRING
+            && !nvim_get_option_var(opt_idx).is_null()
+        {
+            let varp = nvim_get_option_varp_for_check(opt_idx);
+            nvim_call_check_string_option(varp.cast());
+        }
+    }
+}
+
+// =============================================================================
+// Internal helpers
+// =============================================================================
+
+use crate::storage::{OptValData, String_};
+use crate::OptValType;
+
+/// Build a string OptVal from a C string pointer and length.
+unsafe fn build_string_optval(ptr: *mut std::ffi::c_char, len: usize) -> OptVal {
+    OptVal {
+        type_: OptValType::String,
+        data: OptValData {
+            string: String_ {
+                data: ptr,
+                size: len,
+            },
+        },
+    }
+}
+
+/// Portable strlen for C strings.
+unsafe fn libc_strlen(s: *const std::ffi::c_char) -> usize {
+    let mut p = s;
+    while *p != 0 {
+        p = p.add(1);
+    }
+    p.offset_from(s) as usize
+}
 
 // =============================================================================
 // Default Source Constants

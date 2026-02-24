@@ -153,6 +153,13 @@ extern int rs_option_was_set(int opt_idx);
 extern void rs_reset_option_was_set(int opt_idx);
 extern void *rs_get_option_sctx(int opt_idx);
 
+// Rust default value management functions (option pass 8 phase 2)
+extern void rs_alloc_options_default(void);
+extern void rs_change_option_default(int opt_idx, OptVal value);
+extern void rs_set_string_default_opt(int opt_idx, char *val, int allocated);
+extern void rs_set_init_tablocal(void);
+extern void rs_check_options(void);
+
 // Rust parsing helpers and query functions (option pass 7 phase 1)
 extern int rs_get_op(const char *arg);
 extern int rs_get_option_prefix(char **argp);
@@ -1010,6 +1017,17 @@ void *nvim_get_option_script_ctx_ptr(OptIndex opt_idx) { return &options[opt_idx
 // Clears kOptFlagWasSet from options[opt_idx].flags (write accessor for Rust)
 void nvim_option_clear_was_set_flag(OptIndex opt_idx) { options[opt_idx].flags &= ~(uint32_t)kOptFlagWasSet; }
 
+// =============================================================================
+// Phase 8 default value management accessors (Phase 2)
+// =============================================================================
+// Set options[opt_idx].def_val (write accessor for Rust)
+void nvim_set_option_def_val(OptIndex opt_idx, OptVal val) { options[opt_idx].def_val = val; }
+// Returns get_varp(&options[opt_idx]) for check_options loop in Rust
+void *nvim_get_option_varp_for_check(OptIndex opt_idx) { return get_varp(&options[opt_idx]); }
+// Get the cmdheight default value as a number for set_init_tablocal
+int64_t nvim_get_cmdheight_def_number(void) { return options[kOptCmdheight].def_val.data.number; }
+
+
 // Fill offset table for buf_T option fields indexed by OptIndex.
 // Writes offsetof(buf_T, field) into out[idx] for each handled OptIndex.
 // Unhandled indices receive -1 (sentinel). len must equal kOptCount.
@@ -1590,8 +1608,7 @@ void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->
 
 void set_init_tablocal(void)
 {
-  // susy baka: cmdheight calls itself OPT_GLOBAL but is really tablocal!
-  p_ch = options[kOptCmdheight].def_val.data.number;
+  rs_set_init_tablocal();
 }
 
 extern void rs_set_init_default_shell(void);
@@ -1779,9 +1796,7 @@ OptVal get_option_default(const OptIndex opt_idx, int opt_flags)
 /// This ensures that we don't need to always check if the option default is allocated or not.
 static void alloc_options_default(void)
 {
-  for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
-    options[opt_idx].def_val = rs_optval_copy(options[opt_idx].def_val);
-  }
+  rs_alloc_options_default();
 }
 
 /// Change the default value for an option.
@@ -1790,8 +1805,7 @@ static void alloc_options_default(void)
 /// @param  value    New default value. Must be allocated.
 static void change_option_default(const OptIndex opt_idx, OptVal value)
 {
-  rs_optval_free(options[opt_idx].def_val);
-  options[opt_idx].def_val = value;
+  rs_change_option_default(opt_idx, value);
 }
 
 /// Set an option to its default value.
@@ -1849,7 +1863,7 @@ static void set_string_default(OptIndex opt_idx, char *val, bool allocated)
   FUNC_ATTR_NONNULL_ALL
 {
   assert(opt_idx != kOptInvalid);
-  change_option_default(opt_idx, CSTR_AS_OPTVAL(allocated ? val : xstrdup(val)));
+  rs_set_string_default_opt(opt_idx, val, allocated);
 }
 
 #if defined(EXITFREE)
@@ -2409,11 +2423,7 @@ static void didset_options2(void)
 /// Check for string options that are NULL (normally only termcap options).
 void check_options(void)
 {
-  for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
-    if ((option_has_type(opt_idx, kOptValTypeString)) && options[opt_idx].var != NULL) {
-      check_string_option((char **)get_varp(&(options[opt_idx])));
-    }
-  }
+  rs_check_options();
 }
 
 /// Check if option was set insecurely.
