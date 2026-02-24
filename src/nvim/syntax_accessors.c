@@ -918,6 +918,18 @@ static void clear_keywtab(hashtab_T *ht)
   rs_clear_keywtab(ht);
 }
 
+// Phase 6: Forward declarations for Rust functions used below
+extern void rs_add_keyword(char *name, int namelen, int id, int flags,
+                            int16_t *cont_in_list, int16_t *next_list, int conceal_char);
+extern int16_t *rs_copy_id_list(const int16_t *list);
+extern char *rs_get_group_name(char *arg, char **name_end);
+extern void rs_syn_incl_toplevel(int id, int *flagsp);
+extern void rs_init_syn_patterns(void);
+extern int rs_syn_scl_name2id(char *name);
+extern int rs_syn_scl_namen2id(char *linep, int len);
+extern int rs_syn_check_cluster(char *pp, int len);
+extern int rs_syn_add_cluster(char *name);
+
 /// Add a keyword to the list of keywords.
 ///
 /// @param name name of keyword
@@ -929,49 +941,7 @@ static void add_keyword(char *const name, size_t namelen, const int id, const in
                         int16_t *const cont_in_list, int16_t *const next_list,
                         const int conceal_char)
 {
-  char name_folded[MAXKEYWLEN + 1];
-  const char *name_ic;
-  size_t name_iclen;
-  if (curwin->w_s->b_syn_ic) {
-    name_ic = str_foldcase(name, (int)namelen, name_folded, MAXKEYWLEN + 1);
-    name_iclen = strlen(name_ic);
-  } else {
-    name_ic = name;
-    name_iclen = namelen;
-  }
-
-  keyentry_T *const kp = xmalloc(offsetof(keyentry_T, keyword) + name_iclen + 1);
-  STRCPY(kp->keyword, name_ic);
-  kp->k_syn.id = (int16_t)id;
-  kp->k_syn.inc_tag = current_syn_inc_tag;
-  kp->flags = flags;
-  kp->k_char = conceal_char;
-  kp->k_syn.cont_in_list = copy_id_list(cont_in_list);
-  if (cont_in_list != NULL) {
-    curwin->w_s->b_syn_containedin = true;
-  }
-  kp->next_list = copy_id_list(next_list);
-
-  const hash_T hash = hash_hash(kp->keyword);
-  hashtab_T *const ht = (curwin->w_s->b_syn_ic)
-                        ? &curwin->w_s->b_keywtab_ic
-                        : &curwin->w_s->b_keywtab;
-  hashitem_T *const hi = hash_lookup(ht, kp->keyword,
-                                     strlen(kp->keyword), hash);
-
-  // even though it looks like only the kp->keyword member is
-  // being used here, vim uses some pointer trickery to get the original
-  // struct again later by using knowledge of the offset of the keyword
-  // field in the struct. See the definition of the HI2KE macro.
-  if (HASHITEM_EMPTY(hi)) {
-    // new keyword, add to hashtable
-    kp->ke_next = NULL;
-    hash_add_item(ht, hi, kp->keyword, hash);
-  } else {
-    // keyword already exists, prepend to list
-    kp->ke_next = HI2KE(hi);
-    hi->hi_key = KE2HIKEY(kp);
-  }
+  rs_add_keyword(name, (int)namelen, id, flags, cont_in_list, next_list, conceal_char);
 }
 
 /// Get the start and end of the group name argument.
@@ -983,15 +953,7 @@ static void add_keyword(char *const name, size_t namelen, const int id, const in
 ///                  Return NULL if the end of the command was found instead of further args.
 static char *get_group_name(char *arg, char **name_end)
 {
-  *name_end = skiptowhite(arg);
-  char *rest = skipwhite(*name_end);
-
-  // Check if there are enough arguments.  The first argument may be a
-  // pattern, where '|' is allowed, so only check for NUL.
-  if (ends_excmd(*arg) || *rest == NUL) {
-    return NULL;
-  }
-  return rest;
+  return rs_get_group_name(arg, name_end);
 }
 
 
@@ -1000,20 +962,7 @@ static char *get_group_name(char *arg, char **name_end)
 // to the specified top-level group, if any.
 static void syn_incl_toplevel(int id, int *flagsp)
 {
-  if ((*flagsp & HL_CONTAINED) || curwin->w_s->b_syn_topgrp == 0) {
-    return;
-  }
-  *flagsp |= HL_CONTAINED | HL_INCLUDED_TOPLEVEL;
-  if (curwin->w_s->b_syn_topgrp >= SYNID_CLUSTER) {
-    // We have to alloc this, because syn_combine_list() will free it.
-    int16_t *grp_list = xmalloc(2 * sizeof(*grp_list));
-    int tlg_id = curwin->w_s->b_syn_topgrp - SYNID_CLUSTER;
-
-    grp_list[0] = (int16_t)id;
-    grp_list[1] = 0;
-    syn_combine_list(&SYN_CLSTR(curwin->w_s)[tlg_id].scl_list, &grp_list,
-                     CLUSTER_ADD);
-  }
+  rs_syn_incl_toplevel(id, flagsp);
 }
 
 
@@ -1039,27 +988,13 @@ static void syn_combine_list(int16_t **const clstr1, int16_t **const clstr2, con
 /// If it is not found, 0 is returned.
 static int syn_scl_name2id(char *name)
 {
-  // Avoid using stricmp() too much, it's slow on some systems
-  char *name_u = vim_strsave_up(name);
-  int i;
-  for (i = curwin->w_s->b_syn_clusters.ga_len; --i >= 0;) {
-    if (SYN_CLSTR(curwin->w_s)[i].scl_name_u != NULL
-        && strcmp(name_u, SYN_CLSTR(curwin->w_s)[i].scl_name_u) == 0) {
-      break;
-    }
-  }
-  xfree(name_u);
-  return i < 0 ? 0 : i + SYNID_CLUSTER;
+  return rs_syn_scl_name2id(name);
 }
 
 /// Like syn_scl_name2id(), but take a pointer + length argument.
 static int syn_scl_namen2id(char *linep, int len)
 {
-  char *name = xstrnsave(linep, (size_t)len);
-  int id = syn_scl_name2id(name);
-  xfree(name);
-
-  return id;
+  return rs_syn_scl_namen2id(linep, len);
 }
 
 /// Find syntax cluster name in the table and return its ID.
@@ -1069,14 +1004,7 @@ static int syn_scl_namen2id(char *linep, int len)
 /// @return  0 for failure.
 static int syn_check_cluster(char *pp, int len)
 {
-  char *name = xstrnsave(pp, (size_t)len);
-  int id = syn_scl_name2id(name);
-  if (id == 0) {                        // doesn't exist yet
-    id = syn_add_cluster(name);
-  } else {
-    xfree(name);
-  }
-  return id;
+  return rs_syn_check_cluster(pp, len);
 }
 
 /// Add new syntax cluster and return its ID.
@@ -1085,41 +1013,13 @@ static int syn_check_cluster(char *pp, int len)
 /// @return  0 for failure.
 static int syn_add_cluster(char *name)
 {
-  // First call for this growarray: init growing array.
-  if (curwin->w_s->b_syn_clusters.ga_data == NULL) {
-    curwin->w_s->b_syn_clusters.ga_itemsize = sizeof(syn_cluster_T);
-    ga_set_growsize(&curwin->w_s->b_syn_clusters, 10);
-  }
-
-  int len = curwin->w_s->b_syn_clusters.ga_len;
-  if (len >= MAX_CLUSTER_ID) {
-    emsg(_("E848: Too many syntax clusters"));
-    xfree(name);
-    return 0;
-  }
-
-  syn_cluster_T *scp = GA_APPEND_VIA_PTR(syn_cluster_T,
-                                         &curwin->w_s->b_syn_clusters);
-  CLEAR_POINTER(scp);
-  scp->scl_name = name;
-  scp->scl_name_u = vim_strsave_up(name);
-  scp->scl_list = NULL;
-
-  if (STRICMP(name, "Spell") == 0) {
-    curwin->w_s->b_spell_cluster_id = len + SYNID_CLUSTER;
-  }
-  if (STRICMP(name, "NoSpell") == 0) {
-    curwin->w_s->b_nospell_cluster_id = len + SYNID_CLUSTER;
-  }
-
-  return len + SYNID_CLUSTER;
+  return rs_syn_add_cluster(name);
 }
 
 // On first call for current buffer: Init growing array.
 static void init_syn_patterns(void)
 {
-  curwin->w_s->b_syn_patterns.ga_itemsize = sizeof(synpat_T);
-  ga_set_growsize(&curwin->w_s->b_syn_patterns, 10);
+  rs_init_syn_patterns();
 }
 
 /// Get one pattern for a ":syntax match" or ":syntax region" command.
@@ -1136,17 +1036,7 @@ static char *get_syn_pattern(char *arg, synpat_T *ci)
 // Make a copy of an ID list.
 static int16_t *copy_id_list(const int16_t *const list)
 {
-  if (list == NULL) {
-    return NULL;
-  }
-
-  int count;
-  for (count = 0; list[count]; count++) {}
-  const size_t len = ((size_t)count + 1) * sizeof(int16_t);
-  int16_t *const retval = xmalloc(len);
-  memmove(retval, list, len);
-
-  return retval;
+  return rs_copy_id_list(list);
 }
 
 /// in_id_list implemented in Rust.
@@ -4149,4 +4039,127 @@ void nvim_syn_clear_keywtab_ht(hashtab_T *ht)
 void nvim_syn_set_current_state_invalid(void)
 {
   current_state.ga_itemsize = 0;
+}
+
+// =============================================================================
+// Phase 6 accessors: cluster management migration (syn_scl_name2id, syn_add_cluster)
+// =============================================================================
+
+/// Append a new (zeroed) cluster entry to curwin->w_s->b_syn_clusters.
+/// Initializes the garray if needed. Returns the index of the new entry,
+/// or -1 if we have hit MAX_CLUSTER_ID.
+int nvim_synblock_cluster_append(void)
+{
+  synblock_T *block = curwin->w_s;
+  // First call for this growarray: init growing array.
+  if (block->b_syn_clusters.ga_data == NULL) {
+    block->b_syn_clusters.ga_itemsize = sizeof(syn_cluster_T);
+    ga_set_growsize(&block->b_syn_clusters, 10);
+  }
+  int len = block->b_syn_clusters.ga_len;
+  if (len >= MAX_CLUSTER_ID) {
+    emsg(_("E848: Too many syntax clusters"));
+    return -1;
+  }
+  syn_cluster_T *scp = GA_APPEND_VIA_PTR(syn_cluster_T, &block->b_syn_clusters);
+  CLEAR_POINTER(scp);
+  return len;
+}
+
+/// Set the scl_name field of cluster at index idx in curwin->w_s->b_syn_clusters.
+void nvim_synblock_set_cluster_name(int idx, char *name)
+{
+  SYN_CLSTR(curwin->w_s)[idx].scl_name = name;
+}
+
+/// Set the scl_name_u field of cluster at index idx in curwin->w_s->b_syn_clusters.
+void nvim_synblock_set_cluster_name_u(int idx, char *name_u)
+{
+  SYN_CLSTR(curwin->w_s)[idx].scl_name_u = name_u;
+}
+
+/// Set the scl_list field of cluster at index idx in curwin->w_s->b_syn_clusters.
+void nvim_synblock_set_cluster_list(int idx, int16_t *list)
+{
+  SYN_CLSTR(curwin->w_s)[idx].scl_list = list;
+}
+
+/// Set b_spell_cluster_id on curwin->w_s.
+void nvim_synblock_set_spell_cluster_id(int id)
+{
+  curwin->w_s->b_spell_cluster_id = id;
+}
+
+/// Set b_nospell_cluster_id on curwin->w_s.
+void nvim_synblock_set_nospell_cluster_id(int id)
+{
+  curwin->w_s->b_nospell_cluster_id = id;
+}
+
+/// vim_strsave_up for a null-terminated string -- used by rs_syn_add_cluster.
+char *nvim_syn_vim_strsave_up(const char *s)
+{
+  return vim_strsave_up(s);
+}
+
+// =============================================================================
+// Phase 6 accessors: init_syn_patterns migration
+// =============================================================================
+
+/// Initialize b_syn_patterns garray on curwin->w_s.
+void nvim_synblock_ga_init_patterns(void)
+{
+  curwin->w_s->b_syn_patterns.ga_itemsize = sizeof(synpat_T);
+  ga_set_growsize(&curwin->w_s->b_syn_patterns, 10);
+}
+
+// =============================================================================
+// Phase 6 accessors: syn_incl_toplevel migration
+// =============================================================================
+
+/// Get b_syn_topgrp from curwin->w_s.
+int nvim_syn_get_topgrp_curwin(void)
+{
+  return curwin->w_s->b_syn_topgrp;
+}
+
+// =============================================================================
+// Phase 6 accessors: add_keyword + copy_id_list migration
+// =============================================================================
+
+/// Perform the full hashtab keyword insertion for add_keyword.
+/// name_ic is a NUL-terminated foldcased (or original) keyword string.
+/// Allocates a keyentry_T of the appropriate size, fills all fields,
+/// and inserts into curwin->w_s->b_{keywtab,keywtab_ic}.
+/// Ownership of cont_in_list_copy and next_list_copy is transferred.
+void nvim_syn_hash_insert_keyword(const char *name_ic, int name_iclen,
+                                   int id, int inc_tag, int flags,
+                                   int conceal_char,
+                                   int16_t *cont_in_list_copy,
+                                   int16_t *next_list_copy,
+                                   int use_ic)
+{
+  keyentry_T *const kp = xmalloc(offsetof(keyentry_T, keyword) + (size_t)name_iclen + 1);
+  STRCPY(kp->keyword, name_ic);
+  kp->k_syn.id = (int16_t)id;
+  kp->k_syn.inc_tag = inc_tag;
+  kp->flags = flags;
+  kp->k_char = conceal_char;
+  kp->k_syn.cont_in_list = cont_in_list_copy;
+  if (cont_in_list_copy != NULL) {
+    curwin->w_s->b_syn_containedin = true;
+  }
+  kp->next_list = next_list_copy;
+
+  const hash_T hash = hash_hash(kp->keyword);
+  hashtab_T *const ht = use_ic ? &curwin->w_s->b_keywtab_ic : &curwin->w_s->b_keywtab;
+  hashitem_T *const hi = hash_lookup(ht, kp->keyword, (size_t)name_iclen, hash);
+
+  if (HASHITEM_EMPTY(hi)) {
+    kp->ke_next = NULL;
+    hash_add_item(ht, hi, kp->keyword, hash);
+  } else {
+    kp->ke_next = HI2KE(hi);
+    hi->hi_key = KE2HIKEY(kp);
+  }
 }

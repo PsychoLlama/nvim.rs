@@ -786,6 +786,251 @@ pub unsafe extern "C" fn rs_syn_cmd_cluster(eap: *mut c_void, syncing: c_int) {
     syn_cmd_cluster_impl(eap, syncing);
 }
 
+// =============================================================================
+// Phase 6: Cluster management migration
+// (syn_scl_name2id, syn_scl_namen2id, syn_check_cluster, syn_add_cluster)
+// =============================================================================
+
+extern "C" {
+    fn nvim_synblock_cluster_append() -> c_int;
+    fn nvim_synblock_set_cluster_name(idx: c_int, name: *mut c_char);
+    fn nvim_synblock_set_cluster_name_u(idx: c_int, name_u: *mut c_char);
+    fn nvim_synblock_set_cluster_list(idx: c_int, list: *mut i16);
+    fn nvim_synblock_set_spell_cluster_id(id: c_int);
+    fn nvim_synblock_set_nospell_cluster_id(id: c_int);
+    fn nvim_syn_vim_strsave_up(s: *const c_char) -> *mut c_char;
+}
+
+/// Look up a syntax cluster name (null-terminated) and return its SYNID_CLUSTER+idx ID.
+/// Returns 0 if not found. Matches C syn_scl_name2id().
+///
+/// # Safety
+/// `name` must be a valid null-terminated C string.
+unsafe fn syn_scl_name2id_impl(name: *mut c_char) -> c_int {
+    let block = nvim_get_curwin_synblock();
+    if block.is_null() {
+        return 0;
+    }
+    // Convert name to uppercase for comparison.
+    let name_u = nvim_syn_vim_strsave_up(name as *const c_char);
+    if name_u.is_null() {
+        return 0;
+    }
+    let count = nvim_synblock_get_cluster_count(block);
+    let mut result = 0i32;
+    let mut i = count - 1;
+    while i >= 0 {
+        let cluster = nvim_synblock_get_cluster(block, i);
+        if !cluster.is_null() {
+            let name_u_c = nvim_syncluster_get_name_u(cluster);
+            if !name_u_c.is_null() {
+                // strcmp of two C strings
+                let a = std::ffi::CStr::from_ptr(name_u);
+                let b = std::ffi::CStr::from_ptr(name_u_c);
+                if a == b {
+                    result = i + crate::types::SYNID_CLUSTER;
+                    break;
+                }
+            }
+        }
+        i -= 1;
+    }
+    xfree(name_u as *mut c_void);
+    result
+}
+
+/// Add a new syntax cluster with the given name (consumed - ownership transferred).
+/// Returns 0 on failure, or (index + SYNID_CLUSTER) on success.
+/// Matches C syn_add_cluster().
+///
+/// # Safety
+/// `name` must be a valid xmalloc-allocated null-terminated C string (ownership is taken).
+unsafe fn syn_add_cluster_impl(name: *mut c_char) -> c_int {
+    let idx = nvim_synblock_cluster_append();
+    if idx < 0 {
+        // Error already reported; free name and return 0.
+        xfree(name as *mut c_void);
+        return 0;
+    }
+    let name_u = nvim_syn_vim_strsave_up(name as *const c_char);
+    nvim_synblock_set_cluster_name(idx, name);
+    nvim_synblock_set_cluster_name_u(idx, name_u);
+    nvim_synblock_set_cluster_list(idx, std::ptr::null_mut());
+
+    // Check for special @Spell and @NoSpell clusters.
+    let spell = std::ffi::CStr::from_ptr(name as *const c_char);
+    let spell_str = spell.to_bytes();
+    // Case-insensitive compare to "Spell"
+    let lc: Vec<u8> = spell_str
+        .iter()
+        .map(|&c| if c.is_ascii_uppercase() { c | 0x20 } else { c })
+        .collect();
+    if lc == b"spell" {
+        nvim_synblock_set_spell_cluster_id(idx + crate::types::SYNID_CLUSTER);
+    } else if lc == b"nospell" {
+        nvim_synblock_set_nospell_cluster_id(idx + crate::types::SYNID_CLUSTER);
+    }
+
+    idx + crate::types::SYNID_CLUSTER
+}
+
+/// FFI export: look up cluster name and return its ID.
+/// Returns 0 if not found. Equivalent to C syn_scl_name2id().
+///
+/// # Safety
+/// `name` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_scl_name2id(name: *mut c_char) -> c_int {
+    if name.is_null() {
+        return 0;
+    }
+    syn_scl_name2id_impl(name)
+}
+
+/// FFI export: look up cluster name+length and return its ID.
+/// Equivalent to C syn_scl_namen2id().
+///
+/// # Safety
+/// `linep` must point to at least `len` bytes of valid memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_scl_namen2id(linep: *mut c_char, len: c_int) -> c_int {
+    if linep.is_null() || len <= 0 {
+        return 0;
+    }
+    // xstrnsave equivalent: allocate a copy.
+    let slice = std::slice::from_raw_parts(linep as *const u8, len as usize);
+    let Ok(cname) = std::ffi::CString::new(slice) else {
+        return 0;
+    };
+    // syn_scl_name2id operates on a mutable pointer (doesn't modify it).
+    let ptr = cname.as_ptr() as *mut c_char;
+    syn_scl_name2id_impl(ptr)
+}
+
+/// FFI export: find or create a syntax cluster by name+length.
+/// Equivalent to C syn_check_cluster().
+///
+/// # Safety
+/// `pp` must point to at least `len` bytes of valid memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_check_cluster(pp: *mut c_char, len: c_int) -> c_int {
+    if pp.is_null() || len <= 0 {
+        return 0;
+    }
+    // Make a copy of the name.
+    let slice = std::slice::from_raw_parts(pp as *const u8, len as usize);
+    let Ok(cname) = std::ffi::CString::new(slice) else {
+        return 0;
+    };
+    let name_ptr = cname.as_ptr() as *mut c_char;
+    let id = syn_scl_name2id_impl(name_ptr);
+    if id != 0 {
+        return id;
+    }
+    // Doesn't exist: allocate an owned copy to pass to syn_add_cluster_impl.
+    // xmalloc + copy the bytes.
+    let allocated = xmalloc((len as usize) + 1) as *mut c_char;
+    if allocated.is_null() {
+        return 0;
+    }
+    std::ptr::copy_nonoverlapping(pp, allocated, len as usize);
+    *allocated.add(len as usize) = 0;
+    syn_add_cluster_impl(allocated)
+}
+
+/// FFI export: add a new syntax cluster with the given name (ownership taken).
+/// Equivalent to C syn_add_cluster().
+///
+/// # Safety
+/// `name` must be a valid xmalloc-allocated null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_add_cluster(name: *mut c_char) -> c_int {
+    if name.is_null() {
+        return 0;
+    }
+    syn_add_cluster_impl(name)
+}
+
+// =============================================================================
+// Phase 6: Small helper migration
+// (get_group_name, syn_incl_toplevel, init_syn_patterns)
+// =============================================================================
+
+extern "C" {
+    fn nvim_syn_skiptowhite(p: *const c_char) -> *mut c_char;
+    fn nvim_syn_skipwhite(p: *const c_char) -> *mut c_char;
+    fn nvim_syn_get_topgrp_curwin() -> c_int;
+    fn nvim_synblock_ga_init_patterns();
+}
+
+/// Get the start and end of the group name argument.
+/// Equivalent to C get_group_name().
+///
+/// Returns NULL if the end of the command was found instead of further args.
+///
+/// # Safety
+/// `arg` must be a valid null-terminated C string.
+/// `name_end` must be a non-null pointer to a `*mut c_char` output slot.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_group_name(
+    arg: *mut c_char,
+    name_end: *mut *mut c_char,
+) -> *mut c_char {
+    if arg.is_null() || name_end.is_null() {
+        return std::ptr::null_mut();
+    }
+    *name_end = nvim_syn_skiptowhite(arg);
+    let rest = nvim_syn_skipwhite(*name_end);
+
+    // Check if there are enough arguments. The first argument may be a
+    // pattern where '|' is allowed, so only check for NUL.
+    if nvim_syn_ends_excmd(*arg as c_int) != 0 || *rest == 0 {
+        return std::ptr::null_mut();
+    }
+    rest
+}
+
+/// Initialize b_syn_patterns garray on curwin->w_s.
+/// Equivalent to C init_syn_patterns().
+#[no_mangle]
+pub unsafe extern "C" fn rs_init_syn_patterns() {
+    nvim_synblock_ga_init_patterns();
+}
+
+/// Adjustments to syntax item when declared in a ":syn include"'d file.
+/// Equivalent to C syn_incl_toplevel().
+///
+/// # Safety
+/// `flagsp` must be a valid pointer to a c_int.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_incl_toplevel(id: c_int, flagsp: *mut c_int) {
+    use crate::types::{HL_CONTAINED, HL_INCLUDED_TOPLEVEL, SYNID_CLUSTER};
+
+    if flagsp.is_null() {
+        return;
+    }
+    let flags = *flagsp;
+    let topgrp = nvim_syn_get_topgrp_curwin();
+
+    if (flags & HL_CONTAINED) != 0 || topgrp == 0 {
+        return;
+    }
+    *flagsp |= HL_CONTAINED | HL_INCLUDED_TOPLEVEL;
+
+    if topgrp >= SYNID_CLUSTER {
+        // Allocate a 2-element list [id, 0] and combine into the top-level cluster.
+        let mut grp_list = xmalloc(2 * std::mem::size_of::<i16>()) as *mut i16;
+        if grp_list.is_null() {
+            return;
+        }
+        *grp_list = id as i16;
+        *grp_list.add(1) = 0;
+        let tlg_id = topgrp - SYNID_CLUSTER;
+        // Use the existing nvim_syn_combine_cluster_list accessor.
+        nvim_syn_combine_cluster_list(tlg_id, &mut grp_list, CLUSTER_ADD);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

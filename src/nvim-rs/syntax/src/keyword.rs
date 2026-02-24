@@ -380,6 +380,122 @@ impl KeywordMatch {
     }
 }
 
+// =============================================================================
+// Phase 6: add_keyword + copy_id_list migration
+// =============================================================================
+
+extern "C" {
+    fn nvim_syn_get_current_inc_tag() -> c_int;
+    fn nvim_syn_hash_insert_keyword(
+        name_ic: *const c_char,
+        name_iclen: c_int,
+        id: c_int,
+        inc_tag: c_int,
+        flags: c_int,
+        conceal_char: c_int,
+        cont_in_list_copy: *mut i16,
+        next_list_copy: *mut i16,
+        use_ic: c_int,
+    );
+    fn nvim_syn_get_curwin_syn_ic() -> c_int;
+}
+
+extern "C" {
+    fn xmalloc(size: usize) -> *mut std::ffi::c_void;
+    fn xfree(ptr: *mut std::ffi::c_void);
+}
+
+/// Make a copy of a null-terminated int16_t ID list.
+/// Returns null if the input is null.
+/// Equivalent to C copy_id_list().
+///
+/// # Safety
+/// `list` must be null or a valid null-terminated i16 array.
+pub unsafe fn copy_id_list_impl(list: *const i16) -> *mut i16 {
+    if list.is_null() {
+        return std::ptr::null_mut();
+    }
+    let mut count: usize = 0;
+    while *list.add(count) != 0 {
+        count += 1;
+    }
+    let len = (count + 1) * std::mem::size_of::<i16>();
+    let retval = xmalloc(len) as *mut i16;
+    std::ptr::copy_nonoverlapping(list, retval, count + 1);
+    retval
+}
+
+/// FFI export: copy a null-terminated int16_t ID list.
+///
+/// # Safety
+/// `list` must be null or a valid null-terminated i16 array.
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_id_list(list: *const i16) -> *mut i16 {
+    copy_id_list_impl(list)
+}
+
+/// Add a keyword to the current window's syntax hash table.
+/// Equivalent to C add_keyword().
+///
+/// # Safety
+/// All pointer arguments follow the same ownership semantics as C add_keyword.
+/// `cont_in_list` and `next_list` are NOT consumed (copies are made internally).
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_keyword(
+    name: *mut c_char,
+    namelen: c_int,
+    id: c_int,
+    flags: c_int,
+    cont_in_list: *mut i16,
+    next_list: *mut i16,
+    conceal_char: c_int,
+) {
+    if name.is_null() || namelen <= 0 {
+        return;
+    }
+
+    let use_ic = nvim_syn_get_curwin_syn_ic();
+    let inc_tag = nvim_syn_get_current_inc_tag();
+
+    // Perform case folding if needed.
+    let (name_ic_ptr, name_ic_len): (*const c_char, c_int) = if use_ic != 0 {
+        use crate::types::MAXKEYWLEN;
+        let buf_size = (MAXKEYWLEN + 1) as usize;
+        let buf = xmalloc(buf_size) as *mut c_char;
+        nvim_syn_keyword_foldcase(name, namelen, buf, MAXKEYWLEN + 1);
+        let len = {
+            let mut l = 0usize;
+            while *buf.add(l) != 0 {
+                l += 1;
+            }
+            l as c_int
+        };
+        (buf as *const c_char, len)
+    } else {
+        (name as *const c_char, namelen)
+    };
+
+    // Make copies of the ID lists.
+    let cont_in_copy = copy_id_list_impl(cont_in_list);
+    let next_copy = copy_id_list_impl(next_list);
+
+    nvim_syn_hash_insert_keyword(
+        name_ic_ptr,
+        name_ic_len,
+        id,
+        inc_tag,
+        flags,
+        conceal_char,
+        cont_in_copy,
+        next_copy,
+        use_ic,
+    );
+
+    if use_ic != 0 {
+        xfree(name_ic_ptr as *mut std::ffi::c_void);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
