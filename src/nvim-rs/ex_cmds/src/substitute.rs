@@ -136,6 +136,56 @@ extern "C" {
     fn xrealloc(ptr: *mut std::ffi::c_void, size: usize) -> *mut std::ffi::c_void;
 }
 
+// =============================================================================
+// Phase 1: regmmatch_T opaque handle infrastructure
+// =============================================================================
+
+extern "C" {
+    /// Get regmatch->startpos[0].lnum
+    pub fn nvim_regmmatch_startpos0_lnum(rm: *mut crate::RegmmatchHandle) -> c_int;
+    /// Get regmatch->startpos[0].col
+    pub fn nvim_regmmatch_startpos0_col(rm: *mut crate::RegmmatchHandle) -> c_int;
+    /// Get regmatch->endpos[0].lnum
+    pub fn nvim_regmmatch_endpos0_lnum(rm: *mut crate::RegmmatchHandle) -> c_int;
+    /// Get regmatch->endpos[0].col
+    pub fn nvim_regmmatch_endpos0_col(rm: *mut crate::RegmmatchHandle) -> c_int;
+    /// Set regmatch->rmm_ic
+    pub fn nvim_regmmatch_set_rmm_ic(rm: *mut crate::RegmmatchHandle, ic: c_int);
+    /// Get regmatch->rmm_ic
+    pub fn nvim_regmmatch_get_rmm_ic(rm: *mut crate::RegmmatchHandle) -> c_int;
+    /// Check if regmatch->regprog == NULL
+    pub fn nvim_regmmatch_regprog_null(rm: *mut crate::RegmmatchHandle) -> c_int;
+    /// Call re_multiline(regmatch->regprog)
+    pub fn nvim_regmmatch_re_multiline(rm: *mut crate::RegmmatchHandle) -> c_int;
+    /// Wrap search_regcomp for do_sub, allocating and returning opaque regmmatch_T*
+    pub fn nvim_do_sub_search_regcomp(
+        pat: *const c_char,
+        patlen: usize,
+        which_pat: c_int,
+        flags: c_int,
+    ) -> *mut crate::RegmmatchHandle;
+    /// Wrap vim_regexec_multi for do_sub
+    pub fn nvim_do_sub_vim_regexec_multi(
+        rm: *mut crate::RegmmatchHandle,
+        lnum: c_int,
+        col: c_int,
+    ) -> c_int;
+    /// Wrap vim_regsub_multi for do_sub
+    pub fn nvim_do_sub_vim_regsub_multi(
+        rm: *mut crate::RegmmatchHandle,
+        source_lnum: c_int,
+        sub_str: *const c_char,
+        dest: *mut c_char,
+        destlen: c_int,
+        flags: c_int,
+    ) -> c_int;
+    /// Free the regmmatch_T opaque handle (vim_regfree + xfree)
+    pub fn nvim_do_sub_vim_regfree(rm: *mut crate::RegmmatchHandle);
+    /// Wrap regtilde for do_sub
+    pub fn nvim_do_sub_regtilde(sub_str: *mut c_char, magic: c_int, preview: c_int)
+        -> *mut c_char;
+}
+
 /// C-compatible layout for subflags_T.
 ///
 /// Must match the C struct exactly:

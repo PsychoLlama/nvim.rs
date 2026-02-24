@@ -3902,3 +3902,104 @@ int *nvim_excmds_eap_forceit_ptr(exarg_T *eap) { return (int *)&eap->forceit; }
 
 /// Set *forceit_ptr to val (used by check_readonly Rust wrapper).
 void nvim_excmds_set_forceit_ptr(int *forceit_ptr, int val) { *forceit_ptr = val; }
+
+// =============================================================================
+// Phase 1: regmmatch_T opaque handle accessors for do_sub migration
+// =============================================================================
+
+/// Get regmatch->startpos[0].lnum
+int nvim_regmmatch_startpos0_lnum(void *rm)
+{
+  return (int)((regmmatch_T *)rm)->startpos[0].lnum;
+}
+
+/// Get regmatch->startpos[0].col
+int nvim_regmmatch_startpos0_col(void *rm)
+{
+  return (int)((regmmatch_T *)rm)->startpos[0].col;
+}
+
+/// Get regmatch->endpos[0].lnum
+int nvim_regmmatch_endpos0_lnum(void *rm)
+{
+  return (int)((regmmatch_T *)rm)->endpos[0].lnum;
+}
+
+/// Get regmatch->endpos[0].col
+int nvim_regmmatch_endpos0_col(void *rm)
+{
+  return (int)((regmmatch_T *)rm)->endpos[0].col;
+}
+
+/// Set regmatch->rmm_ic
+void nvim_regmmatch_set_rmm_ic(void *rm, int ic)
+{
+  ((regmmatch_T *)rm)->rmm_ic = (bool)ic;
+}
+
+/// Get regmatch->rmm_ic
+int nvim_regmmatch_get_rmm_ic(void *rm)
+{
+  return ((regmmatch_T *)rm)->rmm_ic ? 1 : 0;
+}
+
+/// Check if regmatch->regprog == NULL
+int nvim_regmmatch_regprog_null(void *rm)
+{
+  return ((regmmatch_T *)rm)->regprog == NULL ? 1 : 0;
+}
+
+/// Call re_multiline(regmatch->regprog)
+int nvim_regmmatch_re_multiline(void *rm)
+{
+  return re_multiline(((regmmatch_T *)rm)->regprog) ? 1 : 0;
+}
+
+/// Wrap search_regcomp for do_sub, allocating and returning opaque regmmatch_T*.
+/// Returns NULL on failure. flags=0 normally, flags=SEARCH_HIS to save history.
+void *nvim_do_sub_search_regcomp(const char *pat, size_t patlen, int which_pat, int flags)
+{
+  regmmatch_T *rm = xmalloc(sizeof(regmmatch_T));
+  memset(rm, 0, sizeof(*rm));
+  if (search_regcomp((char *)pat, patlen, NULL, RE_SUBST, which_pat, flags, rm) == FAIL) {
+    xfree(rm);
+    return NULL;
+  }
+  return rm;
+}
+
+/// Wrap vim_regexec_multi for do_sub.
+/// Returns match count (>0 means matched).
+int nvim_do_sub_vim_regexec_multi(void *rm, int lnum, int col)
+{
+  return vim_regexec_multi((regmmatch_T *)rm, curwin, curbuf, (linenr_T)lnum, (colnr_T)col,
+                           NULL, NULL);
+}
+
+/// Wrap vim_regsub_multi for do_sub.
+/// source_lnum is sub_firstlnum - regmatch.startpos[0].lnum.
+/// sub is the replacement string (source arg to vim_regsub_multi).
+/// dest is the output buffer, destlen is its size.
+/// Returns sublen (length including NUL), or 0 on error.
+int nvim_do_sub_vim_regsub_multi(void *rm, int source_lnum, const char *sub,
+                                  char *dest, int destlen, int flags)
+{
+  return vim_regsub_multi((regmmatch_T *)rm, (linenr_T)source_lnum,
+                          (char *)sub, dest, destlen, flags);
+}
+
+/// Wrap vim_regfree for do_sub (frees regprog inside the regmmatch_T, then xfree).
+void nvim_do_sub_vim_regfree(void *rm)
+{
+  if (rm == NULL) { return; }
+  vim_regfree(((regmmatch_T *)rm)->regprog);
+  xfree(rm);
+}
+
+/// Wrap regtilde for do_sub.
+/// Returns new string (may be same as sub if no tilde, or newly allocated).
+/// The caller is responsible for freeing if the pointer changed.
+char *nvim_do_sub_regtilde(char *sub, int magic, int preview)
+{
+  return regtilde(sub, magic, preview != 0);
+}

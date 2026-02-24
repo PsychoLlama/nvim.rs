@@ -80,6 +80,14 @@ pub struct RegmatchHandle {
     _opaque: [u8; 0],
 }
 
+/// Opaque handle to a C `regmmatch_T` struct.
+///
+/// Represents a multi-line compiled regex match state used by `do_sub`.
+#[repr(C)]
+pub struct RegmmatchHandle {
+    _opaque: [u8; 0],
+}
+
 // =============================================================================
 // Command Address Type
 // =============================================================================
