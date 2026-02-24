@@ -719,12 +719,28 @@ extern "C" {
     fn nvim_shada_packer_buffer_for_file(fd: *mut c_void) -> ShadaPackerBuffer;
     /// Initialize a PackerBuffer for writing to a FileDescriptor (by pointer).
     fn nvim_shada_packer_init_for_file(fd: *mut c_void, out: *mut ShadaPackerBuffer);
-    /// Write all global variables to the packer, updating wms->dumped_variables.
-    fn nvim_shada_pack_all_gvars(
-        packer: *mut ShadaPackerBuffer,
-        wms: *mut c_void,
-        max_kbyte: usize,
-    ) -> c_int;
+}
+
+// =============================================================================
+// Phase 3 (plan fd426e0f): nvim_shada_pack_all_gvars migration accessors
+// =============================================================================
+
+extern "C" {
+    /// Get dv_hashtab pointer from VAR_DICT typval.
+    fn nvim_shada_tv_get_dict_ht(tv: *const c_void) -> *mut c_void;
+    /// Get dv_copyID from VAR_DICT typval.
+    fn nvim_shada_tv_get_dict_copyid(tv: *const c_void) -> c_int;
+    /// Get list_T pointer from VAR_LIST typval.
+    fn nvim_shada_tv_get_list(tv: *const c_void) -> *mut c_void;
+    /// Get lv_copyID from VAR_LIST typval.
+    fn nvim_shada_tv_get_list_copyid(tv: *const c_void) -> c_int;
+    /// Mark all items in hashtab with copyID (from eval crate, opaque hashtab_T*).
+    fn rs_set_ref_in_ht(ht: *mut c_void, copy_id: c_int, list_stack: *mut *mut c_void) -> bool;
+    /// Mark all items in list with copyID (from eval crate, opaque list_T*).
+    fn rs_set_ref_in_list_items(l: *mut c_void, copy_id: c_int, ht_stack: *mut *mut c_void)
+        -> bool;
+    /// Get a fresh copyID for circular reference detection (from eval crate).
+    fn rs_get_copyID() -> c_int;
 }
 
 // =============================================================================
@@ -3513,7 +3529,7 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
 
         // Write global variables.
         if dump_global_vars {
-            let gvar_ret = nvim_shada_pack_all_gvars(packer, wms.cast(), max_kbyte);
+            let gvar_ret = rs_shada_pack_all_gvars(packer, wms.cast(), max_kbyte);
             if gvar_ret == SD_WRITE_FAILED {
                 ret = SD_WRITE_FAILED;
                 break 'write_exit;
@@ -4508,6 +4524,111 @@ pub unsafe extern "C" fn rs_shada_encode_gvars() -> NvimString {
     }
 
     nvim_shada_packer_take_string(packer)
+}
+
+/// Write all global variables (VAR_FLAVOUR_SHADA) to the packer,
+/// updating wms->dumped_variables. Includes circular-reference detection
+/// for dict and list values.
+///
+/// This is the Rust replacement for C nvim_shada_pack_all_gvars.
+///
+/// Returns SD_WRITE_SUCCESSFUL or SD_WRITE_FAILED.
+///
+/// # Safety
+///
+/// `packer` and `wms` must be valid pointers.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub unsafe extern "C" fn rs_shada_pack_all_gvars(
+    packer: *mut ShadaPackerBuffer,
+    wms: *mut c_void,
+    // max_kbyte is passed by caller but nvim_shada_pack_gvar_entry always uses 0
+    _max_kbyte: usize,
+) -> c_int {
+    // VAR_FLAVOUR_SHADA = 4
+    const VAR_FLAVOUR_SHADA: c_uint = 4;
+    // v_type values
+    const VAR_FUNC: c_int = 3;
+    const VAR_PARTIAL: c_int = 9;
+    const VAR_DICT: c_int = 6;
+    const VAR_LIST: c_int = 5;
+
+    let cur_timestamp = nvim_shada_os_time();
+    let mut var_iter: *const c_void = std::ptr::null();
+
+    loop {
+        let mut name: *const c_char = std::ptr::null();
+        let mut tv: *mut c_void = std::ptr::null_mut();
+        var_iter =
+            nvim_shada_var_shada_iter(var_iter, &raw mut name, &raw mut tv, VAR_FLAVOUR_SHADA);
+        if name.is_null() {
+            break;
+        }
+
+        let vtype = nvim_shada_tv_get_type(tv);
+
+        // Skip function and partial types.
+        if vtype == VAR_FUNC || vtype == VAR_PARTIAL {
+            nvim_shada_tv_clear(tv.cast());
+            nvim_xfree(tv);
+            if var_iter.is_null() {
+                break;
+            }
+            continue;
+        }
+
+        // Circular reference detection for dict and list.
+        if vtype == VAR_DICT {
+            let ht = nvim_shada_tv_get_dict_ht(tv);
+            let copy_id = rs_get_copyID();
+            let set_result = if ht.is_null() {
+                false
+            } else {
+                rs_set_ref_in_ht(ht, copy_id, std::ptr::null_mut())
+            };
+            let dict_copy_id = nvim_shada_tv_get_dict_copyid(tv);
+            if !set_result && copy_id == dict_copy_id {
+                nvim_shada_tv_clear(tv.cast());
+                nvim_xfree(tv);
+                if var_iter.is_null() {
+                    break;
+                }
+                continue;
+            }
+        } else if vtype == VAR_LIST {
+            let list = nvim_shada_tv_get_list(tv);
+            let copy_id = rs_get_copyID();
+            let set_result = if list.is_null() {
+                false
+            } else {
+                rs_set_ref_in_list_items(list, copy_id, std::ptr::null_mut())
+            };
+            let list_copy_id = nvim_shada_tv_get_list_copyid(tv);
+            if !set_result && copy_id == list_copy_id {
+                nvim_shada_tv_clear(tv.cast());
+                nvim_xfree(tv);
+                if var_iter.is_null() {
+                    break;
+                }
+                continue;
+            }
+        }
+
+        // Pack the variable entry (nvim_shada_pack_gvar_entry clears and frees tv).
+        let spe_ret = nvim_shada_pack_gvar_entry(packer, name, tv, cur_timestamp);
+        if spe_ret == SD_WRITE_FAILED {
+            return SD_WRITE_FAILED;
+        }
+        if spe_ret == SD_WRITE_SUCCESSFUL {
+            nvim_shada_wms_dumped_vars_put(wms, name);
+        }
+
+        if var_iter.is_null() {
+            break;
+        }
+    }
+
+    SD_WRITE_SUCCESSFUL
 }
 
 /// Read ShaDa entries from a string.

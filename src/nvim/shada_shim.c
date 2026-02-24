@@ -2810,77 +2810,55 @@ void nvim_shada_packer_init_for_file(void *fd, PackerBuffer *out)
   *out = nvim_shada_packer_buffer_for_file(fd);
 }
 
-/// Write all global variables to the packer, updating wms->dumped_variables.
-/// Implements the var_shada_iter loop from shada_write including circular-ref detection.
-/// @param packer    Packer buffer to write to.
-/// @param wms       WriteMergerState (for dumped_variables set).
-/// @param max_kbyte Maximum kbyte for entries.
-/// @return kSDWriteSuccessful or kSDWriteFailed.
-int nvim_shada_pack_all_gvars(PackerBuffer *packer, void *wms_opaque, size_t max_kbyte)
+// =============================================================================
+// Phase 3 (plan fd426e0f): nvim_shada_pack_all_gvars migration accessors
+// =============================================================================
+
+/// Get the dv_hashtab pointer from a VAR_DICT typval (for rs_set_ref_in_ht).
+/// @param tv  xmalloc'd typval_T pointer with v_type == VAR_DICT.
+/// @return    pointer to tv->vval.v_dict->dv_hashtab, or NULL if dict is NULL.
+void *nvim_shada_tv_get_dict_ht(const void *tv)
 {
-  WriteMergerState *wms = (WriteMergerState *)wms_opaque;
-  const void *var_iter = NULL;
-  const Timestamp cur_timestamp = os_time();
-  do {
-    typval_T vartv;
-    const char *name = NULL;
-    var_iter = var_shada_iter(var_iter, &name, &vartv, VAR_FLAVOUR_SHADA);
-    if (name == NULL) {
-      break;
-    }
-    switch (vartv.v_type) {
-    case VAR_FUNC:
-    case VAR_PARTIAL:
-      tv_clear(&vartv);
-      continue;
-    case VAR_DICT: {
-      dict_T *di = vartv.vval.v_dict;
-      int copyID = rs_get_copyID();
-      if (!rs_set_ref_in_ht(&di->dv_hashtab, copyID, NULL)
-          && copyID == di->dv_copyID) {
-        tv_clear(&vartv);
-        continue;
-      }
-      break;
-    }
-    case VAR_LIST: {
-      list_T *l = vartv.vval.v_list;
-      int copyID = rs_get_copyID();
-      if (!rs_set_ref_in_list_items(l, copyID, NULL)
-          && copyID == l->lv_copyID) {
-        tv_clear(&vartv);
-        continue;
-      }
-      break;
-    }
-    default:
-      break;
-    }
-    typval_T tgttv;
-    tv_copy(&vartv, &tgttv);
-    ShaDaWriteResult spe_ret;
-    ShadaEntry var_entry = {
-      .type = kSDItemVariable,
-      .timestamp = cur_timestamp,
-      .data = {
-        .global_var = {
-          .name = (char *)name,
-          .value = tgttv,
-        }
-      },
-      .additional_data = NULL,
-    };
-    if ((spe_ret = (ShaDaWriteResult)rs_shada_pack_entry(packer, &var_entry, max_kbyte)) == kSDWriteFailed) {
-      tv_clear(&vartv);
-      tv_clear(&tgttv);
-      return (int)kSDWriteFailed;
-    }
-    tv_clear(&vartv);
-    tv_clear(&tgttv);
-    if (spe_ret == kSDWriteSuccessful) {
-      set_put(cstr_t, &wms->dumped_variables, name);
-    }
-  } while (var_iter != NULL);
-  return (int)kSDWriteSuccessful;
+  const typval_T *t = (const typval_T *)tv;
+  if (!t || !t->vval.v_dict) {
+    return NULL;
+  }
+  return &t->vval.v_dict->dv_hashtab;
+}
+
+/// Get the dv_copyID from a VAR_DICT typval.
+/// @param tv  xmalloc'd typval_T pointer with v_type == VAR_DICT.
+/// @return    dict->dv_copyID, or 0 if dict is NULL.
+int nvim_shada_tv_get_dict_copyid(const void *tv)
+{
+  const typval_T *t = (const typval_T *)tv;
+  if (!t || !t->vval.v_dict) {
+    return 0;
+  }
+  return t->vval.v_dict->dv_copyID;
+}
+
+/// Get the list_T pointer from a VAR_LIST typval (for rs_set_ref_in_list_items).
+/// @param tv  xmalloc'd typval_T pointer with v_type == VAR_LIST.
+/// @return    tv->vval.v_list pointer, or NULL.
+void *nvim_shada_tv_get_list(const void *tv)
+{
+  const typval_T *t = (const typval_T *)tv;
+  if (!t) {
+    return NULL;
+  }
+  return t->vval.v_list;
+}
+
+/// Get the lv_copyID from a VAR_LIST typval.
+/// @param tv  xmalloc'd typval_T pointer with v_type == VAR_LIST.
+/// @return    list->lv_copyID, or 0 if list is NULL.
+int nvim_shada_tv_get_list_copyid(const void *tv)
+{
+  const typval_T *t = (const typval_T *)tv;
+  if (!t || !t->vval.v_list) {
+    return 0;
+  }
+  return t->vval.v_list->lv_copyID;
 }
 
