@@ -15,6 +15,8 @@ use crate::WinHandle;
 // =============================================================================
 
 const MODE_NORMAL: c_int = 0x01;
+const MODE_NORMAL_BUSY: c_int = 0x1001;
+const OP_NOP: c_int = 0;
 
 // =============================================================================
 // FFI declarations
@@ -99,8 +101,31 @@ extern "C" {
     fn nvim_curbuf_b_changed_invalid_clear();
 
     fn nvim_normal_redraw_impl(s: NormalStateHandle);
-    fn nvim_normal_prepare_wrapper(s: NormalStateHandle);
     fn nvim_get_curwin() -> WinHandle;
+
+    // Phase 5 normal_prepare accessors
+    fn nvim_ns_prepare_ca(s: NormalStateHandle);
+    fn nvim_ns_set_mapped_len(s: NormalStateHandle, val: c_int);
+    fn nvim_ns_get_oa_ptr(s: NormalStateHandle) -> *mut std::ffi::c_void;
+    fn nvim_ns_get_ca_ptr(s: NormalStateHandle) -> *mut std::ffi::c_void;
+    fn nvim_ns_get_toplevel(s: NormalStateHandle) -> bool;
+    fn nvim_ns_get_set_prevcount(s: NormalStateHandle) -> bool;
+    fn nvim_ns_set_set_prevcount(s: NormalStateHandle, val: bool);
+    fn nvim_get_opcount() -> c_int;
+    fn nvim_set_finish_op(val: bool);
+    fn nvim_oap_get_op_type_ptr(oap: *mut std::ffi::c_void) -> c_int;
+    fn nvim_oap_get_regname_ptr(oap: *mut std::ffi::c_void) -> c_int;
+    fn nvim_oap_get_prev_opcount_ptr(oap: *mut std::ffi::c_void) -> c_int;
+    fn nvim_oap_get_prev_count0_ptr(oap: *mut std::ffi::c_void) -> c_int;
+    fn nvim_oap_set_prev_opcount(oap: *mut std::ffi::c_void, val: c_int);
+    fn nvim_oap_set_prev_count0(oap: *mut std::ffi::c_void, val: c_int);
+    fn nvim_cap_set_opcount(cap: *mut std::ffi::c_void, val: c_int);
+    fn nvim_cap_set_count0(cap: *mut std::ffi::c_void, val: c_int);
+    fn nvim_ui_cursor_shape_wrapper();
+    fn nvim_may_trigger_modechanged();
+    fn nvim_typebuf_maplen_wrapper() -> c_int;
+    fn readbuf1_empty() -> bool;
+    fn rs_set_vcount_ca(cap: *mut std::ffi::c_void, set_prevcount: *mut bool);
 }
 
 // =============================================================================
@@ -212,6 +237,61 @@ unsafe fn normal_check_folds(_s: NormalStateHandle) {
     }
 }
 
+/// Rust implementation of normal_prepare.
+///
+/// Initializes cmdarg_T, manages opcount/finish_op, restores K_EVENT counts,
+/// sets State to MODE_NORMAL_BUSY, and calls rs_set_vcount_ca.
+///
+/// # Safety
+/// `s` must be a valid NormalState pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_normal_prepare(s: NormalStateHandle) {
+    // CLEAR_FIELD(s->ca); s->ca.oap = &s->oa;
+    nvim_ns_prepare_ca(s);
+
+    let ca = nvim_ns_get_ca_ptr(s);
+    let oa = nvim_ns_get_oa_ptr(s);
+
+    // Use a count remembered from before entering an operator.
+    nvim_cap_set_opcount(ca, nvim_get_opcount());
+
+    // Finish_op tells us to finish the operation before returning.
+    let old_finish_op = nvim_get_finish_op();
+    let new_finish_op = nvim_oap_get_op_type_ptr(oa) != OP_NOP;
+    nvim_set_finish_op(new_finish_op);
+    if new_finish_op != (old_finish_op != 0) {
+        nvim_ui_cursor_shape_wrapper();
+    }
+    nvim_may_trigger_modechanged();
+
+    nvim_ns_set_set_prevcount(s, false);
+    // When not finishing an operator and no register name typed, reset count.
+    if !new_finish_op && nvim_oap_get_regname_ptr(oa) == 0 {
+        nvim_cap_set_opcount(ca, 0);
+        nvim_ns_set_set_prevcount(s, true);
+    }
+
+    // Restore counts from before receiving K_EVENT.
+    let prev_opcount = nvim_oap_get_prev_opcount_ptr(oa);
+    let prev_count0 = nvim_oap_get_prev_count0_ptr(oa);
+    if prev_opcount > 0 || prev_count0 > 0 {
+        nvim_cap_set_opcount(ca, prev_opcount);
+        nvim_cap_set_count0(ca, prev_count0);
+        nvim_oap_set_prev_opcount(oa, 0);
+        nvim_oap_set_prev_count0(oa, 0);
+    }
+
+    nvim_ns_set_mapped_len(s, nvim_typebuf_maplen_wrapper());
+    nvim_set_State(MODE_NORMAL_BUSY);
+
+    // Set v:count here when called from main() and not a stuffed command.
+    if nvim_ns_get_toplevel(s) && readbuf1_empty() {
+        let mut set_prevcount = nvim_ns_get_set_prevcount(s);
+        rs_set_vcount_ca(ca, &mut set_prevcount);
+        nvim_ns_set_set_prevcount(s, set_prevcount);
+    }
+}
+
 /// Pre-iteration check for normal mode.
 ///
 /// Returns:
@@ -304,6 +384,6 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
         return 0;
     }
 
-    nvim_normal_prepare_wrapper(s);
+    rs_normal_prepare(s);
     1
 }

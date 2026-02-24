@@ -454,6 +454,7 @@ extern void rs_goto_byte(int cnt);
 // Normal mode state machine
 extern int rs_normal_check(void *s);
 extern int rs_normal_execute(void *s, int key);
+extern void rs_normal_prepare(void *s);
 extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 
 // Operator/command helpers
@@ -1647,6 +1648,24 @@ void nvim_ns_set_old_pos(void *s) { NS(s)->old_pos = curwin->w_cursor; }
 
 void nvim_ns_save_opcount(void *s) { NS(s)->oa.prev_opcount = NS(s)->ca.opcount; }
 
+// Phase 5 accessors for normal_prepare (migrated to Rust)
+
+/// Compound: CLEAR_FIELD(s->ca) and set s->ca.oap = &s->oa.
+void nvim_ns_prepare_ca(void *s)
+{
+  CLEAR_FIELD(NS(s)->ca);
+  NS(s)->ca.oap = &NS(s)->oa;
+}
+
+/// Set s->mapped_len.
+void nvim_ns_set_mapped_len(void *s, int val) { NS(s)->mapped_len = val; }
+
+/// Get s->oa.prev_opcount via oap handle.
+int nvim_oap_get_prev_opcount_ptr(oparg_T *oap) { return oap ? oap->prev_opcount : 0; }
+
+/// Get s->oa.prev_count0 via oap handle.
+int nvim_oap_get_prev_count0_ptr(oparg_T *oap) { return oap ? oap->prev_count0 : 0; }
+
 bool nvim_ns_get_previous_got_int(void *s) { return NS(s)->previous_got_int; }
 void nvim_ns_set_previous_got_int(void *s, bool val) { NS(s)->previous_got_int = val; }
 
@@ -1674,53 +1693,7 @@ void normal_enter(bool cmdwin, bool noexmode)
   current_oap = prev_oap;
 }
 
-static void normal_prepare(NormalState *s)
-{
-  CLEAR_FIELD(s->ca);  // also resets s->ca.retval
-  s->ca.oap = &s->oa;
-
-  // Use a count remembered from before entering an operator. After typing "3d"
-  // we return from normal_cmd() and come back here, the "3" is remembered in
-  // "opcount".
-  s->ca.opcount = opcount;
-
-  // If there is an operator pending, then the command we take this time will
-  // terminate it. Finish_op tells us to finish the operation before returning
-  // this time (unless the operation was cancelled).
-  int c = finish_op;
-  finish_op = (s->oa.op_type != OP_NOP);
-  if (finish_op != c) {
-    ui_cursor_shape();  // may show different cursor shape
-  }
-  may_trigger_modechanged();
-
-  s->set_prevcount = false;
-  // When not finishing an operator and no register name typed, reset the count.
-  if (!finish_op && !s->oa.regname) {
-    s->ca.opcount = 0;
-    s->set_prevcount = true;
-  }
-
-  // Restore counts from before receiving K_EVENT.  This means after
-  // typing "3", handling K_EVENT and then typing "2" we get "32", not
-  // "3 * 2".
-  if (s->oa.prev_opcount > 0 || s->oa.prev_count0 > 0) {
-    s->ca.opcount = s->oa.prev_opcount;
-    s->ca.count0 = s->oa.prev_count0;
-    s->oa.prev_opcount = 0;
-    s->oa.prev_count0 = 0;
-  }
-
-  s->mapped_len = typebuf_maplen();
-  State = MODE_NORMAL_BUSY;
-
-  // Set v:count here, when called from main() and not a stuffed command, so
-  // that v:count can be used in an expression mapping when there is no count.
-  // Do set it for redo
-  if (s->toplevel && readbuf1_empty()) {
-    rs_set_vcount_ca(&s->ca, &s->set_prevcount);
-  }
-}
+// normal_prepare migrated to Rust (rs_normal_prepare) in Phase 5
 
 static bool normal_handle_special_visual_command(NormalState *s)
 {
@@ -2252,7 +2225,7 @@ int nvim_get_cmdwin_result(void) { return cmdwin_result; }
 /// do_exmode() wrapper.
 void nvim_do_exmode_wrapper(void) { do_exmode(); }
 
-void nvim_normal_prepare_wrapper(void *sp) { normal_prepare((NormalState *)sp); }
+// nvim_normal_prepare_wrapper removed (migrated to Rust in Phase 5: rs_normal_prepare)
 
 // =============================================================================
 // Phase 4 accessors for normal_check* and normal_redraw
@@ -2805,7 +2778,7 @@ void normal_cmd(oparg_T *oap, bool toplevel)
   normal_state_init(&s);
   s.toplevel = toplevel;
   s.oa = *oap;
-  normal_prepare(&s);
+  rs_normal_prepare(&s);
   normal_execute(&s.state, safe_vgetc());
   *oap = s.oa;
 }
