@@ -28,6 +28,7 @@ pub mod operator;
 pub mod scope;
 pub mod strutil;
 pub mod system;
+pub mod timer;
 pub mod types;
 
 use std::ffi::c_int;

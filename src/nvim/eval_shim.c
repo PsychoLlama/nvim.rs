@@ -177,6 +177,16 @@ extern char *rs_do_string_sub(char *str, size_t len, char *pat, char *sub, typva
 // Phase 4 (eval_shim pass 7)
 extern void rs_ex_echohl(exarg_T *eap);
 extern int rs_get_echo_hl_id(void);
+// Phase 1 (eval_shim pass 8): timer functions
+extern timer_T *rs_find_timer_by_nr(int64_t xx);
+extern void rs_add_timer_info(typval_T *rettv, timer_T *timer);
+extern void rs_add_timer_info_all(typval_T *rettv);
+extern void rs_timer_due_cb(TimeWatcher *tw, void *data);
+extern uint64_t rs_timer_start(int64_t timeout, int repeat_count, const Callback *callback);
+extern void rs_timer_stop(timer_T *timer);
+extern void rs_timer_close_cb(TimeWatcher *tw, void *data);
+extern void rs_timer_stop_all(void);
+extern void rs_timer_teardown(void);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -1689,155 +1699,43 @@ bool callback_call(Callback *const callback, const int argcount_in, typval_T *co
 
 timer_T *find_timer_by_nr(varnumber_T xx)
 {
-  return pmap_get(uint64_t)(&timers, (uint64_t)xx);
+  return rs_find_timer_by_nr((int64_t)xx);
 }
 
 void add_timer_info(typval_T *rettv, timer_T *timer)
 {
-  list_T *list = rettv->vval.v_list;
-  dict_T *dict = tv_dict_alloc();
-
-  tv_list_append_dict(list, dict);
-  tv_dict_add_nr(dict, S_LEN("id"), timer->timer_id);
-  tv_dict_add_nr(dict, S_LEN("time"), timer->timeout);
-  tv_dict_add_nr(dict, S_LEN("paused"), timer->paused);
-
-  tv_dict_add_nr(dict, S_LEN("repeat"),
-                 (timer->repeat_count < 0 ? -1 : timer->repeat_count));
-
-  dictitem_T *di = tv_dict_item_alloc("callback");
-  if (tv_dict_add(dict, di) == FAIL) {
-    xfree(di);
-    return;
-  }
-
-  callback_put(&timer->callback, &di->di_tv);
+  rs_add_timer_info(rettv, timer);
 }
 
 void add_timer_info_all(typval_T *rettv)
 {
-  tv_list_alloc_ret(rettv, map_size(&timers));
-  timer_T *timer;
-  map_foreach_value(&timers, timer, {
-    if (!timer->stopped || timer->refcount > 1) {
-      add_timer_info(rettv, timer);
-    }
-  })
+  rs_add_timer_info_all(rettv);
 }
 
 /// invoked on the main loop
 void timer_due_cb(TimeWatcher *tw, void *data)
 {
-  timer_T *timer = (timer_T *)data;
-  int save_did_emsg = did_emsg;
-  const int called_emsg_before = called_emsg;
-  const bool save_ex_pressedreturn = get_pressedreturn();
-
-  if (timer->stopped || timer->paused) {
-    return;
-  }
-
-  timer->refcount++;
-  // if repeat was negative repeat forever
-  if (timer->repeat_count >= 0 && --timer->repeat_count == 0) {
-    timer_stop(timer);
-  }
-
-  typval_T argv[2] = { TV_INITIAL_VALUE, TV_INITIAL_VALUE };
-  argv[0].v_type = VAR_NUMBER;
-  argv[0].vval.v_number = timer->timer_id;
-  typval_T rettv = TV_INITIAL_VALUE;
-
-  callback_call(&timer->callback, 1, argv, &rettv);
-
-  // Handle error message
-  if (called_emsg > called_emsg_before && did_emsg) {
-    timer->emsg_count++;
-    if (did_throw) {
-      discard_current_exception();
-    }
-  }
-  did_emsg = save_did_emsg;
-  set_pressedreturn(save_ex_pressedreturn);
-
-  if (timer->emsg_count >= 3) {
-    timer_stop(timer);
-  }
-
-  tv_clear(&rettv);
-
-  if (!timer->stopped && timer->timeout == 0) {
-    // special case: timeout=0 means the callback will be
-    // invoked again on the next event loop tick.
-    // we don't use uv_idle_t to not spin the event loop
-    // when the main loop is blocked.
-    time_watcher_start(&timer->tw, timer_due_cb, 0, 0);
-  }
-  timer_decref(timer);
+  rs_timer_due_cb(tw, data);
 }
 
 uint64_t timer_start(const int64_t timeout, const int repeat_count, const Callback *const callback)
 {
-  timer_T *timer = xmalloc(sizeof *timer);
-  timer->refcount = 1;
-  timer->stopped = false;
-  timer->paused = false;
-  timer->emsg_count = 0;
-  timer->repeat_count = repeat_count;
-  timer->timeout = timeout;
-  timer->timer_id = (int)last_timer_id++;
-  timer->callback = *callback;
-
-  time_watcher_init(&main_loop, &timer->tw, timer);
-  timer->tw.events = multiqueue_new_child(loop_get_events(&main_loop));
-  // if main loop is blocked, don't queue up multiple events
-  timer->tw.blockable = true;
-  time_watcher_start(&timer->tw, timer_due_cb, (uint64_t)timeout, (uint64_t)timeout);
-
-  pmap_put(uint64_t)(&timers, (uint64_t)timer->timer_id, timer);
-  return (uint64_t)timer->timer_id;
+  return rs_timer_start(timeout, repeat_count, callback);
 }
 
 void timer_stop(timer_T *timer)
 {
-  if (timer->stopped) {
-    // avoid double free
-    return;
-  }
-  timer->stopped = true;
-  time_watcher_stop(&timer->tw);
-  time_watcher_close(&timer->tw, timer_close_cb);
-}
-
-/// This will be run on the main loop after the last timer_due_cb, so at this
-/// point it is safe to free the callback.
-static void timer_close_cb(TimeWatcher *tw, void *data)
-{
-  timer_T *timer = (timer_T *)data;
-  multiqueue_free(timer->tw.events);
-  callback_free(&timer->callback);
-  pmap_del(uint64_t)(&timers, (uint64_t)timer->timer_id, NULL);
-  timer_decref(timer);
-}
-
-static void timer_decref(timer_T *timer)
-{
-  if (--timer->refcount == 0) {
-    xfree(timer);
-  }
+  rs_timer_stop(timer);
 }
 
 void timer_stop_all(void)
 {
-  timer_T *timer;
-  map_foreach_value(&timers, timer, {
-    timer_stop(timer);
-  })
+  rs_timer_stop_all();
 }
 
 void timer_teardown(void)
 {
-  timer_stop_all();
+  rs_timer_teardown();
 }
 
 /// Saves a typval_T as a string.
@@ -4408,5 +4306,244 @@ void nvim_tv_set_number_zero(typval_T *tv)
 void nvim_tv_rawcopy(typval_T *dst, const typval_T *src)
 {
   *dst = *src;
+}
+
+// =============================================================================
+// Timer accessors for Rust timer migration (Phase 8)
+// =============================================================================
+
+/// Allocate and zero-initialize a timer_T.
+timer_T *nvim_timer_alloc(void)
+{
+  return xcalloc(1, sizeof(timer_T));
+}
+
+/// Free a timer_T (only after refcount reaches 0).
+void nvim_timer_free(timer_T *timer)
+{
+  xfree(timer);
+}
+
+/// Get timer_id field.
+int nvim_timer_get_id(const timer_T *timer)
+{
+  return timer->timer_id;
+}
+
+/// Set timer_id field.
+void nvim_timer_set_id(timer_T *timer, int id)
+{
+  timer->timer_id = id;
+}
+
+/// Get repeat_count field.
+int nvim_timer_get_repeat_count(const timer_T *timer)
+{
+  return timer->repeat_count;
+}
+
+/// Set repeat_count field.
+void nvim_timer_set_repeat_count(timer_T *timer, int count)
+{
+  timer->repeat_count = count;
+}
+
+/// Get refcount field.
+int nvim_timer_get_refcount(const timer_T *timer)
+{
+  return timer->refcount;
+}
+
+/// Set refcount field.
+void nvim_timer_set_refcount(timer_T *timer, int refcount)
+{
+  timer->refcount = refcount;
+}
+
+/// Get emsg_count field.
+int nvim_timer_get_emsg_count(const timer_T *timer)
+{
+  return timer->emsg_count;
+}
+
+/// Set emsg_count field.
+void nvim_timer_set_emsg_count(timer_T *timer, int count)
+{
+  timer->emsg_count = count;
+}
+
+/// Get timeout field.
+int64_t nvim_timer_get_timeout(const timer_T *timer)
+{
+  return timer->timeout;
+}
+
+/// Get stopped field.
+int nvim_timer_get_stopped(const timer_T *timer)
+{
+  return timer->stopped ? 1 : 0;
+}
+
+/// Set stopped field.
+void nvim_timer_set_stopped(timer_T *timer, int stopped)
+{
+  timer->stopped = stopped != 0;
+}
+
+/// Get paused field.
+int nvim_timer_get_paused(const timer_T *timer)
+{
+  return timer->paused ? 1 : 0;
+}
+
+/// Get pointer to the callback field.
+Callback *nvim_timer_get_callback_ptr(timer_T *timer)
+{
+  return &timer->callback;
+}
+
+/// Copy callback into timer (sets timer->callback = *cb).
+void nvim_timer_set_callback(timer_T *timer, const Callback *cb)
+{
+  timer->callback = *cb;
+}
+
+/// Initialize the TimeWatcher embedded in timer (calls time_watcher_init).
+void nvim_timer_tw_init(timer_T *timer)
+{
+  time_watcher_init(&main_loop, &timer->tw, timer);
+}
+
+/// Start the TimeWatcher (calls time_watcher_start with rs_timer_due_cb).
+void nvim_timer_tw_start(timer_T *timer, uint64_t timeout, uint64_t repeat)
+{
+  time_watcher_start(&timer->tw, rs_timer_due_cb, timeout, repeat);
+}
+
+/// Stop the TimeWatcher (calls time_watcher_stop).
+void nvim_timer_tw_stop(timer_T *timer)
+{
+  time_watcher_stop(&timer->tw);
+}
+
+/// Close the TimeWatcher (calls time_watcher_close with rs_timer_close_cb).
+void nvim_timer_tw_close(timer_T *timer)
+{
+  time_watcher_close(&timer->tw, rs_timer_close_cb);
+}
+
+/// Set timer->tw.events to a new child queue of main_loop events.
+void nvim_timer_tw_set_events_child(timer_T *timer)
+{
+  timer->tw.events = multiqueue_new_child(loop_get_events(&main_loop));
+}
+
+/// Set timer->tw.blockable.
+void nvim_timer_tw_set_blockable(timer_T *timer, int blockable)
+{
+  timer->tw.blockable = blockable != 0;
+}
+
+/// Free the timer's tw.events multiqueue.
+void nvim_timer_tw_free_events(timer_T *timer)
+{
+  multiqueue_free(timer->tw.events);
+}
+
+/// Get a timer_T from the timers PMap by numeric ID.
+timer_T *nvim_timers_get(int64_t id)
+{
+  return pmap_get(uint64_t)(&timers, (uint64_t)id);
+}
+
+/// Insert a timer_T into the timers PMap.
+void nvim_timers_put(timer_T *timer)
+{
+  pmap_put(uint64_t)(&timers, (uint64_t)timer->timer_id, timer);
+}
+
+/// Remove a timer_T from the timers PMap.
+void nvim_timers_del(int64_t id)
+{
+  pmap_del(uint64_t)(&timers, (uint64_t)id, NULL);
+}
+
+/// Return the current map size (number of timers).
+size_t nvim_timers_size(void)
+{
+  return map_size(&timers);
+}
+
+/// Get and increment last_timer_id, returning the OLD value.
+uint64_t nvim_timers_next_id(void)
+{
+  return last_timer_id++;
+}
+
+/// Iterate all timers, calling cb(timer, userdata) for each.
+/// Used from Rust to implement add_timer_info_all and timer_stop_all.
+void nvim_timers_foreach(void (*cb)(timer_T *, void *), void *userdata)
+{
+  timer_T *timer;
+  map_foreach_value(&timers, timer, {
+    cb(timer, userdata);
+  })
+}
+
+// nvim_tv_set_number is defined in eval/typval.c
+// nvim_tv_dict_alloc is defined in undo.c
+
+/// Wrapper for callback_free (accessor for Rust timer).
+void nvim_callback_free(Callback *cb)
+{
+  callback_free(cb);
+}
+
+/// Wrapper for callback_put (copies callback into a typval_T dictitem).
+void nvim_callback_put(Callback *cb, typval_T *tv)
+{
+  callback_put(cb, tv);
+}
+
+/// Alloc a dictitem_T with the given key.
+dictitem_T *nvim_tv_dict_item_alloc_key(const char *key)
+{
+  return tv_dict_item_alloc(key);
+}
+
+/// Add dictitem to dict. Returns OK (0) or FAIL (-1 in C: but we expose as bool).
+int nvim_tv_dict_add_item(dict_T *dict, dictitem_T *di)
+{
+  return tv_dict_add(dict, di);
+}
+
+/// Get pointer to a dictitem_T's di_tv field.
+typval_T *nvim_di_get_tv_ptr(dictitem_T *di)
+{
+  return &di->di_tv;
+}
+
+/// Free a dictitem_T (called when tv_dict_add fails).
+void nvim_di_free(dictitem_T *di)
+{
+  xfree(di);
+}
+
+/// Wrapper for get_pressedreturn() -- returns 1 if true.
+int nvim_get_pressedreturn(void)
+{
+  return get_pressedreturn() ? 1 : 0;
+}
+
+/// Wrapper for set_pressedreturn().
+void nvim_set_pressedreturn(int val)
+{
+  set_pressedreturn(val != 0);
+}
+
+/// Wrapper for discard_current_exception().
+void nvim_discard_current_exception(void)
+{
+  discard_current_exception();
 }
 
