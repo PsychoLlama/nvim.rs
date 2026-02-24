@@ -21,6 +21,9 @@
 use std::ffi::{c_char, c_int};
 
 use crate::range::{LineNr, LineRange};
+use crate::ExArgHandle;
+
+extern crate libc;
 
 extern "C" {
     // global_exe FFI
@@ -46,6 +49,41 @@ extern "C" {
     fn nvim_excmds_get_msg_scrolled() -> c_int;
     fn nvim_excmds_get_curbuf_ptr() -> *mut std::ffi::c_void;
     fn msgmore(n: c_int);
+
+    // ex_global FFI
+    fn nvim_exarg_get_cmd(eap: *const ExArgHandle) -> *const c_char;
+    fn nvim_excmds_get_arg_mut(eap: *mut ExArgHandle) -> *mut c_char;
+    fn nvim_exarg_get_line1(eap: *const ExArgHandle) -> c_int;
+    fn nvim_exarg_get_line2(eap: *const ExArgHandle) -> c_int;
+    fn nvim_exarg_get_forceit(eap: *const ExArgHandle) -> c_int;
+    fn nvim_excmds_search_regcomp_multi(
+        pat: *const c_char,
+        patlen: usize,
+        used_pat_out: *mut *const c_char,
+        which_pat: c_int,
+    ) -> *mut std::ffi::c_void;
+    fn nvim_excmds_vim_regexec_multi(regmatch: *mut std::ffi::c_void, lnum: c_int) -> c_int;
+    fn nvim_excmds_vim_regfree_multi(regmatch: *mut std::ffi::c_void);
+    fn nvim_excmds_regmmatch_regprog_null(regmatch: *mut std::ffi::c_void) -> c_int;
+    fn nvim_excmds_skip_regexp_ex_global(
+        eap: *mut ExArgHandle,
+        pat: *mut c_char,
+        delim: c_int,
+    ) -> *mut c_char;
+    fn nvim_excmds_ml_setmarked(lnum: c_int);
+    fn nvim_excmds_ml_clearmarked();
+    fn nvim_excmds_line_breakcheck();
+    fn nvim_excmds_smsg_pattern_not_found(pat: *const c_char);
+    fn nvim_excmds_smsg_pattern_found_every(pat: *const c_char);
+    fn nvim_excmds_emsg_e147();
+    fn nvim_excmds_emsg_e148();
+    fn nvim_excmds_emsg_backslash();
+    fn nvim_excmds_emsg_invcmd();
+    fn nvim_excmds_emsg_interr_msg();
+    fn nvim_excmds_curwin_cursor_lnum() -> c_int;
+    fn nvim_excmds_curwin_set_col_zero();
+    fn rs_check_regexp_delim(c: c_int) -> c_int;
+    fn vim_strchr(string: *const c_char, c: c_int) -> *const c_char;
 }
 
 /// BL_WHITE | BL_FIX flags for beginline()
@@ -511,6 +549,139 @@ pub extern "C" fn rs_global_error_invalid_range() -> c_int {
 /// FFI export: Initialize GlobalState
 pub extern "C" fn rs_global_state_is_busy(busy: c_int) -> c_int {
     c_int::from(busy != 0)
+}
+
+/// Implement `:global`/`:vglobal` command. Replaces C `ex_global`.
+///
+/// Two-phase approach:
+/// 1. Mark all matching (or non-matching) lines with ml_setmarked()
+/// 2. Execute the command on each marked line via global_exe (rs_global_exe)
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
+    // Constants matching C values
+    const RE_LAST: c_int = 2;
+    const RE_SEARCH: c_int = 0;
+    const RE_SUBST: c_int = 1;
+    const FAIL: c_int = 0;
+
+    let line1 = nvim_exarg_get_line1(eap);
+    let line2 = nvim_exarg_get_line2(eap);
+    let forceit = nvim_exarg_get_forceit(eap);
+    let ml_line_count = nvim_curbuf_get_b_ml_ml_line_count();
+
+    // When nesting the command works on one line. This allows for
+    // ":g/found/v/notfound/command".
+    if nvim_excmds_global_busy() != 0
+        && (line1 != 1 || line2 != ml_line_count)
+    {
+        // will increment global_busy to break out of the loop
+        nvim_excmds_emsg_e147();
+        return;
+    }
+
+    // Determine type: 'g' (global) or 'v' (vglobal)
+    // forceit means ":global!" => treat as 'v'
+    let cmd_ptr = nvim_exarg_get_cmd(eap);
+    let type_char: u8 = if forceit != 0 {
+        b'v'
+    } else {
+        *cmd_ptr as u8
+    };
+
+    // cmd starts at eap->arg (mutable for skip_regexp_ex)
+    let mut cmd = nvim_excmds_get_arg_mut(eap);
+    let mut which_pat: c_int = RE_LAST;
+    let pat: *const c_char;
+    let patlen: usize;
+
+    // Undocumented vi feature: "\/" "\?" use previous search, "\&" uses previous substitute.
+    if *cmd == b'\\' as c_char {
+        cmd = cmd.add(1);
+        // Check that next char is one of /?&
+        let ok = vim_strchr(c"/?&".as_ptr(), *cmd as c_int);
+        if ok.is_null() {
+            nvim_excmds_emsg_backslash();
+            return;
+        }
+        if *cmd == b'&' as c_char {
+            which_pat = RE_SUBST;
+        } else {
+            which_pat = RE_SEARCH;
+        }
+        cmd = cmd.add(1);
+        pat = c"".as_ptr();
+        patlen = 0;
+    } else if *cmd == 0 {
+        nvim_excmds_emsg_e148();
+        return;
+    } else if rs_check_regexp_delim(*cmd as c_int) == FAIL {
+        return;
+    } else {
+        let delim = *cmd as c_int;
+        cmd = cmd.add(1); // skip delimiter
+        pat = cmd as *const c_char; // remember start of pattern
+        cmd = nvim_excmds_skip_regexp_ex_global(eap, cmd, delim);
+        if *cmd as c_int == delim {
+            // end delimiter found - replace with NUL
+            *cmd = 0;
+            cmd = cmd.add(1);
+        }
+        patlen = libc::strlen(pat);
+    }
+
+    // Compile the pattern
+    let mut used_pat: *const c_char = std::ptr::null();
+    let regmatch = nvim_excmds_search_regcomp_multi(pat, patlen, &mut used_pat, which_pat);
+    if regmatch.is_null() {
+        nvim_excmds_emsg_invcmd();
+        return;
+    }
+
+    if nvim_excmds_global_busy() != 0 {
+        // Nested global: work on the current line only.
+        let lnum = nvim_excmds_curwin_cursor_lnum();
+        let matched = nvim_excmds_vim_regexec_multi(regmatch, lnum);
+        if (type_char == b'g' && matched != 0) || (type_char == b'v' && matched == 0) {
+            nvim_excmds_curwin_set_col_zero();
+            nvim_excmds_do_cmdline_global(cmd);
+        }
+    } else {
+        let mut ndone: c_int = 0;
+        // Pass 1: mark all (not) matching lines
+        let mut lnum = nvim_exarg_get_line1(eap);
+        let end_lnum = nvim_exarg_get_line2(eap);
+        while lnum <= end_lnum && nvim_excmds_got_int() == 0 {
+            let matched = nvim_excmds_vim_regexec_multi(regmatch, lnum);
+            if nvim_excmds_regmmatch_regprog_null(regmatch) != 0 {
+                break; // re-compiling regprog failed
+            }
+            if (type_char == b'g' && matched != 0) || (type_char == b'v' && matched == 0) {
+                nvim_excmds_ml_setmarked(lnum);
+                ndone += 1;
+            }
+            nvim_excmds_line_breakcheck();
+            lnum += 1;
+        }
+
+        // Pass 2: execute the command for each marked line
+        if nvim_excmds_got_int() != 0 {
+            nvim_excmds_emsg_interr_msg();
+        } else if ndone == 0 {
+            if type_char == b'v' {
+                nvim_excmds_smsg_pattern_found_every(used_pat);
+            } else {
+                nvim_excmds_smsg_pattern_not_found(used_pat);
+            }
+        } else {
+            rs_global_exe(cmd);
+        }
+        nvim_excmds_ml_clearmarked();
+    }
+
+    nvim_excmds_vim_regfree_multi(regmatch);
 }
 
 /// FFI export: Check if lines processed count is valid

@@ -3150,6 +3150,9 @@ bool do_sub_msg(bool count_only)
   return rs_do_sub_msg(count_only);
 }
 
+// ex_global implemented in Rust (rs_ex_global in ex_cmds/src/global.rs)
+extern void rs_ex_global(exarg_T *eap);
+
 /// Execute a global command of the form:
 ///
 /// g/pattern/X : execute X on all lines where pattern matches
@@ -3166,112 +3169,7 @@ bool do_sub_msg(bool count_only)
 /// lines we do not know where to search for the next match.
 void ex_global(exarg_T *eap)
 {
-  linenr_T lnum;                // line number according to old situation
-  int type;                     // first char of cmd: 'v' or 'g'
-  char *cmd;                    // command argument
-
-  char delim;                 // delimiter, normally '/'
-  char *pat;
-  size_t patlen;
-  regmmatch_T regmatch;
-
-  // When nesting the command works on one line.  This allows for
-  // ":g/found/v/notfound/command".
-  if (global_busy && (eap->line1 != 1
-                      || eap->line2 != curbuf->b_ml.ml_line_count)) {
-    // will increment global_busy to break out of the loop
-    emsg(_("E147: Cannot do :global recursive with a range"));
-    return;
-  }
-
-  if (eap->forceit) {               // ":global!" is like ":vglobal"
-    type = 'v';
-  } else {
-    type = (uint8_t)(*eap->cmd);
-  }
-  cmd = eap->arg;
-  int which_pat = RE_LAST;              // default: use last used regexp
-
-  // undocumented vi feature:
-  //    "\/" and "\?": use previous search pattern.
-  //             "\&": use previous substitute pattern.
-  if (*cmd == '\\') {
-    cmd++;
-    if (vim_strchr("/?&", (uint8_t)(*cmd)) == NULL) {
-      emsg(_(e_backslash));
-      return;
-    }
-    if (*cmd == '&') {
-      which_pat = RE_SUBST;             // use previous substitute pattern
-    } else {
-      which_pat = RE_SEARCH;            // use previous search pattern
-    }
-    cmd++;
-    pat = "";
-    patlen = 0;
-  } else if (*cmd == NUL) {
-    emsg(_("E148: Regular expression missing from global"));
-    return;
-  } else if (rs_check_regexp_delim(*cmd) == FAIL) {
-    return;
-  } else {
-    delim = *cmd;               // get the delimiter
-    cmd++;                      // skip delimiter if there is one
-    pat = cmd;                  // remember start of pattern
-    cmd = skip_regexp_ex(cmd, delim, rs_magic_isset(), &eap->arg, NULL, NULL);
-    if (cmd[0] == delim) {                  // end delimiter found
-      *cmd++ = NUL;                         // replace it with a NUL
-    }
-    patlen = strlen(pat);
-  }
-
-  char *used_pat;
-  if (search_regcomp(pat, patlen, &used_pat, RE_BOTH, which_pat,
-                     SEARCH_HIS, &regmatch) == FAIL) {
-    emsg(_(e_invcmd));
-    return;
-  }
-
-  if (global_busy) {
-    lnum = curwin->w_cursor.lnum;
-    int match = vim_regexec_multi(&regmatch, curwin, curbuf, lnum, 0, NULL, NULL);
-    if ((type == 'g' && match) || (type == 'v' && !match)) {
-      // Inline global_exe_one (absorbed into Rust rs_global_exe, but ex_global
-      // handles the nested case directly here).
-      curwin->w_cursor.col = 0;
-      nvim_excmds_do_cmdline_global(cmd);
-    }
-  } else {
-    int ndone = 0;
-    // pass 1: set marks for each (not) matching line
-    for (lnum = eap->line1; lnum <= eap->line2 && !got_int; lnum++) {
-      // a match on this line?
-      int match = vim_regexec_multi(&regmatch, curwin, curbuf, lnum, 0, NULL, NULL);
-      if (regmatch.regprog == NULL) {
-        break;  // re-compiling regprog failed
-      }
-      if ((type == 'g' && match) || (type == 'v' && !match)) {
-        ml_setmarked(lnum);
-        ndone++;
-      }
-      line_breakcheck();
-    }
-
-    // pass 2: execute the command for each line that has been marked
-    if (got_int) {
-      msg(_(e_interr), 0);
-    } else if (ndone == 0) {
-      if (type == 'v') {
-        smsg(0, _("Pattern found in every line: %s"), used_pat);
-      } else {
-        smsg(0, _("Pattern not found: %s"), used_pat);
-      }
-    } else {
-      global_exe(cmd);
-    }
-    ml_clearmarked();         // clear rest of the marks
-  }
-  vim_regfree(regmatch.regprog);
+  rs_ex_global(eap);
 }
 
 // global_exe + global_exe_one implemented in Rust (rs_global_exe in ex_cmds/src/global.rs)
@@ -3629,3 +3527,114 @@ void nvim_excmds_preview_lines_item(const void *pl, size_t idx,
   *end_col = item.end.col;
   *pre_match = item.pre_match;
 }
+
+// --- ex_global FFI accessors ---
+
+/// Get eap->cmd pointer (first byte determines global type: 'g' or 'v').
+const char *nvim_exarg_get_cmd(const exarg_T *eap) { return eap->cmd; }
+
+/// Allocate and call search_regcomp for ex_global. Returns opaque regmmatch_T* or NULL on failure.
+/// On success, *used_pat_out is set to the pattern actually used.
+void *nvim_excmds_search_regcomp_multi(const char *pat, size_t patlen, const char **used_pat_out,
+                                        int which_pat)
+{
+  regmmatch_T *rm = xmalloc(sizeof(regmmatch_T));
+  memset(rm, 0, sizeof(*rm));
+  if (search_regcomp((char *)pat, patlen, (char **)used_pat_out, RE_BOTH,
+                     which_pat, SEARCH_HIS, rm) == FAIL) {
+    xfree(rm);
+    return NULL;
+  }
+  return rm;
+}
+
+/// Call vim_regexec_multi on an opaque regmmatch_T handle for the given lnum.
+/// Returns match count (> 0 means matched).
+int nvim_excmds_vim_regexec_multi(void *regmatch, int lnum)
+{
+  regmmatch_T *rm = (regmmatch_T *)regmatch;
+  return vim_regexec_multi(rm, curwin, curbuf, (linenr_T)lnum, 0, NULL, NULL);
+}
+
+/// Free an opaque regmmatch_T handle (calls vim_regfree on regprog, then xfree).
+void nvim_excmds_vim_regfree_multi(void *regmatch)
+{
+  if (regmatch == NULL) { return; }
+  regmmatch_T *rm = (regmmatch_T *)regmatch;
+  vim_regfree(rm->regprog);
+  xfree(rm);
+}
+
+/// Check if regmatch->regprog is NULL (re-compile failed mid-loop).
+int nvim_excmds_regmmatch_regprog_null(void *regmatch)
+{
+  regmmatch_T *rm = (regmmatch_T *)regmatch;
+  return rm->regprog == NULL ? 1 : 0;
+}
+
+/// Wrapper for skip_regexp_ex that also updates eap->arg in place.
+/// Returns pointer to the character after the end delimiter (or to NUL).
+char *nvim_excmds_skip_regexp_ex_global(exarg_T *eap, char *pat, int delim)
+{
+  return skip_regexp_ex(pat, (char)delim, rs_magic_isset(), &eap->arg, NULL, NULL);
+}
+
+/// Wrapper for ml_setmarked.
+void nvim_excmds_ml_setmarked(int lnum) { ml_setmarked((linenr_T)lnum); }
+
+/// Wrapper for ml_clearmarked.
+void nvim_excmds_ml_clearmarked(void) { ml_clearmarked(); }
+
+/// Wrapper for line_breakcheck (used in global pass 1 loop).
+void nvim_excmds_line_breakcheck(void) { line_breakcheck(); }
+
+/// Emit "Pattern not found: %s" message.
+void nvim_excmds_smsg_pattern_not_found(const char *pat)
+{
+  smsg(0, _("Pattern not found: %s"), pat);
+}
+
+/// Emit "Pattern found in every line: %s" message.
+void nvim_excmds_smsg_pattern_found_every(const char *pat)
+{
+  smsg(0, _("Pattern found in every line: %s"), pat);
+}
+
+/// Emit E147 error: Cannot do :global recursive with a range.
+void nvim_excmds_emsg_e147(void)
+{
+  emsg(_("E147: Cannot do :global recursive with a range"));
+}
+
+/// Emit E148 error: Regular expression missing from global.
+void nvim_excmds_emsg_e148(void)
+{
+  emsg(_("E148: Regular expression missing from global"));
+}
+
+/// Emit e_backslash error.
+void nvim_excmds_emsg_backslash(void)
+{
+  emsg(_(e_backslash));
+}
+
+/// Emit e_invcmd error.
+void nvim_excmds_emsg_invcmd(void)
+{
+  emsg(_(e_invcmd));
+}
+
+/// Emit e_interr error message.
+void nvim_excmds_emsg_interr_msg(void)
+{
+  msg(_(e_interr), 0);
+}
+
+/// Get curwin->w_cursor.lnum for nested global handling.
+int nvim_excmds_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
+
+/// Set curwin->w_cursor.col to 0 (for nested global).
+void nvim_excmds_curwin_set_col_zero(void) { curwin->w_cursor.col = 0; }
+
+// rs_ex_global implemented in Rust (ex_cmds/src/global.rs)
+extern void rs_ex_global(exarg_T *eap);
