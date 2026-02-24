@@ -172,6 +172,7 @@ extern "C" {
     fn nvim_cpt_sources_array_exists() -> c_int;
     fn nvim_ins_compl_expand_multiple_skip(str_ptr: *const c_char, skip: c_int);
     fn nvim_ins_compl_insert_bytes_len(cp_str: *const c_char, compl_len: c_int, ins_len: c_int);
+    fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
     fn nvim_cursor_col_sub(n: c_int);
     fn nvim_compl_shown_match_at_orig_text() -> c_int;
     fn nvim_ins_compl_dict_alloc_set_shown();
@@ -441,6 +442,36 @@ pub unsafe extern "C" fn rs_ins_compl_addleader(c: c_int) {
     nvim_api_clear_compl_leader();
     nvim_set_compl_leader_from_cursor();
     nvim_ins_compl_new_leader_wrapper();
+}
+
+// =============================================================================
+// Phase 6 (pass 4): rs_ins_compl_insert_bytes and rs_ins_compl_expand_multiple
+// =============================================================================
+
+/// Insert bytes at the cursor position and update compl_ins_end_col.
+///
+/// Delegates to the C compound accessor `nvim_ins_compl_insert_bytes`.
+/// When `len` is -1, the full NUL-terminated length is used.
+///
+/// # Safety
+/// `p` must point to a valid byte sequence of at least `len` bytes (or be
+/// NUL-terminated when `len == -1`). Requires valid buffer and cursor state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_insert_bytes(p: *const c_char, len: c_int) {
+    nvim_ins_compl_insert_bytes(p, len);
+}
+
+/// Insert a completion string that may contain newlines.
+///
+/// Delegates to the C compound accessor `nvim_ins_compl_expand_multiple_skip`
+/// with `skip = 0` (no prefix to skip).
+///
+/// # Safety
+/// `str_ptr` must point to a valid NUL-terminated C string.
+/// Requires valid buffer, cursor, and indent state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_expand_multiple(str_ptr: *const c_char) {
+    nvim_ins_compl_expand_multiple_skip(str_ptr, 0);
 }
 
 #[cfg(test)]

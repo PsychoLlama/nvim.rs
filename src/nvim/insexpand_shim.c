@@ -189,6 +189,9 @@ extern int rs_advance_cpt_sources_index_safe(void);
 // Phase 5 (pass 4) Rust exports
 extern char *rs_ins_compl_infercase_gettext(const char *str, int char_len, int compl_char_len,
                                             int min_len, char **tofree);
+// Phase 6 (pass 4) Rust exports
+extern void rs_ins_compl_insert_bytes(const char *p, int len);
+extern void rs_ins_compl_expand_multiple(const char *str);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -830,24 +833,6 @@ static int ins_compl_add(char *const str, int len, char *const fname, char *cons
   return OK;
 }
 
-/// Check that "str[len]" matches with "match->cp_str", considering
-/// "match->cp_flags".
-///
-/// @param  match  completion match
-/// @param  str    character string to check
-/// @param  len    length of "str"
-/// when len is -1 mean use whole length of p otherwise part of p
-static void ins_compl_insert_bytes(char *p, int len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (len == -1) {
-    len = (int)strlen(p);
-  }
-  assert(len >= 0);
-  ins_bytes_len(p, (size_t)len);
-  compl_ins_end_col = curwin->w_cursor.col;
-}
-
 /// Checks if the column is within the currently inserted completion text
 /// column range. If it is, it returns a special highlight attribute.
 /// -1 means normal item.
@@ -864,7 +849,7 @@ static void ins_compl_longest_match(compl_T *match)
     compl_leader = copy_string(match->cp_str, NULL);
 
     bool had_match = (curwin->w_cursor.col > compl_col);
-    rs_ins_compl_delete(0); ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1); ins_redraw(false);
+    rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1); ins_redraw(false);
 
     // When the match isn't there (to avoid matching itself) remove it
     // again after redrawing.
@@ -898,7 +883,7 @@ static void ins_compl_longest_match(compl_T *match)
     compl_leader.size = (size_t)(p - compl_leader.data);
 
     bool had_match = (curwin->w_cursor.col > compl_col);
-    rs_ins_compl_delete(0); ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1); ins_redraw(false);
+    rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1); ins_redraw(false);
 
     // When the match isn't there (to avoid matching itself) remove it
     // again after redrawing.
@@ -2533,7 +2518,7 @@ static void fuzzy_longest_match(void)
   if (compl_num_bests == 1) {
     // no more candidates insert the match str
     if (!more_candidates) {
-      rs_ins_compl_delete(0); ins_compl_insert_bytes(compl->cp_str.data + rs_get_compl_len(), -1); ins_redraw(false);
+      rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(compl->cp_str.data + rs_get_compl_len(), -1); ins_redraw(false);
       compl_num_bests = 0;
     }
     compl_num_bests = 0;
@@ -2580,7 +2565,7 @@ static void fuzzy_longest_match(void)
   }
 
   prefix = xmemdupz(prefix, (size_t)prefix_len);
-  rs_ins_compl_delete(0); ins_compl_insert_bytes(prefix + rs_get_compl_len(), -1); ins_redraw(false);
+  rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(prefix + rs_get_compl_len(), -1); ins_redraw(false);
   xfree(prefix);
 
 end:
@@ -3377,35 +3362,6 @@ static int ins_compl_get_exp(pos_T *ini)
   return match_count;
 }
 
-/// Insert a completion string that contains newlines.
-/// The string is split and inserted line by line.
-static void ins_compl_expand_multiple(char *str)
-{
-  char *start = str;
-  char *curr = str;
-  int base_indent = get_indent();
-  while (*curr != NUL) {
-    if (*curr == '\n') {
-      // Insert the text chunk before newline
-      if (curr > start) {
-        ins_char_bytes(start, (size_t)(curr - start));
-      }
-
-      // Handle newline
-      open_line(FORWARD, OPENLINE_KEEPTRAIL | OPENLINE_FORCE_INDENT, base_indent, NULL);
-      start = curr + 1;
-    }
-    curr++;
-  }
-
-  // Handle remaining text after last newline (if any)
-  if (curr > start) {
-    ins_char_bytes(start, (size_t)(curr - start));
-  }
-
-  compl_ins_end_col = curwin->w_cursor.col;
-}
-
 /// Find the longest common prefix among the current completion matches.
 /// Returns a pointer to the first match string, with *prefix_len set to
 /// the length of the common prefix.
@@ -3688,7 +3644,7 @@ static int ins_compl_next(bool allow_get_expansion, int count, bool insert_match
       update_screen();  // Show the inserted text right away
     }
   } else if (compl_no_insert && !started && !compl_preinsert) {
-    ins_compl_insert_bytes(compl_orig_text.data + rs_get_compl_len(), -1);
+    nvim_ins_compl_insert_bytes(compl_orig_text.data + rs_get_compl_len(), -1);
     compl_used_match = false;
     restore_orig_extmarks();
   } else if (insert_match) {
@@ -3698,7 +3654,7 @@ static int ins_compl_next(bool allow_get_expansion, int count, bool insert_match
       rs_ins_compl_insert((compl_preinsert || preinsert_longest) ? 1 : 0, preinsert_longest ? 1 : 0);
     } else {
       assert(compl_leader.data != NULL);
-      ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1);
+      nvim_ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1);
     }
     if (strequal(compl_shown_match->cp_str.data, compl_orig_text.data)) {
       restore_orig_extmarks();
@@ -4301,7 +4257,7 @@ static void get_cpt_func_completion_matches(Callback *cb)
   // This prevents flicker when `func` (e.g. an LSP client) is slow and
   // calls 'sleep', which triggers ui_flush().
   if (!cpt_src->cs_refresh_always) {
-    ins_compl_insert_bytes((char *)rs_ins_compl_leader(), -1);
+    nvim_ins_compl_insert_bytes(rs_ins_compl_leader(), -1);
   }
 
   expand_by_function(0, cpt_compl_pattern.data, cb);
@@ -4447,7 +4403,15 @@ void nvim_ins_apply_autocmds_completedonepre(void) { ins_apply_autocmds(EVENT_CO
 bool nvim_shortmess_completionmenu(void) { return shortmess(SHM_COMPLETIONMENU); }
 bool nvim_in_cinkeys_key_complete(int when, bool line_is_empty) { return in_cinkeys(KEY_COMPLETE, when, line_is_empty); }
 void nvim_set_edit_submode_null_if_set(void) { if (edit_submode != NULL) { edit_submode = NULL; redraw_mode = true; } }
-void nvim_ins_compl_insert_bytes(const char *p, int len) { ins_compl_insert_bytes((char *)p, len); }
+void nvim_ins_compl_insert_bytes(const char *p, int len) {
+  char *q = (char *)p;
+  if (len == -1) {
+    len = (int)strlen(q);
+  }
+  assert(len >= 0);
+  ins_bytes_len(q, (size_t)len);
+  compl_ins_end_col = curwin->w_cursor.col;
+}
 void nvim_restore_orig_extmarks(void) { restore_orig_extmarks(); }
 
 // Compound accessors for ins_compl_show_pum (Phase 2)
@@ -4519,8 +4483,26 @@ const char *nvim_find_common_prefix_data(size_t *len_out, int icase) {
 int nvim_compl_shown_cp_cpt_source_idx(void) { return compl_shown_match ? compl_shown_match->cp_cpt_source_idx : -1; }
 int nvim_get_cpt_source_startcol(int idx) { return (cpt_sources_array && idx >= 0) ? cpt_sources_array[idx].cs_startcol : -1; }
 int nvim_cpt_sources_array_exists(void) { return cpt_sources_array != NULL ? 1 : 0; }
-void nvim_ins_compl_expand_multiple_skip(const char *str, int skip) { ins_compl_expand_multiple((char *)str + skip); }
-void nvim_ins_compl_insert_bytes_len(const char *cp_str, int compl_len, int ins_len) { ins_compl_insert_bytes((char *)cp_str + compl_len, ins_len); }
+void nvim_ins_compl_expand_multiple_skip(const char *str, int skip) {
+  char *start = (char *)str + skip;
+  char *curr = start;
+  int base_indent = get_indent();
+  while (*curr != NUL) {
+    if (*curr == '\n') {
+      if (curr > start) {
+        ins_char_bytes(start, (size_t)(curr - start));
+      }
+      open_line(FORWARD, OPENLINE_KEEPTRAIL | OPENLINE_FORCE_INDENT, base_indent, NULL);
+      start = curr + 1;
+    }
+    curr++;
+  }
+  if (curr > start) {
+    ins_char_bytes(start, (size_t)(curr - start));
+  }
+  compl_ins_end_col = curwin->w_cursor.col;
+}
+void nvim_ins_compl_insert_bytes_len(const char *cp_str, int compl_len, int ins_len) { nvim_ins_compl_insert_bytes(cp_str + compl_len, ins_len); }
 void nvim_cursor_col_sub(int n) { curwin->w_cursor.col -= (colnr_T)n; }
 int nvim_compl_shown_match_at_orig_text(void) { return compl_shown_match ? (match_at_original_text(compl_shown_match) ? 1 : 0) : 0; }
 void nvim_ins_compl_dict_alloc_set_shown(void) { set_vim_var_dict(VV_COMPLETED_ITEM, ins_compl_dict_alloc(compl_shown_match)); }
