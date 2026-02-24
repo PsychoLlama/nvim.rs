@@ -282,7 +282,7 @@ unsafe fn eval_expr_string_impl(expr: *const c_void, rettv: TypevalHandle) -> c_
 /// - `arg` must be a valid null-terminated C string pointer.
 /// - `error` must be a valid pointer to bool.
 /// - `eap` may be null.
-#[no_mangle]
+#[export_name = "eval_to_bool"]
 pub unsafe extern "C" fn rs_eval_to_bool(
     arg: *mut c_char,
     error: *mut bool,
@@ -339,7 +339,7 @@ pub unsafe extern "C" fn rs_eval_to_bool(
 ///
 /// # Safety
 /// - `expr` must be a valid null-terminated C string pointer.
-#[no_mangle]
+#[export_name = "eval_to_number"]
 pub unsafe extern "C" fn rs_eval_to_number(expr: *mut c_char, use_simple_function: bool) -> i64 {
     let mut tv_storage = [0u64; 8];
     let tv = TypevalHandle::from_ptr(tv_storage.as_mut_ptr() as *mut c_void);
@@ -376,7 +376,7 @@ pub unsafe extern "C" fn rs_eval_to_number(expr: *mut c_char, use_simple_functio
 /// # Safety
 /// - `arg` must be a valid null-terminated C string pointer.
 /// - `eap` may be null.
-#[no_mangle]
+#[export_name = "eval_to_string_skip"]
 pub unsafe extern "C" fn rs_eval_to_string_skip(
     arg: *mut c_char,
     eap: ExargHandle,
@@ -414,7 +414,7 @@ pub unsafe extern "C" fn rs_eval_to_string_skip(
 /// # Safety
 /// - `arg` must be a valid null-terminated C string pointer.
 /// - `eap` may be null.
-#[no_mangle]
+#[export_name = "eval_to_string_eap"]
 pub unsafe extern "C" fn rs_eval_to_string_eap(
     arg: *mut c_char,
     join_list: bool,
@@ -457,7 +457,7 @@ pub unsafe extern "C" fn rs_eval_to_string_eap(
 ///
 /// # Safety
 /// - `arg` must be a valid null-terminated C string pointer.
-#[no_mangle]
+#[export_name = "eval_to_string"]
 pub unsafe extern "C" fn rs_eval_to_string(
     arg: *mut c_char,
     join_list: bool,
@@ -472,7 +472,7 @@ pub unsafe extern "C" fn rs_eval_to_string(
 ///
 /// # Safety
 /// - `arg` must be a valid null-terminated C string pointer.
-#[no_mangle]
+#[export_name = "eval_to_string_safe"]
 pub unsafe extern "C" fn rs_eval_to_string_safe(
     arg: *mut c_char,
     use_sandbox: bool,
@@ -502,7 +502,7 @@ pub unsafe extern "C" fn rs_eval_to_string_safe(
 /// # Safety
 /// - `pp` must be a valid pointer to a mutable C string pointer.
 /// - `evalarg` may be null.
-#[no_mangle]
+#[export_name = "skip_expr"]
 pub unsafe extern "C" fn rs_skip_expr(pp: *mut *mut c_char, evalarg: EvalargHandle) -> c_int {
     let save_flags = if evalarg.is_null() {
         0
@@ -571,7 +571,7 @@ pub unsafe extern "C" fn rs_eval1_emsg(
 /// - `expr` must be a valid pointer to a typval_T.
 /// - `argv` must be a valid typval handle or null (argc=0).
 /// - `rettv` must be a valid typval handle.
-#[no_mangle]
+#[export_name = "eval_expr_typval"]
 pub unsafe extern "C" fn rs_eval_expr_typval(
     expr: *const c_void,
     want_func: bool,
@@ -596,7 +596,7 @@ pub unsafe extern "C" fn rs_eval_expr_typval(
 /// # Safety
 /// - `expr` must be a valid pointer to a typval_T.
 /// - `error` must be a valid pointer to bool.
-#[no_mangle]
+#[export_name = "eval_expr_to_bool"]
 pub unsafe extern "C" fn rs_eval_expr_to_bool(expr: *const c_void, error: *mut bool) -> bool {
     let mut argv_storage = [0u64; 8];
     let argv = TypevalHandle::from_ptr(argv_storage.as_mut_ptr() as *mut c_void);
@@ -751,7 +751,7 @@ unsafe fn eval0_simple_funccal_impl(
 /// # Safety
 /// - `arg` must be a valid null-terminated C string.
 /// - `eap` may be null.
-#[no_mangle]
+#[export_name = "eval_expr_ext"]
 pub unsafe extern "C" fn rs_eval_expr_ext(
     arg: *mut c_char,
     eap: ExargHandle,
@@ -831,7 +831,7 @@ const VAR_FIXED: c_int = 2;
 ///
 /// # Safety
 /// All pointers must be valid.
-#[no_mangle]
+#[export_name = "call_vim_function"]
 pub unsafe extern "C" fn rs_call_vim_function(
     func: *const c_char,
     argc: c_int,
@@ -875,7 +875,7 @@ pub unsafe extern "C" fn rs_call_vim_function(
 ///
 /// # Safety
 /// All pointers must be valid.
-#[no_mangle]
+#[export_name = "call_func_retstr"]
 pub unsafe extern "C" fn rs_call_func_retstr(
     func: *const c_char,
     argc: c_int,
@@ -900,7 +900,7 @@ pub unsafe extern "C" fn rs_call_func_retstr(
 ///
 /// # Safety
 /// All pointers must be valid.
-#[no_mangle]
+#[export_name = "call_func_retlist"]
 pub unsafe extern "C" fn rs_call_func_retlist(
     func: *const c_char,
     argc: c_int,

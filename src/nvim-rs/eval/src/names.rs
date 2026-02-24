@@ -270,12 +270,8 @@ extern "C" {
     // skipwhite already declared above as returning *const c_char (link_name alias)
     fn nvim_semsg_invexpr2(p: *const c_char);
 
-    // Phase 4: make_expanded_name helpers
-    fn rs_eval_to_string(
-        arg: *mut c_char,
-        join_list: bool,
-        use_simple_function: bool,
-    ) -> *mut c_char;
+    // Phase 4: make_expanded_name helpers (eval_to_string: renamed Rust export)
+    fn eval_to_string(arg: *mut c_char, join_list: bool, use_simple_function: bool) -> *mut c_char;
     fn nvim_snprintf_three(
         buf: *mut c_char,
         bufsize: usize,
@@ -327,7 +323,7 @@ unsafe fn make_expanded_name_impl(
     *in_end = 0; // NUL
 
     // Evaluate the expression between the braces
-    let temp_result = rs_eval_to_string(expr_start.add(1), false, false);
+    let temp_result = eval_to_string(expr_start.add(1), false, false);
 
     let retval: *mut c_char = if temp_result.is_null() {
         std::ptr::null_mut()
@@ -400,7 +396,7 @@ pub unsafe extern "C" fn rs_make_expanded_name(
 /// # Safety
 /// - `arg` must be a valid pointer to a null-terminated C string pointer.
 /// - `alias` must be a valid writable pointer (set to NULL on entry by this fn).
-#[no_mangle]
+#[export_name = "get_name_len"]
 pub unsafe extern "C" fn rs_get_name_len(
     arg: *mut *const c_char,
     alias: *mut *mut c_char,

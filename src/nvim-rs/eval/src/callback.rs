@@ -266,7 +266,7 @@ unsafe fn partial_free_impl(pt: PartialHandle) {
 ///
 /// # Safety
 /// - `pt` may be null (no-op).
-#[no_mangle]
+#[export_name = "partial_unref"]
 pub unsafe extern "C" fn rs_partial_unref(pt: PartialHandle) {
     if pt.is_null() {
         return;

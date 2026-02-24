@@ -136,7 +136,7 @@ extern int rs_eval_dict(char **arg, typval_T *rettv, evalarg_T *evalarg, bool li
 extern int rs_eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *evalarg);
 // eval6: renamed Rust export (Phase 3 pass 8).
 extern int rs_eval7(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
-extern int rs_eval_interp_string(char **arg, typval_T *rettv, bool evaluate);
+// eval_interp_string: renamed Rust export (Phase 2 pass 9).
 extern void *rs_eval_for_line(const char *arg, bool *errp, exarg_T *eap, evalarg_T *evalarg);
 extern bool rs_next_for_item(void *fi_void, char *arg);
 extern void rs_free_for_info(void *fi_void);
@@ -146,14 +146,8 @@ extern int rs_handle_subscript(const char **arg, typval_T *rettv, evalarg_T *eva
                                bool verbose);
 extern void rs_ex_echo(exarg_T *eap);
 extern void rs_ex_execute(exarg_T *eap);
-extern int rs_eval_option(const char **arg, typval_T *rettv, bool evaluate);
-extern int rs_var_item_copy(const void *conv, typval_T *from, typval_T *to, bool deep,
-                            int copyID);
-extern char *rs_save_tv_as_string(typval_T *tv, ptrdiff_t *len, bool endnl, bool crlf);
-// Phase 1 (eval_shim pass 5)
-extern int rs_call_vim_function(const char *func, int argc, typval_T *argv, typval_T *rettv);
-extern void *rs_call_func_retstr(const char *func, int argc, typval_T *argv);
-extern void *rs_call_func_retlist(const char *func, int argc, typval_T *argv);
+// eval_option, var_item_copy, save_tv_as_string: renamed Rust exports (Phase 2 pass 9).
+// call_vim_function, call_func_retstr, call_func_retlist: renamed Rust exports (Phase 2 pass 9).
 extern void rs_set_argv_var(char **argv, int argc);
 extern void rs_var_set_global(const char *name, typval_T *vartv);
 extern void rs_eval_fmt_source_name_line(char *buf, size_t bufsize);
@@ -166,7 +160,7 @@ extern bool rs_invoke_prompt_interrupt(void);
 extern int rs_eval_foldexpr(win_T *wp, int *cp);
 extern void rs_eval_foldtext(win_T *wp, Object *out);
 // Phase 4 (eval_shim pass 5)
-extern int rs_get_name_len(const char **arg, char **alias, bool evaluate, bool verbose);
+// get_name_len: renamed Rust export (Phase 2 pass 9).
 extern char *rs_make_expanded_name(const char *in_start, char *expr_start, char *expr_end,
                                     char *in_end);
 // Phase 2 (eval_shim pass 7)
@@ -599,24 +593,9 @@ void eval_clear(void)
 #endif
 
 // fill_evalarg_from_eap, clear_evalarg, may_call_simple_func: renamed Rust exports (Phase 3 pass 8).
-// Rust implementations for Phase 5 (eval_shim pass 4)
-extern typval_T *rs_eval_expr_ext(char *arg, exarg_T *eap, bool use_simple_function);
-extern void rs_partial_unref(partial_T *pt);
-extern char *rs_typval_tostring(typval_T *arg, bool quotes);
-
-// Rust implementations (in eval_exec crate, eval_top module)
-extern bool rs_eval_to_bool(char *arg, bool *error, exarg_T *eap, bool skip,
-                             bool use_simple_function);
-extern char *rs_eval_to_string_skip(char *arg, exarg_T *eap, bool skip);
-extern char *rs_eval_to_string_eap(char *arg, bool join_list, exarg_T *eap,
-                                   bool use_simple_function);
-extern char *rs_eval_to_string(char *arg, bool join_list, bool use_simple_function);
-extern char *rs_eval_to_string_safe(char *arg, bool use_sandbox, bool use_simple_function);
-extern int64_t rs_eval_to_number(char *expr, bool use_simple_function);
-extern int rs_skip_expr(char **pp, evalarg_T *evalarg);
-extern int rs_eval_expr_typval(const typval_T *expr, bool want_func, typval_T *argv, int argc,
-                               typval_T *rettv);
-extern bool rs_eval_expr_to_bool(const typval_T *expr, bool *error);
+// eval_expr_ext, partial_unref, typval_tostring: renamed Rust exports (Phase 2 pass 9).
+// eval_to_bool, eval_to_string_*, eval_to_number, skip_expr, eval_expr_typval, eval_expr_to_bool:
+//   renamed Rust exports (Phase 2 pass 9).
 
 // Rust implementations for Phase 1 (eval_shim pass 4, eval_exec crate)
 extern int rs_call_func_rettv(char **arg, evalarg_T *evalarg, typval_T *rettv, bool evaluate,
@@ -643,95 +622,12 @@ extern void rs_eval_call_provider(const char *provider, const char *method,
                                   list_T *arguments, bool discard, typval_T *out_rettv);
 extern void rs_script_host_eval(char *name, typval_T *argvars, typval_T *rettv);
 
-/// Top level evaluation function, returning a boolean.
-/// Sets "error" to true if there was an error.
-///
-/// @param skip  only parse, don't execute
-///
-/// @return  true or false.
-bool eval_to_bool(char *arg, bool *error, exarg_T *eap, const bool skip,
-                  const bool use_simple_function)
-{
-  return rs_eval_to_bool(arg, error, eap, skip, use_simple_function);
-}
+// eval_to_bool, eval_expr_typval, eval_expr_to_bool, eval_to_string_skip,
+// skip_expr, eval_to_string_eap, eval_to_string, eval_to_string_safe,
+// eval_to_number, eval_expr_ext, call_vim_function, call_func_retstr,
+// call_func_retlist: deleted -- Rust exports renamed to match C symbols (Phase 2 pass 9).
 
 // eval1_emsg migrated to Rust (rs_eval1_emsg in eval_exec crate, eval.rs).
-
-/// Evaluate an expression, which can be a function, partial or string.
-/// Pass arguments "argv[argc]".
-/// Return the result in "rettv" and OK or FAIL.
-///
-/// @param want_func  if true, treat a string as a function name, not an expression
-int eval_expr_typval(const typval_T *expr, bool want_func, typval_T *argv, int argc,
-                     typval_T *rettv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_eval_expr_typval(expr, want_func, argv, argc, rettv);
-}
-
-/// Like eval_to_bool() but using a typval_T instead of a string.
-/// Works for string, funcref and partial.
-bool eval_expr_to_bool(const typval_T *expr, bool *error)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  return rs_eval_expr_to_bool(expr, error);
-}
-
-/// Top level evaluation function, returning a string
-///
-/// @param[in]  arg  String to evaluate.
-/// @param[in]  skip  If true, only do parsing to nextcmd without reporting
-///                   errors or actually evaluating anything.
-///
-/// @return [allocated] string result of evaluation or NULL in case of error or
-///                     when skipping.
-char *eval_to_string_skip(char *arg, exarg_T *eap, const bool skip)
-  FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_eval_to_string_skip(arg, eap, skip);
-}
-
-/// Skip over an expression at "*pp".
-///
-/// @return  FAIL for an error, OK otherwise.
-int skip_expr(char **pp, evalarg_T *const evalarg)
-{
-  return rs_skip_expr(pp, evalarg);
-}
-
-/// Top level evaluation function, returning a string.
-///
-/// @param join_list  when true convert a List into a sequence of lines.
-///
-/// @return  pointer to allocated memory, or NULL for failure.
-char *eval_to_string_eap(char *arg, const bool join_list, exarg_T *eap,
-                         const bool use_simple_function)
-{
-  return rs_eval_to_string_eap(arg, join_list, eap, use_simple_function);
-}
-
-char *eval_to_string(char *arg, const bool join_list, const bool use_simple_function)
-{
-  return rs_eval_to_string(arg, join_list, use_simple_function);
-}
-
-/// Call eval_to_string() without using current local variables and using
-/// textlock.
-///
-/// @param use_sandbox  when true, use the sandbox.
-char *eval_to_string_safe(char *arg, const bool use_sandbox, const bool use_simple_function)
-{
-  return rs_eval_to_string_safe(arg, use_sandbox, use_simple_function);
-}
-
-/// Top level evaluation function, returning a number.
-/// Evaluates "expr" silently.
-///
-/// @return  -1 for an error.
-varnumber_T eval_to_number(char *expr, const bool use_simple_function)
-{
-  return rs_eval_to_number(expr, use_simple_function);
-}
 
 /// Top level evaluation function.
 ///
@@ -740,53 +636,6 @@ varnumber_T eval_to_number(char *expr, const bool use_simple_function)
 typval_T *eval_expr(char *arg, exarg_T *eap)
 {
   return eval_expr_ext(arg, eap, false);
-}
-
-typval_T *eval_expr_ext(char *arg, exarg_T *eap, const bool use_simple_function)
-{
-  return rs_eval_expr_ext(arg, eap, use_simple_function);
-}
-
-/// Call some Vim script function and return the result in "*rettv".
-/// Uses argv[0] to argv[argc - 1] for the function arguments. argv[argc]
-/// should have type VAR_UNKNOWN.
-///
-/// @return  OK or FAIL.
-int call_vim_function(const char *func, int argc, typval_T *argv, typval_T *rettv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_call_vim_function(func, argc, argv, rettv);
-}
-
-/// Call Vim script function and return the result as a string.
-/// Uses "argv[0]" to "argv[argc - 1]" for the function arguments. "argv[argc]"
-/// should have type VAR_UNKNOWN.
-///
-/// @param[in]  func  Function name.
-/// @param[in]  argc  Number of arguments.
-/// @param[in]  argv  Array with typval_T arguments.
-///
-/// @return [allocated] NULL when calling function fails, allocated string
-///                     otherwise.
-void *call_func_retstr(const char *const func, int argc, typval_T *argv)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_MALLOC
-{
-  return rs_call_func_retstr(func, argc, argv);
-}
-
-/// Call Vim script function and return the result as a List.
-/// Uses "argv" and "argc" as call_func_retstr().
-///
-/// @param[in]  func  Function name.
-/// @param[in]  argc  Number of arguments.
-/// @param[in]  argv  Array with typval_T arguments.
-///
-/// @return [allocated] NULL when calling function fails or return tv is not a
-///                     List, allocated List otherwise.
-void *call_func_retlist(const char *func, int argc, typval_T *argv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_call_func_retlist(func, argc, argv);
 }
 
 /// Evaluate 'foldexpr'.  Returns the foldlevel, and any character preceding
@@ -1131,32 +980,11 @@ void set_context_for_expression(expand_T *xp, char *arg, cmdidx_T cmdidx)
 // f_slice: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
 // eval_index_inner: deleted -- replaced by rs_eval_index_inner (Rust, Phase 3 pass 8).
 
-/// Get an option value
-///
-/// @param[in,out] arg  Points to the '&' or '+' before the option name. Is
-///                      advanced to the character after the option name.
-/// @param[out] rettv  Location where result is saved.
-/// @param[in] evaluate  If not true, rettv is not populated.
-///
-/// @return  OK or FAIL.
-int eval_option(const char **const arg, typval_T *const rettv, const bool evaluate)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_eval_option(arg, rettv, evaluate);
-}
-
-
-/// Evaluate a single or double quoted string possibly containing expressions.
-/// "arg" points to the '$'.  The result is put in "rettv".
-///
-/// @return  OK or FAIL.
-int eval_interp_string(char **arg, typval_T *rettv, bool evaluate)
-{
-  return rs_eval_interp_string(arg, rettv, evaluate);
-}
+// eval_option: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
+// eval_interp_string: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
 // =============================================================================
-// Accessors for rs_eval_interp_string (Rust Phase 2)
+// Accessors for eval_interp_string (Rust)
 // =============================================================================
 
 /// Allocate and initialize a char garray with given growth size.
@@ -1226,13 +1054,7 @@ char *nvim_partial_get_pt_func_uf_name(partial_T *pt)
   return NULL;
 }
 
-/// Unreference a closure: decrement the reference count and free it when it
-/// becomes zero.
-void partial_unref(partial_T *pt)
-{
-  rs_partial_unref(pt);
-}
-
+// partial_unref: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
 /// Garbage collection for lists and dictionaries.
 ///
@@ -1578,21 +1400,7 @@ void timer_teardown(void)
   rs_timer_teardown();
 }
 
-/// Saves a typval_T as a string.
-///
-/// For lists or buffers, replaces NLs with NUL and separates items with NLs.
-///
-/// @param[in]  tv   Value to store as a string.
-/// @param[out] len  Length of the resulting string or -1 on error.
-/// @param[in]  endnl If true, the output will end in a newline (if a list).
-/// @param[in]  crlf  If true, list items will be joined with CRLF (if a list).
-/// @returns an allocated string if `tv` represents a Vimscript string, list, or
-///          number; NULL otherwise.
-char *save_tv_as_string(typval_T *tv, ptrdiff_t *const len, bool endnl, bool crlf)
-  FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
-{
-  return rs_save_tv_as_string(tv, len, endnl, crlf);
-}
+// save_tv_as_string: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
 /// Translate a Vimscript object into a position
 ///
@@ -1631,19 +1439,7 @@ int list2fpos(typval_T *arg, pos_T *posp, int *fnump, colnr_T *curswantp, bool c
   return rs_list2fpos(arg, posp, fnump, (int *)curswantp, charcol);
 }
 
-/// Get the length of the name of a variable or function.
-/// Only the name is recognized, does not handle ".key" or "[idx]".
-///
-/// @param arg  is advanced to the first non-white character after the name.
-///             If the name contains 'magic' {}'s, expand them and return the
-///             expanded name in an allocated string via 'alias' - caller must free.
-///
-/// @return  -1 if curly braces expansion failed or
-///           0 if something else is wrong.
-int get_name_len(const char **const arg, char **alias, bool evaluate, bool verbose)
-{
-  return rs_get_name_len(arg, alias, evaluate, verbose);
-}
+// get_name_len: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
 // make_expanded_name: deleted -- replaced by rs_make_expanded_name (Rust, Phase 3 pass 8).
 
@@ -1683,28 +1479,7 @@ void set_selfdict(typval_T *const rettv, dict_T *const selfdict)
   rs_set_selfdict(rettv, selfdict);
 }
 
-/// Make a copy of an item
-///
-/// Lists and Dictionaries are also copied.
-///
-/// @param[in]  conv  If not NULL, convert all copied strings.
-/// @param[in]  from  Value to copy.
-/// @param[out]  to  Location where to copy to.
-/// @param[in]  deep  If true, use copy the container and all of the contained
-///                   containers (nested).
-/// @param[in]  copyID  If non-zero then when container is referenced more then
-///                     once then copy of it that was already done is used. E.g.
-///                     when copying list `list = [list2, list2]` (`list[0] is
-///                     list[1]`) var_item_copy with zero copyID will emit
-///                     a copy with (`copy[0] isnot copy[1]`), with non-zero it
-///                     will emit a copy with (`copy[0] is copy[1]`) like in the
-///                     original list. Not used when deep is false.
-int var_item_copy(const vimconv_T *const conv, typval_T *const from, typval_T *const to,
-                  const bool deep, const int copyID)
-  FUNC_ATTR_NONNULL_ARG(2, 3)
-{
-  return rs_var_item_copy(conv, from, to, deep, copyID);
-}
+// var_item_copy: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
 /// ":echo expr1 ..."    print each argument separated with a space, add a
 ///                      newline at the end.
@@ -1824,13 +1599,7 @@ bool invoke_prompt_interrupt(void)
 }
 
 
-/// Convert any type to a string, never give an error.
-/// When "quotes" is true add quotes to a string.
-/// Returns an allocated string.
-char *typval_tostring(typval_T *arg, bool quotes)
-{
-  return rs_typval_tostring(arg, quotes);
-}
+// typval_tostring: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
 // =============================================================================
 // Accessor functions for Rust FFI

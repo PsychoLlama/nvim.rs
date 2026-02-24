@@ -1104,7 +1104,7 @@ pub unsafe fn eval_interp_string_impl(
 ///
 /// # Safety
 /// See `eval_interp_string_impl` for safety requirements.
-#[no_mangle]
+#[export_name = "eval_interp_string"]
 pub unsafe extern "C" fn rs_eval_interp_string(
     arg: *mut *mut c_char,
     rettv: TypevalHandle,
@@ -3547,7 +3547,7 @@ const K_OPT_INVALID: c_int = -1;
 ///
 /// # C equivalent
 /// Replaces the C `eval_option` function in eval_shim.c.
-#[no_mangle]
+#[export_name = "eval_option"]
 pub unsafe extern "C" fn rs_eval_option(
     arg: *mut *const c_char,
     rettv: TypevalHandle,

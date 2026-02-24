@@ -83,13 +83,8 @@ extern "C" {
     // ----- secure check -----
     fn rs_check_secure() -> c_int;
 
-    // ----- save_tv_as_string -----
-    fn rs_save_tv_as_string(
-        tv: *mut c_void,
-        len: *mut isize,
-        endnl: bool,
-        crlf: bool,
-    ) -> *mut c_char;
+    // ----- save_tv_as_string (renamed Rust export) -----
+    fn save_tv_as_string(tv: *mut c_void, len: *mut isize, endnl: bool, crlf: bool) -> *mut c_char;
 }
 
 // =============================================================================
@@ -274,7 +269,7 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
 
     // Get optional input string from argvars[1]
     let mut input_len: isize = 0;
-    let input = rs_save_tv_as_string(arg1, &raw mut input_len, false, false);
+    let input = save_tv_as_string(arg1, &raw mut input_len, false, false);
     if input_len < 0 {
         // Error already reported
         return;

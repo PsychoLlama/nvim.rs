@@ -1347,7 +1347,7 @@ unsafe fn var_item_copy_impl(
 /// # Safety
 /// - `from` and `to` must be valid non-null typval handles
 /// - `conv` may be null
-#[no_mangle]
+#[export_name = "var_item_copy"]
 pub unsafe extern "C" fn rs_var_item_copy(
     conv: *const c_void,
     from: TypevalHandle,

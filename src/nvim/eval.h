@@ -158,4 +158,28 @@ void f_systemlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 bool callback_call(Callback *const callback, const int argcount_in, typval_T *const argvars_in,
                    typval_T *const rettv);
 
+/// Rust-exported FFI symbols (renamed from rs_* in Phase 2, eval_shim pass 9).
+/// These replace C thin wrappers that were deleted from eval_shim.c.
+bool eval_to_bool(char *arg, bool *error, exarg_T *eap, bool skip, bool use_simple_function);
+int eval_expr_typval(const typval_T *expr, bool want_func, typval_T *argv, int argc,
+                     typval_T *rettv);
+bool eval_expr_to_bool(const typval_T *expr, bool *error);
+char *eval_to_string_skip(char *arg, exarg_T *eap, bool skip);
+int skip_expr(char **pp, evalarg_T *evalarg);
+char *eval_to_string_eap(char *arg, bool join_list, exarg_T *eap, bool use_simple_function);
+char *eval_to_string(char *arg, bool join_list, bool use_simple_function);
+char *eval_to_string_safe(char *arg, bool use_sandbox, bool use_simple_function);
+varnumber_T eval_to_number(char *expr, bool use_simple_function);
+typval_T *eval_expr_ext(char *arg, exarg_T *eap, bool use_simple_function);
+int call_vim_function(const char *func, int argc, typval_T *argv, typval_T *rettv);
+void *call_func_retstr(const char *func, int argc, typval_T *argv);
+void *call_func_retlist(const char *func, int argc, typval_T *argv);
+int eval_option(const char **arg, typval_T *rettv, bool evaluate);
+int eval_interp_string(char **arg, typval_T *rettv, bool evaluate);
+void partial_unref(partial_T *pt);
+int var_item_copy(const vimconv_T *conv, typval_T *from, typval_T *to, bool deep, int copyID);
+int get_name_len(const char **arg, char **alias, bool evaluate, bool verbose);
+char *typval_tostring(typval_T *arg, bool quotes);
+char *save_tv_as_string(typval_T *tv, ptrdiff_t *len, bool endnl, bool crlf);
+
 #include "eval_shim.h.generated.h"

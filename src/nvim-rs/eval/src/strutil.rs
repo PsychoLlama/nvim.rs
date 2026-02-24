@@ -61,7 +61,7 @@ const VAR_LIST_S: c_int = 4;
 ///
 /// # C equivalent
 /// Replaces the C `save_tv_as_string` function in eval_shim.c.
-#[no_mangle]
+#[export_name = "save_tv_as_string"]
 #[allow(clippy::cast_sign_loss)]
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_possible_truncation)]
@@ -385,7 +385,7 @@ static EMPTY_STR: &[u8] = b"\0";
 /// # Safety
 /// - `arg` may be null (returns "(does not exist)").
 /// - If non-null, must be a valid pointer to a typval_T.
-#[no_mangle]
+#[export_name = "typval_tostring"]
 pub unsafe extern "C" fn rs_typval_tostring(arg: *mut c_void, quotes: bool) -> *mut c_char {
     if arg.is_null() {
         let msg = b"(does not exist)\0";
