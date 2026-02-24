@@ -67,9 +67,13 @@ extern "C" {
     /// Get w_status_height from a window.
     fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
 
-    /// Set cmdheight option value, with save/restore of min_set_ch around the
-    /// set_option_value call.
-    fn nvim_set_cmdheight_option(new_ch: i64);
+    // nvim_set_cmdheight_option removed: logic inlined in Rust (Phase 8)
+
+    /// Call set_option_value(kOptCmdheight, val, 0) (Phase 8).
+    fn nvim_set_option_cmdheight(val: i64);
+
+    /// Set min_set_ch static (Phase 8).
+    fn nvim_set_min_set_ch(val: i64);
 
     /// Get p_ch (global cmdheight option value).
     fn nvim_get_window_p_ch() -> i64;
@@ -498,7 +502,10 @@ pub(crate) unsafe fn frame_new_height_impl(
         let min_set_ch = nvim_get_min_set_ch() as c_int;
         let new_ch = std::cmp::max(min_set_ch, p_ch + (*topfrp).fr_height - height);
         if new_ch != p_ch {
-            nvim_set_cmdheight_option(i64::from(new_ch));
+            // Inline nvim_set_cmdheight_option: save/restore min_set_ch around set_option_value
+            let save_ch = nvim_get_min_set_ch();
+            nvim_set_option_cmdheight(i64::from(new_ch));
+            nvim_set_min_set_ch(save_ch);
         }
         height = std::cmp::min(nvim_get_rows_avail(), height);
     }

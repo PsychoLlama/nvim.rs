@@ -463,13 +463,14 @@ extern "C" {
     /// Check whether EVENT_WINCLOSED has any autocmds registered.
     fn nvim_has_event_winclosed() -> c_int;
 
-    /// Apply WinClosed autocmds for window `win`.
-    fn nvim_apply_autocmds_winclosed(win: WinHandle);
+    /// Apply WinClosed autocmd using a pre-formatted handle string (Phase 8).
+    fn nvim_apply_autocmds_winclosed_by_handle(handle_str: *const u8, win: WinHandle);
 }
 
 /// Fire WinClosed autocmd for window `win`, with recursion guard.
 ///
-/// Port of C `do_autocmd_winclosed()`.
+/// Port of C `do_autocmd_winclosed()`. Inlines the string formatting that was
+/// previously in C `nvim_apply_autocmds_winclosed` (Phase 8).
 fn do_autocmd_winclosed_impl(win: WinHandle) {
     if DO_AUTOCMD_WINCLOSED_RECURSIVE.load(Ordering::SeqCst) {
         return;
@@ -479,8 +480,12 @@ fn do_autocmd_winclosed_impl(win: WinHandle) {
         return;
     }
     DO_AUTOCMD_WINCLOSED_RECURSIVE.store(true, Ordering::SeqCst);
-    // SAFETY: nvim_apply_autocmds_winclosed is a C accessor
-    unsafe { nvim_apply_autocmds_winclosed(win) };
+    // Format the window handle as a string and fire the autocmd.
+    // SAFETY: nvim_win_get_handle and nvim_apply_autocmds_winclosed_by_handle are C accessors.
+    let handle = unsafe { nvim_win_get_handle(win) };
+    // Format as decimal string with NUL terminator (max 20 digits + NUL for i32).
+    let s = format!("{handle}\0");
+    unsafe { nvim_apply_autocmds_winclosed_by_handle(s.as_ptr(), win) };
     DO_AUTOCMD_WINCLOSED_RECURSIVE.store(false, Ordering::SeqCst);
 }
 

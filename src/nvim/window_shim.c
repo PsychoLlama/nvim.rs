@@ -630,12 +630,7 @@ win_T *prevwin_curwin(void)
 static OptInt min_set_ch = 1;
 
 OptInt nvim_get_min_set_ch(void) { return min_set_ch; }
-void nvim_set_cmdheight_option(int64_t new_ch)
-{
-  const OptInt save_ch = min_set_ch;
-  set_option_value(kOptCmdheight, NUMBER_OPTVAL(new_ch), 0);
-  min_set_ch = save_ch;
-}
+// nvim_set_cmdheight_option deleted: logic migrated to Rust resize/frame.rs (Phase 8)
 
 extern void rs_win_equal(win_T *next_curwin, int current, int dir);
 
@@ -2718,30 +2713,23 @@ void nvim_tabpage_set_topframe(tabpage_T *tp, frame_T *fr) { if (tp) { tp->tp_to
 void nvim_tabpage_set_ch_used(tabpage_T *tp, int64_t val) { if (tp) { tp->tp_ch_used = val; } }
 void nvim_compute_cmdrow(void) { compute_cmdrow(); }
 int nvim_has_event_winclosed(void) { return has_event(EVENT_WINCLOSED) ? 1 : 0; }
-/// Apply WinClosed autocmd for window wp (wrapper for Rust do_autocmd_winclosed).
-void nvim_apply_autocmds_winclosed(win_T *win)
+// nvim_apply_autocmds_winclosed deleted: logic migrated to Rust events.rs (Phase 8)
+/// Apply WinClosed autocmd using pre-formatted handle string (Phase 8).
+/// handle_str must be a NUL-terminated string of the window's integer handle.
+void nvim_apply_autocmds_winclosed_by_handle(const char *handle_str, win_T *win)
 {
-  char winid[NUMBUFLEN];
-  vim_snprintf(winid, sizeof(winid), "%d", win->handle);
-  apply_autocmds(EVENT_WINCLOSED, winid, winid, false, win->w_buffer);
+  apply_autocmds(EVENT_WINCLOSED, (char *)handle_str, (char *)handle_str, false, win->w_buffer);
 }
 win_T *nvim_get_cmdwin_win(void) { return cmdwin_win; }
 win_T *nvim_get_cmdwin_old_curwin(void) { return cmdwin_old_curwin; }
-/// Check if win can close in cmdwin context.
-/// Returns 0=OK, 1=set cmdwin_result (Ctrl_C), 2=api_set_error called.
-int nvim_can_close_in_cmdwin_check(win_T *win, Error *err)
-{
-  if (cmdwin_type != 0) {
-    if (win == cmdwin_win) {
-      cmdwin_result = Ctrl_C;
-      return 1;
-    } else if (win == cmdwin_old_curwin) {
-      api_set_error(err, kErrorTypeException, "%s", e_cmdwin);
-      return 2;
-    }
-  }
-  return 0;
-}
+// nvim_can_close_in_cmdwin_check deleted: logic migrated to Rust focus.rs (Phase 8)
+// nvim_set_cmdwin_result already exists in normal_shim.c
+/// Set api_error for cmdwin (Phase 8 accessor).
+void nvim_api_set_error_e_cmdwin(Error *err) { api_set_error(err, kErrorTypeException, "%s", e_cmdwin); }
+// nvim_set_cmdheight_option deleted: logic migrated to Rust resize/frame.rs (Phase 8)
+/// Set set_option_value for kOptCmdheight with given value (Phase 8 accessor).
+void nvim_set_option_cmdheight(int64_t val) { set_option_value(kOptCmdheight, NUMBER_OPTVAL(val), 0); }
+// nvim_set_min_set_ch already exists below (line ~2867); no duplicate needed here
 void nvim_win_set_winbar_height(win_T *wp, int val) { if (wp) { wp->w_winbar_height = val; } }
 void nvim_win_set_inner_size_wrapper(win_T *wp, int valid_cursor) { win_set_inner_size(wp, valid_cursor != 0); }
 /// Returns 1 if local w_p_wbr is empty/NULL (for floating window check).

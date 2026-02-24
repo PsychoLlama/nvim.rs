@@ -86,10 +86,22 @@ extern "C" {
     /// Redraw window line.
     fn nvim_redrawWinline(wp: WinHandle, lnum: c_int);
 
-    // --- can_close_in_cmdwin dependencies ---
+    // --- can_close_in_cmdwin dependencies (Phase 8 inlined) ---
 
-    /// Check cmdwin state; returns 0=OK, 1=set_cmdwin_result, 2=api_set_error_called.
-    fn nvim_can_close_in_cmdwin_check(win: WinHandle, err: *mut std::ffi::c_void) -> c_int;
+    /// Get cmdwin_type global.
+    fn nvim_get_cmdwin_type() -> c_int;
+
+    /// Get cmdwin_win global.
+    fn nvim_get_cmdwin_win() -> WinHandle;
+
+    /// Get cmdwin_old_curwin global.
+    fn nvim_get_cmdwin_old_curwin() -> WinHandle;
+
+    /// Set cmdwin_result to val.
+    fn nvim_set_cmdwin_result(val: c_int);
+
+    /// Set api_error for cmdwin.
+    fn nvim_api_set_error_e_cmdwin(err: *mut std::ffi::c_void);
 }
 
 /// Get the above or below neighbor window of the specified window.
@@ -459,15 +471,27 @@ pub unsafe extern "C" fn rs_win_goto(wp: WinHandle) {
 
 /// Check if window `win` can close in a command-line window context.
 ///
-/// Port of C `can_close_in_cmdwin()`. The actual cmdwin checks are delegated
-/// to `nvim_can_close_in_cmdwin_check()` which handles the C-side state.
-///
-/// Returns `true` if the window can close, `false` otherwise.
+/// Inlined port of C `nvim_can_close_in_cmdwin_check()` (Phase 8).
+/// Returns `true` if the window can close (no cmdwin conflict), `false` otherwise.
+/// Side effects: may set `cmdwin_result = Ctrl_C` or set an API error.
 ///
 /// # Safety
 /// Calls C accessor functions with a valid window handle.
 unsafe fn can_close_in_cmdwin_impl(win: WinHandle, err: *mut std::ffi::c_void) -> bool {
-    nvim_can_close_in_cmdwin_check(win, err) == 0
+    if nvim_get_cmdwin_type() != 0 {
+        let cmdwin_win = nvim_get_cmdwin_win();
+        if win == cmdwin_win {
+            // Ctrl-C (3) closes the cmdwin itself
+            nvim_set_cmdwin_result(3); // Ctrl_C
+            return false;
+        }
+        let cmdwin_old = nvim_get_cmdwin_old_curwin();
+        if win == cmdwin_old {
+            nvim_api_set_error_e_cmdwin(err);
+            return false;
+        }
+    }
+    true
 }
 
 /// FFI export for `can_close_in_cmdwin`.
