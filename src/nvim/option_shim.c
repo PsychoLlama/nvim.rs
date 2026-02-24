@@ -1362,128 +1362,55 @@ void nvim_put_set_get_opt_name_flags(OptIndex opt_idx, const char **name, uint64
 void *nvim_option_get_var_ptr(OptIndex opt_idx) { return options[opt_idx].var; }
 OptVal nvim_option_get_def_val(OptIndex opt_idx) { return options[opt_idx].def_val; }
 
+// Phase 1 init function accessors: expose static helpers to Rust
+void nvim_call_set_string_default(int opt_idx, char *val, bool allocated)
+{
+  set_string_default((OptIndex)opt_idx, val, allocated);
+}
+void nvim_call_change_option_default(int opt_idx, OptVal value)
+{
+  change_option_default((OptIndex)opt_idx, value);
+}
+char *nvim_call_enc_locale(void) { return enc_locale(); }
+void nvim_set_fenc_default(char *val) { fenc_default = val; }
+void nvim_set_p_title(int v) { p_title = v; }
+void nvim_set_p_icon(int v) { p_icon = v; }
+char *nvim_call_os_getenv(const char *name) { return os_getenv(name); }
+char *nvim_call_vim_getenv(const char *name) { return vim_getenv(name); }
+int nvim_option_was_set_idx(int opt_idx) { return option_was_set((OptIndex)opt_idx); }
+// For set_init_default_backupskip: expose after_pathsep
+int nvim_call_after_pathsep(const char *b, const char *p) { return after_pathsep(b, p); }
+// For rs_find_dup_item call in backupskip (flags accessor already exists)
+
 void set_init_tablocal(void)
 {
   // susy baka: cmdheight calls itself OPT_GLOBAL but is really tablocal!
   p_ch = options[kOptCmdheight].def_val.data.number;
 }
 
+extern void rs_set_init_default_shell(void);
+
 /// Initialize the 'shell' option to a default value.
 static void set_init_default_shell(void)
 {
-  // Find default value for 'shell' option.
-  // Don't use it if it is empty.
-  char *shell = os_getenv("SHELL");
-  if (shell != NULL) {
-    if (vim_strchr(shell, ' ') != NULL) {
-      const size_t len = strlen(shell) + 3;  // two quotes and a trailing NUL
-      char *const cmd = xmalloc(len);
-      snprintf(cmd, len, "\"%s\"", shell);
-      set_string_default(kOptShell, cmd, true);
-    } else {
-      set_string_default(kOptShell, shell, false);
-    }
-    xfree(shell);
-  }
+  rs_set_init_default_shell();
 }
+
+extern void rs_set_init_default_backupskip(void);
 
 /// Set the default for 'backupskip' to include environment variables for
 /// temp files.
 static void set_init_default_backupskip(void)
 {
-#ifdef UNIX
-  static char *(names[4]) = { "", "TMPDIR", "TEMP", "TMP" };
-#else
-  static char *(names[3]) = { "TMPDIR", "TEMP", "TMP" };
-#endif
-  garray_T ga;
-  OptIndex opt_idx = kOptBackupskip;
-
-  ga_init(&ga, 1, 100);
-  for (size_t i = 0; i < ARRAY_SIZE(names); i++) {
-    bool mustfree = true;
-    char *p;
-    size_t plen;
-#ifdef UNIX
-    if (*names[i] == NUL) {
-# ifdef __APPLE__
-      p = "/private/tmp";
-      plen = STRLEN_LITERAL("/private/tmp");
-# else
-      p = "/tmp";
-      plen = STRLEN_LITERAL("/tmp");
-# endif
-      mustfree = false;
-    } else
-#endif
-    {
-      p = vim_getenv(names[i]);
-      plen = 0;  // will be calculated below
-    }
-    if (p != NULL && *p != NUL) {
-      bool has_trailing_path_sep = false;
-
-      if (plen == 0) {
-        // the value was retrieved from the environment
-        plen = strlen(p);
-        // does the value include a trailing path separator?
-        if (after_pathsep(p, p + plen)) {
-          has_trailing_path_sep = true;
-        }
-      }
-
-      // item size needs to be large enough to include "/*" and a trailing NUL
-      // note: the value (and therefore plen) may already include a path separator
-      size_t itemsize = plen + (has_trailing_path_sep ? 0 : 1) + 2;
-      char *item = xmalloc(itemsize);
-      // add a preceding comma as a separator after the first item
-      size_t itemseplen = (ga.ga_len == 0) ? 0 : 1;
-
-      size_t itemlen = (size_t)vim_snprintf(item, itemsize, "%s%s*", p,
-                                            has_trailing_path_sep ? "" : PATHSEPSTR);
-
-      if (rs_find_dup_item(ga.ga_data, item, itemlen, options[opt_idx].flags) == NULL) {
-        ga_grow(&ga, (int)(itemseplen + itemlen + 1));
-        ga.ga_len += vim_snprintf((char *)ga.ga_data + ga.ga_len,
-                                  itemseplen + itemlen + 1,
-                                  "%s%s", (itemseplen > 0) ? "," : "", item);
-      }
-      xfree(item);
-    }
-    if (mustfree) {
-      xfree(p);
-    }
-  }
-  if (ga.ga_data != NULL) {
-    set_string_default(kOptBackupskip, ga.ga_data, true);
-  }
+  rs_set_init_default_backupskip();
 }
+
+extern void rs_set_init_default_cdpath(void);
 
 /// Initialize the 'cdpath' option to a default value.
 static void set_init_default_cdpath(void)
 {
-  char *cdpath = vim_getenv("CDPATH");
-  if (cdpath == NULL) {
-    return;
-  }
-
-  char *buf = xmalloc(2 * strlen(cdpath) + 2);
-  buf[0] = ',';               // start with ",", current dir first
-  int j = 1;
-  for (int i = 0; cdpath[i] != NUL; i++) {
-    if (vim_ispathlistsep(cdpath[i])) {
-      buf[j++] = ',';
-    } else {
-      if (cdpath[i] == ' ' || cdpath[i] == ',') {
-        buf[j++] = '\\';
-      }
-      buf[j++] = cdpath[i];
-    }
-  }
-  buf[j] = NUL;
-  change_option_default(kOptCdpath, CSTR_AS_OPTVAL(buf));
-
-  xfree(cdpath);
+  rs_set_init_default_cdpath();
 }
 
 /// Expand environment variables and things like "~" for the defaults.
@@ -1511,18 +1438,12 @@ static void set_init_expand_env(void)
   }
 }
 
+extern void rs_set_init_fenc_default(void);
+
 /// Initialize the encoding used for "default" in 'fileencodings'.
 static void set_init_fenc_default(void)
 {
-  // enc_locale() will try to find the encoding of the current locale.
-  // This will be used when "default" is used as encoding specifier
-  // in 'fileencodings'.
-  char *p = enc_locale();
-  if (p == NULL) {
-    // Use utf-8 as "default" if locale encoding can't be detected.
-    p = xmemdupz(S_LEN("utf-8"));
-  }
-  fenc_default = p;
+  rs_set_init_fenc_default();
 }
 
 /// Initialize the options, first part.
@@ -1830,6 +1751,8 @@ void set_helplang_default(const char *lang)
   rs_set_helplang_default(lang);
 }
 
+extern void rs_set_title_defaults(void);
+
 /// 'title' and 'icon' only default to true if they have not been set or reset
 /// in .vimrc and we can read the old value.
 /// When 'title' and 'icon' have been reset in .vimrc, we won't even check if
@@ -1837,17 +1760,7 @@ void set_helplang_default(const char *lang)
 /// machine.
 void set_title_defaults(void)
 {
-  // If GUI is (going to be) used, we can always set the window title and
-  // icon name.  Saves a bit of time, because the X11 display server does
-  // not need to be contacted.
-  if (!(options[kOptTitle].flags & kOptFlagWasSet)) {
-    change_option_default(kOptTitle, BOOLEAN_OPTVAL(false));
-    p_title = 0;
-  }
-  if (!(options[kOptIcon].flags & kOptFlagWasSet)) {
-    change_option_default(kOptIcon, BOOLEAN_OPTVAL(false));
-    p_icon = 0;
-  }
+  rs_set_title_defaults();
 }
 
 void ex_set(exarg_T *eap)

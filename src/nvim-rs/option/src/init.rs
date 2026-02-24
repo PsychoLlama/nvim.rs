@@ -423,6 +423,237 @@ pub unsafe extern "C" fn rs_set_helplang_default(lang: *const c_char) {
 }
 
 // =============================================================================
+// Phase 1: Init helper function implementations (option_shim.c migration)
+// =============================================================================
+
+use crate::opt_index::{K_OPT_BACKUPSKIP, K_OPT_CDPATH, K_OPT_ICON, K_OPT_SHELL, K_OPT_TITLE};
+use crate::storage::{OptVal, OptValData, String_};
+use crate::OptValType;
+
+extern "C" {
+    // Phase 1 accessors (added to option_shim.c)
+    fn nvim_call_set_string_default(opt_idx: c_int, val: *mut c_char, allocated: c_int);
+    fn nvim_call_change_option_default(opt_idx: c_int, value: OptVal);
+    fn nvim_call_enc_locale() -> *mut c_char;
+    fn nvim_set_fenc_default(val: *mut c_char);
+    fn nvim_set_p_title(v: c_int);
+    fn nvim_set_p_icon(v: c_int);
+    fn nvim_call_os_getenv(name: *const c_char) -> *mut c_char;
+    fn nvim_call_vim_getenv(name: *const c_char) -> *mut c_char;
+    fn nvim_option_was_set_idx(opt_idx: c_int) -> c_int;
+    fn nvim_call_after_pathsep(b: *const c_char, p: *const c_char) -> c_int;
+    fn nvim_get_option_flags(opt_idx: c_int) -> u32;
+    fn xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
+    fn rs_find_dup_item(
+        origval: *const c_char,
+        newval: *const c_char,
+        newvallen: usize,
+        flags: u32,
+    ) -> *const c_char;
+}
+
+/// C flag: option was set
+const K_OPT_FLAG_WAS_SET: u32 = 1 << 3;
+
+/// Equivalent of CSTR_AS_OPTVAL(ptr): creates a String OptVal wrapping a C pointer.
+/// The pointer must be a valid C string allocated (or borrowed) for the lifetime of the OptVal.
+unsafe fn cstr_as_optval(ptr: *mut c_char) -> OptVal {
+    let len = libc::strlen(ptr as *const _);
+    OptVal {
+        type_: OptValType::String,
+        data: OptValData {
+            string: String_ { data: ptr, size: len },
+        },
+    }
+}
+
+/// Equivalent of BOOLEAN_OPTVAL(b)
+fn boolean_optval(b: bool) -> OptVal {
+    OptVal {
+        type_: OptValType::Boolean,
+        data: OptValData { boolean: c_int::from(b) },
+    }
+}
+
+/// Initialize the 'shell' option to a default value (Rust implementation).
+///
+/// Replaces C `set_init_default_shell()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_init_default_shell() {
+    let shell_env = c"SHELL";
+    let shell = nvim_call_os_getenv(shell_env.as_ptr());
+    if shell.is_null() {
+        return;
+    }
+
+    if rs_shell_needs_quoting(shell) != 0 {
+        // Shell path contains spaces; wrap in double quotes.
+        let len = rs_quoted_shell_len(shell);
+        let cmd = xmalloc(len);
+        // Write `"<shell>"` into cmd
+        *cmd = b'"' as c_char;
+        let mut j: usize = 1;
+        let mut p = shell;
+        while *p != 0 {
+            *cmd.add(j) = *p;
+            j += 1;
+            p = p.add(1);
+        }
+        *cmd.add(j) = b'"' as c_char;
+        j += 1;
+        *cmd.add(j) = 0;
+        // Ownership of cmd transferred to set_string_default (allocated=true)
+        nvim_call_set_string_default(K_OPT_SHELL, cmd, 1);
+    } else {
+        // No quoting needed; shell is not owned after call (allocated=false)
+        nvim_call_set_string_default(K_OPT_SHELL, shell, 0);
+    }
+    xfree(shell);
+}
+
+/// Initialize the 'backupskip' option default from TMPDIR/TEMP/TMP env vars.
+///
+/// Replaces C `set_init_default_backupskip()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_init_default_backupskip() {
+    // On Unix we also include the platform default temp directory.
+    #[cfg(unix)]
+    let tmpdir_literal: Option<*const c_char> = Some(rs_default_tmpdir());
+    #[cfg(not(unix))]
+    let tmpdir_literal: Option<*const c_char> = None;
+
+    let env_names: &[&[u8]] = &[b"TMPDIR\0", b"TEMP\0", b"TMP\0"];
+
+    let opt_idx = K_OPT_BACKUPSKIP;
+    let flags = nvim_get_option_flags(opt_idx);
+
+    // We build the result as a Vec<u8> (comma-separated patterns).
+    let mut result: Vec<u8> = Vec::with_capacity(256);
+
+    // Helper closure: try to add a path to result.
+    let mut try_add_path = |path: *const c_char, mustfree: bool| {
+        if path.is_null() || *path == 0 {
+            if mustfree {
+                xfree(path as *mut c_char);
+            }
+            return;
+        }
+
+        let plen = libc::strlen(path);
+        let has_trailing = nvim_call_after_pathsep(path, path.add(plen)) != 0;
+
+        // Build pattern: path[/]* where / is path separator on current platform
+        let sep: &[u8] = if has_trailing { b"" } else { b"/" };
+        let mut item: Vec<u8> = Vec::with_capacity(plen + 2 + 1);
+        let slice = std::slice::from_raw_parts(path as *const u8, plen);
+        item.extend_from_slice(slice);
+        item.extend_from_slice(sep);
+        item.push(b'*');
+
+        // Check for duplicates using rs_find_dup_item
+        let existing_ptr: *const c_char = if result.is_empty() {
+            std::ptr::null()
+        } else {
+            result.as_ptr() as *const c_char
+        };
+        let dup = rs_find_dup_item(existing_ptr, item.as_ptr() as *const c_char, item.len(), flags);
+
+        if dup.is_null() {
+            // Not a duplicate: append separator if needed, then item
+            if !result.is_empty() {
+                result.push(b',');
+            }
+            result.extend_from_slice(&item);
+        }
+
+        if mustfree {
+            xfree(path as *mut c_char);
+        }
+    };
+
+    // On Unix, add platform default tmp dir first
+    #[cfg(unix)]
+    {
+        if let Some(default_tmp) = tmpdir_literal {
+            if !default_tmp.is_null() {
+                try_add_path(default_tmp, false);
+            }
+        }
+    }
+
+    // Add TMPDIR, TEMP, TMP from environment
+    for name in env_names {
+        let env_name = name.as_ptr() as *const c_char;
+        let p = nvim_call_vim_getenv(env_name);
+        try_add_path(p, true);
+    }
+
+    if !result.is_empty() {
+        // Null-terminate and hand off to set_string_default (allocated=true)
+        result.push(0);
+        let len = result.len();
+        let buf = xmalloc(len);
+        std::ptr::copy_nonoverlapping(result.as_ptr() as *const c_char, buf, len);
+        nvim_call_set_string_default(opt_idx, buf, 1);
+    }
+}
+
+/// Initialize the 'cdpath' option default from CDPATH env var.
+///
+/// Replaces C `set_init_default_cdpath()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_init_default_cdpath() {
+    let cdpath_key = c"CDPATH";
+    let cdpath = nvim_call_vim_getenv(cdpath_key.as_ptr());
+    if cdpath.is_null() {
+        return;
+    }
+
+    // Compute needed buffer length and allocate
+    let needed = rs_cdpath_converted_len(cdpath);
+    let buf = xmalloc(needed);
+
+    rs_convert_cdpath(cdpath, buf, needed);
+    xfree(cdpath);
+
+    // change_option_default takes ownership via CSTR_AS_OPTVAL semantics
+    let val = cstr_as_optval(buf);
+    nvim_call_change_option_default(K_OPT_CDPATH, val);
+}
+
+/// Initialize the encoding used for "default" in 'fileencodings'.
+///
+/// Replaces C `set_init_fenc_default()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_init_fenc_default() {
+    let mut p = nvim_call_enc_locale();
+    if p.is_null() {
+        // Use utf-8 as "default" if locale encoding can't be detected.
+        let utf8 = c"utf-8";
+        let len = 5; // "utf-8\0" = 6, but xmemdupz adds NUL
+        p = xmemdupz(utf8.as_ptr(), len);
+    }
+    nvim_set_fenc_default(p);
+}
+
+/// Set default values for 'title' and 'icon'.
+///
+/// Replaces C `set_title_defaults()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_title_defaults() {
+    let title_flags = nvim_get_option_flags(K_OPT_TITLE);
+    if (title_flags & K_OPT_FLAG_WAS_SET) == 0 {
+        nvim_call_change_option_default(K_OPT_TITLE, boolean_optval(false));
+        nvim_set_p_title(0);
+    }
+    let icon_flags = nvim_get_option_flags(K_OPT_ICON);
+    if (icon_flags & K_OPT_FLAG_WAS_SET) == 0 {
+        nvim_call_change_option_default(K_OPT_ICON, boolean_optval(false));
+        nvim_set_p_icon(0);
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
