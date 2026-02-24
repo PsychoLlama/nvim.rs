@@ -102,6 +102,7 @@ extern void rs_diff_redraw(bool dofold);
 extern void rs_diff_win_options(win_T *wp, bool addbuf);
 extern void rs_ex_diffoff(exarg_T *eap);
 extern void rs_ex_diffsplit(exarg_T *eap);
+extern void rs_ex_diffgetput(exarg_T *eap);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -1264,180 +1265,12 @@ void nv_diffgetput(bool put, size_t count)
   rs_nv_diffgetput(put, count);
 }
 
-/// ":diffget" and ":diffput"
+/// ":diffget" and ":diffput" -- thin wrapper calling Rust rs_ex_diffgetput.
 ///
 /// @param eap
 void ex_diffgetput(exarg_T *eap)
 {
-  int idx_other;
-
-  // Find the current buffer in the list of diff buffers.
-  int idx_cur = rs_diff_buf_idx_tp(curbuf, curtab);
-  if (idx_cur == DB_COUNT) {
-    emsg(_("E99: Current buffer is not in diff mode"));
-    return;
-  }
-
-  if (*eap->arg == NUL) {
-    bool found_not_ma = false;
-    // No argument: Find the other buffer in the list of diff buffers.
-    for (idx_other = 0; idx_other < DB_COUNT; idx_other++) {
-      if ((curtab->tp_diffbuf[idx_other] != curbuf)
-          && (curtab->tp_diffbuf[idx_other] != NULL)) {
-        if ((eap->cmdidx != CMD_diffput)
-            || MODIFIABLE(curtab->tp_diffbuf[idx_other])) {
-          break;
-        }
-        found_not_ma = true;
-      }
-    }
-
-    if (idx_other == DB_COUNT) {
-      if (found_not_ma) {
-        emsg(_("E793: No other buffer in diff mode is modifiable"));
-      } else {
-        emsg(_("E100: No other buffer in diff mode"));
-      }
-      return;
-    }
-
-    // Check that there isn't a third buffer in the list
-    for (int i = idx_other + 1; i < DB_COUNT; i++) {
-      if ((curtab->tp_diffbuf[i] != curbuf)
-          && (curtab->tp_diffbuf[i] != NULL)
-          && ((eap->cmdidx != CMD_diffput)
-              || MODIFIABLE(curtab->tp_diffbuf[i]))) {
-        emsg(_("E101: More than two buffers in diff mode, don't know "
-               "which one to use"));
-        return;
-      }
-    }
-  } else {
-    // Buffer number or pattern given. Ignore trailing white space.
-    char *p = eap->arg + strlen(eap->arg);
-    while (p > eap->arg && ascii_iswhite(p[-1])) {
-      p--;
-    }
-
-    int i;
-    for (i = 0; ascii_isdigit(eap->arg[i]) && eap->arg + i < p; i++) {}
-
-    if (eap->arg + i == p) {
-      // digits only
-      i = (int)atol(eap->arg);
-    } else {
-      i = buflist_findpat(eap->arg, p, false, true, false);
-
-      if (i < 0) {
-        // error message already given
-        return;
-      }
-    }
-    buf_T *buf = buflist_findnr(i);
-
-    if (buf == NULL) {
-      semsg(_("E102: Can't find buffer \"%s\""), eap->arg);
-      return;
-    }
-
-    if (buf == curbuf) {
-      // nothing to do
-      return;
-    }
-    idx_other = rs_diff_buf_idx_tp(buf, curtab);
-
-    if (idx_other == DB_COUNT) {
-      semsg(_("E103: Buffer \"%s\" is not in diff mode"), eap->arg);
-      return;
-    }
-  }
-
-  diff_busy = true;
-
-  // When no range given include the line above or below the cursor.
-  if (eap->addr_count == 0) {
-    // Make it possible that ":diffget" on the last line gets line below
-    // the cursor line when there is no difference above the cursor.
-    int linestatus = 0;
-    if (eap->line1 == curbuf->b_ml.ml_line_count
-        && (rs_diff_check_with_linestatus(curwin, eap->line1, &linestatus) == 0
-            && linestatus == 0)
-        && (eap->line1 == 1
-            || (rs_diff_check_with_linestatus(curwin, eap->line1 - 1, &linestatus) >= 0
-                && linestatus == 0))) {
-      eap->line2++;
-    } else if (eap->line1 > 0) {
-      eap->line1--;
-    }
-  }
-
-  aco_save_T aco;
-
-  if (eap->cmdidx != CMD_diffget) {
-    // Need to make the other buffer the current buffer to be able to make
-    // changes in it.
-
-    // Set curwin/curbuf to buf and save a few things.
-    aucmd_prepbuf(&aco, curtab->tp_diffbuf[idx_other]);
-  }
-
-  const int idx_from = eap->cmdidx == CMD_diffget ? idx_other : idx_cur;
-  const int idx_to = eap->cmdidx == CMD_diffget ? idx_cur : idx_other;
-
-  // May give the warning for a changed buffer here, which can trigger the
-  // FileChangedRO autocommand, which may do nasty things and mess
-  // everything up.
-  if (!curbuf->b_changed) {
-    change_warning(curbuf, 0);
-    if (rs_diff_buf_idx_tp(curbuf, curtab) != idx_to) {
-      emsg(_("E787: Buffer changed unexpectedly"));
-      goto theend;
-    }
-  }
-
-  diffgetput(eap->addr_count, idx_cur, idx_from, idx_to, eap->line1, eap->line2);
-
-  // restore curwin/curbuf and a few other things
-  if (eap->cmdidx != CMD_diffget) {
-    // Syncing undo only works for the current buffer, but we change
-    // another buffer.  Sync undo if the command was typed.  This isn't
-    // 100% right when ":diffput" is used in a function or mapping.
-    if (KeyTyped) {
-      u_sync(false);
-    }
-    aucmd_restbuf(&aco);
-  }
-
-theend:
-  diff_busy = false;
-
-  if (diff_need_update) {
-    rs_diff_ex_diffupdate(NULL);
-  }
-
-  // Check that the cursor is on a valid character and update its
-  // position.  When there were filler lines the topline has become
-  // invalid.
-  check_cursor(curwin);
-  changed_line_abv_curs();
-
-  // If all diffs are gone, update folds in all diff windows.
-  if (curtab->tp_first_diff == NULL) {
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (wp->w_p_diff && wp->w_p_fdm[0] == 'd' && wp->w_p_fen) {
-        rs_foldUpdateAll(wp);
-      }
-    }
-  }
-
-  if (diff_need_update) {
-    // redraw already done by ex_diffupdate()
-    diff_need_update = false;
-  } else {
-    // Also need to redraw the other buffers.
-    diff_redraw(false);
-    apply_autocmds(EVENT_DIFFUPDATED, NULL, NULL, false, curbuf);
-  }
+  rs_ex_diffgetput(eap);
 }
 
 /// Apply diffget/diffput to buffers and diffblocks
@@ -1756,7 +1589,7 @@ void nvim_diffout_append_hunk(void *dout, linenr_T lnum_orig, int count_orig, li
 linenr_T nvim_diff_tv_get_lnum(typval_T *argvars) { return tv_get_lnum(argvars); }
 // Phase 2 accessors: nv_diffgetput and ex_diffthis
 void nvim_vim_beep_operator(void) { vim_beep(kOptBoFlagOperator); }
-void nvim_call_ex_diffgetput(int cmdidx, const char *arg, int addr_count, linenr_T line1, linenr_T line2) { exarg_T ea; CLEAR_FIELD(ea); ea.cmdidx = (cmdidx_T)cmdidx; ea.arg = (char *)arg; ea.addr_count = addr_count; ea.line1 = line1; ea.line2 = line2; ex_diffgetput(&ea); }
+void nvim_diff_call_nv_ex_diffgetput(int cmdidx, const char *arg, int addr_count, linenr_T line1, linenr_T line2) { exarg_T ea; CLEAR_FIELD(ea); ea.cmdidx = (cmdidx_T)cmdidx; ea.arg = (char *)arg; ea.addr_count = addr_count; ea.line1 = line1; ea.line2 = line2; rs_ex_diffgetput(&ea); }
 // Phase 3 (diff_win_options / ex_diffoff) accessors
 bool nvim_win_get_w_p_diff_saved(win_T *wp) { return wp->w_p_diff_saved != 0; }
 void nvim_win_set_w_p_diff_saved(win_T *wp, bool val) { wp->w_p_diff_saved = val ? 1 : 0; }
@@ -1811,6 +1644,36 @@ bool nvim_diff_bufref_valid(const void *r) { return bufref_valid((bufref_T *)r);
 buf_T *nvim_diff_bufref_get_buf(const void *r) { return ((bufref_T *)r)->br_buf; }
 void *nvim_diff_bufref_alloc(void) { return &diff_split_bufref; }
 void nvim_diff_bufref_free(void *r) { (void)r; /* static storage, no-op */ }
+// Phase 5 (ex_diffgetput) accessors
+void nvim_diff_emsg_e99(void) { emsg(_("E99: Current buffer is not in diff mode")); }
+void nvim_diff_emsg_e793(void) { emsg(_("E793: No other buffer in diff mode is modifiable")); }
+void nvim_diff_emsg_e100(void) { emsg(_("E100: No other buffer in diff mode")); }
+void nvim_diff_emsg_e101(void) { emsg(_("E101: More than two buffers in diff mode, don't know which one to use")); }
+void nvim_diff_semsg_e102(const char *arg) { semsg(_("E102: Can't find buffer \"%s\""), arg); }
+void nvim_diff_semsg_e103(const char *arg) { semsg(_("E103: Buffer \"%s\" is not in diff mode"), arg); }
+void nvim_diff_emsg_e787(void) { emsg(_("E787: Buffer changed unexpectedly")); }
+bool nvim_diff_buf_is_modifiable(buf_T *buf) { return MODIFIABLE(buf); }
+buf_T *nvim_diff_get_curbuf(void) { return curbuf; }
+int nvim_diff_buflist_findpat(const char *arg, const char *end) { return buflist_findpat(arg, end, false, true, false); }
+buf_T *nvim_diff_buflist_findnr(int nr) { return buflist_findnr(nr); }
+static aco_save_T diff_aucmd_aco;
+void nvim_diff_aucmd_prepbuf_idx(int idx) { aucmd_prepbuf(&diff_aucmd_aco, curtab->tp_diffbuf[idx]); }
+void nvim_diff_aucmd_restbuf(void) { aucmd_restbuf(&diff_aucmd_aco); }
+void nvim_diff_change_warning_curbuf(void) { change_warning(curbuf, 0); }
+bool nvim_diff_curbuf_changed(void) { return curbuf->b_changed; }
+bool nvim_diff_key_typed(void) { return KeyTyped; }
+void nvim_diff_u_sync(void) { u_sync(false); }
+void nvim_diff_check_cursor_curwin(void) { check_cursor(curwin); }
+void nvim_diff_changed_line_abv_curs(void) { changed_line_abv_curs(); }
+void nvim_diff_call_diffgetput(int addr_count, int idx_cur, int idx_from, int idx_to, linenr_T line1, linenr_T line2) { diffgetput(addr_count, idx_cur, idx_from, idx_to, line1, line2); }
+int nvim_diff_get_CMD_diffget(void) { return (int)CMD_diffget; }
+int nvim_diff_get_CMD_diffput(void) { return (int)CMD_diffput; }
+linenr_T nvim_diff_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
+bool nvim_diff_curtab_first_diff_is_null(void) { return curtab->tp_first_diff == NULL; }
+bool nvim_diff_win_get_w_p_fdm_starts_d(win_T *wp) { return wp->w_p_fdm[0] == 'd'; }
+buf_T *nvim_diff_get_curtab_diffbuf_idx(int idx) { if (idx < 0 || idx >= DB_COUNT) { return NULL; } return curtab->tp_diffbuf[idx]; }
+bool nvim_diff_curbuf_is_curtab_diffbuf(int idx_to) { if (idx_to < 0 || idx_to >= DB_COUNT) { return false; } return rs_diff_buf_idx_tp(curbuf, curtab) == idx_to; }
+void nvim_diff_fire_diffupdated_curbuf(void) { apply_autocmds(EVENT_DIFFUPDATED, NULL, NULL, false, curbuf); }
 // Phase 3 accessors: f_diff_hlID
 int64_t nvim_curbuf_changedtick_i64(void) { return (int64_t)buf_get_changedtick(curbuf); }
 int nvim_diff_tv_get_number_idx(typval_T *argvars, int idx) { return (int)tv_get_number(&argvars[idx]); }

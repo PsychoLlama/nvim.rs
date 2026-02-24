@@ -120,13 +120,13 @@ extern "C" {
 }
 
 /// Literal C string helper -- returns pointer to static "manual" string.
-unsafe fn c_str_manual() -> *const c_char {
-    b"manual\0".as_ptr().cast()
+const unsafe fn c_str_manual() -> *const c_char {
+    c"manual".as_ptr()
 }
 
 /// Literal C string helper -- returns pointer to static "0" string.
-unsafe fn c_str_zero() -> *const c_char {
-    b"0\0".as_ptr().cast()
+const unsafe fn c_str_zero() -> *const c_char {
+    c"0".as_ptr()
 }
 
 /// Set fdc to a single-digit string matching diff_foldcolumn.
@@ -134,17 +134,16 @@ unsafe fn c_str_zero() -> *const c_char {
 unsafe fn set_fdc_to_foldcolumn(wp: WinHandle, n: c_int) {
     // We need to pass a C string with the digit. Use match to select a static literal.
     let s: *const c_char = match n {
-        0 => b"0\0".as_ptr().cast(),
-        1 => b"1\0".as_ptr().cast(),
-        2 => b"2\0".as_ptr().cast(),
-        3 => b"3\0".as_ptr().cast(),
-        4 => b"4\0".as_ptr().cast(),
-        5 => b"5\0".as_ptr().cast(),
-        6 => b"6\0".as_ptr().cast(),
-        7 => b"7\0".as_ptr().cast(),
-        8 => b"8\0".as_ptr().cast(),
-        9 => b"9\0".as_ptr().cast(),
-        _ => b"2\0".as_ptr().cast(),
+        0 => c"0".as_ptr(),
+        1 => c"1".as_ptr(),
+        3 => c"3".as_ptr(),
+        4 => c"4".as_ptr(),
+        5 => c"5".as_ptr(),
+        6 => c"6".as_ptr(),
+        7 => c"7".as_ptr(),
+        8 => c"8".as_ptr(),
+        9 => c"9".as_ptr(),
+        _ => c"2".as_ptr(), // default (covers 2 and out-of-range)
     };
     nvim_win_free_and_set_fdc(wp, s);
 }
@@ -216,7 +215,7 @@ pub unsafe extern "C" fn rs_diff_win_options(wp: WinHandle, addbuf: bool) {
 
     // add 'hor' to 'sbo' if not present
     if !nvim_diff_sbo_has_hor() {
-        nvim_diff_do_cmdline_cmd(b"set sbo+=hor\0".as_ptr().cast());
+        nvim_diff_do_cmdline_cmd(c"set sbo+=hor".as_ptr());
     }
 
     // mark options as saved
@@ -269,11 +268,12 @@ pub unsafe extern "C" fn rs_ex_diffoff(eap: *const std::ffi::c_void) {
                 }
                 // Restore wrap
                 let diff_flags = nvim_diff_get_diff_flags();
-                if diff_flags & DIFF_FOLLOWWRAP == 0 {
-                    if !nvim_win_get_w_p_wrap(wp) && nvim_win_get_w_p_wrap_save(wp) {
-                        nvim_win_set_w_p_wrap(wp, true);
-                        nvim_win_set_leftcol(wp, 0);
-                    }
+                if diff_flags & DIFF_FOLLOWWRAP == 0
+                    && !nvim_win_get_w_p_wrap(wp)
+                    && nvim_win_get_w_p_wrap_save(wp)
+                {
+                    nvim_win_set_w_p_wrap(wp, true);
+                    nvim_win_set_leftcol(wp, 0);
                 }
                 // Restore fdm: use fdm_save if non-empty, else "manual"
                 if nvim_win_get_fdm_save_empty(wp) {
@@ -332,7 +332,7 @@ pub unsafe extern "C" fn rs_ex_diffoff(eap: *const std::ffi::c_void) {
 
     // Remove "hor" from 'scrollopt' if there are no diff windows left.
     if !diffwin && nvim_diff_sbo_has_hor() {
-        nvim_diff_do_cmdline_cmd(b"set sbo-=hor\0".as_ptr().cast());
+        nvim_diff_do_cmdline_cmd(c"set sbo-=hor".as_ptr());
     }
 }
 

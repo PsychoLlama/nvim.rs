@@ -21,6 +21,10 @@ const FAIL: c_int = 0;
 // External C Functions
 // =============================================================================
 
+use crate::buffer::TabpageHandle;
+use std::ffi::c_char;
+
+#[allow(dead_code)]
 extern "C" {
     fn nvim_get_curtab_diffbuf(idx: c_int) -> BufHandle;
     fn nvim_get_diff_first_block() -> DiffBlockHandle;
@@ -35,14 +39,69 @@ extern "C" {
     fn nvim_get_curwin_cursor_lnum() -> c_int;
     fn nvim_docmd_cmd_diffget() -> c_int;
     fn nvim_docmd_cmd_diffput() -> c_int;
-    fn nvim_call_ex_diffgetput(
+    fn nvim_get_curwin() -> WinHandle;
+
+    // Phase 3: ex_diffgetput accessors
+    fn nvim_diff_emsg_e99();
+    fn nvim_diff_emsg_e793();
+    fn nvim_diff_emsg_e100();
+    fn nvim_diff_emsg_e101();
+    fn nvim_diff_semsg_e102(arg: *const c_char);
+    fn nvim_diff_semsg_e103(arg: *const c_char);
+    fn nvim_diff_emsg_e787();
+    fn nvim_diff_buf_is_modifiable(buf: BufHandle) -> bool;
+    fn nvim_diff_get_curbuf() -> BufHandle;
+    fn nvim_diff_buflist_findpat(arg: *const c_char, end: *const c_char) -> c_int;
+    fn nvim_diff_buflist_findnr(nr: c_int) -> BufHandle;
+    fn nvim_diff_aucmd_prepbuf_idx(idx: c_int);
+    fn nvim_diff_aucmd_restbuf();
+    fn nvim_diff_change_warning_curbuf();
+    fn nvim_diff_curbuf_changed() -> bool;
+    fn nvim_diff_key_typed() -> bool;
+    fn nvim_diff_u_sync();
+    fn nvim_diff_check_cursor_curwin();
+    fn nvim_diff_changed_line_abv_curs();
+    fn nvim_diff_call_diffgetput(
+        addr_count: c_int,
+        idx_cur: c_int,
+        idx_from: c_int,
+        idx_to: c_int,
+        line1: LinenrT,
+        line2: LinenrT,
+    );
+    fn nvim_diff_get_CMD_diffget() -> c_int;
+    fn nvim_diff_get_CMD_diffput() -> c_int;
+    fn nvim_diff_curbuf_ml_line_count() -> LinenrT;
+    fn nvim_diff_curtab_first_diff_is_null() -> bool;
+    fn nvim_diff_win_get_w_p_fdm_starts_d(wp: WinHandle) -> bool;
+    fn nvim_diff_get_curtab_diffbuf_idx(idx: c_int) -> BufHandle;
+    fn nvim_diff_curbuf_is_curtab_diffbuf(idx_to: c_int) -> bool;
+    fn nvim_diff_fire_diffupdated_curbuf();
+    fn nvim_diff_set_busy(val: bool);
+    fn nvim_diff_get_need_update() -> bool;
+    fn nvim_diff_set_need_update(val: bool);
+    fn nvim_get_curtab() -> TabpageHandle;
+    fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
+    fn nvim_tabpage_first_win(tp: TabpageHandle) -> WinHandle;
+    fn nvim_win_next(wp: WinHandle) -> WinHandle;
+    fn nvim_win_get_w_p_fen(wp: WinHandle) -> bool;
+    fn rs_foldUpdateAll(wp: WinHandle);
+    fn rs_diff_redraw(dofold: bool);
+    fn rs_diff_ex_diffupdate(eap: *const c_void);
+    fn nvim_eap_get_arg(eap: *const c_void) -> *mut c_char;
+    fn nvim_eap_get_cmdidx(eap: *const c_void) -> c_int;
+    fn nvim_eap_get_addr_count(eap: *const c_void) -> c_int;
+    fn nvim_eap_get_line1(eap: *const c_void) -> LinenrT;
+    fn nvim_eap_get_line2(eap: *const c_void) -> LinenrT;
+    fn nvim_eap_set_line1(eap: *mut c_void, line: LinenrT);
+    fn nvim_eap_set_line2(eap: *mut c_void, line: LinenrT);
+    fn nvim_diff_call_nv_ex_diffgetput(
         cmdidx: c_int,
-        arg: *const u8,
+        arg: *const c_char,
         addr_count: c_int,
         line1: LinenrT,
         line2: LinenrT,
     );
-    fn nvim_get_curwin() -> WinHandle;
 }
 
 // =============================================================================
@@ -494,7 +553,7 @@ pub extern "C" fn rs_diff_get_block_info(dp: DiffBlockHandle) -> DiffBlockInfo {
 
 /// Normal mode "dp" and "do" commands -- Rust implementation.
 ///
-/// Checks for prompt buffer, then builds an exarg_T and calls ex_diffgetput.
+/// Checks for prompt buffer, then builds an exarg_T and calls rs_ex_diffgetput.
 ///
 /// # Safety
 /// Calls C functions that access global state (curbuf, curwin).
@@ -512,15 +571,15 @@ pub unsafe extern "C" fn rs_nv_diffgetput(put: bool, count: usize) {
         nvim_docmd_cmd_diffget()
     };
 
+    // Build a minimal exarg_T on the stack and call rs_ex_diffgetput.
+    // We use the C accessor nvim_diff_call_nv_diffgetput_impl to build the eap.
     if count == 0 {
-        // Empty arg string (null-terminated empty string)
         let empty: &[u8] = &[0u8];
-        nvim_call_ex_diffgetput(cmdidx, empty.as_ptr(), 0, lnum, lnum);
+        nvim_diff_call_nv_ex_diffgetput(cmdidx, empty.as_ptr().cast(), 0, lnum, lnum);
     } else {
-        // Format count as a null-terminated string in a small buffer
         let mut buf = [0u8; 32];
         let s = format_usize_to_buf(count, &mut buf);
-        nvim_call_ex_diffgetput(cmdidx, s.as_ptr(), 0, lnum, lnum);
+        nvim_diff_call_nv_ex_diffgetput(cmdidx, s.as_ptr().cast(), 0, lnum, lnum);
     }
 }
 
@@ -555,6 +614,328 @@ fn format_usize_to_buf(mut n: usize, buf: &mut [u8; 32]) -> &[u8] {
 pub unsafe extern "C" fn rs_ex_diffthis(_eap: *mut c_void) {
     let curwin = nvim_get_curwin();
     crate::winopts::rs_diff_win_options(curwin, true);
+}
+
+// =============================================================================
+// Phase 3 Migrations: ex_diffgetput
+// =============================================================================
+
+/// Check if a character is ASCII whitespace (space or tab).
+#[inline]
+const fn is_ascii_white(c: u8) -> bool {
+    c == b' ' || c == b'\t'
+}
+
+/// Resolve the "other" buffer index when no argument is given.
+///
+/// Finds the single other diff buffer, enforcing that only one exists.
+/// Returns `Ok(idx)` on success, `Err(())` if an error was emitted.
+///
+/// # Safety
+/// Calls C functions that access global state.
+unsafe fn diffgetput_resolve_auto(
+    curbuf: BufHandle,
+    cmdidx: c_int,
+    cmd_diffput: c_int,
+) -> Result<c_int, ()> {
+    let mut found_not_ma = false;
+    let mut found = DB_COUNT;
+    let mut o = 0;
+    while o < DB_COUNT {
+        let diffbuf = nvim_diff_get_curtab_diffbuf_idx(o);
+        if !diffbuf.is_null() && diffbuf != curbuf {
+            if cmdidx != cmd_diffput || nvim_diff_buf_is_modifiable(diffbuf) {
+                found = o;
+                break;
+            }
+            found_not_ma = true;
+        }
+        o += 1;
+    }
+
+    if found == DB_COUNT {
+        if found_not_ma {
+            nvim_diff_emsg_e793();
+        } else {
+            nvim_diff_emsg_e100();
+        }
+        return Err(());
+    }
+
+    // Check that there isn't a third qualifying buffer in the list.
+    let mut i = found + 1;
+    while i < DB_COUNT {
+        let diffbuf = nvim_diff_get_curtab_diffbuf_idx(i);
+        if !diffbuf.is_null()
+            && diffbuf != curbuf
+            && (cmdidx != cmd_diffput || nvim_diff_buf_is_modifiable(diffbuf))
+        {
+            nvim_diff_emsg_e101();
+            return Err(());
+        }
+        i += 1;
+    }
+
+    Ok(found)
+}
+
+/// Resolve the "other" buffer index from an argument string.
+///
+/// Parses a buffer number or pattern from `arg_ptr`. Returns `Ok(idx)` on
+/// success, `Err(())` if an error was emitted or nothing needs to be done.
+///
+/// # Safety
+/// `arg_ptr` must be a valid non-null, non-empty NUL-terminated C string.
+/// Calls C functions that access global state.
+unsafe fn diffgetput_resolve_arg(
+    arg_ptr: *const c_char,
+    curbuf: BufHandle,
+    curtab: crate::buffer::TabpageHandle,
+) -> Result<c_int, ()> {
+    use crate::buffer::rs_diff_buf_idx_tp;
+
+    // Find length of arg, then trim trailing ASCII whitespace.
+    let mut arg_len = 0usize;
+    while *arg_ptr.add(arg_len) != 0 {
+        arg_len += 1;
+    }
+    let mut arg_end = arg_ptr.add(arg_len).cast_mut();
+    while arg_end > arg_ptr.cast_mut() && is_ascii_white((*arg_end.sub(1)).cast_unsigned()) {
+        arg_end = arg_end.sub(1);
+    }
+    let arg_end: *const c_char = arg_end.cast_const();
+
+    // Check whether all characters are ASCII digits.
+    let mut all_digits = true;
+    let mut p = arg_ptr;
+    while p < arg_end {
+        if !(*p).cast_unsigned().is_ascii_digit() {
+            all_digits = false;
+            break;
+        }
+        p = p.add(1);
+    }
+
+    let bufnr = if all_digits && arg_end > arg_ptr {
+        // digits only -- parse as buffer number using atol equivalent
+        let mut n: c_int = 0;
+        let mut p2 = arg_ptr;
+        while p2 < arg_end {
+            n = n
+                .wrapping_mul(10)
+                .wrapping_add(c_int::from((*p2).cast_unsigned() - b'0'));
+            p2 = p2.add(1);
+        }
+        n
+    } else {
+        let nr = nvim_diff_buflist_findpat(arg_ptr, arg_end);
+        if nr < 0 {
+            // error message already given by buflist_findpat
+            return Err(());
+        }
+        nr
+    };
+
+    let buf = nvim_diff_buflist_findnr(bufnr);
+    if buf.is_null() {
+        nvim_diff_semsg_e102(arg_ptr);
+        return Err(());
+    }
+
+    if buf == curbuf {
+        // nothing to do
+        return Err(());
+    }
+
+    let other_idx = rs_diff_buf_idx_tp(buf, curtab);
+    if other_idx == DB_COUNT {
+        nvim_diff_semsg_e103(arg_ptr);
+        return Err(());
+    }
+
+    Ok(other_idx)
+}
+
+/// Adjust the range when no address count was given.
+///
+/// # Safety
+/// `eap` must be a valid pointer. Calls C functions.
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn diffgetput_adjust_range(eap: *mut c_void) {
+    use crate::buffer::rs_diff_check_with_linestatus;
+
+    let line1 = nvim_eap_get_line1(eap);
+    let curwin = nvim_get_curwin();
+    let line_count = nvim_diff_curbuf_ml_line_count();
+
+    // Make it possible that ":diffget" on the last line gets the line below
+    // the cursor when there is no difference above the cursor.
+    let do_increment = if line1 == line_count {
+        let mut ls0: c_int = 0;
+        let check0 = rs_diff_check_with_linestatus(curwin, line1, &raw mut ls0);
+        if check0 == 0 && ls0 == 0 {
+            if line1 == 1 {
+                true
+            } else {
+                let mut ls1: c_int = 0;
+                let c1 = rs_diff_check_with_linestatus(curwin, line1 - 1, &raw mut ls1);
+                c1 >= 0 && ls1 == 0
+            }
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if do_increment {
+        nvim_eap_set_line2(eap, nvim_eap_get_line2(eap) + 1);
+    } else if line1 > 0 {
+        nvim_eap_set_line1(eap, line1 - 1);
+    }
+}
+
+/// Post-operation cleanup after diffgetput: cursor check, fold update, redraw.
+///
+/// # Safety
+/// Calls C functions that access global state.
+unsafe fn diffgetput_cleanup() {
+    nvim_diff_set_busy(false);
+
+    if nvim_diff_get_need_update() {
+        rs_diff_ex_diffupdate(std::ptr::null());
+    }
+
+    // Check that the cursor is on a valid character and update its position.
+    nvim_diff_check_cursor_curwin();
+    nvim_diff_changed_line_abv_curs();
+
+    // If all diffs are gone, update folds in all diff windows.
+    if nvim_diff_curtab_first_diff_is_null() {
+        let tp = nvim_get_curtab();
+        let mut wp = nvim_tabpage_first_win(tp);
+        while !wp.is_null() {
+            if nvim_win_get_p_diff(wp) != 0
+                && nvim_diff_win_get_w_p_fdm_starts_d(wp)
+                && nvim_win_get_w_p_fen(wp)
+            {
+                rs_foldUpdateAll(wp);
+            }
+            wp = nvim_win_next(wp);
+        }
+    }
+
+    if nvim_diff_get_need_update() {
+        // Redraw already done by rs_diff_ex_diffupdate().
+        nvim_diff_set_need_update(false);
+    } else {
+        // Also need to redraw the other buffers.
+        rs_diff_redraw(false);
+        nvim_diff_fire_diffupdated_curbuf();
+    }
+}
+
+/// ":diffget" and ":diffput" commands -- Rust implementation.
+///
+/// Finds the current buffer's diff index, resolves the other buffer (by
+/// argument or auto-detect), manages aucmd_prepbuf/restbuf, calls diffgetput,
+/// and handles post-operation cursor/fold/redraw updates.
+///
+/// # Safety
+/// Calls C functions that access global state (curbuf, curwin, curtab).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_diffgetput(eap: *mut c_void) {
+    use crate::buffer::rs_diff_buf_idx_tp;
+
+    let curtab = nvim_get_curtab();
+    let curbuf = nvim_diff_get_curbuf();
+
+    // Find the current buffer in the list of diff buffers.
+    let idx_cur = rs_diff_buf_idx_tp(curbuf, curtab);
+    if idx_cur == DB_COUNT {
+        nvim_diff_emsg_e99();
+        return;
+    }
+
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmd_diffput = nvim_diff_get_CMD_diffput();
+    let cmd_diffget = nvim_diff_get_CMD_diffget();
+
+    // Resolve the "other" buffer index.
+    let arg_ptr = nvim_eap_get_arg(eap);
+    let arg_empty = arg_ptr.is_null() || *arg_ptr == 0;
+
+    let idx_other = if arg_empty {
+        match diffgetput_resolve_auto(curbuf, cmdidx, cmd_diffput) {
+            Ok(idx) => idx,
+            Err(()) => return,
+        }
+    } else {
+        match diffgetput_resolve_arg(arg_ptr, curbuf, curtab) {
+            Ok(idx) => idx,
+            Err(()) => return,
+        }
+    };
+
+    nvim_diff_set_busy(true);
+
+    // When no range given, include the line above or below the cursor.
+    if nvim_eap_get_addr_count(eap) == 0 {
+        diffgetput_adjust_range(eap);
+    }
+
+    let is_diffput = cmdidx != cmd_diffget;
+
+    if is_diffput {
+        // Need to make the other buffer current to be able to make changes.
+        nvim_diff_aucmd_prepbuf_idx(idx_other);
+    }
+
+    let idx_from = if cmdidx == cmd_diffget {
+        idx_other
+    } else {
+        idx_cur
+    };
+    let idx_to = if cmdidx == cmd_diffget {
+        idx_cur
+    } else {
+        idx_other
+    };
+
+    // May give the warning for a changed buffer here, which can trigger
+    // FileChangedRO autocommand, which may do nasty things and mess
+    // everything up.
+    if !nvim_diff_curbuf_changed() {
+        nvim_diff_change_warning_curbuf();
+        if !nvim_diff_curbuf_is_curtab_diffbuf(idx_to) {
+            nvim_diff_emsg_e787();
+            // goto theend: skip diffgetput and aucmd_restbuf, matching C behavior
+            // when FileChangedRO may have already altered state.
+            diffgetput_cleanup();
+            return;
+        }
+    }
+
+    nvim_diff_call_diffgetput(
+        nvim_eap_get_addr_count(eap),
+        idx_cur,
+        idx_from,
+        idx_to,
+        nvim_eap_get_line1(eap),
+        nvim_eap_get_line2(eap),
+    );
+
+    // Restore curwin/curbuf and a few other things.
+    if is_diffput {
+        // Syncing undo only works for the current buffer, but we changed
+        // another buffer. Sync undo if the command was typed.
+        if nvim_diff_key_typed() {
+            nvim_diff_u_sync();
+        }
+        nvim_diff_aucmd_restbuf();
+    }
+
+    diffgetput_cleanup();
 }
 
 #[cfg(test)]
