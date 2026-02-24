@@ -1117,7 +1117,6 @@ extern "C" {
     fn nvim_syn_emsg_skip_dec();
 
     // Subcommand handlers that are still C functions (static wrappers)
-    fn nvim_syn_cmd_iskeyword_wrapper(eap: *mut c_void, syncing: c_int);
     fn nvim_syn_cmd_list_wrapper(eap: *mut c_void, syncing: c_int);
 }
 
@@ -1135,7 +1134,7 @@ static SUBCOMMANDS: &[(&str, SynCmdFn)] = &[
     ("enable", rs_syn_cmd_on_dispatch),
     ("foldlevel", rs_syn_cmd_foldlevel_dispatch),
     ("include", crate::cmd_include::rs_syn_cmd_include),
-    ("iskeyword", nvim_syn_cmd_iskeyword_wrapper),
+    ("iskeyword", rs_syn_cmd_iskeyword),
     ("keyword", crate::cmd_keyword::rs_syn_cmd_keyword),
     ("list", nvim_syn_cmd_list_wrapper),
     ("manual", rs_syn_cmd_manual_dispatch),
@@ -1202,6 +1201,134 @@ pub unsafe extern "C" fn rs_ex_syntax(eap: *mut c_void) {
 
     if nvim_syn_get_eap_skip(eap) != 0 {
         nvim_syn_emsg_skip_dec();
+    }
+}
+
+// =============================================================================
+// Phase 4: syn_cmd_iskeyword and ex_ownsyntax in Rust
+// =============================================================================
+
+extern "C" {
+    /// Return 1 if block->b_syn_isk is set (not empty_string_option).
+    fn nvim_syn_iskeyword_is_set(block: SynBlockHandle) -> c_int;
+
+    /// Return block->b_syn_isk string.
+    fn nvim_syn_iskeyword_get(block: SynBlockHandle) -> *mut c_char;
+
+    /// Clear iskeyword: copy curbuf chartab to synblock chartab, clear b_syn_isk.
+    fn nvim_syn_iskeyword_clear(block: SynBlockHandle);
+
+    /// Set iskeyword: save/restore curbuf, set b_p_isk=arg, run buf_init_chartab,
+    /// copy result to synblock, transfer to b_syn_isk.
+    fn nvim_syn_iskeyword_set(block: SynBlockHandle, arg: *const c_char);
+
+    /// msg_outtrans wrapper.
+    fn nvim_syn_msg_outtrans(s: *const c_char);
+
+    /// Init ownsyntax: allocate new synblock if sharing buffer's.
+    fn nvim_syn_ownsyntax_init() -> c_int;
+
+    /// Get a Vim variable value.
+    fn nvim_syn_get_var_value(name: *const c_char) -> *mut c_char;
+
+    /// Duplicate a C string.
+    fn nvim_syn_xstrdup(s: *const c_char) -> *mut c_char;
+
+    /// Apply EVENT_SYNTAX autocmds.
+    fn nvim_syn_apply_autocmds_syntax(arg: *const c_char);
+
+    /// set_internal_string_var wrapper.
+    fn nvim_syn_set_internal_string_var(name: *const c_char, val: *const c_char);
+
+    /// Unlet b:current_syntax.
+    fn nvim_syn_do_unlet_b_current_syntax();
+}
+
+/// Static message strings for iskeyword display
+static MSG_ISK_NEWLINE: &[u8] = b"\n\0";
+static MSG_ISK_PREFIX: &[u8] = b"syntax iskeyword \0";
+static MSG_ISK_NOT_SET: &[u8] = b"syntax iskeyword not set\0";
+
+/// `:syntax iskeyword` command -- Rust implementation.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_iskeyword(eap: *mut c_void, _syncing: c_int) {
+    use std::ffi::CStr;
+
+    if nvim_syn_get_eap_skip(eap) != 0 {
+        return;
+    }
+
+    let arg = skipwhite(nvim_syn_get_eap_arg(eap));
+    let block = nvim_get_curwin_synblock();
+
+    if *arg == 0 {
+        // No argument: display current setting
+        // msg_puts("\n")
+        extern "C" {
+            fn msg_puts(s: *const c_char);
+        }
+        msg_puts(MSG_ISK_NEWLINE.as_ptr().cast());
+        if nvim_syn_iskeyword_is_set(block) != 0 {
+            msg_puts(MSG_ISK_PREFIX.as_ptr().cast());
+            let isk = nvim_syn_iskeyword_get(block);
+            nvim_syn_msg_outtrans(isk);
+        } else {
+            nvim_syn_msg_outtrans(MSG_ISK_NOT_SET.as_ptr().cast());
+        }
+    } else {
+        // Check for "clear"
+        let arg_str = CStr::from_ptr(arg).to_bytes();
+        let is_clear = arg_str.len() >= 5
+            && arg_str[..5].eq_ignore_ascii_case(b"clear");
+
+        if is_clear {
+            nvim_syn_iskeyword_clear(block);
+        } else {
+            nvim_syn_iskeyword_set(block, arg);
+        }
+    }
+    nvim_syn_redraw_later_curwin();
+}
+
+/// `:ownsyntax` command -- Rust implementation.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_ownsyntax(eap: *mut c_void) {
+    nvim_syn_ownsyntax_init();
+
+    let arg = nvim_syn_get_eap_arg(eap);
+
+    // Save b:current_syntax
+    let b_current_syntax_key = b"b:current_syntax\0".as_ptr().cast::<c_char>();
+    let w_current_syntax_key = b"w:current_syntax\0".as_ptr().cast::<c_char>();
+
+    let old_raw = nvim_syn_get_var_value(b_current_syntax_key);
+    let old_value: *mut c_char = if old_raw.is_null() {
+        std::ptr::null_mut()
+    } else {
+        nvim_syn_xstrdup(old_raw)
+    };
+
+    // Apply "syntax" autocommand event
+    nvim_syn_apply_autocmds_syntax(arg);
+
+    // Move b:current_syntax to w:current_syntax
+    let new_value = nvim_syn_get_var_value(b_current_syntax_key);
+    if !new_value.is_null() {
+        nvim_syn_set_internal_string_var(w_current_syntax_key, new_value);
+    }
+
+    // Restore b:current_syntax
+    if old_value.is_null() {
+        nvim_syn_do_unlet_b_current_syntax();
+    } else {
+        nvim_syn_set_internal_string_var(b_current_syntax_key, old_value);
+        xfree(old_value as *mut c_void);
     }
 }
 

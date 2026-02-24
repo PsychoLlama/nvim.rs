@@ -210,6 +210,10 @@ extern void rs_syn_cmd_on_dispatch(exarg_T *eap, int syncing);
 extern void rs_syn_cmd_manual_dispatch(exarg_T *eap, int syncing);
 extern void rs_syn_cmd_off_dispatch(exarg_T *eap, int syncing);
 
+// Rust Phase 4 (pass 4): iskeyword + ownsyntax
+extern void rs_syn_cmd_iskeyword(exarg_T *eap, int syncing);
+extern void rs_ex_ownsyntax(exarg_T *eap);
+
 static char *(spo_name_tab[SPO_COUNT]) =
 { "ms=", "me=", "hs=", "he=", "rs=", "re=", "lc=" };
 
@@ -839,41 +843,7 @@ static bool syn_regexec(regmmatch_T *rmp, linenr_T lnum, colnr_T col, syn_time_T
 /// Handle ":syntax iskeyword" command.
 static void syn_cmd_iskeyword(exarg_T *eap, int syncing)
 {
-  char *arg = eap->arg;
-  char save_chartab[32];
-  char *save_isk;
-
-  if (eap->skip) {
-    return;
-  }
-
-  arg = skipwhite(arg);
-  if (*arg == NUL) {
-    msg_puts("\n");
-    if (curwin->w_s->b_syn_isk != empty_string_option) {
-      msg_puts("syntax iskeyword ");
-      msg_outtrans(curwin->w_s->b_syn_isk, 0, false);
-    } else {
-      msg_outtrans(_("syntax iskeyword not set"), 0, false);
-    }
-  } else {
-    if (STRNICMP(arg, "clear", 5) == 0) {
-      memmove(curwin->w_s->b_syn_chartab, curbuf->b_chartab, (size_t)32);
-      clear_string_option(&curwin->w_s->b_syn_isk);
-    } else {
-      memmove(save_chartab, curbuf->b_chartab, (size_t)32);
-      save_isk = curbuf->b_p_isk;
-      curbuf->b_p_isk = xstrdup(arg);
-
-      buf_init_chartab(curbuf, false);
-      memmove(curwin->w_s->b_syn_chartab, curbuf->b_chartab, (size_t)32);
-      memmove(curbuf->b_chartab, save_chartab, (size_t)32);
-      clear_string_option(&curwin->w_s->b_syn_isk);
-      curwin->w_s->b_syn_isk = curbuf->b_p_isk;
-      curbuf->b_p_isk = save_isk;
-    }
-  }
-  redraw_later(curwin, UPD_NOT_VALID);
+  rs_syn_cmd_iskeyword(eap, syncing);
 }
 
 // Clear all syntax info for one buffer.
@@ -1334,45 +1304,10 @@ void ex_syntax(exarg_T *eap)
   rs_ex_syntax(eap);
 }
 
-/// @deprecated
+/// @deprecated -- thin wrapper delegating to Rust.
 void ex_ownsyntax(exarg_T *eap)
 {
-  if (curwin->w_s == &curwin->w_buffer->b_s) {
-    curwin->w_s = xcalloc(1, sizeof(synblock_T));
-    hash_init(&curwin->w_s->b_keywtab);
-    hash_init(&curwin->w_s->b_keywtab_ic);
-    // TODO(vim): Keep the spell checking as it was.
-    curwin->w_p_spell = false;  // No spell checking
-    // make sure option values are "empty_string_option" instead of NULL
-    clear_string_option(&curwin->w_s->b_p_spc);
-    clear_string_option(&curwin->w_s->b_p_spf);
-    clear_string_option(&curwin->w_s->b_p_spl);
-    clear_string_option(&curwin->w_s->b_p_spo);
-    clear_string_option(&curwin->w_s->b_syn_isk);
-  }
-
-  // Save value of b:current_syntax.
-  char *old_value = get_var_value("b:current_syntax");
-  if (old_value != NULL) {
-    old_value = xstrdup(old_value);
-  }
-
-  // Apply the "syntax" autocommand event, this finds and loads the syntax file.
-  apply_autocmds(EVENT_SYNTAX, eap->arg, curbuf->b_fname, true, curbuf);
-
-  // Move value of b:current_syntax to w:current_syntax.
-  char *new_value = get_var_value("b:current_syntax");
-  if (new_value != NULL) {
-    set_internal_string_var("w:current_syntax", new_value);
-  }
-
-  // Restore value of b:current_syntax.
-  if (old_value == NULL) {
-    do_unlet(S_LEN("b:current_syntax"), true);
-  } else {
-    set_internal_string_var("b:current_syntax", old_value);
-    xfree(old_value);
-  }
+  rs_ex_ownsyntax(eap);
 }
 
 static enum {
@@ -4071,6 +4006,103 @@ void nvim_syn_emsg_skip_inc(void)
 void nvim_syn_emsg_skip_dec(void)
 {
   emsg_skip--;
+}
+
+// =============================================================================
+// Phase 4 (pass 4): syn_cmd_iskeyword and ex_ownsyntax migration accessors
+// =============================================================================
+
+/// Return 1 if the synblock's b_syn_isk is set (not empty_string_option).
+int nvim_syn_iskeyword_is_set(synblock_T *block)
+{
+  return block->b_syn_isk != empty_string_option ? 1 : 0;
+}
+
+/// Return block->b_syn_isk (the iskeyword option string).
+char *nvim_syn_iskeyword_get(synblock_T *block)
+{
+  return block->b_syn_isk;
+}
+
+/// Clear the iskeyword setting: copy curbuf->b_chartab into block->b_syn_chartab
+/// and clear block->b_syn_isk.
+void nvim_syn_iskeyword_clear(synblock_T *block)
+{
+  memmove(block->b_syn_chartab, curbuf->b_chartab, (size_t)32);
+  clear_string_option(&block->b_syn_isk);
+}
+
+/// Set the iskeyword: save curbuf state, set b_p_isk to arg, run buf_init_chartab,
+/// copy result into block->b_syn_chartab, restore curbuf state, transfer isk to block.
+void nvim_syn_iskeyword_set(synblock_T *block, const char *arg)
+{
+  char save_chartab[32];
+  memmove(save_chartab, curbuf->b_chartab, (size_t)32);
+  char *save_isk = curbuf->b_p_isk;
+  curbuf->b_p_isk = xstrdup(arg);
+  buf_init_chartab(curbuf, false);
+  memmove(block->b_syn_chartab, curbuf->b_chartab, (size_t)32);
+  memmove(curbuf->b_chartab, save_chartab, (size_t)32);
+  clear_string_option(&block->b_syn_isk);
+  block->b_syn_isk = curbuf->b_p_isk;
+  curbuf->b_p_isk = save_isk;
+}
+
+/// msg_outtrans wrapper for syn_cmd_iskeyword display.
+void nvim_syn_msg_outtrans(const char *s)
+{
+  msg_outtrans(s, 0, false);
+}
+
+/// Initialise ownsyntax: allocate new synblock for curwin (if sharing buffer's),
+/// initialise hashtabs, clear spell and string options.
+/// Returns 1 if a new block was created, 0 if curwin already owns its synblock.
+int nvim_syn_ownsyntax_init(void)
+{
+  if (curwin->w_s == &curwin->w_buffer->b_s) {
+    curwin->w_s = xcalloc(1, sizeof(synblock_T));
+    hash_init(&curwin->w_s->b_keywtab);
+    hash_init(&curwin->w_s->b_keywtab_ic);
+    curwin->w_p_spell = false;
+    clear_string_option(&curwin->w_s->b_p_spc);
+    clear_string_option(&curwin->w_s->b_p_spf);
+    clear_string_option(&curwin->w_s->b_p_spl);
+    clear_string_option(&curwin->w_s->b_p_spo);
+    clear_string_option(&curwin->w_s->b_syn_isk);
+    return 1;
+  }
+  return 0;
+}
+
+/// Get value of a Vim variable (b:current_syntax etc.).
+/// Returns pointer to the string (owned by Vim eval), or NULL.
+char *nvim_syn_get_var_value(const char *name)
+{
+  return get_var_value(name);
+}
+
+/// Duplicate a C string via xstrdup (callers must free with xfree).
+char *nvim_syn_xstrdup(const char *s)
+{
+  return xstrdup(s);
+}
+
+/// Apply EVENT_SYNTAX autocmds for :ownsyntax.
+void nvim_syn_apply_autocmds_syntax(const char *arg)
+{
+  apply_autocmds(EVENT_SYNTAX, arg, curbuf->b_fname, true, curbuf);
+}
+
+/// Set an internal Vim string variable.
+void nvim_syn_set_internal_string_var(const char *name, const char *val)
+{
+  set_internal_string_var(name, val);
+}
+
+/// Unlet b:current_syntax.
+void nvim_syn_do_unlet_b_current_syntax(void)
+{
+  do_unlet(S_LEN("b:current_syntax"), true);
 }
 
 /// Forward syn_cmd_iskeyword (static) for Rust dispatch table.
