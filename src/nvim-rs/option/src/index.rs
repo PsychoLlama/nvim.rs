@@ -61,18 +61,20 @@ extern "C" {
     fn find_option_len(name: *const c_char, len: usize) -> OptIndex;
     fn find_option(name: *const c_char) -> OptIndex;
 
-    // Option type checking
+    // C shim functions (thin wrappers that call Rust, needed for legacy callers)
     fn option_has_type(opt_idx: OptIndex, val_type: c_int) -> c_int;
-    fn option_has_scope(opt_idx: OptIndex, scope: c_int) -> c_int;
-
-    // Option scope predicates (FFI wrappers in option.c)
-    fn nvim_option_is_global_local(opt_idx: OptIndex) -> c_int;
-    fn nvim_option_is_global_only(opt_idx: OptIndex) -> c_int;
     fn nvim_option_is_window_local(opt_idx: OptIndex) -> c_int;
 
-    // Option metadata
-    fn get_option_flags(opt_idx: OptIndex) -> c_uint;
-    fn is_option_hidden(opt_idx: OptIndex) -> c_int;
+    // Field accessors for vimoption_T (Phase 8 metadata)
+    fn nvim_get_option_type(opt_idx: OptIndex) -> c_int;
+    fn nvim_get_option_scope_flags(opt_idx: OptIndex) -> c_int;
+    fn nvim_get_option_scope_idx(opt_idx: OptIndex, scope: c_int) -> c_int;
+    fn nvim_get_option_immutable(opt_idx: OptIndex) -> c_int;
+    fn nvim_get_option_def_val_data_ptr(opt_idx: OptIndex) -> *const std::ffi::c_void;
+    fn nvim_get_option_script_ctx_ptr(opt_idx: OptIndex) -> *mut std::ffi::c_void;
+    fn nvim_get_option_var(opt_idx: OptIndex) -> *mut std::ffi::c_void;
+    fn nvim_get_option_flags(opt_idx: OptIndex) -> c_uint;
+    fn nvim_option_clear_was_set_flag(opt_idx: OptIndex);
 
     // TTY option handling
     fn rs_find_tty_option_end(arg: *const c_char) -> *const c_char;
@@ -86,6 +88,16 @@ extern "C" {
 
     // Window accessor for diff mode check
     fn nvim_win_get_diff(win: WinHandle) -> c_int;
+}
+
+// =============================================================================
+// Internal metadata helpers (Phase 8)
+// =============================================================================
+
+/// Check if a u32 value is a power of two (returns false for 0).
+#[inline]
+fn is_power_of_two(v: u32) -> bool {
+    v != 0 && (v & v.wrapping_sub(1)) == 0
 }
 
 // =============================================================================
@@ -234,7 +246,7 @@ pub unsafe extern "C" fn rs_option_is_boolean(opt_idx: OptIndex) -> c_int {
     if opt_idx == OPT_INVALID {
         return 0;
     }
-    option_has_type(opt_idx, val_type::BOOLEAN)
+    c_int::from(nvim_get_option_type(opt_idx) == val_type::BOOLEAN)
 }
 
 /// Check if option supports number type.
@@ -243,7 +255,7 @@ pub unsafe extern "C" fn rs_option_is_number(opt_idx: OptIndex) -> c_int {
     if opt_idx == OPT_INVALID {
         return 0;
     }
-    option_has_type(opt_idx, val_type::NUMBER)
+    c_int::from(nvim_get_option_type(opt_idx) == val_type::NUMBER)
 }
 
 /// Check if option supports string type.
@@ -252,7 +264,7 @@ pub unsafe extern "C" fn rs_option_is_string(opt_idx: OptIndex) -> c_int {
     if opt_idx == OPT_INVALID {
         return 0;
     }
-    option_has_type(opt_idx, val_type::STRING)
+    c_int::from(nvim_get_option_type(opt_idx) == val_type::STRING)
 }
 
 /// Check if option has a specific type.
@@ -261,7 +273,7 @@ pub unsafe extern "C" fn rs_option_has_type(opt_idx: OptIndex, val_type: c_int) 
     if opt_idx == OPT_INVALID {
         return 0;
     }
-    option_has_type(opt_idx, val_type)
+    c_int::from(nvim_get_option_type(opt_idx) == val_type)
 }
 
 // =============================================================================
@@ -283,7 +295,8 @@ pub unsafe extern "C" fn rs_option_has_scope(opt_idx: OptIndex, opt_scope: c_int
     if opt_idx == OPT_INVALID {
         return 0;
     }
-    option_has_scope(opt_idx, opt_scope)
+    let scope_flags = nvim_get_option_scope_flags(opt_idx) as u32;
+    c_int::from((scope_flags & (1u32 << opt_scope)) != 0)
 }
 
 /// Check if option is global-local (has both global and local values).
@@ -292,7 +305,8 @@ pub unsafe extern "C" fn rs_option_is_global_local(opt_idx: OptIndex) -> c_int {
     if opt_idx == OPT_INVALID {
         return 0;
     }
-    nvim_option_is_global_local(opt_idx)
+    let scope_flags = nvim_get_option_scope_flags(opt_idx) as u32;
+    c_int::from(!is_power_of_two(scope_flags))
 }
 
 /// Check if option is global-only (no local value).
@@ -301,7 +315,9 @@ pub unsafe extern "C" fn rs_option_is_global_only(opt_idx: OptIndex) -> c_int {
     if opt_idx == OPT_INVALID {
         return 0;
     }
-    nvim_option_is_global_only(opt_idx)
+    let scope_flags = nvim_get_option_scope_flags(opt_idx) as u32;
+    // kOptScopeGlobal == 0, bit 0
+    c_int::from(is_power_of_two(scope_flags) && (scope_flags & 1) != 0)
 }
 
 /// Check if option is window-local only.
@@ -310,21 +326,44 @@ pub unsafe extern "C" fn rs_option_is_window_local(opt_idx: OptIndex) -> c_int {
     if opt_idx == OPT_INVALID {
         return 0;
     }
-    nvim_option_is_window_local(opt_idx)
+    let scope_flags = nvim_get_option_scope_flags(opt_idx) as u32;
+    // kOptScopeWin == 1, bit 1
+    c_int::from(is_power_of_two(scope_flags) && (scope_flags & 2) != 0)
 }
 
-/// Check if option is hidden.
+/// Check if option is hidden (immutable and var points to def_val.data).
 #[no_mangle]
 pub unsafe extern "C" fn rs_option_is_hidden(opt_idx: OptIndex) -> c_int {
     if opt_idx == OPT_INVALID {
         return 0;
     }
-    is_option_hidden(opt_idx)
+    let immutable = nvim_get_option_immutable(opt_idx);
+    if immutable == 0 {
+        return 0;
+    }
+    let var_ptr = nvim_get_option_var(opt_idx);
+    let def_data_ptr = nvim_get_option_def_val_data_ptr(opt_idx);
+    c_int::from(var_ptr == def_data_ptr.cast_mut())
 }
 
 // =============================================================================
-// Option Flags Access
+// Option Type, Scope Index, Flags, Was-Set, Script Context (Phase 8)
 // =============================================================================
+
+/// kOptFlagWasSet flag value (must match C definition: 1 << 3)
+const K_OPT_FLAG_WAS_SET: c_uint = 1 << 3;
+
+/// Get the type of an option.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_get_type(opt_idx: OptIndex) -> c_int {
+    nvim_get_option_type(opt_idx)
+}
+
+/// Get option index for scope.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_scope_idx(opt_idx: OptIndex, scope: c_int) -> c_int {
+    nvim_get_option_scope_idx(opt_idx, scope)
+}
 
 /// Get option flags.
 #[no_mangle]
@@ -332,7 +371,30 @@ pub unsafe extern "C" fn rs_get_option_flags(opt_idx: OptIndex) -> c_uint {
     if opt_idx == OPT_INVALID {
         return 0;
     }
-    get_option_flags(opt_idx)
+    nvim_get_option_flags(opt_idx)
+}
+
+/// Check if option was set (has kOptFlagWasSet flag).
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_was_set(opt_idx: OptIndex) -> c_int {
+    if opt_idx == OPT_INVALID {
+        return 0;
+    }
+    c_int::from((nvim_get_option_flags(opt_idx) & K_OPT_FLAG_WAS_SET) != 0)
+}
+
+/// Reset the was-set flag for an option.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reset_option_was_set(opt_idx: OptIndex) {
+    if opt_idx != OPT_INVALID {
+        nvim_option_clear_was_set_flag(opt_idx);
+    }
+}
+
+/// Get pointer to option's script context.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_option_sctx(opt_idx: OptIndex) -> *mut std::ffi::c_void {
+    nvim_get_option_script_ctx_ptr(opt_idx)
 }
 
 /// Check if option has secure flag.

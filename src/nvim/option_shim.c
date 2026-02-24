@@ -136,6 +136,23 @@ extern void rs_set_options_bin(int oldval, int newval, int opt_flags);
 extern void rs_set_fileformat(int eol_style, int opt_flags);
 extern void rs_set_helplang_default(const char *lang);
 
+// Rust metadata query functions (option pass 8 phase 1)
+// rs_option_is_hidden, rs_option_has_type, rs_option_has_scope,
+// rs_option_is_global_local/only/window_local, rs_get_option_flags already declared elsewhere
+extern int rs_option_is_hidden(int opt_idx);
+extern int rs_option_has_type(int opt_idx, int type);
+extern int rs_option_has_scope(int opt_idx, int scope);
+extern int rs_option_is_global_local(int opt_idx);
+extern int rs_option_is_global_only(int opt_idx);
+extern int rs_option_is_window_local(int opt_idx);
+extern uint32_t rs_get_option_flags(int opt_idx);
+// New functions added in Phase 8 index.rs
+extern int rs_option_get_type(int opt_idx);
+extern int rs_option_scope_idx(int opt_idx, int scope);
+extern int rs_option_was_set(int opt_idx);
+extern void rs_reset_option_was_set(int opt_idx);
+extern void *rs_get_option_sctx(int opt_idx);
+
 // Rust parsing helpers and query functions (option pass 7 phase 1)
 extern int rs_get_op(const char *arg);
 extern int rs_get_option_prefix(char **argp);
@@ -972,8 +989,26 @@ OptIndex nvim_get_opt_idx_from_ptr(vimoption_T *p) { return (OptIndex)(p - optio
 // Get sizeof(winopt_T) at runtime (for GLOBAL_WO replication in Rust)
 int nvim_get_sizeof_winopt_T(void) { return (int)sizeof(winopt_T); }
 
-// Get is_option_hidden as an int (for Rust FFI)
-int nvim_opt_is_hidden(OptIndex opt_idx) { return (int)is_option_hidden(opt_idx); }
+// Get is_option_hidden as an int (for Rust FFI) - now delegates to rs_option_is_hidden
+int nvim_opt_is_hidden(OptIndex opt_idx) { return rs_option_is_hidden(opt_idx); }
+
+// =============================================================================
+// Phase 8 metadata query accessors (Phase 1)
+// =============================================================================
+// Returns options[opt_idx].type as c_int for Rust metadata.rs
+int nvim_get_option_type(OptIndex opt_idx) { return (int)options[opt_idx].type; }
+// Returns options[opt_idx].scope_flags as c_int for Rust metadata.rs
+int nvim_get_option_scope_flags(OptIndex opt_idx) { return (int)options[opt_idx].scope_flags; }
+// Returns options[opt_idx].scope_idx[scope] as c_int for Rust metadata.rs
+int nvim_get_option_scope_idx(OptIndex opt_idx, int scope) { return (int)options[opt_idx].scope_idx[scope]; }
+// Returns options[opt_idx].immutable as c_int for Rust metadata.rs
+int nvim_get_option_immutable(OptIndex opt_idx) { return (int)options[opt_idx].immutable; }
+// Returns &options[opt_idx].def_val.data as const void* for Rust metadata.rs
+const void *nvim_get_option_def_val_data_ptr(OptIndex opt_idx) { return &options[opt_idx].def_val.data; }
+// Returns &options[opt_idx].script_ctx as void* for Rust metadata.rs
+void *nvim_get_option_script_ctx_ptr(OptIndex opt_idx) { return &options[opt_idx].script_ctx; }
+// Clears kOptFlagWasSet from options[opt_idx].flags (write accessor for Rust)
+void nvim_option_clear_was_set_flag(OptIndex opt_idx) { options[opt_idx].flags &= ~(uint32_t)kOptFlagWasSet; }
 
 // Fill offset table for buf_T option fields indexed by OptIndex.
 // Writes offsetof(buf_T, field) into out[idx] for each handled OptIndex.
@@ -2426,7 +2461,7 @@ void check_blending(win_T *wp)
 sctx_T *get_option_sctx(OptIndex opt_idx)
 {
   assert(opt_idx != kOptInvalid);
-  return &options[opt_idx].script_ctx;
+  return rs_get_option_sctx(opt_idx);
 }
 
 /// Set the script_ctx for an option, taking care of setting the buffer- or
@@ -2705,68 +2740,49 @@ OptVal object_as_optval(Object o, bool *error)
 /// @return  True if option is hidden, false otherwise. Returns false if option name is invalid.
 bool is_option_hidden(OptIndex opt_idx)
 {
-  // Hidden options are always immutable and point to their default value
-  return opt_idx != kOptInvalid && options[opt_idx].immutable
-         && options[opt_idx].var == &options[opt_idx].def_val.data;
+  return rs_option_is_hidden(opt_idx);
 }
 
 /// Check if option supports a specific type.
 bool option_has_type(OptIndex opt_idx, OptValType type)
 {
-  return opt_idx != kOptInvalid && options[opt_idx].type == type;
+  return rs_option_has_type(opt_idx, (int)type);
 }
 
 /// Check if option supports a specific scope.
 bool option_has_scope(OptIndex opt_idx, OptScope scope)
 {
-  // Ensure that scope flags variable can hold all scopes.
-  STATIC_ASSERT(kOptScopeSize <= sizeof(OptScopeFlags) * 8,
-                "Option scope_flags cannot fit all option scopes");
-  // Ensure that the scope is valid before accessing scope_flags.
-  assert(scope >= kOptScopeGlobal && scope < kOptScopeSize);
-  // Bitshift 1 by the value of scope to get the scope's corresponding flag, and check if it's set
-  // in the scope_flags bit field.
-  return get_option(opt_idx)->scope_flags & (1 << scope);
+  return rs_option_has_scope(opt_idx, (int)scope);
 }
 
 /// Check if option is global-local.
 static inline bool option_is_global_local(OptIndex opt_idx)
 {
-  // Global-local options have at least two types, so their type flag cannot be a power of two.
-  return opt_idx != kOptInvalid && !is_power_of_two(options[opt_idx].scope_flags);
+  return rs_option_is_global_local(opt_idx);
 }
 
 /// Check if option only supports global scope.
 static inline bool option_is_global_only(OptIndex opt_idx)
 {
-  // For an option to be global-only, it has to only have a single scope, which means the scope
-  // flags must be a power of two, and it must have the global scope.
-  return opt_idx != kOptInvalid && is_power_of_two(options[opt_idx].scope_flags)
-         && option_has_scope(opt_idx, kOptScopeGlobal);
+  return rs_option_is_global_only(opt_idx);
 }
 
 /// Check if option only supports window scope.
 static inline bool option_is_window_local(OptIndex opt_idx)
 {
-  // For an option to be window-local it has to only have a single scope, which means the scope
-  // flags must be a power of two, and it must have the window scope.
-  return opt_idx != kOptInvalid && is_power_of_two(options[opt_idx].scope_flags)
-         && option_has_scope(opt_idx, kOptScopeWin);
+  return rs_option_is_window_local(opt_idx);
 }
 
 /// Get option index for scope.
 ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
 {
-  return options[opt_idx].scope_idx[scope];
+  return rs_option_scope_idx(opt_idx, (int)scope);
 }
 
-// =============================================================================
-// Non-static wrappers for Rust FFI
-// =============================================================================
-
-int nvim_option_is_global_local(OptIndex opt_idx) { return option_is_global_local(opt_idx); }
-int nvim_option_is_global_only(OptIndex opt_idx) { return option_is_global_only(opt_idx); }
-int nvim_option_is_window_local(OptIndex opt_idx) { return option_is_window_local(opt_idx); }
+// Non-static wrappers for Rust FFI (Rust callers use these until fully migrated)
+int nvim_option_is_global_local(OptIndex opt_idx) { return rs_option_is_global_local(opt_idx); }
+int nvim_option_is_global_only(OptIndex opt_idx) { return rs_option_is_global_only(opt_idx); }
+int nvim_option_is_window_local(OptIndex opt_idx) { return rs_option_is_window_local(opt_idx); }
 
 /// Get option flags.
 ///
@@ -2775,7 +2791,7 @@ int nvim_option_is_window_local(OptIndex opt_idx) { return option_is_window_loca
 /// @return  Option flags. Returns 0 for invalid option name.
 uint32_t get_option_flags(OptIndex opt_idx)
 {
-  return opt_idx == kOptInvalid ? 0 : options[opt_idx].flags;
+  return rs_get_option_flags(opt_idx);
 }
 
 /// Gets the value for an option.
@@ -4111,7 +4127,7 @@ void vimrc_found(char *fname, char *envname)
 bool option_was_set(OptIndex opt_idx)
 {
   assert(opt_idx != kOptInvalid);
-  return options[opt_idx].flags & kOptFlagWasSet;
+  return rs_option_was_set(opt_idx);
 }
 
 /// Reset the flag indicating option "name" was set.
@@ -4120,7 +4136,7 @@ bool option_was_set(OptIndex opt_idx)
 void reset_option_was_set(OptIndex opt_idx)
 {
   assert(opt_idx != kOptInvalid);
-  options[opt_idx].flags &= ~(unsigned)kOptFlagWasSet;
+  rs_reset_option_was_set(opt_idx);
 }
 
 /// fill_culopt_flags() -- called when 'culopt' changes value
