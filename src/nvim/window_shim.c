@@ -2682,59 +2682,7 @@ void win_set_inner_size(win_T *wp, bool valid_cursor)
 
 void win_comp_scroll(win_T *wp) { rs_win_comp_scroll(wp); }
 
-/// command_height: called whenever p_ch has been changed.
-void command_height(void)
-{
-  int old_p_ch = (int)curtab->tp_ch_used;
-
-  // Find bottom frame with width of screen.
-  frame_T *frp = rs_lastwin_nofloating()->w_frame;
-  while (frp->fr_width != Columns && frp->fr_parent != NULL) {
-    frp = frp->fr_parent;
-  }
-
-  // Avoid changing the height of a window with 'winfixheight' set.
-  while (frp->fr_prev != NULL && frp->fr_layout == FR_LEAF && frp->fr_win->w_p_wfh) {
-    frp = frp->fr_prev;
-  }
-
-  while (p_ch > old_p_ch && command_frame_height) {
-    if (frp == NULL) {
-      emsg(_(e_noroom));
-      p_ch = old_p_ch;
-      break;
-    }
-    int h = MIN((int)(p_ch - old_p_ch), frp->fr_height - rs_frame_minheight(frp, NULL));
-    rs_frame_add_height(frp, -h);
-    old_p_ch += h;
-    frp = frp->fr_prev;
-  }
-  if (p_ch < old_p_ch && command_frame_height && frp != NULL) {
-    rs_frame_add_height(frp, (int)(old_p_ch - p_ch));
-  }
-
-  // Recompute window positions.
-  rs_win_comp_pos();
-  cmdline_row = Rows - (int)p_ch;
-  redraw_cmdline = true;
-
-  // Clear the cmdheight area.
-  if (msg_scrolled == 0 && full_screen) {
-    GridView *grid = &default_gridview;
-    if (!ui_has(kUIMessages)) {
-      msg_grid_validate();
-      grid = &msg_grid_adj;
-    }
-    grid_clear(grid, cmdline_row, Rows, 0, Columns, 0);
-    msg_row = cmdline_row;
-  }
-
-  // Use the value of p_ch that we remembered.  This is needed for when the
-  // GUI starts up, we can't be sure in what order things happen.  And when
-  // p_ch was changed in another tab page.
-  curtab->tp_ch_used = p_ch;
-  min_set_ch = p_ch;
-}
+// command_height: thin wrapper defined in Phase 3 accessors section.
 
 /// Add or remove window bar from window "wp".
 ///
@@ -3638,3 +3586,50 @@ win_T *buf_jump_open_tab(buf_T *buf) { return rs_buf_jump_open_tab(buf); }
 /// swbuf_goto_win_with_buf thin wrapper.
 extern win_T *rs_swbuf_goto_win_with_buf(buf_T *buf);
 win_T *swbuf_goto_win_with_buf(buf_T *buf) { return rs_swbuf_goto_win_with_buf(buf); }
+
+// =============================================================================
+// Phase 3 accessors: command_height migration
+// =============================================================================
+
+/// Set p_ch directly (for restoring after e_noroom).
+void nvim_set_p_ch(int64_t val) { p_ch = val; }
+
+/// Get command_frame_height static.
+int nvim_get_command_frame_height(void) { return command_frame_height ? 1 : 0; }
+/// Set command_frame_height static.
+void nvim_set_command_frame_height(int val) { command_frame_height = (val != 0); }
+
+/// Get curtab->tp_ch_used as int.
+int nvim_get_curtab_ch_used(void) { return curtab ? (int)curtab->tp_ch_used : 0; }
+/// Set curtab->tp_ch_used from Rust.
+void nvim_set_curtab_ch_used(int64_t val) { if (curtab) { curtab->tp_ch_used = val; } }
+
+/// Set min_set_ch = val (the 'cmdheight' minimum).
+void nvim_set_min_set_ch(int64_t val) { min_set_ch = val; }
+
+/// Set cmdline_row = Rows - p_ch.
+void nvim_update_cmdline_row(void) { cmdline_row = Rows - (int)p_ch; }
+
+/// Get cmdline_row.
+int nvim_get_cmdline_row_val(void) { return cmdline_row; }
+
+/// Wrapper: grid_clear for cmdheight area. Selects msg_grid_adj or default_gridview
+/// depending on ui_has(kUIMessages). Also sets msg_row = cmdline_row.
+/// Only called when msg_scrolled==0 and full_screen.
+void nvim_grid_clear_cmd_area(void)
+{
+  if (msg_scrolled != 0 || !full_screen) {
+    return;
+  }
+  GridView *grid = &default_gridview;
+  if (!ui_has(kUIMessages)) {
+    msg_grid_validate();
+    grid = &msg_grid_adj;
+  }
+  grid_clear(grid, cmdline_row, Rows, 0, Columns, 0);
+  msg_row = cmdline_row;
+}
+
+/// command_height thin wrapper.
+extern void rs_command_height(void);
+void command_height(void) { rs_command_height(); }

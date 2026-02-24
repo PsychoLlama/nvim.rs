@@ -13,6 +13,7 @@
 //! - [`save_restore`]: Window size save/restore to growarray
 
 pub mod calculate;
+pub mod cmdheight;
 pub mod execute;
 pub mod fraction;
 pub mod frame;
@@ -23,6 +24,7 @@ pub mod validate;
 
 // Re-export common items
 pub use calculate::*;
+pub use cmdheight::*;
 pub use execute::*;
 pub use fraction::*;
 pub use frame::*;
