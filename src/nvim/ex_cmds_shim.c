@@ -545,6 +545,9 @@ extern int rs_check_readonly(exarg_T *eap, buf_T *buf);
 extern int rs_do_write(exarg_T *eap);
 extern int rs_check_overwrite(exarg_T *eap, buf_T *buf, const char *fname, const char *ffname, int other);
 extern void rs_do_wqall(exarg_T *eap);
+extern int rs_getfile(int fnum, char *ffname, char *sfname, int setpm, int lnum, int forceit);
+extern int rs_set_swapcommand(const char *command, int newlnum);
+extern void rs_delbuf_msg(char *name);
 
 /// ":update". Thin wrapper calling Rust.
 void ex_update(exarg_T *eap)
@@ -630,7 +633,7 @@ static int check_readonly(int *forceit, buf_T *buf)
   return result;
 }
 
-/// Try to abandon the current file and edit a new or existing file.
+/// Thin wrapper calling Rust rs_getfile.
 ///
 /// @param fnum  the number of the file, if zero use "ffname_arg"/"sfname_arg".
 /// @param lnum  the line number for the cursor in the new file (if non-zero).
@@ -642,74 +645,10 @@ static int check_readonly(int *forceit, buf_T *buf)
 ///           GETFILE_OPEN_OTHER for successfully opening another file.
 int getfile(int fnum, char *ffname_arg, char *sfname_arg, bool setpm, linenr_T lnum, bool forceit)
 {
-  if (!check_can_set_curbuf_forceit(forceit)) {
-    return GETFILE_ERROR;
-  }
-
-  char *ffname = ffname_arg;
-  char *sfname = sfname_arg;
-  bool other;
-  int retval;
-  char *free_me = NULL;
-
-  if (text_locked()) {
-    return GETFILE_ERROR;
-  }
-  if (curbuf_locked()) {
-    return GETFILE_ERROR;
-  }
-
-  if (fnum == 0) {
-    // make ffname full path, set sfname
-    fname_expand(curbuf, &ffname, &sfname);
-    other = otherfile(ffname);
-    free_me = ffname;                   // has been allocated, free() later
-  } else {
-    other = (fnum != curbuf->b_fnum);
-  }
-
-  if (other) {
-    no_wait_return++;               // don't wait for autowrite message
-  }
-  if (other && !forceit && curbuf->b_nwindows == 1 && !buf_hide(curbuf)
-      && curbufIsChanged() && autowrite(curbuf, forceit) == FAIL) {
-    if (p_confirm && p_write) {
-      dialog_changed(curbuf, false);
-    }
-    if (curbufIsChanged()) {
-      no_wait_return--;
-      no_write_message();
-      retval = GETFILE_NOT_WRITTEN;     // File has been changed.
-      goto theend;
-    }
-  }
-  if (other) {
-    no_wait_return--;
-  }
-  if (setpm) {
-    setpcmark();
-  }
-  if (!other) {
-    if (lnum != 0) {
-      curwin->w_cursor.lnum = lnum;
-    }
-    check_cursor_lnum(curwin);
-    beginline(BL_SOL | BL_FIX);
-    retval = GETFILE_SAME_FILE;     // it's in the same file
-  } else if (do_ecmd(fnum, ffname, sfname, NULL, lnum,
-                     (buf_hide(curbuf) ? ECMD_HIDE : 0)
-                     + (forceit ? ECMD_FORCEIT : 0), curwin) == OK) {
-    retval = GETFILE_OPEN_OTHER;    // opened another file
-  } else {
-    retval = GETFILE_ERROR;         // error encountered
-  }
-
-theend:
-  xfree(free_me);
-  return retval;
+  return rs_getfile(fnum, ffname_arg, sfname_arg, (int)setpm, (int)lnum, (int)forceit);
 }
 
-/// set v:swapcommand for the SwapExists autocommands.
+/// Thin wrapper calling Rust rs_set_swapcommand.
 ///
 /// @param command  [+cmd] to be executed (e.g. +10).
 /// @param newlnum  if > 0: put cursor on this line number (if possible)
@@ -717,19 +656,7 @@ theend:
 /// @return 1 if swapcommand was actually set, 0 otherwise
 bool set_swapcommand(char *command, linenr_T newlnum)
 {
-  if ((command == NULL && newlnum <= 0) || *get_vim_var_str(VV_SWAPCOMMAND) != NUL) {
-    return false;
-  }
-  const size_t len = (command != NULL) ? strlen(command) + 3 : 30;
-  char *const p = xmalloc(len);
-  if (command != NULL) {
-    vim_snprintf(p, len, ":%s\r", command);
-  } else {
-    vim_snprintf(p, len, "%" PRId64 "G", (int64_t)newlnum);
-  }
-  set_vim_var_string(VV_SWAPCOMMAND, p, -1);
-  xfree(p);
-  return true;
+  return rs_set_swapcommand(command, (int)newlnum) != 0;
 }
 
 /// start editing a new file
@@ -1385,13 +1312,10 @@ theend:
   return retval;
 }
 
+/// Thin wrapper calling Rust rs_delbuf_msg.
 static void delbuf_msg(char *name)
 {
-  semsg(_("E143: Autocommands unexpectedly deleted new buffer %s"),
-        name == NULL ? "" : name);
-  xfree(name);
-  au_new_curbuf.br_buf = NULL;
-  au_new_curbuf.br_buf_free_count = 0;
+  rs_delbuf_msg(name);
 }
 
 static int append_indent = 0;       // autoindent for first line
@@ -3415,6 +3339,119 @@ int nvim_excmds_kShellOptDoOut(void) { return kShellOptDoOut; }
 
 /// Get curbuf->b_ml.ml_line_count.
 int nvim_excmds_curbuf_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
+
+// --- Phase 5: getfile, set_swapcommand, delbuf_msg FFI accessors ---
+
+/// GETFILE_* constants.
+int nvim_excmds_getfile_error(void) { return GETFILE_ERROR; }
+int nvim_excmds_getfile_not_written(void) { return GETFILE_NOT_WRITTEN; }
+int nvim_excmds_getfile_same_file(void) { return GETFILE_SAME_FILE; }
+int nvim_excmds_getfile_open_other(void) { return GETFILE_OPEN_OTHER; }
+
+/// Wrap check_can_set_curbuf_forceit(forceit). Returns 1 if allowed.
+int nvim_excmds_check_can_set_curbuf_forceit(int forceit)
+{
+  return check_can_set_curbuf_forceit((bool)forceit) ? 1 : 0;
+}
+
+/// Wrap text_locked(). Returns 1 if locked.
+int nvim_excmds_text_locked(void) { return text_locked() ? 1 : 0; }
+
+/// Wrap curbuf_locked(). Returns 1 if locked.
+int nvim_excmds_curbuf_locked(void) { return curbuf_locked() ? 1 : 0; }
+
+/// Expand fname and sfname for curbuf. Both pointers are modified in-place.
+/// ffname_ptr and sfname_ptr point to the buffers, fname_expand fills them.
+/// Returns the expanded ffname (allocated, caller must free) via *out_ffname.
+/// *out_sfname is set to point into the allocated ffname or the original sfname.
+void nvim_excmds_fname_expand(char *ffname_in, char *sfname_in,
+                              char **out_ffname, char **out_sfname)
+{
+  *out_ffname = ffname_in;
+  *out_sfname = sfname_in;
+  fname_expand(curbuf, out_ffname, out_sfname);
+}
+
+/// Get curbuf->b_fnum.
+int nvim_excmds_curbuf_get_b_fnum(void) { return curbuf->b_fnum; }
+
+/// Get curbuf->b_nwindows.
+int nvim_excmds_curbuf_get_b_nwindows(void) { return curbuf->b_nwindows; }
+
+/// Wrap buf_hide(curbuf). Returns 1 if true.
+int nvim_excmds_buf_hide_curbuf(void) { return buf_hide(curbuf) ? 1 : 0; }
+
+/// Wrap curbufIsChanged(). Returns 1 if true.
+int nvim_excmds_curbufIsChanged_val(void) { return curbufIsChanged() ? 1 : 0; }
+
+/// Wrap autowrite(curbuf, forceit). Returns 1=OK, 0=FAIL.
+int nvim_excmds_autowrite_curbuf(int forceit)
+{
+  return autowrite(curbuf, (bool)forceit) == OK ? 1 : 0;
+}
+
+/// Get p_confirm option.
+int nvim_excmds_get_p_confirm(void) { return p_confirm ? 1 : 0; }
+
+/// Wrap dialog_changed(curbuf, false).
+void nvim_excmds_dialog_changed_curbuf(void) { dialog_changed(curbuf, false); }
+
+/// Wrap no_write_message().
+void nvim_excmds_no_write_message(void) { no_write_message(); }
+
+/// Set curwin->w_cursor.lnum.
+void nvim_excmds_curwin_set_cursor_lnum(int lnum) { curwin->w_cursor.lnum = (linenr_T)lnum; }
+
+/// Wrap check_cursor_lnum(curwin).
+void nvim_excmds_check_cursor_lnum(void) { check_cursor_lnum(curwin); }
+
+/// BL_SOL | BL_FIX constants.
+int nvim_excmds_bl_sol_fix(void) { return BL_SOL | BL_FIX; }
+
+/// Wrap do_ecmd(fnum, ffname, sfname, NULL, lnum, flags, curwin). Returns 1=OK, 0=FAIL.
+int nvim_excmds_do_ecmd_getfile(int fnum, char *ffname, char *sfname, int lnum, int flags)
+{
+  return do_ecmd(fnum, ffname, sfname, NULL, (linenr_T)lnum, flags, curwin) == OK ? 1 : 0;
+}
+
+/// ECMD_HIDE and ECMD_FORCEIT constants.
+int nvim_excmds_ecmd_hide(void) { return ECMD_HIDE; }
+int nvim_excmds_ecmd_forceit(void) { return ECMD_FORCEIT; }
+
+/// For set_swapcommand: get_vim_var_str(VV_SWAPCOMMAND). Returns the string (not owned).
+const char *nvim_excmds_get_vim_var_str_swapcommand(void)
+{
+  return get_vim_var_str(VV_SWAPCOMMAND);
+}
+
+/// For set_swapcommand: set_vim_var_string(VV_SWAPCOMMAND, p, -1).
+void nvim_excmds_set_vim_var_string_swapcommand(const char *p)
+{
+  set_vim_var_string(VV_SWAPCOMMAND, (char *)p, -1);
+}
+
+/// For set_swapcommand: vim_snprintf into allocated buffer.
+/// Returns newly allocated string: ":%s\r" if command != NULL, else "NNG\0".
+char *nvim_excmds_format_swapcommand(const char *command, int64_t newlnum)
+{
+  size_t len = (command != NULL) ? strlen(command) + 3 : 30;
+  char *p = xmalloc(len);
+  if (command != NULL) {
+    vim_snprintf(p, len, ":%s\r", command);
+  } else {
+    vim_snprintf(p, len, "%" PRId64 "G", newlnum);
+  }
+  return p;
+}
+
+/// For delbuf_msg: semsg E143 and clear au_new_curbuf.
+void nvim_excmds_semsg_e143_and_clear(const char *name)
+{
+  semsg(_("E143: Autocommands unexpectedly deleted new buffer %s"),
+        name == NULL ? "" : name);
+  au_new_curbuf.br_buf = NULL;
+  au_new_curbuf.br_buf_free_count = 0;
+}
 
 // --- Phase 4: do_wqall FFI accessors ---
 

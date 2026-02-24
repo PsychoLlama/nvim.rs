@@ -379,6 +379,187 @@ pub unsafe extern "C" fn rs_check_readonly(eap: *mut ExArgHandle, buf: *mut BufH
 }
 
 // =============================================================================
+// Phase 5: getfile, set_swapcommand, delbuf_msg FFI declarations and implementations
+// =============================================================================
+
+extern "C" {
+    fn nvim_excmds_getfile_error() -> c_int;
+    fn nvim_excmds_getfile_not_written() -> c_int;
+    fn nvim_excmds_getfile_same_file() -> c_int;
+    fn nvim_excmds_getfile_open_other() -> c_int;
+    fn nvim_excmds_check_can_set_curbuf_forceit(forceit: c_int) -> c_int;
+    fn nvim_excmds_text_locked() -> c_int;
+    fn nvim_excmds_curbuf_locked() -> c_int;
+    fn nvim_excmds_fname_expand(
+        ffname_in: *mut c_char,
+        sfname_in: *mut c_char,
+        out_ffname: *mut *mut c_char,
+        out_sfname: *mut *mut c_char,
+    );
+    fn nvim_excmds_curbuf_get_b_fnum() -> c_int;
+    fn nvim_excmds_curbuf_get_b_nwindows() -> c_int;
+    fn nvim_excmds_buf_hide_curbuf() -> c_int;
+    fn nvim_excmds_curbufIsChanged_val() -> c_int;
+    fn nvim_excmds_autowrite_curbuf(forceit: c_int) -> c_int;
+    fn nvim_excmds_get_p_confirm() -> c_int;
+    fn nvim_excmds_dialog_changed_curbuf();
+    fn nvim_excmds_no_write_message();
+    fn nvim_excmds_no_wait_return_inc();
+    fn nvim_excmds_no_wait_return_dec();
+    fn nvim_excmds_setpcmark();
+    fn nvim_excmds_curwin_set_cursor_lnum(lnum: c_int);
+    fn nvim_excmds_check_cursor_lnum();
+    fn nvim_excmds_bl_sol_fix() -> c_int;
+    fn nvim_excmds_do_ecmd_getfile(
+        fnum: c_int,
+        ffname: *mut c_char,
+        sfname: *mut c_char,
+        lnum: c_int,
+        flags: c_int,
+    ) -> c_int;
+    fn nvim_excmds_ecmd_hide() -> c_int;
+    fn nvim_excmds_ecmd_forceit() -> c_int;
+    fn nvim_excmds_get_vim_var_str_swapcommand() -> *const c_char;
+    fn nvim_excmds_set_vim_var_string_swapcommand(p: *const c_char);
+    fn nvim_excmds_format_swapcommand(command: *const c_char, newlnum: i64) -> *mut c_char;
+    fn nvim_excmds_semsg_e143_and_clear(name: *const c_char);
+    fn beginline(flags: c_int);
+}
+
+/// Try to abandon the current file and edit a new or existing file.
+///
+/// Returns GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_SAME_FILE, or GETFILE_OPEN_OTHER.
+///
+/// # Safety
+/// All pointer arguments must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getfile(
+    fnum: c_int,
+    ffname_arg: *mut c_char,
+    sfname_arg: *mut c_char,
+    setpm: c_int,
+    lnum: c_int,
+    forceit: c_int,
+) -> c_int {
+    if nvim_excmds_check_can_set_curbuf_forceit(forceit) == 0 {
+        return nvim_excmds_getfile_error();
+    }
+    if nvim_excmds_text_locked() != 0 {
+        return nvim_excmds_getfile_error();
+    }
+    if nvim_excmds_curbuf_locked() != 0 {
+        return nvim_excmds_getfile_error();
+    }
+
+    let (ffname, sfname, free_me, other) = if fnum == 0 {
+        // Expand filename
+        let mut out_ffname: *mut c_char = ffname_arg;
+        let mut out_sfname: *mut c_char = sfname_arg;
+        nvim_excmds_fname_expand(ffname_arg, sfname_arg, &mut out_ffname, &mut out_sfname);
+        let other = nvim_excmds_otherfile(out_ffname);
+        // out_ffname is the newly allocated expanded name
+        let free_me = if out_ffname != ffname_arg { out_ffname } else { std::ptr::null_mut() };
+        (out_ffname, out_sfname, free_me, other)
+    } else {
+        let other = if fnum != nvim_excmds_curbuf_get_b_fnum() { 1 } else { 0 };
+        (ffname_arg, sfname_arg, std::ptr::null_mut::<c_char>(), other)
+    };
+
+    if other != 0 {
+        nvim_excmds_no_wait_return_inc();
+    }
+
+    let retval;
+
+    if other != 0
+        && forceit == 0
+        && nvim_excmds_curbuf_get_b_nwindows() == 1
+        && nvim_excmds_buf_hide_curbuf() == 0
+        && nvim_excmds_curbufIsChanged_val() != 0
+        && nvim_excmds_autowrite_curbuf(forceit) == 0
+    {
+        if nvim_excmds_get_p_confirm() != 0 && nvim_excmds_get_p_write() != 0 {
+            nvim_excmds_dialog_changed_curbuf();
+        }
+        if nvim_excmds_curbufIsChanged_val() != 0 {
+            nvim_excmds_no_wait_return_dec();
+            nvim_excmds_no_write_message();
+            retval = nvim_excmds_getfile_not_written();
+            xfree(free_me.cast());
+            return retval;
+        }
+    }
+
+    if other != 0 {
+        nvim_excmds_no_wait_return_dec();
+    }
+    if setpm != 0 {
+        nvim_excmds_setpcmark();
+    }
+
+    if other == 0 {
+        if lnum != 0 {
+            nvim_excmds_curwin_set_cursor_lnum(lnum);
+        }
+        nvim_excmds_check_cursor_lnum();
+        beginline(nvim_excmds_bl_sol_fix());
+        retval = nvim_excmds_getfile_same_file();
+    } else {
+        let hide_flag = if nvim_excmds_buf_hide_curbuf() != 0 {
+            nvim_excmds_ecmd_hide()
+        } else {
+            0
+        };
+        let force_flag = if forceit != 0 { nvim_excmds_ecmd_forceit() } else { 0 };
+        let flags = hide_flag + force_flag;
+        if nvim_excmds_do_ecmd_getfile(fnum, ffname, sfname, lnum, flags) != 0 {
+            retval = nvim_excmds_getfile_open_other();
+        } else {
+            retval = nvim_excmds_getfile_error();
+        }
+    }
+
+    xfree(free_me.cast());
+    retval
+}
+
+/// Set v:swapcommand for SwapExists autocommands.
+///
+/// Returns 1 if the swapcommand was set, 0 otherwise.
+///
+/// # Safety
+/// `command` must be a valid C string pointer or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_swapcommand(command: *const c_char, newlnum: c_int) -> c_int {
+    // Don't set if both command is null and newlnum <= 0
+    if command.is_null() && newlnum <= 0 {
+        return 0;
+    }
+    // Don't set if v:swapcommand is already set
+    let existing = nvim_excmds_get_vim_var_str_swapcommand();
+    if !existing.is_null() && *existing != 0 {
+        return 0;
+    }
+
+    let p = nvim_excmds_format_swapcommand(command, newlnum as i64);
+    nvim_excmds_set_vim_var_string_swapcommand(p);
+    xfree(p.cast());
+    1
+}
+
+/// Emit E143 error and clear au_new_curbuf.
+///
+/// Frees `name` (C-allocated string).
+///
+/// # Safety
+/// `name` must be a valid C-allocated string pointer or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_delbuf_msg(name: *mut c_char) {
+    nvim_excmds_semsg_e143_and_clear(name);
+    xfree(name.cast());
+}
+
+// =============================================================================
 // Phase 4: do_wqall FFI declarations and implementation
 // =============================================================================
 
