@@ -2183,27 +2183,16 @@ void f_complete_check(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// Fill the dict of complete_info
-static void fill_complete_info_dict(dict_T *di, compl_T *match, bool add_match)
-{
-  tv_dict_add_str(di, S_LEN("word"), match->cp_str.data);
-  tv_dict_add_str(di, S_LEN("abbr"), match->cp_text[CPT_ABBR]);
-  tv_dict_add_str(di, S_LEN("menu"), match->cp_text[CPT_MENU]);
-  tv_dict_add_str(di, S_LEN("kind"), match->cp_text[CPT_KIND]);
-  tv_dict_add_str(di, S_LEN("info"), match->cp_text[CPT_INFO]);
-  if (add_match) {
-    tv_dict_add_bool(di, S_LEN("match"), match->cp_in_match_array);
-  }
-  if (match->cp_user_data.v_type == VAR_UNKNOWN) {
-    // Add an empty string for backwards compatibility
-    tv_dict_add_str(di, S_LEN("user_data"), "");
-  } else {
-    tv_dict_add_tv(di, S_LEN("user_data"), &match->cp_user_data);
-  }
-}
+// Phase 2 (pass 5): rs_get_complete_info -- Rust wrapper
+extern void rs_get_complete_info(void *what_list, void *retdict);
 
-/// Get complete information
-static void get_complete_info(list_T *what_list, dict_T *retdict)
+/// Compound accessor for Phase 2 (pass 5): complete_info() implementation.
+/// Contains the full what_flag parsing and dictionary population logic.
+void nvim_get_complete_info_impl(void *what_list_v, void *retdict_v)
 {
+  list_T *what_list = (list_T *)what_list_v;
+  dict_T *retdict = (dict_T *)retdict_v;
+
 #define CI_WHAT_MODE                0x01
 #define CI_WHAT_PUM_VISIBLE         0x02
 #define CI_WHAT_ITEMS               0x04
@@ -2282,7 +2271,19 @@ static void get_complete_info(list_T *what_list, dict_T *retdict)
           if (has_items || (has_matches && match->cp_in_match_array)) {
             dict_T *di = tv_dict_alloc();
             tv_list_append_dict(li, di);
-            fill_complete_info_dict(di, match, has_matches && has_items);
+            tv_dict_add_str(di, S_LEN("word"), match->cp_str.data);
+            tv_dict_add_str(di, S_LEN("abbr"), match->cp_text[CPT_ABBR]);
+            tv_dict_add_str(di, S_LEN("menu"), match->cp_text[CPT_MENU]);
+            tv_dict_add_str(di, S_LEN("kind"), match->cp_text[CPT_KIND]);
+            tv_dict_add_str(di, S_LEN("info"), match->cp_text[CPT_INFO]);
+            if (has_matches && has_items) {
+              tv_dict_add_bool(di, S_LEN("match"), match->cp_in_match_array);
+            }
+            if (match->cp_user_data.v_type == VAR_UNKNOWN) {
+              tv_dict_add_str(di, S_LEN("user_data"), "");
+            } else {
+              tv_dict_add_tv(di, S_LEN("user_data"), &match->cp_user_data);
+            }
           }
           if (compl_curr_match != NULL
               && compl_curr_match->cp_number == match->cp_number) {
@@ -2305,7 +2306,16 @@ static void get_complete_info(list_T *what_list, dict_T *retdict)
     }
     if (ret == OK && selected_idx != -1 && has_completed) {
       dict_T *di = tv_dict_alloc();
-      fill_complete_info_dict(di, compl_curr_match, false);
+      tv_dict_add_str(di, S_LEN("word"), compl_curr_match->cp_str.data);
+      tv_dict_add_str(di, S_LEN("abbr"), compl_curr_match->cp_text[CPT_ABBR]);
+      tv_dict_add_str(di, S_LEN("menu"), compl_curr_match->cp_text[CPT_MENU]);
+      tv_dict_add_str(di, S_LEN("kind"), compl_curr_match->cp_text[CPT_KIND]);
+      tv_dict_add_str(di, S_LEN("info"), compl_curr_match->cp_text[CPT_INFO]);
+      if (compl_curr_match->cp_user_data.v_type == VAR_UNKNOWN) {
+        tv_dict_add_str(di, S_LEN("user_data"), "");
+      } else {
+        tv_dict_add_tv(di, S_LEN("user_data"), &compl_curr_match->cp_user_data);
+      }
       ret = tv_dict_add_dict(retdict, S_LEN("completed"), di);
     }
   }
@@ -2327,7 +2337,7 @@ void f_complete_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     }
     what_list = argvars[0].vval.v_list;
   }
-  get_complete_info(what_list, rettv->vval.v_dict);
+  rs_get_complete_info(what_list, rettv->vval.v_dict);
 }
 
 /// Return value of process_next_cpt_value()
