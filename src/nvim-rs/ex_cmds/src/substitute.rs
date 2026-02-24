@@ -1063,6 +1063,112 @@ pub unsafe extern "C" fn rs_skip_substitute(
 }
 
 // =============================================================================
+// Substitute lifecycle (Phase 4 migration)
+// =============================================================================
+
+extern "C" {
+    // old_sub C accessors
+    fn nvim_excmds_old_sub_get_sub() -> *mut c_char;
+    fn nvim_excmds_old_sub_get_timestamp() -> u64;
+    fn nvim_excmds_old_sub_get_additional_data() -> *mut std::ffi::c_void;
+    fn nvim_excmds_old_sub_set(
+        sub: *mut c_char,
+        timestamp: u64,
+        additional_data: *mut std::ffi::c_void,
+    );
+
+    // do_sub accessor
+    fn nvim_excmds_do_sub(
+        eap: *mut ExArgHandle,
+        cmdpreview_ns: c_int,
+        cmdpreview_bufnr: c_int,
+        use_rdt: c_int,
+    ) -> c_int;
+
+    // ex_substitute_preview accessors
+    fn nvim_excmds_arg_has_valid_delim(eap: *const ExArgHandle) -> c_int;
+    fn nvim_excmds_eap_arg_save(eap: *mut ExArgHandle) -> *mut c_char;
+    fn nvim_excmds_eap_arg_restore(eap: *mut ExArgHandle, saved: *mut c_char);
+}
+
+/// C-compatible opaque type matching SubReplacementString:
+/// char*, uint64_t (Timestamp), AdditionalData* (opaque).
+#[repr(C)]
+pub struct SubReplacementStringC {
+    pub sub: *mut c_char,
+    pub timestamp: u64,
+    pub additional_data: *mut std::ffi::c_void,
+}
+
+/// Get old substitute replacement string. Replaces C `sub_get_replacement`.
+///
+/// # Safety
+/// `ret_sub` must be a valid pointer to a SubReplacementStringC.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sub_get_replacement(ret_sub: *mut SubReplacementStringC) {
+    (*ret_sub).sub = nvim_excmds_old_sub_get_sub();
+    (*ret_sub).timestamp = nvim_excmds_old_sub_get_timestamp();
+    (*ret_sub).additional_data = nvim_excmds_old_sub_get_additional_data();
+}
+
+/// Set substitute string and timestamp. Replaces C `sub_set_replacement`.
+///
+/// Called from C with three separate arguments (matching the C calling convention
+/// for the thin wrapper that extracts the struct fields).
+///
+/// # Safety
+/// `sub_ptr` must be C-allocated (or NULL), `additional_data` must be C-allocated (or NULL).
+#[no_mangle]
+pub unsafe extern "C" fn rs_sub_set_replacement(
+    sub_ptr: *mut c_char,
+    timestamp: u64,
+    additional_data: *mut std::ffi::c_void,
+) {
+    nvim_excmds_old_sub_set(sub_ptr, timestamp, additional_data);
+}
+
+/// EXITFREE cleanup for old_sub. Replaces C `free_old_sub`.
+///
+/// # Safety
+/// Calls C accessor.
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_old_sub() {
+    nvim_excmds_old_sub_set(std::ptr::null_mut(), 0, std::ptr::null_mut());
+}
+
+/// `:substitute` entry point. Replaces C `ex_substitute`.
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_substitute(eap: *mut ExArgHandle) {
+    nvim_excmds_do_sub(eap, 0, 0, 0);
+}
+
+/// `:substitute` inccommand preview callback. Replaces C `ex_substitute_preview`.
+///
+/// Returns 0, 1, or 2 (see cmdpreview_may_show()).
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_substitute_preview(
+    eap: *mut ExArgHandle,
+    cmdpreview_ns: c_int,
+    cmdpreview_bufnr: c_int,
+) -> c_int {
+    // Only preview once the pattern delimiter has been typed:
+    // proceed when *eap->arg is non-NUL and NOT alphanumeric (a valid delimiter).
+    if nvim_excmds_arg_has_valid_delim(eap) != 0 {
+        let save_eap = nvim_excmds_eap_arg_save(eap);
+        let retv = nvim_excmds_do_sub(eap, cmdpreview_ns, cmdpreview_bufnr, 1);
+        nvim_excmds_eap_arg_restore(eap, save_eap);
+        return retv;
+    }
+    0
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

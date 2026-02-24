@@ -1946,27 +1946,31 @@ static SubReplacementString old_sub = { NULL, 0, NULL };
 
 static int global_need_beginline;       // call beginline() after ":g"
 
-/// Get old substitute replacement string
+// sub_get_replacement, sub_set_replacement, free_old_sub, ex_substitute, ex_substitute_preview
+// implemented in Rust (ex_cmds/src/substitute.rs).
+extern void rs_sub_get_replacement(void *ret_sub);
+extern void rs_sub_set_replacement(char *sub, uint64_t timestamp, void *additional_data);
+extern void rs_free_old_sub(void);
+extern void rs_ex_substitute(exarg_T *eap);
+extern int rs_ex_substitute_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_bufnr);
+
+/// Get old substitute replacement string. Thin wrapper calling Rust.
 ///
 /// @param[out]  ret_sub    Location where old string will be saved.
 void sub_get_replacement(SubReplacementString *const ret_sub)
   FUNC_ATTR_NONNULL_ALL
 {
-  *ret_sub = old_sub;
+  rs_sub_get_replacement((void *)ret_sub);
 }
 
-/// Set substitute string and timestamp
+/// Set substitute string and timestamp. Thin wrapper calling Rust.
 ///
 /// @warning `sub` must be in allocated memory. It is not copied.
 ///
 /// @param[in]  sub  New replacement string.
 void sub_set_replacement(SubReplacementString sub)
 {
-  xfree(old_sub.sub);
-  if (sub.additional_data != old_sub.additional_data) {
-    xfree(old_sub.additional_data);
-  }
-  old_sub = sub;
+  rs_sub_set_replacement(sub.sub, (uint64_t)sub.timestamp, (void *)sub.additional_data);
 }
 
 // sub_joining_lines, sub_grow_buf, sub_parse_flags implemented in Rust.
@@ -3111,9 +3115,10 @@ void global_exe(char *cmd)
 }
 
 #if defined(EXITFREE)
+/// EXITFREE cleanup for old_sub. Thin wrapper calling Rust.
 void free_old_sub(void)
 {
-  sub_set_replacement((SubReplacementString) { NULL, 0, NULL });
+  rs_free_old_sub();
 }
 
 #endif
@@ -3188,23 +3193,16 @@ static int show_sub(exarg_T *eap, pos_T old_cusr, PreviewLines *preview_lines, i
 }
 
 /// :substitute command.
+/// :substitute command. Thin wrapper calling Rust.
 void ex_substitute(exarg_T *eap)
 {
-  do_sub(eap, profile_zero(), 0, 0);
+  rs_ex_substitute(eap);
 }
 
-/// :substitute command preview callback.
+/// :substitute command preview callback. Thin wrapper calling Rust.
 int ex_substitute_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_bufnr)
 {
-  // Only preview once the pattern delimiter has been typed
-  if (*eap->arg && !ASCII_ISALNUM(*eap->arg)) {
-    char *save_eap = eap->arg;
-    int retv = do_sub(eap, profile_setlimit(p_rdt), cmdpreview_ns, cmdpreview_bufnr);
-    eap->arg = save_eap;
-    return retv;
-  }
-
-  return 0;
+  return rs_ex_substitute_preview(eap, cmdpreview_ns, cmdpreview_bufnr);
 }
 
 // --- ex_oldfiles FFI accessors ---
@@ -3710,3 +3708,43 @@ int nvim_exarg_get_cmd_byte1(const exarg_T *eap) { return (unsigned char)eap->cm
 
 /// Wrapper for do_argfile(eap, i).
 void nvim_excmds_do_argfile(exarg_T *eap, int i) { do_argfile(eap, i); }
+
+// --- sub_get_replacement, sub_set_replacement, free_old_sub, ex_substitute, ex_substitute_preview FFI ---
+
+/// Get old_sub->sub field.
+char *nvim_excmds_old_sub_get_sub(void) { return old_sub.sub; }
+/// Get old_sub->timestamp field.
+uint64_t nvim_excmds_old_sub_get_timestamp(void) { return (uint64_t)old_sub.timestamp; }
+/// Get old_sub->additional_data field (opaque).
+void *nvim_excmds_old_sub_get_additional_data(void) { return (void *)old_sub.additional_data; }
+/// Set old_sub from its three fields, freeing old memory.
+void nvim_excmds_old_sub_set(char *sub, uint64_t timestamp, void *additional_data)
+{
+  xfree(old_sub.sub);
+  if ((void *)old_sub.additional_data != additional_data) {
+    xfree(old_sub.additional_data);
+  }
+  old_sub.sub = sub;
+  old_sub.timestamp = (Timestamp)timestamp;
+  old_sub.additional_data = (AdditionalData *)additional_data;
+}
+
+/// Wrapper for do_sub(eap, timeout, ns, bufnr). Returns 0, 1, or 2.
+int nvim_excmds_do_sub(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_bufnr, int use_rdt)
+{
+  proftime_T timeout = use_rdt ? profile_setlimit(p_rdt) : profile_zero();
+  return do_sub(eap, timeout, cmdpreview_ns, cmdpreview_bufnr);
+}
+
+/// Check if preview should proceed: *eap->arg is non-NUL and NOT alphanumeric.
+/// Returns 1 if we should call do_sub (valid delimiter found), 0 otherwise.
+int nvim_excmds_arg_has_valid_delim(const exarg_T *eap)
+{
+  return (*eap->arg && !ASCII_ISALNUM(*eap->arg)) ? 1 : 0;
+}
+
+/// Save eap->arg and return saved pointer.
+char *nvim_excmds_eap_arg_save(exarg_T *eap) { return eap->arg; }
+
+/// Restore eap->arg to a saved pointer.
+void nvim_excmds_eap_arg_restore(exarg_T *eap, char *saved) { eap->arg = saved; }
