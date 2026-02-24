@@ -167,6 +167,8 @@ extern int rs_thesaurus_func_complete(int type);
 extern void rs_get_next_dict_tsr_completion(int compl_type, char *dict, int dict_f);
 // Phase 4 (pass 5) Rust exports
 extern void rs_fuzzy_longest_match(void);
+// Phase 1 (pass 5) Rust exports
+extern void rs_get_register_completion(void);
 // Phase 5 (pass 5) Rust exports
 extern const char *rs_did_set_completefunc(void *args);
 extern const char *rs_did_set_omnifunc(void *args);
@@ -508,11 +510,6 @@ static bool match_at_original_text(const compl_T *const match)
 static bool is_first_match(const compl_T *const match)
 {
   return match == compl_first_match;
-}
-
-void do_autocmd_completedone(int c, int mode, char *word)
-{
-  rs_do_autocmd_completedone(c, mode, word);
 }
 
 /// Get the completed text by inferring the case of the originally typed text.
@@ -2443,13 +2440,6 @@ done:
   return status;
 }
 
-/// Get the next set of words matching "compl_pattern" in dictionary or
-/// thesaurus files.
-static void get_next_dict_tsr_completion(int compl_type, char *dict, int dict_f)
-{
-  rs_get_next_dict_tsr_completion(compl_type, dict, dict_f);
-}
-
 /// Compare function for qsort
 static int compare_scores(const void *a, const void *b)
 {
@@ -2459,14 +2449,6 @@ static int compare_scores(const void *a, const void *b)
   int score_b = compl_fuzzy_scores[idx_b];
   return score_a == score_b ? (idx_a == idx_b ? 0 : (idx_a < idx_b ? -1 : 1))
                             : (score_a > score_b ? -1 : 1);
-}
-
-// Phase 4 (pass 5): rs_fuzzy_longest_match -- Rust wrapper
-extern void rs_fuzzy_longest_match(void);
-
-static void fuzzy_longest_match(void)
-{
-  rs_fuzzy_longest_match();
 }
 
 /// Get the next set of filename matching "compl_pattern".
@@ -2597,7 +2579,7 @@ static void get_next_filename_completion(void)
     ga_clear(&fuzzy_indices);
 
     if (compl_num_bests > 0 && compl_get_longest) {
-      fuzzy_longest_match();
+      rs_fuzzy_longest_match();
     }
     return;
   }
@@ -2825,16 +2807,6 @@ static int get_next_default_completion(ins_compl_next_state_T *st, pos_T *start_
   return found_new_match;
 }
 
-/// Get completion matches from register contents.
-/// Extracts words from all available registers and adds them to the completion list.
-// Phase 1 (pass 5): rs_get_register_completion -- Rust wrapper
-extern void rs_get_register_completion(void);
-
-static void get_register_completion(void)
-{
-  rs_get_register_completion();
-}
-
 /// Return the callback function associated with "p" if it refers to a
 /// user-defined function in the 'complete' option.
 /// The "idx" parameter is used for indexing callback entries.
@@ -2873,7 +2845,7 @@ static bool get_next_completion_match(int type, ins_compl_next_state_T *st, pos_
 
   case CTRL_X_DICTIONARY:
   case CTRL_X_THESAURUS:
-    get_next_dict_tsr_completion(type, st->dict, st->dict_f);
+    rs_get_next_dict_tsr_completion(type, st->dict, st->dict_f);
     st->dict = NULL;
     break;
 
@@ -2908,7 +2880,7 @@ static bool get_next_completion_match(int type, ins_compl_next_state_T *st, pos_
     rs_get_next_bufname_token();
     break;
   case CTRL_X_REGISTER:
-    get_register_completion();
+    rs_get_register_completion();
     break;
 
   default:            // normal ^P/^N and ^X^L
@@ -3111,7 +3083,7 @@ static int ins_compl_get_exp(pos_T *ini)
   }
 
   if (rs_cot_fuzzy() && compl_get_longest && compl_num_bests > 0) {
-    fuzzy_longest_match();
+    rs_fuzzy_longest_match();
   }
 
   if (compl_old_match != NULL) {

@@ -145,7 +145,7 @@ extern "C" {
     fn nvim_clear_edit_submode_extra();
 
     // Phase 2: C functions called (not pure accessors)
-    fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c_char);
+    fn rs_do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c_char);
     fn may_trigger_modechanged();
     fn rs_ins_compl_pum_key(c: c_int) -> c_int;
     // rs_* functions from lib.rs accessible via no_mangle extern "C"
@@ -412,7 +412,7 @@ pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
     } else if nvim_get_ctrl_x_mode() == CTRL_X_LOCAL_MSG {
         // Trigger the CompleteDone event to give scripts a chance to act upon
         // the (possibly failed) completion.
-        do_autocmd_completedone(c, nvim_get_ctrl_x_mode(), std::ptr::null_mut());
+        rs_do_autocmd_completedone(c, nvim_get_ctrl_x_mode(), std::ptr::null_mut());
     }
 
     may_trigger_modechanged();
@@ -574,7 +574,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
 
     // Trigger the CompleteDone event to give scripts a chance to act upon the
     // end of completion.
-    do_autocmd_completedone(c, prev_mode, word.cast::<c_char>());
+    rs_do_autocmd_completedone(c, prev_mode, word.cast::<c_char>());
     nvim_xfree(word);
 
     c_int::from(retval)
