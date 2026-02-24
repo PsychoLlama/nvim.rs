@@ -67,7 +67,7 @@
 
 // Rust rs_* function declarations (from src/nvim-rs/shada/src/lib.rs)
 extern int rs_magic_isset(void);
-extern uint64_t rs_vim_be64toh(uint64_t big_endian_64_bits);
+// rs_vim_be64toh extern removed (Phase 3 plan 92c8078e): vim_be64toh wrapper deleted.
 extern int rs_marks_equal(pos_T a, pos_T b);
 extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i);
 extern int rs_compare_file_marks(const void *a, const void *b);
@@ -77,31 +77,16 @@ extern void rs_shada_read(void *sd_reader, int flags);
 extern var_flavour_T rs_var_flavour(const char *varname);
 extern int rs_shada_pack_entry(PackerBuffer *packer, const ShadaEntry *entry, size_t max_kbyte);
 
-#ifdef HAVE_BE64TOH
-# define _BSD_SOURCE 1  // NOLINT(bugprone-reserved-identifier)
-# define _DEFAULT_SOURCE 1  // NOLINT(bugprone-reserved-identifier)
-# include ENDIAN_INCLUDE_FILE
-#endif
+// HAVE_BE64TOH block deleted (Phase 3 plan 92c8078e): vim_be64toh/be64toh wrapper deleted.
 
-#define SEARCH_KEY_MAGIC sm
-#define SEARCH_KEY_SMARTCASE sc
-#define SEARCH_KEY_HAS_LINE_OFFSET sl
-#define SEARCH_KEY_PLACE_CURSOR_AT_END se
-#define SEARCH_KEY_IS_LAST_USED su
-#define SEARCH_KEY_IS_SUBSTITUTE_PATTERN ss
-#define SEARCH_KEY_HIGHLIGHTED sh
-#define SEARCH_KEY_OFFSET so
-#define SEARCH_KEY_PAT sp
-#define SEARCH_KEY_BACKWARD sb
+// SEARCH_KEY_* macros deleted (Phase 3 plan 92c8078e): unused after shada_read_next_item migration.
 
 #define REG_KEY_TYPE rt
 #define REG_KEY_WIDTH rw
 #define REG_KEY_CONTENTS rc
 #define REG_KEY_UNNAMED ru
 
-#define KEY_LNUM l
-#define KEY_COL c
-#define KEY_FILE f
+// KEY_LNUM, KEY_COL, KEY_FILE deleted (Phase 3 plan 92c8078e): unused after shada_read_next_item migration.
 #define KEY_NAME_CHAR n
 
 /// Common prefix for all errors inside ShaDa file
@@ -470,7 +455,7 @@ static buf_T *find_buffer(PMap(cstr_t) *const fname_bufs, const char *const fnam
 }
 
 #define KEY_NAME_(s) #s
-#define PACK_KEY(s) mpack_str(STATIC_CSTR_AS_STRING(KEY_NAME_(s)), &sbuf);
+// PACK_KEY deleted (Phase 3 plan 92c8078e): unused after shada_read_next_item migration.
 #define KEY_NAME(s) KEY_NAME_(s)
 
 #define SHADA_MPACK_FREE_SPACE (4 * MPACK_ITEM_SIZE)
