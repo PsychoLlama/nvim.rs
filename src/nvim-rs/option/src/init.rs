@@ -663,6 +663,155 @@ pub unsafe extern "C" fn rs_set_title_defaults() {
 }
 
 // =============================================================================
+// set_init_2 and set_init_3 (option pass 7 phase 2)
+// =============================================================================
+
+use crate::opt_index::{K_OPT_FILEFORMATS, K_OPT_SHELLPIPE, K_OPT_SHELLREDIR, K_OPT_SCROLL, K_OPT_WINDOW};
+use crate::OptInt;
+
+extern "C" {
+    // set_init_2 accessors
+    fn nvim_option_ilog_rtp();
+    fn nvim_call_set_option_default(opt_idx: c_int, opt_flags: c_int);
+    fn nvim_call_comp_col();
+    fn nvim_option_was_set_idx(opt_idx: c_int) -> c_int;
+    fn nvim_get_p_window() -> OptInt;
+    fn nvim_set_p_window(val: OptInt);
+    fn nvim_option_get_rows() -> c_int;
+
+    // set_init_3 accessors
+    fn nvim_call_parse_shape_opt();
+    fn nvim_option_get_sh() -> *const c_char;
+    fn nvim_call_invocation_path_tail(p: *const c_char, lenp: *mut usize) -> *const c_char;
+    fn nvim_call_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+    fn nvim_call_set_option_direct(opt_idx: c_int, val: OptVal, opt_flags: c_int);
+    fn nvim_curbuf_is_empty() -> c_int;
+    fn rs_default_fileformat() -> c_int;
+    fn rs_set_fileformat(eol_style: c_int, opt_flags: c_int);
+    fn rs_optval_copy(o: OptVal) -> OptVal;
+}
+
+/// OPT_LOCAL flag value (from option.h)
+const OPT_LOCAL: c_int = 0x02;
+
+/// kOptFlagWasSet: bit 3 of option flags
+const K_OPT_FLAG_WAS_SET_2: u32 = 1 << 3;
+
+/// Create a string OptVal from a static byte literal.
+/// The string is NOT heap-allocated; use rs_optval_copy to allocate.
+///
+/// # Safety
+/// `bytes` must be a valid NUL-terminated byte string with `len` chars before NUL.
+unsafe fn static_cstr_as_optval(bytes: *const u8, len: usize) -> OptVal {
+    OptVal {
+        type_: OptValType::String,
+        data: OptValData {
+            string: String_ {
+                data: bytes as *mut c_char,
+                size: len,
+            },
+        },
+    }
+}
+
+/// Create a number OptVal.
+fn number_optval(n: OptInt) -> OptVal {
+    OptVal {
+        type_: OptValType::Number,
+        data: OptValData { number: n },
+    }
+}
+
+/// Initialize the options, part two: After getting Rows and Columns.
+///
+/// Corresponds to C's `set_init_2`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_init_2(_headless: c_int) {
+    // set in set_init_1 but logging is not allowed there
+    nvim_option_ilog_rtp();
+
+    // 'scroll' defaults to half the window height. The stored default is zero,
+    // which results in the actual value computed from the window height.
+    let scroll_flags = nvim_get_option_flags(K_OPT_SCROLL);
+    if (scroll_flags & K_OPT_FLAG_WAS_SET_2) == 0 {
+        nvim_call_set_option_default(K_OPT_SCROLL, OPT_LOCAL);
+    }
+    nvim_call_comp_col();
+
+    // 'window' is only for backwards compatibility with Vi.
+    // Default is Rows - 1.
+    if nvim_option_was_set_idx(K_OPT_WINDOW) == 0 {
+        nvim_set_p_window(OptInt::from(nvim_option_get_rows()) - 1);
+    }
+    nvim_call_change_option_default(
+        K_OPT_WINDOW,
+        number_optval(OptInt::from(nvim_option_get_rows()) - 1),
+    );
+}
+
+/// Compare a shell basename (from `p`) to a known shell name.
+///
+/// Helper used by `rs_set_init_3`.
+unsafe fn shell_is(p: *const c_char, name: *const u8) -> bool {
+    nvim_call_path_fnamecmp(p, name.cast()) == 0
+}
+
+/// Initialize the options, part three: After reading the .vimrc.
+///
+/// Corresponds to C's `set_init_3`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_init_3() {
+    nvim_call_parse_shape_opt();
+
+    // Set 'shellpipe' and 'shellredir', depending on the 'shell' option.
+    let do_srr = (nvim_get_option_flags(K_OPT_SHELLREDIR) & K_OPT_FLAG_WAS_SET_2) == 0;
+    let do_sp = (nvim_get_option_flags(K_OPT_SHELLPIPE) & K_OPT_FLAG_WAS_SET_2) == 0;
+
+    let mut len: usize = 0;
+    let p_sh = nvim_option_get_sh();
+    let tail_ptr = nvim_call_invocation_path_tail(p_sh, &raw mut len);
+    // Duplicate just the basename so we can compare safely.
+    let p = xmemdupz(tail_ptr, len);
+
+    let is_csh = shell_is(p, b"csh\0".as_ptr()) || shell_is(p, b"tcsh\0".as_ptr());
+    let is_known_shell = shell_is(p, b"sh\0".as_ptr())
+        || shell_is(p, b"ksh\0".as_ptr())
+        || shell_is(p, b"mksh\0".as_ptr())
+        || shell_is(p, b"pdksh\0".as_ptr())
+        || shell_is(p, b"zsh\0".as_ptr())
+        || shell_is(p, b"zsh-beta\0".as_ptr())
+        || shell_is(p, b"bash\0".as_ptr())
+        || shell_is(p, b"fish\0".as_ptr())
+        || shell_is(p, b"ash\0".as_ptr())
+        || shell_is(p, b"dash\0".as_ptr());
+
+    if is_csh || is_known_shell {
+        if do_sp {
+            let sp_str: &[u8] = if is_csh { b"|& tee" } else { b"2>&1| tee" };
+            let sp = static_cstr_as_optval(sp_str.as_ptr(), sp_str.len());
+            nvim_call_set_option_direct(K_OPT_SHELLPIPE, sp, 0);
+            nvim_call_change_option_default(K_OPT_SHELLPIPE, rs_optval_copy(sp));
+        }
+        if do_srr {
+            let srr_str: &[u8] = if is_csh { b">&" } else { b">%s 2>&1" };
+            let srr = static_cstr_as_optval(srr_str.as_ptr(), srr_str.len());
+            nvim_call_set_option_direct(K_OPT_SHELLREDIR, srr, 0);
+            nvim_call_change_option_default(K_OPT_SHELLREDIR, rs_optval_copy(srr));
+        }
+    }
+    xfree(p);
+
+    if nvim_curbuf_is_empty() != 0 {
+        // Apply the first entry of 'fileformats' to the initial buffer.
+        if (nvim_get_option_flags(K_OPT_FILEFORMATS) & K_OPT_FLAG_WAS_SET_2) != 0 {
+            rs_set_fileformat(rs_default_fileformat(), OPT_LOCAL);
+        }
+    }
+
+    rs_set_title_defaults();
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

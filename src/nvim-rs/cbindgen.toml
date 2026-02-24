@@ -292,6 +292,7 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_stropt_copy_value", "rs_stropt_concat_with_comma",
            "rs_stropt_remove_val", "rs_stropt_remove_dupflags",
            # Option initialization (Phase 8)
+           "rs_set_init_2", "rs_set_init_3",
            "HelplangResult", "rs_compute_helplang",
            "rs_shell_needs_quoting", "rs_quoted_shell_len",
            "rs_cdpath_converted_len", "rs_convert_cdpath",

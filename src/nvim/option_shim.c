@@ -143,6 +143,10 @@ extern int rs_shortmess(int x);
 typedef struct { const char *end; int opt_idx; } FindOptionEndResult;
 extern FindOptionEndResult rs_find_option_end(const char *arg);
 
+// Rust init functions (option pass 7 phase 2)
+extern void rs_set_init_2(int headless);
+extern void rs_set_init_3(void);
+
 // Rust query functions (from Rust query.rs, option pass 4 phase 1)
 extern int rs_can_bs(int what);
 extern const char *rs_get_equalprg(void);
@@ -1389,6 +1393,16 @@ int nvim_option_was_set_idx(int opt_idx) { return option_was_set((OptIndex)opt_i
 int nvim_call_after_pathsep(const char *b, const char *p) { return after_pathsep(b, p); }
 // For rs_find_dup_item call in backupskip (flags accessor already exists)
 
+// Accessors for rs_set_init_2 and rs_set_init_3 (option pass 7 phase 2)
+void nvim_option_ilog_rtp(void) { ILOG("startup runtimepath/packpath value: %s", p_rtp); }
+void nvim_call_set_option_default(int opt_idx, int opt_flags) { set_option_default((OptIndex)opt_idx, opt_flags); }
+void nvim_call_comp_col(void) { comp_col(); }
+void nvim_call_parse_shape_opt(void) { parse_shape_opt(SHAPE_CURSOR); }
+const char *nvim_call_invocation_path_tail(const char *p_sh, size_t *lenp) { return invocation_path_tail(p_sh, lenp); }
+int nvim_call_path_fnamecmp(const char *a, const char *b) { return path_fnamecmp(a, b); }
+int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf); }
+void nvim_call_set_option_direct(int opt_idx, OptVal val, int opt_flags) { set_option_direct((OptIndex)opt_idx, val, opt_flags, SID_NONE); }
+
 // Phase 2 makeset accessors
 int nvim_call_put_line(FILE *fd, const char *str) { return put_line(fd, str); }
 // Write "if &optname != 'val'\n" to fd; returns OK or FAIL (< 0 = FAIL like fprintf)
@@ -1824,71 +1838,13 @@ void free_all_options(void)
 /// Initialize the options, part two: After getting Rows and Columns.
 void set_init_2(bool headless)
 {
-  // set in set_init_1 but logging is not allowed there
-  ILOG("startup runtimepath/packpath value: %s", p_rtp);
-
-  // 'scroll' defaults to half the window height. The stored default is zero,
-  // which results in the actual value computed from the window height.
-  if (!(options[kOptScroll].flags & kOptFlagWasSet)) {
-    set_option_default(kOptScroll, OPT_LOCAL);
-  }
-  comp_col();
-
-  // 'window' is only for backwards compatibility with Vi.
-  // Default is Rows - 1.
-  if (!option_was_set(kOptWindow)) {
-    p_window = Rows - 1;
-  }
-  change_option_default(kOptWindow, NUMBER_OPTVAL(Rows - 1));
+  rs_set_init_2(headless ? 1 : 0);
 }
 
 /// Initialize the options, part three: After reading the .vimrc
 void set_init_3(void)
 {
-  parse_shape_opt(SHAPE_CURSOR);   // set cursor shapes from 'guicursor'
-
-  // Set 'shellpipe' and 'shellredir', depending on the 'shell' option.
-  // This is done after other initializations, where 'shell' might have been
-  // set, but only if they have not been set before.
-  bool do_srr = !(options[kOptShellredir].flags & kOptFlagWasSet);
-  bool do_sp = !(options[kOptShellpipe].flags & kOptFlagWasSet);
-
-  size_t len = 0;
-  char *p = (char *)invocation_path_tail(p_sh, &len);
-  p = xmemdupz(p, len);
-
-  bool is_csh = path_fnamecmp(p, "csh") == 0 || path_fnamecmp(p, "tcsh") == 0;
-  bool is_known_shell = path_fnamecmp(p, "sh") == 0 || path_fnamecmp(p, "ksh") == 0
-                        || path_fnamecmp(p, "mksh") == 0 || path_fnamecmp(p, "pdksh") == 0
-                        || path_fnamecmp(p, "zsh") == 0 || path_fnamecmp(p, "zsh-beta") == 0
-                        || path_fnamecmp(p, "bash") == 0 || path_fnamecmp(p, "fish") == 0
-                        || path_fnamecmp(p, "ash") == 0 || path_fnamecmp(p, "dash") == 0;
-
-  // Default for p_sp is "| tee", for p_srr is ">".
-  // For known shells it is changed here to include stderr.
-  if (is_csh || is_known_shell) {
-    if (do_sp) {
-      const OptVal sp =
-        is_csh ? STATIC_CSTR_AS_OPTVAL("|& tee") : STATIC_CSTR_AS_OPTVAL("2>&1| tee");
-      set_option_direct(kOptShellpipe, sp, 0, SID_NONE);
-      change_option_default(kOptShellpipe, rs_optval_copy(sp));
-    }
-    if (do_srr) {
-      const OptVal srr = is_csh ? STATIC_CSTR_AS_OPTVAL(">&") : STATIC_CSTR_AS_OPTVAL(">%s 2>&1");
-      set_option_direct(kOptShellredir, srr, 0, SID_NONE);
-      change_option_default(kOptShellredir, rs_optval_copy(srr));
-    }
-  }
-  xfree(p);
-
-  if (buf_is_empty(curbuf)) {
-    // Apply the first entry of 'fileformats' to the initial buffer.
-    if (options[kOptFileformats].flags & kOptFlagWasSet) {
-      set_fileformat(rs_default_fileformat(), OPT_LOCAL);
-    }
-  }
-
-  set_title_defaults();  // 'title', 'icon'
+  rs_set_init_3();
 }
 
 /// When 'helplang' is still at its default value, set it to "lang".
