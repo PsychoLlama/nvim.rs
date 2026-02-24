@@ -165,6 +165,8 @@ extern const char *rs_ins_compl_mode(void);
 extern int rs_thesaurus_func_complete(int type);
 // Phase 3 (pass 5) Rust exports
 extern void rs_get_next_dict_tsr_completion(int compl_type, char *dict, int dict_f);
+// Phase 4 (pass 5) Rust exports
+extern void rs_fuzzy_longest_match(void);
 extern void rs_get_next_include_file_completion(int compl_type);
 extern void rs_get_next_cmdline_completion(void);
 extern void rs_get_next_spell_completion(int lnum);
@@ -2474,76 +2476,12 @@ static int compare_scores(const void *a, const void *b)
                             : (score_a > score_b ? -1 : 1);
 }
 
-/// Calculate the longest common prefix among the best fuzzy matches
-/// stored in compl_best_matches, and insert it as the longest.
+// Phase 4 (pass 5): rs_fuzzy_longest_match -- Rust wrapper
+extern void rs_fuzzy_longest_match(void);
+
 static void fuzzy_longest_match(void)
 {
-  if (compl_num_bests == 0) {
-    return;
-  }
-
-  compl_T *nn_compl = compl_first_match->cp_next->cp_next;
-  bool more_candidates = nn_compl && nn_compl != compl_first_match;
-
-  compl_T *compl = rs_ctrl_x_mode_whole_line() ? compl_first_match
-                                            : compl_first_match->cp_next;
-  if (compl_num_bests == 1) {
-    // no more candidates insert the match str
-    if (!more_candidates) {
-      rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(compl->cp_str.data + rs_get_compl_len(), -1); ins_redraw(false);
-      compl_num_bests = 0;
-    }
-    compl_num_bests = 0;
-    return;
-  }
-
-  compl_best_matches = (compl_T **)xmalloc((size_t)compl_num_bests * sizeof(compl_T *));
-
-  for (int i = 0; compl != NULL && i < compl_num_bests; i++) {
-    compl_best_matches[i] = compl;
-    compl = compl->cp_next;
-  }
-
-  char *prefix = compl_best_matches[0]->cp_str.data;
-  int prefix_len = (int)compl_best_matches[0]->cp_str.size;
-
-  for (int i = 1; i < compl_num_bests; i++) {
-    char *match_str = compl_best_matches[i]->cp_str.data;
-    char *prefix_ptr = prefix;
-    char *match_ptr = match_str;
-    int j = 0;
-
-    while (j < prefix_len && *match_ptr != NUL && *prefix_ptr != NUL) {
-      if (strncmp(prefix_ptr, match_ptr, (size_t)utfc_ptr2len(prefix_ptr)) != 0) {
-        break;
-      }
-
-      MB_PTR_ADV(prefix_ptr);
-      MB_PTR_ADV(match_ptr);
-      j++;
-    }
-
-    if (j > 0) {
-      prefix_len = j;
-    }
-  }
-
-  char *leader = (char *)rs_ins_compl_leader();
-  size_t leader_len = rs_ins_compl_leader_len();
-
-  // skip non-consecutive prefixes
-  if (leader_len > 0 && strncmp(prefix, leader, leader_len) != 0) {
-    goto end;
-  }
-
-  prefix = xmemdupz(prefix, (size_t)prefix_len);
-  rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(prefix + rs_get_compl_len(), -1); ins_redraw(false);
-  xfree(prefix);
-
-end:
-  xfree(compl_best_matches);
-  compl_best_matches = NULL;
-  compl_num_bests = 0;
+  rs_fuzzy_longest_match();
 }
 
 /// Get the next set of filename matching "compl_pattern".
@@ -5104,4 +5042,73 @@ void nvim_get_register_completion_impl(void)
     free_register(reg);
     xfree(reg);
   }
+}
+
+// Compound accessor for Phase 4 (pass 5): fuzzy_longest_match implementation.
+void nvim_fuzzy_longest_match_impl(void)
+{
+  if (compl_num_bests == 0) {
+    return;
+  }
+
+  compl_T *nn_compl = compl_first_match->cp_next->cp_next;
+  bool more_candidates = nn_compl && nn_compl != compl_first_match;
+
+  compl_T *compl = rs_ctrl_x_mode_whole_line() ? compl_first_match
+                                            : compl_first_match->cp_next;
+  if (compl_num_bests == 1) {
+    if (!more_candidates) {
+      rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(compl->cp_str.data + rs_get_compl_len(), -1); ins_redraw(false);
+      compl_num_bests = 0;
+    }
+    compl_num_bests = 0;
+    return;
+  }
+
+  compl_best_matches = (compl_T **)xmalloc((size_t)compl_num_bests * sizeof(compl_T *));
+
+  for (int i = 0; compl != NULL && i < compl_num_bests; i++) {
+    compl_best_matches[i] = compl;
+    compl = compl->cp_next;
+  }
+
+  char *prefix = compl_best_matches[0]->cp_str.data;
+  int prefix_len = (int)compl_best_matches[0]->cp_str.size;
+
+  for (int i = 1; i < compl_num_bests; i++) {
+    char *match_str = compl_best_matches[i]->cp_str.data;
+    char *prefix_ptr = prefix;
+    char *match_ptr = match_str;
+    int j = 0;
+
+    while (j < prefix_len && *match_ptr != NUL && *prefix_ptr != NUL) {
+      if (strncmp(prefix_ptr, match_ptr, (size_t)utfc_ptr2len(prefix_ptr)) != 0) {
+        break;
+      }
+
+      MB_PTR_ADV(prefix_ptr);
+      MB_PTR_ADV(match_ptr);
+      j++;
+    }
+
+    if (j > 0) {
+      prefix_len = j;
+    }
+  }
+
+  char *leader = (char *)rs_ins_compl_leader();
+  size_t leader_len = rs_ins_compl_leader_len();
+
+  if (leader_len > 0 && strncmp(prefix, leader, leader_len) != 0) {
+    goto end;
+  }
+
+  prefix = xmemdupz(prefix, (size_t)prefix_len);
+  rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(prefix + rs_get_compl_len(), -1); ins_redraw(false);
+  xfree(prefix);
+
+end:
+  xfree(compl_best_matches);
+  compl_best_matches = NULL;
+  compl_num_bests = 0;
 }

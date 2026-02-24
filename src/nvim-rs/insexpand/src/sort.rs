@@ -60,6 +60,8 @@ extern "C" {
     fn rs_get_cot_flags() -> c_uint;
     fn rs_compl_shows_dir_forward() -> c_int;
     fn nvim_compl_set_first_match(m: ComplMatch);
+    /// Compound accessor: full fuzzy_longest_match implementation.
+    fn nvim_fuzzy_longest_match_impl();
 }
 
 /// Check if a match is the first match.
@@ -184,6 +186,22 @@ pub unsafe extern "C" fn rs_ins_compl_fuzzy_sort() {
         first
     };
     nvim_compl_set_shown_match(new_shown);
+}
+
+// =============================================================================
+// Phase 4 (pass 5): rs_fuzzy_longest_match
+// =============================================================================
+
+/// Calculate the longest common prefix among the best fuzzy matches and insert it.
+///
+/// Delegates to the C compound accessor `nvim_fuzzy_longest_match_impl` which
+/// handles the compl_best_matches array, UTF-8 prefix computation, and insertion.
+///
+/// # Safety
+/// Requires valid completion list state with compl_num_bests > 0.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fuzzy_longest_match() {
+    nvim_fuzzy_longest_match_impl();
 }
 
 #[cfg(test)]
