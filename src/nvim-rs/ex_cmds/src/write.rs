@@ -379,6 +379,128 @@ pub unsafe extern "C" fn rs_check_readonly(eap: *mut ExArgHandle, buf: *mut BufH
 }
 
 // =============================================================================
+// Phase 4: do_wqall FFI declarations and implementation
+// =============================================================================
+
+extern "C" {
+    fn nvim_excmds_cmd_xall() -> c_int;
+    fn nvim_excmds_cmd_wqall() -> c_int;
+    fn nvim_excmds_before_quit_all(eap: *mut ExArgHandle) -> c_int;
+    fn nvim_excmds_set_exiting();
+    fn nvim_excmds_get_exiting() -> c_int;
+    fn nvim_excmds_getout(code: c_int);
+    fn nvim_excmds_not_exiting();
+    fn nvim_excmds_get_firstbuf() -> *mut BufHandle;
+    fn nvim_excmds_buf_get_next(buf: *const BufHandle) -> *mut BufHandle;
+    fn nvim_excmds_buf_has_running_job(buf: *const BufHandle) -> c_int;
+    fn nvim_excmds_no_write_message_nobang(buf: *mut BufHandle);
+    fn nvim_excmds_bufIsChanged(buf: *mut BufHandle) -> c_int;
+    fn nvim_excmds_bt_dontwrite(buf: *const BufHandle) -> c_int;
+    fn nvim_excmds_buf_get_b_ffname_ptr(buf: *const BufHandle) -> *const c_char;
+    fn nvim_excmds_buf_get_b_fnum(buf: *const BufHandle) -> c_int;
+    fn nvim_excmds_semsg_e141(fnum: i64);
+    fn nvim_excmds_check_readonly_buf(
+        forceit_in: c_int,
+        buf: *mut BufHandle,
+        forceit_out: *mut c_int,
+    ) -> c_int;
+    fn nvim_excmds_check_overwrite_wqall(eap: *mut ExArgHandle, buf: *mut BufHandle) -> c_int;
+    fn nvim_excmds_new_bufref(buf: *mut BufHandle) -> *mut std::ffi::c_void;
+    fn nvim_excmds_bufref_valid(refp: *mut std::ffi::c_void) -> c_int;
+    fn nvim_excmds_free_bufref(refp: *mut std::ffi::c_void);
+    fn nvim_excmds_handle_mkdir_p_wqall(eap: *mut ExArgHandle, buf: *mut BufHandle) -> c_int;
+    fn nvim_excmds_buf_write_all(buf: *mut BufHandle, forceit: c_int) -> c_int;
+    fn nvim_exarg_get_cmdidx(eap: *mut ExArgHandle) -> c_int;
+}
+
+/// Implement `:wall`, `:wqall`, `:xall`. Replaces C `do_wqall`.
+///
+/// Write all changed buffers. For :wqall/:xall, also exit after writing.
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
+    let mut error: c_int = 0;
+    let save_forceit = nvim_excmds_eap_get_forceit(eap);
+
+    let cmdidx = nvim_exarg_get_cmdidx(eap);
+    let cmd_xall = nvim_excmds_cmd_xall();
+    let cmd_wqall = nvim_excmds_cmd_wqall();
+
+    if cmdidx == cmd_xall || cmdidx == cmd_wqall {
+        if nvim_excmds_before_quit_all(eap) == 0 {
+            return; // FAIL from before_quit_all
+        }
+        nvim_excmds_set_exiting();
+    }
+
+    // Iterate all buffers (manually walk the linked list)
+    let mut buf = nvim_excmds_get_firstbuf();
+    while !buf.is_null() {
+        let exiting = nvim_excmds_get_exiting() != 0;
+
+        if exiting && nvim_excmds_buf_has_running_job(buf) != 0 {
+            nvim_excmds_no_write_message_nobang(buf);
+            error += 1;
+        } else if nvim_excmds_bufIsChanged(buf) == 0 || nvim_excmds_bt_dontwrite(buf) != 0 {
+            buf = nvim_excmds_buf_get_next(buf);
+            continue;
+        } else {
+            // Buffer needs writing
+            if rs_not_writing() != 0 {
+                error += 1;
+                break; // 'write' option disabled, stop processing
+            }
+
+            let ffname = nvim_excmds_buf_get_b_ffname_ptr(buf);
+            if ffname.is_null() {
+                let fnum = nvim_excmds_buf_get_b_fnum(buf) as i64;
+                nvim_excmds_semsg_e141(fnum);
+                error += 1;
+            } else {
+                // Check readonly and overwrite
+                let mut forceit_out: c_int = save_forceit;
+                let readonly = nvim_excmds_check_readonly_buf(save_forceit, buf, &mut forceit_out);
+                nvim_excmds_set_forceit(eap, forceit_out);
+
+                if readonly != 0 || nvim_excmds_check_overwrite_wqall(eap, buf) == 0 {
+                    error += 1;
+                } else {
+                    // Track buffer ref in case autocmds delete it
+                    let bufref = nvim_excmds_new_bufref(buf);
+                    let forceit = nvim_excmds_eap_get_forceit(eap);
+                    if nvim_excmds_handle_mkdir_p_wqall(eap, buf) == 0
+                        || nvim_excmds_buf_write_all(buf, forceit) == 0
+                    {
+                        error += 1;
+                    }
+                    // An autocommand may have deleted the buffer.
+                    if nvim_excmds_bufref_valid(bufref) == 0 {
+                        nvim_excmds_free_bufref(bufref);
+                        // Reset to start of list
+                        buf = nvim_excmds_get_firstbuf();
+                        nvim_excmds_set_forceit(eap, save_forceit);
+                        continue;
+                    }
+                    nvim_excmds_free_bufref(bufref);
+                }
+            }
+            nvim_excmds_set_forceit(eap, save_forceit); // check_overwrite may have set it
+        }
+
+        buf = nvim_excmds_buf_get_next(buf);
+    }
+
+    if nvim_excmds_get_exiting() != 0 {
+        if error == 0 {
+            nvim_excmds_getout(0); // exit Vim (diverges)
+        }
+        nvim_excmds_not_exiting();
+    }
+}
+
+// =============================================================================
 // Phase 3: check_overwrite FFI declarations and implementation
 // =============================================================================
 

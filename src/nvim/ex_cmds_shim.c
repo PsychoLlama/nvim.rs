@@ -544,6 +544,7 @@ extern int rs_handle_mkdir_p_arg(exarg_T *eap, const char *fname);
 extern int rs_check_readonly(exarg_T *eap, buf_T *buf);
 extern int rs_do_write(exarg_T *eap);
 extern int rs_check_overwrite(exarg_T *eap, buf_T *buf, const char *fname, const char *ffname, int other);
+extern void rs_do_wqall(exarg_T *eap);
 
 /// ":update". Thin wrapper calling Rust.
 void ex_update(exarg_T *eap)
@@ -600,63 +601,12 @@ void ex_wnext(exarg_T *eap)
   rs_ex_wnext(eap);
 }
 
+/// Thin wrapper calling Rust rs_do_wqall.
+///
 /// ":wall", ":wqall" and ":xall": Write all changed files (and exit).
 void do_wqall(exarg_T *eap)
 {
-  int error = 0;
-  int save_forceit = eap->forceit;
-
-  if (eap->cmdidx == CMD_xall || eap->cmdidx == CMD_wqall) {
-    if (before_quit_all(eap) == FAIL) {
-      return;
-    }
-    exiting = true;
-  }
-
-  FOR_ALL_BUFFERS(buf) {
-    if (exiting
-        && buf->terminal
-        && channel_job_running((uint64_t)buf->b_p_channel)) {
-      no_write_message_nobang(buf);
-      error++;
-    } else if (!bufIsChanged(buf) || bt_dontwrite(buf)) {
-      continue;
-    }
-    // Check if there is a reason the buffer cannot be written:
-    // 1. if the 'write' option is set
-    // 2. if there is no file name (even after browsing)
-    // 3. if the 'readonly' is set (even after a dialog)
-    // 4. if overwriting is allowed (even after a dialog)
-    if (not_writing()) {
-      error++;
-      break;
-    }
-    if (buf->b_ffname == NULL) {
-      semsg(_("E141: No file name for buffer %" PRId64), (int64_t)buf->b_fnum);
-      error++;
-    } else if (check_readonly(&eap->forceit, buf)
-               || check_overwrite(eap, buf, buf->b_fname, buf->b_ffname, false) == FAIL) {
-      error++;
-    } else {
-      bufref_T bufref;
-      set_bufref(&bufref, buf);
-      if (handle_mkdir_p_arg(eap, buf->b_fname) == FAIL
-          || buf_write_all(buf, eap->forceit) == FAIL) {
-        error++;
-      }
-      // An autocommand may have deleted the buffer.
-      if (!bufref_valid(&bufref)) {
-        buf = firstbuf;
-      }
-    }
-    eap->forceit = save_forceit;          // check_overwrite() may set it
-  }
-  if (exiting) {
-    if (!error) {
-      getout(0);                // exit Vim
-    }
-    not_exiting();
-  }
+  rs_do_wqall(eap);
 }
 
 /// Thin wrapper calling Rust rs_not_writing.
@@ -3465,6 +3415,106 @@ int nvim_excmds_kShellOptDoOut(void) { return kShellOptDoOut; }
 
 /// Get curbuf->b_ml.ml_line_count.
 int nvim_excmds_curbuf_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
+
+// --- Phase 4: do_wqall FFI accessors ---
+
+/// Get CMD_xall constant.
+int nvim_excmds_cmd_xall(void) { return (int)CMD_xall; }
+
+/// Get CMD_wqall constant.
+int nvim_excmds_cmd_wqall(void) { return (int)CMD_wqall; }
+
+/// Wrap before_quit_all(eap). Returns 1=OK, 0=FAIL.
+int nvim_excmds_before_quit_all(exarg_T *eap) { return before_quit_all(eap) == OK ? 1 : 0; }
+
+/// Set exiting=true.
+void nvim_excmds_set_exiting(void) { exiting = true; }
+
+/// Get exiting global.
+int nvim_excmds_get_exiting(void) { return exiting ? 1 : 0; }
+
+/// Wrap getout(code). Diverges (process exit).
+void nvim_excmds_getout(int code) { getout(code); }
+
+/// Wrap not_exiting().
+void nvim_excmds_not_exiting(void) { not_exiting(); }
+
+/// Get firstbuf (the first buffer in the buffer list).
+buf_T *nvim_excmds_get_firstbuf(void) { return firstbuf; }
+
+/// Get buf->b_next (next buffer in list, or NULL).
+buf_T *nvim_excmds_buf_get_next(const buf_T *buf) { return buf->b_next; }
+
+/// Check if buf has a terminal running (exiting && buf->terminal && channel_job_running).
+int nvim_excmds_buf_has_running_job(const buf_T *buf)
+{
+  return (buf->terminal != NULL && channel_job_running((uint64_t)buf->b_p_channel)) ? 1 : 0;
+}
+
+/// Wrap no_write_message_nobang(buf).
+void nvim_excmds_no_write_message_nobang(buf_T *buf) { no_write_message_nobang(buf); }
+
+/// Check bufIsChanged(buf). Returns 1 if true.
+int nvim_excmds_bufIsChanged(buf_T *buf) { return bufIsChanged(buf) ? 1 : 0; }
+
+/// Check bt_dontwrite(buf). Returns 1 if true.
+int nvim_excmds_bt_dontwrite(const buf_T *buf) { return bt_dontwrite(buf) ? 1 : 0; }
+
+/// Get buf->b_fnum.
+int nvim_excmds_buf_get_b_fnum(const buf_T *buf) { return buf->b_fnum; }
+
+/// semsg E141: No file name for buffer N.
+void nvim_excmds_semsg_e141(int64_t fnum)
+{
+  semsg(_("E141: No file name for buffer %" PRId64), fnum);
+}
+
+/// Wrap check_readonly via rs_ (Rust). Takes buf, uses fake_eap with forceit.
+/// Returns 1 if readonly (error), 0 if OK. Updates *forceit_out.
+int nvim_excmds_check_readonly_buf(int forceit_in, buf_T *buf, int *forceit_out)
+{
+  exarg_T fake_eap = { 0 };
+  fake_eap.forceit = (bool)forceit_in;
+  int result = rs_check_readonly(&fake_eap, buf);
+  *forceit_out = (int)fake_eap.forceit;
+  return result;
+}
+
+/// Wrap check_overwrite for wqall (other=false). Returns 1=OK, 0=FAIL.
+int nvim_excmds_check_overwrite_wqall(exarg_T *eap, buf_T *buf)
+{
+  return check_overwrite(eap, buf, buf->b_fname, buf->b_ffname, false) == OK ? 1 : 0;
+}
+
+/// Set a bufref to buf. Opaque handle for buffer reference tracking.
+/// Uses a C-allocated bufref_T. Returns opaque pointer to bufref.
+void *nvim_excmds_new_bufref(buf_T *buf)
+{
+  bufref_T *ref = xmalloc(sizeof(bufref_T));
+  set_bufref(ref, buf);
+  return ref;
+}
+
+/// Check if bufref is still valid. Returns 1 if valid.
+int nvim_excmds_bufref_valid(void *ref)
+{
+  return bufref_valid((bufref_T *)ref) ? 1 : 0;
+}
+
+/// Free a bufref created with nvim_excmds_new_bufref.
+void nvim_excmds_free_bufref(void *ref) { xfree(ref); }
+
+/// Wrap handle_mkdir_p_arg(eap, buf->b_fname). Returns 1=OK, 0=FAIL.
+int nvim_excmds_handle_mkdir_p_wqall(exarg_T *eap, buf_T *buf)
+{
+  return handle_mkdir_p_arg(eap, buf->b_fname) == OK ? 1 : 0;
+}
+
+/// Wrap buf_write_all(buf, forceit). Returns 1=OK, 0=FAIL.
+int nvim_excmds_buf_write_all(buf_T *buf, int forceit)
+{
+  return buf_write_all(buf, (bool)forceit) == OK ? 1 : 0;
+}
 
 // --- Phase 3: check_overwrite FFI accessors ---
 
