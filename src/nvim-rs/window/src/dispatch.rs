@@ -101,6 +101,7 @@ const TAB: c_int = 9;
 
 // WSP flags (verified by _Static_assert in window.c)
 const WSP_VERT: c_int = 0x02;
+const WSP_HOR: c_int = 0x04;
 const WSP_TOP: c_int = 0x08;
 const WSP_BOT: c_int = 0x10;
 
@@ -115,8 +116,8 @@ extern "C" {
     // nvim_do_window_T removed: replaced by rs_do_window_T (Phase 4)
     // nvim_do_window_hat removed: replaced by rs_do_window_hat (Phase 4)
     // nvim_do_window_new removed: replaced by rs_do_window_new (Phase 4)
-    fn nvim_do_window_equalize();
-    fn nvim_do_window_tag(nchar: c_int, prenum: c_int);
+    // nvim_do_window_equalize removed: replaced inline by rs_do_window_equalize (Phase 8)
+    // nvim_do_window_tag removed: replaced inline by rs_do_window_tag (Phase 8)
     fn nvim_do_window_goto_file(nchar: c_int, prenum1: c_int);
     fn nvim_do_window_find_in_path(nchar: c_int, prenum: c_int, prenum1: c_int);
     // nvim_do_window_g removed: replaced by rs_do_window_g
@@ -180,7 +181,13 @@ extern "C" {
     fn nvim_get_cmdwin_type() -> c_int;
     #[link_name = "rs_lastwin_nofloating"]
     fn nvim_lastwin_nofloating_wrapper() -> WinHandle;
-    fn nvim_get_valid_prevwin() -> WinHandle;
+    // nvim_get_valid_prevwin removed: replaced inline by get_valid_prevwin (Phase 8)
+    fn nvim_get_prevwin() -> WinHandle; // for inline prevwin check
+    fn nvim_get_cmdmod_split() -> c_int; // for inline equalize
+    #[link_name = "rs_win_equal"]
+    fn nvim_win_equal(next_curwin: WinHandle, current: c_int, dir: c_int); // for equalize
+    #[link_name = "rs_win_valid"]
+    fn nvim_win_valid(wp: WinHandle) -> c_int; // for prevwin check
 
     // --- Phase 4: wW/P/T/hat/new/count accessors ---
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
@@ -219,6 +226,68 @@ unsafe fn check_cmdwin() -> bool {
     } else {
         false
     }
+}
+
+/// Inline replacement for C `nvim_get_valid_prevwin`.
+///
+/// Returns prevwin if it is valid (rs_win_valid), not hidden, and focusable;
+/// otherwise returns a null handle.
+#[inline]
+unsafe fn get_valid_prevwin() -> WinHandle {
+    let prevwin = nvim_get_prevwin();
+    if prevwin.is_null()
+        || nvim_win_valid(prevwin) == 0
+        || nvim_win_get_config_hide(prevwin) != 0
+        || nvim_win_get_config_focusable(prevwin) == 0
+    {
+        WinHandle::null()
+    } else {
+        prevwin
+    }
+}
+
+/// Inline replacement for C `nvim_do_window_equalize`.
+///
+/// Reads `cmdmod.cmod_split` to determine equalize direction and calls
+/// `rs_win_equal(NULL, 0, dir)`.
+#[inline]
+unsafe fn do_window_equalize() {
+    let mod_ = nvim_get_cmdmod_split() & (WSP_VERT | WSP_HOR);
+    let dir: c_int = if mod_ == WSP_VERT {
+        c_int::from(b'v')
+    } else if mod_ == WSP_HOR {
+        c_int::from(b'h')
+    } else {
+        c_int::from(b'b')
+    };
+    nvim_win_equal(WinHandle::null(), 0, dir);
+}
+
+/// Inline replacement for C `nvim_do_window_tag`.
+///
+/// Handles ']', '}', and Ctrl-] tag/preview window commands.
+#[inline]
+unsafe fn do_window_tag(nchar: c_int, prenum: c_int) {
+    if nchar == CH_RBRACE {
+        if prenum != 0 {
+            nvim_set_g_do_tagpreview(prenum);
+        } else {
+            nvim_set_g_do_tagpreview(nvim_get_p_pvh());
+        }
+    }
+
+    if prenum != 0 {
+        nvim_set_postponed_split(prenum);
+    } else {
+        nvim_set_postponed_split(-1);
+    }
+
+    if nchar != CH_RBRACE {
+        nvim_set_g_do_tagpreview(0);
+    }
+
+    nvim_do_nv_ident(CTRL_RSB, NUL);
+    nvim_set_postponed_split(0);
 }
 
 // =============================================================================
@@ -426,7 +495,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
             // Cursor to last accessed (previous) window: 'p', Ctrl-P
             // =================================================================
             CH_P | CTRL_P => {
-                let pw = nvim_get_valid_prevwin();
+                let pw = get_valid_prevwin();
                 if pw.is_null() {
                     nvim_beep_flush_wrapper();
                 } else {
@@ -495,7 +564,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
             // Equalize: '='
             // =================================================================
             CH_EQ => {
-                nvim_do_window_equalize();
+                do_window_equalize();
             }
 
             // =================================================================
@@ -559,7 +628,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if check_cmdwin() {
                     return;
                 }
-                nvim_do_window_tag(nchar, prenum);
+                do_window_tag(nchar, prenum);
             }
 
             // =================================================================

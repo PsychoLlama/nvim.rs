@@ -2405,16 +2405,7 @@ void nvim_msg_clr_eos_force(void) { msg_clr_eos_force(); }
 int nvim_is_aucmd_win(win_T *wp) { return is_aucmd_win(wp) ? 1 : 0; }
 int nvim_win_get_config_external_int(win_T *wp) { return wp ? (int)wp->w_config.external : 0; }
 
-/// Iterate over all tabpages, setting tp_curwin to tp_firstwin
-/// when tp != curtab && tp->tp_curwin == wp.
-void nvim_fixup_external_curwin(win_T *wp)
-{
-  FOR_ALL_TABS(tp) {
-    if (tp != curtab && tp->tp_curwin == wp) {
-      tp->tp_curwin = tp->tp_firstwin;
-    }
-  }
-}
+// nvim_fixup_external_curwin deleted: logic migrated to Rust win_close.rs (Phase 8)
 
 void nvim_set_msg_row_val(int val) { msg_row = val; }
 void nvim_set_msg_col_val(int val) { msg_col = val; }
@@ -2473,47 +2464,11 @@ win_T *nvim_win_split_ins_wrapper(int size, int flags, win_T *new_wp, int dir, f
 int nvim_win_get_floating_win(win_T *wp) { return (wp && wp->w_floating) ? 1 : 0; }
 win_T *nvim_win_get_prev_win(win_T *wp) { return wp ? wp->w_prev : NULL; }
 
-/// Wrapper: rs_win_valid(prevwin) check for 'p' command.
-/// Returns prevwin if valid and focusable, NULL otherwise.
-win_T *nvim_get_valid_prevwin(void)
-{
-  if (!rs_win_valid(prevwin) || prevwin->w_config.hide || !prevwin->w_config.focusable) {
-    return NULL;
-  }
-  return prevwin;
-}
+// nvim_get_valid_prevwin deleted: logic migrated to Rust dispatch.rs (Phase 8)
 
-/// Wrapper: The '=' equalize command.
-void nvim_do_window_equalize(void)
-{
-  int mod = cmdmod.cmod_split & (WSP_VERT | WSP_HOR);
-  rs_win_equal(NULL, 0, mod == WSP_VERT ? 'v' : mod == WSP_HOR ? 'h' : 'b');
-}
+// nvim_do_window_equalize deleted: logic migrated to Rust dispatch.rs (Phase 8)
 
-/// Wrapper: The tag/preview commands (']', '}', Ctrl-]).
-void nvim_do_window_tag(int nchar, int Prenum)
-{
-  if (nchar == '}') {
-    if (Prenum) {
-      g_do_tagpreview = Prenum;
-    } else {
-      g_do_tagpreview = (int)p_pvh;
-    }
-  }
-
-  if (Prenum) {
-    postponed_split = Prenum;
-  } else {
-    postponed_split = -1;
-  }
-
-  if (nchar != '}') {
-    g_do_tagpreview = 0;
-  }
-
-  do_nv_ident(Ctrl_RSB, NUL);
-  postponed_split = 0;
-}
+// nvim_do_window_tag deleted: logic migrated to Rust dispatch.rs (Phase 8)
 
 /// Wrapper: The 'f'/'F'/Ctrl-F file-goto command.
 void nvim_do_window_goto_file(int nchar, int Prenum1)

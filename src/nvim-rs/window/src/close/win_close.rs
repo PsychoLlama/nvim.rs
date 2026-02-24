@@ -235,7 +235,9 @@ pub extern "C" fn rs_win_close_structural(
 ///
 /// When closing an external floating window that is `tp_curwin` for some
 /// other tabpage, reset that tabpage's `tp_curwin` to its `tp_firstwin`.
-unsafe fn fixup_external_curwin(win: WinHandle) {
+///
+/// This replaces C `nvim_fixup_external_curwin` (Phase 8).
+pub(crate) unsafe fn fixup_external_curwin(win: WinHandle) {
     let curtab = nvim_get_curtab();
     let mut tp = nvim_get_first_tabpage();
     while !tp.is_null() {

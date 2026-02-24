@@ -116,7 +116,7 @@ extern "C" {
     #[link_name = "rs_one_window_in_tab"]
     fn nvim_one_window_firstwin(firstwin: WinHandle, tp: TabpageHandle) -> c_int;
     fn nvim_is_aucmd_win(wp: WinHandle) -> c_int;
-    fn nvim_fixup_external_curwin(wp: WinHandle);
+    // nvim_fixup_external_curwin removed: replaced by crate::close::win_close::fixup_external_curwin (Phase 8)
     fn nvim_set_msg_row_val(val: c_int);
     fn nvim_set_msg_col_val(val: c_int);
 
@@ -662,7 +662,8 @@ unsafe fn init_new_window(wp: WinHandle, new_wp: WinHandle, flags: c_int) {
         }
 
         if nvim_win_get_config_external_int(wp) != 0 {
-            nvim_fixup_external_curwin(wp);
+            // nvim_fixup_external_curwin migrated to Rust (Phase 8)
+            crate::close::win_close::fixup_external_curwin(wp);
         }
 
         nvim_win_set_floating(wp, 0);
