@@ -1495,16 +1495,10 @@ pub unsafe extern "C" fn rs_enter_tabpage(
 ///
 /// # Safety
 /// Calls C accessor functions.
-unsafe fn goto_tabpage_tp_impl(
-    tp: TabpageHandle,
-    trigger_enter: bool,
-    trigger_leave: bool,
-) {
-    if trigger_enter || trigger_leave {
-        if nvim_get_cmdwin_type() != 0 {
-            nvim_emsg_e_cmdwin();
-            return;
-        }
+unsafe fn goto_tabpage_tp_impl(tp: TabpageHandle, trigger_enter: bool, trigger_leave: bool) {
+    if (trigger_enter || trigger_leave) && nvim_get_cmdwin_type() != 0 {
+        nvim_emsg_e_cmdwin();
+        return;
     }
 
     nvim_set_keep_msg_null();
