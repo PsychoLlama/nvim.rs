@@ -145,6 +145,7 @@ extern "C" {
 ///
 /// Accesses global Neovim state through C accessor functions.
 /// Autocmd calls can invalidate windows; we re-check `rs_win_valid(wp)` after each.
+#[allow(clippy::too_many_lines)]
 fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
     // SAFETY: All calls go through C accessor functions.
     unsafe {
@@ -195,7 +196,7 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
         // Might need to scroll the old window before switching
         // ('splitkeep' == 'c' means cursor-based scrolling)
         let p_spk = nvim_win_get_p_spk_char();
-        if p_spk == b'c' as c_int && !curwin_invalid {
+        if p_spk == c_int::from(b'c') && !curwin_invalid {
             nvim_update_topline_curwin_enter();
         }
 
@@ -223,7 +224,7 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
         }
 
         let p_spk = nvim_win_get_p_spk_char();
-        if p_spk == b'c' as c_int {
+        if p_spk == c_int::from(b'c') {
             nvim_changed_line_abv_curs_wrap();
         } else {
             // Make sure the cursor position is valid, either by moving the cursor

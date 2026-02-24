@@ -38,7 +38,7 @@ extern "C" {
     fn nvim_get_command_frame_height() -> c_int;
 
     // rs_frame_minheight
-    fn rs_frame_minheight(frp: *mut Frame, next_curwin: WinHandle) -> c_int;
+    fn rs_frame_minheight(frp: *const Frame, next_curwin: WinHandle) -> c_int;
 
     // rs_frame_add_height
     fn rs_frame_add_height(frp: *mut Frame, n: c_int);
@@ -66,6 +66,9 @@ extern "C" {
 
     // set p_ch (only for restoring when no room)
     fn nvim_set_p_ch(val: i64);
+
+    // w_p_wfh: winfixheight option
+    fn nvim_win_get_wfh(wp: WinHandle) -> c_int;
 }
 
 // =============================================================================
@@ -118,9 +121,6 @@ fn command_height_impl() {
                 break;
             }
             // Check w_p_wfh via the already-available accessor
-            extern "C" {
-                fn nvim_win_get_wfh(wp: WinHandle) -> c_int;
-            }
             if nvim_win_get_wfh(fr_win) == 0 {
                 break;
             }

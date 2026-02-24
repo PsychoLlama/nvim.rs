@@ -65,10 +65,10 @@ fn win_fix_current_dir_impl() {
     unsafe {
         // New directory is either the local directory of the window, tab or NULL.
         let win_localdir = nvim_curwin_get_localdir();
-        let new_dir = if !win_localdir.is_null() {
-            win_localdir
-        } else {
+        let new_dir = if win_localdir.is_null() {
             nvim_curtab_get_localdir()
+        } else {
+            win_localdir
         };
 
         let mut cwd = [0u8; MAXPATHL];
@@ -77,32 +77,9 @@ fn win_fix_current_dir_impl() {
             cwd[0] = 0;
         }
 
-        if !new_dir.is_null() {
-            // Window/tab has a local directory: Save current directory as global
-            // (unless that was done already) and change to the local directory.
-            let globaldir = nvim_get_globaldir();
-            if globaldir.is_null() && cwd[0] != 0 {
-                nvim_set_globaldir_from_str(cwd_ptr);
-            }
+        let globaldir = nvim_get_globaldir();
 
-            let dir_differs = nvim_pathcmp_unlen(new_dir, cwd_ptr) != 0;
-            let p_acd = nvim_get_p_acd() != 0;
-
-            // localdir=1 means window scope, localdir=0 means tabpage scope.
-            let is_window_local = if win_localdir.is_null() { 0 } else { 1 };
-
-            if !p_acd && dir_differs {
-                nvim_do_autocmd_dirchanged_win(new_dir, is_window_local, 1);
-            }
-            if nvim_os_chdir(new_dir) == 0 {
-                if !p_acd && dir_differs {
-                    nvim_do_autocmd_dirchanged_win(new_dir, is_window_local, 0);
-                }
-            }
-            nvim_set_last_chdir_reason_null();
-            nvim_shorten_fnames_force();
-        } else {
-            let globaldir = nvim_get_globaldir();
+        if new_dir.is_null() {
             if !globaldir.is_null() {
                 // Window doesn't have a local directory and we are not in the global
                 // directory: Change to the global directory.
@@ -111,15 +88,34 @@ fn win_fix_current_dir_impl() {
                 if !p_acd && dir_differs {
                     nvim_do_autocmd_dirchanged_global(globaldir, 1);
                 }
-                if nvim_os_chdir(globaldir) == 0 {
-                    if !p_acd && dir_differs {
-                        nvim_do_autocmd_dirchanged_global(globaldir, 0);
-                    }
+                if nvim_os_chdir(globaldir) == 0 && !p_acd && dir_differs {
+                    nvim_do_autocmd_dirchanged_global(globaldir, 0);
                 }
                 nvim_clear_globaldir();
                 nvim_set_last_chdir_reason_null();
                 nvim_shorten_fnames_force();
             }
+        } else {
+            // Window/tab has a local directory: Save current directory as global
+            // (unless that was done already) and change to the local directory.
+            if globaldir.is_null() && cwd[0] != 0 {
+                nvim_set_globaldir_from_str(cwd_ptr);
+            }
+
+            let dir_differs = nvim_pathcmp_unlen(new_dir, cwd_ptr) != 0;
+            let p_acd = nvim_get_p_acd() != 0;
+
+            // localdir=1 means window scope, localdir=0 means tabpage scope.
+            let is_window_local = c_int::from(!win_localdir.is_null());
+
+            if !p_acd && dir_differs {
+                nvim_do_autocmd_dirchanged_win(new_dir, is_window_local, 1);
+            }
+            if nvim_os_chdir(new_dir) == 0 && !p_acd && dir_differs {
+                nvim_do_autocmd_dirchanged_win(new_dir, is_window_local, 0);
+            }
+            nvim_set_last_chdir_reason_null();
+            nvim_shorten_fnames_force();
         }
     }
 }

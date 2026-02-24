@@ -2991,146 +2991,6 @@ win_T *nvim_get_valid_prevwin(void)
   return prevwin;
 }
 
-/// Wrapper: The 'w'/'W' window navigation.
-/// nchar='w' goes forward, nchar='W' goes backward.
-/// Prenum selects a specific window number.
-void nvim_do_window_wW(int nchar, int Prenum)
-{
-  if (ONE_WINDOW && Prenum != 1) {
-    beep_flush();
-  } else {
-    win_T *wp;
-    if (Prenum) {
-      win_T *last_focusable = firstwin;
-      for (wp = firstwin; --Prenum > 0;) {
-        if (!wp->w_floating || (!wp->w_config.hide && wp->w_config.focusable)) {
-          last_focusable = wp;
-        }
-        if (wp->w_next == NULL) {
-          break;
-        }
-        wp = wp->w_next;
-      }
-      while (wp != NULL && wp->w_floating
-             && (wp->w_config.hide || !wp->w_config.focusable)) {
-        wp = wp->w_next;
-      }
-      if (wp == NULL) {
-        wp = last_focusable;
-      }
-    } else {
-      if (nchar == 'W') {
-        wp = curwin->w_prev;
-        if (wp == NULL) {
-          wp = lastwin;
-        }
-        while (wp != NULL && wp->w_floating
-               && (wp->w_config.hide || !wp->w_config.focusable)) {
-          wp = wp->w_prev;
-        }
-      } else {
-        wp = curwin->w_next;
-        while (wp != NULL && wp->w_floating
-               && (wp->w_config.hide || !wp->w_config.focusable)) {
-          wp = wp->w_next;
-        }
-        if (wp == NULL) {
-          wp = firstwin;
-        }
-      }
-    }
-    win_goto(wp);
-  }
-}
-
-/// Wrapper: cursor to preview window ('P' command).
-void nvim_do_window_P(void)
-{
-  win_T *wp = NULL;
-  FOR_ALL_WINDOWS_IN_TAB(wp2, curtab) {
-    if (wp2->w_p_pvw) {
-      wp = wp2;
-      break;
-    }
-  }
-  if (wp == NULL) {
-    emsg(_("E441: There is no preview window"));
-  } else {
-    win_goto(wp);
-  }
-}
-
-/// Wrapper: 'T' move-to-tab command.
-void nvim_do_window_T(int Prenum)
-{
-  if (rs_one_window_in_tab(curwin, NULL)) {
-    msg(_(m_onlyone), 0);
-  } else {
-    tabpage_T *oldtab = curtab;
-    win_T *wp = curwin;
-    if (win_new_tabpage(Prenum, NULL) == OK
-        && rs_valid_tabpage(oldtab)) {
-      tabpage_T *newtab = curtab;
-      goto_tabpage_tp(oldtab, true, true);
-      if (curwin == wp) {
-        win_close(curwin, false, false);
-      }
-      if (rs_valid_tabpage(newtab)) {
-        goto_tabpage_tp(newtab, true, true);
-        apply_autocmds(EVENT_TABNEWENTERED, NULL, NULL, false, curbuf);
-      }
-    }
-  }
-}
-
-/// Wrapper: '^' split-and-edit-alternate command.
-void nvim_do_window_hat(int Prenum)
-{
-  rs_reset_VIsual_and_resel();
-
-  if (buflist_findnr(Prenum == 0 ? curwin->w_alt_fnum : Prenum) == NULL) {
-    if (Prenum == 0) {
-      emsg(_(e_noalt));
-    } else {
-      semsg(_("E92: Buffer %" PRId64 " not found"), (int64_t)Prenum);
-    }
-    return;
-  }
-
-  if (!curbuf_locked() && win_split(0, 0) == OK) {
-    buflist_getfile(Prenum == 0 ? curwin->w_alt_fnum : Prenum,
-                    0, GETF_ALT, false);
-  }
-}
-
-/// Wrapper: 'n'/'N' new window, including the 'newwindow' goto label logic.
-/// nchar is the original command char (to detect 'v'/'V' for vertical).
-void nvim_do_window_new(int nchar, int Prenum)
-{
-  char cbuf[40];
-  if (Prenum) {
-    vim_snprintf(cbuf, sizeof(cbuf) - 5, "%" PRId64, (int64_t)Prenum);
-  } else {
-    cbuf[0] = NUL;
-  }
-  if (nchar == 'v' || nchar == Ctrl_V) {
-    xstrlcat(cbuf, "v", sizeof(cbuf));
-  }
-  xstrlcat(cbuf, "new", sizeof(cbuf));
-  do_cmdline_cmd(cbuf);
-}
-
-/// Wrapper: cmd_with_count + do_cmdline_cmd.
-void nvim_cmd_with_count_exec(const char *cmd, int64_t Prenum)
-{
-  char cbuf[40];
-  size_t len = xstrlcpy(cbuf, cmd, sizeof(cbuf));
-  if (Prenum > 0 && len < sizeof(cbuf)) {
-    vim_snprintf(cbuf + len, sizeof(cbuf) - len, "%" PRId64, Prenum);
-  }
-  do_cmdline_cmd(cbuf);
-}
-
 /// Wrapper: The '=' equalize command.
 void nvim_do_window_equalize(void)
 {
@@ -3633,3 +3493,54 @@ void nvim_grid_clear_cmd_area(void)
 /// command_height thin wrapper.
 extern void rs_command_height(void);
 void command_height(void) { rs_command_height(); }
+
+// =============================================================================
+// Phase 4: CTRL-W dispatch wrapper accessors
+// =============================================================================
+
+/// Return 1 if curbuf is locked (prevents split/new).
+int nvim_curbuf_locked(void) { return curbuf_locked() ? 1 : 0; }
+
+/// Error: E441 no preview window.
+void nvim_emsg_e441_no_preview(void) { emsg(_("E441: There is no preview window")); }
+
+/// Error: E23 no alternate file.
+void nvim_emsg_noalt(void) { emsg(_(e_noalt)); }
+
+/// Error: E92 buffer N not found.
+void nvim_semsg_e92_buf_not_found(int64_t nr) { semsg(_("E92: Buffer %" PRId64 " not found"), nr); }
+
+/// apply_autocmds for EVENT_TABNEWENTERED.
+void nvim_apply_autocmds_tabnewentered(void)
+{
+  apply_autocmds(EVENT_TABNEWENTERED, NULL, NULL, false, curbuf);
+}
+
+/// win_new_tabpage wrapper (returns OK/FAIL as int).
+int nvim_win_new_tabpage_wrapper(int after, const char *filename)
+{
+  return win_new_tabpage(after, (char *)filename);
+}
+
+/// get curwin->w_alt_fnum.
+int nvim_win_get_alt_fnum(win_T *wp) { return wp ? wp->w_alt_fnum : 0; }
+
+// Phase 4 Rust thin wrappers:
+
+extern void rs_do_window_wW(int nchar, int prenum);
+void nvim_do_window_wW(int nchar, int Prenum) { rs_do_window_wW(nchar, Prenum); }
+
+extern void rs_do_window_P(void);
+void nvim_do_window_P(void) { rs_do_window_P(); }
+
+extern void rs_do_window_T(int prenum);
+void nvim_do_window_T(int Prenum) { rs_do_window_T(Prenum); }
+
+extern void rs_do_window_hat(int prenum);
+void nvim_do_window_hat(int Prenum) { rs_do_window_hat(Prenum); }
+
+extern void rs_do_window_new(int nchar, int prenum);
+void nvim_do_window_new(int nchar, int Prenum) { rs_do_window_new(nchar, Prenum); }
+
+extern void rs_cmd_with_count_exec(const char *cmd, int64_t prenum);
+void nvim_cmd_with_count_exec(const char *cmd, int64_t Prenum) { rs_cmd_with_count_exec(cmd, Prenum); }

@@ -546,12 +546,12 @@ fn swbuf_goto_win_with_buf_impl(buf: BufHandle) -> WinHandle {
     }
 
     unsafe {
-        let mut wp = WinHandle::null();
-
         // If 'switchbuf' contains "useopen": jump to first window in current tab.
-        if nvim_swb_has_useopen() != 0 {
-            wp = buf_jump_open_win_impl(buf);
-        }
+        let mut wp = if nvim_swb_has_useopen() != 0 {
+            buf_jump_open_win_impl(buf)
+        } else {
+            WinHandle::null()
+        };
 
         // If 'switchbuf' contains "usetab": jump to first window in any tab.
         if wp.is_null() && nvim_swb_has_usetab() != 0 {

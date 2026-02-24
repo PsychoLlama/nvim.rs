@@ -11,7 +11,7 @@
 
 use std::ffi::c_int;
 
-use crate::{TabpageHandle, WinHandle};
+use crate::{BufHandle, TabpageHandle, WinHandle};
 
 // =============================================================================
 // Key code constants (verified by _Static_assert in window.c)
@@ -110,11 +110,11 @@ const WSP_BOT: c_int = 0x10;
 
 extern "C" {
     // --- Wrappers for complex cases (keep logic in C) ---
-    fn nvim_do_window_wW(nchar: c_int, prenum: c_int);
-    fn nvim_do_window_P();
-    fn nvim_do_window_T(prenum: c_int);
-    fn nvim_do_window_hat(prenum: c_int);
-    fn nvim_do_window_new(nchar: c_int, prenum: c_int);
+    // nvim_do_window_wW removed: replaced by rs_do_window_wW (Phase 4)
+    // nvim_do_window_P removed: replaced by rs_do_window_P (Phase 4)
+    // nvim_do_window_T removed: replaced by rs_do_window_T (Phase 4)
+    // nvim_do_window_hat removed: replaced by rs_do_window_hat (Phase 4)
+    // nvim_do_window_new removed: replaced by rs_do_window_new (Phase 4)
     fn nvim_do_window_equalize();
     fn nvim_do_window_tag(nchar: c_int, prenum: c_int);
     fn nvim_do_window_goto_file(nchar: c_int, prenum1: c_int);
@@ -148,7 +148,7 @@ extern "C" {
     fn nvim_reset_visual_wrapper();
     fn nvim_bt_quickfix_curbuf() -> c_int;
     fn nvim_win_split_wrapper(size: c_int, flags: c_int) -> c_int;
-    fn nvim_cmd_with_count_exec(cmd: *const u8, prenum: i64);
+    // nvim_cmd_with_count_exec removed: replaced by rs_cmd_with_count_exec (Phase 4)
     fn nvim_do_cmdline_cmd_wrapper(cmd: *const u8) -> c_int;
     fn nvim_beep_flush_wrapper();
     #[link_name = "rs_one_window_in_tab"]
@@ -176,10 +176,30 @@ extern "C" {
     // --- Accessors ---
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_get_firstwin() -> WinHandle;
+    fn nvim_get_lastwin() -> WinHandle;
     fn nvim_get_cmdwin_type() -> c_int;
     #[link_name = "rs_lastwin_nofloating"]
     fn nvim_lastwin_nofloating_wrapper() -> WinHandle;
     fn nvim_get_valid_prevwin() -> WinHandle;
+
+    // --- Phase 4: wW/P/T/hat/new/count accessors ---
+    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_hide(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_focusable(wp: WinHandle) -> c_int;
+    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
+    fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
+    fn nvim_win_get_pvw(wp: WinHandle) -> c_int;
+    fn nvim_emsg_e441_no_preview();
+    fn nvim_win_new_tabpage_wrapper(after: c_int, filename: *const u8) -> c_int;
+    fn nvim_al_goto_tabpage_tp(tp: TabpageHandle, trigger_enter: c_int, trigger_leave: c_int);
+    fn nvim_al_win_close(wp: WinHandle, free_buf: c_int, force: c_int);
+    fn nvim_apply_autocmds_tabnewentered();
+    fn nvim_win_get_alt_fnum(wp: WinHandle) -> c_int;
+    fn nvim_curbuf_locked() -> c_int;
+    fn nvim_emsg_noalt();
+    fn nvim_semsg_e92_buf_not_found(nr: i64);
+    fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
+    fn nvim_buflist_getfile(nr: c_int, lnum: c_int, flags: c_int, setpm: c_int);
 
     // --- Resize ---
     fn rs_win_setheight(height: c_int);
@@ -229,7 +249,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 nvim_reset_visual_wrapper();
                 // When splitting the quickfix window, open a new buffer.
                 if nvim_bt_quickfix_curbuf() != 0 {
-                    nvim_do_window_new(nchar, prenum);
+                    rs_do_window_new(nchar, prenum);
                     return;
                 }
                 nvim_win_split_wrapper(prenum, 0);
@@ -244,7 +264,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 }
                 nvim_reset_visual_wrapper();
                 if nvim_bt_quickfix_curbuf() != 0 {
-                    nvim_do_window_new(nchar, prenum);
+                    rs_do_window_new(nchar, prenum);
                     return;
                 }
                 nvim_win_split_wrapper(prenum, WSP_VERT);
@@ -257,7 +277,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if check_cmdwin() {
                     return;
                 }
-                nvim_do_window_hat(prenum);
+                rs_do_window_hat(prenum);
             }
 
             // =================================================================
@@ -268,7 +288,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                     return;
                 }
                 nvim_reset_visual_wrapper();
-                nvim_do_window_new(nchar, prenum);
+                rs_do_window_new(nchar, prenum);
             }
 
             // =================================================================
@@ -276,7 +296,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
             // =================================================================
             CTRL_Q | CH_Q => {
                 nvim_reset_visual_wrapper();
-                nvim_cmd_with_count_exec(c"quit".as_ptr().cast(), i64::from(prenum));
+                rs_cmd_with_count_exec(c"quit".as_ptr().cast(), i64::from(prenum));
             }
 
             // =================================================================
@@ -284,7 +304,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
             // =================================================================
             CTRL_C | CH_C => {
                 nvim_reset_visual_wrapper();
-                nvim_cmd_with_count_exec(c"close".as_ptr().cast(), i64::from(prenum));
+                rs_cmd_with_count_exec(c"close".as_ptr().cast(), i64::from(prenum));
             }
 
             // =================================================================
@@ -302,7 +322,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
             // Cursor to preview window: 'P'
             // =================================================================
             CH_P_UPPER => {
-                nvim_do_window_P();
+                rs_do_window_P();
             }
 
             // =================================================================
@@ -313,7 +333,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                     return;
                 }
                 nvim_reset_visual_wrapper();
-                nvim_cmd_with_count_exec(c"only".as_ptr().cast(), i64::from(prenum));
+                rs_cmd_with_count_exec(c"only".as_ptr().cast(), i64::from(prenum));
             }
 
             // =================================================================
@@ -323,7 +343,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if check_cmdwin() {
                     return;
                 }
-                nvim_do_window_wW(nchar, prenum);
+                rs_do_window_wW(nchar, prenum);
             }
 
             // =================================================================
@@ -385,7 +405,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if check_cmdwin() {
                     return;
                 }
-                nvim_do_window_T(prenum);
+                rs_do_window_T(prenum);
             }
 
             // =================================================================
@@ -698,4 +718,248 @@ pub extern "C" fn rs_do_window_g(prenum: c_int, mut xchar: c_int) {
             }
         }
     }
+}
+
+// =============================================================================
+// Phase 4: CTRL-W subcommand implementations (migrated from C)
+// =============================================================================
+
+/// C return value for OK.
+const OK: c_int = 1;
+
+/// GETF_ALT flag: jumping to alternate file.
+const GETF_ALT: c_int = 0x02;
+
+/// Check if a floating window is hidden or non-focusable (skip during navigation).
+#[inline]
+unsafe fn is_hidden_float(wp: WinHandle) -> bool {
+    nvim_win_get_floating(wp) != 0
+        && (nvim_win_get_config_hide(wp) != 0 || nvim_win_get_config_focusable(wp) == 0)
+}
+
+/// Rust implementation of `nvim_do_window_wW`.
+///
+/// 'w'/'W' and Ctrl-W navigation: move cursor to next/prev/Nth window,
+/// skipping hidden or non-focusable floating windows.
+///
+/// # Safety
+///
+/// Called from C via FFI. Accesses global state through C accessors.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_do_window_wW(nchar: c_int, prenum: c_int) {
+    // ONE_WINDOW = firstwin == lastwin. With Prenum==1 we still navigate.
+    let firstwin = nvim_get_firstwin();
+    let lastwin = nvim_get_lastwin();
+    if firstwin == lastwin && prenum != 1 {
+        nvim_beep_flush_wrapper();
+        return;
+    }
+
+    let curwin = nvim_get_curwin();
+    let wp;
+
+    if prenum != 0 {
+        // Jump to window number `prenum`, skipping hidden/non-focusable floats.
+        let mut last_focusable = firstwin;
+        let mut w = firstwin;
+        let mut remaining = prenum;
+        loop {
+            remaining -= 1;
+            if remaining <= 0 {
+                break;
+            }
+            if !is_hidden_float(w) {
+                last_focusable = w;
+            }
+            let next = nvim_win_get_next(w);
+            if next.is_null() {
+                break;
+            }
+            w = next;
+        }
+        // Skip past any trailing hidden/non-focusable floats.
+        while !w.is_null() && is_hidden_float(w) {
+            w = nvim_win_get_next(w);
+        }
+        wp = if w.is_null() { last_focusable } else { w };
+    } else if nchar == CH_W_UPPER {
+        // 'W': move backwards (wrapping at firstwin -> lastwin).
+        let mut w = nvim_win_get_prev(curwin);
+        if w.is_null() {
+            w = lastwin;
+        }
+        while !w.is_null() && is_hidden_float(w) {
+            w = nvim_win_get_prev(w);
+        }
+        wp = w;
+    } else {
+        // 'w' / Ctrl-W: move forwards (wrapping at lastwin -> firstwin).
+        let mut w = nvim_win_get_next(curwin);
+        while !w.is_null() && is_hidden_float(w) {
+            w = nvim_win_get_next(w);
+        }
+        wp = if w.is_null() { firstwin } else { w };
+    }
+
+    nvim_win_goto_wrapper(wp);
+}
+
+/// Rust implementation of `nvim_do_window_P`.
+///
+/// 'P': jump to the preview window.
+///
+/// # Safety
+///
+/// Called from C via FFI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_do_window_P() {
+    let mut found: WinHandle = WinHandle::null();
+
+    // Walk all windows in current tab via firstwin/w_next.
+    let mut wp = nvim_get_firstwin();
+    while !wp.is_null() {
+        if nvim_win_get_pvw(wp) != 0 {
+            found = wp;
+            break;
+        }
+        wp = nvim_win_get_next(wp);
+    }
+
+    if found.is_null() {
+        nvim_emsg_e441_no_preview();
+    } else {
+        nvim_win_goto_wrapper(found);
+    }
+}
+
+/// Rust implementation of `nvim_do_window_T`.
+///
+/// 'T': move current window to a new tab page.
+///
+/// # Safety
+///
+/// Called from C via FFI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_do_window_T(prenum: c_int) {
+    let curwin = nvim_get_curwin();
+    if nvim_one_window_curwin(curwin, TabpageHandle::null()) != 0 {
+        nvim_msg_onlyone();
+        return;
+    }
+
+    let oldtab = nvim_get_curtab();
+    let wp = curwin;
+
+    if nvim_win_new_tabpage_wrapper(prenum, std::ptr::null()) == OK
+        && crate::rs_valid_tabpage(oldtab) != 0
+    {
+        let newtab = nvim_get_curtab();
+        nvim_al_goto_tabpage_tp(oldtab, 1, 1);
+        if nvim_get_curwin() == wp {
+            nvim_al_win_close(nvim_get_curwin(), 0, 0);
+        }
+        if crate::rs_valid_tabpage(newtab) != 0 {
+            nvim_al_goto_tabpage_tp(newtab, 1, 1);
+            nvim_apply_autocmds_tabnewentered();
+        }
+    }
+}
+
+/// Rust implementation of `nvim_do_window_hat`.
+///
+/// '^': split window and edit alternate (or Nth) buffer.
+///
+/// # Safety
+///
+/// Called from C via FFI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_do_window_hat(prenum: c_int) {
+    nvim_reset_visual_wrapper();
+
+    let curwin = nvim_get_curwin();
+    let alt_fnum = if prenum == 0 {
+        nvim_win_get_alt_fnum(curwin)
+    } else {
+        prenum
+    };
+
+    // Check that buffer exists.
+    let buf: BufHandle = nvim_buflist_findnr(alt_fnum);
+    if buf.is_null() {
+        if prenum == 0 {
+            nvim_emsg_noalt();
+        } else {
+            nvim_semsg_e92_buf_not_found(i64::from(prenum));
+        }
+        return;
+    }
+
+    if nvim_curbuf_locked() == 0 && nvim_win_split_wrapper(0, 0) == OK {
+        nvim_buflist_getfile(alt_fnum, 0, GETF_ALT, 0);
+    }
+}
+
+/// Rust implementation of `nvim_do_window_new`.
+///
+/// 'n'/'N' or after quickfix: open a new window.
+/// nchar selects horizontal ('n') vs vertical ('v'/'V'/Ctrl-V) split.
+///
+/// # Safety
+///
+/// Called from C via FFI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_do_window_new(nchar: c_int, prenum: c_int) {
+    let mut buf = [0u8; 40];
+    let mut pos = 0usize;
+
+    // Write count prefix if non-zero.
+    if prenum != 0 {
+        let s = prenum.to_string();
+        let bytes = s.as_bytes();
+        let copy_len = bytes.len().min(buf.len() - 4); // reserve "vnew\0"
+        buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
+        pos += copy_len;
+    }
+
+    // Vertical flag.
+    if (nchar == CH_V || nchar == CTRL_V) && pos < buf.len() - 4 {
+        buf[pos] = b'v';
+        pos += 1;
+    }
+
+    // Append "new".
+    for &b in b"new" {
+        if pos < buf.len() - 1 {
+            buf[pos] = b;
+            pos += 1;
+        }
+    }
+    // NUL terminator already in place (array is zero-initialized).
+    nvim_do_cmdline_cmd_wrapper(buf.as_ptr());
+}
+
+/// Rust implementation of `nvim_cmd_with_count_exec`.
+///
+/// Build "cmd[count]" string and execute it.
+///
+/// # Safety
+///
+/// Called from C via FFI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmd_with_count_exec(cmd: *const u8, prenum: i64) {
+    let cmd_str = std::ffi::CStr::from_ptr(cmd.cast());
+    let cmd_bytes = cmd_str.to_bytes();
+
+    let mut buf = [0u8; 40];
+    let cmd_len = cmd_bytes.len().min(buf.len() - 1);
+    buf[..cmd_len].copy_from_slice(&cmd_bytes[..cmd_len]);
+
+    if prenum > 0 && cmd_len < buf.len() - 1 {
+        let suffix = prenum.to_string();
+        let suffix_bytes = suffix.as_bytes();
+        let copy_len = suffix_bytes.len().min(buf.len() - 1 - cmd_len);
+        buf[cmd_len..cmd_len + copy_len].copy_from_slice(&suffix_bytes[..copy_len]);
+    }
+
+    nvim_do_cmdline_cmd_wrapper(buf.as_ptr());
 }
