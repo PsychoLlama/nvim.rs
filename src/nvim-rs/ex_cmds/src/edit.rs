@@ -72,7 +72,6 @@ extern "C" {
     fn nvim_ecmd_curbuf_set_last_used();
     fn nvim_ecmd_curbuf_get_kmap_state() -> c_int;
     fn nvim_ecmd_curbuf_get_help() -> c_int;
-    fn nvim_ecmd_curbuf_has_memfile() -> c_int;
     fn nvim_ecmd_curbuf_get_line_count() -> c_int;
     fn nvim_ecmd_curbuf_clear_op_marks();
 
@@ -93,11 +92,9 @@ extern "C" {
     fn nvim_ecmd_curwin_get_p_spell() -> c_int;
     fn nvim_ecmd_curwin_spl_is_empty() -> c_int;
     fn nvim_ecmd_curwin_set_scbind_pos_from_topline();
-    fn nvim_ecmd_curwin_set_locked(val: c_int);
     fn nvim_ecmd_curwin_buf_is_null() -> c_int;
     fn nvim_ecmd_curwin_ws_is_own_buf() -> c_int;
     fn nvim_ecmd_curwin_set_ws_to_buf(buf: *mut BufHandle);
-    fn nvim_ecmd_curwin_set_buffer(buf: *mut BufHandle);
 
     // buf_T opaque handle accessors
     fn nvim_ecmd_buf_get_b_fnum(buf: *mut BufHandle) -> c_int;
@@ -108,7 +105,6 @@ extern "C" {
     fn nvim_ecmd_buf_inc_locked(buf: *mut BufHandle);
     fn nvim_ecmd_buf_dec_locked(buf: *mut BufHandle);
     fn nvim_ecmd_buf_is_curbuf(buf: *mut BufHandle) -> c_int;
-    fn nvim_ecmd_buf_has_terminal(buf: *mut BufHandle) -> c_int;
     fn nvim_ecmd_set_curbuf(buf: *mut BufHandle);
     fn nvim_ecmd_buf_is_alt(buf: *mut BufHandle) -> c_int;
 
@@ -123,7 +119,6 @@ extern "C" {
     fn nvim_ecmd_set_bufref_to_curbuf(r: *mut std::ffi::c_void);
     fn nvim_ecmd_set_bufref_to_buf(r: *mut std::ffi::c_void, buf: *mut BufHandle);
     fn nvim_ecmd_bufref_valid(r: *mut std::ffi::c_void) -> c_int;
-    fn nvim_ecmd_bufref_get_buf(r: *mut std::ffi::c_void) -> *mut BufHandle;
     fn nvim_ecmd_bufref_is_curbuf(r: *mut std::ffi::c_void) -> c_int;
 
     // au_new_curbuf global accessors
@@ -214,7 +209,6 @@ extern "C" {
         lnum: c_int,
         flags: c_int,
     ) -> *mut BufHandle;
-    fn nvim_ecmd_maybe_restore_oldwin_buffer(oldwin: *mut WinHandle, was_curbuf: *mut BufHandle);
     fn nvim_ecmd_set_file_options(eap: *mut ExArgHandle);
     fn nvim_ecmd_do_modelines();
     fn nvim_ecmd_keymap_init();
@@ -265,6 +259,8 @@ extern "C" {
 ///
 /// # Safety
 /// Called from C; all pointer parameters may be null except as noted.
+#[allow(clippy::never_loop)] // 'outer: loop used to simulate C's goto theend
+#[allow(unused_assignments)] // variables mirror C locals; some intermediate assignments are intentional
 #[no_mangle]
 pub unsafe extern "C" fn rs_do_ecmd(
     fnum: c_int,
@@ -330,9 +326,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             if nvim_ecmd_has_case_insensitive_filename() != 0 && !sfname.is_null() {
                 nvim_ecmd_path_fix_case(sfname);
             }
-            if (flags & (ECMD_ADDBUF | ECMD_ALTBUF)) != 0
-                && (ffname.is_null() || *ffname == 0)
-            {
+            if (flags & (ECMD_ADDBUF | ECMD_ALTBUF)) != 0 && (ffname.is_null() || *ffname == 0) {
                 break 'outer; // retval stays FAIL
             }
             if ffname.is_null() {
@@ -370,16 +364,20 @@ pub unsafe extern "C" fn rs_do_ecmd(
             || (nvim_ecmd_curbuf_get_nwindows() == 1
                 && (flags & (ECMD_HIDE | ECMD_ADDBUF | ECMD_ALTBUF)) == 0);
         if need_check {
-            let ccgd = if nvim_ecmd_get_p_awa() != 0 { CCGD_AW } else { 0 }
-                | if other_file { 0 } else { CCGD_MULTWIN }
-                | if (flags & ECMD_FORCEIT) != 0 { CCGD_FORCEIT } else { 0 }
+            let ccgd = if nvim_ecmd_get_p_awa() != 0 {
+                CCGD_AW
+            } else {
+                0
+            } | if other_file { 0 } else { CCGD_MULTWIN }
+                | if (flags & ECMD_FORCEIT) != 0 {
+                    CCGD_FORCEIT
+                } else {
+                    0
+                }
                 | if !eap.is_null() { CCGD_EXCMD } else { 0 };
             if nvim_ecmd_check_changed(ccgd) != 0 {
                 if fnum == 0 && other_file && !ffname.is_null() {
-                    nvim_ecmd_setaltfname(
-                        ffname, sfname,
-                        if newlnum < 0 { 0 } else { newlnum },
-                    );
+                    nvim_ecmd_setaltfname(ffname, sfname, if newlnum < 0 { 0 } else { newlnum });
                 }
                 break 'outer; // retval stays FAIL
             }
@@ -422,17 +420,23 @@ pub unsafe extern "C" fn rs_do_ecmd(
                         tlnum = 1;
                     }
                 }
-                let newbuf = nvim_ecmd_buflist_new(
-                    ffname, sfname, tlnum, BLN_LISTED | BLN_NOCURWIN,
-                );
+                let newbuf =
+                    nvim_ecmd_buflist_new(ffname, sfname, tlnum, BLN_LISTED | BLN_NOCURWIN);
                 if !newbuf.is_null() && (flags & ECMD_ALTBUF) != 0 {
                     nvim_ecmd_curwin_set_alt_fnum(nvim_ecmd_buf_get_b_fnum(newbuf));
                 }
                 break 'outer; // retval stays FAIL (goto theend)
             } else {
                 buf = nvim_ecmd_buflist_new(
-                    ffname, sfname, 0,
-                    BLN_CURBUF | if (flags & ECMD_SET_HELP) != 0 { 0 } else { BLN_LISTED },
+                    ffname,
+                    sfname,
+                    0,
+                    BLN_CURBUF
+                        | if (flags & ECMD_SET_HELP) != 0 {
+                            0
+                        } else {
+                            BLN_LISTED
+                        },
                 );
                 // Autocmds may change curwin and curbuf
                 if !oldwin.is_null() {
@@ -546,13 +550,12 @@ pub unsafe extern "C" fn rs_do_ecmd(
 
                     // Close the link to the current buffer
                     nvim_ecmd_u_sync();
-                    let close_flags = if (flags & ECMD_HIDE) != 0
-                        || nvim_ecmd_curbuf_get_terminal() != 0
-                    {
-                        0
-                    } else {
-                        DOBUF_UNLOAD
-                    };
+                    let close_flags =
+                        if (flags & ECMD_HIDE) != 0 || nvim_ecmd_curbuf_get_terminal() != 0 {
+                            0
+                        } else {
+                            DOBUF_UNLOAD
+                        };
                     let did_decrement = nvim_ecmd_close_buffer(oldwin, close_flags);
 
                     // Autocommands may have closed the window
@@ -621,9 +624,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             // ============================================================
             // !other_file: re-editing the same file
             // ============================================================
-            if (flags & (ECMD_ADDBUF | ECMD_ALTBUF)) != 0
-                || nvim_ecmd_check_fname() == 0
-            {
+            if (flags & (ECMD_ADDBUF | ECMD_ALTBUF)) != 0 || nvim_ecmd_check_fname() == 0 {
                 break 'outer; // retval stays FAIL
             }
             oldbuf = if (flags & ECMD_OLDBUF) != 0 { 1 } else { 0 };
@@ -808,10 +809,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 nvim_ecmd_check_cursor_lnum();
                 if solcol >= 0 && nvim_ecmd_get_p_sol() == 0 {
                     // 'sol' is off: use last known column
-                    nvim_ecmd_curwin_set_cursor(
-                        nvim_ecmd_curwin_get_cursor_lnum(),
-                        solcol,
-                    );
+                    nvim_ecmd_curwin_set_cursor(nvim_ecmd_curwin_get_cursor_lnum(), solcol);
                     nvim_ecmd_check_cursor_col();
                     nvim_ecmd_curwin_set_cursor_coladd(0);
                     nvim_ecmd_curwin_set_w_set_curswant(1);

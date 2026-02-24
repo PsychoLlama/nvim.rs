@@ -2816,9 +2816,6 @@ int nvim_ecmd_curbuf_get_kmap_state(void) { return curbuf->b_kmap_state; }
 /// Get curbuf->b_help
 int nvim_ecmd_curbuf_get_help(void) { return curbuf->b_help ? 1 : 0; }
 
-/// Get curbuf->b_ml.ml_mfp != NULL (1 = has memfile)
-int nvim_ecmd_curbuf_has_memfile(void) { return curbuf->b_ml.ml_mfp != NULL ? 1 : 0; }
-
 /// Get curbuf->b_locked_split
 int nvim_ecmd_curbuf_get_locked_split(void) { return curbuf->b_locked_split; }
 
@@ -2918,9 +2915,6 @@ void nvim_ecmd_curwin_set_scbind_pos_from_topline(void)
 /// Get curwin->w_locked
 int nvim_ecmd_curwin_get_locked(void) { return curwin->w_locked; }
 
-/// Set curwin->w_locked
-void nvim_ecmd_curwin_set_locked(int val) { curwin->w_locked = (bool)val; }
-
 /// Get curwin->w_buffer == NULL
 int nvim_ecmd_curwin_buf_is_null(void) { return curwin->w_buffer == NULL ? 1 : 0; }
 
@@ -2965,9 +2959,6 @@ void nvim_ecmd_buf_dec_locked(buf_T *buf) { buf->b_locked--; }
 /// Returns 1 if buf == curbuf
 int nvim_ecmd_buf_is_curbuf(buf_T *buf) { return buf == curbuf ? 1 : 0; }
 
-/// Returns 1 if buf->terminal != NULL
-int nvim_ecmd_buf_has_terminal(buf_T *buf) { return buf->terminal != NULL ? 1 : 0; }
-
 /// Set curbuf = buf and buf->b_nwindows++ and curwin->w_buffer = buf
 void nvim_ecmd_set_curbuf(buf_T *buf)
 {
@@ -3007,9 +2998,6 @@ void nvim_ecmd_set_bufref_to_buf(void *ref, buf_T *buf) { set_bufref((bufref_T *
 
 /// Returns 1 if bufref_valid(ref)
 int nvim_ecmd_bufref_valid(void *ref) { return bufref_valid((bufref_T *)ref) ? 1 : 0; }
-
-/// Get ref->br_buf
-buf_T *nvim_ecmd_bufref_get_buf(void *ref) { return ((bufref_T *)ref)->br_buf; }
 
 /// Returns 1 if ref->br_buf == curbuf
 int nvim_ecmd_bufref_is_curbuf(void *ref) { return ((bufref_T *)ref)->br_buf == curbuf ? 1 : 0; }
@@ -3348,14 +3336,6 @@ buf_T *nvim_ecmd_buflist_new(char *ffname, char *sfname, int lnum, int flags)
   return buflist_new(ffname, sfname, (linenr_T)lnum, flags);
 }
 
-/// Set curwin->w_buffer to was_curbuf if oldwin == curwin and oldwin is valid in any tab.
-void nvim_ecmd_maybe_restore_oldwin_buffer(win_T *oldwin, buf_T *was_curbuf)
-{
-  if (rs_win_valid_any_tab(oldwin) && oldwin->w_buffer == NULL) {
-    oldwin->w_buffer = was_curbuf;
-  }
-}
-
 /// Call set_file_options(true, eap) and set_forced_fenc(eap)
 void nvim_ecmd_set_file_options(exarg_T *eap)
 {
@@ -3438,6 +3418,8 @@ _Static_assert(DOBUF_UNLOAD == 2, "DOBUF_UNLOAD mismatch");
 _Static_assert(READ_KEEP_UNDO == 0x20, "READ_KEEP_UNDO mismatch");
 _Static_assert(READ_NOWINENTER == 0x80, "READ_NOWINENTER mismatch");
 _Static_assert(BFA_KEEP_UNDO == 4, "BFA_KEEP_UNDO mismatch");
+_Static_assert(ECMD_LASTL == 0, "ECMD_LASTL mismatch");
+_Static_assert(ECMD_LAST == -1, "ECMD_LAST mismatch");
 
 // Additional accessors for do_ecmd that weren't in the initial Phase 2 list
 
@@ -3507,9 +3489,6 @@ int nvim_ecmd_curwin_buf_is_curbuf(void) { return curwin->w_buffer == curbuf ? 1
 
 /// curwin->w_s = &buf->b_s (set synblock to buf)
 void nvim_ecmd_curwin_set_ws_to_buf(buf_T *buf) { curwin->w_s = &(buf->b_s); }
-
-/// curwin->w_buffer = buf (without incrementing b_nwindows)
-void nvim_ecmd_curwin_set_buffer(buf_T *buf) { curwin->w_buffer = buf; curbuf = buf; }
 
 /// Shortmess flag 'O' check for SHM_OVERALL
 int nvim_ecmd_shortmess_overall(void) { return shortmess(SHM_OVERALL) ? 1 : 0; }
