@@ -25,7 +25,8 @@ use std::ffi::{c_char, c_int, c_uint, c_void};
 use crate::types::{
     BufHandle, ColNr, DataBlockHeader, LineNr, PointerBlockHeader, DATA_BLOCK_HEADER_SIZE,
     DB_INDEX_MASK, DB_MARKED, INDEX_SIZE, ML_ALLOCATED, ML_APPEND_MARK, ML_APPEND_NEW,
-    ML_DEL_MESSAGE, ML_EMPTY, ML_LINE_DIRTY, ML_LOCKED_DIRTY, ML_LOCKED_POS, STACK_INCR,
+    ML_CHNK_UPDLINE, ML_DEL_MESSAGE, ML_EMPTY, ML_FIND, ML_LINE_DIRTY, ML_LOCKED_DIRTY,
+    ML_LOCKED_POS, STACK_INCR,
 };
 
 // =============================================================================
@@ -112,9 +113,6 @@ extern "C" {
 
     /// Delete a line from a specific buffer (C implementation)
     fn ml_delete_buf(buf: *mut BufHandle, lnum: LineNr, message: c_int) -> c_int;
-
-    /// Flush cached line to data block (C implementation)
-    fn ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
 
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
@@ -306,6 +304,25 @@ extern "C" {
         len: ColNr,
         flags: c_int,
     ) -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Pass 5 Phase 2: rs_ml_flush_line accessors
+    // -------------------------------------------------------------------------
+
+    /// Get ml_line_len (cached line length including NUL)
+    fn nvim_buf_get_ml_line_len(buf: *mut BufHandle) -> ColNr;
+
+    /// Increment buf->flush_count
+    fn nvim_buf_inc_flush_count(buf: *mut BufHandle);
+
+    /// Update chunk tracking for a line modification
+    fn nvim_ml_updatechunk(buf: *mut BufHandle, line: LineNr, len: c_int, updtype: c_int);
+
+    /// Print "E320: Cannot find line N" error
+    fn nvim_siemsg_e320_cannot_find_line(lnum: i64);
+
+    /// Set buffer's ml_line_offset to 0
+    fn nvim_buf_set_ml_line_offset(buf: *mut BufHandle, offset: usize);
 }
 
 // =============================================================================
@@ -481,7 +498,7 @@ const FAIL: c_int = 0;
 /// * `line_arg` - New line text
 /// * `len_arg` - Length of `line_arg`, excluding NUL
 /// * `copy` - If true, make a copy of `line_arg` via `xmemdupz`
-/// * `noalloc` - If true, flush the line immediately via `ml_flush_line(buf, true)`
+/// * `noalloc` - If true, flush the line immediately via `rs_ml_flush_line(buf, true)`
 ///
 /// # Returns
 /// OK (1) on success, FAIL (0) on failure
@@ -523,7 +540,7 @@ pub unsafe extern "C" fn rs_ml_replace_buf_len(
 
     if nvim_buf_get_ml_line_lnum(buf) != lnum {
         // Another line is buffered - flush it
-        ml_flush_line(buf, 0);
+        rs_ml_flush_line(buf, 0);
     }
 
     if nvim_buf_get_update_callbacks_size(buf) > 0 {
@@ -545,7 +562,7 @@ pub unsafe extern "C" fn rs_ml_replace_buf_len(
     nvim_buf_set_ml_flags(buf, new_flags);
 
     if noalloc != 0 {
-        ml_flush_line(buf, 1);
+        rs_ml_flush_line(buf, 1);
     }
 
     OK
@@ -673,7 +690,7 @@ pub unsafe extern "C" fn rs_ml_append_buf_impl(
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_delete_flags_impl(lnum: LineNr, flags: c_int) -> c_int {
     let buf = nvim_get_curbuf();
-    ml_flush_line(buf, 0);
+    rs_ml_flush_line(buf, 0);
     let line_count = nvim_buf_get_ml_line_count(buf);
     if lnum < 1 || lnum > line_count {
         return FAIL;
@@ -696,7 +713,7 @@ pub unsafe extern "C" fn rs_ml_delete_buf_impl(
     if buf.is_null() {
         return FAIL;
     }
-    ml_flush_line(buf, 0);
+    rs_ml_flush_line(buf, 0);
     let flags = if message != 0 { ML_DEL_MESSAGE } else { 0 };
     nvim_ml_delete_int(buf, lnum, flags)
 }
@@ -749,7 +766,7 @@ pub unsafe extern "C" fn rs_ml_append_flush(
     }
     if nvim_buf_get_ml_line_lnum(buf) != 0 {
         // This may also invoke ml_append_int().
-        ml_flush_line(buf, 0);
+        rs_ml_flush_line(buf, 0);
     }
     nvim_ml_append_int(buf, lnum, line, len, flags)
 }
@@ -760,19 +777,157 @@ pub unsafe extern "C" fn rs_ml_append_flush(
 
 /// Flush the cached line to the data block.
 ///
-/// This writes any pending changes to the line cache back to the B-tree.
+/// If the line has been changed (`ML_LINE_DIRTY`), finds the data block,
+/// and either updates in-place (if the new line fits) or does a
+/// delete-and-append cycle.
+///
+/// Uses a static reentrancy guard: if called recursively, does nothing.
 ///
 /// # Arguments
 /// * `buf` - Buffer to flush
-/// * `noalloc` - If true, don't allocate, write directly
+/// * `noalloc` - If non-zero, the caller manages line memory (don't xfree)
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
+/// - Only call from the main Neovim thread (static ENTERED guard is not thread-safe)
 #[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines
+)]
 pub unsafe extern "C" fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int) {
-    if !buf.is_null() {
-        ml_flush_line(buf, noalloc);
+    // Reentrancy guard: rs_ml_flush_line must not be called recursively.
+    // Neovim is single-threaded so this static is safe.
+    static mut ENTERED: bool = false;
+
+    if buf.is_null() {
+        return;
     }
+
+    if nvim_buf_get_ml_line_lnum(buf) == 0 || nvim_buf_has_ml_mfp(buf) == 0 {
+        return; // nothing to do
+    }
+
+    let flags = nvim_buf_get_ml_flags(buf);
+
+    if (flags & ML_LINE_DIRTY) != 0 {
+        // This code doesn't work recursively.
+        if ENTERED {
+            return;
+        }
+        ENTERED = true;
+
+        nvim_buf_inc_flush_count(buf);
+
+        let lnum = nvim_buf_get_ml_line_lnum(buf);
+        let new_line: *mut c_char = nvim_buf_get_ml_line_ptr(buf);
+
+        let hp = rs_ml_find_line(buf, lnum, ML_FIND);
+        if hp.is_null() {
+            nvim_siemsg_e320_cannot_find_line(lnum);
+        } else {
+            let dp_raw = nvim_bhdr_get_bh_data(hp);
+            let dp = dp_raw.cast::<u8>();
+            let dp_header = dp_raw.cast::<DataBlockHeader>();
+
+            let idx = (lnum - nvim_buf_get_ml_locked_low(buf)) as usize;
+
+            // db_index array follows immediately after the DataBlockHeader
+            let db_index: *mut u32 = dp.add(DATA_BLOCK_HEADER_SIZE).cast();
+
+            let start = (*db_index.add(idx) & DB_INDEX_MASK) as usize;
+            let old_len: usize = if idx == 0 {
+                // line is last in block - text is at the end
+                (*dp_header).db_txt_end as usize - start
+            } else {
+                // text of previous (higher) line follows
+                (*db_index.add(idx - 1) & DB_INDEX_MASK) as usize - start
+            };
+
+            let new_len = nvim_buf_get_ml_line_len(buf) as usize;
+            // extra is positive if line grows, negative if it shrinks
+            let extra = new_len as i64 - old_len as i64;
+
+            // If new line fits in data block, replace directly
+            if i64::from((*dp_header).db_free) >= extra {
+                // If length changes and there are following lines, shift text
+                let count = (nvim_buf_get_ml_locked_high(buf) - nvim_buf_get_ml_locked_low(buf) + 1)
+                    as usize;
+
+                if extra != 0 && idx < count - 1 {
+                    // Move text of following lines to make room (or fill gap)
+                    let txt_start = (*dp_header).db_txt_start as usize;
+                    let src = dp.add(txt_start);
+                    let dst_offset = (txt_start as i64 - extra) as usize;
+                    let dst = dp.add(dst_offset);
+                    let copy_len = start - txt_start;
+                    std::ptr::copy(src, dst, copy_len);
+
+                    // Adjust db_index entries for lines above idx
+                    for i in (idx + 1)..count {
+                        let cur = *db_index.add(i) & DB_INDEX_MASK;
+                        let new_val = (i64::from(cur) - extra) as u32;
+                        *db_index.add(i) = new_val | (*db_index.add(i) & DB_MARKED);
+                    }
+                }
+
+                // Update this line's index entry (subtract extra to get new start)
+                let old_start_val = *db_index.add(idx);
+                let new_start = (start as i64 - extra) as u32;
+                *db_index.add(idx) = new_start | (old_start_val & DB_MARKED);
+
+                // Adjust free space and text start
+                let old_free = i64::from((*dp_header).db_free);
+                (*dp_header).db_free = (old_free - extra) as u32;
+                let old_txt_start = i64::from((*dp_header).db_txt_start);
+                (*dp_header).db_txt_start = (old_txt_start - extra) as u32;
+
+                // Copy new line into the data block (at the adjusted position)
+                let old_line_ptr = dp.add(start);
+                let dest = old_line_ptr.offset(-extra as isize);
+                std::ptr::copy_nonoverlapping(new_line.cast::<u8>(), dest, new_len);
+
+                // Mark the locked block dirty and needing a positive block number
+                let cur_flags = nvim_buf_get_ml_flags(buf);
+                nvim_buf_set_ml_flags(buf, cur_flags | ML_LOCKED_DIRTY | ML_LOCKED_POS);
+
+                // Update chunk tracking if size changed
+                if extra != 0 {
+                    nvim_ml_updatechunk(buf, lnum, extra as c_int, ML_CHNK_UPDLINE);
+                }
+            } else {
+                // Cannot fit in one data block: Delete and append.
+                // Append first, because ml_delete_int() cannot delete the
+                // last line in a buffer (would leave it empty).
+                // Preserve the mark flag when appending.
+                let marked_flag = if (*db_index.add(idx) & DB_MARKED) != 0 {
+                    ML_APPEND_MARK
+                } else {
+                    0
+                };
+                nvim_ml_append_int(buf, lnum, new_line, new_len as ColNr, marked_flag);
+                nvim_ml_delete_int(buf, lnum, 0);
+            }
+        }
+
+        if noalloc == 0 {
+            xfree(new_line.cast::<c_void>());
+        }
+
+        ENTERED = false;
+    } else if (flags & ML_ALLOCATED) != 0 {
+        // Line was allocated (e.g. for address sanitizer) but not dirtied.
+        // assert(!noalloc) -- caller must set ML_LINE_DIRTY with noalloc
+        xfree(nvim_buf_get_ml_line_ptr(buf).cast::<c_void>());
+    }
+
+    // Clear the dirty/allocated flags and invalidate the line cache
+    let cur_flags = nvim_buf_get_ml_flags(buf);
+    nvim_buf_set_ml_flags(buf, cur_flags & !(ML_LINE_DIRTY | ML_ALLOCATED));
+    nvim_buf_set_ml_line_lnum(buf, 0);
+    nvim_buf_set_ml_line_offset(buf, 0);
 }
 
 /// Check if the buffer has a dirty cached line.

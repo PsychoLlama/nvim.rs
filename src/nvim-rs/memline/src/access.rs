@@ -114,8 +114,8 @@ extern "C" {
     /// Find data block containing a line (Rust implementation)
     fn rs_ml_find_line(buf: *mut BufHandle, lnum: LineNr, action: c_int) -> *mut c_void;
 
-    /// Flush the cached line to the data block
-    fn ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
+    /// Flush the cached line to the data block (Rust implementation)
+    fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
 
     /// Track a deleted line's length for undo purposes (Rust implementation)
     fn rs_ml_add_deleted_len_buf(buf: *mut BufHandle, ptr: *mut c_char, len: isize);
@@ -462,7 +462,7 @@ pub unsafe extern "C" fn rs_ml_get_buf_impl(
             nvim_siemsg_ml_get_invalid_lnum(lnum);
             RECURSIVE -= 1;
         }
-        ml_flush_line(buf, 0);
+        rs_ml_flush_line(buf, 0);
         // errorret:
         let qp = ptr::addr_of_mut!(QUESTIONS);
         (*qp).copy_from_slice(b"???\0");
@@ -478,7 +478,7 @@ pub unsafe extern "C" fn rs_ml_get_buf_impl(
 
     // See if it is the same line as last time.
     if nvim_buf_get_ml_line_lnum(buf) != lnum {
-        ml_flush_line(buf, 0);
+        rs_ml_flush_line(buf, 0);
 
         // Find the data block containing the line.
         let hp = rs_ml_find_line(buf, lnum, crate::types::ML_FIND);

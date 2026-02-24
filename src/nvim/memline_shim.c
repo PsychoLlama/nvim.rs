@@ -298,6 +298,8 @@ extern int rs_ml_replace_buf_impl(buf_T *buf, linenr_T lnum, char *line, bool co
 extern int rs_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags);
 // Pass 5 Phase 1: ml_find_line Rust function declaration
 extern void *rs_ml_find_line(buf_T *buf, linenr_T lnum, int action);
+// Pass 5 Phase 2: ml_flush_line Rust function declaration
+extern void rs_ml_flush_line(buf_T *buf, int noalloc);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1639,6 +1641,23 @@ void nvim_siemsg_line_count_wrong_in_block(int64_t bnum)
   siemsg(_(e_line_count_wrong_in_block_nr), bnum);
 }
 
+// Pass 5 Phase 2: ml_flush_line accessors for Rust FFI
+
+/// Increment buf->flush_count
+void nvim_buf_inc_flush_count(buf_T *buf) { buf->flush_count++; }
+
+/// Public wrapper around static ml_updatechunk, for Rust FFI.
+void nvim_ml_updatechunk(buf_T *buf, linenr_T line, int len, int updtype)
+{
+  ml_updatechunk(buf, line, len, updtype);
+}
+
+/// Print "E320: Cannot find line N" error for ml_flush_line.
+void nvim_siemsg_e320_cannot_find_line(int64_t lnum)
+{
+  siemsg(_("E320: Cannot find line %" PRId64), lnum);
+}
+
 // buf->b_ffname accessor (use existing buffer.c version)
 // buf->b_mtime accessors
 int64_t nvim_buf_get_b_mtime(const buf_T *buf) { return buf->b_mtime; }
@@ -2521,96 +2540,10 @@ size_t ml_flush_deleted_bytes(buf_T *buf, size_t *codepoints, size_t *codeunits)
   return rs_ml_flush_deleted_bytes(buf, codepoints, codeunits);
 }
 
-/// flush ml_line if necessary
+/// flush ml_line if necessary (thin wrapper calling Rust)
 void ml_flush_line(buf_T *buf, bool noalloc)
 {
-  static bool entered = false;
-
-  if (buf->b_ml.ml_line_lnum == 0 || buf->b_ml.ml_mfp == NULL) {
-    return;             // nothing to do
-  }
-  if (buf->b_ml.ml_flags & ML_LINE_DIRTY) {
-    // This code doesn't work recursively.
-    if (entered) {
-      return;
-    }
-    entered = true;
-
-    buf->flush_count++;
-
-    linenr_T lnum = buf->b_ml.ml_line_lnum;
-    char *new_line = buf->b_ml.ml_line_ptr;
-
-    bhdr_T *hp = ml_find_line(buf, lnum, ML_FIND);
-    if (hp == NULL) {
-      siemsg(_("E320: Cannot find line %" PRId64), (int64_t)lnum);
-    } else {
-      DataBlock *dp = hp->bh_data;
-      int idx = lnum - buf->b_ml.ml_locked_low;
-      int start = ((dp->db_index[idx]) & DB_INDEX_MASK);
-      char *old_line = (char *)dp + start;
-      int old_len;
-      if (idx == 0) {           // line is last in block
-        old_len = (int)dp->db_txt_end - start;
-      } else {  // text of previous line follows
-        old_len = (int)(dp->db_index[idx - 1] & DB_INDEX_MASK) - start;
-      }
-      colnr_T new_len = buf->b_ml.ml_line_len;
-      int extra = new_len - old_len;            // negative if lines gets smaller
-
-      // if new line fits in data block, replace directly
-      if ((int)dp->db_free >= extra) {
-        // if the length changes and there are following lines
-        int count = buf->b_ml.ml_locked_high - buf->b_ml.ml_locked_low + 1;
-        if (extra != 0 && idx < count - 1) {
-          // move text of following lines
-          memmove((char *)dp + dp->db_txt_start - extra,
-                  (char *)dp + dp->db_txt_start,
-                  (size_t)(start - (int)dp->db_txt_start));
-
-          // adjust pointers of this and following lines
-          for (int i = idx + 1; i < count; i++) {
-            dp->db_index[i] -= (unsigned)extra;
-          }
-        }
-        dp->db_index[idx] -= (unsigned)extra;
-
-        // adjust free space
-        dp->db_free -= (unsigned)extra;
-        dp->db_txt_start -= (unsigned)extra;
-
-        // copy new line into the data block
-        memmove(old_line - extra, new_line, (size_t)new_len);
-        buf->b_ml.ml_flags |= (ML_LOCKED_DIRTY | ML_LOCKED_POS);
-        // The else case is already covered by the insert and delete
-        if (extra != 0) {
-          ml_updatechunk(buf, lnum, extra, ML_CHNK_UPDLINE);
-        }
-      } else {
-        // Cannot do it in one data block: Delete and append.
-        // Append first, because ml_delete_int() cannot delete the
-        // last line in a buffer, which causes trouble for a buffer
-        // that has only one line.
-        // Don't forget to copy the mark!
-        // How about handling errors???
-        (void)ml_append_int(buf, lnum, new_line, new_len,
-                            (dp->db_index[idx] & DB_MARKED) ? ML_APPEND_MARK : 0);
-        (void)ml_delete_int(buf, lnum, 0);
-      }
-    }
-    if (!noalloc) {
-      xfree(new_line);
-    }
-
-    entered = false;
-  } else if (buf->b_ml.ml_flags & ML_ALLOCATED) {
-    assert(!noalloc);  // caller must set ML_LINE_DIRTY with noalloc, handled above
-    xfree(buf->b_ml.ml_line_ptr);
-  }
-
-  buf->b_ml.ml_flags &= ~(ML_LINE_DIRTY | ML_ALLOCATED);
-  buf->b_ml.ml_line_lnum = 0;
-  buf->b_ml.ml_line_offset = 0;
+  rs_ml_flush_line(buf, noalloc);
 }
 
 /// create a new, empty, data block

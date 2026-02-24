@@ -128,8 +128,8 @@ extern "C" {
     // B-tree Traversal / Cache Management
     // -------------------------------------------------------------------------
 
-    /// Flush the current cached line to the data block (C implementation)
-    fn ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
+    /// Flush the current cached line to the data block (Rust implementation)
+    fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
 
     // -------------------------------------------------------------------------
     // File format
@@ -752,7 +752,7 @@ pub unsafe extern "C" fn rs_ml_find_line_or_offset(
 
     let curbuf = nvim_get_curbuf();
     if lnum == 0 || nvim_buf_get_ml_line_lnum(buf) < lnum || no_ff == 0 {
-        ml_flush_line(curbuf, 0);
+        rs_ml_flush_line(curbuf, 0);
     } else if can_cache && nvim_buf_get_ml_line_offset(buf) > 0 {
         return nvim_buf_get_ml_line_offset(buf) as c_int;
     }
@@ -1009,7 +1009,7 @@ pub unsafe extern "C" fn rs_goto_byte(cnt: c_int) {
     let mut boff = cnt;
 
     let curbuf = nvim_get_curbuf();
-    ml_flush_line(curbuf, 0); // cached line may be dirty
+    rs_ml_flush_line(curbuf, 0); // cached line may be dirty
     nvim_mark_setpcmark();
     if boff != 0 {
         boff -= 1;
