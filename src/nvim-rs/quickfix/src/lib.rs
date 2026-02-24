@@ -17,6 +17,7 @@ pub mod external;
 pub mod filter;
 pub mod helpgrep;
 pub mod init;
+pub mod lifecycle;
 pub mod list;
 pub mod listdo;
 pub mod loclist;

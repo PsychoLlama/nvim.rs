@@ -1024,6 +1024,76 @@ int nvim_qf_get_refcount(const void *qi_void) { return qi_void == NULL ? 0 : ((c
 void nvim_qf_incr_refcount(void *qi_void) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_refcount++; }
 void nvim_qf_set_refcount(void *qi_void, int v) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_refcount = v; }
 
+// ---- Phase 6 lifecycle accessors ----
+
+/// Free the qf_lists array inside a qf_info_T (does NOT free the struct itself).
+void nvim_qf_free_lists_array(void *qi_void)
+{
+  if (qi_void == NULL) { return; }
+  xfree(((qf_info_T *)qi_void)->qf_lists);
+  ((qf_info_T *)qi_void)->qf_lists = NULL;
+}
+
+/// Free the qf_info_T struct itself (only for heap-allocated stacks).
+void nvim_qf_free_info(void *qi_void) { xfree(qi_void); }
+
+// nvim_get_curbuf, nvim_get_curwin: already exist in window_shim.c
+// nvim_buflist_findnr: already exists in buffer.c
+// nvim_buf_get_nwindows: already exists in buffer.c
+
+/// Return curwin->w_buffer (may be NULL).
+void *nvim_curwin_get_buffer(void) { return (void *)curwin->w_buffer; }
+
+/// Set curwin->w_buffer (may be set to NULL).
+void nvim_curwin_set_buffer(void *buf) { curwin->w_buffer = (buf_T *)buf; }
+
+/// Wipe a buffer (calls close_buffer with DOBUF_WIPE).
+void nvim_close_buffer_wipe(void *buf_void)
+{
+  if (buf_void == NULL) { return; }
+  close_buffer(NULL, (buf_T *)buf_void, DOBUF_WIPE, false, false);
+}
+
+/// Set wp->w_llist = NULL.
+void nvim_win_set_llist_null(void *wp_void)
+{
+  if (wp_void != NULL) { ((win_T *)wp_void)->w_llist = NULL; }
+}
+
+/// Set wp->w_llist_ref = NULL.
+void nvim_win_set_llist_ref_null(void *wp_void)
+{
+  if (wp_void != NULL) { ((win_T *)wp_void)->w_llist_ref = NULL; }
+}
+
+/// Atomically exchange wp->w_llist: set to NULL and return old value.
+void *nvim_win_take_llist(void *wp_void)
+{
+  if (wp_void == NULL) { return NULL; }
+  win_T *wp = (win_T *)wp_void;
+  void *old = (void *)wp->w_llist;
+  wp->w_llist = NULL;
+  return old;
+}
+
+/// Atomically exchange wp->w_llist_ref: set to NULL and return old value.
+void *nvim_win_take_llist_ref(void *wp_void)
+{
+  if (wp_void == NULL) { return NULL; }
+  win_T *wp = (win_T *)wp_void;
+  void *old = (void *)wp->w_llist_ref;
+  wp->w_llist_ref = NULL;
+  return old;
+}
+
+// ---- Rust lifecycle forward declarations ----
+extern void rs_incr_quickfix_busy(void);
+extern void rs_decr_quickfix_busy(void);
+extern void rs_locstack_queue_delreq(void *qi);
+extern void rs_check_quickfix_busy(void);
+extern void rs_wipe_qf_buffer(void *qi);
+extern void rs_ll_free_all(void **pqi);
+extern void rs_qf_free_all(void *wp);
 
 void *nvim_qf_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
 bool nvim_qf_has_user_data(const void *qfl_void) { return qfl_void == NULL ? false : ((const qf_list_T *)qfl_void)->qf_has_user_data; }
@@ -1063,10 +1133,7 @@ static void qfga_clear(void)
   }
 }
 
-// Counter to prevent autocmds from freeing up location lists when they are
-// still being used.
-static int quickfix_busy = 0;
-static qf_delq_T *qf_delq_head = NULL;
+// quickfix_busy and qf_delq_head are now managed by Rust in lifecycle.rs.
 
 /// to the quickfix list 'qfl'.
 static int qf_init_process_nextline(qf_list_T *qfl, efm_T *fmt_first, qfstate_T *state,
@@ -1870,136 +1937,38 @@ void nvim_qf_emsg_missing_dir(void)
 // have been deleted. They are now implemented in Rust in src/nvim-rs/quickfix/src/parse.rs
 // as rs_qf_parse_match and helpers called from rs_qf_parse_line.
 
-/// Queue location list stack delete request.
-static void locstack_queue_delreq(qf_info_T *qi)
-{
-  qf_delq_T *q = xmalloc(sizeof(qf_delq_T));
-  q->qi = qi;
-  q->next = qf_delq_head;
-  qf_delq_head = q;
-}
+// locstack_queue_delreq deleted: migrated to Rust rs_locstack_queue_delreq in lifecycle.rs.
 
 int qf_stack_get_bufnr(void) { assert(ql_info != NULL); return ql_info->qf_bufnr; }
 
-/// quickfix/location list.
-static void wipe_qf_buffer(qf_info_T *qi)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (qi->qf_bufnr == INVALID_QFBUFNR) {
-    return;
-  }
+// wipe_qf_buffer, ll_free_all deleted: migrated to Rust in lifecycle.rs.
+// incr_quickfix_busy, decr_quickfix_busy, check_quickfix_busy deleted: migrated to Rust in lifecycle.rs.
 
-  buf_T *const qfbuf = buflist_findnr(qi->qf_bufnr);
-  if (qfbuf != NULL && qfbuf->b_nwindows == 0) {
-    bool buf_was_null = false;
-    // can happen when curwin is going to be closed e.g. curwin->w_buffer
-    // was already closed in win_close(), and we are now closing the
-    // window related location list buffer from win_free_mem()
-    // but close_buffer() calls CHECK_CURBUF() macro and requires
-    // curwin->w_buffer == curbuf
-    if (curwin->w_buffer == NULL) {
-      curwin->w_buffer = curbuf;
-      buf_was_null = true;
-    }
-
-    // If the quickfix buffer is not loaded in any window, then
-    // wipe the buffer.
-    close_buffer(NULL, qfbuf, DOBUF_WIPE, false, false);
-    qi->qf_bufnr = INVALID_QFBUFNR;
-    if (buf_was_null) {
-      curwin->w_buffer = NULL;
-    }
-  }
-}
-
-/// Free a qf_info_T struct completely
+/// Free all lists in a qf_info_T and the struct itself.
+/// (Was the static C qf_free_lists; now delegates to C accessor helpers that
+/// mirror what the Rust qf_free_lists_and_info function does.)
 static void qf_free_lists(qf_info_T *qi)
 {
   for (int i = 0; i < qi->qf_listcount; i++) {
     rs_qf_free_list(qf_get_list(qi, i));
   }
-
-  xfree(qi->qf_lists);
-  xfree(qi);
+  nvim_qf_free_lists_array((void *)qi);
+  nvim_qf_free_info((void *)qi);
 }
 
-/// Free a location list stack
-static void ll_free_all(qf_info_T **pqi)
-{
-  qf_info_T *qi = *pqi;
-  if (qi == NULL) {
-    return;
-  }
-  *pqi = NULL;          // Remove reference to this list
-
-  // If the location list is still in use, then queue the delete request
-  // to be processed later.
-  if (quickfix_busy > 0) {
-    locstack_queue_delreq(qi);
-    return;
-  }
-
-  qi->qf_refcount--;
-  if (qi->qf_refcount < 1) {
-    // No references to this location list.
-    // If the quickfix window buffer is loaded, then wipe it
-    wipe_qf_buffer(qi);
-
-    qf_free_lists(qi);
-  }
-}
+/// Thin C wrapper: forward to Rust rs_ll_free_all.
+/// Kept for callers inside this file that pass a qf_info_T** directly.
+static void ll_free_all(qf_info_T **pqi) { rs_ll_free_all((void **)pqi); }
 
 /// Free all the quickfix/location lists in the stack.
-void qf_free_all(win_T *wp)
-{
-  qf_info_T *qi = ql_info;
+/// Thin wrapper calling Rust rs_qf_free_all.
+void qf_free_all(win_T *wp) { rs_qf_free_all((void *)wp); }
 
-  if (wp != NULL) {
-    // location list
-    ll_free_all(&wp->w_llist);
-    ll_free_all(&wp->w_llist_ref);
-  } else if (qi != NULL) {
-    for (int i = 0; i < qi->qf_listcount; i++) {
-      rs_qf_free_list(qf_get_list(qi, i));
-    }
-  }
-}
-
-static void incr_quickfix_busy(void) { quickfix_busy++; }
-
-/// Safe to free location list stacks. Process any delayed delete requests.
-static void decr_quickfix_busy(void)
-{
-  quickfix_busy--;
-  if (quickfix_busy == 0) {
-    // No longer referencing the location lists. Process all the pending
-    // delete requests.
-    while (qf_delq_head != NULL) {
-      qf_delq_T *q = qf_delq_head;
-
-      qf_delq_head = q->next;
-      ll_free_all(&q->qi);
-      xfree(q);
-    }
-  }
-#ifdef ABORT_ON_INTERNAL_ERROR
-  if (quickfix_busy < 0) {
-    emsg("quickfix_busy has become negative");
-    abort();
-  }
-#endif
-}
+static void incr_quickfix_busy(void) { rs_incr_quickfix_busy(); }
+static void decr_quickfix_busy(void) { rs_decr_quickfix_busy(); }
 
 #if defined(EXITFREE)
-void check_quickfix_busy(void)
-{
-  if (quickfix_busy != 0) {
-    semsg("quickfix_busy not zero on exit: %" PRId64, (int64_t)quickfix_busy);
-# ifdef ABORT_ON_INTERNAL_ERROR
-    abort();
-# endif
-  }
-}
+void check_quickfix_busy(void) { rs_check_quickfix_busy(); }
 #endif
 
 void qf_resize_stack(int n) { assert(ql_info != NULL); qf_resize_stack_base(ql_info, n); }
