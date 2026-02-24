@@ -25,6 +25,18 @@ use crate::{OptFlags, OptInt, OptValType};
 // =============================================================================
 
 extern "C" {
+    // makeset - Phase 2
+    fn nvim_get_option_flags(opt_idx: c_int) -> u32;
+    fn nvim_option_is_global_only(opt_idx: c_int) -> c_int;
+    fn nvim_option_is_window_local(opt_idx: c_int) -> c_int;
+    fn nvim_call_put_line(fd: *mut libc::FILE, str_: *const c_char) -> c_int;
+    fn nvim_call_makeset_if_line(fd: *mut libc::FILE, optname: *const c_char, val: *const c_char) -> c_int;
+    fn nvim_get_varp_string_val(varp: *const std::ffi::c_void) -> *const c_char;
+    fn nvim_option_get_fullname(opt_idx: c_int) -> *const c_char;
+    fn nvim_get_kopt_count() -> c_int;
+}
+
+extern "C" {
     // optval helpers
     fn nvim_optval_from_varp(opt_idx: c_int, varp: *mut std::ffi::c_void)
         -> crate::storage::OptVal;
@@ -451,6 +463,140 @@ pub unsafe extern "C" fn rs_makefoldset(fd: *mut libc::FILE) -> c_int {
         ) == FAIL
     {
         return FAIL;
+    }
+    OK
+}
+
+// =============================================================================
+// makeset (Phase 5 of option_shim migration)
+// =============================================================================
+
+use crate::opt_index::{K_OPT_FILETYPE, K_OPT_PACKPATH, K_OPT_RUNTIMEPATH, K_OPT_SYNTAX};
+
+// Option flag constants (from OptFlags in lib.rs / option_defs.h)
+const K_OPT_FLAG_NO_MKRC: u32 = 1 << 4;
+const K_OPT_FLAG_PRI_MKRC: u32 = 1 << 19;
+const K_OPT_FLAG_NO_GLOB: u32 = 1 << 16;
+
+// OptionSetFlags constants (from lib.rs / option.h)
+const OPT_GLOBAL: c_int = 0x01;
+const OPT_LOCAL: c_int = 0x02;
+const OPT_SKIPRTP: c_int = 0x80;
+
+/// Write modified options as `:set` commands to a file.
+///
+/// Corresponds to `makeset()` in option_shim.c.
+#[no_mangle]
+pub unsafe extern "C" fn rs_makeset(
+    fd: *mut libc::FILE,
+    opt_flags: c_int,
+    local_only: c_int,
+) -> c_int {
+    // Get the var_ptr for runtimepath and packpath for skiprtp check.
+    let rtp_var_ptr = nvim_option_get_var_ptr(K_OPT_RUNTIMEPATH);
+    let pp_var_ptr = nvim_option_get_var_ptr(K_OPT_PACKPATH);
+
+    let kopt_count = nvim_get_kopt_count();
+
+    // Do the loop over options[] twice: once for kOptFlagPriMkrc, once without.
+    for pri in (0..=1i32).rev() {
+        for opt_idx in 0..kopt_count {
+            let flags = nvim_get_option_flags(opt_idx);
+
+            // Skip if kOptFlagNoMkrc is set
+            if (flags & K_OPT_FLAG_NO_MKRC) != 0 {
+                continue;
+            }
+            // Match priority: pri==1 means kOptFlagPriMkrc must be set
+            let has_pri = (flags & K_OPT_FLAG_PRI_MKRC) != 0;
+            if (pri == 1) != has_pri {
+                continue;
+            }
+
+            // Skip global-only option when only doing locals
+            if nvim_option_is_global_only(opt_idx) != 0 && (opt_flags & OPT_GLOBAL) == 0 {
+                continue;
+            }
+
+            // Do not store buffer-specific options in a vimrc
+            if (opt_flags & OPT_GLOBAL) != 0 && (flags & K_OPT_FLAG_NO_GLOB) != 0 {
+                continue;
+            }
+
+            // Get currently used value
+            let varp = nvim_get_varp_scope_by_idx(opt_idx, opt_flags);
+            // Hidden options (varp == NULL) are never written
+            if varp.is_null() {
+                continue;
+            }
+
+            // Global values only written when not at default
+            if (opt_flags & OPT_GLOBAL) != 0 && rs_optval_default(opt_idx, varp) != 0 {
+                continue;
+            }
+
+            // OPT_SKIPRTP: skip runtimepath and packpath
+            if (opt_flags & OPT_SKIPRTP) != 0 {
+                let opt_var = nvim_option_get_var_ptr(opt_idx);
+                if opt_var == rtp_var_ptr || opt_var == pp_var_ptr {
+                    continue;
+                }
+            }
+
+            let mut round = 2i32;
+            let mut varp_local: *mut std::ffi::c_void = std::ptr::null_mut();
+            let mut cur_varp = varp;
+
+            if nvim_option_is_window_local(opt_idx) != 0 {
+                // Skip window-local option when only doing globals
+                if (opt_flags & OPT_LOCAL) == 0 {
+                    continue;
+                }
+                // When fresh value is not at default, write it too
+                if (opt_flags & OPT_GLOBAL) == 0 && local_only == 0 {
+                    let varp_fresh = nvim_get_varp_scope_by_idx(opt_idx, OPT_GLOBAL);
+                    if rs_optval_default(opt_idx, varp_fresh) == 0 {
+                        round = 1;
+                        varp_local = cur_varp;
+                        cur_varp = varp_fresh;
+                    }
+                }
+            }
+
+            // Round 1: fresh value for window-local; Round 2: other values
+            while round <= 2 {
+                let cmd: *const c_char = if round == 1 || (opt_flags & OPT_GLOBAL) != 0 {
+                    c"set".as_ptr()
+                } else {
+                    c"setlocal".as_ptr()
+                };
+
+                let mut do_endif = false;
+                // syntax and filetype get an 'if' guard to avoid reloading
+                if opt_idx == K_OPT_SYNTAX || opt_idx == K_OPT_FILETYPE {
+                    let optname = nvim_option_get_fullname(opt_idx);
+                    let str_val = nvim_get_varp_string_val(cur_varp);
+                    if nvim_call_makeset_if_line(fd, optname, str_val) == FAIL {
+                        return FAIL;
+                    }
+                    do_endif = true;
+                }
+
+                if rs_put_set(fd, cmd, opt_idx, cur_varp) == FAIL {
+                    return FAIL;
+                }
+
+                if do_endif && nvim_call_put_line(fd, c"endif".as_ptr()) == FAIL {
+                    return FAIL;
+                }
+
+                round += 1;
+                // Swap to varp_local for round 2
+                if round == 2 {
+                    cur_varp = varp_local;
+                }
+            }
+        }
     }
     OK
 }

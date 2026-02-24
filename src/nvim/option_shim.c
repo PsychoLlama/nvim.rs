@@ -1382,6 +1382,24 @@ int nvim_option_was_set_idx(int opt_idx) { return option_was_set((OptIndex)opt_i
 int nvim_call_after_pathsep(const char *b, const char *p) { return after_pathsep(b, p); }
 // For rs_find_dup_item call in backupskip (flags accessor already exists)
 
+// Phase 2 makeset accessors
+int nvim_call_put_line(FILE *fd, const char *str) { return put_line(fd, str); }
+// Write "if &optname != 'val'\n" to fd; returns OK or FAIL (< 0 = FAIL like fprintf)
+int nvim_call_makeset_if_line(FILE *fd, const char *optname, const char *val)
+{
+  if (fprintf(fd, "if &%s != '%s'", optname, val) < 0) {
+    return FAIL;
+  }
+  return put_eol(fd) < 0 ? FAIL : OK;
+}
+// Dereference a void* as char** to get the string value (for string option varp)
+const char *nvim_get_varp_string_val(const void *varp) { return *(char *const *)varp; }
+// Get the option fullname for writing to session files
+const char *nvim_option_get_fullname(OptIndex opt_idx) { return options[opt_idx].fullname; }
+// Get the option count
+int nvim_get_kopt_count(void) { return (int)kOptCount; }
+// Get kOptSyntax and kOptFiletype indices (already exist as enum values in opt_index.rs)
+
 void set_init_tablocal(void)
 {
   // susy baka: cmdheight calls itself OPT_GLOBAL but is really tablocal!
@@ -3604,101 +3622,10 @@ static void showoneopt(vimoption_T *opt, int opt_flags)
 /// (fresh value = value used for a new buffer or window for a local option).
 ///
 /// Return FAIL on error, OK otherwise.
+extern int rs_makeset(FILE *fd, int opt_flags, int local_only);
 int makeset(FILE *fd, int opt_flags, int local_only)
 {
-  // Some options are never written:
-  // - Options that don't have a default (terminal name, columns, lines).
-  // - Terminal options.
-  // - Hidden options.
-  //
-  // Do the loop over "options[]" twice: once for options with the
-  // kOptFlagPriMkrc flag and once without.
-  for (int pri = 1; pri >= 0; pri--) {
-    vimoption_T *opt;
-    for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
-      opt = &options[opt_idx];
-
-      if (!(opt->flags & kOptFlagNoMkrc)
-          && ((pri == 1) == ((opt->flags & kOptFlagPriMkrc) != 0))) {
-        // skip global option when only doing locals
-        if (option_is_global_only(opt_idx) && !(opt_flags & OPT_GLOBAL)) {
-          continue;
-        }
-
-        // Do not store options like 'bufhidden' and 'syntax' in a vimrc
-        // file, they are always buffer-specific.
-        if ((opt_flags & OPT_GLOBAL) && (opt->flags & kOptFlagNoGlob)) {
-          continue;
-        }
-
-        void *varp = get_varp_scope(opt, opt_flags);  // currently used value
-        // Hidden options are never written.
-        if (!varp) {
-          continue;
-        }
-        // Global values are only written when not at the default value.
-        if ((opt_flags & OPT_GLOBAL) && optval_default(opt_idx, varp)) {
-          continue;
-        }
-
-        if ((opt_flags & OPT_SKIPRTP)
-            && (opt->var == &p_rtp || opt->var == &p_pp)) {
-          continue;
-        }
-
-        int round = 2;
-        void *varp_local = NULL;  // fresh value
-        if (option_is_window_local(opt_idx)) {
-          // skip window-local option when only doing globals
-          if (!(opt_flags & OPT_LOCAL)) {
-            continue;
-          }
-          // When fresh value of window-local option is not at the
-          // default, need to write it too.
-          if (!(opt_flags & OPT_GLOBAL) && !local_only) {
-            void *varp_fresh = get_varp_scope(opt, OPT_GLOBAL);  // local value
-            if (!optval_default(opt_idx, varp_fresh)) {
-              round = 1;
-              varp_local = varp;
-              varp = varp_fresh;
-            }
-          }
-        }
-
-        // Round 1: fresh value for window-local options.
-        // Round 2: other values
-        for (; round <= 2; varp = varp_local, round++) {
-          char *cmd;
-          if (round == 1 || (opt_flags & OPT_GLOBAL)) {
-            cmd = "set";
-          } else {
-            cmd = "setlocal";
-          }
-
-          bool do_endif = false;
-          // Don't set 'syntax' and 'filetype' again if the value is already right, avoids reloading
-          // the syntax file.
-          if (opt_idx == kOptSyntax || opt_idx == kOptFiletype) {
-            if (fprintf(fd, "if &%s != '%s'", opt->fullname,
-                        *(char **)(varp)) < 0
-                || put_eol(fd) < 0) {
-              return FAIL;
-            }
-            do_endif = true;
-          }
-          if (put_set(fd, cmd, opt_idx, varp) == FAIL) {
-            return FAIL;
-          }
-          if (do_endif) {
-            if (put_line(fd, "endif") == FAIL) {
-              return FAIL;
-            }
-          }
-        }
-      }
-    }
-  }
-  return OK;
+  return rs_makeset(fd, opt_flags, local_only);
 }
 
 /// Generate set commands for the local fold options only.  Used when
