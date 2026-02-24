@@ -30,16 +30,16 @@ pub unsafe extern "C" fn rs_ctx_restore(ctx: *mut Context, flags: c_int) -> bool
     ffi::nvim_ctx_set_shada_restore();
 
     if flags & KCTX_REGS != 0 {
-        ffi::nvim_shada_read_string(c.regs, SHADA_READ_FLAGS);
+        ffi::rs_shada_read_string(c.regs, SHADA_READ_FLAGS);
     }
     if flags & KCTX_JUMPS != 0 {
-        ffi::nvim_shada_read_string(c.jumps, SHADA_READ_FLAGS);
+        ffi::rs_shada_read_string(c.jumps, SHADA_READ_FLAGS);
     }
     if flags & KCTX_BUFS != 0 {
-        ffi::nvim_shada_read_string(c.bufs, SHADA_READ_FLAGS);
+        ffi::rs_shada_read_string(c.bufs, SHADA_READ_FLAGS);
     }
     if flags & KCTX_GVARS != 0 {
-        ffi::nvim_shada_read_string(c.gvars, SHADA_READ_FLAGS);
+        ffi::rs_shada_read_string(c.gvars, SHADA_READ_FLAGS);
     }
     if flags & KCTX_FUNCS != 0 {
         ffi::nvim_ctx_restore_funcs(ctx);

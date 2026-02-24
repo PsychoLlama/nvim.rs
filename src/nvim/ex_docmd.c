@@ -166,6 +166,7 @@ extern size_t rs_find_ident_under_cursor(char **text, int find_type);
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern int rs_shada_read_everything(const char *fname, bool forceit, bool missing_ok);
+extern int rs_shada_write_file(const char *file, bool nomerge);
 extern void rs_ex_copy(linenr_T line1, linenr_T line2, linenr_T dest);
 extern int rs_do_move(linenr_T line1, linenr_T line2, linenr_T dest);
 extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
@@ -6138,7 +6139,7 @@ static void ex_shada(exarg_T *eap)
   if (eap->cmdidx == CMD_rviminfo || eap->cmdidx == CMD_rshada) {
     rs_shada_read_everything(eap->arg, eap->forceit, false);
   } else {
-    shada_write_file(eap->arg, eap->forceit);
+    rs_shada_write_file(eap->arg, eap->forceit);
   }
   p_shada = save_shada;
 }

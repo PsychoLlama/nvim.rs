@@ -423,19 +423,6 @@ static const ShadaEntry sd_default_values[] = {
 #undef DEFAULT_POS
 #undef DEF_SDE
 
-/// Iterate over HMLList in forward direction
-///
-/// @param  hmll       Pointer to the list.
-/// @param  cur_entry  Name of the variable to iterate over.
-/// @param  code       Code to execute on each iteration.
-///
-/// @return `for` cycle header (use `HMLL_FORALL(hmll, cur_entry) {body}`).
-#define HMLL_FORALL(hmll, cur_entry, code) \
-  for (HMLListEntry *(cur_entry) = (hmll)->first; (cur_entry) != NULL; \
-       (cur_entry) = (cur_entry)->next) { \
-    code \
-  } \
-
 /// Wrapper for read that can be used when lseek cannot be used
 ///
 /// E.g. when trying to read from a pipe.
@@ -465,16 +452,6 @@ static ShaDaReadResult sd_reader_skip(FileDescriptor *const sd_reader, const siz
   }
   return kSDReadStatusSuccess;
 }
-
-/// Iterate over all history entries in history merger, in order
-///
-/// @param[in]   hms_p      Merger structure to iterate over.
-/// @param[out]  cur_entry  Name of the iterator variable.
-/// @param       code       Code to execute on each iteration.
-///
-/// @return for cycle header. Use `HMS_ITER(hms_p, cur_entry) {body}`.
-#define HMS_ITER(hms_p, cur_entry, code) \
-  HMLL_FORALL(&((hms_p)->hmll), cur_entry, code)
 
 /// Iterate over global variables
 ///
@@ -595,22 +572,6 @@ static ShaDaReadResult shada_check_status(uintmax_t initial_fpos, int status, si
 
 
 
-/// Write ShaDa file to a given location
-///
-/// @param[in]  fname    File to write to. If it is NULL or empty then default
-///                      location is used.
-/// @param[in]  nomerge  If true then old file is ignored.
-///
-/// @return OK if writing was successful, FAIL otherwise.
-int shada_write_file(const char *const file, bool nomerge)
-{
-  return rs_shada_write_file(file, nomerge);
-}
-
-static void shada_free_shada_entry(ShadaEntry *const entry)
-{
-  rs_shada_free_entry_contents((ShadaEntry *)entry);
-}
 
 #ifndef HAVE_BE64TOH
 // Use Rust implementation for byte order conversion
@@ -1172,27 +1133,11 @@ shada_read_next_item_end:
   return ret;
 shada_read_next_item_error:
   entry->type = (ShadaEntryType)type_u64;
-  shada_free_shada_entry(entry);
+  rs_shada_free_entry_contents(entry);
   entry->type = kSDItemMissing;
   xfree(error_alloc);
   kv_destroy(ad);
   goto shada_read_next_item_end;
-}
-
-/// Read ShaDa from String.
-///
-/// @param[in]  string   string to read from.
-/// @param[in]  flags  Flags, see ShaDaReadFileFlags enum.
-void nvim_shada_read_string(String string, const int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (string.size == 0) {
-    return;
-  }
-  FileDescriptor sd_reader;
-  file_open_buffer(&sd_reader, string.data, string.size);
-  rs_shada_read(&sd_reader, flags);
-  rs_close_file(&sd_reader);
 }
 
 // =============================================================================
@@ -1511,6 +1456,9 @@ void nvim_shada_free_variable(ShadaEntry *entry)
 
 /// Open a file for reading. Returns 0 on success, error code on failure.
 int nvim_shada_file_open(void *fd, const char *fname) { return file_open((FileDescriptor *)fd, fname, kFileReadOnly, 0); }
+
+/// Initialize a FileDescriptor to read from an in-memory buffer (no fd backing).
+void nvim_shada_file_open_buffer(void *fd, char *data, size_t len) { file_open_buffer((FileDescriptor *)fd, data, len); }
 
 /// Read shada data from an open file descriptor.
 /// Delegates to Rust rs_shada_read implementation.

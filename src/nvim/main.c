@@ -147,6 +147,7 @@ extern void rs_win_equal(win_T *next_curwin, int current, int dir);
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern int rs_shada_read_everything(const char *fname, bool forceit, bool missing_ok);
+extern int rs_shada_write_file(const char *file, bool nomerge);
 extern int rs_diffopt_horizontal(void);
 #define loop_get_events(l) rs_loop_get_events(l)
 
@@ -795,7 +796,7 @@ void getout(int exitval)
 #endif
       p_shada && *p_shada != NUL) {
     // Write out the registers, history, marks etc, to the ShaDa file
-    shada_write_file(NULL, false);
+    rs_shada_write_file(NULL, false);
   }
 
   if (v_dying <= 1) {

@@ -133,7 +133,10 @@ pub unsafe extern "C" fn rs_ex_syntime(eap: *mut c_void) {
 pub unsafe extern "C" fn rs_get_syntime_arg(_xp: *mut c_void, idx: c_int) -> *mut c_char {
     if idx >= 0 && (idx as usize) < SYNTIME_ARGS.len() {
         // Cast away const for C API compatibility (callers treat as const)
-        SYNTIME_ARGS[idx as usize].as_ptr().cast::<c_char>().cast_mut()
+        SYNTIME_ARGS[idx as usize]
+            .as_ptr()
+            .cast::<c_char>()
+            .cast_mut()
     } else {
         std::ptr::null_mut()
     }

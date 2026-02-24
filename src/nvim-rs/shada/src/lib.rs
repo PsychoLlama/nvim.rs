@@ -483,6 +483,7 @@ extern "C" {
 
     // Phase 5: File I/O accessors
     fn nvim_shada_file_open(fd: FileDescriptorHandle, fname: *const c_char) -> c_int;
+    fn nvim_shada_file_open_buffer(fd: FileDescriptorHandle, data: *mut c_char, len: usize);
     fn nvim_shada_read(fd: FileDescriptorHandle, flags: c_int);
     fn nvim_shada_os_strerror(err: c_int) -> *const c_char;
     fn nvim_shada_verbose_enter();
@@ -691,8 +692,10 @@ extern "C" {
     /// Get size of file_marks PMap in WMS.
     fn nvim_shada_wms_file_marks_size(wms: *const c_void) -> usize;
     /// Collect, sort, and return all FileMarks from WMS as array.
-    fn nvim_shada_wms_file_marks_get_sorted(wms: *const c_void, out_size: *mut usize)
-        -> *mut *mut c_void;
+    fn nvim_shada_wms_file_marks_get_sorted(
+        wms: *const c_void,
+        out_size: *mut usize,
+    ) -> *mut *mut c_void;
     /// Destroy file_marks PMap in WMS (frees keys and values).
     fn nvim_shada_wms_file_marks_destroy(wms: *mut c_void);
     /// Check if name is in dumped_variables set.
@@ -2985,7 +2988,7 @@ unsafe fn compare_with_entry(wms_entry: *mut ShadaEntry, entry: ShadaEntry) -> b
 /// # Safety
 ///
 /// All pointer arguments must be valid.
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cast_possible_wrap)]
 unsafe fn shada_read_when_writing(
     sd_reader: *mut c_void,
     srni_flags: u32,
@@ -2997,12 +3000,7 @@ unsafe fn shada_read_when_writing(
     let mut entry = ShadaEntry::default();
 
     loop {
-        let srni_ret = nvim_shada_read_next_item(
-            sd_reader,
-            &raw mut entry,
-            srni_flags,
-            max_kbyte,
-        );
+        let srni_ret = nvim_shada_read_next_item(sd_reader, &raw mut entry, srni_flags, max_kbyte);
         match srni_ret {
             r if r == SD_READ_STATUS_FINISHED => break,
             r if r == SD_READ_STATUS_SUCCESS => {}
@@ -3053,9 +3051,9 @@ unsafe fn shada_read_when_writing(
                 entry = ShadaEntry::default();
             }
             ShadaEntryType::HistoryEntry => {
-                let histtype = std::ptr::read(std::ptr::addr_of!(
-                    (*entry.data.history_item).histtype
-                )) as usize;
+                let histtype =
+                    std::ptr::read(std::ptr::addr_of!((*entry.data.history_item).histtype))
+                        as usize;
                 if histtype >= HIST_COUNT {
                     let pack_ret = rs_shada_pack_entry(packer, &raw const entry, 0);
                     rs_shada_free_entry_contents(&raw mut entry);
@@ -3079,16 +3077,12 @@ unsafe fn shada_read_when_writing(
                         ret = SD_WRITE_FAILED;
                     }
                 } else {
-                    compare_with_entry(
-                        &raw mut (*wms).registers[idx as usize],
-                        entry,
-                    );
+                    compare_with_entry(&raw mut (*wms).registers[idx as usize], entry);
                 }
                 entry = ShadaEntry::default();
             }
             ShadaEntryType::Variable => {
-                let var_name =
-                    std::ptr::read(std::ptr::addr_of!((*entry.data.global_var).name));
+                let var_name = std::ptr::read(std::ptr::addr_of!((*entry.data.global_var).name));
                 if !nvim_shada_wms_dumped_vars_has(wms.cast(), var_name) {
                     let pack_ret = rs_shada_pack_entry(packer, &raw const entry, 0);
                     if pack_ret == SD_WRITE_FAILED {
@@ -3103,9 +3097,8 @@ unsafe fn shada_read_when_writing(
                 #[allow(clippy::cast_possible_wrap)]
                 if (fm_name as u8).is_ascii_digit() {
                     // Numbered mark: sort by timestamp descending.
-                    // We use Option to track ownership of entry through the loop.
-                    let mut entry_opt = Some(entry);
-                    entry = ShadaEntry::default();
+                    // Use mem::take to move entry and reset it to Default in one step.
+                    let mut entry_opt = Some(std::mem::take(&mut entry));
                     let numbered_marks_size = EXTRA_MARKS;
                     let mut i = numbered_marks_size;
                     'num_mark_loop: while i > 0 {
@@ -3125,10 +3118,11 @@ unsafe fn shada_read_when_writing(
                             && wms_additional.is_null()
                             && e_ref.additional_data.is_null()
                         {
-                            let wms_fm = std::ptr::read(std::ptr::addr_of!((*wms_entry_ref).data.filemark));
+                            let wms_fm =
+                                std::ptr::read(std::ptr::addr_of!((*wms_entry_ref).data.filemark));
                             let entry_fm = std::ptr::read(std::ptr::addr_of!(e_ref.data.filemark));
-                            if rs_marks_equal((*wms_fm).mark, (*entry_fm).mark) != 0
-                                && libc::strcmp((*wms_fm).fname, (*entry_fm).fname) == 0
+                            if rs_marks_equal(wms_fm.mark, entry_fm.mark) != 0
+                                && libc::strcmp(wms_fm.fname, entry_fm.fname) == 0
                             {
                                 let mut discard = entry_opt.take().unwrap();
                                 rs_shada_free_entry_contents(&raw mut discard);
@@ -3211,10 +3205,8 @@ unsafe fn shada_read_when_writing(
                 nvim_shada_file_marks_update_ts(filemarks, entry.timestamp);
 
                 if entry.entry_type == ShadaEntryType::LocalMark {
-                    let fm_name = std::ptr::read(std::ptr::addr_of!(
-                        (*entry.data.filemark).name
-                    ));
-                    let idx = nvim_shada_mark_local_index(c_int::from(fm_name as u8));
+                    let mark_name = std::ptr::read(std::ptr::addr_of!((*entry.data.filemark).name));
+                    let idx = nvim_shada_mark_local_index(c_int::from(mark_name as u8));
                     if idx < 0 {
                         // Unknown local mark: append to additional marks.
                         nvim_shada_file_marks_push_additional(filemarks, &raw const entry);
@@ -3233,8 +3225,7 @@ unsafe fn shada_read_when_writing(
                                 let old_fname = std::ptr::read(std::ptr::addr_of!(
                                     (*(*wms_entry_ptr).data.filemark).fname
                                 ));
-                                if !out_key.is_null()
-                                    && old_fname == out_key as *mut c_char
+                                if !out_key.is_null() && std::ptr::eq(old_fname, out_key.cast_mut())
                                 {
                                     // The key pointer in the map was pointing to the old
                                     // fname; update key to the new entry's fname.
@@ -3259,7 +3250,7 @@ unsafe fn shada_read_when_writing(
                                     let cmp = nvim_shada_mark_get_cmp(
                                         buf,
                                         curwin,
-                                        c_int::from(fm_name as u8),
+                                        c_int::from(mark_name as u8),
                                         entry.timestamp,
                                     );
                                     if cmp != 0 {
@@ -3291,9 +3282,8 @@ unsafe fn shada_read_when_writing(
                             // Check for duplicates.
                             let jl_fm =
                                 std::ptr::read(std::ptr::addr_of!((*jl_entry_ptr).data.filemark));
-                            let entry_fm =
-                                std::ptr::read(std::ptr::addr_of!(entry.data.filemark));
-                            if rs_marks_equal((*jl_fm).mark, (*entry_fm).mark) != 0 {
+                            let entry_fm = std::ptr::read(std::ptr::addr_of!(entry.data.filemark));
+                            if rs_marks_equal(jl_fm.mark, entry_fm.mark) != 0 {
                                 i = -1;
                             }
                             break;
@@ -3312,19 +3302,16 @@ unsafe fn shada_read_when_writing(
                         changes_size as c_int,
                         i,
                     );
-                    if new_i != -1 {
+                    if new_i == -1 {
+                        rs_shada_free_entry_contents(&raw mut entry);
+                    } else {
                         let slot = nvim_shada_file_marks_get_change(filemarks, new_i);
                         if !slot.is_null() {
                             *slot = entry;
                         }
                         if changes_size < JUMPLISTSIZE {
-                            nvim_shada_file_marks_set_changes_size(
-                                filemarks,
-                                changes_size + 1,
-                            );
+                            nvim_shada_file_marks_set_changes_size(filemarks, changes_size + 1);
                         }
-                    } else {
-                        rs_shada_free_entry_contents(&raw mut entry);
                     }
                 }
                 entry = ShadaEntry::default();
@@ -3339,10 +3326,9 @@ unsafe fn shada_read_when_writing(
                         // Check for duplicates.
                         let jl_fm =
                             std::ptr::read(std::ptr::addr_of!((*jl_entry_ref).data.filemark));
-                        let entry_fm =
-                            std::ptr::read(std::ptr::addr_of!(entry.data.filemark));
-                        if rs_marks_equal((*jl_fm).mark, (*entry_fm).mark) != 0
-                            && libc::strcmp((*jl_fm).fname, (*entry_fm).fname) == 0
+                        let entry_fm = std::ptr::read(std::ptr::addr_of!(entry.data.filemark));
+                        if rs_marks_equal(jl_fm.mark, entry_fm.mark) != 0
+                            && libc::strcmp(jl_fm.fname, entry_fm.fname) == 0
                         {
                             i = -1;
                         }
@@ -3358,13 +3344,13 @@ unsafe fn shada_read_when_writing(
                     (*wms).jumps_size as c_int,
                     i,
                 );
-                if new_i != -1 {
+                if new_i == -1 {
+                    rs_shada_free_entry_contents(&raw mut entry);
+                } else {
                     (*wms).jumps[new_i as usize] = entry;
                     if (*wms).jumps_size < JUMPLISTSIZE {
                         (*wms).jumps_size += 1;
                     }
-                } else {
-                    rs_shada_free_entry_contents(&raw mut entry);
                 }
                 entry = ShadaEntry::default();
             }
@@ -3383,7 +3369,7 @@ unsafe fn shada_read_when_writing(
 /// `sd_writer` must be a valid `FileDescriptor *`.
 /// `sd_reader` must be a valid `FileDescriptor *` or null.
 #[no_mangle]
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut c_void) -> c_int {
     let mut ret = SD_WRITE_SUCCESSFUL;
 
@@ -3398,8 +3384,7 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
     std::ptr::write(wms, WriteMergerState::default());
 
     // Determine what to dump.
-    let dump_global_vars =
-        !find_shada_parameter_impl(c_int::from(b'!')).is_null();
+    let dump_global_vars = !find_shada_parameter_impl(c_int::from(b'!')).is_null();
     let max_reg_lines_raw = rs_get_shada_parameter(c_int::from(b'<'));
     let max_reg_lines = if max_reg_lines_raw < 0 {
         rs_get_shada_parameter(c_int::from(b'"'))
@@ -3411,7 +3396,11 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
     let removable_bufs = nvim_shada_set_init_ptr();
     let num_marked_files = {
         let v = rs_get_shada_parameter(c_int::from(b'\''));
-        if v < 0 { 0usize } else { v as usize }
+        if v < 0 {
+            0usize
+        } else {
+            v as usize
+        }
     };
     let dump_global_marks = rs_get_shada_parameter(c_int::from(b'f')) != 0;
     let mut dump_history = false;
@@ -3442,8 +3431,16 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
         | SD_READ_UNKNOWN
         | if dump_history { SD_READ_HISTORY } else { 0 }
         | if dump_registers { SD_READ_REGISTERS } else { 0 }
-        | if dump_global_vars { SD_READ_VARIABLES } else { 0 }
-        | if dump_global_marks { SD_READ_GLOBAL_MARKS } else { 0 }
+        | if dump_global_vars {
+            SD_READ_VARIABLES
+        } else {
+            0
+        }
+        | if dump_global_marks {
+            SD_READ_GLOBAL_MARKS
+        } else {
+            0
+        }
         | if num_marked_files > 0 {
             SD_READ_LOCAL_MARKS | SD_READ_CHANGES
         } else {
@@ -3509,14 +3506,14 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
             rs_add_search_pattern(
                 &raw mut (*wms).search_pattern,
                 0,
-                if search_last_used { 1 } else { 0 },
-                if search_highlighted { 1 } else { 0 },
+                c_int::from(search_last_used),
+                c_int::from(search_highlighted),
             );
             rs_add_search_pattern(
                 &raw mut (*wms).sub_search_pattern,
                 1,
-                if search_last_used { 1 } else { 0 },
-                if search_highlighted { 1 } else { 0 },
+                c_int::from(search_last_used),
+                c_int::from(search_highlighted),
             );
 
             // Initialize substitute replacement string.
@@ -3585,9 +3582,7 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
                         continue;
                     }
                     let buf_ffname = nvim_shada_buf_get_ffname(buf);
-                    if buf_ffname.is_null()
-                        || nvim_shada_set_has_ptr(removable_bufs, buf) != 0
-                    {
+                    if buf_ffname.is_null() || nvim_shada_set_has_ptr(removable_bufs, buf) != 0 {
                         if global_mark_iter.is_null() {
                             break;
                         }
@@ -3748,8 +3743,7 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
 
         // Read existing ShaDa file and merge.
         if !sd_reader.is_null() {
-            let srww_ret =
-                shada_read_when_writing(sd_reader, srni_flags, max_kbyte, wms, packer);
+            let srww_ret = shada_read_when_writing(sd_reader, srni_flags, max_kbyte, wms, packer);
             if srww_ret != SD_WRITE_SUCCESSFUL {
                 ret = srww_ret;
             }
@@ -3773,7 +3767,7 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
                         data: ShadaEntryData {
                             filemark: std::mem::ManuallyDrop::new(FilemarkData {
                                 mark: Position::new(cl, cc, 0),
-                                name: b'0' as c_char,
+                                name: b'0'.cast_signed(),
                                 fname: curbuf_ffname.cast_mut(),
                             }),
                         },
@@ -3790,7 +3784,7 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
                     if entry_ref.entry_type != ShadaEntryType::Missing {
                         if rs_shada_pack_pfreed_entry(
                             packer,
-                            entry_ref as *mut ShadaEntry,
+                            std::ptr::from_mut(entry_ref),
                             max_kbyte,
                         ) == SD_WRITE_FAILED
                         {
@@ -3807,11 +3801,8 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
 
         // Pack jumps.
         for i in 0..(*wms).jumps_size {
-            if rs_shada_pack_pfreed_entry(
-                packer,
-                &raw mut (*wms).jumps[i],
-                max_kbyte,
-            ) == SD_WRITE_FAILED
+            if rs_shada_pack_pfreed_entry(packer, &raw mut (*wms).jumps[i], max_kbyte)
+                == SD_WRITE_FAILED
             {
                 ret = SD_WRITE_FAILED;
                 break 'write_exit;
@@ -3822,11 +3813,8 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
         macro_rules! pack_wms_entry {
             ($entry:expr) => {
                 if $entry.entry_type != ShadaEntryType::Missing {
-                    if rs_shada_pack_pfreed_entry(
-                        packer,
-                        &raw mut $entry,
-                        max_kbyte,
-                    ) == SD_WRITE_FAILED
+                    if rs_shada_pack_pfreed_entry(packer, &raw mut $entry, max_kbyte)
+                        == SD_WRITE_FAILED
                     {
                         ret = SD_WRITE_FAILED;
                         break 'write_exit;
@@ -3849,15 +3837,14 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
             // Pack all local marks.
             for mi in 0..NLOCALMARKS {
                 let mark_slot = nvim_shada_file_marks_get_mark(fm_ptr, mi as c_int);
-                if !mark_slot.is_null() && (*mark_slot).entry_type != ShadaEntryType::Missing {
-                    if rs_shada_pack_pfreed_entry(packer, mark_slot, max_kbyte)
-                        == SD_WRITE_FAILED
-                    {
-                        ret = SD_WRITE_FAILED;
-                        // Free remaining file marks and exit.
-                        nvim_xfree(all_file_markss.cast::<c_void>());
-                        break 'write_exit;
-                    }
+                if !mark_slot.is_null()
+                    && (*mark_slot).entry_type != ShadaEntryType::Missing
+                    && rs_shada_pack_pfreed_entry(packer, mark_slot, max_kbyte) == SD_WRITE_FAILED
+                {
+                    ret = SD_WRITE_FAILED;
+                    // Free remaining file marks and exit.
+                    nvim_xfree(all_file_markss.cast::<c_void>());
+                    break 'write_exit;
                 }
             }
 
@@ -3865,14 +3852,12 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
             let changes_size = nvim_shada_file_marks_changes_size(fm_ptr);
             for ci in 0..changes_size {
                 let change_slot = nvim_shada_file_marks_get_change(fm_ptr, ci as c_int);
-                if !change_slot.is_null() {
-                    if rs_shada_pack_pfreed_entry(packer, change_slot, max_kbyte)
-                        == SD_WRITE_FAILED
-                    {
-                        ret = SD_WRITE_FAILED;
-                        nvim_xfree(all_file_markss.cast::<c_void>());
-                        break 'write_exit;
-                    }
+                if !change_slot.is_null()
+                    && rs_shada_pack_pfreed_entry(packer, change_slot, max_kbyte) == SD_WRITE_FAILED
+                {
+                    ret = SD_WRITE_FAILED;
+                    nvim_xfree(all_file_markss.cast::<c_void>());
+                    break 'write_exit;
                 }
             }
 
@@ -3906,11 +3891,8 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
                 let hmll = &raw const (*wms).hms[i].hmll;
                 let mut cur_entry = (*hmll).first;
                 while !cur_entry.is_null() {
-                    let pack_ret = rs_shada_pack_pfreed_entry(
-                        packer,
-                        &raw mut (*cur_entry).data,
-                        max_kbyte,
-                    );
+                    let pack_ret =
+                        rs_shada_pack_pfreed_entry(packer, &raw mut (*cur_entry).data, max_kbyte);
                     if pack_ret == SD_WRITE_FAILED {
                         ret = SD_WRITE_FAILED;
                         break 'history_loop;
@@ -4327,8 +4309,6 @@ impl Default for NvimString {
 
 // C accessor functions for encoding/decoding
 extern "C" {
-    /// Read ShaDa from string (calls C implementation).
-    fn nvim_shada_read_string(string: NvimString, flags: c_int);
     /// Iterate over shada-saveable global variables.
     /// flavour: bitmask of VAR_FLAVOUR_DEFAULT(1)|VAR_FLAVOUR_SESSION(2)|VAR_FLAVOUR_SHADA(4).
     /// On each call: *out_name set to variable name (static lifetime, do not free),
@@ -4515,7 +4495,13 @@ pub unsafe extern "C" fn rs_shada_read_string(string: NvimString, flags: c_int) 
     if string.data.is_null() || string.size == 0 {
         return;
     }
-    nvim_shada_read_string(string, flags);
+    let fd_size = nvim_shada_file_descriptor_size();
+    let sd_reader = nvim_xcalloc(1, fd_size);
+    let fd = FileDescriptorHandle::from_ptr(sd_reader);
+    nvim_shada_file_open_buffer(fd, string.data, string.size);
+    nvim_shada_read(fd, flags);
+    rs_close_file(fd);
+    nvim_xfree(sd_reader);
 }
 
 /// Create an empty NvimString.

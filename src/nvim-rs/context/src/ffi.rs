@@ -24,8 +24,8 @@ extern "C" {
     pub fn rs_shada_encode_buflist() -> NvimString;
     pub fn rs_shada_encode_gvars() -> NvimString;
 
-    // ShaDa reading (already in shada.c)
-    pub fn nvim_shada_read_string(s: NvimString, flags: c_int);
+    // ShaDa reading (implemented in nvim-shada Rust crate)
+    pub fn rs_shada_read_string(s: NvimString, flags: c_int);
 
     // Function save/restore (kept in C due to HASHTAB_ITER, exec_impl coupling)
     pub fn nvim_ctx_save_funcs(ctx: *mut Context, scriptonly: bool);
