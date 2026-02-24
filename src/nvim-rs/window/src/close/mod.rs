@@ -9,6 +9,7 @@
 //! - [`execute`]: Close execution helper functions
 //! - [`frame`]: Frame tree helpers for close operations
 
+pub mod close_others;
 pub mod execute;
 pub mod frame;
 pub mod orchestrate;
@@ -16,6 +17,7 @@ pub mod validation;
 pub mod win_close;
 
 // Re-export common items
+pub use close_others::*;
 pub use execute::*;
 pub use frame::*;
 pub use orchestrate::*;

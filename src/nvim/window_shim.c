@@ -1497,71 +1497,6 @@ static void frame_new_width(frame_T *topfrp, int width, bool leftfirst, bool wfw
 /// Used by ":bdel" and ":only".
 ///
 /// @param forceit  always hide all other windows
-void close_others(int message, int forceit)
-{
-  win_T *const old_curwin = curwin;
-
-  if (curwin->w_floating) {
-    if (message && !autocmd_busy) {
-      emsg(e_floatonly);
-    }
-    return;
-  }
-
-  if (rs_one_window_in_tab(firstwin, NULL) && !lastwin->w_floating) {
-    if (message && !autocmd_busy) {
-      msg(_(m_onlyone), 0);
-    }
-    return;
-  }
-
-  // Be very careful here: autocommands may change the window layout.
-  win_T *nextwp;
-  for (win_T *wp = firstwin; rs_win_valid(wp); wp = nextwp) {
-    nextwp = wp->w_next;
-
-    // autocommands messed this one up
-    if (old_curwin != curwin && rs_win_valid(old_curwin)) {
-      curwin = old_curwin;
-      curbuf = curwin->w_buffer;
-    }
-
-    if (wp == curwin) {                 // don't close current window
-      continue;
-    }
-
-    // autoccommands messed this one up
-    if (!buf_valid(wp->w_buffer) && rs_win_valid(wp)) {
-      wp->w_buffer = NULL;
-      win_close(wp, false, false);
-      continue;
-    }
-    // Check if it's allowed to abandon this window
-    int r = can_abandon(wp->w_buffer, forceit);
-    if (!rs_win_valid(wp)) {             // autocommands messed wp up
-      nextwp = firstwin;
-      continue;
-    }
-    if (!r) {
-      if (message && (p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) && p_write) {
-        dialog_changed(wp->w_buffer, false);
-        if (!rs_win_valid(wp)) {                 // autocommands messed wp up
-          nextwp = firstwin;
-          continue;
-        }
-      }
-      if (bufIsChanged(wp->w_buffer)) {
-        continue;
-      }
-    }
-    win_close(wp, !buf_hide(wp->w_buffer) && !bufIsChanged(wp->w_buffer), false);
-  }
-
-  if (message && !ONE_WINDOW) {
-    emsg(_("E445: Other window contains changes"));
-  }
-}
-
 /// Store the relevant window pointers for tab page "tp".  To be used before
 /// use_tabpage().
 void unuse_tabpage(tabpage_T *tp) { rs_unuse_tabpage(tp); }
@@ -3418,3 +3353,72 @@ void nvim_api_set_err_cannot_split_closing(Error *err)
 {
   api_set_error(err, kErrorTypeException, "%s", e_cannot_split_window_when_closing_buffer);
 }
+
+// Phase 6 accessors: close_others
+
+/// Check if a buffer can be abandoned (wraps can_abandon(wp->w_buffer, forceit)).
+int nvim_win_can_abandon(win_T *wp, int forceit)
+{
+  return (wp && wp->w_buffer) ? can_abandon(wp->w_buffer, forceit) : 1;
+}
+
+/// Prompt user to save changes (wraps dialog_changed(wp->w_buffer, false)).
+void nvim_win_dialog_changed(win_T *wp)
+{
+  if (wp && wp->w_buffer) {
+    dialog_changed(wp->w_buffer, false);
+  }
+}
+
+/// Check if the window's buffer has unsaved changes (wraps bufIsChanged).
+int nvim_win_bufIsChanged(win_T *wp)
+{
+  return (wp && wp->w_buffer) ? bufIsChanged(wp->w_buffer) : 0;
+}
+
+/// Check if the window's buffer should be hidden (wraps buf_hide).
+int nvim_win_buf_hide(win_T *wp)
+{
+  return (wp && wp->w_buffer) ? buf_hide(wp->w_buffer) : 0;
+}
+
+/// Check if a buffer pointer is valid (wraps buf_valid).
+int nvim_buf_valid_ptr(buf_T *buf)
+{
+  return buf_valid(buf) ? 1 : 0;
+}
+
+/// Get the p_confirm option.
+int nvim_get_p_confirm(void) { return p_confirm ? 1 : 0; }
+
+/// Check if CMOD_CONFIRM flag is set in cmdmod.
+int nvim_get_cmdmod_confirm(void) { return (cmdmod.cmod_flags & CMOD_CONFIRM) ? 1 : 0; }
+
+/// Get the p_write option.
+int nvim_get_p_write(void) { return p_write ? 1 : 0; }
+
+// nvim_get_autocmd_busy() is defined in change_ffi.c (returns bool)
+
+/// Emit E445 "Other window contains changes" error.
+void nvim_emsg_e445(void) { emsg(_("E445: Other window contains changes")); }
+
+/// Set curwin and curbuf from wp->w_buffer.
+void nvim_set_curwin_from_wp(win_T *wp)
+{
+  if (wp) {
+    curwin = wp;
+    curbuf = wp->w_buffer;
+  }
+}
+
+/// Get the w_buffer field raw pointer.
+buf_T *nvim_win_get_buffer_raw(win_T *wp) { return wp ? wp->w_buffer : NULL; }
+
+/// Call win_close(wp, free_buf, false) from Rust.
+int nvim_win_close_wrapper(win_T *wp, int free_buf)
+{
+  return win_close(wp, free_buf != 0, false);
+}
+
+extern void rs_close_others(int message, int forceit);
+void close_others(int message, int forceit) { rs_close_others(message, forceit); }
