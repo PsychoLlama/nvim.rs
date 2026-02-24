@@ -108,26 +108,160 @@ extern "C" {
     fn nvim_old_showcmd_buf_ptr() -> *mut std::ffi::c_char;
     fn nvim_showcmd_buflen() -> usize;
     fn nvim_normal_display_showcmd();
-    fn nvim_clear_showcmd_visual_info() -> bool;
+
+    // Phase 1: Visual info accessors (formerly nvim_clear_showcmd_visual_info)
+    fn nvim_get_VIsual_active() -> c_int;
+    fn nvim_showcmd_char_avail() -> bool;
+    fn nvim_lt_VIsual_cursor() -> bool;
+    fn nvim_get_VIsual_lnum() -> c_int;
+    fn nvim_get_cursor_lnum() -> c_int;
+    fn nvim_hasFolding_up(lnum: c_int, out_lnum: *mut c_int) -> bool;
+    fn nvim_hasFolding_down(lnum: c_int, out_lnum: *mut c_int) -> bool;
+    fn nvim_get_VIsual_mode() -> c_int;
+    fn nvim_getvcols_visual_sbr_save(out_left: *mut c_int, out_right: *mut c_int);
+    fn nvim_showcmd_ui_has_messages() -> bool;
+    fn nvim_ml_get_pos_visual() -> *mut std::ffi::c_char;
+    fn nvim_get_cursor_pos_ptr() -> *const std::ffi::c_char;
+    fn nvim_utfc_ptr2len_wrapper(ptr: *const std::ffi::c_char) -> c_int;
+    fn nvim_p_sel_is_exclusive() -> bool;
 
     // Phase 5: add_to_showcmd / del_from_showcmd
     fn nvim_transchar_wrapper(c: c_int) -> *const std::ffi::c_char;
     fn nvim_utf_char2bytes_wrapper(c: c_int, buf: *mut std::ffi::c_char) -> c_int;
     fn nvim_vim_isprintc_wrapper(c: c_int) -> bool;
     fn nvim_showcmd_msg_silent() -> c_int;
-    fn nvim_showcmd_ui_has_messages() -> bool;
-    fn nvim_showcmd_char_avail() -> bool;
 }
+
+// =============================================================================
+// Ctrl_V constant (same value as in lib.rs, = 22)
+// =============================================================================
+
+const CTRL_V: c_int = 22;
 
 // =============================================================================
 // Public Rust exports
 // =============================================================================
 
+/// Compute Visual area info and write result into showcmd_buf.
+/// Returns true if in Visual mode and char_avail() is false.
+///
+/// Rust port of the former C `nvim_clear_showcmd_visual_info`.
+///
+/// # Safety
+/// Calls C accessor functions; all pointers are valid while in C event loop.
+unsafe fn clear_showcmd_visual_info() -> bool {
+    if nvim_get_VIsual_active() == 0 || nvim_showcmd_char_avail() {
+        return false;
+    }
+
+    let cursor_bot = nvim_lt_VIsual_cursor();
+    let visual_lnum = nvim_get_VIsual_lnum();
+    let cursor_lnum = nvim_get_cursor_lnum();
+
+    let (mut top, mut bot) = if cursor_bot {
+        (visual_lnum, cursor_lnum)
+    } else {
+        (cursor_lnum, visual_lnum)
+    };
+
+    nvim_hasFolding_up(top, &raw mut top);
+    nvim_hasFolding_down(bot, &raw mut bot);
+    let lines = bot - top + 1;
+
+    let vmode = nvim_get_VIsual_mode();
+    let showcmd_buf: *mut u8 = nvim_normal_showcmd_buf_ptr().cast();
+
+    if vmode == CTRL_V {
+        // Block Visual: LinesxCols
+        let mut leftcol: c_int = 0;
+        let mut rightcol: c_int = 0;
+        nvim_getvcols_visual_sbr_save(&raw mut leftcol, &raw mut rightcol);
+        let cols = rightcol - leftcol + 1;
+        libc::snprintf(
+            showcmd_buf.cast(),
+            SHOWCMD_BUFLEN,
+            c"%ldx%ld".as_ptr(),
+            lines as libc::c_long,
+            cols as libc::c_long,
+        );
+    } else if vmode == c_int::from(b'V') || visual_lnum != cursor_lnum {
+        // Linewise or multi-line charwise
+        libc::snprintf(
+            showcmd_buf.cast(),
+            SHOWCMD_BUFLEN,
+            c"%ld".as_ptr(),
+            lines as libc::c_long,
+        );
+    } else {
+        // Single-line charwise: count bytes and chars
+        let (s_init, e_init): (*const u8, *const u8) = if cursor_bot {
+            (
+                nvim_ml_get_pos_visual().cast(),
+                nvim_get_cursor_pos_ptr().cast(),
+            )
+        } else {
+            (
+                nvim_get_cursor_pos_ptr().cast(),
+                nvim_ml_get_pos_visual().cast(),
+            )
+        };
+
+        let is_exclusive = nvim_p_sel_is_exclusive();
+        let mut s: *const u8 = s_init;
+        let e: *const u8 = e_init;
+        let mut bytes: c_int = 0;
+        let mut chars: c_int = 0;
+
+        // Replicate: while ((*p_sel != 'e') ? s <= e : s < e)
+        loop {
+            let cond = if is_exclusive { s < e } else { s <= e };
+            if !cond {
+                break;
+            }
+            let l = nvim_utfc_ptr2len_wrapper(s.cast());
+            if l == 0 {
+                bytes += 1;
+                chars += 1;
+                break;
+            }
+            bytes += l;
+            chars += 1;
+            s = s.add(l as usize);
+        }
+
+        if bytes == chars {
+            libc::snprintf(
+                showcmd_buf.cast(),
+                SHOWCMD_BUFLEN,
+                c"%d".as_ptr(),
+                chars,
+            );
+        } else {
+            libc::snprintf(
+                showcmd_buf.cast(),
+                SHOWCMD_BUFLEN,
+                c"%d-%d".as_ptr(),
+                chars,
+                bytes,
+            );
+        }
+    }
+
+    // Truncate to the display limit.
+    let limit = if nvim_showcmd_ui_has_messages() {
+        SHOWCMD_BUFLEN - 1
+    } else {
+        SHOWCMD_COLS
+    };
+    *showcmd_buf.add(limit) = 0;
+
+    true
+}
+
 /// Clear the showcmd display area.
 ///
-/// In Visual mode, computes and displays the size of the visual selection
-/// (delegated to C). Otherwise, clears the showcmd buffer and updates
-/// the display.
+/// In Visual mode, computes and displays the size of the visual selection.
+/// Otherwise, clears the showcmd buffer and updates the display.
 ///
 /// This is the Rust implementation of `clear_showcmd()` from normal.c.
 #[no_mangle]
@@ -137,7 +271,7 @@ pub extern "C" fn rs_clear_showcmd() {
             return;
         }
 
-        if nvim_clear_showcmd_visual_info() {
+        if clear_showcmd_visual_info() {
             // Visual info was computed and written into showcmd_buf.
             nvim_set_showcmd_visual(true);
         } else {
