@@ -27,6 +27,10 @@ extern "C" {
     fn rs_ctrl_x_mode_dictionary() -> c_int;
     fn rs_ctrl_x_mode_thesaurus() -> c_int;
     fn rs_magic_isset() -> c_int;
+
+    // Compound accessors for Phase 4 (pass 4)
+    fn nvim_compl_source_start_timer_impl(source_idx: c_int);
+    fn nvim_advance_cpt_sources_index_safe_impl() -> c_int;
 }
 
 // CTRL-X mode constants
@@ -222,6 +226,35 @@ pub unsafe extern "C" fn rs_strip_caret_numbers_in_place(str: *mut c_char) {
         read = read.add(1);
     }
     *write = 0;
+}
+
+// =============================================================================
+// Phase 4 (pass 4): compl_source_start_timer and advance_cpt_sources_index_safe
+// =============================================================================
+
+/// Start the timer for a completion source.
+///
+/// Sets the start timestamp for the specified source index and clears the
+/// time_slice_expired flag. Only active when autocomplete or cto timeout is set.
+///
+/// # Safety
+/// Requires valid cpt_sources_array state with source_idx in bounds.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_source_start_timer(source_idx: c_int) {
+    nvim_compl_source_start_timer_impl(source_idx);
+}
+
+/// Safely advance cpt_sources_index by one.
+///
+/// Increments cpt_sources_index if it is within valid bounds.
+/// Issues an error message and returns 0 (FAIL) if out of range.
+/// Returns 1 (OK) on success.
+///
+/// # Safety
+/// Requires valid cpt_sources_array state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_advance_cpt_sources_index_safe() -> c_int {
+    nvim_advance_cpt_sources_index_safe_impl()
 }
 
 #[cfg(test)]

@@ -183,6 +183,9 @@ extern void rs_find_next_match_in_menu(void);
 extern void rs_get_next_bufname_token(void);
 // Phase 3 (pass 4) Rust exports
 extern void rs_get_next_tag_completion(void);
+// Phase 4 (pass 4) Rust exports
+extern void rs_compl_source_start_timer(int source_idx);
+extern int rs_advance_cpt_sources_index_safe(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -1563,7 +1566,7 @@ void nvim_set_compl_num_bests(int val) { compl_num_bests = val; }
 void nvim_clear_edit_submode_extra(void) { edit_submode_extra = NULL; }
 void nvim_clear_compl_orig_extmarks(void) { kv_destroy(compl_orig_extmarks); }
 void nvim_compl_clear_orig_text(void) { API_CLEAR_STRING(compl_orig_text); }
-void nvim_cpt_sources_clear(void) { cpt_sources_clear(); }
+void nvim_cpt_sources_clear(void) { XFREE_CLEAR(cpt_sources_array); cpt_sources_index = -1; cpt_sources_count = 0; }
 void nvim_set_completed_item_empty(void) { set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED)); }
 
 void nvim_append_char_to_redobuff(int c) { AppendCharToRedobuff(c); }
@@ -3167,26 +3170,6 @@ static void prepare_cpt_compl_funcs(void)
   xfree(cpt);
 }
 
-/// Start the timer for the current completion source.
-static void compl_source_start_timer(int source_idx)
-{
-  if (compl_autocomplete || p_cto > 0) {
-    cpt_sources_array[source_idx].compl_start_tv = os_hrtime();
-    compl_time_slice_expired = false;
-  }
-}
-
-/// Safely advance the cpt_sources_index by one.
-static int advance_cpt_sources_index_safe(void)
-{
-  if (cpt_sources_index >= 0 && cpt_sources_index < cpt_sources_count - 1) {
-    cpt_sources_index++;
-    return OK;
-  }
-  semsg(_(e_list_index_out_of_range_nr), cpt_sources_index);
-  return FAIL;
-}
-
 /// Get the next expansion(s), using "compl_pattern".
 /// The search starts at position "ini" in curbuf and in the direction
 /// compl_direction.
@@ -3242,7 +3225,7 @@ static int ins_compl_get_exp(pos_T *ini)
   if (normal_mode_strict) {
     cpt_sources_index = 0;
     if (compl_autocomplete || p_cto > 0) {
-      compl_source_start_timer(0);
+      rs_compl_source_start_timer(0);
       compl_time_slice_expired = false;
       compl_timeout_ms = compl_autocomplete
                          ? (uint64_t)MAX(COMPL_INITIAL_TIMEOUT_MS, p_act)
@@ -3267,10 +3250,10 @@ static int ins_compl_get_exp(pos_T *ini)
       }
       if (status == INS_COMPL_CPT_CONT) {
         if (may_advance_cpt_idx) {
-          if (!advance_cpt_sources_index_safe()) {
+          if (!rs_advance_cpt_sources_index_safe()) {
             break;
           }
-          compl_source_start_timer(cpt_sources_index);
+          rs_compl_source_start_timer(cpt_sources_index);
         }
         continue;
       }
@@ -3299,10 +3282,10 @@ static int ins_compl_get_exp(pos_T *ini)
     }
 
     if (may_advance_cpt_idx) {
-      if (!advance_cpt_sources_index_safe()) {
+      if (!rs_advance_cpt_sources_index_safe()) {
         break;
       }
-      compl_source_start_timer(cpt_sources_index);
+      rs_compl_source_start_timer(cpt_sources_index);
     }
 
     // break the loop for specialized modes (use 'complete' just for the
@@ -4195,18 +4178,12 @@ static void spell_back_to_badword(void)
   }
 }
 
-/// Reset the info associated with completion sources.
-static void cpt_sources_clear(void)
+/// Setup completion sources.
+static void setup_cpt_sources(void)
 {
   XFREE_CLEAR(cpt_sources_array);
   cpt_sources_index = -1;
   cpt_sources_count = 0;
-}
-
-/// Setup completion sources.
-static void setup_cpt_sources(void)
-{
-  cpt_sources_clear();
 
   int count = rs_get_cpt_sources_count();
   if (count == 0) {
@@ -4236,17 +4213,6 @@ static void setup_cpt_sources(void)
   }
 
   cpt_sources_count = count;
-}
-
-/// Return true if any of the completion sources have 'refresh' set to 'always'.
-static bool is_cpt_func_refresh_always(void)
-{
-  for (int i = 0; i < cpt_sources_count; i++) {
-    if (cpt_sources_array[i].cs_refresh_always) {
-      return true;
-    }
-  }
-  return false;
 }
 
 /// Remove the matches linked to the current completion source (as indicated by
@@ -4381,7 +4347,7 @@ static void cpt_compl_refresh(void)
         }
         cpt_sources_array[cpt_sources_index].cs_startcol = startcol;
         if (ret == OK) {
-          compl_source_start_timer(cpt_sources_index);
+          rs_compl_source_start_timer(cpt_sources_index);
           get_cpt_func_completion_matches(cb);
         }
       }
@@ -4389,7 +4355,7 @@ static void cpt_compl_refresh(void)
 
     (void)copy_option_part(&p, IObuff, IOSIZE, ",");  // Advance p
     if (rs_may_advance_cpt_index(p) != 0) {
-      (void)advance_cpt_sources_index_safe();
+      (void)rs_advance_cpt_sources_index_safe();
     }
   }
   cpt_sources_index = -1;
@@ -4704,7 +4670,14 @@ int nvim_compl_shown_match_is_sentinel(int forward) {
 int nvim_get_p_acl(void) { return (int)p_acl; }
 void nvim_pum_undisplay(int undo) { pum_undisplay(undo != 0); }
 void nvim_redraw_later_valid(void) { redraw_later(curwin, UPD_VALID); }
-int nvim_is_cpt_func_refresh_always(void) { return is_cpt_func_refresh_always() ? 1 : 0; }
+int nvim_is_cpt_func_refresh_always(void) {
+  for (int i = 0; i < cpt_sources_count; i++) {
+    if (cpt_sources_array[i].cs_refresh_always) {
+      return 1;
+    }
+  }
+  return 0;
+}
 void nvim_cpt_compl_refresh(void) { cpt_compl_refresh(); }
 void nvim_set_spell_bad_len(int val) { spell_bad_len = val; }
 void nvim_set_compl_restarting(int val) { compl_restarting = val != 0; }
@@ -5143,5 +5116,26 @@ void nvim_get_next_tag_completion_impl(void)
   }
   g_tag_at_cursor = false;
   p_ic = save_p_ic;
+}
+
+// Compound accessors for Phase 4 (pass 4): compl_source_start_timer and
+// advance_cpt_sources_index_safe
+
+void nvim_compl_source_start_timer_impl(int source_idx)
+{
+  if (compl_autocomplete || p_cto > 0) {
+    cpt_sources_array[source_idx].compl_start_tv = os_hrtime();
+    compl_time_slice_expired = false;
+  }
+}
+
+int nvim_advance_cpt_sources_index_safe_impl(void)
+{
+  if (cpt_sources_index >= 0 && cpt_sources_index < cpt_sources_count - 1) {
+    cpt_sources_index++;
+    return 1;  // OK
+  }
+  semsg(_(e_list_index_out_of_range_nr), cpt_sources_index);
+  return 0;  // FAIL
 }
 
