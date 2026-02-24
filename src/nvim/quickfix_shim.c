@@ -1095,6 +1095,45 @@ extern void rs_wipe_qf_buffer(void *qi);
 extern void rs_ll_free_all(void **pqi);
 extern void rs_qf_free_all(void *wp);
 
+// ---- Phase 3 stack-allocation accessors ----
+
+/// Returns address of the static ql_info_actual (global quickfix stack).
+void *nvim_get_ql_info_actual(void) { return (void *)&ql_info_actual; }
+
+/// Allocate a zeroed qf_info_T on the heap.
+void *nvim_qf_alloc_info(void) { return xcalloc(1, sizeof(qf_info_T)); }
+
+/// Set qi->qfl_type.
+void nvim_qf_set_qi_type(void *qi_void, int qfltype) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qfl_type = (qfltype_T)qfltype; }
+
+/// Set qi->qf_maxcount.
+void nvim_qf_set_maxcount(void *qi_void, int n) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_maxcount = n; }
+
+/// Set qi->qf_lists to a freshly xcalloc'd array of n qf_list_T elements.
+void nvim_qf_set_new_lists(void *qi_void, int n)
+{
+  if (qi_void == NULL) { return; }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  qi->qf_lists = xcalloc((size_t)n, sizeof(qf_list_T));
+}
+
+/// Return wp->w_p_lhi (location history option value).
+int nvim_win_get_p_lhi(const void *wp_void) { return wp_void == NULL ? 0 : (int)((const win_T *)wp_void)->w_p_lhi; }
+
+/// Set *pwinp = curwin.
+void nvim_set_pwin_to_curwin(void **pwinp) { if (pwinp != NULL) *pwinp = (void *)curwin; }
+
+/// Return true if cmdidx is a location-list command.
+bool nvim_is_loclist_cmd(int cmdidx) { return is_loclist_cmd((cmdidx_T)cmdidx); }
+
+// nvim_eap_get_cmdidx: already exists in ex_docmd.c
+
+// ---- Rust Phase 3 forward declarations ----
+extern void *rs_qf_alloc_stack(int qfltype, int n);
+extern void *rs_ll_get_or_alloc_list(void *wp);
+extern void *rs_qf_cmd_get_stack(void *eap, bool print_emsg);
+extern void *rs_qf_cmd_get_or_alloc_stack(const void *eap, void **pwinp);
+
 void *nvim_qf_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
 bool nvim_qf_has_user_data(const void *qfl_void) { return qfl_void == NULL ? false : ((const qf_list_T *)qfl_void)->qf_has_user_data; }
 void nvim_qf_incr_changedtick(void *qfl_void) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_changedtick++; }
@@ -2047,84 +2086,31 @@ static void qf_sync_win_to_llw(win_T *pwp)
   }
 }
 
-/// up to n amount of lists
+// qf_alloc_stack, qf_alloc_list_stack, ll_get_or_alloc_list,
+// qf_cmd_get_stack, qf_cmd_get_or_alloc_stack deleted: migrated to Rust in lifecycle.rs.
+
+/// Thin C wrapper for callers inside this file.
 static qf_info_T *qf_alloc_stack(qfltype_T qfltype, int n)
-  FUNC_ATTR_NONNULL_RET
 {
-  qf_info_T *qi;
-  if (qfltype == QFLT_QUICKFIX) {
-    qi = &ql_info_actual;
-  } else {
-    qi = xcalloc(1, sizeof(qf_info_T));
-    qi->qf_refcount++;
-  }
-  qi->qfl_type = qfltype;
-  qi->qf_bufnr = INVALID_QFBUFNR;
-  qi->qf_lists = qf_alloc_list_stack(n);
-  qi->qf_maxcount = n;
-
-  return qi;
+  return (qf_info_T *)rs_qf_alloc_stack((int)qfltype, n);
 }
 
-/// Allocate memory for qf_lists member of qf_info_T struct.
-static qf_list_T *qf_alloc_list_stack(int n)
-  FUNC_ATTR_NONNULL_RET
-{
-  return xcalloc((size_t)n, sizeof(qf_list_T));
-}
-
-/// If not present, allocate a location list stack
+/// Thin C wrapper for callers inside this file.
 static qf_info_T *ll_get_or_alloc_list(win_T *wp)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
 {
-  if (IS_LL_WINDOW(wp)) {
-    // For a location list window, use the referenced location list
-    return wp->w_llist_ref;
-  }
-
-  // For a non-location list window, w_llist_ref should not point to a
-  // location list.
-  ll_free_all(&wp->w_llist_ref);
-
-  if (wp->w_llist == NULL) {
-    // new location list
-    wp->w_llist = qf_alloc_stack(QFLT_LOCATION, (int)wp->w_p_lhi);
-  }
-
-  return wp->w_llist;
+  return (qf_info_T *)rs_ll_get_or_alloc_list((void *)wp);
 }
 
-/// message if 'print_emsg' is true.
+/// Thin C wrapper for callers inside this file.
 static qf_info_T *qf_cmd_get_stack(exarg_T *eap, bool print_emsg)
 {
-  qf_info_T *qi = ql_info;
-  assert(qi != NULL);
-
-  if (is_loclist_cmd(eap->cmdidx)) {
-    qi = GET_LOC_LIST(curwin);
-    if (qi == NULL) {
-      if (print_emsg) {
-        emsg(_(e_loclist));
-      }
-      return NULL;
-    }
-  }
-
-  return qi;
+  return (qf_info_T *)rs_qf_cmd_get_stack((void *)eap, print_emsg);
 }
 
-/// For a location list command, sets 'pwinp' to curwin.
+/// Thin C wrapper for callers inside this file.
 static qf_info_T *qf_cmd_get_or_alloc_stack(const exarg_T *eap, win_T **pwinp)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
 {
-  qf_info_T *qi = ql_info;
-
-  if (is_loclist_cmd(eap->cmdidx)) {
-    qi = ll_get_or_alloc_list(curwin);
-    *pwinp = curwin;
-  }
-
-  return qi;
+  return (qf_info_T *)rs_qf_cmd_get_or_alloc_stack((const void *)eap, (void **)pwinp);
 }
 
 

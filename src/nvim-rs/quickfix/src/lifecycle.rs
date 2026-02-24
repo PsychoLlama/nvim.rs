@@ -16,6 +16,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
+#![allow(clashing_extern_declarations)]
 
 use std::ffi::{c_int, c_void};
 use std::sync::Mutex;
@@ -83,6 +84,24 @@ extern "C" {
     /// Set wp->w_llist_ref = NULL and return old value.
     fn nvim_win_take_llist_ref(wp: *mut c_void) -> *mut c_void;
     fn nvim_get_ql_info() -> *mut c_void;
+
+    // --- Phase 3: stack allocation ---
+    fn nvim_get_ql_info_actual() -> *mut c_void;
+    fn nvim_qf_alloc_info() -> *mut c_void;
+    fn nvim_qf_set_qi_type(qi: *mut c_void, qfltype: c_int);
+    fn nvim_qf_set_maxcount(qi: *mut c_void, n: c_int);
+    fn nvim_qf_set_new_lists(qi: *mut c_void, n: c_int);
+    fn nvim_qf_incr_refcount(qi: *mut c_void);
+    fn nvim_win_get_p_lhi(wp: *const c_void) -> c_int;
+    fn nvim_win_get_llist_ref(wp: *const c_void) -> *mut c_void;
+    fn nvim_qf_is_ll_window(wp: *const c_void) -> bool;
+    fn nvim_qf_win_get_llist(wp: *const c_void) -> *mut c_void;
+    fn nvim_qf_win_set_loclist(wp: *mut c_void, qi: *mut c_void);
+    fn nvim_get_curwin() -> *mut c_void;
+    fn nvim_qf_curwin_get_loclist() -> *mut c_void;
+    fn nvim_is_loclist_cmd(cmdidx: c_int) -> bool;
+    fn nvim_eap_get_cmdidx(eap: *const c_void) -> c_int;
+    fn nvim_emsg_loclist();
 }
 
 // =============================================================================
@@ -322,4 +341,136 @@ pub unsafe extern "C" fn rs_qf_free_all(wp: *mut c_void) {
             rs_ll_free_all(std::ptr::addr_of_mut!(llist_ref));
         }
     }
+}
+
+// =============================================================================
+// Phase 3: Stack allocation and command stack resolution
+// =============================================================================
+
+/// C constants for `qfltype_T`.
+const QFLT_QUICKFIX: c_int = 0;
+const QFLT_LOCATION: c_int = 1;
+
+/// Allocate (or return) a quickfix/location list stack.
+///
+/// For `QFLT_QUICKFIX` returns the address of the C static `ql_info_actual`.
+/// For all other types heap-allocates a zeroed `qf_info_T`.
+///
+/// Corresponds to C `qf_alloc_stack`.
+///
+/// # Safety
+///
+/// `n` must be > 0 and represent the desired maximum list count.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_alloc_stack(qfltype: c_int, n: c_int) -> *mut c_void {
+    let qi: *mut c_void = if qfltype == QFLT_QUICKFIX {
+        nvim_get_ql_info_actual()
+    } else {
+        let p = nvim_qf_alloc_info();
+        nvim_qf_incr_refcount(p);
+        p
+    };
+
+    nvim_qf_set_qi_type(qi, qfltype);
+    nvim_qf_set_bufnr(qi, INVALID_QFBUFNR);
+    nvim_qf_set_new_lists(qi, n);
+    nvim_qf_set_maxcount(qi, n);
+
+    qi
+}
+
+/// Get or allocate the location list for window `wp`.
+///
+/// - If `wp` is a location list window, returns its `w_llist_ref`.
+/// - Otherwise, frees any stale `w_llist_ref`, allocates a new location list
+///   if `w_llist` is NULL, and returns `w_llist`.
+///
+/// Corresponds to C `ll_get_or_alloc_list`.
+///
+/// # Safety
+///
+/// `wp` must be a valid non-null `*mut win_T`.
+///
+/// # Panics
+///
+/// Panics if the internal mutex is poisoned (should never happen in practice).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ll_get_or_alloc_list(wp: *mut c_void) -> *mut c_void {
+    if nvim_qf_is_ll_window(wp) {
+        // For a location list window, use the referenced location list.
+        return nvim_win_get_llist_ref(wp);
+    }
+
+    // For a non-location list window, w_llist_ref should not point anywhere.
+    let mut llist_ref = nvim_win_take_llist_ref(wp);
+    if !llist_ref.is_null() {
+        rs_ll_free_all(std::ptr::addr_of_mut!(llist_ref));
+    }
+
+    let llist = nvim_qf_win_get_llist(wp);
+    if llist.is_null() {
+        // Allocate a new location list.
+        let n = nvim_win_get_p_lhi(wp);
+        let new_qi = rs_qf_alloc_stack(QFLT_LOCATION, n);
+        nvim_qf_win_set_loclist(wp, new_qi);
+    }
+
+    nvim_qf_win_get_llist(wp)
+}
+
+/// Get the quickfix/location list stack for an Ex command.
+///
+/// Returns NULL and optionally emits E776 if the current window has no
+/// location list.
+///
+/// Corresponds to C `qf_cmd_get_stack`.
+///
+/// # Safety
+///
+/// `eap` must be a valid non-null `*const exarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_cmd_get_stack(eap: *mut c_void, print_emsg: bool) -> *mut c_void {
+    let mut qi = nvim_get_ql_info();
+
+    if nvim_is_loclist_cmd(nvim_eap_get_cmdidx(eap)) {
+        qi = nvim_qf_curwin_get_loclist();
+        if qi.is_null() {
+            if print_emsg {
+                nvim_emsg_loclist();
+            }
+            return std::ptr::null_mut();
+        }
+    }
+
+    qi
+}
+
+/// Get or allocate the quickfix/location list stack for an Ex command.
+///
+/// For location list commands, sets `*pwinp = curwin`.
+///
+/// Corresponds to C `qf_cmd_get_or_alloc_stack`.
+///
+/// # Safety
+///
+/// `eap` must be a valid non-null `*const exarg_T`.
+/// `pwinp` must be a valid non-null `*mut *mut win_T`.
+///
+/// # Panics
+///
+/// Panics if the internal mutex is poisoned (should never happen in practice).
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_cmd_get_or_alloc_stack(
+    eap: *const c_void,
+    pwinp: *mut *mut c_void,
+) -> *mut c_void {
+    let mut qi = nvim_get_ql_info();
+
+    if nvim_is_loclist_cmd(nvim_eap_get_cmdidx(eap)) {
+        let curwin = nvim_get_curwin();
+        qi = rs_ll_get_or_alloc_list(curwin);
+        *pwinp = curwin;
+    }
+
+    qi
 }
