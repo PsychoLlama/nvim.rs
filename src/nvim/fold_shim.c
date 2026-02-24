@@ -206,131 +206,7 @@ void deleteFoldRecurse(buf_T *bp, garray_T *gap)
 // deleteFoldMarkers() -- migrated to Rust (markers.rs: delete_fold_markers_impl)
 // foldDelMarker() -- migrated to Rust (markers.rs: fold_del_marker_impl)
 
-// get_foldtext() {{{2
-/// Generates text to display
-///
-/// @param buf allocated memory of length FOLD_TEXT_LEN. Used when 'foldtext'
-///            isn't set puts the result in "buf[FOLD_TEXT_LEN]".
-/// @param at line "lnum", with last line "lnume".
-/// @return the text for a closed fold
-///
-/// Otherwise the result is in allocated memory.
-char *get_foldtext(win_T *wp, linenr_T lnum, linenr_T lnume, foldinfo_T foldinfo, char *buf,
-                   VirtText *vt)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char *text = NULL;
-  // an error occurred when evaluating 'fdt' setting
-  static bool got_fdt_error = false;
-  int save_did_emsg = did_emsg;
-  static win_T *last_wp = NULL;
-  static linenr_T last_lnum = 0;
-
-  if (last_wp == NULL || last_wp != wp || last_lnum > lnum || last_lnum == 0) {
-    // window changed, try evaluating foldtext setting once again
-    got_fdt_error = false;
-  }
-
-  if (!got_fdt_error) {
-    // a previous error should not abort evaluating 'foldexpr'
-    did_emsg = false;
-  }
-
-  if (*wp->w_p_fdt != NUL) {
-    char dashes[MAX_LEVEL + 2];
-
-    // Set "v:foldstart" and "v:foldend".
-    set_vim_var_nr(VV_FOLDSTART, (varnumber_T)lnum);
-    set_vim_var_nr(VV_FOLDEND, (varnumber_T)lnume);
-
-    // Set "v:folddashes" to a string of "level" dashes.
-    // Set "v:foldlevel" to "level".
-    int level = MIN(foldinfo.fi_level, (int)sizeof(dashes) - 1);
-    memset(dashes, '-', (size_t)level);
-    dashes[level] = NUL;
-    set_vim_var_string(VV_FOLDDASHES, dashes, -1);
-    set_vim_var_nr(VV_FOLDLEVEL, (varnumber_T)level);
-
-    // skip evaluating 'foldtext' on errors
-    if (!got_fdt_error) {
-      win_T *const save_curwin = curwin;
-      const sctx_T saved_sctx = current_sctx;
-
-      curwin = wp;
-      curbuf = wp->w_buffer;
-      current_sctx = wp->w_p_script_ctx[kWinOptFoldtext];
-
-      emsg_off++;  // handle exceptions, but don't display errors
-
-      Object obj = eval_foldtext(wp);
-      if (obj.type == kObjectTypeArray) {
-        Error err = ERROR_INIT;
-        *vt = parse_virt_text(obj.data.array, &err, NULL);
-        if (!ERROR_SET(&err)) {
-          *buf = NUL;
-          text = buf;
-        }
-        api_clear_error(&err);
-      } else if (obj.type == kObjectTypeString) {
-        text = obj.data.string.data;
-        obj = NIL;
-      }
-      api_free_object(obj);
-
-      emsg_off--;
-
-      if (text == NULL || did_emsg) {
-        got_fdt_error = true;
-      }
-
-      curwin = save_curwin;
-      curbuf = curwin->w_buffer;
-      current_sctx = saved_sctx;
-    }
-    last_lnum = lnum;
-    last_wp = wp;
-    set_vim_var_string(VV_FOLDDASHES, NULL, -1);
-
-    if (!did_emsg && save_did_emsg) {
-      did_emsg = save_did_emsg;
-    }
-
-    if (text != NULL) {
-      // Replace unprintable characters, if there are any.  But
-      // replace a TAB with a space.
-      char *p;
-      for (p = text; *p != NUL; p++) {
-        int len = utfc_ptr2len(p);
-
-        if (len > 1) {
-          if (!vim_isprintc(utf_ptr2char(p))) {
-            break;
-          }
-          p += len - 1;
-        } else if (*p == TAB) {
-          *p = ' ';
-        } else if (ptr2cells(p) > 1) {
-          break;
-        }
-      }
-      if (*p != NUL) {
-        p = transstr(text, true);
-        xfree(text);
-        text = p;
-      }
-    }
-  }
-  if (text == NULL) {
-    int count = lnume - lnum + 1;
-
-    vim_snprintf(buf, FOLD_TEXT_LEN,
-                 NGETTEXT("+--%3d line folded",
-                          "+--%3d lines folded ", count),
-                 count);
-    text = buf;
-  }
-  return text;
-}
+// get_foldtext() -- migrated to Rust (display.rs: get_foldtext_impl / rs_get_foldtext)
 
 // foldlevelIndent() -- migrated to Rust (level.rs: foldlevel_indent_result)
 
@@ -353,33 +229,7 @@ char *get_foldtext(win_T *wp, linenr_T lnum, linenr_T lnume, foldinfo_T foldinfo
 
 // f_foldtextresult -- migrated to Rust (lib.rs: rs_f_foldtextresult)
 
-/// Accessor for Rust: get the fold display text for a fold.
-/// Calls get_foldtext and concatenates VirtText chunks if present.
-/// Returns xmalloc'd string (caller must xfree), or NULL if fold has no lines.
-char *nvim_get_foldtext(win_T *wp, linenr_T lnum, linenr_T lnume, foldinfo_T foldinfo)
-{
-  char buf[FOLD_TEXT_LEN];
-  VirtText vt = VIRTTEXT_EMPTY;
-  char *text = get_foldtext(wp, lnum, lnume, foldinfo, buf, &vt);
-  if (text == buf) {
-    text = xstrdup(text);
-  }
-  if (kv_size(vt) > 0) {
-    assert(*text == NUL);
-    for (size_t i = 0; i < kv_size(vt);) {
-      int attr = 0;
-      char *new_text = next_virt_text_chunk(vt, &i, &attr);
-      if (new_text == NULL) {
-        break;
-      }
-      new_text = concat_str(text, new_text);
-      xfree(text);
-      text = new_text;
-    }
-  }
-  clear_virttext(&vt);
-  return text;
-}
+// nvim_get_foldtext -- migrated to Rust (display.rs: get_foldtext_concat_impl)
 
 // ============================================================================
 // VimL function accessors (for f_foldclosed, f_foldlevel, etc.)
@@ -1028,6 +878,7 @@ linenr_T nvim_fold_get_curbuf_line_count(void)
 /// the xmalloc'd string ready for foldtext_cleanup.
 /// `out_header_len` receives the byte length of the formatted header part
 /// (before the line text is appended).
+/// Still used by Rust f_foldtext_impl (for the foldtext() VimL function).
 char *nvim_fold_build_foldtext(const char *txt, const char *dashes, int count,
                                const char *line_text, size_t *out_header_len)
 {
@@ -1095,3 +946,188 @@ void nvim_fold_set_vim_var_nr_lnum(linenr_T lnum)
 }
 
 // nvim_fold_get_curbuf_line_count_c -- deleted (merged into nvim_fold_get_curbuf_line_count)
+
+// ============================================================================
+// Accessors for get_foldtext Rust migration (display.rs)
+// ============================================================================
+
+/// High-level accessor: set curwin/curbuf/sctx, call eval_foldtext(wp),
+/// process the Object result, and restore state.
+///
+/// If the result is a String, sets *out_text to the string data (ownership
+/// transferred; caller must xfree) and *out_has_virt_text=0.
+/// If the result is an Array, populates *vt_out via parse_virt_text, sets
+/// *out_text=NULL, *out_has_virt_text=1, and sets *buf_out = NUL.
+/// On error, sets *out_had_error=1, *out_text=NULL, *out_has_virt_text=0.
+///
+/// Caller must have already called nvim_fold_set_vvars() and reset did_emsg.
+/// Increments/decrements emsg_off around eval.
+void nvim_fold_eval_foldtext_full(win_T *wp, void *vt_out, char *buf_out,
+                                  char **out_text, int *out_has_virt_text,
+                                  int *out_had_error)
+{
+  *out_text = NULL;
+  *out_has_virt_text = 0;
+  *out_had_error = 0;
+
+  win_T *const save_curwin = curwin;
+  const sctx_T saved_sctx = current_sctx;
+
+  curwin = wp;
+  curbuf = wp->w_buffer;
+  current_sctx = wp->w_p_script_ctx[kWinOptFoldtext];
+
+  emsg_off++;  // handle exceptions, but don't display errors
+
+  Object obj = eval_foldtext(wp);
+  if (obj.type == kObjectTypeArray) {
+    Error err = ERROR_INIT;
+    *(VirtText *)vt_out = parse_virt_text(obj.data.array, &err, NULL);
+    if (!ERROR_SET(&err)) {
+      *buf_out = NUL;
+      *out_has_virt_text = 1;
+    } else {
+      *out_had_error = 1;
+    }
+    api_clear_error(&err);
+  } else if (obj.type == kObjectTypeString) {
+    *out_text = obj.data.string.data;
+    obj = NIL;
+  } else {
+    *out_had_error = 1;
+  }
+  api_free_object(obj);
+
+  emsg_off--;
+
+  if ((*out_text == NULL && !*out_has_virt_text) || did_emsg) {
+    *out_had_error = 1;
+  }
+
+  curwin = save_curwin;
+  curbuf = curwin->w_buffer;
+  current_sctx = saved_sctx;
+}
+
+/// Set v:foldstart, v:foldend, v:folddashes, v:foldlevel.
+/// level is clamped to MAX_LEVEL.
+void nvim_fold_set_vvars(linenr_T start, linenr_T end, int level)
+{
+  char dashes[MAX_LEVEL + 2];
+  int clamped = MIN(level, (int)sizeof(dashes) - 1);
+  memset(dashes, '-', (size_t)clamped);
+  dashes[clamped] = NUL;
+  set_vim_var_nr(VV_FOLDSTART, (varnumber_T)start);
+  set_vim_var_nr(VV_FOLDEND, (varnumber_T)end);
+  set_vim_var_string(VV_FOLDDASHES, dashes, -1);
+  set_vim_var_nr(VV_FOLDLEVEL, (varnumber_T)clamped);
+}
+
+/// Clear v:folddashes (set to NULL).
+void nvim_fold_clear_vvars(void)
+{
+  set_vim_var_string(VV_FOLDDASHES, NULL, -1);
+}
+
+/// Replace unprintable characters in text with printable equivalents.
+/// Returns a new xmalloc'd string (caller must xfree), or NULL if text is NULL.
+char *nvim_fold_transstr(char *text)
+{
+  if (text == NULL) {
+    return NULL;
+  }
+  return transstr(text, true);
+}
+
+/// Free a pointer allocated with xmalloc (wraps xfree).
+void nvim_fold_xfree(void *ptr)
+{
+  xfree(ptr);
+}
+
+/// Format default fold text "+--%3d line(s) folded" into buf.
+/// Returns number of bytes written (like snprintf).
+int nvim_fold_vim_snprintf_default(char *buf, int count)
+{
+  vim_snprintf(buf, FOLD_TEXT_LEN,
+               NGETTEXT("+--%3d line folded",
+                        "+--%3d lines folded ", count),
+               count);
+  return (int)strlen(buf);
+}
+
+/// Get wp->w_p_fdt (foldtext option string).
+char *nvim_fold_win_get_p_fdt(win_T *wp)
+{
+  return wp->w_p_fdt;
+}
+
+/// Get the current value of did_emsg.
+int nvim_fold_get_did_emsg(void)
+{
+  return did_emsg;
+}
+
+/// Set did_emsg.
+void nvim_fold_set_did_emsg(int val)
+{
+  did_emsg = (bool)val;
+}
+
+/// xstrdup wrapper.
+char *nvim_fold_xstrdup(const char *s)
+{
+  return xstrdup(s);
+}
+
+/// Concatenate all chunks from a VirtText into a single xmalloc'd string.
+/// `vt_ptr` must be a valid VirtText*.
+/// Returns an xmalloc'd string (caller must xfree).
+char *nvim_fold_virt_text_concat(void *vt_ptr)
+{
+  VirtText *vt = (VirtText *)vt_ptr;
+  char *text = xstrdup("");
+  for (size_t i = 0; i < kv_size(*vt);) {
+    int attr = 0;
+    char *chunk = next_virt_text_chunk(*vt, &i, &attr);
+    if (chunk == NULL) {
+      break;
+    }
+    char *new_text = concat_str(text, chunk);
+    xfree(text);
+    text = new_text;
+  }
+  return text;
+}
+
+/// Get the size of a VirtText (number of chunks).
+size_t nvim_fold_virt_text_size(void *vt_ptr)
+{
+  VirtText *vt = (VirtText *)vt_ptr;
+  return kv_size(*vt);
+}
+
+/// Check if a character at p is a TAB byte.
+int nvim_fold_is_tab(const char *p)
+{
+  return (unsigned char)*p == TAB;
+}
+
+/// Call ptr2cells (returns cell width of character at p).
+int nvim_fold_ptr2cells(const char *p)
+{
+  return ptr2cells(p);
+}
+
+/// Call vim_isprintc (returns nonzero if c is printable).
+int nvim_fold_vim_isprintc(int c)
+{
+  return vim_isprintc(c);
+}
+
+/// Call utf_ptr2char: get Unicode codepoint at p.
+int nvim_fold_utf_ptr2char(const char *p)
+{
+  return utf_ptr2char(p);
+}
+

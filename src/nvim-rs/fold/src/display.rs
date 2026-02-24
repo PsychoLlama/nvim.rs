@@ -14,8 +14,9 @@
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::cast_sign_loss)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 
 use nvim_mbyte::utfc_ptr2len;
 use nvim_window::WinHandle;
@@ -53,6 +54,7 @@ extern "C" {
     /// Get curbuf's line count.
     fn nvim_fold_get_curbuf_line_count() -> LinenrT;
     /// Allocate, format, and concatenate fold text. Returns xmalloc'd string.
+    /// Still used by f_foldtext_impl for the foldtext() VimL function.
     fn nvim_fold_build_foldtext(
         txt: *const c_char,
         dashes: *const c_char,
@@ -60,6 +62,51 @@ extern "C" {
         line_text: *const c_char,
         out_header_len: *mut usize,
     ) -> *mut c_char;
+
+    // Accessors for get_foldtext migration
+    /// Evaluate 'foldtext' option and process Object result.
+    /// Populates vt_out (VirtText*) for Array results.
+    /// Sets out_text, out_has_virt_text, out_had_error.
+    fn nvim_fold_eval_foldtext_full(
+        wp: WinHandle,
+        vt_out: *mut std::ffi::c_void,
+        buf_out: *mut c_char,
+        out_text: *mut *mut c_char,
+        out_has_virt_text: *mut c_int,
+        out_had_error: *mut c_int,
+    );
+    /// Set v:foldstart, v:foldend, v:folddashes, v:foldlevel.
+    fn nvim_fold_set_vvars(start: LinenrT, end: LinenrT, level: c_int);
+    /// Clear v:folddashes (set to NULL).
+    fn nvim_fold_clear_vvars();
+    /// Replace unprintable chars; returns new xmalloc'd string.
+    fn nvim_fold_transstr(text: *mut c_char) -> *mut c_char;
+    /// xfree a pointer.
+    fn nvim_fold_xfree(ptr: *mut std::ffi::c_void);
+    /// Format default fold text into buf; returns byte count.
+    fn nvim_fold_vim_snprintf_default(buf: *mut c_char, count: c_int) -> c_int;
+    /// Get wp->w_p_fdt (foldtext option string).
+    fn nvim_fold_win_get_p_fdt(wp: WinHandle) -> *const c_char;
+    /// Get did_emsg.
+    fn nvim_fold_get_did_emsg() -> c_int;
+    /// Set did_emsg.
+    fn nvim_fold_set_did_emsg(val: c_int);
+    /// xstrdup a string.
+    fn nvim_fold_xstrdup(s: *const c_char) -> *mut c_char;
+    /// Check if character at p is TAB.
+    fn nvim_fold_is_tab(p: *const c_char) -> c_int;
+    /// Get cell width of character at p.
+    fn nvim_fold_ptr2cells(p: *const c_char) -> c_int;
+    /// Check if codepoint c is printable.
+    fn nvim_fold_vim_isprintc(c: c_int) -> c_int;
+    /// Get Unicode codepoint at p.
+    fn nvim_fold_utf_ptr2char(p: *const c_char) -> c_int;
+    /// Concatenate all VirtText chunks into a new xmalloc'd string.
+    fn nvim_fold_virt_text_concat(vt_ptr: *mut std::ffi::c_void) -> *mut c_char;
+    /// Get size (chunk count) of a VirtText.
+    fn nvim_fold_virt_text_size(vt_ptr: *mut std::ffi::c_void) -> usize;
+    /// Clear a VirtText.
+    fn nvim_clear_virttext(vt_ptr: *mut std::ffi::c_void);
 }
 
 // =============================================================================
@@ -582,6 +629,223 @@ unsafe fn f_foldtext_impl() -> *mut c_char {
 }
 
 // =============================================================================
+// get_foldtext implementation
+// =============================================================================
+
+/// Stack buffer size for fold text (matches C FOLD_TEXT_LEN = 51).
+pub const FOLD_TEXT_LEN: usize = 51;
+
+/// Result struct returned by rs_get_foldtext to drawline.c.
+/// Mirrors what the old get_foldtext() returned, but with ownership flag.
+#[repr(C)]
+pub struct FoldTextResult {
+    /// Pointer to fold text string. Either points into buf (not allocated)
+    /// or is an xmalloc'd string (when text_is_allocated is true).
+    pub text: *mut c_char,
+    /// True if text was heap-allocated (caller must xfree it).
+    pub text_is_allocated: bool,
+    /// True if vt_out was populated with VirtText chunks.
+    pub has_virt_text: bool,
+}
+
+impl Default for FoldTextResult {
+    fn default() -> Self {
+        Self {
+            text: ptr::null_mut(),
+            text_is_allocated: false,
+            has_virt_text: false,
+        }
+    }
+}
+
+// Static state for get_foldtext (replaces C statics in get_foldtext).
+static GOT_FDT_ERROR: AtomicBool = AtomicBool::new(false);
+static LAST_WP: AtomicUsize = AtomicUsize::new(0);
+static LAST_LNUM: AtomicI32 = AtomicI32::new(0);
+
+/// Core implementation of get_foldtext logic.
+///
+/// `wp` -- window handle
+/// `lnum` -- first line of fold (1-based)
+/// `lnume` -- last line of fold (1-based)
+/// `fi_level` -- fold level from foldinfo
+/// `buf` -- stack buffer of FOLD_TEXT_LEN bytes (already memset to spaces)
+/// `vt_out` -- pointer to VirtText to populate if 'foldtext' returns Array
+///
+/// Returns a FoldTextResult.
+///
+/// # Safety
+/// `buf` must be valid with at least FOLD_TEXT_LEN bytes.
+/// `vt_out` must be a valid pointer to a zero-initialized VirtText.
+#[allow(clippy::too_many_arguments)]
+unsafe fn get_foldtext_impl(
+    wp: WinHandle,
+    lnum: LinenrT,
+    lnume: LinenrT,
+    fi_level: c_int,
+    buf: *mut c_char,
+    vt_out: *mut c_void,
+) -> FoldTextResult {
+    let mut result = FoldTextResult::default();
+
+    // Use the raw pointer value as a key to detect window changes.
+    let wp_id = wp.as_ptr() as usize;
+
+    let last_wp = LAST_WP.load(Ordering::Relaxed);
+    let last_lnum = LAST_LNUM.load(Ordering::Relaxed);
+
+    if last_wp == 0 || last_wp != wp_id || last_lnum > lnum || last_lnum == 0 {
+        // window changed or first call - reset error flag
+        GOT_FDT_ERROR.store(false, Ordering::Relaxed);
+    }
+
+    let got_fdt_error = GOT_FDT_ERROR.load(Ordering::Relaxed);
+    let save_did_emsg = nvim_fold_get_did_emsg();
+
+    if !got_fdt_error {
+        // A previous error should not abort evaluating 'foldexpr'
+        nvim_fold_set_did_emsg(0);
+    }
+
+    let p_fdt = nvim_fold_win_get_p_fdt(wp);
+
+    if !p_fdt.is_null() && *p_fdt != 0 {
+        // Set v:foldstart, v:foldend, v:folddashes, v:foldlevel
+        nvim_fold_set_vvars(lnum, lnume, fi_level);
+
+        // Skip evaluating 'foldtext' if there was an error last time
+        if !got_fdt_error {
+            let mut out_text: *mut c_char = ptr::null_mut();
+            let mut out_has_virt_text: c_int = 0;
+            let mut out_had_error: c_int = 0;
+
+            nvim_fold_eval_foldtext_full(
+                wp,
+                vt_out,
+                buf,
+                &raw mut out_text,
+                &raw mut out_has_virt_text,
+                &raw mut out_had_error,
+            );
+
+            if out_has_virt_text != 0 {
+                result.text = buf;
+                result.has_virt_text = true;
+            } else if !out_text.is_null() {
+                result.text = out_text;
+                result.text_is_allocated = true;
+            }
+
+            if result.text.is_null() || nvim_fold_get_did_emsg() != 0 {
+                GOT_FDT_ERROR.store(true, Ordering::Relaxed);
+            }
+        }
+
+        LAST_LNUM.store(lnum, Ordering::Relaxed);
+        LAST_WP.store(wp_id, Ordering::Relaxed);
+        nvim_fold_clear_vvars();
+
+        if nvim_fold_get_did_emsg() == 0 && save_did_emsg != 0 {
+            nvim_fold_set_did_emsg(save_did_emsg);
+        }
+
+        // Replace unprintable characters in text (if text is a string, not VirtText)
+        if !result.text.is_null() && !result.has_virt_text {
+            let mut p = result.text;
+            loop {
+                if *p == 0 {
+                    break;
+                }
+                let remaining = {
+                    let mut q = p;
+                    while *q != 0 {
+                        q = q.add(1);
+                    }
+                    #[allow(clippy::cast_sign_loss)]
+                    let len = q.offset_from(p) as usize;
+                    len
+                };
+                let slice = std::slice::from_raw_parts(p as *const u8, remaining + 1);
+                let len = utfc_ptr2len(slice);
+
+                if len > 1 {
+                    let cp = nvim_fold_utf_ptr2char(p);
+                    if nvim_fold_vim_isprintc(cp) == 0 {
+                        break;
+                    }
+                    p = p.add(len - 1);
+                } else if nvim_fold_is_tab(p) != 0 {
+                    *p = b' ' as c_char;
+                } else if nvim_fold_ptr2cells(p) > 1 {
+                    break;
+                }
+                p = p.add(1);
+            }
+            if *p != 0 {
+                // Found unprintable chars - replace with transstr
+                let new_text = nvim_fold_transstr(result.text);
+                if result.text_is_allocated {
+                    nvim_fold_xfree(result.text.cast::<c_void>());
+                }
+                result.text = new_text;
+                result.text_is_allocated = true;
+            }
+        }
+    }
+
+    if result.text.is_null() {
+        // Default fold text: "+--%3d line(s) folded"
+        let count = lnume - lnum + 1;
+        nvim_fold_vim_snprintf_default(buf, count);
+        result.text = buf;
+        result.text_is_allocated = false;
+        result.has_virt_text = false;
+    }
+
+    result
+}
+
+/// Concatenate fold text result into a single xmalloc'd string.
+/// Used by rs_f_foldtextresult as a replacement for nvim_get_foldtext.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+pub(crate) unsafe fn get_foldtext_concat_impl(
+    wp: WinHandle,
+    lnum: LinenrT,
+    lnume: LinenrT,
+    fi_level: c_int,
+) -> *mut c_char {
+    let mut buf = [b' ' as c_char; FOLD_TEXT_LEN];
+    // Stack-allocate a VirtText (VirtText = kvec_t, initially zeroed = VIRTTEXT_EMPTY)
+    // We pass an opaque *mut c_void to C.
+    // Since we need a VirtText on the stack, we use a [u8; 24] (kvec_t is {size_t n, size_t m, T*items} = 24 bytes on 64-bit)
+    let mut vt_storage = [0u8; 24];
+    let vt_ptr = vt_storage.as_mut_ptr().cast::<c_void>();
+
+    let result = get_foldtext_impl(wp, lnum, lnume, fi_level, buf.as_mut_ptr(), vt_ptr);
+
+    if result.has_virt_text {
+        // VirtText was populated - concatenate chunks
+        let vt_size = nvim_fold_virt_text_size(vt_ptr);
+        let text = if vt_size > 0 {
+            nvim_fold_virt_text_concat(vt_ptr)
+        } else {
+            nvim_fold_xstrdup(c"".as_ptr())
+        };
+        nvim_clear_virttext(vt_ptr);
+        text
+    } else if result.text_is_allocated {
+        result.text
+    } else if !result.text.is_null() {
+        // text points into buf (stack) - must copy to heap
+        nvim_fold_xstrdup(result.text)
+    } else {
+        ptr::null_mut()
+    }
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -604,6 +868,33 @@ pub unsafe extern "C" fn rs_foldtext_cleanup(str: *mut c_char) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_f_foldtext_impl() -> *mut c_char {
     f_foldtext_impl()
+}
+
+/// FFI export: generate fold text for a closed fold line.
+///
+/// Replaces C `get_foldtext()`. Called from `drawline.c`.
+///
+/// `buf` must be a stack buffer of FOLD_TEXT_LEN bytes (pre-filled with spaces).
+/// `vt_out` must be a pointer to a zero-initialized VirtText (stack-allocated
+/// in the caller as `VirtText fold_vt = VIRTTEXT_EMPTY`).
+///
+/// Returns a FoldTextResult. The caller (drawline.c) handles:
+/// - If text points into buf: use directly (no free needed)
+/// - If text_is_allocated: must xfree text after use
+/// - If has_virt_text: draw fold_vt, then xfree/clear as before
+///
+/// # Safety
+/// All pointers must be valid. `vt_out` must remain live until caller clears it.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_foldtext(
+    wp: WinHandle,
+    lnum: LinenrT,
+    lnume: LinenrT,
+    fi_level: c_int,
+    buf: *mut c_char,
+    vt_out: *mut c_void,
+) -> FoldTextResult {
+    get_foldtext_impl(wp, lnum, lnume, fi_level, buf, vt_out)
 }
 
 /// FFI export: Get fold column character

@@ -170,6 +170,16 @@ extern bool rs_diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline);
 extern bool rs_diff_change_parse(diffline_T *diffline, diffline_change_T *change,
                                  int *change_start, int *change_end);
 
+/// Return type of rs_get_foldtext (matches Rust FoldTextResult repr(C)).
+typedef struct {
+  char *text;            ///< pointer to fold text (may point into buf or be heap-allocated)
+  bool text_is_allocated;  ///< true if text must be xfree'd
+  bool has_virt_text;    ///< true if fold_vt was populated
+} FoldTextResult;
+
+extern FoldTextResult rs_get_foldtext(win_T *wp, linenr_T lnum, linenr_T lnume,
+                                      int fi_level, char *buf, VirtText *vt_out);
+
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
 
@@ -1990,10 +2000,11 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
       const int v = (int)(ptr - line);
       linenr_T lnume = lnum + foldinfo.fi_lines - 1;
       memset(buf_fold, ' ', FOLD_TEXT_LEN);
-      wlv.p_extra = get_foldtext(wp, lnum, lnume, foldinfo, buf_fold, &fold_vt);
+      FoldTextResult ftr = rs_get_foldtext(wp, lnum, lnume, foldinfo.fi_level, buf_fold, &fold_vt);
+      wlv.p_extra = ftr.text;
       wlv.n_extra = (int)strlen(wlv.p_extra);
 
-      if (wlv.p_extra != buf_fold) {
+      if (ftr.text_is_allocated) {
         assert(foldtext_free == NULL);
         foldtext_free = wlv.p_extra;
       }

@@ -3787,16 +3787,6 @@ extern "C" {
 
     /// Get the Rust-implemented foldtext string.
     fn rs_f_foldtext_impl() -> *mut c_char;
-
-    /// Get the fold display text for a fold range.
-    /// Calls get_foldtext() in C and concatenates VirtText chunks.
-    /// Returns an xmalloc'd string (caller must free), or NULL.
-    fn nvim_get_foldtext(
-        wp: WinHandle,
-        lnum: LineNr,
-        lnume: LineNr,
-        foldinfo: FoldInfoResult,
-    ) -> *mut c_char;
 }
 
 /// Implement `foldclosed()` or `foldclosedend()` VimL functions.
@@ -3914,7 +3904,7 @@ pub unsafe extern "C" fn rs_f_foldtextresult(
     if info.fi_lines > 0 {
         let curwin = nvim_get_curwin();
         let lnume = lnum + info.fi_lines - 1;
-        let text = nvim_get_foldtext(curwin, lnum, lnume, info);
+        let text = crate::display::get_foldtext_concat_impl(curwin, lnum, lnume, info.fi_level);
         nvim_fold_rettv_init_string(rettv, text);
     }
 
