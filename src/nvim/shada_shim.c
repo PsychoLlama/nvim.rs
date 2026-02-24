@@ -1740,37 +1740,6 @@ int nvim_shada_read_next_item(void *sd_reader, ShadaEntry *entry,
                                    srni_flags, max_kbyte);
 }
 
-/// Compute srni_flags from ShaDa read flags (same logic as C shada_read).
-/// @param flags         ShaDaReadFileFlags
-/// @param local_marks   rs_get_shada_parameter('\'') value
-/// @param get_old_files whether oldfiles should be gathered
-/// @param argcount      ARGCOUNT value
-unsigned nvim_shada_get_srni_flags(int flags, int local_marks,
-                                   bool get_old_files, int argcount)
-{
-  const bool force = (bool)(flags & kShaDaForceit);
-  const bool want_marks = (bool)(flags & kShaDaWantMarks);
-  unsigned srni_flags = (unsigned)(
-    (flags & kShaDaWantInfo
-     ? (kSDReadUndisableableData
-        | kSDReadRegisters
-        | kSDReadGlobalMarks
-        | (p_hi ? kSDReadHistory : 0)
-        | (rs_find_shada_parameter('!') != NULL ? kSDReadVariables : 0)
-        | (rs_find_shada_parameter('%') != NULL && argcount == 0
-           ? kSDReadBufferList
-           : 0))
-     : 0)
-    | (want_marks && local_marks > 0
-       ? kSDReadLocalMarks | kSDReadChanges
-       : 0)
-    | (get_old_files
-       ? kSDReadLocalMarks
-       : 0));
-  (void)force;
-  return srni_flags;
-}
-
 /// Allocate and initialize a PMap(cstr_t) for fname_bufs caching.
 void *nvim_shada_fname_bufs_new(void)
 {

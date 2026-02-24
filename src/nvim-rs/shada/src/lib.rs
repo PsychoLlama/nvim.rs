@@ -561,12 +561,6 @@ extern "C" {
         srni_flags: c_uint,
         max_kbyte: usize,
     ) -> c_int;
-    fn nvim_shada_get_srni_flags(
-        flags: c_int,
-        local_marks: c_int,
-        get_old_files: bool,
-        argcount: c_int,
-    ) -> c_uint;
     fn nvim_shada_fname_bufs_new() -> *mut c_void;
     fn nvim_shada_fname_bufs_destroy(handle: *mut c_void);
     fn nvim_shada_cl_bufs_new() -> *mut c_void;
@@ -930,6 +924,42 @@ pub extern "C" fn rs_shada_entry_type_name(entry_type: i32) -> *const c_char {
 // =============================================================================
 // Read Flag Helpers
 // =============================================================================
+
+/// Compute srni_flags for shada_read from ShaDaReadFileFlags.
+///
+/// Matches the logic of C nvim_shada_get_srni_flags (now deleted).
+///
+/// # Safety
+///
+/// Accesses p_hi and shada option via C accessors.
+pub unsafe fn compute_srni_flags(
+    flags: c_int,
+    local_marks: c_int,
+    get_old_files: bool,
+    argcount: c_int,
+) -> u32 {
+    let want_marks = (flags & SHADA_WANT_MARKS) != 0;
+    let mut srni_flags: u32 = 0;
+    if (flags & SHADA_WANT_INFO) != 0 {
+        srni_flags |= SD_READ_UNDISABLEABLE_DATA | SD_READ_REGISTERS | SD_READ_GLOBAL_MARKS;
+        if nvim_get_p_hi() > 0 {
+            srni_flags |= SD_READ_HISTORY;
+        }
+        if !find_shada_parameter_impl(c_int::from(b'!')).is_null() {
+            srni_flags |= SD_READ_VARIABLES;
+        }
+        if !find_shada_parameter_impl(c_int::from(b'%')).is_null() && argcount == 0 {
+            srni_flags |= SD_READ_BUFFER_LIST;
+        }
+    }
+    if want_marks && local_marks > 0 {
+        srni_flags |= SD_READ_LOCAL_MARKS | SD_READ_CHANGES;
+    }
+    if get_old_files {
+        srni_flags |= SD_READ_LOCAL_MARKS;
+    }
+    srni_flags
+}
 
 /// Build the read flags for a given set of options.
 ///
@@ -4161,7 +4191,7 @@ pub unsafe extern "C" fn rs_shada_read(sd_reader: *mut c_void, flags: c_int) {
     };
     let local_marks_param = rs_get_shada_parameter(c_int::from(b'\''));
     let argcount = nvim_shada_argcount();
-    let srni_flags = nvim_shada_get_srni_flags(flags, local_marks_param, get_old_files, argcount);
+    let srni_flags = compute_srni_flags(flags, local_marks_param, get_old_files, argcount);
     if srni_flags == 0 {
         return;
     }
