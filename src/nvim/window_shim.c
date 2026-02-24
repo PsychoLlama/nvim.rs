@@ -1512,6 +1512,48 @@ void free_tabpage(tabpage_T *tp)
   xfree(tp);
 }
 
+// =============================================================================
+// Phase 8 wrappers for rs_win_new_tabpage
+// =============================================================================
+
+/// Allocate a new tabpage. Called once per win_new_tabpage invocation.
+tabpage_T *nvim_alloc_tabpage_wrapper(void) { return alloc_tabpage(); }
+
+/// Allocate first window in a new tabpage from oldwin.
+/// Returns OK (1) or FAIL (0).
+int nvim_win_alloc_firstwin_wrapper(win_T *oldwin) { return win_alloc_firstwin(oldwin); }
+
+/// Copy tp_localdir from src to dst with xstrdup (NULL-safe).
+void nvim_tabpage_copy_localdir(tabpage_T *dst, tabpage_T *src)
+{
+  if (dst && src) {
+    dst->tp_localdir = src->tp_localdir ? xstrdup(src->tp_localdir) : NULL;
+  }
+}
+
+/// Free a tabpage allocated by nvim_alloc_tabpage_wrapper on failure path.
+void nvim_xfree_tabpage(tabpage_T *tp) { xfree(tp); }
+
+/// If curbuf has a terminal, call terminal_check_size on it.
+void nvim_curbuf_terminal_check_size(void)
+{
+  if (curbuf->terminal) {
+    terminal_check_size(curbuf->terminal);
+  }
+}
+
+/// Fire EVENT_TABNEW autocmd with optional filename.
+void nvim_apply_autocmds_tabnew(const char *filename)
+{
+  apply_autocmds(EVENT_TABNEW, (char *)filename, (char *)filename, false, curbuf);
+}
+
+// =============================================================================
+// win_new_tabpage: body replaced by thin wrapper calling rs_win_new_tabpage
+// =============================================================================
+
+extern int rs_win_new_tabpage(int after, const char *filename);
+
 /// Create a new tabpage with one window.
 ///
 /// It will edit the current buffer, like after :split.
@@ -1522,80 +1564,7 @@ void free_tabpage(tabpage_T *tp)
 /// @return Was the new tabpage created successfully? FAIL or OK.
 int win_new_tabpage(int after, char *filename)
 {
-  tabpage_T *old_curtab = curtab;
-
-  if (cmdwin_type != 0) {
-    emsg(_(e_cmdwin));
-    return FAIL;
-  }
-
-  tabpage_T *newtp = alloc_tabpage();
-
-  // Remember the current windows in this Tab page.
-  if (leave_tabpage(curbuf, true) == FAIL) {
-    xfree(newtp);
-    return FAIL;
-  }
-
-  newtp->tp_localdir = old_curtab->tp_localdir
-                       ? xstrdup(old_curtab->tp_localdir) : NULL;
-
-  curtab = newtp;
-
-  // Create a new empty window.
-  if (win_alloc_firstwin(old_curtab->tp_curwin) == OK) {
-    // Make the new Tab page the new topframe.
-    if (after == 1) {
-      // New tab page becomes the first one.
-      newtp->tp_next = first_tabpage;
-      first_tabpage = newtp;
-    } else {
-      tabpage_T *tp = old_curtab;
-
-      if (after > 0) {
-        // Put new tab page before tab page "after".
-        int n = 2;
-        for (tp = first_tabpage; tp->tp_next != NULL
-             && n < after; tp = tp->tp_next) {
-          n++;
-        }
-      }
-      newtp->tp_next = tp->tp_next;
-      tp->tp_next = newtp;
-    }
-    newtp->tp_firstwin = newtp->tp_lastwin = newtp->tp_curwin = curwin;
-
-    win_init_size();
-    firstwin->w_winrow = rs_tabline_height();
-    firstwin->w_prev_winrow = firstwin->w_winrow;
-    win_comp_scroll(curwin);
-
-    newtp->tp_topframe = topframe;
-    rs_last_status(0);
-
-    if (curbuf->terminal) {
-      terminal_check_size(curbuf->terminal);
-    }
-
-    redraw_all_later(UPD_NOT_VALID);
-
-    tabpage_check_windows(old_curtab);
-
-    lastused_tabpage = old_curtab;
-
-    entering_window(curwin);
-
-    apply_autocmds(EVENT_WINNEW, NULL, NULL, false, curbuf);
-    apply_autocmds(EVENT_WINENTER, NULL, NULL, false, curbuf);
-    apply_autocmds(EVENT_TABNEW, filename, filename, false, curbuf);
-    apply_autocmds(EVENT_TABENTER, NULL, NULL, false, curbuf);
-
-    return OK;
-  }
-
-  // Failed, get back the previous Tab page
-  enter_tabpage(curtab, curbuf, true, true);
-  return FAIL;
+  return rs_win_new_tabpage(after, filename);
 }
 
 // Open a new tab page if ":tab cmd" was used.  It will edit the same buffer,
@@ -2955,9 +2924,10 @@ void nvim_apply_autocmds_tabnewentered(void)
 }
 
 /// win_new_tabpage wrapper (returns OK/FAIL as int).
+/// Now delegates directly to rs_win_new_tabpage (Phase 8).
 int nvim_win_new_tabpage_wrapper(int after, const char *filename)
 {
-  return win_new_tabpage(after, (char *)filename);
+  return rs_win_new_tabpage(after, filename);
 }
 
 /// get curwin->w_alt_fnum.

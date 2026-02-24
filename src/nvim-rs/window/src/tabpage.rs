@@ -1537,6 +1537,169 @@ pub unsafe extern "C" fn rs_goto_tabpage_tp_impl(
     goto_tabpage_tp_impl(tp, trigger_enter != 0, trigger_leave != 0);
 }
 
+// =============================================================================
+// Phase 8: win_new_tabpage migration
+// =============================================================================
+
+extern "C" {
+    /// Allocate a new tabpage_T (thin wrapper around static alloc_tabpage()).
+    fn nvim_alloc_tabpage_wrapper() -> TabpageHandle;
+
+    /// Allocate first window in a new tabpage from oldwin.
+    /// Returns OK (1) or FAIL (0).
+    fn nvim_win_alloc_firstwin_wrapper(oldwin: WinHandle) -> c_int;
+
+    /// Copy tp_localdir from src to dst (xstrdup, NULL-safe).
+    fn nvim_tabpage_copy_localdir(dst: TabpageHandle, src: TabpageHandle);
+
+    /// Free a tabpage allocated on the failure path.
+    fn nvim_xfree_tabpage(tp: TabpageHandle);
+
+    /// If curbuf has a terminal, call terminal_check_size.
+    fn nvim_curbuf_terminal_check_size();
+
+    /// Fire EVENT_TABNEW autocmd with optional filename.
+    fn nvim_apply_autocmds_tabnew(filename: *const u8);
+
+    /// Apply WinNew autocmd.
+    fn nvim_apply_autocmds_winnew();
+
+    /// Apply WinEnter autocmd.
+    fn nvim_apply_autocmds_winenter();
+
+    /// Set w_winrow on a window.
+    fn nvim_win_set_winrow(wp: WinHandle, val: c_int);
+
+    /// Set w_prev_winrow on a window.
+    fn nvim_win_set_prev_winrow(wp: WinHandle, val: c_int);
+
+    /// rs_tabline_height.
+    fn rs_tabline_height() -> c_int;
+
+    /// rs_win_comp_scroll for curwin.
+    fn nvim_win_comp_scroll_wrapper(wp: WinHandle);
+}
+
+/// UPD_NOT_VALID constant (matches C define = 40).
+const UPD_NOT_VALID_TAB: c_int = 40;
+
+/// Rust replacement for C `win_new_tabpage`.
+///
+/// Creates a new tab page with one window, links it into the tabpage list,
+/// fires WinNew/WinEnter/TabNew/TabEnter autocmds.
+///
+/// # Safety
+/// Calls C accessor functions. Must only be called from the main Neovim thread.
+unsafe fn win_new_tabpage_impl(after: c_int, filename: *const u8) -> c_int {
+    // Check for command-line window
+    if nvim_get_cmdwin_type() != 0 {
+        nvim_emsg_e_cmdwin();
+        return FAIL;
+    }
+
+    let old_curtab = nvim_get_curtab();
+
+    // Allocate the new tabpage
+    let newtp = nvim_alloc_tabpage_wrapper();
+
+    // Leave the current tabpage (fires BufLeave/WinLeave/TabLeave autocmds)
+    let curbuf = nvim_get_curbuf();
+    if leave_tabpage_impl(curbuf, true) == FAIL {
+        nvim_xfree_tabpage(newtp);
+        return FAIL;
+    }
+
+    // Copy tp_localdir from old curtab
+    nvim_tabpage_copy_localdir(newtp, old_curtab);
+
+    // Set curtab to new tabpage
+    nvim_set_curtab(newtp);
+
+    // Allocate first window for the new tabpage
+    let old_curwin = nvim_tabpage_get_curwin(old_curtab);
+    if nvim_win_alloc_firstwin_wrapper(old_curwin) == OK {
+        // Link new tabpage into the list
+        if after == 1 {
+            // New tab page becomes the first one
+            nvim_tabpage_set_next(newtp, nvim_get_first_tabpage());
+            nvim_set_first_tabpage(newtp);
+        } else {
+            // Find insert position
+            let insert_after = if after == 0 {
+                old_curtab
+            } else {
+                // after > 1: insert after tab N
+                let mut n = 2;
+                let mut tp = nvim_get_first_tabpage();
+                while !nvim_tabpage_get_next(tp).is_null() && n < after {
+                    tp = nvim_tabpage_get_next(tp);
+                    n += 1;
+                }
+                tp
+            };
+            nvim_tabpage_set_next(newtp, nvim_tabpage_get_next(insert_after));
+            nvim_tabpage_set_next(insert_after, newtp);
+        }
+
+        // Set tp_firstwin / tp_lastwin / tp_curwin to curwin
+        let curwin = nvim_get_curwin();
+        nvim_tabpage_set_firstwin(newtp, curwin);
+        nvim_tabpage_set_lastwin(newtp, curwin);
+        nvim_tabpage_set_curwin(newtp, curwin);
+
+        // Initialize window and frame sizes
+        crate::resize::screen::rs_win_init_size();
+        let firstwin = nvim_get_firstwin();
+        let tabline_row = rs_tabline_height();
+        nvim_win_set_winrow(firstwin, tabline_row);
+        nvim_win_set_prev_winrow(firstwin, tabline_row);
+        nvim_win_comp_scroll_wrapper(curwin);
+
+        // Set tp_topframe to topframe
+        nvim_tabpage_set_topframe(newtp, nvim_get_topframe());
+
+        // Update status line
+        crate::statusline::rs_last_status(0);
+
+        // Terminal size check
+        nvim_curbuf_terminal_check_size();
+
+        // Schedule a full redraw
+        nvim_redraw_all_later(UPD_NOT_VALID_TAB);
+
+        // Check windows in old tabpage
+        crate::ui_flush::rs_tabpage_check_windows(old_curtab);
+
+        // Record old curtab as lastused
+        nvim_set_lastused_tabpage_from_rust(old_curtab);
+
+        // entering_window for the new curwin
+        crate::focus::rs_entering_window(curwin);
+
+        // Fire autocmds in order: WinNew, WinEnter, TabNew, TabEnter
+        nvim_apply_autocmds_winnew();
+        nvim_apply_autocmds_winenter();
+        nvim_apply_autocmds_tabnew(filename);
+        nvim_apply_autocmds_tabenter();
+
+        return OK;
+    }
+
+    // Failed: restore previous tabpage
+    let curbuf2 = nvim_get_curbuf();
+    enter_tabpage_impl(nvim_get_curtab(), curbuf2, true, true);
+    FAIL
+}
+
+/// FFI: Rust replacement for C `win_new_tabpage`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_win_new_tabpage(after: c_int, filename: *const u8) -> c_int {
+    win_new_tabpage_impl(after, filename)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
