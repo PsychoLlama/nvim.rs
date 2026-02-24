@@ -666,7 +666,9 @@ pub unsafe extern "C" fn rs_set_title_defaults() {
 // set_init_2 and set_init_3 (option pass 7 phase 2)
 // =============================================================================
 
-use crate::opt_index::{K_OPT_FILEFORMATS, K_OPT_SHELLPIPE, K_OPT_SHELLREDIR, K_OPT_SCROLL, K_OPT_WINDOW};
+use crate::opt_index::{
+    K_OPT_FILEFORMATS, K_OPT_SCROLL, K_OPT_SHELLPIPE, K_OPT_SHELLREDIR, K_OPT_WINDOW,
+};
 use crate::OptInt;
 
 extern "C" {
@@ -675,7 +677,6 @@ extern "C" {
     fn nvim_call_set_option_default(opt_idx: c_int, opt_flags: c_int);
     fn nvim_call_comp_col();
     fn nvim_option_was_set_idx(opt_idx: c_int) -> c_int;
-    fn nvim_get_p_window() -> OptInt;
     fn nvim_set_p_window(val: OptInt);
     fn nvim_option_get_rows() -> c_int;
 
@@ -752,8 +753,8 @@ pub unsafe extern "C" fn rs_set_init_2(_headless: c_int) {
 /// Compare a shell basename (from `p`) to a known shell name.
 ///
 /// Helper used by `rs_set_init_3`.
-unsafe fn shell_is(p: *const c_char, name: *const u8) -> bool {
-    nvim_call_path_fnamecmp(p, name.cast()) == 0
+unsafe fn shell_is(p: *const c_char, name: *const c_char) -> bool {
+    nvim_call_path_fnamecmp(p, name) == 0
 }
 
 /// Initialize the options, part three: After reading the .vimrc.
@@ -773,17 +774,17 @@ pub unsafe extern "C" fn rs_set_init_3() {
     // Duplicate just the basename so we can compare safely.
     let p = xmemdupz(tail_ptr, len);
 
-    let is_csh = shell_is(p, b"csh\0".as_ptr()) || shell_is(p, b"tcsh\0".as_ptr());
-    let is_known_shell = shell_is(p, b"sh\0".as_ptr())
-        || shell_is(p, b"ksh\0".as_ptr())
-        || shell_is(p, b"mksh\0".as_ptr())
-        || shell_is(p, b"pdksh\0".as_ptr())
-        || shell_is(p, b"zsh\0".as_ptr())
-        || shell_is(p, b"zsh-beta\0".as_ptr())
-        || shell_is(p, b"bash\0".as_ptr())
-        || shell_is(p, b"fish\0".as_ptr())
-        || shell_is(p, b"ash\0".as_ptr())
-        || shell_is(p, b"dash\0".as_ptr());
+    let is_csh = shell_is(p, c"csh".as_ptr()) || shell_is(p, c"tcsh".as_ptr());
+    let is_known_shell = shell_is(p, c"sh".as_ptr())
+        || shell_is(p, c"ksh".as_ptr())
+        || shell_is(p, c"mksh".as_ptr())
+        || shell_is(p, c"pdksh".as_ptr())
+        || shell_is(p, c"zsh".as_ptr())
+        || shell_is(p, c"zsh-beta".as_ptr())
+        || shell_is(p, c"bash".as_ptr())
+        || shell_is(p, c"fish".as_ptr())
+        || shell_is(p, c"ash".as_ptr())
+        || shell_is(p, c"dash".as_ptr());
 
     if is_csh || is_known_shell {
         if do_sp {

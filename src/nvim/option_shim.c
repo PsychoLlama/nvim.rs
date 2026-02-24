@@ -147,6 +147,12 @@ extern FindOptionEndResult rs_find_option_end(const char *arg);
 extern void rs_set_init_2(int headless);
 extern void rs_set_init_3(void);
 
+// Rust option validation and ex_set (option pass 7 phase 3)
+typedef struct { int result; const char *errmsg; } ValidateOptIdxResult;
+extern ValidateOptIdxResult rs_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags,
+                                                uint32_t flags, int prefix);
+extern void rs_ex_set(exarg_T *eap);
+
 // Rust query functions (from Rust query.rs, option pass 4 phase 1)
 extern int rs_can_bs(int what);
 extern const char *rs_get_equalprg(void);
@@ -1403,6 +1409,10 @@ int nvim_call_path_fnamecmp(const char *a, const char *b) { return path_fnamecmp
 int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf); }
 void nvim_call_set_option_direct(int opt_idx, OptVal val, int opt_flags) { set_option_direct((OptIndex)opt_idx, val, opt_flags, SID_NONE); }
 
+// Accessors for rs_ex_set and rs_validate_opt_idx (option pass 7 phase 3)
+int nvim_get_cmd_idx_setlocal(void) { return (int)CMD_setlocal; }
+int nvim_get_cmd_idx_setglobal(void) { return (int)CMD_setglobal; }
+
 // Phase 2 makeset accessors
 int nvim_call_put_line(FILE *fd, const char *str) { return put_line(fd, str); }
 // Write "if &optname != 'val'\n" to fd; returns OK or FAIL (< 0 = FAIL like fprintf)
@@ -1868,17 +1878,7 @@ void set_title_defaults(void)
 
 void ex_set(exarg_T *eap)
 {
-  int flags = 0;
-
-  if (eap->cmdidx == CMD_setlocal) {
-    flags = OPT_LOCAL;
-  } else if (eap->cmdidx == CMD_setglobal) {
-    flags = OPT_GLOBAL;
-  }
-  if (eap->forceit) {
-    flags |= OPT_ONECOLUMN;
-  }
-  do_set(eap->arg, flags);
+  rs_ex_set(eap);
 }
 
 /// Get the string value specified for a ":set" command.  The following set options are supported:
@@ -1906,48 +1906,11 @@ static set_prefix_T get_option_prefix(char **argp)
 static int validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
                             set_prefix_T prefix, const char **errmsg)
 {
-  // Only bools can have a prefix of 'inv' or 'no'
-  if (!option_has_type(opt_idx, kOptValTypeBoolean) && prefix != PREFIX_NONE) {
-    *errmsg = e_invarg;
-    return FAIL;
+  ValidateOptIdxResult r = rs_validate_opt_idx(win, opt_idx, opt_flags, flags, (int)prefix);
+  if (r.errmsg != NULL) {
+    *errmsg = r.errmsg;
   }
-
-  // Skip all options that are not window-local (used when showing
-  // an already loaded buffer in a window).
-  if ((opt_flags & OPT_WINONLY) && !option_is_window_local(opt_idx)) {
-    return FAIL;
-  }
-
-  // Skip all options that are window-local (used for :vimgrep).
-  if ((opt_flags & OPT_NOWIN) && option_is_window_local(opt_idx)) {
-    return FAIL;
-  }
-
-  // Disallow changing some options from modelines.
-  if (opt_flags & OPT_MODELINE) {
-    if (flags & (kOptFlagSecure | kOptFlagNoML)) {
-      *errmsg = e_not_allowed_in_modeline;
-      return FAIL;
-    }
-    if ((flags & kOptFlagMLE) && !p_mle) {
-      *errmsg = e_not_allowed_in_modeline_when_modelineexpr_is_off;
-      return FAIL;
-    }
-    // In diff mode some options are overruled.  This avoids that
-    // 'foldmethod' becomes "marker" instead of "diff" and that
-    // "wrap" gets set.
-    if (win->w_p_diff && (opt_idx == kOptFoldmethod || opt_idx == kOptWrap)) {
-      return FAIL;
-    }
-  }
-
-  // Disallow changing some options in the sandbox
-  if (sandbox != 0 && (flags & kOptFlagSecure)) {
-    *errmsg = e_sandbox;
-    return FAIL;
-  }
-
-  return OK;
+  return r.result;
 }
 
 /// Skip over the name of a TTY option or keycode option.

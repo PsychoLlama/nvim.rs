@@ -82,8 +82,8 @@ extern "C" {
     fn nvim_get_p_sj() -> OptInt;
     fn nvim_set_p_sj(val: OptInt);
     fn nvim_option_was_set_window() -> c_int;
-    fn nvim_get_p_window() -> c_int;
-    fn nvim_set_p_window(val: c_int);
+    fn nvim_get_p_window() -> OptInt;
+    fn nvim_set_p_window(val: OptInt);
 }
 
 // =============================================================================
@@ -448,8 +448,8 @@ pub unsafe extern "C" fn rs_did_set_lines_or_columns(args: *mut c_void) -> Callb
             }
         }
         let window = nvim_get_p_window();
-        if window >= nvim_get_Rows() || nvim_option_was_set_window() == 0 {
-            nvim_set_p_window(nvim_get_Rows() - 1);
+        if window >= OptInt::from(nvim_get_Rows()) || nvim_option_was_set_window() == 0 {
+            nvim_set_p_window(OptInt::from(nvim_get_Rows()) - 1);
         }
     }
 

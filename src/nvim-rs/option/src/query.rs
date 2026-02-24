@@ -533,5 +533,3 @@ pub unsafe extern "C" fn rs_get_fileformat_force(buf: BufHandle, eap: *const c_v
         _ => EOL_DOS,
     }
 }
-
-

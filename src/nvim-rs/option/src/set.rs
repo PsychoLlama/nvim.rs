@@ -601,6 +601,48 @@ pub unsafe extern "C" fn rs_stropt_get_newval(
 }
 
 // =============================================================================
+// ex_set command entry point
+// =============================================================================
+
+extern "C" {
+    fn nvim_exarg_get_cmdidx(eap: *mut std::ffi::c_void) -> c_int;
+    fn nvim_exarg_get_forceit(eap: *mut std::ffi::c_void) -> c_int;
+    fn nvim_exarg_get_arg(eap: *const std::ffi::c_void) -> *const c_char;
+    fn nvim_get_cmd_idx_setlocal() -> c_int;
+    fn nvim_get_cmd_idx_setglobal() -> c_int;
+    /// C `do_set` — parses and executes `:set` arguments.
+    fn do_set(arg: *mut c_char, opt_flags: c_int) -> c_int;
+}
+
+/// OPT_ONECOLUMN flag value (list options one per line, from C option.h)
+const OPT_ONECOLUMN: c_int = 0x20;
+
+/// Entry point for `:set`, `:setlocal`, and `:setglobal` commands.
+///
+/// Extracts flags from the exarg_T and dispatches to C `do_set`.
+///
+/// # Safety
+///
+/// `eap` must be a valid non-null pointer to a C `exarg_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_set(eap: *mut std::ffi::c_void) {
+    use crate::setops::{OPT_GLOBAL, OPT_LOCAL};
+
+    let mut flags: c_int = 0;
+    let cmdidx = nvim_exarg_get_cmdidx(eap);
+    if cmdidx == nvim_get_cmd_idx_setlocal() {
+        flags = OPT_LOCAL;
+    } else if cmdidx == nvim_get_cmd_idx_setglobal() {
+        flags = OPT_GLOBAL;
+    }
+    if nvim_exarg_get_forceit(eap) != 0 {
+        flags |= OPT_ONECOLUMN;
+    }
+    let arg = nvim_exarg_get_arg(eap.cast_const()).cast_mut();
+    do_set(arg, flags);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
