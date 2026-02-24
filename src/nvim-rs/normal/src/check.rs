@@ -84,10 +84,20 @@ extern "C" {
     fn rs_foldCheckClose();
     fn rs_foldOpenCursor();
 
-    // Composite wrappers for complex functions
-    fn nvim_normal_check_cursor_moved_impl();
-    fn nvim_normal_check_text_changed_impl();
-    fn nvim_normal_check_buffer_modified_impl();
+    // Phase 5 autocmd-check accessors
+    fn nvim_has_event_cursormoved() -> bool;
+    fn nvim_last_cursormoved_check() -> bool;
+    fn nvim_apply_autocmds_cursormoved();
+    fn nvim_update_last_cursormoved();
+    fn nvim_has_event_textchanged() -> bool;
+    fn nvim_curbuf_changedtick_changed() -> bool;
+    fn nvim_apply_autocmds_textchanged();
+    fn nvim_curbuf_update_last_changedtick();
+    fn nvim_has_event_bufmodifiedset() -> bool;
+    fn nvim_curbuf_b_changed_invalid_get() -> bool;
+    fn nvim_apply_autocmds_bufmodifiedset();
+    fn nvim_curbuf_b_changed_invalid_clear();
+
     fn nvim_normal_redraw_impl(s: NormalStateHandle);
     fn nvim_normal_prepare_wrapper(s: NormalStateHandle);
     fn nvim_get_curwin() -> WinHandle;
@@ -151,6 +161,39 @@ unsafe fn normal_check_safe_state(_s: NormalStateHandle) {
     nvim_may_trigger_safestate_call(!rs_op_pending() && nvim_get_restart_edit() == 0);
 }
 
+/// Inline of normal_check_cursor_moved.
+unsafe fn normal_check_cursor_moved() {
+    if nvim_get_finish_op() == 0
+        && nvim_has_event_cursormoved()
+        && nvim_last_cursormoved_check()
+    {
+        nvim_apply_autocmds_cursormoved();
+        nvim_update_last_cursormoved();
+    }
+}
+
+/// Inline of normal_check_text_changed.
+unsafe fn normal_check_text_changed() {
+    if nvim_get_finish_op() == 0
+        && nvim_has_event_textchanged()
+        && nvim_curbuf_changedtick_changed()
+    {
+        nvim_apply_autocmds_textchanged();
+        nvim_curbuf_update_last_changedtick();
+    }
+}
+
+/// Inline of normal_check_buffer_modified.
+unsafe fn normal_check_buffer_modified() {
+    if nvim_get_finish_op() == 0
+        && nvim_has_event_bufmodifiedset()
+        && nvim_curbuf_b_changed_invalid_get()
+    {
+        nvim_apply_autocmds_bufmodifiedset();
+        nvim_curbuf_b_changed_invalid_clear();
+    }
+}
+
 /// Inline of normal_check_folds.
 unsafe fn normal_check_folds(_s: NormalStateHandle) {
     // Include a closed fold completely in the Visual area.
@@ -208,10 +251,10 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
         nvim_update_topline_curwin_wrapper();
         nvim_validate_cursor();
 
-        nvim_normal_check_cursor_moved_impl();
-        nvim_normal_check_text_changed_impl();
+        normal_check_cursor_moved();
+        normal_check_text_changed();
         normal_check_window_scrolled(s);
-        nvim_normal_check_buffer_modified_impl();
+        normal_check_buffer_modified();
         normal_check_safe_state(s);
 
         // Updating diffs from changed() does not always work properly,

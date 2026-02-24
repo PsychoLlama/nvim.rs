@@ -2126,37 +2126,8 @@ static int normal_execute(VimState *state, int key) { return rs_normal_execute((
 // normal_check_stuff_buffer, normal_check_interrupt, normal_check_window_scrolled
 // migrated to Rust (Phase 4)
 
-static void normal_check_cursor_moved(NormalState *s)
-{
-  // Trigger CursorMoved if the cursor moved.
-  if (!finish_op && has_event(EVENT_CURSORMOVED)
-      && (last_cursormoved_win != curwin
-          || !equalpos(last_cursormoved, curwin->w_cursor))) {
-    apply_autocmds(EVENT_CURSORMOVED, NULL, NULL, false, curbuf);
-    last_cursormoved_win = curwin;
-    last_cursormoved = curwin->w_cursor;
-  }
-}
-
-static void normal_check_text_changed(NormalState *s)
-{
-  // Trigger TextChanged if changedtick differs.
-  if (!finish_op && has_event(EVENT_TEXTCHANGED)
-      && curbuf->b_last_changedtick != buf_get_changedtick(curbuf)) {
-    apply_autocmds(EVENT_TEXTCHANGED, NULL, NULL, false, curbuf);
-    curbuf->b_last_changedtick = buf_get_changedtick(curbuf);
-  }
-}
-
-static void normal_check_buffer_modified(NormalState *s)
-{
-  // Trigger BufModified if b_modified changed
-  if (!finish_op && has_event(EVENT_BUFMODIFIEDSET)
-      && curbuf->b_changed_invalid == true) {
-    apply_autocmds(EVENT_BUFMODIFIEDSET, NULL, NULL, false, curbuf);
-    curbuf->b_changed_invalid = false;
-  }
-}
+// normal_check_cursor_moved, normal_check_text_changed, normal_check_buffer_modified
+// migrated to Rust (Phase 5) -- see check.rs
 
 // normal_check_safe_state, normal_check_folds migrated to Rust (Phase 4)
 
@@ -2239,10 +2210,10 @@ void nvim_setcursor_wrapper(void) { setcursor(); }
 /// update_topline(curwin) wrapper.
 void nvim_update_topline_curwin_wrapper(void) { update_topline(curwin); }
 
-// nvim_normal_check_cursor_moved_wrapper → replaced by nvim_normal_check_cursor_moved_impl
-// nvim_normal_check_text_changed_wrapper → replaced by nvim_normal_check_text_changed_impl
+// nvim_normal_check_cursor_moved_impl → migrated to Rust (Phase 5)
+// nvim_normal_check_text_changed_impl → migrated to Rust (Phase 5)
 // nvim_normal_check_window_scrolled_wrapper → migrated to Rust (Phase 4)
-// nvim_normal_check_buffer_modified_wrapper → replaced by nvim_normal_check_buffer_modified_impl
+// nvim_normal_check_buffer_modified_impl → migrated to Rust (Phase 5)
 // nvim_normal_check_safe_state_wrapper → migrated to Rust (Phase 4)
 
 bool nvim_curtab_needs_diff_update(void) { return curtab->tp_diff_update || curtab->tp_diff_invalid; }
@@ -2308,10 +2279,72 @@ bool nvim_get_quit_more(void) { return quit_more; }
 void nvim_vgetc_and_discard(void) { (void)vgetc(); }
 void nvim_set_exmode_active(bool val) { exmode_active = val; }
 
-// Composite wrappers for complex functions (body stays in C, called from Rust)
-void nvim_normal_check_cursor_moved_impl(void) { normal_check_cursor_moved(NULL); }
-void nvim_normal_check_text_changed_impl(void) { normal_check_text_changed(NULL); }
-void nvim_normal_check_buffer_modified_impl(void) { normal_check_buffer_modified(NULL); }
+// Phase 5 accessors for normal_check_cursor_moved, normal_check_text_changed,
+// normal_check_buffer_modified (migrated to Rust)
+
+/// Check if last_cursormoved_win != curwin or cursor position differs.
+bool nvim_last_cursormoved_check(void)
+{
+  return last_cursormoved_win != curwin || !equalpos(last_cursormoved, curwin->w_cursor);
+}
+
+/// Update last_cursormoved_win and last_cursormoved to curwin/cursor.
+void nvim_update_last_cursormoved(void)
+{
+  last_cursormoved_win = curwin;
+  last_cursormoved = curwin->w_cursor;
+}
+
+/// Check if EVENT_CURSORMOVED has listeners.
+bool nvim_has_event_cursormoved(void) { return has_event(EVENT_CURSORMOVED); }
+
+/// Fire EVENT_CURSORMOVED autocmds for curbuf.
+void nvim_apply_autocmds_cursormoved(void)
+{
+  apply_autocmds(EVENT_CURSORMOVED, NULL, NULL, false, curbuf);
+}
+
+/// Check if EVENT_TEXTCHANGED has listeners.
+bool nvim_has_event_textchanged(void) { return has_event(EVENT_TEXTCHANGED); }
+
+/// Fire EVENT_TEXTCHANGED autocmds for curbuf.
+void nvim_apply_autocmds_textchanged(void)
+{
+  apply_autocmds(EVENT_TEXTCHANGED, NULL, NULL, false, curbuf);
+}
+
+/// Check if curbuf changedtick has changed since b_last_changedtick.
+bool nvim_curbuf_changedtick_changed(void)
+{
+  return curbuf->b_last_changedtick != buf_get_changedtick(curbuf);
+}
+
+/// Update curbuf->b_last_changedtick to the current changedtick.
+void nvim_curbuf_update_last_changedtick(void)
+{
+  curbuf->b_last_changedtick = buf_get_changedtick(curbuf);
+}
+
+/// Check if EVENT_BUFMODIFIEDSET has listeners.
+bool nvim_has_event_bufmodifiedset(void) { return has_event(EVENT_BUFMODIFIEDSET); }
+
+/// Fire EVENT_BUFMODIFIEDSET autocmds for curbuf.
+void nvim_apply_autocmds_bufmodifiedset(void)
+{
+  apply_autocmds(EVENT_BUFMODIFIEDSET, NULL, NULL, false, curbuf);
+}
+
+/// Get curbuf->b_changed_invalid.
+bool nvim_curbuf_b_changed_invalid_get(void) { return curbuf->b_changed_invalid; }
+
+/// Clear curbuf->b_changed_invalid.
+void nvim_curbuf_b_changed_invalid_clear(void) { curbuf->b_changed_invalid = false; }
+
+// Composite wrappers removed (migrated to Rust in Phase 5):
+// nvim_normal_check_cursor_moved_impl → Rust normal_check_cursor_moved
+// nvim_normal_check_text_changed_impl → Rust normal_check_text_changed
+// nvim_normal_check_buffer_modified_impl → Rust normal_check_buffer_modified
+
 void nvim_normal_redraw_impl(void *sp) { normal_redraw((NormalState *)sp); }
 
 static int normal_check(VimState *state) { return rs_normal_check((NormalState *)state); }
