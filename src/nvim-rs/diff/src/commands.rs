@@ -61,14 +61,33 @@ extern "C" {
     fn nvim_diff_u_sync();
     fn nvim_diff_check_cursor_curwin();
     fn nvim_diff_changed_line_abv_curs();
-    fn nvim_diff_call_diffgetput(
-        addr_count: c_int,
-        idx_cur: c_int,
-        idx_from: c_int,
-        idx_to: c_int,
+    // Phase 4 (diffgetput) accessors
+    fn nvim_diff_u_save(top: LinenrT, bot: LinenrT) -> c_int;
+    fn nvim_diff_ml_delete(lnum: LinenrT) -> c_int;
+    fn nvim_diff_ml_append(lnum: LinenrT, line: *const c_char, len: c_int, newfile: bool) -> c_int;
+    fn nvim_diff_buf_is_empty_curbuf() -> bool;
+    fn nvim_diff_curbuf_ml_line_count_direct() -> LinenrT;
+    fn nvim_diff_mark_adjust(
         line1: LinenrT,
         line2: LinenrT,
+        amount: LinenrT,
+        amount_after: LinenrT,
     );
+    fn nvim_diff_extmark_adjust(
+        line1: LinenrT,
+        line2: LinenrT,
+        amount: LinenrT,
+        amount_after: LinenrT,
+    );
+    fn nvim_diff_changed_lines(lnum: LinenrT, col: c_int, lnum_end: LinenrT, xtra: LinenrT);
+    fn nvim_diff_ml_get_buf_diffbuf(idx: c_int, nr: LinenrT) -> *const c_char;
+    fn nvim_diff_diffbuf_ml_line_count(idx: c_int) -> LinenrT;
+    fn nvim_diff_maxlnum() -> LinenrT;
+    fn nvim_diff_curtab_get_first_diff() -> DiffBlockHandle;
+    fn nvim_diffblock_set_count(dp: DiffBlockHandle, idx: c_int, count: LinenrT);
+    fn nvim_set_curwin_cursor_lnum(lnum: LinenrT);
+    fn nvim_diff_xstrdup(s: *const c_char) -> *mut c_char;
+    fn nvim_diff_xfree(p: *mut c_void);
     fn nvim_diff_get_CMD_diffget() -> c_int;
     fn nvim_diff_get_CMD_diffput() -> c_int;
     fn nvim_diff_curbuf_ml_line_count() -> LinenrT;
@@ -835,6 +854,226 @@ unsafe fn diffgetput_cleanup() {
     }
 }
 
+// =============================================================================
+// Phase 4: rs_diffgetput -- core text-transfer logic
+// =============================================================================
+
+/// Core text-transfer logic for `:diffget`/`:diffput`.
+///
+/// Iterates diff blocks, deletes lines from target buffer, copies lines from
+/// source buffer, adjusts marks/extmarks/cursor, and optionally frees
+/// equalized diff entries.
+///
+/// # Safety
+/// Calls C functions that access global state (curbuf, curwin, curtab).
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap, clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_diffgetput(
+    addr_count: c_int,
+    idx_cur: c_int,
+    idx_from: c_int,
+    idx_to: c_int,
+    line1: LinenrT,
+    line2: LinenrT,
+) {
+    use crate::buffer::{
+        rs_diff_equal_entry_full, rs_diff_fold_update, rs_diff_free, rs_valid_diff,
+    };
+
+    let maxlnum = nvim_diff_maxlnum();
+    let curtab = nvim_get_curtab();
+
+    let mut off: LinenrT = 0;
+    let mut dprev = DiffBlockHandle::null();
+    let mut dp = nvim_diff_curtab_get_first_diff();
+
+    while !dp.is_null() {
+        if addr_count == 0 {
+            // Handle adjacent diff blocks (linematch / anchors) at/above cursor.
+            // Since no range was given, grab one diff block rather than all.
+            loop {
+                let dp_next = nvim_diffblock_get_next(dp);
+                if dp_next.is_null() {
+                    break;
+                }
+                let lnum_cur = nvim_diffblock_get_lnum(dp, idx_cur);
+                let count_cur = nvim_diffblock_get_count(dp, idx_cur);
+                let next_lnum_cur = nvim_diffblock_get_lnum(dp_next, idx_cur);
+                if next_lnum_cur == lnum_cur + count_cur && next_lnum_cur == line1 + off + 1 {
+                    dprev = dp;
+                    dp = dp_next;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        let lnum_cur = nvim_diffblock_get_lnum(dp, idx_cur);
+        if lnum_cur > line2 + off {
+            // Past the range that was specified.
+            break;
+        }
+
+        let mut lnum = nvim_diffblock_get_lnum(dp, idx_to);
+        let mut count = nvim_diffblock_get_count(dp, idx_to);
+        let count_cur = nvim_diffblock_get_count(dp, idx_cur);
+
+        let did_enter_block = (lnum_cur + count_cur > line1 + off)
+            && (nvim_diff_u_save(lnum - 1, lnum + count) != FAIL);
+
+        // did_free / dfree / new_count are only meaningful when did_enter_block.
+        let mut did_free = false;
+        let mut dfree = DiffBlockHandle::null();
+
+        if did_enter_block {
+            // Inside the specified range and saving for undo worked.
+            let mut start_skip: LinenrT = 0;
+            let mut end_skip: LinenrT = 0;
+
+            if addr_count > 0 {
+                // A range was specified: check if lines need to be skipped.
+                start_skip = line1 + off - lnum_cur;
+                if start_skip > 0 {
+                    if start_skip > count {
+                        lnum += count;
+                        count = 0;
+                    } else {
+                        count -= start_skip;
+                        lnum += start_skip;
+                    }
+                } else {
+                    start_skip = 0;
+                }
+
+                end_skip = lnum_cur + count_cur - 1 - (line2 + off);
+
+                if end_skip > 0 {
+                    // Range ends above end of current/from diff block.
+                    if idx_cur == idx_from {
+                        // :diffput
+                        let available = count_cur - start_skip - end_skip;
+                        if count > available {
+                            count = available;
+                        }
+                    } else {
+                        // :diffget
+                        count -= end_skip;
+                        let from_count = nvim_diffblock_get_count(dp, idx_from);
+                        let computed = from_count - start_skip - count;
+                        end_skip = if computed > 0 { computed } else { 0 };
+                    }
+                } else {
+                    end_skip = 0;
+                }
+            }
+
+            let mut buf_empty = nvim_diff_buf_is_empty_curbuf();
+            let mut added: LinenrT = 0;
+
+            // Delete lines from target buffer.
+            for _i in 0..count {
+                // Remember deleting the last line of the buffer.
+                buf_empty = nvim_diff_curbuf_ml_line_count_direct() == 1;
+                if nvim_diff_ml_delete(lnum) == OK {
+                    added -= 1;
+                }
+            }
+
+            // Copy lines from source buffer.
+            let from_count = nvim_diffblock_get_count(dp, idx_from);
+            let copy_count = from_count - start_skip - end_skip;
+            let lnum_from = nvim_diffblock_get_lnum(dp, idx_from);
+            for i in 0..copy_count {
+                let nr = lnum_from + start_skip + i;
+                let src_line_count = nvim_diff_diffbuf_ml_line_count(idx_from);
+                if nr > src_line_count {
+                    break;
+                }
+                let p_raw = nvim_diff_ml_get_buf_diffbuf(idx_from, nr);
+                if p_raw.is_null() {
+                    break;
+                }
+                let p = nvim_diff_xstrdup(p_raw);
+                nvim_diff_ml_append(lnum + i - 1, p, 0, false);
+                nvim_diff_xfree(p.cast());
+                added += 1;
+                if buf_empty && nvim_diff_curbuf_ml_line_count_direct() == 2 {
+                    // Added the first line into an empty buffer; delete dummy line.
+                    buf_empty = false;
+                    nvim_diff_ml_delete(2);
+                }
+            }
+
+            let new_count = nvim_diffblock_get_count(dp, idx_to) + added;
+            nvim_diffblock_set_count(dp, idx_to, new_count);
+
+            if start_skip == 0 && end_skip == 0 {
+                // Check if the diff is equal across all other buffers.
+                let mut i = 0;
+                while i < DB_COUNT {
+                    let diffbuf = nvim_get_curtab_diffbuf(i);
+                    if !diffbuf.is_null()
+                        && i != idx_from
+                        && i != idx_to
+                        && !rs_diff_equal_entry_full(dp, idx_from, i)
+                    {
+                        break;
+                    }
+                    i += 1;
+                }
+                if i == DB_COUNT {
+                    // Delete the diff entry; buffers are now equal here.
+                    dfree = dp;
+                    did_free = true;
+                    dp = rs_diff_free(curtab, dprev, dp);
+                }
+            }
+
+            if added != 0 {
+                // Adjust marks. This will change the following entries!
+                nvim_diff_mark_adjust(lnum, lnum + count - 1, maxlnum, added);
+                // Adjust cursor position if it's in/after the changed lines.
+                let cursor_lnum = nvim_get_curwin_cursor_lnum();
+                if cursor_lnum >= lnum {
+                    if cursor_lnum >= lnum + count {
+                        nvim_set_curwin_cursor_lnum(cursor_lnum + added);
+                    } else if added < 0 {
+                        nvim_set_curwin_cursor_lnum(lnum);
+                    }
+                }
+            }
+            nvim_diff_extmark_adjust(lnum, lnum + count - 1, maxlnum, added);
+            nvim_diff_changed_lines(lnum, 0, lnum + count, added);
+
+            if did_free {
+                // Diff is deleted; update folds in other windows.
+                rs_diff_fold_update(dfree, idx_to);
+            }
+
+            // mark_adjust() may have made "dp" invalid.
+            if added != 0 && !rs_valid_diff(dp) {
+                break;
+            }
+
+            if !did_free {
+                // mark_adjust() may have changed the count in a wrong way.
+                nvim_diffblock_set_count(dp, idx_to, new_count);
+            }
+
+            // When changing the current buffer, keep track of line numbers.
+            if idx_cur == idx_to {
+                off += added;
+            }
+        }
+
+        // If before the range or not deleted, go to next diff.
+        if !did_free {
+            dprev = dp;
+            dp = nvim_diffblock_get_next(dp);
+        }
+    }
+}
+
 /// ":diffget" and ":diffput" commands -- Rust implementation.
 ///
 /// Finds the current buffer's diff index, resolves the other buffer (by
@@ -916,7 +1155,7 @@ pub unsafe extern "C" fn rs_ex_diffgetput(eap: *mut c_void) {
         }
     }
 
-    nvim_diff_call_diffgetput(
+    rs_diffgetput(
         nvim_eap_get_addr_count(eap),
         idx_cur,
         idx_from,

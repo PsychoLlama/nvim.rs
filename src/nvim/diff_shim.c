@@ -103,6 +103,7 @@ extern void rs_diff_win_options(win_T *wp, bool addbuf);
 extern void rs_ex_diffoff(exarg_T *eap);
 extern void rs_ex_diffsplit(exarg_T *eap);
 extern void rs_ex_diffgetput(exarg_T *eap);
+extern void rs_diffgetput(int addr_count, int idx_cur, int idx_from, int idx_to, linenr_T line1, linenr_T line2);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -1273,179 +1274,6 @@ void ex_diffgetput(exarg_T *eap)
   rs_ex_diffgetput(eap);
 }
 
-/// Apply diffget/diffput to buffers and diffblocks
-///
-/// @param idx_cur   index of "curbuf" before aucmd_prepbuf() in the list of diff buffers
-/// @param idx_from  index of the buffer to read from in the list of diff buffers
-/// @param idx_to    index of the buffer to modify in the list of diff buffers
-static void diffgetput(const int addr_count, const int idx_cur, const int idx_from,
-                       const int idx_to, const linenr_T line1, const linenr_T line2)
-{
-  linenr_T off = 0;
-  diff_T *dprev = NULL;
-
-  for (diff_T *dp = curtab->tp_first_diff; dp != NULL;) {
-    if (!addr_count) {
-      // Handle the case with adjacent diff blocks (e.g. using linematch
-      // or anchors) at/above the cursor. Since a range wasn't specified,
-      // we just want to grab one diff block rather than all of them in
-      // the vicinity.
-      while (dp->df_next
-             && dp->df_next->df_lnum[idx_cur] == dp->df_lnum[idx_cur] + dp->df_count[idx_cur]
-             && dp->df_next->df_lnum[idx_cur] == line1 + off + 1) {
-        dprev = dp;
-        dp = dp->df_next;
-      }
-    }
-
-    if (dp->df_lnum[idx_cur] > line2 + off) {
-      // past the range that was specified
-      break;
-    }
-    diff_T dfree = { 0 };
-    bool did_free = false;
-    linenr_T lnum = dp->df_lnum[idx_to];
-    linenr_T count = dp->df_count[idx_to];
-
-    if ((dp->df_lnum[idx_cur] + dp->df_count[idx_cur] > line1 + off)
-        && (u_save(lnum - 1, lnum + count) != FAIL)) {
-      // Inside the specified range and saving for undo worked.
-      linenr_T start_skip = 0;
-      linenr_T end_skip = 0;
-
-      if (addr_count > 0) {
-        // A range was specified: check if lines need to be skipped.
-        start_skip = line1 + off - dp->df_lnum[idx_cur];
-        if (start_skip > 0) {
-          // range starts below start of current diff block
-          if (start_skip > count) {
-            lnum += count;
-            count = 0;
-          } else {
-            count -= start_skip;
-            lnum += start_skip;
-          }
-        } else {
-          start_skip = 0;
-        }
-
-        end_skip = dp->df_lnum[idx_cur] + dp->df_count[idx_cur] - 1
-                   - (line2 + off);
-
-        if (end_skip > 0) {
-          // range ends above end of current/from diff block
-          if (idx_cur == idx_from) {
-            // :diffput
-            count = MIN(count, dp->df_count[idx_cur] - start_skip - end_skip);
-          } else {
-            // :diffget
-            count -= end_skip;
-            end_skip = MAX(dp->df_count[idx_from] - start_skip - count, 0);
-          }
-        } else {
-          end_skip = 0;
-        }
-      }
-
-      bool buf_empty = buf_is_empty(curbuf);
-      int added = 0;
-
-      for (int i = 0; i < count; i++) {
-        // remember deleting the last line of the buffer
-        buf_empty = curbuf->b_ml.ml_line_count == 1;
-        if (ml_delete(lnum) == OK) {
-          added--;
-        }
-      }
-
-      for (int i = 0; i < dp->df_count[idx_from] - start_skip - end_skip; i++) {
-        linenr_T nr = dp->df_lnum[idx_from] + start_skip + i;
-        if (nr > curtab->tp_diffbuf[idx_from]->b_ml.ml_line_count) {
-          break;
-        }
-        char *p = xstrdup(ml_get_buf(curtab->tp_diffbuf[idx_from], nr));
-        ml_append(lnum + i - 1, p, 0, false);
-        xfree(p);
-        added++;
-        if (buf_empty && (curbuf->b_ml.ml_line_count == 2)) {
-          // Added the first line into an empty buffer, need to
-          // delete the dummy empty line.
-          // This has a side effect of incrementing curbuf->deleted_bytes,
-          // which results in inaccurate reporting of the byte count of
-          // previous contents in buffer-update events.
-          buf_empty = false;
-          ml_delete(2);
-        }
-      }
-      linenr_T new_count = dp->df_count[idx_to] + added;
-      dp->df_count[idx_to] = new_count;
-
-      if ((start_skip == 0) && (end_skip == 0)) {
-        // Check if there are any other buffers and if the diff is
-        // equal in them.
-        int i;
-        for (i = 0; i < DB_COUNT; i++) {
-          if ((curtab->tp_diffbuf[i] != NULL)
-              && (i != idx_from)
-              && (i != idx_to)
-              && !rs_diff_equal_entry_full(dp, idx_from, i)) {
-            break;
-          }
-        }
-
-        if (i == DB_COUNT) {
-          // delete the diff entry, the buffers are now equal here
-          dfree = *dp;
-          did_free = true;
-          dp = rs_diff_free(curtab, dprev, dp);
-        }
-      }
-
-      if (added != 0) {
-        // Adjust marks.  This will change the following entries!
-        mark_adjust(lnum, lnum + count - 1, MAXLNUM, added, kExtmarkNOOP);
-        if (curwin->w_cursor.lnum >= lnum) {
-          // Adjust the cursor position if it's in/after the changed
-          // lines.
-          if (curwin->w_cursor.lnum >= lnum + count) {
-            curwin->w_cursor.lnum += added;
-          } else if (added < 0) {
-            curwin->w_cursor.lnum = lnum;
-          }
-        }
-      }
-      extmark_adjust(curbuf, lnum, lnum + count - 1, MAXLNUM, added, kExtmarkUndo);
-      changed_lines(curbuf, lnum, 0, lnum + count, added, true);
-
-      if (did_free) {
-        // Diff is deleted, update folds in other windows.
-        rs_diff_fold_update(&dfree, idx_to);
-      }
-
-      // mark_adjust() may have made "dp" invalid.  We don't know where
-      // to continue then, bail out.
-      if (added != 0 && !rs_valid_diff(dp)) {
-        break;
-      }
-
-      if (!did_free) {
-        // mark_adjust() may have changed the count in a wrong way
-        dp->df_count[idx_to] = new_count;
-      }
-
-      // When changing the current buffer, keep track of line numbers
-      if (idx_cur == idx_to) {
-        off += added;
-      }
-    }
-
-    // If before the range or not deleted, go to next diff.
-    if (!did_free) {
-      dprev = dp;
-      dp = dp->df_next;
-    }
-  }
-}
 
 /// Checks that the buffer is in diff-mode.
 
@@ -1665,7 +1493,17 @@ bool nvim_diff_key_typed(void) { return KeyTyped; }
 void nvim_diff_u_sync(void) { u_sync(false); }
 void nvim_diff_check_cursor_curwin(void) { check_cursor(curwin); }
 void nvim_diff_changed_line_abv_curs(void) { changed_line_abv_curs(); }
-void nvim_diff_call_diffgetput(int addr_count, int idx_cur, int idx_from, int idx_to, linenr_T line1, linenr_T line2) { diffgetput(addr_count, idx_cur, idx_from, idx_to, line1, line2); }
+// Phase 4 (diffgetput) accessors
+int nvim_diff_u_save(linenr_T top, linenr_T bot) { return u_save(top, bot); }
+int nvim_diff_ml_delete(linenr_T lnum) { return ml_delete(lnum); }
+int nvim_diff_ml_append(linenr_T lnum, const char *line, int len, bool newfile) { return ml_append(lnum, (char *)line, len, newfile); }
+bool nvim_diff_buf_is_empty_curbuf(void) { return buf_is_empty(curbuf); }
+linenr_T nvim_diff_curbuf_ml_line_count_direct(void) { return curbuf->b_ml.ml_line_count; }
+void nvim_diff_mark_adjust(linenr_T line1, linenr_T line2, linenr_T amount, linenr_T amount_after) { mark_adjust(line1, line2, amount, amount_after, kExtmarkNOOP); }
+void nvim_diff_extmark_adjust(linenr_T line1, linenr_T line2, linenr_T amount, linenr_T amount_after) { extmark_adjust(curbuf, line1, line2, amount, amount_after, kExtmarkUndo); }
+void nvim_diff_changed_lines(linenr_T lnum, int col, linenr_T lnum_end, linenr_T xtra) { changed_lines(curbuf, lnum, col, lnum_end, xtra, true); }
+const char *nvim_diff_ml_get_buf_diffbuf(int idx, linenr_T nr) { if (idx < 0 || idx >= DB_COUNT || curtab->tp_diffbuf[idx] == NULL) { return NULL; } return ml_get_buf(curtab->tp_diffbuf[idx], nr); }
+linenr_T nvim_diff_diffbuf_ml_line_count(int idx) { if (idx < 0 || idx >= DB_COUNT || curtab->tp_diffbuf[idx] == NULL) { return 0; } return curtab->tp_diffbuf[idx]->b_ml.ml_line_count; }
 int nvim_diff_get_CMD_diffget(void) { return (int)CMD_diffget; }
 int nvim_diff_get_CMD_diffput(void) { return (int)CMD_diffput; }
 linenr_T nvim_diff_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
