@@ -539,11 +539,6 @@ extern "C" {
     fn nvim_shada_vim_rename(from: *const c_char, to: *const c_char) -> c_int;
     fn nvim_shada_os_remove(fname: *const c_char);
     fn nvim_shada_smsg_writing(fname: *const c_char);
-    fn nvim_shada_platform_check_writable(
-        fname: *const c_char,
-        sd_writer: *mut c_void,
-        tempname: *const c_char,
-    ) -> c_int;
     fn nvim_shada_semsg_merge_read_error(fname: *const c_char, strerror_msg: *const c_char);
     fn nvim_shada_semsg_tempfile_open_error(tempname: *const c_char, strerror_msg: *const c_char);
     fn nvim_shada_semsg_all_tmpfiles(fname: *const c_char);
@@ -741,6 +736,26 @@ extern "C" {
         -> bool;
     /// Get a fresh copyID for circular reference detection (from eval crate).
     fn rs_get_copyID() -> c_int;
+}
+
+// =============================================================================
+// Phase 4 (plan fd426e0f): nvim_shada_platform_check_writable migration accessors
+// =============================================================================
+
+extern "C" {
+    /// Get stat fields for a file; returns 1 if exists and is not a directory.
+    fn nvim_shada_os_fileinfo(
+        fname: *const c_char,
+        out_mode: *mut u64,
+        out_uid: *mut u64,
+        out_gid: *mut u64,
+    ) -> c_int;
+    /// Call os_fchown on an open FileDescriptor (sd_writer).
+    fn nvim_shada_os_fchown(sd_writer: *mut c_void, uid: u64, gid: u64) -> c_int;
+    /// Emit E137 "ShaDa file is not writable" error.
+    fn nvim_shada_semsg_not_writable(fname: *const c_char);
+    /// Emit RNERR "Failed setting uid and gid" error.
+    fn nvim_shada_semsg_fchown_error(tempname: *const c_char, strerror_msg: *const c_char);
 }
 
 // =============================================================================
@@ -4158,7 +4173,7 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
         }
         let mut did_remove = false;
         if sw_ret == K_SD_WRITE_SUCCESSFUL {
-            let check_result = nvim_shada_platform_check_writable(fname, sd_writer_mem, tempname);
+            let check_result = rs_shada_platform_check_writable(fname, sd_writer_mem, tempname);
             if check_result == 1 {
                 if nvim_shada_vim_rename(tempname, fname) == -1 {
                     nvim_shada_semsg_rename_error(tempname, fname);
@@ -6455,6 +6470,82 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
 
     nvim_xfree(packed.data.cast::<c_void>());
     SD_WRITE_SUCCESSFUL
+}
+
+// =============================================================================
+// Phase 4 (plan fd426e0f): Platform check writable in Rust
+// =============================================================================
+
+/// Check whether the existing ShaDa file at `fname` can be replaced.
+///
+/// Matches the logic of C nvim_shada_platform_check_writable (now deleted).
+///
+/// Returns:
+///  1 = ok to replace (go ahead with rename)
+///  0 = not writable (E137 already emitted)
+/// -1 = fchown failed (RNERR already emitted)
+///
+/// # Safety
+///
+/// `fname`, `sd_writer`, and `tempname` must be valid pointers.
+#[allow(
+    clippy::not_unsafe_ptr_arg_deref,
+    clippy::cast_possible_wrap,
+    clippy::similar_names
+)]
+unsafe fn rs_shada_platform_check_writable(
+    fname: *const c_char,
+    sd_writer: *mut c_void,
+    tempname: *const c_char,
+) -> c_int {
+    let mut file_mode: u64 = 0;
+    let mut file_uid: u64 = 0;
+    let mut file_gid: u64 = 0;
+
+    // os_fileinfo returns 1 if file exists and is not a directory.
+    let info_ok = nvim_shada_os_fileinfo(
+        fname,
+        &raw mut file_mode,
+        &raw mut file_uid,
+        &raw mut file_gid,
+    );
+    if info_ok == 0 {
+        nvim_shada_semsg_not_writable(fname);
+        return 0;
+    }
+
+    #[cfg(unix)]
+    {
+        const ROOT_UID: u64 = 0;
+        let euid = u64::from(libc::getuid());
+        let egid = u64::from(libc::getgid());
+
+        // Non-root: check write permission based on owner/group/other bits.
+        if euid == ROOT_UID {
+            // Running as root: fchown the temp file to match the original owner.
+            if file_uid != ROOT_UID || file_gid != egid {
+                let fchown_ret = nvim_shada_os_fchown(sd_writer, file_uid, file_gid);
+                if fchown_ret != 0 {
+                    nvim_shada_semsg_fchown_error(tempname, nvim_shada_os_strerror(fchown_ret));
+                    return -1;
+                }
+            }
+        } else {
+            let is_writable = if file_uid == euid {
+                (file_mode & 0o200) != 0
+            } else if file_gid == egid {
+                (file_mode & 0o020) != 0
+            } else {
+                (file_mode & 0o002) != 0
+            };
+            if !is_writable {
+                nvim_shada_semsg_not_writable(fname);
+                return 0;
+            }
+        }
+    }
+
+    1
 }
 
 // =============================================================================

@@ -1614,56 +1614,57 @@ void nvim_shada_smsg_writing(const char *fname)
   smsg(0, _("Writing ShaDa file \"%s\""), fname);
 }
 
-/// Composite platform check for shada_write_file rename path.
-///
-/// Checks whether the existing ShaDa file at @a fname can be replaced by the
-/// temporary file we just wrote.  Sends its own error messages on failure.
-///
-/// Returns:
-///  1 = ok to replace (go ahead with rename)
-///  0 = not writable (emit E137, skip rename)
-/// -1 = fchown failed (emit RNERR, skip rename)
-///
-/// @param fname       Path to the existing ShaDa file.
-/// @param sd_writer   Open FileDescriptor for the temporary file (for fchown).
-/// @param tempname    Temporary file name (used in error messages).
-int nvim_shada_platform_check_writable(const char *fname, void *sd_writer,
-                                       const char *tempname)
+// =============================================================================
+// Phase 4 (plan fd426e0f): nvim_shada_platform_check_writable migration accessors
+// =============================================================================
+
+/// Get stat fields (mode, uid, gid) for a file via os_fileinfo.
+/// Returns 1 if file exists and is not a directory, 0 otherwise.
+/// @param fname      File path.
+/// @param out_mode   Output: st_mode (or 0 on failure).
+/// @param out_uid    Output: st_uid as uint64_t.
+/// @param out_gid    Output: st_gid as uint64_t.
+int nvim_shada_os_fileinfo(const char *fname, uint64_t *out_mode,
+                           uint64_t *out_uid, uint64_t *out_gid)
 {
-  FileInfo old_info;
-  if (!os_fileinfo(fname, &old_info) || S_ISDIR(old_info.stat.st_mode)) {
-    semsg(_("E137: ShaDa file is not writable: %s"), fname);
+  FileInfo info;
+  if (!os_fileinfo(fname, &info)) {
+    *out_mode = 0;
+    *out_uid = 0;
+    *out_gid = 0;
     return 0;
   }
-#ifdef UNIX
-  // For Unix we check the owner of the file.  It's not very nice to overwrite
-  // a user's viminfo file after a "su root", with a viminfo file that the
-  // user can't read.
-  if (getuid() != ROOT_UID
-      && !(old_info.stat.st_uid == getuid()
-           ? (old_info.stat.st_mode & 0200)
-           : (old_info.stat.st_gid == getgid()
-              ? (old_info.stat.st_mode & 0020)
-              : (old_info.stat.st_mode & 0002)))) {
-    semsg(_("E137: ShaDa file is not writable: %s"), fname);
+  *out_mode = (uint64_t)info.stat.st_mode;
+  *out_uid  = (uint64_t)info.stat.st_uid;
+  *out_gid  = (uint64_t)info.stat.st_gid;
+  if (S_ISDIR(info.stat.st_mode)) {
     return 0;
   }
-  if (getuid() == ROOT_UID) {
-    if (old_info.stat.st_uid != ROOT_UID
-        || old_info.stat.st_gid != getgid()) {
-      const uv_uid_t old_uid = (uv_uid_t)old_info.stat.st_uid;
-      const uv_gid_t old_gid = (uv_gid_t)old_info.stat.st_gid;
-      const int fchown_ret = os_fchown(file_fd((FileDescriptor *)sd_writer),
-                                       old_uid, old_gid);
-      if (fchown_ret != 0) {
-        semsg(_(RNERR "Failed setting uid and gid for file %s: %s"),
-              tempname, os_strerror(fchown_ret));
-        return -1;
-      }
-    }
-  }
-#endif
   return 1;
+}
+
+/// Wrapper for os_fchown on an open FileDescriptor.
+/// @param sd_writer   FileDescriptor pointer (passed by Rust as void*).
+/// @param uid         New owner uid.
+/// @param gid         New owner gid.
+/// @return Return value of os_fchown (0 on success, errno on failure).
+int nvim_shada_os_fchown(void *sd_writer, uint64_t uid, uint64_t gid)
+{
+  return os_fchown(file_fd((FileDescriptor *)sd_writer),
+                   (uv_uid_t)uid, (uv_gid_t)gid);
+}
+
+/// Error: ShaDa file is not writable (E137).
+void nvim_shada_semsg_not_writable(const char *fname)
+{
+  semsg(_("E137: ShaDa file is not writable: %s"), fname);
+}
+
+/// Error: fchown failed while writing ShaDa file.
+void nvim_shada_semsg_fchown_error(const char *tempname, const char *strerror_msg)
+{
+  semsg(_(RNERR "Failed setting uid and gid for file %s: %s"),
+        tempname, strerror_msg);
 }
 
 /// Error: merge reader open failed (for non-ENOENT errors)
