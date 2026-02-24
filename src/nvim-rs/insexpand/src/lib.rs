@@ -25,6 +25,7 @@ pub mod navigate;
 pub mod pattern;
 pub mod pum;
 pub mod refresh;
+pub mod register;
 pub mod sort;
 pub mod source;
 pub mod spell;
