@@ -97,24 +97,6 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-/// Case matching style to use for :substitute
-typedef enum {
-  kSubHonorOptions = 0,  ///< Honor the user's 'ignorecase'/'smartcase' options
-  kSubIgnoreCase,        ///< Ignore case of the search
-  kSubMatchCase,         ///< Match case of the search
-} SubIgnoreType;
-
-/// Flags kept between calls to :substitute.
-typedef struct {
-  bool do_all;          ///< do multiple substitutions per line
-  bool do_ask;          ///< ask for confirmation
-  bool do_count;        ///< count only
-  bool do_error;        ///< if false, ignore errors
-  bool do_print;        ///< print last line with subs
-  bool do_list;         ///< list last line with subs
-  bool do_number;       ///< list last line with line nr
-  SubIgnoreType do_ic;  ///< ignore case flag
-} subflags_T;
 
 /// Partial result of a substitution during :substitute.
 /// Numbers refer to the buffer _after_ substitution
@@ -398,9 +380,11 @@ int nvim_excmds_do_join(int count)
 // Get/set sub_nsubs global
 int nvim_excmds_get_sub_nsubs(void) { return sub_nsubs; }
 void nvim_excmds_set_sub_nsubs(int val) { sub_nsubs = val; }
+void nvim_excmds_sub_nsubs_inc(void) { sub_nsubs++; }
 // Get/set sub_nlines global (linenr_T)
 int nvim_excmds_get_sub_nlines(void) { return (int)sub_nlines; }
 void nvim_excmds_set_sub_nlines(int val) { sub_nlines = (linenr_T)val; }
+void nvim_excmds_sub_nlines_inc(void) { sub_nlines++; }
 // nvim_excmds_do_sub_msg is defined below (near do_sub_msg) as the full implementation.
 // Call ex_may_print
 void nvim_excmds_ex_may_print(exarg_T *eap) { ex_may_print(eap); }
@@ -3023,8 +3007,7 @@ void nvim_do_sub_changed_window_setting(void) { changed_window_setting(curwin); 
 /// Get p_cwh (cmdwinheight).
 int nvim_do_sub_get_p_cwh(void) { return (int)p_cwh; }
 
-/// Wrap aborting().
-int nvim_do_sub_aborting(void) { return aborting() ? 1 : 0; }
+// nvim_do_sub_aborting deleted -- use nvim_excmds_aborting instead.
 
 /// Wrap os_time(). Returns current time as uint64_t.
 uint64_t nvim_do_sub_os_time(void) { return (uint64_t)os_time(); }
@@ -3275,24 +3258,10 @@ int nvim_do_sub_ascii_isdigit(int c) { return ascii_isdigit(c) ? 1 : 0; }
 /// Set eap->nextcmd.
 void nvim_do_sub_set_eap_nextcmd(exarg_T *eap, char *p) { eap->nextcmd = p; }
 
-/// Get sub_nsubs global.
-int nvim_do_sub_get_sub_nsubs(void) { return sub_nsubs; }
-/// Set sub_nsubs global.
-void nvim_do_sub_set_sub_nsubs(int val) { sub_nsubs = val; }
-/// Increment sub_nsubs.
-void nvim_do_sub_sub_nsubs_inc(void) { sub_nsubs++; }
-
-/// Get sub_nlines global.
-int nvim_do_sub_get_sub_nlines(void) { return (int)sub_nlines; }
-/// Set sub_nlines global.
-void nvim_do_sub_set_sub_nlines(int val) { sub_nlines = (linenr_T)val; }
-/// Increment sub_nlines.
-void nvim_do_sub_sub_nlines_inc(void) { sub_nlines++; }
-
-/// Get global_busy global.
-int nvim_do_sub_get_global_busy(void) { return global_busy; }
-/// Set global_need_beginline.
-void nvim_do_sub_set_global_need_beginline(int val) { global_need_beginline = (bool)val; }
+// nvim_do_sub_get_sub_nsubs, nvim_do_sub_set_sub_nsubs, nvim_do_sub_sub_nsubs_inc,
+// nvim_do_sub_get_sub_nlines, nvim_do_sub_set_sub_nlines, nvim_do_sub_sub_nlines_inc,
+// nvim_do_sub_get_global_busy, nvim_do_sub_set_global_need_beginline deleted --
+// use canonical nvim_excmds_* equivalents instead.
 
 /// Wrap msg("", 0).
 void nvim_do_sub_msg_empty(void) { msg("", 0); }

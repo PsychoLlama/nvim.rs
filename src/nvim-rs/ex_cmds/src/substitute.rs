@@ -106,7 +106,12 @@ extern "C" {
     fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
     fn nvim_excmds_do_join(count: c_int) -> c_int;
     fn nvim_excmds_set_sub_nsubs(val: c_int);
+    fn nvim_excmds_sub_nsubs_inc();
     fn nvim_excmds_set_sub_nlines(val: c_int);
+    fn nvim_excmds_sub_nlines_inc();
+    fn nvim_excmds_global_busy() -> c_int;
+    fn nvim_excmds_set_global_need_beginline(val: c_int);
+    fn nvim_excmds_aborting() -> c_int;
     fn nvim_excmds_ex_may_print(eap: *mut ExArgHandle);
     fn nvim_excmds_save_re_pat(idx: c_int, pat: *const c_char, patlen: usize, magic: c_int);
     fn nvim_excmds_add_to_hist_search(pat: *const c_char, patlen: usize);
@@ -1177,7 +1182,6 @@ extern "C" {
     fn nvim_do_sub_changed_window_setting();
     fn nvim_curwin_get_cursor_col() -> c_int;
     fn nvim_do_sub_get_p_cwh() -> c_int;
-    fn nvim_do_sub_aborting() -> c_int;
     fn nvim_do_sub_os_time() -> u64;
     fn nvim_do_sub_setpcmark();
     fn nvim_do_sub_buf_line_count() -> c_int;
@@ -1240,14 +1244,6 @@ extern "C" {
     fn nvim_do_sub_is_backslash_delim(cmd: *const c_char) -> c_int;
     fn nvim_do_sub_ascii_isdigit(c: c_int) -> c_int;
     fn nvim_do_sub_set_eap_nextcmd(eap: *mut ExArgHandle, p: *mut c_char);
-    fn nvim_do_sub_get_sub_nsubs() -> c_int;
-    fn nvim_do_sub_set_sub_nsubs(val: c_int);
-    fn nvim_do_sub_sub_nsubs_inc();
-    fn nvim_do_sub_get_sub_nlines() -> c_int;
-    fn nvim_do_sub_set_sub_nlines(val: c_int);
-    fn nvim_do_sub_sub_nlines_inc();
-    fn nvim_do_sub_get_global_busy() -> c_int;
-    fn nvim_do_sub_set_global_need_beginline(val: c_int);
     fn nvim_do_sub_msg_empty();
     fn nvim_do_sub_emsg_interr();
     fn nvim_do_sub_save_pat(pat: *const c_char, patlen: usize, which_pat: c_int);
@@ -1680,11 +1676,11 @@ pub unsafe extern "C" fn rs_do_sub(
 
     // Save current globals for the loop
     let old_line_count = nvim_do_sub_buf_line_count();
-    let start_nsubs = nvim_do_sub_get_sub_nsubs();
+    let start_nsubs = nvim_excmds_get_sub_nsubs();
 
-    if nvim_do_sub_get_global_busy() == 0 {
-        nvim_do_sub_set_sub_nsubs(0);
-        nvim_do_sub_set_sub_nlines(0);
+    if nvim_excmds_global_busy() == 0 {
+        nvim_excmds_set_sub_nsubs(0);
+        nvim_excmds_set_sub_nlines(0);
     }
 
     let mut first_line: c_int = 0;
@@ -1706,7 +1702,7 @@ pub unsafe extern "C" fn rs_do_sub(
     let mut lnum = nvim_exarg_get_line1(eap);
     while lnum <= line2
         && !got_quit
-        && nvim_do_sub_aborting() == 0
+        && nvim_excmds_aborting() == 0
         && (cmdpreview_ns <= 0
             || preview_lines.lines_needed <= nvim_do_sub_get_p_cwh()
             || lnum <= nvim_curwin_get_w_botline())
@@ -1798,7 +1794,7 @@ pub unsafe extern "C" fn rs_do_sub(
                             nmatch = 1;
                             skip_match = true;
                         }
-                        nvim_do_sub_sub_nsubs_inc();
+                        nvim_excmds_sub_nsubs_inc();
                         did_sub = true;
                         if !(*sub == b'\\' as i8 && *sub.add(1) == b'=' as i8) {
                             // goto skip
@@ -2085,7 +2081,7 @@ pub unsafe extern "C" fn rs_do_sub(
             } // end inner while
 
             if did_sub {
-                nvim_do_sub_sub_nlines_inc();
+                nvim_excmds_sub_nlines_inc();
             }
             xfree(new_start as *mut std::ffi::c_void);
             xfree(sub_firstline as *mut std::ffi::c_void);
@@ -2121,14 +2117,14 @@ pub unsafe extern "C" fn rs_do_sub(
         nvim_curwin_set_cursor_col(old_cursor_col);
     }
 
-    let cur_sub_nsubs = nvim_do_sub_get_sub_nsubs();
+    let cur_sub_nsubs = nvim_excmds_get_sub_nsubs();
     if cur_sub_nsubs > start_nsubs {
         if nvim_cmdmod_has_lockmarks() == 0 {
             nvim_do_sub_set_op_start(nvim_exarg_get_line1(eap));
             nvim_do_sub_set_op_end(line2);
         }
 
-        if nvim_do_sub_get_global_busy() == 0 {
+        if nvim_excmds_global_busy() == 0 {
             if !subflags_local.do_ask {
                 if endcolumn {
                     nvim_do_sub_coladvance(maxcol);
@@ -2145,7 +2141,7 @@ pub unsafe extern "C" fn rs_do_sub(
                 nvim_do_sub_msg_empty();
             }
         } else {
-            nvim_do_sub_set_global_need_beginline(1);
+            nvim_excmds_set_global_need_beginline(1);
         }
         if subflags_local.do_print {
             rs_print_line(
@@ -2155,7 +2151,7 @@ pub unsafe extern "C" fn rs_do_sub(
                 1,
             );
         }
-    } else if nvim_do_sub_get_global_busy() == 0 {
+    } else if nvim_excmds_global_busy() == 0 {
         if nvim_excmds_got_int() != 0 {
             nvim_do_sub_emsg_interr();
         } else if got_match {
@@ -2185,7 +2181,7 @@ pub unsafe extern "C" fn rs_do_sub(
     let mut retv: c_int = 0;
 
     // Show inccommand preview
-    if cmdpreview_ns > 0 && nvim_do_sub_aborting() == 0 {
+    if cmdpreview_ns > 0 && nvim_excmds_aborting() == 0 {
         if got_quit || nvim_do_sub_profile_passed_limit(timeout) != 0 {
             nvim_do_sub_disable_inccommand();
         } else if nvim_do_sub_get_p_icm_notnul() != 0 && !pat.is_null() {
@@ -2545,7 +2541,7 @@ unsafe fn goto_sub_main(
     subflags.do_number = subflags_save.do_number;
     subflags.do_ic = subflags_save.do_ic;
 
-    if sublen == 0 || nvim_do_sub_aborting() != 0 || subflags.do_count {
+    if sublen == 0 || nvim_excmds_aborting() != 0 || subflags.do_count {
         nvim_curbuf_set_b_p_ma(save_ma);
         nvim_do_sub_sandbox_dec();
         // Undo sandbox increment
@@ -2606,7 +2602,7 @@ unsafe fn goto_sub_main(
             },
     );
     nvim_do_sub_textlock_dec();
-    nvim_do_sub_sub_nsubs_inc();
+    nvim_excmds_sub_nsubs_inc();
     *did_sub = true;
 
     // Move cursor to start of line
