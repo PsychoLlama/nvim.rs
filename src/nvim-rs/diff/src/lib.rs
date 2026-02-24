@@ -25,6 +25,7 @@ pub mod ops;
 pub mod scroll;
 pub mod update;
 pub mod viml;
+pub mod winopts;
 
 // Re-export key types from submodules
 pub use block::{DiffBlockInfo as BlockInfo, DiffBlockIter};

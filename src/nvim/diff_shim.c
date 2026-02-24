@@ -99,6 +99,8 @@ extern void rs_nv_diffgetput(bool put, size_t count);
 extern void rs_ex_diffthis(exarg_T *eap);
 extern void rs_f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void rs_diff_redraw(bool dofold);
+extern void rs_diff_win_options(win_T *wp, bool addbuf);
+extern void rs_ex_diffoff(exarg_T *eap);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -720,153 +722,21 @@ void ex_diffthis(exarg_T *eap)
   rs_ex_diffthis(eap);
 }
 
-/// Set options in window "wp" for diff mode.
+/// Set options in window "wp" for diff mode -- thin wrapper calling Rust rs_diff_win_options.
 ///
 /// @param addbuf Add buffer to diff.
 void diff_win_options(win_T *wp, bool addbuf)
 {
-  win_T *old_curwin = curwin;
-
-  // close the manually opened folds
-  curwin = wp;
-  rs_newFoldLevel();
-  curwin = old_curwin;
-
-  // Use 'scrollbind' and 'cursorbind' when available
-  if (!wp->w_p_diff) {
-    wp->w_p_scb_save = wp->w_p_scb;
-  }
-  wp->w_p_scb = true;
-
-  if (!wp->w_p_diff) {
-    wp->w_p_crb_save = wp->w_p_crb;
-  }
-  wp->w_p_crb = true;
-  if (!(diff_flags & DIFF_FOLLOWWRAP)) {
-    if (!wp->w_p_diff) {
-      wp->w_p_wrap_save = wp->w_p_wrap;
-    }
-    wp->w_p_wrap = false;
-    wp->w_skipcol = 0;
-  }
-
-  if (!wp->w_p_diff) {
-    if (wp->w_p_diff_saved) {
-      free_string_option(wp->w_p_fdm_save);
-    }
-    wp->w_p_fdm_save = xstrdup(wp->w_p_fdm);
-  }
-  set_option_direct_for(kOptFoldmethod, STATIC_CSTR_AS_OPTVAL("diff"), OPT_LOCAL, 0,
-                        kOptScopeWin, wp);
-
-  if (!wp->w_p_diff) {
-    wp->w_p_fen_save = wp->w_p_fen;
-    wp->w_p_fdl_save = wp->w_p_fdl;
-
-    if (wp->w_p_diff_saved) {
-      free_string_option(wp->w_p_fdc_save);
-    }
-    wp->w_p_fdc_save = xstrdup(wp->w_p_fdc);
-  }
-  free_string_option(wp->w_p_fdc);
-  wp->w_p_fdc = xstrdup("2");
-  assert(diff_foldcolumn >= 0 && diff_foldcolumn <= 9);
-  snprintf(wp->w_p_fdc, strlen(wp->w_p_fdc) + 1, "%d", diff_foldcolumn);
-  wp->w_p_fen = true;
-  wp->w_p_fdl = 0;
-  rs_foldUpdateAll(wp);
-
-  // make sure topline is not halfway through a fold
-  changed_window_setting(wp);
-  if (vim_strchr(p_sbo, 'h') == NULL) {
-    do_cmdline_cmd("set sbo+=hor");
-  }
-
-  // Save the current values, to be restored in ex_diffoff().
-  wp->w_p_diff_saved = true;
-
-  rs_set_diff_option(wp, true);
-
-  if (addbuf) {
-    rs_diff_buf_add(wp->w_buffer);
-  }
-  redraw_later(wp, UPD_NOT_VALID);
+  rs_diff_win_options(wp, addbuf);
 }
 
 /// Set options not to show diffs.  For the current window or all windows.
-/// Only in the current tab page.
+/// Only in the current tab page -- thin wrapper calling Rust rs_ex_diffoff.
 ///
 /// @param eap
 void ex_diffoff(exarg_T *eap)
 {
-  bool diffwin = false;
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (eap->forceit ? wp->w_p_diff : (wp == curwin)) {
-      // Set 'diff' off. If option values were saved in
-      // diff_win_options(), restore the ones whose settings seem to have
-      // been left over from diff mode.
-      rs_set_diff_option(wp, false);
-
-      if (wp->w_p_diff_saved) {
-        if (wp->w_p_scb) {
-          wp->w_p_scb = wp->w_p_scb_save;
-        }
-
-        if (wp->w_p_crb) {
-          wp->w_p_crb = wp->w_p_crb_save;
-        }
-        if (!(diff_flags & DIFF_FOLLOWWRAP)) {
-          if (!wp->w_p_wrap && wp->w_p_wrap_save) {
-            wp->w_p_wrap = true;
-            wp->w_leftcol = 0;
-          }
-        }
-        free_string_option(wp->w_p_fdm);
-        wp->w_p_fdm = xstrdup(*wp->w_p_fdm_save ? wp->w_p_fdm_save : "manual");
-        free_string_option(wp->w_p_fdc);
-        wp->w_p_fdc = xstrdup(*wp->w_p_fdc_save ? wp->w_p_fdc_save : "0");
-
-        if (wp->w_p_fdl == 0) {
-          wp->w_p_fdl = wp->w_p_fdl_save;
-        }
-        // Only restore 'foldenable' when 'foldmethod' is not
-        // "manual", otherwise we continue to show the diff folds.
-        if (wp->w_p_fen) {
-          wp->w_p_fen = rs_foldmethodIsManual(wp) ? false : wp->w_p_fen_save;
-        }
-
-        rs_foldUpdateAll(wp);
-      }
-      // remove filler lines
-      wp->w_topfill = 0;
-
-      // make sure topline is not halfway a fold and cursor is
-      // invalidated
-      changed_window_setting(wp);
-
-      // Note: 'sbo' is not restored, it's a global option.
-      rs_diff_buf_adjust(wp);
-    }
-    diffwin |= wp->w_p_diff;
-  }
-
-  // Also remove hidden buffers from the list.
-  if (eap->forceit) {
-    rs_diff_buf_clear();
-  }
-
-  if (!diffwin) {
-    diff_need_update = false;
-    curtab->tp_diff_invalid = false;
-    curtab->tp_diff_update = false;
-    rs_diff_clear(curtab);
-  }
-
-  // Remove "hor" from 'scrollopt' if there are no diff windows left.
-  if (!diffwin && (vim_strchr(p_sbo, 'h') != NULL)) {
-    do_cmdline_cmd("set sbo-=hor");
-  }
+  rs_ex_diffoff(eap);
 }
 
 // Apply results from the linematch algorithm and apply to 'dp' by splitting it into multiple
@@ -1921,8 +1791,48 @@ void nvim_diffout_append_hunk(void *dout, linenr_T lnum_orig, int count_orig, li
 linenr_T nvim_diff_tv_get_lnum(typval_T *argvars) { return tv_get_lnum(argvars); }
 // Phase 2 accessors: nv_diffgetput and ex_diffthis
 void nvim_vim_beep_operator(void) { vim_beep(kOptBoFlagOperator); }
-void nvim_diff_win_options(win_T *wp, bool addbuf) { diff_win_options(wp, addbuf); }
 void nvim_call_ex_diffgetput(int cmdidx, const char *arg, int addr_count, linenr_T line1, linenr_T line2) { exarg_T ea; CLEAR_FIELD(ea); ea.cmdidx = (cmdidx_T)cmdidx; ea.arg = (char *)arg; ea.addr_count = addr_count; ea.line1 = line1; ea.line2 = line2; ex_diffgetput(&ea); }
+// Phase 3 (diff_win_options / ex_diffoff) accessors
+bool nvim_win_get_w_p_diff_saved(win_T *wp) { return wp->w_p_diff_saved != 0; }
+void nvim_win_set_w_p_diff_saved(win_T *wp, bool val) { wp->w_p_diff_saved = val ? 1 : 0; }
+bool nvim_win_get_w_p_scb(win_T *wp) { return wp->w_p_scb != 0; }
+void nvim_win_set_w_p_scb(win_T *wp, bool val) { wp->w_p_scb = val ? 1 : 0; }
+bool nvim_win_get_w_p_scb_save(win_T *wp) { return wp->w_p_scb_save != 0; }
+void nvim_win_set_w_p_scb_save(win_T *wp, bool val) { wp->w_p_scb_save = val ? 1 : 0; }
+bool nvim_win_get_w_p_crb(win_T *wp) { return wp->w_p_crb != 0; }
+void nvim_win_set_w_p_crb(win_T *wp, bool val) { wp->w_p_crb = val ? 1 : 0; }
+bool nvim_win_get_w_p_crb_save(win_T *wp) { return wp->w_p_crb_save != 0; }
+void nvim_win_set_w_p_crb_save(win_T *wp, bool val) { wp->w_p_crb_save = val ? 1 : 0; }
+bool nvim_win_get_w_p_wrap(win_T *wp) { return wp->w_p_wrap != 0; }
+void nvim_win_set_w_p_wrap(win_T *wp, bool val) { wp->w_p_wrap = val ? 1 : 0; }
+bool nvim_win_get_w_p_wrap_save(win_T *wp) { return wp->w_p_wrap_save != 0; }
+void nvim_win_set_w_p_wrap_save(win_T *wp, bool val) { wp->w_p_wrap_save = val ? 1 : 0; }
+bool nvim_win_get_w_p_fen(win_T *wp) { return wp->w_p_fen != 0; }
+void nvim_win_set_w_p_fen(win_T *wp, bool val) { wp->w_p_fen = val ? 1 : 0; }
+bool nvim_win_get_w_p_fen_save(win_T *wp) { return wp->w_p_fen_save != 0; }
+void nvim_win_set_w_p_fen_save(win_T *wp, bool val) { wp->w_p_fen_save = val ? 1 : 0; }
+bool nvim_win_get_w_p_diff(win_T *wp) { return wp->w_p_diff; }
+linenr_T nvim_win_get_w_p_fdl(win_T *wp) { return (linenr_T)wp->w_p_fdl; }
+void nvim_win_set_w_p_fdl(win_T *wp, linenr_T val) { wp->w_p_fdl = (OptInt)val; }
+linenr_T nvim_win_get_w_p_fdl_save(win_T *wp) { return (linenr_T)wp->w_p_fdl_save; }
+void nvim_win_set_w_p_fdl_save(win_T *wp, linenr_T val) { wp->w_p_fdl_save = (OptInt)val; }
+void nvim_win_free_and_set_fdm(win_T *wp, const char *val) { free_string_option(wp->w_p_fdm); wp->w_p_fdm = xstrdup(val ? val : ""); }
+void nvim_win_free_and_set_fdc(win_T *wp, const char *val) { free_string_option(wp->w_p_fdc); wp->w_p_fdc = xstrdup(val ? val : "0"); }
+void nvim_win_free_and_set_fdm_save(win_T *wp, const char *val) { free_string_option(wp->w_p_fdm_save); wp->w_p_fdm_save = xstrdup(val ? val : ""); }
+void nvim_win_free_and_set_fdc_save(win_T *wp, const char *val) { free_string_option(wp->w_p_fdc_save); wp->w_p_fdc_save = xstrdup(val ? val : ""); }
+bool nvim_win_get_fdm_save_empty(win_T *wp) { return *wp->w_p_fdm_save == NUL; }
+bool nvim_win_get_fdc_save_empty(win_T *wp) { return *wp->w_p_fdc_save == NUL; }
+const char *nvim_win_get_w_p_fdm(win_T *wp) { return wp->w_p_fdm; }
+const char *nvim_win_get_w_p_fdm_save(win_T *wp) { return wp->w_p_fdm_save; }
+const char *nvim_win_get_w_p_fdc_save(win_T *wp) { return wp->w_p_fdc_save; }
+int nvim_diff_get_foldcolumn(void) { return diff_foldcolumn; }
+void nvim_diff_set_fdm_to_diff(win_T *wp) { set_option_direct_for(kOptFoldmethod, STATIC_CSTR_AS_OPTVAL("diff"), OPT_LOCAL, 0, kOptScopeWin, wp); }
+void nvim_diff_changed_window_setting(win_T *wp) { changed_window_setting(wp); }
+bool nvim_diff_sbo_has_hor(void) { return vim_strchr(p_sbo, 'h') != NULL; }
+void nvim_diff_do_cmdline_cmd(const char *cmd) { do_cmdline_cmd(cmd); }
+bool nvim_diff_is_curwin(win_T *wp) { return wp == curwin; }
+void nvim_diff_changed_window_foldlevel_reset(win_T *wp) { win_T *old_curwin = curwin; curwin = wp; rs_newFoldLevel(); curwin = old_curwin; }
+int nvim_upd_not_valid(void) { return UPD_NOT_VALID; }
 // Phase 3 accessors: f_diff_hlID
 int64_t nvim_curbuf_changedtick_i64(void) { return (int64_t)buf_get_changedtick(curbuf); }
 int nvim_diff_tv_get_number_idx(typval_T *argvars, int idx) { return (int)tv_get_number(&argvars[idx]); }

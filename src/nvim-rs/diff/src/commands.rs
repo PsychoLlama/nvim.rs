@@ -43,7 +43,6 @@ extern "C" {
         line2: LinenrT,
     );
     fn nvim_get_curwin() -> WinHandle;
-    fn nvim_diff_win_options(wp: WinHandle, addbuf: bool);
 }
 
 // =============================================================================
@@ -548,14 +547,14 @@ fn format_usize_to_buf(mut n: usize, buf: &mut [u8; 32]) -> &[u8] {
 
 /// ":diffthis" command -- Rust implementation.
 ///
-/// Calls diff_win_options(curwin, true).
+/// Calls rs_diff_win_options(curwin, true) directly (Rust-to-Rust).
 ///
 /// # Safety
 /// Calls C functions that access global state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_diffthis(_eap: *mut c_void) {
     let curwin = nvim_get_curwin();
-    nvim_diff_win_options(curwin, true);
+    crate::winopts::rs_diff_win_options(curwin, true);
 }
 
 #[cfg(test)]
