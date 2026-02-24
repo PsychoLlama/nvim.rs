@@ -645,6 +645,7 @@ pub unsafe extern "C" fn rs_ml_append_flags_impl(
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
+///
 /// Modifies buffer state. Only call from main Nvim thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_append_buf_impl(
@@ -667,6 +668,7 @@ pub unsafe extern "C" fn rs_ml_append_buf_impl(
 /// Implement `ml_delete_flags`: flush cached line, range-check, then delete.
 ///
 /// # Safety
+///
 /// Modifies buffer state. Only call from main Nvim thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_delete_flags_impl(lnum: LineNr, flags: c_int) -> c_int {
@@ -683,6 +685,7 @@ pub unsafe extern "C" fn rs_ml_delete_flags_impl(lnum: LineNr, flags: c_int) -> 
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
+///
 /// Modifies buffer state. Only call from main Nvim thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_delete_buf_impl(
@@ -703,6 +706,7 @@ pub unsafe extern "C" fn rs_ml_delete_buf_impl(
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
 /// - `line` must be a valid C string or NULL
+///
 /// Modifies buffer state. Only call from main Nvim thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_replace_buf_impl(
@@ -730,6 +734,7 @@ pub unsafe extern "C" fn rs_ml_replace_buf_impl(
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer (non-null)
+///
 /// Modifies buffer state. Only call from main Nvim thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_append_flush(
