@@ -1387,6 +1387,13 @@ static enum {
 // and reset_expand_highlight are implemented in Rust (expand.rs).
 // Their C thin wrappers are at the bottom of this file.
 
+// Rust implementations of query API (Phase 3 of pass 4)
+extern int rs_syn_get_id(win_T *wp, linenr_T lnum, colnr_T col, int trans, int *spellp,
+                         int keep_state);
+extern int rs_get_syntax_info(int *seqnrp);
+extern int rs_syn_get_concealed_id(win_T *wp, linenr_T lnum, colnr_T col);
+extern int rs_syn_get_stack_item(int i);
+
 /// Function called for expression evaluation: get syntax ID at file position.
 ///
 /// @param trans       remove transparency
@@ -1394,19 +1401,12 @@ static enum {
 /// @param keep_state  keep state of char at "col"
 int syn_get_id(win_T *wp, linenr_T lnum, colnr_T col, int trans, bool *spellp, int keep_state)
 {
-  // When the position is not after the current position and in the same
-  // line of the same window with the same buffer, need to restart parsing.
-  if (wp != syn_win || wp->w_buffer != syn_buf || lnum != current_lnum || col < current_col) {
-    syntax_start(wp, lnum);
-  } else if (col > current_col) {
-    // next_match may not be correct when moving around, e.g. with the
-    // "skip" expression in searchpair()
-    next_match_idx = -1;
+  int sp = 0;
+  int id = rs_syn_get_id(wp, lnum, col, trans, spellp ? &sp : NULL, keep_state);
+  if (spellp) {
+    *spellp = sp != 0;
   }
-
-  get_syntax_attr(col, spellp, keep_state);
-
-  return trans ? current_trans_id : current_id;
+  return id;
 }
 
 // Get extra information about the syntax item.  Must be called right after
@@ -1415,8 +1415,7 @@ int syn_get_id(win_T *wp, linenr_T lnum, colnr_T col, int trans, bool *spellp, i
 // Returns the current flags.
 int get_syntax_info(int *seqnrp)
 {
-  *seqnrp = current_seqnr;
-  return current_flags;
+  return rs_get_syntax_info(seqnrp);
 }
 
 /// Get the sequence number of the concealed file position.
@@ -1424,15 +1423,7 @@ int get_syntax_info(int *seqnrp)
 /// @return seqnr if the file position is concealed, 0 otherwise.
 int syn_get_concealed_id(win_T *wp, linenr_T lnum, colnr_T col)
 {
-  int seqnr;
-
-  syn_get_id(wp, lnum, col, false, NULL, false);
-  int syntax_flags = get_syntax_info(&seqnr);
-
-  if (syntax_flags & HL_CONCEAL) {
-    return seqnr;
-  }
-  return 0;
+  return rs_syn_get_concealed_id(wp, lnum, col);
 }
 
 // C accessor for current_sub_char (used by Rust)
@@ -1443,14 +1434,7 @@ int nvim_get_current_sub_char(void) { return current_sub_char; }
 // Returns -1 when "i" is out of range.
 int syn_get_stack_item(int i)
 {
-  if (i >= current_state.ga_len) {
-    // Need to invalidate the state, because we didn't properly finish it
-    // for the last character, "keep_state" was true.
-    invalidate_current_state();
-    current_col = MAXCOL;
-    return -1;
-  }
-  return CUR_STATE(i).si_id;
+  return rs_syn_get_stack_item(i);
 }
 
 // ":syntime" and "get_syntime_arg" are implemented in Rust (syntime.rs).
