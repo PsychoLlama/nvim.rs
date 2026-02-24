@@ -3047,6 +3047,7 @@ M.funcs = {
       Useful when exporting folded text, e.g., to HTML.
 
     ]=],
+    func = 'rs_f_foldtextresult',
     name = 'foldtextresult',
     params = { { 'lnum', 'integer|string' } },
     returns = 'string',

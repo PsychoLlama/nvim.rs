@@ -357,47 +357,34 @@ char *get_foldtext(win_T *wp, linenr_T lnum, linenr_T lnume, foldinfo_T foldinfo
 // -- migrated to Rust (lib.rs: rs_f_foldclosed, rs_f_foldclosedend, rs_f_foldlevel, rs_f_foldtext)
 // -- dispatch table wired directly to rs_* via eval.lua func = 'rs_f_*' entries
 
-/// "foldtextresult(lnum)" function
-void f_foldtextresult(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+// f_foldtextresult -- migrated to Rust (lib.rs: rs_f_foldtextresult)
+
+/// Accessor for Rust: get the fold display text for a fold.
+/// Calls get_foldtext and concatenates VirtText chunks if present.
+/// Returns xmalloc'd string (caller must xfree), or NULL if fold has no lines.
+char *nvim_get_foldtext(win_T *wp, linenr_T lnum, linenr_T lnume, foldinfo_T foldinfo)
 {
   char buf[FOLD_TEXT_LEN];
-  static bool entered = false;
-
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-  if (entered) {
-    return;  // reject recursive use
+  VirtText vt = VIRTTEXT_EMPTY;
+  char *text = get_foldtext(wp, lnum, lnume, foldinfo, buf, &vt);
+  if (text == buf) {
+    text = xstrdup(text);
   }
-  entered = true;
-  linenr_T lnum = tv_get_lnum(argvars);
-  // Treat illegal types and illegal string values for {lnum} the same.
-  lnum = MAX(lnum, 0);
-
-  foldinfo_T info = rs_fold_info(curwin, lnum);
-  if (info.fi_lines > 0) {
-    VirtText vt = VIRTTEXT_EMPTY;
-    char *text = get_foldtext(curwin, lnum, lnum + info.fi_lines - 1, info, buf, &vt);
-    if (text == buf) {
-      text = xstrdup(text);
-    }
-    if (kv_size(vt) > 0) {
-      assert(*text == NUL);
-      for (size_t i = 0; i < kv_size(vt);) {
-        int attr = 0;
-        char *new_text = next_virt_text_chunk(vt, &i, &attr);
-        if (new_text == NULL) {
-          break;
-        }
-        new_text = concat_str(text, new_text);
-        xfree(text);
-        text = new_text;
+  if (kv_size(vt) > 0) {
+    assert(*text == NUL);
+    for (size_t i = 0; i < kv_size(vt);) {
+      int attr = 0;
+      char *new_text = next_virt_text_chunk(vt, &i, &attr);
+      if (new_text == NULL) {
+        break;
       }
+      new_text = concat_str(text, new_text);
+      xfree(text);
+      text = new_text;
     }
-    clear_virttext(&vt);
-    rettv->vval.v_string = text;
   }
-
-  entered = false;
+  clear_virttext(&vt);
+  return text;
 }
 
 // ============================================================================

@@ -37,5 +37,6 @@ extern void rs_f_foldclosed(typval_T *argvars, typval_T *rettv, EvalFuncData fpt
 extern void rs_f_foldclosedend(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void rs_f_foldlevel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void rs_f_foldtext(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void rs_f_foldtextresult(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 #include "fold_shim.h.generated.h"

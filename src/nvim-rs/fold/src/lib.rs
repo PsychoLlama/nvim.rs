@@ -3787,6 +3787,16 @@ extern "C" {
 
     /// Get the Rust-implemented foldtext string.
     fn rs_f_foldtext_impl() -> *mut c_char;
+
+    /// Get the fold display text for a fold range.
+    /// Calls get_foldtext() in C and concatenates VirtText chunks.
+    /// Returns an xmalloc'd string (caller must free), or NULL.
+    fn nvim_get_foldtext(
+        wp: WinHandle,
+        lnum: LineNr,
+        lnume: LineNr,
+        foldinfo: FoldInfoResult,
+    ) -> *mut c_char;
 }
 
 /// Implement `foldclosed()` or `foldclosedend()` VimL functions.
@@ -3867,6 +3877,48 @@ pub unsafe extern "C" fn rs_f_foldtext(
 ) {
     let s = rs_f_foldtext_impl();
     nvim_fold_rettv_init_string(rettv, s);
+}
+
+/// FFI: `foldtextresult()` VimL function - replace C `f_foldtextresult`.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid `typval_T*` pointers.
+/// `fptr` is ignored.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_foldtextresult(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *const c_void,
+) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static ENTERED: AtomicBool = AtomicBool::new(false);
+
+    // Initialize rettv to empty string (VAR_STRING, NULL).
+    nvim_fold_rettv_init_string(rettv, std::ptr::null_mut());
+
+    // Reentrancy guard: reject recursive calls.
+    if ENTERED
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+
+    let mut lnum = nvim_fold_tv_get_lnum(argvars);
+    // Treat illegal types and illegal string values for {lnum} the same.
+    if lnum < 0 {
+        lnum = 0;
+    }
+
+    let info = fold_info_impl(nvim_get_curwin(), lnum);
+    if info.fi_lines > 0 {
+        let curwin = nvim_get_curwin();
+        let lnume = lnum + info.fi_lines - 1;
+        let text = nvim_get_foldtext(curwin, lnum, lnume, info);
+        nvim_fold_rettv_init_string(rettv, text);
+    }
+
+    ENTERED.store(false, Ordering::Relaxed);
 }
 
 #[cfg(test)]
