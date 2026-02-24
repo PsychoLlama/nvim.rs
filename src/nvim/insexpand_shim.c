@@ -718,7 +718,7 @@ static int ins_compl_add(char *const str, int len, char *const fname, char *cons
   }
 
   // Remove any popup menu before changing the list of matches.
-  ins_compl_del_pum();
+  rs_ins_compl_del_pum();
 
   // Allocate a new match structure.
   // Copy the values to the new match structure.
@@ -918,9 +918,6 @@ static void ins_compl_add_matches(int num_matches, char **matches, int icase)
   }
   FreeWild(num_matches, matches);
 }
-
-/// Remove any popup menu.
-static void ins_compl_del_pum(void) { rs_ins_compl_del_pum(); }
 
 extern int rs_pum_enough_matches(int menuone);
 
@@ -1534,7 +1531,7 @@ int nvim_compl_match_at_original_text(void *m) { return (m && (((compl_T *)m)->c
 void nvim_compl_item_free(void *m) { if (m) ins_compl_item_free((compl_T *)m); }
 void nvim_compl_clear_pattern(void) { API_CLEAR_STRING(compl_pattern); }
 void nvim_compl_clear_leader(void) { API_CLEAR_STRING(compl_leader); }
-void nvim_ins_compl_del_pum(void) { ins_compl_del_pum(); }
+void nvim_ins_compl_del_pum(void) { rs_ins_compl_del_pum(); }
 void nvim_pum_clear(void) { pum_clear(); }
 int nvim_get_compl_match_array_exists(void) { return compl_match_array != NULL ? 1 : 0; }
 
@@ -1583,13 +1580,6 @@ _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 /// to be got from the user.
 int ins_compl_bs(void) { return rs_ins_compl_bs(); }
 
-/// Calculate fuzzy score and sort completion matches unless sorting is disabled.
-static void ins_compl_fuzzy_sort(void) { rs_ins_compl_fuzzy_sort(); }
-
-/// Called after changing "compl_leader".
-/// Show the popup menu with a different set of matches.
-/// May also search for matches again if the previous search was interrupted.
-static void ins_compl_new_leader(void) { rs_ins_compl_new_leader(); }
 
 /// Loops through the list of windows, loaded-buffers or non-loaded-buffers
 /// (depending on flag) starting from buf and looking for a non-scanned
@@ -2197,12 +2187,6 @@ void f_complete_check(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   RedrawingDisabled = saved;
 }
 
-/// Return Insert completion mode name string
-static char *ins_compl_mode(void)
-{
-  return (char *)rs_ins_compl_mode();
-}
-
 /// Fill the dict of complete_info
 static void fill_complete_info_dict(dict_T *di, compl_T *match, bool add_match)
 {
@@ -2264,7 +2248,7 @@ static void get_complete_info(list_T *what_list, dict_T *retdict)
 
   int ret = OK;
   if (what_flag & CI_WHAT_MODE) {
-    ret = tv_dict_add_str(retdict, S_LEN("mode"), ins_compl_mode());
+    ret = tv_dict_add_str(retdict, S_LEN("mode"), rs_ins_compl_mode());
   }
 
   if (ret == OK && (what_flag & CI_WHAT_PUM_VISIBLE)) {
@@ -2349,12 +2333,6 @@ void f_complete_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     what_list = argvars[0].vval.v_list;
   }
   get_complete_info(what_list, rettv->vval.v_dict);
-}
-
-/// Returns true when using a user-defined function for thesaurus completion.
-static bool thesaurus_func_complete(int type)
-{
-  return rs_thesaurus_func_complete(type) != 0;
 }
 
 /// Return value of process_next_cpt_value()
@@ -2500,18 +2478,11 @@ done:
   return status;
 }
 
-/// Get the next set of identifiers or defines matching "compl_pattern" in
-/// included files.
-static void get_next_include_file_completion(int compl_type)
-{
-  rs_get_next_include_file_completion(compl_type);
-}
-
 /// Get the next set of words matching "compl_pattern" in dictionary or
 /// thesaurus files.
 static void get_next_dict_tsr_completion(int compl_type, char *dict, int dict_f)
 {
-  if (thesaurus_func_complete(compl_type)) {
+  if (rs_thesaurus_func_complete(compl_type)) {
     expand_by_function(compl_type, compl_pattern.data, NULL);
   } else {
     ins_compl_dictionaries(dict != NULL
@@ -2768,17 +2739,6 @@ static void get_next_filename_completion(void)
   }
 }
 
-/// Get the next set of command-line completions matching "compl_pattern".
-static void get_next_cmdline_completion(void)
-{
-  rs_get_next_cmdline_completion();
-}
-
-/// Get the next set of spell suggestions matching "compl_pattern".
-static void get_next_spell_completion(linenr_T lnum)
-{
-  rs_get_next_spell_completion((int)lnum);
-}
 
 /// Return the next word or line from buffer "ins_buf" at position
 /// "cur_match_pos" for completion.  The length of the match is set in "len".
@@ -3123,7 +3083,7 @@ static bool get_next_completion_match(int type, ins_compl_next_state_T *st, pos_
     break;
   case CTRL_X_PATH_PATTERNS:
   case CTRL_X_PATH_DEFINES:
-    get_next_include_file_completion(type);
+    rs_get_next_include_file_completion(type);
     break;
 
   case CTRL_X_DICTIONARY:
@@ -3142,7 +3102,7 @@ static bool get_next_completion_match(int type, ins_compl_next_state_T *st, pos_
 
   case CTRL_X_CMDLINE:
   case CTRL_X_CMDLINE_CTRL_X:
-    get_next_cmdline_completion();
+    rs_get_next_cmdline_completion();
     break;
 
   case CTRL_X_FUNCTION:
@@ -3157,7 +3117,7 @@ static bool get_next_completion_match(int type, ins_compl_next_state_T *st, pos_
     break;
 
   case CTRL_X_SPELL:
-    get_next_spell_completion(st->first_match_pos.lnum);
+    rs_get_next_spell_completion((int)st->first_match_pos.lnum);
     break;
   case CTRL_X_BUFNAMES:
     get_next_bufname_token();
@@ -3455,18 +3415,11 @@ static int ins_compl_get_exp(pos_T *ini)
     }
 
     if (rs_cot_fuzzy() && rs_ins_compl_leader_len() > 0) {
-      ins_compl_fuzzy_sort();
+      rs_ins_compl_fuzzy_sort();
     }
   }
 
   return match_count;
-}
-
-/// Update "compl_shown_match" to the actually shown match, it may differ when
-/// "compl_leader" is used to omit some of the matches.
-static void ins_compl_update_shown_match(void)
-{
-  rs_ins_compl_update_shown_match();
 }
 
 /// Insert a completion string that contains newlines.
@@ -3597,22 +3550,6 @@ static char *find_common_prefix(size_t *prefix_len, bool curbuf_only)
   return NULL;
 }
 
-/// show the file name for the completion match (if any).  Truncate the file
-/// name to avoid a wait for return.
-static void ins_compl_show_filename(void)
-{
-  rs_ins_compl_show_filename();
-}
-
-/// Find the appropriate completion item when 'complete' ('cpt') includes
-/// a 'max_matches' postfix. In this case, we search for a match where
-/// 'cp_in_match_array' is set, indicating that the match is also present
-/// in 'compl_match_array'.
-static void find_next_match_in_menu(void)
-{
-  rs_find_next_match_in_menu();
-}
-
 /// Find the next set of matches for completion. Repeat the completion "todo"
 /// times.  The number of matches found is returned in 'num_matches'.
 ///
@@ -3637,7 +3574,7 @@ static int find_next_completion_match(bool allow_get_expansion, int todo, bool a
   while (--todo >= 0) {
     if (rs_compl_shows_dir_forward() && compl_shown_match->cp_next != NULL) {
       if (compl_match_array != NULL) {
-        find_next_match_in_menu();
+        rs_find_next_match_in_menu();
       } else {
         compl_shown_match = compl_shown_match->cp_next;
       }
@@ -3648,7 +3585,7 @@ static int find_next_completion_match(bool allow_get_expansion, int todo, bool a
                && compl_shown_match->cp_prev != NULL) {
       found_end = is_first_match(compl_shown_match);
       if (compl_match_array != NULL) {
-        find_next_match_in_menu();
+        rs_find_next_match_in_menu();
       } else {
         compl_shown_match = compl_shown_match->cp_prev;
       }
@@ -3757,7 +3694,7 @@ static int ins_compl_next(bool allow_get_expansion, int count, bool insert_match
       && !match_at_original_text(compl_shown_match)
       && !rs_cot_fuzzy()) {
     // Update "compl_shown_match" to the actually shown match
-    ins_compl_update_shown_match();
+    rs_ins_compl_update_shown_match();
   }
 
   if (allow_get_expansion && insert_match
@@ -3839,35 +3776,12 @@ static int ins_compl_next(bool allow_get_expansion, int count, bool insert_match
 
   // Show the file name for the match (if any)
   if (compl_shown_match->cp_fname != NULL) {
-    ins_compl_show_filename();
+    rs_ins_compl_show_filename();
   }
 
   return num_matches;
 }
 
-/// Get the pattern, column and length for normal completion (CTRL-N CTRL-P
-/// completion)
-/// Sets the global variables: compl_col, compl_length and compl_pattern.
-/// Uses the global variables: compl_cont_status and ctrl_x_mode
-static int get_normal_compl_info(char *line, int startcol, colnr_T curs_col)
-{
-  return rs_get_normal_compl_info(line, startcol, (int)curs_col);
-}
-
-/// Get the pattern, column and length for whole line completion or for the
-/// complete() function.
-/// Sets the global variables: compl_col, compl_length and compl_pattern.
-static int get_wholeline_compl_info(char *line, colnr_T curs_col)
-{
-  return rs_get_wholeline_compl_info(line, (int)curs_col);
-}
-
-/// Get the pattern, column and length for filename completion.
-/// Sets the global variables: compl_col, compl_length and compl_pattern.
-static int get_filename_compl_info(char *line, int startcol, colnr_T curs_col)
-{
-  return rs_get_filename_compl_info(line, startcol, (int)curs_col);
-}
 
 /// Get the pattern, column and length for command-line completion.
 /// Sets the global variables: compl_col, compl_length and compl_pattern.
@@ -3998,14 +3912,6 @@ static int get_userdefined_compl_info(colnr_T curs_col, Callback *cb, int *start
   return OK;
 }
 
-/// Get the pattern, column and length for spell completion.
-/// Sets the global variables: compl_col, compl_length and compl_pattern.
-/// Uses the global variable: spell_bad_len
-static int get_spell_compl_info(int startcol, colnr_T curs_col)
-{
-  return rs_get_spell_compl_info(startcol, (int)curs_col);
-}
-
 /// Get the completion pattern, column and length.
 ///
 /// @param startcol  start column number of the completion pattern/text
@@ -4019,25 +3925,25 @@ static int compl_get_info(char *line, int startcol, colnr_T curs_col, bool *line
 {
   if (rs_ctrl_x_mode_normal() || rs_ctrl_x_mode_register()
       || ((ctrl_x_mode & CTRL_X_WANT_IDENT)
-          && !thesaurus_func_complete(ctrl_x_mode))) {
-    if (get_normal_compl_info(line, startcol, curs_col) != OK) {
+          && !rs_thesaurus_func_complete(ctrl_x_mode))) {
+    if (rs_get_normal_compl_info(line, startcol, (int)curs_col) != OK) {
       return FAIL;
     }
     *line_invalid = true;  // 'cpt' func may have invalidated "line"
   } else if (rs_ctrl_x_mode_line_or_eval()) {
-    return get_wholeline_compl_info(line, curs_col);
+    return rs_get_wholeline_compl_info(line, (int)curs_col);
   } else if (rs_ctrl_x_mode_files()) {
-    return get_filename_compl_info(line, startcol, curs_col);
+    return rs_get_filename_compl_info(line, startcol, (int)curs_col);
   } else if (ctrl_x_mode == CTRL_X_CMDLINE) {
     return get_cmdline_compl_info(line, curs_col);
   } else if (rs_ctrl_x_mode_function() || rs_ctrl_x_mode_omni()
-             || thesaurus_func_complete(ctrl_x_mode)) {
+             || rs_thesaurus_func_complete(ctrl_x_mode)) {
     if (get_userdefined_compl_info(curs_col, NULL, NULL) != OK) {
       return FAIL;
     }
     *line_invalid = true;  // "line" may have become invalid
   } else if (rs_ctrl_x_mode_spell()) {
-    if (get_spell_compl_info(startcol, curs_col) == FAIL) {
+    if (rs_get_spell_compl_info(startcol, (int)curs_col) == FAIL) {
       return FAIL;
     }
     *line_invalid = true;  // "line" may have become invalid
@@ -4047,19 +3953,6 @@ static int compl_get_info(char *line, int startcol, colnr_T curs_col, bool *line
   }
 
   return OK;
-}
-
-/// Continue an interrupted completion mode search in "line".
-///
-/// If this same ctrl_x_mode has been interrupted use the text from
-/// "compl_startpos" to the cursor as a pattern to add a new word instead of
-/// expand the one before the cursor, in word-wise if "compl_startpos" is not in
-/// the same line as the cursor then fix it (the line has been split because it
-/// was longer than 'tw').  if SOL is set then skip the previous pattern, a word
-/// at the beginning of the line has been inserted, we'll look for that.
-static void ins_compl_continue_search(char *line)
-{
-  rs_ins_compl_continue_search(line);
 }
 
 /// start insert mode completion
@@ -4087,7 +3980,7 @@ static int ins_compl_start(void)
       && compl_cont_mode == ctrl_x_mode) {
     // this same ctrl-x_mode was interrupted previously. Continue the
     // completion.
-    ins_compl_continue_search(line);
+    rs_ins_compl_continue_search(line);
   } else {
     compl_cont_status &= CONT_LOCAL;
   }
@@ -4109,7 +4002,7 @@ static int ins_compl_start(void)
   bool line_invalid = false;
   if (compl_get_info(line, startcol, curs_col, &line_invalid) == FAIL) {
     if (rs_ctrl_x_mode_function() || rs_ctrl_x_mode_omni()
-        || thesaurus_func_complete(ctrl_x_mode)) {
+        || rs_thesaurus_func_complete(ctrl_x_mode)) {
       // restore did_ai, so that adding comment leader works
       did_ai = save_did_ai;
     }
@@ -4188,12 +4081,6 @@ static int ins_compl_start(void)
   return OK;
 }
 
-/// display the completion status message
-static void ins_compl_show_statusmsg(void)
-{
-  rs_ins_compl_show_statusmsg();
-}
-
 /// Do Insert mode completion.
 /// Called when character "c" was typed, which has a meaning for completion.
 /// Returns OK if completion was done, FAIL if something failed.
@@ -4264,7 +4151,7 @@ int ins_complete(int c, bool enable_pum)
   }
 
   if (!shortmess(SHM_COMPLETIONMENU) && !compl_autocomplete) {
-    ins_compl_show_statusmsg();
+    rs_ins_compl_show_statusmsg();
   }
 
   // Wait for the autocompletion delay to expire
@@ -4308,7 +4195,7 @@ static void show_pum(int prev_w_wrow, int prev_w_leftcol)
   // first.
   setcursor();
   if (prev_w_wrow != curwin->w_wrow || prev_w_leftcol != curwin->w_leftcol) {
-    ins_compl_del_pum();
+    rs_ins_compl_del_pum();
   }
 
   rs_ins_compl_show_pum();
@@ -4770,7 +4657,7 @@ int nvim_p_cto(void) { return (int)p_cto; }
 
 // Additional accessors for Phase 4 Rust migrations
 // nvim_set_compl_cont_mode: already defined above (line 5315)
-void nvim_ins_compl_new_leader_wrapper(void) { ins_compl_new_leader(); }
+void nvim_ins_compl_new_leader_wrapper(void) { rs_ins_compl_new_leader(); }
 // ins_compl_addfrommatch compound accessor: handles match traversal in C
 // then calls rs_ins_compl_addleader for the actual insertion.
 extern void rs_ins_compl_addleader(int c);
