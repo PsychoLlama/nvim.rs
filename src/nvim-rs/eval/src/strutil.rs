@@ -36,7 +36,7 @@ extern "C" {
     fn nvim_eval_buf_line_count(buf: *mut c_void) -> c_int;
     fn nvim_eval_ml_get_buf(buf: *mut c_void, lnum: i32) -> *const c_char;
     fn nvim_semsg_e_nobufnr(nr: i64);
-    fn nvim_tv_get_v_list(tv: *mut c_void) -> *mut c_void; // list_T*
+    fn nvim_eval_tv_get_list(tv: *const c_void) -> *mut c_void; // list_T*
     fn nvim_list_first_item(list: *mut c_void) -> *mut c_void; // listitem_T*
     fn nvim_list_item_next(list: *mut c_void, item: *mut c_void) -> *mut c_void; // listitem_T*
     fn nvim_list_item_get_string(item: *mut c_void) -> *const c_char;
@@ -137,7 +137,7 @@ pub unsafe extern "C" fn rs_save_tv_as_string(
     }
 
     // VAR_LIST: iterate items, replacing NL with NUL.
-    let list = nvim_tv_get_v_list(tv);
+    let list = nvim_eval_tv_get_list(tv.cast_const());
 
     // First pass: calculate total length.
     let mut item = nvim_list_first_item(list);
@@ -367,7 +367,7 @@ pub unsafe extern "C" fn rs_string_slice(
 
 extern "C" {
     fn nvim_encode_tv2string_wrapper(tv: *mut c_void) -> *mut c_char;
-    fn nvim_eval_tv_vstring_ro(tv: *const c_void) -> *const c_char;
+    fn nvim_tv_get_vstring_ro(tv: *const c_void) -> *const c_char;
     fn xstrdup(s: *const c_char) -> *mut c_char;
 }
 
@@ -392,7 +392,7 @@ pub unsafe extern "C" fn rs_typval_tostring(arg: *mut c_void, quotes: bool) -> *
         return xstrdup(msg.as_ptr() as *const c_char);
     }
     if !quotes && nvim_tv_get_type(arg) == VAR_STRING_TS {
-        let s = nvim_eval_tv_vstring_ro(arg.cast_const());
+        let s = nvim_tv_get_vstring_ro(arg.cast_const());
         let s_nn = if s.is_null() {
             EMPTY_STR.as_ptr() as *const c_char
         } else {

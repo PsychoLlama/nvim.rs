@@ -80,7 +80,7 @@ extern "C" {
     // -- Dict/List operations for add_timer_info --
     fn nvim_tv_list_alloc_ret(rettv: TvHandle, count_hint: isize) -> ListHandle;
     fn nvim_tv_list_append_dict(list: ListHandle, dict: DictHandle);
-    fn nvim_tv_get_v_list(tv: TvHandle) -> ListHandle;
+    fn nvim_eval_tv_get_list(tv: *const c_void) -> ListHandle;
     fn nvim_tv_dict_add_nr(dict: DictHandle, key: *const c_char, key_len: usize, nr: i64);
     fn nvim_tv_dict_alloc() -> DictHandle;
     fn nvim_tv_dict_item_alloc_key(key: *const c_char) -> DictItemHandle;
@@ -142,7 +142,7 @@ pub unsafe extern "C" fn rs_find_timer_by_nr(xx: i64) -> TimerHandle {
 /// `timer` must be a valid timer_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_add_timer_info(rettv: TvHandle, timer: TimerHandle) {
-    let list = nvim_tv_get_v_list(rettv);
+    let list = nvim_eval_tv_get_list(rettv.cast_const());
 
     let dict = nvim_tv_dict_alloc();
     nvim_tv_list_append_dict(list, dict);

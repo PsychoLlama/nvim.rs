@@ -34,7 +34,7 @@ const VAR_NUMBER: c_int = 1;
 extern "C" {
     // typval field accessors
     fn nvim_eval_tv_get_type(tv: TvHandle) -> c_int;
-    fn nvim_eval_tv_get_vstring(tv: TvHandle) -> *mut c_char;
+    fn nvim_tv_get_vstring(tv: TvHandleMut) -> *mut c_char;
     fn nvim_eval_tv_get_partial(tv: TvHandle) -> PartialHandle;
     fn nvim_eval_tv_get_vnumber(tv: TvHandle) -> i64;
 
@@ -78,7 +78,7 @@ extern "C" {
 pub unsafe extern "C" fn rs_func_equal(tv1: TvHandle, tv2: TvHandle, ic: bool) -> bool {
     // empty and NULL function name considered the same
     let mut s1 = if nvim_eval_tv_get_type(tv1) == VAR_FUNC {
-        nvim_eval_tv_get_vstring(tv1)
+        nvim_tv_get_vstring(tv1.cast_mut())
     } else {
         rs_partial_name(nvim_eval_tv_get_partial(tv1))
     };
@@ -87,7 +87,7 @@ pub unsafe extern "C" fn rs_func_equal(tv1: TvHandle, tv2: TvHandle, ic: bool) -
     }
 
     let mut s2 = if nvim_eval_tv_get_type(tv2) == VAR_FUNC {
-        nvim_eval_tv_get_vstring(tv2)
+        nvim_tv_get_vstring(tv2.cast_mut())
     } else {
         rs_partial_name(nvim_eval_tv_get_partial(tv2))
     };
@@ -168,7 +168,7 @@ pub unsafe extern "C" fn rs_callback_from_typval(callback: CallbackHandle, arg: 
     }
 
     if v_type == VAR_STRING {
-        let vstr = nvim_eval_tv_get_vstring(arg);
+        let vstr = nvim_tv_get_vstring(arg.cast_mut());
         if !vstr.is_null() && (*vstr as u8).is_ascii_digit() {
             nvim_eval_emsg_e921();
             return false;
@@ -176,7 +176,7 @@ pub unsafe extern "C" fn rs_callback_from_typval(callback: CallbackHandle, arg: 
     }
 
     if v_type == VAR_FUNC || v_type == VAR_STRING {
-        let name = nvim_eval_tv_get_vstring(arg);
+        let name = nvim_tv_get_vstring(arg.cast_mut());
         if name.is_null() {
             nvim_eval_emsg_e921();
             return false;

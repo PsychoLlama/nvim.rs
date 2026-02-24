@@ -84,7 +84,7 @@ extern "C" {
     // encode functions
     fn nvim_encode_tv2echo(tv: TypevalHandle) -> *mut c_char;
     fn nvim_encode_tv2string_wrapper(tv: TypevalHandle) -> *mut c_char;
-    fn nvim_eval_tv_get_str(tv: TypevalHandle) -> *mut c_char;
+    fn nvim_eval_tv_get_str(tv: TypevalHandle) -> *const c_char;
     fn nvim_tv_get_type(tv: TypevalHandle) -> c_int;
 
     // echoerr
@@ -342,7 +342,7 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
             // Get string representation of the typval
             let tv_type = nvim_tv_get_type(rettv);
             let argstr: *const c_char = if cmdidx == cmd_execute {
-                nvim_eval_tv_get_str(rettv) as *const c_char
+                nvim_eval_tv_get_str(rettv)
             } else if tv_type == VAR_STRING {
                 nvim_encode_tv2echo(rettv) as *const c_char
             } else {

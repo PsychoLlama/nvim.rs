@@ -132,7 +132,7 @@ extern "C" {
     fn tv_blob_equal(b1: *mut c_void, b2: *mut c_void) -> c_int;
 
     // Partial operations
-    fn nvim_tv_get_partial(tv: TypevalHandle) -> *mut c_void;
+    fn nvim_eval_tv_get_partial(tv: TypevalHandle) -> *mut c_void;
 
     // String comparison
     fn mb_strcmp_ic(ic: c_int, s1: *const c_char, s2: *const c_char) -> c_int;
@@ -356,12 +356,12 @@ pub unsafe fn typval_compare_impl(
 
         let eq: bool;
         let p1 = if t1 == VAR_PARTIAL {
-            nvim_tv_get_partial(typ1)
+            nvim_eval_tv_get_partial(typ1)
         } else {
             std::ptr::null_mut()
         };
         let p2 = if t2 == VAR_PARTIAL {
-            nvim_tv_get_partial(typ2)
+            nvim_eval_tv_get_partial(typ2)
         } else {
             std::ptr::null_mut()
         };

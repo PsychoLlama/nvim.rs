@@ -1815,11 +1815,8 @@ extern "C" {
     fn nvim_partial_incref(pt: *mut c_void);
 
     // Typval partial accessor/setter
-    fn nvim_tv_get_partial(tv: TypevalHandle) -> *mut c_void;
+    fn nvim_eval_tv_get_partial(tv: TypevalHandle) -> *mut c_void;
     fn nvim_tv_set_partial_raw(tv: TypevalHandle, pt: *mut c_void);
-
-    // Typval string accessor
-    fn nvim_eval_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
 
     // Typval direct assign (struct copy)
     fn nvim_tv_assign_direct(dst: TypevalHandle, src: TypevalHandle);
@@ -1944,18 +1941,17 @@ pub unsafe fn eval_method_impl(
                     semsg(E_TRAILING_ARG.as_ptr() as *const c_char, *arg);
                 }
                 ret = FAIL;
-            } else if nvim_tv_get_type(ref_tv) == VAR_FUNC
-                && !nvim_eval_tv_get_vstring(ref_tv).is_null()
+            } else if nvim_tv_get_type(ref_tv) == VAR_FUNC && !nvim_tv_get_vstring(ref_tv).is_null()
             {
-                name = nvim_eval_tv_get_vstring(ref_tv);
+                name = nvim_tv_get_vstring(ref_tv);
                 // Steal the string: set ref.vval.v_string = NULL so tv_clear won't free it
                 nvim_tv_set_vstring_raw(ref_tv, std::ptr::null_mut());
                 tofree = name;
                 len = libc_strlen(name) as c_int;
             } else if nvim_tv_get_type(ref_tv) == VAR_PARTIAL
-                && !nvim_tv_get_partial(ref_tv).is_null()
+                && !nvim_eval_tv_get_partial(ref_tv).is_null()
             {
-                let pt = nvim_tv_get_partial(ref_tv);
+                let pt = nvim_eval_tv_get_partial(ref_tv);
                 if nvim_partial_get_argc(pt) > 0 || !nvim_partial_get_dict(pt).is_null() {
                     if verbose {
                         emsg(E_CANNOT_USE_PARTIAL_HERE.as_ptr() as *const c_char);
@@ -3131,7 +3127,7 @@ extern "C" {
 #[inline]
 unsafe fn set_selfdict_impl(rettv: TypevalHandle, selfdict: *mut c_void) {
     if nvim_tv_get_type(rettv) == VAR_PARTIAL {
-        let pt = nvim_tv_get_partial(rettv);
+        let pt = nvim_eval_tv_get_partial(rettv);
         if !pt.is_null()
             && !nvim_partial_get_pt_auto(pt)
             && !nvim_partial_get_pt_dict_handle(pt).is_null()
@@ -3311,7 +3307,7 @@ extern "C" {
     // semsg e_missingparen
     fn nvim_semsg_e_missingparen(name: *const c_char);
     // Get vval.v_string read-only
-    fn nvim_tv_get_vstring_ro(tv: TypevalHandle) -> *const c_char;
+    fn nvim_tv_get_vstring_ro(tv: *const c_void) -> *const c_char;
     // Emit e_empty_function_name
     fn nvim_emsg_e_empty_function_name();
     // Raw copy typval bytes from src to dst, sets src type to VAR_UNKNOWN
@@ -3351,7 +3347,7 @@ unsafe fn call_func_rettv_impl(
 
         let tv_type = nvim_tv_get_type(functv);
         if tv_type == VAR_PARTIAL {
-            pt = nvim_tv_get_partial(functv);
+            pt = nvim_eval_tv_get_partial(functv);
             is_lua = rs_is_luafunc(pt);
             funcname = if is_lua {
                 lua_funcname
@@ -3359,7 +3355,7 @@ unsafe fn call_func_rettv_impl(
                 rs_partial_name(pt) as *const c_char
             };
         } else {
-            let vstr = nvim_tv_get_vstring_ro(functv);
+            let vstr = nvim_tv_get_vstring_ro(functv.as_ptr().cast_const());
             if vstr.is_null() || *vstr == 0 {
                 nvim_emsg_e_empty_function_name();
                 // jump to theend

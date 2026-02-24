@@ -101,7 +101,7 @@ extern "C" {
 
     // eval_expr_* helpers
     fn nvim_eval_tv_vpartial(tv: *const c_void) -> *mut c_void; // partial_T*
-    fn nvim_eval_tv_vstring_ro(tv: *const c_void) -> *const c_char;
+    fn nvim_tv_get_vstring_ro(tv: *const c_void) -> *const c_char;
     fn rs_partial_name(pt: *const c_void) -> *mut c_char;
     fn nvim_eval_call_func_partial(
         s: *const c_char,
@@ -228,7 +228,7 @@ unsafe fn eval_expr_func_impl(
     let mut buf = [0u8; NUMBUFLEN];
     let vtype = nvim_eval_tv_vtype(expr);
     let s = if vtype == VAR_FUNC {
-        nvim_eval_tv_vstring_ro(expr)
+        nvim_tv_get_vstring_ro(expr)
     } else {
         tv_get_string_buf_chk(
             TypevalHandle::from_ptr(expr as *mut c_void),
@@ -817,7 +817,7 @@ extern "C" {
     fn nvim_find_option_end_wrapper(p: *const c_char, opt_idxp: *mut c_int) -> *const c_char;
 
     // Phase 1: call_func_retstr helper
-    fn nvim_shim_tv_get_string(tv: TypevalHandle) -> *const c_char;
+    fn nvim_eval_tv_get_str(tv: TypevalHandle) -> *const c_char;
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_tv_set_type(tv: TypevalHandle, vtype: c_int);
 }
@@ -888,7 +888,7 @@ pub unsafe extern "C" fn rs_call_func_retstr(
         return std::ptr::null_mut();
     }
 
-    let s = nvim_shim_tv_get_string(rettv);
+    let s = nvim_eval_tv_get_str(rettv);
     let result = nvim_xstrdup(s);
     tv_clear(rettv);
     result
@@ -1174,7 +1174,7 @@ extern "C" {
 
     // Phase 3: typval field accessors
     fn nvim_eval_tv_get_vnumber(tv: *const c_void) -> i64;
-    fn nvim_eval_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
+    fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
 
     // Phase 3: foldtext Object construction helpers
     fn nvim_foldtext_make_nil_obj(out: *mut c_void);
@@ -1223,7 +1223,7 @@ pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_
             } else if vtype != VAR_STRING {
                 0
             } else {
-                let s = nvim_eval_tv_get_vstring(TypevalHandle::from_ptr(tv));
+                let s = nvim_tv_get_vstring(TypevalHandle::from_ptr(tv));
                 if s.is_null() {
                     0
                 } else {

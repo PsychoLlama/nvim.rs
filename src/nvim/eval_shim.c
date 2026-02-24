@@ -147,7 +147,6 @@ extern int rs_handle_subscript(const char **arg, typval_T *rettv, evalarg_T *eva
 extern void rs_ex_echo(exarg_T *eap);
 extern void rs_ex_execute(exarg_T *eap);
 extern int rs_eval_option(const char **arg, typval_T *rettv, bool evaluate);
-extern int rs_eval_env_var(char **arg, typval_T *rettv, int evaluate);
 extern int rs_var_item_copy(const void *conv, typval_T *from, typval_T *to, bool deep,
                             int copyID);
 extern char *rs_save_tv_as_string(typval_T *tv, ptrdiff_t *len, bool endnl, bool crlf);
@@ -211,11 +210,6 @@ _Static_assert(kCallbackPartial == 2, "kCallbackPartial mismatch");
 int nvim_eval_tv_get_type(const typval_T *tv)
 {
   return (int)tv->v_type;
-}
-
-char *nvim_eval_tv_get_vstring(const typval_T *tv)
-{
-  return tv->vval.v_string;
 }
 
 partial_T *nvim_eval_tv_get_partial(const typval_T *tv)
@@ -1223,12 +1217,6 @@ void nvim_tv_set_vstring_owned(typval_T *tv, char *s)
   tv->vval.v_string = s;
 }
 
-/// Get partial_T->pt_name (accessor for Rust).
-char *nvim_partial_get_pt_name(partial_T *pt)
-{
-  return pt->pt_name;
-}
-
 /// Get partial_T->pt_func->uf_name (accessor for Rust).
 char *nvim_partial_get_pt_func_uf_name(partial_T *pt)
 {
@@ -1437,12 +1425,6 @@ bool garbage_collect(bool testing)
 /// make sure this always uses a decimal point.
 ///
 // eval_env_var: deleted -- replaced by rs_eval_env_var (Rust, Phase 2).
-
-/// Non-static wrapper for eval_env_var - calls Rust rs_eval_env_var.
-int nvim_eval_env_var_wrapper(char **arg, typval_T *rettv, int evaluate)
-{
-  return rs_eval_env_var(arg, rettv, evaluate);
-}
 
 /// Builds a process argument vector from a Vimscript object (typval_T).
 ///
@@ -1947,12 +1929,6 @@ int nvim_tv_is_func(const typval_T *tv)
   return tv->v_type == VAR_FUNC || tv->v_type == VAR_PARTIAL;
 }
 
-/// Get partial pointer from typval - accessor for Rust.
-partial_T *nvim_tv_get_partial(const typval_T *tv)
-{
-  return tv->vval.v_partial;
-}
-
 // =============================================================================
 // Phase 1: eval_func helpers (accessor functions for rs_eval_func)
 // =============================================================================
@@ -2150,26 +2126,10 @@ VarLockStatus nvim_blob_get_bv_lock(const blob_T *blob)
   return blob->bv_lock;
 }
 
-/// Get v_lock from a typval_T - accessor for Rust.
-VarLockStatus nvim_tv_get_v_lock(const typval_T *tv)
-{
-  return tv->v_lock;
-}
-
 /// Set v_lock in a typval_T - accessor for Rust.
 void nvim_tv_set_v_lock(typval_T *tv, VarLockStatus lock)
 {
   tv->v_lock = lock;
-}
-
-/// Get dv_lock from ll_tv->vval.v_dict - composite accessor for Rust.
-/// Returns 0 (VAR_UNLOCKED) if ll_tv or v_dict is NULL.
-VarLockStatus nvim_lval_get_dict_dv_lock(const lval_T *lp)
-{
-  if (lp->ll_tv == NULL || lp->ll_tv->vval.v_dict == NULL) {
-    return VAR_UNLOCKED;
-  }
-  return lp->ll_tv->vval.v_dict->dv_lock;
 }
 
 /// Get value_check_lock condition for set_var_lval - composite accessor for Rust.
@@ -2239,28 +2199,10 @@ void nvim_semsg_dictkey(const char *key)
   semsg(_(e_dictkey), key);
 }
 
-/// Get TV_CSTRING constant value - accessor for Rust.
-int nvim_tv_cstring_flag(void)
-{
-  return TV_CSTRING;
-}
-
 /// value_check_lock wrapper - accessor for Rust.
 bool nvim_value_check_lock(int lock, const char *name)
 {
   return value_check_lock((VarLockStatus)lock, name, TV_CSTRING);
-}
-
-/// Get vval.v_dict from a typval_T (direct field) - accessor for Rust.
-dict_T *nvim_tv_get_v_dict(const typval_T *tv)
-{
-  return tv->vval.v_dict;
-}
-
-/// Get vval.v_list from a typval_T (direct field) - accessor for Rust.
-list_T *nvim_tv_get_v_list(const typval_T *tv)
-{
-  return tv->vval.v_list;
 }
 
 /// Set vval.v_list in typval_T (raw assignment, does not update type) - accessor for Rust.
@@ -2455,12 +2397,6 @@ int nvim_call_func_rettv_wrapper(char **arg, evalarg_T *evalarg, typval_T *rettv
   return rs_call_func_rettv(arg, evalarg, rettv, evaluate, NULL, basetv, lua_funcname);
 }
 
-/// Non-static wrapper for rs_eval7 - accessor for Rust rs_eval_method.
-int nvim_eval7_wrapper(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string)
-{
-  return rs_eval7(arg, rettv, evalarg, want_string);
-}
-
 // =============================================================================
 // Phase 1 (lval subscript): new C accessor/wrapper functions for rs_get_lval_subscript
 // =============================================================================
@@ -2611,12 +2547,6 @@ void nvim_lval_alloc_dict_if_null(lval_T *lp)
   lp->ll_dict = lp->ll_tv->vval.v_dict;
 }
 
-/// Get tv->vval.v_dict from the ll_tv - composite accessor for Rust.
-dict_T *nvim_lval_tv_get_dict(const lval_T *lp)
-{
-  return lp->ll_tv->vval.v_dict;
-}
-
 /// Get tv->vval.v_blob from the ll_tv - composite accessor for Rust.
 blob_T *nvim_lval_tv_get_blob(const lval_T *lp)
 {
@@ -2654,22 +2584,10 @@ int nvim_lval_tv_blob_len(const lval_T *lp)
   return tv_blob_len(lp->ll_tv->vval.v_blob);
 }
 
-/// tv_dict_find wrapper accepting key_len as int for ll_dict - composite for Rust.
-dictitem_T *nvim_lval_dict_find(const lval_T *lp, const char *key, int len)
-{
-  return tv_dict_find(lp->ll_dict, key, (ptrdiff_t)len);
-}
-
 /// Set lp->ll_di = tv_dict_find(lp->ll_dict, key, len) - composite setter for Rust.
 void nvim_lval_set_di_from_dict(lval_T *lp, const char *key, int len)
 {
   lp->ll_di = tv_dict_find(lp->ll_dict, key, (ptrdiff_t)len);
-}
-
-/// Get di->di_tv from lp->ll_di - composite accessor for Rust.
-typval_T *nvim_lval_di_get_tv(const lval_T *lp)
-{
-  return &lp->ll_di->di_tv;
 }
 
 /// Set lp->ll_tv = &lp->ll_di->di_tv - composite setter for Rust.
@@ -2683,18 +2601,6 @@ void nvim_lval_set_tv_from_ll_di(lval_T *lp)
 bool nvim_lval_di_is_luafunc(const lval_T *lp)
 {
   return lp->ll_di->di_tv.v_type == VAR_PARTIAL && rs_is_luafunc(lp->ll_di->di_tv.vval.v_partial);
-}
-
-/// var_check_ro for ll_di->di_flags - composite for Rust.
-bool nvim_lval_di_var_check_ro(const lval_T *lp, const char *name, size_t name_len)
-{
-  return var_check_ro(lp->ll_di->di_flags, name, name_len);
-}
-
-/// var_check_lock for ll_di->di_flags - composite for Rust.
-bool nvim_lval_di_var_check_lock(const lval_T *lp, const char *name, size_t name_len)
-{
-  return var_check_lock(lp->ll_di->di_flags, name, name_len);
 }
 
 /// Check if lp->ll_di is NULL - accessor for Rust.
@@ -2725,18 +2631,6 @@ listitem_T *nvim_tv_list_check_range_index_one(lval_T *lp, bool quiet)
 int nvim_tv_list_check_range_index_two(lval_T *lp, bool quiet)
 {
   return tv_list_check_range_index_two(lp->ll_list, &lp->ll_n1, lp->ll_li, &lp->ll_n2, quiet);
-}
-
-/// valid_varname wrapper - accessor for Rust.
-bool nvim_valid_varname(const char *varname)
-{
-  return valid_varname(varname);
-}
-
-/// var_wrong_func_name wrapper - accessor for Rust.
-bool nvim_var_wrong_func_name(const char *name, bool new_var)
-{
-  return var_wrong_func_name(name, new_var);
 }
 
 // =============================================================================
@@ -3095,12 +2989,6 @@ partial_T *nvim_eval_tv_vpartial(const typval_T *tv)
   return tv->vval.v_partial;
 }
 
-/// Get vval.v_string from typval (read-only) - accessor for eval_top.
-const char *nvim_eval_tv_vstring_ro(const typval_T *tv)
-{
-  return tv->vval.v_string;
-}
-
 /// tv_get_string wrapper - accessor for eval_top.
 const char *nvim_eval_tv_get_string(const typval_T *tv)
 {
@@ -3376,12 +3264,6 @@ char *nvim_expand_env_save(const char *src)
 int nvim_vimconv_get_type(const vimconv_T *conv)
 {
   return conv == NULL ? CONV_NONE : (int)conv->vc_type;
-}
-
-/// Get tv->vval.v_string (read-only const accessor).
-const char *nvim_tv_get_vstring_const(const typval_T *tv)
-{
-  return tv->vval.v_string;
 }
 
 /// Wrap string_convert(conv, str, NULL).
@@ -3666,13 +3548,6 @@ void nvim_snprintf_question(char *buf, size_t bufsize)
   snprintf(buf, bufsize, "?");
 }
 
-/// Wrap tv_get_string - accessor for rs_call_func_retstr.
-/// Named nvim_shim_tv_get_string to avoid conflict with nvim_tv_get_string in typval.c.
-const char *nvim_shim_tv_get_string(const typval_T *tv)
-{
-  return tv_get_string(tv);
-}
-
 // nvim_xstrdup is defined in register.c - no duplicate needed here.
 
 // =============================================================================
@@ -3943,7 +3818,6 @@ void nvim_semsg_tv_to_argv_notexe(const char *msg)
   semsg(_(e_invargNval), "cmd", msg);
 }
 
-// nvim_shim_tv_get_string already defined above for tv_get_string().
 
 /// os_can_exe wrapper for tv_to_argv -- check if the command is executable.
 /// Returns true if executable. Sets *abspath to the resolved path (caller must free).
@@ -4055,12 +3929,6 @@ void nvim_eval_list_append_string(list_T *l, const char *str, ptrdiff_t len)
   tv_list_append_string(l, str, len);
 }
 
-/// tv_list_alloc with kListLenMayKnow (for provider args list).
-list_T *nvim_eval_list_alloc_maykno(void)
-{
-  return tv_list_alloc(kListLenMayKnow);
-}
-
 /// tv_list_alloc with explicit count (for provider args list).
 list_T *nvim_eval_list_alloc_n(int n)
 {
@@ -4103,12 +3971,6 @@ void nvim_eval_provider_call_func(const char *funcname, int name_len,
   call_func(funcname, name_len, out_rettv, 2, argvars, &funcexe);
 }
 
-/// Get curwin->w_cursor.lnum for use in FUNCEXE init.
-int32_t nvim_eval_curwin_lnum(void)
-{
-  return (int32_t)curwin->w_cursor.lnum;
-}
-
 /// semsg E319 "No X provider found" wrapper.
 void nvim_semsg_no_provider(const char *provider)
 {
@@ -4121,12 +3983,6 @@ void nvim_tv_set_number_zero(typval_T *tv)
   tv->v_type = VAR_NUMBER;
   tv->v_lock = VAR_UNLOCKED;
   tv->vval.v_number = 0;
-}
-
-/// Raw memcpy typval_T from src to dst (for returning by value from Rust).
-void nvim_tv_rawcopy(typval_T *dst, const typval_T *src)
-{
-  *dst = *src;
 }
 
 // =============================================================================
@@ -4378,22 +4234,10 @@ Callback *nvim_cbr_get_cb_ptr(CallbackReader *reader)
   return &reader->cb;
 }
 
-/// Get the buffered field of a CallbackReader.
-int nvim_cbr_get_buffered(const CallbackReader *reader)
-{
-  return reader->buffered ? 1 : 0;
-}
-
 /// Set the buffered field of a CallbackReader.
 void nvim_cbr_set_buffered(CallbackReader *reader, int buffered)
 {
   reader->buffered = buffered != 0;
-}
-
-/// Get the self field of a CallbackReader.
-dict_T *nvim_cbr_get_self(const CallbackReader *reader)
-{
-  return reader->self;
 }
 
 /// Set the self field of a CallbackReader.

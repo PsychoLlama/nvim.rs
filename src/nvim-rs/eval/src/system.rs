@@ -25,10 +25,10 @@ extern "C" {
     #[allow(dead_code)]
     fn nvim_tv_get_vstring(tv: *mut c_void) -> *mut c_char;
     fn nvim_tv_set_vstring_raw(tv: *mut c_void, s: *mut c_char);
-    fn nvim_tv_get_v_list(tv: *mut c_void) -> *mut c_void;
+    fn nvim_eval_tv_get_list(tv: *const c_void) -> *mut c_void;
     fn nvim_tv_set_v_list(tv: *mut c_void, l: *mut c_void);
     fn nvim_eval_tv_string_chk(tv: *const c_void) -> *const c_char;
-    fn nvim_shim_tv_get_string(tv: *const c_void) -> *const c_char;
+    fn nvim_eval_tv_get_str(tv: *const c_void) -> *const c_char;
     fn nvim_tv_get_number(tv: *const c_void) -> i64;
 
     // ----- list accessors -----
@@ -164,7 +164,7 @@ pub unsafe extern "C" fn rs_tv_to_argv(
 
     if vtype == VAR_STRING {
         // String => shell semantics
-        let cmd_str = nvim_shim_tv_get_string(cmd_tv);
+        let cmd_str = nvim_eval_tv_get_str(cmd_tv);
         if !cmd_out.is_null() {
             *cmd_out = cmd_str;
         }
@@ -176,7 +176,7 @@ pub unsafe extern "C" fn rs_tv_to_argv(
         return ptr::null_mut();
     }
 
-    let cmd_list = nvim_tv_get_v_list(cmd_tv);
+    let cmd_list = nvim_eval_tv_get_list(cmd_tv.cast_const());
     let list_len = nvim_tv_list_len(cmd_list);
     if list_len == 0 {
         nvim_emsg_tv_to_argv_empty();

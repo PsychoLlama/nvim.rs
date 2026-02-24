@@ -42,7 +42,7 @@ const K_CALLBACK_PARTIAL: c_int = 2;
 extern "C" {
     // typval field accessors (Phase 4 already defined some)
     fn nvim_eval_tv_get_type(tv: TvHandle) -> c_int;
-    fn nvim_eval_tv_get_vstring(tv: TvHandle) -> *mut std::ffi::c_char;
+    fn nvim_tv_get_vstring(tv: TvHandleMut) -> *mut std::ffi::c_char;
     fn nvim_eval_tv_get_partial(tv: TvHandle) -> PartialHandle;
 
     // typval_T field accessors for dict and list
@@ -290,7 +290,11 @@ pub unsafe extern "C" fn rs_set_ref_in_item(
     match v_type {
         VAR_DICT => set_ref_in_item_dict(nvim_eval_tv_get_dict(tv), copy_id, ht_stack, list_stack),
         VAR_LIST => set_ref_in_item_list(nvim_eval_tv_get_list(tv), copy_id, ht_stack, list_stack),
-        VAR_FUNC => set_ref_in_func(nvim_eval_tv_get_vstring(tv), std::ptr::null_mut(), copy_id),
+        VAR_FUNC => set_ref_in_func(
+            nvim_tv_get_vstring(tv.cast_mut()),
+            std::ptr::null_mut(),
+            copy_id,
+        ),
         VAR_PARTIAL => {
             set_ref_in_item_partial(nvim_eval_tv_get_partial(tv), copy_id, ht_stack, list_stack)
         }

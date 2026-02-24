@@ -320,7 +320,7 @@ pub unsafe extern "C" fn rs_current_func_returned() -> c_int {
 type PartialHandle = *const std::ffi::c_void;
 
 extern "C" {
-    fn nvim_partial_get_pt_name(pt: PartialHandle) -> *mut c_char;
+    fn nvim_eval_partial_get_name(pt: *mut std::ffi::c_void) -> *mut c_char;
     fn nvim_partial_get_pt_func_uf_name(pt: PartialHandle) -> *mut c_char;
 }
 
@@ -358,7 +358,7 @@ pub unsafe extern "C" fn rs_partial_name(pt: PartialHandle) -> *mut c_char {
         return EMPTY_STRING.as_ptr() as *mut c_char;
     }
 
-    let pt_name = nvim_partial_get_pt_name(pt);
+    let pt_name = nvim_eval_partial_get_name(pt.cast_mut());
     if !pt_name.is_null() {
         return pt_name;
     }
