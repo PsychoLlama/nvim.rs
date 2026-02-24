@@ -42,6 +42,9 @@ extern "C" {
 
     // Utility functions
     fn beep_flush();
+
+    // Phase 3: do_nv_ident accessor
+    fn nvim_create_temp_cap_for_ident(c1: c_int, c2: c_int) -> CapHandle;
 }
 
 // =============================================================================
@@ -614,6 +617,26 @@ pub extern "C" fn rs_z_command_is_fold(zcmd: c_int) -> c_int {
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_parse_bracket_command(nchar: c_int) -> c_int {
     BracketCommand::from_nchar(nchar).to_raw()
+}
+
+// =============================================================================
+// Phase 3: do_nv_ident migration
+// =============================================================================
+
+/// Call nv_ident() as if `c1` was the command character, with `c2` as the
+/// next character.
+///
+/// Rust replacement for the C `do_nv_ident`. Creates a temporary
+/// `oparg_T`/`cmdarg_T` pair via C accessor and invokes `rs_nv_ident`.
+///
+/// # Safety
+/// Calls C accessors and passes the returned pointer to rs_nv_ident.
+/// The returned cap pointer is backed by function-static storage (safe
+/// for single-threaded nvim).
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_nv_ident(c1: c_int, c2: c_int) {
+    let cap = nvim_create_temp_cap_for_ident(c1, c2);
+    crate::rs_nv_ident(cap);
 }
 
 // =============================================================================

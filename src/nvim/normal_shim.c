@@ -2545,19 +2545,24 @@ bool nv_screengo(oparg_T *oap, int dir, int dist, bool skip_conceal)
 // nv_z_get_count migrated to Rust (nv_z_get_count_impl in nv_zet_impl) in Phase 4
 
 
-/// Call nv_ident() as if "c1" was used, with "c2" as next character.
-void do_nv_ident(int c1, int c2)
+/// Phase 3: accessor -- initializes static oparg_T/cmdarg_T and returns cap pointer.
+/// nvim is single-threaded so function-static storage is safe.
+cmdarg_T *nvim_create_temp_cap_for_ident(int c1, int c2)
 {
-  oparg_T oa;
-  cmdarg_T ca;
-
+  static oparg_T oa;
+  static cmdarg_T ca;
   clear_oparg(&oa);
   CLEAR_FIELD(ca);
   ca.oap = &oa;
   ca.cmdchar = c1;
   ca.nchar = c2;
-  rs_nv_ident(&ca);
+  return &ca;
 }
+
+extern void rs_do_nv_ident(int c1, int c2);
+
+/// Call nv_ident() as if "c1" was used, with "c2" as next character.
+void do_nv_ident(int c1, int c2) { rs_do_nv_ident(c1, c2); }
 
 /// Implementation of nv_ident.
 // get_visual_text, nv_gotofile, normal_search, nv_mark_move_to migrated to Rust in Phase 2
