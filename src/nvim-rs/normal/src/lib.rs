@@ -2525,15 +2525,6 @@ pub unsafe extern "C" fn rs_nv_edit(cap: CapHandle) {
 extern "C" {
     // Phase 4: nv_search / nv_next accessors
     fn nvim_getcmdline_for_search(cap: CapHandle) -> *mut c_char;
-    // nv_ident C wrappers (Phase 7)
-    fn nvim_ident_init(
-        cap: CapHandle,
-        cmdchar_out: *mut c_int,
-        g_cmd_out: *mut c_int,
-        ptr_out: *mut *mut c_char,
-        n_out: *mut usize,
-    ) -> c_int;
-
     // Accessors for rs_ident_build_and_exec (Phase 2 migration)
     fn nvim_ident_get_kp() -> *mut c_char;
     fn nvim_ident_curbuf_is_help() -> bool;
@@ -2670,20 +2661,50 @@ pub unsafe extern "C" fn rs_nv_next(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_ident(cap: CapHandle) {
-    let mut cmdchar: c_int = 0;
-    let mut g_cmd: c_int = 0;
+    let oap = nvim_cap_get_oap(cap);
+
+    // Inlined nvim_ident_init:
+    let raw_cmdchar = nvim_cap_get_cmdchar(cap);
+    let (mut cmdchar, g_cmd): (c_int, c_int) = if raw_cmdchar == c_int::from(b'g') {
+        (nvim_cap_get_nchar(cap), 1)
+    } else {
+        (raw_cmdchar, 0)
+    };
+    if cmdchar == POUND {
+        cmdchar = c_int::from(b'#');
+    }
+
     let mut ptr: *mut c_char = core::ptr::null_mut();
     let mut n: usize = 0;
 
-    let ret = nvim_ident_init(
-        cap,
-        &raw mut cmdchar,
-        &raw mut g_cmd,
-        &raw mut ptr,
-        &raw mut n,
-    );
-    if ret != 0 {
-        return;
+    // The "]", "CTRL-]" and "K" commands accept an argument in Visual mode.
+    if cmdchar == c_int::from(b']') || cmdchar == CTRL_RSB || cmdchar == c_int::from(b'K') {
+        if nvim_get_VIsual_active() != 0 && !rs_get_visual_text(cap, &raw mut ptr, &raw mut n) {
+            return;
+        }
+        if rs_checkclearopq(oap) {
+            return;
+        }
+    }
+
+    if ptr.is_null() {
+        let find_type = if cmdchar == c_int::from(b'*') || cmdchar == c_int::from(b'#') {
+            FIND_IDENT | FIND_STRING
+        } else {
+            FIND_IDENT
+        };
+        n = rs_find_ident_at_pos(
+            nvim_get_curwin(),
+            nvim_get_cursor_lnum(),
+            nvim_get_cursor_col(),
+            &raw mut ptr,
+            core::ptr::null_mut(),
+            find_type,
+        );
+        if n == 0 {
+            rs_clearop(oap);
+            return;
+        }
     }
 
     rs_ident_build_and_exec(cap, cmdchar, g_cmd, ptr, n);
@@ -3266,7 +3287,19 @@ extern "C" {
     fn adjust_cursor_col();
 
     // nv_brackets_impl C accessors
-    fn nvim_bracket_find_ident(cap: CapHandle);
+    // Phase 2: new lower-level accessors replacing the bracket helpers (migrated to Rust)
+    fn nvim_find_pattern_in_path_call(
+        ptr: *mut c_char,
+        len: usize,
+        count0: c_int,
+        nchar: c_int,
+        count1: i64,
+        from_rbracket: bool,
+    );
+    fn nvim_pos_to_mark_cursor() -> FmarkHandle;
+    fn nvim_getnextmark_call(fm: FmarkHandle, dir: c_int, begin_line: c_int) -> FmarkHandle;
+    fn nvim_bracket_do_mouse_impl(oap: OapHandle, nchar: c_int, dir: c_int, count1: i64);
+    fn nvim_spell_move_to_cap_call(dir: c_int, smt_type: c_int) -> usize;
     // Phase 3: findmatchlimit accessor
     fn nvim_findmatchlimit_call(
         oap: OapHandle,
@@ -3278,12 +3311,8 @@ extern "C" {
         out_coladd: *mut c_int,
     ) -> bool;
     fn nvim_dec_cursor() -> c_int;
-    fn nvim_bracket_findpar(cap: CapHandle, flag: c_int) -> bool;
-    fn nvim_bracket_mark_jump(cap: CapHandle);
-    fn nvim_bracket_do_mouse(cap: CapHandle);
     fn nvim_bracket_fold_move(cap: CapHandle);
     fn nvim_bracket_diff_move(cap: CapHandle);
-    fn nvim_bracket_spell_move(cap: CapHandle);
     // Phase 4: find_decl accessors
     fn nvim_searchit_decl(pat: *const c_char, patlen: usize, searchflags: c_int) -> c_int;
     fn nvim_findpar_decl() -> c_int;
@@ -3307,6 +3336,11 @@ extern "C" {
 
 // Phase 2 constants
 const CA_NO_ADJ_OP_END_P2: c_int = 2;
+
+// SMT (spell move type) constants from spell.h
+const SMT_ALL: c_int = 0;  // move to "all" words
+const SMT_BAD: c_int = 1;  // move to "bad" words only
+const SMT_RARE: c_int = 2; // move to "rare" words only
 
 /// Command handler for "a" or "i" text objects.
 ///
@@ -3599,8 +3633,34 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
         // "[f" or "]f": Edit file under cursor (same as "gf")
         rs_nv_gotofile(cap);
     } else if nvim_vim_strchr_str(c"iI\x09dD\x04".as_ptr(), nchar) {
-        // Find the occurrence(s) of the identifier or define under cursor
-        nvim_bracket_find_ident(cap);
+        // "[i", "[I", "[TAB", "[d", "[D", "[CTRL-D": find occurrence(s) of identifier/define
+        // (inlined nvim_bracket_find_ident)
+        let mut ptr: *mut c_char = core::ptr::null_mut();
+        let len = rs_find_ident_at_pos(
+            nvim_get_curwin(),
+            nvim_get_cursor_lnum(),
+            nvim_get_cursor_col(),
+            &raw mut ptr,
+            core::ptr::null_mut(),
+            FIND_IDENT,
+        );
+        if len == 0 {
+            rs_clearop(oap);
+        } else {
+            let count0 = nvim_cap_get_count0(cap);
+            let count1 = nvim_cap_get_count1(cap);
+            let from_rbracket = cmdchar == c_int::from(b']');
+            // xmemdupz is called inside the C wrapper since find_pattern_in_path takes ownership
+            nvim_find_pattern_in_path_call(
+                ptr,
+                len,
+                count0,
+                nchar,
+                count1 as i64,
+                from_rbracket,
+            );
+            nvim_curwin_set_curswant(true);
+        }
     } else if (cmdchar == b'[' as c_int && nvim_vim_strchr_str(c"{(*/#mM".as_ptr(), nchar))
         || (cmdchar == b']' as c_int && nvim_vim_strchr_str(c"})*/#mM".as_ptr(), nchar))
     {
@@ -3608,23 +3668,79 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
         rs_nv_bracket_block(cap);
     } else if nchar == b'[' as c_int || nchar == b']' as c_int {
         // "[[", "[]", "]]" and "][": move to start or end of function
+        // (inlined nvim_bracket_findpar)
         let flag = if nchar == cmdchar {
             b'{' as c_int
         } else {
             b'}' as c_int
         };
-        if !nvim_bracket_findpar(cap, flag) {
+        let arg = nvim_cap_get_arg(cap);
+        let count1 = nvim_cap_get_count1(cap);
+        let op_type = nvim_oap_get_op_type_ptr(oap);
+        nvim_curwin_set_curswant(true);
+        let mut pincl = nvim_oap_get_inclusive(oap);
+        let found = nvim_findpar(
+            &raw mut pincl,
+            arg,
+            count1,
+            flag,
+            op_type != OP_NOP && arg == FORWARD && flag == c_int::from(b'{'),
+        );
+        nvim_oap_set_inclusive(oap, pincl);
+        if !found {
             rs_clearopbeep(oap);
+        } else {
+            if op_type == OP_NOP {
+                nvim_beginline(BL_WHITE | BL_FIX);
+            }
+            if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_BLOCK) != 0
+                && nvim_get_KeyTyped()
+                && op_type == OP_NOP
+            {
+                rs_foldOpenCursor();
+            }
         }
     } else if nchar == b'p' as c_int || nchar == b'P' as c_int {
         // "[p", "[P", "]P" and "]p": put with indent adjustment
         nv_put_opt_impl(cap, true);
     } else if nchar == b'\'' as c_int || nchar == b'`' as c_int {
         // "['", "[`", "]'" and "]`": jump to next mark
-        nvim_bracket_mark_jump(cap);
+        // (inlined nvim_bracket_mark_jump)
+        let count1 = nvim_cap_get_count1(cap);
+        let mut fm = nvim_pos_to_mark_cursor();
+        assert!(!fm.is_null());
+        let dir = if cmdchar == c_int::from(b'[') {
+            BACKWARD
+        } else {
+            FORWARD
+        };
+        let begin_line = c_int::from(nchar == c_int::from(b'\''));
+        let mut prev_fm = fm;
+        for _ in 0..count1 {
+            prev_fm = fm;
+            let next = nvim_getnextmark_call(fm, dir, begin_line);
+            if next.is_null() {
+                break;
+            }
+            fm = next;
+        }
+        if fm.is_null() {
+            fm = prev_fm;
+        }
+        let mut flags = K_MARK_CONTEXT;
+        if nchar == c_int::from(b'\'') {
+            flags |= K_MARK_BEGIN_LINE;
+        }
+        rs_nv_mark_move_to(cap, flags, fm);
     } else if (K_RIGHTRELEASE..=K_LEFTMOUSE).contains(&nchar) {
         // Mouse click: put selected text with indent adjustment
-        nvim_bracket_do_mouse(cap);
+        // (inlined nvim_bracket_do_mouse)
+        let dir = if cmdchar == c_int::from(b']') {
+            FORWARD
+        } else {
+            BACKWARD
+        };
+        nvim_bracket_do_mouse_impl(oap, nchar, dir, nvim_cap_get_count1(cap) as i64);
     } else if nchar == b'z' as c_int {
         // "[z" and "]z": move to start or end of open fold
         nvim_bracket_fold_move(cap);
@@ -3633,7 +3749,35 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
         nvim_bracket_diff_move(cap);
     } else if nchar == b'r' as c_int || nchar == b's' as c_int || nchar == b'S' as c_int {
         // "[r", "[s", "[S", "]r", "]s" and "]S": move to next spell error
-        nvim_bracket_spell_move(cap);
+        // (inlined nvim_bracket_spell_move)
+        nvim_setpcmark();
+        let dir = if cmdchar == c_int::from(b']') {
+            FORWARD
+        } else {
+            BACKWARD
+        };
+        let smt_type = if nchar == c_int::from(b's') {
+            SMT_ALL
+        } else if nchar == c_int::from(b'r') {
+            SMT_RARE
+        } else {
+            SMT_BAD
+        };
+        let count1 = nvim_cap_get_count1(cap);
+        let op_type = nvim_oap_get_op_type_ptr(oap);
+        'spell: for _ in 0..count1 {
+            if nvim_spell_move_to_cap_call(dir, smt_type) == 0 {
+                rs_clearopbeep(oap);
+                break 'spell;
+            }
+            nvim_curwin_set_curswant(true);
+        }
+        if op_type == OP_NOP
+            && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_SEARCH) != 0
+            && nvim_get_KeyTyped()
+        {
+            rs_foldOpenCursor();
+        }
     } else {
         // Not a valid cap->nchar
         rs_clearopbeep(oap);
@@ -5388,7 +5532,7 @@ extern "C" {
     fn nvim_set_curwin_w_set_curswant(val: bool);
     fn nvim_nv_g_home_m_cmd_call(cap: CapHandle);
     fn nvim_nv_g_dollar_cmd(cap: CapHandle);
-    fn nvim_nv_gd_impl(oap: OapHandle, nchar: c_int, thisblock: c_int);
+    fn nvim_messaging_and_searchcount() -> bool;
     fn nvim_do_sleep_wrapper(ms: c_int, allow_int: bool);
     fn nvim_do_exmode_wrapper();
     fn rs_do_ascii(eap: *mut std::ffi::c_void);
@@ -5880,9 +6024,34 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
             rs_nv_operator(cap);
         }
 
-        // "gd", "gD": Find definition
+        // "gd", "gD": Find definition (inlined nvim_nv_gd_impl)
         n if n == b'd' as c_int || n == b'D' as c_int => {
-            nvim_nv_gd_impl(oap, nchar, nvim_cap_get_count0(cap));
+            let thisblock = nvim_cap_get_count0(cap);
+            let mut ptr: *mut c_char = core::ptr::null_mut();
+            let len = rs_find_ident_at_pos(
+                nvim_get_curwin(),
+                nvim_get_cursor_lnum(),
+                nvim_get_cursor_col(),
+                &raw mut ptr,
+                core::ptr::null_mut(),
+                FIND_IDENT,
+            );
+            if len == 0
+                || !rs_find_decl(ptr, len, nchar == c_int::from(b'd'), thisblock != 0, SEARCH_START)
+            {
+                rs_clearopbeep(oap);
+            } else {
+                if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_SEARCH) != 0
+                    && nvim_get_KeyTyped()
+                    && nvim_oap_get_op_type_ptr(oap) == OP_NOP
+                {
+                    rs_foldOpenCursor();
+                }
+                // clear any search statistics
+                if nvim_messaging_and_searchcount() {
+                    nvim_set_clear_cmdline(true);
+                }
+            }
         }
 
         // g<*Mouse>: <C-*mouse>

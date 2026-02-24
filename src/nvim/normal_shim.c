@@ -1199,49 +1199,6 @@ char *nvim_cap_get_searchbuf(cmdarg_T *cap) { return cap->searchbuf; }
 /// Initialize nv_ident: determine cmdchar/g_cmd, get visual text or ident under cursor.
 /// Returns 0 on success, -1 to return early (clearop done), -2 to return early (clearopq done).
 /// On success: *cmdchar_out, *g_cmd_out, *ptr_out, *n_out are set.
-int nvim_ident_init(cmdarg_T *cap, int *cmdchar_out, int *g_cmd_out,
-                    char **ptr_out, size_t *n_out) {
-  char *ptr = NULL;
-  size_t n = 0;
-  int cmdchar;
-  bool g_cmd;
-
-  if (cap->cmdchar == 'g') {
-    cmdchar = cap->nchar;
-    g_cmd = true;
-  } else {
-    cmdchar = cap->cmdchar;
-    g_cmd = false;
-  }
-  if (cmdchar == POUND) {
-    cmdchar = '#';
-  }
-
-  // The "]", "CTRL-]" and "K" commands accept an argument in Visual mode.
-  if (cmdchar == ']' || cmdchar == Ctrl_RSB || cmdchar == 'K') {
-    if (VIsual_active && rs_get_visual_text(cap, &ptr, &n) == false) {
-      return -2;
-    }
-    if (rs_checkclearopq(cap->oap)) {
-      return -2;
-    }
-  }
-
-  if (ptr == NULL && (n = rs_find_ident_under_cursor(&ptr,
-                                                   ((cmdchar == '*' || cmdchar == '#')
-                                                    ? FIND_IDENT|FIND_STRING
-                                                    : FIND_IDENT))) == 0) {
-    rs_clearop(cap->oap);
-    return -1;
-  }
-
-  *cmdchar_out = cmdchar;
-  *g_cmd_out = g_cmd ? 1 : 0;
-  *ptr_out = ptr;
-  *n_out = n;
-  return 0;
-}
-
 /// Phase 4: find_decl accessors for Rust FFI
 
 /// Wrapper for searchit using curwin/curbuf cursor (for find_decl pattern).
@@ -1302,26 +1259,6 @@ extern bool rs_is_ident(const char *line, int offset);
 /// rs_find_decl Rust implementation.
 extern bool rs_find_decl(char *ptr, size_t len, bool locally, bool thisblock, int flags_arg);
 
-/// Wrapper for nv_gd -- now calls rs_find_decl.
-void nvim_nv_gd_impl(oparg_T *oap, int nchar, int thisblock)
-{
-  size_t len;
-  char *ptr;
-  if ((len = rs_find_ident_under_cursor(&ptr, FIND_IDENT)) == 0
-      || !rs_find_decl(ptr, len, nchar == 'd', thisblock, SEARCH_START)) {
-    rs_clearopbeep(oap);
-    return;
-  }
-
-  if ((fdo_flags & kOptFdoFlagSearch) && KeyTyped && oap->op_type == OP_NOP) {
-    rs_foldOpenCursor();
-  }
-  // clear any search statistics
-  if (messaging() && !msg_silent && !shortmess(SHM_SEARCHCOUNT)) {
-    clear_cmdline = true;
-  }
-}
-
 // =============================================================================
 // Operator handler accessors for Rust FFI
 // =============================================================================
@@ -1359,86 +1296,51 @@ bool nvim_findmatchlimit_call(oparg_T *oap, int findc, int flags, int64_t maxtra
 extern void rs_nv_bracket_block(cmdarg_T *cap);
 void nvim_nv_bracket_block_call(cmdarg_T *cap) { rs_nv_bracket_block(cap); }
 // (nv_bracket_block static implementation deleted; migrated to Rust)
-void nvim_bracket_find_ident(cmdarg_T *cap)
-{
-  char *ptr;
-  size_t len;
-  if ((len = rs_find_ident_under_cursor(&ptr, FIND_IDENT)) == 0) {
-    rs_clearop(cap->oap);
-  } else {
-    ptr = xmemdupz(ptr, len);
-    find_pattern_in_path(ptr, 0, len, true,
-                         cap->count0 == 0 ? !isupper(cap->nchar) : false,
-                         (((cap->nchar & 0xf) == ('d' & 0xf)) ? FIND_DEFINE : FIND_ANY),
-                         cap->count1,
-                         (isupper(cap->nchar) ? ACTION_SHOW_ALL
-                                              : islower(cap->nchar) ? ACTION_SHOW : ACTION_GOTO),
-                         (cap->cmdchar == ']' ? curwin->w_cursor.lnum + 1 : 1),
-                         MAXLNUM, false, false);
-    xfree(ptr);
-    curwin->w_set_curswant = true;
-  }
+
+// Phase 2: new C accessors replacing nvim_bracket_* helpers (migrated to Rust)
+
+/// find_pattern_in_path wrapper for bracket [i/]i/[d/]d commands.
+/// Takes a copy of ptr (via xmemdupz) and frees it after the call,
+/// matching the original nvim_bracket_find_ident behavior.
+void nvim_find_pattern_in_path_call(char *ptr, size_t len, int count0, int nchar,
+                                    int64_t count1, bool from_rbracket) {
+  char *dup = xmemdupz(ptr, len);
+  find_pattern_in_path(dup, 0, len, true,
+                       count0 == 0 ? !isupper(nchar) : false,
+                       (((nchar & 0xf) == ('d' & 0xf)) ? FIND_DEFINE : FIND_ANY),
+                       (int)count1,
+                       (isupper(nchar) ? ACTION_SHOW_ALL
+                                       : islower(nchar) ? ACTION_SHOW : ACTION_GOTO),
+                       (from_rbracket ? curwin->w_cursor.lnum + 1 : 1),
+                       MAXLNUM, false, false);
+  xfree(dup);
 }
-bool nvim_bracket_findpar(cmdarg_T *cap, int flag)
-{
-  curwin->w_set_curswant = true;
-  if (!findpar(&cap->oap->inclusive, cap->arg, cap->count1, flag,
-               (cap->oap->op_type != OP_NOP && cap->arg == FORWARD && flag == '{'))) {
-    return false;
-  }
-  if (cap->oap->op_type == OP_NOP) {
-    beginline(BL_WHITE | BL_FIX);
-  }
-  if ((fdo_flags & kOptFdoFlagBlock) && KeyTyped && cap->oap->op_type == OP_NOP) {
-    rs_foldOpenCursor();
-  }
-  return true;
+
+/// pos_to_mark(curbuf, NULL, curwin->w_cursor) -- returns fmark_T*.
+fmark_T *nvim_pos_to_mark_cursor(void) { return pos_to_mark(curbuf, NULL, curwin->w_cursor); }
+
+/// getnextmark wrapper: advance fm by one step in dir.
+fmark_T *nvim_getnextmark_call(fmark_T *fm, int dir, int begin_line) {
+  return getnextmark(&fm->mark, dir, begin_line);
 }
-void nvim_bracket_mark_jump(cmdarg_T *cap)
-{
-  fmark_T *fm = pos_to_mark(curbuf, NULL, curwin->w_cursor);
-  assert(fm != NULL);
-  fmark_T *prev_fm;
-  for (int n = cap->count1; n > 0; n--) {
-    prev_fm = fm;
-    fm = getnextmark(&fm->mark, cap->cmdchar == '[' ? BACKWARD : FORWARD,
-                     cap->nchar == '\'');
-    if (fm == NULL) {
-      break;
-    }
-  }
-  if (fm == NULL) {
-    fm = prev_fm;
-  }
-  int flags = kMarkContext;
-  flags |= cap->nchar == '\'' ? kMarkBeginLine : 0;
-  rs_nv_mark_move_to(cap, flags, fm);
+
+/// do_mouse wrapper for bracket [<mouse>/]<mouse> commands.
+void nvim_bracket_do_mouse_impl(oparg_T *oap, int nchar, int dir, int64_t count1) {
+  do_mouse(oap, nchar, dir, (int)count1, PUT_FIXINDENT);
 }
-void nvim_bracket_do_mouse(cmdarg_T *cap)
-{
-  do_mouse(cap->oap, cap->nchar,
-           (cap->cmdchar == ']') ? FORWARD : BACKWARD,
-           cap->count1, PUT_FIXINDENT);
+
+/// spell_move_to wrapper for bracket [s/]s/[r/]r/[S/]S commands.
+size_t nvim_spell_move_to_cap_call(int dir, int smt_type) {
+  return spell_move_to(curwin, dir, smt_type, false, NULL);
 }
+
+/// messaging() && !msg_silent && !shortmess(SHM_SEARCHCOUNT).
+bool nvim_messaging_and_searchcount(void) {
+  return messaging() && !msg_silent && !shortmess(SHM_SEARCHCOUNT);
+}
+
 void nvim_bracket_fold_move(cmdarg_T *cap) { if (!rs_foldMoveTo(false, cap->cmdchar == ']' ? FORWARD : BACKWARD, cap->count1)) { rs_clearopbeep(cap->oap); } }
 void nvim_bracket_diff_move(cmdarg_T *cap) { if (!rs_diff_move_to(cap->cmdchar == ']' ? FORWARD : BACKWARD, cap->count1)) { rs_clearopbeep(cap->oap); } }
-void nvim_bracket_spell_move(cmdarg_T *cap)
-{
-  setpcmark();
-  for (int n = 0; n < cap->count1; n++) {
-    if (spell_move_to(curwin, cap->cmdchar == ']' ? FORWARD : BACKWARD,
-                      cap->nchar == 's' ? SMT_ALL
-                                        : cap->nchar == 'r' ? SMT_RARE : SMT_BAD,
-                      false, NULL) == 0) {
-      rs_clearopbeep(cap->oap);
-      break;
-    }
-    curwin->w_set_curswant = true;
-  }
-  if (cap->oap->op_type == OP_NOP && (fdo_flags & kOptFdoFlagSearch) && KeyTyped) {
-    rs_foldOpenCursor();
-  }
-}
 
 // =============================================================================
 // Undo/Redo handler accessors for Rust FFI
