@@ -1,11 +1,12 @@
 //! Syntax clearing/teardown operations.
 //!
 //! Migrated from syntax_accessors.c: syn_clear_pattern, syn_clear_cluster,
-//! syn_remove_pattern, syn_clear_time, syn_clear_one.
+//! syn_remove_pattern, syn_clear_one, syntax_clear, reset_synblock,
+//! syntax_sync_clear.
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::types::{SynBlockHandle, SynClusterHandle, SynPatHandle};
+use crate::types::{SynBlockHandle, SynClusterHandle, SynPatHandle, WinHandle};
 
 // =============================================================================
 // FFI declarations
@@ -26,6 +27,7 @@ extern "C" {
     fn nvim_synpat_get_cont_in_list(pat: SynPatHandle) -> *mut i16;
 
     // Cluster accessors
+    fn nvim_synblock_get_cluster_count(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_cluster(block: SynBlockHandle, idx: c_int) -> SynClusterHandle;
     fn nvim_syncluster_get_name(cluster: SynClusterHandle) -> *const c_char;
     fn nvim_syncluster_get_name_u(cluster: SynClusterHandle) -> *const c_char;
@@ -55,6 +57,44 @@ extern "C" {
     /// C-side helper: remove all keyword entries with given id from hashtab.
     /// Keeps HI2KE/KE2HIKEY pointer arithmetic in C.
     fn nvim_syn_clear_keyword_in_ht(id: c_int, ht: *mut c_void);
+
+    // Phase 2 accessors: syntax_clear / reset_synblock / syntax_sync_clear
+
+    /// Clear both keyword tables for a synblock.
+    fn nvim_synblock_clear_keytabs(block: SynBlockHandle);
+
+    /// ga_clear on b_syn_patterns.
+    fn nvim_synblock_ga_clear_patterns(block: SynBlockHandle);
+
+    /// ga_clear on b_syn_clusters.
+    fn nvim_synblock_ga_clear_clusters(block: SynBlockHandle);
+
+    /// Free b_syn_linecont_prog and clear b_syn_linecont_pat.
+    fn nvim_synblock_clear_linecont(block: SynBlockHandle);
+
+    /// Reset all b_syn_sync_* flags and b_syn_folditems to 0.
+    fn nvim_synblock_reset_sync_flags(block: SynBlockHandle);
+
+    /// Reset b_spell_cluster_id and b_nospell_cluster_id to 0.
+    fn nvim_synblock_reset_cluster_ids(block: SynBlockHandle);
+
+    /// Reset error/timeout/case/foldlevel/spell/containedin/conceal flags.
+    fn nvim_synblock_reset_flags(block: SynBlockHandle);
+
+    /// clear_string_option on b_syn_isk.
+    fn nvim_synblock_clear_syn_isk(block: SynBlockHandle);
+
+    /// Free all syntax state stack entries for block.
+    fn nvim_syn_stack_free_all(block: SynBlockHandle);
+
+    /// Invalidate the current syntax state.
+    fn nvim_syn_invalidate_current_state();
+
+    /// Reset running_syn_inc_tag to 0.
+    fn nvim_syn_reset_inc_tag();
+
+    /// Release ownsyntax block: clear it, free it, reset to buf's b_s.
+    fn nvim_win_release_synblock(wp: WinHandle);
 }
 
 // SPTYPE_START = 2 (must match C define)
@@ -171,3 +211,96 @@ pub unsafe extern "C" fn rs_syn_clear_one(id: c_int, syncing: c_int) {
         idx -= 1;
     }
 }
+
+// =============================================================================
+// Phase 2 implementations
+// =============================================================================
+
+/// Full teardown of a synblock: free keywords, patterns, clusters, reset flags.
+///
+/// # Safety
+/// block must be a valid synblock_T pointer. Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syntax_clear(block: SynBlockHandle) {
+    if block.is_null() {
+        return;
+    }
+
+    // Reset scalar flags first
+    nvim_synblock_reset_flags(block);
+
+    // Free the keywords
+    nvim_synblock_clear_keytabs(block);
+
+    // Free the syntax patterns (last to first)
+    let mut i = nvim_synblock_get_pattern_count(block) - 1;
+    while i >= 0 {
+        rs_syn_clear_pattern(block, i);
+        i -= 1;
+    }
+    nvim_synblock_ga_clear_patterns(block);
+
+    // Free the syntax clusters (last to first)
+    let mut i = nvim_synblock_get_cluster_count(block) - 1;
+    while i >= 0 {
+        rs_syn_clear_cluster(block, i);
+        i -= 1;
+    }
+    nvim_synblock_ga_clear_clusters(block);
+    nvim_synblock_reset_cluster_ids(block);
+
+    // Reset sync flags and linecont
+    nvim_synblock_reset_sync_flags(block);
+    nvim_synblock_clear_linecont(block);
+    nvim_synblock_clear_syn_isk(block);
+
+    // Free the stored states
+    nvim_syn_stack_free_all(block);
+    nvim_syn_invalidate_current_state();
+
+    // Reset the counter for ":syn include"
+    nvim_syn_reset_inc_tag();
+}
+
+/// Get rid of ownsyntax for window wp.
+///
+/// # Safety
+/// wp must be a valid win_T pointer. Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reset_synblock(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+    nvim_win_release_synblock(wp);
+}
+
+/// Clear syncing info for the current window's synblock.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syntax_sync_clear() {
+    let block = nvim_get_curwin_synblock();
+    if block.is_null() {
+        return;
+    }
+
+    // Free syncing patterns (last to first)
+    let mut i = nvim_synblock_get_pattern_count(block) - 1;
+    while i >= 0 {
+        let pat = nvim_synblock_get_pattern(block, i);
+        if !pat.is_null() && nvim_synpat_get_syncing(pat) != 0 {
+            rs_syn_remove_pattern(block, i);
+        }
+        i -= 1;
+    }
+
+    // Reset sync flags and linecont
+    nvim_synblock_reset_sync_flags(block);
+    nvim_synblock_clear_linecont(block);
+    nvim_synblock_clear_syn_isk(block);
+
+    // Need to recompute all syntax
+    nvim_syn_stack_free_all(block);
+}
+

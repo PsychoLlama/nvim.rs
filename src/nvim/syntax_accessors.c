@@ -70,6 +70,9 @@ extern void rs_syn_clear_pattern(synblock_T *block, int i);
 extern void rs_syn_clear_cluster(synblock_T *block, int i);
 extern void rs_syn_remove_pattern(synblock_T *block, int idx);
 extern void rs_syn_clear_one(int id, int syncing);
+extern void rs_syntax_clear(synblock_T *block);
+extern void rs_reset_synblock(win_T *wp);
+extern void rs_syntax_sync_clear(void);
 
 static bool did_syntax_onoff = false;
 
@@ -855,85 +858,20 @@ static void syn_cmd_iskeyword(exarg_T *eap, int syncing)
 // Clear all syntax info for one buffer.
 void syntax_clear(synblock_T *block)
 {
-  block->b_syn_error = false;           // clear previous error
-  block->b_syn_slow = false;            // clear previous timeout
-  block->b_syn_ic = false;              // Use case, by default
-  block->b_syn_foldlevel = SYNFLD_START;
-  block->b_syn_spell = SYNSPL_DEFAULT;  // default spell checking
-  block->b_syn_containedin = false;
-  block->b_syn_conceal = false;
-
-  // free the keywords
-  clear_keywtab(&block->b_keywtab);
-  clear_keywtab(&block->b_keywtab_ic);
-
-  // free the syntax patterns
-  for (int i = block->b_syn_patterns.ga_len; --i >= 0;) {
-    syn_clear_pattern(block, i);
-  }
-  ga_clear(&block->b_syn_patterns);
-
-  // free the syntax clusters
-  for (int i = block->b_syn_clusters.ga_len; --i >= 0;) {
-    syn_clear_cluster(block, i);
-  }
-  ga_clear(&block->b_syn_clusters);
-  block->b_spell_cluster_id = 0;
-  block->b_nospell_cluster_id = 0;
-
-  block->b_syn_sync_flags = 0;
-  block->b_syn_sync_minlines = 0;
-  block->b_syn_sync_maxlines = 0;
-  block->b_syn_sync_linebreaks = 0;
-
-  vim_regfree(block->b_syn_linecont_prog);
-  block->b_syn_linecont_prog = NULL;
-  XFREE_CLEAR(block->b_syn_linecont_pat);
-  block->b_syn_folditems = 0;
-  clear_string_option(&block->b_syn_isk);
-
-  // free the stored states
-  syn_stack_free_all(block);
-  invalidate_current_state();
-
-  // Reset the counter for ":syn include"
-  running_syn_inc_tag = 0;
+  rs_syntax_clear(block);
 }
 
 // Get rid of ownsyntax for window "wp".
 void reset_synblock(win_T *wp)
 {
-  if (wp->w_s != &wp->w_buffer->b_s) {
-    syntax_clear(wp->w_s);
-    xfree(wp->w_s);
-    wp->w_s = &wp->w_buffer->b_s;
-  }
+  rs_reset_synblock(wp);
 }
 
 // Clear syncing info for one buffer.
 static void syntax_sync_clear(void)
 {
-  // free the syntax patterns
-  for (int i = curwin->w_s->b_syn_patterns.ga_len; --i >= 0;) {
-    if (SYN_ITEMS(curwin->w_s)[i].sp_syncing) {
-      syn_remove_pattern(curwin->w_s, i);
-    }
-  }
-
-  curwin->w_s->b_syn_sync_flags = 0;
-  curwin->w_s->b_syn_sync_minlines = 0;
-  curwin->w_s->b_syn_sync_maxlines = 0;
-  curwin->w_s->b_syn_sync_linebreaks = 0;
-
-  vim_regfree(curwin->w_s->b_syn_linecont_prog);
-  curwin->w_s->b_syn_linecont_prog = NULL;
-  XFREE_CLEAR(curwin->w_s->b_syn_linecont_pat);
-  clear_string_option(&curwin->w_s->b_syn_isk);
-
-  syn_stack_free_all(curwin->w_s);              // Need to recompute all syntax.
+  rs_syntax_sync_clear();
 }
-// Note: syntax_sync_clear kept in C because it touches low-level C APIs
-// (syn_remove_pattern, vim_regfree, clear_string_option, syn_stack_free_all).
 
 // Remove one pattern from the buffer's pattern list.
 static void syn_remove_pattern(synblock_T *block, int idx)
@@ -4119,4 +4057,92 @@ void nvim_synblock_dec_folditems(synblock_T *block)
 void nvim_syn_clear_keyword_in_ht(int id, hashtab_T *ht)
 {
   syn_clear_keyword(id, ht);
+}
+
+// =============================================================================
+// Phase 5 pass 5 Phase 2 accessors: syntax_clear / reset_synblock / syntax_sync_clear
+// =============================================================================
+
+/// Clear both keyword tables for a synblock.
+void nvim_synblock_clear_keytabs(synblock_T *block)
+{
+  clear_keywtab(&block->b_keywtab);
+  clear_keywtab(&block->b_keywtab_ic);
+}
+
+/// ga_clear on b_syn_patterns.
+void nvim_synblock_ga_clear_patterns(synblock_T *block)
+{
+  ga_clear(&block->b_syn_patterns);
+}
+
+/// ga_clear on b_syn_clusters.
+void nvim_synblock_ga_clear_clusters(synblock_T *block)
+{
+  ga_clear(&block->b_syn_clusters);
+}
+
+/// Free b_syn_linecont_prog and clear b_syn_linecont_pat.
+void nvim_synblock_clear_linecont(synblock_T *block)
+{
+  vim_regfree(block->b_syn_linecont_prog);
+  block->b_syn_linecont_prog = NULL;
+  XFREE_CLEAR(block->b_syn_linecont_pat);
+}
+
+/// Reset all b_syn_sync_* flags and b_syn_folditems to defaults.
+void nvim_synblock_reset_sync_flags(synblock_T *block)
+{
+  block->b_syn_sync_flags = 0;
+  block->b_syn_sync_minlines = 0;
+  block->b_syn_sync_maxlines = 0;
+  block->b_syn_sync_linebreaks = 0;
+  block->b_syn_folditems = 0;
+}
+
+/// Reset b_spell_cluster_id and b_nospell_cluster_id.
+void nvim_synblock_reset_cluster_ids(synblock_T *block)
+{
+  block->b_spell_cluster_id = 0;
+  block->b_nospell_cluster_id = 0;
+}
+
+/// Reset error/timeout/case/foldlevel/spell/containedin/conceal flags.
+void nvim_synblock_reset_flags(synblock_T *block)
+{
+  block->b_syn_error = false;
+  block->b_syn_slow = false;
+  block->b_syn_ic = false;
+  block->b_syn_foldlevel = SYNFLD_START;
+  block->b_syn_spell = SYNSPL_DEFAULT;
+  block->b_syn_containedin = false;
+  block->b_syn_conceal = false;
+}
+
+/// clear_string_option on b_syn_isk.
+void nvim_synblock_clear_syn_isk(synblock_T *block)
+{
+  clear_string_option(&block->b_syn_isk);
+}
+
+/// Reset running_syn_inc_tag to 0.
+void nvim_syn_reset_inc_tag(void)
+{
+  running_syn_inc_tag = 0;
+}
+
+/// Release ownsyntax block for a window: clear it, free it, reset to buf's b_s.
+void nvim_win_release_synblock(win_T *wp)
+{
+  if (wp->w_s != &wp->w_buffer->b_s) {
+    syntax_clear(wp->w_s);
+    xfree(wp->w_s);
+    wp->w_s = &wp->w_buffer->b_s;
+  }
+}
+
+/// clear_syn_state wrapper for use from Rust.
+void nvim_syn_clear_syn_state(synstate_T *p)
+{
+  clear_syn_state(p);
 }
