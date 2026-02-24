@@ -205,6 +205,9 @@ extern void rs_ins_compl_expand_multiple(const char *str);
 extern void rs_show_pum(int prev_w_wrow, int prev_w_leftcol);
 extern void rs_ins_compl_add_matches(int num_matches, char **matches, int icase);
 extern void rs_spell_back_to_badword(void);
+// Phase 2 (pass 6) Rust exports
+extern void rs_ins_compl_longest_match(void *match);
+extern const char *rs_find_common_prefix(size_t *prefix_len, int curbuf_only);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -857,55 +860,7 @@ int ins_compl_col_range_attr(linenr_T lnum, int col)
 /// Reduce the longest common string for match "match".
 static void ins_compl_longest_match(compl_T *match)
 {
-  if (compl_leader.data == NULL) {
-    // First match, use it as a whole.
-    compl_leader = copy_string(match->cp_str, NULL);
-
-    bool had_match = (curwin->w_cursor.col > compl_col);
-    rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1); ins_redraw(false);
-
-    // When the match isn't there (to avoid matching itself) remove it
-    // again after redrawing.
-    if (!had_match) {
-      rs_ins_compl_delete(0);
-    }
-    compl_used_match = false;
-
-    return;
-  }
-
-  // Reduce the text if this match differs from compl_leader.
-  char *p = compl_leader.data;
-  char *s = match->cp_str.data;
-  while (*p != NUL) {
-    int c1 = utf_ptr2char(p);
-    int c2 = utf_ptr2char(s);
-
-    if ((match->cp_flags & CP_ICASE)
-        ? (mb_tolower(c1) != mb_tolower(c2))
-        : (c1 != c2)) {
-      break;
-    }
-    MB_PTR_ADV(p);
-    MB_PTR_ADV(s);
-  }
-
-  if (*p != NUL) {
-    // Leader was shortened, need to change the inserted text.
-    *p = NUL;
-    compl_leader.size = (size_t)(p - compl_leader.data);
-
-    bool had_match = (curwin->w_cursor.col > compl_col);
-    rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1); ins_redraw(false);
-
-    // When the match isn't there (to avoid matching itself) remove it
-    // again after redrawing.
-    if (!had_match) {
-      rs_ins_compl_delete(0);
-    }
-  }
-
-  compl_used_match = false;
+  rs_ins_compl_longest_match(match);
 }
 
 /// Add an array of matches to the list of matches.
@@ -5143,4 +5098,59 @@ void nvim_ins_compl_add_matches_impl(int num_matches, char **matches, int icase)
     }
   }
   FreeWild(num_matches, matches);
+}
+
+// Compound accessor for Phase 2 (pass 6): ins_compl_longest_match implementation
+void nvim_ins_compl_longest_match_impl(void *match_opaque)
+{
+  compl_T *match = (compl_T *)match_opaque;
+  if (compl_leader.data == NULL) {
+    // First match, use it as a whole.
+    compl_leader = copy_string(match->cp_str, NULL);
+
+    bool had_match = (curwin->w_cursor.col > compl_col);
+    rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1); ins_redraw(false);
+
+    // When the match isn't there (to avoid matching itself) remove it
+    // again after redrawing.
+    if (!had_match) {
+      rs_ins_compl_delete(0);
+    }
+    compl_used_match = false;
+
+    return;
+  }
+
+  // Reduce the text if this match differs from compl_leader.
+  char *p = compl_leader.data;
+  char *s = match->cp_str.data;
+  while (*p != NUL) {
+    int c1 = utf_ptr2char(p);
+    int c2 = utf_ptr2char(s);
+
+    if ((match->cp_flags & CP_ICASE)
+        ? (mb_tolower(c1) != mb_tolower(c2))
+        : (c1 != c2)) {
+      break;
+    }
+    MB_PTR_ADV(p);
+    MB_PTR_ADV(s);
+  }
+
+  if (*p != NUL) {
+    // Leader was shortened, need to change the inserted text.
+    *p = NUL;
+    compl_leader.size = (size_t)(p - compl_leader.data);
+
+    bool had_match = (curwin->w_cursor.col > compl_col);
+    rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1); ins_redraw(false);
+
+    // When the match isn't there (to avoid matching itself) remove it
+    // again after redrawing.
+    if (!had_match) {
+      rs_ins_compl_delete(0);
+    }
+  }
+
+  compl_used_match = false;
 }

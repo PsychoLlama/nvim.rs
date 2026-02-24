@@ -461,6 +461,53 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
     }
 }
 
+// =============================================================================
+// Phase 2 (pass 6): ins_compl_longest_match and find_common_prefix
+// =============================================================================
+
+use crate::match_list::ComplMatch;
+
+extern "C" {
+    // Compound accessor: full ins_compl_longest_match logic (compl_leader mutation)
+    fn nvim_ins_compl_longest_match_impl(m: ComplMatch);
+
+    // Compound accessor: find_common_prefix (already named nvim_find_common_prefix_data)
+    fn nvim_find_common_prefix_data(len_out: *mut usize, icase: c_int) -> *const c_char;
+}
+
+/// Reduce the longest common string for a new completion match.
+///
+/// Rust entry point for C `ins_compl_longest_match()`. All mutation of
+/// `compl_leader` is delegated to the C compound accessor so that the
+/// static `String` field and the UTF-8 pointer arithmetic remain in C.
+///
+/// # Safety
+/// `m` must be a valid, non-null completion match pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
+    nvim_ins_compl_longest_match_impl(m);
+}
+
+/// Find the longest common prefix among all completion matches.
+///
+/// Rust entry point for C `find_common_prefix()`. All match-list iteration
+/// and `cpt_sources_array` access is delegated to the existing C compound
+/// accessor `nvim_find_common_prefix_data`.
+///
+/// Returns a pointer into the first matching `cp_str` (C-owned), or NULL.
+/// Sets `*prefix_len` to the byte length of the common prefix.
+///
+/// # Safety
+/// `prefix_len` must be a valid pointer. The returned pointer is valid as
+/// long as the completion match list is not modified.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_common_prefix(
+    prefix_len: *mut usize,
+    curbuf_only: c_int,
+) -> *const c_char {
+    nvim_find_common_prefix_data(prefix_len, curbuf_only)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
