@@ -576,12 +576,6 @@ extern "C" {
     // xp_pattern accessor
     fn nvim_xp_get_pattern(xp: *mut c_void) -> *mut c_char;
 
-    // ExpandOldSetting: delegate for terminal options and numbers
-    fn ExpandOldSetting(num_matches: *mut c_int, matches: *mut *mut *mut c_char) -> c_int;
-
-    // escape_option_str_cmdline wrapper
-    fn nvim_escape_option_str_cmdline(var: *mut c_char) -> *mut c_char;
-
     // vim_strchr: search for character in string (returns *const, cast to mut as needed)
     fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
 
@@ -625,8 +619,8 @@ pub unsafe extern "C" fn rs_expand_setting_subtract(
     let expand_option_idx = nvim_get_expand_option_idx();
 
     if expand_option_idx == K_OPT_INVALID {
-        // Terminal option: delegate to ExpandOldSetting.
-        return ExpandOldSetting(num_matches, matches);
+        // Terminal option: delegate to rs_expand_old_setting.
+        return rs_expand_old_setting(num_matches, matches);
     }
 
     let expand_option_flags = nvim_get_expand_option_flags();
@@ -640,7 +634,7 @@ pub unsafe extern "C" fn rs_expand_setting_subtract(
     let option_flags = OptFlags(get_option_flags(expand_option_idx));
 
     if option_has_type(expand_option_idx, K_OPT_VAL_TYPE_NUMBER) != 0 {
-        return ExpandOldSetting(num_matches, matches);
+        return rs_expand_old_setting(num_matches, matches);
     } else if option_flags.contains(OptFlags::COMMA) {
         // Split by comma (respecting "\," escapes), filter by regexec, escape each.
         // kOptFlagComma check goes first because 'whichwrap' has both COMMA and FLAG_LIST.
@@ -693,7 +687,7 @@ pub unsafe extern "C" fn rs_expand_setting_subtract(
                 continue;
             }
 
-            let escaped = nvim_escape_option_str_cmdline(item);
+            let escaped = rs_escape_option_str_cmdline(item);
             // GA_APPEND: grow by 1 and store pointer.
             ga_grow(std::ptr::addr_of_mut!(ga), 1);
             #[allow(clippy::cast_ptr_alignment)]
@@ -761,7 +755,120 @@ pub unsafe extern "C" fn rs_expand_setting_subtract(
         return OK;
     }
 
-    ExpandOldSetting(num_matches, matches)
+    rs_expand_old_setting(num_matches, matches)
+}
+
+// =============================================================================
+// Phase 3: escape_option_str_cmdline, ExpandOldSetting, ExpandStringSetting
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_escape_chars() -> *const c_char;
+    fn nvim_vim_strsave_escaped(s: *const c_char, esc: *const c_char) -> *mut c_char;
+    fn nvim_get_expand_option_name_ptr() -> *const c_char;
+    fn find_option(name: *const c_char) -> OptIndex;
+    fn nvim_set_expand_option_idx(val: OptIndex);
+    fn nvim_get_namebuff() -> *mut c_char;
+    fn nvim_option_has_expand_cb(opt_idx: OptIndex) -> c_int;
+    fn nvim_option_invoke_expand_cb(
+        opt_idx: OptIndex,
+        opt_flags: c_int,
+        xp: *mut c_void,
+        regmatch: *mut c_void,
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+    ) -> c_int;
+}
+
+// Call rs_option_value2string (same library, #[no_mangle] in session.rs)
+extern "C" {
+    fn rs_option_value2string(opt_idx: c_int, opt_flags: c_int);
+}
+
+/// Rust port of `escape_option_str_cmdline`.
+///
+/// Escapes option value for command-line display by prepending backslashes
+/// before special characters. Caller must free the returned string.
+///
+/// # Safety
+/// `var` must be a valid null-terminated C string.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_escape_option_str_cmdline(var: *const c_char) -> *mut c_char {
+    // Call vim_strsave_escaped(var, escape_chars)
+    let escape_chars = nvim_get_escape_chars();
+    nvim_vim_strsave_escaped(var, escape_chars)
+    // Note: BACKSLASH_IN_FILENAME path is Windows-only, skipped on Linux.
+}
+
+/// Rust port of `ExpandOldSetting`.
+///
+/// Expansion handler for `:set=` when filling in with the existing value.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_expand_old_setting(
+    num_matches: *mut c_int,
+    matches: *mut *mut *mut c_char,
+) -> c_int {
+    *num_matches = 0;
+    *matches = xmalloc(std::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
+
+    let mut expand_option_idx = nvim_get_expand_option_idx();
+    let expand_option_flags = nvim_get_expand_option_flags();
+
+    // For a terminal key code expand_option_idx is kOptInvalid.
+    if expand_option_idx == K_OPT_INVALID {
+        let name = nvim_get_expand_option_name_ptr();
+        expand_option_idx = find_option(name);
+        nvim_set_expand_option_idx(expand_option_idx);
+    }
+
+    let var: *const c_char = if expand_option_idx != K_OPT_INVALID {
+        // Put string of option value in NameBuff.
+        rs_option_value2string(expand_option_idx as c_int, expand_option_flags);
+        nvim_get_namebuff()
+    } else {
+        c"".as_ptr()
+    };
+
+    let buf = rs_escape_option_str_cmdline(var);
+    *(*matches) = buf;
+    *num_matches = 1;
+    OK
+}
+
+/// Rust port of `ExpandStringSetting`.
+///
+/// Expansion handler for `:set=`/`:set+=` when the option has a custom callback.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_expand_string_setting(
+    xp: *mut c_void,
+    regmatch: *mut c_void,
+    num_matches: *mut c_int,
+    matches: *mut *mut *mut c_char,
+) -> c_int {
+    let expand_option_idx = nvim_get_expand_option_idx();
+    let expand_option_flags = nvim_get_expand_option_flags();
+
+    if nvim_option_has_expand_cb(expand_option_idx) == 0 {
+        // Not supposed to reach here.
+        return FAIL;
+    }
+
+    nvim_option_invoke_expand_cb(
+        expand_option_idx,
+        expand_option_flags,
+        xp,
+        regmatch,
+        num_matches,
+        matches,
+    )
 }
 
 // =============================================================================

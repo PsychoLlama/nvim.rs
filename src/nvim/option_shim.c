@@ -4077,6 +4077,7 @@ void nvim_set_expand_option_flags(int val) { expand_option_flags = val; }
 int nvim_get_expand_option_append(void) { return (int)expand_option_append; }
 void nvim_set_expand_option_append(int val) { expand_option_append = (bool)val; }
 void nvim_get_expand_option_name(char out[5]) { memcpy(out, expand_option_name, 5); }
+const char *nvim_get_expand_option_name_ptr(void) { return expand_option_name; }
 void nvim_set_expand_option_name_chars(char c2, char c3)
 {
   expand_option_name[2] = c2;
@@ -4144,27 +4145,10 @@ int ExpandSettings(expand_T *xp, regmatch_T *regmatch, char *fuzzystr, int *numM
 
 /// Escape an option value that can be used on the command-line with :set.
 /// Caller needs to free the returned string, unless NULL is returned.
+extern char *rs_escape_option_str_cmdline(const char *var);
 static char *escape_option_str_cmdline(char *var)
 {
-  // A backslash is required before some characters.  This is the reverse of
-  // what happens in do_set().
-  char *buf = vim_strsave_escaped(var, escape_chars);
-
-#ifdef BACKSLASH_IN_FILENAME
-  // For MS-Windows et al. we don't double backslashes at the start and
-  // before a file name character.
-  // The reverse is found at stropt_copy_value().
-  for (var = buf; *var != NUL; MB_PTR_ADV(var)) {
-    if (var[0] == '\\' && var[1] == '\\'
-        && expand_option_idx != kOptInvalid
-        && (options[expand_option_idx].flags & kOptFlagExpand)
-        && vim_isfilec((uint8_t)var[2])
-        && (var[2] != '\\' || (var == buf && var[4] != '\\'))) {
-      STRMOVE(var, var + 1);
-    }
-  }
-#endif
-  return buf;
+  return rs_escape_option_str_cmdline(var);
 }
 
 /// Non-static wrapper for escape_option_str_cmdline (for Rust FFI).
@@ -4178,64 +4162,18 @@ buf_T *nvim_opt_get_curbuf(void) { return curbuf; }
 win_T *nvim_opt_get_curwin(void) { return curwin; }
 
 /// Expansion handler for :set= when we just want to fill in with the existing value.
+extern int rs_expand_old_setting(int *numMatches, char ***matches);
 int ExpandOldSetting(int *numMatches, char ***matches)
 {
-  char *var = NULL;
-
-  *numMatches = 0;
-  *matches = xmalloc(sizeof(char *));
-
-  // For a terminal key code expand_option_idx is kOptInvalid.
-  if (expand_option_idx == kOptInvalid) {
-    expand_option_idx = find_option(expand_option_name);
-  }
-
-  if (expand_option_idx != kOptInvalid) {
-    // Put string of option value in NameBuff.
-    option_value2string(&options[expand_option_idx], expand_option_flags);
-    var = NameBuff;
-  } else {
-    var = "";
-  }
-
-  char *buf = escape_option_str_cmdline(var);
-
-  (*matches)[0] = buf;
-  *numMatches = 1;
-  return OK;
+  return rs_expand_old_setting(numMatches, matches);
 }
 
 /// Expansion handler for :set=/:set+= when the option has a custom expansion handler.
+extern int rs_expand_string_setting(expand_T *xp, regmatch_T *regmatch, int *numMatches,
+                                    char ***matches);
 int ExpandStringSetting(expand_T *xp, regmatch_T *regmatch, int *numMatches, char ***matches)
 {
-  if (expand_option_idx == kOptInvalid || options[expand_option_idx].opt_expand_cb == NULL) {
-    // Not supposed to reach this. This function is only for options with
-    // custom expansion callbacks.
-    return FAIL;
-  }
-
-  optexpand_T args = {
-    .oe_varp = get_varp_scope(&options[expand_option_idx], expand_option_flags),
-    .oe_idx = expand_option_idx,
-    .oe_append = expand_option_append,
-    .oe_regmatch = regmatch,
-    .oe_xp = xp,
-    .oe_set_arg = xp->xp_line + expand_option_start_col,
-  };
-  args.oe_include_orig_val = !expand_option_append && (*args.oe_set_arg == NUL);
-
-  // Retrieve the existing value, but escape it as a reverse of setting it.
-  // We technically only need to do this when oe_append or
-  // oe_include_orig_val is true.
-  option_value2string(&options[expand_option_idx], expand_option_flags);
-  char *var = NameBuff;
-  char *buf = escape_option_str_cmdline(var);
-  args.oe_opt_value = buf;
-
-  int num_ret = options[expand_option_idx].opt_expand_cb(&args, numMatches, matches);
-
-  xfree(buf);
-  return num_ret;
+  return rs_expand_string_setting(xp, regmatch, numMatches, matches);
 }
 
 
@@ -4607,8 +4545,48 @@ int nvim_varp_is_curbuf_b_changed(const void *varp)
 }
 
 // =============================================================================
-// Phase 6 accessors: ExpandSettings / match_str
+// Phase 6 accessors: ExpandSettings / match_str / escape_option_str_cmdline
 // =============================================================================
+
+/// Get the escape_chars static string used by escape_option_str_cmdline.
+const char *nvim_get_escape_chars(void)
+{
+  return escape_chars;
+}
+
+/// Wrap vim_strsave_escaped.
+char *nvim_vim_strsave_escaped(const char *s, const char *esc)
+{
+  return vim_strsave_escaped(s, esc);
+}
+
+/// Invoke the expand callback for an option (constructs optexpand_T in C).
+int nvim_option_invoke_expand_cb(OptIndex opt_idx, int opt_flags,
+                                 void *xp, void *regmatch,
+                                 int *num_matches, char ***matches)
+{
+  if (opt_idx == kOptInvalid || options[opt_idx].opt_expand_cb == NULL) {
+    return FAIL;
+  }
+  optexpand_T args = {
+    .oe_varp = get_varp_scope(&options[opt_idx], opt_flags),
+    .oe_idx = opt_idx,
+    .oe_append = (bool)expand_option_append,
+    .oe_regmatch = (regmatch_T *)regmatch,
+    .oe_xp = (expand_T *)xp,
+    .oe_set_arg = ((expand_T *)xp)->xp_line + expand_option_start_col,
+  };
+  args.oe_include_orig_val = !args.oe_append && (*args.oe_set_arg == NUL);
+
+  option_value2string(&options[opt_idx], opt_flags);
+  char *var = NameBuff;
+  char *buf = escape_option_str_cmdline(var);
+  args.oe_opt_value = buf;
+
+  int result = options[opt_idx].opt_expand_cb(&args, num_matches, matches);
+  xfree(buf);
+  return result;
+}
 
 /// Get the shortname of an option by index.
 const char *nvim_option_get_shortname(OptIndex opt_idx)
