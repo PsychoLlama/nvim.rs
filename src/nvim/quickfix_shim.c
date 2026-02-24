@@ -305,6 +305,13 @@ extern bool rs_qf_is_continuation(char prefix);
 extern bool rs_qf_starts_multiline(char prefix);
 extern bool rs_qf_is_file_handler(char prefix);
 
+// Phase 5: parse_match and parse_line (migrated to Rust)
+extern int rs_qf_parse_match(const char *linebuf, size_t linelen, void *fmt_ptr, const void *rm,
+                              void *fields, bool qf_multiline, bool qf_multiscan, char **tail);
+extern int rs_qf_parse_line(void *qfl, char *linebuf, size_t linelen, void *fmt_first,
+                             void *fields);
+extern void rs_qf_reset_fmt_start(void);
+
 // Entry creation
 extern int rs_qf_add_entry(void *qfl, char *dir, const char *fname, const char *module,
                            int bufnum, const char *mesg, linenr_T lnum, linenr_T end_lnum,
@@ -1112,10 +1119,7 @@ int qf_init(win_T *wp, const char *restrict efile, char *restrict errorformat, i
 // Maximum number of bytes allowed per line while reading an errorfile.
 static const size_t LINE_MAXLEN = 4096;
 
-// Format pattern definitions moved to Rust (see parse.rs FMT_PAT array).
-// The pattern indices are still used via FMT_PATTERN_M and FMT_PATTERN_R defines.
-#define FMT_PATTERN_M 8
-#define FMT_PATTERN_R 9
+// Format pattern definitions and FMT_PATTERN_M/R indices are in Rust (parse.rs).
 
 // Converts a 'errorformat' string to regular expression pattern
 // Now uses Rust implementation and adapts the result.
@@ -1177,6 +1181,7 @@ static void free_efm_list(efm_T **efm_first)
   }
 
   fmt_start = NULL;
+  rs_qf_reset_fmt_start();
 }
 
 /// the parsed 'errorformat' option.
@@ -1464,89 +1469,11 @@ static qf_list_T *qf_get_list(qf_info_T *qi, int idx)
   return &qi->qf_lists[idx];
 }
 
-/// Return the QF_ status.
+/// Thin wrapper: delegates to rs_qf_parse_line (Rust implementation).
 static int qf_parse_line(qf_list_T *qfl, char *linebuf, size_t linelen, efm_T *fmt_first,
                          qffields_T *fields)
 {
-  efm_T *fmt_ptr;
-  int idx = 0;
-  char *tail = NULL;
-  int status;
-
-restofline:
-  // If there was no %> item start at the first pattern
-  if (fmt_start == NULL) {
-    fmt_ptr = fmt_first;
-  } else {
-    // Otherwise start from the last used pattern.
-    fmt_ptr = fmt_start;
-    fmt_start = NULL;
-  }
-
-  // Try to match each part of 'errorformat' until we find a complete
-  // match or no match.
-  fields->valid = true;
-  for (; fmt_ptr != NULL; fmt_ptr = fmt_ptr->next) {
-    idx = (uint8_t)fmt_ptr->prefix;
-    status = qf_parse_get_fields(linebuf, linelen, fmt_ptr, fields,
-                                 qfl->qf_multiline, qfl->qf_multiscan,
-                                 &tail);
-    if (status == QF_NOMEM) {
-      return status;
-    }
-    if (status == QF_OK) {
-      break;
-    }
-  }
-  qfl->qf_multiscan = false;
-
-  if (fmt_ptr == NULL || idx == 'D' || idx == 'X') {
-    if (fmt_ptr != NULL) {
-      // 'D' and 'X' directory specifiers.
-      status = qf_parse_dir_pfx(idx, fields, qfl);
-      if (status != QF_OK) {
-        return status;
-      }
-    }
-    status = qf_parse_line_nomatch(linebuf, linelen, fields);
-    if (status != QF_OK) {
-      return status;
-    }
-    if (fmt_ptr == NULL) {
-      qfl->qf_multiline = qfl->qf_multiignore = false;
-    }
-  } else {
-    // honor %> item
-    if (fmt_ptr->conthere) {
-      fmt_start = fmt_ptr;
-    }
-
-    if (rs_qf_starts_multiline((char)idx)) {
-      qfl->qf_multiline = true;     // start of a multi-line message
-      qfl->qf_multiignore = false;  // reset continuation
-    } else if (rs_qf_is_continuation((char)idx)) {
-      // continuation of multi-line msg
-      status = qf_parse_multiline_pfx(idx, qfl, fields);
-      if (status != QF_OK) {
-        return status;
-      }
-    } else if (rs_qf_is_file_handler((char)idx)) {
-      // global file names
-      status = qf_parse_file_pfx(idx, fields, qfl, tail);
-      if (status == QF_MULTISCAN) {
-        goto restofline;
-      }
-    }
-    if (rs_qf_should_skip_line(fmt_ptr->flags)) {  // generally exclude this line
-      if (qfl->qf_multiline) {
-        // also exclude continuation lines
-        qfl->qf_multiignore = true;
-      }
-      return QF_IGNORE_LINE;
-    }
-  }
-
-  return QF_OK;
+  return rs_qf_parse_line(qfl, linebuf, linelen, fmt_first, fields);
 }
 
 // Allocate the fields used for parsing lines and populating a quickfix list.
@@ -1737,401 +1664,211 @@ static qf_list_T *qf_get_curlist(qf_info_T *qi)
   return qf_get_list(qi, qi->qf_curlist);
 }
 
-/// Return the matched value in "fields->namebuf".
-static int qf_parse_fmt_f(regmatch_T *rmp, int midx, qffields_T *fields, int prefix)
+// =============================================================================
+// Phase 5: regmatch_T indexed accessors for Rust parse_match migration
+// =============================================================================
+
+/// Return the start pointer for submatch at index idx (0-based, 0-13).
+const char *nvim_qf_regmatch_startp(const void *rm, int idx)
 {
-  if (rmp->startp[midx] == NULL || rmp->endp[midx] == NULL) {
-    return QF_FAIL;
+  if (rm == NULL || idx < 0 || idx >= NSUBEXP) {
+    return NULL;
   }
-
-  // Expand ~/file and $HOME/file to full path.
-  char c = *rmp->endp[midx];
-  *rmp->endp[midx] = NUL;
-  expand_env(rmp->startp[midx], fields->namebuf, CMDBUFFSIZE);
-  *rmp->endp[midx] = c;
-
-  // For separate filename patterns (%O, %P and %Q), the specified file
-  // should exist.
-  if (rs_qf_is_file_handler((char)prefix) && !os_path_exists(fields->namebuf)) {
-    return QF_FAIL;
-  }
-
-  return QF_OK;
+  return ((const regmatch_T *)rm)->startp[idx];
 }
 
-/// Return the matched value in "fields->bnr".
-static int qf_parse_fmt_b(regmatch_T *rmp, int midx, qffields_T *fields)
+/// Return the end pointer for submatch at index idx (0-based, 0-13).
+const char *nvim_qf_regmatch_endp(const void *rm, int idx)
 {
-  if (rmp->startp[midx] == NULL) {
-    return QF_FAIL;
+  if (rm == NULL || idx < 0 || idx >= NSUBEXP) {
+    return NULL;
   }
-  int bnr = (int)atol(rmp->startp[midx]);
-  if (buflist_findnr(bnr) == NULL) {
-    return QF_FAIL;
-  }
-  fields->bnr = bnr;
-  return QF_OK;
+  return ((const regmatch_T *)rm)->endp[idx];
 }
 
-/// Return the matched value in "fields->enr".
-static int qf_parse_fmt_n(regmatch_T *rmp, int midx, qffields_T *fields)
+/// Expand environment variables in src into dst (dstlen bytes).
+void nvim_qf_expand_env(const char *src, char *dst, int dstlen)
 {
-  if (rmp->startp[midx] == NULL) {
-    return QF_FAIL;
+  if (src != NULL && dst != NULL && dstlen > 0) {
+    expand_env((char *)src, dst, dstlen);
   }
-  fields->enr = (int)atol(rmp->startp[midx]);
-  return QF_OK;
 }
 
-/// Return the matched value in "fields->lnum".
-static int qf_parse_fmt_l(regmatch_T *rmp, int midx, qffields_T *fields)
+/// Return true if the path exists on the filesystem.
+bool nvim_qf_os_path_exists(const char *path)
 {
-  if (rmp->startp[midx] == NULL) {
-    return QF_FAIL;
-  }
-  fields->lnum = (linenr_T)atol(rmp->startp[midx]);
-  return QF_OK;
+  return path != NULL && os_path_exists(path);
 }
 
-/// Return the matched value in "fields->end_lnum".
-static int qf_parse_fmt_e(regmatch_T *rmp, int midx, qffields_T *fields)
+/// Return true if the buffer number bnr refers to a known buffer.
+bool nvim_qf_buflist_findnr_exists(int bnr)
 {
-  if (rmp->startp[midx] == NULL) {
-    return QF_FAIL;
-  }
-  fields->end_lnum = (linenr_T)atol(rmp->startp[midx]);
-  return QF_OK;
+  return buflist_findnr(bnr) != NULL;
 }
 
-/// Return the matched value in "fields->col".
-static int qf_parse_fmt_c(regmatch_T *rmp, int midx, qffields_T *fields)
+// =============================================================================
+// Phase 5: qffields_T accessors for Rust
+// =============================================================================
+
+char *nvim_qf_fields_get_namebuf(void *fields) { return fields == NULL ? NULL : ((qffields_T *)fields)->namebuf; }
+int nvim_qf_fields_get_bnr(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->bnr; }
+void nvim_qf_fields_set_bnr(void *fields, int bnr) { if (fields != NULL) ((qffields_T *)fields)->bnr = bnr; }
+char *nvim_qf_fields_get_module(void *fields) { return fields == NULL ? NULL : ((qffields_T *)fields)->module; }
+char *nvim_qf_fields_get_errmsg(void *fields) { return fields == NULL ? NULL : ((qffields_T *)fields)->errmsg; }
+size_t nvim_qf_fields_get_errmsglen(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->errmsglen; }
+void nvim_qf_fields_set_errmsg(void *fields, const char *msg, size_t len)
 {
-  if (rmp->startp[midx] == NULL) {
-    return QF_FAIL;
+  if (fields == NULL || msg == NULL) {
+    return;
   }
-  fields->col = (int)atol(rmp->startp[midx]);
-  return QF_OK;
+  qffields_T *f = (qffields_T *)fields;
+  if (len >= f->errmsglen) {
+    f->errmsg = xrealloc(f->errmsg, len + 1);
+    f->errmsglen = len + 1;
+  }
+  xstrlcpy(f->errmsg, msg, len + 1);
+}
+linenr_T nvim_qf_fields_get_lnum(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->lnum; }
+void nvim_qf_fields_set_lnum(void *fields, linenr_T lnum) { if (fields != NULL) ((qffields_T *)fields)->lnum = lnum; }
+linenr_T nvim_qf_fields_get_end_lnum(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->end_lnum; }
+void nvim_qf_fields_set_end_lnum(void *fields, linenr_T end_lnum) { if (fields != NULL) ((qffields_T *)fields)->end_lnum = end_lnum; }
+int nvim_qf_fields_get_col(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->col; }
+void nvim_qf_fields_set_col(void *fields, int col) { if (fields != NULL) ((qffields_T *)fields)->col = col; }
+int nvim_qf_fields_get_end_col(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->end_col; }
+void nvim_qf_fields_set_end_col(void *fields, int end_col) { if (fields != NULL) ((qffields_T *)fields)->end_col = end_col; }
+bool nvim_qf_fields_get_use_viscol(const void *fields) { return fields == NULL ? false : ((const qffields_T *)fields)->use_viscol; }
+void nvim_qf_fields_set_use_viscol(void *fields, bool use_viscol) { if (fields != NULL) ((qffields_T *)fields)->use_viscol = use_viscol; }
+char *nvim_qf_fields_get_pattern(void *fields) { return fields == NULL ? NULL : ((qffields_T *)fields)->pattern; }
+int nvim_qf_fields_get_enr(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->enr; }
+void nvim_qf_fields_set_enr(void *fields, int enr) { if (fields != NULL) ((qffields_T *)fields)->enr = enr; }
+char nvim_qf_fields_get_type(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->type; }
+void nvim_qf_fields_set_type(void *fields, char type) { if (fields != NULL) ((qffields_T *)fields)->type = type; }
+bool nvim_qf_fields_get_valid(const void *fields) { return fields == NULL ? false : ((const qffields_T *)fields)->valid; }
+void nvim_qf_fields_set_valid(void *fields, bool valid) { if (fields != NULL) ((qffields_T *)fields)->valid = valid; }
+
+// =============================================================================
+// Phase 5: Phase 2 accessors - efm prog, regmatch lifecycle, qfline text append
+// =============================================================================
+
+/// Get the regprog from an efm_T (returns opaque pointer).
+void *nvim_efm_get_prog(void *efm)
+{
+  return efm == NULL ? NULL : ((efm_T *)efm)->prog;
 }
 
-/// Return the matched value in "fields->end_lnum".
-static int qf_parse_fmt_k(regmatch_T *rmp, int midx, qffields_T *fields)
+/// Set the regprog on an efm_T (after vim_regexec may update it).
+void nvim_efm_set_prog(void *efm, void *prog)
 {
-  if (rmp->startp[midx] == NULL) {
-    return QF_FAIL;
+  if (efm != NULL) {
+    ((efm_T *)efm)->prog = (regprog_T *)prog;
   }
-  fields->end_col = (int)atol(rmp->startp[midx]);
-  return QF_OK;
 }
 
-/// Return the matched value in "fields->type".
-static int qf_parse_fmt_t(regmatch_T *rmp, int midx, qffields_T *fields)
+/// Create a regmatch_T on the heap, set rm_ic=true, and assign the given prog.
+/// Returns an opaque handle. The caller owns the memory; free with nvim_qf_regmatch_free.
+void *nvim_qf_regmatch_create_ic(void *prog)
 {
-  if (rmp->startp[midx] == NULL) {
-    return QF_FAIL;
-  }
-  fields->type = *rmp->startp[midx];
-  return QF_OK;
+  regmatch_T *rm = xcalloc(1, sizeof(regmatch_T));
+  rm->rm_ic = true;
+  rm->regprog = (regprog_T *)prog;
+  return rm;
 }
 
-/// "fields->errmsg".
-static int copy_nonerror_line(const char *linebuf, size_t linelen, qffields_T *fields)
-  FUNC_ATTR_NONNULL_ALL
+/// Extract the regprog from a regmatch_T and free the regmatch_T struct.
+/// Returns the prog (which may have been updated by vim_regexec).
+void *nvim_qf_regmatch_extract_prog(void *rm_void)
 {
-  if (linelen >= fields->errmsglen) {
-    // linelen + null terminator
-    fields->errmsg = xrealloc(fields->errmsg, linelen + 1);
-    fields->errmsglen = linelen + 1;
+  if (rm_void == NULL) {
+    return NULL;
   }
-  // copy whole line to error message
-  xstrlcpy(fields->errmsg, linebuf, linelen + 1);
-
-  return QF_OK;
+  regmatch_T *rm = (regmatch_T *)rm_void;
+  void *prog = rm->regprog;
+  xfree(rm);
+  return prog;
 }
 
-/// Return the matched value in "fields->errmsg".
-static int qf_parse_fmt_m(regmatch_T *rmp, int midx, qffields_T *fields)
+/// Execute vim_regexec using the regmatch_T handle (already has prog set).
+/// Returns true if the regex matches the line.
+bool nvim_qf_vim_regexec(void *rm_void, const char *line)
 {
-  if (rmp->startp[midx] == NULL || rmp->endp[midx] == NULL) {
-    return QF_FAIL;
+  if (rm_void == NULL || line == NULL) {
+    return false;
   }
-  size_t len = (size_t)(rmp->endp[midx] - rmp->startp[midx]);
-  if (len >= fields->errmsglen) {
-    // len + null terminator
-    fields->errmsg = xrealloc(fields->errmsg, len + 1);
-    fields->errmsglen = len + 1;
-  }
-  xstrlcpy(fields->errmsg, rmp->startp[midx], len + 1);
-  return QF_OK;
+  return vim_regexec((regmatch_T *)rm_void, line, 0);
 }
 
-/// Return the matched value in "tail".
-static int qf_parse_fmt_r(regmatch_T *rmp, int midx, char **tail)
+/// Append text to qfline_T.qf_text with a newline separator.
+/// Handles the xrealloc + newline + STRCPY pattern safely.
+void nvim_qfline_append_text(void *qfp_void, const char *text)
 {
-  if (rmp->startp[midx] == NULL) {
-    return QF_FAIL;
+  if (qfp_void == NULL || text == NULL || *text == NUL) {
+    return;
   }
-  *tail = rmp->startp[midx];
-  return QF_OK;
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  size_t textlen = qfp->qf_text != NULL ? strlen(qfp->qf_text) : 0;
+  size_t errlen = strlen(text);
+  qfp->qf_text = xrealloc(qfp->qf_text, textlen + errlen + 2);
+  qfp->qf_text[textlen] = '\n';
+  STRCPY(qfp->qf_text + textlen + 1, text);
 }
 
-/// Return the matched value in "fields->col".
-static int qf_parse_fmt_p(regmatch_T *rmp, int midx, qffields_T *fields)
+/// Wrapper for line_breakcheck().
+void nvim_qf_line_breakcheck(void)
 {
-  if (rmp->startp[midx] == NULL || rmp->endp[midx] == NULL) {
-    return QF_FAIL;
-  }
-  fields->col = 0;
-  for (char *match_ptr = rmp->startp[midx]; match_ptr != rmp->endp[midx];
-       match_ptr++) {
-    fields->col++;
-    if (*match_ptr == TAB) {
-      fields->col += 7;
-      fields->col -= fields->col % 8;
-    }
-  }
-  fields->col++;
-  fields->use_viscol = true;
-  return QF_OK;
-}
-
-/// Return the matched value in "fields->col".
-static int qf_parse_fmt_v(regmatch_T *rmp, int midx, qffields_T *fields)
-{
-  if (rmp->startp[midx] == NULL) {
-    return QF_FAIL;
-  }
-  fields->col = (int)atol(rmp->startp[midx]);
-  fields->use_viscol = true;
-  return QF_OK;
-}
-
-/// Return the matched value in "fields->pattern".
-static int qf_parse_fmt_s(regmatch_T *rmp, int midx, qffields_T *fields)
-{
-  if (rmp->startp[midx] == NULL || rmp->endp[midx] == NULL) {
-    return QF_FAIL;
-  }
-  size_t len = (size_t)(rmp->endp[midx] - rmp->startp[midx]);
-  len = MIN(len, CMDBUFFSIZE - 5);
-  STRCPY(fields->pattern, "^\\V");
-  xstrlcat(fields->pattern, rmp->startp[midx], len + 4);
-  fields->pattern[len + 3] = '\\';
-  fields->pattern[len + 4] = '$';
-  fields->pattern[len + 5] = NUL;
-  return QF_OK;
-}
-
-/// Return the matched value in "fields->module".
-static int qf_parse_fmt_o(regmatch_T *rmp, int midx, qffields_T *fields)
-{
-  if (rmp->startp[midx] == NULL || rmp->endp[midx] == NULL) {
-    return QF_FAIL;
-  }
-  size_t len = (size_t)(rmp->endp[midx] - rmp->startp[midx]);
-  size_t dsize = strlen(fields->module) + len + 1;
-  dsize = MIN(dsize, CMDBUFFSIZE);
-  xstrlcat(fields->module, rmp->startp[midx], dsize);
-  return QF_OK;
-}
-
-/// Keep in sync with fmt_pat[].
-static int (*qf_parse_fmt[FMT_PATTERNS])(regmatch_T *, int, qffields_T *) = {
-  NULL,  // %f
-  qf_parse_fmt_b,
-  qf_parse_fmt_n,
-  qf_parse_fmt_l,
-  qf_parse_fmt_e,
-  qf_parse_fmt_c,
-  qf_parse_fmt_k,
-  qf_parse_fmt_t,
-  qf_parse_fmt_m,
-  NULL,  // %r
-  qf_parse_fmt_p,
-  qf_parse_fmt_v,
-  qf_parse_fmt_s,
-  qf_parse_fmt_o
-};
-
-/// returns QF_FAIL or QF_NOMEM.
-static int qf_parse_match(char *linebuf, size_t linelen, efm_T *fmt_ptr, regmatch_T *regmatch,
-                          qffields_T *fields, int qf_multiline, int qf_multiscan, char **tail)
-{
-  char idx = fmt_ptr->prefix;
-
-  if (rs_qf_is_continuation(idx) && !qf_multiline) {
-    return QF_FAIL;
-  }
-  fields->type = rs_qf_parse_prefix_type(idx);
-
-  // Extract error message data from matched line.
-  // We check for an actual submatch, because "\[" and "\]" in
-  // the 'errorformat' may cause the wrong submatch to be used.
-  for (int i = 0; i < FMT_PATTERNS; i++) {
-    int status = QF_OK;
-    int midx = (int)fmt_ptr->addr[i];
-    if (i == 0 && midx > 0) {  // %f
-      status = qf_parse_fmt_f(regmatch, midx, fields, idx);
-    } else if (i == FMT_PATTERN_M) {
-      if (fmt_ptr->flags == '+' && !qf_multiscan) {  // %+
-        status = copy_nonerror_line(linebuf, linelen, fields);
-      } else if (midx > 0) {  // %m
-        status = qf_parse_fmt_m(regmatch, midx, fields);
-      }
-    } else if (i == FMT_PATTERN_R && midx > 0) {  // %r
-      status = qf_parse_fmt_r(regmatch, midx, tail);
-    } else if (midx > 0) {  // others
-      status = (qf_parse_fmt[i])(regmatch, midx, fields);
-    }
-
-    if (status != QF_OK) {
-      return status;
-    }
-  }
-
-  return QF_OK;
-}
-
-/// successfully copied. Otherwise returns QF_FAIL or QF_NOMEM.
-static int qf_parse_get_fields(char *linebuf, size_t linelen, efm_T *fmt_ptr, qffields_T *fields,
-                               int qf_multiline, int qf_multiscan, char **tail)
-{
-  if (qf_multiscan && !rs_qf_is_file_handler(fmt_ptr->prefix)) {
-    return QF_FAIL;
-  }
-
-  fields->namebuf[0] = NUL;
-  fields->bnr = 0;
-  fields->module[0] = NUL;
-  fields->pattern[0] = NUL;
-  if (!qf_multiscan) {
-    fields->errmsg[0] = NUL;
-  }
-  fields->lnum = 0;
-  fields->end_lnum = 0;
-  fields->col = 0;
-  fields->end_col = 0;
-  fields->use_viscol = false;
-  fields->enr = -1;
-  fields->type = 0;
-  *tail = NULL;
-
-  regmatch_T regmatch;
-  // Always ignore case when looking for a matching error.
-  regmatch.rm_ic = true;
-  regmatch.regprog = fmt_ptr->prog;
-  bool r = vim_regexec(&regmatch, linebuf, 0);
-  fmt_ptr->prog = regmatch.regprog;
-  int status = QF_FAIL;
-  if (r) {
-    status = qf_parse_match(linebuf, linelen, fmt_ptr, &regmatch, fields,
-                            qf_multiline, qf_multiscan, tail);
-  }
-
-  return status;
-}
-
-/// names.
-static int qf_parse_dir_pfx(int idx, qffields_T *fields, qf_list_T *qfl)
-{
-  if (idx == 'D') {  // enter directory
-    if (*fields->namebuf == NUL) {
-      emsg(_("E379: Missing or empty directory name"));
-      return QF_FAIL;
-    }
-    qfl->qf_directory = (char *)rs_qf_push_dir(qfl, fields->namebuf, false);
-    if (qfl->qf_directory == NULL) {
-      return QF_FAIL;
-    }
-  } else if (idx == 'X') {  // leave directory
-    qfl->qf_directory = (char *)rs_qf_pop_dir(qfl, false);
-  }
-
-  return QF_OK;
-}
-
-/// Parse global file name error format prefixes (%O, %P and %Q).
-static int qf_parse_file_pfx(int idx, qffields_T *fields, qf_list_T *qfl, char *tail)
-{
-  fields->valid = false;
-  if (*fields->namebuf == NUL || os_path_exists(fields->namebuf)) {
-    if (*fields->namebuf && idx == 'P') {
-      qfl->qf_currfile = (char *)rs_qf_push_dir(qfl, fields->namebuf, true);
-    } else if (idx == 'Q') {
-      qfl->qf_currfile = (char *)rs_qf_pop_dir(qfl, true);
-    }
-    *fields->namebuf = NUL;
-    if (tail && *tail) {
-      STRMOVE(IObuff, skipwhite(tail));
-      qfl->qf_multiscan = true;
-      return QF_MULTISCAN;
-    }
-  }
-
-  return QF_OK;
-}
-
-/// format in 'efm').
-static int qf_parse_line_nomatch(char *linebuf, size_t linelen, qffields_T *fields)
-{
-  fields->namebuf[0] = NUL;   // no match found, remove file name
-  fields->lnum = 0;           // don't jump to this line
-  fields->valid = false;
-
-  return copy_nonerror_line(linebuf, linelen, fields);
-}
-
-/// Parse multi-line error format prefixes (%C and %Z)
-static int qf_parse_multiline_pfx(int idx, qf_list_T *qfl, qffields_T *fields)
-{
-  if (!qfl->qf_multiignore) {
-    qfline_T *qfprev = qfl->qf_last;
-
-    if (qfprev == NULL) {
-      return QF_FAIL;
-    }
-    if (*fields->errmsg) {
-      size_t textlen = strlen(qfprev->qf_text);
-      size_t errlen = strlen(fields->errmsg);
-      qfprev->qf_text = xrealloc(qfprev->qf_text, textlen + errlen + 2);
-      qfprev->qf_text[textlen] = '\n';
-      STRCPY(qfprev->qf_text + textlen + 1, fields->errmsg);
-    }
-    if (qfprev->qf_nr == -1) {
-      qfprev->qf_nr = fields->enr;
-    }
-    if (vim_isprintc(fields->type) && !qfprev->qf_type) {
-      // only printable chars allowed
-      qfprev->qf_type = fields->type;
-    }
-
-    if (!qfprev->qf_lnum) {
-      qfprev->qf_lnum = fields->lnum;
-    }
-    if (!qfprev->qf_end_lnum) {
-      qfprev->qf_end_lnum = fields->end_lnum;
-    }
-    if (!qfprev->qf_col) {
-      qfprev->qf_col = fields->col;
-      qfprev->qf_viscol = fields->use_viscol;
-    }
-    if (!qfprev->qf_end_col) {
-      qfprev->qf_end_col = fields->end_col;
-    }
-    if (!qfprev->qf_fnum) {
-      qfprev->qf_fnum = qf_get_fnum(qfl, qfl->qf_directory,
-                                    *fields->namebuf || qfl->qf_directory
-                                    ? fields->namebuf
-                                    : qfl->qf_currfile && fields->valid
-                                    ? qfl->qf_currfile : 0);
-    }
-  }
-  if (idx == 'Z') {
-    qfl->qf_multiline = qfl->qf_multiignore = false;
-  }
   line_breakcheck();
-
-  return QF_IGNORE_LINE;
 }
+
+/// Call vim_isprintc() - returns nonzero if the char is printable.
+int nvim_qf_vim_isprintc(int c)
+{
+  return vim_isprintc(c);
+}
+
+/// Get the qf_get_fnum result for a qfl + namebuf/currfile/valid.
+/// Handles the complex conditional logic for directory + currfile selection.
+int nvim_qf_get_fnum_for_fields(void *qfl_void, void *fields_void)
+{
+  if (qfl_void == NULL || fields_void == NULL) {
+    return 0;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qffields_T *fields = (qffields_T *)fields_void;
+  return qf_get_fnum(qfl, qfl->qf_directory,
+                     *fields->namebuf || qfl->qf_directory
+                     ? fields->namebuf
+                     : qfl->qf_currfile && fields->valid
+                     ? qfl->qf_currfile : 0);
+}
+
+/// Move memory: STRMOVE(dst, src) - move overlapping memory.
+void nvim_qf_strmove(char *dst, const char *src)
+{
+  if (dst != NULL && src != NULL) {
+    STRMOVE(dst, src);
+  }
+}
+
+/// Get IObuff pointer for reuse in file_pfx multiscan.
+char *nvim_qf_get_iobuff(void) { return IObuff; }
+
+/// skipwhite wrapper.
+const char *nvim_qf_skipwhite(const char *p)
+{
+  return p == NULL ? NULL : skipwhite(p);
+}
+
+/// Emit error E379 (missing directory name).
+void nvim_qf_emsg_missing_dir(void)
+{
+  emsg(_("E379: Missing or empty directory name"));
+}
+
+// qf_parse_fmt_f and all qf_parse_fmt_* functions deleted: migrated to Rust rs_qf_parse_match.
+
+// All qf_parse_fmt_* functions, copy_nonerror_line, qf_parse_match, qf_parse_get_fields,
+// qf_parse_dir_pfx, qf_parse_file_pfx, qf_parse_line_nomatch, and qf_parse_multiline_pfx
+// have been deleted. They are now implemented in Rust in src/nvim-rs/quickfix/src/parse.rs
+// as rs_qf_parse_match and helpers called from rs_qf_parse_line.
 
 /// Queue location list stack delete request.
 static void locstack_queue_delreq(qf_info_T *qi)
