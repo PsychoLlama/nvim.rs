@@ -858,103 +858,76 @@ bool nvim_valid_yank_reg(int regname, bool writing) { return valid_yank_reg(regn
 
 void nvim_set_reg_var(int regname) { set_reg_var(regname); }
 
-// nv_put_opt C accessors for Rust FFI
-// Returns true if the function should return early (op_type handling done in C)
-bool nvim_put_check_op_type(cmdarg_T *cap)
-{
-  if (cap->oap->op_type != OP_NOP) {
-    if (cap->oap->op_type == OP_DELETE && cap->cmdchar == 'p') {
-      rs_clearop(cap->oap);
-      assert(cap->opcount >= 0);
-      nv_diffgetput(true, (size_t)cap->opcount);
-    } else {
-      rs_clearopbeep(cap->oap);
-    }
-    return true;
-  }
-  return false;
-}
-// Returns true if prompt check handled the case (and we should return early on false result)
-int nvim_put_check_prompt(cmdarg_T *cap)
-{
-  if (bt_prompt(curbuf) && !prompt_curpos_editable()) {
-    if (curwin->w_cursor.lnum == curbuf->b_prompt_start.mark.lnum) {
-      curwin->w_cursor.col = (int)strlen(prompt_text());
-      cap->cmdchar = 'P';
-      return 0; // continue
-    } else {
-      rs_clearopbeep(cap->oap);
-      return 1; // early return
-    }
-  }
-  return 0; // continue
-}
+// nv_put_opt C accessors (Phase 1: some helpers inlined into Rust)
 int nvim_put_get_save_fen(void) { return curwin->w_p_fen; }
-void nvim_put_set_fen(bool val) { curwin->w_p_fen = val; }
 int nvim_get_cb_flags(void) { return cb_flags; }
 void *nvim_put_copy_register(int regname) { return copy_register(regname); }
-void nvim_put_visual_delete(cmdarg_T *cap, bool keep_registers, int regname, bool *empty)
-{
-  // Temporarily disable folding
-  curwin->w_p_fen = false;
-
-  if (!VIsual_active || VIsual_mode == 'V' || regname != '.') {
-    cap->cmdchar = 'd';
-    cap->nchar = NUL;
-    cap->oap->regname = keep_registers ? '_' : NUL;
-    msg_silent++;
-    rs_nv_operator(cap);
-    do_pending_operator(cap, 0, false);
-    *empty = (curbuf->b_ml.ml_flags & ML_EMPTY);
-    msg_silent--;
-    cap->oap->regname = regname;
-  }
-}
-int nvim_put_visual_flags(int flags, int *dir)
-{
-  if (VIsual_mode == 'V') {
-    flags |= PUT_LINE;
-  } else if (VIsual_mode == 'v') {
-    flags |= PUT_LINE_SPLIT;
-  }
-  if (VIsual_mode == Ctrl_V && *dir == FORWARD) {
-    flags |= PUT_LINE_FORWARD;
-  }
-  *dir = BACKWARD;
-  if ((VIsual_mode != 'V'
-       && curwin->w_cursor.col < curbuf->b_op_start.col)
-      || (VIsual_mode == 'V'
-          && curwin->w_cursor.lnum < curbuf->b_op_start.lnum)) {
-    *dir = FORWARD;
-  }
-  VIsual_active = true;
-  return flags;
-}
 void nvim_put_do_put(int regname, void *savereg, int dir, int count, int flags) { do_put(regname, (yankreg_T *)savereg, dir, count, flags); }
 void nvim_put_free_register(void *savereg) { if (savereg != NULL) { free_register((yankreg_T *)savereg); xfree(savereg); } }
-void nvim_put_was_visual_cleanup(bool save_fen)
-{
-  if (save_fen) {
-    curwin->w_p_fen = true;
-  }
+void nvim_auto_format_call(void) { auto_format(false, true); }
+
+// =============================================================================
+// Phase 1: New lower-level accessors replacing the put/replace helpers
+// =============================================================================
+
+// For nvim_put_check_prompt inlining
+int nvim_get_b_prompt_start_lnum_put(void) { return curbuf->b_prompt_start.mark.lnum; }
+void nvim_set_cursor_col_to_prompt_text_len(void) { curwin->w_cursor.col = (int)strlen(prompt_text()); }
+
+// For nvim_put_visual_delete inlining
+void nvim_set_w_p_fen(bool val) { curwin->w_p_fen = val; }
+bool nvim_check_vd_condition(int regname) {
+  return !VIsual_active || VIsual_mode == 'V' || regname != '.';
+}
+void nvim_inc_msg_silent(void) { msg_silent++; }
+void nvim_dec_msg_silent(void) { msg_silent--; }
+bool nvim_curbuf_ml_empty(void) { return (curbuf->b_ml.ml_flags & ML_EMPTY) != 0; }
+
+// For nvim_put_visual_flags inlining
+int nvim_get_VIsual_mode_val(void) { return VIsual_mode; }
+int nvim_get_cursor_col_vs_b_op_start_col(void) { return curwin->w_cursor.col - curbuf->b_op_start.col; }
+int nvim_get_cursor_lnum_vs_b_op_start_lnum(void) { return (int)(curwin->w_cursor.lnum - curbuf->b_op_start.lnum); }
+
+// For nvim_put_was_visual_cleanup inlining
+void nvim_set_b_visual_from_op(void) {
   curbuf->b_visual.vi_start = curbuf->b_op_start;
   curbuf->b_visual.vi_end = curbuf->b_op_end;
-  if (*p_sel == 'e') {
-    inc(&curbuf->b_visual.vi_end);
+}
+void nvim_inc_b_visual_vi_end(void) { inc(&curbuf->b_visual.vi_end); }
+
+// For nvim_put_delete_empty_line inlining
+bool nvim_last_line_is_empty(void) {
+  return *ml_get(curbuf->b_ml.ml_line_count) == NUL;
+}
+void nvim_ml_delete_last_line(void) {
+  ml_delete_flags(curbuf->b_ml.ml_line_count, ML_DEL_MESSAGE);
+  deleted_lines(curbuf->b_ml.ml_line_count + 1, 1);
+}
+bool nvim_cursor_lnum_gt_line_count(void) {
+  return curwin->w_cursor.lnum > curbuf->b_ml.ml_line_count;
+}
+void nvim_cursor_lnum_set_to_line_count(void) {
+  curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
+}
+void nvim_coladvance_maxcol(void) { coladvance(curwin, MAXCOL); }
+
+// For nvim_replace helpers inlining
+void nvim_coladvance_force_val(colnr_T col) { coladvance_force(col); }
+int nvim_get_cursor_pos_len_check(void) { return get_cursor_pos_len(); }
+int nvim_mb_charlen_cursor(void) { return mb_charlen(get_cursor_pos_ptr()); }
+bool nvim_curbuf_b_p_et(void) { return curbuf->b_p_et; }
+void nvim_del_chars_call(int count, bool fixpos) { del_chars(count, fixpos); }
+void nvim_ins_char_call(int c) { ins_char(c); }
+void nvim_ins_char_bytes_from_cap(cmdarg_T *cap) { if (cap && cap->nchar_len > 0) { ins_char_bytes((char *)cap->nchar_composing, (size_t)cap->nchar_len); } }
+void nvim_set_last_insert_call(int c) { set_last_insert(c); }
+void nvim_set_b_op_start_cursor(void) { curbuf->b_op_start = curwin->w_cursor; }
+int nvim_get_MODE_REPLACE(void) { return MODE_REPLACE; }
+void nvim_AppendToRedobuff_composing(cmdarg_T *cap) {
+  if (cap && cap->nchar_len > 0) {
+    AppendToRedobuff(cap->nchar_composing);
   }
 }
-void nvim_put_delete_empty_line(void)
-{
-  if (*ml_get(curbuf->b_ml.ml_line_count) == NUL) {
-    ml_delete_flags(curbuf->b_ml.ml_line_count, ML_DEL_MESSAGE);
-    deleted_lines(curbuf->b_ml.ml_line_count + 1, 1);
-    if (curwin->w_cursor.lnum > curbuf->b_ml.ml_line_count) {
-      curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
-      coladvance(curwin, MAXCOL);
-    }
-  }
-}
-void nvim_auto_format_call(void) { auto_format(false, true); }
+int nvim_ins_copychar_val(int lnum) { return ins_copychar(lnum); }
 
 // =============================================================================
 // Visual mode accessors for Rust FFI
@@ -1486,105 +1459,11 @@ bool nvim_get_p_to(void) { return p_to; }
 
 // (nv_Replace_impl, nv_vreplace_impl migrated to Rust in Phase 3)
 
-// C wrappers for nv_replace Rust migration (Phase 6)
+// C wrappers for nv_replace (Phase 1: most helpers inlined into Rust)
 
 /// Check if buffer is a prompt buffer and cursor is not in editable area.
 int nvim_replace_check_prompt(void) {
   return (bt_prompt(curbuf) && !prompt_curpos_editable()) ? 1 : 0;
-}
-
-/// Handle the Ctrl-V literal character input.
-/// Sets cap->nchar to the literal character, returns had_ctrl_v value.
-int nvim_replace_get_literal(cmdarg_T *cap) {
-  if (cap->nchar == Ctrl_V || cap->nchar == Ctrl_Q) {
-    int had_ctrl_v = Ctrl_V;
-    cap->nchar = get_literal(false);
-    if (cap->nchar > DEL) {
-      had_ctrl_v = NUL;
-    }
-    return had_ctrl_v;
-  }
-  return NUL;
-}
-
-/// Handle virtual edit block. Returns -1 to abort, 0 to continue.
-int nvim_replace_virtual_edit(cmdarg_T *cap) {
-  if (virtual_active(curwin)) {
-    if (u_save_cursor() == false) {
-      return -1;
-    }
-    if (gchar_cursor() == NUL) {
-      coladvance_force((colnr_T)(getviscol() + cap->count1));
-      assert(cap->count1 <= INT_MAX);
-      curwin->w_cursor.col -= (colnr_T)cap->count1;
-    } else if (gchar_cursor() == TAB) {
-      coladvance_force(getviscol());
-    }
-  }
-  return 0;
-}
-
-/// Check if there are enough characters to replace. Returns 1 if NOT enough.
-int nvim_replace_check_length(cmdarg_T *cap) {
-  return ((size_t)get_cursor_pos_len() < (unsigned)cap->count1
-          || (mb_charlen(get_cursor_pos_ptr()) < cap->count1)) ? 1 : 0;
-}
-
-/// Handle TAB with expandtab/smarttab. Returns 1 if handled (caller should return).
-int nvim_replace_tab_expand(cmdarg_T *cap, int had_ctrl_v) {
-  if (had_ctrl_v != Ctrl_V && cap->nchar == '\t' && (curbuf->b_p_et || p_sta)) {
-    stuffnumReadbuff(cap->count1);
-    stuffcharReadbuff('R');
-    stuffcharReadbuff('\t');
-    stuffcharReadbuff(ESC);
-    return 1;
-  }
-  return 0;
-}
-
-/// Handle the newline replacement path (del_chars + invoke_edit).
-void nvim_replace_newline(cmdarg_T *cap) {
-  del_chars(cap->count1, false);
-  stuffcharReadbuff('\r');
-  stuffcharReadbuff(ESC);
-  invoke_edit(cap, true, 'r', false);
-}
-
-/// Handle the character replacement loop.
-void nvim_replace_chars(cmdarg_T *cap, int had_ctrl_v) {
-  curbuf->b_op_start = curwin->w_cursor;
-  const int old_State = State;
-
-  if (cap->nchar_len > 0) {
-    AppendToRedobuff(cap->nchar_composing);
-  } else {
-    AppendCharToRedobuff(cap->nchar);
-  }
-
-  for (int n = cap->count1; n > 0; n--) {
-    State = MODE_REPLACE;
-    if (cap->nchar == Ctrl_E || cap->nchar == Ctrl_Y) {
-      int c = ins_copychar(curwin->w_cursor.lnum
-                           + (cap->nchar == Ctrl_Y ? -1 : 1));
-      if (c != NUL) {
-        ins_char(c);
-      } else {
-        curwin->w_cursor.col++;
-      }
-    } else {
-      if (cap->nchar_len) {
-        ins_char_bytes(cap->nchar_composing, (size_t)cap->nchar_len);
-      } else {
-        ins_char(cap->nchar);
-      }
-    }
-    State = old_State;
-  }
-  curwin->w_cursor.col--;
-  mb_adjust_cursor();
-  curbuf->b_op_end = curwin->w_cursor;
-  curwin->w_set_curswant = true;
-  set_last_insert(cap->nchar);
 }
 
 // nvim_nv_vreplace_impl removed: nv_vreplace_impl migrated to Rust in Phase 3

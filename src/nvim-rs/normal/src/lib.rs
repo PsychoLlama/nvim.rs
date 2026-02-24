@@ -1338,19 +1338,10 @@ extern "C" {
     fn nvim_get_expr_register() -> c_int;
     fn nvim_valid_yank_reg(regname: c_int, writing: bool) -> bool;
     fn nvim_set_reg_var(regname: c_int);
-    // nv_put_opt C accessors
-    fn nvim_put_check_op_type(cap: CapHandle) -> bool;
-    fn nvim_put_check_prompt(cap: CapHandle) -> c_int;
+    // nv_put_opt lower-level C accessors (Phase 1 inlined helpers)
     fn nvim_put_get_save_fen() -> c_int;
     fn nvim_get_cb_flags() -> c_int;
     fn nvim_put_copy_register(regname: c_int) -> *mut std::ffi::c_void;
-    fn nvim_put_visual_delete(
-        cap: CapHandle,
-        keep_registers: bool,
-        regname: c_int,
-        empty: *mut bool,
-    );
-    fn nvim_put_visual_flags(flags: c_int, dir: *mut c_int) -> c_int;
     fn nvim_put_do_put(
         regname: c_int,
         savereg: *mut std::ffi::c_void,
@@ -1359,9 +1350,40 @@ extern "C" {
         flags: c_int,
     );
     fn nvim_put_free_register(savereg: *mut std::ffi::c_void);
-    fn nvim_put_was_visual_cleanup(save_fen: bool);
-    fn nvim_put_delete_empty_line();
     fn nvim_auto_format_call();
+    // Phase 1 new lower-level accessors for put helpers
+    fn nvim_get_b_prompt_start_lnum_put() -> c_int;
+    fn nvim_set_cursor_col_to_prompt_text_len();
+    fn nvim_set_w_p_fen(val: bool);
+    fn nvim_check_vd_condition(regname: c_int) -> bool;
+    fn nvim_inc_msg_silent();
+    fn nvim_dec_msg_silent();
+    fn nvim_curbuf_ml_empty() -> bool;
+    fn nvim_get_VIsual_mode_val() -> c_int;
+    fn nvim_get_cursor_col_vs_b_op_start_col() -> c_int;
+    fn nvim_get_cursor_lnum_vs_b_op_start_lnum() -> c_int;
+    fn nvim_set_b_visual_from_op();
+    fn nvim_inc_b_visual_vi_end();
+    fn nvim_last_line_is_empty() -> bool;
+    fn nvim_ml_delete_last_line();
+    fn nvim_cursor_lnum_gt_line_count() -> bool;
+    fn nvim_cursor_lnum_set_to_line_count();
+    fn nvim_coladvance_maxcol();
+    // Phase 1 new lower-level accessors for replace helpers
+    fn nvim_coladvance_force_val(col: c_int);
+    fn nvim_get_cursor_pos_len_check() -> c_int;
+    fn nvim_mb_charlen_cursor() -> c_int;
+    fn nvim_curbuf_b_p_et() -> bool;
+    fn nvim_get_p_sta() -> c_int;
+    fn nvim_del_chars_call(count: c_int, fixpos: bool);
+    fn nvim_ins_char_call(c: c_int);
+    fn nvim_ins_copychar_val(lnum: c_int) -> c_int;
+    fn nvim_ins_char_bytes_from_cap(cap: CapHandle);
+    fn nvim_set_last_insert_call(c: c_int);
+    fn nvim_set_b_op_start_cursor();
+    fn nvim_get_MODE_REPLACE() -> c_int;
+    fn nvim_AppendToRedobuff_composing(cap: CapHandle);
+    fn nvim_do_pending_operator_call(cap: CapHandle, old_col: c_int, gui_yank: bool);
 
     // Phase 3: nv_visual_impl accessors (C functions already exist, add Rust declarations)
     fn nvim_get_resel_VIsual_mode() -> c_int;
@@ -1996,7 +2018,15 @@ const PUT_BLOCK_INNER: c_int = 64;
 const CB_FLAG_UNNAMED: c_int = 0x01;
 const CB_FLAG_UNNAMEDPLUS: c_int = 0x02;
 
+// PUT_LINE_* flag constants for do_put() visual mode
+const PUT_LINE: c_int = 4;
+const PUT_LINE_SPLIT: c_int = 8;
+const PUT_LINE_FORWARD: c_int = 16;
+
 /// Implementation of nv_put_opt - paste with optional indent fixing.
+/// Inlines helpers: nvim_put_check_op_type, nvim_put_check_prompt,
+/// nvim_put_visual_delete, nvim_put_visual_flags, nvim_put_was_visual_cleanup,
+/// nvim_put_delete_empty_line.
 ///
 /// # Safety
 /// `cap` must be a valid cmdarg_T pointer.
@@ -2004,14 +2034,33 @@ const CB_FLAG_UNNAMEDPLUS: c_int = 0x02;
 unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
     let oap = nvim_cap_get_oap(cap);
 
-    // Check if there's a pending operator (e.g., "dp" for :diffput)
-    if nvim_put_check_op_type(cap) {
+    // Inlined nvim_put_check_op_type: check if there's a pending operator
+    let op_type = nvim_oap_get_op_type_ptr(oap);
+    if op_type != OP_NOP {
+        let cmdchar = nvim_cap_get_cmdchar(cap);
+        let opcount = nvim_cap_get_opcount(cap);
+        if op_type == OP_DELETE && cmdchar == b'p' as c_int {
+            rs_clearop(oap);
+            assert!(opcount >= 0);
+            nvim_nv_diffgetput_call(true, opcount as usize);
+        } else {
+            rs_clearopbeep(oap);
+        }
         return;
     }
 
-    // Check prompt buffer restrictions
-    if nvim_put_check_prompt(cap) != 0 {
-        return;
+    // Inlined nvim_put_check_prompt: check prompt buffer restrictions
+    if nvim_bt_prompt_curbuf() && !nvim_prompt_curpos_editable() {
+        let cursor_lnum = nvim_get_cursor_lnum();
+        let b_prompt_lnum = nvim_get_b_prompt_start_lnum_put();
+        if cursor_lnum == b_prompt_lnum {
+            nvim_set_cursor_col_to_prompt_text_len();
+            nvim_cap_set_cmdchar(cap, b'P' as c_int);
+            // continue (return 0 in C means don't do early return)
+        } else {
+            rs_clearopbeep(oap);
+            return;
+        }
     }
 
     let save_fen = nvim_put_get_save_fen() != 0;
@@ -2066,11 +2115,41 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
             savereg = nvim_put_copy_register(regname);
         }
 
-        // Do the visual delete
-        nvim_put_visual_delete(cap, keep_registers, regname, &raw mut empty);
+        // Inlined nvim_put_visual_delete: delete visual selection before put
+        nvim_set_w_p_fen(false);
+        if nvim_check_vd_condition(regname) {
+            nvim_cap_set_cmdchar(cap, b'd' as c_int);
+            nvim_cap_set_nchar(cap, NUL_CHAR);
+            let underscore = if keep_registers { b'_' as c_int } else { NUL_CHAR };
+            nvim_oap_set_regname(oap, underscore);
+            nvim_inc_msg_silent();
+            rs_nv_operator(cap);
+            nvim_do_pending_operator_call(cap, 0, false);
+            empty = nvim_curbuf_ml_empty();
+            nvim_dec_msg_silent();
+            nvim_oap_set_regname(oap, regname);
+        }
 
-        // Adjust flags for visual mode
-        flags = nvim_put_visual_flags(flags, &raw mut dir);
+        // Inlined nvim_put_visual_flags: compute put flags for visual mode
+        let vis_mode = nvim_get_VIsual_mode_val();
+        if vis_mode == b'V' as c_int {
+            flags |= PUT_LINE;
+        } else if vis_mode == b'v' as c_int {
+            flags |= PUT_LINE_SPLIT;
+        }
+        if vis_mode == CTRL_V && dir == FORWARD {
+            flags |= PUT_LINE_FORWARD;
+        }
+        dir = BACKWARD;
+        if (vis_mode != b'V' as c_int
+            && nvim_get_cursor_col_vs_b_op_start_col() < 0)
+            || (vis_mode == b'V' as c_int
+                && nvim_get_cursor_lnum_vs_b_op_start_lnum() < 0)
+        {
+            dir = FORWARD;
+        }
+        // VIsual_active = true (needed after delete)
+        nvim_set_VIsual_active(true);
     }
 
     let regname = nvim_oap_get_regname_ptr(oap);
@@ -2081,12 +2160,25 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
     nvim_put_free_register(savereg);
 
     if was_visual {
-        nvim_put_was_visual_cleanup(save_fen);
+        // Inlined nvim_put_was_visual_cleanup: restore visual state after put
+        if save_fen {
+            nvim_set_w_p_fen(true);
+        }
+        nvim_set_b_visual_from_op();
+        #[allow(clippy::cast_possible_wrap)]
+        let sel_e_char = b'e' as std::ffi::c_char;
+        if nvim_get_p_sel_first() == sel_e_char {
+            nvim_inc_b_visual_vi_end();
+        }
     }
 
-    // Delete empty line left by do_put() when all lines were deleted
-    if empty {
-        nvim_put_delete_empty_line();
+    // Inlined nvim_put_delete_empty_line: delete trailing empty line after put
+    if empty && nvim_last_line_is_empty() {
+        nvim_ml_delete_last_line();
+        if nvim_cursor_lnum_gt_line_count() {
+            nvim_cursor_lnum_set_to_line_count();
+            nvim_coladvance_maxcol();
+        }
     }
     nvim_auto_format_call();
 }
@@ -3857,16 +3949,10 @@ extern "C" {
     fn nvim_get_literal_call(no_simplify: bool) -> c_int;
     fn nvim_stuffcharReadbuff(c: c_int);
 
-    // nv_replace C wrappers
+    // nv_replace C wrappers (lower-level after Phase 1 inlining)
     fn nvim_get_got_int() -> c_int;
     fn nvim_set_got_int(val: c_int);
     fn nvim_replace_check_prompt() -> c_int;
-    fn nvim_replace_get_literal(cap: CapHandle) -> c_int;
-    fn nvim_replace_virtual_edit(cap: CapHandle) -> c_int;
-    fn nvim_replace_check_length(cap: CapHandle) -> c_int;
-    fn nvim_replace_tab_expand(cap: CapHandle, had_ctrl_v: c_int) -> c_int;
-    fn nvim_replace_newline(cap: CapHandle);
-    fn nvim_replace_chars(cap: CapHandle, had_ctrl_v: c_int);
     fn u_save_cursor() -> c_int;
     fn rs_foldUpdateAfterInsert();
 }
@@ -3874,6 +3960,7 @@ extern "C" {
 // nv_replace constants
 const REPLACE_CR_NCHAR: c_int = -1;
 const REPLACE_NL_NCHAR: c_int = -2;
+const DEL_CHAR: c_int = 127; // DEL character value
 
 /// Command handler for "r" single-character replace.
 ///
@@ -3894,8 +3981,17 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
         return;
     }
 
-    // Get another character (handle Ctrl-V/Ctrl-Q literal input)
-    let had_ctrl_v = nvim_replace_get_literal(cap);
+    // Inlined nvim_replace_get_literal: handle Ctrl-V/Ctrl-Q literal input
+    let had_ctrl_v = {
+        let nch = nvim_cap_get_nchar(cap);
+        if nch == CTRL_V || nch == CTRL_Q_P3 {
+            let new_nchar = nvim_get_literal_call(false);
+            nvim_cap_set_nchar(cap, new_nchar);
+            if new_nchar > DEL_CHAR { NUL_CHAR } else { CTRL_V }
+        } else {
+            NUL_CHAR
+        }
+    };
 
     // Abort if the character is a special key
     let nchar = nvim_cap_get_nchar(cap);
@@ -3921,19 +4017,40 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
         return;
     }
 
-    // Break tabs, etc. in virtual edit mode
-    if nvim_replace_virtual_edit(cap) < 0 {
-        return;
+    // Inlined nvim_replace_virtual_edit: break tabs in virtual edit mode
+    if nvim_virtual_active() {
+        if u_save_cursor() == 0 {
+            return;
+        }
+        let gc = nvim_gchar_cursor_call();
+        let count1 = nvim_cap_get_count1(cap);
+        if gc == NUL_CHAR {
+            let viscol = nvim_getviscol();
+            nvim_coladvance_force_val(viscol + count1);
+            let new_col = nvim_get_cursor_col() - count1;
+            nvim_set_cursor_col(new_col);
+        } else if gc == TAB_CHAR {
+            let viscol = nvim_getviscol();
+            nvim_coladvance_force_val(viscol);
+        }
     }
 
-    // Abort if not enough characters to replace
-    if nvim_replace_check_length(cap) != 0 {
+    // Inlined nvim_replace_check_length: abort if not enough chars to replace
+    let count1 = nvim_cap_get_count1(cap);
+    if (nvim_get_cursor_pos_len_check() as usize) < (count1 as usize)
+        || nvim_mb_charlen_cursor() < count1
+    {
         rs_clearopbeep(oap);
         return;
     }
 
-    // TAB with expandtab/smarttab -- handled via edit()
-    if nvim_replace_tab_expand(cap, had_ctrl_v) != 0 {
+    // Inlined nvim_replace_tab_expand: TAB with expandtab/smarttab via edit()
+    let nchar = nvim_cap_get_nchar(cap);
+    if had_ctrl_v != CTRL_V && nchar == TAB_CHAR && (nvim_curbuf_b_p_et() || nvim_get_p_sta() != 0) {
+        nvim_stuffnumReadbuff(count1);
+        nvim_stuffcharReadbuff(b'R' as c_int);
+        nvim_stuffcharReadbuff(TAB_CHAR);
+        nvim_stuffcharReadbuff(ESC_CHAR);
         return;
     }
 
@@ -3944,12 +4061,14 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
 
     let nchar = nvim_cap_get_nchar(cap);
     if had_ctrl_v != CTRL_V && (nchar == c_int::from(b'\r') || nchar == c_int::from(b'\n')) {
-        // Replace character(s) by a single newline
-        nvim_replace_newline(cap);
+        // Inlined nvim_replace_newline: replace char(s) by single newline
+        nvim_del_chars_call(count1, false);
+        nvim_stuffcharReadbuff(c_int::from(b'\r'));
+        nvim_stuffcharReadbuff(ESC_CHAR);
+        invoke_edit_impl(cap, true, c_int::from(b'r'), false);
     } else {
         // Replace with typed character(s)
         let regname = nvim_oap_get_regname_ptr(oap);
-        let count1 = nvim_cap_get_count1(cap);
         rs_prep_redo(
             regname,
             count1,
@@ -3959,7 +4078,42 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
             had_ctrl_v,
             0,
         );
-        nvim_replace_chars(cap, had_ctrl_v);
+
+        // Inlined nvim_replace_chars: character replacement loop
+        nvim_set_b_op_start_cursor();
+        let old_state = nvim_get_State();
+
+        let nchar_len = nvim_cap_get_nchar_len(cap);
+        if nchar_len > 0 {
+            nvim_AppendToRedobuff_composing(cap);
+        } else {
+            AppendCharToRedobuff(nchar);
+        }
+
+        for _ in 0..count1 {
+            nvim_set_State(nvim_get_MODE_REPLACE());
+            let ctrl_e = c_int::from(b'\x05'); // Ctrl-E
+            let ctrl_y = c_int::from(b'\x19'); // Ctrl-Y
+            if nchar == ctrl_e || nchar == ctrl_y {
+                let lnum = nvim_get_cursor_lnum() + if nchar == ctrl_y { -1 } else { 1 };
+                let c = nvim_ins_copychar_val(lnum);
+                if c != NUL_CHAR {
+                    nvim_ins_char_call(c);
+                } else {
+                    nvim_set_cursor_col(nvim_get_cursor_col() + 1);
+                }
+            } else if nchar_len > 0 {
+                nvim_ins_char_bytes_from_cap(cap);
+            } else {
+                nvim_ins_char_call(nchar);
+            }
+            nvim_set_State(old_state);
+        }
+        nvim_dec_cursor_col();
+        nvim_mb_adjust_cursor();
+        nvim_set_b_op_end_cursor();
+        nvim_set_w_set_curswant(true);
+        nvim_set_last_insert_call(nchar);
     }
 
     rs_foldUpdateAfterInsert();
