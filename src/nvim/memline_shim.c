@@ -282,6 +282,12 @@ extern int rs_ml_replace_buf_len(buf_T *buf, linenr_T lnum, char *line_arg, size
                                   bool copy, bool noalloc);
 // Pass 3 Phase 4: ml_get_buf_impl Rust function declaration
 extern char *rs_ml_get_buf_impl(buf_T *buf, linenr_T lnum, bool will_change);
+// Pass 4 Phase 1: line-access thin wrapper Rust function declarations
+extern char *rs_ml_get_pos(const pos_T *pos);
+extern colnr_T rs_ml_get_len(linenr_T lnum);
+extern colnr_T rs_ml_get_pos_len(pos_T *pos);
+extern colnr_T rs_ml_get_buf_len(buf_T *buf, linenr_T lnum);
+extern int rs_gchar_pos(pos_T *pos);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1262,7 +1268,7 @@ theend:
 /// having to check for error everywhere).
 char *ml_get(linenr_T lnum)
 {
-  return ml_get_buf_impl(curbuf, lnum, false);
+  return rs_ml_get_buf_impl(curbuf, lnum, false);
 }
 
 /// @return  a pointer to a (read-only copy of a) line.
@@ -1271,7 +1277,7 @@ char *ml_get(linenr_T lnum)
 /// as an argument.
 char *ml_get_buf(buf_T *buf, linenr_T lnum)
 {
-  return ml_get_buf_impl(buf, lnum, false);
+  return rs_ml_get_buf_impl(buf, lnum, false);
 }
 
 /// Like `ml_get_buf`, but allow the line to be mutated in place.
@@ -1282,56 +1288,39 @@ char *ml_get_buf(buf_T *buf, linenr_T lnum)
 /// @return a pointer to a line in the buffer
 char *ml_get_buf_mut(buf_T *buf, linenr_T lnum)
 {
-  return ml_get_buf_impl(buf, lnum, true);
+  return rs_ml_get_buf_impl(buf, lnum, true);
 }
 
 /// @return  pointer to position "pos".
 char *ml_get_pos(const pos_T *pos)
   FUNC_ATTR_NONNULL_ALL
 {
-  return ml_get_buf(curbuf, pos->lnum) + pos->col;
+  return rs_ml_get_pos(pos);
 }
 
 /// @return  length (excluding the NUL) of the given line.
 colnr_T ml_get_len(linenr_T lnum)
 {
-  return ml_get_buf_len(curbuf, lnum);
+  return rs_ml_get_len(lnum);
 }
 
 /// @return  length (excluding the NUL) of the text after position "pos".
 colnr_T ml_get_pos_len(pos_T *pos)
 {
-  return ml_get_buf_len(curbuf, pos->lnum) - pos->col;
+  return rs_ml_get_pos_len(pos);
 }
 
 /// @return  length (excluding the NUL) of the given line in the given buffer.
 colnr_T ml_get_buf_len(buf_T *buf, linenr_T lnum)
 {
-  if (*ml_get_buf(buf, lnum) == NUL) {
-    return 0;
-  }
-
-  return buf->b_ml.ml_line_len - 1;
+  return rs_ml_get_buf_len(buf, lnum);
 }
 
 /// @return  codepoint at pos. pos must be either valid or have col set to MAXCOL!
 int gchar_pos(pos_T *pos)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  // When searching columns is sometimes put at the end of a line.
-  if (pos->col == MAXCOL || pos->col > ml_get_len(pos->lnum)) {
-    return NUL;
-  }
-  return utf_ptr2char(ml_get_pos(pos));
-}
-
-/// @param will_change  true mark the buffer dirty (chars in the line will be changed)
-///
-/// @return  a pointer to a line in a specific buffer
-static char *ml_get_buf_impl(buf_T *buf, linenr_T lnum, bool will_change)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_ml_get_buf_impl(buf, lnum, will_change);
+  return rs_gchar_pos(pos);
 }
 
 // =============================================================================
