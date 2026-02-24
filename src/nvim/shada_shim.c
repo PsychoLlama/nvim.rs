@@ -555,31 +555,6 @@ static buf_T *find_buffer(PMap(cstr_t) *const fname_bufs, const char *const fnam
 
 #define SHADA_MPACK_FREE_SPACE (4 * MPACK_ITEM_SIZE)
 
-/// Write single ShaDa entry (thin wrapper over Rust rs_shada_pack_entry).
-///
-/// @param[in]  packer     Packer used to write entry.
-/// @param[in]  entry      Entry written (by value; address passed to Rust).
-/// @param[in]  max_kbyte  Maximum size of an item in KiB. Zero means no
-///                        restrictions.
-///
-/// @return kSDWriteSuccessful, kSDWriteFailed or kSDWriteIgnError.
-static ShaDaWriteResult shada_pack_entry(PackerBuffer *const packer, ShadaEntry entry,
-                                         const size_t max_kbyte)
-{
-  return (ShaDaWriteResult)rs_shada_pack_entry(packer, &entry, max_kbyte);
-}
-
-/// Write single ShaDa entry and free it afterwards (thin wrapper).
-///
-/// @param[in]  packer     Packer used to write entry.
-/// @param[in]  entry      Entry written (by value; address passed to Rust).
-/// @param[in]  max_kbyte  Maximum size of an item in KiB. Zero means no
-///                        restrictions.
-static inline ShaDaWriteResult shada_pack_pfreed_entry(PackerBuffer *const packer, ShadaEntry entry,
-                                                       const size_t max_kbyte)
-{
-  return (ShaDaWriteResult)rs_shada_pack_pfreed_entry(packer, &entry, max_kbyte);
-}
 
 /// Parse msgpack object that has given length
 ///
@@ -618,759 +593,7 @@ static ShaDaReadResult shada_check_status(uintmax_t initial_fpos, int status, si
 }
 
 
-/// Read and merge in ShaDa file, used when writing
-///
-/// @param[in]      sd_reader   Structure containing file reader definition.
-/// @param[in]      srni_flags  Flags determining what to read.
-/// @param[in]      max_kbyte   Maximum size of one element.
-/// @param[in,out]  ret_wms     Location where results are saved.
-/// @param[out]     packer      MessagePack packer for entries which are not
-///                             merged.
-static inline ShaDaWriteResult shada_read_when_writing(FileDescriptor *const sd_reader,
-                                                       const unsigned srni_flags,
-                                                       const size_t max_kbyte,
-                                                       WriteMergerState *const wms,
-                                                       PackerBuffer *const packer)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  ShaDaWriteResult ret = kSDWriteSuccessful;
-  ShadaEntry entry;
-  ShaDaReadResult srni_ret;
 
-#define COMPARE_WITH_ENTRY(wms_entry_, entry) \
-  do { \
-    ShadaEntry *const wms_entry = (wms_entry_); \
-    if (wms_entry->type != kSDItemMissing) { \
-      if (wms_entry->timestamp >= (entry).timestamp) { \
-        shada_free_shada_entry(&entry); \
-        break; \
-      } \
-      shada_free_shada_entry(wms_entry); \
-    } \
-    *wms_entry = entry; \
-  } while (0)
-
-  while ((srni_ret = shada_read_next_item(sd_reader, &entry, srni_flags,
-                                          max_kbyte))
-         != kSDReadStatusFinished) {
-    switch (srni_ret) {
-    case kSDReadStatusSuccess:
-      break;
-    case kSDReadStatusFinished:
-      // Should be handled by the while condition.
-      abort();
-    case kSDReadStatusNotShaDa:
-      ret = kSDWriteReadNotShada;
-      FALLTHROUGH;
-    case kSDReadStatusReadError:
-      return ret;
-    case kSDReadStatusMalformed:
-      continue;
-    }
-    switch (entry.type) {
-    case kSDItemMissing:
-      break;
-    case kSDItemHeader:
-    case kSDItemBufferList:
-      abort();
-    case kSDItemUnknown:
-      ret = shada_pack_entry(packer, entry, 0);
-      shada_free_shada_entry(&entry);
-      break;
-    case kSDItemSearchPattern:
-      COMPARE_WITH_ENTRY((entry.data.search_pattern.is_substitute_pattern
-                          ? &wms->sub_search_pattern
-                          : &wms->search_pattern), entry);
-      break;
-    case kSDItemSubString:
-      COMPARE_WITH_ENTRY(&wms->replacement, entry);
-      break;
-    case kSDItemHistoryEntry:
-      if (entry.data.history_item.histtype >= HIST_COUNT) {
-        ret = shada_pack_entry(packer, entry, 0);
-        shada_free_shada_entry(&entry);
-        break;
-      }
-      if (wms->hms[entry.data.history_item.histtype].hmll.size != 0) {
-        rs_hms_insert(&wms->hms[entry.data.history_item.histtype], entry, 1);
-      } else {
-        shada_free_shada_entry(&entry);
-      }
-      break;
-    case kSDItemRegister: {
-      const int idx = op_reg_index(entry.data.reg.name);
-      if (idx < 0) {
-        ret = shada_pack_entry(packer, entry, 0);
-        shada_free_shada_entry(&entry);
-        break;
-      }
-      COMPARE_WITH_ENTRY(&wms->registers[idx], entry);
-      break;
-    }
-    case kSDItemVariable:
-      if (!set_has(cstr_t, &wms->dumped_variables, entry.data.global_var.name)) {
-        ret = shada_pack_entry(packer, entry, 0);
-      }
-      shada_free_shada_entry(&entry);
-      break;
-    case kSDItemGlobalMark:
-      if (ascii_isdigit(entry.data.filemark.name)) {
-        bool processed_mark = false;
-        // Completely ignore numbered mark names, make a list sorted by
-        // timestamp.
-        for (size_t i = ARRAY_SIZE(wms->numbered_marks); i > 0; i--) {
-          ShadaEntry wms_entry = wms->numbered_marks[i - 1];
-          if (wms_entry.type != kSDItemGlobalMark) {
-            continue;
-          }
-          // Ignore duplicates.
-          if (wms_entry.timestamp == entry.timestamp
-              && (wms_entry.additional_data == NULL
-                  && entry.additional_data == NULL)
-              && rs_marks_equal(wms_entry.data.filemark.mark,
-                                entry.data.filemark.mark) != 0
-              && strcmp(wms_entry.data.filemark.fname,
-                        entry.data.filemark.fname) == 0) {
-            shada_free_shada_entry(&entry);
-            processed_mark = true;
-            break;
-          }
-          if (wms_entry.timestamp >= entry.timestamp) {
-            processed_mark = true;
-            if (i < ARRAY_SIZE(wms->numbered_marks)) {
-              rs_replace_numbered_mark(wms, i, entry);
-            } else {
-              shada_free_shada_entry(&entry);
-            }
-            break;
-          }
-        }
-        if (!processed_mark) {
-          rs_replace_numbered_mark(wms, 0, entry);
-        }
-      } else {
-        const int idx = mark_global_index(entry.data.filemark.name);
-        if (idx < 0) {
-          ret = shada_pack_entry(packer, entry, 0);
-          shada_free_shada_entry(&entry);
-          break;
-        }
-
-        // Global or numbered mark.
-        ShadaEntry *mark = idx < 26 ? &wms->global_marks[idx] : &wms->numbered_marks[idx - 26];
-
-        if (mark->type == kSDItemMissing) {
-          if (namedfm[idx].fmark.timestamp >= entry.timestamp) {
-            shada_free_shada_entry(&entry);
-            break;
-          }
-        }
-        COMPARE_WITH_ENTRY(mark, entry);
-      }
-      break;
-    case kSDItemChange:
-    case kSDItemLocalMark: {
-      if (rs_shada_removable(entry.data.filemark.fname) != 0) {
-        shada_free_shada_entry(&entry);
-        break;
-      }
-      const char *const fname = entry.data.filemark.fname;
-      cstr_t *key = NULL;
-      bool new_item = false;
-      ptr_t *val = pmap_put_ref(cstr_t)(&wms->file_marks, fname, &key, &new_item);
-      if (new_item) {
-        *key = xstrdup(fname);
-      }
-      if (*val == NULL) {
-        *val = xcalloc(1, sizeof(FileMarks));
-      }
-      FileMarks *const filemarks = *val;
-      if (entry.timestamp > filemarks->greatest_timestamp) {
-        filemarks->greatest_timestamp = entry.timestamp;
-      }
-      if (entry.type == kSDItemLocalMark) {
-        const int idx = mark_local_index(entry.data.filemark.name);
-        if (idx < 0) {
-          filemarks->additional_marks = xrealloc(filemarks->additional_marks,
-                                                 (++filemarks->additional_marks_size
-                                                  * sizeof(filemarks->additional_marks[0])));
-          filemarks->additional_marks[filemarks->additional_marks_size - 1] =
-            entry;
-        } else {
-          ShadaEntry *const wms_entry = &filemarks->marks[idx];
-          bool set_wms = true;
-          if (wms_entry->type != kSDItemMissing) {
-            if (wms_entry->timestamp >= entry.timestamp) {
-              shada_free_shada_entry(&entry);
-              break;
-            }
-            if (wms_entry->can_free_entry) {
-              if (*key == wms_entry->data.filemark.fname) {
-                *key = entry.data.filemark.fname;
-              }
-              shada_free_shada_entry(wms_entry);
-            }
-          } else {
-            FOR_ALL_BUFFERS(buf) {
-              if (buf->b_ffname != NULL
-                  && path_fnamecmp(entry.data.filemark.fname, buf->b_ffname) == 0) {
-                fmark_T fm;
-                mark_get(buf, curwin, &fm, kMarkBufLocal, (int)entry.data.filemark.name);
-                if (fm.timestamp >= entry.timestamp) {
-                  set_wms = false;
-                  shada_free_shada_entry(&entry);
-                  break;
-                }
-              }
-            }
-          }
-          if (set_wms) {
-            *wms_entry = entry;
-          }
-        }
-      } else {
-        int i;
-        for (i = (int)filemarks->changes_size; i > 0; i--) {
-          const ShadaEntry jl_entry = filemarks->changes[i - 1];
-          if (jl_entry.timestamp <= (entry).timestamp) {
-            if (rs_marks_equal(jl_entry.data.filemark.mark, entry.data.filemark.mark) != 0) {
-              i = -1;
-            }
-            break;
-          }
-        }
-        if (i > 0 && filemarks->changes_size == JUMPLISTSIZE) {
-          shada_free_shada_entry(&filemarks->changes[0]);
-        }
-        i = rs_marklist_insert(filemarks->changes, sizeof(*filemarks->changes),
-                            (int)filemarks->changes_size, i);
-        if (i != -1) {
-          filemarks->changes[i] = entry;
-          if (filemarks->changes_size < JUMPLISTSIZE) {
-            filemarks->changes_size++;
-          }
-        } else {
-          shada_free_shada_entry(&(entry));
-        }
-      }
-      break;
-    }
-    case kSDItemJump:
-      ;
-      int i;
-      for (i = (int)wms->jumps_size; i > 0; i--) {
-        const ShadaEntry jl_entry = wms->jumps[i - 1];
-        if (jl_entry.timestamp <= entry.timestamp) {
-          if (rs_marks_equal(jl_entry.data.filemark.mark, entry.data.filemark.mark) != 0
-              && strcmp(jl_entry.data.filemark.fname, entry.data.filemark.fname) == 0) {
-            i = -1;
-          }
-          break;
-        }
-      }
-      if (i > 0 && wms->jumps_size == JUMPLISTSIZE) {
-        shada_free_shada_entry(&wms->jumps[0]);
-      }
-      i = rs_marklist_insert(wms->jumps, sizeof(*wms->jumps), (int)wms->jumps_size, i);
-      if (i != -1) {
-        wms->jumps[i] = entry;
-        if (wms->jumps_size < JUMPLISTSIZE) {
-          wms->jumps_size++;
-        }
-      } else {
-        shada_free_shada_entry(&entry);
-      }
-      break;
-    }
-  }
-#undef COMPARE_WITH_ENTRY
-  return ret;
-}
-
-static PackerBuffer packer_buffer_for_file(FileDescriptor *file)
-{
-  if (file_space(file) < SHADA_MPACK_FREE_SPACE) {
-    file_flush(file);
-  }
-  return (PackerBuffer) {
-    .startptr = file->buffer,
-    .ptr = file->write_pos,
-    .endptr = file->buffer + ARENA_BLOCK_SIZE,
-    .anydata = file,
-    .anyint = 0,  // set to nonzero if error
-    .packer_flush = flush_file_buffer,
-  };
-}
-
-static void flush_file_buffer(PackerBuffer *buffer)
-{
-  FileDescriptor *fd = buffer->anydata;
-  fd->write_pos = buffer->ptr;
-  buffer->anyint = file_flush(fd);
-  buffer->ptr = fd->write_pos;
-}
-
-/// Write ShaDa file
-///
-/// @param[in]  sd_writer  Structure containing file writer definition.
-/// @param[in]  sd_reader  Structure containing file reader definition. If it is
-///                        not NULL then contents of this file will be merged
-///                        with current Neovim runtime.
-static ShaDaWriteResult shada_write(FileDescriptor *const sd_writer,
-                                    FileDescriptor *const sd_reader)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  ShaDaWriteResult ret = kSDWriteSuccessful;
-  int max_kbyte_i = rs_get_shada_parameter('s');
-  if (max_kbyte_i < 0) {
-    max_kbyte_i = 10;
-  }
-  if (max_kbyte_i == 0) {
-    return ret;
-  }
-
-  WriteMergerState *const wms = xcalloc(1, sizeof(*wms));
-  bool dump_one_history[HIST_COUNT];
-  const bool dump_global_vars = (rs_find_shada_parameter('!') != NULL);
-  int max_reg_lines = rs_get_shada_parameter('<');
-  if (max_reg_lines < 0) {
-    max_reg_lines = rs_get_shada_parameter('"');
-  }
-  const bool dump_registers = (max_reg_lines != 0);
-  Set(ptr_t) removable_bufs = SET_INIT;
-  const size_t max_kbyte = (size_t)max_kbyte_i;
-  const size_t num_marked_files = (size_t)rs_get_shada_parameter('\'');
-  const bool dump_global_marks = rs_get_shada_parameter('f') != 0;
-  bool dump_history = false;
-
-  // Initialize history merger
-  for (int i = 0; i < HIST_COUNT; i++) {
-    int num_saved = rs_get_shada_parameter(rs_shada_hist_type2char(i));
-    if (num_saved == -1) {
-      num_saved = (int)p_hi;
-    }
-    if (num_saved > 0) {
-      dump_history = true;
-      dump_one_history[i] = true;
-      rs_hms_init(&wms->hms[i], (uint8_t)i, (size_t)num_saved, sd_reader != NULL ? 1 : 0, 0);
-    } else {
-      dump_one_history[i] = false;
-    }
-  }
-
-  const unsigned srni_flags = (unsigned)(kSDReadUndisableableData
-                                         | kSDReadUnknown
-                                         | (dump_history ? kSDReadHistory : 0)
-                                         | (dump_registers ? kSDReadRegisters : 0)
-                                         | (dump_global_vars ? kSDReadVariables : 0)
-                                         | (dump_global_marks ? kSDReadGlobalMarks : 0)
-                                         | (num_marked_files ? kSDReadLocalMarks |
-                                            kSDReadChanges : 0));
-
-  PackerBuffer packer = packer_buffer_for_file(sd_writer);
-
-  // Set b_last_cursor for all the buffers that have a window.
-  //
-  // It is needed to correctly save '"' mark on exit. Has a side effect of
-  // setting '"' mark in all windows on :wshada to the current cursor
-  // position (basically what :wviminfo used to do).
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    set_last_cursor(wp);
-  }
-
-  rs_find_removable_bufs(&removable_bufs);
-
-  // Write header
-  if (shada_pack_entry(&packer, (ShadaEntry) {
-    .type = kSDItemHeader,
-    .timestamp = os_time(),
-    .data = {
-      .header = {
-        .size = 5,
-        .capacity = 5,
-        .items = ((KeyValuePair[]) {
-          { STATIC_CSTR_AS_STRING("generator"),
-            STATIC_CSTR_AS_OBJ("nvim") },
-          { STATIC_CSTR_AS_STRING("version"),
-            CSTR_AS_OBJ(longVersion) },
-          { STATIC_CSTR_AS_STRING("max_kbyte"),
-            INTEGER_OBJ((Integer)max_kbyte) },
-          { STATIC_CSTR_AS_STRING("pid"),
-            INTEGER_OBJ((Integer)os_get_pid()) },
-          { STATIC_CSTR_AS_STRING("encoding"),
-            CSTR_AS_OBJ(p_enc) },
-        }),
-      }
-    }
-  }, 0) == kSDWriteFailed) {
-    ret = kSDWriteFailed;
-    goto shada_write_exit;
-  }
-
-  // Write buffer list
-  if (rs_find_shada_parameter('%') != NULL) {
-    ShadaEntry buflist_entry = rs_shada_get_buflist(&removable_bufs);
-    if (shada_pack_entry(&packer, buflist_entry, 0) == kSDWriteFailed) {
-      xfree(buflist_entry.data.buffer_list.buffers);
-      ret = kSDWriteFailed;
-      goto shada_write_exit;
-    }
-    xfree(buflist_entry.data.buffer_list.buffers);
-  }
-
-  // Write some of the variables
-  if (dump_global_vars) {
-    const void *var_iter = NULL;
-    const Timestamp cur_timestamp = os_time();
-    do {
-      typval_T vartv;
-      const char *name = NULL;
-      var_iter = var_shada_iter(var_iter, &name, &vartv, VAR_FLAVOUR_SHADA);
-      if (name == NULL) {
-        break;
-      }
-      switch (vartv.v_type) {
-      case VAR_FUNC:
-      case VAR_PARTIAL:
-        tv_clear(&vartv);
-        continue;
-      case VAR_DICT: {
-        dict_T *di = vartv.vval.v_dict;
-        int copyID = rs_get_copyID();
-        if (!rs_set_ref_in_ht(&di->dv_hashtab, copyID, NULL)
-            && copyID == di->dv_copyID) {
-          tv_clear(&vartv);
-          continue;
-        }
-        break;
-      }
-      case VAR_LIST: {
-        list_T *l = vartv.vval.v_list;
-        int copyID = rs_get_copyID();
-        if (!rs_set_ref_in_list_items(l, copyID, NULL)
-            && copyID == l->lv_copyID) {
-          tv_clear(&vartv);
-          continue;
-        }
-        break;
-      }
-      default:
-        break;
-      }
-      typval_T tgttv;
-      tv_copy(&vartv, &tgttv);
-      ShaDaWriteResult spe_ret;
-      if ((spe_ret = shada_pack_entry(&packer, (ShadaEntry) {
-        .type = kSDItemVariable,
-        .timestamp = cur_timestamp,
-        .data = {
-          .global_var = {
-            .name = (char *)name,
-            .value = tgttv,
-          }
-        },
-        .additional_data = NULL,
-      }, max_kbyte)) == kSDWriteFailed) {
-        tv_clear(&vartv);
-        tv_clear(&tgttv);
-        ret = kSDWriteFailed;
-        goto shada_write_exit;
-      }
-      tv_clear(&vartv);
-      tv_clear(&tgttv);
-      if (spe_ret == kSDWriteSuccessful) {
-        set_put(cstr_t, &wms->dumped_variables, name);
-      }
-    } while (var_iter != NULL);
-  }
-
-  if (num_marked_files > 0) {  // Skip if '0 in 'shada'
-    // Initialize jump list
-    wms->jumps_size = rs_shada_init_jumps(wms->jumps, &removable_bufs);
-  }
-
-  if (dump_one_history[HIST_SEARCH] > 0) {  // Skip if /0 in 'shada'
-    const bool search_highlighted = !(no_hlsearch
-                                      || rs_find_shada_parameter('h') != NULL);
-    const bool search_last_used = search_was_last_used();
-
-    // Initialize search pattern
-    rs_add_search_pattern(&wms->search_pattern, 0,
-                          search_last_used ? 1 : 0, search_highlighted ? 1 : 0);
-
-    // Initialize substitute search pattern
-    rs_add_search_pattern(&wms->sub_search_pattern, 1,
-                          search_last_used ? 1 : 0, search_highlighted ? 1 : 0);
-
-    // Initialize substitute replacement string
-    SubReplacementString sub;
-    sub_get_replacement(&sub);
-    if (sub.sub != NULL) {  // Don't store empty replacement string
-      wms->replacement = (ShadaEntry) {
-        .can_free_entry = false,
-        .type = kSDItemSubString,
-        .timestamp = sub.timestamp,
-        .data = {
-          .sub_string = {
-            .sub = sub.sub,
-          }
-        },
-        .additional_data = sub.additional_data,
-      };
-    }
-  }
-
-  // Initialize global marks
-  if (dump_global_marks) {
-    const void *global_mark_iter = NULL;
-    size_t digit_mark_idx = 0;
-    do {
-      char name = NUL;
-      xfmark_T fm;
-      global_mark_iter = mark_global_iter(global_mark_iter, &name, &fm);
-      if (name == NUL) {
-        break;
-      }
-      const char *fname;
-      if (fm.fmark.fnum == 0) {
-        assert(fm.fname != NULL);
-        if (rs_shada_removable(fm.fname) != 0) {
-          continue;
-        }
-        fname = fm.fname;
-      } else {
-        const buf_T *const buf = buflist_findnr(fm.fmark.fnum);
-        if (buf == NULL || buf->b_ffname == NULL
-            || set_has(ptr_t, &removable_bufs, (ptr_t)buf)) {
-          continue;
-        }
-        fname = buf->b_ffname;
-      }
-      const ShadaEntry entry = {
-        .can_free_entry = false,
-        .type = kSDItemGlobalMark,
-        .timestamp = fm.fmark.timestamp,
-        .data = {
-          .filemark = {
-            .mark = fm.fmark.mark,
-            .name = name,
-            .fname = (char *)fname,
-          }
-        },
-        .additional_data = fm.fmark.additional_data,
-      };
-      if (ascii_isdigit(name)) {
-        rs_replace_numbered_mark(wms, digit_mark_idx++, entry);
-      } else {
-        wms->global_marks[mark_global_index(name)] = entry;
-      }
-    } while (global_mark_iter != NULL);
-  }
-
-  // Initialize registers
-  if (dump_registers) {
-    rs_shada_initialize_registers(wms, max_reg_lines);
-  }
-
-  // Initialize buffers
-  if (num_marked_files > 0) {
-    FOR_ALL_BUFFERS(buf) {
-      if (rs_ignore_buf(buf, &removable_bufs) != 0) {
-        continue;
-      }
-      const void *local_marks_iter = NULL;
-      const char *const fname = buf->b_ffname;
-      cstr_t *map_key = NULL;
-      bool new_item = false;
-      ptr_t *val = pmap_put_ref(cstr_t)(&wms->file_marks, fname, &map_key, &new_item);
-      if (new_item) {
-        *map_key = xstrdup(fname);
-      }
-      if (*val == NULL) {
-        *val = xcalloc(1, sizeof(FileMarks));
-      }
-      FileMarks *const filemarks = *val;
-      do {
-        fmark_T fm;
-        char name = NUL;
-        local_marks_iter = mark_buffer_iter(local_marks_iter, buf, &name, &fm);
-        if (name == NUL) {
-          break;
-        }
-        filemarks->marks[mark_local_index(name)] = (ShadaEntry) {
-          .can_free_entry = false,
-          .type = kSDItemLocalMark,
-          .timestamp = fm.timestamp,
-          .data = {
-            .filemark = {
-              .mark = fm.mark,
-              .name = name,
-              .fname = (char *)fname,
-            }
-          },
-          .additional_data = fm.additional_data,
-        };
-        if (fm.timestamp > filemarks->greatest_timestamp) {
-          filemarks->greatest_timestamp = fm.timestamp;
-        }
-      } while (local_marks_iter != NULL);
-      for (int i = 0; i < buf->b_changelistlen; i++) {
-        const fmark_T fm = buf->b_changelist[i];
-        filemarks->changes[i] = (ShadaEntry) {
-          .can_free_entry = false,
-          .type = kSDItemChange,
-          .timestamp = fm.timestamp,
-          .data = {
-            .filemark = {
-              .mark = fm.mark,
-              .fname = (char *)fname,
-            }
-          },
-          .additional_data = fm.additional_data,
-        };
-        if (fm.timestamp > filemarks->greatest_timestamp) {
-          filemarks->greatest_timestamp = fm.timestamp;
-        }
-      }
-      filemarks->changes_size = (size_t)buf->b_changelistlen;
-    }
-  }
-
-  if (sd_reader != NULL) {
-    const ShaDaWriteResult srww_ret = shada_read_when_writing(sd_reader, srni_flags, max_kbyte, wms,
-                                                              &packer);
-    if (srww_ret != kSDWriteSuccessful) {
-      ret = srww_ret;
-    }
-  }
-
-  // Update numbered marks: replace '0 mark with the current position,
-  // remove '9 and shift all other marks. Skip if f0 in 'shada'.
-  if (dump_global_marks && rs_ignore_buf(curbuf, &removable_bufs) == 0 && curwin->w_cursor.lnum != 0) {
-    rs_replace_numbered_mark(wms, 0, (ShadaEntry) {
-      .can_free_entry = false,
-      .type = kSDItemGlobalMark,
-      .timestamp = os_time(),
-      .data = {
-        .filemark = {
-          .mark = curwin->w_cursor,
-          .name = '0',
-          .fname = curbuf->b_ffname,
-        }
-      },
-      .additional_data = NULL,
-    });
-  }
-
-  // Write the rest
-#define PACK_WMS_ARRAY(wms_array) \
-  do { \
-    for (size_t i_ = 0; i_ < ARRAY_SIZE(wms_array); i_++) { \
-      if ((wms_array)[i_].type != kSDItemMissing) { \
-        if (shada_pack_pfreed_entry(&packer, (wms_array)[i_], max_kbyte) \
-            == kSDWriteFailed) { \
-          ret = kSDWriteFailed; \
-          goto shada_write_exit; \
-        } \
-      } \
-    } \
-  } while (0)
-  PACK_WMS_ARRAY(wms->global_marks);
-  PACK_WMS_ARRAY(wms->numbered_marks);
-  PACK_WMS_ARRAY(wms->registers);
-  for (size_t i = 0; i < wms->jumps_size; i++) {
-    if (shada_pack_pfreed_entry(&packer, wms->jumps[i], max_kbyte)
-        == kSDWriteFailed) {
-      ret = kSDWriteFailed;
-      goto shada_write_exit;
-    }
-  }
-#define PACK_WMS_ENTRY(wms_entry) \
-  do { \
-    if ((wms_entry).type != kSDItemMissing) { \
-      if (shada_pack_pfreed_entry(&packer, wms_entry, max_kbyte) \
-          == kSDWriteFailed) { \
-        ret = kSDWriteFailed; \
-        goto shada_write_exit; \
-      } \
-    } \
-  } while (0)
-  PACK_WMS_ENTRY(wms->search_pattern);
-  PACK_WMS_ENTRY(wms->sub_search_pattern);
-  PACK_WMS_ENTRY(wms->replacement);
-#undef PACK_WMS_ENTRY
-
-  const size_t file_markss_size = map_size(&wms->file_marks);
-  FileMarks **const all_file_markss =
-    xmalloc(file_markss_size * sizeof(*all_file_markss));
-  FileMarks **cur_file_marks = all_file_markss;
-  ptr_t val;
-  map_foreach_value(&wms->file_marks, val, {
-    *cur_file_marks++ = val;
-  })
-  qsort((void *)all_file_markss, file_markss_size, sizeof(*all_file_markss),
-        &rs_compare_file_marks);
-  const size_t file_markss_to_dump = MIN(num_marked_files, file_markss_size);
-  for (size_t i = 0; i < file_markss_to_dump; i++) {
-    PACK_WMS_ARRAY(all_file_markss[i]->marks);
-    for (size_t j = 0; j < all_file_markss[i]->changes_size; j++) {
-      if (shada_pack_pfreed_entry(&packer, all_file_markss[i]->changes[j],
-                                  max_kbyte) == kSDWriteFailed) {
-        ret = kSDWriteFailed;
-        goto shada_write_exit;
-      }
-    }
-    for (size_t j = 0; j < all_file_markss[i]->additional_marks_size; j++) {
-      if (shada_pack_entry(&packer, all_file_markss[i]->additional_marks[j],
-                           0) == kSDWriteFailed) {
-        shada_free_shada_entry(&all_file_markss[i]->additional_marks[j]);
-        ret = kSDWriteFailed;
-        goto shada_write_exit;
-      }
-      shada_free_shada_entry(&all_file_markss[i]->additional_marks[j]);
-    }
-    xfree(all_file_markss[i]->additional_marks);
-  }
-  xfree(all_file_markss);
-#undef PACK_WMS_ARRAY
-
-  if (dump_history) {
-    for (int i = 0; i < HIST_COUNT; i++) {
-      if (dump_one_history[i]) {
-        rs_hms_insert_whole_neovim_history(&wms->hms[i]);
-        HMS_ITER(&wms->hms[i], cur_entry, {
-          if (shada_pack_pfreed_entry(&packer, cur_entry->data, max_kbyte) == kSDWriteFailed) {
-            ret = kSDWriteFailed;
-            break;
-          }
-        })
-        if (ret == kSDWriteFailed) {
-          goto shada_write_exit;
-        }
-      }
-    }
-  }
-
-shada_write_exit:
-  for (int i = 0; i < HIST_COUNT; i++) {
-    if (dump_one_history[i]) {
-      rs_hms_dealloc(&wms->hms[i]);
-    }
-  }
-  const char *stored_key = NULL;
-  map_foreach(&wms->file_marks, stored_key, val, {
-    xfree((char *)stored_key);
-    xfree(val);
-  })
-  map_destroy(cstr_t, &wms->file_marks);
-  set_destroy(ptr_t, &removable_bufs);
-  packer.packer_flush(&packer);
-  set_destroy(cstr_t, &wms->dumped_variables);
-  xfree(wms);
-  return ret;
-}
-
-#undef PACK_KEY
 
 /// Write ShaDa file to a given location
 ///
@@ -2424,13 +1647,6 @@ int nvim_shada_os_mkdir_recurse(const char *fname, int perm, char **out_failed_d
   return os_mkdir_recurse(fname, (int)perm, out_failed_dir, NULL);
 }
 
-/// Wrapper for shada_write() used by rs_shada_write_file.
-/// sd_reader may be NULL (for nomerge writes). Returns ShaDaWriteResult as int.
-int nvim_shada_shada_write(void *sd_writer, void *sd_reader)
-{
-  return (int)shada_write((FileDescriptor *)sd_writer,
-                          (FileDescriptor *)sd_reader);
-}
 
 /// Wrapper for vim_rename() used by rs_shada_write_file.
 int nvim_shada_vim_rename(const char *from, const char *to)
@@ -3225,5 +2441,562 @@ int nvim_shada_pack_gvar_entry(PackerBuffer *packer, const char *name, void *tv,
   int r = rs_shada_pack_entry(packer, &entry, 0);
   tv_clear(&entry.data.global_var.value);
   return r;
+}
+
+// =============================================================================
+// Phase 2 accessor functions: shada_write / shada_read_when_writing migration
+// =============================================================================
+
+/// Set b_last_cursor for all windows in all tabs (wraps FOR_ALL_TAB_WINDOWS loop).
+void nvim_shada_set_all_last_cursors(void)
+{
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    set_last_cursor(wp);
+  }
+}
+
+/// Get the longVersion string (Neovim version string).
+const char *nvim_shada_get_longversion(void) { return longVersion; }
+
+/// Get the current process ID.
+int64_t nvim_shada_os_get_pid(void) { return os_get_pid(); }
+
+/// Get the current encoding option (p_enc).
+const char *nvim_shada_get_p_enc(void) { return p_enc; }
+
+/// Pack the ShaDa file header entry.
+/// @param packer   Packer buffer to write to.
+/// @param max_kbyte Maximum kbyte size for entries.
+/// @return kSDWriteSuccessful or kSDWriteFailed.
+int nvim_shada_pack_header_entry(PackerBuffer *packer, size_t max_kbyte)
+{
+  if (!packer) {
+    return kSDWriteFailed;
+  }
+  return (int)rs_shada_pack_entry(packer, &(ShadaEntry) {
+    .type = kSDItemHeader,
+    .timestamp = os_time(),
+    .data = {
+      .header = {
+        .size = 5,
+        .capacity = 5,
+        .items = ((KeyValuePair[]) {
+          { STATIC_CSTR_AS_STRING("generator"),
+            STATIC_CSTR_AS_OBJ("nvim") },
+          { STATIC_CSTR_AS_STRING("version"),
+            CSTR_AS_OBJ(longVersion) },
+          { STATIC_CSTR_AS_STRING("max_kbyte"),
+            INTEGER_OBJ((Integer)max_kbyte) },
+          { STATIC_CSTR_AS_STRING("pid"),
+            INTEGER_OBJ((Integer)os_get_pid()) },
+          { STATIC_CSTR_AS_STRING("encoding"),
+            CSTR_AS_OBJ(p_enc) },
+        }),
+      }
+    }
+  }, 0);
+}
+
+/// Iterate over global marks.
+/// @param iter       Previous iterator or NULL to start.
+/// @param out_name   Output: mark name character.
+/// @param out_lnum   Output: mark line number.
+/// @param out_col    Output: mark column.
+/// @param out_fnum   Output: file number (0 if fname-based).
+/// @param out_ts     Output: timestamp.
+/// @param out_fname  Output: file name (used when fnum == 0, may be NULL).
+/// @param out_additional Output: additional data pointer (may be NULL).
+/// @return Next iterator value, or NULL when done.
+const void *nvim_shada_mark_global_iter(const void *iter,
+                                        char *out_name,
+                                        int64_t *out_lnum,
+                                        int32_t *out_col,
+                                        int *out_fnum,
+                                        uint64_t *out_ts,
+                                        const char **out_fname,
+                                        void **out_additional)
+{
+  xfmark_T fm;
+  *out_name = NUL;
+  const void *next = mark_global_iter(iter, out_name, &fm);
+  if (*out_name != NUL) {
+    *out_lnum = (int64_t)fm.fmark.mark.lnum;
+    *out_col = (int32_t)fm.fmark.mark.col;
+    *out_fnum = fm.fmark.fnum;
+    *out_ts = fm.fmark.timestamp;
+    *out_fname = fm.fname;
+    *out_additional = fm.fmark.additional_data;
+  }
+  return next;
+}
+
+/// Get the global mark index for a mark name character.
+int nvim_shada_mark_global_index(int name)
+{
+  return mark_global_index((char)name);
+}
+
+/// Get the local mark index for a mark name character.
+int nvim_shada_mark_local_index(int name)
+{
+  return mark_local_index((char)name);
+}
+
+/// Get the timestamp of a named global mark (namedfm[idx].fmark.timestamp).
+uint64_t nvim_shada_named_mark_timestamp(int idx)
+{
+  if (idx < 0 || idx >= NGLOBALMARKS) {
+    return 0;
+  }
+  return namedfm[idx].fmark.timestamp;
+}
+
+/// Iterate over buffer-local marks.
+/// @param iter         Previous iterator or NULL to start.
+/// @param buf          Buffer to iterate.
+/// @param out_name     Output: mark name character.
+/// @param out_lnum     Output: mark line number.
+/// @param out_col      Output: mark column.
+/// @param out_ts       Output: timestamp.
+/// @param out_additional Output: additional data pointer (may be NULL).
+/// @return Next iterator value, or NULL when done.
+const void *nvim_shada_mark_buffer_iter(const void *iter,
+                                        const void *buf,
+                                        char *out_name,
+                                        int64_t *out_lnum,
+                                        int32_t *out_col,
+                                        uint64_t *out_ts,
+                                        void **out_additional)
+{
+  fmark_T fm;
+  *out_name = NUL;
+  const void *next = mark_buffer_iter(iter, (const buf_T *)buf, out_name, &fm);
+  if (*out_name != NUL) {
+    *out_lnum = (int64_t)fm.mark.lnum;
+    *out_col = (int32_t)fm.mark.col;
+    *out_ts = fm.timestamp;
+    *out_additional = fm.additional_data;
+  }
+  return next;
+}
+
+/// Get the changelist length of a buffer.
+int nvim_shada_buf_changelist_len(const void *buf)
+{
+  if (!buf) {
+    return 0;
+  }
+  return ((const buf_T *)buf)->b_changelistlen;
+}
+
+/// Get a changelist entry from a buffer.
+/// @param buf          Buffer handle.
+/// @param idx          Index into changelist.
+/// @param out_lnum     Output: line number.
+/// @param out_col      Output: column.
+/// @param out_ts       Output: timestamp.
+/// @param out_additional Output: additional data pointer.
+void nvim_shada_buf_changelist_entry(const void *buf, int idx,
+                                     int64_t *out_lnum, int32_t *out_col,
+                                     uint64_t *out_ts, void **out_additional)
+{
+  if (!buf || idx < 0) {
+    return;
+  }
+  const buf_T *b = (const buf_T *)buf;
+  const fmark_T fm = b->b_changelist[idx];
+  *out_lnum = (int64_t)fm.mark.lnum;
+  *out_col = (int32_t)fm.mark.col;
+  *out_ts = fm.timestamp;
+  *out_additional = fm.additional_data;
+}
+
+/// Get the current substitute replacement string, its timestamp, and additional data.
+/// @param out_sub      Output: replacement string (may be NULL if not set).
+/// @param out_ts       Output: timestamp.
+/// @param out_additional Output: additional data pointer (may be NULL).
+void nvim_shada_sub_get_replacement(const char **out_sub, uint64_t *out_ts,
+                                    void **out_additional)
+{
+  SubReplacementString sub;
+  sub_get_replacement(&sub);
+  *out_sub = sub.sub;
+  *out_ts = sub.timestamp;
+  *out_additional = sub.additional_data;
+}
+
+/// Get curwin->w_cursor.lnum.
+int64_t nvim_shada_curwin_lnum(void)
+{
+  return (int64_t)curwin->w_cursor.lnum;
+}
+
+/// Get curwin->w_cursor as a Position.
+/// @param out_lnum Output: line number.
+/// @param out_col  Output: column.
+void nvim_shada_curwin_cursor(int64_t *out_lnum, int32_t *out_col)
+{
+  *out_lnum = (int64_t)curwin->w_cursor.lnum;
+  *out_col = (int32_t)curwin->w_cursor.col;
+}
+
+/// Put a file-marks entry into the WriteMergerState's file_marks PMap.
+/// If the key is new, xstrdup's the fname. Returns pointer to the FileMarks*.
+/// @param wms    WriteMergerState pointer (as void*).
+/// @param fname  File name to use as key.
+/// @param is_new Output: true if this is a new entry.
+/// @param out_key Output: pointer to the key in the map (for ownership transfer).
+/// @return pointer to the ptr_t value slot in the PMap.
+void **nvim_shada_wms_file_marks_put_ref(void *wms_opaque, const char *fname,
+                                         bool *is_new, const char **out_key)
+{
+  WriteMergerState *wms = (WriteMergerState *)wms_opaque;
+  if (!wms || !fname) {
+    return NULL;
+  }
+  ptr_t *val = pmap_put_ref(cstr_t)(&wms->file_marks, fname, (cstr_t **)out_key, is_new);
+  return (void **)val;
+}
+
+/// Allocate a new FileMarks and zero-initialize it.
+void *nvim_shada_file_marks_alloc(void)
+{
+  return xcalloc(1, sizeof(FileMarks));
+}
+
+/// Get the greatest_timestamp from a FileMarks.
+uint64_t nvim_shada_file_marks_greatest_ts(const void *fm_ptr)
+{
+  return fm_ptr ? ((const FileMarks *)fm_ptr)->greatest_timestamp : 0;
+}
+
+/// Set the greatest_timestamp in a FileMarks if ts is larger.
+void nvim_shada_file_marks_update_ts(void *fm_ptr, uint64_t ts)
+{
+  if (fm_ptr && ts > ((FileMarks *)fm_ptr)->greatest_timestamp) {
+    ((FileMarks *)fm_ptr)->greatest_timestamp = ts;
+  }
+}
+
+/// Get a specific local mark entry from a FileMarks.
+ShadaEntry *nvim_shada_file_marks_get_mark(void *fm_ptr, int idx)
+{
+  if (!fm_ptr || idx < 0 || idx >= NLOCALMARKS) {
+    return NULL;
+  }
+  return &((FileMarks *)fm_ptr)->marks[idx];
+}
+
+/// Get a specific change entry from a FileMarks.
+ShadaEntry *nvim_shada_file_marks_get_change(void *fm_ptr, int idx)
+{
+  if (!fm_ptr || idx < 0 || idx >= JUMPLISTSIZE) {
+    return NULL;
+  }
+  return &((FileMarks *)fm_ptr)->changes[idx];
+}
+
+/// Get changes_size from FileMarks.
+size_t nvim_shada_file_marks_changes_size(const void *fm_ptr)
+{
+  return fm_ptr ? ((const FileMarks *)fm_ptr)->changes_size : 0;
+}
+
+/// Set changes_size in FileMarks.
+void nvim_shada_file_marks_set_changes_size(void *fm_ptr, size_t size)
+{
+  if (fm_ptr) {
+    ((FileMarks *)fm_ptr)->changes_size = size;
+  }
+}
+
+/// Get additional_marks_size from FileMarks.
+size_t nvim_shada_file_marks_additional_size(const void *fm_ptr)
+{
+  return fm_ptr ? ((const FileMarks *)fm_ptr)->additional_marks_size : 0;
+}
+
+/// Get pointer to an additional mark entry (for packing then freeing).
+ShadaEntry *nvim_shada_file_marks_get_additional(void *fm_ptr, size_t idx)
+{
+  if (!fm_ptr) {
+    return NULL;
+  }
+  FileMarks *fm = (FileMarks *)fm_ptr;
+  if (idx >= fm->additional_marks_size) {
+    return NULL;
+  }
+  return &fm->additional_marks[idx];
+}
+
+/// Free the additional_marks array of a FileMarks.
+void nvim_shada_file_marks_free_additional(void *fm_ptr)
+{
+  if (fm_ptr) {
+    FileMarks *fm = (FileMarks *)fm_ptr;
+    xfree(fm->additional_marks);
+    fm->additional_marks = NULL;
+    fm->additional_marks_size = 0;
+  }
+}
+
+/// Grow the additional_marks array of a FileMarks and set the last entry.
+void nvim_shada_file_marks_push_additional(void *fm_ptr, const ShadaEntry *entry)
+{
+  if (!fm_ptr || !entry) {
+    return;
+  }
+  FileMarks *fm = (FileMarks *)fm_ptr;
+  fm->additional_marks = xrealloc(fm->additional_marks,
+                                  (++fm->additional_marks_size
+                                   * sizeof(fm->additional_marks[0])));
+  fm->additional_marks[fm->additional_marks_size - 1] = *entry;
+}
+
+/// Get the size of the file_marks PMap in the WriteMergerState.
+size_t nvim_shada_wms_file_marks_size(const void *wms_opaque)
+{
+  const WriteMergerState *wms = (const WriteMergerState *)wms_opaque;
+  return wms ? map_size(&wms->file_marks) : 0;
+}
+
+/// Collect all FileMarks from the PMap, sort by greatest_timestamp (descending),
+/// and return as an allocated array of void* pointers.
+/// Caller must xfree the returned array.
+void **nvim_shada_wms_file_marks_get_sorted(const void *wms_opaque, size_t *out_size)
+{
+  const WriteMergerState *wms = (const WriteMergerState *)wms_opaque;
+  if (!wms) {
+    *out_size = 0;
+    return NULL;
+  }
+  size_t sz = map_size(&wms->file_marks);
+  *out_size = sz;
+  if (sz == 0) {
+    return NULL;
+  }
+  void **arr = xmalloc(sz * sizeof(*arr));
+  size_t i = 0;
+  ptr_t val;
+  map_foreach_value((PMap(cstr_t) *)&wms->file_marks, val, {
+    arr[i++] = val;
+  })
+  qsort(arr, sz, sizeof(*arr), &rs_compare_file_marks);
+  return arr;
+}
+
+/// Destroy the file_marks PMap in the WriteMergerState.
+/// Frees all keys and FileMarks values.
+void nvim_shada_wms_file_marks_destroy(void *wms_opaque)
+{
+  WriteMergerState *wms = (WriteMergerState *)wms_opaque;
+  if (!wms) {
+    return;
+  }
+  const char *key = NULL;
+  ptr_t val;
+  map_foreach(&wms->file_marks, key, val, {
+    xfree((char *)key);
+    xfree(val);
+  })
+  map_destroy(cstr_t, &wms->file_marks);
+}
+
+/// Check if a variable name is in the dumped_variables set.
+bool nvim_shada_wms_dumped_vars_has(const void *wms_opaque, const char *name)
+{
+  const WriteMergerState *wms = (const WriteMergerState *)wms_opaque;
+  if (!wms || !name) {
+    return false;
+  }
+  return set_has(cstr_t, (Set(cstr_t) *)&wms->dumped_variables, name);
+}
+
+/// Add a variable name to the dumped_variables set.
+void nvim_shada_wms_dumped_vars_put(void *wms_opaque, const char *name)
+{
+  WriteMergerState *wms = (WriteMergerState *)wms_opaque;
+  if (!wms || !name) {
+    return;
+  }
+  set_put(cstr_t, &wms->dumped_variables, name);
+}
+
+/// Destroy the dumped_variables set in the WriteMergerState.
+void nvim_shada_wms_dumped_vars_destroy(void *wms_opaque)
+{
+  WriteMergerState *wms = (WriteMergerState *)wms_opaque;
+  if (wms) {
+    set_destroy(cstr_t, &wms->dumped_variables);
+  }
+}
+
+/// Get the hmll.size of hms[i] (to check if history merging is active).
+size_t nvim_shada_wms_hms_size(const void *wms_opaque, int i)
+{
+  const WriteMergerState *wms = (const WriteMergerState *)wms_opaque;
+  if (!wms || i < 0 || i >= HIST_COUNT) {
+    return 0;
+  }
+  return wms->hms[i].hmll.size;
+}
+
+/// Get the (lnum, col) of the mark returned by mark_get for a local mark.
+/// Returns 1 if a mark was found with timestamp >= entry_ts, 0 otherwise.
+int nvim_shada_mark_get_cmp(const void *buf, const void *win, int name, uint64_t entry_ts)
+{
+  if (!buf) {
+    return 0;
+  }
+  fmark_T fm_storage;
+  fmark_T *fm = mark_get((buf_T *)buf, (win_T *)win, &fm_storage,
+                          kMarkBufLocal, name);
+  if (fm == NULL) {
+    return 0;
+  }
+  return (fm->timestamp >= entry_ts) ? 1 : 0;
+}
+
+/// Wrapper for nvim_mark_path_fnamecmp (path comparison for marks).
+int nvim_shada_path_fnamecmp(const char *a, const char *b)
+{
+  return nvim_mark_path_fnamecmp(a, b);
+}
+
+/// Get the xfree function pointer for use by Rust (wraps xfree).
+void nvim_shada_xfree_key(void *key)
+{
+  xfree(key);
+}
+
+/// Allocate and initialize a WriteMergerState on the heap (returns void*).
+void *nvim_shada_wms_alloc(void)
+{
+  return xcalloc(1, sizeof(WriteMergerState));
+}
+
+/// Free a WriteMergerState without destroying PMap/Set fields (those must be
+/// destroyed separately via nvim_shada_wms_file_marks_destroy and
+/// nvim_shada_wms_dumped_vars_destroy).
+void nvim_shada_wms_free(void *wms)
+{
+  xfree(wms);
+}
+
+/// Flush the packer buffer.
+void nvim_shada_packer_flush_buf(PackerBuffer *packer)
+{
+  if (packer && packer->packer_flush) {
+    packer->packer_flush(packer);
+  }
+}
+
+/// Internal flush callback for file-backed PackerBuffers.
+static void nvim_shada_flush_file_buffer_(PackerBuffer *buffer)
+{
+  FileDescriptor *fd = buffer->anydata;
+  fd->write_pos = buffer->ptr;
+  buffer->anyint = file_flush(fd);
+  buffer->ptr = fd->write_pos;
+}
+
+/// Create a PackerBuffer for writing to a FileDescriptor.
+PackerBuffer nvim_shada_packer_buffer_for_file(void *fd)
+{
+  FileDescriptor *file = (FileDescriptor *)fd;
+  if (file_space(file) < SHADA_MPACK_FREE_SPACE) {
+    file_flush(file);
+  }
+  return (PackerBuffer) {
+    .startptr = file->buffer,
+    .ptr = file->write_pos,
+    .endptr = file->buffer + ARENA_BLOCK_SIZE,
+    .anydata = file,
+    .anyint = 0,
+    .packer_flush = nvim_shada_flush_file_buffer_,
+  };
+}
+
+/// Initialize a PackerBuffer for writing to a FileDescriptor (by pointer).
+/// This is the preferred accessor for Rust which cannot use by-value struct returns.
+/// @param fd     FileDescriptor to write to.
+/// @param out    Output: initialized PackerBuffer.
+void nvim_shada_packer_init_for_file(void *fd, PackerBuffer *out)
+{
+  *out = nvim_shada_packer_buffer_for_file(fd);
+}
+
+/// Write all global variables to the packer, updating wms->dumped_variables.
+/// Implements the var_shada_iter loop from shada_write including circular-ref detection.
+/// @param packer    Packer buffer to write to.
+/// @param wms       WriteMergerState (for dumped_variables set).
+/// @param max_kbyte Maximum kbyte for entries.
+/// @return kSDWriteSuccessful or kSDWriteFailed.
+int nvim_shada_pack_all_gvars(PackerBuffer *packer, void *wms_opaque, size_t max_kbyte)
+{
+  WriteMergerState *wms = (WriteMergerState *)wms_opaque;
+  const void *var_iter = NULL;
+  const Timestamp cur_timestamp = os_time();
+  do {
+    typval_T vartv;
+    const char *name = NULL;
+    var_iter = var_shada_iter(var_iter, &name, &vartv, VAR_FLAVOUR_SHADA);
+    if (name == NULL) {
+      break;
+    }
+    switch (vartv.v_type) {
+    case VAR_FUNC:
+    case VAR_PARTIAL:
+      tv_clear(&vartv);
+      continue;
+    case VAR_DICT: {
+      dict_T *di = vartv.vval.v_dict;
+      int copyID = rs_get_copyID();
+      if (!rs_set_ref_in_ht(&di->dv_hashtab, copyID, NULL)
+          && copyID == di->dv_copyID) {
+        tv_clear(&vartv);
+        continue;
+      }
+      break;
+    }
+    case VAR_LIST: {
+      list_T *l = vartv.vval.v_list;
+      int copyID = rs_get_copyID();
+      if (!rs_set_ref_in_list_items(l, copyID, NULL)
+          && copyID == l->lv_copyID) {
+        tv_clear(&vartv);
+        continue;
+      }
+      break;
+    }
+    default:
+      break;
+    }
+    typval_T tgttv;
+    tv_copy(&vartv, &tgttv);
+    ShaDaWriteResult spe_ret;
+    ShadaEntry var_entry = {
+      .type = kSDItemVariable,
+      .timestamp = cur_timestamp,
+      .data = {
+        .global_var = {
+          .name = (char *)name,
+          .value = tgttv,
+        }
+      },
+      .additional_data = NULL,
+    };
+    if ((spe_ret = (ShaDaWriteResult)rs_shada_pack_entry(packer, &var_entry, max_kbyte)) == kSDWriteFailed) {
+      tv_clear(&vartv);
+      tv_clear(&tgttv);
+      return (int)kSDWriteFailed;
+    }
+    tv_clear(&vartv);
+    tv_clear(&tgttv);
+    if (spe_ret == kSDWriteSuccessful) {
+      set_put(cstr_t, &wms->dumped_variables, name);
+    }
+  } while (var_iter != NULL);
+  return (int)kSDWriteSuccessful;
 }
 
