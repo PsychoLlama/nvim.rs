@@ -460,7 +460,7 @@ unsafe fn handle_internal_float(wp: WinHandle, validate: bool) {
 static DO_AUTOCMD_WINCLOSED_RECURSIVE: AtomicBool = AtomicBool::new(false);
 
 extern "C" {
-    /// Check whether EVENT_WINCLOSED has any autocmds registered.
+        /// Check whether EVENT_WINCLOSED has any autocmds registered.
     fn nvim_has_event_winclosed() -> c_int;
 
     /// Apply WinClosed autocmds for window `win`.
@@ -516,4 +516,186 @@ pub unsafe extern "C" fn rs_ui_ext_win_position(wp: WinHandle, validate: bool) {
     } else {
         handle_external(wp);
     }
+}
+
+// ---------------------------------------------------------------------------
+// ui_ext_win_viewport
+// ---------------------------------------------------------------------------
+
+/// MAXCOL from pos_defs.h.
+const MAXCOL: i64 = 0x7fff_ffff;
+
+extern "C" {
+    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
+    fn nvim_win_get_topline(wp: WinHandle) -> i32;
+    fn nvim_win_get_botline(wp: WinHandle) -> i32;
+    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
+    fn nvim_win_get_skipcol(wp: WinHandle) -> u32;
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> i32;
+    fn nvim_win_get_cursor_col(wp: WinHandle) -> u32;
+    fn nvim_win_get_empty_rows(wp: WinHandle) -> c_int;
+    fn nvim_win_get_viewport_invalid(wp: WinHandle) -> c_int;
+    fn nvim_win_set_viewport_invalid(wp: WinHandle, val: c_int);
+    fn nvim_win_get_viewport_last_topline(wp: WinHandle) -> i32;
+    fn nvim_win_set_viewport_last_topline(wp: WinHandle, val: i32);
+    fn nvim_win_get_viewport_last_botline(wp: WinHandle) -> i32;
+    fn nvim_win_set_viewport_last_botline(wp: WinHandle, val: i32);
+    fn nvim_win_get_viewport_last_topfill(wp: WinHandle) -> c_int;
+    fn nvim_win_set_viewport_last_topfill(wp: WinHandle, val: i32);
+    fn nvim_win_get_viewport_last_skipcol(wp: WinHandle) -> i64;
+    fn nvim_win_set_viewport_last_skipcol(wp: WinHandle, val: i64);
+    fn nvim_ui_call_win_viewport_wrapper(
+        grid: c_int,
+        win: c_int,
+        topline: c_int,
+        botline: c_int,
+        curline: c_int,
+        curcol: c_int,
+        line_count: c_int,
+        delta: i64,
+    );
+    fn rs_win_text_height(
+        wp: WinHandle,
+        start_lnum: c_int,
+        start_vcol: i64,
+        end_lnum: *mut c_int,
+        end_vcol: *mut i64,
+        fill: *mut i64,
+        max: i64,
+    ) -> i64;
+}
+
+/// Get the grid alloc handle via the existing ScreenGridHandle path.
+unsafe fn get_grid_alloc_handle(wp: WinHandle) -> c_int {
+    nvim_screengrid_get_handle(nvim_win_get_grid_alloc(wp))
+}
+
+/// Emit `win_viewport` UI event for window `wp`.
+///
+/// Computes scroll delta from last-known viewport state and emits the event.
+/// Corresponds to C `ui_ext_win_viewport()`.
+///
+/// # Safety
+/// Accesses global Neovim state via C accessor functions.
+unsafe fn ui_ext_win_viewport_impl(wp: WinHandle) {
+    // NOTE: The win_viewport command is delayed until the next flush when there
+    // are pending updates. This ensures that the updates and the viewport are
+    // sent together.
+    if nvim_win_is_curwin(wp) == 0 && nvim_get_ui_ext(K_UI_MULTIGRID) == 0 {
+        return;
+    }
+    if nvim_win_get_viewport_invalid(wp) == 0 {
+        return;
+    }
+    if nvim_win_get_redr_type(wp) != 0 {
+        return;
+    }
+
+    let line_count = nvim_win_buf_line_count(wp);
+
+    // Avoid ml_get errors when producing "scroll_delta".
+    let cur_topline = nvim_win_get_topline(wp).min(line_count);
+    let cur_botline = nvim_win_get_botline(wp).min(line_count);
+
+    let mut delta: i64 = 0;
+
+    let mut last_topline = nvim_win_get_viewport_last_topline(wp);
+    let mut last_botline = nvim_win_get_viewport_last_botline(wp);
+    let mut last_topfill = nvim_win_get_viewport_last_topfill(wp);
+    let mut last_skipcol = nvim_win_get_viewport_last_skipcol(wp);
+
+    if last_topline > line_count {
+        delta -= i64::from(last_topline - line_count);
+        last_topline = line_count;
+        last_topfill = 0;
+        last_skipcol = MAXCOL;
+    }
+    last_botline = last_botline.min(line_count);
+
+    let skipcol = i64::from(nvim_win_get_skipcol(wp));
+
+    if cur_topline < last_topline
+        || (cur_topline == last_topline && skipcol < last_skipcol)
+    {
+        let mut vcole: i64 = last_skipcol;
+        let mut lnume: c_int = last_topline;
+        if last_topline > 0 && cur_botline < last_topline {
+            // Scrolling too many lines: only give an approximate "scroll_delta".
+            delta -= i64::from(last_topline - cur_botline);
+            lnume = cur_botline;
+            vcole = 0;
+        }
+        delta -= rs_win_text_height(
+            wp,
+            cur_topline,
+            skipcol,
+            std::ptr::addr_of_mut!(lnume),
+            std::ptr::addr_of_mut!(vcole),
+            std::ptr::null_mut(),
+            i64::MAX,
+        );
+    } else if cur_topline > last_topline
+        || (cur_topline == last_topline && skipcol > last_skipcol)
+    {
+        let mut vcole: i64 = skipcol;
+        let mut lnume: c_int = cur_topline;
+        if last_botline > 0 && cur_topline > last_botline {
+            // Scrolling too many lines: only give an approximate "scroll_delta".
+            delta += i64::from(cur_topline - last_botline);
+            lnume = last_botline;
+            vcole = 0;
+        }
+        delta += rs_win_text_height(
+            wp,
+            last_topline,
+            last_skipcol,
+            std::ptr::addr_of_mut!(lnume),
+            std::ptr::addr_of_mut!(vcole),
+            std::ptr::null_mut(),
+            i64::MAX,
+        );
+    }
+
+    delta += i64::from(last_topfill);
+    delta -= i64::from(nvim_win_get_topfill(wp));
+
+    let mut ev_botline = nvim_win_get_botline(wp);
+    if ev_botline == line_count + 1 && nvim_win_get_empty_rows(wp) == 0 {
+        // TODO(bfredl): There might be more cases to consider, like how does
+        // this interact with incomplete final line? Diff filler lines?
+        ev_botline = line_count;
+    }
+
+    let grid_handle = get_grid_alloc_handle(wp);
+    let win_handle = nvim_win_get_handle(wp);
+    nvim_ui_call_win_viewport_wrapper(
+        grid_handle,
+        win_handle,
+        nvim_win_get_topline(wp) - 1,
+        ev_botline,
+        nvim_win_get_cursor_lnum(wp) - 1,
+        #[allow(clippy::cast_possible_wrap)]
+        {
+            nvim_win_get_cursor_col(wp) as c_int
+        },
+        line_count,
+        delta,
+    );
+
+    nvim_win_set_viewport_invalid(wp, 0);
+    nvim_win_set_viewport_last_topline(wp, nvim_win_get_topline(wp));
+    nvim_win_set_viewport_last_botline(wp, nvim_win_get_botline(wp));
+    nvim_win_set_viewport_last_topfill(wp, nvim_win_get_topfill(wp));
+    nvim_win_set_viewport_last_skipcol(wp, i64::from(nvim_win_get_skipcol(wp)));
+}
+
+/// FFI: Emit `win_viewport` UI event for window `wp`.
+///
+/// Replaces C `ui_ext_win_viewport()`.
+///
+/// # Safety
+/// Accesses global Neovim state via C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_ui_ext_win_viewport(wp: WinHandle) {
+    ui_ext_win_viewport_impl(wp);
 }

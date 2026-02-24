@@ -698,68 +698,6 @@ void ui_ext_win_position(win_T *wp, bool validate)
   rs_ui_ext_win_position(wp, validate);
 }
 
-void ui_ext_win_viewport(win_T *wp)
-{
-  // NOTE: The win_viewport command is delayed until the next flush when there are pending updates.
-  // This ensures that the updates and the viewport are sent together.
-  if ((wp == curwin || ui_has(kUIMultigrid)) && wp->w_viewport_invalid && wp->w_redr_type == 0) {
-    const linenr_T line_count = wp->w_buffer->b_ml.ml_line_count;
-    // Avoid ml_get errors when producing "scroll_delta".
-    const linenr_T cur_topline = MIN(wp->w_topline, line_count);
-    const linenr_T cur_botline = MIN(wp->w_botline, line_count);
-    int64_t delta = 0;
-    linenr_T last_topline = wp->w_viewport_last_topline;
-    linenr_T last_botline = wp->w_viewport_last_botline;
-    int last_topfill = wp->w_viewport_last_topfill;
-    int64_t last_skipcol = wp->w_viewport_last_skipcol;
-    if (last_topline > line_count) {
-      delta -= last_topline - line_count;
-      last_topline = line_count;
-      last_topfill = 0;
-      last_skipcol = MAXCOL;
-    }
-    last_botline = MIN(last_botline, line_count);
-    if (cur_topline < last_topline
-        || (cur_topline == last_topline && wp->w_skipcol < last_skipcol)) {
-      int64_t vcole = last_skipcol;
-      linenr_T lnume = last_topline;
-      if (last_topline > 0 && cur_botline < last_topline) {
-        // Scrolling too many lines: only give an approximate "scroll_delta".
-        delta -= last_topline - cur_botline;
-        lnume = cur_botline;
-        vcole = 0;
-      }
-      delta -= win_text_height(wp, cur_topline, wp->w_skipcol, &lnume, &vcole, NULL, INT64_MAX);
-    } else if (cur_topline > last_topline
-               || (cur_topline == last_topline && wp->w_skipcol > last_skipcol)) {
-      int64_t vcole = wp->w_skipcol;
-      linenr_T lnume = cur_topline;
-      if (last_botline > 0 && cur_topline > last_botline) {
-        // Scrolling too many lines: only give an approximate "scroll_delta".
-        delta += cur_topline - last_botline;
-        lnume = last_botline;
-        vcole = 0;
-      }
-      delta += win_text_height(wp, last_topline, last_skipcol, &lnume, &vcole, NULL, INT64_MAX);
-    }
-    delta += last_topfill;
-    delta -= wp->w_topfill;
-    linenr_T ev_botline = wp->w_botline;
-    if (ev_botline == line_count + 1 && wp->w_empty_rows == 0) {
-      // TODO(bfredl): The might be more cases to consider, like how does this
-      // interact with incomplete final line? Diff filler lines?
-      ev_botline = line_count;
-    }
-    ui_call_win_viewport(wp->w_grid_alloc.handle, wp->handle, wp->w_topline - 1, ev_botline,
-                         wp->w_cursor.lnum - 1, wp->w_cursor.col, line_count, delta);
-    wp->w_viewport_invalid = false;
-    wp->w_viewport_last_topline = wp->w_topline;
-    wp->w_viewport_last_botline = wp->w_botline;
-    wp->w_viewport_last_topfill = wp->w_topfill;
-    wp->w_viewport_last_skipcol = wp->w_skipcol;
-  }
-}
-
 /// If "split_disallowed" is set, or "wp"'s buffer is closing, give an error and return FAIL.
 /// Otherwise return OK.
 int check_split_disallowed(const win_T *wp)
@@ -3394,3 +3332,24 @@ int nvim_win_close_othertab_wrapper(win_T *wp, int free_buf, tabpage_T *tp, int 
 
 extern void rs_close_windows(buf_T *buf, int keep_curwin);
 void close_windows(buf_T *buf, bool keep_curwin) { rs_close_windows(buf, keep_curwin ? 1 : 0); }
+
+// Phase 6 accessors: ui_ext_win_viewport
+
+linenr_T nvim_win_get_viewport_last_topline(win_T *wp) { return wp ? wp->w_viewport_last_topline : 0; }
+void nvim_win_set_viewport_last_topline(win_T *wp, int32_t val) { if (wp) { wp->w_viewport_last_topline = (linenr_T)val; } }
+linenr_T nvim_win_get_viewport_last_botline(win_T *wp) { return wp ? wp->w_viewport_last_botline : 0; }
+void nvim_win_set_viewport_last_botline(win_T *wp, int32_t val) { if (wp) { wp->w_viewport_last_botline = (linenr_T)val; } }
+int nvim_win_get_viewport_last_topfill(win_T *wp) { return wp ? wp->w_viewport_last_topfill : 0; }
+void nvim_win_set_viewport_last_topfill(win_T *wp, int32_t val) { if (wp) { wp->w_viewport_last_topfill = (linenr_T)val; } }
+int64_t nvim_win_get_viewport_last_skipcol(win_T *wp) { return wp ? (int64_t)wp->w_viewport_last_skipcol : 0; }
+void nvim_win_set_viewport_last_skipcol(win_T *wp, int64_t val) { if (wp) { wp->w_viewport_last_skipcol = (linenr_T)val; } }
+
+/// Wrap ui_call_win_viewport for Rust.
+void nvim_ui_call_win_viewport_wrapper(int grid, int win, int topline, int botline,
+                                       int curline, int curcol, int line_count, int64_t delta)
+{
+  ui_call_win_viewport(grid, win, topline, botline, curline, curcol, line_count, delta);
+}
+
+extern void rs_ui_ext_win_viewport(win_T *wp);
+void ui_ext_win_viewport(win_T *wp) { rs_ui_ext_win_viewport(wp); }
