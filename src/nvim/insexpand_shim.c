@@ -179,6 +179,8 @@ extern void rs_ins_compl_show_statusmsg(void);
 // Phase 4 (pass 3) Rust exports
 extern void rs_ins_compl_update_shown_match(void);
 extern void rs_find_next_match_in_menu(void);
+// Phase 2 (pass 4) Rust exports
+extern void rs_get_next_bufname_token(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -3120,7 +3122,7 @@ static bool get_next_completion_match(int type, ins_compl_next_state_T *st, pos_
     rs_get_next_spell_completion((int)st->first_match_pos.lnum);
     break;
   case CTRL_X_BUFNAMES:
-    get_next_bufname_token();
+    rs_get_next_bufname_token();
     break;
   case CTRL_X_REGISTER:
     get_register_completion();
@@ -3140,19 +3142,6 @@ static bool get_next_completion_match(int type, ins_compl_next_state_T *st, pos_
   }
 
   return found_new_match;
-}
-
-static void get_next_bufname_token(void)
-{
-  FOR_ALL_BUFFERS(b) {
-    if (b->b_p_bl && b->b_sfname != NULL) {
-      char *tail = path_tail(b->b_sfname);
-      if (strncmp(tail, compl_orig_text.data, compl_orig_text.size) == 0) {
-        ins_compl_add(tail, (int)strlen(tail), NULL, NULL, false, NULL, 0,
-                      p_ic ? CP_ICASE : 0, false, NULL, FUZZY_SCORE_NONE);
-      }
-    }
-  }
 }
 
 /// Strips carets followed by numbers. This suffix typically represents the
@@ -5138,5 +5127,19 @@ void nvim_find_next_match_in_menu_impl(void)
   } while (match->cp_next && !match->cp_in_match_array
            && !match_at_original_text(match));
   compl_shown_match = match;
+}
+
+// Compound accessor for Phase 2 (pass 4): get_next_bufname_token
+void nvim_get_next_bufname_token_impl(void)
+{
+  FOR_ALL_BUFFERS(b) {
+    if (b->b_p_bl && b->b_sfname != NULL) {
+      char *tail = path_tail(b->b_sfname);
+      if (strncmp(tail, compl_orig_text.data, compl_orig_text.size) == 0) {
+        ins_compl_add(tail, (int)strlen(tail), NULL, NULL, false, NULL, 0,
+                      p_ic ? CP_ICASE : 0, false, NULL, FUZZY_SCORE_NONE);
+      }
+    }
+  }
 }
 
