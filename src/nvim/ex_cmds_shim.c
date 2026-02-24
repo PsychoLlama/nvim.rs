@@ -477,231 +477,15 @@ void free_prev_shellcmd(void)
 
 #endif
 
-/// do_filter: filter lines through a command given by the user
-///
-/// We mostly use temp files and the call_shell() routine here. This would
-/// normally be done using pipes on a Unix system, but this is more portable
-/// to non-Unix systems. The call_shell() routine needs to be able
-/// to deal with redirection somehow, and should handle things like looking
-/// at the PATH env. variable, and adding reasonable extensions to the
-/// command name given by the user. All reasonable versions of call_shell()
-/// do this.
-/// Alternatively, if on Unix and redirecting input or output, but not both,
-/// and the 'shelltemp' option isn't set, use pipes.
-/// We use input redirection if do_in is true.
-/// We use output redirection if do_out is true.
-///
-/// @param eap  for forced 'ff' and 'fenc'
+// do_filter implemented in Rust (rs_do_filter in ex_cmds/src/shell.rs)
+extern void rs_do_filter(int line1, int line2, exarg_T *eap, const char *cmd, int do_in,
+                         int do_out);
+
+/// Filter lines through an external command. Thin wrapper calling the Rust implementation.
 static void do_filter(linenr_T line1, linenr_T line2, exarg_T *eap, char *cmd, bool do_in,
                       bool do_out)
 {
-  char *itmp = NULL;
-  char *otmp = NULL;
-  buf_T *old_curbuf = curbuf;
-  int shell_flags = 0;
-  const pos_T orig_start = curbuf->b_op_start;
-  const pos_T orig_end = curbuf->b_op_end;
-  const int stmp = p_stmp;
-
-  if (*cmd == NUL) {        // no filter command
-    return;
-  }
-
-  const int save_cmod_flags = cmdmod.cmod_flags;
-  // Temporarily disable lockmarks since that's needed to propagate changed
-  // regions of the buffer for foldUpdate(), linecount, etc.
-  cmdmod.cmod_flags &= ~CMOD_LOCKMARKS;
-
-  pos_T cursor_save = curwin->w_cursor;
-  linenr_T linecount = line2 - line1 + 1;
-  curwin->w_cursor.lnum = line1;
-  curwin->w_cursor.col = 0;
-  changed_line_abv_curs();
-  invalidate_botline(curwin);
-
-  // When using temp files:
-  // 1. * Form temp file names
-  // 2. * Write the lines to a temp file
-  // 3.   Run the filter command on the temp file
-  // 4. * Read the output of the command into the buffer
-  // 5. * Delete the original lines to be filtered
-  // 6. * Remove the temp files
-  //
-  // When writing the input with a pipe or when catching the output with a
-  // pipe only need to do 3.
-
-  if (do_out) {
-    shell_flags |= kShellOptDoOut;
-  }
-
-  if (!do_in && do_out && !stmp) {
-    // Use a pipe to fetch stdout of the command, do not use a temp file.
-    shell_flags |= kShellOptRead;
-    curwin->w_cursor.lnum = line2;
-  } else if (do_in && !do_out && !stmp) {
-    // Use a pipe to write stdin of the command, do not use a temp file.
-    shell_flags |= kShellOptWrite;
-    curbuf->b_op_start.lnum = line1;
-    curbuf->b_op_end.lnum = line2;
-  } else if (do_in && do_out && !stmp) {
-    // Use a pipe to write stdin and fetch stdout of the command, do not
-    // use a temp file.
-    shell_flags |= kShellOptRead | kShellOptWrite;
-    curbuf->b_op_start.lnum = line1;
-    curbuf->b_op_end.lnum = line2;
-    curwin->w_cursor.lnum = line2;
-  } else if ((do_in && (itmp = vim_tempname()) == NULL)
-             || (do_out && (otmp = vim_tempname()) == NULL)) {
-    emsg(_(e_notmp));
-    goto filterend;
-  }
-
-  // The writing and reading of temp files will not be shown.
-  // Vi also doesn't do this and the messages are not very informative.
-  no_wait_return++;             // don't call wait_return() while busy
-  if (itmp != NULL && buf_write(curbuf, itmp, NULL, line1, line2, eap,
-                                false, false, false, true) == FAIL) {
-    msg_putchar('\n');  // Keep message from buf_write().
-    no_wait_return--;
-    if (!aborting()) {
-      // will call wait_return()
-      semsg(_("E482: Can't create file %s"), itmp);
-    }
-    goto filterend;
-  }
-  if (curbuf != old_curbuf) {
-    goto filterend;
-  }
-
-  if (!do_out) {
-    msg_putchar('\n');
-  }
-
-  // Create the shell command in allocated memory.
-  char *cmd_buf = make_filter_cmd(cmd, itmp, otmp, do_in);
-  ui_cursor_goto(Rows - 1, 0);
-
-  if (do_out) {
-    if (u_save(line2, (linenr_T)(line2 + 1)) == FAIL) {
-      xfree(cmd_buf);
-      goto error;
-    }
-    redraw_curbuf_later(UPD_VALID);
-  }
-  linenr_T read_linecount = curbuf->b_ml.ml_line_count;
-
-  // Pass on the kShellOptDoOut flag when the output is being redirected.
-  call_shell(cmd_buf, kShellOptFilter | shell_flags, NULL);
-  xfree(cmd_buf);
-
-  did_check_timestamps = false;
-  need_check_timestamps = true;
-
-  // When interrupting the shell command, it may still have produced some
-  // useful output.  Reset got_int here, so that readfile() won't cancel
-  // reading.
-  os_breakcheck();
-  got_int = false;
-
-  if (do_out) {
-    if (otmp != NULL) {
-      if (readfile(otmp, NULL, line2, 0, (linenr_T)MAXLNUM, eap,
-                   READ_FILTER, false) != OK) {
-        if (!aborting()) {
-          msg_putchar('\n');
-          semsg(_(e_notread), otmp);
-        }
-        goto error;
-      }
-      if (curbuf != old_curbuf) {
-        goto filterend;
-      }
-    }
-
-    read_linecount = curbuf->b_ml.ml_line_count - read_linecount;
-
-    if (shell_flags & kShellOptRead) {
-      curbuf->b_op_start.lnum = line2 + 1;
-      curbuf->b_op_end.lnum = curwin->w_cursor.lnum;
-      appended_lines_mark(line2, read_linecount);
-    }
-
-    if (do_in) {
-      if ((cmdmod.cmod_flags & CMOD_KEEPMARKS)
-          || vim_strchr(p_cpo, CPO_REMMARK) == NULL) {
-        // TODO(bfredl): Currently not active for extmarks. What would we
-        // do if columns don't match, assume added/deleted bytes at the
-        // end of each line?
-        if (read_linecount >= linecount) {
-          // move all marks from old lines to new lines
-          mark_adjust(line1, line2, linecount, 0, kExtmarkNOOP);
-        } else {
-          // move marks from old lines to new lines, delete marks
-          // that are in deleted lines
-          mark_adjust(line1, line1 + read_linecount - 1, linecount, 0,
-                      kExtmarkNOOP);
-          mark_adjust(line1 + read_linecount, line2, MAXLNUM, 0,
-                      kExtmarkNOOP);
-        }
-      }
-
-      // Put cursor on first filtered line for ":range!cmd".
-      // Adjust '[ and '] (set by buf_write()).
-      curwin->w_cursor.lnum = line1;
-      del_lines(linecount, true);
-      curbuf->b_op_start.lnum -= linecount;             // adjust '[
-      curbuf->b_op_end.lnum -= linecount;               // adjust ']
-      write_lnum_adjust(-linecount);                    // adjust last line
-                                                        // for next write
-      rs_foldUpdate(curwin, curbuf->b_op_start.lnum, curbuf->b_op_end.lnum);
-    } else {
-      // Put cursor on last new line for ":r !cmd".
-      linecount = curbuf->b_op_end.lnum - curbuf->b_op_start.lnum + 1;
-      curwin->w_cursor.lnum = curbuf->b_op_end.lnum;
-    }
-
-    beginline(BL_WHITE | BL_FIX);           // cursor on first non-blank
-    no_wait_return--;
-
-    if (linecount > p_report) {
-      if (do_in) {
-        vim_snprintf(msg_buf, sizeof(msg_buf),
-                     _("%" PRId64 " lines filtered"), (int64_t)linecount);
-        if (msg(msg_buf, 0) && !msg_scroll) {
-          // save message to display it after redraw
-          set_keep_msg(msg_buf, 0);
-        }
-      } else {
-        msgmore(linecount);
-      }
-    }
-  } else {
-error:
-    // put cursor back in same position for ":w !cmd"
-    curwin->w_cursor = cursor_save;
-    no_wait_return--;
-    wait_return(false);
-  }
-
-filterend:
-
-  cmdmod.cmod_flags = save_cmod_flags;
-  if (curbuf != old_curbuf) {
-    no_wait_return--;
-    emsg(_("E135: *Filter* Autocommands must not change current buffer"));
-  } else if (cmdmod.cmod_flags & CMOD_LOCKMARKS) {
-    curbuf->b_op_start = orig_start;
-    curbuf->b_op_end = orig_end;
-  }
-
-  if (itmp != NULL) {
-    os_remove(itmp);
-  }
-  if (otmp != NULL) {
-    os_remove(otmp);
-  }
-  xfree(itmp);
-  xfree(otmp);
+  rs_do_filter((int)line1, (int)line2, eap, cmd, do_in ? 1 : 0, do_out ? 1 : 0);
 }
 
 // do_shell implemented in Rust (rs_do_shell in ex_cmds/src/shell.rs)
@@ -3748,3 +3532,204 @@ char *nvim_excmds_eap_arg_save(exarg_T *eap) { return eap->arg; }
 
 /// Restore eap->arg to a saved pointer.
 void nvim_excmds_eap_arg_restore(exarg_T *eap, char *saved) { eap->arg = saved; }
+
+// --- do_filter FFI accessors ---
+
+/// Get p_stmp (shelltemp option).
+int nvim_excmds_get_p_stmp(void) { return p_stmp ? 1 : 0; }
+
+/// Get curbuf->b_op_start.lnum
+int nvim_excmds_curbuf_op_start_lnum(void) { return (int)curbuf->b_op_start.lnum; }
+
+/// Get curbuf->b_op_end.lnum
+int nvim_excmds_curbuf_op_end_lnum(void) { return (int)curbuf->b_op_end.lnum; }
+
+/// Set curbuf->b_op_start.lnum and .col (from curbuf's fields).
+void nvim_excmds_curbuf_set_op_start_lnum(int lnum) { curbuf->b_op_start.lnum = (linenr_T)lnum; }
+void nvim_excmds_curbuf_set_op_end_lnum(int lnum) { curbuf->b_op_end.lnum = (linenr_T)lnum; }
+
+/// Save entire cursor position (returns lnum, col as a packed 64-bit int: high32=lnum, low32=col).
+uint64_t nvim_excmds_curwin_cursor_save(void)
+{
+  return ((uint64_t)(uint32_t)curwin->w_cursor.lnum << 32)
+         | (uint32_t)(int32_t)curwin->w_cursor.col;
+}
+
+/// Restore cursor position from packed 64-bit int.
+void nvim_excmds_curwin_cursor_restore(uint64_t saved)
+{
+  curwin->w_cursor.lnum = (linenr_T)(uint32_t)(saved >> 32);
+  curwin->w_cursor.col = (colnr_T)(int32_t)(uint32_t)saved;
+}
+
+/// Save cmdmod.cmod_flags and clear CMOD_LOCKMARKS.
+int nvim_excmds_cmdmod_save_clear_lockmarks(void)
+{
+  int saved = cmdmod.cmod_flags;
+  cmdmod.cmod_flags &= ~CMOD_LOCKMARKS;
+  return saved;
+}
+
+/// Restore cmdmod.cmod_flags.
+void nvim_excmds_cmdmod_restore_flags(int saved) { cmdmod.cmod_flags = saved; }
+
+/// Check if CMOD_LOCKMARKS is currently set.
+int nvim_excmds_cmdmod_has_lockmarks(void)
+{
+  return (cmdmod.cmod_flags & CMOD_LOCKMARKS) != 0 ? 1 : 0;
+}
+
+/// Check if CMOD_KEEPMARKS is currently set.
+int nvim_excmds_cmdmod_has_keepmarks_now(void)
+{
+  return (cmdmod.cmod_flags & CMOD_KEEPMARKS) != 0 ? 1 : 0;
+}
+
+/// Wrapper for vim_tempname().
+char *nvim_excmds_vim_tempname(void) { return vim_tempname(); }
+
+/// Call buf_write for the filter temp file write. Returns 1=OK, 0=FAIL.
+int nvim_excmds_buf_write_filter(const char *itmp, int line1, int line2, exarg_T *eap)
+{
+  return buf_write(curbuf, (char *)itmp, NULL, (linenr_T)line1, (linenr_T)line2,
+                   eap, false, false, false, true) == OK ? 1 : 0;
+}
+
+/// Increment no_wait_return.
+void nvim_excmds_no_wait_return_inc(void) { no_wait_return++; }
+
+/// Decrement no_wait_return.
+void nvim_excmds_no_wait_return_dec(void) { no_wait_return--; }
+
+/// Call readfile for filter output. Returns 1=OK, 0=FAIL.
+int nvim_excmds_readfile_filter(const char *otmp, int line2, exarg_T *eap)
+{
+  return readfile((char *)otmp, NULL, (linenr_T)line2, 0, (linenr_T)MAXLNUM,
+                  eap, READ_FILTER, false) == OK ? 1 : 0;
+}
+
+/// Call call_shell for filter command.
+void nvim_excmds_call_shell_filter(const char *cmd, int flags)
+{
+  call_shell((char *)cmd, flags, NULL);
+}
+
+/// Set did_check_timestamps=false, need_check_timestamps=true.
+void nvim_excmds_after_shell(void)
+{
+  did_check_timestamps = false;
+  need_check_timestamps = true;
+}
+
+/// Set got_int = false.
+void nvim_excmds_clear_got_int(void) { got_int = false; }
+
+/// Wrapper for del_lines(count, true).
+void nvim_excmds_del_lines(int count) { del_lines((linenr_T)count, true); }
+
+/// Wrapper for write_lnum_adjust.
+void nvim_excmds_write_lnum_adjust(int offset) { write_lnum_adjust((linenr_T)offset); }
+
+/// Wrapper for redraw_curbuf_later(UPD_VALID).
+void nvim_excmds_redraw_curbuf_later_valid(void) { redraw_curbuf_later(UPD_VALID); }
+
+/// Wrapper for invalidate_botline(curwin).
+void nvim_excmds_invalidate_botline(void) { invalidate_botline(curwin); }
+
+/// Get p_report option value.
+int nvim_excmds_get_p_report_int(void) { return (int)p_report; }
+
+/// Check vim_strchr(p_cpo, CPO_REMMARK) == NULL (returns 1 if NULL, 0 if found).
+int nvim_excmds_p_cpo_no_remmark(void)
+{
+  return vim_strchr(p_cpo, CPO_REMMARK) == NULL ? 1 : 0;
+}
+
+/// Call mark_adjust(line1, line2, amount, 0, kExtmarkNOOP).
+void nvim_excmds_mark_adjust_noop(int line1, int line2, int amount)
+{
+  mark_adjust((linenr_T)line1, (linenr_T)line2, (linenr_T)amount, 0, kExtmarkNOOP);
+}
+
+/// Wrapper for rs_foldUpdate(curwin, ...).
+extern void rs_foldUpdate(win_T *win, int top, int bot);
+void nvim_excmds_fold_update_curwin(int top, int bot)
+{
+  rs_foldUpdate(curwin, top, bot);
+}
+
+/// Format and display "N lines filtered" message via set_keep_msg if scrolled.
+void nvim_excmds_msg_lines_filtered(int linecount)
+{
+  char msg_buf[80];
+  vim_snprintf(msg_buf, sizeof(msg_buf),
+               _("%" PRId64 " lines filtered"), (int64_t)linecount);
+  if (msg(msg_buf, 0) && !msg_scroll) {
+    set_keep_msg(msg_buf, 0);
+  }
+}
+
+/// Emit E482 error: Can't create file.
+void nvim_excmds_semsg_e482(const char *fname)
+{
+  semsg(_("E482: Can't create file %s"), fname);
+}
+
+/// Emit e_notread error with filename.
+void nvim_excmds_semsg_e_notread(const char *fname)
+{
+  semsg(_(e_notread), fname);
+}
+
+/// Emit e_notmp error.
+void nvim_excmds_emsg_e_notmp(void) { emsg(_(e_notmp)); }
+
+/// Emit E135 error.
+void nvim_excmds_emsg_e135(void)
+{
+  emsg(_("E135: *Filter* Autocommands must not change current buffer"));
+}
+
+/// Wrapper for wait_return(false).
+void nvim_excmds_wait_return_false(void) { wait_return(false); }
+
+/// Get msg_scroll.
+int nvim_excmds_get_msg_scroll_val(void) { return msg_scroll ? 1 : 0; }
+
+/// Save curbuf->b_op_start and b_op_end as packed values.
+/// Returns two packed uint64 values via out pointers.
+void nvim_excmds_curbuf_op_save(uint64_t *out_start, uint64_t *out_end)
+{
+  *out_start = ((uint64_t)(uint32_t)curbuf->b_op_start.lnum << 32)
+               | (uint32_t)(int32_t)curbuf->b_op_start.col;
+  *out_end = ((uint64_t)(uint32_t)curbuf->b_op_end.lnum << 32)
+             | (uint32_t)(int32_t)curbuf->b_op_end.col;
+}
+
+/// Restore curbuf->b_op_start and b_op_end from packed values.
+void nvim_excmds_curbuf_op_restore(uint64_t saved_start, uint64_t saved_end)
+{
+  curbuf->b_op_start.lnum = (linenr_T)(uint32_t)(saved_start >> 32);
+  curbuf->b_op_start.col = (colnr_T)(int32_t)(uint32_t)saved_start;
+  curbuf->b_op_end.lnum = (linenr_T)(uint32_t)(saved_end >> 32);
+  curbuf->b_op_end.col = (colnr_T)(int32_t)(uint32_t)saved_end;
+}
+
+/// Adjust curbuf->b_op_start.lnum and b_op_end.lnum by delta.
+void nvim_excmds_curbuf_op_adjust_lnum(int delta)
+{
+  curbuf->b_op_start.lnum += (linenr_T)delta;
+  curbuf->b_op_end.lnum += (linenr_T)delta;
+}
+
+/// os_remove wrapper.
+int nvim_excmds_os_remove(const char *path) { return os_remove(path); }
+
+/// kShellOpt* constants accessor.
+int nvim_excmds_kShellOptFilter(void) { return kShellOptFilter; }
+int nvim_excmds_kShellOptRead(void) { return kShellOptRead; }
+int nvim_excmds_kShellOptWrite(void) { return kShellOptWrite; }
+int nvim_excmds_kShellOptDoOut(void) { return kShellOptDoOut; }
+
+/// Get curbuf->b_ml.ml_line_count.
+int nvim_excmds_curbuf_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
