@@ -2344,6 +2344,8 @@ bool nvim_get_showcmd_visual(void) { return showcmd_visual; }
 void nvim_set_showcmd_visual(bool val) { showcmd_visual = val; }
 
 char *nvim_normal_showcmd_buf_ptr(void) { return showcmd_buf; }
+char *nvim_old_showcmd_buf_ptr(void) { return old_showcmd_buf; }
+size_t nvim_showcmd_buflen(void) { return SHOWCMD_BUFLEN; }
 
 void nvim_normal_display_showcmd(void) { display_showcmd(); }
 
@@ -2500,23 +2502,11 @@ static void del_from_showcmd(int len)
 
 /// push_showcmd() and pop_showcmd() are used when waiting for the user to type
 /// something and there is a partial mapping.
-void push_showcmd(void)
-{
-  if (p_sc) {
-    STRCPY(old_showcmd_buf, showcmd_buf);
-  }
-}
+extern void rs_push_showcmd(void);
+void push_showcmd(void) { rs_push_showcmd(); }
 
-void pop_showcmd(void)
-{
-  if (!p_sc) {
-    return;
-  }
-
-  STRCPY(showcmd_buf, old_showcmd_buf);
-
-  display_showcmd();
-}
+extern void rs_pop_showcmd(void);
+void pop_showcmd(void) { rs_pop_showcmd(); }
 
 static void display_showcmd(void)
 {
