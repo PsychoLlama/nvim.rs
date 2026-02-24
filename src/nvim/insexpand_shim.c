@@ -201,6 +201,10 @@ extern char *rs_ins_compl_infercase_gettext(const char *str, int char_len, int c
 // Phase 6 (pass 4) Rust exports
 extern void rs_ins_compl_insert_bytes(const char *p, int len);
 extern void rs_ins_compl_expand_multiple(const char *str);
+// Phase 1 (pass 6) Rust exports
+extern void rs_show_pum(int prev_w_wrow, int prev_w_leftcol);
+extern void rs_ins_compl_add_matches(int num_matches, char **matches, int icase);
+extern void rs_spell_back_to_badword(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -908,19 +912,7 @@ static void ins_compl_longest_match(compl_T *match)
 /// Frees matches[].
 static void ins_compl_add_matches(int num_matches, char **matches, int icase)
 {
-  int add_r = OK;
-  Direction dir = compl_direction;
-
-  for (int i = 0; i < num_matches && add_r != FAIL; i++) {
-    add_r = ins_compl_add(matches[i], -1, NULL, NULL, false, NULL, dir,
-                          CP_FAST | (icase ? CP_ICASE : 0), false, NULL,
-                          FUZZY_SCORE_NONE);
-    if (add_r == OK) {
-      // If dir was BACKWARD then honor it just once.
-      dir = FORWARD;
-    }
-  }
-  FreeWild(num_matches, matches);
+  rs_ins_compl_add_matches(num_matches, matches, icase);
 }
 
 extern int rs_pum_enough_matches(int menuone);
@@ -3959,20 +3951,7 @@ int ins_complete(int c, bool enable_pum)
 /// Remove (if needed) and show the popup menu
 static void show_pum(int prev_w_wrow, int prev_w_leftcol)
 {
-  // RedrawingDisabled may be set when invoked through complete().
-  int n = RedrawingDisabled;
-  RedrawingDisabled = 0;
-
-  // If the cursor moved or the display scrolled we need to remove the pum
-  // first.
-  setcursor();
-  if (prev_w_wrow != curwin->w_wrow || prev_w_leftcol != curwin->w_leftcol) {
-    rs_ins_compl_del_pum();
-  }
-
-  rs_ins_compl_show_pum();
-  setcursor();
-  RedrawingDisabled = n;
+  rs_show_pum(prev_w_wrow, prev_w_leftcol);
 }
 
 #if defined(EXITFREE)
@@ -5145,4 +5124,23 @@ end:
   xfree(compl_best_matches);
   compl_best_matches = NULL;
   compl_num_bests = 0;
+}
+
+// Accessors for Phase 1 (pass 6): show_pum, ins_compl_add_matches, spell_back_to_badword
+void nvim_set_redrawing_disabled(int val) { RedrawingDisabled = val; }
+int nvim_get_curwin_w_wrow(void) { return curwin->w_wrow; }
+// Compound accessor: ins_compl_add loop + FreeWild
+void nvim_ins_compl_add_matches_impl(int num_matches, char **matches, int icase)
+{
+  int add_r = OK;
+  Direction dir = compl_direction;
+  for (int i = 0; i < num_matches && add_r != FAIL; i++) {
+    add_r = ins_compl_add(matches[i], -1, NULL, NULL, false, NULL, dir,
+                          CP_FAST | (icase ? CP_ICASE : 0), false, NULL,
+                          FUZZY_SCORE_NONE);
+    if (add_r == OK) {
+      dir = FORWARD;
+    }
+  }
+  FreeWild(num_matches, matches);
 }
