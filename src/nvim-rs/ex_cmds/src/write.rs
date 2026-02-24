@@ -379,6 +379,114 @@ pub unsafe extern "C" fn rs_check_readonly(eap: *mut ExArgHandle, buf: *mut BufH
 }
 
 // =============================================================================
+// Phase 3: check_overwrite FFI declarations and implementation
+// =============================================================================
+
+extern "C" {
+    fn nvim_excmds_bt_nofilename(buf: *const BufHandle) -> c_int;
+    fn nvim_excmds_buf_get_b_flags(buf: *const BufHandle) -> c_int;
+    fn nvim_excmds_bf_notedited() -> c_int;
+    fn nvim_excmds_bf_new() -> c_int;
+    fn nvim_excmds_bf_readerr() -> c_int;
+    fn nvim_excmds_cpo_no_overnew() -> c_int;
+    fn nvim_excmds_os_path_exists(ffname: *const c_char) -> c_int;
+    fn nvim_excmds_os_isdir(ffname: *const c_char) -> c_int;
+    fn nvim_excmds_semsg_isadir2(ffname: *const c_char);
+    fn nvim_excmds_emsg_e_exists();
+    fn nvim_excmds_dialog_overwrite(eap: *mut ExArgHandle, fname: *const c_char) -> c_int;
+    fn nvim_excmds_get_first_dir() -> *mut c_char;
+    fn nvim_excmds_makeswapname(
+        fname: *const c_char,
+        ffname: *const c_char,
+        dir: *const c_char,
+    ) -> *mut c_char;
+    fn nvim_excmds_get_emsg_silent() -> c_int;
+    fn nvim_excmds_dialog_swapfile(eap: *mut ExArgHandle, swapname: *const c_char) -> c_int;
+    fn nvim_excmds_semsg_e768(swapname: *const c_char);
+}
+
+/// Check if overwriting a file is allowed.
+///
+/// Returns OK (1) if it's OK to write, FAIL (0) if not.
+/// May set eap->forceit if a dialog says it's OK to overwrite.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_overwrite(
+    eap: *mut ExArgHandle,
+    buf: *mut BufHandle,
+    fname: *const c_char,
+    ffname: *const c_char,
+    other: c_int,
+) -> c_int {
+    // Check if overwrite check is needed
+    let b_flags = nvim_excmds_buf_get_b_flags(buf);
+    let bf_notedited = nvim_excmds_bf_notedited();
+    let bf_new = nvim_excmds_bf_new();
+    let bf_readerr = nvim_excmds_bf_readerr();
+    let is_nofilename = nvim_excmds_bt_nofilename(buf) != 0;
+
+    let needs_check = other != 0
+        || (!is_nofilename
+            && ((b_flags & bf_notedited) != 0
+                || ((b_flags & bf_new) != 0 && nvim_excmds_cpo_no_overnew() != 0)
+                || (b_flags & bf_readerr) != 0));
+
+    if !needs_check || nvim_excmds_get_p_wa() != 0 || nvim_excmds_os_path_exists(ffname) == 0 {
+        return 1; // OK
+    }
+
+    let forceit = nvim_excmds_eap_get_forceit(eap);
+    let append = nvim_excmds_eap_get_append(eap);
+
+    if forceit == 0 && append == 0 {
+        // Check if target is a directory (Unix only)
+        #[cfg(unix)]
+        {
+            if nvim_excmds_os_isdir(ffname) != 0 {
+                nvim_excmds_semsg_isadir2(ffname);
+                return 0; // FAIL
+            }
+        }
+
+        if nvim_excmds_p_confirm_or_cmod_confirm() != 0 {
+            if nvim_excmds_dialog_overwrite(eap, fname) == 0 {
+                return 0; // FAIL (user declined)
+            }
+            // forceit is set by nvim_excmds_dialog_overwrite
+        } else {
+            nvim_excmds_emsg_e_exists();
+            return 0; // FAIL
+        }
+    }
+
+    // For ":w! filename" check that no swap file exists for "filename".
+    if other != 0 && nvim_excmds_get_emsg_silent() == 0 {
+        let dir = nvim_excmds_get_first_dir();
+        let swapname = nvim_excmds_makeswapname(fname, ffname, dir);
+        xfree(dir.cast());
+
+        if nvim_excmds_os_path_exists(swapname) != 0 {
+            if nvim_excmds_p_confirm_or_cmod_confirm() != 0 {
+                if nvim_excmds_dialog_swapfile(eap, swapname) == 0 {
+                    xfree(swapname.cast());
+                    return 0; // FAIL
+                }
+                // forceit set by dialog_swapfile
+            } else {
+                nvim_excmds_semsg_e768(swapname);
+                xfree(swapname.cast());
+                return 0; // FAIL
+            }
+        }
+        xfree(swapname.cast());
+    }
+
+    1 // OK
+}
+
+// =============================================================================
 // Phase 2: do_write FFI declarations and implementation
 // =============================================================================
 

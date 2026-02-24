@@ -543,6 +543,7 @@ extern int rs_check_writable(const char *fname);
 extern int rs_handle_mkdir_p_arg(exarg_T *eap, const char *fname);
 extern int rs_check_readonly(exarg_T *eap, buf_T *buf);
 extern int rs_do_write(exarg_T *eap);
+extern int rs_check_overwrite(exarg_T *eap, buf_T *buf, const char *fname, const char *ffname, int other);
 
 /// ":update". Thin wrapper calling Rust.
 void ex_update(exarg_T *eap)
@@ -581,7 +582,7 @@ int do_write(exarg_T *eap)
 
 /// Check if it is allowed to overwrite a file.  If b_flags has BF_NOTEDITED,
 /// BF_NEW or BF_READERR, check for overwriting current file.
-/// May set eap->forceit if a dialog says it's OK to overwrite.
+/// Thin wrapper calling Rust rs_check_overwrite.
 ///
 /// @param fname   file name to be used (can differ from buf->ffname)
 /// @param ffname  full path version of fname
@@ -590,85 +591,7 @@ int do_write(exarg_T *eap)
 /// @return  OK if it's OK, FAIL if it is not.
 int check_overwrite(exarg_T *eap, buf_T *buf, char *fname, char *ffname, bool other)
 {
-  // Write to another file or b_flags set or not writing the whole file:
-  // overwriting only allowed with '!'
-  // If "other" is false and bt_nofilename(buf) is true, this must be
-  // writing an "acwrite" buffer to the same file as its b_ffname, and
-  // buf_write() will only allow writing with BufWriteCmd autocommands,
-  // so there is no need for an overwrite check.
-  if ((other
-       || (!bt_nofilename(buf)
-           && ((buf->b_flags & BF_NOTEDITED)
-               || ((buf->b_flags & BF_NEW)
-                   && vim_strchr(p_cpo, CPO_OVERNEW) == NULL)
-               || (buf->b_flags & BF_READERR))))
-      && !p_wa
-      && os_path_exists(ffname)) {
-    if (!eap->forceit && !eap->append) {
-#ifdef UNIX
-      // It is possible to open a directory on Unix.
-      if (os_isdir(ffname)) {
-        semsg(_(e_isadir2), ffname);
-        return FAIL;
-      }
-#endif
-      if (p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) {
-        char buff[DIALOG_MSG_SIZE];
-
-        dialog_msg(buff, _("Overwrite existing file \"%s\"?"), fname);
-        if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 2) != VIM_YES) {
-          return FAIL;
-        }
-        eap->forceit = true;
-      } else {
-        emsg(_(e_exists));
-        return FAIL;
-      }
-    }
-
-    // For ":w! filename" check that no swap file exists for "filename".
-    if (other && !emsg_silent) {
-      char *dir;
-
-      // We only try the first entry in 'directory', without checking if
-      // it's writable.  If the "." directory is not writable the write
-      // will probably fail anyway.
-      // Use 'shortname' of the current buffer, since there is no buffer
-      // for the written file.
-      if (*p_dir == NUL) {
-        dir = xmalloc(5);
-        STRCPY(dir, ".");
-      } else {
-        dir = xmalloc(MAXPATHL);
-        char *p = p_dir;
-        copy_option_part(&p, dir, MAXPATHL, ",");
-      }
-      char *swapname = makeswapname(fname, ffname, curbuf, dir);
-      xfree(dir);
-      if (os_path_exists(swapname)) {
-        if (p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) {
-          char buff[DIALOG_MSG_SIZE];
-
-          dialog_msg(buff,
-                     _("Swap file \"%s\" exists, overwrite anyway?"),
-                     swapname);
-          if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 2)
-              != VIM_YES) {
-            xfree(swapname);
-            return FAIL;
-          }
-          eap->forceit = true;
-        } else {
-          semsg(_("E768: Swap file exists: %s (:silent! overrides)"),
-                swapname);
-          xfree(swapname);
-          return FAIL;
-        }
-      }
-      xfree(swapname);
-    }
-  }
-  return OK;
+  return rs_check_overwrite(eap, buf, fname, ffname, (int)other) != 0 ? OK : FAIL;
 }
 
 /// Handle ":wnext", ":wNext" and ":wprevious" commands. Thin wrapper calling Rust.
@@ -3542,6 +3465,93 @@ int nvim_excmds_kShellOptDoOut(void) { return kShellOptDoOut; }
 
 /// Get curbuf->b_ml.ml_line_count.
 int nvim_excmds_curbuf_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
+
+// --- Phase 3: check_overwrite FFI accessors ---
+
+/// Wrap bt_nofilename(buf). Returns 1 if true.
+int nvim_excmds_bt_nofilename(const buf_T *buf) { return bt_nofilename((buf_T *)buf) ? 1 : 0; }
+
+/// Get buf->b_flags field.
+int nvim_excmds_buf_get_b_flags(const buf_T *buf) { return (int)buf->b_flags; }
+
+/// BF_NOTEDITED constant.
+int nvim_excmds_bf_notedited(void) { return BF_NOTEDITED; }
+/// BF_NEW constant.
+int nvim_excmds_bf_new(void) { return BF_NEW; }
+/// BF_READERR constant.
+int nvim_excmds_bf_readerr(void) { return BF_READERR; }
+
+/// Check vim_strchr(p_cpo, CPO_OVERNEW) == NULL. Returns 1 if not found.
+int nvim_excmds_cpo_no_overnew(void) { return vim_strchr(p_cpo, CPO_OVERNEW) == NULL ? 1 : 0; }
+
+/// Wrap os_path_exists(ffname). Returns 1 if true.
+int nvim_excmds_os_path_exists(const char *ffname) { return os_path_exists((char *)ffname) ? 1 : 0; }
+
+/// Wrap os_isdir(ffname). Returns 1 if true.
+int nvim_excmds_os_isdir(const char *ffname) { return os_isdir((char *)ffname) ? 1 : 0; }
+
+/// semsg e_isadir2: "%s" is a directory.
+void nvim_excmds_semsg_isadir2(const char *ffname) { semsg(_(e_isadir2), ffname); }
+
+/// emsg e_exists: File exists.
+void nvim_excmds_emsg_e_exists(void) { emsg(_(e_exists)); }
+
+/// Dialog: "Overwrite existing file "fname"?" Returns 1 if user said yes, sets forceit.
+int nvim_excmds_dialog_overwrite(exarg_T *eap, const char *fname)
+{
+  char buff[DIALOG_MSG_SIZE];
+  dialog_msg(buff, _("Overwrite existing file \"%s\"?"), (char *)fname);
+  if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 2) == VIM_YES) {
+    eap->forceit = true;
+    return 1;
+  }
+  return 0;
+}
+
+/// Get p_dir (directory option string).
+const char *nvim_excmds_get_p_dir(void) { return p_dir; }
+
+/// Allocate a copy_option_part result for the first dir entry.
+/// Returns newly allocated string (caller must free). Returns "." if p_dir is empty.
+char *nvim_excmds_get_first_dir(void)
+{
+  if (*p_dir == NUL) {
+    char *dir = xmalloc(5);
+    STRCPY(dir, ".");
+    return dir;
+  }
+  char *dir = xmalloc(MAXPATHL);
+  char *p = p_dir;
+  copy_option_part(&p, dir, MAXPATHL, ",");
+  return dir;
+}
+
+/// Wrap makeswapname(fname, ffname, curbuf, dir). Returns allocated string (caller must free).
+char *nvim_excmds_makeswapname(const char *fname, const char *ffname, const char *dir)
+{
+  return makeswapname((char *)fname, (char *)ffname, curbuf, (char *)dir);
+}
+
+/// Get emsg_silent. Returns 1 if silent, 0 otherwise.
+int nvim_excmds_get_emsg_silent(void) { return emsg_silent ? 1 : 0; }
+
+/// Dialog: "Swap file "sname" exists, overwrite anyway?" Returns 1 if yes, sets forceit.
+int nvim_excmds_dialog_swapfile(exarg_T *eap, const char *swapname)
+{
+  char buff[DIALOG_MSG_SIZE];
+  dialog_msg(buff, _("Swap file \"%s\" exists, overwrite anyway?"), (char *)swapname);
+  if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 2) == VIM_YES) {
+    eap->forceit = true;
+    return 1;
+  }
+  return 0;
+}
+
+/// semsg E768: Swap file exists: %s.
+void nvim_excmds_semsg_e768(const char *swapname)
+{
+  semsg(_("E768: Swap file exists: %s (:silent! overrides)"), swapname);
+}
 
 // --- Phase 2: do_write FFI accessors ---
 
