@@ -20,10 +20,10 @@
 //! - Validation utilities
 //! - Helper functions for the C implementation
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 use crate::range::{LineNr, LineRange};
-use crate::ExArgHandle;
+use crate::{BufHandle, ExArgHandle};
 
 /// Result of a write operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -249,6 +249,133 @@ pub extern "C" fn rs_validate_write_range(start: c_int, end: c_int, line_count: 
 /// Returns 1 if should write, 0 if should skip.
 pub extern "C" fn rs_should_write_update(is_modified: c_int) -> c_int {
     c_int::from(should_write(is_modified != 0, WriteMode::Update))
+}
+
+// =============================================================================
+// Phase 1: Write Validation Helpers FFI declarations
+// =============================================================================
+
+extern "C" {
+    fn nvim_excmds_get_p_write() -> c_int;
+    fn nvim_excmds_os_nodetype(fname: *const c_char) -> c_int;
+    fn nvim_excmds_node_other_val() -> c_int;
+    fn nvim_excmds_eap_get_mkdir_p(eap: *const ExArgHandle) -> c_int;
+    fn nvim_excmds_os_file_mkdir(fname: *const c_char) -> c_int;
+    fn nvim_excmds_buf_get_b_p_ro(buf: *const BufHandle) -> c_int;
+    fn nvim_excmds_buf_get_b_fname(buf: *const BufHandle) -> *const c_char;
+    fn nvim_excmds_buf_ffname_path_exists(buf: *const BufHandle) -> c_int;
+    fn nvim_excmds_buf_ffname_is_writable(buf: *const BufHandle) -> c_int;
+    fn nvim_excmds_p_confirm_or_cmod_confirm() -> c_int;
+    fn nvim_excmds_vim_dialog_yesno_question(msg: *const c_char) -> c_int;
+    fn nvim_excmds_dialog_msg_readonly(fmt_id: c_int, arg: *const c_char) -> *mut c_char;
+    fn nvim_excmds_emsg_readonly() -> c_int;
+    fn nvim_excmds_semsg_e503(fname: *const c_char);
+    fn nvim_excmds_semsg_e505(fname: *const c_char);
+    fn nvim_excmds_emsg_e142();
+    fn nvim_excmds_set_forceit(eap: *mut ExArgHandle, val: c_int);
+    fn nvim_excmds_eap_get_forceit(eap: *const ExArgHandle) -> c_int;
+    fn xfree(ptr: *mut std::ffi::c_void);
+}
+
+// =============================================================================
+// Phase 1: Write Validation Helpers (Rust implementations)
+// =============================================================================
+
+/// Check 'write' option. Returns true (1) if writing is disabled (error printed).
+///
+/// # Safety
+/// No pointers involved.
+#[no_mangle]
+pub unsafe extern "C" fn rs_not_writing() -> c_int {
+    if nvim_excmds_get_p_write() != 0 {
+        return 0; // writing is enabled, no error
+    }
+    nvim_excmds_emsg_e142();
+    1 // writing is disabled
+}
+
+/// Check if fname is a writable device (Unix only). Returns FAIL (0) or OK (1).
+///
+/// # Safety
+/// `fname` must be a valid C string pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_writable(fname: *const c_char) -> c_int {
+    #[cfg(unix)]
+    {
+        if nvim_excmds_os_nodetype(fname) == nvim_excmds_node_other_val() {
+            nvim_excmds_semsg_e503(fname);
+            return 0; // FAIL
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = fname;
+    }
+    1 // OK
+}
+
+/// Handle ++p (mkdir -p) argument for write command.
+/// Returns OK (1) on success, FAIL (0) if mkdir failed.
+///
+/// # Safety
+/// `eap` and `fname` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_handle_mkdir_p_arg(
+    eap: *mut ExArgHandle,
+    fname: *const c_char,
+) -> c_int {
+    if nvim_excmds_eap_get_mkdir_p(eap) != 0 && nvim_excmds_os_file_mkdir(fname) < 0 {
+        return 0; // FAIL
+    }
+    1 // OK
+}
+
+/// Check if buffer is readonly, possibly prompting with a dialog.
+/// Returns true (1) if readonly (writing not allowed), false (0) if writing is allowed.
+/// May set eap->forceit to true if the user confirms override.
+///
+/// # Safety
+/// `eap` and `buf` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_readonly(eap: *mut ExArgHandle, buf: *mut BufHandle) -> c_int {
+    let forceit = nvim_excmds_eap_get_forceit(eap);
+    if forceit != 0 {
+        return 0; // not readonly when forced
+    }
+
+    let b_p_ro = nvim_excmds_buf_get_b_p_ro(buf);
+    let ffname_exists = nvim_excmds_buf_ffname_path_exists(buf);
+    let ffname_writable = nvim_excmds_buf_ffname_is_writable(buf);
+
+    // Check: buffer has 'readonly' set OR (file exists AND is not writable)
+    let is_readonly = b_p_ro != 0 || (ffname_exists != 0 && ffname_writable == 0);
+
+    if !is_readonly {
+        return 0; // not readonly
+    }
+
+    let b_fname = nvim_excmds_buf_get_b_fname(buf);
+    if nvim_excmds_p_confirm_or_cmod_confirm() != 0 && !b_fname.is_null() {
+        // Show a dialog
+        let fmt_id = if b_p_ro != 0 { 0 } else { 1 };
+        let buff = nvim_excmds_dialog_msg_readonly(fmt_id, b_fname);
+        let yes = nvim_excmds_vim_dialog_yesno_question(buff);
+        xfree(buff.cast());
+        if yes != 0 {
+            // User confirmed: set forceit and allow write
+            nvim_excmds_set_forceit(eap, 1);
+            return 0; // not readonly (user overrode)
+        }
+        return 1; // readonly (user declined)
+    }
+
+    // No dialog: emit error
+    if b_p_ro != 0 {
+        nvim_excmds_emsg_readonly();
+    } else {
+        nvim_excmds_semsg_e505(b_fname);
+    }
+    1 // readonly
 }
 
 // =============================================================================

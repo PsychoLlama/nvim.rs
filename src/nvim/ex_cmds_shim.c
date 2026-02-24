@@ -538,6 +538,10 @@ void ex_file(exarg_T *eap)
 extern void rs_ex_update(exarg_T *eap);
 extern void rs_ex_write(exarg_T *eap);
 extern void rs_ex_wnext(exarg_T *eap);
+extern int rs_not_writing(void);
+extern int rs_check_writable(const char *fname);
+extern int rs_handle_mkdir_p_arg(exarg_T *eap, const char *fname);
+extern int rs_check_readonly(exarg_T *eap, buf_T *buf);
 
 /// ":update". Thin wrapper calling Rust.
 void ex_update(exarg_T *eap)
@@ -551,24 +555,16 @@ void ex_write(exarg_T *eap)
   rs_ex_write(eap);
 }
 
-#ifdef UNIX
+/// Thin wrapper calling Rust rs_check_writable.
 static int check_writable(const char *fname)
 {
-  if (os_nodetype(fname) == NODE_OTHER) {
-    semsg(_("E503: \"%s\" is not a file or writable device"), fname);
-    return FAIL;
-  }
-  return OK;
+  return rs_check_writable(fname) == 1 ? OK : FAIL;
 }
-#endif
 
+/// Thin wrapper calling Rust rs_handle_mkdir_p_arg.
 static int handle_mkdir_p_arg(exarg_T *eap, char *fname)
 {
-  if (eap->mkdir_p && os_file_mkdir(fname, 0755) < 0) {
-    return FAIL;
-  }
-
-  return OK;
+  return rs_handle_mkdir_p_arg(eap, fname) == 1 ? OK : FAIL;
 }
 
 /// Write current buffer to file "eap->arg".
@@ -894,58 +890,25 @@ void do_wqall(exarg_T *eap)
   }
 }
 
-/// Check the 'write' option.
+/// Thin wrapper calling Rust rs_not_writing.
 ///
-/// @return  true and give a message when it's not st.
+/// @return  true and give a message when writing is disabled.
 static bool not_writing(void)
 {
-  if (p_write) {
-    return false;
-  }
-  emsg(_("E142: File not written: Writing is disabled by 'write' option"));
-  return true;
+  return rs_not_writing() != 0;
 }
 
-/// Check if a buffer is read-only (either 'readonly' option is set or file is
-/// read-only). Ask for overruling in a dialog. Return true and give an error
-/// message when the buffer is readonly.
+/// Thin wrapper calling Rust rs_check_readonly.
+/// Note: rs_check_readonly reads/sets forceit via the eap pointer.
+/// This wrapper reconstructs an eap with the passed forceit for compatibility.
 static int check_readonly(int *forceit, buf_T *buf)
 {
-  // Handle a file being readonly when the 'readonly' option is set or when
-  // the file exists and permissions are read-only.
-  if (!*forceit && (buf->b_p_ro
-                    || (os_path_exists(buf->b_ffname)
-                        && !os_file_is_writable(buf->b_ffname)))) {
-    if ((p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) && buf->b_fname != NULL) {
-      char buff[DIALOG_MSG_SIZE];
-
-      if (buf->b_p_ro) {
-        dialog_msg(buff,
-                   _("'readonly' option is set for \"%s\".\nDo you wish to write anyway?"),
-                   buf->b_fname);
-      } else {
-        dialog_msg(buff,
-                   _("File permissions of \"%s\" are read-only.\nIt may still be possible to "
-                     "write it.\nDo you wish to try?"),
-                   buf->b_fname);
-      }
-
-      if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 2) == VIM_YES) {
-        // Set forceit, to force the writing of a readonly file
-        *forceit = true;
-        return false;
-      }
-      return true;
-    } else if (buf->b_p_ro) {
-      emsg(_(e_readonly));
-    } else {
-      semsg(_("E505: \"%s\" is read-only (add ! to override)"),
-            buf->b_fname);
-    }
-    return true;
-  }
-
-  return false;
+  // We use a local exarg_T to pass forceit through the rs_ interface
+  exarg_T fake_eap = { 0 };
+  fake_eap.forceit = (bool)*forceit;
+  int result = rs_check_readonly(&fake_eap, buf);
+  *forceit = (int)fake_eap.forceit;
+  return result;
 }
 
 /// Try to abandon the current file and edit a new or existing file.
@@ -3733,3 +3696,104 @@ int nvim_excmds_kShellOptDoOut(void) { return kShellOptDoOut; }
 
 /// Get curbuf->b_ml.ml_line_count.
 int nvim_excmds_curbuf_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
+
+// --- Phase 1: Write Validation Helpers FFI accessors ---
+
+/// Get p_write option.
+int nvim_excmds_get_p_write(void) { return p_write ? 1 : 0; }
+
+/// Wrap os_nodetype(fname). Returns NODE_OTHER constant value for comparison.
+int nvim_excmds_os_nodetype(const char *fname) { return (int)os_nodetype(fname); }
+
+/// Return NODE_OTHER constant value.
+int nvim_excmds_node_other_val(void) { return (int)NODE_OTHER; }
+
+/// Get eap->mkdir_p field.
+int nvim_excmds_eap_get_mkdir_p(const exarg_T *eap) { return eap->mkdir_p ? 1 : 0; }
+
+/// Wrap os_file_mkdir(fname, 0755). Returns 0 on success, negative on error.
+int nvim_excmds_os_file_mkdir(const char *fname) { return os_file_mkdir((char *)fname, 0755); }
+
+/// Get buf->b_p_ro (readonly option).
+int nvim_excmds_buf_get_b_p_ro(const buf_T *buf) { return buf->b_p_ro ? 1 : 0; }
+
+/// Get buf->b_fname (short file name).
+const char *nvim_excmds_buf_get_b_fname(const buf_T *buf) { return buf->b_fname; }
+
+/// Get buf->b_ffname (full file name).
+const char *nvim_excmds_buf_get_b_ffname_ptr(const buf_T *buf) { return buf->b_ffname; }
+
+/// Check os_path_exists(buf->b_ffname). Returns 1 if exists.
+int nvim_excmds_buf_ffname_path_exists(const buf_T *buf)
+{
+  return (buf->b_ffname != NULL && os_path_exists(buf->b_ffname)) ? 1 : 0;
+}
+
+/// Check os_file_is_writable(buf->b_ffname). Returns 1 if writable.
+int nvim_excmds_buf_ffname_is_writable(const buf_T *buf)
+{
+  return (buf->b_ffname != NULL && os_file_is_writable(buf->b_ffname)) ? 1 : 0;
+}
+
+/// Check p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM).
+int nvim_excmds_p_confirm_or_cmod_confirm(void)
+{
+  return (p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) ? 1 : 0;
+}
+
+/// Wrap vim_dialog_yesno(VIM_QUESTION, NULL, msg, 2). Returns VIM_YES (1) or not.
+int nvim_excmds_vim_dialog_yesno_question(const char *msg)
+{
+  return vim_dialog_yesno(VIM_QUESTION, NULL, (char *)msg, 2) == VIM_YES ? 1 : 0;
+}
+
+/// Format dialog_msg(buff, fmt, arg) into a newly allocated string. Caller must free.
+/// fmt_id: 0 = readonly option, 1 = read-only permissions
+char *nvim_excmds_dialog_msg_readonly(int fmt_id, const char *arg)
+{
+  char *buff = xmalloc(DIALOG_MSG_SIZE);
+  if (fmt_id == 0) {
+    dialog_msg(buff,
+               _("'readonly' option is set for \"%s\".\nDo you wish to write anyway?"),
+               (char *)arg);
+  } else {
+    dialog_msg(buff,
+               _("File permissions of \"%s\" are read-only.\nIt may still be possible to "
+                 "write it.\nDo you wish to try?"),
+               (char *)arg);
+  }
+  return buff;
+}
+
+/// emsg(_(e_readonly)). Returns 1 (true).
+int nvim_excmds_emsg_readonly(void) { return emsg(_(e_readonly)); }
+
+/// semsg E505: "%s" is not a file or writable device.
+void nvim_excmds_semsg_e503(const char *fname)
+{
+  semsg(_("E503: \"%s\" is not a file or writable device"), fname);
+}
+
+/// semsg E505: "%s" is read-only (add ! to override).
+void nvim_excmds_semsg_e505(const char *fname)
+{
+  semsg(_("E505: \"%s\" is read-only (add ! to override)"), fname);
+}
+
+/// emsg E142: File not written: Writing is disabled by 'write' option.
+void nvim_excmds_emsg_e142(void)
+{
+  emsg(_("E142: File not written: Writing is disabled by 'write' option"));
+}
+
+/// Set eap->forceit to val.
+void nvim_excmds_set_forceit(exarg_T *eap, int val) { eap->forceit = (bool)val; }
+
+/// Get eap->forceit.
+int nvim_excmds_eap_get_forceit(const exarg_T *eap) { return eap->forceit ? 1 : 0; }
+
+/// Get mutable pointer to eap->forceit field (for check_readonly pattern).
+int *nvim_excmds_eap_forceit_ptr(exarg_T *eap) { return (int *)&eap->forceit; }
+
+/// Set *forceit_ptr to val (used by check_readonly Rust wrapper).
+void nvim_excmds_set_forceit_ptr(int *forceit_ptr, int val) { *forceit_ptr = val; }
