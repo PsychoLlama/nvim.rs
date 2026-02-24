@@ -1636,68 +1636,8 @@ static int leave_tabpage(buf_T *new_curbuf, bool trigger_leave_autocmds)
 static void enter_tabpage(tabpage_T *tp, buf_T *old_curbuf, bool trigger_enter_autocmds,
                           bool trigger_leave_autocmds)
 {
-  int old_off = tp->tp_firstwin->w_winrow;
-  win_T *next_prevwin = tp->tp_prevwin;
-  tabpage_T *old_curtab = curtab;
-
-  use_tabpage(tp);
-
-  if (old_curtab != curtab) {
-    tabpage_check_windows(old_curtab);
-    if (p_ch != curtab->tp_ch_used) {
-      // Use the stored value of p_ch, so that it can be different for each tab page.
-      // Handle other side-effects but avoid setting frame sizes, which are still correct.
-      OptInt new_ch = curtab->tp_ch_used;
-      curtab->tp_ch_used = p_ch;
-      command_frame_height = false;
-      set_option_value(kOptCmdheight, NUMBER_OPTVAL(new_ch), 0);
-      command_frame_height = true;
-    }
-  }
-
-  // We would like doing the TabEnter event first, but we don't have a
-  // valid current window yet, which may break some commands.
-  // This triggers autocommands, thus may make "tp" invalid.
-  win_enter_ext(tp->tp_curwin, WEE_CURWIN_INVALID
-                | (trigger_enter_autocmds ? WEE_TRIGGER_ENTER_AUTOCMDS : 0)
-                | (trigger_leave_autocmds ? WEE_TRIGGER_LEAVE_AUTOCMDS : 0));
-  prevwin = next_prevwin;
-
-  rs_last_status(0);  // status line may appear or disappear
-  win_float_update_statusline();
-  rs_win_comp_pos();      // recompute w_winrow for all windows
-  diff_need_scrollbind = true;
-
-  // If there was a click in a window, it won't be usable for a following
-  // drag.
-  reset_dragwin();
-
-  // The tabpage line may have appeared or disappeared, may need to resize the frames for that.
-  // When the Vim window was resized or ROWS_AVAIL changed need to update frame sizes too.
-  if (curtab->tp_old_Rows_avail != ROWS_AVAIL || (old_off != firstwin->w_winrow)) {
-    win_new_screen_rows();
-  }
-  if (curtab->tp_old_Columns != Columns) {
-    if (starting == 0) {
-      win_new_screen_cols();  // update window widths
-      curtab->tp_old_Columns = Columns;
-    } else {
-      curtab->tp_old_Columns = -1;  // update window widths later
-    }
-  }
-
-  lastused_tabpage = old_curtab;
-
-  // Apply autocommands after updating the display, when 'rows' and
-  // 'columns' have been set correctly.
-  if (trigger_enter_autocmds) {
-    apply_autocmds(EVENT_TABENTER, NULL, NULL, false, curbuf);
-    if (old_curbuf != curbuf) {
-      apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf);
-    }
-  }
-
-  redraw_all_later(UPD_NOT_VALID);
+  rs_enter_tabpage(tp, old_curbuf, trigger_enter_autocmds ? 1 : 0,
+                   trigger_leave_autocmds ? 1 : 0);
 }
 
 /// tells external UI that windows and inline floats in old_curtab are invisible
