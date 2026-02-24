@@ -23,6 +23,10 @@ const FAIL: c_int = 0;
 
 /// DIFF_FOLLOWWRAP flag value (must match C).
 const DIFF_FOLLOWWRAP: c_int = 0x800;
+/// DIFF_VERTICAL flag value (must match C).
+const DIFF_VERTICAL: c_int = 0x080;
+/// WSP_VERT constant (must match C window.h).
+const WSP_VERT: c_int = 0x02;
 
 // =============================================================================
 // C FFI declarations
@@ -332,6 +336,71 @@ pub unsafe extern "C" fn rs_ex_diffoff(eap: *const std::ffi::c_void) {
     }
 }
 
+/// `:diffsplit` command -- Rust implementation.
+///
+/// Splits the window and edits another file with diff options enabled on both windows.
+///
+/// # Safety
+/// Calls C functions that access global Neovim state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_diffsplit(eap: *mut std::ffi::c_void) {
+    let old_curwin = nvim_diff_get_curwin();
+
+    // Allocate a heap bufref to track old_curbuf across the split
+    let old_curbuf_ref = nvim_diff_bufref_alloc();
+    nvim_diff_bufref_set_to_curbuf(old_curbuf_ref);
+
+    // Need to compute w_fraction when no redraw happened yet.
+    nvim_diff_validate_cursor_curwin();
+    rs_set_fraction(old_curwin);
+
+    // don't use a new tab page, each tab page has its own diffs
+    nvim_diff_set_cmdmod_tab_zero();
+
+    let split_flags = if nvim_diff_get_diff_flags() & DIFF_VERTICAL != 0 {
+        WSP_VERT
+    } else {
+        0
+    };
+    if nvim_win_split_wrapper(0, split_flags) == FAIL {
+        nvim_diff_bufref_free(old_curbuf_ref);
+        return;
+    }
+
+    // Pretend it was a ":split fname" command
+    let cmd_split = nvim_diff_get_CMD_split();
+    nvim_eap_set_cmdidx(eap, cmd_split);
+    nvim_diff_set_curwin_w_p_diff(true);
+    nvim_diff_do_exedit_with_old_curwin(eap, old_curwin);
+
+    let curwin = nvim_diff_get_curwin();
+    if curwin == old_curwin {
+        // split didn't work
+        nvim_diff_bufref_free(old_curbuf_ref);
+        return;
+    }
+
+    // Set 'diff', 'scrollbind' on and 'wrap' off.
+    rs_diff_win_options(curwin, true);
+    if rs_win_valid(old_curwin) != 0 {
+        rs_diff_win_options(old_curwin, true);
+
+        if nvim_diff_bufref_valid(old_curbuf_ref) {
+            // Move the cursor position to that of the old window.
+            let old_lnum = nvim_win_get_cursor_lnum(old_curwin);
+            let old_buf = nvim_diff_bufref_get_buf(old_curbuf_ref);
+            let new_lnum = rs_diff_get_corresponding_line(old_buf, old_lnum);
+            nvim_win_set_cursor_lnum(curwin, new_lnum);
+        }
+    }
+
+    // Now that lines are folded scroll to show the cursor at the same relative position.
+    let height = nvim_win_get_w_height(curwin);
+    rs_scroll_to_fraction(curwin, height);
+
+    nvim_diff_bufref_free(old_curbuf_ref);
+}
+
 // =============================================================================
 // Additional C FFI declarations needed for winopts (not in buffer.rs)
 // =============================================================================
@@ -342,4 +411,26 @@ extern "C" {
     fn nvim_win_get_w_p_fdc_save(wp: WinHandle) -> *const c_char;
     fn nvim_diff_is_curwin(wp: WinHandle) -> bool;
     fn nvim_diff_changed_window_foldlevel_reset(wp: WinHandle);
+
+    // Phase 2: ex_diffsplit accessors
+    fn nvim_diff_validate_cursor_curwin();
+    fn nvim_diff_set_cmdmod_tab_zero();
+    fn nvim_win_split_wrapper(size: c_int, flags: c_int) -> c_int; // in window_shim.c
+    fn nvim_diff_do_exedit_with_old_curwin(eap: *mut std::ffi::c_void, old_curwin: WinHandle);
+    fn nvim_eap_set_cmdidx(eap: *mut std::ffi::c_void, idx: c_int); // in ex_docmd.c
+    fn nvim_diff_get_CMD_split() -> c_int;
+    fn nvim_diff_set_curwin_w_p_diff(val: bool);
+    fn nvim_diff_bufref_alloc() -> *mut std::ffi::c_void;
+    fn nvim_diff_bufref_free(r: *mut std::ffi::c_void);
+    fn nvim_diff_bufref_set_to_curbuf(r: *mut std::ffi::c_void);
+    fn nvim_diff_bufref_valid(r: *const std::ffi::c_void) -> bool;
+    fn nvim_diff_bufref_get_buf(r: *const std::ffi::c_void) -> BufHandle;
+    fn nvim_win_get_w_height(wp: WinHandle) -> c_int; // in window_shim.c
+    fn nvim_diff_get_curwin() -> WinHandle; // get global curwin
+    fn rs_set_fraction(wp: WinHandle); // in window Rust crate
+    fn rs_scroll_to_fraction(wp: WinHandle, prev_height: c_int); // in window Rust crate
+    fn rs_diff_get_corresponding_line(buf: BufHandle, lnum: LinenrT) -> LinenrT;
+    fn rs_win_valid(wp: WinHandle) -> c_int;
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT; // in window_shim.c
+    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT); // in window_shim.c
 }

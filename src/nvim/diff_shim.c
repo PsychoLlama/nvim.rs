@@ -101,6 +101,7 @@ extern void rs_f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
 extern void rs_diff_redraw(bool dofold);
 extern void rs_diff_win_options(win_T *wp, bool addbuf);
 extern void rs_ex_diffoff(exarg_T *eap);
+extern void rs_ex_diffsplit(exarg_T *eap);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -672,48 +673,12 @@ theend:
 }
 
 /// Split the window and edit another file, setting options to show the diffs.
+/// Thin wrapper -- implementation moved to Rust (rs_ex_diffsplit in winopts.rs).
 ///
 /// @param eap
 void ex_diffsplit(exarg_T *eap)
 {
-  win_T *old_curwin = curwin;
-  bufref_T old_curbuf;
-  set_bufref(&old_curbuf, curbuf);
-
-  // Need to compute w_fraction when no redraw happened yet.
-  validate_cursor(curwin);
-  rs_set_fraction(curwin);
-
-  // don't use a new tab page, each tab page has its own diffs
-  cmdmod.cmod_tab = 0;
-
-  if (win_split(0, (diff_flags & DIFF_VERTICAL) ? WSP_VERT : 0) == FAIL) {
-    return;
-  }
-
-  // Pretend it was a ":split fname" command
-  eap->cmdidx = CMD_split;
-  curwin->w_p_diff = true;
-  do_exedit(eap, old_curwin);
-
-  if (curwin == old_curwin) {  // split didn't work
-    return;
-  }
-
-  // Set 'diff', 'scrollbind' on and 'wrap' off.
-  diff_win_options(curwin, true);
-  if (rs_win_valid(old_curwin)) {
-    diff_win_options(old_curwin, true);
-
-    if (bufref_valid(&old_curbuf)) {
-      // Move the cursor position to that of the old window.
-      curwin->w_cursor.lnum = rs_diff_get_corresponding_line(old_curbuf.br_buf,
-                                                             old_curwin->w_cursor.lnum);
-    }
-  }
-  // Now that lines are folded scroll to show the cursor at the same
-  // relative position.
-  scroll_to_fraction(curwin, curwin->w_height);
+  rs_ex_diffsplit(eap);
 }
 
 // Set options to show diffs for the current window -- thin wrapper calling Rust rs_ex_diffthis.
@@ -1833,6 +1798,19 @@ void nvim_diff_do_cmdline_cmd(const char *cmd) { do_cmdline_cmd(cmd); }
 bool nvim_diff_is_curwin(win_T *wp) { return wp == curwin; }
 void nvim_diff_changed_window_foldlevel_reset(win_T *wp) { win_T *old_curwin = curwin; curwin = wp; rs_newFoldLevel(); curwin = old_curwin; }
 int nvim_upd_not_valid(void) { return UPD_NOT_VALID; }
+// Phase 4 (ex_diffsplit) accessors
+void nvim_diff_validate_cursor_curwin(void) { validate_cursor(curwin); }
+void nvim_diff_set_cmdmod_tab_zero(void) { cmdmod.cmod_tab = 0; }
+void nvim_diff_do_exedit_with_old_curwin(exarg_T *eap, win_T *old_curwin) { do_exedit(eap, old_curwin); }
+void nvim_diff_set_curwin_w_p_diff(bool val) { curwin->w_p_diff = val; }
+win_T *nvim_diff_get_curwin(void) { return curwin; }
+int nvim_diff_get_CMD_split(void) { return (int)CMD_split; }
+static bufref_T diff_split_bufref;
+void nvim_diff_bufref_set_to_curbuf(void *r) { set_bufref((bufref_T *)r, curbuf); }
+bool nvim_diff_bufref_valid(const void *r) { return bufref_valid((bufref_T *)r); }
+buf_T *nvim_diff_bufref_get_buf(const void *r) { return ((bufref_T *)r)->br_buf; }
+void *nvim_diff_bufref_alloc(void) { return &diff_split_bufref; }
+void nvim_diff_bufref_free(void *r) { (void)r; /* static storage, no-op */ }
 // Phase 3 accessors: f_diff_hlID
 int64_t nvim_curbuf_changedtick_i64(void) { return (int64_t)buf_get_changedtick(curbuf); }
 int nvim_diff_tv_get_number_idx(typval_T *argvars, int idx) { return (int)tv_get_number(&argvars[idx]); }
