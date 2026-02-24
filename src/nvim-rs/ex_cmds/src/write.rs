@@ -458,11 +458,24 @@ pub unsafe extern "C" fn rs_getfile(
         nvim_excmds_fname_expand(ffname_arg, sfname_arg, &mut out_ffname, &mut out_sfname);
         let other = nvim_excmds_otherfile(out_ffname);
         // out_ffname is the newly allocated expanded name
-        let free_me = if out_ffname != ffname_arg { out_ffname } else { std::ptr::null_mut() };
+        let free_me = if out_ffname != ffname_arg {
+            out_ffname
+        } else {
+            std::ptr::null_mut()
+        };
         (out_ffname, out_sfname, free_me, other)
     } else {
-        let other = if fnum != nvim_excmds_curbuf_get_b_fnum() { 1 } else { 0 };
-        (ffname_arg, sfname_arg, std::ptr::null_mut::<c_char>(), other)
+        let other = if fnum != nvim_excmds_curbuf_get_b_fnum() {
+            1
+        } else {
+            0
+        };
+        (
+            ffname_arg,
+            sfname_arg,
+            std::ptr::null_mut::<c_char>(),
+            other,
+        )
     };
 
     if other != 0 {
@@ -510,7 +523,11 @@ pub unsafe extern "C" fn rs_getfile(
         } else {
             0
         };
-        let force_flag = if forceit != 0 { nvim_excmds_ecmd_forceit() } else { 0 };
+        let force_flag = if forceit != 0 {
+            nvim_excmds_ecmd_forceit()
+        } else {
+            0
+        };
         let flags = hide_flag + force_flag;
         if nvim_excmds_do_ecmd_getfile(fnum, ffname, sfname, lnum, flags) != 0 {
             retval = nvim_excmds_getfile_open_other();
@@ -826,10 +843,8 @@ extern "C" {
         ffname: *const c_char,
         other: c_int,
     ) -> c_int;
-    fn nvim_excmds_do_saveas_swap(
-        alt_buf: *mut BufHandle,
-        out_sfname: *mut *const c_char,
-    ) -> c_int;
+    fn nvim_excmds_do_saveas_swap(alt_buf: *mut BufHandle, out_sfname: *mut *const c_char)
+        -> c_int;
     fn nvim_excmds_buf_write_do_write(
         ffname: *const c_char,
         fname: *const c_char,
@@ -871,12 +886,21 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
                 nvim_excmds_emsg_e_argreq();
                 return 0; // FAIL (goto theend with free_fname=NULL)
             }
-            (std::ptr::null_mut::<c_char>(), std::ptr::null_mut::<c_char>(), std::ptr::null_mut::<c_char>(), 0)
+            (
+                std::ptr::null_mut::<c_char>(),
+                std::ptr::null_mut::<c_char>(),
+                std::ptr::null_mut::<c_char>(),
+                0,
+            )
         } else {
             // Has argument
             let fname_ptr = arg;
             let free_ptr = nvim_excmds_fix_fname(fname_ptr);
-            let ff = if !free_ptr.is_null() { free_ptr } else { fname_ptr };
+            let ff = if !free_ptr.is_null() {
+                free_ptr
+            } else {
+                fname_ptr
+            };
             let other = nvim_excmds_otherfile(ff);
             (ff, fname_ptr, free_ptr, other)
         }
@@ -966,9 +990,8 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
         let line1 = nvim_excmds_eap_get_line1(eap);
         let line2 = nvim_excmds_eap_get_line2_val(eap);
 
-        let write_ok = nvim_excmds_buf_write_do_write(
-            ffname, fname, line1, line2, eap, append, forceit,
-        );
+        let write_ok =
+            nvim_excmds_buf_write_do_write(ffname, fname, line1, line2, eap, append, forceit);
         retval = write_ok;
 
         if is_saveas && write_ok != 0 {
