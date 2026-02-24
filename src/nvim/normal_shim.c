@@ -2119,55 +2119,8 @@ void nvim_execute_nv_cmd(int idx, cmdarg_T *ca) { ca->arg = nv_cmds[idx].cmd_arg
 
 static int normal_execute(VimState *state, int key) { return rs_normal_execute((NormalState *)state, key); }
 
-static void normal_check_stuff_buffer(NormalState *s)
-{
-  if (stuff_empty()) {
-    did_check_timestamps = false;
-
-    if (need_check_timestamps) {
-      check_timestamps(false);
-    }
-
-    if (need_wait_return) {
-      // if wait_return still needed call it now
-      wait_return(false);
-    }
-  }
-}
-
-static void normal_check_interrupt(NormalState *s)
-{
-  // Reset "got_int" now that we got back to the main loop.  Except when
-  // inside a ":g/pat/cmd" command, then the "got_int" needs to abort
-  // the ":g" command.
-  // For ":g/pat/vi" we reset "got_int" when used once.  When used
-  // a second time we go back to Ex mode and abort the ":g" command.
-  if (got_int) {
-    if (s->noexmode && global_busy && !exmode_active
-        && s->previous_got_int) {
-      // Typed two CTRL-C in a row: go back to ex mode as if "Q" was
-      // used and keep "got_int" set, so that it aborts ":g".
-      exmode_active = true;
-      State = MODE_NORMAL;
-    } else if (!global_busy || !exmode_active) {
-      if (!quit_more) {
-        // flush all buffers
-        vgetc();
-      }
-      got_int = false;
-    }
-    s->previous_got_int = true;
-  } else {
-    s->previous_got_int = false;
-  }
-}
-
-static void normal_check_window_scrolled(NormalState *s)
-{
-  if (!finish_op) {
-    may_trigger_win_scrolled_resized();
-  }
-}
+// normal_check_stuff_buffer, normal_check_interrupt, normal_check_window_scrolled
+// migrated to Rust (Phase 4)
 
 static void normal_check_cursor_moved(NormalState *s)
 {
@@ -2201,25 +2154,7 @@ static void normal_check_buffer_modified(NormalState *s)
   }
 }
 
-static void normal_check_safe_state(NormalState *s) { may_trigger_safestate(!rs_op_pending() && restart_edit == 0); }
-
-static void normal_check_folds(NormalState *s)
-{
-  // Include a closed fold completely in the Visual area.
-  rs_foldAdjustVisual();
-
-  // When 'foldclose' is set, apply 'foldlevel' to folds that don't
-  // contain the cursor.
-  // When 'foldopen' is "all", open the fold(s) under the cursor.
-  // This may mark the window for redrawing.
-  if (rs_hasAnyFolding(curwin) && !char_avail()) {
-    rs_foldCheckClose();
-
-    if (fdo_flags & kOptFdoFlagAll) {
-      rs_foldOpenCursor();
-    }
-  }
-}
+// normal_check_safe_state, normal_check_folds migrated to Rust (Phase 4)
 
 static void normal_redraw(NormalState *s)
 {
@@ -2273,9 +2208,8 @@ static void normal_redraw(NormalState *s)
 // normal_check accessors for Rust FFI
 // =============================================================================
 
-void nvim_normal_check_stuff_buffer_wrapper(void *sp) { normal_check_stuff_buffer((NormalState *)sp); }
-
-void nvim_normal_check_interrupt_wrapper(void *sp) { normal_check_interrupt((NormalState *)sp); }
+// nvim_normal_check_stuff_buffer_wrapper and nvim_normal_check_interrupt_wrapper
+// removed (migrated to Rust Phase 4)
 
 /// Get did_throw global.
 bool nvim_get_did_throw_direct(void) { return did_throw; }
@@ -2301,15 +2235,11 @@ void nvim_setcursor_wrapper(void) { setcursor(); }
 /// update_topline(curwin) wrapper.
 void nvim_update_topline_curwin_wrapper(void) { update_topline(curwin); }
 
-void nvim_normal_check_cursor_moved_wrapper(void *sp) { normal_check_cursor_moved((NormalState *)sp); }
-
-void nvim_normal_check_text_changed_wrapper(void *sp) { normal_check_text_changed((NormalState *)sp); }
-
-void nvim_normal_check_window_scrolled_wrapper(void *sp) { normal_check_window_scrolled((NormalState *)sp); }
-
-void nvim_normal_check_buffer_modified_wrapper(void *sp) { normal_check_buffer_modified((NormalState *)sp); }
-
-void nvim_normal_check_safe_state_wrapper(void *sp) { normal_check_safe_state((NormalState *)sp); }
+// nvim_normal_check_cursor_moved_wrapper → replaced by nvim_normal_check_cursor_moved_impl
+// nvim_normal_check_text_changed_wrapper → replaced by nvim_normal_check_text_changed_impl
+// nvim_normal_check_window_scrolled_wrapper → migrated to Rust (Phase 4)
+// nvim_normal_check_buffer_modified_wrapper → replaced by nvim_normal_check_buffer_modified_impl
+// nvim_normal_check_safe_state_wrapper → migrated to Rust (Phase 4)
 
 bool nvim_curtab_needs_diff_update(void) { return curtab->tp_diff_update || curtab->tp_diff_invalid; }
 
@@ -2325,9 +2255,8 @@ void nvim_set_diff_need_scrollbind(bool val) { diff_need_scrollbind = val; }
 /// check_scrollbind(0, 0) wrapper.
 void nvim_check_scrollbind_zero_wrapper(void) { check_scrollbind(0, 0); }
 
-void nvim_normal_check_folds_wrapper(void *sp) { normal_check_folds((NormalState *)sp); }
-
-void nvim_normal_redraw_wrapper(void *sp) { normal_redraw((NormalState *)sp); }
+// nvim_normal_check_folds_wrapper → migrated to Rust (Phase 4)
+// nvim_normal_redraw_wrapper → replaced by nvim_normal_redraw_impl
 
 /// time_fd != NULL check.
 bool nvim_get_time_fd_not_null(void) { return time_fd != NULL; }
@@ -2349,6 +2278,37 @@ int nvim_get_cmdwin_result(void) { return cmdwin_result; }
 void nvim_do_exmode_wrapper(void) { do_exmode(); }
 
 void nvim_normal_prepare_wrapper(void *sp) { normal_prepare((NormalState *)sp); }
+
+// =============================================================================
+// Phase 4 accessors for normal_check* and normal_redraw
+// =============================================================================
+
+// For normal_check_window_scrolled
+void nvim_may_trigger_win_scrolled_resized_call(void) { may_trigger_win_scrolled_resized(); }
+
+// For normal_check_safe_state
+void nvim_may_trigger_safestate_call(bool safe) { may_trigger_safestate(safe); }
+
+// For normal_check_folds
+bool nvim_char_avail_call(void) { return char_avail(); }
+bool nvim_fdo_has_all_flag(void) { return (fdo_flags & kOptFdoFlagAll) != 0; }
+
+// For normal_check_stuff_buffer
+bool nvim_get_did_check_timestamps(void) { return did_check_timestamps; }
+void nvim_set_did_check_timestamps(bool val) { did_check_timestamps = val; }
+bool nvim_get_need_check_timestamps(void) { return need_check_timestamps; }
+void nvim_check_timestamps_call(bool focus) { check_timestamps(focus); }
+
+// For normal_check_interrupt
+bool nvim_get_quit_more(void) { return quit_more; }
+void nvim_vgetc_and_discard(void) { (void)vgetc(); }
+void nvim_set_exmode_active(bool val) { exmode_active = val; }
+
+// Composite wrappers for complex functions (body stays in C, called from Rust)
+void nvim_normal_check_cursor_moved_impl(void) { normal_check_cursor_moved(NULL); }
+void nvim_normal_check_text_changed_impl(void) { normal_check_text_changed(NULL); }
+void nvim_normal_check_buffer_modified_impl(void) { normal_check_buffer_modified(NULL); }
+void nvim_normal_redraw_impl(void *sp) { normal_redraw((NormalState *)sp); }
 
 static int normal_check(VimState *state) { return rs_normal_check((NormalState *)state); }
 

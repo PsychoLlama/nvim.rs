@@ -8,6 +8,13 @@
 use std::ffi::c_int;
 
 use crate::dispatch::types::NormalStateHandle;
+use crate::WinHandle;
+
+// =============================================================================
+// Constants (verified with _Static_assert in normal.c)
+// =============================================================================
+
+const MODE_NORMAL: c_int = 0x01;
 
 // =============================================================================
 // FFI declarations
@@ -17,25 +24,17 @@ extern "C" {
     // NormalState accessors
     fn nvim_ns_get_cmdwin(s: NormalStateHandle) -> bool;
     fn nvim_ns_get_noexmode(s: NormalStateHandle) -> bool;
-
-    // Static helper wrappers (all take void* for NormalState)
-    fn nvim_normal_check_stuff_buffer_wrapper(s: NormalStateHandle);
-    fn nvim_normal_check_interrupt_wrapper(s: NormalStateHandle);
-    fn nvim_normal_check_cursor_moved_wrapper(s: NormalStateHandle);
-    fn nvim_normal_check_text_changed_wrapper(s: NormalStateHandle);
-    fn nvim_normal_check_window_scrolled_wrapper(s: NormalStateHandle);
-    fn nvim_normal_check_buffer_modified_wrapper(s: NormalStateHandle);
-    fn nvim_normal_check_safe_state_wrapper(s: NormalStateHandle);
-    fn nvim_normal_check_folds_wrapper(s: NormalStateHandle);
-    fn nvim_normal_redraw_wrapper(s: NormalStateHandle);
-    fn nvim_normal_prepare_wrapper(s: NormalStateHandle);
+    fn nvim_ns_get_previous_got_int(s: NormalStateHandle) -> bool;
+    fn nvim_ns_set_previous_got_int(s: NormalStateHandle, val: bool);
 
     // Global accessors
     fn nvim_get_did_throw_direct() -> bool;
     fn nvim_get_ex_normal_busy() -> c_int;
     fn nvim_get_exmode_active() -> bool;
+    fn nvim_set_exmode_active(val: bool);
     fn nvim_set_msg_scroll(val: c_int);
     fn nvim_set_quit_more(val: bool);
+    fn nvim_get_quit_more() -> bool;
     fn nvim_get_skip_redraw() -> bool;
     fn nvim_set_skip_redraw(val: bool);
     fn nvim_get_do_redraw() -> c_int;
@@ -46,6 +45,15 @@ extern "C" {
     fn nvim_get_cmdwin_result() -> c_int;
     fn nvim_set_may_garbage_collect(val: bool);
     fn nvim_stuff_empty() -> bool;
+    fn nvim_get_finish_op() -> c_int;
+    fn nvim_get_got_int() -> c_int;
+    fn nvim_set_got_int(val: c_int);
+    fn nvim_get_global_busy() -> bool;
+    fn nvim_set_did_check_timestamps(val: bool);
+    fn nvim_get_need_check_timestamps() -> bool;
+    fn nvim_get_need_wait_return() -> c_int;
+    fn nvim_wait_return(redraw: bool);
+    fn nvim_get_restart_edit() -> c_int;
 
     // Function wrappers
     fn nvim_discard_current_exception_wrapper();
@@ -61,6 +69,104 @@ extern "C" {
     fn nvim_may_make_initial_scroll_size_snapshot_wrapper();
     fn nvim_update_curswant_wrapper();
     fn nvim_do_exmode_wrapper();
+    fn nvim_check_timestamps_call(focus: bool);
+    fn nvim_may_trigger_win_scrolled_resized_call();
+    fn nvim_may_trigger_safestate_call(safe: bool);
+    fn nvim_char_avail_call() -> bool;
+    fn nvim_fdo_has_all_flag() -> bool;
+    fn nvim_vgetc_and_discard();
+    fn nvim_set_State(val: c_int);
+    fn rs_op_pending() -> bool;
+
+    // Fold functions (from fold crate)
+    fn rs_foldAdjustVisual();
+    fn rs_hasAnyFolding(win: WinHandle) -> c_int;
+    fn rs_foldCheckClose();
+    fn rs_foldOpenCursor();
+
+    // Composite wrappers for complex functions
+    fn nvim_normal_check_cursor_moved_impl();
+    fn nvim_normal_check_text_changed_impl();
+    fn nvim_normal_check_buffer_modified_impl();
+    fn nvim_normal_redraw_impl(s: NormalStateHandle);
+    fn nvim_normal_prepare_wrapper(s: NormalStateHandle);
+    fn nvim_get_curwin() -> WinHandle;
+}
+
+// =============================================================================
+// Inlined Phase 4 helper implementations
+// =============================================================================
+
+/// Inline of normal_check_stuff_buffer.
+unsafe fn normal_check_stuff_buffer(s: NormalStateHandle) {
+    let _ = s; // s is not used in the body
+    if nvim_stuff_empty() {
+        nvim_set_did_check_timestamps(false);
+
+        if nvim_get_need_check_timestamps() {
+            nvim_check_timestamps_call(false);
+        }
+
+        if nvim_get_need_wait_return() != 0 {
+            // if wait_return still needed call it now
+            nvim_wait_return(false);
+        }
+    }
+}
+
+/// Inline of normal_check_interrupt.
+unsafe fn normal_check_interrupt(s: NormalStateHandle) {
+    if nvim_get_got_int() != 0 {
+        if nvim_ns_get_noexmode(s)
+            && nvim_get_global_busy()
+            && !nvim_get_exmode_active()
+            && nvim_ns_get_previous_got_int(s)
+        {
+            // Typed two CTRL-C in a row: go back to ex mode as if "Q" was
+            // used and keep "got_int" set, so that it aborts ":g".
+            nvim_set_exmode_active(true);
+            nvim_set_State(MODE_NORMAL);
+        } else if !nvim_get_global_busy() || !nvim_get_exmode_active() {
+            if !nvim_get_quit_more() {
+                // flush all buffers
+                nvim_vgetc_and_discard();
+            }
+            nvim_set_got_int(0);
+        }
+        nvim_ns_set_previous_got_int(s, true);
+    } else {
+        nvim_ns_set_previous_got_int(s, false);
+    }
+}
+
+/// Inline of normal_check_window_scrolled.
+unsafe fn normal_check_window_scrolled(_s: NormalStateHandle) {
+    if nvim_get_finish_op() == 0 {
+        nvim_may_trigger_win_scrolled_resized_call();
+    }
+}
+
+/// Inline of normal_check_safe_state.
+unsafe fn normal_check_safe_state(_s: NormalStateHandle) {
+    nvim_may_trigger_safestate_call(!rs_op_pending() && nvim_get_restart_edit() == 0);
+}
+
+/// Inline of normal_check_folds.
+unsafe fn normal_check_folds(_s: NormalStateHandle) {
+    // Include a closed fold completely in the Visual area.
+    rs_foldAdjustVisual();
+
+    // When 'foldclose' is set, apply 'foldlevel' to folds that don't
+    // contain the cursor.
+    // When 'foldopen' is "all", open the fold(s) under the cursor.
+    // This may mark the window for redrawing.
+    if rs_hasAnyFolding(nvim_get_curwin()) != 0 && !nvim_char_avail_call() {
+        rs_foldCheckClose();
+
+        if nvim_fdo_has_all_flag() {
+            rs_foldOpenCursor();
+        }
+    }
 }
 
 /// Pre-iteration check for normal mode.
@@ -74,8 +180,8 @@ extern "C" {
 /// `s` must be a valid NormalState pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
-    nvim_normal_check_stuff_buffer_wrapper(s);
-    nvim_normal_check_interrupt_wrapper(s);
+    normal_check_stuff_buffer(s);
+    normal_check_interrupt(s);
 
     // At the toplevel there is no exception handling. Discard any that
     // may be hanging around (e.g. from "interrupt" at the debug prompt).
@@ -102,11 +208,11 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
         nvim_update_topline_curwin_wrapper();
         nvim_validate_cursor();
 
-        nvim_normal_check_cursor_moved_wrapper(s);
-        nvim_normal_check_text_changed_wrapper(s);
-        nvim_normal_check_window_scrolled_wrapper(s);
-        nvim_normal_check_buffer_modified_wrapper(s);
-        nvim_normal_check_safe_state_wrapper(s);
+        nvim_normal_check_cursor_moved_impl();
+        nvim_normal_check_text_changed_impl();
+        normal_check_window_scrolled(s);
+        nvim_normal_check_buffer_modified_impl();
+        normal_check_safe_state(s);
 
         // Updating diffs from changed() does not always work properly,
         // esp. updating folds. Do an update just before redrawing if needed.
@@ -122,8 +228,8 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
             nvim_set_diff_need_scrollbind(false);
         }
 
-        nvim_normal_check_folds_wrapper(s);
-        nvim_normal_redraw_wrapper(s);
+        normal_check_folds(s);
+        nvim_normal_redraw_impl(s);
         nvim_set_do_redraw(false);
 
         // Now that we have drawn the first screen all the startup stuff
