@@ -167,6 +167,11 @@ extern int rs_thesaurus_func_complete(int type);
 extern void rs_get_next_dict_tsr_completion(int compl_type, char *dict, int dict_f);
 // Phase 4 (pass 5) Rust exports
 extern void rs_fuzzy_longest_match(void);
+// Phase 5 (pass 5) Rust exports
+extern const char *rs_did_set_completefunc(void *args);
+extern const char *rs_did_set_omnifunc(void *args);
+extern const char *rs_did_set_thesaurusfunc(void *args);
+extern bool rs_set_ref_in_insexpand_funcs(int copyID);
 extern void rs_get_next_include_file_completion(int compl_type);
 extern void rs_get_next_cmdline_completion(void);
 extern void rs_get_next_spell_completion(int lnum);
@@ -1621,18 +1626,31 @@ static void copy_global_to_buflocal_cb(Callback *globcb, Callback *bufcb)
   }
 }
 
-/// Parse the 'completefunc' option value and set the callback function.
-/// Invoked when the 'completefunc' option is set. The option value can be a
-/// name of a function (string), or function(<name>) or funcref(<name>) or a
-/// lambda expression.
-const char *did_set_completefunc(optset_T *args)
+// Phase 5 (pass 5): Rust wrappers for callback management functions
+extern const char *rs_did_set_completefunc(void *args);
+extern const char *rs_did_set_omnifunc(void *args);
+extern const char *rs_did_set_thesaurusfunc(void *args);
+extern bool rs_set_ref_in_insexpand_funcs(int copyID);
+
+/// Compound accessor for Phase 5 (pass 5): did_set_completefunc implementation.
+const char *nvim_did_set_completefunc_impl(void *args_v)
 {
+  optset_T *args = (optset_T *)args_v;
   buf_T *buf = (buf_T *)args->os_buf;
   if (option_set_callback_func(buf->b_p_cfu, &cfu_cb) == FAIL) {
     return e_invarg;
   }
   set_buflocal_cfu_callback(buf);
   return NULL;
+}
+
+/// Parse the 'completefunc' option value and set the callback function.
+/// Invoked when the 'completefunc' option is set. The option value can be a
+/// name of a function (string), or function(<name>) or funcref(<name>) or a
+/// lambda expression.
+const char *did_set_completefunc(optset_T *args)
+{
+  return rs_did_set_completefunc(args);
 }
 
 /// Copy the global 'completefunc' callback function to the buffer-local
@@ -1642,18 +1660,25 @@ void set_buflocal_cfu_callback(buf_T *buf)
   copy_global_to_buflocal_cb(&cfu_cb, &buf->b_cfu_cb);
 }
 
-/// Parse the 'omnifunc' option value and set the callback function.
-/// Invoked when the 'omnifunc' option is set. The option value can be a
-/// name of a function (string), or function(<name>) or funcref(<name>) or a
-/// lambda expression.
-const char *did_set_omnifunc(optset_T *args)
+/// Compound accessor for Phase 5 (pass 5): did_set_omnifunc implementation.
+const char *nvim_did_set_omnifunc_impl(void *args_v)
 {
+  optset_T *args = (optset_T *)args_v;
   buf_T *buf = (buf_T *)args->os_buf;
   if (option_set_callback_func(buf->b_p_ofu, &ofu_cb) == FAIL) {
     return e_invarg;
   }
   set_buflocal_ofu_callback(buf);
   return NULL;
+}
+
+/// Parse the 'omnifunc' option value and set the callback function.
+/// Invoked when the 'omnifunc' option is set. The option value can be a
+/// name of a function (string), or function(<name>) or funcref(<name>) or a
+/// lambda expression.
+const char *did_set_omnifunc(optset_T *args)
+{
+  return rs_did_set_omnifunc(args);
 }
 
 /// Copy the global 'omnifunc' callback function to the buffer-local 'omnifunc'
@@ -1758,28 +1783,32 @@ int set_cpt_callbacks(optset_T *args)
   return OK;
 }
 
-/// Parse the 'thesaurusfunc' option value and set the callback function.
-/// Invoked when the 'thesaurusfunc' option is set. The option value can be a
-/// name of a function (string), or function(<name>) or funcref(<name>) or a
-/// lambda expression.
-const char *did_set_thesaurusfunc(optset_T *args FUNC_ATTR_UNUSED)
+/// Compound accessor for Phase 5 (pass 5): did_set_thesaurusfunc implementation.
+const char *nvim_did_set_thesaurusfunc_impl(void *args_v)
 {
+  optset_T *args = (optset_T *)args_v;
   buf_T *buf = (buf_T *)args->os_buf;
   int retval;
 
   if (args->os_flags & OPT_LOCAL) {
-    // buffer-local option set
     retval = option_set_callback_func(buf->b_p_tsrfu, &buf->b_tsrfu_cb);
   } else {
-    // global option set
     retval = option_set_callback_func(p_tsrfu, &tsrfu_cb);
-    // when using :set, free the local callback
     if (!(args->os_flags & OPT_GLOBAL)) {
       callback_free(&buf->b_tsrfu_cb);
     }
   }
 
   return retval == FAIL ? e_invarg : NULL;
+}
+
+/// Parse the 'thesaurusfunc' option value and set the callback function.
+/// Invoked when the 'thesaurusfunc' option is set. The option value can be a
+/// name of a function (string), or function(<name>) or funcref(<name>) or a
+/// lambda expression.
+const char *did_set_thesaurusfunc(optset_T *args FUNC_ATTR_UNUSED)
+{
+  return rs_did_set_thesaurusfunc(args);
 }
 
 /// Mark "copyID" references in an array of F{func} callbacks so that they are
@@ -1798,16 +1827,21 @@ bool set_ref_in_cpt_callbacks(Callback *callbacks, int count, int copyID)
   return abort;
 }
 
-/// Mark the global 'completefunc' 'omnifunc' and 'thesaurusfunc' callbacks with
-/// "copyID" so that they are not garbage collected.
-bool set_ref_in_insexpand_funcs(int copyID)
+/// Compound accessor for Phase 5 (pass 5): set_ref_in_insexpand_funcs implementation.
+int nvim_set_ref_in_insexpand_funcs_impl(int copyID)
 {
   bool abort = rs_set_ref_in_callback(&cfu_cb, copyID, NULL, NULL);
   abort = abort || rs_set_ref_in_callback(&ofu_cb, copyID, NULL, NULL);
   abort = abort || rs_set_ref_in_callback(&tsrfu_cb, copyID, NULL, NULL);
   abort = abort || set_ref_in_cpt_callbacks(cpt_cb, cpt_cb_count, copyID);
+  return abort ? 1 : 0;
+}
 
-  return abort;
+/// Mark the global 'completefunc' 'omnifunc' and 'thesaurusfunc' callbacks with
+/// "copyID" so that they are not garbage collected.
+bool set_ref_in_insexpand_funcs(int copyID)
+{
+  return rs_set_ref_in_insexpand_funcs(copyID);
 }
 
 /// Get the user-defined completion function name for completion "type"
