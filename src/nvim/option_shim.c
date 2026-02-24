@@ -1400,6 +1400,128 @@ const char *nvim_option_get_fullname(OptIndex opt_idx) { return options[opt_idx]
 int nvim_get_kopt_count(void) { return (int)kOptCount; }
 // Get kOptSyntax and kOptFiletype indices (already exist as enum values in opt_index.rs)
 
+// Phase 3 winopt accessors
+// Return pointer to the i-th string field of a winopt_T (for clear/check loops in Rust).
+// String fields in the order used by check_winopt / clear_winopt.
+char **nvim_winopt_string_field_ptr(winopt_T *wop, int idx)
+{
+  switch (idx) {
+  case 0:  return &wop->wo_fdc;
+  case 1:  return &wop->wo_fdc_save;
+  case 2:  return &wop->wo_fdi;
+  case 3:  return &wop->wo_fdm;
+  case 4:  return &wop->wo_fdm_save;
+  case 5:  return &wop->wo_fde;
+  case 6:  return &wop->wo_fdt;
+  case 7:  return &wop->wo_fmr;
+  case 8:  return &wop->wo_eiw;
+  case 9:  return &wop->wo_scl;
+  case 10: return &wop->wo_rlc;
+  case 11: return &wop->wo_sbr;
+  case 12: return &wop->wo_stl;
+  case 13: return &wop->wo_culopt;
+  case 14: return &wop->wo_cc;
+  case 15: return &wop->wo_cocu;
+  case 16: return &wop->wo_briopt;
+  case 17: return &wop->wo_winhl;
+  case 18: return &wop->wo_lcs;
+  case 19: return &wop->wo_fcs;
+  case 20: return &wop->wo_ve;
+  case 21: return &wop->wo_wbr;
+  case 22: return &wop->wo_stc;
+  default: return NULL;
+  }
+}
+int nvim_winopt_string_field_count(void) { return 23; }
+
+// Copy all scalar (bool/int/flags) fields from one winopt_T to another.
+// Does NOT copy string fields or wo_script_ctx.
+void nvim_copy_winopt_scalars(winopt_T *from, winopt_T *to)
+{
+  to->wo_arab = from->wo_arab;
+  to->wo_list = from->wo_list;
+  to->wo_nu = from->wo_nu;
+  to->wo_rnu = from->wo_rnu;
+  to->wo_ve_flags = from->wo_ve_flags;
+  to->wo_nuw = from->wo_nuw;
+  to->wo_rl = from->wo_rl;
+  to->wo_wrap = from->wo_wrap;
+  to->wo_wrap_save = from->wo_wrap_save;
+  to->wo_lbr = from->wo_lbr;
+  to->wo_bri = from->wo_bri;
+  to->wo_scb = from->wo_scb;
+  to->wo_scb_save = from->wo_scb_save;
+  to->wo_sms = from->wo_sms;
+  to->wo_crb = from->wo_crb;
+  to->wo_crb_save = from->wo_crb_save;
+  to->wo_siso = from->wo_siso;
+  to->wo_so = from->wo_so;
+  to->wo_spell = from->wo_spell;
+  to->wo_cuc = from->wo_cuc;
+  to->wo_cul = from->wo_cul;
+  to->wo_diff = from->wo_diff;
+  to->wo_diff_saved = from->wo_diff_saved;
+  to->wo_cole = from->wo_cole;
+  to->wo_fen = from->wo_fen;
+  to->wo_fen_save = from->wo_fen_save;
+  to->wo_fml = from->wo_fml;
+  to->wo_fdl = from->wo_fdl;
+  to->wo_fdl_save = from->wo_fdl_save;
+  to->wo_fdn = from->wo_fdn;
+  to->wo_lhi = from->wo_lhi;
+  to->wo_winbl = from->wo_winbl;
+  to->wo_wrap_flags = from->wo_wrap_flags;
+  to->wo_stl_flags = from->wo_stl_flags;
+  to->wo_wbr_flags = from->wo_wbr_flags;
+  to->wo_fde_flags = from->wo_fde_flags;
+  to->wo_fdt_flags = from->wo_fdt_flags;
+}
+
+// Copy the diff-mode save string fields with conditional xstrdup.
+void nvim_copy_winopt_save_strs(winopt_T *from, winopt_T *to)
+{
+  to->wo_fdc_save = from->wo_diff_saved ? xstrdup(from->wo_fdc_save) : empty_string_option;
+  to->wo_fdm_save = from->wo_diff_saved ? xstrdup(from->wo_fdm_save) : empty_string_option;
+}
+
+// Copy the wo_script_ctx array via memmove.
+void nvim_copy_winopt_script_ctx(winopt_T *from, winopt_T *to)
+{
+  memmove(to->wo_script_ctx, from->wo_script_ctx, sizeof(to->wo_script_ctx));
+}
+
+// Wrap copy_option_val (static) for use from Rust.
+char *nvim_call_copy_option_val(const char *val) { return copy_option_val(val); }
+
+// Wrap clear_string_option / check_string_option for Rust.
+void nvim_call_clear_string_option(char **ptr) { clear_string_option(ptr); }
+void nvim_call_check_string_option(char **ptr) { check_string_option(ptr); }
+
+// Return pointer to win_T.w_onebuf_opt / w_allbuf_opt for Rust.
+winopt_T *nvim_win_get_onebuf_opt(win_T *win) { return &win->w_onebuf_opt; }
+winopt_T *nvim_win_get_allbuf_opt(win_T *win) { return &win->w_allbuf_opt; }
+
+// Wrappers for didset_window_options internals.
+void nvim_call_check_colorcolumn(win_T *wp) { check_colorcolumn(NULL, wp); }
+void nvim_call_briopt_check(win_T *wp) { briopt_check(NULL, wp); }
+void nvim_call_fill_culopt_flags(win_T *wp) { fill_culopt_flags(NULL, wp); }
+void nvim_call_set_chars_option_fcs(win_T *wp)
+{
+  set_chars_option(wp, wp->w_p_fcs, kFillchars, true, NULL, 0);
+}
+void nvim_call_set_chars_option_lcs(win_T *wp)
+{
+  set_chars_option(wp, wp->w_p_lcs, kListchars, true, NULL, 0);
+}
+void nvim_call_check_blending(win_T *wp) { check_blending(wp); }
+void nvim_call_set_winbar_win(win_T *wp, int valid_cursor)
+{
+  set_winbar_win(wp, false, (bool)valid_cursor);
+}
+void nvim_call_check_signcolumn(win_T *wp) { check_signcolumn(NULL, wp); }
+// Update w_grid_alloc.blending based on current w_p_winbl value (different from window_shim's nvim_win_set_grid_blending which takes explicit bool).
+void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
+
 void set_init_tablocal(void)
 {
   // susy baka: cmdheight calls itself OPT_GLOBAL but is really tablocal!
@@ -3715,160 +3837,42 @@ static char *copy_option_val(const char *val)
   return xstrdup(val);
 }
 
+extern void rs_copy_winopt(winopt_T *from, winopt_T *to);
+extern void rs_clear_winopt(winopt_T *wop);
+extern void rs_check_winopt(winopt_T *wop);
+extern void rs_didset_window_options(win_T *wp, int valid_cursor);
+
 /// Copy the options from one winopt_T to another.
 /// Doesn't free the old option values in "to", use clear_winopt() for that.
 /// The 'scroll' option is not copied, because it depends on the window height.
 /// The 'previewwindow' option is reset, there can be only one preview window.
 void copy_winopt(winopt_T *from, winopt_T *to)
 {
-  to->wo_arab = from->wo_arab;
-  to->wo_list = from->wo_list;
-  to->wo_lcs = copy_option_val(from->wo_lcs);
-  to->wo_fcs = copy_option_val(from->wo_fcs);
-  to->wo_nu = from->wo_nu;
-  to->wo_rnu = from->wo_rnu;
-  to->wo_ve = copy_option_val(from->wo_ve);
-  to->wo_ve_flags = from->wo_ve_flags;
-  to->wo_nuw = from->wo_nuw;
-  to->wo_rl = from->wo_rl;
-  to->wo_rlc = copy_option_val(from->wo_rlc);
-  to->wo_sbr = copy_option_val(from->wo_sbr);
-  to->wo_stl = copy_option_val(from->wo_stl);
-  to->wo_wbr = copy_option_val(from->wo_wbr);
-  to->wo_wrap = from->wo_wrap;
-  to->wo_wrap_save = from->wo_wrap_save;
-  to->wo_lbr = from->wo_lbr;
-  to->wo_bri = from->wo_bri;
-  to->wo_briopt = copy_option_val(from->wo_briopt);
-  to->wo_scb = from->wo_scb;
-  to->wo_scb_save = from->wo_scb_save;
-  to->wo_sms = from->wo_sms;
-  to->wo_crb = from->wo_crb;
-  to->wo_crb_save = from->wo_crb_save;
-  to->wo_siso = from->wo_siso;
-  to->wo_so = from->wo_so;
-  to->wo_spell = from->wo_spell;
-  to->wo_cuc = from->wo_cuc;
-  to->wo_cul = from->wo_cul;
-  to->wo_culopt = copy_option_val(from->wo_culopt);
-  to->wo_cc = copy_option_val(from->wo_cc);
-  to->wo_diff = from->wo_diff;
-  to->wo_diff_saved = from->wo_diff_saved;
-  to->wo_eiw = copy_option_val(from->wo_eiw);
-  to->wo_cocu = copy_option_val(from->wo_cocu);
-  to->wo_cole = from->wo_cole;
-  to->wo_fdc = copy_option_val(from->wo_fdc);
-  to->wo_fdc_save = from->wo_diff_saved ? xstrdup(from->wo_fdc_save) : empty_string_option;
-  to->wo_fen = from->wo_fen;
-  to->wo_fen_save = from->wo_fen_save;
-  to->wo_fdi = copy_option_val(from->wo_fdi);
-  to->wo_fml = from->wo_fml;
-  to->wo_fdl = from->wo_fdl;
-  to->wo_fdl_save = from->wo_fdl_save;
-  to->wo_fdm = copy_option_val(from->wo_fdm);
-  to->wo_fdm_save = from->wo_diff_saved ? xstrdup(from->wo_fdm_save) : empty_string_option;
-  to->wo_fdn = from->wo_fdn;
-  to->wo_fde = copy_option_val(from->wo_fde);
-  to->wo_fdt = copy_option_val(from->wo_fdt);
-  to->wo_fmr = copy_option_val(from->wo_fmr);
-  to->wo_scl = copy_option_val(from->wo_scl);
-  to->wo_lhi = from->wo_lhi;
-  to->wo_winhl = copy_option_val(from->wo_winhl);
-  to->wo_winbl = from->wo_winbl;
-  to->wo_stc = copy_option_val(from->wo_stc);
-
-  to->wo_wrap_flags = from->wo_wrap_flags;
-  to->wo_stl_flags = from->wo_stl_flags;
-  to->wo_wbr_flags = from->wo_wbr_flags;
-  to->wo_fde_flags = from->wo_fde_flags;
-  to->wo_fdt_flags = from->wo_fdt_flags;
-
-  // Copy the script context so that we know were the value was last set.
-  memmove(to->wo_script_ctx, from->wo_script_ctx, sizeof(to->wo_script_ctx));
-  check_winopt(to);             // don't want NULL pointers
+  rs_copy_winopt(from, to);
 }
 
 /// Check string options in a window for a NULL value.
 static void check_win_options(win_T *win)
 {
-  check_winopt(&win->w_onebuf_opt);
-  check_winopt(&win->w_allbuf_opt);
+  rs_check_winopt(&win->w_onebuf_opt);
+  rs_check_winopt(&win->w_allbuf_opt);
 }
 
 /// Check for NULL pointers in a winopt_T and replace them with empty_string_option.
 static void check_winopt(winopt_T *wop)
 {
-  check_string_option(&wop->wo_fdc);
-  check_string_option(&wop->wo_fdc_save);
-  check_string_option(&wop->wo_fdi);
-  check_string_option(&wop->wo_fdm);
-  check_string_option(&wop->wo_fdm_save);
-  check_string_option(&wop->wo_fde);
-  check_string_option(&wop->wo_fdt);
-  check_string_option(&wop->wo_fmr);
-  check_string_option(&wop->wo_eiw);
-  check_string_option(&wop->wo_scl);
-  check_string_option(&wop->wo_rlc);
-  check_string_option(&wop->wo_sbr);
-  check_string_option(&wop->wo_stl);
-  check_string_option(&wop->wo_culopt);
-  check_string_option(&wop->wo_cc);
-  check_string_option(&wop->wo_cocu);
-  check_string_option(&wop->wo_briopt);
-  check_string_option(&wop->wo_winhl);
-  check_string_option(&wop->wo_lcs);
-  check_string_option(&wop->wo_fcs);
-  check_string_option(&wop->wo_ve);
-  check_string_option(&wop->wo_wbr);
-  check_string_option(&wop->wo_stc);
+  rs_check_winopt(wop);
 }
 
 /// Free the allocated memory inside a winopt_T.
 void clear_winopt(winopt_T *wop)
 {
-  clear_string_option(&wop->wo_fdc);
-  clear_string_option(&wop->wo_fdc_save);
-  clear_string_option(&wop->wo_fdi);
-  clear_string_option(&wop->wo_fdm);
-  clear_string_option(&wop->wo_fdm_save);
-  clear_string_option(&wop->wo_fde);
-  clear_string_option(&wop->wo_fdt);
-  clear_string_option(&wop->wo_fmr);
-  clear_string_option(&wop->wo_eiw);
-  clear_string_option(&wop->wo_scl);
-  clear_string_option(&wop->wo_rlc);
-  clear_string_option(&wop->wo_sbr);
-  clear_string_option(&wop->wo_stl);
-  clear_string_option(&wop->wo_culopt);
-  clear_string_option(&wop->wo_cc);
-  clear_string_option(&wop->wo_cocu);
-  clear_string_option(&wop->wo_briopt);
-  clear_string_option(&wop->wo_winhl);
-  clear_string_option(&wop->wo_lcs);
-  clear_string_option(&wop->wo_fcs);
-  clear_string_option(&wop->wo_ve);
-  clear_string_option(&wop->wo_wbr);
-  clear_string_option(&wop->wo_stc);
+  rs_clear_winopt(wop);
 }
 
 void didset_window_options(win_T *wp, bool valid_cursor)
 {
-  // Set w_leftcol or w_skipcol to zero.
-  if (wp->w_p_wrap) {
-    wp->w_leftcol = 0;
-  } else {
-    wp->w_skipcol = 0;
-  }
-  check_colorcolumn(NULL, wp);
-  briopt_check(NULL, wp);
-  fill_culopt_flags(NULL, wp);
-  set_chars_option(wp, wp->w_p_fcs, kFillchars, true, NULL, 0);
-  set_chars_option(wp, wp->w_p_lcs, kListchars, true, NULL, 0);
-  rs_parse_winhl_opt(NULL, wp);  // sets w_hl_needs_update also for w_p_winbl
-  check_blending(wp);
-  set_winbar_win(wp, false, valid_cursor);
-  check_signcolumn(NULL, wp);
-  wp->w_grid_alloc.blending = wp->w_p_winbl > 0;
+  rs_didset_window_options(wp, (int)valid_cursor);
 }
 
 #define COPY_OPT_SCTX(buf, bv) buf->b_p_script_ctx[bv] = options[buf_opt_idx[bv]].script_ctx

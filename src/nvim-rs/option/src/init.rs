@@ -440,7 +440,6 @@ extern "C" {
     fn nvim_set_p_icon(v: c_int);
     fn nvim_call_os_getenv(name: *const c_char) -> *mut c_char;
     fn nvim_call_vim_getenv(name: *const c_char) -> *mut c_char;
-    fn nvim_option_was_set_idx(opt_idx: c_int) -> c_int;
     fn nvim_call_after_pathsep(b: *const c_char, p: *const c_char) -> c_int;
     fn nvim_get_option_flags(opt_idx: c_int) -> u32;
     fn xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
@@ -458,11 +457,14 @@ const K_OPT_FLAG_WAS_SET: u32 = 1 << 3;
 /// Equivalent of CSTR_AS_OPTVAL(ptr): creates a String OptVal wrapping a C pointer.
 /// The pointer must be a valid C string allocated (or borrowed) for the lifetime of the OptVal.
 unsafe fn cstr_as_optval(ptr: *mut c_char) -> OptVal {
-    let len = libc::strlen(ptr as *const _);
+    let len = libc::strlen(ptr.cast_const());
     OptVal {
         type_: OptValType::String,
         data: OptValData {
-            string: String_ { data: ptr, size: len },
+            string: String_ {
+                data: ptr,
+                size: len,
+            },
         },
     }
 }
@@ -471,7 +473,9 @@ unsafe fn cstr_as_optval(ptr: *mut c_char) -> OptVal {
 fn boolean_optval(b: bool) -> OptVal {
     OptVal {
         type_: OptValType::Boolean,
-        data: OptValData { boolean: c_int::from(b) },
+        data: OptValData {
+            boolean: c_int::from(b),
+        },
     }
 }
 
@@ -534,7 +538,7 @@ pub unsafe extern "C" fn rs_set_init_default_backupskip() {
     let mut try_add_path = |path: *const c_char, mustfree: bool| {
         if path.is_null() || *path == 0 {
             if mustfree {
-                xfree(path as *mut c_char);
+                xfree(path.cast_mut());
             }
             return;
         }
@@ -545,7 +549,7 @@ pub unsafe extern "C" fn rs_set_init_default_backupskip() {
         // Build pattern: path[/]* where / is path separator on current platform
         let sep: &[u8] = if has_trailing { b"" } else { b"/" };
         let mut item: Vec<u8> = Vec::with_capacity(plen + 2 + 1);
-        let slice = std::slice::from_raw_parts(path as *const u8, plen);
+        let slice = std::slice::from_raw_parts(path.cast::<u8>(), plen);
         item.extend_from_slice(slice);
         item.extend_from_slice(sep);
         item.push(b'*');
@@ -554,9 +558,14 @@ pub unsafe extern "C" fn rs_set_init_default_backupskip() {
         let existing_ptr: *const c_char = if result.is_empty() {
             std::ptr::null()
         } else {
-            result.as_ptr() as *const c_char
+            result.as_ptr().cast::<c_char>()
         };
-        let dup = rs_find_dup_item(existing_ptr, item.as_ptr() as *const c_char, item.len(), flags);
+        let dup = rs_find_dup_item(
+            existing_ptr,
+            item.as_ptr().cast::<c_char>(),
+            item.len(),
+            flags,
+        );
 
         if dup.is_null() {
             // Not a duplicate: append separator if needed, then item
@@ -567,7 +576,7 @@ pub unsafe extern "C" fn rs_set_init_default_backupskip() {
         }
 
         if mustfree {
-            xfree(path as *mut c_char);
+            xfree(path.cast_mut());
         }
     };
 
@@ -583,7 +592,7 @@ pub unsafe extern "C" fn rs_set_init_default_backupskip() {
 
     // Add TMPDIR, TEMP, TMP from environment
     for name in env_names {
-        let env_name = name.as_ptr() as *const c_char;
+        let env_name = name.as_ptr().cast::<c_char>();
         let p = nvim_call_vim_getenv(env_name);
         try_add_path(p, true);
     }
@@ -593,7 +602,7 @@ pub unsafe extern "C" fn rs_set_init_default_backupskip() {
         result.push(0);
         let len = result.len();
         let buf = xmalloc(len);
-        std::ptr::copy_nonoverlapping(result.as_ptr() as *const c_char, buf, len);
+        std::ptr::copy_nonoverlapping(result.as_ptr().cast::<c_char>(), buf, len);
         nvim_call_set_string_default(opt_idx, buf, 1);
     }
 }

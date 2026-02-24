@@ -30,7 +30,11 @@ extern "C" {
     fn nvim_option_is_global_only(opt_idx: c_int) -> c_int;
     fn nvim_option_is_window_local(opt_idx: c_int) -> c_int;
     fn nvim_call_put_line(fd: *mut libc::FILE, str_: *const c_char) -> c_int;
-    fn nvim_call_makeset_if_line(fd: *mut libc::FILE, optname: *const c_char, val: *const c_char) -> c_int;
+    fn nvim_call_makeset_if_line(
+        fd: *mut libc::FILE,
+        optname: *const c_char,
+        val: *const c_char,
+    ) -> c_int;
     fn nvim_get_varp_string_val(varp: *const std::ffi::c_void) -> *const c_char;
     fn nvim_option_get_fullname(opt_idx: c_int) -> *const c_char;
     fn nvim_get_kopt_count() -> c_int;
@@ -571,16 +575,17 @@ pub unsafe extern "C" fn rs_makeset(
                     c"setlocal".as_ptr()
                 };
 
-                let mut do_endif = false;
                 // syntax and filetype get an 'if' guard to avoid reloading
-                if opt_idx == K_OPT_SYNTAX || opt_idx == K_OPT_FILETYPE {
+                let do_endif = if opt_idx == K_OPT_SYNTAX || opt_idx == K_OPT_FILETYPE {
                     let optname = nvim_option_get_fullname(opt_idx);
                     let str_val = nvim_get_varp_string_val(cur_varp);
                     if nvim_call_makeset_if_line(fd, optname, str_val) == FAIL {
                         return FAIL;
                     }
-                    do_endif = true;
-                }
+                    true
+                } else {
+                    false
+                };
 
                 if rs_put_set(fd, cmd, opt_idx, cur_varp) == FAIL {
                     return FAIL;

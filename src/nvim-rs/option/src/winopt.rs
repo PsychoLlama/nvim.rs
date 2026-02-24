@@ -1,0 +1,138 @@
+//! Window option copy/clear/check operations
+//!
+//! This module provides Rust implementations of the winopt_T manipulation
+//! functions: copy_winopt, clear_winopt, check_winopt, didset_window_options,
+//! and check_win_options.
+
+use std::ffi::{c_char, c_int, c_void};
+
+// Opaque handle types
+type WinoptHandle = *mut c_void;
+type WinHandle = *mut c_void;
+
+extern "C" {
+    // String field accessor: returns &mut *char for field at index [0..22]
+    fn nvim_winopt_string_field_ptr(wop: WinoptHandle, idx: c_int) -> *mut *mut c_char;
+    fn nvim_winopt_string_field_count() -> c_int;
+
+    // Scalar copy: copies all bool/int/flags fields from->to
+    fn nvim_copy_winopt_scalars(from: WinoptHandle, to: WinoptHandle);
+    // Conditional xstrdup for wo_fdc_save and wo_fdm_save based on wo_diff_saved
+    fn nvim_copy_winopt_save_strs(from: WinoptHandle, to: WinoptHandle);
+    // memmove of wo_script_ctx
+    fn nvim_copy_winopt_script_ctx(from: WinoptHandle, to: WinoptHandle);
+
+    // copy_option_val: returns empty_string_option if val == empty_string_option, else xstrdup
+    fn nvim_call_copy_option_val(val: *const c_char) -> *mut c_char;
+
+    // Per-field string manipulation
+    fn nvim_call_clear_string_option(ptr: *mut *mut c_char);
+    fn nvim_call_check_string_option(ptr: *mut *mut c_char);
+
+    // didset_window_options sub-calls
+    // nvim_win_get_p_wrap, nvim_win_set_leftcol, nvim_win_set_skipcol defined in window_shim.c
+    fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
+    fn nvim_win_set_leftcol(wp: WinHandle, v: c_int);
+    fn nvim_win_set_skipcol(wp: WinHandle, v: c_int);
+    fn nvim_call_check_colorcolumn(wp: WinHandle);
+    fn nvim_call_briopt_check(wp: WinHandle);
+    fn nvim_call_fill_culopt_flags(wp: WinHandle);
+    fn nvim_call_set_chars_option_fcs(wp: WinHandle);
+    fn nvim_call_set_chars_option_lcs(wp: WinHandle);
+    fn nvim_call_check_blending(wp: WinHandle);
+    fn nvim_call_set_winbar_win(wp: WinHandle, valid_cursor: c_int);
+    fn nvim_call_check_signcolumn(wp: WinHandle);
+    // nvim_win_update_grid_blending defined in option_shim.c (uses w_p_winbl > 0 logic)
+    fn nvim_win_update_grid_blending(wp: WinHandle);
+}
+
+/// Copy all window options from `from` to `to`.
+///
+/// Does not free old values in `to` - use `rs_clear_winopt` first.
+/// The 'scroll' option is not copied (depends on window height).
+///
+/// # Safety
+/// Both `from` and `to` must be valid non-null winopt_T pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_winopt(from: WinoptHandle, to: WinoptHandle) {
+    // Copy all scalar fields
+    nvim_copy_winopt_scalars(from, to);
+
+    // Copy all string fields via copy_option_val (which handles empty_string_option).
+    // Skip indices 1 (wo_fdc_save) and 4 (wo_fdm_save) -- handled specially below.
+    let n = nvim_winopt_string_field_count();
+    for i in 0..n {
+        if i == 1 || i == 4 {
+            continue; // handled by nvim_copy_winopt_save_strs
+        }
+        let from_field = nvim_winopt_string_field_ptr(from, i);
+        let to_field = nvim_winopt_string_field_ptr(to, i);
+        if from_field.is_null() || to_field.is_null() {
+            continue;
+        }
+        *to_field = nvim_call_copy_option_val(*from_field);
+    }
+
+    // Handle wo_fdc_save and wo_fdm_save with conditional xstrdup (diff-mode save fields)
+    nvim_copy_winopt_save_strs(from, to);
+
+    // Copy script context array
+    nvim_copy_winopt_script_ctx(from, to);
+
+    // Ensure no NULL pointers remain
+    rs_check_winopt(to);
+}
+
+/// Free all allocated string fields in a winopt_T.
+///
+/// # Safety
+/// `wop` must be a valid non-null winopt_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_winopt(wop: WinoptHandle) {
+    let n = nvim_winopt_string_field_count();
+    for i in 0..n {
+        let field = nvim_winopt_string_field_ptr(wop, i);
+        if !field.is_null() {
+            nvim_call_clear_string_option(field);
+        }
+    }
+}
+
+/// Replace NULL string pointers in a winopt_T with `empty_string_option`.
+///
+/// # Safety
+/// `wop` must be a valid non-null winopt_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_winopt(wop: WinoptHandle) {
+    let n = nvim_winopt_string_field_count();
+    for i in 0..n {
+        let field = nvim_winopt_string_field_ptr(wop, i);
+        if !field.is_null() {
+            nvim_call_check_string_option(field);
+        }
+    }
+}
+
+/// Recalculate derived window state after option changes.
+///
+/// # Safety
+/// `wp` must be a valid non-null win_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_didset_window_options(wp: WinHandle, valid_cursor: c_int) {
+    // Set w_leftcol or w_skipcol to zero based on 'wrap'
+    if nvim_win_get_p_wrap(wp) != 0 {
+        nvim_win_set_leftcol(wp, 0);
+    } else {
+        nvim_win_set_skipcol(wp, 0);
+    }
+    nvim_call_check_colorcolumn(wp);
+    nvim_call_briopt_check(wp);
+    nvim_call_fill_culopt_flags(wp);
+    nvim_call_set_chars_option_fcs(wp);
+    nvim_call_set_chars_option_lcs(wp);
+    crate::callbacks::winhl::rs_parse_winhl_opt(std::ptr::null(), wp); // sets w_hl_needs_update also for w_p_winbl
+    nvim_call_check_blending(wp);
+    nvim_call_set_winbar_win(wp, valid_cursor);
+    nvim_call_check_signcolumn(wp);
+    nvim_win_update_grid_blending(wp);
+}

@@ -40,6 +40,7 @@ pub mod types;
 pub mod validate;
 pub mod value;
 pub mod varp;
+pub mod winopt;
 
 use std::ffi::{c_char, c_int, c_uint};
 
