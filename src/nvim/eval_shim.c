@@ -169,6 +169,9 @@ extern int rs_eval_foldexpr(win_T *wp, int *cp);
 extern void rs_eval_foldtext(win_T *wp, Object *out);
 // Phase 4 (eval_shim pass 5)
 extern int rs_get_name_len(const char **arg, char **alias, bool evaluate, bool verbose);
+// Phase 2 (eval_shim pass 7)
+extern char *rs_do_string_sub(char *str, size_t len, char *pat, char *sub, typval_T *expr,
+                               const char *flags, size_t *ret_len);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -455,6 +458,35 @@ void nvim_eval_save_set_cpo(void)
 void nvim_eval_restore_cpo(void)
 {
   p_cpo = saved_eval_p_cpo;
+}
+
+/// Get p_cpo pointer (accessor for rs_do_string_sub).
+char *nvim_p_cpo_get(void)
+{
+  return p_cpo;
+}
+
+/// Set p_cpo pointer (accessor for rs_do_string_sub).
+void nvim_p_cpo_set(char *val)
+{
+  p_cpo = val;
+}
+
+/// Get empty_string_option pointer (accessor for rs_do_string_sub).
+char *nvim_empty_string_option(void)
+{
+  return empty_string_option;
+}
+
+/// Restore p_cpo via set_option_value_give_err when the expression changed it
+/// during substitution. Handles the complex path in do_string_sub where p_cpo
+/// changed but is now NUL (was changed and restored).
+void nvim_do_string_sub_restore_cpo_complex(char *save_cpo)
+{
+  if (*p_cpo == NUL) {
+    set_option_value_give_err(kOptCpoptions, CSTR_AS_OPTVAL(save_cpo), 0);
+  }
+  free_string_option(save_cpo);
 }
 
 #define loop_get_events(l) rs_loop_get_events(l)
@@ -2058,99 +2090,7 @@ void last_set_msg(sctx_T script_ctx)
 char *do_string_sub(char *str, size_t len, char *pat, char *sub, typval_T *expr, const char *flags,
                     size_t *ret_len)
 {
-  regmatch_T regmatch;
-  garray_T ga;
-
-  // Make 'cpoptions' empty, so that the 'l' flag doesn't work here
-  char *save_cpo = p_cpo;
-  p_cpo = empty_string_option;
-
-  ga_init(&ga, 1, 200);
-
-  regmatch.rm_ic = p_ic;
-  regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
-  if (regmatch.regprog != NULL) {
-    char *tail = str;
-    char *end = str + len;
-    bool do_all = (flags[0] == 'g');
-    int sublen;
-    char *zero_width = NULL;
-
-    while (vim_regexec_nl(&regmatch, str, (colnr_T)(tail - str))) {
-      // Skip empty match except for first match.
-      if (regmatch.startp[0] == regmatch.endp[0]) {
-        if (zero_width == regmatch.startp[0]) {
-          // avoid getting stuck on a match with an empty string
-          int i = utfc_ptr2len(tail);
-          memmove((char *)ga.ga_data + ga.ga_len, tail, (size_t)i);
-          ga.ga_len += i;
-          tail += i;
-          continue;
-        }
-        zero_width = regmatch.startp[0];
-      }
-
-      // Get some space for a temporary buffer to do the substitution
-      // into.  It will contain:
-      // - The text up to where the match is.
-      // - The substituted text.
-      // - The text after the match.
-      sublen = vim_regsub(&regmatch, sub, expr, tail, 0, REGSUB_MAGIC);
-      if (sublen <= 0) {
-        ga_clear(&ga);
-        break;
-      }
-      ga_grow(&ga, (int)((end - tail) + sublen -
-                         (regmatch.endp[0] - regmatch.startp[0])));
-
-      // copy the text up to where the match is
-      int i = (int)(regmatch.startp[0] - tail);
-      memmove((char *)ga.ga_data + ga.ga_len, tail, (size_t)i);
-      // add the substituted text
-      vim_regsub(&regmatch, sub, expr,
-                 (char *)ga.ga_data + ga.ga_len + i, sublen,
-                 REGSUB_COPY | REGSUB_MAGIC);
-      ga.ga_len += i + sublen - 1;
-      tail = regmatch.endp[0];
-      if (*tail == NUL) {
-        break;
-      }
-      if (!do_all) {
-        break;
-      }
-    }
-
-    if (ga.ga_data != NULL) {
-      STRCPY((char *)ga.ga_data + ga.ga_len, tail);
-      ga.ga_len += (int)(end - tail);
-    }
-
-    vim_regfree(regmatch.regprog);
-  }
-
-  if (ga.ga_data != NULL) {
-    str = ga.ga_data;
-    len = (size_t)ga.ga_len;
-  }
-  char *ret = xstrnsave(str, len);
-  ga_clear(&ga);
-  if (p_cpo == empty_string_option) {
-    p_cpo = save_cpo;
-  } else {
-    // Darn, evaluating {sub} expression or {expr} changed the value.
-    // If it's still empty it was changed and restored, need to restore in
-    // the complicated way.
-    if (*p_cpo == NUL) {
-      set_option_value_give_err(kOptCpoptions, CSTR_AS_OPTVAL(save_cpo), 0);
-    }
-    free_string_option(save_cpo);
-  }
-
-  if (ret_len != NULL) {
-    *ret_len = len;
-  }
-
-  return ret;
+  return rs_do_string_sub(str, len, pat, sub, expr, flags, ret_len);
 }
 
 /// Common code for getting job callbacks for `jobstart`.
