@@ -312,13 +312,14 @@ void nvim_beep_flush_wrapper(void)
   beep_flush();
 }
 
-/// Wrapper for nv_g_home_m_cmd() (accessor for Rust).
+/// Wrapper for rs_nv_g_home_m_cmd() (accessor for Rust move crate).
+extern void rs_nv_g_home_m_cmd(cmdarg_T *cap);
 void nvim_nv_g_home_m_cmd(void)
 {
   oparg_T oa = { 0 };
   cmdarg_T ca = { 0 };
   ca.oap = &oa;
-  nv_g_home_m_cmd(&ca);
+  rs_nv_g_home_m_cmd(&ca);
 }
 
 /// Check if ONE_WINDOW macro is true (accessor for Rust).

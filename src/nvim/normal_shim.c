@@ -1162,9 +1162,11 @@ bool nvim_findmatch_nul(oparg_T *oap, int *out_lnum, int *out_col, int *out_cola
   return true;
 }
 
-bool nvim_unadjust_for_sel_inner_cursor(void) { return unadjust_for_sel_inner(&curwin->w_cursor); }
-
-bool nvim_unadjust_for_sel_inner_visual(void) { return unadjust_for_sel_inner(&VIsual); }
+// These call Rust implementations; unadjust_for_sel_inner (C) is kept for eval/funcs.c
+extern bool rs_unadjust_for_sel_inner_cursor(void);
+extern bool rs_unadjust_for_sel_inner_visual(void);
+bool nvim_unadjust_for_sel_inner_cursor(void) { return rs_unadjust_for_sel_inner_cursor(); }
+bool nvim_unadjust_for_sel_inner_visual(void) { return rs_unadjust_for_sel_inner_visual(); }
 
 int nvim_mark_mb_adjustpos_cursor(void) { mark_mb_adjustpos(curbuf, &curwin->w_cursor); return curwin->w_cursor.col; }
 
@@ -1343,6 +1345,51 @@ void nvim_bracket_fold_move(cmdarg_T *cap) { if (!rs_foldMoveTo(false, cap->cmdc
 void nvim_bracket_diff_move(cmdarg_T *cap) { if (!rs_diff_move_to(cap->cmdchar == ']' ? FORWARD : BACKWARD, cap->count1)) { rs_clearopbeep(cap->oap); } }
 
 // =============================================================================
+// Phase 3 accessors for nv_g_home_m_cmd, nv_g_dollar_cmd, n_opencmd,
+// and unadjust_for_sel_inner migrations
+// =============================================================================
+
+int nvim_sms_marker_overlap_curwin(int width) { return sms_marker_overlap(curwin, width); }
+void nvim_validate_cheight_curwin(void) { validate_cheight(curwin); }
+int nvim_get_curwin_w_skipcol(void) { return (int)curwin->w_skipcol; }
+int nvim_get_curwin_w_topline(void) { return (int)curwin->w_topline; }
+bool nvim_get_curwin_w_cline_folded(void) { return curwin->w_cline_folded; }
+void nvim_clear_curwin_w_valid_wcol(void) { curwin->w_valid &= ~VALID_WCOL; }
+bool nvim_ascii_iswhite_or_nul(int c) { return ascii_iswhite_or_nul(c); }
+int nvim_utf_ptr2cells_cursor(void) { return utf_ptr2cells(get_cursor_pos_ptr()); }
+int nvim_getvvcol_cursor_end(void) { colnr_T vcol; getvvcol(curwin, &curwin->w_cursor, NULL, NULL, &vcol); return (int)vcol; }
+void nvim_hasFolding_cursor_set_lnum_up(void) { hasFolding(curwin, curwin->w_cursor.lnum, &curwin->w_cursor.lnum, NULL); }
+void nvim_hasFolding_cursor_set_lnum_down(void) { hasFolding(curwin, curwin->w_cursor.lnum, NULL, &curwin->w_cursor.lnum); }
+void nvim_set_curbuf_b_last_changedtick_i(void) { curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf); }
+bool nvim_u_save_for_opencmd(bool backward) { return u_save(curwin->w_cursor.lnum - (backward ? 1 : 0), curwin->w_cursor.lnum + (backward ? 0 : 1)) != 0; }
+bool nvim_open_line_for_opencmd(bool backward, bool do_com) { return open_line(backward ? BACKWARD : FORWARD, do_com ? OPENLINE_DO_COM : 0, 0, NULL) != false; }
+bool nvim_has_format_option_fo_open_coms(void) { return has_format_option(FO_OPEN_COMS); }
+bool nvim_win_cursorline_standout_curwin(void) { return win_cursorline_standout(curwin); }
+void nvim_clear_curwin_w_valid_crow(void) { curwin->w_valid &= ~VALID_CROW; }
+/// mark_mb_adjustpos for cursor: adjusts curwin->w_cursor via curbuf,
+/// returns new col.
+int nvim_mark_mb_adjustpos_cursor_new(void) {
+  mark_mb_adjustpos(curbuf, &curwin->w_cursor);
+  return curwin->w_cursor.col;
+}
+/// getvcol for cursor pos after mark_mb_adjustpos_cursor: returns coladd = ce - cs.
+int nvim_getvcol_cursor_coladd_after_adj(void) {
+  colnr_T cs, ce;
+  getvcol(curwin, &curwin->w_cursor, &cs, NULL, &ce);
+  return (int)(ce - cs);
+}
+/// mark_mb_adjustpos for VIsual: adjusts VIsual via curbuf, returns new col.
+int nvim_mark_mb_adjustpos_visual_new(void) {
+  mark_mb_adjustpos(curbuf, &VIsual);
+  return VIsual.col;
+}
+/// getvcol for VIsual pos: returns coladd = ce - cs.
+int nvim_getvcol_visual_coladd_after_adj(void) {
+  colnr_T cs, ce;
+  getvcol(curwin, &VIsual, &cs, NULL, &ce);
+  return (int)(ce - cs);
+}
+// =============================================================================
 // Undo/Redo handler accessors for Rust FFI
 // =============================================================================
 
@@ -1387,8 +1434,8 @@ int nvim_get_literal_call(bool no_simplify) { return get_literal(no_simplify); }
 // nvim_stuffcharReadbuff already defined in edit.c
 void nvim_do_join_call(int count, bool insert_space) { do_join((size_t)count, insert_space, true, true, true); }
 void nvim_nv_diffgetput_call(bool put, size_t count) { nv_diffgetput(put, count); }
-void nvim_n_opencmd_call(cmdarg_T *cap) { n_opencmd(cap); }
-static void n_opencmd(cmdarg_T *cap);
+extern void rs_n_opencmd(cmdarg_T *cap);
+void nvim_n_opencmd_call(cmdarg_T *cap) { rs_n_opencmd(cap); }
 int nvim_get_b_prompt_start_lnum(void) { return curbuf->b_prompt_start.mark.lnum; }
 int nvim_cursor_count0_max2(cmdarg_T *cap) { return MAX(cap->count0, 2); }
 int nvim_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
@@ -1477,9 +1524,7 @@ void nvim_show_utf8_call(void) { show_utf8(); }
 void nvim_utf_find_illegal_call(void) { utf_find_illegal(); }
 void nvim_set_oap_cursor_start(oparg_T *oap) { oap->cursor_start = curwin->w_cursor; }
 void nvim_set_curwin_w_set_curswant(bool val) { curwin->w_set_curswant = val; }
-void nvim_nv_g_home_m_cmd_call(cmdarg_T *cap) { nv_g_home_m_cmd(cap); }
-static void nv_g_dollar_cmd(cmdarg_T *cap);
-void nvim_nv_g_dollar_cmd(cmdarg_T *cap) { nv_g_dollar_cmd(cap); }
+// nv_g_home_m_cmd and nv_g_dollar_cmd migrated to Rust (rs_nv_g_home_m_cmd, rs_nv_g_dollar_cmd)
 
 // nv_screengo C accessors for Rust FFI
 int nvim_get_curwin_w_virtcol(void) { return curwin->w_virtcol; }
@@ -2725,156 +2770,7 @@ void do_nv_ident(int c1, int c2)
 
 // n_start_visual_mode migrated to Rust (rs_n_start_visual_mode) in Phase 3
 
-/// "g0", "g^" : Like "0" and "^" but for screen lines.
-/// "gm": middle of "g0" and "g$".
-void nv_g_home_m_cmd(cmdarg_T *cap)
-{
-  int i;
-  const bool flag = cap->nchar == '^';
-
-  cap->oap->motion_type = kMTCharWise;
-  cap->oap->inclusive = false;
-  if (curwin->w_p_wrap && curwin->w_view_width != 0) {
-    int width1 = curwin->w_view_width - win_col_off(curwin);
-    int width2 = width1 + win_col_off2(curwin);
-
-    validate_virtcol(curwin);
-    i = 0;
-    if (curwin->w_virtcol >= (colnr_T)width1 && width2 > 0) {
-      i = (curwin->w_virtcol - width1) / width2 * width2 + width1;
-    }
-
-    // When ending up below 'smoothscroll' marker, move just beyond it so
-    // that skipcol is not adjusted later.
-    if (curwin->w_skipcol > 0 && curwin->w_cursor.lnum == curwin->w_topline) {
-      int overlap = sms_marker_overlap(curwin, curwin->w_view_width - width2);
-      if (overlap > 0 && i == curwin->w_skipcol) {
-        i += overlap;
-      }
-    }
-  } else {
-    i = curwin->w_leftcol;
-  }
-  // Go to the middle of the screen line.  When 'number' or
-  // 'relativenumber' is on and lines are wrapping the middle can be more
-  // to the left.
-  if (cap->nchar == 'm') {
-    i += (curwin->w_view_width - win_col_off(curwin)
-          + ((curwin->w_p_wrap && i > 0) ? win_col_off2(curwin) : 0)) / 2;
-  }
-  coladvance(curwin, (colnr_T)i);
-  if (flag) {
-    do {
-      i = gchar_cursor();
-    } while (ascii_iswhite(i) && oneright() == OK);
-    curwin->w_valid &= ~VALID_WCOL;
-  }
-  curwin->w_set_curswant = true;
-  if (rs_hasAnyFolding(curwin)) {
-    validate_cheight(curwin);
-    if (curwin->w_cline_folded) {
-      update_curswant_force();
-    }
-  }
-  adjust_skipcol();
-}
-
-/// "g$" : Like "$" but for screen lines.
-static void nv_g_dollar_cmd(cmdarg_T *cap)
-{
-  oparg_T *oap = cap->oap;
-  int i;
-  int col_off = win_col_off(curwin);
-  const bool flag = cap->nchar == K_END || cap->nchar == K_KEND;
-
-  oap->motion_type = kMTCharWise;
-  oap->inclusive = true;
-  if (curwin->w_p_wrap && curwin->w_view_width != 0) {
-    curwin->w_curswant = MAXCOL;              // so we stay at the end
-    if (cap->count1 == 1) {
-      int width1 = curwin->w_view_width - col_off;
-      int width2 = width1 + win_col_off2(curwin);
-
-      validate_virtcol(curwin);
-      i = width1 - 1;
-      if (curwin->w_virtcol >= (colnr_T)width1) {
-        i += ((curwin->w_virtcol - width1) / width2 + 1) * width2;
-      }
-      coladvance(curwin, (colnr_T)i);
-
-      // Make sure we stick in this column.
-      update_curswant_force();
-      if (curwin->w_cursor.col > 0 && curwin->w_p_wrap) {
-        // Check for landing on a character that got split at
-        // the end of the line.  We do not want to advance to
-        // the next screen line.
-        if (curwin->w_virtcol > (colnr_T)i) {
-          curwin->w_cursor.col--;
-        }
-      }
-    } else if (nv_screengo(oap, FORWARD, cap->count1 - 1, false) == false) {
-      rs_clearopbeep(oap);
-    }
-  } else {
-    if (cap->count1 > 1) {
-      // if it fails, let the cursor still move to the last char
-      cursor_down(cap->count1 - 1, false);
-    }
-    i = curwin->w_leftcol + curwin->w_view_width - col_off - 1;
-    coladvance(curwin, (colnr_T)i);
-
-    // if the character doesn't fit move one back
-    if (curwin->w_cursor.col > 0 && utf_ptr2cells(get_cursor_pos_ptr()) > 1) {
-      colnr_T vcol;
-
-      getvvcol(curwin, &curwin->w_cursor, NULL, NULL, &vcol);
-      if (vcol >= curwin->w_leftcol + curwin->w_view_width - col_off) {
-        curwin->w_cursor.col--;
-      }
-    }
-
-    // Make sure we stick in this column.
-    update_curswant_force();
-  }
-  if (flag) {
-    do {
-      i = gchar_cursor();
-    } while (ascii_iswhite_or_nul(i) && oneleft() == OK);
-    curwin->w_valid &= ~VALID_WCOL;
-  }
-}
-
-/// Handle "o" and "O" commands.
-static void n_opencmd(cmdarg_T *cap)
-{
-  if (rs_checkclearopq(cap->oap)) {
-    return;
-  }
-
-  if (cap->cmdchar == 'O') {
-    // Open above the first line of a folded sequence of lines
-    hasFolding(curwin, curwin->w_cursor.lnum,
-               &curwin->w_cursor.lnum, NULL);
-  } else {
-    // Open below the last line of a folded sequence of lines
-    hasFolding(curwin, curwin->w_cursor.lnum,
-               NULL, &curwin->w_cursor.lnum);
-  }
-  // trigger TextChangedI for the 'o/O' command
-  curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf);
-  if (u_save(curwin->w_cursor.lnum - (cap->cmdchar == 'O' ? 1 : 0),
-             curwin->w_cursor.lnum + (cap->cmdchar == 'o' ? 1 : 0))
-      && open_line(cap->cmdchar == 'O' ? BACKWARD : FORWARD,
-                   has_format_option(FO_OPEN_COMS) ? OPENLINE_DO_COM : 0,
-                   0, NULL)) {
-    if (win_cursorline_standout(curwin)) {
-      // force redraw of cursorline
-      curwin->w_valid &= ~VALID_CROW;
-    }
-    invoke_edit(cap, false, cap->cmdchar, true);
-  }
-}
-
+// nv_g_home_m_cmd, nv_g_dollar_cmd, n_opencmd migrated to Rust (Phase 3)
 
 // nv_operator_impl migrated to Rust in Phase 2
 
