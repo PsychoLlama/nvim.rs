@@ -92,13 +92,7 @@ static bool fold_changed;
 #include "fold_shim.c.generated.h"
 
 // Rust FFI declarations (internal-only; fold method checks are in fold.h)
-extern bool rs_diff_infold(win_T *wp, linenr_T lnum);
 extern linenr_T rs_diff_lnum_win(linenr_T lnum, win_T *wp);
-extern int rs_foldLevelWin(win_T *wp, linenr_T lnum);
-extern void rs_foldUpdateIEMS(win_T *wp, linenr_T top, linenr_T bot);
-extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
-extern void rs_foldtext_cleanup(char *str);
-extern char *rs_f_foldtext_impl(void);
 
 // Struct returned by rs_hasFoldingWin
 typedef struct {
