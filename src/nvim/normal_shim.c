@@ -1779,39 +1779,29 @@ int nvim_get_MB_BYTE2LEN(int c) { return MB_BYTE2LEN(c); }
 
 void nvim_gotchars_ignore_wrapper(void) { no_u_sync++; gotchars_ignore(); no_u_sync--; }
 
+// Phase 6 accessors for rs_normal_handle_composing_chars
+
+/// Set cap->nchar_len.
+void nvim_cap_set_nchar_len(cmdarg_T *cap, int val) { if (cap) { cap->nchar_len = val; } }
+
+// nvim_cap_get_nchar_composing_ptr: defined in search.c (const char*)
+
+/// utf_iscomposing(prev, c, state_ptr) wrapper.
+/// state_ptr points to a GraphemeState (int32_t) initialized to 0 (GRAPHEME_STATE_INIT).
+bool nvim_utf_iscomposing_check(int prev, int c, int32_t *state_ptr)
+{
+  return utf_iscomposing(prev, c, (GraphemeState *)state_ptr);
+}
+
+/// utf_char2len(c) wrapper.
+int nvim_utf_char2len_wrapper(int c) { return utf_char2len(c); }
+
 /// Handle the composing character loop in normal_get_additional_char.
-/// This is the "lang" section that deals with multi-byte composing chars.
-/// Takes NormalState* (as void*).
+/// Delegates to Rust implementation rs_normal_handle_composing_chars.
+extern void rs_normal_handle_composing_chars(void *sp);
 void nvim_normal_handle_composing_chars(void *sp)
 {
-  NormalState *s = (NormalState *)sp;
-  no_mapping--;
-  GraphemeState state = GRAPHEME_STATE_INIT;
-  int prev_code = s->ca.nchar;
-
-  while ((s->c = vpeekc()) > 0
-         && (s->c >= 0x100 || MB_BYTE2LEN(vpeekc()) > 1)) {
-    s->c = plain_vgetc();
-
-    if (!utf_iscomposing(prev_code, s->c, &state)) {
-      vungetc(s->c);
-      break;
-    }
-
-    if (s->ca.nchar_len == 0) {
-      s->ca.nchar_len = utf_char2bytes(s->ca.nchar, s->ca.nchar_composing);
-    }
-
-    if (s->ca.nchar_len + utf_char2len(s->c) < (int)sizeof(s->ca.nchar_composing)) {
-      s->ca.nchar_len += utf_char2bytes(s->c, s->ca.nchar_composing + s->ca.nchar_len);
-    }
-    prev_code = s->c;
-  }
-  s->ca.nchar_composing[s->ca.nchar_len] = NUL;
-  no_mapping++;
-  no_u_sync++;
-  gotchars_ignore();
-  no_u_sync--;
+  rs_normal_handle_composing_chars(sp);
 }
 
 static void normal_invert_horizontal(NormalState *s) { s->ca.cmdchar = rs_invert_horizontal(s->ca.cmdchar); s->idx = rs_find_command(s->ca.cmdchar); }

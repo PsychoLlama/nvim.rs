@@ -74,7 +74,16 @@ extern "C" {
     fn nvim_get_op_type_wrapper(c1: c_int, c2: c_int) -> c_int;
     fn nvim_get_p_ttm() -> i64;
     fn nvim_get_p_tm() -> i64;
-    fn nvim_normal_handle_composing_chars(s: NormalStateHandle);
+
+    // Phase 6: composing char handler accessors
+    fn nvim_cap_get_nchar_len(cap: CapHandle) -> c_int;
+    fn nvim_cap_set_nchar_len(cap: CapHandle, val: c_int);
+    fn nvim_cap_get_nchar_composing_ptr(cap: CapHandle) -> *const std::ffi::c_char; // search.c
+    fn nvim_utf_iscomposing_check(prev: c_int, c: c_int, state_ptr: *mut i32) -> bool;
+    fn nvim_utf_char2len_wrapper(c: c_int) -> c_int;
+    fn nvim_utf_char2bytes_wrapper(c: c_int, buf: *mut std::ffi::c_char) -> c_int;
+    fn nvim_get_MB_BYTE2LEN(c: c_int) -> c_int;
+    fn nvim_gotchars_ignore_wrapper();
 
     // find_command (already in Rust, but we need the C wrapper)
     fn rs_find_command(cmdchar: c_int) -> c_int;
@@ -219,8 +228,8 @@ unsafe fn read_target_char(
     }
 
     if lang {
-        // Handle composing characters (complex C code).
-        nvim_normal_handle_composing_chars(s);
+        // Handle composing characters.
+        rs_normal_handle_composing_chars(s);
     }
 }
 
@@ -285,4 +294,83 @@ pub unsafe extern "C" fn rs_normal_get_additional_char(s: NormalStateHandle) {
 
     nvim_dec_no_mapping();
     nvim_dec_allow_keys();
+}
+
+/// Maximum byte length of nchar_composing buffer (normal_defs.h MAX_SCHAR_SIZE = 32).
+const MAX_SCHAR_SIZE: usize = 32;
+/// MAX_SCHAR_SIZE as c_int for comparisons with C int values.
+const MAX_SCHAR_SIZE_INT: c_int = 32;
+
+/// Handle composing characters after reading nchar in normal mode.
+///
+/// This is the Rust implementation of `nvim_normal_handle_composing_chars()`
+/// from `normal_shim.c`. Reads composing code points that follow `ca.nchar`
+/// and accumulates them into `ca.nchar_composing`.
+///
+/// # Safety
+/// `s` must be a valid NormalState pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) {
+    let ca = nvim_ns_get_ca_ptr(s);
+
+    nvim_dec_no_mapping();
+
+    // GraphemeState is int32_t; GRAPHEME_STATE_INIT = 0.
+    let mut grapheme_state: i32 = 0;
+    let mut prev_code = nvim_cap_get_nchar(ca);
+
+    loop {
+        let peeked = nvim_vpeekc_wrapper();
+        nvim_ns_set_c(s, peeked);
+        if peeked <= 0 {
+            break;
+        }
+        // Check the while condition: c >= 0x100 || MB_BYTE2LEN(c) > 1
+        // MB_BYTE2LEN is safe for 0..=255; peeked may be > 255 for special keys.
+        let is_mb = peeked >= 0x100 || nvim_get_MB_BYTE2LEN(peeked & 0xff) > 1;
+        if !is_mb {
+            break;
+        }
+
+        let c = nvim_plain_vgetc_wrapper();
+        nvim_ns_set_c(s, c);
+
+        if !nvim_utf_iscomposing_check(prev_code, c, std::ptr::addr_of_mut!(grapheme_state)) {
+            nvim_vungetc_wrapper(c);
+            break;
+        }
+
+        // Ensure nchar_composing holds the base character first.
+        if nvim_cap_get_nchar_len(ca) == 0 {
+            let nchar = nvim_cap_get_nchar(ca);
+            // nchar_composing is mutable; the const is a C API convention.
+            let composing_ptr = nvim_cap_get_nchar_composing_ptr(ca).cast_mut();
+            let written = nvim_utf_char2bytes_wrapper(nchar, composing_ptr);
+            nvim_cap_set_nchar_len(ca, written);
+        }
+
+        // Append composing character if it fits.
+        let cur_len = nvim_cap_get_nchar_len(ca);
+        let extra = nvim_utf_char2len_wrapper(c);
+        if cur_len + extra < MAX_SCHAR_SIZE_INT {
+            let composing_ptr = nvim_cap_get_nchar_composing_ptr(ca).cast_mut();
+            let offset = usize::try_from(cur_len).unwrap_or(0);
+            let written = nvim_utf_char2bytes_wrapper(c, composing_ptr.add(offset));
+            nvim_cap_set_nchar_len(ca, cur_len + written);
+        }
+        prev_code = c;
+    }
+
+    // NUL-terminate nchar_composing.
+    {
+        let composing_ptr = nvim_cap_get_nchar_composing_ptr(ca).cast_mut();
+        let cur_len = nvim_cap_get_nchar_len(ca);
+        let offset = usize::try_from(cur_len)
+            .unwrap_or(0)
+            .min(MAX_SCHAR_SIZE - 1);
+        *composing_ptr.add(offset) = 0;
+    }
+
+    nvim_inc_no_mapping();
+    nvim_gotchars_ignore_wrapper(); // wraps no_u_sync++ / gotchars_ignore() / no_u_sync--
 }
