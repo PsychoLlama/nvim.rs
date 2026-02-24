@@ -570,15 +570,6 @@ extern "C" {
     /// Delete mark at iterator position.
     fn nvim_marktree_del_itr(b: MarkTreeHandle, itr: MarkTreeIterHandle, rev: bool) -> u64;
 
-    /// Pivot right (steal from left sibling).
-    fn nvim_pivot_right(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: c_int);
-
-    /// Pivot left (steal from right sibling).
-    fn nvim_pivot_left(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: c_int);
-
-    /// Merge two nodes.
-    fn nvim_merge_node(b: MarkTreeHandle, p: MTNodeHandle, i: c_int) -> MTNodeHandle;
-
     /// Delete key from id2node map.
     fn nvim_marktree_del_id(b: MarkTreeHandle, id: u64);
 
@@ -3584,6 +3575,11 @@ pub fn marktree_del_itr(b: MarkTreeHandle, itr: MarkTreeIterHandle, rev: bool) -
 /// Call this after changing decoration flags on a key.
 /// Walks the parent chain updating meta counts for the difference between
 /// old_key and the current key at the iterator position.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 pub fn marktree_revise_meta(b: MarkTreeHandle, itr: MarkTreeIterHandle, old_key: MTKey) {
     let meta_old = meta_describe_key(&old_key);
     let cur_key = rawkey(itr);
@@ -3631,7 +3627,10 @@ pub fn marktree_move(b: MarkTreeHandle, itr: MarkTreeIterHandle, row: i32, col: 
         let mut internal = false;
         let mut newpos = MTPos { row, col };
         let x_parent = unsafe { nvim_mtnode_get_parent(x) };
-        if !x_parent.is_null() {
+        if x_parent.is_null() {
+            // tree is one node, newpos is already "relative" to itr->pos
+            internal = true;
+        } else {
             let itr_pos = unsafe { nvim_mtitr_get_pos(itr) };
             // strictly _after_ key before `x`
             if pos_less(itr_pos, newpos) {
@@ -3643,9 +3642,6 @@ pub fn marktree_move(b: MarkTreeHandle, itr: MarkTreeIterHandle, row: i32, col: 
                     internal = true;
                 }
             }
-        } else {
-            // tree is one node, newpos is already "relative" to itr->pos
-            internal = true;
         }
 
         if internal {
@@ -3657,21 +3653,24 @@ pub fn marktree_move(b: MarkTreeHandle, itr: MarkTreeIterHandle, row: i32, col: 
             let search_key = MTKey { pos: newpos, ..key };
             // Match C logic: new_i = rs_marktree_getp_aux(x, key, &match); if !match { new_i++; }
             let (raw_new_i, raw_match) = marktree_getp_aux(x, &search_key);
-            let new_i = if !raw_match { raw_new_i + 1 } else { raw_new_i };
+            let new_i = if raw_match { raw_new_i } else { raw_new_i + 1 };
 
-            if new_i == itr_i {
-                unsafe { nvim_mtnode_set_key(x, itr_i, MTKey { pos: newpos, ..key }) };
-            } else if new_i < itr_i {
-                unsafe {
-                    nvim_mtnode_memmove_keys(x, new_i + 1, new_i, itr_i - new_i);
+            match new_i.cmp(&itr_i) {
+                std::cmp::Ordering::Equal => {
+                    unsafe { nvim_mtnode_set_key(x, itr_i, MTKey { pos: newpos, ..key }) };
                 }
-                unsafe { nvim_mtnode_set_key(x, new_i, MTKey { pos: newpos, ..key }) };
-            } else {
-                // new_i > itr_i
-                unsafe {
-                    nvim_mtnode_memmove_keys(x, itr_i, itr_i + 1, new_i - itr_i - 1);
+                std::cmp::Ordering::Less => {
+                    unsafe {
+                        nvim_mtnode_memmove_keys(x, new_i + 1, new_i, itr_i - new_i);
+                    }
+                    unsafe { nvim_mtnode_set_key(x, new_i, MTKey { pos: newpos, ..key }) };
                 }
-                unsafe { nvim_mtnode_set_key(x, new_i - 1, MTKey { pos: newpos, ..key }) };
+                std::cmp::Ordering::Greater => {
+                    unsafe {
+                        nvim_mtnode_memmove_keys(x, itr_i, itr_i + 1, new_i - itr_i - 1);
+                    }
+                    unsafe { nvim_mtnode_set_key(x, new_i - 1, MTKey { pos: newpos, ..key }) };
+                }
             }
             return;
         }
@@ -3722,22 +3721,6 @@ pub fn marktree_restore_pair(b: MarkTreeHandle, key: MTKey) {
         nvim_free_marktreeiter(itr);
         nvim_free_marktreeiter(end_itr);
     }
-}
-
-/// Pivot right (steal from left sibling).
-pub fn pivot_right(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: i32) {
-    unsafe { nvim_pivot_right(b, p_pos, p, i) }
-}
-
-/// Pivot left (steal from right sibling).
-pub fn pivot_left(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: i32) {
-    unsafe { nvim_pivot_left(b, p_pos, p, i) }
-}
-
-/// Merge two nodes.
-#[must_use]
-pub fn merge_node(b: MarkTreeHandle, p: MTNodeHandle, i: i32) -> MTNodeHandle {
-    unsafe { nvim_merge_node(b, p, i) }
 }
 
 /// Delete key from id2node map.
@@ -3855,24 +3838,6 @@ pub extern "C" fn rs_marktree_restore_pair(b: MarkTreeHandle, key: MTKey) {
     marktree_restore_pair(b, key);
 }
 
-/// Exported FFI version of `pivot_right`.
-#[no_mangle]
-pub extern "C" fn rs_pivot_right(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: c_int) {
-    pivot_right(b, p_pos, p, i);
-}
-
-/// Exported FFI version of `pivot_left`.
-#[no_mangle]
-pub extern "C" fn rs_pivot_left(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: c_int) {
-    pivot_left(b, p_pos, p, i);
-}
-
-/// Exported FFI version of `merge_node`.
-#[no_mangle]
-pub extern "C" fn rs_merge_node(b: MarkTreeHandle, p: MTNodeHandle, i: c_int) -> MTNodeHandle {
-    merge_node(b, p, i)
-}
-
 // Note: rs_rawkey already uses the existing rawkey() which calls mtnode_key()
 
 /// Exported FFI version of `rawkey_set_flags`.
@@ -3970,7 +3935,15 @@ pub fn marktree_move_region(
     unrelative(start, &mut end);
 
     let itr = unsafe { nvim_alloc_marktreeiter() };
-    let _ = marktree_itr_get_ext_full(b, start, itr, false, true, std::ptr::null_mut(), std::ptr::null());
+    let _ = marktree_itr_get_ext_full(
+        b,
+        start,
+        itr,
+        false,
+        true,
+        std::ptr::null_mut(),
+        std::ptr::null(),
+    );
 
     let mut saved: Vec<MTKey> = Vec::new();
 
@@ -4012,6 +3985,10 @@ pub fn marktree_move_region(
 /// Test helper: delete both ends of a paired mark.
 ///
 /// Used by unit tests to delete a mark pair by ns/id.
+///
+/// # Panics
+///
+/// Panics if the mark specified by `ns`/`id` is not a paired mark.
 pub fn marktree_del_pair_test(b: MarkTreeHandle, ns: u32, id: u32) {
     let itr = unsafe { nvim_alloc_marktreeiter() };
     let _ = marktree_lookup_ns(b, ns, id, false, itr);

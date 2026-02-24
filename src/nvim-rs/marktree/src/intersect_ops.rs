@@ -7,7 +7,7 @@
 use std::ffi::c_int;
 
 use crate::intersection::intersect_merge_impl;
-use crate::{MarkTreeHandle, MTNodeHandle};
+use crate::{MTNodeHandle, MarkTreeHandle};
 
 // ============================================================================
 // C accessors used here
@@ -61,15 +61,19 @@ pub fn intersect_add_vec(x: &mut Vec<u64>, y: &[u64]) {
     let mut yi = 0;
 
     while xi < x.len() && yi < y.len() {
-        if x[xi] == y[yi] {
-            xi += 1;
-            yi += 1;
-        } else if y[yi] < x[xi] {
-            x.insert(xi, y[yi]);
-            xi += 1; // skip newly inserted element
-            yi += 1;
-        } else {
-            xi += 1;
+        match x[xi].cmp(&y[yi]) {
+            std::cmp::Ordering::Equal => {
+                xi += 1;
+                yi += 1;
+            }
+            std::cmp::Ordering::Greater => {
+                x.insert(xi, y[yi]);
+                xi += 1; // skip newly inserted element
+                yi += 1;
+            }
+            std::cmp::Ordering::Less => {
+                xi += 1;
+            }
         }
     }
     // Append remaining from y
@@ -100,18 +104,16 @@ pub fn intersect_mov_vec(x: &[u64], y: &mut Vec<u64>, w: &mut Vec<u64>, d: &mut 
                 yi += 1;
             }
             if yi < y.len() && y[yi] == w[wi] {
-                // Keep y[yi] in y at position yn; keep w[wi] in w consumed
+                // Keep y[yi] in y at position yn; w[wi] is consumed/matched, not kept in w
                 y[yn] = y[yi];
                 yn += 1;
                 yi += 1;
-                wi += 1;
-                // wn unchanged: w[wi] is consumed/matched, not kept in w
             } else {
                 // w[wi] not in y: keep w[wi] in w at position wn
                 w[wn] = w[wi];
                 wn += 1;
-                wi += 1;
             }
+            wi += 1;
         } else {
             // x[xi] < w[wi] strictly (or w exhausted)
             while yi < y.len() && y[yi] < x[xi] {
@@ -123,7 +125,6 @@ pub fn intersect_mov_vec(x: &[u64], y: &mut Vec<u64>, w: &mut Vec<u64>, d: &mut 
                 y[yn] = y[yi];
                 yn += 1;
                 yi += 1;
-                xi += 1;
             } else {
                 // x[xi] not in y and not in w: insert into w at position wn
                 if wi == wn {
@@ -136,8 +137,8 @@ pub fn intersect_mov_vec(x: &[u64], y: &mut Vec<u64>, w: &mut Vec<u64>, d: &mut 
                     w[wn] = x[xi];
                     wn += 1;
                 }
-                xi += 1;
             }
+            xi += 1;
         }
     }
 
@@ -228,7 +229,7 @@ pub extern "C" fn rs_merge_node_intersect(
 /// The moved child is at y->ptr[0].
 #[no_mangle]
 pub extern "C" fn rs_pivot_right_intersect(
-    b: MarkTreeHandle,
+    _b: MarkTreeHandle,
     x_node: MTNodeHandle,
     y_node: MTNodeHandle,
     y_n: c_int,
@@ -271,7 +272,7 @@ pub extern "C" fn rs_pivot_right_intersect(
 /// The moved child is at x->ptr[x_n].
 #[no_mangle]
 pub extern "C" fn rs_pivot_left_intersect(
-    b: MarkTreeHandle,
+    _b: MarkTreeHandle,
     x_node: MTNodeHandle,
     x_n: c_int,
     y_node: MTNodeHandle,
@@ -312,9 +313,9 @@ pub extern "C" fn rs_intersect_mov_test(
     win: *const u64,
     nwin: usize,
     wout: *mut u64,
-    nwout: *mut usize,
+    w_result_size: *mut usize,
     dout: *mut u64,
-    ndout: *mut usize,
+    d_result_size: *mut usize,
 ) -> bool {
     // SAFETY: Caller must provide valid pointers and sizes
     let x_vec = unsafe { std::slice::from_raw_parts(x, nx) }.to_vec();
@@ -324,18 +325,18 @@ pub extern "C" fn rs_intersect_mov_test(
 
     intersect_mov_vec(&x_vec, &mut y_vec, &mut w_vec, &mut d_vec);
 
-    let max_wout = unsafe { *nwout };
-    let max_dout = unsafe { *ndout };
+    let w_cap = unsafe { *w_result_size };
+    let d_cap = unsafe { *d_result_size };
 
-    if w_vec.len() > max_wout || d_vec.len() > max_dout {
+    if w_vec.len() > w_cap || d_vec.len() > d_cap {
         return false;
     }
 
     unsafe {
         std::ptr::copy_nonoverlapping(w_vec.as_ptr(), wout, w_vec.len());
-        *nwout = w_vec.len();
+        *w_result_size = w_vec.len();
         std::ptr::copy_nonoverlapping(d_vec.as_ptr(), dout, d_vec.len());
-        *ndout = d_vec.len();
+        *d_result_size = d_vec.len();
     }
 
     true
@@ -353,21 +354,21 @@ mod tests {
     fn test_intersect_add_vec() {
         let mut x = vec![1u64, 3, 5];
         intersect_add_vec(&mut x, &[2, 3, 6]);
-        assert_eq!(x, vec![1, 2, 3, 5, 6]);
+        assert_eq!(x, [1, 2, 3, 5, 6]);
     }
 
     #[test]
     fn test_intersect_add_empty_y() {
         let mut x = vec![1u64, 2, 3];
         intersect_add_vec(&mut x, &[]);
-        assert_eq!(x, vec![1, 2, 3]);
+        assert_eq!(x, [1, 2, 3]);
     }
 
     #[test]
     fn test_intersect_add_empty_x() {
         let mut x: Vec<u64> = vec![];
         intersect_add_vec(&mut x, &[1, 2, 3]);
-        assert_eq!(x, vec![1, 2, 3]);
+        assert_eq!(x, [1, 2, 3]);
     }
 
     #[test]
@@ -377,7 +378,7 @@ mod tests {
         // 1 is in x but not in y -> insert into w
         // 3 is in x AND y -> keep in y, not in w
         // 2,4 in y not in x or w -> go to d
-        let x = vec![1u64, 3];
+        let x = [1u64, 3];
         let mut y = vec![2u64, 3, 4];
         let mut w = vec![1u64, 3];
         let mut d: Vec<u64> = vec![];
@@ -387,20 +388,20 @@ mod tests {
         // After: y should keep 3 (it's in x), discard 2,4 (to d)
         // w should keep 1 (in x not in y), discard 3 (in both x and y -> already in y)
         // d = [2, 4]
-        assert_eq!(y, vec![3]);
-        assert_eq!(w, vec![1]);
-        assert_eq!(d, vec![2, 4]);
+        assert_eq!(y, [3]);
+        assert_eq!(w, [1]);
+        assert_eq!(d, [2, 4]);
     }
 
     #[test]
     fn test_intersect_mov_via_test_fn() {
-        let x = vec![1u64, 3, 5];
-        let y = vec![2u64, 3, 4];
-        let win = vec![1u64, 3, 5];
-        let mut wout = vec![0u64; 16];
-        let mut nwout = 16usize;
-        let mut dout = vec![0u64; 16];
-        let mut ndout = 16usize;
+        let x = [1u64, 3, 5];
+        let y = [2u64, 3, 4];
+        let win = [1u64, 3, 5];
+        let mut wout = [0u64; 16];
+        let mut w_size = 16usize;
+        let mut dout = [0u64; 16];
+        let mut d_size = 16usize;
 
         let result = rs_intersect_mov_test(
             x.as_ptr(),
@@ -410,9 +411,9 @@ mod tests {
             win.as_ptr(),
             win.len(),
             wout.as_mut_ptr(),
-            &mut nwout,
+            &raw mut w_size,
             dout.as_mut_ptr(),
-            &mut ndout,
+            &raw mut d_size,
         );
 
         assert!(result);

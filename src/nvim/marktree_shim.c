@@ -220,32 +220,6 @@ static MTNode *id2node(MarkTree *b, uint64_t id)
 #define meta s->i_meta
 // put functions
 
-// x must be an internal node, which is not full
-// x->ptr[i] should be a full node, i e x->ptr[i]->n == 2*T-1
-static inline void split_node(MarkTree *b, MTNode *x, const int i, MTKey next)
-{
-  rs_split_node(b, x, i, next);
-}
-
-// x must not be a full node (even if there might be internal space)
-static inline void marktree_putp_aux(MarkTree *b, MTNode *x, MTKey k, uint32_t *meta_inc)
-{
-  rs_marktree_putp_aux(b, x, k, meta_inc);
-}
-
-void marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_right)
-{
-  rs_marktree_put(b, key, end_row, end_col, end_right);
-}
-
-
-/// @param itr mutated
-/// @param end_itr not mutated
-void marktree_intersect_pair(MarkTree *b, uint64_t id, MarkTreeIter *itr, MarkTreeIter *end_itr,
-                             bool delete)
-{
-  rs_marktree_intersect_pair(b, id, itr, end_itr, delete);
-}
 
 static MTNode *marktree_alloc_node(MarkTree *b, bool internal)
 {
@@ -256,10 +230,6 @@ static MTNode *marktree_alloc_node(MarkTree *b, bool internal)
 }
 
 
-void marktree_put_key(MarkTree *b, MTKey k)
-{
-  rs_marktree_put_key(b, k);
-}
 
 /// INITIATING DELETION PROTOCOL:
 ///
@@ -304,9 +274,9 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
     // Remove intersect markers. NB: must match exactly!
     if (mt_start(raw)) {
       MarkTreeIter this_itr[1] = { *itr };  // mutated copy
-      marktree_intersect_pair(b, id, this_itr, other_itr, true);
+      rs_marktree_intersect_pair(b, id, this_itr, other_itr, true);
     } else {
-      marktree_intersect_pair(b, other, other_itr, itr, true);
+      rs_marktree_intersect_pair(b, other, other_itr, itr, true);
     }
   }
 
@@ -486,7 +456,7 @@ uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
       }
 
       b->root->parent = NULL;
-      marktree_free_node(b, oldroot);
+      rs_marktree_free_node(b, oldroot);
     } else {
       // no items, nothing for iterator to point to
       // not strictly needed, should handle delete right-most mark anyway
@@ -581,7 +551,7 @@ static MTNode *merge_node(MarkTree *b, MTNode *p, int i)
     p->ptr[j]->p_idx = (int16_t)j;
   }
   p->n--;
-  marktree_free_node(b, y);
+  rs_marktree_free_node(b, y);
 
   return x;
 }
@@ -738,21 +708,6 @@ static void pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i)
   }
 }
 
-/// frees all mem, resets tree to valid empty state
-void marktree_clear(MarkTree *b)
-{
-  rs_marktree_clear(b);
-}
-
-void marktree_free_subtree(MarkTree *b, MTNode *x)
-{
-  rs_marktree_free_subtree(b, x);
-}
-
-static void marktree_free_node(MarkTree *b, MTNode *x)
-{
-  rs_marktree_free_node(b, x);
-}
 
 /// @param itr iterator is invalid after call
 void marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col)
@@ -1000,10 +955,10 @@ past_continue_same_node:
           // pair
           rs_marktree_itr_set_node(b,itr, d.old, d.old_i);
           rs_marktree_itr_set_node(b,enditr, d2.old, d2.old_i);
-          marktree_intersect_pair(b, d.id, itr, enditr, true);
+          rs_marktree_intersect_pair(b, d.id, itr, enditr, true);
           rs_marktree_itr_set_node(b,itr, d.new, d.new_i);
           rs_marktree_itr_set_node(b,enditr, d2.new, d2.new_i);
-          marktree_intersect_pair(b, d.id, itr, enditr, false);
+          rs_marktree_intersect_pair(b, d.id, itr, enditr, false);
 
           i++;  // consume two items
           continue;
@@ -1015,10 +970,10 @@ past_continue_same_node:
         if (endpos->x) {
           rs_marktree_itr_set_node(b,itr, d.old, d.old_i);
           *enditr = *endpos;
-          marktree_intersect_pair(b, d.id, itr, enditr, true);
+          rs_marktree_intersect_pair(b, d.id, itr, enditr, true);
           rs_marktree_itr_set_node(b,itr, d.new, d.new_i);
           *enditr = *endpos;
-          marktree_intersect_pair(b, d.id, itr, enditr, false);
+          rs_marktree_intersect_pair(b, d.id, itr, enditr, false);
         }
       } else {
         // d is lone end, start didn't move
@@ -1029,10 +984,10 @@ past_continue_same_node:
         if (startpos->x) {
           *itr = *startpos;
           rs_marktree_itr_set_node(b,enditr, d.old, d.old_i);
-          marktree_intersect_pair(b, start_id, itr, enditr, true);
+          rs_marktree_intersect_pair(b, start_id, itr, enditr, true);
           *itr = *startpos;
           rs_marktree_itr_set_node(b,enditr, d.new, d.new_i);
-          marktree_intersect_pair(b, start_id, itr, enditr, false);
+          rs_marktree_intersect_pair(b, start_id, itr, enditr, false);
         }
       }
     }
@@ -1049,19 +1004,6 @@ void marktree_move_region(MarkTree *b, int start_row, colnr_T start_col, int ext
 }
 
 
-// for unit test
-void marktree_put_test(MarkTree *b, uint32_t ns, uint32_t id, int row, int col, bool right_gravity,
-                       int end_row, int end_col, bool end_right, bool meta_inline)
-{
-  rs_marktree_put_test(b, ns, id, row, col, right_gravity, end_row, end_col, end_right,
-                       meta_inline);
-}
-
-// for unit test
-bool mt_right_test(MTKey key)
-{
-  return rs_mt_right_test(key);
-}
 
 // for unit test
 void marktree_del_pair_test(MarkTree *b, uint32_t ns, uint32_t id)
@@ -1170,7 +1112,7 @@ bool marktree_check_intersections(MarkTree *b)
       MTKey k = rs_marktree_lookup(b, end_id, end_itr);
       if (k.pos.row >= 0) {
         *start_itr = *itr;
-        marktree_intersect_pair(b, mt_lookup_key(mark), start_itr, end_itr, false);
+        rs_marktree_intersect_pair(b, mt_lookup_key(mark), start_itr, end_itr, false);
       }
     }
 
@@ -1542,9 +1484,6 @@ uint64_t nvim_marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev) { retur
 void nvim_marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key) { marktree_revise_meta(b, itr, old_key); }
 void nvim_marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col) { marktree_move(b, itr, row, col); }
 void nvim_marktree_restore_pair(MarkTree *b, MTKey key) { marktree_restore_pair(b, key); }
-void nvim_pivot_right(MarkTree *b, MTPos p_pos, MTNode *p, int i) { pivot_right(b, p_pos, p, i); }
-void nvim_pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i) { pivot_left(b, p_pos, p, i); }
-MTNode *nvim_merge_node(MarkTree *b, MTNode *p, int i) { return merge_node(b, p, i); }
 void nvim_marktree_del_id(MarkTree *b, uint64_t id) { pmap_del(uint64_t)(b->id2node, id, NULL); }
 void nvim_marktree_dec_n_keys(MarkTree *b) { b->n_keys--; }
 MarkTreeIter *nvim_alloc_marktreeiter(void) { return xcalloc(1, sizeof(MarkTreeIter)); }
