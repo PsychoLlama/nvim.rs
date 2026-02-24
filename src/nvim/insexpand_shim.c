@@ -186,6 +186,9 @@ extern void rs_get_next_tag_completion(void);
 // Phase 4 (pass 4) Rust exports
 extern void rs_compl_source_start_timer(int source_idx);
 extern int rs_advance_cpt_sources_index_safe(void);
+// Phase 5 (pass 4) Rust exports
+extern char *rs_ins_compl_infercase_gettext(const char *str, int char_len, int compl_char_len,
+                                            int min_len, char **tofree);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -491,8 +494,8 @@ void do_autocmd_completedone(int c, int mode, char *word)
 
 /// Get the completed text by inferring the case of the originally typed text.
 /// If the result is in allocated memory "tofree" is set to it.
-static char *ins_compl_infercase_gettext(const char *str, int char_len, int compl_char_len,
-                                         int min_len, char **tofree)
+char *nvim_ins_compl_infercase_gettext_impl(const char *str, int char_len, int compl_char_len,
+                                            int min_len, char **tofree)
 {
   bool has_lower = false;
 
@@ -632,7 +635,7 @@ int ins_compl_add_infercase(char *str_arg, int len, bool icase, char *fname, Dir
     // thesaurus, only use the minimum when comparing.
     int min_len = MIN(char_len, compl_char_len);
 
-    str = ins_compl_infercase_gettext(str, char_len, compl_char_len, min_len, &tofree);
+    str = nvim_ins_compl_infercase_gettext_impl(str, char_len, compl_char_len, min_len, &tofree);
   }
   if (cont_s_ipos) {
     flags |= CP_CONT_S_IPOS;

@@ -15,6 +15,7 @@ pub mod dict;
 pub mod entry;
 pub mod extmark;
 pub mod file;
+pub mod infercase;
 pub mod insert;
 pub mod keys;
 pub mod keyword;
