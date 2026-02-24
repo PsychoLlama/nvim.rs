@@ -2412,39 +2412,6 @@ int64_t nvim_shada_os_get_pid(void) { return os_get_pid(); }
 /// Get the current encoding option (p_enc).
 const char *nvim_shada_get_p_enc(void) { return p_enc; }
 
-/// Pack the ShaDa file header entry.
-/// @param packer   Packer buffer to write to.
-/// @param max_kbyte Maximum kbyte size for entries.
-/// @return kSDWriteSuccessful or kSDWriteFailed.
-int nvim_shada_pack_header_entry(PackerBuffer *packer, size_t max_kbyte)
-{
-  if (!packer) {
-    return kSDWriteFailed;
-  }
-  return (int)rs_shada_pack_entry(packer, &(ShadaEntry) {
-    .type = kSDItemHeader,
-    .timestamp = os_time(),
-    .data = {
-      .header = {
-        .size = 5,
-        .capacity = 5,
-        .items = ((KeyValuePair[]) {
-          { STATIC_CSTR_AS_STRING("generator"),
-            STATIC_CSTR_AS_OBJ("nvim") },
-          { STATIC_CSTR_AS_STRING("version"),
-            CSTR_AS_OBJ(longVersion) },
-          { STATIC_CSTR_AS_STRING("max_kbyte"),
-            INTEGER_OBJ((Integer)max_kbyte) },
-          { STATIC_CSTR_AS_STRING("pid"),
-            INTEGER_OBJ((Integer)os_get_pid()) },
-          { STATIC_CSTR_AS_STRING("encoding"),
-            CSTR_AS_OBJ(p_enc) },
-        }),
-      }
-    }
-  }, 0);
-}
-
 /// Iterate over global marks.
 /// @param iter       Previous iterator or NULL to start.
 /// @param out_name   Output: mark name character.

@@ -610,8 +610,6 @@ extern "C" {
     fn nvim_shada_os_get_pid() -> i64;
     /// Get p_enc (current encoding).
     fn nvim_shada_get_p_enc() -> *const c_char;
-    /// Pack the ShaDa file header entry with generator/version/max_kbyte/pid/encoding.
-    fn nvim_shada_pack_header_entry(packer: *mut c_void, max_kbyte: usize) -> c_int;
     /// Iterate over global marks.
     fn nvim_shada_mark_global_iter(
         iter: *const c_void,
@@ -3458,7 +3456,7 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
     rs_find_removable_bufs(removable_bufs);
 
     // Write header.
-    if nvim_shada_pack_header_entry(packer.cast::<c_void>(), max_kbyte) == SD_WRITE_FAILED {
+    if rs_shada_pack_file_header(packer, max_kbyte) == SD_WRITE_FAILED {
         ret = SD_WRITE_FAILED;
         // fall through to cleanup (goto equivalent)
     }
@@ -6306,6 +6304,107 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
 
     nvim_xfree(packed.data.cast::<c_void>());
     SD_WRITE_SUCCESSFUL
+}
+
+// =============================================================================
+// Phase 1 (plan fd426e0f): Pack header directly in Rust
+// =============================================================================
+
+/// Pack the ShaDa file header entry (generator/version/max_kbyte/pid/encoding) directly in Rust.
+///
+/// Constructs a header msgpack map(5) with keys: generator, version,
+/// max_kbyte, pid, encoding -- all collected from existing C accessors.
+/// Bypasses the C ShadaEntry/Dict infrastructure entirely.
+///
+/// Returns SD_WRITE_SUCCESSFUL or SD_WRITE_FAILED.
+///
+/// # Safety
+///
+/// `packer` must be a valid PackerBuffer pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_pack_file_header(
+    packer: *mut ShadaPackerBuffer,
+    max_kbyte: usize,
+) -> c_int {
+    if packer.is_null() {
+        return SD_WRITE_FAILED;
+    }
+
+    // Collect values from C accessors.
+    let timestamp = nvim_shada_os_time();
+    let long_version = nvim_shada_get_longversion();
+    let pid = nvim_shada_os_get_pid();
+    let p_enc = nvim_shada_get_p_enc();
+
+    // Build body in a temporary string buffer.
+    let mut sbuf = std::mem::MaybeUninit::<ShadaPackerBuffer>::uninit();
+    nvim_shada_packer_string_buffer(sbuf.as_mut_ptr());
+    let sbuf = sbuf.as_mut_ptr();
+    rs_mpack_check_buffer(sbuf);
+
+    // Pack map(5): generator, version, max_kbyte, pid, encoding
+    let mut ptr = nvim_shada_packer_get_ptr(sbuf);
+    rs_mpack_map(&raw mut ptr, 5);
+    nvim_shada_packer_set_ptr(sbuf, ptr);
+
+    // "generator" => "nvim"
+    rs_mpack_str(b"generator".as_ptr(), 9, sbuf);
+    rs_mpack_bin(b"nvim".as_ptr(), 4, sbuf);
+
+    // "version" => longVersion (string)
+    rs_mpack_str(b"version".as_ptr(), 7, sbuf);
+    let version_len = if long_version.is_null() {
+        0
+    } else {
+        libc::strlen(long_version)
+    };
+    rs_mpack_bin(long_version.cast::<u8>(), version_len, sbuf);
+
+    // "max_kbyte" => max_kbyte (integer)
+    rs_mpack_str(b"max_kbyte".as_ptr(), 9, sbuf);
+    let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
+    #[allow(clippy::cast_possible_wrap)]
+    rs_mpack_integer(&raw mut ptr2, max_kbyte as i64);
+    nvim_shada_packer_set_ptr(sbuf, ptr2);
+
+    // "pid" => pid (integer)
+    rs_mpack_str(b"pid".as_ptr(), 3, sbuf);
+    let mut ptr3 = nvim_shada_packer_get_ptr(sbuf);
+    rs_mpack_integer(&raw mut ptr3, pid);
+    nvim_shada_packer_set_ptr(sbuf, ptr3);
+
+    // "encoding" => p_enc (string)
+    rs_mpack_str(b"encoding".as_ptr(), 8, sbuf);
+    let enc_len = if p_enc.is_null() {
+        0
+    } else {
+        libc::strlen(p_enc)
+    };
+    rs_mpack_bin(p_enc.cast::<u8>(), enc_len, sbuf);
+
+    let header_body = nvim_shada_packer_take_string(sbuf);
+
+    // Write entry header: type=1, timestamp, length
+    rs_shada_check_buffer(packer);
+    let mut outer_ptr = nvim_shada_packer_get_ptr(packer);
+    rs_mpack_uint64_inline(&raw mut outer_ptr, SD_ITEM_HEADER as u64);
+    rs_mpack_uint64_inline(&raw mut outer_ptr, timestamp);
+    rs_mpack_uint64_inline(&raw mut outer_ptr, header_body.size as u64);
+    nvim_shada_packer_set_ptr(packer, outer_ptr);
+
+    // Write body
+    if header_body.size > 0 {
+        rs_mpack_raw(header_body.data.cast::<u8>(), header_body.size, packer);
+    }
+
+    let anyint = nvim_shada_packer_get_anyint(packer);
+    nvim_xfree(header_body.data.cast::<c_void>());
+
+    if anyint != 0 {
+        SD_WRITE_FAILED
+    } else {
+        SD_WRITE_SUCCESSFUL
+    }
 }
 
 /// Write a single ShaDa entry and free it afterwards.
