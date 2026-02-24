@@ -167,6 +167,8 @@ extern bool rs_invoke_prompt_interrupt(void);
 // Phase 3 (eval_shim pass 5)
 extern int rs_eval_foldexpr(win_T *wp, int *cp);
 extern void rs_eval_foldtext(win_T *wp, Object *out);
+// Phase 4 (eval_shim pass 5)
+extern int rs_get_name_len(const char **arg, char **alias, bool evaluate, bool verbose);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -2039,51 +2041,7 @@ int list2fpos(typval_T *arg, pos_T *posp, int *fnump, colnr_T *curswantp, bool c
 ///           0 if something else is wrong.
 int get_name_len(const char **const arg, char **alias, bool evaluate, bool verbose)
 {
-  *alias = NULL;    // default to no alias
-
-  if ((*arg)[0] == (char)K_SPECIAL && (*arg)[1] == (char)KS_EXTRA
-      && (*arg)[2] == (char)KE_SNR) {
-    // Hard coded <SNR>, already translated.
-    *arg += 3;
-    return rs_get_id_len(arg) + 3;
-  }
-  int len = eval_fname_script(*arg);
-  if (len > 0) {
-    // literal "<SID>", "s:" or "<SNR>"
-    *arg += len;
-  }
-
-  // Find the end of the name; check for {} construction.
-  char *expr_start;
-  char *expr_end;
-  const char *p = rs_find_name_end((*arg), (const char **)&expr_start, (const char **)&expr_end,
-                                len > 0 ? 0 : FNE_CHECK_START);
-  if (expr_start != NULL) {
-    if (!evaluate) {
-      len += (int)(p - *arg);
-      *arg = skipwhite(p);
-      return len;
-    }
-
-    // Include any <SID> etc in the expanded string:
-    // Thus the -len here.
-    char *temp_string = make_expanded_name(*arg - len, expr_start, expr_end, (char *)p);
-    if (temp_string == NULL) {
-      return -1;
-    }
-    *alias = temp_string;
-    *arg = skipwhite(p);
-    return (int)strlen(temp_string);
-  }
-
-  len += rs_get_id_len(arg);
-  // Only give an error when there is something, otherwise it will be
-  // reported at a higher level.
-  if (len == 0 && verbose && **arg != NUL) {
-    semsg(_(e_invexpr2), *arg);
-  }
-
-  return len;
+  return rs_get_name_len(arg, alias, evaluate, verbose);
 }
 
 /// Expands out the 'magic' {}'s in a variable/function name.
@@ -4580,5 +4538,21 @@ void nvim_foldtext_make_string_obj(typval_T *tv, Object *out)
 void nvim_foldtext_make_array_obj(typval_T *tv, Object *out)
 {
   *out = vim_to_object(tv, NULL, false);
+}
+
+// =============================================================================
+// Accessors for Phase 4 (eval_shim pass 5): get_name_len / make_expanded_name
+// =============================================================================
+
+/// Wrap eval_fname_script - accessor for rs_get_name_len.
+int nvim_eval_fname_script(const char *p)
+{
+  return eval_fname_script(p);
+}
+
+/// Wrap vim_snprintf for make_expanded_name - accessor for rs_make_expanded_name.
+void nvim_snprintf_three(char *buf, size_t bufsize, const char *a, const char *b, const char *c)
+{
+  vim_snprintf(buf, bufsize, "%s%s%s", a, b, c);
 }
 

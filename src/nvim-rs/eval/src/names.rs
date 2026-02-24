@@ -254,6 +254,203 @@ pub unsafe extern "C" fn rs_find_name_end(
     p
 }
 
+// =============================================================================
+// Phase 4 (eval_shim pass 5): get_name_len and make_expanded_name
+// =============================================================================
+
+// Key constants from keycodes.h
+const K_SPECIAL: u8 = 0x80;
+const KS_EXTRA: u8 = 253;
+const KE_SNR: u8 = 82;
+
+#[allow(clashing_extern_declarations)]
+extern "C" {
+    // Phase 4: get_name_len helpers
+    fn nvim_eval_fname_script(p: *const c_char) -> c_int;
+    // skipwhite already declared above as returning *const c_char (link_name alias)
+    fn nvim_semsg_invexpr2(p: *const c_char);
+
+    // Phase 4: make_expanded_name helpers
+    fn rs_eval_to_string(
+        arg: *mut c_char,
+        join_list: bool,
+        use_simple_function: bool,
+    ) -> *mut c_char;
+    fn nvim_snprintf_three(
+        buf: *mut c_char,
+        bufsize: usize,
+        a: *const c_char,
+        b: *const c_char,
+        c: *const c_char,
+    );
+    fn xmalloc(size: usize) -> *mut c_char;
+    fn xfree(ptr: *mut c_char);
+}
+
+/// Compute strlen of a C string.
+///
+/// # Safety
+/// `s` must be a valid null-terminated C string.
+#[inline]
+unsafe fn c_strlen(s: *const c_char) -> usize {
+    let mut p = s;
+    while *p != 0 {
+        p = p.add(1);
+    }
+    p.offset_from(s) as usize
+}
+
+/// Expand `{expr}` constructs in a variable/function name.
+///
+/// Equivalent to C static `make_expanded_name`. Mutates the input string
+/// temporarily (writes NUL bytes) to extract sub-expressions.
+///
+/// Returns newly allocated string (caller must free) or NULL on failure.
+///
+/// # Safety
+/// All pointer arguments must be valid. `expr_start` and `expr_end` must
+/// be non-null (caller has already checked). `in_end` must be non-null.
+unsafe fn make_expanded_name_impl(
+    in_start: *const c_char,
+    expr_start: *mut c_char,
+    expr_end: *mut c_char,
+    in_end: *mut c_char,
+) -> *mut c_char {
+    if expr_end.is_null() || in_end.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Temporarily NUL-terminate at brace positions
+    *expr_start = 0; // NUL
+    *expr_end = 0; // NUL
+    let c1 = *in_end;
+    *in_end = 0; // NUL
+
+    // Evaluate the expression between the braces
+    let temp_result = rs_eval_to_string(expr_start.add(1), false, false);
+
+    let retval: *mut c_char = if temp_result.is_null() {
+        std::ptr::null_mut()
+    } else {
+        let prefix_len = expr_start.offset_from(in_start) as usize;
+        let result_len = c_strlen(temp_result);
+        let suffix_len = in_end.offset_from(expr_end) as usize;
+        let retvalsize = prefix_len + result_len + suffix_len + 1;
+        let buf = xmalloc(retvalsize);
+        nvim_snprintf_three(buf, retvalsize, in_start, temp_result, expr_end.add(1));
+        buf
+    };
+
+    xfree(temp_result);
+
+    // Restore original bytes
+    *in_end = c1;
+    *expr_start = b'{' as c_char;
+    *expr_end = b'}' as c_char;
+
+    if !retval.is_null() {
+        // Check for further {expr} in the expanded result
+        let mut inner_start: *const c_char = std::ptr::null();
+        let mut inner_end: *const c_char = std::ptr::null();
+        let next_p = rs_find_name_end(retval, &mut inner_start, &mut inner_end, 0);
+        if !inner_start.is_null() {
+            // Recursive expansion
+            let further = make_expanded_name_impl(
+                retval,
+                inner_start.cast_mut(),
+                inner_end.cast_mut(),
+                next_p.cast_mut(),
+            );
+            xfree(retval);
+            return further;
+        }
+    }
+
+    retval
+}
+
+/// Get the length of a variable or function name.
+///
+/// Handles `<SNR>`, `<SID>`, `s:` prefixes and `{expr}` brace expansion.
+/// Sets `*alias` to an allocated expanded string if `{expr}` is used.
+///
+/// Returns -1 on error, 0 if no name found, else the length.
+///
+/// Equivalent to C `get_name_len`.
+///
+/// # Safety
+/// - `arg` must be a valid pointer to a null-terminated C string pointer.
+/// - `alias` must be a valid writable pointer (set to NULL on entry by this fn).
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_name_len(
+    arg: *mut *const c_char,
+    alias: *mut *mut c_char,
+    evaluate: bool,
+    verbose: bool,
+) -> c_int {
+    *alias = std::ptr::null_mut();
+
+    let start = *arg;
+
+    // Check for hard-coded <SNR> (already translated in the keycode stream)
+    if (*start as u8) == K_SPECIAL
+        && (*start.add(1) as u8) == KS_EXTRA
+        && (*start.add(2) as u8) == KE_SNR
+    {
+        *arg = start.add(3);
+        return rs_get_id_len(arg) + 3;
+    }
+
+    // Check for literal "<SID>", "s:", or "<SNR>"
+    let mut len = nvim_eval_fname_script(start);
+    if len > 0 {
+        *arg = start.add(len as usize);
+    }
+
+    // Find the end of the name; check for {} construction.
+    let mut expr_start: *const c_char = std::ptr::null();
+    let mut expr_end: *const c_char = std::ptr::null();
+    let p = rs_find_name_end(
+        *arg,
+        &mut expr_start,
+        &mut expr_end,
+        if len > 0 { 0 } else { FNE_CHECK_START },
+    );
+
+    if !expr_start.is_null() {
+        if !evaluate {
+            // len = script prefix length; add name portion length
+            len += p.offset_from(*arg) as c_int;
+            *arg = rs_skipwhite(p);
+            return len;
+        }
+
+        // Include any <SID> etc in the expanded string; thus -len offset here.
+        let temp_string = make_expanded_name_impl(
+            (*arg).sub(len as usize),
+            expr_start.cast_mut(),
+            expr_end.cast_mut(),
+            p.cast_mut(),
+        );
+        if temp_string.is_null() {
+            return -1;
+        }
+        *alias = temp_string;
+        *arg = rs_skipwhite(p);
+        return c_strlen(temp_string) as c_int;
+    }
+
+    let id_len = rs_get_id_len(arg);
+    len += id_len;
+
+    // Only give an error when there is something; otherwise reported higher up.
+    if len == 0 && verbose && **arg != 0 {
+        nvim_semsg_invexpr2(*arg);
+    }
+
+    len
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

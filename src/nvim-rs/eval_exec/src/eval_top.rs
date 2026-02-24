@@ -1216,55 +1216,55 @@ pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_
     let tv_handle = TypevalHandle::from_ptr(tv);
 
     let evalarg = nvim_get_evalarg_evaluate_ptr();
-    let retval: i64 = if eval0_simple_funccal_impl(arg, tv_handle, ExargHandle::null(), evalarg)
-        == FAIL
-    {
-        0
-    } else {
-        let vtype = nvim_eval_tv_vtype(tv);
-        let result = if vtype == VAR_NUMBER {
-            nvim_eval_tv_get_vnumber(tv)
-        } else if vtype != VAR_STRING {
+    let retval: i64 =
+        if eval0_simple_funccal_impl(arg, tv_handle, ExargHandle::null(), evalarg) == FAIL {
             0
         } else {
-            let s = nvim_eval_tv_get_vstring(TypevalHandle::from_ptr(tv));
-            if s.is_null() {
+            let vtype = nvim_eval_tv_vtype(tv);
+            let result = if vtype == VAR_NUMBER {
+                nvim_eval_tv_get_vnumber(tv)
+            } else if vtype != VAR_STRING {
                 0
             } else {
-                // If string starts with non-digit, non-minus: that char is the prefix
-                let first = *s as u8;
-                let s_num = if first != 0
-                    && !(first >= b'0' && first <= b'9')
-                    && first != b'-'
-                {
-                    *cp = first as c_int;
-                    s.add(1)
+                let s = nvim_eval_tv_get_vstring(TypevalHandle::from_ptr(tv));
+                if s.is_null() {
+                    0
                 } else {
-                    s
-                };
-                // atol equivalent: parse decimal integer from s_num
-                let mut n: i64 = 0;
-                let mut neg = false;
-                let mut p = s_num;
-                if *p == b'-' as i8 {
-                    neg = true;
-                    p = p.add(1);
-                }
-                while *p != 0 {
-                    let c = *p as u8;
-                    if c >= b'0' && c <= b'9' {
-                        n = n * 10 + (c - b'0') as i64;
-                        p = p.add(1);
+                    // If string starts with non-digit, non-minus: that char is the prefix
+                    let first = *s as u8;
+                    let s_num = if first != 0 && !first.is_ascii_digit() && first != b'-' {
+                        *cp = first as c_int;
+                        s.add(1)
                     } else {
-                        break;
+                        s
+                    };
+                    // atol equivalent: parse decimal integer from s_num
+                    let mut n: i64 = 0;
+                    let mut neg = false;
+                    let mut p = s_num;
+                    if *p == b'-' as i8 {
+                        neg = true;
+                        p = p.add(1);
+                    }
+                    while *p != 0 {
+                        let c = *p as u8;
+                        if c.is_ascii_digit() {
+                            n = n * 10 + (c - b'0') as i64;
+                            p = p.add(1);
+                        } else {
+                            break;
+                        }
+                    }
+                    if neg {
+                        -n
+                    } else {
+                        n
                     }
                 }
-                if neg { -n } else { n }
-            }
+            };
+            tv_clear(tv_handle);
+            result
         };
-        tv_clear(tv_handle);
-        result
-    };
 
     nvim_eval_emsg_off_dec();
     if use_sandbox {
