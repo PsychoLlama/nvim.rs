@@ -193,9 +193,6 @@ extern "C" {
     /// Duplicate a memory region, NUL-terminated (xmalloc + memcpy + NUL)
     fn xmemdupz(data: *const c_void, len: usize) -> *mut c_void;
 
-    /// Get buffer's cached line length (`buf->b_ml.ml_line_len`)
-    fn nvim_buf_get_ml_line_len(buf: *mut BufHandle) -> ColNr;
-
     /// Set buffer's cached line length (`buf->b_ml.ml_line_len = len`)
     fn nvim_buf_set_ml_line_len(buf: *mut BufHandle, len: ColNr);
 }

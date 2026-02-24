@@ -280,6 +280,8 @@ extern int64_t rs_swapfile_info(char *fname, void *sb, int *proc_running_out);
 // Pass 3 Phase 3: ml_replace_buf_len Rust function declaration
 extern int rs_ml_replace_buf_len(buf_T *buf, linenr_T lnum, char *line_arg, size_t len_arg,
                                   bool copy, bool noalloc);
+// Pass 3 Phase 4: ml_get_buf_impl Rust function declaration
+extern char *rs_ml_get_buf_impl(buf_T *buf, linenr_T lnum, bool will_change);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1329,93 +1331,7 @@ int gchar_pos(pos_T *pos)
 static char *ml_get_buf_impl(buf_T *buf, linenr_T lnum, bool will_change)
   FUNC_ATTR_NONNULL_ALL
 {
-  static int recursive = 0;
-  static char questions[4];
-
-  if (buf->b_ml.ml_mfp == NULL) {       // there are no lines
-    buf->b_ml.ml_line_len = 1;
-    return "";
-  }
-
-  if (lnum > buf->b_ml.ml_line_count) {  // invalid line number
-    if (recursive == 0) {
-      // Avoid giving this message for a recursive call, may happen when
-      // the GUI redraws part of the text.
-      recursive++;
-      siemsg(_(e_ml_get_invalid_lnum_nr), (int64_t)lnum);
-      recursive--;
-    }
-    ml_flush_line(buf, false);
-errorret:
-    STRCPY(questions, "???");
-    buf->b_ml.ml_line_len = 4;
-    buf->b_ml.ml_line_lnum = lnum;
-    return questions;
-  }
-  lnum = MAX(lnum, 1);  // pretend line 0 is line 1
-
-  // See if it is the same line as requested last time.
-  // Otherwise may need to flush last used line.
-  // Don't use the last used line when 'swapfile' is reset, need to load all
-  // blocks.
-  if (buf->b_ml.ml_line_lnum != lnum) {
-    ml_flush_line(buf, false);
-
-    // Find the data block containing the line.
-    // This also fills the stack with the blocks from the root to the data
-    // block and releases any locked block.
-    bhdr_T *hp;
-    if ((hp = ml_find_line(buf, lnum, ML_FIND)) == NULL) {
-      if (recursive == 0) {
-        // Avoid giving this message for a recursive call, may happen
-        // when the GUI redraws part of the text.
-        recursive++;
-        get_trans_bufname(buf);
-        shorten_dir(NameBuff);
-        siemsg(_(e_ml_get_cannot_find_line_nr_in_buffer_nr_str),
-               (int64_t)lnum, buf->b_fnum, NameBuff);
-        recursive--;
-      }
-      goto errorret;
-    }
-
-    DataBlock *dp = hp->bh_data;
-
-    int idx = lnum - buf->b_ml.ml_locked_low;
-    unsigned start = (dp->db_index[idx] & DB_INDEX_MASK);
-    // The text ends where the previous line starts.  The first line ends
-    // at the end of the block.
-    unsigned end = idx == 0 ? dp->db_txt_end : (dp->db_index[idx - 1] & DB_INDEX_MASK);
-
-    buf->b_ml.ml_line_ptr = (char *)dp + start;
-    buf->b_ml.ml_line_len = (colnr_T)(end - start);
-    buf->b_ml.ml_line_lnum = lnum;
-    buf->b_ml.ml_flags &= ~(ML_LINE_DIRTY | ML_ALLOCATED);
-  }
-  if (will_change) {
-    buf->b_ml.ml_flags |= (ML_LOCKED_DIRTY | ML_LOCKED_POS);
-#ifdef ML_GET_ALLOC_LINES
-    if (buf->b_ml.ml_flags & ML_ALLOCATED) {
-      // can't make the change in the data block
-      buf->b_ml.ml_flags |= ML_LINE_DIRTY;
-    }
-#endif
-    ml_add_deleted_len_buf(buf, buf->b_ml.ml_line_ptr, -1);
-  }
-
-#ifdef ML_GET_ALLOC_LINES
-  if ((buf->b_ml.ml_flags & (ML_LINE_DIRTY | ML_ALLOCATED)) == 0) {
-    // make sure the text is in allocated memory
-    buf->b_ml.ml_line_ptr = xmemdup(buf->b_ml.ml_line_ptr,
-                                    (size_t)buf->b_ml.ml_line_len);
-    buf->b_ml.ml_flags |= ML_ALLOCATED;
-    if (will_change) {
-      // can't make the change in the data block
-      buf->b_ml.ml_flags |= ML_LINE_DIRTY;
-    }
-  }
-#endif
-  return buf->b_ml.ml_line_ptr;
+  return rs_ml_get_buf_impl(buf, lnum, will_change);
 }
 
 // =============================================================================
@@ -1484,6 +1400,24 @@ int nvim_buf_open_buffer_if_needed(buf_T *buf)
     return open_buffer(false, NULL, 0);
   }
   return OK;
+}
+
+// Pass 3 Phase 4: Error message wrappers for rs_ml_get_buf_impl
+/// Emit the "invalid lnum" internal error for ml_get_buf_impl.
+/// Wraps: siemsg(_(e_ml_get_invalid_lnum_nr), lnum)
+void nvim_siemsg_ml_get_invalid_lnum(int64_t lnum)
+{
+  siemsg(_(e_ml_get_invalid_lnum_nr), lnum);
+}
+
+/// Emit the "cannot find line" internal error for ml_get_buf_impl.
+/// Wraps: get_trans_bufname + shorten_dir + siemsg(...)
+void nvim_siemsg_ml_get_cannot_find_line(int64_t lnum, buf_T *buf)
+{
+  get_trans_bufname(buf);
+  shorten_dir(NameBuff);
+  siemsg(_(e_ml_get_cannot_find_line_nr_in_buffer_nr_str),
+         lnum, buf->b_fnum, NameBuff);
 }
 
 // Print swapfile info (wraps swapfile_info which uses StringBuilder internally)

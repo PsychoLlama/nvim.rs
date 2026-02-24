@@ -1,9 +1,8 @@
 //! Line access functions for the memline system.
 //!
-//! This module provides Rust implementations for accessing lines in buffers.
-//! The core implementation remains in C (`ml_get_buf_impl`) due to its deep
-//! integration with memfile operations, but helper functions and accessors
-//! are implemented here.
+//! This module provides Rust implementations for accessing lines in buffers,
+//! including the core `rs_ml_get_buf_impl` which is the central line-fetching
+//! function for Neovim's buffer text storage.
 //!
 //! # Line Caching
 //!
@@ -18,12 +17,12 @@
 //! that stores the start offset of that line's text. The text ends at the
 //! previous line's start offset (or at `db_txt_end` for the first line).
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
 use crate::types::{
     BufHandle, ColNr, DataBlockHeader, LineNr, PosHandle, DB_INDEX_MASK, ML_ALLOCATED,
-    ML_LINE_DIRTY,
+    ML_LINE_DIRTY, ML_LOCKED_DIRTY, ML_LOCKED_POS,
 };
 
 // =============================================================================
@@ -86,6 +85,49 @@ extern "C" {
 
     /// MAXCOL constant
     fn nvim_get_maxcol() -> ColNr;
+
+    // -------------------------------------------------------------------------
+    // ml_get_buf_impl Support
+    // -------------------------------------------------------------------------
+
+    /// Check if `buf->b_ml.ml_mfp != NULL`
+    fn nvim_buf_has_ml_mfp(buf: *mut BufHandle) -> c_int;
+
+    /// Set buffer's ml_flags (`buf->b_ml.ml_flags`)
+    fn nvim_buf_set_ml_flags(buf: *mut BufHandle, flags: c_int);
+
+    /// Set buffer's cached line length (`buf->b_ml.ml_line_len`)
+    fn nvim_buf_set_ml_line_len(buf: *mut BufHandle, len: ColNr);
+
+    /// Set buffer's cached line number (`buf->b_ml.ml_line_lnum`)
+    fn nvim_buf_set_ml_line_lnum(buf: *mut BufHandle, lnum: LineNr);
+
+    /// Set buffer's cached line pointer (`buf->b_ml.ml_line_ptr`)
+    fn nvim_buf_set_ml_line_ptr(buf: *mut BufHandle, ptr: *mut c_char);
+
+    /// Get buffer's locked block low line number (`buf->b_ml.ml_locked_low`)
+    fn nvim_buf_get_ml_locked_low(buf: *mut BufHandle) -> LineNr;
+
+    /// Get block header's data pointer (`hp->bh_data`)
+    fn nvim_bhdr_get_bh_data(hp: *mut c_void) -> *mut c_void;
+
+    /// Find data block containing a line
+    fn nvim_ml_find_line(buf: *mut BufHandle, lnum: LineNr, action: c_int) -> *mut c_void;
+
+    /// Flush the cached line to the data block
+    fn ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
+
+    /// Track a deleted line's length for undo purposes (Rust implementation)
+    fn rs_ml_add_deleted_len_buf(buf: *mut BufHandle, ptr: *mut c_char, len: isize);
+
+    /// Duplicate memory of given length
+    fn xmemdup(data: *const c_void, len: usize) -> *mut c_void;
+
+    /// Emit "invalid lnum" siemsg (wraps siemsg + gettext)
+    fn nvim_siemsg_ml_get_invalid_lnum(lnum: i64);
+
+    /// Emit "cannot find line" siemsg (wraps get_trans_bufname + shorten_dir + siemsg + gettext)
+    fn nvim_siemsg_ml_get_cannot_find_line(lnum: i64, buf: *mut BufHandle);
 }
 
 // =============================================================================
@@ -372,6 +414,135 @@ pub unsafe extern "C" fn rs_ml_line_alloced_buf(buf: *mut BufHandle) -> c_int {
 
     let flags = nvim_buf_get_ml_flags(buf);
     c_int::from((flags & (ML_LINE_DIRTY | ML_ALLOCATED)) != 0)
+}
+
+// =============================================================================
+// Core Line Access Implementation
+// =============================================================================
+
+// Static empty string returned when buffer has no lines.
+static EMPTY_LINE: u8 = 0;
+
+/// The central line-fetching function for Neovim's buffer text storage.
+///
+/// Returns a pointer to the text of line `lnum` in `buf`. If `will_change` is
+/// true the locked block is marked dirty so it will be written back.
+///
+/// On error a pointer to the static "???" string is returned.
+///
+/// # Safety
+/// - `buf` must be a valid, non-null buffer pointer.
+/// - The returned pointer is only valid until the next call to any ml_get_* function.
+#[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_ptr_alignment
+)]
+pub unsafe extern "C" fn rs_ml_get_buf_impl(
+    buf: *mut BufHandle,
+    mut lnum: LineNr,
+    will_change: c_int,
+) -> *mut c_char {
+    // Static state mirroring the C implementation.
+    // SAFETY: these statics are only accessed from the single Neovim main thread.
+    static mut RECURSIVE: c_int = 0;
+    static mut QUESTIONS: [u8; 4] = *b"???\0";
+
+    // No lines in buffer.
+    if nvim_buf_has_ml_mfp(buf) == 0 {
+        nvim_buf_set_ml_line_len(buf, 1);
+        return (&raw const EMPTY_LINE).cast_mut().cast();
+    }
+
+    if lnum > nvim_buf_get_ml_line_count(buf) {
+        // Invalid line number.
+        if RECURSIVE == 0 {
+            RECURSIVE += 1;
+            nvim_siemsg_ml_get_invalid_lnum(lnum);
+            RECURSIVE -= 1;
+        }
+        ml_flush_line(buf, 0);
+        // errorret:
+        let qp = ptr::addr_of_mut!(QUESTIONS);
+        (*qp).copy_from_slice(b"???\0");
+        nvim_buf_set_ml_line_len(buf, 4);
+        nvim_buf_set_ml_line_lnum(buf, lnum);
+        return (*qp).as_mut_ptr().cast();
+    }
+
+    // Pretend line 0 is line 1.
+    if lnum < 1 {
+        lnum = 1;
+    }
+
+    // See if it is the same line as last time.
+    if nvim_buf_get_ml_line_lnum(buf) != lnum {
+        ml_flush_line(buf, 0);
+
+        // Find the data block containing the line.
+        let hp = nvim_ml_find_line(buf, lnum, crate::types::ML_FIND);
+        if hp.is_null() {
+            if RECURSIVE == 0 {
+                RECURSIVE += 1;
+                nvim_siemsg_ml_get_cannot_find_line(lnum, buf);
+                RECURSIVE -= 1;
+            }
+            // goto errorret
+            let qp = ptr::addr_of_mut!(QUESTIONS);
+            (*qp).copy_from_slice(b"???\0");
+            nvim_buf_set_ml_line_len(buf, 4);
+            nvim_buf_set_ml_line_lnum(buf, lnum);
+            return (*qp).as_mut_ptr().cast();
+        }
+
+        let dp: *mut c_char = nvim_bhdr_get_bh_data(hp).cast();
+
+        let idx = (lnum - nvim_buf_get_ml_locked_low(buf)) as usize;
+
+        // db_index array follows immediately after the DataBlockHeader.
+        // The block data is aligned to page boundaries in the memfile, so
+        // the DataBlockHeader alignment is guaranteed by the memfile allocator.
+        let db_header = dp.cast::<DataBlockHeader>();
+        let db_index: *const u32 = db_header.add(1).cast();
+        let start = *db_index.add(idx) & DB_INDEX_MASK;
+        let end = if idx == 0 {
+            (*db_header).db_txt_end
+        } else {
+            *db_index.add(idx - 1) & DB_INDEX_MASK
+        };
+
+        nvim_buf_set_ml_line_ptr(buf, dp.add(start as usize));
+        #[allow(clippy::cast_possible_wrap)]
+        nvim_buf_set_ml_line_len(buf, (end - start) as ColNr);
+        nvim_buf_set_ml_line_lnum(buf, lnum);
+        let flags = nvim_buf_get_ml_flags(buf);
+        nvim_buf_set_ml_flags(buf, flags & !(ML_LINE_DIRTY | ML_ALLOCATED));
+    }
+
+    if will_change != 0 {
+        let flags = nvim_buf_get_ml_flags(buf);
+        nvim_buf_set_ml_flags(buf, flags | ML_LOCKED_DIRTY | ML_LOCKED_POS);
+        rs_ml_add_deleted_len_buf(buf, nvim_buf_get_ml_line_ptr(buf), -1);
+    }
+
+    // ML_GET_ALLOC_LINES: ensure line text is in allocated memory (address sanitizer path).
+    {
+        let flags = nvim_buf_get_ml_flags(buf);
+        if (flags & (ML_LINE_DIRTY | ML_ALLOCATED)) == 0 {
+            let line_ptr = nvim_buf_get_ml_line_ptr(buf);
+            let line_len = nvim_buf_get_ml_line_len(buf) as usize;
+            let new_ptr: *mut c_char = xmemdup(line_ptr.cast(), line_len).cast();
+            nvim_buf_set_ml_line_ptr(buf, new_ptr);
+            nvim_buf_set_ml_flags(buf, flags | ML_ALLOCATED);
+            if will_change != 0 {
+                // Can't make the change in the data block.
+                nvim_buf_set_ml_flags(buf, flags | ML_ALLOCATED | ML_LINE_DIRTY);
+            }
+        }
+    }
+
+    nvim_buf_get_ml_line_ptr(buf)
 }
 
 // =============================================================================

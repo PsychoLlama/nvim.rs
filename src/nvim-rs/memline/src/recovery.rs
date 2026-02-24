@@ -582,6 +582,7 @@ pub unsafe extern "C" fn rs_swapfile_dict(fname: *const c_char, d: *mut c_void) 
     let bytes_read = read_eintr(fd, b0_ptr, b0_size);
     close(fd);
 
+    #[allow(clippy::cast_sign_loss)]
     if bytes_read as usize != b0_size {
         xfree(b0_ptr);
         tv_dict_add_str(d, c"error".as_ptr(), 5, c"Cannot read file".as_ptr());
@@ -601,15 +602,33 @@ pub unsafe extern "C" fn rs_swapfile_dict(fname: *const c_char, d: *mut c_void) 
 
         // user: B0_UNAME_SIZE bytes
         let uname_ptr = nvim_b0_get_uname_ptr(b0);
-        tv_dict_add_str_len(d, c"user".as_ptr(), 4, uname_ptr, crate::types::B0_UNAME_SIZE as c_int);
+        tv_dict_add_str_len(
+            d,
+            c"user".as_ptr(),
+            4,
+            uname_ptr,
+            crate::types::B0_UNAME_SIZE as c_int,
+        );
 
         // host: B0_HNAME_SIZE bytes
         let hname_ptr = nvim_b0_get_hname_ptr(b0);
-        tv_dict_add_str_len(d, c"host".as_ptr(), 4, hname_ptr, crate::types::B0_HNAME_SIZE as c_int);
+        tv_dict_add_str_len(
+            d,
+            c"host".as_ptr(),
+            4,
+            hname_ptr,
+            crate::types::B0_HNAME_SIZE as c_int,
+        );
 
         // fname: B0_FNAME_SIZE_ORG bytes
         let fname_ptr = nvim_b0_get_fname_ptr(b0);
-        tv_dict_add_str_len(d, c"fname".as_ptr(), 5, fname_ptr, crate::types::B0_FNAME_SIZE_ORG as c_int);
+        tv_dict_add_str_len(
+            d,
+            c"fname".as_ptr(),
+            5,
+            fname_ptr,
+            crate::types::B0_FNAME_SIZE_ORG as c_int,
+        );
 
         // pid: process ID derived from b0_pid
         let pid = rs_swapfile_proc_running(b0, fname);
@@ -622,7 +641,7 @@ pub unsafe extern "C" fn rs_swapfile_dict(fname: *const c_char, d: *mut c_void) 
 
         // dirty: whether the file was unsaved
         let dirty = nvim_b0_get_dirty(b0);
-        tv_dict_add_nr(d, c"dirty".as_ptr(), 5, i64::from(if dirty != 0 { 1i32 } else { 0i32 }));
+        tv_dict_add_nr(d, c"dirty".as_ptr(), 5, i64::from(i32::from(dirty != 0)));
 
         // inode: stored inode number from b0_ino
         let ino_ptr = nvim_b0_get_ino(b0_ptr);
@@ -644,10 +663,13 @@ pub unsafe extern "C" fn rs_swapfile_dict(fname: *const c_char, d: *mut c_void) 
 /// - `fname` must be a valid C string
 /// - `sb` must be a valid `StringBuilder *` (opaque from C)
 /// - `proc_running_out` must be a valid pointer
+/// # Panics
+/// Panics if `fname` is null.
 #[no_mangle]
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
     clippy::too_many_lines
 )]
 pub unsafe extern "C" fn rs_swapfile_info(
@@ -663,12 +685,8 @@ pub unsafe extern "C" fn rs_swapfile_info(
     // Get file date and owner (UNIX: get owner name)
     let mut uname_buf = [0i8; 40]; // B0_UNAME_SIZE
     let mut uname_found: c_int = 0;
-    let file_mtime = nvim_swapfile_get_file_info(
-        fname,
-        uname_buf.as_mut_ptr(),
-        40,
-        &raw mut uname_found,
-    );
+    let file_mtime =
+        nvim_swapfile_get_file_info(fname, uname_buf.as_mut_ptr(), 40, &raw mut uname_found);
 
     if file_mtime != 0 {
         mtime = file_mtime;
@@ -694,6 +712,7 @@ pub unsafe extern "C" fn rs_swapfile_info(
     close(fd);
 
     if bytes_read as usize != b0_size {
+        // cast_sign_loss: allowed because bytes_read < 0 means error (mismatch with b0_size)
         xfree(b0_ptr);
         nvim_sb_swapinfo_cannot_read(sb);
         nvim_sb_append_str(sb, c"\n".as_ptr());
@@ -706,6 +725,7 @@ pub unsafe extern "C" fn rs_swapfile_info(
     let version_ptr = nvim_b0_get_version_ptr(b0);
     // Check "VIM 3.0" (7 bytes)
     let vim3 = b"VIM 3.0";
+    #[allow(clippy::cast_sign_loss)]
     let is_vim3 = (0..7).all(|i| *version_ptr.add(i) as u8 == vim3[i]);
 
     if is_vim3 {
@@ -725,16 +745,16 @@ pub unsafe extern "C" fn rs_swapfile_info(
 
         // Print user name if present
         let uname_ptr = nvim_b0_get_uname_ptr(b0);
-        let has_uname = *uname_ptr != 0;
-        if has_uname {
+        let uname_present = *uname_ptr != 0;
+        if uname_present {
             nvim_sb_swapinfo_user(sb, uname_ptr);
         }
 
         // Print host name if present
         let hname_ptr = nvim_b0_get_hname_ptr(b0);
-        let has_hname = *hname_ptr != 0;
-        if has_hname {
-            nvim_sb_swapinfo_host(sb, hname_ptr, c_int::from(has_uname));
+        let hname_present = *hname_ptr != 0;
+        if hname_present {
+            nvim_sb_swapinfo_host(sb, hname_ptr, c_int::from(uname_present));
         }
 
         // Print process ID if present
@@ -863,12 +883,7 @@ extern "C" {
     ) -> c_int;
 
     /// Add an integer (number) entry to a Vim dictionary
-    fn tv_dict_add_nr(
-        d: *mut c_void,
-        key: *const c_char,
-        key_len: usize,
-        nr: i64,
-    ) -> c_int;
+    fn tv_dict_add_nr(d: *mut c_void, key: *const c_char, key_len: usize, nr: i64) -> c_int;
 
     /// Get pointer to b0_mtime field (4 bytes, char_to_long encoding)
     fn nvim_b0_get_mtime(b0: *mut c_void) -> *mut c_char;
