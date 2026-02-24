@@ -1103,12 +1103,11 @@ const FAIL: c_int = 0;
 /// Calls C accessor functions.
 unsafe fn close_tabpage_impl(tab: TabpageHandle) {
     let first = nvim_get_first_tabpage();
-    let ptp;
 
-    if tab == first {
+    let ptp = if tab == first {
         let next = nvim_tabpage_get_next(tab);
         nvim_set_first_tabpage(next);
-        ptp = next;
+        next
     } else {
         // Find the tabpage before tab.
         let mut p = first;
@@ -1117,8 +1116,8 @@ unsafe fn close_tabpage_impl(tab: TabpageHandle) {
         }
         // assert: nvim_tabpage_get_next(p) == tab
         nvim_tabpage_set_next(p, nvim_tabpage_get_next(tab));
-        ptp = p;
-    }
+        p
+    };
 
     nvim_al_goto_tabpage_tp(ptp, 0, 0);
     nvim_free_tabpage_wrapper(tab);
@@ -1132,6 +1131,7 @@ unsafe fn close_tabpage_impl(tab: TabpageHandle) {
 /// Calls C accessor functions.
 unsafe fn make_tabpages_impl(maxcount: c_int) -> c_int {
     // Limit to 'tabpagemax' tabs.
+    #[allow(clippy::cast_possible_truncation)]
     let p_tpm = nvim_get_p_tpm() as c_int;
     let count = maxcount.min(p_tpm);
 
