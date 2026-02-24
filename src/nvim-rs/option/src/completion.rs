@@ -506,6 +506,209 @@ pub unsafe extern "C" fn rs_ends_with_comma(s: *const c_char) -> c_int {
 }
 
 // =============================================================================
+// Phase 2: ExpandSettings / match_str
+// =============================================================================
+
+// FFI declarations for ExpandSettings migration
+extern "C" {
+    fn nvim_option_get_fullname(opt_idx: c_int) -> *const c_char;
+    fn nvim_option_get_shortname(opt_idx: c_int) -> *const c_char;
+    fn nvim_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
+    fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;
+    fn nvim_get_kopt_count() -> c_int;
+    fn nvim_xp_get_context(xp: *const std::ffi::c_void) -> c_int;
+    fn nvim_regmatch_get_rm_ic(regmatch: *const std::ffi::c_void) -> c_int;
+    fn nvim_regmatch_set_rm_ic(regmatch: *mut std::ffi::c_void, val: c_int);
+    fn nvim_excmds_regexec(rm: *mut std::ffi::c_void, line: *const c_char) -> c_int;
+    fn nvim_option_fuzzy_match_str(str_: *const c_char, pat: *const c_char) -> c_int;
+    fn nvim_option_fuzzymatches_to_strmatches(
+        fuzmatch: *mut std::ffi::c_void,
+        matches: *mut *mut *mut c_char,
+        count: c_int,
+    );
+    fn nvim_option_cmdline_fuzzy_complete(fuzzystr: *const c_char) -> c_int;
+    fn nvim_option_get_fuzmatch_size() -> usize;
+    fn nvim_option_fuzmatch_set(fuzmatch: *mut std::ffi::c_void, idx: c_int, str_: *const c_char, score: c_int);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn xmalloc(size: usize) -> *mut std::ffi::c_void;
+    fn xfree(ptr: *mut std::ffi::c_void);
+    fn strlen(s: *const c_char) -> usize;
+}
+
+/// Option boolean type value (kOptValTypeBoolean = 0)
+const K_OPT_VAL_TYPE_BOOLEAN: c_int = 0;
+
+/// EXPAND_BOOL_SETTINGS context value
+const EXPAND_BOOL_SETTINGS: c_int = 5;
+
+/// FUZZY_SCORE_NONE value (INT_MIN)
+const FUZZY_SCORE_NONE: c_int = i32::MIN;
+
+/// Match a string against a regex or fuzzy pattern.
+///
+/// If not fuzzy: calls vim_regexec; on match, stores str in matches[idx] (unless test_only).
+/// If fuzzy: calls fuzzy_match_str; on match, stores fuzmatch entry (unless test_only).
+///
+/// Returns true if matched.
+///
+/// # Safety
+/// All pointers must be valid.
+#[allow(clippy::cast_possible_truncation)]
+unsafe fn match_str_impl(
+    str_: *const c_char,
+    regmatch: *mut std::ffi::c_void,
+    matches: *mut *mut c_char,
+    idx: c_int,
+    test_only: bool,
+    fuzzy: bool,
+    fuzzystr: *const c_char,
+    fuzmatch: *mut std::ffi::c_void,
+) -> bool {
+    if !fuzzy {
+        if nvim_excmds_regexec(regmatch, str_) != 0 {
+            if !test_only && !matches.is_null() {
+                *matches.add(idx as usize) = xstrdup(str_);
+            }
+            return true;
+        }
+    } else {
+        let score = nvim_option_fuzzy_match_str(str_, fuzzystr);
+        if score != FUZZY_SCORE_NONE {
+            if !test_only && !fuzmatch.is_null() {
+                nvim_option_fuzmatch_set(fuzmatch, idx, str_, score);
+            }
+            return true;
+        }
+    }
+    false
+}
+
+/// Expand option names for command-line completion (translation of C ExpandSettings).
+///
+/// Two-pass algorithm: first count matches, then fill allocated arrays.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_expand_option_settings(
+    xp: *mut std::ffi::c_void,
+    regmatch: *mut std::ffi::c_void,
+    fuzzystr: *const c_char,
+    num_matches: *mut c_int,
+    matches: *mut *mut *mut c_char,
+    can_fuzzy: c_int,
+) -> c_int {
+    // "all" is the only keyword we offer outside of option names
+    static KEYWORD_ALL: &[u8] = b"all\0";
+
+    let mut num_normal: c_int = 0;
+    let mut count: c_int = 0;
+    let ic = nvim_regmatch_get_rm_ic(regmatch);
+    let fuzzy =
+        can_fuzzy != 0 && nvim_option_cmdline_fuzzy_complete(fuzzystr) != 0;
+    let mut fuzmatch: *mut std::ffi::c_void = std::ptr::null_mut();
+    let kopt_count = nvim_get_kopt_count();
+
+    // Two-pass loop: loop==0 counts, loop==1 fills
+    let mut loop_: c_int = 0;
+    while loop_ <= 1 {
+        nvim_regmatch_set_rm_ic(regmatch, ic);
+        // Match "all" keyword (only for non-bool-settings context)
+        if nvim_xp_get_context(xp) != EXPAND_BOOL_SETTINGS {
+            let all_ptr = KEYWORD_ALL.as_ptr().cast::<c_char>();
+            let matched = match_str_impl(
+                all_ptr,
+                regmatch,
+                if loop_ == 1 { *matches } else { std::ptr::null_mut() },
+                count,
+                loop_ == 0,
+                fuzzy,
+                fuzzystr,
+                fuzmatch,
+            );
+            if matched {
+                if loop_ == 0 {
+                    num_normal += 1;
+                } else {
+                    count += 1;
+                }
+            }
+        }
+
+        // Match option names
+        for opt_idx in 0..kopt_count {
+            if nvim_opt_is_hidden(opt_idx) != 0 {
+                continue;
+            }
+            // Bool-only context: skip non-boolean options
+            if nvim_xp_get_context(xp) == EXPAND_BOOL_SETTINGS
+                && nvim_option_has_type(opt_idx, K_OPT_VAL_TYPE_BOOLEAN) == 0
+            {
+                continue;
+            }
+
+            let fullname = nvim_option_get_fullname(opt_idx);
+
+            let matched_full = match_str_impl(
+                fullname,
+                regmatch,
+                if loop_ == 1 { *matches } else { std::ptr::null_mut() },
+                count,
+                loop_ == 0,
+                fuzzy,
+                fuzzystr,
+                fuzmatch,
+            );
+            if matched_full {
+                if loop_ == 0 {
+                    num_normal += 1;
+                } else {
+                    count += 1;
+                }
+            } else if !fuzzy {
+                // Also try shortname for regex (not fuzzy - fuzzy already matches both)
+                let shortname = nvim_option_get_shortname(opt_idx);
+                if !shortname.is_null()
+                    && nvim_excmds_regexec(regmatch, shortname) != 0
+                {
+                    if loop_ == 0 {
+                        num_normal += 1;
+                    } else {
+                        // Store fullname (not shortname) in matches
+                        *(*matches).add(count as usize) = xstrdup(fullname);
+                        count += 1;
+                    }
+                }
+            }
+        }
+
+        if loop_ == 0 {
+            if num_normal == 0 {
+                return 0; // OK
+            }
+            *num_matches = num_normal;
+            if !fuzzy {
+                *matches = xmalloc((*num_matches as usize) * std::mem::size_of::<*mut c_char>())
+                    .cast::<*mut c_char>();
+            } else {
+                let fm_size = nvim_option_get_fuzmatch_size();
+                fuzmatch = xmalloc((*num_matches as usize) * fm_size);
+            }
+        }
+        loop_ += 1;
+    }
+
+    if fuzzy {
+        nvim_option_fuzzymatches_to_strmatches(fuzmatch, matches, count);
+    }
+
+    0 // OK
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

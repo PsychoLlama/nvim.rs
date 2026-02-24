@@ -4134,124 +4134,12 @@ void set_context_in_set_cmd(expand_T *xp, char *arg, int opt_flags)
   rs_set_context_in_set_cmd(xp, arg, opt_flags);
 }
 
-/// Returns true if "str" either matches "regmatch" or fuzzy matches "pat".
-///
-/// If "test_only" is true and "fuzzy" is false and if "str" matches the regular
-/// expression "regmatch", then returns true.  Otherwise returns false.
-///
-/// If "test_only" is false and "fuzzy" is false and if "str" matches the
-/// regular expression "regmatch", then stores the match in matches[idx] and
-/// returns true.
-///
-/// If "test_only" is true and "fuzzy" is true and if "str" fuzzy matches
-/// "fuzzystr", then returns true. Otherwise returns false.
-///
-/// If "test_only" is false and "fuzzy" is true and if "str" fuzzy matches
-/// "fuzzystr", then stores the match details in fuzmatch[idx] and returns true.
-static bool match_str(char *const str, regmatch_T *const regmatch, char **const matches,
-                      const int idx, const bool test_only, const bool fuzzy,
-                      const char *const fuzzystr, fuzmatch_str_T *const fuzmatch)
-{
-  if (!fuzzy) {
-    if (vim_regexec(regmatch, str, 0)) {
-      if (!test_only) {
-        matches[idx] = xstrdup(str);
-      }
-      return true;
-    }
-  } else {
-    const int score = fuzzy_match_str(str, fuzzystr);
-    if (score != FUZZY_SCORE_NONE) {
-      if (!test_only) {
-        fuzmatch[idx].idx = idx;
-        fuzmatch[idx].str = xstrdup(str);
-        fuzmatch[idx].score = score;
-      }
-      return true;
-    }
-  }
-  return false;
-}
-
+extern int rs_expand_option_settings(expand_T *xp, regmatch_T *regmatch, char *fuzzystr,
+                                      int *numMatches, char ***matches, int can_fuzzy);
 int ExpandSettings(expand_T *xp, regmatch_T *regmatch, char *fuzzystr, int *numMatches,
                    char ***matches, const bool can_fuzzy)
 {
-  int num_normal = 0;  // Nr of matching non-term-code settings
-  int count = 0;
-  static char *(names[]) = { "all" };
-  int ic = regmatch->rm_ic;  // remember the ignore-case flag
-
-  fuzmatch_str_T *fuzmatch = NULL;
-  const bool fuzzy = can_fuzzy && cmdline_fuzzy_complete(fuzzystr);
-
-  // do this loop twice:
-  // loop == 0: count the number of matching options
-  // loop == 1: copy the matching options into allocated memory
-  for (int loop = 0; loop <= 1; loop++) {
-    regmatch->rm_ic = ic;
-    if (xp->xp_context != EXPAND_BOOL_SETTINGS) {
-      for (int match = 0; match < (int)ARRAY_SIZE(names);
-           match++) {
-        if (match_str(names[match], regmatch, *matches,
-                      count, (loop == 0), fuzzy, fuzzystr, fuzmatch)) {
-          if (loop == 0) {
-            num_normal++;
-          } else {
-            count++;
-          }
-        }
-      }
-    }
-    char *str;
-    for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
-      str = options[opt_idx].fullname;
-      if (is_option_hidden(opt_idx)) {
-        continue;
-      }
-      if (xp->xp_context == EXPAND_BOOL_SETTINGS
-          && !(option_has_type(opt_idx, kOptValTypeBoolean))) {
-        continue;
-      }
-
-      if (match_str(str, regmatch, *matches, count, (loop == 0),
-                    fuzzy, fuzzystr, fuzmatch)) {
-        if (loop == 0) {
-          num_normal++;
-        } else {
-          count++;
-        }
-      } else if (!fuzzy && options[opt_idx].shortname != NULL
-                 && vim_regexec(regmatch, options[opt_idx].shortname, 0)) {
-        // Compare against the abbreviated option name (for regular
-        // expression match). Fuzzy matching (previous if) already
-        // matches against both the expanded and abbreviated names.
-        if (loop == 0) {
-          num_normal++;
-        } else {
-          (*matches)[count++] = xstrdup(str);
-        }
-      }
-    }
-
-    if (loop == 0) {
-      if (num_normal > 0) {
-        *numMatches = num_normal;
-      } else {
-        return OK;
-      }
-      if (!fuzzy) {
-        *matches = xmalloc((size_t)(*numMatches) * sizeof(char *));
-      } else {
-        fuzmatch = xmalloc((size_t)(*numMatches) * sizeof(fuzmatch_str_T));
-      }
-    }
-  }
-
-  if (fuzzy) {
-    fuzzymatches_to_strmatches(fuzmatch, matches, count, false);
-  }
-
-  return OK;
+  return rs_expand_option_settings(xp, regmatch, fuzzystr, numMatches, matches, can_fuzzy ? 1 : 0);
 }
 
 /// Escape an option value that can be used on the command-line with :set.
@@ -4717,5 +4605,61 @@ int nvim_varp_is_curbuf_b_changed(const void *varp)
 {
   return (const int *)varp == &curbuf->b_changed ? 1 : 0;
 }
+
+// =============================================================================
+// Phase 6 accessors: ExpandSettings / match_str
+// =============================================================================
+
+/// Get the shortname of an option by index.
+const char *nvim_option_get_shortname(OptIndex opt_idx)
+{
+  return options[opt_idx].shortname;
+}
+
+/// Get rm_ic field from a regmatch_T pointer (opaque).
+int nvim_regmatch_get_rm_ic(const void *regmatch)
+{
+  return ((const regmatch_T *)regmatch)->rm_ic;
+}
+
+/// Set rm_ic field on a regmatch_T pointer (opaque).
+void nvim_regmatch_set_rm_ic(void *regmatch, int val)
+{
+  ((regmatch_T *)regmatch)->rm_ic = val;
+}
+
+/// Call fuzzy_match_str with opaque pointer.
+int nvim_option_fuzzy_match_str(const char *str, const char *pat)
+{
+  return fuzzy_match_str((char *)str, pat);
+}
+
+/// Call fuzzymatches_to_strmatches with opaque pointer.
+void nvim_option_fuzzymatches_to_strmatches(void *fuzmatch, char ***matches, int count)
+{
+  fuzzymatches_to_strmatches((fuzmatch_str_T *)fuzmatch, matches, count, false);
+}
+
+/// Call cmdline_fuzzy_complete.
+int nvim_option_cmdline_fuzzy_complete(const char *fuzzystr)
+{
+  return cmdline_fuzzy_complete(fuzzystr);
+}
+
+/// Get fuzmatch_str_T size.
+size_t nvim_option_get_fuzmatch_size(void)
+{
+  return sizeof(fuzmatch_str_T);
+}
+
+/// Set a fuzmatch_str_T entry at index in an opaque array.
+void nvim_option_fuzmatch_set(void *fuzmatch, int idx, const char *str, int score)
+{
+  fuzmatch_str_T *fm = (fuzmatch_str_T *)fuzmatch;
+  fm[idx].idx = idx;
+  fm[idx].str = xstrdup(str);
+  fm[idx].score = score;
+}
+
 
 
