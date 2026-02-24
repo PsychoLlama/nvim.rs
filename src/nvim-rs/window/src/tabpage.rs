@@ -1277,6 +1277,272 @@ pub unsafe extern "C" fn rs_may_open_tabpage() -> c_int {
     may_open_tabpage_impl()
 }
 
+// =============================================================================
+// Phase 7: leave_tabpage, enter_tabpage, goto_tabpage_tp
+// =============================================================================
+
+extern "C" {
+    // leave_tabpage dependencies (cross-crate)
+    fn rs_reset_VIsual_and_resel();
+    fn nvim_get_curbuf() -> crate::BufHandle;
+    fn nvim_apply_autocmds_bufleave();
+    fn nvim_apply_autocmds_winleave();
+    fn nvim_apply_autocmds_tableave();
+    fn nvim_reset_dragwin();
+    fn nvim_tabpage_set_prevwin(tp: TabpageHandle, wp: WinHandle);
+    fn nvim_tabpage_set_old_rows_avail(tp: TabpageHandle, val: c_int);
+    fn nvim_tabpage_get_old_columns(tp: TabpageHandle) -> c_int;
+    fn nvim_tabpage_set_old_columns(tp: TabpageHandle, val: c_int);
+    fn nvim_get_rows_avail() -> c_int;
+    fn nvim_get_Columns() -> c_int;
+    fn nvim_get_prevwin() -> WinHandle;
+    fn nvim_set_firstwin_null();
+    fn nvim_set_lastwin_null();
+
+    // enter_tabpage dependencies
+    fn nvim_get_p_ch() -> i64;
+    fn nvim_get_curtab_ch_used() -> c_int;
+    fn nvim_set_cmdheight_for_tabpage(new_ch: i64);
+    fn nvim_set_curtab_ch_used(val: i64);
+    fn nvim_tabpage_get_prevwin(tp: TabpageHandle) -> WinHandle;
+    fn nvim_tabpage_get_firstwin_winrow(tp: TabpageHandle) -> c_int;
+    fn nvim_set_prevwin(wp: WinHandle);
+    fn nvim_win_float_update_statusline();
+    fn nvim_set_diff_need_scrollbind(val: bool);
+    fn nvim_tabpage_get_old_rows_avail(tp: TabpageHandle) -> c_int;
+    fn nvim_get_starting() -> c_int;
+    fn nvim_set_lastused_tabpage_from_rust(tp: TabpageHandle);
+    fn nvim_apply_autocmds_tabenter();
+    fn nvim_apply_autocmds_bufenter();
+    fn nvim_redraw_all_later(type_: c_int);
+
+    // goto_tabpage_tp dependencies
+    fn nvim_get_cmdwin_type() -> c_int;
+    fn nvim_emsg_e_cmdwin();
+    fn nvim_set_keep_msg_null();
+    fn nvim_set_skip_win_fix_scroll(val: c_int);
+    fn nvim_win_get_buffer(wp: WinHandle) -> crate::BufHandle;
+}
+
+// WEE_* flags for win_enter_ext (must match C enum)
+const WEE_CURWIN_INVALID: c_int = 0x02;
+const WEE_TRIGGER_ENTER_AUTOCMDS: c_int = 0x08;
+const WEE_TRIGGER_LEAVE_AUTOCMDS: c_int = 0x10;
+
+// OK/FAIL constants
+const OK: c_int = 1;
+const LEAVE_FAIL: c_int = 0;
+
+/// Rust port of C static `leave_tabpage()`.
+///
+/// Prepares for leaving the current tab page. Fires BufLeave/WinLeave/TabLeave
+/// autocmds if requested and checks curtab stability after each. Saves current
+/// window pointers to the tabpage and clears firstwin/lastwin.
+///
+/// Returns OK (1) on success, FAIL (0) if autocmds changed curtab.
+///
+/// # Safety
+/// Calls C accessor functions and fires autocmds.
+unsafe fn leave_tabpage_impl(new_curbuf: crate::BufHandle, trigger_leave: bool) -> c_int {
+    let tp = nvim_get_curtab();
+
+    crate::focus::rs_leaving_window(nvim_get_curwin());
+    rs_reset_VIsual_and_resel();
+
+    if trigger_leave {
+        let curbuf = nvim_get_curbuf();
+        if new_curbuf != curbuf {
+            nvim_apply_autocmds_bufleave();
+            if nvim_get_curtab() != tp {
+                return LEAVE_FAIL;
+            }
+        }
+        nvim_apply_autocmds_winleave();
+        if nvim_get_curtab() != tp {
+            return LEAVE_FAIL;
+        }
+        nvim_apply_autocmds_tableave();
+        if nvim_get_curtab() != tp {
+            return LEAVE_FAIL;
+        }
+    }
+
+    nvim_reset_dragwin();
+    nvim_tabpage_set_curwin(tp, nvim_get_curwin());
+    nvim_tabpage_set_prevwin(tp, nvim_get_prevwin());
+    nvim_tabpage_set_firstwin(tp, nvim_get_firstwin());
+    nvim_tabpage_set_lastwin(tp, nvim_get_lastwin());
+    nvim_tabpage_set_old_rows_avail(tp, nvim_get_rows_avail());
+    if nvim_tabpage_get_old_columns(tp) != -1 {
+        nvim_tabpage_set_old_columns(tp, nvim_get_Columns());
+    }
+    nvim_set_firstwin_null();
+    nvim_set_lastwin_null();
+    OK
+}
+
+/// FFI export: Rust replacement for C static `leave_tabpage()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_leave_tabpage(
+    new_curbuf: crate::BufHandle,
+    trigger_leave: c_int,
+) -> c_int {
+    leave_tabpage_impl(new_curbuf, trigger_leave != 0)
+}
+
+// UPD_NOT_VALID constant (matches C define)
+const UPD_NOT_VALID: c_int = 2;
+
+/// Rust port of C static `enter_tabpage()`.
+///
+/// Switches to tab page `tp`. Syncs cmdheight, fires win_enter_ext, recomputes
+/// layout, updates lastused_tabpage, and fires TabEnter/BufEnter autocmds.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn enter_tabpage_impl(
+    tp: TabpageHandle,
+    old_curbuf: crate::BufHandle,
+    trigger_enter: bool,
+    trigger_leave: bool,
+) {
+    // Capture the w_winrow of tp->tp_firstwin before use_tabpage changes firstwin.
+    let old_off_winrow = nvim_tabpage_get_firstwin_winrow(tp);
+    let next_prevwin = nvim_tabpage_get_prevwin(tp);
+    let old_curtab = nvim_get_curtab();
+
+    use_tabpage_impl(tp);
+
+    if old_curtab != nvim_get_curtab() {
+        crate::ui_flush::rs_tabpage_check_windows(old_curtab);
+        let p_ch = nvim_get_p_ch();
+        let tp_ch_used = i64::from(nvim_get_curtab_ch_used());
+        if p_ch != tp_ch_used {
+            // Temporarily swap tp_ch_used with p_ch so set_option_value
+            // sees the stored value, then restore after.
+            nvim_set_curtab_ch_used(p_ch);
+            nvim_set_cmdheight_for_tabpage(tp_ch_used);
+        }
+    }
+
+    let mut enter_flags = WEE_CURWIN_INVALID;
+    if trigger_enter {
+        enter_flags |= WEE_TRIGGER_ENTER_AUTOCMDS;
+    }
+    if trigger_leave {
+        enter_flags |= WEE_TRIGGER_LEAVE_AUTOCMDS;
+    }
+    crate::enter::rs_win_enter_ext(nvim_tabpage_get_curwin(tp), enter_flags);
+    nvim_set_prevwin(next_prevwin);
+
+    crate::statusline::rs_last_status(0);
+    nvim_win_float_update_statusline();
+    crate::rs_win_comp_pos();
+    nvim_set_diff_need_scrollbind(true);
+    nvim_reset_dragwin();
+
+    // The tabpage line may have appeared or disappeared; also check ROWS_AVAIL.
+    let curtab = nvim_get_curtab();
+    let firstwin_winrow = nvim_tabpage_get_firstwin_winrow(curtab);
+    if nvim_tabpage_get_old_rows_avail(curtab) != nvim_get_rows_avail()
+        || old_off_winrow != firstwin_winrow
+    {
+        crate::resize::screen::rs_win_new_screen_rows();
+    }
+    if nvim_tabpage_get_old_columns(curtab) != nvim_get_Columns() {
+        if nvim_get_starting() == 0 {
+            crate::resize::screen::rs_win_new_screen_cols();
+            nvim_tabpage_set_old_columns(curtab, nvim_get_Columns());
+        } else {
+            nvim_tabpage_set_old_columns(curtab, -1);
+        }
+    }
+
+    nvim_set_lastused_tabpage_from_rust(old_curtab);
+
+    if trigger_enter {
+        nvim_apply_autocmds_tabenter();
+        let curbuf = nvim_get_curbuf();
+        if old_curbuf != curbuf {
+            nvim_apply_autocmds_bufenter();
+        }
+    }
+
+    nvim_redraw_all_later(UPD_NOT_VALID);
+}
+
+/// FFI export: Rust replacement for C static `enter_tabpage()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_enter_tabpage(
+    tp: TabpageHandle,
+    old_curbuf: crate::BufHandle,
+    trigger_enter: c_int,
+    trigger_leave: c_int,
+) {
+    enter_tabpage_impl(tp, old_curbuf, trigger_enter != 0, trigger_leave != 0);
+}
+
+/// Rust port of C `goto_tabpage_tp()`.
+///
+/// Orchestrates tab page switching: fires leave autocmds via leave_tabpage,
+/// then enter autocmds via enter_tabpage.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn goto_tabpage_tp_impl(
+    tp: TabpageHandle,
+    trigger_enter: bool,
+    trigger_leave: bool,
+) {
+    if trigger_enter || trigger_leave {
+        if nvim_get_cmdwin_type() != 0 {
+            nvim_emsg_e_cmdwin();
+            return;
+        }
+    }
+
+    nvim_set_keep_msg_null();
+
+    nvim_set_skip_win_fix_scroll(1);
+
+    let curtab = nvim_get_curtab();
+    if tp != curtab {
+        // Get the buffer that will be current in tp
+        let tp_curwin = nvim_tabpage_get_curwin(tp);
+        let new_curbuf = nvim_win_get_buffer(tp_curwin);
+        let leave_ok = leave_tabpage_impl(new_curbuf, trigger_leave);
+        if leave_ok == OK {
+            if valid_tabpage_impl(tp) {
+                enter_tabpage_impl(tp, nvim_get_curbuf(), trigger_enter, trigger_leave);
+            } else {
+                let curtab2 = nvim_get_curtab();
+                enter_tabpage_impl(curtab2, nvim_get_curbuf(), trigger_enter, trigger_leave);
+            }
+        }
+    }
+
+    nvim_set_skip_win_fix_scroll(0);
+}
+
+/// FFI export: Rust replacement for C `goto_tabpage_tp()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_goto_tabpage_tp_impl(
+    tp: TabpageHandle,
+    trigger_enter: c_int,
+    trigger_leave: c_int,
+) {
+    goto_tabpage_tp_impl(tp, trigger_enter != 0, trigger_leave != 0);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

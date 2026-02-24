@@ -244,6 +244,11 @@ extern void rs_set_winbar(int make_room);
 extern void rs_last_status(int morewin);
 extern int rs_resize_frame_for_winbar(frame_T *fr);
 
+// Phase 7: leave_tabpage, enter_tabpage, goto_tabpage_tp
+extern int rs_leave_tabpage(buf_T *new_curbuf, int trigger_leave);
+extern void rs_enter_tabpage(tabpage_T *tp, buf_T *old_curbuf, int trigger_enter, int trigger_leave);
+extern void rs_goto_tabpage_tp_impl(tabpage_T *tp, int trigger_enter, int trigger_leave);
+
 // win_split_ins migration: Rust orchestrator
 typedef struct {
   win_T *wp;           // new window or NULL
@@ -1620,39 +1625,7 @@ void close_tabpage(tabpage_T *tab)
 /// @param trigger_leave_autocmds  when true trigger *Leave autocommands.
 static int leave_tabpage(buf_T *new_curbuf, bool trigger_leave_autocmds)
 {
-  tabpage_T *tp = curtab;
-
-  leaving_window(curwin);
-  rs_reset_VIsual_and_resel();     // stop Visual mode
-  if (trigger_leave_autocmds) {
-    if (new_curbuf != curbuf) {
-      apply_autocmds(EVENT_BUFLEAVE, NULL, NULL, false, curbuf);
-      if (curtab != tp) {
-        return FAIL;
-      }
-    }
-    apply_autocmds(EVENT_WINLEAVE, NULL, NULL, false, curbuf);
-    if (curtab != tp) {
-      return FAIL;
-    }
-    apply_autocmds(EVENT_TABLEAVE, NULL, NULL, false, curbuf);
-    if (curtab != tp) {
-      return FAIL;
-    }
-  }
-
-  reset_dragwin();
-  tp->tp_curwin = curwin;
-  tp->tp_prevwin = prevwin;
-  tp->tp_firstwin = firstwin;
-  tp->tp_lastwin = lastwin;
-  tp->tp_old_Rows_avail = ROWS_AVAIL;
-  if (tp->tp_old_Columns != -1) {
-    tp->tp_old_Columns = Columns;
-  }
-  firstwin = NULL;
-  lastwin = NULL;
-  return OK;
+  return rs_leave_tabpage(new_curbuf, trigger_leave_autocmds ? 1 : 0);
 }
 
 /// Start using tab page "tp".
@@ -3322,3 +3295,72 @@ void nvim_set_cmdmod_tab(int val) { cmdmod.cmod_tab = val; }
 
 extern int rs_may_open_tabpage(void);
 static int may_open_tabpage(void) { return rs_may_open_tabpage(); }
+
+// =============================================================================
+// Phase 7 accessors: leave_tabpage, enter_tabpage, goto_tabpage_tp
+// =============================================================================
+
+/// Set tp->tp_prevwin.
+void nvim_tabpage_set_prevwin(tabpage_T *tp, win_T *wp) { if (tp) { tp->tp_prevwin = wp; } }
+
+/// Get tp->tp_prevwin.
+win_T *nvim_tabpage_get_prevwin(tabpage_T *tp) { return tp ? tp->tp_prevwin : NULL; }
+
+/// Set tp->tp_old_Rows_avail.
+void nvim_tabpage_set_old_rows_avail(tabpage_T *tp, int val) { if (tp) { tp->tp_old_Rows_avail = val; } }
+
+/// Get tp->tp_old_Rows_avail.
+int nvim_tabpage_get_old_rows_avail(tabpage_T *tp) { return tp ? tp->tp_old_Rows_avail : 0; }
+
+/// Get tp->tp_old_Columns.
+int nvim_tabpage_get_old_columns(tabpage_T *tp) { return tp ? tp->tp_old_Columns : 0; }
+
+/// Set tp->tp_old_Columns.
+void nvim_tabpage_set_old_columns(tabpage_T *tp, int val) { if (tp) { tp->tp_old_Columns = val; } }
+
+/// Call reset_dragwin().
+void nvim_reset_dragwin(void) { reset_dragwin(); }
+
+/// Fire EVENT_TABLEAVE autocmd.
+void nvim_apply_autocmds_tableave(void) { apply_autocmds(EVENT_TABLEAVE, NULL, NULL, false, curbuf); }
+
+/// Fire EVENT_TABENTER autocmd.
+void nvim_apply_autocmds_tabenter(void) { apply_autocmds(EVENT_TABENTER, NULL, NULL, false, curbuf); }
+
+/// Set firstwin = NULL (without syncing curtab->tp_firstwin).
+void nvim_set_firstwin_null(void) { firstwin = NULL; }
+
+/// Set lastwin = NULL (without syncing curtab->tp_lastwin).
+void nvim_set_lastwin_null(void) { lastwin = NULL; }
+
+/// Get the `starting` global (nonzero while Vim is starting up).
+int nvim_get_starting(void) { return starting; }
+
+/// Call win_float_update_statusline().
+void nvim_win_float_update_statusline(void) { win_float_update_statusline(); }
+
+/// Set lastused_tabpage global (for enter_tabpage migration).
+void nvim_set_lastused_tabpage_from_rust(tabpage_T *tp) { lastused_tabpage = tp; }
+
+/// Call set_keep_msg(NULL, 0).
+void nvim_set_keep_msg_null(void) { set_keep_msg(NULL, 0); }
+
+/// Set skip_win_fix_scroll global.
+void nvim_set_skip_win_fix_scroll(int val) { skip_win_fix_scroll = (val != 0); }
+
+/// Wrap set_option_value for cmdheight with command_frame_height guard.
+/// Sets command_frame_height=false, calls set_option_value(kOptCmdheight, new_ch, 0),
+/// then restores command_frame_height=true.
+void nvim_set_cmdheight_for_tabpage(int64_t new_ch)
+{
+  command_frame_height = false;
+  set_option_value(kOptCmdheight, NUMBER_OPTVAL(new_ch), 0);
+  command_frame_height = true;
+}
+
+/// Get w_winrow from tp->tp_firstwin (for enter_tabpage old_off comparison).
+int nvim_tabpage_get_firstwin_winrow(tabpage_T *tp)
+{
+  return (tp && tp->tp_firstwin) ? tp->tp_firstwin->w_winrow : 0;
+}
+
