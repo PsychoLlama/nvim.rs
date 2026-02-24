@@ -71,7 +71,7 @@ extern "C" {
     fn nvim_fold_set_vim_var_nr_lnum(lnum: LineNr);
 
     /// Get the line count of curbuf (after curwin/curbuf have been set).
-    fn nvim_fold_get_curbuf_line_count_c() -> LineNr;
+    fn nvim_fold_get_curbuf_line_count() -> LineNr;
 }
 
 /// Result of fold level calculation for a line.
@@ -315,7 +315,7 @@ pub fn foldlevel_expr_result(
             result.lvl = 0;
             result.lvl_next = 0;
         }
-        let line_count = unsafe { nvim_fold_get_curbuf_line_count_c() };
+        let line_count = unsafe { nvim_fold_get_curbuf_line_count() };
         if actual_lnum == line_count {
             result.lvl_next = 0;
         }

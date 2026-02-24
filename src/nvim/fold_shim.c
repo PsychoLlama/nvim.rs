@@ -707,11 +707,7 @@ int nvim_get_sw_value(buf_T *buf)
   return (int)get_sw_value(buf);
 }
 
-/// Check if a line is in a diff fold (wrapper for diff_infold).
-int nvim_rs_diff_infold(win_T *wp, linenr_T lnum)
-{
-  return rs_diff_infold(wp, lnum);
-}
+// nvim_rs_diff_infold -- deleted (Rust calls rs_diff_infold directly)
 
 /// Skip whitespace at the beginning of a string (wrapper for skipwhite).
 char *nvim_skipwhite(const char *s)
@@ -1104,8 +1100,4 @@ void nvim_fold_set_vim_var_nr_lnum(linenr_T lnum)
   set_vim_var_nr(VV_LNUM, (varnumber_T)lnum);
 }
 
-/// Get curbuf's line count (used after curwin/curbuf have been set).
-linenr_T nvim_fold_get_curbuf_line_count_c(void)
-{
-  return curbuf->b_ml.ml_line_count;
-}
+// nvim_fold_get_curbuf_line_count_c -- deleted (merged into nvim_fold_get_curbuf_line_count)
