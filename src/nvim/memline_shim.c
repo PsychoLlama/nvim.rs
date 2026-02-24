@@ -275,6 +275,8 @@ extern int rs_ml_add_stack(buf_T *buf);
 extern void rs_ml_setflags(buf_T *buf);
 // Pass 3 Phase 1: swapfile_dict Rust function declaration
 extern void rs_swapfile_dict(const char *fname, dict_T *d);
+// Pass 3 Phase 2: swapfile_info Rust function declaration
+extern int64_t rs_swapfile_info(char *fname, void *sb, int *proc_running_out);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1125,89 +1127,10 @@ void swapfile_dict(const char *fname, dict_T *d)
 /// @return  timestamp (0 when unknown).
 static time_t swapfile_info(char *fname, StringBuilder *msg)
 {
-  assert(fname != NULL);
-  ZeroBlock b0;
-  time_t x = (time_t)0;
-#ifdef UNIX
-  char uname[B0_UNAME_SIZE];
-#endif
-
-  // print the swapfile date
-  FileInfo file_info;
-  if (os_fileinfo(fname, &file_info)) {
-#ifdef UNIX
-    // print name of owner of the file
-    if (os_get_uname((uv_uid_t)file_info.stat.st_uid, uname, B0_UNAME_SIZE) == OK) {
-      kv_printf(*msg, "%s%s", _("          owned by: "), uname);
-      kv_printf(*msg, _("   dated: "));
-    } else {
-      kv_printf(*msg, _("             dated: "));
-    }
-#else
-    msg_puts(_("             dated: "));
-#endif
-    x = file_info.stat.st_mtim.tv_sec;
-    char ctime_buf[100];  // hopefully enough for every language
-    kv_printf(*msg, "%s", os_ctime_r(&x, ctime_buf, sizeof(ctime_buf), true));
-  }
-
-  // print the original file name
-  int fd = os_open(fname, O_RDONLY, 0);
-  if (fd >= 0) {
-    if (read_eintr(fd, &b0, sizeof(b0)) == sizeof(b0)) {
-      if (strncmp(b0.b0_version, "VIM 3.0", 7) == 0) {
-        kv_printf(*msg, _("         [from Vim version 3.0]"));
-      } else if (rs_ml_check_b0_id(&b0) != 0) {
-        kv_printf(*msg, _("         [does not look like a Nvim swap file]"));
-      } else if (rs_ml_check_b0_strings(&b0) != 0) {
-        kv_printf(*msg, _("         [garbled strings (not nul terminated)]"));
-      } else {
-        kv_printf(*msg, _("         file name: "));
-        if (b0.b0_fname[0] == NUL) {
-          kv_printf(*msg, _("[No Name]"));
-        } else {
-          kv_printf(*msg, "%s", b0.b0_fname);
-        }
-
-        kv_printf(*msg, _("\n          modified: "));
-        kv_printf(*msg, b0.b0_dirty ? _("YES") : _("no"));
-
-        if (*(b0.b0_uname) != NUL) {
-          kv_printf(*msg, _("\n         user name: "));
-          kv_printf(*msg, "%s", b0.b0_uname);
-        }
-
-        if (*(b0.b0_hname) != NUL) {
-          if (*(b0.b0_uname) != NUL) {
-            kv_printf(*msg, _("   host name: "));
-          } else {
-            kv_printf(*msg, _("\n         host name: "));
-          }
-          kv_printf(*msg, "%s", b0.b0_hname);
-        }
-
-        if (rs_char_to_long(b0.b0_pid) != 0) {
-          kv_printf(*msg, _("\n        process ID: "));
-          kv_printf(*msg, "%d", (int)rs_char_to_long(b0.b0_pid));
-          if ((proc_running = rs_swapfile_proc_running(&b0, fname))) {
-            kv_printf(*msg, _(" (STILL RUNNING)"));
-          }
-        }
-
-        if (rs_b0_magic_wrong(&b0)) {
-          kv_printf(*msg, _("\n         [not usable on this computer]"));
-        }
-      }
-    } else {
-      kv_printf(*msg, _("         [cannot be read]"));
-    }
-    close(fd);
-  } else {
-    kv_printf(*msg, _("         [cannot be opened]"));
-  }
-  kv_printf(*msg, "\n");
-
-  return x;
+  int running = 0;
+  int64_t mtime = rs_swapfile_info(fname, msg, &running);
+  proc_running = running;
+  return (time_t)mtime;
 }
 
 // recov_file_names migrated to Rust (recovery.rs)
@@ -1557,6 +1480,131 @@ void nvim_swapfile_info_and_print(char *fname)
   bool need_clear = false;
   msg_multiline(cbuf_as_string(msg.items, msg.size), 0, false, false, &need_clear);
   kv_destroy(msg);
+}
+
+// Pass 3 Phase 2: C wrappers for StringBuilder operations (used by rs_swapfile_info)
+
+/// Append a string to a StringBuilder (opaque void* pointer from Rust)
+void nvim_sb_append_str(void *sb, const char *s)
+{
+  kv_printf(*(StringBuilder *)sb, "%s", s);
+}
+
+/// Get file mtime and owner name from a file, for swapfile_info display.
+/// On UNIX, also fills uname_buf with the owner's name (if available).
+/// Returns mtime in seconds, or 0 if file not found.
+/// uname_found is set to 1 if uname_buf was filled.
+int64_t nvim_swapfile_get_file_info(const char *fname, char *uname_buf, size_t uname_len,
+                                    int *uname_found)
+{
+  FileInfo file_info;
+  *uname_found = 0;
+  if (!os_fileinfo(fname, &file_info)) {
+    return 0;
+  }
+#ifdef UNIX
+  if (os_get_uname((uv_uid_t)file_info.stat.st_uid, uname_buf, uname_len) == OK) {
+    *uname_found = 1;
+  }
+#endif
+  return (int64_t)file_info.stat.st_mtim.tv_sec;
+}
+
+/// Append the ctime string for an mtime value to a StringBuilder.
+void nvim_sb_append_ctime(void *sb, int64_t mtime)
+{
+  time_t x = (time_t)mtime;
+  char ctime_buf[100];
+  kv_printf(*(StringBuilder *)sb, "%s", os_ctime_r(&x, ctime_buf, sizeof(ctime_buf), true));
+}
+
+// Translated message helpers for rs_swapfile_info
+
+void nvim_sb_swapinfo_owned_by(void *sb, const char *uname)
+{
+  kv_printf(*(StringBuilder *)sb, "%s%s", _("          owned by: "), uname);
+}
+
+void nvim_sb_swapinfo_dated(void *sb, int has_owner)
+{
+  if (has_owner) {
+    kv_printf(*(StringBuilder *)sb, _("   dated: "));
+  } else {
+    kv_printf(*(StringBuilder *)sb, _("             dated: "));
+  }
+}
+
+void nvim_sb_swapinfo_vim3(void *sb)
+{
+  kv_printf(*(StringBuilder *)sb, _("         [from Vim version 3.0]"));
+}
+
+void nvim_sb_swapinfo_not_nvim(void *sb)
+{
+  kv_printf(*(StringBuilder *)sb, _("         [does not look like a Nvim swap file]"));
+}
+
+void nvim_sb_swapinfo_garbled(void *sb)
+{
+  kv_printf(*(StringBuilder *)sb, _("         [garbled strings (not nul terminated)]"));
+}
+
+void nvim_sb_swapinfo_filename(void *sb, const char *b0_fname)
+{
+  kv_printf(*(StringBuilder *)sb, _("         file name: "));
+  if (b0_fname[0] == NUL) {
+    kv_printf(*(StringBuilder *)sb, _("[No Name]"));
+  } else {
+    kv_printf(*(StringBuilder *)sb, "%s", b0_fname);
+  }
+}
+
+void nvim_sb_swapinfo_modified(void *sb, int dirty)
+{
+  kv_printf(*(StringBuilder *)sb, _("\n          modified: "));
+  kv_printf(*(StringBuilder *)sb, dirty ? _("YES") : _("no"));
+}
+
+void nvim_sb_swapinfo_user(void *sb, const char *uname)
+{
+  kv_printf(*(StringBuilder *)sb, _("\n         user name: "));
+  kv_printf(*(StringBuilder *)sb, "%s", uname);
+}
+
+void nvim_sb_swapinfo_host(void *sb, const char *hname, int after_user)
+{
+  if (after_user) {
+    kv_printf(*(StringBuilder *)sb, _("   host name: "));
+  } else {
+    kv_printf(*(StringBuilder *)sb, _("\n         host name: "));
+  }
+  kv_printf(*(StringBuilder *)sb, "%s", hname);
+}
+
+void nvim_sb_swapinfo_pid(void *sb, int pid)
+{
+  kv_printf(*(StringBuilder *)sb, _("\n        process ID: "));
+  kv_printf(*(StringBuilder *)sb, "%d", pid);
+}
+
+void nvim_sb_swapinfo_still_running(void *sb)
+{
+  kv_printf(*(StringBuilder *)sb, _(" (STILL RUNNING)"));
+}
+
+void nvim_sb_swapinfo_not_usable(void *sb)
+{
+  kv_printf(*(StringBuilder *)sb, _("\n         [not usable on this computer]"));
+}
+
+void nvim_sb_swapinfo_cannot_read(void *sb)
+{
+  kv_printf(*(StringBuilder *)sb, _("         [cannot be read]"));
+}
+
+void nvim_sb_swapinfo_cannot_open(void *sb)
+{
+  kv_printf(*(StringBuilder *)sb, _("         [cannot be opened]"));
 }
 
 // Phase 4 accessors for Rust FFI (ml_new_ptr, ml_new_data, ml_lineadd, ml_upd_block0)
