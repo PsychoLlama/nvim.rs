@@ -922,57 +922,6 @@ void win_init_empty(win_T *wp) { rs_win_init_empty(wp); }
 
 void curwin_init(void) { rs_win_init_empty(curwin); }
 
-/// Closes all windows for buffer `buf` unless there is only one non-floating window.
-///
-/// @param keep_curwin  don't close `curwin`
-void close_windows(buf_T *buf, bool keep_curwin)
-{
-  RedrawingDisabled++;
-
-  // Start from lastwin to close floating windows with the same buffer first.
-  // When the autocommand window is involved win_close() may need to print an error message.
-  for (win_T *wp = lastwin; wp != NULL && (is_aucmd_win(lastwin) || !rs_one_window_in_tab(wp, NULL));) {
-    if (wp->w_buffer == buf && (!keep_curwin || wp != curwin)
-        && !(rs_win_locked(wp) || wp->w_buffer->b_locked > 0)) {
-      if (win_close(wp, false, false) == FAIL) {
-        // If closing the window fails give up, to avoid looping forever.
-        break;
-      }
-
-      // Start all over, autocommands may change the window layout.
-      wp = lastwin;
-    } else {
-      wp = wp->w_prev;
-    }
-  }
-
-  tabpage_T *nexttp;
-
-  // Also check windows in other tab pages.
-  for (tabpage_T *tp = first_tabpage; tp != NULL; tp = nexttp) {
-    nexttp = tp->tp_next;
-    if (tp != curtab) {
-      // Start from tp_lastwin to close floating windows with the same buffer first.
-      for (win_T *wp = tp->tp_lastwin; wp != NULL; wp = wp->w_prev) {
-        if (wp->w_buffer == buf
-            && !(rs_win_locked(wp) || wp->w_buffer->b_locked > 0)) {
-          if (!win_close_othertab(wp, false, tp, false)) {
-            // If closing the window fails give up, to avoid looping forever.
-            break;
-          }
-
-          // Start all over, the tab page may be closed and
-          // autocommands may change the window layout.
-          nexttp = first_tabpage;
-          break;
-        }
-      }
-    }
-  }
-
-  RedrawingDisabled--;
-}
-
 /// Check if floating windows in tabpage `tp` can be closed.
 /// Do not call this when the autocommand window is in use!
 ///
@@ -3422,3 +3371,26 @@ int nvim_win_close_wrapper(win_T *wp, int free_buf)
 
 extern void rs_close_others(int message, int forceit);
 void close_others(int message, int forceit) { rs_close_others(message, forceit); }
+
+// Phase 6 accessors: close_windows
+
+/// Increment RedrawingDisabled.
+void nvim_inc_RedrawingDisabled(void) { RedrawingDisabled++; }
+
+/// Decrement RedrawingDisabled.
+void nvim_dec_RedrawingDisabled(void) { RedrawingDisabled--; }
+
+/// Check if wp->w_buffer->b_locked > 0.
+int nvim_win_buf_b_locked(win_T *wp)
+{
+  return (wp && wp->w_buffer && wp->w_buffer->b_locked > 0) ? 1 : 0;
+}
+
+/// Wrap win_close_othertab(wp, free_buf, tp, force) returning int (0=FAIL, 1=OK).
+int nvim_win_close_othertab_wrapper(win_T *wp, int free_buf, tabpage_T *tp, int force)
+{
+  return win_close_othertab(wp, free_buf != 0, tp, force != 0) ? 1 : 0;
+}
+
+extern void rs_close_windows(buf_T *buf, int keep_curwin);
+void close_windows(buf_T *buf, bool keep_curwin) { rs_close_windows(buf, keep_curwin ? 1 : 0); }

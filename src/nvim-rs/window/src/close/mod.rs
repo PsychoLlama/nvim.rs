@@ -10,6 +10,7 @@
 //! - [`frame`]: Frame tree helpers for close operations
 
 pub mod close_others;
+pub mod close_windows;
 pub mod execute;
 pub mod frame;
 pub mod orchestrate;
@@ -18,6 +19,7 @@ pub mod win_close;
 
 // Re-export common items
 pub use close_others::*;
+pub use close_windows::*;
 pub use execute::*;
 pub use frame::*;
 pub use orchestrate::*;
