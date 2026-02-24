@@ -297,6 +297,15 @@ extern "C" {
 
     /// Public wrapper around static ml_delete_int
     fn nvim_ml_delete_int(buf: *mut BufHandle, lnum: LineNr, flags: c_int) -> c_int;
+
+    /// Public wrapper around static ml_append_int
+    fn nvim_ml_append_int(
+        buf: *mut BufHandle,
+        lnum: LineNr,
+        line: *mut c_char,
+        len: ColNr,
+        flags: c_int,
+    ) -> c_int;
 }
 
 // =============================================================================
@@ -712,6 +721,32 @@ pub unsafe extern "C" fn rs_ml_replace_buf_impl(
         strlen(line)
     };
     rs_ml_replace_buf_len(buf, lnum, line, len, copy, noalloc)
+}
+
+/// Implement `ml_append_flush`: flush pending cached line if needed, then
+/// call `nvim_ml_append_int` (public wrapper for the static `ml_append_int`).
+///
+/// This is a Rust port of the static C `ml_append_flush` function.
+///
+/// # Safety
+/// - `buf` must be a valid buffer pointer (non-null)
+/// Modifies buffer state. Only call from main Nvim thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_append_flush(
+    buf: *mut BufHandle,
+    lnum: LineNr,
+    line: *mut c_char,
+    len: ColNr,
+    flags: c_int,
+) -> c_int {
+    if lnum > nvim_buf_get_ml_line_count(buf) {
+        return FAIL; // lnum out of range
+    }
+    if nvim_buf_get_ml_line_lnum(buf) != 0 {
+        // This may also invoke ml_append_int().
+        ml_flush_line(buf, 0);
+    }
+    nvim_ml_append_int(buf, lnum, line, len, flags)
 }
 
 // =============================================================================

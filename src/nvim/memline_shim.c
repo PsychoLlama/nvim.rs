@@ -294,6 +294,8 @@ extern int rs_ml_append_buf_impl(buf_T *buf, linenr_T lnum, char *line, colnr_T 
 extern int rs_ml_delete_flags_impl(linenr_T lnum, int flags);
 extern int rs_ml_delete_buf_impl(buf_T *buf, linenr_T lnum, bool message);
 extern int rs_ml_replace_buf_impl(buf_T *buf, linenr_T lnum, char *line, bool copy, bool noalloc);
+// Pass 4 Phase 3: ml_append_flush Rust function declaration
+extern int rs_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -2146,6 +2148,13 @@ theend:
   return ret;
 }
 
+/// Public wrapper around static ml_append_int, used by rs_ml_append_flush.
+int nvim_ml_append_int(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags)
+  FUNC_ATTR_NONNULL_ARG(1)
+{
+  return ml_append_int(buf, lnum, line, len, flags);
+}
+
 /// Flush any pending change and call ml_append_int()
 ///
 /// @param buf
@@ -2158,15 +2167,7 @@ theend:
 static int ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  if (lnum > buf->b_ml.ml_line_count) {
-    return FAIL;  // lnum out of range
-  }
-  if (buf->b_ml.ml_line_lnum != 0) {
-    // This may also invoke ml_append_int().
-    ml_flush_line(buf, false);
-  }
-
-  return ml_append_int(buf, lnum, line, len, flags);
+  return rs_ml_append_flush(buf, lnum, line, len, flags);
 }
 
 /// Public wrapper around static ml_append_flush, used by Rust _impl functions.
