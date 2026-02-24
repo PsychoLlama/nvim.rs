@@ -648,6 +648,7 @@ void nvim_tag_msg_puts_title(const char *s) { msg_puts_title(s); }
 void nvim_tag_msg_outtrans(const char *str, int attr, bool right) { msg_outtrans(str, attr, right); }
 void nvim_tag_msg_outtrans_len(const char *str, int len, int attr, bool right) { msg_outtrans_len(str, len, attr, right); }
 const char *nvim_tag_msg_outtrans_one(const char *p, int hl_id, bool right) { return msg_outtrans_one((char *)p, hl_id, right); }
+void nvim_tag_msg(const char *msg_str, int hlf) { msg(msg_str, hlf); }
 void nvim_tag_msg_putchar(int c) { msg_putchar(c); }
 void nvim_tag_msg_start(void) { msg_start(); }
 void nvim_tag_os_breakcheck(void) { os_breakcheck(); }
@@ -1318,41 +1319,21 @@ void nvim_tag_xfree(void *p) { xfree(p); }
 char *nvim_tag_xmemdupz(const char *s, size_t len) { return xmemdupz(s, len); }
 int nvim_tag_strcmp(const char *s1, const char *s2) { return strcmp(s1, s2); }
 char *nvim_tag_buflist_findnr_ffname(int fnum) { buf_T *buf = buflist_findnr(fnum); return buf != NULL ? buf->b_ffname : NULL; }
-/// Handle the DT_POP jump: restore position from saved fmark.
-/// Returns: 0 = OK, 1 = FAIL (buflist_getfile failed), 2 = at top of stack
-int nvim_tag_do_pop_jump(void *tg_void, int count, int forceit,
-                         int tagstackidx, int tagstacklen)
+/// buflist_getfile wrapper that returns the result (OK/FAIL).
+/// Used from Rust for DT_POP jump to different buffer.
+int nvim_tag_buflist_getfile_with_result(int fnum, linenr_T lnum, int flags, int forceit)
 {
-  taggy_T *tg = (taggy_T *)tg_void;
-  const bool old_KeyTyped = KeyTyped;
-
-  if (tagstackidx >= tagstacklen) {
-    // count == 0?
-    emsg(_(e_at_top_of_tag_stack));
-    return 2;
-  }
-
-  // Make a copy of the fmark, autocommands may invalidate the
-  // tagstack before it's used.
-  fmark_T saved_fmark = tg[tagstackidx].fmark;
-  if (saved_fmark.fnum != curbuf->b_fnum) {
-    if (buflist_getfile(saved_fmark.fnum, saved_fmark.mark.lnum,
-                        GETF_SETMARK, forceit) == FAIL) {
-      return 1;
-    }
-    curwin->w_cursor.lnum = saved_fmark.mark.lnum;
-  } else {
-    setpcmark();
-    curwin->w_cursor.lnum = saved_fmark.mark.lnum;
-  }
-  curwin->w_cursor.col = saved_fmark.mark.col;
-  curwin->w_set_curswant = true;
-  check_cursor(curwin);
-  if ((fdo_flags & kOptFdoFlagTag) && old_KeyTyped) {
-    rs_foldOpenCursor();
-  }
-  return 0;
+  return buflist_getfile(fnum, lnum, flags, forceit);
 }
+
+/// give_warning wrapper for Rust.
+void nvim_tag_give_warning(const char *msg_str, bool ic)
+{
+  give_warning(msg_str, ic);
+}
+
+/// Get the KeyTyped global (bool).
+bool nvim_tag_get_KeyTyped(void) { return KeyTyped; }
 
 bool nvim_tag_tagstack_changed(void *saved_tagstack) { return saved_tagstack != curwin->w_tagstack; }
 void *nvim_tag_get_tagstack_ptr(void) { return curwin->w_tagstack; }
@@ -1372,29 +1353,21 @@ _Static_assert(sizeof(fmark_T) <= 64, "fmark_T must fit in 64 bytes for Rust sta
 int nvim_tag_prompt_for_selection(void) { return prompt_for_input(NULL, 0, false, NULL); }
 void nvim_tag_set_swap_command(const char *name) { vim_snprintf(IObuff, IOSIZE, ":ta %s\r", name); set_vim_var_string(VV_SWAPCOMMAND, IObuff, -1); }
 void nvim_tag_clear_swap_command(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
-/// Show "tag X of Y" message with optional IC warning
-void nvim_tag_show_match_msg(int cur_match, int num_matches,
-                             int max_num_matches, int prev_num_matches,
-                             bool new_tag, bool ic)
+/// Format "tag X of Y" message into IObuff and return pointer.
+/// Used from Rust for show_match_msg to avoid direct IObuff access.
+const char *nvim_tag_format_match_msg(int cur_match, int num_matches, int max_num_matches)
 {
   snprintf(IObuff, sizeof(IObuff), _("tag %d of %d%s"),
            cur_match + 1,
            num_matches,
            max_num_matches != MAXCOL ? _(" or more") : "");
-  if (ic) {
-    xstrlcat(IObuff, _("  Using tag with different case!"), IOSIZE);
-  }
-  if ((num_matches > prev_num_matches || new_tag)
-      && num_matches > 1) {
-    msg(IObuff, ic ? HLF_W : 0);
-    msg_scroll = true;
-  } else {
-    give_warning(IObuff, ic);
-  }
-  if (ic && !msg_scrolled && msg_silent == 0 && !ui_has(kUIMessages)) {
-    ui_flush();
-    os_delay(1007, true);
-  }
+  return IObuff;
+}
+
+/// Append IC warning to IObuff.
+void nvim_tag_append_ic_warning(void)
+{
+  xstrlcat(IObuff, _("  Using tag with different case!"), IOSIZE);
 }
 
 void nvim_tag_emsg_stack_empty(void) { emsg(_(e_tag_stack_empty)); }

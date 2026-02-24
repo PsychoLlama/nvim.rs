@@ -70,12 +70,11 @@ extern "C" {
     fn nvim_tag_get_tfu_in_use() -> bool;
     fn nvim_tag_emsg_tfu_in_use();
     fn nvim_tag_buflist_findnr_ffname(fnum: c_int) -> *mut c_char;
-    fn nvim_tag_do_pop_jump(
-        tagstack: *mut c_void,
-        count: c_int,
+    fn nvim_tag_buflist_getfile_with_result(
+        fnum: c_int,
+        lnum: i32,
+        flags: c_int,
         forceit: c_int,
-        tagstackidx: c_int,
-        tagstacklen: c_int,
     ) -> c_int;
     fn nvim_tag_tagstack_changed(saved_tagstack: *mut c_void) -> bool;
     fn nvim_tag_get_tagstack_ptr() -> *mut c_void;
@@ -85,14 +84,32 @@ extern "C" {
     fn nvim_tag_prompt_for_selection() -> c_int;
     fn nvim_tag_set_swap_command(name: *const c_char);
     fn nvim_tag_clear_swap_command();
-    fn nvim_tag_show_match_msg(
+    fn nvim_tag_format_match_msg(
         cur_match: c_int,
         num_matches: c_int,
         max_num_matches: c_int,
-        prev_num_matches: c_int,
-        new_tag: bool,
-        ic: bool,
-    );
+    ) -> *const c_char;
+    fn nvim_tag_append_ic_warning();
+    fn nvim_tag_give_warning(msg: *const c_char, ic: bool);
+    fn nvim_tag_get_KeyTyped() -> bool;
+    fn nvim_taggy_get_fmark(tg: *const c_void) -> *const c_void;
+    fn nvim_fmark_get_fnum(fm: *const c_void) -> c_int;
+    fn nvim_fmark_get_lnum(fm: *const c_void) -> i32;
+    fn nvim_fmark_get_col(fm: *const c_void) -> c_int;
+    fn nvim_setpcmark();
+    fn nvim_set_cursor_lnum(lnum: i32);
+    fn nvim_set_cursor_col(col: c_int);
+    fn nvim_curwin_set_curswant(val: bool);
+    fn nvim_check_cursor();
+    fn nvim_get_fdo_flags() -> u32;
+    fn rs_foldOpenCursor();
+    fn nvim_tag_set_msg_scroll(val: c_int);
+    fn nvim_tag_get_msg_scrolled() -> c_int;
+    fn nvim_tag_get_msg_silent() -> c_int;
+    fn nvim_tag_ui_has_messages() -> bool;
+    fn nvim_tag_ui_flush();
+    fn nvim_tag_os_delay(msec: c_int);
+    fn nvim_tag_msg(msg: *const c_char, hlf: c_int);
     fn nvim_tag_emsg_stack_empty();
     fn nvim_tag_emsg_at_bottom();
     fn nvim_tag_emsg_at_top();
@@ -654,6 +671,15 @@ const MT_IC_OFF: u8 = 4;
 /// TAGSTACKSIZE constant
 const TAGSTACKSIZE: c_int = 20;
 
+/// GETF_SETMARK flag for buflist_getfile
+const GETF_SETMARK: c_int = 0x01;
+
+/// kOptFdoFlagTag flag value (verified by _Static_assert in tag_shim.c)
+const FDO_FLAG_TAG: u32 = 0x80;
+
+/// HLF_W highlight attribute (verified by _Static_assert in tag_shim.c)
+const HLF_W: c_int = 26;
+
 // =============================================================================
 // Main do_tag() implementation
 // =============================================================================
@@ -827,21 +853,40 @@ pub unsafe extern "C" fn rs_do_tag(
                     tagstackidx = 0;
                 }
 
-                let pop_result =
-                    nvim_tag_do_pop_jump(tagstack_ptr, count, forceit, tagstackidx, tagstacklen);
-                match pop_result {
-                    1 => {
-                        // buflist_getfile failed
-                        tagstackidx = oldtagstackidx;
-                        do_tag_cleanup(use_tagstack, tagstackidx, tofree);
-                        return;
-                    }
-                    2 => {
-                        // at top of stack (count == 0)
-                        do_tag_cleanup(use_tagstack, tagstackidx, tofree);
-                        return;
-                    }
-                    _ => {}
+                // Inline Rust port of nvim_tag_do_pop_jump (Phase 1)
+                if tagstackidx >= tagstacklen {
+                    // count == 0 case
+                    nvim_tag_emsg_at_top();
+                    do_tag_cleanup(use_tagstack, tagstackidx, tofree);
+                    return;
+                }
+                let old_key_typed = nvim_tag_get_KeyTyped();
+                // Read the fmark fields at tagstackidx before any autocommands can
+                // fire (analogous to the C code's fmark_T saved_fmark = ... copy).
+                let entry_for_pop = nvim_win_get_tagstack_entry(curwin, tagstackidx);
+                let pop_fmark = nvim_taggy_get_fmark(entry_for_pop);
+                let pop_bufnum = nvim_fmark_get_fnum(pop_fmark);
+                let pop_linenum = nvim_fmark_get_lnum(pop_fmark);
+                let pop_colnum = nvim_fmark_get_col(pop_fmark);
+                if pop_bufnum == nvim_tag_get_curbuf_fnum() {
+                    nvim_setpcmark();
+                } else if nvim_tag_buflist_getfile_with_result(
+                    pop_bufnum,
+                    pop_linenum,
+                    GETF_SETMARK,
+                    forceit,
+                ) == FAIL
+                {
+                    tagstackidx = oldtagstackidx;
+                    do_tag_cleanup(use_tagstack, tagstackidx, tofree);
+                    return;
+                }
+                nvim_set_cursor_lnum(pop_linenum);
+                nvim_set_cursor_col(pop_colnum);
+                nvim_curwin_set_curswant(true);
+                nvim_check_cursor();
+                if (nvim_get_fdo_flags() & FDO_FLAG_TAG) != 0 && old_key_typed {
+                    rs_foldOpenCursor();
                 }
 
                 // Free old matches
@@ -1138,14 +1183,25 @@ pub unsafe extern "C" fn rs_do_tag(
                 && (NUM_MATCHES > 1 || ic)
                 && !skip_msg
             {
-                nvim_tag_show_match_msg(
-                    cur_match,
-                    NUM_MATCHES,
-                    MAX_NUM_MATCHES,
-                    prev_num_matches,
-                    new_tag,
-                    ic,
-                );
+                // Inline Rust port of nvim_tag_show_match_msg (Phase 1)
+                let msg_str = nvim_tag_format_match_msg(cur_match, NUM_MATCHES, MAX_NUM_MATCHES);
+                if ic {
+                    nvim_tag_append_ic_warning();
+                }
+                if (NUM_MATCHES > prev_num_matches || new_tag) && NUM_MATCHES > 1 {
+                    nvim_tag_msg(msg_str, if ic { HLF_W } else { 0 });
+                    nvim_tag_set_msg_scroll(1);
+                } else {
+                    nvim_tag_give_warning(msg_str, ic);
+                }
+                if ic
+                    && nvim_tag_get_msg_scrolled() == 0
+                    && nvim_tag_get_msg_silent() == 0
+                    && !nvim_tag_ui_has_messages()
+                {
+                    nvim_tag_ui_flush();
+                    nvim_tag_os_delay(1007);
+                }
             }
 
             // Set VV_SWAPCOMMAND and jump
