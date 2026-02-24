@@ -3904,6 +3904,505 @@ int *nvim_excmds_eap_forceit_ptr(exarg_T *eap) { return (int *)&eap->forceit; }
 void nvim_excmds_set_forceit_ptr(int *forceit_ptr, int val) { *forceit_ptr = val; }
 
 // =============================================================================
+// Phase 2: Additional global/struct accessors for do_sub migration
+// =============================================================================
+
+/// Get RedrawingDisabled global.
+int nvim_do_sub_get_RedrawingDisabled(void) { return RedrawingDisabled; }
+/// Set RedrawingDisabled global.
+void nvim_do_sub_set_RedrawingDisabled(int val) { RedrawingDisabled = val; }
+
+/// Increment no_u_sync.
+void nvim_do_sub_no_u_sync_inc(void) { no_u_sync++; }
+/// Decrement no_u_sync.
+void nvim_do_sub_no_u_sync_dec(void) { no_u_sync--; }
+
+/// Set need_wait_return global.
+void nvim_do_sub_set_need_wait_return(int val) { need_wait_return = (bool)val; }
+
+/// Set msg_didout global.
+void nvim_do_sub_set_msg_didout(int val) { msg_didout = (bool)val; }
+
+/// Set highlight_match global.
+void nvim_do_sub_set_highlight_match(int val) { highlight_match = (bool)val; }
+
+/// Set search_match_lines global.
+void nvim_do_sub_set_search_match_lines(int val) { search_match_lines = val; }
+
+/// Set search_match_endcol global.
+void nvim_do_sub_set_search_match_endcol(int val) { search_match_endcol = (colnr_T)val; }
+
+/// Get ex_normal_busy global.
+int nvim_do_sub_get_ex_normal_busy(void) { return ex_normal_busy; }
+
+/// Get exmode_active global.
+int nvim_do_sub_get_exmode_active(void) { return exmode_active; }
+
+/// Get sandbox global.
+int nvim_do_sub_get_sandbox(void) { return sandbox; }
+/// Increment sandbox.
+void nvim_do_sub_sandbox_inc(void) { sandbox++; }
+/// Decrement sandbox.
+void nvim_do_sub_sandbox_dec(void) { sandbox--; }
+
+/// Get textlock global.
+int nvim_do_sub_get_textlock(void) { return textlock; }
+/// Increment textlock.
+void nvim_do_sub_textlock_inc(void) { textlock++; }
+/// Decrement textlock.
+void nvim_do_sub_textlock_dec(void) { textlock--; }
+
+/// Get p_ch (cmdheight).
+int nvim_do_sub_get_p_ch(void) { return (int)p_ch; }
+
+/// Get p_lz (lazyredraw).
+int nvim_do_sub_get_p_lz(void) { return p_lz ? 1 : 0; }
+/// Set p_lz (lazyredraw).
+void nvim_do_sub_set_p_lz(int val) { p_lz = (bool)val; }
+
+/// Check if CPO_UNDO is in p_cpo.
+int nvim_do_sub_get_p_cpo_has_undo(void)
+{
+  return vim_strchr(p_cpo, CPO_UNDO) != NULL ? 1 : 0;
+}
+
+// nvim_curwin_get_w_curswant -- defined in indent_ffi.c
+// nvim_curbuf_get_b_p_ma / nvim_curbuf_set_b_p_ma -- defined in option_shim.c
+
+/// Get curwin->w_botline.
+int nvim_curwin_get_w_botline(void) { return (int)curwin->w_botline; }
+
+/// Get curwin->w_p_crb (cursor bind).
+int nvim_curwin_get_w_p_crb(void) { return curwin->w_p_crb ? 1 : 0; }
+
+/// Get curwin->w_p_fen (folding enable).
+int nvim_curwin_get_w_p_fen(void) { return curwin->w_p_fen ? 1 : 0; }
+/// Set curwin->w_p_fen.
+void nvim_curwin_set_w_p_fen(int val) { curwin->w_p_fen = (bool)val; }
+
+/// Set curbuf->deleted_bytes2.
+void nvim_curbuf_set_deleted_bytes2(int val) { curbuf->deleted_bytes2 = (bcount_t)val; }
+
+/// Get CMD_tilde constant.
+int nvim_do_sub_get_CMD_tilde(void) { return CMD_tilde; }
+
+/// Get MAXCOL constant.
+int nvim_do_sub_get_MAXCOL(void) { return (int)MAXCOL; }
+
+/// Check if CMOD_KEEPPATTERNS is in cmdmod.cmod_flags.
+int nvim_do_sub_get_CMOD_KEEPPATTERNS(void)
+{
+  return (cmdmod.cmod_flags & CMOD_KEEPPATTERNS) != 0 ? 1 : 0;
+}
+
+/// Wrap coladvance(curwin, col).
+void nvim_do_sub_coladvance(int col) { coladvance(curwin, (colnr_T)col); }
+
+/// Wrap changed_bytes(lnum, col).
+void nvim_do_sub_changed_bytes(int lnum, int col)
+{
+  changed_bytes((linenr_T)lnum, (colnr_T)col);
+}
+
+/// Wrap deleted_lines(lnum, count).
+void nvim_do_sub_deleted_lines(int lnum, int count)
+{
+  deleted_lines((linenr_T)lnum, (linenr_T)count);
+}
+
+/// Wrap u_inssub(lnum). Returns OK (1) or FAIL (0).
+int nvim_do_sub_u_inssub(int lnum)
+{
+  return u_inssub((linenr_T)lnum) == OK ? 1 : 0;
+}
+
+/// Wrap u_savesub(lnum). Returns OK (1) or FAIL (0).
+int nvim_do_sub_u_savesub(int lnum)
+{
+  return u_savesub((linenr_T)lnum) == OK ? 1 : 0;
+}
+
+/// Wrap u_savedel(lnum, count). Returns OK (1) or FAIL (0).
+int nvim_do_sub_u_savedel(int lnum, int count)
+{
+  return u_savedel((linenr_T)lnum, (linenr_T)count) == OK ? 1 : 0;
+}
+
+/// Wrap u_save_cursor().
+void nvim_do_sub_u_save_cursor(void) { u_save_cursor(); }
+
+/// Wrap do_check_cursorbind().
+void nvim_do_sub_do_check_cursorbind(void) { do_check_cursorbind(); }
+
+/// Wrap scrollup_clamp().
+void nvim_do_sub_scrollup_clamp(void) { scrollup_clamp(); }
+
+/// Wrap scrolldown_clamp().
+void nvim_do_sub_scrolldown_clamp(void) { scrolldown_clamp(); }
+
+/// Wrap setmouse().
+void nvim_do_sub_setmouse(void) { setmouse(); }
+
+/// Wrap concat_str(s1, s2). Returns newly allocated string.
+char *nvim_do_sub_concat_str(const char *s1, const char *s2)
+{
+  return concat_str((char *)s1, (char *)s2);
+}
+
+/// Wrap ml_replace(lnum, line, copy).
+void nvim_do_sub_ml_replace(int lnum, char *line, int copy)
+{
+  ml_replace((linenr_T)lnum, line, copy != 0);
+}
+
+/// Wrap getdigits_int(&pp, true, INT_MAX). Returns int and advances *pp.
+int nvim_do_sub_getdigits_int(char **pp)
+{
+  return getdigits_int(pp, true, INT_MAX);
+}
+
+/// Wrap profile_passed_limit(timeout).
+int nvim_do_sub_profile_passed_limit(uint64_t timeout)
+{
+  return profile_passed_limit((proftime_T)timeout) ? 1 : 0;
+}
+
+/// Wrap profile_setlimit(ms). Returns proftime_T as uint64_t.
+uint64_t nvim_do_sub_profile_setlimit(int64_t ms)
+{
+  return (uint64_t)profile_setlimit((int64_t)ms);
+}
+
+/// Return profile_zero() as uint64_t.
+uint64_t nvim_do_sub_profile_zero(void)
+{
+  return (uint64_t)profile_zero();
+}
+
+/// Wrap p_rdt (redrawtime option, milliseconds).
+int64_t nvim_do_sub_get_p_rdt(void) { return (int64_t)p_rdt; }
+
+/// Wrap skip_regexp_ex for do_sub. Updates *arg_ptr in place.
+char *nvim_do_sub_skip_regexp_ex(char *cmd, int delim, char **arg_ptr)
+{
+  return skip_regexp_ex(cmd, (char)delim, rs_magic_isset(), arg_ptr, NULL, NULL);
+}
+
+/// Wrap check_nextcmd(cmd). Returns pointer to next command or NULL.
+char *nvim_do_sub_check_nextcmd(const char *cmd)
+{
+  return check_nextcmd((char *)cmd);
+}
+
+/// Wrap get_search_pat(). Returns pointer to last search pattern string.
+const char *nvim_do_sub_get_search_pat(void) { return get_search_pat(); }
+
+/// Wrap changed_window_setting(curwin).
+void nvim_do_sub_changed_window_setting(void) { changed_window_setting(curwin); }
+
+// nvim_curwin_get_cursor_col -- defined in edit.c
+
+/// Get p_cwh (cmdwinheight).
+int nvim_do_sub_get_p_cwh(void) { return (int)p_cwh; }
+
+/// Wrap aborting().
+int nvim_do_sub_aborting(void) { return aborting() ? 1 : 0; }
+
+/// Wrap os_time(). Returns current time as uint64_t.
+uint64_t nvim_do_sub_os_time(void) { return (uint64_t)os_time(); }
+
+/// Wrap setpcmark().
+void nvim_do_sub_setpcmark(void) { setpcmark(); }
+
+/// Get curbuf->b_ml.ml_line_count.
+int nvim_do_sub_buf_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
+
+/// Wrap getvcol for start column (sc). Returns sc via out pointer.
+void nvim_do_sub_getvcol_startcol(int lnum, int col, int *sc_out)
+{
+  pos_T pos = { (linenr_T)lnum, (colnr_T)col, 0 };
+  colnr_T sc = 0;
+  getvcol(curwin, &pos, &sc, NULL, NULL);
+  *sc_out = (int)sc;
+}
+
+/// Wrap getvcol for end column (ec). Returns ec via out pointer.
+void nvim_do_sub_getvcol_endcol(int lnum, int col, int *ec_out)
+{
+  pos_T pos = { (linenr_T)lnum, (colnr_T)col, 0 };
+  colnr_T ec = 0;
+  getvcol(curwin, &pos, NULL, NULL, &ec);
+  *ec_out = (int)ec;
+}
+
+/// Wrap getcmdline_prompt for exmode substitution confirm.
+/// Returns the first character typed (or NUL).
+int nvim_do_sub_getcmdline_prompt(const char *prompt_str)
+{
+  char *resp = getcmdline_prompt(-1, (char *)prompt_str, 0, EXPAND_NOTHING, NULL,
+                                  CALLBACK_NONE, false, NULL);
+  msg_putchar('\n');
+  int typed = NUL;
+  if (resp != NULL) {
+    typed = (uint8_t)(*resp);
+    xfree(resp);
+  }
+  return typed;
+}
+
+/// Wrap prompt_for_input(str, HLF_R, true, NULL). Returns typed character.
+int nvim_do_sub_prompt_for_input(const char *str)
+{
+  return prompt_for_input((char *)str, HLF_R, true, NULL);
+}
+
+/// Call update_topline, validate_cursor, redraw and update_screen for confirm.
+void nvim_do_sub_update_screen_for_confirm(void)
+{
+  update_topline(curwin);
+  validate_cursor(curwin);
+  redraw_later(curwin, UPD_SOME_VALID);
+  show_cursor_info_later(true);
+  update_screen();
+  redraw_later(curwin, UPD_SOME_VALID);
+}
+
+/// Wrap gotocmdline(true).
+void nvim_do_sub_gotocmdline(void) { gotocmdline(true); }
+
+/// Get number_width(curwin).
+int nvim_do_sub_number_width(void) { return number_width(curwin); }
+
+/// Wrap syn_check_group for "Substitute". Returns hl_id.
+int nvim_do_sub_syn_check_sub_group(void)
+{
+  return syn_check_group(S_LEN("Substitute"));
+}
+
+/// Wrap set_option_direct(kOptInccommand, "", 0, SID_NONE) to disable inccommand.
+void nvim_do_sub_disable_inccommand(void)
+{
+  set_option_direct(kOptInccommand, STATIC_CSTR_AS_OPTVAL(""), 0, SID_NONE);
+}
+
+/// Get *p_icm != NUL.
+int nvim_do_sub_get_p_icm_notnul(void) { return *p_icm != NUL ? 1 : 0; }
+
+/// Set curbuf->b_op_start.lnum and col = 0.
+void nvim_do_sub_set_op_start(int lnum)
+{
+  curbuf->b_op_start.lnum = (linenr_T)lnum;
+  curbuf->b_op_start.col = 0;
+}
+/// Set curbuf->b_op_end.lnum and col = 0.
+void nvim_do_sub_set_op_end(int lnum)
+{
+  curbuf->b_op_end.lnum = (linenr_T)lnum;
+  curbuf->b_op_end.col = 0;
+}
+
+/// Wrap MODIFIABLE macro: returns 1 if buffer is modifiable.
+int nvim_do_sub_modifiable(void) { return MODIFIABLE(curbuf) ? 1 : 0; }
+
+/// Emit emsg(_(e_nopresub)).
+void nvim_do_sub_emsg_nopresub(void) { emsg(_(e_nopresub)); }
+
+/// Emit emsg(_(e_invcmd)).
+void nvim_do_sub_emsg_invcmd(void) { emsg(_(e_invcmd)); }
+
+/// Emit emsg(_(e_modifiable)).
+void nvim_do_sub_emsg_modifiable(void) { emsg(_(e_modifiable)); }
+
+/// Emit emsg(_(e_zerocount)).
+void nvim_do_sub_emsg_zerocount(void) { emsg(_(e_zerocount)); }
+
+/// Emit emsg(_(e_backslash)).
+void nvim_do_sub_emsg_backslash(void) { emsg(_(e_backslash)); }
+
+/// Emit semsg(_(e_patnotf2), pat).
+void nvim_do_sub_semsg_patnotf2(const char *pat)
+{
+  semsg(_(e_patnotf2), pat);
+}
+
+/// Emit semsg(_(e_trailing_arg), cmd).
+void nvim_do_sub_semsg_trailing(const char *cmd)
+{
+  semsg(_(e_trailing_arg), cmd);
+}
+
+/// Format the confirm prompt string into IObuff and return xstrdup of it.
+char *nvim_do_sub_format_confirm_prompt(const char *sub)
+{
+  const char *p = _("replace with %s? (y)es/(n)o/(a)ll/(q)uit/(l)ast/scroll up(^E)/down(^Y)");
+  vim_snprintf(IObuff, IOSIZE, p, sub);
+  return xstrdup(IObuff);
+}
+
+/// Format an int into a string and return xstrdup of it (for e_val_too_large).
+char *nvim_do_sub_format_val_too_large_str(int val)
+{
+  char buf[20];
+  vim_snprintf(buf, sizeof(buf), "%d", val);
+  return xstrdup(buf);
+}
+
+/// Emit semsg(_(e_val_too_large), buf).
+void nvim_do_sub_semsg_val_too_large(const char *buf)
+{
+  semsg(_(e_val_too_large), buf);
+}
+
+/// Get RE_LAST constant (2).
+int nvim_do_sub_RE_LAST(void) { return RE_LAST; }
+
+/// Get RE_SUBST constant (1).
+int nvim_do_sub_RE_SUBST(void) { return RE_SUBST; }
+
+/// Get RE_SEARCH constant (0).
+int nvim_do_sub_RE_SEARCH(void) { return RE_SEARCH; }
+
+/// Get SEARCH_HIS constant.
+int nvim_do_sub_SEARCH_HIS(void) { return SEARCH_HIS; }
+
+/// Get REGSUB_BACKSLASH constant.
+int nvim_do_sub_REGSUB_BACKSLASH(void) { return REGSUB_BACKSLASH; }
+
+/// Get REGSUB_MAGIC constant.
+int nvim_do_sub_REGSUB_MAGIC(void) { return REGSUB_MAGIC; }
+
+/// Get REGSUB_COPY constant.
+int nvim_do_sub_REGSUB_COPY(void) { return REGSUB_COPY; }
+
+/// Get MAXLNUM as int.
+int nvim_do_sub_MAXLNUM(void) { return (int)MAXLNUM; }
+
+/// Get kExtmarkNOOP as int.
+int nvim_do_sub_kExtmarkNOOP(void) { return (int)kExtmarkNOOP; }
+
+/// Get kExtmarkUndo as int.
+int nvim_do_sub_kExtmarkUndo(void) { return (int)kExtmarkUndo; }
+
+/// Call extmark_splice on curbuf for do_sub.
+void nvim_do_sub_extmark_splice(int start_row, int start_col,
+                                 int old_row, int old_col, int64_t old_bytes,
+                                 int new_row, int new_col, int64_t new_bytes,
+                                 int etype)
+{
+  extmark_splice(curbuf, start_row, (colnr_T)start_col,
+                 old_row, (colnr_T)old_col, (bcount_t)old_bytes,
+                 new_row, (colnr_T)new_col, (bcount_t)new_bytes, (ExtmarkOp)etype);
+}
+
+/// Call mark_adjust(lnum+1, MAXLNUM, 1, 0, kExtmarkNOOP) for do_sub insert.
+void nvim_do_sub_mark_adjust_insert(int lnum)
+{
+  mark_adjust((linenr_T)lnum + 1, (linenr_T)MAXLNUM, 1, 0, kExtmarkNOOP);
+}
+
+/// Call mark_adjust(lnum, lnum+count-1, MAXLNUM, -count, kExtmarkNOOP) for do_sub delete.
+void nvim_do_sub_mark_adjust_delete(int lnum, int count)
+{
+  mark_adjust((linenr_T)lnum, (linenr_T)lnum + count - 1, MAXLNUM, (long)-count, kExtmarkNOOP);
+}
+
+/// Call appended_lines(lnum-1, 1) for do_sub.
+void nvim_do_sub_appended_lines(int lnum) { appended_lines((linenr_T)lnum - 1, 1); }
+
+/// Wrap ml_delete(lnum) for do_sub.
+void nvim_do_sub_ml_delete(int lnum) { ml_delete((linenr_T)lnum); }
+
+/// Wrap changed_lines(curbuf, first, 0, last, xtra, false) for do_sub.
+void nvim_do_sub_changed_lines(int first, int last, int xtra)
+{
+  changed_lines(curbuf, (linenr_T)first, 0, (linenr_T)last, (linenr_T)xtra, false);
+}
+
+/// Wrap buf_updates_send_changes(curbuf, first, num_added, num_removed) for do_sub.
+void nvim_do_sub_buf_updates_send_changes(int first, int64_t num_added, int64_t num_removed)
+{
+  buf_updates_send_changes(curbuf, (linenr_T)first, num_added, num_removed);
+}
+
+/// Wrap line_breakcheck().
+void nvim_do_sub_line_breakcheck(void) { line_breakcheck(); }
+
+/// Get ml_get_len(lnum) for do_sub.
+int nvim_do_sub_ml_get_len(int lnum) { return (int)ml_get_len((linenr_T)lnum); }
+
+/// Get ml_get(lnum) for do_sub.
+const char *nvim_do_sub_ml_get(int lnum) { return ml_get((linenr_T)lnum); }
+
+/// Check if eap->cmd[0] == 's'.
+int nvim_do_sub_eap_cmd_is_s(const exarg_T *eap) { return eap->cmd[0] == 's' ? 1 : 0; }
+
+/// Check if character is ASCII whitespace.
+int nvim_do_sub_ascii_iswhite(int c) { return ascii_iswhite(c) ? 1 : 0; }
+
+/// Check if character is in "0123456789cegriIp|\"" (i.e., sub flag or digit).
+int nvim_do_sub_is_sub_flag_or_digit(int c)
+{
+  return vim_strchr("0123456789cegriIp|\"", (uint8_t)c) == NULL ? 0 : 1;
+}
+
+/// Check if *cmd == '\\' and cmd[1] is in "/?&".
+int nvim_do_sub_is_backslash_delim(const char *cmd)
+{
+  return (*cmd == '\\' && vim_strchr("/?&", (uint8_t)(cmd[1])) != NULL) ? 1 : 0;
+}
+
+/// Wrap ascii_isdigit().
+int nvim_do_sub_ascii_isdigit(int c) { return ascii_isdigit(c) ? 1 : 0; }
+
+/// Set eap->nextcmd.
+void nvim_do_sub_set_eap_nextcmd(exarg_T *eap, char *p) { eap->nextcmd = p; }
+
+/// Get sub_nsubs global.
+int nvim_do_sub_get_sub_nsubs(void) { return sub_nsubs; }
+/// Set sub_nsubs global.
+void nvim_do_sub_set_sub_nsubs(int val) { sub_nsubs = val; }
+/// Increment sub_nsubs.
+void nvim_do_sub_sub_nsubs_inc(void) { sub_nsubs++; }
+
+/// Get sub_nlines global.
+int nvim_do_sub_get_sub_nlines(void) { return (int)sub_nlines; }
+/// Set sub_nlines global.
+void nvim_do_sub_set_sub_nlines(int val) { sub_nlines = (linenr_T)val; }
+/// Increment sub_nlines.
+void nvim_do_sub_sub_nlines_inc(void) { sub_nlines++; }
+
+/// Get global_busy global.
+int nvim_do_sub_get_global_busy(void) { return global_busy; }
+/// Set global_need_beginline.
+void nvim_do_sub_set_global_need_beginline(int val) { global_need_beginline = (bool)val; }
+
+/// Wrap msg("", 0).
+void nvim_do_sub_msg_empty(void) { msg("", 0); }
+
+/// Wrap emsg(_(e_interr)).
+void nvim_do_sub_emsg_interr(void) { emsg(_(e_interr)); }
+
+/// Save substitute pattern and history via save_re_pat + add_to_history.
+void nvim_do_sub_save_pat(const char *pat, size_t patlen, int which_pat)
+{
+  save_re_pat(which_pat, (char *)pat, patlen, rs_magic_isset());
+  add_to_history(HIST_SEARCH, (char *)pat, patlen, true, NUL);
+}
+
+/// Wrap sub_set_replacement for do_sub (xstrdup of sub, os_time, NULL additional).
+void nvim_do_sub_set_replacement(const char *sub)
+{
+  sub_set_replacement((SubReplacementString) {
+    .sub = xstrdup(sub),
+    .timestamp = os_time(),
+    .additional_data = NULL,
+  });
+}
+
+/// Get old_sub.sub pointer.
+const char *nvim_do_sub_get_old_sub(void) { return old_sub.sub; }
+
+// =============================================================================
 // Phase 1: regmmatch_T opaque handle accessors for do_sub migration
 // =============================================================================
 
