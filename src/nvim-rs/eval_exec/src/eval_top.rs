@@ -41,13 +41,13 @@ const NUMBUFLEN: usize = 65;
 
 extern "C" {
     // Eval0/eval1 (already in Rust, called via C ABI)
-    fn rs_eval0(
+    fn eval0(
         arg: *mut c_char,
         rettv: TypevalHandle,
         eap: ExargHandle,
         evalarg: EvalargHandle,
     ) -> c_int;
-    fn rs_eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: EvalargHandle) -> c_int;
+    fn eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: EvalargHandle) -> c_int;
 
     // Evalarg lifecycle
     fn nvim_evalarg_alloc_from_eap(eap: ExargHandle, skip: bool) -> EvalargHandle;
@@ -301,12 +301,12 @@ pub unsafe extern "C" fn rs_eval_to_bool(
     let r = if use_simple_function {
         let r_simple = nvim_eval_may_call_simple_func(arg, tv);
         if r_simple == NOTDONE {
-            rs_eval0(arg, tv, eap, evalarg)
+            eval0(arg, tv, eap, evalarg)
         } else {
             r_simple
         }
     } else {
-        rs_eval0(arg, tv, eap, evalarg)
+        eval0(arg, tv, eap, evalarg)
     };
 
     let retval;
@@ -354,7 +354,7 @@ pub unsafe extern "C" fn rs_eval_to_number(expr: *mut c_char, use_simple_functio
     }
     if r == NOTDONE {
         let evalarg = nvim_get_evalarg_evaluate_ptr();
-        r = rs_eval1(&mut p as *mut *mut c_char, tv, evalarg);
+        r = eval1(&mut p as *mut *mut c_char, tv, evalarg);
     }
 
     let retval = if r == FAIL {
@@ -390,7 +390,7 @@ pub unsafe extern "C" fn rs_eval_to_string_skip(
         nvim_emsg_skip_inc();
     }
 
-    let retval = if rs_eval0(arg, tv, eap, evalarg) == FAIL || skip {
+    let retval = if eval0(arg, tv, eap, evalarg) == FAIL || skip {
         ptr::null_mut()
     } else {
         let s = nvim_eval_tv_get_string(tv.as_ptr() as *const c_void);
@@ -431,12 +431,12 @@ pub unsafe extern "C" fn rs_eval_to_string_eap(
     let r = if use_simple_function {
         let r_simple = nvim_eval_may_call_simple_func(arg, tv);
         if r_simple == NOTDONE {
-            rs_eval0(arg, tv, ExargHandle::null(), evalarg)
+            eval0(arg, tv, ExargHandle::null(), evalarg)
         } else {
             r_simple
         }
     } else {
-        rs_eval0(arg, tv, ExargHandle::null(), evalarg)
+        eval0(arg, tv, ExargHandle::null(), evalarg)
     };
 
     let retval = if r == FAIL {
@@ -520,7 +520,7 @@ pub unsafe extern "C" fn rs_skip_expr(pp: *mut *mut c_char, evalarg: EvalargHand
     *pp = skipwhite(*pp);
     let mut tv_storage = [0u64; 8];
     let rettv = TypevalHandle::from_ptr(tv_storage.as_mut_ptr() as *mut c_void);
-    let res = rs_eval1(pp, rettv, EvalargHandle::null());
+    let res = eval1(pp, rettv, EvalargHandle::null());
 
     if !evalarg.is_null() {
         evalarg_set_flags(evalarg, save_flags);
@@ -550,7 +550,7 @@ pub unsafe extern "C" fn rs_eval1_emsg(
     let skip = !eap.is_null() && nvim_eap_get_skip_local(eap) != 0;
     let evalarg = nvim_evalarg_alloc_from_eap(eap, skip);
 
-    let ret = rs_eval1(arg, rettv, evalarg);
+    let ret = eval1(arg, rettv, evalarg);
     if ret == FAIL
         && aborting() == 0
         && did_emsg_get() == did_emsg_before
@@ -625,7 +625,7 @@ pub unsafe extern "C" fn rs_eval_expr_to_bool(expr: *const c_void, error: *mut b
 /// - `evalarg` must be a valid pointer to an evalarg_T (writable).
 /// - `eap` may be null.
 #[no_mangle]
-pub unsafe extern "C" fn rs_fill_evalarg_from_eap(
+pub unsafe extern "C" fn fill_evalarg_from_eap(
     evalarg: EvalargHandle,
     eap: ExargHandle,
     skip: bool,
@@ -649,7 +649,7 @@ pub unsafe extern "C" fn rs_fill_evalarg_from_eap(
 /// - `evalarg` may be null (no-op).
 /// - `eap` may be null.
 #[no_mangle]
-pub unsafe extern "C" fn rs_clear_evalarg(evalarg: EvalargHandle, eap: ExargHandle) {
+pub unsafe extern "C" fn clear_evalarg(evalarg: EvalargHandle, eap: ExargHandle) {
     if evalarg.is_null() {
         return;
     }
@@ -680,7 +680,7 @@ pub unsafe extern "C" fn rs_clear_evalarg(evalarg: EvalargHandle, eap: ExargHand
 /// - `arg` must be a valid null-terminated C string.
 /// - `rettv` must be a valid typval handle.
 #[no_mangle]
-pub unsafe extern "C" fn rs_may_call_simple_func(
+pub unsafe extern "C" fn may_call_simple_func(
     arg: *const c_char,
     rettv: TypevalHandle,
 ) -> c_int {
@@ -737,9 +737,9 @@ unsafe fn eval0_simple_funccal_impl(
     eap: ExargHandle,
     evalarg: EvalargHandle,
 ) -> c_int {
-    let r = rs_may_call_simple_func(arg, rettv);
+    let r = may_call_simple_func(arg, rettv);
     if r == NOTDONE {
-        rs_eval0(arg, rettv, eap, evalarg)
+        eval0(arg, rettv, eap, evalarg)
     } else {
         r
     }
@@ -770,7 +770,7 @@ pub unsafe extern "C" fn rs_eval_expr_ext(
     let r = if use_simple_function {
         eval0_simple_funccal_impl(arg, tv_handle, eap, evalarg)
     } else {
-        rs_eval0(arg, tv_handle, eap, evalarg)
+        eval0(arg, tv_handle, eap, evalarg)
     };
 
     if r == FAIL {
@@ -1271,7 +1271,7 @@ pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_
         nvim_eval_sandbox_dec();
     }
     nvim_eval_textlock_dec();
-    rs_clear_evalarg(evalarg, ExargHandle::null());
+    clear_evalarg(evalarg, ExargHandle::null());
     nvim_restore_current_sctx(saved_sctx);
     xfree(tv);
 
@@ -1312,7 +1312,7 @@ pub unsafe extern "C" fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void) {
         tv_clear(tv_handle);
     }
 
-    rs_clear_evalarg(evalarg, ExargHandle::null());
+    clear_evalarg(evalarg, ExargHandle::null());
 
     if use_sandbox {
         nvim_eval_sandbox_dec();

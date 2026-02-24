@@ -338,7 +338,7 @@ pub unsafe fn eval0_impl(
 /// # Safety
 /// See `eval0_impl` for safety requirements.
 #[no_mangle]
-pub unsafe extern "C" fn rs_eval0(
+pub unsafe extern "C" fn eval0(
     arg: *mut c_char,
     rettv: TypevalHandle,
     eap: ExargHandle,
@@ -491,7 +491,7 @@ pub unsafe fn eval1_impl(
 /// # Safety
 /// See `eval1_impl` for safety requirements.
 #[no_mangle]
-pub unsafe extern "C" fn rs_eval1(
+pub unsafe extern "C" fn eval1(
     arg: *mut *mut c_char,
     rettv: TypevalHandle,
     evalarg: EvalargHandle,
@@ -1009,7 +1009,7 @@ pub unsafe fn eval6_impl(
 /// # Safety
 /// See `eval6_impl` for safety requirements.
 #[no_mangle]
-pub unsafe extern "C" fn rs_eval6(
+pub unsafe extern "C" fn eval6(
     arg: *mut *mut c_char,
     rettv: TypevalHandle,
     evalarg: EvalargHandle,

@@ -143,4 +143,19 @@ enum {
 /// Passed to an eval() function to enable evaluation.
 EXTERN evalarg_T EVALARG_EVALUATE INIT( = { EVAL_EVALUATE, NULL, NULL, NULL });
 
+/// Rust-exported FFI symbols (renamed from rs_* in Phase 3, eval_shim pass 8).
+/// These replace C thin wrappers that were deleted from eval_shim.c.
+int pattern_match(const char *pat, const char *text, bool ic);
+void fill_evalarg_from_eap(evalarg_T *evalarg, exarg_T *eap, bool skip);
+void clear_evalarg(evalarg_T *evalarg, exarg_T *eap);
+int eval0(char *arg, typval_T *rettv, exarg_T *eap, evalarg_T *const evalarg);
+int may_call_simple_func(const char *arg, typval_T *rettv);
+int eval1(char **arg, typval_T *rettv, evalarg_T *const evalarg);
+int eval6(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool want_string);
+void f_slice(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_system(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_systemlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+bool callback_call(Callback *const callback, const int argcount_in, typval_T *const argvars_in,
+                   typval_T *const rettv);
+
 #include "eval_shim.h.generated.h"

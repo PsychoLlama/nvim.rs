@@ -723,13 +723,13 @@ pub use context::rs_set_context_for_expression;
 
 // Re-export FFI functions from the eval module
 pub use eval::{
-    rs_eval0, rs_eval1, rs_eval2, rs_eval3, rs_eval4, rs_eval5, rs_eval6, rs_eval_dict,
+    eval0, eval1, eval6, rs_eval2, rs_eval3, rs_eval4, rs_eval5, rs_eval_dict,
     rs_eval_interp_string, rs_eval_lit_dict, rs_eval_lit_string, rs_eval_method, rs_eval_string,
     rs_handle_subscript, rs_set_selfdict, EvalargHandle, ExargHandle, TypevalHandle,
 };
 
 // Re-export FFI functions from the index module
-pub use index::{rs_check_can_index, rs_eval_index, rs_eval_index_inner, rs_f_slice};
+pub use index::{f_slice, rs_check_can_index, rs_eval_index, rs_eval_index_inner};
 
 // Re-export FFI functions from the operators module
 pub use operators::{
@@ -737,7 +737,7 @@ pub use operators::{
 };
 
 // Re-export callback FFI functions
-pub use callback::rs_callback_call;
+pub use callback::callback_call;
 
 // Re-export for-loop FFI functions
 pub use for_loop::{rs_eval_for_line, rs_free_for_info, rs_next_for_item};

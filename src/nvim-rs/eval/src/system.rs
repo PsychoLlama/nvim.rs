@@ -392,7 +392,7 @@ unsafe fn translate_crnl(res: *mut c_char, _nread: usize) {
 /// - `rettv` must be a valid typval pointer.
 /// - `fptr` is unused (VimL EvalFuncData).
 #[no_mangle]
-pub unsafe extern "C" fn rs_f_system(argvars: *mut c_void, rettv: *mut c_void, _fptr: *mut c_void) {
+pub unsafe extern "C" fn f_system(argvars: *mut c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     get_system_output_impl(argvars, rettv, false);
 }
 
@@ -401,7 +401,7 @@ pub unsafe extern "C" fn rs_f_system(argvars: *mut c_void, rettv: *mut c_void, _
 /// # Safety
 /// See `rs_f_system`.
 #[no_mangle]
-pub unsafe extern "C" fn rs_f_systemlist(
+pub unsafe extern "C" fn f_systemlist(
     argvars: *mut c_void,
     rettv: *mut c_void,
     _fptr: *mut c_void,

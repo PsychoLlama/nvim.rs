@@ -18,7 +18,7 @@ extern "C" {
     fn nvim_evalarg_clear_and_free(ea: EvalargHandle, eap: ExargHandle);
 
     // eval1 (Rust FFI export, takes arg as *mut *mut c_char)
-    fn rs_eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: EvalargHandle) -> c_int;
+    fn eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: EvalargHandle) -> c_int;
 
     // eval1_emsg wrapper (non-static wrapper)
     fn nvim_eval1_emsg_wrapper(
@@ -229,7 +229,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
 
         let p = arg;
         let rettv = alloc_typval();
-        let eval_ret = rs_eval1(&mut arg, rettv, evalarg);
+        let eval_ret = eval1(&mut arg, rettv, evalarg);
         if eval_ret == FAIL {
             // Report the invalid expression unless the expression evaluation
             // has been cancelled due to an aborting error, an interrupt, or an

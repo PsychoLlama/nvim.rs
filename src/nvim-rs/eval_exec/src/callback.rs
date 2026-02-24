@@ -126,7 +126,7 @@ pub unsafe fn callback_call_impl(
 /// # Safety
 /// See `callback_call_impl` for safety requirements.
 #[no_mangle]
-pub unsafe extern "C" fn rs_callback_call(
+pub unsafe extern "C" fn callback_call(
     callback: *const c_void,
     argcount: c_int,
     argvars: *mut c_void,

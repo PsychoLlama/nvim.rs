@@ -81,7 +81,7 @@ extern "C" {
     fn evalarg_get_flags(ea: EvalargHandle) -> c_int;
 
     // eval1 (recursive subscript parsing)
-    fn rs_eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: EvalargHandle) -> c_int;
+    fn eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: EvalargHandle) -> c_int;
 
     // eval_isdictc (check if char is valid dict key char)
     fn rs_eval_isdictc(c: c_int) -> bool;
@@ -276,7 +276,7 @@ pub unsafe fn eval_index_impl(
         *arg = skipwhite((*arg).add(1));
         if **arg == b':' as c_char {
             empty1 = true;
-        } else if rs_eval1(arg, var1, evalarg) == FAIL {
+        } else if eval1(arg, var1, evalarg) == FAIL {
             free_typval(var1);
             free_typval(var2);
             return FAIL;
@@ -293,7 +293,7 @@ pub unsafe fn eval_index_impl(
             *arg = skipwhite((*arg).add(1));
             if **arg == b']' as c_char {
                 empty2 = true;
-            } else if rs_eval1(arg, var2, evalarg) == FAIL {
+            } else if eval1(arg, var2, evalarg) == FAIL {
                 if !empty1 {
                     tv_clear(var1);
                 }
@@ -581,7 +581,7 @@ extern "C" {
 /// # Safety
 /// See `f_slice_impl` for safety requirements.
 #[no_mangle]
-pub unsafe extern "C" fn rs_f_slice(
+pub unsafe extern "C" fn f_slice(
     argvars: TypevalHandle,
     rettv: TypevalHandle,
     _fptr: *mut c_void,

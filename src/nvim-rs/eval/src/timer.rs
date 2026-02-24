@@ -19,7 +19,7 @@ type TimerHandle = *mut c_void;
 /// Opaque pointer to typval_T.
 type TvHandle = *mut c_void;
 /// Opaque pointer to Callback.
-type CallbackHandle = *const c_void;
+type CallbackHandle = *mut c_void;
 /// Opaque pointer to dict_T.
 type DictHandle = *mut c_void;
 /// Opaque pointer to dictitem_T.
@@ -88,7 +88,7 @@ extern "C" {
     // -- Callback operations --
     fn nvim_callback_free(cb: CallbackHandle);
     fn nvim_callback_put(cb: CallbackHandle, tv: TvHandle);
-    fn rs_callback_call(callback: CallbackHandle, argcount: c_int, argvars: TvHandle, rettv: TvHandle) -> bool;
+    fn callback_call(callback: CallbackHandle, argcount: c_int, argvars: TvHandle, rettv: TvHandle) -> bool;
 
     // -- Error state accessors --
     fn nvim_get_did_emsg() -> c_int;
@@ -275,7 +275,7 @@ pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_vo
     nvim_tv_init(rettv_ptr);
 
     let cb_ptr = nvim_timer_get_callback_ptr(timer);
-    rs_callback_call(cb_ptr, 1, argv0, rettv_ptr);
+    callback_call(cb_ptr, 1, argv0, rettv_ptr);
 
     // Handle error message
     let called_emsg_now = nvim_get_called_emsg();

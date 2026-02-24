@@ -184,7 +184,7 @@ extern "C" {
     fn nvim_tv_get_blob(tv: TypevalHandle) -> *mut c_void;
 
     // eval1 (recursive subscript parsing)
-    fn rs_eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: *mut c_void) -> c_int;
+    fn eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: *mut c_void) -> c_int;
 
     // ASCII predicates
     fn rs_ascii_isalnum(c: c_int) -> c_int;
@@ -553,7 +553,7 @@ unsafe fn get_lval_subscript_impl(
                 } else {
                     empty1 = false;
                     let evalarg = nvim_get_evalarg_evaluate_ptr();
-                    if rs_eval1(&mut p, var1, evalarg) == FAIL {
+                    if eval1(&mut p, var1, evalarg) == FAIL {
                         break 'outer; // goto done
                     }
                     if !tv_check_str(var1) {
@@ -590,7 +590,7 @@ unsafe fn get_lval_subscript_impl(
                     } else {
                         nvim_lval_set_empty2(lp, false);
                         let evalarg = nvim_get_evalarg_evaluate_ptr();
-                        if rs_eval1(&mut p, var2, evalarg) == FAIL {
+                        if eval1(&mut p, var2, evalarg) == FAIL {
                             break 'outer; // goto done
                         }
                         if !tv_check_str(var2) {

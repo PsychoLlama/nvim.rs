@@ -103,7 +103,7 @@ extern const char *rs_find_name_end(const char *arg, const char **expr_start,
                                     const char **expr_end, int flags);
 extern int rs_buf_byteidx_to_charidx(buf_T *buf, linenr_T lnum, int byteidx);
 extern int rs_buf_charidx_to_byteidx(buf_T *buf, linenr_T lnum, int charidx);
-extern int rs_pattern_match(const char *pat, const char *text, bool ic);
+// pattern_match: renamed Rust export (Phase 3 pass 8).
 extern int rs_is_tty_option(const char *name);
 extern int rs_get_callback_depth(void);
 extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
@@ -113,8 +113,7 @@ extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern bool rs_set_ref_in_callback_reader(CallbackReader *reader, int copyID,
                                           ht_stack_T **ht_stack, list_stack_T **list_stack);
-extern int rs_eval0(char *arg, typval_T *rettv, exarg_T *eap, void *evalarg);
-extern int rs_eval1(char **arg, typval_T *rettv, void *evalarg);
+// eval0, eval1: renamed Rust exports (Phase 3 pass 8).
 extern int rs_eval_multdiv_number(typval_T *tv1, typval_T *tv2, int op);
 extern int rs_eval_func(char **arg, evalarg_T *evalarg, char *name, int name_len,
                         typval_T *rettv, int flags, typval_T *basetv);
@@ -129,19 +128,19 @@ extern int rs_eval_index(char **arg, typval_T *rettv, evalarg_T *evalarg, bool v
 extern int rs_check_can_index(typval_T *rettv, bool evaluate, bool verbose);
 extern int rs_eval_index_inner(typval_T *rettv, bool is_range, typval_T *var1, typval_T *var2,
                                bool exclusive, const char *key, ptrdiff_t keylen, bool verbose);
-extern void rs_f_slice(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+// f_slice: renamed Rust export (Phase 3 pass 8).
 extern int rs_eval_method(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 extern int rs_eval_lit_string(char **arg, typval_T *rettv, bool evaluate, bool interpolate);
 extern int rs_eval_string(char **arg, typval_T *rettv, bool evaluate, bool interpolate);
 extern int rs_eval_dict(char **arg, typval_T *rettv, evalarg_T *evalarg, bool literal);
 extern int rs_eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *evalarg);
-extern int rs_eval6(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
+// eval6: renamed Rust export (Phase 3 pass 8).
 extern int rs_eval7(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
 extern int rs_eval_interp_string(char **arg, typval_T *rettv, bool evaluate);
 extern void *rs_eval_for_line(const char *arg, bool *errp, exarg_T *eap, evalarg_T *evalarg);
 extern bool rs_next_for_item(void *fi_void, char *arg);
 extern void rs_free_for_info(void *fi_void);
-extern bool rs_callback_call(const void *callback, int argcount, void *argvars, void *rettv);
+// callback_call: renamed Rust export (Phase 3 pass 8).
 extern int rs_free_unref_items(int copyID);
 extern int rs_handle_subscript(const char **arg, typval_T *rettv, evalarg_T *evalarg,
                                bool verbose);
@@ -605,18 +604,11 @@ void eval_clear(void)
 
 #endif
 
+// fill_evalarg_from_eap, clear_evalarg, may_call_simple_func: renamed Rust exports (Phase 3 pass 8).
 // Rust implementations for Phase 5 (eval_shim pass 4)
-extern void rs_fill_evalarg_from_eap(evalarg_T *evalarg, exarg_T *eap, bool skip);
-extern void rs_clear_evalarg(evalarg_T *evalarg, exarg_T *eap);
-extern int rs_may_call_simple_func(const char *arg, typval_T *rettv);
 extern typval_T *rs_eval_expr_ext(char *arg, exarg_T *eap, bool use_simple_function);
 extern void rs_partial_unref(partial_T *pt);
 extern char *rs_typval_tostring(typval_T *arg, bool quotes);
-
-void fill_evalarg_from_eap(evalarg_T *evalarg, exarg_T *eap, bool skip)
-{
-  rs_fill_evalarg_from_eap(evalarg, eap, skip);
-}
 
 // Rust implementations (in eval_exec crate, eval_top module)
 extern bool rs_eval_to_bool(char *arg, bool *error, exarg_T *eap, bool skip,
@@ -649,8 +641,7 @@ extern void rs_set_selfdict(typval_T *rettv, dict_T *selfdict);
 
 // Rust implementations for Phase 2 (eval_shim pass 6): tv_to_argv + system output
 extern char **rs_tv_to_argv(typval_T *cmd_tv, const char **cmd, bool *executable);
-extern void rs_f_system(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-extern void rs_f_systemlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+// f_system, f_systemlist: renamed Rust exports (Phase 3 pass 8).
 
 // Rust implementations for Phase 3 (eval_shim pass 6): provider infrastructure
 extern bool rs_eval_has_provider(const char *feat, bool throw_if_fast);
@@ -1123,141 +1114,28 @@ void set_context_for_expression(expand_T *xp, char *arg, cmdidx_T cmdidx)
   rs_set_context_for_expression(xp, arg, (int)cmdidx);
 }
 
-/// Does not use 'cpo' and always uses 'magic'.
-///
-/// @return  true if "pat" matches "text".
-int pattern_match(const char *pat, const char *text, bool ic)
-{
-  return rs_pattern_match(pat, text, ic);
-}
-
-/// Handle a name followed by "(".  Both for just "name(arg)" and for
-/// "expr->name(arg)".
-///
-/// @param arg  Points to "(", will be advanced
-/// @param basetv  "expr" for "expr->name(arg)"
-///
-/// @return OK or FAIL.
-static int eval_func(char **const arg, evalarg_T *const evalarg, char *const name,
-                     const int name_len, typval_T *const rettv, const int flags,
-                     typval_T *const basetv)
-  FUNC_ATTR_NONNULL_ARG(1, 3, 5)
-{
-  return rs_eval_func(arg, evalarg, name, name_len, rettv, flags, basetv);
-}
-
-/// After using "evalarg" filled from "eap": free the memory.
-void clear_evalarg(evalarg_T *evalarg, exarg_T *eap)
-{
-  rs_clear_evalarg(evalarg, eap);
-}
+// pattern_match: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
+// eval_func: deleted -- replaced by rs_eval_func (Rust, Phase 3 pass 8).
+// clear_evalarg: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
 
 /// The "eval" functions have an "evalarg" argument: When NULL or
 /// "evalarg->eval_flags" does not have EVAL_EVALUATE, then the argument is only
 /// parsed but not executed.  The functions may return OK, but the rettv will be
 /// of type VAR_UNKNOWN.  The functions still returns FAIL for a syntax error.
 
-/// Handle zero level expression.
-/// This calls eval1() and handles error message and nextcmd.
-/// Put the result in "rettv" when returning OK and "evaluate" is true.
-///
-/// @param evalarg  can be NULL, &EVALARG_EVALUATE or a pointer.
-///
-/// @return OK or FAIL.
-int eval0(char *arg, typval_T *rettv, exarg_T *eap, evalarg_T *const evalarg)
-{
-  return rs_eval0(arg, rettv, eap, evalarg);
-}
-
-/// If "arg" is a simple function call without arguments then call it and return
-/// the result.  Otherwise return NOTDONE.
-int may_call_simple_func(const char *arg, typval_T *rettv)
-{
-  return rs_may_call_simple_func(arg, rettv);
-}
-
-/// Handle top level expression:
-///      expr2 ? expr1 : expr1
-///      expr2 ?? expr1
-///
-/// "arg" must point to the first non-white of the expression.
-/// "arg" is advanced to the next non-white after the recognized expression.
-///
-/// @return  OK or FAIL.
-int eval1(char **arg, typval_T *rettv, evalarg_T *const evalarg)
-{
-  return rs_eval1(arg, rettv, evalarg);
-}
-
-/// Handle fifth level expression:
-///  - *  number multiplication
-///  - /  number division
-///  - %  number modulo
-///
-/// @param[in,out]  arg  Points to the first non-whitespace character of the
-///                      expression.  Is advanced to the next non-whitespace
-///                      character after the recognized expression.
-/// @param[out]  rettv  Location where result is saved.
-/// @param[in]  want_string  True if "." is string_concatenation, otherwise
-///                          float
-/// @return  OK or FAIL.
-int eval6(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool want_string)
-{
-  return rs_eval6(arg, rettv, evalarg, want_string);
-}
-
+// eval0: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
+// may_call_simple_func: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
+// eval1: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
+// eval6: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
 // eval7 and eval7_leader migrated to Rust (rs_eval7 in eval_exec crate).
 // call_func_rettv migrated to Rust (rs_call_func_rettv in eval_exec crate, eval.rs).
-
 // eval_lambda migrated to Rust (rs_eval_lambda in eval_exec crate, eval.rs).
-
-/// Evaluate "->method()" or "->v:lua.method()".
-///
-/// @param *arg  points to the '-'.
-///
-/// @return  FAIL or OK. "*arg" is advanced to after the ')'.
-static int eval_method(char **const arg, typval_T *const rettv, evalarg_T *const evalarg,
-                       const bool verbose)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  return rs_eval_method(arg, rettv, evalarg, verbose);
-}
-
-/// Evaluate an "[expr]" or "[expr:expr]" index.  Also "dict.key".
-/// "*arg" points to the '[' or '.'.
-///
-/// @param verbose  give error messages
-///
-/// @returns FAIL or OK. "*arg" is advanced to after the ']'.
-static int eval_index(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool verbose)
-{
-  return rs_eval_index(arg, rettv, evalarg, verbose);
-}
-
-/// Check if "rettv" can have an [index] or [sli:ce]
-static int check_can_index(typval_T *rettv, bool evaluate, bool verbose)
-{
-  return rs_check_can_index(rettv, evaluate, verbose);
-}
-
-/// slice() function
-void f_slice(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_slice(argvars, rettv, fptr);
-}
-
-/// Apply index or range to "rettv".
-///
-/// @param var1  the first index, NULL for [:expr].
-/// @param var2  the second index, NULL for [expr] and [expr: ]
-/// @param exclusive  true for slice(): second index is exclusive, use character
-///                                     index for string.
-/// Alternatively, "key" is not NULL, then key[keylen] is the dict index.
-static int eval_index_inner(typval_T *rettv, bool is_range, typval_T *var1, typval_T *var2,
-                            bool exclusive, const char *key, ptrdiff_t keylen, bool verbose)
-{
-  return rs_eval_index_inner(rettv, is_range, var1, var2, exclusive, key, keylen, verbose);
-}
+// eval_func: deleted -- replaced by rs_eval_func (Rust, Phase 3 pass 8).
+// eval_method: deleted -- replaced by rs_eval_method (Rust, Phase 3 pass 8).
+// eval_index: deleted -- replaced by rs_eval_index (Rust, Phase 3 pass 8).
+// check_can_index: deleted -- replaced by rs_check_can_index (Rust, Phase 3 pass 8).
+// f_slice: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
+// eval_index_inner: deleted -- replaced by rs_eval_index_inner (Rust, Phase 3 pass 8).
 
 /// Get an option value
 ///
@@ -1539,7 +1417,7 @@ bool garbage_collect(bool testing)
   bool did_free = false;
   if (!abort) {
     // 2. Free lists and dictionaries that are not referenced.
-    did_free = free_unref_items(copyID);
+    did_free = rs_free_unref_items(copyID);
 
     // 3. Check if any funccal can be freed now.
     //    This may call us back recursively.
@@ -1551,17 +1429,7 @@ bool garbage_collect(bool testing)
   return did_free;
 }
 
-/// Free lists and dictionaries that are no longer referenced.
-///
-/// @note  This function may only be called from garbage_collect().
-///
-/// @param copyID  Free lists/dictionaries that don't have this ID.
-///
-/// @return  true, if something was freed.
-static int free_unref_items(int copyID)
-{
-  return rs_free_unref_items(copyID);
-}
+// free_unref_items: deleted -- replaced by rs_free_unref_items (Rust, Phase 3 pass 8).
 
 /// Convert the string to a floating point number
 ///
@@ -1590,16 +1458,8 @@ char **tv_to_argv(typval_T *cmd_tv, const char **cmd, bool *executable)
   return rs_tv_to_argv(cmd_tv, cmd, executable);
 }
 
-/// f_system - the Vimscript system() function
-void f_system(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_system(argvars, rettv, fptr);
-}
-
-void f_systemlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_systemlist(argvars, rettv, fptr);
-}
+// f_system: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
+// f_systemlist: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
 
 static int callback_depth = 0;
 
@@ -1693,13 +1553,7 @@ bool nvim_callback_call_func(const char *name, partial_T *partial,
   return call_func(name, -1, rettv, argcount, argvars, &funcexe);
 }
 
-/// @return  whether the callback could be called.
-bool callback_call(Callback *const callback, const int argcount_in, typval_T *const argvars_in,
-                   typval_T *const rettv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_callback_call(callback, argcount_in, argvars_in, rettv);
-}
+// callback_call: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
 
 timer_T *find_timer_by_nr(varnumber_T xx)
 {
@@ -1809,11 +1663,7 @@ int get_name_len(const char **const arg, char **alias, bool evaluate, bool verbo
   return rs_get_name_len(arg, alias, evaluate, verbose);
 }
 
-static char *make_expanded_name(const char *in_start, char *expr_start, char *expr_end,
-                                char *in_end)
-{
-  return rs_make_expanded_name(in_start, expr_start, expr_end, in_end);
-}
+// make_expanded_name: deleted -- replaced by rs_make_expanded_name (Rust, Phase 3 pass 8).
 
 /// Set the v:argv list.
 void set_argv_var(char **argv, int argc)
@@ -1827,11 +1677,7 @@ partial_T *nvim_get_vlua_partial(void)
   return get_vim_var_partial(VV_LUA);
 }
 
-/// check if special v:lua value for calling lua functions
-static bool tv_is_luafunc(typval_T *tv)
-{
-  return tv->v_type == VAR_PARTIAL && rs_is_luafunc(tv->vval.v_partial);
-}
+// tv_is_luafunc: deleted -- inlined into callers (Phase 3 pass 8).
 
 /// Handle:
 /// - expr[expr], expr[expr:expr] subscript
@@ -2208,10 +2054,10 @@ typval_T *nvim_di_get_tv(dictitem_T *di)
 }
 
 /// Check if a typval_T is a Lua function - accessor for Rust.
-/// This wraps the static tv_is_luafunc function.
+/// Inlined from the deleted static tv_is_luafunc (Phase 3 pass 8).
 bool nvim_tv_is_luafunc_wrapper(typval_T *tv)
 {
-  return tv_is_luafunc(tv);
+  return tv->v_type == VAR_PARTIAL && rs_is_luafunc(tv->vval.v_partial);
 }
 
 /// Return address of the EVALARG_EVALUATE global - accessor for Rust.
@@ -2833,9 +2679,10 @@ void nvim_lval_set_tv_from_ll_di(lval_T *lp)
 }
 
 /// Check if lp->ll_di->di_tv is a lua func wrapper - composite accessor for Rust.
+/// Inlined from the deleted static tv_is_luafunc (Phase 3 pass 8).
 bool nvim_lval_di_is_luafunc(const lval_T *lp)
 {
-  return tv_is_luafunc(&lp->ll_di->di_tv);
+  return lp->ll_di->di_tv.v_type == VAR_PARTIAL && rs_is_luafunc(lp->ll_di->di_tv.vval.v_partial);
 }
 
 /// var_check_ro for ll_di->di_flags - composite for Rust.
@@ -3192,7 +3039,7 @@ void nvim_eval_restore_funccal(void *entry)
 /// may_call_simple_func wrapper - accessor for Rust eval_top.
 int nvim_eval_may_call_simple_func(const char *arg, typval_T *rettv)
 {
-  return rs_may_call_simple_func(arg, rettv);
+  return may_call_simple_func(arg, rettv);
 }
 
 /// tv_list_join with newline separator - wrapper for typval2string.
