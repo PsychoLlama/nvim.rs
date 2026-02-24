@@ -332,6 +332,55 @@ pub unsafe extern "C" fn rs_dict_get_nth_word(
     0
 }
 
+// =============================================================================
+// Phase 3 (pass 5): rs_get_next_dict_tsr_completion
+// =============================================================================
+
+extern "C" {
+    /// Check if thesaurus function completion is active for the given type.
+    fn rs_thesaurus_func_complete(compl_type: c_int) -> c_int;
+    /// Compound accessor: calls expand_by_function(type, compl_pattern.data, NULL).
+    fn nvim_expand_by_function_impl(compl_type: c_int);
+    /// Compound accessor: full ins_compl_dictionaries + ins_compl_files logic.
+    /// Uses compl_pattern.data internally for the pattern.
+    fn nvim_ins_compl_dictionaries_impl(dict: *const c_char, flags: c_int, thesaurus: c_int);
+    /// Returns the effective thesaurus option (curbuf->b_p_tsr or p_tsr).
+    fn nvim_get_curbuf_b_p_tsr() -> *const c_char;
+    /// Returns the effective dictionary option (curbuf->b_p_dict or p_dict).
+    fn nvim_get_curbuf_b_p_dict() -> *const c_char;
+}
+
+/// Get the next set of words matching compl_pattern in dictionary or thesaurus files.
+///
+/// Determines the dict/thesaurus option string and delegates to either
+/// expand_by_function (for thesaurusfunc) or ins_compl_dictionaries (for file scanning).
+///
+/// # Safety
+/// Requires valid completion state. `dict` may be null (use buffer option).
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_next_dict_tsr_completion(
+    compl_type: c_int,
+    dict: *mut c_char,
+    dict_f: c_int,
+) {
+    if rs_thesaurus_func_complete(compl_type) != 0 {
+        nvim_expand_by_function_impl(compl_type);
+    } else {
+        let effective_dict = if dict.is_null() {
+            if compl_type == CTRL_X_THESAURUS {
+                nvim_get_curbuf_b_p_tsr()
+            } else {
+                nvim_get_curbuf_b_p_dict()
+            }
+        } else {
+            dict.cast_const()
+        };
+        let flags = if dict.is_null() { 0 } else { dict_f };
+        let is_thesaurus = c_int::from(compl_type == CTRL_X_THESAURUS);
+        nvim_ins_compl_dictionaries_impl(effective_dict, flags, is_thesaurus);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

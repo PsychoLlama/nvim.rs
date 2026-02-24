@@ -163,6 +163,8 @@ extern void rs_ins_compl_del_pum(void);
 // Phase 1 Rust exports
 extern const char *rs_ins_compl_mode(void);
 extern int rs_thesaurus_func_complete(int type);
+// Phase 3 (pass 5) Rust exports
+extern void rs_get_next_dict_tsr_completion(int compl_type, char *dict, int dict_f);
 extern void rs_get_next_include_file_completion(int compl_type);
 extern void rs_get_next_cmdline_completion(void);
 extern void rs_get_next_spell_completion(int lnum);
@@ -1256,9 +1258,16 @@ static int ins_compl_build_pum(void)
 ///
 /// @param flags      DICT_FIRST and/or DICT_EXACT
 /// @param thesaurus  Thesaurus completion
-static void ins_compl_dictionaries(char *dict_start, char *pat, int flags, bool thesaurus)
+// Phase 3 (pass 5): rs_get_next_dict_tsr_completion -- Rust wrapper
+extern void rs_get_next_dict_tsr_completion(int compl_type, char *dict, int dict_f);
+
+/// Compound accessor for Phase 3 (pass 5): full ins_compl_dictionaries logic
+/// (previously ins_compl_dictionaries + ins_compl_files + thesaurus_add_words_in_line).
+/// Uses compl_pattern.data as the pattern.
+void nvim_ins_compl_dictionaries_impl(const char *dict_start, int flags, int thesaurus)
 {
-  char *dict = dict_start;
+  char *dict = (char *)dict_start;
+  const char *pat = compl_pattern.data;
   char *ptr;
   regmatch_T regmatch;
   char **files;
@@ -1266,8 +1275,6 @@ static void ins_compl_dictionaries(char *dict_start, char *pat, int flags, bool 
   Direction dir = compl_direction;
 
   if (*dict == NUL) {
-    // When 'dictionary' is empty and spell checking is enabled use
-    // "spell".
     if (!thesaurus && curwin->w_p_spell) {
       dict = "spell";
     } else {
@@ -1276,20 +1283,15 @@ static void ins_compl_dictionaries(char *dict_start, char *pat, int flags, bool 
   }
 
   char *buf = xmalloc(LSIZE);
-  regmatch.regprog = NULL;      // so that we can goto theend
+  regmatch.regprog = NULL;
 
-  // If 'infercase' is set, don't use 'smartcase' here
   int save_p_scs = p_scs;
   if (curbuf->b_p_inf) {
     p_scs = false;
   }
 
-  // When invoked to match whole lines for CTRL-X CTRL-L adjust the pattern
-  // to only match at the start of a line.  Otherwise just match the
-  // pattern. Also need to double backslashes.
   if (rs_ctrl_x_mode_line_or_eval()) {
     char *pat_esc = vim_strsave_escaped(pat, "\\");
-
     size_t len = strlen(pat_esc) + 10;
     ptr = xmalloc(len);
     vim_snprintf(ptr, len, "^\\s*\\zs\\V%s", pat_esc);
@@ -1303,17 +1305,12 @@ static void ins_compl_dictionaries(char *dict_start, char *pat, int flags, bool 
     }
   }
 
-  // ignore case depends on 'ignorecase', 'smartcase' and "pat"
   regmatch.rm_ic = ignorecase(pat);
   while (*dict != NUL && !got_int && !compl_interrupted) {
-    // copy one dictionary file name into buf
     if (flags == DICT_EXACT) {
       count = 1;
       files = &dict;
     } else {
-      // Expand wildcards in the dictionary name, but do not allow
-      // backticks (for security, the 'dict' option may have been set in
-      // a modeline).
       copy_option_part(&dict, buf, LSIZE, ",");
       if (!thesaurus && strcmp(buf, "spell") == 0) {
         count = -1;
@@ -1325,16 +1322,99 @@ static void ins_compl_dictionaries(char *dict_start, char *pat, int flags, bool 
     }
 
     if (count == -1) {
-      // Complete from active spelling.  Skip "\<" in the pattern, we
-      // don't use it as a RE.
       if (pat[0] == '\\' && pat[1] == '<') {
         ptr = pat + 2;
       } else {
-        ptr = pat;
+        ptr = (char *)pat;
       }
       spell_dump_compl(ptr, regmatch.rm_ic, &dir, 0);
-    } else if (count > 0) {  // avoid warning for using "files" uninit
-      ins_compl_files(count, files, thesaurus, flags, &regmatch, buf, &dir);
+    } else if (count > 0) {
+      // ins_compl_files inlined:
+      char *leader = rs_cot_fuzzy() ? (char *)rs_ins_compl_leader() : NULL;
+      int leader_len = rs_cot_fuzzy() ? (int)rs_ins_compl_leader_len() : 0;
+      for (int i = 0; i < count && !got_int && !rs_ins_compl_interrupted(); i++) {
+        FILE *fp = os_fopen(files[i], "r");
+        if (flags != DICT_EXACT && !shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete) {
+          msg_hist_off = true;
+          msg_ext_set_kind("completion");
+          vim_snprintf(IObuff, IOSIZE, _("Scanning dictionary: %s"), files[i]);
+          msg_trunc(IObuff, true, HLF_R);
+        }
+        if (fp == NULL) {
+          continue;
+        }
+        while (!got_int && !rs_ins_compl_interrupted() && !vim_fgets(buf, LSIZE, fp)) {
+          char *lptr = buf;
+          if (rs_cot_fuzzy() && leader_len > 0) {
+            char *line_end = rs_find_line_end(lptr);
+            while (lptr < line_end) {
+              int score = 0;
+              int len = 0;
+              if (fuzzy_match_str_in_line(&lptr, leader, &len, NULL, &score)) {
+                char *end_ptr = rs_ctrl_x_mode_line_or_eval()
+                                ? rs_find_line_end(lptr) : rs_find_word_end(lptr);
+                int add_r = ins_compl_add_infercase(lptr, (int)(end_ptr - lptr),
+                                                    p_ic, files[i], dir, false, score);
+                if (add_r == FAIL) {
+                  break;
+                }
+                lptr = end_ptr;
+                if (compl_get_longest && rs_ctrl_x_mode_normal()
+                    && compl_first_match->cp_next
+                    && score == compl_first_match->cp_next->cp_score) {
+                  compl_num_bests++;
+                }
+              }
+            }
+          } else if (regmatch.regprog != NULL) {
+            while (vim_regexec(&regmatch, buf, (colnr_T)(lptr - buf))) {
+              lptr = regmatch.startp[0];
+              lptr = rs_ctrl_x_mode_line_or_eval() ? rs_find_line_end(lptr)
+                                                   : rs_find_word_end(lptr);
+              int add_r = ins_compl_add_infercase(regmatch.startp[0],
+                                                  (int)(lptr - regmatch.startp[0]),
+                                                  p_ic, files[i], dir, false,
+                                                  FUZZY_SCORE_NONE);
+              if (thesaurus) {
+                // thesaurus_add_words_in_line inlined:
+                lptr = buf;
+                while (!got_int) {
+                  lptr = rs_find_word_start(lptr);
+                  if (*lptr == NUL || *lptr == NL) {
+                    break;
+                  }
+                  char *wstart = lptr;
+                  while (*lptr != NUL) {
+                    const int l = utfc_ptr2len(lptr);
+                    if (l < 2 && !vim_iswordc((uint8_t)(*lptr))) {
+                      break;
+                    }
+                    lptr += l;
+                  }
+                  if (wstart != regmatch.startp[0]) {
+                    add_r = ins_compl_add_infercase(wstart, (int)(lptr - wstart), p_ic,
+                                                    files[i], dir, false, FUZZY_SCORE_NONE);
+                    if (add_r == FAIL) {
+                      break;
+                    }
+                  }
+                }
+              }
+              if (add_r == OK) {
+                dir = FORWARD;
+              } else if (add_r == FAIL) {
+                break;
+              }
+              if (*lptr == '\n' || got_int) {
+                break;
+              }
+            }
+          }
+          line_breakcheck();
+          rs_ins_compl_check_keys(50, 0);
+        }
+        fclose(fp);
+      }
       if (flags != DICT_EXACT) {
         FreeWild(count, files);
       }
@@ -1350,131 +1430,24 @@ theend:
   xfree(buf);
 }
 
-/// Add all the words in the line "*buf_arg" from the thesaurus file "fname"
-/// skipping the word at 'skip_word'.
-///
-/// @return  OK on success.
-static int thesaurus_add_words_in_line(char *fname, char **buf_arg, int dir, const char *skip_word)
+/// Compound accessor: returns the effective thesaurus option string.
+/// Returns curbuf->b_p_tsr if non-empty, else p_tsr.
+const char *nvim_get_curbuf_b_p_tsr(void)
 {
-  int status = OK;
-
-  // Add the other matches on the line
-  char *ptr = *buf_arg;
-  while (!got_int) {
-    // Find start of the next word.  Skip white
-    // space and punctuation.
-    ptr = rs_find_word_start(ptr);
-    if (*ptr == NUL || *ptr == NL) {
-      break;
-    }
-    char *wstart = ptr;
-
-    // Find end of the word.
-    // Japanese words may have characters in
-    // different classes, only separate words
-    // with single-byte non-word characters.
-    while (*ptr != NUL) {
-      const int l = utfc_ptr2len(ptr);
-
-      if (l < 2 && !vim_iswordc((uint8_t)(*ptr))) {
-        break;
-      }
-      ptr += l;
-    }
-
-    // Add the word. Skip the regexp match.
-    if (wstart != skip_word) {
-      status = ins_compl_add_infercase(wstart, (int)(ptr - wstart), p_ic,
-                                       fname, dir, false, FUZZY_SCORE_NONE);
-      if (status == FAIL) {
-        break;
-      }
-    }
-  }
-
-  *buf_arg = ptr;
-  return status;
+  return *curbuf->b_p_tsr == NUL ? p_tsr : curbuf->b_p_tsr;
 }
 
-/// Process "count" dictionary/thesaurus "files" and add the text matching
-/// "regmatch".
-static void ins_compl_files(int count, char **files, bool thesaurus, int flags,
-                            regmatch_T *regmatch, char *buf, Direction *dir)
-  FUNC_ATTR_NONNULL_ARG(2, 7)
+/// Compound accessor: returns the effective dictionary option string.
+/// Returns curbuf->b_p_dict if non-empty, else p_dict.
+const char *nvim_get_curbuf_b_p_dict(void)
 {
-  char *leader = rs_cot_fuzzy() ? (char *)rs_ins_compl_leader() : NULL;
-  int leader_len = rs_cot_fuzzy() ? (int)rs_ins_compl_leader_len() : 0;
+  return *curbuf->b_p_dict == NUL ? p_dict : curbuf->b_p_dict;
+}
 
-  for (int i = 0; i < count && !got_int && !rs_ins_compl_interrupted(); i++) {
-    FILE *fp = os_fopen(files[i], "r");  // open dictionary file
-    if (flags != DICT_EXACT && !shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete) {
-      msg_hist_off = true;  // reset in msg_trunc()
-      msg_ext_set_kind("completion");
-      vim_snprintf(IObuff, IOSIZE,
-                   _("Scanning dictionary: %s"), files[i]);
-      msg_trunc(IObuff, true, HLF_R);
-    }
-
-    if (fp == NULL) {
-      continue;
-    }
-
-    // Read dictionary file line by line.
-    // Check each line for a match.
-    while (!got_int && !rs_ins_compl_interrupted() && !vim_fgets(buf, LSIZE, fp)) {
-      char *ptr = buf;
-      if (rs_cot_fuzzy() && leader_len > 0) {
-        char *line_end = rs_find_line_end(ptr);
-        while (ptr < line_end) {
-          int score = 0;
-          int len = 0;
-          if (fuzzy_match_str_in_line(&ptr, leader, &len, NULL, &score)) {
-            char *end_ptr = rs_ctrl_x_mode_line_or_eval()
-                            ? rs_find_line_end(ptr) : rs_find_word_end(ptr);
-            int add_r = ins_compl_add_infercase(ptr, (int)(end_ptr - ptr),
-                                                p_ic, files[i], *dir, false, score);
-            if (add_r == FAIL) {
-              break;
-            }
-            ptr = end_ptr;  // start from next word
-            if (compl_get_longest && rs_ctrl_x_mode_normal()
-                && compl_first_match->cp_next
-                && score == compl_first_match->cp_next->cp_score) {
-              compl_num_bests++;
-            }
-          }
-        }
-      } else if (regmatch != NULL) {
-        while (vim_regexec(regmatch, buf, (colnr_T)(ptr - buf))) {
-          ptr = regmatch->startp[0];
-          ptr = rs_ctrl_x_mode_line_or_eval() ? rs_find_line_end(ptr) : rs_find_word_end(ptr);
-          int add_r = ins_compl_add_infercase(regmatch->startp[0],
-                                              (int)(ptr - regmatch->startp[0]),
-                                              p_ic, files[i], *dir, false,
-                                              FUZZY_SCORE_NONE);
-          if (thesaurus) {
-            // For a thesaurus, add all the words in the line
-            ptr = buf;
-            add_r = thesaurus_add_words_in_line(files[i], &ptr, *dir, regmatch->startp[0]);
-          }
-          if (add_r == OK) {
-            // if dir was BACKWARD then honor it just once
-            *dir = FORWARD;
-          } else if (add_r == FAIL) {
-            break;
-          }
-          // avoid expensive call to vim_regexec() when at end
-          // of line
-          if (*ptr == '\n' || got_int) {
-            break;
-          }
-        }
-      }
-      line_breakcheck();
-      rs_ins_compl_check_keys(50, 0);
-    }
-    fclose(fp);
-  }
+/// Compound accessor: calls expand_by_function(type, compl_pattern.data, NULL).
+void nvim_expand_by_function_impl(int compl_type)
+{
+  expand_by_function(compl_type, compl_pattern.data, NULL);
 }
 
 /// Free a completion item in the list
@@ -2487,18 +2460,7 @@ done:
 /// thesaurus files.
 static void get_next_dict_tsr_completion(int compl_type, char *dict, int dict_f)
 {
-  if (rs_thesaurus_func_complete(compl_type)) {
-    expand_by_function(compl_type, compl_pattern.data, NULL);
-  } else {
-    ins_compl_dictionaries(dict != NULL
-                           ? dict
-                           : (compl_type == CTRL_X_THESAURUS
-                              ? (*curbuf->b_p_tsr == NUL ? p_tsr : curbuf->b_p_tsr)
-                              : (*curbuf->b_p_dict == NUL ? p_dict : curbuf->b_p_dict)),
-                           compl_pattern.data,
-                           dict != NULL ? dict_f : 0,
-                           compl_type == CTRL_X_THESAURUS);
-  }
+  rs_get_next_dict_tsr_completion(compl_type, dict, dict_f);
 }
 
 /// Compare function for qsort
