@@ -102,12 +102,23 @@ const SHOWCMD_IGNORE: &[c_int] = &[
 extern "C" {
     fn nvim_get_p_sc() -> c_int;
     fn nvim_get_showcmd_is_clear() -> bool;
+    fn nvim_set_showcmd_is_clear(val: bool);
     fn nvim_get_showcmd_visual() -> bool;
     fn nvim_set_showcmd_visual(val: bool);
     fn nvim_normal_showcmd_buf_ptr() -> *mut std::ffi::c_char;
     fn nvim_old_showcmd_buf_ptr() -> *mut std::ffi::c_char;
     fn nvim_showcmd_buflen() -> usize;
     fn nvim_normal_display_showcmd();
+
+    // Phase 2: display_showcmd accessors
+    fn nvim_showcmd_get_p_sloc_first() -> c_int;
+    fn nvim_showcmd_set_w_redr_status();
+    fn nvim_showcmd_win_redr_status();
+    fn nvim_showcmd_set_redraw_tabline();
+    fn nvim_showcmd_draw_tabline();
+    fn nvim_showcmd_ui_msg_showcmd(buf: *const std::ffi::c_char, is_clear: bool);
+    fn nvim_showcmd_get_p_ch() -> c_int;
+    fn nvim_showcmd_grid_render(buf: *const std::ffi::c_char, is_clear: bool);
 
     // Phase 1: Visual info accessors (formerly nvim_clear_showcmd_visual_info)
     fn nvim_get_VIsual_active() -> c_int;
@@ -449,6 +460,53 @@ pub unsafe extern "C" fn rs_del_from_showcmd(len: c_int) {
     if !nvim_showcmd_char_avail() {
         nvim_normal_display_showcmd();
     }
+}
+
+/// Render the showcmd buffer to the appropriate display location.
+///
+/// Dispatches to statusline, tabline, UI messages protocol, or last-line
+/// grid rendering based on the `showcmdloc` option.
+///
+/// Rust port of the C `display_showcmd` function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_display_showcmd() {
+    let buf_ptr = nvim_normal_showcmd_buf_ptr();
+    let is_clear = *buf_ptr == 0;
+    nvim_set_showcmd_is_clear(is_clear);
+
+    let sloc = nvim_showcmd_get_p_sloc_first();
+
+    if sloc == c_int::from(b's') {
+        // showcmdloc=statusline
+        if is_clear {
+            nvim_showcmd_set_w_redr_status();
+        } else {
+            nvim_showcmd_win_redr_status();
+        }
+        return;
+    }
+
+    if sloc == c_int::from(b't') {
+        // showcmdloc=tabline
+        if is_clear {
+            nvim_showcmd_set_redraw_tabline();
+        } else {
+            nvim_showcmd_draw_tabline();
+        }
+        return;
+    }
+
+    // showcmdloc=last (or empty)
+    if nvim_showcmd_ui_has_messages() {
+        nvim_showcmd_ui_msg_showcmd(buf_ptr, is_clear);
+        return;
+    }
+
+    if nvim_showcmd_get_p_ch() == 0 {
+        return;
+    }
+
+    nvim_showcmd_grid_render(buf_ptr, is_clear);
 }
 
 // =============================================================================

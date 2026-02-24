@@ -2263,7 +2263,65 @@ char *nvim_normal_showcmd_buf_ptr(void) { return showcmd_buf; }
 char *nvim_old_showcmd_buf_ptr(void) { return old_showcmd_buf; }
 size_t nvim_showcmd_buflen(void) { return SHOWCMD_BUFLEN; }
 
-void nvim_normal_display_showcmd(void) { display_showcmd(); }
+extern void rs_display_showcmd(void);
+void nvim_normal_display_showcmd(void) { rs_display_showcmd(); }
+
+// Phase 2 accessors for rs_display_showcmd
+
+/// Returns the first character of p_sloc option.
+int nvim_showcmd_get_p_sloc_first(void) { return (unsigned char)*p_sloc; }
+
+/// Set w_redr_status for curwin (showcmdloc=statusline, clear path).
+void nvim_showcmd_set_w_redr_status(void) { curwin->w_redr_status = true; }
+
+/// Redraw statusline for curwin and restore cursor (showcmdloc=statusline, non-clear path).
+void nvim_showcmd_win_redr_status(void) { win_redr_status(curwin); setcursor(); }
+
+/// Set redraw_tabline flag (showcmdloc=tabline, clear path).
+void nvim_showcmd_set_redraw_tabline(void) { redraw_tabline = true; }
+
+/// Redraw tabline and restore cursor (showcmdloc=tabline, non-clear path).
+void nvim_showcmd_draw_tabline(void) { draw_tabline(); setcursor(); }
+
+/// Send showcmd via UI messages protocol.
+/// If is_clear, sends an empty array; otherwise sends [{0, buf, 0}].
+void nvim_showcmd_ui_msg_showcmd(const char *buf, bool is_clear)
+{
+  MAXSIZE_TEMP_ARRAY(content, 1);
+  MAXSIZE_TEMP_ARRAY(chunk, 3);
+  if (!is_clear) {
+    ADD_C(chunk, INTEGER_OBJ(0));
+    ADD_C(chunk, CSTR_AS_OBJ(buf));
+    ADD_C(chunk, INTEGER_OBJ(0));
+    ADD_C(content, ARRAY_OBJ(chunk));
+  }
+  ui_call_msg_showcmd(content);
+}
+
+/// Returns p_ch option value.
+int nvim_showcmd_get_p_ch(void) { return (int)p_ch; }
+
+/// Render the showcmd area on the grid last line.
+/// buf is the current showcmd text (NULL or empty means clear).
+/// len is the number of display cells already written (from grid_line_puts).
+/// Performs msg_grid_validate, grid_line_start, grid_line_puts (content),
+/// grid_line_puts (padding), grid_line_flush.
+void nvim_showcmd_grid_render(const char *buf, bool is_clear)
+{
+  msg_grid_validate();
+  int showcmd_row = Rows - 1;
+  grid_line_start(&msg_grid_adj, showcmd_row);
+
+  int len = 0;
+  if (!is_clear) {
+    len = grid_line_puts(sc_col, buf, -1, HL_ATTR(HLF_MSG));
+  }
+
+  // clear the rest of an old message by outputting up to SHOWCMD_COLS spaces
+  grid_line_puts(sc_col + len, (char *)"          " + len, -1, HL_ATTR(HLF_MSG));
+
+  grid_line_flush();
+}
 
 // Phase 5 accessors for rs_add_to_showcmd and rs_del_from_showcmd
 
@@ -2350,61 +2408,7 @@ void push_showcmd(void) { rs_push_showcmd(); }
 extern void rs_pop_showcmd(void);
 void pop_showcmd(void) { rs_pop_showcmd(); }
 
-static void display_showcmd(void)
-{
-  showcmd_is_clear = (showcmd_buf[0] == NUL);
-
-  if (*p_sloc == 's') {
-    if (showcmd_is_clear) {
-      curwin->w_redr_status = true;
-    } else {
-      win_redr_status(curwin);
-      setcursor();  // put cursor back where it belongs
-    }
-    return;
-  }
-  if (*p_sloc == 't') {
-    if (showcmd_is_clear) {
-      redraw_tabline = true;
-    } else {
-      draw_tabline();
-      setcursor();  // put cursor back where it belongs
-    }
-    return;
-  }
-  // 'showcmdloc' is "last" or empty
-
-  if (ui_has(kUIMessages)) {
-    MAXSIZE_TEMP_ARRAY(content, 1);
-    MAXSIZE_TEMP_ARRAY(chunk, 3);
-    if (!showcmd_is_clear) {
-      // placeholder for future highlight support
-      ADD_C(chunk, INTEGER_OBJ(0));
-      ADD_C(chunk, CSTR_AS_OBJ(showcmd_buf));
-      ADD_C(chunk, INTEGER_OBJ(0));
-      ADD_C(content, ARRAY_OBJ(chunk));
-    }
-    ui_call_msg_showcmd(content);
-    return;
-  }
-  if (p_ch == 0) {
-    return;
-  }
-
-  msg_grid_validate();
-  int showcmd_row = Rows - 1;
-  grid_line_start(&msg_grid_adj, showcmd_row);
-
-  int len = 0;
-  if (!showcmd_is_clear) {
-    len = grid_line_puts(sc_col, showcmd_buf, -1, HL_ATTR(HLF_MSG));
-  }
-
-  // clear the rest of an old message by outputting up to SHOWCMD_COLS spaces
-  grid_line_puts(sc_col + len, (char *)"          " + len, -1, HL_ATTR(HLF_MSG));
-
-  grid_line_flush();
-}
+// display_showcmd migrated to Rust (rs_display_showcmd) in Phase 2
 
 /// When "check" is false, prepare for commands that scroll the window.
 /// When "check" is true, take care of scroll-binding after the window has
