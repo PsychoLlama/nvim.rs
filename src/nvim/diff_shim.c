@@ -104,6 +104,7 @@ extern void rs_ex_diffoff(exarg_T *eap);
 extern void rs_ex_diffsplit(exarg_T *eap);
 extern void rs_ex_diffgetput(exarg_T *eap);
 extern void rs_diffgetput(int addr_count, int idx_cur, int idx_from, int idx_to, linenr_T line1, linenr_T line2);
+extern void rs_run_linematch(diff_T *dp);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -706,98 +707,6 @@ void ex_diffoff(exarg_T *eap)
   rs_ex_diffoff(eap);
 }
 
-// Apply results from the linematch algorithm and apply to 'dp' by splitting it into multiple
-// adjacent diff blocks.
-static void apply_linematch_results(diff_T *dp, size_t decisions_length, const int *decisions)
-{
-  // get the start line number here in each diff buffer, and then increment
-  int line_numbers[DB_COUNT];
-  int outputmap[DB_COUNT];
-  size_t ndiffs = 0;
-  for (int i = 0; i < DB_COUNT; i++) {
-    if (curtab->tp_diffbuf[i] != NULL) {
-      line_numbers[i] = dp->df_lnum[i];
-      dp->df_count[i] = 0;
-
-      // Keep track of the index of the diff buffer we are using here.
-      // We will use this to write the output of the algorithm to
-      // diff_T structs at the correct indexes
-      outputmap[ndiffs] = i;
-      ndiffs++;
-    }
-  }
-
-  // write the diffs starting with the current diff block
-  diff_T *dp_s = dp;
-  for (size_t i = 0; i < decisions_length; i++) {
-    // Don't allocate on first iter since we can reuse the initial diffblock
-    if (i != 0 && (decisions[i - 1] != decisions[i])) {
-      // create new sub diff blocks to segment the original diff block which we
-      // further divided by running the linematch algorithm
-      dp_s = rs_diff_alloc_new(curtab, dp_s, dp_s->df_next);
-      dp_s->is_linematched = true;
-      for (int j = 0; j < DB_COUNT; j++) {
-        if (curtab->tp_diffbuf[j] != NULL) {
-          dp_s->df_lnum[j] = line_numbers[j];
-          dp_s->df_count[j] = 0;
-        }
-      }
-    }
-    for (size_t j = 0; j < ndiffs; j++) {
-      if (decisions[i] & (1 << j)) {
-        // will need to use the map here
-        dp_s->df_count[outputmap[j]]++;
-        line_numbers[outputmap[j]]++;
-      }
-    }
-  }
-  dp->is_linematched = true;
-}
-
-static void run_linematch_algorithm(diff_T *dp)
-{
-  // define buffers for diff algorithm
-  mmfile_t diffbufs_mm[DB_COUNT];
-  const mmfile_t *diffbufs[DB_COUNT];
-  int diff_length[DB_COUNT];
-  size_t ndiffs = 0;
-  for (int i = 0; i < DB_COUNT; i++) {
-    if (curtab->tp_diffbuf[i] != NULL) {
-      if (dp->df_count[i] > 0) {
-        // write the contents of the entire buffer to
-        // diffbufs_mm[diffbuffers_count]
-        diff_write_buffer(curtab->tp_diffbuf[i], &diffbufs_mm[ndiffs],
-                          dp->df_lnum[i], dp->df_lnum[i] + dp->df_count[i] - 1);
-      } else {
-        diffbufs_mm[ndiffs].size = 0;
-        diffbufs_mm[ndiffs].ptr = NULL;
-      }
-
-      diffbufs[ndiffs] = &diffbufs_mm[ndiffs];
-
-      // keep track of the length of this diff block to pass it to the linematch
-      // algorithm
-      diff_length[ndiffs] = dp->df_count[i];
-
-      // increment the amount of diff buffers we are passing to the algorithm
-      ndiffs++;
-    }
-  }
-
-  // we will get the output of the linematch algorithm in the format of an array
-  // of integers (*decisions) and the length of that array (decisions_length)
-  int *decisions = NULL;
-  const bool iwhite = (diff_flags & (DIFF_IWHITEALL | DIFF_IWHITE)) > 0;
-  size_t decisions_length = linematch_nbuffers(diffbufs, diff_length, ndiffs, &decisions, iwhite);
-
-  for (size_t i = 0; i < ndiffs; i++) {
-    XFREE_CLEAR(diffbufs_mm[i].ptr);
-  }
-
-  apply_linematch_results(dp, decisions_length, decisions);
-
-  xfree(decisions);
-}
 
 /// Check diff status for line "lnum" in buffer "buf":
 ///
@@ -1400,7 +1309,7 @@ void nvim_diff_invalidate_botline_win(win_T *wp) { invalidate_botline(wp); }
 void nvim_diff_changed_line_abv_curs_win(win_T *wp) { changed_line_abv_curs_win(wp); }
 void nvim_diff_check_topfill(win_T *wp, bool down) { check_topfill(wp, down); }
 void nvim_diff_setpcmark(void) { setpcmark(); }
-void nvim_diff_run_linematch(diff_T *dp) { run_linematch_algorithm(dp); }
+void nvim_diff_run_linematch(diff_T *dp) { rs_run_linematch(dp); }
 bool nvim_diffblock_get_has_changes(diff_T *dp) { if (dp == NULL) { return false; } return dp->has_changes; }
 void nvim_diffblock_set_has_changes(diff_T *dp, bool val) { if (dp != NULL) { dp->has_changes = val; } }
 void nvim_diffblock_reset_changes_len(diff_T *dp) { if (dp != NULL) { dp->df_changes.ga_len = 0; } }
