@@ -1113,10 +1113,8 @@ pub unsafe extern "C" fn rs_showoneopt(opt_idx: c_int, opt_flags: c_int) {
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
     let kopt_count = nvim_get_kopt_count();
-    let items: *mut c_int = xmalloc(
-        (kopt_count as usize) * std::mem::size_of::<c_int>(),
-    )
-    .cast::<c_int>();
+    let items: *mut c_int =
+        xmalloc((kopt_count as usize) * std::mem::size_of::<c_int>()).cast::<c_int>();
 
     msg_ext_set_kind(c"list_cmd".as_ptr());
     // Highlight title

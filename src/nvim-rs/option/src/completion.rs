@@ -528,7 +528,12 @@ extern "C" {
     );
     fn nvim_option_cmdline_fuzzy_complete(fuzzystr: *const c_char) -> c_int;
     fn nvim_option_get_fuzmatch_size() -> usize;
-    fn nvim_option_fuzmatch_set(fuzmatch: *mut std::ffi::c_void, idx: c_int, str_: *const c_char, score: c_int);
+    fn nvim_option_fuzmatch_set(
+        fuzmatch: *mut std::ffi::c_void,
+        idx: c_int,
+        str_: *const c_char,
+        score: c_int,
+    );
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn xmalloc(size: usize) -> *mut std::ffi::c_void;
     fn xfree(ptr: *mut std::ffi::c_void);
@@ -607,8 +612,7 @@ pub unsafe extern "C" fn rs_expand_option_settings(
     let mut num_normal: c_int = 0;
     let mut count: c_int = 0;
     let ic = nvim_regmatch_get_rm_ic(regmatch);
-    let fuzzy =
-        can_fuzzy != 0 && nvim_option_cmdline_fuzzy_complete(fuzzystr) != 0;
+    let fuzzy = can_fuzzy != 0 && nvim_option_cmdline_fuzzy_complete(fuzzystr) != 0;
     let mut fuzmatch: *mut std::ffi::c_void = std::ptr::null_mut();
     let kopt_count = nvim_get_kopt_count();
 
@@ -622,7 +626,11 @@ pub unsafe extern "C" fn rs_expand_option_settings(
             let matched = match_str_impl(
                 all_ptr,
                 regmatch,
-                if loop_ == 1 { *matches } else { std::ptr::null_mut() },
+                if loop_ == 1 {
+                    *matches
+                } else {
+                    std::ptr::null_mut()
+                },
                 count,
                 loop_ == 0,
                 fuzzy,
@@ -655,7 +663,11 @@ pub unsafe extern "C" fn rs_expand_option_settings(
             let matched_full = match_str_impl(
                 fullname,
                 regmatch,
-                if loop_ == 1 { *matches } else { std::ptr::null_mut() },
+                if loop_ == 1 {
+                    *matches
+                } else {
+                    std::ptr::null_mut()
+                },
                 count,
                 loop_ == 0,
                 fuzzy,
@@ -671,9 +683,7 @@ pub unsafe extern "C" fn rs_expand_option_settings(
             } else if !fuzzy {
                 // Also try shortname for regex (not fuzzy - fuzzy already matches both)
                 let shortname = nvim_option_get_shortname(opt_idx);
-                if !shortname.is_null()
-                    && nvim_excmds_regexec(regmatch, shortname) != 0
-                {
+                if !shortname.is_null() && nvim_excmds_regexec(regmatch, shortname) != 0 {
                     if loop_ == 0 {
                         num_normal += 1;
                     } else {

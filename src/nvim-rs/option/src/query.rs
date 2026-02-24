@@ -509,10 +509,7 @@ pub unsafe extern "C" fn rs_do_spelllang_source(win: WinHandle) {
 ///
 /// Translation of C `get_fileformat_force`. Returns EOL_UNIX, EOL_DOS, or EOL_MAC.
 #[no_mangle]
-pub unsafe extern "C" fn rs_get_fileformat_force(
-    buf: BufHandle,
-    eap: *const c_void,
-) -> c_int {
+pub unsafe extern "C" fn rs_get_fileformat_force(buf: BufHandle, eap: *const c_void) -> c_int {
     let force_ff = nvim_eap_get_force_ff(eap);
     let c = if force_ff != 0 {
         force_ff
