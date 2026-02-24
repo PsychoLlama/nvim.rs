@@ -160,6 +160,10 @@ extern void rs_set_argv_var(char **argv, int argc);
 extern void rs_var_set_global(const char *name, typval_T *vartv);
 extern void rs_eval_fmt_source_name_line(char *buf, size_t bufsize);
 extern const char *rs_find_option_var_end(const char **arg, int *opt_idxp, int *opt_flags);
+// Phase 2 (eval_shim pass 5)
+extern char *rs_prompt_get_input(buf_T *buf);
+extern void rs_prompt_invoke_callback(void);
+extern bool rs_invoke_prompt_interrupt(void);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -2651,84 +2655,19 @@ void eval_fmt_source_name_line(char *buf, size_t bufsize)
 /// Gets the current user-input in prompt buffer `buf`, or NULL if buffer is not a prompt buffer.
 char *prompt_get_input(buf_T *buf)
 {
-  if (!bt_prompt(buf)) {
-    return NULL;
-  }
-  linenr_T lnum_start = buf->b_prompt_start.mark.lnum;
-  linenr_T lnum_last = buf->b_ml.ml_line_count;
-
-  char *text = ml_get_buf(buf, lnum_start);
-  char *prompt = prompt_text();
-  if (strlen(text) >= strlen(prompt)) {
-    text += strlen(prompt);
-  }
-
-  char *full_text = xstrdup(text);
-  for (linenr_T i = lnum_start + 1; i <= lnum_last; i++) {
-    char *half_text = concat_str(full_text, "\n");
-    xfree(full_text);
-    full_text = concat_str(half_text, ml_get_buf(buf, i));
-    xfree(half_text);
-  }
-  return full_text;
+  return rs_prompt_get_input(buf);
 }
 
 /// Invokes the user-defined callback defined for the current prompt-buffer.
 void prompt_invoke_callback(void)
 {
-  typval_T rettv;
-  typval_T argv[2];
-  linenr_T lnum = curbuf->b_ml.ml_line_count;
-
-  char *user_input = prompt_get_input(curbuf);
-
-  if (!user_input) {
-    return;
-  }
-
-  // Add a new line for the prompt before invoking the callback, so that
-  // text can always be inserted above the last line.
-  ml_append(lnum, "", 0, false);
-  appended_lines_mark(lnum, 1);
-  curwin->w_cursor.lnum = lnum + 1;
-  curwin->w_cursor.col = 0;
-  curbuf->b_prompt_start.mark.lnum = lnum + 1;
-
-  if (curbuf->b_prompt_callback.type == kCallbackNone) {
-    xfree(user_input);
-    goto theend;
-  }
-
-  argv[0].v_type = VAR_STRING;
-  argv[0].vval.v_string = user_input;
-  argv[1].v_type = VAR_UNKNOWN;
-
-  callback_call(&curbuf->b_prompt_callback, 1, argv, &rettv);
-  tv_clear(&argv[0]);
-  tv_clear(&rettv);
-
-theend:
-  // clear undo history on submit
-  u_clearallandblockfree(curbuf);
-
-  curbuf->b_prompt_start.mark.lnum = curbuf->b_ml.ml_line_count;
+  rs_prompt_invoke_callback();
 }
 
 /// @return  true when the interrupt callback was invoked.
 bool invoke_prompt_interrupt(void)
 {
-  typval_T rettv;
-  typval_T argv[1];
-
-  if (curbuf->b_prompt_interrupt.type == kCallbackNone) {
-    return false;
-  }
-  argv[0].v_type = VAR_UNKNOWN;
-
-  got_int = false;  // don't skip executing commands
-  int ret = callback_call(&curbuf->b_prompt_interrupt, 0, argv, &rettv);
-  tv_clear(&rettv);
-  return ret != FAIL;
+  return rs_invoke_prompt_interrupt();
 }
 
 
@@ -4564,4 +4503,85 @@ const char *nvim_shim_tv_get_string(const typval_T *tv)
 }
 
 // nvim_xstrdup is defined in register.c - no duplicate needed here.
+
+// =============================================================================
+// Accessors for Phase 2 (eval_shim pass 5): prompt functions
+// =============================================================================
+
+/// Get buf->b_prompt_start.mark.lnum - accessor for rs_prompt_get_input.
+linenr_T nvim_buf_get_prompt_start_lnum(buf_T *buf)
+{
+  return buf->b_prompt_start.mark.lnum;
+}
+
+/// Set curbuf->b_prompt_start.mark.lnum - accessor for rs_prompt_invoke_callback.
+void nvim_curbuf_set_prompt_start_lnum(linenr_T lnum)
+{
+  curbuf->b_prompt_start.mark.lnum = lnum;
+}
+
+/// Get &curbuf->b_prompt_callback - accessor for rs_prompt_invoke_callback.
+Callback *nvim_curbuf_get_prompt_callback(void)
+{
+  return &curbuf->b_prompt_callback;
+}
+
+/// Get &curbuf->b_prompt_interrupt - accessor for rs_invoke_prompt_interrupt.
+Callback *nvim_curbuf_get_prompt_interrupt(void)
+{
+  return &curbuf->b_prompt_interrupt;
+}
+
+/// Wrap appended_lines_mark(lnum, count) - accessor for rs_prompt_invoke_callback.
+void nvim_appended_lines_mark(linenr_T lnum, int count)
+{
+  appended_lines_mark(lnum, count);
+}
+
+/// Wrap u_clearallandblockfree(curbuf) - accessor for rs_prompt_invoke_callback.
+void nvim_curbuf_u_clearallandblockfree(void)
+{
+  u_clearallandblockfree(curbuf);
+}
+
+/// Get curbuf handle - accessor for rs_prompt_invoke_callback.
+buf_T *nvim_get_curbuf_ptr(void)
+{
+  return curbuf;
+}
+
+/// Get curbuf->b_ml.ml_line_count - accessor for rs_prompt_invoke_callback.
+linenr_T nvim_curbuf_get_ml_line_count_lnr(void)
+{
+  return (linenr_T)curbuf->b_ml.ml_line_count;
+}
+
+/// Call callback_call with a string argument - accessor for rs_prompt_invoke_callback.
+/// Constructs a [VAR_STRING(user_input), VAR_UNKNOWN] argv array on the stack
+/// and calls callback_call. user_input ownership is transferred (freed by tv_clear).
+/// Returns whether the callback was called successfully.
+bool nvim_curbuf_prompt_callback_call(char *user_input)
+{
+  typval_T rettv;
+  typval_T argv[2];
+  argv[0].v_type = VAR_STRING;
+  argv[0].vval.v_string = user_input;
+  argv[1].v_type = VAR_UNKNOWN;
+  callback_call(&curbuf->b_prompt_callback, 1, argv, &rettv);
+  tv_clear(&argv[0]);
+  tv_clear(&rettv);
+  return true;
+}
+
+/// Call callback_call with no arguments for b_prompt_interrupt.
+/// Returns the result of callback_call (OK/FAIL as bool).
+int nvim_curbuf_prompt_interrupt_call(void)
+{
+  typval_T rettv;
+  typval_T argv[1];
+  argv[0].v_type = VAR_UNKNOWN;
+  int ret = callback_call(&curbuf->b_prompt_interrupt, 0, argv, &rettv);
+  tv_clear(&rettv);
+  return ret;
+}
 
