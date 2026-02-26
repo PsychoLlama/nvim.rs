@@ -3948,112 +3948,72 @@ int nvim_get_spell_compl_info_impl(int startcol, int curs_col)
   return OK;
 }
 
-// Compound accessors for Phase 3 (pass 3): ins_compl_continue_search,
-// ins_compl_show_statusmsg. Logic moved here from the thin wrappers above.
+// =============================================================================
+// Phase 10 (pass 10): New fine-grained accessors for continue_search and
+// show_statusmsg migration to Rust.
+// =============================================================================
 
-void nvim_ins_compl_continue_search_impl(char *line)
-{
-  // it is a continued search
-  compl_cont_status &= ~CONT_INTRPT;  // remove INTRPT
-  if (rs_ctrl_x_mode_normal()
-      || rs_ctrl_x_mode_path_patterns()
-      || rs_ctrl_x_mode_path_defines()) {
-    if (compl_startpos.lnum != curwin->w_cursor.lnum) {
-      compl_col = (colnr_T)getwhitecols(line);
-      compl_startpos.col = compl_col;
-      compl_startpos.lnum = curwin->w_cursor.lnum;
-      compl_cont_status &= ~CONT_SOL;  // clear SOL if present
-    } else {
-      if (compl_cont_status & CONT_S_IPOS) {
-        compl_cont_status |= CONT_SOL;
-        compl_startpos.col = (colnr_T)(skipwhite(line + compl_length + compl_startpos.col) - line);
-      }
-      compl_col = compl_startpos.col;
-    }
-    compl_length = curwin->w_cursor.col - (int)compl_col;
-#define MIN_SPACE 75
-    if (compl_length > (IOSIZE - MIN_SPACE)) {
-      compl_cont_status &= ~CONT_SOL;
-      compl_length = (IOSIZE - MIN_SPACE);
-      compl_col = curwin->w_cursor.col - compl_length;
-    }
-    compl_cont_status |= CONT_ADDING | CONT_N_ADDS;
-    if (compl_length < 1) {
-      compl_cont_status &= CONT_LOCAL;
-    }
-  } else if (rs_ctrl_x_mode_line_or_eval() || rs_ctrl_x_mode_register()) {
-    compl_cont_status = CONT_ADDING | CONT_N_ADDS;
+// --- compl_col / compl_length / compl_startpos setters ---
+void nvim_set_compl_col(int val) { compl_col = (colnr_T)val; }
+void nvim_set_compl_length(int val) { compl_length = val; }
+void nvim_set_compl_startpos_col(int val) { compl_startpos.col = (colnr_T)val; }
+void nvim_set_compl_startpos_lnum_to_cursor(void) { compl_startpos.lnum = curwin->w_cursor.lnum; }
+
+// --- getwhitecols / skipwhite wrappers ---
+int nvim_getwhitecols_of_line(const char *line) { return (int)getwhitecols(line); }
+/// Returns the column offset of skipwhite(line + length + start_col) relative to line.
+int nvim_skipwhite_offset(const char *line, int length, int start_col) {
+  return (int)(skipwhite(line + length + start_col) - line);
+}
+
+// --- edit_submode_extra compound setters (keep _() in C) ---
+void nvim_set_edit_submode_extra_hitend(void) { edit_submode_extra = _(e_hitend); }
+void nvim_set_edit_submode_extra_patnotf(void) { edit_submode_extra = _(e_patnotf); }
+void nvim_set_edit_submode_extra_back_at_original(void) { edit_submode_extra = _("Back at original"); }
+void nvim_set_edit_submode_extra_word_from_other_line(void) { edit_submode_extra = _("Word from other line"); }
+void nvim_set_edit_submode_extra_the_only_match(void) { edit_submode_extra = _("The only match"); }
+/// Format "match %d of %d" or "match %d" into static buffer and set edit_submode_extra.
+void nvim_set_edit_submode_extra_match_ref(int cp_number, int compl_matches_val) {
+  static char match_ref[81];
+  if (compl_matches_val > 0) {
+    vim_snprintf(match_ref, sizeof(match_ref), _("match %d of %d"), cp_number, compl_matches_val);
   } else {
-    compl_cont_status = 0;
+    vim_snprintf(match_ref, sizeof(match_ref), _("match %d"), cp_number);
   }
+  edit_submode_extra = match_ref;
+}
+int nvim_get_edit_submode_extra_is_null(void) { return edit_submode_extra == NULL ? 1 : 0; }
+const char *nvim_get_edit_submode_extra_ptr(void) { return edit_submode_extra; }
+
+// --- edit_submode_highl setters (using HLF enum values) ---
+void nvim_set_edit_submode_highl_e(void) { edit_submode_highl = HLF_E; }
+void nvim_set_edit_submode_highl_w(void) { edit_submode_highl = HLF_W; }
+void nvim_set_edit_submode_highl_r(void) { edit_submode_highl = HLF_R; }
+void nvim_set_edit_submode_highl_count(void) { edit_submode_highl = HLF_COUNT; }
+/// Returns (edit_submode_highl < HLF_COUNT ? edit_submode_highl + 1 : 0)
+int nvim_get_edit_submode_highl_attr(void) {
+  return edit_submode_highl < HLF_COUNT ? (int)edit_submode_highl + 1 : 0;
 }
 
-void nvim_ins_compl_show_statusmsg_impl(void)
-{
-  // we found no match if the list has only the "compl_orig_text"-entry
-  if (is_first_match(compl_first_match->cp_next)) {
-    edit_submode_extra = rs_compl_status_adding() && compl_length > 1 ? _(e_hitend) : _(e_patnotf);
-    edit_submode_highl = HLF_E;
-  }
-
-  if (edit_submode_extra == NULL) {
-    if (match_at_original_text(compl_curr_match)) {
-      edit_submode_extra = _("Back at original");
-      edit_submode_highl = HLF_W;
-    } else if (compl_cont_status & CONT_S_IPOS) {
-      edit_submode_extra = _("Word from other line");
-      edit_submode_highl = HLF_COUNT;
-    } else if (compl_curr_match->cp_next == compl_curr_match->cp_prev) {
-      edit_submode_extra = _("The only match");
-      edit_submode_highl = HLF_COUNT;
-      compl_curr_match->cp_number = 1;
-    } else {
-      // Update completion sequence number when needed.
-      if (compl_curr_match->cp_number == -1) {
-        rs_ins_compl_update_sequence_numbers();
-      }
-
-      // The match should always have a sequence number now, this is
-      // just a safety check.
-      if (compl_curr_match->cp_number != -1) {
-        // Space for 10 text chars. + 2x10-digit no.s = 31.
-        // Translations may need more than twice that.
-        static char match_ref[81];
-
-        if (compl_matches > 0) {
-          vim_snprintf(match_ref, sizeof(match_ref),
-                       _("match %d of %d"),
-                       compl_curr_match->cp_number, compl_matches);
-        } else {
-          vim_snprintf(match_ref, sizeof(match_ref),
-                       _("match %d"),
-                       compl_curr_match->cp_number);
-        }
-        edit_submode_extra = match_ref;
-        edit_submode_highl = HLF_R;
-        if (dollar_vcol >= 0) {
-          curs_columns(curwin, false);
-        }
-      }
-    }
-  }
-
-  // Show a message about what (completion) mode we're in.
-  redraw_mode = true;
-  if (!shortmess(SHM_COMPLETIONMENU)) {
-    if (edit_submode_extra != NULL) {
-      if (!p_smd) {
-        msg_hist_off = true;
-        msg_ext_set_kind("completion");
-        msg(edit_submode_extra, (edit_submode_highl < HLF_COUNT
-                                 ? (int)edit_submode_highl + 1 : 0));
-        msg_hist_off = false;
-      }
-    } else {
-      msg_clr_cmdline();  // necessary for "noshowmode"
-    }
-  }
+// --- compl_curr_match accessors ---
+int nvim_compl_curr_match_cp_number(void) { return compl_curr_match ? compl_curr_match->cp_number : -1; }
+void nvim_compl_curr_match_set_cp_number(int val) { if (compl_curr_match) compl_curr_match->cp_number = val; }
+int nvim_compl_curr_match_next_eq_prev(void) {
+  return (compl_curr_match
+          && compl_curr_match->cp_next == compl_curr_match->cp_prev) ? 1 : 0;
 }
+
+// --- misc message / display wrappers ---
+// nvim_get_p_smd: defined in normal_shim.c
+// nvim_get_dollar_vcol: defined in edit.c
+void nvim_curs_columns_curwin(void) { curs_columns(curwin, false); }
+void nvim_msg_hist_off_set(int val) { msg_hist_off = val != 0; }
+void nvim_msg_ext_set_kind_completion(void) { msg_ext_set_kind("completion"); }
+void nvim_msg_with_attr(const char *s, int attr) { msg(s, attr); }
+void nvim_msg_clr_cmdline_wrap(void) { msg_clr_cmdline(); }
+
+// NOTE: nvim_ins_compl_continue_search_impl and nvim_ins_compl_show_statusmsg_impl
+// bodies migrated to Rust (Phase 10, pass 10). C callers updated accordingly.
 
 // NOTE: nvim_ins_compl_update_shown_match_impl and nvim_find_next_match_in_menu_impl
 // bodies migrated to Rust rs_ins_compl_update_shown_match / rs_find_next_match_in_menu
