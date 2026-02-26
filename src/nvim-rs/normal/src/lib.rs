@@ -297,8 +297,6 @@ extern "C" {
         out_col: *mut c_int,
         out_coladd: *mut c_int,
     ) -> bool;
-    fn nvim_unadjust_for_sel_inner_cursor() -> bool;
-    fn nvim_unadjust_for_sel_inner_visual() -> bool;
     #[allow(dead_code)]
     fn nvim_ml_get_len_call(lnum: c_int) -> c_int;
 
@@ -3334,8 +3332,6 @@ extern "C" {
         out_coladd: *mut c_int,
     ) -> bool;
     fn nvim_dec_cursor() -> c_int;
-    fn nvim_bracket_fold_move(cap: CapHandle);
-    fn nvim_bracket_diff_move(cap: CapHandle);
     // Phase 4: find_decl accessors
     fn nvim_searchit_decl(pat: *const c_char, patlen: usize, searchflags: c_int) -> c_int;
     fn nvim_findpar_decl() -> c_int;
@@ -3761,10 +3757,24 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
         nvim_bracket_do_mouse_impl(oap, nchar, dir, nvim_cap_get_count1(cap) as i64);
     } else if nchar == b'z' as c_int {
         // "[z" and "]z": move to start or end of open fold
-        nvim_bracket_fold_move(cap);
+        let dir = if cmdchar == c_int::from(b']') {
+            FORWARD
+        } else {
+            BACKWARD
+        };
+        if rs_foldMoveTo(false, dir, nvim_cap_get_count1(cap)) == 0 {
+            rs_clearopbeep(oap);
+        }
     } else if nchar == b'c' as c_int {
         // "[c" and "]c": move to next or previous diff-change
-        nvim_bracket_diff_move(cap);
+        let dir = if cmdchar == c_int::from(b']') {
+            FORWARD
+        } else {
+            BACKWARD
+        };
+        if rs_diff_move_to(dir, nvim_cap_get_count1(cap)) == 0 {
+            rs_clearopbeep(oap);
+        }
     } else if nchar == b'r' as c_int || nchar == b's' as c_int || nchar == b'S' as c_int {
         // "[r", "[s", "[S", "]r", "]s" and "]S": move to next spell error
         // (inlined nvim_bracket_spell_move)
@@ -4406,7 +4416,7 @@ extern "C" {
 
     // Phase 3: nv_up / nv_down accessors
     fn nvim_bt_quickfix_curbuf() -> c_int; // defined in window_shim.c, returns int
-    fn nvim_qf_view_result(split: bool);
+    fn rs_qf_view_result(split: bool);
     fn nvim_prompt_invoke_callback();
     fn nvim_curbuf_ml_line_count() -> c_int;
     // (nvim_nv_scroll_impl removed: nv_scroll_impl migrated to Rust)
@@ -4464,6 +4474,7 @@ extern "C" {
     fn rs_setManualFold(lnum: c_int, do_open: bool, recursive: bool, donep: *mut bool);
     fn rs_getDeepestNesting(wp: WinHandle) -> c_int;
     fn rs_foldMoveTo(updown: bool, dir: c_int, count: c_int) -> c_int;
+    fn rs_diff_move_to(dir: c_int, count: c_int) -> c_int;
     fn rs_set_fraction(wp: WinHandle);
     fn rs_get_sidescrolloff_value(wp: WinHandle) -> c_int;
     fn nvim_curwin_get_p_scb() -> bool;
@@ -5496,7 +5507,7 @@ pub unsafe extern "C" fn rs_nv_down(cap: CapHandle) {
         rs_nv_page(cap);
     } else if nvim_bt_quickfix_curbuf() != 0 && cmdchar == CAR_CHAR {
         // Quickfix window only: view the result under the cursor.
-        nvim_qf_view_result(false);
+        rs_qf_view_result(false);
     } else {
         // In the cmdline window a <CR> executes the command.
         if nvim_normal_get_cmdwin_type() != 0 && cmdchar == CAR_CHAR {
@@ -5531,7 +5542,6 @@ extern "C" {
     // Phase 3: nv_join / nv_open accessors
     fn nvim_do_join_call(count: c_int, insert_space: bool);
     fn nvim_nv_diffgetput_call(put: bool, count: usize);
-    fn nvim_n_opencmd_call(cap: CapHandle);
     fn nvim_get_b_prompt_start_lnum() -> c_int;
     fn nvim_cursor_count0_max2(cap: CapHandle) -> c_int;
     fn nvim_do_execreg_call(regname: c_int) -> bool;
@@ -5546,7 +5556,7 @@ extern "C" {
     fn nvim_invoke_edit_g(cap: CapHandle);
     fn nvim_set_mod_mask_ctrl();
     fn nvim_do_mouse_g(oap: OapHandle, nchar: c_int, count1: c_int);
-    fn nvim_goto_byte_call(count: c_int);
+    fn rs_goto_byte(count: c_int);
     fn nvim_undo_time_call(count: c_int, sec: bool, file: bool, absolute: bool);
     fn nvim_show_sb_text_call();
     fn nvim_show_utf8_call();
@@ -6436,7 +6446,7 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
         // "go": goto byte count from start of buffer
         n if n == b'o' as c_int => {
             nvim_oap_set_inclusive(oap, false);
-            nvim_goto_byte_call(nvim_cap_get_count0(cap));
+            rs_goto_byte(nvim_cap_get_count0(cap));
         }
 
         // "gQ": improved Ex mode
@@ -6590,7 +6600,7 @@ pub unsafe extern "C" fn rs_nv_open(cap: CapHandle) {
     } else if nvim_bt_prompt_curbuf() && nvim_get_cursor_lnum() < nvim_get_b_prompt_start_lnum() {
         rs_clearopbeep(oap);
     } else {
-        nvim_n_opencmd_call(cap);
+        rs_n_opencmd(cap);
     }
 }
 
@@ -7155,9 +7165,9 @@ pub unsafe extern "C" fn rs_v_swap_corners(cmdchar: c_int) {
 pub unsafe extern "C" fn rs_unadjust_for_sel() -> bool {
     if nvim_p_sel_is_exclusive() && !nvim_equalpos_VIsual_cursor() {
         if nvim_lt_VIsual_cursor() {
-            return nvim_unadjust_for_sel_inner_cursor();
+            return rs_unadjust_for_sel_inner_cursor();
         }
-        return nvim_unadjust_for_sel_inner_visual();
+        return rs_unadjust_for_sel_inner_visual();
     }
     false
 }

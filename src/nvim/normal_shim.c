@@ -980,10 +980,6 @@ int nvim_cap_dec_count1(cmdarg_T *cap) { return cap ? --cap->count1 : 0; }
 // Command handler accessors for Rust FFI
 // =============================================================================
 
-// nvim_nv_clear_impl: migrated to Rust (rs_nv_clear_impl), calls individual C accessors.
-extern void rs_nv_clear_impl(void);
-void nvim_nv_clear_impl(void) { rs_nv_clear_impl(); }
-
 /// Clear b_syn_slow for all windows in current tab (for nv_clear).
 void nvim_clear_b_syn_slow_all_windows(void) {
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
@@ -1158,12 +1154,6 @@ bool nvim_findmatch_nul(oparg_T *oap, int *out_lnum, int *out_col, int *out_cola
   *out_coladd = pos->coladd;
   return true;
 }
-
-// These call Rust implementations; unadjust_for_sel_inner migrated to Rust (Phase 2)
-extern bool rs_unadjust_for_sel_inner_cursor(void);
-extern bool rs_unadjust_for_sel_inner_visual(void);
-bool nvim_unadjust_for_sel_inner_cursor(void) { return rs_unadjust_for_sel_inner_cursor(); }
-bool nvim_unadjust_for_sel_inner_visual(void) { return rs_unadjust_for_sel_inner_visual(); }
 
 int nvim_mark_mb_adjustpos_cursor(void) { mark_mb_adjustpos(curbuf, &curwin->w_cursor); return curwin->w_cursor.col; }
 
@@ -1344,9 +1334,6 @@ bool nvim_messaging_and_searchcount(void) {
   return messaging() && !msg_silent && !shortmess(SHM_SEARCHCOUNT);
 }
 
-void nvim_bracket_fold_move(cmdarg_T *cap) { if (!rs_foldMoveTo(false, cap->cmdchar == ']' ? FORWARD : BACKWARD, cap->count1)) { rs_clearopbeep(cap->oap); } }
-void nvim_bracket_diff_move(cmdarg_T *cap) { if (!rs_diff_move_to(cap->cmdchar == ']' ? FORWARD : BACKWARD, cap->count1)) { rs_clearopbeep(cap->oap); } }
-
 // =============================================================================
 // Phase 3 accessors for nv_g_home_m_cmd, nv_g_dollar_cmd, n_opencmd,
 // and unadjust_for_sel_inner migrations
@@ -1427,7 +1414,6 @@ int nvim_replace_check_prompt(void) {
 // Phase 3 movement/mode-entry accessors for Rust FFI
 // (nv_up_impl, nv_down_impl migrated to Rust in Phase 3)
 // nvim_bt_quickfix_curbuf already defined in window_shim.c
-void nvim_qf_view_result(bool split) { rs_qf_view_result(split); }
 void nvim_prompt_invoke_callback(void) { prompt_invoke_callback(); }
 bool nvim_curbuf_modifiable(void) { return MODIFIABLE(curbuf); }
 // nvim_emsg_modifiable already defined in undo.c
@@ -1437,8 +1423,6 @@ int nvim_get_literal_call(bool no_simplify) { return get_literal(no_simplify); }
 // nvim_stuffcharReadbuff already defined in edit.c
 void nvim_do_join_call(int count, bool insert_space) { do_join((size_t)count, insert_space, true, true, true); }
 void nvim_nv_diffgetput_call(bool put, size_t count) { nv_diffgetput(put, count); }
-extern void rs_n_opencmd(cmdarg_T *cap);
-void nvim_n_opencmd_call(cmdarg_T *cap) { rs_n_opencmd(cap); }
 int nvim_get_b_prompt_start_lnum(void) { return curbuf->b_prompt_start.mark.lnum; }
 int nvim_cursor_count0_max2(cmdarg_T *cap) { return MAX(cap->count0, 2); }
 int nvim_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
@@ -1515,7 +1499,6 @@ void nvim_cursor_pos_info_call(void) { cursor_pos_info(NULL); }
 void nvim_invoke_edit_g(cmdarg_T *cap) { invoke_edit(cap, false, 'g', false); }
 void nvim_set_mod_mask_ctrl(void) { mod_mask = MOD_MASK_CTRL; }
 void nvim_do_mouse_g(oparg_T *oap, int nchar, int count1) { do_mouse(oap, nchar, BACKWARD, count1, 0); }
-void nvim_goto_byte_call(int count) { rs_goto_byte(count); }
 void nvim_undo_time_call(int count, bool sec, bool file, bool absolute) { undo_time(count, sec, file, absolute); }
 void nvim_show_sb_text_call(void) { show_sb_text(); }
 void nvim_show_utf8_call(void) { show_utf8(); }
@@ -1689,8 +1672,6 @@ void normal_enter(bool cmdwin, bool noexmode)
 
 // normal_handle_special_visual_command migrated to Rust (Phase 5) -- see normal_execute.rs
 
-static bool normal_need_additional_char(NormalState *s) { bool pending_op = s->oa.op_type != OP_NOP; return rs_need_additional_char(s->idx, s->ca.cmdchar, pending_op); }
-
 // normal_need_redraw_mode_message and normal_redraw_mode_message migrated to Rust (Phase 5)
 
 // =============================================================================
@@ -1789,8 +1770,6 @@ void nvim_normal_handle_composing_chars(void *sp)
 {
   rs_normal_handle_composing_chars(sp);
 }
-
-static void normal_invert_horizontal(NormalState *s) { s->ca.cmdchar = rs_invert_horizontal(s->ca.cmdchar); s->idx = rs_find_command(s->ca.cmdchar); }
 
 // normal_get_command_count migrated to Rust (Phase 5) -- see normal_execute.rs
 
@@ -2016,15 +1995,8 @@ void nvim_oap_set_prev_count0(oparg_T *oap, int val) { oap->prev_count0 = val; }
 // nvim_normal_get_command_count_loop removed (migrated to Rust in Phase 5)
 // nvim_normal_handle_special_visual_command_wrapper removed (migrated to Rust in Phase 5)
 
-void nvim_normal_invert_horizontal_wrapper(void *sp) { normal_invert_horizontal((NormalState *)sp); }
-
-bool nvim_normal_need_additional_char_wrapper(void *sp) { return normal_need_additional_char((NormalState *)sp); }
-
 /// ui_flush() wrapper.
 void nvim_ui_flush_wrapper(void) { ui_flush(); }
-
-/// unshift_special(&ca) wrapper.
-void nvim_unshift_special_wrapper(cmdarg_T *ca) { ca->cmdchar = rs_unshift_special(ca->cmdchar, &mod_mask); }
 
 /// Clear MOD_MASK_SHIFT from mod_mask.
 void nvim_mod_mask_clear_shift(void) { mod_mask &= ~MOD_MASK_SHIFT; }
@@ -2247,9 +2219,6 @@ char *nvim_normal_showcmd_buf_ptr(void) { return showcmd_buf; }
 char *nvim_old_showcmd_buf_ptr(void) { return old_showcmd_buf; }
 size_t nvim_showcmd_buflen(void) { return SHOWCMD_BUFLEN; }
 
-extern void rs_display_showcmd(void);
-void nvim_normal_display_showcmd(void) { rs_display_showcmd(); }
-
 // Phase 2 accessors for rs_display_showcmd
 
 /// Returns the first character of p_sloc option.
@@ -2403,9 +2372,6 @@ bool nvim_get_did_syncbind(void) { return did_syncbind; }
 
 /// Set did_syncbind global.
 void nvim_set_did_syncbind(bool val) { did_syncbind = val; }
-
-/// rs_get_vtopline(curwin) wrapper (avoids exposing win_T* from Rust).
-int nvim_rs_get_vtopline_curwin(void) { return rs_get_vtopline(curwin); }
 
 /// Check curwin pointer equality with a saved handle.
 bool nvim_curwin_eq(win_T *wp) { return curwin == wp; }

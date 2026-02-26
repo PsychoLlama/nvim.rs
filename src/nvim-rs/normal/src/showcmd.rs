@@ -108,7 +108,6 @@ extern "C" {
     fn nvim_normal_showcmd_buf_ptr() -> *mut std::ffi::c_char;
     fn nvim_old_showcmd_buf_ptr() -> *mut std::ffi::c_char;
     fn nvim_showcmd_buflen() -> usize;
-    fn nvim_normal_display_showcmd();
 
     // Phase 2: display_showcmd accessors
     fn nvim_showcmd_get_p_sloc_first() -> c_int;
@@ -294,7 +293,7 @@ pub extern "C" fn rs_clear_showcmd() {
             }
         }
 
-        nvim_normal_display_showcmd();
+        rs_display_showcmd();
     }
 }
 
@@ -331,7 +330,7 @@ pub unsafe extern "C" fn rs_pop_showcmd() {
     let len = nvim_showcmd_buflen();
     // Safe: both are valid C arrays of size SHOWCMD_BUFLEN
     std::ptr::copy_nonoverlapping(src, dst, len);
-    nvim_normal_display_showcmd();
+    rs_display_showcmd();
 }
 
 /// Append the representation of key `c` to the shown command string.
@@ -433,7 +432,7 @@ pub unsafe extern "C" fn rs_add_to_showcmd(c: c_int) -> bool {
         return false;
     }
 
-    nvim_normal_display_showcmd();
+    rs_display_showcmd();
     true
 }
 
@@ -455,7 +454,7 @@ pub unsafe extern "C" fn rs_del_from_showcmd(len: c_int) {
     *showcmd_buf.add(old_len - to_remove) = 0;
 
     if !nvim_showcmd_char_avail() {
-        nvim_normal_display_showcmd();
+        rs_display_showcmd();
     }
 }
 

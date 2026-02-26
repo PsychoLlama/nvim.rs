@@ -118,12 +118,13 @@ extern "C" {
     fn rs_find_command(cmdchar: c_int) -> c_int;
     fn rs_clearopbeep(oap: OapHandle);
     fn rs_check_text_or_curbuf_locked(oap: OapHandle) -> bool;
-    fn nvim_normal_invert_horizontal_wrapper(s: NormalStateHandle);
-    fn nvim_normal_need_additional_char_wrapper(s: NormalStateHandle) -> bool;
+    fn rs_invert_horizontal(cmdchar: c_int) -> c_int;
+    fn rs_need_additional_char(idx: c_int, cmdchar: c_int, pending_op: bool) -> bool;
     fn rs_normal_get_additional_char(s: NormalStateHandle);
     fn nvim_ui_flush_wrapper();
     fn rs_start_selection();
-    fn nvim_unshift_special_wrapper(ca: CapHandle);
+    fn rs_unshift_special(cmdchar: c_int, modp: *mut c_int) -> c_int;
+    fn nvim_set_mod_mask(val: c_int);
     fn nvim_mod_mask_clear_shift();
     fn nvim_execute_nv_cmd(idx: c_int, ca: CapHandle);
 
@@ -274,11 +275,14 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
             && nvim_get_keystuffed() == 0
             && (nvim_get_nv_cmd_flags(nvim_ns_get_idx(s)) & NV_RL != 0)
         {
-            nvim_normal_invert_horizontal_wrapper(s);
+            let new_cmdchar = rs_invert_horizontal(nvim_cap_get_cmdchar(ca));
+            nvim_cap_set_cmdchar(ca, new_cmdchar);
+            nvim_ns_set_idx(s, rs_find_command(new_cmdchar));
         }
 
         // Get an additional character if we need one.
-        if nvim_normal_need_additional_char_wrapper(s) {
+        let pending_op = nvim_oap_get_op_type_ptr(nvim_ns_get_oa_ptr(s)) != OP_NOP;
+        if rs_need_additional_char(nvim_ns_get_idx(s), nvim_cap_get_cmdchar(ca), pending_op) {
             rs_normal_get_additional_char(s);
         }
 
@@ -312,8 +316,11 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
             let flags = nvim_get_nv_cmd_flags(cur_idx);
             if flags & NV_SS != 0 {
                 rs_start_selection();
-                nvim_unshift_special_wrapper(ca);
-                let new_idx = rs_find_command(nvim_cap_get_cmdchar(ca));
+                let mut mm = nvim_get_mod_mask();
+                let new_cmdchar = rs_unshift_special(nvim_cap_get_cmdchar(ca), &raw mut mm);
+                nvim_set_mod_mask(mm);
+                nvim_cap_set_cmdchar(ca, new_cmdchar);
+                let new_idx = rs_find_command(new_cmdchar);
                 debug_assert!(new_idx >= 0);
                 nvim_ns_set_idx(s, new_idx);
             } else if (flags & NV_SSS != 0) && (nvim_get_mod_mask() & MOD_MASK_SHIFT != 0) {
@@ -441,8 +448,11 @@ pub unsafe extern "C" fn rs_normal_handle_special_visual_command(s: NormalStateH
     if nvim_get_km_startsel() {
         let flags = nvim_get_nv_cmd_flags(idx);
         if flags & NV_SS != 0 {
-            nvim_unshift_special_wrapper(ca);
-            let new_idx = rs_find_command(nvim_cap_get_cmdchar(ca));
+            let mut mm = nvim_get_mod_mask();
+            let new_cmdchar = rs_unshift_special(nvim_cap_get_cmdchar(ca), &raw mut mm);
+            nvim_set_mod_mask(mm);
+            nvim_cap_set_cmdchar(ca, new_cmdchar);
+            let new_idx = rs_find_command(new_cmdchar);
             nvim_ns_set_idx(s, new_idx);
             if new_idx < 0 {
                 // Just in case

@@ -20,7 +20,6 @@ static OLD_LEFTCOL: AtomicI32 = AtomicI32::new(0);
 extern "C" {
     fn nvim_get_did_syncbind() -> bool;
     fn nvim_set_did_syncbind(val: bool);
-    fn nvim_rs_get_vtopline_curwin() -> c_int;
     fn nvim_curwin_get_p_scb() -> bool;
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_get_curbuf() -> BufHandle;
@@ -50,7 +49,7 @@ extern "C" {
 /// Caller must ensure curwin/curbuf globals are valid.
 #[no_mangle]
 pub unsafe extern "C" fn rs_do_check_scrollbind(check: bool) {
-    let vtopline = nvim_rs_get_vtopline_curwin();
+    let vtopline = crate::rs_get_vtopline(nvim_get_curwin());
 
     if check && nvim_curwin_get_p_scb() {
         let old_curwin = OLD_CURWIN.load(Ordering::Relaxed) as WinHandle;
