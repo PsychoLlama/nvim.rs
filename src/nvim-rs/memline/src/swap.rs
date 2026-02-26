@@ -56,11 +56,7 @@ extern "C" {
     /// Close memlines for unmodified buffers (buffer iteration stays in C)
     fn ml_close_notmod();
 
-    /// Sync all modified swap files
-    fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: c_int);
-
-    /// Preserve buffer (write to swap file)
-    fn ml_preserve(buf: *mut BufHandle, message: c_int, do_fsync: c_int);
+    // ml_sync_all and ml_preserve removed: now call rs_ml_sync_one / rs_ml_preserve (Phase 8)
 
     // -------------------------------------------------------------------------
     // Phase 3: Buffer lifecycle accessors
@@ -283,39 +279,8 @@ pub unsafe extern "C" fn rs_ml_timestamp(buf: *mut BufHandle) {
     }
 }
 
-/// Sync all modified swap files.
-///
-/// Writes pending changes to disk for all buffers.
-///
-/// # Arguments
-/// * `check_file` - If true, check if file changed
-/// * `check_char` - If true, check for typed character
-/// * `do_fsync` - If true, fsync the file
-///
-/// # Safety
-/// Modifies global file state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: c_int) {
-    ml_sync_all(check_file, check_char, do_fsync);
-}
-
-/// Preserve a buffer by writing all changes to the swap file.
-///
-/// Used when memory is low or when explicitly preserving.
-///
-/// # Arguments
-/// * `buf` - Buffer to preserve
-/// * `message` - If true, show a message
-/// * `do_fsync` - If true, fsync the file
-///
-/// # Safety
-/// - `buf` must be a valid buffer pointer or NULL
-#[no_mangle]
-pub unsafe extern "C" fn rs_ml_preserve(buf: *mut BufHandle, message: c_int, do_fsync: c_int) {
-    if !buf.is_null() {
-        ml_preserve(buf, message, do_fsync);
-    }
-}
+// rs_ml_sync_all removed: C ml_sync_all now iterates buffers and calls rs_ml_sync_one per buf.
+// rs_ml_preserve: now a full Rust implementation below (Phase 8 Pass 2).
 
 /// Set the memline flags for swap file state.
 ///
@@ -1744,6 +1709,183 @@ pub unsafe extern "C" fn rs_findswapname(
 
     xfree(dir_name.cast());
     fname
+}
+
+// =============================================================================
+// Phase 8 Pass 2: ml_preserve and ml_sync_one
+// =============================================================================
+
+extern "C" {
+    /// Sync memfile blocks to disk
+    fn nvim_mf_sync(mfp: *mut c_void, flags: c_int) -> c_int;
+
+    /// Check if memfile has blocks needing block number translation
+    fn nvim_mf_need_trans(mfp: *mut c_void) -> c_int;
+
+    /// Check if memfile has dirty blocks (mf_dirty == MF_DIRTY_YES)
+    fn nvim_mf_is_dirty(mfp: *mut c_void) -> c_int;
+
+    /// Check if a character is available (for stopping sync mid-loop)
+    fn nvim_os_char_avail() -> c_int;
+
+    /// Set need_check_timestamps global
+    fn nvim_set_need_check_timestamps(val: c_int);
+
+    /// Set did_check_timestamps global
+    fn nvim_set_did_check_timestamps(val: bool);
+
+    /// Check if original file changed since last read
+    fn nvim_buf_file_unchanged(buf: *mut BufHandle) -> c_int;
+
+    // nvim_buf_get_b_ffname already declared in Phase 1 extern block above.
+
+    /// Check if buffer has unsaved changes
+    fn nvim_buf_is_changed(buf: *mut BufHandle) -> c_int;
+
+    /// Set buf->b_ml.ml_stack_top
+    fn nvim_buf_set_ml_stack_top(buf: *mut BufHandle, n: c_int);
+
+    /// Get buf->b_ml.ml_line_count
+    fn nvim_buf_get_ml_line_count(buf: *mut BufHandle) -> LineNr;
+
+    /// Get buf->b_ml.ml_locked_high
+    fn nvim_buf_get_ml_locked_high(buf: *mut BufHandle) -> LineNr;
+
+    /// Flush buffered line for buffer
+    fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
+
+    /// Find or flush line in B-tree
+    fn rs_ml_find_line(buf: *mut BufHandle, lnum: LineNr, action: c_int) -> *mut c_void;
+
+    /// Emit "File preserved" message
+    fn nvim_msg_file_preserved();
+
+    /// Emit E314 "Preserve failed" error
+    fn nvim_emsg_preserve_failed();
+
+    /// Emit E313 "Cannot preserve, there is no swap file" error
+    fn nvim_emsg_no_swapfile();
+
+    /// Get got_int global
+    fn nvim_get_got_int() -> c_int;
+}
+
+use crate::types::{LineNr, MFS_ALL, MFS_FLUSH, MFS_STOP, ML_FIND, ML_FLUSH};
+
+/// Sync one buffer's memline, including negative blocks.
+///
+/// Called from the `ml_sync_all` C loop (which uses `FOR_ALL_BUFFERS`).
+/// Returns 1 if the loop should break (character available), 0 to continue.
+///
+/// # Safety
+/// Calls into C via FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_sync_one(
+    buf: *mut BufHandle,
+    check_file: c_int,
+    check_char: c_int,
+    do_fsync: bool,
+) -> c_int {
+    let mfp = nvim_buf_get_ml_mfp(buf);
+    if mfp.is_null() {
+        return 0;
+    }
+    let mfp_fname = nvim_buf_get_ml_mfp_fname(buf);
+    if mfp_fname.is_null() {
+        return 0;
+    }
+
+    rs_ml_flush_line(buf, 0); // flush buffered line
+    rs_ml_find_line(buf, 0, ML_FLUSH); // flush locked block
+
+    if nvim_buf_is_changed(buf) != 0
+        && check_file != 0
+        && nvim_mf_need_trans(mfp) != 0
+        && !nvim_buf_get_b_ffname(buf).is_null()
+        && nvim_buf_file_unchanged(buf) != 0
+    {
+        // Original file no longer matches; preserve to translate negative blocks.
+        rs_ml_preserve(buf, false, do_fsync);
+        nvim_set_did_check_timestamps(false);
+        nvim_set_need_check_timestamps(1); // give message later
+    }
+
+    if nvim_mf_is_dirty(mfp) != 0 {
+        let flags = (if check_char != 0 { MFS_STOP } else { 0 })
+            | (if do_fsync && nvim_buf_is_changed(buf) != 0 {
+                MFS_FLUSH
+            } else {
+                0
+            });
+        mf_sync(mfp, flags);
+        if check_char != 0 && nvim_os_char_avail() != 0 {
+            return 1; // character available now, stop loop
+        }
+    }
+    0
+}
+
+/// Write all blocks of buffer's memline to the swap file.
+///
+/// After this call all blocks are in the swap file.
+/// Used for the `:preserve` command and when the original file has changed.
+///
+/// # Safety
+/// Calls into C via FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_preserve(buf: *mut BufHandle, message: bool, do_fsync: bool) {
+    let mfp = nvim_buf_get_ml_mfp(buf);
+    if mfp.is_null() || nvim_buf_get_ml_mfp_fname(buf).is_null() {
+        if message {
+            nvim_emsg_no_swapfile();
+        }
+        return;
+    }
+
+    // We only want to stop when interrupted here, not when interrupted before.
+    let got_int_save = nvim_get_got_int();
+    nvim_set_got_int(0);
+
+    rs_ml_flush_line(buf, 0); // flush buffered line
+    rs_ml_find_line(buf, 0, ML_FLUSH); // flush locked block
+    let sync_flags = MFS_ALL | (if do_fsync { MFS_FLUSH } else { 0 });
+    let mut status = nvim_mf_sync(mfp, sync_flags);
+
+    // stack is invalid after mf_sync(.., MFS_ALL)
+    nvim_buf_set_ml_stack_top(buf, 0);
+
+    // Some data blocks may have changed from negative to positive block numbers.
+    // In that case the pointer blocks need to be updated.
+    // ml_find_line() does the work by translating negative block numbers when
+    // getting the first line of each data block.
+    if nvim_mf_need_trans(mfp) != 0 && nvim_get_got_int() == 0 {
+        let mut lnum: LineNr = 1;
+        while nvim_mf_need_trans(mfp) != 0 && lnum <= nvim_buf_get_ml_line_count(buf) {
+            let hp = rs_ml_find_line(buf, lnum, ML_FIND);
+            if hp.is_null() {
+                status = crate::types::FAIL;
+                break;
+            }
+            lnum = nvim_buf_get_ml_locked_high(buf) + 1;
+        }
+        rs_ml_find_line(buf, 0, ML_FLUSH); // flush locked block
+                                           // sync the updated pointer blocks
+        if nvim_mf_sync(mfp, sync_flags) == crate::types::FAIL {
+            status = crate::types::FAIL;
+        }
+        nvim_buf_set_ml_stack_top(buf, 0); // stack is invalid now
+    }
+
+    // Restore got_int (OR with saved value so prior interrupt is not lost)
+    nvim_set_got_int(nvim_get_got_int() | got_int_save);
+
+    if message {
+        if status == crate::types::OK {
+            nvim_msg_file_preserved();
+        } else {
+            nvim_emsg_preserve_failed();
+        }
+    }
 }
 
 #[cfg(test)]

@@ -305,6 +305,9 @@ extern int rs_ml_append_int(buf_T *buf, linenr_T lnum, char *line, colnr_T len, 
 // Pass 8 Phase 1: findswapname Rust function declaration
 extern char *rs_findswapname(buf_T *buf, char **dirp, const char *old_fname,
                               bool *found_existing_dir);
+// Pass 8 Phase 2: ml_preserve and ml_sync_one Rust function declarations
+extern void rs_ml_preserve(buf_T *buf, bool message, bool do_fsync);
+extern int rs_ml_sync_one(buf_T *buf, int check_file, int check_char, bool do_fsync);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1150,48 +1153,19 @@ void swapfile_dict(const char *fname, dict_T *d)
 // recov_file_names migrated to Rust (recovery.rs)
 // proc_running static, swapfile_info wrapper migrated to Rust (swap.rs Phase 8)
 
-/// sync all memlines
-///
-/// @param check_file  if true, check if original file exists and was not changed.
-/// @param check_char  if true, stop syncing when character becomes available, but
-///
-/// always sync at least one block.
+/// sync all memlines (thin wrapper; per-buffer logic in Rust rs_ml_sync_one)
 void ml_sync_all(int check_file, int check_char, bool do_fsync)
 {
   FOR_ALL_BUFFERS(buf) {
-    if (buf->b_ml.ml_mfp == NULL || buf->b_ml.ml_mfp->mf_fname == NULL) {
-      continue;                             // no file
-    }
-    ml_flush_line(buf, false);              // flush buffered line
-                                            // flush locked block
-    ml_find_line(buf, 0, ML_FLUSH);
-    if (bufIsChanged(buf) && check_file && mf_need_trans(buf->b_ml.ml_mfp)
-        && buf->b_ffname != NULL) {
-      // If the original file does not exist anymore or has been changed
-      // call ml_preserve() to get rid of all negative numbered blocks.
-      FileInfo file_info;
-      if (!os_fileinfo(buf->b_ffname, &file_info)
-          || file_info.stat.st_mtim.tv_sec != buf->b_mtime_read
-          || file_info.stat.st_mtim.tv_nsec != buf->b_mtime_read_ns
-          || os_fileinfo_size(&file_info) != buf->b_orig_size) {
-        ml_preserve(buf, false, do_fsync);
-        did_check_timestamps = false;
-        need_check_timestamps = true;           // give message later
-      }
-    }
-    if (buf->b_ml.ml_mfp->mf_dirty == MF_DIRTY_YES) {
-      mf_sync(buf->b_ml.ml_mfp, (check_char ? MFS_STOP : 0)
-              | (do_fsync && bufIsChanged(buf) ? MFS_FLUSH : 0));
-      if (check_char && os_char_avail()) {      // character available now
-        break;
-      }
+    if (rs_ml_sync_one(buf, check_file, check_char, do_fsync)) {
+      break;
     }
   }
 }
 
 /// sync one buffer, including negative blocks
 ///
-/// after this all the blocks are in the swapfile
+/// after this all the blocks are in the swapfile (thin wrapper calling Rust)
 ///
 /// Used for the :preserve command and when the original file has been
 /// changed or deleted.
@@ -1199,65 +1173,7 @@ void ml_sync_all(int check_file, int check_char, bool do_fsync)
 /// @param message  if true, the success of preserving is reported.
 void ml_preserve(buf_T *buf, bool message, bool do_fsync)
 {
-  memfile_T *mfp = buf->b_ml.ml_mfp;
-  int got_int_save = got_int;
-
-  if (mfp == NULL || mfp->mf_fname == NULL) {
-    if (message) {
-      emsg(_("E313: Cannot preserve, there is no swap file"));
-    }
-    return;
-  }
-
-  // We only want to stop when interrupted here, not when interrupted
-  // before.
-  got_int = false;
-
-  ml_flush_line(buf, false);        // flush buffered line
-  ml_find_line(buf, 0, ML_FLUSH);   // flush locked block
-  int status = mf_sync(mfp, MFS_ALL | (do_fsync ? MFS_FLUSH : 0));
-
-  // stack is invalid after mf_sync(.., MFS_ALL)
-  buf->b_ml.ml_stack_top = 0;
-
-  // Some of the data blocks may have been changed from negative to
-  // positive block number. In that case the pointer blocks need to be
-  // updated.
-  //
-  // We don't know in which pointer block the references are, so we visit
-  // all data blocks until there are no more translations to be done (or
-  // we hit the end of the file, which can only happen in case a write fails,
-  // e.g. when file system if full).
-  // ml_find_line() does the work by translating the negative block numbers
-  // when getting the first line of each data block.
-  if (mf_need_trans(mfp) && !got_int) {
-    linenr_T lnum = 1;
-    while (mf_need_trans(mfp) && lnum <= buf->b_ml.ml_line_count) {
-      bhdr_T *hp = ml_find_line(buf, lnum, ML_FIND);
-      if (hp == NULL) {
-        status = FAIL;
-        goto theend;
-      }
-      CHECK(buf->b_ml.ml_locked_low != lnum, "low != lnum");
-      lnum = buf->b_ml.ml_locked_high + 1;
-    }
-    ml_find_line(buf, 0, ML_FLUSH);  // flush locked block
-    // sync the updated pointer blocks
-    if (mf_sync(mfp, MFS_ALL | (do_fsync ? MFS_FLUSH : 0)) == FAIL) {
-      status = FAIL;
-    }
-    buf->b_ml.ml_stack_top = 0;  // stack is invalid now
-  }
-theend:
-  got_int |= got_int_save;
-
-  if (message) {
-    if (status == OK) {
-      msg(_("File preserved"), 0);
-    } else {
-      emsg(_("E314: Preserve failed"));
-    }
-  }
+  rs_ml_preserve(buf, message, do_fsync);
 }
 
 // NOTE: The pointer returned by the ml_get_*() functions only remains valid
@@ -2082,6 +1998,49 @@ void nvim_msg_puts_newline(void) { msg_puts("\n"); }
 
 /// os_strerror wrapper (os_strerror is a macro, cannot be referenced directly from Rust)
 const char *nvim_os_strerror(int err) { return os_strerror(err); }
+
+// Pass 8 Phase 2: ml_preserve and ml_sync_all accessors for Rust FFI
+
+/// Sync memfile blocks to disk
+int nvim_mf_sync(memfile_T *mfp, int flags) { return mf_sync(mfp, flags); }
+
+/// Check if memfile has blocks needing block number translation
+int nvim_mf_need_trans(memfile_T *mfp) { return mf_need_trans(mfp); }
+
+/// Check if memfile has dirty blocks (mf_dirty == MF_DIRTY_YES)
+int nvim_mf_is_dirty(memfile_T *mfp) { return mfp->mf_dirty == MF_DIRTY_YES ? 1 : 0; }
+
+/// Check if a character is available (for stopping sync mid-loop)
+int nvim_os_char_avail(void) { return os_char_avail() ? 1 : 0; }
+
+/// Set need_check_timestamps global
+void nvim_set_need_check_timestamps(int val) { need_check_timestamps = val != 0; }
+
+/// Check if original file changed since last read (mtime, mtime_ns, size comparison).
+/// Returns 1 if the file has changed or doesn't exist, 0 if unchanged.
+int nvim_buf_file_unchanged(buf_T *buf)
+{
+  if (buf->b_ffname == NULL) {
+    return 0;
+  }
+  FileInfo file_info;
+  if (!os_fileinfo(buf->b_ffname, &file_info)
+      || file_info.stat.st_mtim.tv_sec != buf->b_mtime_read
+      || file_info.stat.st_mtim.tv_nsec != buf->b_mtime_read_ns
+      || os_fileinfo_size(&file_info) != buf->b_orig_size) {
+    return 1;
+  }
+  return 0;
+}
+
+/// Emit "File preserved" message
+void nvim_msg_file_preserved(void) { msg(_("File preserved"), 0); }
+
+/// Emit E314 "Preserve failed" error
+void nvim_emsg_preserve_failed(void) { emsg(_("E314: Preserve failed")); }
+
+/// Emit E313 "Cannot preserve, there is no swap file" error
+void nvim_emsg_no_swapfile(void) { emsg(_("E313: Cannot preserve, there is no swap file")); }
 
 /// Thin wrapper: ml_append_int migrated to Rust (rs_ml_append_int).
 static int ml_append_int(buf_T *buf, linenr_T lnum, char *line_arg, colnr_T len_arg, int flags)
