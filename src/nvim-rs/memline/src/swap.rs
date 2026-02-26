@@ -35,18 +35,6 @@ extern "C" {
     fn nvim_buf_has_ml_mfp(buf: *mut BufHandle) -> c_int;
 
     // -------------------------------------------------------------------------
-    // Swap File Operations (C implementations -- to be migrated)
-    // -------------------------------------------------------------------------
-
-    /// Close all memlines (buffer iteration stays in C via FOR_ALL_BUFFERS)
-    fn ml_close_all(del_file: c_int);
-
-    /// Close memlines for unmodified buffers (buffer iteration stays in C)
-    fn ml_close_notmod();
-
-    // ml_sync_all and ml_preserve removed: now call rs_ml_sync_one / rs_ml_preserve (Phase 8)
-
-    // -------------------------------------------------------------------------
     // Phase 3: Buffer lifecycle accessors
     // -------------------------------------------------------------------------
 
@@ -508,27 +496,43 @@ pub unsafe extern "C" fn rs_ml_close(buf: *mut BufHandle, del_file: c_int) {
 
 /// Close all existing memlines and memfiles.
 ///
-/// Only used when exiting Neovim. Buffer iteration stays in C (FOR_ALL_BUFFERS).
+/// Only used when exiting Neovim. Iterates all buffers and calls rs_ml_close.
+/// After iteration, deletes the internal spell word list and temp directory.
 ///
 /// # Arguments
-/// * `del_file` - If true, delete the swap files
+/// * `del_file` - If non-zero, delete the swap files
 ///
 /// # Safety
 /// Modifies global state, only call during exit.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_close_all(del_file: c_int) {
-    ml_close_all(del_file);
+    let mut buf = nvim_get_firstbuf();
+    while !buf.is_null() {
+        let next = nvim_buf_get_next(buf);
+        rs_ml_close(buf, del_file);
+        buf = next;
+    }
+    spell_delete_wordlist();
+    vim_deltempdir();
 }
 
 /// Close all memlines for unmodified buffers.
 ///
-/// Only use just before exiting. Buffer iteration stays in C (FOR_ALL_BUFFERS).
+/// Only use just before exiting. Iterates all buffers; closes those that are
+/// not modified.
 ///
 /// # Safety
 /// Modifies global state, only call during exit.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_close_notmod() {
-    ml_close_notmod();
+    let mut buf = nvim_get_firstbuf();
+    while !buf.is_null() {
+        let next = nvim_buf_get_next(buf);
+        if nvim_buf_is_changed(buf) == 0 {
+            rs_ml_close(buf, 1); // close all not-modified buffers, del_file=true
+        }
+        buf = next;
+    }
 }
 
 // =============================================================================
@@ -549,7 +553,26 @@ pub unsafe extern "C" fn rs_ml_timestamp(buf: *mut BufHandle) {
     }
 }
 
-// rs_ml_sync_all removed: C ml_sync_all now iterates buffers and calls rs_ml_sync_one per buf.
+/// Sync all memlines, flushing dirty blocks to disk.
+///
+/// Iterates all buffers and calls rs_ml_sync_one for each. Stops early if
+/// rs_ml_sync_one returns non-zero (character available or interrupt).
+///
+/// Called from idle timer and signal handlers (SIGPWR, SIGUSR1).
+///
+/// # Safety
+/// Calls into C via FFI. Must be signal-handler safe.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
+    let mut buf = nvim_get_firstbuf();
+    while !buf.is_null() {
+        if rs_ml_sync_one(buf, check_file, check_char, do_fsync) != 0 {
+            break;
+        }
+        buf = nvim_buf_get_next(buf);
+    }
+}
+
 // rs_ml_preserve: now a full Rust implementation below (Phase 8 Pass 2).
 
 /// Set the memline flags for swap file state.
@@ -763,6 +786,18 @@ extern "C" {
 
     /// nvim_buf_set_ml_flags: set buf->b_ml.ml_flags
     fn nvim_buf_set_ml_flags(buf: *mut BufHandle, flags: c_int);
+}
+
+// =============================================================================
+// Phase 9-4: ml_close_all, ml_close_notmod, ml_sync_all extern declarations
+// =============================================================================
+
+extern "C" {
+    /// spell_delete_wordlist: delete the internal spell word list
+    fn spell_delete_wordlist();
+
+    /// vim_deltempdir: delete temp directory created by Neovim
+    fn vim_deltempdir();
 }
 
 // =============================================================================

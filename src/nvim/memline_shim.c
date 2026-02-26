@@ -315,6 +315,10 @@ extern void rs_ml_open_files(void);
 extern void rs_ml_setname(buf_T *buf);
 // Pass 9 Phase 3: ml_open Rust function declaration
 extern int rs_ml_open(buf_T *buf);
+// Pass 9 Phase 4: buffer-iteration wrappers Rust function declarations
+extern void rs_ml_close_all(int del_file);
+extern void rs_ml_close_notmod(void);
+extern void rs_ml_sync_all(int check_file, int check_char, bool do_fsync);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -370,29 +374,15 @@ void check_need_swap(bool newfile) { rs_check_need_swap(newfile); }
 /// @param del_file  if true, delete the swapfile
 void ml_close(buf_T *buf, int del_file) { rs_ml_close(buf, del_file); }
 
-/// Close all existing memlines and memfiles.
+/// Close all existing memlines and memfiles. (thin wrapper calling Rust)
 /// Only used when exiting.
 ///
 /// @param del_file  if true, delete the memfiles.
-void ml_close_all(bool del_file)
-{
-  FOR_ALL_BUFFERS(buf) {
-    ml_close(buf, del_file);
-  }
-  spell_delete_wordlist();      // delete the internal wordlist
-  vim_deltempdir();             // delete created temp directory
-}
+void ml_close_all(bool del_file) { rs_ml_close_all((int)del_file); }
 
-/// Close all memfiles for not modified buffers.
+/// Close all memfiles for not modified buffers. (thin wrapper calling Rust)
 /// Only use just before exiting!
-void ml_close_notmod(void)
-{
-  FOR_ALL_BUFFERS(buf) {
-    if (!bufIsChanged(buf)) {
-      ml_close(buf, true);          // close all not-modified buffers
-    }
-  }
-}
+void ml_close_notmod(void) { rs_ml_close_notmod(); }
 
 /// Update the timestamp in the .swp file (thin wrapper calling Rust).
 /// Used when the file has been written.
@@ -914,14 +904,10 @@ void swapfile_dict(const char *fname, dict_T *d)
 // recov_file_names migrated to Rust (recovery.rs)
 // proc_running static, swapfile_info wrapper migrated to Rust (swap.rs Phase 8)
 
-/// sync all memlines (thin wrapper; per-buffer logic in Rust rs_ml_sync_one)
+/// sync all memlines (thin wrapper calling Rust)
 void ml_sync_all(int check_file, int check_char, bool do_fsync)
 {
-  FOR_ALL_BUFFERS(buf) {
-    if (rs_ml_sync_one(buf, check_file, check_char, do_fsync)) {
-      break;
-    }
-  }
+  rs_ml_sync_all(check_file, check_char, do_fsync);
 }
 
 /// sync one buffer, including negative blocks
