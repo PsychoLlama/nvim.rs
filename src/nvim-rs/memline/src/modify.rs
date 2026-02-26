@@ -378,9 +378,6 @@ extern "C" {
     /// Increment buf->flush_count
     fn nvim_buf_inc_flush_count(buf: *mut BufHandle);
 
-    /// Update chunk tracking for a line modification
-    fn nvim_ml_updatechunk(buf: *mut BufHandle, line: LineNr, len: c_int, updtype: c_int);
-
     /// Print "E320: Cannot find line N" error
     fn nvim_siemsg_e320_cannot_find_line(lnum: i64);
 
@@ -958,7 +955,7 @@ pub unsafe extern "C" fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int) {
 
                 // Update chunk tracking if size changed
                 if extra != 0 {
-                    nvim_ml_updatechunk(buf, lnum, extra as c_int, ML_CHNK_UPDLINE);
+                    crate::chunk::rs_ml_updatechunk(buf, lnum, extra as c_int, ML_CHNK_UPDLINE);
                 }
             } else {
                 // Cannot fit in one data block: Delete and append.
@@ -1882,7 +1879,7 @@ pub unsafe extern "C" fn rs_ml_delete_int(
         ret = OK;
     }
 
-    nvim_ml_updatechunk(buf, lnum, line_size as c_int, ML_CHNK_DELLINE);
+    crate::chunk::rs_ml_updatechunk(buf, lnum, line_size as c_int, ML_CHNK_DELLINE);
 
     ret
 }

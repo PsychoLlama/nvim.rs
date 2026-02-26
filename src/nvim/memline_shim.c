@@ -1646,10 +1646,12 @@ void nvim_siemsg_line_count_wrong_in_block(int64_t bnum)
 /// Increment buf->flush_count
 void nvim_buf_inc_flush_count(buf_T *buf) { buf->flush_count++; }
 
-/// Public wrapper around static ml_updatechunk, for Rust FFI.
+extern void rs_ml_updatechunk(buf_T *buf, linenr_T line, int len, int updtype);
+
+/// Public wrapper: calls Rust rs_ml_updatechunk (ml_updatechunk migrated to Rust).
 void nvim_ml_updatechunk(buf_T *buf, linenr_T line, int len, int updtype)
 {
-  ml_updatechunk(buf, line, len, updtype);
+  rs_ml_updatechunk(buf, line, len, updtype);
 }
 
 // Pass 6 Phase 1: ml_delete_int accessors for Rust FFI
@@ -1684,6 +1686,69 @@ void nvim_pp_pe_memmove(void *pp, int dst_idx, int src_idx, int count)
   PointerBlock *pb = (PointerBlock *)pp;
   memmove(&pb->pb_pointer[dst_idx], &pb->pb_pointer[src_idx],
           (size_t)count * sizeof(PointerEntry));
+}
+
+// Pass 6 Phase 2: ml_updatechunk accessors for Rust FFI
+
+/// Set buf->b_ml.ml_chunksize[idx].mlcs_numlines
+void nvim_buf_set_ml_chunksize_numlines(buf_T *buf, int idx, int val)
+{
+  buf->b_ml.ml_chunksize[idx].mlcs_numlines = val;
+}
+
+/// Set buf->b_ml.ml_chunksize[idx].mlcs_totalsize
+void nvim_buf_set_ml_chunksize_totalsize(buf_T *buf, int idx, int val)
+{
+  buf->b_ml.ml_chunksize[idx].mlcs_totalsize = val;
+}
+
+/// Add val to buf->b_ml.ml_chunksize[idx].mlcs_numlines
+void nvim_buf_add_ml_chunksize_numlines(buf_T *buf, int idx, int val)
+{
+  buf->b_ml.ml_chunksize[idx].mlcs_numlines += val;
+}
+
+/// Add val to buf->b_ml.ml_chunksize[idx].mlcs_totalsize
+void nvim_buf_add_ml_chunksize_totalsize(buf_T *buf, int idx, int val)
+{
+  buf->b_ml.ml_chunksize[idx].mlcs_totalsize += val;
+}
+
+/// Get buf->b_ml.ml_numchunks
+int nvim_buf_get_ml_numchunks(buf_T *buf) { return buf->b_ml.ml_numchunks; }
+
+/// Set buf->b_ml.ml_numchunks
+void nvim_buf_set_ml_numchunks(buf_T *buf, int val) { buf->b_ml.ml_numchunks = val; }
+
+/// Set buf->b_ml.ml_usedchunks
+void nvim_buf_set_ml_usedchunks(buf_T *buf, int val) { buf->b_ml.ml_usedchunks = val; }
+
+/// memmove within ml_chunksize: move count entries from src_idx to dst_idx.
+void nvim_buf_ml_chunksize_memmove(buf_T *buf, int dst_idx, int src_idx, int count)
+{
+  memmove(buf->b_ml.ml_chunksize + dst_idx,
+          buf->b_ml.ml_chunksize + src_idx,
+          (size_t)count * sizeof(chunksize_T));
+}
+
+/// Ensure capacity for usedchunks+1: grow ml_chunksize array by 3/2 if needed.
+void nvim_buf_ml_chunksize_ensure_capacity(buf_T *buf)
+{
+  if (buf->b_ml.ml_usedchunks + 1 >= buf->b_ml.ml_numchunks) {
+    buf->b_ml.ml_numchunks = buf->b_ml.ml_numchunks * 3 / 2;
+    buf->b_ml.ml_chunksize = xrealloc(buf->b_ml.ml_chunksize,
+                                      sizeof(chunksize_T) * (size_t)buf->b_ml.ml_numchunks);
+  }
+}
+
+/// Allocate initial ml_chunksize array (100 entries) and set first entry to (1, 1).
+void nvim_buf_ml_chunksize_init(buf_T *buf)
+{
+  buf->b_ml.ml_chunksize = xmalloc(sizeof(chunksize_T) * 100);
+  buf->b_ml.ml_numchunks = 100;
+  buf->b_ml.ml_usedchunks = 1;
+  buf->b_ml.ml_chunksize[0].mlcs_numlines = 1;
+  buf->b_ml.ml_chunksize[0].mlcs_totalsize = 1;
 }
 
 /// Print "E320: Cannot find line N" error for ml_flush_line.
@@ -2846,193 +2911,10 @@ static char *findswapname(buf_T *buf, char **dirp, char *old_fname, bool *found_
 /// Set the flags in the first block of the swapfile. (thin wrapper calling Rust)
 void ml_setflags(buf_T *buf) { rs_ml_setflags(buf); }
 
-enum {
-  MLCS_MAXL = 800,  // max no of lines in chunk
-  MLCS_MINL = 400,  // should be half of MLCS_MAXL
-};
-
-/// Keep information for finding byte offset of a line
-///
-/// @param updtype  may be one of:
-///                 ML_CHNK_ADDLINE: Add len to parent chunk, possibly splitting it
-///                         Careful: ML_CHNK_ADDLINE may cause ml_find_line() to be called.
-///                 ML_CHNK_DELLINE: Subtract len from parent chunk, possibly deleting it
-///                 ML_CHNK_UPDLINE: Add len to parent chunk, as a signed entity.
+/// Keep information for finding byte offset of a line (thin wrapper calling Rust).
 static void ml_updatechunk(buf_T *buf, linenr_T line, int len, int updtype)
 {
-  static buf_T *ml_upd_lastbuf = NULL;
-  static linenr_T ml_upd_lastline;
-  static linenr_T ml_upd_lastcurline;
-  static int ml_upd_lastcurix;
-
-  linenr_T curline = ml_upd_lastcurline;
-  int curix = ml_upd_lastcurix;
-  bhdr_T *hp;
-
-  if (buf->b_ml.ml_usedchunks == -1 || len == 0) {
-    return;
-  }
-  if (buf->b_ml.ml_chunksize == NULL) {
-    buf->b_ml.ml_chunksize = xmalloc(sizeof(chunksize_T) * 100);
-    buf->b_ml.ml_numchunks = 100;
-    buf->b_ml.ml_usedchunks = 1;
-    buf->b_ml.ml_chunksize[0].mlcs_numlines = 1;
-    buf->b_ml.ml_chunksize[0].mlcs_totalsize = 1;
-  }
-
-  if (updtype == ML_CHNK_UPDLINE && buf->b_ml.ml_line_count == 1) {
-    // First line in empty buffer from ml_flush_line() -- reset
-    buf->b_ml.ml_usedchunks = 1;
-    buf->b_ml.ml_chunksize[0].mlcs_numlines = 1;
-    buf->b_ml.ml_chunksize[0].mlcs_totalsize = buf->b_ml.ml_line_len;
-    return;
-  }
-
-  // Find chunk that our line belongs to, curline will be at start of the
-  // chunk.
-  if (buf != ml_upd_lastbuf || line != ml_upd_lastline + 1
-      || updtype != ML_CHNK_ADDLINE) {
-    for (curline = 1, curix = 0;
-         curix < buf->b_ml.ml_usedchunks - 1
-         && line >= curline +
-         buf->b_ml.ml_chunksize[curix].mlcs_numlines;
-         curix++) {
-      curline += buf->b_ml.ml_chunksize[curix].mlcs_numlines;
-    }
-  } else if (curix < buf->b_ml.ml_usedchunks - 1
-             && line >= curline + buf->b_ml.ml_chunksize[curix].mlcs_numlines) {
-    // Adjust cached curix & curline
-    curline += buf->b_ml.ml_chunksize[curix].mlcs_numlines;
-    curix++;
-  }
-  chunksize_T *curchnk = buf->b_ml.ml_chunksize + curix;
-
-  if (updtype == ML_CHNK_DELLINE) {
-    len = -len;
-  }
-  curchnk->mlcs_totalsize += len;
-  if (updtype == ML_CHNK_ADDLINE) {
-    int rest;
-    DataBlock *dp;
-    curchnk->mlcs_numlines++;
-
-    // May resize here so we don't have to do it in both cases below
-    if (buf->b_ml.ml_usedchunks + 1 >= buf->b_ml.ml_numchunks) {
-      buf->b_ml.ml_numchunks = buf->b_ml.ml_numchunks * 3 / 2;
-      buf->b_ml.ml_chunksize = xrealloc(buf->b_ml.ml_chunksize,
-                                        sizeof(chunksize_T) * (size_t)buf->b_ml.ml_numchunks);
-    }
-
-    if (buf->b_ml.ml_chunksize[curix].mlcs_numlines >= MLCS_MAXL) {
-      int end_idx;
-      int text_end;
-
-      memmove(buf->b_ml.ml_chunksize + curix + 1,
-              buf->b_ml.ml_chunksize + curix,
-              (size_t)(buf->b_ml.ml_usedchunks - curix) * sizeof(chunksize_T));
-      // Compute length of first half of lines in the split chunk
-      int size = 0;
-      int linecnt = 0;
-      while (curline < buf->b_ml.ml_line_count
-             && linecnt < MLCS_MINL) {
-        if ((hp = ml_find_line(buf, curline, ML_FIND)) == NULL) {
-          buf->b_ml.ml_usedchunks = -1;
-          return;
-        }
-        dp = hp->bh_data;
-        int count
-          = buf->b_ml.ml_locked_high - buf->b_ml.ml_locked_low + 1;  // number of entries in block
-        int idx = curline - buf->b_ml.ml_locked_low;
-        curline = buf->b_ml.ml_locked_high + 1;
-        // compute index of last line to use in this MEMLINE
-        rest = count - idx;
-        if (linecnt + rest > MLCS_MINL) {
-          end_idx = idx + MLCS_MINL - linecnt - 1;
-          linecnt = MLCS_MINL;
-        } else {
-          end_idx = count - 1;
-          linecnt += rest;
-        }
-        if (idx == 0) {  // first line in block, text at the end
-          text_end = (int)dp->db_txt_end;
-        } else {
-          text_end = ((dp->db_index[idx - 1]) & DB_INDEX_MASK);
-        }
-        size += text_end - (int)((dp->db_index[end_idx]) & DB_INDEX_MASK);
-      }
-      buf->b_ml.ml_chunksize[curix].mlcs_numlines = linecnt;
-      buf->b_ml.ml_chunksize[curix + 1].mlcs_numlines -= linecnt;
-      buf->b_ml.ml_chunksize[curix].mlcs_totalsize = size;
-      buf->b_ml.ml_chunksize[curix + 1].mlcs_totalsize -= size;
-      buf->b_ml.ml_usedchunks++;
-      ml_upd_lastbuf = NULL;         // Force recalc of curix & curline
-      return;
-    } else if (buf->b_ml.ml_chunksize[curix].mlcs_numlines >= MLCS_MINL
-               && curix == buf->b_ml.ml_usedchunks - 1
-               && buf->b_ml.ml_line_count - line <= 1) {
-      // We are in the last chunk and it is cheap to create a new one
-      // after this. Do it now to avoid the loop above later on
-      curchnk = buf->b_ml.ml_chunksize + curix + 1;
-      buf->b_ml.ml_usedchunks++;
-      if (line == buf->b_ml.ml_line_count) {
-        curchnk->mlcs_numlines = 0;
-        curchnk->mlcs_totalsize = 0;
-      } else {
-        // Line is just prior to last, move count for last
-        // This is the common case  when loading a new file
-        hp = ml_find_line(buf, buf->b_ml.ml_line_count, ML_FIND);
-        if (hp == NULL) {
-          buf->b_ml.ml_usedchunks = -1;
-          return;
-        }
-        dp = hp->bh_data;
-        if (dp->db_line_count == 1) {
-          rest = (int)(dp->db_txt_end - dp->db_txt_start);
-        } else {
-          rest = (int)((dp->db_index[dp->db_line_count - 2]) & DB_INDEX_MASK)
-                 - (int)dp->db_txt_start;
-        }
-        curchnk->mlcs_totalsize = rest;
-        curchnk->mlcs_numlines = 1;
-        curchnk[-1].mlcs_totalsize -= rest;
-        curchnk[-1].mlcs_numlines -= 1;
-      }
-    }
-  } else if (updtype == ML_CHNK_DELLINE) {
-    curchnk->mlcs_numlines--;
-    ml_upd_lastbuf = NULL;       // Force recalc of curix & curline
-    if (curix < (buf->b_ml.ml_usedchunks - 1)
-        && (curchnk->mlcs_numlines + curchnk[1].mlcs_numlines)
-        <= MLCS_MINL) {
-      curix++;
-      curchnk = buf->b_ml.ml_chunksize + curix;
-    } else if (curix == 0 && curchnk->mlcs_numlines <= 0) {
-      buf->b_ml.ml_usedchunks--;
-      memmove(buf->b_ml.ml_chunksize, buf->b_ml.ml_chunksize + 1,
-              (size_t)buf->b_ml.ml_usedchunks * sizeof(chunksize_T));
-      return;
-    } else if (curix == 0 || (curchnk->mlcs_numlines > 10
-                              && (curchnk->mlcs_numlines +
-                                  curchnk[-1].mlcs_numlines)
-                              > MLCS_MINL)) {
-      return;
-    }
-
-    // Collapse chunks
-    curchnk[-1].mlcs_numlines += curchnk->mlcs_numlines;
-    curchnk[-1].mlcs_totalsize += curchnk->mlcs_totalsize;
-    buf->b_ml.ml_usedchunks--;
-    if (curix < buf->b_ml.ml_usedchunks) {
-      memmove(buf->b_ml.ml_chunksize + curix,
-              buf->b_ml.ml_chunksize + curix + 1,
-              (size_t)(buf->b_ml.ml_usedchunks - curix) * sizeof(chunksize_T));
-    }
-    return;
-  }
-  ml_upd_lastbuf = buf;
-  ml_upd_lastline = line;
-  ml_upd_lastcurline = curline;
-  ml_upd_lastcurix = curix;
+  rs_ml_updatechunk(buf, line, len, updtype);
 }
 
 // ml_find_line_or_offset and goto_byte migrated to Rust (navigate.rs)

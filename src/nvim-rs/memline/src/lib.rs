@@ -51,6 +51,7 @@
 #![allow(unsafe_code)]
 
 pub mod access;
+pub mod chunk;
 pub mod modify;
 pub mod navigate;
 pub mod recovery;
@@ -59,6 +60,7 @@ pub mod types;
 
 // Re-export all public items for FFI
 pub use access::*;
+pub use chunk::*;
 pub use modify::*;
 pub use navigate::*;
 pub use recovery::*;
