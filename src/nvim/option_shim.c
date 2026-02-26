@@ -2501,46 +2501,6 @@ void set_option_sctx(OptIndex opt_idx, int opt_flags, sctx_T script_ctx)
   rs_set_option_sctx(opt_idx, opt_flags, script_ctx);
 }
 
-/// Apply the OptionSet autocommand.
-static void apply_optionset_autocmd(OptIndex opt_idx, int opt_flags, OptVal oldval, OptVal oldval_g,
-                                    OptVal oldval_l, OptVal newval, const char *errmsg)
-{
-  // Don't do this while starting up, failure or recursively.
-  if (starting || errmsg != NULL || *get_vim_var_str(VV_OPTION_TYPE) != NUL) {
-    return;
-  }
-
-  char buf_type[7];
-  typval_T oldval_tv = optval_as_tv(oldval, false);
-  typval_T oldval_g_tv = optval_as_tv(oldval_g, false);
-  typval_T oldval_l_tv = optval_as_tv(oldval_l, false);
-  typval_T newval_tv = optval_as_tv(newval, false);
-
-  vim_snprintf(buf_type, sizeof(buf_type), "%s", (opt_flags & OPT_LOCAL) ? "local" : "global");
-  set_vim_var_tv(VV_OPTION_NEW, &newval_tv);
-  set_vim_var_tv(VV_OPTION_OLD, &oldval_tv);
-  set_vim_var_string(VV_OPTION_TYPE, buf_type, -1);
-  if (opt_flags & OPT_LOCAL) {
-    set_vim_var_string(VV_OPTION_COMMAND, "setlocal", -1);
-    set_vim_var_tv(VV_OPTION_OLDLOCAL, &oldval_tv);
-  }
-  if (opt_flags & OPT_GLOBAL) {
-    set_vim_var_string(VV_OPTION_COMMAND, "setglobal", -1);
-    set_vim_var_tv(VV_OPTION_OLDGLOBAL, &oldval_tv);
-  }
-  if ((opt_flags & (OPT_LOCAL | OPT_GLOBAL)) == 0) {
-    set_vim_var_string(VV_OPTION_COMMAND, "set", -1);
-    set_vim_var_tv(VV_OPTION_OLDLOCAL, &oldval_l_tv);
-    set_vim_var_tv(VV_OPTION_OLDGLOBAL, &oldval_g_tv);
-  }
-  if (opt_flags & OPT_MODELINE) {
-    set_vim_var_string(VV_OPTION_COMMAND, "modeline", -1);
-    set_vim_var_tv(VV_OPTION_OLDLOCAL, &oldval_tv);
-  }
-  apply_autocmds(EVENT_OPTIONSET, options[opt_idx].fullname, NULL, false, NULL);
-  reset_v_option_vars();
-}
-
 
 
 
@@ -2832,24 +2792,6 @@ static bool is_option_local_value_unset(OptIndex opt_idx)
 /// @param       errbuflen       Length of error buffer.
 ///
 /// @return  NULL on success, an untranslated error message on error.
-static const char *did_set_option(OptIndex opt_idx, void *varp, OptVal old_value, OptVal new_value,
-                                  int opt_flags, scid_T set_sid, const bool direct,
-                                  const bool value_replaced, char *errbuf, size_t errbuflen)
-{
-  return rs_did_set_option(opt_idx, varp, old_value, new_value, opt_flags, set_sid,
-                           direct ? 1 : 0, value_replaced ? 1 : 0, errbuf, errbuflen);
-}
-
-/// Validate the new value for an option.
-///
-/// @param  opt_idx         Index in options[] table. Must not be kOptInvalid.
-/// @param  newval[in,out]  New option value. Might be modified.
-static const char *validate_option_value(const OptIndex opt_idx, OptVal *newval, int opt_flags,
-                                         char *errbuf, size_t errbuflen)
-{
-  return rs_validate_option_value(opt_idx, newval, opt_flags, errbuf, errbuflen);
-}
-
 /// Set the value of an option using an OptVal.
 ///
 /// @param       opt_idx         Index in options[] table. Must not be kOptInvalid.
@@ -4372,12 +4314,46 @@ void *nvim_get_varp_opt(OptIndex opt_idx)
 /// Get kOptFlagUIOption constant
 uint32_t nvim_get_koptflag_ui_option(void) { return (uint32_t)kOptFlagUIOption; }
 
-/// Apply the OptionSet autocommand: delegates entirely to C to avoid VimL type system FFI.
+/// Apply the OptionSet autocommand: called from rs_set_option_impl in Rust.
+/// Keeps VimL type system interactions (optval_as_tv, set_vim_var_tv, etc.) in C.
 void nvim_apply_optionset_autocmd(OptIndex opt_idx, int opt_flags, OptVal oldval,
                                   OptVal oldval_g, OptVal oldval_l, OptVal newval,
                                   const char *errmsg)
 {
-  apply_optionset_autocmd(opt_idx, opt_flags, oldval, oldval_g, oldval_l, newval, errmsg);
+  // Don't do this while starting up, failure or recursively.
+  if (starting || errmsg != NULL || *get_vim_var_str(VV_OPTION_TYPE) != NUL) {
+    return;
+  }
+
+  char buf_type[7];
+  typval_T oldval_tv = optval_as_tv(oldval, false);
+  typval_T oldval_g_tv = optval_as_tv(oldval_g, false);
+  typval_T oldval_l_tv = optval_as_tv(oldval_l, false);
+  typval_T newval_tv = optval_as_tv(newval, false);
+
+  vim_snprintf(buf_type, sizeof(buf_type), "%s", (opt_flags & OPT_LOCAL) ? "local" : "global");
+  set_vim_var_tv(VV_OPTION_NEW, &newval_tv);
+  set_vim_var_tv(VV_OPTION_OLD, &oldval_tv);
+  set_vim_var_string(VV_OPTION_TYPE, buf_type, -1);
+  if (opt_flags & OPT_LOCAL) {
+    set_vim_var_string(VV_OPTION_COMMAND, "setlocal", -1);
+    set_vim_var_tv(VV_OPTION_OLDLOCAL, &oldval_tv);
+  }
+  if (opt_flags & OPT_GLOBAL) {
+    set_vim_var_string(VV_OPTION_COMMAND, "setglobal", -1);
+    set_vim_var_tv(VV_OPTION_OLDGLOBAL, &oldval_tv);
+  }
+  if ((opt_flags & (OPT_LOCAL | OPT_GLOBAL)) == 0) {
+    set_vim_var_string(VV_OPTION_COMMAND, "set", -1);
+    set_vim_var_tv(VV_OPTION_OLDLOCAL, &oldval_l_tv);
+    set_vim_var_tv(VV_OPTION_OLDGLOBAL, &oldval_g_tv);
+  }
+  if (opt_flags & OPT_MODELINE) {
+    set_vim_var_string(VV_OPTION_COMMAND, "modeline", -1);
+    set_vim_var_tv(VV_OPTION_OLDLOCAL, &oldval_tv);
+  }
+  apply_autocmds(EVENT_OPTIONSET, options[opt_idx].fullname, NULL, false, NULL);
+  reset_v_option_vars();
 }
 
 /// Call ui_call_option_set for a specific option with a saved new value.
