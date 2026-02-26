@@ -17,6 +17,7 @@ pub mod entry;
 pub mod expand;
 pub mod extmark;
 pub mod file;
+pub mod funcexpand;
 pub mod infercase;
 pub mod info;
 pub mod insert;

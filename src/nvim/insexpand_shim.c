@@ -231,6 +231,23 @@ extern int rs_ins_compl_next(int allow_get_expansion, int count, int insert_matc
 // Phase 2 (pass 8) Rust exports
 extern int rs_ins_compl_get_exp(int lnum, int col);
 
+// Phase 9 (pass 9): Forward declarations for compound C accessors.
+// These are defined at the bottom of this file and used by the static
+// functions whose bodies were migrated to Rust.
+int nvim_ins_compl_add_tv_impl(void *tv, int dir, int fast);
+void nvim_ins_compl_add_list_impl(void *list);
+void nvim_ins_compl_add_dict_impl(void *dict);
+void nvim_expand_by_function_full_impl(int type, char *base, void *cb);
+// Phase 9 (pass 9): Phase 2/3/4 compound accessor forward declarations.
+void nvim_f_complete_impl(void *argvars, void *rettv);
+void nvim_f_complete_add_impl(void *argvars, void *rettv);
+void nvim_f_complete_check_impl(void *rettv);
+void nvim_f_preinserted_impl(void *rettv);
+void nvim_set_completion_impl(int startcol, void *list);
+void nvim_remove_old_matches_impl(void);
+void nvim_cpt_compl_refresh_impl(void);
+void *nvim_get_callback_if_cpt_func_impl(const char *p, int idx);
+
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
 // and ctrl_x_mode_names[].
@@ -1848,81 +1865,11 @@ static Callback *get_insert_callback(int type)
 ///
 /// @param type  one of CTRL_X_OMNI or CTRL_X_FUNCTION or CTRL_X_THESAURUS
 /// @param cb    set if triggered by a function in 'cpt' option, otherwise NULL
+// NOTE: Body migrated to Rust rs_expand_by_function (Phase 9, pass 9).
+// Logic lives in nvim_expand_by_function_full_impl compound accessor.
 static void expand_by_function(int type, char *base, Callback *cb)
 {
-  list_T *matchlist = NULL;
-  dict_T *matchdict = NULL;
-  typval_T rettv;
-  const int save_State = State;
-
-  assert(curbuf != NULL);
-
-  const bool is_cpt_function = (cb != NULL);
-  if (!is_cpt_function) {
-    char *funcname = get_complete_funcname(type);
-    if (*funcname == NUL) {
-      return;
-    }
-    cb = get_insert_callback(type);
-  }
-
-  // Call 'completefunc' to obtain the list of matches.
-  typval_T args[3];
-  args[0].v_type = VAR_NUMBER;
-  args[1].v_type = VAR_STRING;
-  args[2].v_type = VAR_UNKNOWN;
-  args[0].vval.v_number = 0;
-  args[1].vval.v_string = base != NULL ? base : "";
-
-  pos_T pos = curwin->w_cursor;
-  // Lock the text to avoid weird things from happening.  Also disallow
-  // switching to another window, it should not be needed and may end up in
-  // Insert mode in another buffer.
-  textlock++;
-
-  // Call a function, which returns a list or dict.
-  if (callback_call(cb, 2, args, &rettv)) {
-    switch (rettv.v_type) {
-    case VAR_LIST:
-      matchlist = rettv.vval.v_list;
-      break;
-    case VAR_DICT:
-      matchdict = rettv.vval.v_dict;
-      break;
-    case VAR_SPECIAL:
-      FALLTHROUGH;
-    default:
-      // TODO(brammool): Give error message?
-      tv_clear(&rettv);
-      break;
-    }
-  }
-  textlock--;
-
-  curwin->w_cursor = pos;  // restore the cursor position
-  check_cursor(curwin);  // make sure cursor position is valid, just in case
-  validate_cursor(curwin);
-  if (!equalpos(curwin->w_cursor, pos)) {
-    emsg(_(e_compldel));
-    goto theend;
-  }
-
-  if (matchlist != NULL) {
-    ins_compl_add_list(matchlist);
-  } else if (matchdict != NULL) {
-    ins_compl_add_dict(matchdict);
-  }
-
-theend:
-  // Restore State, it might have been changed.
-  State = save_State;
-
-  if (matchdict != NULL) {
-    tv_dict_unref(matchdict);
-  }
-  if (matchlist != NULL) {
-    tv_list_unref(matchlist);
-  }
+  nvim_expand_by_function_full_impl(type, base, (void *)cb);
 }
 
 static inline int get_user_highlight_attr(const char *hlname)
@@ -1935,103 +1882,28 @@ static inline int get_user_highlight_attr(const char *hlname)
 
 /// Add a match to the list of matches from Vimscript object
 ///
-/// @param[in]  tv  Object to get matches from.
-/// @param[in]  dir  Completion direction.
-/// @param[in]  fast  use fast_breakcheck() instead of os_breakcheck().
-///
-/// @return NOTDONE if the given string is already in the list of completions,
-///         otherwise it is added to the list and  OK is returned. FAIL will be
-///         returned in case of error.
+/// NOTE: Body migrated to Rust rs_ins_compl_add_tv (Phase 9, pass 9).
+/// Logic lives in nvim_ins_compl_add_tv_impl compound accessor.
+// FUNC_ATTR_NONNULL_ALL removed since body is now in compound accessor
 static int ins_compl_add_tv(typval_T *const tv, const Direction dir, bool fast)
-  FUNC_ATTR_NONNULL_ALL
 {
-  const char *word;
-  bool dup = false;
-  bool empty = false;
-  int flags = fast ? CP_FAST : 0;
-  char *(cptext[CPT_COUNT]);
-  char *user_abbr_hlname = NULL;
-  char *user_kind_hlname = NULL;
-  int user_hl[2] = { -1, -1 };
-  typval_T user_data;
-
-  user_data.v_type = VAR_UNKNOWN;
-  if (tv->v_type == VAR_DICT && tv->vval.v_dict != NULL) {
-    word = tv_dict_get_string(tv->vval.v_dict, "word", false);
-    cptext[CPT_ABBR] = tv_dict_get_string(tv->vval.v_dict, "abbr", true);
-    cptext[CPT_MENU] = tv_dict_get_string(tv->vval.v_dict, "menu", true);
-    cptext[CPT_KIND] = tv_dict_get_string(tv->vval.v_dict, "kind", true);
-    cptext[CPT_INFO] = tv_dict_get_string(tv->vval.v_dict, "info", true);
-
-    user_abbr_hlname = tv_dict_get_string(tv->vval.v_dict, "abbr_hlgroup", false);
-    user_hl[0] = get_user_highlight_attr(user_abbr_hlname);
-
-    user_kind_hlname = tv_dict_get_string(tv->vval.v_dict, "kind_hlgroup", false);
-    user_hl[1] = get_user_highlight_attr(user_kind_hlname);
-
-    tv_dict_get_tv(tv->vval.v_dict, "user_data", &user_data);
-
-    if (tv_dict_get_number(tv->vval.v_dict, "icase")) {
-      flags |= CP_ICASE;
-    }
-    dup = (bool)tv_dict_get_number(tv->vval.v_dict, "dup");
-    empty = (bool)tv_dict_get_number(tv->vval.v_dict, "empty");
-    if (tv_dict_get_string(tv->vval.v_dict, "equal", false) != NULL
-        && tv_dict_get_number(tv->vval.v_dict, "equal")) {
-      flags |= CP_EQUAL;
-    }
-  } else {
-    word = tv_get_string_chk(tv);
-    CLEAR_FIELD(cptext);
-  }
-  if (word == NULL || (!empty && *word == NUL)) {
-    free_cptext(cptext);
-    tv_clear(&user_data);
-    return FAIL;
-  }
-  int status = ins_compl_add((char *)word, -1, NULL, cptext, true,
-                             &user_data, dir, flags, dup, user_hl, FUZZY_SCORE_NONE);
-  if (status != OK) {
-    tv_clear(&user_data);
-  }
-  return status;
+  return nvim_ins_compl_add_tv_impl((void *)tv, (int)dir, fast ? 1 : 0);
 }
 
 /// Add completions from a list.
+/// NOTE: Body migrated to Rust rs_ins_compl_add_list (Phase 9, pass 9).
+/// Logic lives in nvim_ins_compl_add_list_impl compound accessor.
 static void ins_compl_add_list(list_T *const list)
 {
-  Direction dir = compl_direction;
-
-  // Go through the List with matches and add each of them.
-  TV_LIST_ITER(list, li, {
-    if (ins_compl_add_tv(TV_LIST_ITEM_TV(li), dir, true) == OK) {
-      // If dir was BACKWARD then honor it just once.
-      dir = FORWARD;
-    } else if (did_emsg) {
-      break;
-    }
-  });
+  nvim_ins_compl_add_list_impl((void *)list);
 }
 
 /// Add completions from a dict.
+/// NOTE: Body migrated to Rust rs_ins_compl_add_dict (Phase 9, pass 9).
+/// Logic lives in nvim_ins_compl_add_dict_impl compound accessor.
 static void ins_compl_add_dict(dict_T *dict)
 {
-  // Check for optional "refresh" item.
-  compl_opt_refresh_always = false;
-  dictitem_T *di_refresh = tv_dict_find(dict, S_LEN("refresh"));
-  if (di_refresh != NULL && di_refresh->di_tv.v_type == VAR_STRING) {
-    const char *v = di_refresh->di_tv.vval.v_string;
-
-    if (v != NULL && strcmp(v, "always") == 0) {
-      compl_opt_refresh_always = true;
-    }
-  }
-
-  // Add completions from a "words" list.
-  dictitem_T *di_words = tv_dict_find(dict, S_LEN("words"));
-  if (di_words != NULL && di_words->di_tv.v_type == VAR_LIST) {
-    ins_compl_add_list(di_words->di_tv.vval.v_list);
-  }
+  nvim_ins_compl_add_dict_impl((void *)dict);
 }
 
 /// Compound accessor: save extmarks before completion modifies text.
@@ -2061,112 +1933,35 @@ static void save_orig_extmarks(void)
 ///
 /// @param startcol  where the matched text starts (1 is first column).
 /// @param list      the list of matches.
+// NOTE: Body migrated to Rust rs_set_completion (Phase 9, pass 9).
+// Logic lives in nvim_set_completion_impl compound accessor.
 static void set_completion(colnr_T startcol, list_T *list)
 {
-  int flags = CP_ORIGINAL_TEXT;
-  unsigned cur_cot_flags = rs_get_cot_flags();
-  bool compl_longest = (cur_cot_flags & kOptCotFlagLongest) != 0;
-  bool compl_no_insert = (cur_cot_flags & kOptCotFlagNoinsert) != 0;
-  bool compl_no_select = (cur_cot_flags & kOptCotFlagNoselect) != 0;
-
-  // If already doing completions stop it.
-  if (rs_ctrl_x_mode_not_default()) {
-    rs_ins_compl_prep(' ');
-  }
-  rs_ins_compl_clear();
-  rs_ins_compl_free();
-  compl_get_longest = compl_longest;
-
-  compl_direction = FORWARD;
-  if (startcol > curwin->w_cursor.col) {
-    startcol = curwin->w_cursor.col;
-  }
-  compl_col = startcol;
-  compl_lnum = curwin->w_cursor.lnum;
-  compl_length = curwin->w_cursor.col - startcol;
-  // compl_pattern doesn't need to be set
-  compl_orig_text = cbuf_to_string(get_cursor_line_ptr() + compl_col,
-                                   (size_t)compl_length);
-  save_orig_extmarks();
-  if (p_ic) {
-    flags |= CP_ICASE;
-  }
-  if (ins_compl_add(compl_orig_text.data, (int)compl_orig_text.size,
-                    NULL, NULL, false, NULL, 0,
-                    flags | CP_FAST, false, NULL, FUZZY_SCORE_NONE) != OK) {
-    return;
-  }
-
-  ctrl_x_mode = CTRL_X_EVAL;
-
-  ins_compl_add_list(list);
-  compl_matches = rs_ins_compl_make_cyclic();
-  compl_started = true;
-  compl_used_match = true;
-  compl_cont_status = 0;
-  int save_w_wrow = curwin->w_wrow;
-  int save_w_leftcol = curwin->w_leftcol;
-
-  compl_curr_match = compl_first_match;
-  bool no_select = compl_no_select || compl_longest;
-  if (compl_no_insert || no_select) {
-    ins_complete(K_DOWN, false);
-    if (no_select) {
-      ins_complete(K_UP, false);
-    }
-  } else {
-    ins_complete(Ctrl_N, false);
-  }
-  compl_enter_selects = compl_no_insert;
-
-  // Lazily show the popup menu, unless we got interrupted.
-  if (!compl_interrupted) {
-    show_pum(save_w_wrow, save_w_leftcol);
-  }
-
-  may_trigger_modechanged();
-  ui_flush();
+  nvim_set_completion_impl((int)startcol, (void *)list);
 }
 
 /// "complete()" function
+// NOTE: Body migrated to Rust rs_f_complete (Phase 9, pass 9).
+// Logic lives in nvim_f_complete_impl compound accessor.
 void f_complete(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if ((State & MODE_INSERT) == 0) {
-    emsg(_("E785: complete() can only be used in Insert mode"));
-    return;
-  }
-
-  // Check for undo allowed here, because if something was already inserted
-  // the line was already saved for undo and this check isn't done.
-  if (!undo_allowed(curbuf)) {
-    return;
-  }
-
-  if (argvars[1].v_type != VAR_LIST) {
-    emsg(_(e_invarg));
-  } else {
-    const colnr_T startcol = (colnr_T)tv_get_number_chk(&argvars[0], NULL);
-    if (startcol > 0) {
-      set_completion(startcol - 1, argvars[1].vval.v_list);
-    }
-  }
+  nvim_f_complete_impl((void *)argvars, (void *)rettv);
 }
 
 /// "complete_add()" function
+// NOTE: Body migrated to Rust rs_f_complete_add (Phase 9, pass 9).
+// Logic lives in nvim_f_complete_add_impl compound accessor.
 void f_complete_add(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = ins_compl_add_tv(&argvars[0], 0, false);
+  nvim_f_complete_add_impl((void *)argvars, (void *)rettv);
 }
 
 /// "complete_check()" function
+// NOTE: Body migrated to Rust rs_f_complete_check (Phase 9, pass 9).
+// Logic lives in nvim_f_complete_check_impl compound accessor.
 void f_complete_check(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  int saved = RedrawingDisabled;
-
-  RedrawingDisabled = 0;
-  rs_ins_compl_check_keys(0, 1);
-  rettv->vval.v_number = rs_ins_compl_interrupted();
-  RedrawingDisabled = saved;
+  nvim_f_complete_check_impl((void *)rettv);
 }
 
 /// Fill the dict of complete_info
@@ -2840,23 +2635,11 @@ static int get_next_default_completion(ins_compl_next_state_T *st, pos_T *start_
 /// Return the callback function associated with "p" if it refers to a
 /// user-defined function in the 'complete' option.
 /// The "idx" parameter is used for indexing callback entries.
+// NOTE: Body migrated to Rust rs_get_callback_if_cpt_func (Phase 9, pass 9).
+// Logic lives in nvim_get_callback_if_cpt_func_impl compound accessor.
 static Callback *get_callback_if_cpt_func(char *p, int idx)
 {
-  if (*p == 'o') {
-    return &curbuf->b_ofu_cb;
-  }
-
-  if (*p == 'F') {
-    if (*++p != ',' && *p != NUL) {
-      // 'F{func}' case
-      return curbuf->b_p_cpt_cb[idx].type != kCallbackNone
-             ? &curbuf->b_p_cpt_cb[idx] : NULL;
-    } else {
-      return &curbuf->b_cfu_cb;  // 'cfu'
-    }
-  }
-
-  return NULL;
+  return (Callback *)nvim_get_callback_if_cpt_func_impl((const char *)p, idx);
 }
 
 /// get the next set of completion matches for "type".
@@ -3397,68 +3180,11 @@ static void setup_cpt_sources(void)
 
 /// Remove the matches linked to the current completion source (as indicated by
 /// cpt_sources_index) from the completion list.
+// NOTE: Body migrated to Rust rs_remove_old_matches (Phase 9, pass 9).
+// Logic lives in nvim_remove_old_matches_impl compound accessor.
 static void remove_old_matches(void)
 {
-  bool shown_match_removed = false;
-  bool forward = (compl_first_match->cp_cpt_source_idx < 0);
-
-  if (cpt_sources_index < 0) {
-    return;
-  }
-
-  compl_direction = forward ? FORWARD : BACKWARD;
-  compl_shows_dir = compl_direction;
-
-  // When 'fuzzy' is enabled, items are not ordered by their original source
-  // order (cpt_sources_index). So, remove items one by one.
-  for (compl_T *current = compl_first_match; current != NULL;) {
-    if (current->cp_cpt_source_idx == cpt_sources_index) {
-      compl_T *to_delete = current;
-
-      if (!shown_match_removed && compl_shown_match == current) {
-        shown_match_removed = true;
-      }
-
-      current = current->cp_next;
-
-      if (to_delete == compl_first_match) {  // node to remove is at head
-        compl_first_match = to_delete->cp_next;
-        compl_first_match->cp_prev = NULL;
-      } else if (to_delete->cp_next == NULL) {  // node to remove is at tail
-        to_delete->cp_prev->cp_next = NULL;
-      } else {          // node is in the moddle
-        to_delete->cp_prev->cp_next = to_delete->cp_next;
-        to_delete->cp_next->cp_prev = to_delete->cp_prev;
-      }
-      ins_compl_item_free(to_delete);
-    } else {
-      current = current->cp_next;
-    }
-  }
-
-  // Re-assign compl_shown_match if necessary
-  if (shown_match_removed) {
-    if (forward) {
-      compl_shown_match = compl_first_match;
-    } else {    // Last node will have the prefix that is being completed
-      compl_T *current;
-      for (current = compl_first_match; current->cp_next != NULL;
-           current = current->cp_next) {}
-      compl_shown_match = current;
-    }
-  }
-
-  // Re-assign compl_curr_match
-  compl_curr_match = compl_first_match;
-  for (compl_T *current = compl_first_match; current != NULL;) {
-    if ((forward ? current->cp_cpt_source_idx < cpt_sources_index
-                 : current->cp_cpt_source_idx > cpt_sources_index)) {
-      compl_curr_match = forward ? current : current->cp_next;
-      current = current->cp_next;
-    } else {
-      break;
-    }
-  }
+  nvim_remove_old_matches_impl();
 }
 
 /// Retrieve completion matches using the callback function "cb" and store the
@@ -3470,64 +3196,19 @@ static void get_cpt_func_completion_matches(Callback *cb)
 
 /// Retrieve completion matches from functions in the 'cpt' option where the
 /// 'refresh:always' flag is set.
+// NOTE: Body migrated to Rust rs_cpt_compl_refresh (Phase 9, pass 9).
+// Logic lives in nvim_cpt_compl_refresh_impl compound accessor.
 static void cpt_compl_refresh(void)
 {
-  // Make the completion list linear (non-cyclic)
-  rs_ins_compl_make_linear();
-  // Make a copy of 'cpt' in case the buffer gets wiped out
-  char *cpt = xstrdup(curbuf->b_p_cpt);
-  rs_strip_caret_numbers_in_place(cpt);
-
-  cpt_sources_index = 0;
-  for (char *p = cpt; *p;) {
-    while (*p == ',' || *p == ' ') {  // Skip delimiters
-      p++;
-    }
-    if (*p == NUL) {
-      break;
-    }
-
-    if (cpt_sources_array[cpt_sources_index].cs_refresh_always) {
-      Callback *cb = get_callback_if_cpt_func(p, cpt_sources_index);
-      if (cb) {
-        remove_old_matches();
-        int startcol;
-        int ret = get_userdefined_compl_info(curwin->w_cursor.col, cb, &startcol);
-        if (ret == FAIL) {
-          if (startcol == -3) {
-            cpt_sources_array[cpt_sources_index].cs_refresh_always = false;
-          } else {
-            startcol = -2;
-          }
-        } else if (startcol < 0 || startcol > curwin->w_cursor.col) {
-          startcol = curwin->w_cursor.col;
-        }
-        cpt_sources_array[cpt_sources_index].cs_startcol = startcol;
-        if (ret == OK) {
-          rs_compl_source_start_timer(cpt_sources_index);
-          get_cpt_func_completion_matches(cb);
-        }
-      }
-    }
-
-    (void)copy_option_part(&p, IObuff, IOSIZE, ",");  // Advance p
-    if (rs_may_advance_cpt_index(p) != 0) {
-      (void)rs_advance_cpt_sources_index_safe();
-    }
-  }
-  cpt_sources_index = -1;
-
-  xfree(cpt);
-  // Make the list cyclic
-  compl_matches = rs_ins_compl_make_cyclic();
+  nvim_cpt_compl_refresh_impl();
 }
 
 /// "preinserted()" function
+// NOTE: Body migrated to Rust rs_f_preinserted (Phase 9, pass 9).
+// Logic lives in nvim_f_preinserted_impl compound accessor.
 void f_preinserted(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (rs_ins_compl_preinsert_effect()) {
-    rettv->vval.v_number = 1;
-  }
+  nvim_f_preinserted_impl((void *)rettv);
 }
 
 // Completion state accessors (used by Rust insexpand crate)
@@ -4818,4 +4499,467 @@ void nvim_get_cpt_func_completion_matches_impl(void *cb_opaque)
 
   cpt_src->cs_refresh_always = compl_opt_refresh_always;
   compl_opt_refresh_always = false;
+}
+
+// =============================================================================
+// Phase 9 (pass 9): Compound C accessors for funcexpand.rs
+// These expose static C functions to Rust via the compound-accessor pattern.
+// =============================================================================
+
+// Forward declarations for the Rust wrappers defined in funcexpand.rs
+extern void rs_expand_by_function(int type, char *base, void *cb);
+extern int rs_ins_compl_add_tv(void *tv, int dir, int fast);
+extern void rs_ins_compl_add_list(void *list);
+extern void rs_ins_compl_add_dict(void *dict);
+extern void rs_f_complete(void *argvars, void *rettv, void *fptr);
+extern void rs_f_complete_add(void *argvars, void *rettv, void *fptr);
+extern void rs_f_complete_check(void *argvars, void *rettv, void *fptr);
+extern void rs_f_preinserted(void *argvars, void *rettv, void *fptr);
+extern void rs_set_completion(int startcol, void *list);
+extern void rs_remove_old_matches(void);
+extern void rs_cpt_compl_refresh(void);
+extern void *rs_get_callback_if_cpt_func(const char *p, int idx);
+
+// Phase 1 accessors: wrap static functions for Rust
+
+/// Compound accessor: full expand_by_function logic, callable from Rust.
+/// Contains the same logic as the static expand_by_function but calls
+/// nvim_ins_compl_add_list_impl / nvim_ins_compl_add_dict_impl to avoid
+/// circular calls after expand_by_function becomes a thin wrapper.
+void nvim_expand_by_function_full_impl(int type, char *base, void *cb_opaque)
+{
+  Callback *cb = (Callback *)cb_opaque;
+  list_T *matchlist = NULL;
+  dict_T *matchdict = NULL;
+  typval_T rettv;
+  const int save_State = State;
+
+  assert(curbuf != NULL);
+
+  const bool is_cpt_function = (cb != NULL);
+  if (!is_cpt_function) {
+    char *funcname = get_complete_funcname(type);
+    if (*funcname == NUL) {
+      return;
+    }
+    cb = get_insert_callback(type);
+  }
+
+  typval_T args[3];
+  args[0].v_type = VAR_NUMBER;
+  args[1].v_type = VAR_STRING;
+  args[2].v_type = VAR_UNKNOWN;
+  args[0].vval.v_number = 0;
+  args[1].vval.v_string = base != NULL ? base : "";
+
+  pos_T pos = curwin->w_cursor;
+  textlock++;
+
+  if (callback_call(cb, 2, args, &rettv)) {
+    switch (rettv.v_type) {
+    case VAR_LIST:
+      matchlist = rettv.vval.v_list;
+      break;
+    case VAR_DICT:
+      matchdict = rettv.vval.v_dict;
+      break;
+    case VAR_SPECIAL:
+      FALLTHROUGH;
+    default:
+      tv_clear(&rettv);
+      break;
+    }
+  }
+  textlock--;
+
+  curwin->w_cursor = pos;
+  check_cursor(curwin);
+  validate_cursor(curwin);
+  if (!equalpos(curwin->w_cursor, pos)) {
+    emsg(_(e_compldel));
+    goto theend;
+  }
+
+  if (matchlist != NULL) {
+    nvim_ins_compl_add_list_impl(matchlist);
+  } else if (matchdict != NULL) {
+    nvim_ins_compl_add_dict_impl(matchdict);
+  }
+
+theend:
+  State = save_State;
+
+  if (matchdict != NULL) {
+    tv_dict_unref(matchdict);
+  }
+  if (matchlist != NULL) {
+    tv_list_unref(matchlist);
+  }
+}
+
+/// Compound accessor: ins_compl_add_tv logic, callable from Rust.
+/// Contains the full logic moved from the static ins_compl_add_tv function.
+int nvim_ins_compl_add_tv_impl(void *tv_opaque, int dir, int fast)
+{
+  typval_T *tv = (typval_T *)tv_opaque;
+  const char *word;
+  bool dup = false;
+  bool empty = false;
+  int flags = fast ? CP_FAST : 0;
+  char *(cptext[CPT_COUNT]);
+  char *user_abbr_hlname = NULL;
+  char *user_kind_hlname = NULL;
+  int user_hl[2] = { -1, -1 };
+  typval_T user_data;
+
+  user_data.v_type = VAR_UNKNOWN;
+  if (tv->v_type == VAR_DICT && tv->vval.v_dict != NULL) {
+    word = tv_dict_get_string(tv->vval.v_dict, "word", false);
+    cptext[CPT_ABBR] = tv_dict_get_string(tv->vval.v_dict, "abbr", true);
+    cptext[CPT_MENU] = tv_dict_get_string(tv->vval.v_dict, "menu", true);
+    cptext[CPT_KIND] = tv_dict_get_string(tv->vval.v_dict, "kind", true);
+    cptext[CPT_INFO] = tv_dict_get_string(tv->vval.v_dict, "info", true);
+
+    user_abbr_hlname = tv_dict_get_string(tv->vval.v_dict, "abbr_hlgroup", false);
+    user_hl[0] = get_user_highlight_attr(user_abbr_hlname);
+
+    user_kind_hlname = tv_dict_get_string(tv->vval.v_dict, "kind_hlgroup", false);
+    user_hl[1] = get_user_highlight_attr(user_kind_hlname);
+
+    tv_dict_get_tv(tv->vval.v_dict, "user_data", &user_data);
+
+    if (tv_dict_get_number(tv->vval.v_dict, "icase")) {
+      flags |= CP_ICASE;
+    }
+    dup = (bool)tv_dict_get_number(tv->vval.v_dict, "dup");
+    empty = (bool)tv_dict_get_number(tv->vval.v_dict, "empty");
+    if (tv_dict_get_string(tv->vval.v_dict, "equal", false) != NULL
+        && tv_dict_get_number(tv->vval.v_dict, "equal")) {
+      flags |= CP_EQUAL;
+    }
+  } else {
+    word = tv_get_string_chk(tv);
+    CLEAR_FIELD(cptext);
+  }
+  if (word == NULL || (!empty && *word == NUL)) {
+    free_cptext(cptext);
+    tv_clear(&user_data);
+    return FAIL;
+  }
+  int status = ins_compl_add((char *)word, -1, NULL, cptext, true,
+                             &user_data, dir, flags, dup, user_hl, FUZZY_SCORE_NONE);
+  if (status != OK) {
+    tv_clear(&user_data);
+  }
+  return status;
+}
+
+/// Compound accessor: ins_compl_add_list logic, callable from Rust.
+void nvim_ins_compl_add_list_impl(void *list_opaque)
+{
+  list_T *list = (list_T *)list_opaque;
+  Direction dir = compl_direction;
+
+  TV_LIST_ITER(list, li, {
+    if (nvim_ins_compl_add_tv_impl(TV_LIST_ITEM_TV(li), (int)dir, 1) == OK) {
+      dir = FORWARD;
+    } else if (did_emsg) {
+      break;
+    }
+  });
+}
+
+/// Compound accessor: ins_compl_add_dict logic, callable from Rust.
+void nvim_ins_compl_add_dict_impl(void *dict_opaque)
+{
+  dict_T *dict = (dict_T *)dict_opaque;
+  // Check for optional "refresh" item.
+  compl_opt_refresh_always = false;
+  dictitem_T *di_refresh = tv_dict_find(dict, S_LEN("refresh"));
+  if (di_refresh != NULL && di_refresh->di_tv.v_type == VAR_STRING) {
+    const char *v = di_refresh->di_tv.vval.v_string;
+    if (v != NULL && strcmp(v, "always") == 0) {
+      compl_opt_refresh_always = true;
+    }
+  }
+
+  // Add completions from a "words" list.
+  dictitem_T *di_words = tv_dict_find(dict, S_LEN("words"));
+  if (di_words != NULL && di_words->di_tv.v_type == VAR_LIST) {
+    nvim_ins_compl_add_list_impl(di_words->di_tv.vval.v_list);
+  }
+}
+
+// Phase 2 accessors: full logic for f_complete, f_complete_add,
+// f_complete_check, f_preinserted -- callable from Rust.
+
+/// Compound accessor: f_complete logic, callable from Rust.
+/// Contains the full logic from the original f_complete function.
+void nvim_f_complete_impl(void *argvars_v, void *rettv_v)
+{
+  typval_T *argvars = (typval_T *)argvars_v;
+  (void)rettv_v;  // not used by f_complete
+
+  if ((State & MODE_INSERT) == 0) {
+    emsg(_("E785: complete() can only be used in Insert mode"));
+    return;
+  }
+  if (!undo_allowed(curbuf)) {
+    return;
+  }
+  if (argvars[1].v_type != VAR_LIST) {
+    emsg(_(e_invarg));
+  } else {
+    const colnr_T startcol = (colnr_T)tv_get_number_chk(&argvars[0], NULL);
+    if (startcol > 0) {
+      nvim_set_completion_impl((int)(startcol - 1), argvars[1].vval.v_list);
+    }
+  }
+}
+
+/// Compound accessor: f_complete_add logic, callable from Rust.
+/// Contains the full logic from the original f_complete_add function.
+void nvim_f_complete_add_impl(void *argvars_v, void *rettv_v)
+{
+  typval_T *argvars = (typval_T *)argvars_v;
+  typval_T *rettv = (typval_T *)rettv_v;
+  rettv->vval.v_number = nvim_ins_compl_add_tv_impl((void *)&argvars[0], 0, 0);
+}
+
+/// Compound accessor: f_complete_check logic, callable from Rust.
+/// Contains the full logic from the original f_complete_check function.
+void nvim_f_complete_check_impl(void *rettv_v)
+{
+  typval_T *rettv = (typval_T *)rettv_v;
+  int saved = RedrawingDisabled;
+  RedrawingDisabled = 0;
+  rs_ins_compl_check_keys(0, 1);
+  rettv->vval.v_number = rs_ins_compl_interrupted();
+  RedrawingDisabled = saved;
+}
+
+/// Compound accessor: f_preinserted logic, callable from Rust.
+/// Contains the full logic from the original f_preinserted function.
+void nvim_f_preinserted_impl(void *rettv_v)
+{
+  typval_T *rettv = (typval_T *)rettv_v;
+  if (rs_ins_compl_preinsert_effect()) {
+    rettv->vval.v_number = 1;
+  }
+}
+
+// Phase 3 accessor: set_completion
+
+/// Compound accessor: set_completion logic, callable from Rust.
+/// Contains the full logic from the original set_completion function.
+void nvim_set_completion_impl(int startcol_arg, void *list_opaque)
+{
+  colnr_T startcol = (colnr_T)startcol_arg;
+  list_T *list = (list_T *)list_opaque;
+
+  int flags = CP_ORIGINAL_TEXT;
+  unsigned cur_cot_flags = rs_get_cot_flags();
+  bool compl_longest = (cur_cot_flags & kOptCotFlagLongest) != 0;
+  bool compl_no_insert = (cur_cot_flags & kOptCotFlagNoinsert) != 0;
+  bool compl_no_select = (cur_cot_flags & kOptCotFlagNoselect) != 0;
+
+  // If already doing completions stop it.
+  if (rs_ctrl_x_mode_not_default()) {
+    rs_ins_compl_prep(' ');
+  }
+  rs_ins_compl_clear();
+  rs_ins_compl_free();
+  compl_get_longest = compl_longest;
+
+  compl_direction = FORWARD;
+  if (startcol > curwin->w_cursor.col) {
+    startcol = curwin->w_cursor.col;
+  }
+  compl_col = startcol;
+  compl_lnum = curwin->w_cursor.lnum;
+  compl_length = curwin->w_cursor.col - startcol;
+  compl_orig_text = cbuf_to_string(get_cursor_line_ptr() + compl_col,
+                                   (size_t)compl_length);
+  save_orig_extmarks();
+  if (p_ic) {
+    flags |= CP_ICASE;
+  }
+  if (ins_compl_add(compl_orig_text.data, (int)compl_orig_text.size,
+                    NULL, NULL, false, NULL, 0,
+                    flags | CP_FAST, false, NULL, FUZZY_SCORE_NONE) != OK) {
+    return;
+  }
+
+  ctrl_x_mode = CTRL_X_EVAL;
+
+  nvim_ins_compl_add_list_impl(list);
+  compl_matches = rs_ins_compl_make_cyclic();
+  compl_started = true;
+  compl_used_match = true;
+  compl_cont_status = 0;
+  int save_w_wrow = curwin->w_wrow;
+  int save_w_leftcol = curwin->w_leftcol;
+
+  compl_curr_match = compl_first_match;
+  bool no_select = compl_no_select || compl_longest;
+  if (compl_no_insert || no_select) {
+    ins_complete(K_DOWN, false);
+    if (no_select) {
+      ins_complete(K_UP, false);
+    }
+  } else {
+    ins_complete(Ctrl_N, false);
+  }
+  compl_enter_selects = compl_no_insert;
+
+  if (!compl_interrupted) {
+    show_pum(save_w_wrow, save_w_leftcol);
+  }
+
+  may_trigger_modechanged();
+  ui_flush();
+}
+
+// Phase 4 accessors: remove_old_matches, cpt_compl_refresh, get_callback_if_cpt_func
+
+/// Compound accessor: remove_old_matches logic, callable from Rust.
+/// Contains the full logic from the original remove_old_matches function.
+void nvim_remove_old_matches_impl(void)
+{
+  bool shown_match_removed = false;
+  bool forward = (compl_first_match->cp_cpt_source_idx < 0);
+
+  if (cpt_sources_index < 0) {
+    return;
+  }
+
+  compl_direction = forward ? FORWARD : BACKWARD;
+  compl_shows_dir = compl_direction;
+
+  // When 'fuzzy' is enabled, items are not ordered by their original source
+  // order (cpt_sources_index). So, remove items one by one.
+  for (compl_T *current = compl_first_match; current != NULL;) {
+    if (current->cp_cpt_source_idx == cpt_sources_index) {
+      compl_T *to_delete = current;
+
+      if (!shown_match_removed && compl_shown_match == current) {
+        shown_match_removed = true;
+      }
+
+      current = current->cp_next;
+
+      if (to_delete == compl_first_match) {  // node to remove is at head
+        compl_first_match = to_delete->cp_next;
+        compl_first_match->cp_prev = NULL;
+      } else if (to_delete->cp_next == NULL) {  // node to remove is at tail
+        to_delete->cp_prev->cp_next = NULL;
+      } else {          // node is in the middle
+        to_delete->cp_prev->cp_next = to_delete->cp_next;
+        to_delete->cp_next->cp_prev = to_delete->cp_prev;
+      }
+      ins_compl_item_free(to_delete);
+    } else {
+      current = current->cp_next;
+    }
+  }
+
+  // Re-assign compl_shown_match if necessary
+  if (shown_match_removed) {
+    if (forward) {
+      compl_shown_match = compl_first_match;
+    } else {    // Last node will have the prefix that is being completed
+      compl_T *current;
+      for (current = compl_first_match; current->cp_next != NULL;
+           current = current->cp_next) {}
+      compl_shown_match = current;
+    }
+  }
+
+  // Re-assign compl_curr_match
+  compl_curr_match = compl_first_match;
+  for (compl_T *current = compl_first_match; current != NULL;) {
+    if ((forward ? current->cp_cpt_source_idx < cpt_sources_index
+                 : current->cp_cpt_source_idx > cpt_sources_index)) {
+      compl_curr_match = forward ? current : current->cp_next;
+      current = current->cp_next;
+    } else {
+      break;
+    }
+  }
+}
+
+/// Compound accessor: cpt_compl_refresh logic, callable from Rust.
+/// Contains the full logic from the original cpt_compl_refresh function.
+void nvim_cpt_compl_refresh_impl(void)
+{
+  // Make the completion list linear (non-cyclic)
+  rs_ins_compl_make_linear();
+  // Make a copy of 'cpt' in case the buffer gets wiped out
+  char *cpt = xstrdup(curbuf->b_p_cpt);
+  rs_strip_caret_numbers_in_place(cpt);
+
+  cpt_sources_index = 0;
+  for (char *p = cpt; *p;) {
+    while (*p == ',' || *p == ' ') {  // Skip delimiters
+      p++;
+    }
+    if (*p == NUL) {
+      break;
+    }
+
+    if (cpt_sources_array[cpt_sources_index].cs_refresh_always) {
+      Callback *cb = (Callback *)nvim_get_callback_if_cpt_func_impl(p, cpt_sources_index);
+      if (cb) {
+        nvim_remove_old_matches_impl();
+        int startcol;
+        int ret = get_userdefined_compl_info(curwin->w_cursor.col, cb, &startcol);
+        if (ret == FAIL) {
+          if (startcol == -3) {
+            cpt_sources_array[cpt_sources_index].cs_refresh_always = false;
+          } else {
+            startcol = -2;
+          }
+        } else if (startcol < 0 || startcol > curwin->w_cursor.col) {
+          startcol = curwin->w_cursor.col;
+        }
+        cpt_sources_array[cpt_sources_index].cs_startcol = startcol;
+        if (ret == OK) {
+          rs_compl_source_start_timer(cpt_sources_index);
+          get_cpt_func_completion_matches(cb);
+        }
+      }
+    }
+
+    (void)copy_option_part(&p, IObuff, IOSIZE, ",");  // Advance p
+    if (rs_may_advance_cpt_index(p) != 0) {
+      (void)rs_advance_cpt_sources_index_safe();
+    }
+  }
+  cpt_sources_index = -1;
+
+  xfree(cpt);
+  // Make the list cyclic
+  compl_matches = rs_ins_compl_make_cyclic();
+}
+
+/// Compound accessor: get_callback_if_cpt_func logic, callable from Rust.
+/// Contains the full logic from the original get_callback_if_cpt_func function.
+void *nvim_get_callback_if_cpt_func_impl(const char *p, int idx)
+{
+  if (*p == 'o') {
+    return &curbuf->b_ofu_cb;
+  }
+
+  if (*p == 'F') {
+    const char *q = p + 1;
+    if (*q != ',' && *q != NUL) {
+      // 'F{func}' case
+      return curbuf->b_p_cpt_cb[idx].type != kCallbackNone
+             ? &curbuf->b_p_cpt_cb[idx] : NULL;
+    } else {
+      return &curbuf->b_cfu_cb;  // 'cfu'
+    }
+  }
+
+  return NULL;
 }
