@@ -343,6 +343,18 @@ extern int rs_qf_init_ext(void *qi, int qf_idx, const char *efile, void *buf,
 
 extern void rs_ex_vimgrep(void *eap);
 
+// Phase 8: qf_get_properties / qf_set_properties cluster (migrated to Rust)
+extern int rs_get_errorlist(const void *qi_arg, const void *wp, int qf_idx, int eidx, void *list);
+extern int rs_qf_get_list_from_lines(const void *what, void *retdict);
+extern int rs_qf_get_properties(const void *wp, void *what, void *retdict);
+extern void rs_get_qf_loc_list(bool is_qf, void *wp, const void *what_arg, void *rettv);
+extern void rs_f_getqflist(const void *argvars, void *rettv, void *fptr);
+extern void rs_f_getloclist(const void *argvars, void *rettv, void *fptr);
+extern int rs_qf_set_properties(void *qi, const void *what, int action, char *title);
+extern void rs_set_qf_ll_list(void *wp, const void *args, void *rettv);
+extern void rs_f_setqflist(const void *argvars, void *rettv, void *fptr);
+extern void rs_f_setloclist(const void *argvars, void *rettv, void *fptr);
+
 // Pass 4: stack query entry points (Phase 1)
 extern size_t rs_qf_get_size_eap(void *eap);
 extern size_t rs_qf_get_valid_size_eap(void *eap);
@@ -901,6 +913,493 @@ int nvim_tv_dict_add_list_empty(void *dict, const char *key, int key_len)
   return tv_dict_add_list((dict_T *)dict, key, (size_t)key_len, l);
 }
 
+// Phase 8 accessors: get_properties / set_properties cluster
+
+/// Allocate a new list and set it as the return value (qf-specific void* version).
+void nvim_qf_tv_list_alloc_ret(void *rettv_void)
+{
+  typval_T *rettv = (typval_T *)rettv_void;
+  tv_list_alloc_ret(rettv, kListLenMayKnow);
+}
+
+/// Allocate a new dict and set it as the return value (qf-specific void* version).
+void nvim_qf_tv_dict_alloc_ret(void *rettv_void)
+{
+  typval_T *rettv = (typval_T *)rettv_void;
+  tv_dict_alloc_ret(rettv);
+}
+
+/// Allocate a plain dict_T (qf-specific void* version).
+void *nvim_qf_tv_dict_alloc(void) { return tv_dict_alloc(); }
+
+/// Append a dict to a list (qf-specific void* version).
+void nvim_qf_tv_list_append_dict(void *list, void *dict)
+{
+  if (list != NULL && dict != NULL) {
+    tv_list_append_dict((list_T *)list, (dict_T *)dict);
+  }
+}
+
+/// Add a tv (copy) to a dict under 'key' of 'key_len'; returns OK or FAIL.
+int nvim_tv_dict_add_tv(void *dict, const char *key, int key_len, void *tv)
+{
+  return tv_dict_add_tv((dict_T *)dict, key, (size_t)key_len, (typval_T *)tv);
+}
+
+/// Allocate a new dictitem_T with the given key (length exclusive).
+void *nvim_tv_dict_item_alloc_len(const char *key, int key_len)
+{
+  return tv_dict_item_alloc_len(key, (size_t)key_len);
+}
+
+/// Add a dictitem_T to a dict (qf-specific void* version); returns OK or FAIL.
+int nvim_qf_tv_dict_add_item(void *dict, void *item)
+{
+  return tv_dict_add((dict_T *)dict, (dictitem_T *)item);
+}
+
+/// Free a dictitem_T including its di_tv (qf-specific void* version).
+void nvim_qf_tv_dict_item_free(void *item)
+{
+  if (item != NULL) {
+    tv_dict_item_free((dictitem_T *)item);
+  }
+}
+
+/// Copy a typval_T value (shallow copy with reference counting).
+void nvim_tv_copy(const void *from, void *to)
+{
+  if (from != NULL && to != NULL) {
+    tv_copy((const typval_T *)from, (typval_T *)to);
+  }
+}
+
+/// Serialize the qfl's quickfixtextfunc callback into a stack-allocated tv.
+/// Returns true if callback was non-None.
+bool nvim_qf_qftf_cb_put(void *qfl_void, void *tv_out)
+{
+  if (qfl_void == NULL || tv_out == NULL) {
+    return false;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  if (qfl->qf_qftf_cb.type == kCallbackNone) {
+    return false;
+  }
+  callback_put(&qfl->qf_qftf_cb, (typval_T *)tv_out);
+  return true;
+}
+
+/// Clear (free) an inline typval_T value without freeing the struct itself.
+void nvim_tv_clear(void *tv)
+{
+  if (tv != NULL) {
+    tv_clear((typval_T *)tv);
+  }
+}
+
+/// Get the v_type field of a typval_T (qf-specific void* version).
+int nvim_qf_tv_get_type(const void *tv) { return tv == NULL ? VAR_UNKNOWN : ((const typval_T *)tv)->v_type; }
+
+/// Get the vval.v_number field of a typval_T.
+int64_t nvim_tv_get_vval_nr(const void *tv) { return tv == NULL ? 0 : (int64_t)((const typval_T *)tv)->vval.v_number; }
+
+/// Get the dictitem's v_type.
+int nvim_di_get_type(const void *di) { return di == NULL ? VAR_UNKNOWN : ((const dictitem_T *)di)->di_tv.v_type; }
+
+/// Get the dictitem's vval.v_number.
+int64_t nvim_di_get_nr(const void *di) { return di == NULL ? 0 : (int64_t)((const dictitem_T *)di)->di_tv.vval.v_number; }
+
+/// Get the dictitem's vval.v_string (may be NULL).
+const char *nvim_di_get_string(const void *di) { return di == NULL ? NULL : ((const dictitem_T *)di)->di_tv.vval.v_string; }
+
+/// Get a pointer to the dictitem's di_tv (qf-specific void* version).
+void *nvim_qf_di_get_tv(void *di) { return di == NULL ? NULL : (void *)&((dictitem_T *)di)->di_tv; }
+
+/// Find a dictitem_T by key in a dict (key_len = -1 for NUL-terminated).
+void *nvim_tv_dict_find(const void *dict, const char *key, int key_len)
+{
+  if (dict == NULL) {
+    return NULL;
+  }
+  return tv_dict_find((const dict_T *)dict, key, (ptrdiff_t)key_len);
+}
+
+/// Look up the window for f_getloclist from argvars[0].
+void *nvim_find_win_by_nr_or_id(const void *argvars_void)
+{
+  return (void *)find_win_by_nr_or_id((const typval_T *)argvars_void);
+}
+
+/// Advance the typval_T pointer by one element for argvars indexing.
+void *nvim_tv_advance(const void *tv) { return (void *)((const typval_T *)tv + 1); }
+
+/// Check if VAR_UNKNOWN type.
+bool nvim_tv_is_unknown(const void *tv) { return tv == NULL || ((const typval_T *)tv)->v_type == VAR_UNKNOWN; }
+
+/// Check if VAR_DICT type.
+bool nvim_tv_is_dict(const void *tv) { return tv != NULL && ((const typval_T *)tv)->v_type == VAR_DICT; }
+
+/// Get vval.v_dict pointer from typval (qf-specific void* version).
+void *nvim_qf_tv_get_dict(const void *tv) { return (tv == NULL || ((const typval_T *)tv)->v_type != VAR_DICT) ? NULL : ((const typval_T *)tv)->vval.v_dict; }
+
+/// Get a list from a typval_T (qf-specific void* version).
+void *nvim_qf_tv_get_list(const void *tv) { return (tv == NULL || ((const typval_T *)tv)->v_type != VAR_LIST) ? NULL : ((const typval_T *)tv)->vval.v_list; }
+
+/// Emit e_dictreq error.
+void nvim_emsg_dictreq(void) { emsg(_(e_dictreq)); }
+
+/// Get the qfl->qf_ctx as a raw pointer (NULL if not set).
+void *nvim_qfl_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
+
+/// tv_dict_add_list: add an existing list to a dict (qf-specific); returns OK or FAIL.
+int nvim_qf_tv_dict_add_list(void *dict, const char *key, int key_len, void *list)
+{
+  return tv_dict_add_list((dict_T *)dict, key, (size_t)key_len, (list_T *)list);
+}
+
+/// Allocate a list (qf-specific void* version).
+void *nvim_qf_tv_list_alloc(void) { return tv_list_alloc(kListLenMayKnow); }
+
+/// Check if a dict has 'lines' key with a VAR_LIST value and non-NULL list.
+bool nvim_tv_dict_has_lines_key(const void *dict)
+{
+  if (dict == NULL) {
+    return false;
+  }
+  const dictitem_T *di = tv_dict_find((const dict_T *)dict, S_LEN("lines"));
+  return di != NULL && di->di_tv.v_type == VAR_LIST && di->di_tv.vval.v_list != NULL;
+}
+
+/// Get the di_tv pointer for the "lines" dictitem in a dict (NULL if not found / wrong type).
+void *nvim_tv_dict_get_lines_di_tv(const void *dict)
+{
+  if (dict == NULL) { return NULL; }
+  dictitem_T *di = tv_dict_find((const dict_T *)dict, S_LEN("lines"));
+  if (di == NULL || di->di_tv.v_type != VAR_LIST) { return NULL; }
+  return &di->di_tv;
+}
+
+/// Get valid_bufnr for a qfline (check with buflist_findnr).
+int nvim_qfline_get_valid_bufnr(const void *qfp_void)
+{
+  if (qfp_void == NULL) {
+    return 0;
+  }
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  int bufnum = qfp->qf_fnum;
+  if (bufnum != 0 && buflist_findnr(bufnum) == NULL) {
+    bufnum = 0;
+  }
+  return bufnum;
+}
+
+/// Get the qfl->qf_index field.
+int nvim_qfl_get_index(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_index; }
+
+/// Get the qfl->qf_count field.
+int nvim_qfl_get_count(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_count; }
+
+/// Get the qfl->qf_id field.
+unsigned nvim_qfl_get_id(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_id; }
+
+/// Get the qfl->qf_changedtick field.
+int nvim_qfl_get_changedtick(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_changedtick; }
+
+/// Get the qfl->qf_title field (may be NULL).
+const char *nvim_qfl_get_title(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_title; }
+
+/// qf_alloc_stack wrapper for internal stacks (used by qf_get_list_from_lines).
+void *nvim_qf_alloc_internal_stack(void) { return qf_alloc_stack(QFLT_INTERNAL, 1); }
+
+/// qf_free_lists wrapper (free qi->qf_lists array after iterating).
+void nvim_qf_free_lists_for_qi(void *qi_void)
+{
+  if (qi_void == NULL) { return; }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  for (int i = 0; i < qi->qf_listcount; i++) {
+    rs_qf_free_list(qf_get_list(qi, i));
+  }
+  nvim_qf_free_lists_array(qi_void);
+}
+
+/// Get the "efm" string from a what dict (NULL if missing or wrong type).
+const char *nvim_tv_dict_get_efm_str(const void *dict)
+{
+  if (dict == NULL) { return NULL; }
+  const dictitem_T *di = tv_dict_find((const dict_T *)dict, S_LEN("efm"));
+  if (di == NULL) { return NULL; }
+  if (di->di_tv.v_type != VAR_STRING || di->di_tv.vval.v_string == NULL) {
+    return NULL;  // wrong type/empty - will cause FAIL from caller
+  }
+  return di->di_tv.vval.v_string;
+}
+
+/// Check if "efm" key exists and has wrong type (not VAR_STRING or NULL string).
+bool nvim_tv_dict_efm_wrong_type(const void *dict)
+{
+  if (dict == NULL) { return false; }
+  const dictitem_T *di = tv_dict_find((const dict_T *)dict, S_LEN("efm"));
+  if (di == NULL) { return false; }
+  return di->di_tv.v_type != VAR_STRING || di->di_tv.vval.v_string == NULL;
+}
+
+/// Get the qfl list handle at index qf_idx from qi.
+void *nvim_qf_get_list_handle(const void *qi_void, int qf_idx)
+{
+  if (qi_void == NULL) { return NULL; }
+  const qf_info_T *qi = (const qf_info_T *)qi_void;
+  if (qf_idx < 0 || qf_idx >= qi->qf_listcount) { return NULL; }
+  return (void *)&qi->qf_lists[qf_idx];
+}
+
+/// Get the got_int flag (qf-specific version to avoid conflict with insexpand_shim).
+bool nvim_qf_got_int(void) { return got_int; }
+
+// Phase 8 set-side accessors
+
+/// tv_dict_get_string: get string from dict by key (alloc=true means heap copy, qf void* version).
+char *nvim_qf_tv_dict_get_string(const void *dict, const char *key, bool alloc)
+{
+  return tv_dict_get_string((const dict_T *)dict, key, alloc);
+}
+
+/// tv_dict_get_number: get number from dict by key (0 if not found, qf void* version).
+int64_t nvim_qf_tv_dict_get_number(const void *dict, const char *key)
+{
+  return (int64_t)tv_dict_get_number((const dict_T *)dict, key);
+}
+
+/// tv_dict_get_tv: copy tv from dict key into *tv_out (VAR_UNKNOWN if not found).
+void nvim_tv_dict_get_tv(const void *dict, const char *key, void *tv_out)
+{
+  tv_dict_get_tv((const dict_T *)dict, key, (typval_T *)tv_out);
+}
+
+/// tv_get_number_chk: get number from typval (qf void* version).
+int64_t nvim_qf_tv_get_number_chk(const void *tv, bool *denote)
+{
+  return (int64_t)tv_get_number_chk((const typval_T *)tv, denote);
+}
+
+/// tv_get_string_chk: get string from typval (qf void* version, NULL on error).
+const char *nvim_qf_tv_get_string_chk(const void *tv)
+{
+  return tv_get_string_chk((const typval_T *)tv);
+}
+
+/// tv_free: free a heap-allocated typval_T (qf void* version).
+void nvim_qf_tv_free(void *tv) { tv_free((typval_T *)tv); }
+
+/// Allocate a heap typval_T (zeroed).
+void *nvim_tv_alloc(void) { return xcalloc(1, sizeof(typval_T)); }
+
+/// tv_copy from src tv into a newly allocated heap typval_T.
+void *nvim_tv_alloc_copy(const void *src_tv)
+{
+  typval_T *dst = xcalloc(1, sizeof(typval_T));
+  tv_copy((const typval_T *)src_tv, dst);
+  return dst;
+}
+
+/// Free the qfl->qf_ctx field (tv_free + set to NULL).
+void nvim_qfl_free_ctx(void *qfl_void)
+{
+  if (qfl_void == NULL) { return; }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  tv_free(qfl->qf_ctx);
+  qfl->qf_ctx = NULL;
+}
+
+/// Set qfl->qf_ctx to the given heap typval_T pointer.
+void nvim_qfl_set_ctx(void *qfl_void, void *ctx_tv)
+{
+  if (qfl_void != NULL) {
+    ((qf_list_T *)qfl_void)->qf_ctx = (typval_T *)ctx_tv;
+  }
+}
+
+/// callback_free on qfl->qf_qftf_cb.
+void nvim_qfl_free_qftf_cb(void *qfl_void)
+{
+  if (qfl_void != NULL) {
+    callback_free(&((qf_list_T *)qfl_void)->qf_qftf_cb);
+  }
+}
+
+/// callback_from_typval into qfl->qf_qftf_cb.
+/// Returns true if callback was valid.
+bool nvim_qfl_set_qftf_cb_from_tv(void *qfl_void, void *tv_void)
+{
+  if (qfl_void == NULL || tv_void == NULL) { return false; }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  Callback cb;
+  if (rs_callback_from_typval(&cb, (const typval_T *)tv_void)) {
+    qfl->qf_qftf_cb = cb;
+    return true;
+  }
+  return false;
+}
+
+/// Set qfl->qf_title from a title dict value (tv_dict_get_string for "title" key in what dict).
+/// Frees existing title. Returns OK.
+int nvim_qfl_set_title_from_what(void *qi_void, int qf_idx, const void *what_void, const void *di_void)
+{
+  if (qi_void == NULL || what_void == NULL || di_void == NULL) { return FAIL; }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  const dictitem_T *di = (const dictitem_T *)di_void;
+  if (di->di_tv.v_type != VAR_STRING) { return FAIL; }
+  qf_list_T *qfl = qf_get_list(qi, qf_idx);
+  xfree(qfl->qf_title);
+  qfl->qf_title = tv_dict_get_string((const dict_T *)what_void, "title", true);
+  if (qf_idx == qi->qf_curlist) {
+    qf_update_win_titlevar(qi);
+  }
+  return OK;
+}
+
+/// Set quickfix list items via rs_qf_add_entries. Returns OK or FAIL.
+int nvim_qfl_set_items(void *qi_void, int qf_idx, void *di_void, int action)
+{
+  if (qi_void == NULL || di_void == NULL) { return FAIL; }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  dictitem_T *di = (dictitem_T *)di_void;
+  if (di->di_tv.v_type != VAR_LIST) { return FAIL; }
+  char *title_save = xstrdup(qi->qf_lists[qf_idx].qf_title);
+  int retval = rs_qf_add_entries(qi, qf_idx, di->di_tv.vval.v_list, title_save,
+                                  action == ' ' ? 'a' : action);
+  xfree(title_save);
+  return retval;
+}
+
+/// Set quickfix list items from lines via rs_qf_init_ext. Returns OK or FAIL.
+int nvim_qfl_set_items_from_lines(void *qi_void, int qf_idx, const void *what_void,
+                                   void *di_void, int action)
+{
+  if (qi_void == NULL || what_void == NULL || di_void == NULL) { return FAIL; }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  const dict_T *what = (const dict_T *)what_void;
+  dictitem_T *di = (dictitem_T *)di_void;
+
+  const char *errorformat = p_efm;
+  const dictitem_T *efm_di = tv_dict_find(what, S_LEN("efm"));
+  if (efm_di != NULL) {
+    if (efm_di->di_tv.v_type != VAR_STRING || efm_di->di_tv.vval.v_string == NULL) {
+      return FAIL;
+    }
+    errorformat = efm_di->di_tv.vval.v_string;
+  }
+
+  if (di->di_tv.v_type != VAR_LIST || di->di_tv.vval.v_list == NULL) {
+    return FAIL;
+  }
+
+  if (action == 'r' || action == 'u') {
+    rs_qf_free_items(&qi->qf_lists[qf_idx]);
+  }
+  if (rs_qf_init_ext(qi, qf_idx, NULL, NULL, &di->di_tv, errorformat, false, 0, 0, NULL, NULL) >= 0) {
+    return OK;
+  }
+  return FAIL;
+}
+
+/// Set the current index in the specified quickfix list via rs_qf_get_nth_entry.
+/// Returns OK or FAIL.
+int nvim_qfl_set_curidx(void *qi_void, void *qfl_void, void *di_void)
+{
+  if (qi_void == NULL || qfl_void == NULL || di_void == NULL) { return FAIL; }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  const dictitem_T *di = (const dictitem_T *)di_void;
+
+  int newidx;
+  if (di->di_tv.v_type == VAR_STRING
+      && di->di_tv.vval.v_string != NULL
+      && strcmp(di->di_tv.vval.v_string, "$") == 0) {
+    newidx = qfl->qf_count;
+  } else {
+    bool denote = false;
+    newidx = (int)tv_get_number_chk(&di->di_tv, &denote);
+    if (denote) { return FAIL; }
+  }
+
+  if (newidx < 1) { return FAIL; }
+  newidx = MIN(newidx, qfl->qf_count);
+  const int old_qfidx = qfl->qf_index;
+  qfline_T *const qf_ptr = rs_qf_get_nth_entry(qfl, newidx, &newidx);
+  if (qf_ptr == NULL) { return FAIL; }
+  qfl->qf_ptr = qf_ptr;
+  qfl->qf_index = newidx;
+
+  if (qi->qf_lists[qi->qf_curlist].qf_id == qfl->qf_id) {
+    qf_win_pos_update(qi, old_qfidx);
+  }
+  return OK;
+}
+
+/// Set qf_list_changed + update buffer for a qfl.
+void nvim_qfl_list_changed_and_update_buf(void *qi_void, void *qfl_void)
+{
+  if (qi_void == NULL) { return; }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  if (qfl_void != NULL) {
+    rs_qf_incr_changedtick((qf_list_T *)qfl_void);
+  }
+  qf_update_buffer(qi, NULL);
+}
+
+/// qf_list_changed only (no buffer update).
+void nvim_qfl_list_changed(void *qfl_void)
+{
+  if (qfl_void != NULL) {
+    rs_qf_incr_changedtick((qf_list_T *)qfl_void);
+  }
+}
+
+/// Find a dictitem_T by key in what dict (NUL-terminated key). Returns di_tv ptr or NULL.
+void *nvim_tv_dict_find_di_tv(void *dict, const char *key)
+{
+  if (dict == NULL || key == NULL) { return NULL; }
+  dictitem_T *di = tv_dict_find((dict_T *)dict, key, -1);
+  return di == NULL ? NULL : (void *)di;
+}
+
+/// Check if the action_arg is VAR_STRING and get the string.
+const char *nvim_tv_get_string_if_string(const void *tv)
+{
+  if (tv == NULL || ((const typval_T *)tv)->v_type != VAR_STRING) { return NULL; }
+  return tv_get_string_chk((const typval_T *)tv);
+}
+
+/// Emit E927 invalid action error.
+void nvim_emsg_invact(const char *act)
+{
+  static const char *e_invact = N_("E927: Invalid action: '%s'");
+  semsg(_(e_invact), act);
+}
+
+/// Emit e_listreq error.
+void nvim_emsg_listreq(void) { emsg(_(e_listreq)); }
+
+/// Emit e_au_recursive error.
+void nvim_emsg_au_recursive(void) { emsg(_(e_au_recursive)); }
+
+/// Emit e_string_required error.
+void nvim_emsg_string_required(void) { emsg(_(e_string_required)); }
+
+/// Set typval_T vval.v_number (qf-specific void* version).
+void nvim_qf_tv_set_number(void *tv_void, int64_t nr)
+{
+  if (tv_void != NULL) {
+    ((typval_T *)tv_void)->vval.v_number = (varnumber_T)nr;
+  }
+}
+
+/// Check if a typval_T has type VAR_LIST (qf-specific void* version).
+bool nvim_qf_tv_is_list_type(const void *tv_void)
+{
+  return tv_void != NULL && ((const typval_T *)tv_void)->v_type == VAR_LIST;
+}
+
 /// Get the valid quickfix buffer number for a qi (0 if not valid).
 int nvim_qf_get_valid_bufnr(const void *qi_void)
 {
@@ -1016,7 +1515,6 @@ bool nvim_win_is_qf_win(const void *win_void)
 void *nvim_win_get_llist_ref(const void *win_void) { return win_void == NULL ? NULL : ((const win_T *)win_void)->w_llist_ref; }
 
 static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char *title);
-static int qf_get_properties(win_T *wp, dict_T *what, dict_T *retdict);
 
 bool nvim_qf_is_qf_stack(const void *qi_void) { return qi_void == NULL ? false : qi_void == ql_info; }
 bool nvim_qf_is_ll_stack(const void *qi_void) { return qi_void == NULL ? false : qi_void != ql_info; }
@@ -3981,92 +4479,6 @@ static void unload_dummy_buffer(buf_T *buf, char *dirname_start)
   restore_start_dir(dirname_start);
 }
 
-/// to 'list'.  Returns OK on success.
-static int get_qfline_items(qfline_T *qfp, list_T *list)
-{
-  // Handle entries with a non-existing buffer number.
-  int bufnum = qfp->qf_fnum;
-  if (bufnum != 0 && (buflist_findnr(bufnum) == NULL)) {
-    bufnum = 0;
-  }
-
-  dict_T *const dict = tv_dict_alloc();
-  tv_list_append_dict(list, dict);
-
-  char buf[2];
-  buf[0] = qfp->qf_type;
-  buf[1] = NUL;
-  if (tv_dict_add_nr(dict, S_LEN("bufnr"), (varnumber_T)bufnum) == FAIL
-      || (tv_dict_add_nr(dict, S_LEN("lnum"), (varnumber_T)qfp->qf_lnum) == FAIL)
-      || (tv_dict_add_nr(dict, S_LEN("end_lnum"), (varnumber_T)qfp->qf_end_lnum) == FAIL)
-      || (tv_dict_add_nr(dict, S_LEN("col"), (varnumber_T)qfp->qf_col) == FAIL)
-      || (tv_dict_add_nr(dict, S_LEN("end_col"), (varnumber_T)qfp->qf_end_col) == FAIL)
-      || (tv_dict_add_nr(dict, S_LEN("vcol"), (varnumber_T)qfp->qf_viscol) == FAIL)
-      || (tv_dict_add_nr(dict, S_LEN("nr"), (varnumber_T)qfp->qf_nr) == FAIL)
-      || (tv_dict_add_str(dict, S_LEN("module"), (qfp->qf_module == NULL ? "" : qfp->qf_module))
-          == FAIL)
-      || (tv_dict_add_str(dict, S_LEN("pattern"), (qfp->qf_pattern == NULL ? "" : qfp->qf_pattern))
-          == FAIL)
-      || (tv_dict_add_str(dict, S_LEN("text"), (qfp->qf_text == NULL ? "" : qfp->qf_text)) == FAIL)
-      || (tv_dict_add_str(dict, S_LEN("type"), buf) == FAIL)
-      || (qfp->qf_user_data.v_type != VAR_UNKNOWN
-          && tv_dict_add_tv(dict, S_LEN("user_data"), &qfp->qf_user_data) == FAIL)
-      || (tv_dict_add_nr(dict, S_LEN("valid"), (varnumber_T)qfp->qf_valid) == FAIL)) {
-    // tv_dict_add* fail only if key already exist, but this is a newly
-    // allocated dictionary which is thus guaranteed to have no existing keys.
-    abort();
-  }
-
-  return OK;
-}
-
-/// all the entries.
-static int get_errorlist(qf_info_T *qi_arg, win_T *wp, int qf_idx, int eidx, list_T *list)
-{
-  qf_info_T *qi = qi_arg;
-
-  if (qi == NULL) {
-    qi = ql_info;
-    if (wp != NULL) {
-      qi = GET_LOC_LIST(wp);
-    }
-    if (qi == NULL) {
-      return FAIL;
-    }
-  }
-
-  if (eidx < 0) {
-    return OK;
-  }
-
-  if (qf_idx == INVALID_QFIDX) {
-    qf_idx = qi->qf_curlist;
-  }
-
-  if (qf_idx >= qi->qf_listcount) {
-    return FAIL;
-  }
-
-  qf_list_T *qfl = qf_get_list(qi, qf_idx);
-  if (rs_qf_list_empty(qfl)) {
-    return FAIL;
-  }
-
-  qfline_T *qfp;
-  int i;
-  FOR_ALL_QFL_ITEMS(qfl, qfp, i) {
-    if (eidx > 0) {
-      if (eidx == i) {
-        return get_qfline_items(qfp, list);
-      }
-    } else if (get_qfline_items(qfp, list) == FAIL) {
-      return FAIL;
-    }
-  }
-
-  return OK;
-}
-
 /// Flags used by getqflist()/getloclist() to determine which fields to return.
 enum {
   QF_GETLIST_NONE = 0x0,
@@ -4084,45 +4496,6 @@ enum {
   QF_GETLIST_QFTF = 0x800,
   QF_GETLIST_ALL = 0xFFF,
 };
-
-/// Existing quickfix lists are not modified.
-static int qf_get_list_from_lines(dict_T *what, dictitem_T *di, dict_T *retdict)
-{
-  int status = FAIL;
-
-  // Only a List value is supported
-  if (di->di_tv.v_type != VAR_LIST || di->di_tv.vval.v_list == NULL) {
-    return FAIL;
-  }
-
-  char *errorformat = p_efm;
-  dictitem_T *efm_di;
-  // If errorformat is supplied then use it, otherwise use the 'efm'
-  // option setting
-  if ((efm_di = tv_dict_find(what, S_LEN("efm"))) != NULL) {
-    if (efm_di->di_tv.v_type != VAR_STRING
-        || efm_di->di_tv.vval.v_string == NULL) {
-      return FAIL;
-    }
-    errorformat = efm_di->di_tv.vval.v_string;
-  }
-
-  list_T *l = tv_list_alloc(kListLenMayKnow);
-  qf_info_T *const qi = qf_alloc_stack(QFLT_INTERNAL, 1);
-
-  if (rs_qf_init_ext(qi, 0, NULL, NULL, &di->di_tv, errorformat,
-                  true, 0, 0, NULL, NULL) > 0) {
-    get_errorlist(qi, NULL, 0, 0, l);
-    rs_qf_free_list(&qi->qf_lists[0]);
-  }
-
-  qf_free_lists(qi);
-
-  tv_dict_add_list(retdict, S_LEN("items"), l);
-  status = OK;
-
-  return status;
-}
 
 /// Return the quickfix/location list window identifier in the current tabpage.
 static int qf_winid(qf_info_T *qi)
@@ -4142,13 +4515,6 @@ static int qf_winid(qf_info_T *qi)
 /// Accessor for Rust: get winid for a quickfix info (0 if not found).
 int nvim_qf_winid(const void *qi_void) { return qf_winid((qf_info_T *)(uintptr_t)qi_void); }
 
-/// wiped out, then returns 0.
-static int qf_getprop_qfbufnr(const qf_info_T *qi, dict_T *retdict)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  return tv_dict_add_nr(retdict, S_LEN("qfbufnr"), rs_qf_getprop_qfbufnr(qi));
-}
-
 // _Static_assert for Phase 3 QF_GETLIST_* constants used in Rust property functions
 _Static_assert(QF_GETLIST_NONE == 0x0, "QF_GETLIST_NONE mismatch");
 _Static_assert(QF_GETLIST_TITLE == 0x1, "QF_GETLIST_TITLE mismatch");
@@ -4164,159 +4530,6 @@ _Static_assert(QF_GETLIST_FILEWINID == 0x200, "QF_GETLIST_FILEWINID mismatch");
 _Static_assert(QF_GETLIST_QFBUFNR == 0x400, "QF_GETLIST_QFBUFNR mismatch");
 _Static_assert(QF_GETLIST_QFTF == 0x800, "QF_GETLIST_QFTF mismatch");
 _Static_assert(QF_GETLIST_ALL == 0xFFF, "QF_GETLIST_ALL mismatch");
-
-static int qf_getprop_title(qf_list_T *qfl, dict_T *retdict) { return tv_dict_add_str(retdict, S_LEN("title"), qfl->qf_title); }
-
-// Returns the identifier of the window used to display files from a location
-// list.  If there is no associated window, then returns 0. Useful only when
-// called from a location list window.
-static int qf_getprop_filewinid(const win_T *wp, const qf_info_T *qi, dict_T *retdict)
-  FUNC_ATTR_NONNULL_ARG(3)
-{
-  return tv_dict_add_nr(retdict, S_LEN("filewinid"), rs_qf_getprop_filewinid(wp, qi));
-}
-
-/// If eidx is not 0, then return the item at the specified index.
-static int qf_getprop_items(qf_info_T *qi, int qf_idx, int eidx, dict_T *retdict)
-{
-  list_T *l = tv_list_alloc(kListLenMayKnow);
-  get_errorlist(qi, NULL, qf_idx, eidx, l);
-  tv_dict_add_list(retdict, S_LEN("items"), l);
-
-  return OK;
-}
-
-/// Return the quickfix list context (if any) as 'context' in retdict.
-static int qf_getprop_ctx(qf_list_T *qfl, dict_T *retdict)
-{
-  int status;
-
-  if (qfl->qf_ctx != NULL) {
-    dictitem_T *di = tv_dict_item_alloc_len(S_LEN("context"));
-    tv_copy(qfl->qf_ctx, &di->di_tv);
-    status = tv_dict_add(retdict, di);
-    if (status == FAIL) {
-      tv_dict_item_free(di);
-    }
-  } else {
-    status = tv_dict_add_str(retdict, S_LEN("context"), "");
-  }
-
-  return status;
-}
-
-/// If a specific entry index (eidx) is supplied, then use that.
-static int qf_getprop_idx(qf_list_T *qfl, int eidx, dict_T *retdict)
-{
-  if (eidx == 0) {
-    eidx = qfl->qf_index;
-    if (rs_qf_list_empty(qfl)) {
-      // For empty lists, current index is set to 0
-      eidx = 0;
-    }
-  }
-  return tv_dict_add_nr(retdict, S_LEN("idx"), eidx);
-}
-
-/// @return OK or FAIL
-static int qf_getprop_qftf(qf_list_T *qfl, dict_T *retdict)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int status;
-
-  if (qfl->qf_qftf_cb.type != kCallbackNone) {
-    typval_T tv;
-
-    callback_put(&qfl->qf_qftf_cb, &tv);
-    status = tv_dict_add_tv(retdict, S_LEN("quickfixtextfunc"), &tv);
-    tv_clear(&tv);
-  } else {
-    status = tv_dict_add_str(retdict, S_LEN("quickfixtextfunc"), "");
-  }
-
-  return status;
-}
-
-/// then current list is used. Otherwise the specified list is used.
-static int qf_get_properties(win_T *wp, dict_T *what, dict_T *retdict)
-{
-  qf_info_T *qi = ql_info;
-  assert(qi != NULL);
-  dictitem_T *di = NULL;
-  int status = OK;
-  int qf_idx = INVALID_QFIDX;
-
-  if ((di = tv_dict_find(what, S_LEN("lines"))) != NULL) {
-    return qf_get_list_from_lines(what, di, retdict);
-  }
-
-  if (wp != NULL) {
-    qi = GET_LOC_LIST(wp);
-  }
-
-  const int flags = rs_qf_getprop_keys2flags(what, wp != NULL);
-
-  if (!rs_qf_stack_empty(qi)) {
-    qf_idx = rs_qf_getprop_qfidx(qi, what);
-  }
-
-  // List is not present or is empty
-  if (rs_qf_stack_empty(qi) || qf_idx == INVALID_QFIDX) {
-    return rs_qf_getprop_defaults(qi, flags, wp != NULL, retdict);
-  }
-
-  qf_list_T *qfl = qf_get_list(qi, qf_idx);
-  int eidx = 0;
-
-  // If an entry index is specified, use that
-  if ((di = tv_dict_find(what, S_LEN("idx"))) != NULL) {
-    if (di->di_tv.v_type != VAR_NUMBER) {
-      return FAIL;
-    }
-    eidx = (int)di->di_tv.vval.v_number;
-  }
-
-  if (flags & QF_GETLIST_TITLE) {
-    status = qf_getprop_title(qfl, retdict);
-  }
-  if ((status == OK) && (flags & QF_GETLIST_NR)) {
-    status = tv_dict_add_nr(retdict, S_LEN("nr"), qf_idx + 1);
-  }
-  if ((status == OK) && (flags & QF_GETLIST_WINID)) {
-    status = tv_dict_add_nr(retdict, S_LEN("winid"), qf_winid(qi));
-  }
-  if ((status == OK) && (flags & QF_GETLIST_ITEMS)) {
-    status = qf_getprop_items(qi, qf_idx, eidx, retdict);
-  }
-  if ((status == OK) && (flags & QF_GETLIST_CONTEXT)) {
-    status = qf_getprop_ctx(qfl, retdict);
-  }
-  if ((status == OK) && (flags & QF_GETLIST_ID)) {
-    status = tv_dict_add_nr(retdict, S_LEN("id"), qfl->qf_id);
-  }
-  if ((status == OK) && (flags & QF_GETLIST_IDX)) {
-    status = qf_getprop_idx(qfl, eidx, retdict);
-  }
-  if ((status == OK) && (flags & QF_GETLIST_SIZE)) {
-    status = tv_dict_add_nr(retdict, S_LEN("size"),
-                            qfl->qf_count);
-  }
-  if ((status == OK) && (flags & QF_GETLIST_TICK)) {
-    status = tv_dict_add_nr(retdict, S_LEN("changedtick"),
-                            qfl->qf_changedtick);
-  }
-  if ((status == OK) && (wp != NULL) && (flags & QF_GETLIST_FILEWINID)) {
-    status = qf_getprop_filewinid(wp, qi, retdict);
-  }
-  if ((status == OK) && (flags & QF_GETLIST_QFBUFNR)) {
-    status = qf_getprop_qfbufnr(qi, retdict);
-  }
-  if ((status == OK) && (flags & QF_GETLIST_QFTF)) {
-    status = qf_getprop_qftf(qfl, retdict);
-  }
-
-  return status;
-}
 
 /// @return OK
 static int qf_setprop_qftf(qf_list_T *qfl, dictitem_T *di)
@@ -4930,32 +5143,9 @@ void free_quickfix(void)
 }
 #endif
 
-static void get_qf_loc_list(bool is_qf, win_T *wp, typval_T *what_arg, typval_T *rettv)
-{
-  if (what_arg->v_type == VAR_UNKNOWN) {
-    tv_list_alloc_ret(rettv, kListLenMayKnow);
-    if (is_qf || wp != NULL) {
-      get_errorlist(NULL, wp, -1, 0, rettv->vval.v_list);
-    }
-  } else {
-    tv_dict_alloc_ret(rettv);
-    if (is_qf || wp != NULL) {
-      if (what_arg->v_type == VAR_DICT) {
-        dict_T *d = what_arg->vval.v_dict;
+void f_getloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_getloclist(argvars, rettv, NULL); }
 
-        if (d != NULL) {
-          qf_get_properties(wp, d, rettv->vval.v_dict);
-        }
-      } else {
-        emsg(_(e_dictreq));
-      }
-    }
-  }
-}
-
-void f_getloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { win_T *wp = find_win_by_nr_or_id(&argvars[0]); get_qf_loc_list(false, wp, &argvars[1], rettv); }
-
-void f_getqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { get_qf_loc_list(true, NULL, &argvars[0], rettv); }
+void f_getqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_getqflist(argvars, rettv, NULL); }
 
 /// @param[out]  rettv  Return value: 0 in case of success, -1 otherwise.
 static void set_qf_ll_list(win_T *wp, typval_T *args, typval_T *rettv)
