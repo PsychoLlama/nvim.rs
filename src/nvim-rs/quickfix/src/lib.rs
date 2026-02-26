@@ -2001,6 +2001,15 @@ extern "C" {
     fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
     fn nvim_qf_win_buf_fnum(win: *const c_void) -> c_int;
 
+    // Phase 10 Pass 10 Phase 2: Window positioning accessors
+    fn nvim_qf_win_set_redraw_bounds(win: *mut c_void, top: LinenrT, bot: LinenrT);
+    fn nvim_qf_win_goto_impl(win: *mut c_void, lnum: LinenrT);
+    fn nvim_qf_set_title_var_for_list(qfl: *const c_void);
+    fn nvim_qf_save_curwin() -> *mut c_void;
+    fn nvim_qf_restore_curwin(saved: *mut c_void);
+    fn nvim_qf_set_curwin(win: *mut c_void);
+    fn nvim_qf_win_get_buf_line_count(win: *const c_void) -> LinenrT;
+
     // Phase 8: Ex Commands and API Functions accessors
     // (nvim_qf_get_title and nvim_qf_get_changedtick already declared above)
     fn nvim_qf_is_qf_stack(qi: QfInfoHandle) -> bool;
@@ -3098,7 +3107,8 @@ pub unsafe extern "C" fn rs_qf_find_buf_for_stack(qi: QfInfoHandleMut) -> BufHan
 
 /// Update the cursor position in the quickfix window.
 ///
-/// Moves the cursor to the current error entry and updates the redraw range.
+/// Equivalent to C `qf_win_pos_update`. Finds the quickfix window and moves
+/// the cursor to the current error entry. Updates redraw bounds.
 /// Returns true if there is a quickfix window.
 ///
 /// # Safety
@@ -3106,10 +3116,7 @@ pub unsafe extern "C" fn rs_qf_find_buf_for_stack(qi: QfInfoHandleMut) -> BufHan
 /// - `qi` must be a valid pointer to a `qf_info_T` struct
 #[no_mangle]
 pub unsafe extern "C" fn rs_qf_win_pos_update(qi: QfInfoHandleMut, old_qf_index: c_int) -> bool {
-    if qi.is_null() {
-        return false;
-    }
-    nvim_qf_win_pos_update(qi, old_qf_index)
+    rs_qf_win_pos_update_impl(qi, old_qf_index)
 }
 
 /// Update the quickfix buffer contents.
@@ -3186,6 +3193,106 @@ pub unsafe extern "C" fn rs_win_get_llist_ref(win: WinHandle) -> QfInfoHandle {
         return std::ptr::null();
     }
     nvim_win_get_llist_ref(win)
+}
+
+// =============================================================================
+// Phase 10 Pass 10 Phase 2: Window Positioning and Title Management
+// =============================================================================
+
+/// Set the `w:quickfix_title` window variable for the current window.
+///
+/// Equivalent to C `qf_set_title_var`. Called with the current window
+/// already set to the target quickfix window.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - Must be called with `curwin` pointing to the target quickfix window
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_set_title_var(qfl: QfListHandle) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_set_title_var_for_list(qfl);
+}
+
+/// Update `w:quickfix_title` for all windows displaying the given quickfix stack.
+///
+/// Equivalent to C `qf_update_win_titlevar`. Iterates all tab windows,
+/// temporarily sets curwin to each matching window, and sets the title var.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_update_win_titlevar(qi: QfInfoHandleMut) {
+    if qi.is_null() {
+        return;
+    }
+    let qfl = nvim_qf_get_curlist(qi);
+    if qfl.is_null() {
+        return;
+    }
+    let saved_curwin = nvim_qf_save_curwin();
+
+    // FOR_ALL_TAB_WINDOWS(tp, win)
+    let mut tp = nvim_get_first_tabpage();
+    while !tp.is_null() {
+        let mut win = nvim_tabpage_get_firstwin(tp);
+        while !win.is_null() {
+            if is_qf_win_for_stack(win, qi.cast_const()) {
+                nvim_qf_set_curwin(win);
+                nvim_qf_set_title_var_for_list(qfl);
+            }
+            win = nvim_qf_win_next(win);
+        }
+        tp = nvim_tabpage_get_next(tp);
+    }
+    nvim_qf_restore_curwin(saved_curwin);
+}
+
+/// Update the cursor position in the quickfix window.
+///
+/// Equivalent to C `qf_win_pos_update`. Moves the cursor in the quickfix
+/// window to the current error entry line.
+///
+/// Returns true if there is a quickfix window.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_win_pos_update_impl(
+    qi: QfInfoHandleMut,
+    old_qf_index: c_int,
+) -> bool {
+    if qi.is_null() {
+        return false;
+    }
+    let qfl = nvim_qf_get_curlist(qi);
+    if qfl.is_null() {
+        return false;
+    }
+    let qf_index = nvim_qf_get_index(qfl);
+    let win = rs_qf_find_win_for_stack(qi.cast_const()).cast_mut();
+    if !win.is_null()
+        && qf_index <= nvim_qf_win_get_buf_line_count(win)
+        && window::rs_qf_should_update_cursor(qfl, old_qf_index)
+    {
+        let top = if old_qf_index < qf_index {
+            old_qf_index
+        } else {
+            qf_index
+        };
+        let bot = if old_qf_index > qf_index {
+            old_qf_index
+        } else {
+            qf_index
+        };
+        nvim_qf_win_set_redraw_bounds(win, top, bot);
+        nvim_qf_win_goto_impl(win, qf_index);
+    }
+    !win.is_null()
 }
 
 // =============================================================================

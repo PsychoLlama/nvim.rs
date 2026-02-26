@@ -1484,6 +1484,7 @@ extern "C" {
     fn nvim_qf_win_close(win: *mut c_void);
     fn nvim_qf_win_get_cursor_lnum(win: *const c_void) -> CLinenrT;
     fn nvim_qf_win_get_buf_line_count(win: *const c_void) -> CLinenrT;
+    // nvim_qf_win_goto_lnum delegates to Rust rs_qf_win_goto_impl
     fn nvim_qf_win_goto_lnum(win: *mut c_void, lnum: CLinenrT);
 }
 
@@ -1580,7 +1581,6 @@ extern "C" {
     fn nvim_qf_get_cmdmod_tab() -> c_int;
     fn nvim_qf_get_cmdmod_split() -> c_int;
     fn nvim_qf_open_new_cwindow(qi: QfInfoHandleMut, height: c_int) -> c_int;
-    fn nvim_qf_set_title_var(qfl: *mut c_void);
     fn nvim_qf_curwin_set_cursor(lnum: CLinenrT, col: c_int);
     fn nvim_qf_check_cursor_curwin();
     fn nvim_qf_update_topline_curwin();
@@ -1676,7 +1676,7 @@ pub unsafe extern "C" fn rs_ex_copen(eap: EapHandle) {
     }
 
     let qfl = nvim_qf_get_curlist_mut(qi);
-    nvim_qf_set_title_var(qfl);
+    crate::rs_qf_set_title_var(qfl.cast_const());
 
     // Calculate cursor line
     let mut lnum = crate::window::rs_qf_cursor_line(qfl.cast_const());

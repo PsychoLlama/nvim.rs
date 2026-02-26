@@ -2659,7 +2659,7 @@ void nvim_qf_restore_swb(void *old_swb, unsigned old_swb_flags)
 }
 
 void nvim_qf_win_close(void *win_void) { if (win_void != NULL) win_close((win_T *)win_void, false, false); }
-void nvim_qf_win_goto_lnum(void *win_void, linenr_T lnum) { if (win_void != NULL) qf_win_goto((win_T *)win_void, lnum); }
+void nvim_qf_win_goto_lnum(void *win_void, linenr_T lnum) { nvim_qf_win_goto_impl(win_void, lnum); }
 linenr_T nvim_qf_win_get_cursor_lnum(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_cursor.lnum; }
 linenr_T nvim_qf_win_get_buf_line_count(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_buffer->b_ml.ml_line_count; }
 int nvim_qf_win_get_width(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_width; }
@@ -2680,6 +2680,57 @@ void nvim_qf_check_cursor_curwin(void) { check_cursor(curwin); }
 void nvim_qf_update_topline_curwin(void) { update_topline(curwin); }
 
 void nvim_qf_update_win_titlevar(void *qi_void) { if (qi_void != NULL) qf_update_win_titlevar((qf_info_T *)qi_void); }
+
+// Phase 10 Pass 10 Phase 2: New C accessors for Rust implementations
+
+/// Set w_redraw_top and w_redraw_bot on a window.
+void nvim_qf_win_set_redraw_bounds(void *win_void, linenr_T top, linenr_T bot)
+{
+  if (win_void == NULL) { return; }
+  win_T *win = (win_T *)win_void;
+  win->w_redraw_top = top;
+  win->w_redraw_bot = bot;
+}
+
+/// Perform the qf_win_goto operation: save curwin, switch to win, set cursor,
+/// update topline, redraw, restore curwin. (Migrated body from qf_win_goto.)
+void nvim_qf_win_goto_impl(void *win_void, linenr_T lnum)
+{
+  if (win_void == NULL) { return; }
+  win_T *win = (win_T *)win_void;
+  win_T *old_curwin = curwin;
+  curwin = win;
+  curbuf = win->w_buffer;
+  curwin->w_cursor.lnum = lnum;
+  curwin->w_cursor.col = 0;
+  curwin->w_cursor.coladd = 0;
+  curwin->w_curswant = 0;
+  update_topline(curwin);
+  redraw_later(curwin, UPD_VALID);
+  curwin->w_redr_status = true;
+  curwin = old_curwin;
+  curbuf = curwin->w_buffer;
+}
+
+/// Set the w:quickfix_title window variable for the current window.
+/// Only sets if qfl->qf_title is not NULL.
+void nvim_qf_set_title_var_for_list(void *qfl_void)
+{
+  if (qfl_void == NULL) { return; }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  if (qfl->qf_title != NULL) {
+    set_internal_string_var("w:quickfix_title", qfl->qf_title);
+  }
+}
+
+/// Save and return the current curwin pointer.
+void *nvim_qf_save_curwin(void) { return curwin; }
+
+/// Restore curwin to a previously saved pointer.
+void nvim_qf_restore_curwin(void *saved) { curwin = (win_T *)saved; }
+
+/// Set curwin to the given window (for qf_update_win_titlevar pattern).
+void nvim_qf_set_curwin(void *win_void) { curwin = (win_T *)win_void; }
 
 // Highlight ids used for displaying entries from the quickfix list.
 static int qfFile_hl_id;
