@@ -9,7 +9,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 use crate::{BufHandle, TabpageHandle, WinHandle};
 
@@ -118,8 +118,9 @@ extern "C" {
     // nvim_do_window_new removed: replaced by rs_do_window_new (Phase 4)
     // nvim_do_window_equalize removed: replaced inline by rs_do_window_equalize (Phase 8)
     // nvim_do_window_tag removed: replaced inline by rs_do_window_tag (Phase 8)
-    fn nvim_do_window_goto_file(nchar: c_int, prenum1: c_int);
-    fn nvim_do_window_find_in_path(nchar: c_int, prenum: c_int, prenum1: c_int);
+    // nvim_do_window_goto_file removed: replaced by do_window_goto_file (Phase 10)
+    // nvim_do_window_find_in_path removed: replaced by do_window_find_in_path (Phase 10)
+    // nvim_do_window_g_external removed: replaced by do_window_g_external (Phase 10)
     // nvim_do_window_g removed: replaced by rs_do_window_g
     fn rs_qf_view_result(split: bool);
 
@@ -142,6 +143,55 @@ extern "C" {
     fn nvim_goto_tabpage_lastused() -> bool; // normal_shim.c
     fn nvim_set_cmdmod_tab_to_curtab_idx(); // window_shim.c
     fn nvim_do_window_g_external(); // window_shim.c
+
+    // --- Phase 10: goto_file, find_in_path, g_external accessors ---
+    /// grab_file_name(count1, &lnum): returns owned char*, sets *lnum_out (as int).
+    fn nvim_grab_file_name(count1: c_int, lnum_out: *mut c_int) -> *mut c_char;
+    /// buflist_findname_exp wrapper.
+    fn nvim_buflist_findname_exp(ptr: *const c_char) -> BufHandle;
+    /// setpcmark() wrapper.
+    fn nvim_setpcmark_curwin();
+    /// RESET_BINDING(curwin) wrapper.
+    fn nvim_reset_binding_curwin();
+    /// do_ecmd(0, ptr, NULL, NULL, ECMD_LASTL, ECMD_HIDE, NULL) wrapper.
+    fn nvim_do_ecmd_lastl_hide(ptr: *const c_char) -> c_int;
+    /// check_cursor_lnum(curwin) wrapper.
+    fn nvim_check_cursor_lnum_curwin();
+    /// beginline(BL_SOL | BL_FIX) wrapper.
+    fn nvim_beginline_sol_fix();
+    /// curwin->w_cursor.lnum setter (linenr_T = int32_t).
+    fn nvim_set_curwin_cursor_lnum(lnum: i32);
+    /// swb_flags & kOptSwbFlagUseopen.
+    fn nvim_swb_has_useopen() -> c_int;
+    /// swb_flags & kOptSwbFlagUsetab.
+    fn nvim_swb_has_usetab() -> c_int;
+    /// goto_tabpage_win wrapper.
+    fn nvim_goto_tabpage_win_wrapper(tp: TabpageHandle, wp: WinHandle);
+    /// win_close(wp, free_buf, false) wrapper.
+    fn nvim_win_close_wrapper(wp: WinHandle, free_buf: c_int) -> c_int;
+    /// cmdmod.cmod_tab getter.
+    fn nvim_get_cmdmod_tab() -> c_int;
+    /// rs_check_text_or_curbuf_locked(NULL) -- true if text or curbuf locked.
+    fn rs_check_text_or_curbuf_locked(oap: *mut std::ffi::c_void) -> bool;
+    /// rs_find_ident_under_cursor: sets *pp to pointer into buffer, returns len.
+    fn nvim_find_ident_under_cursor(pp: *mut *mut c_char) -> usize;
+    /// find_pattern_in_path with ACTION_SPLIT.
+    /// `whole`: 1 if searching whole file (Prenum == 0).
+    fn nvim_find_pattern_in_path_split(
+        ptr: *const c_char,
+        len: usize,
+        type_: c_int,
+        prenum1: c_int,
+        whole: c_int,
+    );
+    /// curwin->w_set_curswant = true wrapper.
+    fn nvim_set_curswant_curwin();
+    /// nvim_xmemdupz: allocates a NUL-terminated copy of len bytes.
+    fn nvim_xmemdupz(ptr: *const c_char, len: usize) -> *mut c_char;
+    /// nvim_xfree: free a C-allocated pointer.
+    fn nvim_xfree(ptr: *mut std::ffi::c_void);
+    /// win_new_float external wrapper: -1=not applicable, 0=fail, 1=ok.
+    fn nvim_win_new_float_external() -> c_int;
 
     // --- Simple wrappers ---
     fn nvim_emsg_e_cmdwin();
@@ -288,6 +338,118 @@ unsafe fn do_window_tag(nchar: c_int, prenum: c_int) {
 
     nvim_do_nv_ident(CTRL_RSB, NUL);
     nvim_set_postponed_split(0);
+}
+
+// =============================================================================
+// Phase 10: Goto-file, find-in-path, and external-float helpers
+// =============================================================================
+
+/// CTRL-F constants from search.h.
+const FIND_ANY: c_int = 1;
+const FIND_DEFINE: c_int = 2;
+
+/// C 'F' nchar value.
+const CH_F_VAL: c_int = b'F' as c_int;
+
+/// do_ecmd return values.
+const FAIL: c_int = 0;
+const OK_ECMD: c_int = 1;
+
+// (CTRL_I = 9 already defined above)
+
+/// Rust implementation of `nvim_do_window_goto_file`.
+///
+/// The 'f'/'F'/Ctrl-F file-goto command: grab filename under cursor, split
+/// window, open file, optionally jump to line.
+///
+/// # Safety
+///
+/// Called from dispatch; all state access via C wrappers.
+unsafe fn do_window_goto_file(nchar: c_int, prenum1: c_int) {
+    if rs_check_text_or_curbuf_locked(std::ptr::null_mut()) {
+        return;
+    }
+
+    let mut lnum: c_int = -1;
+    let ptr = nvim_grab_file_name(prenum1, std::ptr::addr_of_mut!(lnum));
+    if ptr.is_null() {
+        return;
+    }
+
+    let oldtab = nvim_get_curtab();
+    let oldwin = nvim_get_curwin();
+    nvim_setpcmark_curwin();
+
+    let mut wp = WinHandle::null();
+
+    // Check 'switchbuf' flags to reuse an existing window.
+    if (nvim_swb_has_useopen() != 0 || nvim_swb_has_usetab() != 0) && nvim_get_cmdmod_tab() == 0 {
+        let buf = nvim_buflist_findname_exp(ptr);
+        if !buf.is_null() {
+            wp = crate::navigate::find::rs_swbuf_goto_win_with_buf(buf);
+        }
+    }
+
+    if wp.is_null() && nvim_win_split_wrapper(0, 0) == OK_ECMD {
+        nvim_reset_binding_curwin();
+        if nvim_do_ecmd_lastl_hide(ptr) == FAIL {
+            nvim_win_close_wrapper(nvim_get_curwin(), 0);
+            nvim_goto_tabpage_win_wrapper(oldtab, oldwin);
+        } else {
+            wp = nvim_get_curwin();
+        }
+    }
+
+    if !wp.is_null() && nchar == CH_F_VAL && lnum >= 0 {
+        nvim_set_curwin_cursor_lnum(lnum as i32);
+        nvim_check_cursor_lnum_curwin();
+        nvim_beginline_sol_fix();
+    }
+
+    nvim_xfree(ptr.cast());
+}
+
+/// Rust implementation of `nvim_do_window_find_in_path`.
+///
+/// The 'i'/'d' find-in-path command: find identifier under cursor, call
+/// `find_pattern_in_path` with ACTION_SPLIT.
+///
+/// # Safety
+///
+/// Called from dispatch; all state access via C wrappers.
+unsafe fn do_window_find_in_path(nchar: c_int, prenum: c_int, prenum1: c_int) {
+    let type_ = if nchar == CH_I || nchar == CTRL_I {
+        FIND_ANY
+    } else {
+        FIND_DEFINE
+    };
+
+    let mut raw_ptr: *mut c_char = std::ptr::null_mut();
+    let len = nvim_find_ident_under_cursor(std::ptr::addr_of_mut!(raw_ptr));
+    if len == 0 {
+        return;
+    }
+
+    // Make an owned copy so find_pattern_in_path can safely use it.
+    let ptr = nvim_xmemdupz(raw_ptr, len);
+    let whole = c_int::from(prenum == 0);
+    nvim_find_pattern_in_path_split(ptr, len, type_, prenum1, whole);
+    nvim_xfree(ptr.cast());
+    nvim_set_curswant_curwin();
+}
+
+/// Rust implementation of `nvim_do_window_g_external`.
+///
+/// The 'g'+'e' command: convert current window to an external floating window.
+///
+/// # Safety
+///
+/// Called from dispatch; all state access via C wrappers.
+unsafe fn do_window_g_external() {
+    let result = nvim_win_new_float_external();
+    if result <= 0 {
+        nvim_beep_flush_wrapper();
+    }
 }
 
 // =============================================================================
@@ -638,7 +800,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if check_cmdwin() {
                     return;
                 }
-                nvim_do_window_goto_file(nchar, prenum1);
+                do_window_goto_file(nchar, prenum1);
             }
 
             // =================================================================
@@ -648,7 +810,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if check_cmdwin() {
                     return;
                 }
-                nvim_do_window_find_in_path(nchar, prenum, prenum1);
+                do_window_find_in_path(nchar, prenum, prenum1);
             }
 
             // =================================================================
@@ -746,7 +908,7 @@ pub extern "C" fn rs_do_window_g(prenum: c_int, mut xchar: c_int) {
             // =================================================================
             CH_F | CH_F_UPPER => {
                 nvim_set_cmdmod_tab_to_curtab_idx();
-                nvim_do_window_goto_file(xchar, prenum1);
+                do_window_goto_file(xchar, prenum1);
             }
 
             // =================================================================
@@ -776,7 +938,7 @@ pub extern "C" fn rs_do_window_g(prenum: c_int, mut xchar: c_int) {
             // External window: 'e'
             // =================================================================
             CH_E => {
-                nvim_do_window_g_external();
+                do_window_g_external();
             }
 
             // =================================================================

@@ -90,6 +90,7 @@
 extern void rs_tagstack_clear_entry(void *tg);
 extern void rs_reset_VIsual_and_resel(void);
 extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
+extern size_t rs_find_ident_under_cursor(char **text, int find_type);
 
 // Phase 9: win_init migration
 extern void rs_win_init(win_T *newp, win_T *oldp, int flags);
@@ -2126,65 +2127,51 @@ win_T *nvim_win_get_prev_win(win_T *wp) { return wp ? wp->w_prev : NULL; }
 
 // nvim_do_window_tag deleted: logic migrated to Rust dispatch.rs (Phase 8)
 
-/// Wrapper: The 'f'/'F'/Ctrl-F file-goto command.
-void nvim_do_window_goto_file(int nchar, int Prenum1)
+// nvim_do_window_goto_file deleted: logic migrated to Rust dispatch.rs (Phase 10)
+// nvim_do_window_find_in_path deleted: logic migrated to Rust dispatch.rs (Phase 10)
+
+// Phase 10 accessors: goto_file and find_in_path handlers
+// (nvim_grab_file_name already exists in normal_shim.c with int* lnum_out)
+
+/// buflist_findname_exp wrapper.
+buf_T *nvim_buflist_findname_exp(const char *ptr) { return buflist_findname_exp(ptr); }
+
+/// setpcmark() wrapper.
+void nvim_setpcmark_curwin(void) { setpcmark(); }
+
+/// win_split(0,0) wrapper returning OK/FAIL.
+// (nvim_win_split_wrapper already exists)
+
+/// RESET_BINDING(curwin) wrapper.
+void nvim_reset_binding_curwin(void) { RESET_BINDING(curwin); }
+
+/// do_ecmd(0, ptr, NULL, NULL, ECMD_LASTL, ECMD_HIDE, NULL) wrapper.
+int nvim_do_ecmd_lastl_hide(const char *ptr)
 {
-  if (rs_check_text_or_curbuf_locked(NULL)) {
-    return;
-  }
-
-  linenr_T lnum = -1;
-  char *ptr = grab_file_name(Prenum1, &lnum);
-  if (ptr != NULL) {
-    tabpage_T *oldtab = curtab;
-    win_T *oldwin = curwin;
-    setpcmark();
-
-    win_T *wp = NULL;
-    if ((swb_flags & (kOptSwbFlagUseopen | kOptSwbFlagUsetab))
-        && cmdmod.cmod_tab == 0) {
-      wp = swbuf_goto_win_with_buf(buflist_findname_exp(ptr));
-    }
-
-    if (wp == NULL && win_split(0, 0) == OK) {
-      RESET_BINDING(curwin);
-      if (do_ecmd(0, ptr, NULL, NULL, ECMD_LASTL, ECMD_HIDE, NULL) == FAIL) {
-        win_close(curwin, false, false);
-        goto_tabpage_win(oldtab, oldwin);
-      } else {
-        wp = curwin;
-      }
-    }
-
-    if (wp != NULL && nchar == 'F' && lnum >= 0) {
-      curwin->w_cursor.lnum = lnum;
-      check_cursor_lnum(curwin);
-      beginline(BL_SOL | BL_FIX);
-    }
-    xfree(ptr);
-  }
+  return do_ecmd(0, ptr, NULL, NULL, ECMD_LASTL, ECMD_HIDE, NULL);
 }
 
-/// Wrapper: The 'i'/'d' find-in-path command.
-void nvim_do_window_find_in_path(int nchar, int Prenum, int Prenum1)
+/// check_cursor_lnum(curwin) wrapper.
+void nvim_check_cursor_lnum_curwin(void) { check_cursor_lnum(curwin); }
+
+/// beginline(BL_SOL | BL_FIX) wrapper.
+void nvim_beginline_sol_fix(void) { beginline(BL_SOL | BL_FIX); }
+
+// nvim_set_curwin_cursor_lnum already exists in change_ffi.c
+
+/// find_pattern_in_path with ACTION_SPLIT and fixed extra params.
+/// @param whole  1 to search whole file (Prenum == 0), 0 otherwise
+void nvim_find_pattern_in_path_split(const char *ptr, size_t len, int type, int prenum1, int whole)
 {
-  int type = FIND_DEFINE;
-  if (nchar == 'i' || nchar == Ctrl_I) {
-    type = FIND_ANY;
-  }
-
-  size_t len;
-  char *ptr;
-  if ((len = rs_find_ident_under_cursor(&ptr, FIND_IDENT)) == 0) {
-    return;
-  }
-
-  ptr = xmemdupz(ptr, len);
-  find_pattern_in_path(ptr, 0, len, true, Prenum == 0, type,
-                       Prenum1, ACTION_SPLIT, 1, MAXLNUM, false, false);
-  xfree(ptr);
-  curwin->w_set_curswant = true;
+  find_pattern_in_path(ptr, 0, len, true, whole != 0, type,
+                       prenum1, ACTION_SPLIT, 1, MAXLNUM, false, false);
 }
+
+/// curwin->w_set_curswant = true wrapper.
+void nvim_set_curswant_curwin(void) { curwin->w_set_curswant = true; }
+
+/// rs_find_ident_under_cursor wrapper: sets *pp to pointer into buffer, returns len.
+size_t nvim_find_ident_under_cursor(char **pp) { return rs_find_ident_under_cursor(pp, FIND_IDENT); }
 
 // New one-liner wrappers for rs_do_window_g (Phase 3)
 // (nvim_inc/dec_no_mapping, nvim_inc/dec_allow_keys, nvim_goto_tabpage,
@@ -2194,13 +2181,15 @@ int nvim_get_p_pvh(void) { return (int)p_pvh; }
 void nvim_do_nv_ident(int prefix, int xchar) { do_nv_ident(prefix, xchar); }
 void nvim_set_cmdmod_tab_to_curtab_idx(void) { cmdmod.cmod_tab = rs_tabpage_index(curtab) + 1; }
 
-/// External window case for 'g' sub-switch ('e' command).
-/// Kept in C to avoid marshalling WinConfig and Error types.
-void nvim_do_window_g_external(void)
+// nvim_do_window_g_external deleted: logic migrated to Rust dispatch.rs (Phase 10)
+
+/// win_new_float external wrapper: converts curwin to external float.
+/// Returns 1 on success, 0 on failure (also calls beep_flush on failure).
+/// Returns -1 if curwin is already floating or kUIMultigrid not supported.
+int nvim_win_new_float_external(void)
 {
   if (curwin->w_floating || !ui_has(kUIMultigrid)) {
-    beep_flush();
-    return;
+    return -1;
   }
   WinConfig config = WIN_CONFIG_INIT;
   config.width = curwin->w_width;
@@ -2210,8 +2199,9 @@ void nvim_do_window_g_external(void)
   if (!win_new_float(curwin, false, config, &err)) {
     emsg(err.msg);
     api_clear_error(&err);
-    beep_flush();
+    return 0;
   }
+  return 1;
 }
 
 _Static_assert(16384 == FRACTION_MULT, "FRACTION_MULT mismatch");
