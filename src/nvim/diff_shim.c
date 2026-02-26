@@ -111,6 +111,7 @@ extern void rs_ex_diffpatch(exarg_T *eap);
 extern int rs_diff_write_buffer(buf_T *buf, char **m_ptr, int *m_size,
                                 linenr_T start, linenr_T end, int diff_flags);
 extern int rs_diff_file_internal(void *dio);
+extern int rs_diff_file(void *dio);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -245,9 +246,12 @@ static int diff_write_buffer(buf_T *buf, mmfile_t *m, linenr_T start, linenr_T e
 /// Write buffer "buf" to file or memory buffer.
 ///
 /// Always use 'fileformat' set to "unix".
+/// Dispatches to rs_diff_write_buffer (Rust) or nvim_diff_write_to_file.
 ///
 /// @param buf
 /// @param din
+/// @param start
+/// @param end
 ///
 /// @return FAIL for failure
 static int diff_write(buf_T *buf, diffin_T *din, linenr_T start, linenr_T end)
@@ -255,32 +259,7 @@ static int diff_write(buf_T *buf, diffin_T *din, linenr_T start, linenr_T end)
   if (din->din_fname == NULL) {
     return diff_write_buffer(buf, &din->din_mmfile, start, end);
   }
-
-  if (end < 0) {
-    end = buf->b_ml.ml_line_count;
-  }
-
-  // Always use 'fileformat' set to "unix".
-  int save_ml_flags = buf->b_ml.ml_flags;
-  char *save_ff = buf->b_p_ff;
-  buf->b_p_ff = xstrdup("unix");
-  const bool save_cmod_flags = cmdmod.cmod_flags;
-  // Writing the buffer is an implementation detail of performing the diff,
-  // so it shouldn't update the '[ and '] marks.
-  cmdmod.cmod_flags |= CMOD_LOCKMARKS;
-  if (end < start) {
-    // The line range specifies a completely empty file.
-    end = start;
-    buf->b_ml.ml_flags |= ML_EMPTY;
-  }
-  int r = buf_write(buf, din->din_fname, NULL,
-                    start, end,
-                    NULL, false, false, false, true);
-  cmdmod.cmod_flags = save_cmod_flags;
-  free_string_option(buf->b_p_ff);
-  buf->b_p_ff = save_ff;
-  buf->b_ml.ml_flags = (buf->b_ml.ml_flags & ~ML_EMPTY) | (save_ml_flags & ML_EMPTY);
-  return r;
+  return nvim_diff_write_to_file(buf, din->din_fname, start, end);
 }
 
 /// Completely update the diffs for the buffers involved.
@@ -390,48 +369,7 @@ static int diff_file_internal(diffio_T *diffio)
 /// @return OK or FAIL
 static int diff_file(diffio_T *dio)
 {
-  char *tmp_orig = dio->dio_orig.din_fname;
-  char *tmp_new = dio->dio_new.din_fname;
-  char *tmp_diff = dio->dio_diff.dout_fname;
-  if (*p_dex != NUL) {
-    // Use 'diffexpr' to generate the diff file.
-    eval_diff(tmp_orig, tmp_new, tmp_diff);
-    return OK;
-  }
-  // Use xdiff for generating the diff.
-  if (dio->dio_internal) {
-    return diff_file_internal(dio);
-  }
-
-  const size_t len = (strlen(tmp_orig) + strlen(tmp_new) + strlen(tmp_diff)
-                      + strlen(p_srr) + 27);
-  char *const cmd = xmalloc(len);
-
-  // We don't want $DIFF_OPTIONS to get in the way.
-  if (os_env_exists("DIFF_OPTIONS", true)) {
-    os_unsetenv("DIFF_OPTIONS");
-  }
-
-  // Build the diff command and execute it.  Always use -a, binary
-  // differences are of no use.  Ignore errors, diff returns
-  // non-zero when differences have been found.
-  vim_snprintf(cmd, len, "diff %s%s%s%s%s%s%s%s %s",
-               diff_a_works == kFalse ? "" : "-a ",
-               "",
-               (diff_flags & DIFF_IWHITE) ? "-b " : "",
-               (diff_flags & DIFF_IWHITEALL) ? "-w " : "",
-               (diff_flags & DIFF_IWHITEEOL) ? "-Z " : "",
-               (diff_flags & DIFF_IBLANK) ? "-B " : "",
-               (diff_flags & DIFF_ICASE) ? "-i " : "",
-               tmp_orig, tmp_new);
-  append_redir(cmd, len, p_srr, tmp_diff);
-  block_autocmds();  // Avoid ShellCmdPost stuff
-  call_shell(cmd,
-             kShellOptFilter | kShellOptSilent | kShellOptDoOut,
-             NULL);
-  unblock_autocmds();
-  xfree(cmd);
-  return OK;
+  return rs_diff_file(dio);
 }
 
 /// Create a new version of a file from the current buffer and a diff file.
@@ -672,6 +610,15 @@ char *nvim_diffio_get_new_ptr(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_p
 int nvim_diffio_get_new_size(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_new.din_mmfile.size : 0; }
 void *nvim_diffio_get_dout(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? &dio->dio_diff : NULL; }
 void nvim_diff_emsg_e960(void) { emsg(_("E960: Problem creating the internal diff")); }
+// Phase 3 (diff_file, diff_write) accessors
+const char *nvim_diffio_get_orig_fname(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_orig.din_fname : NULL; }
+const char *nvim_diffio_get_new_fname(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_new.din_fname : NULL; }
+const char *nvim_diffio_get_diff_fname(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_diff.dout_fname : NULL; }
+int nvim_diff_write_to_file(buf_T *buf, const char *fname, linenr_T start, linenr_T end) { diffin_T din = { .din_fname = (char *)fname }; return diff_write(buf, &din, start, end); }
+int nvim_diff_get_a_works(void) { return (int)diff_a_works; }
+void nvim_diff_set_a_works(int val) { diff_a_works = (TriState)val; }
+void nvim_diff_eval_diff(const char *orig, const char *new_f, const char *diff) { eval_diff((char *)orig, (char *)new_f, (char *)diff); }
+int nvim_diff_run_external_shell(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return FAIL; } char *tmp_orig = dio->dio_orig.din_fname; char *tmp_new = dio->dio_new.din_fname; char *tmp_diff = dio->dio_diff.dout_fname; const size_t len = (strlen(tmp_orig) + strlen(tmp_new) + strlen(tmp_diff) + strlen(p_srr) + 27); char *const cmd = xmalloc(len); if (os_env_exists("DIFF_OPTIONS", true)) { os_unsetenv("DIFF_OPTIONS"); } vim_snprintf(cmd, len, "diff %s%s%s%s%s%s%s%s %s", diff_a_works == kFalse ? "" : "-a ", "", (diff_flags & DIFF_IWHITE) ? "-b " : "", (diff_flags & DIFF_IWHITEALL) ? "-w " : "", (diff_flags & DIFF_IWHITEEOL) ? "-Z " : "", (diff_flags & DIFF_IBLANK) ? "-B " : "", (diff_flags & DIFF_ICASE) ? "-i " : "", tmp_orig, tmp_new); append_redir(cmd, len, p_srr, tmp_diff); block_autocmds(); call_shell(cmd, kShellOptFilter | kShellOptSilent | kShellOptDoOut, NULL); unblock_autocmds(); xfree(cmd); return OK; }
 // Phase 5 (inline_compute) accessors
 int nvim_xdiff_internal_run(const char *orig_data, int orig_size, const char *new_data, int new_size, void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return FAIL; } dio->dio_orig.din_mmfile.ptr = (char *)orig_data; dio->dio_orig.din_mmfile.size = orig_size; dio->dio_new.din_mmfile.ptr = (char *)new_data; dio->dio_new.din_mmfile.size = new_size; return diff_file_internal(dio); }
 uint64_t *nvim_diffbuf_get_chartab(int idx) { if (idx < 0 || idx >= DB_COUNT || curtab->tp_diffbuf[idx] == NULL) { return NULL; } return curtab->tp_diffbuf[idx]->b_chartab; }

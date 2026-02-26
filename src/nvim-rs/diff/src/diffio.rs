@@ -179,6 +179,13 @@ extern "C" {
         priv_: *mut std::ffi::c_void,
     ) -> c_int;
 
+    // Phase 3 (diff_file, diff_write) accessors
+    fn nvim_diffio_get_orig_fname(dio: DiffioHandle) -> *const c_char;
+    fn nvim_diffio_is_internal(dio: DiffioHandle) -> bool;
+    fn nvim_diff_eval_diff(orig: *const c_char, new_f: *const c_char, diff: *const c_char);
+    fn nvim_diff_run_external_shell(dio: DiffioHandle) -> c_int;
+    fn nvim_diffio_get_diff_fname(dio: DiffioHandle) -> *const c_char;
+
     /// xdl_diff -- the xdiff library entry point.
     fn xdl_diff(
         mf1: *const MmFileInternal,
@@ -379,4 +386,44 @@ pub unsafe extern "C" fn rs_diff_file_internal(dio: DiffioHandle) -> c_int {
         return FAIL;
     }
     OK
+}
+
+// ============================================================================
+// Phase 3: diff_file (dispatch between diffexpr, internal xdiff, external shell)
+// ============================================================================
+
+/// Dispatch diff computation for files stored in `dio`.
+///
+/// Replicates C `diff_file(dio)`:
+/// - If diffexpr is set (`p_dex != NUL`): run eval_diff
+/// - If internal flag set in dio: run rs_diff_file_internal (xdiff)
+/// - Otherwise: run external shell diff
+///
+/// # Safety
+/// `dio` must be a valid, non-null diffio handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_file(dio: DiffioHandle) -> c_int {
+    if !nvim_is_diffexpr_empty() {
+        // Use 'diffexpr' to generate the diff file.
+        let orig = nvim_diffio_get_orig_fname(dio);
+        let new_f = nvim_diffio_get_new_fname(dio);
+        let diff = nvim_diffio_get_diff_fname(dio);
+        nvim_diff_eval_diff(orig, new_f, diff);
+        return OK;
+    }
+
+    // Use xdiff for internal diff.
+    if nvim_diffio_is_internal(dio) {
+        return rs_diff_file_internal(dio);
+    }
+
+    // External shell diff.
+    nvim_diff_run_external_shell(dio)
+}
+
+// Additional accessor used in rs_diff_file but declared in buffer.rs for other uses.
+// Re-declare here to avoid cross-module dependencies.
+extern "C" {
+    fn nvim_is_diffexpr_empty() -> bool;
+    fn nvim_diffio_get_new_fname(dio: DiffioHandle) -> *const c_char;
 }
