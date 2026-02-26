@@ -2942,25 +2942,50 @@ static int compl_get_info(char *line, int startcol, colnr_T curs_col, bool *line
   return ret;
 }
 
-/// Compound accessor: initialize completion flags and call stop_arrow.
-/// Saves did_ai into *save_did_ai, clears indent flags, calls stop_arrow.
-/// Returns OK on success, FAIL if stop_arrow fails (restores did_ai on FAIL).
-int nvim_ins_compl_start_init_impl(int *save_did_ai_out)
-{
-  const bool save_did_ai = did_ai;
-  *save_did_ai_out = save_did_ai ? 1 : 0;
-  did_ai = false;
-  did_si = false;
-  can_si = false;
-  can_si_back = false;
-  if (stop_arrow() == FAIL) {
-    did_ai = save_did_ai;
+// =============================================================================
+// Phase 10 (pass 10): New fine-grained accessors for start/init migration
+// =============================================================================
+
+// nvim_get_did_ai: defined in change_ffi.c (bool nvim_get_did_ai(void))
+// nvim_set_did_ai: defined in change_ffi.c (void nvim_set_did_ai(bool val))
+void nvim_clear_indent_flags(void) { did_si = false; can_si = false; can_si_back = false; }
+void nvim_set_compl_lnum_to_cursor(void) { compl_lnum = curwin->w_cursor.lnum; }
+void nvim_ins_eol_wrap(int c) { ins_eol(c); }
+void nvim_set_curbuf_b_p_com_empty(void) { curbuf->b_p_com = ""; }
+void nvim_restore_curbuf_b_p_com(const char *old_val) { curbuf->b_p_com = (char *)old_val; }
+const char *nvim_get_curbuf_b_p_com(void) { return curbuf->b_p_com; }
+void nvim_set_compl_startpos_lnum_col(int lnum_to_cursor, int col) {
+  if (lnum_to_cursor) {
+    compl_startpos.lnum = curwin->w_cursor.lnum;
+  }
+  compl_startpos.col = (colnr_T)col;
+}
+/// Set compl_orig_text from line+compl_col with length compl_length.
+void nvim_set_compl_orig_text_from_line(const char *line) {
+  API_CLEAR_STRING(compl_orig_text);
+  kv_destroy(compl_orig_extmarks);
+  compl_orig_text = cbuf_to_string(line + compl_col, (size_t)compl_length);
+}
+/// Add orig text as first completion match. Returns OK or FAIL.
+/// On FAIL, clears pattern/orig_text/extmarks and restores did_ai.
+int nvim_ins_compl_add_orig_text(int flags, int save_did_ai) {
+  if (ins_compl_add(compl_orig_text.data, (int)compl_orig_text.size,
+                    NULL, NULL, false, NULL, 0,
+                    flags, false, NULL, FUZZY_SCORE_NONE) != OK) {
+    API_CLEAR_STRING(compl_pattern);
+    API_CLEAR_STRING(compl_orig_text);
+    kv_destroy(compl_orig_extmarks);
+    did_ai = save_did_ai != 0;
     return FAIL;
   }
-  compl_pending = 0;
-  compl_lnum = curwin->w_cursor.lnum;
   return OK;
 }
+void nvim_set_edit_submode_extra_searching(void) { edit_submode_extra = _("-- Searching..."); }
+void nvim_showmode_wrap(void) { showmode(); }
+
+// NOTE: nvim_ins_compl_start_init_impl body migrated to Rust rs_ins_compl_start
+// (Phase 10, pass 10). Uses fine-grained accessors: nvim_get_did_ai, nvim_set_did_ai,
+// nvim_clear_indent_flags, nvim_stop_arrow, nvim_set_compl_pending, nvim_set_compl_lnum_to_cursor.
 
 /// Compound accessor: set compl_startpos to the current cursor position.
 void nvim_set_compl_startpos_to_cursor(void)
@@ -2996,54 +3021,19 @@ void nvim_set_edit_submode_ctrl_x_local_or_mode(void)
   }
 }
 
-/// Compound accessor: add the original text as the first completion match.
-/// Sets compl_orig_text, saves extmarks, calls ins_compl_add.
-/// Returns OK or FAIL. On FAIL, also restores did_ai from save_did_ai.
-int nvim_ins_compl_start_add_orig_impl(char *line, int save_did_ai)
-{
-  API_CLEAR_STRING(compl_orig_text);
-  kv_destroy(compl_orig_extmarks);
-  compl_orig_text = cbuf_to_string(line + compl_col, (size_t)compl_length);
-  save_orig_extmarks();
-  int flags = CP_ORIGINAL_TEXT;
-  if (p_ic) {
-    flags |= CP_ICASE;
-  }
-  if (ins_compl_add(compl_orig_text.data, (int)compl_orig_text.size,
-                    NULL, NULL, false, NULL, 0,
-                    flags, false, NULL, FUZZY_SCORE_NONE) != OK) {
-    API_CLEAR_STRING(compl_pattern);
-    API_CLEAR_STRING(compl_orig_text);
-    kv_destroy(compl_orig_extmarks);
-    did_ai = save_did_ai != 0;
-    return FAIL;
-  }
-  return OK;
-}
+// NOTE: nvim_ins_compl_start_add_orig_impl body migrated to Rust rs_ins_compl_start
+// (Phase 10, pass 10). Uses: nvim_compl_clear_orig_text, nvim_clear_compl_orig_extmarks,
+// nvim_set_compl_orig_text_from_line, rs_save_orig_extmarks, nvim_get_p_ic,
+// nvim_ins_compl_add_orig_text, nvim_compl_clear_pattern, nvim_restore_did_ai.
 
-/// Compound accessor: show "Searching..." mode and flush UI.
-void nvim_ins_compl_start_show_searching_impl(void)
-{
-  edit_submode_extra = _("-- Searching...");
-  edit_submode_highl = HLF_COUNT;
-  showmode();
-  edit_submode_extra = NULL;
-  ui_flush();
-}
+// NOTE: nvim_ins_compl_start_show_searching_impl body migrated to Rust rs_ins_compl_start
+// (Phase 10, pass 10). Uses: nvim_set_edit_submode_extra_searching,
+// nvim_set_edit_submode_highl_count, nvim_showmode_wrap, nvim_clear_edit_submode_extra, nvim_ui_flush.
 
-/// Compound accessor: adding mode -- handle ins_eol for line/eval completion.
-void nvim_ins_compl_start_adding_eol_impl(void)
-{
-  char *old = curbuf->b_p_com;
-  curbuf->b_p_com = "";
-  compl_startpos.lnum = curwin->w_cursor.lnum;
-  compl_startpos.col = (colnr_T)compl_col;
-  ins_eol('\r');
-  curbuf->b_p_com = old;
-  compl_length = 0;
-  compl_col = curwin->w_cursor.col;
-  compl_lnum = curwin->w_cursor.lnum;
-}
+// NOTE: nvim_ins_compl_start_adding_eol_impl body migrated to Rust rs_ins_compl_start
+// (Phase 10, pass 10). Uses: nvim_get_curbuf_b_p_com, nvim_set_curbuf_b_p_com_empty,
+// nvim_set_compl_startpos_lnum_col, nvim_ins_eol_wrap, nvim_restore_curbuf_b_p_com,
+// nvim_set_compl_length, nvim_set_compl_col, nvim_set_compl_lnum_to_cursor, nvim_get_cursor_col.
 
 /// Compound accessor: set edit_submode_pre to _(" Adding").
 void nvim_set_edit_submode_adding(void)

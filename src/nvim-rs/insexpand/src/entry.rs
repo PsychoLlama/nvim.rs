@@ -44,8 +44,23 @@ extern "C" {
     fn nvim_get_userdefined_compl_info_impl(curs_col: c_int) -> c_int;
     fn nvim_internal_error_compl_get_info();
 
-    // Accessors for ins_compl_start
-    fn nvim_ins_compl_start_init_impl(save_did_ai_out: *mut c_int) -> c_int;
+    // Accessors for ins_compl_start (Phase 10)
+    fn nvim_get_did_ai() -> bool;
+    fn nvim_set_did_ai(val: bool);
+    fn nvim_clear_indent_flags();
+    fn nvim_set_compl_lnum_to_cursor();
+    fn nvim_ins_eol_wrap(c: c_int);
+    fn nvim_get_curbuf_b_p_com() -> *const c_char;
+    fn nvim_set_curbuf_b_p_com_empty();
+    fn nvim_restore_curbuf_b_p_com(old_val: *const c_char);
+    fn nvim_set_compl_startpos_lnum_col(lnum_to_cursor: c_int, col: c_int);
+    fn nvim_set_compl_orig_text_from_line(line: *const c_char);
+    fn nvim_ins_compl_add_orig_text(flags: c_int, save_did_ai: c_int) -> c_int;
+    fn rs_save_orig_extmarks();
+    fn nvim_set_edit_submode_extra_searching();
+    fn nvim_showmode_wrap();
+    fn nvim_set_compl_col(val: c_int);
+    fn nvim_set_compl_length(val: c_int);
     fn nvim_get_compl_cont_mode() -> c_int;
     fn nvim_set_compl_cont_status(val: c_int);
     fn nvim_compl_cont_status_or(mask: c_int);
@@ -55,17 +70,21 @@ extern "C" {
     fn nvim_set_compl_startpos_col_to_compl_col();
     fn nvim_restore_did_ai(saved_val: c_int);
     fn nvim_set_edit_submode_ctrl_x_local_or_mode();
-    fn nvim_ins_compl_start_add_orig_impl(line: *mut c_char, save_did_ai: c_int) -> c_int;
-    fn nvim_ins_compl_start_show_searching_impl();
-    fn nvim_ins_compl_start_adding_eol_impl();
     fn nvim_set_edit_submode_adding();
     fn nvim_clear_edit_submode_pre();
+    fn nvim_set_edit_submode_highl_count();
+    fn nvim_clear_edit_submode_extra();
     fn nvim_shortmess_completionmenu() -> bool;
     fn nvim_get_compl_autocomplete() -> c_int;
     fn nvim_ml_get_curline() -> *const c_char;
     fn nvim_get_curwin_cursor_lnum() -> c_int;
     fn nvim_set_compl_pending(val: c_int);
+    fn nvim_get_p_ic() -> c_int;
 }
+
+// CP flags (must match C enum)
+const CP_ORIGINAL_TEXT: c_int = 1;
+const CP_ICASE: c_int = 16;
 
 // CTRL-X mode constants
 const CTRL_X_NORMAL: c_int = 0;
@@ -157,10 +176,16 @@ pub unsafe extern "C" fn rs_compl_get_info(
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     // Block 1: init flags, stop_arrow, get line/col
-    let mut save_did_ai: c_int = 0;
-    if nvim_ins_compl_start_init_impl(&raw mut save_did_ai) == FAIL {
+    // (was nvim_ins_compl_start_init_impl; inlined here in Phase 10)
+    let save_did_ai: bool = nvim_get_did_ai();
+    nvim_set_did_ai(false);
+    nvim_clear_indent_flags();
+    if nvim_stop_arrow() == FAIL {
+        nvim_restore_did_ai(c_int::from(save_did_ai));
         return FAIL;
     }
+    nvim_set_compl_pending(0);
+    nvim_set_compl_lnum_to_cursor();
     // line and curs_col are obtained via accessors
     let line = nvim_ml_get_curline().cast_mut();
     let curs_col = nvim_get_cursor_col();
@@ -201,7 +226,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
             || rs_thesaurus_func_complete(ctrl_x_mode) != 0
         {
             // Restore did_ai so that adding comment leader works
-            nvim_restore_did_ai(save_did_ai);
+            nvim_restore_did_ai(c_int::from(save_did_ai));
         }
         return FAIL;
     }
@@ -220,7 +245,16 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
         }
         if rs_ctrl_x_mode_line_or_eval() != 0 {
             // Insert a new line, keep indentation but ignore 'comments'.
-            nvim_ins_compl_start_adding_eol_impl();
+            // (was nvim_ins_compl_start_adding_eol_impl; inlined here in Phase 10)
+            let old_b_p_com = nvim_get_curbuf_b_p_com();
+            nvim_set_curbuf_b_p_com_empty();
+            let compl_col = nvim_get_compl_col();
+            nvim_set_compl_startpos_lnum_col(1, compl_col);
+            nvim_ins_eol_wrap(c_int::from(b'\r'));
+            nvim_restore_curbuf_b_p_com(old_b_p_com);
+            nvim_set_compl_length(0);
+            nvim_set_compl_col(nvim_get_cursor_col());
+            nvim_set_compl_lnum_to_cursor();
         }
     } else {
         nvim_clear_edit_submode_pre();
@@ -236,16 +270,28 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     rs_ins_compl_fixRedoBufForLeader(std::ptr::null());
 
     // Block 8: add the original text as the first completion match
-    if nvim_ins_compl_start_add_orig_impl(line, save_did_ai) == FAIL {
+    // (was nvim_ins_compl_start_add_orig_impl; inlined here in Phase 10)
+    nvim_set_compl_orig_text_from_line(line);
+    rs_save_orig_extmarks();
+    let mut orig_flags: c_int = CP_ORIGINAL_TEXT;
+    if nvim_get_p_ic() != 0 {
+        orig_flags |= CP_ICASE;
+    }
+    if nvim_ins_compl_add_orig_text(orig_flags, c_int::from(save_did_ai)) == FAIL {
         return FAIL;
     }
 
     // Block 9: show "Searching..." status message
+    // (was nvim_ins_compl_start_show_searching_impl; inlined here in Phase 10)
     if !nvim_shortmess_completionmenu() && nvim_get_compl_autocomplete() == 0 {
-        nvim_ins_compl_start_show_searching_impl();
+        nvim_set_edit_submode_extra_searching();
+        nvim_set_edit_submode_highl_count();
+        nvim_showmode_wrap();
+        nvim_clear_edit_submode_extra();
+        nvim_ui_flush();
     }
 
-    nvim_restore_did_ai(save_did_ai);
+    nvim_restore_did_ai(c_int::from(save_did_ai));
     OK
 }
 
