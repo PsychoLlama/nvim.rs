@@ -2645,12 +2645,17 @@ pub unsafe extern "C" fn rs_find_tags(
 // =============================================================================
 
 extern "C" {
-    // Accessor: check if curbuf tagfunc is configured and ready
-    fn nvim_tag_curbuf_tfu_is_ready() -> bool;
+    // Phase 2: fine-grained accessors replacing nvim_tag_curbuf_tfu_is_ready
+    fn nvim_tag_curbuf_b_p_tfu_is_empty() -> bool;
+    fn nvim_tag_curbuf_tfu_cb_is_none() -> bool;
     // Accessor: get g_tag_at_cursor flag
     fn nvim_tag_get_g_tag_at_cursor() -> bool;
-    // Accessor: get user_data from current tagstack entry (or null)
-    fn nvim_tag_get_curwin_tagstack_user_data() -> *const c_char;
+    // Phase 2: tagstack accessors replacing nvim_tag_get_curwin_tagstack_user_data
+    fn nvim_tag_get_curwin() -> *mut c_void;
+    fn nvim_win_get_tagstacklen(wp: *const c_void) -> c_int;
+    fn nvim_win_get_tagstackidx(wp: *const c_void) -> c_int;
+    fn nvim_win_get_tagstack_entry(wp: *const c_void, idx: c_int) -> *const c_void;
+    fn nvim_taggy_get_user_data(tg: *const c_void) -> *const c_char;
     // Accessor: allocate a VAR_FIXED-locked dict
     fn nvim_tag_dict_alloc_lock_fixed() -> *mut c_void;
     // Accessor: increment/decrement dict refcount
@@ -2712,8 +2717,8 @@ pub unsafe extern "C" fn rs_tag_call_tagfunc(
     out_list: *mut *mut c_void,
     rettv_storage: *mut c_void,
 ) -> c_int {
-    // Check prerequisites: curbuf must have a non-empty tagfunc with a valid callback
-    if !nvim_tag_curbuf_tfu_is_ready() {
+    // Phase 2: inline nvim_tag_curbuf_tfu_is_ready check with fine-grained accessors
+    if nvim_tag_curbuf_b_p_tfu_is_empty() || nvim_tag_curbuf_tfu_cb_is_none() {
         return 4;
     }
 
@@ -2743,8 +2748,21 @@ pub unsafe extern "C" fn rs_tag_call_tagfunc(
     // Allocate the info dict with VAR_FIXED lock
     let d = nvim_tag_dict_alloc_lock_fixed();
 
-    // Add user_data if the current tagstack entry has one
-    let user_data = nvim_tag_get_curwin_tagstack_user_data();
+    // Phase 2: inline nvim_tag_get_curwin_tagstack_user_data logic using fine-grained accessors
+    let curwin = nvim_tag_get_curwin();
+    let tagstacklen = nvim_win_get_tagstacklen(curwin);
+    let user_data: *const c_char = if tagstacklen > 0 {
+        let tagstackidx = nvim_win_get_tagstackidx(curwin);
+        let idx = if tagstackidx == tagstacklen {
+            tagstackidx - 1
+        } else {
+            tagstackidx
+        };
+        let tg = nvim_win_get_tagstack_entry(curwin, idx);
+        nvim_taggy_get_user_data(tg)
+    } else {
+        std::ptr::null()
+    };
     if !user_data.is_null() {
         // key = "user_data", key_len = 9
         nvim_tag_tv_dict_add_str(d, c"user_data".as_ptr(), 9, user_data.cast_mut());

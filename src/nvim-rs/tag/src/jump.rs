@@ -493,17 +493,23 @@ extern "C" {
 // =============================================================================
 
 extern "C" {
-    fn nvim_tag_get_old_key_typed() -> bool;
+    fn nvim_tag_get_KeyTyped() -> bool;
     fn nvim_tag_get_curwin() -> *mut c_void;
-    fn nvim_tag_jumpto_preview_setup(fname: *mut c_char) -> *mut c_char;
-    fn nvim_tag_jumpto_check_swb(fname: *const c_char) -> c_int;
-    fn nvim_tag_jumpto_maybe_split(getfile_result: c_int) -> c_int;
-    fn nvim_tag_jumpto_set_keep_help(
-        keep_help: bool,
-        do_tagpreview: c_int,
-        curwin_save: *const c_void,
-    );
-    fn nvim_tag_jumpto_load_file(fname: *mut c_char, forceit: c_int) -> c_int;
+    // Phase 2: fine-grained jumpto helpers (replacing composite C functions)
+    fn nvim_tag_inc_RedrawingDisabled();
+    fn nvim_tag_curwin_pvw() -> bool;
+    fn nvim_tag_fullname_save(fname: *mut c_char) -> *mut c_char;
+    fn nvim_tag_prepare_tagpreview();
+    fn nvim_tag_swb_has_useopen_or_usetab() -> bool;
+    fn nvim_tag_buflist_findname_exp(fname: *mut c_char) -> *mut c_void;
+    fn nvim_tag_swbuf_goto_win_with_buf(buf: *mut c_void) -> bool;
+    fn nvim_tag_win_split(size: c_int, flags: c_int) -> c_int;
+    fn nvim_tag_get_postponed_split_flags() -> c_int;
+    fn nvim_tag_reset_binding_curwin();
+    fn nvim_tag_set_keep_help_flag(val: bool);
+    fn nvim_tag_bt_help_saved_win(win: *const c_void) -> bool;
+    fn nvim_tag_getfile_call(fname: *mut c_char, forceit: c_int) -> c_int;
+    fn nvim_tag_get_cmdmod_tab() -> c_int;
     // Accessors for rs_tag_jumpto_run_search (Phase 1)
     fn nvim_tag_set_curswant(val: bool);
     fn nvim_tag_get_magic_overruled() -> c_int;
@@ -547,10 +553,6 @@ extern "C" {
     fn nvim_win_enter(wp: *mut c_void, undo_sync: c_int);
     fn nvim_tag_dec_RedrawingDisabled();
     fn nvim_tag_win_close_curwin();
-    fn nvim_tag_getfile_success(getfile_result: c_int) -> bool;
-    fn nvim_tag_getfile_open_other() -> c_int;
-    fn nvim_tag_getfile_unused() -> c_int;
-    fn nvim_tag_redrawing_disabled_inc();
 }
 
 use crate::parse::TagPtrs;
@@ -732,6 +734,8 @@ unsafe fn rs_tag_jumpto_run_search(
 /// - Cursor positioning and fold opening
 /// - Cleanup on error
 ///
+/// Phase 2: jumpto helpers inlined here; composite C functions deleted.
+///
 /// # Safety
 /// All pointer arguments must be valid C strings.
 #[no_mangle]
@@ -744,45 +748,96 @@ pub unsafe extern "C" fn rs_tag_jumpto_execute(
     forceit: c_int,
     keep_help: bool,
 ) -> c_int {
-    let old_key_typed = nvim_tag_get_old_key_typed();
+    /// GETFILE_SAME_FILE = 0 (verified by _Static_assert in tag_shim.c)
+    const GETFILE_SAME_FILE: c_int = 0;
+    /// GETFILE_OPEN_OTHER = -1 (verified by _Static_assert in tag_shim.c)
+    const GETFILE_OPEN_OTHER: c_int = -1;
+    /// GETFILE_UNUSED = 8 (verified by _Static_assert in tag_shim.c)
+    const GETFILE_UNUSED: c_int = 8;
+
+    let old_key_typed = nvim_tag_get_KeyTyped();
     let l_g_do_tagpreview = nvim_get_g_do_tagpreview();
 
     // Increment RedrawingDisabled
-    nvim_tag_redrawing_disabled_inc();
+    nvim_tag_inc_RedrawingDisabled();
 
     // Save curwin for preview window tracking
     let curwin_save = nvim_tag_get_curwin();
 
-    // Preview setup: if g_do_tagpreview && !curwin->w_p_pvw, expand fname and
-    // prepare_tagpreview. Returns heap-allocated full name (or NULL).
-    let full_fname = nvim_tag_jumpto_preview_setup(fname);
+    // --- Inline nvim_tag_jumpto_preview_setup ---
+    // If g_do_tagpreview is set: clear postponed_split.
+    // If curwin is the preview window, no expansion needed; otherwise expand fname.
+    let full_fname: *mut c_char = if l_g_do_tagpreview != 0 {
+        nvim_set_postponed_split(0);
+        if nvim_tag_curwin_pvw() {
+            ptr::null_mut()
+        } else {
+            let full = nvim_tag_fullname_save(fname);
+            nvim_tag_prepare_tagpreview();
+            full
+        }
+    } else {
+        ptr::null_mut()
+    };
     if !full_fname.is_null() {
         fname = full_fname;
     }
 
-    // Check swb flags: if postponed_split && swb allows switching to existing buf
-    let mut getfile_result = nvim_tag_jumpto_check_swb(fname);
+    // --- Inline nvim_tag_jumpto_check_swb ---
+    // If postponed_split && swb has useopen/usetab, try to switch to existing buf.
+    let mut getfile_result: c_int =
+        if nvim_get_postponed_split() != 0 && nvim_tag_swb_has_useopen_or_usetab() {
+            let existing_buf = nvim_tag_buflist_findname_exp(fname);
+            if !existing_buf.is_null() && nvim_tag_swbuf_goto_win_with_buf(existing_buf) {
+                GETFILE_SAME_FILE
+            } else {
+                GETFILE_UNUSED
+            }
+        } else {
+            GETFILE_UNUSED
+        };
 
-    // Maybe split window (postponed_split or cmdmod.cmod_tab)
-    if nvim_tag_jumpto_maybe_split(getfile_result) == FAIL {
-        // RedrawingDisabled was already decremented inside maybe_split on failure
-        xfree(full_fname.cast::<c_void>());
-        return FAIL;
+    // --- Inline nvim_tag_jumpto_maybe_split ---
+    // Split window if postponed_split or cmdmod.cmod_tab is set and not already switched.
+    if getfile_result == GETFILE_UNUSED
+        && (nvim_get_postponed_split() != 0 || nvim_tag_get_cmdmod_tab() != 0)
+    {
+        let split_size = if nvim_get_postponed_split() > 0 {
+            nvim_get_postponed_split()
+        } else {
+            0
+        };
+        if nvim_tag_win_split(split_size, nvim_tag_get_postponed_split_flags()) == FAIL {
+            // Decrement RedrawingDisabled (was incremented above)
+            nvim_tag_dec_RedrawingDisabled();
+            xfree(full_fname.cast::<c_void>());
+            return FAIL;
+        }
+        nvim_tag_reset_binding_curwin();
     }
 
-    // Set keep_help_flag
-    nvim_tag_jumpto_set_keep_help(keep_help, l_g_do_tagpreview, curwin_save);
-
-    // Load file if not already done by swb switch
-    if getfile_result == nvim_tag_getfile_unused() {
-        getfile_result = nvim_tag_jumpto_load_file(fname, forceit);
+    // --- Inline nvim_tag_jumpto_set_keep_help ---
+    if keep_help {
+        if l_g_do_tagpreview != 0 {
+            nvim_tag_set_keep_help_flag(nvim_tag_bt_help_saved_win(curwin_save));
+        } else {
+            nvim_tag_set_keep_help_flag(nvim_curbuf_is_help());
+        }
     }
 
-    let retval = if nvim_tag_getfile_success(getfile_result) {
+    // --- Inline nvim_tag_jumpto_load_file ---
+    // Load file if not already done by swb switch.
+    if getfile_result == GETFILE_UNUSED {
+        getfile_result = nvim_tag_getfile_call(fname, forceit);
+        nvim_tag_set_keep_help_flag(false);
+    }
+
+    // GETFILE_SUCCESS(x) is (x) <= 0
+    let retval = if getfile_result <= 0 {
         // Run search or ex-command (sets result to OK or FAIL).
         // GETFILE_OPEN_OTHER always yields OK regardless of search outcome.
         let raw_search = rs_tag_jumpto_run_search(pbuf, pbuf_end, lbuf);
-        let search_retval = if getfile_result == nvim_tag_getfile_open_other() {
+        let search_retval = if getfile_result == GETFILE_OPEN_OTHER {
             OK
         } else {
             raw_search

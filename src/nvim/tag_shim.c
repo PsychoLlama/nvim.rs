@@ -792,54 +792,18 @@ void *nvim_tag_optset_get_buf(const void *args_void) { const optset_T *args = (c
 const char *nvim_tag_get_e_invarg(void) { return e_invarg; }
 
 // --- Accessor functions for rs_tag_call_tagfunc ---
+// (Phase 2: composite helpers replaced with fine-grained accessors)
 
-/// Returns true if curbuf has a non-empty tagfunc option and a valid callback.
-bool nvim_tag_curbuf_tfu_is_ready(void)
-{
-  return *curbuf->b_p_tfu != NUL && curbuf->b_tfu_cb.type != kCallbackNone;
-}
+/// Returns g_tag_at_cursor.
+bool nvim_tag_get_g_tag_at_cursor(void) { return g_tag_at_cursor; }
 
-/// Returns the global g_tag_at_cursor flag.
-bool nvim_tag_get_g_tag_at_cursor(void)
-{
-  return g_tag_at_cursor;
-}
+/// tv_dict_alloc_lock(VAR_FIXED) wrapper.
+void *nvim_tag_dict_alloc_lock_fixed(void) { return (void *)tv_dict_alloc_lock(VAR_FIXED); }
 
-/// Returns the user_data string from the current tagstack entry, or NULL.
-/// The returned pointer is owned by C and must not be freed.
-const char *nvim_tag_get_curwin_tagstack_user_data(void)
-{
-  if (curwin->w_tagstacklen <= 0) {
-    return NULL;
-  }
-  taggy_T *tag;
-  if (curwin->w_tagstackidx == curwin->w_tagstacklen) {
-    tag = &curwin->w_tagstack[curwin->w_tagstackidx - 1];
-  } else {
-    tag = &curwin->w_tagstack[curwin->w_tagstackidx];
-  }
-  return tag->user_data;
-}
-
-/// Allocate a VAR_FIXED-locked dict and return it as an opaque handle.
-void *nvim_tag_dict_alloc_lock_fixed(void)
-{
-  return (void *)tv_dict_alloc_lock(VAR_FIXED);
-}
-
-/// Increment the refcount of a dict (opaque handle).
-void nvim_tag_dict_refcount_inc(void *dict_void)
-{
-  dict_T *d = (dict_T *)dict_void;
-  d->dv_refcount++;
-}
-
-/// Decrement the refcount of a dict (opaque handle).
-void nvim_tag_dict_refcount_dec(void *dict_void)
-{
-  dict_T *d = (dict_T *)dict_void;
-  d->dv_refcount--;
-}
+/// Increment dict dv_refcount.
+void nvim_tag_dict_refcount_inc(void *dict_void) { ((dict_T *)dict_void)->dv_refcount++; }
+/// Decrement dict dv_refcount.
+void nvim_tag_dict_refcount_dec(void *dict_void) { ((dict_T *)dict_void)->dv_refcount--; }
 
 /// Set up the args and invoke the curbuf tagfunc callback.
 /// - pat: the tag pattern (VAR_STRING arg 0)
@@ -862,24 +826,13 @@ int nvim_tag_do_callback_call_tfu(const char *pat, const char *flag_str,
 }
 
 /// Save curwin->w_cursor into the provided storage (a pos_T*).
-void nvim_tag_save_cursor(void *pos_storage)
-{
-  *(pos_T *)pos_storage = curwin->w_cursor;
-}
+void nvim_tag_save_cursor(void *pos_storage) { *(pos_T *)pos_storage = curwin->w_cursor; }
 
 /// Restore curwin->w_cursor from storage and call check_cursor.
 void nvim_tag_restore_cursor_check(void *pos_storage)
 {
   curwin->w_cursor = *(pos_T *)pos_storage;
   check_cursor(curwin);
-}
-
-/// Returns the type of the typval_T rettv result.
-/// 0=VAR_UNKNOWN, 1=VAR_NUMBER, 2=VAR_STRING, 3=VAR_FUNC, 4=VAR_LIST,
-/// 5=VAR_DICT, 10=VAR_SPECIAL, etc. (matches var_type_T enum).
-int nvim_tag_rettv_get_type(const void *rettv_storage)
-{
-  return (int)((const typval_T *)rettv_storage)->v_type;
 }
 
 /// Returns true if rettv is VAR_SPECIAL with kSpecialVarNull.
@@ -1021,86 +974,59 @@ _Static_assert(TAG_NAMES == 2, "TAG_NAMES value for Rust");
 int rs_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
                           char *lbuf, int forceit, bool keep_help);
 
-/// Returns true if KeyTyped is set.
-bool nvim_tag_get_old_key_typed(void) { return KeyTyped; }
+// Verify swb flag constants used in Rust (Phase 2)
+_Static_assert(kOptSwbFlagUseopen == 0x01, "kOptSwbFlagUseopen value for Rust");
+_Static_assert(kOptSwbFlagUsetab == 0x02, "kOptSwbFlagUsetab value for Rust");
 
-/// Returns true if curwin == the saved win handle.
-bool nvim_tag_curwin_is(const void *win) { return curwin == (const win_T *)win; }
+/// Increment RedrawingDisabled.
+void nvim_tag_inc_RedrawingDisabled(void) { RedrawingDisabled++; }
 
-/// Expand fname with FullName_save if g_do_tagpreview && !curwin->w_p_pvw.
-/// Also clears postponed_split to 0 if g_do_tagpreview.
-/// Returns heap-allocated full name on expansion (caller must xfree), or NULL.
-char *nvim_tag_jumpto_preview_setup(char *fname)
-{
-  if (g_do_tagpreview == 0) {
-    return NULL;
-  }
-  postponed_split = 0;
-  if (!curwin->w_p_pvw) {
-    char *full_fname = FullName_save(fname, false);
-    prepare_tagpreview(true);
-    return full_fname;
-  }
-  return NULL;
-}
+/// Returns curwin->w_p_pvw.
+bool nvim_tag_curwin_pvw(void) { return curwin->w_p_pvw; }
 
-/// Check swb flags + buflist_findname_exp: if postponed_split and useopen/usetab
-/// flags match and existing buf is found, switch to that window.
-/// Returns GETFILE_SAME_FILE if switched, GETFILE_UNUSED otherwise.
-int nvim_tag_jumpto_check_swb(char *fname)
-{
-  if (postponed_split && (swb_flags & (kOptSwbFlagUseopen | kOptSwbFlagUsetab))) {
-    buf_T *const existing_buf = buflist_findname_exp(fname);
-    if (existing_buf != NULL) {
-      if (swbuf_goto_win_with_buf(existing_buf) != NULL) {
-        return GETFILE_SAME_FILE;
-      }
-    }
-  }
-  return GETFILE_UNUSED;
-}
+/// FullName_save(fname, false) wrapper.
+char *nvim_tag_fullname_save(char *fname) { return FullName_save(fname, false); }
 
-/// Split window if postponed_split or cmdmod.cmod_tab is set (and getfile_result
-/// is still GETFILE_UNUSED). Decrements RedrawingDisabled on win_split failure.
-/// Returns OK on success, FAIL if win_split failed.
-int nvim_tag_jumpto_maybe_split(int getfile_result)
-{
-  if (getfile_result == GETFILE_UNUSED
-      && (postponed_split || cmdmod.cmod_tab != 0)) {
-    if (win_split(postponed_split > 0 ? postponed_split : 0,
-                  postponed_split_flags) == FAIL) {
-      RedrawingDisabled--;
-      return FAIL;
-    }
-    RESET_BINDING(curwin);
-  }
-  return OK;
-}
+/// prepare_tagpreview(true) wrapper.
+void nvim_tag_prepare_tagpreview(void) { prepare_tagpreview(true); }
 
-/// Set keep_help_flag based on keep_help argument and preview state.
-/// curwin_save_void: the saved curwin (only used when do_tagpreview != 0).
-void nvim_tag_jumpto_set_keep_help(bool keep_help, int do_tagpreview,
-                                   const void *curwin_save_void)
-{
-  if (!keep_help) {
-    return;
-  }
-  if (do_tagpreview != 0) {
-    const win_T *curwin_save = (const win_T *)curwin_save_void;
-    keep_help_flag = bt_help(curwin_save->w_buffer);
-  } else {
-    keep_help_flag = curbuf->b_help;
-  }
-}
+/// Returns true if swb_flags has useopen or usetab set.
+bool nvim_tag_swb_has_useopen_or_usetab(void) { return (swb_flags & (kOptSwbFlagUseopen | kOptSwbFlagUsetab)) != 0; }
 
-/// Call getfile(0, fname, NULL, true, 0, forceit) and clear keep_help_flag.
-/// Returns getfile result code.
-int nvim_tag_jumpto_load_file(char *fname, int forceit)
-{
-  int result = getfile(0, fname, NULL, true, 0, forceit);
-  keep_help_flag = false;
-  return result;
-}
+/// buflist_findname_exp wrapper.
+void *nvim_tag_buflist_findname_exp(char *fname) { return (void *)buflist_findname_exp(fname); }
+
+/// swbuf_goto_win_with_buf wrapper. Returns true if a window was found.
+bool nvim_tag_swbuf_goto_win_with_buf(void *buf) { return swbuf_goto_win_with_buf((buf_T *)buf) != NULL; }
+
+/// win_split(size, flags) wrapper.
+int nvim_tag_win_split(int size, int flags) { return win_split(size, flags); }
+
+/// Returns postponed_split_flags.
+int nvim_tag_get_postponed_split_flags(void) { return postponed_split_flags; }
+
+/// RESET_BINDING(curwin) wrapper.
+void nvim_tag_reset_binding_curwin(void) { RESET_BINDING(curwin); }
+
+/// Returns keep_help_flag.
+bool nvim_tag_get_keep_help_flag(void) { return keep_help_flag; }
+/// Sets keep_help_flag.
+void nvim_tag_set_keep_help_flag(bool val) { keep_help_flag = val; }
+
+/// bt_help(((win_T*)win)->w_buffer) wrapper.
+bool nvim_tag_bt_help_saved_win(const void *win) { return bt_help(((const win_T *)win)->w_buffer); }
+
+/// getfile(0, fname, NULL, true, 0, forceit) wrapper.
+int nvim_tag_getfile_call(char *fname, int forceit) { return getfile(0, fname, NULL, true, 0, forceit); }
+
+/// Returns cmdmod.cmod_tab.
+int nvim_tag_get_cmdmod_tab(void) { return cmdmod.cmod_tab; }
+
+/// Returns true if *curbuf->b_p_tfu == NUL (tagfunc option is empty).
+bool nvim_tag_curbuf_b_p_tfu_is_empty(void) { return *curbuf->b_p_tfu == NUL; }
+
+/// Returns true if curbuf->b_tfu_cb.type == kCallbackNone.
+bool nvim_tag_curbuf_tfu_cb_is_none(void) { return curbuf->b_tfu_cb.type == kCallbackNone; }
 
 // --- C accessor functions for nvim_tag_jumpto_run_search (Phase 1 migration) ---
 
@@ -1183,21 +1109,8 @@ _Static_assert(GETFILE_UNUSED == 8, "GETFILE_UNUSED value for Rust");
 // nvim_tag_jumpto_run_search migrated to Rust (Phase 1)
 // nvim_tag_jumpto_post_success and nvim_tag_jumpto_post_fail migrated to Rust (Phase 3)
 
-/// Returns true if GETFILE_SUCCESS(getfile_result).
-bool nvim_tag_getfile_success(int getfile_result)
-{
-  return GETFILE_SUCCESS(getfile_result);
-}
-
-/// Returns GETFILE_OPEN_OTHER constant.
-int nvim_tag_getfile_open_other(void) { return GETFILE_OPEN_OTHER; }
-/// Returns GETFILE_SAME_FILE constant.
-int nvim_tag_getfile_same_file(void) { return GETFILE_SAME_FILE; }
-/// Returns GETFILE_UNUSED constant.
-int nvim_tag_getfile_unused(void) { return GETFILE_UNUSED; }
-
-/// Increments RedrawingDisabled.
-void nvim_tag_redrawing_disabled_inc(void) { RedrawingDisabled++; }
+// nvim_tag_getfile_success/open_other/same_file/unused migrated to Rust constants (Phase 2)
+// nvim_tag_redrawing_disabled_inc migrated to nvim_tag_inc_RedrawingDisabled (Phase 2)
 
 /// High-level executor for jumpto_tag (thin wrapper calling Rust).
 int nvim_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
