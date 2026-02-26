@@ -482,6 +482,7 @@ pub unsafe extern "C" fn rs_reset_tagpreview() {
 // Import Rust functions from sibling modules via extern "C"
 extern "C" {
     fn rs_parse_match(lbuf: *mut c_char, tagp: *mut c_void) -> c_int;
+    fn rs_test_for_static(tagp: *const c_void) -> bool;
     fn rs_find_extra(pp: *mut *mut c_char) -> c_int;
     fn rs_expand_tag_fname(fname: *mut c_char, tag_fname: *mut c_char, expand: bool)
         -> *mut c_char;
@@ -503,11 +504,38 @@ extern "C" {
         curwin_save: *const c_void,
     );
     fn nvim_tag_jumpto_load_file(fname: *mut c_char, forceit: c_int) -> c_int;
-    fn nvim_tag_jumpto_run_search(
-        pbuf: *mut c_char,
-        pbuf_end: *mut c_char,
-        lbuf: *mut c_char,
-    ) -> c_int;
+    // Accessors for rs_tag_jumpto_run_search (Phase 1)
+    fn nvim_tag_set_curswant(val: bool);
+    fn nvim_tag_get_magic_overruled() -> c_int;
+    fn nvim_tag_set_magic_overruled(val: c_int);
+    fn nvim_tag_get_no_hlsearch() -> bool;
+    fn nvim_tag_set_no_hlsearch_val(val: bool);
+    fn nvim_tag_cpo_has_tagpat() -> bool;
+    fn nvim_tag_get_p_ws() -> bool;
+    fn nvim_tag_set_p_ws(val: bool);
+    fn nvim_tag_get_p_ic() -> c_int;
+    fn nvim_tag_get_p_scs() -> c_int;
+    fn nvim_tag_set_p_scs(val: c_int);
+    fn nvim_set_p_ic(val: c_int);
+    fn nvim_tag_get_cursor_lnum() -> i32;
+    fn nvim_tag_set_cursor_lnum(val: i32);
+    fn nvim_tag_set_cursor_start();
+    fn nvim_tag_get_secure() -> c_int;
+    fn nvim_tag_set_secure(val: c_int);
+    fn nvim_tag_inc_sandbox();
+    fn nvim_tag_dec_sandbox();
+    fn nvim_tag_skip_regexp(p: *mut c_char, delim: c_int) -> *mut c_char;
+    fn nvim_tag_do_search(dir: c_int, pat: *mut c_char, patlen: usize, options: c_int) -> bool;
+    fn nvim_tag_do_cmdline_cmd(cmd: *mut c_char);
+    fn nvim_tag_wait_return();
+    fn nvim_tag_check_cursor();
+    fn nvim_tag_emsg_e434();
+    fn nvim_tag_msg_e435();
+    fn nvim_tag_get_msg_scrolled() -> c_int;
+    fn nvim_tag_get_msg_silent() -> c_int;
+    fn nvim_tag_ui_has_messages() -> bool;
+    fn nvim_tag_ui_flush();
+    fn nvim_tag_os_delay(msec: c_int);
     // Post-jump helpers (Phase 3 — migrated to Rust inline)
     fn nvim_curbuf_is_help() -> bool;
     fn nvim_tag_set_topline_curwin();
@@ -526,6 +554,172 @@ extern "C" {
 }
 
 use crate::parse::TagPtrs;
+
+// =============================================================================
+// Phase 1: rs_tag_jumpto_run_search — migrated from nvim_tag_jumpto_run_search in C
+// =============================================================================
+
+/// Rust port of the search/cmdline execution phase after a successful getfile.
+///
+/// Mirrors `nvim_tag_jumpto_run_search` in C exactly:
+/// - Sets `curwin->w_set_curswant`
+/// - Saves/restores `magic_overruled`, `no_hlsearch`, `p_ws`, `p_ic`, `p_scs`
+/// - Tries regexp search with up to 4 fallback patterns
+/// - Or executes ex-command in sandbox
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[allow(clippy::too_many_lines)]
+unsafe fn rs_tag_jumpto_run_search(
+    pbuf: *mut c_char,
+    pbuf_end: *mut c_char,
+    lbuf: *mut c_char,
+) -> c_int {
+    /// SEARCH_KEEP = 0x400 (verified by _Static_assert in tag_shim.c)
+    const SEARCH_KEEP: c_int = 0x400;
+    /// OPTION_MAGIC_OFF = 2 (verified by _Static_assert in tag_shim.c)
+    const OPTION_MAGIC_OFF: c_int = 2;
+    /// LSIZE = 512 (verified by _Static_assert in tag_shim.c)
+    const LSIZE: usize = 512;
+
+    let mut retval = FAIL;
+
+    nvim_tag_set_curswant(true);
+    nvim_set_postponed_split(0);
+
+    let save_magic_overruled = nvim_tag_get_magic_overruled();
+    nvim_tag_set_magic_overruled(OPTION_MAGIC_OFF);
+    let save_no_hlsearch = nvim_tag_get_no_hlsearch();
+
+    let search_options: c_int = if nvim_tag_cpo_has_tagpat() {
+        0
+    } else {
+        SEARCH_KEEP
+    };
+
+    // Check if the command is a search pattern (starts with '/' or '?')
+    let mut str_p = pbuf;
+    let first_byte = *pbuf as u8;
+    if first_byte == b'/' || first_byte == b'?' {
+        str_p = nvim_tag_skip_regexp(pbuf.add(1), c_int::from(first_byte as i8)).add(1);
+    }
+
+    if str_p > pbuf_end.sub(1) {
+        // Re-parse lbuf to get tagp (tagline, tagname, tagname_end)
+        let mut tagp = TagPtrs::default();
+        if rs_parse_match(lbuf, (&raw mut tagp).cast::<c_void>()) == FAIL {
+            nvim_tag_set_magic_overruled(save_magic_overruled);
+            if search_options != 0 {
+                nvim_tag_set_no_hlsearch_val(save_no_hlsearch);
+            }
+            return FAIL;
+        }
+
+        let pbuflen = pbuf_end.offset_from(pbuf) as usize;
+
+        let save_p_ws = nvim_tag_get_p_ws();
+        let save_p_ic = nvim_tag_get_p_ic();
+        let save_p_scs = nvim_tag_get_p_scs();
+        nvim_tag_set_p_ws(true);
+        nvim_set_p_ic(0); // false
+        nvim_tag_set_p_scs(0); // false
+        let save_lnum = nvim_tag_get_cursor_lnum();
+
+        // Set cursor to tagline - 1 (or 0 if tagline <= 0)
+        let new_lnum = if tagp.tagline > 0 {
+            tagp.tagline - 1
+        } else {
+            0
+        };
+        nvim_tag_set_cursor_lnum(new_lnum);
+
+        if nvim_tag_do_search(
+            c_int::from(first_byte as i8),
+            pbuf.add(1),
+            pbuflen - 1,
+            search_options,
+        ) {
+            retval = OK;
+        } else {
+            let mut found: c_int = 1;
+            nvim_set_p_ic(1); // true
+            if !nvim_tag_do_search(
+                c_int::from(first_byte as i8),
+                pbuf.add(1),
+                pbuflen - 1,
+                search_options,
+            ) {
+                found = 2;
+                rs_test_for_static((&raw const tagp).cast::<c_void>());
+                let cc = *tagp.tagname_end;
+                *tagp.tagname_end = 0;
+
+                // Build fallback pattern: "^tagname\s\*("
+                let new_len = libc::snprintf(pbuf, LSIZE, c"^%s\\s\\*(".as_ptr(), tagp.tagname);
+                let new_pbuflen = new_len as usize;
+
+                if !nvim_tag_do_search(b'/' as c_int, pbuf, new_pbuflen, search_options) {
+                    // Build wider fallback: "^[#a-zA-Z_].*\<tagname\s\*("
+                    let new_len2 = libc::snprintf(
+                        pbuf,
+                        LSIZE,
+                        c"^\\[#a-zA-Z_]\\.\\*\\<%s\\s\\*(".as_ptr(),
+                        tagp.tagname,
+                    );
+                    let new_pbuflen2 = new_len2 as usize;
+                    if !nvim_tag_do_search(b'/' as c_int, pbuf, new_pbuflen2, search_options) {
+                        found = 0;
+                    }
+                }
+                *tagp.tagname_end = cc;
+            }
+
+            if found == 0 {
+                nvim_tag_emsg_e434();
+                nvim_tag_set_cursor_lnum(save_lnum);
+            } else {
+                if found == 2 || save_p_ic == 0 {
+                    nvim_tag_msg_e435();
+                    // Only delay if not scrolled and not silent and no UI messages
+                    if nvim_tag_get_msg_scrolled() == 0
+                        && nvim_tag_get_msg_silent() == 0
+                        && !nvim_tag_ui_has_messages()
+                    {
+                        nvim_tag_ui_flush();
+                        nvim_tag_os_delay(1010);
+                    }
+                }
+                retval = OK;
+            }
+        }
+
+        nvim_tag_set_p_ws(save_p_ws);
+        nvim_set_p_ic(save_p_ic);
+        nvim_tag_set_p_scs(save_p_scs);
+        nvim_tag_check_cursor();
+    } else {
+        // Ex-command branch
+        let save_secure = nvim_tag_get_secure();
+        nvim_tag_set_secure(1);
+        nvim_tag_inc_sandbox();
+        nvim_tag_set_cursor_start();
+        nvim_tag_do_cmdline_cmd(pbuf);
+        retval = OK;
+
+        if nvim_tag_get_secure() == 2 {
+            nvim_tag_wait_return();
+        }
+        nvim_tag_set_secure(save_secure);
+        nvim_tag_dec_sandbox();
+    }
+
+    nvim_tag_set_magic_overruled(save_magic_overruled);
+    if search_options != 0 {
+        nvim_tag_set_no_hlsearch_val(save_no_hlsearch);
+    }
+
+    retval
+}
 
 /// Rust implementation of the jumpto_execute phase — migrated from C.
 ///
@@ -587,7 +781,7 @@ pub unsafe extern "C" fn rs_tag_jumpto_execute(
     let retval = if nvim_tag_getfile_success(getfile_result) {
         // Run search or ex-command (sets result to OK or FAIL).
         // GETFILE_OPEN_OTHER always yields OK regardless of search outcome.
-        let raw_search = nvim_tag_jumpto_run_search(pbuf, pbuf_end, lbuf);
+        let raw_search = rs_tag_jumpto_run_search(pbuf, pbuf_end, lbuf);
         let search_retval = if getfile_result == nvim_tag_getfile_open_other() {
             OK
         } else {

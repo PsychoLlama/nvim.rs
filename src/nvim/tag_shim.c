@@ -1102,121 +1102,85 @@ int nvim_tag_jumpto_load_file(char *fname, int forceit)
   return result;
 }
 
-/// Execute the search/cmdline phase after a successful getfile.
-/// Sets curwin->w_set_curswant, saves/restores magic_overruled and no_hlsearch.
-/// Handles both regexp search and ex-command patterns in pbuf.
-/// Returns OK or FAIL.
-int nvim_tag_jumpto_run_search(char *pbuf, char *pbuf_end, char *lbuf)
+// --- C accessor functions for nvim_tag_jumpto_run_search (Phase 1 migration) ---
+
+/// Set curwin->w_set_curswant = val.
+void nvim_tag_set_curswant(bool val) { curwin->w_set_curswant = val; }
+
+/// Get magic_overruled as int.
+int nvim_tag_get_magic_overruled(void) { return (int)magic_overruled; }
+/// Set magic_overruled from int.
+void nvim_tag_set_magic_overruled(int val) { magic_overruled = (optmagic_T)val; }
+
+/// Get no_hlsearch flag.
+bool nvim_tag_get_no_hlsearch(void) { return no_hlsearch; }
+/// Call set_no_hlsearch(val).
+void nvim_tag_set_no_hlsearch_val(bool val) { set_no_hlsearch(val); }
+
+/// Returns true if CPO_TAGPAT is in p_cpo.
+bool nvim_tag_cpo_has_tagpat(void) { return vim_strchr(p_cpo, CPO_TAGPAT) != NULL; }
+
+/// Get p_ws.
+bool nvim_tag_get_p_ws(void) { return p_ws; }
+/// Set p_ws.
+void nvim_tag_set_p_ws(bool val) { p_ws = val; }
+
+/// Get p_ic (already have nvim_set_p_ic).
+int nvim_tag_get_p_ic(void) { return p_ic; }
+
+/// Get p_scs.
+int nvim_tag_get_p_scs(void) { return p_scs; }
+/// Set p_scs.
+void nvim_tag_set_p_scs(int val) { p_scs = val; }
+
+/// Get curwin->w_cursor.lnum.
+linenr_T nvim_tag_get_cursor_lnum(void) { return curwin->w_cursor.lnum; }
+/// Set curwin->w_cursor.lnum.
+void nvim_tag_set_cursor_lnum(linenr_T val) { curwin->w_cursor.lnum = val; }
+/// Set cursor to lnum=1, col=0, coladd=0.
+void nvim_tag_set_cursor_start(void) { curwin->w_cursor.lnum = 1; curwin->w_cursor.col = 0; curwin->w_cursor.coladd = 0; }
+
+/// Get secure.
+int nvim_tag_get_secure(void) { return secure; }
+/// Set secure.
+void nvim_tag_set_secure(int val) { secure = val; }
+/// Increment sandbox.
+void nvim_tag_inc_sandbox(void) { sandbox++; }
+/// Decrement sandbox.
+void nvim_tag_dec_sandbox(void) { sandbox--; }
+
+/// skip_regexp(p, delim, false) wrapper.
+char *nvim_tag_skip_regexp(char *p, int delim) { return skip_regexp(p, delim, false); }
+
+/// do_search wrapper for tag search: do_search(NULL, dir, dir, pat, patlen, 1, options, NULL).
+bool nvim_tag_do_search(int dir, char *pat, size_t patlen, int options)
 {
-  int retval = FAIL;
-  int search_options;
-
-  curwin->w_set_curswant = true;
-  postponed_split = 0;
-
-  const optmagic_T save_magic_overruled = magic_overruled;
-  magic_overruled = OPTION_MAGIC_OFF;
-  const bool save_no_hlsearch = no_hlsearch;
-
-  if (vim_strchr(p_cpo, CPO_TAGPAT) != NULL) {
-    search_options = 0;
-  } else {
-    search_options = SEARCH_KEEP;
-  }
-
-  // If the command is a search, try here.
-  char *str = pbuf;
-  if (pbuf[0] == '/' || pbuf[0] == '?') {
-    str = skip_regexp(pbuf + 1, pbuf[0], false) + 1;
-  }
-  if (str > pbuf_end - 1) {
-    tagptrs_T tagp;
-    // Re-parse lbuf to get tagp fields (tagline, tagname, tagname_end)
-    if (rs_parse_match(lbuf, &tagp) == FAIL) {
-      magic_overruled = save_magic_overruled;
-      if (search_options) {
-        set_no_hlsearch(save_no_hlsearch);
-      }
-      return FAIL;
-    }
-
-    size_t pbuflen = (size_t)(pbuf_end - pbuf);
-
-    bool save_p_ws = p_ws;
-    int save_p_ic = p_ic;
-    int save_p_scs = p_scs;
-    p_ws = true;
-    p_ic = false;
-    p_scs = false;
-    linenr_T save_lnum = curwin->w_cursor.lnum;
-
-    curwin->w_cursor.lnum = tagp.tagline > 0 ? tagp.tagline - 1 : 0;
-
-    if (do_search(NULL, pbuf[0], pbuf[0], pbuf + 1, pbuflen - 1, 1,
-                  search_options, NULL)) {
-      retval = OK;
-    } else {
-      int found = 1;
-      p_ic = true;
-      if (!do_search(NULL, pbuf[0], pbuf[0], pbuf + 1, pbuflen - 1, 1,
-                     search_options, NULL)) {
-        found = 2;
-        rs_test_for_static(&tagp);
-        char cc = *tagp.tagname_end;
-        *tagp.tagname_end = NUL;
-        pbuflen = (size_t)snprintf(pbuf, LSIZE, "^%s\\s\\*(", tagp.tagname);
-        if (!do_search(NULL, '/', '/', pbuf, pbuflen, 1, search_options, NULL)) {
-          pbuflen = (size_t)snprintf(pbuf, LSIZE, "^\\[#a-zA-Z_]\\.\\*\\<%s\\s\\*(",
-                                     tagp.tagname);
-          if (!do_search(NULL, '/', '/', pbuf, pbuflen, 1, search_options, NULL)) {
-            found = 0;
-          }
-        }
-        *tagp.tagname_end = cc;
-      }
-      if (found == 0) {
-        emsg(_("E434: Can't find tag pattern"));
-        curwin->w_cursor.lnum = save_lnum;
-      } else {
-        if (found == 2 || !save_p_ic) {
-          msg(_("E435: Couldn't find tag, just guessing!"), 0);
-          if (!msg_scrolled && msg_silent == 0 && !ui_has(kUIMessages)) {
-            ui_flush();
-            os_delay(1010, true);
-          }
-        }
-        retval = OK;
-      }
-    }
-    p_ws = save_p_ws;
-    p_ic = save_p_ic;
-    p_scs = save_p_scs;
-    check_cursor(curwin);
-  } else {
-    const int save_secure = secure;
-    secure = 1;
-    sandbox++;
-    curwin->w_cursor.lnum = 1;
-    curwin->w_cursor.col = 0;
-    curwin->w_cursor.coladd = 0;
-    do_cmdline_cmd(pbuf);
-    retval = OK;
-
-    if (secure == 2) {
-      wait_return(true);
-    }
-    secure = save_secure;
-    sandbox--;
-  }
-
-  magic_overruled = save_magic_overruled;
-  if (search_options) {
-    set_no_hlsearch(save_no_hlsearch);
-  }
-
-  return retval;
+  return do_search(NULL, dir, dir, pat, patlen, 1, options, NULL);
 }
 
+/// do_cmdline_cmd wrapper.
+void nvim_tag_do_cmdline_cmd(char *cmd) { do_cmdline_cmd(cmd); }
+
+/// wait_return(true) wrapper.
+void nvim_tag_wait_return(void) { wait_return(true); }
+
+/// check_cursor(curwin) wrapper.
+void nvim_tag_check_cursor(void) { check_cursor(curwin); }
+
+/// Emit E434 "Can't find tag pattern" error.
+void nvim_tag_emsg_e434(void) { emsg(_("E434: Can't find tag pattern")); }
+/// Emit E435 "Couldn't find tag, just guessing!" message.
+void nvim_tag_msg_e435(void) { msg(_("E435: Couldn't find tag, just guessing!"), 0); }
+
+// Verify constants used in Rust rs_tag_jumpto_run_search
+_Static_assert(SEARCH_KEEP == 0x400, "SEARCH_KEEP value for Rust");
+_Static_assert(OPTION_MAGIC_OFF == 2, "OPTION_MAGIC_OFF value for Rust");
+_Static_assert(LSIZE == 512, "LSIZE value for Rust");
+_Static_assert(GETFILE_SAME_FILE == 0, "GETFILE_SAME_FILE value for Rust");
+_Static_assert(GETFILE_OPEN_OTHER == -1, "GETFILE_OPEN_OTHER value for Rust");
+_Static_assert(GETFILE_UNUSED == 8, "GETFILE_UNUSED value for Rust");
+
+// nvim_tag_jumpto_run_search migrated to Rust (Phase 1)
 // nvim_tag_jumpto_post_success and nvim_tag_jumpto_post_fail migrated to Rust (Phase 3)
 
 /// Returns true if GETFILE_SUCCESS(getfile_result).
