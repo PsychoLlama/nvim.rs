@@ -1430,13 +1430,13 @@ bool nvim_qf_list_is_empty(const void *qfl_void)
 // nvim_qf_state_* and qf_{setup,cleanup,get_nextline,grow_linebuf,get_next_*}_state
 // deleted: migrated to Rust QfParserState in reader.rs (Phase 9).
 
-static win_T *qf_find_win(const qf_info_T *qi);
-static buf_T *qf_find_buf(qf_info_T *qi);
 static bool qf_win_pos_update(qf_info_T *qi, int old_qf_index);
 static void qf_update_buffer(qf_info_T *qi, qfline_T *old_last);
 
-void *nvim_qf_find_win_for_stack(const void *qi_void) { return qi_void == NULL ? NULL : qf_find_win((const qf_info_T *)qi_void); }
-void *nvim_qf_find_buf_for_stack(void *qi_void) { return qi_void == NULL ? NULL : qf_find_buf((qf_info_T *)qi_void); }
+// qf_find_win, qf_find_buf: deleted -- migrated to Rust rs_qf_find_win_for_stack /
+// rs_qf_find_buf_for_stack in lib.rs (Phase 10, Pass 10).
+// nvim_qf_find_win_for_stack, nvim_qf_find_buf_for_stack: deleted -- callers use
+// rs_qf_find_win_for_stack / rs_qf_find_buf_for_stack directly.
 bool nvim_qf_win_pos_update(void *qi_void, int old_qf_index) { return qi_void == NULL ? false : qf_win_pos_update((qf_info_T *)qi_void, old_qf_index); }
 void nvim_qf_update_buffer(void *qi_void, void *old_last) { if (qi_void != NULL) qf_update_buffer((qf_info_T *)qi_void, (qfline_T *)old_last); }
 int nvim_qf_get_bufnr(const void *qi_void) { return qi_void == NULL ? -1 : ((const qf_info_T *)qi_void)->qf_bufnr; }
@@ -4102,23 +4102,11 @@ enum {
   QF_GETLIST_ALL = 0xFFF,
 };
 
-/// Return the quickfix/location list window identifier in the current tabpage.
-static int qf_winid(qf_info_T *qi)
-{
-  // The quickfix window can be opened even if the quickfix list is not set
-  // using ":copen". This is not true for location lists.
-  if (qi == NULL) {
-    return 0;
-  }
-  win_T *win = qf_find_win(qi);
-  if (win != NULL) {
-    return win->handle;
-  }
-  return 0;
-}
+// qf_winid deleted: migrated to Rust rs_qf_winid in lib.rs (Phase 10, Pass 10).
 
 /// Accessor for Rust: get winid for a quickfix info (0 if not found).
-int nvim_qf_winid(const void *qi_void) { return qf_winid((qf_info_T *)(uintptr_t)qi_void); }
+extern int rs_qf_winid(void *qi_void);
+int nvim_qf_winid(const void *qi_void) { return rs_qf_winid((void *)(uintptr_t)qi_void); }
 
 // _Static_assert for Phase 3 QF_GETLIST_* constants used in Rust property functions
 _Static_assert(QF_GETLIST_NONE == 0x0, "QF_GETLIST_NONE mismatch");

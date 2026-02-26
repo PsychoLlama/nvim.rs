@@ -1490,9 +1490,8 @@ extern "C" {
 /// Find the quickfix window for a given stack.
 /// Returns a mutable pointer to the window, or null.
 unsafe fn find_win_for_stack(qi: QfInfoHandleMut) -> *mut c_void {
-    // The C function takes const void* and returns void*.
-    // lib.rs declares it as returning *const c_void, so we cast back.
-    crate::nvim_qf_find_win_for_stack(qi.cast_const()).cast_mut()
+    // Use the Rust implementation directly (migrated in Phase 10, Pass 10).
+    crate::rs_qf_find_win_for_stack(qi.cast_const()).cast_mut()
 }
 
 /// `:cclose` / `:lclose` -- close the quickfix/location list window.

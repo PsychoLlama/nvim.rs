@@ -499,11 +499,12 @@ pub unsafe extern "C" fn rs_qf_restore_list(qi: QfInfoHandleMut, save_qfid: u32)
 pub unsafe extern "C" fn rs_qf_winid(qi: QfInfoHandle) -> c_int {
     // The quickfix window can be opened even if the quickfix list is not set
     // using ":copen". This is not true for location lists.
+    // Uses Rust window iteration (migrated in Phase 10, Pass 10).
     if qi.is_null() {
         return 0;
     }
 
-    let win = nvim_qf_find_win_handle(qi);
+    let win = rs_qf_find_win_for_stack(qi);
     if win.is_null() {
         return 0;
     }
@@ -1983,14 +1984,22 @@ extern "C" {
     fn nvim_qf_set_multiignore(qfl: QfListHandleMut, multiignore: bool);
 
     // Phase 7: Window and Display Management accessors
-    fn nvim_qf_find_win_for_stack(qi: QfInfoHandle) -> WinHandle;
-    fn nvim_qf_find_buf_for_stack(qi: QfInfoHandleMut) -> BufHandle;
     fn nvim_qf_win_pos_update(qi: QfInfoHandleMut, old_qf_index: c_int) -> bool;
     fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle);
     fn nvim_qf_get_bufnr(qi: QfInfoHandle) -> c_int;
     fn nvim_qf_set_bufnr(qi: QfInfoHandleMut, bufnr: c_int);
     fn nvim_win_is_qf_win(win: WinHandle) -> bool;
     fn nvim_win_get_llist_ref(win: WinHandle) -> QfInfoHandle;
+
+    // Phase 10 (Pass 10): Window iteration primitives for is_qf_win/find_win/find_buf
+    fn nvim_get_firstwin() -> *mut c_void;
+    fn nvim_qf_win_next(win: *const c_void) -> *mut c_void;
+    fn nvim_get_first_tabpage() -> *mut c_void;
+    fn nvim_tabpage_get_next(tp: *const c_void) -> *mut c_void;
+    fn nvim_tabpage_get_firstwin(tp: *const c_void) -> *mut c_void;
+    // nvim_qf_win_get_handle already declared above (Phase 1)
+    fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
+    fn nvim_qf_win_buf_fnum(win: *const c_void) -> c_int;
 
     // Phase 8: Ex Commands and API Functions accessors
     // (nvim_qf_get_title and nvim_qf_get_changedtick already declared above)
@@ -2985,9 +2994,38 @@ pub unsafe extern "C" fn rs_qf_set_multiignore(qfl: QfListHandleMut, multiignore
 // Phase 7: Window and Display Management
 // =============================================================================
 
-/// Find the quickfix window for a given quickfix stack.
+/// Check if a window is displaying the quickfix/location list for a given stack.
 ///
-/// Returns the window handle, or null if no window is displaying this stack.
+/// Equivalent to C `is_qf_win`: checks `bt_quickfix(w_buffer)` and then
+/// compares `w_llist_ref` to the stack pointer.
+///
+/// A quickfix window has `w_llist_ref == NULL`.
+/// A location list window has `w_llist_ref == qi`.
+///
+/// # Safety
+///
+/// - `win` must be a valid non-null pointer to a `win_T` struct
+/// - `qi` must be a valid non-null pointer to a `qf_info_T` struct
+#[allow(clippy::cast_ptr_alignment)]
+unsafe fn is_qf_win_for_stack(win: *const c_void, qi: QfInfoHandle) -> bool {
+    if !nvim_win_is_qf_win(win) {
+        return false;
+    }
+    let llist_ref = nvim_win_get_llist_ref(win);
+    if nvim_qf_is_qf_stack(qi) {
+        llist_ref.is_null()
+    } else {
+        // location list: llist_ref must point to qi
+        std::ptr::eq(llist_ref, qi)
+    }
+}
+
+/// Find the quickfix window in the current tab for a given quickfix stack.
+///
+/// Equivalent to C `qf_find_win`. Iterates `FOR_ALL_WINDOWS_IN_TAB(win, curtab)`.
+///
+/// Returns the window handle, or null if no window in the current tab
+/// is displaying this stack.
 ///
 /// # Safety
 ///
@@ -2997,10 +3035,24 @@ pub unsafe extern "C" fn rs_qf_find_win_for_stack(qi: QfInfoHandle) -> WinHandle
     if qi.is_null() {
         return std::ptr::null();
     }
-    nvim_qf_find_win_for_stack(qi)
+    // Iterate windows in current tab (FOR_ALL_WINDOWS_IN_TAB(win, curtab))
+    let mut win = nvim_get_firstwin();
+    while !win.is_null() {
+        if is_qf_win_for_stack(win, qi) {
+            return win.cast_const();
+        }
+        win = nvim_qf_win_next(win);
+    }
+    std::ptr::null()
 }
 
-/// Find the quickfix buffer for a given quickfix stack.
+/// Find the quickfix buffer for a given quickfix stack, searching all tab pages.
+///
+/// Equivalent to C `qf_find_buf`.
+///
+/// First checks the cached `qf_bufnr`. If valid, returns that buffer directly.
+/// Otherwise iterates `FOR_ALL_TAB_WINDOWS` searching for a window displaying
+/// this stack.
 ///
 /// Returns the buffer handle, or null if no buffer exists for this stack.
 ///
@@ -3012,7 +3064,36 @@ pub unsafe extern "C" fn rs_qf_find_buf_for_stack(qi: QfInfoHandleMut) -> BufHan
     if qi.is_null() {
         return std::ptr::null_mut();
     }
-    nvim_qf_find_buf_for_stack(qi)
+    // Check cached bufnr first (INVALID_QFBUFNR == 0)
+    let bufnr = nvim_qf_get_bufnr(qi);
+    if bufnr != 0 {
+        let qfbuf = nvim_buflist_findnr(bufnr);
+        if !qfbuf.is_null() {
+            return qfbuf;
+        }
+        // Buffer no longer present; clear the cache
+        nvim_qf_set_bufnr(qi, 0);
+    }
+    // Search all tab windows (FOR_ALL_TAB_WINDOWS)
+    let mut tp = nvim_get_first_tabpage();
+    while !tp.is_null() {
+        let mut win = nvim_tabpage_get_firstwin(tp);
+        while !win.is_null() {
+            if is_qf_win_for_stack(win, qi.cast_const()) {
+                // Return the window's buffer via fnum lookup
+                let fnum = nvim_qf_win_buf_fnum(win);
+                if fnum > 0 {
+                    let buf = nvim_buflist_findnr(fnum);
+                    if !buf.is_null() {
+                        return buf;
+                    }
+                }
+            }
+            win = nvim_qf_win_next(win);
+        }
+        tp = nvim_tabpage_get_next(tp);
+    }
+    std::ptr::null_mut()
 }
 
 /// Update the cursor position in the quickfix window.
