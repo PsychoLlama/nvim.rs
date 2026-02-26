@@ -787,13 +787,15 @@ pub unsafe extern "C" fn rs_syn_cmd_cluster(eap: *mut c_void, syncing: c_int) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_synblock_cluster_append() -> c_int;
+    // nvim_synblock_cluster_append now delegates to rs_synblock_cluster_append
     fn nvim_synblock_set_cluster_name(idx: c_int, name: *mut c_char);
     fn nvim_synblock_set_cluster_name_u(idx: c_int, name_u: *mut c_char);
     fn nvim_synblock_set_cluster_list(idx: c_int, list: *mut i16);
     fn nvim_synblock_set_spell_cluster_id(id: c_int);
     fn nvim_synblock_set_nospell_cluster_id(id: c_int);
     fn nvim_syn_vim_strsave_up(s: *const c_char) -> *mut c_char;
+    // Phase 11: inner accessor for cluster_append (handles GA_APPEND_VIA_PTR)
+    fn nvim_synblock_cluster_append_inner() -> c_int;
 }
 
 /// Look up a syntax cluster name (null-terminated) and return its SYNID_CLUSTER+idx ID.
@@ -841,7 +843,7 @@ unsafe fn syn_scl_name2id_impl(name: *mut c_char) -> c_int {
 /// # Safety
 /// `name` must be a valid xmalloc-allocated null-terminated C string (ownership is taken).
 unsafe fn syn_add_cluster_impl(name: *mut c_char) -> c_int {
-    let idx = nvim_synblock_cluster_append();
+    let idx = rs_synblock_cluster_append();
     if idx < 0 {
         // Error already reported; free name and return 0.
         xfree(name as *mut c_void);
@@ -867,6 +869,20 @@ unsafe fn syn_add_cluster_impl(name: *mut c_char) -> c_int {
     }
 
     idx + crate::types::SYNID_CLUSTER
+}
+
+/// Append a new zeroed cluster entry to curwin's synblock.
+///
+/// Replaces C `nvim_synblock_cluster_append`. Delegates growarray management
+/// to `nvim_synblock_cluster_append_inner` (GA_APPEND_VIA_PTR stays in C).
+///
+/// Returns the index of the new entry, or -1 if MAX_CLUSTER_ID is reached.
+///
+/// # Safety
+/// Accesses C global state; must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_cluster_append() -> c_int {
+    nvim_synblock_cluster_append_inner()
 }
 
 /// FFI export: look up cluster name and return its ID.

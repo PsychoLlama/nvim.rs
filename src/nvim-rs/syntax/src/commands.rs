@@ -1264,8 +1264,12 @@ extern "C" {
     /// msg_outtrans wrapper.
     fn nvim_syn_msg_outtrans(s: *const c_char);
 
-    /// Init ownsyntax: allocate new synblock if sharing buffer's.
-    fn nvim_syn_ownsyntax_init() -> c_int;
+    /// Phase 11: Check if curwin shares buffer's synblock.
+    fn nvim_curwin_shares_buf_synblock() -> c_int;
+    /// Phase 11: Allocate and init a new synblock (not yet assigned to curwin).
+    fn nvim_syn_alloc_new_synblock() -> SynBlockHandle;
+    /// Phase 11: Assign new synblock to curwin->w_s, clear w_p_spell.
+    fn nvim_curwin_set_synblock(block: SynBlockHandle);
 
     /// Get a Vim variable value.
     fn nvim_syn_get_var_value(name: *const c_char) -> *mut c_char;
@@ -1337,7 +1341,7 @@ pub unsafe extern "C" fn rs_syn_cmd_iskeyword(eap: *mut c_void, _syncing: c_int)
 /// Must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_ownsyntax(eap: *mut c_void) {
-    nvim_syn_ownsyntax_init();
+    rs_syn_ownsyntax_init();
 
     let arg = nvim_syn_get_eap_arg(eap);
 
@@ -1368,6 +1372,25 @@ pub unsafe extern "C" fn rs_ex_ownsyntax(eap: *mut c_void) {
         nvim_syn_set_internal_string_var(b_current_syntax_key, old_value);
         xfree(old_value as *mut c_void);
     }
+}
+
+/// Initialize ownsyntax: allocate a new synblock for curwin if it currently
+/// shares the buffer's synblock.
+///
+/// Replaces C `nvim_syn_ownsyntax_init`.
+///
+/// Returns 1 if a new block was created, 0 if curwin already has its own block.
+///
+/// # Safety
+/// Accesses C global state; must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_ownsyntax_init() -> c_int {
+    if nvim_curwin_shares_buf_synblock() == 0 {
+        return 0;
+    }
+    let new_block = nvim_syn_alloc_new_synblock();
+    nvim_curwin_set_synblock(new_block);
+    1
 }
 
 #[cfg(test)]

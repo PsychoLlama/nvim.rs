@@ -119,6 +119,10 @@ extern void rs_syn_hash_insert_keyword(const char *name_ic, int name_iclen,
                                         int16_t *next_list_copy,
                                         int use_ic);
 
+// Phase 11: commands.rs / cluster.rs Rust implementations for ownsyntax_init, cluster_append
+extern int rs_syn_ownsyntax_init(void);
+extern int rs_synblock_cluster_append(void);
+
 // Phase 9.2: state_ops.rs Rust implementations
 extern void rs_syn_set_next_match_state(int idx, int col,
     int m_endpos_lnum, int m_endpos_col,
@@ -2781,19 +2785,7 @@ void nvim_syn_msg_outtrans(const char *s)
 /// Returns 1 if a new block was created, 0 if curwin already owns its synblock.
 int nvim_syn_ownsyntax_init(void)
 {
-  if (curwin->w_s == &curwin->w_buffer->b_s) {
-    curwin->w_s = xcalloc(1, sizeof(synblock_T));
-    hash_init(&curwin->w_s->b_keywtab);
-    hash_init(&curwin->w_s->b_keywtab_ic);
-    curwin->w_p_spell = false;
-    clear_string_option(&curwin->w_s->b_p_spc);
-    clear_string_option(&curwin->w_s->b_p_spf);
-    clear_string_option(&curwin->w_s->b_p_spl);
-    clear_string_option(&curwin->w_s->b_p_spo);
-    clear_string_option(&curwin->w_s->b_syn_isk);
-    return 1;
-  }
-  return 0;
+  return rs_syn_ownsyntax_init();
 }
 
 /// Get value of a Vim variable (b:current_syntax etc.).
@@ -2974,20 +2966,7 @@ void nvim_syn_set_current_state_invalid(void)
 /// or -1 if we have hit MAX_CLUSTER_ID.
 int nvim_synblock_cluster_append(void)
 {
-  synblock_T *block = curwin->w_s;
-  // First call for this growarray: init growing array.
-  if (block->b_syn_clusters.ga_data == NULL) {
-    block->b_syn_clusters.ga_itemsize = sizeof(syn_cluster_T);
-    ga_set_growsize(&block->b_syn_clusters, 10);
-  }
-  int len = block->b_syn_clusters.ga_len;
-  if (len >= MAX_CLUSTER_ID) {
-    emsg(_("E848: Too many syntax clusters"));
-    return -1;
-  }
-  syn_cluster_T *scp = GA_APPEND_VIA_PTR(syn_cluster_T, &block->b_syn_clusters);
-  CLEAR_POINTER(scp);
-  return len;
+  return rs_synblock_cluster_append();
 }
 
 /// Set the scl_name field of cluster at index idx in curwin->w_s->b_syn_clusters.
@@ -3621,4 +3600,59 @@ void nvim_ke_alloc_and_insert(hashtab_T *ht, const char *name_ic, int name_iclen
 hashtab_T *nvim_curwin_get_keywtab(int use_ic)
 {
   return use_ic ? &curwin->w_s->b_keywtab_ic : &curwin->w_s->b_keywtab;
+}
+
+// =============================================================================
+// Phase 11: ownsyntax_init and cluster_append C accessors
+// =============================================================================
+
+/// Check if curwin shares the buffer's synblock (i.e. has not yet called ownsyntax).
+/// Returns 1 if they share (curwin->w_s == &curwin->w_buffer->b_s), else 0.
+int nvim_curwin_shares_buf_synblock(void)
+{
+  return curwin->w_s == &curwin->w_buffer->b_s ? 1 : 0;
+}
+
+/// Allocate a new zeroed synblock_T, initialise its hashtabs and spell options.
+/// Does NOT assign it to curwin->w_s.
+/// Returns pointer to the new block.
+synblock_T *nvim_syn_alloc_new_synblock(void)
+{
+  synblock_T *block = xcalloc(1, sizeof(synblock_T));
+  hash_init(&block->b_keywtab);
+  hash_init(&block->b_keywtab_ic);
+  clear_string_option(&block->b_p_spc);
+  clear_string_option(&block->b_p_spf);
+  clear_string_option(&block->b_p_spl);
+  clear_string_option(&block->b_p_spo);
+  clear_string_option(&block->b_syn_isk);
+  return block;
+}
+
+/// Assign synblock to curwin->w_s and clear curwin->w_p_spell.
+void nvim_curwin_set_synblock(synblock_T *block)
+{
+  curwin->w_s = block;
+  curwin->w_p_spell = false;
+}
+
+/// Append a new zeroed cluster entry to curwin->w_s->b_syn_clusters.
+/// Initialises the garray if needed. Returns the index of the new entry,
+/// or -1 if MAX_CLUSTER_ID has been reached.
+/// Emits E848 on overflow.
+int nvim_synblock_cluster_append_inner(void)
+{
+  synblock_T *block = curwin->w_s;
+  if (block->b_syn_clusters.ga_data == NULL) {
+    block->b_syn_clusters.ga_itemsize = sizeof(syn_cluster_T);
+    ga_set_growsize(&block->b_syn_clusters, 10);
+  }
+  int len = block->b_syn_clusters.ga_len;
+  if (len >= MAX_CLUSTER_ID) {
+    emsg(_("E848: Too many syntax clusters"));
+    return -1;
+  }
+  syn_cluster_T *scp = GA_APPEND_VIA_PTR(syn_cluster_T, &block->b_syn_clusters);
+  CLEAR_POINTER(scp);
+  return len;
 }
