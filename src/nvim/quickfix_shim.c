@@ -532,6 +532,7 @@ extern void rs_win_setwidth(int width);
 extern int rs_qf_open_new_cwindow(void *qi_void, int height);
 extern const char *rs_did_set_quickfixtextfunc(const void *args);
 extern void rs_qf_update_buffer(void *qi_void, const void *old_last);
+extern bool rs_set_ref_in_quickfix(int copyID);
 
 // Rust fold FFI declarations
 extern void rs_foldOpenCursor(void);
@@ -4282,78 +4283,59 @@ int set_errorlist(win_T *wp, list_T *list, int action, char *title, dict_T *what
   return rs_set_errorlist((void *)wp, (void *)list, action, title, (void *)what);
 }
 
-static bool mark_quickfix_user_data(qf_info_T *qi, int copyID)
+// Phase 10 Pass 10 Phase 6: C accessors for rs_set_ref_in_quickfix
+
+/// Return a mutable pointer to qfl->qf_qftf_cb.
+void *nvim_qfl_get_qftf_cb_ptr(void *qfl_void)
 {
-  bool abort = false;
-  for (int i = 0; i < qi->qf_maxcount && !abort; i++) {
-    qf_list_T *qfl = &qi->qf_lists[i];
-    if (!qfl->qf_has_user_data) {
-      continue;
-    }
-    qfline_T *qfp;
-    int j;
-    FOR_ALL_QFL_ITEMS(qfl, qfp, j) {
-      typval_T *user_data = &qfp->qf_user_data;
-      if (user_data != NULL && user_data->v_type != VAR_NUMBER
-          && user_data->v_type != VAR_STRING && user_data->v_type != VAR_FLOAT) {
-        abort = abort || rs_set_ref_in_item(user_data, copyID, NULL, NULL);
-      }
-    }
-  }
-  return abort;
+  return qfl_void == NULL ? NULL : (void *)&((qf_list_T *)qfl_void)->qf_qftf_cb;
 }
 
-/// in a quickfix stack.
-static bool mark_quickfix_ctx(qf_info_T *qi, int copyID)
+/// Return a mutable pointer to the global qftf_cb static.
+void *nvim_qf_get_global_qftf_cb_ptr(void)
 {
-  bool abort = false;
-
-  for (int i = 0; i < qi->qf_maxcount && !abort; i++) {
-    typval_T *ctx = qi->qf_lists[i].qf_ctx;
-    if (ctx != NULL && ctx->v_type != VAR_NUMBER
-        && ctx->v_type != VAR_STRING && ctx->v_type != VAR_FLOAT) {
-      abort = rs_set_ref_in_item(ctx, copyID, NULL, NULL);
-    }
-
-    Callback *cb = &qi->qf_lists[i].qf_qftf_cb;
-    abort = abort || rs_set_ref_in_callback(cb, copyID, NULL, NULL);
-  }
-
-  return abort;
+  return (void *)&qftf_cb;
 }
+
+/// Return win->w_llist (mutable).
+void *nvim_qf_win_get_llist_mut(void *win_void)
+{
+  return win_void == NULL ? NULL : ((win_T *)win_void)->w_llist;
+}
+
+/// Return win->w_llist_ref (mutable).
+void *nvim_qf_win_get_llist_ref_mut(void *win_void)
+{
+  return win_void == NULL ? NULL : ((win_T *)win_void)->w_llist_ref;
+}
+
+/// Return true if IS_LL_WINDOW(win) and win->w_llist_ref->qf_refcount == 1.
+bool nvim_qf_win_is_ll_and_refcount_one(const void *win_void)
+{
+  if (win_void == NULL) { return false; }
+  const win_T *win = (const win_T *)win_void;
+  return IS_LL_WINDOW(win) && win->w_llist_ref->qf_refcount == 1;
+}
+
+// nvim_qf_get_ql_info: use existing nvim_get_ql_info instead (Phase 10 Pass 10 Phase 6).
+
+/// Return a const pointer to a qf_list_T item at index i.
+const void *nvim_qf_get_list_at_const(const void *qi_void, int idx)
+{
+  if (qi_void == NULL) { return NULL; }
+  const qf_info_T *qi = (const qf_info_T *)qi_void;
+  if (idx < 0 || idx >= qi->qf_maxcount) { return NULL; }
+  return (const void *)&qi->qf_lists[idx];
+}
+
+// mark_quickfix_user_data deleted: migrated to Rust rs_set_ref_in_quickfix (Phase 10 Pass 10 Phase 6).
+// mark_quickfix_ctx deleted: migrated to Rust rs_set_ref_in_quickfix (Phase 10 Pass 10 Phase 6).
 
 /// "in use". So that garbage collection doesn't free the context.
 bool set_ref_in_quickfix(int copyID)
 {
-  assert(ql_info != NULL);
-  if (mark_quickfix_ctx(ql_info, copyID)
-      || mark_quickfix_user_data(ql_info, copyID)
-      || rs_set_ref_in_callback(&qftf_cb, copyID, NULL, NULL)) {
-    return true;
-  }
-
-  FOR_ALL_TAB_WINDOWS(tp, win) {
-    if (win->w_llist != NULL) {
-      if (mark_quickfix_ctx(win->w_llist, copyID)
-          || mark_quickfix_user_data(win->w_llist, copyID)) {
-        return true;
-      }
-    }
-
-    if (IS_LL_WINDOW(win) && (win->w_llist_ref->qf_refcount == 1)) {
-      // In a location list window and none of the other windows is
-      // referring to this location list. Mark the location list
-      // context as still in use.
-      if (mark_quickfix_ctx(win->w_llist_ref, copyID)
-          || mark_quickfix_user_data(win->w_llist_ref, copyID)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  return rs_set_ref_in_quickfix(copyID);
 }
-
 
 /// :cgetbuffer, :lbuffer, :laddbuffer, :lgetbuffer Ex commands.
 // ":[range]cbuffer [bufnr]" command.

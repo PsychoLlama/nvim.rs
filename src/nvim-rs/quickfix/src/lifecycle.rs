@@ -648,3 +648,182 @@ extern "C" {
         action: c_int,
     ) -> c_int;
 }
+
+// =============================================================================
+// Phase 10 Pass 10 Phase 6: GC Marking (set_ref_in_quickfix)
+// =============================================================================
+
+extern "C" {
+    // Tab-window iteration (FOR_ALL_TAB_WINDOWS)
+    fn nvim_get_first_tabpage() -> *mut c_void;
+    fn nvim_tabpage_get_next(tp: *const c_void) -> *mut c_void;
+    fn nvim_tabpage_get_firstwin(tp: *const c_void) -> *mut c_void;
+    fn nvim_qf_win_next(win: *const c_void) -> *mut c_void;
+
+    // QFL item iteration (FOR_ALL_QFL_ITEMS)
+    fn nvim_qf_get_start(qfl: *const c_void) -> *mut c_void;
+    fn nvim_qfline_get_next(qfp: *const c_void) -> *mut c_void;
+
+    // qf_info_T accessors
+    fn nvim_qf_get_maxcount(qi: *const c_void) -> c_int;
+
+    // qf_list_T accessors
+    fn nvim_qf_has_user_data(qfl: *const c_void) -> bool;
+    fn nvim_qf_get_ctx(qfl: *const c_void) -> *mut c_void;
+
+    // qfline_T user_data accessor
+    fn nvim_qfline_get_user_data_ptr(qfp: *const c_void) -> *const c_void;
+
+    // GC marking via eval crate
+    fn rs_set_ref_in_item(
+        tv: *mut c_void,
+        copy_id: c_int,
+        ht_stack: *mut *mut c_void,
+        list_stack: *mut *mut c_void,
+    ) -> bool;
+    fn rs_set_ref_in_callback(
+        callback: *mut c_void,
+        copy_id: c_int,
+        ht_stack: *mut *mut c_void,
+        list_stack: *mut *mut c_void,
+    ) -> bool;
+
+    // Per-list callback pointer
+    fn nvim_qfl_get_qftf_cb_ptr(qfl: *mut c_void) -> *mut c_void;
+    // Global qftf_cb pointer
+    fn nvim_qf_get_global_qftf_cb_ptr() -> *mut c_void;
+    // Global ql_info: use existing nvim_get_ql_info (declared above in the main extern block)
+
+    // Window accessors for GC
+    fn nvim_qf_win_get_llist_mut(win: *mut c_void) -> *mut c_void;
+    fn nvim_qf_win_get_llist_ref_mut(win: *mut c_void) -> *mut c_void;
+    fn nvim_qf_win_is_ll_and_refcount_one(win: *const c_void) -> bool;
+}
+
+/// Mark user data typvals in a quickfix stack for GC.
+///
+/// Iterates all lists in the stack, and for lists with user data,
+/// iterates all entries and marks each entry's `qf_user_data` typval.
+unsafe fn mark_quickfix_user_data(qi: *const c_void, copy_id: c_int) -> bool {
+    let maxcount = nvim_qf_get_maxcount(qi);
+    for i in 0..maxcount {
+        let qfl = nvim_qf_get_list_at(qi.cast_mut(), i);
+        if qfl.is_null() {
+            continue;
+        }
+        if !nvim_qf_has_user_data(qfl) {
+            continue;
+        }
+        // FOR_ALL_QFL_ITEMS: iterate from qfl_start following qf_next
+        let mut qfp = nvim_qf_get_start(qfl);
+        while !qfp.is_null() {
+            let user_data_ptr = nvim_qfline_get_user_data_ptr(qfp.cast_const());
+            if !user_data_ptr.is_null()
+                && rs_set_ref_in_item(
+                    user_data_ptr.cast_mut(),
+                    copy_id,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                )
+            {
+                return true;
+            }
+            qfp = nvim_qfline_get_next(qfp.cast_const());
+        }
+    }
+    false
+}
+
+/// Mark context typvals and per-list callbacks in a quickfix stack for GC.
+///
+/// Iterates all lists in the stack and marks each list's `qf_ctx` typval
+/// and `qf_qftf_cb` callback.
+unsafe fn mark_quickfix_ctx(qi: *mut c_void, copy_id: c_int) -> bool {
+    let maxcount = nvim_qf_get_maxcount(qi.cast_const());
+    for i in 0..maxcount {
+        let qfl = nvim_qf_get_list_at(qi, i);
+        if qfl.is_null() {
+            continue;
+        }
+        let ctx = nvim_qf_get_ctx(qfl);
+        if !ctx.is_null()
+            && rs_set_ref_in_item(ctx, copy_id, std::ptr::null_mut(), std::ptr::null_mut())
+        {
+            return true;
+        }
+        let cb_ptr = nvim_qfl_get_qftf_cb_ptr(qfl.cast_mut());
+        if !cb_ptr.is_null()
+            && rs_set_ref_in_callback(cb_ptr, copy_id, std::ptr::null_mut(), std::ptr::null_mut())
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Mark all quickfix/location list GC roots with `copy_id`.
+///
+/// Equivalent to C `set_ref_in_quickfix`. Called by the GC to keep
+/// quickfix user data, contexts, and callbacks alive.
+///
+/// # Safety
+///
+/// Must be called only from the Neovim main thread during GC.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_ref_in_quickfix(copy_id: c_int) -> bool {
+    let ql_info = nvim_get_ql_info();
+    debug_assert!(
+        !ql_info.is_null(),
+        "rs_set_ref_in_quickfix: ql_info must not be NULL"
+    );
+
+    // Mark the global quickfix stack.
+    if mark_quickfix_ctx(ql_info, copy_id) || mark_quickfix_user_data(ql_info.cast_const(), copy_id)
+    {
+        return true;
+    }
+
+    // Mark the global quickfixtextfunc callback.
+    let global_cb = nvim_qf_get_global_qftf_cb_ptr();
+    if !global_cb.is_null()
+        && rs_set_ref_in_callback(
+            global_cb,
+            copy_id,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    {
+        return true;
+    }
+
+    // Mark all location lists in all tab windows (FOR_ALL_TAB_WINDOWS).
+    let mut tp = nvim_get_first_tabpage();
+    while !tp.is_null() {
+        let mut win = nvim_tabpage_get_firstwin(tp.cast_const());
+        while !win.is_null() {
+            let llist = nvim_qf_win_get_llist_mut(win);
+            if !llist.is_null()
+                && (mark_quickfix_ctx(llist, copy_id)
+                    || mark_quickfix_user_data(llist.cast_const(), copy_id))
+            {
+                return true;
+            }
+
+            // In a location list window with no other referrers, mark llist_ref.
+            if nvim_qf_win_is_ll_and_refcount_one(win.cast_const()) {
+                let llist_ref = nvim_qf_win_get_llist_ref_mut(win);
+                if !llist_ref.is_null()
+                    && (mark_quickfix_ctx(llist_ref, copy_id)
+                        || mark_quickfix_user_data(llist_ref.cast_const(), copy_id))
+                {
+                    return true;
+                }
+            }
+
+            win = nvim_qf_win_next(win.cast_const());
+        }
+        tp = nvim_tabpage_get_next(tp.cast_const());
+    }
+
+    false
+}
