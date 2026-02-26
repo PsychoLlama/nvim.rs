@@ -262,9 +262,6 @@ extern int rs_get_char_class(char **pp);
 #define RF_NOICASE  2   // don't ignore case
 #define RF_ICOMBINE 8   // ignore combining characters
 
-static regengine_T bt_regengine;
-static regengine_T nfa_regengine;
-
 #include "regexp_shim.c.generated.h"
 
 // Accessors for Rust FFI (static helpers exposed for the regexp crate)
@@ -580,10 +577,6 @@ static int prog_magic_wrong(void)
   return rs_prog_magic_wrong();
 }
 
-// Accessor: check if a prog uses the NFA engine
-int nvim_regexp_prog_is_nfa_engine(void *prog) {
-  return ((regprog_T *)prog)->engine == &nfa_regengine ? 1 : 0;
-}
 ////////////////////////////////////////////////////////////////
 //                    regsub stuff                            //
 
@@ -852,20 +845,8 @@ int32_t nvim_regexp_get_curwin_vcol(void)
 }
 
 
-// Thin wrapper: compile via Rust BT engine.
-static regprog_T *bt_regcomp(uint8_t *expr, int re_flags)
-{
-  return (regprog_T *)rs_bt_regcomp(expr, re_flags);
-}
-
 extern int rs_vim_regcomp_had_eol(void);
 int vim_regcomp_had_eol(void) { return rs_vim_regcomp_had_eol(); }
-
-// Free a compiled regexp program, returned by bt_regcomp().
-static void bt_regfree(regprog_T *prog)
-{
-  xfree(prog);
-}
 
 // --- regmatch accessor functions for Rust FFI (rs_regmatch) ---
 
@@ -912,18 +893,6 @@ int nvim_regexp_call_mb_get_class_tab(uint8_t *p) {
 }
 
 
-// Thin wrappers: BT engine vtable entry points delegate to Rust.
-static int bt_regexec_nl(regmatch_T *rmp, uint8_t *line, colnr_T col, bool line_lbr)
-{
-  return rs_bt_regexec_nl(rmp, line, col, line_lbr);
-}
-
-static int bt_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T lnum, colnr_T col,
-                            proftime_T *tm, int *timed_out)
-{
-  return rs_bt_regexec_multi(rmp, win, buf, lnum, col, tm, timed_out);
-}
-
 // NFA opcode enum deleted (moved to Rust constants in lib.rs)
 
 
@@ -938,7 +907,6 @@ extern void *rs_nfa_regcomp(uint8_t *expr, int re_flags);
 
 int nvim_regexp_get_rex_nfa_has_zend(void) { return REX_PTR->nfa_has_zend; }
 int nvim_regexp_get_rex_nfa_has_backref(void) { return REX_PTR->nfa_has_backref; }
-void nvim_regexp_set_nfa_prog_engine(void *prog) { ((nfa_regprog_T *)prog)->engine = &nfa_regengine; }
 char *nvim_regexp_xstrdup(const char *s) { return xstrdup(s); }
 
 
@@ -1059,16 +1027,6 @@ void nvim_regexp_set_rex_reg_buf_curbuf(void) { REX_PTR->reg_buf = curbuf; }
 // called_emsg counter
 int nvim_regexp_get_called_emsg(void) { return called_emsg; }
 
-// Engine vtable compile dispatch
-void *nvim_regexp_call_nfa_regcomp(const uint8_t *expr, int re_flags) {
-  return nfa_regengine.regcomp(expr, re_flags);
-}
-
-void *nvim_regexp_call_bt_regcomp(const uint8_t *expr, int re_flags) {
-  return bt_regengine.regcomp(expr, re_flags);
-}
-
-// E864 error message
 // bt_regcomp accessors
 
 // Allocate bt_regprog_T with flexible array member for program bytes
@@ -1077,54 +1035,6 @@ void *nvim_regexp_alloc_bt_regprog(int64_t regsize_val) {
   r->re_in_use = false;
   return r;
 }
-
-void nvim_bt_prog_set_engine_bt(void *prog) { ((bt_regprog_T *)prog)->engine = &bt_regengine; }
-
-// E339 error + rc_did_emsg
-
-// Compile a regular expression into internal code for the NFA matcher.
-// Returns the program in allocated space.  Returns NULL for an error.
-static regprog_T *nfa_regcomp(uint8_t *expr, int re_flags)
-{
-  return (regprog_T *)rs_nfa_regcomp(expr, re_flags);
-}
-// Free a compiled regexp program, returned by nfa_regcomp().
-static void nfa_regfree(regprog_T *prog)
-{
-  if (prog == NULL) {
-    return;
-  }
-
-  xfree(((nfa_regprog_T *)prog)->match_text);
-  xfree(((nfa_regprog_T *)prog)->pattern);
-  xfree(prog);
-}
-
-// Thin wrappers: NFA engine vtable entry points delegate to Rust.
-static int nfa_regexec_nl(regmatch_T *rmp, uint8_t *line, colnr_T col, bool line_lbr)
-{
-  return rs_nfa_regexec_nl(rmp, line, col, line_lbr);
-}
-
-static int nfa_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T lnum, colnr_T col,
-                             proftime_T *tm, int *timed_out)
-{
-  return rs_nfa_regexec_multi(rmp, win, buf, lnum, col, tm, timed_out);
-}
-
-static regengine_T bt_regengine = {
-  bt_regcomp,
-  bt_regfree,
-  bt_regexec_nl,
-  bt_regexec_multi,
-};
-
-static regengine_T nfa_regengine = {
-  nfa_regcomp,
-  nfa_regfree,
-  nfa_regexec_nl,
-  nfa_regexec_multi,
-};
 
 // Compile a regular expression into internal code.
 // Returns the program in allocated memory.

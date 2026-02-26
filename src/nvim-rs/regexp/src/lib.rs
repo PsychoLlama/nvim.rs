@@ -2591,10 +2591,6 @@ pub unsafe extern "C" fn rs_vim_regsub_literal(
 // prog_magic_wrong: validate BT program magic number
 // ---------------------------------------------------------------------------
 
-extern "C" {
-    fn nvim_regexp_prog_is_nfa_engine(prog: *mut c_void) -> c_int;
-}
-
 /// Check the regexp program for its magic number.
 /// Returns 1 if the magic is wrong (error emitted), 0 if OK.
 /// (Phase 7: inlined `get_prog` logic directly)
@@ -2610,7 +2606,7 @@ pub unsafe extern "C" fn rs_prog_magic_wrong() -> c_int {
             .regprog
             .cast::<c_void>()
     };
-    if nvim_regexp_prog_is_nfa_engine(prog) != 0 {
+    if (*prog.cast::<RegprogT>()).engine == core::ptr::addr_of!(NFA_REGENGINE).cast_mut() {
         // For NFA matcher we don't check the magic
         return 0;
     }
@@ -10609,7 +10605,6 @@ pub unsafe extern "C" fn rs_nfa_get_match_text(start: NfaStateHandle) -> *mut u8
 
 // ---- Phase 7 C accessors ----
 extern "C" {
-    fn nvim_regexp_set_nfa_prog_engine(prog: NfaProgHandle);
     fn nvim_regexp_xstrdup(s: *const c_char) -> *mut c_char;
 }
 
@@ -10674,7 +10669,9 @@ pub unsafe extern "C" fn rs_nfa_regcomp(expr: *mut u8, re_flags: c_int) -> NfaPr
 
     (*prog.cast::<NfaRegprogT>()).start = start.cast::<NfaStateT>();
     (*prog.cast::<NfaRegprogT>()).regflags = REGFLAGS_COMPILE as c_int as c_uint;
-    nvim_regexp_set_nfa_prog_engine(prog);
+    (*prog.cast::<NfaRegprogT>()).engine = core::ptr::addr_of!(NFA_REGENGINE)
+        .cast_mut()
+        .cast::<c_void>();
     (*prog.cast::<NfaRegprogT>()).nstate = nstate_val;
     (*prog.cast::<NfaRegprogT>()).has_zend = REX.nfa_has_zend;
     (*prog.cast::<NfaRegprogT>()).has_backref = REX.nfa_has_backref;
@@ -10953,11 +10950,14 @@ struct NfaRegprogT {
 }
 
 /// Matches C `struct regengine` — vtable for BT/NFA engines.
+/// Note: C defines `regexec_nl` with `bool` as the 4th arg; on x86-64 Linux,
+/// `bool` and `c_int` are ABI-compatible in argument position (both zero-extended
+/// to register width), so `c_int` is used here to match the Rust implementations.
 #[repr(C)]
 struct RegengineT {
     regcomp: unsafe extern "C" fn(*mut u8, c_int) -> *mut c_void,
     regfree: unsafe extern "C" fn(*mut c_void),
-    regexec_nl: unsafe extern "C" fn(*mut c_void, *mut u8, i32, bool) -> c_int,
+    regexec_nl: unsafe extern "C" fn(*mut c_void, *mut u8, i32, c_int) -> c_int,
     regexec_multi: unsafe extern "C" fn(
         *mut c_void,
         *mut c_void,
@@ -10968,6 +10968,48 @@ struct RegengineT {
         *mut c_int,
     ) -> c_int,
 }
+
+// Safety: RegengineT contains only function pointers (no mutable state).
+unsafe impl Sync for RegengineT {}
+
+/// Free a BT-engine compiled program.
+///
+/// Matches C `bt_regfree()`.
+unsafe extern "C" fn rs_bt_regfree(prog: *mut c_void) {
+    xfree(prog);
+}
+
+/// Free an NFA-engine compiled program.
+///
+/// Matches C `nfa_regfree()`.
+unsafe extern "C" fn rs_nfa_regfree(prog: *mut c_void) {
+    if prog.is_null() {
+        return;
+    }
+    xfree((*prog.cast::<NfaRegprogT>()).match_text.cast());
+    xfree((*prog.cast::<NfaRegprogT>()).pattern.cast());
+    xfree(prog);
+}
+
+/// Vtable for the backtracking regexp engine.
+///
+/// Replaces the C `bt_regengine` static.
+static BT_REGENGINE: RegengineT = RegengineT {
+    regcomp: rs_bt_regcomp,
+    regfree: rs_bt_regfree,
+    regexec_nl: rs_bt_regexec_nl,
+    regexec_multi: rs_bt_regexec_multi,
+};
+
+/// Vtable for the NFA regexp engine.
+///
+/// Replaces the C `nfa_regengine` static.
+static NFA_REGENGINE: RegengineT = RegengineT {
+    regcomp: rs_nfa_regcomp,
+    regfree: rs_nfa_regfree,
+    regexec_nl: rs_nfa_regexec_nl,
+    regexec_multi: rs_nfa_regexec_multi,
+};
 
 /// Matches C `struct regprog` — common header for all regexp programs.
 #[repr(C)]
@@ -15110,7 +15152,7 @@ unsafe fn handle_nfa_fallback_nl(rmp: *mut c_void, line: *const u8, col: i32, nl
             rmp.cast::<c_void>(),
             line.cast_mut(),
             col,
-            nl != 0,
+            nl,
         );
         (*new_prog.cast::<RegprogT>()).re_in_use = false;
     }
@@ -15203,7 +15245,7 @@ pub unsafe extern "C" fn rs_vim_regexec_string(
         rmp.cast::<c_void>(),
         line.cast_mut(),
         col,
-        nl != 0,
+        nl,
     );
     (*prog.cast::<RegprogT>()).re_in_use = false;
 
@@ -15316,8 +15358,6 @@ const NFA_ENGINE: c_int = 2;
 extern "C" {
     fn nvim_regexp_set_rex_reg_buf_curbuf();
     fn nvim_regexp_get_called_emsg() -> c_int;
-    fn nvim_regexp_call_nfa_regcomp(expr: *const u8, re_flags: c_int) -> *mut c_void;
-    fn nvim_regexp_call_bt_regcomp(expr: *const u8, re_flags: c_int) -> *mut c_void;
 }
 
 /// Top-level regexp compilation dispatch.
@@ -15355,14 +15395,14 @@ pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) ->
     let regexp_engine = REGEXP_ENGINE;
 
     let mut prog = if regexp_engine == BACKTRACKING_ENGINE {
-        nvim_regexp_call_bt_regcomp(expr, re_flags)
+        (BT_REGENGINE.regcomp)(expr.cast_mut(), re_flags)
     } else {
         let auto_flag = if regexp_engine == AUTOMATIC_ENGINE {
             RE_AUTO
         } else {
             0
         };
-        nvim_regexp_call_nfa_regcomp(expr, re_flags + auto_flag)
+        (NFA_REGENGINE.regcomp)(expr.cast_mut(), re_flags + auto_flag)
     };
 
     // If NFA failed, try backtracking engine
@@ -15372,7 +15412,7 @@ pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) ->
     {
         REGEXP_ENGINE = BACKTRACKING_ENGINE;
         report_re_switch(expr.cast::<c_char>());
-        prog = nvim_regexp_call_bt_regcomp(expr, re_flags);
+        prog = (BT_REGENGINE.regcomp)(expr.cast_mut(), re_flags);
     }
 
     if !prog.is_null() {
@@ -15394,7 +15434,6 @@ const RF_LOOKBH: c_uint = 8;
 
 extern "C" {
     fn nvim_regexp_alloc_bt_regprog(regsize_val: i64) -> *mut c_void;
-    fn nvim_bt_prog_set_engine_bt(prog: *mut c_void);
 }
 
 /// BT compiler wrapper: two-pass compilation, allocation, optimization extraction.
@@ -15438,7 +15477,7 @@ pub unsafe extern "C" fn rs_bt_regcomp(expr: *mut u8, re_flags: c_int) -> *mut c
     // Dig out information for optimizations.
     bt_extract_optimizations(r, flags);
 
-    nvim_bt_prog_set_engine_bt(r);
+    (*r.cast::<BtRegprogT>()).engine = core::ptr::addr_of!(BT_REGENGINE).cast_mut();
     r
 }
 
