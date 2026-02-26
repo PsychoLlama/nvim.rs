@@ -142,6 +142,7 @@ int64_t nvim_curwin_get_p_scr(void) { return curwin->w_p_scr; }
 int nvim_curwin_get_view_height(void) { return curwin->w_view_height; }
 void nvim_set_ex_no_reprint(int val) { ex_no_reprint = val != 0; }
 int nvim_cmdmod_has_lockmarks(void) { return (cmdmod.cmod_flags & CMOD_LOCKMARKS) != 0; }
+int nvim_cmdmod_has_keeppatterns(void) { return (cmdmod.cmod_flags & CMOD_KEEPPATTERNS) != 0; }
 int nvim_curbuf_get_b_p_ai(void) { return curbuf->b_p_ai; }
 void nvim_check_pos_visual(void) { check_pos(curbuf, &VIsual); }
 void nvim_transchar_nonprint_curbuf(char *buf, int c) { transchar_nonprint(curbuf, buf, c); }
@@ -427,6 +428,18 @@ _Static_assert(MODE_CMDLINE == 0x08, "MODE_CMDLINE mismatch");
 _Static_assert(MODE_NORMAL == 0x01, "MODE_NORMAL mismatch");
 _Static_assert(B_IMODE_LMAP == 1, "B_IMODE_LMAP mismatch");
 _Static_assert(BL_SOL == 2, "BL_SOL mismatch");
+
+// Verify do_sub constants used as Rust compile-time values.
+_Static_assert(CMD_tilde == 554, "CMD_tilde mismatch - update Rust constant");
+_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL mismatch - update Rust constant");
+_Static_assert(MAXLNUM == 0x7fffffff, "MAXLNUM mismatch - update Rust constant");
+_Static_assert(RE_SEARCH == 0, "RE_SEARCH mismatch - update Rust constant");
+_Static_assert(RE_SUBST == 1, "RE_SUBST mismatch - update Rust constant");
+_Static_assert(RE_LAST == 2, "RE_LAST mismatch - update Rust constant");
+_Static_assert(SEARCH_HIS == 0x20, "SEARCH_HIS mismatch - update Rust constant");
+_Static_assert(REGSUB_COPY == 1, "REGSUB_COPY mismatch - update Rust constant");
+_Static_assert(REGSUB_MAGIC == 2, "REGSUB_MAGIC mismatch - update Rust constant");
+_Static_assert(REGSUB_BACKSLASH == 4, "REGSUB_BACKSLASH mismatch - update Rust constant");
 
 // do_bang, prevcmd management implemented in Rust (rs_do_bang, rs_free_prev_shellcmd)
 extern void rs_do_bang(int addr_count, exarg_T *eap, bool forceit, bool do_in, bool do_out);
@@ -2235,18 +2248,6 @@ void nvim_curwin_set_w_p_fen(int val) { curwin->w_p_fen = (bool)val; }
 /// Set curbuf->deleted_bytes2.
 void nvim_curbuf_set_deleted_bytes2(int val) { curbuf->deleted_bytes2 = (bcount_t)val; }
 
-/// Get CMD_tilde constant.
-int nvim_do_sub_get_CMD_tilde(void) { return CMD_tilde; }
-
-/// Get MAXCOL constant.
-int nvim_do_sub_get_MAXCOL(void) { return (int)MAXCOL; }
-
-/// Check if CMOD_KEEPPATTERNS is in cmdmod.cmod_flags.
-int nvim_do_sub_get_CMOD_KEEPPATTERNS(void)
-{
-  return (cmdmod.cmod_flags & CMOD_KEEPPATTERNS) != 0 ? 1 : 0;
-}
-
 /// Wrap coladvance(curwin, col).
 void nvim_do_sub_coladvance(int col) { coladvance(curwin, (colnr_T)col); }
 
@@ -2500,36 +2501,6 @@ void nvim_do_sub_semsg_val_too_large(const char *buf)
 {
   semsg(_(e_val_too_large), buf);
 }
-
-/// Get RE_LAST constant (2).
-int nvim_do_sub_RE_LAST(void) { return RE_LAST; }
-
-/// Get RE_SUBST constant (1).
-int nvim_do_sub_RE_SUBST(void) { return RE_SUBST; }
-
-/// Get RE_SEARCH constant (0).
-int nvim_do_sub_RE_SEARCH(void) { return RE_SEARCH; }
-
-/// Get SEARCH_HIS constant.
-int nvim_do_sub_SEARCH_HIS(void) { return SEARCH_HIS; }
-
-/// Get REGSUB_BACKSLASH constant.
-int nvim_do_sub_REGSUB_BACKSLASH(void) { return REGSUB_BACKSLASH; }
-
-/// Get REGSUB_MAGIC constant.
-int nvim_do_sub_REGSUB_MAGIC(void) { return REGSUB_MAGIC; }
-
-/// Get REGSUB_COPY constant.
-int nvim_do_sub_REGSUB_COPY(void) { return REGSUB_COPY; }
-
-/// Get MAXLNUM as int.
-int nvim_do_sub_MAXLNUM(void) { return (int)MAXLNUM; }
-
-/// Get kExtmarkNOOP as int.
-int nvim_do_sub_kExtmarkNOOP(void) { return (int)kExtmarkNOOP; }
-
-/// Get kExtmarkUndo as int.
-int nvim_do_sub_kExtmarkUndo(void) { return (int)kExtmarkUndo; }
 
 /// Call extmark_splice on curbuf for do_sub.
 void nvim_do_sub_extmark_splice(int start_row, int start_col,

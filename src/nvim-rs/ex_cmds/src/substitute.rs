@@ -35,11 +35,29 @@ use crate::SubIgnoreType;
 // Phase 3: sub_parse_flags migration constants
 // =============================================================================
 
-/// Pattern type: use last used regexp (RE_LAST from search.h)
+/// Pattern type: RE_SEARCH (save as search pattern, value 0)
+const RE_SEARCH: c_int = 0;
+/// Pattern type: RE_SUBST (save as substitute pattern, value 1)
+const RE_SUBST: c_int = 1;
+/// Pattern type: use last used regexp (RE_LAST from search.h, value 2)
 const RE_LAST: c_int = 2;
 
-/// Pattern type: RE_SUBST (save as substitute pattern)
-const RE_SUBST: c_int = 1;
+/// Add search pattern to history (SEARCH_HIS from search.h, value 0x20)
+const SEARCH_HIS: c_int = 0x20;
+
+/// vim_regsub_multi flags (from regexp_defs.h)
+const REGSUB_COPY: c_int = 1;
+const REGSUB_MAGIC: c_int = 2;
+const REGSUB_BACKSLASH: c_int = 4;
+
+/// Maximum valid column (MAXCOL from pos_defs.h)
+const MAXCOL: c_int = 0x7fffffff;
+
+/// Command index for :~ (tilde) command (CMD_tilde from ex_cmds_enum.generated.h)
+const CMD_TILDE: c_int = 554;
+
+/// ExtmarkOp constant for undo (KEXTMARK_UNDO from buffer_defs.h; verified by _Static_assert)
+const KEXTMARK_UNDO: c_int = 1;
 
 /// EXFLAG constants (must match C defines)
 const EXFLAG_LIST: c_int = 0x01;
@@ -1151,9 +1169,6 @@ extern "C" {
     fn nvim_curbuf_get_b_p_ma() -> c_int;
     fn nvim_curbuf_set_b_p_ma(val: c_int);
     fn nvim_curbuf_set_deleted_bytes2(val: c_int);
-    fn nvim_do_sub_get_CMD_tilde() -> c_int;
-    fn nvim_do_sub_get_MAXCOL() -> c_int;
-    fn nvim_do_sub_get_CMOD_KEEPPATTERNS() -> c_int;
     fn nvim_do_sub_coladvance(col: c_int);
     fn nvim_do_sub_changed_bytes(lnum: c_int, col: c_int);
     fn nvim_do_sub_deleted_lines(lnum: c_int, count: c_int);
@@ -1207,16 +1222,6 @@ extern "C" {
     fn nvim_do_sub_format_confirm_prompt(sub_str: *const c_char) -> *mut c_char;
     fn nvim_do_sub_format_val_too_large_str(val: c_int) -> *mut c_char;
     fn nvim_do_sub_semsg_val_too_large(buf: *const c_char);
-    fn nvim_do_sub_RE_LAST() -> c_int;
-    fn nvim_do_sub_RE_SUBST() -> c_int;
-    fn nvim_do_sub_RE_SEARCH() -> c_int;
-    fn nvim_do_sub_SEARCH_HIS() -> c_int;
-    fn nvim_do_sub_REGSUB_BACKSLASH() -> c_int;
-    fn nvim_do_sub_REGSUB_MAGIC() -> c_int;
-    fn nvim_do_sub_REGSUB_COPY() -> c_int;
-    fn nvim_do_sub_MAXLNUM() -> c_int;
-    fn nvim_do_sub_kExtmarkNOOP() -> c_int;
-    fn nvim_do_sub_kExtmarkUndo() -> c_int;
     fn nvim_do_sub_extmark_splice(
         start_row: c_int,
         start_col: c_int,
@@ -1283,6 +1288,7 @@ extern "C" {
     fn msg(s: *const c_char, hl_id: c_int) -> c_int;
     fn emsg(s: *const c_char) -> c_int;
     fn nvim_cmdmod_has_lockmarks() -> c_int;
+    fn nvim_cmdmod_has_keeppatterns() -> c_int;
     fn fast_breakcheck();
 }
 
@@ -1433,31 +1439,18 @@ pub unsafe extern "C" fn rs_do_sub(
         nvim_do_sub_profile_zero()
     };
 
-    let re_last = nvim_do_sub_RE_LAST();
-    let re_subst = nvim_do_sub_RE_SUBST();
-    let re_search = nvim_do_sub_RE_SEARCH();
-    let maxcol = nvim_do_sub_get_MAXCOL();
-    let _maxlnum = nvim_do_sub_MAXLNUM();
-    let kextmark_noop = nvim_do_sub_kExtmarkNOOP();
-    let kextmark_undo = nvim_do_sub_kExtmarkUndo();
-    let regsub_backslash = nvim_do_sub_REGSUB_BACKSLASH();
-    let regsub_magic = nvim_do_sub_REGSUB_MAGIC();
-    let regsub_copy = nvim_do_sub_REGSUB_COPY();
-    let search_his = nvim_do_sub_SEARCH_HIS();
-
     let mut which_pat: c_int;
-    let cmd_tilde = nvim_do_sub_get_CMD_tilde();
 
     // Determine which_pat
     let cmdidx = nvim_exarg_get_cmdidx(eap);
-    if cmdidx == cmd_tilde {
-        which_pat = re_last;
+    if cmdidx == CMD_TILDE {
+        which_pat = RE_LAST;
     } else {
-        which_pat = re_subst;
+        which_pat = RE_SUBST;
     }
 
     let mut cmd = nvim_exarg_get_arg(eap) as *mut c_char;
-    let keeppatterns = nvim_do_sub_get_CMOD_KEEPPATTERNS() != 0;
+    let keeppatterns = nvim_cmdmod_has_keeppatterns() != 0;
 
     let mut pat: *const c_char = std::ptr::null();
     let mut patlen: usize = 0;
@@ -1485,7 +1478,7 @@ pub unsafe extern "C" fn rs_do_sub(
             cmd = cmd.add(1);
             let dc = *cmd as u8;
             if dc != b'&' {
-                which_pat = re_search;
+                which_pat = RE_SEARCH;
             }
             pat = c"".as_ptr();
             patlen = 0;
@@ -1493,7 +1486,7 @@ pub unsafe extern "C" fn rs_do_sub(
             cmd = cmd.add(1);
             _has_second_delim = true;
         } else {
-            which_pat = re_last;
+            which_pat = RE_LAST;
             delimiter = *cmd as c_int;
             cmd = cmd.add(1);
             pat = cmd;
@@ -1528,13 +1521,13 @@ pub unsafe extern "C" fn rs_do_sub(
         sub = xstrdup(old_sub);
 
         // Vi compatibility: if last command used "$", keep cursor in last column
-        let endcolumn = nvim_curwin_get_w_curswant() == maxcol;
+        let endcolumn = nvim_curwin_get_w_curswant() == MAXCOL;
         let _ = endcolumn; // Used later after loop
     }
 
     // Determine endcolumn now (before sub_joining_lines)
     let endcolumn = if !cmd_is_new_pattern && nvim_exarg_get_skip(eap) == 0 {
-        nvim_curwin_get_w_curswant() == maxcol
+        nvim_curwin_get_w_curswant() == MAXCOL
     } else {
         false
     };
@@ -1636,7 +1629,7 @@ pub unsafe extern "C" fn rs_do_sub(
         pat,
         patlen,
         which_pat,
-        if cmdpreview_ns > 0 { 0 } else { search_his },
+        if cmdpreview_ns > 0 { 0 } else { SEARCH_HIS },
     );
     if regmatch.is_null() {
         if subflags_local.do_error {
@@ -1713,7 +1706,7 @@ pub unsafe extern "C" fn rs_do_sub(
 
             let mut copycol: c_int = 0;
             let mut matchcol: c_int = 0;
-            let mut prev_matchcol: c_int = maxcol;
+            let mut prev_matchcol: c_int = MAXCOL;
             let mut new_start: *mut c_char = std::ptr::null_mut();
             let mut new_start_len: c_int = 0;
             let mut did_sub = false;
@@ -1829,11 +1822,6 @@ pub unsafe extern "C" fn rs_do_sub(
                                 &mut cur_end_lnum,
                                 &mut cur_end_col,
                                 cmdpreview_ns,
-                                regsub_backslash,
-                                regsub_magic,
-                                regsub_copy,
-                                kextmark_noop,
-                                kextmark_undo,
                                 eap,
                             );
                         }
@@ -1898,11 +1886,6 @@ pub unsafe extern "C" fn rs_do_sub(
                                     &mut cur_end_lnum,
                                     &mut cur_end_col,
                                     cmdpreview_ns,
-                                    regsub_backslash,
-                                    regsub_magic,
-                                    regsub_copy,
-                                    kextmark_noop,
-                                    kextmark_undo,
                                     eap,
                                 );
                             }
@@ -1935,11 +1918,6 @@ pub unsafe extern "C" fn rs_do_sub(
                                 &mut cur_end_lnum,
                                 &mut cur_end_col,
                                 cmdpreview_ns,
-                                regsub_backslash,
-                                regsub_magic,
-                                regsub_copy,
-                                kextmark_noop,
-                                kextmark_undo,
                                 eap,
                             );
                         }
@@ -1996,7 +1974,7 @@ pub unsafe extern "C" fn rs_do_sub(
                                 md.lnum_after - md.lnum_before,
                                 md.subcols,
                                 md.subbytes,
-                                kextmark_undo,
+                                KEXTMARK_UNDO,
                             );
                         }
                         line_matches.clear();
@@ -2126,7 +2104,7 @@ pub unsafe extern "C" fn rs_do_sub(
         if nvim_excmds_global_busy() == 0 {
             if !subflags_local.do_ask {
                 if endcolumn {
-                    nvim_do_sub_coladvance(maxcol);
+                    nvim_do_sub_coladvance(MAXCOL);
                 } else {
                     // BL_WHITE | BL_FIX = 1 | 4 = 5
                     beginline(5);
@@ -2443,11 +2421,6 @@ unsafe fn goto_sub_main(
     cur_end_lnum: &mut c_int,
     cur_end_col: &mut c_int,
     cmdpreview_ns: c_int,
-    regsub_backslash: c_int,
-    regsub_magic: c_int,
-    regsub_copy: c_int,
-    _kextmark_noop: c_int,
-    _kextmark_undo: c_int,
     _eap: *mut ExArgHandle,
 ) {
     let startpos0_col = nvim_regmmatch_startpos0_col(regmatch);
@@ -2521,9 +2494,9 @@ unsafe fn goto_sub_main(
         sub,
         *sub_firstline,
         0,
-        regsub_backslash
+        REGSUB_BACKSLASH
             | if rs_magic_isset() != 0 {
-                regsub_magic
+                REGSUB_MAGIC
             } else {
                 0
             },
@@ -2592,10 +2565,10 @@ unsafe fn goto_sub_main(
         sub,
         new_end,
         sublen,
-        regsub_copy
-            | regsub_backslash
+        REGSUB_COPY
+            | REGSUB_BACKSLASH
             | if rs_magic_isset() != 0 {
-                regsub_magic
+                REGSUB_MAGIC
             } else {
                 0
             },
