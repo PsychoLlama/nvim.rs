@@ -1883,8 +1883,7 @@ extern "C" {
     // simple_diffline_change sentinel
     fn nvim_diff_get_simple_change() -> DiffLineChangeHandle;
     fn nvim_diff_is_simple_change(change: DiffLineChangeHandle) -> bool;
-    // compute inline diff (calls static diff_find_change_inline_diff)
-    fn nvim_diff_compute_inline(dp: DiffBlockHandle);
+    // inline diff computation is now done by rs_compute_inline_diff (inline_compute.rs)
     // diffline_change_T field accessors
     fn nvim_diffchange_get_start_lnum_off(change: DiffLineChangeHandle, idx: c_int) -> c_int;
     fn nvim_diffchange_get_end_lnum_off(change: DiffLineChangeHandle, idx: c_int) -> c_int;
@@ -3348,7 +3347,7 @@ pub unsafe extern "C" fn rs_diff_find_change(
 
     // Inline diff algorithm
     if !nvim_diffblock_get_has_changes(dp) {
-        nvim_diff_compute_inline(dp);
+        crate::inline_compute::rs_compute_inline_diff(dp);
     }
 
     let changes_len = nvim_diffblock_get_changes_len(dp);

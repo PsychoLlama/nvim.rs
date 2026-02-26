@@ -17,6 +17,7 @@ pub mod external;
 pub mod helpers;
 pub mod highlight;
 pub mod inline;
+pub mod inline_compute;
 pub mod linematch_bridge;
 pub mod marks;
 pub mod nav;
