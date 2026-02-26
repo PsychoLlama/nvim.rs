@@ -60,6 +60,8 @@ extern "C" {
 
     // varp dispatch
     fn nvim_get_varp_scope_opt(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
+    fn nvim_get_varp_opt(opt_idx: c_int) -> *mut std::ffi::c_void;
+    fn nvim_option_get_var_ptr(opt_idx: c_int) -> *mut std::ffi::c_void;
 
     // Read/write option variable pointer values
     fn rs_optval_from_varp(opt_idx: c_int, varp: *mut std::ffi::c_void) -> OptVal;
@@ -128,6 +130,33 @@ extern "C" {
 
     // SID_NONE
     fn nvim_get_sid_none() -> c_int;
+
+    // is_option_local_value_unset (gated behind #[cfg(not(test))] in value.rs, call via FFI)
+    fn rs_is_option_local_value_unset(opt_idx: c_int) -> c_int;
+
+    // validate option value (gated behind #[cfg(not(test))] in validate.rs, call via FFI)
+    fn rs_validate_option_value(
+        opt_idx: c_int,
+        newval: *mut OptVal,
+        opt_flags: c_int,
+        errbuf: *mut c_char,
+        errbuflen: usize,
+    ) -> *const c_char;
+
+    // set_option support
+    fn nvim_get_starting() -> c_int;
+    fn nvim_set_secure(val: c_int);
+    fn nvim_apply_optionset_autocmd(
+        opt_idx: c_int,
+        opt_flags: c_int,
+        oldval: OptVal,
+        oldval_g: OptVal,
+        oldval_l: OptVal,
+        newval: OptVal,
+        errmsg: *const c_char,
+    );
+    fn nvim_ui_call_option_set(opt_idx: c_int, saved_new_value: OptVal);
+    fn nvim_get_koptflag_ui_option() -> c_uint;
 }
 
 // OPT_LOCAL / OPT_GLOBAL flags
@@ -320,6 +349,133 @@ pub unsafe extern "C" fn rs_did_set_option(
             }
         }
     }
+
+    errmsg
+}
+
+// =============================================================================
+// rs_set_option_impl
+// =============================================================================
+
+/// Rust implementation of set_option.
+///
+/// Validates the new value, sets it, triggers side effects via did_set_option,
+/// fires the OptionSet autocmd, and notifies the UI.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_option_impl(
+    opt_idx: c_int,
+    value: OptVal,
+    opt_flags: c_int,
+    set_sid: c_int,
+    direct: c_int,
+    value_replaced: c_int,
+    errbuf: *mut c_char,
+    errbuflen: usize,
+) -> *const c_char {
+    let mut value = value;
+
+    if direct == 0 {
+        let validate_errmsg =
+            rs_validate_option_value(opt_idx, &raw mut value, opt_flags, errbuf, errbuflen);
+        if !validate_errmsg.is_null() {
+            rs_optval_free(value);
+            return validate_errmsg;
+        }
+    }
+
+    let scope_local = (opt_flags & OPT_LOCAL) != 0;
+    let scope_global = (opt_flags & OPT_GLOBAL) != 0;
+    let scope_both = !scope_local && !scope_global;
+    let is_opt_local_unset = rs_is_option_local_value_unset(opt_idx) != 0;
+
+    // When using ":set opt=val" for a global option with a local value, use opt->var.
+    let varp = if scope_both && rs_option_is_global_local(opt_idx) != 0 {
+        nvim_option_get_var_ptr(opt_idx)
+    } else {
+        nvim_get_varp_scope_opt(opt_idx, opt_flags)
+    };
+    let varp_local = nvim_get_varp_scope_opt(opt_idx, OPT_LOCAL);
+    let varp_global = nvim_get_varp_scope_opt(opt_idx, OPT_GLOBAL);
+
+    let old_value = rs_optval_from_varp(opt_idx, varp);
+    let old_global_value = rs_optval_from_varp(opt_idx, varp_global);
+    // If local value of global-local option is unset, use global value as local value.
+    let old_local_value = if is_opt_local_unset {
+        old_global_value
+    } else {
+        rs_optval_from_varp(opt_idx, varp_local)
+    };
+    // Value actually being used (for OptionSet autocmd).
+    let used_old_value = if scope_local && is_opt_local_unset {
+        rs_optval_from_varp(opt_idx, nvim_get_varp_opt(opt_idx))
+    } else {
+        old_value
+    };
+
+    // Save copies in case they get changed by autocommands.
+    let saved_used_value = rs_optval_copy(used_old_value);
+    let saved_old_global_value = rs_optval_copy(old_global_value);
+    let saved_old_local_value = rs_optval_copy(old_local_value);
+    let saved_new_value = rs_optval_copy(value);
+
+    let curwin = nvim_opt_get_curwin();
+    let p = rs_insecure_flag(curwin, opt_idx, opt_flags);
+    let secure_saved = nvim_get_secure();
+
+    // Enable secure mode if needed.
+    let kflag_insecure = nvim_get_koptflag_insecure();
+    let opt_modeline = nvim_get_opt_modeline();
+    if (opt_flags & opt_modeline) != 0
+        || nvim_get_sandbox() != 0
+        || (value_replaced == 0 && (*p & kflag_insecure) != 0)
+    {
+        nvim_set_secure(1);
+    }
+
+    // Set option through its variable pointer.
+    rs_set_option_varp(opt_idx, varp, value, 0);
+    // Process side effects.
+    let errmsg = rs_did_set_option(
+        opt_idx,
+        varp,
+        old_value,
+        value,
+        opt_flags,
+        set_sid,
+        direct,
+        value_replaced,
+        errbuf,
+        errbuflen,
+    );
+
+    nvim_set_secure(secure_saved);
+
+    if errmsg.is_null() && direct == 0 {
+        if nvim_get_starting() == 0 {
+            nvim_apply_optionset_autocmd(
+                opt_idx,
+                opt_flags,
+                saved_used_value,
+                saved_old_global_value,
+                saved_old_local_value,
+                saved_new_value,
+                errmsg,
+            );
+        }
+        let kflag_ui_option = nvim_get_koptflag_ui_option();
+        if (nvim_option_get_flags_val(opt_idx) & kflag_ui_option) != 0 {
+            nvim_ui_call_option_set(opt_idx, saved_new_value);
+        }
+    }
+
+    // Free saved values.
+    rs_optval_free(saved_used_value);
+    rs_optval_free(saved_old_local_value);
+    rs_optval_free(saved_old_global_value);
+    rs_optval_free(saved_new_value);
 
     errmsg
 }

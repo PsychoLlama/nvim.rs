@@ -204,6 +204,9 @@ extern const char *rs_did_set_option(OptIndex opt_idx, void *varp, OptVal old_va
                                      OptVal new_value, int opt_flags, scid_T set_sid,
                                      int direct, int value_replaced, char *errbuf,
                                      size_t errbuflen);
+extern const char *rs_set_option_impl(OptIndex opt_idx, OptVal value, int opt_flags,
+                                      int set_sid, int direct, int value_replaced,
+                                      char *errbuf, size_t errbuflen);
 extern int rs_was_set_insecurely(win_T *wp, OptIndex opt_idx, int opt_flags);
 extern void rs_set_option_sctx(OptIndex opt_idx, int opt_flags, sctx_T script_ctx);
 extern int rs_optval_default(OptIndex opt_idx, void *varp);
@@ -2865,90 +2868,8 @@ static const char *set_option(const OptIndex opt_idx, OptVal value, int opt_flag
                               const bool direct, const bool value_replaced, char *errbuf,
                               size_t errbuflen)
 {
-  assert(opt_idx != kOptInvalid);
-
-  const char *errmsg = NULL;
-
-  if (!direct) {
-    errmsg = validate_option_value(opt_idx, &value, opt_flags, errbuf, errbuflen);
-
-    if (errmsg != NULL) {
-      rs_optval_free(value);
-      return errmsg;
-    }
-  }
-
-  vimoption_T *opt = &options[opt_idx];
-  const bool scope_local = opt_flags & OPT_LOCAL;
-  const bool scope_global = opt_flags & OPT_GLOBAL;
-  const bool scope_both = !scope_local && !scope_global;
-  // Whether local value of global-local option is unset.
-  // NOTE: When this is true, it also implies that the option is global-local.
-  const bool is_opt_local_unset = is_option_local_value_unset(opt_idx);
-
-  // When using ":set opt=val" for a global option with a local value the local value will be reset,
-  // use the global value in that case.
-  void *varp
-    = scope_both && option_is_global_local(opt_idx) ? opt->var : get_varp_scope(opt, opt_flags);
-  void *varp_local = get_varp_scope(opt, OPT_LOCAL);
-  void *varp_global = get_varp_scope(opt, OPT_GLOBAL);
-
-  OptVal old_value = optval_from_varp(opt_idx, varp);
-  OptVal old_global_value = optval_from_varp(opt_idx, varp_global);
-  // If local value of global-local option is unset, use global value as local value.
-  OptVal old_local_value = is_opt_local_unset
-                           ? old_global_value
-                           : optval_from_varp(opt_idx, varp_local);
-  // Value that's actually being used.
-  // For local scope of a global-local option, it's equal to the global value if the local value is
-  // unset. In every other case, it is the same as old_value.
-  // This value is used instead of old_value when triggering the OptionSet autocommand.
-  OptVal used_old_value = (scope_local && is_opt_local_unset)
-                          ? optval_from_varp(opt_idx, get_varp(opt))
-                          : old_value;
-
-  // Save the old values and the new value in case they get changed.
-  OptVal saved_used_value = rs_optval_copy(used_old_value);
-  OptVal saved_old_global_value = rs_optval_copy(old_global_value);
-  OptVal saved_old_local_value = rs_optval_copy(old_local_value);
-  // New value (and varp) may become invalid if the buffer is closed by autocommands.
-  OptVal saved_new_value = rs_optval_copy(value);
-
-  uint32_t *p = insecure_flag(curwin, opt_idx, opt_flags);
-  const int secure_saved = secure;
-
-  // When an option is set in the sandbox, from a modeline or in secure mode, then deal with side
-  // effects in secure mode. Also when the value was set with the kOptFlagInsecure flag and is not
-  // completely replaced.
-  if ((opt_flags & OPT_MODELINE) || sandbox != 0 || (!value_replaced && (*p & kOptFlagInsecure))) {
-    secure = 1;
-  }
-
-  // Set option through its variable pointer.
-  set_option_varp(opt_idx, varp, value, false);
-  // Process any side effects.
-  errmsg = did_set_option(opt_idx, varp, old_value, value, opt_flags, set_sid, direct,
-                          value_replaced, errbuf, errbuflen);
-
-  secure = secure_saved;
-
-  if (errmsg == NULL && !direct) {
-    if (!starting) {
-      apply_optionset_autocmd(opt_idx, opt_flags, saved_used_value, saved_old_global_value,
-                              saved_old_local_value, saved_new_value, errmsg);
-    }
-    if (opt->flags & kOptFlagUIOption) {
-      ui_call_option_set(cstr_as_string(opt->fullname), optval_as_object(saved_new_value));
-    }
-  }
-
-  // Free copied values as they are not needed anymore
-  rs_optval_free(saved_used_value);
-  rs_optval_free(saved_old_local_value);
-  rs_optval_free(saved_old_global_value);
-  rs_optval_free(saved_new_value);
-
-  return errmsg;
+  return rs_set_option_impl(opt_idx, value, opt_flags, set_sid, direct ? 1 : 0,
+                            value_replaced ? 1 : 0, errbuf, errbuflen);
 }
 
 /// Set option value directly, without processing any side effects.
@@ -4443,6 +4364,29 @@ void *nvim_get_varp_opt(OptIndex opt_idx)
 {
   return get_varp(&options[opt_idx]);
 }
+
+// =============================================================================
+// Phase 9 (pass 9) trampolines: set_option / apply_optionset_autocmd
+// =============================================================================
+
+/// Get kOptFlagUIOption constant
+uint32_t nvim_get_koptflag_ui_option(void) { return (uint32_t)kOptFlagUIOption; }
+
+/// Apply the OptionSet autocommand: delegates entirely to C to avoid VimL type system FFI.
+void nvim_apply_optionset_autocmd(OptIndex opt_idx, int opt_flags, OptVal oldval,
+                                  OptVal oldval_g, OptVal oldval_l, OptVal newval,
+                                  const char *errmsg)
+{
+  apply_optionset_autocmd(opt_idx, opt_flags, oldval, oldval_g, oldval_l, newval, errmsg);
+}
+
+/// Call ui_call_option_set for a specific option with a saved new value.
+void nvim_ui_call_option_set(OptIndex opt_idx, OptVal saved_new_value)
+{
+  ui_call_option_set(cstr_as_string(options[opt_idx].fullname), optval_as_object(saved_new_value));
+}
+
+// rs_set_option_impl is declared at the top of the extern declarations section above.
 
 
 
