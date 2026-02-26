@@ -936,14 +936,6 @@ int nvim_ins_copychar_val(int lnum) { return ins_copychar(lnum); }
 // Visual mode accessors for Rust FFI
 // =============================================================================
 
-int nvim_get_Ctrl_Q(void) { return Ctrl_Q; }
-
-int nvim_get_Ctrl_V(void) { return Ctrl_V; }
-
-void nvim_cap_set_cmdchar_call(cmdarg_T *cap, int val) { if (cap) cap->cmdchar = val; }
-
-int nvim_get_motion_force(void) { return motion_force; }
-
 void nvim_set_finish_op(bool val) { finish_op = val; }
 
 
@@ -1137,8 +1129,6 @@ bool nvim_p_sel_is_exclusive(void) { return *p_sel == 'e'; }
 
 bool nvim_equalpos_VIsual_cursor(void) { return equalpos(VIsual, curwin->w_cursor); }
 
-bool nvim_get_w_set_curswant(void) { return curwin->w_set_curswant; }
-
 void nvim_set_w_set_curswant(bool val) { curwin->w_set_curswant = val; }
 
 /// Wrapper for getvcols: takes two positions, returns left/right via out-params.
@@ -1179,8 +1169,6 @@ int nvim_mark_mb_adjustpos_cursor(void) { mark_mb_adjustpos(curbuf, &curwin->w_c
 
 int nvim_mark_mb_adjustpos_visual(void) { mark_mb_adjustpos(curbuf, &VIsual); return VIsual.col; }
 
-int nvim_getvcol_ce(int lnum, int col, int coladd) { pos_T pp = { lnum, col, coladd }; colnr_T cs, ce; getvcol(curwin, &pp, &cs, NULL, &ce); return ce - cs; }
-
 int nvim_ml_get_len_call(int lnum) { return (int)ml_get_len(lnum); }
 
 // nvim_nv_Zet_impl migrated to Rust (rs_nv_Zet) in Phase 4
@@ -1199,9 +1187,6 @@ char *nvim_getcmdline_for_search(cmdarg_T *cap)
   cap->searchbuf = getcmdline(cap->cmdchar, cap->count1, 0, true);
   return cap->searchbuf;
 }
-
-/// Get cap->searchbuf.
-char *nvim_cap_get_searchbuf(cmdarg_T *cap) { return cap->searchbuf; }
 
 // C wrappers for nv_ident Rust migration (Phase 7)
 
@@ -1244,9 +1229,6 @@ void nvim_set_cursor_col_zero_val(void) { curwin->w_cursor.col = 0; }
 
 /// Cursor lnum decrement.
 void nvim_cursor_lnum_dec_val(void) { curwin->w_cursor.lnum--; }
-
-/// Get cursor lnum.
-int nvim_get_cursor_lnum_val(void) { return (int)curwin->w_cursor.lnum; }
 
 /// findmatchlimit with NULL oap, FM_FORWARD, for block scope in find_decl.
 bool nvim_findmatchlimit_forward(int64_t maxtravel,
@@ -1301,9 +1283,6 @@ bool nvim_findmatchlimit_call(oparg_T *oap, int findc, int flags, int64_t maxtra
   return true;
 }
 
-/// Phase 3: nv_bracket_block -- now calls Rust directly.
-extern void rs_nv_bracket_block(cmdarg_T *cap);
-void nvim_nv_bracket_block_call(cmdarg_T *cap) { rs_nv_bracket_block(cap); }
 // (nv_bracket_block static implementation deleted; migrated to Rust)
 
 // Phase 2: new C accessors replacing nvim_bracket_* helpers (migrated to Rust)
@@ -1469,7 +1448,6 @@ void nvim_getvcol_curwin_cursor(int *vcol) { getvcol(curwin, &curwin->w_cursor, 
 void nvim_getvcol_curwin_cursor_end(int *vcol) { getvcol(curwin, &curwin->w_cursor, NULL, NULL, vcol); }
 int nvim_win_col_off_curwin(void) { return win_col_off(curwin); }
 void nvim_changed_window_setting_curwin(void) { changed_window_setting(curwin); }
-void nvim_changed_window_setting_win(win_T *wp) { changed_window_setting(wp); }
 void nvim_spell_suggest_call(int count) { spell_suggest(count); }
 bool nvim_get_curwin_w_p_wrap(void) { return curwin->w_p_wrap; }
 
@@ -1480,10 +1458,6 @@ size_t nvim_spell_move_to_wrapper(int dir) { return spell_move_to(curwin, dir, S
 
 /// Wrapper for ml_get_pos(&curwin->w_cursor) for Rust FFI.
 char *nvim_ml_get_pos_cursor(void) { return ml_get_pos(&curwin->w_cursor); }
-
-/// nv_zg_zw: spell word add/remove for z commands -- now calls Rust.
-extern int rs_nv_zg_zw(cmdarg_T *cap, int nchar);
-int nvim_nv_zg_zw(cmdarg_T *cap, int nchar) { return rs_nv_zg_zw(cap, nchar); }
 
 /// Sync w_p_fen in diff-synced windows for 'z' commands.
 void nvim_sync_fen_in_diff_windows(void)
@@ -1648,8 +1622,6 @@ cmdarg_T *nvim_ns_get_ca_ptr(void *s) { return &NS(s)->ca; }
 int nvim_ns_get_old_pos_lnum(void *s) { return NS(s)->old_pos.lnum; }
 int nvim_ns_get_old_pos_col(void *s) { return NS(s)->old_pos.col; }
 void nvim_ns_set_old_pos(void *s) { NS(s)->old_pos = curwin->w_cursor; }
-
-void nvim_ns_save_opcount(void *s) { NS(s)->oa.prev_opcount = NS(s)->ca.opcount; }
 
 // Phase 5 accessors for normal_prepare (migrated to Rust)
 
@@ -2144,7 +2116,6 @@ bool nvim_char_avail_call(void) { return char_avail(); }
 bool nvim_fdo_has_all_flag(void) { return (fdo_flags & kOptFdoFlagAll) != 0; }
 
 // For normal_check_stuff_buffer
-bool nvim_get_did_check_timestamps(void) { return did_check_timestamps; }
 void nvim_set_did_check_timestamps(bool val) { did_check_timestamps = val; }
 bool nvim_get_need_check_timestamps(void) { return need_check_timestamps; }
 void nvim_check_timestamps_call(bool focus) { check_timestamps(focus); }
@@ -2836,9 +2807,6 @@ void nvim_redraw_curbuf_later_valid(void) { redraw_curbuf_later(UPD_VALID); }
 
 /// Return typebuf_was_empty global.
 bool nvim_get_typebuf_was_empty(void) { return typebuf_was_empty; }
-
-/// Return anyBufIsChanged().
-bool nvim_anyBufIsChanged(void) { return anyBufIsChanged(); }
 
 /// Call vim_beep(kOptBoFlagEsc).
 void nvim_vim_beep_esc(void) { vim_beep(kOptBoFlagEsc); }
