@@ -13,6 +13,7 @@
 #![allow(clippy::missing_safety_doc)] // FFI functions safety is implicit
 
 pub mod accessors;
+pub mod apply;
 pub mod callbacks;
 pub mod completion;
 pub mod copy;

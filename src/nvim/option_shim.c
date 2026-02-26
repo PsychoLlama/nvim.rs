@@ -200,6 +200,10 @@ extern bool rs_set_tty_option(const char *name, char *value);
 extern int rs_string_to_key(char *arg);
 extern void rs_check_redraw_for(buf_T *buf, win_T *win, uint32_t flags);
 extern uint32_t *rs_insecure_flag(win_T *wp, OptIndex opt_idx, int opt_flags);
+extern const char *rs_did_set_option(OptIndex opt_idx, void *varp, OptVal old_value,
+                                     OptVal new_value, int opt_flags, scid_T set_sid,
+                                     int direct, int value_replaced, char *errbuf,
+                                     size_t errbuflen);
 extern int rs_was_set_insecurely(win_T *wp, OptIndex opt_idx, int opt_flags);
 extern void rs_set_option_sctx(OptIndex opt_idx, int opt_flags, sctx_T script_ctx);
 extern int rs_optval_default(OptIndex opt_idx, void *varp);
@@ -2829,156 +2833,8 @@ static const char *did_set_option(OptIndex opt_idx, void *varp, OptVal old_value
                                   int opt_flags, scid_T set_sid, const bool direct,
                                   const bool value_replaced, char *errbuf, size_t errbuflen)
 {
-  vimoption_T *opt = &options[opt_idx];
-  const char *errmsg = NULL;
-  bool restore_chartab = false;
-  bool value_changed = false;
-  bool value_checked = false;
-
-  optset_T did_set_cb_args = {
-    .os_varp = varp,
-    .os_idx = opt_idx,
-    .os_flags = opt_flags,
-    .os_oldval = old_value.data,
-    .os_newval = new_value.data,
-    .os_value_checked = false,
-    .os_value_changed = false,
-    .os_restore_chartab = false,
-    .os_errbuf = errbuf,
-    .os_errbuflen = errbuflen,
-    .os_buf = curbuf,
-    .os_win = curwin,
-  };
-
-  if (direct) {
-    // Don't do any extra processing if setting directly.
-  }
-  // Disallow changing immutable options.
-  else if (opt->immutable && rs_optval_equal(old_value, new_value) == 0) {
-    errmsg = e_unsupportedoption;
-  }
-  // Disallow changing some options from secure mode.
-  else if ((secure || sandbox != 0) && (opt->flags & kOptFlagSecure)) {
-    errmsg = e_secure;
-  }
-  // Check for a "normal" directory or file name in some string options.
-  else if (new_value.type == kOptValTypeString
-           && check_illegal_path_names(*(char **)varp, opt->flags)) {
-    errmsg = e_invarg;
-  } else if (opt->opt_did_set_cb != NULL) {
-    // Invoke the option specific callback function to validate and apply the new value.
-    errmsg = opt->opt_did_set_cb(&did_set_cb_args);
-    // The 'filetype' and 'syntax' option callback functions may change the os_value_changed field.
-    value_changed = did_set_cb_args.os_value_changed;
-    // The 'keymap', 'filetype' and 'syntax' option callback functions may change the
-    // os_value_checked field.
-    value_checked = did_set_cb_args.os_value_checked;
-    // The 'isident', 'iskeyword', 'isprint' and 'isfname' options may change the character table.
-    // On failure, this needs to be restored.
-    restore_chartab = did_set_cb_args.os_restore_chartab;
-  }
-
-  // If option is hidden or if an error is detected, restore the previous value and don't do any
-  // further processing.
-  if (errmsg != NULL) {
-    set_option_varp(opt_idx, varp, old_value, true);
-    // When resetting some values, need to act on it.
-    if (restore_chartab) {
-      buf_init_chartab(curbuf, true);
-    }
-
-    return errmsg;
-  }
-
-  // Re-assign the new value as its value may get freed or modified by the option callback.
-  new_value = optval_from_varp(opt_idx, varp);
-
-  if (set_sid != SID_NONE) {
-    sctx_T script_ctx = set_sid == 0 ? current_sctx : (sctx_T){ .sc_sid = set_sid };
-    // Remember where the option was set.
-    set_option_sctx(opt_idx, opt_flags, script_ctx);
-  }
-
-  rs_optval_free(old_value);
-
-  const bool scope_both = (opt_flags & (OPT_LOCAL | OPT_GLOBAL)) == 0;
-
-  if (scope_both) {
-    if (option_is_global_local(opt_idx)) {
-      // Global option with local value set to use global value.
-      // Free the local value and clear it.
-      void *varp_local = get_varp_scope(opt, OPT_LOCAL);
-      OptVal local_unset_value = get_option_unset_value(opt_idx);
-      set_option_varp(opt_idx, varp_local, rs_optval_copy(local_unset_value), true);
-    } else {
-      // May set global value for local option.
-      void *varp_global = get_varp_scope(opt, OPT_GLOBAL);
-      set_option_varp(opt_idx, varp_global, rs_optval_copy(new_value), true);
-    }
-  }
-
-  // Don't do anything else if setting the option directly.
-  if (direct) {
-    return errmsg;
-  }
-
-  // Trigger the autocommand only after setting the flags.
-  if (varp == &curbuf->b_p_syn) {
-    do_syntax_autocmd(curbuf, value_changed);
-  } else if (varp == &curbuf->b_p_ft) {
-    // 'filetype' is set, trigger the FileType autocommand
-    // Skip this when called from a modeline
-    // Force autocmd when the filetype was changed
-    if (!(opt_flags & OPT_MODELINE) || value_changed) {
-      do_filetype_autocmd(curbuf, value_changed);
-    }
-  } else if (varp == &curwin->w_s->b_p_spl) {
-    do_spelllang_source(curwin);
-  }
-
-  // In case 'ruler' or 'showcmd' or 'columns' or 'ls' changed.
-  comp_col();
-
-  if (varp == &p_mouse) {
-    setmouse();  // in case 'mouse' changed
-  } else if ((varp == &p_flp || varp == &(curbuf->b_p_flp)) && curwin->w_briopt_list) {
-    // Changing Formatlistpattern when briopt includes the list setting:
-    // redraw
-    redraw_all_later(UPD_NOT_VALID);
-  } else if (varp == &p_wbr || varp == &(curwin->w_p_wbr)) {
-    // add / remove window bars for 'winbar'
-    set_winbar(true);
-  }
-
-  if (curwin->w_curswant != MAXCOL
-      && (opt->flags & (kOptFlagCurswant | kOptFlagRedrAll)) != 0
-      && (opt->flags & kOptFlagHLOnly) == 0) {
-    curwin->w_set_curswant = true;
-  }
-
-  check_redraw(opt->flags);
-
-  if (errmsg == NULL) {
-    opt->flags |= kOptFlagWasSet;
-
-    uint32_t *flagsp = insecure_flag(curwin, opt_idx, opt_flags);
-    uint32_t *flagsp_local = scope_both ? insecure_flag(curwin, opt_idx, OPT_LOCAL) : NULL;
-    // When an option is set in the sandbox, from a modeline or in secure mode set the
-    // kOptFlagInsecure flag.  Otherwise, if a new value is stored reset the flag.
-    if (!value_checked && (secure || sandbox != 0 || (opt_flags & OPT_MODELINE))) {
-      *flagsp |= kOptFlagInsecure;
-      if (flagsp_local != NULL) {
-        *flagsp_local |= kOptFlagInsecure;
-      }
-    } else if (value_replaced) {
-      *flagsp &= ~(unsigned)kOptFlagInsecure;
-      if (flagsp_local != NULL) {
-        *flagsp_local &= ~(unsigned)kOptFlagInsecure;
-      }
-    }
-  }
-
-  return errmsg;
+  return rs_did_set_option(opt_idx, varp, old_value, new_value, opt_flags, set_sid,
+                           direct ? 1 : 0, value_replaced ? 1 : 0, errbuf, errbuflen);
 }
 
 /// Validate the new value for an option.
@@ -4445,6 +4301,147 @@ void nvim_option_fuzmatch_set(void *fuzmatch, int idx, const char *str, int scor
   fm[idx].idx = idx;
   fm[idx].str = xstrdup(str);
   fm[idx].score = score;
+}
+
+// =============================================================================
+// Phase 9 (pass 9) accessors: did_set_option / set_option / apply_optionset_autocmd
+// =============================================================================
+
+/// Invoke the did_set_cb for an option. Constructs optset_T in C and calls the callback.
+/// Returns NULL on success, error message on failure.
+/// Output fields are written back to *value_changed_out, *value_checked_out, *restore_chartab_out.
+const char *nvim_invoke_did_set_cb(OptIndex opt_idx, void *varp, OptVal old_value,
+                                   OptVal new_value, int opt_flags,
+                                   char *errbuf, size_t errbuflen,
+                                   int *value_changed_out, int *value_checked_out,
+                                   int *restore_chartab_out)
+{
+  vimoption_T *opt = &options[opt_idx];
+  if (opt->opt_did_set_cb == NULL) {
+    return NULL;
+  }
+  optset_T args = {
+    .os_varp = varp,
+    .os_idx = opt_idx,
+    .os_flags = opt_flags,
+    .os_oldval = old_value.data,
+    .os_newval = new_value.data,
+    .os_value_checked = false,
+    .os_value_changed = false,
+    .os_restore_chartab = false,
+    .os_errbuf = errbuf,
+    .os_errbuflen = errbuflen,
+    .os_buf = curbuf,
+    .os_win = curwin,
+  };
+  const char *errmsg = opt->opt_did_set_cb(&args);
+  *value_changed_out = args.os_value_changed ? 1 : 0;
+  *value_checked_out = args.os_value_checked ? 1 : 0;
+  *restore_chartab_out = args.os_restore_chartab ? 1 : 0;
+  return errmsg;
+}
+
+/// Set the script context for an option from a SID.
+/// Uses C to construct sctx_T (avoids FFI layout issues with sc_chan field).
+void nvim_set_option_sctx_from_sid(OptIndex opt_idx, int opt_flags, int set_sid)
+{
+  sctx_T script_ctx = set_sid == 0 ? current_sctx : (sctx_T){ .sc_sid = set_sid };
+  set_option_sctx(opt_idx, opt_flags, script_ctx);
+}
+
+/// Returns 1 if opt->opt_did_set_cb is non-NULL for opt_idx.
+int nvim_option_has_did_set_cb(OptIndex opt_idx) { return options[opt_idx].opt_did_set_cb != NULL ? 1 : 0; }
+
+/// Address of curbuf->b_p_syn (for varp pointer comparison)
+void *nvim_curbuf_b_p_syn_addr(void) { return &curbuf->b_p_syn; }
+/// Address of curbuf->b_p_ft (for varp pointer comparison)
+void *nvim_curbuf_b_p_ft_addr(void) { return &curbuf->b_p_ft; }
+/// Address of curwin->w_s->b_p_spl (for varp pointer comparison)
+void *nvim_curwin_b_p_spl_addr(void) { return &curwin->w_s->b_p_spl; }
+/// Address of p_mouse (for varp pointer comparison)
+void *nvim_get_p_mouse_addr(void) { return &p_mouse; }
+/// Address of p_flp (for varp pointer comparison)
+void *nvim_get_p_flp_addr(void) { return &p_flp; }
+/// Address of curbuf->b_p_flp (for varp pointer comparison)
+void *nvim_curbuf_b_p_flp_addr(void) { return &curbuf->b_p_flp; }
+/// Address of p_wbr (for varp pointer comparison)
+void *nvim_get_p_wbr_addr(void) { return &p_wbr; }
+/// Address of curwin->w_p_wbr (for varp pointer comparison)
+void *nvim_curwin_p_wbr_addr(void) { return &curwin->w_p_wbr; }
+
+// nvim_curwin_get_w_curswant and nvim_curwin_set_w_set_curswant are defined in indent_ffi.c
+/// Get curwin->w_briopt_list
+int nvim_curwin_get_w_briopt_list(void) { return curwin->w_briopt_list ? 1 : 0; }
+
+/// Get `secure` global variable
+// nvim_get_secure, nvim_set_secure are defined in ex_docmd.c
+// nvim_get_sandbox is defined in undo.c
+
+/// Call buf_init_chartab(curbuf, true)
+void nvim_call_buf_init_chartab(void) { buf_init_chartab(curbuf, true); }
+/// Call setmouse()
+void nvim_call_setmouse(void) { setmouse(); }
+/// Call set_winbar(true)
+void nvim_call_set_winbar(void) { set_winbar(true); }
+/// Call check_redraw(flags)
+void nvim_call_check_redraw(uint32_t flags) { check_redraw(flags); }
+
+/// Call do_filetype_autocmd(curbuf, value_changed)
+void nvim_do_filetype_autocmd(int value_changed) { do_filetype_autocmd(curbuf, value_changed != 0); }
+
+/// Set options[opt_idx].flags |= kOptFlagWasSet
+void nvim_option_set_was_set_flag(OptIndex opt_idx) { options[opt_idx].flags |= kOptFlagWasSet; }
+
+/// Error message strings for did_set_option
+const char *nvim_get_e_unsupportedoption(void) { return e_unsupportedoption; }
+const char *nvim_get_e_secure(void) { return e_secure; }
+// nvim_get_e_invarg is defined in ex_docmd.c
+
+/// Call check_illegal_path_names(*(char**)varp, flags)
+/// Returns 1 if illegal path names detected, 0 otherwise.
+int nvim_check_illegal_path_names(void *varp, uint32_t flags)
+{
+  return check_illegal_path_names(*(char **)varp, flags) ? 1 : 0;
+}
+
+/// Get options[opt_idx].flags (already exists as nvim_option_get_flags_ptr, but need value)
+uint32_t nvim_option_get_flags_val(OptIndex opt_idx) { return options[opt_idx].flags; }
+
+/// Get current_sctx
+sctx_T nvim_get_current_sctx(void) { return current_sctx; }
+
+/// Get SID_NONE constant
+int nvim_get_sid_none(void) { return (int)SID_NONE; }
+
+// nvim_get_maxcol is defined in memline_shim.c
+
+/// kOptFlagWasSet constant
+uint32_t nvim_get_koptflag_was_set(void) { return (uint32_t)kOptFlagWasSet; }
+/// kOptFlagInsecure constant
+uint32_t nvim_get_koptflag_insecure(void) { return (uint32_t)kOptFlagInsecure; }
+/// kOptFlagSecure constant
+uint32_t nvim_get_koptflag_secure(void) { return (uint32_t)kOptFlagSecure; }
+/// kOptFlagCurswant constant
+uint32_t nvim_get_koptflag_curswant(void) { return (uint32_t)kOptFlagCurswant; }
+/// kOptFlagRedrAll constant
+uint32_t nvim_get_koptflag_redr_all(void) { return (uint32_t)kOptFlagRedrAll; }
+/// kOptFlagHLOnly constant
+uint32_t nvim_get_koptflag_hl_only(void) { return (uint32_t)kOptFlagHLOnly; }
+/// OPT_MODELINE constant
+int nvim_get_opt_modeline(void) { return (int)OPT_MODELINE; }
+/// UPD_NOT_VALID constant
+int nvim_get_upd_not_valid(void) { return (int)UPD_NOT_VALID; }
+
+/// Call get_varp_scope(&options[opt_idx], opt_flags)
+void *nvim_get_varp_scope_opt(OptIndex opt_idx, int opt_flags)
+{
+  return get_varp_scope(&options[opt_idx], opt_flags);
+}
+
+/// Call get_varp(&options[opt_idx])
+void *nvim_get_varp_opt(OptIndex opt_idx)
+{
+  return get_varp(&options[opt_idx]);
 }
 
 
