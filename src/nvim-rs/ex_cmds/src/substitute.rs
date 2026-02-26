@@ -1170,14 +1170,14 @@ extern "C" {
     fn nvim_curbuf_get_b_p_ma() -> c_int;
     fn nvim_curbuf_set_b_p_ma(val: c_int);
     fn nvim_curbuf_set_deleted_bytes2(val: c_int);
-    fn nvim_do_sub_coladvance(col: c_int);
+    fn nvim_coladvance_curwin(col: c_int);
     fn nvim_do_sub_changed_bytes(lnum: c_int, col: c_int);
     fn nvim_do_sub_deleted_lines(lnum: c_int, count: c_int);
-    fn nvim_do_sub_u_inssub(lnum: c_int) -> c_int;
-    fn nvim_do_sub_u_savesub(lnum: c_int) -> c_int;
-    fn nvim_do_sub_u_savedel(lnum: c_int, count: c_int) -> c_int;
-    fn nvim_do_sub_u_save_cursor();
-    fn nvim_do_sub_do_check_cursorbind();
+    fn nvim_u_inssub(lnum: c_int) -> c_int;
+    fn nvim_u_savesub(lnum: c_int) -> c_int;
+    fn nvim_u_savedel2(lnum: c_int, count: c_int) -> c_int;
+    fn nvim_u_save_cursor() -> c_int;
+    fn nvim_do_check_cursorbind_wrapper();
     fn nvim_do_sub_scrollup_clamp();
     fn nvim_do_sub_scrolldown_clamp();
     fn nvim_do_sub_setmouse();
@@ -1204,10 +1204,10 @@ extern "C" {
     fn nvim_do_sub_getcmdline_prompt(prompt_str: *const c_char) -> c_int;
     fn nvim_do_sub_prompt_for_input(str_: *const c_char) -> c_int;
     fn nvim_do_sub_update_screen_for_confirm();
-    fn nvim_do_sub_gotocmdline();
-    fn nvim_do_sub_number_width() -> c_int;
-    fn nvim_do_sub_syn_check_sub_group() -> c_int;
-    fn nvim_do_sub_disable_inccommand();
+    fn nvim_al_gotocmdline(clr: c_int);
+    fn nvim_number_width_curwin() -> c_int;
+    fn nvim_excmds_syn_check_sub_group() -> c_int;
+    fn nvim_excmds_disable_inccommand();
     fn nvim_option_p_icm_notnul() -> c_int;
     fn nvim_do_sub_set_op_start(lnum: c_int);
     fn nvim_do_sub_set_op_end(lnum: c_int);
@@ -1220,7 +1220,6 @@ extern "C" {
     fn nvim_excmds_semsg_patnotf2(pat: *const c_char);
     fn nvim_excmds_semsg_trailing(cmd: *const c_char);
     fn nvim_do_sub_format_confirm_prompt(sub_str: *const c_char) -> *mut c_char;
-    fn nvim_do_sub_format_val_too_large_str(val: c_int) -> *mut c_char;
     fn nvim_excmds_semsg_val_too_large(buf: *const c_char);
     fn nvim_do_sub_extmark_splice(
         start_row: c_int,
@@ -1615,9 +1614,8 @@ pub unsafe extern "C" fn rs_do_sub(
             xfree(sub as *mut std::ffi::c_void);
             return 0;
         } else if i == c_int::MAX {
-            let buf = nvim_do_sub_format_val_too_large_str(i);
-            nvim_excmds_semsg_val_too_large(buf);
-            xfree(buf as *mut std::ffi::c_void);
+            let buf_str = std::ffi::CString::new(format!("{}", i)).unwrap_or_default();
+            nvim_excmds_semsg_val_too_large(buf_str.as_ptr());
             xfree(sub as *mut std::ffi::c_void);
             return 0;
         }
@@ -1985,7 +1983,7 @@ pub unsafe extern "C" fn rs_do_sub(
                         matchcol = strlen_c(sub_firstline) as c_int - matchcol;
                         prev_matchcol = strlen_c(sub_firstline) as c_int - prev_matchcol;
 
-                        if nvim_do_sub_u_savesub(lnum) == 0 {
+                        if nvim_u_savesub(lnum) == 0 {
                             break;
                         }
                         nvim_do_sub_ml_replace(lnum, new_start, 1);
@@ -2008,7 +2006,7 @@ pub unsafe extern "C" fn rs_do_sub(
 
                         if nmatch_tl > 0 {
                             lnum += 1;
-                            if nvim_do_sub_u_savedel(lnum, nmatch_tl) == 0 {
+                            if nvim_u_savedel2(lnum, nmatch_tl) == 0 {
                                 break;
                             }
                             for _ in 0..nmatch_tl {
@@ -2131,7 +2129,7 @@ pub unsafe extern "C" fn rs_do_sub(
         if nvim_excmds_global_busy() == 0 {
             if !subflags_local.do_ask {
                 if endcolumn {
-                    nvim_do_sub_coladvance(MAXCOL);
+                    nvim_coladvance_curwin(MAXCOL);
                 } else {
                     // BL_WHITE | BL_FIX = 1 | 4 = 5
                     beginline(5);
@@ -2187,11 +2185,11 @@ pub unsafe extern "C" fn rs_do_sub(
     // Show inccommand preview
     if cmdpreview_ns > 0 && nvim_excmds_aborting() == 0 {
         if got_quit || nvim_do_sub_profile_passed_limit(timeout) != 0 {
-            nvim_do_sub_disable_inccommand();
+            nvim_excmds_disable_inccommand();
         } else if nvim_option_p_icm_notnul() != 0 && !pat.is_null() {
             let mut hl_id = PRE_HL_ID.load(std::sync::atomic::Ordering::Relaxed);
             if hl_id == 0 {
-                hl_id = nvim_do_sub_syn_check_sub_group();
+                hl_id = nvim_excmds_syn_check_sub_group();
                 PRE_HL_ID.store(hl_id, std::sync::atomic::Ordering::Relaxed);
             }
             // Call rs_show_sub with the preview_lines
@@ -2250,7 +2248,7 @@ unsafe fn handle_do_ask(
     nvim_curwin_set_cursor_col(startpos0_col);
 
     if nvim_curwin_get_w_p_crb() != 0 {
-        nvim_do_sub_do_check_cursorbind();
+        nvim_do_check_cursorbind_wrapper();
     }
 
     if nvim_option_p_cpo_has_undo() != 0 {
@@ -2273,7 +2271,7 @@ unsafe fn handle_do_ask(
 
             if subflags.do_number || nvim_curwin_get_w_p_nu() != 0 {
                 // We can't easily get w_p_nu in isolation - use nvim_curwin_get_w_p_nu from lib
-                let numw = nvim_do_sub_number_width() + 1;
+                let numw = nvim_number_width_curwin() + 1;
                 sc += numw;
                 ec += numw;
             }
@@ -2340,7 +2338,7 @@ unsafe fn handle_do_ask(
             xfree(prompt_str as *mut std::ffi::c_void);
 
             nvim_set_msg_didout(0);
-            nvim_do_sub_gotocmdline();
+            nvim_al_gotocmdline(1);
             nvim_option_set_lz(save_p_lz);
             nvim_set_RedrawingDisabled(temp);
 
@@ -2638,7 +2636,7 @@ unsafe fn goto_sub_main(
             let len = strlen_c(src) + 1;
             std::ptr::copy(src, p_iter, len);
         } else if *p_iter == b'\r' as i8 {
-            if nvim_do_sub_u_inssub(*lnum) != 0 {
+            if nvim_u_inssub(*lnum) != 0 {
                 *p_iter = 0; // truncate at CR
                 let new_start_ptr = *new_start;
                 let append_len = (p_iter.offset_from(new_start_ptr) + 1) as c_int;
@@ -2686,7 +2684,7 @@ unsafe fn goto_sub_main(
     let subcols = new_endcol - if *lnum == *lnum_start { start_col } else { 0 };
 
     if !*did_save {
-        nvim_do_sub_u_save_cursor();
+        let _ = nvim_u_save_cursor();
         *did_save = true;
     }
 

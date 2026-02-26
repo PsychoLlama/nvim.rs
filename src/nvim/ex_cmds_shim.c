@@ -1252,6 +1252,18 @@ void nvim_excmds_semsg_trailing(const char *cmd) { semsg(_(e_trailing_arg), cmd)
 /// Emit semsg(_(e_val_too_large), buf).
 void nvim_excmds_semsg_val_too_large(const char *buf) { semsg(_(e_val_too_large), buf); }
 
+/// Wrap syn_check_group("Substitute"). Returns hl_id.
+int nvim_excmds_syn_check_sub_group(void)
+{
+  return syn_check_group(S_LEN("Substitute"));
+}
+
+/// Disable inccommand option.
+void nvim_excmds_disable_inccommand(void)
+{
+  set_option_direct(kOptInccommand, STATIC_CSTR_AS_OPTVAL(""), 0, SID_NONE);
+}
+
 /// Get curwin->w_cursor.lnum for nested global handling.
 int nvim_excmds_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
 
@@ -2204,8 +2216,7 @@ void nvim_curwin_set_w_p_fen(int val) { curwin->w_p_fen = (bool)val; }
 /// Set curbuf->deleted_bytes2.
 void nvim_curbuf_set_deleted_bytes2(int val) { curbuf->deleted_bytes2 = (bcount_t)val; }
 
-/// Wrap coladvance(curwin, col).
-void nvim_do_sub_coladvance(int col) { coladvance(curwin, (colnr_T)col); }
+// nvim_do_sub_coladvance deleted -- use nvim_coladvance_curwin (normal_shim.c)
 
 /// Wrap changed_bytes(lnum, col).
 void nvim_do_sub_changed_bytes(int lnum, int col)
@@ -2219,29 +2230,11 @@ void nvim_do_sub_deleted_lines(int lnum, int count)
   deleted_lines((linenr_T)lnum, (linenr_T)count);
 }
 
-/// Wrap u_inssub(lnum). Returns OK (1) or FAIL (0).
-int nvim_do_sub_u_inssub(int lnum)
-{
-  return u_inssub((linenr_T)lnum) == OK ? 1 : 0;
-}
-
-/// Wrap u_savesub(lnum). Returns OK (1) or FAIL (0).
-int nvim_do_sub_u_savesub(int lnum)
-{
-  return u_savesub((linenr_T)lnum) == OK ? 1 : 0;
-}
-
-/// Wrap u_savedel(lnum, count). Returns OK (1) or FAIL (0).
-int nvim_do_sub_u_savedel(int lnum, int count)
-{
-  return u_savedel((linenr_T)lnum, (linenr_T)count) == OK ? 1 : 0;
-}
-
-/// Wrap u_save_cursor().
-void nvim_do_sub_u_save_cursor(void) { u_save_cursor(); }
-
-/// Wrap do_check_cursorbind().
-void nvim_do_sub_do_check_cursorbind(void) { do_check_cursorbind(); }
+// nvim_do_sub_u_inssub deleted -- use nvim_u_inssub (undo.c)
+// nvim_do_sub_u_savesub deleted -- use nvim_u_savesub (undo.c)
+// nvim_do_sub_u_savedel deleted -- use nvim_u_savedel2 (undo.c)
+// nvim_do_sub_u_save_cursor deleted -- use nvim_u_save_cursor (change_ffi.c)
+// nvim_do_sub_do_check_cursorbind deleted -- use nvim_do_check_cursorbind_wrapper (normal_shim.c)
 
 /// Wrap scrollup_clamp().
 void nvim_do_sub_scrollup_clamp(void) { scrollup_clamp(); }
@@ -2365,23 +2358,10 @@ void nvim_do_sub_update_screen_for_confirm(void)
   redraw_later(curwin, UPD_SOME_VALID);
 }
 
-/// Wrap gotocmdline(true).
-void nvim_do_sub_gotocmdline(void) { gotocmdline(true); }
-
-/// Get number_width(curwin).
-int nvim_do_sub_number_width(void) { return number_width(curwin); }
-
-/// Wrap syn_check_group for "Substitute". Returns hl_id.
-int nvim_do_sub_syn_check_sub_group(void)
-{
-  return syn_check_group(S_LEN("Substitute"));
-}
-
-/// Wrap set_option_direct(kOptInccommand, "", 0, SID_NONE) to disable inccommand.
-void nvim_do_sub_disable_inccommand(void)
-{
-  set_option_direct(kOptInccommand, STATIC_CSTR_AS_OPTVAL(""), 0, SID_NONE);
-}
+// nvim_do_sub_gotocmdline deleted -- use nvim_al_gotocmdline(1) (arglist.c)
+// nvim_do_sub_number_width deleted -- use nvim_number_width_curwin (ex_cmds_shim.c line ~169)
+// nvim_do_sub_syn_check_sub_group deleted -- use nvim_excmds_syn_check_sub_group
+// nvim_do_sub_disable_inccommand deleted -- use nvim_excmds_disable_inccommand
 
 // nvim_do_sub_get_p_icm_notnul deleted -- use nvim_option_p_icm_notnul (option_shim.c)
 
@@ -2408,13 +2388,7 @@ char *nvim_do_sub_format_confirm_prompt(const char *sub)
   return xstrdup(IObuff);
 }
 
-/// Format an int into a string and return xstrdup of it (for e_val_too_large).
-char *nvim_do_sub_format_val_too_large_str(int val)
-{
-  char buf[20];
-  vim_snprintf(buf, sizeof(buf), "%d", val);
-  return xstrdup(buf);
-}
+// nvim_do_sub_format_val_too_large_str deleted -- implemented in Rust
 
 /// Call extmark_splice on curbuf for do_sub.
 void nvim_do_sub_extmark_splice(int start_row, int start_col,

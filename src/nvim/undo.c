@@ -2693,3 +2693,13 @@ void nvim_dec_no_u_sync(void) { no_u_sync--; }
 void nvim_inc_sandbox(void) { sandbox++; }
 /// Decrement sandbox.
 void nvim_dec_sandbox(void) { sandbox--; }
+
+/// Wrap u_inssub(lnum). Returns 1 on OK, 0 on FAIL.
+int nvim_u_inssub(int lnum) { return u_inssub((linenr_T)lnum) == OK ? 1 : 0; }
+/// Wrap u_savesub(lnum). Returns 1 on OK, 0 on FAIL.
+int nvim_u_savesub(int lnum) { return u_savesub((linenr_T)lnum) == OK ? 1 : 0; }
+/// Wrap u_savedel(lnum, count). Returns 1 on OK, 0 on FAIL.
+int nvim_u_savedel2(int lnum, int count)
+{
+  return u_savedel((linenr_T)lnum, (linenr_T)count) == OK ? 1 : 0;
+}
