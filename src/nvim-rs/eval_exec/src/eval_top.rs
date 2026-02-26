@@ -18,6 +18,7 @@ use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
 use crate::eval::{EvalargHandle, ExargHandle, TypevalHandle};
+use crate::funcexe::FuncExeT;
 
 // =============================================================================
 // Constants
@@ -96,18 +97,14 @@ extern "C" {
     fn nvim_eval_tv_get_partial(tv: TypevalHandle) -> *mut c_void; // partial_T*
     fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
     fn rs_partial_name(pt: *const c_void) -> *mut c_char;
-    fn nvim_eval_call_func_partial(
-        s: *const c_char,
-        partial: *mut c_void,
-        argv: TypevalHandle,
-        argc: c_int,
-        rettv: TypevalHandle,
-    ) -> c_int;
-    fn nvim_eval_call_func_simple(
-        s: *const c_char,
-        argv: TypevalHandle,
-        argc: c_int,
-        rettv: TypevalHandle,
+    // Direct call_func for eval_expr_partial/eval_expr_func/call_vim_function
+    fn call_func(
+        funcname: *const c_char,
+        len: c_int,
+        rettv: *mut c_void,
+        argcount: c_int,
+        argvars: *mut c_void,
+        funcexe: *mut FuncExeT,
     ) -> c_int;
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn nvim_semsg_invexpr2(p: *const c_char);
@@ -206,7 +203,10 @@ unsafe fn eval_expr_partial_impl(
     if s.is_null() || *s == 0 {
         return FAIL;
     }
-    nvim_eval_call_func_partial(s, partial, argv, argc, rettv)
+    let mut funcexe = FuncExeT::new();
+    funcexe.fe_evaluate = true;
+    funcexe.fe_partial = partial;
+    call_func(s, -1, rettv.as_ptr(), argc, argv.as_ptr(), &mut funcexe)
 }
 
 /// Evaluate a function expression.
@@ -230,7 +230,9 @@ unsafe fn eval_expr_func_impl(
     if s.is_null() || *s == 0 {
         return FAIL;
     }
-    nvim_eval_call_func_simple(s, argv, argc, rettv)
+    let mut funcexe = FuncExeT::new();
+    funcexe.fe_evaluate = true;
+    call_func(s, -1, rettv.as_ptr(), argc, argv.as_ptr(), &mut funcexe)
 }
 
 /// Evaluate a string expression.
@@ -790,15 +792,9 @@ pub unsafe extern "C" fn rs_eval_expr(arg: *mut c_char, eap: ExargHandle) -> *mu
 
 extern "C" {
     // Phase 1: call_vim_function accessors
-    fn nvim_call_func_with_partial(
-        func: *const c_char,
-        len: c_int,
-        rettv: TypevalHandle,
-        argc: c_int,
-        argv: TypevalHandle,
-        partial: *mut c_void,
-    ) -> c_int;
+    // call_func is already declared in eval_expr block above (re-use via funcexe::FuncExeT)
     fn nvim_get_vlua_partial() -> *mut c_void; // partial_T*
+    fn nvim_curwin_get_cursor_lnum() -> i32;
     fn rs_check_luafunc_name(s: *const c_char, paren: bool) -> c_int;
 
     // Phase 1: set_argv_var accessors
@@ -864,7 +860,20 @@ pub unsafe extern "C" fn rs_call_vim_function(
     // Initialize rettv: set v_type = VAR_UNKNOWN (0) so tv_clear works on failure
     nvim_tv_set_type(rettv, 0); // VAR_UNKNOWN = 0
 
-    let ret = nvim_call_func_with_partial(actual_func, actual_len, rettv, argc, argv, partial);
+    let lnum = nvim_curwin_get_cursor_lnum();
+    let mut funcexe = FuncExeT::new();
+    funcexe.fe_firstline = lnum;
+    funcexe.fe_lastline = lnum;
+    funcexe.fe_evaluate = true;
+    funcexe.fe_partial = partial;
+    let ret = call_func(
+        actual_func,
+        actual_len,
+        rettv.as_ptr(),
+        argc,
+        argv.as_ptr(),
+        &mut funcexe,
+    );
 
     if ret == FAIL {
         tv_clear(rettv);

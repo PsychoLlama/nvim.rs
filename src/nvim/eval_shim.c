@@ -185,6 +185,19 @@ _Static_assert(kCallbackPartial == 2, "kCallbackPartial mismatch");
 
 // Phase 11: lval_T layout assertions (Rust LvalT must match exactly).
 _Static_assert(sizeof(lval_T) == 96, "lval_T size mismatch: Rust LvalT must be updated");
+// Phase 11: funcexe_T layout assertions (Rust FuncExeT must match exactly).
+_Static_assert(sizeof(funcexe_T) == 64, "funcexe_T size mismatch: Rust FuncExeT must be updated");
+_Static_assert(offsetof(funcexe_T, fe_argv_func) == 0, "funcexe_T fe_argv_func offset mismatch");
+_Static_assert(offsetof(funcexe_T, fe_firstline) == 8, "funcexe_T fe_firstline offset mismatch");
+_Static_assert(offsetof(funcexe_T, fe_lastline) == 12, "funcexe_T fe_lastline offset mismatch");
+_Static_assert(offsetof(funcexe_T, fe_doesrange) == 16, "funcexe_T fe_doesrange offset mismatch");
+_Static_assert(offsetof(funcexe_T, fe_evaluate) == 24, "funcexe_T fe_evaluate offset mismatch");
+_Static_assert(offsetof(funcexe_T, fe_partial) == 32, "funcexe_T fe_partial offset mismatch");
+_Static_assert(offsetof(funcexe_T, fe_selfdict) == 40, "funcexe_T fe_selfdict offset mismatch");
+_Static_assert(offsetof(funcexe_T, fe_basetv) == 48, "funcexe_T fe_basetv offset mismatch");
+_Static_assert(offsetof(funcexe_T, fe_found_var) == 56, "funcexe_T fe_found_var offset mismatch");
+// Phase 11: typval_T size for provider.rs argvars array (3 * sizeof(typval_T)).
+_Static_assert(sizeof(typval_T) == 16, "typval_T size mismatch: update provider.rs argvars stride");
 _Static_assert(offsetof(lval_T, ll_name) == 0, "lval_T ll_name offset mismatch");
 _Static_assert(offsetof(lval_T, ll_name_len) == 8, "lval_T ll_name_len offset mismatch");
 _Static_assert(offsetof(lval_T, ll_exp_name) == 16, "lval_T ll_exp_name offset mismatch");
@@ -1097,24 +1110,7 @@ bool nvim_callback_call_lua(LuaRef luaref)
   return LUARET_TRUTHY(rv);
 }
 
-/// Call a funcref or partial callback (handles funcexe_T construction).
-/// @param name     Function name
-/// @param partial  partial_T * or NULL
-/// @param argcount Number of arguments
-/// @param argvars  Argument typvals
-/// @param rettv    Result typval
-/// @return  true on success (call_func returned OK)
-bool nvim_callback_call_func(const char *name, partial_T *partial,
-                             int argcount, typval_T *argvars, typval_T *rettv)
-{
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_firstline = curwin->w_cursor.lnum;
-  funcexe.fe_lastline = curwin->w_cursor.lnum;
-  funcexe.fe_evaluate = true;
-  funcexe.fe_partial = partial;
-
-  return call_func(name, -1, rettv, argcount, argvars, &funcexe);
-}
+// nvim_callback_call_func: deleted -- Rust callback.rs constructs FuncExeT directly (Phase 11).
 
 // callback_call: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
 
@@ -1545,27 +1541,7 @@ void nvim_tv_dict_item_free(dictitem_T *di)
   xfree(di);
 }
 
-// =============================================================================
-// Phase 1 continuation: funcexe wrapper
-// =============================================================================
-
-/// Construct funcexe_T and call get_func_tv - wrapper for Rust eval_func.
-///
-/// This avoids replicating the funcexe_T struct layout in Rust.
-int nvim_call_func_tv_wrapper(char *name, int len, typval_T *rettv, char **arg,
-                              evalarg_T *evalarg, bool evaluate,
-                              partial_T *partial, typval_T *basetv,
-                              bool found_var, linenr_T lnum)
-{
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_firstline = lnum;
-  funcexe.fe_lastline = lnum;
-  funcexe.fe_evaluate = evaluate;
-  funcexe.fe_partial = partial;
-  funcexe.fe_basetv = basetv;
-  funcexe.fe_found_var = found_var;
-  return get_func_tv(name, len, rettv, arg, evalarg, &funcexe);
-}
+// nvim_call_func_tv_wrapper: deleted -- Rust eval.rs constructs FuncExeT directly (Phase 11).
 
 // =============================================================================
 // Phase 3: eval_list accessor wrappers for Rust
@@ -2148,25 +2124,8 @@ char *nvim_eval_tv_list_join_nl(list_T *l)
 
 
 
-/// call_func wrapper for eval_expr_partial - accessor for Rust eval_top.
-int nvim_eval_call_func_partial(const char *s, partial_T *partial,
-                                typval_T *argv, int argc, typval_T *rettv)
-{
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_evaluate = true;
-  funcexe.fe_partial = partial;
-  return call_func(s, -1, rettv, argc, argv, &funcexe);
-}
-
-/// call_func wrapper for eval_expr_func - accessor for Rust eval_top.
-int nvim_eval_call_func_simple(const char *s, typval_T *argv, int argc, typval_T *rettv)
-{
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_evaluate = true;
-  return call_func(s, -1, rettv, argc, argv, &funcexe);
-}
-
-
+// nvim_eval_call_func_partial: deleted -- Rust eval_top.rs constructs FuncExeT directly (Phase 11).
+// nvim_eval_call_func_simple: deleted -- Rust eval_top.rs constructs FuncExeT directly (Phase 11).
 
 /// xstrdup wrapper - accessor for eval_top.
 char *nvim_eval_xstrdup(const char *s)
@@ -2312,22 +2271,7 @@ int nvim_get_cursor_line_charlen(void)
 // Phase 1 (eval_shim pass 4): C accessors for rs_call_func_rettv / rs_eval_lambda
 // =============================================================================
 
-/// Construct funcexe_T with selfdict and call get_func_tv.
-/// Used by rs_call_func_rettv to handle both selfdict and non-selfdict cases.
-int nvim_call_func_tv_with_selfdict(char *name, int len, typval_T *rettv, char **arg,
-                                    evalarg_T *evalarg, bool evaluate,
-                                    partial_T *pt, dict_T *selfdict, typval_T *basetv,
-                                    linenr_T lnum)
-{
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_firstline = lnum;
-  funcexe.fe_lastline = lnum;
-  funcexe.fe_evaluate = evaluate;
-  funcexe.fe_partial = pt;
-  funcexe.fe_selfdict = selfdict;
-  funcexe.fe_basetv = basetv;
-  return get_func_tv(name, len, rettv, arg, evalarg, &funcexe);
-}
+// nvim_call_func_tv_with_selfdict: deleted -- Rust eval.rs constructs FuncExeT directly (Phase 11).
 
 /// Wrap get_lambda_tv for Rust rs_eval_lambda.
 int nvim_get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg)
@@ -2626,19 +2570,7 @@ bool nvim_partial_decref_and_check(partial_T *pt)
 //   set_argv_var, var_set_global, eval_fmt_source_name_line, find_option_var_end
 // =============================================================================
 
-/// Construct funcexe_T and call call_func - accessor for rs_call_vim_function.
-/// Avoids replicating funcexe_T struct layout in Rust.
-int nvim_call_func_with_partial(const char *func, int len, typval_T *rettv,
-                                int argc, typval_T *argv, partial_T *partial)
-{
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_firstline = curwin->w_cursor.lnum;
-  funcexe.fe_lastline = curwin->w_cursor.lnum;
-  funcexe.fe_evaluate = true;
-  funcexe.fe_partial = partial;
-  return call_func(func, len, rettv, argc, argv, &funcexe);
-}
-
+// nvim_call_func_with_partial: deleted -- Rust eval_top.rs constructs FuncExeT directly (Phase 11).
 
 /// Wrap set_var(name, name_len, tv, false) - accessor for rs_var_set_global.
 void nvim_set_var_wrapper(const char *name, size_t name_len, typval_T *tv)
@@ -3091,27 +3023,7 @@ void nvim_eval_list_ref(list_T *l)
 
 // nvim_eval_save_funccal and nvim_eval_restore_funccal already defined above (line 3567).
 
-/// Call a provider function by name with method and list args.
-/// Returns the typval_T result via out_rettv.
-void nvim_eval_provider_call_func(const char *funcname, int name_len,
-                                  const char *method, list_T *arguments,
-                                  typval_T *out_rettv)
-{
-  typval_T argvars[3] = {
-    { .v_type = VAR_STRING, .vval.v_string = (char *)method,
-      .v_lock = VAR_UNLOCKED },
-    { .v_type = VAR_LIST, .vval.v_list = arguments, .v_lock = VAR_UNLOCKED },
-    { .v_type = VAR_UNKNOWN }
-  };
-  out_rettv->v_type = VAR_UNKNOWN;
-  out_rettv->v_lock = VAR_UNLOCKED;
-
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_firstline = curwin->w_cursor.lnum;
-  funcexe.fe_lastline = curwin->w_cursor.lnum;
-  funcexe.fe_evaluate = true;
-  call_func(funcname, name_len, out_rettv, 2, argvars, &funcexe);
-}
+// nvim_eval_provider_call_func: deleted -- Rust provider.rs constructs FuncExeT directly (Phase 11).
 
 /// semsg E319 "No X provider found" wrapper.
 void nvim_semsg_no_provider(const char *provider)

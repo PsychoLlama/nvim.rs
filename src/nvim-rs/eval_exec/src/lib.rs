@@ -711,6 +711,7 @@ pub mod eval;
 pub mod eval_top;
 pub mod ex_echo;
 pub mod for_loop;
+pub mod funcexe;
 pub mod gc;
 pub mod index;
 pub mod lval;

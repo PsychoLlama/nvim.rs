@@ -10,6 +10,8 @@
 
 use std::ffi::{c_char, c_int, c_void, CStr};
 
+use crate::funcexe::FuncExeT;
+
 // =============================================================================
 // C Extern Declarations
 // =============================================================================
@@ -56,14 +58,19 @@ extern "C" {
     fn nvim_eval_save_funccal() -> *mut c_void;
     fn nvim_eval_restore_funccal(entry: *mut c_void);
 
-    // ----- call provider function -----
-    fn nvim_eval_provider_call_func(
+    // ----- direct call_func (replaces nvim_eval_provider_call_func) -----
+    fn call_func(
         funcname: *const c_char,
-        name_len: c_int,
-        method: *const c_char,
-        arguments: *mut c_void,
-        out_rettv: *mut c_void,
-    );
+        len: c_int,
+        rettv: *mut c_void,
+        argcount: c_int,
+        argvars: *mut c_void,
+        funcexe: *mut FuncExeT,
+    ) -> c_int;
+    fn nvim_curwin_get_cursor_lnum() -> i32;
+    fn nvim_tv_set_type(tv: *mut c_void, vtype: c_int);
+    fn nvim_tv_set_vstring_raw(tv: *mut c_void, s: *mut c_char);
+    fn nvim_tv_set_list(tv: *mut c_void, list: *mut c_void);
 
     // ----- string utilities -----
     fn rs_strchrsub(str: *mut c_char, c: c_char, x: c_char);
@@ -304,15 +311,33 @@ pub unsafe extern "C" fn rs_eval_call_provider(
     // Ref the arguments list for the call
     unsafe { nvim_eval_list_ref(arguments) };
 
-    // Make the call via C (handles argvars setup, funcexe, etc.)
+    // Build argvars[3]: [VAR_STRING method, VAR_LIST arguments, VAR_UNKNOWN]
+    // typval_T is 16 bytes: v_type(4) + v_lock(4) + vval(8)
+    // VAR_STRING=2, VAR_LIST=4, VAR_UNKNOWN=0, VAR_UNLOCKED=0
+    let mut argvars = [0u8; 48usize]; // 3 * 16 bytes, zeroed
+    let av0 = argvars.as_mut_ptr() as *mut c_void;
+    // av2 stays all-zero (VAR_UNKNOWN=0, VAR_UNLOCKED=0, vval=null)
+    let lnum = unsafe { nvim_curwin_get_cursor_lnum() };
+    let mut funcexe = FuncExeT::new();
+    funcexe.fe_firstline = lnum;
+    funcexe.fe_lastline = lnum;
+    funcexe.fe_evaluate = true;
     unsafe {
-        nvim_eval_provider_call_func(
+        let av1 = argvars.as_mut_ptr().add(16) as *mut c_void;
+        nvim_tv_set_type(av0, 2); // VAR_STRING
+        nvim_tv_set_vstring_raw(av0, method as *mut c_char);
+        nvim_tv_set_type(av1, 4); // VAR_LIST
+        nvim_tv_set_list(av1, arguments);
+        // Set out_rettv to VAR_UNKNOWN/VAR_UNLOCKED before call
+        nvim_tv_set_type(out_rettv, 0); // VAR_UNKNOWN
+        call_func(
             func_buf.as_ptr() as *const c_char,
             name_len,
-            method,
-            arguments,
             out_rettv,
-        )
+            2,
+            av0,
+            &mut funcexe,
+        );
     };
 
     // Unref arguments

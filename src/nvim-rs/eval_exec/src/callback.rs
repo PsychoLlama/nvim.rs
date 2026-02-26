@@ -9,6 +9,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::eval::TypevalHandle;
+use crate::funcexe::FuncExeT;
 
 // =============================================================================
 // Constants (matching C kCallbackXxx enum)
@@ -47,14 +48,18 @@ extern "C" {
     // Lua callback call
     fn nvim_callback_call_lua(luaref: i32) -> bool;
 
-    // Funcref/partial callback call
-    fn nvim_callback_call_func(
-        name: *const c_char,
-        partial: *mut c_void,
+    // Direct call_func (used with FuncExeT)
+    fn call_func(
+        funcname: *const c_char,
+        len: c_int,
+        rettv: *mut c_void,
         argcount: c_int,
         argvars: *mut c_void,
-        rettv: TypevalHandle,
-    ) -> bool;
+        funcexe: *mut FuncExeT,
+    ) -> c_int;
+
+    // Cursor position accessor
+    fn nvim_curwin_get_cursor_lnum() -> i32;
 
     // rs_partial_name (already Rust, declared in eval.rs as const)
     fn rs_partial_name(pt: *const c_void) -> *mut c_char;
@@ -100,7 +105,20 @@ pub unsafe fn callback_call_impl(
                 (name as *const c_char, std::ptr::null_mut())
             };
             nvim_callback_depth_inc();
-            let ret = nvim_callback_call_func(call_name, partial, argcount, argvars, rettv);
+            let lnum = nvim_curwin_get_cursor_lnum();
+            let mut funcexe = FuncExeT::new();
+            funcexe.fe_firstline = lnum;
+            funcexe.fe_lastline = lnum;
+            funcexe.fe_evaluate = true;
+            funcexe.fe_partial = partial;
+            let ret = call_func(
+                call_name,
+                -1,
+                rettv.as_ptr(),
+                argcount,
+                argvars,
+                &mut funcexe,
+            ) != 0;
             nvim_callback_depth_dec();
             ret
         }
@@ -108,7 +126,13 @@ pub unsafe fn callback_call_impl(
             let partial = nvim_eval_cb_get_partial(callback);
             let name = rs_partial_name(partial as *const c_void);
             nvim_callback_depth_inc();
-            let ret = nvim_callback_call_func(name, partial, argcount, argvars, rettv);
+            let lnum = nvim_curwin_get_cursor_lnum();
+            let mut funcexe = FuncExeT::new();
+            funcexe.fe_firstline = lnum;
+            funcexe.fe_lastline = lnum;
+            funcexe.fe_evaluate = true;
+            funcexe.fe_partial = partial;
+            let ret = call_func(name, -1, rettv.as_ptr(), argcount, argvars, &mut funcexe) != 0;
             nvim_callback_depth_dec();
             ret
         }

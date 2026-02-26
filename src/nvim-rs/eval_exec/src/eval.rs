@@ -28,6 +28,8 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
+use crate::funcexe::FuncExeT;
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -1378,18 +1380,14 @@ extern "C" {
     ) -> *mut c_char;
     fn xmemdupz(src: *const c_void, len: usize) -> *mut c_char;
 
-    // Helper that constructs funcexe_T and calls get_func_tv
-    fn nvim_call_func_tv_wrapper(
-        name: *mut c_char,
+    // Direct call to get_func_tv (used with FuncExeT)
+    fn get_func_tv(
+        name: *const c_char,
         len: c_int,
-        rettv: TypevalHandle,
+        rettv: *mut c_void,
         arg: *mut *mut c_char,
-        evalarg: EvalargHandle,
-        evaluate: bool,
-        partial: *mut c_void,
-        basetv: TypevalHandle,
-        found_var: bool,
-        lnum: i32,
+        evalarg: *mut c_void,
+        funcexe: *mut FuncExeT,
     ) -> c_int;
 
     // Cursor position accessor
@@ -1444,8 +1442,20 @@ unsafe fn eval_func_impl(
     let s_copy = xmemdupz(s as *const c_void, len as usize);
 
     let lnum = nvim_curwin_get_cursor_lnum();
-    let ret = nvim_call_func_tv_wrapper(
-        s_copy, len, rettv, arg, evalarg, evaluate, partial, basetv, found_var, lnum,
+    let mut funcexe = FuncExeT::new();
+    funcexe.fe_firstline = lnum;
+    funcexe.fe_lastline = lnum;
+    funcexe.fe_evaluate = evaluate;
+    funcexe.fe_partial = partial;
+    funcexe.fe_basetv = basetv.as_ptr();
+    funcexe.fe_found_var = found_var;
+    let ret = get_func_tv(
+        s_copy,
+        len,
+        rettv.as_ptr(),
+        arg,
+        evalarg.as_ptr(),
+        &mut funcexe,
     );
 
     xfree(s_copy as *mut c_void);
@@ -3263,19 +3273,6 @@ extern "C" {
     // rs_is_luafunc from eval crate
     fn rs_is_luafunc(pt: *const c_void) -> bool;
 
-    // New accessor: get_func_tv with selfdict support
-    fn nvim_call_func_tv_with_selfdict(
-        name: *mut c_char,
-        len: c_int,
-        rettv: TypevalHandle,
-        arg: *mut *mut c_char,
-        evalarg: EvalargHandle,
-        evaluate: bool,
-        pt: *mut c_void,       // partial_T*
-        selfdict: *mut c_void, // dict_T*
-        basetv: TypevalHandle,
-        lnum: i32,
-    ) -> c_int;
     // Wrap get_lambda_tv
     fn nvim_get_lambda_tv(
         arg: *mut *mut c_char,
@@ -3356,17 +3353,20 @@ unsafe fn call_func_rettv_impl(
         -1
     };
 
-    let ret = nvim_call_func_tv_with_selfdict(
-        funcname as *mut c_char,
+    let mut funcexe2 = FuncExeT::new();
+    funcexe2.fe_firstline = lnum;
+    funcexe2.fe_lastline = lnum;
+    funcexe2.fe_evaluate = evaluate;
+    funcexe2.fe_partial = pt;
+    funcexe2.fe_selfdict = selfdict;
+    funcexe2.fe_basetv = basetv.as_ptr();
+    let ret = get_func_tv(
+        funcname,
         name_len,
-        rettv,
+        rettv.as_ptr(),
         arg,
-        evalarg,
-        evaluate,
-        pt,
-        selfdict,
-        basetv,
-        lnum,
+        evalarg.as_ptr(),
+        &mut funcexe2,
     );
 
     // theend: clear the saved funcref
