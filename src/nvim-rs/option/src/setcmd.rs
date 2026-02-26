@@ -483,19 +483,6 @@ extern "C" {
     fn option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     fn option_has_scope(opt_idx: c_int, scope: c_int) -> c_int;
     fn option_scope_idx(opt_idx: c_int, scope: c_int) -> c_int;
-    fn nvim_get_option_newval(
-        opt_idx: c_int,
-        opt_flags: c_int,
-        prefix: c_int,
-        argp: *mut *mut c_char,
-        nextchar: u8,
-        op: c_int,
-        flags: u32,
-        varp: *mut std::ffi::c_void,
-        errbuf: *mut c_char,
-        errbuflen: usize,
-        errmsg: *mut *const c_char,
-    ) -> OptVal;
     fn nvim_rs_set_option(
         opt_idx: c_int,
         value: OptVal,
@@ -537,6 +524,29 @@ extern "C" {
     fn nvim_get_no_wait_return() -> c_int;
     fn nvim_set_no_wait_return(val: c_int);
     fn nvim_get_iobuff() -> *mut c_char;
+
+    // get_option_newval dependencies
+    fn rs_optval_from_varp(opt_idx: c_int, varp: *mut std::ffi::c_void) -> OptVal;
+    fn rs_optval_copy(o: OptVal) -> OptVal;
+    fn rs_get_option_default(opt_idx: c_int, opt_flags: c_int) -> OptVal;
+    fn rs_option_is_global_local(opt_idx: c_int) -> c_int;
+    fn nvim_get_varp_opt(opt_idx: c_int) -> *mut std::ffi::c_void;
+    fn nvim_call_unset_option_local_value(opt_idx: c_int) -> *const c_char;
+    fn nvim_get_option_value_global(opt_idx: c_int) -> OptVal;
+    fn nvim_call_vim_str2nr(arg: *const c_char, len_out: *mut c_int, num_out: *mut crate::OptInt);
+    fn rs_string_to_key(arg: *mut c_char) -> c_int;
+    fn rs_stropt_get_newval(
+        nextchar: c_int,
+        opt_idx: c_int,
+        argp: *mut *mut c_char,
+        varp: *mut std::ffi::c_void,
+        origval: *const c_char,
+        op_arg: *mut c_int,
+        flags: u32,
+    ) -> *mut c_char;
+    fn nvim_option_get_p_wc_ptr() -> *const std::ffi::c_void;
+    fn nvim_option_get_p_wcm_ptr() -> *const std::ffi::c_void;
+    fn nvim_get_e_number_required_after_equal() -> *const c_char;
 }
 
 // =============================================================================
@@ -577,6 +587,15 @@ mod errmsg {
     pub const E_INVARG: &[u8] = b"E474: Invalid argument\0";
     pub const E_TRAILING: &[u8] = b"E488: Trailing characters\0";
 }
+
+/// SetPrefix constants (must match set_prefix_T in C)
+const PREFIX_NO: c_int = 0;
+const PREFIX_INV: c_int = 2;
+
+/// SetOp constants (must match set_op_T in C)
+const OP_ADDING: c_int = 1;
+const OP_PREPENDING: c_int = 2;
+const OP_REMOVING: c_int = 3;
 
 // =============================================================================
 // :set Command Implementation
@@ -895,7 +914,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
     }
 
     // Get new value
-    let newval = nvim_get_option_newval(
+    let newval = get_option_newval_impl(
         opt_idx, opt_flags, prefix, argp, nextchar, op, flags, varp, errbuf, errbuflen, errmsg,
     );
 
@@ -915,6 +934,200 @@ pub unsafe extern "C" fn rs_do_one_set_option(
         errbuf,
         errbuflen,
     );
+}
+
+/// Compute new option value from :set command arguments.
+///
+/// Rust translation of C `get_option_newval`. Handles boolean toggle/set/reset,
+/// number parsing (decimal/octal/hex, wildchar special keys), string value via
+/// `rs_stropt_get_newval`, operator application (+=, ^=, -=), and special
+/// `&` (default) / `<` (global copy) modes.
+///
+/// # Safety
+/// All pointers must be valid. `varp` must not be null.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::bool_to_int_with_if)]
+unsafe fn get_option_newval_impl(
+    opt_idx: c_int,
+    opt_flags: c_int,
+    prefix: c_int,
+    argp: *mut *mut c_char,
+    nextchar: u8,
+    op: c_int,
+    flags: u32,
+    varp: *mut std::ffi::c_void,
+    errbuf: *mut c_char,
+    errbuflen: usize,
+    errmsg: *mut *const c_char,
+) -> OptVal {
+    use crate::storage::{OptValData, String_};
+
+    let _ = (errbuf, errbuflen); // Not used directly; errmsg is the output channel
+
+    let mut newval = OptVal::nil();
+
+    // ":set opt&": Reset to default value.
+    // Use OPT_GLOBAL to avoid using the unset local value for global-local options.
+    if nextchar == b'&' {
+        return rs_optval_copy(rs_get_option_default(opt_idx, set_flags::OPT_GLOBAL));
+    }
+
+    // ":set opt<": Reset to global value.
+    // ":setlocal opt<": Copy global value to local value.
+    if nextchar == b'<' {
+        if rs_option_is_global_local(opt_idx) != 0 && (opt_flags & set_flags::OPT_LOCAL) == 0 {
+            // Ignore the error from unset_option_local_value -- C did the same
+            nvim_call_unset_option_local_value(opt_idx);
+        }
+        return nvim_get_option_value_global(opt_idx);
+    }
+
+    // When setting the local value of a global option, the old value may be the global value.
+    let oldval_is_global =
+        rs_option_is_global_local(opt_idx) != 0 && (opt_flags & set_flags::OPT_LOCAL) != 0;
+    let oldval_varp = if oldval_is_global {
+        nvim_get_varp_opt(opt_idx)
+    } else {
+        varp
+    };
+    let oldval = rs_optval_from_varp(opt_idx, oldval_varp);
+
+    match oldval.type_ {
+        OptValType::Nil => {
+            // Should not happen; mirror C abort() with a panic.
+            panic!("get_option_newval_impl: oldval is Nil for opt_idx={opt_idx}");
+        }
+        OptValType::Boolean => {
+            let newval_bool: c_int = if nextchar == b'!' {
+                // ":set opt!": invert
+                match oldval.data.boolean {
+                    -1 => -1, // kNone stays kNone
+                    0 => 1,   // kFalse -> kTrue
+                    _ => 0,   // kTrue -> kFalse
+                }
+            } else {
+                // ":set invopt": invert; ":set opt" / ":set noopt": set / reset
+                if prefix == PREFIX_INV {
+                    // XOR with 1, clamped to 0/1 (kFalse/kTrue)
+                    let cur = *(varp.cast::<c_int>());
+                    cur ^ 1
+                } else if prefix == PREFIX_NO {
+                    0 // kFalse
+                } else {
+                    1 // kTrue
+                }
+            };
+            newval = OptVal {
+                type_: OptValType::Boolean,
+                data: OptValData {
+                    boolean: newval_bool,
+                },
+            };
+        }
+        OptValType::Number => {
+            let oldval_num = oldval.data.number;
+
+            // Advance past '=' or ':'
+            let arg = (*argp).add(1);
+
+            let p_wc = nvim_option_get_p_wc_ptr();
+            let p_wcm = nvim_option_get_p_wcm_ptr();
+            let varp_as_optint = varp.cast::<crate::OptInt>();
+
+            let newval_num: crate::OptInt;
+
+            // Special handling for 'wildchar' / 'wildcharm'
+            if (varp_as_optint == p_wc.cast::<crate::OptInt>().cast_mut()
+                || varp_as_optint == p_wcm.cast::<crate::OptInt>().cast_mut())
+                && (*arg as u8 == b'<'
+                    || *arg as u8 == b'^'
+                    || (*arg != 0
+                        && (*arg.add(1) == 0
+                            || rs_ascii_iswhite(c_int::from(*arg.add(1) as u8)) != 0)
+                        && !(*arg as u8).is_ascii_digit()))
+            {
+                let key = rs_string_to_key(arg);
+                if key == 0 {
+                    *errmsg = errmsg::E_INVARG.as_ptr().cast();
+                    return newval;
+                }
+                newval_num = crate::OptInt::from(key);
+            } else if *arg as u8 == b'-' || (*arg as u8).is_ascii_digit() {
+                // Allow negative, octal and hex numbers.
+                let mut len: c_int = 0;
+                let mut parsed: crate::OptInt = 0;
+                nvim_call_vim_str2nr(arg, &raw mut len, &raw mut parsed);
+                // Check that the whole token was consumed (no trailing non-whitespace).
+                if len == 0
+                    || (*arg.add(len as usize) != 0
+                        && rs_ascii_iswhite(c_int::from(*arg.add(len as usize) as u8)) == 0)
+                {
+                    *errmsg = nvim_get_e_number_required_after_equal();
+                    return newval;
+                }
+                newval_num = parsed;
+            } else {
+                *errmsg = nvim_get_e_number_required_after_equal();
+                return newval;
+            }
+
+            let final_num = if op == OP_ADDING {
+                oldval_num + newval_num
+            } else if op == OP_PREPENDING {
+                oldval_num * newval_num
+            } else if op == OP_REMOVING {
+                oldval_num - newval_num
+            } else {
+                newval_num
+            };
+
+            newval = OptVal {
+                type_: OptValType::Number,
+                data: OptValData { number: final_num },
+            };
+        }
+        OptValType::String => {
+            let oldval_str = oldval.data.string.data;
+            let mut op_mut = op;
+            // rs_stropt_get_newval advances *argp past the string value.
+            let newval_str = rs_stropt_get_newval(
+                c_int::from(nextchar),
+                opt_idx,
+                argp,
+                varp,
+                oldval_str,
+                &raw mut op_mut,
+                flags,
+            );
+            newval = OptVal {
+                type_: OptValType::String,
+                data: OptValData {
+                    string: String_ {
+                        data: newval_str,
+                        size: if newval_str.is_null() {
+                            0
+                        } else {
+                            libc_strlen(newval_str)
+                        },
+                    },
+                },
+            };
+        }
+    }
+
+    newval
+}
+
+/// Compute the length of a C string (libc strlen equivalent).
+#[inline]
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    let mut p = s;
+    while *p != 0 {
+        p = p.add(1);
+    }
+    p.offset_from(s) as usize
 }
 
 /// Get option prefix (no/inv) - internal version that returns c_int.

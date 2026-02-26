@@ -1275,9 +1275,6 @@ void nvim_showoptions(int all, int opt_flags);
 void nvim_showoneopt(vimoption_T *opt, int opt_flags);
 int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
                           int prefix, const char **errmsg);
-OptVal nvim_get_option_newval(OptIndex opt_idx, int opt_flags, int prefix, char **argp,
-                              char nextchar, int op, uint32_t flags, void *varp,
-                              char *errbuf, size_t errbuflen, const char **errmsg);
 const char *nvim_rs_set_option(OptIndex opt_idx, OptVal value, int opt_flags,
                                int set_sid, int direct, int value_replaced,
                                char *errbuf, size_t errbuflen);
@@ -1988,126 +1985,6 @@ const char *find_option_end(const char *arg, OptIndex *opt_idxp)
   FindOptionEndResult r = rs_find_option_end(arg);
   *opt_idxp = (OptIndex)r.opt_idx;
   return r.end;
-}
-
-/// Get new option value from argp. Allocated OptVal must be freed by caller.
-/// Can unset local value of an option when ":set {option}<" is used.
-static OptVal get_option_newval(OptIndex opt_idx, int opt_flags, set_prefix_T prefix, char **argp,
-                                int nextchar, set_op_T op, uint32_t flags, void *varp, char *errbuf,
-                                const size_t errbuflen, const char **errmsg)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  assert(varp != NULL);
-
-  vimoption_T *opt = &options[opt_idx];
-  char *arg = *argp;
-  // When setting the local value of a global option, the old value may be the global value.
-  const bool oldval_is_global = option_is_global_local(opt_idx) && (opt_flags & OPT_LOCAL);
-  OptVal oldval = optval_from_varp(opt_idx, oldval_is_global ? get_varp(opt) : varp);
-  OptVal newval = NIL_OPTVAL;
-
-  if (nextchar == '&') {
-    // ":set opt&": Reset to default value.
-    // NOTE: Use OPT_GLOBAL instead of opt_flags to ensure we don't use the unset local value for
-    // global-local options when OPT_LOCAL is used.
-    return rs_optval_copy(get_option_default(opt_idx, OPT_GLOBAL));
-  } else if (nextchar == '<') {
-    // ":set opt<": Reset to global value.
-    // ":setlocal opt<": Copy global value to local value.
-    if (option_is_global_local(opt_idx) && !(opt_flags & OPT_LOCAL)) {
-      unset_option_local_value(opt_idx);
-    }
-    return get_option_value(opt_idx, OPT_GLOBAL);
-  }
-
-  switch (oldval.type) {
-  case kOptValTypeNil:
-    abort();
-  case kOptValTypeBoolean: {
-    TriState newval_bool;
-
-    // ":set opt!": invert
-    if (nextchar == '!') {
-      switch (oldval.data.boolean) {
-      case kNone:
-        newval_bool = kNone;
-        break;
-      case kTrue:
-        newval_bool = kFalse;
-        break;
-      case kFalse:
-        newval_bool = kTrue;
-        break;
-      }
-    } else {
-      // ":set invopt": invert
-      // ":set opt" or ":set noopt": set or reset
-      if (prefix == PREFIX_INV) {
-        newval_bool = *(int *)varp ^ 1;
-      } else {
-        newval_bool = prefix == PREFIX_NO ? 0 : 1;
-      }
-    }
-
-    newval = BOOLEAN_OPTVAL(newval_bool);
-    break;
-  }
-  case kOptValTypeNumber: {
-    OptInt oldval_num = oldval.data.number;
-    OptInt newval_num;
-
-    // Different ways to set a number option:
-    // <xx>         accept special key codes for 'wildchar' or 'wildcharm'
-    // ^x           accept ctrl key codes for 'wildchar' or 'wildcharm'
-    // c            accept any non-digit for 'wildchar' or 'wildcharm'
-    // [-]0-9       set number
-    // other        error
-    arg++;
-    if (((OptInt *)varp == &p_wc || (OptInt *)varp == &p_wcm)
-        && (*arg == '<' || *arg == '^'
-            || (*arg != NUL && (!arg[1] || ascii_iswhite(arg[1])) && !ascii_isdigit(*arg)))) {
-      newval_num = string_to_key(arg);
-      if (newval_num == 0) {
-        *errmsg = e_invarg;
-        return newval;
-      }
-    } else if (*arg == '-' || ascii_isdigit(*arg)) {
-      int i;
-      // Allow negative, octal and hex numbers.
-      vim_str2nr(arg, NULL, &i, STR2NR_ALL, &newval_num, NULL, 0, true, NULL);
-      if (i == 0 || (arg[i] != NUL && !ascii_iswhite(arg[i]))) {
-        *errmsg = e_number_required_after_equal;
-        return newval;
-      }
-    } else {
-      *errmsg = e_number_required_after_equal;
-      return newval;
-    }
-
-    if (op == OP_ADDING) {
-      newval_num = oldval_num + newval_num;
-    }
-    if (op == OP_PREPENDING) {
-      newval_num = oldval_num * newval_num;
-    }
-    if (op == OP_REMOVING) {
-      newval_num = oldval_num - newval_num;
-    }
-
-    newval = NUMBER_OPTVAL(newval_num);
-    break;
-  }
-  case kOptValTypeString: {
-    const char *oldval_str = oldval.data.string.data;
-    // Get the new value for the option
-    const char *newval_str = stropt_get_newval(nextchar, opt_idx, argp, varp, oldval_str, &op,
-                                               flags);
-    newval = CSTR_AS_OPTVAL(newval_str);
-    break;
-  }
-  }
-
-  return newval;
 }
 
 /// Parse 'arg' for option settings.
@@ -3793,12 +3670,33 @@ int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t 
   return validate_opt_idx(win, opt_idx, opt_flags, flags, (set_prefix_T)prefix, errmsg);
 }
 
-OptVal nvim_get_option_newval(OptIndex opt_idx, int opt_flags, int prefix, char **argp,
-                              char nextchar, int op, uint32_t flags, void *varp,
-                              char *errbuf, size_t errbuflen, const char **errmsg)
+/// Unset the local value of a global-local option.
+/// Wraps the static inline unset_option_local_value for Rust FFI.
+const char *nvim_call_unset_option_local_value(OptIndex opt_idx)
 {
-  return get_option_newval(opt_idx, opt_flags, (set_prefix_T)prefix, argp, nextchar,
-                           (set_op_T)op, flags, varp, errbuf, errbuflen, errmsg);
+  return unset_option_local_value(opt_idx);
+}
+
+/// Parse a number from arg using vim_str2nr (STR2NR_ALL format).
+/// Sets *len_out to the number of characters consumed.
+/// Sets *num_out to the parsed value.
+/// Wraps vim_str2nr for Rust FFI.
+void nvim_call_vim_str2nr(const char *arg, int *len_out, int64_t *num_out)
+{
+  vim_str2nr(arg, NULL, len_out, STR2NR_ALL, num_out, NULL, 0, true, NULL);
+}
+
+/// Get the option value at global scope.
+/// Wraps get_option_value(opt_idx, OPT_GLOBAL) for Rust FFI.
+OptVal nvim_get_option_value_global(OptIndex opt_idx)
+{
+  return get_option_value(opt_idx, OPT_GLOBAL);
+}
+
+/// Get the e_number_required_after_equal error string.
+const char *nvim_get_e_number_required_after_equal(void)
+{
+  return e_number_required_after_equal;
 }
 
 const char *nvim_rs_set_option(OptIndex opt_idx, OptVal value, int opt_flags,
