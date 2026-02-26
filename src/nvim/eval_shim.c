@@ -183,6 +183,23 @@ _Static_assert(kCallbackNone == 0, "kCallbackNone mismatch");
 _Static_assert(kCallbackFuncref == 1, "kCallbackFuncref mismatch");
 _Static_assert(kCallbackPartial == 2, "kCallbackPartial mismatch");
 
+// Phase 11: lval_T layout assertions (Rust LvalT must match exactly).
+_Static_assert(sizeof(lval_T) == 96, "lval_T size mismatch: Rust LvalT must be updated");
+_Static_assert(offsetof(lval_T, ll_name) == 0, "lval_T ll_name offset mismatch");
+_Static_assert(offsetof(lval_T, ll_name_len) == 8, "lval_T ll_name_len offset mismatch");
+_Static_assert(offsetof(lval_T, ll_exp_name) == 16, "lval_T ll_exp_name offset mismatch");
+_Static_assert(offsetof(lval_T, ll_tv) == 24, "lval_T ll_tv offset mismatch");
+_Static_assert(offsetof(lval_T, ll_li) == 32, "lval_T ll_li offset mismatch");
+_Static_assert(offsetof(lval_T, ll_list) == 40, "lval_T ll_list offset mismatch");
+_Static_assert(offsetof(lval_T, ll_range) == 48, "lval_T ll_range offset mismatch");
+_Static_assert(offsetof(lval_T, ll_empty2) == 49, "lval_T ll_empty2 offset mismatch");
+_Static_assert(offsetof(lval_T, ll_n1) == 52, "lval_T ll_n1 offset mismatch");
+_Static_assert(offsetof(lval_T, ll_n2) == 56, "lval_T ll_n2 offset mismatch");
+_Static_assert(offsetof(lval_T, ll_dict) == 64, "lval_T ll_dict offset mismatch");
+_Static_assert(offsetof(lval_T, ll_di) == 72, "lval_T ll_di offset mismatch");
+_Static_assert(offsetof(lval_T, ll_newkey) == 80, "lval_T ll_newkey offset mismatch");
+_Static_assert(offsetof(lval_T, ll_blob) == 88, "lval_T ll_blob offset mismatch");
+
 // C accessors for typval fields (used by Rust callback module)
 int nvim_eval_tv_get_type(const typval_T *tv)
 {
@@ -1328,72 +1345,17 @@ const char *nvim_get_tv_empty_string(void)
 // =============================================================================
 // Phase 2: get_lval / clear_lval helpers (lval_T accessors for rs_get_lval)
 // =============================================================================
-
-/// Zero out lval_T struct - accessor for Rust.
-void nvim_lval_clear(lval_T *lp)
-{
-  CLEAR_POINTER(lp);
-}
-
-/// Get ll_name field from lval_T - accessor for Rust.
-const char *nvim_lval_get_name(const lval_T *lp)
-{
-  return lp->ll_name;
-}
-
-/// Set ll_name field in lval_T - accessor for Rust.
-void nvim_lval_set_name(lval_T *lp, const char *name)
-{
-  lp->ll_name = name;
-}
-
-/// Get ll_name_len field from lval_T - accessor for Rust.
-size_t nvim_lval_get_name_len(const lval_T *lp)
-{
-  return lp->ll_name_len;
-}
-
-/// Set ll_name_len field in lval_T - accessor for Rust.
-void nvim_lval_set_name_len(lval_T *lp, size_t len)
-{
-  lp->ll_name_len = len;
-}
-
-/// Get ll_exp_name field from lval_T - accessor for Rust.
-char *nvim_lval_get_exp_name(const lval_T *lp)
-{
-  return lp->ll_exp_name;
-}
-
-/// Set ll_exp_name field in lval_T - accessor for Rust.
-void nvim_lval_set_exp_name(lval_T *lp, char *exp_name)
-{
-  lp->ll_exp_name = exp_name;
-}
-
-/// Get ll_tv field from lval_T - accessor for Rust.
-typval_T *nvim_lval_get_tv(const lval_T *lp)
-{
-  return lp->ll_tv;
-}
-
-/// Set ll_tv field in lval_T - accessor for Rust.
-void nvim_lval_set_tv(lval_T *lp, typval_T *tv)
-{
-  lp->ll_tv = tv;
-}
-
-/// Get ll_newkey field from lval_T - accessor for Rust.
-char *nvim_lval_get_newkey(const lval_T *lp)
-{
-  return lp->ll_newkey;
-}
-
-/// Check if ll_name is NULL - accessor for Rust.
-bool nvim_lval_name_is_null(const lval_T *lp)
-{
-  return lp->ll_name == NULL;
-}
+// nvim_lval_clear: deleted -- Rust uses std::ptr::write_bytes(lp, 0, 1) (Phase 11).
+// nvim_lval_get_name: deleted -- Rust accesses LvalT::ll_name directly (Phase 11).
+// nvim_lval_set_name: deleted -- Rust accesses LvalT::ll_name directly (Phase 11).
+// nvim_lval_get_name_len: deleted -- Rust accesses LvalT::ll_name_len directly (Phase 11).
+// nvim_lval_set_name_len: deleted -- Rust accesses LvalT::ll_name_len directly (Phase 11).
+// nvim_lval_get_exp_name: deleted -- Rust accesses LvalT::ll_exp_name directly (Phase 11).
+// nvim_lval_set_exp_name: deleted -- Rust accesses LvalT::ll_exp_name directly (Phase 11).
+// nvim_lval_get_tv: deleted -- Rust accesses LvalT::ll_tv directly (Phase 11).
+// nvim_lval_set_tv: deleted -- Rust accesses LvalT::ll_tv directly (Phase 11).
+// nvim_lval_get_newkey: deleted -- Rust accesses LvalT::ll_newkey directly (Phase 11).
+// nvim_lval_name_is_null: deleted -- Rust checks LvalT::ll_name.is_null() directly (Phase 11).
 
 /// Wrapper for find_var with no-write mode - accessor for Rust.
 /// Returns dictitem_T* for the named variable. Sets *htp if not NULL.
@@ -1417,11 +1379,7 @@ evalarg_T *nvim_get_evalarg_evaluate_ptr(void)
   return &EVALARG_EVALUATE;
 }
 
-/// Set ll_name_len to (p - ll_name) - accessor for Rust.
-void nvim_lval_compute_name_len(lval_T *lp, const char *p)
-{
-  lp->ll_name_len = (size_t)(p - lp->ll_name);
-}
+// nvim_lval_compute_name_len: deleted -- Rust computes directly (Phase 11).
 
 /// Emit "E488: Trailing characters: %s" error - accessor for Rust.
 void nvim_semsg_trailing_arg(const char *p)
@@ -1440,60 +1398,15 @@ void nvim_semsg_undef_var(int len, const char *name)
 // =============================================================================
 // Phase 3: set_var_lval helpers (additional lval_T accessors for rs_set_var_lval)
 // =============================================================================
-
-/// Get ll_blob field from lval_T - accessor for Rust.
-blob_T *nvim_lval_get_blob(const lval_T *lp)
-{
-  return lp->ll_blob;
-}
-
-/// Get ll_range field from lval_T - accessor for Rust.
-bool nvim_lval_get_range(const lval_T *lp)
-{
-  return lp->ll_range;
-}
-
-/// Get ll_empty2 field from lval_T - accessor for Rust.
-bool nvim_lval_get_empty2(const lval_T *lp)
-{
-  return lp->ll_empty2;
-}
-
-/// Get ll_n1 field from lval_T - accessor for Rust.
-int nvim_lval_get_n1(const lval_T *lp)
-{
-  return lp->ll_n1;
-}
-
-/// Get ll_n2 field from lval_T - accessor for Rust.
-int nvim_lval_get_n2(const lval_T *lp)
-{
-  return lp->ll_n2;
-}
-
-/// Set ll_n2 field in lval_T - accessor for Rust.
-void nvim_lval_set_n2(lval_T *lp, int n2)
-{
-  lp->ll_n2 = n2;
-}
-
-/// Get ll_list field from lval_T - accessor for Rust.
-list_T *nvim_lval_get_list(const lval_T *lp)
-{
-  return lp->ll_list;
-}
-
-/// Get ll_dict field from lval_T - accessor for Rust.
-dict_T *nvim_lval_get_dict(const lval_T *lp)
-{
-  return lp->ll_dict;
-}
-
-/// Get ll_di field from lval_T - accessor for Rust.
-dictitem_T *nvim_lval_get_di(const lval_T *lp)
-{
-  return lp->ll_di;
-}
+// nvim_lval_get_blob: deleted -- Rust accesses LvalT::ll_blob directly (Phase 11).
+// nvim_lval_get_range: deleted -- Rust accesses LvalT::ll_range directly (Phase 11).
+// nvim_lval_get_empty2: deleted -- Rust accesses LvalT::ll_empty2 directly (Phase 11).
+// nvim_lval_get_n1: deleted -- Rust accesses LvalT::ll_n1 directly (Phase 11).
+// nvim_lval_get_n2: deleted -- Rust accesses LvalT::ll_n2 directly (Phase 11).
+// nvim_lval_set_n2: deleted -- Rust accesses LvalT::ll_n2 directly (Phase 11).
+// nvim_lval_get_list: deleted -- Rust accesses LvalT::ll_list directly (Phase 11).
+// nvim_lval_get_dict: deleted -- Rust accesses LvalT::ll_dict directly (Phase 11).
+// nvim_lval_get_di: deleted -- Rust accesses LvalT::ll_di directly (Phase 11).
 
 /// Get bv_lock from a blob_T - accessor for Rust.
 VarLockStatus nvim_blob_get_bv_lock(const blob_T *blob)
@@ -1763,68 +1676,18 @@ void nvim_tv_set_partial_raw(typval_T *tv, partial_T *pt)
 // nvim_call_func_rettv_wrapper: deleted -- Rust calls call_func_rettv_impl directly (Phase 3 pass 10).
 
 // =============================================================================
-// Phase 1 (lval subscript): new C accessor/wrapper functions for rs_get_lval_subscript
+// Phase 1 (lval subscript): composite C accessor/wrapper functions for rs_get_lval_subscript
 // =============================================================================
-
-/// Set lp->ll_list - accessor for Rust.
-void nvim_lval_set_list(lval_T *lp, list_T *list)
-{
-  lp->ll_list = list;
-}
-
-/// Set lp->ll_dict - accessor for Rust.
-void nvim_lval_set_dict(lval_T *lp, dict_T *dict)
-{
-  lp->ll_dict = dict;
-}
-
-/// Set lp->ll_di - accessor for Rust.
-void nvim_lval_set_di(lval_T *lp, dictitem_T *di)
-{
-  lp->ll_di = di;
-}
-
-/// Set lp->ll_n1 - accessor for Rust.
-void nvim_lval_set_n1(lval_T *lp, int n1)
-{
-  lp->ll_n1 = n1;
-}
-
-/// Set lp->ll_range - accessor for Rust.
-void nvim_lval_set_range(lval_T *lp, bool range)
-{
-  lp->ll_range = range;
-}
-
-/// Set lp->ll_empty2 - accessor for Rust.
-void nvim_lval_set_empty2(lval_T *lp, bool empty2)
-{
-  lp->ll_empty2 = empty2;
-}
-
-/// Set lp->ll_blob - accessor for Rust.
-void nvim_lval_set_blob(lval_T *lp, blob_T *blob)
-{
-  lp->ll_blob = blob;
-}
-
-/// Set lp->ll_li - accessor for Rust.
-void nvim_lval_set_li(lval_T *lp, listitem_T *li)
-{
-  lp->ll_li = li;
-}
-
-/// Set lp->ll_newkey - accessor for Rust.
-void nvim_lval_set_newkey(lval_T *lp, char *key)
-{
-  lp->ll_newkey = key;
-}
-
-/// Get lp->ll_li as opaque void* - accessor for Rust.
-listitem_T *nvim_lval_get_li(const lval_T *lp)
-{
-  return lp->ll_li;
-}
+// nvim_lval_set_list: deleted -- Rust accesses LvalT::ll_list directly (Phase 11).
+// nvim_lval_set_dict: deleted -- Rust accesses LvalT::ll_dict directly (Phase 11).
+// nvim_lval_set_di: deleted -- Rust accesses LvalT::ll_di directly (Phase 11).
+// nvim_lval_set_n1: deleted -- Rust accesses LvalT::ll_n1 directly (Phase 11).
+// nvim_lval_set_range: deleted -- Rust accesses LvalT::ll_range directly (Phase 11).
+// nvim_lval_set_empty2: deleted -- Rust accesses LvalT::ll_empty2 directly (Phase 11).
+// nvim_lval_set_blob: deleted -- Rust accesses LvalT::ll_blob directly (Phase 11).
+// nvim_lval_set_li: deleted -- Rust accesses LvalT::ll_li directly (Phase 11).
+// nvim_lval_set_newkey: deleted -- Rust accesses LvalT::ll_newkey directly (Phase 11).
+// nvim_lval_get_li: deleted -- Rust accesses LvalT::ll_li directly (Phase 11).
 
 /// Returns true if ll_dict is v: or a: scope dict - composite accessor for Rust.
 bool nvim_lval_dict_is_v_or_a_scope(const lval_T *lp)
