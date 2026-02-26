@@ -1424,22 +1424,8 @@ bool nvim_qf_list_is_empty(const void *qfl_void)
   return rs_qf_list_empty(qfl_void);
 }
 
-static efm_T *parse_efm_option(char *efm);
-static void free_efm_list(efm_T **efm_first);
-// qf_parse_line forward declaration removed: function deleted (Phase 9).
-
-// EfmHandle is now defined in quickfix.h
-
-EfmHandle nvim_qf_parse_efm_option(char *efm) { return efm == NULL ? NULL : parse_efm_option(efm); }
-
-void nvim_qf_free_efm_list(EfmHandle efm_first) { efm_T *efm = (efm_T *)efm_first; free_efm_list(&efm); }
-
-/// Get the next pattern in the errorformat list
-EfmHandle nvim_efm_get_next(EfmHandle efm) { return efm == NULL ? NULL : ((efm_T *)efm)->next; }
-char nvim_efm_get_prefix(EfmHandle efm) { return efm == NULL ? '\0' : ((efm_T *)efm)->prefix; }
-char nvim_efm_get_flags(EfmHandle efm) { return efm == NULL ? '\0' : ((efm_T *)efm)->flags; }
-int nvim_efm_get_conthere(EfmHandle efm) { return efm == NULL ? 0 : ((efm_T *)efm)->conthere; }
-char nvim_efm_get_addr(EfmHandle efm, int idx) { return (efm == NULL || idx < 0 || idx >= FMT_PATTERNS) ? 0 : ((efm_T *)efm)->addr[idx]; }
+// parse_efm_option, free_efm_list, nvim_qf_parse_efm_option, nvim_qf_free_efm_list,
+// nvim_efm_get_* deleted: migrated to Rust EfmPattern in reader.rs (Phase 9).
 
 // nvim_qf_state_* and qf_{setup,cleanup,get_nextline,grow_linebuf,get_next_*}_state
 // deleted: migrated to Rust QfParserState in reader.rs (Phase 9).
@@ -1671,120 +1657,12 @@ int qf_init(win_T *wp, const char *restrict efile, char *restrict errorformat, i
 }
 
 // Maximum number of bytes allowed per line while reading an errorfile.
+// efm_to_regpat, fmt_start, free_efm_list, parse_efm_option deleted:
+// migrated to Rust parse_efm_option / EfmPattern in reader.rs (Phase 9).
 static const size_t LINE_MAXLEN = 4096;
-
-// Format pattern definitions and FMT_PATTERN_M/R indices are in Rust (parse.rs).
-
-// Converts a 'errorformat' string to regular expression pattern
-// Now uses Rust implementation and adapts the result.
-static int efm_to_regpat(const char *efm, int len, efm_T *fmt_ptr, char *regpat)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // Use Rust implementation for the core conversion
-  EfmToRegpatResult result = rs_efm_to_regpat(efm, (size_t)len,
-                                               fmt_ptr->addr, regpat,
-                                               rs_efm_regpat_bufsz(efm, (size_t)len));
-
-  if (result.status != OK) {
-    // Handle error messages based on error code
-    switch (result.error_code) {
-      case 372:
-        semsg(_("E372: Too many %%%c in format string"), result.error_char);
-        break;
-      case 373:
-        semsg(_("E373: Unexpected %%%c in format string"), result.error_char);
-        break;
-      case 374:
-        emsg(_("E374: Missing ] in format string"));
-        break;
-      case 375:
-        semsg(_("E375: Unsupported %%%c in format string"), result.error_char);
-        break;
-      case 376:
-        semsg(_("E376: Invalid %%%c in format string prefix"), result.error_char);
-        break;
-      case 377:
-        semsg(_("E377: Invalid %%%c in format string"), result.error_char);
-        break;
-      default:
-        emsg(_("E378: 'errorformat' contains no pattern"));
-        break;
-    }
-    return FAIL;
-  }
-
-  // Copy prefix, flags, and conthere from result to efm_T
-  fmt_ptr->prefix = result.prefix;
-  fmt_ptr->flags = result.flags;
-  fmt_ptr->conthere = result.conthere;
-
-  return OK;
-}
-
-static efm_T *fmt_start = NULL;  // cached across qf_parse_line() calls
 
 // callback function for 'quickfixtextfunc'
 static Callback qftf_cb;
-
-static void free_efm_list(efm_T **efm_first)
-{
-  for (efm_T *efm_ptr = *efm_first; efm_ptr != NULL; efm_ptr = *efm_first) {
-    *efm_first = efm_ptr->next;
-    vim_regfree(efm_ptr->prog);
-    xfree(efm_ptr);
-  }
-
-  fmt_start = NULL;
-  rs_qf_reset_fmt_start();
-}
-
-/// the parsed 'errorformat' option.
-static efm_T *parse_efm_option(char *efm)
-{
-  efm_T *fmt_first = NULL;
-  efm_T *fmt_last = NULL;
-
-  // Get some space to modify the format string into.
-  size_t sz = rs_efm_regpat_bufsz(efm, strlen(efm));
-  char *fmtstr = xmalloc(sz);
-
-  while (efm[0] != NUL) {
-    // Allocate a new eformat structure and put it at the end of the list
-    efm_T *fmt_ptr = (efm_T *)xcalloc(1, sizeof(efm_T));
-    if (fmt_first == NULL) {        // first one
-      fmt_first = fmt_ptr;
-    } else {
-      fmt_last->next = fmt_ptr;
-    }
-    fmt_last = fmt_ptr;
-
-    // Isolate one part in the 'errorformat' option
-    int len = rs_efm_option_part_len(efm, strlen(efm));
-
-    if (efm_to_regpat(efm, len, fmt_ptr, fmtstr) == FAIL) {
-      goto parse_efm_error;
-    }
-    if ((fmt_ptr->prog = vim_regcomp(fmtstr, RE_MAGIC + RE_STRING)) == NULL) {
-      goto parse_efm_error;
-    }
-    // Advance to next part
-    efm = (char *)rs_skip_to_option_part(efm + len);       // skip comma and spaces
-  }
-
-  if (fmt_first == NULL) {      // nothing found
-    emsg(_("E378: 'errorformat' contains no pattern"));
-  }
-
-  goto parse_efm_end;
-
-parse_efm_error:
-  free_efm_list(&fmt_first);
-
-parse_efm_end:
-  xfree(fmtstr);
-
-  return fmt_first;
-}
 
 // qf_grow_linebuf deleted: migrated to Rust QfParserState::grow_linebuf (Phase 9).
 
@@ -1801,34 +1679,10 @@ static qf_list_T *qf_get_list(qf_info_T *qi, int idx)
 
 // qf_parse_line (thin wrapper), qf_alloc_fields, qf_free_fields,
 // qf_setup_state, qf_cleanup_state deleted: migrated to Rust (Phase 9).
-// qf_alloc_fields/qf_free_fields still used by nvim_qf_init_alloc_fields/nvim_qf_init_free_fields
-// which remain as C accessors for Phase 1 (will be removed in Phase 2).
-
-/// Allocate a qffields_T and return it as an opaque handle.
-void *nvim_qf_init_alloc_fields(void)
-{
-  qffields_T *pfields = xcalloc(1, sizeof(qffields_T));
-  pfields->namebuf = xmalloc(CMDBUFFSIZE + 1);
-  pfields->module = xmalloc(CMDBUFFSIZE + 1);
-  pfields->errmsglen = CMDBUFFSIZE + 1;
-  pfields->errmsg = xmalloc(pfields->errmsglen);
-  pfields->pattern = xmalloc(CMDBUFFSIZE + 1);
-  return pfields;
-}
-
-/// Free a qffields_T allocated by nvim_qf_init_alloc_fields.
-void nvim_qf_init_free_fields(void *fields_void)
-{
-  if (fields_void == NULL) {
-    return;
-  }
-  qffields_T *pfields = (qffields_T *)fields_void;
-  xfree(pfields->namebuf);
-  xfree(pfields->module);
-  xfree(pfields->errmsg);
-  xfree(pfields->pattern);
-  xfree(pfields);
-}
+// nvim_qf_init_alloc_fields, nvim_qf_init_free_fields deleted:
+// replaced by rs_qf_alloc_fields / rs_qf_free_fields in Rust reader.rs (Phase 9).
+// nvim_qf_init_update_efm_cache, s_fmt_first, s_last_efm deleted:
+// replaced by rs_qf_init_update_efm_cache + EFM_CACHE in Rust reader.rs (Phase 9).
 
 // nvim_qf_init_setup_state, nvim_qf_init_cleanup_state deleted:
 // replaced by rs_qf_parser_state_new / rs_qf_parser_state_free in Rust (Phase 9).
@@ -1844,23 +1698,6 @@ char *nvim_qf_init_resolve_efm(char *errorformat, void *tv_void, void *buf_void)
     return buf->b_p_efm;
   }
   return errorformat;
-}
-
-/// Returns NULL if parsing failed.
-static efm_T *s_fmt_first = NULL;
-static char *s_last_efm = NULL;
-
-void *nvim_qf_init_update_efm_cache(char *efm)
-{
-  if (s_last_efm == NULL || (strcmp(s_last_efm, efm) != 0)) {
-    XFREE_CLEAR(s_last_efm);
-    free_efm_list(&s_fmt_first);
-    s_fmt_first = parse_efm_option(efm);
-    if (s_fmt_first != NULL) {
-      s_last_efm = xstrdup(efm);
-    }
-  }
-  return s_fmt_first;
 }
 
 // nvim_qf_init_process_nextline, nvim_qf_init_state_no_fd_error deleted:
@@ -1946,65 +1783,15 @@ bool nvim_qf_buflist_findnr_exists(int bnr)
 }
 
 // =============================================================================
-// Phase 5: qffields_T accessors for Rust
+// Phase 5: qffields_T accessors deleted: migrated to Rust QfAllFields in reader.rs (Phase 9).
+// nvim_efm_get_prog, nvim_efm_set_prog deleted:
+// Rust parse.rs uses EfmPattern directly (inline struct field access).
+// nvim_qf_regmatch_create_ic, nvim_qf_regmatch_extract_prog, nvim_qf_vim_regexec
+// remain as C wrappers for vim regex lifecycle (parse.rs calls these for pattern matching).
 // =============================================================================
-
-char *nvim_qf_fields_get_namebuf(void *fields) { return fields == NULL ? NULL : ((qffields_T *)fields)->namebuf; }
-int nvim_qf_fields_get_bnr(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->bnr; }
-void nvim_qf_fields_set_bnr(void *fields, int bnr) { if (fields != NULL) ((qffields_T *)fields)->bnr = bnr; }
-char *nvim_qf_fields_get_module(void *fields) { return fields == NULL ? NULL : ((qffields_T *)fields)->module; }
-char *nvim_qf_fields_get_errmsg(void *fields) { return fields == NULL ? NULL : ((qffields_T *)fields)->errmsg; }
-size_t nvim_qf_fields_get_errmsglen(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->errmsglen; }
-void nvim_qf_fields_set_errmsg(void *fields, const char *msg, size_t len)
-{
-  if (fields == NULL || msg == NULL) {
-    return;
-  }
-  qffields_T *f = (qffields_T *)fields;
-  if (len >= f->errmsglen) {
-    f->errmsg = xrealloc(f->errmsg, len + 1);
-    f->errmsglen = len + 1;
-  }
-  xstrlcpy(f->errmsg, msg, len + 1);
-}
-linenr_T nvim_qf_fields_get_lnum(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->lnum; }
-void nvim_qf_fields_set_lnum(void *fields, linenr_T lnum) { if (fields != NULL) ((qffields_T *)fields)->lnum = lnum; }
-linenr_T nvim_qf_fields_get_end_lnum(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->end_lnum; }
-void nvim_qf_fields_set_end_lnum(void *fields, linenr_T end_lnum) { if (fields != NULL) ((qffields_T *)fields)->end_lnum = end_lnum; }
-int nvim_qf_fields_get_col(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->col; }
-void nvim_qf_fields_set_col(void *fields, int col) { if (fields != NULL) ((qffields_T *)fields)->col = col; }
-int nvim_qf_fields_get_end_col(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->end_col; }
-void nvim_qf_fields_set_end_col(void *fields, int end_col) { if (fields != NULL) ((qffields_T *)fields)->end_col = end_col; }
-bool nvim_qf_fields_get_use_viscol(const void *fields) { return fields == NULL ? false : ((const qffields_T *)fields)->use_viscol; }
-void nvim_qf_fields_set_use_viscol(void *fields, bool use_viscol) { if (fields != NULL) ((qffields_T *)fields)->use_viscol = use_viscol; }
-char *nvim_qf_fields_get_pattern(void *fields) { return fields == NULL ? NULL : ((qffields_T *)fields)->pattern; }
-int nvim_qf_fields_get_enr(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->enr; }
-void nvim_qf_fields_set_enr(void *fields, int enr) { if (fields != NULL) ((qffields_T *)fields)->enr = enr; }
-char nvim_qf_fields_get_type(const void *fields) { return fields == NULL ? 0 : ((const qffields_T *)fields)->type; }
-void nvim_qf_fields_set_type(void *fields, char type) { if (fields != NULL) ((qffields_T *)fields)->type = type; }
-bool nvim_qf_fields_get_valid(const void *fields) { return fields == NULL ? false : ((const qffields_T *)fields)->valid; }
-void nvim_qf_fields_set_valid(void *fields, bool valid) { if (fields != NULL) ((qffields_T *)fields)->valid = valid; }
-
-// =============================================================================
-// Phase 5: Phase 2 accessors - efm prog, regmatch lifecycle, qfline text append
-// =============================================================================
-
-/// Get the regprog from an efm_T (returns opaque pointer).
-void *nvim_efm_get_prog(void *efm)
-{
-  return efm == NULL ? NULL : ((efm_T *)efm)->prog;
-}
-
-/// Set the regprog on an efm_T (after vim_regexec may update it).
-void nvim_efm_set_prog(void *efm, void *prog)
-{
-  if (efm != NULL) {
-    ((efm_T *)efm)->prog = (regprog_T *)prog;
-  }
-}
 
 /// Create a regmatch_T on the heap, set rm_ic=true, and assign the given prog.
-/// Returns an opaque handle. The caller owns the memory; free with nvim_qf_regmatch_free.
+/// Returns an opaque handle. The caller owns the memory; free after extracting prog.
 void *nvim_qf_regmatch_create_ic(void *prog)
 {
   regmatch_T *rm = xcalloc(1, sizeof(regmatch_T));
@@ -2065,17 +1852,17 @@ int nvim_qf_vim_isprintc(int c)
 
 /// Get the qf_get_fnum result for a qfl + namebuf/currfile/valid.
 /// Handles the complex conditional logic for directory + currfile selection.
-int nvim_qf_get_fnum_for_fields(void *qfl_void, void *fields_void)
+/// namebuf: the filename buffer from qffields; valid: whether the entry is valid.
+int nvim_qf_get_fnum_for_fields(void *qfl_void, char *namebuf, bool valid)
 {
-  if (qfl_void == NULL || fields_void == NULL) {
+  if (qfl_void == NULL || namebuf == NULL) {
     return 0;
   }
   qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qffields_T *fields = (qffields_T *)fields_void;
   return qf_get_fnum(qfl, qfl->qf_directory,
-                     *fields->namebuf || qfl->qf_directory
-                     ? fields->namebuf
-                     : qfl->qf_currfile && fields->valid
+                     *namebuf || qfl->qf_directory
+                     ? namebuf
+                     : qfl->qf_currfile && valid
                      ? qfl->qf_currfile : 0);
 }
 
@@ -2276,6 +2063,43 @@ char *nvim_qf_strchr_nl(char *str)
 {
   return vim_strchr(str, '\n');
 }
+
+// =============================================================================
+// Phase 9 (Phase 2): vim_regcomp/vim_regfree wrappers and efm error messages
+// =============================================================================
+
+/// Compile a regex pattern; returns allocated regprog_T* or NULL.
+void *nvim_qf_vim_regcomp(const char *pat, int flags)
+{
+  return vim_regcomp((char *)pat, flags);
+}
+
+/// Free a compiled regex (regprog_T*).
+void nvim_qf_vim_regfree(void *prog) { vim_regfree(prog); }
+
+/// Wrapper for xstrdup used by Rust's EFM cache.
+char *nvim_qf_xstrdup(const char *s) { return s == NULL ? NULL : xstrdup(s); }
+
+/// Error message E372: Too many %%%c in format string
+void nvim_qf_semsg_efm_e372(char ch) { semsg(_("E372: Too many %%%c in format string"), ch); }
+
+/// Error message E373: Unexpected %%%c in format string
+void nvim_qf_semsg_efm_e373(char ch) { semsg(_("E373: Unexpected %%%c in format string"), ch); }
+
+/// Error message E374: Missing ] in format string
+void nvim_qf_emsg_efm_e374(void) { emsg(_("E374: Missing ] in format string")); }
+
+/// Error message E375: Unsupported %%%c in format string
+void nvim_qf_semsg_efm_e375(char ch) { semsg(_("E375: Unsupported %%%c in format string"), ch); }
+
+/// Error message E376: Invalid %%%c in format string prefix
+void nvim_qf_semsg_efm_e376(char ch) { semsg(_("E376: Invalid %%%c in format string prefix"), ch); }
+
+/// Error message E377: Invalid %%%c in format string
+void nvim_qf_semsg_efm_e377(char ch) { semsg(_("E377: Invalid %%%c in format string"), ch); }
+
+/// Error message E378: 'errorformat' contains no pattern
+void nvim_qf_emsg_efm_e378(void) { emsg(_("E378: 'errorformat' contains no pattern")); }
 
 // qf_parse_fmt_f and all qf_parse_fmt_* functions deleted: migrated to Rust rs_qf_parse_match.
 

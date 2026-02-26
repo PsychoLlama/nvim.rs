@@ -593,6 +593,405 @@ pub unsafe extern "C" fn rs_qf_parser_state_no_fd_error(state: *const c_void) ->
 }
 
 // ===========================================================================
+// Phase 2: EfmPattern (Rust equivalent of efm_T)
+// ===========================================================================
+
+/// Number of % pattern slots in errorformat (matches C `FMT_PATTERNS`)
+pub const FMT_PATTERNS: usize = 14;
+
+/// `CMDBUFFSIZE` from C (`os_defs.h`)
+pub const CMDBUFFSIZE: usize = 1024;
+
+extern "C" {
+    // Errorformat conversion helpers (from parse.rs)
+    fn rs_efm_to_regpat(
+        efm: *const c_char,
+        efm_len: usize,
+        addr: *mut c_char,
+        out: *mut c_char,
+        out_size: usize,
+    ) -> EfmToRegpatResult;
+    fn rs_efm_regpat_bufsz(efm: *const c_char, efm_len: usize) -> usize;
+    fn rs_efm_option_part_len(efm: *const c_char, efm_max_len: usize) -> c_int;
+    fn rs_skip_to_option_part(p: *const c_char) -> *const c_char;
+
+    // vim regex (thin C wrappers needed around vim_regcomp/vim_regfree)
+    fn nvim_qf_vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
+    fn nvim_qf_vim_regfree(prog: *mut c_void);
+
+    // Error messages (Phase 2: emit efm error messages from C)
+    fn nvim_qf_semsg_efm_e372(ch: c_char);
+    fn nvim_qf_semsg_efm_e373(ch: c_char);
+    fn nvim_qf_emsg_efm_e374();
+    fn nvim_qf_semsg_efm_e375(ch: c_char);
+    fn nvim_qf_semsg_efm_e376(ch: c_char);
+    fn nvim_qf_semsg_efm_e377(ch: c_char);
+    fn nvim_qf_emsg_efm_e378();
+
+    // Memory helpers for string fields
+    fn nvim_qf_xstrdup(s: *const c_char) -> *mut c_char;
+}
+
+/// Result type matching C's `EfmToRegpatResult` (must stay in sync with parse.rs)
+#[repr(C)]
+struct EfmToRegpatResult {
+    bytes_written: usize,
+    prefix: c_char,
+    flags: c_char,
+    conthere: bool,
+    status: c_int,
+    error_code: c_int,
+    error_char: c_char,
+}
+
+/// One parsed errorformat element.
+///
+/// Equivalent to C's `efm_T`. Must be ABI-compatible via raw pointer casting.
+pub struct EfmPattern {
+    /// Pre-compiled regex program (opaque C pointer, owned - free with `nvim_qf_vim_regfree`)
+    pub prog: *mut c_void,
+    /// Next in linked list (NULL if last)
+    pub next: *mut EfmPattern,
+    /// Indices of used % patterns (`FMT_PATTERNS` elements)
+    pub addr: [c_char; FMT_PATTERNS],
+    /// Prefix character (E/W/I/N/C/Z/G/P/Q/O/D/X/A)
+    pub prefix: c_char,
+    /// Flags character ('-' or '+')
+    pub flags: c_char,
+    /// Whether %> (conthere) was used
+    pub conthere: c_int,
+}
+
+impl EfmPattern {
+    /// Create a zeroed `EfmPattern`.
+    fn new_zeroed() -> Self {
+        Self {
+            prog: std::ptr::null_mut(),
+            next: std::ptr::null_mut(),
+            addr: [0; FMT_PATTERNS],
+            prefix: 0,
+            flags: 0,
+            conthere: 0,
+        }
+    }
+}
+
+/// Free a linked list of `EfmPattern` nodes.
+///
+/// Also resets the Rust `FMT_START` via `rs_qf_reset_fmt_start`.
+///
+/// # Safety
+/// `efm_first` must be a valid pointer from `rs_qf_parse_efm_option` or NULL.
+pub unsafe fn free_efm_pattern_list(efm_first: *mut EfmPattern) {
+    let mut p = efm_first;
+    while !p.is_null() {
+        let node = Box::from_raw(p);
+        p = node.next;
+        if !node.prog.is_null() {
+            nvim_qf_vim_regfree(node.prog);
+        }
+        // node is dropped here (Box goes out of scope)
+    }
+    // Reset the fmt_start static in parse.rs
+    rs_qf_reset_fmt_start();
+}
+
+extern "C" {
+    fn rs_qf_reset_fmt_start();
+}
+
+/// Parse an errorformat string into a linked list of `EfmPattern` nodes.
+///
+/// Returns NULL on error (e.g., empty format or compilation failure).
+///
+/// # Safety
+/// `efm` must be a valid null-terminated C string.
+unsafe fn parse_efm_option(efm: *const c_char) -> *mut EfmPattern {
+    if efm.is_null() || *efm == 0 {
+        return std::ptr::null_mut();
+    }
+
+    let efm_cstr = std::ffi::CStr::from_ptr(efm);
+    let efm_bytes = efm_cstr.to_bytes();
+    let total_len = efm_bytes.len();
+
+    let bufsz = rs_efm_regpat_bufsz(efm, total_len);
+    if bufsz == 0 {
+        return std::ptr::null_mut();
+    }
+    // Allocate the regex pattern buffer via xmalloc
+    let fmtstr: *mut c_char = nvim_qf_xmalloc_buf(bufsz);
+
+    let mut fmt_first: *mut EfmPattern = std::ptr::null_mut();
+    let mut fmt_last: *mut EfmPattern = std::ptr::null_mut();
+    let mut pos: *const c_char = efm;
+
+    loop {
+        if *pos == 0 {
+            break;
+        }
+
+        let remaining = total_len - pos.offset_from(efm) as usize;
+        let len = rs_efm_option_part_len(pos, remaining) as usize;
+
+        // Allocate a new EfmPattern
+        let mut fmt_ptr = EfmPattern::new_zeroed();
+
+        // Convert this format part to a regex pattern
+        let result = rs_efm_to_regpat(pos, len, fmt_ptr.addr.as_mut_ptr(), fmtstr, bufsz);
+
+        if result.status != 1 {
+            // 1 = OK in Neovim
+            // Emit the appropriate error message
+            match result.error_code {
+                372 => nvim_qf_semsg_efm_e372(result.error_char),
+                373 => nvim_qf_semsg_efm_e373(result.error_char),
+                374 => nvim_qf_emsg_efm_e374(),
+                375 => nvim_qf_semsg_efm_e375(result.error_char),
+                376 => nvim_qf_semsg_efm_e376(result.error_char),
+                377 => nvim_qf_semsg_efm_e377(result.error_char),
+                _ => nvim_qf_emsg_efm_e378(),
+            }
+            // fmt_ptr has no prog to free; it will be dropped here (no Drop impl)
+            free_efm_pattern_list(fmt_first);
+            nvim_qf_xfree_buf(fmtstr.cast());
+            return std::ptr::null_mut();
+        }
+
+        fmt_ptr.prefix = result.prefix;
+        fmt_ptr.flags = result.flags;
+        fmt_ptr.conthere = result.conthere as c_int;
+
+        // Compile the regex pattern
+        let prog = nvim_qf_vim_regcomp(fmtstr, 1 + 2); // RE_MAGIC + RE_STRING
+        if prog.is_null() {
+            // fmt_ptr has no prog to free; it will be dropped here (no Drop impl)
+            free_efm_pattern_list(fmt_first);
+            nvim_qf_xfree_buf(fmtstr.cast());
+            return std::ptr::null_mut();
+        }
+        fmt_ptr.prog = prog;
+
+        // Append to list (box now, after all fields are set)
+        let raw_ptr = Box::into_raw(Box::new(fmt_ptr));
+        if fmt_first.is_null() {
+            fmt_first = raw_ptr;
+        } else {
+            (*fmt_last).next = raw_ptr;
+        }
+        fmt_last = raw_ptr;
+
+        // Advance to next part (skip comma + spaces)
+        pos = rs_skip_to_option_part(pos.add(len));
+    }
+
+    if fmt_first.is_null() {
+        nvim_qf_emsg_efm_e378();
+    }
+
+    nvim_qf_xfree_buf(fmtstr.cast());
+    fmt_first
+}
+
+/// Static efm cache (equivalent to C's `s_fmt_first` / `s_last_efm`).
+///
+/// Stores the last-used efm string (heap-allocated) and the compiled pattern list.
+struct EfmCache {
+    last_efm: *mut c_char,
+    fmt_first: *mut EfmPattern,
+}
+
+unsafe impl Send for EfmCache {}
+unsafe impl Sync for EfmCache {}
+
+static mut EFM_CACHE: EfmCache = EfmCache {
+    last_efm: std::ptr::null_mut(),
+    fmt_first: std::ptr::null_mut(),
+};
+
+// ===========================================================================
+// Phase 2: C-callable exports
+// ===========================================================================
+
+/// Parse an errorformat string and return the first [`EfmPattern`] as opaque pointer.
+///
+/// # Safety
+/// `efm` must be a valid null-terminated C string or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_parse_efm_option(efm: *const c_char) -> *mut c_void {
+    if efm.is_null() {
+        return std::ptr::null_mut();
+    }
+    parse_efm_option(efm).cast()
+}
+
+/// Free a linked list of `EfmPattern` nodes created by `rs_qf_parse_efm_option`.
+///
+/// # Safety
+/// `efm_first` must have been created by `rs_qf_parse_efm_option` or be NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_free_efm_list(efm_first: *mut c_void) {
+    free_efm_pattern_list(efm_first.cast());
+}
+
+/// Update the cached efm parse and return the `fmt_first` pointer.
+///
+/// Returns NULL if parsing fails.
+///
+/// # Safety
+/// `efm` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_init_update_efm_cache(efm: *mut c_char) -> *mut c_void {
+    let cache = &raw mut EFM_CACHE;
+    let last = (*cache).last_efm;
+    let needs_update = last.is_null() || libc::strcmp(last.cast_const(), efm.cast_const()) != 0;
+
+    if needs_update {
+        // Free old cache
+        if !last.is_null() {
+            nvim_qf_xfree_buf(last.cast());
+            (*cache).last_efm = std::ptr::null_mut();
+        }
+        free_efm_pattern_list((*cache).fmt_first);
+        (*cache).fmt_first = std::ptr::null_mut();
+
+        // Parse new efm
+        (*cache).fmt_first = parse_efm_option(efm);
+        if !(*cache).fmt_first.is_null() {
+            (*cache).last_efm = nvim_qf_xstrdup(efm);
+        }
+    }
+
+    (*cache).fmt_first.cast()
+}
+
+// ===========================================================================
+// Phase 2: QfAllFields — full quickfix fields (Rust equivalent of qffields_T)
+// ===========================================================================
+
+/// Full quickfix fields with owned heap buffers.
+///
+/// Equivalent to C's `qffields_T`. The string fields are heap-allocated
+/// via C's xmalloc (so they can be passed to C functions that expect them).
+pub struct QfAllFields {
+    /// Filename buffer (CMDBUFFSIZE + 1 bytes)
+    pub namebuf: *mut c_char,
+    /// Buffer number
+    pub bnr: c_int,
+    /// Module name buffer (CMDBUFFSIZE + 1 bytes)
+    pub module: *mut c_char,
+    /// Error message buffer (initially CMDBUFFSIZE + 1, may grow)
+    pub errmsg: *mut c_char,
+    /// Allocated size of errmsg buffer
+    pub errmsglen: usize,
+    /// Line number
+    pub lnum: i32,
+    /// End line number
+    pub end_lnum: i32,
+    /// Column number
+    pub col: c_int,
+    /// End column number
+    pub end_col: c_int,
+    /// Whether column is visual
+    pub use_viscol: bool,
+    /// Pattern buffer (CMDBUFFSIZE + 1 bytes)
+    pub pattern: *mut c_char,
+    /// Error number
+    pub enr: c_int,
+    /// Error type character
+    pub type_char: c_char,
+    /// User data (`typval_T`*, always NULL in Rust-managed path)
+    pub user_data: *mut c_void,
+    /// Whether entry is valid
+    pub valid: bool,
+}
+
+impl QfAllFields {
+    /// Allocate a new `QfAllFields` with heap-allocated string buffers.
+    ///
+    /// # Safety
+    /// Calls C xmalloc.
+    pub unsafe fn alloc() -> Box<Self> {
+        let bufsz = CMDBUFFSIZE + 1;
+        Box::new(Self {
+            namebuf: nvim_qf_xmalloc_buf(bufsz),
+            bnr: 0,
+            module: nvim_qf_xmalloc_buf(bufsz),
+            errmsg: nvim_qf_xmalloc_buf(bufsz),
+            errmsglen: bufsz,
+            lnum: 0,
+            end_lnum: 0,
+            col: 0,
+            end_col: 0,
+            use_viscol: false,
+            pattern: nvim_qf_xmalloc_buf(bufsz),
+            enr: 0,
+            type_char: 0,
+            user_data: std::ptr::null_mut(),
+            valid: false,
+        })
+    }
+}
+
+impl QfAllFields {
+    /// Set the error message, growing the buffer if needed.
+    ///
+    /// Mirrors C's `nvim_qf_fields_set_errmsg`.
+    ///
+    /// # Safety
+    /// `msg` must be a valid pointer to `len` bytes (NUL-terminated at `msg[len]`).
+    pub unsafe fn set_errmsg(&mut self, msg: *const c_char, len: usize) {
+        if msg.is_null() {
+            return;
+        }
+        if len >= self.errmsglen {
+            self.errmsg = nvim_qf_xrealloc_buf(self.errmsg, len + 1);
+            self.errmsglen = len + 1;
+        }
+        nvim_qf_xstrlcpy(self.errmsg, msg, len + 1);
+    }
+}
+
+impl Drop for QfAllFields {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.namebuf.is_null() {
+                nvim_qf_xfree_buf(self.namebuf.cast());
+            }
+            if !self.module.is_null() {
+                nvim_qf_xfree_buf(self.module.cast());
+            }
+            if !self.errmsg.is_null() {
+                nvim_qf_xfree_buf(self.errmsg.cast());
+            }
+            if !self.pattern.is_null() {
+                nvim_qf_xfree_buf(self.pattern.cast());
+            }
+        }
+    }
+}
+
+/// Allocate a new `QfAllFields` and return it as an opaque heap pointer.
+///
+/// # Safety
+/// Returns a heap-allocated pointer. Free with `rs_qf_free_fields`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_alloc_fields() -> *mut c_void {
+    Box::into_raw(QfAllFields::alloc()).cast()
+}
+
+/// Free a `QfAllFields` allocated by `rs_qf_alloc_fields`.
+///
+/// # Safety
+/// `fields` must have been created by `rs_qf_alloc_fields` or be NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_free_fields(fields: *mut c_void) {
+    if !fields.is_null() {
+        drop(Box::from_raw(fields.cast::<QfAllFields>()));
+    }
+}
+
+// ===========================================================================
 // Tests
 // ===========================================================================
 

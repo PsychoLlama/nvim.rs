@@ -334,35 +334,17 @@ mod init_ext {
         fn nvim_set_got_int(val: c_int);
         fn nvim_line_breakcheck();
 
-        // Phase 4 accessors still needed (fields allocation still in C for Phase 1)
-        fn nvim_qf_init_alloc_fields() -> FieldsHandle;
-        fn nvim_qf_init_free_fields(fields: FieldsHandle);
+        // C-side helpers still needed
         fn nvim_qf_init_clear_last_bufname();
         fn nvim_qf_init_resolve_efm(
             errorformat: *mut c_char,
             tv: TvHandle,
             buf: BufHandle,
         ) -> *mut c_char;
-        fn nvim_qf_init_update_efm_cache(efm: *mut c_char) -> EfmHandle;
         fn nvim_qf_init_finalize_list(qfl: QfListHandleMut);
         fn nvim_qf_init_emsg_readerrf();
         fn nvim_qf_decrement_listcount(qi: QfInfoHandleMut);
         fn nvim_qf_set_curlist_idx(qi: QfInfoHandleMut, idx: c_int);
-
-        // qffields_T accessors (needed to build rs_qf_add_entry call)
-        fn nvim_qf_fields_get_namebuf(fields: *mut c_void) -> *mut c_char;
-        fn nvim_qf_fields_get_bnr(fields: *const c_void) -> c_int;
-        fn nvim_qf_fields_get_module(fields: *mut c_void) -> *mut c_char;
-        fn nvim_qf_fields_get_errmsg(fields: *mut c_void) -> *mut c_char;
-        fn nvim_qf_fields_get_lnum(fields: *const c_void) -> i32;
-        fn nvim_qf_fields_get_end_lnum(fields: *const c_void) -> i32;
-        fn nvim_qf_fields_get_col(fields: *const c_void) -> c_int;
-        fn nvim_qf_fields_get_end_col(fields: *const c_void) -> c_int;
-        fn nvim_qf_fields_get_use_viscol(fields: *const c_void) -> bool;
-        fn nvim_qf_fields_get_pattern(fields: *mut c_void) -> *mut c_char;
-        fn nvim_qf_fields_get_enr(fields: *const c_void) -> c_int;
-        fn nvim_qf_fields_get_type(fields: *const c_void) -> c_char;
-        fn nvim_qf_fields_get_valid(fields: *const c_void) -> bool;
 
         // qf_list_T directory/currfile accessors
         fn nvim_qf_get_directory(qfl: *const c_void) -> *const c_char;
@@ -427,18 +409,18 @@ mod init_ext {
             return parse_status;
         }
 
-        // Build the rs_qf_add_entry arguments
+        // Build the rs_qf_add_entry arguments using direct Rust struct field access
+        let f = &*fields.cast::<crate::reader::QfAllFields>();
         let dir = nvim_qf_get_directory(qfl.cast_const()).cast_mut();
-        let namebuf = nvim_qf_fields_get_namebuf(fields);
         let currfile = nvim_qf_get_currfile(qfl.cast_const());
-        let valid = nvim_qf_fields_get_valid(fields.cast_const());
+        let valid = f.valid;
 
         // fname selection matches C logic:
         //   if (*namebuf || dir != NULL) use namebuf
         //   elif (currfile != NULL && valid) use currfile
         //   else use NULL
-        let fname: *const c_char = if !namebuf.is_null() && (*namebuf != 0 || !dir.is_null()) {
-            namebuf.cast_const()
+        let fname: *const c_char = if !f.namebuf.is_null() && (*f.namebuf != 0 || !dir.is_null()) {
+            f.namebuf.cast_const()
         } else if !currfile.is_null() && valid {
             currfile
         } else {
@@ -449,18 +431,18 @@ mod init_ext {
             qfl,
             dir,
             fname,
-            nvim_qf_fields_get_module(fields).cast_const(),
-            nvim_qf_fields_get_bnr(fields.cast_const()),
-            nvim_qf_fields_get_errmsg(fields).cast_const(),
-            nvim_qf_fields_get_lnum(fields.cast_const()),
-            nvim_qf_fields_get_end_lnum(fields.cast_const()),
-            nvim_qf_fields_get_col(fields.cast_const()),
-            nvim_qf_fields_get_end_col(fields.cast_const()),
-            nvim_qf_fields_get_use_viscol(fields.cast_const()) as c_char,
-            nvim_qf_fields_get_pattern(fields).cast_const(),
-            nvim_qf_fields_get_enr(fields.cast_const()),
-            nvim_qf_fields_get_type(fields.cast_const()),
-            std::ptr::null(), // user_data: qffields_T.user_data is typval_T*, kept in C
+            f.module.cast_const(),
+            f.bnr,
+            f.errmsg.cast_const(),
+            f.lnum,
+            f.end_lnum,
+            f.col,
+            f.end_col,
+            f.use_viscol as c_char,
+            f.pattern.cast_const(),
+            f.enr,
+            f.type_char,
+            std::ptr::null(), // user_data: always null in Rust-managed path
             valid as c_char,
         )
     }
@@ -488,8 +470,8 @@ mod init_ext {
         // Do not use the cached buffer, it may have been wiped out.
         nvim_qf_init_clear_last_bufname();
 
-        // Allocate fields (still managed by C in Phase 1)
-        let fields = nvim_qf_init_alloc_fields();
+        // Allocate fields in Rust (Phase 2)
+        let fields = crate::reader::rs_qf_alloc_fields();
 
         // Setup parser state in Rust (replaces nvim_qf_init_setup_state)
         let state_ptr =
@@ -524,8 +506,8 @@ mod init_ext {
             // Resolve the effective errorformat.
             let efm = nvim_qf_init_resolve_efm(errorformat, tv, buf);
 
-            // Update the cached efm parsing.
-            let fmt_first = nvim_qf_init_update_efm_cache(efm);
+            // Update the cached efm parsing (Phase 2: Rust-owned cache)
+            let fmt_first = crate::reader::rs_qf_init_update_efm_cache(efm);
             if fmt_first.is_null() {
                 break 'init -1; // error2 path
             }
@@ -573,9 +555,9 @@ mod init_ext {
         if qf_idx == nvim_qf_get_curlist_idx(qi) {
             nvim_qf_update_buffer(qi, old_last);
         }
-        // Free Rust parser state (replaces nvim_qf_init_cleanup_state)
+        // Free Rust parser state and fields (Phase 2: both Rust-owned)
         crate::reader::rs_qf_parser_state_free(state_ptr);
-        nvim_qf_init_free_fields(fields);
+        crate::reader::rs_qf_free_fields(fields);
 
         retval
     }

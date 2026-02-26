@@ -2124,10 +2124,10 @@ const C_FMT_PATTERN_M: usize = 8;
 /// Index of %r (rest) pattern
 const C_FMT_PATTERN_R: usize = 9;
 
-/// Handle for C's EfmHandle (opaque efm_T pointer)
+/// Handle for an `EfmPattern` node (opaque pointer to `crate::reader::EfmPattern`)
 type EfmHandle = *mut c_void;
 
-// C accessor functions needed for Phase 5 parse_match implementation
+// C accessor functions needed for parse_match implementation
 extern "C" {
     // regmatch_T indexed submatch accessors
     fn nvim_qf_regmatch_startp(rm: *const c_void, idx: c_int) -> *const c_char;
@@ -2137,38 +2137,6 @@ extern "C" {
     fn nvim_qf_expand_env(src: *const c_char, dst: *mut c_char, dstlen: c_int);
     fn nvim_qf_os_path_exists(path: *const c_char) -> bool;
     fn nvim_qf_buflist_findnr_exists(bnr: c_int) -> bool;
-
-    // qffields_T accessors
-    fn nvim_qf_fields_get_namebuf(fields: *mut c_void) -> *mut c_char;
-    fn nvim_qf_fields_set_bnr(fields: *mut c_void, bnr: c_int);
-    fn nvim_qf_fields_get_module(fields: *mut c_void) -> *mut c_char;
-    fn nvim_qf_fields_get_errmsg(fields: *mut c_void) -> *mut c_char;
-    fn nvim_qf_fields_set_errmsg(fields: *mut c_void, msg: *const c_char, len: usize);
-    fn nvim_qf_fields_get_lnum(fields: *const c_void) -> i32;
-    fn nvim_qf_fields_set_lnum(fields: *mut c_void, lnum: i32);
-    fn nvim_qf_fields_get_end_lnum(fields: *const c_void) -> i32;
-    fn nvim_qf_fields_set_end_lnum(fields: *mut c_void, end_lnum: i32);
-    fn nvim_qf_fields_get_col(fields: *const c_void) -> c_int;
-    fn nvim_qf_fields_set_col(fields: *mut c_void, col: c_int);
-    fn nvim_qf_fields_get_end_col(fields: *const c_void) -> c_int;
-    fn nvim_qf_fields_set_end_col(fields: *mut c_void, end_col: c_int);
-    fn nvim_qf_fields_get_use_viscol(fields: *const c_void) -> bool;
-    fn nvim_qf_fields_set_use_viscol(fields: *mut c_void, use_viscol: bool);
-    fn nvim_qf_fields_get_pattern(fields: *mut c_void) -> *mut c_char;
-    fn nvim_qf_fields_get_enr(fields: *const c_void) -> c_int;
-    fn nvim_qf_fields_set_enr(fields: *mut c_void, enr: c_int);
-    fn nvim_qf_fields_get_type(fields: *const c_void) -> c_char;
-    fn nvim_qf_fields_set_type(fields: *mut c_void, type_char: c_char);
-    fn nvim_qf_fields_set_valid(fields: *mut c_void, valid: bool);
-
-    // efm_T accessors
-    fn nvim_efm_get_addr(efm: EfmHandle, idx: c_int) -> c_char;
-    fn nvim_efm_get_prefix(efm: EfmHandle) -> c_char;
-    fn nvim_efm_get_flags(efm: EfmHandle) -> c_char;
-    fn nvim_efm_get_conthere(efm: EfmHandle) -> c_int;
-    fn nvim_efm_get_next(efm: EfmHandle) -> EfmHandle;
-    fn nvim_efm_get_prog(efm: EfmHandle) -> *mut c_void;
-    fn nvim_efm_set_prog(efm: EfmHandle, prog: *mut c_void);
 
     // regmatch_T lifecycle for vim_regexec
     fn nvim_qf_regmatch_create_ic(prog: *mut c_void) -> *mut c_void;
@@ -2200,7 +2168,7 @@ extern "C" {
     // misc
     fn nvim_qf_line_breakcheck();
     fn nvim_qf_vim_isprintc(c: c_int) -> c_int;
-    fn nvim_qf_get_fnum_for_fields(qfl: *mut c_void, fields: *mut c_void) -> c_int;
+    fn nvim_qf_get_fnum_for_fields(qfl: *mut c_void, namebuf: *mut c_char, valid: bool) -> c_int;
     fn nvim_qf_set_directory(qfl: *mut c_void, dir: *mut c_char);
     fn nvim_qf_set_currfile(qfl: *mut c_void, file: *mut c_char);
     fn nvim_qf_strmove(dst: *mut c_char, src: *const c_char);
@@ -2213,8 +2181,158 @@ extern "C" {
     fn rs_qf_pop_dir(qfl: *mut c_void, is_file_stack: bool) -> *const c_char;
 }
 
-// CMDBUFFSIZE_P5 is the same as CMDBUFFSIZE but local to avoid duplicate definition.
-// The value 256 matches C's CMDBUFFSIZE.
+// =============================================================================
+// Inline accessors for EfmPattern and QfAllFields (Phase 9 Phase 2)
+// =============================================================================
+//
+// These replace the deleted C accessor functions nvim_efm_get_* and nvim_qf_fields_*.
+// The `fields` and `fmt_ptr` parameters are `*mut c_void` pointing to Rust-owned
+// EfmPattern / QfAllFields structs.
+
+use crate::reader::{EfmPattern, QfAllFields};
+
+#[inline]
+unsafe fn efm_get_prefix(efm: EfmHandle) -> c_char {
+    (*efm.cast::<EfmPattern>()).prefix
+}
+
+#[inline]
+unsafe fn efm_get_flags(efm: EfmHandle) -> c_char {
+    (*efm.cast::<EfmPattern>()).flags
+}
+
+#[inline]
+unsafe fn efm_get_conthere(efm: EfmHandle) -> c_int {
+    (*efm.cast::<EfmPattern>()).conthere
+}
+
+#[inline]
+unsafe fn efm_get_addr(efm: EfmHandle, idx: c_int) -> c_char {
+    #[allow(clippy::cast_sign_loss)]
+    (*efm.cast::<EfmPattern>()).addr[idx as usize]
+}
+
+#[inline]
+unsafe fn efm_get_next(efm: EfmHandle) -> EfmHandle {
+    (*efm.cast::<EfmPattern>()).next.cast()
+}
+
+#[inline]
+unsafe fn efm_get_prog(efm: EfmHandle) -> *mut c_void {
+    (*efm.cast::<EfmPattern>()).prog
+}
+
+#[inline]
+unsafe fn efm_set_prog(efm: EfmHandle, prog: *mut c_void) {
+    (*efm.cast::<EfmPattern>()).prog = prog;
+}
+
+#[inline]
+unsafe fn fields_get_namebuf(fields: *mut c_void) -> *mut c_char {
+    (*fields.cast::<QfAllFields>()).namebuf
+}
+
+#[inline]
+unsafe fn fields_set_bnr(fields: *mut c_void, bnr: c_int) {
+    (*fields.cast::<QfAllFields>()).bnr = bnr;
+}
+
+#[inline]
+unsafe fn fields_get_module(fields: *mut c_void) -> *mut c_char {
+    (*fields.cast::<QfAllFields>()).module
+}
+
+#[inline]
+unsafe fn fields_get_errmsg(fields: *mut c_void) -> *mut c_char {
+    (*fields.cast::<QfAllFields>()).errmsg
+}
+
+#[inline]
+unsafe fn fields_set_errmsg(fields: *mut c_void, msg: *const c_char, len: usize) {
+    (*fields.cast::<QfAllFields>()).set_errmsg(msg, len);
+}
+
+#[inline]
+unsafe fn fields_get_lnum(fields: *const c_void) -> i32 {
+    (*fields.cast::<QfAllFields>()).lnum
+}
+
+#[inline]
+unsafe fn fields_set_lnum(fields: *mut c_void, lnum: i32) {
+    (*fields.cast::<QfAllFields>()).lnum = lnum;
+}
+
+#[inline]
+unsafe fn fields_get_end_lnum(fields: *const c_void) -> i32 {
+    (*fields.cast::<QfAllFields>()).end_lnum
+}
+
+#[inline]
+unsafe fn fields_set_end_lnum(fields: *mut c_void, end_lnum: i32) {
+    (*fields.cast::<QfAllFields>()).end_lnum = end_lnum;
+}
+
+#[inline]
+unsafe fn fields_get_col(fields: *const c_void) -> c_int {
+    (*fields.cast::<QfAllFields>()).col
+}
+
+#[inline]
+unsafe fn fields_set_col(fields: *mut c_void, col: c_int) {
+    (*fields.cast::<QfAllFields>()).col = col;
+}
+
+#[inline]
+unsafe fn fields_get_end_col(fields: *const c_void) -> c_int {
+    (*fields.cast::<QfAllFields>()).end_col
+}
+
+#[inline]
+unsafe fn fields_set_end_col(fields: *mut c_void, end_col: c_int) {
+    (*fields.cast::<QfAllFields>()).end_col = end_col;
+}
+
+#[inline]
+unsafe fn fields_get_use_viscol(fields: *const c_void) -> bool {
+    (*fields.cast::<QfAllFields>()).use_viscol
+}
+
+#[inline]
+unsafe fn fields_set_use_viscol(fields: *mut c_void, use_viscol: bool) {
+    (*fields.cast::<QfAllFields>()).use_viscol = use_viscol;
+}
+
+#[inline]
+unsafe fn fields_get_pattern(fields: *mut c_void) -> *mut c_char {
+    (*fields.cast::<QfAllFields>()).pattern
+}
+
+#[inline]
+unsafe fn fields_get_enr(fields: *const c_void) -> c_int {
+    (*fields.cast::<QfAllFields>()).enr
+}
+
+#[inline]
+unsafe fn fields_set_enr(fields: *mut c_void, enr: c_int) {
+    (*fields.cast::<QfAllFields>()).enr = enr;
+}
+
+#[inline]
+unsafe fn fields_get_type(fields: *const c_void) -> c_char {
+    (*fields.cast::<QfAllFields>()).type_char
+}
+
+#[inline]
+unsafe fn fields_set_type(fields: *mut c_void, type_char: c_char) {
+    (*fields.cast::<QfAllFields>()).type_char = type_char;
+}
+
+#[inline]
+unsafe fn fields_set_valid(fields: *mut c_void, valid: bool) {
+    (*fields.cast::<QfAllFields>()).valid = valid;
+}
+
+// CMDBUFFSIZE: matches C's CMDBUFFSIZE (1024) from os_defs.h
 
 /// Helper: get the length of a matched submatch (end - start).
 /// Returns None if start or end is null.
@@ -2266,7 +2384,7 @@ unsafe fn parse_fmt_f_impl(
     tmp.extend_from_slice(std::slice::from_raw_parts(start.cast::<u8>(), copy_len));
     tmp.push(0); // NUL-terminate
 
-    let namebuf = nvim_qf_fields_get_namebuf(fields);
+    let namebuf = fields_get_namebuf(fields);
     if namebuf.is_null() {
         return C_QF_FAIL;
     }
@@ -2292,7 +2410,7 @@ unsafe fn parse_fmt_b_impl(rm: *const c_void, midx: c_int, fields: *mut c_void) 
     if bnr <= 0 || !nvim_qf_buflist_findnr_exists(bnr) {
         return C_QF_FAIL;
     }
-    nvim_qf_fields_set_bnr(fields, bnr);
+    fields_set_bnr(fields, bnr);
     C_QF_OK
 }
 
@@ -2303,7 +2421,7 @@ unsafe fn parse_fmt_n_impl(rm: *const c_void, midx: c_int, fields: *mut c_void) 
         return C_QF_FAIL;
     }
     let bytes = submatch_bytes(rm, midx).unwrap_or(&[]);
-    nvim_qf_fields_set_enr(fields, parse_number(bytes) as c_int);
+    fields_set_enr(fields, parse_number(bytes) as c_int);
     C_QF_OK
 }
 
@@ -2314,7 +2432,7 @@ unsafe fn parse_fmt_l_impl(rm: *const c_void, midx: c_int, fields: *mut c_void) 
         return C_QF_FAIL;
     }
     let bytes = submatch_bytes(rm, midx).unwrap_or(&[]);
-    nvim_qf_fields_set_lnum(fields, parse_number(bytes) as i32);
+    fields_set_lnum(fields, parse_number(bytes) as i32);
     C_QF_OK
 }
 
@@ -2325,7 +2443,7 @@ unsafe fn parse_fmt_e_impl(rm: *const c_void, midx: c_int, fields: *mut c_void) 
         return C_QF_FAIL;
     }
     let bytes = submatch_bytes(rm, midx).unwrap_or(&[]);
-    nvim_qf_fields_set_end_lnum(fields, parse_number(bytes) as i32);
+    fields_set_end_lnum(fields, parse_number(bytes) as i32);
     C_QF_OK
 }
 
@@ -2336,7 +2454,7 @@ unsafe fn parse_fmt_c_impl(rm: *const c_void, midx: c_int, fields: *mut c_void) 
         return C_QF_FAIL;
     }
     let bytes = submatch_bytes(rm, midx).unwrap_or(&[]);
-    nvim_qf_fields_set_col(fields, parse_number(bytes) as c_int);
+    fields_set_col(fields, parse_number(bytes) as c_int);
     C_QF_OK
 }
 
@@ -2347,7 +2465,7 @@ unsafe fn parse_fmt_k_impl(rm: *const c_void, midx: c_int, fields: *mut c_void) 
         return C_QF_FAIL;
     }
     let bytes = submatch_bytes(rm, midx).unwrap_or(&[]);
-    nvim_qf_fields_set_end_col(fields, parse_number(bytes) as c_int);
+    fields_set_end_col(fields, parse_number(bytes) as c_int);
     C_QF_OK
 }
 
@@ -2359,7 +2477,7 @@ unsafe fn parse_fmt_t_impl(rm: *const c_void, midx: c_int, fields: *mut c_void) 
     }
     #[allow(clippy::cast_possible_wrap)]
     let first = *start.cast::<u8>() as c_char;
-    nvim_qf_fields_set_type(fields, first);
+    fields_set_type(fields, first);
     C_QF_OK
 }
 
@@ -2372,7 +2490,7 @@ unsafe fn copy_nonerror_line_impl(
     if linebuf.is_null() {
         return C_QF_FAIL;
     }
-    nvim_qf_fields_set_errmsg(fields, linebuf, linelen);
+    fields_set_errmsg(fields, linebuf, linelen);
     C_QF_OK
 }
 
@@ -2384,7 +2502,7 @@ unsafe fn parse_fmt_m_impl(rm: *const c_void, midx: c_int, fields: *mut c_void) 
         return C_QF_FAIL;
     }
     let len = submatch_len(rm, midx).unwrap_or(0);
-    nvim_qf_fields_set_errmsg(fields, start, len);
+    fields_set_errmsg(fields, start, len);
     C_QF_OK
 }
 
@@ -2418,8 +2536,8 @@ unsafe fn parse_fmt_p_impl(rm: *const c_void, midx: c_int, fields: *mut c_void) 
         }
     }
     col += 1; // 1-based
-    nvim_qf_fields_set_col(fields, col);
-    nvim_qf_fields_set_use_viscol(fields, true);
+    fields_set_col(fields, col);
+    fields_set_use_viscol(fields, true);
     C_QF_OK
 }
 
@@ -2430,8 +2548,8 @@ unsafe fn parse_fmt_v_impl(rm: *const c_void, midx: c_int, fields: *mut c_void) 
         return C_QF_FAIL;
     }
     let bytes = submatch_bytes(rm, midx).unwrap_or(&[]);
-    nvim_qf_fields_set_col(fields, parse_number(bytes) as c_int);
-    nvim_qf_fields_set_use_viscol(fields, true);
+    fields_set_col(fields, parse_number(bytes) as c_int);
+    fields_set_use_viscol(fields, true);
     C_QF_OK
 }
 
@@ -2444,7 +2562,7 @@ unsafe fn parse_fmt_s_impl(rm: *const c_void, midx: c_int, fields: *mut c_void) 
     }
     let len = submatch_len(rm, midx).unwrap_or(0);
     let len = len.min(CMDBUFFSIZE - 5);
-    let pattern_ptr = nvim_qf_fields_get_pattern(fields);
+    let pattern_ptr = fields_get_pattern(fields);
     if pattern_ptr.is_null() {
         return C_QF_FAIL;
     }
@@ -2469,7 +2587,7 @@ unsafe fn parse_fmt_o_impl(rm: *const c_void, midx: c_int, fields: *mut c_void) 
     if start.is_null() || end.is_null() {
         return C_QF_FAIL;
     }
-    let module_ptr = nvim_qf_fields_get_module(fields);
+    let module_ptr = fields_get_module(fields);
     if module_ptr.is_null() {
         return C_QF_FAIL;
     }
@@ -2524,22 +2642,22 @@ pub unsafe extern "C" fn rs_qf_parse_match(
     qf_multiscan: bool,
     tail: *mut *mut c_char,
 ) -> c_int {
-    let idx = nvim_efm_get_prefix(fmt_ptr);
+    let idx = efm_get_prefix(fmt_ptr);
 
     if rs_qf_is_continuation(idx) && !qf_multiline {
         return C_QF_FAIL;
     }
-    nvim_qf_fields_set_type(fields, rs_qf_parse_prefix_type(idx));
+    fields_set_type(fields, rs_qf_parse_prefix_type(idx));
 
     for i in 0..C_FMT_PATTERNS {
         #[allow(clippy::cast_possible_wrap)]
-        let midx = nvim_efm_get_addr(fmt_ptr, i as c_int) as c_int;
+        let midx = efm_get_addr(fmt_ptr, i as c_int) as c_int;
 
         let status = if i == 0 && midx > 0 {
             // %f - filename
             parse_fmt_f_impl(rm, midx, fields, idx)
         } else if i == C_FMT_PATTERN_M {
-            let flags = nvim_efm_get_flags(fmt_ptr);
+            let flags = efm_get_flags(fmt_ptr);
             #[allow(clippy::cast_sign_loss)]
             if (flags as u8) == b'+' && !qf_multiscan {
                 // %+ - copy whole line
@@ -2602,43 +2720,43 @@ unsafe fn qf_parse_get_fields_rs(
     qf_multiscan: bool,
     tail: *mut *mut c_char,
 ) -> c_int {
-    let prefix = nvim_efm_get_prefix(fmt_ptr);
+    let prefix = efm_get_prefix(fmt_ptr);
     if qf_multiscan && !rs_qf_is_file_handler(prefix) {
         return C_QF_FAIL;
     }
 
     // Initialize fields for this line
-    let namebuf = nvim_qf_fields_get_namebuf(fields);
+    let namebuf = fields_get_namebuf(fields);
     if !namebuf.is_null() {
         *namebuf = 0;
     }
-    nvim_qf_fields_set_bnr(fields, 0);
-    let module_ptr = nvim_qf_fields_get_module(fields);
+    fields_set_bnr(fields, 0);
+    let module_ptr = fields_get_module(fields);
     if !module_ptr.is_null() {
         *module_ptr = 0;
     }
-    let pattern_ptr = nvim_qf_fields_get_pattern(fields);
+    let pattern_ptr = fields_get_pattern(fields);
     if !pattern_ptr.is_null() {
         *pattern_ptr = 0;
     }
     if !qf_multiscan {
-        let errmsg_ptr = nvim_qf_fields_get_errmsg(fields);
+        let errmsg_ptr = fields_get_errmsg(fields);
         if !errmsg_ptr.is_null() {
             *errmsg_ptr = 0;
         }
     }
-    nvim_qf_fields_set_lnum(fields, 0);
-    nvim_qf_fields_set_end_lnum(fields, 0);
-    nvim_qf_fields_set_col(fields, 0);
-    nvim_qf_fields_set_end_col(fields, 0);
-    nvim_qf_fields_set_use_viscol(fields, false);
-    nvim_qf_fields_set_enr(fields, -1);
-    nvim_qf_fields_set_type(fields, 0);
+    fields_set_lnum(fields, 0);
+    fields_set_end_lnum(fields, 0);
+    fields_set_col(fields, 0);
+    fields_set_end_col(fields, 0);
+    fields_set_use_viscol(fields, false);
+    fields_set_enr(fields, -1);
+    fields_set_type(fields, 0);
     if !tail.is_null() {
         *tail = std::ptr::null_mut();
     }
 
-    let prog = nvim_efm_get_prog(fmt_ptr);
+    let prog = efm_get_prog(fmt_ptr);
     // Allocate a regmatch_T with rm_ic=true and the given prog
     let rm = nvim_qf_regmatch_create_ic(prog);
     let matched = nvim_qf_vim_regexec(rm, linebuf);
@@ -2660,7 +2778,7 @@ unsafe fn qf_parse_get_fields_rs(
     };
     // Extract prog back (frees rm)
     let updated_prog = nvim_qf_regmatch_extract_prog(rm);
-    nvim_efm_set_prog(fmt_ptr, updated_prog);
+    efm_set_prog(fmt_ptr, updated_prog);
 
     status
 }
@@ -2674,7 +2792,7 @@ unsafe fn qf_parse_dir_pfx_rs(idx: c_char, fields: *mut c_void, qfl: *mut c_void
     match idx as u8 {
         b'D' => {
             // enter directory
-            let namebuf = nvim_qf_fields_get_namebuf(fields);
+            let namebuf = fields_get_namebuf(fields);
             if namebuf.is_null() || *namebuf == 0 {
                 nvim_qf_emsg_missing_dir();
                 return C_QF_FAIL;
@@ -2705,8 +2823,8 @@ unsafe fn qf_parse_file_pfx_rs(
     qfl: *mut c_void,
     tail: *mut c_char,
 ) -> c_int {
-    nvim_qf_fields_set_valid(fields, false);
-    let namebuf = nvim_qf_fields_get_namebuf(fields);
+    fields_set_valid(fields, false);
+    let namebuf = fields_get_namebuf(fields);
     #[allow(clippy::cast_sign_loss)]
     let namebuf_empty = namebuf.is_null() || *namebuf == 0;
     let name_exists = !namebuf_empty && nvim_qf_os_path_exists(namebuf);
@@ -2750,12 +2868,12 @@ unsafe fn qf_parse_line_nomatch_rs(
     linelen: usize,
     fields: *mut c_void,
 ) -> c_int {
-    let namebuf = nvim_qf_fields_get_namebuf(fields);
+    let namebuf = fields_get_namebuf(fields);
     if !namebuf.is_null() {
         *namebuf = 0;
     }
-    nvim_qf_fields_set_lnum(fields, 0);
-    nvim_qf_fields_set_valid(fields, false);
+    fields_set_lnum(fields, 0);
+    fields_set_valid(fields, false);
     copy_nonerror_line_impl(linebuf, linelen, fields)
 }
 
@@ -2773,18 +2891,18 @@ unsafe fn qf_parse_multiline_pfx_rs(idx: c_char, qfl: *mut c_void, fields: *mut 
         // Safety: we have exclusive access since we hold a mutable reference to qfl.
         let qfprev = qfprev_const.cast_mut();
 
-        let errmsg = nvim_qf_fields_get_errmsg(fields);
+        let errmsg = fields_get_errmsg(fields);
         if !errmsg.is_null() && *errmsg != 0 {
             nvim_qfline_append_text(qfprev, errmsg);
         }
 
         // Update nr if not set
         if nvim_qfline_get_nr(qfprev_const) == -1 {
-            nvim_qfline_set_nr(qfprev, nvim_qf_fields_get_enr(fields));
+            nvim_qfline_set_nr(qfprev, fields_get_enr(fields));
         }
 
         // Update type if not set and new type is printable
-        let new_type = nvim_qf_fields_get_type(fields);
+        let new_type = fields_get_type(fields);
         #[allow(clippy::cast_possible_wrap)]
         if nvim_qf_vim_isprintc(new_type as c_int) != 0 && nvim_qfline_get_type(qfprev_const) == 0 {
             nvim_qfline_set_type(qfprev, new_type);
@@ -2792,26 +2910,27 @@ unsafe fn qf_parse_multiline_pfx_rs(idx: c_char, qfl: *mut c_void, fields: *mut 
 
         // Update lnum if not set
         if nvim_qfline_get_lnum(qfprev_const) == 0 {
-            nvim_qfline_set_lnum(qfprev, nvim_qf_fields_get_lnum(fields));
+            nvim_qfline_set_lnum(qfprev, fields_get_lnum(fields));
         }
         // Update end_lnum if not set
         if nvim_qfline_get_end_lnum(qfprev_const) == 0 {
-            nvim_qfline_set_end_lnum(qfprev, nvim_qf_fields_get_end_lnum(fields));
+            nvim_qfline_set_end_lnum(qfprev, fields_get_end_lnum(fields));
         }
         // Update col and viscol if not set
         if nvim_qfline_get_col(qfprev_const) == 0 {
-            nvim_qfline_set_col(qfprev, nvim_qf_fields_get_col(fields));
+            nvim_qfline_set_col(qfprev, fields_get_col(fields));
             #[allow(clippy::cast_possible_wrap)]
-            let viscol = nvim_qf_fields_get_use_viscol(fields) as c_char;
+            let viscol = fields_get_use_viscol(fields) as c_char;
             nvim_qfline_set_viscol(qfprev, viscol);
         }
         // Update end_col if not set
         if nvim_qfline_get_end_col(qfprev_const) == 0 {
-            nvim_qfline_set_end_col(qfprev, nvim_qf_fields_get_end_col(fields));
+            nvim_qfline_set_end_col(qfprev, fields_get_end_col(fields));
         }
         // Update fnum if not set
         if nvim_qfline_get_fnum(qfprev_const) == 0 {
-            let fnum = nvim_qf_get_fnum_for_fields(qfl, fields);
+            let f = &*fields.cast::<crate::reader::QfAllFields>();
+            let fnum = nvim_qf_get_fnum_for_fields(qfl, f.namebuf, f.valid);
             nvim_qfline_set_fnum(qfprev, fnum);
         }
     }
@@ -2871,13 +2990,13 @@ pub unsafe extern "C" fn rs_qf_parse_line(
         };
 
         // Mark fields as valid at start of each attempt
-        nvim_qf_fields_set_valid(fields, true);
+        fields_set_valid(fields, true);
 
         // Try each format pattern; initial value C_QF_FAIL used only if fmt_ptr is null
         #[allow(unused_assignments)]
         let mut status = C_QF_FAIL;
         while !fmt_ptr.is_null() {
-            idx = nvim_efm_get_prefix(fmt_ptr);
+            idx = efm_get_prefix(fmt_ptr);
             status = qf_parse_get_fields_rs(
                 linebuf,
                 linelen,
@@ -2893,7 +3012,7 @@ pub unsafe extern "C" fn rs_qf_parse_line(
             if status == C_QF_OK {
                 break;
             }
-            fmt_ptr = nvim_efm_get_next(fmt_ptr);
+            fmt_ptr = efm_get_next(fmt_ptr);
         }
         nvim_qf_set_multiscan(qfl, false);
 
@@ -2916,7 +3035,7 @@ pub unsafe extern "C" fn rs_qf_parse_line(
             }
         } else {
             // Honor %> item
-            if nvim_efm_get_conthere(fmt_ptr) != 0 {
+            if efm_get_conthere(fmt_ptr) != 0 {
                 FMT_START = fmt_ptr;
             }
 
@@ -2935,7 +3054,7 @@ pub unsafe extern "C" fn rs_qf_parse_line(
                     continue 'restofline;
                 }
             }
-            if rs_qf_should_skip_line(nvim_efm_get_flags(fmt_ptr)) {
+            if rs_qf_should_skip_line(efm_get_flags(fmt_ptr)) {
                 if nvim_qf_get_multiline(qfl) {
                     nvim_qf_set_multiignore(qfl, true);
                 }
