@@ -302,6 +302,9 @@ extern void *rs_ml_find_line(buf_T *buf, linenr_T lnum, int action);
 extern void rs_ml_flush_line(buf_T *buf, int noalloc);
 // Pass 7 Phase 2: ml_append_int Rust function declaration
 extern int rs_ml_append_int(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags);
+// Pass 8 Phase 1: findswapname Rust function declaration
+extern char *rs_findswapname(buf_T *buf, char **dirp, const char *old_fname,
+                              bool *found_existing_dir);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1136,9 +1139,6 @@ char *make_percent_swname(char *dir, char *dir_end, const char *name)
   return rs_make_percent_swname(dir, dir_end, name);
 }
 
-// PID of swapfile owner, or zero if not running.
-static int proc_running;
-
 /// For Vimscript "swapinfo()".
 ///
 /// @return  information found in swapfile "fname" in dictionary "d".
@@ -1147,18 +1147,8 @@ void swapfile_dict(const char *fname, dict_T *d)
   rs_swapfile_dict(fname, d);
 }
 
-/// Loads info from swapfile `fname`, and displays it to the user.
-///
-/// @return  timestamp (0 when unknown).
-static time_t swapfile_info(char *fname, StringBuilder *msg)
-{
-  int running = 0;
-  int64_t mtime = rs_swapfile_info(fname, msg, &running);
-  proc_running = running;
-  return (time_t)mtime;
-}
-
 // recov_file_names migrated to Rust (recovery.rs)
+// proc_running static, swapfile_info wrapper migrated to Rust (swap.rs Phase 8)
 
 /// sync all memlines
 ///
@@ -1423,12 +1413,13 @@ void nvim_siemsg_ml_get_cannot_find_line(int64_t lnum, buf_T *buf)
          lnum, buf->b_fnum, NameBuff);
 }
 
-// Print swapfile info (wraps swapfile_info which uses StringBuilder internally)
+// Print swapfile info (calls rs_swapfile_info directly; proc_running discarded for display)
 void nvim_swapfile_info_and_print(char *fname)
 {
   StringBuilder msg = KV_INITIAL_VALUE;
   kv_resize(msg, IOSIZE);
-  swapfile_info(fname, &msg);
+  int proc_running_unused = 0;
+  rs_swapfile_info(fname, &msg, &proc_running_unused);
   bool need_clear = false;
   msg_multiline(cbuf_as_string(msg.items, msg.size), 0, false, false, &need_clear);
   kv_destroy(msg);
@@ -1935,6 +1926,163 @@ int64_t nvim_get_file_mtime(const char *fname)
   return 0;
 }
 
+// Pass 8 Phase 1: findswapname cluster accessors for Rust FFI
+
+/// Get the swap_exists_action global
+int nvim_get_swap_exists_action(void) { return swap_exists_action; }
+
+/// Set the swap_exists_action global
+void nvim_set_swap_exists_action(int val) { swap_exists_action = val; }
+
+/// Get the recoverymode global
+int nvim_get_recoverymode(void) { return recoverymode ? 1 : 0; }
+
+/// Get the p_shm option string
+const char *nvim_get_p_shm(void) { return p_shm; }
+
+/// Increment no_wait_return
+void nvim_inc_no_wait_return(void) { no_wait_return++; }
+
+/// Decrement no_wait_return
+void nvim_dec_no_wait_return(void) { no_wait_return--; }
+
+// nvim_get_no_wait_return is already in option_shim.c
+
+/// Set buf->b_p_ro = true
+void nvim_buf_set_b_p_ro_true(buf_T *buf) { buf->b_p_ro = true; }
+
+/// Check if a path link exists (os_fileinfo_link wrapper)
+int nvim_os_fileinfo_link(const char *fname)
+{
+  FileInfo fi;
+  return os_fileinfo_link(fname, &fi) ? 1 : 0;
+}
+
+/// Read block 0 from a swap file fd. Returns sizeof(ZeroBlock) on success, -1 on failure.
+int nvim_read_block0(int fd, ZeroBlock *b0p)
+{
+  ssize_t n = read_eintr(fd, b0p, sizeof(*b0p));
+  return (n == (ssize_t)sizeof(*b0p)) ? 1 : 0;
+}
+
+// nvim_path_fnamecmp is already in buffer.c
+
+/// Check if two paths are in the same directory (same_directory wrapper)
+int nvim_same_directory(const char *a, const char *b) { return same_directory(a, b); }
+
+/// Expand environment variables in src to dst, maxlen version (expand_env wrapper)
+void nvim_expand_env_maxpathl(const char *src, char *dst, int len) { expand_env((char *)src, dst, len); }
+
+/// Check if path is a directory (os_isdir wrapper)
+int nvim_os_isdir(const char *name) { return os_isdir(name) ? 1 : 0; }
+
+/// Create directory recursively (os_mkdir_recurse wrapper)
+int nvim_os_mkdir_recurse(const char *dir, int mode, char **failed_dir)
+{
+  return os_mkdir_recurse(dir, mode, failed_dir, NULL);
+}
+
+// nvim_os_remove is already in undo.c
+
+/// Get path tail pointer from a file path (for findswapname, const-correct version)
+char *nvim_path_tail_const(const char *fname) { return path_tail(fname); }
+
+/// Check whether SwapExists autocmd exists for this file
+int nvim_has_autocmd_swapexists(const char *fname, buf_T *buf)
+{
+  return has_autocmd(EVENT_SWAPEXISTS, fname, buf) ? 1 : 0;
+}
+
+/// Apply SwapExists autocommands for the given buffer + fname
+void nvim_apply_autocmds_swapexists(const char *fname, buf_T *buf)
+{
+  allbuf_lock++;
+  apply_autocmds(EVENT_SWAPEXISTS, (char *)fname, NULL, false, NULL);
+  allbuf_lock--;
+}
+
+/// Get v:swapchoice string value (get_vim_var_str wrapper)
+const char *nvim_get_vim_var_swapchoice(void) { return get_vim_var_str(VV_SWAPCHOICE); }
+
+/// Set v:swapname (set_vim_var_string wrapper)
+void nvim_set_vim_var_swapname(const char *fname) { set_vim_var_string(VV_SWAPNAME, (char *)fname, -1); }
+
+/// Clear v:swapname (set to NULL)
+void nvim_clear_vim_var_swapname(void) { set_vim_var_string(VV_SWAPNAME, NULL, -1); }
+
+/// Clear v:swapchoice (set to NULL)
+void nvim_clear_vim_var_swapchoice(void) { set_vim_var_string(VV_SWAPCHOICE, NULL, -1); }
+
+/// Show a multiline confirm dialog and return user choice (do_dialog wrapper).
+/// Returns the button index (1-based) or 0 if no choice.
+int nvim_do_dialog_warning(const char *title, const char *message,
+                           const char *buttons, int dflt_button, bool mouse_used)
+{
+  return do_dialog(VIM_WARNING, (char *)title, (char *)message,
+                   (char *)buttons, dflt_button, NULL, mouse_used);
+}
+
+/// Flush type-ahead buffers (flush_buffers wrapper)
+void nvim_flush_buffers_typeahead(void) { flush_buffers(FLUSH_TYPEAHEAD); }
+
+/// Reset scroll position for messages (msg_reset_scroll wrapper)
+void nvim_msg_reset_scroll(void) { msg_reset_scroll(); }
+
+/// Output a multiline message string with highlight (msg_multiline wrapper)
+void nvim_msg_multiline(const char *s, int hl_id)
+{
+  bool need_clear = false;
+  msg_multiline(cbuf_as_string((char *)s, strlen(s)), hl_id, false, false, &need_clear);
+}
+
+/// Print a "verbose" message (verb_msg wrapper)
+void nvim_verb_msg(const char *s) { verb_msg((char *)s); }
+
+/// Get SHM_ATTENTION character constant
+int nvim_get_shm_attention(void) { return SHM_ATTENTION; }
+
+/// Open file for reading, return fd (os_open wrapper)
+int nvim_os_open_rdonly(const char *fname) { return os_open(fname, O_RDONLY, 0); }
+
+/// Close an fd (close wrapper)
+void nvim_close_fd(int fd) { close(fd); }
+
+/// Allocate and initialize a StringBuilder for attention message building
+void *nvim_alloc_stringbuilder_iosize(void)
+{
+  StringBuilder *sb = xmalloc(sizeof(StringBuilder));
+  *sb = (StringBuilder)KV_INITIAL_VALUE;
+  kv_resize(*sb, IOSIZE);
+  return sb;
+}
+
+/// Get the items pointer from a StringBuilder (as char*)
+const char *nvim_sb_get_items(void *sb) { return ((StringBuilder *)sb)->items; }
+
+/// Get the size of a StringBuilder
+size_t nvim_sb_get_size(void *sb) { return ((StringBuilder *)sb)->size; }
+
+/// Destroy and free a StringBuilder
+void nvim_free_stringbuilder(void *sb)
+{
+  kv_destroy(*(StringBuilder *)sb);
+  xfree(sb);
+}
+
+/// Append a literal string to a StringBuilder (no format)
+void nvim_sb_append(void *sb, const char *s)
+{
+  kv_printf(*(StringBuilder *)sb, "%s", s);
+}
+
+// nvim_emsg(const char *s) is already in normal_shim.c
+
+/// msg_puts("\n") wrapper
+void nvim_msg_puts_newline(void) { msg_puts("\n"); }
+
+/// os_strerror wrapper (os_strerror is a macro, cannot be referenced directly from Rust)
+const char *nvim_os_strerror(int err) { return os_strerror(err); }
+
 /// Thin wrapper: ml_append_int migrated to Rust (rs_ml_append_int).
 static int ml_append_int(buf_T *buf, linenr_T lnum, char *line_arg, colnr_T len_arg, int flags)
   FUNC_ATTR_NONNULL_ARG(1)
@@ -2192,325 +2340,15 @@ char *get_file_in_dir(char *fname, char *dname)
   return rs_get_file_in_dir(fname, dname);
 }
 
-/// Build the ATTENTION message: info about an existing swapfile.
-///
-/// @param buf  buffer being edited
-/// @param fname  swapfile name
-/// @param fhname  swapfile name, home replaced
-/// @param msg  string buffer, emitted as either a regular or confirm message
-static void attention_message(buf_T *buf, char *fname, char *fhname, StringBuilder *msg)
-{
-  assert(buf->b_fname != NULL);
+// attention_message, do_swapexists, findswapname migrated to Rust (swap.rs Phase 8 Pass 1)
 
-  emsg(_("E325: ATTENTION"));
-  kv_printf(*msg, _("Found a swap file by the name \""));
-  kv_printf(*msg, "%s\"\n", fhname);
-  const time_t swap_mtime = swapfile_info(fname, msg);
-  kv_printf(*msg, (_("While opening file \"")));
-  kv_printf(*msg, "%s\"\n", buf->b_fname);
-  FileInfo file_info;
-  if (!os_fileinfo(buf->b_fname, &file_info)) {
-    kv_printf(*msg, _("      CANNOT BE FOUND"));
-  } else {
-    kv_printf(*msg, _("             dated: "));
-    time_t x = file_info.stat.st_mtim.tv_sec;
-    char ctime_buf[50];
-    kv_printf(*msg, "%s", os_ctime_r(&x, ctime_buf, sizeof(ctime_buf), true));
-    if (swap_mtime != 0 && x > swap_mtime) {
-      kv_printf(*msg, _("      NEWER than swap file!\n"));
-    }
-  }
-  // Some of these messages are long to allow translation to
-  // other languages.
-  kv_printf(*msg, _("\n(1) Another program may be editing the same file.  If this is"
-                    " the case,\n    be careful not to end up with two different"
-                    " instances of the same\n    file when making changes."
-                    "  Quit, or continue with caution.\n"));
-  kv_printf(*msg, _("(2) An edit session for this file crashed.\n"));
-  kv_printf(*msg, _("    If this is the case, use \":recover\" or \"nvim -r "));
-  kv_printf(*msg, "%s", buf->b_fname);
-  kv_printf(*msg, (_("\"\n    to recover the changes (see \":help recovery\").\n")));
-  kv_printf(*msg, _("    If you did this already, delete the swap file \""));
-  kv_printf(*msg, "%s", fname);
-  kv_printf(*msg, _("\"\n    to avoid this message.\n"));
-}
-
-/// Trigger the SwapExists autocommands.
-///
-/// @return  a value for equivalent to do_dialog().
-static sea_choice_T do_swapexists(buf_T *buf, char *fname)
-{
-  set_vim_var_string(VV_SWAPNAME, fname, -1);
-  set_vim_var_string(VV_SWAPCHOICE, NULL, -1);
-
-  // Trigger SwapExists autocommands with <afile> set to the file being
-  // edited.  Disallow changing directory here.
-  allbuf_lock++;
-  apply_autocmds(EVENT_SWAPEXISTS, buf->b_fname, NULL, false, NULL);
-  allbuf_lock--;
-
-  set_vim_var_string(VV_SWAPNAME, NULL, -1);
-
-  switch (*get_vim_var_str(VV_SWAPCHOICE)) {
-  case 'o':
-    return SEA_CHOICE_READONLY;
-  case 'e':
-    return SEA_CHOICE_EDIT;
-  case 'r':
-    return SEA_CHOICE_RECOVER;
-  case 'd':
-    return SEA_CHOICE_DELETE;
-  case 'q':
-    return SEA_CHOICE_QUIT;
-  case 'a':
-    return SEA_CHOICE_ABORT;
-  }
-
-  return SEA_CHOICE_NONE;
-}
-
-/// Find out what name to use for the swapfile for buffer 'buf'.
-///
-/// Several names are tried to find one that does not exist. Last directory in
-/// option is automatically created.
-///
-/// @note If BASENAMELEN is not correct, you will get error messages for
-///   not being able to open the swap or undo file.
-/// @note May trigger SwapExists autocmd, pointers may change!
-///
-/// @param[in]  buf  Buffer for which swapfile names needs to be found.
-/// @param[in,out]  dirp  Pointer to a list of directories. When out of memory,
-///                       is set to NULL. Is advanced to the next directory in
-///                       the list otherwise.
-/// @param[in]  old_fname  Allowed existing swapfile name. Except for this
-///                        case, name of the non-existing file is used.
-/// @param[in,out]  found_existing_dir  If points to true, then new directory
-///                                     for swapfile is not created. At first
-///                                     findswapname() call this argument must
-///                                     point to false. This parameter may only
-///                                     be set to true by this function, it is
-///                                     never set to false.
-///
-/// @return [allocated] Name of the swapfile.
+/// Find out what name to use for the swapfile for buffer 'buf'. (thin wrapper calling Rust)
 static char *findswapname(buf_T *buf, char **dirp, char *old_fname, bool *found_existing_dir)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1, 2, 4)
 {
-  char *buf_fname = buf->b_fname;
-
-  // Isolate a directory name from *dirp and put it in dir_name.
-  // First allocate some memory to put the directory name in.
-  const size_t dir_len = strlen(*dirp) + 1;
-  char *dir_name = xmalloc(dir_len);
-  copy_option_part(dirp, dir_name, dir_len, ",");
-
-  // We try different swapfile names until we find one that does not exist yet.
-  char *fname = makeswapname(buf_fname, buf->b_ffname, buf, dir_name);
-
-  while (true) {
-    size_t n;
-    if (fname == NULL) {        // must be out of memory
-      break;
-    }
-    if ((n = strlen(fname)) == 0) {        // safety check
-      XFREE_CLEAR(fname);
-      break;
-    }
-    // check if the swapfile already exists
-    // Extra security check: When a swapfile is a symbolic link, this
-    // is most likely a symlink attack.
-    FileInfo file_info;
-    bool file_or_link_found = os_fileinfo_link(fname, &file_info);
-    if (!file_or_link_found) {
-      break;
-    }
-
-    // A file name equal to old_fname is OK to use.
-    if (old_fname != NULL && path_fnamecmp(fname, old_fname) == 0) {
-      break;
-    }
-
-    // get here when file already exists
-    if (fname[n - 2] == 'w' && fname[n - 1] == 'p') {   // first try
-      // If we get here the ".swp" file really exists.
-      // Give an error message, unless recovering, no file name, we are
-      // viewing a help file or when the path of the file is different
-      // (happens when all .swp files are in one directory).
-      if (!recoverymode && buf_fname != NULL && !buf->b_help && !(buf->b_flags & BF_DUMMY)) {
-        int fd;
-        ZeroBlock b0;
-        bool differ = false;
-
-        // Try to read block 0 from the swapfile to get the original file name (and inode number).
-        fd = os_open(fname, O_RDONLY, 0);
-        if (fd >= 0) {
-          if (read_eintr(fd, &b0, sizeof(b0)) == sizeof(b0)) {
-            proc_running = rs_swapfile_proc_running(&b0, fname);
-
-            // If the swapfile has the same directory as the
-            // buffer don't compare the directory names, they can
-            // have a different mountpoint.
-            if (b0.b0_flags & B0_SAME_DIR) {
-              if (path_fnamecmp(path_tail(buf->b_ffname),
-                                path_tail(b0.b0_fname)) != 0
-                  || !same_directory(fname, buf->b_ffname)) {
-                // Symlinks may point to the same file even
-                // when the name differs, need to check the
-                // inode too.
-                expand_env(b0.b0_fname, NameBuff, MAXPATHL);
-                if (rs_fnamecmp_ino(buf->b_ffname, NameBuff,
-                                    rs_char_to_long(b0.b0_ino))) {
-                  differ = true;
-                }
-              }
-            } else {
-              // The name in the swapfile may be "~user/path/file".  Expand it first.
-              expand_env(b0.b0_fname, NameBuff, MAXPATHL);
-              if (rs_fnamecmp_ino(buf->b_ffname, NameBuff,
-                                  rs_char_to_long(b0.b0_ino))) {
-                differ = true;
-              }
-            }
-          }
-          close(fd);
-        }
-
-        // Show the ATTENTION message when:
-        //  - there is an old swapfile for the current file
-        //  - the buffer was not recovered
-        if (!differ && !(curbuf->b_flags & BF_RECOVERED)
-            && vim_strchr(p_shm, SHM_ATTENTION) == NULL) {
-          sea_choice_T choice = SEA_CHOICE_NONE;
-
-          // It's safe to delete the swapfile if all these are true:
-          // - the edited file exists
-          // - the swapfile has no changes and looks OK
-          if (os_path_exists(buf->b_fname) && rs_swapfile_unchanged(fname)) {
-            choice = SEA_CHOICE_DELETE;
-            if (p_verbose > 0) {
-              verb_msg(_("Found a swap file that is not useful, deleting it"));
-            }
-          }
-
-          // If there is a SwapExists autocommand and we can handle the
-          // response, trigger it.  It may return 0 to ask the user anyway.
-          if (choice == SEA_CHOICE_NONE
-              && swap_exists_action != SEA_NONE
-              && has_autocmd(EVENT_SWAPEXISTS, buf_fname, buf)) {
-            choice = do_swapexists(buf, fname);
-          }
-
-          if (choice == SEA_CHOICE_NONE && swap_exists_action == SEA_READONLY) {
-            // always open readonly.
-            choice = SEA_CHOICE_READONLY;
-          }
-
-          proc_running = 0;  // Set by attention_message..swapfile_info.
-          if (choice == SEA_CHOICE_NONE) {
-            no_wait_return++;
-            // Show info about the existing swapfile.
-            StringBuilder msg = KV_INITIAL_VALUE;
-            kv_resize(msg, IOSIZE);
-            char *fhname = home_replace_save(NULL, fname);
-            attention_message(buf, fname, fhname, &msg);
-
-            // We don't want a 'q' typed at the more-prompt
-            // interrupt loading a file.
-            got_int = false;
-
-            // If vimrc has "simalt ~x" we don't want it to
-            // interfere with the prompt here.
-            flush_buffers(FLUSH_TYPEAHEAD);
-
-            if (swap_exists_action != SEA_NONE) {
-              kv_printf(msg, _("Swap file \""));
-              kv_printf(msg, "%s", fhname);
-              kv_printf(msg, _("\" already exists!"));
-              char *run_but = _("&Open Read-Only\n&Edit anyway\n&Recover\n&Quit\n&Abort");
-              char *but = _("&Open Read-Only\n&Edit anyway\n&Recover\n&Delete it\n&Quit\n&Abort");
-              choice = (sea_choice_T)do_dialog(VIM_WARNING, _("VIM - ATTENTION"), msg.items,
-                                               proc_running ? run_but : but, 1, NULL, false);
-
-              // compensate for missing "Delete it" button
-              choice += proc_running && choice >= 4;
-              // pretend screen didn't scroll, need redraw anyway
-              msg_reset_scroll();
-            } else {
-              bool need_clear = false;
-              msg_multiline(cbuf_as_string(msg.items, msg.size), 0, false, false, &need_clear);
-            }
-            no_wait_return--;
-            kv_destroy(msg);
-            xfree(fhname);
-          }
-
-          switch (choice) {
-          case SEA_CHOICE_READONLY:  // "Open Read-Only"
-            buf->b_p_ro = true;
-            break;
-          case SEA_CHOICE_EDIT:  // "Edit anyway"
-            break;
-          case SEA_CHOICE_RECOVER:  // "Recover"
-            swap_exists_action = SEA_RECOVER;
-            break;
-          case SEA_CHOICE_DELETE:  // "Delete it"
-            os_remove(fname);
-            break;
-          case SEA_CHOICE_QUIT:  // "Quit"
-            swap_exists_action = SEA_QUIT;
-            break;
-          case SEA_CHOICE_ABORT:  // "Abort"
-            swap_exists_action = SEA_QUIT;
-            got_int = true;
-            break;
-          case SEA_CHOICE_NONE:
-            msg_puts("\n");
-            if (msg_silent == 0) {
-              // call wait_return() later
-              need_wait_return = true;
-            }
-            break;
-          }
-
-          // If the swapfile was deleted this `fname` can be used.
-          if (choice != SEA_CHOICE_NONE && !os_path_exists(fname)) {
-            break;
-          }
-        }
-      }
-    }
-
-    // Permute the ".swp" extension to find a unique swapfile name.
-    // First decrement the last char: ".swo", ".swn", etc.
-    // If that still isn't enough decrement the last but one char: ".svz"
-    // Can happen when many Nvim instances are editing the same file (including "No Name" buffers).
-    if (fname[n - 1] == 'a') {          // ".s?a"
-      if (fname[n - 2] == 'a') {        // ".saa": tried enough, give up
-        emsg(_("E326: Too many swap files found"));
-        XFREE_CLEAR(fname);
-        break;
-      }
-      fname[n - 2]--;                   // ".svz", ".suz", etc.
-      fname[n - 1] = 'z' + 1;
-    }
-    fname[n - 1]--;                     // ".swo", ".swn", etc.
-  }
-
-  if (os_isdir(dir_name)) {
-    *found_existing_dir = true;
-  } else if (!*found_existing_dir && **dirp == NUL) {
-    int ret;
-    char *failed_dir;
-    if ((ret = os_mkdir_recurse(dir_name, 0755, &failed_dir, NULL)) != 0) {
-      semsg(_("E303: Unable to create directory \"%s\" for swap file, "
-              "recovery impossible: %s"),
-            failed_dir, os_strerror(ret));
-      xfree(failed_dir);
-    }
-  }
-
-  xfree(dir_name);
-  return fname;
+  return rs_findswapname(buf, dirp, old_fname, found_existing_dir);
 }
+
 
 /// Set the flags in the first block of the swapfile. (thin wrapper calling Rust)
 void ml_setflags(buf_T *buf) { rs_ml_setflags(buf); }

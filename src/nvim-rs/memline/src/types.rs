@@ -181,8 +181,40 @@ pub const UB_SAME_DIR: c_int = 1;
 // Memfile Sync Flags
 // =============================================================================
 
+/// Sync flag: also sync blocks with negative numbers
+pub const MFS_ALL: c_int = 1;
+
+/// Sync flag: stop syncing when a character is available
+pub const MFS_STOP: c_int = 2;
+
+/// Sync flag: flush file to disk (fsync)
+pub const MFS_FLUSH: c_int = 4;
+
 /// Sync flag: only write block 0
 pub const MFS_ZERO: c_int = 8;
+
+// =============================================================================
+// Swap Existence Action (swap_exists_action global values)
+// =============================================================================
+
+/// Don't use dialog (SEA_NONE)
+pub const SEA_NONE: c_int = 0;
+
+/// Quit editing the file (SEA_QUIT)
+pub const SEA_QUIT: c_int = 2;
+
+/// Recover the file (SEA_RECOVER)
+pub const SEA_RECOVER: c_int = 3;
+
+/// No dialog, mark buffer as read-only (SEA_READONLY)
+pub const SEA_READONLY: c_int = 4;
+
+// =============================================================================
+// Buffer flags (b_flags field, additional values)
+// =============================================================================
+
+/// Dummy buffer used for autocommands (BF_DUMMY)
+pub const BF_DUMMY: c_int = 0x08;
 
 // =============================================================================
 // Swap Existence Action Choices
