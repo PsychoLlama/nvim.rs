@@ -362,15 +362,18 @@ static const void *var_shada_iter(const void *const iter, const char **const nam
   return NULL;
 }
 
-/// Find buffer for given buffer name (cached)
+// find_buffer promoted to nvim_shada_find_buffer (plan b499a5d0 Phase 3): used by Rust.
+
+/// Find buffer for given buffer name (cached).
 ///
-/// @param[in,out]  fname_bufs  Cache containing fname to buffer mapping.
-/// @param[in]      fname       File name to find.
+/// @param[in,out]  fname_bufs_handle  Opaque PMap(cstr_t) handle.
+/// @param[in]      fname              File name to find.
 ///
 /// @return Pointer to the buffer or NULL.
-static buf_T *find_buffer(PMap(cstr_t) *const fname_bufs, const char *const fname)
+buf_T *nvim_shada_find_buffer(void *const fname_bufs_handle, const char *const fname)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+  PMap(cstr_t) *const fname_bufs = (PMap(cstr_t) *)fname_bufs_handle;
   cstr_t *key_alloc = NULL;
   bool new_item = false;
   buf_T **ref = (buf_T **)pmap_put_ref(cstr_t)(fname_bufs, fname, &key_alloc, &new_item);
@@ -390,6 +393,12 @@ static buf_T *find_buffer(PMap(cstr_t) *const fname_bufs, const char *const fnam
   }
   *ref = NULL;
   return NULL;
+}
+
+// Thin alias so internal C callers still compile.
+static inline buf_T *find_buffer(PMap(cstr_t) *fname_bufs, const char *fname)
+{
+  return nvim_shada_find_buffer((void *)fname_bufs, fname);
 }
 
 // KEY_NAME_, KEY_NAME deleted (Phase 6 plan 13c452f9): Rust rs_parse_register no longer uses them.
@@ -2114,27 +2123,38 @@ int nvim_shada_apply_mark_or_jump(ShadaEntry *entry, void *fname_bufs_handle, bo
   return 0;
 }
 
-/// Apply a buffer list entry.
-/// @param entry   The ShaDa entry (kSDItemBufferList).
-void nvim_shada_apply_buffer_list(ShadaEntry *entry)
+// nvim_shada_apply_buffer_list deleted (plan b499a5d0 Phase 3): Rust rs_shada_apply_buffer_list.
+
+// Phase 3 (plan b499a5d0): thin C accessors for buffer list apply migration
+
+/// Wrap path_try_shorten_fname. Returns shortened fname (may be original pointer).
+char *nvim_shada_path_try_shorten_fname(const char *fname)
 {
-  for (size_t i = 0; i < entry->data.buffer_list.size; i++) {
-    char *const sfname =
-      path_try_shorten_fname(entry->data.buffer_list.buffers[i].fname);
-    buf_T *const buf =
-      buflist_new(entry->data.buffer_list.buffers[i].fname, sfname, 0, BLN_LISTED);
-    if (buf != NULL) {
-      fmarkv_T view = INIT_FMARKV;
-      RESET_FMARK(&buf->b_last_cursor,
-                  entry->data.buffer_list.buffers[i].pos, 0, view);
-      buflist_setfpos(buf, curwin, buf->b_last_cursor.mark.lnum,
-                      buf->b_last_cursor.mark.col, false);
-      xfree(buf->additional_data);
-      buf->additional_data = entry->data.buffer_list.buffers[i].additional_data;
-      entry->data.buffer_list.buffers[i].additional_data = NULL;
-    }
-  }
-  rs_shada_free_entry_contents(entry);
+  return path_try_shorten_fname((char *)fname);
+}
+
+/// Wrap buflist_new(fname, sfname, 0, BLN_LISTED). Returns buf_T* or NULL.
+void *nvim_shada_buflist_new(const char *fname, const char *sfname)
+{
+  return buflist_new((char *)fname, (char *)sfname, 0, BLN_LISTED);
+}
+
+/// Set buffer cursor position and additional data from a buffer list entry.
+/// Combines RESET_FMARK, buflist_setfpos, and additional_data ownership transfer.
+/// @param buf_handle  buf_T* (non-NULL).
+/// @param entry       ShadaEntry* containing buffer_list.
+/// @param i           Index into entry->data.buffer_list.buffers.
+void nvim_shada_buf_set_cursor_and_data(void *buf_handle, ShadaEntry *entry, size_t i)
+{
+  buf_T *const buf = (buf_T *)buf_handle;
+  fmarkv_T view = INIT_FMARKV;
+  RESET_FMARK(&buf->b_last_cursor,
+              entry->data.buffer_list.buffers[i].pos, 0, view);
+  buflist_setfpos(buf, curwin, buf->b_last_cursor.mark.lnum,
+                  buf->b_last_cursor.mark.col, false);
+  xfree(buf->additional_data);
+  buf->additional_data = entry->data.buffer_list.buffers[i].additional_data;
+  entry->data.buffer_list.buffers[i].additional_data = NULL;
 }
 
 /// Apply a local mark or change entry.

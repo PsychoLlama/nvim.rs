@@ -571,7 +571,7 @@ extern "C" {
         fname_bufs: *mut c_void,
         force: bool,
     ) -> c_int;
-    fn nvim_shada_apply_buffer_list(entry: *mut ShadaEntry);
+    // nvim_shada_apply_buffer_list removed (plan b499a5d0 Phase 3): Rust rs_shada_apply_buffer_list.
     fn nvim_shada_apply_local_or_change(
         entry: *mut ShadaEntry,
         fname_bufs: *mut c_void,
@@ -595,6 +595,12 @@ extern "C" {
     fn nvim_shada_op_reg_get_timestamp(name: c_char) -> u64;
     fn nvim_shada_op_reg_set_from_entry(entry: *mut ShadaEntry) -> c_int;
     fn nvim_shada_var_set_global_from_entry(entry: *mut ShadaEntry);
+    // Phase 3 (plan b499a5d0): thin accessors for buffer list apply
+    // nvim_shada_apply_buffer_list removed (plan b499a5d0 Phase 3): Rust rs_shada_apply_buffer_list.
+    fn nvim_shada_find_buffer(fname_bufs: *mut c_void, fname: *const c_char) -> *mut c_void;
+    fn nvim_shada_path_try_shorten_fname(fname: *const c_char) -> *mut c_char;
+    fn nvim_shada_buflist_new(fname: *const c_char, sfname: *const c_char) -> *mut c_void;
+    fn nvim_shada_buf_set_cursor_and_data(buf: *mut c_void, entry: *mut ShadaEntry, i: usize);
     fn nvim_shada_for_all_tab_windows_update_changelist(cl_bufs_handle: *mut c_void);
     fn nvim_shada_clr_history(i: c_int);
     fn nvim_shada_hist_get_array(
@@ -5352,6 +5358,34 @@ unsafe fn rs_shada_apply_variable(entry: *mut ShadaEntry) {
     rs_shada_free_entry_contents(entry);
 }
 
+// =============================================================================
+// Phase 3 (plan b499a5d0): Rust apply function for buffer list
+// =============================================================================
+
+/// Apply a buffer list ShaDa entry (Rust replacement for C nvim_shada_apply_buffer_list).
+///
+/// Iterates buffer list entries, calls buflist_new, sets cursor positions and
+/// transfers additional data ownership.
+///
+/// # Safety
+///
+/// `entry` must be a valid pointer to a ShadaEntry of type BufferList.
+unsafe fn rs_shada_apply_buffer_list(entry: *mut ShadaEntry) {
+    let size = nvim_shada_bl_get_size(entry);
+    for i in 0..size {
+        let fname = nvim_shada_bl_buf_get_fname(entry, i);
+        if fname.is_null() {
+            continue;
+        }
+        let sfname = nvim_shada_path_try_shorten_fname(fname);
+        let buf = nvim_shada_buflist_new(fname, sfname);
+        if !buf.is_null() {
+            nvim_shada_buf_set_cursor_and_data(buf, entry, i);
+        }
+    }
+    rs_shada_free_entry_contents(entry);
+}
+
 /// Dispatch a single ShaDa entry to Neovim's in-memory state.
 ///
 /// This is the Rust replacement for the C `nvim_shada_apply_entry` function.
@@ -5395,7 +5429,7 @@ unsafe fn rs_shada_apply_entry(
             nvim_shada_apply_mark_or_jump(entry, fname_bufs, force);
         }
         ShadaEntryType::BufferList => {
-            nvim_shada_apply_buffer_list(entry);
+            rs_shada_apply_buffer_list(entry);
         }
         ShadaEntryType::LocalMark | ShadaEntryType::Change => {
             nvim_shada_apply_local_or_change(
