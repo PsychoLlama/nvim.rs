@@ -1237,6 +1237,21 @@ void nvim_excmds_emsg_interr_msg(void)
   msg(_(e_interr), 0);
 }
 
+/// Emit e_zerocount error.
+void nvim_excmds_emsg_zerocount(void) { emsg(_(e_zerocount)); }
+
+/// Emit msg("", 0) (empty message).
+void nvim_excmds_msg_empty(void) { msg("", 0); }
+
+/// Emit semsg(_(e_patnotf2), pat).
+void nvim_excmds_semsg_patnotf2(const char *pat) { semsg(_(e_patnotf2), pat); }
+
+/// Emit semsg(_(e_trailing_arg), cmd).
+void nvim_excmds_semsg_trailing(const char *cmd) { semsg(_(e_trailing_arg), cmd); }
+
+/// Emit semsg(_(e_val_too_large), buf).
+void nvim_excmds_semsg_val_too_large(const char *buf) { semsg(_(e_val_too_large), buf); }
+
 /// Get curwin->w_cursor.lnum for nested global handling.
 int nvim_excmds_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
 
@@ -2404,32 +2419,6 @@ void nvim_do_sub_set_op_end(int lnum)
 /// Wrap MODIFIABLE macro: returns 1 if buffer is modifiable.
 int nvim_do_sub_modifiable(void) { return MODIFIABLE(curbuf) ? 1 : 0; }
 
-/// Emit emsg(_(e_nopresub)).
-void nvim_do_sub_emsg_nopresub(void) { emsg(_(e_nopresub)); }
-
-/// Emit emsg(_(e_invcmd)).
-void nvim_do_sub_emsg_invcmd(void) { emsg(_(e_invcmd)); }
-
-/// Emit emsg(_(e_modifiable)).
-void nvim_do_sub_emsg_modifiable(void) { emsg(_(e_modifiable)); }
-
-/// Emit emsg(_(e_zerocount)).
-void nvim_do_sub_emsg_zerocount(void) { emsg(_(e_zerocount)); }
-
-/// Emit emsg(_(e_backslash)).
-void nvim_do_sub_emsg_backslash(void) { emsg(_(e_backslash)); }
-
-/// Emit semsg(_(e_patnotf2), pat).
-void nvim_do_sub_semsg_patnotf2(const char *pat)
-{
-  semsg(_(e_patnotf2), pat);
-}
-
-/// Emit semsg(_(e_trailing_arg), cmd).
-void nvim_do_sub_semsg_trailing(const char *cmd)
-{
-  semsg(_(e_trailing_arg), cmd);
-}
 
 /// Format the confirm prompt string into IObuff and return xstrdup of it.
 char *nvim_do_sub_format_confirm_prompt(const char *sub)
@@ -2445,12 +2434,6 @@ char *nvim_do_sub_format_val_too_large_str(int val)
   char buf[20];
   vim_snprintf(buf, sizeof(buf), "%d", val);
   return xstrdup(buf);
-}
-
-/// Emit semsg(_(e_val_too_large), buf).
-void nvim_do_sub_semsg_val_too_large(const char *buf)
-{
-  semsg(_(e_val_too_large), buf);
 }
 
 /// Call extmark_splice on curbuf for do_sub.
@@ -2531,12 +2514,6 @@ void nvim_do_sub_set_eap_nextcmd(exarg_T *eap, char *p) { eap->nextcmd = p; }
 // nvim_do_sub_get_sub_nlines, nvim_do_sub_set_sub_nlines, nvim_do_sub_sub_nlines_inc,
 // nvim_do_sub_get_global_busy, nvim_do_sub_set_global_need_beginline deleted --
 // use canonical nvim_excmds_* equivalents instead.
-
-/// Wrap msg("", 0).
-void nvim_do_sub_msg_empty(void) { msg("", 0); }
-
-/// Wrap emsg(_(e_interr)).
-void nvim_do_sub_emsg_interr(void) { emsg(_(e_interr)); }
 
 /// Save substitute pattern and history via save_re_pat + add_to_history.
 void nvim_do_sub_save_pat(const char *pat, size_t patlen, int which_pat)

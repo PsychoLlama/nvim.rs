@@ -1213,16 +1213,16 @@ extern "C" {
     fn nvim_do_sub_set_op_start(lnum: c_int);
     fn nvim_do_sub_set_op_end(lnum: c_int);
     fn nvim_do_sub_modifiable() -> c_int;
-    fn nvim_do_sub_emsg_nopresub();
-    fn nvim_do_sub_emsg_invcmd();
-    fn nvim_do_sub_emsg_modifiable();
-    fn nvim_do_sub_emsg_zerocount();
-    fn nvim_do_sub_emsg_backslash();
-    fn nvim_do_sub_semsg_patnotf2(pat: *const c_char);
-    fn nvim_do_sub_semsg_trailing(cmd: *const c_char);
+    fn nvim_emsg_nopresub();
+    fn nvim_excmds_emsg_invcmd();
+    fn nvim_emsg_modifiable();
+    fn nvim_excmds_emsg_zerocount();
+    fn nvim_excmds_emsg_backslash();
+    fn nvim_excmds_semsg_patnotf2(pat: *const c_char);
+    fn nvim_excmds_semsg_trailing(cmd: *const c_char);
     fn nvim_do_sub_format_confirm_prompt(sub_str: *const c_char) -> *mut c_char;
     fn nvim_do_sub_format_val_too_large_str(val: c_int) -> *mut c_char;
-    fn nvim_do_sub_semsg_val_too_large(buf: *const c_char);
+    fn nvim_excmds_semsg_val_too_large(buf: *const c_char);
     fn nvim_do_sub_extmark_splice(
         start_row: c_int,
         start_col: c_int,
@@ -1249,8 +1249,7 @@ extern "C" {
     fn nvim_do_sub_is_backslash_delim(cmd: *const c_char) -> c_int;
     fn nvim_do_sub_ascii_isdigit(c: c_int) -> c_int;
     fn nvim_do_sub_set_eap_nextcmd(eap: *mut ExArgHandle, p: *mut c_char);
-    fn nvim_do_sub_msg_empty();
-    fn nvim_do_sub_emsg_interr();
+    fn nvim_excmds_msg_empty();
     fn nvim_do_sub_save_pat(pat: *const c_char, patlen: usize, which_pat: c_int);
     fn nvim_do_sub_set_replacement(sub_str: *const c_char);
     fn nvim_do_sub_get_old_sub() -> *const c_char;
@@ -1514,7 +1513,7 @@ pub unsafe extern "C" fn rs_do_sub(
         // Use previous pattern and substitution
         let old_sub = nvim_do_sub_get_old_sub();
         if old_sub.is_null() {
-            nvim_do_sub_emsg_nopresub();
+            nvim_emsg_nopresub();
             return 0;
         }
         pat = std::ptr::null();
@@ -1585,12 +1584,12 @@ pub unsafe extern "C" fn rs_do_sub(
     if nvim_do_sub_ascii_isdigit(*cmd as c_int) != 0 {
         let i = nvim_do_sub_getdigits_int(&mut cmd);
         if i <= 0 && nvim_exarg_get_skip(eap) == 0 && subflags_local.do_error {
-            nvim_do_sub_emsg_zerocount();
+            nvim_excmds_emsg_zerocount();
             xfree(sub as *mut std::ffi::c_void);
             return 0;
         } else if i == c_int::MAX {
             let buf = nvim_do_sub_format_val_too_large_str(i);
-            nvim_do_sub_semsg_val_too_large(buf);
+            nvim_excmds_semsg_val_too_large(buf);
             xfree(buf as *mut std::ffi::c_void);
             xfree(sub as *mut std::ffi::c_void);
             return 0;
@@ -1607,7 +1606,7 @@ pub unsafe extern "C" fn rs_do_sub(
     if *cmd != 0 && *cmd != b'"' as i8 {
         let nextcmd = nvim_do_sub_check_nextcmd(cmd);
         if nextcmd.is_null() {
-            nvim_do_sub_semsg_trailing(cmd);
+            nvim_excmds_semsg_trailing(cmd);
             xfree(sub as *mut std::ffi::c_void);
             return 0;
         }
@@ -1620,7 +1619,7 @@ pub unsafe extern "C" fn rs_do_sub(
     }
 
     if !subflags_local.do_count && nvim_do_sub_modifiable() == 0 {
-        nvim_do_sub_emsg_modifiable();
+        nvim_emsg_modifiable();
         xfree(sub as *mut std::ffi::c_void);
         return 0;
     }
@@ -1634,7 +1633,7 @@ pub unsafe extern "C" fn rs_do_sub(
     );
     if regmatch.is_null() {
         if subflags_local.do_error {
-            nvim_do_sub_emsg_invcmd();
+            nvim_excmds_emsg_invcmd();
         }
         xfree(sub as *mut std::ffi::c_void);
         return 0;
@@ -2116,7 +2115,7 @@ pub unsafe extern "C" fn rs_do_sub(
                 && subflags_local.do_ask
                 && nvim_do_sub_get_p_ch() > 0
             {
-                nvim_do_sub_msg_empty();
+                nvim_excmds_msg_empty();
             }
         } else {
             nvim_excmds_set_global_need_beginline(1);
@@ -2131,14 +2130,14 @@ pub unsafe extern "C" fn rs_do_sub(
         }
     } else if nvim_excmds_global_busy() == 0 {
         if nvim_excmds_got_int() != 0 {
-            nvim_do_sub_emsg_interr();
+            nvim_excmds_emsg_interr();
         } else if got_match {
             if nvim_do_sub_get_p_ch() > 0 {
-                nvim_do_sub_msg_empty();
+                nvim_excmds_msg_empty();
             }
         } else if subflags_local.do_error {
             let pat_str = nvim_do_sub_get_search_pat();
-            nvim_do_sub_semsg_patnotf2(pat_str);
+            nvim_excmds_semsg_patnotf2(pat_str);
         }
     }
 
