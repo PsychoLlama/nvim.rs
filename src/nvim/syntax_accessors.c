@@ -120,6 +120,12 @@ extern int rs_syn_state_item_spans_line(int idx, int lnum);
 extern void rs_syn_clear_current_state(void);
 extern stateitem_T *rs_stateitem_prev_if_trans_cont(stateitem_T *item);
 
+// Phase 9.3: extmatch comparison and cur_state_set_matchcont
+extern int rs_syn_extmatch_equal(reg_extmatch_T *a, reg_extmatch_T *b);
+extern int rs_syn_extmatch_strings_equal(reg_extmatch_T *a, reg_extmatch_T *b,
+                                          int subidx, int pat_idx);
+extern void rs_cur_state_set_matchcont(int i);
+
 static bool did_syntax_onoff = false;
 
 // different types of offsets that are possible
@@ -1109,55 +1115,15 @@ void nvim_syn_update_si_attr(int idx)
 /// Returns 1 if they match, 0 if different, -1 if needs string comparison
 int nvim_syn_extmatch_equal(reg_extmatch_T *a, reg_extmatch_T *b)
 {
-  if (a == b) {
-    return 1;
-  }
-  if (a == NULL || b == NULL) {
-    return 0;
-  }
-  return -1;  // Need string comparison
+  return rs_syn_extmatch_equal(a, b);
 }
 
 /// Compare extmatch strings at given sub-index with ignore-case from pattern
-
 /// Returns 1 if equal, 0 if different
-
 int nvim_syn_extmatch_strings_equal(reg_extmatch_T *a, reg_extmatch_T *b,
-
                                      int subidx, int pat_idx)
-
 {
-
-  if (subidx < 0 || subidx >= NSUBEXP) {
-
-    return 0;
-
-  }
-
-  if (a->matches[subidx] == b->matches[subidx]) {
-
-    return 1;
-
-  }
-
-  if (a->matches[subidx] == NULL || b->matches[subidx] == NULL) {
-
-    return 0;
-
-  }
-
-  int ic = 0;
-
-  if (pat_idx >= 0 && syn_block != NULL && pat_idx < syn_block->b_syn_patterns.ga_len) {
-
-    ic = SYN_ITEMS(syn_block)[pat_idx].sp_ic;
-
-  }
-
-  return mb_strcmp_ic(ic, (const char *)a->matches[subidx],
-
-                      (const char *)b->matches[subidx]) == 0 ? 1 : 0;
-
+  return rs_syn_extmatch_strings_equal(a, b, subidx, pat_idx);
 }
 
 int nvim_syn_get_nsubexp(void) { return NSUBEXP; }
@@ -1169,6 +1135,24 @@ int nvim_synblock_pattern_ic(int pat_idx)
     return 0;
   }
   return SYN_ITEMS(syn_block)[pat_idx].sp_ic;
+}
+
+/// Get matches[subidx] string from a reg_extmatch_T.
+const char *nvim_extmatch_get_string(reg_extmatch_T *em, int subidx)
+{
+  if (em == NULL || subidx < 0 || subidx >= NSUBEXP) {
+    return NULL;
+  }
+  return (const char *)em->matches[subidx];
+}
+
+/// Wrap mb_strcmp_ic for Rust callers.
+int nvim_syn_mb_strcmp_ic(int ic, const char *a, const char *b)
+{
+  if (a == NULL || b == NULL) {
+    return a == b ? 0 : 1;
+  }
+  return mb_strcmp_ic(ic, a, b);
 }
 
 /// Get si_extmatch from a stateitem
@@ -3592,12 +3576,7 @@ int nvim_cur_state_get_m_endpos_lnum(int i)
 /// Set HL_MATCHCONT flag on CUR_STATE(i).si_flags and clear m_endpos.
 void nvim_cur_state_set_matchcont(int i)
 {
-  if (i < 0 || i >= current_state.ga_len) return;
-  CUR_STATE(i).si_flags |= HL_MATCHCONT;
-  CUR_STATE(i).si_m_endpos.lnum = 0;
-  CUR_STATE(i).si_m_endpos.col = 0;
-  CUR_STATE(i).si_h_endpos = CUR_STATE(i).si_m_endpos;
-  CUR_STATE(i).si_ends = true;
+  rs_cur_state_set_matchcont(i);
 }
 
 /// Get CUR_STATE(i).si_flags.

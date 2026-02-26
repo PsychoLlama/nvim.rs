@@ -60,15 +60,8 @@ extern "C" {
     fn nvim_stateitem_get_cchar(item: crate::types::StateItemHandle) -> c_int;
     fn nvim_stateitem_get_extmatch(item: crate::types::StateItemHandle) -> ExtMatchHandle;
 
-    // Extmatch comparison
-    fn nvim_syn_extmatch_equal(a: ExtMatchHandle, b: ExtMatchHandle) -> c_int;
+    // NSUBEXP constant
     fn nvim_syn_get_nsubexp() -> c_int;
-    fn nvim_syn_extmatch_strings_equal(
-        a: ExtMatchHandle,
-        b: ExtMatchHandle,
-        idx: c_int,
-        count: c_int,
-    ) -> c_int;
 
     // Synblock accessors
     fn nvim_synblock_get_sst_first(block: SynBlockHandle) -> SynStateHandle;
@@ -658,14 +651,16 @@ pub unsafe fn syn_stack_equal(sp: SynStateHandle) -> bool {
         // If one is null and the other isn't, check for empty strings
         if bs_extmatch.is_null() || si_extmatch.is_null() {
             // Check if the non-null one has any actual content
-            if nvim_syn_extmatch_strings_equal(bs_extmatch, si_extmatch, 0, nsubexp) == 0 {
+            if crate::state_ops::rs_syn_extmatch_strings_equal(bs_extmatch, si_extmatch, 0, nsubexp)
+                == 0
+            {
                 return false;
             }
             continue;
         }
 
-        // Both non-null: compare using the C comparison function
-        if nvim_syn_extmatch_equal(bs_extmatch, si_extmatch) == 0 {
+        // Both non-null: compare using Rust comparison function
+        if crate::state_ops::rs_syn_extmatch_equal(bs_extmatch, si_extmatch) == 0 {
             return false;
         }
     }

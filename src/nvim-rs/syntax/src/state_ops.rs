@@ -9,10 +9,15 @@
 //! - nvim_syn_state_item_spans_line (check if item spans past given line)
 //! - nvim_syn_clear_current_state   (GA_DEEP_CLEAR with extmatch unref)
 //! - nvim_stateitem_prev_if_trans_cont (walk back through HL_TRANS_CONT items)
+//! - nvim_syn_extmatch_equal        (pointer comparison, tri-state)
+//! - nvim_syn_extmatch_strings_equal (per-subidx string comparison)
+//! - nvim_cur_state_set_matchcont   (set HL_MATCHCONT, clear positions, set si_ends)
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
-use crate::types::{ExtMatchHandle, IdListHandle, StateItemHandle, HL_FOLD, HL_TRANS_CONT};
+use crate::types::{
+    ExtMatchHandle, IdListHandle, StateItemHandle, HL_FOLD, HL_MATCHCONT, HL_TRANS_CONT,
+};
 
 // =============================================================================
 // FFI declarations
@@ -75,6 +80,17 @@ extern "C" {
     fn nvim_syn_set_next_match_end_idx(idx: c_int);
     fn nvim_syn_set_next_match_extmatch_raw(em: ExtMatchHandle);
     fn nvim_syn_get_next_match_extmatch() -> ExtMatchHandle;
+
+    // Phase 3: extmatch string comparison helpers
+    fn nvim_extmatch_get_string(em: ExtMatchHandle, subidx: c_int) -> *const c_char;
+    fn nvim_syn_mb_strcmp_ic(ic: c_int, a: *const c_char, b: *const c_char) -> c_int;
+    fn nvim_synblock_pattern_ic(pat_idx: c_int) -> c_int;
+    fn nvim_syn_get_nsubexp() -> c_int;
+
+    // Phase 3: stateitem setters for cur_state_set_matchcont
+    fn nvim_stateitem_or_flags(item: StateItemHandle, flags: c_int);
+    fn nvim_stateitem_set_m_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
+    fn nvim_stateitem_set_h_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
 }
 
 // =============================================================================
@@ -308,4 +324,90 @@ pub unsafe extern "C" fn rs_stateitem_prev_if_trans_cont(item: StateItemHandle) 
     }
     // Return the item at cur_idx (either HL_TRANS_CONT-free or bottom)
     nvim_syn_get_stateitem(cur_idx)
+}
+
+// =============================================================================
+// Phase 3 Rust implementations
+// =============================================================================
+
+/// Compare two extmatch pointers.
+///
+/// Returns 1 if same pointer (trivially equal), 0 if one is NULL and the other
+/// isn't, or -1 if both are non-null and different (caller must compare strings).
+///
+/// Replaces C `nvim_syn_extmatch_equal`.
+///
+/// # Safety
+/// Handles may be null; null-checks are performed before dereferencing.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_extmatch_equal(a: ExtMatchHandle, b: ExtMatchHandle) -> c_int {
+    if a.0 == b.0 {
+        return 1;
+    }
+    if a.is_null() || b.is_null() {
+        return 0;
+    }
+    -1 // Both non-null and different: need string comparison
+}
+
+/// Compare extmatch strings at a given sub-index using the pattern's ignore-case flag.
+///
+/// Returns 1 if equal, 0 if different.
+///
+/// Replaces C `nvim_syn_extmatch_strings_equal`.
+///
+/// # Safety
+/// a and b must be valid non-null `reg_extmatch_T` pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_extmatch_strings_equal(
+    a: ExtMatchHandle,
+    b: ExtMatchHandle,
+    subidx: c_int,
+    pat_idx: c_int,
+) -> c_int {
+    let nsubexp = nvim_syn_get_nsubexp();
+    if subidx < 0 || subidx >= nsubexp {
+        return 0;
+    }
+
+    let sa = nvim_extmatch_get_string(a, subidx);
+    let sb = nvim_extmatch_get_string(b, subidx);
+
+    // Same pointer (including both NULL) = equal
+    if sa == sb {
+        return 1;
+    }
+    // One is NULL and the other isn't = not equal
+    if sa.is_null() || sb.is_null() {
+        return 0;
+    }
+
+    let ic = nvim_synblock_pattern_ic(pat_idx);
+    if nvim_syn_mb_strcmp_ic(ic, sa, sb) == 0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Set HL_MATCHCONT flag on current_state item i, clear m_endpos/h_endpos, set si_ends.
+///
+/// Replaces C `nvim_cur_state_set_matchcont`.
+///
+/// # Safety
+/// Accesses C global syntax state; must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cur_state_set_matchcont(i: c_int) {
+    let len = nvim_syn_get_current_state_len();
+    if i < 0 || i >= len {
+        return;
+    }
+    let item = nvim_syn_get_stateitem(i);
+    if item.is_null() {
+        return;
+    }
+    nvim_stateitem_or_flags(item, HL_MATCHCONT);
+    nvim_stateitem_set_m_endpos(item, 0, 0);
+    nvim_stateitem_set_h_endpos(item, 0, 0);
+    nvim_stateitem_set_ends(item, 1);
 }

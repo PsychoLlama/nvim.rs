@@ -565,17 +565,6 @@ extern "C" {
     /// Call update_si_attr for item at index
     fn nvim_syn_update_si_attr(idx: c_int);
 
-    /// Compare two extmatch pointers (for syn_stack_equal)
-    fn nvim_syn_extmatch_equal(a: ExtMatchHandle, b: ExtMatchHandle) -> c_int;
-
-    /// Compare extmatch strings at given sub-index
-    fn nvim_syn_extmatch_strings_equal(
-        a: ExtMatchHandle,
-        b: ExtMatchHandle,
-        subidx: c_int,
-        pat_idx: c_int,
-    ) -> c_int;
-
     /// Get NSUBEXP constant
     fn nvim_syn_get_nsubexp() -> c_int;
     /// Get si_extmatch from a stateitem
@@ -2428,7 +2417,7 @@ pub unsafe extern "C" fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int {
         // Compare extmatch
         let bs_extmatch = nvim_bufstate_get_extmatch(bs);
         let si_extmatch = nvim_stateitem_get_extmatch(cur_si);
-        let cmp = nvim_syn_extmatch_equal(bs_extmatch, si_extmatch);
+        let cmp = crate::state_ops::rs_syn_extmatch_equal(bs_extmatch, si_extmatch);
 
         if cmp == 1 {
             // Same pointer or both NULL, continue
@@ -2440,7 +2429,9 @@ pub unsafe extern "C" fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int {
 
         // cmp == -1: need to compare strings
         for j in 0..nsubexp {
-            if nvim_syn_extmatch_strings_equal(bs_extmatch, si_extmatch, j, si_idx) == 0 {
+            if crate::state_ops::rs_syn_extmatch_strings_equal(bs_extmatch, si_extmatch, j, si_idx)
+                == 0
+            {
                 return 0;
             }
         }

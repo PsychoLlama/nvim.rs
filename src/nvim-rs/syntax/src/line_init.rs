@@ -37,7 +37,6 @@ extern "C" {
     // CUR_STATE accessors for syn_update_ends
     fn nvim_cur_state_get_si_idx(i: c_int) -> c_int;
     fn nvim_cur_state_get_m_endpos_lnum(i: c_int) -> c_int;
-    fn nvim_cur_state_set_matchcont(i: c_int);
     fn nvim_cur_state_get_si_flags(i: c_int) -> c_int;
     fn nvim_cur_state_set_h_startpos_cur(i: c_int);
     fn nvim_cur_state_ptr(i: c_int) -> StateItemHandle;
@@ -96,7 +95,7 @@ pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
                 && nvim_syn_get_sptype_at(si_idx) == SPTYPE_MATCH
                 && nvim_cur_state_get_m_endpos_lnum(i) < current_lnum
             {
-                nvim_cur_state_set_matchcont(i);
+                crate::state_ops::rs_cur_state_set_matchcont(i);
             }
         }
     }

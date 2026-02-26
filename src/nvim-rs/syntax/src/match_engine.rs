@@ -94,13 +94,6 @@ extern "C" {
     // Extmatch management
     fn nvim_syn_ref_extmatch(em: ExtMatchHandle) -> ExtMatchHandle;
     fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
-    fn nvim_syn_extmatch_equal(a: ExtMatchHandle, b: ExtMatchHandle) -> c_int;
-    fn nvim_syn_extmatch_strings_equal(
-        a: ExtMatchHandle,
-        b: ExtMatchHandle,
-        subidx: c_int,
-        pat_idx: c_int,
-    ) -> c_int;
 
     // Update state item attribute
     fn nvim_syn_update_si_attr(idx: c_int);
@@ -649,7 +642,7 @@ pub unsafe fn unref_extmatch(em: ExtMatchHandle) {
 /// Check if two extmatches are equal.
 #[must_use]
 pub fn extmatch_equal(a: ExtMatchHandle, b: ExtMatchHandle) -> bool {
-    unsafe { nvim_syn_extmatch_equal(a, b) != 0 }
+    unsafe { crate::state_ops::rs_syn_extmatch_equal(a, b) != 0 }
 }
 
 /// Check if two extmatch strings at a given index are equal.
@@ -660,7 +653,7 @@ pub fn extmatch_strings_equal(
     subidx: i32,
     pat_idx: i32,
 ) -> bool {
-    unsafe { nvim_syn_extmatch_strings_equal(a, b, subidx, pat_idx) != 0 }
+    unsafe { crate::state_ops::rs_syn_extmatch_strings_equal(a, b, subidx, pat_idx) != 0 }
 }
 
 // =============================================================================
