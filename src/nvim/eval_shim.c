@@ -412,25 +412,8 @@ list_T *nvim_eval_list_stack_pop(list_stack_T **stack)
   return list;
 }
 
-// Construct a typval_T with VAR_DICT and call rs_set_ref_in_item
-bool nvim_eval_set_ref_dict_tv(dict_T *dict, int copyID, ht_stack_T **ht_stack,
-                               list_stack_T **list_stack)
-{
-  typval_T dtv;
-  dtv.v_type = VAR_DICT;
-  dtv.vval.v_dict = dict;
-  return rs_set_ref_in_item(&dtv, copyID, ht_stack, list_stack);
-}
-
-// Construct a typval_T with VAR_PARTIAL and call rs_set_ref_in_item
-bool nvim_eval_set_ref_partial_tv(partial_T *partial, int copyID, ht_stack_T **ht_stack,
-                                  list_stack_T **list_stack)
-{
-  typval_T tv;
-  tv.v_type = VAR_PARTIAL;
-  tv.vval.v_partial = partial;
-  return rs_set_ref_in_item(&tv, copyID, ht_stack, list_stack);
-}
+// nvim_eval_set_ref_dict_tv: deleted -- inlined in gc.rs as set_ref_in_item_dict (Phase 13).
+// nvim_eval_set_ref_partial_tv: deleted -- inlined in gc.rs as set_ref_in_item_partial (Phase 13).
 
 // C accessors for buffer operations (used by Rust indexing module)
 int nvim_eval_buf_ml_valid(const buf_T *buf)

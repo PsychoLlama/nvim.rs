@@ -147,22 +147,6 @@ extern "C" {
     // External: set_ref_in_func (remains in C)
     fn set_ref_in_func(name: *mut std::ffi::c_char, fp: *mut c_void, copyid: c_int) -> bool;
 
-    // Construct a typval_T with VAR_DICT and call set_ref_in_item
-    fn nvim_eval_set_ref_dict_tv(
-        dict: DictHandle,
-        copyid: c_int,
-        ht_stack: *mut *mut c_void,
-        list_stack: *mut *mut c_void,
-    ) -> bool;
-
-    // Construct a typval_T with VAR_PARTIAL and call set_ref_in_item
-    fn nvim_eval_set_ref_partial_tv(
-        partial: PartialHandle,
-        copyid: c_int,
-        ht_stack: *mut *mut c_void,
-        list_stack: *mut *mut c_void,
-    ) -> bool;
-
     // Free unreferenced items (in eval_exec crate)
     fn rs_free_unref_items(copy_id: c_int) -> c_int;
 }
@@ -398,7 +382,7 @@ unsafe fn set_ref_in_item_partial(
 
     let dict = nvim_eval_partial_get_dict(pt);
     if !dict.is_null() {
-        abort = abort || nvim_eval_set_ref_dict_tv(dict, copy_id, ht_stack, list_stack);
+        abort = abort || set_ref_in_item_dict(dict, copy_id, ht_stack, list_stack);
     }
 
     let argc = nvim_eval_partial_get_argc(pt);
@@ -459,7 +443,7 @@ pub unsafe extern "C" fn rs_set_ref_in_callback(
     // Direct field access: replaces nvim_eval_cb_get_type / nvim_eval_cb_get_partial
     if (*callback).cb_type == K_CALLBACK_PARTIAL {
         let partial = (*callback).data.partial;
-        return nvim_eval_set_ref_partial_tv(partial, copy_id, ht_stack, list_stack);
+        return set_ref_in_item_partial(partial, copy_id, ht_stack, list_stack);
     }
     false
 }
@@ -483,7 +467,7 @@ pub unsafe extern "C" fn rs_set_ref_in_callback_reader(
 
     let self_dict = nvim_eval_cbr_get_self(reader);
     if !self_dict.is_null() {
-        return nvim_eval_set_ref_dict_tv(self_dict, copy_id, ht_stack, list_stack);
+        return set_ref_in_item_dict(self_dict, copy_id, ht_stack, list_stack);
     }
     false
 }
