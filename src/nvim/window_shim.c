@@ -288,6 +288,8 @@ extern WinCloseStructResult rs_win_close_structural(win_T *win, int help_window,
                                                      frame_T *win_frame);
 extern void rs_win_close_post_layout(int was_floating, int dir, frame_T *win_frame);
 extern void rs_win_close_buffer(win_T *win, int action, int abort_if_last);
+extern int rs_close_last_window_tabpage(win_T *win, int free_buf, tabpage_T *prev_curtab);
+extern win_T *rs_win_free_mem(win_T *win, int *dirp, tabpage_T *tp);
 
 int nvim_win_get_locked(win_T *wp) { return wp->w_locked; }
 int nvim_win_get_floating(win_T *wp) { return wp->w_floating; }
@@ -826,47 +828,7 @@ bool can_close_in_cmdwin(win_T *win, Error *err)
 ///                      last window in the tabpage
 ///
 /// @return false if there are other windows and nothing is done, true otherwise.
-static bool close_last_window_tabpage(win_T *win, bool free_buf, tabpage_T *prev_curtab)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  if (!ONE_WINDOW) {
-    return false;
-  }
-
-  buf_T *old_curbuf = curbuf;
-
-  Terminal *term = win->w_buffer ? win->w_buffer->terminal : NULL;
-  if (term) {
-    // Don't free terminal buffers
-    free_buf = false;
-  }
-
-  // Closing the last window in a tab page.  First go to another tab
-  // page and then close the window and the tab page.  This avoids that
-  // curwin and curtab are invalid while we are freeing memory, they may
-  // be used in GUI events.
-  // Don't trigger *Enter autocommands yet, they may use wrong values, so do
-  // that below.
-  // Do trigger *Leave autocommands, unless win->w_buffer is NULL, in which
-  // case they have already been triggered.
-  goto_tabpage_tp(alt_tabpage(), false, win->w_buffer != NULL);
-
-  // Safety check: Autocommands may have switched back to the old tab page
-  // or closed the window when jumping to the other tab page.
-  if (curtab != prev_curtab && rs_valid_tabpage(prev_curtab) && prev_curtab->tp_firstwin == win) {
-    win_close_othertab(win, free_buf, prev_curtab, false);
-  }
-  entering_window(curwin);
-
-  // Since goto_tabpage_tp above did not trigger *Enter autocommands, do
-  // that now.
-  apply_autocmds(EVENT_WINENTER, NULL, NULL, false, curbuf);
-  apply_autocmds(EVENT_TABENTER, NULL, NULL, false, curbuf);
-  if (old_curbuf != curbuf) {
-    apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf);
-  }
-  return true;
-}
+// close_last_window_tabpage deleted: logic migrated to Rust close/helpers.rs (Phase 10)
 
 // win_close_buffer deleted: logic migrated to Rust close/helpers.rs (Phase 10)
 
@@ -913,8 +875,8 @@ int win_close(win_T *win, bool free_buf, bool force)
     }
   }
 
-  // close_last_window_tabpage (heavy autocmd interaction, stays in C).
-  if (close_last_window_tabpage(win, free_buf, prev_curtab)) {
+  // close_last_window_tabpage migrated to Rust (Phase 10).
+  if (rs_close_last_window_tabpage(win, free_buf ? 1 : 0, prev_curtab)) {
     return FAIL;
   }
 
@@ -987,7 +949,7 @@ int win_close(win_T *win, bool free_buf, bool force)
   }
 
   if (!rs_win_valid(win) || (!win->w_floating && rs_last_window(win))
-      || close_last_window_tabpage(win, free_buf, prev_curtab)) {
+      || rs_close_last_window_tabpage(win, free_buf ? 1 : 0, prev_curtab)) {
     return FAIL;
   }
 
@@ -1113,7 +1075,7 @@ bool win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, bool force)
   // Free the memory used for the window.
   buf_T *buf = win->w_buffer;
   int dir;
-  win_free_mem(win, &dir, tp);
+  rs_win_free_mem(win, &dir, tp);
 
   if (res.free_tp_idx > 0) {
     free_tabpage(tp);
@@ -1133,41 +1095,7 @@ leave_open:
   return false;
 }
 
-/// Free the memory used for a window.
-///
-/// @param dirp  set to 'v' or 'h' for direction if 'ea'
-/// @param tp    tab page "win" is in, NULL for current
-///
-/// @return      a pointer to the window that got the freed up space.
-static win_T *win_free_mem(win_T *win, int *dirp, tabpage_T *tp)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  win_T *wp;
-  tabpage_T *win_tp = tp == NULL ? curtab : tp;
-
-  if (!win->w_floating) {
-    // Remove the window and its frame from the tree of frames.
-    frame_T *frp = win->w_frame;
-    wp = winframe_remove(win, dirp, tp, NULL);
-    xfree(frp);
-  } else {
-    *dirp = 'h';  // Dummy value.
-    wp = win_float_find_altwin(win, tp);
-  }
-  win_free(win, tp);
-
-  // When deleting the current window in the tab, select a new current
-  // window.
-  if (win == win_tp->tp_curwin) {
-    win_tp->tp_curwin = wp;
-  }
-  // Avoid executing cmdline_win logic after it is closed.
-  if (win == cmdline_win) {
-    cmdline_win = NULL;
-  }
-
-  return wp;
-}
+// win_free_mem deleted: logic migrated to Rust close/helpers.rs (Phase 10)
 
 #if defined(EXITFREE)
 void win_free_all(void)
@@ -1186,7 +1114,7 @@ void win_free_all(void)
     win_T *wp = lastwin;
     rs_win_remove(lastwin, NULL);
     int dummy;
-    win_free_mem(wp, &dummy, NULL);
+    rs_win_free_mem(wp, &dummy, NULL);
     for (int i = 0; i < AUCMD_WIN_COUNT; i++) {
       if (aucmd_win[i].auc_win == wp) {
         aucmd_win[i].auc_win = NULL;
@@ -1197,7 +1125,7 @@ void win_free_all(void)
   for (int i = 0; i < AUCMD_WIN_COUNT; i++) {
     if (aucmd_win[i].auc_win != NULL) {
       int dummy;
-      win_free_mem(aucmd_win[i].auc_win, &dummy, NULL);
+      rs_win_free_mem(aucmd_win[i].auc_win, &dummy, NULL);
       aucmd_win[i].auc_win = NULL;
     }
   }
@@ -1206,7 +1134,7 @@ void win_free_all(void)
 
   while (firstwin != NULL) {
     int dummy;
-    win_free_mem(firstwin, &dummy, NULL);
+    rs_win_free_mem(firstwin, &dummy, NULL);
   }
 
   // No window should be used after this. Set curwin to NULL to crash
@@ -2049,7 +1977,7 @@ void nvim_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync != 0); }
 void nvim_emsg_e_autocmd_close(void) { emsg(_(e_autocmd_close)); }
 void nvim_internal_error_othertab(void) { internal_error("win_close_othertab()"); }
 void nvim_win_new_screen_rows_wrapper(void) { win_new_screen_rows(); }
-win_T *nvim_win_free_mem_wrapper(win_T *win, int *dirp, tabpage_T *tp) { return win_free_mem(win, dirp, tp); }
+// nvim_win_free_mem_wrapper deleted: rs_win_close_structural now calls rs_win_free_mem directly (Phase 10)
 void nvim_inc_split_disallowed(void) { split_disallowed++; }
 void nvim_dec_split_disallowed(void) { split_disallowed--; }
 void nvim_ui_call_win_close_win(win_T *wp) { if (wp) { ui_call_win_close(wp->w_grid_alloc.handle); } }
@@ -3194,5 +3122,42 @@ int nvim_close_buffer_for_win(win_T *win, int action, int abort_if_last)
     return 1;
   }
   return 0;
+}
+
+// =============================================================================
+// Phase 10 (Pass 3): close_last_window_tabpage + win_free_mem helpers
+// =============================================================================
+
+/// Safe terminal check: 1 if win->w_buffer != NULL && w_buffer->terminal != NULL.
+int nvim_win_buf_has_terminal_safe(win_T *win)
+{
+  return (win && win->w_buffer && win->w_buffer->terminal) ? 1 : 0;
+}
+
+/// win_float_find_altwin wrapper.
+win_T *nvim_win_float_find_altwin(win_T *win, tabpage_T *tp)
+{
+  return win_float_find_altwin(win, tp);
+}
+
+/// xfree wrapper for frame_T* (frees the frame pointer).
+void nvim_xfree_frame(void *frp) { xfree(frp); }
+
+/// win_free(win, tp) wrapper.
+void nvim_win_free_wrapper(win_T *win, tabpage_T *tp) { win_free(win, tp); }
+
+/// Check if win == cmdline_win.
+int nvim_win_is_cmdline_win(win_T *win) { return (win == cmdline_win) ? 1 : 0; }
+
+/// Set cmdline_win = NULL.
+void nvim_set_cmdline_win_null(void) { cmdline_win = NULL; }
+
+/// Wrapper for apply_autocmds(EVENT_BUFENTER) with old_curbuf comparison.
+/// Fires if curbuf != old_curbuf_saved.
+void nvim_apply_autocmds_bufenter_if_changed(buf_T *old_curbuf)
+{
+  if (old_curbuf != curbuf) {
+    apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf);
+  }
 }
 

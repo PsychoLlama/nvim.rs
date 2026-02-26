@@ -63,7 +63,7 @@ extern "C" {
     fn nvim_check_cursor_win_wrapper(wp: WinHandle);
     #[link_name = "rs_win_valid"]
     fn nvim_win_valid_wrapper(wp: WinHandle) -> c_int;
-    fn nvim_win_free_mem_wrapper(win: WinHandle, dirp: *mut c_int, tp: TabpageHandle) -> WinHandle;
+    // nvim_win_free_mem_wrapper removed: rs_win_close_structural now calls rs_win_free_mem directly (Phase 10)
     #[link_name = "rs_win_equal"]
     fn nvim_win_equal_wrapper(wp: WinHandle, current: c_int, dir: c_int);
     fn nvim_win_fix_scroll(upd_topline: bool);
@@ -193,8 +193,11 @@ pub extern "C" fn rs_win_close_structural(
 
         // Free the memory and get the window that received the space.
         let mut dir: c_int = 0;
-        let mut wp =
-            nvim_win_free_mem_wrapper(win, std::ptr::addr_of_mut!(dir), TabpageHandle::null());
+        let mut wp = crate::close::helpers::rs_win_free_mem(
+            win,
+            std::ptr::addr_of_mut!(dir),
+            TabpageHandle::null(),
+        );
 
         // For help windows, try restoring snapshot curwin.
         if help_window != 0 {
