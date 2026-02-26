@@ -2633,11 +2633,12 @@ void nvim_ecmd_curwin_set_cursor(int lnum, int col)
 /// Get curwin->w_cursor.col
 int nvim_ecmd_curwin_get_cursor_col(void) { return (int)curwin->w_cursor.col; }
 
-/// Set curwin->w_cursor.coladd
-void nvim_ecmd_curwin_set_cursor_coladd(int val) { curwin->w_cursor.coladd = (colnr_T)val; }
-
-/// Set curwin->w_set_curswant
-void nvim_ecmd_curwin_set_w_set_curswant(int val) { curwin->w_set_curswant = (bool)val; }
+/// Set curwin->w_cursor.coladd = 0 and curwin->w_set_curswant = true (for 'sol' off path)
+void nvim_ecmd_curwin_set_coladd_curswant(void)
+{
+  curwin->w_cursor.coladd = 0;
+  curwin->w_set_curswant = true;
+}
 
 /// Get curwin->w_topline
 int nvim_ecmd_curwin_get_topline(void) { return (int)curwin->w_topline; }
@@ -2671,14 +2672,13 @@ void nvim_ecmd_curwin_set_effective_p_so(int val)
   }
 }
 
-/// Get curwin->w_p_diff
-int nvim_ecmd_curwin_get_p_diff(void) { return curwin->w_p_diff ? 1 : 0; }
-
-/// Get curwin->w_p_spell
-int nvim_ecmd_curwin_get_p_spell(void) { return curwin->w_p_spell ? 1 : 0; }
-
-/// Get curwin->w_s->b_p_spl (first char, 0 = empty)
-int nvim_ecmd_curwin_spl_is_empty(void) { return *curwin->w_s->b_p_spl == NUL ? 1 : 0; }
+/// Get diff/spell state: fills *diff_out, *spell_out, *spl_empty_out
+void nvim_ecmd_curwin_diff_spell_state(int *diff_out, int *spell_out, int *spl_empty_out)
+{
+  *diff_out = curwin->w_p_diff ? 1 : 0;
+  *spell_out = curwin->w_p_spell ? 1 : 0;
+  *spl_empty_out = *curwin->w_s->b_p_spl == NUL ? 1 : 0;
+}
 
 /// Set curwin->w_scbind_pos to plines_m_win_fill(curwin, 1, topline)
 void nvim_ecmd_curwin_set_scbind_pos_from_topline(void)

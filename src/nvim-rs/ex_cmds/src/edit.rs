@@ -82,17 +82,18 @@ extern "C" {
     fn nvim_ecmd_curwin_set_cursor(lnum: c_int, col: c_int);
     fn nvim_ecmd_curwin_get_cursor_col() -> c_int;
     fn nvim_excmds_curwin_cursor_lnum() -> c_int;
-    fn nvim_ecmd_curwin_set_cursor_coladd(val: c_int);
-    fn nvim_ecmd_curwin_set_w_set_curswant(val: c_int);
+    fn nvim_ecmd_curwin_set_coladd_curswant();
     fn nvim_ecmd_curwin_get_topline() -> c_int;
     fn nvim_ecmd_curwin_get_alt_fnum() -> c_int;
     fn nvim_ecmd_curwin_set_alt_fnum(fnum: c_int);
     fn nvim_ecmd_curwin_set_pcmark(lnum: c_int, col: c_int);
     fn nvim_ecmd_curwin_get_effective_p_so() -> c_int;
     fn nvim_ecmd_curwin_set_effective_p_so(val: c_int);
-    fn nvim_ecmd_curwin_get_p_diff() -> c_int;
-    fn nvim_ecmd_curwin_get_p_spell() -> c_int;
-    fn nvim_ecmd_curwin_spl_is_empty() -> c_int;
+    fn nvim_ecmd_curwin_diff_spell_state(
+        diff_out: *mut c_int,
+        spell_out: *mut c_int,
+        spl_empty_out: *mut c_int,
+    );
     fn nvim_ecmd_curwin_set_scbind_pos_from_topline();
     fn nvim_ecmd_curwin_buf_is_null() -> c_int;
     fn nvim_ecmd_curwin_ws_is_own_buf() -> c_int;
@@ -784,16 +785,16 @@ pub unsafe extern "C" fn rs_do_ecmd(
         }
 
         // Tell diff about new/updated buffer
-        if nvim_ecmd_curwin_get_p_diff() != 0 {
+        // If window options changed, set spell language
+        let mut p_diff: c_int = 0;
+        let mut p_spell: c_int = 0;
+        let mut spl_empty: c_int = 0;
+        nvim_ecmd_curwin_diff_spell_state(&mut p_diff, &mut p_spell, &mut spl_empty);
+        if p_diff != 0 {
             rs_diff_buf_add(nvim_get_curbuf());
             rs_diff_invalidate(nvim_get_curbuf());
         }
-
-        // If window options changed, set spell language
-        if did_get_winopts
-            && nvim_ecmd_curwin_get_p_spell() != 0
-            && nvim_ecmd_curwin_spl_is_empty() == 0
-        {
+        if did_get_winopts && p_spell != 0 && spl_empty == 0 {
             nvim_ecmd_parse_spelllang();
         }
 
@@ -811,8 +812,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                     // 'sol' is off: use last known column
                     nvim_ecmd_curwin_set_cursor(nvim_excmds_curwin_cursor_lnum(), solcol);
                     nvim_ecmd_check_cursor_col();
-                    nvim_ecmd_curwin_set_cursor_coladd(0);
-                    nvim_ecmd_curwin_set_w_set_curswant(1);
+                    nvim_ecmd_curwin_set_coladd_curswant();
                 } else {
                     nvim_beginline(BL_SOL | BL_FIX);
                 }
