@@ -620,10 +620,6 @@ void nvim_oap_set_inclusive(oparg_T *oap, bool val) { if (oap) oap->inclusive = 
 // Additional oparg_T accessors for Rust ops crate
 // =============================================================================
 
-// nvim_oap_get_op_type_raw removed: callers updated to use nvim_oap_get_op_type_ptr (Phase 4)
-// nvim_oap_get_regname_raw removed: callers updated to use nvim_oap_get_regname_ptr (Phase 4)
-// nvim_oap_get_motion_type_raw removed: callers updated to use nvim_oap_get_motion_type (Phase 4)
-
 int nvim_oap_get_use_reg_one(oparg_T *oap) { return oap ? oap->use_reg_one : false; }
 
 int nvim_oap_get_line_count(oparg_T *oap) { return oap ? oap->line_count : 0; }
@@ -763,8 +759,6 @@ void nvim_cap_set_prechar(cmdarg_T *cap, int val) { if (cap) cap->prechar = val;
 // Word motion accessors for Rust FFI
 // =============================================================================
 
-// nvim_curwin_set_set_curswant removed: callers updated to use nvim_curwin_set_curswant (Phase 4)
-
 int nvim_fwd_word(int count, bool bigword, bool eol) { return fwd_word(count, bigword, eol); }
 
 int nvim_bck_word(int count, bool bigword, bool stop) { return bck_word(count, bigword, stop); }
@@ -824,9 +818,6 @@ int nvim_get_TAB(void) { return TAB; }
 // =============================================================================
 
 bool nvim_setmark(int name) { return setmark(name); }
-
-// nvim_cap_get_nchar_call removed: duplicate of nvim_cap_get_nchar, no Rust callers (Phase 4)
-// nvim_cap_get_extra_char_call removed: duplicate of nvim_cap_get_extra_char, no Rust callers (Phase 4)
 
 unsigned int nvim_get_jop_flags(void) { return jop_flags; }
 
@@ -1172,15 +1163,9 @@ int nvim_getvcol_pos_coladd(int lnum, int col, int coladd) {
 
 int nvim_ml_get_len_call(int lnum) { return (int)ml_get_len(lnum); }
 
-// nvim_nv_Zet_impl migrated to Rust (rs_nv_Zet) in Phase 4
-// nvim_nv_esc_impl migrated to Rust (rs_nv_esc) in Phase 4
-// nvim_nv_edit_impl migrated to Rust (rs_nv_edit) in Phase 4
-
 // =============================================================================
 // Search handler accessors for Rust FFI
 // =============================================================================
-
-// Phase 4: nv_search_impl / nv_next_impl migrated to Rust; direct accessors below
 
 /// Call getcmdline for search and set cap->searchbuf. Returns the searchbuf (or NULL).
 char *nvim_getcmdline_for_search(cmdarg_T *cap)
@@ -1267,8 +1252,6 @@ void nvim_stuffReadbuff(const char *s) { stuffReadbuff(s); }
 // Text object handler accessors for Rust FFI
 // =============================================================================
 
-// (nv_select_impl migrated to Rust)
-
 // nv_brackets_impl C accessors for Rust FFI
 /// Phase 3: findmatchlimit wrapper that copies pos_T fields to output params.
 bool nvim_findmatchlimit_call(oparg_T *oap, int findc, int flags, int64_t maxtravel,
@@ -1283,10 +1266,6 @@ bool nvim_findmatchlimit_call(oparg_T *oap, int findc, int flags, int64_t maxtra
   *out_coladd = pos->coladd;
   return true;
 }
-
-// (nv_bracket_block static implementation deleted; migrated to Rust)
-
-// Phase 2: new C accessors replacing nvim_bracket_* helpers (migrated to Rust)
 
 /// find_pattern_in_path wrapper for bracket [i/]i/[d/]d commands.
 /// Takes a copy of ptr (via xmemdupz) and frees it after the call,
@@ -1390,8 +1369,6 @@ bool nvim_get_p_to(void) { return p_to; }
 // Insert mode entry handler accessors for Rust FFI
 // =============================================================================
 
-// (nv_Replace_impl, nv_vreplace_impl migrated to Rust in Phase 3)
-
 // C wrappers for nv_replace (Phase 1: most helpers inlined into Rust)
 
 /// Check if buffer is a prompt buffer and cursor is not in editable area.
@@ -1399,14 +1376,10 @@ int nvim_replace_check_prompt(void) {
   return (bt_prompt(curbuf) && !prompt_curpos_editable()) ? 1 : 0;
 }
 
-// nvim_nv_vreplace_impl removed: nv_vreplace_impl migrated to Rust in Phase 3
-
 // =============================================================================
 // Scroll and screen handler accessors for Rust FFI
 // =============================================================================
 
-// Phase 3 movement/mode-entry accessors for Rust FFI
-// (nv_up_impl, nv_down_impl migrated to Rust in Phase 3)
 // nvim_bt_quickfix_curbuf already defined in window_shim.c
 void nvim_prompt_invoke_callback(void) { prompt_invoke_callback(); }
 bool nvim_curbuf_modifiable(void) { return MODIFIABLE(curbuf); }
@@ -1446,8 +1419,6 @@ void nvim_changed_window_setting_curwin(void) { changed_window_setting(curwin); 
 void nvim_spell_suggest_call(int count) { spell_suggest(count); }
 bool nvim_get_curwin_w_p_wrap(void) { return curwin->w_p_wrap; }
 
-// nvim_nv_z_get_count removed: nv_z_get_count migrated to Rust in Phase 4
-
 /// Wrapper for spell_move_to(curwin, dir, SMT_ALL, true, NULL) for Rust FFI.
 size_t nvim_spell_move_to_wrapper(int dir) { return spell_move_to(curwin, dir, SMT_ALL, true, NULL); }
 
@@ -1474,16 +1445,11 @@ bool nvim_ascii_isdigit(int c) { return ascii_isdigit(c); }
 /// Get translated E352 error message.
 const char *nvim_get_e352_msg(void) { return _("E352: Cannot erase folds with current 'foldmethod'"); }
 
-// nvim_nv_up_impl, nvim_nv_down_impl removed: nv_up/down_impl migrated to Rust in Phase 3
-
 // =============================================================================
 // Miscellaneous handler accessors for Rust FFI
 // =============================================================================
 
-// (nv_at_impl, nv_join_impl, nv_open_impl migrated to Rust in Phases 1 and 3)
-
 // g-command C accessors for Rust FFI
-// nvim_nv_addsub migrated to rs_nv_addsub in Rust
 bool nvim_current_search(int count, bool forward) { return current_search(count, forward); }
 int nvim_cursor_up(int count, bool upd_topline) { return cursor_up(count, upd_topline); }
 int nvim_cursor_down_call(int count, bool upd_topline) { return cursor_down(count, upd_topline); }
@@ -1498,9 +1464,6 @@ void nvim_show_sb_text_call(void) { show_sb_text(); }
 void nvim_show_utf8_call(void) { show_utf8(); }
 void nvim_utf_find_illegal_call(void) { utf_find_illegal(); }
 void nvim_set_oap_cursor_start(oparg_T *oap) { oap->cursor_start = curwin->w_cursor; }
-// nvim_set_curwin_w_set_curswant removed: callers updated to use nvim_curwin_set_curswant (Phase 4)
-// nv_g_home_m_cmd and nv_g_dollar_cmd migrated to Rust (rs_nv_g_home_m_cmd, rs_nv_g_dollar_cmd)
-
 // nv_screengo C accessors for Rust FFI
 int nvim_get_curwin_w_virtcol(void) { return curwin->w_virtcol; }
 void nvim_set_curwin_w_curswant_int(int val) { curwin->w_curswant = val; }
@@ -1541,13 +1504,9 @@ void nvim_set_b_op_start(int lnum, int col, int coladd) { curbuf->b_op_start.lnu
 void nvim_set_b_op_end_cursor(void) { curbuf->b_op_end = curwin->w_cursor; }
 void nvim_dec_b_op_end_col(void) { if (curbuf->b_op_end.col > 0) curbuf->b_op_end.col--; }
 
-// (nvim_nv_at_impl, nvim_nv_join_impl, nvim_nv_open_impl migrated to Rust)
-
 // =============================================================================
 // Window command accessors for Rust FFI
 // =============================================================================
-
-// nvim_nv_colon migrated to rs_nv_colon in Rust
 
 // =============================================================================
 // find_ident_at_pos accessors for Rust FFI
@@ -1662,12 +1621,6 @@ void normal_enter(bool cmdwin, bool noexmode)
   current_oap = prev_oap;
 }
 
-// normal_prepare migrated to Rust (rs_normal_prepare) in Phase 5
-
-// normal_handle_special_visual_command migrated to Rust (Phase 5) -- see normal_execute.rs
-
-// normal_need_redraw_mode_message and normal_redraw_mode_message migrated to Rust (Phase 5)
-
 // =============================================================================
 // normal_get_additional_char accessors for Rust FFI
 // =============================================================================
@@ -1764,8 +1717,6 @@ void nvim_normal_handle_composing_chars(void *sp)
 {
   rs_normal_handle_composing_chars(sp);
 }
-
-// normal_get_command_count migrated to Rust (Phase 5) -- see normal_execute.rs
 
 // =============================================================================
 // normal_finish_command accessors for Rust FFI
@@ -1899,10 +1850,6 @@ void nvim_redraw_mode_msg_keep_msg(void)
 /// os_delay(ms, can_interrupt) wrapper.
 void nvim_os_delay_wrapper(int ms, bool can_interrupt) { os_delay(ms, can_interrupt); }
 
-// Wrappers removed (migrated to Rust in Phase 5):
-// nvim_normal_need_redraw_mode_message_wrapper → Rust normal_need_redraw_mode_message
-// nvim_normal_redraw_mode_message_wrapper → Rust normal_redraw_mode_message
-
 /// ui_cursor_shape() wrapper.
 void nvim_ui_cursor_shape_wrapper(void) { ui_cursor_shape(); }
 
@@ -1932,8 +1879,6 @@ void nvim_do_check_cursorbind_wrapper(void) { do_check_cursorbind(); }
 
 /// edit(cmd, startln, count) wrapper.
 void nvim_edit_wrapper(int cmd, bool startln, int count) { edit(cmd, startln, count); }
-
-// nvim_showmode_wrapper removed: callers updated to use nvim_showmode (Phase 4 cleanup)
 
 // =============================================================================
 // normal_execute accessors for Rust FFI
@@ -1986,9 +1931,6 @@ void nvim_oap_set_prev_opcount(oparg_T *oap, int val) { oap->prev_opcount = val;
 /// Set oa->prev_count0 via oap handle.
 void nvim_oap_set_prev_count0(oparg_T *oap, int val) { oap->prev_count0 = val; }
 
-// nvim_normal_get_command_count_loop removed (migrated to Rust in Phase 5)
-// nvim_normal_handle_special_visual_command_wrapper removed (migrated to Rust in Phase 5)
-
 /// ui_flush() wrapper.
 void nvim_ui_flush_wrapper(void) { ui_flush(); }
 
@@ -1999,22 +1941,10 @@ void nvim_execute_nv_cmd(int idx, cmdarg_T *ca) { ca->arg = nv_cmds[idx].cmd_arg
 
 static int normal_execute(VimState *state, int key) { return rs_normal_execute((NormalState *)state, key); }
 
-// normal_check_stuff_buffer, normal_check_interrupt, normal_check_window_scrolled
-// migrated to Rust (Phase 4)
-
-// normal_check_cursor_moved, normal_check_text_changed, normal_check_buffer_modified
-// migrated to Rust (Phase 5) -- see check.rs
-
-// normal_check_safe_state, normal_check_folds migrated to Rust (Phase 4)
-
-// normal_redraw migrated to Rust (Phase 5) -- see check.rs
 
 // =============================================================================
 // normal_check accessors for Rust FFI
 // =============================================================================
-
-// nvim_normal_check_stuff_buffer_wrapper and nvim_normal_check_interrupt_wrapper
-// removed (migrated to Rust Phase 4)
 
 /// Get did_throw global.
 bool nvim_get_did_throw_direct(void) { return did_throw; }
@@ -2040,12 +1970,6 @@ void nvim_setcursor_wrapper(void) { setcursor(); }
 /// update_topline(curwin) wrapper.
 void nvim_update_topline_curwin_wrapper(void) { update_topline(curwin); }
 
-// nvim_normal_check_cursor_moved_impl → migrated to Rust (Phase 5)
-// nvim_normal_check_text_changed_impl → migrated to Rust (Phase 5)
-// nvim_normal_check_window_scrolled_wrapper → migrated to Rust (Phase 4)
-// nvim_normal_check_buffer_modified_impl → migrated to Rust (Phase 5)
-// nvim_normal_check_safe_state_wrapper → migrated to Rust (Phase 4)
-
 bool nvim_curtab_needs_diff_update(void) { return curtab->tp_diff_update || curtab->tp_diff_invalid; }
 
 /// Clear curtab diff update flag.
@@ -2059,9 +1983,6 @@ void nvim_set_diff_need_scrollbind(bool val) { diff_need_scrollbind = val; }
 
 /// check_scrollbind(0, 0) wrapper.
 void nvim_check_scrollbind_zero_wrapper(void) { check_scrollbind(0, 0); }
-
-// nvim_normal_check_folds_wrapper → migrated to Rust (Phase 4)
-// nvim_normal_redraw_wrapper → replaced by nvim_normal_redraw_impl
 
 /// time_fd != NULL check.
 bool nvim_get_time_fd_not_null(void) { return time_fd != NULL; }
@@ -2081,8 +2002,6 @@ int nvim_get_cmdwin_result(void) { return cmdwin_result; }
 
 /// do_exmode() wrapper.
 void nvim_do_exmode_wrapper(void) { do_exmode(); }
-
-// nvim_normal_prepare_wrapper removed (migrated to Rust in Phase 5: rs_normal_prepare)
 
 // =============================================================================
 // Phase 4 accessors for normal_check* and normal_redraw
@@ -2107,9 +2026,6 @@ void nvim_check_timestamps_call(bool focus) { check_timestamps(focus); }
 bool nvim_get_quit_more(void) { return quit_more; }
 void nvim_vgetc_and_discard(void) { (void)vgetc(); }
 void nvim_set_exmode_active(bool val) { exmode_active = val; }
-
-// Phase 5 accessors for normal_check_cursor_moved, normal_check_text_changed,
-// normal_check_buffer_modified (migrated to Rust)
 
 /// Check if last_cursormoved_win != curwin or cursor position differs.
 bool nvim_last_cursormoved_check(void)
@@ -2169,13 +2085,6 @@ bool nvim_curbuf_b_changed_invalid_get(void) { return curbuf->b_changed_invalid;
 /// Clear curbuf->b_changed_invalid.
 void nvim_curbuf_b_changed_invalid_clear(void) { curbuf->b_changed_invalid = false; }
 
-// Composite wrappers removed (migrated to Rust in Phase 5):
-// nvim_normal_check_cursor_moved_impl → Rust normal_check_cursor_moved
-// nvim_normal_check_text_changed_impl → Rust normal_check_text_changed
-// nvim_normal_check_buffer_modified_impl → Rust normal_check_buffer_modified
-
-// nvim_normal_redraw_impl removed (migrated to Rust in Phase 5: rs_normal_redraw)
-
 static int normal_check(VimState *state) { return rs_normal_check((NormalState *)state); }
 
 /// End Visual mode.
@@ -2185,8 +2094,6 @@ void end_visual_mode(void)
 {
   rs_end_visual_mode();
 }
-
-// find_ident_under_cursor migrated to Rust (rs_find_ident_under_cursor) in Phase 3
 
 // =============================================================================
 // showcmd accessors for Rust FFI
@@ -2312,8 +2219,6 @@ void nvim_getvcols_visual_sbr_save(int *out_left, int *out_right)
   *out_right = (int)rightcol;
 }
 
-// nvim_clear_showcmd_visual_info migrated to Rust (rs_clear_showcmd_visual_info) in Phase 1
-
 /// Add 'c' to string of shown command chars.
 ///
 /// @return  true if output has been written (and setcursor() has been called).
@@ -2339,8 +2244,6 @@ void push_showcmd(void) { rs_push_showcmd(); }
 
 extern void rs_pop_showcmd(void);
 void pop_showcmd(void) { rs_pop_showcmd(); }
-
-// display_showcmd migrated to Rust (rs_display_showcmd) in Phase 2
 
 // =============================================================================
 // Phase 3: Scrollbind C accessors for Rust FFI
@@ -2460,9 +2363,6 @@ bool nv_screengo(oparg_T *oap, int dir, int dist, bool skip_conceal)
   return rs_nv_screengo(oap, dir, dist, skip_conceal);
 }
 
-// nv_z_get_count migrated to Rust (nv_z_get_count_impl in nv_zet_impl) in Phase 4
-
-
 /// Phase 3: accessor -- initializes static oparg_T/cmdarg_T and returns cap pointer.
 /// nvim is single-threaded so function-static storage is safe.
 cmdarg_T *nvim_create_temp_cap_for_ident(int c1, int c2)
@@ -2481,21 +2381,6 @@ extern void rs_do_nv_ident(int c1, int c2);
 
 /// Call nv_ident() as if "c1" was used, with "c2" as next character.
 void do_nv_ident(int c1, int c2) { rs_do_nv_ident(c1, c2); }
-
-/// Implementation of nv_ident.
-// get_visual_text, nv_gotofile, normal_search, nv_mark_move_to migrated to Rust in Phase 2
-
-// nv_subst_impl, nv_optrans_impl migrated to Rust in Phase 2
-
-// n_start_visual_mode migrated to Rust (rs_n_start_visual_mode) in Phase 3
-
-// nv_g_home_m_cmd, nv_g_dollar_cmd, n_opencmd migrated to Rust (Phase 3)
-
-// nv_operator_impl migrated to Rust in Phase 2
-
-// set_op_var, adjust_cursor, adjust_for_sel, set_cursor_for_append_to_line
-// migrated to Rust (rs_set_op_var, rs_adjust_cursor, rs_adjust_for_sel,
-// rs_set_cursor_for_append_to_line) in Phase 3
 
 /// Move position "*pp" back one character for 'selection' == "exclusive".
 ///
@@ -2519,8 +2404,6 @@ static void invoke_edit(cmdarg_T *cap, int repl, int cmd, int startln)
 {
   rs_invoke_edit(cap, repl, cmd, startln);
 }
-
-// nv_record, nv_paste, nv_event, nv_join_impl, nv_open_impl migrated to Rust
 
 void normal_cmd(oparg_T *oap, bool toplevel)
 {
@@ -2688,16 +2571,6 @@ void nvim_set_mouse_dragging(int val) { mouse_dragging = val; }
 
 /// Call adjust_cursor_eol().
 void nvim_adjust_cursor_eol(void) { adjust_cursor_eol(); }
-
-/// Save curbuf visual area and mode from current cursor/VIsual state.
-void nvim_curbuf_save_visual(void)
-{
-  curbuf->b_visual.vi_mode = VIsual_mode;
-  curbuf->b_visual.vi_start = VIsual;
-  curbuf->b_visual.vi_end = curwin->w_cursor;
-  curbuf->b_visual.vi_curswant = curwin->w_curswant;
-  curbuf->b_visual_mode_eval = VIsual_mode;
-}
 
 /// Get get_op_char(optype).
 int nvim_get_op_char(int optype) { return get_op_char(optype); }

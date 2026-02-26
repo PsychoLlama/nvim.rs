@@ -7678,7 +7678,6 @@ extern "C" {
     fn nvim_conceal_check_cursor_line();
     fn nvim_set_mouse_dragging(val: c_int);
     fn nvim_adjust_cursor_eol();
-    fn nvim_curbuf_save_visual();
     fn nvim_get_op_char(optype: c_int) -> c_int;
     fn nvim_get_extra_op_char(optype: c_int) -> c_int;
     fn nvim_set_vim_var_string_vv_op(opchars: *const std::ffi::c_char, len: c_int);
@@ -7748,7 +7747,20 @@ pub unsafe extern "C" fn rs_end_visual_mode() {
     nvim_set_mouse_dragging(0);
 
     // Save the current VIsual area for '< and '> marks, and "gv"
-    nvim_curbuf_save_visual();
+    let vis_mode = nvim_get_VIsual_mode();
+    nvim_set_curbuf_visual_vi_mode(vis_mode);
+    nvim_set_b_visual_vi_start(
+        nvim_get_VIsual_lnum(),
+        nvim_get_VIsual_col(),
+        nvim_get_VIsual_coladd(),
+    );
+    nvim_set_b_visual_vi_end(
+        nvim_get_cursor_lnum(),
+        nvim_get_cursor_col(),
+        nvim_get_cursor_coladd(),
+    );
+    nvim_set_b_visual_vi_curswant(nvim_get_curwin_w_curswant());
+    nvim_set_curbuf_visual_mode_eval(vis_mode);
 
     if !nvim_virtual_active() {
         nvim_set_cursor_coladd_zero();
