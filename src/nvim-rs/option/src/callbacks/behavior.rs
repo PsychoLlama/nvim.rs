@@ -153,7 +153,7 @@ extern "C" {
     fn nvim_curbuf_set_b_p_ml_nobin(v: c_int);
     fn nvim_curbuf_get_b_p_et_nobin() -> c_int;
     fn nvim_curbuf_set_b_p_et_nobin(v: c_int);
-    fn nvim_bin_didset_options_sctx(opt_flags: c_int);
+    fn nvim_bin_didset_sctx_all(opt_flags: c_int);
 }
 
 // =============================================================================
@@ -795,7 +795,7 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
         }
     }
 
-    nvim_bin_didset_options_sctx(opt_flags);
+    nvim_bin_didset_sctx_all(opt_flags);
 }
 
 // =============================================================================

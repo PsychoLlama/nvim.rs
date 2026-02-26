@@ -440,6 +440,61 @@ impl CallbackState {
 }
 
 // =============================================================================
+// Phase 12 Pass 2: didset_options / didset_options2 migration
+// =============================================================================
+
+extern "C" {
+    fn nvim_call_init_chartab();
+    fn nvim_call_didset_string_options();
+    fn nvim_call_spell_check_msm();
+    fn nvim_call_spell_check_sps();
+    fn nvim_call_compile_cap_prog_curwin();
+    fn nvim_call_did_set_spell_option();
+    fn nvim_call_did_set_cedit();
+    fn nvim_call_did_set_breakat();
+    fn nvim_call_didset_window_options_curwin();
+    fn nvim_call_highlight_changed();
+    fn nvim_call_check_opt_wim() -> c_int;
+    fn nvim_call_set_chars_option_fcs_curwin();
+    fn nvim_call_set_chars_option_lcs_curwin();
+    fn nvim_call_curbuf_tabstop_set_vsts();
+    fn nvim_call_curbuf_tabstop_set_vts();
+}
+
+/// After setting various option values: recompute variables that depend on option values.
+/// Mirrors C `didset_options`.
+///
+/// # Safety
+/// Calls C side-effect functions; safe when called from C's option processing.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_didset_options() {
+    nvim_call_init_chartab();
+    nvim_call_didset_string_options();
+    nvim_call_spell_check_msm();
+    nvim_call_spell_check_sps();
+    nvim_call_compile_cap_prog_curwin();
+    nvim_call_did_set_spell_option();
+    nvim_call_did_set_cedit();
+    nvim_call_did_set_breakat();
+    nvim_call_didset_window_options_curwin();
+}
+
+/// More side effects of setting options.
+/// Mirrors C `didset_options2`.
+///
+/// # Safety
+/// Calls C side-effect functions; safe when called from C's option processing.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_didset_options2() {
+    nvim_call_highlight_changed();
+    nvim_call_set_chars_option_fcs_curwin();
+    nvim_call_set_chars_option_lcs_curwin();
+    nvim_call_check_opt_wim();
+    nvim_call_curbuf_tabstop_set_vsts();
+    nvim_call_curbuf_tabstop_set_vts();
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 

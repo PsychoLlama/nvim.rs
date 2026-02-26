@@ -1172,18 +1172,10 @@ const char *nvim_rs_set_option(OptIndex opt_idx, OptVal value, int opt_flags,
                                int set_sid, int direct, int value_replaced,
                                char *errbuf, size_t errbuflen);
 
-static int p_bin_dep_opts[] = {
-  kOptTextwidth, kOptWrapmargin, kOptModeline, kOptExpandtab, kOptInvalid
-};
-
 // nvim_paste_didset_options_sctx and p_paste_dep_opts removed (Phase 12 Pass 1).
 // Replaced by nvim_paste_didset_sctx_all at the bottom of this file.
-
-// bin callback: record sctx for all dependent options (after p_bin_dep_opts is defined)
-void nvim_bin_didset_options_sctx(int opt_flags)
-{
-  didset_options_sctx(opt_flags, p_bin_dep_opts);
-}
+// p_bin_dep_opts and nvim_bin_didset_options_sctx removed (Phase 12 Pass 2).
+// Replaced by nvim_bin_didset_sctx_all at the bottom of this file.
 
 // set_fileformat helper: set the 'fileformat' option string and trigger redraws
 void nvim_set_fileformat_option(const char *p, int opt_flags)
@@ -1846,44 +1838,20 @@ void *nvim_option_get_p_kp_ptr(void)
   return (void *)&p_kp;
 }
 
+extern void rs_didset_options(void);
+extern void rs_didset_options2(void);
+
 /// After setting various option values: recompute variables that depend on
-/// option values.
+/// option values. Body migrated to Rust (Phase 12 Pass 2).
 static void didset_options(void)
 {
-  // initialize the table for 'iskeyword' et.al.
-  init_chartab();
-
-  didset_string_options();
-
-  spell_check_msm();
-  spell_check_sps();
-  compile_cap_prog(curwin->w_s);
-  did_set_spell_option();
-  // set cedit_key
-  did_set_cedit(NULL);
-  // initialize the table for 'breakat'.
-  did_set_breakat(NULL);
-  didset_window_options(curwin, true);
+  rs_didset_options();
 }
 
-// More side effects of setting options.
+// More side effects of setting options. Body migrated to Rust (Phase 12 Pass 2).
 static void didset_options2(void)
 {
-  // Initialize the highlight_attr[] table.
-  highlight_changed();
-
-  // Parse default for 'fillchars'.
-  set_chars_option(curwin, curwin->w_p_fcs, kFillchars, true, NULL, 0);
-
-  // Parse default for 'listchars'.
-  set_chars_option(curwin, curwin->w_p_lcs, kListchars, true, NULL, 0);
-
-  // Parse default for 'wildmode'.
-  check_opt_wim();
-  xfree(curbuf->b_p_vsts_array);
-  tabstop_set(curbuf->b_p_vsts, &curbuf->b_p_vsts_array);
-  xfree(curbuf->b_p_vts_array);
-  tabstop_set(curbuf->b_p_vts,  &curbuf->b_p_vts_array);
+  rs_didset_options2();
 }
 
 /// Check for string options that are NULL (normally only termcap options).
@@ -4318,4 +4286,55 @@ void nvim_paste_didset_sctx_all(void)
     kOptTextwidth, kOptWrapmargin, kOptRevins, kOptVarsofttabstop, kOptInvalid
   };
   didset_options_sctx((OPT_LOCAL | OPT_GLOBAL), paste_dep);
+}
+
+// =============================================================================
+// Phase 12 Pass 2: didset_options / didset_options2 sub-function wrappers
+// =============================================================================
+
+/// didset_string_options() wrapper.
+void nvim_call_didset_string_options(void) { didset_string_options(); }
+/// spell_check_msm() wrapper.
+void nvim_call_spell_check_msm(void) { spell_check_msm(); }
+/// spell_check_sps() wrapper.
+void nvim_call_spell_check_sps(void) { spell_check_sps(); }
+/// compile_cap_prog(curwin->w_s) wrapper.
+void nvim_call_compile_cap_prog_curwin(void) { compile_cap_prog(curwin->w_s); }
+/// did_set_spell_option() wrapper.
+void nvim_call_did_set_spell_option(void) { did_set_spell_option(); }
+/// did_set_cedit(NULL) wrapper.
+void nvim_call_did_set_cedit(void) { did_set_cedit(NULL); }
+/// did_set_breakat(NULL) wrapper.
+void nvim_call_did_set_breakat(void) { did_set_breakat(NULL); }
+/// didset_window_options(curwin, true) wrapper.
+void nvim_call_didset_window_options_curwin(void) { didset_window_options(curwin, true); }
+/// set_chars_option(curwin, curwin->w_p_fcs, kFillchars, true, NULL, 0)
+void nvim_call_set_chars_option_fcs_curwin(void)
+{
+  set_chars_option(curwin, curwin->w_p_fcs, kFillchars, true, NULL, 0);
+}
+/// set_chars_option(curwin, curwin->w_p_lcs, kListchars, true, NULL, 0)
+void nvim_call_set_chars_option_lcs_curwin(void)
+{
+  set_chars_option(curwin, curwin->w_p_lcs, kListchars, true, NULL, 0);
+}
+/// xfree(curbuf->b_p_vsts_array) + tabstop_set(curbuf->b_p_vsts, &curbuf->b_p_vsts_array).
+void nvim_call_curbuf_tabstop_set_vsts(void)
+{
+  xfree(curbuf->b_p_vsts_array);
+  tabstop_set(curbuf->b_p_vsts, &curbuf->b_p_vsts_array);
+}
+/// xfree(curbuf->b_p_vts_array) + tabstop_set(curbuf->b_p_vts, &curbuf->b_p_vts_array).
+void nvim_call_curbuf_tabstop_set_vts(void)
+{
+  xfree(curbuf->b_p_vts_array);
+  tabstop_set(curbuf->b_p_vts, &curbuf->b_p_vts_array);
+}
+/// Record sctx for all bin-dependent options.
+void nvim_bin_didset_sctx_all(int opt_flags)
+{
+  static int bin_dep[] = {
+    kOptTextwidth, kOptWrapmargin, kOptModeline, kOptExpandtab, kOptInvalid
+  };
+  didset_options_sctx(opt_flags, bin_dep);
 }
