@@ -2643,16 +2643,6 @@ static Callback *get_callback_if_cpt_func(char *p, int idx)
   return (Callback *)nvim_get_callback_if_cpt_func_impl((const char *)p, idx);
 }
 
-/// get the next set of completion matches for "type".
-/// @return  true if a new match is found, otherwise false.
-/// NOTE: Body replaced by rs_ins_compl_get_exp (Phase 2, pass 8).
-static bool get_next_completion_match(int type, ins_compl_next_state_T *st, pos_T *ini)
-{
-  (void)type; (void)st; (void)ini;
-  // This function is no longer called directly; all dispatching is done by
-  // rs_ins_compl_get_exp which calls the compound accessors.
-  return FAIL;
-}
 
 /// Strips carets followed by numbers. This suffix typically represents the
 /// max_matches setting.
@@ -2983,10 +2973,6 @@ int nvim_ins_compl_add_orig_text(int flags, int save_did_ai) {
 void nvim_set_edit_submode_extra_searching(void) { edit_submode_extra = _("-- Searching..."); }
 void nvim_showmode_wrap(void) { showmode(); }
 
-// NOTE: nvim_ins_compl_start_init_impl body migrated to Rust rs_ins_compl_start
-// (Phase 10, pass 10). Uses fine-grained accessors: nvim_get_did_ai, nvim_set_did_ai,
-// nvim_clear_indent_flags, nvim_stop_arrow, nvim_set_compl_pending, nvim_set_compl_lnum_to_cursor.
-
 /// Compound accessor: set compl_startpos to the current cursor position.
 void nvim_set_compl_startpos_to_cursor(void)
 {
@@ -3020,20 +3006,6 @@ void nvim_set_edit_submode_ctrl_x_local_or_mode(void)
     edit_submode = _(CTRL_X_MSG(ctrl_x_mode));
   }
 }
-
-// NOTE: nvim_ins_compl_start_add_orig_impl body migrated to Rust rs_ins_compl_start
-// (Phase 10, pass 10). Uses: nvim_compl_clear_orig_text, nvim_clear_compl_orig_extmarks,
-// nvim_set_compl_orig_text_from_line, rs_save_orig_extmarks, nvim_get_p_ic,
-// nvim_ins_compl_add_orig_text, nvim_compl_clear_pattern, nvim_restore_did_ai.
-
-// NOTE: nvim_ins_compl_start_show_searching_impl body migrated to Rust rs_ins_compl_start
-// (Phase 10, pass 10). Uses: nvim_set_edit_submode_extra_searching,
-// nvim_set_edit_submode_highl_count, nvim_showmode_wrap, nvim_clear_edit_submode_extra, nvim_ui_flush.
-
-// NOTE: nvim_ins_compl_start_adding_eol_impl body migrated to Rust rs_ins_compl_start
-// (Phase 10, pass 10). Uses: nvim_get_curbuf_b_p_com, nvim_set_curbuf_b_p_com_empty,
-// nvim_set_compl_startpos_lnum_col, nvim_ins_eol_wrap, nvim_restore_curbuf_b_p_com,
-// nvim_set_compl_length, nvim_set_compl_col, nvim_set_compl_lnum_to_cursor, nvim_get_cursor_col.
 
 /// Compound accessor: set edit_submode_pre to _(" Adding").
 void nvim_set_edit_submode_adding(void)
@@ -3168,9 +3140,6 @@ static void setup_cpt_sources(void)
 {
   rs_setup_cpt_sources();
 }
-
-// NOTE: remove_old_matches() thin wrapper deleted (Phase 10, pass 10).
-// rs_remove_old_matches() in navigate.rs provides the full implementation.
 
 /// Retrieve completion matches using the callback function "cb" and store the
 /// 'refresh:always' flag.
@@ -4002,13 +3971,6 @@ void nvim_msg_ext_set_kind_completion(void) { msg_ext_set_kind("completion"); }
 void nvim_msg_with_attr(const char *s, int attr) { msg(s, attr); }
 void nvim_msg_clr_cmdline_wrap(void) { msg_clr_cmdline(); }
 
-// NOTE: nvim_ins_compl_continue_search_impl and nvim_ins_compl_show_statusmsg_impl
-// bodies migrated to Rust (Phase 10, pass 10). C callers updated accordingly.
-
-// NOTE: nvim_ins_compl_update_shown_match_impl and nvim_find_next_match_in_menu_impl
-// bodies migrated to Rust rs_ins_compl_update_shown_match / rs_find_next_match_in_menu
-// (Phase 10, pass 10).
-
 // Compound accessor for Phase 2 (pass 4): get_next_bufname_token
 void nvim_get_next_bufname_token_impl(void)
 {
@@ -4726,9 +4688,6 @@ void nvim_set_completion_impl(int startcol_arg, void *list_opaque)
   may_trigger_modechanged();
   ui_flush();
 }
-
-// Phase 4 accessors: remove_old_matches, cpt_compl_refresh, get_callback_if_cpt_func
-// NOTE: nvim_remove_old_matches_impl body migrated to Rust rs_remove_old_matches (Phase 10, pass 10).
 
 /// Compound accessor: cpt_compl_refresh logic, callable from Rust.
 /// Contains the full logic from the original cpt_compl_refresh function.
