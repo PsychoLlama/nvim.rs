@@ -2011,46 +2011,46 @@ void nvim_shada_set_sub_replacement_from_entry(ShadaEntry *entry)
   regtilde(entry->data.sub_string.sub, rs_magic_isset(), false);
 }
 
-/// Apply a register entry.
-/// @param entry   The ShaDa entry (kSDItemRegister).
-/// @param force   Whether to force overwrite newer entries.
-/// @return 1 if memory was consumed by op_reg_set, 0 if entry was freed.
-int nvim_shada_apply_register(ShadaEntry *entry, bool force)
+// nvim_shada_apply_register deleted (plan b499a5d0 Phase 2): Rust rs_shada_apply_register.
+// nvim_shada_apply_variable deleted (plan b499a5d0 Phase 2): Rust rs_shada_apply_variable.
+
+// Phase 2 (plan b499a5d0): thin C accessors for register/variable apply migration
+
+/// Return 1 if register type is char/line/block-wise (valid for ShaDa), 0 otherwise.
+int nvim_shada_entry_get_reg_type_valid(const ShadaEntry *entry)
 {
-  if (entry->data.reg.type != kMTCharWise
-      && entry->data.reg.type != kMTLineWise
-      && entry->data.reg.type != kMTBlockWise) {
-    rs_shada_free_entry_contents(entry);
-    return 0;
-  }
-  if (!force) {
-    const yankreg_T *const reg = op_reg_get(entry->data.reg.name);
-    if (reg == NULL || reg->timestamp >= entry->timestamp) {
-      rs_shada_free_entry_contents(entry);
-      return 0;
-    }
-  }
-  if (!op_reg_set(entry->data.reg.name, (yankreg_T) {
+  return (entry->data.reg.type == kMTCharWise
+          || entry->data.reg.type == kMTLineWise
+          || entry->data.reg.type == kMTBlockWise) ? 1 : 0;
+}
+
+/// Get timestamp of named register (0 if register is NULL).
+uint64_t nvim_shada_op_reg_get_timestamp(char name)
+{
+  const yankreg_T *const reg = op_reg_get(name);
+  return reg != NULL ? (uint64_t)reg->timestamp : 0;
+}
+
+/// Build yankreg_T from entry fields and call op_reg_set.
+/// Returns 1 if memory was consumed (do not free entry), 0 if op_reg_set rejected.
+int nvim_shada_op_reg_set_from_entry(ShadaEntry *entry)
+{
+  return op_reg_set(entry->data.reg.name, (yankreg_T) {
     .y_array = entry->data.reg.contents,
     .y_size = entry->data.reg.contents_size,
     .y_type = entry->data.reg.type,
     .y_width = (colnr_T)entry->data.reg.width,
     .timestamp = entry->timestamp,
     .additional_data = entry->additional_data,
-  }, entry->data.reg.is_unnamed)) {
-    rs_shada_free_entry_contents(entry);
-    return 0;
-  }
-  return 1;
+  }, entry->data.reg.is_unnamed) ? 1 : 0;
 }
 
-/// Apply a global variable entry.
-/// @param entry   The ShaDa entry (kSDItemVariable).
-void nvim_shada_apply_variable(ShadaEntry *entry)
+/// Call var_set_global with entry's name and value, then clear the typval.
+/// After this call, the entry's value field is zeroed (VAR_UNKNOWN).
+void nvim_shada_var_set_global_from_entry(ShadaEntry *entry)
 {
   var_set_global(entry->data.global_var.name, &entry->data.global_var.value);
   entry->data.global_var.value.v_type = VAR_UNKNOWN;
-  rs_shada_free_entry_contents(entry);
 }
 
 /// Apply a global mark or jump entry.

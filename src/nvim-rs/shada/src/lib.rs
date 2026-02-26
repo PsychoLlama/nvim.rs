@@ -564,8 +564,8 @@ extern "C" {
     // Phase 1 (plan 92c8078e): compound accessors replacing nvim_shada_apply_entry
     // nvim_shada_apply_search_pattern removed (plan b499a5d0 Phase 1): Rust rs_shada_apply_search_pattern.
     // nvim_shada_apply_sub_string removed (plan b499a5d0 Phase 1): Rust rs_shada_apply_sub_string.
-    fn nvim_shada_apply_register(entry: *mut ShadaEntry, force: bool) -> c_int;
-    fn nvim_shada_apply_variable(entry: *mut ShadaEntry);
+    // nvim_shada_apply_register removed (plan b499a5d0 Phase 2): Rust rs_shada_apply_register.
+    // nvim_shada_apply_variable removed (plan b499a5d0 Phase 2): Rust rs_shada_apply_variable.
     fn nvim_shada_apply_mark_or_jump(
         entry: *mut ShadaEntry,
         fname_bufs: *mut c_void,
@@ -590,6 +590,11 @@ extern "C" {
     fn nvim_shada_set_no_hlsearch(val: c_int);
     fn nvim_shada_get_sub_replacement_timestamp() -> u64;
     fn nvim_shada_set_sub_replacement_from_entry(entry: *mut ShadaEntry);
+    // Phase 2 (plan b499a5d0): thin accessors for register/variable apply
+    fn nvim_shada_entry_get_reg_type_valid(entry: *const ShadaEntry) -> c_int;
+    fn nvim_shada_op_reg_get_timestamp(name: c_char) -> u64;
+    fn nvim_shada_op_reg_set_from_entry(entry: *mut ShadaEntry) -> c_int;
+    fn nvim_shada_var_set_global_from_entry(entry: *mut ShadaEntry);
     fn nvim_shada_for_all_tab_windows_update_changelist(cl_bufs_handle: *mut c_void);
     fn nvim_shada_clr_history(i: c_int);
     fn nvim_shada_hist_get_array(
@@ -5302,6 +5307,51 @@ unsafe fn rs_shada_apply_sub_string(entry: *mut ShadaEntry, force: bool) {
     // Memory was consumed by sub_set_replacement; do not free.
 }
 
+// =============================================================================
+// Phase 2 (plan b499a5d0): Rust apply functions for register and variable
+// =============================================================================
+
+/// Apply a register ShaDa entry (Rust replacement for C nvim_shada_apply_register).
+///
+/// Validates register type, compares timestamps with current register,
+/// calls op_reg_set via thin C accessor.
+///
+/// # Safety
+///
+/// `entry` must be a valid pointer to a ShadaEntry of type Register.
+unsafe fn rs_shada_apply_register(entry: *mut ShadaEntry, force: bool) {
+    if nvim_shada_entry_get_reg_type_valid(entry) == 0 {
+        rs_shada_free_entry_contents(entry);
+        return;
+    }
+    if !force {
+        let name = nvim_shada_reg_get_name(entry);
+        let cur_ts = nvim_shada_op_reg_get_timestamp(name);
+        // cur_ts == 0 means register is NULL; if non-null and newer or equal, skip
+        if cur_ts != 0 && cur_ts >= (*entry).timestamp {
+            rs_shada_free_entry_contents(entry);
+            return;
+        }
+    }
+    if nvim_shada_op_reg_set_from_entry(entry) == 0 {
+        rs_shada_free_entry_contents(entry);
+    }
+    // If op_reg_set returned 1, memory was consumed; do not free.
+}
+
+/// Apply a global variable ShaDa entry (Rust replacement for C nvim_shada_apply_variable).
+///
+/// Calls var_set_global via thin C accessor (which also clears the typval),
+/// then frees the entry.
+///
+/// # Safety
+///
+/// `entry` must be a valid pointer to a ShadaEntry of type Variable.
+unsafe fn rs_shada_apply_variable(entry: *mut ShadaEntry) {
+    nvim_shada_var_set_global_from_entry(entry);
+    rs_shada_free_entry_contents(entry);
+}
+
 /// Dispatch a single ShaDa entry to Neovim's in-memory state.
 ///
 /// This is the Rust replacement for the C `nvim_shada_apply_entry` function.
@@ -5336,10 +5386,10 @@ unsafe fn rs_shada_apply_entry(
             rs_shada_apply_sub_string(entry, force);
         }
         ShadaEntryType::Register => {
-            nvim_shada_apply_register(entry, force);
+            rs_shada_apply_register(entry, force);
         }
         ShadaEntryType::Variable => {
-            nvim_shada_apply_variable(entry);
+            rs_shada_apply_variable(entry);
         }
         ShadaEntryType::GlobalMark | ShadaEntryType::Jump => {
             nvim_shada_apply_mark_or_jump(entry, fname_bufs, force);
