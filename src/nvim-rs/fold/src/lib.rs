@@ -374,11 +374,11 @@ extern "C" {
     /// Get the buffer from a window.
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
 
-    /// Call deleteFoldRecurse from Rust (to recursively free nested fold memory).
-    fn nvim_deleteFoldRecurse(buf: BufHandle, gap: GArrayHandle);
-
     /// Free the ga_data pointer of a garray (for nested folds).
     fn nvim_ga_free_data(gap: GArrayHandle);
+
+    /// Clear (free and reset) a garray: frees ga_data, resets ga_len/ga_maxlen.
+    fn nvim_ga_clear(gap: GArrayHandle);
 
     // ========================================================================
     // Phase 2: Fold State Management accessors
@@ -568,6 +568,31 @@ fn has_any_folding_impl(win: WinHandle) -> bool {
         let folds_empty = nvim_win_folds_empty(win) != 0;
         !folds_empty
     }
+}
+
+// ============================================================================
+// delete_fold_recurse_impl (Phase 5 Pass 5)
+// ============================================================================
+
+/// Recursively delete nested folds in a garray, then clear the garray.
+///
+/// Equivalent to C's GA_DEEP_CLEAR with DELETE_FOLD_NESTED: for each fold,
+/// recurse into its fd_nested array, then call ga_clear on the top-level array.
+pub(crate) fn delete_fold_recurse_impl(gap: GArrayHandle) {
+    if gap.is_null() {
+        return;
+    }
+    let len = unsafe { nvim_ga_len(gap) };
+    for i in 0..len {
+        let fp = unsafe { nvim_ga_fold_at(gap, i) };
+        if !fp.is_null() {
+            let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+            if !nested.is_null() {
+                delete_fold_recurse_impl(nested);
+            }
+        }
+    }
+    unsafe { nvim_ga_clear(gap) };
 }
 
 // ============================================================================
@@ -1296,6 +1321,30 @@ pub unsafe extern "C" fn nvim_hasFolding(
     c_int::from(hasFolding(wp, lnum, firstp, lastp))
 }
 
+/// deleteFoldRecurse Rust export (Phase 5 Pass 5).
+///
+/// Recursively delete nested folds in a garray, then clear it.
+/// Matches GA_DEEP_CLEAR behavior from the original C implementation.
+///
+/// # Safety
+/// `gap` must be a valid garray_T* or null. `bp` is accepted for ABI
+/// compatibility but not used (the Rust implementation does not need it).
+#[no_mangle]
+pub unsafe extern "C" fn deleteFoldRecurse(_bp: BufHandle, gap: GArrayHandle) {
+    delete_fold_recurse_impl(gap);
+}
+
+/// nvim_foldUpdateAll_c Rust export (Phase 5 Pass 5).
+///
+/// Sets w_foldinvalid and schedules a NOT_VALID redraw for the window.
+///
+/// # Safety
+/// `win` must be a valid win_T* or null.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_foldUpdateAll_c(win: WinHandle) {
+    fold_update_all_impl(win);
+}
+
 // ============================================================================
 // Phase 1 & 2: Fold State Queries and Navigation
 // ============================================================================
@@ -1498,12 +1547,10 @@ pub(crate) fn delete_fold_entry_impl(
         unsafe { nvim_ga_len(nested) }
     };
 
-    let buf = unsafe { nvim_win_get_buffer(wp) };
-
     if recursive || nested_len == 0 {
         // Recursively delete the contained folds
         if !nested.is_null() {
-            unsafe { nvim_deleteFoldRecurse(buf, nested) };
+            delete_fold_recurse_impl(nested);
         }
 
         // Shift remaining folds down
@@ -2514,12 +2561,9 @@ fn clear_folding_impl(win: WinHandle) {
         return;
     }
 
-    unsafe {
-        let buf = nvim_win_get_buffer(win);
-        let folds = nvim_win_get_folds(win);
-        nvim_deleteFoldRecurse(buf, folds);
-        nvim_win_set_w_foldinvalid(win, false);
-    }
+    let folds = unsafe { nvim_win_get_folds(win) };
+    delete_fold_recurse_impl(folds);
+    unsafe { nvim_win_set_w_foldinvalid(win, false) };
 }
 
 // ============================================================================
@@ -2564,8 +2608,6 @@ extern "C" {
     /// Redraw later with specified type.
     fn nvim_redraw_later(wp: WinHandle, redraw_type: c_int);
 
-    /// Call foldUpdateAll in C.
-    fn nvim_foldUpdateAll_c(win: WinHandle);
 }
 
 /// UPD_NOT_VALID redraw type.
@@ -2599,9 +2641,7 @@ fn fold_update_after_insert_impl() {
         return;
     }
 
-    unsafe {
-        nvim_foldUpdateAll_c(curwin);
-    }
+    fold_update_all_impl(curwin);
     fold_open_cursor_impl();
 }
 

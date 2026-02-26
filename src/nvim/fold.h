@@ -29,6 +29,9 @@ extern bool hasFolding(win_T *win, linenr_T lnum, linenr_T *firstp, linenr_T *la
 extern bool hasFoldingWin(win_T *win, linenr_T lnum, linenr_T *firstp, linenr_T *lastp,
                           bool cache, foldinfo_T *infop);
 extern int nvim_hasFolding(win_T *wp, linenr_T lnum, linenr_T *firstp, linenr_T *lastp);
+
+// Phase 5 Pass 5: deleteFoldRecurse exported from Rust
+extern void deleteFoldRecurse(buf_T *bp, garray_T *gap);
 extern int rs_foldmethodIsManual(win_T *wp);
 extern int rs_foldmethodIsIndent(win_T *wp);
 extern int rs_foldmethodIsExpr(win_T *wp);

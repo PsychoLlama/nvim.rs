@@ -81,24 +81,13 @@ static const char *e_nofold = N_("E490: No fold found");
 
 // foldUpdate() -- migrated to Rust (update.rs: fold_update_impl / rs_foldUpdate)
 
-// C accessor for foldUpdateAll (for Rust to call from foldUpdateAfterInsert)
-void nvim_foldUpdateAll_c(win_T *win)
-{
-  win->w_foldinvalid = true;
-  redraw_later(win, UPD_NOT_VALID);
-}
+// nvim_foldUpdateAll_c -- migrated to Rust export (Phase 5 Pass 5)
 
 // Internal functions for "fold_T" {{{1
 
 // foldFind() -- migrated to Rust (update.rs: fold_find_impl)
 
-// deleteFoldRecurse() {{{2
-/// Delete nested folds in a fold.
-void deleteFoldRecurse(buf_T *bp, garray_T *gap)
-{
-#define DELETE_FOLD_NESTED(fd) deleteFoldRecurse(bp, &((fd)->fd_nested))
-  GA_DEEP_CLEAR(gap, fold_T, DELETE_FOLD_NESTED);
-}
+// deleteFoldRecurse -- migrated to Rust (Phase 5 Pass 5)
 
 // foldCreateMarkers() -- migrated to Rust (markers.rs: fold_create_markers_impl)
 // foldAddMarker() -- migrated to Rust (markers.rs: fold_add_marker_impl)
@@ -518,11 +507,7 @@ void nvim_fold_copy(fold_T *dst, const fold_T *src)
   *dst = *src;
 }
 
-/// Call deleteFoldRecurse from Rust (to recursively free nested fold memory).
-void nvim_deleteFoldRecurse(buf_T *buf, garray_T *gap)
-{
-  deleteFoldRecurse(buf, gap);
-}
+// nvim_deleteFoldRecurse -- deleted; Rust calls delete_fold_recurse_impl directly (Phase 5 Pass 5)
 
 /// Free the ga_data pointer of a garray (for nested folds).
 void nvim_ga_free_data(garray_T *gap)
@@ -530,6 +515,13 @@ void nvim_ga_free_data(garray_T *gap)
   xfree(gap->ga_data);
   gap->ga_data = NULL;
   gap->ga_len = 0;
+}
+
+/// Clear (free and reset) a garray of folds.
+/// Equivalent to ga_clear(): frees ga_data, resets ga_len, ga_maxlen.
+void nvim_ga_clear(garray_T *gap)
+{
+  ga_clear(gap);
 }
 
 // nvim_set_fold_changed/nvim_get_fold_changed -- migrated to Rust static FOLD_CHANGED (Phase 5 Pass 5)
