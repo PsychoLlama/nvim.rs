@@ -14,7 +14,8 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::types::{
-    StateItemHandle, SynStateHandle, HL_EXTEND, HL_KEEPEND, HL_MATCHCONT, SPTYPE_MATCH,
+    BufStateHandle, ExtMatchHandle, StateItemHandle, SynStateHandle, HL_EXTEND, HL_KEEPEND,
+    HL_MATCHCONT, SPTYPE_MATCH,
 };
 
 // =============================================================================
@@ -58,8 +59,13 @@ extern "C" {
 
     // (nvim_syn_exec_linecont replaced by crate::regexec::syn_exec_linecont)
 
-    // clear_syn_state (wraps the real impl in C)
-    fn nvim_syn_clear_syn_state(p: SynStateHandle);
+    // clear_syn_state accessors (Phase 11)
+    fn nvim_synstate_get_sst_fix_states() -> c_int;
+    fn nvim_synstate_ga_clear(state: SynStateHandle);
+    fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
+    fn nvim_synstate_get_stacksize(state: SynStateHandle) -> c_int;
+    fn nvim_synstate_get_bufstate(state: SynStateHandle, idx: c_int) -> BufStateHandle;
+    fn nvim_bufstate_get_extmatch(bs: BufStateHandle) -> ExtMatchHandle;
 
     // syn_clear_time (wraps syn_clear_time)
     fn nvim_syn_do_clear_time(st: *mut c_void);
@@ -199,13 +205,30 @@ pub unsafe extern "C" fn rs_restore_chartab(chartab: *const c_char) {
 
 /// Release extmatch pointers from a synstate entry.
 ///
-/// Replaces static C `clear_syn_state` (via existing nvim_syn_clear_syn_state).
+/// Replaces static C `clear_syn_state`. Iterates through the bufstate entries
+/// and unrefs each extmatch, then clears the growarray if the GA path was used.
 ///
 /// # Safety
 /// Accesses C global state; must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_clear_syn_state(p: SynStateHandle) {
-    nvim_syn_clear_syn_state(p);
+    if p.is_null() {
+        return;
+    }
+    let stacksize = nvim_synstate_get_stacksize(p);
+    let sst_fix_states = nvim_synstate_get_sst_fix_states();
+    // Unref all extmatch pointers
+    for i in 0..stacksize {
+        let bs = nvim_synstate_get_bufstate(p, i);
+        if !bs.0.is_null() {
+            let em = nvim_bufstate_get_extmatch(bs);
+            nvim_syn_unref_extmatch(em);
+        }
+    }
+    // If the growarray path was used, free the ga_data
+    if stacksize > sst_fix_states {
+        nvim_synstate_ga_clear(p);
+    }
 }
 
 /// Set itemsize/growsize on current_state garray.

@@ -28,6 +28,7 @@ extern "C" {
     // SynState navigation
     fn nvim_synstate_get_next(state: SynStateHandle) -> SynStateHandle;
     fn nvim_synstate_set_next(state: SynStateHandle, next: SynStateHandle);
+    fn nvim_synstate_get_stacksize(state: SynStateHandle) -> c_int;
     fn nvim_synstate_set_stacksize(state: SynStateHandle, size: c_int);
     fn nvim_synstate_set_sst_lnum(state: SynStateHandle, lnum: c_int);
 
@@ -45,6 +46,11 @@ extern "C" {
 
     // Bufstate fill (handles union sst_stack vs sst_ga)
     fn nvim_syn_store_bufstates(sp: SynStateHandle);
+
+    // Phase 11 accessors for rs_syn_store_bufstates Rust implementation
+    fn nvim_synstate_get_sst_fix_states() -> c_int;
+    fn nvim_synstate_ga_init_for_store(sp: SynStateHandle);
+    fn nvim_synstate_fill_bufstate_from_curstate(sp: SynStateHandle, i: c_int);
 
     // Free entry + list operations
     fn rs_syn_stack_free_entry(block: SynBlockHandle, p: SynStateHandle);
@@ -140,6 +146,29 @@ pub unsafe extern "C" fn rs_syn_stack_alloc_entry(
     p
 }
 
+/// Fill bufstate array in a synstate entry from the current state stack.
+///
+/// Replaces C `nvim_syn_store_bufstates`. Handles both fixed-array
+/// (stacksize <= SST_FIX_STATES) and growarray paths.
+///
+/// # Safety
+/// Accesses C global current_state; must be called from main thread.
+/// Must be called after nvim_synstate_set_stacksize has been set on sp.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_store_bufstates(sp: SynStateHandle) {
+    if sp.is_null() {
+        return;
+    }
+    let stacksize = nvim_synstate_get_stacksize(sp);
+    let sst_fix_states = nvim_synstate_get_sst_fix_states();
+    if stacksize > sst_fix_states {
+        nvim_synstate_ga_init_for_store(sp);
+    }
+    for i in 0..stacksize {
+        nvim_synstate_fill_bufstate_from_curstate(sp, i);
+    }
+}
+
 /// Store the current state into a synstate entry.
 ///
 /// Replaces C `nvim_syn_store_state_to_entry`.
@@ -159,7 +188,7 @@ pub unsafe extern "C" fn rs_syn_store_state_to_entry(sp: SynStateHandle) {
     nvim_synstate_set_stacksize(sp, stacksize);
 
     // Fill bufstate array (handles union fixed/growarray split)
-    nvim_syn_store_bufstates(sp);
+    rs_syn_store_bufstates(sp);
 
     // Copy next_flags, next_list, tick, change_lnum
     nvim_synstate_set_sst_next_flags(sp, nvim_syn_get_current_next_flags());

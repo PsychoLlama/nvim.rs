@@ -103,6 +103,9 @@ extern synstate_T *rs_syn_stack_alloc_entry(int lnum, synstate_T *after);
 extern void rs_syn_store_state_to_entry(synstate_T *sp);
 extern void rs_syn_do_stack_realloc(int len);
 
+// Phase 11: state_entry.rs Phase 11 Rust implementations
+extern void rs_syn_store_bufstates(synstate_T *sp);
+
 // Phase 9.2: state_ops.rs Rust implementations
 extern void rs_syn_set_next_match_state(int idx, int col,
     int m_endpos_lnum, int m_endpos_col,
@@ -419,16 +422,10 @@ void syn_set_timeout(proftime_T *tm)
 
 // We cannot simply discard growarrays full of state_items or buf_states; we
 // have to manually release their extmatch pointers first.
+// Thin wrapper: logic is in rs_clear_syn_state (line_init.rs).
 static void clear_syn_state(synstate_T *p)
 {
-  if (p->sst_stacksize > SST_FIX_STATES) {
-#define UNREF_BUFSTATE_EXTMATCH(bs) unref_extmatch((bs)->bs_extmatch)
-    GA_DEEP_CLEAR(&(p->sst_union.sst_ga), bufstate_T, UNREF_BUFSTATE_EXTMATCH);
-  } else {
-    for (int i = 0; i < p->sst_stacksize; i++) {
-      unref_extmatch(p->sst_union.sst_stack[i].bs_extmatch);
-    }
-  }
+  rs_clear_syn_state(p);
 }
 
 // Try to find a synchronisation point for line "lnum".
@@ -3461,29 +3458,10 @@ void nvim_synstate_set_sst_next_list(synstate_T *state, int16_t *list)
 }
 
 /// Initialize and fill the sst_union bufstate array from current_state.
-/// Handles both fixed-array (stack <= SST_FIX_STATES) and growarray paths.
-/// Must be called after nvim_syn_do_clear_syn_state and nvim_synstate_set_stacksize.
+/// Thin wrapper: logic is in rs_syn_store_bufstates (state_entry.rs).
 void nvim_syn_store_bufstates(synstate_T *sp)
 {
-  if (sp == NULL) {
-    return;
-  }
-  bufstate_T *bp;
-  if (sp->sst_stacksize > SST_FIX_STATES) {
-    ga_init(&sp->sst_union.sst_ga, (int)sizeof(bufstate_T), 1);
-    ga_grow(&sp->sst_union.sst_ga, sp->sst_stacksize);
-    sp->sst_union.sst_ga.ga_len = sp->sst_stacksize;
-    bp = SYN_STATE_P(&(sp->sst_union.sst_ga));
-  } else {
-    bp = sp->sst_union.sst_stack;
-  }
-  for (int i = 0; i < sp->sst_stacksize; i++) {
-    bp[i].bs_idx = CUR_STATE(i).si_idx;
-    bp[i].bs_flags = CUR_STATE(i).si_flags;
-    bp[i].bs_seqnr = CUR_STATE(i).si_seqnr;
-    bp[i].bs_cchar = CUR_STATE(i).si_cchar;
-    bp[i].bs_extmatch = ref_extmatch(CUR_STATE(i).si_extmatch);
-  }
+  rs_syn_store_bufstates(sp);
 }
 
 /// Set sst_tick to current display_tick on a synstate entry.
@@ -3544,3 +3522,47 @@ void nvim_syn_set_next_match_end_idx(int idx) { next_match_end_idx = idx; }
 
 /// Set next_match_extmatch (without unref of old value; Rust handles that).
 void nvim_syn_set_next_match_extmatch_raw(reg_extmatch_T *em) { next_match_extmatch = em; }
+
+// =============================================================================
+// Phase 11: New C accessors for clear_syn_state / store_bufstates migration
+// =============================================================================
+
+/// Return SST_FIX_STATES constant (size of sst_stack[]).
+int nvim_synstate_get_sst_fix_states(void) { return SST_FIX_STATES; }
+
+/// Call ga_clear on state->sst_union.sst_ga (for use after unreffing all extmatches
+/// in the growarray path of clear_syn_state).
+void nvim_synstate_ga_clear(synstate_T *state)
+{
+  if (state) ga_clear(&state->sst_union.sst_ga);
+}
+
+/// Fill one bufstate slot in sp->sst_union from CUR_STATE(i).
+/// Handles both fixed-stack and growarray paths.
+/// Must be called only after nvim_syn_store_bufstates_init() sets up the bp pointer.
+/// Combined accessor: copies idx/flags/seqnr/cchar and calls ref_extmatch.
+/// This avoids exposing CUR_STATE and ref_extmatch macros to Rust.
+void nvim_synstate_fill_bufstate_from_curstate(synstate_T *sp, int i)
+{
+  bufstate_T *bp;
+  if (sp->sst_stacksize > SST_FIX_STATES) {
+    bp = SYN_STATE_P(&(sp->sst_union.sst_ga));
+  } else {
+    bp = sp->sst_union.sst_stack;
+  }
+  bp[i].bs_idx = CUR_STATE(i).si_idx;
+  bp[i].bs_flags = CUR_STATE(i).si_flags;
+  bp[i].bs_seqnr = CUR_STATE(i).si_seqnr;
+  bp[i].bs_cchar = CUR_STATE(i).si_cchar;
+  bp[i].bs_extmatch = ref_extmatch(CUR_STATE(i).si_extmatch);
+}
+
+/// Initialize the growarray path of sst_union for store_bufstates.
+/// Only call when sp->sst_stacksize > SST_FIX_STATES.
+void nvim_synstate_ga_init_for_store(synstate_T *sp)
+{
+  if (sp == NULL) return;
+  ga_init(&sp->sst_union.sst_ga, (int)sizeof(bufstate_T), 1);
+  ga_grow(&sp->sst_union.sst_ga, sp->sst_stacksize);
+  sp->sst_union.sst_ga.ga_len = sp->sst_stacksize;
+}
