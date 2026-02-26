@@ -2168,55 +2168,6 @@ int nvim_excmds_eap_get_forceit(const exarg_T *eap) { return eap->forceit ? 1 : 
 /// Get mutable pointer to eap->forceit field (for check_readonly pattern).
 int *nvim_excmds_eap_forceit_ptr(exarg_T *eap) { return (int *)&eap->forceit; }
 
-// =============================================================================
-// Phase 2: Additional global/struct accessors for do_sub migration
-// =============================================================================
-
-/// Get RedrawingDisabled global.
-int nvim_do_sub_get_RedrawingDisabled(void) { return RedrawingDisabled; }
-/// Set RedrawingDisabled global.
-void nvim_do_sub_set_RedrawingDisabled(int val) { RedrawingDisabled = val; }
-
-/// Increment no_u_sync.
-void nvim_do_sub_no_u_sync_inc(void) { no_u_sync++; }
-/// Decrement no_u_sync.
-void nvim_do_sub_no_u_sync_dec(void) { no_u_sync--; }
-
-/// Set need_wait_return global.
-void nvim_do_sub_set_need_wait_return(int val) { need_wait_return = (bool)val; }
-
-/// Set msg_didout global.
-void nvim_do_sub_set_msg_didout(int val) { msg_didout = (bool)val; }
-
-/// Set highlight_match global.
-void nvim_do_sub_set_highlight_match(int val) { highlight_match = (bool)val; }
-
-/// Set search_match_lines global.
-void nvim_do_sub_set_search_match_lines(int val) { search_match_lines = val; }
-
-/// Set search_match_endcol global.
-void nvim_do_sub_set_search_match_endcol(int val) { search_match_endcol = (colnr_T)val; }
-
-/// Get ex_normal_busy global.
-int nvim_do_sub_get_ex_normal_busy(void) { return ex_normal_busy; }
-
-/// Get exmode_active global.
-int nvim_do_sub_get_exmode_active(void) { return exmode_active; }
-
-/// Get sandbox global.
-int nvim_do_sub_get_sandbox(void) { return sandbox; }
-/// Increment sandbox.
-void nvim_do_sub_sandbox_inc(void) { sandbox++; }
-/// Decrement sandbox.
-void nvim_do_sub_sandbox_dec(void) { sandbox--; }
-
-/// Get textlock global.
-int nvim_do_sub_get_textlock(void) { return textlock; }
-/// Increment textlock.
-void nvim_do_sub_textlock_inc(void) { textlock++; }
-/// Decrement textlock.
-void nvim_do_sub_textlock_dec(void) { textlock--; }
-
 /// Get p_ch (cmdheight).
 int nvim_do_sub_get_p_ch(void) { return (int)p_ch; }
 

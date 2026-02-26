@@ -2611,9 +2611,12 @@ void close_others(int message, int forceit) { rs_close_others(message, forceit);
 
 // Phase 6 accessors: close_windows
 
+/// Get RedrawingDisabled.
+int nvim_get_RedrawingDisabled(void) { return RedrawingDisabled; }
+/// Set RedrawingDisabled.
+void nvim_set_RedrawingDisabled(int val) { RedrawingDisabled = val; }
 /// Increment RedrawingDisabled.
 void nvim_inc_RedrawingDisabled(void) { RedrawingDisabled++; }
-
 /// Decrement RedrawingDisabled.
 void nvim_dec_RedrawingDisabled(void) { RedrawingDisabled--; }
 

@@ -1140,23 +1140,24 @@ pub unsafe extern "C" fn rs_skip_substitute(
 
 #[allow(dead_code)]
 extern "C" {
-    fn nvim_do_sub_get_RedrawingDisabled() -> c_int;
-    fn nvim_do_sub_set_RedrawingDisabled(val: c_int);
-    fn nvim_do_sub_no_u_sync_inc();
-    fn nvim_do_sub_no_u_sync_dec();
-    fn nvim_do_sub_set_need_wait_return(val: c_int);
-    fn nvim_do_sub_set_msg_didout(val: c_int);
-    fn nvim_do_sub_set_highlight_match(val: c_int);
-    fn nvim_do_sub_set_search_match_lines(val: c_int);
-    fn nvim_do_sub_set_search_match_endcol(val: c_int);
-    fn nvim_do_sub_get_ex_normal_busy() -> c_int;
-    fn nvim_do_sub_get_exmode_active() -> c_int;
-    fn nvim_do_sub_get_sandbox() -> c_int;
-    fn nvim_do_sub_sandbox_inc();
-    fn nvim_do_sub_sandbox_dec();
-    fn nvim_do_sub_get_textlock() -> c_int;
-    fn nvim_do_sub_textlock_inc();
-    fn nvim_do_sub_textlock_dec();
+    // Generic global accessors (replacing do_sub-specific ones)
+    fn nvim_get_RedrawingDisabled() -> c_int;
+    fn nvim_set_RedrawingDisabled(val: c_int);
+    fn nvim_inc_no_u_sync();
+    fn nvim_dec_no_u_sync();
+    fn nvim_set_need_wait_return(val: c_int);
+    fn nvim_set_msg_didout(val: c_int);
+    fn nvim_set_highlight_match(val: c_int);
+    fn nvim_set_search_match_lines(val: c_int);
+    fn nvim_set_search_match_endcol(val: c_int);
+    fn nvim_get_ex_normal_busy() -> c_int;
+    fn nvim_get_exmode_active() -> bool;
+    fn nvim_get_sandbox() -> c_int;
+    fn nvim_inc_sandbox();
+    fn nvim_dec_sandbox();
+    fn nvim_get_textlock() -> c_int;
+    fn nvim_inc_textlock();
+    fn nvim_dec_textlock();
     fn nvim_do_sub_get_p_ch() -> c_int;
     fn nvim_do_sub_get_p_lz() -> c_int;
     fn nvim_do_sub_set_p_lz(val: c_int);
@@ -2227,13 +2228,13 @@ unsafe fn handle_do_ask(
     }
 
     if nvim_do_sub_get_p_cpo_has_undo() != 0 {
-        nvim_do_sub_no_u_sync_inc();
+        nvim_inc_no_u_sync();
     }
 
     let mut typed: c_int = 0;
 
     while subflags.do_ask {
-        if nvim_do_sub_get_exmode_active() != 0 {
+        if nvim_get_exmode_active() {
             // Exmode: use getcmdline_prompt
             rs_print_line_no_prefix(lnum, subflags.do_number as c_int, subflags.do_list as c_int);
 
@@ -2261,7 +2262,7 @@ unsafe fn handle_do_ask(
             typed = nvim_do_sub_getcmdline_prompt(prompt);
             libc_free(prompt);
 
-            if nvim_do_sub_get_ex_normal_busy() != 0 && typed == 0 {
+            if nvim_get_ex_normal_busy() != 0 && typed == 0 {
                 typed = b'q' as c_int;
             }
         } else {
@@ -2273,8 +2274,8 @@ unsafe fn handle_do_ask(
 
             nvim_curwin_set_w_p_fen(0);
 
-            let temp = nvim_do_sub_get_RedrawingDisabled();
-            nvim_do_sub_set_RedrawingDisabled(0);
+            let temp = nvim_get_RedrawingDisabled();
+            nvim_set_RedrawingDisabled(0);
 
             nvim_do_sub_set_p_lz(0);
 
@@ -2294,16 +2295,14 @@ unsafe fn handle_do_ask(
             let endpos0_col = nvim_regmmatch_endpos0_col(regmatch);
             let match_endcol = endpos0_col + len_change;
             let match_lines = endpos0_lnum - startpos0_col; // actually endpos0_lnum - startpos0_lnum
-            nvim_do_sub_set_search_match_lines(
-                endpos0_lnum - nvim_regmmatch_startpos0_lnum(regmatch),
-            );
-            nvim_do_sub_set_search_match_endcol(match_endcol);
+            nvim_set_search_match_lines(endpos0_lnum - nvim_regmmatch_startpos0_lnum(regmatch));
+            nvim_set_search_match_endcol(match_endcol);
             if nvim_regmmatch_endpos0_lnum(regmatch) - nvim_regmmatch_startpos0_lnum(regmatch) == 0
                 && match_endcol == 0
             {
-                nvim_do_sub_set_search_match_endcol(1);
+                nvim_set_search_match_endcol(1);
             }
-            nvim_do_sub_set_highlight_match(1);
+            nvim_set_highlight_match(1);
 
             nvim_do_sub_update_screen_for_confirm();
 
@@ -2311,13 +2310,13 @@ unsafe fn handle_do_ask(
 
             let prompt_str = nvim_do_sub_format_confirm_prompt(sub);
             typed = nvim_do_sub_prompt_for_input(prompt_str);
-            nvim_do_sub_set_highlight_match(0);
+            nvim_set_highlight_match(0);
             xfree(prompt_str as *mut std::ffi::c_void);
 
-            nvim_do_sub_set_msg_didout(0);
+            nvim_set_msg_didout(0);
             nvim_do_sub_gotocmdline();
             nvim_do_sub_set_p_lz(save_p_lz);
-            nvim_do_sub_set_RedrawingDisabled(temp);
+            nvim_set_RedrawingDisabled(temp);
 
             if !orig_line.is_null() {
                 nvim_do_sub_ml_replace(lnum, orig_line, 0);
@@ -2326,7 +2325,7 @@ unsafe fn handle_do_ask(
             let _ = save_state;
         }
 
-        nvim_do_sub_set_need_wait_return(0);
+        nvim_set_need_wait_return(0);
         if typed == b'q' as c_int || typed == 27 /* ESC */ || typed == 3
         /* Ctrl-C */
         {
@@ -2362,7 +2361,7 @@ unsafe fn handle_do_ask(
     // Restore state
     nvim_do_sub_setmouse();
     if nvim_do_sub_get_p_cpo_has_undo() != 0 {
-        nvim_do_sub_no_u_sync_dec();
+        nvim_dec_no_u_sync();
     }
 
     if typed == b'n' as c_int && *nmatch > 1 {
@@ -2466,11 +2465,11 @@ unsafe fn goto_sub_main(
     // 3. Do actual substitution
     *lnum_start = *lnum;
     let save_ma = nvim_curbuf_get_b_p_ma();
-    let save_sandbox = nvim_do_sub_get_sandbox();
+    let save_sandbox = nvim_get_sandbox();
 
     if subflags.do_count {
         nvim_curbuf_set_b_p_ma(0);
-        nvim_do_sub_sandbox_inc();
+        nvim_inc_sandbox();
     }
 
     let subflags_save = CSubFlags {
@@ -2484,7 +2483,7 @@ unsafe fn goto_sub_main(
         do_ic: subflags.do_ic,
     };
 
-    nvim_do_sub_textlock_inc();
+    nvim_inc_textlock();
     let source_lnum = *sub_firstlnum - startpos0_lnum;
     // Measurement call: pass sub_firstline as dest with destlen=0 to avoid null-dest error.
     // vim_regsub_multi with destlen=0 just measures the required length without modifying dest.
@@ -2501,7 +2500,7 @@ unsafe fn goto_sub_main(
                 0
             },
     );
-    nvim_do_sub_textlock_dec();
+    nvim_dec_textlock();
 
     // Restore flags from any recursive call
     subflags.do_all = subflags_save.do_all;
@@ -2515,18 +2514,18 @@ unsafe fn goto_sub_main(
 
     if sublen == 0 || nvim_excmds_aborting() != 0 || subflags.do_count {
         nvim_curbuf_set_b_p_ma(save_ma);
-        nvim_do_sub_sandbox_dec();
+        nvim_dec_sandbox();
         // Undo sandbox increment
-        for _ in 0..(nvim_do_sub_get_sandbox() - save_sandbox) {
-            nvim_do_sub_sandbox_dec();
+        for _ in 0..(nvim_get_sandbox() - save_sandbox) {
+            nvim_dec_sandbox();
         }
         return;
     }
 
     // Restore sandbox
     nvim_curbuf_set_b_p_ma(save_ma);
-    while nvim_do_sub_get_sandbox() > save_sandbox {
-        nvim_do_sub_sandbox_dec();
+    while nvim_get_sandbox() > save_sandbox {
+        nvim_dec_sandbox();
     }
 
     // Get the line for the last matched line
@@ -2558,7 +2557,7 @@ unsafe fn goto_sub_main(
     let start_col = new_end.offset_from(*new_start) as c_int;
     *cur_start_col = start_col;
 
-    nvim_do_sub_textlock_inc();
+    nvim_inc_textlock();
     nvim_do_sub_vim_regsub_multi(
         regmatch,
         source_lnum,
@@ -2573,7 +2572,7 @@ unsafe fn goto_sub_main(
                 0
             },
     );
-    nvim_do_sub_textlock_dec();
+    nvim_dec_textlock();
     nvim_excmds_sub_nsubs_inc();
     *did_sub = true;
 

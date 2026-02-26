@@ -5372,3 +5372,8 @@ char *nvim_getcmdline_prompt_simple(int firstc, const char *prompt, int hl_id,
   return getcmdline_prompt(firstc, prompt, hl_id, xp_context, NULL,
                            CALLBACK_NONE, one_key, mouse_used);
 }
+
+/// Increment textlock.
+void nvim_inc_textlock(void) { textlock++; }
+/// Decrement textlock.
+void nvim_dec_textlock(void) { textlock--; }

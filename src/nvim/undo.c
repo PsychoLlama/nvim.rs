@@ -2683,3 +2683,13 @@ void nvim_undo_get_visual_pos(linenr_T *lnum, colnr_T *col, colnr_T *coladd)
   *col = VIsual.col;
   *coladd = VIsual.coladd;
 }
+
+/// Increment no_u_sync.
+void nvim_inc_no_u_sync(void) { no_u_sync++; }
+/// Decrement no_u_sync.
+void nvim_dec_no_u_sync(void) { no_u_sync--; }
+
+/// Increment sandbox.
+void nvim_inc_sandbox(void) { sandbox++; }
+/// Decrement sandbox.
+void nvim_dec_sandbox(void) { sandbox--; }
