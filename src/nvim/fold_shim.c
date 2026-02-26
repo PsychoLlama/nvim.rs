@@ -517,7 +517,7 @@ char *nvim_fold_get_buf_b_p_cms(buf_T *buf)
   return buf->b_p_cms;
 }
 
-/// Allocate memory using xmalloc (for Rust to build buffer lines with correct allocator).
+/// Allocate memory using xmalloc (used by markers.rs to build buffer lines with correct allocator).
 void *nvim_fold_xmalloc(size_t size)
 {
   return xmalloc(size);
@@ -1029,22 +1029,6 @@ void nvim_fold_clear_vvars(void)
   set_vim_var_string(VV_FOLDDASHES, NULL, -1);
 }
 
-/// Replace unprintable characters in text with printable equivalents.
-/// Returns a new xmalloc'd string (caller must xfree), or NULL if text is NULL.
-char *nvim_fold_transstr(char *text)
-{
-  if (text == NULL) {
-    return NULL;
-  }
-  return transstr(text, true);
-}
-
-/// Free a pointer allocated with xmalloc (wraps xfree).
-void nvim_fold_xfree(void *ptr)
-{
-  xfree(ptr);
-}
-
 /// Format default fold text "+--%3d line(s) folded" into buf.
 /// Returns number of bytes written (like snprintf).
 int nvim_fold_vim_snprintf_default(char *buf, int count)
@@ -1062,23 +1046,6 @@ char *nvim_fold_win_get_p_fdt(win_T *wp)
   return wp->w_p_fdt;
 }
 
-/// Get the current value of did_emsg.
-int nvim_fold_get_did_emsg(void)
-{
-  return did_emsg;
-}
-
-/// Set did_emsg.
-void nvim_fold_set_did_emsg(int val)
-{
-  did_emsg = (bool)val;
-}
-
-/// xstrdup wrapper.
-char *nvim_fold_xstrdup(const char *s)
-{
-  return xstrdup(s);
-}
 
 /// Concatenate all chunks from a VirtText into a single xmalloc'd string.
 /// `vt_ptr` must be a valid VirtText*.
@@ -1100,34 +1067,4 @@ char *nvim_fold_virt_text_concat(void *vt_ptr)
   return text;
 }
 
-/// Get the size of a VirtText (number of chunks).
-size_t nvim_fold_virt_text_size(void *vt_ptr)
-{
-  VirtText *vt = (VirtText *)vt_ptr;
-  return kv_size(*vt);
-}
-
-/// Check if a character at p is a TAB byte.
-int nvim_fold_is_tab(const char *p)
-{
-  return (unsigned char)*p == TAB;
-}
-
-/// Call ptr2cells (returns cell width of character at p).
-int nvim_fold_ptr2cells(const char *p)
-{
-  return ptr2cells(p);
-}
-
-/// Call vim_isprintc (returns nonzero if c is printable).
-int nvim_fold_vim_isprintc(int c)
-{
-  return vim_isprintc(c);
-}
-
-/// Call utf_ptr2char: get Unicode codepoint at p.
-int nvim_fold_utf_ptr2char(const char *p)
-{
-  return utf_ptr2char(p);
-}
 

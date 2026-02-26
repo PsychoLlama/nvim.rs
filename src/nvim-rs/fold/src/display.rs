@@ -18,7 +18,9 @@ use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 
+use nvim_charset::rs_vim_isprintc;
 use nvim_mbyte::utfc_ptr2len;
+use nvim_memory::{xfree, xstrdup};
 use nvim_window::WinHandle;
 
 use crate::markers::parse_marker_impl;
@@ -79,32 +81,16 @@ extern "C" {
     fn nvim_fold_set_vvars(start: LinenrT, end: LinenrT, level: c_int);
     /// Clear v:folddashes (set to NULL).
     fn nvim_fold_clear_vvars();
-    /// Replace unprintable chars; returns new xmalloc'd string.
-    fn nvim_fold_transstr(text: *mut c_char) -> *mut c_char;
-    /// xfree a pointer.
-    fn nvim_fold_xfree(ptr: *mut std::ffi::c_void);
     /// Format default fold text into buf; returns byte count.
     fn nvim_fold_vim_snprintf_default(buf: *mut c_char, count: c_int) -> c_int;
     /// Get wp->w_p_fdt (foldtext option string).
     fn nvim_fold_win_get_p_fdt(wp: WinHandle) -> *const c_char;
-    /// Get did_emsg.
-    fn nvim_fold_get_did_emsg() -> c_int;
-    /// Set did_emsg.
-    fn nvim_fold_set_did_emsg(val: c_int);
-    /// xstrdup a string.
-    fn nvim_fold_xstrdup(s: *const c_char) -> *mut c_char;
-    /// Check if character at p is TAB.
-    fn nvim_fold_is_tab(p: *const c_char) -> c_int;
-    /// Get cell width of character at p.
-    fn nvim_fold_ptr2cells(p: *const c_char) -> c_int;
-    /// Check if codepoint c is printable.
-    fn nvim_fold_vim_isprintc(c: c_int) -> c_int;
-    /// Get Unicode codepoint at p.
-    fn nvim_fold_utf_ptr2char(p: *const c_char) -> c_int;
+    /// Get did_emsg (generic accessor from message.c).
+    fn nvim_get_did_emsg() -> c_int;
+    /// Set did_emsg (generic accessor from message.c).
+    fn nvim_set_did_emsg(val: c_int);
     /// Concatenate all VirtText chunks into a new xmalloc'd string.
     fn nvim_fold_virt_text_concat(vt_ptr: *mut std::ffi::c_void) -> *mut c_char;
-    /// Get size (chunk count) of a VirtText.
-    fn nvim_fold_virt_text_size(vt_ptr: *mut std::ffi::c_void) -> usize;
     /// Clear a VirtText.
     fn nvim_clear_virttext(vt_ptr: *mut std::ffi::c_void);
 }
@@ -700,11 +686,11 @@ unsafe fn get_foldtext_impl(
     }
 
     let got_fdt_error = GOT_FDT_ERROR.load(Ordering::Relaxed);
-    let save_did_emsg = nvim_fold_get_did_emsg();
+    let save_did_emsg = nvim_get_did_emsg();
 
     if !got_fdt_error {
         // A previous error should not abort evaluating 'foldexpr'
-        nvim_fold_set_did_emsg(0);
+        nvim_set_did_emsg(0);
     }
 
     let p_fdt = nvim_fold_win_get_p_fdt(wp);
@@ -736,7 +722,7 @@ unsafe fn get_foldtext_impl(
                 result.text_is_allocated = true;
             }
 
-            if result.text.is_null() || nvim_fold_get_did_emsg() != 0 {
+            if result.text.is_null() || nvim_get_did_emsg() != 0 {
                 GOT_FDT_ERROR.store(true, Ordering::Relaxed);
             }
         }
@@ -745,8 +731,8 @@ unsafe fn get_foldtext_impl(
         LAST_WP.store(wp_id, Ordering::Relaxed);
         nvim_fold_clear_vvars();
 
-        if nvim_fold_get_did_emsg() == 0 && save_did_emsg != 0 {
-            nvim_fold_set_did_emsg(save_did_emsg);
+        if nvim_get_did_emsg() == 0 && save_did_emsg != 0 {
+            nvim_set_did_emsg(save_did_emsg);
         }
 
         // Replace unprintable characters in text (if text is a string, not VirtText)
@@ -769,23 +755,23 @@ unsafe fn get_foldtext_impl(
                 let len = utfc_ptr2len(slice);
 
                 if len > 1 {
-                    let cp = nvim_fold_utf_ptr2char(p);
-                    if nvim_fold_vim_isprintc(cp) == 0 {
+                    let cp = nvim_mbyte::utf_ptr2char(slice);
+                    if !rs_vim_isprintc(cp) {
                         break;
                     }
                     p = p.add(len - 1);
-                } else if nvim_fold_is_tab(p) != 0 {
+                } else if *p as u8 == b'\t' {
                     *p = b' ' as c_char;
-                } else if nvim_fold_ptr2cells(p) > 1 {
+                } else if nvim_charset::rs_ptr2cells(p) > 1 {
                     break;
                 }
                 p = p.add(1);
             }
             if *p != 0 {
                 // Found unprintable chars - replace with transstr
-                let new_text = nvim_fold_transstr(result.text);
+                let new_text = nvim_charset::rs_transstr(result.text, true);
                 if result.text_is_allocated {
-                    nvim_fold_xfree(result.text.cast::<c_void>());
+                    xfree(result.text.cast::<c_void>());
                 }
                 result.text = new_text;
                 result.text_is_allocated = true;
@@ -826,12 +812,13 @@ pub(crate) unsafe fn get_foldtext_concat_impl(
     let result = get_foldtext_impl(wp, lnum, lnume, fi_level, buf.as_mut_ptr(), vt_ptr);
 
     if result.has_virt_text {
-        // VirtText was populated - concatenate chunks
-        let vt_size = nvim_fold_virt_text_size(vt_ptr);
-        let text = if vt_size > 0 {
+        // VirtText was populated - concatenate chunks.
+        // kvec_t layout: { size_t n, size_t m, T *items } -- read n (first field) inline.
+        let vt_n = vt_storage.as_ptr().cast::<usize>().read_unaligned();
+        let text = if vt_n > 0 {
             nvim_fold_virt_text_concat(vt_ptr)
         } else {
-            nvim_fold_xstrdup(c"".as_ptr())
+            xstrdup(c"".as_ptr())
         };
         nvim_clear_virttext(vt_ptr);
         text
@@ -839,7 +826,7 @@ pub(crate) unsafe fn get_foldtext_concat_impl(
         result.text
     } else if !result.text.is_null() {
         // text points into buf (stack) - must copy to heap
-        nvim_fold_xstrdup(result.text)
+        xstrdup(result.text)
     } else {
         ptr::null_mut()
     }
