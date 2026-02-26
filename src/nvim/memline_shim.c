@@ -311,6 +311,8 @@ extern int rs_ml_sync_one(buf_T *buf, int check_file, int check_char, bool do_fs
 // Pass 9 Phase 1: ml_open_file + ml_open_files Rust function declarations
 extern void rs_ml_open_file(buf_T *buf);
 extern void rs_ml_open_files(void);
+// Pass 9 Phase 2: ml_setname Rust function declaration
+extern void rs_ml_setname(buf_T *buf);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -451,73 +453,8 @@ error:
 }
 
 /// ml_setname() is called when the file name of "buf" has been changed.
-/// It may rename the swapfile.
-void ml_setname(buf_T *buf)
-{
-  bool success = false;
-
-  memfile_T *mfp = buf->b_ml.ml_mfp;
-  if (mfp->mf_fd < 0) {             // there is no swapfile yet
-    // When 'updatecount' is 0 and 'noswapfile' there is no swapfile.
-    // For help files we will make a swapfile now.
-    if (p_uc != 0 && (cmdmod.cmod_flags & CMOD_NOSWAPFILE) == 0) {
-      ml_open_file(buf);  // create a swapfile
-    }
-    return;
-  }
-
-  // Try all directories in the 'directory' option.
-  char *dirp = p_dir;
-  bool found_existing_dir = false;
-  while (true) {
-    if (*dirp == NUL) {             // tried all directories, fail
-      break;
-    }
-    char *fname = findswapname(buf, &dirp, mfp->mf_fname, &found_existing_dir);
-    // alloc's fname
-    if (dirp == NULL) {             // out of memory
-      break;
-    }
-    if (fname == NULL) {            // no file name found for this dir
-      continue;
-    }
-
-    // if the file name is the same we don't have to do anything
-    if (path_fnamecmp(fname, mfp->mf_fname) == 0) {
-      xfree(fname);
-      success = true;
-      break;
-    }
-    // need to close the swapfile before renaming
-    if (mfp->mf_fd >= 0) {
-      close(mfp->mf_fd);
-      mfp->mf_fd = -1;
-    }
-
-    // try to rename the swapfile
-    if (vim_rename(mfp->mf_fname, fname) == 0) {
-      success = true;
-      mf_free_fnames(mfp);
-      mf_set_fnames(mfp, fname);
-      ml_upd_block0(buf, UB_SAME_DIR);
-      break;
-    }
-    xfree(fname);                // this fname didn't work, try another
-  }
-
-  if (mfp->mf_fd == -1) {           // need to (re)open the swapfile
-    mfp->mf_fd = os_open(mfp->mf_fname, O_RDWR, 0);
-    if (mfp->mf_fd < 0) {
-      // could not (re)open the swapfile, what can we do????
-      emsg(_("E301: Oops, lost the swap file!!!"));
-      return;
-    }
-    os_set_cloexec(mfp->mf_fd);
-  }
-  if (!success) {
-    emsg(_("E302: Could not rename swap file"));
-  }
-}
+/// It may rename the swapfile. (thin wrapper calling Rust)
+void ml_setname(buf_T *buf) { rs_ml_setname(buf); }
 
 /// Open a file for the memfile for all buffers that are not readonly or have
 /// been modified.
@@ -1781,6 +1718,17 @@ int nvim_buf_get_b_spell(buf_T *buf) { return buf->b_spell ? 1 : 0; }
 
 /// Set buf->b_may_swap (0 = false, non-zero = true)
 void nvim_buf_set_b_may_swap(buf_T *buf, int val) { buf->b_may_swap = (val != 0); }
+
+// Pass 9 Phase 2: ml_setname accessors for Rust FFI
+
+/// Wrap os_set_cloexec (os_set_cloexec itself is now a thin wrapper around Rust)
+void nvim_os_set_cloexec(int fd) { os_set_cloexec(fd); }
+
+/// Rename a file (vim_rename wrapper)
+int nvim_vim_rename(const char *from, const char *to) { return vim_rename(from, to); }
+
+/// Get O_RDWR flag value for os_open calls
+int nvim_get_o_rdwr(void) { return O_RDWR; }
 
 // Pass 8 Phase 1: findswapname cluster accessors for Rust FFI
 

@@ -41,9 +41,6 @@ extern "C" {
     /// Open memline for buffer, create swap file
     fn ml_open(buf: *mut BufHandle) -> c_int;
 
-    /// Set the name of the swap file
-    fn ml_setname(buf: *mut BufHandle);
-
     /// Close all memlines (buffer iteration stays in C via FOR_ALL_BUFFERS)
     fn ml_close_all(del_file: c_int);
 
@@ -136,14 +133,98 @@ pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
 
 /// Set the name of the swap file for a buffer.
 ///
-/// This is called when the buffer's file name changes.
+/// Called when the buffer's file name changes. Renames the swap file
+/// to match the new file name (trying all directories in 'directory').
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_setname(buf: *mut BufHandle) {
-    if !buf.is_null() {
-        ml_setname(buf);
+    if buf.is_null() {
+        return;
+    }
+
+    let mfp = nvim_buf_get_ml_mfp(buf);
+    if mfp.is_null() {
+        return;
+    }
+
+    if nvim_mf_get_fd(mfp) < 0 {
+        // There is no swap file yet.
+        // When 'updatecount' is 0 or 'noswapfile' there is no swap file.
+        // For help files we will make a swap file now.
+        if nvim_callback_get_p_uc() != 0 && nvim_get_cmod_noswapfile() == 0 {
+            rs_ml_open_file(buf); // create a swap file
+        }
+        return;
+    }
+
+    // Try all directories in the 'directory' option.
+    let dirp_start = nvim_get_p_dir();
+    let mut dirp = dirp_start;
+    let mut found_existing_dir = false;
+    let mut success = false;
+
+    loop {
+        if *dirp == 0 {
+            break; // tried all directories, fail
+        }
+        let old_fname = nvim_mf_get_fname(mfp);
+        #[allow(clippy::redundant_locals)]
+        let fname = rs_findswapname(buf, &raw mut dirp, old_fname, &raw mut found_existing_dir);
+        if dirp.is_null() {
+            break; // out of memory
+        }
+        if fname.is_null() {
+            continue; // no file name found for this dir
+        }
+
+        // If the file name is the same we don't have to do anything
+        if nvim_path_fnamecmp(fname, old_fname) == 0 {
+            xfree(fname.cast());
+            success = true;
+            break;
+        }
+
+        // Need to close the swap file before renaming
+        let fd = nvim_mf_get_fd(mfp);
+        if fd >= 0 {
+            // close() from libc - declared in recovery.rs; redeclare here
+            extern "C" {
+                fn close(fd: c_int) -> c_int;
+            }
+            close(fd);
+            nvim_mf_set_fd(mfp, -1);
+        }
+
+        // Try to rename the swap file
+        let old_fname_for_rename = nvim_mf_get_fname(mfp);
+        if nvim_vim_rename(old_fname_for_rename, fname) == 0 {
+            success = true;
+            mf_free_fnames(mfp);
+            mf_set_fnames(mfp, fname); // fname is consumed
+            rs_ml_upd_block0(buf, UB_SAME_DIR as c_int);
+            break;
+        }
+        xfree(fname.cast()); // this fname didn't work, try another
+    }
+
+    // Need to (re)open the swap file if we closed it
+    if nvim_mf_get_fd(mfp) == -1 {
+        let mf_fname = nvim_mf_get_fname(mfp);
+        let o_rdwr = nvim_get_o_rdwr();
+        let new_fd = os_open(mf_fname, o_rdwr, 0);
+        if new_fd < 0 {
+            // could not (re)open the swap file
+            emsg(c"E301: Oops, lost the swap file!!!".as_ptr());
+            return;
+        }
+        nvim_mf_set_fd(mfp, new_fd);
+        nvim_os_set_cloexec(new_fd);
+    }
+
+    if !success {
+        emsg(c"E302: Could not rename swap file".as_ptr());
     }
 }
 
@@ -473,6 +554,39 @@ extern "C" {
 
     /// nvim_mf_get_fd: get mfp->mf_fd
     fn nvim_mf_get_fd(mfp: *mut std::ffi::c_void) -> c_int;
+}
+
+// =============================================================================
+// Phase 9-2: ml_setname extern declarations
+// =============================================================================
+
+extern "C" {
+    /// Rename a file (vim_rename wrapper)
+    fn nvim_vim_rename(from: *const c_char, to: *const c_char) -> c_int;
+
+    /// mf_free_fnames: free memfile fname/ffname strings
+    fn mf_free_fnames(mfp: *mut std::ffi::c_void);
+
+    /// mf_set_fnames: set memfile fname (consumes allocated fname)
+    fn mf_set_fnames(mfp: *mut std::ffi::c_void, fname: *mut c_char);
+
+    /// nvim_mf_set_fd: set mfp->mf_fd
+    fn nvim_mf_set_fd(mfp: *mut std::ffi::c_void, fd: c_int);
+
+    /// os_open: open a file (thin wrapper around Rust os_open)
+    fn os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int;
+
+    /// nvim_os_set_cloexec: set close-on-exec flag on fd
+    fn nvim_os_set_cloexec(fd: c_int);
+
+    /// emsg: print error message
+    fn emsg(msg: *const c_char);
+
+    /// Get p_uc option value (updatecount)
+    fn nvim_callback_get_p_uc() -> i64;
+
+    /// Get O_RDWR constant value for os_open
+    fn nvim_get_o_rdwr() -> c_int;
 }
 
 // =============================================================================
