@@ -211,6 +211,10 @@ extern void rs_spell_back_to_badword(void);
 extern void rs_save_orig_extmarks(void);
 extern void rs_restore_orig_extmarks(void);
 extern void rs_free_insexpand_stuff(void);
+// Phase 2 (pass 7) Rust exports
+extern int rs_get_cmdline_compl_info(char *line, int curs_col);
+extern void rs_set_compl_globals(int startcol, int curs_col, int is_cpt_compl);
+extern int rs_compl_get_info(char *line, int startcol, int curs_col, int *line_invalid);
 // Phase 2 (pass 6) Rust exports
 extern void rs_ins_compl_longest_match(void *match);
 extern const char *rs_find_common_prefix(size_t *prefix_len, int curbuf_only);
@@ -3455,9 +3459,9 @@ static int ins_compl_next(bool allow_get_expansion, int count, bool insert_match
 }
 
 
-/// Get the pattern, column and length for command-line completion.
+/// Compound accessor: get the pattern, column and length for command-line completion.
 /// Sets the global variables: compl_col, compl_length and compl_pattern.
-static int get_cmdline_compl_info(char *line, colnr_T curs_col)
+int nvim_get_cmdline_compl_info_impl(char *line, int curs_col)
 {
   compl_pattern = cbuf_to_string(line, (size_t)curs_col);
   set_cmd_context(&compl_xp, compl_pattern.data,
@@ -3478,9 +3482,15 @@ static int get_cmdline_compl_info(char *line, colnr_T curs_col)
   return OK;
 }
 
-/// Set global variables related to completion:
+/// Thin wrapper for rs_get_cmdline_compl_info.
+static int get_cmdline_compl_info(char *line, colnr_T curs_col)
+{
+  return rs_get_cmdline_compl_info(line, (int)curs_col);
+}
+
+/// Compound accessor: set global variables related to completion:
 /// compl_col, compl_length, compl_pattern, and cpt_compl_pattern.
-static void set_compl_globals(int startcol, colnr_T curs_col, bool is_cpt_compl)
+void nvim_set_compl_globals_impl(int startcol, int curs_col, int is_cpt_compl)
 {
   if (is_cpt_compl) {
     API_CLEAR_STRING(cpt_compl_pattern);
@@ -3503,6 +3513,12 @@ static void set_compl_globals(int startcol, colnr_T curs_col, bool is_cpt_compl)
     compl_col = startcol;
     compl_length = len;
   }
+}
+
+/// Thin wrapper for rs_set_compl_globals.
+static void set_compl_globals(int startcol, colnr_T curs_col, bool is_cpt_compl)
+{
+  rs_set_compl_globals(startcol, (int)curs_col, is_cpt_compl ? 1 : 0);
 }
 
 /// Get the pattern, column and length for user defined completion ('omnifunc',
@@ -3584,6 +3600,12 @@ static int get_userdefined_compl_info(colnr_T curs_col, Callback *cb, int *start
   return OK;
 }
 
+/// Compound accessor: call get_userdefined_compl_info for Rust dispatch.
+int nvim_get_userdefined_compl_info_impl(int curs_col)
+{
+  return get_userdefined_compl_info((colnr_T)curs_col, NULL, NULL);
+}
+
 /// Get the completion pattern, column and length.
 ///
 /// @param startcol  start column number of the completion pattern/text
@@ -3595,36 +3617,12 @@ static int get_userdefined_compl_info(colnr_T curs_col, Callback *cb, int *start
 /// @return  OK on success.
 static int compl_get_info(char *line, int startcol, colnr_T curs_col, bool *line_invalid)
 {
-  if (rs_ctrl_x_mode_normal() || rs_ctrl_x_mode_register()
-      || ((ctrl_x_mode & CTRL_X_WANT_IDENT)
-          && !rs_thesaurus_func_complete(ctrl_x_mode))) {
-    if (rs_get_normal_compl_info(line, startcol, (int)curs_col) != OK) {
-      return FAIL;
-    }
-    *line_invalid = true;  // 'cpt' func may have invalidated "line"
-  } else if (rs_ctrl_x_mode_line_or_eval()) {
-    return rs_get_wholeline_compl_info(line, (int)curs_col);
-  } else if (rs_ctrl_x_mode_files()) {
-    return rs_get_filename_compl_info(line, startcol, (int)curs_col);
-  } else if (ctrl_x_mode == CTRL_X_CMDLINE) {
-    return get_cmdline_compl_info(line, curs_col);
-  } else if (rs_ctrl_x_mode_function() || rs_ctrl_x_mode_omni()
-             || rs_thesaurus_func_complete(ctrl_x_mode)) {
-    if (get_userdefined_compl_info(curs_col, NULL, NULL) != OK) {
-      return FAIL;
-    }
-    *line_invalid = true;  // "line" may have become invalid
-  } else if (rs_ctrl_x_mode_spell()) {
-    if (rs_get_spell_compl_info(startcol, (int)curs_col) == FAIL) {
-      return FAIL;
-    }
-    *line_invalid = true;  // "line" may have become invalid
-  } else {
-    internal_error("ins_complete()");
-    return FAIL;
+  int line_invalid_int = 0;
+  int ret = rs_compl_get_info(line, startcol, (int)curs_col, &line_invalid_int);
+  if (line_invalid_int) {
+    *line_invalid = true;
   }
-
-  return OK;
+  return ret;
 }
 
 /// start insert mode completion
@@ -4113,6 +4111,9 @@ void nvim_ins_compl_insert_bytes(const char *p, int len) {
   compl_ins_end_col = curwin->w_cursor.col;
 }
 void nvim_restore_orig_extmarks(void) { restore_orig_extmarks(); }
+
+// Accessor for internal_error in compl_get_info dispatch
+void nvim_internal_error_compl_get_info(void) { internal_error("ins_complete()"); }
 
 // Compound accessors for ins_compl_show_pum (Phase 2)
 // nvim_update_screen() already exists in drawscreen.c

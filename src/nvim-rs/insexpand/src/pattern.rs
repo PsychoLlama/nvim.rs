@@ -23,6 +23,9 @@ extern "C" {
         curs_col: c_int,
     ) -> c_int;
     fn nvim_get_spell_compl_info_impl(startcol: c_int, curs_col: c_int) -> c_int;
+
+    // Compound accessor for setting compl_col/compl_length/compl_pattern/cpt_compl_pattern.
+    fn nvim_set_compl_globals_impl(startcol: c_int, curs_col: c_int, is_cpt_compl: c_int);
 }
 
 /// Get the pattern, column and length for normal (keyword) completion.
@@ -76,6 +79,22 @@ pub unsafe extern "C" fn rs_get_filename_compl_info(
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_spell_compl_info(startcol: c_int, curs_col: c_int) -> c_int {
     nvim_get_spell_compl_info_impl(startcol, curs_col)
+}
+
+/// Set global variables related to completion.
+///
+/// Sets `compl_col`, `compl_length`, `compl_pattern`, and `cpt_compl_pattern`
+/// based on the mode (`is_cpt_compl != 0` for cpt function completion).
+///
+/// # Safety
+/// Requires valid global completion state. Mutates C static globals.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_compl_globals(
+    startcol: c_int,
+    curs_col: c_int,
+    is_cpt_compl: c_int,
+) {
+    nvim_set_compl_globals_impl(startcol, curs_col, is_cpt_compl);
 }
 
 #[cfg(test)]
