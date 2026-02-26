@@ -103,6 +103,23 @@ extern synstate_T *rs_syn_stack_alloc_entry(int lnum, synstate_T *after);
 extern void rs_syn_store_state_to_entry(synstate_T *sp);
 extern void rs_syn_do_stack_realloc(int len);
 
+// Phase 9.2: state_ops.rs Rust implementations
+extern void rs_syn_set_next_match_state(int idx, int col,
+    int m_endpos_lnum, int m_endpos_col,
+    int h_endpos_lnum, int h_endpos_col,
+    int h_startpos_lnum, int h_startpos_col,
+    int flags, int eos_pos_lnum, int eos_pos_col,
+    int eoe_pos_lnum, int eoe_pos_col,
+    int end_idx, reg_extmatch_T *extmatch);
+extern void rs_syn_pop_current_state(void);
+extern void rs_syn_push_current_state(int idx);
+extern void rs_syn_set_cur_state_item(int idx, int si_idx, int si_flags, int si_seqnr,
+                                      int si_cchar, reg_extmatch_T *extmatch);
+extern int rs_syn_count_fold_items(void);
+extern int rs_syn_state_item_spans_line(int idx, int lnum);
+extern void rs_syn_clear_current_state(void);
+extern stateitem_T *rs_stateitem_prev_if_trans_cont(stateitem_T *item);
+
 static bool did_syntax_onoff = false;
 
 // different types of offsets that are possible
@@ -852,17 +869,7 @@ stateitem_T *nvim_syn_get_cur_state(int idx)
 
 synblock_T *nvim_syn_get_synblock(void) { return syn_block; }
 
-/// Count items with HL_FOLD flag in current state
-int nvim_syn_count_fold_items(void)
-{
-  int count = 0;
-  for (int i = 0; i < current_state.ga_len; i++) {
-    if (CUR_STATE(i).si_flags & HL_FOLD) {
-      count++;
-    }
-  }
-  return count;
-}
+int nvim_syn_count_fold_items(void) { return rs_syn_count_fold_items(); }
 
 regprog_T *nvim_synpat_get_prog(synpat_T *pat) { return pat->sp_prog; }
 int nvim_synpat_has_prog(synpat_T *pat) { return pat->sp_prog != NULL; }
@@ -1022,21 +1029,9 @@ int nvim_syncluster_get_id(syn_cluster_T *cluster)
   }
   return SYNID_CLUSTER + idx;
 }
-/// Check if a state item at idx has a position spanning past current line
-/// Used by store_current_state to decide if state can be stored
 int nvim_syn_state_item_spans_line(int idx, int lnum)
 {
-  if (idx < 0 || idx >= current_state.ga_len) {
-    return 0;
-  }
-  stateitem_T *cur_si = &CUR_STATE(idx);
-  if (cur_si->si_h_startpos.lnum >= lnum
-      || cur_si->si_m_endpos.lnum >= lnum
-      || cur_si->si_h_endpos.lnum >= lnum
-      || (cur_si->si_end_idx && cur_si->si_eoe_pos.lnum >= lnum)) {
-    return 1;
-  }
-  return 0;
+  return rs_syn_state_item_spans_line(idx, lnum);
 }
 
 synstate_T *nvim_syn_stack_find_entry(int lnum) { return syn_stack_find_entry((linenr_T)lnum); }
@@ -1050,12 +1045,7 @@ void nvim_syn_store_state_to_entry(synstate_T *sp) { rs_syn_store_state_to_entry
 
 void nvim_syn_set_state_stored(int stored) { current_state_stored = stored ? true : false; }
 
-/// Call clear_current_state()
-void nvim_syn_clear_current_state(void)
-{
-#define UNREF_STATEITEM_EXTMATCH(si) unref_extmatch((si)->si_extmatch)
-  GA_DEEP_CLEAR(&current_state, stateitem_T, UNREF_STATEITEM_EXTMATCH);
-}
+void nvim_syn_clear_current_state(void) { rs_syn_clear_current_state(); }
 
 void nvim_syn_validate_current_state(void) { validate_current_state(); }
 
@@ -1101,42 +1091,10 @@ int nvim_bufstate_get_seqnr(bufstate_T *bs) { return bs ? bs->bs_seqnr : 0; }
 int nvim_bufstate_get_cchar(bufstate_T *bs) { return bs ? bs->bs_cchar : 0; }
 reg_extmatch_T *nvim_bufstate_get_extmatch(bufstate_T *bs) { return bs ? bs->bs_extmatch : NULL; }
 
-/// Set stateitem fields at index (used by load_current_state)
-
 void nvim_syn_set_cur_state_item(int idx, int si_idx, int si_flags, int si_seqnr,
-
                                   int si_cchar, reg_extmatch_T *extmatch)
-
 {
-
-  if (idx < 0 || idx >= current_state.ga_len) {
-
-    return;
-
-  }
-
-  CUR_STATE(idx).si_idx = si_idx;
-
-  CUR_STATE(idx).si_flags = si_flags;
-
-  CUR_STATE(idx).si_seqnr = si_seqnr;
-
-  CUR_STATE(idx).si_cchar = si_cchar;
-
-  CUR_STATE(idx).si_extmatch = ref_extmatch(extmatch);
-
-  CUR_STATE(idx).si_ends = false;
-
-  CUR_STATE(idx).si_m_lnum = 0;
-
-  CUR_STATE(idx).si_next_list = NULL;
-
-  if (si_idx >= 0) {
-
-    CUR_STATE(idx).si_next_list = SYN_ITEMS(syn_block)[si_idx].sp_next_list;
-
-  }
-
+  rs_syn_set_cur_state_item(idx, si_idx, si_flags, si_seqnr, si_cchar, extmatch);
 }
 
 /// Call update_si_attr for item at index
@@ -1347,29 +1305,8 @@ void nvim_syn_check_state_ends(void) { rs_check_state_ends(); }
 
 void nvim_syn_call_update_si_attr(int idx) { rs_update_si_attr(idx); }
 
-/// Call pop_current_state
-void nvim_syn_pop_current_state(void)
-{
-  if (!GA_EMPTY(&current_state)) {
-    unref_extmatch(CUR_STATE(current_state.ga_len - 1).si_extmatch);
-    current_state.ga_len--;
-  }
-  // after the end of a pattern, try matching a keyword or pattern
-  next_match_idx = -1;
-
-  // if first state with "keepend" is popped, reset keepend_level
-  if (keepend_level >= current_state.ga_len) {
-    keepend_level = -1;
-  }
-}
-
-/// Call push_current_state
-void nvim_syn_push_current_state(int idx)
-{
-  stateitem_T *p = GA_APPEND_VIA_PTR(stateitem_T, &current_state);
-  CLEAR_POINTER(p);
-  p->si_idx = idx;
-}
+void nvim_syn_pop_current_state(void) { rs_syn_pop_current_state(); }
+void nvim_syn_push_current_state(int idx) { rs_syn_push_current_state(idx); }
 
 char nvim_syn_getcurline_at_col(void) { return syn_getcurline()[current_col]; }
 
@@ -1455,14 +1392,7 @@ int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
 /// Otherwise returns item unchanged.
 stateitem_T *nvim_stateitem_prev_if_trans_cont(stateitem_T *item)
 {
-  if (item == NULL) {
-    return NULL;
-  }
-  while ((item->si_flags & HL_TRANS_CONT)
-         && item > (stateitem_T *)(current_state.ga_data)) {
-    item--;
-  }
-  return item;
+  return rs_stateitem_prev_if_trans_cont(item);
 }
 
 /// Get SYN_ITEMS(syn_block)[idx].sp_syn.id
@@ -2164,62 +2094,22 @@ int nvim_syn_utf_head_off(char *base, char *p) { return utf_head_off(base, p); }
 
 int nvim_syn_ascii_iswhite(int c) { return ascii_iswhite(c); }
 
-/// Set next_match positions (bulk setter for all next_match_* variables)
-
 void nvim_syn_set_next_match_state(
-
     int idx, int col,
-
     int m_endpos_lnum, int m_endpos_col,
-
     int h_endpos_lnum, int h_endpos_col,
-
     int h_startpos_lnum, int h_startpos_col,
-
-    int flags,
-
-    int eos_pos_lnum, int eos_pos_col,
-
+    int flags, int eos_pos_lnum, int eos_pos_col,
     int eoe_pos_lnum, int eoe_pos_col,
-
-    int end_idx,
-
-    reg_extmatch_T *extmatch)
-
+    int end_idx, reg_extmatch_T *extmatch)
 {
-
-  next_match_idx = idx;
-
-  next_match_col = col;
-
-  next_match_m_endpos.lnum = m_endpos_lnum;
-
-  next_match_m_endpos.col = m_endpos_col;
-
-  next_match_h_endpos.lnum = h_endpos_lnum;
-
-  next_match_h_endpos.col = h_endpos_col;
-
-  next_match_h_startpos.lnum = h_startpos_lnum;
-
-  next_match_h_startpos.col = h_startpos_col;
-
-  next_match_flags = flags;
-
-  next_match_eos_pos.lnum = eos_pos_lnum;
-
-  next_match_eos_pos.col = eos_pos_col;
-
-  next_match_eoe_pos.lnum = eoe_pos_lnum;
-
-  next_match_eoe_pos.col = eoe_pos_col;
-
-  next_match_end_idx = end_idx;
-
-  unref_extmatch(next_match_extmatch);
-
-  next_match_extmatch = extmatch;
-
+  rs_syn_set_next_match_state(idx, col,
+      m_endpos_lnum, m_endpos_col,
+      h_endpos_lnum, h_endpos_col,
+      h_startpos_lnum, h_startpos_col,
+      flags, eos_pos_lnum, eos_pos_col,
+      eoe_pos_lnum, eoe_pos_col,
+      end_idx, extmatch);
 }
 
 _Static_assert(SPO_MS_OFF == 0, "SPO_MS_OFF");
@@ -3785,3 +3675,56 @@ void nvim_synstate_set_tick_to_display(synstate_T *state)
 {
   if (state) state->sst_tick = display_tick;
 }
+
+// =============================================================================
+// Phase 9.2: New C accessors for state_ops.rs migration (Phase 2)
+// =============================================================================
+
+/// Append a new zeroed stateitem to current_state and return it.
+/// Combines GA_APPEND_VIA_PTR + CLEAR_POINTER.
+stateitem_T *nvim_syn_append_new_stateitem(void)
+{
+  stateitem_T *p = GA_APPEND_VIA_PTR(stateitem_T, &current_state);
+  CLEAR_POINTER(p);
+  return p;
+}
+
+/// Set all next_match_* static variables (bulk setter for Rust migration).
+/// This variant takes explicit extmatch and does NOT do unref of old extmatch;
+/// the Rust caller handles unref separately.
+void nvim_syn_set_next_match_m_endpos(int lnum, int col)
+{
+  next_match_m_endpos.lnum = lnum;
+  next_match_m_endpos.col = col;
+}
+
+void nvim_syn_set_next_match_h_endpos(int lnum, int col)
+{
+  next_match_h_endpos.lnum = lnum;
+  next_match_h_endpos.col = col;
+}
+
+void nvim_syn_set_next_match_h_startpos(int lnum, int col)
+{
+  next_match_h_startpos.lnum = lnum;
+  next_match_h_startpos.col = col;
+}
+
+void nvim_syn_set_next_match_flags(int flags) { next_match_flags = flags; }
+
+void nvim_syn_set_next_match_eos_pos(int lnum, int col)
+{
+  next_match_eos_pos.lnum = lnum;
+  next_match_eos_pos.col = col;
+}
+
+void nvim_syn_set_next_match_eoe_pos(int lnum, int col)
+{
+  next_match_eoe_pos.lnum = lnum;
+  next_match_eoe_pos.col = col;
+}
+
+void nvim_syn_set_next_match_end_idx(int idx) { next_match_end_idx = idx; }
+
+/// Set next_match_extmatch (without unref of old value; Rust handles that).
+void nvim_syn_set_next_match_extmatch_raw(reg_extmatch_T *em) { next_match_extmatch = em; }

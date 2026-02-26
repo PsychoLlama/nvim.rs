@@ -60,8 +60,6 @@ extern "C" {
     // State management
     fn nvim_syn_invalidate_current_state();
     fn nvim_syn_validate_current_state();
-    fn nvim_syn_clear_current_state();
-    fn nvim_syn_push_current_state(idx: c_int);
     fn nvim_syn_set_current_lnum(lnum: c_int);
     fn nvim_syn_get_current_lnum() -> c_int;
     fn nvim_syn_set_current_col(col: c_int);
@@ -376,9 +374,9 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
                 // Put the item that was specified by the sync point on the
                 // state stack. If there was no item specified, make the
                 // state stack empty.
-                nvim_syn_clear_current_state();
+                crate::state_ops::rs_syn_clear_current_state();
                 if found_match_idx >= 0 {
-                    nvim_syn_push_current_state(found_match_idx);
+                    crate::state_ops::rs_syn_push_current_state(found_match_idx);
                     update_si_attr(nvim_syn_get_current_state_len() - 1);
                 }
 

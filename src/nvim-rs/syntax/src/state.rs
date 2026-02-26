@@ -128,11 +128,8 @@ extern "C" {
     fn nvim_syn_is_current_state_empty() -> c_int;
     fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
     fn nvim_syn_get_top_stateitem() -> StateItemHandle;
-    fn nvim_syn_count_fold_items() -> c_int;
-
     // Current state setters
     fn nvim_syn_set_state_stored(stored: c_int);
-    fn nvim_syn_clear_current_state();
     fn nvim_syn_validate_current_state();
     fn nvim_syn_invalidate_current_state();
     fn nvim_syn_set_keepend_level(level: c_int);
@@ -146,18 +143,6 @@ extern "C" {
     fn nvim_syn_set_current_trans_id(id: c_int);
     fn nvim_syn_set_current_flags(flags: c_int);
     fn nvim_syn_set_current_seqnr(seqnr: c_int);
-    fn nvim_syn_pop_current_state();
-    fn nvim_syn_push_current_state(idx: c_int);
-
-    // State item field setter helper
-    fn nvim_syn_set_cur_state_item(
-        idx: c_int,
-        si_idx: c_int,
-        si_flags: c_int,
-        si_seqnr: c_int,
-        si_cchar: c_int,
-        em: ExtMatchHandle,
-    );
 
     // -------------------------------------------------------------------------
     // Stack management functions
@@ -877,7 +862,7 @@ pub fn get_top_stateitem() -> StateItemHandle {
 /// Count items with HL_FOLD flag in the current state
 #[must_use]
 pub fn count_fold_items() -> i32 {
-    unsafe { nvim_syn_count_fold_items() }
+    unsafe { crate::state_ops::rs_syn_count_fold_items() }
 }
 
 // =============================================================================
@@ -891,7 +876,7 @@ pub fn set_state_stored(stored: bool) {
 
 /// Clear the current state
 pub fn clear_current_state() {
-    unsafe { nvim_syn_clear_current_state() }
+    unsafe { crate::state_ops::rs_syn_clear_current_state() }
 }
 
 /// Validate the current state
@@ -961,12 +946,12 @@ pub fn set_current_seqnr(seqnr: i32) {
 
 /// Pop the top item from the current state stack
 pub fn pop_current_state() {
-    unsafe { nvim_syn_pop_current_state() }
+    unsafe { crate::state_ops::rs_syn_pop_current_state() }
 }
 
 /// Push an item onto the current state stack
 pub fn push_current_state(idx: i32) {
-    unsafe { nvim_syn_push_current_state(idx) }
+    unsafe { crate::state_ops::rs_syn_push_current_state(idx) }
 }
 
 /// Set state item fields at the given index (used by load_current_state)
@@ -978,7 +963,9 @@ pub fn set_cur_state_item(
     si_cchar: i32,
     em: ExtMatchHandle,
 ) {
-    unsafe { nvim_syn_set_cur_state_item(idx, si_idx, si_flags, si_seqnr, si_cchar, em) }
+    unsafe {
+        crate::state_ops::rs_syn_set_cur_state_item(idx, si_idx, si_flags, si_seqnr, si_cchar, em)
+    }
 }
 
 // =============================================================================

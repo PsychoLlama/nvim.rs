@@ -104,9 +104,6 @@ extern "C" {
     /// Set current_state.ga_itemsize = 0 to mark current state invalid.
     fn nvim_syn_set_current_state_invalid();
 
-    /// Clear the current state garray (deep clear with extmatch unref).
-    fn nvim_syn_clear_current_state();
-
     /// Set current_next_list.
     fn nvim_syn_set_current_next_list(list: *mut i16);
 
@@ -264,7 +261,7 @@ pub unsafe extern "C" fn rs_clear_keywtab(ht: *mut c_void) {
 /// Must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_invalidate_current_state() {
-    nvim_syn_clear_current_state();
+    crate::state_ops::rs_syn_clear_current_state();
     nvim_syn_set_current_state_invalid();
     nvim_syn_set_current_next_list(std::ptr::null_mut());
     nvim_syn_set_keepend_level(-1);

@@ -53,6 +53,7 @@ pub mod pattern_store;
 pub mod region;
 pub mod state;
 pub mod state_entry;
+pub mod state_ops;
 pub mod sync;
 pub mod syntime;
 pub mod types;
@@ -331,9 +332,6 @@ extern "C" {
     /// Get the current synblock
     fn nvim_syn_get_synblock() -> SynBlockHandle;
 
-    /// Count items with HL_FOLD flag in current state
-    fn nvim_syn_count_fold_items() -> c_int;
-
     // -------------------------------------------------------------------------
     // Phase 4: Pattern matching accessors
     // -------------------------------------------------------------------------
@@ -517,17 +515,11 @@ extern "C" {
     // Phase 24.1: State Management Helpers
     // -------------------------------------------------------------------------
 
-    /// Check if a state item at idx has a position spanning past current line
-    fn nvim_syn_state_item_spans_line(idx: c_int, lnum: c_int) -> c_int;
-
     /// Find a state entry in the synblock at or before given line
     fn nvim_syn_stack_find_entry(lnum: c_int) -> SynStateHandle;
 
     /// Mark current state as stored
     fn nvim_syn_set_state_stored(stored: c_int);
-
-    /// Call clear_current_state()
-    fn nvim_syn_clear_current_state();
 
     /// Call validate_current_state()
     fn nvim_syn_validate_current_state();
@@ -569,16 +561,6 @@ extern "C" {
 
     /// Get bs_extmatch from bufstate (opaque pointer)
     fn nvim_bufstate_get_extmatch(bs: BufStateHandle) -> ExtMatchHandle;
-
-    /// Set stateitem fields at index (used by load_current_state)
-    fn nvim_syn_set_cur_state_item(
-        idx: c_int,
-        si_idx: c_int,
-        si_flags: c_int,
-        si_seqnr: c_int,
-        si_cchar: c_int,
-        extmatch: ExtMatchHandle,
-    );
 
     /// Call update_si_attr for item at index
     fn nvim_syn_update_si_attr(idx: c_int);
@@ -739,7 +721,7 @@ pub fn get_synblock() -> Option<SynBlockHandle> {
 /// Count items with HL_FOLD flag in current state
 #[must_use]
 pub fn count_fold_items() -> i32 {
-    unsafe { nvim_syn_count_fold_items() }
+    unsafe { crate::state_ops::rs_syn_count_fold_items() }
 }
 
 // =============================================================================
@@ -2303,7 +2285,7 @@ pub unsafe extern "C" fn rs_store_current_state() -> SynStateHandle {
     // If so, we can't use this state - it's not valid for line boundaries
     let mut has_spanning_item = false;
     for i in (0..state_len).rev() {
-        if nvim_syn_state_item_spans_line(i, lnum) != 0 {
+        if crate::state_ops::rs_syn_state_item_spans_line(i, lnum) != 0 {
             has_spanning_item = true;
             break;
         }
@@ -2348,7 +2330,7 @@ pub unsafe extern "C" fn rs_load_current_state(from: SynStateHandle) {
     }
 
     // Clear and validate current state
-    nvim_syn_clear_current_state();
+    crate::state_ops::rs_syn_clear_current_state();
     nvim_syn_validate_current_state();
     nvim_syn_set_keepend_level(-1);
 
@@ -2373,7 +2355,9 @@ pub unsafe extern "C" fn rs_load_current_state(from: SynStateHandle) {
             let extmatch = nvim_bufstate_get_extmatch(bs);
 
             // Set the state item (this also sets si_next_list based on pattern)
-            nvim_syn_set_cur_state_item(i, bs_idx, bs_flags, bs_seqnr, bs_cchar, extmatch);
+            crate::state_ops::rs_syn_set_cur_state_item(
+                i, bs_idx, bs_flags, bs_seqnr, bs_cchar, extmatch,
+            );
 
             // Track keepend level
             if keepend_level < 0 && (bs_flags & HL_KEEPEND) != 0 {

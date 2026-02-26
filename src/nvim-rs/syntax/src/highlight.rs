@@ -65,7 +65,6 @@ extern "C" {
     fn nvim_synblock_has_sst_array(block: SynBlockHandle) -> c_int;
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
     fn nvim_syn_get_buf() -> crate::types::BufHandle;
-    fn nvim_syn_clear_current_state();
     fn nvim_syn_set_current_id(id: c_int);
     fn nvim_syn_set_current_trans_id(id: c_int);
     fn nvim_syn_set_current_flags(flags: c_int);
@@ -463,7 +462,7 @@ unsafe fn get_syntax_attr_impl(col: c_int, keep_state: bool) -> SyntaxAttrResult
     // After 'synmaxcol' the attribute is always zero.
     let synmaxcol = nvim_buf_get_synmaxcol(buf);
     if synmaxcol > 0 && col >= synmaxcol {
-        nvim_syn_clear_current_state();
+        crate::state_ops::rs_syn_clear_current_state();
         nvim_syn_set_current_id(0);
         nvim_syn_set_current_trans_id(0);
         nvim_syn_set_current_flags(0);

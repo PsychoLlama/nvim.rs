@@ -45,7 +45,6 @@ extern "C" {
     fn nvim_syn_get_current_state_len() -> c_int;
     fn nvim_syn_is_current_state_empty() -> c_int;
     fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
-    fn nvim_syn_push_current_state(idx: c_int);
 
     // State item accessors
     fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
@@ -84,25 +83,6 @@ extern "C" {
     fn nvim_syn_get_next_match_col() -> c_int;
     fn nvim_syn_set_next_match_idx(idx: c_int);
     fn nvim_syn_set_next_match_col(col: c_int);
-
-    // Next match bulk setter
-    fn nvim_syn_set_next_match_state(
-        idx: c_int,
-        col: c_int,
-        m_endpos_lnum: c_int,
-        m_endpos_col: c_int,
-        h_endpos_lnum: c_int,
-        h_endpos_col: c_int,
-        h_startpos_lnum: c_int,
-        h_startpos_col: c_int,
-        flags: c_int,
-        eos_pos_lnum: c_int,
-        eos_pos_col: c_int,
-        eoe_pos_lnum: c_int,
-        eoe_pos_col: c_int,
-        end_idx: c_int,
-        extmatch: ExtMatchHandle,
-    );
 
     // Next match position getters
     fn nvim_syn_get_next_match_m_endpos(lnum: *mut c_int, col: *mut c_int);
@@ -307,7 +287,7 @@ pub unsafe fn syn_current_attr(
                     );
 
                     if syn_id != 0 {
-                        nvim_syn_push_current_state(KEYWORD_IDX);
+                        crate::state_ops::rs_syn_push_current_state(KEYWORD_IDX);
                         let new_len = nvim_syn_get_current_state_len();
                         let cur_si = nvim_syn_get_stateitem(new_len - 1);
                         nvim_stateitem_set_m_startcol(cur_si, current_col);
@@ -518,7 +498,7 @@ pub unsafe fn syn_current_attr(
                         limit_pos_zero(&mut hl_endpos, &endpos);
 
                         // Store best match
-                        nvim_syn_set_next_match_state(
+                        crate::state_ops::rs_syn_set_next_match_state(
                             idx,
                             startcol,
                             endpos.lnum,

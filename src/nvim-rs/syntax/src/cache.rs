@@ -42,9 +42,7 @@ extern "C" {
     fn nvim_syn_get_current_lnum() -> c_int;
     fn nvim_syn_get_current_state_len() -> c_int;
     fn nvim_syn_get_current_next_list() -> IdListHandle;
-    fn nvim_syn_state_item_spans_line(idx: c_int, lnum: c_int) -> c_int;
     fn nvim_syn_set_state_stored(stored: c_int);
-    fn nvim_syn_clear_current_state();
     fn nvim_syn_validate_current_state();
     fn nvim_syn_set_keepend_level(level: c_int);
     fn nvim_syn_grow_current_state(size: c_int);
@@ -52,16 +50,6 @@ extern "C" {
     fn nvim_syn_set_current_next_list(list: IdListHandle);
     fn nvim_syn_set_current_next_flags(flags: c_int);
     fn nvim_syn_set_current_lnum(lnum: c_int);
-
-    // State item operations
-    fn nvim_syn_set_cur_state_item(
-        idx: c_int,
-        si_idx: c_int,
-        si_flags: c_int,
-        si_seqnr: c_int,
-        si_cchar: c_int,
-        em: ExtMatchHandle,
-    );
     fn nvim_syn_update_si_attr(idx: c_int);
     fn nvim_syn_get_cur_state(idx: c_int) -> crate::types::StateItemHandle;
 
@@ -509,7 +497,7 @@ pub unsafe fn store_current_state() -> SynStateHandle {
     // If so, we can't use this state - it's not valid for line boundaries
     let mut has_spanning_item = false;
     for i in (0..state_len).rev() {
-        if nvim_syn_state_item_spans_line(i, lnum) != 0 {
+        if crate::state_ops::rs_syn_state_item_spans_line(i, lnum) != 0 {
             has_spanning_item = true;
             break;
         }
@@ -553,7 +541,7 @@ pub unsafe fn load_current_state(from: SynStateHandle) {
     }
 
     // Clear and validate current state
-    nvim_syn_clear_current_state();
+    crate::state_ops::rs_syn_clear_current_state();
     nvim_syn_validate_current_state();
     nvim_syn_set_keepend_level(-1);
 
@@ -578,7 +566,9 @@ pub unsafe fn load_current_state(from: SynStateHandle) {
             let extmatch = nvim_bufstate_get_extmatch(bs);
 
             // Set the state item (this also sets si_next_list based on pattern)
-            nvim_syn_set_cur_state_item(i, bs_idx, bs_flags, bs_seqnr, bs_cchar, extmatch);
+            crate::state_ops::rs_syn_set_cur_state_item(
+                i, bs_idx, bs_flags, bs_seqnr, bs_cchar, extmatch,
+            );
 
             // Track keepend level
             if keepend_level < 0 && (bs_flags & HL_KEEPEND) != 0 {

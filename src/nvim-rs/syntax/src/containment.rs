@@ -51,7 +51,6 @@ extern "C" {
     ) -> c_int;
 
     // New accessors for Phase 2: rs_syn_in_id_list implementation
-    fn nvim_stateitem_prev_if_trans_cont(item: StateItemHandle) -> StateItemHandle;
     fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
     fn nvim_syn_get_pattern_sp_syn_id(idx: c_int) -> i16;
     fn nvim_syn_get_pattern_sp_syn_inc_tag(idx: c_int) -> c_int;
@@ -329,7 +328,7 @@ unsafe fn in_id_list_inner(
     // If ssp has a "containedin" list and "cur_si" is in it, return true.
     if !cur_si.is_null() && !cont_in_list.is_null() && (flags & HL_MATCH) == 0 {
         // Walk back through transparent items without a contains argument.
-        let actual_si = nvim_stateitem_prev_if_trans_cont(cur_si);
+        let actual_si = crate::state_ops::rs_stateitem_prev_if_trans_cont(cur_si);
 
         // cur_si->si_idx is -1 for keywords; keywords never contain anything.
         let si_idx = nvim_stateitem_get_idx(actual_si);

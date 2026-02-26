@@ -47,12 +47,9 @@ extern "C" {
     fn nvim_syn_get_current_state_len() -> c_int;
     fn nvim_syn_current_state_len() -> c_int;
     fn nvim_syn_set_current_state_len(len: c_int);
-    fn nvim_syn_clear_current_state();
     fn nvim_syn_validate_current_state();
     fn nvim_syn_invalidate_current_state();
     fn nvim_syn_grow_current_state(size: c_int);
-    fn nvim_syn_pop_current_state();
-    fn nvim_syn_push_current_state(idx: c_int);
 
     // Next list management
     fn nvim_syn_get_current_next_list() -> IdListHandle;
@@ -93,9 +90,6 @@ extern "C" {
     // Line ID tracking
     fn nvim_syn_get_current_line_id() -> c_int;
     fn nvim_syn_incr_current_line_id();
-
-    // State item spans check
-    fn nvim_syn_state_item_spans_line(idx: c_int, lnum: c_int) -> c_int;
 
     // Extmatch management
     fn nvim_syn_ref_extmatch(em: ExtMatchHandle) -> ExtMatchHandle;
@@ -287,7 +281,7 @@ pub unsafe fn set_current_state_len(len: i32) {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn clear_current_state() {
-    nvim_syn_clear_current_state();
+    crate::state_ops::rs_syn_clear_current_state();
 }
 
 /// Validate the current state.
@@ -319,7 +313,7 @@ pub unsafe fn grow_current_state(size: i32) {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn pop_current_state() {
-    nvim_syn_pop_current_state();
+    crate::state_ops::rs_syn_pop_current_state();
 }
 
 /// Push a state item index onto the current state stack.
@@ -327,7 +321,7 @@ pub unsafe fn pop_current_state() {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn push_current_state(idx: i32) {
-    nvim_syn_push_current_state(idx);
+    crate::state_ops::rs_syn_push_current_state(idx);
 }
 
 // =============================================================================
@@ -628,7 +622,7 @@ pub unsafe fn incr_current_line_id() {
 /// Check if a state item spans to a given line.
 #[must_use]
 pub fn state_item_spans_line(idx: i32, lnum: i32) -> bool {
-    unsafe { nvim_syn_state_item_spans_line(idx, lnum) != 0 }
+    unsafe { crate::state_ops::rs_syn_state_item_spans_line(idx, lnum) != 0 }
 }
 
 // =============================================================================

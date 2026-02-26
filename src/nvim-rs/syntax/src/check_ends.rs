@@ -27,8 +27,6 @@ extern "C" {
     fn nvim_syn_get_current_lnum() -> c_int;
     fn nvim_syn_get_current_col() -> c_int;
     fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
-    fn nvim_syn_pop_current_state();
-    fn nvim_syn_push_current_state(idx: c_int);
     fn nvim_syn_is_current_state_empty() -> c_int;
     fn nvim_syn_get_keepend_level() -> c_int;
     fn nvim_syn_set_keepend_level(level: c_int);
@@ -343,7 +341,7 @@ pub unsafe fn push_next_match() -> StateItemHandle {
     let pat_cchar = nvim_syn_get_pattern_cchar(next_match_idx);
 
     // Push the item in current_state stack
-    nvim_syn_push_current_state(next_match_idx);
+    crate::state_ops::rs_syn_push_current_state(next_match_idx);
 
     let state_len = nvim_syn_get_current_state_len();
     let cur_si = nvim_syn_get_stateitem(state_len - 1);
@@ -417,7 +415,7 @@ pub unsafe fn push_next_match() -> StateItemHandle {
     // on the stack for the start pattern.
     let pat_match_id = nvim_syn_get_pattern_syn_match_id(next_match_idx);
     if pat_type == SPTYPE_START && pat_match_id != 0 {
-        nvim_syn_push_current_state(next_match_idx);
+        crate::state_ops::rs_syn_push_current_state(next_match_idx);
         let sl = nvim_syn_get_current_state_len();
         let mg_si = nvim_syn_get_stateitem(sl - 1);
 
@@ -538,7 +536,7 @@ pub unsafe fn check_state_ends() {
             // now needs to check for its end.
             let had_extend = si_flags & HL_EXTEND;
 
-            nvim_syn_pop_current_state();
+            crate::state_ops::rs_syn_pop_current_state();
 
             if nvim_syn_is_current_state_empty() != 0 {
                 break;
