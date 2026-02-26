@@ -2062,12 +2062,16 @@ void nvim_shada_var_set_global_from_entry(ShadaEntry *entry)
   entry->data.global_var.value.v_type = VAR_UNKNOWN;
 }
 
-/// Apply a global mark or jump entry.
-/// @param entry             The ShaDa entry (kSDItemGlobalMark or kSDItemJump).
-/// @param fname_bufs_handle Opaque PMap(cstr_t) for buffer caching.
-/// @param force             Whether to force overwrite.
-/// @return 0 normally.
-int nvim_shada_apply_mark_or_jump(ShadaEntry *entry, void *fname_bufs_handle, bool force)
+// nvim_shada_apply_mark_or_jump deleted (plan b499a5d0 Phase 4): Rust rs_shada_apply_mark_or_jump.
+
+// Phase 4 (plan b499a5d0): thin C accessors for mark/jump and local/change apply migration
+
+/// Build xfmark_T from entry fields and call mark_set_global.
+/// Handles buf lookup, XFREE_CLEAR of fname when buf found.
+/// @param no_overwrite  Pass !force to mark_set_global.
+/// @return 1 if mark was set (memory consumed), 0 if not set.
+int nvim_shada_mark_set_global_from_entry(ShadaEntry *entry, void *fname_bufs_handle,
+                                          int no_overwrite)
 {
   PMap(cstr_t) *fname_bufs = (PMap(cstr_t) *)fname_bufs_handle;
   buf_T *buf = find_buffer(fname_bufs, entry->data.filemark.fname);
@@ -2084,43 +2088,71 @@ int nvim_shada_apply_mark_or_jump(ShadaEntry *entry, void *fname_bufs_handle, bo
       .additional_data = entry->additional_data,
     },
   };
-  if (entry->type == kSDItemGlobalMark) {
-    if (!mark_set_global(entry->data.filemark.name, fm, !force)) {
-      rs_shada_free_entry_contents(entry);
-    }
-  } else {
-    int i;
-    for (i = curwin->w_jumplistlen; i > 0; i--) {
-      const xfmark_T jl_entry = curwin->w_jumplist[i - 1];
-      if (jl_entry.fmark.timestamp <= entry->timestamp) {
-        if (rs_marks_equal(jl_entry.fmark.mark, entry->data.filemark.mark) != 0
-            && (buf == NULL
-                ? (jl_entry.fname != NULL && strcmp(fm.fname, jl_entry.fname) == 0)
-                : fm.fmark.fnum == jl_entry.fmark.fnum)) {
-          i = -1;
-        }
-        break;
-      }
-    }
-    if (i > 0 && curwin->w_jumplistlen == JUMPLISTSIZE) {
-      free_xfmark(curwin->w_jumplist[0]);
-    }
-    i = rs_marklist_insert(curwin->w_jumplist, sizeof(*curwin->w_jumplist),
-                           curwin->w_jumplistlen, i);
-    if (i != -1) {
-      curwin->w_jumplist[i] = fm;
-      if (curwin->w_jumplistlen < JUMPLISTSIZE) {
-        curwin->w_jumplistlen++;
-      }
-      if (curwin->w_jumplistidx >= i
-          && curwin->w_jumplistidx + 1 <= curwin->w_jumplistlen) {
-        curwin->w_jumplistidx++;
-      }
-    } else {
-      rs_shada_free_entry_contents(entry);
-    }
+  return mark_set_global(entry->data.filemark.name, fm, (bool)no_overwrite) ? 1 : 0;
+}
+
+/// Return curwin->w_jumplistlen.
+int nvim_shada_jumplist_len(void) { return curwin->w_jumplistlen; }
+
+/// Return curwin->w_jumplist[idx].fmark.timestamp.
+uint64_t nvim_shada_jumplist_entry_timestamp(int idx)
+{
+  return (uint64_t)curwin->w_jumplist[idx].fmark.timestamp;
+}
+
+/// Return curwin->w_jumplist[idx].fmark.mark (position).
+void nvim_shada_jumplist_entry_mark(int idx, int64_t *out_lnum, int32_t *out_col)
+{
+  *out_lnum = (int64_t)curwin->w_jumplist[idx].fmark.mark.lnum;
+  *out_col = (int32_t)curwin->w_jumplist[idx].fmark.mark.col;
+}
+
+/// Return curwin->w_jumplist[idx].fname.
+const char *nvim_shada_jumplist_entry_fname(int idx)
+{
+  return curwin->w_jumplist[idx].fname;
+}
+
+/// Return curwin->w_jumplist[idx].fmark.fnum.
+int nvim_shada_jumplist_entry_fnum(int idx)
+{
+  return curwin->w_jumplist[idx].fmark.fnum;
+}
+
+/// Build xfmark_T from entry fields and set curwin->w_jumplist[idx].
+/// Handles buf lookup, XFREE_CLEAR of fname when buf found.
+void nvim_shada_jumplist_set_from_entry(int idx, ShadaEntry *entry, void *fname_bufs_handle)
+{
+  PMap(cstr_t) *fname_bufs = (PMap(cstr_t) *)fname_bufs_handle;
+  buf_T *buf = find_buffer(fname_bufs, entry->data.filemark.fname);
+  if (buf != NULL) {
+    XFREE_CLEAR(entry->data.filemark.fname);
   }
-  return 0;
+  curwin->w_jumplist[idx] = (xfmark_T) {
+    .fname = buf == NULL ? entry->data.filemark.fname : NULL,
+    .fmark = {
+      .mark = entry->data.filemark.mark,
+      .fnum = (buf == NULL ? 0 : buf->b_fnum),
+      .timestamp = entry->timestamp,
+      .view = INIT_FMARKV,
+      .additional_data = entry->additional_data,
+    },
+  };
+}
+
+/// Free curwin->w_jumplist[0] via free_xfmark.
+void nvim_shada_jumplist_free_first(void) { free_xfmark(curwin->w_jumplist[0]); }
+
+/// Increment w_jumplistlen if < JUMPLISTSIZE; increment w_jumplistidx if needed.
+void nvim_shada_jumplist_update_len_and_idx(int inserted_at)
+{
+  if (curwin->w_jumplistlen < JUMPLISTSIZE) {
+    curwin->w_jumplistlen++;
+  }
+  if (curwin->w_jumplistidx >= inserted_at
+      && curwin->w_jumplistidx + 1 <= curwin->w_jumplistlen) {
+    curwin->w_jumplistidx++;
+  }
 }
 
 // nvim_shada_apply_buffer_list deleted (plan b499a5d0 Phase 3): Rust rs_shada_apply_buffer_list.
@@ -2157,87 +2189,136 @@ void nvim_shada_buf_set_cursor_and_data(void *buf_handle, ShadaEntry *entry, siz
   entry->data.buffer_list.buffers[i].additional_data = NULL;
 }
 
-/// Apply a local mark or change entry.
-/// @param entry             The ShaDa entry (kSDItemLocalMark or kSDItemChange).
-/// @param fname_bufs_handle Opaque PMap(cstr_t) for buffer caching.
-/// @param cl_bufs_handle    Opaque Set(ptr_t) for changelist bufs.
-/// @param oldfiles_set_handle Opaque Set(cstr_t) for oldfiles dedup.
-/// @param oldfiles_list     Opaque list_T for v:oldfiles.
-/// @param force             Whether to force overwrite.
-/// @param want_marks        Whether marks should be read.
-/// @param get_old_files     Whether oldfiles should be gathered.
-/// @return 0 normally.
-int nvim_shada_apply_local_or_change(ShadaEntry *entry,
-                                     void *fname_bufs_handle, void *cl_bufs_handle,
-                                     void *oldfiles_set_handle, void *oldfiles_list,
-                                     bool force, bool want_marks, bool get_old_files)
+// nvim_shada_apply_local_or_change deleted (plan b499a5d0 Phase 4): Rust rs_shada_apply_local_or_change.
+
+/// Handle oldfiles set/list update for a filemark entry.
+/// Adds fname to oldfiles_set and oldfiles_list if get_old_files is true and fname not yet seen.
+/// If want_marks is false, takes ownership of fname (sets entry->data.filemark.fname = NULL).
+/// If want_marks is true, duplicates fname for the set; the entry retains its fname.
+void nvim_shada_oldfiles_add(void *oldfiles_set_handle, void *oldfiles_list,
+                             ShadaEntry *entry, int want_marks)
 {
-  PMap(cstr_t) *fname_bufs = (PMap(cstr_t) *)fname_bufs_handle;
-  Set(ptr_t) *cl_bufs = (Set(ptr_t) *)cl_bufs_handle;
   Set(cstr_t) *oldfiles_set = (Set(cstr_t) *)oldfiles_set_handle;
   list_T *old_list = (list_T *)oldfiles_list;
-
-  if (get_old_files
-      && !set_has(cstr_t, oldfiles_set, entry->data.filemark.fname)) {
-    char *fname = entry->data.filemark.fname;
-    if (want_marks) {
-      fname = xstrdup(fname);
-    }
-    set_put(cstr_t, oldfiles_set, fname);
-    tv_list_append_allocated_string(old_list, fname);
-    if (!want_marks) {
-      entry->data.filemark.fname = NULL;
-    }
+  char *fname = entry->data.filemark.fname;
+  if (want_marks) {
+    fname = xstrdup(fname);
   }
+  set_put(cstr_t, oldfiles_set, fname);
+  tv_list_append_allocated_string(old_list, fname);
   if (!want_marks) {
-    rs_shada_free_entry_contents(entry);
-    return 0;
+    entry->data.filemark.fname = NULL;
   }
-  buf_T *buf = find_buffer(fname_bufs, entry->data.filemark.fname);
-  if (buf == NULL) {
-    rs_shada_free_entry_contents(entry);
-    return 0;
-  }
-  const fmark_T fm = (fmark_T) {
+}
+
+/// Return 1 if entry->data.filemark.fname is already in oldfiles_set, 0 otherwise.
+int nvim_shada_oldfiles_has(void *oldfiles_set_handle, const ShadaEntry *entry)
+{
+  Set(cstr_t) *oldfiles_set = (Set(cstr_t) *)oldfiles_set_handle;
+  return set_has(cstr_t, oldfiles_set, entry->data.filemark.fname) ? 1 : 0;
+}
+
+/// Build fmark_T from entry and call mark_set_local.
+/// @param no_overwrite  Pass !force.
+/// @return 1 if mark was set (memory consumed), 0 if not set.
+int nvim_shada_mark_set_local_from_entry(ShadaEntry *entry, void *buf_handle, int no_overwrite)
+{
+  buf_T *buf = (buf_T *)buf_handle;
+  fmark_T fm = (fmark_T) {
     .mark = entry->data.filemark.mark,
     .fnum = 0,
     .timestamp = entry->timestamp,
     .view = INIT_FMARKV,
     .additional_data = entry->additional_data,
   };
-  if (entry->type == kSDItemLocalMark) {
-    if (!mark_set_local(entry->data.filemark.name, buf, fm, !force)) {
-      rs_shada_free_entry_contents(entry);
-      return 0;
-    }
-  } else {
-    set_put(ptr_t, cl_bufs, buf);
-    int i;
-    for (i = buf->b_changelistlen; i > 0; i--) {
-      const fmark_T jl_entry = buf->b_changelist[i - 1];
-      if (jl_entry.timestamp <= entry->timestamp) {
-        if (rs_marks_equal(jl_entry.mark, entry->data.filemark.mark) != 0) {
-          i = -1;
-        }
-        break;
-      }
-    }
-    if (i > 0 && buf->b_changelistlen == JUMPLISTSIZE) {
-      free_fmark(buf->b_changelist[0]);
-    }
-    i = rs_marklist_insert(buf->b_changelist, sizeof(*buf->b_changelist),
-                           buf->b_changelistlen, i);
-    if (i != -1) {
-      buf->b_changelist[i] = fm;
-      if (buf->b_changelistlen < JUMPLISTSIZE) {
-        buf->b_changelistlen++;
-      }
-    } else {
-      xfree(fm.additional_data);
-    }
+  return mark_set_local(entry->data.filemark.name, buf, fm, (bool)no_overwrite) ? 1 : 0;
+}
+
+/// call set_put(ptr_t, cl_bufs, buf).
+void nvim_shada_cl_bufs_set_put(void *cl_bufs_handle, void *buf_handle)
+{
+  Set(ptr_t) *cl_bufs = (Set(ptr_t) *)cl_bufs_handle;
+  set_put(ptr_t, cl_bufs, buf_handle);
+}
+
+/// Return buf->b_changelistlen.
+int nvim_shada_buf_get_changelistlen(const void *buf_handle)
+{
+  return ((const buf_T *)buf_handle)->b_changelistlen;
+}
+
+/// Return buf->b_changelist[idx].timestamp.
+uint64_t nvim_shada_changelist_entry_timestamp(const void *buf_handle, int idx)
+{
+  return (uint64_t)((const buf_T *)buf_handle)->b_changelist[idx].timestamp;
+}
+
+/// Return buf->b_changelist[idx].mark position.
+void nvim_shada_changelist_entry_mark(const void *buf_handle, int idx,
+                                      int64_t *out_lnum, int32_t *out_col)
+{
+  const fmark_T *fm = &((const buf_T *)buf_handle)->b_changelist[idx];
+  *out_lnum = (int64_t)fm->mark.lnum;
+  *out_col = (int32_t)fm->mark.col;
+}
+
+/// Build fmark_T from entry and set buf->b_changelist[idx].
+void nvim_shada_changelist_set_from_entry(void *buf_handle, int idx, ShadaEntry *entry)
+{
+  buf_T *buf = (buf_T *)buf_handle;
+  buf->b_changelist[idx] = (fmark_T) {
+    .mark = entry->data.filemark.mark,
+    .fnum = 0,
+    .timestamp = entry->timestamp,
+    .view = INIT_FMARKV,
+    .additional_data = entry->additional_data,
+  };
+}
+
+/// Free buf->b_changelist[0] via free_fmark.
+void nvim_shada_changelist_free_first(void *buf_handle)
+{
+  buf_T *buf = (buf_T *)buf_handle;
+  free_fmark(buf->b_changelist[0]);
+}
+
+/// Increment b_changelistlen if < JUMPLISTSIZE.
+void nvim_shada_changelist_update_len(void *buf_handle)
+{
+  buf_T *buf = (buf_T *)buf_handle;
+  if (buf->b_changelistlen < JUMPLISTSIZE) {
+    buf->b_changelistlen++;
   }
+}
+
+/// Free entry->data.filemark.fname via xfree.
+void nvim_shada_fm_xfree_fname(ShadaEntry *entry)
+{
   xfree(entry->data.filemark.fname);
-  return 0;
+  entry->data.filemark.fname = NULL;
+}
+
+/// Return buf->b_fnum.
+int nvim_shada_buf_get_fnum(const void *buf_handle)
+{
+  return ((const buf_T *)buf_handle)->b_fnum;
+}
+
+/// Call rs_marklist_insert on curwin->w_jumplist.
+/// Returns the new insertion index, or -1 if duplicate.
+int nvim_shada_jumplist_marklist_insert(int i)
+{
+  return rs_marklist_insert(curwin->w_jumplist, sizeof(*curwin->w_jumplist),
+                            curwin->w_jumplistlen, i);
+}
+
+/// Call rs_marklist_insert on buf->b_changelist.
+/// Returns the new insertion index, or -1 if duplicate.
+int nvim_shada_changelist_marklist_insert(void *buf_handle, int i)
+{
+  buf_T *buf = (buf_T *)buf_handle;
+  return rs_marklist_insert(buf->b_changelist, sizeof(*buf->b_changelist),
+                            buf->b_changelistlen, i);
 }
 
 // =============================================================================

@@ -566,22 +566,55 @@ extern "C" {
     // nvim_shada_apply_sub_string removed (plan b499a5d0 Phase 1): Rust rs_shada_apply_sub_string.
     // nvim_shada_apply_register removed (plan b499a5d0 Phase 2): Rust rs_shada_apply_register.
     // nvim_shada_apply_variable removed (plan b499a5d0 Phase 2): Rust rs_shada_apply_variable.
-    fn nvim_shada_apply_mark_or_jump(
-        entry: *mut ShadaEntry,
-        fname_bufs: *mut c_void,
-        force: bool,
-    ) -> c_int;
+    // nvim_shada_apply_mark_or_jump removed (plan b499a5d0 Phase 4): Rust rs_shada_apply_mark_or_jump.
     // nvim_shada_apply_buffer_list removed (plan b499a5d0 Phase 3): Rust rs_shada_apply_buffer_list.
-    fn nvim_shada_apply_local_or_change(
+    // nvim_shada_apply_local_or_change removed (plan b499a5d0 Phase 4): Rust rs_shada_apply_local_or_change.
+    // Phase 4 (plan b499a5d0): thin accessors for mark/jump and local/change apply
+    fn nvim_shada_mark_set_global_from_entry(
         entry: *mut ShadaEntry,
         fname_bufs: *mut c_void,
-        cl_bufs: *mut c_void,
+        no_overwrite: c_int,
+    ) -> c_int;
+    fn nvim_shada_jumplist_len() -> c_int;
+    fn nvim_shada_jumplist_entry_timestamp(idx: c_int) -> u64;
+    fn nvim_shada_jumplist_entry_mark(idx: c_int, out_lnum: *mut i64, out_col: *mut i32);
+    fn nvim_shada_jumplist_entry_fname(idx: c_int) -> *const c_char;
+    fn nvim_shada_jumplist_entry_fnum(idx: c_int) -> c_int;
+    fn nvim_shada_jumplist_set_from_entry(
+        idx: c_int,
+        entry: *mut ShadaEntry,
+        fname_bufs: *mut c_void,
+    );
+    fn nvim_shada_jumplist_free_first();
+    fn nvim_shada_jumplist_update_len_and_idx(inserted_at: c_int);
+    fn nvim_shada_oldfiles_add(
         oldfiles_set: *mut c_void,
         oldfiles_list: *mut c_void,
-        force: bool,
-        want_marks: bool,
-        get_old_files: bool,
+        entry: *mut ShadaEntry,
+        want_marks: c_int,
+    );
+    fn nvim_shada_oldfiles_has(oldfiles_set: *mut c_void, entry: *const ShadaEntry) -> c_int;
+    fn nvim_shada_mark_set_local_from_entry(
+        entry: *mut ShadaEntry,
+        buf: *mut c_void,
+        no_overwrite: c_int,
     ) -> c_int;
+    fn nvim_shada_cl_bufs_set_put(cl_bufs: *mut c_void, buf: *mut c_void);
+    fn nvim_shada_buf_get_changelistlen(buf: *const c_void) -> c_int;
+    fn nvim_shada_changelist_entry_timestamp(buf: *const c_void, idx: c_int) -> u64;
+    fn nvim_shada_changelist_entry_mark(
+        buf: *const c_void,
+        idx: c_int,
+        out_lnum: *mut i64,
+        out_col: *mut i32,
+    );
+    fn nvim_shada_changelist_set_from_entry(buf: *mut c_void, idx: c_int, entry: *mut ShadaEntry);
+    fn nvim_shada_changelist_free_first(buf: *mut c_void);
+    fn nvim_shada_changelist_update_len(buf: *mut c_void);
+    fn nvim_shada_fm_xfree_fname(entry: *mut ShadaEntry);
+    fn nvim_shada_buf_get_fnum(buf: *const c_void) -> c_int;
+    fn nvim_shada_jumplist_marklist_insert(i: c_int) -> c_int;
+    fn nvim_shada_changelist_marklist_insert(buf: *mut c_void, i: c_int) -> c_int;
     // Phase 1 (plan b499a5d0): thin accessors for search/sub apply
     fn nvim_shada_get_search_pattern_timestamp(is_substitute: c_int) -> u64;
     fn nvim_shada_set_search_pattern_from_entry(entry: *mut ShadaEntry);
@@ -5386,6 +5419,171 @@ unsafe fn rs_shada_apply_buffer_list(entry: *mut ShadaEntry) {
     rs_shada_free_entry_contents(entry);
 }
 
+// =============================================================================
+// Phase 4 (plan b499a5d0): Rust apply functions for mark/jump and local/change
+// =============================================================================
+
+/// Apply a global mark or jump ShaDa entry (Rust replacement for C nvim_shada_apply_mark_or_jump).
+///
+/// For GlobalMark: calls compound mark_set_global_from_entry accessor.
+/// For Jump: implements duplicate-detection loop using jumplist accessors,
+/// calls rs_marklist_insert, then sets the entry.
+///
+/// # Safety
+///
+/// All pointer arguments must be valid.
+unsafe fn rs_shada_apply_mark_or_jump(
+    entry: *mut ShadaEntry,
+    fname_bufs: *mut c_void,
+    force: bool,
+) {
+    if (*entry).entry_type == ShadaEntryType::GlobalMark {
+        let no_overwrite = c_int::from(!force);
+        if nvim_shada_mark_set_global_from_entry(entry, fname_bufs, no_overwrite) == 0 {
+            rs_shada_free_entry_contents(entry);
+        }
+        // If 1: memory was consumed by mark_set_global.
+        return;
+    }
+
+    // Jump entry: duplicate-detection loop (mirrors C nvim_shada_apply_mark_or_jump).
+    let jl_len = nvim_shada_jumplist_len();
+    let entry_ts = (*entry).timestamp;
+
+    // Find buf to know whether we compare by fnum or fname.
+    let entry_fname = nvim_shada_fm_get_fname(entry);
+    let fm_buf = nvim_shada_find_buffer(fname_bufs, entry_fname);
+    let compare_by_fnum = !fm_buf.is_null();
+
+    let mut i = jl_len;
+    while i > 0 {
+        let jl_ts = nvim_shada_jumplist_entry_timestamp(i - 1);
+        if jl_ts <= entry_ts {
+            // Check for duplicate: same mark position AND same file identity.
+            let mut jl_lnum: i64 = 0;
+            let mut jl_col: i32 = 0;
+            nvim_shada_jumplist_entry_mark(i - 1, &raw mut jl_lnum, &raw mut jl_col);
+            let entry_lnum: i64 = nvim_shada_fm_get_lnum(entry);
+            let entry_col: i32 = nvim_shada_fm_get_col(entry);
+            let jl_pos = Position::new(jl_lnum, jl_col, 0);
+            let entry_pos = Position::new(entry_lnum, entry_col, 0);
+            if rs_marks_equal(jl_pos, entry_pos) != 0 {
+                let file_match = if compare_by_fnum {
+                    // Buf was found: compare fnum.
+                    let jump_fnum = nvim_shada_jumplist_entry_fnum(i - 1);
+                    let buf_fnum = nvim_shada_buf_get_fnum(fm_buf);
+                    jump_fnum == buf_fnum
+                } else {
+                    // No buf: compare fname strings.
+                    let jl_fname = nvim_shada_jumplist_entry_fname(i - 1);
+                    !jl_fname.is_null() && libc::strcmp(entry_fname, jl_fname) == 0
+                };
+                if file_match {
+                    i = -1;
+                }
+            }
+            break;
+        }
+        i -= 1;
+    }
+
+    if i > 0 && jl_len as usize == JUMPLISTSIZE {
+        nvim_shada_jumplist_free_first();
+    }
+    let i = nvim_shada_jumplist_marklist_insert(i);
+    if i == -1 {
+        rs_shada_free_entry_contents(entry);
+    } else {
+        nvim_shada_jumplist_set_from_entry(i, entry, fname_bufs);
+        nvim_shada_jumplist_update_len_and_idx(i);
+    }
+}
+
+/// Apply a local mark or change ShaDa entry (Rust replacement for C nvim_shada_apply_local_or_change).
+///
+/// Handles oldfiles list update, then either sets a local mark or inserts into
+/// changelist with duplicate detection.
+///
+/// # Safety
+///
+/// All pointer arguments must be valid.
+#[allow(clippy::too_many_arguments)]
+unsafe fn rs_shada_apply_local_or_change(
+    entry: *mut ShadaEntry,
+    fname_bufs: *mut c_void,
+    cl_bufs: *mut c_void,
+    oldfiles_set: *mut c_void,
+    oldfiles_list: *mut c_void,
+    force: bool,
+    want_marks: bool,
+    get_old_files: bool,
+) {
+    // Handle oldfiles list update (mirrors C logic).
+    if get_old_files && nvim_shada_oldfiles_has(oldfiles_set, entry) == 0 {
+        nvim_shada_oldfiles_add(oldfiles_set, oldfiles_list, entry, c_int::from(want_marks));
+    }
+    if !want_marks {
+        rs_shada_free_entry_contents(entry);
+        return;
+    }
+
+    // Find buffer for this entry.
+    let entry_fname = nvim_shada_fm_get_fname(entry);
+    let buf = nvim_shada_find_buffer(fname_bufs, entry_fname);
+    if buf.is_null() {
+        rs_shada_free_entry_contents(entry);
+        return;
+    }
+
+    if (*entry).entry_type == ShadaEntryType::LocalMark {
+        let no_overwrite = c_int::from(!force);
+        if nvim_shada_mark_set_local_from_entry(entry, buf, no_overwrite) == 0 {
+            rs_shada_free_entry_contents(entry);
+        }
+        // mark_set_local uses fnum=0, does not own fname.
+    } else {
+        // Change entry: duplicate-detection loop (mirrors C nvim_shada_apply_local_or_change).
+        nvim_shada_cl_bufs_set_put(cl_bufs, buf);
+
+        let cl_len = nvim_shada_buf_get_changelistlen(buf);
+        let entry_ts = (*entry).timestamp;
+
+        let mut i = cl_len;
+        while i > 0 {
+            let cl_ts = nvim_shada_changelist_entry_timestamp(buf, i - 1);
+            if cl_ts <= entry_ts {
+                // Check for duplicate: same mark position.
+                let mut cl_lnum: i64 = 0;
+                let mut cl_col: i32 = 0;
+                nvim_shada_changelist_entry_mark(buf, i - 1, &raw mut cl_lnum, &raw mut cl_col);
+                let entry_lnum: i64 = nvim_shada_fm_get_lnum(entry);
+                let entry_col: i32 = nvim_shada_fm_get_col(entry);
+                let cl_pos = Position::new(cl_lnum, cl_col, 0);
+                let entry_pos = Position::new(entry_lnum, entry_col, 0);
+                if rs_marks_equal(cl_pos, entry_pos) != 0 {
+                    i = -1;
+                }
+                break;
+            }
+            i -= 1;
+        }
+
+        if i > 0 && cl_len as usize == JUMPLISTSIZE {
+            nvim_shada_changelist_free_first(buf);
+        }
+        let i = nvim_shada_changelist_marklist_insert(buf, i);
+        if i == -1 {
+            // Duplicate: free the additional_data (rest of entry is stack-allocated).
+            nvim_xfree((*entry).additional_data);
+        } else {
+            nvim_shada_changelist_set_from_entry(buf, i, entry);
+            nvim_shada_changelist_update_len(buf);
+        }
+    }
+    // xfree entry->data.filemark.fname (mirrors C end-of-function xfree for both branches).
+    nvim_shada_fm_xfree_fname(entry);
+}
+
 /// Dispatch a single ShaDa entry to Neovim's in-memory state.
 ///
 /// This is the Rust replacement for the C `nvim_shada_apply_entry` function.
@@ -5426,13 +5624,13 @@ unsafe fn rs_shada_apply_entry(
             rs_shada_apply_variable(entry);
         }
         ShadaEntryType::GlobalMark | ShadaEntryType::Jump => {
-            nvim_shada_apply_mark_or_jump(entry, fname_bufs, force);
+            rs_shada_apply_mark_or_jump(entry, fname_bufs, force);
         }
         ShadaEntryType::BufferList => {
             rs_shada_apply_buffer_list(entry);
         }
         ShadaEntryType::LocalMark | ShadaEntryType::Change => {
-            nvim_shada_apply_local_or_change(
+            rs_shada_apply_local_or_change(
                 entry,
                 fname_bufs,
                 cl_bufs,
