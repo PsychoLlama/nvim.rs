@@ -494,6 +494,199 @@ pub extern "C" fn rs_source_has_higher_priority(source1: c_int, source2: c_int) 
 }
 
 // =============================================================================
+// Phase 12: option_expand, set_option_default, set_options_default, free_all_options
+// =============================================================================
+
+use crate::opt_index::K_OPT_SCROLL;
+use crate::OptFlags;
+use std::ffi::c_uint;
+
+extern "C" {
+    /// rs_option_is_hidden(opt_idx) - returns 1 if option is hidden
+    fn rs_option_is_hidden(opt_idx: c_int) -> c_int;
+    /// rs_option_is_global_only(opt_idx)
+    fn rs_option_is_global_only(opt_idx: c_int) -> c_int;
+    /// rs_option_is_window_local(opt_idx)
+    fn rs_option_is_window_local(opt_idx: c_int) -> c_int;
+    /// rs_optval_from_varp(opt_idx, varp) - convert varp pointer to OptVal
+    fn rs_optval_from_varp(opt_idx: c_int, varp: *mut std::ffi::c_void) -> OptVal;
+    /// rs_insecure_flag(wp, opt_idx, opt_flags) - get pointer to insecure flag
+    fn rs_insecure_flag(wp: *mut std::ffi::c_void, opt_idx: c_int, opt_flags: c_int)
+        -> *mut c_uint;
+    /// nvim_get_koptflag_insecure() - get kOptFlagInsecure constant
+    fn nvim_get_koptflag_insecure() -> c_uint;
+    /// nvim_opt_get_curwin() - get current window handle
+    fn nvim_opt_get_curwin() -> *mut std::ffi::c_void;
+    /// set_option_direct with current_sctx.sc_sid
+    fn nvim_call_set_option_direct_with_sctx(opt_idx: c_int, val: OptVal, opt_flags: c_int);
+    /// win_comp_scroll(curwin)
+    fn nvim_call_win_comp_scroll_curwin();
+    /// FOR_ALL_TAB_WINDOWS { win_comp_scroll(wp) }
+    fn nvim_call_comp_scroll_all_windows();
+    /// parse_cino(curbuf)
+    fn nvim_call_parse_cino_curbuf();
+    /// free_operatorfunc_option()
+    fn nvim_call_free_operatorfunc_option();
+    /// free_findfunc_option()
+    fn nvim_call_free_findfunc_option();
+    /// rs_free_tagfunc_option() - free tagfunc option
+    fn rs_free_tagfunc_option();
+    /// XFREE_CLEAR(fenc_default)
+    fn nvim_call_xfree_clear_fenc_default();
+    /// XFREE_CLEAR(p_term)
+    fn nvim_call_xfree_clear_p_term();
+    /// XFREE_CLEAR(p_ttytype)
+    fn nvim_call_xfree_clear_p_ttytype();
+    /// option_expand escape kind for opt_idx (0=none, 1=esc, 2=file:)
+    fn nvim_option_expand_escape_kind(opt_idx: c_int) -> c_int;
+    /// expand_env_esc into NameBuff; returns NameBuff or NULL if no change
+    fn nvim_call_expand_env_esc_option(
+        val: *const std::ffi::c_char,
+        esc_kind: c_int,
+    ) -> *const std::ffi::c_char;
+}
+
+/// OPT_LOCAL flag (must match C OPT_LOCAL = 0x02)
+const OPT_LOCAL_P12: c_int = 0x02;
+/// OPT_GLOBAL flag (must match C OPT_GLOBAL = 0x01)
+const OPT_GLOBAL_P12: c_int = 0x01;
+/// MAXPATHL constant (must match C MAXPATHL = 4096)
+const MAXPATHL: usize = 4096;
+
+/// Expand environment variables for a string option.
+///
+/// Mirrors C `option_expand`.
+/// Returns pointer to NameBuff (static buffer), or NULL when not expanded.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_expand(
+    opt_idx: c_int,
+    val: *const std::ffi::c_char,
+) -> *const std::ffi::c_char {
+    // If option doesn't need expansion, nothing to do.
+    if (nvim_get_option_flags(opt_idx) & OptFlags::EXPAND.0) == 0
+        || rs_option_is_hidden(opt_idx) != 0
+    {
+        return std::ptr::null();
+    }
+
+    // If val is NULL, read the current string value from options[opt_idx].var.
+    let actual_val: *const std::ffi::c_char = if val.is_null() {
+        let var_ptr = nvim_get_option_var(opt_idx);
+        if var_ptr.is_null() {
+            return std::ptr::null();
+        }
+        // options[opt_idx].var is char** for string options; dereference it.
+        *(var_ptr.cast::<*const std::ffi::c_char>())
+    } else {
+        val
+    };
+
+    if actual_val.is_null() {
+        return std::ptr::null();
+    }
+
+    // If val is longer than MAXPATHL, no meaningful expansion can be done.
+    let mut len = 0usize;
+    let mut p = actual_val;
+    while *p != 0 {
+        len += 1;
+        if len > MAXPATHL {
+            return std::ptr::null();
+        }
+        p = p.add(1);
+    }
+
+    // Get escape kind and expand.
+    let esc_kind = nvim_option_expand_escape_kind(opt_idx);
+    nvim_call_expand_env_esc_option(actual_val, esc_kind)
+}
+
+/// Set one option to its default value.
+///
+/// Mirrors C `set_option_default`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_option_default(opt_idx: c_int, opt_flags: c_int) {
+    let both = (opt_flags & (OPT_LOCAL_P12 | OPT_GLOBAL_P12)) == 0;
+    let def_val = rs_get_option_default(opt_idx, opt_flags);
+    nvim_call_set_option_direct_with_sctx(opt_idx, def_val, opt_flags);
+
+    if opt_idx == K_OPT_SCROLL {
+        nvim_call_win_comp_scroll_curwin();
+    }
+
+    // The default value is not insecure.
+    let curwin = nvim_opt_get_curwin();
+    let insecure_bit = nvim_get_koptflag_insecure();
+    let flagsp = rs_insecure_flag(curwin, opt_idx, opt_flags);
+    *flagsp &= !insecure_bit;
+    if both {
+        let flagsp2 = rs_insecure_flag(curwin, opt_idx, OPT_LOCAL_P12);
+        *flagsp2 &= !insecure_bit;
+    }
+}
+
+/// Set all options (except terminal options) to their default value.
+///
+/// Mirrors C `set_options_default`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_options_default(opt_flags: c_int) {
+    let count = nvim_get_kopt_count();
+    for opt_idx in 0..count {
+        let flags = OptFlags(nvim_get_option_flags(opt_idx));
+        if !flags.contains(OptFlags::NO_DEFAULT) {
+            rs_set_option_default(opt_idx, opt_flags);
+        }
+    }
+
+    // The 'scroll' option must be computed for all windows.
+    nvim_call_comp_scroll_all_windows();
+
+    nvim_call_parse_cino_curbuf();
+}
+
+/// Free all options (EXITFREE path only).
+///
+/// Mirrors C `free_all_options`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_all_options() {
+    let count = nvim_get_kopt_count();
+    for opt_idx in 0..count {
+        let hidden = rs_option_is_hidden(opt_idx) != 0;
+        if rs_option_is_global_only(opt_idx) != 0 || hidden {
+            // global option: free value and default value.
+            // hidden option: free default value only.
+            if !hidden {
+                let var_ptr = nvim_get_option_var(opt_idx);
+                rs_optval_free(rs_optval_from_varp(opt_idx, var_ptr));
+            }
+        } else if rs_option_is_window_local(opt_idx) == 0 {
+            // buffer-local option: free global value.
+            let var_ptr = nvim_get_option_var(opt_idx);
+            rs_optval_free(rs_optval_from_varp(opt_idx, var_ptr));
+        }
+        rs_optval_free(nvim_option_get_def_val(opt_idx));
+    }
+    nvim_call_free_operatorfunc_option();
+    rs_free_tagfunc_option();
+    nvim_call_free_findfunc_option();
+    nvim_call_xfree_clear_fenc_default();
+    nvim_call_xfree_clear_p_term();
+    nvim_call_xfree_clear_p_ttytype();
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

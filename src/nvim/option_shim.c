@@ -1592,47 +1592,29 @@ static void change_option_default(const OptIndex opt_idx, OptVal value)
   rs_change_option_default(opt_idx, value);
 }
 
+extern const char *rs_option_expand(int opt_idx, const char *val);
+extern void rs_set_option_default(int opt_idx, int opt_flags);
+extern void rs_set_options_default(int opt_flags);
+extern void rs_free_all_options(void);
+
 /// Set an option to its default value.
 /// This does not take care of side effects!
 ///
 /// @param  opt_idx    Option index in options[] table.
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
+/// Body migrated to Rust (Phase 12 Pass 3).
 static void set_option_default(const OptIndex opt_idx, int opt_flags)
 {
-  bool both = (opt_flags & (OPT_LOCAL | OPT_GLOBAL)) == 0;
-  OptVal def_val = get_option_default(opt_idx, opt_flags);
-  set_option_direct(opt_idx, def_val, opt_flags, current_sctx.sc_sid);
-
-  if (opt_idx == kOptScroll) {
-    win_comp_scroll(curwin);
-  }
-
-  // The default value is not insecure.
-  uint32_t *flagsp = insecure_flag(curwin, opt_idx, opt_flags);
-  *flagsp = *flagsp & ~(unsigned)kOptFlagInsecure;
-  if (both) {
-    flagsp = insecure_flag(curwin, opt_idx, OPT_LOCAL);
-    *flagsp = *flagsp & ~(unsigned)kOptFlagInsecure;
-  }
+  rs_set_option_default((int)opt_idx, opt_flags);
 }
 
 /// Set all options (except terminal options) to their default value.
 ///
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
+/// Body migrated to Rust (Phase 12 Pass 3).
 static void set_options_default(int opt_flags)
 {
-  for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
-    if (!(options[opt_idx].flags & kOptFlagNoDefault)) {
-      set_option_default(opt_idx, opt_flags);
-    }
-  }
-
-  // The 'scroll' option must be computed for all windows.
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    win_comp_scroll(wp);
-  }
-
-  parse_cino(curbuf);
+  rs_set_options_default(opt_flags);
 }
 
 /// Set the Vi-default value of a string option.
@@ -1651,30 +1633,10 @@ static void set_string_default(OptIndex opt_idx, char *val, bool allocated)
 }
 
 #if defined(EXITFREE)
-/// Free all options.
+/// Free all options. Body migrated to Rust (Phase 12 Pass 3).
 void free_all_options(void)
 {
-  for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
-    bool hidden = is_option_hidden(opt_idx);
-
-    if (option_is_global_only(opt_idx) || hidden) {
-      // global option: free value and default value.
-      // hidden option: free default value only.
-      if (!hidden) {
-        rs_optval_free(optval_from_varp(opt_idx, options[opt_idx].var));
-      }
-    } else if (!option_is_window_local(opt_idx)) {
-      // buffer-local option: free global value.
-      rs_optval_free(optval_from_varp(opt_idx, options[opt_idx].var));
-    }
-    rs_optval_free(options[opt_idx].def_val);
-  }
-  free_operatorfunc_option();
-  rs_free_tagfunc_option();
-  free_findfunc_option();
-  XFREE_CLEAR(fenc_default);
-  XFREE_CLEAR(p_term);
-  XFREE_CLEAR(p_ttytype);
+  rs_free_all_options();
 }
 #endif
 
@@ -1792,36 +1754,10 @@ void set_options_bin(int oldval, int newval, int opt_flags)
 /// These string options cannot be indirect!
 /// If "val" is NULL expand the current value of the option.
 /// Return pointer to NameBuff, or NULL when not expanded.
+/// Body migrated to Rust (Phase 12 Pass 3).
 static char *option_expand(OptIndex opt_idx, const char *val)
 {
-  // if option doesn't need expansion nothing to do
-  if (!(options[opt_idx].flags & kOptFlagExpand) || is_option_hidden(opt_idx)) {
-    return NULL;
-  }
-
-  if (val == NULL) {
-    val = *(char **)options[opt_idx].var;
-  }
-
-  // If val is longer than MAXPATHL no meaningful expansion can be done,
-  // expand_env() would truncate the string.
-  if (val == NULL || strlen(val) > MAXPATHL) {
-    return NULL;
-  }
-
-  // Expanding this with NameBuff, expand_env() must not be passed IObuff.
-  // Escape spaces when expanding 'tags' or 'path', they are used to separate
-  // file names.
-  // For 'spellsuggest' expand after "file:".
-  char **var = (char **)options[opt_idx].var;
-  bool esc = var == &p_tags || var == &p_path;
-  expand_env_esc(val, NameBuff, MAXPATHL, esc, false,
-                 (char **)options[opt_idx].var == &p_sps ? "file:" : NULL);
-  if (strcmp(NameBuff, val) == 0) {   // they are the same
-    return NULL;
-  }
-
-  return NameBuff;
+  return (char *)rs_option_expand((int)opt_idx, val);
 }
 
 /// Non-static wrapper for option_expand(), for Rust FFI.
@@ -4337,4 +4273,78 @@ void nvim_bin_didset_sctx_all(int opt_flags)
     kOptTextwidth, kOptWrapmargin, kOptModeline, kOptExpandtab, kOptInvalid
   };
   didset_options_sctx(opt_flags, bin_dep);
+}
+
+// =============================================================================
+// Phase 12 lifecycle accessors (set_option_default, set_options_default,
+// option_expand, free_all_options)
+// =============================================================================
+
+/// set_option_direct(opt_idx, val, opt_flags, current_sctx.sc_sid) wrapper.
+void nvim_call_set_option_direct_with_sctx(int opt_idx, OptVal val, int opt_flags)
+{
+  set_option_direct((OptIndex)opt_idx, val, opt_flags, current_sctx.sc_sid);
+}
+
+/// win_comp_scroll(curwin) wrapper.
+void nvim_call_win_comp_scroll_curwin(void) { win_comp_scroll(curwin); }
+
+/// FOR_ALL_TAB_WINDOWS win_comp_scroll wrapper.
+void nvim_call_comp_scroll_all_windows(void)
+{
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    win_comp_scroll(wp);
+  }
+}
+
+/// parse_cino(curbuf) wrapper.
+void nvim_call_parse_cino_curbuf(void) { parse_cino(curbuf); }
+
+/// free_operatorfunc_option() wrapper (EXITFREE only).
+#if defined(EXITFREE)
+void nvim_call_free_operatorfunc_option(void) { free_operatorfunc_option(); }
+#else
+void nvim_call_free_operatorfunc_option(void) {}
+#endif
+
+/// free_findfunc_option() wrapper.
+void nvim_call_free_findfunc_option(void) { free_findfunc_option(); }
+
+/// XFREE_CLEAR(fenc_default) wrapper.
+void nvim_call_xfree_clear_fenc_default(void) { XFREE_CLEAR(fenc_default); }
+
+/// XFREE_CLEAR(p_term) wrapper.
+void nvim_call_xfree_clear_p_term(void) { XFREE_CLEAR(p_term); }
+
+/// XFREE_CLEAR(p_ttytype) wrapper.
+void nvim_call_xfree_clear_p_ttytype(void) { XFREE_CLEAR(p_ttytype); }
+
+/// Return escape kind for option_expand:
+///   0 = no escape needed
+///   1 = escape spaces (p_tags or p_path)
+///   2 = use "file:" prefix (p_sps)
+int nvim_option_expand_escape_kind(int opt_idx)
+{
+  char **var = (char **)options[(OptIndex)opt_idx].var;
+  if (var == &p_tags || var == &p_path) {
+    return 1;
+  }
+  if (var == &p_sps) {
+    return 2;
+  }
+  return 0;
+}
+
+/// expand_env_esc into NameBuff wrapper for option_expand.
+/// esc_kind: 0=no escape, 1=escape, 2=use "file:" prefix.
+/// Returns NameBuff if the expanded string differs from val, else NULL.
+const char *nvim_call_expand_env_esc_option(const char *val, int esc_kind)
+{
+  const char *prefix = (esc_kind == 2) ? "file:" : NULL;
+  bool esc = (esc_kind == 1);
+  expand_env_esc(val, NameBuff, MAXPATHL, esc, false, (char *)prefix);
+  if (strcmp(NameBuff, val) == 0) {
+    return NULL;
+  }
+  return NameBuff;
 }
