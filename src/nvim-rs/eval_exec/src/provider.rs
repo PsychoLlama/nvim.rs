@@ -34,7 +34,7 @@ extern "C" {
 
     // ----- typval accessors -----
     fn nvim_tv_get_type(tv: *mut c_void) -> c_int;
-    fn nvim_tv_get_vnumber_sys(tv: *const c_void) -> i64;
+    fn nvim_eval_tv_get_vnumber(tv: *const c_void) -> i64;
     fn nvim_tv_alloc_zero() -> *mut c_void;
     fn nvim_tv_set_number_zero(tv: *mut c_void);
     fn tv_clear(tv: *mut c_void);
@@ -42,8 +42,8 @@ extern "C" {
 
     // ----- list operations -----
     fn nvim_eval_list_alloc_n(n: c_int) -> *mut c_void;
-    fn nvim_eval_list_append_string(l: *mut c_void, str: *const c_char, len: isize);
-    fn nvim_eval_list_unref(l: *mut c_void);
+    fn nvim_tv_list_append_string(l: *mut c_void, str: *const c_char, len: isize);
+    fn nvim_tv_list_unref(l: *mut c_void);
     fn nvim_eval_list_ref(l: *mut c_void);
 
     // ----- provider caller scope save/restore -----
@@ -221,7 +221,7 @@ pub unsafe extern "C" fn rs_eval_has_provider(feat: *const c_char, throw_if_fast
     // Check: v_type == VAR_NUMBER && v_number == 2 means "loaded and working"
     let tv_type = unsafe { nvim_tv_get_type(rettv) };
     let ok = if tv_type == VAR_NUMBER {
-        let vnum = unsafe { nvim_tv_get_vnumber_sys(rettv) };
+        let vnum = unsafe { nvim_eval_tv_get_vnumber(rettv as *const c_void) };
         vnum == 2
     } else {
         false
@@ -316,7 +316,7 @@ pub unsafe extern "C" fn rs_eval_call_provider(
     };
 
     // Unref arguments
-    unsafe { nvim_eval_list_unref(arguments) };
+    unsafe { nvim_tv_list_unref(arguments) };
 
     // Restore
     unsafe { nvim_eval_restore_funccal(funccal_entry) };
@@ -359,7 +359,7 @@ pub unsafe extern "C" fn rs_script_host_eval(
     let args = unsafe { nvim_eval_list_alloc_n(1) };
     // argvars[0] is a VAR_STRING typval; get its v_string field via accessor
     let s = unsafe { nvim_tv_get_vstring(argvars) };
-    unsafe { nvim_eval_list_append_string(args, s, -1) };
+    unsafe { nvim_tv_list_append_string(args, s, -1) };
 
     // Call the provider and write result into rettv
     unsafe { rs_eval_call_provider(name, c"eval".as_ptr(), args, false, rettv) };

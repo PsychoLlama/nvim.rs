@@ -31,7 +31,7 @@ extern "C" {
 extern "C" {
     fn nvim_tv_get_type(tv: *mut c_void) -> c_int;
     fn nvim_eval_tv_string_chk(tv: *mut c_void) -> *const c_char;
-    fn nvim_tv_get_vnumber(tv: *mut c_void) -> i64;
+    fn nvim_eval_tv_get_vnumber(tv: *const c_void) -> i64;
     fn nvim_buflist_findnr(nr: c_int) -> *mut c_void; // buf_T*
     fn nvim_eval_buf_line_count(buf: *mut c_void) -> c_int;
     fn nvim_eval_ml_get_buf(buf: *mut c_void, lnum: i32) -> *const c_char;
@@ -93,7 +93,7 @@ pub unsafe extern "C" fn rs_save_tv_as_string(
 
     // VAR_NUMBER: treat as buffer-id.
     if vtype == VAR_NUMBER_S {
-        let bufnr = nvim_tv_get_vnumber(tv);
+        let bufnr = nvim_eval_tv_get_vnumber(tv.cast_const());
         let buf = nvim_buflist_findnr(bufnr as c_int);
         if buf.is_null() {
             nvim_semsg_e_nobufnr(bufnr);
@@ -367,7 +367,7 @@ pub unsafe extern "C" fn rs_string_slice(
 
 extern "C" {
     fn nvim_encode_tv2string_wrapper(tv: *mut c_void) -> *mut c_char;
-    fn nvim_tv_get_vstring_ro(tv: *const c_void) -> *const c_char;
+    fn nvim_tv_get_vstring(tv: *mut c_void) -> *mut c_char;
     fn xstrdup(s: *const c_char) -> *mut c_char;
 }
 
@@ -392,7 +392,7 @@ pub unsafe extern "C" fn rs_typval_tostring(arg: *mut c_void, quotes: bool) -> *
         return xstrdup(msg.as_ptr() as *const c_char);
     }
     if !quotes && nvim_tv_get_type(arg) == VAR_STRING_TS {
-        let s = nvim_tv_get_vstring_ro(arg.cast_const());
+        let s = nvim_tv_get_vstring(arg).cast_const();
         let s_nn = if s.is_null() {
             EMPTY_STR.as_ptr() as *const c_char
         } else {

@@ -85,8 +85,8 @@ extern "C" {
     fn nvim_tv_dict_alloc() -> DictHandle;
     fn nvim_tv_dict_item_alloc_key(key: *const c_char) -> DictItemHandle;
     fn nvim_tv_dict_add_item(dict: DictHandle, di: DictItemHandle) -> c_int;
-    fn nvim_di_get_tv_ptr(di: DictItemHandle) -> TvHandle;
-    fn nvim_di_free(di: DictItemHandle);
+    fn nvim_di_get_tv(di: DictItemHandle) -> TvHandle;
+    fn nvim_tv_dict_item_free(di: DictItemHandle);
 
     // -- Callback operations --
     fn nvim_callback_free(cb: CallbackHandle);
@@ -165,11 +165,11 @@ pub unsafe extern "C" fn rs_add_timer_info(rettv: TvHandle, timer: TimerHandle) 
 
     let di = nvim_tv_dict_item_alloc_key(c"callback".as_ptr());
     if nvim_tv_dict_add_item(dict, di) == FAIL {
-        nvim_di_free(di);
+        nvim_tv_dict_item_free(di);
         return;
     }
 
-    let di_tv = nvim_di_get_tv_ptr(di);
+    let di_tv = nvim_di_get_tv(di);
     let cb_ptr = nvim_timer_get_callback_ptr(timer);
     nvim_callback_put(cb_ptr, di_tv);
 }

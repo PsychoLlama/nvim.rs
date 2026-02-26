@@ -98,7 +98,7 @@ extern "C" {
     fn nvim_ga_append_str_len(ga: *mut c_void, str: *const c_char, len: c_int);
     fn nvim_ga_get_data(ga: *const c_void) -> *mut c_char;
     fn nvim_ga_data_is_null(ga: *const c_void) -> bool;
-    fn nvim_ga_clear_and_free(ga: *mut c_void);
+    fn nvim_ga_free(ga: *mut c_void);
 
     // do_cmdline for :execute
     fn nvim_do_cmdline_execute(cmd: *mut c_char, eap: ExargHandle);
@@ -385,7 +385,7 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
         }
     }
 
-    nvim_ga_clear_and_free(ga);
+    nvim_ga_free(ga);
 
     if skip {
         nvim_emsg_skip_dec();

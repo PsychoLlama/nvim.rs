@@ -41,8 +41,8 @@ extern "C" {
     // v:lua funcref check
     fn nvim_cb_check_vlua_funcref(name: *const c_char) -> *const c_char;
 
-    // VV_LUA partial getter
-    fn nvim_get_vv_lua_partial() -> *mut c_void;
+    // VV_LUA partial getter (canonical name)
+    fn nvim_get_vlua_partial() -> *mut c_void;
 
     // Lua callback call
     fn nvim_callback_call_lua(luaref: i32) -> bool;
@@ -94,7 +94,7 @@ pub unsafe fn callback_call_impl(
             // Check if this is a v:lua.* funcref
             let lua_name = nvim_cb_check_vlua_funcref(name);
             let (call_name, partial) = if !lua_name.is_null() {
-                let vv_lua_partial = nvim_get_vv_lua_partial();
+                let vv_lua_partial = nvim_get_vlua_partial();
                 (lua_name, vv_lua_partial)
             } else {
                 (name as *const c_char, std::ptr::null_mut())

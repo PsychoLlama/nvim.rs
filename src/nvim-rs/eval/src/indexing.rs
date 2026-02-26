@@ -209,8 +209,8 @@ type ListHandle = *mut c_void;
 
 extern "C" {
     // Typval field accessors (Phase 3)
-    fn nvim_eval_tv_vtype(tv: *const c_void) -> c_int;
-    fn nvim_eval_tv_vlist(tv: *const c_void) -> ListHandle;
+    fn nvim_eval_tv_get_type(tv: *const c_void) -> c_int;
+    fn nvim_eval_tv_get_list(tv: *const c_void) -> ListHandle;
     fn nvim_eval_tv_string_chk(tv: *const c_void) -> *const c_char;
     fn nvim_tv_list_find_nr(l: ListHandle, n: c_int, error_out: *mut bool) -> i64;
     fn nvim_tv_list_item_is_dollar(l: ListHandle, idx: c_int) -> bool;
@@ -287,8 +287,8 @@ pub unsafe extern "C" fn rs_var2fpos(
     out: *mut PosT,
 ) -> bool {
     // Argument can be [lnum, col, coladd].
-    if nvim_eval_tv_vtype(tv) == VAR_LIST {
-        let l = nvim_eval_tv_vlist(tv);
+    if nvim_eval_tv_get_type(tv) == VAR_LIST {
+        let l = nvim_eval_tv_get_list(tv);
         if l.is_null() {
             return false;
         }
@@ -466,10 +466,10 @@ pub unsafe extern "C" fn rs_list2fpos(
     charcol: bool,
 ) -> c_int {
     // Validate: must be a list
-    if nvim_eval_tv_vtype(arg) != VAR_LIST {
+    if nvim_eval_tv_get_type(arg) != VAR_LIST {
         return FAIL;
     }
-    let l = nvim_eval_tv_vlist(arg);
+    let l = nvim_eval_tv_get_list(arg);
     if l.is_null() {
         return FAIL;
     }

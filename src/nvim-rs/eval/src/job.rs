@@ -34,7 +34,7 @@ extern "C" {
     fn nvim_tv_dict_get_number(dict: DictHandle, key: *const c_char) -> i64;
 
     // -- CallbackReader accessors --
-    fn nvim_cbr_get_cb_ptr(reader: CallbackReaderHandle) -> CallbackHandle;
+    fn nvim_eval_cbr_get_cb(reader: CallbackReaderHandle) -> CallbackHandle;
     fn nvim_cbr_set_buffered(reader: CallbackReaderHandle, buffered: c_int);
     fn nvim_cbr_set_self(reader: CallbackReaderHandle, dict: DictHandle);
     fn nvim_callback_reader_free(reader: CallbackReaderHandle);
@@ -80,8 +80,8 @@ pub unsafe extern "C" fn rs_common_job_callbacks(
     on_stderr: CallbackReaderHandle,
     on_exit: CallbackHandle,
 ) -> bool {
-    let stdout_cb = nvim_cbr_get_cb_ptr(on_stdout);
-    let stderr_cb = nvim_cbr_get_cb_ptr(on_stderr);
+    let stdout_cb = nvim_eval_cbr_get_cb(on_stdout);
+    let stderr_cb = nvim_eval_cbr_get_cb(on_stderr);
 
     if nvim_tv_dict_get_callback(vopts, c"on_stdout".as_ptr(), 9, stdout_cb)
         && nvim_tv_dict_get_callback(vopts, c"on_stderr".as_ptr(), 9, stderr_cb)

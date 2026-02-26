@@ -83,13 +83,13 @@ extern "C" {
     fn tv_get_string_buf_chk(tv: TypevalHandle, buf: *mut c_char) -> *const c_char;
 
     // eval_to_string_safe wrapper (calls through to our rs_eval_to_string)
-    fn nvim_eval_tv_get_string(tv: *const c_void) -> *const c_char;
+    fn nvim_eval_tv_get_str(tv: TypevalHandle) -> *const c_char;
     fn nvim_eval_xstrdup(s: *const c_char) -> *mut c_char;
 
     // typval2string helpers
     fn nvim_eval_tv_list_join_nl(l: *mut c_void) -> *mut c_char;
-    fn nvim_eval_tv_vtype(tv: *const c_void) -> c_int;
-    fn nvim_eval_tv_vlist(tv: *const c_void) -> *mut c_void;
+    fn nvim_eval_tv_get_type(tv: TypevalHandle) -> c_int;
+    fn nvim_eval_tv_get_list(tv: TypevalHandle) -> *mut c_void;
     fn nvim_encode_tv2string_wrapper(tv: *mut c_void) -> *mut c_char;
 
     // eval1_emsg wrapper
@@ -100,8 +100,8 @@ extern "C" {
     ) -> c_int;
 
     // eval_expr_* helpers
-    fn nvim_eval_tv_vpartial(tv: *const c_void) -> *mut c_void; // partial_T*
-    fn nvim_tv_get_vstring_ro(tv: *const c_void) -> *const c_char;
+    fn nvim_eval_tv_get_partial(tv: TypevalHandle) -> *mut c_void; // partial_T*
+    fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
     fn rs_partial_name(pt: *const c_void) -> *mut c_char;
     fn nvim_eval_call_func_partial(
         s: *const c_char,
@@ -166,15 +166,16 @@ extern "C" {
 /// # Safety
 /// `tv` must be a valid pointer to a typval_T.
 unsafe fn typval2string_impl(tv: *mut c_void, join_list: bool) -> *mut c_char {
-    let vtype = nvim_eval_tv_vtype(tv);
+    let tv_h = TypevalHandle::from_ptr(tv);
+    let vtype = nvim_eval_tv_get_type(tv_h);
     if join_list && vtype == VAR_LIST {
-        let l = nvim_eval_tv_vlist(tv);
+        let l = nvim_eval_tv_get_list(tv_h);
         return nvim_eval_tv_list_join_nl(l);
     }
     if vtype == VAR_LIST || vtype == VAR_DICT {
         return nvim_encode_tv2string_wrapper(tv);
     }
-    nvim_eval_xstrdup(nvim_eval_tv_get_string(tv))
+    nvim_eval_xstrdup(nvim_eval_tv_get_str(tv_h))
 }
 
 // =============================================================================
@@ -204,7 +205,7 @@ unsafe fn eval_expr_partial_impl(
     argc: c_int,
     rettv: TypevalHandle,
 ) -> c_int {
-    let partial = nvim_eval_tv_vpartial(expr);
+    let partial = nvim_eval_tv_get_partial(TypevalHandle::from_ptr(expr as *mut c_void));
     if partial.is_null() {
         return FAIL;
     }
@@ -226,14 +227,12 @@ unsafe fn eval_expr_func_impl(
     rettv: TypevalHandle,
 ) -> c_int {
     let mut buf = [0u8; NUMBUFLEN];
-    let vtype = nvim_eval_tv_vtype(expr);
-    let s = if vtype == VAR_FUNC {
-        nvim_tv_get_vstring_ro(expr)
+    let expr_h = TypevalHandle::from_ptr(expr as *mut c_void);
+    let vtype = nvim_eval_tv_get_type(expr_h);
+    let s: *const c_char = if vtype == VAR_FUNC {
+        nvim_tv_get_vstring(expr_h) as *const c_char
     } else {
-        tv_get_string_buf_chk(
-            TypevalHandle::from_ptr(expr as *mut c_void),
-            buf.as_mut_ptr() as *mut c_char,
-        )
+        tv_get_string_buf_chk(expr_h, buf.as_mut_ptr() as *mut c_char)
     };
     if s.is_null() || *s == 0 {
         return FAIL;
@@ -393,7 +392,7 @@ pub unsafe extern "C" fn rs_eval_to_string_skip(
     let retval = if eval0(arg, tv, eap, evalarg) == FAIL || skip {
         ptr::null_mut()
     } else {
-        let s = nvim_eval_tv_get_string(tv.as_ptr() as *const c_void);
+        let s = nvim_eval_tv_get_str(tv);
         let r = nvim_eval_xstrdup(s);
         tv_clear(tv);
         r
@@ -579,7 +578,7 @@ pub unsafe extern "C" fn rs_eval_expr_typval(
     argc: c_int,
     rettv: TypevalHandle,
 ) -> c_int {
-    let vtype = nvim_eval_tv_vtype(expr);
+    let vtype = nvim_eval_tv_get_type(TypevalHandle::from_ptr(expr as *mut c_void));
     if vtype == VAR_PARTIAL {
         return eval_expr_partial_impl(expr, argv, argc, rettv);
     }
@@ -794,7 +793,7 @@ extern "C" {
         argv: TypevalHandle,
         partial: *mut c_void,
     ) -> c_int;
-    fn nvim_get_vv_lua_partial_p1() -> *mut c_void; // partial_T*
+    fn nvim_get_vlua_partial() -> *mut c_void; // partial_T*
     fn rs_check_luafunc_name(s: *const c_char, paren: bool) -> c_int;
 
     // Phase 1: set_argv_var accessors
@@ -817,7 +816,6 @@ extern "C" {
     fn nvim_find_option_end_wrapper(p: *const c_char, opt_idxp: *mut c_int) -> *const c_char;
 
     // Phase 1: call_func_retstr helper
-    fn nvim_eval_tv_get_str(tv: TypevalHandle) -> *const c_char;
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_tv_set_type(tv: TypevalHandle, vtype: c_int);
 }
@@ -855,7 +853,7 @@ pub unsafe extern "C" fn rs_call_vim_function(
         }
         actual_func = lua_name;
         actual_len = lua_len;
-        partial = nvim_get_vv_lua_partial_p1();
+        partial = nvim_get_vlua_partial();
     }
 
     // Initialize rettv: set v_type = VAR_UNKNOWN (0) so tv_clear works on failure
@@ -913,13 +911,13 @@ pub unsafe extern "C" fn rs_call_func_retlist(
         return std::ptr::null_mut();
     }
 
-    let vtype = nvim_eval_tv_vtype(rettv.as_ptr() as *const c_void);
+    let vtype = nvim_eval_tv_get_type(rettv);
     if vtype != VAR_LIST {
         tv_clear(rettv);
         return std::ptr::null_mut();
     }
 
-    nvim_eval_tv_vlist(rettv.as_ptr() as *const c_void)
+    nvim_eval_tv_get_list(rettv)
 }
 
 /// Set the v:argv list from argc/argv.
@@ -1174,7 +1172,6 @@ extern "C" {
 
     // Phase 3: typval field accessors
     fn nvim_eval_tv_get_vnumber(tv: *const c_void) -> i64;
-    fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
 
     // Phase 3: foldtext Object construction helpers
     fn nvim_foldtext_make_nil_obj(out: *mut c_void);
@@ -1217,9 +1214,9 @@ pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_
         if eval0_simple_funccal_impl(arg, tv_handle, ExargHandle::null(), evalarg) == FAIL {
             0
         } else {
-            let vtype = nvim_eval_tv_vtype(tv);
+            let vtype = nvim_eval_tv_get_type(TypevalHandle::from_ptr(tv));
             let result = if vtype == VAR_NUMBER {
-                nvim_eval_tv_get_vnumber(tv)
+                nvim_eval_tv_get_vnumber(tv as *const c_void)
             } else if vtype != VAR_STRING {
                 0
             } else {
@@ -1300,7 +1297,7 @@ pub unsafe extern "C" fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void) {
     if eval0_simple_funccal_impl(arg, tv_handle, ExargHandle::null(), evalarg) == FAIL {
         nvim_foldtext_make_nil_obj(out);
     } else {
-        let vtype = nvim_eval_tv_vtype(tv);
+        let vtype = nvim_eval_tv_get_type(tv_handle);
         if vtype == VAR_LIST {
             nvim_foldtext_make_array_obj(tv_handle, out);
         } else {

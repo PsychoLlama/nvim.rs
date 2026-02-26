@@ -253,7 +253,7 @@ extern "C" {
     fn nvim_semsg_e_dot_dict(name: *const c_char);
     fn nvim_semsg_e_illvar_raw(name: *const c_char);
     fn nvim_semsg_e_illvar(name: *const c_char);
-    fn nvim_semsg_e_cannot_slice_dict();
+    fn nvim_emsg_cannot_slice_dict();
     fn nvim_emsg_missbrac();
 }
 
@@ -566,7 +566,7 @@ unsafe fn get_lval_subscript_impl(
                 if *p == b':' as c_char {
                     if nvim_lval_tv_get_type(lp) == VAR_DICT_TYPE {
                         if !quiet {
-                            nvim_semsg_e_cannot_slice_dict();
+                            nvim_emsg_cannot_slice_dict();
                         }
                         break 'outer; // goto done
                     }
@@ -1160,8 +1160,8 @@ use std::cell::Cell;
 extern "C" {
     // vimconv_T accessor: returns conv->vc_type (0 = CONV_NONE)
     fn nvim_vimconv_get_type(conv: *const c_void) -> c_int;
-    // Get tv->vval.v_string (read-only)
-    fn nvim_tv_get_vstring_ro(tv: *const c_void) -> *const c_char;
+    // Get tv->vval.v_string (canonical name; cast to *const c_char for read-only use)
+    fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
     // string_convert wrapper; returns allocated string or NULL
     fn nvim_string_convert(conv: *const c_void, str: *const c_char) -> *mut c_char;
     // xstrdup
@@ -1271,7 +1271,7 @@ unsafe fn var_item_copy_impl(
             tv_copy(from, to);
         }
         VAR_STRING => {
-            let from_str = nvim_tv_get_vstring_ro(from.0.cast_const());
+            let from_str = nvim_tv_get_vstring(from) as *const c_char;
             let conv_type = nvim_vimconv_get_type(conv);
             if conv.is_null() || conv_type == CONV_NONE || from_str.is_null() {
                 tv_copy(from, to);

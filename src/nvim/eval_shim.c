@@ -1236,11 +1236,6 @@ const char *nvim_cb_check_vlua_funcref(const char *name)
   return NULL;
 }
 
-/// Get the VV_LUA partial.
-partial_T *nvim_get_vv_lua_partial(void)
-{
-  return get_vim_var_partial(VV_LUA);
-}
 
 /// Handle the kCallbackLua case: call nlua_call_ref and return LUARET_TRUTHY.
 bool nvim_callback_call_lua(LuaRef luaref)
@@ -1928,11 +1923,6 @@ typval_T *nvim_f_slice_get_arg2(typval_T *argvars)
 // Phase 1 (eval_method): new C accessor/wrapper functions
 // =============================================================================
 
-/// Increment pt->pt_refcount - accessor for Rust rs_eval_method.
-void nvim_partial_incref(partial_T *pt)
-{
-  pt->pt_refcount++;
-}
 
 /// Set tv->vval.v_partial = pt without clearing - accessor for Rust rs_eval_method.
 void nvim_tv_set_partial_raw(typval_T *tv, partial_T *pt)
@@ -2079,11 +2069,6 @@ void nvim_semsg_e_illvar(const char *name)
   semsg(_(e_illvar), name);
 }
 
-/// Emit e_cannot_slice_dictionary - accessor for Rust.
-void nvim_semsg_e_cannot_slice_dict(void)
-{
-  emsg(_(e_cannot_slice_dictionary));
-}
 
 /// Increment dict refcount and assign to ll_tv->vval.v_dict; set ll_dict = dict - accessor for Rust.
 /// Replicates: lp->ll_tv->vval.v_dict = tv_dict_alloc(); lp->ll_tv->vval.v_dict->dv_refcount++;
@@ -2235,11 +2220,6 @@ bool nvim_partial_get_pt_auto(const partial_T *pt)
   return pt->pt_auto;
 }
 
-/// Get partial->pt_dict (for set_selfdict check) - accessor for Rust rs_handle_subscript.
-dict_T *nvim_partial_get_pt_dict_handle(const partial_T *pt)
-{
-  return pt->pt_dict;
-}
 
 /// Scope check for get_lval_dict_item: set key[len]=NUL, check scope, restore.
 /// Returns true if the variable is 'wrong' (validation failed).
@@ -2382,12 +2362,6 @@ char *nvim_ga_get_data(const garray_T *ga)
   return (char *)ga->ga_data;
 }
 
-/// ga_clear and xfree the garray - accessor for Rust.
-void nvim_ga_clear_and_free(garray_T *ga)
-{
-  ga_clear(ga);
-  xfree(ga);
-}
 
 /// Get eap->skip - accessor for Rust (local, avoids dependency on ex_docmd).
 int nvim_eap_get_skip_local(const exarg_T *eap)
@@ -2503,17 +2477,7 @@ char *nvim_eval_tv_list_join_nl(list_T *l)
   return (char *)ga.ga_data;
 }
 
-/// Get v_type from typval - accessor for eval_top.
-int nvim_eval_tv_vtype(const typval_T *tv)
-{
-  return (int)tv->v_type;
-}
 
-/// Get vval.v_list from typval - accessor for eval_top.
-list_T *nvim_eval_tv_vlist(const typval_T *tv)
-{
-  return tv->vval.v_list;
-}
 
 /// call_func wrapper for eval_expr_partial - accessor for Rust eval_top.
 int nvim_eval_call_func_partial(const char *s, partial_T *partial,
@@ -2533,17 +2497,7 @@ int nvim_eval_call_func_simple(const char *s, typval_T *argv, int argc, typval_T
   return call_func(s, -1, rettv, argc, argv, &funcexe);
 }
 
-/// Get vval.v_partial from typval - accessor for eval_top.
-partial_T *nvim_eval_tv_vpartial(const typval_T *tv)
-{
-  return tv->vval.v_partial;
-}
 
-/// tv_get_string wrapper - accessor for eval_top.
-const char *nvim_eval_tv_get_string(const typval_T *tv)
-{
-  return tv_get_string(tv);
-}
 
 /// xstrdup wrapper - accessor for eval_top.
 char *nvim_eval_xstrdup(const char *s)
@@ -2724,11 +2678,6 @@ void nvim_semsg_e_missingparen(const char *name)
   semsg(_(e_missingparen), name);
 }
 
-/// Get vval.v_string from a const typval - accessor for rs_call_func_rettv.
-const char *nvim_tv_get_vstring_ro(const typval_T *tv)
-{
-  return tv->vval.v_string;
-}
 
 /// Emit "E117: Unknown function" / empty function name error.
 void nvim_emsg_e_empty_function_name(void)
@@ -2887,12 +2836,6 @@ void nvim_emsg_nested_too_deep(void)
 
 // nvim_buflist_findnr already exists in buffer.c -- no duplicate needed here.
 
-/// Get tv->vval.v_number (integer field) - for VAR_NUMBER branch.
-varnumber_T nvim_tv_get_vnumber(const typval_T *tv)
-{
-  return tv->vval.v_number;
-}
-
 /// Emit "E86: Buffer % does not exist" semsg.
 void nvim_semsg_e_nobufnr(varnumber_T nr)
 {
@@ -3027,11 +2970,6 @@ int nvim_call_func_with_partial(const char *func, int len, typval_T *rettv,
   return call_func(func, len, rettv, argc, argv, &funcexe);
 }
 
-/// Get VV_LUA partial - accessor for rs_call_vim_function.
-partial_T *nvim_get_vv_lua_partial_p1(void)
-{
-  return get_vim_var_partial(VV_LUA);
-}
 
 /// Wrap set_var(name, name_len, tv, false) - accessor for rs_var_set_global.
 void nvim_set_var_wrapper(const char *name, size_t name_len, typval_T *tv)
@@ -3429,11 +3367,6 @@ void nvim_semsg_provider_no_call(const char *name, const char *funcname)
   semsg("provider: %s: g:loaded_%s_provider=2 but %s is not defined", name, name, funcname);
 }
 
-/// tv_get_vnumber wrapper -- get the numeric value of a typval.
-int64_t nvim_tv_get_vnumber_sys(const typval_T *tv)
-{
-  return tv->vval.v_number;
-}
 
 /// Save the provider_caller_scope and related globals to an opaque heap blob.
 /// Returns a pointer that must be passed to nvim_restore_provider_caller_scope.
@@ -3473,11 +3406,6 @@ void nvim_provider_call_nesting_dec(void)
   assert(provider_call_nesting >= 0);
 }
 
-/// tv_list_append_string wrapper for Rust.
-void nvim_eval_list_append_string(list_T *l, const char *str, ptrdiff_t len)
-{
-  tv_list_append_string(l, str, len);
-}
 
 /// tv_list_alloc with explicit count (for provider args list).
 list_T *nvim_eval_list_alloc_n(int n)
@@ -3485,11 +3413,6 @@ list_T *nvim_eval_list_alloc_n(int n)
   return tv_list_alloc((ptrdiff_t)n);
 }
 
-/// tv_list_unref wrapper for provider list argument cleanup.
-void nvim_eval_list_unref(list_T *l)
-{
-  tv_list_unref(l);
-}
 
 /// tv_list_ref wrapper for provider list argument.
 void nvim_eval_list_ref(list_T *l)
@@ -3744,17 +3667,7 @@ int nvim_tv_dict_add_item(dict_T *dict, dictitem_T *di)
   return tv_dict_add(dict, di);
 }
 
-/// Get pointer to a dictitem_T's di_tv field.
-typval_T *nvim_di_get_tv_ptr(dictitem_T *di)
-{
-  return &di->di_tv;
-}
 
-/// Free a dictitem_T (called when tv_dict_add fails).
-void nvim_di_free(dictitem_T *di)
-{
-  xfree(di);
-}
 
 /// Wrapper for get_pressedreturn() -- returns 1 if true.
 int nvim_get_pressedreturn(void)
@@ -3778,11 +3691,6 @@ void nvim_discard_current_exception(void)
 // Job helper accessors for Rust Phase 2 (eval_shim pass 8)
 // =============================================================================
 
-/// Get a pointer to the cb field of a CallbackReader.
-Callback *nvim_cbr_get_cb_ptr(CallbackReader *reader)
-{
-  return &reader->cb;
-}
 
 /// Set the buffered field of a CallbackReader.
 void nvim_cbr_set_buffered(CallbackReader *reader, int buffered)
