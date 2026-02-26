@@ -355,6 +355,12 @@ extern void rs_set_qf_ll_list(void *wp, const void *args, void *rettv);
 extern void rs_f_setqflist(const void *argvars, void *rettv, void *fptr);
 extern void rs_f_setloclist(const void *argvars, void *rettv, void *fptr);
 
+// Phase 11: window/title helpers and position update (migrated to Rust)
+extern const void *rs_qf_find_win_for_stack(const void *qi);
+extern bool rs_qf_win_pos_update(void *qi, int old_qf_index);
+extern void rs_qf_set_title_var(const void *qfl);
+extern void rs_qf_update_win_titlevar(void *qi);
+
 // Pass 4: stack query entry points (Phase 1)
 extern size_t rs_qf_get_size_eap(void *eap);
 extern size_t rs_qf_get_valid_size_eap(void *eap);
@@ -573,7 +579,7 @@ bool nvim_win_valid(const void *wp_void) { return wp_void == NULL ? false : rs_w
 
 void *nvim_win_get_loclist(const void *wp_void) { return wp_void == NULL ? NULL : (void *)GET_LOC_LIST((win_T *)wp_void); }
 
-void *nvim_qf_find_win_handle(const void *qi_void) { return qi_void == NULL ? NULL : (void *)qf_find_win((const qf_info_T *)qi_void); }
+void *nvim_qf_find_win_handle(const void *qi_void) { return (void *)rs_qf_find_win_for_stack(qi_void); }
 
 int nvim_qf_win_get_handle(const void *wp_void) { return wp_void == NULL ? 0 : ((const win_T *)wp_void)->handle; }
 
@@ -1122,7 +1128,7 @@ void nvim_qf_free_lists_for_qi(void *qi_void)
   if (qi_void == NULL) { return; }
   qf_info_T *qi = (qf_info_T *)qi_void;
   for (int i = 0; i < qi->qf_listcount; i++) {
-    rs_qf_free_list(qf_get_list(qi, i));
+    rs_qf_free_list(&qi->qf_lists[i]);
   }
   nvim_qf_free_lists_array(qi_void);
 }
@@ -1253,11 +1259,11 @@ int nvim_qfl_set_title_from_what(void *qi_void, int qf_idx, const void *what_voi
   qf_info_T *qi = (qf_info_T *)qi_void;
   const dictitem_T *di = (const dictitem_T *)di_void;
   if (di->di_tv.v_type != VAR_STRING) { return FAIL; }
-  qf_list_T *qfl = qf_get_list(qi, qf_idx);
+  qf_list_T *qfl = &qi->qf_lists[qf_idx];
   xfree(qfl->qf_title);
   qfl->qf_title = tv_dict_get_string((const dict_T *)what_void, "title", true);
   if (qf_idx == qi->qf_curlist) {
-    qf_update_win_titlevar(qi);
+    rs_qf_update_win_titlevar(qi);
   }
   return OK;
 }
@@ -1336,7 +1342,7 @@ int nvim_qfl_set_curidx(void *qi_void, void *qfl_void, void *di_void)
   qfl->qf_index = newidx;
 
   if (qi->qf_lists[qi->qf_curlist].qf_id == qfl->qf_id) {
-    qf_win_pos_update(qi, old_qfidx);
+    rs_qf_win_pos_update(qi, old_qfidx);
   }
   return OK;
 }
@@ -1435,14 +1441,14 @@ bool nvim_qf_list_is_empty(const void *qfl_void)
 // nvim_qf_state_* and qf_{setup,cleanup,get_nextline,grow_linebuf,get_next_*}_state
 // deleted: migrated to Rust QfParserState in reader.rs (Phase 9).
 
-static bool qf_win_pos_update(qf_info_T *qi, int old_qf_index);
+// qf_win_pos_update forward declaration deleted: migrated to Rust rs_qf_win_pos_update (Phase 11).
 // qf_update_buffer forward declaration deleted: migrated to Rust rs_qf_update_buffer (Phase 10 Pass 10 Phase 4).
 
 // qf_find_win, qf_find_buf: deleted -- migrated to Rust rs_qf_find_win_for_stack /
-// rs_qf_find_buf_for_stack in lib.rs (Phase 10, Pass 10).
+// rs_qf_find_buf_for_stack in lib.rs (Phase 10, Pass 10), bodies deleted Phase 11.
 // nvim_qf_find_win_for_stack, nvim_qf_find_buf_for_stack: deleted -- callers use
 // rs_qf_find_win_for_stack / rs_qf_find_buf_for_stack directly.
-bool nvim_qf_win_pos_update(void *qi_void, int old_qf_index) { return qi_void == NULL ? false : qf_win_pos_update((qf_info_T *)qi_void, old_qf_index); }
+bool nvim_qf_win_pos_update(void *qi_void, int old_qf_index) { return qi_void == NULL ? false : rs_qf_win_pos_update(qi_void, old_qf_index); }
 void nvim_qf_update_buffer(void *qi_void, void *old_last) { rs_qf_update_buffer(qi_void, old_last); }
 int nvim_qf_get_bufnr(const void *qi_void) { return qi_void == NULL ? -1 : ((const qf_info_T *)qi_void)->qf_bufnr; }
 void nvim_qf_set_bufnr(void *qi_void, int bufnr) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_bufnr = bufnr; }
@@ -1675,12 +1681,7 @@ static Callback qftf_cb;
 // qf_get_next_file_line, qf_get_nextline deleted: migrated to Rust
 // QfParserState methods in reader.rs (Phase 9).
 
-/// Return a pointer to a list in the specified quickfix stack
-static qf_list_T *qf_get_list(qf_info_T *qi, int idx)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return &qi->qf_lists[idx];
-}
+// qf_get_list deleted: inlined as &qi->qf_lists[idx] (Phase 11).
 
 // qf_parse_line (thin wrapper), qf_alloc_fields, qf_free_fields,
 // qf_setup_state, qf_cleanup_state deleted: migrated to Rust (Phase 9).
@@ -1730,20 +1731,9 @@ void nvim_qf_init_emsg_readerrf(void) { emsg(_(e_readerrf)); }
 _Static_assert(QF_END_OF_INPUT == 2, "QF_END_OF_INPUT must be 2");
 _Static_assert(QF_FAIL == 0, "QF_FAIL must be 0");
 
-/// Returns a pointer to a static buffer with the title.
-static char *qf_cmdtitle(char *cmd)
-{
-  static char qftitle_str[IOSIZE];
-  rs_qf_cmdtitle(cmd, qftitle_str, sizeof(qftitle_str));
-  return qftitle_str;
-}
+// qf_cmdtitle deleted: inlined as local char[IOSIZE] + rs_qf_cmdtitle (Phase 11).
 
-/// Return a pointer to the current list in the specified quickfix stack
-static qf_list_T *qf_get_curlist(qf_info_T *qi)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return qf_get_list(qi, qi->qf_curlist);
-}
+// qf_get_curlist deleted: inlined as &qi->qf_lists[qi->qf_curlist] (Phase 11).
 
 // =============================================================================
 // Phase 5: regmatch_T indexed accessors for Rust parse_match migration
@@ -2112,7 +2102,7 @@ int qf_stack_get_bufnr(void) { assert(ql_info != NULL); return ql_info->qf_bufnr
 static void qf_free_lists(qf_info_T *qi)
 {
   for (int i = 0; i < qi->qf_listcount; i++) {
-    rs_qf_free_list(qf_get_list(qi, i));
+    rs_qf_free_list(&qi->qf_lists[i]);
   }
   nvim_qf_free_lists_array((void *)qi);
   nvim_qf_free_info((void *)qi);
@@ -2545,7 +2535,7 @@ void nvim_qf_jump_print_msg(void *qi_void, int qf_index, void *qf_ptr_void,
   }
   char qf_types_buf[20];
   vim_snprintf(IObuff, IOSIZE, _("(%d of %d)%s%s: "), qf_index,
-               qf_get_curlist(qi)->qf_count,
+               qi->qf_lists[qi->qf_curlist].qf_count,
                qf_ptr->qf_cleared ? _(" (line deleted)") : "",
                rs_qf_types(qf_ptr->qf_type, qf_ptr->qf_nr, qf_types_buf, sizeof(qf_types_buf)));
   // Add the message, skipping leading whitespace and newlines.
@@ -2606,7 +2596,7 @@ int nvim_qf_cmdline_row(void) { return (int)cmdline_row; }
 
 
 int nvim_qf_open_new_cwindow(void *qi_void, int height) { return rs_qf_open_new_cwindow(qi_void, height); }
-void nvim_qf_set_title_var(void *qfl_void) { if (qfl_void != NULL) qf_set_title_var((qf_list_T *)qfl_void); }
+void nvim_qf_set_title_var(void *qfl_void) { rs_qf_set_title_var(qfl_void); }
 
 void nvim_qf_curwin_set_cursor(linenr_T lnum, int col) { curwin->w_cursor.lnum = lnum; curwin->w_cursor.col = col; }
 
@@ -2614,7 +2604,7 @@ void nvim_qf_check_cursor_curwin(void) { check_cursor(curwin); }
 
 void nvim_qf_update_topline_curwin(void) { update_topline(curwin); }
 
-void nvim_qf_update_win_titlevar(void *qi_void) { if (qi_void != NULL) qf_update_win_titlevar((qf_info_T *)qi_void); }
+void nvim_qf_update_win_titlevar(void *qi_void) { rs_qf_update_win_titlevar(qi_void); }
 
 // Phase 10 Pass 10 Phase 2: New C accessors for Rust implementations
 
@@ -2885,31 +2875,10 @@ void nvim_qf_clear_fnum_cache(void)
 // qf_open_new_cwindow: deleted -- migrated to Rust rs_qf_open_new_cwindow
 // (Phase 10 Pass 10 Phase 3). nvim_qf_open_new_cwindow now calls rs_qf_open_new_cwindow.
 
-/// Set "w:quickfix_title" if "qi" has a title.
-static void qf_set_title_var(qf_list_T *qfl)
-{
-  if (qfl->qf_title != NULL) {
-    set_internal_string_var("w:quickfix_title", qfl->qf_title);
-  }
-}
+// qf_set_title_var deleted: migrated to Rust rs_qf_set_title_var (Phase 11).
+// nvim_qf_set_title_var now calls rs_qf_set_title_var directly.
 
-// Move the cursor in the quickfix window to "lnum".
-static void qf_win_goto(win_T *win, linenr_T lnum)
-{
-  win_T *old_curwin = curwin;
-
-  curwin = win;
-  curbuf = win->w_buffer;
-  curwin->w_cursor.lnum = lnum;
-  curwin->w_cursor.col = 0;
-  curwin->w_cursor.coladd = 0;
-  curwin->w_curswant = 0;
-  update_topline(curwin);              // scroll to show the line
-  redraw_later(curwin, UPD_VALID);
-  curwin->w_redr_status = true;  // update ruler
-  curwin = old_curwin;
-  curbuf = curwin->w_buffer;
-}
+// qf_win_goto deleted: implementation moved to nvim_qf_win_goto_impl (Phase 10 Pass 10 Phase 2).
 
 // Return the number of the current entry (line number in the quickfix
 // window).
@@ -2920,77 +2889,10 @@ linenr_T qf_current_entry(win_T *wp)
 
 linenr_T nvim_qf_current_entry(win_T *wp) { return qf_current_entry(wp); }
 
-/// @param old_qf_index  previous qf_index or zero
-static bool qf_win_pos_update(qf_info_T *qi, int old_qf_index)
-{
-  qf_list_T *qfl = qf_get_curlist(qi);
-  int qf_index = qfl->qf_index;
-
-  // Put the cursor on the current error in the quickfix window, so that
-  // it's viewable.
-  win_T *win = qf_find_win(qi);
-  if (win != NULL
-      && qf_index <= win->w_buffer->b_ml.ml_line_count
-      && rs_qf_should_update_cursor(qfl, old_qf_index)) {
-    win->w_redraw_top = MIN(old_qf_index, qf_index);
-    win->w_redraw_bot = MAX(old_qf_index, qf_index);
-    qf_win_goto(win, qf_index);
-  }
-  return win != NULL;
-}
-
-/// quickfix/location stack.
-static int is_qf_win(const win_T *win, const qf_info_T *qi)
-  FUNC_ATTR_NONNULL_ARG(2) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  // A window displaying the quickfix buffer will have the w_llist_ref field
-  // set to NULL.
-  // A window displaying a location list buffer will have the w_llist_ref
-  // pointing to the location list.
-  if (buf_valid(win->w_buffer) && bt_quickfix(win->w_buffer)) {
-    if ((IS_QF_STACK(qi) && win->w_llist_ref == NULL)
-        || (IS_LL_STACK(qi) && win->w_llist_ref == qi)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/// page.
-static win_T *qf_find_win(const qf_info_T *qi)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  FOR_ALL_WINDOWS_IN_TAB(win, curtab) {
-    if (is_qf_win(win, qi)) {
-      return win;
-    }
-  }
-
-  return NULL;
-}
-
-/// Searches in windows opened in all the tab pages.
-static buf_T *qf_find_buf(qf_info_T *qi)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if (qi->qf_bufnr != INVALID_QFBUFNR) {
-    buf_T *const qfbuf = buflist_findnr(qi->qf_bufnr);
-    if (qfbuf != NULL) {
-      return qfbuf;
-    }
-    // buffer is no longer present
-    qi->qf_bufnr = INVALID_QFBUFNR;
-  }
-
-  FOR_ALL_TAB_WINDOWS(tp, win) {
-    if (is_qf_win(win, qi)) {
-      return win->w_buffer;
-    }
-  }
-
-  return NULL;
-}
+// qf_win_pos_update deleted: migrated to Rust rs_qf_win_pos_update (Phase 11).
+// is_qf_win deleted: logic inlined into rs_qf_find_win_for_stack / rs_qf_win_pos_update (Phase 11).
+// qf_find_win deleted: migrated to Rust rs_qf_find_win_for_stack (Phase 10/11).
+// qf_find_buf deleted: migrated to Rust rs_qf_find_buf_for_stack (Phase 10/11).
 
 /// Process the 'quickfixtextfunc' option value.
 /// Delegates to rs_did_set_quickfixtextfunc (Phase 10 Pass 10 Phase 3).
@@ -2999,21 +2901,7 @@ const char *did_set_quickfixtextfunc(optset_T *args FUNC_ATTR_UNUSED)
   return rs_did_set_quickfixtextfunc(args);
 }
 
-/// all the tab pages.
-static void qf_update_win_titlevar(qf_info_T *qi)
-  FUNC_ATTR_NONNULL_ALL
-{
-  qf_list_T *const qfl = qf_get_curlist(qi);
-  win_T *const save_curwin = curwin;
-
-  FOR_ALL_TAB_WINDOWS(tp, win) {
-    if (is_qf_win(win, qi)) {
-      curwin = win;
-      qf_set_title_var(qfl);
-    }
-  }
-  curwin = save_curwin;
-}
+// qf_update_win_titlevar deleted: migrated to Rust rs_qf_update_win_titlevar (Phase 11).
 
 // qf_update_buffer deleted: migrated to Rust rs_qf_update_buffer (Phase 10 Pass 10 Phase 4).
 
@@ -3677,7 +3565,11 @@ static int vgr_process_args(exarg_T *eap, vgr_args_T *args)
   CLEAR_POINTER(args);
 
   args->regmatch.regprog = NULL;
-  args->qf_title = xstrdup(qf_cmdtitle(*eap->cmdlinep));
+  {
+    char qftitle_buf[IOSIZE];
+    rs_qf_cmdtitle(*eap->cmdlinep, qftitle_buf, sizeof(qftitle_buf));
+    args->qf_title = xstrdup(qftitle_buf);
+  }
   args->tomatch = eap->addr_count > 0 ? eap->line2 : MAXLNUM;
 
   // Get the search pattern: either white-separated or enclosed in //
@@ -3866,7 +3758,7 @@ void nvim_vgr_free_wild(void *args_void)
 void nvim_vgr_finalize_list(void *qi_void)
 {
   qf_info_T *qi = (qf_info_T *)qi_void;
-  qf_list_T *qfl = qf_get_curlist(qi);
+  qf_list_T *qfl = &qi->qf_lists[qi->qf_curlist];
   qfl->qf_nonevalid = false;
   qfl->qf_ptr = qfl->qf_start;
   qfl->qf_index = 1;
@@ -3893,7 +3785,7 @@ void nvim_vgr_jump_or_nomatch(void *qi_void, void *eap_void, bool *redraw_for_du
 {
   qf_info_T *qi = (qf_info_T *)qi_void;
   exarg_T *eap = (exarg_T *)eap_void;
-  if (!rs_qf_list_empty(qf_get_curlist(qi))) {
+  if (!rs_qf_list_empty(&qi->qf_lists[qi->qf_curlist])) {
     if ((flags & VGR_NOJUMP) == 0) {
       vgr_jump_to_match(qi, eap->forceit, redraw_for_dummy,
                         (buf_T *)first_match_buf, target_dir);
@@ -4375,8 +4267,12 @@ bool nvim_hgr_compile_and_search(void *eap_void, void *qi_void)
     return false;
   }
 
-  rs_qf_new_list(qi, qf_cmdtitle(*eap->cmdlinep));
-  qf_list_T *const qfl = qf_get_curlist(qi);
+  {
+    char qftitle_buf[IOSIZE];
+    rs_qf_cmdtitle(*eap->cmdlinep, qftitle_buf, sizeof(qftitle_buf));
+    rs_qf_new_list(qi, qftitle_buf);
+  }
+  qf_list_T *const qfl = &qi->qf_lists[qi->qf_curlist];
 
   rs_hgr_search_in_rtp(qfl, &regmatch, lang);
 
@@ -4436,7 +4332,7 @@ void nvim_hgr_jump_or_nomatch(void *eap_void, void *qi_void)
   exarg_T *eap = (exarg_T *)eap_void;
   qf_info_T *qi = (qf_info_T *)qi_void;
 
-  if (!rs_qf_list_empty(qf_get_curlist(qi))) {
+  if (!rs_qf_list_empty(&qi->qf_lists[qi->qf_curlist])) {
     rs_qf_jump_newwin(qi, 0, 0, false, false);
   } else {
     semsg(_(e_nomatch2), eap->arg);
