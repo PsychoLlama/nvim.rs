@@ -533,6 +533,7 @@ extern int rs_qf_open_new_cwindow(void *qi_void, int height);
 extern const char *rs_did_set_quickfixtextfunc(const void *args);
 extern void rs_qf_update_buffer(void *qi_void, const void *old_last);
 extern bool rs_set_ref_in_quickfix(int copyID);
+extern void rs_free_quickfix(void);
 
 // Rust fold FFI declarations
 extern void rs_foldOpenCursor(void);
@@ -3118,6 +3119,9 @@ void nvim_ml_delete_one(linenr_T lnum) { ml_delete(lnum); }
 
 void nvim_qfga_clear(void) { qfga_clear(); }
 
+/// Fully free (ga_clear) the quickfix grow-array on exit (EXITFREE path).
+void nvim_qfga_free(void) { ga_clear(&qfga); }
+
 /// Set filetype, apply autocmds, and redraw for new qf buffer fill
 void nvim_qf_set_filetype_and_autocmds(void)
 {
@@ -4542,13 +4546,7 @@ void nvim_hgr_cleanup(void *qi_void, bool new_qi)
 #if defined(EXITFREE)
 void free_quickfix(void)
 {
-  qf_free_all(NULL);
-  // Free all location lists
-  FOR_ALL_TAB_WINDOWS(tab, win) {
-    qf_free_all(win);
-  }
-
-  ga_clear(&qfga);
+  rs_free_quickfix();
 }
 #endif
 

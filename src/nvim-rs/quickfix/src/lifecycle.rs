@@ -827,3 +827,43 @@ pub unsafe extern "C" fn rs_set_ref_in_quickfix(copy_id: c_int) -> bool {
 
     false
 }
+
+// =============================================================================
+// Phase 7: free_quickfix
+// =============================================================================
+
+extern "C" {
+    /// Fully free (`ga_clear`) the quickfix grow-array on exit.
+    fn nvim_qfga_free();
+}
+
+/// Free all quickfix and location list resources at process exit.
+///
+/// Corresponds to C `free_quickfix` (EXITFREE path).
+/// - Frees the global quickfix stack contents.
+/// - Frees every window's location list in every tab page.
+/// - Frees the qfga grow-array.
+///
+/// # Safety
+///
+/// Must be called only from the Neovim main thread during shutdown
+/// (EXITFREE path).
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_quickfix() {
+    // Free global quickfix list contents (struct is static, not freed).
+    rs_qf_free_all(std::ptr::null_mut());
+
+    // Free all location lists in all tab windows (FOR_ALL_TAB_WINDOWS).
+    let mut tp = nvim_get_first_tabpage();
+    while !tp.is_null() {
+        let mut win = nvim_tabpage_get_firstwin(tp.cast_const());
+        while !win.is_null() {
+            rs_qf_free_all(win);
+            win = nvim_qf_win_next(win.cast_const());
+        }
+        tp = nvim_tabpage_get_next(tp.cast_const());
+    }
+
+    // Fully free the quickfix grow-array.
+    nvim_qfga_free();
+}
