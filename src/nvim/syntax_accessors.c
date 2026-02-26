@@ -1478,9 +1478,6 @@ stateitem_T *nvim_syn_get_top_stateitem(void)
   return &CUR_STATE(current_state.ga_len - 1);
 }
 
-int nvim_syn_get_next_seqnr(void) { return next_seqnr; }
-void nvim_syn_set_next_seqnr(int seqnr) { next_seqnr = seqnr; }
-
 int nvim_syn_incr_next_seqnr(void) { return next_seqnr++; }
 
 /// Get next_match_h_startpos
@@ -1644,7 +1641,6 @@ void nvim_stateitem_set_extmatch(stateitem_T *item, reg_extmatch_T *em)
   }
 }
 
-int nvim_syn_get_sptype_start(void) { return SPTYPE_START; }
 int nvim_syn_get_hl_oneline(void) { return HL_ONELINE; }
 int nvim_syn_get_hl_keepend(void) { return HL_KEEPEND; }
 int nvim_syn_get_hl_match(void) { return HL_MATCH; }
@@ -1662,7 +1658,6 @@ void nvim_syn_incr_current_line_id(void) { current_line_id++; }
 
 void *nvim_syn_get_syn_block(void) { return syn_block; }
 void nvim_syn_set_syn_block(void *block) { syn_block = (synblock_T *)block; }
-void *nvim_syn_get_syn_win(void) { return syn_win; }
 void nvim_syn_set_syn_win(void *win) { syn_win = (win_T *)win; }
 int nvim_syn_get_sync_minlines(void) { return syn_block ? (int)syn_block->b_syn_sync_minlines : 0; }
 int nvim_syn_get_sync_maxlines(void) { return syn_block ? (int)syn_block->b_syn_sync_maxlines : 0; }
@@ -1687,11 +1682,8 @@ void nvim_syn_set_current_seqnr(int seqnr) { current_seqnr = seqnr; }
 int nvim_syn_get_hl_matchcont(void) { return HL_MATCHCONT; }
 int nvim_syn_get_hl_extend(void) { return HL_EXTEND; }
 int nvim_syn_get_sf_ccomment(void) { return SF_CCOMMENT; }
-int nvim_syn_get_sf_match(void) { return SF_MATCH; }
 int nvim_syn_get_hl_sync_here(void) { return HL_SYNC_HERE; }
 int nvim_syn_get_hl_sync_there(void) { return HL_SYNC_THERE; }
-int nvim_syn_get_sptype_match(void) { return SPTYPE_MATCH; }
-
 void nvim_syn_stack_alloc(void) { syn_stack_alloc(); }
 void *nvim_syn_stack_find_entry_ptr(int lnum) { return syn_stack_find_entry((linenr_T)lnum); }
 
@@ -1799,10 +1791,6 @@ void nvim_syn_set_running_inc_tag(int tag) { running_syn_inc_tag = tag; }
 int nvim_syn_get_conceal_setting(synblock_T *block) { return block->b_syn_conceal; }
 int nvim_syn_get_ic_setting(synblock_T *block) { return block->b_syn_ic; }
 
-int nvim_get_syntax_info(int *seqnrp) { return get_syntax_info(seqnrp); }
-
-void nvim_syntax_end_parsing(win_T *wp, int lnum) { syntax_end_parsing(wp, (linenr_T)lnum); }
-
 /// Set tick on synstate
 void nvim_synstate_set_tick(synstate_T *state, int tick)
 {
@@ -1810,8 +1798,6 @@ void nvim_synstate_set_tick(synstate_T *state, int tick)
     state->sst_tick = tick;
   }
 }
-
-int nvim_synstate_get_tick_val(synstate_T *state) { return state ? state->sst_tick : 0; }
 
 // Note: The following accessor functions are already defined earlier in the file:
 
@@ -2169,9 +2155,6 @@ int nvim_syn_vim_regcomp_had_eol(void) { return vim_regcomp_had_eol(); }
 // Phase 7 (pass 7) accessors: pattern_store migration
 // =============================================================================
 
-/// Grow the curwin b_syn_patterns garray by count slots.
-void nvim_synblock_ga_grow_patterns(int count) { ga_grow(&curwin->w_s->b_syn_patterns, count); }
-
 /// Append one slot to curwin b_syn_patterns and return a pointer to it.
 synpat_T *nvim_synblock_ga_append_pattern(void)
 {
@@ -2228,12 +2211,6 @@ void nvim_syn_semsg_2s(const char *fmt, const char *arg1, const char *arg2)
 // =============================================================================
 // Phase 4 accessors: syn_cmd_cluster migration
 // =============================================================================
-
-/// Return pointer to SYN_CLSTR(curwin->w_s)[scl_id].scl_list for Rust.
-int16_t **nvim_syn_get_cluster_list_ptr(int scl_id)
-{
-  return &SYN_CLSTR(curwin->w_s)[scl_id].scl_list;
-}
 
 /// Combine a cluster's ID list with a new list, consuming both.
 /// Calls syn_combine_list on the cluster's list and clstr_list.
@@ -2366,12 +2343,6 @@ void nvim_syn_cmd_clear_wrapper(exarg_T *eap, int syncing)
 // Phase 2 accessors: syn_cmd_clear migration
 // =============================================================================
 
-/// Look up a syntax cluster name+length and return its ID (with SYNID_CLUSTER offset).
-int nvim_syn_scl_namen2id(const char *arg, int len)
-{
-  return rs_syn_scl_namen2id((char *)arg, len);
-}
-
 /// Look up a syntax group name+length and return its ID.
 int nvim_syn_name2id_len_wrapper(const char *arg, int len)
 {
@@ -2471,13 +2442,6 @@ int nvim_syn_get_did_syntax_onoff(void)
 void nvim_syn_do_onoff(exarg_T *eap, const char *name)
 {
   rs_syn_do_onoff_impl(eap, name);
-}
-
-/// Enable syntax (syn_maybe_enable helper): create minimal exarg_T and call rs_syn_cmd_on_dispatch.
-/// Thin wrapper: logic is in rs_syn_maybe_enable (commands.rs).
-void nvim_syn_do_maybe_enable(void)
-{
-  rs_syn_do_maybe_enable_impl();
 }
 
 /// Wrap do_cmdline_cmd for Rust callers (Phase 11).
@@ -2685,19 +2649,6 @@ int nvim_curwin_syn_sync_maxlines(void) { return (int)curwin->w_s->b_syn_sync_ma
 
 /// Get curwin synblock sync linebreaks.
 int nvim_curwin_syn_sync_linebreaks(void) { return (int)curwin->w_s->b_syn_sync_linebreaks; }
-
-/// Get the synpat at a specific index from the curwin synblock.
-/// Unlike nvim_curwin_synpat_at, used by syn_list_one for the loop.
-synpat_T *nvim_curwin_get_synpat_at(int idx)
-{
-  if (idx < 0 || idx >= curwin->w_s->b_syn_patterns.ga_len) {
-    return NULL;
-  }
-  return &SYN_ITEMS(curwin->w_s)[idx];
-}
-
-/// Call find_nextcmd on arg for eap.
-char *nvim_syn_find_nextcmd_arg(const char *arg) { return find_nextcmd(arg); }
 
 // nvim_syn_ends_excmd already defined above (as nvim_syn_ends_excmd).
 // nvim_syn_skiptowhite and nvim_syn_skipwhite already defined above.
@@ -2932,12 +2883,6 @@ void nvim_win_release_synblock(win_T *wp)
     xfree(wp->w_s);
     wp->w_s = &wp->w_buffer->b_s;
   }
-}
-
-/// clear_syn_state wrapper for use from Rust.
-void nvim_syn_clear_syn_state(synstate_T *p)
-{
-  clear_syn_state(p);
 }
 
 // =============================================================================
@@ -3260,9 +3205,6 @@ void nvim_syn_block_set_linecont_prog(void *prog)
   if (syn_block) syn_block->b_syn_linecont_prog = (regprog_T *)prog;
 }
 
-/// Get current_finished.
-int nvim_syn_get_current_finished_val(void) { return current_finished ? 1 : 0; }
-
 /// Set current_finished.
 void nvim_syn_set_current_finished_val(int v) { current_finished = v ? true : false; }
 
@@ -3308,9 +3250,6 @@ void nvim_syn_do_clear_time(syn_time_T *st)
   st->count = 0;
   st->match = 0;
 }
-
-/// Check if current_state is empty (GA_EMPTY).
-int nvim_syn_is_current_state_empty_ga(void) { return GA_EMPTY(&current_state) ? 1 : 0; }
 
 /// Get CUR_STATE(i).si_idx for a given index.
 int nvim_cur_state_get_si_idx(int i)
