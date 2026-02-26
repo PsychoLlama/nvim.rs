@@ -157,6 +157,13 @@ pub use types::{
 // Re-export pattern offset and item type enums
 pub use pattern::PatternType;
 
+// Re-export Phase 8 cache management functions (state stack)
+pub use cache::{
+    rs_syn_stack_alloc, rs_syn_stack_apply_changes, rs_syn_stack_apply_changes_block,
+    rs_syn_stack_cleanup, rs_syn_stack_find_entry, rs_syn_stack_free_all, rs_syn_stack_free_block,
+    rs_syn_stack_free_entry,
+};
+
 pub use attr::{
     rs_combine_attrs, rs_invalidation_needs_full_sync, rs_should_spell_check,
     rs_syn_attr_stack_clear, rs_syn_attr_stack_depth, rs_syn_attr_stack_effective_attr,

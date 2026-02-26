@@ -6,10 +6,11 @@
 //! - State comparison for cache validation
 //! - Cache invalidation logic
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 use crate::types::{
-    BufStateHandle, ExtMatchHandle, IdListHandle, SynBlockHandle, SynStateHandle, HL_KEEPEND,
+    BufHandle, BufStateHandle, ExtMatchHandle, IdListHandle, SynBlockHandle, SynStateHandle,
+    HL_KEEPEND, SST_DIST, SST_MAX_ENTRIES, SST_MIN_ENTRIES,
 };
 
 // =============================================================================
@@ -91,9 +92,362 @@ extern "C" {
     fn nvim_synblock_has_sst_array(block: SynBlockHandle) -> c_int;
 
     // Global state accessors
-    fn nvim_syn_get_sst_array() -> *mut std::ffi::c_void;
+    fn nvim_syn_get_sst_array() -> *mut c_void;
     fn nvim_syn_get_sst_first() -> SynStateHandle;
     fn nvim_syn_get_sst_len() -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Phase 8 accessors: state stack cache management
+    // -------------------------------------------------------------------------
+
+    // synstate_T setters / navigation
+    fn nvim_synstate_get_next(state: SynStateHandle) -> SynStateHandle;
+    fn nvim_synstate_set_next(state: SynStateHandle, next: SynStateHandle);
+    fn nvim_synstate_get_tick(state: SynStateHandle) -> c_int;
+    fn nvim_synstate_set_sst_change_lnum(state: SynStateHandle, lnum: c_int);
+    fn nvim_synstate_set_sst_lnum(state: SynStateHandle, lnum: c_int);
+    fn nvim_synstate_get_sst_change_lnum(state: SynStateHandle) -> c_int;
+    fn nvim_synstate_get_sst_tick(state: SynStateHandle) -> c_int;
+
+    // synblock_T setters
+    fn nvim_synblock_set_sst_first(block: SynBlockHandle, ptr: SynStateHandle);
+    fn nvim_synblock_set_sst_firstfree(block: SynBlockHandle, ptr: SynStateHandle);
+    fn nvim_synblock_set_sst_freecount(block: SynBlockHandle, count: c_int);
+    fn nvim_synblock_set_sst_array(block: SynBlockHandle, ptr: SynStateHandle, len: c_int);
+    fn nvim_synblock_get_sst_firstfree(block: SynBlockHandle) -> SynStateHandle;
+    fn nvim_synblock_get_sst_lasttick(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_syn_sync_linebreaks_val(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_sst_array_ptr(block: SynBlockHandle) -> SynStateHandle;
+
+    // clear_syn_state wrapper
+    fn nvim_syn_do_clear_syn_state(p: SynStateHandle);
+
+    // Array allocation/free
+    fn nvim_syn_xcalloc_synstate_array(len: c_int) -> SynStateHandle;
+    fn nvim_syn_free_sst_array(ptr: SynStateHandle);
+
+    // Stack realloc helper (keeps pointer arithmetic in C)
+    fn nvim_syn_do_stack_realloc(len: c_int);
+
+    // Global syn_block handle
+    fn nvim_syn_get_syn_block() -> SynBlockHandle;
+
+    // syn_buf line count
+    fn nvim_syn_buf_get_ml_line_count() -> c_int;
+
+    // Rows
+    fn nvim_syn_get_rows() -> c_int;
+
+    // Fold update for windows in tab
+    fn nvim_syn_fold_update_for_block(block: SynBlockHandle);
+    fn nvim_syn_apply_changes_for_windows(buf: BufHandle);
+
+    // buf->b_s accessor
+    fn nvim_buf_get_b_s(buf: BufHandle) -> SynBlockHandle;
+
+    // buf modification info
+    fn nvim_buf_get_mod_top(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_mod_bot(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_mod_xlines(buf: BufHandle) -> c_int;
+
+    fn nvim_synblock_get_linebreaks(block: SynBlockHandle) -> c_int;
+}
+
+// =============================================================================
+// Phase 8: State stack cache management (replaces C implementations)
+// =============================================================================
+
+/// Find an entry in the list of state stacks at or before "lnum".
+/// Returns null when there is no entry or the first entry is after "lnum".
+///
+/// Replaces static C `syn_stack_find_entry`.
+///
+/// # Safety
+/// Accesses C global syn_block state; must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_find_entry(lnum: c_int) -> SynStateHandle {
+    let block = nvim_syn_get_syn_block();
+    if block.is_null() {
+        return SynStateHandle::null();
+    }
+    let mut prev = SynStateHandle::null();
+    let mut p = nvim_synblock_get_sst_first(block);
+    while !p.is_null() {
+        let p_lnum = nvim_synstate_get_lnum(p);
+        if p_lnum == lnum {
+            return p;
+        }
+        if p_lnum > lnum {
+            break;
+        }
+        prev = p;
+        p = nvim_synstate_get_next(p);
+    }
+    prev
+}
+
+/// Free one synstate entry and move it to the free list.
+///
+/// Replaces static C `syn_stack_free_entry`.
+///
+/// # Safety
+/// Accesses C global syn_block state; must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_free_entry(block: SynBlockHandle, p: SynStateHandle) {
+    if block.is_null() || p.is_null() {
+        return;
+    }
+    nvim_syn_do_clear_syn_state(p);
+    let firstfree = nvim_synblock_get_sst_firstfree(block);
+    nvim_synstate_set_next(p, firstfree);
+    nvim_synblock_set_sst_firstfree(block, p);
+    let count = nvim_synblock_get_sst_freecount(block);
+    nvim_synblock_set_sst_freecount(block, count + 1);
+}
+
+/// Free all entries in a synblock's state array.
+///
+/// Replaces static C `syn_stack_free_block`.
+///
+/// # Safety
+/// Accesses C global state; must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_free_block(block: SynBlockHandle) {
+    if block.is_null() {
+        return;
+    }
+    if nvim_synblock_has_sst_array(block) == 0 {
+        return;
+    }
+    // Clear all used entries
+    let mut p = nvim_synblock_get_sst_first(block);
+    while !p.is_null() {
+        let next = nvim_synstate_get_next(p);
+        nvim_syn_do_clear_syn_state(p);
+        p = next;
+    }
+    // Free the backing array and reset fields
+    let arr = nvim_synblock_get_sst_array_ptr(block);
+    nvim_syn_free_sst_array(arr);
+    nvim_synblock_set_sst_array(block, SynStateHandle::null(), 0);
+    nvim_synblock_set_sst_first(block, SynStateHandle::null());
+    nvim_synblock_set_sst_freecount(block, 0);
+}
+
+/// Free b_sst_array[] for the given synblock.
+/// Also updates folds for affected windows via C helper.
+///
+/// Replaces public C `syn_stack_free_all`.
+///
+/// # Safety
+/// Accesses C global state; must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_free_all(block: SynBlockHandle) {
+    rs_syn_stack_free_block(block);
+    // FOR_ALL_WINDOWS_IN_TAB macro stays in C
+    nvim_syn_fold_update_for_block(block);
+}
+
+/// Reduce the number of entries in the state stack for syn_buf.
+/// Returns 1 if at least one entry was freed, 0 otherwise.
+///
+/// Replaces static C `syn_stack_cleanup`.
+///
+/// # Safety
+/// Accesses C global state; must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_cleanup() -> c_int {
+    let block = nvim_syn_get_syn_block();
+    if block.is_null() {
+        return 0;
+    }
+    let first = nvim_synblock_get_sst_first(block);
+    if first.is_null() {
+        return 0;
+    }
+
+    let sst_len = nvim_synblock_get_sst_len(block);
+    let rows = nvim_syn_get_rows();
+
+    // Compute normal distance between non-displayed entries.
+    let dist = if sst_len <= rows {
+        999999
+    } else {
+        let line_count = nvim_syn_buf_get_ml_line_count();
+        line_count / (sst_len - rows) + 1
+    };
+
+    // Find the "tick" for the oldest entry that can be removed.
+    let lasttick = nvim_synblock_get_sst_lasttick(block);
+    let mut tick = lasttick;
+    let mut above = false;
+
+    let mut prev = first;
+    let mut p = nvim_synstate_get_next(first);
+    while !p.is_null() {
+        let prev_lnum = nvim_synstate_get_lnum(prev);
+        let p_lnum = nvim_synstate_get_lnum(p);
+        if prev_lnum + dist > p_lnum {
+            let p_tick = nvim_synstate_get_sst_tick(p);
+            if p_tick > lasttick {
+                if !above || p_tick < tick {
+                    tick = p_tick;
+                }
+                above = true;
+            } else if !above && p_tick < tick {
+                tick = p_tick;
+            }
+        }
+        prev = p;
+        p = nvim_synstate_get_next(p);
+    }
+
+    // Remove entries at the oldest tick that are too close together.
+    let mut retval = 0;
+    prev = first;
+    p = nvim_synstate_get_next(first);
+    while !p.is_null() {
+        let prev_lnum = nvim_synstate_get_lnum(prev);
+        let p_lnum = nvim_synstate_get_lnum(p);
+        let p_tick = nvim_synstate_get_sst_tick(p);
+        let next = nvim_synstate_get_next(p);
+        if p_tick == tick && prev_lnum + dist > p_lnum {
+            // Move this entry from used list to free list
+            nvim_synstate_set_next(prev, next);
+            rs_syn_stack_free_entry(block, p);
+            // prev stays the same (we removed p, not prev)
+            retval = 1;
+        } else {
+            prev = p;
+        }
+        p = next;
+    }
+    retval
+}
+
+/// Allocate/resize the b_sst_array for syn_buf when needed.
+///
+/// Replaces static C `syn_stack_alloc`.
+///
+/// # Safety
+/// Accesses C global state; must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_alloc() {
+    let block = nvim_syn_get_syn_block();
+    if block.is_null() {
+        return;
+    }
+    let line_count = nvim_syn_buf_get_ml_line_count();
+    let rows = nvim_syn_get_rows();
+
+    // Compute desired length
+    let len = (line_count / SST_DIST + rows * 2).clamp(SST_MIN_ENTRIES, SST_MAX_ENTRIES);
+
+    let sst_len = nvim_synblock_get_sst_len(block);
+    let freecount = nvim_synblock_get_sst_freecount(block);
+
+    if sst_len > len * 2 || sst_len < len {
+        // Allocate 50% too much to avoid frequent reallocation.
+        let line_count2 = line_count;
+        let new_len_raw = (line_count2 + line_count2 / 2) / SST_DIST + rows * 2;
+        let mut new_len = new_len_raw.clamp(SST_MIN_ENTRIES, SST_MAX_ENTRIES);
+
+        if nvim_synblock_has_sst_array(block) != 0 {
+            // When shrinking, cleanup until all valid entries fit.
+            let used_plus_margin = sst_len - freecount + 2;
+            while used_plus_margin > new_len && rs_syn_stack_cleanup() != 0 {}
+            // Ensure minimum size to hold existing entries.
+            let min_needed =
+                nvim_synblock_get_sst_len(block) - nvim_synblock_get_sst_freecount(block) + 2;
+            if new_len < min_needed {
+                new_len = min_needed;
+            }
+        }
+
+        // Delegate actual array allocation/copying to C (pointer arithmetic is C territory).
+        nvim_syn_do_stack_realloc(new_len);
+    }
+}
+
+/// Adjust cached entries in one synblock after buffer changes.
+///
+/// Replaces static C `syn_stack_apply_changes_block`.
+///
+/// # Safety
+/// Accesses C global state; must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_apply_changes_block(block: SynBlockHandle, buf: BufHandle) {
+    if block.is_null() || buf.is_null() {
+        return;
+    }
+    let linebreaks = nvim_synblock_get_linebreaks(block);
+    let mod_top = nvim_buf_get_mod_top(buf);
+    let mod_bot = nvim_buf_get_mod_bot(buf);
+    let mod_xlines = nvim_buf_get_mod_xlines(buf);
+
+    let mut prev = SynStateHandle::null();
+    let mut p = nvim_synblock_get_sst_first(block);
+
+    while !p.is_null() {
+        let p_lnum = nvim_synstate_get_lnum(p);
+        let next = nvim_synstate_get_next(p);
+
+        if p_lnum + linebreaks > mod_top {
+            let n = p_lnum + mod_xlines;
+            if n <= mod_bot {
+                // This state is inside the changed area - remove it.
+                if prev.is_null() {
+                    nvim_synblock_set_sst_first(block, next);
+                } else {
+                    nvim_synstate_set_next(prev, next);
+                }
+                rs_syn_stack_free_entry(block, p);
+                p = next;
+                continue;
+            }
+
+            // This state is below the changed area.
+            let change_lnum = nvim_synstate_get_sst_change_lnum(p);
+            let new_change_lnum = if change_lnum != 0 && change_lnum > mod_top {
+                if change_lnum + mod_xlines > mod_top {
+                    change_lnum + mod_xlines
+                } else {
+                    mod_top
+                }
+            } else {
+                change_lnum
+            };
+
+            let final_change_lnum = if new_change_lnum == 0 || new_change_lnum < mod_bot {
+                mod_bot
+            } else {
+                new_change_lnum
+            };
+            nvim_synstate_set_sst_change_lnum(p, final_change_lnum);
+            nvim_synstate_set_sst_lnum(p, n);
+        }
+
+        prev = p;
+        p = next;
+    }
+}
+
+/// Check for changes in syn_buf to affect stored syntax states.
+/// Called from update_screen() before screen update, once per displayed buffer.
+///
+/// Replaces public C `syn_stack_apply_changes`.
+///
+/// # Safety
+/// Accesses C global state; must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_apply_changes(buf: BufHandle) {
+    if buf.is_null() {
+        return;
+    }
+    let b_s = nvim_buf_get_b_s(buf);
+    rs_syn_stack_apply_changes_block(b_s, buf);
+    // FOR_ALL_WINDOWS_IN_TAB stays in C
+    nvim_syn_apply_changes_for_windows(buf);
 }
 
 // =============================================================================

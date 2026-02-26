@@ -51,6 +51,15 @@
 #include "nvim/vim_defs.h"
 
 // Rust FFI declarations - functions called from C code in this file
+// Phase 8: state stack cache management (Rust implementations)
+extern synstate_T *rs_syn_stack_find_entry(int lnum);
+extern void rs_syn_stack_free_entry(synblock_T *block, synstate_T *p);
+extern void rs_syn_stack_free_block(synblock_T *block);
+extern void rs_syn_stack_free_all(synblock_T *block);
+extern int rs_syn_stack_cleanup(void);
+extern void rs_syn_stack_alloc(void);
+extern void rs_syn_stack_apply_changes_block(synblock_T *block, buf_T *buf);
+extern void rs_syn_stack_apply_changes(buf_T *buf);
 extern void rs_load_current_state(synstate_T *from);
 extern void rs_update_si_end(stateitem_T *sip, int startcol, int force);
 extern void rs_check_state_ends(void);
@@ -545,151 +554,32 @@ static void syn_update_ends(bool startofline)
 
 static void syn_stack_free_block(synblock_T *block)
 {
-  if (block->b_sst_array == NULL) {
-    return;
-  }
-
-  for (synstate_T *p = block->b_sst_first; p != NULL; p = p->sst_next) {
-    clear_syn_state(p);
-  }
-  XFREE_CLEAR(block->b_sst_array);
-  block->b_sst_first = NULL;
-  block->b_sst_len = 0;
+  rs_syn_stack_free_block(block);
 }
 // Free b_sst_array[] for buffer "buf".
 // Used when syntax items changed to force resyncing everywhere.
 void syn_stack_free_all(synblock_T *block)
 {
-  syn_stack_free_block(block);
-
-  // When using "syntax" fold method, must update all folds.
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_s == block && rs_foldmethodIsSyntax(wp)) {
-      rs_foldUpdateAll(wp);
-    }
-  }
+  rs_syn_stack_free_all(block);
 }
 
 // Allocate the syntax state stack for syn_buf when needed.
-// If the number of entries in b_sst_array[] is much too big or a bit too
-// small, reallocate it.
-// Also used to allocate b_sst_array[] for the first time.
+// Delegated to Rust; actual array allocation is in nvim_syn_do_stack_realloc().
 static void syn_stack_alloc(void)
 {
-  int len = syn_buf->b_ml.ml_line_count / SST_DIST + Rows * 2;
-  if (len < SST_MIN_ENTRIES) {
-    len = SST_MIN_ENTRIES;
-  } else if (len > SST_MAX_ENTRIES) {
-    len = SST_MAX_ENTRIES;
-  }
-  if (syn_block->b_sst_len > len * 2 || syn_block->b_sst_len < len) {
-    // Allocate 50% too much, to avoid reallocating too often.
-    len = syn_buf->b_ml.ml_line_count;
-    len = (len + len / 2) / SST_DIST + Rows * 2;
-    if (len < SST_MIN_ENTRIES) {
-      len = SST_MIN_ENTRIES;
-    } else if (len > SST_MAX_ENTRIES) {
-      len = SST_MAX_ENTRIES;
-    }
-
-    if (syn_block->b_sst_array != NULL) {
-      // When shrinking the array, cleanup the existing stack.
-      // Make sure that all valid entries fit in the new array.
-      while (syn_block->b_sst_len - syn_block->b_sst_freecount + 2 > len
-             && syn_stack_cleanup()) {}
-      if (len < syn_block->b_sst_len - syn_block->b_sst_freecount + 2) {
-        len = syn_block->b_sst_len - syn_block->b_sst_freecount + 2;
-      }
-    }
-
-    assert(len >= 0);
-    synstate_T *sstp = xcalloc((size_t)len, sizeof(synstate_T));
-
-    synstate_T *to = sstp - 1;
-    if (syn_block->b_sst_array != NULL) {
-      // Move the states from the old array to the new one.
-      for (synstate_T *from = syn_block->b_sst_first; from != NULL;
-           from = from->sst_next) {
-        to++;
-        *to = *from;
-        to->sst_next = to + 1;
-      }
-    }
-    if (to != sstp - 1) {
-      to->sst_next = NULL;
-      syn_block->b_sst_first = sstp;
-      syn_block->b_sst_freecount = len - (int)(to - sstp) - 1;
-    } else {
-      syn_block->b_sst_first = NULL;
-      syn_block->b_sst_freecount = len;
-    }
-
-    // Create the list of free entries.
-    syn_block->b_sst_firstfree = to + 1;
-    while (++to < sstp + len) {
-      to->sst_next = to + 1;
-    }
-    (sstp + len - 1)->sst_next = NULL;
-
-    xfree(syn_block->b_sst_array);
-    syn_block->b_sst_array = sstp;
-    syn_block->b_sst_len = len;
-  }
+  rs_syn_stack_alloc();
 }
 
-// Check for changes in a buffer to affect stored syntax states.  Uses the
-// b_mod_* fields.
-// Called from update_screen(), before screen is being updated, once for each
-// displayed buffer.
+// Check for changes in a buffer to affect stored syntax states.
+// Delegated to Rust; window iteration stays in nvim_syn_apply_changes_for_windows().
 void syn_stack_apply_changes(buf_T *buf)
 {
-  syn_stack_apply_changes_block(&buf->b_s, buf);
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if ((wp->w_buffer == buf) && (wp->w_s != &buf->b_s)) {
-      syn_stack_apply_changes_block(wp->w_s, buf);
-    }
-  }
+  rs_syn_stack_apply_changes(buf);
 }
 
 static void syn_stack_apply_changes_block(synblock_T *block, buf_T *buf)
 {
-  synstate_T *prev = NULL;
-  for (synstate_T *p = block->b_sst_first; p != NULL;) {
-    if (p->sst_lnum + block->b_syn_sync_linebreaks > buf->b_mod_top) {
-      linenr_T n = p->sst_lnum + buf->b_mod_xlines;
-      if (n <= buf->b_mod_bot) {
-        // this state is inside the changed area, remove it
-        synstate_T *np = p->sst_next;
-        if (prev == NULL) {
-          block->b_sst_first = np;
-        } else {
-          prev->sst_next = np;
-        }
-        syn_stack_free_entry(block, p);
-        p = np;
-        continue;
-      }
-      // This state is below the changed area.  Remember the line
-      // that needs to be parsed before this entry can be made valid
-      // again.
-      if (p->sst_change_lnum != 0 && p->sst_change_lnum > buf->b_mod_top) {
-        if (p->sst_change_lnum + buf->b_mod_xlines > buf->b_mod_top) {
-          p->sst_change_lnum += buf->b_mod_xlines;
-        } else {
-          p->sst_change_lnum = buf->b_mod_top;
-        }
-      }
-      if (p->sst_change_lnum == 0
-          || p->sst_change_lnum < buf->b_mod_bot) {
-        p->sst_change_lnum = buf->b_mod_bot;
-      }
-
-      p->sst_lnum = n;
-    }
-    prev = p;
-    p = p->sst_next;
-  }
+  rs_syn_stack_apply_changes_block(block, buf);
 }
 
 /// Reduce the number of entries in the state stack for syn_buf.
@@ -697,80 +587,21 @@ static void syn_stack_apply_changes_block(synblock_T *block, buf_T *buf)
 /// @return  true if at least one entry was freed.
 static bool syn_stack_cleanup(void)
 {
-  synstate_T *prev;
-  disptick_T tick;
-  int dist;
-  bool retval = false;
-
-  if (syn_block->b_sst_first == NULL) {
-    return retval;
-  }
-
-  // Compute normal distance between non-displayed entries.
-  if (syn_block->b_sst_len <= Rows) {
-    dist = 999999;
-  } else {
-    dist = syn_buf->b_ml.ml_line_count / (syn_block->b_sst_len - Rows) + 1;
-  }
-
-  // Go through the list to find the "tick" for the oldest entry that can
-  // be removed.  Set "above" when the "tick" for the oldest entry is above
-  // "b_sst_lasttick" (the display tick wraps around).
-  tick = syn_block->b_sst_lasttick;
-  bool above = false;
-  prev = syn_block->b_sst_first;
-  for (synstate_T *p = prev->sst_next; p != NULL; prev = p, p = p->sst_next) {
-    if (prev->sst_lnum + dist > p->sst_lnum) {
-      if (p->sst_tick > syn_block->b_sst_lasttick) {
-        if (!above || p->sst_tick < tick) {
-          tick = p->sst_tick;
-        }
-        above = true;
-      } else if (!above && p->sst_tick < tick) {
-        tick = p->sst_tick;
-      }
-    }
-  }
-
-  // Go through the list to make the entries for the oldest tick at an
-  // interval of several lines.
-  prev = syn_block->b_sst_first;
-  for (synstate_T *p = prev->sst_next; p != NULL; prev = p, p = p->sst_next) {
-    if (p->sst_tick == tick && prev->sst_lnum + dist > p->sst_lnum) {
-      // Move this entry from used list to free list
-      prev->sst_next = p->sst_next;
-      syn_stack_free_entry(syn_block, p);
-      p = prev;
-      retval = true;
-    }
-  }
-  return retval;
+  return rs_syn_stack_cleanup() != 0;
 }
 
 // Free the allocated memory for a syn_state item.
 // Move the entry into the free list.
 static void syn_stack_free_entry(synblock_T *block, synstate_T *p)
 {
-  clear_syn_state(p);
-  p->sst_next = block->b_sst_firstfree;
-  block->b_sst_firstfree = p;
-  block->b_sst_freecount++;
+  rs_syn_stack_free_entry(block, p);
 }
 
 // Find an entry in the list of state stacks at or before "lnum".
 // Returns NULL when there is no entry or the first entry is after "lnum".
 static synstate_T *syn_stack_find_entry(linenr_T lnum)
 {
-  synstate_T *prev = NULL;
-  for (synstate_T *p = syn_block->b_sst_first; p != NULL; prev = p, p = p->sst_next) {
-    if (p->sst_lnum == lnum) {
-      return p;
-    }
-    if (p->sst_lnum > lnum) {
-      break;
-    }
-  }
-  return prev;
+  return rs_syn_stack_find_entry((int)lnum);
 }
 
 // End of handling of the state stack.
@@ -3730,3 +3561,372 @@ void nvim_syn_hash_insert_keyword(const char *name_ic, int name_iclen,
     hi->hi_key = KE2HIKEY(kp);
   }
 }
+
+// =============================================================================
+// Phase 8: State stack cache management accessors (for Rust migration)
+// =============================================================================
+
+/// Get b_sst_array pointer (raw array base) for a synblock.
+synstate_T *nvim_synblock_get_sst_array_ptr(synblock_T *block)
+{
+  return block ? block->b_sst_array : NULL;
+}
+
+/// Set b_sst_array and b_sst_len for a synblock (takes ownership of ptr).
+void nvim_synblock_set_sst_array(synblock_T *block, synstate_T *ptr, int len)
+{
+  if (!block) return;
+  block->b_sst_array = ptr;
+  block->b_sst_len = len;
+}
+
+/// Set b_sst_first for a synblock.
+void nvim_synblock_set_sst_first(synblock_T *block, synstate_T *ptr)
+{
+  if (block) block->b_sst_first = ptr;
+}
+
+/// Set b_sst_firstfree for a synblock.
+void nvim_synblock_set_sst_firstfree(synblock_T *block, synstate_T *ptr)
+{
+  if (block) block->b_sst_firstfree = ptr;
+}
+
+/// Set b_sst_freecount for a synblock.
+void nvim_synblock_set_sst_freecount(synblock_T *block, int count)
+{
+  if (block) block->b_sst_freecount = count;
+}
+
+/// Set sst_next pointer on a synstate entry.
+void nvim_synstate_set_next(synstate_T *state, synstate_T *next)
+{
+  if (state) state->sst_next = next;
+}
+
+/// Set sst_stacksize on a synstate entry.
+void nvim_synstate_set_stacksize(synstate_T *state, int size)
+{
+  if (state) state->sst_stacksize = size;
+}
+
+/// Call clear_syn_state on a synstate entry (releases extmatch pointers).
+void nvim_syn_do_clear_syn_state(synstate_T *p)
+{
+  clear_syn_state(p);
+}
+
+/// Allocate a new zeroed synstate array of given length.
+/// Returns the pointer; caller owns the memory and must free with
+/// nvim_syn_free_sst_array().
+synstate_T *nvim_syn_xcalloc_synstate_array(int len)
+{
+  if (len <= 0) return NULL;
+  return xcalloc((size_t)len, sizeof(synstate_T));
+}
+
+/// Free a synstate array previously allocated with nvim_syn_xcalloc_synstate_array.
+void nvim_syn_free_sst_array(synstate_T *ptr)
+{
+  xfree(ptr);
+}
+
+/// Get a pointer to synstate entry at given index in array.
+synstate_T *nvim_syn_sst_array_at(synstate_T *array, int idx)
+{
+  return array + idx;
+}
+
+/// Copy one synstate_T entry: *dst = *src.
+void nvim_syn_sst_copy_entry(synstate_T *dst, const synstate_T *src)
+{
+  *dst = *src;
+}
+
+/// Get b_sst_lasttick for a synblock.
+int nvim_synblock_get_sst_lasttick(synblock_T *block)
+{
+  return block ? (int)block->b_sst_lasttick : 0;
+}
+
+/// Get sst_tick for a synstate entry.
+int nvim_synstate_get_sst_tick(synstate_T *state)
+{
+  return state ? (int)state->sst_tick : 0;
+}
+
+/// Get b_syn_sync_linebreaks for a synblock.
+int nvim_synblock_get_syn_sync_linebreaks_val(synblock_T *block)
+{
+  return block ? (int)block->b_syn_sync_linebreaks : 0;
+}
+
+/// Get sst_change_lnum for a synstate entry.
+int nvim_synstate_get_sst_change_lnum(synstate_T *state)
+{
+  return state ? (int)state->sst_change_lnum : 0;
+}
+
+/// Set sst_change_lnum on a synstate entry.
+void nvim_synstate_set_sst_change_lnum(synstate_T *state, int lnum)
+{
+  if (state) state->sst_change_lnum = (linenr_T)lnum;
+}
+
+/// Set sst_lnum on a synstate entry.
+void nvim_synstate_set_sst_lnum(synstate_T *state, int lnum)
+{
+  if (state) state->sst_lnum = (linenr_T)lnum;
+}
+
+/// Get b_ml.ml_line_count from syn_buf.
+int nvim_syn_buf_get_ml_line_count(void)
+{
+  return syn_buf ? (int)syn_buf->b_ml.ml_line_count : 0;
+}
+
+/// Get a pointer to the buf's b_s (main synblock).
+synblock_T *nvim_buf_get_b_s(buf_T *buf)
+{
+  return buf ? &buf->b_s : NULL;
+}
+
+/// Do the FOR_ALL_WINDOWS_IN_TAB loop for syn_stack_free_all:
+/// free block, then update folds for windows that use this block.
+/// This is called by rs_syn_stack_free_all after the block has been freed by Rust.
+void nvim_syn_fold_update_for_block(synblock_T *block)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (wp->w_s == block && rs_foldmethodIsSyntax(wp)) {
+      rs_foldUpdateAll(wp);
+    }
+  }
+}
+
+/// Do the FOR_ALL_WINDOWS_IN_TAB part of syn_stack_apply_changes:
+/// apply changes to all window-local synblocks that differ from buf->b_s.
+/// rs_syn_stack_apply_changes_block is called for each such window's block.
+void nvim_syn_apply_changes_for_windows(buf_T *buf)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if ((wp->w_buffer == buf) && (wp->w_s != &buf->b_s)) {
+      rs_syn_stack_apply_changes_block(wp->w_s, buf);
+    }
+  }
+}
+
+/// Do the actual array reallocation for syn_stack_alloc.
+/// Called from Rust after it has computed the desired new_len.
+/// Handles copying existing entries and rebuilding the free list.
+void nvim_syn_do_stack_realloc(int len)
+{
+  assert(len >= 0);
+  synstate_T *sstp = xcalloc((size_t)len, sizeof(synstate_T));
+
+  synstate_T *to = sstp - 1;
+  if (syn_block->b_sst_array != NULL) {
+    // Move the states from the old array to the new one.
+    for (synstate_T *from = syn_block->b_sst_first; from != NULL;
+         from = from->sst_next) {
+      to++;
+      *to = *from;
+      to->sst_next = to + 1;
+    }
+  }
+  if (to != sstp - 1) {
+    to->sst_next = NULL;
+    syn_block->b_sst_first = sstp;
+    syn_block->b_sst_freecount = len - (int)(to - sstp) - 1;
+  } else {
+    syn_block->b_sst_first = NULL;
+    syn_block->b_sst_freecount = len;
+  }
+
+  // Create the list of free entries.
+  syn_block->b_sst_firstfree = to + 1;
+  while (++to < sstp + len) {
+    to->sst_next = to + 1;
+  }
+  (sstp + len - 1)->sst_next = NULL;
+
+  xfree(syn_block->b_sst_array);
+  syn_block->b_sst_array = sstp;
+  syn_block->b_sst_len = len;
+}
+
+// =============================================================================
+// Phase 8: Line initialization accessors (for Rust migration)
+// =============================================================================
+
+/// Return true if syn_block->b_syn_isk == empty_string_option.
+int nvim_syn_block_isk_is_empty(void)
+{
+  return (syn_block && syn_block->b_syn_isk == empty_string_option) ? 1 : 0;
+}
+
+/// Copy 32 bytes from syn_buf->b_chartab to dst.
+void nvim_syn_buf_chartab_get(char *dst)
+{
+  if (syn_buf) memmove(dst, syn_buf->b_chartab, 32);
+}
+
+/// Copy 32 bytes from src to syn_buf->b_chartab.
+void nvim_syn_buf_chartab_set(const char *src)
+{
+  if (syn_buf) memmove(syn_buf->b_chartab, src, 32);
+}
+
+/// Copy 32 bytes from syn_win->w_s->b_syn_chartab to dst.
+void nvim_syn_win_chartab_get(char *dst)
+{
+  if (syn_win) memmove(dst, syn_win->w_s->b_syn_chartab, 32);
+}
+
+/// Return true if syn_win->w_s->b_syn_isk != empty_string_option.
+int nvim_syn_win_isk_not_empty(void)
+{
+  return (syn_win && syn_win->w_s->b_syn_isk != empty_string_option) ? 1 : 0;
+}
+
+/// Get syn_block->b_syn_linecont_prog (returns NULL if not set).
+void *nvim_syn_block_get_linecont_prog(void)
+{
+  return (syn_block) ? syn_block->b_syn_linecont_prog : NULL;
+}
+
+/// Get syn_block->b_syn_linecont_ic.
+int nvim_syn_block_get_linecont_ic(void)
+{
+  return syn_block ? syn_block->b_syn_linecont_ic : 0;
+}
+
+/// Get address of syn_block->b_syn_linecont_time (for syn_regexec timing).
+void *nvim_syn_block_get_linecont_time_ptr(void)
+{
+  return syn_block ? (void *)&syn_block->b_syn_linecont_time : NULL;
+}
+
+/// Set syn_block->b_syn_linecont_prog.
+void nvim_syn_block_set_linecont_prog(void *prog)
+{
+  if (syn_block) syn_block->b_syn_linecont_prog = (regprog_T *)prog;
+}
+
+/// Execute syn_regexec with linecont pattern for given lnum.
+/// Returns nonzero on match.
+int nvim_syn_exec_linecont(linenr_T lnum)
+{
+  if (syn_block->b_syn_linecont_prog == NULL) return 0;
+  regmmatch_T regmatch;
+  char buf_chartab[32];
+  save_chartab(buf_chartab);
+  regmatch.rmm_ic = syn_block->b_syn_linecont_ic;
+  regmatch.regprog = syn_block->b_syn_linecont_prog;
+  int r = syn_regexec(&regmatch, lnum, 0,
+                      IF_SYN_TIME(&syn_block->b_syn_linecont_time));
+  syn_block->b_syn_linecont_prog = regmatch.regprog;
+  restore_chartab(buf_chartab);
+  return r;
+}
+
+/// Get current_finished.
+int nvim_syn_get_current_finished_val(void) { return current_finished ? 1 : 0; }
+
+/// Set current_finished.
+void nvim_syn_set_current_finished_val(int v) { current_finished = v ? true : false; }
+
+/// Set current_col.
+void nvim_syn_set_current_col_val(int col) { current_col = (colnr_T)col; }
+
+/// Get current_col.
+int nvim_syn_get_current_col_val(void) { return (int)current_col; }
+
+/// Increment current_line_id.
+void nvim_syn_incr_current_line_id_val(void) { current_line_id++; }
+
+/// Set next_match_idx.
+void nvim_syn_set_next_match_idx_val(int idx) { next_match_idx = idx; }
+
+/// Set next_seqnr to 1.
+void nvim_syn_reset_next_seqnr(void) { next_seqnr = 1; }
+
+/// Return true if current_state is non-empty.
+int nvim_syn_current_state_nonempty(void) { return !GA_EMPTY(&current_state) ? 1 : 0; }
+
+/// Call validate_current_state() to set itemsize/growsize.
+void nvim_syn_do_validate_current_state(void) { validate_current_state(); }
+
+/// Return syn_getcurline().
+char *nvim_syn_do_getcurline(void) { return syn_getcurline(); }
+
+/// Return (int)ml_get_buf_len(syn_buf, current_lnum).
+int nvim_syn_do_getcurline_len(void) { return (int)ml_get_buf_len(syn_buf, current_lnum); }
+
+/// Zero out a syn_time_T struct.
+void nvim_syn_do_clear_time(syn_time_T *st)
+{
+  syn_clear_time(st);
+}
+
+/// Check if current_state is empty (GA_EMPTY).
+int nvim_syn_is_current_state_empty_ga(void) { return GA_EMPTY(&current_state) ? 1 : 0; }
+
+/// Get CUR_STATE(i).si_idx for a given index.
+int nvim_cur_state_get_si_idx(int i)
+{
+  if (i < 0 || i >= current_state.ga_len) return -3;
+  return CUR_STATE(i).si_idx;
+}
+
+/// Get SYN_ITEMS(syn_block)[idx].sp_type for a given pattern index.
+int nvim_syn_get_sptype_at(int idx)
+{
+  if (!syn_block || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) return -1;
+  return (int)SYN_ITEMS(syn_block)[idx].sp_type;
+}
+
+/// Get CUR_STATE(i).si_m_endpos.lnum.
+int nvim_cur_state_get_m_endpos_lnum(int i)
+{
+  if (i < 0 || i >= current_state.ga_len) return 0;
+  return (int)CUR_STATE(i).si_m_endpos.lnum;
+}
+
+/// Set HL_MATCHCONT flag on CUR_STATE(i).si_flags and clear m_endpos.
+void nvim_cur_state_set_matchcont(int i)
+{
+  if (i < 0 || i >= current_state.ga_len) return;
+  CUR_STATE(i).si_flags |= HL_MATCHCONT;
+  CUR_STATE(i).si_m_endpos.lnum = 0;
+  CUR_STATE(i).si_m_endpos.col = 0;
+  CUR_STATE(i).si_h_endpos = CUR_STATE(i).si_m_endpos;
+  CUR_STATE(i).si_ends = true;
+}
+
+/// Get CUR_STATE(i).si_flags.
+int nvim_cur_state_get_si_flags(int i)
+{
+  if (i < 0 || i >= current_state.ga_len) return 0;
+  return CUR_STATE(i).si_flags;
+}
+
+/// Set CUR_STATE(i).si_h_startpos to (current_lnum, 0).
+void nvim_cur_state_set_h_startpos_cur(int i)
+{
+  if (i < 0 || i >= current_state.ga_len) return;
+  CUR_STATE(i).si_h_startpos.col = 0;
+  CUR_STATE(i).si_h_startpos.lnum = current_lnum;
+}
+
+/// Return pointer to CUR_STATE(i) for rs_update_si_end / rs_check_keepend.
+stateitem_T *nvim_cur_state_ptr(int i)
+{
+  if (i < 0 || i >= current_state.ga_len) return NULL;
+  return &CUR_STATE(i);
+}
+
+/// Get keepend_level.
+int nvim_syn_get_keepend_level_val(void) { return keepend_level; }
+
+/// Get current_state.ga_len.
+int nvim_syn_get_current_state_len_val(void) { return current_state.ga_len; }
