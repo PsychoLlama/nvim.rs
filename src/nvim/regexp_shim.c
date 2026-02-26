@@ -476,6 +476,9 @@ int32_t nvim_regexp_get_rsm_sm_mmatch_startpos_col(int i) { return (int32_t)RSM_
 int32_t nvim_regexp_get_rsm_sm_mmatch_endpos_lnum(int i) { return (int32_t)RSM_PTR->sm_mmatch->endpos[i].lnum; }
 int32_t nvim_regexp_get_rsm_sm_mmatch_endpos_col(int i) { return (int32_t)RSM_PTR->sm_mmatch->endpos[i].col; }
 
+// Allocate a VimL list with a length hint (wrapper for tv_list_alloc with ptrdiff_t)
+list_T *nvim_regexp_tv_list_alloc(int64_t len) { return tv_list_alloc((ptrdiff_t)len); }
+
 // reg_match_visual accessors for Rust FFI
 
 // Returns 0 if quick-reject (REX_PTR->reg_buf != curbuf || VIsual.lnum == 0 || !REG_MULTI), 1 otherwise
@@ -765,67 +768,6 @@ int nvim_regexp_eval_regsub_expr(char *source, void *expr_ptr, int flags, int ne
 }
 
 // vim_regsub_both is now implemented in Rust as rs_vim_regsub_both
-
-static char *reg_getline_submatch(linenr_T lnum)
-{
-  char *line;
-  reg_getline_common(lnum, RGLF_LINE | RGLF_SUBMATCH, &line, NULL);
-  return line;
-}
-
-// Used for the submatch() function with the optional non-zero argument: get
-// the list of strings from the n'th submatch in allocated memory with NULs
-// represented in NLs.
-// Returns a list of allocated strings.  Returns NULL when not in a ":s"
-// command, for a non-existing submatch and for any error.
-list_T *reg_submatch_list(int no)
-{
-  if (!(*nvim_regexp_get_can_f_submatch_ptr()) || no < 0) {
-    return NULL;
-  }
-
-  linenr_T slnum;
-  linenr_T elnum;
-  list_T *list;
-  const char *s;
-
-  if (RSM_PTR->sm_match == NULL) {
-    slnum = RSM_PTR->sm_mmatch->startpos[no].lnum;
-    elnum = RSM_PTR->sm_mmatch->endpos[no].lnum;
-    if (slnum < 0 || elnum < 0) {
-      return NULL;
-    }
-
-    colnr_T scol = RSM_PTR->sm_mmatch->startpos[no].col;
-    colnr_T ecol = RSM_PTR->sm_mmatch->endpos[no].col;
-
-    list = tv_list_alloc(elnum - slnum + 1);
-
-    s = reg_getline_submatch(slnum) + scol;
-    if (slnum == elnum) {
-      tv_list_append_string(list, s, ecol - scol);
-    } else {
-      int max_lnum = elnum - slnum;
-      tv_list_append_string(list, s, -1);
-      for (int i = 1; i < max_lnum; i++) {
-        s = reg_getline_submatch(slnum + i);
-        tv_list_append_string(list, s, -1);
-      }
-      s = reg_getline_submatch(elnum);
-      tv_list_append_string(list, s, ecol);
-    }
-  } else {
-    s = RSM_PTR->sm_match->startp[no];
-    if (s == NULL || RSM_PTR->sm_match->endp[no] == NULL) {
-      return NULL;
-    }
-    list = tv_list_alloc(1);
-    tv_list_append_string(list, s, RSM_PTR->sm_match->endp[no] - s);
-  }
-
-  tv_list_ref(list);
-  return list;
-}
 
 // init_regexec_multi inlined into Rust (rs_nfa_regexec_multi)
 

@@ -1882,6 +1882,70 @@ pub unsafe extern "C" fn reg_submatch(no: c_int) -> *mut c_char {
     }
 }
 
+// --- reg_submatch_list ---
+
+extern "C" {
+    fn nvim_regexp_tv_list_alloc(len: i64) -> *mut c_void;
+    fn nvim_tv_list_ref(list: *mut c_void);
+    fn nvim_tv_list_append_string(list: *mut c_void, s: *const c_char, len: isize);
+}
+
+/// Return a `VimL` list of submatch strings for the `submatch()` function (list arg variant).
+///
+/// Replaces the C `reg_submatch_list()`.
+/// Returns NULL when not in a `:s` command, for a non-existing submatch, or on error.
+#[no_mangle]
+pub unsafe extern "C" fn reg_submatch_list(no: c_int) -> *mut c_void {
+    if !CAN_F_SUBMATCH || no < 0 {
+        return core::ptr::null_mut();
+    }
+
+    let list: *mut c_void;
+
+    if RSM.sm_match.is_null() {
+        // Multi-line match path (sm_mmatch)
+        let slnum = nvim_regexp_get_rsm_sm_mmatch_startpos_lnum(no);
+        let elnum = nvim_regexp_get_rsm_sm_mmatch_endpos_lnum(no);
+        if slnum < 0 || elnum < 0 {
+            return core::ptr::null_mut();
+        }
+
+        let scol = nvim_regexp_get_rsm_sm_mmatch_startpos_col(no);
+        let ecol = nvim_regexp_get_rsm_sm_mmatch_endpos_col(no);
+
+        list = nvim_regexp_tv_list_alloc((elnum - slnum + 1) as i64);
+
+        let s = reg_getline_submatch(slnum);
+        let s = s.add(scol as usize);
+
+        if slnum == elnum {
+            nvim_tv_list_append_string(list, s, (ecol - scol) as isize);
+        } else {
+            let max_lnum = elnum - slnum;
+            nvim_tv_list_append_string(list, s, -1);
+            for i in 1..max_lnum {
+                let line = reg_getline_submatch(slnum + i);
+                nvim_tv_list_append_string(list, line, -1);
+            }
+            let eline = reg_getline_submatch(elnum);
+            nvim_tv_list_append_string(list, eline, ecol as isize);
+        }
+    } else {
+        // Single-line match path (sm_match)
+        let s = nvim_regexp_get_rsm_sm_match_startp(no);
+        let e = nvim_regexp_get_rsm_sm_match_endp(no);
+        if s.is_null() || e.is_null() {
+            return core::ptr::null_mut();
+        }
+        let span = e.offset_from(s) as isize;
+        list = nvim_regexp_tv_list_alloc(1);
+        nvim_tv_list_append_string(list, s, span);
+    }
+
+    nvim_tv_list_ref(list);
+    list
+}
+
 // --- get_char_class ---
 
 /// Sorted table of `[:name:]` character class names.

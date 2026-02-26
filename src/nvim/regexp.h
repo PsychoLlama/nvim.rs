@@ -23,6 +23,7 @@ extern reg_extmatch_T *ref_extmatch(reg_extmatch_T *em);
 extern void unref_extmatch(reg_extmatch_T *em);
 extern char *regtilde(char *source, int magic, bool preview);
 extern char *reg_submatch(int no);
+extern list_T *reg_submatch_list(int no);
 extern char *skip_regexp_err(char *startp, int delim, int magic);
 extern void vim_regfree(regprog_T *prog);
 extern void free_regexp_stuff(void);
