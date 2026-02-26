@@ -215,6 +215,8 @@ extern void rs_free_insexpand_stuff(void);
 extern int rs_get_cmdline_compl_info(char *line, int curs_col);
 extern void rs_set_compl_globals(int startcol, int curs_col, int is_cpt_compl);
 extern int rs_compl_get_info(char *line, int startcol, int curs_col, int *line_invalid);
+// Phase 3 (pass 7) Rust exports
+extern int rs_ins_compl_start(void);
 // Phase 2 (pass 6) Rust exports
 extern void rs_ins_compl_longest_match(void *match);
 extern const char *rs_find_common_prefix(size_t *prefix_len, int curbuf_only);
@@ -3625,13 +3627,13 @@ static int compl_get_info(char *line, int startcol, colnr_T curs_col, bool *line
   return ret;
 }
 
-/// start insert mode completion
-static int ins_compl_start(void)
+/// Compound accessor: initialize completion flags and call stop_arrow.
+/// Saves did_ai into *save_did_ai, clears indent flags, calls stop_arrow.
+/// Returns OK on success, FAIL if stop_arrow fails (restores did_ai on FAIL).
+int nvim_ins_compl_start_init_impl(int *save_did_ai_out)
 {
   const bool save_did_ai = did_ai;
-
-  // First time we hit ^N or ^P (in a row, I mean)
-
+  *save_did_ai_out = save_did_ai ? 1 : 0;
   did_ai = false;
   did_si = false;
   can_si = false;
@@ -3640,84 +3642,50 @@ static int ins_compl_start(void)
     did_ai = save_did_ai;
     return FAIL;
   }
-
-  char *line = ml_get(curwin->w_cursor.lnum);
-  colnr_T curs_col = curwin->w_cursor.col;
   compl_pending = 0;
   compl_lnum = curwin->w_cursor.lnum;
+  return OK;
+}
 
-  if ((compl_cont_status & CONT_INTRPT) == CONT_INTRPT
-      && compl_cont_mode == ctrl_x_mode) {
-    // this same ctrl-x_mode was interrupted previously. Continue the
-    // completion.
-    rs_ins_compl_continue_search(line);
+/// Compound accessor: set compl_startpos to the current cursor position.
+void nvim_set_compl_startpos_to_cursor(void)
+{
+  compl_startpos = curwin->w_cursor;
+}
+
+/// Compound accessor: set compl_col to 0.
+void nvim_set_compl_col_zero(void)
+{
+  compl_col = 0;
+}
+
+/// Compound accessor: set compl_startpos.col = compl_col.
+void nvim_set_compl_startpos_col_to_compl_col(void)
+{
+  compl_startpos.col = (colnr_T)compl_col;
+}
+
+/// Compound accessor: restore did_ai from saved value.
+void nvim_restore_did_ai(int saved_val)
+{
+  did_ai = saved_val != 0;
+}
+
+/// Compound accessor: set edit_submode to the CTRL-X mode message.
+void nvim_set_edit_submode_ctrl_x_local_or_mode(void)
+{
+  if (compl_cont_status & CONT_LOCAL) {
+    edit_submode = _(ctrl_x_msgs[CTRL_X_LOCAL_MSG]);
   } else {
-    compl_cont_status &= CONT_LOCAL;
+    edit_submode = _(CTRL_X_MSG(ctrl_x_mode));
   }
+}
 
-  int startcol = 0;  // column where searched text starts
-  if (!rs_compl_status_adding()) {   // normal expansion
-    compl_cont_mode = ctrl_x_mode;
-    if (rs_ctrl_x_mode_not_default()) {
-      // Remove LOCAL if ctrl_x_mode != CTRL_X_NORMAL
-      compl_cont_status = 0;
-    }
-    compl_cont_status |= CONT_N_ADDS;
-    compl_startpos = curwin->w_cursor;
-    startcol = (int)curs_col;
-    compl_col = 0;
-  }
-
-  // Work out completion pattern and original text -- webb
-  bool line_invalid = false;
-  if (compl_get_info(line, startcol, curs_col, &line_invalid) == FAIL) {
-    if (rs_ctrl_x_mode_function() || rs_ctrl_x_mode_omni()
-        || rs_thesaurus_func_complete(ctrl_x_mode)) {
-      // restore did_ai, so that adding comment leader works
-      did_ai = save_did_ai;
-    }
-    return FAIL;
-  }
-  // If "line" was changed while getting completion info get it again.
-  if (line_invalid) {
-    line = ml_get(curwin->w_cursor.lnum);
-  }
-
-  if (rs_compl_status_adding()) {
-    if (!shortmess(SHM_COMPLETIONMENU)) {
-      edit_submode_pre = _(" Adding");
-    }
-    if (rs_ctrl_x_mode_line_or_eval()) {
-      // Insert a new line, keep indentation but ignore 'comments'.
-      char *old = curbuf->b_p_com;
-
-      curbuf->b_p_com = "";
-      compl_startpos.lnum = curwin->w_cursor.lnum;
-      compl_startpos.col = compl_col;
-      ins_eol('\r');
-      curbuf->b_p_com = old;
-      compl_length = 0;
-      compl_col = curwin->w_cursor.col;
-      compl_lnum = curwin->w_cursor.lnum;
-    }
-  } else {
-    edit_submode_pre = NULL;
-    compl_startpos.col = compl_col;
-  }
-
-  if (!shortmess(SHM_COMPLETIONMENU) && !compl_autocomplete) {
-    if (compl_cont_status & CONT_LOCAL) {
-      edit_submode = _(ctrl_x_msgs[CTRL_X_LOCAL_MSG]);
-    } else {
-      edit_submode = _(CTRL_X_MSG(ctrl_x_mode));
-    }
-  }
-
-  // If any of the original typed text has been changed we need to fix
-  // the redo buffer.
-  rs_ins_compl_fixRedoBufForLeader(NULL);
-
-  // Always add completion for the original text.
+/// Compound accessor: add the original text as the first completion match.
+/// Sets compl_orig_text, saves extmarks, calls ins_compl_add.
+/// Returns OK or FAIL. On FAIL, also restores did_ai from save_did_ai.
+int nvim_ins_compl_start_add_orig_impl(char *line, int save_did_ai)
+{
   API_CLEAR_STRING(compl_orig_text);
   kv_destroy(compl_orig_extmarks);
   compl_orig_text = cbuf_to_string(line + compl_col, (size_t)compl_length);
@@ -3732,23 +3700,58 @@ static int ins_compl_start(void)
     API_CLEAR_STRING(compl_pattern);
     API_CLEAR_STRING(compl_orig_text);
     kv_destroy(compl_orig_extmarks);
-    did_ai = save_did_ai;
+    did_ai = save_did_ai != 0;
     return FAIL;
   }
-
-  // showmode might reset the internal line pointers, so it must
-  // be called before line = ml_get(), or when this address is no
-  // longer needed.  -- Acevedo.
-  if (!shortmess(SHM_COMPLETIONMENU) && !compl_autocomplete) {
-    edit_submode_extra = _("-- Searching...");
-    edit_submode_highl = HLF_COUNT;
-    showmode();
-    edit_submode_extra = NULL;
-    ui_flush();
-  }
-
-  did_ai = save_did_ai;
   return OK;
+}
+
+/// Compound accessor: show "Searching..." mode and flush UI.
+void nvim_ins_compl_start_show_searching_impl(void)
+{
+  edit_submode_extra = _("-- Searching...");
+  edit_submode_highl = HLF_COUNT;
+  showmode();
+  edit_submode_extra = NULL;
+  ui_flush();
+}
+
+/// Compound accessor: adding mode -- handle ins_eol for line/eval completion.
+void nvim_ins_compl_start_adding_eol_impl(void)
+{
+  char *old = curbuf->b_p_com;
+  curbuf->b_p_com = "";
+  compl_startpos.lnum = curwin->w_cursor.lnum;
+  compl_startpos.col = (colnr_T)compl_col;
+  ins_eol('\r');
+  curbuf->b_p_com = old;
+  compl_length = 0;
+  compl_col = curwin->w_cursor.col;
+  compl_lnum = curwin->w_cursor.lnum;
+}
+
+/// Compound accessor: set edit_submode_pre to _(" Adding").
+void nvim_set_edit_submode_adding(void)
+{
+  edit_submode_pre = _(" Adding");
+}
+
+/// Compound accessor: clear edit_submode_pre (set to NULL).
+void nvim_clear_edit_submode_pre(void)
+{
+  edit_submode_pre = NULL;
+}
+
+/// Accessor: return the current buffer line at cursor position.
+const char *nvim_ml_get_curline(void)
+{
+  return ml_get(curwin->w_cursor.lnum);
+}
+
+/// Thin wrapper -- start insert mode completion.
+static int ins_compl_start(void)
+{
+  return rs_ins_compl_start();
 }
 
 /// Do Insert mode completion.
