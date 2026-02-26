@@ -91,6 +91,9 @@ extern void rs_tagstack_clear_entry(void *tg);
 extern void rs_reset_VIsual_and_resel(void);
 extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
 
+// Phase 9: win_init migration
+extern void rs_win_init(win_T *newp, win_T *oldp, int flags);
+
 // Rust fold FFI declarations
 extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
 extern void rs_clearFolding(win_T *win);
@@ -752,72 +755,7 @@ win_T *win_split_ins(int size, int flags, win_T *new_wp, int dir, frame_T *to_fl
 // being copied.
 void win_init(win_T *newp, win_T *oldp, int flags)
 {
-  newp->w_buffer = oldp->w_buffer;
-  newp->w_s = &(oldp->w_buffer->b_s);
-  oldp->w_buffer->b_nwindows++;
-  newp->w_cursor = oldp->w_cursor;
-  newp->w_valid = 0;
-  newp->w_curswant = oldp->w_curswant;
-  newp->w_set_curswant = oldp->w_set_curswant;
-  newp->w_topline = oldp->w_topline;
-  newp->w_topfill = oldp->w_topfill;
-  newp->w_leftcol = oldp->w_leftcol;
-  newp->w_pcmark = oldp->w_pcmark;
-  newp->w_prev_pcmark = oldp->w_prev_pcmark;
-  newp->w_alt_fnum = oldp->w_alt_fnum;
-  newp->w_wrow = oldp->w_wrow;
-  newp->w_fraction = oldp->w_fraction;
-  newp->w_prev_fraction_row = oldp->w_prev_fraction_row;
-  copy_jumplist(oldp, newp);
-  if (flags & WSP_NEWLOC) {
-    // Don't copy the location list.
-    newp->w_llist = NULL;
-    newp->w_llist_ref = NULL;
-  } else {
-    copy_loclist_stack(oldp, newp);
-  }
-  newp->w_localdir = (oldp->w_localdir == NULL)
-                     ? NULL : xstrdup(oldp->w_localdir);
-  newp->w_prevdir = (oldp->w_prevdir == NULL)
-                    ? NULL : xstrdup(oldp->w_prevdir);
-
-  if (*p_spk != 'c') {
-    if (*p_spk == 't') {
-      newp->w_skipcol = oldp->w_skipcol;
-    }
-    newp->w_botline = oldp->w_botline;
-    newp->w_prev_height = oldp->w_height;
-    newp->w_prev_winrow = oldp->w_winrow;
-  }
-
-  // copy tagstack and folds
-  for (int i = 0; i < oldp->w_tagstacklen; i++) {
-    taggy_T *tag = &newp->w_tagstack[i];
-    *tag = oldp->w_tagstack[i];
-    if (tag->tagname != NULL) {
-      tag->tagname = xstrdup(tag->tagname);
-    }
-    if (tag->user_data != NULL) {
-      tag->user_data = xstrdup(tag->user_data);
-    }
-  }
-  newp->w_tagstackidx = oldp->w_tagstackidx;
-  newp->w_tagstacklen = oldp->w_tagstacklen;
-
-  // Keep same changelist position in new window.
-  newp->w_changelistidx = oldp->w_changelistidx;
-
-  rs_copyFoldingState(oldp, newp);
-
-  // Use the same argument list.
-  newp->w_alist = oldp->w_alist;
-  newp->w_alist->al_refcount++;
-  newp->w_arg_idx = oldp->w_arg_idx;
-
-  // copy options from existing window
-  win_copy_options(oldp, newp);
-
-  newp->w_winbar_height = oldp->w_winbar_height;
+  rs_win_init(newp, oldp, flags);
 }
 
 /// Make "count" windows on the screen.
@@ -3195,4 +3133,128 @@ int nvim_tabpage_get_firstwin_winrow(tabpage_T *tp)
 {
   return (tp && tp->tp_firstwin) ? tp->tp_firstwin->w_winrow : 0;
 }
+
+// =============================================================================
+// Phase 9 accessors: win_init migration
+// =============================================================================
+
+/// Copy buffer link: dst->w_buffer = src->w_buffer; dst->w_s = &src->w_buffer->b_s;
+/// src->w_buffer->b_nwindows++.
+void nvim_win_copy_buffer_link(win_T *dst, win_T *src)
+{
+  if (!dst || !src || !src->w_buffer) {
+    return;
+  }
+  dst->w_buffer = src->w_buffer;
+  dst->w_s = &src->w_buffer->b_s;
+  src->w_buffer->b_nwindows++;
+}
+
+/// Copy pcmarks: dst->w_pcmark = src->w_pcmark, dst->w_prev_pcmark = src->w_prev_pcmark.
+void nvim_win_copy_pcmarks(win_T *dst, win_T *src)
+{
+  if (!dst || !src) {
+    return;
+  }
+  dst->w_pcmark = src->w_pcmark;
+  dst->w_prev_pcmark = src->w_prev_pcmark;
+}
+
+/// Set w_alt_fnum.
+void nvim_win_set_alt_fnum(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_alt_fnum = val;
+  }
+}
+
+/// Wrap copy_jumplist(old, new) for Rust.
+void nvim_copy_jumplist_wrapper(win_T *old, win_T *new)
+{
+  if (old && new) {
+    copy_jumplist(old, new);
+  }
+}
+
+/// Wrap copy_loclist_stack(old, new) for Rust.
+void nvim_copy_loclist_stack_wrapper(win_T *old, win_T *new)
+{
+  if (old && new) {
+    copy_loclist_stack(old, new);
+  }
+}
+
+/// Set w_llist = NULL, w_llist_ref = NULL (skip location list copy).
+void nvim_win_clear_loclist(win_T *wp)
+{
+  if (wp) {
+    wp->w_llist = NULL;
+    wp->w_llist_ref = NULL;
+  }
+}
+
+/// Copy local directory strings with xstrdup (handles NULL).
+void nvim_win_copy_localdir(win_T *dst, win_T *src)
+{
+  if (!dst || !src) {
+    return;
+  }
+  dst->w_localdir = (src->w_localdir == NULL) ? NULL : xstrdup(src->w_localdir);
+  dst->w_prevdir = (src->w_prevdir == NULL) ? NULL : xstrdup(src->w_prevdir);
+}
+
+/// Copy entire tagstack from src to dst, with xstrdup of tagname/user_data strings.
+void nvim_win_copy_tagstack(win_T *dst, win_T *src)
+{
+  if (!dst || !src) {
+    return;
+  }
+  for (int i = 0; i < src->w_tagstacklen; i++) {
+    taggy_T *tag = &dst->w_tagstack[i];
+    *tag = src->w_tagstack[i];
+    if (tag->tagname != NULL) {
+      tag->tagname = xstrdup(tag->tagname);
+    }
+    if (tag->user_data != NULL) {
+      tag->user_data = xstrdup(tag->user_data);
+    }
+  }
+  dst->w_tagstackidx = src->w_tagstackidx;
+  dst->w_tagstacklen = src->w_tagstacklen;
+}
+
+/// Get w_changelistidx.
+int nvim_win_get_changelistidx(win_T *wp) { return wp ? wp->w_changelistidx : 0; }
+
+/// Set w_changelistidx.
+void nvim_win_set_changelistidx(win_T *wp, int val) { if (wp) { wp->w_changelistidx = val; } }
+
+/// Wrap rs_copyFoldingState(old, new) callable from Rust.
+void nvim_copy_folding_state_wrapper(win_T *old, win_T *new)
+{
+  if (old && new) {
+    rs_copyFoldingState(old, new);
+  }
+}
+
+/// Copy alist: dst->w_alist = src->w_alist; al_refcount++; dst->w_arg_idx = src->w_arg_idx.
+void nvim_win_copy_alist(win_T *dst, win_T *src)
+{
+  if (!dst || !src || !src->w_alist) {
+    return;
+  }
+  dst->w_alist = src->w_alist;
+  dst->w_alist->al_refcount++;
+  dst->w_arg_idx = src->w_arg_idx;
+}
+
+/// Wrap win_copy_options(old, new) for Rust.
+void nvim_win_copy_options_wrapper(win_T *old, win_T *new)
+{
+  if (old && new) {
+    win_copy_options(old, new);
+  }
+}
+
+
 
