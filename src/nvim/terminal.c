@@ -59,6 +59,9 @@
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/eval/vars.h"
+// Phase 12: rs_eval_call_provider replaces the C eval_call_provider wrapper
+extern void rs_eval_call_provider(const char *provider, const char *method,
+                                  list_T *arguments, bool discard, typval_T *out_rettv);
 #include "nvim/event/defs.h"
 #include "nvim/event/loop.h"
 #include "nvim/event/multiqueue.h"
@@ -1564,7 +1567,8 @@ static void term_clipboard_set(void **argv)
   tv_list_append_string(args, &regtype, 1);
 
   tv_list_append_string(args, &regname, 1);
-  eval_call_provider("clipboard", "set", args, true);
+  typval_T rettv;
+  rs_eval_call_provider("clipboard", "set", args, true, &rettv);
 }
 
 static int term_selection_set(VTermSelectionMask mask, VTermStringFragment frag, void *user)

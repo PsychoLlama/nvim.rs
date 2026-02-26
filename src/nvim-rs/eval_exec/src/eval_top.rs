@@ -986,12 +986,13 @@ pub unsafe extern "C" fn rs_eval_fmt_source_name_line(buf: *mut c_char, bufsize:
 
 /// Skip over the name of an option variable: "&option", "&g:option" or "&l:option".
 ///
-/// Equivalent to C `find_option_var_end`.
+/// Exported as `find_option_var_end` (replaces C wrapper in eval_shim.c, Phase 12).
+/// Accepts `OptIndex*` as `*mut c_int` (compatible since OptIndex is int-sized).
 ///
 /// # Safety
 /// `arg` must be a valid pointer to a mutable C string pointer.
 /// `opt_idxp` and `opt_flags` must be valid pointers.
-#[no_mangle]
+#[export_name = "find_option_var_end"]
 pub unsafe extern "C" fn rs_find_option_var_end(
     arg: *mut *const c_char,
     opt_idxp: *mut c_int,

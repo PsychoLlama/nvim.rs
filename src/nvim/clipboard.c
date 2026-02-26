@@ -9,6 +9,9 @@
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
 #include "nvim/message.h"
+// Phase 12: rs_eval_call_provider replaces the C eval_call_provider wrapper
+extern void rs_eval_call_provider(const char *provider, const char *method,
+                                  list_T *arguments, bool discard, typval_T *out_rettv);
 #include "nvim/option_vars.h"
 #include "nvim/register.h"
 
@@ -64,7 +67,8 @@ bool nvim_clipboard_provider_get(int name, yankreg_T *reg)
   const char regname = (char)name;
   tv_list_append_string(args, &regname, 1);
 
-  typval_T result = eval_call_provider("clipboard", "get", args, false);
+  typval_T result;
+  rs_eval_call_provider("clipboard", "get", args, false, &result);
 
   if (result.v_type != VAR_LIST) {
     if (result.v_type == VAR_NUMBER && result.vval.v_number == 0) {
@@ -189,7 +193,8 @@ void nvim_clipboard_provider_set(int name, yankreg_T *reg)
   tv_list_append_string(args_list, &regtype, 1);
   tv_list_append_string(args_list, ((char[]) { (char)name }), 1);
 
-  eval_call_provider("clipboard", "set", args_list, true);
+  typval_T rettv;
+  rs_eval_call_provider("clipboard", "set", args_list, true, &rettv);
 }
 
 // =============================================================================

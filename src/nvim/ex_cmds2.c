@@ -22,6 +22,9 @@
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/eval/vars.h"
+// Phase 12: rs_eval_call_provider replaces the C eval_call_provider wrapper
+extern void rs_eval_call_provider(const char *provider, const char *method,
+                                  list_T *arguments, bool discard, typval_T *out_rettv);
 #include "nvim/ex_cmds.h"
 #include "nvim/ex_cmds2.h"
 #include "nvim/ex_cmds_defs.h"
@@ -172,7 +175,8 @@ void nvim_ex2_tv_list_append_string(list_T *l, const char *s, ssize_t len)
 
 void nvim_ex2_eval_call_provider(char *provider, char *method, list_T *arguments, bool discard)
 {
-  eval_call_provider(provider, method, arguments, discard);
+  typval_T rettv;
+  rs_eval_call_provider(provider, method, arguments, discard, &rettv);
 }
 
 int nvim_ex2_vim_fullname(const char *fname, char *buf, size_t len, bool force)

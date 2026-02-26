@@ -29,3 +29,8 @@ typedef struct {
 } EvalFuncDef;
 
 #include "eval/funcs.h.generated.h"
+
+// Phase 12: var2fpos exported from Rust (eval/src/indexing.rs via #[export_name])
+// FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL deliberately omitted here
+// since this header is included without macros_defs.h in some TUs.
+pos_T *var2fpos(const typval_T *tv, bool dollar_lnum, int *ret_fnum, bool charcol);

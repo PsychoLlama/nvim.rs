@@ -450,6 +450,37 @@ pub unsafe extern "C" fn rs_var2fpos(
     false
 }
 
+/// Thin exported wrapper for `rs_var2fpos` that owns the static pos_T.
+///
+/// Replaces the C `var2fpos` wrapper in eval_shim.c (Phase 12).
+/// Returns a pointer to a Rust-owned static on success, null on failure.
+///
+/// # Safety
+///
+/// Same as `rs_var2fpos`. Single-threaded; static is safe under Neovim's
+/// cooperative concurrency model (same guarantee as the original C static).
+// SAFETY: Neovim is single-threaded for VimL evaluation; the static matches
+// the behaviour of the original C `static pos_T pos` in the C wrapper.
+#[allow(static_mut_refs)]
+#[export_name = "var2fpos"]
+pub unsafe extern "C" fn rs_var2fpos_export(
+    tv: *const c_void,
+    dollar_lnum: bool,
+    ret_fnum: *mut c_int,
+    charcol: bool,
+) -> *mut PosT {
+    static mut VAR2FPOS_BUF: PosT = PosT {
+        lnum: 0,
+        col: 0,
+        coladd: 0,
+    };
+    if rs_var2fpos(tv, dollar_lnum, ret_fnum, charcol, &raw mut VAR2FPOS_BUF) {
+        &raw mut VAR2FPOS_BUF
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
 /// Convert a list typval to a buffer position.
 ///
 /// Migrated from `list2fpos` in eval_shim.c.

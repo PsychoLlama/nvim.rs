@@ -143,14 +143,14 @@ extern int rs_free_unref_items(int copyID);
 // set_argv_var: renamed Rust export (Phase 3 pass 9).
 // var_set_global: renamed Rust export (Phase 3 pass 9).
 // eval_fmt_source_name_line: renamed Rust export (Phase 3 pass 9).
-extern const char *rs_find_option_var_end(const char **arg, int *opt_idxp, int *opt_flags);
+// find_option_var_end: renamed Rust export (Phase 12).
 // Phase 2 (eval_shim pass 5)
 // prompt_get_input: renamed Rust export (Phase 4 pass 9).
 // prompt_invoke_callback: renamed Rust export (Phase 4 pass 9).
 // invoke_prompt_interrupt: renamed Rust export (Phase 4 pass 9).
 // Phase 3 (eval_shim pass 5)
 // eval_foldexpr: renamed Rust export (Phase 3 pass 9).
-extern void rs_eval_foldtext(win_T *wp, Object *out);
+// rs_eval_foldtext: Rust implementation (eval_exec/src/eval_top.rs)
 // Phase 4 (eval_shim pass 5)
 // get_name_len: renamed Rust export (Phase 2 pass 9).
 extern char *rs_make_expanded_name(const char *in_start, char *expr_start, char *expr_end,
@@ -589,13 +589,10 @@ extern int rs_call_func_rettv(char **arg, evalarg_T *evalarg, typval_T *rettv, b
 extern int rs_eval_lambda(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 extern int rs_eval1_emsg(char **arg, typval_T *rettv, exarg_T *eap);
 
-// Rust implementations for Phase 3 (in eval crate, indexing module)
-extern bool rs_var2fpos(const typval_T *tv, bool dollar_lnum, int *ret_fnum, bool charcol,
-                        pos_T *out);
+// var2fpos: renamed Rust export (Phase 12).
 // list2fpos: renamed Rust export (Phase 3 pass 9).
 
-// Rust implementations for Phase 1 (eval_shim pass 6)
-extern void rs_last_set_msg(int sc_sid, int sc_lnum, uint64_t sc_chan);
+// rs_last_set_msg: deleted -- last_set_msg now exported directly from Rust (Phase 12).
 // set_selfdict: renamed Rust export (Phase 3 pass 9).
 
 // Rust implementations for Phase 2 (eval_shim pass 6): tv_to_argv + system output
@@ -604,8 +601,7 @@ extern void rs_last_set_msg(int sc_sid, int sc_lnum, uint64_t sc_chan);
 
 // Rust implementations for Phase 3 (eval_shim pass 6): provider infrastructure
 // eval_has_provider: renamed Rust export (Phase 3 pass 9).
-extern void rs_eval_call_provider(const char *provider, const char *method,
-                                  list_T *arguments, bool discard, typval_T *out_rettv);
+// eval_call_provider: deleted -- callers updated to call rs_eval_call_provider directly (Phase 12).
 // script_host_eval: renamed Rust export (Phase 4 pass 9).
 
 // eval_to_bool, eval_expr_typval, eval_expr_to_bool, eval_to_string_skip,
@@ -619,14 +615,7 @@ extern void rs_eval_call_provider(const char *provider, const char *method,
 
 // eval_foldexpr: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
-/// Evaluate 'foldtext', returning an Array or a String (NULL_STRING on failure).
-Object eval_foldtext(win_T *wp)
-{
-  Object retval;
-  rs_eval_foldtext(wp, &retval);
-  return retval;
-}
-
+// eval_foldtext: deleted -- no C callers; Rust code calls rs_eval_foldtext directly (Phase 12).
 
 /// Get an lvalue
 ///
@@ -1058,28 +1047,7 @@ bool nvim_callback_call_lua(LuaRef luaref)
 
 // save_tv_as_string: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
-/// Translate a Vimscript object into a position
-///
-/// Accepts VAR_LIST and VAR_STRING objects. Does not give an error for invalid
-/// type.
-///
-/// @param[in]  tv  Object to translate.
-/// @param[in]  dollar_lnum  True when "$" is last line.
-/// @param[out]  ret_fnum  Set to fnum for marks.
-/// @param[in]  charcol  True to return character column.
-///
-/// @return Pointer to position or NULL in case of error (e.g. invalid type).
-pos_T *var2fpos(const typval_T *const tv, const bool dollar_lnum, int *const ret_fnum,
-                const bool charcol)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  static pos_T pos;
-  if (rs_var2fpos(tv, dollar_lnum, ret_fnum, charcol, &pos)) {
-    return &pos;
-  }
-  return NULL;
-}
-
+// var2fpos: deleted -- Rust export renamed to match C symbol (Phase 12).
 // list2fpos: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
 // get_name_len: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
@@ -1106,31 +1074,14 @@ partial_T *nvim_get_vlua_partial(void)
 
 // ex_execute: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
-/// Skip over the name of an option variable: "&option", "&g:option" or "&l:option".
-///
-/// @param[in,out]  arg        Points to the "&" or '+' when called, to "option" when returning.
-/// @param[out]     opt_idxp   Set to option index in options[] table.
-/// @param[out]     opt_flags  Option flags.
-///
-/// @return NULL when no option name found. Otherwise pointer to the char after the option name.
-const char *find_option_var_end(const char **const arg, OptIndex *const opt_idxp,
-                                int *const opt_flags)
-{
-  int opt_idx_int = 0;
-  const char *end = rs_find_option_var_end(arg, &opt_idx_int, opt_flags);
-  *opt_idxp = (OptIndex)opt_idx_int;
-  return end;
-}
+// find_option_var_end: deleted -- Rust export renamed to match C symbol (Phase 12).
 
 // var_set_global: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 // Callers now pass a pointer to typval_T instead of by value.
 
-/// Display script name where an item was last set.
-/// Should only be invoked when 'verbose' is non-zero.
-void last_set_msg(sctx_T script_ctx)
-{
-  rs_last_set_msg(script_ctx.sc_sid, script_ctx.sc_lnum, script_ctx.sc_chan);
-}
+// last_set_msg: deleted -- Rust eval/src/display.rs exported as last_set_msg via #[export_name] (Phase 12).
+// _Static_assert for sctx_T layout:
+_Static_assert(sizeof(sctx_T) == 24, "sctx_T size must be 24 bytes");
 
 // do_string_sub: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
@@ -1138,14 +1089,7 @@ void last_set_msg(sctx_T script_ctx)
 // find_job: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
 // script_host_eval: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
 
-/// @param discard  Clears the value returned by the provider and returns
-///                 an empty typval_T.
-typval_T eval_call_provider(char *provider, char *method, list_T *arguments, bool discard)
-{
-  typval_T rettv;
-  rs_eval_call_provider(provider, method, arguments, discard, &rettv);
-  return rettv;
-}
+// eval_call_provider: deleted -- callers updated to call rs_eval_call_provider directly (Phase 12).
 
 // eval_has_provider: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 

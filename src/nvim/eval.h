@@ -228,5 +228,13 @@ void set_context_for_expression(expand_T *xp, char *arg, int cmdidx);
 char *prompt_get_input(buf_T *buf);
 void prompt_invoke_callback(void);
 bool invoke_prompt_interrupt(void);
+// Phase 12: last_set_msg exported from Rust (eval/src/display.rs via #[export_name])
+void last_set_msg(sctx_T script_ctx);
+// Phase 12: find_option_var_end exported from Rust (eval_exec/src/eval_top.rs via #[export_name])
+const char *find_option_var_end(const char **arg, OptIndex *opt_idxp, int *opt_flags)
+  FUNC_ATTR_WARN_UNUSED_RESULT;
+// Phase 12: var2fpos exported from Rust (eval/src/indexing.rs via #[export_name])
+pos_T *var2fpos(const typval_T *tv, bool dollar_lnum, int *ret_fnum, bool charcol)
+  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL;
 
 #include "eval_shim.h.generated.h"

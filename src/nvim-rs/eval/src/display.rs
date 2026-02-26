@@ -3,8 +3,40 @@
 //! This module provides `last_set_msg`, which displays the script name and
 //! line where a setting was last changed. Equivalent to the C `last_set_msg`
 //! in `eval_shim.c`.
+//!
+//! Phase 12 update: changed from rs_last_set_msg(sc_sid, sc_lnum, sc_chan) scalars
+//! to last_set_msg(SctxT) by-value struct, eliminating the C wrapper.
 
 use std::ffi::{c_char, c_int};
+
+// =============================================================================
+// SctxT: #[repr(C)] mirror of C's sctx_T struct
+//
+// C definition (eval/typval_defs.h lines 279-290):
+//   typedef struct {
+//     scid_T sc_sid;     // int, offset 0
+//     int sc_seq;        // int, offset 4
+//     linenr_T sc_lnum;  // int32_t, offset 8
+//     // 4 bytes implicit padding for sc_chan alignment
+//     uint64_t sc_chan;  // offset 16
+//   } sctx_T;            // sizeof = 24
+//
+// Validated by _Static_assert(sizeof(sctx_T) == 24) in eval_shim.c.
+// =============================================================================
+
+/// Rust mirror of C `sctx_T` (24 bytes).
+#[repr(C)]
+pub struct SctxT {
+    /// Script ID (scid_T = int).
+    pub sc_sid: c_int,
+    /// Sourcing sequence number.
+    pub sc_seq: c_int,
+    /// Line number in script (linenr_T = int32_t).
+    pub sc_lnum: i32,
+    // 4 bytes implicit padding here (repr(C) aligns sc_chan to 8 bytes)
+    /// Channel ID (only used when sc_sid is SID_API_CLIENT).
+    pub sc_chan: u64,
+}
 
 // =============================================================================
 // C Accessor Extern Declarations
@@ -46,19 +78,25 @@ const MSG_LINE: &[u8] = b" line \0";
 const MSG_LUA_HINT: &[u8] = b" (run Nvim with -V1 for more details)\0";
 
 // =============================================================================
-// Phase 1: last_set_msg
+// Phase 12: last_set_msg (was rs_last_set_msg with scalars, now by-value SctxT)
 // =============================================================================
 
 /// Display the script name where an item was last set.
 ///
-/// Should only be invoked when 'verbose' is non-zero. Takes the two relevant
-/// fields of `sctx_T` as scalars to avoid passing the full struct over FFI.
+/// Should only be invoked when 'verbose' is non-zero.
+///
+/// Exported as `last_set_msg` (replaces C wrapper in eval_shim.c).
+/// Accepts `sctx_T` by value via `SctxT` (`#[repr(C)]` struct).
 ///
 /// # Safety
 ///
 /// Calls multiple C functions that access global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_last_set_msg(sc_sid: c_int, sc_lnum: c_int, sc_chan: u64) {
+#[export_name = "last_set_msg"]
+pub unsafe extern "C" fn rs_last_set_msg(script_ctx: SctxT) {
+    let sc_sid = script_ctx.sc_sid;
+    let sc_lnum = script_ctx.sc_lnum;
+    let sc_chan = script_ctx.sc_chan;
+
     if sc_sid == 0 {
         return;
     }
