@@ -13,12 +13,42 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+// Re-export CallbackT from eval_exec via FFI -- we reconstruct it here since
+// eval crate doesn't depend on eval_exec.
+//
+// Layout verified by _Static_assert in eval_shim.c:
+//   sizeof(Callback) == 16
+//   offsetof(Callback, data) == 0
+//   offsetof(Callback, type) == 8
+
+/// Union data field of Callback (8 bytes).
+#[repr(C)]
+pub union CallbackData {
+    /// kCallbackFuncref: heap-allocated function name string.
+    pub funcref: *mut c_char,
+    /// kCallbackPartial: pointer to partial_T.
+    pub partial: *mut c_void,
+    /// kCallbackLua: Lua registry reference.
+    pub luaref: c_int,
+}
+
+/// Rust mirror of C `Callback` struct (16 bytes).
+#[repr(C)]
+pub struct CallbackT {
+    /// Union data (funcref / partial / luaref).
+    pub data: CallbackData,
+    /// Which variant is active.
+    pub cb_type: c_int,
+    // 4 bytes trailing padding
+}
+
+const K_CALLBACK_NONE: c_int = 0;
+const K_CALLBACK_PARTIAL: c_int = 2;
+
 /// Opaque handle for typval_T struct
 type TvHandle = *const c_void;
 /// Mutable opaque handle for typval_T struct
 type TvHandleMut = *mut c_void;
-/// Opaque handle for Callback struct
-type CallbackHandle = *mut c_void;
 /// Opaque handle for partial_T struct
 type PartialHandle = *mut c_void;
 /// Opaque handle for dict_T struct
@@ -51,11 +81,6 @@ extern "C" {
     fn tv_dict_equal(d1: DictHandle, d2: DictHandle, ic: bool) -> bool;
     fn tv_equal(tv1: TvHandleMut, tv2: TvHandleMut, ic: bool) -> bool;
 
-    // Callback struct setters
-    fn nvim_eval_cb_set_partial(cb: CallbackHandle, pt: PartialHandle);
-    fn nvim_eval_cb_set_funcref(cb: CallbackHandle, name: *mut c_char);
-    fn nvim_eval_cb_set_none(cb: CallbackHandle);
-
     // String/function operations
     fn get_scriptlocal_funcname(name: *const c_char) -> *mut c_char;
     fn func_ref(name: *const c_char);
@@ -66,8 +91,10 @@ extern "C" {
     fn nlua_register_table_as_callable(arg: TvHandle) -> *mut c_char;
 
     // Error reporting
-    fn nvim_eval_emsg_e921();
+    fn emsg(s: *const c_char) -> c_int;
 }
+
+static E921_MSG: &[u8] = b"E921: Invalid callback argument\0";
 
 /// Compare two function/partial typvals for equality.
 ///
@@ -154,23 +181,25 @@ pub unsafe extern "C" fn rs_func_equal(tv1: TvHandle, tv2: TvHandle, ic: bool) -
 ///
 /// # Safety
 ///
-/// `callback` must be a valid pointer to a Callback struct.
+/// `callback` must be a valid pointer to a Callback (CallbackT) struct.
 /// `arg` must be a valid pointer to a typval_T.
 #[no_mangle]
-pub unsafe extern "C" fn rs_callback_from_typval(callback: CallbackHandle, arg: TvHandle) -> bool {
+pub unsafe extern "C" fn rs_callback_from_typval(callback: *mut CallbackT, arg: TvHandle) -> bool {
     let v_type = nvim_eval_tv_get_type(arg);
 
     if v_type == VAR_PARTIAL && !nvim_eval_tv_get_partial(arg).is_null() {
         let pt = nvim_eval_tv_get_partial(arg);
         nvim_eval_partial_incref(pt);
-        nvim_eval_cb_set_partial(callback, pt);
+        // cb->data.partial = pt; cb->type = kCallbackPartial;
+        (*callback).data.partial = pt;
+        (*callback).cb_type = K_CALLBACK_PARTIAL;
         return true;
     }
 
     if v_type == VAR_STRING {
         let vstr = nvim_tv_get_vstring(arg.cast_mut());
         if !vstr.is_null() && (*vstr as u8).is_ascii_digit() {
-            nvim_eval_emsg_e921();
+            emsg(E921_MSG.as_ptr() as *const c_char);
             return false;
         }
     }
@@ -178,11 +207,13 @@ pub unsafe extern "C" fn rs_callback_from_typval(callback: CallbackHandle, arg: 
     if v_type == VAR_FUNC || v_type == VAR_STRING {
         let name = nvim_tv_get_vstring(arg.cast_mut());
         if name.is_null() {
-            nvim_eval_emsg_e921();
+            emsg(E921_MSG.as_ptr() as *const c_char);
             return false;
         }
         if *name == 0 {
-            nvim_eval_cb_set_none(callback);
+            // cb->data.funcref = NULL; cb->type = kCallbackNone;
+            (*callback).data.funcref = std::ptr::null_mut();
+            (*callback).cb_type = K_CALLBACK_NONE;
             return true;
         }
 
@@ -195,26 +226,31 @@ pub unsafe extern "C" fn rs_callback_from_typval(callback: CallbackHandle, arg: 
             funcref = xstrdup(name);
         }
         func_ref(funcref);
-        nvim_eval_cb_set_funcref(callback, funcref);
+        // cb->data.funcref = funcref; cb->type = kCallbackFuncref;
+        (*callback).data.funcref = funcref;
+        (*callback).cb_type = 1; // K_CALLBACK_FUNCREF
         return true;
     }
 
     if nlua_is_table_from_lua(arg) != 0 {
         let name = nlua_register_table_as_callable(arg);
         if !name.is_null() {
-            nvim_eval_cb_set_funcref(callback, xstrdup(name));
+            (*callback).data.funcref = xstrdup(name);
+            (*callback).cb_type = 1; // K_CALLBACK_FUNCREF
             return true;
         }
-        nvim_eval_emsg_e921();
+        emsg(E921_MSG.as_ptr() as *const c_char);
         return false;
     }
 
     if v_type == VAR_SPECIAL || (v_type == VAR_NUMBER && nvim_eval_tv_get_vnumber(arg) == 0) {
-        nvim_eval_cb_set_none(callback);
+        // cb->data.funcref = NULL; cb->type = kCallbackNone;
+        (*callback).data.funcref = std::ptr::null_mut();
+        (*callback).cb_type = K_CALLBACK_NONE;
         return true;
     }
 
-    nvim_eval_emsg_e921();
+    emsg(E921_MSG.as_ptr() as *const c_char);
     false
 }
 

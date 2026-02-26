@@ -250,29 +250,20 @@ void nvim_eval_partial_incref(partial_T *pt)
   pt->pt_refcount++;
 }
 
-// C accessors for Callback struct setters
-void nvim_eval_cb_set_partial(Callback *cb, partial_T *pt)
-{
-  cb->data.partial = pt;
-  cb->type = kCallbackPartial;
-}
+// nvim_eval_cb_set_partial: deleted -- Rust eval/src/callback.rs uses CallbackT directly (Phase 12).
+// nvim_eval_cb_set_funcref: deleted -- Rust eval/src/callback.rs uses CallbackT directly (Phase 12).
+// nvim_eval_cb_set_none: deleted -- Rust eval/src/callback.rs uses CallbackT directly (Phase 12).
+// nvim_eval_emsg_e921: deleted -- Rust eval/src/callback.rs uses CallbackT directly (Phase 12).
 
-void nvim_eval_cb_set_funcref(Callback *cb, char *name)
-{
-  cb->data.funcref = name;
-  cb->type = kCallbackFuncref;
-}
+// _Static_assert for Callback layout (validated by Rust CallbackT #[repr(C)]):
+_Static_assert(sizeof(Callback) == 16, "Callback size must be 16 bytes");
+_Static_assert(offsetof(Callback, data) == 0, "Callback.data must be at offset 0");
+_Static_assert(offsetof(Callback, type) == 8, "Callback.type must be at offset 8");
 
-void nvim_eval_cb_set_none(Callback *cb)
+/// Accessor for p_mfd option (max function depth).
+int nvim_p_mfd_get(void)
 {
-  cb->data.funcref = NULL;
-  cb->type = kCallbackNone;
-}
-
-// Error message helper
-void nvim_eval_emsg_e921(void)
-{
-  emsg(_("E921: Invalid callback argument"));
+  return (int)p_mfd;
 }
 
 // C accessors for typval dict/list fields
@@ -334,16 +325,8 @@ ufunc_T *nvim_eval_partial_get_func(partial_T *pt)
   return pt->pt_func;
 }
 
-// Callback struct accessors for GC
-int nvim_eval_cb_get_type(const Callback *cb)
-{
-  return (int)cb->type;
-}
-
-partial_T *nvim_eval_cb_get_partial(const Callback *cb)
-{
-  return cb->data.partial;
-}
+// nvim_eval_cb_get_type: deleted -- Rust uses CallbackT directly (Phase 12).
+// nvim_eval_cb_get_partial: deleted -- Rust uses CallbackT directly (Phase 12).
 
 // CallbackReader accessors
 Callback *nvim_eval_cbr_get_cb(CallbackReader *reader)
@@ -1042,67 +1025,17 @@ bool garbage_collect(bool testing)
 // f_system: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
 // f_systemlist: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
 
-static int callback_depth = 0;
-
-/// C accessor for callback_depth static.
-int nvim_get_callback_depth(void)
-{
-  return callback_depth;
-}
-
-// =============================================================================
-// Accessors for rs_callback_call (Phase 4)
-// =============================================================================
-
-/// Get callback->data.funcref name string.
-char *nvim_cb_get_funcref_name(const Callback *cb)
-{
-  return cb->data.funcref;
-}
-
-/// Get callback->data.luaref.
-LuaRef nvim_cb_get_luaref(const Callback *cb)
-{
-  return cb->data.luaref;
-}
-
-/// Increment callback_depth.
-void nvim_callback_depth_inc(void)
-{
-  callback_depth++;
-}
-
-/// Decrement callback_depth.
-void nvim_callback_depth_dec(void)
-{
-  callback_depth--;
-}
-
-/// Check if callback_depth > p_mfd.
-bool nvim_callback_depth_exceeded(void)
-{
-  return callback_depth > p_mfd;
-}
-
-/// Check if name is a v:lua funcref and return the Lua function name portion.
-/// Returns NULL if not a v:lua funcref or if name is invalid.
-/// Caller must not free the returned pointer.
-const char *nvim_cb_check_vlua_funcref(const char *name)
-{
-  int len = (int)strlen(name);
-  if (len >= 6 && !memcmp(name, "v:lua.", 6)) {
-    const char *luaname = name + 6;
-    int lualen = rs_check_luafunc_name(luaname, false);
-    if (lualen == 0) {
-      return NULL;
-    }
-    return luaname;
-  }
-  return NULL;
-}
-
+// callback_depth: deleted -- moved to Rust CALLBACK_DEPTH atomic static (eval_exec/callback.rs, Phase 12).
+// nvim_get_callback_depth: deleted -- rs_get_callback_depth is now defined in Rust (Phase 12).
+// nvim_cb_get_funcref_name: deleted -- Rust uses CallbackT directly (Phase 12).
+// nvim_cb_get_luaref: deleted -- Rust uses CallbackT directly (Phase 12).
+// nvim_callback_depth_inc: deleted -- Rust uses CALLBACK_DEPTH directly (Phase 12).
+// nvim_callback_depth_dec: deleted -- Rust uses CALLBACK_DEPTH directly (Phase 12).
+// nvim_callback_depth_exceeded: deleted -- Rust uses CALLBACK_DEPTH + nvim_p_mfd_get (Phase 12).
+// nvim_cb_check_vlua_funcref: deleted -- logic inlined in Rust check_vlua_funcref (Phase 12).
 
 /// Handle the kCallbackLua case: call nlua_call_ref and return LUARET_TRUTHY.
+/// Retained in C because LUARET_TRUTHY is a C macro that cannot be called from Rust.
 bool nvim_callback_call_lua(LuaRef luaref)
 {
   Array args = ARRAY_DICT_INIT;
@@ -3224,17 +3157,8 @@ void nvim_timers_foreach(void (*cb)(timer_T *, void *), void *userdata)
 // nvim_tv_set_number is defined in eval/typval.c
 // nvim_tv_dict_alloc is defined in undo.c
 
-/// Wrapper for callback_free (accessor for Rust timer).
-void nvim_callback_free(Callback *cb)
-{
-  callback_free(cb);
-}
-
-/// Wrapper for callback_put (copies callback into a typval_T dictitem).
-void nvim_callback_put(Callback *cb, typval_T *tv)
-{
-  callback_put(cb, tv);
-}
+// nvim_callback_free: deleted -- now defined in Rust eval_exec/callback.rs (Phase 12).
+// nvim_callback_put: deleted -- now defined in Rust eval_exec/callback.rs (Phase 12).
 
 /// Alloc a dictitem_T with the given key.
 dictitem_T *nvim_tv_dict_item_alloc_key(const char *key)

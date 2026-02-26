@@ -10,12 +10,28 @@ use std::ffi::{c_char, c_int, c_void};
 
 /// Opaque pointer to dict_T.
 type DictHandle = *mut c_void;
-/// Opaque pointer to Callback.
-type CallbackHandle = *mut c_void;
 /// Opaque pointer to CallbackReader.
 type CallbackReaderHandle = *mut c_void;
 /// Opaque pointer to Channel.
 type ChannelHandle = *mut c_void;
+
+// CallbackT: Rust mirror of C Callback struct (16 bytes).
+// Layout validated by _Static_assert in eval_shim.c.
+#[repr(C)]
+pub union CallbackData {
+    pub funcref: *mut std::ffi::c_char,
+    pub partial: *mut c_void,
+    pub luaref: std::ffi::c_int,
+}
+
+#[repr(C)]
+pub struct CallbackT {
+    data: CallbackData,
+    cb_type: std::ffi::c_int,
+    // 4 bytes trailing padding
+}
+
+type CallbackHandle = *mut CallbackT;
 
 // =============================================================================
 // C Extern Declarations
@@ -39,11 +55,8 @@ extern "C" {
     fn nvim_cbr_set_self(reader: CallbackReaderHandle, dict: DictHandle);
     fn nvim_callback_reader_free(reader: CallbackReaderHandle);
 
-    // -- Callback type accessor --
-    fn nvim_eval_cb_get_type(cb: CallbackHandle) -> c_int;
-
-    // -- Callback free --
-    fn nvim_callback_free(cb: CallbackHandle);
+    // -- Callback free (now defined in Rust eval_exec/callback.rs, takes *mut c_void) --
+    fn nvim_callback_free(cb: *mut c_void);
 
     // -- Dict refcount --
     fn nvim_dict_refcount_inc(dict: DictHandle);
@@ -60,6 +73,7 @@ extern "C" {
 
 // kCallbackNone == 0 (verified by _Static_assert in eval_shim.c)
 const K_CALLBACK_NONE: c_int = 0;
+// Note: callback_depth check removed -- use direct CallbackT field access
 
 // =============================================================================
 // Phase 2: common_job_callbacks
@@ -93,10 +107,11 @@ pub unsafe extern "C" fn rs_common_job_callbacks(
         nvim_cbr_set_buffered(on_stdout, c_int::from(stdout_buffered));
         nvim_cbr_set_buffered(on_stderr, c_int::from(stderr_buffered));
 
-        if stdout_buffered && nvim_eval_cb_get_type(stdout_cb) == K_CALLBACK_NONE {
+        // Direct field access: replaces nvim_eval_cb_get_type
+        if stdout_buffered && (*stdout_cb).cb_type == K_CALLBACK_NONE {
             nvim_cbr_set_self(on_stdout, vopts);
         }
-        if stderr_buffered && nvim_eval_cb_get_type(stderr_cb) == K_CALLBACK_NONE {
+        if stderr_buffered && (*stderr_cb).cb_type == K_CALLBACK_NONE {
             nvim_cbr_set_self(on_stderr, vopts);
         }
 
@@ -106,7 +121,7 @@ pub unsafe extern "C" fn rs_common_job_callbacks(
 
     nvim_callback_reader_free(on_stdout);
     nvim_callback_reader_free(on_stderr);
-    nvim_callback_free(on_exit);
+    nvim_callback_free(on_exit.cast::<c_void>());
     false
 }
 

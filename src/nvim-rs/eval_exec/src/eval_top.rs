@@ -17,6 +17,7 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
+use crate::callback::CallbackT;
 use crate::eval::{EvalargHandle, ExargHandle, TypevalHandle};
 use crate::funcexe::FuncExeT;
 
@@ -1052,13 +1053,12 @@ extern "C" {
     fn nvim_set_cursor_lnum(lnum: i32); // linenr_T
     fn nvim_set_cursor_col(col: c_int);
     fn nvim_curbuf_set_prompt_start_lnum(lnum: i32);
-    fn nvim_eval_cb_get_type(cb: *const c_void) -> c_int;
-    fn nvim_curbuf_get_prompt_callback() -> *mut c_void; // Callback*
+    fn nvim_curbuf_get_prompt_callback() -> *mut CallbackT;
     fn nvim_curbuf_prompt_callback_call(user_input: *mut c_char) -> bool;
     fn nvim_curbuf_u_clearallandblockfree();
 
     // Phase 2: invoke_prompt_interrupt accessors
-    fn nvim_curbuf_get_prompt_interrupt() -> *mut c_void; // Callback*
+    fn nvim_curbuf_get_prompt_interrupt() -> *mut CallbackT;
     fn nvim_excmds_clear_got_int();
     fn nvim_curbuf_prompt_interrupt_call() -> c_int;
 }
@@ -1137,8 +1137,8 @@ pub unsafe extern "C" fn rs_prompt_invoke_callback() {
     nvim_curbuf_set_prompt_start_lnum(lnum + 1);
 
     let callback = nvim_curbuf_get_prompt_callback();
-    let cb_type = nvim_eval_cb_get_type(callback);
-    if cb_type == K_CALLBACK_NONE {
+    // Direct field access: replaces nvim_eval_cb_get_type
+    if (*callback).cb_type == K_CALLBACK_NONE {
         xfree(user_input as *mut c_void);
     } else {
         // user_input ownership transferred to callback (freed by tv_clear)
@@ -1160,8 +1160,8 @@ pub unsafe extern "C" fn rs_prompt_invoke_callback() {
 #[export_name = "invoke_prompt_interrupt"]
 pub unsafe extern "C" fn rs_invoke_prompt_interrupt() -> bool {
     let callback = nvim_curbuf_get_prompt_interrupt();
-    let cb_type = nvim_eval_cb_get_type(callback);
-    if cb_type == K_CALLBACK_NONE {
+    // Direct field access: replaces nvim_eval_cb_get_type
+    if (*callback).cb_type == K_CALLBACK_NONE {
         return false;
     }
 

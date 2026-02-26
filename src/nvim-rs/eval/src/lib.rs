@@ -228,18 +228,8 @@ pub unsafe extern "C" fn rs_check_luafunc_name(str: *const c_char, paren: bool) 
 // Eval State Accessors
 // =============================================================================
 
-extern "C" {
-    fn nvim_get_callback_depth() -> c_int;
-}
-
-/// Get the current callback nesting depth.
-///
-/// # Safety
-/// Calls C accessor function for callback_depth static.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_callback_depth() -> c_int {
-    nvim_get_callback_depth()
-}
+// rs_get_callback_depth: deleted from eval crate -- now defined in eval_exec/callback.rs (Phase 12).
+// The function is exported from eval_exec crate's CALLBACK_DEPTH atomic static.
 
 /// Variable flavour types for persistence (`ShaDa`) handling.
 ///

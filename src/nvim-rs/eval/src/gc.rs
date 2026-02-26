@@ -27,7 +27,6 @@ type DictHandle = *mut c_void;
 type ListHandle = *mut c_void;
 type PartialHandle = *mut c_void;
 type HtHandle = *mut c_void;
-type CallbackHandle = *mut c_void;
 type CallbackReaderHandle = *mut c_void;
 
 // C VarType enum values (verified by _Static_assert in eval.c)
@@ -38,6 +37,23 @@ const VAR_PARTIAL: c_int = 9;
 
 // C CallbackType enum values
 const K_CALLBACK_PARTIAL: c_int = 2;
+
+// CallbackT: Rust mirror of C Callback struct (16 bytes, layout validated by _Static_assert).
+#[repr(C)]
+pub union CallbackData {
+    pub funcref: *mut std::ffi::c_char,
+    pub partial: *mut c_void,
+    pub luaref: c_int,
+}
+
+#[repr(C)]
+pub struct CallbackT {
+    data: CallbackData,
+    cb_type: c_int,
+    // 4 bytes trailing padding
+}
+
+type CallbackHandle = *mut CallbackT;
 
 extern "C" {
     // typval field accessors (Phase 4 already defined some)
@@ -90,10 +106,6 @@ extern "C" {
         ht_stack: *mut *mut c_void,
         list_stack: *mut *mut c_void,
     );
-
-    // Callback accessors
-    fn nvim_eval_cb_get_type(cb: CallbackHandle) -> c_int;
-    fn nvim_eval_cb_get_partial(cb: CallbackHandle) -> PartialHandle;
 
     // Callback reader accessors
     fn nvim_eval_cbr_get_cb(reader: CallbackReaderHandle) -> CallbackHandle;
@@ -314,8 +326,9 @@ pub unsafe extern "C" fn rs_set_ref_in_callback(
     ht_stack: *mut *mut c_void,
     list_stack: *mut *mut c_void,
 ) -> bool {
-    if nvim_eval_cb_get_type(callback) == K_CALLBACK_PARTIAL {
-        let partial = nvim_eval_cb_get_partial(callback);
+    // Direct field access: replaces nvim_eval_cb_get_type / nvim_eval_cb_get_partial
+    if (*callback).cb_type == K_CALLBACK_PARTIAL {
+        let partial = (*callback).data.partial;
         return nvim_eval_set_ref_partial_tv(partial, copy_id, ht_stack, list_stack);
     }
     false
