@@ -12,9 +12,76 @@ extern "C" {
     fn nvim_syn_get_pattern_offset(pat_idx: c_int, off_idx: c_int) -> c_int;
     fn nvim_syn_get_pattern_off_flags(pat_idx: c_int) -> c_int;
     fn nvim_syn_get_buf_line_count() -> c_int;
-    fn nvim_syn_mb_adjust_col(lnum: c_int, col: c_int, off: c_int) -> c_int;
-    fn nvim_syn_mb_adjust_col_start(lnum: c_int, col: c_int, off: c_int) -> c_int;
     fn nvim_syn_get_line_len(lnum: c_int) -> c_int;
+
+    // Line access and multibyte helpers for mb_adjust_col
+    fn nvim_syn_ml_get(lnum: c_int) -> *mut i8;
+    fn nvim_syn_utfc_ptr2len(p: *mut i8) -> c_int;
+    fn nvim_syn_utf_head_off(base: *mut i8, p: *mut i8) -> c_int;
+}
+
+/// Advance or retreat a column position by `off` multibyte characters.
+/// Returns the new column (byte offset from start of line).
+/// Does not stop at NUL (for end offsets).
+///
+/// Replaces C `nvim_syn_mb_adjust_col`.
+///
+/// # Safety
+/// Calls C to get the line buffer; pointer arithmetic stays within bounds.
+unsafe fn mb_adjust_col(lnum: i32, col: i32, off: i32) -> i32 {
+    if off == 0 {
+        return col;
+    }
+    let base = nvim_syn_ml_get(lnum);
+    let mut p = base.offset(col as isize);
+    if off > 0 {
+        let mut remaining = off;
+        while remaining > 0 && *p != 0 {
+            let advance = nvim_syn_utfc_ptr2len(p);
+            p = p.offset(advance as isize);
+            remaining -= 1;
+        }
+    } else {
+        let mut remaining = off;
+        while remaining < 0 && p > base {
+            let retreat = nvim_syn_utf_head_off(base, p.offset(-1)) + 1;
+            p = p.offset(-(retreat as isize));
+            remaining += 1;
+        }
+    }
+    p.offset_from(base) as i32
+}
+
+/// Advance or retreat a column position by `off` multibyte characters.
+/// Returns the new column. Stops at NUL on advance (for start offsets).
+///
+/// Replaces C `nvim_syn_mb_adjust_col_start`.
+///
+/// # Safety
+/// Calls C to get the line buffer; pointer arithmetic stays within bounds.
+unsafe fn mb_adjust_col_start(lnum: i32, col: i32, off: i32) -> i32 {
+    if off == 0 {
+        return col;
+    }
+    let base = nvim_syn_ml_get(lnum);
+    let mut p = base.offset(col as isize);
+    if off > 0 {
+        let mut remaining = off;
+        // Note: the C original uses `off--` before the check, so 'off' steps
+        while remaining != 0 && *p != 0 {
+            let advance = nvim_syn_utfc_ptr2len(p);
+            p = p.offset(advance as isize);
+            remaining -= 1;
+        }
+    } else {
+        let mut remaining = off;
+        while remaining != 0 && p > base {
+            let retreat = nvim_syn_utf_head_off(base, p.offset(-1)) + 1;
+            p = p.offset(-(retreat as isize));
+            remaining += 1;
+        }
+    }
+    p.offset_from(base) as i32
 }
 
 /// A regex match result with start and end positions.
@@ -54,7 +121,7 @@ pub fn syn_add_end_off(regmatch: &RegMatch, pat_idx: i32, off_idx: i32, extra: i
     let adjusted_col = if lnum > line_count {
         0
     } else if off != 0 {
-        unsafe { nvim_syn_mb_adjust_col(lnum, col, off) }
+        unsafe { mb_adjust_col(lnum, col, off) }
     } else {
         col
     };
@@ -100,7 +167,7 @@ pub fn syn_add_start_off(regmatch: &RegMatch, pat_idx: i32, off_idx: i32, extra:
     }
 
     let adjusted_col = if off != 0 {
-        unsafe { nvim_syn_mb_adjust_col_start(lnum, col, off) }
+        unsafe { mb_adjust_col_start(lnum, col, off) }
     } else {
         col
     };

@@ -128,13 +128,11 @@ extern "C" {
     fn nvim_syn_get_pattern_next_list(idx: c_int) -> IdListHandle;
     fn nvim_syn_get_pattern_syn_match_id(idx: c_int) -> c_int;
 
-    // Pattern containment check
-    fn nvim_syn_check_pattern_containment(
-        pat_idx: c_int,
-        si_idx: c_int,
-        has_next_list: c_int,
-        has_cur_si: c_int,
-    ) -> c_int;
+    // Pattern sp_syn fields for containment check (Phase 2)
+    fn nvim_syn_get_pattern_syn_id(idx: c_int) -> c_int;
+    fn nvim_syn_get_pattern_inc_tag(idx: c_int) -> c_int;
+    fn nvim_syn_get_pattern_syn_cont_in_list(idx: c_int) -> IdListHandle;
+    // (nvim_syn_check_pattern_containment inlined in Rust as check_pattern_containment())
     // (nvim_syn_regexec_by_idx replaced by crate::regexec::syn_regexec_by_idx)
 
     // Synblock queries
@@ -165,6 +163,51 @@ extern "C" {
 
 // Use the Rust push_next_match from check_ends module
 use crate::check_ends::push_next_match;
+
+/// Check pattern containment for a pattern at pat_idx.
+///
+/// Replaces C `nvim_syn_check_pattern_containment`.
+/// Returns 1 if the pattern is contained in the correct context, 0 otherwise.
+///
+/// # Safety
+/// Accesses C global state.
+unsafe fn check_pattern_containment(
+    pat_idx: c_int,
+    si_idx: c_int,
+    has_next_list: bool,
+    has_cur_si: bool,
+) -> c_int {
+    use crate::containment::rs_syn_in_id_list;
+    use crate::types::{StateItemHandle, HL_CONTAINED};
+
+    let syn_id = nvim_syn_get_pattern_syn_id(pat_idx);
+    let inc_tag = nvim_syn_get_pattern_inc_tag(pat_idx);
+    let cont_in_list = nvim_syn_get_pattern_syn_cont_in_list(pat_idx);
+
+    if has_next_list {
+        let next_list = nvim_syn_get_current_next_list();
+        rs_syn_in_id_list(
+            StateItemHandle(std::ptr::null_mut()),
+            next_list,
+            syn_id,
+            inc_tag,
+            cont_in_list,
+            0,
+        )
+    } else if !has_cur_si {
+        let flags = nvim_syn_get_pattern_flags(pat_idx);
+        if flags & HL_CONTAINED != 0 {
+            0
+        } else {
+            1
+        }
+    } else {
+        let cur_si = nvim_syn_get_stateitem(si_idx);
+        let cont_list = nvim_stateitem_get_cont_list(cur_si);
+        let flags = nvim_syn_get_pattern_flags(pat_idx);
+        rs_syn_in_id_list(cur_si, cont_list, syn_id, inc_tag, cont_in_list, flags)
+    }
+}
 
 /// Compute the syntax highlight attribute for the current column.
 ///
@@ -356,12 +399,7 @@ pub unsafe fn syn_current_attr(
                             continue;
                         }
 
-                        if nvim_syn_check_pattern_containment(
-                            idx,
-                            si_idx,
-                            has_next_list as c_int,
-                            cur_si_valid as c_int,
-                        ) == 0
+                        if check_pattern_containment(idx, si_idx, has_next_list, cur_si_valid) == 0
                         {
                             continue;
                         }

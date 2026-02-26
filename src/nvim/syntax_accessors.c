@@ -1863,6 +1863,24 @@ int16_t *nvim_syn_get_pattern_cont_list(int idx)
   return SYN_ITEMS(syn_block)[idx].sp_cont_list;
 }
 
+/// Get the sp_syn.inc_tag by pattern index.
+int nvim_syn_get_pattern_inc_tag(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_syn.inc_tag;
+}
+
+/// Get the sp_syn.cont_in_list by pattern index.
+int16_t *nvim_syn_get_pattern_syn_cont_in_list(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return NULL;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_syn.cont_in_list;
+}
+
 /// Get pattern count in the current synblock.
 int nvim_syn_get_synblock_pattern_count(void)
 {
@@ -1876,49 +1894,6 @@ int nvim_syn_getcurline_len(void) { return (int)ml_get_buf_len(syn_buf, current_
 
 int nvim_syn_get_line_len(int lnum) { return (int)ml_get_buf_len(syn_buf, (linenr_T)lnum); }
 int nvim_syn_get_buf_line_count(void) { return (int)syn_buf->b_ml.ml_line_count; }
-
-/// Apply multibyte character offset to a column position.
-/// Given a line number and starting column, advance (off > 0) or retreat
-/// (off < 0) by `off` characters, respecting multibyte boundaries.
-/// Returns the new column.
-int nvim_syn_mb_adjust_col(int lnum, int col, int off)
-{
-  if (off == 0) {
-    return col;
-  }
-  char *base = ml_get_buf(syn_buf, (linenr_T)lnum);
-  char *p = base + col;
-  if (off > 0) {
-    while (off-- > 0 && *p != NUL) {
-      MB_PTR_ADV(p);
-    }
-  } else {
-    while (off++ < 0 && base < p) {
-      MB_PTR_BACK(base, p);
-    }
-  }
-  return (int)(p - base);
-}
-
-/// Same as nvim_syn_mb_adjust_col but don't go past NUL (for start offsets).
-int nvim_syn_mb_adjust_col_start(int lnum, int col, int off)
-{
-  if (off == 0) {
-    return col;
-  }
-  char *base = ml_get_buf(syn_buf, (linenr_T)lnum);
-  char *p = base + col;
-  if (off > 0) {
-    while (off-- && *p != NUL) {
-      MB_PTR_ADV(p);
-    }
-  } else {
-    while (off++ && base < p) {
-      MB_PTR_BACK(base, p);
-    }
-  }
-  return (int)(p - base);
-}
 
 /// Get/set re_extmatch_in for find_endpos.
 void nvim_syn_set_extmatch_in(reg_extmatch_T *em)
@@ -1971,20 +1946,6 @@ int nvim_syn_has_containedin(void) { return syn_block->b_syn_containedin; }
 /// mode: 0 = check current_next_list (cur_si ignored)
 ///       1 = check cur_si->si_cont_list
 ///       2 = check HL_CONTAINED flag
-int nvim_syn_check_pattern_containment(int pat_idx, int si_idx, int has_next_list, int has_cur_si)
-{
-  synpat_T *spp = &(SYN_ITEMS(syn_block)[pat_idx]);
-  if (has_next_list) {
-    return rs_syn_in_id_list(NULL, current_next_list, spp->sp_syn.id, spp->sp_syn.inc_tag,
-                             spp->sp_syn.cont_in_list, 0);
-  } else if (!has_cur_si) {
-    return !(spp->sp_flags & HL_CONTAINED);
-  } else {
-    stateitem_T *cur_si = &CUR_STATE(si_idx);
-    return rs_syn_in_id_list(cur_si, cur_si->si_cont_list, spp->sp_syn.id, spp->sp_syn.inc_tag,
-                             spp->sp_syn.cont_in_list, spp->sp_flags);
-  }
-}
 
 /// Check in_id_list with a specific sp_syn (for spell checking)
 int nvim_syn_in_id_list_spell(stateitem_T *sip, int16_t *list, int id)
@@ -2061,12 +2022,12 @@ int nvim_syn_get_pattern_sync_idx(int idx)
 
 char *nvim_syn_ml_get(linenr_T lnum) { return ml_get_buf(syn_buf, lnum); }
 
-/// Handle the entire C-comment sync setup path.
-/// This saves/restores curwin, curbuf, cursor and does the find_start_comment
-/// logic. Returns the adjusted start_lnum.
-linenr_T nvim_syn_ccomment_sync_setup(win_T *wp, linenr_T start_lnum)
+/// Thin C helper for C-comment sync: saves/restores curwin, curbuf, and cursor;
+/// does backslash-continuation skip; sets current_lnum; calls find_start_comment.
+/// Returns the adjusted start_lnum in *out_start_lnum.
+/// Returns 1 if find_start_comment found a comment, 0 otherwise.
+int nvim_syn_ccomment_find(win_T *wp, int start_lnum, int *out_start_lnum)
 {
-  // Save curwin/curbuf and set to syn_buf/wp
   win_T *curwin_save = curwin;
   curwin = wp;
   buf_T *curbuf_save = curbuf;
@@ -2079,34 +2040,20 @@ linenr_T nvim_syn_ccomment_sync_setup(win_T *wp, linenr_T start_lnum)
       break;
     }
   }
-  current_lnum = start_lnum;
+  current_lnum = (linenr_T)start_lnum;
 
-  // set cursor to start of search
   pos_T cursor_save = wp->w_cursor;
-  wp->w_cursor.lnum = start_lnum;
+  wp->w_cursor.lnum = (linenr_T)start_lnum;
   wp->w_cursor.col = 0;
 
-  // If the line is inside a comment, need to find the syntax item that
-  // defines the comment.
-  if (find_start_comment((int)syn_block->b_syn_sync_maxlines) != NULL) {
-    for (int idx = syn_block->b_syn_patterns.ga_len; --idx >= 0;) {
-      if (SYN_ITEMS(syn_block)[idx].sp_syn.id
-          == syn_block->b_syn_sync_id
-          && SYN_ITEMS(syn_block)[idx].sp_type == SPTYPE_START) {
-        validate_current_state();
-        nvim_syn_push_current_state(idx);
-        rs_update_si_attr(current_state.ga_len - 1);
-        break;
-      }
-    }
-  }
+  int found = (find_start_comment((int)syn_block->b_syn_sync_maxlines) != NULL) ? 1 : 0;
 
-  // restore cursor and buffer
   wp->w_cursor = cursor_save;
   curwin = curwin_save;
   curbuf = curbuf_save;
 
-  return start_lnum;
+  *out_start_lnum = start_lnum;
+  return found;
 }
 
 _Static_assert(HL_DISPLAY == 0x1000, "HL_DISPLAY");

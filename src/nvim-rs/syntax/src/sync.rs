@@ -12,6 +12,7 @@ use crate::current_attr::syn_finish_line;
 use crate::region::update_si_end;
 use crate::types::{
     StateItemHandle, SynBlockHandle, SynPatHandle, SynStateHandle, WinHandle, KEYWORD_IDX,
+    SPTYPE_START,
 };
 
 // =============================================================================
@@ -73,7 +74,20 @@ extern "C" {
     fn nvim_syn_load_current_state(from: SynStateHandle);
     fn nvim_syn_match_linecont(lnum: c_int) -> c_int;
     fn nvim_synstate_get_lnum(state: SynStateHandle) -> c_int;
-    fn nvim_syn_ccomment_sync_setup(wp: WinHandle, start_lnum: c_int) -> c_int;
+
+    // C-comment sync: thin helper that saves/restores curwin/curbuf/cursor,
+    // calls find_start_comment, and returns the adjusted start_lnum via out-param.
+    // Returns 1 if find_start_comment found a comment, 0 otherwise.
+    fn nvim_syn_ccomment_find(
+        wp: WinHandle,
+        start_lnum: c_int,
+        out_start_lnum: *mut c_int,
+    ) -> c_int;
+
+    // Pattern type/id accessors (for ccomment pattern search loop)
+    fn nvim_syn_get_pattern_ga_len() -> c_int;
+    fn nvim_syn_get_sptype_at(idx: c_int) -> c_int;
+    fn nvim_syn_get_pattern_syn_id(idx: c_int) -> c_int;
 
     // Stateitem accessors
     fn nvim_syn_get_top_stateitem() -> StateItemHandle;
@@ -258,11 +272,30 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
 
     // 1. Search backwards for the end of a C-style comment.
     if sync_fl & SF_CCOMMENT != 0 {
-        // The entire ccomment sync path is handled by C because it needs to
-        // manipulate curwin/curbuf/cursor globals. It returns the adjusted
-        // start_lnum.
-        let adjusted = nvim_syn_ccomment_sync_setup(wp, start_lnum);
-        nvim_syn_set_current_lnum(adjusted);
+        // The C helper saves/restores curwin/curbuf/cursor, skips backslash
+        // continuations, sets current_lnum, and calls find_start_comment.
+        // It returns 1 if we are inside a comment.
+        let mut adjusted_lnum = start_lnum;
+        let found = nvim_syn_ccomment_find(wp, start_lnum, &mut adjusted_lnum);
+        nvim_syn_set_current_lnum(adjusted_lnum);
+
+        if found != 0 {
+            // Inside a comment: find the syntax item that defines the comment.
+            let sync_id = nvim_syn_get_sync_id();
+            let ga_len = nvim_syn_get_pattern_ga_len();
+            let mut idx = ga_len - 1;
+            while idx >= 0 {
+                if nvim_syn_get_pattern_syn_id(idx) == sync_id
+                    && nvim_syn_get_sptype_at(idx) == SPTYPE_START
+                {
+                    nvim_syn_validate_current_state();
+                    crate::state_ops::rs_syn_push_current_state(idx);
+                    update_si_attr(nvim_syn_get_current_state_len() - 1);
+                    break;
+                }
+                idx -= 1;
+            }
+        }
     } else if sync_fl & SF_MATCH != 0 {
         // 2. Search backwards for given sync patterns.
         let break_lnum = if sync_maxlines != 0 && start_lnum > sync_maxlines {
