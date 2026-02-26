@@ -371,10 +371,6 @@ bool *nvim_regexp_get_can_f_submatch_ptr(void);
 #define REX_PTR ((regexec_T *)nvim_regexp_get_rex_ptr())
 #define RSM_PTR ((regsubmatch_T *)nvim_regexp_get_rsm_ptr())
 
-// --- Rex and error accessors for Rust FFI ---
-int nvim_regexp_get_rex_reg_ic(void) { return REX_PTR->reg_ic; }
-int nvim_regexp_get_rex_reg_icombine(void) { return REX_PTR->reg_icombine; }
-
 void nvim_regexp_set_rc_did_emsg(int v) { rc_did_emsg = (bool)v; }
 
 
@@ -421,54 +417,23 @@ static colnr_T reg_getline_len(linenr_T lnum)
 // true if using multi-line regexp.
 #define REG_MULTI       (REX_PTR->reg_match == NULL)
 
-// cleanup_subexpr / cleanup_zsubexpr accessors for Rust FFI
-int nvim_regexp_get_rex_need_clear_subexpr(void) { return REX_PTR->need_clear_subexpr; }
-void nvim_regexp_set_rex_need_clear_subexpr(int v) { REX_PTR->need_clear_subexpr = (bool)v; }
-int nvim_regexp_get_rex_need_clear_zsubexpr(void) { return REX_PTR->need_clear_zsubexpr; }
-void nvim_regexp_set_rex_need_clear_zsubexpr(int v) { REX_PTR->need_clear_zsubexpr = (bool)v; }
-int nvim_regexp_is_reg_multi(void) { return REG_MULTI; }
-// Subexpression position/pointer array accessors for Rust FFI
-lpos_T *nvim_regexp_get_rex_startpos_array(void) { return REX_PTR->reg_startpos; }
-lpos_T *nvim_regexp_get_rex_endpos_array(void) { return REX_PTR->reg_endpos; }
-uint8_t **nvim_regexp_get_rex_startp_array(void) { return (uint8_t **)REX_PTR->reg_startp; }
-uint8_t **nvim_regexp_get_rex_endp_array(void) { return (uint8_t **)REX_PTR->reg_endp; }
-
-void nvim_regexp_clear_rex_startpos(void) { memset(REX_PTR->reg_startpos, 0xff, sizeof(lpos_T) * NSUBEXP); }
-void nvim_regexp_clear_rex_endpos(void) { memset(REX_PTR->reg_endpos, 0xff, sizeof(lpos_T) * NSUBEXP); }
-void nvim_regexp_clear_rex_startp(void) { memset(REX_PTR->reg_startp, 0, sizeof(char *) * NSUBEXP); }
-void nvim_regexp_clear_rex_endp(void) { memset(REX_PTR->reg_endp, 0, sizeof(char *) * NSUBEXP); }
 // reg_prev_class accessors for Rust FFI
-uint8_t *nvim_regexp_get_rex_input(void) { return REX_PTR->input; }
-uint8_t *nvim_regexp_get_rex_line(void) { return REX_PTR->line; }
 int64_t *nvim_regexp_get_rex_reg_buf_chartab(void) { return REX_PTR->reg_buf->b_chartab; }
 
 // reg_nextline accessors for Rust FFI
-int32_t nvim_regexp_get_rex_lnum(void) { return (int32_t)REX_PTR->lnum; }
-void nvim_regexp_set_rex_lnum(int32_t v) { REX_PTR->lnum = (linenr_T)v; }
-void nvim_regexp_set_rex_line_and_input(uint8_t *line) { REX_PTR->line = line; REX_PTR->input = line; }
 char *nvim_regexp_call_reg_getline(int32_t lnum) { return reg_getline((linenr_T)lnum); }
 
-void nvim_regexp_set_rex_line(uint8_t *line) { REX_PTR->line = line; }
-void nvim_regexp_set_rex_input(uint8_t *input) { REX_PTR->input = input; }
 int nvim_regexp_get_got_int(void) { return got_int; }
-int nvim_regexp_get_rex_line_strlen(void) { return (int)strlen((char *)REX_PTR->line); }
 int32_t nvim_regexp_call_reg_getline_len(int32_t lnum) { return (int32_t)reg_getline_len((linenr_T)lnum); }
 
 // regrepeat accessors for Rust FFI
-int nvim_regexp_get_rex_reg_line_lbr(void) { return REX_PTR->reg_line_lbr; }
 int nvim_regexp_call_vim_iswordp_buf(const char *p) { return vim_iswordp_buf(p, REX_PTR->reg_buf); }
 
 void nvim_regexp_unref_re_extmatch_out(void) { unref_extmatch(re_extmatch_out); }
 void nvim_regexp_set_re_extmatch_out(void *em) { re_extmatch_out = (reg_extmatch_T *)em; }
 void *nvim_regexp_get_re_extmatch_out(void) { return (void *)re_extmatch_out; }
 void nvim_regexp_set_re_extmatch_out_match(int i, uint8_t *v) { re_extmatch_out->matches[i] = v; }
-// reg_breakcheck / reg_iswordc accessors for Rust FFI
-int nvim_regexp_get_rex_reg_nobreak(void) { return REX_PTR->reg_nobreak; }
-void *nvim_regexp_get_rex_reg_buf(void) { return (void *)REX_PTR->reg_buf; }
-
 // reg_submatch accessors for Rust FFI
-int nvim_regexp_get_can_f_submatch(void) { return (*nvim_regexp_get_can_f_submatch_ptr()) ? 1 : 0; }
-int nvim_regexp_is_rsm_sm_match_null(void) { return RSM_PTR->sm_match == NULL ? 1 : 0; }
 const char *nvim_regexp_get_rsm_sm_match_startp(int i) { return RSM_PTR->sm_match->startp[i]; }
 const char *nvim_regexp_get_rsm_sm_match_endp(int i) { return RSM_PTR->sm_match->endp[i]; }
 int32_t nvim_regexp_get_rsm_sm_mmatch_startpos_lnum(int i) { return (int32_t)RSM_PTR->sm_mmatch->startpos[i].lnum; }
@@ -565,10 +530,6 @@ int nvim_regexp_call_prog_magic_wrong(void) { return prog_magic_wrong(); }
 // nvim_regexp_setup_vim_regsub and nvim_regexp_setup_vim_regsub_multi inlined into Rust
 
 // reg_getline_common accessors for Rust FFI
-int32_t nvim_regexp_get_rex_reg_firstlnum(void) { return (int32_t)REX_PTR->reg_firstlnum; }
-int32_t nvim_regexp_get_rex_reg_maxline(void) { return (int32_t)REX_PTR->reg_maxline; }
-int32_t nvim_regexp_get_rsm_firstlnum(void) { return (int32_t)RSM_PTR->sm_firstlnum; }
-int32_t nvim_regexp_get_rsm_maxline(void) { return (int32_t)RSM_PTR->sm_maxline; }
 char *nvim_regexp_call_ml_get_buf(int32_t lnum) { return ml_get_buf(REX_PTR->reg_buf, (linenr_T)lnum); }
 int32_t nvim_regexp_call_ml_get_buf_len(int32_t lnum) { return (int32_t)ml_get_buf_len(REX_PTR->reg_buf, (linenr_T)lnum); }
 
@@ -775,7 +736,7 @@ int nvim_regexp_eval_regsub_expr(char *source, void *expr_ptr, int flags, int ne
 
 // reg_do_extmatch is a global (globals.h), not a C static -- accessor kept for Rust FFI
 int nvim_regexp_get_reg_do_extmatch(void) { return reg_do_extmatch; }
-// reg_prev_sub is a C static (kept here until it is moved to Rust in a later phase)
+// reg_prev_sub is a C static (will be moved to Rust in Phase 3)
 char *nvim_regexp_get_reg_prev_sub_ptr(void) { return reg_prev_sub; }
 int32_t nvim_regexp_get_curwin_lnum(void) { return (int32_t)curwin->w_cursor.lnum; }
 int32_t nvim_regexp_get_curwin_col(void) { return (int32_t)curwin->w_cursor.col; }
@@ -847,8 +808,6 @@ int nvim_regexp_call_mb_get_class_tab(uint8_t *p) {
 extern void *rs_nfa_regcomp(uint8_t *expr, int re_flags);
 
 
-int nvim_regexp_get_rex_nfa_has_zend(void) { return REX_PTR->nfa_has_zend; }
-int nvim_regexp_get_rex_nfa_has_backref(void) { return REX_PTR->nfa_has_backref; }
 char *nvim_regexp_xstrdup(const char *s) { return xstrdup(s); }
 
 
@@ -860,20 +819,11 @@ char *nvim_regexp_xstrdup(const char *s) { return xstrdup(s); }
 
 int nvim_regexp_get_nfa_has_zsubexpr(void) { return REX_PTR->nfa_has_zsubexpr; }
 
-void nvim_regexp_set_rex_nfa_has_zend(int v) { REX_PTR->nfa_has_zend = v; }
-void nvim_regexp_set_rex_nfa_has_backref(int v) { REX_PTR->nfa_has_backref = v; }
-
 // NFA prog allocation: allocates the prog and updates Rust-owned STATE_PTR via nvim_regexp_set_state_ptr
 extern void nvim_regexp_set_state_ptr(void *v);  // exported by Rust, sets STATE_PTR static
 /////////////////////////////////////////////////////////////////
 // NFA execution code.
 /////////////////////////////////////////////////////////////////
-
-// rex execution field accessors for nfa_regmatch
-int nvim_regexp_get_rex_nfa_listid(void) { return REX_PTR->nfa_listid; }
-void nvim_regexp_set_rex_nfa_listid(int v) { REX_PTR->nfa_listid = v; }
-int32_t nvim_regexp_get_rex_reg_maxcol(void) { return (int32_t)REX_PTR->reg_maxcol; }
-int nvim_regexp_get_rex_nfa_nsubexpr(void) { return REX_PTR->nfa_nsubexpr; }
 
 // win_T and buffer accessors for VCOL/MARK cases
 void *nvim_regexp_get_curwin(void) { return (void *)curwin; }
@@ -895,10 +845,6 @@ int32_t nvim_regexp_fmark_get_col_adj(void *fm, int32_t lnum_match)
 }
 
 void nvim_regexp_xfree(void *p) { xfree(p); }
-
-// nfa_alt_listid accessors (for recursive_regmatch in Rust)
-int nvim_regexp_get_rex_nfa_alt_listid(void) { return REX_PTR->nfa_alt_listid; }
-void nvim_regexp_set_rex_nfa_alt_listid(int v) { REX_PTR->nfa_alt_listid = v; }
 
 // nvim_regexp_nfa_regtry_setup/extract_multi/extract_single/extract_extmatch inlined into Rust
 // nvim_regexp_nfa_regexec_both_* and nvim_regexp_nfa_regexec_nl_setup inlined into Rust
