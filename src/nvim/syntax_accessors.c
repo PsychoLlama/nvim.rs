@@ -97,6 +97,12 @@ extern void rs_syn_clear_keyword(int id, hashtab_T *ht);
 extern void rs_clear_keywtab(hashtab_T *ht);
 extern void rs_invalidate_current_state(void);
 
+// Phase 9: state_entry.rs Rust implementations
+extern void rs_syn_stack_remove_entry(synstate_T *sp);
+extern synstate_T *rs_syn_stack_alloc_entry(int lnum, synstate_T *after);
+extern void rs_syn_store_state_to_entry(synstate_T *sp);
+extern void rs_syn_do_stack_realloc(int len);
+
 static bool did_syntax_onoff = false;
 
 // different types of offsets that are possible
@@ -1035,102 +1041,12 @@ int nvim_syn_state_item_spans_line(int idx, int lnum)
 
 synstate_T *nvim_syn_stack_find_entry(int lnum) { return syn_stack_find_entry((linenr_T)lnum); }
 
-/// Remove a state entry from the used list and move to free list
-void nvim_syn_stack_remove_entry(synstate_T *sp)
-{
-  if (sp == NULL || syn_block == NULL) {
-    return;
-  }
-  synstate_T *p;
-  if (syn_block->b_sst_first == sp) {
-    syn_block->b_sst_first = sp->sst_next;
-  } else {
-    for (p = syn_block->b_sst_first; p != NULL; p = p->sst_next) {
-      if (p->sst_next == sp) {
-        break;
-      }
-    }
-    if (p != NULL) {
-      p->sst_next = sp->sst_next;
-    }
-  }
-  syn_stack_free_entry(syn_block, sp);
-}
-
-/// Allocate a new state entry for the given line
-/// Returns NULL if no free entries or after insert position
+void nvim_syn_stack_remove_entry(synstate_T *sp) { rs_syn_stack_remove_entry(sp); }
 synstate_T *nvim_syn_stack_alloc_entry(int lnum, synstate_T *after)
 {
-  if (syn_block == NULL) {
-    return NULL;
-  }
-
-  // If no free items, cleanup the array first
-  if (syn_block->b_sst_freecount == 0) {
-    syn_stack_cleanup();
-  }
-
-  // Still no free items?
-  if (syn_block->b_sst_freecount == 0) {
-    return NULL;
-  }
-
-  // Take the first item from the free list
-  synstate_T *p = syn_block->b_sst_firstfree;
-  syn_block->b_sst_firstfree = p->sst_next;
-  syn_block->b_sst_freecount--;
-
-  if (after == NULL) {
-    // Insert in front of the list
-    p->sst_next = syn_block->b_sst_first;
-    syn_block->b_sst_first = p;
-  } else {
-    // Insert in list after *after
-    p->sst_next = after->sst_next;
-    after->sst_next = p;
-  }
-
-  p->sst_stacksize = 0;
-  p->sst_lnum = (linenr_T)lnum;
-  return p;
+  return rs_syn_stack_alloc_entry(lnum, after);
 }
-
-/// Store the current state into a synstate entry
-/// This copies current_state items to the synstate's bufstate array
-void nvim_syn_store_state_to_entry(synstate_T *sp)
-{
-  if (sp == NULL) {
-    return;
-  }
-
-  // Clear any existing state
-  clear_syn_state(sp);
-  sp->sst_stacksize = current_state.ga_len;
-
-  bufstate_T *bp;
-  if (current_state.ga_len > SST_FIX_STATES) {
-    // Need to use growarray for long stacks
-    ga_init(&sp->sst_union.sst_ga, (int)sizeof(bufstate_T), 1);
-    ga_grow(&sp->sst_union.sst_ga, current_state.ga_len);
-    sp->sst_union.sst_ga.ga_len = current_state.ga_len;
-    bp = SYN_STATE_P(&(sp->sst_union.sst_ga));
-  } else {
-    bp = sp->sst_union.sst_stack;
-  }
-
-  for (int i = 0; i < sp->sst_stacksize; i++) {
-    bp[i].bs_idx = CUR_STATE(i).si_idx;
-    bp[i].bs_flags = CUR_STATE(i).si_flags;
-    bp[i].bs_seqnr = CUR_STATE(i).si_seqnr;
-    bp[i].bs_cchar = CUR_STATE(i).si_cchar;
-    bp[i].bs_extmatch = ref_extmatch(CUR_STATE(i).si_extmatch);
-  }
-
-  sp->sst_next_flags = current_next_flags;
-  sp->sst_next_list = current_next_list;
-  sp->sst_tick = display_tick;
-  sp->sst_change_lnum = 0;
-}
+void nvim_syn_store_state_to_entry(synstate_T *sp) { rs_syn_store_state_to_entry(sp); }
 
 void nvim_syn_set_state_stored(int stored) { current_state_stored = stored ? true : false; }
 
@@ -3633,44 +3549,7 @@ void nvim_syn_apply_changes_for_windows(buf_T *buf)
   }
 }
 
-/// Do the actual array reallocation for syn_stack_alloc.
-/// Called from Rust after it has computed the desired new_len.
-/// Handles copying existing entries and rebuilding the free list.
-void nvim_syn_do_stack_realloc(int len)
-{
-  assert(len >= 0);
-  synstate_T *sstp = xcalloc((size_t)len, sizeof(synstate_T));
-
-  synstate_T *to = sstp - 1;
-  if (syn_block->b_sst_array != NULL) {
-    // Move the states from the old array to the new one.
-    for (synstate_T *from = syn_block->b_sst_first; from != NULL;
-         from = from->sst_next) {
-      to++;
-      *to = *from;
-      to->sst_next = to + 1;
-    }
-  }
-  if (to != sstp - 1) {
-    to->sst_next = NULL;
-    syn_block->b_sst_first = sstp;
-    syn_block->b_sst_freecount = len - (int)(to - sstp) - 1;
-  } else {
-    syn_block->b_sst_first = NULL;
-    syn_block->b_sst_freecount = len;
-  }
-
-  // Create the list of free entries.
-  syn_block->b_sst_firstfree = to + 1;
-  while (++to < sstp + len) {
-    to->sst_next = to + 1;
-  }
-  (sstp + len - 1)->sst_next = NULL;
-
-  xfree(syn_block->b_sst_array);
-  syn_block->b_sst_array = sstp;
-  syn_block->b_sst_len = len;
-}
+void nvim_syn_do_stack_realloc(int len) { rs_syn_do_stack_realloc(len); }
 
 // =============================================================================
 // Phase 8: Line initialization accessors (for Rust migration)
@@ -3858,3 +3737,51 @@ int nvim_syn_get_keepend_level_val(void) { return keepend_level; }
 
 /// Get current_state.ga_len.
 int nvim_syn_get_current_state_len_val(void) { return current_state.ga_len; }
+
+// =============================================================================
+// Phase 9: New C accessors for state_entry.rs migration
+// =============================================================================
+
+/// Set sst_next_flags on a synstate entry.
+void nvim_synstate_set_sst_next_flags(synstate_T *state, int flags)
+{
+  if (state) state->sst_next_flags = (int16_t)flags;
+}
+
+/// Set sst_next_list on a synstate entry.
+void nvim_synstate_set_sst_next_list(synstate_T *state, int16_t *list)
+{
+  if (state) state->sst_next_list = list;
+}
+
+/// Initialize and fill the sst_union bufstate array from current_state.
+/// Handles both fixed-array (stack <= SST_FIX_STATES) and growarray paths.
+/// Must be called after nvim_syn_do_clear_syn_state and nvim_synstate_set_stacksize.
+void nvim_syn_store_bufstates(synstate_T *sp)
+{
+  if (sp == NULL) {
+    return;
+  }
+  bufstate_T *bp;
+  if (sp->sst_stacksize > SST_FIX_STATES) {
+    ga_init(&sp->sst_union.sst_ga, (int)sizeof(bufstate_T), 1);
+    ga_grow(&sp->sst_union.sst_ga, sp->sst_stacksize);
+    sp->sst_union.sst_ga.ga_len = sp->sst_stacksize;
+    bp = SYN_STATE_P(&(sp->sst_union.sst_ga));
+  } else {
+    bp = sp->sst_union.sst_stack;
+  }
+  for (int i = 0; i < sp->sst_stacksize; i++) {
+    bp[i].bs_idx = CUR_STATE(i).si_idx;
+    bp[i].bs_flags = CUR_STATE(i).si_flags;
+    bp[i].bs_seqnr = CUR_STATE(i).si_seqnr;
+    bp[i].bs_cchar = CUR_STATE(i).si_cchar;
+    bp[i].bs_extmatch = ref_extmatch(CUR_STATE(i).si_extmatch);
+  }
+}
+
+/// Set sst_tick to current display_tick on a synstate entry.
+void nvim_synstate_set_tick_to_display(synstate_T *state)
+{
+  if (state) state->sst_tick = display_tick;
+}

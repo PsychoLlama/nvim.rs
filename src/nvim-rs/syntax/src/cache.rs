@@ -20,9 +20,6 @@ use crate::types::{
 extern "C" {
     // State stack management
     fn nvim_syn_stack_find_entry(lnum: c_int) -> SynStateHandle;
-    fn nvim_syn_stack_remove_entry(sp: SynStateHandle);
-    fn nvim_syn_stack_alloc_entry(lnum: c_int, after: SynStateHandle) -> SynStateHandle;
-    fn nvim_syn_store_state_to_entry(sp: SynStateHandle);
     fn nvim_syn_stack_alloc();
     fn nvim_syn_stack_find_entry_ptr(lnum: c_int) -> SynStateHandle;
 
@@ -125,9 +122,6 @@ extern "C" {
     // Array allocation/free
     fn nvim_syn_xcalloc_synstate_array(len: c_int) -> SynStateHandle;
     fn nvim_syn_free_sst_array(ptr: SynStateHandle);
-
-    // Stack realloc helper (keeps pointer arithmetic in C)
-    fn nvim_syn_do_stack_realloc(len: c_int);
 
     // Global syn_block handle
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
@@ -364,8 +358,8 @@ pub unsafe extern "C" fn rs_syn_stack_alloc() {
             }
         }
 
-        // Delegate actual array allocation/copying to C (pointer arithmetic is C territory).
-        nvim_syn_do_stack_realloc(new_len);
+        // Delegate actual array allocation/copying to the Rust implementation.
+        crate::state_entry::rs_syn_do_stack_realloc(new_len);
     }
 }
 
@@ -470,7 +464,7 @@ pub fn stack_find_entry_ptr(lnum: i32) -> SynStateHandle {
 /// Remove a synstate entry from the cache.
 pub fn stack_remove_entry(sp: SynStateHandle) {
     if !sp.is_null() {
-        unsafe { nvim_syn_stack_remove_entry(sp) }
+        unsafe { crate::state_entry::rs_syn_stack_remove_entry(sp) }
     }
 }
 
@@ -478,13 +472,13 @@ pub fn stack_remove_entry(sp: SynStateHandle) {
 /// The entry is inserted after the given state (or at the beginning if null).
 #[must_use]
 pub fn stack_alloc_entry(lnum: i32, after: SynStateHandle) -> SynStateHandle {
-    unsafe { nvim_syn_stack_alloc_entry(lnum, after) }
+    unsafe { crate::state_entry::rs_syn_stack_alloc_entry(lnum, after) }
 }
 
 /// Store the current state to a synstate entry.
 pub fn store_state_to_entry(sp: SynStateHandle) {
     if !sp.is_null() {
-        unsafe { nvim_syn_store_state_to_entry(sp) }
+        unsafe { crate::state_entry::rs_syn_store_state_to_entry(sp) }
     }
 }
 
@@ -525,7 +519,7 @@ pub unsafe fn store_current_state() -> SynStateHandle {
         // Current state spans lines, can't store it
         // If there was an existing entry at this line, remove it
         if !sp.is_null() {
-            nvim_syn_stack_remove_entry(sp);
+            crate::state_entry::rs_syn_stack_remove_entry(sp);
         }
         nvim_syn_set_state_stored(1);
         return SynStateHandle::null();
@@ -534,7 +528,7 @@ pub unsafe fn store_current_state() -> SynStateHandle {
     // Determine if we need to allocate a new entry
     let entry = if sp.is_null() || nvim_synstate_get_lnum(sp) != lnum {
         // Need to allocate a new entry
-        nvim_syn_stack_alloc_entry(lnum, sp)
+        crate::state_entry::rs_syn_stack_alloc_entry(lnum, sp)
     } else {
         // Reuse existing entry
         sp
@@ -542,7 +536,7 @@ pub unsafe fn store_current_state() -> SynStateHandle {
 
     if !entry.is_null() {
         // Store current state to the entry
-        nvim_syn_store_state_to_entry(entry);
+        crate::state_entry::rs_syn_store_state_to_entry(entry);
     }
 
     nvim_syn_set_state_stored(1);

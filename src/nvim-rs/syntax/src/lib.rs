@@ -52,6 +52,7 @@ pub mod pattern_parse;
 pub mod pattern_store;
 pub mod region;
 pub mod state;
+pub mod state_entry;
 pub mod sync;
 pub mod syntime;
 pub mod types;
@@ -521,15 +522,6 @@ extern "C" {
 
     /// Find a state entry in the synblock at or before given line
     fn nvim_syn_stack_find_entry(lnum: c_int) -> SynStateHandle;
-
-    /// Remove a state entry from the used list and move to free list
-    fn nvim_syn_stack_remove_entry(sp: SynStateHandle);
-
-    /// Allocate a new state entry for the given line
-    fn nvim_syn_stack_alloc_entry(lnum: c_int, after: SynStateHandle) -> SynStateHandle;
-
-    /// Store the current state into a synstate entry
-    fn nvim_syn_store_state_to_entry(sp: SynStateHandle);
 
     /// Mark current state as stored
     fn nvim_syn_set_state_stored(stored: c_int);
@@ -2321,7 +2313,7 @@ pub unsafe extern "C" fn rs_store_current_state() -> SynStateHandle {
         // Current state spans lines, can't store it
         // If there was an existing entry at this line, remove it
         if !sp.is_null() {
-            nvim_syn_stack_remove_entry(sp);
+            crate::state_entry::rs_syn_stack_remove_entry(sp);
         }
         nvim_syn_set_state_stored(1);
         return SynStateHandle::null();
@@ -2330,7 +2322,7 @@ pub unsafe extern "C" fn rs_store_current_state() -> SynStateHandle {
     // Determine if we need to allocate a new entry
     let entry = if sp.is_null() || nvim_synstate_get_lnum(sp) != lnum {
         // Need to allocate a new entry
-        nvim_syn_stack_alloc_entry(lnum, sp)
+        crate::state_entry::rs_syn_stack_alloc_entry(lnum, sp)
     } else {
         // Reuse existing entry
         sp
@@ -2338,7 +2330,7 @@ pub unsafe extern "C" fn rs_store_current_state() -> SynStateHandle {
 
     if !entry.is_null() {
         // Store current state to the entry
-        nvim_syn_store_state_to_entry(entry);
+        crate::state_entry::rs_syn_store_state_to_entry(entry);
     }
 
     nvim_syn_set_state_stored(1);
