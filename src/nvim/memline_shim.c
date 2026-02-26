@@ -300,6 +300,8 @@ extern int rs_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len
 extern void *rs_ml_find_line(buf_T *buf, linenr_T lnum, int action);
 // Pass 5 Phase 2: ml_flush_line Rust function declaration
 extern void rs_ml_flush_line(buf_T *buf, int noalloc);
+// Pass 7 Phase 2: ml_append_int Rust function declaration
+extern int rs_ml_append_int(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -1702,6 +1704,9 @@ void nvim_iemsg_pointer_block_id_wrong_three(void) { iemsg(_(e_pointer_block_id_
 /// iemsg for "E318: Updated too many blocks?"
 void nvim_iemsg_e318_updated_too_many(void) { iemsg(_("E318: Updated too many blocks?")); }
 
+/// Increment pp->pb_count and return new value.
+uint16_t nvim_pp_inc_count(void *pp) { return ++(((PointerBlock *)pp)->pb_count); }
+
 // Pass 6 Phase 2: ml_updatechunk accessors for Rust FFI
 
 /// Set buf->b_ml.ml_chunksize[idx].mlcs_numlines
@@ -1930,15 +1935,14 @@ int64_t nvim_get_file_mtime(const char *fname)
   return 0;
 }
 
-/// @param lnum  append after this line (can be 0)
-/// @param line_arg  text of the new line
-/// @param len_arg  length of line, including NUL, or 0
-/// @param flags  ML_APPEND_ flags
-///
-/// @return  FAIL for failure, OK otherwise
+/// Thin wrapper: ml_append_int migrated to Rust (rs_ml_append_int).
 static int ml_append_int(buf_T *buf, linenr_T lnum, char *line_arg, colnr_T len_arg, int flags)
   FUNC_ATTR_NONNULL_ARG(1)
 {
+  return rs_ml_append_int(buf, lnum, line_arg, len_arg, flags);
+}
+
+#if 0  // Old C implementation (deleted -- migrated to rs_ml_append_int in Rust)
   char *line = line_arg;
   colnr_T len = len_arg;
 
@@ -2344,13 +2348,7 @@ static int ml_append_int(buf_T *buf, linenr_T lnum, char *line_arg, colnr_T len_
 theend:
   return ret;
 }
-
-/// Public wrapper around static ml_append_int, used by rs_ml_append_flush.
-int nvim_ml_append_int(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return ml_append_int(buf, lnum, line, len, flags);
-}
+#endif  // End of deleted C ml_append_int implementation
 
 /// Flush any pending change and call ml_append_int()
 ///

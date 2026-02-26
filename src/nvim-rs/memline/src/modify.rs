@@ -24,9 +24,10 @@ use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::types::{
     BlockNr, BufHandle, ColNr, DataBlockHeader, InfoPtrHandle, LineNr, PointerBlockHeader,
-    DATA_BLOCK_HEADER_SIZE, DB_INDEX_MASK, DB_MARKED, INDEX_SIZE, ML_ALLOCATED, ML_APPEND_MARK,
-    ML_APPEND_NEW, ML_CHNK_DELLINE, ML_CHNK_UPDLINE, ML_DEL_MESSAGE, ML_EMPTY, ML_FIND,
-    ML_LINE_DIRTY, ML_LOCKED_DIRTY, ML_LOCKED_POS, PTR_ID, STACK_INCR,
+    PointerEntry, DATA_BLOCK_HEADER_SIZE, DB_INDEX_MASK, DB_MARKED, INDEX_SIZE, ML_ALLOCATED,
+    ML_APPEND_MARK, ML_APPEND_NEW, ML_CHNK_ADDLINE, ML_CHNK_DELLINE, ML_CHNK_UPDLINE,
+    ML_DEL_MESSAGE, ML_EMPTY, ML_FIND, ML_FLUSH, ML_INSERT, ML_LINE_DIRTY, ML_LOCKED_DIRTY,
+    ML_LOCKED_POS, PTR_ID, STACK_INCR,
 };
 
 // =============================================================================
@@ -251,6 +252,9 @@ extern "C" {
     /// Add count to ip->ip_high
     fn nvim_ip_add_high(ip: *mut InfoPtrHandle, count: c_int);
 
+    /// Set ip->ip_index
+    fn nvim_ip_set_index(ip: *mut InfoPtrHandle, idx: c_int);
+
     /// Set buf->b_ml.ml_locked
     fn nvim_buf_set_ml_locked(buf: *mut BufHandle, hp: *mut std::ffi::c_void);
 
@@ -265,7 +269,6 @@ extern "C" {
 // Pass 7 Phase 1: ml_append_int C accessor declarations
 // =============================================================================
 
-#[allow(dead_code)]
 extern "C" {
     /// Get hp->bh_bnum as int64_t
     fn nvim_bhdr_get_bh_bnum(hp: *mut c_void) -> i64;
@@ -284,6 +287,12 @@ extern "C" {
 
     /// Increment buf->b_ml.ml_line_count and return new value
     fn nvim_buf_inc_ml_line_count(buf: *mut BufHandle) -> LineNr;
+
+    /// Set buf->b_ml.ml_locked_high
+    fn nvim_buf_set_ml_locked_high(buf: *mut BufHandle, val: LineNr);
+
+    /// Increment pp->pb_count
+    fn nvim_pp_inc_count(pp: *mut c_void);
 }
 
 // =============================================================================
@@ -377,15 +386,6 @@ extern "C" {
 
     /// Public wrapper around static ml_append_flush
     fn nvim_ml_append_flush(
-        buf: *mut BufHandle,
-        lnum: LineNr,
-        line: *mut c_char,
-        len: ColNr,
-        flags: c_int,
-    ) -> c_int;
-
-    /// Public wrapper around static ml_append_int
-    fn nvim_ml_append_int(
         buf: *mut BufHandle,
         lnum: LineNr,
         line: *mut c_char,
@@ -829,8 +829,553 @@ pub unsafe extern "C" fn rs_ml_replace_buf_impl(
     rs_ml_replace_buf_len(buf, lnum, line, len, copy, noalloc)
 }
 
+/// Get a mutable pointer to the PointerEntry array inside a pointer block.
+///
+/// The pb_pointer array immediately follows the `PointerBlockHeader` in memory,
+/// matching the C flexible array member `pb_pointer[]`.
+///
+/// # Safety
+/// - `pp` must be a valid pointer to a `PointerBlock` (PointerBlockHeader + pb_pointer[])
+#[inline]
+unsafe fn pb_pointer_ptr(pp: *mut c_void) -> *mut PointerEntry {
+    #[allow(clippy::cast_ptr_alignment)]
+    pp.cast::<u8>()
+        .add(std::mem::size_of::<PointerBlockHeader>())
+        .cast::<PointerEntry>()
+}
+
+// =============================================================================
+// Pass 7 Phase 2: rs_ml_append_int -- core B-tree line insertion
+// =============================================================================
+
+/// Insert a line after `lnum` into buffer `buf`.
+///
+/// This is the Rust port of the C `ml_append_int` function. It handles:
+/// - Simple case: Line fits in the existing data block. Shift text and indexes,
+///   copy the line in.
+/// - Block split: Data block is full. Allocate a new data block, decide left/right
+///   placement, move lines between blocks.
+/// - Pointer block update: Walk up the stack inserting the new pointer entry.
+///   If a pointer block is full, split it. If block 1 is full, add a new tree
+///   level.
+///
+/// # Arguments
+/// * `buf` - Buffer to modify (must be non-null)
+/// * `lnum` - Insert after this line number (0 = insert before line 1)
+/// * `line_arg` - Text of the new line (NUL-terminated)
+/// * `len_arg` - Length including NUL, or 0 to auto-calculate via strlen
+/// * `flags` - `ML_APPEND_NEW` and/or `ML_APPEND_MARK`
+///
+/// # Returns
+/// OK (1) on success, FAIL (0) on failure.
+///
+/// # Safety
+/// - `buf` must be a valid, non-null buffer pointer with an initialized memline.
+/// - `line_arg` must point to a valid NUL-terminated string (or have length len_arg).
+/// - Must only be called from the main Neovim thread.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn rs_ml_append_int(
+    buf: *mut BufHandle,
+    lnum: LineNr,
+    line_arg: *mut c_char,
+    len_arg: ColNr,
+    flags: c_int,
+) -> c_int {
+    let line = line_arg;
+    let len: ColNr = if len_arg == 0 {
+        strlen(line) as ColNr + 1
+    } else {
+        len_arg
+    };
+
+    if lnum > nvim_buf_get_ml_line_count(buf) || nvim_buf_has_ml_mfp(buf) == 0 {
+        return FAIL; // lnum out of range
+    }
+
+    rs_ml_adjust_lowest_marked_for_insert(lnum);
+
+    let space_needed = len + INDEX_SIZE as ColNr; // space for text + index entry
+
+    let mfp = nvim_buf_get_ml_mfp(buf);
+    let page_size = nvim_mf_get_page_size(mfp) as c_int;
+
+    // Find the data block containing the previous line.
+    // This fills the stack from root to the data block and releases any locked block.
+    let mut hp = rs_ml_find_line(buf, if lnum == 0 { 1 } else { lnum }, ML_INSERT);
+    if hp.is_null() {
+        return FAIL;
+    }
+
+    // Clear ML_EMPTY flag now that we have at least one real line.
+    let cur_flags = nvim_buf_get_ml_flags(buf);
+    nvim_buf_set_ml_flags(buf, cur_flags & !ML_EMPTY);
+
+    let mut db_idx: c_int = if lnum == 0 {
+        -1 // prepending before line 1
+    } else {
+        (lnum - nvim_buf_get_ml_locked_low(buf)) as c_int
+    };
+    // line count (number of indexes) in current block before insertion
+    let mut line_count =
+        (nvim_buf_get_ml_locked_high(buf) - nvim_buf_get_ml_locked_low(buf)) as c_int;
+
+    let mut dp = nvim_bhdr_get_bh_data(hp);
+    let mut dp_header = dp.cast::<DataBlockHeader>();
+
+    // If not enough room AND appending to last line in block AND not end of file,
+    // insert in front of the next block instead.
+    if ((*dp_header).db_free as c_int) < space_needed
+        && db_idx == line_count - 1
+        && lnum < nvim_buf_get_ml_line_count(buf)
+    {
+        // The line counts in pointer blocks need adjustment via ml_locked_lineadd.
+        let lineadd_val = nvim_buf_get_ml_locked_lineadd(buf) - 1;
+        nvim_buf_set_ml_locked_lineadd(buf, lineadd_val);
+        nvim_buf_set_ml_locked_high(buf, nvim_buf_get_ml_locked_high(buf) - 1);
+        hp = rs_ml_find_line(buf, lnum + 1, ML_INSERT);
+        if hp.is_null() {
+            return FAIL;
+        }
+        db_idx = -1; // prepending in this new block
+        line_count = (nvim_buf_get_ml_locked_high(buf) - nvim_buf_get_ml_locked_low(buf)) as c_int;
+        debug_assert!(nvim_buf_get_ml_locked_low(buf) == lnum + 1);
+        dp = nvim_bhdr_get_bh_data(hp);
+        dp_header = dp.cast::<DataBlockHeader>();
+    }
+
+    if nvim_buf_get_b_prev_line_count(buf) == 0 {
+        nvim_buf_set_b_prev_line_count(buf, nvim_buf_get_ml_line_count(buf));
+    }
+    nvim_buf_inc_ml_line_count(buf);
+
+    let db_idx_arr: *mut u32 = db_index_ptr(dp);
+
+    if (*dp_header).db_free as c_int >= space_needed {
+        // -----------------------------------------------------------------------
+        // Simple case: enough room in the data block.
+        // Insert the new line text and update the index array.
+        // -----------------------------------------------------------------------
+        (*dp_header).db_txt_start -= len as u32;
+        (*dp_header).db_free -= space_needed as u32;
+        (*dp_header).db_line_count += 1;
+
+        if line_count > db_idx + 1 {
+            // There are lines following the insertion point -- move their text forward.
+            // offset = start position of the line at db_idx (the line we insert after).
+            let offset: u32 = if db_idx < 0 {
+                (*dp_header).db_txt_end
+            } else {
+                *db_idx_arr.add(db_idx as usize) & DB_INDEX_MASK
+            };
+            // Move text of lines that follow toward the start of the block.
+            let txt_start = (*dp_header).db_txt_start as usize;
+            let block_base = dp.cast::<u8>();
+            let src = block_base.add(txt_start + len as usize);
+            let dst = block_base.add(txt_start);
+            let copy_len = offset as usize - (txt_start + len as usize);
+            std::ptr::copy(src, dst, copy_len);
+            // Adjust indexes of the lines that follow: each shifts back by len bytes.
+            for i in (db_idx + 1..line_count).rev() {
+                *db_idx_arr.add((i + 1) as usize) = (*db_idx_arr.add(i as usize)) - len as u32;
+            }
+            *db_idx_arr.add((db_idx + 1) as usize) = offset - len as u32;
+        } else {
+            // Adding the line at the end (start of the text area).
+            *db_idx_arr.add((db_idx + 1) as usize) = (*dp_header).db_txt_start;
+        }
+
+        // Copy the new line text into the block.
+        let text_dst = dp
+            .cast::<u8>()
+            .add((*db_idx_arr.add((db_idx + 1) as usize) & DB_INDEX_MASK) as usize);
+        std::ptr::copy_nonoverlapping(line.cast::<u8>(), text_dst, len as usize);
+        if (flags & ML_APPEND_MARK) != 0 {
+            *db_idx_arr.add((db_idx + 1) as usize) |= DB_MARKED;
+        }
+
+        // Mark the block dirty.
+        let cur_flags = nvim_buf_get_ml_flags(buf);
+        let new_flags = cur_flags
+            | ML_LOCKED_DIRTY
+            | if (flags & ML_APPEND_NEW) == 0 {
+                ML_LOCKED_POS
+            } else {
+                0
+            };
+        nvim_buf_set_ml_flags(buf, new_flags);
+    } else {
+        // -----------------------------------------------------------------------
+        // Not enough space: create a new data block and copy some lines into it.
+        // Then insert an entry in the pointer block. If that is also full, go up
+        // the stack until we can insert (splitting pointer blocks as needed).
+        // -----------------------------------------------------------------------
+        let mut line_count_left: c_int;
+        let mut line_count_right: c_int;
+        let mut hp_new: *mut c_void;
+        let lines_moved: c_int;
+        let mut data_moved: c_int = 0;
+        let mut total_moved: c_int = 0;
+        let in_left: bool;
+
+        // Decide whether the new line and/or moved lines go in the left or right block.
+        if db_idx < 0 {
+            // Left block is new, right block is the existing block.
+            lines_moved = 0;
+            in_left = true;
+            // space_needed does not change
+        } else {
+            lines_moved = line_count - db_idx - 1;
+            if lines_moved == 0 {
+                in_left = false; // put new line in right (new) block
+            } else {
+                data_moved = ((*db_idx_arr.add(db_idx as usize) & DB_INDEX_MASK) as c_int)
+                    - (*dp_header).db_txt_start as c_int;
+                total_moved = data_moved + lines_moved * INDEX_SIZE as c_int;
+                if (*dp_header).db_free as c_int + total_moved >= space_needed {
+                    in_left = true; // put new line in left block
+                                    // space_needed now only needs to hold total_moved
+                } else {
+                    in_left = false; // put new line in right block
+                }
+            }
+        }
+        // Recompute space_needed for the new block
+        let space_for_new: c_int = if in_left && db_idx >= 0 && lines_moved > 0 {
+            total_moved
+        } else if !in_left && lines_moved > 0 {
+            space_needed + total_moved
+        } else {
+            space_needed
+        };
+        let page_count =
+            (space_for_new + DATA_BLOCK_HEADER_SIZE as c_int + page_size - 1) / page_size;
+
+        hp_new = rs_ml_new_data(mfp, (flags & ML_APPEND_NEW) != 0, page_count);
+        let hp_left: *mut c_void;
+        let hp_right: *mut c_void;
+        if db_idx < 0 {
+            // Left block is new, right block is existing.
+            hp_left = hp_new;
+            hp_right = hp;
+            line_count_left = 0;
+            line_count_right = line_count;
+        } else {
+            // Right block is new, left block is existing.
+            hp_left = hp;
+            hp_right = hp_new;
+            line_count_left = line_count;
+            line_count_right = 0;
+        }
+        let dp_right_raw = nvim_bhdr_get_bh_data(hp_right);
+        let dp_left_raw = nvim_bhdr_get_bh_data(hp_left);
+        let dp_right = dp_right_raw.cast::<DataBlockHeader>();
+        let dp_left = dp_left_raw.cast::<DataBlockHeader>();
+        let dp_right_arr: *mut u32 = db_index_ptr(dp_right_raw);
+        let dp_left_arr: *mut u32 = db_index_ptr(dp_left_raw);
+        let bnum_left: BlockNr = nvim_bhdr_get_bh_bnum(hp_left);
+        let bnum_right: BlockNr = nvim_bhdr_get_bh_bnum(hp_right);
+        let page_count_left: c_int = nvim_bhdr_get_bh_page_count(hp_left);
+        let page_count_right: c_int = nvim_bhdr_get_bh_page_count(hp_right);
+
+        // May move the new line into the right (new) block.
+        if !in_left {
+            (*dp_right).db_txt_start -= len as u32;
+            (*dp_right).db_free -= len as u32 + INDEX_SIZE as u32;
+            *dp_right_arr.add(0) = (*dp_right).db_txt_start;
+            if (flags & ML_APPEND_MARK) != 0 {
+                *dp_right_arr.add(0) |= DB_MARKED;
+            }
+            std::ptr::copy_nonoverlapping(
+                line.cast::<u8>(),
+                dp_right_raw
+                    .cast::<u8>()
+                    .add((*dp_right).db_txt_start as usize),
+                len as usize,
+            );
+            line_count_right += 1;
+        }
+
+        // May move lines from the left (old) block to the right (new) block.
+        if lines_moved > 0 {
+            (*dp_right).db_txt_start -= data_moved as u32;
+            (*dp_right).db_free -= total_moved as u32;
+            // Copy the text data
+            std::ptr::copy_nonoverlapping(
+                dp_left_raw
+                    .cast::<u8>()
+                    .add((*dp_left).db_txt_start as usize),
+                dp_right_raw
+                    .cast::<u8>()
+                    .add((*dp_right).db_txt_start as usize),
+                data_moved as usize,
+            );
+            let offset = (*dp_right).db_txt_start as c_int - (*dp_left).db_txt_start as c_int;
+            (*dp_left).db_txt_start += data_moved as u32;
+            (*dp_left).db_free += total_moved as u32;
+
+            // Update indexes in the new right block.
+            let mut to = line_count_right;
+            for from in (db_idx + 1)..line_count_left {
+                *dp_right_arr.add(to as usize) =
+                    (*dp_left_arr.add(from as usize)).wrapping_add(offset as u32);
+                to += 1;
+            }
+            line_count_right += lines_moved;
+            line_count_left -= lines_moved;
+        }
+
+        // May move the new line into the left block.
+        if in_left {
+            (*dp_left).db_txt_start -= len as u32;
+            (*dp_left).db_free -= len as u32 + INDEX_SIZE as u32;
+            *dp_left_arr.add(line_count_left as usize) = (*dp_left).db_txt_start;
+            if (flags & ML_APPEND_MARK) != 0 {
+                *dp_left_arr.add(line_count_left as usize) |= DB_MARKED;
+            }
+            std::ptr::copy_nonoverlapping(
+                line.cast::<u8>(),
+                dp_left_raw
+                    .cast::<u8>()
+                    .add((*dp_left).db_txt_start as usize),
+                len as usize,
+            );
+            line_count_left += 1;
+        }
+
+        // Compute lnum_left / lnum_right for recovery tracking.
+        let (lnum_left, lnum_right): (LineNr, LineNr) = if db_idx < 0 {
+            (lnum + 1, 0)
+        } else {
+            (0, if in_left { lnum + 2 } else { lnum + 1 })
+        };
+        (*dp_left).db_line_count = i64::from(line_count_left);
+        (*dp_right).db_line_count = i64::from(line_count_right);
+
+        // Release the two data blocks.
+        if lines_moved > 0 || in_left {
+            let cur_flags = nvim_buf_get_ml_flags(buf);
+            nvim_buf_set_ml_flags(buf, cur_flags | ML_LOCKED_DIRTY);
+        }
+        if (flags & ML_APPEND_NEW) == 0 && db_idx >= 0 && in_left {
+            let cur_flags = nvim_buf_get_ml_flags(buf);
+            nvim_buf_set_ml_flags(buf, cur_flags | ML_LOCKED_POS);
+        }
+        mf_put(mfp, hp_new, true, false);
+
+        // Flush the old data block.
+        // Set ml_locked_lineadd to 0 because pointer block updates are done below.
+        let lineadd = nvim_buf_get_ml_locked_lineadd(buf);
+        nvim_buf_set_ml_locked_lineadd(buf, 0);
+        rs_ml_find_line(buf, 0, ML_FLUSH); // flush data block
+
+        // Update pointer blocks for the new data block.
+        let stack_top = nvim_buf_get_ml_stack_top(buf);
+        let mut bnum_left_cur: BlockNr = bnum_left;
+        let mut bnum_right_cur: BlockNr = bnum_right;
+        let mut page_count_left_cur = page_count_left;
+        let mut page_count_right_cur = page_count_right;
+        let mut line_count_left_cur = line_count_left;
+        let mut line_count_right_cur = line_count_right;
+        let mut lnum_left_cur = lnum_left;
+        let mut lnum_right_cur = lnum_right;
+
+        let mut stack_idx = stack_top - 1;
+        while stack_idx >= 0 {
+            let ip = nvim_buf_get_ml_stack_ip(buf, stack_idx);
+            let pb_idx = nvim_ip_get_index(ip);
+            let bnum = nvim_ip_get_bnum(ip);
+            let block_hp = mf_get(mfp, bnum, 1);
+            if block_hp.is_null() {
+                return FAIL;
+            }
+            let pp = nvim_bhdr_get_bh_data(block_hp);
+            let pp_header = pp.cast::<PointerBlockHeader>();
+            if nvim_pp_get_id(pp) != PTR_ID {
+                nvim_iemsg_pointer_block_id_wrong_three();
+                mf_put(mfp, block_hp, false, false);
+                return FAIL;
+            }
+
+            if (*pp_header).pb_count < (*pp_header).pb_count_max {
+                // Block not full: insert one entry after pb_idx.
+                let ptr_arr = pb_pointer_ptr(pp);
+                let count = (*pp_header).pb_count as usize;
+                if (pb_idx + 1) < c_int::from((*pp_header).pb_count) {
+                    // Shift existing entries to make room.
+                    std::ptr::copy(
+                        ptr_arr.add((pb_idx + 1) as usize),
+                        ptr_arr.add((pb_idx + 2) as usize),
+                        count - (pb_idx + 1) as usize,
+                    );
+                }
+                nvim_pp_inc_count(pp);
+                (*ptr_arr.add(pb_idx as usize)).pe_line_count = LineNr::from(line_count_left_cur);
+                (*ptr_arr.add(pb_idx as usize)).pe_bnum = bnum_left_cur;
+                (*ptr_arr.add(pb_idx as usize)).pe_page_count = page_count_left_cur;
+                (*ptr_arr.add((pb_idx + 1) as usize)).pe_line_count =
+                    LineNr::from(line_count_right_cur);
+                (*ptr_arr.add((pb_idx + 1) as usize)).pe_bnum = bnum_right_cur;
+                (*ptr_arr.add((pb_idx + 1) as usize)).pe_page_count = page_count_right_cur;
+                if lnum_left_cur != 0 {
+                    (*ptr_arr.add(pb_idx as usize)).pe_old_lnum = lnum_left_cur;
+                }
+                if lnum_right_cur != 0 {
+                    (*ptr_arr.add((pb_idx + 1) as usize)).pe_old_lnum = lnum_right_cur;
+                }
+
+                mf_put(mfp, block_hp, true, false);
+                nvim_buf_set_ml_stack_top(buf, stack_idx + 1); // truncate stack
+
+                if lineadd != 0 {
+                    let new_top = nvim_buf_get_ml_stack_top(buf) - 1;
+                    nvim_buf_set_ml_stack_top(buf, new_top);
+                    rs_ml_lineadd(buf, lineadd);
+                    // fix stack itself
+                    let top_ip = nvim_buf_get_ml_stack_ip(buf, nvim_buf_get_ml_stack_top(buf));
+                    nvim_ip_add_high(top_ip, lineadd);
+                    nvim_buf_set_ml_stack_top(buf, nvim_buf_get_ml_stack_top(buf) + 1);
+                }
+
+                // Done -- break the loop.
+                crate::chunk::rs_ml_updatechunk(buf, lnum + 1, len as c_int, ML_CHNK_ADDLINE);
+                return OK;
+            }
+
+            // Pointer block is full: split it.
+            // Allocate a new pointer block. If this is block 1 (the root), grow
+            // the tree by an extra level: copy block 1 to a new block, reset
+            // block 1 to point to just the copy, then loop again to split the copy.
+            // This mirrors the C `while (true)` that runs twice for block-1 splits.
+            let mut cur_block_hp = block_hp;
+            let mut cur_pp = pp;
+            let mut cur_pb_idx = pb_idx;
+
+            let hp_split_new = 'alloc_split: loop {
+                hp_new = rs_ml_new_ptr(mfp);
+                if hp_new.is_null() {
+                    return FAIL;
+                }
+                let pp_new = nvim_bhdr_get_bh_data(hp_new);
+
+                if nvim_bhdr_get_bh_bnum(cur_block_hp) != 1 {
+                    // Normal case: not block 1, proceed with the split.
+                    break 'alloc_split hp_new;
+                }
+
+                // Block 1 is full: grow the tree by one level.
+                // Copy all of block 1 into hp_new, then reset block 1 to point
+                // to just hp_new. Then loop again to allocate the actual split block.
+                let cur_page_size = nvim_mf_get_page_size(mfp) as usize;
+                std::ptr::copy_nonoverlapping(
+                    cur_pp.cast::<u8>(),
+                    pp_new.cast::<u8>(),
+                    cur_page_size,
+                );
+                let pp_root = cur_pp.cast::<PointerBlockHeader>();
+                (*pp_root).pb_count = 1;
+                let root_arr = pb_pointer_ptr(cur_pp);
+                (*root_arr).pe_bnum = nvim_bhdr_get_bh_bnum(hp_new);
+                (*root_arr).pe_line_count = nvim_buf_get_ml_line_count(buf);
+                (*root_arr).pe_old_lnum = 1;
+                (*root_arr).pe_page_count = 1;
+                mf_put(mfp, cur_block_hp, true, false); // release block 1
+
+                // Now split hp_new (the copy of block 1).
+                // The C code does: ip->ip_index = 0; stack_idx++;
+                debug_assert!(
+                    stack_idx == 0,
+                    "stack_idx should be 0 when splitting block 1"
+                );
+                nvim_ip_set_index(ip, 0);
+                stack_idx += 1;
+                cur_block_hp = hp_new;
+                cur_pp = pp_new;
+                cur_pb_idx = 0;
+                // Loop again to allocate the actual split block for cur_block_hp.
+            };
+
+            // Move pointers after cur_pb_idx into hp_split_new.
+            let pp_split = nvim_bhdr_get_bh_data(hp_split_new);
+            let ptr_arr_old = pb_pointer_ptr(cur_pp);
+            let ptr_arr_new = pb_pointer_ptr(pp_split);
+            let pp_header_cur = cur_pp.cast::<PointerBlockHeader>();
+            let pp_split_header = pp_split.cast::<PointerBlockHeader>();
+
+            total_moved = c_int::from((*pp_header_cur).pb_count) - cur_pb_idx - 1;
+            if total_moved > 0 {
+                std::ptr::copy_nonoverlapping(
+                    ptr_arr_old.add((cur_pb_idx + 1) as usize),
+                    ptr_arr_new,
+                    total_moved as usize,
+                );
+                (*pp_split_header).pb_count = total_moved as u16;
+                (*pp_header_cur).pb_count =
+                    ((*pp_header_cur).pb_count - (total_moved as u16 - 1)) as u16;
+                (*ptr_arr_old.add((cur_pb_idx + 1) as usize)).pe_bnum = bnum_right_cur;
+                (*ptr_arr_old.add((cur_pb_idx + 1) as usize)).pe_line_count =
+                    LineNr::from(line_count_right_cur);
+                (*ptr_arr_old.add((cur_pb_idx + 1) as usize)).pe_page_count = page_count_right_cur;
+                if lnum_right_cur != 0 {
+                    (*ptr_arr_old.add((cur_pb_idx + 1) as usize)).pe_old_lnum = lnum_right_cur;
+                }
+            } else {
+                (*pp_split_header).pb_count = 1;
+                (*ptr_arr_new.add(0)).pe_bnum = bnum_right_cur;
+                (*ptr_arr_new.add(0)).pe_line_count = LineNr::from(line_count_right_cur);
+                (*ptr_arr_new.add(0)).pe_page_count = page_count_right_cur;
+                (*ptr_arr_new.add(0)).pe_old_lnum = lnum_right_cur;
+            }
+            (*ptr_arr_old.add(cur_pb_idx as usize)).pe_bnum = bnum_left_cur;
+            (*ptr_arr_old.add(cur_pb_idx as usize)).pe_line_count =
+                LineNr::from(line_count_left_cur);
+            (*ptr_arr_old.add(cur_pb_idx as usize)).pe_page_count = page_count_left_cur;
+            if lnum_left_cur != 0 {
+                (*ptr_arr_old.add(cur_pb_idx as usize)).pe_old_lnum = lnum_left_cur;
+            }
+
+            lnum_left_cur = 0;
+            lnum_right_cur = 0;
+
+            // Recompute line counts for the two pointer blocks.
+            line_count_right_cur = 0;
+            for i in 0..(*pp_split_header).pb_count as usize {
+                line_count_right_cur += (*ptr_arr_new.add(i)).pe_line_count as c_int;
+            }
+            line_count_left_cur = 0;
+            for i in 0..(*pp_header_cur).pb_count as usize {
+                line_count_left_cur += (*ptr_arr_old.add(i)).pe_line_count as c_int;
+            }
+
+            bnum_left_cur = nvim_bhdr_get_bh_bnum(cur_block_hp);
+            bnum_right_cur = nvim_bhdr_get_bh_bnum(hp_split_new);
+            page_count_left_cur = 1;
+            page_count_right_cur = 1;
+            mf_put(mfp, cur_block_hp, true, false);
+            mf_put(mfp, hp_split_new, true, false);
+
+            stack_idx -= 1;
+        }
+
+        // Safety check: fell out of the for loop without inserting?
+        if stack_idx < 0 {
+            nvim_iemsg_e318_updated_too_many();
+            nvim_buf_set_ml_stack_top(buf, 0); // invalidate stack
+        }
+    }
+
+    // The line was inserted below lnum.
+    crate::chunk::rs_ml_updatechunk(buf, lnum + 1, len as c_int, ML_CHNK_ADDLINE);
+    OK
+}
+
 /// Implement `ml_append_flush`: flush pending cached line if needed, then
-/// call `nvim_ml_append_int` (public wrapper for the static `ml_append_int`).
+/// call `rs_ml_append_int` (Rust implementation).
 ///
 /// This is a Rust port of the static C `ml_append_flush` function.
 ///
@@ -850,10 +1395,10 @@ pub unsafe extern "C" fn rs_ml_append_flush(
         return FAIL; // lnum out of range
     }
     if nvim_buf_get_ml_line_lnum(buf) != 0 {
-        // This may also invoke ml_append_int().
+        // This may also invoke rs_ml_append_int().
         rs_ml_flush_line(buf, 0);
     }
-    nvim_ml_append_int(buf, lnum, line, len, flags)
+    rs_ml_append_int(buf, lnum, line, len, flags)
 }
 
 // =============================================================================
@@ -992,7 +1537,7 @@ pub unsafe extern "C" fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int) {
                 } else {
                     0
                 };
-                nvim_ml_append_int(buf, lnum, new_line, new_len as ColNr, marked_flag);
+                rs_ml_append_int(buf, lnum, new_line, new_len as ColNr, marked_flag);
                 rs_ml_delete_int(buf, lnum, 0);
             }
         }
