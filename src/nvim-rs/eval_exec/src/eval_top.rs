@@ -58,9 +58,8 @@ extern "C" {
     fn evalarg_get_flags(ea: EvalargHandle) -> c_int;
     fn evalarg_set_flags(ea: EvalargHandle, flags: c_int);
 
-    // emsg_skip inc/dec
-    fn nvim_emsg_skip_inc();
-    fn nvim_emsg_skip_dec();
+    // Phase 12: emsg_skip accessed directly as a global
+    static mut emsg_skip: c_int;
 
     // emsg_off inc/dec
     fn nvim_eval_emsg_off_inc();
@@ -290,7 +289,7 @@ pub unsafe extern "C" fn rs_eval_to_bool(
 
     let evalarg = nvim_evalarg_alloc_from_eap(eap, skip);
     if skip {
-        nvim_emsg_skip_inc();
+        emsg_skip += 1;
     }
 
     let r = if use_simple_function {
@@ -319,7 +318,7 @@ pub unsafe extern "C" fn rs_eval_to_bool(
     }
 
     if skip {
-        nvim_emsg_skip_dec();
+        emsg_skip -= 1;
     }
     nvim_evalarg_clear_and_free(evalarg, eap);
 
@@ -382,7 +381,7 @@ pub unsafe extern "C" fn rs_eval_to_string_skip(
 
     let evalarg = nvim_evalarg_alloc_from_eap(eap, skip);
     if skip {
-        nvim_emsg_skip_inc();
+        emsg_skip += 1;
     }
 
     let retval = if eval0(arg, tv, eap, evalarg) == FAIL || skip {
@@ -395,7 +394,7 @@ pub unsafe extern "C" fn rs_eval_to_string_skip(
     };
 
     if skip {
-        nvim_emsg_skip_dec();
+        emsg_skip -= 1;
     }
     nvim_evalarg_clear_and_free(evalarg, eap);
 

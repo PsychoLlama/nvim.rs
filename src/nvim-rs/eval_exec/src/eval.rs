@@ -1024,16 +1024,25 @@ pub unsafe extern "C" fn eval6(
 // eval_interp_string - Interpolated string expressions ($"..." and $'...')
 // =============================================================================
 
+/// Growing array structure matching C `garray_T` layout exactly.
+/// Used for character accumulation in eval_interp_string.
+#[repr(C)]
+struct GArray {
+    ga_len: c_int,
+    ga_maxlen: c_int,
+    ga_itemsize: c_int,
+    ga_growsize: c_int,
+    ga_data: *mut c_void,
+}
+
 extern "C" {
-    // Garray operations (opaque handle approach)
-    fn nvim_ga_alloc_char(growsize: c_int) -> *mut c_void;
-    fn nvim_ga_concat_str(ga: *mut c_void, s: *const c_char);
-    fn nvim_ga_append_nul(ga: *mut c_void);
-    fn nvim_ga_take_data(ga: *mut c_void) -> *mut c_char;
-    fn nvim_ga_free(ga: *mut c_void);
-    // eval_one_expr_in_str wrapper
-    fn nvim_eval_one_expr_in_str(p: *mut c_char, gap: *mut c_void, evaluate: bool) -> *mut c_char;
-    // TV string field accessor
+    // Direct garray operations (Rust-exported from collections crate)
+    fn ga_init(gap: *mut GArray, itemsize: c_int, growsize: c_int);
+    fn ga_concat(gap: *mut GArray, s: *const c_char);
+    fn ga_clear(gap: *mut c_void);
+    // eval_one_expr_in_str wrapper (stays in C: wraps static C function)
+    fn nvim_eval_one_expr_in_str(p: *mut c_char, gap: *mut GArray, evaluate: bool) -> *mut c_char;
+    // TV string field accessor (stays in C: requires typval_T internals)
     fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
     fn nvim_tv_set_vstring_owned(tv: TypevalHandle, s: *mut c_char);
 }
@@ -1051,7 +1060,9 @@ pub unsafe fn eval_interp_string_impl(
     rettv: TypevalHandle,
     evaluate: bool,
 ) -> c_int {
-    let ga = nvim_ga_alloc_char(80);
+    // Allocate GArray on the heap with ga_init (char array, growsize=80).
+    let ga = xmalloc(std::mem::size_of::<GArray>()).cast::<GArray>();
+    ga_init(ga, 1, 80);
 
     // *arg is on the '$' character, move it to the first string character.
     *arg = (*arg).add(1);
@@ -1074,7 +1085,7 @@ pub unsafe fn eval_interp_string_impl(
             }
             if evaluate {
                 let s = nvim_tv_get_vstring(tv);
-                nvim_ga_concat_str(ga, s);
+                ga_concat(ga, s);
                 tv_clear(tv);
             }
             free_typval(tv);
@@ -1094,10 +1105,11 @@ pub unsafe fn eval_interp_string_impl(
 
     nvim_tv_set_type(rettv, VAR_STRING);
     if result != FAIL && evaluate {
-        nvim_ga_append_nul(ga);
+        ga_append(ga as *mut c_void, 0i32); // NUL terminator
     }
-    // Take ownership of the string data
-    let data = nvim_ga_take_data(ga);
+    // Take ownership of the string data and free the GArray struct.
+    let data = (*ga).ga_data.cast::<c_char>();
+    xfree(ga.cast::<c_void>());
     nvim_tv_set_vstring_owned(rettv, data);
     OK
 }

@@ -35,8 +35,8 @@ extern "C" {
     fn did_emsg_get() -> c_int;
     fn called_emsg_get() -> c_int;
     fn nvim_get_msg_didout() -> c_int;
-    fn nvim_emsg_skip_inc();
-    fn nvim_emsg_skip_dec();
+    // Phase 12: emsg_skip accessed directly as a global
+    static mut emsg_skip: c_int;
     fn nvim_get_did_emsg() -> c_int;
     fn nvim_set_did_emsg(val: c_int);
     fn nvim_get_force_abort() -> c_int;
@@ -91,7 +91,8 @@ extern "C" {
     fn nvim_ga_append_str_len(ga: *mut c_void, str: *const c_char, len: c_int);
     fn nvim_ga_get_data(ga: *const c_void) -> *mut c_char;
     fn nvim_ga_data_is_null(ga: *const c_void) -> bool;
-    fn nvim_ga_free(ga: *mut c_void);
+    // ga_clear replaces nvim_ga_free (Phase 12, Phase 4)
+    fn ga_clear(ga: *mut c_void);
 
     // do_cmdline for :execute
     fn nvim_do_cmdline_execute(cmd: *mut c_char, eap: ExargHandle);
@@ -207,7 +208,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
     let evalarg = nvim_evalarg_alloc_from_eap(eap, skip);
 
     if skip {
-        nvim_emsg_skip_inc();
+        emsg_skip += 1;
     }
 
     loop {
@@ -272,7 +273,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
     nvim_evalarg_clear_and_free(evalarg, eap);
 
     if skip {
-        nvim_emsg_skip_dec();
+        emsg_skip -= 1;
     } else {
         // remove text that may still be there from the command
         if need_clear {
@@ -315,7 +316,7 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
     let mut ret = OK;
 
     if skip {
-        nvim_emsg_skip_inc();
+        emsg_skip += 1;
     }
 
     loop {
@@ -378,10 +379,12 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
         }
     }
 
-    nvim_ga_free(ga);
+    // Phase 12: replace nvim_ga_free with ga_clear + xfree
+    ga_clear(ga);
+    xfree(ga);
 
     if skip {
-        nvim_emsg_skip_dec();
+        emsg_skip -= 1;
     }
 
     nvim_eap_set_nextcmd_checked(eap, arg);

@@ -135,9 +135,8 @@ extern "C" {
     // utfc_ptr2len
     fn utfc_ptr2len(p: *const c_char) -> c_int;
 
-    // emsg_skip
-    fn nvim_emsg_skip_inc();
-    fn nvim_emsg_skip_dec();
+    // Phase 12: emsg_skip accessed directly as a global
+    static mut emsg_skip: c_int;
 
     // ascii_iswhite (declared in normal_shim, takes int)
     fn nvim_ascii_iswhite(c: c_int) -> bool;
@@ -225,7 +224,7 @@ pub unsafe fn eval_for_line_impl(
     }
 
     if skip {
-        nvim_emsg_skip_inc();
+        emsg_skip += 1;
     }
 
     let expr_after_in = skipwhite(expr.add(2));
@@ -285,7 +284,7 @@ pub unsafe fn eval_for_line_impl(
     free_typval(tv);
 
     if skip {
-        nvim_emsg_skip_dec();
+        emsg_skip -= 1;
     }
 
     fi as *mut c_void

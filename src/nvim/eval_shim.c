@@ -698,17 +698,7 @@ bool nvim_ex_let_vars_list_item(char *arg, listitem_T *item, int semicolon, int 
   return ex_let_vars(arg, TV_LIST_ITEM_TV(item), true, semicolon, varcount, false, NULL) == OK;
 }
 
-/// Increment emsg_skip.
-void nvim_emsg_skip_inc(void)
-{
-  emsg_skip++;
-}
-
-/// Decrement emsg_skip.
-void nvim_emsg_skip_dec(void)
-{
-  emsg_skip--;
-}
+// nvim_emsg_skip_inc/dec: deleted -- Rust accesses emsg_skip global directly (Phase 12).
 
 // set_context_for_expression: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
 // Note: C callers pass cmdidx_T which implicitly converts to int (the Rust parameter type).
@@ -739,48 +729,8 @@ void nvim_emsg_skip_dec(void)
 // eval_option: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 // eval_interp_string: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
-// =============================================================================
-// Accessors for eval_interp_string (Rust)
-// =============================================================================
-
-/// Allocate and initialize a char garray with given growth size.
-/// Returns an opaque pointer to be passed to other nvim_ga_* functions.
-garray_T *nvim_ga_alloc_char(int growsize)
-{
-  garray_T *ga = xmalloc(sizeof(garray_T));
-  ga_init(ga, 1, growsize);
-  return ga;
-}
-
-/// Concatenate a C string into the garray.
-void nvim_ga_concat_str(garray_T *ga, const char *s)
-{
-  if (s != NULL) {
-    ga_concat(ga, s);
-  }
-}
-
-/// Append a NUL byte to the garray.
-void nvim_ga_append_nul(garray_T *ga)
-{
-  ga_append(ga, NUL);
-}
-
-/// Take the ga_data pointer and free the garray struct.
-/// The caller owns the returned string.
-char *nvim_ga_take_data(garray_T *ga)
-{
-  char *data = ga->ga_data;
-  xfree(ga);
-  return data;
-}
-
-/// Free the garray (including data) and the struct.
-void nvim_ga_free(garray_T *ga)
-{
-  ga_clear(ga);
-  xfree(ga);
-}
+// nvim_ga_alloc_char/concat_str/append_nul/take_data/free: deleted -- Rust uses GArray struct
+// directly with ga_init/ga_concat/ga_append/ga_clear/xfree (Phase 12).
 
 /// Non-static wrapper for eval_one_expr_in_str -- used by rs_eval_interp_string.
 char *nvim_eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate)

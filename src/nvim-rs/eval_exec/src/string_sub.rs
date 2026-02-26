@@ -104,7 +104,7 @@ extern "C" {
     #[link_name = "ga_grow"]
     fn ga_grow(gap: *mut GArray, n: c_int);
     #[link_name = "ga_clear"]
-    fn ga_clear(gap: *mut GArray);
+    fn ga_clear(gap: *mut c_void);
 
     // memory
     fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
@@ -199,7 +199,7 @@ pub unsafe extern "C" fn rs_do_string_sub(
             // Measure substitution size (pass with destlen=0)
             let sublen = rs_vim_regsub(&mut regmatch, sub, expr, tail, 0, REGSUB_MAGIC);
             if sublen <= 0 {
-                ga_clear(&mut ga);
+                ga_clear((&mut ga) as *mut GArray as *mut c_void);
                 break;
             }
 
@@ -258,7 +258,7 @@ pub unsafe extern "C" fn rs_do_string_sub(
     };
 
     let ret = xstrnsave(ret_str, ret_sz);
-    ga_clear(&mut ga);
+    ga_clear((&mut ga) as *mut GArray as *mut c_void);
 
     // Restore p_cpo
     let current_cpo = nvim_p_cpo_get();
