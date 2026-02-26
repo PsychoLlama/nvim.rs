@@ -177,18 +177,8 @@ pub unsafe extern "C" fn rs_set_completion(startcol: c_int, list: ListPtr) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_remove_old_matches_impl();
     fn nvim_cpt_compl_refresh_impl();
     fn nvim_get_callback_if_cpt_func_impl(p: *const c_char, idx: c_int) -> CallbackPtr;
-}
-
-/// Remove completion matches from the current cpt source index.
-///
-/// # Safety
-/// Requires valid global completion list state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_remove_old_matches() {
-    nvim_remove_old_matches_impl();
 }
 
 /// Refresh completion matches from 'cpt' function sources with `refresh:always`.

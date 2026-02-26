@@ -244,7 +244,6 @@ void nvim_f_complete_add_impl(void *argvars, void *rettv);
 void nvim_f_complete_check_impl(void *rettv);
 void nvim_f_preinserted_impl(void *rettv);
 void nvim_set_completion_impl(int startcol, void *list);
-void nvim_remove_old_matches_impl(void);
 void nvim_cpt_compl_refresh_impl(void);
 void *nvim_get_callback_if_cpt_func_impl(const char *p, int idx);
 
@@ -1489,6 +1488,8 @@ int nvim_compl_match_get_flags(void *m) { return m ? ((compl_T *)m)->cp_flags : 
 int nvim_compl_match_get_score(void *m) { return m ? ((compl_T *)m)->cp_score : -1; }
 int nvim_compl_is_first_match(void *m) { return m == compl_first_match ? 1 : 0; }
 int nvim_compl_match_at_original_text(void *m) { return (m && (((compl_T *)m)->cp_flags & CP_ORIGINAL_TEXT)) ? 1 : 0; }
+int nvim_compl_match_get_cpt_source_idx(void *m) { return m ? ((compl_T *)m)->cp_cpt_source_idx : -1; }
+int nvim_compl_match_get_in_match_array(void *m) { return (m && ((compl_T *)m)->cp_in_match_array) ? 1 : 0; }
 
 // Memory operations for Rust
 void nvim_compl_item_free(void *m) { if (m) ins_compl_item_free((compl_T *)m); }
@@ -3178,14 +3179,8 @@ static void setup_cpt_sources(void)
   rs_setup_cpt_sources();
 }
 
-/// Remove the matches linked to the current completion source (as indicated by
-/// cpt_sources_index) from the completion list.
-// NOTE: Body migrated to Rust rs_remove_old_matches (Phase 9, pass 9).
-// Logic lives in nvim_remove_old_matches_impl compound accessor.
-static void remove_old_matches(void)
-{
-  nvim_remove_old_matches_impl();
-}
+// NOTE: remove_old_matches() thin wrapper deleted (Phase 10, pass 10).
+// rs_remove_old_matches() in navigate.rs provides the full implementation.
 
 /// Retrieve completion matches using the callback function "cb" and store the
 /// 'refresh:always' flag.
@@ -4060,47 +4055,9 @@ void nvim_ins_compl_show_statusmsg_impl(void)
   }
 }
 
-// Compound accessors for Phase 4 (pass 3): ins_compl_update_shown_match,
-// find_next_match_in_menu. Logic moved here from the thin wrappers above.
-
-void nvim_ins_compl_update_shown_match_impl(void)
-{
-  (void)get_leader_for_startcol(NULL, true);  // Clear the cache
-  String *leader = get_leader_for_startcol(compl_shown_match, true);
-
-  while (!rs_ins_compl_equal(compl_shown_match, leader->data, leader->size)
-         && compl_shown_match->cp_next != NULL
-         && !is_first_match(compl_shown_match->cp_next)) {
-    compl_shown_match = compl_shown_match->cp_next;
-    leader = get_leader_for_startcol(compl_shown_match, true);
-  }
-
-  // If we didn't find it searching forward, and compl_shows_dir is
-  // backward, find the last match.
-  if (rs_compl_shows_dir_backward()
-      && !rs_ins_compl_equal(compl_shown_match, leader->data, leader->size)
-      && (compl_shown_match->cp_next == NULL
-          || is_first_match(compl_shown_match->cp_next))) {
-    while (!rs_ins_compl_equal(compl_shown_match, leader->data, leader->size)
-           && compl_shown_match->cp_prev != NULL
-           && !is_first_match(compl_shown_match->cp_prev)) {
-      compl_shown_match = compl_shown_match->cp_prev;
-      leader = get_leader_for_startcol(compl_shown_match, true);
-    }
-  }
-}
-
-void nvim_find_next_match_in_menu_impl(void)
-{
-  bool is_forward = rs_compl_shows_dir_forward() != 0;
-  compl_T *match = compl_shown_match;
-
-  do {
-    match = is_forward ? match->cp_next : match->cp_prev;
-  } while (match->cp_next && !match->cp_in_match_array
-           && !match_at_original_text(match));
-  compl_shown_match = match;
-}
+// NOTE: nvim_ins_compl_update_shown_match_impl and nvim_find_next_match_in_menu_impl
+// bodies migrated to Rust rs_ins_compl_update_shown_match / rs_find_next_match_in_menu
+// (Phase 10, pass 10).
 
 // Compound accessor for Phase 2 (pass 4): get_next_bufname_token
 void nvim_get_next_bufname_token_impl(void)
@@ -4821,72 +4778,7 @@ void nvim_set_completion_impl(int startcol_arg, void *list_opaque)
 }
 
 // Phase 4 accessors: remove_old_matches, cpt_compl_refresh, get_callback_if_cpt_func
-
-/// Compound accessor: remove_old_matches logic, callable from Rust.
-/// Contains the full logic from the original remove_old_matches function.
-void nvim_remove_old_matches_impl(void)
-{
-  bool shown_match_removed = false;
-  bool forward = (compl_first_match->cp_cpt_source_idx < 0);
-
-  if (cpt_sources_index < 0) {
-    return;
-  }
-
-  compl_direction = forward ? FORWARD : BACKWARD;
-  compl_shows_dir = compl_direction;
-
-  // When 'fuzzy' is enabled, items are not ordered by their original source
-  // order (cpt_sources_index). So, remove items one by one.
-  for (compl_T *current = compl_first_match; current != NULL;) {
-    if (current->cp_cpt_source_idx == cpt_sources_index) {
-      compl_T *to_delete = current;
-
-      if (!shown_match_removed && compl_shown_match == current) {
-        shown_match_removed = true;
-      }
-
-      current = current->cp_next;
-
-      if (to_delete == compl_first_match) {  // node to remove is at head
-        compl_first_match = to_delete->cp_next;
-        compl_first_match->cp_prev = NULL;
-      } else if (to_delete->cp_next == NULL) {  // node to remove is at tail
-        to_delete->cp_prev->cp_next = NULL;
-      } else {          // node is in the middle
-        to_delete->cp_prev->cp_next = to_delete->cp_next;
-        to_delete->cp_next->cp_prev = to_delete->cp_prev;
-      }
-      ins_compl_item_free(to_delete);
-    } else {
-      current = current->cp_next;
-    }
-  }
-
-  // Re-assign compl_shown_match if necessary
-  if (shown_match_removed) {
-    if (forward) {
-      compl_shown_match = compl_first_match;
-    } else {    // Last node will have the prefix that is being completed
-      compl_T *current;
-      for (current = compl_first_match; current->cp_next != NULL;
-           current = current->cp_next) {}
-      compl_shown_match = current;
-    }
-  }
-
-  // Re-assign compl_curr_match
-  compl_curr_match = compl_first_match;
-  for (compl_T *current = compl_first_match; current != NULL;) {
-    if ((forward ? current->cp_cpt_source_idx < cpt_sources_index
-                 : current->cp_cpt_source_idx > cpt_sources_index)) {
-      compl_curr_match = forward ? current : current->cp_next;
-      current = current->cp_next;
-    } else {
-      break;
-    }
-  }
-}
+// NOTE: nvim_remove_old_matches_impl body migrated to Rust rs_remove_old_matches (Phase 10, pass 10).
 
 /// Compound accessor: cpt_compl_refresh logic, callable from Rust.
 /// Contains the full logic from the original cpt_compl_refresh function.
@@ -4910,7 +4802,7 @@ void nvim_cpt_compl_refresh_impl(void)
     if (cpt_sources_array[cpt_sources_index].cs_refresh_always) {
       Callback *cb = (Callback *)nvim_get_callback_if_cpt_func_impl(p, cpt_sources_index);
       if (cb) {
-        nvim_remove_old_matches_impl();
+        rs_remove_old_matches();
         int startcol;
         int ret = get_userdefined_compl_info(curwin->w_cursor.col, cb, &startcol);
         if (ret == FAIL) {
