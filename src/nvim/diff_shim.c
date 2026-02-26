@@ -108,6 +108,8 @@ extern void rs_run_linematch(diff_T *dp);
 extern void rs_compute_inline_diff(diff_T *dp);
 extern int rs_parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, int *num_anchors);
 extern void rs_ex_diffpatch(exarg_T *eap);
+extern int rs_diff_write_buffer(buf_T *buf, char **m_ptr, int *m_size,
+                                linenr_T start, linenr_T end, int diff_flags);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -226,77 +228,17 @@ static void clear_diffout(diffout_T *dout)
 }
 
 /// Write buffer "buf" to a memory buffer.
+/// Thin wrapper -- implementation moved to Rust (rs_diff_write_buffer in diffio.rs).
 ///
-/// @param buf
-/// @param din
+/// @param buf  Buffer to write
+/// @param m    Memory file to populate
+/// @param start  First line
+/// @param end    Last line (-1 = all)
 ///
 /// @return FAIL for failure.
 static int diff_write_buffer(buf_T *buf, mmfile_t *m, linenr_T start, linenr_T end)
 {
-  if (end < 0) {
-    end = buf->b_ml.ml_line_count;
-  }
-
-  if (buf->b_ml.ml_flags & ML_EMPTY || end < start) {
-    m->ptr = NULL;
-    m->size = 0;
-    return OK;
-  }
-
-  size_t len = 0;
-
-  // xdiff requires one big block of memory with all the text.
-  for (linenr_T lnum = start; lnum <= end; lnum++) {
-    len += (size_t)ml_get_buf_len(buf, lnum) + 1;
-  }
-  char *ptr = xmalloc(len);
-  m->ptr = ptr;
-  m->size = (int)len;
-
-  len = 0;
-  for (linenr_T lnum = start; lnum <= end; lnum++) {
-    char *s = ml_get_buf(buf, lnum);
-    if (diff_flags & DIFF_ICASE) {
-      while (*s != NUL) {
-        int c;
-        int c_len = 1;
-        char cbuf[MB_MAXBYTES + 1];
-
-        if (*s == NL) {
-          c = NUL;
-        } else {
-          // xdiff doesn't support ignoring case, fold-case the text.
-          c = utf_ptr2char(s);
-          c_len = utf_char2len(c);
-          c = utf_fold(c);
-        }
-        const int orig_len = utfc_ptr2len(s);
-
-        if (utf_char2bytes(c, cbuf) != c_len) {
-          // TODO(Bram): handle byte length difference
-          // One example is Å (3 bytes) and å (2 bytes).
-          memmove(ptr + len, s, (size_t)orig_len);
-        } else {
-          memmove(ptr + len, cbuf, (size_t)c_len);
-          if (orig_len > c_len) {
-            // Copy remaining composing characters
-            memmove(ptr + len + c_len, s + c_len, (size_t)(orig_len - c_len));
-          }
-        }
-
-        s += orig_len;
-        len += (size_t)orig_len;
-      }
-    } else {
-      size_t slen = strlen(s);
-      memmove(ptr + len, s, slen);
-      // NUL is represented as NL; convert
-      memchrsub(ptr + len, NL, NUL, slen);
-      len += slen;
-    }
-    ptr[len++] = NL;
-  }
-  return OK;
+  return rs_diff_write_buffer(buf, &m->ptr, &m->size, start, end, diff_flags);
 }
 
 /// Write buffer "buf" to file or memory buffer.
@@ -660,7 +602,9 @@ diff_T *nvim_diff_alloc_new(tabpage_T *tp, diff_T *prev, diff_T *next) { diff_T 
 int nvim_diff_is_busy(void) { return diff_busy ? 1 : 0; }
 int nvim_diffblock_get_changes_len(diff_T *dp) { if (dp == NULL) { return 0; } return dp->df_changes.ga_len; }
 diffline_change_T *nvim_diffblock_get_change(diff_T *dp, int change_idx) { if (dp == NULL || change_idx < 0 || change_idx >= dp->df_changes.ga_len) { return NULL; } return &((diffline_change_T *)dp->df_changes.ga_data)[change_idx]; }
-void nvim_diff_write_buffer(buf_T *buf, void *m, linenr_T start, linenr_T end) { diff_write_buffer(buf, (mmfile_t *)m, start, end); }
+void nvim_diff_write_buffer(buf_T *buf, void *m, linenr_T start, linenr_T end) { mmfile_t *mm = (mmfile_t *)m; rs_diff_write_buffer(buf, &mm->ptr, &mm->size, start, end, diff_flags); }
+int nvim_diff_buf_get_ml_flags(buf_T *buf) { return buf ? buf->b_ml.ml_flags : 0; }
+int nvim_diff_ml_get_buf_len(buf_T *buf, linenr_T lnum) { return buf ? ml_get_buf_len(buf, lnum) : 0; }
 void nvim_curtab_set_diffbuf(int idx, buf_T *buf) { if (idx >= 0 && idx < DB_COUNT) { curtab->tp_diffbuf[idx] = buf; } }
 void nvim_tabpage_set_diffbuf(tabpage_T *tp, int idx, buf_T *buf) { if (tp != NULL && idx >= 0 && idx < DB_COUNT) { tp->tp_diffbuf[idx] = buf; } }
 void nvim_tabpage_set_first_diff(tabpage_T *tp, diff_T *dp) { if (tp != NULL) { tp->tp_first_diff = dp; } }

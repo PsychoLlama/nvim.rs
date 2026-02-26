@@ -13,6 +13,7 @@ pub mod block;
 pub mod buffer;
 pub mod commands;
 pub mod compute;
+pub mod diffio;
 pub mod external;
 pub mod helpers;
 pub mod highlight;
