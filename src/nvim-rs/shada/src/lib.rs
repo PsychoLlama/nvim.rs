@@ -3250,13 +3250,18 @@ pub struct BufferListBuffer {
     pub additional_data: *mut c_void,
 }
 
+impl BufferListBuffer {
+    /// Default value (constant for use in raw pointer contexts).
+    pub const DEFAULT: Self = Self {
+        pos: Position::DEFAULT,
+        fname: std::ptr::null_mut(),
+        additional_data: std::ptr::null_mut(),
+    };
+}
+
 impl Default for BufferListBuffer {
     fn default() -> Self {
-        Self {
-            pos: Position::DEFAULT,
-            fname: std::ptr::null_mut(),
-            additional_data: std::ptr::null_mut(),
-        }
+        Self::DEFAULT
     }
 }
 
@@ -5439,7 +5444,7 @@ unsafe fn rs_shada_apply_register(entry: *mut ShadaEntry, force: bool) {
         return;
     }
     if !force {
-        let name = nvim_shada_reg_get_name(entry);
+        let name = read_union_field!(entry, reg, name);
         let cur_ts = nvim_shada_op_reg_get_timestamp(name);
         // cur_ts == 0 means register is NULL; if non-null and newer or equal, skip
         if cur_ts != 0 && cur_ts >= (*entry).timestamp {
@@ -5479,9 +5484,10 @@ unsafe fn rs_shada_apply_variable(entry: *mut ShadaEntry) {
 ///
 /// `entry` must be a valid pointer to a ShadaEntry of type BufferList.
 unsafe fn rs_shada_apply_buffer_list(entry: *mut ShadaEntry) {
-    let size = nvim_shada_bl_get_size(entry);
+    let size = read_union_field!(entry, buffer_list, size);
+    let buffers = read_union_field!(entry, buffer_list, buffers);
     for i in 0..size {
-        let fname = nvim_shada_bl_buf_get_fname(entry, i);
+        let fname = (*buffers.add(i)).fname;
         if fname.is_null() {
             continue;
         }
@@ -5526,7 +5532,8 @@ unsafe fn rs_shada_apply_mark_or_jump(
     let entry_ts = (*entry).timestamp;
 
     // Find buf to know whether we compare by fnum or fname.
-    let entry_fname = nvim_shada_fm_get_fname(entry);
+    let fm_mark = read_union_field!(entry, filemark, mark);
+    let entry_fname = read_union_field!(entry, filemark, fname);
     let fm_buf = nvim_shada_find_buffer(fname_bufs, entry_fname);
     let compare_by_fnum = !fm_buf.is_null();
 
@@ -5538,8 +5545,8 @@ unsafe fn rs_shada_apply_mark_or_jump(
             let mut jl_lnum: i64 = 0;
             let mut jl_col: i32 = 0;
             nvim_shada_jumplist_entry_mark(i - 1, &raw mut jl_lnum, &raw mut jl_col);
-            let entry_lnum: i64 = nvim_shada_fm_get_lnum(entry);
-            let entry_col: i32 = nvim_shada_fm_get_col(entry);
+            let entry_lnum: i64 = fm_mark.lnum;
+            let entry_col: i32 = fm_mark.col;
             let jl_pos = Position::new(jl_lnum, jl_col, 0);
             let entry_pos = Position::new(entry_lnum, entry_col, 0);
             if rs_marks_equal(jl_pos, entry_pos) != 0 {
@@ -5603,8 +5610,9 @@ unsafe fn rs_shada_apply_local_or_change(
     }
 
     // Find buffer for this entry.
-    let entry_fname = nvim_shada_fm_get_fname(entry);
-    let buf = nvim_shada_find_buffer(fname_bufs, entry_fname);
+    let cl_mark = read_union_field!(entry, filemark, mark);
+    let cl_entry_fname = read_union_field!(entry, filemark, fname);
+    let buf = nvim_shada_find_buffer(fname_bufs, cl_entry_fname);
     if buf.is_null() {
         rs_shada_free_entry_contents(entry);
         return;
@@ -5631,8 +5639,8 @@ unsafe fn rs_shada_apply_local_or_change(
                 let mut cl_lnum: i64 = 0;
                 let mut cl_col: i32 = 0;
                 nvim_shada_changelist_entry_mark(buf, i - 1, &raw mut cl_lnum, &raw mut cl_col);
-                let entry_lnum: i64 = nvim_shada_fm_get_lnum(entry);
-                let entry_col: i32 = nvim_shada_fm_get_col(entry);
+                let entry_lnum: i64 = cl_mark.lnum;
+                let entry_col: i32 = cl_mark.col;
                 let cl_pos = Position::new(cl_lnum, cl_col, 0);
                 let entry_pos = Position::new(entry_lnum, entry_col, 0);
                 if rs_marks_equal(cl_pos, entry_pos) != 0 {
@@ -6956,12 +6964,15 @@ pub unsafe extern "C" fn rs_shada_free_entry_contents(entry: *mut ShadaEntry) {
             }
         }
         ShadaEntryType::Register => {
-            // Register contents are String structs in C ({char*, size_t} = 16 bytes each),
-            // not simple char* pointers. Delegate to C to free correctly.
+            // Register contents are *mut c_char pointers (Rust layout, uniform for all paths).
+            // Read-path entries (can_free_entry=true) own each pointer; write-path (false) skip here.
             let contents = read_union_field!(entry, reg, contents);
             let contents_size = read_union_field!(entry, reg, contents_size);
             if !contents.is_null() {
-                nvim_shada_free_reg_contents(contents.cast(), contents_size);
+                for i in 0..contents_size {
+                    nvim_xfree((*contents.add(i)).cast::<c_void>());
+                }
+                nvim_xfree(contents.cast::<c_void>());
             }
         }
         ShadaEntryType::Variable => {
@@ -7422,13 +7433,21 @@ pub unsafe extern "C" fn rs_shada_initialize_registers(
 
         let idx = nvim_shada_op_reg_index(name);
         if idx >= 0 {
+            // Convert String* array (16-byte structs) to *mut c_char array (8-byte pointers)
+            // so all register entries share uniform Rust layout for packing.
+            let strings = contents.cast::<NvimString>();
+            let ptr_array =
+                nvim_xmalloc(size * std::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
+            for j in 0..size {
+                *ptr_array.add(j) = (*strings.add(j)).data;
+            }
             wms.registers[idx as usize] = ShadaEntry {
                 can_free_entry: false,
                 entry_type: ShadaEntryType::Register,
                 timestamp: ts,
                 data: ShadaEntryData {
                     reg: std::mem::ManuallyDrop::new(RegisterData {
-                        contents: contents.cast(),
+                        contents: ptr_array,
                         contents_size: size,
                         reg_type,
                         width,
@@ -7637,46 +7656,8 @@ extern "C" {
     fn nvim_shada_entry_is_blob_var(entry: *const ShadaEntry) -> c_int;
     /// Get typval_T pointer from a variable entry.
     fn nvim_shada_entry_var_value_ptr(entry: *mut ShadaEntry) -> *mut c_void;
-    /// Get number of items in header Dict.
-    fn nvim_shada_header_size(entry: *const ShadaEntry) -> usize;
-    /// Get key data pointer for header item i.
-    fn nvim_shada_header_item_key_data(entry: *const ShadaEntry, i: usize) -> *const c_char;
-    /// Get key size for header item i.
-    fn nvim_shada_header_item_key_size(entry: *const ShadaEntry, i: usize) -> usize;
-    /// Get object type for header item i.
-    fn nvim_shada_header_item_value_type(entry: *const ShadaEntry, i: usize) -> c_int;
-    /// Get string data pointer for a string-typed header item i.
-    fn nvim_shada_header_item_value_str_data(entry: *const ShadaEntry, i: usize) -> *const c_char;
-    /// Get string size for a string-typed header item i.
-    fn nvim_shada_header_item_value_str_size(entry: *const ShadaEntry, i: usize) -> usize;
-    /// Get integer value for an integer-typed header item i.
-    fn nvim_shada_header_item_value_integer(entry: *const ShadaEntry, i: usize) -> i64;
-    /// Get data pointer for register contents[i].
-    fn nvim_shada_reg_contents_data(entry: *const ShadaEntry, i: usize) -> *const c_char;
-    /// Get size for register contents[i].
-    fn nvim_shada_reg_contents_size(entry: *const ShadaEntry, i: usize) -> usize;
-    /// Get number of register contents entries.
-    fn nvim_shada_reg_contents_count(entry: *const ShadaEntry) -> usize;
-
-    // Filemark field accessors (pos_T.lnum is i32 but Rust Position.lnum is i64)
-    fn nvim_shada_fm_get_lnum(entry: *const ShadaEntry) -> i64;
-    fn nvim_shada_fm_get_col(entry: *const ShadaEntry) -> i32;
-    fn nvim_shada_fm_get_name(entry: *const ShadaEntry) -> c_char;
-    fn nvim_shada_fm_get_fname(entry: *const ShadaEntry) -> *const c_char;
-
-    // Register field accessors (MotionType enum layout differs from Rust c_int)
-    fn nvim_shada_reg_get_type(entry: *const ShadaEntry) -> i32;
-    fn nvim_shada_reg_get_name(entry: *const ShadaEntry) -> c_char;
-    fn nvim_shada_reg_get_is_unnamed(entry: *const ShadaEntry) -> bool;
-    fn nvim_shada_reg_get_width(entry: *const ShadaEntry) -> usize;
-
-    // BufferList per-buffer accessors (pos_T layout differs)
-    fn nvim_shada_bl_get_size(entry: *const ShadaEntry) -> usize;
-    fn nvim_shada_bl_buf_get_lnum(entry: *const ShadaEntry, i: usize) -> i64;
-    fn nvim_shada_bl_buf_get_col(entry: *const ShadaEntry, i: usize) -> i32;
-    fn nvim_shada_bl_buf_get_fname(entry: *const ShadaEntry, i: usize) -> *const c_char;
-    fn nvim_shada_bl_buf_fname_size(entry: *const ShadaEntry, i: usize) -> usize;
-    fn nvim_shada_bl_buf_get_additional_data(entry: *const ShadaEntry, i: usize) -> *const c_void;
+    /// Pack a header entry's Dict into a packer buffer (replaces 7 individual header accessors).
+    fn nvim_shada_pack_header_dict(entry: *const ShadaEntry, sbuf: *mut ShadaPackerBuffer);
 
     // MessagePack primitives (from nvim-msgpack crate, callable as extern "C")
     fn rs_mpack_array(ptr: *mut *mut u8, size: u32);
@@ -7691,10 +7672,6 @@ extern "C" {
     fn rs_mpack_check_buffer(packer: *mut ShadaPackerBuffer);
 
 }
-
-/// ObjectType constants matching C's enum.
-const OBJECT_TYPE_INTEGER: c_int = 2;
-const OBJECT_TYPE_STRING: c_int = 4;
 
 /// VAR_BLOB constant value matching C's VarType enum.
 const VAR_TYPE_BLOB: i64 = 10;
@@ -7966,12 +7943,12 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
         | ShadaEntryType::GlobalMark
         | ShadaEntryType::LocalMark
         | ShadaEntryType::Jump => {
-            // Use C accessor functions - pos_T.lnum is i32 but Rust Position.lnum is i64,
-            // so direct struct access would read wrong values.
-            let fm_lnum = nvim_shada_fm_get_lnum(entry);
-            let fm_col = nvim_shada_fm_get_col(entry);
-            let fm_name = nvim_shada_fm_get_name(entry);
-            let fm_fname = nvim_shada_fm_get_fname(entry);
+            // Direct Rust field access - FilemarkData uses Rust Position (i64 lnum).
+            let fm_mark = read_union_field!(entry, filemark, mark);
+            let fm_lnum = fm_mark.lnum;
+            let fm_col = fm_mark.col;
+            let fm_name = read_union_field!(entry, filemark, name);
+            let fm_fname = read_union_field!(entry, filemark, fname);
 
             let def_lnum: i64 = 1;
             let def_col: i32 = 0;
@@ -8028,13 +8005,13 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
             nvim_shada_dump_additional_data(additional_data.cast::<c_void>(), sbuf);
         }
         ShadaEntryType::Register => {
-            // Use C accessor functions - MotionType is a C enum with different
-            // representation than Rust c_int, and String* layout differs.
-            let reg_type = nvim_shada_reg_get_type(entry);
-            let reg_name = nvim_shada_reg_get_name(entry);
-            let reg_is_unnamed = nvim_shada_reg_get_is_unnamed(entry);
-            let reg_width = nvim_shada_reg_get_width(entry);
-            let contents_count = nvim_shada_reg_contents_count(entry);
+            // Direct Rust field access - all register entries use uniform *mut *mut c_char layout.
+            let reg_type = read_union_field!(entry, reg, reg_type);
+            let reg_name = read_union_field!(entry, reg, name);
+            let reg_is_unnamed = read_union_field!(entry, reg, is_unnamed);
+            let reg_width = read_union_field!(entry, reg, width);
+            let contents_count = read_union_field!(entry, reg, contents_size);
+            let reg_contents = read_union_field!(entry, reg, contents);
 
             let def_reg_type: i32 = MT_CHAR_WISE;
             let def_width: usize = 0;
@@ -8062,9 +8039,17 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
             rs_mpack_array(&raw mut ptr2, contents_count as u32);
             nvim_shada_packer_set_ptr(sbuf, ptr2);
             for i in 0..contents_count {
-                let data = nvim_shada_reg_contents_data(entry, i);
-                let size = nvim_shada_reg_contents_size(entry, i);
-                rs_mpack_bin(data.cast::<u8>(), size, sbuf);
+                if reg_contents.is_null() {
+                    rs_mpack_bin(std::ptr::null(), 0, sbuf);
+                } else {
+                    let data = *reg_contents.add(i);
+                    let size = if data.is_null() {
+                        0
+                    } else {
+                        libc::strlen(data)
+                    };
+                    rs_mpack_bin(data.cast::<u8>(), size, sbuf);
+                }
             }
 
             // Pack register name (n key)
@@ -8094,21 +8079,32 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
             nvim_shada_dump_additional_data(additional_data.cast::<c_void>(), sbuf);
         }
         ShadaEntryType::BufferList => {
-            // Use C accessor functions - buffer_list_buffer.pos is pos_T (i32 lnum),
-            // but Rust BufferListBuffer.pos is Position (i64 lnum). Direct access is wrong.
-            let bl_size = nvim_shada_bl_get_size(entry);
+            // Direct Rust field access - BufferListBuffer uses Rust Position (i64 lnum).
+            let bl_size = read_union_field!(entry, buffer_list, size);
+            let bl_buffers = read_union_field!(entry, buffer_list, buffers);
             let def_lnum: i64 = 1;
             let def_col: i32 = 0;
             let mut ptr = nvim_shada_packer_get_ptr(sbuf);
             rs_mpack_array(&raw mut ptr, bl_size as u32);
             nvim_shada_packer_set_ptr(sbuf, ptr);
             for i in 0..bl_size {
-                let buf_ad_ptr = nvim_shada_bl_buf_get_additional_data(entry, i);
-                let buf_ad = nvim_shada_additional_data_len(buf_ad_ptr);
-                let buf_lnum = nvim_shada_bl_buf_get_lnum(entry, i);
-                let buf_col = nvim_shada_bl_buf_get_col(entry, i);
-                let buf_fname = nvim_shada_bl_buf_get_fname(entry, i);
-                let buf_fname_len = nvim_shada_bl_buf_fname_size(entry, i);
+                let (buf_ad_ptr, buf_lnum, buf_col, buf_fname) = if bl_buffers.is_null() {
+                    (
+                        std::ptr::null_mut(),
+                        0i64,
+                        0i32,
+                        std::ptr::null_mut::<c_char>(),
+                    )
+                } else {
+                    let b = &*bl_buffers.add(i);
+                    (b.additional_data, b.pos.lnum, b.pos.col, b.fname)
+                };
+                let buf_ad = nvim_shada_additional_data_len(buf_ad_ptr.cast_const());
+                let buf_fname_len = if buf_fname.is_null() {
+                    0
+                } else {
+                    libc::strlen(buf_fname)
+                };
 
                 let mut entry_map_size: u32 = 1; // fname always present
                 if buf_lnum != def_lnum {
@@ -8138,31 +8134,12 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
                     rs_mpack_uint64(&raw mut ptr3, buf_col as u64);
                     nvim_shada_packer_set_ptr(sbuf, ptr3);
                 }
-                nvim_shada_dump_additional_data(buf_ad_ptr, sbuf);
+                nvim_shada_dump_additional_data(buf_ad_ptr.cast_const(), sbuf);
             }
         }
         ShadaEntryType::Header => {
-            let header_size = nvim_shada_header_size(entry);
-            let mut ptr = nvim_shada_packer_get_ptr(sbuf);
-            rs_mpack_map(&raw mut ptr, header_size as u32);
-            nvim_shada_packer_set_ptr(sbuf, ptr);
-            for i in 0..header_size {
-                let key_data = nvim_shada_header_item_key_data(entry, i);
-                let key_size = nvim_shada_header_item_key_size(entry, i);
-                rs_mpack_str(key_data.cast::<u8>(), key_size, sbuf);
-                let val_type = nvim_shada_header_item_value_type(entry, i);
-                if val_type == OBJECT_TYPE_STRING {
-                    let str_data = nvim_shada_header_item_value_str_data(entry, i);
-                    let str_size = nvim_shada_header_item_value_str_size(entry, i);
-                    rs_mpack_bin(str_data.cast::<u8>(), str_size, sbuf);
-                } else if val_type == OBJECT_TYPE_INTEGER {
-                    let int_val = nvim_shada_header_item_value_integer(entry, i);
-                    let mut ptr2 = nvim_shada_packer_get_ptr(sbuf);
-                    rs_mpack_integer(&raw mut ptr2, int_val);
-                    nvim_shada_packer_set_ptr(sbuf, ptr2);
-                }
-                // Other types abort() in C; we skip them
-            }
+            // Compound accessor: C handles Dict iteration (Dict/kvec_t layout is C-specific).
+            nvim_shada_pack_header_dict(entry, sbuf);
         }
     }
 

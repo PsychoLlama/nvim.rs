@@ -1164,99 +1164,41 @@ void *nvim_shada_entry_var_value_ptr(ShadaEntry *entry)
   return entry ? &entry->data.global_var.value : NULL;
 }
 
-/// Get number of items in a header Dict.
-size_t nvim_shada_header_size(const ShadaEntry *entry)
+/// Pack a header entry's Dict into a packer buffer (compound replacement for 7 individual
+/// header field accessors). Writes a msgpack map with all header key-value pairs.
+/// Called from Rust rs_shada_pack_entry for ShadaEntryType::Header.
+void nvim_shada_pack_header_dict(const ShadaEntry *entry, PackerBuffer *sbuf)
 {
-  return entry ? entry->data.header.size : 0;
-}
-
-/// Get key data pointer for header item i.
-const char *nvim_shada_header_item_key_data(const ShadaEntry *entry, size_t i)
-{
-  return (entry && i < entry->data.header.size) ? entry->data.header.items[i].key.data : NULL;
-}
-
-/// Get key size for header item i.
-size_t nvim_shada_header_item_key_size(const ShadaEntry *entry, size_t i)
-{
-  return (entry && i < entry->data.header.size) ? entry->data.header.items[i].key.size : 0;
-}
-
-/// Get object type for header item i.
-int nvim_shada_header_item_value_type(const ShadaEntry *entry, size_t i)
-{
-  return (entry && i < entry->data.header.size) ? (int)entry->data.header.items[i].value.type : 0;
-}
-
-/// Get string data pointer for a string-typed header item i.
-const char *nvim_shada_header_item_value_str_data(const ShadaEntry *entry, size_t i)
-{
-  return (entry && i < entry->data.header.size) ? entry->data.header.items[i].value.data.string.data : NULL;
-}
-
-/// Get string size for a string-typed header item i.
-size_t nvim_shada_header_item_value_str_size(const ShadaEntry *entry, size_t i)
-{
-  return (entry && i < entry->data.header.size) ? entry->data.header.items[i].value.data.string.size : 0;
-}
-
-/// Get integer value for an integer-typed header item i.
-int64_t nvim_shada_header_item_value_integer(const ShadaEntry *entry, size_t i)
-{
-  return (entry && i < entry->data.header.size) ? entry->data.header.items[i].value.data.integer : 0;
-}
-
-/// Get data pointer for register contents[i] (a String struct's .data).
-const char *nvim_shada_reg_contents_data(const ShadaEntry *entry, size_t i)
-{
-  if (!entry || i >= entry->data.reg.contents_size || !entry->data.reg.contents) {
-    return NULL;
+  if (!entry) {
+    return;
   }
-  return entry->data.reg.contents[i].data;
-}
-
-/// Get size for register contents[i] (a String struct's .size).
-size_t nvim_shada_reg_contents_size(const ShadaEntry *entry, size_t i)
-{
-  if (!entry || i >= entry->data.reg.contents_size || !entry->data.reg.contents) {
-    return 0;
+  size_t header_size = entry->data.header.size;
+  char *ptr = sbuf->ptr;
+  mpack_map((uint8_t **)&ptr, (uint32_t)header_size);
+  sbuf->ptr = ptr;
+  for (size_t i = 0; i < header_size; i++) {
+    mpack_check_buffer(sbuf);
+    KeyValuePair *kv = &entry->data.header.items[i];
+    mpack_str((String){ .data = kv->key.data, .size = kv->key.size }, sbuf);
+    if (kv->value.type == kObjectTypeString) {
+      mpack_bin((String){ .data = kv->value.data.string.data, .size = kv->value.data.string.size },
+                sbuf);
+    } else if (kv->value.type == kObjectTypeInteger) {
+      mpack_integer(&sbuf->ptr, kv->value.data.integer);
+    }
+    // Other types are skipped (same as Rust behaviour).
   }
-  return entry->data.reg.contents[i].size;
 }
 
-/// Get the number of register contents entries.
-size_t nvim_shada_reg_contents_count(const ShadaEntry *entry)
-{
-  return entry ? entry->data.reg.contents_size : 0;
-}
-
+// nvim_shada_reg_contents_data, nvim_shada_reg_contents_size, nvim_shada_reg_contents_count
+// nvim_shada_fm_get_*, nvim_shada_reg_get_*, nvim_shada_bl_* deleted (Phase 3 plan c02d0f11):
+// read via read_union_field!/direct struct access in Rust; register entries normalized to
+// *mut c_char* in rs_shada_initialize_registers.
+// nvim_shada_header_size, nvim_shada_header_item_* deleted (Phase 3 plan c02d0f11):
+// consolidated into nvim_shada_pack_header_dict compound accessor.
 // nvim_shada_packer_get_anyint deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
 
 // nvim_shada_sp_get_* deleted (Phase 2 plan c02d0f11): search_pattern read via read_union_field! in Rust.
-
-// Filemark field accessors (pos_T uses linenr_T=int32 but Rust Position.lnum is i64)
-int64_t nvim_shada_fm_get_lnum(const ShadaEntry *e) { return (int64_t)e->data.filemark.mark.lnum; }
-int32_t nvim_shada_fm_get_col(const ShadaEntry *e) { return (int32_t)e->data.filemark.mark.col; }
-char nvim_shada_fm_get_name(const ShadaEntry *e) { return e->data.filemark.name; }
-const char *nvim_shada_fm_get_fname(const ShadaEntry *e) { return e->data.filemark.fname; }
-
-// Register field accessors (MotionType enum and String* layout differ from Rust)
-int32_t nvim_shada_reg_get_type(const ShadaEntry *e) { return (int32_t)e->data.reg.type; }
-char nvim_shada_reg_get_name(const ShadaEntry *e) { return e->data.reg.name; }
-bool nvim_shada_reg_get_is_unnamed(const ShadaEntry *e) { return e->data.reg.is_unnamed; }
-size_t nvim_shada_reg_get_width(const ShadaEntry *e) { return e->data.reg.width; }
-
-// BufferList per-buffer position accessors
-int64_t nvim_shada_bl_buf_get_lnum(const ShadaEntry *e, size_t i) { return (int64_t)e->data.buffer_list.buffers[i].pos.lnum; }
-int32_t nvim_shada_bl_buf_get_col(const ShadaEntry *e, size_t i) { return (int32_t)e->data.buffer_list.buffers[i].pos.col; }
-const char *nvim_shada_bl_buf_get_fname(const ShadaEntry *e, size_t i) { return e->data.buffer_list.buffers[i].fname; }
-size_t nvim_shada_bl_buf_fname_size(const ShadaEntry *e, size_t i)
-{
-  const char *f = e->data.buffer_list.buffers[i].fname;
-  return f ? strlen(f) : 0;
-}
-const void *nvim_shada_bl_buf_get_additional_data(const ShadaEntry *e, size_t i) { return e->data.buffer_list.buffers[i].additional_data; }
-size_t nvim_shada_bl_get_size(const ShadaEntry *e) { return e->data.buffer_list.size; }
 
 // nvim_shada_unknown_get_*, nvim_shada_hist_get_*, nvim_shada_gvar_get_name,
 // nvim_shada_sub_get_string deleted (Phase 2 plan c02d0f11): read via read_union_field! in Rust.
