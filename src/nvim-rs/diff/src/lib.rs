@@ -23,6 +23,7 @@ pub mod marks;
 pub mod nav;
 pub mod navigate;
 pub mod ops;
+pub mod patch;
 pub mod scroll;
 pub mod update;
 pub mod viml;

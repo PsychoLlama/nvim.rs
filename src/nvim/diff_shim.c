@@ -107,6 +107,7 @@ extern void rs_diffgetput(int addr_count, int idx_cur, int idx_from, int idx_to,
 extern void rs_run_linematch(diff_T *dp);
 extern void rs_compute_inline_diff(diff_T *dp);
 extern int rs_parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, int *num_anchors);
+extern void rs_ex_diffpatch(exarg_T *eap);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -526,155 +527,12 @@ static int diff_file(diffio_T *dio)
 /// The buffer is written to a file, also for unmodified buffers (the file
 /// could have been produced by autocommands, e.g. the netrw plugin).
 ///
+/// Thin wrapper -- implementation moved to Rust (rs_ex_diffpatch in patch.rs).
+///
 /// @param eap
 void ex_diffpatch(exarg_T *eap)
 {
-  char *buf = NULL;
-  win_T *old_curwin = curwin;
-  char *newname = NULL;  // name of patched file buffer
-  char *esc_name = NULL;
-
-#ifdef UNIX
-  char *fullname = NULL;
-#endif
-
-  // We need two temp file names.
-  // Name of original temp file.
-  char *tmp_orig = vim_tempname();
-  // Name of patched temp file.
-  char *tmp_new = vim_tempname();
-
-  if ((tmp_orig == NULL) || (tmp_new == NULL)) {
-    goto theend;
-  }
-
-  // Write the current buffer to "tmp_orig".
-  if (buf_write(curbuf, tmp_orig, NULL,
-                1, curbuf->b_ml.ml_line_count,
-                NULL, false, false, false, true) == FAIL) {
-    goto theend;
-  }
-
-#ifdef UNIX
-  // Get the absolute path of the patchfile, changing directory below.
-  fullname = FullName_save(eap->arg, false);
-  esc_name = vim_strsave_shellescape(fullname != NULL ? fullname : eap->arg, true, true);
-#else
-  esc_name = vim_strsave_shellescape(eap->arg, true, true);
-#endif
-  size_t buflen = strlen(tmp_orig) + strlen(esc_name) + strlen(tmp_new) + 16;
-  buf = xmalloc(buflen);
-
-#ifdef UNIX
-  char dirbuf[MAXPATHL];
-  // Temporarily chdir to /tmp, to avoid patching files in the current
-  // directory when the patch file contains more than one patch.  When we
-  // have our own temp dir use that instead, it will be cleaned up when we
-  // exit (any .rej files created).  Don't change directory if we can't
-  // return to the current.
-  if ((os_dirname(dirbuf, MAXPATHL) != OK)
-      || (os_chdir(dirbuf) != 0)) {
-    dirbuf[0] = NUL;
-  } else {
-    char *tempdir = vim_gettempdir();
-    if (tempdir == NULL) {
-      tempdir = "/tmp";
-    }
-    os_chdir(tempdir);
-    shorten_fnames(true);
-  }
-#endif
-
-  if (*p_pex != NUL) {
-    // Use 'patchexpr' to generate the new file.
-#ifdef UNIX
-    eval_patch(tmp_orig, (fullname != NULL ? fullname : eap->arg), tmp_new);
-#else
-    eval_patch(tmp_orig, eap->arg, tmp_new);
-#endif
-  } else {
-    // Build the patch command and execute it. Ignore errors.
-    vim_snprintf(buf, buflen, "patch -o %s %s < %s",
-                 tmp_new, tmp_orig, esc_name);
-    block_autocmds();  // Avoid ShellCmdPost stuff
-    call_shell(buf, kShellOptFilter, NULL);
-    unblock_autocmds();
-  }
-
-#ifdef UNIX
-  if (dirbuf[0] != NUL) {
-    if (os_chdir(dirbuf) != 0) {
-      emsg(_(e_prev_dir));
-    }
-    shorten_fnames(true);
-  }
-#endif
-
-  // Delete any .orig or .rej file created.
-  STRCPY(buf, tmp_new);
-  strcat(buf, ".orig");
-  os_remove(buf);
-  STRCPY(buf, tmp_new);
-  strcat(buf, ".rej");
-  os_remove(buf);
-
-  // Only continue if the output file was created.
-  FileInfo file_info;
-  bool info_ok = os_fileinfo(tmp_new, &file_info);
-  uint64_t filesize = os_fileinfo_size(&file_info);
-  if (!info_ok || filesize == 0) {
-    emsg(_("E816: Cannot read patch output"));
-  } else {
-    if (curbuf->b_fname != NULL) {
-      newname = xstrnsave(curbuf->b_fname, strlen(curbuf->b_fname) + 4);
-      strcat(newname, ".new");
-    }
-
-    // don't use a new tab page, each tab page has its own diffs
-    cmdmod.cmod_tab = 0;
-
-    if (win_split(0, (diff_flags & DIFF_VERTICAL) ? WSP_VERT : 0) != FAIL) {
-      // Pretend it was a ":split fname" command
-      eap->cmdidx = CMD_split;
-      eap->arg = tmp_new;
-      do_exedit(eap, old_curwin);
-
-      // check that split worked and editing tmp_new
-      if ((curwin != old_curwin) && rs_win_valid(old_curwin)) {
-        // Set 'diff', 'scrollbind' on and 'wrap' off.
-        diff_win_options(curwin, true);
-        diff_win_options(old_curwin, true);
-
-        if (newname != NULL) {
-          // do a ":file filename.new" on the patched buffer
-          eap->arg = newname;
-          ex_file(eap);
-
-          // Do filetype detection with the new name.
-          if (augroup_exists("filetypedetect")) {
-            do_cmdline_cmd(":doau filetypedetect BufRead");
-          }
-        }
-      }
-    }
-  }
-
-theend:
-  if (tmp_orig != NULL) {
-    os_remove(tmp_orig);
-  }
-  xfree(tmp_orig);
-
-  if (tmp_new != NULL) {
-    os_remove(tmp_new);
-  }
-  xfree(tmp_new);
-  xfree(newname);
-  xfree(buf);
-#ifdef UNIX
-  xfree(fullname);
-#endif
-  xfree(esc_name);
+  rs_ex_diffpatch(eap);
 }
 
 /// Split the window and edit another file, setting options to show the diffs.
@@ -1009,6 +867,30 @@ void nvim_diff_semsg_too_many_anchors(int max) { semsg(_(e_cannot_have_more_than
 win_T *nvim_diff_get_firstwin(void) { return firstwin; }
 bool nvim_win_get_w_p_diff_bool(win_T *wp) { return wp->w_p_diff; }
 void nvim_diff_emsg(const char *msg) { emsg(msg); }
+// Phase 7 (ex_diffpatch) accessors
+char *nvim_diff_vim_tempname(void) { return vim_tempname(); }
+int nvim_diff_buf_write_curbuf(const char *fname) { return buf_write(curbuf, (char *)fname, NULL, 1, curbuf->b_ml.ml_line_count, NULL, false, false, false, true); }
+char *nvim_diff_FullName_save(const char *fname) { return FullName_save((char *)fname, false); }
+char *nvim_diff_vim_strsave_shellescape(const char *s) { return vim_strsave_shellescape(s, true, true); }
+int nvim_diff_os_dirname(char *buf, int size) { return os_dirname(buf, (size_t)size); }
+int nvim_diff_os_chdir(const char *dir) { return os_chdir(dir); }
+const char *nvim_diff_vim_gettempdir(void) { return vim_gettempdir(); }
+void nvim_diff_shorten_fnames(void) { shorten_fnames(true); }
+bool nvim_diff_is_patchexpr_set(void) { return *p_pex != NUL; }
+void nvim_diff_eval_patch(const char *orig, const char *diff, const char *out) { eval_patch((char *)orig, (char *)diff, (char *)out); }
+void nvim_diff_call_shell_filter(const char *cmd) { block_autocmds(); call_shell((char *)cmd, kShellOptFilter, NULL); unblock_autocmds(); }
+bool nvim_diff_os_fileinfo_size(const char *fname, uint64_t *size_out) { FileInfo fi; bool ok = os_fileinfo(fname, &fi); if (ok && size_out != NULL) { *size_out = os_fileinfo_size(&fi); } return ok; }
+void nvim_diff_os_remove(const char *fname) { os_remove(fname); }
+char *nvim_diff_xstrnsave(const char *s, size_t len) { return xstrnsave(s, len); }
+int nvim_diff_get_MAXPATHL(void) { return MAXPATHL; }
+char *nvim_diff_xmalloc(size_t size) { return xmalloc(size); }
+void nvim_diff_vim_snprintf_patch(char *buf, size_t buflen, const char *tmp_new, const char *tmp_orig, const char *esc_name) { vim_snprintf(buf, buflen, "patch -o %s %s < %s", tmp_new, tmp_orig, esc_name); }
+size_t nvim_diff_strlen(const char *s) { return s ? strlen(s) : 0; }
+const char *nvim_diff_get_curbuf_fname(void) { return curbuf->b_fname; }
+void nvim_diff_emsg_e816(void) { emsg(_("E816: Cannot read patch output")); }
+void nvim_diff_emsg_prev_dir(void) { emsg(_(e_prev_dir)); }
+void nvim_diff_ex_file(exarg_T *eap) { ex_file(eap); }
+bool nvim_diff_augroup_exists_filetypedetect(void) { return augroup_exists("filetypedetect"); }
 // Phase 3 accessors: f_diff_hlID
 int64_t nvim_curbuf_changedtick_i64(void) { return (int64_t)buf_get_changedtick(curbuf); }
 int nvim_diff_tv_get_number_idx(typval_T *argvars, int idx) { return (int)tv_get_number(&argvars[idx]); }
