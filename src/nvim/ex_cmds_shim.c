@@ -2183,19 +2183,9 @@ int nvim_excmds_eap_get_forceit(const exarg_T *eap) { return eap->forceit ? 1 : 
 /// Get mutable pointer to eap->forceit field (for check_readonly pattern).
 int *nvim_excmds_eap_forceit_ptr(exarg_T *eap) { return (int *)&eap->forceit; }
 
-/// Get p_ch (cmdheight).
-int nvim_do_sub_get_p_ch(void) { return (int)p_ch; }
-
-/// Get p_lz (lazyredraw).
-int nvim_do_sub_get_p_lz(void) { return p_lz ? 1 : 0; }
-/// Set p_lz (lazyredraw).
-void nvim_do_sub_set_p_lz(int val) { p_lz = (bool)val; }
-
-/// Check if CPO_UNDO is in p_cpo.
-int nvim_do_sub_get_p_cpo_has_undo(void)
-{
-  return vim_strchr(p_cpo, CPO_UNDO) != NULL ? 1 : 0;
-}
+// nvim_do_sub_get_p_ch deleted -- use nvim_option_get_ch (option_shim.c)
+// nvim_do_sub_get_p_lz / nvim_do_sub_set_p_lz deleted -- use nvim_option_get_lz / nvim_option_set_lz (option_shim.c)
+// nvim_do_sub_get_p_cpo_has_undo deleted -- use nvim_option_p_cpo_has_undo (option_shim.c)
 
 // nvim_curwin_get_w_curswant -- defined in indent_ffi.c
 // nvim_curbuf_get_b_p_ma / nvim_curbuf_set_b_p_ma -- defined in option_shim.c
@@ -2298,8 +2288,7 @@ uint64_t nvim_do_sub_profile_zero(void)
   return (uint64_t)profile_zero();
 }
 
-/// Wrap p_rdt (redrawtime option, milliseconds).
-int64_t nvim_do_sub_get_p_rdt(void) { return (int64_t)p_rdt; }
+// nvim_do_sub_get_p_rdt deleted -- use nvim_option_get_p_rdt (option_shim.c)
 
 /// Wrap skip_regexp_ex for do_sub. Updates *arg_ptr in place.
 char *nvim_do_sub_skip_regexp_ex(char *cmd, int delim, char **arg_ptr)
@@ -2321,16 +2310,10 @@ void nvim_do_sub_changed_window_setting(void) { changed_window_setting(curwin); 
 
 // nvim_curwin_get_cursor_col -- defined in edit.c
 
-/// Get p_cwh (cmdwinheight).
-int nvim_do_sub_get_p_cwh(void) { return (int)p_cwh; }
-
+// nvim_do_sub_get_p_cwh deleted -- use nvim_option_get_p_cwh (option_shim.c)
 // nvim_do_sub_aborting deleted -- use nvim_excmds_aborting instead.
-
-/// Wrap os_time(). Returns current time as uint64_t.
-uint64_t nvim_do_sub_os_time(void) { return (uint64_t)os_time(); }
-
-/// Wrap setpcmark().
-void nvim_do_sub_setpcmark(void) { setpcmark(); }
+// nvim_do_sub_os_time deleted -- had no call sites.
+// nvim_do_sub_setpcmark deleted -- use nvim_excmds_setpcmark (ex_cmds_shim.c line 1047)
 
 /// Wrap getvcol for start column (sc). Returns sc via out pointer.
 void nvim_do_sub_getvcol_startcol(int lnum, int col, int *sc_out)
@@ -2400,8 +2383,7 @@ void nvim_do_sub_disable_inccommand(void)
   set_option_direct(kOptInccommand, STATIC_CSTR_AS_OPTVAL(""), 0, SID_NONE);
 }
 
-/// Get *p_icm != NUL.
-int nvim_do_sub_get_p_icm_notnul(void) { return *p_icm != NUL ? 1 : 0; }
+// nvim_do_sub_get_p_icm_notnul deleted -- use nvim_option_p_icm_notnul (option_shim.c)
 
 /// Set curbuf->b_op_start.lnum and col = 0.
 void nvim_do_sub_set_op_start(int lnum)
@@ -2416,9 +2398,7 @@ void nvim_do_sub_set_op_end(int lnum)
   curbuf->b_op_end.col = 0;
 }
 
-/// Wrap MODIFIABLE macro: returns 1 if buffer is modifiable.
-int nvim_do_sub_modifiable(void) { return MODIFIABLE(curbuf) ? 1 : 0; }
-
+// nvim_do_sub_modifiable deleted -- use nvim_curbuf_modifiable (normal_shim.c)
 
 /// Format the confirm prompt string into IObuff and return xstrdup of it.
 char *nvim_do_sub_format_confirm_prompt(const char *sub)
@@ -2477,35 +2457,18 @@ void nvim_do_sub_buf_updates_send_changes(int first, int64_t num_added, int64_t 
   buf_updates_send_changes(curbuf, (linenr_T)first, num_added, num_removed);
 }
 
-/// Wrap line_breakcheck().
-void nvim_do_sub_line_breakcheck(void) { line_breakcheck(); }
+// nvim_do_sub_line_breakcheck deleted -- use nvim_excmds_line_breakcheck (ex_cmds_shim.c line 1196)
+// nvim_do_sub_eap_cmd_is_s deleted -- implemented in Rust
+// nvim_do_sub_ascii_iswhite deleted -- implemented in Rust
+// nvim_do_sub_is_sub_flag_or_digit deleted -- implemented in Rust
+// nvim_do_sub_is_backslash_delim deleted -- implemented in Rust
+// nvim_do_sub_ascii_isdigit deleted -- implemented in Rust
 
 /// Get ml_get_len(lnum) for do_sub.
 int nvim_do_sub_ml_get_len(int lnum) { return (int)ml_get_len((linenr_T)lnum); }
 
 /// Get ml_get(lnum) for do_sub.
 const char *nvim_do_sub_ml_get(int lnum) { return ml_get((linenr_T)lnum); }
-
-/// Check if eap->cmd[0] == 's'.
-int nvim_do_sub_eap_cmd_is_s(const exarg_T *eap) { return eap->cmd[0] == 's' ? 1 : 0; }
-
-/// Check if character is ASCII whitespace.
-int nvim_do_sub_ascii_iswhite(int c) { return ascii_iswhite(c) ? 1 : 0; }
-
-/// Check if character is in "0123456789cegriIp|\"" (i.e., sub flag or digit).
-int nvim_do_sub_is_sub_flag_or_digit(int c)
-{
-  return vim_strchr("0123456789cegriIp|\"", (uint8_t)c) == NULL ? 0 : 1;
-}
-
-/// Check if *cmd == '\\' and cmd[1] is in "/?&".
-int nvim_do_sub_is_backslash_delim(const char *cmd)
-{
-  return (*cmd == '\\' && vim_strchr("/?&", (uint8_t)(cmd[1])) != NULL) ? 1 : 0;
-}
-
-/// Wrap ascii_isdigit().
-int nvim_do_sub_ascii_isdigit(int c) { return ascii_isdigit(c) ? 1 : 0; }
 
 /// Set eap->nextcmd.
 void nvim_do_sub_set_eap_nextcmd(exarg_T *eap, char *p) { eap->nextcmd = p; }

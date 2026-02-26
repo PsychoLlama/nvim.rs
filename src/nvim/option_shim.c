@@ -4247,3 +4247,15 @@ void nvim_buf_clear_b_p_bt_if_help(buf_T *buf)
     clear_string_option(&buf->b_p_bt);
   }
 }
+
+/// Check if CPO_UNDO is in p_cpo.
+int nvim_option_p_cpo_has_undo(void)
+{
+  return vim_strchr(p_cpo, CPO_UNDO) != NULL ? 1 : 0;
+}
+/// Get p_rdt (redrawtime option, milliseconds).
+int64_t nvim_option_get_p_rdt(void) { return (int64_t)p_rdt; }
+/// Get p_cwh (cmdwinheight).
+int nvim_option_get_p_cwh(void) { return (int)p_cwh; }
+/// Get whether p_icm (inccommand) is non-empty.
+int nvim_option_p_icm_notnul(void) { return *p_icm != NUL ? 1 : 0; }
