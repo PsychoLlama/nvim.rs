@@ -1,12 +1,12 @@
 //! Orchestrator helpers for `win_close_othertab`.
 //!
-//! The C function remains the orchestrator (it handles autocmd triggers,
-//! `close_buffer`, and re-validations), but delegates three chunks of pure
-//! structural logic to Rust:
+//! This module provides the consolidated `rs_win_close_othertab` entry point
+//! as well as the three helper functions that remain exported for legacy callers:
 //!
 //! 1. [`rs_close_othertab_validate`] — initial validation (locked, aucmd, floating-only)
 //! 2. [`rs_close_othertab_remove_tabpage`] — unlink tabpage from the list
 //! 3. [`rs_close_othertab_leave_open`] — error-recovery buffer restore
+//! 4. [`rs_win_close_othertab`] — consolidated entry point replacing the C body
 
 use std::ffi::c_int;
 
@@ -26,6 +26,8 @@ extern "C" {
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
     fn nvim_tabpage_get_next(tp: TabpageHandle) -> TabpageHandle;
     fn nvim_get_first_tabpage() -> TabpageHandle;
+    fn nvim_get_curtab() -> TabpageHandle;
+    fn nvim_buf_valid_ptr(buf: BufHandle) -> c_int;
 
     // --- Existing Rust FFI helpers ---
     fn rs_is_aucmd_win(wp: WinHandle) -> c_int;
@@ -33,6 +35,9 @@ extern "C" {
     fn rs_win_valid_any_tab(win: WinHandle) -> c_int;
     fn rs_tabpage_index(ftp: TabpageHandle) -> c_int;
     fn rs_tabline_height() -> c_int;
+    fn rs_valid_tabpage(tp: TabpageHandle) -> c_int;
+    fn rs_tabpage_win_valid(tp: TabpageHandle, win: WinHandle) -> c_int;
+    fn rs_do_autocmd_winclosed(win: WinHandle);
 
     // --- New Phase 2 wrappers ---
     fn nvim_emsg_e_autocmd_close();
@@ -47,6 +52,19 @@ extern "C" {
     fn nvim_buf_inc_nwindows(buf: BufHandle);
     fn nvim_win_init_empty_wrapper(wp: WinHandle);
     fn nvim_get_firstbuf_wrapper() -> BufHandle;
+    fn nvim_free_tabpage_wrapper(tp: TabpageHandle);
+
+    // --- Phase 11 new accessors ---
+    fn nvim_close_buffer_othertab(win: WinHandle, free_buf: c_int) -> c_int;
+    fn nvim_apply_autocmds_tabclosed(idx_str: *const std::ffi::c_char, buf: BufHandle);
+    fn nvim_has_event_tabclosed() -> c_int;
+    // Recursive call wrapper (Rust -> C -> Rust re-entrant pattern).
+    fn nvim_win_close_othertab_wrapper(
+        win: WinHandle,
+        free_buf: c_int,
+        tp: TabpageHandle,
+        force: c_int,
+    ) -> c_int;
 }
 
 // =============================================================================
@@ -58,6 +76,139 @@ extern "C" {
 pub struct TabRemoveResult {
     /// Tabpage index if we removed a tabpage (>0), 0 otherwise.
     pub free_tp_idx: c_int,
+}
+
+// =============================================================================
+// Consolidated entry point: rs_win_close_othertab
+// =============================================================================
+
+/// Consolidated Rust replacement for C `win_close_othertab`.
+///
+/// Returns 1 (true) if window was closed, 0 (false) if not.
+///
+/// # Safety
+///
+/// `win` must be a valid `win_T*` in tabpage `tp`. `tp` must not be curtab.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_close_othertab(
+    win: WinHandle,
+    free_buf: c_int,
+    tp: TabpageHandle,
+    force: c_int,
+) -> c_int {
+    let mut did_decrement: c_int = 0;
+    let mut bufref_buf: BufHandle = BufHandle::null();
+
+    // Phase 1: Validation.
+    let vrc = rs_close_othertab_validate(win, tp, force);
+    if vrc == 1 {
+        return 0; // locked or aucmd_win
+    }
+    if vrc == 2 {
+        // Floating-only: recursively close floating windows.
+        loop {
+            let lastwin = nvim_tabpage_get_lastwin(tp);
+            if nvim_win_get_floating(lastwin) == 0 {
+                break;
+            }
+            if nvim_win_close_othertab_wrapper(lastwin, free_buf, tp, 1) == 0 {
+                // goto leave_open
+                rs_close_othertab_leave_open(win, did_decrement, bufref_buf, 0);
+                return 0;
+            }
+        }
+        if rs_win_valid_any_tab(win) == 0 {
+            return 0;
+        }
+    }
+    if vrc == 3 {
+        // e_floatonly already emitted by validate
+        rs_close_othertab_leave_open(win, did_decrement, bufref_buf, 0);
+        return 0;
+    }
+
+    // --- Autocmd section ---
+
+    // Fire WinClosed before freeing window-related resources.
+    if !nvim_win_get_buffer(win).is_null() {
+        rs_do_autocmd_winclosed(win);
+        if rs_win_valid_any_tab(win) == 0 {
+            return 0;
+        }
+    }
+
+    // Save bufref before close_buffer (for error recovery).
+    bufref_buf = nvim_win_get_buffer(win);
+
+    if !nvim_win_get_buffer(win).is_null() {
+        did_decrement = nvim_close_buffer_othertab(win, free_buf);
+    }
+
+    // Re-validate after autocmds.
+    if rs_valid_tabpage(tp) == 0 || tp == nvim_get_curtab() {
+        // goto leave_open
+        let bufref_valid = if bufref_buf.is_null() {
+            0
+        } else {
+            nvim_buf_valid_ptr(bufref_buf)
+        };
+        rs_close_othertab_leave_open(win, did_decrement, bufref_buf, bufref_valid);
+        return 0;
+    }
+    if rs_tabpage_win_valid(tp, win) == 0 {
+        let bufref_valid = if bufref_buf.is_null() {
+            0
+        } else {
+            nvim_buf_valid_ptr(bufref_buf)
+        };
+        rs_close_othertab_leave_open(win, did_decrement, bufref_buf, bufref_valid);
+        return 0;
+    }
+    let lastwin = nvim_tabpage_get_lastwin(tp);
+    if nvim_win_get_floating(lastwin) != 0 && rs_one_window_in_tab(win, tp) != 0 {
+        nvim_emsg_e_floatonly();
+        let bufref_valid = if bufref_buf.is_null() {
+            0
+        } else {
+            nvim_buf_valid_ptr(bufref_buf)
+        };
+        rs_close_othertab_leave_open(win, did_decrement, bufref_buf, bufref_valid);
+        return 0;
+    }
+
+    // Phase 2: Tabpage removal.
+    let res = rs_close_othertab_remove_tabpage(win, tp);
+
+    // Free the window memory.
+    let buf = nvim_win_get_buffer(win);
+    let mut dir: c_int = 0;
+    crate::close::helpers::rs_win_free_mem(win, std::ptr::addr_of_mut!(dir), tp);
+
+    if res.free_tp_idx > 0 {
+        nvim_free_tabpage_wrapper(tp);
+
+        if nvim_has_event_tabclosed() != 0 {
+            // Format the tabpage index as a C string.
+            let idx_str = format_tabpage_idx(res.free_tp_idx);
+            nvim_apply_autocmds_tabclosed(idx_str.as_ptr(), buf);
+        }
+    }
+
+    1 // true: window was closed
+}
+
+/// Format a tabpage index as a NUL-terminated C string.
+/// Returns a small fixed-size buffer (same as C's NUMBUFLEN=20).
+unsafe fn format_tabpage_idx(idx: c_int) -> [std::ffi::c_char; 20] {
+    let mut buf = [0i8; 20];
+    let s = format!("{idx}");
+    for (i, b) in s.bytes().enumerate() {
+        if i + 1 < buf.len() {
+            // All digit characters are 0x30-0x39, safe to reinterpret as i8.
+            buf[i] = i8::from_ne_bytes([b]);
+        }
+    }
+    buf
 }
 
 // =============================================================================

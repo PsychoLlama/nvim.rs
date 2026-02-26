@@ -1,12 +1,12 @@
 //! Orchestrator helpers for `win_close`.
 //!
-//! The C function remains the orchestrator for autocmd-heavy sections
-//! (BufLeave, WinLeave, WinClosed, win_close_buffer, getout, re-validations).
-//! Three chunks of pure structural/layout logic are delegated to Rust:
+//! This module provides the consolidated `rs_win_close` entry point as well as
+//! the three helper functions that remain exported for legacy callers:
 //!
 //! 1. [`rs_win_close_validate`] — initial validation checks
 //! 2. [`rs_win_close_structural`] — UI cleanup, win_free_mem, cursor transfer
 //! 3. [`rs_win_close_post_layout`] — post-close layout adjustment
+//! 4. [`rs_win_close`] — consolidated entry point replacing the C `win_close` body
 
 use std::ffi::c_int;
 
@@ -35,6 +35,11 @@ extern "C" {
     fn nvim_win_get_config_focusable(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_external(wp: WinHandle) -> c_int;
     fn nvim_buf_get_locked(buf: BufHandle) -> c_int;
+    fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
+    fn nvim_win_set_locked(wp: WinHandle, val: c_int);
+    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
+    fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
+    fn nvim_redraw_all_later(type_: c_int);
 
     // --- Existing Rust FFI helpers ---
     fn rs_last_window(win: WinHandle) -> c_int;
@@ -42,14 +47,24 @@ extern "C" {
     fn rs_one_window_in_tab(win: WinHandle, tp: TabpageHandle) -> c_int;
     fn rs_win_valid_any_tab(win: WinHandle) -> c_int;
     fn rs_bt_quickfix(buf: BufHandle) -> c_int;
+    fn rs_bt_help(buf: BufHandle) -> c_int;
     fn rs_get_snapshot_curwin(idx: c_int) -> WinHandle;
     fn rs_last_status(morewin: c_int);
     fn rs_win_comp_pos() -> c_int;
+    fn rs_diffopt_closeoff() -> c_int;
+    fn rs_do_autocmd_winclosed(win: WinHandle);
+    fn rs_reset_VIsual_and_resel();
+    fn rs_win_altframe(win: WinHandle) -> *mut Frame;
+    fn rs_frame2win(frp: *mut Frame) -> WinHandle;
+    fn rs_clear_snapshot(tp: TabpageHandle, idx: c_int);
+    fn rs_restore_snapshot(idx: c_int, close_curwin: c_int);
 
     // --- Phase 2 wrappers (reused) ---
     fn nvim_emsg_e_autocmd_close();
     fn nvim_emsg_e_floatonly();
     fn nvim_can_close_floating_windows(tp: TabpageHandle) -> c_int;
+    fn nvim_emsg_e444();
+    fn nvim_emsg_e814();
 
     // --- Phase 3 wrappers ---
     fn nvim_inc_split_disallowed();
@@ -63,13 +78,33 @@ extern "C" {
     fn nvim_check_cursor_win_wrapper(wp: WinHandle);
     #[link_name = "rs_win_valid"]
     fn nvim_win_valid_wrapper(wp: WinHandle) -> c_int;
-    // nvim_win_free_mem_wrapper removed: rs_win_close_structural now calls rs_win_free_mem directly (Phase 10)
     #[link_name = "rs_win_equal"]
     fn nvim_win_equal_wrapper(wp: WinHandle, current: c_int, dir: c_int);
     fn nvim_win_fix_scroll(upd_topline: bool);
     fn nvim_win_get_frame_parent(wp: WinHandle) -> *mut Frame;
     fn nvim_get_p_ea() -> c_int;
     fn nvim_get_p_ead_char() -> c_int;
+
+    // --- Phase 11 new accessors ---
+    fn nvim_bt_help_win(wp: WinHandle) -> c_int;
+    fn nvim_win_close_force(wp: WinHandle, free_buf: c_int) -> c_int;
+    fn nvim_getout_zero() -> !;
+    fn nvim_count_diff_windows_in_curtab() -> c_int;
+    fn nvim_do_cmdline_cmd_diffoff();
+    fn nvim_one_window_and_locked_split() -> c_int;
+    fn nvim_curwin_set_buffer_to_curbuf();
+    fn nvim_win_close_othertab_wrapper(
+        wp: WinHandle,
+        free_buf: c_int,
+        tp: TabpageHandle,
+        force: c_int,
+    ) -> c_int;
+    fn nvim_win_float_find_altwin(win: WinHandle, tp: TabpageHandle) -> WinHandle;
+    fn nvim_apply_autocmds_bufleave();
+    fn nvim_apply_autocmds_winleave();
+    fn nvim_apply_autocmds_bufenter();
+    fn nvim_apply_autocmds_tableave();
+    fn nvim_excmds_aborting() -> c_int;
 }
 
 // =============================================================================
@@ -78,6 +113,16 @@ extern "C" {
 
 /// `SNAP_HELP_IDX` from window.c.
 const SNAP_HELP_IDX: c_int = 0;
+
+/// `UPD_NOT_VALID` from drawscreen.h (value 40, verified by static assert in C).
+const UPD_NOT_VALID: c_int = 40;
+
+/// `DOBUF_UNLOAD` from buffer.h (value 2).
+const DOBUF_UNLOAD: c_int = 2;
+
+/// `WEE_CURWIN_INVALID | WEE_TRIGGER_ENTER_AUTOCMDS | WEE_TRIGGER_LEAVE_AUTOCMDS`
+/// (0x02 | 0x08 | 0x10 = 0x1a = 26)
+const WEE_CLOSE_FLAGS: c_int = 0x02 | 0x08 | 0x10;
 
 // =============================================================================
 // Return type
@@ -94,6 +139,226 @@ pub struct WinCloseStructResult {
     pub was_floating: c_int,
     /// Direction from `win_free_mem` ('v' or 'h').
     pub dir: c_int,
+}
+
+// =============================================================================
+// Consolidated entry point: rs_win_close
+// =============================================================================
+
+/// Consolidated Rust replacement for C `win_close`.
+///
+/// This function absorbs the entire `win_close` body (validation, autocmd
+/// sections, structural close, post-layout, post-close autocmds).
+///
+/// Returns OK (0) on success, FAIL (1) on failure.
+///
+/// # Safety
+///
+/// `win` must be a valid `win_T*`.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_int) -> c_int {
+    let prev_curtab = nvim_get_curtab();
+    let win_floating = nvim_win_get_floating(win) != 0;
+    let win_frame: *mut Frame = if win_floating {
+        std::ptr::null_mut()
+    } else {
+        nvim_win_get_frame_parent(win)
+    };
+    let had_diffmode = nvim_win_get_p_diff(win) != 0;
+
+    // --- Phase 1: Validation ---
+    let vrc = rs_win_close_validate(win, free_buf, force);
+    if vrc == 1 {
+        // Specific error messages for last_window, locked, aucmd_win, E814.
+        // Re-check conditions to emit the right message (mirrors C logic).
+        if rs_last_window(win) != 0 {
+            nvim_emsg_e444();
+        } else if rs_is_aucmd_win(win) != 0 {
+            nvim_emsg_e_autocmd_close();
+        } else {
+            let lastwin = nvim_get_lastwin();
+            if nvim_win_get_floating(lastwin) != 0
+                && rs_one_window_in_tab(win, TabpageHandle::null()) != 0
+                && rs_is_aucmd_win(lastwin) != 0
+            {
+                nvim_emsg_e814();
+            }
+            // else: locked window -- no error message (silent FAIL)
+        }
+        return 1; // FAIL
+    }
+    if vrc == 2 {
+        // Floating-only: recursive close loop.
+        if force != 0 || nvim_can_close_floating_windows(TabpageHandle::null()) != 0 {
+            loop {
+                let lastwin = nvim_get_lastwin();
+                if nvim_win_get_floating(lastwin) == 0 {
+                    break;
+                }
+                if nvim_win_close_force(lastwin, free_buf) != 0 {
+                    return 1; // FAIL
+                }
+            }
+            if rs_win_valid_any_tab(win) == 0 {
+                return 1; // FAIL
+            }
+        } else {
+            nvim_emsg_e_floatonly();
+            return 1; // FAIL
+        }
+    }
+
+    // close_last_window_tabpage.
+    if crate::close::helpers::rs_close_last_window_tabpage(win, free_buf, prev_curtab) != 0 {
+        return 1; // FAIL
+    }
+
+    // --- Autocmd-heavy section ---
+
+    let help_window = nvim_bt_help_win(win) != 0;
+    if !help_window {
+        rs_clear_snapshot(nvim_get_curtab(), SNAP_HELP_IDX);
+    }
+
+    let mut other_buffer = false;
+
+    if nvim_win_is_curwin(win) != 0 {
+        crate::focus::rs_leaving_window(win);
+
+        // Find the alternate window.
+        let wp_alt: WinHandle = if nvim_win_get_floating(win) != 0 {
+            nvim_win_float_find_altwin(win, TabpageHandle::null())
+        } else {
+            rs_frame2win(rs_win_altframe(win))
+        };
+
+        // Check if alternate window has different buffer from curbuf.
+        let alt_buf = nvim_win_get_buffer(wp_alt);
+        if alt_buf != nvim_get_curbuf_c() {
+            // alt buffer differs from curbuf
+            rs_reset_VIsual_and_resel();
+            other_buffer = true;
+
+            if nvim_win_valid_wrapper(win) == 0 {
+                return 1; // FAIL
+            }
+            nvim_win_set_locked(win, 1);
+            nvim_apply_autocmds_bufleave();
+            if nvim_win_valid_wrapper(win) == 0 {
+                return 1; // FAIL
+            }
+            nvim_win_set_locked(win, 0);
+            if rs_last_window(win) != 0 {
+                return 1; // FAIL
+            }
+        }
+
+        nvim_win_set_locked(win, 1);
+        nvim_apply_autocmds_winleave();
+        if nvim_win_valid_wrapper(win) == 0 {
+            return 1; // FAIL
+        }
+        nvim_win_set_locked(win, 0);
+        if rs_last_window(win) != 0 {
+            return 1; // FAIL
+        }
+        if nvim_excmds_aborting() != 0 {
+            return 1; // FAIL
+        }
+    }
+
+    rs_do_autocmd_winclosed(win);
+    if rs_win_valid_any_tab(win) == 0 {
+        return 0; // OK (window already gone)
+    }
+
+    crate::close::helpers::rs_win_close_buffer(
+        win,
+        if free_buf != 0 { DOBUF_UNLOAD } else { 0 },
+        1,
+    );
+
+    // Getout edge case: last non-float window with NULL buffer.
+    if nvim_win_valid_wrapper(win) != 0
+        && nvim_win_get_buffer(win).is_null()
+        && nvim_win_get_floating(win) == 0
+        && rs_last_window(win) != 0
+    {
+        let curwin = nvim_get_curwin();
+        if nvim_win_get_buffer(curwin).is_null() {
+            nvim_curwin_set_buffer_to_curbuf();
+        }
+        nvim_getout_zero(); // never returns
+    }
+
+    // Cross-tabpage redirect: if win moved to another tab after close_buffer.
+    let curtab_now = nvim_get_curtab();
+    if curtab_now != prev_curtab
+        && rs_win_valid_any_tab(win) != 0
+        && nvim_win_get_buffer(win).is_null()
+    {
+        nvim_win_close_othertab_wrapper(win, 0, prev_curtab, force);
+        return 1; // FAIL
+    }
+
+    // Post-autocmd re-validation.
+    if nvim_win_valid_wrapper(win) == 0
+        || (nvim_win_get_floating(win) == 0 && rs_last_window(win) != 0)
+        || crate::close::helpers::rs_close_last_window_tabpage(win, free_buf, prev_curtab) != 0
+    {
+        return 1; // FAIL
+    }
+
+    // --- Phase 2: Structural close ---
+    let res = rs_win_close_structural(win, c_int::from(help_window), win_frame);
+    let wp = res.wp;
+
+    // --- Phase 3: Post-layout ---
+    rs_win_close_post_layout(res.was_floating, res.dir, win_frame);
+
+    // --- Post-close autocmds ---
+    if res.close_curwin != 0 {
+        crate::enter::rs_win_enter_ext(wp, WEE_CLOSE_FLAGS);
+        if other_buffer {
+            nvim_apply_autocmds_bufenter();
+        }
+    }
+
+    if nvim_one_window_and_locked_split() != 0 {
+        nvim_apply_autocmds_tableave();
+    }
+
+    nvim_dec_split_disallowed();
+
+    if help_window {
+        rs_restore_snapshot(SNAP_HELP_IDX, res.close_curwin);
+    }
+
+    // Diff closeoff handling.
+    if rs_diffopt_closeoff() != 0 && had_diffmode && nvim_get_curtab() == prev_curtab {
+        let diffcount = nvim_count_diff_windows_in_curtab();
+        if diffcount == 1 {
+            nvim_do_cmdline_cmd_diffoff();
+        }
+    }
+
+    let curwin = nvim_get_curwin();
+    nvim_win_set_pos_changed(curwin, 1);
+    if res.was_floating == 0 {
+        nvim_redraw_all_later(UPD_NOT_VALID);
+    }
+
+    0 // OK
+}
+
+/// Helper: get curbuf (needed inline without re-exporting).
+#[inline]
+unsafe fn nvim_get_curbuf_c() -> BufHandle {
+    extern "C" {
+        fn nvim_get_curbuf() -> BufHandle;
+    }
+    nvim_get_curbuf()
 }
 
 // =============================================================================
