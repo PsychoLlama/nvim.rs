@@ -110,6 +110,7 @@ extern int rs_parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, 
 extern void rs_ex_diffpatch(exarg_T *eap);
 extern int rs_diff_write_buffer(buf_T *buf, char **m_ptr, int *m_size,
                                 linenr_T start, linenr_T end, int diff_flags);
+extern int rs_diff_file_internal(void *dio);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -376,41 +377,10 @@ static int check_external_diff(diffio_T *diffio)
 }
 
 /// Invoke the xdiff function.
+/// Thin wrapper -- implementation moved to Rust (rs_diff_file_internal in diffio.rs).
 static int diff_file_internal(diffio_T *diffio)
 {
-  xpparam_t param;
-  xdemitconf_t emit_cfg;
-  xdemitcb_t emit_cb;
-
-  CLEAR_FIELD(param);
-  CLEAR_FIELD(emit_cfg);
-  CLEAR_FIELD(emit_cb);
-
-  param.flags = (unsigned long)diff_algorithm;
-
-  if (diff_flags & DIFF_IWHITE) {
-    param.flags |= XDF_IGNORE_WHITESPACE_CHANGE;
-  }
-  if (diff_flags & DIFF_IWHITEALL) {
-    param.flags |= XDF_IGNORE_WHITESPACE;
-  }
-  if (diff_flags & DIFF_IWHITEEOL) {
-    param.flags |= XDF_IGNORE_WHITESPACE_AT_EOL;
-  }
-  if (diff_flags & DIFF_IBLANK) {
-    param.flags |= XDF_IGNORE_BLANK_LINES;
-  }
-
-  emit_cfg.ctxlen = 0;  // don't need any diff_context here
-  emit_cb.priv = &diffio->dio_diff;
-  emit_cfg.hunk_func = xdiff_out;
-  if (xdl_diff(&diffio->dio_orig.din_mmfile,
-               &diffio->dio_new.din_mmfile,
-               &param, &emit_cfg, &emit_cb) < 0) {
-    emsg(_("E960: Problem creating the internal diff"));
-    return FAIL;
-  }
-  return OK;
+  return rs_diff_file_internal(diffio);
 }
 
 /// Make a diff between files "tmp_orig" and "tmp_new", results in "tmp_diff".
@@ -695,6 +665,13 @@ colnr_T nvim_diffchange_get_start(diffline_change_T *change, int idx) { if (chan
 colnr_T nvim_diffchange_get_end(diffline_change_T *change, int idx) { if (change == NULL || idx < 0 || idx >= DB_COUNT) { return 0; } return change->dc_end[idx]; }
 bool nvim_diff_is_simple_change(diffline_change_T *change) { return change == &simple_diffline_change; }
 const char *nvim_diff_skipwhite(const char *p) { return skipwhite(p); }
+// Phase 2 (diff_file_internal) accessors
+char *nvim_diffio_get_orig_ptr(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_orig.din_mmfile.ptr : NULL; }
+int nvim_diffio_get_orig_size(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_orig.din_mmfile.size : 0; }
+char *nvim_diffio_get_new_ptr(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_new.din_mmfile.ptr : NULL; }
+int nvim_diffio_get_new_size(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_new.din_mmfile.size : 0; }
+void *nvim_diffio_get_dout(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? &dio->dio_diff : NULL; }
+void nvim_diff_emsg_e960(void) { emsg(_("E960: Problem creating the internal diff")); }
 // Phase 5 (inline_compute) accessors
 int nvim_xdiff_internal_run(const char *orig_data, int orig_size, const char *new_data, int new_size, void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return FAIL; } dio->dio_orig.din_mmfile.ptr = (char *)orig_data; dio->dio_orig.din_mmfile.size = orig_size; dio->dio_new.din_mmfile.ptr = (char *)new_data; dio->dio_new.din_mmfile.size = new_size; return diff_file_internal(dio); }
 uint64_t *nvim_diffbuf_get_chartab(int idx) { if (idx < 0 || idx >= DB_COUNT || curtab->tp_diffbuf[idx] == NULL) { return NULL; } return curtab->tp_diffbuf[idx]->b_chartab; }
