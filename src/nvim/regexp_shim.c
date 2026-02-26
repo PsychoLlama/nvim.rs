@@ -108,42 +108,6 @@ typedef struct {
   uint8_t program[];
 } bt_regprog_T;
 
-/// Structure representing a NFA state.
-/// An NFA state may have no outgoing edge, when it is a NFA_MATCH state.
-typedef struct nfa_state nfa_state_T;
-struct nfa_state {
-  int c;
-  nfa_state_T *out;
-  nfa_state_T *out1;
-  int id;
-  int lastlist[2];  ///< 0: normal, 1: recursive
-  int val;
-};
-
-/// Structure used by the NFA matcher.
-typedef struct {
-  // These four members implement regprog_T.
-  regengine_T *engine;
-  unsigned regflags;
-  unsigned re_engine;
-  unsigned re_flags;
-  bool re_in_use;
-
-  nfa_state_T *start;   ///< points into state[]
-
-  int reganch;          ///< pattern starts with ^
-  int regstart;         ///< char at start of pattern
-  uint8_t *match_text;  ///< plain text to match with
-
-  int has_zend;         ///< pattern contains \ze
-  int has_backref;      ///< pattern contains \1 .. \9
-  int reghasz;
-  char *pattern;
-  int nsubexp;          ///< number of ()
-  int nstate;
-  nfa_state_T state[];
-} nfa_regprog_T;
-
 struct regengine {
   /// bt_regcomp or nfa_regcomp
   regprog_T *(*regcomp)(uint8_t *, int);
@@ -154,80 +118,6 @@ struct regengine {
   /// bt_regexec_mult or nfa_regexec_mult
   int (*regexec_multi)(regmmatch_T *, win_T *, buf_T *, linenr_T, colnr_T, proftime_T *, int *);
 };
-
-// Structure used to save the current input state, when it needs to be
-// restored after trying a match.  Used by reg_save() and reg_restore().
-// Also stores the length of "backpos".
-typedef struct {
-  union {
-    uint8_t *ptr;       // REX_PTR->input pointer, for single-line regexp
-    lpos_T pos;        // REX_PTR->input pos, for multi-line regexp
-  } rs_u;
-  int rs_len;
-} regsave_T;
-
-// struct to save start/end pointer/position in for \(\)
-typedef struct {
-  union {
-    uint8_t *ptr;
-    lpos_T pos;
-  } se_u;
-} save_se_T;
-
-typedef struct {
-  int in_use;       ///< number of subexpr with useful info
-
-  // When REG_MULTI is true list.multi is used, otherwise list.line.
-  union {
-    struct multipos {
-      linenr_T start_lnum;
-      linenr_T end_lnum;
-      colnr_T start_col;
-      colnr_T end_col;
-    } multi[NSUBEXP];
-    struct linepos {
-      uint8_t *start;
-      uint8_t *end;
-    } line[NSUBEXP];
-  } list;
-  colnr_T orig_start_col;  // list.multi[0].start_col without \zs
-} regsub_T;
-
-typedef struct {
-  regsub_T norm;      // \( .. \) matches
-  regsub_T synt;      // \z( .. \) matches
-} regsubs_T;
-
-// nfa_pim_T stores a Postponed Invisible Match.
-typedef struct nfa_pim_S nfa_pim_T;
-struct nfa_pim_S {
-  int result;                   // NFA_PIM_*, see below
-  nfa_state_T *state;           // the invisible match start state
-  regsubs_T subs;               // submatch info, only party used
-  union {
-    lpos_T pos;
-    uint8_t *ptr;
-  } end;                        // where the match must end
-};
-
-// nfa_thread_T contains execution information of a NFA state
-typedef struct {
-  nfa_state_T *state;
-  int count;
-  nfa_pim_T pim;                // if pim.result != 0 (NFA_PIM_UNUSED): postponed
-                                // invisible match
-  regsubs_T subs;               // submatch info, only party used
-} nfa_thread_T;
-
-// nfa_list_T contains the alternative NFA execution states.
-typedef struct {
-  nfa_thread_T *t;           ///< allocated array of states
-  int n;                        ///< nr of states currently in "t"
-  int len;                      ///< max nr of states in "t"
-  int id;                       ///< ID of the list
-  int has_pim;                  ///< true when any state has a PIM
-} nfa_list_T;
-
 
 static char *reg_prev_sub = NULL;
 static size_t reg_prev_sublen = 0;
