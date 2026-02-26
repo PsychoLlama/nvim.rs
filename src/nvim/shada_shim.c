@@ -1232,18 +1232,7 @@ size_t nvim_shada_reg_contents_count(const ShadaEntry *entry)
 
 // nvim_shada_packer_get_anyint deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
 
-// Search pattern field accessors (Dict(_shada_search_pat) has OptionalKeys prefix)
-bool nvim_shada_sp_get_magic(const ShadaEntry *e) { return e->data.search_pattern.magic; }
-bool nvim_shada_sp_get_smartcase(const ShadaEntry *e) { return e->data.search_pattern.smartcase; }
-bool nvim_shada_sp_get_has_line_offset(const ShadaEntry *e) { return e->data.search_pattern.has_line_offset; }
-bool nvim_shada_sp_get_place_cursor_at_end(const ShadaEntry *e) { return e->data.search_pattern.place_cursor_at_end; }
-bool nvim_shada_sp_get_is_last_used(const ShadaEntry *e) { return e->data.search_pattern.is_last_used; }
-bool nvim_shada_sp_get_is_substitute_pattern(const ShadaEntry *e) { return e->data.search_pattern.is_substitute_pattern; }
-bool nvim_shada_sp_get_highlighted(const ShadaEntry *e) { return e->data.search_pattern.highlighted; }
-bool nvim_shada_sp_get_search_backward(const ShadaEntry *e) { return e->data.search_pattern.search_backward; }
-int64_t nvim_shada_sp_get_offset(const ShadaEntry *e) { return e->data.search_pattern.offset; }
-const char *nvim_shada_sp_get_pat_data(const ShadaEntry *e) { return e->data.search_pattern.pat.data; }
-size_t nvim_shada_sp_get_pat_size(const ShadaEntry *e) { return e->data.search_pattern.pat.size; }
+// nvim_shada_sp_get_* deleted (Phase 2 plan c02d0f11): search_pattern read via read_union_field! in Rust.
 
 // Filemark field accessors (pos_T uses linenr_T=int32 but Rust Position.lnum is i64)
 int64_t nvim_shada_fm_get_lnum(const ShadaEntry *e) { return (int64_t)e->data.filemark.mark.lnum; }
@@ -1269,21 +1258,8 @@ size_t nvim_shada_bl_buf_fname_size(const ShadaEntry *e, size_t i)
 const void *nvim_shada_bl_buf_get_additional_data(const ShadaEntry *e, size_t i) { return e->data.buffer_list.buffers[i].additional_data; }
 size_t nvim_shada_bl_get_size(const ShadaEntry *e) { return e->data.buffer_list.size; }
 
-// UnknownItem field accessors (avoid Rust implicit autoref through union)
-uint64_t nvim_shada_unknown_get_type_num(const ShadaEntry *e) { return e->data.unknown_item.type; }
-const char *nvim_shada_unknown_get_contents(const ShadaEntry *e) { return e->data.unknown_item.contents; }
-size_t nvim_shada_unknown_get_size(const ShadaEntry *e) { return e->data.unknown_item.size; }
-
-// HistoryItem field accessors
-uint8_t nvim_shada_hist_get_histtype(const ShadaEntry *e) { return e->data.history_item.histtype; }
-const char *nvim_shada_hist_get_string(const ShadaEntry *e) { return e->data.history_item.string; }
-char nvim_shada_hist_get_sep(const ShadaEntry *e) { return e->data.history_item.sep; }
-
-// GlobalVar field accessors
-const char *nvim_shada_gvar_get_name(const ShadaEntry *e) { return e->data.global_var.name; }
-
-// SubString field accessors
-const char *nvim_shada_sub_get_string(const ShadaEntry *e) { return e->data.sub_string.sub; }
+// nvim_shada_unknown_get_*, nvim_shada_hist_get_*, nvim_shada_gvar_get_name,
+// nvim_shada_sub_get_string deleted (Phase 2 plan c02d0f11): read via read_union_field! in Rust.
 
 // Global variable iteration accessor (inlines var_shada_iter; plan b499a5d0 Phase 5).
 // flavour is a bitmask of VAR_FLAVOUR_DEFAULT | VAR_FLAVOUR_SESSION | VAR_FLAVOUR_SHADA.

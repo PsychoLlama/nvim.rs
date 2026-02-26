@@ -27,6 +27,20 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
+// Safely read a field from a ManuallyDrop union variant of a ShadaEntry.
+//
+// Usage: `read_union_field!(entry_ptr, variant_name, field_name)`
+//
+// Uses `addr_of!` to avoid triggering ManuallyDrop's Drop impl or creating
+// unaligned references.
+macro_rules! read_union_field {
+    ($entry:expr, $field:ident, $inner:ident) => {{
+        let data_ptr = std::ptr::addr_of!((*$entry).data.$field);
+        let inner_ptr: *const _ = std::ptr::addr_of!((**data_ptr).$inner);
+        std::ptr::read(inner_ptr)
+    }};
+}
+
 // =============================================================================
 // ShaDa Entry Type Constants
 // =============================================================================
@@ -5361,7 +5375,11 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
 ///
 /// `entry` must be a valid pointer to a ShadaEntry of type SearchPattern.
 unsafe fn rs_shada_apply_search_pattern(entry: *mut ShadaEntry, force: bool) {
-    let is_sub = c_int::from(nvim_shada_sp_get_is_substitute_pattern(entry));
+    let is_sub = c_int::from(read_union_field!(
+        entry,
+        search_pattern,
+        is_substitute_pattern
+    ));
     if !force {
         let cur_ts = nvim_shada_get_search_pattern_timestamp(is_sub);
         // cur_ts == 0 means no pattern set (pat is NULL); skip only if pat exists and is newer
@@ -5375,9 +5393,9 @@ unsafe fn rs_shada_apply_search_pattern(entry: *mut ShadaEntry, force: bool) {
     } else {
         nvim_shada_set_search_pattern_from_entry(entry);
     }
-    if nvim_shada_sp_get_is_last_used(entry) {
+    if read_union_field!(entry, search_pattern, is_last_used) {
         nvim_shada_set_last_used_pattern(is_sub);
-        let highlighted = nvim_shada_sp_get_highlighted(entry);
+        let highlighted = read_union_field!(entry, search_pattern, highlighted);
         nvim_shada_set_no_hlsearch(c_int::from(!highlighted));
     }
     // Memory was consumed by set_search_pattern / set_substitute_pattern; do not free.
@@ -6905,15 +6923,6 @@ pub unsafe extern "C" fn rs_shada_free_entry_contents(entry: *mut ShadaEntry) {
         return;
     }
 
-    // Helper to read from ManuallyDrop union fields safely
-    macro_rules! read_union_field {
-        ($entry:expr, $field:ident, $inner:ident) => {{
-            let data_ptr = std::ptr::addr_of!((*$entry).data.$field);
-            let inner_ptr: *const _ = std::ptr::addr_of!((**data_ptr).$inner);
-            std::ptr::read(inner_ptr)
-        }};
-    }
-
     match (*entry).entry_type {
         ShadaEntryType::Unknown => {
             let contents = read_union_field!(entry, unknown_item, contents);
@@ -7649,19 +7658,6 @@ extern "C" {
     /// Get number of register contents entries.
     fn nvim_shada_reg_contents_count(entry: *const ShadaEntry) -> usize;
 
-    // Search pattern field accessors (Dict has OptionalKeys prefix, layout differs)
-    fn nvim_shada_sp_get_magic(entry: *const ShadaEntry) -> bool;
-    fn nvim_shada_sp_get_smartcase(entry: *const ShadaEntry) -> bool;
-    fn nvim_shada_sp_get_has_line_offset(entry: *const ShadaEntry) -> bool;
-    fn nvim_shada_sp_get_place_cursor_at_end(entry: *const ShadaEntry) -> bool;
-    fn nvim_shada_sp_get_is_last_used(entry: *const ShadaEntry) -> bool;
-    fn nvim_shada_sp_get_is_substitute_pattern(entry: *const ShadaEntry) -> bool;
-    fn nvim_shada_sp_get_highlighted(entry: *const ShadaEntry) -> bool;
-    fn nvim_shada_sp_get_search_backward(entry: *const ShadaEntry) -> bool;
-    fn nvim_shada_sp_get_offset(entry: *const ShadaEntry) -> i64;
-    fn nvim_shada_sp_get_pat_data(entry: *const ShadaEntry) -> *const c_char;
-    fn nvim_shada_sp_get_pat_size(entry: *const ShadaEntry) -> usize;
-
     // Filemark field accessors (pos_T.lnum is i32 but Rust Position.lnum is i64)
     fn nvim_shada_fm_get_lnum(entry: *const ShadaEntry) -> i64;
     fn nvim_shada_fm_get_col(entry: *const ShadaEntry) -> i32;
@@ -7694,21 +7690,6 @@ extern "C" {
     fn rs_mpack_raw(data: *const u8, len: usize, packer: *mut ShadaPackerBuffer);
     fn rs_mpack_check_buffer(packer: *mut ShadaPackerBuffer);
 
-    // UnknownItem field accessors (avoid implicit autoref through union)
-    fn nvim_shada_unknown_get_type_num(entry: *const ShadaEntry) -> u64;
-    fn nvim_shada_unknown_get_contents(entry: *const ShadaEntry) -> *const c_char;
-    fn nvim_shada_unknown_get_size(entry: *const ShadaEntry) -> usize;
-
-    // HistoryItem field accessors
-    fn nvim_shada_hist_get_histtype(entry: *const ShadaEntry) -> u8;
-    fn nvim_shada_hist_get_string(entry: *const ShadaEntry) -> *const c_char;
-    fn nvim_shada_hist_get_sep(entry: *const ShadaEntry) -> c_char;
-
-    // GlobalVar field accessor
-    fn nvim_shada_gvar_get_name(entry: *const ShadaEntry) -> *const c_char;
-
-    // SubString field accessor
-    fn nvim_shada_sub_get_string(entry: *const ShadaEntry) -> *const c_char;
 }
 
 /// ObjectType constants matching C's enum.
@@ -7773,17 +7754,16 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
             return SD_WRITE_FAILED;
         }
         ShadaEntryType::Unknown => {
-            // Pack raw unknown data using C accessors to avoid Rust implicit autoref
-            let contents = nvim_shada_unknown_get_contents(entry);
-            let size = nvim_shada_unknown_get_size(entry);
+            let contents = read_union_field!(entry, unknown_item, contents);
+            let size = read_union_field!(entry, unknown_item, size);
             if !contents.is_null() {
                 rs_mpack_raw(contents.cast::<u8>(), size, sbuf);
             }
         }
         ShadaEntryType::HistoryEntry => {
-            let histtype = nvim_shada_hist_get_histtype(entry);
-            let string = nvim_shada_hist_get_string(entry);
-            let sep = nvim_shada_hist_get_sep(entry);
+            let histtype = read_union_field!(entry, history_item, histtype);
+            let string = read_union_field!(entry, history_item, string);
+            let sep = read_union_field!(entry, history_item, sep);
             let is_hist_search = histtype == HIST_SEARCH;
             let arr_size = 2u32 + u32::from(is_hist_search) + ad_len;
             let mut ptr = nvim_shada_packer_get_ptr(sbuf);
@@ -7805,10 +7785,10 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
             nvim_shada_dump_additional_data(additional_data.cast::<c_void>(), sbuf);
         }
         ShadaEntryType::Variable => {
-            // Check if it's a blob type
+            // Check if it's a blob type (must use C accessor - reads C-layout typval_T)
             let is_blob = nvim_shada_entry_is_blob_var(entry) != 0;
             let arr_size = 2u32 + u32::from(is_blob) + ad_len;
-            let name = nvim_shada_gvar_get_name(entry);
+            let name = read_union_field!(entry, global_var, name);
             let name_len = if name.is_null() {
                 0
             } else {
@@ -7851,7 +7831,7 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
             nvim_shada_dump_additional_data(additional_data.cast::<c_void>(), sbuf);
         }
         ShadaEntryType::SubString => {
-            let sub = nvim_shada_sub_get_string(entry);
+            let sub = read_union_field!(entry, sub_string, sub);
             let arr_size = 1u32 + ad_len;
             let mut ptr = nvim_shada_packer_get_ptr(sbuf);
             rs_mpack_array(&raw mut ptr, arr_size);
@@ -7872,19 +7852,21 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
             let def_offset: i64 = 0;
             let def_search_backward = false;
 
-            // Use C accessor functions - Dict(_shada_search_pat) has an OptionalKeys
-            // prefix that makes direct struct field access incorrect from Rust.
-            let sp_magic = nvim_shada_sp_get_magic(entry);
-            let sp_is_last_used = nvim_shada_sp_get_is_last_used(entry);
-            let sp_smartcase = nvim_shada_sp_get_smartcase(entry);
-            let sp_has_line_offset = nvim_shada_sp_get_has_line_offset(entry);
-            let sp_place_cursor_at_end = nvim_shada_sp_get_place_cursor_at_end(entry);
-            let sp_is_substitute_pattern = nvim_shada_sp_get_is_substitute_pattern(entry);
-            let sp_highlighted = nvim_shada_sp_get_highlighted(entry);
-            let sp_search_backward = nvim_shada_sp_get_search_backward(entry);
-            let sp_offset = nvim_shada_sp_get_offset(entry);
-            let sp_pat = nvim_shada_sp_get_pat_data(entry);
-            let sp_pat_len = nvim_shada_sp_get_pat_size(entry);
+            // Data is in Rust SearchPatternData layout (created by rs_parse_search_pattern
+            // or rs_add_search_pattern), so direct field access via read_union_field! is correct.
+            let sp_magic = read_union_field!(entry, search_pattern, magic);
+            let sp_is_last_used = read_union_field!(entry, search_pattern, is_last_used);
+            let sp_smartcase = read_union_field!(entry, search_pattern, smartcase);
+            let sp_has_line_offset = read_union_field!(entry, search_pattern, has_line_offset);
+            let sp_place_cursor_at_end =
+                read_union_field!(entry, search_pattern, place_cursor_at_end);
+            let sp_is_substitute_pattern =
+                read_union_field!(entry, search_pattern, is_substitute_pattern);
+            let sp_highlighted = read_union_field!(entry, search_pattern, highlighted);
+            let sp_search_backward = read_union_field!(entry, search_pattern, search_backward);
+            let sp_offset = read_union_field!(entry, search_pattern, offset);
+            let sp_pat = read_union_field!(entry, search_pattern, pat);
+            let sp_pat_len = read_union_field!(entry, search_pattern, pat_len);
 
             let mut map_size: u32 = 1; // pattern is always present
             if sp_magic != def_magic {
@@ -8194,7 +8176,7 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
         // Write header: type, timestamp, packed size
         let mut outer_ptr = nvim_shada_packer_get_ptr(packer);
         if entry_type == ShadaEntryType::Unknown {
-            let type_num = nvim_shada_unknown_get_type_num(entry);
+            let type_num = read_union_field!(entry, unknown_item, type_num);
             rs_mpack_uint64_inline(&raw mut outer_ptr, type_num);
         } else {
             rs_mpack_uint64_inline(&raw mut outer_ptr, entry_type as u64);
