@@ -21,6 +21,7 @@ pub mod normal_execute;
 pub mod operator;
 pub mod operator_cmds;
 pub mod pending;
+pub mod scrollbind;
 pub mod showcmd;
 pub mod visual;
 

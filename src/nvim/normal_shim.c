@@ -2394,97 +2394,70 @@ void pop_showcmd(void) { rs_pop_showcmd(); }
 
 // display_showcmd migrated to Rust (rs_display_showcmd) in Phase 2
 
-/// When "check" is false, prepare for commands that scroll the window.
-/// When "check" is true, take care of scroll-binding after the window has
-/// scrolled.  Called from normal_cmd() and edit().
-void do_check_scrollbind(bool check)
+// =============================================================================
+// Phase 3: Scrollbind C accessors for Rust FFI
+// =============================================================================
+
+/// Get did_syncbind global.
+bool nvim_get_did_syncbind(void) { return did_syncbind; }
+
+/// Set did_syncbind global.
+void nvim_set_did_syncbind(bool val) { did_syncbind = val; }
+
+/// rs_get_vtopline(curwin) wrapper (avoids exposing win_T* from Rust).
+int nvim_rs_get_vtopline_curwin(void) { return rs_get_vtopline(curwin); }
+
+/// Check curwin pointer equality with a saved handle.
+bool nvim_curwin_eq(win_T *wp) { return curwin == wp; }
+
+/// Check curwin->w_buffer pointer equality with a saved buffer handle.
+bool nvim_curwin_buf_eq(buf_T *buf) { return curwin->w_buffer == buf; }
+
+/// Get curwin->w_p_diff.
+bool nvim_curwin_get_w_p_diff(void) { return curwin->w_p_diff; }
+
+/// Get curwin->w_scbind_pos.
+int nvim_curwin_get_w_scbind_pos(void) { return curwin->w_scbind_pos; }
+
+/// Set curwin->w_scbind_pos.
+void nvim_curwin_set_w_scbind_pos(int val) { curwin->w_scbind_pos = (linenr_T)val; }
+
+/// Check if char c is in p_sbo (scrollopt) option string.
+bool nvim_vim_strchr_p_sbo(int c) { return vim_strchr(p_sbo, c) != NULL; }
+
+/// Compound: iterate all windows in current tab and sync scrollbind.
+/// Handles curwin/curbuf swapping internally (unsafe to do in Rust).
+/// old_curwin_arg: the original window before the loop.
+/// vtopline_diff: vertical scroll diff.
+/// tgt_leftcol: target left column for horizontal scroll.
+/// want_ver: do vertical sync.
+/// want_hor: do horizontal sync.
+void nvim_scrollbind_sync_windows(win_T *old_curwin_arg, int vtopline_diff,
+                                   int tgt_leftcol, bool want_ver, bool want_hor)
 {
-  static win_T *old_curwin = NULL;
-  static linenr_T old_vtopline = 0;
-  static buf_T *old_buf = NULL;
-  static colnr_T old_leftcol = 0;
-
-  int vtopline = rs_get_vtopline(curwin);
-
-  if (check && curwin->w_p_scb) {
-    // If a ":syncbind" command was just used, don't scroll, only reset
-    // the values.
-    if (did_syncbind) {
-      did_syncbind = false;
-    } else if (curwin == old_curwin) {
-      // Synchronize other windows, as necessary according to
-      // 'scrollbind'.  Don't do this after an ":edit" command, except
-      // when 'diff' is set.
-      if ((curwin->w_buffer == old_buf
-           || curwin->w_p_diff
-           )
-          && (vtopline != old_vtopline
-              || curwin->w_leftcol != old_leftcol)) {
-        check_scrollbind(vtopline - old_vtopline, curwin->w_leftcol - old_leftcol);
-      }
-    } else if (vim_strchr(p_sbo, 'j')) {  // jump flag set in 'scrollopt'
-      // When switching between windows, make sure that the relative
-      // vertical offset is valid for the new window.  The relative
-      // offset is invalid whenever another 'scrollbind' window has
-      // scrolled to a point that would force the current window to
-      // scroll past the beginning or end of its buffer.  When the
-      // resync is performed, some of the other 'scrollbind' windows may
-      // need to jump so that the current window's relative position is
-      // visible on-screen.
-      check_scrollbind(vtopline - curwin->w_scbind_pos, 0);
-    }
-    curwin->w_scbind_pos = vtopline;
-  }
-
-  old_curwin = curwin;
-  old_vtopline = vtopline;
-  old_buf = curwin->w_buffer;
-  old_leftcol = curwin->w_leftcol;
-}
-
-/// Synchronize any windows that have "scrollbind" set, based on the
-/// number of rows by which the current window has changed
-/// (1998-11-02 16:21:01  R. Edward Ralston <eralston@computer.org>)
-void check_scrollbind(linenr_T vtopline_diff, int leftcol_diff)
-{
-  win_T *old_curwin = curwin;
-  buf_T *old_curbuf = curbuf;
+  win_T *old_curbuf_win = curwin;
+  buf_T *old_curbuf_buf = curbuf;
   int old_VIsual_select = VIsual_select;
   int old_VIsual_active = VIsual_active;
-  colnr_T tgt_leftcol = curwin->w_leftcol;
-
-  // check 'scrollopt' string for vertical and horizontal scroll options
-  bool want_ver = old_curwin->w_p_diff
-                  || (vim_strchr(p_sbo, 'v') && vtopline_diff != 0);
-  bool want_hor = (vim_strchr(p_sbo, 'h') && (leftcol_diff || vtopline_diff != 0));
-
-  // loop through the scrollbound windows and scroll accordingly
   VIsual_select = VIsual_active = 0;
+
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
     curwin = wp;
     curbuf = curwin->w_buffer;
-    // skip original window and windows with 'noscrollbind'
-    if (curwin == old_curwin || !curwin->w_p_scb) {
+    if (curwin == old_curwin_arg || !curwin->w_p_scb) {
       continue;
     }
 
-    // do the vertical scroll
     if (want_ver) {
-      if (old_curwin->w_p_diff && curwin->w_p_diff) {
-        rs_diff_set_topline(old_curwin, curwin);
+      if (old_curwin_arg->w_p_diff && curwin->w_p_diff) {
+        rs_diff_set_topline(old_curwin_arg, curwin);
       } else {
         curwin->w_scbind_pos += vtopline_diff;
         int curr_vtopline = rs_get_vtopline(curwin);
-
-        // Perf: reuse curr_vtopline to reduce the time in plines_m_win_fill().
-        // Equivalent to:
-        //   int max_vtopline = plines_m_win_fill(curwin, 1, curbuf->b_ml.ml_line_count);
         int max_vtopline = curr_vtopline + curwin->w_topfill
                            + plines_m_win_fill(curwin, curwin->w_topline + 1,
                                                curbuf->b_ml.ml_line_count);
-
         int new_vtopline = MAX(MIN((linenr_T)curwin->w_scbind_pos, max_vtopline), 1);
-
         int y = new_vtopline - curr_vtopline;
         if (y > 0) {
           scrollup(curwin, y, false);
@@ -2492,23 +2465,39 @@ void check_scrollbind(linenr_T vtopline_diff, int leftcol_diff)
           scrolldown(curwin, -y, false);
         }
       }
-
       redraw_later(curwin, UPD_VALID);
       cursor_correct(curwin);
       curwin->w_redr_status = true;
     }
 
-    // do the horizontal scroll
     if (want_hor) {
-      set_leftcol(tgt_leftcol);
+      set_leftcol((colnr_T)tgt_leftcol);
     }
   }
 
-  // reset current-window
   VIsual_select = old_VIsual_select;
   VIsual_active = old_VIsual_active;
-  curwin = old_curwin;
-  curbuf = old_curbuf;
+  curwin = old_curbuf_win;
+  curbuf = old_curbuf_buf;
+}
+
+/// When "check" is false, prepare for commands that scroll the window.
+/// When "check" is true, take care of scroll-binding after the window has
+/// scrolled.  Called from normal_cmd() and edit().
+/// Migrated to Rust (rs_do_check_scrollbind) in Phase 3; thin wrapper.
+extern void rs_do_check_scrollbind(bool check);
+void do_check_scrollbind(bool check)
+{
+  rs_do_check_scrollbind(check);
+}
+
+/// Synchronize any windows that have "scrollbind" set, based on the
+/// number of rows by which the current window has changed.
+/// Migrated to Rust (rs_check_scrollbind) in Phase 3; thin wrapper.
+extern void rs_check_scrollbind(int vtopline_diff, int leftcol_diff);
+void check_scrollbind(linenr_T vtopline_diff, int leftcol_diff)
+{
+  rs_check_scrollbind((int)vtopline_diff, leftcol_diff);
 }
 
 /// Search for variable declaration of "ptr[len]" (thin wrapper calling Rust).
