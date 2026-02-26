@@ -1514,7 +1514,6 @@ bool nvim_win_is_qf_win(const void *win_void)
 
 void *nvim_win_get_llist_ref(const void *win_void) { return win_void == NULL ? NULL : ((const win_T *)win_void)->w_llist_ref; }
 
-static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char *title);
 
 bool nvim_qf_is_qf_stack(const void *qi_void) { return qi_void == NULL ? false : qi_void == ql_info; }
 bool nvim_qf_is_ll_stack(const void *qi_void) { return qi_void == NULL ? false : qi_void != ql_info; }
@@ -1648,10 +1647,10 @@ void nvim_semsg_list_and_what(void)
   semsg(_(e_invarg2), _("cannot have both a list and a \"what\" argument"));
 }
 
-/// Call qf_set_properties(qi, what, action, title).
+/// Call rs_qf_set_properties (Rust implementation).
 int nvim_qf_set_properties(void *qi, const void *what, int action, void *title)
 {
-  return qf_set_properties((qf_info_T *)qi, (const dict_T *)what, action, (char *)title);
+  return rs_qf_set_properties(qi, what, action, (char *)title);
 }
 
 /// Call qf_list_changed(qfl) -> rs_qf_incr_changedtick.
@@ -4531,21 +4530,42 @@ _Static_assert(QF_GETLIST_QFBUFNR == 0x400, "QF_GETLIST_QFBUFNR mismatch");
 _Static_assert(QF_GETLIST_QFTF == 0x800, "QF_GETLIST_QFTF mismatch");
 _Static_assert(QF_GETLIST_ALL == 0xFFF, "QF_GETLIST_ALL mismatch");
 
-/// @return OK
-static int qf_setprop_qftf(qf_list_T *qfl, dictitem_T *di)
-  FUNC_ATTR_NONNULL_ALL
-{
-  Callback cb;
 
-  callback_free(&qfl->qf_qftf_cb);
-  if (rs_callback_from_typval(&cb, &di->di_tv)) {
-    qfl->qf_qftf_cb = cb;
+/// Get the first item in a VimL list
+void *nvim_tv_list_first(const void *list)
+{
+  if (list == NULL) {
+    return NULL;
   }
-  return OK;
+  return tv_list_first((const list_T *)list);
 }
 
-/// to true.
-static int qf_add_entry_from_dict(qf_list_T *qfl, dict_T *d, bool first_entry, bool *valid_entry)
+/// Get the next item in a VimL list
+void *nvim_tv_list_item_next(const void *list, const void *li)
+{
+  if (list == NULL || li == NULL) {
+    return NULL;
+  }
+  return TV_LIST_ITEM_NEXT((const list_T *)list, (const listitem_T *)li);
+}
+
+/// Get dict from a list item, or NULL if not a dict type
+void *nvim_tv_list_item_dict(const void *li)
+{
+  if (li == NULL) {
+    return NULL;
+  }
+  const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li);
+  if (tv->v_type != VAR_DICT) {
+    return NULL;
+  }
+  return tv->vval.v_dict;
+}
+
+/// Create a quickfix entry from a VimL dict.
+/// Extracted from dict fields, then calls rs_qf_add_entry.
+static int qf_add_entry_from_dict(qf_list_T *qfl, dict_T *d, bool first_entry,
+                                   bool *valid_entry)
   FUNC_ATTR_NONNULL_ALL
 {
   static bool did_bufnr_emsg;
@@ -4591,25 +4611,25 @@ static int qf_add_entry_from_dict(qf_list_T *qfl, dict_T *d, bool first_entry, b
 
   // If the 'valid' field is present it overrules the detected value.
   if (tv_dict_find(d, "valid", -1) != NULL) {
-    valid = tv_dict_get_number(d, "valid");
+    valid = (bool)tv_dict_get_number(d, "valid");
   }
 
   const int status = rs_qf_add_entry(qfl,
-                                  NULL,      // dir
-                                  filename,
-                                  module,
-                                  bufnum,
-                                  text,
-                                  lnum,
-                                  end_lnum,
-                                  col,
-                                  end_col,
-                                  vcol,      // vis_col
-                                  pattern,   // search pattern
-                                  nr,
-                                  type == NULL ? NUL : *type,
-                                  &user_data,
-                                  valid);
+                                     NULL,      // dir
+                                     filename,
+                                     module,
+                                     bufnum,
+                                     text,
+                                     lnum,
+                                     end_lnum,
+                                     col,
+                                     end_col,
+                                     vcol,      // vis_col
+                                     pattern,   // search pattern
+                                     nr,
+                                     type == NULL ? NUL : *type,
+                                     &user_data,
+                                     valid);
 
   xfree(filename);
   xfree(module);
@@ -4622,37 +4642,6 @@ static int qf_add_entry_from_dict(qf_list_T *qfl, dict_T *d, bool first_entry, b
   }
 
   return status;
-}
-
-/// Get the first item in a VimL list
-void *nvim_tv_list_first(const void *list)
-{
-  if (list == NULL) {
-    return NULL;
-  }
-  return tv_list_first((const list_T *)list);
-}
-
-/// Get the next item in a VimL list
-void *nvim_tv_list_item_next(const void *list, const void *li)
-{
-  if (list == NULL || li == NULL) {
-    return NULL;
-  }
-  return TV_LIST_ITEM_NEXT((const list_T *)list, (const listitem_T *)li);
-}
-
-/// Get dict from a list item, or NULL if not a dict type
-void *nvim_tv_list_item_dict(const void *li)
-{
-  if (li == NULL) {
-    return NULL;
-  }
-  const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li);
-  if (tv->v_type != VAR_DICT) {
-    return NULL;
-  }
-  return tv->vval.v_dict;
 }
 
 int nvim_qf_add_entry_from_dict(void *qfl, void *d, bool first_entry, bool *valid_entry) { return qf_add_entry_from_dict((qf_list_T *)qfl, (dict_T *)d, first_entry, valid_entry); }
@@ -4681,173 +4670,6 @@ bool nvim_tv_list_item_is_first(const void *list, const void *li)
   return li == tv_list_first((const list_T *)list);
 }
 
-// Set the quickfix list title.
-static int qf_setprop_title(qf_info_T *qi, int qf_idx, const dict_T *what, const dictitem_T *di)
-  FUNC_ATTR_NONNULL_ALL
-{
-  qf_list_T *qfl = qf_get_list(qi, qf_idx);
-  if (di->di_tv.v_type != VAR_STRING) {
-    return FAIL;
-  }
-
-  xfree(qfl->qf_title);
-  qfl->qf_title = tv_dict_get_string(what, "title", true);
-  if (qf_idx == qi->qf_curlist) {
-    qf_update_win_titlevar(qi);
-  }
-
-  return OK;
-}
-
-// Set quickfix list items/entries.
-static int qf_setprop_items(qf_info_T *qi, int qf_idx, dictitem_T *di, int action)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (di->di_tv.v_type != VAR_LIST) {
-    return FAIL;
-  }
-
-  char *title_save = xstrdup(qi->qf_lists[qf_idx].qf_title);
-  const int retval = rs_qf_add_entries(qi, qf_idx, di->di_tv.vval.v_list, title_save,
-                                    action == ' ' ? 'a' : action);
-  xfree(title_save);
-
-  return retval;
-}
-
-// Set quickfix list items/entries from a list of lines.
-static int qf_setprop_items_from_lines(qf_info_T *qi, int qf_idx, const dict_T *what,
-                                       dictitem_T *di, int action)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char *errorformat = p_efm;
-  dictitem_T *efm_di;
-  int retval = FAIL;
-
-  // Use the user supplied errorformat settings (if present)
-  if ((efm_di = tv_dict_find(what, S_LEN("efm"))) != NULL) {
-    if (efm_di->di_tv.v_type != VAR_STRING
-        || efm_di->di_tv.vval.v_string == NULL) {
-      return FAIL;
-    }
-    errorformat = efm_di->di_tv.vval.v_string;
-  }
-
-  // Only a List value is supported
-  if (di->di_tv.v_type != VAR_LIST || di->di_tv.vval.v_list == NULL) {
-    return FAIL;
-  }
-
-  if (action == 'r' || action == 'u') {
-    rs_qf_free_items(&qi->qf_lists[qf_idx]);
-  }
-  if (rs_qf_init_ext(qi, qf_idx, NULL, NULL, &di->di_tv, errorformat,
-                  false, 0, 0, NULL, NULL) >= 0) {
-    retval = OK;
-  }
-
-  return retval;
-}
-
-// Set quickfix list context.
-static int qf_setprop_context(qf_list_T *qfl, dictitem_T *di)
-  FUNC_ATTR_NONNULL_ALL
-{
-  tv_free(qfl->qf_ctx);
-  typval_T *ctx = xcalloc(1, sizeof(typval_T));
-  tv_copy(&di->di_tv, ctx);
-  qfl->qf_ctx = ctx;
-
-  return OK;
-}
-
-// Set the current index in the specified quickfix list
-static int qf_setprop_curidx(qf_info_T *qi, qf_list_T *qfl, const dictitem_T *di)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int newidx;
-
-  // If the specified index is '$', then use the last entry
-  if (di->di_tv.v_type == VAR_STRING
-      && di->di_tv.vval.v_string != NULL
-      && strcmp(di->di_tv.vval.v_string, "$") == 0) {
-    newidx = qfl->qf_count;
-  } else {
-    // Otherwise use the specified index
-    bool denote = false;
-    newidx = (int)tv_get_number_chk(&di->di_tv, &denote);
-    if (denote) {
-      return FAIL;
-    }
-  }
-
-  if (newidx < 1) {  // sanity check
-    return FAIL;
-  }
-  newidx = MIN(newidx, qfl->qf_count);
-  const int old_qfidx = qfl->qf_index;
-  qfline_T *const qf_ptr = rs_qf_get_nth_entry(qfl, newidx, &newidx);
-  if (qf_ptr == NULL) {
-    return FAIL;
-  }
-  qfl->qf_ptr = qf_ptr;
-  qfl->qf_index = newidx;
-
-  // If the current list is modified and it is displayed in the quickfix
-  // window, then Update it.
-  if (qi->qf_lists[qi->qf_curlist].qf_id == qfl->qf_id) {
-    qf_win_pos_update(qi, old_qfidx);
-  }
-  return OK;
-}
-
-/// Used by the setqflist() and setloclist() Vim script functions.
-static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char *title)
-  FUNC_ATTR_NONNULL_ALL
-{
-  bool newlist = action == ' ' || rs_qf_stack_empty(qi);
-  int qf_idx = rs_qf_setprop_get_qfidx(qi, what, action, &newlist);
-  if (qf_idx == INVALID_QFIDX) {  // List not found
-    return FAIL;
-  }
-
-  if (newlist) {
-    qi->qf_curlist = qf_idx;
-    rs_qf_new_list(qi, title);
-    qf_idx = qi->qf_curlist;
-  }
-
-  qf_list_T *qfl = qf_get_list(qi, qf_idx);
-  dictitem_T *di;
-  int retval = FAIL;
-  if ((di = tv_dict_find(what, S_LEN("title"))) != NULL) {
-    retval = qf_setprop_title(qi, qf_idx, what, di);
-  }
-  if ((di = tv_dict_find(what, S_LEN("items"))) != NULL) {
-    retval = qf_setprop_items(qi, qf_idx, di, action);
-  }
-  if ((di = tv_dict_find(what, S_LEN("lines"))) != NULL) {
-    retval = qf_setprop_items_from_lines(qi, qf_idx, what, di, action);
-  }
-  if ((di = tv_dict_find(what, S_LEN("context"))) != NULL) {
-    retval = qf_setprop_context(qfl, di);
-  }
-  if ((di = tv_dict_find(what, S_LEN("idx"))) != NULL) {
-    retval = qf_setprop_curidx(qi, qfl, di);
-  }
-  if ((di = tv_dict_find(what, S_LEN("quickfixtextfunc"))) != NULL) {
-    retval = qf_setprop_qftf(qfl, di);
-  }
-
-  if (newlist || retval == OK) {
-    qf_list_changed(qfl);
-  }
-  if (newlist) {
-    qf_update_buffer(qi, NULL);
-  }
-
-  return retval;
-}
 
 /// When "what" is not NULL then only set some properties.
 int set_errorlist(win_T *wp, list_T *list, int action, char *title, dict_T *what)
@@ -5147,82 +4969,6 @@ void f_getloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_
 
 void f_getqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_getqflist(argvars, rettv, NULL); }
 
-/// @param[out]  rettv  Return value: 0 in case of success, -1 otherwise.
-static void set_qf_ll_list(win_T *wp, typval_T *args, typval_T *rettv)
-  FUNC_ATTR_NONNULL_ARG(2, 3)
-{
-  static const char *e_invact = N_("E927: Invalid action: '%s'");
-  const char *title = NULL;
-  char action = ' ';
-  static int recursive = 0;
-  rettv->vval.v_number = -1;
-  dict_T *what = NULL;
+void f_setloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_setloclist(argvars, rettv, NULL); }
 
-  typval_T *list_arg = &args[0];
-  if (list_arg->v_type != VAR_LIST) {
-    emsg(_(e_listreq));
-    return;
-  } else if (recursive != 0) {
-    emsg(_(e_au_recursive));
-    return;
-  }
-
-  typval_T *action_arg = &args[1];
-  if (action_arg->v_type == VAR_UNKNOWN) {
-    // Option argument was not given.
-    goto skip_args;
-  } else if (action_arg->v_type != VAR_STRING) {
-    emsg(_(e_string_required));
-    return;
-  }
-  const char *const act = tv_get_string_chk(action_arg);
-  if ((*act == 'a' || *act == 'r' || *act == 'u' || *act == ' ' || *act == 'f')
-      && act[1] == NUL) {
-    action = *act;
-  } else {
-    semsg(_(e_invact), act);
-    return;
-  }
-
-  typval_T *const what_arg = &args[2];
-  if (what_arg->v_type == VAR_UNKNOWN) {
-    // Option argument was not given.
-    goto skip_args;
-  } else if (what_arg->v_type == VAR_STRING) {
-    title = tv_get_string_chk(what_arg);
-    if (!title) {
-      // Type error. Error already printed by tv_get_string_chk().
-      return;
-    }
-  } else if (what_arg->v_type == VAR_DICT && what_arg->vval.v_dict != NULL) {
-    what = what_arg->vval.v_dict;
-  } else {
-    emsg(_(e_dictreq));
-    return;
-  }
-
-skip_args:
-  if (!title) {
-    title = (wp ? ":setloclist()" : ":setqflist()");
-  }
-
-  recursive++;
-  list_T *const l = list_arg->vval.v_list;
-  if (set_errorlist(wp, l, action, (char *)title, what) == OK) {
-    rettv->vval.v_number = 0;
-  }
-  recursive--;
-}
-
-/// "setloclist()" function
-void f_setloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = -1;
-
-  win_T *win = find_win_by_nr_or_id(&argvars[0]);
-  if (win != NULL) {
-    set_qf_ll_list(win, &argvars[1], rettv);
-  }
-}
-
-void f_setqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { set_qf_ll_list(NULL, argvars, rettv); }
+void f_setqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_setqflist(argvars, rettv, NULL); }
