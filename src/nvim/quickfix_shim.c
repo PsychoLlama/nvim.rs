@@ -361,6 +361,13 @@ extern bool rs_qf_win_pos_update(void *qi, int old_qf_index);
 extern void rs_qf_set_title_var(const void *qfl);
 extern void rs_qf_update_win_titlevar(void *qi);
 
+// Phase 11: stack resize and location list sync (migrated to Rust)
+extern void rs_qf_resize_stack_base(void *qi, int n);
+extern void rs_qf_resize_stack(int n);
+extern void rs_ll_resize_stack(void *wp, int n);
+extern void rs_qf_sync_llw_to_win(void *llw);
+extern void rs_qf_sync_win_to_llw(void *pwp);
+
 // Pass 4: stack query entry points (Phase 1)
 extern size_t rs_qf_get_size_eap(void *eap);
 extern size_t rs_qf_get_valid_size_eap(void *eap);
@@ -1568,6 +1575,22 @@ void nvim_qf_set_new_lists(void *qi_void, int n)
   qi->qf_lists = xcalloc((size_t)n, sizeof(qf_list_T));
 }
 
+/// Phase 11: Realloc qi->qf_lists to n elements and zero-fill new entries.
+/// Updates qi->qf_lists and qi->qf_maxcount.
+void nvim_qf_resize_lists_array(void *qi_void, int n)
+{
+  if (qi_void == NULL) { return; }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  size_t lsz = sizeof(*qi->qf_lists);
+  int old_maxcount = qi->qf_maxcount;
+  qf_list_T *new = xrealloc(qi->qf_lists, lsz * (size_t)n);
+  if (n > old_maxcount) {
+    memset(new + old_maxcount, 0, lsz * (size_t)(n - old_maxcount));
+  }
+  qi->qf_lists = new;
+  qi->qf_maxcount = n;
+}
+
 /// Return wp->w_p_lhi (location history option value).
 int nvim_win_get_p_lhi(const void *wp_void) { return wp_void == NULL ? 0 : (int)((const win_T *)wp_void)->w_p_lhi; }
 
@@ -2123,81 +2146,18 @@ static void decr_quickfix_busy(void) { rs_decr_quickfix_busy(); }
 void check_quickfix_busy(void) { rs_check_quickfix_busy(); }
 #endif
 
-void qf_resize_stack(int n) { assert(ql_info != NULL); qf_resize_stack_base(ql_info, n); }
+// qf_resize_stack deleted: migrated to Rust rs_qf_resize_stack (Phase 11).
+void qf_resize_stack(int n) { rs_qf_resize_stack(n); }
 
-/// Resize location list stack for window 'wp' to be able to hold n amount of lists.
-void ll_resize_stack(win_T *wp, int n)
-{
-  // check if given window is a location list window;
-  // if so then sync its 'lhistory' to the parent window or vice versa
-  if (IS_LL_WINDOW(wp)) {
-    qf_sync_llw_to_win(wp);
-  } else {
-    qf_sync_win_to_llw(wp);
-  }
+// ll_resize_stack deleted: migrated to Rust rs_ll_resize_stack (Phase 11).
+void ll_resize_stack(win_T *wp, int n) { rs_ll_resize_stack((void *)wp, n); }
 
-  qf_info_T *qi = ll_get_or_alloc_list(wp);
-  qf_resize_stack_base(qi, n);
-}
-
-/// Resize quickfix/location lists stack to be able to hold n amount of lists.
-static void qf_resize_stack_base(qf_info_T *qi, int n)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int amount_to_rm = 0;
-  size_t lsz = sizeof(*qi->qf_lists);
-
-  if (n == qi->qf_maxcount) {
-    return;
-  } else if (n < qi->qf_maxcount && n < qi->qf_listcount) {
-    // We have too many lists to store them all in the new stack,
-    // pop lists until we can fit them all in the newly resized stack
-    amount_to_rm = qi->qf_listcount - n;
-
-    for (int i = 0; i < amount_to_rm; i++) {
-      rs_qf_pop_stack(qi, true);
-    }
-  }
-
-  qf_list_T *new = xrealloc(qi->qf_lists, lsz * (size_t)n);
-
-  // fill with zeroes any newly allocated memory
-  if (n > qi->qf_maxcount) {
-    memset(new + qi->qf_maxcount, 0, lsz * (size_t)(n - qi->qf_maxcount));
-  }
-
-  qi->qf_lists = new;
-  qi->qf_maxcount = n;
-
-  rs_qf_update_buffer(qi, NULL);
-}
+// qf_resize_stack_base deleted: migrated to Rust rs_qf_resize_stack_base (Phase 11).
 
 void qf_init_stack(void) { ql_info = qf_alloc_stack(QFLT_QUICKFIX, (int)p_chi); }
 
-/// Sync a location list window's 'lhistory' value to the parent window
-static void qf_sync_llw_to_win(win_T *llw)
-{
-  win_T *wp = qf_find_win_with_loclist(llw->w_llist_ref);
-
-  if (wp != NULL) {
-    wp->w_p_lhi = llw->w_p_lhi;
-  }
-}
-
-/// Sync a window's 'lhistory' value to its location list window, if any
-static void qf_sync_win_to_llw(win_T *pwp)
-{
-  qf_info_T *llw = pwp->w_llist;
-
-  if (llw != NULL) {
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (wp->w_llist_ref == llw && bt_quickfix(wp->w_buffer)) {
-        wp->w_p_lhi = pwp->w_p_lhi;
-        return;
-      }
-    }
-  }
-}
+// qf_sync_llw_to_win deleted: migrated to Rust rs_qf_sync_llw_to_win (Phase 11).
+// qf_sync_win_to_llw deleted: migrated to Rust rs_qf_sync_win_to_llw (Phase 11).
 
 // qf_alloc_stack, qf_alloc_list_stack, ll_get_or_alloc_list,
 // qf_cmd_get_stack, qf_cmd_get_or_alloc_stack deleted: migrated to Rust in lifecycle.rs.

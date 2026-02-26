@@ -444,6 +444,161 @@ pub unsafe extern "C" fn rs_qf_zero_top_list(qi: QfStackHandle) {
 }
 
 // =============================================================================
+// Phase 11: Stack resize and location list sync
+// =============================================================================
+
+/// Opaque window handle
+type WinHandle = *mut c_void;
+/// Opaque quickfix info handle
+type QfInfoHandleMut = *mut c_void;
+
+extern "C" {
+    // Stack accessors (new for Phase 11)
+    fn nvim_qf_get_maxcount(qi: *const c_void) -> c_int;
+    fn nvim_qf_resize_lists_array(qi: *mut c_void, n: c_int);
+
+    // From lifecycle.rs (same crate, same link unit)
+    fn rs_qf_pop_stack(qi: *mut c_void, adjust: bool);
+    fn rs_qf_update_buffer(qi: *mut c_void, old_last: *const c_void);
+    fn nvim_get_ql_info() -> *mut c_void;
+    fn nvim_qf_is_ll_window(wp: *const c_void) -> bool;
+    fn rs_ll_get_or_alloc_list(wp: *mut c_void) -> *mut c_void;
+
+    // Window field accessors
+    fn nvim_win_get_llist_ref(win: *const c_void) -> *const c_void;
+    fn nvim_win_get_p_lhi(wp: *const c_void) -> c_int;
+    fn nvim_win_set_p_lhi(win: *mut c_void, v: c_int);
+    fn nvim_qf_win_get_llist(wp: *const c_void) -> *mut c_void;
+    fn nvim_qf_find_win_with_loclist(ll: *const c_void) -> *mut c_void;
+
+    // Window iteration (FOR_ALL_WINDOWS_IN_TAB)
+    fn nvim_get_firstwin() -> *mut c_void;
+    fn nvim_qf_win_next(win: *const c_void) -> *mut c_void;
+    fn nvim_win_is_qf_win(win: *const c_void) -> bool;
+}
+
+/// Sync a location list window's `lhistory` value to its parent window.
+///
+/// Equivalent to C `qf_sync_llw_to_win`.
+///
+/// # Safety
+///
+/// - `llw` must be a valid pointer to a `win_T` that is a location list window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_sync_llw_to_win(llw: WinHandle) {
+    if llw.is_null() {
+        return;
+    }
+    let llist_ref = nvim_win_get_llist_ref(llw.cast_const());
+    if llist_ref.is_null() {
+        return;
+    }
+    let wp = nvim_qf_find_win_with_loclist(llist_ref);
+    if !wp.is_null() {
+        let lhi = nvim_win_get_p_lhi(llw.cast_const());
+        nvim_win_set_p_lhi(wp, lhi);
+    }
+}
+
+/// Sync a window's `lhistory` value to its location list window, if any.
+///
+/// Equivalent to C `qf_sync_win_to_llw`.
+///
+/// # Safety
+///
+/// - `pwp` must be a valid pointer to a `win_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_sync_win_to_llw(pwp: WinHandle) {
+    if pwp.is_null() {
+        return;
+    }
+    let llw = nvim_qf_win_get_llist(pwp.cast_const());
+    if llw.is_null() {
+        return;
+    }
+    let lhi = nvim_win_get_p_lhi(pwp.cast_const());
+    // FOR_ALL_WINDOWS_IN_TAB(wp, curtab)
+    let mut wp = nvim_get_firstwin();
+    while !wp.is_null() {
+        let llist_ref = nvim_win_get_llist_ref(wp.cast_const());
+        if llist_ref == llw.cast_const() && nvim_win_is_qf_win(wp.cast_const()) {
+            nvim_win_set_p_lhi(wp, lhi);
+            return;
+        }
+        wp = nvim_qf_win_next(wp.cast_const());
+    }
+}
+
+/// Resize the quickfix/location lists array to hold `n` lists.
+///
+/// Equivalent to C `qf_resize_stack_base`. If shrinking below the current
+/// list count, pops excess lists first. Reallocates and zero-fills the array.
+///
+/// # Safety
+///
+/// - `qi` must be a valid non-null pointer to a `qf_info_T` struct.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_resize_stack_base(qi: QfInfoHandleMut, n: c_int) {
+    if qi.is_null() {
+        return;
+    }
+    let qi_handle = QfStackHandle(qi);
+    let maxcount = nvim_qf_get_maxcount(qi.cast_const());
+    if n == maxcount {
+        return;
+    }
+    let listcount = nvim_qf_get_listcount(qi_handle);
+    if n < maxcount && n < listcount {
+        let amount_to_rm = listcount - n;
+        for _ in 0..amount_to_rm {
+            rs_qf_pop_stack(qi, true);
+        }
+    }
+    nvim_qf_resize_lists_array(qi, n);
+    rs_qf_update_buffer(qi, std::ptr::null());
+}
+
+/// Resize the global quickfix stack to hold `n` lists.
+///
+/// Equivalent to C `qf_resize_stack`.
+///
+/// # Safety
+///
+/// - Must be called from the Neovim main thread.
+/// - `ql_info` must be initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_resize_stack(n: c_int) {
+    let qi = nvim_get_ql_info();
+    if !qi.is_null() {
+        rs_qf_resize_stack_base(qi, n);
+    }
+}
+
+/// Resize a location list stack for window `wp` to hold `n` lists.
+///
+/// Equivalent to C `ll_resize_stack`. Syncs `lhistory` first, then
+/// gets-or-allocates the list and resizes.
+///
+/// # Safety
+///
+/// - `wp` must be a valid non-null pointer to a `win_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ll_resize_stack(wp: WinHandle, n: c_int) {
+    if wp.is_null() {
+        return;
+    }
+    if nvim_qf_is_ll_window(wp.cast_const()) {
+        rs_qf_sync_llw_to_win(wp);
+    } else {
+        rs_qf_sync_win_to_llw(wp);
+    }
+    let qi = rs_ll_get_or_alloc_list(wp);
+    if !qi.is_null() {
+        rs_qf_resize_stack_base(qi, n);
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
