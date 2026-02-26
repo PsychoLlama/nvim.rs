@@ -1426,8 +1426,7 @@ bool nvim_qf_list_is_empty(const void *qfl_void)
 
 static efm_T *parse_efm_option(char *efm);
 static void free_efm_list(efm_T **efm_first);
-static int qf_parse_line(qf_list_T *qfl, char *linebuf, size_t linelen, efm_T *fmt_first,
-                         qffields_T *fields);
+// qf_parse_line forward declaration removed: function deleted (Phase 9).
 
 // EfmHandle is now defined in quickfix.h
 
@@ -1442,50 +1441,8 @@ char nvim_efm_get_flags(EfmHandle efm) { return efm == NULL ? '\0' : ((efm_T *)e
 int nvim_efm_get_conthere(EfmHandle efm) { return efm == NULL ? 0 : ((efm_T *)efm)->conthere; }
 char nvim_efm_get_addr(EfmHandle efm, int idx) { return (efm == NULL || idx < 0 || idx >= FMT_PATTERNS) ? 0 : ((efm_T *)efm)->addr[idx]; }
 
-static int qf_get_nextline(qfstate_T *state);
-static int qf_setup_state(qfstate_T *pstate, char *restrict enc, const char *restrict efile,
-                          typval_T *tv, buf_T *buf, linenr_T lnumfirst, linenr_T lnumlast);
-static void qf_cleanup_state(qfstate_T *pstate);
-
-// QfStateHandle is now defined in quickfix.h
-
-QfStateHandle nvim_qf_state_alloc(void) { return xcalloc(1, sizeof(qfstate_T)); }
-
-/// Free a parser state object
-void nvim_qf_state_free(QfStateHandle state)
-{
-  if (state != NULL) {
-    qf_cleanup_state((qfstate_T *)state);
-    xfree(state);
-  }
-}
-
-/// Returns OK on success, FAIL on error
-int nvim_qf_state_setup_file(QfStateHandle state, char *enc, const char *efile)
-{
-  if (state == NULL) {
-    return FAIL;
-  }
-  return qf_setup_state((qfstate_T *)state, enc, efile, NULL, NULL, 0, 0);
-}
-
-/// Returns OK on success, FAIL on error
-int nvim_qf_state_setup_buffer(QfStateHandle state, void *buf, int lnumfirst, int lnumlast)
-{
-  if (state == NULL || buf == NULL) {
-    return FAIL;
-  }
-  return qf_setup_state((qfstate_T *)state, NULL, NULL, NULL,
-                        (buf_T *)buf, lnumfirst, lnumlast);
-}
-
-int nvim_qf_state_get_nextline(QfStateHandle state) { return state == NULL ? QF_FAIL : qf_get_nextline((qfstate_T *)state); }
-const char *nvim_qf_state_get_linebuf(QfStateHandle state) { return state == NULL ? NULL : ((qfstate_T *)state)->linebuf; }
-size_t nvim_qf_state_get_linelen(QfStateHandle state) { return state == NULL ? 0 : ((qfstate_T *)state)->linelen; }
-bool nvim_qf_state_has_fd(QfStateHandle state) { return state == NULL ? false : ((qfstate_T *)state)->fd != NULL; }
-bool nvim_qf_state_has_tv(QfStateHandle state) { return state == NULL ? false : ((qfstate_T *)state)->tv != NULL; }
-
-bool nvim_qf_state_has_buf(QfStateHandle state) { return state == NULL ? false : ((qfstate_T *)state)->buf != NULL; }
+// nvim_qf_state_* and qf_{setup,cleanup,get_nextline,grow_linebuf,get_next_*}_state
+// deleted: migrated to Rust QfParserState in reader.rs (Phase 9).
 
 static win_T *qf_find_win(const qf_info_T *qi);
 static buf_T *qf_find_buf(qf_info_T *qi);
@@ -1700,42 +1657,7 @@ static void qfga_clear(void)
 
 // quickfix_busy and qf_delq_head are now managed by Rust in lifecycle.rs.
 
-/// to the quickfix list 'qfl'.
-static int qf_init_process_nextline(qf_list_T *qfl, efm_T *fmt_first, qfstate_T *state,
-                                    qffields_T *fields)
-{
-  // Get the next line from a file/buffer/list/string
-  int status = qf_get_nextline(state);
-  if (status != QF_OK) {
-    return status;
-  }
-
-  status = qf_parse_line(qfl, state->linebuf, state->linelen,
-                         fmt_first, fields);
-  if (status != QF_OK) {
-    return status;
-  }
-
-  return rs_qf_add_entry(qfl,
-                      qfl->qf_directory,
-                      (*fields->namebuf || qfl->qf_directory != NULL)
-                      ? fields->namebuf
-                      : ((qfl->qf_currfile != NULL && fields->valid)
-                         ? qfl->qf_currfile : NULL),
-                      fields->module,
-                      fields->bnr,
-                      fields->errmsg,
-                      fields->lnum,
-                      fields->end_lnum,
-                      fields->col,
-                      fields->end_col,
-                      fields->use_viscol,
-                      fields->pattern,
-                      fields->enr,
-                      fields->type,
-                      fields->user_data,
-                      fields->valid);
-}
+// qf_init_process_nextline deleted: inlined into Rust process_nextline in init.rs (Phase 9).
 
 /// @returns -1 for error, number of errors for success.
 int qf_init(win_T *wp, const char *restrict efile, char *restrict errorformat, int newlist,
@@ -1864,235 +1786,11 @@ parse_efm_end:
   return fmt_first;
 }
 
-/// Allocate more memory for the line buffer used for parsing lines.
-static char *qf_grow_linebuf(qfstate_T *state, size_t newsz)
-{
-  // If the line exceeds LINE_MAXLEN exclude the last
-  // byte since it's not a NL character.
-  state->linelen = newsz > LINE_MAXLEN ? LINE_MAXLEN - 1 : newsz;
-  if (state->growbuf == NULL) {
-    state->growbuf = xmalloc(state->linelen + 1);
-    state->growbufsiz = state->linelen;
-  } else if (state->linelen > state->growbufsiz) {
-    state->growbuf = xrealloc(state->growbuf, state->linelen + 1);
-    state->growbufsiz = state->linelen;
-  }
-  return state->growbuf;
-}
+// qf_grow_linebuf deleted: migrated to Rust QfParserState::grow_linebuf (Phase 9).
 
-/// Get the next string (separated by newline) from state->p_str.
-static int qf_get_next_str_line(qfstate_T *state)
-{
-  // Get the next line from the supplied string
-  char *p_str = state->p_str;
-
-  if (*p_str == NUL) {  // Reached the end of the string
-    return QF_END_OF_INPUT;
-  }
-
-  char *p = vim_strchr(p_str, '\n');
-  size_t len = (p != NULL) ? (size_t)(p - p_str) + 1 : strlen(p_str);
-
-  if (len > IOSIZE - 2) {
-    state->linebuf = qf_grow_linebuf(state, len);
-  } else {
-    state->linebuf = IObuff;
-    state->linelen = len;
-  }
-  memcpy(state->linebuf, p_str, state->linelen);
-  state->linebuf[state->linelen] = NUL;
-
-  // Increment using len in order to discard the rest of the line if it
-  // exceeds LINE_MAXLEN.
-  p_str += len;
-  state->p_str = p_str;
-
-  return QF_OK;
-}
-
-/// Get the next string from state->p_Li.
-static int qf_get_next_list_line(qfstate_T *state)
-{
-  listitem_T *p_li = state->p_li;
-
-  // Get the next line from the supplied list
-  while (p_li != NULL
-         && (TV_LIST_ITEM_TV(p_li)->v_type != VAR_STRING
-             || TV_LIST_ITEM_TV(p_li)->vval.v_string == NULL)) {
-    p_li = TV_LIST_ITEM_NEXT(state->p_list, p_li);  // Skip non-string items.
-  }
-
-  if (p_li == NULL) {  // End of the list.
-    state->p_li = NULL;
-    return QF_END_OF_INPUT;
-  }
-
-  size_t len = strlen(TV_LIST_ITEM_TV(p_li)->vval.v_string);
-  if (len > IOSIZE - 2) {
-    state->linebuf = qf_grow_linebuf(state, len);
-  } else {
-    state->linebuf = IObuff;
-    state->linelen = len;
-  }
-
-  xstrlcpy(state->linebuf, TV_LIST_ITEM_TV(p_li)->vval.v_string,
-           state->linelen + 1);
-
-  state->p_li = TV_LIST_ITEM_NEXT(state->p_list, p_li);
-  return QF_OK;
-}
-
-/// Get the next string from state->buf.
-static int qf_get_next_buf_line(qfstate_T *state)
-{
-  // Get the next line from the supplied buffer
-  if (state->buflnum > state->lnumlast) {
-    return QF_END_OF_INPUT;
-  }
-  char *p_buf = ml_get_buf(state->buf, state->buflnum);
-  size_t len = (size_t)ml_get_buf_len(state->buf, state->buflnum);
-  state->buflnum += 1;
-
-  if (len > IOSIZE - 2) {
-    state->linebuf = qf_grow_linebuf(state, len);
-  } else {
-    state->linebuf = IObuff;
-    state->linelen = len;
-  }
-  xstrlcpy(state->linebuf, p_buf, state->linelen + 1);
-
-  return QF_OK;
-}
-
-/// Get the next string from file state->fd.
-static int qf_get_next_file_line(qfstate_T *state)
-{
-retry:
-  errno = 0;
-  if (fgets(IObuff, IOSIZE, state->fd) == NULL) {
-    if (errno == EINTR) {
-      goto retry;
-    }
-    return QF_END_OF_INPUT;
-  }
-
-  bool discard = false;
-  state->linelen = strlen(IObuff);
-  if (state->linelen == IOSIZE - 1
-      && !(IObuff[state->linelen - 1] == '\n')) {
-    // The current line exceeds IObuff, continue reading using growbuf
-    // until EOL or LINE_MAXLEN bytes is read.
-    if (state->growbuf == NULL) {
-      state->growbufsiz = 2 * (IOSIZE - 1);
-      state->growbuf = xmalloc(state->growbufsiz);
-    }
-
-    // Copy the read part of the line, excluding null-terminator
-    memcpy(state->growbuf, IObuff, IOSIZE - 1);
-    size_t growbuflen = state->linelen;
-
-    while (true) {
-      errno = 0;
-      if (fgets(state->growbuf + growbuflen,
-                (int)(state->growbufsiz - growbuflen), state->fd) == NULL) {
-        if (errno == EINTR) {
-          continue;
-        }
-        break;
-      }
-      state->linelen = strlen(state->growbuf + growbuflen);
-      growbuflen += state->linelen;
-      if (state->growbuf[growbuflen - 1] == '\n') {
-        break;
-      }
-      if (state->growbufsiz == LINE_MAXLEN) {
-        discard = true;
-        break;
-      }
-
-      state->growbufsiz = MIN(2 * state->growbufsiz, LINE_MAXLEN);
-      state->growbuf = xrealloc(state->growbuf, state->growbufsiz);
-    }
-
-    while (discard) {
-      // The current line is longer than LINE_MAXLEN, continue reading but
-      // discard everything until EOL or EOF is reached.
-      errno = 0;
-      if (fgets(IObuff, IOSIZE, state->fd) == NULL) {
-        if (errno == EINTR) {
-          continue;
-        }
-        break;
-      }
-      if (strlen(IObuff) < IOSIZE - 1 || IObuff[IOSIZE - 2] == '\n') {
-        break;
-      }
-    }
-
-    state->linebuf = state->growbuf;
-    state->linelen = growbuflen;
-  } else {
-    state->linebuf = IObuff;
-  }
-
-  // Convert a line if it contains a non-ASCII character
-  if (state->vc.vc_type != CONV_NONE && has_non_ascii(state->linebuf)) {
-    char *line = string_convert(&state->vc, state->linebuf, &state->linelen);
-    if (line != NULL) {
-      if (state->linelen < IOSIZE) {
-        xstrlcpy(state->linebuf, line, state->linelen + 1);
-        xfree(line);
-      } else {
-        xfree(state->growbuf);
-        state->linebuf = line;
-        state->growbuf = line;
-        state->growbufsiz = MIN(state->linelen, LINE_MAXLEN);
-      }
-    }
-  }
-  return QF_OK;
-}
-
-/// Get the next string from a file/buffer/list/string.
-static int qf_get_nextline(qfstate_T *state)
-{
-  int status = QF_FAIL;
-
-  if (state->fd == NULL) {
-    if (state->tv != NULL) {
-      if (state->tv->v_type == VAR_STRING) {
-        // Get the next line from the supplied string
-        status = qf_get_next_str_line(state);
-      } else if (state->tv->v_type == VAR_LIST) {
-        // Get the next line from the supplied list
-        status = qf_get_next_list_line(state);
-      }
-    } else {
-      // Get the next line from the supplied buffer
-      status = qf_get_next_buf_line(state);
-    }
-  } else {
-    // Get the next line from the supplied file
-    status = qf_get_next_file_line(state);
-  }
-
-  if (status != QF_OK) {
-    return status;
-  }
-
-  if (state->linelen > 0 && state->linebuf[state->linelen - 1] == '\n') {
-    state->linebuf[state->linelen - 1] = NUL;
-#ifdef USE_CRNL
-    if (state->linelen > 1 && state->linebuf[state->linelen - 2] == '\r') {
-      state->linebuf[state->linelen - 2] = NUL;
-    }
-#endif
-  }
-
-  remove_bom(state->linebuf);
-
-  return QF_OK;
-}
+// qf_get_next_str_line, qf_get_next_list_line, qf_get_next_buf_line,
+// qf_get_next_file_line, qf_get_nextline deleted: migrated to Rust
+// QfParserState methods in reader.rs (Phase 9).
 
 /// Return a pointer to a list in the specified quickfix stack
 static qf_list_T *qf_get_list(qf_info_T *qi, int idx)
@@ -2101,87 +1799,20 @@ static qf_list_T *qf_get_list(qf_info_T *qi, int idx)
   return &qi->qf_lists[idx];
 }
 
-/// Thin wrapper: delegates to rs_qf_parse_line (Rust implementation).
-static int qf_parse_line(qf_list_T *qfl, char *linebuf, size_t linelen, efm_T *fmt_first,
-                         qffields_T *fields)
-{
-  return rs_qf_parse_line(qfl, linebuf, linelen, fmt_first, fields);
-}
-
-// Allocate the fields used for parsing lines and populating a quickfix list.
-static void qf_alloc_fields(qffields_T *pfields)
-  FUNC_ATTR_NONNULL_ALL
-{
-  pfields->namebuf = xmalloc(CMDBUFFSIZE + 1);
-  pfields->module = xmalloc(CMDBUFFSIZE + 1);
-  pfields->errmsglen = CMDBUFFSIZE + 1;
-  pfields->errmsg = xmalloc(pfields->errmsglen);
-  pfields->pattern = xmalloc(CMDBUFFSIZE + 1);
-}
-
-// Free the fields used for parsing lines and populating a quickfix list.
-static void qf_free_fields(qffields_T *pfields)
-  FUNC_ATTR_NONNULL_ALL
-{
-  xfree(pfields->namebuf);
-  xfree(pfields->module);
-  xfree(pfields->errmsg);
-  xfree(pfields->pattern);
-}
-
-// Setup the state information used for parsing lines and populating a
-// quickfix list.
-static int qf_setup_state(qfstate_T *pstate, char *restrict enc, const char *restrict efile,
-                          typval_T *tv, buf_T *buf, linenr_T lnumfirst, linenr_T lnumlast)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  pstate->vc.vc_type = CONV_NONE;
-  if (enc != NULL && *enc != NUL) {
-    convert_setup(&pstate->vc, enc, p_enc);
-  }
-
-  if (efile != NULL
-      && (pstate->fd = (strequal(efile, "-")
-                        ? fdopen(os_open_stdin_fd(), "r")
-                        : os_fopen(efile, "r"))) == NULL) {
-    semsg(_(e_openerrf), efile);
-    return FAIL;
-  }
-
-  if (tv != NULL) {
-    if (tv->v_type == VAR_STRING) {
-      pstate->p_str = tv->vval.v_string;
-    } else if (tv->v_type == VAR_LIST) {
-      pstate->p_li = tv_list_first(tv->vval.v_list);
-    }
-    pstate->tv = tv;
-  }
-  pstate->buf = buf;
-  pstate->buflnum = lnumfirst;
-  pstate->lnumlast = lnumlast;
-
-  return OK;
-}
-
-// Cleanup the state information used for parsing lines and populating a
-// quickfix list.
-static void qf_cleanup_state(qfstate_T *pstate)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (pstate->fd != NULL) {
-    fclose(pstate->fd);
-  }
-  xfree(pstate->growbuf);
-  if (pstate->vc.vc_type != CONV_NONE) {
-    convert_setup(&pstate->vc, NULL, NULL);
-  }
-}
+// qf_parse_line (thin wrapper), qf_alloc_fields, qf_free_fields,
+// qf_setup_state, qf_cleanup_state deleted: migrated to Rust (Phase 9).
+// qf_alloc_fields/qf_free_fields still used by nvim_qf_init_alloc_fields/nvim_qf_init_free_fields
+// which remain as C accessors for Phase 1 (will be removed in Phase 2).
 
 /// Allocate a qffields_T and return it as an opaque handle.
 void *nvim_qf_init_alloc_fields(void)
 {
   qffields_T *pfields = xcalloc(1, sizeof(qffields_T));
-  qf_alloc_fields(pfields);
+  pfields->namebuf = xmalloc(CMDBUFFSIZE + 1);
+  pfields->module = xmalloc(CMDBUFFSIZE + 1);
+  pfields->errmsglen = CMDBUFFSIZE + 1;
+  pfields->errmsg = xmalloc(pfields->errmsglen);
+  pfields->pattern = xmalloc(CMDBUFFSIZE + 1);
   return pfields;
 }
 
@@ -2192,32 +1823,15 @@ void nvim_qf_init_free_fields(void *fields_void)
     return;
   }
   qffields_T *pfields = (qffields_T *)fields_void;
-  qf_free_fields(pfields);
+  xfree(pfields->namebuf);
+  xfree(pfields->module);
+  xfree(pfields->errmsg);
+  xfree(pfields->pattern);
   xfree(pfields);
 }
 
-/// Allocate and setup a qfstate_T. Returns NULL on failure.
-void *nvim_qf_init_setup_state(char *enc, const char *efile, void *tv_void,
-                                void *buf_void, linenr_T lnumfirst, linenr_T lnumlast)
-{
-  qfstate_T *pstate = xcalloc(1, sizeof(qfstate_T));
-  if (qf_setup_state(pstate, enc, efile, (typval_T *)tv_void,
-                     (buf_T *)buf_void, lnumfirst, lnumlast) == FAIL) {
-    xfree(pstate);
-    return NULL;
-  }
-  return pstate;
-}
-
-/// Cleanup and free a qfstate_T.
-void nvim_qf_init_cleanup_state(void *state_void)
-{
-  if (state_void == NULL) {
-    return;
-  }
-  qf_cleanup_state((qfstate_T *)state_void);
-  xfree(state_void);
-}
+// nvim_qf_init_setup_state, nvim_qf_init_cleanup_state deleted:
+// replaced by rs_qf_parser_state_new / rs_qf_parser_state_free in Rust (Phase 9).
 
 void nvim_qf_init_clear_last_bufname(void) { XFREE_CLEAR(qf_last_bufname); }
 
@@ -2249,15 +1863,8 @@ void *nvim_qf_init_update_efm_cache(char *efm)
   return s_fmt_first;
 }
 
-/// Process one line during qf_init. Returns QF_OK, QF_END_OF_INPUT, or QF_FAIL.
-int nvim_qf_init_process_nextline(void *qfl_void, void *fmt_first_void,
-                                   void *state_void, void *fields_void)
-{
-  return qf_init_process_nextline((qf_list_T *)qfl_void, (efm_T *)fmt_first_void,
-                                  (qfstate_T *)state_void, (qffields_T *)fields_void);
-}
-
-bool nvim_qf_init_state_no_fd_error(void *state_void) { return ((qfstate_T *)state_void)->fd == NULL || !ferror(((qfstate_T *)state_void)->fd); }
+// nvim_qf_init_process_nextline, nvim_qf_init_state_no_fd_error deleted:
+// inlined into Rust rs_qf_init_ext / process_nextline (Phase 9).
 
 /// Sets qf_ptr, qf_index, and qf_nonevalid based on whether valid entries exist.
 void nvim_qf_init_finalize_list(void *qfl_void)
@@ -2493,6 +2100,181 @@ const char *nvim_qf_skipwhite(const char *p)
 void nvim_qf_emsg_missing_dir(void)
 {
   emsg(_("E379: Missing or empty directory name"));
+}
+
+// =============================================================================
+// Phase 9: Reader state accessors for Rust QfParserState
+// =============================================================================
+
+/// Open a file for reading; handles "-" (stdin). Returns NULL on failure.
+/// Emits E_OPENERRF on failure. Caller must fclose() when done.
+FILE *nvim_qf_open_file_for_read(const char *efile)
+{
+  if (efile == NULL) {
+    return NULL;
+  }
+  FILE *fd = (strequal(efile, "-")
+              ? fdopen(os_open_stdin_fd(), "r")
+              : os_fopen(efile, "r"));
+  if (fd == NULL) {
+    semsg(_(e_openerrf), efile);
+  }
+  return fd;
+}
+
+/// Close a FILE*. Safe to call with NULL.
+void nvim_qf_fclose(FILE *fd)
+{
+  if (fd != NULL) {
+    fclose(fd);
+  }
+}
+
+/// fgets wrapper: reads up to size-1 bytes into buf from fd.
+/// Returns true if data was read, false on EOF/error (sets errno on EINTR).
+bool nvim_qf_fgets(char *buf, int size, FILE *fd)
+{
+  return fgets(buf, size, fd) != NULL;
+}
+
+/// Return errno value (used for EINTR check after failed fgets).
+int nvim_qf_errno(void) { return errno; }
+
+/// Returns true if the string has non-ASCII bytes.
+bool nvim_qf_has_non_ascii(const char *buf) { return has_non_ascii(buf); }
+
+/// Remove BOM from the start of buf (modifies in place).
+void nvim_qf_remove_bom(char *buf) { remove_bom(buf); }
+
+/// Allocate a zeroed vimconv_T on the heap.
+void *nvim_qf_alloc_vimconv(void) { return xcalloc(1, sizeof(vimconv_T)); }
+
+/// Free a heap-allocated vimconv_T (no cleanup; caller must convert_setup first).
+void nvim_qf_free_vimconv(void *vc) { xfree(vc); }
+
+/// Setup encoding conversion: convert_setup(vc, from, p_enc).
+/// enc may be NULL (no conversion set up in that case).
+void nvim_qf_convert_setup(void *vc, const char *enc)
+{
+  if (vc == NULL) {
+    return;
+  }
+  if (enc != NULL && *enc != NUL) {
+    convert_setup((vimconv_T *)vc, (char *)enc, p_enc);
+  }
+}
+
+/// Cleanup encoding conversion: convert_setup(vc, NULL, NULL).
+void nvim_qf_convert_setup_cleanup(void *vc)
+{
+  if (vc != NULL) {
+    ((vimconv_T *)vc)->vc_type = CONV_NONE;
+    convert_setup((vimconv_T *)vc, NULL, NULL);
+  }
+}
+
+/// Return vc->vc_type (CONV_NONE == 0).
+int nvim_qf_vc_type(const void *vc) { return vc == NULL ? 0 : ((const vimconv_T *)vc)->vc_type; }
+
+/// Convert buf with encoding conversion (string_convert).
+/// Returns allocated converted string (caller must xfree), or NULL.
+/// Sets *lenp to the new length.
+char *nvim_qf_string_convert_with_len(void *vc, char *buf, size_t *lenp)
+{
+  if (vc == NULL || buf == NULL) {
+    return NULL;
+  }
+  return string_convert((vimconv_T *)vc, buf, lenp);
+}
+
+/// Return ml_get_buf(buf, lnum) - a pointer to the buffer line (not allocated).
+char *nvim_qf_ml_get_buf(void *buf, int32_t lnum) { return ml_get_buf((buf_T *)buf, (linenr_T)lnum); }
+
+/// Return ml_get_buf_len(buf, lnum).
+int32_t nvim_qf_ml_get_buf_len(void *buf, int32_t lnum) { return (int32_t)ml_get_buf_len((buf_T *)buf, (linenr_T)lnum); }
+
+/// Return IObuff pointer.
+char *nvim_qf_get_iobuff_ptr(void) { return IObuff; }
+
+/// Return IOSIZE constant.
+int nvim_qf_get_iosize(void) { return IOSIZE; }
+
+/// xmalloc wrapper for growbuf allocation.
+char *nvim_qf_xmalloc_buf(size_t sz) { return xmalloc(sz); }
+
+/// xrealloc wrapper for growbuf grow.
+char *nvim_qf_xrealloc_buf(char *ptr, size_t sz) { return xrealloc(ptr, sz); }
+
+/// xfree wrapper for growbuf free.
+void nvim_qf_xfree_buf(void *ptr) { xfree(ptr); }
+
+/// xstrlcpy: copy at most n-1 bytes of src to dst, always NUL-terminate.
+void nvim_qf_xstrlcpy(char *dst, const char *src, size_t n) { xstrlcpy(dst, src, n); }
+
+/// Return true if tv is VAR_STRING.
+bool nvim_qf_tv_is_string(const void *tv_void)
+{
+  return tv_void != NULL && ((const typval_T *)tv_void)->v_type == VAR_STRING;
+}
+
+/// Return the vval.v_string field of a VAR_STRING typval.
+char *nvim_qf_tv_get_string(void *tv_void)
+{
+  return tv_void == NULL ? NULL : ((typval_T *)tv_void)->vval.v_string;
+}
+
+/// Get the first list item from a VAR_LIST typval (or NULL).
+void *nvim_qf_tv_list_first(void *tv_void)
+{
+  if (tv_void == NULL) {
+    return NULL;
+  }
+  const typval_T *tv = (const typval_T *)tv_void;
+  if (tv->v_type != VAR_LIST || tv->vval.v_list == NULL) {
+    return NULL;
+  }
+  return tv_list_first(tv->vval.v_list);
+}
+
+// nvim_qf_tv_get_list: use existing declaration at line ~1046 (nvim_qf_tv_get_list(const void*)).
+
+/// Return the next list item (TV_LIST_ITEM_NEXT).
+void *nvim_qf_list_item_next(const void *list, const void *li)
+{
+  if (list == NULL || li == NULL) {
+    return NULL;
+  }
+  return TV_LIST_ITEM_NEXT((const list_T *)list, (const listitem_T *)li);
+}
+
+/// Return true if the list item has a non-null string value.
+bool nvim_qf_list_item_is_string(const void *li)
+{
+  if (li == NULL) {
+    return false;
+  }
+  const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li);
+  return tv->v_type == VAR_STRING && tv->vval.v_string != NULL;
+}
+
+/// Return the string value of a list item (or NULL if not a string/null string).
+char *nvim_qf_list_item_string(void *li)
+{
+  if (li == NULL) {
+    return NULL;
+  }
+  const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li);
+  if (tv->v_type != VAR_STRING || tv->vval.v_string == NULL) {
+    return NULL;
+  }
+  return tv->vval.v_string;
+}
+
+/// vim_strchr on a mutable char* with char NL character.
+/// Returns pointer to first NL in str, or NULL.
+char *nvim_qf_strchr_nl(char *str)
+{
+  return vim_strchr(str, '\n');
 }
 
 // qf_parse_fmt_f and all qf_parse_fmt_* functions deleted: migrated to Rust rs_qf_parse_match.

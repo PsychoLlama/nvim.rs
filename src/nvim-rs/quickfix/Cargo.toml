@@ -13,5 +13,6 @@ crate-type = ["staticlib", "rlib"]
 workspace = true
 
 [dependencies]
+libc = "0.2"
 
 [dev-dependencies]

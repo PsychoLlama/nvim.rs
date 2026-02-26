@@ -313,10 +313,10 @@ mod init_ext {
     type QfLineHandle = *const c_void;
     type BufHandle = *mut c_void;
     type TvHandle = *mut c_void;
-    type StateHandle = *mut c_void;
     type FieldsHandle = *mut c_void;
     type EfmHandle = *mut c_void;
 
+    const QF_OK: c_int = 1;
     const QF_END_OF_INPUT: c_int = 2;
     const QF_FAIL: c_int = 0;
 
@@ -334,18 +334,9 @@ mod init_ext {
         fn nvim_set_got_int(val: c_int);
         fn nvim_line_breakcheck();
 
-        // New Phase 4 accessors
+        // Phase 4 accessors still needed (fields allocation still in C for Phase 1)
         fn nvim_qf_init_alloc_fields() -> FieldsHandle;
         fn nvim_qf_init_free_fields(fields: FieldsHandle);
-        fn nvim_qf_init_setup_state(
-            enc: *mut c_char,
-            efile: *const c_char,
-            tv: TvHandle,
-            buf: BufHandle,
-            lnumfirst: LinenrT,
-            lnumlast: LinenrT,
-        ) -> StateHandle;
-        fn nvim_qf_init_cleanup_state(state: StateHandle);
         fn nvim_qf_init_clear_last_bufname();
         fn nvim_qf_init_resolve_efm(
             errorformat: *mut c_char,
@@ -353,17 +344,125 @@ mod init_ext {
             buf: BufHandle,
         ) -> *mut c_char;
         fn nvim_qf_init_update_efm_cache(efm: *mut c_char) -> EfmHandle;
-        fn nvim_qf_init_process_nextline(
-            qfl: QfListHandleMut,
-            fmt_first: EfmHandle,
-            state: StateHandle,
-            fields: FieldsHandle,
-        ) -> c_int;
-        fn nvim_qf_init_state_no_fd_error(state: StateHandle) -> bool;
         fn nvim_qf_init_finalize_list(qfl: QfListHandleMut);
         fn nvim_qf_init_emsg_readerrf();
         fn nvim_qf_decrement_listcount(qi: QfInfoHandleMut);
         fn nvim_qf_set_curlist_idx(qi: QfInfoHandleMut, idx: c_int);
+
+        // qffields_T accessors (needed to build rs_qf_add_entry call)
+        fn nvim_qf_fields_get_namebuf(fields: *mut c_void) -> *mut c_char;
+        fn nvim_qf_fields_get_bnr(fields: *const c_void) -> c_int;
+        fn nvim_qf_fields_get_module(fields: *mut c_void) -> *mut c_char;
+        fn nvim_qf_fields_get_errmsg(fields: *mut c_void) -> *mut c_char;
+        fn nvim_qf_fields_get_lnum(fields: *const c_void) -> i32;
+        fn nvim_qf_fields_get_end_lnum(fields: *const c_void) -> i32;
+        fn nvim_qf_fields_get_col(fields: *const c_void) -> c_int;
+        fn nvim_qf_fields_get_end_col(fields: *const c_void) -> c_int;
+        fn nvim_qf_fields_get_use_viscol(fields: *const c_void) -> bool;
+        fn nvim_qf_fields_get_pattern(fields: *mut c_void) -> *mut c_char;
+        fn nvim_qf_fields_get_enr(fields: *const c_void) -> c_int;
+        fn nvim_qf_fields_get_type(fields: *const c_void) -> c_char;
+        fn nvim_qf_fields_get_valid(fields: *const c_void) -> bool;
+
+        // qf_list_T directory/currfile accessors
+        fn nvim_qf_get_directory(qfl: *const c_void) -> *const c_char;
+        fn nvim_qf_get_currfile(qfl: *const c_void) -> *const c_char;
+
+        // rs_qf_parse_line (already in Rust parse.rs, callable via extern "C")
+        fn rs_qf_parse_line(
+            qfl: *mut c_void,
+            linebuf: *mut c_char,
+            linelen: usize,
+            fmt_first: EfmHandle,
+            fields: *mut c_void,
+        ) -> c_int;
+
+        // rs_qf_add_entry (already in Rust lib.rs, callable via extern "C")
+        fn rs_qf_add_entry(
+            qfl: QfListHandleMut,
+            dir: *mut c_char,
+            fname: *const c_char,
+            module: *const c_char,
+            bufnum: c_int,
+            mesg: *const c_char,
+            lnum: LinenrT,
+            end_lnum: LinenrT,
+            col: c_int,
+            end_col: c_int,
+            vis_col: c_char,
+            pattern: *const c_char,
+            nr: c_int,
+            type_char: c_char,
+            user_data: *const c_void,
+            valid: c_char,
+        ) -> c_int;
+    }
+
+    /// Process one line: read next line via Rust parser state, parse it, add entry.
+    ///
+    /// This replaces the C `nvim_qf_init_process_nextline` wrapper.
+    ///
+    /// # Safety
+    ///
+    /// All pointer parameters must be valid.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn process_nextline(
+        qfl: QfListHandleMut,
+        fmt_first: EfmHandle,
+        state: *mut crate::reader::QfParserState,
+        fields: FieldsHandle,
+    ) -> c_int {
+        // Get the next line from the source
+        let status = (*state).get_nextline();
+        if status != QF_OK {
+            return status;
+        }
+
+        let linebuf = (*state).linebuf;
+        let linelen = (*state).linelen;
+
+        // Parse the line against errorformat patterns
+        let parse_status = rs_qf_parse_line(qfl, linebuf, linelen, fmt_first, fields);
+        if parse_status != QF_OK {
+            return parse_status;
+        }
+
+        // Build the rs_qf_add_entry arguments
+        let dir = nvim_qf_get_directory(qfl.cast_const()).cast_mut();
+        let namebuf = nvim_qf_fields_get_namebuf(fields);
+        let currfile = nvim_qf_get_currfile(qfl.cast_const());
+        let valid = nvim_qf_fields_get_valid(fields.cast_const());
+
+        // fname selection matches C logic:
+        //   if (*namebuf || dir != NULL) use namebuf
+        //   elif (currfile != NULL && valid) use currfile
+        //   else use NULL
+        let fname: *const c_char = if !namebuf.is_null() && (*namebuf != 0 || !dir.is_null()) {
+            namebuf.cast_const()
+        } else if !currfile.is_null() && valid {
+            currfile
+        } else {
+            std::ptr::null()
+        };
+
+        rs_qf_add_entry(
+            qfl,
+            dir,
+            fname,
+            nvim_qf_fields_get_module(fields).cast_const(),
+            nvim_qf_fields_get_bnr(fields.cast_const()),
+            nvim_qf_fields_get_errmsg(fields).cast_const(),
+            nvim_qf_fields_get_lnum(fields.cast_const()),
+            nvim_qf_fields_get_end_lnum(fields.cast_const()),
+            nvim_qf_fields_get_col(fields.cast_const()),
+            nvim_qf_fields_get_end_col(fields.cast_const()),
+            nvim_qf_fields_get_use_viscol(fields.cast_const()) as c_char,
+            nvim_qf_fields_get_pattern(fields).cast_const(),
+            nvim_qf_fields_get_enr(fields.cast_const()),
+            nvim_qf_fields_get_type(fields.cast_const()),
+            std::ptr::null(), // user_data: qffields_T.user_data is typval_T*, kept in C
+            valid as c_char,
+        )
     }
 
     /// Initialize quickfix list from error file/buffer/string/list.
@@ -389,8 +488,13 @@ mod init_ext {
         // Do not use the cached buffer, it may have been wiped out.
         nvim_qf_init_clear_last_bufname();
 
+        // Allocate fields (still managed by C in Phase 1)
         let fields = nvim_qf_init_alloc_fields();
-        let state = nvim_qf_init_setup_state(enc, efile, tv, buf, lnumfirst, lnumlast);
+
+        // Setup parser state in Rust (replaces nvim_qf_init_setup_state)
+        let state_ptr =
+            crate::reader::rs_qf_parser_state_new(enc, efile, tv, buf, lnumfirst, lnumlast);
+        let state: *mut crate::reader::QfParserState = state_ptr.cast();
 
         // Tracks whether we need to run the error2 cleanup path.
         let mut adding = false;
@@ -433,7 +537,8 @@ mod init_ext {
             // Read the lines in the error file one by one.
             // Try to recognize one of the error formats in each line.
             while nvim_get_got_int() == 0 {
-                let status = nvim_qf_init_process_nextline(qfl, fmt_first, state, fields);
+                // Use Rust parser state directly (replaces nvim_qf_init_process_nextline)
+                let status = process_nextline(qfl, fmt_first, state, fields);
                 if status == QF_END_OF_INPUT {
                     break;
                 }
@@ -443,7 +548,8 @@ mod init_ext {
                 nvim_line_breakcheck();
             }
 
-            if nvim_qf_init_state_no_fd_error(state) {
+            // Check if file source had a read error (replaces nvim_qf_init_state_no_fd_error)
+            if (*state).no_fd_error() {
                 nvim_qf_init_finalize_list(qfl);
                 nvim_qf_get_count(qfl) // success: return number of matches
             } else {
@@ -467,7 +573,8 @@ mod init_ext {
         if qf_idx == nvim_qf_get_curlist_idx(qi) {
             nvim_qf_update_buffer(qi, old_last);
         }
-        nvim_qf_init_cleanup_state(state);
+        // Free Rust parser state (replaces nvim_qf_init_cleanup_state)
+        crate::reader::rs_qf_parser_state_free(state_ptr);
         nvim_qf_init_free_fields(fields);
 
         retval
