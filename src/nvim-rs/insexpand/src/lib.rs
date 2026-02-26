@@ -24,6 +24,7 @@ pub mod keyword;
 pub mod leader;
 pub mod match_list;
 pub mod navigate;
+pub mod next;
 pub mod pattern;
 pub mod pum;
 pub mod refresh;

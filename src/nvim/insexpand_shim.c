@@ -226,6 +226,8 @@ extern const char *rs_find_common_prefix(size_t *prefix_len, int curbuf_only);
 extern void rs_setup_cpt_sources(void);
 extern void rs_prepare_cpt_compl_funcs(void);
 extern void rs_get_cpt_func_completion_matches(void *cb_opaque);
+// Phase 1 (pass 8) Rust exports
+extern int rs_ins_compl_next(int allow_get_expansion, int count, int insert_match);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -3230,236 +3232,10 @@ static char *find_common_prefix(size_t *prefix_len, bool curbuf_only)
   return NULL;
 }
 
-/// Find the next set of matches for completion. Repeat the completion "todo"
-/// times.  The number of matches found is returned in 'num_matches'.
-///
-/// @param allow_get_expansion  If true, then ins_compl_get_exp() may be called to
-///                             get more completions.
-///                             If false, then do nothing when there are no more
-///                             completions in the given direction.
-/// @param todo  repeat completion this many times
-/// @param advance  If true, then completion will move to the first match.
-///                 Otherwise, the original text will be shown.
-///
-/// @return  OK on success and -1 if the number of matches are unknown.
-static int find_next_completion_match(bool allow_get_expansion, int todo, bool advance,
-                                      int *num_matches)
-{
-  bool found_end = false;
-  compl_T *found_compl = NULL;
-  unsigned cur_cot_flags = rs_get_cot_flags();
-  bool compl_no_select = (cur_cot_flags & kOptCotFlagNoselect) != 0
-                         || (compl_autocomplete && !rs_ins_compl_has_preinsert());
-
-  while (--todo >= 0) {
-    if (rs_compl_shows_dir_forward() && compl_shown_match->cp_next != NULL) {
-      if (compl_match_array != NULL) {
-        rs_find_next_match_in_menu();
-      } else {
-        compl_shown_match = compl_shown_match->cp_next;
-      }
-      found_end = (compl_first_match != NULL
-                   && (is_first_match(compl_shown_match->cp_next)
-                       || is_first_match(compl_shown_match)));
-    } else if (rs_compl_shows_dir_backward()
-               && compl_shown_match->cp_prev != NULL) {
-      found_end = is_first_match(compl_shown_match);
-      if (compl_match_array != NULL) {
-        rs_find_next_match_in_menu();
-      } else {
-        compl_shown_match = compl_shown_match->cp_prev;
-      }
-      found_end |= is_first_match(compl_shown_match);
-    } else {
-      if (!allow_get_expansion) {
-        if (advance) {
-          if (rs_compl_shows_dir_backward()) {
-            compl_pending -= todo + 1;
-          } else {
-            compl_pending += todo + 1;
-          }
-        }
-        return -1;
-      }
-
-      if (!compl_no_select && advance) {
-        if (rs_compl_shows_dir_backward()) {
-          compl_pending--;
-        } else {
-          compl_pending++;
-        }
-      }
-
-      // Find matches.
-      *num_matches = ins_compl_get_exp(&compl_startpos);
-
-      // handle any pending completions
-      while (compl_pending != 0 && compl_direction == compl_shows_dir
-             && advance) {
-        if (compl_pending > 0 && compl_shown_match->cp_next != NULL) {
-          compl_shown_match = compl_shown_match->cp_next;
-          compl_pending--;
-        }
-        if (compl_pending < 0 && compl_shown_match->cp_prev != NULL) {
-          compl_shown_match = compl_shown_match->cp_prev;
-          compl_pending++;
-        } else {
-          break;
-        }
-      }
-      found_end = false;
-    }
-
-    String *leader = get_leader_for_startcol(compl_shown_match, false);
-
-    if (!match_at_original_text(compl_shown_match)
-        && leader->data != NULL
-        && !rs_ins_compl_equal(compl_shown_match, leader->data, leader->size)
-        && !(rs_cot_fuzzy() && compl_shown_match->cp_score != FUZZY_SCORE_NONE)) {
-      todo++;
-    } else {
-      // Remember a matching item.
-      found_compl = compl_shown_match;
-    }
-
-    // Stop at the end of the list when we found a usable match.
-    if (found_end) {
-      if (found_compl != NULL) {
-        compl_shown_match = found_compl;
-        break;
-      }
-      todo = 1;             // use first usable match after wrapping around
-    }
-  }
-
-  return OK;
-}
-
-/// Fill in the next completion in the current direction.
-/// If "allow_get_expansion" is true, then we may call ins_compl_get_exp() to
-/// get more completions.  If it is false, then we just do nothing when there
-/// are no more completions in a given direction.  The latter case is used when
-/// we are still in the middle of finding completions, to allow browsing
-/// through the ones found so far.
-/// @return  the total number of matches, or -1 if still unknown -- webb.
-///
-/// compl_curr_match is currently being used by ins_compl_get_exp(), so we use
-/// compl_shown_match here.
-///
-/// Note that this function may be called recursively once only.  First with
-/// "allow_get_expansion" true, which calls ins_compl_get_exp(), which in turn
-/// calls this function with "allow_get_expansion" false.
-///
-/// @param count          Repeat completion this many times; should be at least 1
-/// @param insert_match   Insert the newly selected match
+/// Thin wrapper: delegates to rs_ins_compl_next in Rust.
 static int ins_compl_next(bool allow_get_expansion, int count, bool insert_match)
 {
-  int num_matches = -1;
-  int todo = count;
-  const bool started = compl_started;
-  buf_T *const orig_curbuf = curbuf;
-  unsigned cur_cot_flags = rs_get_cot_flags();
-  bool compl_no_insert = (cur_cot_flags & kOptCotFlagNoinsert) != 0
-                         || (compl_autocomplete && !rs_ins_compl_has_preinsert());
-  bool compl_preinsert = rs_ins_compl_has_preinsert();
-  bool has_autocomplete_delay = (compl_autocomplete && p_acl > 0);
-
-  // When user complete function return -1 for findstart which is next
-  // time of 'always', compl_shown_match become NULL.
-  if (compl_shown_match == NULL) {
-    return -1;
-  }
-
-  if (compl_leader.data != NULL
-      && !match_at_original_text(compl_shown_match)
-      && !rs_cot_fuzzy()) {
-    // Update "compl_shown_match" to the actually shown match
-    rs_ins_compl_update_shown_match();
-  }
-
-  if (allow_get_expansion && insert_match
-      && (!compl_get_longest || compl_used_match)) {
-    // Delete old text to be replaced
-    rs_ins_compl_delete(0);
-  }
-
-  // When finding the longest common text we stick at the original text,
-  // don't let CTRL-N or CTRL-P move to the first match.
-  bool advance = count != 1 || !allow_get_expansion || !compl_get_longest;
-
-  // When restarting the search don't insert the first match either.
-  if (compl_restarting) {
-    advance = false;
-    compl_restarting = false;
-  }
-
-  // Repeat this for when <PageUp> or <PageDown> is typed.  But don't wrap
-  // around.
-  if (find_next_completion_match(allow_get_expansion, todo, advance,
-                                 &num_matches) == -1) {
-    return -1;
-  }
-
-  if (curbuf != orig_curbuf) {
-    // In case some completion function switched buffer, don't want to
-    // insert the completion elsewhere.
-    return -1;
-  }
-
-  // Insert the text of the new completion, or the compl_leader.
-  if (!started && rs_ins_compl_preinsert_longest()) {
-    rs_ins_compl_insert(1, 1);
-    if (has_autocomplete_delay) {
-      update_screen();  // Show the inserted text right away
-    }
-  } else if (compl_no_insert && !started && !compl_preinsert) {
-    nvim_ins_compl_insert_bytes(compl_orig_text.data + rs_get_compl_len(), -1);
-    compl_used_match = false;
-    restore_orig_extmarks();
-  } else if (insert_match) {
-    if (!compl_get_longest || compl_used_match) {
-      bool preinsert_longest = rs_ins_compl_preinsert_longest()
-                               && match_at_original_text(compl_shown_match);  // none selected
-      rs_ins_compl_insert((compl_preinsert || preinsert_longest) ? 1 : 0, preinsert_longest ? 1 : 0);
-    } else {
-      assert(compl_leader.data != NULL);
-      nvim_ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1);
-    }
-    if (strequal(compl_shown_match->cp_str.data, compl_orig_text.data)) {
-      restore_orig_extmarks();
-    }
-  } else {
-    compl_used_match = false;
-  }
-
-  if (!allow_get_expansion) {
-    // redraw to show the user what was inserted
-    update_screen();  // TODO(bfredl): no!
-
-    if (!has_autocomplete_delay) {
-      // display the updated popup menu
-      rs_ins_compl_show_pum();
-    }
-
-    // Delete old text to be replaced, since we're still searching and
-    // don't want to match ourselves!
-    rs_ins_compl_delete(0);
-  }
-
-  // Enter will select a match when the match wasn't inserted and the popup
-  // menu is visible.
-  if (compl_no_insert && !started && !match_at_original_text(compl_shown_match)) {
-    compl_enter_selects = true;
-  } else {
-    compl_enter_selects = !insert_match && compl_match_array != NULL;
-  }
-
-  // Show the file name for the match (if any)
-  if (compl_shown_match->cp_fname != NULL) {
-    rs_ins_compl_show_filename();
-  }
-
-  return num_matches;
+  return rs_ins_compl_next(allow_get_expansion ? 1 : 0, count, insert_match ? 1 : 0);
 }
 
 
@@ -4241,11 +4017,32 @@ int nvim_cot_flags_has_noinsert_fuzzy(void) { return (cot_flags & (kOptCotFlagNo
 void nvim_set_compl_shows_dir(int val) { compl_shows_dir = val; }
 int nvim_ins_compl_key2dir(int c) { return rs_ins_compl_key2dir(c); }
 int nvim_ins_compl_key2count(int c) { return rs_ins_compl_key2count(c); }
+
+// Phase 1 (pass 8) accessors for rs_ins_compl_next / find_next_completion_match
+int nvim_get_compl_startpos_lnum(void) { return (int)compl_startpos.lnum; }
+int nvim_get_compl_startpos_col(void) { return (int)compl_startpos.col; }
+int nvim_ins_compl_get_exp_wrap(int lnum, int col) {
+  pos_T pos = { .lnum = (linenr_T)lnum, .col = (colnr_T)col };
+  return ins_compl_get_exp(&pos);
+}
+int nvim_compl_shown_match_score(void) { return compl_shown_match ? compl_shown_match->cp_score : FUZZY_SCORE_NONE; }
+int nvim_compl_shown_match_has_fname(void) { return (compl_shown_match && compl_shown_match->cp_fname != NULL) ? 1 : 0; }
+int nvim_compl_shown_match_str_eq_orig(void) {
+  return (compl_shown_match && compl_orig_text.data
+          && strequal(compl_shown_match->cp_str.data, compl_orig_text.data)) ? 1 : 0;
+}
+size_t nvim_get_leader_for_startcol_size(void *match, int cached) {
+  String *s = get_leader_for_startcol((compl_T *)match, cached != 0);
+  return s ? s->size : 0;
+}
+
+extern int rs_ins_compl_next(int allow_get_expansion, int count, int insert_match);
+
 void nvim_ins_compl_next_wrap(int allow_get_expansion, int todo, int advance) {
-  ins_compl_next(allow_get_expansion != 0, todo, advance != 0);
+  rs_ins_compl_next(allow_get_expansion, todo, advance);
 }
 int nvim_ins_compl_next_wrap_ret(int allow_get_expansion, int todo, int advance) {
-  return ins_compl_next(allow_get_expansion != 0, todo, advance != 0);
+  return rs_ins_compl_next(allow_get_expansion, todo, advance);
 }
 int nvim_cpt_sources_index_non_neg(void) { return cpt_sources_index >= 0 ? 1 : 0; }
 int nvim_p_cto(void) { return (int)p_cto; }
