@@ -2782,18 +2782,6 @@ void nvim_ecmd_au_new_curbuf_restore(void *saved) { au_new_curbuf = *(bufref_T *
 
 // --- Buffer operation wrappers ---
 
-/// Call buf_check_timestamp(buf)
-void nvim_ecmd_buf_check_timestamp(buf_T *buf) { buf_check_timestamp(buf); }
-
-/// Call buf_copy_options(buf, BCO_ENTER)
-void nvim_ecmd_buf_copy_options(buf_T *buf) { buf_copy_options(buf, BCO_ENTER); }
-
-/// Call buf_freeall(curbuf, flags)
-void nvim_ecmd_buf_freeall(int flags) { buf_freeall(curbuf, flags); }
-
-/// Call buf_clear_file(curbuf)
-void nvim_ecmd_buf_clear_file(void) { buf_clear_file(curbuf); }
-
 /// Call close_buffer(oldwin, curbuf, flags, false, false). Returns did_decrement as int.
 int nvim_ecmd_close_buffer(win_T *oldwin, int flags)
 {
@@ -2818,48 +2806,10 @@ int nvim_ecmd_u_savecommon(int line_count)
   return u_savecommon(curbuf, 0, (linenr_T)(line_count + 1), 0, true) == OK ? 1 : 0;
 }
 
-/// Call u_unchanged(curbuf)
-void nvim_ecmd_u_unchanged(void) { u_unchanged(curbuf); }
-
-/// Call u_sync(false)
-void nvim_ecmd_u_sync(void) { u_sync(false); }
-
-/// Call buf_valid(buf). Returns 1 if valid.
-int nvim_ecmd_buf_valid(buf_T *buf) { return buf_valid(buf) ? 1 : 0; }
-
-/// Call set_buflisted(val)
-void nvim_ecmd_set_buflisted(int val) { set_buflisted((bool)val); }
-
-/// Call prepare_help_buffer()
-void nvim_ecmd_prepare_help_buffer(void) { prepare_help_buffer(); }
-
-// --- Window/display wrappers ---
-
-/// Call curwin_init()
-void nvim_ecmd_curwin_init(void) { curwin_init(); }
-
-/// Call get_winopts(curbuf)
-void nvim_ecmd_get_winopts(void) { get_winopts(curbuf); }
-
-/// Call set_last_cursor(curwin)
-void nvim_ecmd_set_last_cursor(void) { set_last_cursor(curwin); }
-
-/// Call parse_spelllang(curwin)
-void nvim_ecmd_parse_spelllang(void) { parse_spelllang(curwin); }
-
-/// Call check_arg_idx(curwin)
-void nvim_ecmd_check_arg_idx(void) { check_arg_idx(curwin); }
-
-/// Call redraw_curbuf_later(UPD_NOT_VALID)
-void nvim_ecmd_redraw_curbuf_later(void) { redraw_curbuf_later(UPD_NOT_VALID); }
-
 // --- Cursor manipulation wrappers ---
 
 /// Call check_cursor_col(curwin)
 void nvim_ecmd_check_cursor_col(void) { check_cursor_col(curwin); }
-
-/// Call check_fname(). Returns OK (1) or FAIL (0).
-int nvim_ecmd_check_fname(void) { return check_fname() == OK ? 1 : 0; }
 
 /// Returns 1 if cursor position equals orig (pass lnum and col)
 int nvim_ecmd_cursor_eq(int lnum, int col)
@@ -3024,12 +2974,6 @@ void nvim_ecmd_set_file_options(exarg_T *eap)
   set_forced_fenc(eap);
 }
 
-/// Call do_modelines(OPT_WINONLY)
-void nvim_ecmd_do_modelines(void) { do_modelines(OPT_WINONLY); }
-
-/// Call keymap_init()
-void nvim_ecmd_keymap_init(void) { keymap_init(); }
-
 /// Wrap the FOR_ALL_TAB_WINDOWS loop for fold update all curbuf wins
 void nvim_ecmd_fold_update_all_curbuf_wins(void)
 {
@@ -3039,12 +2983,6 @@ void nvim_ecmd_fold_update_all_curbuf_wins(void)
     }
   }
 }
-
-/// Call msg_check_for_delay(false)
-void nvim_ecmd_msg_check_for_delay(void) { msg_check_for_delay(false); }
-
-/// Call fileinfo(false, true, false)
-void nvim_ecmd_fileinfo(void) { fileinfo(false, true, false); }
 
 /// Get eap->do_ecmd_cmd (the command to run after loading, e.g. for +cmd)
 const char *nvim_ecmd_eap_get_do_ecmd_cmd(exarg_T *eap)
@@ -3066,37 +3004,6 @@ int nvim_ecmd_set_swapcommand(const char *command, int newlnum)
 {
   return rs_set_swapcommand(command, newlnum) ? 1 : 0;
 }
-
-// _Static_assert checks for do_ecmd constants used by Rust
-_Static_assert(ECMD_HIDE == 0x01, "ECMD_HIDE mismatch");
-_Static_assert(ECMD_SET_HELP == 0x02, "ECMD_SET_HELP mismatch");
-_Static_assert(ECMD_OLDBUF == 0x04, "ECMD_OLDBUF mismatch");
-_Static_assert(ECMD_FORCEIT == 0x08, "ECMD_FORCEIT mismatch");
-_Static_assert(ECMD_ADDBUF == 0x10, "ECMD_ADDBUF mismatch");
-_Static_assert(ECMD_ALTBUF == 0x20, "ECMD_ALTBUF mismatch");
-_Static_assert(ECMD_NOWINENTER == 0x40, "ECMD_NOWINENTER mismatch");
-_Static_assert(BF_NEVERLOADED == 0x04, "BF_NEVERLOADED mismatch");
-_Static_assert(BF_CHECK_RO == 0x02, "BF_CHECK_RO mismatch");
-_Static_assert(BF_NOTEDITED == 0x08, "BF_NOTEDITED mismatch");
-_Static_assert(BLN_CURBUF == 1, "BLN_CURBUF mismatch");
-_Static_assert(BLN_LISTED == 2, "BLN_LISTED mismatch");
-_Static_assert(BLN_NOCURWIN == 128, "BLN_NOCURWIN mismatch");
-_Static_assert(BCO_ENTER == 1, "BCO_ENTER mismatch");
-_Static_assert(CCGD_AW == 0x01, "CCGD_AW mismatch");
-_Static_assert(CCGD_MULTWIN == 0x02, "CCGD_MULTWIN mismatch");
-_Static_assert(CCGD_FORCEIT == 0x04, "CCGD_FORCEIT mismatch");
-_Static_assert(CCGD_EXCMD == 0x10, "CCGD_EXCMD mismatch");
-_Static_assert(SEA_DIALOG == 1, "SEA_DIALOG mismatch");
-_Static_assert(SEA_QUIT == 2, "SEA_QUIT mismatch");
-_Static_assert(KEYMAP_INIT == 1, "KEYMAP_INIT mismatch");
-_Static_assert(DOBUF_UNLOAD == 2, "DOBUF_UNLOAD mismatch");
-_Static_assert(READ_KEEP_UNDO == 0x20, "READ_KEEP_UNDO mismatch");
-_Static_assert(READ_NOWINENTER == 0x80, "READ_NOWINENTER mismatch");
-_Static_assert(BFA_KEEP_UNDO == 4, "BFA_KEEP_UNDO mismatch");
-_Static_assert(ECMD_LASTL == 0, "ECMD_LASTL mismatch");
-_Static_assert(ECMD_LAST == -1, "ECMD_LAST mismatch");
-
-// Additional accessors for do_ecmd that weren't in the initial Phase 2 list
 
 /// Get p_ur (undoreload option). Returns -1 if unlimited.
 int64_t nvim_ecmd_get_p_ur(void) { return (int64_t)p_ur; }

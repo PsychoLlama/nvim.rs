@@ -11,7 +11,7 @@ use crate::{BufHandle, ExArgHandle, WinHandle};
 use libc::atol as c_atol;
 
 // =============================================================================
-// Constants matching C defines (verified by _Static_assert in ex_cmds_shim.c)
+// Constants matching C defines
 // =============================================================================
 
 const ECMD_HIDE: c_int = 0x01;
@@ -55,6 +55,11 @@ const BL_FIX: c_int = 4;
 
 const OK: c_int = 1;
 const FAIL: c_int = 0;
+
+// Additional constants needed for direct C function calls (Phase 3)
+const UPD_NOT_VALID: c_int = 40; // buffer needs complete redraw
+const OPT_WINONLY: c_int = 0x08; // only set window-local options
+const BCO_ENTER: c_int = 1; // buf_copy_options: entering buffer
 
 // =============================================================================
 // FFI declarations
@@ -130,38 +135,38 @@ extern "C" {
     fn nvim_ecmd_au_new_curbuf_save() -> *mut std::ffi::c_void;
     fn nvim_ecmd_au_new_curbuf_restore(saved: *mut std::ffi::c_void);
 
-    // Buffer operation wrappers
-    fn nvim_ecmd_buf_check_timestamp(buf: *mut BufHandle);
-    fn nvim_ecmd_buf_copy_options(buf: *mut BufHandle);
-    fn nvim_ecmd_buf_freeall(flags: c_int);
-    fn nvim_ecmd_buf_clear_file();
+    // Buffer operation wrappers (direct C calls)
+    fn nvim_ex2_buf_check_timestamp(buf: *mut BufHandle);
+    fn buf_copy_options(buf: *mut BufHandle, flags: c_int);
+    fn buf_freeall(buf: *mut BufHandle, flags: c_int);
+    fn buf_clear_file(buf: *mut BufHandle);
     fn nvim_ecmd_close_buffer(oldwin: *mut WinHandle, flags: c_int) -> c_int;
     fn nvim_ecmd_open_buffer(eap: *mut ExArgHandle, flags: c_int) -> c_int;
     fn nvim_ecmd_check_changed(flags: c_int) -> c_int;
     fn nvim_ecmd_u_savecommon(line_count: c_int) -> c_int;
-    fn nvim_ecmd_u_unchanged();
-    fn nvim_ecmd_u_sync();
-    fn nvim_ecmd_buf_valid(buf: *mut BufHandle) -> c_int;
-    fn nvim_ecmd_set_buflisted(val: c_int);
-    fn nvim_ecmd_prepare_help_buffer();
+    fn u_unchanged(buf: *mut BufHandle);
+    fn nvim_u_sync(force: bool);
+    fn buf_valid(buf: *mut BufHandle) -> bool;
+    fn set_buflisted(on: c_int);
+    fn prepare_help_buffer();
 
-    // Window/display wrappers
-    fn nvim_ecmd_curwin_init();
-    fn nvim_ecmd_get_winopts();
-    fn nvim_ecmd_set_last_cursor();
+    // Window/display wrappers (direct C calls)
+    fn curwin_init();
+    fn get_winopts(buf: *mut BufHandle);
+    fn set_last_cursor(win: *mut WinHandle);
     fn nvim_maketitle();
-    fn nvim_ecmd_parse_spelllang();
-    fn nvim_ecmd_check_arg_idx();
+    fn nvim_parse_spelllang(win: *mut WinHandle) -> *const c_char;
+    fn check_arg_idx(win: *mut WinHandle);
     fn nvim_excmds_do_autochdir();
     fn nvim_excmds_changed_line_abv_curs();
     fn nvim_excmds_update_topline_curwin();
-    fn nvim_ecmd_redraw_curbuf_later();
+    fn redraw_curbuf_later(type_: c_int);
 
     // Cursor manipulation wrappers
     fn nvim_check_cursor();
     fn nvim_excmds_check_cursor_lnum();
     fn nvim_ecmd_check_cursor_col();
-    fn nvim_ecmd_check_fname() -> c_int;
+    fn nvim_excmds_check_fname() -> c_int;
     fn nvim_beginline(flags: c_int);
     fn nvim_ecmd_cursor_eq(lnum: c_int, col: c_int) -> c_int;
     fn nvim_ecmd_cursor_col_skipwhite() -> c_int;
@@ -213,14 +218,14 @@ extern "C" {
         flags: c_int,
     ) -> *mut BufHandle;
     fn nvim_ecmd_set_file_options(eap: *mut ExArgHandle);
-    fn nvim_ecmd_do_modelines();
-    fn nvim_ecmd_keymap_init();
+    fn do_modelines(flags: c_int);
+    fn keymap_init() -> *mut c_char;
     fn nvim_ecmd_fold_update_all_curbuf_wins();
     fn nvim_ecmd_shortmess_overall() -> c_int;
     fn nvim_ecmd_shortmess_fileinfo() -> c_int;
-    fn nvim_ecmd_msg_check_for_delay();
+    fn msg_check_for_delay(check_msg_scroll: bool);
     fn nvim_excmds_msg_start();
-    fn nvim_ecmd_fileinfo();
+    fn nvim_fileinfo_call();
     fn nvim_ecmd_eap_get_do_ecmd_cmd(eap: *mut ExArgHandle) -> *const c_char;
     fn nvim_ecmd_do_cmdline(command: *const c_char);
     fn nvim_ecmd_clear_swapcommand();
@@ -352,7 +357,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
         // Re-editing a terminal buffer: skip most re-initialization
         // ----------------------------------------------------------------
         if !other_file && nvim_ecmd_curbuf_get_terminal() != 0 {
-            nvim_ecmd_check_arg_idx();
+            check_arg_idx(nvim_get_curwin());
             nvim_maketitle();
             retval = OK;
             break 'outer;
@@ -469,7 +474,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             } else {
                 oldbuf = 1;
                 nvim_ecmd_set_bufref_to_buf(bufref, buf);
-                nvim_ecmd_buf_check_timestamp(buf);
+                nvim_ex2_buf_check_timestamp(buf);
                 // Check if autocommands invalidated the buffer or changed curbuf
                 if nvim_ecmd_bufref_valid(bufref) == 0
                     || nvim_ecmd_curbuf_changed_from_bufref(old_curbuf) != 0
@@ -546,11 +551,11 @@ pub unsafe extern "C" fn rs_do_ecmd(
 
                     // Copy options if curbuf is still the old curbuf
                     if nvim_ecmd_curbuf_is_old_buf(old_curbuf) != 0 {
-                        nvim_ecmd_buf_copy_options(buf);
+                        buf_copy_options(buf, BCO_ENTER);
                     }
 
                     // Close the link to the current buffer
-                    nvim_ecmd_u_sync();
+                    nvim_u_sync(false);
                     let close_flags =
                         if (flags & ECMD_HIDE) != 0 || nvim_ecmd_curbuf_get_terminal() != 0 {
                             0
@@ -583,7 +588,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
 
                     if nvim_ecmd_buf_is_curbuf(buf) != 0 {
                         // Already in new buffer after close_buffer()
-                        if did_decrement != 0 && nvim_ecmd_buf_valid(was_curbuf) != 0 {
+                        if did_decrement != 0 && buf_valid(was_curbuf) {
                             nvim_ecmd_buf_inc_nwindows(was_curbuf);
                         }
                         if rs_win_valid_any_tab(oldwin) != 0
@@ -609,7 +614,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                     }
 
                     // Get window options from last time buffer was in this window
-                    nvim_ecmd_get_winopts();
+                    get_winopts(nvim_get_curbuf());
                     did_get_winopts = true;
                 }
 
@@ -625,7 +630,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             // ============================================================
             // !other_file: re-editing the same file
             // ============================================================
-            if (flags & (ECMD_ADDBUF | ECMD_ALTBUF)) != 0 || nvim_ecmd_check_fname() == 0 {
+            if (flags & (ECMD_ADDBUF | ECMD_ALTBUF)) != 0 || nvim_excmds_check_fname() == 0 {
                 break 'outer; // retval stays FAIL
             }
             oldbuf = if (flags & ECMD_OLDBUF) != 0 { 1 } else { 0 };
@@ -640,9 +645,9 @@ pub unsafe extern "C" fn rs_do_ecmd(
         buf = nvim_get_curbuf();
 
         if (flags & ECMD_SET_HELP) != 0 || nvim_ecmd_get_keep_help_flag() != 0 {
-            nvim_ecmd_prepare_help_buffer();
+            prepare_help_buffer();
         } else if nvim_ecmd_curbuf_get_help() == 0 {
-            nvim_ecmd_set_buflisted(1);
+            set_buflisted(1);
         }
 
         // If autocommands changed buffers, give up
@@ -658,7 +663,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
 
         // re-use the buffer case: !other_file && !oldbuf
         if !other_file && oldbuf == 0 {
-            nvim_ecmd_set_last_cursor();
+            set_last_cursor(nvim_get_curwin());
             if newlnum == ECMD_LAST || newlnum == ECMD_LASTL {
                 newlnum = nvim_excmds_curwin_cursor_lnum();
                 solcol = nvim_ecmd_curwin_get_cursor_col();
@@ -676,17 +681,17 @@ pub unsafe extern "C" fn rs_do_ecmd(
             if (nvim_ecmd_curbuf_get_b_flags() & BF_NEVERLOADED) == 0
                 && (p_ur < 0 || line_count as i64 <= p_ur)
             {
-                nvim_ecmd_u_sync();
+                nvim_u_sync(false);
                 if nvim_ecmd_u_savecommon(line_count) == 0 {
                     xfree(new_name as *mut std::ffi::c_void);
                     new_name = std::ptr::null_mut();
                     break 'outer; // retval stays FAIL
                 }
-                nvim_ecmd_u_unchanged();
-                nvim_ecmd_buf_freeall(BFA_KEEP_UNDO);
+                u_unchanged(nvim_get_curbuf());
+                buf_freeall(nvim_get_curbuf(), BFA_KEEP_UNDO);
                 readfile_flags = READ_KEEP_UNDO;
             } else {
-                nvim_ecmd_buf_freeall(0);
+                buf_freeall(nvim_get_curbuf(), 0);
             }
 
             // If autocommands deleted the buffer, give up
@@ -705,7 +710,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             if nvim_excmds_aborting() != 0 {
                 break 'outer;
             }
-            nvim_ecmd_buf_clear_file();
+            buf_clear_file(nvim_get_curbuf());
             nvim_ecmd_curbuf_clear_op_marks();
         }
 
@@ -718,11 +723,11 @@ pub unsafe extern "C" fn rs_do_ecmd(
         }
 
         // Check if editing the w_arg_idx file in the argument list
-        nvim_ecmd_check_arg_idx();
+        check_arg_idx(nvim_get_curwin());
 
         if !auto_buf {
             // Init window before reading file / executing autocmds
-            nvim_ecmd_curwin_init();
+            curwin_init();
 
             // Update automatic folding for all windows showing curbuf
             nvim_ecmd_fold_update_all_curbuf_wins();
@@ -754,14 +759,14 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 nvim_ecmd_handle_swap_exists(old_curbuf);
             } else {
                 // Read modelines (window-local options only)
-                nvim_ecmd_do_modelines();
+                do_modelines(OPT_WINONLY);
 
                 nvim_ecmd_apply_autocmds_bufenter_retval(&mut retval);
                 if (flags & ECMD_NOWINENTER) == 0 {
                     nvim_ecmd_apply_autocmds_bufwinenter_retval(&mut retval);
                 }
             }
-            nvim_ecmd_check_arg_idx();
+            check_arg_idx(nvim_get_curwin());
 
             // If autocommands changed cursor position or topline, keep it.
             // But not if cursor moved to first non-blank.
@@ -795,7 +800,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             rs_diff_invalidate(nvim_get_curbuf());
         }
         if did_get_winopts && p_spell != 0 && spl_empty == 0 {
-            nvim_ecmd_parse_spelllang();
+            nvim_parse_spelllang(nvim_get_curwin());
         }
 
         // Position cursor
@@ -841,14 +846,14 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 nvim_set_msg_scroll(0);
             }
             if nvim_excmds_get_msg_scroll() == 0 {
-                nvim_ecmd_msg_check_for_delay();
+                msg_check_for_delay(false);
             }
             nvim_excmds_msg_start();
             nvim_set_msg_scroll(msg_scroll_save);
             nvim_ecmd_set_msg_scrolled_ign(1);
 
             if nvim_ecmd_shortmess_fileinfo() == 0 {
-                nvim_ecmd_fileinfo();
+                nvim_fileinfo_call();
             }
 
             nvim_ecmd_set_msg_scrolled_ign(0);
@@ -861,7 +866,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
         }
 
         if (nvim_ecmd_curbuf_get_kmap_state() & KEYMAP_INIT) != 0 {
-            nvim_ecmd_keymap_init();
+            keymap_init();
         }
 
         nvim_dec_RedrawingDisabled();
@@ -876,7 +881,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             nvim_ecmd_curwin_set_scbind_pos_from_topline();
             // Restore original scroll offset
             nvim_ecmd_curwin_set_effective_p_so(orig_p_so);
-            nvim_ecmd_redraw_curbuf_later();
+            redraw_curbuf_later(UPD_NOT_VALID);
         }
 
         nvim_excmds_do_autochdir();
