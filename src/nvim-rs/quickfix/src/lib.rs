@@ -2010,6 +2010,27 @@ extern "C" {
     fn nvim_qf_set_curwin(win: *mut c_void);
     fn nvim_qf_win_get_buf_line_count(win: *const c_void) -> LinenrT;
 
+    // Phase 10 Pass 10 Phase 3: qf_open_new_cwindow / did_set_quickfixtextfunc accessors
+    fn nvim_qf_set_cwindow_options();
+    fn nvim_qf_do_ecmd_existing_buf(fnum: c_int, oldwin: *mut c_void) -> c_int;
+    fn nvim_qf_do_ecmd_new_buf(oldwin: *mut c_void) -> c_int;
+    fn nvim_qf_get_curtab() -> *const c_void;
+    fn nvim_qf_curwin_width() -> c_int;
+    fn nvim_qf_curwin_set_llist_ref_incr(qi: *mut c_void);
+    fn nvim_qf_curwin_set_wfh();
+    fn nvim_qf_curwin_reset_binding();
+    fn nvim_qf_set_prevwin(win: *mut c_void);
+    fn nvim_qf_curtab_eq(saved_tab: *const c_void) -> bool;
+    fn nvim_qf_option_set_callback_func_for_qftf() -> c_int;
+    // nvim_qf_buf_get_fnum already declared in navigate.rs (with *const c_void)
+    fn nvim_qf_curbuf_is_quickfix() -> bool;
+    fn nvim_qf_curbuf_fnum() -> c_int;
+    fn nvim_qf_get_columns() -> c_int;
+    fn nvim_qf_win_split(size: c_int, flags: c_int) -> c_int;
+    fn nvim_qf_get_cmdmod_split() -> c_int;
+    fn nvim_qf_get_e_invarg() -> *const c_char;
+    fn nvim_qf_curwin_is(win: *const c_void) -> bool;
+
     // Phase 8: Ex Commands and API Functions accessors
     // (nvim_qf_get_title and nvim_qf_get_changedtick already declared above)
     fn nvim_qf_is_qf_stack(qi: QfInfoHandle) -> bool;
@@ -5353,6 +5374,133 @@ pub const extern "C" fn rs_qf_type_normalize(type_char: c_char) -> c_char {
         b'n' => b'N' as c_char,
         c => c as c_char,
     }
+}
+
+// =============================================================================
+// Phase 10 Pass 10 Phase 3: qf_open_new_cwindow + did_set_quickfixtextfunc
+// =============================================================================
+
+// Window split flags (from window.h)
+const WSP_BOT: c_int = 0x10; // window at bottom-right of shell
+const WSP_BELOW: c_int = 0x40; // put new window below/right
+const WSP_NEWLOC: c_int = 0x100; // don't copy location list
+
+// Return codes for Phase 3
+const P3_OK: c_int = 1;
+const P3_FAIL: c_int = 0;
+
+extern "C" {
+    #[link_name = "rs_win_setheight"]
+    fn p3_rs_win_setheight(height: c_int);
+    // nvim_qf_buf_get_fnum takes const void* in C; declared here separately to avoid
+    // clashing with navigate.rs which uses a different type alias for BufHandle.
+    #[link_name = "nvim_qf_buf_get_fnum"]
+    fn p3_nvim_qf_buf_get_fnum(buf: *const c_void) -> c_int;
+}
+
+/// Open a new quickfix or location list window.
+///
+/// Equivalent to C `qf_open_new_cwindow`. Finds or creates the quickfix
+/// buffer and opens it in a new split window with appropriate options.
+///
+/// Returns OK (1) on success or FAIL (0) on failure.
+///
+/// # Safety
+///
+/// - `qi` must be a valid mutable pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_open_new_cwindow(qi: QfInfoHandleMut, height: c_int) -> c_int {
+    if qi.is_null() {
+        return P3_FAIL;
+    }
+
+    // Save curwin as oldwin (= win, to be stored as prevwin later)
+    let oldwin = nvim_qf_save_curwin();
+    let prevtab = nvim_qf_get_curtab();
+
+    // Find existing quickfix buffer (if any)
+    let qf_buf = rs_qf_find_buf_for_stack(qi);
+
+    // Default is to open the window below the current window or at the bottom,
+    // except when :belowright or :aboveleft is used.
+    let flags = if nvim_qf_get_cmdmod_split() == 0 {
+        if nvim_qf_is_qf_stack(qi.cast_const()) {
+            WSP_BOT
+        } else {
+            WSP_BELOW
+        }
+    } else {
+        0
+    } | WSP_NEWLOC;
+
+    if nvim_qf_win_split(height, flags) == P3_FAIL {
+        return P3_FAIL; // not enough room for window
+    }
+    nvim_qf_curwin_reset_binding();
+
+    if nvim_qf_is_ll_stack(qi.cast_const()) {
+        // For the location list window, create a reference to the
+        // location list stack from the window 'win'.
+        nvim_qf_curwin_set_llist_ref_incr(qi);
+    }
+
+    // If curwin changed after win_split (it usually does), don't store info.
+    let effective_oldwin = if nvim_qf_curwin_is(oldwin) {
+        oldwin
+    } else {
+        std::ptr::null_mut()
+    };
+
+    if qf_buf.is_null() {
+        // Create a new quickfix buffer
+        if nvim_qf_do_ecmd_new_buf(effective_oldwin) == P3_FAIL {
+            return P3_FAIL;
+        }
+        // Save the number of the new buffer
+        let curbuf_fnum = nvim_qf_curbuf_fnum();
+        nvim_qf_set_bufnr(qi, curbuf_fnum);
+    } else {
+        // Use the existing quickfix buffer
+        let fnum = p3_nvim_qf_buf_get_fnum(qf_buf.cast_const());
+        if nvim_qf_do_ecmd_existing_buf(fnum, effective_oldwin) == P3_FAIL {
+            return P3_FAIL;
+        }
+    }
+
+    // Set the options for the quickfix buffer/window (if not already done).
+    // Do this even if the quickfix buffer was already present, as an autocmd
+    // might have previously deleted (:bdelete) the quickfix buffer.
+    if !nvim_qf_curbuf_is_quickfix() {
+        nvim_qf_set_cwindow_options();
+    }
+
+    // Only set the height when still in the same tab page and there is no
+    // window to the side.
+    if nvim_qf_curtab_eq(prevtab) && nvim_qf_curwin_width() == nvim_qf_get_columns() {
+        p3_rs_win_setheight(height);
+    }
+    nvim_qf_curwin_set_wfh();
+    if nvim_win_valid(oldwin) {
+        nvim_qf_set_prevwin(oldwin);
+    }
+    P3_OK
+}
+
+/// Process the 'quickfixtextfunc' option value.
+///
+/// This is the Rust implementation of C `did_set_quickfixtextfunc`.
+/// It calls `option_set_callback_func(p_qftf, &qftf_cb)` through a C accessor.
+/// Returns NULL on success or the address of `e_invarg` on failure.
+///
+/// # Safety
+///
+/// May only be called from the option-setting machinery.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_quickfixtextfunc(_args: *const c_void) -> *const c_char {
+    if nvim_qf_option_set_callback_func_for_qftf() == P3_FAIL {
+        return nvim_qf_get_e_invarg();
+    }
+    std::ptr::null()
 }
 
 // =============================================================================

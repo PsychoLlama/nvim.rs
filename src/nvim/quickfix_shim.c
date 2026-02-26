@@ -529,6 +529,8 @@ extern void rs_check_lnums(int do_curwin);
 extern int rs_tabline_height(void);
 extern void rs_win_setheight(int height);
 extern void rs_win_setwidth(int width);
+extern int rs_qf_open_new_cwindow(void *qi_void, int height);
+extern const char *rs_did_set_quickfixtextfunc(const void *args);
 
 // Rust fold FFI declarations
 extern void rs_foldOpenCursor(void);
@@ -2670,7 +2672,7 @@ int nvim_qf_win_get_status_height(const void *win_void) { return win_void == NUL
 int nvim_qf_cmdline_row(void) { return (int)cmdline_row; }
 
 
-int nvim_qf_open_new_cwindow(void *qi_void, int height) { return qi_void == NULL ? FAIL : qf_open_new_cwindow((qf_info_T *)qi_void, height); }
+int nvim_qf_open_new_cwindow(void *qi_void, int height) { return rs_qf_open_new_cwindow(qi_void, height); }
 void nvim_qf_set_title_var(void *qfl_void) { if (qfl_void != NULL) qf_set_title_var((qf_list_T *)qfl_void); }
 
 void nvim_qf_curwin_set_cursor(linenr_T lnum, int col) { curwin->w_cursor.lnum = lnum; curwin->w_cursor.col = col; }
@@ -2732,6 +2734,77 @@ void nvim_qf_restore_curwin(void *saved) { curwin = (win_T *)saved; }
 /// Set curwin to the given window (for qf_update_win_titlevar pattern).
 void nvim_qf_set_curwin(void *win_void) { curwin = (win_T *)win_void; }
 
+// Phase 10 Pass 10 Phase 3: New C accessors for qf_open_new_cwindow / did_set_quickfixtextfunc
+
+/// Set buffer options for the quickfix/location list window (swapfile, buftype, bufhidden,
+/// foldmethod). Also resets key bindings and w_p_diff. (Migrated body from qf_set_cwindow_options.)
+void nvim_qf_set_cwindow_options(void)
+{
+  set_option_value_give_err(kOptSwapfile, BOOLEAN_OPTVAL(false), OPT_LOCAL);
+  set_option_value_give_err(kOptBuftype, STATIC_CSTR_AS_OPTVAL("quickfix"), OPT_LOCAL);
+  set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("hide"), OPT_LOCAL);
+  RESET_BINDING(curwin);
+  curwin->w_p_diff = false;
+  set_option_value_give_err(kOptFoldmethod, STATIC_CSTR_AS_OPTVAL("manual"), OPT_LOCAL);
+}
+
+/// do_ecmd for an existing quickfix buffer (ECMD_HIDE + ECMD_OLDBUF + ECMD_NOWINENTER).
+/// oldwin may be NULL. Returns OK (1) or FAIL (0).
+int nvim_qf_do_ecmd_existing_buf(int fnum, void *oldwin_void)
+{
+  return do_ecmd(fnum, NULL, NULL, NULL, ECMD_ONE,
+                 ECMD_HIDE + ECMD_OLDBUF + ECMD_NOWINENTER,
+                 (win_T *)oldwin_void);
+}
+
+/// do_ecmd creating a new quickfix buffer (ECMD_HIDE + ECMD_NOWINENTER).
+/// oldwin may be NULL. Returns OK (1) or FAIL (0).
+int nvim_qf_do_ecmd_new_buf(void *oldwin_void)
+{
+  return do_ecmd(0, NULL, NULL, NULL, ECMD_ONE,
+                 ECMD_HIDE + ECMD_NOWINENTER,
+                 (win_T *)oldwin_void);
+}
+
+/// Return the current tab page pointer (curtab).
+const void *nvim_qf_get_curtab(void) { return curtab; }
+
+// nvim_qf_curwin_width already defined at line 2529 (nvim_qf_get_columns section).
+
+/// Set curwin->w_llist_ref = qi and increment qi->qf_refcount.
+/// Only do this when qi is a location list stack (IS_LL_STACK).
+void nvim_qf_curwin_set_llist_ref_incr(void *qi_void)
+{
+  if (qi_void == NULL) { return; }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  curwin->w_llist_ref = qi;
+  qi->qf_refcount++;
+}
+
+/// Set curwin->w_p_wfh to true (winfixheight).
+void nvim_qf_curwin_set_wfh(void) { curwin->w_p_wfh = true; }
+
+/// Reset key bindings on curwin (RESET_BINDING).
+void nvim_qf_curwin_reset_binding(void) { RESET_BINDING(curwin); }
+
+/// Set prevwin to the given window pointer.
+void nvim_qf_set_prevwin(void *win_void) { prevwin = (win_T *)win_void; }
+
+/// Check if the current tab page equals a previously saved tab page pointer.
+bool nvim_qf_curtab_eq(const void *saved_tab) { return curtab == (const tabpage_T *)saved_tab; }
+
+/// Call option_set_callback_func(p_qftf, &qftf_cb). Returns FAIL or OK.
+int nvim_qf_option_set_callback_func_for_qftf(void)
+{
+  return option_set_callback_func(p_qftf, &qftf_cb);
+}
+
+/// Return the e_invarg error string pointer (for rs_did_set_quickfixtextfunc).
+const char *nvim_qf_get_e_invarg(void) { return e_invarg; }
+
+/// Return true if curwin equals the given window (for oldwin != curwin check).
+bool nvim_qf_curwin_is(const void *win_void) { return curwin == (const win_T *)win_void; }
+
 // Highlight ids used for displaying entries from the quickfix list.
 static int qfFile_hl_id;
 static int qfSep_hl_id;
@@ -2759,87 +2832,11 @@ bool qf_mark_adjust(buf_T *buf, win_T *wp, linenr_T line1, linenr_T line2, linen
   return rs_qf_mark_adjust_entry(buf, wp, line1, line2, amount, amount_after);
 }
 
-// Set options for the buffer in the quickfix or location list window.
-static void qf_set_cwindow_options(void)
-{
-  // switch off 'swapfile'
-  set_option_value_give_err(kOptSwapfile, BOOLEAN_OPTVAL(false), OPT_LOCAL);
-  set_option_value_give_err(kOptBuftype, STATIC_CSTR_AS_OPTVAL("quickfix"), OPT_LOCAL);
-  set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("hide"), OPT_LOCAL);
-  RESET_BINDING(curwin);
-  curwin->w_p_diff = false;
-  set_option_value_give_err(kOptFoldmethod, STATIC_CSTR_AS_OPTVAL("manual"), OPT_LOCAL);
-}
+// qf_set_cwindow_options: deleted -- migrated to nvim_qf_set_cwindow_options accessor
+// and Rust rs_qf_open_new_cwindow (Phase 10 Pass 10 Phase 3).
 
-// Open a new quickfix or location list window, load the quickfix buffer and
-// set the appropriate options for the window.
-// Returns FAIL if the window could not be opened.
-static int qf_open_new_cwindow(qf_info_T *qi, int height)
-  FUNC_ATTR_NONNULL_ALL
-{
-  win_T *oldwin = curwin;
-  const tabpage_T *const prevtab = curtab;
-  int flags = 0;
-
-  const buf_T *const qf_buf = qf_find_buf(qi);
-
-  // The current window becomes the previous window afterwards.
-  win_T *const win = curwin;
-
-  // Default is to open the window below the current window or at the bottom,
-  // except when :belowright or :aboveleft is used.
-  if (cmdmod.cmod_split == 0) {
-    flags = IS_QF_STACK(qi) ? WSP_BOT : WSP_BELOW;
-  }
-  flags |= WSP_NEWLOC;
-  if (win_split(height, flags) == FAIL) {
-    return FAIL;  // not enough room for window
-  }
-  RESET_BINDING(curwin);
-
-  if (IS_LL_STACK(qi)) {
-    // For the location list window, create a reference to the
-    // location list stack from the window 'win'.
-    curwin->w_llist_ref = qi;
-    qi->qf_refcount++;
-  }
-
-  if (oldwin != curwin) {
-    oldwin = NULL;  // don't store info when in another window
-  }
-  if (qf_buf != NULL) {
-    // Use the existing quickfix buffer
-    if (do_ecmd(qf_buf->b_fnum, NULL, NULL, NULL, ECMD_ONE,
-                ECMD_HIDE + ECMD_OLDBUF + ECMD_NOWINENTER, oldwin) == FAIL) {
-      return FAIL;
-    }
-  } else {
-    // Create a new quickfix buffer
-    if (do_ecmd(0, NULL, NULL, NULL, ECMD_ONE, ECMD_HIDE + ECMD_NOWINENTER, oldwin) == FAIL) {
-      return FAIL;
-    }
-    // save the number of the new buffer
-    qi->qf_bufnr = curbuf->b_fnum;
-  }
-
-  // Set the options for the quickfix buffer/window (if not already done)
-  // Do this even if the quickfix buffer was already present, as an autocmd
-  // might have previously deleted (:bdelete) the quickfix buffer.
-  if (!bt_quickfix(curbuf)) {
-    qf_set_cwindow_options();
-  }
-
-  // Only set the height when still in the same tab page and there is no
-  // window to the side.
-  if (curtab == prevtab && curwin->w_width == Columns) {
-    rs_win_setheight(height);
-  }
-  curwin->w_p_wfh = true;  // set 'winfixheight'
-  if (rs_win_valid(win)) {
-    prevwin = win;
-  }
-  return OK;
-}
+// qf_open_new_cwindow: deleted -- migrated to Rust rs_qf_open_new_cwindow
+// (Phase 10 Pass 10 Phase 3). nvim_qf_open_new_cwindow now calls rs_qf_open_new_cwindow.
 
 /// Set "w:quickfix_title" if "qi" has a title.
 static void qf_set_title_var(qf_list_T *qfl)
@@ -2949,12 +2946,10 @@ static buf_T *qf_find_buf(qf_info_T *qi)
 }
 
 /// Process the 'quickfixtextfunc' option value.
+/// Delegates to rs_did_set_quickfixtextfunc (Phase 10 Pass 10 Phase 3).
 const char *did_set_quickfixtextfunc(optset_T *args FUNC_ATTR_UNUSED)
 {
-  if (option_set_callback_func(p_qftf, &qftf_cb) == FAIL) {
-    return e_invarg;
-  }
-  return NULL;
+  return rs_did_set_quickfixtextfunc(args);
 }
 
 /// all the tab pages.
