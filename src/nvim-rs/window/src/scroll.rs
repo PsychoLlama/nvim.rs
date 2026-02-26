@@ -368,6 +368,443 @@ pub extern "C" fn rs_win_fix_cursor(normal: c_int) {
 }
 
 // =============================================================================
+// Phase 9: may_trigger_win_scrolled_resized migration
+// =============================================================================
+
+/// Opaque handle to a C dict_T*.
+type DictHandle = *mut std::ffi::c_void;
+
+/// Opaque handle to a C list_T*.
+type ListHandle = *mut std::ffi::c_void;
+
+extern "C" {
+    // Window snapshot field getters
+    fn nvim_win_get_last_topline(wp: WinHandle) -> c_int;
+    fn nvim_win_get_last_topfill(wp: WinHandle) -> c_int;
+    fn nvim_win_get_last_leftcol(wp: WinHandle) -> c_int;
+    fn nvim_win_get_last_skipcol(wp: WinHandle) -> c_int;
+    fn nvim_win_get_last_width(wp: WinHandle) -> c_int;
+    fn nvim_win_get_last_height(wp: WinHandle) -> c_int;
+
+    // Event ignored/has_event wrappers
+    fn nvim_event_ignored_winscrolled(wp: WinHandle) -> c_int;
+    fn nvim_event_ignored_winresized(wp: WinHandle) -> c_int;
+    fn nvim_has_event_winscrolled() -> c_int;
+    fn nvim_has_event_winresized() -> c_int;
+
+    // Window field getters (some already declared in existing extern block above)
+    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
+    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
+    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
+    fn nvim_win_get_leftcol(wp: WinHandle) -> c_int;
+    fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
+
+    // Init floating window snapshot
+    fn nvim_win_init_float_snapshot(wp: WinHandle);
+
+    // Typval compound operations
+    fn nvim_tv_dict_alloc_refcount1() -> DictHandle;
+    fn nvim_tv_dict_add_number(
+        dict: DictHandle,
+        key: *const std::ffi::c_char,
+        key_len: usize,
+        nr: c_int,
+    ) -> c_int;
+    fn nvim_tv_dict_add_dict_wrapper(
+        dict: DictHandle,
+        key: *const std::ffi::c_char,
+        key_len: usize,
+        child: DictHandle,
+    ) -> c_int;
+    fn nvim_tv_dict_unref_wrapper(dict: DictHandle);
+    fn nvim_tv_list_alloc_wrapper(count: c_int) -> ListHandle;
+    fn nvim_tv_list_append_number(list: ListHandle, nr: c_int);
+
+    // Compound autocmd/v:event fire operations.
+    // These wrappers take full ownership of list/dict and handle the entire
+    // get_v_event / set_keys_readonly / apply_autocmds / restore_v_event lifecycle.
+    // The win_handle is used to find the buffer (via bufref_valid check).
+    fn nvim_fire_winresized(
+        list: ListHandle,
+        winid_str: *const std::ffi::c_char,
+        first_size_win: WinHandle,
+        first_size_win_buf_fnum: c_int,
+    );
+    fn nvim_fire_winscrolled(
+        dict: DictHandle,
+        winid_str: *const std::ffi::c_char,
+        first_scroll_win: WinHandle,
+        first_scroll_win_buf_fnum: c_int,
+    );
+
+    // Get buf fnum for bufref validity check
+    fn nvim_win_get_buf_fnum(wp: WinHandle) -> c_int;
+}
+
+/// Scan result from iterating windows for scroll/resize changes.
+struct ScrollResizeScan {
+    size_count: c_int,
+    first_scroll_win: WinHandle,
+    first_size_win: WinHandle,
+}
+
+/// Scan all windows in current tab for scroll/size changes.
+///
+/// Returns counts and first-window pointers needed to decide what events to fire.
+fn check_window_scroll_resize_scan() -> ScrollResizeScan {
+    let mut result = ScrollResizeScan {
+        size_count: 0,
+        first_scroll_win: WinHandle::null(),
+        first_size_win: WinHandle::null(),
+    };
+
+    // SAFETY: all accessor calls are safe C functions
+    unsafe {
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            // Skip floating windows without a snapshot (init them instead)
+            if nvim_win_get_floating(wp) != 0 && nvim_win_get_last_topline(wp) == 0 {
+                nvim_win_init_float_snapshot(wp);
+                wp = nvim_win_get_next(wp);
+                continue;
+            }
+
+            let ignore_scroll = nvim_event_ignored_winscrolled(wp) != 0;
+            let size_changed = nvim_event_ignored_winresized(wp) == 0
+                && (nvim_win_get_last_width(wp) != nvim_win_get_w_width(wp)
+                    || nvim_win_get_last_height(wp) != nvim_win_get_w_height(wp));
+
+            if size_changed {
+                result.size_count += 1;
+                if result.first_size_win.is_null() {
+                    result.first_size_win = wp;
+                }
+                // For WinScrolled: first window with a size change is also used
+                // as first_scroll_win even when it didn't scroll (per C original).
+                if result.first_scroll_win.is_null() && !ignore_scroll {
+                    result.first_scroll_win = wp;
+                }
+            }
+
+            let scroll_changed = !ignore_scroll
+                && (nvim_win_get_last_topline(wp) != nvim_win_get_topline(wp)
+                    || nvim_win_get_last_topfill(wp) != nvim_win_get_topfill(wp)
+                    || nvim_win_get_last_leftcol(wp) != nvim_win_get_leftcol(wp)
+                    || nvim_win_get_last_skipcol(wp) != nvim_win_get_skipcol(wp));
+
+            if scroll_changed && result.first_scroll_win.is_null() {
+                result.first_scroll_win = wp;
+            }
+
+            wp = nvim_win_get_next(wp);
+        }
+    }
+
+    result
+}
+
+/// Build the list of window handles with size changes for WinResized v:event.
+fn check_window_scroll_resize_build_list(list: ListHandle) {
+    // SAFETY: all accessor calls are safe C functions
+    unsafe {
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            if nvim_win_get_floating(wp) != 0 && nvim_win_get_last_topline(wp) == 0 {
+                wp = nvim_win_get_next(wp);
+                continue;
+            }
+
+            let size_changed = nvim_event_ignored_winresized(wp) == 0
+                && (nvim_win_get_last_width(wp) != nvim_win_get_w_width(wp)
+                    || nvim_win_get_last_height(wp) != nvim_win_get_w_height(wp));
+
+            if size_changed {
+                nvim_tv_list_append_number(list, nvim_win_get_handle(wp));
+            }
+
+            wp = nvim_win_get_next(wp);
+        }
+    }
+}
+
+/// Allocate a win-info dict with 6 number entries.
+///
+/// Returns null DictHandle on any allocation failure (frees partial dict).
+fn make_win_info_dict_rs(
+    width: c_int,
+    height: c_int,
+    topline: c_int,
+    topfill: c_int,
+    leftcol: c_int,
+    skipcol: c_int,
+) -> DictHandle {
+    // SAFETY: compound C wrappers manage dict memory
+    unsafe {
+        let d = nvim_tv_dict_alloc_refcount1();
+        if d.is_null() {
+            return std::ptr::null_mut();
+        }
+
+        // OK == 1 in Neovim's C API (maps to FAIL == 0)
+        let mut success = true;
+
+        macro_rules! add_num {
+            ($key:expr, $val:expr) => {{
+                let k: &[u8] = $key;
+                if nvim_tv_dict_add_number(d, k.as_ptr().cast(), k.len() - 1, $val) == 0 {
+                    success = false;
+                }
+            }};
+        }
+
+        add_num!(b"width\0", width);
+        if success {
+            add_num!(b"height\0", height);
+        }
+        if success {
+            add_num!(b"topline\0", topline);
+        }
+        if success {
+            add_num!(b"topfill\0", topfill);
+        }
+        if success {
+            add_num!(b"leftcol\0", leftcol);
+        }
+        if success {
+            add_num!(b"skipcol\0", skipcol);
+        }
+
+        if success {
+            d
+        } else {
+            nvim_tv_dict_unref_wrapper(d);
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Build the scroll dict for WinScrolled v:event.
+///
+/// For each window with scroll or size changes, adds a per-window sub-dict
+/// keyed by window ID string. Also adds an "all" totals dict.
+///
+/// Returns the dict (caller owns it with refcount=1), or null on failure.
+fn check_window_scroll_resize_build_dict() -> DictHandle {
+    let mut tot_width: c_int = 0;
+    let mut tot_height: c_int = 0;
+    let mut tot_topline: c_int = 0;
+    let mut tot_topfill: c_int = 0;
+    let mut tot_leftcol: c_int = 0;
+    let mut tot_skipcol: c_int = 0;
+
+    // SAFETY: all compound C wrappers manage their own memory
+    unsafe {
+        let scroll_dict = nvim_tv_dict_alloc_refcount1();
+        if scroll_dict.is_null() {
+            return std::ptr::null_mut();
+        }
+
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            if nvim_win_get_floating(wp) != 0 && nvim_win_get_last_topline(wp) == 0 {
+                wp = nvim_win_get_next(wp);
+                continue;
+            }
+
+            let ignore_scroll = nvim_event_ignored_winscrolled(wp) != 0;
+            let size_changed = nvim_event_ignored_winresized(wp) == 0
+                && (nvim_win_get_last_width(wp) != nvim_win_get_w_width(wp)
+                    || nvim_win_get_last_height(wp) != nvim_win_get_w_height(wp));
+
+            let scroll_changed = !ignore_scroll
+                && (nvim_win_get_last_topline(wp) != nvim_win_get_topline(wp)
+                    || nvim_win_get_last_topfill(wp) != nvim_win_get_topfill(wp)
+                    || nvim_win_get_last_leftcol(wp) != nvim_win_get_leftcol(wp)
+                    || nvim_win_get_last_skipcol(wp) != nvim_win_get_skipcol(wp));
+
+            if size_changed || scroll_changed {
+                let width = nvim_win_get_w_width(wp) - nvim_win_get_last_width(wp);
+                let height = nvim_win_get_w_height(wp) - nvim_win_get_last_height(wp);
+                let topline = nvim_win_get_topline(wp) - nvim_win_get_last_topline(wp);
+                let topfill = nvim_win_get_topfill(wp) - nvim_win_get_last_topfill(wp);
+                let leftcol = nvim_win_get_leftcol(wp) - nvim_win_get_last_leftcol(wp);
+                let skipcol = nvim_win_get_skipcol(wp) - nvim_win_get_last_skipcol(wp);
+
+                let d = make_win_info_dict_rs(width, height, topline, topfill, leftcol, skipcol);
+                if d.is_null() {
+                    nvim_tv_dict_unref_wrapper(scroll_dict);
+                    return std::ptr::null_mut();
+                }
+
+                // Format window handle as NUL-terminated decimal string
+                let handle = nvim_win_get_handle(wp);
+                let mut winid_buf = [0u8; 24];
+                let key_len = format_int_to_buf(handle, &mut winid_buf);
+
+                if nvim_tv_dict_add_dict_wrapper(scroll_dict, winid_buf.as_ptr().cast(), key_len, d)
+                    == 0
+                {
+                    // Wrapper does not consume d on failure; free it.
+                    nvim_tv_dict_unref_wrapper(d);
+                    nvim_tv_dict_unref_wrapper(scroll_dict);
+                    return std::ptr::null_mut();
+                }
+                // d ownership transferred (wrapper decrements refcount)
+
+                tot_width += width.abs();
+                tot_height += height.abs();
+                tot_topline += topline.abs();
+                tot_topfill += topfill.abs();
+                tot_leftcol += leftcol.abs();
+                tot_skipcol += skipcol.abs();
+            }
+
+            wp = nvim_win_get_next(wp);
+        }
+
+        // Add "all" totals sub-dict (non-fatal if it fails, matching C original)
+        let alldict = make_win_info_dict_rs(
+            tot_width,
+            tot_height,
+            tot_topline,
+            tot_topfill,
+            tot_leftcol,
+            tot_skipcol,
+        );
+        if !alldict.is_null()
+            && nvim_tv_dict_add_dict_wrapper(scroll_dict, c"all".as_ptr(), 3, alldict) == 0
+        {
+            nvim_tv_dict_unref_wrapper(alldict);
+            // non-fatal per C original
+        }
+
+        scroll_dict
+    }
+}
+
+/// Format a c_int as decimal ASCII into buf, return length (not including NUL).
+///
+/// Writes a NUL terminator after the digits.
+fn format_int_to_buf(val: c_int, buf: &mut [u8; 24]) -> usize {
+    use std::io::Write;
+    let mut cursor = std::io::Cursor::new(buf.as_mut_slice());
+    let _ = write!(cursor, "{val}");
+    let pos = cursor.position() as usize;
+    if pos < buf.len() {
+        buf[pos] = 0; // NUL-terminate
+    }
+    pos
+}
+
+/// Recursive guard for may_trigger_win_scrolled_resized.
+///
+/// AtomicBool with Relaxed ordering is sufficient since Neovim is single-threaded.
+static SCROLLED_RESIZED_RECURSIVE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Trigger WinScrolled and/or WinResized if any window in the current tab
+/// page scrolled or changed size.
+///
+/// This is the Rust equivalent of `may_trigger_win_scrolled_resized()`.
+fn may_trigger_win_scrolled_resized_impl() {
+    // SAFETY: compound C wrappers manage typval/autocmd lifecycle
+    unsafe {
+        let do_resize = nvim_has_event_winresized() != 0;
+        let do_scroll = nvim_has_event_winscrolled() != 0;
+
+        if SCROLLED_RESIZED_RECURSIVE.load(Ordering::Relaxed)
+            || (!do_scroll && !do_resize)
+            || !DID_INITIAL_SCROLL_SIZE_SNAPSHOT.load(Ordering::Relaxed)
+        {
+            return;
+        }
+
+        // Scan for changes
+        let scan = check_window_scroll_resize_scan();
+        let trigger_resize = do_resize && scan.size_count > 0;
+        let trigger_scroll = do_scroll && !scan.first_scroll_win.is_null();
+
+        if !trigger_resize && !trigger_scroll {
+            return;
+        }
+
+        // Build WinResized list before snapshot
+        let windows_list: ListHandle = if trigger_resize {
+            let list = nvim_tv_list_alloc_wrapper(scan.size_count);
+            if !list.is_null() {
+                check_window_scroll_resize_build_list(list);
+            }
+            list
+        } else {
+            std::ptr::null_mut()
+        };
+
+        // Build WinScrolled dict before snapshot
+        let scroll_dict: DictHandle = if trigger_scroll {
+            check_window_scroll_resize_build_dict()
+        } else {
+            std::ptr::null_mut()
+        };
+
+        // Take snapshot BEFORE firing autocmds (matching C original)
+        rs_snapshot_windows_scroll_size();
+
+        SCROLLED_RESIZED_RECURSIVE.store(true, Ordering::Relaxed);
+
+        // Save winid strings and buf fnums before autocmds (windows can be freed)
+        let mut resize_winid = [0u8; 24];
+        let resize_buf_fnum: c_int = if trigger_resize && !scan.first_size_win.is_null() {
+            format_int_to_buf(nvim_win_get_handle(scan.first_size_win), &mut resize_winid);
+            nvim_win_get_buf_fnum(scan.first_size_win)
+        } else {
+            0
+        };
+
+        let mut scroll_winid = [0u8; 24];
+        let scroll_buf_fnum: c_int = if trigger_scroll && !scan.first_scroll_win.is_null() {
+            format_int_to_buf(
+                nvim_win_get_handle(scan.first_scroll_win),
+                &mut scroll_winid,
+            );
+            nvim_win_get_buf_fnum(scan.first_scroll_win)
+        } else {
+            0
+        };
+
+        // Fire WinResized first
+        if trigger_resize && !windows_list.is_null() {
+            nvim_fire_winresized(
+                windows_list,
+                resize_winid.as_ptr().cast(),
+                scan.first_size_win,
+                resize_buf_fnum,
+            );
+            // windows_list ownership transferred to wrapper
+            // If windows_list is null (alloc failed), skip firing but don't crash
+        }
+
+        // Fire WinScrolled
+        if trigger_scroll && !scroll_dict.is_null() {
+            nvim_fire_winscrolled(
+                scroll_dict,
+                scroll_winid.as_ptr().cast(),
+                scan.first_scroll_win,
+                scroll_buf_fnum,
+            );
+            // scroll_dict ownership transferred to wrapper
+        }
+
+        SCROLLED_RESIZED_RECURSIVE.store(false, Ordering::Relaxed);
+    }
+}
+
+/// FFI export for `may_trigger_win_scrolled_resized`.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_may_trigger_win_scrolled_resized() {
+    may_trigger_win_scrolled_resized_impl();
+}
+
+// =============================================================================
 // Static assertions via tests
 // =============================================================================
 

@@ -94,6 +94,9 @@ extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
 // Phase 9: win_init migration
 extern void rs_win_init(win_T *newp, win_T *oldp, int flags);
 
+// Phase 9: may_trigger_win_scrolled_resized migration
+extern void rs_may_trigger_win_scrolled_resized(void);
+
 // Rust fold FFI declarations
 extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
 extern void rs_clearFolding(win_T *win);
@@ -1828,260 +1831,11 @@ void snapshot_windows_scroll_size(void) { rs_snapshot_windows_scroll_size(); }
 
 void may_make_initial_scroll_size_snapshot(void) { rs_may_make_initial_scroll_size_snapshot(); }
 
-/// Create a dictionary with information about size and scroll changes in a
-/// window.
-/// Returns the dictionary with refcount set to one.
-/// Returns NULL on internal error.
-static dict_T *make_win_info_dict(int width, int height, int topline, int topfill, int leftcol,
-                                  int skipcol)
-{
-  dict_T *const d = tv_dict_alloc();
-  d->dv_refcount = 1;
-
-  // not actually looping, for breaking out on error
-  while (true) {
-    typval_T tv = {
-      .v_lock = VAR_UNLOCKED,
-      .v_type = VAR_NUMBER,
-    };
-
-    tv.vval.v_number = width;
-    if (tv_dict_add_tv(d, S_LEN("width"), &tv) == FAIL) {
-      break;
-    }
-    tv.vval.v_number = height;
-    if (tv_dict_add_tv(d, S_LEN("height"), &tv) == FAIL) {
-      break;
-    }
-    tv.vval.v_number = topline;
-    if (tv_dict_add_tv(d, S_LEN("topline"), &tv) == FAIL) {
-      break;
-    }
-    tv.vval.v_number = topfill;
-    if (tv_dict_add_tv(d, S_LEN("topfill"), &tv) == FAIL) {
-      break;
-    }
-    tv.vval.v_number = leftcol;
-    if (tv_dict_add_tv(d, S_LEN("leftcol"), &tv) == FAIL) {
-      break;
-    }
-    tv.vval.v_number = skipcol;
-    if (tv_dict_add_tv(d, S_LEN("skipcol"), &tv) == FAIL) {
-      break;
-    }
-    return d;
-  }
-  tv_dict_unref(d);
-  return NULL;
-}
-
-/// This function is used for three purposes:
-/// 1. Goes over all windows in the current tab page and sets:
-///    "size_count" to the nr of windows with size changes.
-///    "first_scroll_win" to the first window with any relevant changes.
-///    "first_size_win" to the first window with size changes.
-///
-/// 2. When the first three arguments are NULL and "winlist" is not NULL,
-///    "winlist" is set to the list of window IDs with size changes.
-///
-/// 3. When the first three arguments are NULL and "v_event" is not NULL,
-///    information about changed windows is added to "v_event".
-static void check_window_scroll_resize(int *size_count, win_T **first_scroll_win,
-                                       win_T **first_size_win, list_T *winlist, dict_T *v_event)
-{
-  // int listidx = 0;
-  int tot_width = 0;
-  int tot_height = 0;
-  int tot_topline = 0;
-  int tot_topfill = 0;
-  int tot_leftcol = 0;
-  int tot_skipcol = 0;
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    // Skip floating windows that do not have a snapshot (usually because they are newly-created),
-    // as unlike split windows, creating floating windows doesn't cause other windows to resize.
-    if (wp->w_floating && wp->w_last_topline == 0) {
-      wp->w_last_topline = wp->w_topline;
-      wp->w_last_topfill = wp->w_topfill;
-      wp->w_last_leftcol = wp->w_leftcol;
-      wp->w_last_skipcol = wp->w_skipcol;
-      wp->w_last_width = wp->w_width;
-      wp->w_last_height = wp->w_height;
-      continue;
-    }
-
-    const bool ignore_scroll = event_ignored(EVENT_WINSCROLLED, wp->w_p_eiw);
-    const bool size_changed = !event_ignored(EVENT_WINRESIZED, wp->w_p_eiw)
-                              && (wp->w_last_width != wp->w_width
-                                  || wp->w_last_height != wp->w_height);
-    if (size_changed) {
-      if (winlist != NULL) {
-        // Add this window to the list of changed windows.
-        typval_T tv = {
-          .v_lock = VAR_UNLOCKED,
-          .v_type = VAR_NUMBER,
-          .vval.v_number = wp->handle,
-        };
-        // tv_list_set_item(winlist, listidx++, &tv);
-        tv_list_append_owned_tv(winlist, tv);
-      } else if (size_count != NULL) {
-        assert(first_size_win != NULL && first_scroll_win != NULL);
-        (*size_count)++;
-        if (*first_size_win == NULL) {
-          *first_size_win = wp;
-        }
-        // For WinScrolled the first window with a size change is used
-        // even when it didn't scroll.
-        if (*first_scroll_win == NULL && !ignore_scroll) {
-          *first_scroll_win = wp;
-        }
-      }
-    }
-
-    const bool scroll_changed = !ignore_scroll
-                                && (wp->w_last_topline != wp->w_topline
-                                    || wp->w_last_topfill != wp->w_topfill
-                                    || wp->w_last_leftcol != wp->w_leftcol
-                                    || wp->w_last_skipcol != wp->w_skipcol);
-    if (scroll_changed && first_scroll_win != NULL && *first_scroll_win == NULL) {
-      *first_scroll_win = wp;
-    }
-
-    if ((size_changed || scroll_changed) && v_event != NULL) {
-      // Add info about this window to the v:event dictionary.
-      int width = wp->w_width - wp->w_last_width;
-      int height = wp->w_height - wp->w_last_height;
-      int topline = wp->w_topline - wp->w_last_topline;
-      int topfill = wp->w_topfill - wp->w_last_topfill;
-      int leftcol = wp->w_leftcol - wp->w_last_leftcol;
-      int skipcol = wp->w_skipcol - wp->w_last_skipcol;
-      dict_T *d = make_win_info_dict(width, height, topline,
-                                     topfill, leftcol, skipcol);
-      if (d == NULL) {
-        break;
-      }
-      char winid[NUMBUFLEN];
-      int key_len = vim_snprintf(winid, sizeof(winid), "%d", wp->handle);
-      if (tv_dict_add_dict(v_event, winid, (size_t)key_len, d) == FAIL) {
-        tv_dict_unref(d);
-        break;
-      }
-      d->dv_refcount--;
-
-      tot_width += abs(width);
-      tot_height += abs(height);
-      tot_topline += abs(topline);
-      tot_topfill += abs(topfill);
-      tot_leftcol += abs(leftcol);
-      tot_skipcol += abs(skipcol);
-    }
-  }
-
-  if (v_event != NULL) {
-    dict_T *alldict = make_win_info_dict(tot_width, tot_height, tot_topline,
-                                         tot_topfill, tot_leftcol, tot_skipcol);
-    if (alldict != NULL) {
-      if (tv_dict_add_dict(v_event, S_LEN("all"), alldict) == FAIL) {
-        tv_dict_unref(alldict);
-      } else {
-        alldict->dv_refcount--;
-      }
-    }
-  }
-}
-
 /// Trigger WinScrolled and/or WinResized if any window in the current tab page
 /// scrolled or changed size.
 void may_trigger_win_scrolled_resized(void)
 {
-  static bool recursive = false;
-  const bool do_resize = has_event(EVENT_WINRESIZED);
-  const bool do_scroll = has_event(EVENT_WINSCROLLED);
-
-  if (recursive
-      || !(do_scroll || do_resize)
-      || !rs_get_did_initial_scroll_size_snapshot()) {
-    return;
-  }
-
-  int size_count = 0;
-  win_T *first_scroll_win = NULL;
-  win_T *first_size_win = NULL;
-  check_window_scroll_resize(&size_count, &first_scroll_win, &first_size_win, NULL, NULL);
-  bool trigger_resize = do_resize && size_count > 0;
-  bool trigger_scroll = do_scroll && first_scroll_win != NULL;
-  if (!trigger_resize && !trigger_scroll) {
-    return;  // no relevant changes
-  }
-
-  list_T *windows_list = NULL;
-  if (trigger_resize) {
-    // Create the list for v:event.windows before making the snapshot.
-    // windows_list = tv_list_alloc_with_items(size_count);
-    windows_list = tv_list_alloc(size_count);
-    check_window_scroll_resize(NULL, NULL, NULL, windows_list, NULL);
-  }
-
-  dict_T *scroll_dict = NULL;
-  if (trigger_scroll) {
-    // Create the dict with entries for v:event before making the snapshot.
-    scroll_dict = tv_dict_alloc();
-    scroll_dict->dv_refcount = 1;
-    check_window_scroll_resize(NULL, NULL, NULL, NULL, scroll_dict);
-  }
-
-  // WinScrolled/WinResized are triggered only once, even when multiple
-  // windows scrolled or changed size.  Store the current values before
-  // triggering the event, if a scroll or resize happens as a side effect
-  // then WinScrolled/WinResized is triggered for that later.
-  snapshot_windows_scroll_size();
-
-  recursive = true;
-
-  // Save window info before autocmds since they can free windows
-  char resize_winid[NUMBUFLEN];
-  bufref_T resize_bufref;
-  if (trigger_resize) {
-    vim_snprintf(resize_winid, sizeof(resize_winid), "%d", first_size_win->handle);
-    set_bufref(&resize_bufref, first_size_win->w_buffer);
-  }
-
-  char scroll_winid[NUMBUFLEN];
-  bufref_T scroll_bufref;
-  if (trigger_scroll) {
-    vim_snprintf(scroll_winid, sizeof(scroll_winid), "%d", first_scroll_win->handle);
-    set_bufref(&scroll_bufref, first_scroll_win->w_buffer);
-  }
-
-  // If both are to be triggered do WinResized first.
-  if (trigger_resize) {
-    save_v_event_T save_v_event;
-    dict_T *v_event = get_v_event(&save_v_event);
-
-    if (tv_dict_add_list(v_event, S_LEN("windows"), windows_list) == OK) {
-      tv_dict_set_keys_readonly(v_event);
-      buf_T *buf = bufref_valid(&resize_bufref) ? resize_bufref.br_buf : curbuf;
-      apply_autocmds(EVENT_WINRESIZED, resize_winid, resize_winid, false, buf);
-    }
-    restore_v_event(v_event, &save_v_event);
-  }
-
-  if (trigger_scroll) {
-    save_v_event_T save_v_event;
-    dict_T *v_event = get_v_event(&save_v_event);
-
-    // Move the entries from scroll_dict to v_event.
-    tv_dict_extend(v_event, scroll_dict, "move");
-    tv_dict_set_keys_readonly(v_event);
-    tv_dict_unref(scroll_dict);
-
-    buf_T *buf = bufref_valid(&scroll_bufref) ? scroll_bufref.br_buf : curbuf;
-    apply_autocmds(EVENT_WINSCROLLED, scroll_winid, scroll_winid, false, buf);
-
-    restore_v_event(v_event, &save_v_event);
-  }
-
-  recursive = false;
+  rs_may_trigger_win_scrolled_resized();
 }
 
 #define FRACTION_MULT   16384
@@ -3256,5 +3010,203 @@ void nvim_win_copy_options_wrapper(win_T *old, win_T *new)
   }
 }
 
+// =============================================================================
+// Phase 9 accessors: may_trigger_win_scrolled_resized migration
+// =============================================================================
+
+// Window snapshot field getters
+linenr_T nvim_win_get_last_topline(win_T *wp) { return wp ? wp->w_last_topline : 0; }
+int nvim_win_get_last_topfill(win_T *wp) { return wp ? wp->w_last_topfill : 0; }
+colnr_T nvim_win_get_last_leftcol(win_T *wp) { return wp ? wp->w_last_leftcol : 0; }
+colnr_T nvim_win_get_last_skipcol(win_T *wp) { return wp ? wp->w_last_skipcol : 0; }
+int nvim_win_get_last_width(win_T *wp) { return wp ? wp->w_last_width : 0; }
+int nvim_win_get_last_height(win_T *wp) { return wp ? wp->w_last_height : 0; }
+
+// Event ignored wrappers
+int nvim_event_ignored_winscrolled(win_T *wp)
+{
+  return wp ? (event_ignored(EVENT_WINSCROLLED, wp->w_p_eiw) ? 1 : 0) : 1;
+}
+int nvim_event_ignored_winresized(win_T *wp)
+{
+  return wp ? (event_ignored(EVENT_WINRESIZED, wp->w_p_eiw) ? 1 : 0) : 1;
+}
+
+// has_event wrappers for scroll/resize events
+int nvim_has_event_winscrolled(void) { return has_event(EVENT_WINSCROLLED) ? 1 : 0; }
+int nvim_has_event_winresized(void) { return has_event(EVENT_WINRESIZED) ? 1 : 0; }
+
+/// Initialize snapshot fields for a floating window that has no snapshot yet.
+void nvim_win_init_float_snapshot(win_T *wp)
+{
+  if (!wp) {
+    return;
+  }
+  wp->w_last_topline = wp->w_topline;
+  wp->w_last_topfill = wp->w_topfill;
+  wp->w_last_leftcol = wp->w_leftcol;
+  wp->w_last_skipcol = wp->w_skipcol;
+  wp->w_last_width = wp->w_width;
+  wp->w_last_height = wp->w_height;
+}
+
+/// Get buf handle (b_fnum / handle) for bufref validity check.
+int nvim_win_get_buf_fnum(win_T *wp)
+{
+  return (wp && wp->w_buffer) ? (int)wp->w_buffer->handle : 0;
+}
+
+// =============================================================================
+// Typval compound operations for scroll/resize event building
+// =============================================================================
+
+/// Allocate a new dict with refcount=1.
+void *nvim_tv_dict_alloc_refcount1(void)
+{
+  dict_T *d = tv_dict_alloc();
+  if (d) {
+    d->dv_refcount = 1;
+  }
+  return d;
+}
+
+/// Add a number entry to a dict. Returns 1 on success, 0 on failure.
+/// key_len is the length of the key (not including NUL).
+int nvim_tv_dict_add_number(void *dict, const char *key, size_t key_len, int nr)
+{
+  if (!dict || !key) {
+    return 0;
+  }
+  typval_T tv = {
+    .v_lock = VAR_UNLOCKED,
+    .v_type = VAR_NUMBER,
+    .vval.v_number = (varnumber_T)nr,
+  };
+  return tv_dict_add_tv((dict_T *)dict, key, key_len, &tv) == OK ? 1 : 0;
+}
+
+/// Add a dict child under a key.
+/// Decrements child->dv_refcount on success (ownership transferred).
+/// Returns 1 on success, 0 on failure.
+/// On failure, does NOT free child (caller must free it).
+int nvim_tv_dict_add_dict_wrapper(void *dict, const char *key, size_t key_len, void *child)
+{
+  if (!dict || !key || !child) {
+    return 0;
+  }
+  if (tv_dict_add_dict((dict_T *)dict, key, key_len, (dict_T *)child) == FAIL) {
+    return 0;
+  }
+  ((dict_T *)child)->dv_refcount--;
+  return 1;
+}
+
+/// Decrement refcount on dict (frees it when it reaches zero).
+void nvim_tv_dict_unref_wrapper(void *dict)
+{
+  if (dict) {
+    tv_dict_unref((dict_T *)dict);
+  }
+}
+
+/// Allocate a new list (kListLenMayKnow hint with count).
+void *nvim_tv_list_alloc_wrapper(int count)
+{
+  return tv_list_alloc((ptrdiff_t)count);
+}
+
+/// Append a number to a list.
+void nvim_tv_list_append_number(void *list, int nr)
+{
+  if (!list) {
+    return;
+  }
+  typval_T tv = {
+    .v_lock = VAR_UNLOCKED,
+    .v_type = VAR_NUMBER,
+    .vval.v_number = (varnumber_T)nr,
+  };
+  tv_list_append_owned_tv((list_T *)list, tv);
+}
+
+// =============================================================================
+// Compound autocmd/v:event fire operations
+// =============================================================================
+
+/// Fire WinResized autocmd.
+///
+/// Takes full ownership of `list`. Handles the entire v:event lifecycle:
+/// get_v_event -> tv_dict_add_list -> tv_dict_set_keys_readonly
+/// -> apply_autocmds -> restore_v_event.
+///
+/// Uses `first_size_win` and `first_size_win_buf_fnum` to find a valid buf:
+/// if the buffer identified by `first_size_win_buf_fnum` is still valid,
+/// uses it; otherwise falls back to curbuf.
+void nvim_fire_winresized(void *list, const char *winid_str,
+                          win_T *first_size_win, int first_size_win_buf_fnum)
+{
+  if (!list) {
+    return;
+  }
+  save_v_event_T save_v_event;
+  dict_T *v_event = get_v_event(&save_v_event);
+
+  buf_T *buf = curbuf;
+  if (first_size_win_buf_fnum != 0) {
+    bufref_T bufref;
+    // Find buffer by fnum and set bufref for validity check
+    buf_T *b = buflist_findnr(first_size_win_buf_fnum);
+    if (b != NULL) {
+      set_bufref(&bufref, b);
+      if (bufref_valid(&bufref)) {
+        buf = bufref.br_buf;
+      }
+    }
+  }
+
+  if (tv_dict_add_list(v_event, S_LEN("windows"), (list_T *)list) == OK) {
+    tv_dict_set_keys_readonly(v_event);
+    apply_autocmds(EVENT_WINRESIZED, (char *)winid_str, (char *)winid_str, false, buf);
+  }
+  restore_v_event(v_event, &save_v_event);
+}
+
+/// Fire WinScrolled autocmd.
+///
+/// Takes full ownership of `dict`. Handles the entire v:event lifecycle:
+/// get_v_event -> tv_dict_extend(v_event, dict, "move") -> tv_dict_set_keys_readonly
+/// -> tv_dict_unref(dict) -> apply_autocmds -> restore_v_event.
+///
+/// Uses `first_scroll_win` and `first_scroll_win_buf_fnum` to find a valid buf.
+void nvim_fire_winscrolled(void *dict, const char *winid_str,
+                           win_T *first_scroll_win, int first_scroll_win_buf_fnum)
+{
+  if (!dict) {
+    return;
+  }
+  save_v_event_T save_v_event;
+  dict_T *v_event = get_v_event(&save_v_event);
+
+  buf_T *buf = curbuf;
+  if (first_scroll_win_buf_fnum != 0) {
+    buf_T *b = buflist_findnr(first_scroll_win_buf_fnum);
+    if (b != NULL) {
+      bufref_T bufref;
+      set_bufref(&bufref, b);
+      if (bufref_valid(&bufref)) {
+        buf = bufref.br_buf;
+      }
+    }
+  }
+
+  // Move entries from scroll_dict to v_event.
+  tv_dict_extend(v_event, (dict_T *)dict, "move");
+  tv_dict_set_keys_readonly(v_event);
+  tv_dict_unref((dict_T *)dict);
+
+  apply_autocmds(EVENT_WINSCROLLED, (char *)winid_str, (char *)winid_str, false, buf);
+
+  restore_v_event(v_event, &save_v_event);
+}
 
 
