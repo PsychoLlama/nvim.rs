@@ -217,6 +217,8 @@ extern void rs_set_compl_globals(int startcol, int curs_col, int is_cpt_compl);
 extern int rs_compl_get_info(char *line, int startcol, int curs_col, int *line_invalid);
 // Phase 3 (pass 7) Rust exports
 extern int rs_ins_compl_start(void);
+// Phase 4 (pass 7) Rust exports
+extern int rs_ins_complete(int c, int enable_pum);
 // Phase 2 (pass 6) Rust exports
 extern void rs_ins_compl_longest_match(void *match);
 extern const char *rs_find_common_prefix(size_t *prefix_len, int curbuf_only);
@@ -3754,107 +3756,73 @@ static int ins_compl_start(void)
   return rs_ins_compl_start();
 }
 
+/// Compound accessor: set compl_direction.
+void nvim_set_compl_direction(int val) { compl_direction = val; }
+
+/// Compound accessor: set up completion window/buffer/match/direction state.
+/// Sets compl_curr_win, compl_curr_buf, compl_shown_match, compl_shows_dir.
+void nvim_ins_complete_setup_match_state(int direction)
+{
+  compl_curr_win = curwin;
+  compl_curr_buf = curwin->w_buffer;
+  compl_shown_match = compl_curr_match;
+  compl_shows_dir = direction;
+}
+
+/// Compound accessor: return os_hrtime().
+uint64_t nvim_os_hrtime(void) { return os_hrtime(); }
+
+/// Compound accessor: check if first_match->cp_next is the first match (no matches case).
+int nvim_compl_first_match_next_is_first(void)
+{
+  return (compl_first_match && compl_first_match->cp_next
+          && is_first_match(compl_first_match->cp_next)) ? 1 : 0;
+}
+
+/// Compound accessor: update compl_cont_status based on compl_curr_match->cp_flags.
+void nvim_ins_complete_update_cont_s_ipos(void)
+{
+  if (compl_curr_match && (compl_curr_match->cp_flags & CP_CONT_S_IPOS)) {
+    compl_cont_status |= CONT_S_IPOS;
+  } else {
+    compl_cont_status &= ~CONT_S_IPOS;
+  }
+}
+
+/// Compound accessor: remove CONT_N_ADDS from compl_cont_status.
+void nvim_compl_cont_status_remove_n_adds(void)
+{
+  compl_cont_status &= ~CONT_N_ADDS;
+}
+
+/// Compound accessor: eat the ESC vgetc() returns after CTRL-C (got_int handling).
+void nvim_ins_complete_eat_got_int(void)
+{
+  if (got_int && !global_busy) {
+    vgetc();
+    got_int = false;
+  }
+}
+
+/// Compound accessor: set compl_was_interrupted = compl_interrupted, compl_interrupted = false.
+void nvim_ins_complete_finish_interrupted(void)
+{
+  compl_was_interrupted = compl_interrupted;
+  compl_interrupted = false;
+}
+
+/// Compound accessor: set compl_ins_end_col = compl_col.
+void nvim_set_compl_ins_end_col_to_compl_col(void)
+{
+  compl_ins_end_col = compl_col;
+}
+
 /// Do Insert mode completion.
 /// Called when character "c" was typed, which has a meaning for completion.
 /// Returns OK if completion was done, FAIL if something failed.
 int ins_complete(int c, bool enable_pum)
 {
-  const bool disable_ac_delay = compl_started && rs_ctrl_x_mode_normal()
-                                && (c == Ctrl_N || c == Ctrl_P || c == Ctrl_R
-                                    || rs_ins_compl_pum_key(c));
-
-  compl_direction = rs_ins_compl_key2dir(c);
-  int insert_match = rs_ins_compl_use_match(c);
-
-  if (!compl_started) {
-    if (ins_compl_start() == FAIL) {
-      return FAIL;
-    }
-  } else if (insert_match && stop_arrow() == FAIL) {
-    return FAIL;
-  }
-
-  uint64_t compl_start_tv = 0;  ///< Time when match collection starts
-  if (compl_autocomplete && p_acl > 0 && !disable_ac_delay) {
-    compl_start_tv = os_hrtime();
-  }
-  compl_curr_win = curwin;
-  compl_curr_buf = curwin->w_buffer;
-  compl_shown_match = compl_curr_match;
-  compl_shows_dir = compl_direction;
-
-  // Find next match (and following matches).
-  int save_w_wrow = curwin->w_wrow;
-  int save_w_leftcol = curwin->w_leftcol;
-  int n = ins_compl_next(true, rs_ins_compl_key2count(c), insert_match);
-
-  if (n > 1) {          // all matches have been found
-    compl_matches = n;
-  }
-  compl_curr_match = compl_shown_match;
-  compl_direction = compl_shows_dir;
-
-  // Eat the ESC that vgetc() returns after a CTRL-C to avoid leaving Insert
-  // mode.
-  if (got_int && !global_busy) {
-    vgetc();
-    got_int = false;
-  }
-
-  // we found no match if the list has only the "compl_orig_text"-entry
-  bool no_matches_found = is_first_match(compl_first_match->cp_next);
-  if (no_matches_found) {
-    // remove N_ADDS flag, so next ^X<> won't try to go to ADDING mode,
-    // because we couldn't expand anything at first place, but if we used
-    // ^P, ^N, ^X^I or ^X^D we might want to add-expand a single-char-word
-    // (such as M in M'exico) if not tried already.  -- Acevedo
-    if (compl_length > 1
-        || rs_compl_status_adding()
-        || (rs_ctrl_x_mode_not_default()
-            && !rs_ctrl_x_mode_path_patterns()
-            && !rs_ctrl_x_mode_path_defines())) {
-      compl_cont_status &= ~CONT_N_ADDS;
-    }
-  }
-
-  if (compl_curr_match->cp_flags & CP_CONT_S_IPOS) {
-    compl_cont_status |= CONT_S_IPOS;
-  } else {
-    compl_cont_status &= ~CONT_S_IPOS;
-  }
-
-  if (!shortmess(SHM_COMPLETIONMENU) && !compl_autocomplete) {
-    rs_ins_compl_show_statusmsg();
-  }
-
-  // Wait for the autocompletion delay to expire
-  if (compl_autocomplete && p_acl > 0 && !disable_ac_delay && !no_matches_found
-      && (os_hrtime() - compl_start_tv) / 1000000 < (uint64_t)p_acl) {
-    setcursor();
-    ui_flush();
-    do {
-      if (char_avail()) {
-        if (rs_ins_compl_preinsert_effect() && rs_ins_compl_win_active(curwin)) {
-          rs_ins_compl_delete(0);  // Remove pre-inserted text
-          compl_ins_end_col = compl_col;
-        }
-        rs_ins_compl_restart();
-        compl_interrupted = true;
-        break;
-      } else {
-        os_delay(2L, true);
-      }
-    } while ((os_hrtime() - compl_start_tv) / 1000000 < (uint64_t)p_acl);
-  }
-
-  // Show the popup menu, unless we got interrupted.
-  if (enable_pum && !compl_interrupted) {
-    show_pum(save_w_wrow, save_w_leftcol);
-  }
-  compl_was_interrupted = compl_interrupted;
-  compl_interrupted = false;
-
-  return OK;
+  return rs_ins_complete(c, enable_pum ? 1 : 0);
 }
 
 /// Remove (if needed) and show the popup menu
@@ -4275,6 +4243,9 @@ int nvim_ins_compl_key2dir(int c) { return rs_ins_compl_key2dir(c); }
 int nvim_ins_compl_key2count(int c) { return rs_ins_compl_key2count(c); }
 void nvim_ins_compl_next_wrap(int allow_get_expansion, int todo, int advance) {
   ins_compl_next(allow_get_expansion != 0, todo, advance != 0);
+}
+int nvim_ins_compl_next_wrap_ret(int allow_get_expansion, int todo, int advance) {
+  return ins_compl_next(allow_get_expansion != 0, todo, advance != 0);
 }
 int nvim_cpt_sources_index_non_neg(void) { return cpt_sources_index >= 0 ? 1 : 0; }
 int nvim_p_cto(void) { return (int)p_cto; }

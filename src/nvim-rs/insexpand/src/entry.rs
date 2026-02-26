@@ -7,6 +7,8 @@
 #![allow(dead_code, unused_imports)]
 use std::os::raw::{c_char, c_int};
 
+use nvim_window::WinHandle;
+
 // C accessor functions
 extern "C" {
     fn nvim_get_ctrl_x_mode() -> c_int;
@@ -244,6 +246,177 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     }
 
     nvim_restore_did_ai(save_did_ai);
+    OK
+}
+
+// Additional extern declarations for rs_ins_complete
+extern "C" {
+    fn nvim_get_compl_length() -> c_int;
+    fn rs_ins_compl_key2dir(c: c_int) -> c_int;
+    fn rs_ins_compl_use_match(c: c_int) -> c_int;
+    fn rs_ins_compl_pum_key(c: c_int) -> c_int;
+    fn rs_ins_compl_key2count(c: c_int) -> c_int;
+    fn nvim_stop_arrow() -> c_int;
+    fn nvim_get_p_acl() -> c_int;
+    fn nvim_os_hrtime() -> u64;
+    fn nvim_ins_complete_setup_match_state(direction: c_int);
+    fn nvim_get_curwin_w_wrow() -> c_int;
+    fn nvim_get_curwin_w_leftcol() -> c_int;
+    fn nvim_ins_compl_next_wrap_ret(
+        allow_get_expansion: c_int,
+        todo: c_int,
+        advance: c_int,
+    ) -> c_int;
+    fn nvim_set_compl_matches(val: c_int);
+    fn nvim_compl_set_curr_to_shown();
+    fn nvim_set_compl_direction(val: c_int);
+    fn nvim_get_compl_shows_dir() -> c_int;
+    fn nvim_ins_complete_eat_got_int();
+    fn nvim_compl_first_match_next_is_first() -> c_int;
+    fn nvim_compl_cont_status_remove_n_adds();
+    fn rs_ctrl_x_mode_path_patterns() -> c_int;
+    fn rs_ctrl_x_mode_path_defines() -> c_int;
+    fn nvim_ins_complete_update_cont_s_ipos();
+    fn rs_ins_compl_show_statusmsg();
+    fn nvim_setcursor();
+    fn nvim_ui_flush();
+    fn nvim_char_avail() -> c_int;
+    fn rs_ins_compl_preinsert_effect() -> c_int;
+    // rs_ins_compl_win_active and nvim_get_curwin use *mut u8 (opaque pointer)
+    fn rs_ins_compl_win_active(wp: *mut u8) -> c_int;
+    fn nvim_get_curwin() -> *mut u8;
+    fn rs_ins_compl_delete(new_leader: c_int);
+    fn rs_ins_compl_restart();
+    fn nvim_set_compl_interrupted(val: c_int);
+    fn nvim_set_compl_ins_end_col_to_compl_col();
+    // nvim_os_delay: ms is c_long, allow_input is bool
+    fn nvim_os_delay(ms: std::os::raw::c_long, allow_input: bool);
+    fn nvim_ins_complete_finish_interrupted();
+    fn rs_show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int);
+}
+
+// Additional key constants for ins_complete
+const CTRL_R: c_int = 18;
+const CONT_S_IPOS: c_int = 8;
+
+/// Do Insert mode completion.
+///
+/// Called when character `c` was typed which has a meaning for completion.
+/// Returns OK if completion was done, FAIL if something failed.
+///
+/// # Safety
+/// Requires valid global completion state. Mutates many C static globals.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
+    // Compute disable_ac_delay: disable autocomplete delay if already started
+    // and key is a regular forward/backward completion key or pum key.
+    let compl_started = nvim_get_compl_started() != 0;
+    let disable_ac_delay = compl_started
+        && rs_ctrl_x_mode_normal() != 0
+        && (c == CTRL_N || c == CTRL_P || c == CTRL_R || rs_ins_compl_pum_key(c) != 0);
+
+    // Set direction and insert_match from the key
+    let direction = rs_ins_compl_key2dir(c);
+    nvim_set_compl_direction(direction);
+    let insert_match = rs_ins_compl_use_match(c);
+
+    // Start completion if not already started; otherwise call stop_arrow if inserting
+    if !compl_started {
+        if rs_ins_compl_start() == FAIL {
+            return FAIL;
+        }
+    } else if insert_match != 0 && nvim_stop_arrow() == FAIL {
+        return FAIL;
+    }
+
+    // Set up timestamp for autocomplete delay
+    let compl_start_tv: u64 =
+        if nvim_get_compl_autocomplete() != 0 && nvim_get_p_acl() > 0 && !disable_ac_delay {
+            nvim_os_hrtime()
+        } else {
+            0
+        };
+
+    // Set up completion window/buffer/match/direction state
+    nvim_ins_complete_setup_match_state(direction);
+
+    // Find next match (and following matches)
+    let save_w_wrow = nvim_get_curwin_w_wrow();
+    let save_w_leftcol = nvim_get_curwin_w_leftcol();
+    let n = nvim_ins_compl_next_wrap_ret(1, rs_ins_compl_key2count(c), insert_match);
+
+    if n > 1 {
+        // All matches have been found
+        nvim_set_compl_matches(n);
+    }
+    nvim_compl_set_curr_to_shown();
+    nvim_set_compl_direction(nvim_get_compl_shows_dir());
+
+    // Eat the ESC that vgetc() returns after a CTRL-C to avoid leaving Insert mode
+    nvim_ins_complete_eat_got_int();
+
+    // Check if no matches found (list has only the compl_orig_text entry)
+    let no_matches_found = nvim_compl_first_match_next_is_first() != 0;
+    if no_matches_found {
+        // Remove N_ADDS flag so next ^X<> won't try to go to ADDING mode,
+        // unless we might want to add-expand a single-char-word.
+        let compl_length = nvim_get_compl_length();
+        if compl_length > 1
+            || rs_compl_status_adding() != 0
+            || (rs_ctrl_x_mode_not_default() != 0
+                && rs_ctrl_x_mode_path_patterns() == 0
+                && rs_ctrl_x_mode_path_defines() == 0)
+        {
+            nvim_compl_cont_status_remove_n_adds();
+        }
+    }
+
+    // Update CONT_S_IPOS based on current match flags
+    nvim_ins_complete_update_cont_s_ipos();
+
+    // Show status message if appropriate
+    if !nvim_shortmess_completionmenu() && nvim_get_compl_autocomplete() == 0 {
+        rs_ins_compl_show_statusmsg();
+    }
+
+    // Wait for the autocompletion delay to expire
+    let p_acl = nvim_get_p_acl();
+    #[allow(clippy::cast_sign_loss)]
+    let p_acl_ms: u64 = if p_acl > 0 { p_acl as u64 } else { 0 };
+    if nvim_get_compl_autocomplete() != 0
+        && p_acl > 0
+        && !disable_ac_delay
+        && !no_matches_found
+        && (nvim_os_hrtime() - compl_start_tv) / 1_000_000 < p_acl_ms
+    {
+        nvim_setcursor();
+        nvim_ui_flush();
+        loop {
+            if nvim_char_avail() != 0 {
+                if rs_ins_compl_preinsert_effect() != 0
+                    && rs_ins_compl_win_active(nvim_get_curwin()) != 0
+                {
+                    rs_ins_compl_delete(0); // Remove pre-inserted text
+                    nvim_set_compl_ins_end_col_to_compl_col();
+                }
+                rs_ins_compl_restart();
+                nvim_set_compl_interrupted(1);
+                break;
+            }
+            nvim_os_delay(2, false);
+            if (nvim_os_hrtime() - compl_start_tv) / 1_000_000 >= p_acl_ms {
+                break;
+            }
+        }
+    }
+
+    // Show the popup menu, unless we got interrupted
+    if enable_pum != 0 && nvim_get_compl_interrupted() == 0 {
+        rs_show_pum(save_w_wrow, save_w_leftcol);
+    }
+    nvim_ins_complete_finish_interrupted();
+
     OK
 }
 
