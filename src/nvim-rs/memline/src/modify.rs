@@ -23,10 +23,10 @@
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::types::{
-    BufHandle, ColNr, DataBlockHeader, LineNr, PointerBlockHeader, DATA_BLOCK_HEADER_SIZE,
-    DB_INDEX_MASK, DB_MARKED, INDEX_SIZE, ML_ALLOCATED, ML_APPEND_MARK, ML_APPEND_NEW,
-    ML_CHNK_UPDLINE, ML_DEL_MESSAGE, ML_EMPTY, ML_FIND, ML_LINE_DIRTY, ML_LOCKED_DIRTY,
-    ML_LOCKED_POS, STACK_INCR,
+    BlockNr, BufHandle, ColNr, DataBlockHeader, InfoPtrHandle, LineNr, PointerBlockHeader,
+    DATA_BLOCK_HEADER_SIZE, DB_INDEX_MASK, DB_MARKED, INDEX_SIZE, ML_ALLOCATED, ML_APPEND_MARK,
+    ML_APPEND_NEW, ML_CHNK_DELLINE, ML_CHNK_UPDLINE, ML_DEL_MESSAGE, ML_EMPTY, ML_FIND,
+    ML_LINE_DIRTY, ML_LOCKED_DIRTY, ML_LOCKED_POS, PTR_ID, STACK_INCR,
 };
 
 // =============================================================================
@@ -196,6 +196,72 @@ extern "C" {
 }
 
 // =============================================================================
+// Phase 6: ml_delete_int / ml_updatechunk C accessor declarations
+// =============================================================================
+
+extern "C" {
+    /// Get buffer's memfile pointer (`buf->b_ml.ml_mfp`)
+    fn nvim_buf_get_ml_mfp(buf: *mut BufHandle) -> *mut std::ffi::c_void;
+
+    /// Decrement buf->b_ml.ml_line_count and return new value
+    fn nvim_buf_dec_ml_line_count(buf: *mut BufHandle) -> LineNr;
+
+    /// Get buf->b_prev_line_count
+    fn nvim_buf_get_b_prev_line_count(buf: *mut BufHandle) -> LineNr;
+
+    /// Set buf->b_prev_line_count
+    fn nvim_buf_set_b_prev_line_count(buf: *mut BufHandle, val: LineNr);
+
+    /// set_keep_msg(_(no_lines_msg), 0) -- "No lines in buffer"
+    fn nvim_set_keep_msg_no_lines();
+
+    /// iemsg for "E317: Pointer block id wrong 4"
+    fn nvim_iemsg_pointer_block_id_wrong_four();
+
+    /// Free a block in the memfile (mf_free wrapper)
+    fn nvim_mf_free(mfp: *mut std::ffi::c_void, hp: *mut std::ffi::c_void);
+
+    /// Decrement pp->pb_count and return new value
+    fn nvim_pp_dec_count(pp: *mut std::ffi::c_void) -> c_int;
+
+    /// memmove pointer entries within a pointer block
+    fn nvim_pp_pe_memmove(pp: *mut std::ffi::c_void, dst_idx: c_int, src_idx: c_int, count: c_int);
+
+    /// Get buf->b_ml.ml_locked_lineadd
+    fn nvim_buf_get_ml_locked_lineadd(buf: *mut BufHandle) -> c_int;
+
+    /// Get buf->b_ml.ml_stack[idx]
+    fn nvim_buf_get_ml_stack_ip(buf: *mut BufHandle, idx: c_int) -> *mut InfoPtrHandle;
+
+    /// Get ip->ip_index
+    fn nvim_ip_get_index(ip: *const InfoPtrHandle) -> c_int;
+
+    /// Get ip->ip_bnum as BlockNr
+    fn nvim_ip_get_bnum(ip: *const InfoPtrHandle) -> BlockNr;
+
+    /// Get memfile block (mf_get)
+    fn mf_get(mfp: *mut std::ffi::c_void, bnum: BlockNr, count: c_int) -> *mut std::ffi::c_void;
+
+    /// Release block to memfile (mf_put)
+    fn mf_put(mfp: *mut std::ffi::c_void, hp: *mut std::ffi::c_void, dirty: bool, release: bool);
+
+    /// Get pp->pb_id
+    fn nvim_pp_get_id(pp: *const std::ffi::c_void) -> u16;
+
+    /// Add count to ip->ip_high
+    fn nvim_ip_add_high(ip: *mut InfoPtrHandle, count: c_int);
+
+    /// Set buf->b_ml.ml_locked
+    fn nvim_buf_set_ml_locked(buf: *mut BufHandle, hp: *mut std::ffi::c_void);
+
+    /// Set buf->b_ml.ml_stack_top
+    fn nvim_buf_set_ml_stack_top(buf: *mut BufHandle, n: c_int);
+
+    /// Adjust the B-tree pointer block line counts after insert/delete (in navigate.rs)
+    fn rs_ml_lineadd(buf: *mut BufHandle, count: c_int);
+}
+
+// =============================================================================
 // Mark Tracking State (Phase 1 migration)
 // =============================================================================
 
@@ -292,9 +358,6 @@ extern "C" {
         len: ColNr,
         flags: c_int,
     ) -> c_int;
-
-    /// Public wrapper around static ml_delete_int
-    fn nvim_ml_delete_int(buf: *mut BufHandle, lnum: LineNr, flags: c_int) -> c_int;
 
     /// Public wrapper around static ml_append_int
     fn nvim_ml_append_int(
@@ -695,7 +758,7 @@ pub unsafe extern "C" fn rs_ml_delete_flags_impl(lnum: LineNr, flags: c_int) -> 
     if lnum < 1 || lnum > line_count {
         return FAIL;
     }
-    nvim_ml_delete_int(buf, lnum, flags)
+    rs_ml_delete_int(buf, lnum, flags)
 }
 
 /// Implement `ml_delete_buf`: flush cached line, then delete from given buffer.
@@ -715,7 +778,7 @@ pub unsafe extern "C" fn rs_ml_delete_buf_impl(
     }
     rs_ml_flush_line(buf, 0);
     let flags = if message != 0 { ML_DEL_MESSAGE } else { 0 };
-    nvim_ml_delete_int(buf, lnum, flags)
+    rs_ml_delete_int(buf, lnum, flags)
 }
 
 /// Implement `ml_replace_buf`: compute strlen, then call rs_ml_replace_buf_len.
@@ -908,7 +971,7 @@ pub unsafe extern "C" fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int) {
                     0
                 };
                 nvim_ml_append_int(buf, lnum, new_line, new_len as ColNr, marked_flag);
-                nvim_ml_delete_int(buf, lnum, 0);
+                rs_ml_delete_int(buf, lnum, 0);
             }
         }
 
@@ -1634,6 +1697,194 @@ pub extern "C" fn rs_ml_calc_delete_flags(current_flags: c_int) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_ml_buffer_becomes_empty(line_count: LineNr) -> c_int {
     c_int::from(line_count == 1)
+}
+
+// =============================================================================
+// Phase 6: rs_ml_delete_int -- core B-tree line deletion
+// =============================================================================
+
+/// Delete line `lnum` from buffer `buf`.
+///
+/// This is the Rust port of the C `ml_delete_int` function. It handles:
+/// - Empty-buffer case: replaces last line with empty string
+/// - Multi-line block: shifts text and index entries, updates free space
+/// - Single-line block (block becomes empty): frees data block, walks up
+///   the pointer block stack to remove the entry, collapsing empty pointer
+///   blocks as needed.
+///
+/// # Returns
+/// OK (1) on success, FAIL (0) on failure.
+///
+/// # Safety
+/// - `buf` must be a valid, non-null buffer pointer with an initialized memline.
+/// - Must only be called from the main Neovim thread.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn rs_ml_delete_int(
+    buf: *mut BufHandle,
+    lnum: LineNr,
+    flags: c_int,
+) -> c_int {
+    rs_ml_adjust_lowest_marked_for_delete(lnum);
+
+    // If the file becomes empty, replace the last line with an empty line.
+    if nvim_buf_get_ml_line_count(buf) == 1 {
+        if (flags & ML_DEL_MESSAGE) != 0 {
+            nvim_set_keep_msg_no_lines();
+        }
+        let empty: &[u8] = b"\0";
+        let i = rs_ml_replace_buf_impl(
+            buf,
+            1,
+            empty.as_ptr().cast::<c_char>().cast_mut(),
+            1, // copy=true
+            0, // noalloc=false
+        );
+        let cur_flags = nvim_buf_get_ml_flags(buf);
+        nvim_buf_set_ml_flags(buf, cur_flags | ML_EMPTY);
+        return i;
+    }
+
+    // Find the data block containing the line.
+    // This also fills the stack with the blocks from root to data block,
+    // and releases any previously locked block.
+    let mfp = nvim_buf_get_ml_mfp(buf);
+    if mfp.is_null() {
+        return FAIL;
+    }
+
+    let hp = rs_ml_find_line(buf, lnum, crate::types::ML_DELETE);
+    if hp.is_null() {
+        return FAIL;
+    }
+
+    let dp_raw = nvim_bhdr_get_bh_data(hp);
+    let dp = dp_raw.cast::<u8>();
+    let dp_header = dp_raw.cast::<DataBlockHeader>();
+
+    // count = number of lines in block before the delete
+    let count = (nvim_buf_get_ml_locked_high(buf) - nvim_buf_get_ml_locked_low(buf) + 2) as usize;
+    let idx = (lnum - nvim_buf_get_ml_locked_low(buf)) as usize;
+
+    // Update b_prev_line_count if not already set
+    if nvim_buf_get_b_prev_line_count(buf) == 0 {
+        nvim_buf_set_b_prev_line_count(buf, nvim_buf_get_ml_line_count(buf));
+    }
+    nvim_buf_dec_ml_line_count(buf);
+
+    // db_index array follows immediately after the DataBlockHeader
+    let db_index: *mut u32 = dp.add(DATA_BLOCK_HEADER_SIZE).cast();
+
+    let line_start = (*db_index.add(idx) & DB_INDEX_MASK) as usize;
+    let line_size: usize = if idx == 0 {
+        // first line in block, text is at the end
+        (*dp_header).db_txt_end as usize - line_start
+    } else {
+        (*db_index.add(idx - 1) & DB_INDEX_MASK) as usize - line_start
+    };
+
+    // Line must always have at least 1 byte (the NUL/NL terminator)
+    debug_assert!(line_size >= 1);
+    rs_ml_add_deleted_len_buf(
+        buf,
+        dp.add(line_start).cast::<c_char>(),
+        (line_size - 1) as isize,
+    );
+
+    let mut ret = FAIL;
+
+    if count == 1 {
+        // Special case: only one line in the data block -- it becomes empty.
+        // Free the data block and walk up the pointer block stack to remove
+        // the pointer entry. If a pointer block becomes empty, keep going up.
+        nvim_mf_free(mfp, hp);
+        nvim_buf_set_ml_locked(buf, std::ptr::null_mut());
+
+        let stack_top = nvim_buf_get_ml_stack_top(buf);
+        let mut stack_idx = stack_top - 1;
+        while stack_idx >= 0 {
+            nvim_buf_set_ml_stack_top(buf, 0); // stack is invalid when failing
+            let ip = nvim_buf_get_ml_stack_ip(buf, stack_idx);
+            let cur_idx = nvim_ip_get_index(ip) as usize;
+            let bnum = nvim_ip_get_bnum(ip);
+            let block_hp = mf_get(mfp, bnum, 1);
+            if block_hp.is_null() {
+                // goto theend (ret is FAIL)
+                return ret;
+            }
+            let pp = nvim_bhdr_get_bh_data(block_hp);
+            if nvim_pp_get_id(pp) != PTR_ID {
+                nvim_iemsg_pointer_block_id_wrong_four();
+                mf_put(mfp, block_hp, false, false);
+                return ret;
+            }
+            let new_count = nvim_pp_dec_count(pp) as usize;
+            if new_count == 0 {
+                // pointer block becomes empty too -- free it and keep going up
+                nvim_mf_free(mfp, block_hp);
+            } else {
+                if new_count != cur_idx {
+                    // move entries after the deleted one to fill the gap
+                    nvim_pp_pe_memmove(
+                        pp,
+                        cur_idx as c_int,
+                        cur_idx as c_int + 1,
+                        (new_count - cur_idx) as c_int,
+                    );
+                }
+                mf_put(mfp, block_hp, true, false);
+
+                nvim_buf_set_ml_stack_top(buf, stack_idx); // truncate stack
+
+                // fix line count for remaining blocks in the stack
+                let lineadd = nvim_buf_get_ml_locked_lineadd(buf);
+                if lineadd != 0 {
+                    rs_ml_lineadd(buf, lineadd);
+                    let top_ip = nvim_buf_get_ml_stack_ip(buf, nvim_buf_get_ml_stack_top(buf));
+                    nvim_ip_add_high(top_ip, lineadd);
+                }
+                nvim_buf_set_ml_stack_top(buf, nvim_buf_get_ml_stack_top(buf) + 1);
+
+                ret = OK;
+                break;
+            }
+            stack_idx -= 1;
+        }
+        // CHECK(stack_idx < 0, "deleted block 1?") -- we just skip it if stack emptied
+    } else {
+        // Normal case: multiple lines in the block -- shift text and indexes.
+
+        // Delete the text by moving subsequent lines' text forward
+        let text_start = (*dp_header).db_txt_start as usize;
+        let src = dp.add(text_start);
+        let dst = dp.add(text_start + line_size);
+        std::ptr::copy(src, dst, line_start - text_start);
+
+        // Delete the index entry by shifting subsequent entries,
+        // adjusting each offset to account for the text movement.
+        for i in idx..(count - 1) {
+            *db_index.add(i) = (*db_index.add(i + 1)).wrapping_add(line_size as u32);
+        }
+
+        (*dp_header).db_free += line_size as u32 + INDEX_SIZE as u32;
+        (*dp_header).db_txt_start += line_size as u32;
+        (*dp_header).db_line_count -= 1;
+
+        // Mark the block dirty and needing a positive block number (for recovery)
+        let cur_flags = nvim_buf_get_ml_flags(buf);
+        nvim_buf_set_ml_flags(buf, cur_flags | ML_LOCKED_DIRTY | ML_LOCKED_POS);
+
+        ret = OK;
+    }
+
+    nvim_ml_updatechunk(buf, lnum, line_size as c_int, ML_CHNK_DELLINE);
+
+    ret
 }
 
 // =============================================================================

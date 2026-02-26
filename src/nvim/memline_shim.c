@@ -1652,6 +1652,40 @@ void nvim_ml_updatechunk(buf_T *buf, linenr_T line, int len, int updtype)
   ml_updatechunk(buf, line, len, updtype);
 }
 
+// Pass 6 Phase 1: ml_delete_int accessors for Rust FFI
+
+/// Decrement buf->b_ml.ml_line_count and return new value.
+linenr_T nvim_buf_dec_ml_line_count(buf_T *buf) { return --buf->b_ml.ml_line_count; }
+
+/// Increment buf->b_ml.ml_line_count and return new value.
+linenr_T nvim_buf_inc_ml_line_count(buf_T *buf) { return ++buf->b_ml.ml_line_count; }
+
+/// Get buf->b_prev_line_count
+linenr_T nvim_buf_get_b_prev_line_count(buf_T *buf) { return buf->b_prev_line_count; }
+
+/// Set buf->b_prev_line_count
+void nvim_buf_set_b_prev_line_count(buf_T *buf, linenr_T val) { buf->b_prev_line_count = val; }
+
+/// set_keep_msg(_(no_lines_msg), 0) -- "No lines in buffer" message
+void nvim_set_keep_msg_no_lines(void) { set_keep_msg(_(no_lines_msg), 0); }
+
+/// iemsg for "E317: Pointer block id wrong 4"
+void nvim_iemsg_pointer_block_id_wrong_four(void) { iemsg(_(e_pointer_block_id_wrong_four)); }
+
+/// Free a block in the memfile (mf_free wrapper).
+void nvim_mf_free(memfile_T *mfp, bhdr_T *hp) { mf_free(mfp, hp); }
+
+/// Decrement pp->pb_count and return new value.
+int nvim_pp_dec_count(void *pp) { return --(((PointerBlock *)pp)->pb_count); }
+
+/// memmove(pp->pb_pointer + dst_idx, pp->pb_pointer + src_idx, count * sizeof(PointerEntry))
+void nvim_pp_pe_memmove(void *pp, int dst_idx, int src_idx, int count)
+{
+  PointerBlock *pb = (PointerBlock *)pp;
+  memmove(&pb->pb_pointer[dst_idx], &pb->pb_pointer[src_idx],
+          (size_t)count * sizeof(PointerEntry));
+}
+
 /// Print "E320: Cannot find line N" error for ml_flush_line.
 void nvim_siemsg_e320_cannot_find_line(int64_t lnum)
 {
@@ -2372,138 +2406,19 @@ int ml_delete_buf(buf_T *buf, linenr_T lnum, bool message)
 ///               ML_DEL_UNDO this is called from undo.
 ///
 /// @return  FAIL for failure, OK otherwise
+extern int rs_ml_delete_int(buf_T *buf, linenr_T lnum, int flags);
+
 static int ml_delete_int(buf_T *buf, linenr_T lnum, int flags)
   FUNC_ATTR_NONNULL_ALL
 {
-  rs_ml_adjust_lowest_marked_for_delete(lnum);
-
-  // If the file becomes empty the last line is replaced by an empty line.
-  if (buf->b_ml.ml_line_count == 1) {       // file becomes empty
-    if (flags & ML_DEL_MESSAGE) {
-      set_keep_msg(_(no_lines_msg), 0);
-    }
-
-    int i = ml_replace_buf(buf, 1, "", true, false);
-    buf->b_ml.ml_flags |= ML_EMPTY;
-
-    return i;
-  }
-
-  // Find the data block containing the line.
-  // This also fills the stack with the blocks from the root to the data block.
-  // This also releases any locked block.
-  memfile_T *mfp = buf->b_ml.ml_mfp;
-  if (mfp == NULL) {
-    return FAIL;
-  }
-
-  bhdr_T *hp;
-  if ((hp = ml_find_line(buf, lnum, ML_DELETE)) == NULL) {
-    return FAIL;
-  }
-
-  DataBlock *dp = hp->bh_data;
-  // compute line count (number of entries in block) before the delete
-  int count = buf->b_ml.ml_locked_high - buf->b_ml.ml_locked_low + 2;
-  int idx = lnum - buf->b_ml.ml_locked_low;
-
-  if (buf->b_prev_line_count == 0) {
-    buf->b_prev_line_count = buf->b_ml.ml_line_count;
-  }
-  buf->b_ml.ml_line_count--;
-
-  int line_start = ((dp->db_index[idx]) & DB_INDEX_MASK);
-  int line_size;
-  if (idx == 0) {               // first line in block, text at the end
-    line_size = (int)(dp->db_txt_end - (unsigned)line_start);
-  } else {
-    line_size = (int)(((dp->db_index[idx - 1]) & DB_INDEX_MASK) - (unsigned)line_start);
-  }
-
-  // Line should always have an NL char internally (represented as NUL),
-  // even if 'noeol' is set.
-  assert(line_size >= 1);
-  ml_add_deleted_len_buf(buf, (char *)dp + line_start, line_size - 1);
-
-  // special case: If there is only one line in the data block it becomes empty.
-  // Then we have to remove the entry, pointing to this data block, from the
-  // pointer block. If this pointer block also becomes empty, we go up another
-  // block, and so on, up to the root if necessary.
-  // The line counts in the pointer blocks have already been adjusted by
-  // ml_find_line().
-  int ret = FAIL;
-  if (count == 1) {
-    mf_free(mfp, hp);           // free the data block
-    buf->b_ml.ml_locked = NULL;
-
-    for (int stack_idx = buf->b_ml.ml_stack_top - 1; stack_idx >= 0; stack_idx--) {
-      buf->b_ml.ml_stack_top = 0;           // stack is invalid when failing
-      infoptr_T *ip = &(buf->b_ml.ml_stack[stack_idx]);
-      idx = ip->ip_index;
-      if ((hp = mf_get(mfp, ip->ip_bnum, 1)) == NULL) {
-        goto theend;
-      }
-      PointerBlock *pp = hp->bh_data;         // must be pointer block
-      if (pp->pb_id != PTR_ID) {
-        iemsg(_(e_pointer_block_id_wrong_four));
-        mf_put(mfp, hp, false, false);
-        goto theend;
-      }
-      count = --(pp->pb_count);
-      if (count == 0) {             // the pointer block becomes empty!
-        mf_free(mfp, hp);
-      } else {
-        if (count != idx) {             // move entries after the deleted one
-          memmove(&pp->pb_pointer[idx], &pp->pb_pointer[idx + 1],
-                  (size_t)(count - idx) * sizeof(PointerEntry));
-        }
-        mf_put(mfp, hp, true, false);
-
-        buf->b_ml.ml_stack_top = stack_idx;             // truncate stack
-        // fix line count for rest of blocks in the stack
-        if (buf->b_ml.ml_locked_lineadd != 0) {
-          ml_lineadd(buf, buf->b_ml.ml_locked_lineadd);
-          buf->b_ml.ml_stack[buf->b_ml.ml_stack_top].ip_high +=
-            buf->b_ml.ml_locked_lineadd;
-        }
-        (buf->b_ml.ml_stack_top)++;
-
-        break;
-      }
-    }
-    CHECK(stack_idx < 0, _("deleted block 1?"));
-  } else {
-    // delete the text by moving the next lines forwards
-    int text_start = (int)dp->db_txt_start;
-    memmove((char *)dp + text_start + line_size,
-            (char *)dp + text_start, (size_t)(line_start - text_start));
-
-    // delete the index by moving the next indexes backwards
-    // Adjust the indexes for the text movement.
-    for (int i = idx; i < count - 1; i++) {
-      dp->db_index[i] = dp->db_index[i + 1] + (unsigned)line_size;
-    }
-
-    dp->db_free += (unsigned)line_size + (unsigned)INDEX_SIZE;
-    dp->db_txt_start += (unsigned)line_size;
-    dp->db_line_count--;
-
-    // mark the block dirty and make sure it is in the file (for recovery)
-    buf->b_ml.ml_flags |= (ML_LOCKED_DIRTY | ML_LOCKED_POS);
-  }
-
-  ml_updatechunk(buf, lnum, line_size, ML_CHNK_DELLINE);
-  ret = OK;
-
-theend:
-  return ret;
+  return rs_ml_delete_int(buf, lnum, flags);
 }
 
-/// Public wrapper around static ml_delete_int, used by Rust _impl functions.
+/// Public wrapper: calls Rust rs_ml_delete_int (ml_delete_int migrated to Rust).
 int nvim_ml_delete_int(buf_T *buf, linenr_T lnum, int flags)
   FUNC_ATTR_NONNULL_ALL
 {
-  return ml_delete_int(buf, lnum, flags);
+  return rs_ml_delete_int(buf, lnum, flags);
 }
 
 /// Delete line "lnum" in the current buffer.
