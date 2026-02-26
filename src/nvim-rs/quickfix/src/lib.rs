@@ -1985,7 +1985,7 @@ extern "C" {
 
     // Phase 7: Window and Display Management accessors
     fn nvim_qf_win_pos_update(qi: QfInfoHandleMut, old_qf_index: c_int) -> bool;
-    fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle);
+    // nvim_qf_update_buffer removed: migrated to Rust rs_qf_update_buffer (Phase 10 Pass 10 Phase 4)
     fn nvim_qf_get_bufnr(qi: QfInfoHandle) -> c_int;
     fn nvim_qf_set_bufnr(qi: QfInfoHandleMut, bufnr: c_int);
     fn nvim_win_is_qf_win(win: WinHandle) -> bool;
@@ -2030,6 +2030,45 @@ extern "C" {
     fn nvim_qf_get_cmdmod_split() -> c_int;
     fn nvim_qf_get_e_invarg() -> *const c_char;
     fn nvim_qf_curwin_is(win: *const c_void) -> bool;
+
+    // Phase 10 Pass 10 Phase 4: qf_update_buffer accessors
+    fn nvim_buf_get_ml_line_count_void(buf: *const c_void) -> LinenrT;
+    fn nvim_ml_get_buf_len(buf: *mut c_void, lnum: LinenrT) -> c_int;
+    fn nvim_qf_get_region_bytecount(
+        buf: *mut c_void,
+        l1: LinenrT,
+        l2: LinenrT,
+        c1: c_int,
+        c2: c_int,
+    ) -> i64;
+    fn nvim_qf_extmark_splice(
+        buf: *mut c_void,
+        r1: c_int,
+        c1: c_int,
+        r2: c_int,
+        c2: c_int,
+        bc: i64,
+        nr: c_int,
+        nc: c_int,
+        nbc: i64,
+    );
+    fn nvim_qf_changed_lines(
+        buf: *mut c_void,
+        lnum: LinenrT,
+        col: c_int,
+        lnume: LinenrT,
+        xtra: LinenrT,
+        do_win: bool,
+    );
+    fn nvim_qf_buf_set_changed_false(buf: *mut c_void);
+    fn nvim_qf_redraw_buf_later(buf: *mut c_void);
+    fn nvim_qf_win_botline(win: *const c_void) -> LinenrT;
+    fn nvim_qf_aucmd_prepbuf_alloc(buf: *mut c_void) -> *mut c_void;
+    fn nvim_qf_aucmd_restbuf_free(aco: *mut c_void);
+    fn nvim_qf_find_win_with_loclist(ll: *const c_void) -> *mut c_void;
+    fn nvim_buf_win_get_llist(win: *const c_void) -> *mut c_void;
+    fn nvim_qf_get_curwin() -> *mut c_void;
+    // nvim_qf_win_get_handle already declared above at line 102
 
     // Phase 8: Ex Commands and API Functions accessors
     // (nvim_qf_get_title and nvim_qf_get_changedtick already declared above)
@@ -3140,22 +3179,7 @@ pub unsafe extern "C" fn rs_qf_win_pos_update(qi: QfInfoHandleMut, old_qf_index:
     rs_qf_win_pos_update_impl(qi, old_qf_index)
 }
 
-/// Update the quickfix buffer contents.
-///
-/// Refreshes the buffer to reflect changes to the quickfix list.
-/// Pass `old_last` to only update entries added after that point.
-///
-/// # Safety
-///
-/// - `qi` must be a valid pointer to a `qf_info_T` struct
-/// - `old_last` can be null to refresh the entire list
-#[no_mangle]
-pub unsafe extern "C" fn rs_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle) {
-    if qi.is_null() {
-        return;
-    }
-    nvim_qf_update_buffer(qi, old_last);
-}
+// rs_qf_update_buffer: real implementation in Phase 10 Pass 10 Phase 4 below.
 
 /// Get the buffer number from a quickfix info struct.
 ///
@@ -5501,6 +5525,128 @@ pub unsafe extern "C" fn rs_did_set_quickfixtextfunc(_args: *const c_void) -> *c
         return nvim_qf_get_e_invarg();
     }
     std::ptr::null()
+}
+
+// =============================================================================
+// Phase 10 Pass 10 Phase 4: qf_update_buffer
+// =============================================================================
+
+/// Find the quickfix buffer. If it exists, update its contents.
+///
+/// Equivalent to C `qf_update_buffer`. Called after entries are added or changed.
+///
+/// # Safety
+///
+/// - `qi` must be a valid mutable pointer to a `qf_info_T` struct
+/// - `old_last` may be null (full update) or a valid `qfline_T*` (append update)
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle) {
+    if qi.is_null() {
+        return;
+    }
+
+    // Check if a buffer for the quickfix list exists.
+    let buf = rs_qf_find_buf_for_stack(qi);
+    if buf.is_null() {
+        return;
+    }
+
+    let old_line_count = nvim_buf_get_ml_line_count_void(buf.cast_const());
+    let old_endcol = nvim_ml_get_buf_len(buf, old_line_count);
+    let old_bytecount = nvim_qf_get_region_bytecount(buf, 1, old_line_count, 0, old_endcol);
+
+    // For location list stacks, find the associated window and get its winid.
+    let qf_winid: c_int = if nvim_qf_is_ll_stack(qi.cast_const()) {
+        let curwin = nvim_qf_get_curwin();
+        let curwin_llist = nvim_buf_win_get_llist(curwin.cast_const());
+        let win = if std::ptr::eq(curwin_llist, qi) {
+            curwin
+        } else {
+            let mut w = nvim_qf_find_win_with_loclist(qi.cast_const());
+            if w.is_null() {
+                w = rs_qf_find_win_for_stack(qi.cast_const()).cast_mut();
+            }
+            if w.is_null() {
+                return;
+            }
+            w
+        };
+        nvim_qf_win_get_handle(win.cast_const())
+    } else {
+        0
+    };
+
+    // Autocommands may cause trouble - increment busy count
+    crate::lifecycle::rs_incr_quickfix_busy();
+
+    let aco = if old_last.is_null() {
+        // Set curwin/curbuf to buf and save a few things
+        nvim_qf_aucmd_prepbuf_alloc(buf)
+    } else {
+        std::ptr::null_mut()
+    };
+
+    rs_qf_update_win_titlevar(qi);
+
+    let qfl = nvim_qf_get_curlist(qi.cast_const());
+    crate::display::rs_qf_fill_buffer(qfl.cast_mut(), buf, old_last, qf_winid);
+
+    let new_line_count = nvim_buf_get_ml_line_count_void(buf.cast_const());
+    let new_endcol = nvim_ml_get_buf_len(buf, new_line_count);
+    let delta = new_line_count - old_line_count;
+
+    if old_last.is_null() {
+        let new_byte_count = nvim_qf_get_region_bytecount(buf, 1, new_line_count, 0, new_endcol);
+        nvim_qf_extmark_splice(
+            buf,
+            0,
+            0,
+            old_line_count - 1,
+            0,
+            old_bytecount,
+            new_line_count - 1,
+            new_endcol,
+            new_byte_count,
+        );
+        let lnume = if old_line_count > 0 {
+            old_line_count + 1
+        } else {
+            1
+        };
+        nvim_qf_changed_lines(buf, 1, 0, lnume, delta, true);
+    } else if delta > 0 {
+        let start_lnum = old_line_count + 1;
+        let new_byte_count =
+            nvim_qf_get_region_bytecount(buf, start_lnum, new_line_count, 0, new_endcol);
+        nvim_qf_extmark_splice(
+            buf,
+            old_line_count - 1,
+            old_endcol,
+            0,
+            0,
+            0,
+            delta,
+            new_endcol,
+            new_byte_count,
+        );
+        nvim_qf_changed_lines(buf, start_lnum, 0, start_lnum, delta, true);
+    }
+    nvim_qf_buf_set_changed_false(buf);
+
+    if old_last.is_null() {
+        rs_qf_win_pos_update_impl(qi, 0);
+        nvim_qf_aucmd_restbuf_free(aco);
+    }
+
+    // Only redraw when added lines are visible.
+    let qf_win = rs_qf_find_win_for_stack(qi.cast_const()).cast_mut();
+    if !qf_win.is_null() && old_line_count < nvim_qf_win_botline(qf_win.cast_const()) {
+        nvim_qf_redraw_buf_later(buf);
+    }
+
+    // Always called after rs_incr_quickfix_busy()
+    crate::lifecycle::rs_decr_quickfix_busy();
 }
 
 // =============================================================================

@@ -531,6 +531,7 @@ extern void rs_win_setheight(int height);
 extern void rs_win_setwidth(int width);
 extern int rs_qf_open_new_cwindow(void *qi_void, int height);
 extern const char *rs_did_set_quickfixtextfunc(const void *args);
+extern void rs_qf_update_buffer(void *qi_void, const void *old_last);
 
 // Rust fold FFI declarations
 extern void rs_foldOpenCursor(void);
@@ -1346,7 +1347,7 @@ void nvim_qfl_list_changed_and_update_buf(void *qi_void, void *qfl_void)
   if (qfl_void != NULL) {
     rs_qf_incr_changedtick((qf_list_T *)qfl_void);
   }
-  qf_update_buffer(qi, NULL);
+  rs_qf_update_buffer(qi, NULL);
 }
 
 /// qf_list_changed only (no buffer update).
@@ -1433,14 +1434,14 @@ bool nvim_qf_list_is_empty(const void *qfl_void)
 // deleted: migrated to Rust QfParserState in reader.rs (Phase 9).
 
 static bool qf_win_pos_update(qf_info_T *qi, int old_qf_index);
-static void qf_update_buffer(qf_info_T *qi, qfline_T *old_last);
+// qf_update_buffer forward declaration deleted: migrated to Rust rs_qf_update_buffer (Phase 10 Pass 10 Phase 4).
 
 // qf_find_win, qf_find_buf: deleted -- migrated to Rust rs_qf_find_win_for_stack /
 // rs_qf_find_buf_for_stack in lib.rs (Phase 10, Pass 10).
 // nvim_qf_find_win_for_stack, nvim_qf_find_buf_for_stack: deleted -- callers use
 // rs_qf_find_win_for_stack / rs_qf_find_buf_for_stack directly.
 bool nvim_qf_win_pos_update(void *qi_void, int old_qf_index) { return qi_void == NULL ? false : qf_win_pos_update((qf_info_T *)qi_void, old_qf_index); }
-void nvim_qf_update_buffer(void *qi_void, void *old_last) { if (qi_void != NULL) qf_update_buffer((qf_info_T *)qi_void, (qfline_T *)old_last); }
+void nvim_qf_update_buffer(void *qi_void, void *old_last) { rs_qf_update_buffer(qi_void, old_last); }
 int nvim_qf_get_bufnr(const void *qi_void) { return qi_void == NULL ? -1 : ((const qf_info_T *)qi_void)->qf_bufnr; }
 void nvim_qf_set_bufnr(void *qi_void, int bufnr) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_bufnr = bufnr; }
 
@@ -2190,7 +2191,7 @@ static void qf_resize_stack_base(qf_info_T *qi, int n)
   qi->qf_lists = new;
   qi->qf_maxcount = n;
 
-  qf_update_buffer(qi, NULL);
+  rs_qf_update_buffer(qi, NULL);
 }
 
 void qf_init_stack(void) { ql_info = qf_alloc_stack(QFLT_QUICKFIX, (int)p_chi); }
@@ -2805,6 +2806,52 @@ const char *nvim_qf_get_e_invarg(void) { return e_invarg; }
 /// Return true if curwin equals the given window (for oldwin != curwin check).
 bool nvim_qf_curwin_is(const void *win_void) { return curwin == (const win_T *)win_void; }
 
+// Phase 10 Pass 10 Phase 4: New C accessors for rs_qf_update_buffer
+
+/// get_region_bytecount for a quickfix buffer.
+bcount_t nvim_qf_get_region_bytecount(void *buf, linenr_T l1, linenr_T l2, colnr_T c1, colnr_T c2)
+{
+  return get_region_bytecount((buf_T *)buf, l1, l2, c1, c2);
+}
+
+/// extmark_splice for quickfix buffer updates.
+void nvim_qf_extmark_splice(void *buf, int r1, colnr_T c1, int r2, colnr_T c2,
+                             bcount_t bc, int nr, colnr_T nc, bcount_t nbc)
+{
+  extmark_splice((buf_T *)buf, r1, c1, r2, c2, bc, nr, nc, nbc, kExtmarkNoUndo);
+}
+
+/// changed_lines for quickfix buffer updates.
+void nvim_qf_changed_lines(void *buf, linenr_T lnum, colnr_T col, linenr_T lnume, linenr_T xtra, bool do_win)
+{
+  changed_lines((buf_T *)buf, lnum, col, lnume, xtra, do_win);
+}
+
+/// Set buf->b_changed = false.
+void nvim_qf_buf_set_changed_false(void *buf) { ((buf_T *)buf)->b_changed = false; }
+
+/// redraw_buf_later(buf, UPD_NOT_VALID).
+void nvim_qf_redraw_buf_later(void *buf) { redraw_buf_later((buf_T *)buf, UPD_NOT_VALID); }
+
+/// Return win->w_botline.
+linenr_T nvim_qf_win_botline(const void *win) { return ((const win_T *)win)->w_botline; }
+
+/// Allocate aco_save_T, call aucmd_prepbuf(aco, buf), return aco pointer.
+void *nvim_qf_aucmd_prepbuf_alloc(void *buf)
+{
+  aco_save_T *aco = xmalloc(sizeof(aco_save_T));
+  aucmd_prepbuf(aco, (buf_T *)buf);
+  return aco;
+}
+
+/// Call aucmd_restbuf(aco) and free the aco_save_T pointer.
+void nvim_qf_aucmd_restbuf_free(void *aco_void)
+{
+  if (aco_void == NULL) { return; }
+  aucmd_restbuf((aco_save_T *)aco_void);
+  xfree(aco_void);
+}
+
 // Highlight ids used for displaying entries from the quickfix list.
 static int qfFile_hl_id;
 static int qfSep_hl_id;
@@ -2968,87 +3015,7 @@ static void qf_update_win_titlevar(qf_info_T *qi)
   curwin = save_curwin;
 }
 
-// Find the quickfix buffer.  If it exists, update the contents.
-static void qf_update_buffer(qf_info_T *qi, qfline_T *old_last)
-{
-  // Check if a buffer for the quickfix list exists.  Update it.
-  buf_T *buf = qf_find_buf(qi);
-  if (buf == NULL) {
-    return;
-  }
-
-  linenr_T old_line_count = buf->b_ml.ml_line_count;
-  colnr_T old_endcol = ml_get_buf_len(buf, old_line_count);
-  bcount_t old_bytecount = get_region_bytecount(buf, 1, old_line_count, 0, old_endcol);
-  int qf_winid = 0;
-
-  win_T *win;
-  if (IS_LL_STACK(qi)) {
-    if (curwin->w_llist == qi) {
-      win = curwin;
-    } else {
-      // Find the file window (non-quickfix) with this location list
-      win = qf_find_win_with_loclist(qi);
-      if (win == NULL) {
-        // File window is not found. Find the location list window.
-        win = qf_find_win(qi);
-      }
-      if (win == NULL) {
-        return;
-      }
-    }
-    qf_winid = (int)win->handle;
-  }
-
-  // autocommands may cause trouble
-  incr_quickfix_busy();
-
-  aco_save_T aco;
-
-  if (old_last == NULL) {
-    // set curwin/curbuf to buf and save a few things
-    aucmd_prepbuf(&aco, buf);
-  }
-
-  qf_update_win_titlevar(qi);
-
-  rs_qf_fill_buffer(qf_get_curlist(qi), buf, old_last, qf_winid);
-
-  linenr_T new_line_count = buf->b_ml.ml_line_count;
-  colnr_T new_endcol = ml_get_buf_len(buf, new_line_count);
-  bcount_t new_byte_count = 0;
-  linenr_T delta = new_line_count - old_line_count;
-
-  if (old_last == NULL) {
-    new_byte_count = get_region_bytecount(buf, 1, new_line_count, 0, new_endcol);
-    extmark_splice(buf, 0, 0, old_line_count - 1, 0, old_bytecount, new_line_count - 1, new_endcol,
-                   new_byte_count, kExtmarkNoUndo);
-    changed_lines(buf, 1, 0, old_line_count > 0 ? old_line_count + 1 : 1, delta, true);
-  } else if (delta > 0) {
-    linenr_T start_lnum = old_line_count + 1;
-    new_byte_count = get_region_bytecount(buf, start_lnum, new_line_count, 0, new_endcol);
-    extmark_splice(buf, old_line_count - 1, old_endcol, 0, 0, 0, delta, new_endcol, new_byte_count,
-                   kExtmarkNoUndo);
-    changed_lines(buf, start_lnum, 0, start_lnum, delta, true);
-  }
-  buf->b_changed = false;
-
-  if (old_last == NULL) {
-    qf_win_pos_update(qi, 0);
-
-    // restore curwin/curbuf and a few other things
-    aucmd_restbuf(&aco);
-  }
-
-  // Only redraw when added lines are visible.  This avoids flickering when
-  // the added lines are not visible.
-  if ((win = qf_find_win(qi)) != NULL && old_line_count < win->w_botline) {
-    redraw_buf_later(buf, UPD_NOT_VALID);
-  }
-
-  // always called after incr_quickfix_busy()
-  decr_quickfix_busy();
-}
+// qf_update_buffer deleted: migrated to Rust rs_qf_update_buffer (Phase 10 Pass 10 Phase 4).
 
 // qf_buf_add_line migrated to Rust (Phase 3) -- see rs_qf_buf_add_line in display.rs
 
@@ -3912,7 +3879,7 @@ void nvim_vgr_finalize_list(void *qi_void)
   qfl->qf_ptr = qfl->qf_start;
   qfl->qf_index = 1;
   qf_list_changed(qfl);
-  qf_update_buffer(qi, NULL);
+  rs_qf_update_buffer(qi, NULL);
 }
 
 /// Apply QuickFixCmdPost autocmd for vimgrep.
