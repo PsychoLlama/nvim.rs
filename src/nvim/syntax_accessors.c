@@ -582,50 +582,70 @@ static colnr_T syn_getcurline_len(void)
   return (colnr_T)rs_syn_getcurline_len();
 }
 
-// Call vim_regexec() to find a match with "rmp" in "syn_buf".
-// Returns true when there is a match.
-static bool syn_regexec(regmmatch_T *rmp, linenr_T lnum, colnr_T col, syn_time_T *st)
+/// Thin C helper: set up regmmatch_T, call vim_regexec_multi, extract results.
+/// Profiling/timeout/b_syn_slow logic is handled by the Rust caller.
+/// Returns 1 on match (with positions set), 0 on no match, -1 if regprog is NULL.
+/// Sets *out_timed_out if vim_regexec_multi reported a timeout.
+int nvim_syn_do_regexec(void *regprog, int ic,
+                        int lnum, int col,
+                        int *out_s_lnum, int *out_s_col,
+                        int *out_e_lnum, int *out_e_col,
+                        void **out_regprog, int *out_timed_out)
 {
-  int timed_out = 0;
-  proftime_T pt;
-  const bool l_syn_time_on = syn_time_on;
-
-  if (l_syn_time_on) {
-    pt = profile_start();
+  if (regprog == NULL) {
+    return -1;
   }
-
-  if (rmp->regprog == NULL) {
-    // This can happen if a previous call to vim_regexec_multi() tried to
-    // use the NFA engine, which resulted in NFA_TOO_EXPENSIVE, and
-    // compiling the pattern with the other engine fails.
-    return false;
-  }
-
-  rmp->rmm_maxcol = (colnr_T)syn_buf->b_p_smc;
-  int r = vim_regexec_multi(rmp, syn_win, syn_buf, lnum, col, syn_tm, &timed_out);
-
-  if (l_syn_time_on) {
-    pt = profile_end(pt);
-    st->total = profile_add(st->total, pt);
-    if (profile_cmp(pt, st->slowest) < 0) {
-      st->slowest = pt;
-    }
-    st->count++;
-    if (r > 0) {
-      st->match++;
-    }
-  }
-  if (timed_out && !syn_win->w_s->b_syn_slow) {
-    syn_win->w_s->b_syn_slow = true;
-    msg(_("'redrawtime' exceeded, syntax highlighting disabled"), 0);
-  }
-
+  regmmatch_T regmatch;
+  regmatch.regprog = (regprog_T *)regprog;
+  regmatch.rmm_ic = ic;
+  regmatch.rmm_maxcol = (colnr_T)syn_buf->b_p_smc;
+  *out_timed_out = 0;
+  int r = vim_regexec_multi(&regmatch, syn_win, syn_buf,
+                            (linenr_T)lnum, (colnr_T)col,
+                            syn_tm, out_timed_out);
+  *out_regprog = regmatch.regprog;
   if (r > 0) {
-    rmp->startpos[0].lnum += lnum;
-    rmp->endpos[0].lnum += lnum;
-    return true;
+    *out_s_lnum = regmatch.startpos[0].lnum + lnum;
+    *out_s_col  = regmatch.startpos[0].col;
+    *out_e_lnum = regmatch.endpos[0].lnum + lnum;
+    *out_e_col  = regmatch.endpos[0].col;
+    return 1;
   }
-  return false;
+  return 0;
+}
+
+int nvim_syn_get_b_syn_slow(void) { return syn_win->w_s->b_syn_slow ? 1 : 0; }
+void nvim_syn_set_b_syn_slow(int val) { syn_win->w_s->b_syn_slow = (val != 0); }
+
+/// Get pointer to syn_block->b_syn_linecont_time as void*.
+/// Returns pointer to the inline syn_time_T field in the synblock.
+/// NOTE: nvim_syn_block_get_linecont_time_ptr already exists; this is a new alias.
+
+/// Get pointer to sp_time for a pattern at index in the current synblock.
+/// Used by Rust to pass as *mut c_void to nvim_syn_time_update.
+void *nvim_syn_get_pat_time_ptr(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return NULL;
+  }
+  return (void *)&SYN_ITEMS(syn_block)[idx].sp_time;
+}
+
+/// Update syn_time_T fields from Rust after a regex execution.
+/// elapsed: elapsed time (proftime_T / u64).
+/// matched: 1 if the regex matched, 0 otherwise.
+void nvim_syn_time_update(void *st_ptr, uint64_t elapsed, int matched)
+{
+  if (st_ptr == NULL) return;
+  syn_time_T *st = (syn_time_T *)st_ptr;
+  st->total = profile_add(st->total, (proftime_T)elapsed);
+  if (profile_cmp((proftime_T)elapsed, st->slowest) < 0) {
+    st->slowest = (proftime_T)elapsed;
+  }
+  st->count++;
+  if (matched) {
+    st->match++;
+  }
 }
 
 // Clear all syntax info for one buffer.
@@ -1806,58 +1826,6 @@ int nvim_synstate_get_tick_val(synstate_T *state) { return state ? state->sst_ti
 
 // nvim_stateitem_get_cchar, nvim_stateitem_get_end_idx, nvim_stateitem_get_ends
 
-/// Wrapper around syn_regexec for calling from Rust.
-
-/// Executes regex match on a pattern in the current synblock by index.
-
-/// Returns 1 if matched, 0 if not. Fills out-params with match positions.
-
-int nvim_syn_regexec_pat(int idx, int lnum, int col,
-
-                         int *start_lnum, int *start_col,
-
-                         int *end_lnum, int *end_col)
-
-{
-
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-
-    return 0;
-
-  }
-
-  synpat_T *spp = &SYN_ITEMS(syn_block)[idx];
-
-  regmmatch_T regmatch;
-
-  regmatch.rmm_ic = spp->sp_ic;
-
-  regmatch.regprog = spp->sp_prog;
-
-  bool r = syn_regexec(&regmatch, (linenr_T)lnum, (colnr_T)col,
-
-                        IF_SYN_TIME(&spp->sp_time));
-
-  spp->sp_prog = regmatch.regprog;
-
-  if (r) {
-
-    if (start_lnum) { *start_lnum = regmatch.startpos[0].lnum; }
-
-    if (start_col) { *start_col = regmatch.startpos[0].col; }
-
-    if (end_lnum) { *end_lnum = regmatch.endpos[0].lnum; }
-
-    if (end_col) { *end_col = regmatch.endpos[0].col; }
-
-    return 1;
-
-  }
-
-  return 0;
-
-}
-
 /// Get a synpat offset value by pattern index and offset index.
 int nvim_syn_get_pattern_offset(int pat_idx, int off_idx)
 {
@@ -1997,50 +1965,6 @@ int nvim_syn_get_pattern_syncing(int idx) { return SYN_ITEMS(syn_block)[idx].sp_
 int nvim_syn_get_pattern_display(int idx) { return (SYN_ITEMS(syn_block)[idx].sp_flags & HL_DISPLAY) != 0; }
 int nvim_syn_get_pattern_ga_len(void) { return syn_block->b_syn_patterns.ga_len; }
 int nvim_syn_has_containedin(void) { return syn_block->b_syn_containedin; }
-
-/// Execute syn_regexec for a pattern by index, return match result.
-
-/// Returns 1 if matched, 0 if not. Writes start/end positions to out-params.
-
-/// Also updates sp_prog if needed.
-
-int nvim_syn_regexec_by_idx(int idx, int lnum, int col,
-
-                            int *s_lnum, int *s_col,
-
-                            int *e_lnum, int *e_col)
-
-{
-
-  synpat_T *spp = &(SYN_ITEMS(syn_block)[idx]);
-
-  regmmatch_T regmatch;
-
-  regmatch.rmm_ic = spp->sp_ic;
-
-  regmatch.regprog = spp->sp_prog;
-
-  int r = syn_regexec(&regmatch, lnum, col,
-
-                      IF_SYN_TIME(&spp->sp_time));
-
-  spp->sp_prog = regmatch.regprog;
-
-  if (r) {
-
-    *s_lnum = regmatch.startpos[0].lnum;
-
-    *s_col = regmatch.startpos[0].col;
-
-    *e_lnum = regmatch.endpos[0].lnum;
-
-    *e_col = regmatch.endpos[0].col;
-
-  }
-
-  return r;
-
-}
 
 /// Check in_id_list for a pattern by index against the current_next_list or
 /// cur_si cont_list.
@@ -3481,23 +3405,6 @@ void *nvim_syn_block_get_linecont_time_ptr(void)
 void nvim_syn_block_set_linecont_prog(void *prog)
 {
   if (syn_block) syn_block->b_syn_linecont_prog = (regprog_T *)prog;
-}
-
-/// Execute syn_regexec with linecont pattern for given lnum.
-/// Returns nonzero on match.
-int nvim_syn_exec_linecont(linenr_T lnum)
-{
-  if (syn_block->b_syn_linecont_prog == NULL) return 0;
-  regmmatch_T regmatch;
-  char buf_chartab[32];
-  save_chartab(buf_chartab);
-  regmatch.rmm_ic = syn_block->b_syn_linecont_ic;
-  regmatch.regprog = syn_block->b_syn_linecont_prog;
-  int r = syn_regexec(&regmatch, lnum, 0,
-                      IF_SYN_TIME(&syn_block->b_syn_linecont_time));
-  syn_block->b_syn_linecont_prog = regmatch.regprog;
-  restore_chartab(buf_chartab);
-  return r;
 }
 
 /// Get current_finished.

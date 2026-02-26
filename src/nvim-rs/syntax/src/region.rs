@@ -43,16 +43,7 @@ extern "C" {
     fn nvim_syn_get_pattern_offset(pat_idx: c_int, off_idx: c_int) -> c_int;
     fn nvim_syn_get_pattern_off_flags(pat_idx: c_int) -> c_int;
 
-    // Regex execution wrapper
-    fn nvim_syn_regexec_pat(
-        idx: c_int,
-        lnum: c_int,
-        col: c_int,
-        start_lnum: *mut c_int,
-        start_col: *mut c_int,
-        end_lnum: *mut c_int,
-        end_col: *mut c_int,
-    ) -> c_int;
+    // (nvim_syn_regexec_pat replaced by crate::regexec::syn_regexec_pat)
 
     // Extmatch management
     fn nvim_syn_set_extmatch_in(em: ExtMatchHandle);
@@ -196,7 +187,9 @@ fn regexec_pat(idx: i32, lnum: i32, col: i32) -> Option<RegMatch> {
     let mut sc: c_int = 0;
     let mut el: c_int = 0;
     let mut ec: c_int = 0;
-    let r = unsafe { nvim_syn_regexec_pat(idx, lnum, col, &mut sl, &mut sc, &mut el, &mut ec) };
+    let r = unsafe {
+        crate::regexec::syn_regexec_pat(idx, lnum, col, &mut sl, &mut sc, &mut el, &mut ec)
+    };
     if r != 0 {
         Some(RegMatch {
             startpos: Position { lnum: sl, col: sc },

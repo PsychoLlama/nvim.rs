@@ -135,17 +135,7 @@ extern "C" {
         has_next_list: c_int,
         has_cur_si: c_int,
     ) -> c_int;
-
-    // Pattern regex execution
-    fn nvim_syn_regexec_by_idx(
-        idx: c_int,
-        lnum: c_int,
-        col: c_int,
-        s_lnum: *mut c_int,
-        s_col: *mut c_int,
-        e_lnum: *mut c_int,
-        e_col: *mut c_int,
-    ) -> c_int;
+    // (nvim_syn_regexec_by_idx replaced by crate::regexec::syn_regexec_by_idx)
 
     // Synblock queries
     fn nvim_syn_has_containedin() -> c_int;
@@ -396,7 +386,7 @@ pub unsafe fn syn_current_attr(
                         let mut s_col: c_int = 0;
                         let mut e_lnum: c_int = 0;
                         let mut e_col: c_int = 0;
-                        let r = nvim_syn_regexec_by_idx(
+                        let r = crate::regexec::syn_regexec_by_idx(
                             idx,
                             current_lnum,
                             lc_col,

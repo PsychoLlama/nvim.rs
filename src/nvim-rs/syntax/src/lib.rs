@@ -50,6 +50,7 @@ pub mod parse;
 pub mod pattern;
 pub mod pattern_parse;
 pub mod pattern_store;
+pub mod regexec;
 pub mod region;
 pub mod state;
 pub mod state_entry;

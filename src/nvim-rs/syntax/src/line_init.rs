@@ -56,8 +56,7 @@ extern "C" {
     fn nvim_syn_win_chartab_get(dst: *mut c_char);
     fn nvim_syn_win_isk_not_empty() -> c_int;
 
-    // syn_match_linecont (fully wrapped in C)
-    fn nvim_syn_exec_linecont(lnum: c_int) -> c_int;
+    // (nvim_syn_exec_linecont replaced by crate::regexec::syn_exec_linecont)
 
     // clear_syn_state (wraps the real impl in C)
     fn nvim_syn_clear_syn_state(p: SynStateHandle);
@@ -159,13 +158,13 @@ pub unsafe extern "C" fn rs_syn_start_line() {
 /// Check if the line-continuation pattern matches in line "lnum".
 ///
 /// Replaces static C `syn_match_linecont`.
-/// Uses C helper nvim_syn_exec_linecont to keep regmmatch_T in C.
+/// Delegates to Rust regexec module.
 ///
 /// # Safety
 /// Accesses C global state; must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_match_linecont(lnum: c_int) -> c_int {
-    nvim_syn_exec_linecont(lnum)
+    crate::regexec::syn_exec_linecont(lnum)
 }
 
 /// Save buffer chartab, overriding with syn iskeyword if set.
