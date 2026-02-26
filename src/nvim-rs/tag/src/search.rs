@@ -1124,18 +1124,31 @@ type FindTagsMatchArgsHandle = *mut c_void;
 extern "C" {
     fn nvim_findtags_init_tag_fname(st: FindTagsStateHandle);
     fn nvim_findtags_set_fp_null(st: FindTagsStateHandle);
-    fn nvim_findtags_init_orgpat(st: FindTagsStateHandle, pat: *mut c_char);
-    fn nvim_findtags_set_fields(st: FindTagsStateHandle, flags: c_int, mincount: c_int);
+    // Fine-grained orgpat initialization accessors
+    fn nvim_findtags_alloc_orgpat(st: FindTagsStateHandle);
+    fn nvim_findtags_clear_orgpat_regprog(st: FindTagsStateHandle);
+    // Fine-grained field setters
+    fn nvim_findtags_set_flags(st: FindTagsStateHandle, flags: c_int);
+    fn nvim_findtags_set_help_only_from_flags(st: FindTagsStateHandle, flags: c_int);
+    fn nvim_findtags_set_mincount(st: FindTagsStateHandle, mincount: c_int);
+    fn nvim_findtags_alloc_lbuf(st: FindTagsStateHandle);
+    // Fine-grained free accessors
+    fn nvim_findtags_free_tag_fname(st: FindTagsStateHandle);
+    fn nvim_findtags_free_lbuf(st: FindTagsStateHandle);
+    fn nvim_findtags_free_orgpat_regprog(st: FindTagsStateHandle);
+    fn nvim_findtags_free_orgpat(st: FindTagsStateHandle);
+    // Match array init (keeps C macro loop)
     fn nvim_findtags_init_match_arrays(st: FindTagsStateHandle);
-    fn nvim_findtags_state_free_inner(st: FindTagsStateHandle);
     fn nvim_findtags_matchargs_init(margs: FindTagsMatchArgsHandle, flags: c_int);
 }
 
 /// Initialize a `findtags_state_T` struct for a tag search.
 ///
+/// The struct must have been zero-initialized (via xcalloc) before calling this.
+///
 /// # Safety
 ///
-/// - `st` must be a valid pointer to a `findtags_state_T` struct
+/// - `st` must be a valid pointer to a zero-initialized `findtags_state_T` struct
 /// - `pat` must be a valid C string that outlives the search
 #[no_mangle]
 pub unsafe extern "C" fn rs_findtags_state_init(
@@ -1147,14 +1160,32 @@ pub unsafe extern "C" fn rs_findtags_state_init(
     if st.is_null() {
         return;
     }
+    // Allocate tag_fname buffer and set fp = NULL (xcalloc already NULL-ed it)
     nvim_findtags_init_tag_fname(st);
     nvim_findtags_set_fp_null(st);
-    nvim_findtags_init_orgpat(st, pat);
-    nvim_findtags_set_fields(st, flags, mincount);
+
+    // Initialize orgpat (inline of nvim_findtags_init_orgpat)
+    nvim_findtags_alloc_orgpat(st);
+    nvim_findtags_set_orgpat_pat(st, pat);
+    nvim_findtags_set_orgpat_len(st, strlen(pat) as c_int);
+    nvim_findtags_clear_orgpat_regprog(st);
+
+    // Set scalar fields (inline of nvim_findtags_set_fields)
+    // xcalloc zeroed: tag_file_sorted, help_lang_find, is_txt, did_open,
+    //                 get_searchpat, help_lang[0], help_pri, match_count, stop_searching
+    nvim_findtags_set_flags(st, flags);
+    nvim_findtags_set_help_only_from_flags(st, flags);
+    nvim_findtags_set_mincount(st, mincount);
+    nvim_findtags_alloc_lbuf(st);
+
+    // Initialize match arrays
     nvim_findtags_init_match_arrays(st);
 }
 
 /// Free the inner resources of a `findtags_state_T` struct.
+///
+/// Inlines the logic of `nvim_findtags_state_free_inner` using fine-grained
+/// accessors: frees tag_fname, lbuf, orgpat->regmatch.regprog, and orgpat.
 ///
 /// # Safety
 ///
@@ -1164,7 +1195,10 @@ pub unsafe extern "C" fn rs_findtags_state_free(st: FindTagsStateHandle) {
     if st.is_null() {
         return;
     }
-    nvim_findtags_state_free_inner(st);
+    nvim_findtags_free_tag_fname(st);
+    nvim_findtags_free_lbuf(st);
+    nvim_findtags_free_orgpat_regprog(st);
+    nvim_findtags_free_orgpat(st);
 }
 
 /// Initialize a `findtags_match_args_T` struct.
@@ -2439,12 +2473,8 @@ pub unsafe extern "C" fn rs_findtags_in_file(
 // =============================================================================
 
 extern "C" {
-    /// Heap-allocate and initialize a findtags_state_T.
-    fn nvim_findtags_state_new(
-        pat: *mut c_char,
-        flags: c_int,
-        mincount: c_int,
-    ) -> FindTagsStateHandle;
+    /// Heap-allocate a zero-initialized findtags_state_T (caller must call rs_findtags_state_init).
+    fn nvim_findtags_state_xcalloc() -> FindTagsStateHandle;
     /// Free the findtags_state_T struct itself (after rs_findtags_state_free).
     fn nvim_findtags_state_delete(st: FindTagsStateHandle);
     /// Get the mutable tag_fname buffer pointer from the state.
@@ -2491,13 +2521,14 @@ pub unsafe extern "C" fn rs_find_tags(
 
     let help_save = nvim_get_curbuf_b_help();
 
-    // Heap-allocate and initialize the findtags state
-    let st = nvim_findtags_state_new(pat, flags, mincount);
+    // Heap-allocate (xcalloc) and initialize the findtags state
+    let st = nvim_findtags_state_xcalloc();
     if st.is_null() {
         nvim_set_p_ic(save_p_ic);
         *num_matches = 0;
         return FAIL;
     }
+    rs_findtags_state_init(st, pat, flags, mincount);
 
     let mut saved_pat: *mut c_char = std::ptr::null_mut();
     #[allow(unused_assignments)]

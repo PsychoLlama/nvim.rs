@@ -227,35 +227,28 @@ int64_t nvim_get_p_tl(void) { return p_tl; }
 // --- Rust FFI accessor functions for findtags_state_T initialization ---
 void nvim_findtags_init_tag_fname(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; st->tag_fname = xmalloc(MAXPATHL + 1); }
 void nvim_findtags_set_fp_null(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; st->fp = NULL; }
-/// Allocate orgpat and initialize it with pattern
-void nvim_findtags_init_orgpat(void *st_void, char *pat)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->orgpat = xmalloc(sizeof(pat_T));
-  st->orgpat->pat = pat;
-  st->orgpat->len = (int)strlen(pat);
-  st->orgpat->regmatch.regprog = NULL;
-}
-
-/// Set scalar fields of findtags_state_T
-void nvim_findtags_set_fields(void *st_void, int flags, int mincount)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  st->flags = flags;
-  st->tag_file_sorted = NUL;
-  st->help_lang_find = NULL;
-  st->is_txt = false;
-  st->did_open = false;
-  st->help_only = (flags & TAG_HELP);
-  st->get_searchpat = false;
-  st->help_lang[0] = NUL;
-  st->help_pri = 0;
-  st->mincount = mincount;
-  st->lbuf_size = LSIZE;
-  st->lbuf = xmalloc((size_t)st->lbuf_size);
-  st->match_count = 0;
-  st->stop_searching = false;
-}
+/// Allocate orgpat struct (does not set fields -- Rust sets them individually).
+void nvim_findtags_alloc_orgpat(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; st->orgpat = xmalloc(sizeof(pat_T)); }
+/// Set orgpat->regmatch.regprog to NULL.
+void nvim_findtags_clear_orgpat_regprog(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; st->orgpat->regmatch.regprog = NULL; }
+/// Set st->flags.
+void nvim_findtags_set_flags(void *st_void, int flags) { findtags_state_T *st = (findtags_state_T *)st_void; st->flags = flags; }
+/// Set st->help_only from flags.
+void nvim_findtags_set_help_only_from_flags(void *st_void, int flags) { findtags_state_T *st = (findtags_state_T *)st_void; st->help_only = (flags & TAG_HELP) != 0; }
+/// Set st->mincount.
+void nvim_findtags_set_mincount(void *st_void, int mincount) { findtags_state_T *st = (findtags_state_T *)st_void; st->mincount = mincount; }
+/// Allocate st->lbuf at LSIZE bytes and set st->lbuf_size.
+void nvim_findtags_alloc_lbuf(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; st->lbuf_size = LSIZE; st->lbuf = xmalloc((size_t)st->lbuf_size); }
+/// Free st->tag_fname.
+void nvim_findtags_free_tag_fname(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; xfree(st->tag_fname); }
+/// Free st->lbuf.
+void nvim_findtags_free_lbuf(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; xfree(st->lbuf); }
+/// Free st->orgpat->regmatch.regprog via vim_regfree.
+void nvim_findtags_free_orgpat_regprog(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; vim_regfree(st->orgpat->regmatch.regprog); }
+/// Free st->orgpat.
+void nvim_findtags_free_orgpat(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; xfree(st->orgpat); }
+/// Heap-allocate a zero-initialized findtags_state_T (caller must call rs_findtags_state_init).
+void *nvim_findtags_state_xcalloc(void) { return xcalloc(1, sizeof(findtags_state_T)); }
 
 /// Initialize ga_match and ht_match arrays
 void nvim_findtags_init_match_arrays(void *st_void)
@@ -267,29 +260,7 @@ void nvim_findtags_init_match_arrays(void *st_void)
   }
 }
 
-/// Free findtags_state_T inner resources
-void nvim_findtags_state_free_inner(void *st_void)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  xfree(st->tag_fname);
-  xfree(st->lbuf);
-  vim_regfree(st->orgpat->regmatch.regprog);
-  xfree(st->orgpat);
-}
-
-// Forward declaration needed by nvim_findtags_state_new (defined later in file)
-extern void rs_findtags_state_init(findtags_state_T *st, char *pat, int flags, int mincount);
-
-/// Heap-allocate and initialize a findtags_state_T.
-/// Returned pointer must be freed with nvim_findtags_state_delete.
-void *nvim_findtags_state_new(char *pat, int flags, int mincount)
-{
-  findtags_state_T *st = xcalloc(1, sizeof(findtags_state_T));
-  rs_findtags_state_init(st, pat, flags, mincount);
-  return st;
-}
-
-/// Free the findtags_state_T struct itself (inner resources already freed).
+/// Free the findtags_state_T struct itself (inner resources already freed by rs_findtags_state_free).
 void nvim_findtags_state_delete(void *st_void)
 {
   xfree(st_void);
