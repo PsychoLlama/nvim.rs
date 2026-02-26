@@ -664,28 +664,8 @@ void *nvim_tag_tv_list_alloc(int count) { return (void *)tv_list_alloc(count); }
 void nvim_tag_tv_list_append_dict(void *list, void *dict) { tv_list_append_dict((list_T *)list, (dict_T *)dict); }
 void nvim_tag_tv_list_free(void *list) { tv_list_free((list_T *)list); }
 void nvim_tag_set_errorlist(void *list, const char *title) { set_errorlist(curwin, (list_T *)list, ' ', (char *)title, NULL); }
-/// Wrapper for vim_snprintf into IObuff
-void nvim_tag_snprintf_iobuff(const char *fmt, ...)
-{
-  va_list ap;
-  va_start(ap, fmt);
-  vim_vsnprintf(IObuff, IOSIZE, fmt, ap);
-  va_end(ap);
-}
-
-/// Format do_tags line into IObuff and return IObuff pointer.
-/// Rust calls this then nvim_tag_msg_outtrans separately (Phase 3).
-const char *nvim_tag_format_tags_line(int is_current, int idx, int cur_match,
-                                      const char *tagname, int64_t lnum)
-{
-  vim_snprintf(IObuff, IOSIZE, "%c%2d %2d %-15s %5" PRIdLINENR "  ",
-               is_current ? '>' : ' ',
-               idx + 1,
-               cur_match + 1,
-               tagname,
-               (linenr_T)lnum);
-  return IObuff;
-}
+/// Set VV_SWAPCOMMAND to ":ta <name>\r" (Rust-formatted).
+void nvim_tag_set_vim_var_swapcommand(const char *cmd) { set_vim_var_string(VV_SWAPCOMMAND, (char *)cmd, -1); }
 
 /// Decrement RedrawingDisabled.
 void nvim_tag_dec_RedrawingDisabled(void) { RedrawingDisabled--; }
@@ -703,13 +683,6 @@ void nvim_tag_win_close_curwin(void)
 }
 
 char *nvim_tag_fm_getname(const void *tg_void, int lead_len) { const taggy_T *tg = (const taggy_T *)tg_void; return fm_getname(&((taggy_T *)tg)->fmark, lead_len); }
-/// Format print_tag_list header line into IObuff
-void nvim_tag_list_format_entry(bool is_current, int i, const char *mt_name)
-{
-  *IObuff = is_current ? '>' : ' ';
-  vim_snprintf(IObuff + 1, IOSIZE - 1, "%2d %s ", i + 1, mt_name);
-  msg_puts(IObuff);
-}
 
 int nvim_tag_get_iosize(void) { return IOSIZE; }
 int nvim_tag_get_maxpathl(void) { return MAXPATHL; }
@@ -1175,23 +1148,18 @@ size_t nvim_tag_fmark_size(void) { return sizeof(fmark_T); }
 _Static_assert(sizeof(fmark_T) <= 64, "fmark_T must fit in 64 bytes for Rust stack buffer");
 
 int nvim_tag_prompt_for_selection(void) { return prompt_for_input(NULL, 0, false, NULL); }
-void nvim_tag_set_swap_command(const char *name) { vim_snprintf(IObuff, IOSIZE, ":ta %s\r", name); set_vim_var_string(VV_SWAPCOMMAND, IObuff, -1); }
 void nvim_tag_clear_swap_command(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
-/// Format "tag X of Y" message into IObuff and return pointer.
-/// Used from Rust for show_match_msg to avoid direct IObuff access.
-const char *nvim_tag_format_match_msg(int cur_match, int num_matches, int max_num_matches)
+/// Format "tag N of M[or more]" into caller-provided buffer.
+void nvim_tag_snprintf_match_msg(char *buf, int buf_size, int cur_match, int num_matches, int max_num_matches)
 {
-  snprintf(IObuff, sizeof(IObuff), _("tag %d of %d%s"),
-           cur_match + 1,
-           num_matches,
+  snprintf(buf, (size_t)buf_size, _("tag %d of %d%s"),
+           cur_match + 1, num_matches,
            max_num_matches != MAXCOL ? _(" or more") : "");
-  return IObuff;
 }
-
-/// Append IC warning to IObuff.
-void nvim_tag_append_ic_warning(void)
+/// Append IC warning to caller-provided buffer.
+void nvim_tag_append_ic_warning_to_buf(char *buf, int buf_size)
 {
-  xstrlcat(IObuff, _("  Using tag with different case!"), IOSIZE);
+  xstrlcat(buf, _("  Using tag with different case!"), (size_t)buf_size);
 }
 
 void nvim_tag_emsg_stack_empty(void) { emsg(_(e_tag_stack_empty)); }

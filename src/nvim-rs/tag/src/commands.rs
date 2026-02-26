@@ -952,14 +952,6 @@ extern "C" {
     fn nvim_tag_get_curwin() -> *mut c_void;
     fn nvim_tag_fm_getname(tg: *const c_void, lead_len: c_int) -> *mut c_char;
     fn nvim_taggy_get_fmark_fnum(tg: *const c_void) -> c_int;
-    fn nvim_tag_list_format_entry(is_current: bool, i: c_int, mt_name: *const c_char);
-    fn nvim_tag_format_tags_line(
-        is_current: c_int,
-        idx: c_int,
-        cur_match: c_int,
-        tagname: *const c_char,
-        lnum: i64,
-    ) -> *const c_char;
 
     // Dictionary/list operations
     fn nvim_tag_tv_dict_alloc() -> DictHandle;
@@ -982,7 +974,6 @@ extern "C" {
     fn nvim_tag_set_errorlist(list: ListHandle, title: *const c_char);
 
     // Memory management
-    fn nvim_tag_snprintf_iobuff(fmt: *const c_char, ...);
     fn xmalloc(size: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
     fn nvim_tag_xstrlcpy(dst: *mut c_char, src: *const c_char, dstsize: usize);
@@ -1089,11 +1080,28 @@ pub unsafe extern "C" fn rs_print_tag_list(
             && ((nvim_get_g_do_tagpreview() != 0 && i == nvim_tag_get_ptag_cur_match())
                 || (use_tagstack && i == tagstack_cur_match));
 
-        // Format and print entry header
+        // Format and print entry header (inline port of nvim_tag_list_format_entry)
         let match_byte = *(*matches.add(i as usize)) as u8;
         let mt_idx = (match_byte & MT_MASK) as c_int;
         let mt_name = nvim_tag_get_mt_name(mt_idx);
-        nvim_tag_list_format_entry(is_current, i, mt_name);
+        {
+            // Format: "<prefix>%2d <mt_name> " where prefix is '>' or ' '
+            let prefix = if is_current {
+                b'>' as c_char
+            } else {
+                b' ' as c_char
+            };
+            let mut buf = [0u8; 32];
+            buf[0] = prefix as u8;
+            snprintf(
+                buf.as_mut_ptr().add(1).cast(),
+                31,
+                c"%2d %s ".as_ptr(),
+                i + 1,
+                mt_name,
+            );
+            nvim_tag_msg_puts(buf.as_ptr().cast());
+        }
 
         // Print tag kind if available
         let tagkind = tagp_tagkind(tagp_ptr);
@@ -1389,19 +1397,21 @@ pub unsafe extern "C" fn rs_add_llist_tags(
         }
     }
 
-    nvim_tag_snprintf_iobuff(c"ltag %s".as_ptr(), tag);
-    let iobuff = nvim_get_iobuff();
-    nvim_tag_set_errorlist(list, iobuff);
+    // Format "ltag <tag>" as the errorlist title directly into a local buffer
+    let mut title_buf = [0u8; MAXPATHL + 8];
+    snprintf(
+        title_buf.as_mut_ptr().cast(),
+        title_buf.len(),
+        c"ltag %s".as_ptr(),
+        tag,
+    );
+    nvim_tag_set_errorlist(list, title_buf.as_ptr().cast());
 
     nvim_tag_tv_list_free(list);
     xfree(fname.cast());
     xfree(cmd.cast());
 
     OK
-}
-
-extern "C" {
-    fn nvim_get_iobuff() -> *const c_char;
 }
 
 // -------------------------------------------------------------------------
@@ -1440,10 +1450,25 @@ pub unsafe extern "C" fn rs_do_tags() {
         let lnum = nvim_fmark_get_lnum(fmark) as i64;
         let cur_match = nvim_taggy_get_cur_match(entry);
 
-        // Inline Rust port of nvim_tag_do_tags_line (Phase 3)
-        let line_str =
-            nvim_tag_format_tags_line((i == tagstackidx) as c_int, i, cur_match, tagname, lnum);
-        nvim_tag_msg_outtrans(line_str, 0, false);
+        // Inline port of nvim_tag_format_tags_line (Phase 1 migration)
+        // Format: "%c%2d %2d %-15s %5lld  "
+        let is_current_char = if i == tagstackidx {
+            b'>' as c_char
+        } else {
+            b' ' as c_char
+        };
+        let mut line_buf = [0u8; 64];
+        snprintf(
+            line_buf.as_mut_ptr().cast(),
+            64,
+            c"%c%2d %2d %-15s %5lld  ".as_ptr(),
+            is_current_char as c_int,
+            i + 1,
+            cur_match + 1,
+            tagname,
+            lnum,
+        );
+        nvim_tag_msg_outtrans(line_buf.as_ptr().cast(), 0, false);
 
         let fmark_fnum = nvim_taggy_get_fmark_fnum(entry);
         let curbuf_fnum = nvim_get_curbuf_fnum();

@@ -82,14 +82,16 @@ extern "C" {
     fn nvim_tag_copy_fmark_from_entry(tagstack: *mut c_void, idx: c_int, out_buf: *mut c_void);
     fn nvim_tag_restore_fmark_to_entry(tagstack: *mut c_void, idx: c_int, buf: *const c_void);
     fn nvim_tag_prompt_for_selection() -> c_int;
-    fn nvim_tag_set_swap_command(name: *const c_char);
+    fn nvim_tag_set_vim_var_swapcommand(cmd: *const c_char);
     fn nvim_tag_clear_swap_command();
-    fn nvim_tag_format_match_msg(
+    fn nvim_tag_snprintf_match_msg(
+        buf: *mut c_char,
+        buf_size: c_int,
         cur_match: c_int,
         num_matches: c_int,
         max_num_matches: c_int,
-    ) -> *const c_char;
-    fn nvim_tag_append_ic_warning();
+    );
+    fn nvim_tag_append_ic_warning_to_buf(buf: *mut c_char, buf_size: c_int);
     fn nvim_tag_give_warning(msg: *const c_char, ic: bool);
     fn nvim_tag_get_KeyTyped() -> bool;
     fn nvim_taggy_get_fmark(tg: *const c_void) -> *const c_void;
@@ -1184,10 +1186,21 @@ pub unsafe extern "C" fn rs_do_tag(
                 && !skip_msg
             {
                 // Inline Rust port of nvim_tag_show_match_msg (Phase 1)
-                let msg_str = nvim_tag_format_match_msg(cur_match, NUM_MATCHES, MAX_NUM_MATCHES);
+                let mut msg_buf = [0u8; 256];
+                nvim_tag_snprintf_match_msg(
+                    msg_buf.as_mut_ptr().cast(),
+                    msg_buf.len() as c_int,
+                    cur_match,
+                    NUM_MATCHES,
+                    MAX_NUM_MATCHES,
+                );
                 if ic {
-                    nvim_tag_append_ic_warning();
+                    nvim_tag_append_ic_warning_to_buf(
+                        msg_buf.as_mut_ptr().cast(),
+                        msg_buf.len() as c_int,
+                    );
                 }
+                let msg_str: *const c_char = msg_buf.as_ptr().cast();
                 if (NUM_MATCHES > prev_num_matches || new_tag) && NUM_MATCHES > 1 {
                     nvim_tag_msg(msg_str, if ic { HLF_W } else { 0 });
                     nvim_tag_set_msg_scroll(1);
@@ -1204,8 +1217,20 @@ pub unsafe extern "C" fn rs_do_tag(
                 }
             }
 
-            // Set VV_SWAPCOMMAND and jump
-            nvim_tag_set_swap_command(name);
+            // Set VV_SWAPCOMMAND and jump (inline port of nvim_tag_set_swap_command)
+            let mut swap_cmd_buf = [0u8; 4096 + 8]; // name up to MAXPATHL + ":ta \r\0"
+            {
+                extern "C" {
+                    fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
+                }
+                snprintf(
+                    swap_cmd_buf.as_mut_ptr().cast(),
+                    swap_cmd_buf.len(),
+                    c":ta %s\r".as_ptr(),
+                    name,
+                );
+            }
+            nvim_tag_set_vim_var_swapcommand(swap_cmd_buf.as_ptr().cast());
             let jump_result =
                 crate::jump::rs_jumpto_tag(*MATCHES.offset(cur_match as isize), forceit, true);
             nvim_tag_clear_swap_command();
