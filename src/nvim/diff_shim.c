@@ -106,6 +106,7 @@ extern void rs_ex_diffgetput(exarg_T *eap);
 extern void rs_diffgetput(int addr_count, int idx_cur, int idx_from, int idx_to, linenr_T line1, linenr_T line2);
 extern void rs_run_linematch(diff_T *dp);
 extern void rs_compute_inline_diff(diff_T *dp);
+extern int rs_parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, int *num_anchors);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -731,79 +732,10 @@ void ex_diffoff(exarg_T *eap)
 
 /// Parse the diff anchors. If "check_only" is set, will only make sure the
 /// syntax is correct.
+/// Thin wrapper -- implementation moved to Rust (rs_parse_diffanchors in buffer.rs).
 static int parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, int *num_anchors)
 {
-  int i;
-  char *dia = (*buf->b_p_dia == NUL) ? p_dia : buf->b_p_dia;
-
-  buf_T *orig_curbuf = curbuf;
-  win_T *orig_curwin = curwin;
-
-  win_T *bufwin = NULL;
-  if (check_only) {
-    bufwin = curwin;
-  } else {
-    // Find the first window tied to this buffer and ignore the rest. Will
-    // only matter for window-specific addresses like `.` or `''`.
-    for (bufwin = firstwin; bufwin != NULL; bufwin = bufwin->w_next) {
-      if (bufwin->w_buffer == buf && bufwin->w_p_diff) {
-        break;
-      }
-    }
-    if (bufwin == NULL && *dia != NUL) {
-      // The buffer is hidden. Currently this is not supported due to the
-      // edge cases of needing to decide if an address is window-specific
-      // or not. We could add more checks in the future so we can detect
-      // whether an address relies on curwin to make this more fleixble.
-      emsg(_(e_diff_anchors_with_hidden_windows));
-      return FAIL;
-    }
-  }
-
-  for (i = 0; i < MAX_DIFF_ANCHORS && *dia != NUL; i++) {
-    if (*dia == ',') {  // don't allow empty values
-      return FAIL;
-    }
-
-    curbuf = buf;
-    curwin = bufwin;
-    const char *errormsg = NULL;
-    linenr_T lnum = get_address(NULL, &dia, ADDR_LINES, check_only, true, false, 1, &errormsg);
-    curbuf = orig_curbuf;
-    curwin = orig_curwin;
-
-    if (errormsg != NULL) {
-      emsg(errormsg);
-    }
-    if (dia == NULL) {  // error detected
-      return FAIL;
-    }
-    if (*dia != ',' && *dia != NUL) {
-      return FAIL;
-    }
-
-    if (!check_only
-        && (lnum == MAXLNUM || lnum <= 0 || lnum > buf->b_ml.ml_line_count + 1)) {
-      emsg(_(e_invrange));
-      return FAIL;
-    }
-
-    if (anchors != NULL) {
-      anchors[i] = lnum;
-    }
-
-    if (*dia == ',') {
-      dia++;
-    }
-  }
-  if (i == MAX_DIFF_ANCHORS && *dia != NUL) {
-    semsg(_(e_cannot_have_more_than_nr_diff_anchors), MAX_DIFF_ANCHORS);
-    return FAIL;
-  }
-  if (num_anchors != NULL) {
-    *num_anchors = i;
-  }
-  return OK;
+  return rs_parse_diffanchors(check_only, buf, anchors, num_anchors);
 }
 
 /// used for simple inline diff algorithm
@@ -1065,6 +997,18 @@ bool nvim_diff_win_get_w_p_fdm_starts_d(win_T *wp) { return wp->w_p_fdm[0] == 'd
 buf_T *nvim_diff_get_curtab_diffbuf_idx(int idx) { if (idx < 0 || idx >= DB_COUNT) { return NULL; } return curtab->tp_diffbuf[idx]; }
 bool nvim_diff_curbuf_is_curtab_diffbuf(int idx_to) { if (idx_to < 0 || idx_to >= DB_COUNT) { return false; } return rs_diff_buf_idx_tp(curbuf, curtab) == idx_to; }
 void nvim_diff_fire_diffupdated_curbuf(void) { apply_autocmds(EVENT_DIFFUPDATED, NULL, NULL, false, curbuf); }
+// Phase 6 (parse_diffanchors) accessors
+const char *nvim_diff_get_buf_dia(buf_T *buf) { return buf->b_p_dia; }
+const char *nvim_diff_get_p_dia(void) { return p_dia; }
+void nvim_diff_set_curwin_curbuf(win_T *wp) { curwin = wp; curbuf = wp->w_buffer; }
+void nvim_diff_restore_curwin_curbuf(win_T *old_curwin) { curwin = old_curwin; curbuf = old_curwin->w_buffer; }
+linenr_T nvim_diff_buf_get_ml_line_count(buf_T *buf) { return buf->b_ml.ml_line_count; }
+void nvim_diff_emsg_hidden_diff_anchors(void) { emsg(_(e_diff_anchors_with_hidden_windows)); }
+void nvim_diff_emsg_invrange(void) { emsg(_(e_invrange)); }
+void nvim_diff_semsg_too_many_anchors(int max) { semsg(_(e_cannot_have_more_than_nr_diff_anchors), max); }
+win_T *nvim_diff_get_firstwin(void) { return firstwin; }
+bool nvim_win_get_w_p_diff_bool(win_T *wp) { return wp->w_p_diff; }
+void nvim_diff_emsg(const char *msg) { emsg(msg); }
 // Phase 3 accessors: f_diff_hlID
 int64_t nvim_curbuf_changedtick_i64(void) { return (int64_t)buf_get_changedtick(curbuf); }
 int nvim_diff_tv_get_number_idx(typval_T *argvars, int idx) { return (int)tv_get_number(&argvars[idx]); }

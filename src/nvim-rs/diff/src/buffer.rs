@@ -1711,9 +1711,9 @@ pub unsafe extern "C" fn rs_diffopt_changed() -> c_int {
 /// Equivalent to C `diffanchors_changed`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_diffanchors_changed(buflocal: bool) -> c_int {
-    let result = nvim_diff_parse_diffanchors();
+    let curbuf = nvim_get_curbuf();
+    let result = rs_parse_diffanchors(true, curbuf, std::ptr::null_mut(), std::ptr::null_mut());
     if result == OK && (nvim_diff_get_diff_flags() & DIFF_ANCHOR != 0) {
-        let curbuf = nvim_get_curbuf();
         let mut tp = nvim_get_first_tabpage();
         while !tp.is_null() {
             if buflocal {
@@ -2294,7 +2294,6 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
 
     // Parse and sort diff anchors if enabled
     let diff_flags = nvim_diff_get_diff_flags();
-    let max_anchors = nvim_diff_max_anchors();
     let mut num_anchors: c_int = i32::MAX;
     let mut anchors = [[0 as LinenrT; MAX_DIFF_ANCHORS_RUST]; DB_COUNT as usize];
 
@@ -2304,9 +2303,14 @@ pub unsafe extern "C" fn rs_diff_try_update(dio: DiffioHandle, idx_orig: c_int, 
             if buf.is_null() {
                 continue;
             }
-            let buf_num =
-                nvim_diff_parse_buf_anchors(buf, anchors[idx as usize].as_mut_ptr(), max_anchors);
-            if buf_num < 0 {
+            let mut buf_num: c_int = 0;
+            let result = rs_parse_diffanchors(
+                false,
+                buf,
+                anchors[idx as usize].as_mut_ptr(),
+                std::ptr::addr_of_mut!(buf_num),
+            );
+            if result != OK {
                 nvim_diff_emsg_anchors();
                 num_anchors = 0;
                 anchors = [[0; MAX_DIFF_ANCHORS_RUST]; DB_COUNT as usize];
@@ -3471,6 +3475,169 @@ pub unsafe extern "C" fn rs_diff_ex_diffupdate(eap: ExargHandle) {
         rs_diff_redraw(true);
         nvim_diff_fire_diffupdated();
     }
+}
+
+// =============================================================================
+// Phase 6: parse_diffanchors migration
+// =============================================================================
+
+// C accessor declarations for parse_diffanchors.
+#[allow(dead_code)]
+extern "C" {
+    fn nvim_diff_get_buf_dia(buf: BufHandle) -> *const c_char;
+    fn nvim_diff_get_p_dia() -> *const c_char;
+    fn nvim_diff_set_curwin_curbuf(wp: WinHandle);
+    fn nvim_diff_restore_curwin_curbuf(old_curwin: WinHandle);
+    fn nvim_diff_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
+    fn nvim_diff_emsg_hidden_diff_anchors();
+    fn nvim_diff_emsg_invrange();
+    fn nvim_diff_semsg_too_many_anchors(max: c_int);
+    fn nvim_diff_get_firstwin() -> WinHandle;
+    fn nvim_win_get_w_p_diff_bool(wp: WinHandle) -> bool;
+    fn nvim_diff_emsg(msg: *const c_char);
+    fn rs_get_address(
+        eap: *mut c_void,
+        ptr: *mut *mut c_char,
+        addr_type: c_int,
+        skip: bool,
+        silent: bool,
+        to_other_file: c_int,
+        address_count: c_int,
+        errormsg: *mut *const c_char,
+    ) -> LinenrT;
+}
+
+// ADDR_LINES constant (must match C).
+const ADDR_LINES: c_int = 0;
+// Comma character as c_char (i8 on Linux; b',' = 44, fits in i8).
+const COMMA_CHAR: c_char = 44;
+// MAXLNUM as i32.
+const MAXLNUM_I32: LinenrT = i32::MAX;
+
+/// Parse the diff anchors option for buffer `buf`.
+///
+/// If `check_only` is true, only validates syntax.
+/// If `check_only` is false, resolves addresses and writes to `anchors`/`num_anchors`.
+///
+/// Returns `OK` on success, `FAIL` on error.
+///
+/// Replaces C `parse_diffanchors`.
+///
+/// # Safety
+/// Calls C functions that access global Neovim state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_diffanchors(
+    check_only: bool,
+    buf: BufHandle,
+    anchors: *mut LinenrT,
+    num_anchors: *mut c_int,
+) -> c_int {
+    // Get the option string: buf-local first, fall back to global.
+    let buf_dia = nvim_diff_get_buf_dia(buf);
+    let global_dia = nvim_diff_get_p_dia();
+    let dia_ptr: *const c_char = if *buf_dia == 0 { global_dia } else { buf_dia };
+
+    let orig_curwin = nvim_get_curwin();
+
+    // Find the window to use for address resolution.
+    let bufwin: WinHandle = if check_only {
+        orig_curwin
+    } else {
+        // Find the first diff window for this buffer.
+        let mut w = nvim_diff_get_firstwin();
+        let mut found = WinHandle::null();
+        while !w.is_null() {
+            if nvim_win_get_w_buffer(w) == buf && nvim_win_get_w_p_diff_bool(w) {
+                found = w;
+                break;
+            }
+            w = nvim_win_next(w);
+        }
+        if found.is_null() && *dia_ptr != 0 {
+            // Buffer is hidden and anchors are specified: unsupported.
+            nvim_diff_emsg_hidden_diff_anchors();
+            return FAIL;
+        }
+        found
+    };
+
+    let max_anchors = nvim_diff_max_anchors();
+    let mut i: c_int = 0;
+
+    // Make a mutable copy of the pointer into the option string.
+    // Safety: get_address advances the pointer but does not write through it for
+    // read-only option strings accessed in check_only mode; and in full mode the
+    // string comes from a mutable Neovim option buffer.
+    let mut dia: *mut c_char = dia_ptr.cast_mut();
+
+    while i < max_anchors && *dia != 0 {
+        // Disallow empty values (leading comma).
+        if *dia == COMMA_CHAR {
+            return FAIL;
+        }
+
+        // Temporarily set curwin/curbuf for address resolution.
+        if bufwin.is_null() {
+            // No window (hidden buf with empty dia): loop body unreachable.
+        } else {
+            nvim_diff_set_curwin_curbuf(bufwin);
+        }
+
+        let mut errormsg: *const c_char = std::ptr::null();
+        let lnum = rs_get_address(
+            std::ptr::null_mut(),
+            std::ptr::addr_of_mut!(dia),
+            ADDR_LINES,
+            check_only,
+            true,
+            0, // to_other_file = false
+            1,
+            std::ptr::addr_of_mut!(errormsg),
+        );
+
+        // Restore curwin/curbuf.
+        nvim_diff_restore_curwin_curbuf(orig_curwin);
+
+        if !errormsg.is_null() {
+            nvim_diff_emsg(errormsg);
+        }
+        if dia.is_null() {
+            // Error detected by get_address.
+            return FAIL;
+        }
+        if *dia != COMMA_CHAR && *dia != 0 {
+            return FAIL;
+        }
+
+        if !check_only
+            && (lnum == MAXLNUM_I32 || lnum <= 0 || lnum > nvim_diff_buf_get_ml_line_count(buf) + 1)
+        {
+            nvim_diff_emsg_invrange();
+            return FAIL;
+        }
+
+        if !anchors.is_null() {
+            // Safety: i < max_anchors <= MAX_DIFF_ANCHORS which is 20, so i fits in usize.
+            *anchors.add(i.unsigned_abs() as usize) = lnum;
+        }
+
+        if *dia == COMMA_CHAR {
+            dia = dia.add(1);
+        }
+
+        i += 1;
+    }
+
+    if i == max_anchors && *dia != 0 {
+        nvim_diff_semsg_too_many_anchors(max_anchors);
+        return FAIL;
+    }
+
+    if !num_anchors.is_null() {
+        *num_anchors = i;
+    }
+
+    OK
 }
 
 #[cfg(test)]
