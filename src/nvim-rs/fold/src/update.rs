@@ -304,22 +304,6 @@ extern "C" {
     fn nvim_changed_window_setting(wp: WinHandle);
     fn nvim_redraw_win_range_later(wp: WinHandle, top: LinenrT, bot: LinenrT);
 
-    // Fold static variable accessors
-    #[allow(dead_code)]
-    fn nvim_get_invalid_top() -> LinenrT;
-    fn nvim_set_invalid_top(val: LinenrT);
-    #[allow(dead_code)]
-    fn nvim_get_invalid_bot() -> LinenrT;
-    fn nvim_set_invalid_bot(val: LinenrT);
-    fn nvim_set_prev_lnum(val: LinenrT);
-    #[allow(dead_code)]
-    fn nvim_get_prev_lnum_lvl() -> c_int;
-    fn nvim_set_prev_lnum_lvl(val: c_int);
-
-    // Global fold changed flag
-    fn nvim_get_fold_changed() -> bool;
-    fn nvim_set_fold_changed(val: bool);
-
     // Diff context
     fn nvim_get_diff_context() -> LinenrT;
 
@@ -649,12 +633,9 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
     // Initialize fold line state
     let mut flp = FlineT::new(wp);
 
-    unsafe { nvim_set_fold_changed(false) };
-
-    unsafe {
-        nvim_set_invalid_top(top);
-        nvim_set_invalid_bot(bot);
-    }
+    crate::set_fold_changed(false);
+    crate::set_invalid_top(top);
+    crate::set_invalid_bot(bot);
 
     if kind == LevelGetterKind::Marker {
         // Init marker variables to speed up foldlevelMarker()
@@ -811,10 +792,8 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
 
         // A level 1 fold starts at a line with foldlevel > 0
         if flp.lvl > 0 {
-            unsafe {
-                nvim_set_invalid_top(flp.lnum);
-                nvim_set_invalid_bot(end);
-            }
+            crate::set_invalid_top(flp.lnum);
+            crate::set_invalid_bot(end);
             end = fold_update_iems_recurse(
                 wp,
                 gap,
@@ -840,7 +819,7 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
     crate::fold_remove_impl(wp, gap, start, end);
 
     // Redraw if folds changed
-    if unsafe { nvim_get_fold_changed() } && unsafe { nvim_win_get_p_fen(wp) } != 0 {
+    if crate::fold_changed() && unsafe { nvim_win_get_p_fen(wp) } != 0 {
         unsafe { nvim_changed_window_setting(wp) };
     }
 
@@ -849,7 +828,7 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
         unsafe { nvim_redraw_win_range_later(wp, top, end) };
     }
 
-    unsafe { nvim_set_invalid_top(0) };
+    crate::set_invalid_top(0);
 }
 
 /// Check if a level getter kind uses the "finish" behavior
@@ -1059,8 +1038,8 @@ fn fold_update_iems_recurse(
                                     nvim_fold_set_fd_len(fp, fd_len + fd_top - firstlnum);
                                     nvim_fold_set_fd_top(fp, firstlnum);
                                     nvim_fold_set_fd_small(fp, tristate::K_NONE);
-                                    nvim_set_fold_changed(true);
                                 }
+                                crate::set_fold_changed(true);
                                 fp_idx = found_idx;
                             } else if flp.start != 0 && lvl == level || firstlnum != startlnum {
                                 // Need to split the fold
@@ -1127,8 +1106,8 @@ fn fold_update_iems_recurse(
                                     MAXLNUM,
                                     0,
                                 );
-                                nvim_set_fold_changed(true);
                             }
+                            crate::set_fold_changed(true);
                         }
                     } else {
                         // No existing fold found, insert a new one
@@ -1161,8 +1140,8 @@ fn fold_update_iems_recurse(
                                 nvim_fold_set_fd_flags(fp, prev_flags);
                             }
                             nvim_fold_set_fd_small(fp, tristate::K_NONE);
-                            nvim_set_fold_changed(true);
                         }
+                        crate::set_fold_changed(true);
                         fp_idx = idx;
 
                         // Divergence point 3b: finish flag after insert
@@ -1191,8 +1170,8 @@ fn fold_update_iems_recurse(
                             }
                         }
                         nvim_fold_set_fd_small(fp, tristate::K_NONE);
-                        nvim_set_fold_changed(true);
                     }
+                    crate::set_fold_changed(true);
                     fp_idx = idx;
 
                     // Divergence point 3b: finish flag after insert
@@ -1248,10 +1227,8 @@ fn fold_update_iems_recurse(
 
             while unsafe { nvim_get_got_int() } == 0 {
                 // Make the previous level available to foldlevel()
-                unsafe {
-                    nvim_set_prev_lnum(flp.lnum);
-                    nvim_set_prev_lnum_lvl(flp.lvl);
-                }
+                crate::set_prev_lnum(flp.lnum);
+                crate::set_prev_lnum_lvl(flp.lvl);
 
                 flp.lnum += 1;
                 if flp.lnum > line_count {
@@ -1265,7 +1242,7 @@ fn fold_update_iems_recurse(
                     break;
                 }
             }
-            unsafe { nvim_set_prev_lnum(0) };
+            crate::set_prev_lnum(0);
 
             if flp.lnum > line_count {
                 break;
@@ -1290,8 +1267,8 @@ fn fold_update_iems_recurse(
         unsafe {
             nvim_fold_set_fd_len(fp, flp.lnum - fd_top);
             nvim_fold_set_fd_small(fp, tristate::K_NONE);
-            nvim_set_fold_changed(true);
         }
+        crate::set_fold_changed(true);
     } else if fd_top + fd_len > line_count {
         unsafe {
             nvim_fold_set_fd_len(fp, line_count - fd_top + 1);
@@ -1326,7 +1303,7 @@ fn fold_update_iems_recurse(
                     nvim_fold_set_fd_len(fp, flp.lnum - fd_top);
                 }
             }
-            unsafe { nvim_set_fold_changed(true) };
+            crate::set_fold_changed(true);
         }
     }
 
@@ -1360,8 +1337,8 @@ fn fold_update_iems_recurse(
                     );
                     nvim_fold_set_fd_len(fp2, fd2_len - (flp.lnum - fd2_top));
                     nvim_fold_set_fd_top(fp2, flp.lnum);
-                    nvim_set_fold_changed(true);
                 }
+                crate::set_fold_changed(true);
             }
 
             if lvl >= level {
@@ -1371,7 +1348,7 @@ fn fold_update_iems_recurse(
             break;
         }
 
-        unsafe { nvim_set_fold_changed(true) };
+        crate::set_fold_changed(true);
         crate::delete_fold_entry_impl(wp, gap, fp_idx + 1, true);
     }
 

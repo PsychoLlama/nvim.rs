@@ -27,12 +27,82 @@ pub use methods::{FoldLevelResult, FoldMethod};
 pub use tree::{FoldRange, FoldState, FoldTreeInfo, FoldUpdateRequest, FoldUpdateType};
 
 use std::ffi::{c_char, c_int, c_void};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use nvim_buffer::BufHandle;
 use nvim_window::WinHandle;
 
 /// Line number type (matches linenr_T in C).
 pub type LineNr = i32;
+
+// ============================================================================
+// Statics migrated from fold_shim.c (Phase 5, Pass 5)
+// ============================================================================
+
+/// Whether any folds changed during the last update (fold_changed in C).
+static FOLD_CHANGED: AtomicBool = AtomicBool::new(false);
+
+/// Top of the invalid fold range during an update (invalid_top in C).
+static INVALID_TOP: AtomicI32 = AtomicI32::new(0);
+
+/// Bottom of the invalid fold range during an update (invalid_bot in C).
+static INVALID_BOT: AtomicI32 = AtomicI32::new(0);
+
+/// Line number whose level is cached for foldlevel() chicken-egg problem (prev_lnum in C).
+static PREV_LNUM: AtomicI32 = AtomicI32::new(0);
+
+/// Fold level for prev_lnum; -1 means not available (prev_lnum_lvl in C).
+static PREV_LNUM_LVL: AtomicI32 = AtomicI32::new(-1);
+
+#[inline]
+pub(crate) fn fold_changed() -> bool {
+    FOLD_CHANGED.load(Ordering::Relaxed)
+}
+
+#[inline]
+pub(crate) fn set_fold_changed(val: bool) {
+    FOLD_CHANGED.store(val, Ordering::Relaxed);
+}
+
+#[inline]
+pub(crate) fn invalid_top() -> LineNr {
+    INVALID_TOP.load(Ordering::Relaxed)
+}
+
+#[inline]
+pub(crate) fn set_invalid_top(val: LineNr) {
+    INVALID_TOP.store(val, Ordering::Relaxed);
+}
+
+#[inline]
+pub(crate) fn invalid_bot() -> LineNr {
+    INVALID_BOT.load(Ordering::Relaxed)
+}
+
+#[inline]
+pub(crate) fn set_invalid_bot(val: LineNr) {
+    INVALID_BOT.store(val, Ordering::Relaxed);
+}
+
+#[inline]
+pub(crate) fn prev_lnum() -> LineNr {
+    PREV_LNUM.load(Ordering::Relaxed)
+}
+
+#[inline]
+pub(crate) fn set_prev_lnum(val: LineNr) {
+    PREV_LNUM.store(val, Ordering::Relaxed);
+}
+
+#[inline]
+pub(crate) fn prev_lnum_lvl() -> c_int {
+    PREV_LNUM_LVL.load(Ordering::Relaxed)
+}
+
+#[inline]
+pub(crate) fn set_prev_lnum_lvl(val: c_int) {
+    PREV_LNUM_LVL.store(val, Ordering::Relaxed);
+}
 
 /// Result struct for hasFoldingWin.
 ///
@@ -310,13 +380,6 @@ extern "C" {
     /// Free the ga_data pointer of a garray (for nested folds).
     fn nvim_ga_free_data(gap: GArrayHandle);
 
-    /// Set the fold_changed flag.
-    fn nvim_set_fold_changed(changed: bool);
-
-    /// Get the fold_changed flag.
-    #[allow(dead_code)]
-    fn nvim_get_fold_changed() -> bool;
-
     // ========================================================================
     // Phase 2: Fold State Management accessors
     // ========================================================================
@@ -357,22 +420,6 @@ extern "C" {
 
     /// Set the pc mark (for jump list).
     fn nvim_setpcmark();
-
-    // ========================================================================
-    // Phase 3: Fold level statics and query accessors
-    // ========================================================================
-
-    /// Get the invalid_top static.
-    fn nvim_get_invalid_top() -> LineNr;
-
-    /// Get the invalid_bot static.
-    fn nvim_get_invalid_bot() -> LineNr;
-
-    /// Get the prev_lnum static.
-    fn nvim_get_prev_lnum() -> LineNr;
-
-    /// Get the prev_lnum_lvl static.
-    fn nvim_get_prev_lnum_lvl() -> c_int;
 
     /// Get the p_fcl option value (pointer to NUL-terminated string).
     fn nvim_get_p_fcl() -> *const c_char;
@@ -1536,7 +1583,7 @@ pub(crate) fn fold_split_impl(
     // Truncate original fold
     unsafe {
         nvim_fold_set_fd_len(fp, top - fd_top);
-        nvim_set_fold_changed(true);
+        set_fold_changed(true);
     }
 }
 
@@ -1597,7 +1644,7 @@ pub(crate) fn fold_remove_impl(wp: WinHandle, gap: GArrayHandle, top: LineNr, bo
                 // 2: truncate fold at "top".
                 unsafe { nvim_fold_set_fd_len(fp, top - fd_top) };
             }
-            unsafe { nvim_set_fold_changed(true) };
+            set_fold_changed(true);
             continue;
         }
 
@@ -1610,7 +1657,7 @@ pub(crate) fn fold_remove_impl(wp: WinHandle, gap: GArrayHandle, top: LineNr, bo
 
         if fd_top >= top {
             // Found an entry below top.
-            unsafe { nvim_set_fold_changed(true) };
+            set_fold_changed(true);
 
             if fd_top + fd_len - 1 > bot {
                 // 5: Make fold that includes bot start below bot.
@@ -1710,7 +1757,7 @@ pub(crate) fn fold_merge_impl(wp: WinHandle, fp1_idx: c_int, gap: GArrayHandle, 
     }
 
     delete_fold_entry_impl(wp, gap, fp2_idx, true);
-    unsafe { nvim_set_fold_changed(true) };
+    set_fold_changed(true);
 }
 
 /// Helper function that returns both found status and index.
@@ -3451,17 +3498,17 @@ pub(crate) fn checkupdate_impl(wp: WinHandle) {
 fn fold_level_impl(lnum: LineNr) -> c_int {
     let curwin = unsafe { nvim_get_curwin() };
 
-    let invalid_top = unsafe { nvim_get_invalid_top() };
-    if invalid_top == 0 {
+    let inv_top = invalid_top();
+    if inv_top == 0 {
         checkupdate_impl(curwin);
     } else {
-        let prev_lnum = unsafe { nvim_get_prev_lnum() };
-        let prev_lnum_lvl = unsafe { nvim_get_prev_lnum_lvl() };
-        if lnum == prev_lnum && prev_lnum_lvl >= 0 {
-            return prev_lnum_lvl;
+        let p_lnum = prev_lnum();
+        let p_lnum_lvl = prev_lnum_lvl();
+        if lnum == p_lnum && p_lnum_lvl >= 0 {
+            return p_lnum_lvl;
         }
-        let invalid_bot = unsafe { nvim_get_invalid_bot() };
-        if lnum >= invalid_top && lnum <= invalid_bot {
+        let inv_bot = invalid_bot();
+        if lnum >= inv_top && lnum <= inv_bot {
             return -1;
         }
     }

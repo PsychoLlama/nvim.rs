@@ -60,32 +60,7 @@
 
 // fold_T is defined in fold_defs.h
 
-enum {
-  FD_OPEN = 0,    // fold is open (nested ones can be closed)
-  FD_CLOSED = 1,  // fold is closed
-  FD_LEVEL = 2,   // depends on 'foldlevel' (nested folds too)
-};
-
-#define MAX_LEVEL       20      // maximum fold depth
-
-// Define "fline_T", passed to get fold level for a line. {{{2
-typedef struct {
-  win_T *wp;              // window
-  linenr_T lnum;                // current line number
-  linenr_T off;                 // offset between lnum and real line number
-  linenr_T lnum_save;           // line nr used by fold update recursion
-  int lvl;                      // current level (-1 for undefined)
-  int lvl_next;                 // level used for next line
-  int start;                    // number of folds that are forced to start at
-                                // this line.
-  int end;                      // level of fold that is forced to end below
-                                // this line
-  int had_end;                  // level of fold that is forced to end above
-                                // this line (copy of "end" of prev. line)
-} fline_T;
-
-// Flag is set when redrawing is needed.
-static bool fold_changed;
+// fold_changed, invalid_top, invalid_bot, prev_lnum, prev_lnum_lvl -- migrated to Rust statics (Phase 5 Pass 5)
 
 // static functions {{{2
 
@@ -107,19 +82,6 @@ typedef struct {
 extern FoldingResult rs_hasFoldingWin(win_T *win, linenr_T lnum, bool cache);
 
 static const char *e_nofold = N_("E490: No fold found");
-
-// While updating the folds lines between invalid_top and invalid_bot have an
-// undefined fold level.  Only used for the window currently being updated.
-static linenr_T invalid_top = 0;
-static linenr_T invalid_bot = 0;
-
-// When using 'foldexpr' we sometimes get the level of the next line, which
-// calls foldlevel() to get the level of the current line, which hasn't been
-// stored yet.  To get around this chicken-egg problem the level of the
-// previous line is stored here when available.  prev_lnum is zero when the
-// level is not available.
-static linenr_T prev_lnum = 0;
-static int prev_lnum_lvl = -1;
 
 // foldstartmarkerlen/foldendmarker/foldendmarkerlen -- deleted (Rust uses parse_marker_impl directly)
 
@@ -633,17 +595,7 @@ void nvim_ga_free_data(garray_T *gap)
   gap->ga_len = 0;
 }
 
-/// Set the fold_changed flag.
-void nvim_set_fold_changed(bool changed)
-{
-  fold_changed = changed;
-}
-
-/// Get the fold_changed flag.
-bool nvim_get_fold_changed(void)
-{
-  return fold_changed;
-}
+// nvim_set_fold_changed/nvim_get_fold_changed -- migrated to Rust static FOLD_CHANGED (Phase 5 Pass 5)
 
 // ============================================================================
 // Fold State Management accessors
@@ -805,15 +757,7 @@ void nvim_redraw_win_range_later(win_T *wp, linenr_T top, linenr_T bot)
 
 // nvim_foldFind -- deleted (Rust uses fold_find_impl directly)
 
-// Accessors for fold statics
-linenr_T nvim_get_invalid_top(void) { return invalid_top; }
-void nvim_set_invalid_top(linenr_T val) { invalid_top = val; }
-linenr_T nvim_get_invalid_bot(void) { return invalid_bot; }
-void nvim_set_invalid_bot(linenr_T val) { invalid_bot = val; }
-linenr_T nvim_get_prev_lnum(void) { return prev_lnum; }
-void nvim_set_prev_lnum(linenr_T val) { prev_lnum = val; }
-int nvim_get_prev_lnum_lvl(void) { return prev_lnum_lvl; }
-void nvim_set_prev_lnum_lvl(int val) { prev_lnum_lvl = val; }
+// nvim_get/set_invalid_top/bot, nvim_get/set_prev_lnum/lvl -- migrated to Rust statics (Phase 5 Pass 5)
 
 /// Get the p_fcl option value.
 char *nvim_get_p_fcl(void) { return p_fcl; }
