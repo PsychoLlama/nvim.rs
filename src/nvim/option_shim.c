@@ -1676,30 +1676,7 @@ static void set_init_default_cdpath(void)
   rs_set_init_default_cdpath();
 }
 
-/// Expand environment variables and things like "~" for the defaults.
-/// If option_expand() returns non-NULL the variable is expanded.  This can
-/// only happen for non-indirect options.
-/// Also set the default to the expanded value, so ":set" does not list
-/// them.
-static void set_init_expand_env(void)
-{
-  for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
-    vimoption_T *opt = &options[opt_idx];
-    if (opt->flags & kOptFlagNoDefExp) {
-      continue;
-    }
-    char *p;
-    if ((opt->flags & kOptFlagGettext) && opt->var != NULL) {
-      p = _(*(char **)opt->var);
-    } else {
-      p = option_expand(opt_idx, NULL);
-    }
-    if (p != NULL) {
-      set_option_varp(opt_idx, opt->var, CSTR_TO_OPTVAL(p), true);
-      change_option_default(opt_idx, CSTR_TO_OPTVAL(p));
-    }
-  }
-}
+// set_init_expand_env is now called via nvim_call_set_init_expand_env from Rust (Phase 11 section).
 
 extern void rs_set_init_fenc_default(void);
 
@@ -1709,97 +1686,7 @@ static void set_init_fenc_default(void)
   rs_set_init_fenc_default();
 }
 
-/// Initialize the options, first part.
-///
-/// Called only once from main(), just after creating the first buffer.
-/// If "clean_arg" is true, Nvim was started with --clean.
-///
-/// NOTE: ELOG() etc calls are not allowed here, as log location depends on
-/// env var expansion which depends on expression evaluation and other
-/// editor state initialized here. Do logging in set_init_2 or later.
-void set_init_1(bool clean_arg)
-{
-  langmap_init();
-
-  // Allocate the default option values.
-  alloc_options_default();
-
-  set_init_default_shell();
-  set_init_default_backupskip();
-  set_init_default_cdpath();
-
-  char *backupdir = stdpaths_user_state_subpath("backup", 2, true);
-  const size_t backupdir_len = strlen(backupdir);
-  backupdir = xrealloc(backupdir, backupdir_len + 3);
-  memmove(backupdir + 2, backupdir, backupdir_len + 1);
-  memmove(backupdir, ".,", 2);
-  set_string_default(kOptBackupdir, backupdir, true);
-  set_string_default(kOptViewdir, stdpaths_user_state_subpath("view", 2, true),
-                     true);
-  set_string_default(kOptDirectory, stdpaths_user_state_subpath("swap", 2, true),
-                     true);
-  set_string_default(kOptUndodir, stdpaths_user_state_subpath("undo", 2, true),
-                     true);
-  // Set default for &runtimepath. All necessary expansions are performed in
-  // this function.
-  char *rtp = runtimepath_default(clean_arg);
-  if (rtp) {
-    set_string_default(kOptRuntimepath, rtp, true);
-    // Make a copy of 'rtp' for 'packpath'
-    set_string_default(kOptPackpath, rtp, false);
-    rtp = NULL;  // ownership taken
-  }
-
-  // Set all the options (except the terminal options) to their default
-  // value.  Also set the global value for local options.
-  set_options_default(0);
-
-  curbuf->b_p_initialized = true;
-  curbuf->b_p_ac = -1;
-  curbuf->b_p_ar = -1;          // no local 'autoread' value
-  curbuf->b_p_ul = NO_LOCAL_UNDOLEVEL;
-  check_buf_options(curbuf);
-  check_win_options(curwin);
-  check_options();
-
-  // set 'laststatus'
-  rs_last_status(0);
-
-  // Must be before option_expand(), because that one needs vim_isIDc()
-  didset_options();
-
-  // Use the current chartab for the generic chartab. This is not in
-  // didset_options() because it only depends on 'encoding'.
-  init_spell_chartab();
-
-  // Expand environment variables and things like "~" for the defaults.
-  set_init_expand_env();
-
-  save_file_ff(curbuf);         // Buffer is unchanged
-
-  // Detect use of mlterm.
-  // Mlterm is a terminal emulator akin to xterm that has some special
-  // abilities (bidi namely).
-  // NOTE: mlterm's author is being asked to 'set' a variable
-  //       instead of an environment variable due to inheritance.
-  if (os_env_exists("MLTERM", false)) {
-    set_option_value_give_err(kOptTermbidi, BOOLEAN_OPTVAL(true), 0);
-  }
-
-  didset_options2();
-
-  lang_init();
-  set_init_fenc_default();
-
-#ifdef HAVE_WORKING_LIBINTL
-  // GNU gettext 0.10.37 supports this feature: set the codeset used for
-  // translated messages independently from the current locale.
-  (void)bind_textdomain_codeset(PROJECT_NAME, p_enc);
-#endif
-
-  // Set the default for 'helplang'.
-  set_helplang_default(get_mess_lang());
-}
+// set_init_1 is now in the Phase 11 section at the bottom of this file (delegates to rs_set_init_1).
 
 /// Get default value for option, based on the option's type and scope.
 ///
@@ -2945,293 +2832,7 @@ void didset_window_options(win_T *wp, bool valid_cursor)
   rs_didset_window_options(wp, (int)valid_cursor);
 }
 
-#define COPY_OPT_SCTX(buf, bv) buf->b_p_script_ctx[bv] = options[buf_opt_idx[bv]].script_ctx
-
-/// Copy global option values to local options for one buffer.
-/// Used when creating a new buffer and sometimes when entering a buffer.
-/// flags:
-/// BCO_ENTER    We will enter the buffer "buf".
-/// BCO_ALWAYS   Always copy the options, but only set b_p_initialized when
-///      appropriate.
-/// BCO_NOHELP   Don't copy the values to a help buffer.
-void buf_copy_options(buf_T *buf, int flags)
-{
-  bool should_copy = true;
-  char *save_p_isk = NULL;           // init for GCC
-  bool did_isk = false;
-
-  // Skip this when the option defaults have not been set yet.  Happens when
-  // main() allocates the first buffer.
-  if (p_cpo != NULL) {
-    //
-    // Always copy when entering and 'cpo' contains 'S'.
-    // Don't copy when already initialized.
-    // Don't copy when 'cpo' contains 's' and not entering.
-    //    'S'      BCO_ENTER  initialized  's'  should_copy
-    //    yes        yes          X         X      true
-    //    yes        no          yes        X      false
-    //    no          X          yes        X      false
-    //     X         no          no        yes     false
-    //     X         no          no        no      true
-    //    no         yes         no         X      true
-    ///
-    if ((vim_strchr(p_cpo, CPO_BUFOPTGLOB) == NULL || !(flags & BCO_ENTER))
-        && (buf->b_p_initialized
-            || (!(flags & BCO_ENTER)
-                && vim_strchr(p_cpo, CPO_BUFOPT) != NULL))) {
-      should_copy = false;
-    }
-
-    if (should_copy || (flags & BCO_ALWAYS)) {
-      CLEAR_FIELD(buf->b_p_script_ctx);
-      // Don't copy the options specific to a help buffer when
-      // BCO_NOHELP is given or the options were initialized already
-      // (jumping back to a help file with CTRL-T or CTRL-O)
-      bool dont_do_help = ((flags & BCO_NOHELP) && buf->b_help) || buf->b_p_initialized;
-      if (dont_do_help) {               // don't free b_p_isk
-        save_p_isk = buf->b_p_isk;
-        buf->b_p_isk = NULL;
-      }
-      // Always free the allocated strings.  If not already initialized,
-      // reset 'readonly' and copy 'fileformat'.
-      if (!buf->b_p_initialized) {
-        free_buf_options(buf, true);
-        buf->b_p_ro = false;                    // don't copy readonly
-        buf->b_p_fenc = xstrdup(p_fenc);
-        switch (*p_ffs) {
-        case 'm':
-          buf->b_p_ff = xstrdup("mac");
-          break;
-        case 'd':
-          buf->b_p_ff = xstrdup("dos");
-          break;
-        case 'u':
-          buf->b_p_ff = xstrdup("unix");
-          break;
-        default:
-          buf->b_p_ff = xstrdup(p_ff);
-          break;
-        }
-        buf->b_p_bh = empty_string_option;
-        buf->b_p_bt = empty_string_option;
-      } else {
-        free_buf_options(buf, false);
-      }
-
-      buf->b_p_ai = p_ai;
-      COPY_OPT_SCTX(buf, kBufOptAutoindent);
-      buf->b_p_ai_nopaste = p_ai_nopaste;
-      buf->b_p_sw = p_sw;
-      COPY_OPT_SCTX(buf, kBufOptShiftwidth);
-      buf->b_p_scbk = p_scbk;
-      COPY_OPT_SCTX(buf, kBufOptScrollback);
-      buf->b_p_tw = p_tw;
-      COPY_OPT_SCTX(buf, kBufOptTextwidth);
-      buf->b_p_tw_nopaste = p_tw_nopaste;
-      buf->b_p_tw_nobin = p_tw_nobin;
-      buf->b_p_wm = p_wm;
-      COPY_OPT_SCTX(buf, kBufOptWrapmargin);
-      buf->b_p_wm_nopaste = p_wm_nopaste;
-      buf->b_p_wm_nobin = p_wm_nobin;
-      buf->b_p_bin = p_bin;
-      COPY_OPT_SCTX(buf, kBufOptBinary);
-      buf->b_p_bomb = p_bomb;
-      COPY_OPT_SCTX(buf, kBufOptBomb);
-      buf->b_p_et = p_et;
-      COPY_OPT_SCTX(buf, kBufOptExpandtab);
-      buf->b_p_fixeol = p_fixeol;
-      COPY_OPT_SCTX(buf, kBufOptFixendofline);
-      buf->b_p_et_nobin = p_et_nobin;
-      buf->b_p_et_nopaste = p_et_nopaste;
-      buf->b_p_ml = p_ml;
-      COPY_OPT_SCTX(buf, kBufOptModeline);
-      buf->b_p_ml_nobin = p_ml_nobin;
-      buf->b_p_inf = p_inf;
-      COPY_OPT_SCTX(buf, kBufOptInfercase);
-      if (cmdmod.cmod_flags & CMOD_NOSWAPFILE) {
-        buf->b_p_swf = false;
-      } else {
-        buf->b_p_swf = p_swf;
-        COPY_OPT_SCTX(buf, kBufOptSwapfile);
-      }
-      buf->b_p_cpt = xstrdup(p_cpt);
-      COPY_OPT_SCTX(buf, kBufOptComplete);
-      set_buflocal_cpt_callbacks(buf);
-#ifdef BACKSLASH_IN_FILENAME
-      buf->b_p_csl = xstrdup(p_csl);
-      COPY_OPT_SCTX(buf, kBufOptCompleteslash);
-#endif
-      buf->b_p_cfu = xstrdup(p_cfu);
-      COPY_OPT_SCTX(buf, kBufOptCompletefunc);
-      set_buflocal_cfu_callback(buf);
-      buf->b_p_ofu = xstrdup(p_ofu);
-      COPY_OPT_SCTX(buf, kBufOptOmnifunc);
-      set_buflocal_ofu_callback(buf);
-      buf->b_p_tfu = xstrdup(p_tfu);
-      COPY_OPT_SCTX(buf, kBufOptTagfunc);
-      rs_set_buflocal_tfu_callback(buf);
-      buf->b_p_sts = p_sts;
-      COPY_OPT_SCTX(buf, kBufOptSofttabstop);
-      buf->b_p_sts_nopaste = p_sts_nopaste;
-      buf->b_p_vsts = xstrdup(p_vsts);
-      COPY_OPT_SCTX(buf, kBufOptVarsofttabstop);
-      if (p_vsts && p_vsts != empty_string_option) {
-        tabstop_set(p_vsts, &buf->b_p_vsts_array);
-      } else {
-        buf->b_p_vsts_array = NULL;
-      }
-      buf->b_p_vsts_nopaste = p_vsts_nopaste ? xstrdup(p_vsts_nopaste) : NULL;
-      buf->b_p_com = xstrdup(p_com);
-      COPY_OPT_SCTX(buf, kBufOptComments);
-      buf->b_p_cms = xstrdup(p_cms);
-      COPY_OPT_SCTX(buf, kBufOptCommentstring);
-      buf->b_p_fo = xstrdup(p_fo);
-      COPY_OPT_SCTX(buf, kBufOptFormatoptions);
-      buf->b_p_flp = xstrdup(p_flp);
-      COPY_OPT_SCTX(buf, kBufOptFormatlistpat);
-      buf->b_p_nf = xstrdup(p_nf);
-      COPY_OPT_SCTX(buf, kBufOptNrformats);
-      buf->b_p_mps = xstrdup(p_mps);
-      COPY_OPT_SCTX(buf, kBufOptMatchpairs);
-      buf->b_p_si = p_si;
-      COPY_OPT_SCTX(buf, kBufOptSmartindent);
-      buf->b_p_channel = 0;
-      buf->b_p_ci = p_ci;
-
-      COPY_OPT_SCTX(buf, kBufOptCopyindent);
-      buf->b_p_cin = p_cin;
-      COPY_OPT_SCTX(buf, kBufOptCindent);
-      buf->b_p_cink = xstrdup(p_cink);
-      COPY_OPT_SCTX(buf, kBufOptCinkeys);
-      buf->b_p_cino = xstrdup(p_cino);
-      COPY_OPT_SCTX(buf, kBufOptCinoptions);
-      buf->b_p_cinsd = xstrdup(p_cinsd);
-      COPY_OPT_SCTX(buf, kBufOptCinscopedecls);
-      buf->b_p_lop = xstrdup(p_lop);
-      COPY_OPT_SCTX(buf, kBufOptLispoptions);
-
-      // Don't copy 'filetype', it must be detected
-      buf->b_p_ft = empty_string_option;
-      buf->b_p_pi = p_pi;
-      COPY_OPT_SCTX(buf, kBufOptPreserveindent);
-      buf->b_p_cinw = xstrdup(p_cinw);
-      COPY_OPT_SCTX(buf, kBufOptCinwords);
-      buf->b_p_lisp = p_lisp;
-      COPY_OPT_SCTX(buf, kBufOptLisp);
-      // Don't copy 'syntax', it must be set
-      buf->b_p_syn = empty_string_option;
-      buf->b_p_smc = p_smc;
-      COPY_OPT_SCTX(buf, kBufOptSynmaxcol);
-      buf->b_s.b_syn_isk = empty_string_option;
-      buf->b_s.b_p_spc = xstrdup(p_spc);
-      COPY_OPT_SCTX(buf, kBufOptSpellcapcheck);
-      compile_cap_prog(&buf->b_s);
-      buf->b_s.b_p_spf = xstrdup(p_spf);
-      COPY_OPT_SCTX(buf, kBufOptSpellfile);
-      buf->b_s.b_p_spl = xstrdup(p_spl);
-      COPY_OPT_SCTX(buf, kBufOptSpelllang);
-      buf->b_s.b_p_spo = xstrdup(p_spo);
-      COPY_OPT_SCTX(buf, kBufOptSpelloptions);
-      buf->b_s.b_p_spo_flags = spo_flags;
-      buf->b_p_inde = xstrdup(p_inde);
-      COPY_OPT_SCTX(buf, kBufOptIndentexpr);
-      buf->b_p_indk = xstrdup(p_indk);
-      COPY_OPT_SCTX(buf, kBufOptIndentkeys);
-      buf->b_p_fp = empty_string_option;
-      buf->b_p_fex = xstrdup(p_fex);
-      COPY_OPT_SCTX(buf, kBufOptFormatexpr);
-      buf->b_p_sua = xstrdup(p_sua);
-      COPY_OPT_SCTX(buf, kBufOptSuffixesadd);
-      buf->b_p_keymap = xstrdup(p_keymap);
-      COPY_OPT_SCTX(buf, kBufOptKeymap);
-      buf->b_kmap_state |= KEYMAP_INIT;
-      // This isn't really an option, but copying the langmap and IME
-      // state from the current buffer is better than resetting it.
-      buf->b_p_iminsert = p_iminsert;
-      COPY_OPT_SCTX(buf, kBufOptIminsert);
-      buf->b_p_imsearch = p_imsearch;
-      COPY_OPT_SCTX(buf, kBufOptImsearch);
-
-      // options that are normally global but also have a local value
-      // are not copied, start using the global value
-      buf->b_p_ac = -1;
-      buf->b_p_ar = -1;
-      buf->b_p_ul = NO_LOCAL_UNDOLEVEL;
-      buf->b_p_bkc = empty_string_option;
-      buf->b_bkc_flags = 0;
-      buf->b_p_gefm = empty_string_option;
-      buf->b_p_gp = empty_string_option;
-      buf->b_p_mp = empty_string_option;
-      buf->b_p_efm = empty_string_option;
-      buf->b_p_ep = empty_string_option;
-      buf->b_p_ffu = empty_string_option;
-      buf->b_p_kp = empty_string_option;
-      buf->b_p_path = empty_string_option;
-      buf->b_p_tags = empty_string_option;
-      buf->b_p_tc = empty_string_option;
-      buf->b_tc_flags = 0;
-      buf->b_p_def = empty_string_option;
-      buf->b_p_inc = empty_string_option;
-      buf->b_p_inex = xstrdup(p_inex);
-      COPY_OPT_SCTX(buf, kBufOptIncludeexpr);
-      buf->b_p_cot = empty_string_option;
-      buf->b_cot_flags = 0;
-      buf->b_p_dict = empty_string_option;
-      buf->b_p_dia = empty_string_option;
-      buf->b_p_tsr = empty_string_option;
-      buf->b_p_tsrfu = empty_string_option;
-      buf->b_p_qe = xstrdup(p_qe);
-      COPY_OPT_SCTX(buf, kBufOptQuoteescape);
-      buf->b_p_udf = p_udf;
-      COPY_OPT_SCTX(buf, kBufOptUndofile);
-      buf->b_p_lw = empty_string_option;
-      buf->b_p_menc = empty_string_option;
-
-      // Don't copy the options set by ex_help(), use the saved values,
-      // when going from a help buffer to a non-help buffer.
-      // Don't touch these at all when BCO_NOHELP is used and going from
-      // or to a help buffer.
-      if (dont_do_help) {
-        buf->b_p_isk = save_p_isk;
-        if (p_vts && *p_vts != NUL && !buf->b_p_vts_array) {
-          tabstop_set(p_vts, &buf->b_p_vts_array);
-        } else {
-          buf->b_p_vts_array = NULL;
-        }
-      } else {
-        buf->b_p_isk = xstrdup(p_isk);
-        COPY_OPT_SCTX(buf, kBufOptIskeyword);
-        did_isk = true;
-        buf->b_p_ts = p_ts;
-        COPY_OPT_SCTX(buf, kBufOptTabstop);
-        buf->b_p_vts = xstrdup(p_vts);
-        COPY_OPT_SCTX(buf, kBufOptVartabstop);
-        if (p_vts && *p_vts != NUL && !buf->b_p_vts_array) {
-          tabstop_set(p_vts, &buf->b_p_vts_array);
-        } else {
-          buf->b_p_vts_array = NULL;
-        }
-        buf->b_help = false;
-        if (buf->b_p_bt[0] == 'h') {
-          clear_string_option(&buf->b_p_bt);
-        }
-        buf->b_p_ma = p_ma;
-        COPY_OPT_SCTX(buf, kBufOptModifiable);
-      }
-    }
-
-    // When the options should be copied (ignoring BCO_ALWAYS), set the
-    // flag that indicates that the options have been initialized.
-    if (should_copy) {
-      buf->b_p_initialized = true;
-    }
-  }
-
-  check_buf_options(buf);           // make sure we don't have NULLs
-  if (did_isk) {
-    buf_init_chartab(buf, false);
-  }
-}
+// buf_copy_options is now in the Phase 11 section at the bottom of this file.
 
 /// Reset the 'modifiable' option and its default value.
 void reset_modifiable(void)
@@ -4059,5 +3660,590 @@ void nvim_ui_call_option_set(OptIndex opt_idx, OptVal saved_new_value)
 
 // rs_set_option_impl is declared at the top of the extern declarations section above.
 
+// =============================================================================
+// Phase 11 (pass 11) accessors: buf_copy_options
+// =============================================================================
 
+extern void rs_buf_copy_options(void *buf, int flags);
 
+/// Copy global option values to local options for one buffer.
+/// Delegates all control flow to Rust; C handles only the mechanical bulk copy.
+void buf_copy_options(buf_T *buf, int flags)
+{
+  rs_buf_copy_options(buf, flags);
+}
+
+/// Returns cmdmod.cmod_flags (used by Rust to check CMOD_NOSWAPFILE).
+int nvim_cmdmod_get_cmod_flags(void)
+{
+  return cmdmod.cmod_flags;
+}
+
+/// Returns the CMOD_NOSWAPFILE constant.
+int nvim_get_cmod_noswapfile(void)
+{
+  return (int)CMOD_NOSWAPFILE;
+}
+
+/// Returns BCO_ENTER constant.
+int nvim_get_bco_enter(void) { return (int)BCO_ENTER; }
+/// Returns BCO_ALWAYS constant.
+int nvim_get_bco_always(void) { return (int)BCO_ALWAYS; }
+/// Returns BCO_NOHELP constant.
+int nvim_get_bco_nohelp(void) { return (int)BCO_NOHELP; }
+
+/// Returns CPO_BUFOPTGLOB character ('S') as int.
+int nvim_get_cpo_bufoptglob(void) { return (unsigned char)CPO_BUFOPTGLOB; }
+/// Returns CPO_BUFOPT character ('s') as int.
+int nvim_get_cpo_bufopt(void) { return (unsigned char)CPO_BUFOPT; }
+
+/// Returns buf->b_p_initialized.
+int nvim_buf_get_b_p_initialized(buf_T *buf) { return buf->b_p_initialized ? 1 : 0; }
+/// Sets buf->b_p_initialized.
+void nvim_buf_set_b_p_initialized(buf_T *buf, int val) { buf->b_p_initialized = val != 0; }
+
+/// Returns buf->b_help.
+int nvim_buf_get_b_help(buf_T *buf) { return buf->b_help ? 1 : 0; }
+/// Sets buf->b_help.
+void nvim_buf_set_b_help(buf_T *buf, int val) { buf->b_help = val != 0; }
+
+/// CLEAR_FIELD(buf->b_p_script_ctx) -- zeroes the script_ctx array for the buffer.
+void nvim_buf_clear_b_p_script_ctx(buf_T *buf) { CLEAR_FIELD(buf->b_p_script_ctx); }
+
+/// Returns 1 if buf->b_p_bt[0] == 'h' (help buftype), else 0.
+int nvim_buf_get_b_p_bt_is_help(buf_T *buf)
+{
+  return (buf->b_p_bt && buf->b_p_bt[0] == 'h') ? 1 : 0;
+}
+
+/// Saves b_p_isk pointer and NULLs the field.
+/// Returns the saved pointer.
+char *nvim_buf_save_and_clear_b_p_isk(buf_T *buf)
+{
+  char *saved = buf->b_p_isk;
+  buf->b_p_isk = NULL;
+  return saved;
+}
+
+/// Restores b_p_isk from a previously saved pointer.
+void nvim_buf_restore_b_p_isk(buf_T *buf, char *saved) { buf->b_p_isk = saved; }
+
+/// buf->b_p_ro = false
+void nvim_buf_clear_b_p_ro(buf_T *buf) { buf->b_p_ro = false; }
+
+/// free_buf_options(buf, free_flags)
+void nvim_call_free_buf_options(buf_T *buf, int free_flags) { free_buf_options(buf, free_flags != 0); }
+
+/// check_buf_options(buf)
+void nvim_call_check_buf_options(buf_T *buf) { check_buf_options(buf); }
+
+/// buf_init_chartab(buf, false)
+void nvim_call_buf_init_chartab_buf(buf_T *buf) { buf_init_chartab(buf, false); }
+
+/// compile_cap_prog(&buf->b_s)
+void nvim_call_compile_cap_prog_buf(buf_T *buf) { compile_cap_prog(&buf->b_s); }
+
+/// tabstop_set(str, &buf->b_p_vsts_array)
+void nvim_call_tabstop_set_vsts(buf_T *buf, const char *str) { tabstop_set(str, &buf->b_p_vsts_array); }
+/// tabstop_set(str, &buf->b_p_vts_array)
+void nvim_call_tabstop_set_vts(buf_T *buf, const char *str) { tabstop_set(str, &buf->b_p_vts_array); }
+
+/// Returns buf->b_p_vts_array (for null check)
+int nvim_buf_get_b_p_vts_array_is_null(buf_T *buf) { return buf->b_p_vts_array == NULL ? 1 : 0; }
+
+/// set_buflocal_cpt_callbacks(buf)
+void nvim_call_set_buflocal_cpt_callbacks(buf_T *buf) { set_buflocal_cpt_callbacks(buf); }
+/// set_buflocal_cfu_callback(buf)
+void nvim_call_set_buflocal_cfu_callback(buf_T *buf) { set_buflocal_cfu_callback(buf); }
+/// set_buflocal_ofu_callback(buf)
+void nvim_call_set_buflocal_ofu_callback(buf_T *buf) { set_buflocal_ofu_callback(buf); }
+
+/// Returns the 'keymap_init' flag constant (KEYMAP_INIT).
+int nvim_get_keymap_init(void) { return (int)KEYMAP_INIT; }
+/// buf->b_kmap_state |= KEYMAP_INIT
+void nvim_buf_kmap_state_set_init(buf_T *buf) { buf->b_kmap_state |= KEYMAP_INIT; }
+
+/// Returns p_vsts (the global vartabstop value).
+const char *nvim_get_p_vsts(void) { return p_vsts; }
+/// Returns p_vts (the global vartabstop for normal tabstop).
+const char *nvim_get_p_vts(void) { return p_vts; }
+/// Returns p_vsts_nopaste.
+const char *nvim_get_p_vsts_nopaste(void) { return p_vsts_nopaste; }
+
+/// Returns p_fenc.
+const char *nvim_get_p_fenc(void) { return p_fenc; }
+/// Returns p_ff.
+const char *nvim_get_p_ff(void) { return p_ff; }
+/// Returns p_ffs (fileformats).
+const char *nvim_get_p_ffs(void) { return p_ffs; }
+
+// These individual global option getters are needed for the bulk copy:
+const char *nvim_get_p_cpt(void) { return p_cpt; }
+const char *nvim_get_p_cfu(void) { return p_cfu; }
+const char *nvim_get_p_ofu(void) { return p_ofu; }
+const char *nvim_get_p_tfu(void) { return p_tfu; }
+const char *nvim_get_p_com(void) { return p_com; }
+const char *nvim_get_p_cms(void) { return p_cms; }
+const char *nvim_get_p_fo(void) { return p_fo; }
+const char *nvim_get_p_flp(void) { return p_flp; }
+const char *nvim_get_p_nf(void) { return p_nf; }
+const char *nvim_get_p_mps(void) { return p_mps; }
+const char *nvim_get_p_cink(void) { return p_cink; }
+const char *nvim_get_p_cino(void) { return p_cino; }
+const char *nvim_get_p_cinsd(void) { return p_cinsd; }
+const char *nvim_get_p_lop(void) { return p_lop; }
+const char *nvim_get_p_cinw(void) { return p_cinw; }
+const char *nvim_get_p_inde(void) { return p_inde; }
+const char *nvim_get_p_indk(void) { return p_indk; }
+const char *nvim_get_p_fex(void) { return p_fex; }
+const char *nvim_get_p_sua(void) { return p_sua; }
+const char *nvim_get_p_keymap(void) { return p_keymap; }
+const char *nvim_get_p_qe(void) { return p_qe; }
+const char *nvim_get_p_inex(void) { return p_inex; }
+const char *nvim_get_p_spc(void) { return p_spc; }
+const char *nvim_get_p_spf(void) { return p_spf; }
+const char *nvim_get_p_spl(void) { return p_spl; }
+const char *nvim_get_p_spo(void) { return p_spo; }
+const char *nvim_get_p_isk(void) { return p_isk; }
+#ifdef BACKSLASH_IN_FILENAME
+const char *nvim_get_p_csl(void) { return p_csl; }
+#else
+const char *nvim_get_p_csl(void) { return ""; }
+#endif
+int nvim_get_backslash_in_filename(void) {
+#ifdef BACKSLASH_IN_FILENAME
+  return 1;
+#else
+  return 0;
+#endif
+}
+
+bool nvim_get_p_ai(void) { return p_ai; }
+bool nvim_get_p_bin(void) { return p_bin; }
+bool nvim_get_p_bomb(void) { return p_bomb; }
+bool nvim_get_p_ci(void) { return p_ci; }
+bool nvim_get_p_cin(void) { return p_cin; }
+bool nvim_get_p_et(void) { return p_et; }
+bool nvim_get_p_fixeol(void) { return p_fixeol; }
+// nvim_get_p_inf: already defined in insexpand_shim.c (as int)
+bool nvim_get_p_lisp(void) { return p_lisp; }
+bool nvim_get_p_ma(void) { return p_ma; }
+bool nvim_get_p_ml(void) { return p_ml; }
+bool nvim_get_p_pi(void) { return p_pi; }
+bool nvim_get_p_si(void) { return p_si; }
+bool nvim_get_p_swf(void) { return p_swf; }
+// nvim_get_p_udf: already defined as int at line 579
+
+OptInt nvim_get_p_sw(void) { return p_sw; }
+OptInt nvim_get_p_scbk(void) { return p_scbk; }
+// nvim_get_p_tw / nvim_get_p_wm: already defined at lines 793/795
+OptInt nvim_get_p_sts(void) { return p_sts; }
+OptInt nvim_get_p_ts(void) { return p_ts; }
+OptInt nvim_get_p_smc(void) { return p_smc; }
+// nvim_get_p_iminsert / nvim_get_p_imsearch: already defined at lines 1361-1363
+
+bool nvim_get_p_ai_nopaste(void) { return p_ai_nopaste; }
+bool nvim_get_p_et_nopaste(void) { return p_et_nopaste; }
+// nvim_get_p_et_nobin / nvim_get_p_ml_nobin: already defined as int at lines 1337/1335
+OptInt nvim_get_p_tw_nopaste(void) { return p_tw_nopaste; }
+OptInt nvim_get_p_wm_nopaste(void) { return p_wm_nopaste; }
+OptInt nvim_get_p_sts_nopaste(void) { return p_sts_nopaste; }
+// nvim_get_p_tw_nobin / nvim_get_p_wm_nobin: already defined at lines 1331/1333
+
+/// Sets buf->b_p_fenc = xstrdup(p_fenc).
+void nvim_buf_set_b_p_fenc_dup(buf_T *buf) { buf->b_p_fenc = xstrdup(p_fenc); }
+
+/// Sets buf->b_p_ff based on first char of p_ffs.
+void nvim_buf_set_b_p_ff_from_ffs(buf_T *buf) {
+  switch (*p_ffs) {
+  case 'm': buf->b_p_ff = xstrdup("mac"); break;
+  case 'd': buf->b_p_ff = xstrdup("dos"); break;
+  case 'u': buf->b_p_ff = xstrdup("unix"); break;
+  default:  buf->b_p_ff = xstrdup(p_ff); break;
+  }
+}
+
+/// Sets buf->b_p_bh = empty_string_option.
+void nvim_buf_set_b_p_bh_empty(buf_T *buf) { buf->b_p_bh = empty_string_option; }
+/// Sets buf->b_p_bt = empty_string_option.
+void nvim_buf_set_b_p_bt_empty(buf_T *buf) { buf->b_p_bt = empty_string_option; }
+
+/// Sets buf->b_p_ft = empty_string_option.
+void nvim_buf_set_b_p_ft_empty(buf_T *buf) { buf->b_p_ft = empty_string_option; }
+/// Sets buf->b_p_syn = empty_string_option.
+void nvim_buf_set_b_p_syn_empty(buf_T *buf) { buf->b_p_syn = empty_string_option; }
+/// Sets buf->b_p_fp = empty_string_option.
+void nvim_buf_set_b_p_fp_empty(buf_T *buf) { buf->b_p_fp = empty_string_option; }
+/// Sets buf->b_s.b_syn_isk = empty_string_option.
+void nvim_buf_set_b_s_syn_isk_empty(buf_T *buf) { buf->b_s.b_syn_isk = empty_string_option; }
+
+// Setters for global-local fields that default to "no local value":
+void nvim_buf_set_b_p_ac_minus1(buf_T *buf) { buf->b_p_ac = -1; }
+void nvim_buf_set_b_p_ar_minus1(buf_T *buf) { buf->b_p_ar = -1; }
+void nvim_buf_set_b_p_ul_no_local(buf_T *buf) { buf->b_p_ul = NO_LOCAL_UNDOLEVEL; }
+void nvim_buf_set_b_p_bkc_empty(buf_T *buf) { buf->b_p_bkc = empty_string_option; buf->b_bkc_flags = 0; }
+void nvim_buf_set_b_p_gefm_empty(buf_T *buf) { buf->b_p_gefm = empty_string_option; }
+void nvim_buf_set_b_p_gp_empty(buf_T *buf) { buf->b_p_gp = empty_string_option; }
+void nvim_buf_set_b_p_mp_empty(buf_T *buf) { buf->b_p_mp = empty_string_option; }
+void nvim_buf_set_b_p_efm_empty(buf_T *buf) { buf->b_p_efm = empty_string_option; }
+void nvim_buf_set_b_p_ep_empty(buf_T *buf) { buf->b_p_ep = empty_string_option; }
+void nvim_buf_set_b_p_ffu_empty(buf_T *buf) { buf->b_p_ffu = empty_string_option; }
+void nvim_buf_set_b_p_kp_empty(buf_T *buf) { buf->b_p_kp = empty_string_option; }
+void nvim_buf_set_b_p_path_empty(buf_T *buf) { buf->b_p_path = empty_string_option; }
+void nvim_buf_set_b_p_tags_empty(buf_T *buf) { buf->b_p_tags = empty_string_option; }
+void nvim_buf_set_b_p_tc_empty(buf_T *buf) { buf->b_p_tc = empty_string_option; buf->b_tc_flags = 0; }
+void nvim_buf_set_b_p_def_empty(buf_T *buf) { buf->b_p_def = empty_string_option; }
+void nvim_buf_set_b_p_inc_empty(buf_T *buf) { buf->b_p_inc = empty_string_option; }
+void nvim_buf_set_b_p_cot_empty(buf_T *buf) { buf->b_p_cot = empty_string_option; buf->b_cot_flags = 0; }
+void nvim_buf_set_b_p_dict_empty(buf_T *buf) { buf->b_p_dict = empty_string_option; }
+void nvim_buf_set_b_p_dia_empty(buf_T *buf) { buf->b_p_dia = empty_string_option; }
+void nvim_buf_set_b_p_tsr_empty(buf_T *buf) { buf->b_p_tsr = empty_string_option; }
+void nvim_buf_set_b_p_tsrfu_empty(buf_T *buf) { buf->b_p_tsrfu = empty_string_option; }
+void nvim_buf_set_b_p_lw_empty(buf_T *buf) { buf->b_p_lw = empty_string_option; }
+void nvim_buf_set_b_p_menc_empty(buf_T *buf) { buf->b_p_menc = empty_string_option; }
+
+// Scalar field setters for the bulk copy:
+void nvim_buf_set_b_p_ai(buf_T *buf, int v) { buf->b_p_ai = v != 0; }
+void nvim_buf_set_b_p_ai_nopaste(buf_T *buf, int v) { buf->b_p_ai_nopaste = v != 0; }
+void nvim_buf_set_b_p_sw(buf_T *buf, OptInt v) { buf->b_p_sw = v; }
+void nvim_buf_set_b_p_scbk(buf_T *buf, OptInt v) { buf->b_p_scbk = v; }
+void nvim_buf_set_b_p_tw(buf_T *buf, OptInt v) { buf->b_p_tw = v; }
+void nvim_buf_set_b_p_tw_nopaste(buf_T *buf, OptInt v) { buf->b_p_tw_nopaste = v; }
+void nvim_buf_set_b_p_tw_nobin(buf_T *buf, OptInt v) { buf->b_p_tw_nobin = v; }
+void nvim_buf_set_b_p_wm(buf_T *buf, OptInt v) { buf->b_p_wm = v; }
+void nvim_buf_set_b_p_wm_nopaste(buf_T *buf, OptInt v) { buf->b_p_wm_nopaste = v; }
+void nvim_buf_set_b_p_wm_nobin(buf_T *buf, OptInt v) { buf->b_p_wm_nobin = v; }
+void nvim_buf_set_b_p_bin(buf_T *buf, int v) { buf->b_p_bin = v != 0; }
+void nvim_buf_set_b_p_bomb(buf_T *buf, int v) { buf->b_p_bomb = v != 0; }
+void nvim_buf_set_b_p_et(buf_T *buf, int v) { buf->b_p_et = v != 0; }
+void nvim_buf_set_b_p_fixeol(buf_T *buf, int v) { buf->b_p_fixeol = v != 0; }
+void nvim_buf_set_b_p_et_nobin(buf_T *buf, int v) { buf->b_p_et_nobin = v != 0; }
+void nvim_buf_set_b_p_et_nopaste(buf_T *buf, int v) { buf->b_p_et_nopaste = v != 0; }
+// nvim_buf_set_b_p_ml: already in buffer.c
+void nvim_buf_set_b_p_ml_nobin(buf_T *buf, int v) { buf->b_p_ml_nobin = v != 0; }
+void nvim_buf_set_b_p_inf(buf_T *buf, int v) { buf->b_p_inf = v != 0; }
+void nvim_buf_set_b_p_swf(buf_T *buf, int v) { buf->b_p_swf = v != 0; }
+void nvim_buf_set_b_p_si(buf_T *buf, int v) { buf->b_p_si = v != 0; }
+void nvim_buf_set_b_p_channel(buf_T *buf, OptInt v) { buf->b_p_channel = v; }
+void nvim_buf_set_b_p_ci(buf_T *buf, int v) { buf->b_p_ci = v != 0; }
+void nvim_buf_set_b_p_cin(buf_T *buf, int v) { buf->b_p_cin = v != 0; }
+void nvim_buf_set_b_p_pi(buf_T *buf, int v) { buf->b_p_pi = v != 0; }
+void nvim_buf_set_b_p_lisp(buf_T *buf, int v) { buf->b_p_lisp = v != 0; }
+void nvim_buf_set_b_p_smc(buf_T *buf, OptInt v) { buf->b_p_smc = v; }
+void nvim_buf_set_b_p_sts(buf_T *buf, OptInt v) { buf->b_p_sts = v; }
+void nvim_buf_set_b_p_sts_nopaste(buf_T *buf, OptInt v) { buf->b_p_sts_nopaste = v; }
+void nvim_buf_set_b_p_udf(buf_T *buf, int v) { buf->b_p_udf = v != 0; }
+void nvim_buf_set_b_p_ts(buf_T *buf, OptInt v) { buf->b_p_ts = v; }
+// nvim_buf_set_b_p_iminsert / nvim_buf_set_b_p_imsearch: already in buffer.c (int param)
+void nvim_buf_set_b_p_ma(buf_T *buf, int v) { buf->b_p_ma = v != 0; }
+
+// String field setters using xstrdup:
+void nvim_buf_set_b_p_cpt_dup(buf_T *buf, const char *s) { buf->b_p_cpt = xstrdup(s); }
+void nvim_buf_set_b_p_cfu_dup(buf_T *buf, const char *s) { buf->b_p_cfu = xstrdup(s); }
+void nvim_buf_set_b_p_ofu_dup(buf_T *buf, const char *s) { buf->b_p_ofu = xstrdup(s); }
+void nvim_buf_set_b_p_tfu_dup(buf_T *buf, const char *s) { buf->b_p_tfu = xstrdup(s); }
+void nvim_buf_set_b_p_vsts_dup(buf_T *buf, const char *s) { buf->b_p_vsts = xstrdup(s); }
+void nvim_buf_set_b_p_vsts_nopaste_dup(buf_T *buf, const char *s) { buf->b_p_vsts_nopaste = s ? xstrdup(s) : NULL; }
+void nvim_buf_set_b_p_com_dup(buf_T *buf, const char *s) { buf->b_p_com = xstrdup(s); }
+void nvim_buf_set_b_p_cms_dup(buf_T *buf, const char *s) { buf->b_p_cms = xstrdup(s); }
+void nvim_buf_set_b_p_fo_dup(buf_T *buf, const char *s) { buf->b_p_fo = xstrdup(s); }
+void nvim_buf_set_b_p_flp_dup(buf_T *buf, const char *s) { buf->b_p_flp = xstrdup(s); }
+void nvim_buf_set_b_p_nf_dup(buf_T *buf, const char *s) { buf->b_p_nf = xstrdup(s); }
+void nvim_buf_set_b_p_mps_dup(buf_T *buf, const char *s) { buf->b_p_mps = xstrdup(s); }
+void nvim_buf_set_b_p_cink_dup(buf_T *buf, const char *s) { buf->b_p_cink = xstrdup(s); }
+void nvim_buf_set_b_p_cino_dup(buf_T *buf, const char *s) { buf->b_p_cino = xstrdup(s); }
+void nvim_buf_set_b_p_cinsd_dup(buf_T *buf, const char *s) { buf->b_p_cinsd = xstrdup(s); }
+void nvim_buf_set_b_p_lop_dup(buf_T *buf, const char *s) { buf->b_p_lop = xstrdup(s); }
+void nvim_buf_set_b_p_cinw_dup(buf_T *buf, const char *s) { buf->b_p_cinw = xstrdup(s); }
+void nvim_buf_set_b_s_spc_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spc = xstrdup(s); }
+void nvim_buf_set_b_s_spf_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spf = xstrdup(s); }
+void nvim_buf_set_b_s_spl_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spl = xstrdup(s); }
+void nvim_buf_set_b_s_spo_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spo = xstrdup(s); }
+void nvim_buf_set_b_p_inde_dup(buf_T *buf, const char *s) { buf->b_p_inde = xstrdup(s); }
+void nvim_buf_set_b_p_indk_dup(buf_T *buf, const char *s) { buf->b_p_indk = xstrdup(s); }
+void nvim_buf_set_b_p_fex_dup(buf_T *buf, const char *s) { buf->b_p_fex = xstrdup(s); }
+void nvim_buf_set_b_p_sua_dup(buf_T *buf, const char *s) { buf->b_p_sua = xstrdup(s); }
+void nvim_buf_set_b_p_keymap_dup(buf_T *buf, const char *s) { buf->b_p_keymap = xstrdup(s); }
+void nvim_buf_set_b_p_qe_dup(buf_T *buf, const char *s) { buf->b_p_qe = xstrdup(s); }
+void nvim_buf_set_b_p_inex_dup(buf_T *buf, const char *s) { buf->b_p_inex = xstrdup(s); }
+void nvim_buf_set_b_p_isk_dup(buf_T *buf, const char *s) { buf->b_p_isk = xstrdup(s); }
+void nvim_buf_set_b_p_vts_dup(buf_T *buf, const char *s) { buf->b_p_vts = xstrdup(s); }
+#ifdef BACKSLASH_IN_FILENAME
+void nvim_buf_set_b_p_csl_dup(buf_T *buf, const char *s) { buf->b_p_csl = xstrdup(s); }
+#else
+void nvim_buf_set_b_p_csl_dup(buf_T *buf, const char *s) { (void)buf; (void)s; }
+#endif
+
+/// Copy global script_ctx for a buf-opt index to the buffer's script_ctx array.
+/// Implements COPY_OPT_SCTX(buf, bv).
+void nvim_buf_copy_opt_sctx(buf_T *buf, int bv)
+{
+  if (buf && bv >= 0 && (size_t)bv < ARRAY_SIZE(buf->b_p_script_ctx)) {
+    buf->b_p_script_ctx[bv] = options[buf_opt_idx[bv]].script_ctx;
+  }
+}
+
+/// Set b_s.b_p_spo_flags from global spo_flags.
+void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags = spo_flags; }
+
+// =============================================================================
+// Phase 11 (pass 11) accessors: set_init_1, set_init_expand_env
+// =============================================================================
+
+extern void rs_set_init_1(int clean_arg);
+
+/// Initialize the options, first part.
+/// Called only once from main(), just after creating the first buffer.
+void set_init_1(bool clean_arg)
+{
+  rs_set_init_1(clean_arg ? 1 : 0);
+}
+
+/// langmap_init() wrapper.
+void nvim_call_langmap_init(void) { langmap_init(); }
+
+/// save_file_ff(curbuf) wrapper.
+void nvim_call_save_file_ff_curbuf(void) { save_file_ff(curbuf); }
+
+/// os_env_exists(name, false) wrapper. Returns 1 if env exists, 0 otherwise.
+int nvim_call_os_env_exists(const char *name) { return os_env_exists(name, false) ? 1 : 0; }
+
+/// init_spell_chartab() wrapper.
+void nvim_call_init_spell_chartab(void) { init_spell_chartab(); }
+
+/// lang_init() wrapper.
+void nvim_call_lang_init(void) { lang_init(); }
+
+/// get_mess_lang() wrapper.
+const char *nvim_call_get_mess_lang(void) { return get_mess_lang(); }
+
+/// set_option_value_give_err(kOptTermbidi, BOOLEAN_OPTVAL(true), 0) wrapper.
+void nvim_call_set_termbidi_true(void)
+{
+  set_option_value_give_err(kOptTermbidi, BOOLEAN_OPTVAL(true), 0);
+}
+
+/// alloc_options_default() wrapper.
+void nvim_call_alloc_options_default(void) { alloc_options_default(); }
+
+/// set_options_default(0) wrapper.
+void nvim_call_set_options_default_0(void) { set_options_default(0); }
+
+/// check_win_options(curwin) wrapper.
+void nvim_call_check_win_options(void) { check_win_options(curwin); }
+
+/// check_options() wrapper (already exists as static, need non-static form).
+void nvim_call_check_options(void) { check_options(); }
+
+/// didset_options() wrapper.
+void nvim_call_didset_options(void) { didset_options(); }
+
+/// didset_options2() wrapper.
+void nvim_call_didset_options2(void) { didset_options2(); }
+
+/// set_helplang_default(get_mess_lang()) wrapper.
+void nvim_call_set_helplang_default_from_mess_lang(void)
+{
+  set_helplang_default(get_mess_lang());
+}
+
+/// set_init_fenc_default() wrapper.
+void nvim_call_set_init_fenc_default(void) { set_init_fenc_default(); }
+
+/// rs_last_status(0) -- already a Rust fn; call it here for the shim.
+void nvim_call_rs_last_status_0(void) { rs_last_status(0); }
+
+// nvim_get_curbuf: already defined in window_shim.c (as buf_T *)
+
+/// curbuf->b_p_initialized = true
+void nvim_curbuf_set_b_p_initialized(void) { curbuf->b_p_initialized = true; }
+
+/// curbuf->b_p_ac = -1
+void nvim_curbuf_set_b_p_ac_minus1(void) { curbuf->b_p_ac = -1; }
+
+/// curbuf->b_p_ar = -1
+void nvim_curbuf_set_b_p_ar_minus1(void) { curbuf->b_p_ar = -1; }
+
+/// curbuf->b_p_ul = NO_LOCAL_UNDOLEVEL
+void nvim_curbuf_set_b_p_ul_no_local(void) { curbuf->b_p_ul = NO_LOCAL_UNDOLEVEL; }
+
+/// check_buf_options(curbuf)
+void nvim_call_check_buf_options_curbuf(void) { check_buf_options(curbuf); }
+
+/// stdpaths_user_state_subpath(name, 2, true), returns allocated string.
+char *nvim_call_stdpaths_user_state_subpath(const char *name) { return stdpaths_user_state_subpath(name, 2, true); }
+
+/// runtimepath_default(clean_arg) wrapper.
+char *nvim_call_runtimepath_default(int clean_arg) { return runtimepath_default(clean_arg != 0); }
+
+/// set_string_default(opt_idx, val, allocated) with integer opt_idx and bool allocated.
+void nvim_call_set_string_default_idx(int opt_idx, char *val, int allocated)
+{
+  set_string_default((OptIndex)opt_idx, val, allocated != 0);
+}
+
+/// Returns kOptBackupdir constant.
+int nvim_get_kopt_backupdir(void) { return (int)kOptBackupdir; }
+/// Returns kOptViewdir constant.
+int nvim_get_kopt_viewdir(void) { return (int)kOptViewdir; }
+/// Returns kOptDirectory constant.
+int nvim_get_kopt_directory(void) { return (int)kOptDirectory; }
+/// Returns kOptUndodir constant.
+int nvim_get_kopt_undodir(void) { return (int)kOptUndodir; }
+/// Returns kOptRuntimepath constant.
+int nvim_get_kopt_runtimepath(void) { return (int)kOptRuntimepath; }
+/// Returns kOptPackpath constant.
+int nvim_get_kopt_packpath(void) { return (int)kOptPackpath; }
+/// Returns kOptTermbidi constant.
+int nvim_get_kopt_termbidi(void) { return (int)kOptTermbidi; }
+
+/// set_init_expand_env() implementation called from Rust.
+/// Iterates over all options and expands environment variables for defaults.
+void nvim_call_set_init_expand_env(void)
+{
+  for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
+    vimoption_T *opt = &options[opt_idx];
+    if (opt->flags & kOptFlagNoDefExp) {
+      continue;
+    }
+    char *p;
+    if ((opt->flags & kOptFlagGettext) && opt->var != NULL) {
+      p = _(*(char **)opt->var);
+    } else {
+      p = option_expand(opt_idx, NULL);
+    }
+    if (p != NULL) {
+      set_option_varp(opt_idx, opt->var, CSTR_TO_OPTVAL(p), true);
+      change_option_default(opt_idx, CSTR_TO_OPTVAL(p));
+    }
+  }
+}
+
+/// kBufOptIskeyword constant.
+int nvim_get_kbufopt_iskeyword(void) { return (int)kBufOptIskeyword; }
+/// kBufOptTabstop constant.
+int nvim_get_kbufopt_tabstop(void) { return (int)kBufOptTabstop; }
+/// kBufOptVartabstop constant.
+int nvim_get_kbufopt_vartabstop(void) { return (int)kBufOptVartabstop; }
+/// kBufOptModifiable constant.
+int nvim_get_kbufopt_modifiable(void) { return (int)kBufOptModifiable; }
+/// kBufOptAutoindent constant.
+int nvim_get_kbufopt_autoindent(void) { return (int)kBufOptAutoindent; }
+/// kBufOptShiftwidth constant.
+int nvim_get_kbufopt_shiftwidth(void) { return (int)kBufOptShiftwidth; }
+/// kBufOptScrollback constant.
+int nvim_get_kbufopt_scrollback(void) { return (int)kBufOptScrollback; }
+/// kBufOptTextwidth constant.
+int nvim_get_kbufopt_textwidth(void) { return (int)kBufOptTextwidth; }
+/// kBufOptWrapmargin constant.
+int nvim_get_kbufopt_wrapmargin(void) { return (int)kBufOptWrapmargin; }
+/// kBufOptBinary constant.
+int nvim_get_kbufopt_binary(void) { return (int)kBufOptBinary; }
+/// kBufOptBomb constant.
+int nvim_get_kbufopt_bomb(void) { return (int)kBufOptBomb; }
+/// kBufOptExpandtab constant.
+int nvim_get_kbufopt_expandtab(void) { return (int)kBufOptExpandtab; }
+/// kBufOptFixendofline constant.
+int nvim_get_kbufopt_fixendofline(void) { return (int)kBufOptFixendofline; }
+/// kBufOptModeline constant.
+int nvim_get_kbufopt_modeline(void) { return (int)kBufOptModeline; }
+/// kBufOptInfercase constant.
+int nvim_get_kbufopt_infercase(void) { return (int)kBufOptInfercase; }
+/// kBufOptSwapfile constant.
+int nvim_get_kbufopt_swapfile(void) { return (int)kBufOptSwapfile; }
+/// kBufOptComplete constant.
+int nvim_get_kbufopt_complete(void) { return (int)kBufOptComplete; }
+/// kBufOptCompleteslash constant.
+int nvim_get_kbufopt_completeslash(void) { return (int)kBufOptCompleteslash; }
+/// kBufOptCompletefunc constant.
+int nvim_get_kbufopt_completefunc(void) { return (int)kBufOptCompletefunc; }
+/// kBufOptOmnifunc constant.
+int nvim_get_kbufopt_omnifunc(void) { return (int)kBufOptOmnifunc; }
+/// kBufOptTagfunc constant.
+int nvim_get_kbufopt_tagfunc(void) { return (int)kBufOptTagfunc; }
+/// kBufOptSofttabstop constant.
+int nvim_get_kbufopt_softtabstop(void) { return (int)kBufOptSofttabstop; }
+/// kBufOptVarsofttabstop constant.
+int nvim_get_kbufopt_varsofttabstop(void) { return (int)kBufOptVarsofttabstop; }
+/// kBufOptComments constant.
+int nvim_get_kbufopt_comments(void) { return (int)kBufOptComments; }
+/// kBufOptCommentstring constant.
+int nvim_get_kbufopt_commentstring(void) { return (int)kBufOptCommentstring; }
+/// kBufOptFormatoptions constant.
+int nvim_get_kbufopt_formatoptions(void) { return (int)kBufOptFormatoptions; }
+/// kBufOptFormatlistpat constant.
+int nvim_get_kbufopt_formatlistpat(void) { return (int)kBufOptFormatlistpat; }
+/// kBufOptNrformats constant.
+int nvim_get_kbufopt_nrformats(void) { return (int)kBufOptNrformats; }
+/// kBufOptMatchpairs constant.
+int nvim_get_kbufopt_matchpairs(void) { return (int)kBufOptMatchpairs; }
+/// kBufOptSmartindent constant.
+int nvim_get_kbufopt_smartindent(void) { return (int)kBufOptSmartindent; }
+/// kBufOptCopyindent constant.
+int nvim_get_kbufopt_copyindent(void) { return (int)kBufOptCopyindent; }
+/// kBufOptCindent constant.
+int nvim_get_kbufopt_cindent(void) { return (int)kBufOptCindent; }
+/// kBufOptCinkeys constant.
+int nvim_get_kbufopt_cinkeys(void) { return (int)kBufOptCinkeys; }
+/// kBufOptCinoptions constant.
+int nvim_get_kbufopt_cinoptions(void) { return (int)kBufOptCinoptions; }
+/// kBufOptCinscopedecls constant.
+int nvim_get_kbufopt_cinscopedecls(void) { return (int)kBufOptCinscopedecls; }
+/// kBufOptLispoptions constant.
+int nvim_get_kbufopt_lispoptions(void) { return (int)kBufOptLispoptions; }
+/// kBufOptPreserveindent constant.
+int nvim_get_kbufopt_preserveindent(void) { return (int)kBufOptPreserveindent; }
+/// kBufOptCinwords constant.
+int nvim_get_kbufopt_cinwords(void) { return (int)kBufOptCinwords; }
+/// kBufOptLisp constant.
+int nvim_get_kbufopt_lisp(void) { return (int)kBufOptLisp; }
+/// kBufOptSynmaxcol constant.
+int nvim_get_kbufopt_synmaxcol(void) { return (int)kBufOptSynmaxcol; }
+/// kBufOptSpellcapcheck constant.
+int nvim_get_kbufopt_spellcapcheck(void) { return (int)kBufOptSpellcapcheck; }
+/// kBufOptSpellfile constant.
+int nvim_get_kbufopt_spellfile(void) { return (int)kBufOptSpellfile; }
+/// kBufOptSpelllang constant.
+int nvim_get_kbufopt_spelllang(void) { return (int)kBufOptSpelllang; }
+/// kBufOptSpelloptions constant.
+int nvim_get_kbufopt_spelloptions(void) { return (int)kBufOptSpelloptions; }
+/// kBufOptIndentexpr constant.
+int nvim_get_kbufopt_indentexpr(void) { return (int)kBufOptIndentexpr; }
+/// kBufOptIndentkeys constant.
+int nvim_get_kbufopt_indentkeys(void) { return (int)kBufOptIndentkeys; }
+/// kBufOptFormatexpr constant.
+int nvim_get_kbufopt_formatexpr(void) { return (int)kBufOptFormatexpr; }
+/// kBufOptSuffixesadd constant.
+int nvim_get_kbufopt_suffixesadd(void) { return (int)kBufOptSuffixesadd; }
+/// kBufOptKeymap constant.
+int nvim_get_kbufopt_keymap(void) { return (int)kBufOptKeymap; }
+/// kBufOptIminsert constant.
+int nvim_get_kbufopt_iminsert(void) { return (int)kBufOptIminsert; }
+/// kBufOptImsearch constant.
+int nvim_get_kbufopt_imsearch(void) { return (int)kBufOptImsearch; }
+/// kBufOptIncludeexpr constant.
+int nvim_get_kbufopt_includeexpr(void) { return (int)kBufOptIncludeexpr; }
+/// kBufOptQuoteescape constant.
+int nvim_get_kbufopt_quoteescape(void) { return (int)kBufOptQuoteescape; }
+/// kBufOptUndofile constant.
+int nvim_get_kbufopt_undofile(void) { return (int)kBufOptUndofile; }
+
+/// vim_strchr wrapper for Rust.
+const char *nvim_call_vim_strchr(const char *s, int c) { return vim_strchr(s, c); }
+
+/// Calls bind_textdomain_codeset(PROJECT_NAME, p_enc) if HAVE_WORKING_LIBINTL.
+/// No-op otherwise.
+void nvim_call_bind_textdomain_codeset(void)
+{
+#ifdef HAVE_WORKING_LIBINTL
+  (void)bind_textdomain_codeset(PROJECT_NAME, p_enc);
+#endif
+}
+
+/// If buf->b_p_bt[0] == 'h', clear it with clear_string_option.
+void nvim_buf_clear_b_p_bt_if_help(buf_T *buf)
+{
+  if (buf && buf->b_p_bt && buf->b_p_bt[0] == 'h') {
+    clear_string_option(&buf->b_p_bt);
+  }
+}
