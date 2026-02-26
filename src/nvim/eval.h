@@ -206,6 +206,10 @@ char *do_string_sub(char *str, size_t len, char *pat, char *sub, typval_T *expr,
                     const char *flags, size_t *ret_len);
 void var_set_global(const char *name, typval_T *vartv);
 
+/// Rust-exported FFI symbols (renamed from rs_* in Phase 3, eval_shim pass 10).
+/// These replace C thin wrappers that were deleted from eval_shim.c.
+typval_T *eval_expr(char *arg, exarg_T *eap);
+
 /// Rust-exported FFI symbols (renamed from rs_* in Phase 4, eval_shim pass 9).
 /// These replace C thin wrappers that were deleted from eval_shim.c.
 timer_T *find_timer_by_nr(varnumber_T xx);

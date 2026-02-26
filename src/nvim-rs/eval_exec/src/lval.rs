@@ -159,8 +159,11 @@ extern "C" {
     // dictitem_T accessor
     fn nvim_di_get_tv(di: DictitemHandle) -> TypevalHandle;
 
-    // tv_is_luafunc wrapper
-    fn nvim_tv_is_luafunc_wrapper(tv: TypevalHandle) -> bool;
+    // is_luafunc check (from eval crate, via C export)
+    fn rs_is_luafunc(pt: *const c_void) -> bool;
+
+    // get partial pointer from typval (tv->vval.v_partial)
+    fn nvim_eval_tv_get_partial(tv: TypevalHandle) -> *mut c_void;
 
     // emsg_severe flag (already exists in message.c with int param)
     fn nvim_set_emsg_severe(val: c_int);
@@ -217,7 +220,6 @@ extern "C" {
     fn nvim_lval_tv_blob_len(lp: LvalHandle) -> c_int;
     fn nvim_lval_alloc_dict_if_null(lp: LvalHandle);
     fn nvim_lval_di_is_null(lp: LvalHandle) -> bool;
-    fn nvim_lval_di_is_luafunc(lp: LvalHandle) -> bool;
     fn nvim_lval_dict_scope_check(
         lp: LvalHandle,
         key: *mut c_char,
@@ -321,7 +323,16 @@ unsafe fn get_lval_dict_item_impl(
     }
 
     // Check if di is a luafunc (v:['lua'] case)
-    if !nvim_lval_di_is_null(lp) && nvim_lval_di_is_luafunc(lp) && len == -1 && rettv.is_null() {
+    // Inlined from nvim_lval_di_is_luafunc: lp->ll_di->di_tv.v_type == VAR_PARTIAL && rs_is_luafunc(partial)
+    let lval_di_is_luafunc = || -> bool {
+        let di = nvim_lval_get_di(lp);
+        if di.is_null() {
+            return false;
+        }
+        let di_tv = nvim_di_get_tv(di);
+        nvim_tv_get_type(di_tv) == VAR_PARTIAL && rs_is_luafunc(nvim_eval_tv_get_partial(di_tv))
+    };
+    if !nvim_lval_di_is_null(lp) && lval_di_is_luafunc() && len == -1 && rettv.is_null() {
         nvim_semsg_e_illvar_raw(c"v:['lua']".as_ptr());
         return GlvStatus::Fail;
     }
@@ -768,7 +779,8 @@ unsafe fn get_lval_impl(
 
     nvim_lval_set_tv(lp, nvim_di_get_tv(v));
 
-    if nvim_tv_is_luafunc_wrapper(nvim_lval_get_tv(lp)) {
+    let lp_tv = nvim_lval_get_tv(lp);
+    if nvim_tv_get_type(lp_tv) == VAR_PARTIAL && rs_is_luafunc(nvim_eval_tv_get_partial(lp_tv)) {
         // For v:lua just return a pointer to the "." after the "v:lua".
         // If the caller is trans_function_name() it will check for a Lua function name.
         return p;

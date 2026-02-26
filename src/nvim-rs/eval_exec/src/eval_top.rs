@@ -92,13 +92,6 @@ extern "C" {
     fn nvim_eval_tv_get_list(tv: TypevalHandle) -> *mut c_void;
     fn nvim_encode_tv2string_wrapper(tv: *mut c_void) -> *mut c_char;
 
-    // eval1_emsg wrapper
-    fn nvim_eval1_emsg_wrapper(
-        arg: *mut *mut c_char,
-        rettv: TypevalHandle,
-        eap: ExargHandle,
-    ) -> c_int;
-
     // eval_expr_* helpers
     fn nvim_eval_tv_get_partial(tv: TypevalHandle) -> *mut c_void; // partial_T*
     fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
@@ -188,7 +181,7 @@ unsafe fn typval2string_impl(tv: *mut c_void, join_list: bool) -> *mut c_char {
 /// `arg` must be a valid pointer to a mutable C string pointer.
 /// `rettv` must be a valid typval handle.
 unsafe fn eval1_emsg_impl(arg: *mut *mut c_char, rettv: TypevalHandle, eap: ExargHandle) -> c_int {
-    nvim_eval1_emsg_wrapper(arg, rettv, eap)
+    rs_eval1_emsg(arg, rettv, eap)
 }
 
 // =============================================================================
@@ -777,6 +770,18 @@ pub unsafe extern "C" fn rs_eval_expr_ext(
 
     nvim_evalarg_clear_and_free(evalarg, eap);
     tv
+}
+
+/// Equivalent to C `eval_expr`: evaluate expression, return allocated typval_T or NULL.
+///
+/// This is a thin wrapper around `rs_eval_expr_ext` with `use_simple_function = false`.
+///
+/// # Safety
+/// - `arg` must be a valid null-terminated C string.
+/// - `eap` may be null.
+#[export_name = "eval_expr"]
+pub unsafe extern "C" fn rs_eval_expr(arg: *mut c_char, eap: ExargHandle) -> *mut c_void {
+    rs_eval_expr_ext(arg, eap, false)
 }
 
 // =============================================================================

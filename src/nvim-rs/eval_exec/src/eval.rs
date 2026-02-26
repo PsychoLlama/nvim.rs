@@ -1827,16 +1827,6 @@ extern "C" {
     // String duplication
     fn xstrdup(s: *const c_char) -> *mut c_char;
 
-    // call_func_rettv wrapper (selfdict always NULL from eval_method)
-    fn nvim_call_func_rettv_wrapper(
-        arg: *mut *mut c_char,
-        evalarg: EvalargHandle,
-        rettv: TypevalHandle,
-        evaluate: bool,
-        basetv: TypevalHandle,
-        lua_funcname: *const c_char,
-    ) -> c_int;
-
 }
 
 /// Error: missing name after ->
@@ -1996,8 +1986,15 @@ pub unsafe fn eval_method_impl(
                     nvim_tv_set_partial_raw(rettv, vlua);
                     nvim_eval_partial_incref(vlua);
                 }
-                ret =
-                    nvim_call_func_rettv_wrapper(arg, evalarg, rettv, evaluate, base, lua_funcname);
+                ret = call_func_rettv_impl(
+                    arg,
+                    evalarg,
+                    rettv,
+                    evaluate,
+                    std::ptr::null_mut(),
+                    base,
+                    lua_funcname,
+                );
             } else {
                 ret = eval_func_impl(
                     arg,
@@ -3083,22 +3080,6 @@ extern "C" {
     fn nvim_dict_refcount_inc(dict: *mut c_void);
     // tv_dict_unref wrapper
     fn nvim_dict_unref(dict: *mut c_void);
-    // call_func_rettv with selfdict
-    fn nvim_call_func_rettv_with_selfdict(
-        arg: *mut *mut c_char,
-        evalarg: EvalargHandle,
-        rettv: TypevalHandle,
-        evaluate: bool,
-        selfdict: *mut c_void,
-        lua_funcname: *const c_char,
-    ) -> c_int;
-    // eval_lambda (static, non-static wrapper)
-    fn nvim_eval_lambda_wrapper(
-        arg: *mut *mut c_char,
-        rettv: TypevalHandle,
-        evalarg: EvalargHandle,
-        verbose: bool,
-    ) -> c_int;
     // make_partial wrapper
     fn nvim_make_partial(selfdict: *mut c_void, rettv: TypevalHandle);
     // aborting() wrapper
@@ -3107,8 +3088,6 @@ extern "C" {
     fn nvim_partial_get_pt_auto(pt: *const c_void) -> bool;
     // Get partial->pt_dict (for set_selfdict check)
     fn nvim_eval_partial_get_dict(pt: *const c_void) -> *mut c_void;
-    // tv_is_luafunc wrapper
-    fn nvim_tv_is_luafunc_wrapper(tv: TypevalHandle) -> bool;
     // tv_is_func wrapper (returns int, matches other declarations in this crate)
     fn nvim_tv_is_func(tv: TypevalHandle) -> c_int;
     // ascii_iswhite (available in normal_shim.c)
@@ -3173,7 +3152,7 @@ pub unsafe fn handle_subscript_impl(
     // We cast to *mut *mut c_char for internal use.
     let arg_mut = arg as *mut *mut c_char;
 
-    if nvim_tv_is_luafunc_wrapper(rettv) {
+    if nvim_tv_get_type(rettv) == VAR_PARTIAL && rs_is_luafunc(nvim_eval_tv_get_partial(rettv)) {
         if !evaluate {
             tv_clear(rettv);
         }
@@ -3210,12 +3189,13 @@ pub unsafe fn handle_subscript_impl(
         }
 
         if ch == b'(' {
-            ret = nvim_call_func_rettv_with_selfdict(
+            ret = call_func_rettv_impl(
                 arg_mut,
                 evalarg,
                 rettv,
                 evaluate,
                 selfdict,
+                TypevalHandle::null(),
                 lua_funcname,
             );
             // Stop on aborting (interrupt, exception, etc.)
@@ -3231,7 +3211,7 @@ pub unsafe fn handle_subscript_impl(
             let after_arrow = get_byte((*arg_mut as *const c_char).add(2));
             if after_arrow == b'{' {
                 // expr->{lambda}()
-                ret = nvim_eval_lambda_wrapper(arg_mut, rettv, evalarg, verbose);
+                ret = eval_lambda_impl(arg_mut, rettv, evalarg, verbose);
             } else {
                 // expr->name()
                 ret = eval_method_impl(arg_mut, rettv, evalarg, verbose);

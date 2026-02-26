@@ -20,13 +20,6 @@ extern "C" {
     // eval1 (Rust FFI export, takes arg as *mut *mut c_char)
     fn eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: EvalargHandle) -> c_int;
 
-    // eval1_emsg wrapper (non-static wrapper)
-    fn nvim_eval1_emsg_wrapper(
-        arg: *mut *mut c_char,
-        rettv: TypevalHandle,
-        eap: ExargHandle,
-    ) -> c_int;
-
     // Typval operations
     fn tv_clear(tv: TypevalHandle);
     fn xfree(ptr: *mut c_void);
@@ -332,7 +325,7 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
         }
 
         let rettv = alloc_typval();
-        ret = nvim_eval1_emsg_wrapper(&mut arg, rettv, eap);
+        ret = crate::eval_top::rs_eval1_emsg(&mut arg, rettv, eap);
         if ret == FAIL {
             free_typval(rettv);
             break;

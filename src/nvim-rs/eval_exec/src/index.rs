@@ -122,8 +122,11 @@ extern "C" {
     // nvim_di_get_tv: get typval pointer from dictitem
     fn nvim_di_get_tv(di: *mut c_void) -> TypevalHandle;
 
-    // nvim_tv_is_luafunc_wrapper: check if typval is lua func
-    fn nvim_tv_is_luafunc_wrapper(tv: TypevalHandle) -> bool;
+    // rs_is_luafunc: check if a partial is a lua func (from eval crate)
+    fn rs_is_luafunc(pt: *const c_void) -> bool;
+
+    // nvim_eval_tv_get_partial: get partial pointer from typval
+    fn nvim_eval_tv_get_partial(tv: TypevalHandle) -> *mut c_void;
 
     // String operations
     fn xmemdupz(src: *const c_void, len: usize) -> *mut c_char;
@@ -500,7 +503,10 @@ pub unsafe fn eval_index_inner_impl(
             }
 
             let item_tv = nvim_di_get_tv(item);
-            if nvim_tv_is_luafunc_wrapper(item_tv) {
+            // Inline tv_is_luafunc: v_type == VAR_PARTIAL && rs_is_luafunc(partial)
+            if nvim_tv_get_type(item_tv) == VAR_PARTIAL
+                && rs_is_luafunc(nvim_eval_tv_get_partial(item_tv))
+            {
                 return FAIL;
             }
 

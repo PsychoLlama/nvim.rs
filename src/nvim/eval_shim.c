@@ -602,14 +602,7 @@ extern void rs_eval_call_provider(const char *provider, const char *method,
 
 // eval1_emsg migrated to Rust (rs_eval1_emsg in eval_exec crate, eval.rs).
 
-/// Top level evaluation function.
-///
-/// @return  an allocated typval_T with the result or
-///          NULL when there is an error.
-typval_T *eval_expr(char *arg, exarg_T *eap)
-{
-  return eval_expr_ext(arg, eap, false);
-}
+// eval_expr: deleted -- Rust export renamed to match C symbol (Phase 3 pass 10).
 
 // eval_foldexpr: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
 
@@ -1416,12 +1409,7 @@ typval_T *nvim_di_get_tv(dictitem_T *di)
   return &di->di_tv;
 }
 
-/// Check if a typval_T is a Lua function - accessor for Rust.
-/// Inlined from the deleted static tv_is_luafunc (Phase 3 pass 8).
-bool nvim_tv_is_luafunc_wrapper(typval_T *tv)
-{
-  return tv->v_type == VAR_PARTIAL && rs_is_luafunc(tv->vval.v_partial);
-}
+// nvim_tv_is_luafunc_wrapper: deleted -- inlined in Rust (Phase 3 pass 10).
 
 /// Return address of the EVALARG_EVALUATE global - accessor for Rust.
 evalarg_T *nvim_get_evalarg_evaluate_ptr(void)
@@ -1772,12 +1760,7 @@ void nvim_tv_set_partial_raw(typval_T *tv, partial_T *pt)
   tv->vval.v_partial = pt;
 }
 
-/// Thin wrapper for rs_call_func_rettv with selfdict=NULL - accessor for Rust rs_eval_method.
-int nvim_call_func_rettv_wrapper(char **arg, evalarg_T *evalarg, typval_T *rettv, bool evaluate,
-                                 typval_T *basetv, const char *lua_funcname)
-{
-  return rs_call_func_rettv(arg, evalarg, rettv, evaluate, NULL, basetv, lua_funcname);
-}
+// nvim_call_func_rettv_wrapper: deleted -- Rust calls call_func_rettv_impl directly (Phase 3 pass 10).
 
 // =============================================================================
 // Phase 1 (lval subscript): new C accessor/wrapper functions for rs_get_lval_subscript
@@ -1973,12 +1956,7 @@ void nvim_lval_set_tv_from_ll_di(lval_T *lp)
   lp->ll_tv = &lp->ll_di->di_tv;
 }
 
-/// Check if lp->ll_di->di_tv is a lua func wrapper - composite accessor for Rust.
-/// Inlined from the deleted static tv_is_luafunc (Phase 3 pass 8).
-bool nvim_lval_di_is_luafunc(const lval_T *lp)
-{
-  return lp->ll_di->di_tv.v_type == VAR_PARTIAL && rs_is_luafunc(lp->ll_di->di_tv.vval.v_partial);
-}
+// nvim_lval_di_is_luafunc: deleted -- inlined in Rust using nvim_lval_get_di + nvim_di_get_tv + rs_is_luafunc (Phase 3 pass 10).
 
 /// Check if lp->ll_di is NULL - accessor for Rust.
 bool nvim_lval_di_is_null(const lval_T *lp)
@@ -2030,19 +2008,9 @@ void nvim_dict_unref(dict_T *dict)
   tv_dict_unref(dict);
 }
 
-/// Thin wrapper for rs_call_func_rettv with selfdict - accessor for Rust rs_handle_subscript.
-int nvim_call_func_rettv_with_selfdict(char **arg, evalarg_T *evalarg, typval_T *rettv,
-                                       bool evaluate, dict_T *selfdict,
-                                       const char *lua_funcname)
-{
-  return rs_call_func_rettv(arg, evalarg, rettv, evaluate, selfdict, NULL, lua_funcname);
-}
+// nvim_call_func_rettv_with_selfdict: deleted -- Rust calls call_func_rettv_impl directly (Phase 3 pass 10).
 
-/// Thin wrapper for rs_eval_lambda - accessor for Rust rs_handle_subscript.
-int nvim_eval_lambda_wrapper(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose)
-{
-  return rs_eval_lambda(arg, rettv, evalarg, verbose);
-}
+// nvim_eval_lambda_wrapper: deleted -- Rust calls eval_lambda_impl directly (Phase 3 pass 10).
 
 /// make_partial wrapper - accessor for Rust rs_handle_subscript.
 void nvim_make_partial(dict_T *selfdict, typval_T *rettv)
@@ -2104,11 +2072,7 @@ void nvim_evalarg_clear_and_free(evalarg_T *ea, exarg_T *eap)
   xfree(ea);
 }
 
-/// Non-static wrapper for eval1_emsg -- now delegates to Rust rs_eval1_emsg.
-int nvim_eval1_emsg_wrapper(char **arg, typval_T *rettv, exarg_T *eap)
-{
-  return rs_eval1_emsg(arg, rettv, eap);
-}
+// nvim_eval1_emsg_wrapper: deleted -- Rust calls rs_eval1_emsg directly (Phase 3 pass 10).
 
 /// encode_tv2echo wrapper - accessor for Rust.
 char *nvim_encode_tv2echo(typval_T *tv)
