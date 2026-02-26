@@ -592,78 +592,8 @@ extern "C" {
     // Phase 2 (plan 92c8078e): compound parsing accessors for rs_shada_read_next_item
     fn nvim_shada_file_try_read_buffered(fd: *mut c_void, len: usize) -> *mut c_char;
     fn nvim_shada_file_bytes_read(fd: *mut c_void) -> u64;
-    fn nvim_shada_set_entry_default_data(entry: *mut ShadaEntry, type_u64: u64);
-    fn nvim_shada_verify_skip(buf: *const c_char, size: usize, parse_pos: u64) -> c_int;
-    fn nvim_shada_set_unknown_item(
-        entry: *mut ShadaEntry,
-        type_u64: u64,
-        buf: *mut c_char,
-        length: usize,
-        buf_allocated: bool,
-        read_ptr: *const c_char,
-        read_size: usize,
-        initial_fpos: u64,
-        parse_pos: u64,
-    ) -> c_int;
-    fn nvim_shada_parse_search_pattern(
-        entry: *mut ShadaEntry,
-        buf: *const c_char,
-        size: usize,
-        initial_fpos: u64,
-    ) -> c_int;
-    fn nvim_shada_parse_mark(
-        entry: *mut ShadaEntry,
-        buf: *const c_char,
-        size: usize,
-        initial_fpos: u64,
-        type_u64: u64,
-    ) -> c_int;
-    fn nvim_shada_parse_register(
-        entry: *mut ShadaEntry,
-        buf: *const c_char,
-        size: usize,
-        initial_fpos: u64,
-    ) -> c_int;
-    fn nvim_shada_parse_history(
-        entry: *mut ShadaEntry,
-        buf: *const c_char,
-        size: usize,
-        initial_fpos: u64,
-        num_additional: *mut u32,
-        read_ptr_out: *mut *const c_char,
-        read_size_out: *mut usize,
-    ) -> c_int;
-    fn nvim_shada_parse_variable(
-        entry: *mut ShadaEntry,
-        buf: *const c_char,
-        size: usize,
-        initial_fpos: u64,
-        num_additional: *mut u32,
-        read_ptr_out: *mut *const c_char,
-        read_size_out: *mut usize,
-    ) -> c_int;
-    fn nvim_shada_parse_substr(
-        entry: *mut ShadaEntry,
-        buf: *const c_char,
-        size: usize,
-        initial_fpos: u64,
-        num_additional: *mut u32,
-        read_ptr_out: *mut *const c_char,
-        read_size_out: *mut usize,
-    ) -> c_int;
-    fn nvim_shada_parse_buflist(
-        entry: *mut ShadaEntry,
-        buf: *const c_char,
-        size: usize,
-        initial_fpos: u64,
-    ) -> c_int;
-    fn nvim_shada_parse_additional_data(
-        entry: *mut ShadaEntry,
-        read_ptr: *const c_char,
-        read_size: usize,
-        num_additional: u32,
-        initial_fpos: u64,
-    ) -> c_int;
+    // Phase 6 plan 13c452f9: all keydict parse functions migrated to Rust.
+    // Kept: semsg_rcerr wrappers (called from rs_shada_read_next_item header parsing)
     fn nvim_shada_semsg_rcerr_too_long(initial_fpos: u64);
     fn nvim_shada_semsg_rcerr_missing(initial_fpos: u64);
 }
@@ -839,6 +769,1030 @@ extern "C" {
     fn nvim_shada_semsg_not_writable(fname: *const c_char);
     /// Emit RNERR "Failed setting uid and gid" error.
     fn nvim_shada_semsg_fchown_error(tempname: *const c_char, strerror_msg: *const c_char);
+}
+
+// =============================================================================
+// Phase 6 (plan 13c452f9): FFI declarations for unpack_* and decode_string
+// =============================================================================
+
+// NvimString is defined later in this file (line ~5153). is_null() method added there.
+
+/// AdditionalDataBuilder matches C's `kvec_t(char)` = `AdditionalDataBuilder`:
+/// `{size_t size; size_t capacity; char *items}`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct AdditionalDataBuilder {
+    pub size: usize,
+    pub capacity: usize,
+    pub items: *mut c_char,
+}
+
+impl AdditionalDataBuilder {
+    /// Equivalent of C's KV_INITIAL_VALUE.
+    pub const fn new() -> Self {
+        Self {
+            size: 0,
+            capacity: 0,
+            items: std::ptr::null_mut(),
+        }
+    }
+}
+
+impl Default for AdditionalDataBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// MPACK status codes matching mpack_core.h
+const MPACK_OK: c_int = 0;
+
+/// Matches C's `KeySetLink` in api/private/defs.h.
+/// Used by `unpack_keydict` to locate struct fields.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct KeySetLink {
+    pub str_: *mut c_char,
+    pub ptr_off: usize,
+    pub type_: c_int,
+    pub opt_index: c_int,
+    pub is_hlgroup: bool,
+}
+
+/// StringArray = kvec_t(String) = `{size: usize, capacity: usize, items: *mut NvimString}`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct StringArray {
+    pub size: usize,
+    pub capacity: usize,
+    pub items: *mut NvimString,
+}
+
+/// Matches C's `Dict(_shada_search_pat)` from keysets_defs.h.
+///
+/// Fields ordered to match C struct layout. KEYSET_OPTIDX: sb=1, sc=2, se=3, sh=4,
+/// sl=5, sm=6, so=7, sp=8, ss=9, su=10.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct KeyDict_shada_search_pat {
+    pub is_set: u64,
+    pub magic: bool,                 // sm = 6
+    pub smartcase: bool,             // sc = 2
+    pub has_line_offset: bool,       // sl = 5
+    pub place_cursor_at_end: bool,   // se = 3
+    pub is_last_used: bool,          // su = 10
+    pub is_substitute_pattern: bool, // ss = 9
+    pub highlighted: bool,           // sh = 4
+    pub search_backward: bool,       // sb = 1
+    pub offset: i64,                 // so = 7
+    pub pat: NvimString,             // sp = 8
+}
+
+/// Matches C's `Dict(_shada_mark)` from keysets_defs.h.
+/// KEYSET_OPTIDX: c=1, f=2, l=3, n=4
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct KeyDict_shada_mark {
+    pub is_set: u64,
+    pub n: i64,
+    pub l: i64,
+    pub c: i64,
+    pub f: NvimString,
+}
+
+/// Matches C's `Dict(_shada_register)` from keysets_defs.h.
+///
+/// KEYSET_OPTIDX: n=1, rc=2, rt=3, ru=4, rw=5. C inserts 7 bytes of padding
+/// after `ru` to align `rt`; `#[repr(C)]` does the same automatically.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct KeyDict_shada_register {
+    pub is_set: u64,
+    pub rc: StringArray,
+    pub ru: bool,
+    pub rt: i64,
+    pub n: i64,
+    pub rw: i64,
+}
+
+/// Matches C's `Dict(_shada_buflist_item)` from keysets_defs.h.
+/// KEYSET_OPTIDX: c=1, f=2, l=3
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct KeyDict_shada_buflist_item {
+    pub is_set: u64,
+    pub l: i64,
+    pub c: i64,
+    pub f: NvimString,
+}
+
+/// Check if a keydict field is set (HAS_KEY macro equivalent).
+#[inline]
+const fn has_key(is_set: u64, opt_idx: u64) -> bool {
+    (is_set & (1 << opt_idx)) != 0
+}
+
+#[allow(dead_code)]
+extern "C" {
+    /// Unpack the next msgpack array; returns element count or -1 on error.
+    fn unpack_array(data: *mut *const c_char, size: *mut usize) -> isize;
+    /// Unpack the next msgpack string; returns NvimString with data=null on error.
+    fn unpack_string(data: *mut *const c_char, size: *mut usize) -> NvimString;
+    /// Unpack the next msgpack integer into *res; returns true on success.
+    fn unpack_integer(data: *mut *const c_char, size: *mut usize, res: *mut i64) -> bool;
+    /// Skip the next msgpack value; returns MPACK_OK/MPACK_EOF/MPACK_ERROR.
+    fn unpack_skip(data: *mut *const c_char, size: *mut usize) -> c_int;
+    /// Decode msgpack into a typval_T at *ret; returns MPACK_OK on success.
+    fn unpack_typval(data: *mut *const c_char, size: *mut usize, ret: *mut c_void) -> c_int;
+    /// Push raw msgpack bytes into the AdditionalDataBuilder.
+    fn push_additional_data(ad: *mut AdditionalDataBuilder, data: *const c_char, size: usize);
+    /// Decode a msgpack binary string to a typval_T written at dst (16 bytes).
+    /// Callers must provide a 16-byte aligned destination via nvim_shada_entry_var_value_ptr.
+    fn nvim_shada_decode_string_into(
+        s: *const c_char,
+        len: usize,
+        force_blob: bool,
+        dst: *mut c_void,
+    );
+    /// Emit RERR "Error while reading ShaDa file: <name> entry at <pos> <desc>".
+    fn nvim_shada_semsg_readerr(
+        entry_name: *const c_char,
+        error_desc: *const c_char,
+        position: u64,
+    );
+    /// Emit RCERR "Failed to parse ShaDa file: extra bytes in msgpack string".
+    fn nvim_shada_semsg_rcerr_extra_bytes(parse_pos: u64);
+    /// Emit RCERR "Failed to parse ShaDa file: incomplete msgpack string".
+    fn nvim_shada_semsg_rcerr_incomplete(parse_pos: u64);
+    /// Emit RCERR "Failed to parse ShaDa file due to a msgpack parser error".
+    fn nvim_shada_semsg_rcerr_parse_error(parse_pos: u64);
+    /// Unpack a msgpack dict into a typed keydict struct via field hash.
+    /// Returns true on success; writes error string (xmalloc'd) to *error on failure.
+    fn unpack_keydict(
+        retval: *mut c_void,
+        hashy: Option<unsafe extern "C" fn(*const c_char, usize) -> *mut KeySetLink>,
+        ad: *mut AdditionalDataBuilder,
+        data: *mut *const c_char,
+        size: *mut usize,
+        error: *mut *mut c_char,
+    ) -> bool;
+    /// Heap-copy a NvimString (pass arena=NULL for heap allocation).
+    fn copy_string(str: NvimString, arena: *mut c_void) -> NvimString;
+    /// DictHash for _shada_search_pat.
+    fn KeyDict__shada_search_pat_get_field(str: *const c_char, len: usize) -> *mut KeySetLink;
+    /// DictHash for _shada_mark.
+    fn KeyDict__shada_mark_get_field(str: *const c_char, len: usize) -> *mut KeySetLink;
+    /// DictHash for _shada_register.
+    fn KeyDict__shada_register_get_field(str: *const c_char, len: usize) -> *mut KeySetLink;
+    /// DictHash for _shada_buflist_item.
+    fn KeyDict__shada_buflist_item_get_field(str: *const c_char, len: usize) -> *mut KeySetLink;
+}
+
+// =============================================================================
+// Phase 6 (plan 13c452f9): Rust implementations of non-keydict parse functions
+// =============================================================================
+
+/// Inline the RCERR msgpack-check-status logic.
+/// Returns SD_READ_STATUS_SUCCESS or SD_READ_STATUS_NOT_SHADA.
+unsafe fn rs_check_skip_status(status: c_int, read_size: usize, parse_pos: u64) -> c_int {
+    // MPACK_OK = 0, MPACK_EOF = 1, MPACK_ERROR = 2
+    if status == MPACK_OK {
+        if read_size != 0 {
+            nvim_shada_semsg_rcerr_extra_bytes(parse_pos);
+            SD_READ_STATUS_NOT_SHADA
+        } else {
+            SD_READ_STATUS_SUCCESS
+        }
+    } else if status == 1 {
+        // MPACK_EOF
+        nvim_shada_semsg_rcerr_incomplete(parse_pos);
+        SD_READ_STATUS_NOT_SHADA
+    } else {
+        nvim_shada_semsg_rcerr_parse_error(parse_pos);
+        SD_READ_STATUS_NOT_SHADA
+    }
+}
+
+/// Rust replacement for nvim_shada_set_entry_default_data.
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn rs_set_entry_default_data(entry: *mut ShadaEntry, type_u64: u64) {
+    match type_u64 as i32 {
+        SD_ITEM_HEADER => {
+            (*entry).data.header = std::mem::ManuallyDrop::new(HeaderData::default());
+        }
+        SD_ITEM_SEARCH_PATTERN => {
+            (*entry).data.search_pattern =
+                std::mem::ManuallyDrop::new(SearchPatternData::default());
+        }
+        SD_ITEM_SUB_STRING => {
+            (*entry).data.sub_string = std::mem::ManuallyDrop::new(SubStringData::default());
+        }
+        SD_ITEM_HISTORY_ENTRY => {
+            (*entry).data.history_item = std::mem::ManuallyDrop::new(HistoryItemData::default());
+        }
+        SD_ITEM_REGISTER => {
+            (*entry).data.reg = std::mem::ManuallyDrop::new(RegisterData::default());
+        }
+        SD_ITEM_VARIABLE => {
+            (*entry).data.global_var = std::mem::ManuallyDrop::new(GlobalVarData::default());
+        }
+        SD_ITEM_GLOBAL_MARK | SD_ITEM_LOCAL_MARK => {
+            (*entry).data.filemark = std::mem::ManuallyDrop::new(FilemarkData {
+                name: b'"' as c_char,
+                mark: Position::DEFAULT,
+                fname: std::ptr::null_mut(),
+            });
+        }
+        SD_ITEM_JUMP | SD_ITEM_CHANGE => {
+            (*entry).data.filemark = std::mem::ManuallyDrop::new(FilemarkData {
+                name: 0,
+                mark: Position::DEFAULT,
+                fname: std::ptr::null_mut(),
+            });
+        }
+        SD_ITEM_BUFFER_LIST => {
+            (*entry).data.buffer_list = std::mem::ManuallyDrop::new(BufferListData::default());
+        }
+        _ => {}
+    }
+}
+
+/// Rust replacement for nvim_shada_verify_skip.
+unsafe fn rs_verify_skip(buf: *const c_char, size: usize, parse_pos: u64) -> c_int {
+    let mut read_ptr = buf;
+    let mut read_size = size;
+    let status = unpack_skip(&raw mut read_ptr, &raw mut read_size);
+    rs_check_skip_status(status, read_size, parse_pos)
+}
+
+/// Rust replacement for nvim_shada_set_unknown_item.
+#[allow(clippy::too_many_arguments)]
+unsafe fn rs_set_unknown_item(
+    entry: *mut ShadaEntry,
+    type_u64: u64,
+    buf: *mut c_char,
+    length: usize,
+    buf_allocated: bool,
+    read_ptr: *const c_char,
+    read_size: usize,
+    initial_fpos: u64,
+    parse_pos: u64,
+) -> c_int {
+    (*entry).entry_type = ShadaEntryType::Unknown;
+    (*entry).data.unknown_item = std::mem::ManuallyDrop::new(UnknownItemData {
+        type_num: type_u64,
+        contents: std::ptr::null_mut(),
+        size: length,
+    });
+
+    if initial_fpos == 0 {
+        let mut rp = read_ptr;
+        let mut rs = read_size;
+        let status = unpack_skip(&raw mut rp, &raw mut rs);
+        let spm_ret = rs_check_skip_status(status, rs, parse_pos);
+        if spm_ret != SD_READ_STATUS_SUCCESS {
+            if buf_allocated {
+                nvim_xfree(buf.cast::<c_void>());
+            }
+            (*entry).entry_type = ShadaEntryType::Missing;
+            return spm_ret;
+        }
+    }
+
+    let contents = if buf_allocated {
+        buf
+    } else {
+        let mem = nvim_xmalloc(length).cast::<c_char>();
+        std::ptr::copy_nonoverlapping(buf, mem, length);
+        mem
+    };
+    (*entry).data.unknown_item = std::mem::ManuallyDrop::new(UnknownItemData {
+        type_num: type_u64,
+        contents,
+        size: length,
+    });
+    SD_READ_STATUS_SUCCESS
+}
+
+/// Rust replacement for nvim_shada_parse_history.
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+unsafe fn rs_parse_history(
+    entry: *mut ShadaEntry,
+    buf: *const c_char,
+    size: usize,
+    initial_fpos: u64,
+    num_additional: *mut u32,
+    read_ptr_out: *mut *const c_char,
+    read_size_out: *mut usize,
+) -> c_int {
+    let mut read_ptr = buf;
+    let mut read_size = size;
+
+    let len = unpack_array(&raw mut read_ptr, &raw mut read_size);
+    if len < 2 {
+        nvim_shada_semsg_readerr(
+            c"history".as_ptr(),
+            c"is not an array with enough elements".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    let mut hist_type: i64 = 0;
+    if !unpack_integer(&raw mut read_ptr, &raw mut read_size, &raw mut hist_type) {
+        nvim_shada_semsg_readerr(
+            c"history".as_ptr(),
+            c"has wrong history type type".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    let item = unpack_string(&raw mut read_ptr, &raw mut read_size);
+    if item.is_null() {
+        nvim_shada_semsg_readerr(
+            c"history".as_ptr(),
+            c"has wrong history string type".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+    if !libc::memchr(item.data.cast::<c_void>(), 0, item.size).is_null() {
+        nvim_shada_semsg_readerr(
+            c"history".as_ptr(),
+            c"contains string with zero byte inside".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    let hist_type_u8 = hist_type as u8;
+    let is_hist_search = hist_type_u8 == HIST_SEARCH;
+
+    let sep: c_char = if is_hist_search {
+        if len < 3 {
+            nvim_shada_semsg_readerr(
+                c"search history".as_ptr(),
+                c"does not have separator character".as_ptr(),
+                initial_fpos,
+            );
+            return SD_READ_STATUS_MALFORMED;
+        }
+        let mut sep_type: i64 = 0;
+        if !unpack_integer(&raw mut read_ptr, &raw mut read_size, &raw mut sep_type) {
+            nvim_shada_semsg_readerr(
+                c"search history".as_ptr(),
+                c"has wrong history separator type".as_ptr(),
+                initial_fpos,
+            );
+            return SD_READ_STATUS_MALFORMED;
+        }
+        sep_type as c_char
+    } else {
+        0
+    };
+
+    // Allocate string: item.size bytes + NUL + sep (matches C logic exactly)
+    let strsize = item.size + 2;
+    let string = nvim_xmalloc(strsize).cast::<c_char>();
+    std::ptr::copy_nonoverlapping(item.data, string, item.size);
+    *string.add(item.size) = 0;
+    *string.add(item.size + 1) = sep;
+
+    (*entry).data.history_item = std::mem::ManuallyDrop::new(HistoryItemData {
+        histtype: hist_type_u8,
+        string,
+        sep,
+    });
+
+    *num_additional = (len as u32).wrapping_sub(2 + u32::from(is_hist_search));
+    *read_ptr_out = read_ptr;
+    *read_size_out = read_size;
+    SD_READ_STATUS_SUCCESS
+}
+
+/// Rust replacement for nvim_shada_parse_variable.
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+unsafe fn rs_parse_variable(
+    entry: *mut ShadaEntry,
+    buf: *const c_char,
+    size: usize,
+    initial_fpos: u64,
+    num_additional: *mut u32,
+    read_ptr_out: *mut *const c_char,
+    read_size_out: *mut usize,
+) -> c_int {
+    let mut read_ptr = buf;
+    let mut read_size = size;
+
+    let len = unpack_array(&raw mut read_ptr, &raw mut read_size);
+    if len < 2 {
+        nvim_shada_semsg_readerr(
+            c"variable".as_ptr(),
+            c"is not an array with enough elements".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    let name = unpack_string(&raw mut read_ptr, &raw mut read_size);
+    if name.is_null() {
+        nvim_shada_semsg_readerr(
+            c"variable".as_ptr(),
+            c"has wrong variable name type".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    // Set the name atomically (ManuallyDrop union fields cannot be mutated field-by-field).
+    // We set value to null here; the actual typval_T is written below via tv_ptr into C memory.
+    (*entry).data.global_var = std::mem::ManuallyDrop::new(GlobalVarData {
+        name: nvim_xmemdupz(name.data, name.size),
+        value: std::ptr::null_mut(),
+    });
+
+    let binval = unpack_string(&raw mut read_ptr, &raw mut read_size);
+    let mut is_blob = false;
+    if binval.is_null() {
+        // No binary value: unpack as a generic typval_T
+        let tv_ptr = nvim_shada_entry_var_value_ptr(entry);
+        let status = unpack_typval(&raw mut read_ptr, &raw mut read_size, tv_ptr);
+        if status != MPACK_OK {
+            nvim_shada_semsg_readerr(
+                c"variable".as_ptr(),
+                c"has value that cannot be converted to the Vimscript value".as_ptr(),
+                initial_fpos,
+            );
+            return SD_READ_STATUS_MALFORMED;
+        }
+    } else {
+        // Binary value: optionally check blob type tag
+        if len > 2 {
+            let mut type_val: i64 = 0;
+            if !unpack_integer(&raw mut read_ptr, &raw mut read_size, &raw mut type_val)
+                || type_val != 10
+            // VAR_TYPE_BLOB
+            {
+                nvim_shada_semsg_readerr(
+                    c"variable".as_ptr(),
+                    c"has wrong variable type".as_ptr(),
+                    initial_fpos,
+                );
+                return SD_READ_STATUS_MALFORMED;
+            }
+            is_blob = true;
+        }
+        // decode_string writes a typval_T into the entry at the C-layout location
+        let tv_ptr = nvim_shada_entry_var_value_ptr(entry);
+        nvim_shada_decode_string_into(binval.data, binval.size, is_blob, tv_ptr);
+    }
+
+    *num_additional = (len as u32).wrapping_sub(2 + u32::from(is_blob));
+    *read_ptr_out = read_ptr;
+    *read_size_out = read_size;
+    SD_READ_STATUS_SUCCESS
+}
+
+/// Rust replacement for nvim_shada_parse_substr.
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+unsafe fn rs_parse_substr(
+    entry: *mut ShadaEntry,
+    buf: *const c_char,
+    size: usize,
+    initial_fpos: u64,
+    num_additional: *mut u32,
+    read_ptr_out: *mut *const c_char,
+    read_size_out: *mut usize,
+) -> c_int {
+    let mut read_ptr = buf;
+    let mut read_size = size;
+
+    let len = unpack_array(&raw mut read_ptr, &raw mut read_size);
+    if len < 1 {
+        nvim_shada_semsg_readerr(
+            c"sub string".as_ptr(),
+            c"is not an array with enough elements".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    let sub = unpack_string(&raw mut read_ptr, &raw mut read_size);
+    if sub.is_null() {
+        nvim_shada_semsg_readerr(
+            c"sub string".as_ptr(),
+            c"has wrong sub string type".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    // Assign atomically (ManuallyDrop union fields cannot be mutated field-by-field).
+    (*entry).data.sub_string = std::mem::ManuallyDrop::new(SubStringData {
+        sub: nvim_xmemdupz(sub.data, sub.size),
+    });
+    *num_additional = (len as u32).wrapping_sub(1);
+    *read_ptr_out = read_ptr;
+    *read_size_out = read_size;
+    SD_READ_STATUS_SUCCESS
+}
+
+/// Rust replacement for nvim_shada_parse_additional_data.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn rs_parse_additional_data(
+    entry: *mut ShadaEntry,
+    read_ptr: *const c_char,
+    read_size: usize,
+    num_additional: u32,
+    initial_fpos: u64,
+) -> c_int {
+    let mut ad = AdditionalDataBuilder::new();
+    let mut rp = read_ptr;
+    let mut rs = read_size;
+
+    for _ in 0..num_additional {
+        let item_start = rp;
+        let status = unpack_skip(&raw mut rp, &raw mut rs);
+        if status != MPACK_OK {
+            if !ad.items.is_null() {
+                nvim_xfree(ad.items.cast::<c_void>());
+            }
+            return SD_READ_STATUS_MALFORMED;
+        }
+        let item_len = rp.offset_from(item_start) as usize;
+        push_additional_data(&raw mut ad, item_start, item_len);
+    }
+
+    if rs != 0 {
+        nvim_shada_semsg_readerr(c"item".as_ptr(), c"additional bytes".as_ptr(), initial_fpos);
+        if !ad.items.is_null() {
+            nvim_xfree(ad.items.cast::<c_void>());
+        }
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    (*entry).additional_data = ad.items.cast::<c_void>();
+    SD_READ_STATUS_SUCCESS
+}
+
+// =============================================================================
+// Phase 6 Part 2 (plan 13c452f9): Rust implementations of keydict parse functions
+// =============================================================================
+
+/// Rust replacement for nvim_shada_parse_search_pattern.
+/// Uses a local KeyDict_shada_search_pat with unpack_keydict, then copies fields
+/// into the Rust SearchPatternData in entry->data.search_pattern.
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+unsafe fn rs_parse_search_pattern(
+    entry: *mut ShadaEntry,
+    buf: *const c_char,
+    size: usize,
+    initial_fpos: u64,
+) -> c_int {
+    let mut read_ptr = buf;
+    let mut read_size = size;
+    let mut error_alloc: *mut c_char = std::ptr::null_mut();
+
+    // Use a zeroed local keydict struct as the unpack target.
+    let mut it = KeyDict_shada_search_pat {
+        is_set: 0,
+        magic: false,
+        smartcase: false,
+        has_line_offset: false,
+        place_cursor_at_end: false,
+        is_last_used: false,
+        is_substitute_pattern: false,
+        highlighted: false,
+        search_backward: false,
+        offset: 0,
+        pat: NvimString {
+            data: std::ptr::null_mut(),
+            size: 0,
+        },
+    };
+
+    if !unpack_keydict(
+        std::ptr::addr_of_mut!(it).cast::<c_void>(),
+        Some(KeyDict__shada_search_pat_get_field),
+        std::ptr::null_mut(),
+        &raw mut read_ptr,
+        &raw mut read_size,
+        &raw mut error_alloc,
+    ) {
+        nvim_shada_semsg_readerr(c"search pattern".as_ptr(), error_alloc, initial_fpos);
+        nvim_xfree(error_alloc.cast::<c_void>());
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    // KEYSET_OPTIDX__shada_search_pat__sp = 8
+    if !has_key(it.is_set, 8) {
+        nvim_shada_semsg_readerr(
+            c"search pattern".as_ptr(),
+            c"has no pattern".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    // Heap-copy the pat string (copy_string with NULL arena).
+    let pat_copy = copy_string(it.pat, std::ptr::null_mut());
+
+    // Copy fields into the Rust SearchPatternData. Keep defaults for fields not set.
+    // KEYSET_OPTIDX: sb=1, sc=2, se=3, sh=4, sl=5, sm=6, so=7, sp=8, ss=9, su=10
+    let defaults = SearchPatternData::default();
+    let magic = if has_key(it.is_set, 6) {
+        it.magic
+    } else {
+        defaults.magic
+    };
+    let smartcase = if has_key(it.is_set, 2) {
+        it.smartcase
+    } else {
+        defaults.smartcase
+    };
+    let has_line_offset = if has_key(it.is_set, 5) {
+        it.has_line_offset
+    } else {
+        defaults.has_line_offset
+    };
+    let place_cursor_at_end = if has_key(it.is_set, 3) {
+        it.place_cursor_at_end
+    } else {
+        defaults.place_cursor_at_end
+    };
+    let is_last_used = if has_key(it.is_set, 10) {
+        it.is_last_used
+    } else {
+        defaults.is_last_used
+    };
+    let is_substitute_pattern = if has_key(it.is_set, 9) {
+        it.is_substitute_pattern
+    } else {
+        defaults.is_substitute_pattern
+    };
+    let highlighted = if has_key(it.is_set, 4) {
+        it.highlighted
+    } else {
+        defaults.highlighted
+    };
+    let search_backward = if has_key(it.is_set, 1) {
+        it.search_backward
+    } else {
+        defaults.search_backward
+    };
+    let offset = if has_key(it.is_set, 7) {
+        it.offset
+    } else {
+        defaults.offset
+    };
+
+    (*entry).data.search_pattern = std::mem::ManuallyDrop::new(SearchPatternData {
+        magic,
+        smartcase,
+        has_line_offset,
+        place_cursor_at_end,
+        offset,
+        is_last_used,
+        is_substitute_pattern,
+        highlighted,
+        search_backward,
+        pat: pat_copy.data,
+        pat_len: pat_copy.size,
+    });
+
+    SD_READ_STATUS_SUCCESS
+}
+
+/// Rust replacement for nvim_shada_parse_mark.
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+unsafe fn rs_parse_mark(
+    entry: *mut ShadaEntry,
+    buf: *const c_char,
+    size: usize,
+    initial_fpos: u64,
+    type_u64: u64,
+) -> c_int {
+    let mut read_ptr = buf;
+    let mut read_size = size;
+    let mut error_alloc: *mut c_char = std::ptr::null_mut();
+
+    let mut it = KeyDict_shada_mark {
+        is_set: 0,
+        n: 0,
+        l: 0,
+        c: 0,
+        f: NvimString {
+            data: std::ptr::null_mut(),
+            size: 0,
+        },
+    };
+
+    if !unpack_keydict(
+        std::ptr::addr_of_mut!(it).cast::<c_void>(),
+        Some(KeyDict__shada_mark_get_field),
+        std::ptr::null_mut(),
+        &raw mut read_ptr,
+        &raw mut read_size,
+        &raw mut error_alloc,
+    ) {
+        nvim_shada_semsg_readerr(c"mark".as_ptr(), error_alloc, initial_fpos);
+        nvim_xfree(error_alloc.cast::<c_void>());
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    // KEYSET_OPTIDX: c=1, f=2, l=3, n=4
+    // Read the existing filemark defaults (set by rs_set_entry_default_data).
+    let existing: FilemarkData = *(*entry).data.filemark;
+
+    let name = if has_key(it.is_set, 4) {
+        // n key only valid for local/global marks, not jump/change
+        if type_u64 == SD_ITEM_JUMP as u64 || type_u64 == SD_ITEM_CHANGE as u64 {
+            nvim_shada_semsg_readerr(
+                c"mark".as_ptr(),
+                c"has n key which is only valid for local and global mark entries".as_ptr(),
+                initial_fpos,
+            );
+            return SD_READ_STATUS_MALFORMED;
+        }
+        it.n as c_char
+    } else {
+        existing.name
+    };
+
+    let lnum = if has_key(it.is_set, 3) {
+        it.l
+    } else {
+        existing.mark.lnum
+    };
+    let col = if has_key(it.is_set, 1) {
+        it.c as i32
+    } else {
+        existing.mark.col
+    };
+    let fname = if has_key(it.is_set, 2) {
+        nvim_xmemdupz(it.f.data, it.f.size)
+    } else {
+        existing.fname
+    };
+
+    if fname.is_null() {
+        nvim_shada_semsg_readerr(
+            c"mark".as_ptr(),
+            c"is missing file name".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+    if lnum <= 0 {
+        nvim_shada_semsg_readerr(
+            c"mark".as_ptr(),
+            c"has invalid line number".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+    if col < 0 {
+        nvim_shada_semsg_readerr(
+            c"mark".as_ptr(),
+            c"has invalid column number".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    (*entry).data.filemark = std::mem::ManuallyDrop::new(FilemarkData {
+        name,
+        mark: Position::new(lnum, col, 0),
+        fname,
+    });
+
+    SD_READ_STATUS_SUCCESS
+}
+
+/// Rust replacement for nvim_shada_parse_register.
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+unsafe fn rs_parse_register(
+    entry: *mut ShadaEntry,
+    buf: *const c_char,
+    size: usize,
+    initial_fpos: u64,
+) -> c_int {
+    let mut read_ptr = buf;
+    let mut read_size = size;
+    let mut error_alloc: *mut c_char = std::ptr::null_mut();
+
+    let mut it = KeyDict_shada_register {
+        is_set: 0,
+        rc: StringArray {
+            size: 0,
+            capacity: 0,
+            items: std::ptr::null_mut(),
+        },
+        ru: false,
+        rt: 0,
+        n: 0,
+        rw: 0,
+    };
+
+    if !unpack_keydict(
+        std::ptr::addr_of_mut!(it).cast::<c_void>(),
+        Some(KeyDict__shada_register_get_field),
+        std::ptr::null_mut(),
+        &raw mut read_ptr,
+        &raw mut read_size,
+        &raw mut error_alloc,
+    ) {
+        nvim_shada_semsg_readerr(c"register".as_ptr(), error_alloc, initial_fpos);
+        nvim_xfree(error_alloc.cast::<c_void>());
+        nvim_xfree(it.rc.items.cast::<c_void>());
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    // KEYSET_OPTIDX: n=1, rc=2, rt=3, ru=4, rw=5
+    if it.rc.size == 0 {
+        nvim_shada_semsg_readerr(
+            c"register".as_ptr(),
+            c"has rc key with missing or empty array".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+
+    // Allocate Rust-layout contents array (array of *mut c_char).
+    let contents_size = it.rc.size;
+    let contents =
+        nvim_xmalloc(contents_size * std::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
+    for j in 0..contents_size {
+        let s = copy_string(*it.rc.items.add(j), std::ptr::null_mut());
+        *contents.add(j) = s.data;
+    }
+    nvim_xfree(it.rc.items.cast::<c_void>());
+
+    let defaults = RegisterData::default();
+    // ru=4, rt=3, n=1, rw=5
+    let is_unnamed = if has_key(it.is_set, 4) {
+        it.ru
+    } else {
+        defaults.is_unnamed
+    };
+    let reg_type = if has_key(it.is_set, 3) {
+        it.rt as c_int
+    } else {
+        defaults.reg_type
+    };
+    let name = if has_key(it.is_set, 1) {
+        it.n as c_char
+    } else {
+        defaults.name
+    };
+    let width = if has_key(it.is_set, 5) {
+        it.rw as usize
+    } else {
+        defaults.width
+    };
+
+    (*entry).data.reg = std::mem::ManuallyDrop::new(RegisterData {
+        name,
+        reg_type,
+        contents,
+        contents_size,
+        is_unnamed,
+        width,
+    });
+
+    SD_READ_STATUS_SUCCESS
+}
+
+/// Rust replacement for nvim_shada_parse_buflist.
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines
+)]
+unsafe fn rs_parse_buflist(
+    entry: *mut ShadaEntry,
+    buf: *const c_char,
+    size: usize,
+    initial_fpos: u64,
+) -> c_int {
+    let mut read_ptr = buf;
+    let mut read_size = size;
+
+    let len = unpack_array(&raw mut read_ptr, &raw mut read_size);
+    if len < 0 {
+        nvim_shada_semsg_readerr(
+            c"buffer list".as_ptr(),
+            c"is not an array".as_ptr(),
+            initial_fpos,
+        );
+        return SD_READ_STATUS_MALFORMED;
+    }
+    if len == 0 {
+        return SD_READ_STATUS_SUCCESS;
+    }
+
+    let buf_count = len as usize;
+    let buffers =
+        nvim_xcalloc(buf_count, std::mem::size_of::<BufferListBuffer>()).cast::<BufferListBuffer>();
+
+    let mut actual_size: usize = 0;
+    for i in 0..buf_count {
+        actual_size += 1;
+        let mut it = KeyDict_shada_buflist_item {
+            is_set: 0,
+            l: 0,
+            c: 0,
+            f: NvimString {
+                data: std::ptr::null_mut(),
+                size: 0,
+            },
+        };
+        let mut it_ad = AdditionalDataBuilder::new();
+        let mut error_alloc: *mut c_char = std::ptr::null_mut();
+
+        if !unpack_keydict(
+            std::ptr::addr_of_mut!(it).cast::<c_void>(),
+            Some(KeyDict__shada_buflist_item_get_field),
+            &raw mut it_ad,
+            &raw mut read_ptr,
+            &raw mut read_size,
+            &raw mut error_alloc,
+        ) {
+            // Build error message like C: "buffer list at position %u contains entry that %s"
+            nvim_shada_semsg_readerr(c"buffer list".as_ptr(), error_alloc, initial_fpos);
+            nvim_xfree(error_alloc.cast::<c_void>());
+            nvim_xfree(it_ad.items.cast::<c_void>());
+            (*entry).data.buffer_list = std::mem::ManuallyDrop::new(BufferListData {
+                size: actual_size,
+                buffers,
+            });
+            return SD_READ_STATUS_MALFORMED;
+        }
+
+        let e = &mut *buffers.add(i);
+        e.additional_data = it_ad.items.cast::<c_void>();
+        e.pos = Position::DEFAULT;
+
+        // KEYSET_OPTIDX: c=1, f=2, l=3
+        if has_key(it.is_set, 3) {
+            e.pos.lnum = it.l;
+        }
+        if has_key(it.is_set, 1) {
+            e.pos.col = it.c as i32;
+        }
+        if has_key(it.is_set, 2) {
+            e.fname = nvim_xmemdupz(it.f.data, it.f.size);
+        }
+
+        if e.pos.lnum <= 0 {
+            nvim_shada_semsg_readerr(
+                c"buffer list".as_ptr(),
+                c"contains entry with invalid line number".as_ptr(),
+                initial_fpos,
+            );
+            (*entry).data.buffer_list = std::mem::ManuallyDrop::new(BufferListData {
+                size: actual_size,
+                buffers,
+            });
+            return SD_READ_STATUS_MALFORMED;
+        }
+        if e.pos.col < 0 {
+            nvim_shada_semsg_readerr(
+                c"buffer list".as_ptr(),
+                c"contains entry with invalid column number".as_ptr(),
+                initial_fpos,
+            );
+            (*entry).data.buffer_list = std::mem::ManuallyDrop::new(BufferListData {
+                size: actual_size,
+                buffers,
+            });
+            return SD_READ_STATUS_MALFORMED;
+        }
+        if e.fname.is_null() {
+            nvim_shada_semsg_readerr(
+                c"buffer list".as_ptr(),
+                c"contains entry that does not have a file name".as_ptr(),
+                initial_fpos,
+            );
+            (*entry).data.buffer_list = std::mem::ManuallyDrop::new(BufferListData {
+                size: actual_size,
+                buffers,
+            });
+            return SD_READ_STATUS_MALFORMED;
+        }
+    }
+
+    (*entry).data.buffer_list = std::mem::ManuallyDrop::new(BufferListData {
+        size: actual_size,
+        buffers,
+    });
+    SD_READ_STATUS_SUCCESS
 }
 
 // =============================================================================
@@ -4459,7 +5413,8 @@ unsafe fn rs_shada_read_next_item(
         let read_size = length;
 
         if verify_but_ignore {
-            let spm_ret = nvim_shada_verify_skip(read_ptr, read_size, parse_pos);
+            // Phase 6 (plan 13c452f9): use Rust rs_verify_skip
+            let spm_ret = rs_verify_skip(read_ptr, read_size, parse_pos);
             if buf_allocated {
                 nvim_xfree(buf.cast::<c_void>());
             }
@@ -4470,7 +5425,8 @@ unsafe fn rs_shada_read_next_item(
         }
 
         if type_u64 > SHADA_LAST_ENTRY {
-            let r = nvim_shada_set_unknown_item(
+            // Phase 6 (plan 13c452f9): use Rust rs_set_unknown_item
+            let r = rs_set_unknown_item(
                 entry,
                 type_u64,
                 buf,
@@ -4484,10 +5440,10 @@ unsafe fn rs_shada_read_next_item(
             return r;
         }
 
-        // Set default data for this entry type
-        nvim_shada_set_entry_default_data(entry, type_u64);
+        // Set default data for this entry type (Phase 6: Rust implementation)
+        rs_set_entry_default_data(entry, type_u64);
 
-        // Parse the entry body using per-type C compound accessors
+        // Parse the entry body using per-type implementations
         let mut num_additional: u32 = 0;
         let mut body_read_ptr = read_ptr;
         let mut body_read_size = read_size;
@@ -4498,19 +5454,19 @@ unsafe fn rs_shada_read_next_item(
                 SD_READ_STATUS_SUCCESS
             }
             t if t == SD_ITEM_SEARCH_PATTERN as u64 => {
-                nvim_shada_parse_search_pattern(entry, read_ptr, read_size, initial_fpos)
+                rs_parse_search_pattern(entry, read_ptr, read_size, initial_fpos)
             }
             t if t == SD_ITEM_CHANGE as u64
                 || t == SD_ITEM_JUMP as u64
                 || t == SD_ITEM_GLOBAL_MARK as u64
                 || t == SD_ITEM_LOCAL_MARK as u64 =>
             {
-                nvim_shada_parse_mark(entry, read_ptr, read_size, initial_fpos, type_u64)
+                rs_parse_mark(entry, read_ptr, read_size, initial_fpos, type_u64)
             }
             t if t == SD_ITEM_REGISTER as u64 => {
-                nvim_shada_parse_register(entry, read_ptr, read_size, initial_fpos)
+                rs_parse_register(entry, read_ptr, read_size, initial_fpos)
             }
-            t if t == SD_ITEM_HISTORY_ENTRY as u64 => nvim_shada_parse_history(
+            t if t == SD_ITEM_HISTORY_ENTRY as u64 => rs_parse_history(
                 entry,
                 read_ptr,
                 read_size,
@@ -4519,7 +5475,7 @@ unsafe fn rs_shada_read_next_item(
                 &raw mut body_read_ptr,
                 &raw mut body_read_size,
             ),
-            t if t == SD_ITEM_VARIABLE as u64 => nvim_shada_parse_variable(
+            t if t == SD_ITEM_VARIABLE as u64 => rs_parse_variable(
                 entry,
                 read_ptr,
                 read_size,
@@ -4528,7 +5484,7 @@ unsafe fn rs_shada_read_next_item(
                 &raw mut body_read_ptr,
                 &raw mut body_read_size,
             ),
-            t if t == SD_ITEM_SUB_STRING as u64 => nvim_shada_parse_substr(
+            t if t == SD_ITEM_SUB_STRING as u64 => rs_parse_substr(
                 entry,
                 read_ptr,
                 read_size,
@@ -4538,7 +5494,7 @@ unsafe fn rs_shada_read_next_item(
                 &raw mut body_read_size,
             ),
             t if t == SD_ITEM_BUFFER_LIST as u64 => {
-                nvim_shada_parse_buflist(entry, read_ptr, read_size, initial_fpos)
+                rs_parse_buflist(entry, read_ptr, read_size, initial_fpos)
             }
             _ => {
                 // kSDItemMissing / kSDItemUnknown should not reach here
@@ -4557,9 +5513,9 @@ unsafe fn rs_shada_read_next_item(
             return SD_READ_STATUS_MALFORMED;
         }
 
-        // Parse additional data (for array-based entry types with extra elements)
+        // Parse additional data (Phase 6: Rust implementation)
         if num_additional > 0 || body_read_size > 0 {
-            let ad_ret = nvim_shada_parse_additional_data(
+            let ad_ret = rs_parse_additional_data(
                 entry,
                 body_read_ptr,
                 body_read_size,
@@ -4746,6 +5702,13 @@ impl Default for NvimString {
             data: std::ptr::null_mut(),
             size: 0,
         }
+    }
+}
+
+impl NvimString {
+    /// Check if data pointer is null (string has no data).
+    pub const fn is_null(self) -> bool {
+        self.data.is_null()
     }
 }
 
