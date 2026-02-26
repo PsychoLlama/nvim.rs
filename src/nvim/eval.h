@@ -228,6 +228,8 @@ void set_context_for_expression(expand_T *xp, char *arg, int cmdidx);
 char *prompt_get_input(buf_T *buf);
 void prompt_invoke_callback(void);
 bool invoke_prompt_interrupt(void);
+// Phase 12: eval_init exported from Rust (eval/src/init.rs via #[export_name])
+void eval_init(void);
 // Phase 12: last_set_msg exported from Rust (eval/src/display.rs via #[export_name])
 void last_set_msg(sctx_T script_ctx);
 // Phase 12: find_option_var_end exported from Rust (eval_exec/src/eval_top.rs via #[export_name])

@@ -550,12 +550,7 @@ void restore_v_event(dict_T *v_event, save_v_event_T *sve)
   }
 }
 
-/// Initialize the global and v: variables.
-void eval_init(void)
-{
-  evalvars_init();
-  func_init();
-}
+// eval_init: deleted -- Rust export renamed to match C symbol (Phase 12).
 
 #if defined(EXITFREE)
 void eval_clear(void)
