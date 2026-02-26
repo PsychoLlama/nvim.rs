@@ -2163,12 +2163,12 @@ extern "C" {
     fn nvim_semsg_e432(tag_fname: *const c_char);
     fn nvim_emsg_e433();
 
-    // tagfunc wrapper (stays in C)
-    fn nvim_findtags_apply_tfu(
-        st: FindTagsStateHandle,
-        pat: *mut c_char,
-        buf_ffname: *mut c_char,
-    ) -> c_int;
+    // tfu_in_use guard accessors
+    fn nvim_tag_get_tfu_in_use() -> bool;
+    fn nvim_tag_set_tfu_in_use(val: bool);
+    // ga_match and match_count pointer accessors for rs_findtags_apply_tfu
+    fn nvim_findtags_get_ga_match_ptr(st: FindTagsStateHandle) -> *mut c_void;
+    fn nvim_findtags_get_match_count_ptr(st: FindTagsStateHandle) -> *mut c_int;
 
     // Pattern preparation
     fn nvim_findtags_prepare_pats(st: FindTagsStateHandle, has_re: bool);
@@ -2178,6 +2178,40 @@ extern "C" {
 
     // String functions
     fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+}
+
+/// Apply the tagfunc option to find tags (Rust port of nvim_findtags_apply_tfu).
+///
+/// Guards against recursive tagfunc calls via the `tfu_in_use` flag.
+/// Returns NOTDONE if tagfunc should not be called, or the tagfunc's result.
+///
+/// # Safety
+///
+/// - `st` must be a valid `findtags_state_T` pointer
+/// - `pat` and `buf_ffname` must be valid C strings (buf_ffname may be null)
+unsafe fn rs_findtags_apply_tfu(
+    st: FindTagsStateHandle,
+    pat: *mut c_char,
+    buf_ffname: *mut c_char,
+) -> c_int {
+    let flags = nvim_findtags_get_flags(st);
+    let use_tfu = (flags & find_tags_flags::TAG_NO_TAGFUNC) == 0;
+
+    if !use_tfu || nvim_tag_get_tfu_in_use() {
+        return NOTDONE;
+    }
+
+    let p_tfu = nvim_get_curbuf_p_tfu();
+    if p_tfu.is_null() || *p_tfu == 0 {
+        return NOTDONE;
+    }
+
+    nvim_tag_set_tfu_in_use(true);
+    let ga = nvim_findtags_get_ga_match_ptr(st);
+    let match_count = nvim_findtags_get_match_count_ptr(st);
+    let retval = rs_find_tagfunc_tags(pat, ga, match_count, flags, buf_ffname);
+    nvim_tag_set_tfu_in_use(false);
+    retval
 }
 
 /// Initialize help language and priority for a tag search.
@@ -2575,7 +2609,7 @@ pub unsafe extern "C" fn rs_find_tags(
     if has_re && !nvim_findtags_has_regprog(st) {
         retval = FAIL;
     } else {
-        retval = nvim_findtags_apply_tfu(st, pat, buf_ffname);
+        retval = rs_findtags_apply_tfu(st, pat, buf_ffname);
         if retval == NOTDONE {
             retval = FAIL;
 

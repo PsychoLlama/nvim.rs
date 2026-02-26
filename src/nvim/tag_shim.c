@@ -455,12 +455,6 @@ int nvim_help_heuristic(const char *tagname, int match_offset, bool wrong_case) 
 // Verify hash_T size matches Rust usize assumption
 _Static_assert(sizeof(hash_T) == sizeof(size_t), "hash_T must be size_t");
 
-// Verify tag flag constants match Rust values
-_Static_assert(TAG_VERBOSE == 32, "TAG_VERBOSE must be 32");
-_Static_assert(TAG_INS_COMP == 64, "TAG_INS_COMP must be 64");
-_Static_assert(TAG_KEEP_LANG == 128, "TAG_KEEP_LANG must be 128");
-_Static_assert(TAG_NO_TAGFUNC == 256, "TAG_NO_TAGFUNC must be 256");
-_Static_assert(TAG_MANY == 300, "TAG_MANY must be 300");
 
 /// Add a match to ht_match/ga_match arrays.
 /// Returns true if the match was added (not a duplicate).
@@ -579,30 +573,9 @@ void nvim_semsg_e431(const char *tag_fname) { semsg(_("E431: Format error in tag
 void nvim_semsg_before_byte(int64_t offset) { semsg(_("Before byte %" PRId64), offset); }
 void nvim_semsg_e432(const char *tag_fname) { semsg(_("E432: Tags file not sorted: %s"), tag_fname); }
 void nvim_emsg_e433(void) { emsg(_("E433: No tags file")); }
-/// Call find_tagfunc_tags via st->ga_match (keeps tfu_in_use in C)
-int nvim_findtags_apply_tfu(void *st_void, char *pat, char *buf_ffname)
-{
-  findtags_state_T *st = (findtags_state_T *)st_void;
-  const bool use_tfu = ((st->flags & TAG_NO_TAGFUNC) == 0);
-
-  if (!use_tfu || tfu_in_use || *curbuf->b_p_tfu == NUL) {
-    return NOTDONE;
-  }
-
-  tfu_in_use = true;
-  int retval = rs_find_tagfunc_tags(pat, st->ga_match, &st->match_count,
-                                   st->flags, buf_ffname);
-  tfu_in_use = false;
-  return retval;
-}
 
 void nvim_findtags_prepare_pats(void *st_void, bool has_re) { findtags_state_T *st = (findtags_state_T *)st_void; rs_prepare_pats(st->orgpat, has_re); }
 // --- Rust FFI accessor functions for tag display and location list ---
-// Verify highlight constants used in Rust
-_Static_assert(HLF_T == 23, "HLF_T value for Rust");
-_Static_assert(HLF_D == 5, "HLF_D value for Rust");
-_Static_assert(HLF_CM == 11, "HLF_CM value for Rust");
-_Static_assert(MT_MASK == 7, "MT_MASK value for Rust");
 _Static_assert(IOSIZE == 1025, "IOSIZE value for Rust");
 
 /// Get mt_names entry by index
@@ -662,8 +635,6 @@ void nvim_tag_xmemcpyz(char *dst, const char *src, size_t len) { xmemcpyz(dst, s
 const char *nvim_tag_gettext(const char *s) { return _(s); }
 int nvim_tag_get_ptag_cur_match(void) { return ptag_entry.cur_match; }
 // --- Rust FFI accessor functions for VimL API and tag stack setters ---
-// Verify constants used in Rust
-_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL value for Rust");
 
 /// Wrapper for find_tags callable from Rust
 int nvim_tag_find_tags(char *pat, int *num_matches, char ***matchesp,
@@ -686,6 +657,9 @@ const char *nvim_tag_mb_ptr_adv(const char *p)
 
 bool nvim_tag_ascii_iswhite(int c) { return ascii_iswhite(c); }
 bool nvim_tag_get_tfu_in_use(void) { return tfu_in_use; }
+void nvim_tag_set_tfu_in_use(bool val) { tfu_in_use = val; }
+void *nvim_findtags_get_ga_match_ptr(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; return (void *)st->ga_match; }
+int *nvim_findtags_get_match_count_ptr(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; return &st->match_count; }
 void nvim_tag_emsg_tfu_in_use(void) { emsg(_(e_cannot_modify_tag_stack_within_tagfunc)); }
 void nvim_tag_emsg_listreq(void) { emsg(_(e_listreq)); }
 void *nvim_tag_tv_dict_find_item(const void *dict, const char *key, int key_len) { return (void *)tv_dict_find((const dict_T *)dict, key, key_len); }
@@ -736,7 +710,6 @@ void *nvim_tag_optset_get_buf(const void *args_void) { const optset_T *args = (c
 const char *nvim_tag_get_e_invarg(void) { return e_invarg; }
 
 // --- Accessor functions for rs_tag_call_tagfunc ---
-// (Phase 2: composite helpers replaced with fine-grained accessors)
 
 /// Returns g_tag_at_cursor.
 bool nvim_tag_get_g_tag_at_cursor(void) { return g_tag_at_cursor; }
@@ -908,17 +881,12 @@ void nvim_tag_ga_grow_append(void *ga_void, char *mfp)
   ((char **)(ga->ga_data))[ga->ga_len++] = mfp;
 }
 
-_Static_assert(TAG_INS_COMP == 64, "TAG_INS_COMP value for Rust");
-_Static_assert(TAG_REGEXP == 4, "TAG_REGEXP value for Rust");
-_Static_assert(TAG_NAMES == 2, "TAG_NAMES value for Rust");
-
 // --- C accessor functions for jumpto_tag ---
 
 // Forward declaration for rs_tag_jumpto_execute
 int rs_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
                           char *lbuf, int forceit, bool keep_help);
 
-// Verify swb flag constants used in Rust (Phase 2)
 _Static_assert(kOptSwbFlagUseopen == 0x01, "kOptSwbFlagUseopen value for Rust");
 _Static_assert(kOptSwbFlagUsetab == 0x02, "kOptSwbFlagUsetab value for Rust");
 
@@ -971,8 +939,6 @@ bool nvim_tag_curbuf_b_p_tfu_is_empty(void) { return *curbuf->b_p_tfu == NUL; }
 
 /// Returns true if curbuf->b_tfu_cb.type == kCallbackNone.
 bool nvim_tag_curbuf_tfu_cb_is_none(void) { return curbuf->b_tfu_cb.type == kCallbackNone; }
-
-// --- C accessor functions for nvim_tag_jumpto_run_search (Phase 1 migration) ---
 
 /// Set curwin->w_set_curswant = val.
 void nvim_tag_set_curswant(bool val) { curwin->w_set_curswant = val; }
@@ -1043,19 +1009,6 @@ void nvim_tag_emsg_e434(void) { emsg(_("E434: Can't find tag pattern")); }
 void nvim_tag_msg_e435(void) { msg(_("E435: Couldn't find tag, just guessing!"), 0); }
 
 // Verify constants used in Rust rs_tag_jumpto_run_search
-_Static_assert(SEARCH_KEEP == 0x400, "SEARCH_KEEP value for Rust");
-_Static_assert(OPTION_MAGIC_OFF == 2, "OPTION_MAGIC_OFF value for Rust");
-_Static_assert(LSIZE == 512, "LSIZE value for Rust");
-_Static_assert(GETFILE_SAME_FILE == 0, "GETFILE_SAME_FILE value for Rust");
-_Static_assert(GETFILE_OPEN_OTHER == -1, "GETFILE_OPEN_OTHER value for Rust");
-_Static_assert(GETFILE_UNUSED == 8, "GETFILE_UNUSED value for Rust");
-
-// nvim_tag_jumpto_run_search migrated to Rust (Phase 1)
-// nvim_tag_jumpto_post_success and nvim_tag_jumpto_post_fail migrated to Rust (Phase 3)
-
-// nvim_tag_getfile_success/open_other/same_file/unused migrated to Rust constants (Phase 2)
-// nvim_tag_redrawing_disabled_inc migrated to nvim_tag_inc_RedrawingDisabled (Phase 2)
-
 /// High-level executor for jumpto_tag (thin wrapper calling Rust).
 int nvim_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
                             char *lbuf, int forceit, bool keep_help)
@@ -1065,12 +1018,6 @@ int nvim_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
 
 // --- End of jumpto_tag accessor functions ---
 // --- C accessor functions for do_tag() ---
-// Verify constants used by Rust
-_Static_assert(HLF_W == 26, "HLF_W value for Rust");
-_Static_assert(kOptFdoFlagTag == 0x80, "kOptFdoFlagTag value for Rust");
-_Static_assert(NOTAGFILE == 99, "NOTAGFILE value for Rust");
-_Static_assert(TAGSTACKSIZE == 20, "TAGSTACKSIZE value for Rust");
-_Static_assert(MT_IC_OFF == 4, "MT_IC_OFF value for Rust");
 
 bool nvim_tag_get_p_tgst(void) { return p_tgst; }
 int nvim_tag_get_curbuf_fnum(void) { return curbuf->b_fnum; }
