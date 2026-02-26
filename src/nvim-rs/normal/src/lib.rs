@@ -301,6 +301,10 @@ extern "C" {
     #[allow(dead_code)]
     fn nvim_ml_get_len_call(lnum: c_int) -> c_int;
 
+    // Phase 2: unadjust_for_sel_inner generic pos accessors
+    fn nvim_mark_mb_adjustpos_pos(lnum: c_int, col: c_int, col_out: *mut c_int) -> c_int;
+    fn nvim_getvcol_pos_coladd(lnum: c_int, col: c_int, coladd: c_int) -> c_int;
+
     // Phase 1A: find_ident_at_pos accessors
     fn nvim_ml_get_buf_wrapper(buf: BufHandle, lnum: i32) -> *mut c_char;
     fn nvim_mb_get_class_wrapper(ptr: *const c_char) -> c_int;
@@ -5963,6 +5967,38 @@ pub unsafe extern "C" fn rs_n_opencmd(cap: CapHandle) {
             rs_invoke_edit(cap, false, cmdchar, true);
         }
     }
+}
+
+/// Move an arbitrary position back one char for 'selection' == "exclusive".
+///
+/// Takes lnum/col/coladd as in/out pointer params and updates them in place.
+/// Returns true when backed up to the previous line.
+///
+/// # Safety
+/// All pointer arguments must be valid non-null pointers. curwin/curbuf must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_unadjust_for_sel_inner(
+    lnum: *mut c_int,
+    col: *mut c_int,
+    coladd: *mut c_int,
+) -> bool {
+    nvim_set_VIsual_select_exclu_adj(false);
+    if *coladd > 0 {
+        *coladd -= 1;
+    } else if *col > 0 {
+        *col -= 1;
+        let mut new_col: c_int = 0;
+        nvim_mark_mb_adjustpos_pos(*lnum, *col, &raw mut new_col);
+        *col = new_col;
+        if nvim_virtual_active() {
+            *coladd = nvim_getvcol_pos_coladd(*lnum, *col, *coladd);
+        }
+    } else if *lnum > 1 {
+        *lnum -= 1;
+        *col = nvim_ml_get_len_call(*lnum);
+        return true;
+    }
+    false
 }
 
 /// Move position of curwin cursor back one char for 'selection' == "exclusive".

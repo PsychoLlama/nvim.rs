@@ -1159,7 +1159,7 @@ bool nvim_findmatch_nul(oparg_T *oap, int *out_lnum, int *out_col, int *out_cola
   return true;
 }
 
-// These call Rust implementations; unadjust_for_sel_inner (C) is kept for eval/funcs.c
+// These call Rust implementations; unadjust_for_sel_inner migrated to Rust (Phase 2)
 extern bool rs_unadjust_for_sel_inner_cursor(void);
 extern bool rs_unadjust_for_sel_inner_visual(void);
 bool nvim_unadjust_for_sel_inner_cursor(void) { return rs_unadjust_for_sel_inner_cursor(); }
@@ -1168,6 +1168,23 @@ bool nvim_unadjust_for_sel_inner_visual(void) { return rs_unadjust_for_sel_inner
 int nvim_mark_mb_adjustpos_cursor(void) { mark_mb_adjustpos(curbuf, &curwin->w_cursor); return curwin->w_cursor.col; }
 
 int nvim_mark_mb_adjustpos_visual(void) { mark_mb_adjustpos(curbuf, &VIsual); return VIsual.col; }
+
+/// Phase 2 accessor: mark_mb_adjustpos for arbitrary pos (by lnum/col/coladd).
+/// Updates *col_out after adjustment and returns new col.
+int nvim_mark_mb_adjustpos_pos(int lnum, int col, int *col_out) {
+  pos_T pp = { lnum, (colnr_T)col, 0 };
+  mark_mb_adjustpos(curbuf, &pp);
+  *col_out = pp.col;
+  return pp.col;
+}
+
+/// Phase 2 accessor: getvcol coladd (ce - cs) for arbitrary pos.
+int nvim_getvcol_pos_coladd(int lnum, int col, int coladd) {
+  pos_T pp = { lnum, (colnr_T)col, (colnr_T)coladd };
+  colnr_T cs, ce;
+  getvcol(curwin, &pp, &cs, NULL, &ce);
+  return (int)(ce - cs);
+}
 
 int nvim_ml_get_len_call(int lnum) { return (int)ml_get_len(lnum); }
 
@@ -2549,27 +2566,18 @@ void do_nv_ident(int c1, int c2) { rs_do_nv_ident(c1, c2); }
 /// Move position "*pp" back one character for 'selection' == "exclusive".
 ///
 /// @return  true when backed up to the previous line.
+/// Migrated to Rust (rs_unadjust_for_sel_inner) in Phase 2; thin wrapper remains for eval/funcs.c.
+extern bool rs_unadjust_for_sel_inner(int *lnum, int *col, int *coladd);
 bool unadjust_for_sel_inner(pos_T *pp)
 {
-  VIsual_select_exclu_adj = false;
-
-  if (pp->coladd > 0) {
-    pp->coladd--;
-  } else if (pp->col > 0) {
-    pp->col--;
-    mark_mb_adjustpos(curbuf, pp);
-    if (virtual_active(curwin)) {
-      colnr_T cs, ce;
-      getvcol(curwin, pp, &cs, NULL, &ce);
-      pp->coladd = ce - cs;
-    }
-  } else if (pp->lnum > 1) {
-    pp->lnum--;
-    pp->col = ml_get_len(pp->lnum);
-    return true;
-  }
-
-  return false;
+  int lnum = (int)pp->lnum;
+  int col = (int)pp->col;
+  int coladd = (int)pp->coladd;
+  bool backed_up = rs_unadjust_for_sel_inner(&lnum, &col, &coladd);
+  pp->lnum = (linenr_T)lnum;
+  pp->col = (colnr_T)col;
+  pp->coladd = (colnr_T)coladd;
+  return backed_up;
 }
 
 /// Thin wrapper: invoke_edit migrated to Rust (rs_invoke_edit) in Phase 4.
