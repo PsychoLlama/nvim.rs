@@ -23,6 +23,12 @@ typedef struct {
 // Rust FFI: fold method checks and fold state queries
 extern int rs_foldLevel(linenr_T lnum);
 extern int rs_lineFolded(win_T *wp, linenr_T lnum);
+
+// Phase 5 Pass 5: hasFolding/hasFoldingWin/nvim_hasFolding exported from Rust
+extern bool hasFolding(win_T *win, linenr_T lnum, linenr_T *firstp, linenr_T *lastp);
+extern bool hasFoldingWin(win_T *win, linenr_T lnum, linenr_T *firstp, linenr_T *lastp,
+                          bool cache, foldinfo_T *infop);
+extern int nvim_hasFolding(win_T *wp, linenr_T lnum, linenr_T *firstp, linenr_T *lastp);
 extern int rs_foldmethodIsManual(win_T *wp);
 extern int rs_foldmethodIsIndent(win_T *wp);
 extern int rs_foldmethodIsExpr(win_T *wp);

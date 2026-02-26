@@ -69,78 +69,15 @@
 // Rust FFI declarations (internal-only; fold method checks are in fold.h)
 extern linenr_T rs_diff_lnum_win(linenr_T lnum, win_T *wp);
 
-// Struct returned by rs_hasFoldingWin
-typedef struct {
-  int has_folding;
-  linenr_T first;
-  linenr_T last;
-  int fi_level;
-  linenr_T fi_lnum;
-  int fi_low_level;
-} FoldingResult;
-
-extern FoldingResult rs_hasFoldingWin(win_T *win, linenr_T lnum, bool cache);
-
 static const char *e_nofold = N_("E490: No fold found");
 
 // foldstartmarkerlen/foldendmarker/foldendmarkerlen -- deleted (Rust uses parse_marker_impl directly)
 
+// hasFolding/hasFoldingWin/nvim_hasFolding -- migrated to Rust exports (Phase 5 Pass 5)
+// FoldingResult typedef and rs_hasFoldingWin extern -- deleted (Phase 5 Pass 5)
+// nvim_lineFolded -- deleted; callers use rs_lineFolded directly (Phase 5 Pass 5)
+
 // Exported folding functions. {{{1
-
-// hasFolding() {{{2
-/// When returning true, *firstp and *lastp are set to the first and last
-/// lnum of the sequence of folded lines (skipped when NULL).
-///
-/// @return  true if line "lnum" in window "win" is part of a closed fold.
-bool hasFolding(win_T *win, linenr_T lnum, linenr_T *firstp, linenr_T *lastp)
-{
-  return hasFoldingWin(win, lnum, firstp, lastp, true, NULL);
-}
-
-/// Wrapper for hasFolding for Rust FFI.
-int nvim_hasFolding(win_T *wp, linenr_T lnum, linenr_T *firstp, linenr_T *lastp)
-{
-  return hasFolding(wp, lnum, firstp, lastp) ? 1 : 0;
-}
-
-// hasFoldingWin() {{{2
-/// Search folds starting at lnum
-/// @param lnum first line to search
-/// @param[out] first first line of fold containing lnum
-/// @param[out] lastp last line with a fold
-/// @param cache when true: use cached values of window
-/// @param[out] infop where to store fold info
-///
-/// @return true if range contains folds
-bool hasFoldingWin(win_T *const win, const linenr_T lnum, linenr_T *const firstp,
-                   linenr_T *const lastp, const bool cache, foldinfo_T *const infop)
-{
-  FoldingResult result = rs_hasFoldingWin(win, lnum, cache);
-
-  if (infop != NULL) {
-    infop->fi_level = result.fi_level;
-    infop->fi_lnum = result.fi_lnum;
-    infop->fi_low_level = result.fi_low_level;
-  }
-
-  if (result.has_folding) {
-    if (lastp != NULL) {
-      *lastp = result.last;
-    }
-    if (firstp != NULL) {
-      *firstp = result.first;
-    }
-    return true;
-  }
-
-  return false;
-}
-
-/// Wrapper for lineFolded for Rust FFI.
-int nvim_lineFolded(win_T *wp, linenr_T lnum)
-{
-  return rs_lineFolded(wp, lnum);
-}
 
 // foldUpdate() -- migrated to Rust (update.rs: fold_update_impl / rs_foldUpdate)
 

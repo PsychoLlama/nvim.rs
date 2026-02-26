@@ -2158,7 +2158,7 @@ extern "C" {
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
     fn nvim_win_get_topline(wp: WinHandle) -> c_int;
-    fn nvim_lineFolded(wp: WinHandle, lnum: c_int) -> c_int;
+    fn rs_lineFolded(wp: WinHandle, lnum: c_int) -> c_int;
     fn nvim_hasFolding(wp: WinHandle, lnum: c_int, firstp: *mut c_int, lastp: *mut c_int) -> c_int;
     fn nvim_win_get_fill(wp: WinHandle, lnum: c_int) -> c_int;
     fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
@@ -2510,7 +2510,7 @@ pub extern "C" fn rs_plines_win_nofill(
         }
 
         // Folded lines are handled just like an empty line.
-        if nvim_lineFolded(wp, lnum) != 0 {
+        if rs_lineFolded(wp, lnum) != 0 {
             return 1;
         }
 

@@ -1225,6 +1225,77 @@ pub extern "C" fn rs_hasFoldingWin(win: WinHandle, lnum: LineNr, cache: bool) ->
     has_folding_win_impl(win, lnum, cache)
 }
 
+/// Full hasFoldingWin Rust export (Phase 5 Pass 5).
+///
+/// Returns true if `lnum` is in a closed fold. Writes first/last fold line
+/// to `firstp`/`lastp` (if non-null). Writes fold info to `infop` (if non-null).
+///
+/// # Safety
+/// All pointer arguments must be null or valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn hasFoldingWin(
+    win: WinHandle,
+    lnum: LineNr,
+    firstp: *mut LineNr,
+    lastp: *mut LineNr,
+    cache: bool,
+    infop: *mut c_void,
+) -> bool {
+    let result = has_folding_win_impl(win, lnum, cache);
+
+    if !infop.is_null() {
+        // foldinfo_T layout: fi_lnum (i32), fi_level (i32), fi_low_level (i32), fi_lines (i32)
+        let fi = infop.cast::<FoldInfoResult>();
+        (*fi).fi_lnum = result.fi_lnum;
+        (*fi).fi_level = result.fi_level;
+        (*fi).fi_low_level = result.fi_low_level;
+        // fi_lines is not set by hasFoldingWin (it's for fold_info())
+    }
+
+    if result.has_folding != 0 {
+        if !lastp.is_null() {
+            *lastp = result.last;
+        }
+        if !firstp.is_null() {
+            *firstp = result.first;
+        }
+        return true;
+    }
+
+    false
+}
+
+/// hasFolding Rust export (Phase 5 Pass 5).
+///
+/// Returns true if `lnum` is in a closed fold in `win`.
+/// Sets `*firstp`/`*lastp` to first/last line of the fold.
+///
+/// # Safety
+/// `win` must be a valid win_T* or null. `firstp`/`lastp` must be null or valid.
+#[no_mangle]
+pub unsafe extern "C" fn hasFolding(
+    win: WinHandle,
+    lnum: LineNr,
+    firstp: *mut LineNr,
+    lastp: *mut LineNr,
+) -> bool {
+    hasFoldingWin(win, lnum, firstp, lastp, true, std::ptr::null_mut())
+}
+
+/// nvim_hasFolding Rust export (Phase 5 Pass 5): integer return for Rust FFI.
+///
+/// # Safety
+/// `wp` must be a valid win_T* or null.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_hasFolding(
+    wp: WinHandle,
+    lnum: LineNr,
+    firstp: *mut LineNr,
+    lastp: *mut LineNr,
+) -> c_int {
+    c_int::from(hasFolding(wp, lnum, firstp, lastp))
+}
+
 // ============================================================================
 // Phase 1 & 2: Fold State Queries and Navigation
 // ============================================================================
@@ -2668,14 +2739,6 @@ extern "C" {
 
     /// Call mb_adjust_cursor().
     fn nvim_mb_adjust_cursor();
-
-    /// Check if fold at lnum is closed and get first/last line.
-    fn nvim_hasFolding(
-        wp: WinHandle,
-        lnum: LineNr,
-        firstp: *mut LineNr,
-        lastp: *mut LineNr,
-    ) -> c_int;
 }
 
 /// Column number type.
@@ -2688,11 +2751,9 @@ fn fold_adjust_cursor_impl(wp: WinHandle) {
     }
 
     let cursor_lnum = unsafe { nvim_win_get_cursor_lnum(wp) };
-    let mut first_lnum: LineNr = 0;
-    let result =
-        unsafe { nvim_hasFolding(wp, cursor_lnum, &raw mut first_lnum, std::ptr::null_mut()) };
-    if result != 0 {
-        unsafe { nvim_win_set_cursor_lnum(wp, first_lnum) };
+    let result = has_folding_win_impl(wp, cursor_lnum, true);
+    if result.has_folding != 0 {
+        unsafe { nvim_win_set_cursor_lnum(wp, result.first) };
     }
 }
 
@@ -2717,35 +2778,32 @@ fn fold_adjust_visual_impl() {
     };
 
     // Adjust start position
-    let mut first_lnum: LineNr = 0;
-    if unsafe {
-        nvim_hasFolding(
-            curwin,
-            start_lnum,
-            &raw mut first_lnum,
-            std::ptr::null_mut(),
-        )
-    } != 0
     {
-        if start_is_visual {
-            #[allow(clippy::cast_possible_truncation)]
-            unsafe {
-                nvim_set_VIsual_lnum(first_lnum as c_int);
-                nvim_set_VIsual_col(0);
-            }
-        } else {
-            unsafe {
-                nvim_win_set_cursor_lnum(curwin, first_lnum);
-                nvim_win_set_cursor_col(curwin, 0);
+        let r = has_folding_win_impl(curwin, start_lnum, true);
+        if r.has_folding != 0 {
+            let first_lnum = r.first;
+            if start_is_visual {
+                #[allow(clippy::cast_possible_truncation)]
+                unsafe {
+                    nvim_set_VIsual_lnum(first_lnum as c_int);
+                    nvim_set_VIsual_col(0);
+                }
+            } else {
+                unsafe {
+                    nvim_win_set_cursor_lnum(curwin, first_lnum);
+                    nvim_win_set_cursor_col(curwin, 0);
+                }
             }
         }
     }
 
     // Adjust end position
-    let mut last_lnum: LineNr = 0;
-    if unsafe { nvim_hasFolding(curwin, end_lnum, std::ptr::null_mut(), &raw mut last_lnum) } == 0 {
+    let r2 = has_folding_win_impl(curwin, end_lnum, true);
+    let last_lnum = if r2.has_folding != 0 {
+        r2.last
+    } else {
         return;
-    }
+    };
 
     let line_len = unsafe { ml_get_len(last_lnum) };
     let mut end_col = line_len;
@@ -3362,11 +3420,9 @@ fn op_fold_range_impl(
 
         // Opening one level only: next fold to open is after the one going to be opened.
         if opening && !recurse {
-            let mut temp_last: LineNr = 0;
-            if unsafe { nvim_hasFolding(curwin, lnum, std::ptr::null_mut(), &raw mut temp_last) }
-                != 0
-            {
-                lnum_next = temp_last;
+            let r = has_folding_win_impl(curwin, lnum, true);
+            if r.has_folding != 0 {
+                lnum_next = r.last;
             }
         }
 
@@ -3374,11 +3430,9 @@ fn op_fold_range_impl(
 
         // Closing one level only: next line to close a fold is after just closed fold.
         if !opening && !recurse {
-            let mut temp_last: LineNr = 0;
-            if unsafe { nvim_hasFolding(curwin, lnum, std::ptr::null_mut(), &raw mut temp_last) }
-                != 0
-            {
-                lnum_next = temp_last;
+            let r = has_folding_win_impl(curwin, lnum, true);
+            if r.has_folding != 0 {
+                lnum_next = r.last;
             }
         }
 
