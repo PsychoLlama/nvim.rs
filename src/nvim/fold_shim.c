@@ -923,86 +923,42 @@ void nvim_fold_set_vim_var_nr_lnum(linenr_T lnum)
 // nvim_fold_get_curbuf_line_count_c -- deleted (merged into nvim_fold_get_curbuf_line_count)
 
 // ============================================================================
-// Accessors for get_foldtext Rust migration (display.rs)
+// Accessors for get_foldtext Rust migration (display.rs) -- Phase 3
 // ============================================================================
 
-/// High-level accessor: set curwin/curbuf/sctx, call eval_foldtext(wp),
-/// process the Object result, and restore state.
-///
-/// If the result is a String, sets *out_text to the string data (ownership
-/// transferred; caller must xfree) and *out_has_virt_text=0.
-/// If the result is an Array, populates *vt_out via parse_virt_text, sets
-/// *out_text=NULL, *out_has_virt_text=1, and sets *buf_out = NUL.
-/// On error, sets *out_had_error=1, *out_text=NULL, *out_has_virt_text=0.
-///
-/// Caller must have already called nvim_fold_set_vvars() and reset did_emsg.
-/// Increments/decrements emsg_off around eval.
-void nvim_fold_eval_foldtext_full(win_T *wp, void *vt_out, char *buf_out,
-                                  char **out_text, int *out_has_virt_text,
-                                  int *out_had_error)
+/// Save current_sctx into *out_saved (sctx_T), then set current_sctx from
+/// wp->w_p_script_ctx[kWinOptFoldtext].
+void nvim_fold_save_sctx_foldtext(win_T *wp, void *out_saved)
 {
-  *out_text = NULL;
-  *out_has_virt_text = 0;
-  *out_had_error = 0;
-
-  win_T *const save_curwin = curwin;
-  const sctx_T saved_sctx = current_sctx;
-
-  curwin = wp;
-  curbuf = wp->w_buffer;
+  *(sctx_T *)out_saved = current_sctx;
   current_sctx = wp->w_p_script_ctx[kWinOptFoldtext];
-
-  emsg_off++;  // handle exceptions, but don't display errors
-
-  Object obj = eval_foldtext(wp);
-  if (obj.type == kObjectTypeArray) {
-    Error err = ERROR_INIT;
-    *(VirtText *)vt_out = parse_virt_text(obj.data.array, &err, NULL);
-    if (!ERROR_SET(&err)) {
-      *buf_out = NUL;
-      *out_has_virt_text = 1;
-    } else {
-      *out_had_error = 1;
-    }
-    api_clear_error(&err);
-  } else if (obj.type == kObjectTypeString) {
-    *out_text = obj.data.string.data;
-    obj = NIL;
-  } else {
-    *out_had_error = 1;
-  }
-  api_free_object(obj);
-
-  emsg_off--;
-
-  if ((*out_text == NULL && !*out_has_virt_text) || did_emsg) {
-    *out_had_error = 1;
-  }
-
-  curwin = save_curwin;
-  curbuf = curwin->w_buffer;
-  current_sctx = saved_sctx;
 }
 
-/// Set v:foldstart, v:foldend, v:folddashes, v:foldlevel.
-/// level is clamped to MAX_LEVEL.
-void nvim_fold_set_vvars(linenr_T start, linenr_T end, int level)
+/// Restore current_sctx from *saved (sctx_T).
+void nvim_fold_restore_sctx(void *saved)
 {
-  char dashes[MAX_LEVEL + 2];
-  int clamped = MIN(level, (int)sizeof(dashes) - 1);
-  memset(dashes, '-', (size_t)clamped);
-  dashes[clamped] = NUL;
-  set_vim_var_nr(VV_FOLDSTART, (varnumber_T)start);
-  set_vim_var_nr(VV_FOLDEND, (varnumber_T)end);
-  set_vim_var_string(VV_FOLDDASHES, dashes, -1);
-  set_vim_var_nr(VV_FOLDLEVEL, (varnumber_T)clamped);
+  current_sctx = *(sctx_T *)saved;
 }
 
-/// Clear v:folddashes (set to NULL).
-void nvim_fold_clear_vvars(void)
+/// Call parse_virt_text on an Array embedded in an Object.
+/// obj_ptr must point to an Object with type == kObjectTypeArray.
+/// vt_out receives the VirtText result.
+/// *out_error is set to 1 if parse_virt_text fails.
+void nvim_fold_parse_virt_text_from_obj(void *obj_ptr, void *vt_out, int *out_error)
 {
-  set_vim_var_string(VV_FOLDDASHES, NULL, -1);
+  Object *obj = (Object *)obj_ptr;
+  Error err = ERROR_INIT;
+  *(VirtText *)vt_out = parse_virt_text(obj->data.array, &err, NULL);
+  if (ERROR_SET(&err)) {
+    *out_error = 1;
+  }
+  api_clear_error(&err);
 }
+
+// nvim_fold_eval_foldtext_full -- migrated to Rust (display.rs: eval_foldtext_full_impl)
+
+// nvim_fold_set_vvars -- migrated to Rust (display.rs: set_fold_vvars_impl)
+// nvim_fold_clear_vvars -- migrated to Rust (display.rs: clear_fold_vvars_impl)
 
 /// Get wp->w_p_fdt (foldtext option string).
 char *nvim_fold_win_get_p_fdt(win_T *wp)
@@ -1011,24 +967,6 @@ char *nvim_fold_win_get_p_fdt(win_T *wp)
 }
 
 
-/// Concatenate all chunks from a VirtText into a single xmalloc'd string.
-/// `vt_ptr` must be a valid VirtText*.
-/// Returns an xmalloc'd string (caller must xfree).
-char *nvim_fold_virt_text_concat(void *vt_ptr)
-{
-  VirtText *vt = (VirtText *)vt_ptr;
-  char *text = xstrdup("");
-  for (size_t i = 0; i < kv_size(*vt);) {
-    int attr = 0;
-    char *chunk = next_virt_text_chunk(*vt, &i, &attr);
-    if (chunk == NULL) {
-      break;
-    }
-    char *new_text = concat_str(text, chunk);
-    xfree(text);
-    text = new_text;
-  }
-  return text;
-}
+// nvim_fold_virt_text_concat -- migrated to Rust (display.rs: virt_text_concat_impl)
 
 

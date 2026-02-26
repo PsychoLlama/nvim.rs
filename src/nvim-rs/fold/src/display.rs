@@ -36,13 +36,14 @@ type LinenrT = i32;
 const VV_FOLDSTART: c_int = 23;
 const VV_FOLDEND: c_int = 24;
 const VV_FOLDDASHES: c_int = 25;
-// VV_FOLDLEVEL used in Phase 3 (set_fold_vvars_impl).
-#[allow(dead_code)]
 const VV_FOLDLEVEL: c_int = 26;
 
-// Maximum fold level depth (from fold_shim.c MAX_LEVEL); used in Phase 3.
-#[allow(dead_code)]
+// Maximum fold level depth (from fold_shim.c MAX_LEVEL).
 const MAX_LEVEL: usize = 20;
+
+// Object type constants matching C kObjectType enum.
+const K_OBJECT_TYPE_STRING: c_int = 4;
+const K_OBJECT_TYPE_ARRAY: c_int = 5;
 
 extern "C" {
     /// Get curbuf's commentstring option (b_p_cms).
@@ -55,8 +56,12 @@ extern "C" {
     // Generic vim variable accessors
     /// Get a vim variable as a number by index.
     fn nvim_fold_get_vim_var_nr(vv_idx: c_int) -> i64;
+    /// Set a vim variable as a number by index.
+    fn nvim_fold_set_vim_var_nr(vv_idx: c_int, val: i64);
     /// Get a vim variable as a string by index.
     fn nvim_fold_get_vim_var_str(vv_idx: c_int) -> *const c_char;
+    /// Set a vim variable as a string by index (from change_ffi.c).
+    fn nvim_set_vim_var_string(vv_idx: c_int, val: *const c_char, len: c_int);
 
     // Generic line/buffer accessors (from change_ffi.c, move.c)
     /// Check if a line contains only whitespace (from change_ffi.c).
@@ -65,6 +70,8 @@ extern "C" {
     fn nvim_ml_get(lnum: LinenrT) -> *const c_char;
     /// Get curbuf's line count (from move.c).
     fn nvim_curbuf_line_count() -> LinenrT;
+    /// Concatenate two strings into a new xmalloc'd string (from change_ffi.c).
+    fn nvim_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
 
     // NGETTEXT accessors (macro-wrapping required)
     /// Get the localized fold text format string.
@@ -72,30 +79,41 @@ extern "C" {
     /// Get the localized default fold text format string.
     fn nvim_fold_ngettext_default(count: c_int) -> *const c_char;
 
-    // Accessors for get_foldtext migration
-    /// Evaluate 'foldtext' option and process Object result.
-    /// Populates vt_out (VirtText*) for Array results.
-    /// Sets out_text, out_has_virt_text, out_had_error.
-    fn nvim_fold_eval_foldtext_full(
-        wp: WinHandle,
-        vt_out: *mut std::ffi::c_void,
-        buf_out: *mut c_char,
-        out_text: *mut *mut c_char,
-        out_has_virt_text: *mut c_int,
-        out_had_error: *mut c_int,
+    // Phase 3 thin C accessors
+    /// Save current_sctx into *out_saved and set current_sctx from wp's foldtext ctx.
+    fn nvim_fold_save_sctx_foldtext(wp: *mut c_void, out_saved: *mut c_void);
+    /// Restore current_sctx from *saved.
+    fn nvim_fold_restore_sctx(saved: *mut c_void);
+    /// Call parse_virt_text on obj->data.array; write result to vt_out.
+    fn nvim_fold_parse_virt_text_from_obj(
+        obj_ptr: *mut c_void,
+        vt_out: *mut c_void,
+        out_error: *mut c_int,
     );
-    /// Set v:foldstart, v:foldend, v:folddashes, v:foldlevel.
-    fn nvim_fold_set_vvars(start: LinenrT, end: LinenrT, level: c_int);
-    /// Clear v:folddashes (set to NULL).
-    fn nvim_fold_clear_vvars();
+    /// Call rs_eval_foldtext (Rust-to-Rust via extern "C").
+    fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void);
+    /// Free an Object (via rs_api_free_object from api crate).
+    fn rs_api_free_object(obj: nvim_api::Object);
+    /// Get emsg_off value (from message.c).
+    fn nvim_get_emsg_off() -> c_int;
+    /// Set emsg_off value (from message.c).
+    fn nvim_set_emsg_off(val: c_int);
+    /// Save curwin/curbuf and set to wp/wp->w_buffer. Returns old curwin.
+    fn nvim_fold_save_curwin(wp: WinHandle) -> WinHandle;
+    /// Restore curwin/curbuf from saved_win.
+    fn nvim_fold_restore_curwin(saved_win: WinHandle);
     /// Get wp->w_p_fdt (foldtext option string).
     fn nvim_fold_win_get_p_fdt(wp: WinHandle) -> *const c_char;
     /// Get did_emsg (generic accessor from message.c).
     fn nvim_get_did_emsg() -> c_int;
     /// Set did_emsg (generic accessor from message.c).
     fn nvim_set_did_emsg(val: c_int);
-    /// Concatenate all VirtText chunks into a new xmalloc'd string.
-    fn nvim_fold_virt_text_concat(vt_ptr: *mut std::ffi::c_void) -> *mut c_char;
+    /// Get next chunk from a VirtText (from decoration.c).
+    fn nvim_next_virt_text_chunk(
+        vt_ptr: *mut c_void,
+        pos: *mut usize,
+        attr: *mut c_int,
+    ) -> *const c_char;
     /// Clear a VirtText.
     fn nvim_clear_virttext(vt_ptr: *mut std::ffi::c_void);
 }
@@ -608,6 +626,130 @@ unsafe fn format_default_foldtext(buf: *mut c_char, count: c_int) {
     libc::snprintf(buf, FOLD_TEXT_LEN, fmt, count);
 }
 
+// =============================================================================
+// Phase 3: eval_foldtext_full, set/clear vvars, virt_text_concat
+// =============================================================================
+
+/// Set v:foldstart, v:foldend, v:folddashes, v:foldlevel.
+/// `level` is clamped to MAX_LEVEL (matching C behavior).
+///
+/// # Safety
+/// Must be called with valid global state (vvars initialized).
+unsafe fn set_fold_vvars_impl(start: LinenrT, end: LinenrT, level: c_int) {
+    let clamped = level.min(MAX_LEVEL as c_int);
+    // Build the dashes string in Rust: `clamped` '-' bytes + NUL.
+    let mut dashes = [b'-' as c_char; MAX_LEVEL + 1];
+    dashes[clamped as usize] = 0;
+    nvim_fold_set_vim_var_nr(VV_FOLDSTART, i64::from(start));
+    nvim_fold_set_vim_var_nr(VV_FOLDEND, i64::from(end));
+    nvim_set_vim_var_string(VV_FOLDDASHES, dashes.as_ptr(), -1);
+    nvim_fold_set_vim_var_nr(VV_FOLDLEVEL, i64::from(clamped));
+}
+
+/// Clear v:folddashes (set to NULL).
+///
+/// # Safety
+/// Must be called with valid global state.
+unsafe fn clear_fold_vvars_impl() {
+    nvim_set_vim_var_string(VV_FOLDDASHES, ptr::null(), -1);
+}
+
+/// Concatenate all chunks from a VirtText into a single xmalloc'd string.
+///
+/// `vt_ptr` must be a valid `VirtText*`. Returns an xmalloc'd string.
+///
+/// # Safety
+/// `vt_ptr` must point to a valid, initialized VirtText.
+unsafe fn virt_text_concat_impl(vt_ptr: *mut c_void) -> *mut c_char {
+    let mut text = xstrdup(c"".as_ptr());
+    let mut pos: usize = 0;
+    loop {
+        let mut attr: c_int = 0;
+        let chunk = nvim_next_virt_text_chunk(vt_ptr, &raw mut pos, &raw mut attr);
+        if chunk.is_null() {
+            break;
+        }
+        let new_text = nvim_concat_str(text, chunk);
+        xfree(text.cast::<c_void>());
+        text = new_text;
+    }
+    text
+}
+
+/// Evaluate 'foldtext' option for window `wp`.
+///
+/// This is the Rust reimplementation of C `nvim_fold_eval_foldtext_full`.
+///
+/// # Safety
+/// All pointers must be valid. `vt_out` must point to a zero-initialized VirtText.
+/// `buf_out` must point to a FOLD_TEXT_LEN-byte buffer.
+unsafe fn eval_foldtext_full_impl(
+    wp: WinHandle,
+    vt_out: *mut c_void,
+    buf_out: *mut c_char,
+    out_text: *mut *mut c_char,
+    out_has_virt_text: *mut c_int,
+    out_had_error: *mut c_int,
+) {
+    *out_text = ptr::null_mut();
+    *out_has_virt_text = 0;
+    *out_had_error = 0;
+
+    // Save curwin/curbuf and set to wp/wp->w_buffer.
+    let save_curwin = nvim_fold_save_curwin(wp);
+    // Save current_sctx and set to wp->w_p_script_ctx[kWinOptFoldtext].
+    // sctx_T = {int sc_sid, int sc_seq, linenr_T sc_lnum, (pad 4), uint64_t sc_chan} = 24 bytes.
+    let mut saved_sctx = [0u8; 24];
+    nvim_fold_save_sctx_foldtext(wp.as_ptr(), saved_sctx.as_mut_ptr().cast::<c_void>());
+
+    // emsg_off++: suppress error display during foldtext eval.
+    let old_emsg_off = nvim_get_emsg_off();
+    nvim_set_emsg_off(old_emsg_off + 1);
+
+    // Call rs_eval_foldtext directly (Rust-to-Rust via extern "C").
+    // Object = {c_int obj_type (4) + pad(4) + ObjectData (24)} = 32 bytes.
+    let mut obj = nvim_api::Object {
+        obj_type: 0,
+        data: nvim_api::ObjectData { integer: 0 },
+    };
+    rs_eval_foldtext(wp.as_ptr(), ptr::addr_of_mut!(obj).cast::<c_void>());
+
+    if obj.obj_type == K_OBJECT_TYPE_ARRAY {
+        let mut had_parse_error: c_int = 0;
+        nvim_fold_parse_virt_text_from_obj(
+            ptr::addr_of_mut!(obj).cast::<c_void>(),
+            vt_out,
+            &raw mut had_parse_error,
+        );
+        if had_parse_error == 0 {
+            *buf_out = 0; // NUL: signals "use vt_out"
+            *out_has_virt_text = 1;
+        } else {
+            *out_had_error = 1;
+        }
+        // Free the Array data (not the VirtText chunks - those are separately allocated).
+    } else if obj.obj_type == K_OBJECT_TYPE_STRING {
+        // Transfer string data ownership to caller.
+        *out_text = obj.data.string.data;
+        // Prevent double-free: mark Object as NIL before freeing.
+        obj.obj_type = 0; // kObjectTypeNil
+    } else {
+        *out_had_error = 1;
+    }
+    rs_api_free_object(obj);
+
+    // emsg_off--
+    nvim_set_emsg_off(old_emsg_off);
+
+    if ((*out_text).is_null() && *out_has_virt_text == 0) || nvim_get_did_emsg() != 0 {
+        *out_had_error = 1;
+    }
+
+    // Restore curwin/curbuf and current_sctx.
+    nvim_fold_restore_curwin(save_curwin);
+    nvim_fold_restore_sctx(saved_sctx.as_mut_ptr().cast::<c_void>());
+}
+
 /// Implement the `foldtext()` VimL function.
 ///
 /// Returns an xmalloc'd string (caller must xfree), or NULL if conditions
@@ -742,7 +884,7 @@ unsafe fn get_foldtext_impl(
 
     if !p_fdt.is_null() && *p_fdt != 0 {
         // Set v:foldstart, v:foldend, v:folddashes, v:foldlevel
-        nvim_fold_set_vvars(lnum, lnume, fi_level);
+        set_fold_vvars_impl(lnum, lnume, fi_level);
 
         // Skip evaluating 'foldtext' if there was an error last time
         if !got_fdt_error {
@@ -750,7 +892,7 @@ unsafe fn get_foldtext_impl(
             let mut out_has_virt_text: c_int = 0;
             let mut out_had_error: c_int = 0;
 
-            nvim_fold_eval_foldtext_full(
+            eval_foldtext_full_impl(
                 wp,
                 vt_out,
                 buf,
@@ -774,7 +916,7 @@ unsafe fn get_foldtext_impl(
 
         LAST_LNUM.store(lnum, Ordering::Relaxed);
         LAST_WP.store(wp_id, Ordering::Relaxed);
-        nvim_fold_clear_vvars();
+        clear_fold_vvars_impl();
 
         if nvim_get_did_emsg() == 0 && save_did_emsg != 0 {
             nvim_set_did_emsg(save_did_emsg);
@@ -861,7 +1003,7 @@ pub(crate) unsafe fn get_foldtext_concat_impl(
         // kvec_t layout: { size_t n, size_t m, T *items } -- read n (first field) inline.
         let vt_n = vt_storage.as_ptr().cast::<usize>().read_unaligned();
         let text = if vt_n > 0 {
-            nvim_fold_virt_text_concat(vt_ptr)
+            virt_text_concat_impl(vt_ptr)
         } else {
             xstrdup(c"".as_ptr())
         };
