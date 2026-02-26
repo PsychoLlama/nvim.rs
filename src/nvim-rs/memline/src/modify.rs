@@ -262,6 +262,31 @@ extern "C" {
 }
 
 // =============================================================================
+// Pass 7 Phase 1: ml_append_int C accessor declarations
+// =============================================================================
+
+#[allow(dead_code)]
+extern "C" {
+    /// Get hp->bh_bnum as int64_t
+    fn nvim_bhdr_get_bh_bnum(hp: *mut c_void) -> i64;
+
+    /// Get hp->bh_page_count as int
+    fn nvim_bhdr_get_bh_page_count(hp: *mut c_void) -> c_int;
+
+    /// iemsg for "E317: Pointer block id wrong 3"
+    fn nvim_iemsg_pointer_block_id_wrong_three();
+
+    /// iemsg for "E318: Updated too many blocks?"
+    fn nvim_iemsg_e318_updated_too_many();
+
+    /// Set buf->b_ml.ml_locked_lineadd
+    fn nvim_buf_set_ml_locked_lineadd(buf: *mut BufHandle, val: c_int);
+
+    /// Increment buf->b_ml.ml_line_count and return new value
+    fn nvim_buf_inc_ml_line_count(buf: *mut BufHandle) -> LineNr;
+}
+
+// =============================================================================
 // Mark Tracking State (Phase 1 migration)
 // =============================================================================
 

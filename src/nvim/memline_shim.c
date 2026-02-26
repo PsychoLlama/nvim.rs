@@ -1688,6 +1688,20 @@ void nvim_pp_pe_memmove(void *pp, int dst_idx, int src_idx, int count)
           (size_t)count * sizeof(PointerEntry));
 }
 
+// Pass 7 Phase 1: ml_append_int accessors for Rust FFI
+
+/// Get hp->bh_bnum as int64_t.
+int64_t nvim_bhdr_get_bh_bnum(bhdr_T *hp) { return (int64_t)hp->bh_bnum; }
+
+/// Get hp->bh_page_count as int.
+int nvim_bhdr_get_bh_page_count(bhdr_T *hp) { return (int)hp->bh_page_count; }
+
+/// iemsg for "E317: Pointer block id wrong 3"
+void nvim_iemsg_pointer_block_id_wrong_three(void) { iemsg(_(e_pointer_block_id_wrong_three)); }
+
+/// iemsg for "E318: Updated too many blocks?"
+void nvim_iemsg_e318_updated_too_many(void) { iemsg(_("E318: Updated too many blocks?")); }
+
 // Pass 6 Phase 2: ml_updatechunk accessors for Rust FFI
 
 /// Set buf->b_ml.ml_chunksize[idx].mlcs_numlines
