@@ -60,6 +60,17 @@ extern int rs_syn_stack_cleanup(void);
 extern void rs_syn_stack_alloc(void);
 extern void rs_syn_stack_apply_changes_block(synblock_T *block, buf_T *buf);
 extern void rs_syn_stack_apply_changes(buf_T *buf);
+// Phase 8: line initialization (Rust implementations)
+extern void rs_syn_update_ends(int startofline);
+extern void rs_syn_start_line(void);
+extern int rs_syn_match_linecont(int lnum);
+extern void rs_save_chartab(char *chartab);
+extern void rs_restore_chartab(const char *chartab);
+extern void rs_clear_syn_state(synstate_T *p);
+extern void rs_validate_current_state(void);
+extern char *rs_syn_getcurline(void);
+extern int rs_syn_getcurline_len(void);
+extern void rs_syn_clear_time(syn_time_T *st);
 extern void rs_load_current_state(synstate_T *from);
 extern void rs_update_si_end(stateitem_T *sip, int startcol, int force);
 extern void rs_check_state_ends(void);
@@ -401,59 +412,24 @@ static void clear_syn_state(synstate_T *p)
 
 static void save_chartab(char *chartab)
 {
-  if (syn_block->b_syn_isk == empty_string_option) {
-    return;
-  }
-
-  memmove(chartab, syn_buf->b_chartab, (size_t)32);
-  memmove(syn_buf->b_chartab, syn_win->w_s->b_syn_chartab, (size_t)32);
+  rs_save_chartab(chartab);
 }
 
 static void restore_chartab(char *chartab)
 {
-  if (syn_win->w_s->b_syn_isk != empty_string_option) {
-    memmove(syn_buf->b_chartab, chartab, (size_t)32);
-  }
+  rs_restore_chartab(chartab);
 }
 
 /// Return true if the line-continuation pattern matches in line "lnum".
 static int syn_match_linecont(linenr_T lnum)
 {
-  if (syn_block->b_syn_linecont_prog == NULL) {
-    return false;
-  }
-
-  regmmatch_T regmatch;
-  // chartab array for syn iskeyword
-  char buf_chartab[32];
-  save_chartab(buf_chartab);
-
-  regmatch.rmm_ic = syn_block->b_syn_linecont_ic;
-  regmatch.regprog = syn_block->b_syn_linecont_prog;
-  int r = syn_regexec(&regmatch, lnum, 0,
-                      IF_SYN_TIME(&syn_block->b_syn_linecont_time));
-  syn_block->b_syn_linecont_prog = regmatch.regprog;
-
-  restore_chartab(buf_chartab);
-  return r;
+  return rs_syn_match_linecont((int)lnum);
 }
 
 // Prepare the current state for the start of a line.
 static void syn_start_line(void)
 {
-  current_finished = false;
-  current_col = 0;
-
-  // Need to update the end of a start/skip/end that continues from the
-  // previous line and regions that have "keepend".
-  if (!GA_EMPTY(&current_state)) {
-    syn_update_ends(true);
-    rs_check_state_ends();
-  }
-
-  next_match_idx = -1;
-  current_line_id++;
-  next_seqnr = 1;
+  rs_syn_start_line();
 }
 
 /// Check for items in the stack that need their end updated.
@@ -462,61 +438,7 @@ static void syn_start_line(void)
 ///                     if false the item with "keepend" is forcefully updated.
 static void syn_update_ends(bool startofline)
 {
-  stateitem_T *cur_si;
-
-  if (startofline) {
-    // Check for a match carried over from a previous line with a
-    // contained region.  The match ends as soon as the region ends.
-    for (int i = 0; i < current_state.ga_len; i++) {
-      cur_si = &CUR_STATE(i);
-      if (cur_si->si_idx >= 0
-          && (SYN_ITEMS(syn_block)[cur_si->si_idx]).sp_type
-          == SPTYPE_MATCH
-          && cur_si->si_m_endpos.lnum < current_lnum) {
-        cur_si->si_flags |= HL_MATCHCONT;
-        cur_si->si_m_endpos.lnum = 0;
-        cur_si->si_m_endpos.col = 0;
-        cur_si->si_h_endpos = cur_si->si_m_endpos;
-        cur_si->si_ends = true;
-      }
-    }
-  }
-
-  // Need to update the end of a start/skip/end that continues from the
-  // previous line.  And regions that have "keepend", because they may
-  // influence contained items.  If we've just removed "extend"
-  // (startofline == 0) then we should update ends of normal regions
-  // contained inside "keepend" because "extend" could have extended
-  // these "keepend" regions as well as contained normal regions.
-  // Then check for items ending in column 0.
-  int i = current_state.ga_len - 1;
-  if (keepend_level >= 0) {
-    for (; i > keepend_level; i--) {
-      if (CUR_STATE(i).si_flags & HL_EXTEND) {
-        break;
-      }
-    }
-  }
-
-  bool seen_keepend = false;
-  for (; i < current_state.ga_len; i++) {
-    cur_si = &CUR_STATE(i);
-    if ((cur_si->si_flags & HL_KEEPEND)
-        || (seen_keepend && !startofline)
-        || (i == current_state.ga_len - 1 && startofline)) {
-      cur_si->si_h_startpos.col = 0;            // start highl. in col 0
-      cur_si->si_h_startpos.lnum = current_lnum;
-
-      if (!(cur_si->si_flags & HL_MATCHCONT)) {
-        rs_update_si_end(cur_si, (int)current_col, !startofline ? 1 : 0);
-      }
-
-      if (!startofline && (cur_si->si_flags & HL_KEEPEND)) {
-        seen_keepend = true;
-      }
-    }
-  }
-  rs_check_keepend();
+  rs_syn_update_ends(startofline ? 1 : 0);
 }
 
 /////////////////////////////////////////
@@ -609,8 +531,7 @@ static synstate_T *syn_stack_find_entry(linenr_T lnum)
 
 static void validate_current_state(void)
 {
-  current_state.ga_itemsize = sizeof(stateitem_T);
-  ga_set_growsize(&current_state, 3);
+  rs_validate_current_state();
 }
 
 /// Update an entry in the current_state stack for a start-skip-end pattern.
@@ -623,13 +544,13 @@ static void validate_current_state(void)
 /// Get current line in syntax buffer.
 static char *syn_getcurline(void)
 {
-  return ml_get_buf(syn_buf, current_lnum);
+  return rs_syn_getcurline();
 }
 
 /// Get length of current line in syntax buffer.
 static colnr_T syn_getcurline_len(void)
 {
-  return ml_get_buf_len(syn_buf, current_lnum);
+  return (colnr_T)rs_syn_getcurline_len();
 }
 
 // Call vim_regexec() to find a match with "rmp" in "syn_buf".
@@ -803,10 +724,7 @@ int syn_get_stack_item(int i)
 // and syn_start_line's b_syn_linecont_time reset.
 static void syn_clear_time(syn_time_T *st)
 {
-  st->total = profile_zero();
-  st->slowest = profile_zero();
-  st->count = 0;
-  st->match = 0;
+  rs_syn_clear_time(st);
 }
 
 int nvim_win_get_syn_patterns_len(win_T *win) { return win->w_s->b_syn_patterns.ga_len; }
@@ -3854,10 +3772,16 @@ void nvim_syn_reset_next_seqnr(void) { next_seqnr = 1; }
 int nvim_syn_current_state_nonempty(void) { return !GA_EMPTY(&current_state) ? 1 : 0; }
 
 /// Call validate_current_state() to set itemsize/growsize.
-void nvim_syn_do_validate_current_state(void) { validate_current_state(); }
+/// Direct implementation to avoid circular call.
+void nvim_syn_do_validate_current_state(void)
+{
+  current_state.ga_itemsize = sizeof(stateitem_T);
+  ga_set_growsize(&current_state, 3);
+}
 
-/// Return syn_getcurline().
-char *nvim_syn_do_getcurline(void) { return syn_getcurline(); }
+/// Return ml_get_buf(syn_buf, current_lnum).
+/// Direct implementation to avoid circular call through syn_getcurline.
+char *nvim_syn_do_getcurline(void) { return ml_get_buf(syn_buf, current_lnum); }
 
 /// Return (int)ml_get_buf_len(syn_buf, current_lnum).
 int nvim_syn_do_getcurline_len(void) { return (int)ml_get_buf_len(syn_buf, current_lnum); }
@@ -3865,7 +3789,11 @@ int nvim_syn_do_getcurline_len(void) { return (int)ml_get_buf_len(syn_buf, curre
 /// Zero out a syn_time_T struct.
 void nvim_syn_do_clear_time(syn_time_T *st)
 {
-  syn_clear_time(st);
+  // Direct implementation to avoid circular call with syn_clear_time -> rs_syn_clear_time -> here
+  st->total = profile_zero();
+  st->slowest = profile_zero();
+  st->count = 0;
+  st->match = 0;
 }
 
 /// Check if current_state is empty (GA_EMPTY).

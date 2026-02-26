@@ -41,6 +41,7 @@ pub mod group;
 pub mod highlight;
 pub mod item;
 pub mod keyword;
+pub mod line_init;
 pub mod listing;
 pub mod match_engine;
 pub mod offset;
@@ -162,6 +163,13 @@ pub use cache::{
     rs_syn_stack_alloc, rs_syn_stack_apply_changes, rs_syn_stack_apply_changes_block,
     rs_syn_stack_cleanup, rs_syn_stack_find_entry, rs_syn_stack_free_all, rs_syn_stack_free_block,
     rs_syn_stack_free_entry,
+};
+
+// Re-export Phase 8 line initialization functions
+pub use line_init::{
+    rs_clear_syn_state, rs_restore_chartab, rs_save_chartab, rs_syn_clear_time, rs_syn_getcurline,
+    rs_syn_getcurline_len, rs_syn_match_linecont, rs_syn_start_line, rs_syn_update_ends,
+    rs_validate_current_state,
 };
 
 pub use attr::{
