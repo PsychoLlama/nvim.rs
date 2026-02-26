@@ -56,6 +56,33 @@ pub struct CallbackT {
 type CallbackHandle = *mut CallbackT;
 
 extern "C" {
+    // GC composite wrappers (Phase 13)
+    fn nvim_gc_mark_buffers(copy_id: c_int, abort: bool) -> bool;
+    fn nvim_gc_mark_tab_windows(copy_id: c_int, abort: bool) -> bool;
+    fn nvim_gc_mark_tabs(copy_id: c_int, abort: bool) -> bool;
+    fn nvim_gc_mark_channels(copy_id: c_int, abort: bool) -> bool;
+    fn nvim_gc_mark_timers(copy_id: c_int, abort: bool) -> bool;
+    fn nvim_gc_iterate_registers();
+    fn nvim_gc_iterate_marks();
+    fn nvim_gc_shrink_exestack();
+    fn nvim_gc_clear_flags();
+    fn nvim_gc_verb_msg_abort();
+
+    // C mark/collect functions called by garbage_collect
+    fn set_ref_in_previous_funccal(copy_id: c_int) -> bool;
+    fn garbage_collect_scriptvars(copy_id: c_int) -> bool;
+    fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool;
+    fn set_ref_in_opfunc(copy_id: c_int) -> bool;
+    fn rs_set_ref_in_tagfunc(copy_id: c_int) -> bool;
+    fn set_ref_in_findfunc(copy_id: c_int) -> bool;
+    fn garbage_collect_globvars(copy_id: c_int) -> c_int;
+    fn set_ref_in_call_stack(copy_id: c_int) -> bool;
+    fn set_ref_in_functions(copy_id: c_int) -> bool;
+    fn set_ref_in_func_args(copy_id: c_int) -> bool;
+    fn garbage_collect_vimvars(copy_id: c_int) -> bool;
+    fn set_ref_in_quickfix(copy_id: c_int) -> bool;
+    fn free_unref_funccal(copy_id: c_int, testing: bool) -> bool;
+
     // typval field accessors (Phase 4 already defined some)
     fn nvim_eval_tv_get_type(tv: TvHandle) -> c_int;
     fn nvim_tv_get_vstring(tv: TvHandleMut) -> *mut std::ffi::c_char;
@@ -135,6 +162,109 @@ extern "C" {
         ht_stack: *mut *mut c_void,
         list_stack: *mut *mut c_void,
     ) -> bool;
+
+    // Free unreferenced items (in eval_exec crate)
+    fn rs_free_unref_items(copy_id: c_int) -> c_int;
+}
+
+/// Do garbage collection for lists and dicts.
+///
+/// Direct Rust replacement for the C `garbage_collect` function.
+///
+/// # Safety
+///
+/// Must only be called from Neovim's main thread.
+#[must_use]
+#[export_name = "garbage_collect"]
+pub unsafe extern "C" fn rs_garbage_collect(testing: bool) -> bool {
+    use super::rs_get_copyID;
+
+    if !testing {
+        nvim_gc_clear_flags();
+    }
+
+    // Shrink the execution stack if it grew too large.
+    nvim_gc_shrink_exestack();
+
+    // Advance by two (COPYID_INC) because we add one for items referenced
+    // through previous_funccal.
+    let copy_id = rs_get_copyID();
+
+    // 1. Go through all accessible variables and mark all lists and dicts
+    // with copyID.
+
+    // Don't free variables in the previous_funccal list unless they are only
+    // referenced through previous_funccal. This must be first, because if
+    // the item is referenced elsewhere the funccal must not be freed.
+    let mut abort = set_ref_in_previous_funccal(copy_id);
+
+    // script-local variables
+    abort = abort || garbage_collect_scriptvars(copy_id);
+
+    // buffer-local variables and callbacks
+    abort = nvim_gc_mark_buffers(copy_id, abort);
+
+    // 'completefunc', 'omnifunc' and 'thesaurusfunc' callbacks
+    abort = abort || set_ref_in_insexpand_funcs(copy_id);
+
+    // 'operatorfunc' callback
+    abort = abort || set_ref_in_opfunc(copy_id);
+
+    // 'tagfunc' callback
+    abort = abort || rs_set_ref_in_tagfunc(copy_id);
+
+    // 'findfunc' callback
+    abort = abort || set_ref_in_findfunc(copy_id);
+
+    // window-local variables (all tab windows + autocmd windows)
+    abort = nvim_gc_mark_tab_windows(copy_id, abort);
+
+    // registers (ShaDa additional data) -- no marking, preserves side effects
+    nvim_gc_iterate_registers();
+
+    // global marks (ShaDa additional data) -- no marking, preserves side effects
+    nvim_gc_iterate_marks();
+
+    // tabpage-local variables
+    abort = nvim_gc_mark_tabs(copy_id, abort);
+
+    // global variables
+    abort = abort || (garbage_collect_globvars(copy_id) != 0);
+
+    // function-local variables
+    abort = abort || set_ref_in_call_stack(copy_id);
+
+    // named functions (matters for closures)
+    abort = abort || set_ref_in_functions(copy_id);
+
+    // channels
+    abort = nvim_gc_mark_channels(copy_id, abort);
+
+    // timers
+    abort = nvim_gc_mark_timers(copy_id, abort);
+
+    // function call arguments, if v:testing is set.
+    abort = abort || set_ref_in_func_args(copy_id);
+
+    // v: vars
+    abort = abort || garbage_collect_vimvars(copy_id);
+
+    abort = abort || set_ref_in_quickfix(copy_id);
+
+    let mut did_free = false;
+    if abort {
+        // Use p_verbose check via the verb_msg wrapper
+        nvim_gc_verb_msg_abort();
+    } else {
+        // 2. Free lists and dictionaries that are not referenced.
+        did_free = rs_free_unref_items(copy_id) != 0;
+
+        // 3. Check if any funccal can be freed now.
+        //    This may call us back recursively.
+        did_free = free_unref_funccal(copy_id, testing) || did_free;
+    }
+
+    did_free
 }
 
 /// Mark all lists and dicts referenced through hashtab `ht` with `copyID`.

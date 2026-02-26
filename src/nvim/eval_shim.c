@@ -762,50 +762,151 @@ char *nvim_partial_get_pt_func_uf_name(partial_T *pt)
 
 // partial_unref: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
-/// Garbage collection for lists and dictionaries.
-///
-/// We use reference counts to be able to free most items right away when they
-/// are no longer used.  But for composite items it's possible that it becomes
-/// unused while the reference count is > 0: When there is a recursive
-/// reference.  Example:
-///      :let l = [1, 2, 3]
-///      :let d = {9: l}
-///      :let l[1] = d
-///
-/// Since this is quite unusual we handle this with garbage collection: every
-/// once in a while find out which lists and dicts are not referenced from any
-/// variable.
-///
-/// Here is a good reference text about garbage collection (refers to Python
-/// but it applies to all reference-counting mechanisms):
-///      http://python.ca/nas/python/gc/
+// =============================================================================
+// GC composite iteration wrappers (for Rust garbage_collect, Phase 13)
+// =============================================================================
 
-/// Do garbage collection for lists and dicts.
-///
-/// @param testing  true if called from test_garbagecollect_now().
-///
-/// @return  true if some memory was freed.
-bool garbage_collect(bool testing)
+/// Mark buffer-local variables and callbacks with copyID.
+/// Iterates all buffers and calls rs_set_ref_in_item / rs_set_ref_in_callback
+/// for each buffer's variables and callback functions.
+/// @param abort  in/out: if true on entry, short-circuits all marking.
+/// @return updated abort value.
+bool nvim_gc_mark_buffers(int copyID, bool abort)
 {
-  bool abort = false;
-#define ABORTING(func) abort = abort || func
-
-  if (!testing) {
-    // Only do this once.
-    want_garbage_collect = false;
-    may_garbage_collect = false;
-    garbage_collect_at_exit = false;
+  FOR_ALL_BUFFERS(buf) {
+    if (!abort) {
+      abort = abort || rs_set_ref_in_item(&buf->b_bufvar.di_tv, copyID, NULL, NULL);
+    }
+    if (!abort) {
+      abort = abort || rs_set_ref_in_callback(&buf->b_prompt_callback, copyID, NULL, NULL);
+    }
+    if (!abort) {
+      abort = abort || rs_set_ref_in_callback(&buf->b_prompt_interrupt, copyID, NULL, NULL);
+    }
+    if (!abort) {
+      abort = abort || rs_set_ref_in_callback(&buf->b_cfu_cb, copyID, NULL, NULL);
+    }
+    if (!abort) {
+      abort = abort || rs_set_ref_in_callback(&buf->b_ofu_cb, copyID, NULL, NULL);
+    }
+    if (!abort) {
+      abort = abort || rs_set_ref_in_callback(&buf->b_tsrfu_cb, copyID, NULL, NULL);
+    }
+    if (!abort) {
+      abort = abort || rs_set_ref_in_callback(&buf->b_tfu_cb, copyID, NULL, NULL);
+    }
+    if (!abort) {
+      abort = abort || rs_set_ref_in_callback(&buf->b_ffu_cb, copyID, NULL, NULL);
+    }
+    if (!abort && buf->b_p_cpt_cb != NULL) {
+      abort = abort || set_ref_in_cpt_callbacks(buf->b_p_cpt_cb, buf->b_p_cpt_count, copyID);
+    }
   }
+  return abort;
+}
 
-  // The execution stack can grow big, limit the size.
+/// Mark window-local variables (all tab windows + autocmd windows) with copyID.
+/// @param abort  in/out abort value.
+/// @return updated abort value.
+bool nvim_gc_mark_tab_windows(int copyID, bool abort)
+{
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    if (!abort) {
+      abort = abort || rs_set_ref_in_item(&wp->w_winvar.di_tv, copyID, NULL, NULL);
+    }
+  }
+  for (int i = 0; i < AUCMD_WIN_COUNT; i++) {
+    if (!abort && aucmd_win[i].auc_win != NULL) {
+      abort = abort
+              || rs_set_ref_in_item(&aucmd_win[i].auc_win->w_winvar.di_tv, copyID, NULL, NULL);
+    }
+  }
+  return abort;
+}
+
+/// Mark tabpage-local variables with copyID.
+/// @param abort  in/out abort value.
+/// @return updated abort value.
+bool nvim_gc_mark_tabs(int copyID, bool abort)
+{
+  FOR_ALL_TABS(tp) {
+    if (!abort) {
+      abort = abort || rs_set_ref_in_item(&tp->tp_winvar.di_tv, copyID, NULL, NULL);
+    }
+  }
+  return abort;
+}
+
+/// Mark channel callback references with copyID.
+/// Iterates the global channels map.
+/// @param abort  in/out abort value.
+/// @return updated abort value.
+bool nvim_gc_mark_channels(int copyID, bool abort)
+{
+  Channel *data;
+  map_foreach_value(&channels, data, {
+    if (!abort) {
+      abort = abort
+              || rs_set_ref_in_callback_reader(&data->on_data, copyID, NULL, NULL);
+    }
+    if (!abort) {
+      abort = abort
+              || rs_set_ref_in_callback_reader(&data->on_stderr, copyID, NULL, NULL);
+    }
+    if (!abort) {
+      abort = abort || rs_set_ref_in_callback(&data->on_exit, copyID, NULL, NULL);
+    }
+  })
+  return abort;
+}
+
+/// Mark timer callback references with copyID.
+/// Iterates the global timers map.
+/// @param abort  in/out abort value.
+/// @return updated abort value.
+bool nvim_gc_mark_timers(int copyID, bool abort)
+{
+  timer_T *timer;
+  map_foreach_value(&timers, timer, {
+    if (!abort) {
+      abort = abort || rs_set_ref_in_callback(&timer->callback, copyID, NULL, NULL);
+    }
+  })
+  return abort;
+}
+
+/// Iterate registers (ShaDa additional data) -- no marking, preserves side effects.
+void nvim_gc_iterate_registers(void)
+{
+  const void *reg_iter = NULL;
+  do {
+    yankreg_T reg;
+    char name = NUL;
+    bool is_unnamed = false;
+    reg_iter = op_global_reg_iter(reg_iter, &name, &reg, &is_unnamed);
+  } while (reg_iter != NULL);
+}
+
+/// Iterate global marks (ShaDa additional data) -- no marking, preserves side effects.
+void nvim_gc_iterate_marks(void)
+{
+  const void *mark_iter = NULL;
+  do {
+    xfmark_T fm;
+    char name = NUL;
+    mark_iter = mark_global_iter(mark_iter, &name, &fm);
+  } while (mark_iter != NULL);
+}
+
+/// Shrink the execution stack if it is too large.
+/// Mirrors the exestack compaction logic from garbage_collect.
+void nvim_gc_shrink_exestack(void)
+{
   if (exestack.ga_maxlen - exestack.ga_len > 500) {
-    // Keep 150% of the current size, with a minimum of the growth size.
     int n = exestack.ga_len / 2;
     if (n < exestack.ga_growsize) {
       n = exestack.ga_growsize;
     }
-
-    // Don't make it bigger though.
     if (exestack.ga_len + n < exestack.ga_maxlen) {
       size_t new_len = (size_t)exestack.ga_itemsize * (size_t)(exestack.ga_len + n);
       char *pp = xrealloc(exestack.ga_data, new_len);
@@ -813,137 +914,26 @@ bool garbage_collect(bool testing)
       exestack.ga_data = pp;
     }
   }
+}
 
-  // We advance by two (COPYID_INC) because we add one for items referenced
-  // through previous_funccal.
-  const int copyID = rs_get_copyID();
+/// Clear the garbage collection trigger flags.
+/// Called by rs_garbage_collect when not in testing mode.
+void nvim_gc_clear_flags(void)
+{
+  want_garbage_collect = false;
+  may_garbage_collect = false;
+  garbage_collect_at_exit = false;
+}
 
-  // 1. Go through all accessible variables and mark all lists and dicts
-  // with copyID.
-
-  // Don't free variables in the previous_funccal list unless they are only
-  // referenced through previous_funccal.  This must be first, because if
-  // the item is referenced elsewhere the funccal must not be freed.
-  ABORTING(set_ref_in_previous_funccal)(copyID);
-
-  // script-local variables
-  ABORTING(garbage_collect_scriptvars)(copyID);
-
-  FOR_ALL_BUFFERS(buf) {
-    // buffer-local variables
-    ABORTING(rs_set_ref_in_item)(&buf->b_bufvar.di_tv, copyID, NULL, NULL);
-
-    // buffer callback functions
-    ABORTING(rs_set_ref_in_callback)(&buf->b_prompt_callback, copyID, NULL, NULL);
-    ABORTING(rs_set_ref_in_callback)(&buf->b_prompt_interrupt, copyID, NULL, NULL);
-    ABORTING(rs_set_ref_in_callback)(&buf->b_cfu_cb, copyID, NULL, NULL);
-    ABORTING(rs_set_ref_in_callback)(&buf->b_ofu_cb, copyID, NULL, NULL);
-    ABORTING(rs_set_ref_in_callback)(&buf->b_tsrfu_cb, copyID, NULL, NULL);
-    ABORTING(rs_set_ref_in_callback)(&buf->b_tfu_cb, copyID, NULL, NULL);
-    ABORTING(rs_set_ref_in_callback)(&buf->b_ffu_cb, copyID, NULL, NULL);
-    if (!abort && buf->b_p_cpt_cb != NULL) {
-      ABORTING(set_ref_in_cpt_callbacks)(buf->b_p_cpt_cb, buf->b_p_cpt_count, copyID);
-    }
-  }
-
-  // 'completefunc', 'omnifunc' and 'thesaurusfunc' callbacks
-  ABORTING(set_ref_in_insexpand_funcs)(copyID);
-
-  // 'operatorfunc' callback
-  ABORTING(set_ref_in_opfunc)(copyID);
-
-  // 'tagfunc' callback
-  ABORTING(rs_set_ref_in_tagfunc)(copyID);
-
-  // 'findfunc' callback
-  ABORTING(set_ref_in_findfunc)(copyID);
-
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    // window-local variables
-    ABORTING(rs_set_ref_in_item)(&wp->w_winvar.di_tv, copyID, NULL, NULL);
-  }
-  // window-local variables in autocmd windows
-  for (int i = 0; i < AUCMD_WIN_COUNT; i++) {
-    if (aucmd_win[i].auc_win != NULL) {
-      ABORTING(rs_set_ref_in_item)(&aucmd_win[i].auc_win->w_winvar.di_tv, copyID, NULL, NULL);
-    }
-  }
-
-  // registers (ShaDa additional data)
-  {
-    const void *reg_iter = NULL;
-    do {
-      yankreg_T reg;
-      char name = NUL;
-      bool is_unnamed = false;
-      reg_iter = op_global_reg_iter(reg_iter, &name, &reg, &is_unnamed);
-    } while (reg_iter != NULL);
-  }
-
-  // global marks (ShaDa additional data)
-  {
-    const void *mark_iter = NULL;
-    do {
-      xfmark_T fm;
-      char name = NUL;
-      mark_iter = mark_global_iter(mark_iter, &name, &fm);
-    } while (mark_iter != NULL);
-  }
-
-  // tabpage-local variables
-  FOR_ALL_TABS(tp) {
-    ABORTING(rs_set_ref_in_item)(&tp->tp_winvar.di_tv, copyID, NULL, NULL);
-  }
-
-  // global variables
-  ABORTING(garbage_collect_globvars)(copyID);
-
-  // function-local variables
-  ABORTING(set_ref_in_call_stack)(copyID);
-
-  // named functions (matters for closures)
-  ABORTING(set_ref_in_functions)(copyID);
-
-  // Channels
-  {
-    Channel *data;
-    map_foreach_value(&channels, data, {
-      rs_set_ref_in_callback_reader(&data->on_data, copyID, NULL, NULL);
-      rs_set_ref_in_callback_reader(&data->on_stderr, copyID, NULL, NULL);
-      rs_set_ref_in_callback(&data->on_exit, copyID, NULL, NULL);
-    })
-  }
-
-  // Timers
-  {
-    timer_T *timer;
-    map_foreach_value(&timers, timer, {
-      rs_set_ref_in_callback(&timer->callback, copyID, NULL, NULL);
-    })
-  }
-
-  // function call arguments, if v:testing is set.
-  ABORTING(set_ref_in_func_args)(copyID);
-
-  // v: vars
-  ABORTING(garbage_collect_vimvars)(copyID);
-
-  ABORTING(set_ref_in_quickfix)(copyID);
-
-  bool did_free = false;
-  if (!abort) {
-    // 2. Free lists and dictionaries that are not referenced.
-    did_free = rs_free_unref_items(copyID);
-
-    // 3. Check if any funccal can be freed now.
-    //    This may call us back recursively.
-    did_free = free_unref_funccal(copyID, testing) || did_free;
-  } else if (p_verbose > 0) {
+/// Emit the "not enough memory" GC abort verbose message, if p_verbose > 0.
+void nvim_gc_verb_msg_abort(void)
+{
+  if (p_verbose > 0) {
     verb_msg(_("Not enough memory to set references, garbage collection aborted!"));
   }
-#undef ABORTING
-  return did_free;
 }
+
+// garbage_collect: deleted -- replaced by rs_garbage_collect (Rust, Phase 13).
 
 // free_unref_items: deleted -- replaced by rs_free_unref_items (Rust, Phase 3 pass 8).
 
