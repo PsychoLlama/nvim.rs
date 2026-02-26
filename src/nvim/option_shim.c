@@ -183,6 +183,9 @@ extern ValidateOptIdxResult rs_validate_opt_idx(win_T *win, OptIndex opt_idx, in
                                                 uint32_t flags, int prefix);
 extern void rs_ex_set(exarg_T *eap);
 
+// Rust do_set / do_one_set_option (option pass 10 phase 1)
+extern int rs_do_set(char *arg, int opt_flags);
+
 // Rust query functions (from Rust query.rs, option pass 4 phase 1)
 extern int rs_can_bs(int what);
 extern const char *rs_get_equalprg(void);
@@ -1962,16 +1965,6 @@ static char *stropt_get_newval(int nextchar, OptIndex opt_idx, char **argp, void
   return result;
 }
 
-static set_op_T get_op(const char *arg)
-{
-  return (set_op_T)rs_get_op(arg);
-}
-
-static set_prefix_T get_option_prefix(char **argp)
-{
-  return (set_prefix_T)rs_get_option_prefix(argp);
-}
-
 static int validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
                             set_prefix_T prefix, const char **errmsg)
 {
@@ -2117,126 +2110,6 @@ static OptVal get_option_newval(OptIndex opt_idx, int opt_flags, set_prefix_T pr
   return newval;
 }
 
-static void do_one_set_option(int opt_flags, char **argp, bool *did_show, char *errbuf,
-                              size_t errbuflen, const char **errmsg)
-{
-  // 1: nothing, 0: "no", 2: "inv" in front of name
-  set_prefix_T prefix = get_option_prefix(argp);
-
-  char *arg = *argp;
-
-  // find end of name
-  OptIndex opt_idx;
-  const char *const option_end = find_option_end(arg, &opt_idx);
-
-  if (opt_idx != kOptInvalid) {
-    assert(option_end >= arg);
-  } else if (rs_is_tty_option(arg)) {  // Silently ignore TTY options.
-    return;
-  } else {                          // Invalid option name, skip.
-    *errmsg = e_unknown_option;
-    return;
-  }
-
-  // Remember character after option name.
-  uint8_t afterchar = (uint8_t)(*option_end);
-  char *p = (char *)option_end;
-
-  // Skip white space, allow ":set ai  ?".
-  while (ascii_iswhite(*p)) {
-    p++;
-  }
-
-  set_op_T op = get_op(p);
-  if (op != OP_NONE) {
-    p++;
-  }
-
-  uint8_t nextchar = (uint8_t)(*p);  // next non-white char after option name
-  // flags for current option
-  uint32_t flags = options[opt_idx].flags;
-  // pointer to variable for current option
-  void *varp = get_varp_scope(&(options[opt_idx]), opt_flags);
-
-  if (validate_opt_idx(curwin, opt_idx, opt_flags, flags, prefix, errmsg) == FAIL) {
-    return;
-  }
-
-  if (vim_strchr("?=:!&<", nextchar) != NULL) {
-    *argp = p;
-
-    if (nextchar == '&' && (*argp)[1] == 'v' && (*argp)[2] == 'i') {
-      if ((*argp)[3] == 'm') {  // "opt&vim": set to Vim default
-        *argp += 3;
-      } else {  // "opt&vi": set to Vi default
-        *argp += 2;
-      }
-    }
-    if (vim_strchr("?!&<", nextchar) != NULL
-        && (*argp)[1] != NUL && !ascii_iswhite((*argp)[1])) {
-      *errmsg = e_trailing;
-      return;
-    }
-  }
-
-  // Allow '=' and ':' as MS-DOS command.com allows only one '=' character per "set" command line.
-  if (nextchar == '?'
-      || (prefix == PREFIX_NONE && vim_strchr("=:&<", nextchar) == NULL
-          && !option_has_type(opt_idx, kOptValTypeBoolean))) {
-    // print value
-    if (*did_show) {
-      msg_putchar('\n');                // cursor below last one
-    } else {
-      msg_ext_set_kind("list_cmd");
-      gotocmdline(true);                // cursor at status line
-      *did_show = true;                 // remember that we did a line
-    }
-    showoneopt(&options[opt_idx], opt_flags);
-
-    if (p_verbose > 0) {
-      // Mention where the option was last set.
-      if (varp == options[opt_idx].var) {
-        last_set_msg(options[opt_idx].script_ctx);
-      } else if (option_has_scope(opt_idx, kOptScopeWin)) {
-        last_set_msg(curwin->w_p_script_ctx[option_scope_idx(opt_idx, kOptScopeWin)]);
-      } else if (option_has_scope(opt_idx, kOptScopeBuf)) {
-        last_set_msg(curbuf->b_p_script_ctx[option_scope_idx(opt_idx, kOptScopeBuf)]);
-      }
-    }
-
-    if (nextchar != '?' && nextchar != NUL && !ascii_iswhite(afterchar)) {
-      *errmsg = e_trailing;
-    }
-    return;
-  }
-
-  if (option_has_type(opt_idx, kOptValTypeBoolean)) {
-    if (vim_strchr("=:", nextchar) != NULL) {
-      *errmsg = e_invarg;
-      return;
-    }
-
-    if (vim_strchr("!&<", nextchar) == NULL && nextchar != NUL && !ascii_iswhite(afterchar)) {
-      *errmsg = e_trailing;
-      return;
-    }
-  } else {
-    if (vim_strchr("=:&<", nextchar) == NULL) {
-      *errmsg = e_invarg;
-      return;
-    }
-  }
-
-  OptVal newval = get_option_newval(opt_idx, opt_flags, prefix, argp, nextchar, op, flags, varp,
-                                    errbuf, errbuflen, errmsg);
-
-  if (newval.type == kOptValTypeNil || *errmsg != NULL) {
-    return;
-  }
-
-  *errmsg = set_option(opt_idx, newval, opt_flags, 0, false, op == OP_NONE, errbuf, errbuflen);
-}
-
 /// Parse 'arg' for option settings.
 ///
 /// 'arg' may be IObuff, but only when no errors can be present and option
@@ -2254,83 +2127,7 @@ static void do_one_set_option(int opt_flags, char **argp, bool *did_show, char *
 /// @return  FAIL if an error is detected, OK otherwise
 int do_set(char *arg, int opt_flags)
 {
-  bool did_show = false;             // already showed one value
-
-  if (*arg == NUL) {
-    showoptions(false, opt_flags);
-    did_show = true;
-  } else {
-    while (*arg != NUL) {         // loop to process all options
-      if (strncmp(arg, "all", 3) == 0 && !ASCII_ISALPHA(arg[3])
-          && !(opt_flags & OPT_MODELINE)) {
-        // ":set all"  show all options.
-        // ":set all&" set all options to their default value.
-        arg += 3;
-        if (*arg == '&') {
-          arg++;
-          // Only for :set command set global value of local options.
-          set_options_default(opt_flags);
-          didset_options();
-          didset_options2();
-          ui_refresh_options();
-          redraw_all_later(UPD_CLEAR);
-        } else {
-          showoptions(true, opt_flags);
-          did_show = true;
-        }
-      } else {
-        char *startarg = arg;             // remember for error message
-        const char *errmsg = NULL;
-        char errbuf[ERR_BUFLEN];
-
-        do_one_set_option(opt_flags, &arg, &did_show, errbuf, sizeof(errbuf), &errmsg);
-
-        // Advance to next argument.
-        // - skip until a blank found, taking care of backslashes
-        // - skip blanks
-        // - skip one "=val" argument (for hidden options ":set gfn =xx")
-        for (int i = 0; i < 2; i++) {
-          arg = skiptowhite_esc(arg);
-          arg = skipwhite(arg);
-          if (*arg != '=') {
-            break;
-          }
-        }
-
-        if (errmsg != NULL) {
-          int i = vim_snprintf((char *)IObuff, IOSIZE, "%s", _(errmsg)) + 2;
-          if (i + (arg - startarg) < IOSIZE) {
-            // append the argument with the error
-            xstrlcpy(IObuff + i - 2, ": ", (size_t)(IOSIZE - i + 2));
-            assert(arg >= startarg);
-            memmove(IObuff + i, startarg, (size_t)(arg - startarg));
-            IObuff[i + (arg - startarg)] = NUL;
-          }
-          // make sure all characters are printable
-          trans_characters(IObuff, IOSIZE);
-
-          no_wait_return++;         // wait_return() done later
-          emsg(IObuff);             // show error highlighted
-          no_wait_return--;
-
-          return FAIL;
-        }
-      }
-
-      arg = skipwhite(arg);
-    }
-  }
-
-  if (silent_mode && did_show) {
-    // After displaying option values in silent mode.
-    silent_mode = false;
-    info_message = true;        // use stdout, not stderr
-    msg_putchar('\n');
-    silent_mode = true;
-    info_message = false;       // use stdout, not stderr
-  }
-
-  return OK;
+  return rs_do_set(arg, opt_flags);
 }
 
 /// Convert a key name or string into a key value.

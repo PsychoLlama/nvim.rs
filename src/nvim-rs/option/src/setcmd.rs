@@ -7,7 +7,8 @@ use std::ffi::{c_char, c_int, c_uint};
 use std::ptr;
 
 use crate::index::{val_type, OptIndex};
-use crate::{OptInt, OptScope, SetPrefix, FAIL, OK};
+use crate::storage::OptVal;
+use crate::{OptInt, OptScope, OptValType, SetPrefix, FAIL, OK};
 
 // =============================================================================
 // C Function Declarations
@@ -471,7 +472,6 @@ extern "C" {
     // Option lookup and validation
     fn find_option_end(arg: *const c_char, opt_idx: *mut c_int) -> *const c_char;
     fn rs_is_tty_option(name: *const c_char) -> c_int;
-    fn get_varp_scope(opt: *const std::ffi::c_void, opt_flags: c_int) -> *mut std::ffi::c_void;
     fn nvim_validate_opt_idx(
         win: *const std::ffi::c_void,
         opt_idx: c_int,
@@ -526,7 +526,6 @@ extern "C" {
     // State accessors
     fn nvim_get_curwin() -> *const std::ffi::c_void;
     fn nvim_get_curbuf() -> *mut std::ffi::c_void;
-    fn nvim_get_options_array() -> *const std::ffi::c_void;
     fn nvim_get_option_flags(opt_idx: c_int) -> u32;
     fn nvim_get_option_var(opt_idx: c_int) -> *mut std::ffi::c_void;
     fn nvim_get_option_script_ctx(opt_idx: c_int) -> ScriptContext;
@@ -570,32 +569,6 @@ pub struct ScriptContext {
     pub sc_sid: c_int,
     pub sc_seq: c_int,
     pub sc_lnum: i64,
-}
-
-/// Option value union (matches C's OptVal)
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub union OptValData {
-    pub boolean: c_int,
-    pub number: i64,
-    pub string: *mut c_char,
-}
-
-/// Option value structure (matches C's OptVal)
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct OptVal {
-    pub type_: c_int,
-    pub data: OptValData,
-}
-
-impl Default for OptVal {
-    fn default() -> Self {
-        Self {
-            type_: -1, // kOptValTypeNil
-            data: OptValData { boolean: 0 },
-        }
-    }
 }
 
 /// Error messages
@@ -829,10 +802,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
 
     let nextchar = *p as u8;
     let flags = nvim_get_option_flags(opt_idx);
-    let opt = nvim_get_options_array()
-        .cast::<u8>()
-        .add(opt_idx as usize * get_option_struct_size());
-    let varp = get_varp_scope(opt.cast(), opt_flags);
+    let varp = nvim_get_varp_scope_by_idx(opt_idx, opt_flags);
 
     // Validate option
     if nvim_validate_opt_idx(nvim_get_curwin(), opt_idx, opt_flags, flags, prefix, errmsg) == FAIL {
@@ -929,7 +899,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
         opt_idx, opt_flags, prefix, argp, nextchar, op, flags, varp, errbuf, errbuflen, errmsg,
     );
 
-    if newval.type_ == -1 || !(*errmsg).is_null() {
+    if newval.type_ == OptValType::Nil || !(*errmsg).is_null() {
         return;
     }
 
@@ -991,15 +961,6 @@ unsafe fn rs_get_op_internal(p: *const c_char) -> c_int {
     } else {
         0
     }
-}
-
-/// Get the size of the vimoption_T struct.
-/// This is needed for array indexing into options[].
-#[inline]
-const fn get_option_struct_size() -> usize {
-    // vimoption_T is roughly 120 bytes on 64-bit systems
-    // This should match the C struct size
-    128
 }
 
 // =============================================================================
