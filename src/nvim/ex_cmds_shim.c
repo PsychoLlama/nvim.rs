@@ -2844,43 +2844,22 @@ void nvim_ecmd_get_winopts(void) { get_winopts(curbuf); }
 /// Call set_last_cursor(curwin)
 void nvim_ecmd_set_last_cursor(void) { set_last_cursor(curwin); }
 
-/// Call maketitle()
-void nvim_ecmd_maketitle(void) { maketitle(); }
-
 /// Call parse_spelllang(curwin)
 void nvim_ecmd_parse_spelllang(void) { parse_spelllang(curwin); }
 
 /// Call check_arg_idx(curwin)
 void nvim_ecmd_check_arg_idx(void) { check_arg_idx(curwin); }
 
-/// Call do_autochdir()
-void nvim_ecmd_do_autochdir(void) { do_autochdir(); }
-
-/// Call changed_line_abv_curs()
-void nvim_ecmd_changed_line_abv_curs(void) { changed_line_abv_curs(); }
-
-/// Call update_topline(curwin)
-void nvim_ecmd_update_topline(void) { update_topline(curwin); }
-
 /// Call redraw_curbuf_later(UPD_NOT_VALID)
 void nvim_ecmd_redraw_curbuf_later(void) { redraw_curbuf_later(UPD_NOT_VALID); }
 
 // --- Cursor manipulation wrappers ---
-
-/// Call check_cursor(curwin)
-void nvim_ecmd_check_cursor(void) { check_cursor(curwin); }
-
-/// Call check_cursor_lnum(curwin)
-void nvim_ecmd_check_cursor_lnum(void) { check_cursor_lnum(curwin); }
 
 /// Call check_cursor_col(curwin)
 void nvim_ecmd_check_cursor_col(void) { check_cursor_col(curwin); }
 
 /// Call check_fname(). Returns OK (1) or FAIL (0).
 int nvim_ecmd_check_fname(void) { return check_fname() == OK ? 1 : 0; }
-
-/// Call beginline(flags)
-void nvim_ecmd_beginline(int flags) { beginline(flags); }
 
 /// Returns 1 if cursor position equals orig (pass lnum and col)
 int nvim_ecmd_cursor_eq(int lnum, int col)
@@ -2919,18 +2898,6 @@ void nvim_ecmd_apply_autocmds_bufwinenter_retval(int *retval)
 
 // --- Global state accessors ---
 
-/// Increment RedrawingDisabled
-void nvim_ecmd_inc_RedrawingDisabled(void) { RedrawingDisabled++; }
-
-/// Decrement RedrawingDisabled
-void nvim_ecmd_dec_RedrawingDisabled(void) { RedrawingDisabled--; }
-
-/// Get swap_exists_action
-int nvim_ecmd_get_swap_exists_action(void) { return swap_exists_action; }
-
-/// Set swap_exists_action
-void nvim_ecmd_set_swap_exists_action(int val) { swap_exists_action = val; }
-
 /// Returns 1 if cmdwin_buf != NULL
 int nvim_ecmd_cmdwin_buf_is_nonnull(void) { return cmdwin_buf != NULL ? 1 : 0; }
 
@@ -2961,9 +2928,6 @@ void nvim_ecmd_cmdwin_restore_free(void *bundle)
   xfree(s);
 }
 
-/// Get skip_redraw
-int nvim_ecmd_get_skip_redraw(void) { return skip_redraw ? 1 : 0; }
-
 /// Get keep_help_flag
 int nvim_ecmd_get_keep_help_flag(void) { return keep_help_flag ? 1 : 0; }
 
@@ -2973,20 +2937,11 @@ int nvim_ecmd_cmdmod_has_keepalt(void) { return (cmdmod.cmod_flags & CMOD_KEEPAL
 /// Get p_awa (autowrite all)
 int nvim_ecmd_get_p_awa(void) { return p_awa ? 1 : 0; }
 
-/// Get p_sol (startofline)
-int nvim_ecmd_get_p_sol(void) { return p_sol ? 1 : 0; }
-
-/// Set msg_scroll
-void nvim_ecmd_set_msg_scroll(int val) { msg_scroll = (bool)val; }
-
 /// Set msg_scrolled_ign
 void nvim_ecmd_set_msg_scrolled_ign(int val) { msg_scrolled_ign = (bool)val; }
 
 /// Get msg_listdo_overwrite
 int nvim_ecmd_get_msg_listdo_overwrite(void) { return msg_listdo_overwrite ? 1 : 0; }
-
-/// Get p_verbose
-int nvim_ecmd_get_p_verbose(void) { return (int)p_verbose; }
 
 // --- Misc wrappers ---
 
@@ -3033,9 +2988,6 @@ void nvim_ecmd_setaltfname(char *ffname, char *sfname, int lnum)
 /// Call delbuf_msg(name). Also frees name.
 void nvim_ecmd_delbuf_msg(char *name) { delbuf_msg(name); }
 
-/// Call fix_fname(ffname). Returns allocated string or NULL.
-char *nvim_ecmd_fix_fname(char *ffname) { return fix_fname(ffname); }
-
 /// Call otherfile(ffname). Returns 1 if different file.
 int nvim_ecmd_otherfile(char *ffname) { return otherfile(ffname) ? 1 : 0; }
 
@@ -3058,9 +3010,6 @@ int nvim_ecmd_has_case_insensitive_filename(void)
   return 0;
 #endif
 }
-
-/// Call buflist_findnr(fnum). Returns buf_T* or NULL.
-buf_T *nvim_ecmd_buflist_findnr(int fnum) { return buflist_findnr(fnum); }
 
 /// Call buflist_new(ffname, sfname, lnum, flags). Returns buf_T* or NULL.
 buf_T *nvim_ecmd_buflist_new(char *ffname, char *sfname, int lnum, int flags)
@@ -3093,9 +3042,6 @@ void nvim_ecmd_fold_update_all_curbuf_wins(void)
 
 /// Call msg_check_for_delay(false)
 void nvim_ecmd_msg_check_for_delay(void) { msg_check_for_delay(false); }
-
-/// Call msg_start()
-void nvim_ecmd_msg_start(void) { msg_start(); }
 
 /// Call fileinfo(false, true, false)
 void nvim_ecmd_fileinfo(void) { fileinfo(false, true, false); }
@@ -3164,15 +3110,6 @@ int nvim_ecmd_should_dec_nwindows_on_locked(win_T *oldwin)
   return (oldwin == NULL && curwin->w_buffer != NULL
           && curwin->w_buffer->b_nwindows > 1) ? 1 : 0;
 }
-
-/// xstrdup(s) wrapper -- allocate a copy of string
-char *nvim_ecmd_xstrdup(const char *s) { return xstrdup(s); }
-
-/// xfree wrapper
-void nvim_ecmd_xfree(void *p) { xfree(p); }
-
-/// atol wrapper for command line number parsing
-int nvim_ecmd_atol(const char *s) { return (int)atol(s); }
 
 /// Check if curbuf == old_curbuf.br_buf using the old_curbuf bufref
 int nvim_ecmd_curbuf_is_old_buf(void *old_curbuf_ref)
