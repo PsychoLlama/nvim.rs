@@ -30,23 +30,35 @@ type ListHandle = *mut c_void;
 type TimeWatcherHandle = *mut c_void;
 
 // =============================================================================
+// TimerFields: bulk scalar field accessor (Phase 13)
+// =============================================================================
+
+/// Mirror of C `NvimTimerFields` -- scalar fields of `timer_T` only.
+///
+/// Layout must stay in sync with the C typedef in eval_shim.c.
+/// Validated by `_Static_assert` in eval_shim.c.
+#[repr(C)]
+#[derive(Default, Clone, Copy)]
+struct TimerFields {
+    timer_id: c_int,
+    repeat_count: c_int,
+    refcount: c_int,
+    emsg_count: c_int,
+    timeout: i64,
+    stopped: bool,
+    paused: bool,
+}
+
+// =============================================================================
 // C Extern Declarations
 // =============================================================================
 
 extern "C" {
-    // -- timer_T field accessors --
-    fn nvim_timer_get_id(timer: TimerHandle) -> c_int;
-    fn nvim_timer_set_id(timer: TimerHandle, id: c_int);
-    fn nvim_timer_get_repeat_count(timer: TimerHandle) -> c_int;
-    fn nvim_timer_set_repeat_count(timer: TimerHandle, count: c_int);
-    fn nvim_timer_get_refcount(timer: TimerHandle) -> c_int;
-    fn nvim_timer_set_refcount(timer: TimerHandle, refcount: c_int);
-    fn nvim_timer_get_emsg_count(timer: TimerHandle) -> c_int;
-    fn nvim_timer_set_emsg_count(timer: TimerHandle, count: c_int);
-    fn nvim_timer_get_timeout(timer: TimerHandle) -> i64;
-    fn nvim_timer_get_stopped(timer: TimerHandle) -> c_int;
-    fn nvim_timer_set_stopped(timer: TimerHandle, stopped: c_int);
-    fn nvim_timer_get_paused(timer: TimerHandle) -> c_int;
+    // -- Bulk timer field accessors (Phase 13) --
+    fn nvim_timer_read_fields(timer: TimerHandle, out: *mut TimerFields);
+    fn nvim_timer_write_fields(timer: TimerHandle, fields: *const TimerFields);
+
+    // -- Retained individual accessors --
     fn nvim_timer_get_callback_ptr(timer: TimerHandle) -> CallbackHandle;
     fn nvim_timer_set_callback(timer: TimerHandle, cb: CallbackHandle);
     fn nvim_timer_alloc() -> TimerHandle;
@@ -106,10 +118,6 @@ extern "C" {
     fn nvim_get_pressedreturn() -> c_int;
     fn nvim_set_pressedreturn(val: c_int);
     fn nvim_discard_current_exception();
-
-    // -- timer_stop (calls rs_timer_stop via C) --
-    // We use rs_timer_stop directly in recursion (timer_due_cb calls timer_stop).
-    // To avoid forward reference issues, we call through C wrapper.
 }
 
 // =============================================================================
@@ -121,6 +129,30 @@ const TYPVAL_SIZE: usize = 16;
 
 /// FAIL return value from C.
 const FAIL: c_int = 0;
+
+// =============================================================================
+// Helper: read timer fields
+// =============================================================================
+
+/// Read all scalar fields from a timer into a `TimerFields`.
+///
+/// # Safety
+/// `timer` must be a valid timer_T pointer.
+#[inline]
+unsafe fn read_fields(timer: TimerHandle) -> TimerFields {
+    let mut f = TimerFields::default();
+    nvim_timer_read_fields(timer, &raw mut f);
+    f
+}
+
+/// Write all scalar fields from `TimerFields` back to a timer.
+///
+/// # Safety
+/// `timer` must be a valid timer_T pointer.
+#[inline]
+unsafe fn write_fields(timer: TimerHandle, f: &TimerFields) {
+    nvim_timer_write_fields(timer, std::ptr::from_ref::<TimerFields>(f));
+}
 
 // =============================================================================
 // Implementation
@@ -148,14 +180,14 @@ pub unsafe extern "C" fn rs_add_timer_info(rettv: TvHandle, timer: TimerHandle) 
     let dict = nvim_tv_dict_alloc();
     nvim_tv_list_append_dict(list, dict);
 
-    let id = i64::from(nvim_timer_get_id(timer));
-    let timeout = nvim_timer_get_timeout(timer);
-    let paused = i64::from(nvim_timer_get_paused(timer));
-    let repeat_count = nvim_timer_get_repeat_count(timer);
-    let repeat_val = if repeat_count < 0 {
+    let f = read_fields(timer);
+    let id = i64::from(f.timer_id);
+    let timeout = f.timeout;
+    let paused = i64::from(f.paused);
+    let repeat_val = if f.repeat_count < 0 {
         -1i64
     } else {
-        i64::from(repeat_count)
+        i64::from(f.repeat_count)
     };
 
     nvim_tv_dict_add_nr(dict, c"id".as_ptr(), 2, id);
@@ -181,9 +213,8 @@ pub unsafe extern "C" fn rs_add_timer_info(rettv: TvHandle, timer: TimerHandle) 
 #[export_name = "add_timer_info_all"]
 pub unsafe extern "C" fn rs_add_timer_info_all(rettv: TvHandle) {
     unsafe extern "C" fn foreach_cb(timer: TimerHandle, userdata: *mut c_void) {
-        let stopped = nvim_timer_get_stopped(timer) != 0;
-        let refcount = nvim_timer_get_refcount(timer);
-        if !stopped || refcount > 1 {
+        let f = read_fields(timer);
+        if !f.stopped || f.refcount > 1 {
             rs_add_timer_info(userdata as TvHandle, timer);
         }
     }
@@ -197,9 +228,10 @@ pub unsafe extern "C" fn rs_add_timer_info_all(rettv: TvHandle) {
 /// # Safety
 /// `timer` must be a valid timer_T pointer.
 unsafe fn timer_decref(timer: TimerHandle) {
-    let refcount = nvim_timer_get_refcount(timer) - 1;
-    nvim_timer_set_refcount(timer, refcount);
-    if refcount == 0 {
+    let mut f = read_fields(timer);
+    f.refcount -= 1;
+    write_fields(timer, &f);
+    if f.refcount == 0 {
         nvim_timer_free(timer);
     }
 }
@@ -216,8 +248,8 @@ pub unsafe extern "C" fn rs_timer_close_cb(_tw: TimeWatcherHandle, data: *mut c_
     nvim_timer_tw_free_events(timer);
     let cb_ptr = nvim_timer_get_callback_ptr(timer);
     nvim_callback_free(cb_ptr);
-    let id = i64::from(nvim_timer_get_id(timer));
-    nvim_timers_del(id);
+    let f = read_fields(timer);
+    nvim_timers_del(i64::from(f.timer_id));
     timer_decref(timer);
 }
 
@@ -227,11 +259,14 @@ pub unsafe extern "C" fn rs_timer_close_cb(_tw: TimeWatcherHandle, data: *mut c_
 /// `timer` must be a valid timer_T pointer.
 #[export_name = "timer_stop"]
 pub unsafe extern "C" fn rs_timer_stop(timer: TimerHandle) {
-    if nvim_timer_get_stopped(timer) != 0 {
+    let f = read_fields(timer);
+    if f.stopped {
         // avoid double free
         return;
     }
-    nvim_timer_set_stopped(timer, 1);
+    let mut f2 = f;
+    f2.stopped = true;
+    write_fields(timer, &f2);
     nvim_timer_tw_stop(timer);
     nvim_timer_tw_close(timer);
 }
@@ -250,23 +285,28 @@ pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_vo
     let called_emsg_before = nvim_get_called_emsg();
     let save_ex_pressedreturn = nvim_get_pressedreturn();
 
-    if nvim_timer_get_stopped(timer) != 0 || nvim_timer_get_paused(timer) != 0 {
+    let f = read_fields(timer);
+    if f.stopped || f.paused {
         return;
     }
 
     // Increment refcount to keep timer alive during callback
-    let refcount = nvim_timer_get_refcount(timer);
-    nvim_timer_set_refcount(timer, refcount + 1);
+    let mut f = f;
+    f.refcount += 1;
 
     // if repeat was negative, repeat forever; otherwise count down
-    let repeat_count = nvim_timer_get_repeat_count(timer);
-    if repeat_count >= 0 {
-        let new_repeat = repeat_count - 1;
-        nvim_timer_set_repeat_count(timer, new_repeat);
-        if new_repeat == 0 {
+    if f.repeat_count >= 0 {
+        f.repeat_count -= 1;
+        if f.repeat_count == 0 {
+            write_fields(timer, &f);
             rs_timer_stop(timer);
+            // Re-read after stop (stopped flag changed)
+            f = read_fields(timer);
         }
     }
+
+    // Write back updated refcount (and potentially repeat_count)
+    write_fields(timer, &f);
 
     // Build argv[2] on the stack. typval_T is 16 bytes.
     let mut argv = [0u8; TYPVAL_SIZE * 2];
@@ -278,7 +318,7 @@ pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_vo
     nvim_tv_init(argv1);
 
     // Set argv[0] = timer->timer_id as VAR_NUMBER
-    let timer_id = i64::from(nvim_timer_get_id(timer));
+    let timer_id = i64::from(f.timer_id);
     nvim_tv_set_number(argv0, timer_id);
 
     // rettv
@@ -293,8 +333,9 @@ pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_vo
     let called_emsg_now = nvim_get_called_emsg();
     let did_emsg_now = nvim_get_did_emsg();
     if called_emsg_now > called_emsg_before && did_emsg_now != 0 {
-        let emsg_count = nvim_timer_get_emsg_count(timer);
-        nvim_timer_set_emsg_count(timer, emsg_count + 1);
+        let mut f2 = read_fields(timer);
+        f2.emsg_count += 1;
+        write_fields(timer, &f2);
         if nvim_get_did_throw() != 0 {
             nvim_discard_current_exception();
         }
@@ -302,14 +343,16 @@ pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_vo
     nvim_set_did_emsg(save_did_emsg);
     nvim_set_pressedreturn(save_ex_pressedreturn);
 
-    if nvim_timer_get_emsg_count(timer) >= 3 {
+    let f3 = read_fields(timer);
+    if f3.emsg_count >= 3 {
         rs_timer_stop(timer);
     }
 
     tv_clear(rettv_ptr);
 
     // timeout==0: requeue for next event loop tick
-    if nvim_timer_get_stopped(timer) == 0 && nvim_timer_get_timeout(timer) == 0 {
+    let f4 = read_fields(timer);
+    if !f4.stopped && f4.timeout == 0 {
         nvim_timer_tw_start(timer, 0, 0);
     }
 
@@ -327,14 +370,25 @@ pub unsafe extern "C" fn rs_timer_start(
     callback: CallbackHandle,
 ) -> u64 {
     let timer = nvim_timer_alloc();
-    nvim_timer_set_refcount(timer, 1);
-    nvim_timer_set_stopped(timer, 0);
-    nvim_timer_set_emsg_count(timer, 0);
-    nvim_timer_set_repeat_count(timer, repeat_count);
+
+    let f = TimerFields {
+        timer_id: 0, // will be set below
+        repeat_count,
+        refcount: 1,
+        emsg_count: 0,
+        timeout,
+        stopped: false,
+        paused: false,
+    };
+    // Write initial scalar fields (timer_id set below after getting the id)
+    write_fields(timer, &f);
+
     nvim_timer_set_callback(timer, callback);
 
     let id = nvim_timers_next_id() as c_int;
-    nvim_timer_set_id(timer, id);
+    let mut f2 = f;
+    f2.timer_id = id;
+    write_fields(timer, &f2);
 
     nvim_timer_tw_init(timer);
     nvim_timer_tw_set_events_child(timer);

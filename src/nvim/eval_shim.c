@@ -2867,76 +2867,44 @@ void nvim_timer_free(timer_T *timer)
   xfree(timer);
 }
 
-/// Get timer_id field.
-int nvim_timer_get_id(const timer_T *timer)
+// nvim_timer_get_id, nvim_timer_set_id, nvim_timer_get_repeat_count, nvim_timer_set_repeat_count,
+// nvim_timer_get_refcount, nvim_timer_set_refcount, nvim_timer_get_emsg_count,
+// nvim_timer_set_emsg_count, nvim_timer_get_timeout, nvim_timer_get_stopped,
+// nvim_timer_set_stopped, nvim_timer_get_paused:
+// deleted -- replaced by nvim_timer_read_fields / nvim_timer_write_fields (Phase 13).
+
+// NvimTimerFields typedef is in eval.h (Phase 13).
+// Verify field offsets match expected layout.
+_Static_assert(offsetof(NvimTimerFields, timer_id) == 0, "NvimTimerFields.timer_id offset");
+_Static_assert(offsetof(NvimTimerFields, repeat_count) == 4, "NvimTimerFields.repeat_count offset");
+_Static_assert(offsetof(NvimTimerFields, refcount) == 8, "NvimTimerFields.refcount offset");
+_Static_assert(offsetof(NvimTimerFields, emsg_count) == 12, "NvimTimerFields.emsg_count offset");
+_Static_assert(offsetof(NvimTimerFields, timeout) == 16, "NvimTimerFields.timeout offset");
+_Static_assert(offsetof(NvimTimerFields, stopped) == 24, "NvimTimerFields.stopped offset");
+_Static_assert(offsetof(NvimTimerFields, paused) == 25, "NvimTimerFields.paused offset");
+
+/// Bulk-read all scalar timer fields into a NvimTimerFields struct.
+void nvim_timer_read_fields(const timer_T *timer, NvimTimerFields *out)
 {
-  return timer->timer_id;
+  out->timer_id = timer->timer_id;
+  out->repeat_count = timer->repeat_count;
+  out->refcount = timer->refcount;
+  out->emsg_count = timer->emsg_count;
+  out->timeout = timer->timeout;
+  out->stopped = timer->stopped;
+  out->paused = timer->paused;
 }
 
-/// Set timer_id field.
-void nvim_timer_set_id(timer_T *timer, int id)
+/// Bulk-write all scalar timer fields from a NvimTimerFields struct.
+void nvim_timer_write_fields(timer_T *timer, const NvimTimerFields *fields)
 {
-  timer->timer_id = id;
-}
-
-/// Get repeat_count field.
-int nvim_timer_get_repeat_count(const timer_T *timer)
-{
-  return timer->repeat_count;
-}
-
-/// Set repeat_count field.
-void nvim_timer_set_repeat_count(timer_T *timer, int count)
-{
-  timer->repeat_count = count;
-}
-
-/// Get refcount field.
-int nvim_timer_get_refcount(const timer_T *timer)
-{
-  return timer->refcount;
-}
-
-/// Set refcount field.
-void nvim_timer_set_refcount(timer_T *timer, int refcount)
-{
-  timer->refcount = refcount;
-}
-
-/// Get emsg_count field.
-int nvim_timer_get_emsg_count(const timer_T *timer)
-{
-  return timer->emsg_count;
-}
-
-/// Set emsg_count field.
-void nvim_timer_set_emsg_count(timer_T *timer, int count)
-{
-  timer->emsg_count = count;
-}
-
-/// Get timeout field.
-int64_t nvim_timer_get_timeout(const timer_T *timer)
-{
-  return timer->timeout;
-}
-
-/// Get stopped field.
-int nvim_timer_get_stopped(const timer_T *timer)
-{
-  return timer->stopped ? 1 : 0;
-}
-
-/// Set stopped field.
-void nvim_timer_set_stopped(timer_T *timer, int stopped)
-{
-  timer->stopped = stopped != 0;
-}
-
-/// Get paused field.
-int nvim_timer_get_paused(const timer_T *timer)
-{
-  return timer->paused ? 1 : 0;
+  timer->timer_id = fields->timer_id;
+  timer->repeat_count = fields->repeat_count;
+  timer->refcount = fields->refcount;
+  timer->emsg_count = fields->emsg_count;
+  timer->timeout = fields->timeout;
+  timer->stopped = fields->stopped;
+  timer->paused = fields->paused;
 }
 
 /// Get pointer to the callback field.

@@ -114,6 +114,19 @@ typedef struct {
   Callback callback;
 } timer_T;
 
+/// Bulk-access struct for scalar fields of timer_T (Phase 13).
+/// Mirror of Rust TimerFields (#[repr(C)]) in timer.rs.
+/// Must stay in sync with the Rust struct and the _Static_assert in eval_shim.c.
+typedef struct {
+  int timer_id;
+  int repeat_count;
+  int refcount;
+  int emsg_count;
+  int64_t timeout;
+  bool stopped;
+  bool paused;
+} NvimTimerFields;
+
 /// types for expressions.
 typedef enum {
   EXPR_UNKNOWN = 0,
