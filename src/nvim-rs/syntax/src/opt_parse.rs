@@ -7,9 +7,9 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::types::{
-    HL_CONCEAL, HL_CONCEALENDS, HL_CONTAINED, HL_DISPLAY, HL_EXCLUDENL, HL_EXTEND, HL_FOLD,
-    HL_KEEPEND, HL_ONELINE, HL_SKIPEMPTY, HL_SKIPNL, HL_SKIPWHITE, HL_SYNC_HERE, HL_SYNC_THERE,
-    HL_TRANSP, NONE_IDX, SYNID_ALLBUT, SYNID_CONTAINED, SYNID_TOP,
+    SynPatHandle, HL_CONCEAL, HL_CONCEALENDS, HL_CONTAINED, HL_DISPLAY, HL_EXCLUDENL, HL_EXTEND,
+    HL_FOLD, HL_KEEPEND, HL_ONELINE, HL_SKIPEMPTY, HL_SKIPNL, HL_SKIPWHITE, HL_SYNC_HERE,
+    HL_SYNC_THERE, HL_TRANSP, NONE_IDX, SPTYPE_START, SYNID_ALLBUT, SYNID_CONTAINED, SYNID_TOP,
 };
 
 /// RE_MAGIC flag for vim_regcomp.
@@ -51,12 +51,24 @@ extern "C" {
     fn nvim_syn_check_group_wrapper(name: *const c_char, len: c_int) -> c_int;
     fn nvim_syn_highlight_num_groups() -> c_int;
     fn nvim_syn_highlight_group_name(idx: c_int) -> *mut c_char;
-    fn nvim_syn_find_sync_pattern_idx(syn_id: c_int) -> c_int;
+    // Curwin synpat accessors (for find_sync_pattern_idx)
+    fn nvim_curwin_synpat_count() -> c_int;
+    fn nvim_curwin_synpat_at(idx: c_int) -> SynPatHandle;
+    fn nvim_synpat_get_syn_id(pat: SynPatHandle) -> i16;
+    fn nvim_synpat_get_type(pat: SynPatHandle) -> c_int;
 
     // Regexp
     fn nvim_syn_vim_regcomp(pat: *mut c_char, flags: c_int) -> *mut c_void;
-    fn nvim_syn_vim_regexec(regprog: *mut c_void, ic: c_int, str: *mut c_char) -> c_int;
     fn nvim_syn_vim_regfree(regprog: *mut c_void);
+
+    // Direct Rust regexp exec (replaces nvim_syn_vim_regexec):
+    // takes *mut *mut c_void so regprog updates on NFA fallback are visible
+    fn rs_vim_regexec_prog(
+        prog_ptr: *mut *mut c_void,
+        ignore_case: c_int,
+        line: *const u8,
+        col: i32,
+    ) -> c_int;
 
     // Fold
     fn nvim_syn_foldmethod_is_syntax_curwin() -> c_int;
@@ -66,6 +78,33 @@ extern "C" {
 
 /// FAIL return value from C.
 const FAIL: c_int = 0;
+
+// =============================================================================
+// Helpers replacing deleted C functions
+// =============================================================================
+
+/// Find the pattern index matching `syn_id` + `SPTYPE_START` in curwin's patterns.
+/// Returns the index, or -1 if not found.
+///
+/// Replaces C `nvim_syn_find_sync_pattern_idx`.
+///
+/// # Safety
+/// Accesses C global state (curwin).
+unsafe fn find_sync_pattern_idx(syn_id: c_int) -> c_int {
+    let count = nvim_curwin_synpat_count();
+    let mut i = count - 1;
+    while i >= 0 {
+        let pat = nvim_curwin_synpat_at(i);
+        if !pat.is_null()
+            && nvim_synpat_get_syn_id(pat) as c_int == syn_id
+            && nvim_synpat_get_type(pat) == SPTYPE_START
+        {
+            return i;
+        }
+        i -= 1;
+    }
+    -1
+}
 
 // =============================================================================
 // Flag table for option matching
@@ -336,7 +375,7 @@ pub unsafe fn get_syn_options_impl(
                     *opt_sync_idx = NONE_IDX;
                 } else {
                     let syn_id = nvim_syn_name2id_wrapper(gname);
-                    let idx = nvim_syn_find_sync_pattern_idx(syn_id);
+                    let idx = find_sync_pattern_idx(syn_id);
                     if idx < 0 {
                         nvim_syn_semsg_1s(c"E394: Didn't find region item for %s".as_ptr(), gname);
                         nvim_syn_xfree(gname as *mut c_void);
@@ -472,14 +511,15 @@ pub unsafe fn get_id_list_impl(
 
                 id = 0;
                 let num_groups = nvim_syn_highlight_num_groups();
+                let mut cur_regprog = regprog;
                 for i in (0..num_groups).rev() {
                     let group_name = nvim_syn_highlight_group_name(i);
-                    if nvim_syn_vim_regexec(regprog, 1, group_name) != 0 {
+                    if rs_vim_regexec_prog(&mut cur_regprog, 1, group_name.cast::<u8>(), 0) != 0 {
                         ids.push((i + 1) as i16);
                         id = -1; // Remember we found one
                     }
                 }
-                nvim_syn_vim_regfree(regprog);
+                nvim_syn_vim_regfree(cur_regprog);
             }
         }
 

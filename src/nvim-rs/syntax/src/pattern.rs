@@ -24,7 +24,6 @@ extern "C" {
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
     fn nvim_synblock_get_folditems(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_pattern_is_syncing(block: SynBlockHandle, idx: c_int) -> c_int;
-    fn nvim_synblock_count_patterns_for_id(block: SynBlockHandle, id: c_int) -> c_int;
 
     // synpat_T field accessors
     fn nvim_synpat_get_type(pat: SynPatHandle) -> c_int;
@@ -156,13 +155,23 @@ pub fn synblock_pattern_is_syncing(block: SynBlockHandle, idx: i32) -> bool {
     unsafe { nvim_synblock_pattern_is_syncing(block, idx) != 0 }
 }
 
-/// Count patterns with a specific highlight group ID
+/// Count patterns with a specific highlight group ID.
+///
+/// Replaces C `nvim_synblock_count_patterns_for_id`.
 #[must_use]
 pub fn synblock_count_patterns_for_id(block: SynBlockHandle, id: i32) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_count_patterns_for_id(block, id) }
+    let count = unsafe { nvim_synblock_get_pattern_count(block) };
+    let mut n = 0;
+    for i in 0..count {
+        let pat = unsafe { nvim_synblock_get_pattern(block, i) };
+        if !pat.is_null() && unsafe { nvim_synpat_get_syn_id(pat) } as i32 == id {
+            n += 1;
+        }
+    }
+    n
 }
 
 // =============================================================================

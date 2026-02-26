@@ -1012,18 +1012,6 @@ int nvim_synblock_pattern_is_syncing(synblock_T *block, int idx)
 
 int nvim_synpat_get_hl_group(synpat_T *pat) { return pat->sp_syn.id - 1; }
 
-/// Count patterns with a specific highlight group ID
-int nvim_synblock_count_patterns_for_id(synblock_T *block, int id)
-{
-  int count = 0;
-  for (int i = 0; i < block->b_syn_patterns.ga_len; i++) {
-    if (SYN_ITEMS(block)[i].sp_syn.id == id) {
-      count++;
-    }
-  }
-  return count;
-}
-
 int nvim_syn_get_expand_what(void) { return expand_what; }
 void nvim_syn_set_expand_what(int what) { expand_what = what; }
 
@@ -2076,17 +2064,6 @@ char *nvim_syn_highlight_group_name(int idx) { return highlight_group_name(idx);
 
 void *nvim_syn_vim_regcomp(char *pat, int flags) { return vim_regcomp(pat, flags); }
 
-/// Execute a regexp match against a string.
-/// regprog is from nvim_syn_vim_regcomp, ic is ignore case.
-int nvim_syn_vim_regexec(void *regprog, int ic, char *str)
-{
-  regmatch_T regmatch;
-  regmatch.regprog = regprog;
-  regmatch.rm_ic = ic;
-  int ret = vim_regexec(&regmatch, str, 0);
-  // Don't free regprog here - caller manages it
-  return ret;
-}
 
 void nvim_syn_vim_regfree(void *regprog) { vim_regfree(regprog); }
 
@@ -2094,18 +2071,6 @@ int nvim_syn_foldmethod_is_syntax_curwin(void) { return rs_foldmethodIsSyntax(cu
 
 void nvim_syn_fold_update_all_curwin(void) { rs_foldUpdateAll(curwin); }
 
-/// Find the pattern index matching sync_id + SPTYPE_START in curwin's patterns.
-/// Returns the index, or -1 if not found.
-int nvim_syn_find_sync_pattern_idx(int syn_id)
-{
-  for (int i = curwin->w_s->b_syn_patterns.ga_len; --i >= 0;) {
-    if (SYN_ITEMS(curwin->w_s)[i].sp_syn.id == syn_id
-        && SYN_ITEMS(curwin->w_s)[i].sp_type == SPTYPE_START) {
-      return i;
-    }
-  }
-  return -1;
-}
 
 int nvim_syn_utf_ptr2char(const char *p) { return utf_ptr2char(p); }
 
@@ -2329,27 +2294,45 @@ int nvim_synblock_get_linecont_pat_is_set(synblock_T *block)
   return block->b_syn_linecont_pat != NULL ? 1 : 0;
 }
 
-/// Store linecont pattern: allocate, compile regexp, clear time.
-/// pat_start points to the pattern text (not the delimiter).
-/// pat_len is the length in bytes.
-/// Returns 1 on success, 0 on regexp compile failure.
-int nvim_synblock_set_linecont(synblock_T *block, const char *pat_start, int pat_len)
-{
-  block->b_syn_linecont_pat = xstrnsave(pat_start, (size_t)pat_len);
-  block->b_syn_linecont_ic = block->b_syn_ic;
+/// Get b_syn_ic from a synblock.
+int nvim_synblock_get_b_syn_ic(synblock_T *block) { return block->b_syn_ic; }
 
-  // Make 'cpoptions' empty to avoid the 'l' flag
+/// Set b_syn_linecont_pat (takes ownership of pat).
+void nvim_synblock_set_linecont_pat(synblock_T *block, char *pat)
+{
+  block->b_syn_linecont_pat = pat;
+}
+
+/// Get b_syn_linecont_pat.
+char *nvim_synblock_get_linecont_pat(synblock_T *block) { return block->b_syn_linecont_pat; }
+
+/// Set b_syn_linecont_ic.
+void nvim_synblock_set_linecont_ic(synblock_T *block, int ic) { block->b_syn_linecont_ic = ic; }
+
+/// Set b_syn_linecont_prog.
+void nvim_synblock_set_linecont_prog2(synblock_T *block, void *prog)
+{
+  block->b_syn_linecont_prog = (regprog_T *)prog;
+}
+
+/// XFREE_CLEAR b_syn_linecont_pat.
+void nvim_syn_clear_linecont_pat(synblock_T *block) { XFREE_CLEAR(block->b_syn_linecont_pat); }
+
+/// Get pointer to b_syn_linecont_time for a synblock.
+void *nvim_synblock_get_linecont_time_ptr(synblock_T *block)
+{
+  return (void *)&block->b_syn_linecont_time;
+}
+
+/// Compile regexp with empty p_cpo (avoid 'l' flag side-effect).
+/// Returns the compiled regprog, or NULL on failure.
+void *nvim_syn_vim_regcomp_empty_cpo(char *pat, int flags)
+{
   char *cpo_save = p_cpo;
   p_cpo = empty_string_option;
-  block->b_syn_linecont_prog = vim_regcomp(block->b_syn_linecont_pat, RE_MAGIC);
+  void *prog = vim_regcomp(pat, flags);
   p_cpo = cpo_save;
-  syn_clear_time(&block->b_syn_linecont_time);
-
-  if (block->b_syn_linecont_prog == NULL) {
-    XFREE_CLEAR(block->b_syn_linecont_pat);
-    return 0;
-  }
-  return 1;
+  return prog;
 }
 
 /// Forward to rs_syn_cmd_match.
