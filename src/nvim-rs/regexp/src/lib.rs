@@ -214,6 +214,10 @@ static mut EVAL_RESULT: [*mut c_char; MAX_REGSUB_NESTING] =
     [std::ptr::null_mut(); MAX_REGSUB_NESTING];
 static mut REGSUB_NESTING: c_int = 0;
 
+// Previous substitute string (owned by Rust; was C reg_prev_sub/reg_prev_sublen)
+static mut REG_PREV_SUB: *mut c_char = std::ptr::null_mut();
+static mut REG_PREV_SUBLEN: usize = 0;
+
 // --- Phase 5: rex (regexec_T), rex_in_use, rsm (regsubmatch_T), can_f_submatch ---
 
 /// Matches C `regexec_T` exactly (single-threaded regexp execution state).
@@ -389,7 +393,7 @@ pub unsafe extern "C" fn nvim_regexp_bt_cleanup_stacks_rust() {
     }
 }
 
-/// Called from C `nvim_regexp_call_free_regexp_stuff()` to release all stacks/buffers.
+/// Release all regexp-related allocations (stacks, buffers, prev-sub string).
 #[no_mangle]
 pub unsafe extern "C" fn nvim_regexp_free_regexp_stuff_rust() {
     ga_clear(&raw mut REGSTACK);
@@ -397,6 +401,9 @@ pub unsafe extern "C" fn nvim_regexp_free_regexp_stuff_rust() {
     xfree(REG_TOFREE.cast::<c_void>());
     REG_TOFREE = core::ptr::null_mut();
     REG_TOFREELEN = 0;
+    xfree(REG_PREV_SUB.cast::<c_void>());
+    REG_PREV_SUB = core::ptr::null_mut();
+    REG_PREV_SUBLEN = 0;
 }
 
 /// Called from C compound functions (`nvim_regexp_setup_vim_regsub` etc.) to get
@@ -2037,10 +2044,6 @@ pub unsafe extern "C" fn rs_get_char_class(pp: *mut *mut c_char) -> c_int {
 const MAXCOL: usize = 0x7fff_ffff;
 
 extern "C" {
-    fn nvim_regexp_get_reg_prev_sub() -> *mut c_char;
-    fn nvim_regexp_set_reg_prev_sub(p: *mut c_char);
-    fn nvim_regexp_get_reg_prev_sublen() -> usize;
-    fn nvim_regexp_set_reg_prev_sublen(v: usize);
     fn xmalloc(size: usize) -> *mut c_void;
     fn strlen(s: *const c_char) -> usize;
 }
@@ -2072,8 +2075,8 @@ pub unsafe extern "C" fn regtilde(source: *mut c_char, magic: c_int, preview: bo
             }
             newsublen -= tildelen;
             let postfixlen = newsublen - prefixlen;
-            let reg_prev_sub = nvim_regexp_get_reg_prev_sub();
-            let reg_prev_sublen = nvim_regexp_get_reg_prev_sublen();
+            let reg_prev_sub = REG_PREV_SUB;
+            let reg_prev_sublen = REG_PREV_SUBLEN;
             let tmpsublen = prefixlen + reg_prev_sublen + postfixlen;
 
             if tmpsublen > 0 && !reg_prev_sub.is_null() {
@@ -2125,16 +2128,15 @@ pub unsafe extern "C" fn regtilde(source: *mut c_char, magic: c_int, preview: bo
     // Only change reg_prev_sub when not previewing.
     if !preview {
         newsublen = p.offset_from(newsub) as usize;
-        let prev = nvim_regexp_get_reg_prev_sub();
-        if !prev.is_null() {
-            xfree(prev.cast());
+        if !REG_PREV_SUB.is_null() {
+            xfree(REG_PREV_SUB.cast());
         }
         if newsublen == 0 {
-            nvim_regexp_set_reg_prev_sub(std::ptr::null_mut());
+            REG_PREV_SUB = std::ptr::null_mut();
         } else {
-            nvim_regexp_set_reg_prev_sub(xstrnsave(newsub, newsublen));
+            REG_PREV_SUB = xstrnsave(newsub, newsublen);
         }
-        nvim_regexp_set_reg_prev_sublen(newsublen);
+        REG_PREV_SUBLEN = newsublen;
     }
 
     newsub
@@ -3232,7 +3234,6 @@ extern "C" {
     fn nvim_regexp_get_curwin_lnum() -> i32;
     fn nvim_regexp_get_curwin_col() -> i32;
     fn nvim_regexp_get_curwin_vcol() -> i32;
-    fn nvim_regexp_get_reg_prev_sub_ptr() -> *mut c_char;
 
     // Character / multibyte helpers
     fn utf_iscomposing_legacy(c: c_int) -> c_int;
@@ -3853,7 +3854,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
 
     // --- Previous substitute pattern: \~ ---
     if c == magic(b'~') {
-        let prev_sub = nvim_regexp_get_reg_prev_sub_ptr();
+        let prev_sub = REG_PREV_SUB;
         if !prev_sub.is_null() {
             let ret = rs_regnode(EXACTLY);
             let mut lp = prev_sub as *const u8;
@@ -8822,7 +8823,7 @@ pub unsafe extern "C" fn rs_nfa_regatom() -> c_int {
 
     // \~ — previous substitute pattern
     if c == nfa_magic(b'~') {
-        let reg_prev_sub = nvim_regexp_get_reg_prev_sub_ptr();
+        let reg_prev_sub = REG_PREV_SUB;
         if reg_prev_sub.is_null() {
             errors::emsg_nopresub();
             return FAIL;
@@ -15124,10 +15125,6 @@ unsafe fn bt_try_unanchored(
 
 // --- Phase 9.3: vim_regfree + free_regexp_stuff ---
 
-extern "C" {
-    fn nvim_regexp_call_free_regexp_stuff();
-}
-
 /// Free a compiled regexp program.
 #[no_mangle]
 pub unsafe extern "C" fn vim_regfree(prog: *mut c_void) {
@@ -15139,7 +15136,7 @@ pub unsafe extern "C" fn vim_regfree(prog: *mut c_void) {
 /// Free all regexp-related allocations (for EXITFREE).
 #[no_mangle]
 pub unsafe extern "C" fn free_regexp_stuff() {
-    nvim_regexp_call_free_regexp_stuff();
+    nvim_regexp_free_regexp_stuff_rust();
 }
 
 // --- Phase 9.4: Public execution API ---

@@ -119,15 +119,6 @@ struct regengine {
   int (*regexec_multi)(regmmatch_T *, win_T *, buf_T *, linenr_T, colnr_T, proftime_T *, int *);
 };
 
-static char *reg_prev_sub = NULL;
-static size_t reg_prev_sublen = 0;
-
-// regtilde accessors for Rust FFI
-char *nvim_regexp_get_reg_prev_sub(void) { return reg_prev_sub; }
-void nvim_regexp_set_reg_prev_sub(char *p) { reg_prev_sub = p; }
-size_t nvim_regexp_get_reg_prev_sublen(void) { return reg_prev_sublen; }
-void nvim_regexp_set_reg_prev_sublen(size_t v) { reg_prev_sublen = v; }
-
 // REGEXP_INRANGE contains all characters which are always special in a []
 // range after '\'.
 // REGEXP_ABBR contains all characters which act as abbreviations after '\'.
@@ -626,8 +617,6 @@ int nvim_regexp_eval_regsub_expr(char *source, void *expr_ptr, int flags, int ne
 
 // reg_do_extmatch is a global (globals.h), not a C static -- accessor kept for Rust FFI
 int nvim_regexp_get_reg_do_extmatch(void) { return reg_do_extmatch; }
-// reg_prev_sub is a C static (will be moved to Rust in Phase 3)
-char *nvim_regexp_get_reg_prev_sub_ptr(void) { return reg_prev_sub; }
 int32_t nvim_regexp_get_curwin_lnum(void) { return (int32_t)curwin->w_cursor.lnum; }
 int32_t nvim_regexp_get_curwin_col(void) { return (int32_t)curwin->w_cursor.col; }
 int32_t nvim_regexp_get_curwin_vcol(void)
@@ -754,12 +743,6 @@ void nvim_regexp_bt_init_stacks(void) {
 // Cleanup stacks and reg_tofree after bt_regexec_both (delegates to Rust)
 void nvim_regexp_bt_cleanup_stacks(void) {
   nvim_regexp_bt_cleanup_stacks_rust();
-}
-
-void nvim_regexp_free_regexp_stuff_rust(void);
-void nvim_regexp_call_free_regexp_stuff(void) {
-  nvim_regexp_free_regexp_stuff_rust();
-  xfree(reg_prev_sub);
 }
 
 // curbuf and buf_T accessors
