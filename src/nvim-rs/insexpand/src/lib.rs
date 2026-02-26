@@ -14,6 +14,7 @@ pub mod ctrl_x;
 pub mod dict;
 pub mod display;
 pub mod entry;
+pub mod expand;
 pub mod extmark;
 pub mod file;
 pub mod infercase;
