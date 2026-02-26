@@ -77,16 +77,6 @@ extern void rs_shada_read(void *sd_reader, int flags);
 extern var_flavour_T rs_var_flavour(const char *varname);
 extern int rs_shada_pack_entry(PackerBuffer *packer, const ShadaEntry *entry, size_t max_kbyte);
 
-// HAVE_BE64TOH block deleted (Phase 3 plan 92c8078e): vim_be64toh/be64toh wrapper deleted.
-
-// SEARCH_KEY_* macros deleted (Phase 3 plan 92c8078e): unused after shada_read_next_item migration.
-
-// REG_KEY_TYPE, REG_KEY_WIDTH, REG_KEY_CONTENTS, REG_KEY_UNNAMED deleted (Phase 6 plan 13c452f9):
-// Rust rs_parse_register no longer uses these macros.
-
-// KEY_LNUM, KEY_COL, KEY_FILE deleted (Phase 3 plan 92c8078e): unused after shada_read_next_item migration.
-// KEY_NAME_CHAR deleted (Phase 6 plan 13c452f9): Rust rs_parse_register no longer uses it.
-
 /// Common prefix for all errors inside ShaDa file
 ///
 /// I.e. errors occurred while parsing, but not system errors occurred while
@@ -314,11 +304,6 @@ typedef struct {
 
 #include "shada_shim.c.generated.h"
 
-// DEF_SDE, DEFAULT_POS, default_pos, sd_default_values deleted (Phase 6 plan 13c452f9):
-// Rust rs_set_entry_default_data replaces nvim_shada_set_entry_default_data.
-
-// sd_reader_skip deleted (Phase 2 plan 92c8078e): Rust rs_sd_reader_skip_bytes replaces it.
-
 // var_shada_iter inlined into nvim_shada_var_shada_iter (plan b499a5d0 Phase 5).
 
 // find_buffer promoted to nvim_shada_find_buffer (plan b499a5d0 Phase 3): used by Rust.
@@ -360,25 +345,8 @@ static inline buf_T *find_buffer(PMap(cstr_t) *fname_bufs, const char *fname)
   return nvim_shada_find_buffer((void *)fname_bufs, fname);
 }
 
-// KEY_NAME_, KEY_NAME deleted (Phase 6 plan 13c452f9): Rust rs_parse_register no longer uses them.
-// PACK_KEY deleted (Phase 3 plan 92c8078e): unused after shada_read_next_item migration.
-
 #define SHADA_MPACK_FREE_SPACE (4 * MPACK_ITEM_SIZE)
 
-
-// shada_check_status deleted (Phase 2 plan 92c8078e): only used by shada_read_next_item.
-
-
-
-
-
-// vim_be64toh deleted (Phase 2 plan 92c8078e): only used by msgpack_read_uint64.
-
-// fread_len deleted (Phase 2 plan 92c8078e): Rust rs_fread_len replaces it.
-
-// msgpack_read_uint64 deleted (Phase 2 plan 92c8078e): Rust rs_msgpack_read_uint64 replaces it.
-
-// READERR macro deleted (Phase 6 plan 13c452f9): Rust uses nvim_shada_semsg_readerr.
 
 /// Emit RERR "Error while reading ShaDa file" message (used by Rust parse functions).
 void nvim_shada_semsg_readerr(const char *entry_name, const char *error_desc, uint64_t position)
@@ -435,13 +403,6 @@ void nvim_shada_decode_string_into(const char *s, size_t len, bool force_blob, v
   typval_T tv = decode_string(s, len, force_blob, false);
   memcpy(dst, &tv, sizeof(typval_T));
 }
-
-// shada_read_next_item deleted (Phase 2 plan 92c8078e): Rust rs_shada_read_next_item replaces it.
-
-// nvim_shada_packer_get_ptr deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
-// nvim_shada_packer_set_ptr deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
-// nvim_shada_packer_get_endptr deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
-// nvim_shada_packer_flush deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
 
 // Map operations for Rust hmll implementation (operate on inline PMap(cstr_t))
 void nvim_hmll_map_init(PMap(cstr_t) *map)
@@ -685,12 +646,6 @@ const void *nvim_shada_buflist_findnr(int nr) { return buflist_findnr(nr); }
 void nvim_shada_siemsg(const char *msg)
 {
   siemsg("%s", msg);
-}
-
-/// Free a Dict (api_free_dict wrapper)
-void nvim_shada_api_free_dict(Dict value)
-{
-  api_free_dict(value);
 }
 
 /// Free a Header ShadaEntry's dict (api_free_dict wrapper for Header entries).
@@ -1003,8 +958,6 @@ void nvim_shada_semsg_remove_reminder(const char *tempname, const char *fname)
 // Phase 3 (plan 11dd3cf4): shada_read migration accessors
 // =============================================================================
 
-// nvim_shada_read_next_item deleted (Phase 2 plan 92c8078e): Rust calls rs_shada_read_next_item directly.
-
 /// Allocate and initialize a PMap(cstr_t) for fname_bufs caching.
 void *nvim_shada_fname_bufs_new(void)
 {
@@ -1121,19 +1074,10 @@ void *nvim_shada_hist_get_array(int i, int **out_hisidx, int **out_hisnum)
 // Phase 1 accessors: shada_pack_entry migration
 // =============================================================================
 
-// nvim_shada_packer_string_buffer deleted (Phase 1 plan c02d0f11): Rust calls packer_string_buffer() directly.
-// nvim_shada_packer_take_string deleted (Phase 1 plan c02d0f11): Rust calls packer_take_string() directly.
-
 /// Wrapper for encode_vim_to_msgpack (for encoding typval_T variables).
 int nvim_encode_vim_to_msgpack(PackerBuffer *packer, void *tv, const char *desc)
 {
   return encode_vim_to_msgpack(packer, (typval_T *)tv, desc);
-}
-
-/// Get cstr_as_string equivalent: returns {s, strlen(s)} or STRING_INIT if NULL.
-String nvim_shada_cstr_as_string(const char *s)
-{
-  return s ? cstr_as_string((char *)s) : (String)STRING_INIT;
 }
 
 /// Return the number of additional data items in an AdditionalData struct.
@@ -1189,19 +1133,6 @@ void nvim_shada_pack_header_dict(const ShadaEntry *entry, PackerBuffer *sbuf)
     // Other types are skipped (same as Rust behaviour).
   }
 }
-
-// nvim_shada_reg_contents_data, nvim_shada_reg_contents_size, nvim_shada_reg_contents_count
-// nvim_shada_fm_get_*, nvim_shada_reg_get_*, nvim_shada_bl_* deleted (Phase 3 plan c02d0f11):
-// read via read_union_field!/direct struct access in Rust; register entries normalized to
-// *mut c_char* in rs_shada_initialize_registers.
-// nvim_shada_header_size, nvim_shada_header_item_* deleted (Phase 3 plan c02d0f11):
-// consolidated into nvim_shada_pack_header_dict compound accessor.
-// nvim_shada_packer_get_anyint deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
-
-// nvim_shada_sp_get_* deleted (Phase 2 plan c02d0f11): search_pattern read via read_union_field! in Rust.
-
-// nvim_shada_unknown_get_*, nvim_shada_hist_get_*, nvim_shada_gvar_get_name,
-// nvim_shada_sub_get_string deleted (Phase 2 plan c02d0f11): read via read_union_field! in Rust.
 
 // Global variable iteration accessor (inlines var_shada_iter; plan b499a5d0 Phase 5).
 // flavour is a bitmask of VAR_FLAVOUR_DEFAULT | VAR_FLAVOUR_SESSION | VAR_FLAVOUR_SHADA.
@@ -1688,7 +1619,6 @@ void nvim_shada_wms_free(void *wms)
 }
 
 /// Flush the packer buffer.
-// nvim_shada_packer_flush_buf deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
 
 /// Internal flush callback for file-backed PackerBuffers.
 static void nvim_shada_flush_file_buffer_(PackerBuffer *buffer)
@@ -2188,20 +2118,3 @@ uint64_t nvim_shada_file_bytes_read(void *fd)
 {
   return (uint64_t)((FileDescriptor *)fd)->bytes_read;
 }
-
-// nvim_shada_set_entry_default_data deleted (Phase 6 plan 13c452f9): Rust rs_set_entry_default_data.
-// nvim_shada_verify_skip deleted (Phase 6 plan 13c452f9): Rust rs_verify_skip.
-// nvim_shada_set_unknown_item deleted (Phase 6 plan 13c452f9): Rust rs_set_unknown_item.
-
-// nvim_shada_parse_search_pattern deleted (Phase 6 plan 13c452f9): Rust rs_parse_search_pattern.
-// nvim_shada_parse_mark deleted (Phase 6 plan 13c452f9): Rust rs_parse_mark.
-// nvim_shada_parse_register deleted (Phase 6 plan 13c452f9): Rust rs_parse_register.
-// nvim_shada_parse_history deleted (Phase 6 plan 13c452f9): Rust rs_parse_history.
-// nvim_shada_parse_variable deleted (Phase 6 plan 13c452f9): Rust rs_parse_variable.
-// nvim_shada_parse_substr deleted (Phase 6 plan 13c452f9): Rust rs_parse_substr.
-// nvim_shada_parse_buflist deleted (Phase 6 plan 13c452f9): Rust rs_parse_buflist.
-
-// nvim_shada_parse_additional_data deleted (Phase 6 plan 13c452f9): Rust rs_parse_additional_data.
-// nvim_shada_semsg_rcerr_too_long deleted (Phase 6 plan 13c452f9): inline in Rust rs_shada_read_next_item.
-// nvim_shada_semsg_rcerr_missing deleted (Phase 6 plan 13c452f9): inline in Rust rs_shada_read_next_item.
-
