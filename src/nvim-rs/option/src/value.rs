@@ -762,6 +762,215 @@ pub extern "C" fn rs_is_invert(nextchar: c_int) -> c_int {
 }
 
 // =============================================================================
+// Phase 9 Value Manipulation Helpers
+// =============================================================================
+
+use crate::storage::{OptVal, OptValData, String_};
+// Use StorageOptValType as an alias to distinguish from the local OptValType enum
+use crate::OptValType as StorageOptValType;
+
+// C external functions used by Phase 9 helpers
+extern "C" {
+    fn nvim_varp_is_curbuf_b_changed(varp: *const std::ffi::c_void) -> c_int;
+    fn nvim_curbufIsChanged() -> c_int;
+    fn nvim_get_option_type(opt_idx: c_int) -> c_int;
+    fn rs_optval_free(o: OptVal);
+    fn rs_optval_equal(o1: OptVal, o2: OptVal) -> c_int;
+    fn rs_option_is_global_local(opt_idx: c_int) -> c_int;
+    fn rs_get_option_unset_value(opt_idx: c_int) -> OptVal;
+    fn nvim_get_varp_scope_by_idx(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
+    fn xmalloc(size: usize) -> *mut c_char;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
+}
+
+/// TriState values matching C definitions
+const K_NONE: c_int = -1;
+const K_FALSE: c_int = 0;
+const K_TRUE: c_int = 1;
+
+/// OPT_LOCAL flag (matches option.h)
+const OPT_LOCAL: c_int = 0x02;
+
+/// kOptValType* constants (must match C enum)
+const K_OPT_VAL_TYPE_NIL: c_int = -1;
+const K_OPT_VAL_TYPE_BOOLEAN: c_int = 0;
+const K_OPT_VAL_TYPE_NUMBER: c_int = 1;
+
+/// NUMBUFLEN constant matching C definition
+const NUMBUFLEN: usize = 65;
+
+/// Rust implementation of optval_from_varp.
+///
+/// Creates an OptVal from a variable pointer based on option type.
+/// Handles the special case for 'modified' (b_changed).
+#[no_mangle]
+pub unsafe extern "C" fn rs_optval_from_varp(
+    opt_idx: c_int,
+    varp: *mut std::ffi::c_void,
+) -> OptVal {
+    // Special case: 'modified' is b_changed, but we also want to consider it set
+    // when 'ff' or 'fenc' changed.
+    if nvim_varp_is_curbuf_b_changed(varp) != 0 {
+        let changed = nvim_curbufIsChanged();
+        // Returns BOOLEAN_OPTVAL(curbufIsChanged()) where curbufIsChanged() is bool -> kTrue/kFalse
+        return OptVal {
+            type_: StorageOptValType::Boolean,
+            data: OptValData {
+                boolean: if changed != 0 { K_TRUE } else { K_FALSE },
+            },
+        };
+    }
+
+    let type_ = nvim_get_option_type(opt_idx);
+
+    if type_ == K_OPT_VAL_TYPE_NIL {
+        OptVal {
+            type_: StorageOptValType::Nil,
+            data: OptValData { number: 0 },
+        }
+    } else if type_ == K_OPT_VAL_TYPE_BOOLEAN {
+        // Read int* and convert to TriState (kNone=-1, kFalse=0, kTrue=1)
+        let raw = *varp.cast::<c_int>();
+        let tristate = if raw == 0 {
+            K_FALSE
+        } else if raw >= 1 {
+            K_TRUE
+        } else {
+            K_NONE
+        };
+        OptVal {
+            type_: StorageOptValType::Boolean,
+            data: OptValData { boolean: tristate },
+        }
+    } else if type_ == K_OPT_VAL_TYPE_NUMBER {
+        let num = *varp.cast::<OptInt>();
+        OptVal {
+            type_: StorageOptValType::Number,
+            data: OptValData { number: num },
+        }
+    } else {
+        // String: read char** and build String_ with cstr_as_string semantics (no copy, just pointer)
+        let data_ptr = *varp.cast::<*mut c_char>();
+        let size = if data_ptr.is_null() {
+            0
+        } else {
+            libc_strlen(data_ptr)
+        };
+        OptVal {
+            type_: StorageOptValType::String,
+            data: OptValData {
+                string: String_ {
+                    data: data_ptr,
+                    size,
+                },
+            },
+        }
+    }
+}
+
+/// Measure the length of a C string without libc dependency.
+/// Replicates strlen for use in no_std contexts.
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    let mut len = 0usize;
+    let mut p = s;
+    while *p != 0 {
+        len += 1;
+        p = p.add(1);
+    }
+    len
+}
+
+/// Rust implementation of set_option_varp.
+///
+/// Writes an OptVal into a variable pointer, optionally freeing the old value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_option_varp(
+    opt_idx: c_int,
+    varp: *mut std::ffi::c_void,
+    value: OptVal,
+    free_oldval: c_int,
+) {
+    if free_oldval != 0 {
+        let old = rs_optval_from_varp(opt_idx, varp);
+        rs_optval_free(old);
+    }
+
+    match value.type_ {
+        StorageOptValType::Nil => {
+            // abort() in C - should never happen
+            std::process::abort();
+        }
+        StorageOptValType::Boolean => {
+            *varp.cast::<c_int>() = value.data.boolean;
+        }
+        StorageOptValType::Number => {
+            *varp.cast::<OptInt>() = value.data.number;
+        }
+        StorageOptValType::String => {
+            *varp.cast::<*mut c_char>() = value.data.string.data;
+        }
+    }
+}
+
+/// Rust implementation of is_option_local_value_unset.
+///
+/// Returns 1 if the local value of a global-local option equals the unset sentinel.
+/// Returns 0 for options that aren't global-local.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_option_local_value_unset(opt_idx: c_int) -> c_int {
+    // Local value of option that isn't global-local is always considered set.
+    if rs_option_is_global_local(opt_idx) == 0 {
+        return 0;
+    }
+
+    let varp_local = nvim_get_varp_scope_by_idx(opt_idx, OPT_LOCAL);
+    let local_value = rs_optval_from_varp(opt_idx, varp_local);
+    let unset_value = rs_get_option_unset_value(opt_idx);
+
+    rs_optval_equal(local_value, unset_value)
+}
+
+/// Rust implementation of optval_to_cstr.
+///
+/// Returns an allocated C string representation of an OptVal.
+/// Caller must free the returned string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_optval_to_cstr(o: OptVal) -> *mut c_char {
+    match o.type_ {
+        StorageOptValType::Nil => xstrdup(c"".as_ptr()),
+        StorageOptValType::Boolean => {
+            // In C: o.data.boolean ? "true" : "false"
+            // boolean == kFalse (0) or kNone (-1) -> "false"; kTrue (1) -> "true"
+            let s = if o.data.boolean == K_TRUE {
+                c"true".as_ptr()
+            } else {
+                c"false".as_ptr()
+            };
+            xstrdup(s)
+        }
+        StorageOptValType::Number => {
+            let buf = xmalloc(NUMBUFLEN);
+            snprintf(buf, NUMBUFLEN, c"%lld".as_ptr(), o.data.number);
+            buf
+        }
+        StorageOptValType::String => {
+            // Format as "\"<string>\""
+            let size = o.data.string.size;
+            let buf = xmalloc(size + 3);
+            // Write opening quote
+            *buf = b'"' as c_char;
+            if size > 0 && !o.data.string.data.is_null() {
+                std::ptr::copy_nonoverlapping(o.data.string.data, buf.add(1), size);
+            }
+            *buf.add(size + 1) = b'"' as c_char;
+            *buf.add(size + 2) = 0;
+            buf
+        }
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

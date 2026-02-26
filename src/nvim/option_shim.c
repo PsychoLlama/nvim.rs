@@ -317,6 +317,12 @@ extern void rs_optval_free(OptVal o);
 extern OptVal rs_optval_copy(OptVal o);
 extern int rs_optval_equal(OptVal o1, OptVal o2);
 
+// Phase 9 value manipulation helpers (from Rust value.rs)
+extern OptVal rs_optval_from_varp(OptIndex opt_idx, void *varp);
+extern void rs_set_option_varp(OptIndex opt_idx, void *varp, OptVal value, int free_oldval);
+extern int rs_is_option_local_value_unset(OptIndex opt_idx);
+extern char *rs_optval_to_cstr(OptVal o);
+
 // Rust FFI declarations (tag module)
 extern void rs_free_tagfunc_option(void);
 extern void rs_set_buflocal_tfu_callback(void *buf);
@@ -2622,7 +2628,7 @@ OptIndex find_option(const char *const name)
 /// Get type of option.
 static OptValType option_get_type(const OptIndex opt_idx)
 {
-  return options[opt_idx].type;
+  return (OptValType)rs_option_get_type(opt_idx);
 }
 
 /// Create OptVal from var pointer.
@@ -2634,25 +2640,7 @@ static OptValType option_get_type(const OptIndex opt_idx)
 OptVal optval_from_varp(OptIndex opt_idx, void *varp)
   FUNC_ATTR_NONNULL_ARG(2)
 {
-  // Special case: 'modified' is b_changed, but we also want to consider it set when 'ff' or 'fenc'
-  // changed.
-  if ((int *)varp == &curbuf->b_changed) {
-    return BOOLEAN_OPTVAL(curbufIsChanged());
-  }
-
-  OptValType type = option_get_type(opt_idx);
-
-  switch (type) {
-  case kOptValTypeNil:
-    return NIL_OPTVAL;
-  case kOptValTypeBoolean:
-    return BOOLEAN_OPTVAL(TRISTATE_FROM_INT(*(int *)varp));
-  case kOptValTypeNumber:
-    return NUMBER_OPTVAL(*(OptInt *)varp);
-  case kOptValTypeString:
-    return STRING_OPTVAL(cstr_as_string(*(char **)varp));
-  }
-  UNREACHABLE;
+  return rs_optval_from_varp(opt_idx, varp);
 }
 
 /// Set option var pointer value from OptVal.
@@ -2664,48 +2652,13 @@ OptVal optval_from_varp(OptIndex opt_idx, void *varp)
 static void set_option_varp(OptIndex opt_idx, void *varp, OptVal value, bool free_oldval)
   FUNC_ATTR_NONNULL_ARG(2)
 {
-  assert(option_has_type(opt_idx, value.type));
-
-  if (free_oldval) {
-    rs_optval_free(optval_from_varp(opt_idx, varp));
-  }
-
-  switch (value.type) {
-  case kOptValTypeNil:
-    abort();
-  case kOptValTypeBoolean:
-    *(int *)varp = value.data.boolean;
-    return;
-  case kOptValTypeNumber:
-    *(OptInt *)varp = value.data.number;
-    return;
-  case kOptValTypeString:
-    *(char **)varp = value.data.string.data;
-    return;
-  }
-  UNREACHABLE;
+  rs_set_option_varp(opt_idx, varp, value, free_oldval ? 1 : 0);
 }
 
 /// Return C-string representation of OptVal. Caller must free the returned C-string.
 static char *optval_to_cstr(OptVal o)
 {
-  switch (o.type) {
-  case kOptValTypeNil:
-    return xstrdup("");
-  case kOptValTypeBoolean:
-    return xstrdup(o.data.boolean ? "true" : "false");
-  case kOptValTypeNumber: {
-    char *buf = xmalloc(NUMBUFLEN);
-    snprintf(buf, NUMBUFLEN, "%" PRId64, o.data.number);
-    return buf;
-  }
-  case kOptValTypeString: {
-    char *buf = xmalloc(o.data.string.size + 3);
-    snprintf(buf, o.data.string.size + 3, "\"%s\"", o.data.string.data);
-    return buf;
-  }
-  }
-  UNREACHABLE;
+  return rs_optval_to_cstr(o);
 }
 
 /// Convert an OptVal to an API Object.
@@ -2854,18 +2807,7 @@ static OptVal get_option_unset_value(OptIndex opt_idx)
 /// TODO(famiu): Remove this once we have an OptVal type to indicate an unset local value.
 static bool is_option_local_value_unset(OptIndex opt_idx)
 {
-  vimoption_T *opt = get_option(opt_idx);
-
-  // Local value of option that isn't global-local is always considered set.
-  if (!option_is_global_local(opt_idx)) {
-    return false;
-  }
-
-  void *varp_local = get_varp_scope(opt, OPT_LOCAL);
-  OptVal local_value = optval_from_varp(opt_idx, varp_local);
-  OptVal unset_local_value = get_option_unset_value(opt_idx);
-
-  return rs_optval_equal(local_value, unset_local_value) != 0;
+  return rs_is_option_local_value_unset(opt_idx) != 0;
 }
 
 /// Handle side-effects of setting an option.
