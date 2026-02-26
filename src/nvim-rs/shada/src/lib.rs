@@ -562,8 +562,8 @@ extern "C" {
     fn nvim_shada_create_oldfiles_list() -> *mut c_void;
     fn nvim_shada_argcount() -> c_int;
     // Phase 1 (plan 92c8078e): compound accessors replacing nvim_shada_apply_entry
-    fn nvim_shada_apply_search_pattern(entry: *mut ShadaEntry, force: bool) -> c_int;
-    fn nvim_shada_apply_sub_string(entry: *mut ShadaEntry, force: bool) -> c_int;
+    // nvim_shada_apply_search_pattern removed (plan b499a5d0 Phase 1): Rust rs_shada_apply_search_pattern.
+    // nvim_shada_apply_sub_string removed (plan b499a5d0 Phase 1): Rust rs_shada_apply_sub_string.
     fn nvim_shada_apply_register(entry: *mut ShadaEntry, force: bool) -> c_int;
     fn nvim_shada_apply_variable(entry: *mut ShadaEntry);
     fn nvim_shada_apply_mark_or_jump(
@@ -582,6 +582,14 @@ extern "C" {
         want_marks: bool,
         get_old_files: bool,
     ) -> c_int;
+    // Phase 1 (plan b499a5d0): thin accessors for search/sub apply
+    fn nvim_shada_get_search_pattern_timestamp(is_substitute: c_int) -> u64;
+    fn nvim_shada_set_search_pattern_from_entry(entry: *mut ShadaEntry);
+    fn nvim_shada_set_substitute_pattern_from_entry(entry: *mut ShadaEntry);
+    fn nvim_shada_set_last_used_pattern(is_substitute: c_int);
+    fn nvim_shada_set_no_hlsearch(val: c_int);
+    fn nvim_shada_get_sub_replacement_timestamp() -> u64;
+    fn nvim_shada_set_sub_replacement_from_entry(entry: *mut ShadaEntry);
     fn nvim_shada_for_all_tab_windows_update_changelist(cl_bufs_handle: *mut c_void);
     fn nvim_shada_clr_history(i: c_int);
     fn nvim_shada_hist_get_array(
@@ -5239,6 +5247,61 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
     OK
 }
 
+// =============================================================================
+// Phase 1 (plan b499a5d0): Rust apply functions for search pattern and sub string
+// =============================================================================
+
+/// Apply a search pattern ShaDa entry (Rust replacement for C nvim_shada_apply_search_pattern).
+///
+/// Compares timestamps with the current pattern; if the entry is newer (or force is true),
+/// sets the search or substitute pattern. Handles is_last_used and highlighted flags.
+///
+/// # Safety
+///
+/// `entry` must be a valid pointer to a ShadaEntry of type SearchPattern.
+unsafe fn rs_shada_apply_search_pattern(entry: *mut ShadaEntry, force: bool) {
+    let is_sub = c_int::from(nvim_shada_sp_get_is_substitute_pattern(entry));
+    if !force {
+        let cur_ts = nvim_shada_get_search_pattern_timestamp(is_sub);
+        // cur_ts == 0 means no pattern set (pat is NULL); skip only if pat exists and is newer
+        if cur_ts != 0 && cur_ts >= (*entry).timestamp {
+            rs_shada_free_entry_contents(entry);
+            return;
+        }
+    }
+    if is_sub != 0 {
+        nvim_shada_set_substitute_pattern_from_entry(entry);
+    } else {
+        nvim_shada_set_search_pattern_from_entry(entry);
+    }
+    if nvim_shada_sp_get_is_last_used(entry) {
+        nvim_shada_set_last_used_pattern(is_sub);
+        let highlighted = nvim_shada_sp_get_highlighted(entry);
+        nvim_shada_set_no_hlsearch(c_int::from(!highlighted));
+    }
+    // Memory was consumed by set_search_pattern / set_substitute_pattern; do not free.
+}
+
+/// Apply a substitute string ShaDa entry (Rust replacement for C nvim_shada_apply_sub_string).
+///
+/// Compares timestamps with the current sub replacement; if the entry is newer (or force is true),
+/// sets the sub replacement string.
+///
+/// # Safety
+///
+/// `entry` must be a valid pointer to a ShadaEntry of type SubString.
+unsafe fn rs_shada_apply_sub_string(entry: *mut ShadaEntry, force: bool) {
+    if !force {
+        let cur_ts = nvim_shada_get_sub_replacement_timestamp();
+        if cur_ts != 0 && cur_ts >= (*entry).timestamp {
+            rs_shada_free_entry_contents(entry);
+            return;
+        }
+    }
+    nvim_shada_set_sub_replacement_from_entry(entry);
+    // Memory was consumed by sub_set_replacement; do not free.
+}
+
 /// Dispatch a single ShaDa entry to Neovim's in-memory state.
 ///
 /// This is the Rust replacement for the C `nvim_shada_apply_entry` function.
@@ -5267,10 +5330,10 @@ unsafe fn rs_shada_apply_entry(
             rs_shada_free_entry_contents(entry);
         }
         ShadaEntryType::SearchPattern => {
-            nvim_shada_apply_search_pattern(entry, force);
+            rs_shada_apply_search_pattern(entry, force);
         }
         ShadaEntryType::SubString => {
-            nvim_shada_apply_sub_string(entry, force);
+            rs_shada_apply_sub_string(entry, force);
         }
         ShadaEntryType::Register => {
             nvim_shada_apply_register(entry, force);

@@ -1919,26 +1919,28 @@ int nvim_shada_tv_get_list_copyid(const void *tv)
 
 // =============================================================================
 // Phase 1 (plan 92c8078e): compound accessor functions for rs_shada_apply_entry
+// nvim_shada_apply_search_pattern deleted (plan b499a5d0 Phase 1): Rust rs_shada_apply_search_pattern.
+// nvim_shada_apply_sub_string deleted (plan b499a5d0 Phase 1): Rust rs_shada_apply_sub_string.
 // =============================================================================
 
-/// Apply a search pattern entry.
-/// @param entry   The ShaDa entry (kSDItemSearchPattern).
-/// @param force   Whether to force overwrite newer entries.
-/// @return 1 if memory was consumed (do not free), 0 if entry was freed.
-int nvim_shada_apply_search_pattern(ShadaEntry *entry, bool force)
+// Phase 1 (plan b499a5d0): thin C accessors for search/sub apply migration
+
+/// Get current search or substitute pattern timestamp (0 if no pattern set).
+uint64_t nvim_shada_get_search_pattern_timestamp(int is_substitute)
 {
-  if (!force) {
-    SearchPattern pat;
-    if (entry->data.search_pattern.is_substitute_pattern) {
-      get_substitute_pattern(&pat);
-    } else {
-      get_search_pattern(&pat);
-    }
-    if (pat.pat != NULL && pat.timestamp >= entry->timestamp) {
-      rs_shada_free_entry_contents(entry);
-      return 0;
-    }
+  SearchPattern pat;
+  if (is_substitute) {
+    get_substitute_pattern(&pat);
+  } else {
+    get_search_pattern(&pat);
   }
+  return pat.pat != NULL ? (uint64_t)pat.timestamp : 0;
+}
+
+/// Build SearchPattern from entry fields and call set_search_pattern.
+/// Memory ownership: entry's pat.data and additional_data are consumed.
+void nvim_shada_set_search_pattern_from_entry(ShadaEntry *entry)
+{
   SearchPattern spat = (SearchPattern) {
     .magic = entry->data.search_pattern.magic,
     .no_scs = !entry->data.search_pattern.smartcase,
@@ -1953,41 +1955,60 @@ int nvim_shada_apply_search_pattern(ShadaEntry *entry, bool force)
     .additional_data = entry->additional_data,
     .timestamp = entry->timestamp,
   };
-  if (entry->data.search_pattern.is_substitute_pattern) {
-    set_substitute_pattern(spat);
-  } else {
-    set_search_pattern(spat);
-  }
-  if (entry->data.search_pattern.is_last_used) {
-    set_last_used_pattern(entry->data.search_pattern.is_substitute_pattern);
-    set_no_hlsearch(!entry->data.search_pattern.highlighted);
-  }
-  // Do not free: allocated memory was saved above.
-  return 1;
+  set_search_pattern(spat);
 }
 
-/// Apply a substitute string entry.
-/// @param entry   The ShaDa entry (kSDItemSubString).
-/// @param force   Whether to force overwrite newer entries.
-/// @return 1 if memory was consumed (do not free), 0 if entry was freed.
-int nvim_shada_apply_sub_string(ShadaEntry *entry, bool force)
+/// Build SearchPattern from entry fields and call set_substitute_pattern.
+/// Memory ownership: entry's pat.data and additional_data are consumed.
+void nvim_shada_set_substitute_pattern_from_entry(ShadaEntry *entry)
 {
-  if (!force) {
-    SubReplacementString sub;
-    sub_get_replacement(&sub);
-    if (sub.sub != NULL && sub.timestamp >= entry->timestamp) {
-      rs_shada_free_entry_contents(entry);
-      return 0;
-    }
-  }
+  SearchPattern spat = (SearchPattern) {
+    .magic = entry->data.search_pattern.magic,
+    .no_scs = !entry->data.search_pattern.smartcase,
+    .off = {
+      .dir = entry->data.search_pattern.search_backward ? '?' : '/',
+      .line = entry->data.search_pattern.has_line_offset,
+      .end = entry->data.search_pattern.place_cursor_at_end,
+      .off = entry->data.search_pattern.offset,
+    },
+    .pat = entry->data.search_pattern.pat.data,
+    .patlen = entry->data.search_pattern.pat.size,
+    .additional_data = entry->additional_data,
+    .timestamp = entry->timestamp,
+  };
+  set_substitute_pattern(spat);
+}
+
+/// Wrap set_last_used_pattern(is_substitute).
+void nvim_shada_set_last_used_pattern(int is_substitute)
+{
+  set_last_used_pattern((bool)is_substitute);
+}
+
+/// Wrap set_no_hlsearch(val).
+void nvim_shada_set_no_hlsearch(int val)
+{
+  set_no_hlsearch((bool)val);
+}
+
+/// Get current substitute replacement string timestamp (0 if no sub set).
+uint64_t nvim_shada_get_sub_replacement_timestamp(void)
+{
+  SubReplacementString sub;
+  sub_get_replacement(&sub);
+  return sub.sub != NULL ? (uint64_t)sub.timestamp : 0;
+}
+
+/// Build SubReplacementString from entry and call sub_set_replacement + regtilde.
+/// Memory ownership: entry's sub_string.sub and additional_data are consumed.
+void nvim_shada_set_sub_replacement_from_entry(ShadaEntry *entry)
+{
   sub_set_replacement((SubReplacementString) {
     .sub = entry->data.sub_string.sub,
     .timestamp = entry->timestamp,
     .additional_data = entry->additional_data,
   });
   regtilde(entry->data.sub_string.sub, rs_magic_isset(), false);
-  // Do not free: allocated memory was saved above.
-  return 1;
 }
 
 /// Apply a register entry.
