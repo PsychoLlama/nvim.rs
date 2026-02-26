@@ -1018,13 +1018,21 @@ extern "C" {
     fn nvim_get_p_sta() -> c_int;
     fn nvim_get_p_ru() -> c_int;
     fn nvim_get_p_ri() -> c_int;
-    fn nvim_paste_buf_save_and_activate(buf: *mut c_void);
-    fn nvim_paste_buf_activate_only(buf: *mut c_void);
-    fn nvim_paste_buf_restore(buf: *mut c_void);
-    fn nvim_paste_global_save();
-    fn nvim_paste_global_activate();
-    fn nvim_paste_global_restore(save_sm: c_int, save_sta: c_int, save_ru: c_int, save_ri: c_int);
-    fn nvim_paste_didset_options_sctx();
+    // Compound paste buf operations (Phase 12 Pass 1)
+    fn nvim_buf_paste_save_scalars(buf: *mut c_void);
+    fn nvim_buf_paste_save_vsts(buf: *mut c_void);
+    fn nvim_buf_paste_activate_scalars(buf: *mut c_void);
+    fn nvim_buf_paste_activate_vsts(buf: *mut c_void);
+    fn nvim_buf_paste_restore_scalars(buf: *mut c_void);
+    fn nvim_buf_paste_restore_vsts(buf: *mut c_void);
+    // Compound paste global operations (Phase 12 Pass 1)
+    fn nvim_paste_global_save_scalars();
+    fn nvim_paste_global_save_vsts();
+    fn nvim_paste_global_activate_scalars();
+    fn nvim_paste_global_activate_vsts();
+    fn nvim_paste_global_restore_scalars(sm: c_int, sta: c_int, ru: c_int, ri: c_int);
+    fn nvim_paste_global_restore_vsts();
+    fn nvim_paste_didset_sctx_all();
 }
 
 // Saved state for when 'paste' is toggled on.
@@ -1034,19 +1042,24 @@ static mut PASTE_SAVE_STA: c_int = 0;
 static mut PASTE_SAVE_RU: c_int = 0;
 static mut PASTE_SAVE_RI: c_int = 0;
 
-/// Per-buffer callback: save nopaste fields and activate paste mode.
+/// Per-buffer callback: save nopaste scalars+vsts and activate paste mode.
 unsafe extern "C" fn paste_buf_save_and_activate_cb(buf: *mut c_void) {
-    nvim_paste_buf_save_and_activate(buf);
+    nvim_buf_paste_save_scalars(buf);
+    nvim_buf_paste_save_vsts(buf);
+    nvim_buf_paste_activate_scalars(buf);
+    nvim_buf_paste_activate_vsts(buf);
 }
 
 /// Per-buffer callback: activate paste mode only (no save, already saved).
 unsafe extern "C" fn paste_buf_activate_only_cb(buf: *mut c_void) {
-    nvim_paste_buf_activate_only(buf);
+    nvim_buf_paste_activate_scalars(buf);
+    nvim_buf_paste_activate_vsts(buf);
 }
 
 /// Per-buffer callback: restore saved nopaste fields.
 unsafe extern "C" fn paste_buf_restore_cb(buf: *mut c_void) {
-    nvim_paste_buf_restore(buf);
+    nvim_buf_paste_restore_scalars(buf);
+    nvim_buf_paste_restore_vsts(buf);
 }
 
 /// Callback for 'paste' option.
@@ -1066,20 +1079,28 @@ pub unsafe extern "C" fn rs_did_set_paste_full(_args: *mut c_void) -> CallbackRe
             PASTE_SAVE_STA = nvim_get_p_sta();
             PASTE_SAVE_RU = nvim_get_p_ru();
             PASTE_SAVE_RI = nvim_get_p_ri();
-            nvim_paste_global_save();
+            nvim_paste_global_save_scalars();
+            nvim_paste_global_save_vsts();
         } else {
             // Paste was already on: just enforce the paste option values again.
             nvim_for_all_buffers(paste_buf_activate_only_cb);
         }
-        nvim_paste_global_activate();
+        nvim_paste_global_activate_scalars();
+        nvim_paste_global_activate_vsts();
     } else if PASTE_OLD_P_PASTE != 0 {
         // Paste switched from on to off: restore saved values.
         nvim_for_all_buffers(paste_buf_restore_cb);
-        nvim_paste_global_restore(PASTE_SAVE_SM, PASTE_SAVE_STA, PASTE_SAVE_RU, PASTE_SAVE_RI);
+        nvim_paste_global_restore_scalars(
+            PASTE_SAVE_SM,
+            PASTE_SAVE_STA,
+            PASTE_SAVE_RU,
+            PASTE_SAVE_RI,
+        );
+        nvim_paste_global_restore_vsts();
     }
 
     PASTE_OLD_P_PASTE = p_paste;
-    nvim_paste_didset_options_sctx();
+    nvim_paste_didset_sctx_all();
 
     callback_ok()
 }
