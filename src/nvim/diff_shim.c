@@ -212,56 +212,9 @@ void diff_redraw(bool dofold)
   rs_diff_redraw(dofold);
 }
 
-static void clear_diffin(diffin_T *din)
-{
-  if (din->din_fname == NULL) {
-    XFREE_CLEAR(din->din_mmfile.ptr);
-  } else {
-    os_remove(din->din_fname);
-  }
-}
 
-static void clear_diffout(diffout_T *dout)
-{
-  if (dout->dout_fname == NULL) {
-    ga_clear(&dout->dout_ga);
-  } else {
-    os_remove(dout->dout_fname);
-  }
-}
 
-/// Write buffer "buf" to a memory buffer.
-/// Thin wrapper -- implementation moved to Rust (rs_diff_write_buffer in diffio.rs).
-///
-/// @param buf  Buffer to write
-/// @param m    Memory file to populate
-/// @param start  First line
-/// @param end    Last line (-1 = all)
-///
-/// @return FAIL for failure.
-static int diff_write_buffer(buf_T *buf, mmfile_t *m, linenr_T start, linenr_T end)
-{
-  return rs_diff_write_buffer(buf, &m->ptr, &m->size, start, end, diff_flags);
-}
 
-/// Write buffer "buf" to file or memory buffer.
-///
-/// Always use 'fileformat' set to "unix".
-/// Dispatches to rs_diff_write_buffer (Rust) or nvim_diff_write_to_file.
-///
-/// @param buf
-/// @param din
-/// @param start
-/// @param end
-///
-/// @return FAIL for failure
-static int diff_write(buf_T *buf, diffin_T *din, linenr_T start, linenr_T end)
-{
-  if (din->din_fname == NULL) {
-    return diff_write_buffer(buf, &din->din_mmfile, start, end);
-  }
-  return nvim_diff_write_to_file(buf, din->din_fname, start, end);
-}
 
 /// Completely update the diffs for the buffers involved.
 ///
@@ -271,31 +224,8 @@ void ex_diffupdate(exarg_T *eap)
   rs_diff_ex_diffupdate(eap);
 }
 
-/// Do a quick test if "diff" really works.  Otherwise it looks like there
-/// are no differences.  Can't use the return value, it's non-zero when
-/// there are differences.
-/// Thin wrapper -- implementation moved to Rust (rs_check_external_diff in diffio.rs).
-static int check_external_diff(diffio_T *diffio)
-{
-  return rs_check_external_diff(diffio);
-}
 
-/// Invoke the xdiff function.
-/// Thin wrapper -- implementation moved to Rust (rs_diff_file_internal in diffio.rs).
-static int diff_file_internal(diffio_T *diffio)
-{
-  return rs_diff_file_internal(diffio);
-}
 
-/// Make a diff between files "tmp_orig" and "tmp_new", results in "tmp_diff".
-///
-/// @param dio
-///
-/// @return OK or FAIL
-static int diff_file(diffio_T *dio)
-{
-  return rs_diff_file(dio);
-}
 
 /// Create a new version of a file from the current buffer and a diff file.
 ///
@@ -474,13 +404,13 @@ bool nvim_diffio_is_internal(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_pt
 void nvim_diffio_init_ga(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio != NULL) { ga_init(&dio->dio_diff.dout_ga, sizeof(diffhunk_T), 100); } }
 bool nvim_diffio_alloc_tempfiles(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return false; } dio->dio_orig.din_fname = vim_tempname(); dio->dio_new.din_fname = vim_tempname(); dio->dio_diff.dout_fname = vim_tempname(); return (dio->dio_orig.din_fname != NULL && dio->dio_new.din_fname != NULL && dio->dio_diff.dout_fname != NULL); }
 void nvim_diffio_free_tempfiles(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return; } xfree(dio->dio_orig.din_fname); xfree(dio->dio_new.din_fname); xfree(dio->dio_diff.dout_fname); dio->dio_orig.din_fname = NULL; dio->dio_new.din_fname = NULL; dio->dio_diff.dout_fname = NULL; }
-int nvim_diffio_write_orig(void *dio_ptr, buf_T *buf, linenr_T start, linenr_T end) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL || buf == NULL) { return FAIL; } return diff_write(buf, &dio->dio_orig, start, end); }
-int nvim_diffio_write_new(void *dio_ptr, buf_T *buf, linenr_T start, linenr_T end) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL || buf == NULL) { return FAIL; } return diff_write(buf, &dio->dio_new, start, end); }
-int nvim_diffio_run_diff(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return FAIL; } return diff_file(dio); }
-int nvim_diffio_check_external(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return FAIL; } return check_external_diff(dio); }
-void nvim_diffio_clear_new(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio != NULL) { clear_diffin(&dio->dio_new); } }
-void nvim_diffio_clear_output(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio != NULL) { clear_diffout(&dio->dio_diff); } }
-void nvim_diffio_clear_orig(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio != NULL) { clear_diffin(&dio->dio_orig); } }
+int nvim_diffio_write_orig(void *dio_ptr, buf_T *buf, linenr_T start, linenr_T end) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL || buf == NULL) { return FAIL; } if (dio->dio_orig.din_fname == NULL) { return rs_diff_write_buffer(buf, &dio->dio_orig.din_mmfile.ptr, &dio->dio_orig.din_mmfile.size, start, end, diff_flags); } return nvim_diff_write_to_file(buf, dio->dio_orig.din_fname, start, end); }
+int nvim_diffio_write_new(void *dio_ptr, buf_T *buf, linenr_T start, linenr_T end) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL || buf == NULL) { return FAIL; } if (dio->dio_new.din_fname == NULL) { return rs_diff_write_buffer(buf, &dio->dio_new.din_mmfile.ptr, &dio->dio_new.din_mmfile.size, start, end, diff_flags); } return nvim_diff_write_to_file(buf, dio->dio_new.din_fname, start, end); }
+int nvim_diffio_run_diff(void *dio_ptr) { if (dio_ptr == NULL) { return FAIL; } return rs_diff_file(dio_ptr); }
+int nvim_diffio_check_external(void *dio_ptr) { if (dio_ptr == NULL) { return FAIL; } return rs_check_external_diff(dio_ptr); }
+void nvim_diffio_clear_new(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return; } if (dio->dio_new.din_fname == NULL) { XFREE_CLEAR(dio->dio_new.din_mmfile.ptr); } else { os_remove(dio->dio_new.din_fname); } }
+void nvim_diffio_clear_output(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return; } if (dio->dio_diff.dout_fname == NULL) { ga_clear(&dio->dio_diff.dout_ga); } else { os_remove(dio->dio_diff.dout_fname); } }
+void nvim_diffio_clear_orig(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return; } if (dio->dio_orig.din_fname == NULL) { XFREE_CLEAR(dio->dio_orig.din_mmfile.ptr); } else { os_remove(dio->dio_orig.din_fname); } }
 int nvim_diffio_get_hunk_count(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return 0; } return dio->dio_diff.dout_ga.ga_len; }
 bool nvim_diffio_get_hunk(void *dio_ptr, int idx,
                           linenr_T *lnum_orig, int *count_orig,
@@ -539,7 +469,7 @@ void nvim_diff_emsg_e960(void) { emsg(_("E960: Problem creating the internal dif
 const char *nvim_diffio_get_orig_fname(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_orig.din_fname : NULL; }
 const char *nvim_diffio_get_new_fname(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_new.din_fname : NULL; }
 const char *nvim_diffio_get_diff_fname(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_diff.dout_fname : NULL; }
-int nvim_diff_write_to_file(buf_T *buf, const char *fname, linenr_T start, linenr_T end) { diffin_T din = { .din_fname = (char *)fname }; return diff_write(buf, &din, start, end); }
+int nvim_diff_write_to_file(buf_T *buf, const char *fname, linenr_T start, linenr_T end) { if (end < 0) { end = buf->b_ml.ml_line_count; } int save_ml_flags = buf->b_ml.ml_flags; char *save_ff = buf->b_p_ff; buf->b_p_ff = xstrdup("unix"); const bool save_cmod_flags = cmdmod.cmod_flags; cmdmod.cmod_flags |= CMOD_LOCKMARKS; if (end < start) { end = start; buf->b_ml.ml_flags |= ML_EMPTY; } int r = buf_write(buf, (char *)fname, NULL, start, end, NULL, false, false, false, true); cmdmod.cmod_flags = save_cmod_flags; free_string_option(buf->b_p_ff); buf->b_p_ff = save_ff; buf->b_ml.ml_flags = (buf->b_ml.ml_flags & ~ML_EMPTY) | (save_ml_flags & ML_EMPTY); return r; }
 int nvim_diff_get_a_works(void) { return (int)diff_a_works; }
 void nvim_diff_set_a_works(int val) { diff_a_works = (TriState)val; }
 void nvim_diff_eval_diff(const char *orig, const char *new_f, const char *diff) { eval_diff((char *)orig, (char *)new_f, (char *)diff); }
@@ -551,7 +481,7 @@ void *nvim_diff_fopen_read(const char *fname) { return os_fopen(fname, "r"); }
 void nvim_diff_emsg_e810(void) { emsg(_("E810: Cannot read or write temp files")); }
 void nvim_diff_emsg_e97(void) { emsg(_("E97: Cannot create diffs")); }
 // Phase 5 (inline_compute) accessors
-int nvim_xdiff_internal_run(const char *orig_data, int orig_size, const char *new_data, int new_size, void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return FAIL; } dio->dio_orig.din_mmfile.ptr = (char *)orig_data; dio->dio_orig.din_mmfile.size = orig_size; dio->dio_new.din_mmfile.ptr = (char *)new_data; dio->dio_new.din_mmfile.size = new_size; return diff_file_internal(dio); }
+int nvim_xdiff_internal_run(const char *orig_data, int orig_size, const char *new_data, int new_size, void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return FAIL; } dio->dio_orig.din_mmfile.ptr = (char *)orig_data; dio->dio_orig.din_mmfile.size = orig_size; dio->dio_new.din_mmfile.ptr = (char *)new_data; dio->dio_new.din_mmfile.size = new_size; return rs_diff_file_internal(dio); }
 uint64_t *nvim_diffbuf_get_chartab(int idx) { if (idx < 0 || idx >= DB_COUNT || curtab->tp_diffbuf[idx] == NULL) { return NULL; } return curtab->tp_diffbuf[idx]->b_chartab; }
 void nvim_diffblock_append_change(diff_T *dp, const int *dc_start, const int *dc_end, const int *dc_start_lnum_off, const int *dc_end_lnum_off) { if (dp == NULL) { return; } diffline_change_T change = { 0 }; for (int i = 0; i < DB_COUNT; i++) { change.dc_start[i] = dc_start[i]; change.dc_end[i] = dc_end[i]; change.dc_start_lnum_off[i] = dc_start_lnum_off[i]; change.dc_end_lnum_off[i] = dc_end_lnum_off[i]; } GA_APPEND(diffline_change_T, &dp->df_changes, change); }
 // Phase 1 accessors: xdiff_out and f_diff_filler
