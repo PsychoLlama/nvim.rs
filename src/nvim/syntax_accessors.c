@@ -106,6 +106,10 @@ extern void rs_syn_do_stack_realloc(int len);
 // Phase 11: state_entry.rs Phase 11 Rust implementations
 extern void rs_syn_store_bufstates(synstate_T *sp);
 
+// Phase 11: commands.rs Rust implementations for do_onoff and maybe_enable
+extern void rs_syn_do_onoff_impl(exarg_T *eap, const char *name);
+extern void rs_syn_do_maybe_enable_impl(void);
+
 // Phase 9.2: state_ops.rs Rust implementations
 extern void rs_syn_set_next_match_state(int idx, int col,
     int m_endpos_lnum, int m_endpos_col,
@@ -2455,25 +2459,29 @@ int nvim_syn_get_did_syntax_onoff(void)
 }
 
 /// Execute the on/off/manual logic: set did_syntax_onoff, build "so ..." cmd, run it.
+/// Thin wrapper: logic is in rs_syn_cmd_onoff (commands.rs).
 void nvim_syn_do_onoff(exarg_T *eap, const char *name)
 {
-  eap->nextcmd = check_nextcmd(eap->arg);
-  if (!eap->skip) {
-    did_syntax_onoff = true;
-    char buf[100];
-    memcpy(buf, "so ", 4);
-    vim_snprintf(buf + 3, sizeof(buf) - 3, SYNTAX_FNAME, name);
-    do_cmdline_cmd(buf);
-  }
+  rs_syn_do_onoff_impl(eap, name);
 }
 
 /// Enable syntax (syn_maybe_enable helper): create minimal exarg_T and call rs_syn_cmd_on_dispatch.
+/// Thin wrapper: logic is in rs_syn_maybe_enable (commands.rs).
 void nvim_syn_do_maybe_enable(void)
 {
-  exarg_T ea;
-  ea.arg = "";
-  ea.skip = false;
-  rs_syn_cmd_on_dispatch(&ea, false);
+  rs_syn_do_maybe_enable_impl();
+}
+
+/// Wrap do_cmdline_cmd for Rust callers (Phase 11).
+void nvim_syn_do_cmdline_cmd(const char *cmd)
+{
+  do_cmdline_cmd(cmd);
+}
+
+/// Set did_syntax_onoff flag (Phase 11).
+void nvim_syn_set_did_syntax_onoff(int v)
+{
+  did_syntax_onoff = (bool)v;
 }
 
 /// Redraw curwin with UPD_NOT_VALID (used after :syntax spell dispatch from Rust).

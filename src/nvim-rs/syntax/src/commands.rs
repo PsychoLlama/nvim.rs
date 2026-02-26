@@ -940,18 +940,19 @@ extern "C" {
     // check_nextcmd accessor (sets eap->nextcmd = check_nextcmd(arg))
     fn nvim_syn_check_nextcmd(eap: *mut c_void, arg: *mut c_char);
 
-    // Syntax on/off/manual: sets did_syntax_onoff, builds "so ..." command, runs it
-    fn nvim_syn_do_onoff(eap: *mut c_void, name: *const c_char);
-
     // Reset: calls init_highlight(true, true)
     fn nvim_syn_init_highlight(reset: c_int, init: c_int);
 
-    // did_syntax_onoff flag getter
+    // did_syntax_onoff flag getter/setter (Phase 11)
     fn nvim_syn_get_did_syntax_onoff() -> c_int;
+    fn nvim_syn_set_did_syntax_onoff(v: c_int);
 
-    // Create minimal exarg_T and run syn_cmd_on (for syn_maybe_enable)
-    fn nvim_syn_do_maybe_enable();
+    // Run a cmdline command string (Phase 11)
+    fn nvim_syn_do_cmdline_cmd(cmd: *const c_char);
 }
+
+/// SYNTAX_FNAME format string for sourcing syntax files.
+const SYNTAX_FNAME: &str = "$VIMRUNTIME/syntax/%s.vim";
 
 /// Handle `:syntax reset` command: resets highlighting.
 ///
@@ -966,6 +967,23 @@ pub unsafe extern "C" fn rs_syn_cmd_reset(eap: *mut c_void, _syncing: c_int) {
     }
 }
 
+/// Core do_onoff logic: sets eap->nextcmd, sets did_syntax_onoff, builds and runs command.
+///
+/// # Safety
+/// Must be called from main thread. `name` must be a valid NUL-terminated C string.
+unsafe fn do_onoff_impl(eap: *mut c_void, name: *const c_char) {
+    let arg = nvim_syn_get_eap_arg(eap);
+    nvim_syn_check_nextcmd(eap, arg);
+    if nvim_syn_get_eap_skip(eap) == 0 {
+        nvim_syn_set_did_syntax_onoff(1);
+        // Build "so $VIMRUNTIME/syntax/<name>.vim"
+        let name_str = std::ffi::CStr::from_ptr(name).to_string_lossy();
+        let cmd = format!("so {}", SYNTAX_FNAME.replace("%s", &name_str));
+        let cmd_cstr = std::ffi::CString::new(cmd).unwrap_or_default();
+        nvim_syn_do_cmdline_cmd(cmd_cstr.as_ptr());
+    }
+}
+
 /// Handle `:syntax on`, `:syntax off`, `:syntax manual` commands.
 ///
 /// `name` must be a NUL-terminated C string: "syntax", "nosyntax", or "manual".
@@ -974,7 +992,16 @@ pub unsafe extern "C" fn rs_syn_cmd_reset(eap: *mut c_void, _syncing: c_int) {
 /// Must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_cmd_onoff(eap: *mut c_void, name: *const c_char, _syncing: c_int) {
-    nvim_syn_do_onoff(eap, name);
+    do_onoff_impl(eap, name);
+}
+
+/// FFI entry point called from C nvim_syn_do_onoff thin wrapper.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_do_onoff_impl(eap: *mut c_void, name: *const c_char) {
+    do_onoff_impl(eap, name);
 }
 
 /// Enable syntax if not already done (`syn_maybe_enable`).
@@ -984,8 +1011,21 @@ pub unsafe extern "C" fn rs_syn_cmd_onoff(eap: *mut c_void, name: *const c_char,
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_maybe_enable() {
     if nvim_syn_get_did_syntax_onoff() == 0 {
-        nvim_syn_do_maybe_enable();
+        rs_syn_do_maybe_enable_impl();
     }
+}
+
+/// Core logic for syn_maybe_enable: create minimal dispatch call for syntax on.
+///
+/// # Safety
+/// Must be called from main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_do_maybe_enable_impl() {
+    // Build the "so $VIMRUNTIME/syntax/syntax.vim" command directly
+    nvim_syn_set_did_syntax_onoff(1);
+    let cmd = format!("so {}", SYNTAX_FNAME.replace("%s", "syntax"));
+    let cmd_cstr = std::ffi::CString::new(cmd).unwrap_or_default();
+    nvim_syn_do_cmdline_cmd(cmd_cstr.as_ptr());
 }
 
 // =============================================================================
