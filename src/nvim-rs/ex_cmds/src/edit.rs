@@ -114,7 +114,6 @@ extern "C" {
     fn nvim_ecmd_buf_dec_locked(buf: *mut BufHandle);
     fn nvim_ecmd_buf_is_curbuf(buf: *mut BufHandle) -> c_int;
     fn nvim_ecmd_set_curbuf(buf: *mut BufHandle);
-    fn nvim_ecmd_buf_is_alt(buf: *mut BufHandle) -> c_int;
 
     // win_T opaque handle accessors
     fn nvim_ecmd_win_buf_is_null(win: *mut WinHandle) -> c_int;
@@ -201,8 +200,7 @@ extern "C" {
     // Misc wrappers
     fn nvim_ecmd_buflist_altfpos(win: *mut WinHandle);
     fn nvim_ecmd_buflist_findfmark(buf: *mut BufHandle, lnum: *mut c_int, col: *mut c_int);
-    fn nvim_ecmd_terminal_check_size_bufref(r: *mut std::ffi::c_void);
-    fn nvim_ecmd_terminal_check_size_curbuf();
+    fn nvim_ecmd_terminal_check_size_cleanup(r: *mut std::ffi::c_void);
     fn nvim_ecmd_handle_swap_exists(old_curbuf_ref: *mut std::ffi::c_void);
     fn nvim_ecmd_setaltfname(ffname: *mut c_char, sfname: *mut c_char, lnum: c_int);
     fn nvim_ecmd_delbuf_msg(name: *mut c_char);
@@ -232,8 +230,6 @@ extern "C" {
     fn nvim_ecmd_set_swapcommand(command: *const c_char, newlnum: c_int) -> c_int;
     fn nvim_ecmd_emsg_closing_buffer();
     fn xstrdup(s: *const c_char) -> *mut c_char;
-    fn nvim_ecmd_curbuf_changed_from_bufref(old_curbuf_ref: *mut std::ffi::c_void) -> c_int;
-    fn nvim_ecmd_curbuf_is_old_buf(old_curbuf_ref: *mut std::ffi::c_void) -> c_int;
     fn nvim_ecmd_should_dec_nwindows_on_locked(oldwin: *mut WinHandle) -> c_int;
     fn nvim_ecmd_dec_curwin_buf_nwindows_safe();
 
@@ -464,7 +460,9 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 break 'outer; // retval stays FAIL
             }
 
-            if nvim_ecmd_buf_is_alt(buf) != 0 && prev_alt_fnum != 0 {
+            if nvim_ecmd_buf_get_b_fnum(buf) == nvim_ecmd_curwin_get_alt_fnum()
+                && prev_alt_fnum != 0
+            {
                 // Reusing buffer: keep old alternate file
                 nvim_ecmd_curwin_set_alt_fnum(prev_alt_fnum);
             }
@@ -477,7 +475,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 nvim_ex2_buf_check_timestamp(buf);
                 // Check if autocommands invalidated the buffer or changed curbuf
                 if nvim_ecmd_bufref_valid(bufref) == 0
-                    || nvim_ecmd_curbuf_changed_from_bufref(old_curbuf) != 0
+                    || nvim_ecmd_bufref_is_curbuf(old_curbuf) == 0
                 {
                     break 'outer;
                 }
@@ -550,7 +548,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                     nvim_ecmd_buf_inc_locked(buf);
 
                     // Copy options if curbuf is still the old curbuf
-                    if nvim_ecmd_curbuf_is_old_buf(old_curbuf) != 0 {
+                    if nvim_ecmd_bufref_is_curbuf(old_curbuf) != 0 {
                         buf_copy_options(buf, BCO_ENTER);
                     }
 
@@ -890,10 +888,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
     } // end 'outer
 
     // theend: cleanup
-    nvim_ecmd_terminal_check_size_bufref(old_curbuf);
-    if nvim_ecmd_bufref_valid(old_curbuf) == 0 || nvim_ecmd_bufref_is_curbuf(old_curbuf) == 0 {
-        nvim_ecmd_terminal_check_size_curbuf();
-    }
+    nvim_ecmd_terminal_check_size_cleanup(old_curbuf);
 
     if did_inc_redrawing_disabled {
         nvim_dec_RedrawingDisabled();

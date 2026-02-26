@@ -2906,20 +2906,18 @@ void nvim_ecmd_buflist_findfmark(buf_T *buf, int *lnum, int *col)
   *col = (int)pos->col;
 }
 
-/// Call terminal_check_size on old_curbuf's terminal if valid (void* = bufref_T*)
-void nvim_ecmd_terminal_check_size_bufref(void *ref)
+/// Check terminal size at cleanup: call terminal_check_size on old_curbuf's terminal
+/// if valid; if bufref is invalid or no longer curbuf, also check curbuf's terminal.
+void nvim_ecmd_terminal_check_size_cleanup(void *ref)
 {
   bufref_T *br = (bufref_T *)ref;
   if (bufref_valid(br) && br->br_buf->terminal != NULL) {
     terminal_check_size(br->br_buf->terminal);
   }
-}
-
-/// Call terminal_check_size(curbuf->terminal) if curbuf has terminal
-void nvim_ecmd_terminal_check_size_curbuf(void)
-{
-  if (curbuf->terminal != NULL) {
-    terminal_check_size(curbuf->terminal);
+  if (!bufref_valid(br) || br->br_buf != curbuf) {
+    if (curbuf->terminal != NULL) {
+      terminal_check_size(curbuf->terminal);
+    }
   }
 }
 
@@ -3016,24 +3014,6 @@ int nvim_ecmd_should_dec_nwindows_on_locked(win_T *oldwin)
 {
   return (oldwin == NULL && curwin->w_buffer != NULL
           && curwin->w_buffer->b_nwindows > 1) ? 1 : 0;
-}
-
-/// Check if curbuf == old_curbuf.br_buf using the old_curbuf bufref
-int nvim_ecmd_curbuf_is_old_buf(void *old_curbuf_ref)
-{
-  bufref_T *ref = (bufref_T *)old_curbuf_ref;
-  return curbuf == ref->br_buf ? 1 : 0;
-}
-
-/// Get buf->b_fnum == curwin->w_alt_fnum
-int nvim_ecmd_buf_is_alt(buf_T *buf) { return buf->b_fnum == curwin->w_alt_fnum ? 1 : 0; }
-
-/// Get curbuf == old_curbuf.br_buf via bufref. Returns 1 if changed.
-/// Used to check if autocommands changed the buffer.
-int nvim_ecmd_curbuf_changed_from_bufref(void *old_curbuf_ref)
-{
-  bufref_T *ref = (bufref_T *)old_curbuf_ref;
-  return curbuf != ref->br_buf ? 1 : 0;
 }
 
 /// curwin->w_s = &buf->b_s (set synblock to buf)
