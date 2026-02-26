@@ -313,6 +313,8 @@ extern void rs_ml_open_file(buf_T *buf);
 extern void rs_ml_open_files(void);
 // Pass 9 Phase 2: ml_setname Rust function declaration
 extern void rs_ml_setname(buf_T *buf);
+// Pass 9 Phase 3: ml_open Rust function declaration
+extern int rs_ml_open(buf_T *buf);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -337,120 +339,10 @@ static const char e_warning_pointer_block_corrupted[]
 # define ML_GET_ALLOC_LINES
 #endif
 
-/// Open a new memline for "buf".
+/// Open a new memline for "buf". (thin wrapper calling Rust)
 ///
 /// @return  FAIL for failure, OK otherwise.
-int ml_open(buf_T *buf)
-{
-  // init fields in memline struct
-  buf->b_ml.ml_stack_size = 0;   // no stack yet
-  buf->b_ml.ml_stack = NULL;    // no stack yet
-  buf->b_ml.ml_stack_top = 0;   // nothing in the stack
-  buf->b_ml.ml_locked = NULL;   // no cached block
-  buf->b_ml.ml_line_lnum = 0;   // no cached line
-  buf->b_ml.ml_line_offset = 0;
-  buf->b_ml.ml_chunksize = NULL;
-  buf->b_ml.ml_usedchunks = 0;
-
-  if (cmdmod.cmod_flags & CMOD_NOSWAPFILE) {
-    buf->b_p_swf = false;
-  }
-
-  // When 'updatecount' is non-zero swapfile may be opened later.
-  if (!buf->terminal && p_uc && buf->b_p_swf) {
-    buf->b_may_swap = true;
-  } else {
-    buf->b_may_swap = false;
-  }
-
-  // Open the memfile.  No swapfile is created yet.
-  memfile_T *mfp = mf_open(NULL, 0);
-  if (mfp == NULL) {
-    goto error;
-  }
-
-  buf->b_ml.ml_mfp = mfp;
-  buf->b_ml.ml_flags = ML_EMPTY;
-  buf->b_ml.ml_line_count = 1;
-
-  // fill block0 struct and write page 0
-  bhdr_T *hp = mf_new(mfp, false, 1);
-  if (hp->bh_bnum != 0) {
-    iemsg(_("E298: Didn't get block nr 0?"));
-    goto error;
-  }
-  ZeroBlock *b0p = hp->bh_data;
-
-  b0p->b0_id[0] = BLOCK0_ID0;
-  b0p->b0_id[1] = BLOCK0_ID1;
-  b0p->b0_magic_long = B0_MAGIC_LONG;
-  b0p->b0_magic_int = B0_MAGIC_INT;
-  b0p->b0_magic_short = (int16_t)B0_MAGIC_SHORT;
-  b0p->b0_magic_char = B0_MAGIC_CHAR;
-  xstrlcpy(xstpcpy(b0p->b0_version, "VIM "), Versions[0], 6);
-  rs_long_to_char((long)mfp->mf_page_size, b0p->b0_page_size);
-
-  if (!buf->b_spell) {
-    b0p->b0_dirty = buf->b_changed ? B0_DIRTY : 0;
-    b0p->b0_flags = (char)(rs_get_fileformat((buf_T *)buf) + 1);
-    set_b0_fname(b0p, buf);
-    os_get_username(b0p->b0_uname, B0_UNAME_SIZE);
-    b0p->b0_uname[B0_UNAME_SIZE - 1] = NUL;
-    os_get_hostname(b0p->b0_hname, B0_HNAME_SIZE);
-    b0p->b0_hname[B0_HNAME_SIZE - 1] = NUL;
-    rs_long_to_char((long)os_get_pid(), b0p->b0_pid);
-  }
-
-  // Always sync block number 0 to disk, so we can check the file name in
-  // the swapfile in findswapname(). Don't do this for a help files or
-  // a spell buffer though.
-  // Only works when there's a swapfile, otherwise it's done when the file
-  // is created.
-  mf_put(mfp, hp, true, false);
-  if (!buf->b_help && !buf->b_spell) {
-    mf_sync(mfp, 0);
-  }
-
-  // Fill in root pointer block and write page 1.
-  hp = ml_new_ptr(mfp);
-  assert(hp != NULL);
-  if (hp->bh_bnum != 1) {
-    iemsg(_("E298: Didn't get block nr 1?"));
-    goto error;
-  }
-  PointerBlock *pp = hp->bh_data;
-  pp->pb_count = 1;
-  pp->pb_pointer[0].pe_bnum = 2;
-  pp->pb_pointer[0].pe_page_count = 1;
-  pp->pb_pointer[0].pe_old_lnum = 1;
-  pp->pb_pointer[0].pe_line_count = 1;      // line count after insertion
-  mf_put(mfp, hp, true, false);
-
-  // Allocate first data block and create an empty line 1.
-  hp = ml_new_data(mfp, false, 1);
-  if (hp->bh_bnum != 2) {
-    iemsg(_("E298: Didn't get block nr 2?"));
-    goto error;
-  }
-
-  DataBlock *dp = hp->bh_data;
-  dp->db_index[0] = --dp->db_txt_start;         // at end of block
-  dp->db_free -= 1 + (unsigned)INDEX_SIZE;
-  dp->db_line_count = 1;
-  *((char *)dp + dp->db_txt_start) = NUL;     // empty line
-
-  return OK;
-
-error:
-  if (mfp != NULL) {
-    if (hp) {
-      mf_put(mfp, hp, false, false);
-    }
-    mf_close(mfp, true);  // will also xfree(mfp->mf_fname)
-  }
-  buf->b_ml.ml_mfp = NULL;
-  return FAIL;
-}
+int ml_open(buf_T *buf) { return rs_ml_open(buf); }
 
 /// ml_setname() is called when the file name of "buf" has been changed.
 /// It may rename the swapfile. (thin wrapper calling Rust)
@@ -1729,6 +1621,91 @@ int nvim_vim_rename(const char *from, const char *to) { return vim_rename(from, 
 
 /// Get O_RDWR flag value for os_open calls
 int nvim_get_o_rdwr(void) { return O_RDWR; }
+
+// Pass 9 Phase 3: ml_open accessors for Rust FFI
+
+/// Initialize all ml fields to their zero/NULL defaults for ml_open
+void nvim_buf_init_ml_empty(buf_T *buf)
+{
+  buf->b_ml.ml_stack_size = 0;
+  buf->b_ml.ml_stack = NULL;
+  buf->b_ml.ml_stack_top = 0;
+  buf->b_ml.ml_locked = NULL;
+  buf->b_ml.ml_line_lnum = 0;
+  buf->b_ml.ml_line_offset = 0;
+  buf->b_ml.ml_chunksize = NULL;
+  buf->b_ml.ml_usedchunks = 0;
+}
+
+/// Set buf->b_ml.ml_mfp
+void nvim_buf_set_ml_mfp(buf_T *buf, void *mfp) { buf->b_ml.ml_mfp = mfp; }
+
+/// Initialize block 0 header fields (magic numbers, version, page_size)
+void nvim_b0_init_header(ZeroBlock *b0p, unsigned page_size)
+{
+  b0p->b0_id[0] = BLOCK0_ID0;
+  b0p->b0_id[1] = BLOCK0_ID1;
+  b0p->b0_magic_long = B0_MAGIC_LONG;
+  b0p->b0_magic_int = B0_MAGIC_INT;
+  b0p->b0_magic_short = (int16_t)B0_MAGIC_SHORT;
+  b0p->b0_magic_char = B0_MAGIC_CHAR;
+  xstrlcpy(xstpcpy(b0p->b0_version, "VIM "), Versions[0], 6);
+  rs_long_to_char((long)page_size, b0p->b0_page_size);
+}
+
+/// Initialize the root pointer block for ml_open (block 1)
+void nvim_pp_init_root(void *pp_raw)
+{
+  PointerBlock *pp = (PointerBlock *)pp_raw;
+  pp->pb_count = 1;
+  pp->pb_pointer[0].pe_bnum = 2;
+  pp->pb_pointer[0].pe_page_count = 1;
+  pp->pb_pointer[0].pe_old_lnum = 1;
+  pp->pb_pointer[0].pe_line_count = 1;  // line count after insertion
+}
+
+/// Initialize the first data block with an empty line for ml_open (block 2)
+void nvim_dp_init_empty_line(void *dp_raw)
+{
+  DataBlock *dp = (DataBlock *)dp_raw;
+  dp->db_index[0] = --dp->db_txt_start;       // at end of block
+  dp->db_free -= 1 + (unsigned)INDEX_SIZE;
+  dp->db_line_count = 1;
+  *((char *)dp + dp->db_txt_start) = NUL;     // empty line
+}
+
+/// Get buf->b_p_swf (swapfile option); returns non-zero if true
+int nvim_buf_get_b_p_swf_mlopen(buf_T *buf) { return buf->b_p_swf ? 1 : 0; }
+
+/// Set buf->b_p_swf = false
+void nvim_buf_set_b_p_swf_false(buf_T *buf) { buf->b_p_swf = false; }
+
+/// Set buf->b_may_swap = true
+void nvim_buf_set_b_may_swap_true(buf_T *buf) { buf->b_may_swap = true; }
+
+/// Get buf->b_help (returns 1 if true)
+// nvim_buf_get_b_help already in option_shim.c
+
+/// Set b0_dirty field in block 0 from buf->b_changed
+void nvim_b0_set_dirty_from_buf(ZeroBlock *b0p, buf_T *buf)
+{
+  b0p->b0_dirty = buf->b_changed ? B0_DIRTY : 0;
+}
+
+/// Set b0_flags from fileformat
+void nvim_b0_set_flags_from_ff(ZeroBlock *b0p, int fileformat)
+{
+  b0p->b0_flags = (char)(fileformat + 1);
+}
+
+/// Copy username into b0_uname, NUL-terminate
+void nvim_b0_fill_uname(ZeroBlock *b0p) { os_get_username(b0p->b0_uname, B0_UNAME_SIZE); }
+
+/// Copy hostname into b0_hname, NUL-terminate
+void nvim_b0_fill_hname(ZeroBlock *b0p) { os_get_hostname(b0p->b0_hname, B0_HNAME_SIZE); }
+
+/// Write PID into b0_pid
+void nvim_b0_fill_pid(ZeroBlock *b0p) { rs_long_to_char((long)os_get_pid(), b0p->b0_pid); }
 
 // Pass 8 Phase 1: findswapname cluster accessors for Rust FFI
 

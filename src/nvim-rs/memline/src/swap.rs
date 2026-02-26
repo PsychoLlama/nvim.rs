@@ -14,7 +14,7 @@
 //! Swap file operations modify filesystem state and should only be called
 //! when appropriate (e.g., not during recovery).
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_uint};
 
 use crate::rs_long_to_char;
 use crate::types::{
@@ -37,9 +37,6 @@ extern "C" {
     // -------------------------------------------------------------------------
     // Swap File Operations (C implementations -- to be migrated)
     // -------------------------------------------------------------------------
-
-    /// Open memline for buffer, create swap file
-    fn ml_open(buf: *mut BufHandle) -> c_int;
 
     /// Close all memlines (buffer iteration stays in C via FOR_ALL_BUFFERS)
     fn ml_close_all(del_file: c_int);
@@ -124,11 +121,113 @@ extern "C" {
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
     if buf.is_null() {
-        return 0; // FAIL
+        return crate::types::FAIL;
     }
-    ml_open(buf)
+
+    // Initialize all ml fields to zero/NULL
+    nvim_buf_init_ml_empty(buf);
+
+    if nvim_get_cmod_noswapfile() != 0 {
+        nvim_buf_set_b_p_swf_false(buf);
+    }
+
+    // When 'updatecount' is non-zero swapfile may be opened later.
+    if nvim_buf_get_terminal(buf) == 0
+        && nvim_callback_get_p_uc() != 0
+        && nvim_buf_get_p_swf(buf) != 0
+    {
+        nvim_buf_set_b_may_swap_true(buf);
+    } else {
+        nvim_buf_set_b_may_swap(buf, 0);
+    }
+
+    // Open the memfile. No swap file is created yet.
+    let mfp = mf_open(std::ptr::null_mut(), 0);
+    if mfp.is_null() {
+        return crate::types::FAIL;
+    }
+
+    nvim_buf_set_ml_mfp(buf, mfp);
+    nvim_buf_set_ml_flags(buf, crate::types::ML_EMPTY);
+    nvim_buf_set_ml_line_count(buf, 1);
+
+    // A helper macro-like closure for the error path.
+    // Puts hp back (if non-null) then closes the memfile.
+    let do_error = |hp: *mut std::ffi::c_void| {
+        if !hp.is_null() {
+            mf_put(mfp, hp, false, false);
+        }
+        mf_close(mfp, 1); // del_file = true
+        nvim_buf_set_ml_mfp(buf, std::ptr::null_mut());
+    };
+
+    // Allocate block 0 (expected bh_bnum == 0)
+    let hp0 = mf_new(mfp, false, 1);
+    if hp0.is_null() {
+        do_error(std::ptr::null_mut());
+        return crate::types::FAIL;
+    }
+    if nvim_bhdr_get_bh_bnum(hp0) != 0 {
+        iemsg(c"E298: Didn't get block nr 0?".as_ptr());
+        do_error(hp0);
+        return crate::types::FAIL;
+    }
+
+    let b0p = nvim_bhdr_get_bh_data(hp0);
+    let page_size = nvim_mf_get_page_size(mfp);
+    nvim_b0_init_header(b0p, page_size);
+
+    if nvim_buf_get_b_spell(buf) == 0 {
+        nvim_b0_set_dirty_from_buf(b0p, buf);
+        let fileformat = rs_get_fileformat(buf);
+        nvim_b0_set_flags_from_ff(b0p, fileformat);
+        rs_set_b0_fname(b0p, buf);
+        nvim_b0_fill_uname(b0p);
+        nvim_b0_fill_hname(b0p);
+        nvim_b0_fill_pid(b0p);
+    }
+
+    // Always sync block 0 to disk so findswapname() can check the file name.
+    // Don't do this for help files or spell buffers.
+    mf_put(mfp, hp0, true, false);
+    if nvim_buf_get_b_help(buf) == 0 && nvim_buf_get_b_spell(buf) == 0 {
+        mf_sync(mfp, 0);
+    }
+
+    // Fill in root pointer block and write page 1.
+    let hp1 = rs_ml_new_ptr(mfp);
+    if hp1.is_null() {
+        do_error(std::ptr::null_mut());
+        return crate::types::FAIL;
+    }
+    if nvim_bhdr_get_bh_bnum(hp1) != 1 {
+        iemsg(c"E298: Didn't get block nr 1?".as_ptr());
+        do_error(hp1);
+        return crate::types::FAIL;
+    }
+    let pp = nvim_bhdr_get_bh_data(hp1);
+    nvim_pp_init_root(pp);
+    mf_put(mfp, hp1, true, false);
+
+    // Allocate first data block and create an empty line 1.
+    let hp2 = rs_ml_new_data(mfp, false, 1);
+    if hp2.is_null() {
+        do_error(std::ptr::null_mut());
+        return crate::types::FAIL;
+    }
+    if nvim_bhdr_get_bh_bnum(hp2) != 2 {
+        iemsg(c"E298: Didn't get block nr 2?".as_ptr());
+        do_error(hp2);
+        return crate::types::FAIL;
+    }
+    let dp = nvim_bhdr_get_bh_data(hp2);
+    nvim_dp_init_empty_line(dp);
+    mf_put(mfp, hp2, true, false);
+
+    crate::types::OK
 }
 
 /// Set the name of the swap file for a buffer.
@@ -587,6 +686,83 @@ extern "C" {
 
     /// Get O_RDWR constant value for os_open
     fn nvim_get_o_rdwr() -> c_int;
+}
+
+// =============================================================================
+// Phase 9-3: ml_open extern declarations
+// =============================================================================
+
+extern "C" {
+    /// Initialize all ml fields to zero/NULL for a new buffer
+    fn nvim_buf_init_ml_empty(buf: *mut BufHandle);
+
+    /// Set buf->b_ml.ml_mfp
+    fn nvim_buf_set_ml_mfp(buf: *mut BufHandle, mfp: *mut std::ffi::c_void);
+
+    /// Set buf->b_ml.ml_line_count
+    fn nvim_buf_set_ml_line_count(buf: *mut BufHandle, count: c_int);
+
+    /// Initialize block 0 header (magic numbers, version, page_size)
+    fn nvim_b0_init_header(b0p: *mut std::ffi::c_void, page_size: c_uint);
+
+    /// Initialize the root pointer block (block 1) entries
+    fn nvim_pp_init_root(pp: *mut std::ffi::c_void);
+
+    /// Initialize the first data block (block 2) with an empty line
+    fn nvim_dp_init_empty_line(dp: *mut std::ffi::c_void);
+
+    /// Set buf->b_p_swf = false
+    fn nvim_buf_set_b_p_swf_false(buf: *mut BufHandle);
+
+    /// Set buf->b_may_swap = true
+    fn nvim_buf_set_b_may_swap_true(buf: *mut BufHandle);
+
+    /// mf_open: open or create a memfile
+    fn mf_open(fname: *mut c_char, flags: c_int) -> *mut std::ffi::c_void;
+
+    /// mf_new: allocate a new block in the memfile
+    fn mf_new(
+        mfp: *mut std::ffi::c_void,
+        negative: bool,
+        page_count: c_uint,
+    ) -> *mut std::ffi::c_void;
+
+    /// nvim_mf_get_page_size: get mfp->mf_page_size
+    fn nvim_mf_get_page_size(mfp: *mut std::ffi::c_void) -> c_uint;
+
+    /// Set b0_dirty from buf->b_changed
+    fn nvim_b0_set_dirty_from_buf(b0p: *mut std::ffi::c_void, buf: *mut BufHandle);
+
+    /// Set b0_flags from file format number
+    fn nvim_b0_set_flags_from_ff(b0p: *mut std::ffi::c_void, fileformat: c_int);
+
+    /// Fill b0_uname from os_get_username
+    fn nvim_b0_fill_uname(b0p: *mut std::ffi::c_void);
+
+    /// Fill b0_hname from os_get_hostname
+    fn nvim_b0_fill_hname(b0p: *mut std::ffi::c_void);
+
+    /// Fill b0_pid from os_get_pid
+    fn nvim_b0_fill_pid(b0p: *mut std::ffi::c_void);
+
+    /// rs_ml_new_ptr: allocate new pointer block (in the same crate)
+    fn rs_ml_new_ptr(mfp: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+
+    /// rs_ml_new_data: allocate new data block (in the same crate)
+    fn rs_ml_new_data(
+        mfp: *mut std::ffi::c_void,
+        negative: bool,
+        page_count: c_int,
+    ) -> *mut std::ffi::c_void;
+
+    /// iemsg: emit an internal error message
+    fn iemsg(msg: *const c_char);
+
+    /// nvim_bhdr_get_bh_bnum: get block header block number
+    fn nvim_bhdr_get_bh_bnum(hp: *mut std::ffi::c_void) -> i64;
+
+    /// nvim_buf_set_ml_flags: set buf->b_ml.ml_flags
+    fn nvim_buf_set_ml_flags(buf: *mut BufHandle, flags: c_int);
 }
 
 // =============================================================================
