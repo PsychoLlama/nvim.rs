@@ -156,20 +156,20 @@ extern "C" {
     fn nvim_buf_set_b_s_spo_flags_from_global(buf: *mut core::ffi::c_void);
     fn nvim_get_backslash_in_filename() -> c_int;
 
-    fn nvim_get_p_ai() -> bool;
+    fn nvim_get_p_ai() -> c_int;
     fn nvim_get_p_ai_nopaste() -> bool;
     fn nvim_get_p_bin() -> bool;
     fn nvim_get_p_bomb() -> bool;
     fn nvim_get_p_ci() -> bool;
     fn nvim_get_p_cin() -> bool;
-    fn nvim_get_p_et() -> bool;
+    fn nvim_get_p_et() -> c_int;
     fn nvim_get_p_et_nobin() -> c_int;
     fn nvim_get_p_et_nopaste() -> bool;
     fn nvim_get_p_fixeol() -> bool;
     fn nvim_get_p_inf() -> c_int;
     fn nvim_get_p_lisp() -> bool;
-    fn nvim_get_p_ma() -> bool;
-    fn nvim_get_p_ml() -> bool;
+    fn nvim_get_p_ma() -> c_int;
+    fn nvim_get_p_ml() -> c_int;
     fn nvim_get_p_ml_nobin() -> c_int;
     fn nvim_get_p_pi() -> bool;
     fn nvim_get_p_si() -> bool;

@@ -1158,7 +1158,7 @@ extern "C" {
     fn nvim_get_textlock() -> c_int;
     fn nvim_inc_textlock();
     fn nvim_dec_textlock();
-    fn nvim_option_get_ch() -> i64;
+    fn nvim_callback_get_p_ch() -> i64;
     fn nvim_option_get_lz() -> c_int;
     fn nvim_option_set_lz(val: c_int);
     fn nvim_option_p_cpo_has_undo() -> c_int;
@@ -2138,7 +2138,7 @@ pub unsafe extern "C" fn rs_do_sub(
             if cmdpreview_ns <= 0
                 && !rs_do_sub_msg(subflags_local.do_count)
                 && subflags_local.do_ask
-                && nvim_option_get_ch() > 0
+                && nvim_callback_get_p_ch() > 0
             {
                 nvim_excmds_msg_empty();
             }
@@ -2157,7 +2157,7 @@ pub unsafe extern "C" fn rs_do_sub(
         if nvim_excmds_got_int() != 0 {
             nvim_excmds_emsg_interr();
         } else if got_match {
-            if nvim_option_get_ch() > 0 {
+            if nvim_callback_get_p_ch() > 0 {
                 nvim_excmds_msg_empty();
             }
         } else if subflags_local.do_error {

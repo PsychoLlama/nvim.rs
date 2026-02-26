@@ -149,9 +149,7 @@ extern "C" {
     fn nvim_curbuf_set_b_p_tw_nobin(v: OptInt);
     fn nvim_curbuf_get_b_p_wm_nobin() -> c_int;
     fn nvim_curbuf_set_b_p_wm_nobin(v: OptInt);
-    fn nvim_curbuf_get_b_p_ml_nobin() -> c_int;
     fn nvim_curbuf_set_b_p_ml_nobin(v: c_int);
-    fn nvim_curbuf_get_b_p_et_nobin() -> c_int;
     fn nvim_curbuf_set_b_p_et_nobin(v: c_int);
     fn nvim_bin_didset_sctx_all(opt_flags: c_int);
 }
@@ -784,8 +782,8 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
         if (opt_flags & OPT_GLOBAL_BIN) == 0 {
             nvim_curbuf_set_b_p_tw(OptInt::from(nvim_curbuf_get_b_p_tw_nobin()));
             nvim_curbuf_set_b_p_wm(OptInt::from(nvim_curbuf_get_b_p_wm_nobin()));
-            nvim_curbuf_set_b_p_ml(nvim_curbuf_get_b_p_ml_nobin());
-            nvim_curbuf_set_b_p_et(nvim_curbuf_get_b_p_et_nobin());
+            nvim_curbuf_set_b_p_ml(nvim_curbuf_get_b_p_ml());
+            nvim_curbuf_set_b_p_et(nvim_curbuf_get_b_p_et());
         }
         if (opt_flags & OPT_LOCAL_BIN) == 0 {
             nvim_set_p_tw(nvim_get_p_tw_nobin());

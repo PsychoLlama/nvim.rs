@@ -306,7 +306,7 @@ extern "C" {
     fn nvim_option_get_shm() -> *const c_char;
 
     // Boolean option accessors
-    fn nvim_option_get_ai() -> c_int;
+    fn nvim_get_p_ai() -> c_int;
     fn nvim_option_get_et() -> c_int;
     fn nvim_option_get_ic() -> c_int;
     fn nvim_option_get_scs() -> c_int;
@@ -327,16 +327,16 @@ extern "C" {
     fn nvim_option_get_to() -> c_int;
 
     // Numeric option accessors
-    fn nvim_option_get_sw() -> OptInt;
-    fn nvim_option_get_ts() -> OptInt;
-    fn nvim_option_get_sts() -> OptInt;
-    fn nvim_option_get_tw() -> OptInt;
-    fn nvim_option_get_wm() -> OptInt;
+    fn nvim_get_p_sw() -> OptInt;
+    fn nvim_get_p_ts() -> OptInt;
+    fn nvim_get_p_sts() -> OptInt;
+    fn nvim_get_p_tw() -> OptInt;
+    fn nvim_get_p_wm() -> OptInt;
     fn nvim_option_get_so() -> OptInt;
     fn nvim_option_get_siso() -> OptInt;
-    fn nvim_option_get_columns() -> OptInt;
-    fn nvim_option_get_lines() -> OptInt;
-    fn nvim_option_get_ch() -> OptInt;
+    fn nvim_get_p_columns() -> OptInt;
+    fn nvim_get_p_lines() -> OptInt;
+    fn nvim_callback_get_p_ch() -> OptInt;
     fn nvim_option_get_report() -> OptInt;
     fn nvim_option_get_mat() -> OptInt;
     fn nvim_option_get_ut() -> OptInt;
@@ -502,7 +502,7 @@ pub fn get_shortmess() -> *const c_char {
 /// Get the 'autoindent' option value.
 #[inline]
 pub fn get_autoindent() -> bool {
-    unsafe { nvim_option_get_ai() != 0 }
+    unsafe { nvim_get_p_ai() != 0 }
 }
 
 /// Get the 'expandtab' option value.
@@ -616,31 +616,31 @@ pub fn get_tildeop() -> bool {
 /// Get the 'shiftwidth' option value.
 #[inline]
 pub fn get_shiftwidth() -> OptInt {
-    unsafe { nvim_option_get_sw() }
+    unsafe { nvim_get_p_sw() }
 }
 
 /// Get the 'tabstop' option value.
 #[inline]
 pub fn get_tabstop() -> OptInt {
-    unsafe { nvim_option_get_ts() }
+    unsafe { nvim_get_p_ts() }
 }
 
 /// Get the 'softtabstop' option value.
 #[inline]
 pub fn get_softtabstop() -> OptInt {
-    unsafe { nvim_option_get_sts() }
+    unsafe { nvim_get_p_sts() }
 }
 
 /// Get the 'textwidth' option value.
 #[inline]
 pub fn get_textwidth() -> OptInt {
-    unsafe { nvim_option_get_tw() }
+    unsafe { nvim_get_p_tw() }
 }
 
 /// Get the 'wrapmargin' option value.
 #[inline]
 pub fn get_wrapmargin() -> OptInt {
-    unsafe { nvim_option_get_wm() }
+    unsafe { nvim_get_p_wm() }
 }
 
 /// Get the 'scrolloff' option value.
@@ -658,19 +658,19 @@ pub fn get_sidescrolloff() -> OptInt {
 /// Get the 'columns' option value.
 #[inline]
 pub fn get_columns() -> OptInt {
-    unsafe { nvim_option_get_columns() }
+    unsafe { nvim_get_p_columns() }
 }
 
 /// Get the 'lines' option value.
 #[inline]
 pub fn get_lines() -> OptInt {
-    unsafe { nvim_option_get_lines() }
+    unsafe { nvim_get_p_lines() }
 }
 
 /// Get the 'cmdheight' option value.
 #[inline]
 pub fn get_cmdheight() -> OptInt {
-    unsafe { nvim_option_get_ch() }
+    unsafe { nvim_callback_get_p_ch() }
 }
 
 /// Get the 'report' option value.

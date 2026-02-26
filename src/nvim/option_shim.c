@@ -383,7 +383,7 @@ const char *nvim_option_get_mouse(void) { return p_mouse; }
 const char *nvim_option_get_shm(void) { return p_shm; }
 
 // Boolean option accessors
-int nvim_option_get_ai(void) { return p_ai; }
+// nvim_option_get_ai: consolidated into nvim_get_p_ai (Phase 12 Pass 4)
 int nvim_option_get_et(void) { return p_et; }
 int nvim_option_get_ic(void) { return p_ic; }
 int nvim_option_get_scs(void) { return p_scs; }
@@ -404,16 +404,9 @@ int nvim_option_get_lz(void) { return p_lz; }
 int nvim_option_get_to(void) { return p_to; }
 
 // Numeric option accessors
-OptInt nvim_option_get_sw(void) { return p_sw; }
-OptInt nvim_option_get_ts(void) { return p_ts; }
-OptInt nvim_option_get_sts(void) { return p_sts; }
-OptInt nvim_option_get_tw(void) { return p_tw; }
-OptInt nvim_option_get_wm(void) { return p_wm; }
+// nvim_option_get_sw/ts/sts/tw/wm/columns/lines/ch: consolidated into nvim_get_p_* (Phase 12 Pass 4)
 OptInt nvim_option_get_so(void) { return p_so; }
 OptInt nvim_option_get_siso(void) { return p_siso; }
-OptInt nvim_option_get_columns(void) { return p_columns; }
-OptInt nvim_option_get_lines(void) { return p_lines; }
-OptInt nvim_option_get_ch(void) { return p_ch; }
 OptInt nvim_option_get_report(void) { return p_report; }
 OptInt nvim_option_get_mat(void) { return p_mat; }
 OptInt nvim_option_get_ut(void) { return p_ut; }
@@ -1193,9 +1186,8 @@ int nvim_curbuf_get_b_p_tw_nobin(void) { return (int)curbuf->b_p_tw_nobin; }
 void nvim_curbuf_set_b_p_tw_nobin(OptInt v) { curbuf->b_p_tw_nobin = v; }
 int nvim_curbuf_get_b_p_wm_nobin(void) { return (int)curbuf->b_p_wm_nobin; }
 void nvim_curbuf_set_b_p_wm_nobin(OptInt v) { curbuf->b_p_wm_nobin = v; }
-int nvim_curbuf_get_b_p_ml_nobin(void) { return curbuf->b_p_ml; }
+// nvim_curbuf_get_b_p_ml_nobin/et_nobin: consolidated into nvim_curbuf_get_b_p_ml/et (Phase 12 Pass 4)
 void nvim_curbuf_set_b_p_ml_nobin(int v) { curbuf->b_p_ml_nobin = v != 0; }
-int nvim_curbuf_get_b_p_et_nobin(void) { return curbuf->b_p_et; }
 void nvim_curbuf_set_b_p_et_nobin(int v) { curbuf->b_p_et_nobin = v != 0; }
 // nvim_curbuf_get_b_p_tw/wm are defined in ex_cmds_shim.c
 void nvim_curbuf_set_b_p_tw(OptInt v) { curbuf->b_p_tw = v; }
@@ -1243,7 +1235,7 @@ void nvim_set_p_imsearch(OptInt v) { p_imsearch = v; }
 OptInt nvim_buf_get_b_p_iminsert(buf_T *buf) { return buf->b_p_iminsert; }
 OptInt nvim_buf_get_b_p_imsearch(buf_T *buf) { return buf->b_p_imsearch; }
 // p_ma / b_p_ma accessors (for reset_modifiable)
-int nvim_option_get_p_ma(void) { return p_ma; }
+// nvim_option_get_p_ma: consolidated into nvim_get_p_ma (Phase 12 Pass 4)
 void nvim_option_set_p_ma(int v) { p_ma = v != 0; }
 int nvim_curbuf_get_b_p_ma(void) { return curbuf->b_p_ma; }
 void nvim_curbuf_set_b_p_ma(int v) { curbuf->b_p_ma = v != 0; }
@@ -3607,17 +3599,17 @@ int nvim_get_backslash_in_filename(void) {
 #endif
 }
 
-bool nvim_get_p_ai(void) { return p_ai; }
+int nvim_get_p_ai(void) { return p_ai; }
 bool nvim_get_p_bin(void) { return p_bin; }
 bool nvim_get_p_bomb(void) { return p_bomb; }
 bool nvim_get_p_ci(void) { return p_ci; }
 bool nvim_get_p_cin(void) { return p_cin; }
-bool nvim_get_p_et(void) { return p_et; }
+int nvim_get_p_et(void) { return p_et; }
 bool nvim_get_p_fixeol(void) { return p_fixeol; }
 // nvim_get_p_inf: already defined in insexpand_shim.c (as int)
 bool nvim_get_p_lisp(void) { return p_lisp; }
-bool nvim_get_p_ma(void) { return p_ma; }
-bool nvim_get_p_ml(void) { return p_ml; }
+int nvim_get_p_ma(void) { return p_ma; }
+int nvim_get_p_ml(void) { return p_ml; }
 bool nvim_get_p_pi(void) { return p_pi; }
 bool nvim_get_p_si(void) { return p_si; }
 bool nvim_get_p_swf(void) { return p_swf; }
