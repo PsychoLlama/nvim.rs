@@ -4172,89 +4172,20 @@ void *nvim_tv_list_item_dict(const void *li)
   return tv->vval.v_dict;
 }
 
-/// Create a quickfix entry from a VimL dict.
-/// Extracted from dict fields, then calls rs_qf_add_entry.
-static int qf_add_entry_from_dict(qf_list_T *qfl, dict_T *d, bool first_entry,
-                                   bool *valid_entry)
-  FUNC_ATTR_NONNULL_ALL
+// qf_add_entry_from_dict + nvim_qf_add_entry_from_dict deleted:
+// migrated to Rust rs_qf_add_entry_from_dict in list.rs (Phase 11).
+
+/// Emit the "E92: Buffer N not found" error message.
+void nvim_qf_semsg_e92_bufnr(int64_t bufnr)
 {
-  static bool did_bufnr_emsg;
-
-  if (first_entry) {
-    did_bufnr_emsg = false;
-  }
-
-  char *const filename = tv_dict_get_string(d, "filename", true);
-  char *const module = tv_dict_get_string(d, "module", true);
-  int bufnum = (int)tv_dict_get_number(d, "bufnr");
-  const linenr_T lnum = (linenr_T)tv_dict_get_number(d, "lnum");
-  const linenr_T end_lnum = (linenr_T)tv_dict_get_number(d, "end_lnum");
-  const int col = (int)tv_dict_get_number(d, "col");
-  const int end_col = (int)tv_dict_get_number(d, "end_col");
-  const char vcol = (char)tv_dict_get_number(d, "vcol");
-  const int nr = (int)tv_dict_get_number(d, "nr");
-  const char *const type = tv_dict_get_string(d, "type", false);
-  char *const pattern = tv_dict_get_string(d, "pattern", true);
-  char *text = tv_dict_get_string(d, "text", true);
-  if (text == NULL) {
-    text = xcalloc(1, 1);
-  }
-  typval_T user_data = { .v_type = VAR_UNKNOWN };
-  tv_dict_get_tv(d, "user_data", &user_data);
-
-  bool valid = true;
-  if ((filename == NULL && bufnum == 0)
-      || (lnum == 0 && pattern == NULL)) {
-    valid = false;
-  }
-
-  // Mark entries with non-existing buffer number as not valid. Give the
-  // error message only once.
-  if (bufnum != 0 && (buflist_findnr(bufnum) == NULL)) {
-    if (!did_bufnr_emsg) {
-      did_bufnr_emsg = true;
-      semsg(_("E92: Buffer %" PRId64 " not found"), (int64_t)bufnum);
-    }
-    valid = false;
-    bufnum = 0;
-  }
-
-  // If the 'valid' field is present it overrules the detected value.
-  if (tv_dict_find(d, "valid", -1) != NULL) {
-    valid = (bool)tv_dict_get_number(d, "valid");
-  }
-
-  const int status = rs_qf_add_entry(qfl,
-                                     NULL,      // dir
-                                     filename,
-                                     module,
-                                     bufnum,
-                                     text,
-                                     lnum,
-                                     end_lnum,
-                                     col,
-                                     end_col,
-                                     vcol,      // vis_col
-                                     pattern,   // search pattern
-                                     nr,
-                                     type == NULL ? NUL : *type,
-                                     &user_data,
-                                     valid);
-
-  xfree(filename);
-  xfree(module);
-  xfree(pattern);
-  xfree(text);
-  tv_clear(&user_data);
-
-  if (valid) {
-    *valid_entry = true;
-  }
-
-  return status;
+  semsg(_("E92: Buffer %" PRId64 " not found"), bufnr);
 }
 
-int nvim_qf_add_entry_from_dict(void *qfl, void *d, bool first_entry, bool *valid_entry) { return qf_add_entry_from_dict((qf_list_T *)qfl, (dict_T *)d, first_entry, valid_entry); }
+/// Allocate a single null byte (empty C string). Caller must xfree/nvim_xfree_char.
+char *nvim_qf_alloc_empty_text(void) { return xcalloc(1, 1); }
+
+/// Free a char * allocated by xmalloc/xstrdup/etc.
+void nvim_xfree_char(char *ptr) { xfree(ptr); }
 
 /// Get the current entry's fnum, lnum, col as a group
 void nvim_qf_get_ptr_position(const void *qfl_void, int *fnum, int *lnum, int *col)

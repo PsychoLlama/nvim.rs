@@ -89,12 +89,6 @@ extern "C" {
     fn nvim_tv_list_item_next(list: *const c_void, li: *const c_void) -> *const c_void;
     fn nvim_tv_list_item_dict(li: *const c_void) -> *mut c_void;
     fn nvim_tv_list_item_is_first(list: *const c_void, li: *const c_void) -> bool;
-    fn nvim_qf_add_entry_from_dict(
-        qfl: QfListHandleMut,
-        d: *mut c_void,
-        first_entry: bool,
-        valid_entry: *mut bool,
-    ) -> c_int;
     fn rs_qf_list_empty(qfl: QfListHandle) -> bool;
     fn rs_qf_entry_is_closer_to_target(
         entry: QfLineHandle,
@@ -968,6 +962,158 @@ pub unsafe extern "C" fn rs_qf_file_entry_count(qfl: QfListHandle, fnum: c_int) 
 const OK: c_int = 1;
 const QF_FAIL: c_int = 0;
 
+// =============================================================================
+// Phase 11: qf_add_entry_from_dict (migrated from C)
+// =============================================================================
+
+extern "C" {
+    // Dict field accessors for qf_add_entry_from_dict
+    fn nvim_qf_tv_dict_get_string(
+        dict: *const c_void,
+        key: *const c_char,
+        alloc: bool,
+    ) -> *mut c_char;
+    fn nvim_qf_tv_dict_get_number(dict: *const c_void, key: *const c_char) -> i64;
+    fn nvim_tv_dict_get_tv(dict: *const c_void, key: *const c_char, tv_out: *mut c_void);
+    fn nvim_tv_dict_find(dict: *const c_void, key: *const c_char, key_len: c_int) -> *mut c_void;
+    fn nvim_tv_clear(tv: *mut c_void);
+    fn nvim_tv_alloc() -> *mut c_void;
+    fn nvim_qf_tv_free(tv: *mut c_void);
+    fn nvim_qf_buflist_findnr_exists(bnr: c_int) -> bool;
+    fn nvim_qf_semsg_e92_bufnr(bufnr: i64);
+    fn nvim_qf_alloc_empty_text() -> *mut c_char;
+    fn nvim_xfree_char(ptr: *mut c_char);
+    fn rs_qf_add_entry(
+        qfl: QfListHandleMut,
+        dir: *mut c_char,
+        fname: *const c_char,
+        module: *const c_char,
+        bufnum: c_int,
+        mesg: *const c_char,
+        lnum: LinenrT,
+        end_lnum: LinenrT,
+        col: c_int,
+        end_col: c_int,
+        vis_col: c_char,
+        pattern: *const c_char,
+        nr: c_int,
+        type_char: c_char,
+        user_data: *const c_void,
+        valid: c_char,
+    ) -> c_int;
+}
+
+/// Tracks whether we already emitted E92 in the current `add_entries` batch.
+/// Reset to false when `first_entry` is true.
+static DID_BUFNR_EMSG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Create a quickfix entry from a `VimL` `dict_T`.
+///
+/// Mirrors C `qf_add_entry_from_dict`. Reads dict fields via accessors,
+/// validates `bufnum`, and calls `rs_qf_add_entry`.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T`
+/// - `d` must be a valid pointer to a `dict_T`
+/// - `valid_entry` must be a valid non-null pointer
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_qf_add_entry_from_dict(
+    qfl: QfListHandleMut,
+    d: *mut c_void,
+    first_entry: bool,
+    valid_entry: *mut bool,
+) -> c_int {
+    use std::sync::atomic::Ordering;
+
+    if first_entry {
+        DID_BUFNR_EMSG.store(false, Ordering::Relaxed);
+    }
+
+    let filename = nvim_qf_tv_dict_get_string(d, c"filename".as_ptr(), true);
+    let module = nvim_qf_tv_dict_get_string(d, c"module".as_ptr(), true);
+    let mut bufnum = nvim_qf_tv_dict_get_number(d, c"bufnr".as_ptr()) as c_int;
+    let lnum = nvim_qf_tv_dict_get_number(d, c"lnum".as_ptr()) as LinenrT;
+    let end_lnum = nvim_qf_tv_dict_get_number(d, c"end_lnum".as_ptr()) as LinenrT;
+    let col = nvim_qf_tv_dict_get_number(d, c"col".as_ptr()) as c_int;
+    let end_col = nvim_qf_tv_dict_get_number(d, c"end_col".as_ptr()) as c_int;
+    let vcol = nvim_qf_tv_dict_get_number(d, c"vcol".as_ptr()) as c_char;
+    let nr = nvim_qf_tv_dict_get_number(d, c"nr".as_ptr()) as c_int;
+    // type: not alloc'd (alloc=false), caller must NOT free
+    let type_str = nvim_qf_tv_dict_get_string(d, c"type".as_ptr(), false);
+    let pattern = nvim_qf_tv_dict_get_string(d, c"pattern".as_ptr(), true);
+
+    let text_raw = nvim_qf_tv_dict_get_string(d, c"text".as_ptr(), true);
+    let text = if text_raw.is_null() {
+        nvim_qf_alloc_empty_text()
+    } else {
+        text_raw
+    };
+
+    // Allocate a heap typval_T for user_data (zeroed, VAR_UNKNOWN)
+    let user_data_tv: *mut c_void = nvim_tv_alloc();
+    nvim_tv_dict_get_tv(d, c"user_data".as_ptr(), user_data_tv);
+
+    let mut valid = (filename.is_null() && bufnum == 0) || (lnum == 0 && pattern.is_null());
+    valid = !valid; // valid=false if no file/lnum
+
+    // Mark entries with non-existing buffer number as not valid.
+    // Emit the error message only once per batch.
+    if bufnum != 0 && !nvim_qf_buflist_findnr_exists(bufnum) {
+        if !DID_BUFNR_EMSG.load(Ordering::Relaxed) {
+            DID_BUFNR_EMSG.store(true, Ordering::Relaxed);
+            nvim_qf_semsg_e92_bufnr(i64::from(bufnum));
+        }
+        valid = false;
+        bufnum = 0;
+    }
+
+    // If the 'valid' field is present it overrules the detected value.
+    let valid_di = nvim_tv_dict_find(d, c"valid".as_ptr(), -1);
+    if !valid_di.is_null() {
+        valid = nvim_qf_tv_dict_get_number(d, c"valid".as_ptr()) != 0;
+    }
+
+    let type_char: c_char = if type_str.is_null() || *type_str == 0 {
+        0
+    } else {
+        *type_str
+    };
+
+    let status = rs_qf_add_entry(
+        qfl,
+        std::ptr::null_mut(), // dir
+        filename,
+        module,
+        bufnum,
+        text,
+        lnum,
+        end_lnum,
+        col,
+        end_col,
+        vcol,
+        pattern,
+        nr,
+        type_char,
+        user_data_tv,
+        c_char::from(valid),
+    );
+
+    nvim_xfree_char(filename);
+    nvim_xfree_char(module);
+    nvim_xfree_char(pattern);
+    nvim_xfree_char(text);
+    nvim_tv_clear(user_data_tv);
+    nvim_qf_tv_free(user_data_tv);
+
+    if valid {
+        *valid_entry = true;
+    }
+
+    status
+}
+
 /// Add list of entries to quickfix/location list. Each list entry is
 /// a dictionary with item information.
 ///
@@ -1039,7 +1185,7 @@ pub unsafe extern "C" fn rs_qf_add_entries(
         }
 
         let is_first = nvim_tv_list_item_is_first(list, li);
-        retval = nvim_qf_add_entry_from_dict(qfl, d, is_first, &raw mut valid_entry);
+        retval = rs_qf_add_entry_from_dict(qfl, d, is_first, &raw mut valid_entry);
         if retval == QF_FAIL {
             break;
         }
