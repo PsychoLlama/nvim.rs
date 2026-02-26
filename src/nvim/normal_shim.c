@@ -112,8 +112,6 @@ typedef struct {
   pos_T old_pos;
 } NormalState;
 
-static int VIsual_mode_orig = NUL;              // saved Visual mode
-
 #include "normal_shim.c.generated.h"
 
 static const char e_changelist_is_empty[] = N_("E664: Changelist is empty");
@@ -1003,10 +1001,6 @@ int nvim_get_GETF_ALT(void) { return GETF_ALT; }
 // =============================================================================
 // Visual mode accessors for Rust FFI
 // =============================================================================
-
-int nvim_get_VIsual_mode_orig(void) { return VIsual_mode_orig; }
-
-void nvim_set_VIsual_mode_orig(int val) { VIsual_mode_orig = val; }
 
 int nvim_get_curbuf_visual_vi_mode(void) { return curbuf->b_visual.vi_mode; }
 
@@ -2194,11 +2188,6 @@ void end_visual_mode(void)
 
 // find_ident_under_cursor migrated to Rust (rs_find_ident_under_cursor) in Phase 3
 
-// Routines for displaying a partly typed command
-static char old_showcmd_buf[SHOWCMD_BUFLEN];    // For push_showcmd()
-static bool showcmd_is_clear = true;
-static bool showcmd_visual = false;
-
 // =============================================================================
 // showcmd accessors for Rust FFI
 // =============================================================================
@@ -2207,17 +2196,7 @@ static bool showcmd_visual = false;
 _Static_assert(SHOWCMD_COLS == 10, "SHOWCMD_COLS changed");
 _Static_assert(SHOWCMD_BUFLEN == SHOWCMD_COLS + 1 + 30, "SHOWCMD_BUFLEN changed");
 
-bool nvim_get_showcmd_is_clear(void) { return showcmd_is_clear; }
-
-void nvim_set_showcmd_is_clear(bool val) { showcmd_is_clear = val; }
-
-bool nvim_get_showcmd_visual(void) { return showcmd_visual; }
-
-void nvim_set_showcmd_visual(bool val) { showcmd_visual = val; }
-
 char *nvim_normal_showcmd_buf_ptr(void) { return showcmd_buf; }
-char *nvim_old_showcmd_buf_ptr(void) { return old_showcmd_buf; }
-size_t nvim_showcmd_buflen(void) { return SHOWCMD_BUFLEN; }
 
 // Phase 2 accessors for rs_display_showcmd
 

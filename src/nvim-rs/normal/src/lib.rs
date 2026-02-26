@@ -26,6 +26,7 @@ pub mod showcmd;
 pub mod visual;
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
+use std::sync::atomic::{AtomicI32, Ordering};
 
 // =============================================================================
 // Key Constants (from keycodes.h)
@@ -79,6 +80,14 @@ const K_KDEL: c_int = termcap2key(KS_EXTRA, KE_KDEL);
 const KE_KINS: c_int = 79;
 const K_INS: c_int = termcap2key(b'k' as c_int, b'I' as c_int);
 const K_KINS: c_int = termcap2key(KS_EXTRA, KE_KINS);
+
+// =============================================================================
+// File-static variables (migrated from C normal_shim.c)
+// =============================================================================
+
+/// Saved Visual mode (VIsual_mode_orig in C). Initial value NUL (0).
+/// SAFETY: Neovim is single-threaded; Relaxed ordering is sufficient.
+static VISUAL_MODE_ORIG: AtomicI32 = AtomicI32::new(0);
 
 // =============================================================================
 // C accessor functions for normal mode state
@@ -212,8 +221,6 @@ extern "C" {
     fn nvim_redraw_curbuf_inverted();
     fn nvim_get_VIsual_reselect() -> c_int;
     fn nvim_set_VIsual_reselect(val: bool);
-    fn nvim_get_VIsual_mode_orig() -> c_int;
-    fn nvim_set_VIsual_mode_orig(val: c_int);
     #[allow(dead_code)]
     fn nvim_get_curbuf_visual_vi_mode() -> c_int;
     fn nvim_set_curbuf_visual_vi_mode(val: c_int);
@@ -3179,7 +3186,7 @@ pub unsafe extern "C" fn rs_nv_subst(cap: CapHandle) {
         let cmdchar = nvim_cap_get_cmdchar(cap);
         if cmdchar == c_int::from(b'S') {
             let vis_mode = nvim_get_VIsual_mode();
-            nvim_set_VIsual_mode_orig(vis_mode);
+            VISUAL_MODE_ORIG.store(vis_mode, Ordering::Relaxed);
             nvim_set_VIsual_mode(c_int::from(b'V'));
         }
         nvim_cap_set_cmdchar(cap, c_int::from(b'c'));
@@ -4309,7 +4316,7 @@ pub unsafe extern "C" fn rs_nv_Replace(cap: CapHandle) {
         nvim_cap_set_cmdchar(cap, c_int::from(b'c'));
         nvim_cap_set_nchar(cap, NUL_CHAR);
         let vis_mode = nvim_get_VIsual_mode();
-        nvim_set_VIsual_mode_orig(vis_mode);
+        VISUAL_MODE_ORIG.store(vis_mode, Ordering::Relaxed);
         nvim_set_VIsual_mode(c_int::from(b'V'));
         rs_nv_operator(cap);
         return;
@@ -6645,10 +6652,10 @@ pub extern "C" fn rs_reset_VIsual() {
 #[no_mangle]
 pub extern "C" fn rs_restore_visual_mode() {
     unsafe {
-        let orig = nvim_get_VIsual_mode_orig();
+        let orig = VISUAL_MODE_ORIG.load(Ordering::Relaxed);
         if orig != NUL_CHAR {
             nvim_set_curbuf_visual_vi_mode(orig);
-            nvim_set_VIsual_mode_orig(NUL_CHAR);
+            VISUAL_MODE_ORIG.store(NUL_CHAR, Ordering::Relaxed);
         }
     }
 }
@@ -6797,7 +6804,7 @@ pub unsafe extern "C" fn rs_v_visop(cap: CapHandle) {
     // Uppercase means linewise, except in block mode (isupper equivalent)
     if cmdchar >= c_int::from(b'A') && cmdchar <= c_int::from(b'Z') {
         if nvim_get_VIsual_mode() != CTRL_V {
-            nvim_set_VIsual_mode_orig(nvim_get_VIsual_mode());
+            VISUAL_MODE_ORIG.store(nvim_get_VIsual_mode(), Ordering::Relaxed);
             nvim_set_VIsual_mode(c_int::from(b'V'));
         } else if cmdchar == c_int::from(b'C') || cmdchar == c_int::from(b'D') {
             nvim_set_curswant(MAXCOL);

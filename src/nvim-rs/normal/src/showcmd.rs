@@ -7,6 +7,7 @@
 //! to a C helper function.
 
 use std::ffi::c_int;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // =============================================================================
 // Constants
@@ -14,6 +15,21 @@ use std::ffi::c_int;
 
 const SHOWCMD_COLS: usize = 10;
 const SHOWCMD_BUFLEN: usize = SHOWCMD_COLS + 1 + 30; // = 41
+
+// =============================================================================
+// File-static variables (migrated from C normal_shim.c)
+// =============================================================================
+
+/// Routines for displaying a partly typed command (showcmd_is_clear in C).
+/// SAFETY: Neovim is single-threaded; Relaxed ordering is sufficient.
+static SHOWCMD_IS_CLEAR: AtomicBool = AtomicBool::new(true);
+
+/// Whether last showcmd content was Visual mode info (showcmd_visual in C).
+static SHOWCMD_VISUAL: AtomicBool = AtomicBool::new(false);
+
+/// Buffer for push_showcmd/pop_showcmd (old_showcmd_buf in C, 41 bytes).
+/// SAFETY: Accessed only from single-threaded Neovim normal mode processing.
+static mut OLD_SHOWCMD_BUF: [u8; SHOWCMD_BUFLEN] = [0u8; SHOWCMD_BUFLEN];
 
 /// Maximum byte length of a UTF-8 encoded code point (mbyte.h MB_MAXCHAR = 6).
 const MB_MAXCHAR: usize = 6;
@@ -101,13 +117,7 @@ const SHOWCMD_IGNORE: &[c_int] = &[
 
 extern "C" {
     fn nvim_get_p_sc() -> c_int;
-    fn nvim_get_showcmd_is_clear() -> bool;
-    fn nvim_set_showcmd_is_clear(val: bool);
-    fn nvim_get_showcmd_visual() -> bool;
-    fn nvim_set_showcmd_visual(val: bool);
     fn nvim_normal_showcmd_buf_ptr() -> *mut std::ffi::c_char;
-    fn nvim_old_showcmd_buf_ptr() -> *mut std::ffi::c_char;
-    fn nvim_showcmd_buflen() -> usize;
 
     // Phase 2: display_showcmd accessors
     fn nvim_showcmd_get_p_sloc_first() -> c_int;
@@ -280,15 +290,15 @@ pub extern "C" fn rs_clear_showcmd() {
 
         if clear_showcmd_visual_info() {
             // Visual info was computed and written into showcmd_buf.
-            nvim_set_showcmd_visual(true);
+            SHOWCMD_VISUAL.store(true, Ordering::Relaxed);
         } else {
             // Not in Visual mode or char_avail() returned true.
             let buf = nvim_normal_showcmd_buf_ptr();
             *buf = 0; // NUL
-            nvim_set_showcmd_visual(false);
+            SHOWCMD_VISUAL.store(false, Ordering::Relaxed);
 
             // Don't actually display something if there is nothing to clear.
-            if nvim_get_showcmd_is_clear() {
+            if SHOWCMD_IS_CLEAR.load(Ordering::Relaxed) {
                 return;
             }
         }
@@ -306,11 +316,11 @@ pub extern "C" fn rs_clear_showcmd() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_push_showcmd() {
     if nvim_get_p_sc() != 0 {
-        let src = nvim_normal_showcmd_buf_ptr();
-        let dst = nvim_old_showcmd_buf_ptr();
-        let len = nvim_showcmd_buflen();
-        // Safe: both are valid C arrays of size SHOWCMD_BUFLEN
-        std::ptr::copy_nonoverlapping(src, dst, len);
+        let src = nvim_normal_showcmd_buf_ptr().cast::<u8>();
+        // SAFETY: Neovim is single-threaded; OLD_SHOWCMD_BUF is only
+        // accessed here and in rs_pop_showcmd.
+        let dst = std::ptr::addr_of_mut!(OLD_SHOWCMD_BUF).cast::<u8>();
+        std::ptr::copy_nonoverlapping(src, dst, SHOWCMD_BUFLEN);
     }
 }
 
@@ -325,11 +335,11 @@ pub unsafe extern "C" fn rs_pop_showcmd() {
     if nvim_get_p_sc() == 0 {
         return;
     }
-    let src = nvim_old_showcmd_buf_ptr();
-    let dst = nvim_normal_showcmd_buf_ptr();
-    let len = nvim_showcmd_buflen();
-    // Safe: both are valid C arrays of size SHOWCMD_BUFLEN
-    std::ptr::copy_nonoverlapping(src, dst, len);
+    // SAFETY: Neovim is single-threaded; OLD_SHOWCMD_BUF is only
+    // accessed here and in rs_push_showcmd.
+    let src = std::ptr::addr_of!(OLD_SHOWCMD_BUF).cast::<u8>();
+    let dst = nvim_normal_showcmd_buf_ptr().cast::<u8>();
+    std::ptr::copy_nonoverlapping(src, dst, SHOWCMD_BUFLEN);
     rs_display_showcmd();
 }
 
@@ -352,10 +362,10 @@ pub unsafe extern "C" fn rs_add_to_showcmd(c: c_int) -> bool {
     }
 
     // If a Visual selection was last displayed, clear it first.
-    if nvim_get_showcmd_visual() {
+    if SHOWCMD_VISUAL.load(Ordering::Relaxed) {
         let buf = nvim_normal_showcmd_buf_ptr();
         *buf = 0;
-        nvim_set_showcmd_visual(false);
+        SHOWCMD_VISUAL.store(false, Ordering::Relaxed);
     }
 
     // IS_SPECIAL(c) is equivalent to c < 0.
@@ -472,7 +482,7 @@ pub unsafe extern "C" fn rs_del_from_showcmd(len: c_int) {
 pub unsafe extern "C" fn rs_display_showcmd() {
     let buf_ptr = nvim_normal_showcmd_buf_ptr();
     let is_clear = *buf_ptr == 0;
-    nvim_set_showcmd_is_clear(is_clear);
+    SHOWCMD_IS_CLEAR.store(is_clear, Ordering::Relaxed);
 
     let sloc = nvim_showcmd_get_p_sloc_first();
 
