@@ -12,6 +12,8 @@
 #![allow(clippy::borrow_as_ptr)]
 #![allow(dead_code)] // NFA constants are used incrementally across phases
 
+pub(crate) mod errors;
+
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use std::ffi::c_long;
@@ -37,8 +39,6 @@ extern "C" {
     fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
     fn nvim_regexp_get_regflags(prog: *const c_void) -> c_uint;
 
-    fn nvim_regexp_emsg2_fail(msg: *const c_char, is_magic_all: c_int) -> c_int;
-
     // Multibyte helpers
     fn utf_ptr2len(p: *const c_char) -> c_int;
     fn utf_ptr2char(p: *const c_char) -> c_int;
@@ -57,10 +57,8 @@ extern "C" {
 
     // re_mult_next accessors
     fn nvim_regexp_set_rc_did_emsg(v: c_int);
-    fn nvim_regexp_semsg_e888(what: *const c_char);
 
     // skip_regexp_err accessor
-    fn nvim_regexp_semsg_e654(startp: *const c_char);
 
     // reg_nextline accessors
     fn nvim_regexp_call_reg_getline(lnum: i32) -> *mut c_char;
@@ -1190,7 +1188,7 @@ pub unsafe extern "C" fn rs_read_limits(minval: *mut c_int, maxval: *mut c_int) 
     }
     if *regparse as u8 != b'}' {
         REGPARSE = regparse;
-        return nvim_regexp_emsg2_fail(
+        return errors::emsg2_fail(
             c"E554: Syntax error in %s{...}".as_ptr(),
             c_int::from(REG_MAGIC == MAGIC_ALL),
         );
@@ -1470,7 +1468,7 @@ pub unsafe extern "C" fn unref_extmatch(em: *mut RegExtmatchT) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_re_mult_next(what: *const c_char) -> bool {
     if rs_re_multi_type(rs_peekchr()) == MULTI_MULT {
-        nvim_regexp_semsg_e888(what);
+        errors::semsg_e888(what);
         nvim_regexp_set_rc_did_emsg(1);
         return false;
     }
@@ -1694,7 +1692,7 @@ pub unsafe extern "C" fn skip_regexp_err(
 ) -> *mut c_char {
     let p = rs_skip_regexp(startp, delim, magic);
     if *p as u8 as c_int != delim {
-        nvim_regexp_semsg_e654(startp);
+        errors::emsg_semsg_e654(startp);
         return std::ptr::null_mut();
     }
     p
@@ -1979,7 +1977,6 @@ extern "C" {
     fn nvim_regexp_set_reg_prev_sub(p: *mut c_char);
     fn nvim_regexp_get_reg_prev_sublen() -> usize;
     fn nvim_regexp_set_reg_prev_sublen(v: usize);
-    fn nvim_regexp_emsg_resulting_text_too_long();
     fn xmalloc(size: usize) -> *mut c_void;
     fn strlen(s: *const c_char) -> usize;
 }
@@ -2017,7 +2014,7 @@ pub unsafe extern "C" fn regtilde(source: *mut c_char, magic: c_int, preview: bo
 
             if tmpsublen > 0 && !reg_prev_sub.is_null() {
                 if tmpsublen > MAXCOL {
-                    nvim_regexp_emsg_resulting_text_too_long();
+                    errors::emsg_resulting_text_too_long();
                     error = true;
                     break;
                 }
@@ -2226,8 +2223,6 @@ extern "C" {
     fn nvim_regexp_get_rex_reg_mmatch_startpos_col(no: c_int) -> i32;
     fn nvim_regexp_get_rex_reg_mmatch_endpos_lnum(no: c_int) -> i32;
     fn nvim_regexp_get_rex_reg_mmatch_endpos_col(no: c_int) -> i32;
-    fn nvim_regexp_call_iemsg_not_enough_space();
-    fn nvim_regexp_call_iemsg_re_damg();
     fn utf_char2len(c: c_int) -> c_int;
     fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
 }
@@ -2262,7 +2257,7 @@ unsafe fn apply_case(func: CaseFunc, c: c_int) -> c_int {
 #[inline]
 unsafe fn regsub_check_space(out: *mut c_char, dest: *mut c_char, need: isize, lim: isize) -> bool {
     if out.offset_from(dest) + need > lim {
-        nvim_regexp_call_iemsg_not_enough_space();
+        errors::call_iemsg_not_enough_space();
         true
     } else {
         false
@@ -2337,7 +2332,7 @@ unsafe fn regsub_expand_backref(
             };
         } else if *s == 0 {
             if copy {
-                nvim_regexp_call_iemsg_re_damg();
+                errors::call_iemsg_re_damg();
             }
             *early_exit = true;
             return out;
@@ -2623,7 +2618,7 @@ pub unsafe extern "C" fn rs_prog_magic_wrong() -> c_int {
         .cast::<u8>()
         .add(core::mem::offset_of!(BtRegprogT, reghasz) + 1);
     if *program as c_int != REGMAGIC {
-        nvim_regexp_iemsg_re_corr();
+        errors::iemsg_re_corr();
         return 1;
     }
     0
@@ -2634,8 +2629,6 @@ pub unsafe extern "C" fn rs_prog_magic_wrong() -> c_int {
 // ---------------------------------------------------------------------------
 
 extern "C" {
-    fn nvim_regexp_emsg_e_null();
-    fn nvim_regexp_emsg_e_substitute_nesting();
     fn nvim_regexp_eval_regsub_expr(
         source: *mut c_char,
         expr_ptr: *mut c_void,
@@ -2664,7 +2657,7 @@ pub unsafe extern "C" fn rs_vim_regsub_both(
 
     // Be paranoid...
     if source.is_null() && expr.is_null() || dest.is_null() {
-        nvim_regexp_emsg_e_null();
+        errors::emsg_e_null();
         return 0;
     }
     if nvim_regexp_call_prog_magic_wrong() != 0 {
@@ -2674,7 +2667,7 @@ pub unsafe extern "C" fn rs_vim_regsub_both(
     let max_nesting = MAX_REGSUB_NESTING as c_int;
     let nesting = REGSUB_NESTING;
     if nesting == max_nesting {
-        nvim_regexp_emsg_e_substitute_nesting();
+        errors::emsg_e_substitute_nesting();
         return 0;
     }
     let nested = nesting;
@@ -3171,13 +3164,6 @@ const CLASSCODES: &[c_int] = &[
     NUPPER,
 ];
 
-extern "C" {
-    fn nvim_regexp_emsg2_e59(m: c_int);
-    fn nvim_regexp_emsg2_e60(m: c_int);
-    fn nvim_regexp_emsg2_e61(m: c_int);
-    fn nvim_regexp_emsg3_e62(m: c_int, c: c_int);
-}
-
 // --- regatom accessor/error extern declarations ---
 #[allow(dead_code)]
 extern "C" {
@@ -3198,26 +3184,6 @@ extern "C" {
     fn mb_isupper(c: c_int) -> c_int;
 
     // Error helpers for regatom
-    fn nvim_regexp_emsg_e63_underscore();
-    fn nvim_regexp_iemsg_internal();
-    fn nvim_regexp_emsg3_e64(m: c_int, c: c_int);
-    fn nvim_regexp_emsg_nopresub();
-    fn nvim_regexp_emsg_e65();
-    fn nvim_regexp_emsg_e66();
-    fn nvim_regexp_emsg_e67();
-    fn nvim_regexp_emsg_e68();
-    fn nvim_regexp_emsg2_e69(m: c_int);
-    fn nvim_regexp_emsg2_e70(m: c_int);
-    fn nvim_regexp_emsg2_e71(m: c_int);
-    fn nvim_regexp_emsg2_e678(m: c_int);
-    fn nvim_regexp_emsg2_e769(m: c_int);
-    fn nvim_regexp_emsg_e944();
-    fn nvim_regexp_emsg_e945();
-    fn nvim_regexp_emsg_e949();
-    fn nvim_regexp_emsg_toomsbra();
-    fn nvim_regexp_semsg_e_atom_engine(c: c_int);
-    fn nvim_regexp_semsg_e_dot_pos(c: c_int);
-    fn nvim_regexp_emsg2_e369(m: c_int);
 
     // libc ctype helpers
     fn isalnum(c: c_int) -> c_int;
@@ -3285,7 +3251,7 @@ unsafe fn seen_endbrace(refnum: c_int) -> bool {
             p = p.add(1);
         }
         if *p == 0 {
-            nvim_regexp_emsg_e65();
+            errors::emsg_e65();
             return false;
         }
     }
@@ -3434,7 +3400,7 @@ unsafe fn parse_collection(flagp: *mut c_int, extra: c_int) -> *mut u8 {
     if *lp != b']' as c_char {
         // No matching ']' — treated as literal in default/strict handling
         if REG_STRICT != 0 {
-            nvim_regexp_emsg2_e769(c_int::from(REG_MAGIC > MAGIC_OFF));
+            errors::emsg2_e769(c_int::from(REG_MAGIC > MAGIC_OFF));
             return std::ptr::null_mut();
         }
         // Fall through to literal handling — return null to signal caller
@@ -3501,13 +3467,13 @@ unsafe fn parse_collection(flagp: *mut c_int, extra: c_int) -> *mut u8 {
                 }
 
                 if startc > endc {
-                    nvim_regexp_emsg_e944();
+                    errors::emsg_e944();
                     return std::ptr::null_mut();
                 }
                 if utf_char2len(startc) > 1 || utf_char2len(endc) > 1 {
                     // Limit to a range of 256 chars
                     if endc > startc + 256 {
-                        nvim_regexp_emsg_e945();
+                        errors::emsg_e945();
                         return std::ptr::null_mut();
                     }
                     startc += 1;
@@ -3565,7 +3531,7 @@ unsafe fn parse_collection(flagp: *mut c_int, extra: c_int) -> *mut u8 {
                 regparse = REGPARSE;
                 // max UTF-8 Codepoint is U+10FFFF, but allow values until INT_MAX
                 if startc == c_int::MAX {
-                    nvim_regexp_emsg_e949();
+                    errors::emsg_e949();
                     return std::ptr::null_mut();
                 }
                 if startc == 0 {
@@ -3632,7 +3598,7 @@ unsafe fn parse_collection(flagp: *mut c_int, extra: c_int) -> *mut u8 {
     PREVCHR_LEN = 1; // last char was the ']'
     regparse = REGPARSE;
     if *regparse != b']' as c_char {
-        nvim_regexp_emsg_toomsbra(); // Cannot happen?
+        errors::emsg_toomsbra(); // Cannot happen?
         return std::ptr::null_mut();
     }
     rs_skipchr(); // let's be friends with the lexer again
@@ -3751,7 +3717,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let plain_byte = plain_c as u8;
         let Some(p) = CLASSCHARS.iter().position(|&ch| ch == plain_byte) else {
-            nvim_regexp_emsg_e63_underscore();
+            errors::emsg_e63_underscore();
             return std::ptr::null_mut();
         };
         // When '.' is followed by a composing char ignore the dot, so that
@@ -3784,7 +3750,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
     // --- Grouping: \( ---
     if c == magic(b'(') {
         if ONE_EXACTLY != 0 {
-            nvim_regexp_emsg2_e369(c_int::from(REG_MAGIC == MAGIC_ALL));
+            errors::emsg2_e369(c_int::from(REG_MAGIC == MAGIC_ALL));
             return std::ptr::null_mut();
         }
         let mut flags: c_int = 0;
@@ -3799,11 +3765,11 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
     // --- Internal errors: NUL, |, &, ) ---
     if c == 0 || c == magic(b'|') || c == magic(b'&') || c == magic(b')') {
         if ONE_EXACTLY != 0 {
-            nvim_regexp_emsg2_e369(c_int::from(REG_MAGIC == MAGIC_ALL));
+            errors::emsg2_e369(c_int::from(REG_MAGIC == MAGIC_ALL));
             return std::ptr::null_mut();
         }
         // Supposed to be caught earlier.
-        nvim_regexp_iemsg_internal();
+        errors::iemsg_internal();
         return std::ptr::null_mut();
     }
 
@@ -3821,7 +3787,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
         } else {
             REG_MAGIC == MAGIC_ALL
         };
-        nvim_regexp_emsg3_e64(c_int::from(is_magic), plain);
+        errors::emsg3_e64(c_int::from(is_magic), plain);
         return std::ptr::null_mut();
     }
 
@@ -3844,7 +3810,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
             }
             return ret;
         }
-        nvim_regexp_emsg_nopresub();
+        errors::emsg_nopresub();
         return std::ptr::null_mut();
     }
 
@@ -3862,11 +3828,11 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
         c = rs_no_magic(rs_getchr());
         if c == b'(' as c_int {
             if (nvim_regexp_get_reg_do_extmatch() & REX_SET) == 0 {
-                nvim_regexp_emsg_e66();
+                errors::emsg_e66();
                 return std::ptr::null_mut();
             }
             if ONE_EXACTLY != 0 {
-                nvim_regexp_emsg2_e369(c_int::from(REG_MAGIC == MAGIC_ALL));
+                errors::emsg2_e369(c_int::from(REG_MAGIC == MAGIC_ALL));
                 return std::ptr::null_mut();
             }
             let mut flags: c_int = 0;
@@ -3879,7 +3845,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
             return ret;
         } else if c >= b'1' as c_int && c <= b'9' as c_int {
             if (nvim_regexp_get_reg_do_extmatch() & REX_USE) == 0 {
-                nvim_regexp_emsg_e67();
+                errors::emsg_e67();
                 return std::ptr::null_mut();
             }
             let ret = rs_regnode(ZREF + c - b'0' as c_int);
@@ -3898,7 +3864,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
             }
             return ret;
         }
-        nvim_regexp_emsg_e68();
+        errors::emsg_e68();
         return std::ptr::null_mut();
     }
 
@@ -3909,7 +3875,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
         // \%( — non-capturing group
         if c == b'(' as c_int {
             if ONE_EXACTLY != 0 {
-                nvim_regexp_emsg2_e369(c_int::from(REG_MAGIC == MAGIC_ALL));
+                errors::emsg2_e369(c_int::from(REG_MAGIC == MAGIC_ALL));
                 return std::ptr::null_mut();
             }
             let mut flags: c_int = 0;
@@ -3936,7 +3902,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
             let regparse = REGPARSE;
             if *regparse == b'=' as c_char && *regparse.add(1) >= 48 && *regparse.add(1) <= 50 {
                 // misplaced \%#=1
-                nvim_regexp_semsg_e_atom_engine(*regparse.add(1) as c_int);
+                errors::semsg_e_atom_engine(*regparse.add(1) as c_int);
                 return std::ptr::null_mut();
             }
             return rs_regnode(CURSOR);
@@ -3955,7 +3921,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
         // \%[abc] — optional sequence
         if c == b'[' as c_int {
             if ONE_EXACTLY != 0 {
-                nvim_regexp_emsg2_e369(c_int::from(REG_MAGIC == MAGIC_ALL));
+                errors::emsg2_e369(c_int::from(REG_MAGIC == MAGIC_ALL));
                 return std::ptr::null_mut();
             }
 
@@ -3968,7 +3934,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
                     break;
                 }
                 if c == 0 {
-                    nvim_regexp_emsg2_e69(c_int::from(REG_MAGIC == MAGIC_ALL));
+                    errors::emsg2_e69(c_int::from(REG_MAGIC == MAGIC_ALL));
                     return std::ptr::null_mut();
                 }
                 let br = rs_regnode(BRANCH);
@@ -3990,7 +3956,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
                 }
             }
             if ret.is_null() {
-                nvim_regexp_emsg2_e70(c_int::from(REG_MAGIC == MAGIC_ALL));
+                errors::emsg2_e70(c_int::from(REG_MAGIC == MAGIC_ALL));
                 return std::ptr::null_mut();
             }
             let lastbranch = rs_regnode(BRANCH);
@@ -4037,7 +4003,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
             };
 
             if i < 0 || i > c_int::MAX as c_long {
-                nvim_regexp_emsg2_e678(c_int::from(REG_MAGIC == MAGIC_ALL));
+                errors::emsg2_e678(c_int::from(REG_MAGIC == MAGIC_ALL));
                 return std::ptr::null_mut();
             }
             #[allow(clippy::cast_possible_truncation)]
@@ -4100,7 +4066,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
                 && (cur || got_digit)
             {
                 if cur && n != 0 {
-                    nvim_regexp_semsg_e_dot_pos(rs_no_magic(c));
+                    errors::semsg_e_dot_pos(rs_no_magic(c));
                     return std::ptr::null_mut();
                 }
                 let ret;
@@ -4136,7 +4102,7 @@ pub unsafe extern "C" fn regatom(flagp: *mut c_int) -> *mut u8 {
             }
         }
 
-        nvim_regexp_emsg2_e71(c_int::from(REG_MAGIC == MAGIC_ALL));
+        errors::emsg2_e71(c_int::from(REG_MAGIC == MAGIC_ALL));
         return std::ptr::null_mut();
     }
 
@@ -4267,7 +4233,7 @@ pub unsafe extern "C" fn rs_regpiece(flagp: *mut c_int) -> *mut u8 {
             }
             if lop == END {
                 let reg_magic = REG_MAGIC;
-                nvim_regexp_emsg2_e59(c_int::from(reg_magic == MAGIC_ALL));
+                errors::emsg2_e59(c_int::from(reg_magic == MAGIC_ALL));
                 return std::ptr::null_mut();
             }
             // Look behind must match with behind_pos.
@@ -4305,7 +4271,7 @@ pub unsafe extern "C" fn rs_regpiece(flagp: *mut c_int) -> *mut u8 {
                 let ncb = NUM_COMPLEX_BRACES;
                 if ncb >= 10 {
                     let reg_magic = REG_MAGIC;
-                    nvim_regexp_emsg2_e60(c_int::from(reg_magic == MAGIC_ALL));
+                    errors::emsg2_e60(c_int::from(reg_magic == MAGIC_ALL));
                     return std::ptr::null_mut();
                 }
                 rs_reginsert(BRACE_COMPLEX + ncb, ret);
@@ -4325,10 +4291,10 @@ pub unsafe extern "C" fn rs_regpiece(flagp: *mut c_int) -> *mut u8 {
         // Can't have a multi follow a multi.
         let reg_magic = REG_MAGIC;
         if rs_peekchr() == magic(b'*') {
-            nvim_regexp_emsg2_e61(c_int::from(reg_magic >= MAGIC_ON));
+            errors::emsg2_e61(c_int::from(reg_magic >= MAGIC_ON));
             return std::ptr::null_mut();
         }
-        nvim_regexp_emsg3_e62(
+        errors::emsg3_e62(
             c_int::from(reg_magic == MAGIC_ALL),
             rs_no_magic(rs_peekchr()),
         );
@@ -4454,16 +4420,6 @@ pub unsafe extern "C" fn rs_regbranch(flagp: *mut c_int) -> *mut u8 {
     ret
 }
 
-extern "C" {
-    fn nvim_regexp_emsg_e50();
-    fn nvim_regexp_emsg2_e51(m: c_int);
-    fn nvim_regexp_emsg_e52();
-    fn nvim_regexp_emsg2_e53(m: c_int);
-    fn nvim_regexp_emsg2_e54(m: c_int);
-    fn nvim_regexp_emsg2_e55(m: c_int);
-    fn nvim_regexp_emsg_e488();
-}
-
 /// Parse regular expression, i.e. main body or parenthesized thing.
 /// Caller must absorb opening parenthesis.
 ///
@@ -4481,7 +4437,7 @@ pub unsafe extern "C" fn rs_reg(paren: c_int, flagp: *mut c_int) -> *mut u8 {
         // Make a ZOPEN node.
         let nzpar = REGNZPAR;
         if nzpar >= 10 {
-            nvim_regexp_emsg_e50();
+            errors::emsg_e50();
             return std::ptr::null_mut();
         }
         parno = nzpar;
@@ -4492,7 +4448,7 @@ pub unsafe extern "C" fn rs_reg(paren: c_int, flagp: *mut c_int) -> *mut u8 {
         let npar = REGNPAR;
         if npar >= 10 {
             let reg_magic = REG_MAGIC;
-            nvim_regexp_emsg2_e51(c_int::from(reg_magic == MAGIC_ALL));
+            errors::emsg2_e51(c_int::from(reg_magic == MAGIC_ALL));
             return std::ptr::null_mut();
         }
         parno = npar;
@@ -4558,19 +4514,19 @@ pub unsafe extern "C" fn rs_reg(paren: c_int, flagp: *mut c_int) -> *mut u8 {
     if paren != REG_NOPAREN && rs_getchr() != magic(b')') {
         let reg_magic = REG_MAGIC;
         if paren == REG_ZPAREN {
-            nvim_regexp_emsg_e52();
+            errors::emsg_e52();
         } else if paren == REG_NPAREN {
-            nvim_regexp_emsg2_e53(c_int::from(reg_magic == MAGIC_ALL));
+            errors::emsg2_e53(c_int::from(reg_magic == MAGIC_ALL));
         } else {
-            nvim_regexp_emsg2_e54(c_int::from(reg_magic == MAGIC_ALL));
+            errors::emsg2_e54(c_int::from(reg_magic == MAGIC_ALL));
         }
         return std::ptr::null_mut();
     } else if paren == REG_NOPAREN && rs_peekchr() != 0 {
         let reg_magic = REG_MAGIC;
         if CURCHR == magic(b')') {
-            nvim_regexp_emsg2_e55(c_int::from(reg_magic == MAGIC_ALL));
+            errors::emsg2_e55(c_int::from(reg_magic == MAGIC_ALL));
         } else {
-            nvim_regexp_emsg_e488(); // "Can't happen".
+            errors::emsg_e488(); // "Can't happen".
         }
         return std::ptr::null_mut();
     }
@@ -4892,7 +4848,6 @@ const fn ascii_isdigit(c: u8) -> bool {
 
 extern "C" {
     fn nvim_regexp_call_vim_iswordp_buf(p: *const c_char) -> c_int;
-    fn nvim_regexp_iemsg_re_corr();
 }
 
 /// Try to advance past a newline boundary (either in-line `\n` or multi-line).
@@ -5232,7 +5187,7 @@ pub unsafe extern "C" fn rs_regrepeat(p: *mut u8, maxcount: i64) -> c_int {
 
             _ => {
                 // Oh dear. Called inappropriately.
-                nvim_regexp_iemsg_re_corr();
+                errors::iemsg_re_corr();
             }
         }
     }
@@ -5359,7 +5314,6 @@ extern "C" {
     // reg_getline_len: reuse existing nvim_regexp_call_reg_getline_len (declared above)
 
     // Error/utility
-    fn nvim_regexp_emsg_maxmempattern();
     fn nvim_regexp_call_profile_passed_limit(tm: *const c_void) -> c_int;
     // got_int: reuse existing nvim_regexp_get_got_int (declared above)
     fn nvim_mb_isupper(c: c_int) -> c_int;
@@ -5373,13 +5327,12 @@ extern "C" {
     // z-subexpr element-pointer accessors for save_se/restore_se
 
     // internal_error
-    fn nvim_regexp_internal_error(msg: *const c_char);
 
     // regrepeat: use rs_regrepeat() directly from Rust (no wrapper needed)
 
     // regnext: use rs_regnext() directly from Rust (no wrapper needed)
 
-    // iemsg: use existing nvim_regexp_iemsg_re_corr (declared in regrepeat section)
+    // iemsg: use existing errors::iemsg_re_corr (declared in regrepeat section)
 }
 
 // --- Helper inline functions for rs_regmatch ---
@@ -5449,7 +5402,7 @@ fn re_num_cmp(val: u32, scan: *const u8) -> bool {
 )]
 unsafe fn regstack_push(state: c_int, scan: *mut u8) -> *mut RegitemT {
     if (REGSTACK.ga_len as u32 >> 10) as i64 >= nvim_regexp_get_p_mmp() {
-        nvim_regexp_emsg_maxmempattern();
+        errors::emsg_maxmempattern();
         return std::ptr::null_mut();
     }
     ga_grow(&raw mut REGSTACK, std::mem::size_of::<RegitemT>() as c_int);
@@ -6222,7 +6175,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                             BRACE_MAX[no as usize] = operand_max(scan);
                             BRACE_COUNT[no as usize] = 0;
                         } else {
-                            nvim_regexp_internal_error(c"BRACE_LIMITS".as_ptr());
+                            errors::regexp_internal_error(c"BRACE_LIMITS".as_ptr());
                             status = RA_FAIL;
                         }
                     }
@@ -6316,7 +6269,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         } {
                             // It could match. Push regstar_T + regitem_T.
                             if (REGSTACK.ga_len as u32 >> 10) as i64 >= nvim_regexp_get_p_mmp() {
-                                nvim_regexp_emsg_maxmempattern();
+                                errors::emsg_maxmempattern();
                                 status = RA_FAIL;
                             } else {
                                 ga_grow(
@@ -6360,7 +6313,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                     BEHIND | NOBEHIND => {
                         // Need a bit of room to store extra positions.
                         if (REGSTACK.ga_len as u32 >> 10) as i64 >= nvim_regexp_get_p_mmp() {
-                            nvim_regexp_emsg_maxmempattern();
+                            errors::emsg_maxmempattern();
                             status = RA_FAIL;
                         } else {
                             ga_grow(
@@ -6967,7 +6920,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
         // If the regstack is empty or something failed we are done.
         if REGSTACK.ga_len == 0 || status == RA_FAIL {
             if scan.is_null() {
-                nvim_regexp_iemsg_re_corr();
+                errors::iemsg_re_corr();
             }
             return c_int::from(status == RA_MATCH);
         }
@@ -8329,21 +8282,6 @@ pub unsafe extern "C" fn rs_nfa_recognize_char_class(
 
 // --- Phase 3: NFA regatom extern declarations ---
 #[allow(dead_code)]
-extern "C" {
-    // NFA-specific error helpers
-    fn nvim_regexp_emsg_nul_found();
-    fn nvim_regexp_semsg_misplaced(c: c_int);
-    fn nvim_regexp_semsg_ill_char_class(c: i64);
-    fn nvim_regexp_siemsg_unknown_class(c: i64);
-    fn nvim_regexp_semsg_e867_z(c: c_int);
-    fn nvim_regexp_semsg_e867_pct(c: c_int);
-    fn nvim_regexp_emsg_value_too_large();
-    fn nvim_regexp_semsg_missing_value(c: c_int);
-
-    // Data accessors
-    fn nvim_regexp_set_rc_did_emsg_true();
-}
-
 // Phase 3 constant
 const MB_MAXBYTES: i64 = 21;
 
@@ -8554,7 +8492,7 @@ unsafe fn nfa_handle_collection(mut extra: c_int, old_rp: *mut c_char) -> c_int 
                 {
                     startc = coll_get_char();
                     if startc == c_int::MAX {
-                        nvim_regexp_emsg_e949();
+                        errors::emsg_e949();
                         return FAIL;
                     }
                     got_coll_char = true;
@@ -8574,7 +8512,7 @@ unsafe fn nfa_handle_collection(mut extra: c_int, old_rp: *mut c_char) -> c_int 
                 let endc = startc;
                 startc = oldstartc;
                 if startc > endc {
-                    nvim_regexp_emsg_e944();
+                    errors::emsg_e944();
                     return FAIL;
                 }
 
@@ -8674,7 +8612,7 @@ unsafe fn nfa_handle_collection(mut extra: c_int, old_rp: *mut c_char) -> c_int 
     } // if *endp == ']'
 
     if REG_STRICT != 0 {
-        nvim_regexp_emsg2_e769(c_int::from(REG_MAGIC > MAGIC_OFF));
+        errors::emsg2_e769(c_int::from(REG_MAGIC > MAGIC_OFF));
         return FAIL;
     }
     // Fall through to default (multibyte) handling — caller handles this
@@ -8696,7 +8634,7 @@ pub unsafe extern "C" fn rs_nfa_regatom() -> c_int {
 
     // NUL
     if c == 0 {
-        nvim_regexp_emsg_nul_found();
+        errors::emsg_nul_found();
         return FAIL;
     }
 
@@ -8726,7 +8664,7 @@ pub unsafe extern "C" fn rs_nfa_regatom() -> c_int {
     if c == nfa_magic(b'_') {
         c = rs_no_magic(rs_getchr());
         if c == 0 {
-            nvim_regexp_emsg_nul_found();
+            errors::emsg_nul_found();
             return FAIL;
         }
         if c == b'^' as c_int {
@@ -8806,7 +8744,7 @@ pub unsafe extern "C" fn rs_nfa_regatom() -> c_int {
 
     // Misplaced \|, \&, \)
     if c == nfa_magic(b'|') || c == nfa_magic(b'&') || c == nfa_magic(b')') {
-        nvim_regexp_semsg_misplaced(rs_no_magic(c));
+        errors::semsg_misplaced(rs_no_magic(c));
         return FAIL;
     }
 
@@ -8818,7 +8756,7 @@ pub unsafe extern "C" fn rs_nfa_regatom() -> c_int {
         || c == nfa_magic(b'*')
         || c == nfa_magic(b'{')
     {
-        nvim_regexp_semsg_misplaced(rs_no_magic(c));
+        errors::semsg_misplaced(rs_no_magic(c));
         return FAIL;
     }
 
@@ -8826,7 +8764,7 @@ pub unsafe extern "C" fn rs_nfa_regatom() -> c_int {
     if c == nfa_magic(b'~') {
         let reg_prev_sub = nvim_regexp_get_reg_prev_sub_ptr();
         if reg_prev_sub.is_null() {
-            nvim_regexp_emsg_nopresub();
+            errors::emsg_nopresub();
             return FAIL;
         }
         let mut lp = reg_prev_sub.cast::<u8>();
@@ -8882,10 +8820,10 @@ unsafe fn nfa_handle_char_class(c: c_int, extra: c_int, _old_regparse: *mut c_ch
     let p = vim_strchr(classchars.cast::<c_char>(), rs_no_magic(c));
     if p.is_null() {
         if extra == NFA_ADD_NL {
-            nvim_regexp_semsg_ill_char_class(c as i64);
+            errors::semsg_ill_char_class(c as i64);
             return FAIL;
         }
-        nvim_regexp_siemsg_unknown_class(c as i64);
+        errors::siemsg_unknown_class(c as i64);
         return FAIL;
     }
 
@@ -8931,7 +8869,7 @@ unsafe fn nfa_handle_z_atom() -> c_int {
         // \z1 .. \z9
         x if x >= b'1' as c_int && x <= b'9' as c_int => {
             if (nvim_regexp_get_reg_do_extmatch() & REX_USE) == 0 {
-                nvim_regexp_emsg_e67();
+                errors::emsg_e67();
                 return FAIL;
             }
             nfa_emit(NFA_ZREF1 + (rs_no_magic(c) - b'1' as c_int));
@@ -8941,7 +8879,7 @@ unsafe fn nfa_handle_z_atom() -> c_int {
         // \z(
         x if x == b'(' as c_int => {
             if nvim_regexp_get_reg_do_extmatch() != REX_SET {
-                nvim_regexp_emsg_e66();
+                errors::emsg_e66();
                 return FAIL;
             }
             if rs_nfa_reg(REG_ZPAREN) == FAIL {
@@ -8951,7 +8889,7 @@ unsafe fn nfa_handle_z_atom() -> c_int {
             OK
         }
         _ => {
-            nvim_regexp_semsg_e867_z(rs_no_magic(c));
+            errors::semsg_e867_z(rs_no_magic(c));
             FAIL
         }
     }
@@ -8988,7 +8926,7 @@ unsafe fn nfa_handle_percent_atom(save_prev_at_start: c_int) -> c_int {
             _ => -1,
         };
         if nr < 0 || nr > c_long::from(c_int::MAX) {
-            nvim_regexp_emsg2_e678(c_int::from(REG_MAGIC == MAGIC_ALL));
+            errors::emsg2_e678(c_int::from(REG_MAGIC == MAGIC_ALL));
             return FAIL;
         }
         // A NUL is stored as NL (nr is in range, checked above)
@@ -9014,7 +8952,7 @@ unsafe fn nfa_handle_percent_atom(save_prev_at_start: c_int) -> c_int {
     if c == b'#' as c_int {
         let rp = REGPARSE;
         if *rp == b'=' as c_char && *rp.add(1) >= 48 && *rp.add(1) <= 50 {
-            nvim_regexp_semsg_e_atom_engine(*rp.add(1) as c_int);
+            errors::semsg_e_atom_engine(*rp.add(1) as c_int);
             return FAIL;
         }
         nfa_emit(NFA_CURSOR);
@@ -9042,7 +8980,7 @@ unsafe fn nfa_handle_percent_atom(save_prev_at_start: c_int) -> c_int {
                 break;
             }
             if pc == 0 {
-                nvim_regexp_emsg2_e769(c_int::from(REG_MAGIC == MAGIC_ALL));
+                errors::emsg2_e769(c_int::from(REG_MAGIC == MAGIC_ALL));
                 return FAIL;
             }
             // recursive call
@@ -9053,7 +8991,7 @@ unsafe fn nfa_handle_percent_atom(save_prev_at_start: c_int) -> c_int {
         }
         rs_getchr(); // consume the ]
         if n == 0 {
-            nvim_regexp_emsg2_e70(c_int::from(REG_MAGIC == MAGIC_ALL));
+            errors::emsg2_e70(c_int::from(REG_MAGIC == MAGIC_ALL));
             return FAIL;
         }
         nfa_emit(NFA_OPT_CHARS);
@@ -9084,11 +9022,11 @@ unsafe fn nfa_handle_percent_position(c_in: c_int, save_prev_at_start: c_int) ->
     }
     while c >= b'0' as c_int && c <= b'9' as c_int {
         if cur {
-            nvim_regexp_semsg_e_dot_pos(rs_no_magic(c));
+            errors::semsg_e_dot_pos(rs_no_magic(c));
             return FAIL;
         }
         if n > (i64::from(i32::MAX) - i64::from(c - b'0' as c_int)) / 10 {
-            nvim_regexp_emsg_value_too_large();
+            errors::emsg_value_too_large();
             return FAIL;
         }
         n = n * 10 + i64::from(c - b'0' as c_int);
@@ -9099,7 +9037,7 @@ unsafe fn nfa_handle_percent_position(c_in: c_int, save_prev_at_start: c_int) ->
     if c == b'l' as c_int || c == b'c' as c_int || c == b'v' as c_int {
         let mut limit: i64 = i64::from(i32::MAX);
         if !cur && !got_digit {
-            nvim_regexp_semsg_missing_value(rs_no_magic(c));
+            errors::semsg_missing_value(rs_no_magic(c));
             return FAIL;
         }
         if c == b'l' as c_int {
@@ -9144,7 +9082,7 @@ unsafe fn nfa_handle_percent_position(c_in: c_int, save_prev_at_start: c_int) ->
             limit = i64::from(i32::MAX) / MB_MAXBYTES;
         }
         if n >= limit {
-            nvim_regexp_emsg_value_too_large();
+            errors::emsg_value_too_large();
             return FAIL;
         }
         #[allow(clippy::cast_possible_truncation)]
@@ -9166,22 +9104,13 @@ unsafe fn nfa_handle_percent_position(c_in: c_int, save_prev_at_start: c_int) ->
         return OK;
     }
 
-    nvim_regexp_semsg_e867_pct(rs_no_magic(c));
+    errors::semsg_e867_pct(rs_no_magic(c));
     FAIL
 }
 
 // === Phase 4: NFA Parser Functions + re2post ===
 
 const RE_AUTO: c_int = 8;
-
-extern "C" {
-    fn nvim_regexp_semsg_e869(op: c_int);
-    fn nvim_regexp_emsg_e870();
-    fn nvim_regexp_emsg_e871();
-    fn nvim_regexp_emsg_e872();
-    fn nvim_regexp_emsg_e879();
-    fn nvim_regexp_emsg_e873();
-}
 
 /// Helper: compute current postfix position index.
 #[inline]
@@ -9253,7 +9182,7 @@ unsafe fn nfa_regpiece() -> c_int {
             i = NFA_PREV_ATOM_LIKE_PATTERN;
         }
         if i == 0 {
-            nvim_regexp_semsg_e869(op);
+            errors::semsg_e869(op);
             return FAIL;
         }
         nfa_emit(i);
@@ -9276,7 +9205,7 @@ unsafe fn nfa_regpiece() -> c_int {
         let mut minval: c_int = 0;
         let mut maxval: c_int = 0;
         if rs_read_limits(&mut minval, &mut maxval) == 0 {
-            nvim_regexp_emsg_e870();
+            errors::emsg_e870();
             return FAIL;
         }
 
@@ -9343,7 +9272,7 @@ unsafe fn nfa_regpiece() -> c_int {
     }
 
     if rs_re_multi_type(rs_peekchr()) != NOT_MULTI {
-        nvim_regexp_emsg_e871();
+        errors::emsg_e871();
         return FAIL;
     }
 
@@ -9440,14 +9369,14 @@ pub unsafe extern "C" fn rs_nfa_reg(paren: c_int) -> c_int {
     let mut parno: c_int = 0;
     if paren == REG_PAREN {
         if REGNPAR >= NSUBEXP_I {
-            nvim_regexp_emsg_e872();
+            errors::emsg_e872();
             return FAIL;
         }
         parno = REGNPAR;
         REGNPAR = parno + 1;
     } else if paren == REG_ZPAREN {
         if REGNZPAR >= NSUBEXP_I {
-            nvim_regexp_emsg_e879();
+            errors::emsg_e879();
             return FAIL;
         }
         parno = REGNZPAR;
@@ -9469,16 +9398,16 @@ pub unsafe extern "C" fn rs_nfa_reg(paren: c_int) -> c_int {
     // Check for proper termination
     if paren != REG_NOPAREN && rs_getchr() != nfa_magic(b')') {
         if paren == REG_NPAREN {
-            nvim_regexp_emsg2_e53(c_int::from(REG_MAGIC == MAGIC_ALL));
+            errors::emsg2_e53(c_int::from(REG_MAGIC == MAGIC_ALL));
         } else {
-            nvim_regexp_emsg2_e54(c_int::from(REG_MAGIC == MAGIC_ALL));
+            errors::emsg2_e54(c_int::from(REG_MAGIC == MAGIC_ALL));
         }
         return FAIL;
     } else if paren == REG_NOPAREN && rs_peekchr() != 0 {
         if rs_peekchr() == nfa_magic(b')') {
-            nvim_regexp_emsg2_e55(c_int::from(REG_MAGIC == MAGIC_ALL));
+            errors::emsg2_e55(c_int::from(REG_MAGIC == MAGIC_ALL));
         } else {
-            nvim_regexp_emsg_e873();
+            errors::emsg_e873();
         }
         return FAIL;
     }
@@ -9528,14 +9457,6 @@ struct FragT {
 }
 
 // ---- Phase 5 C accessors ----
-extern "C" {
-    // state_ptr global (points into nfa_regprog_T.state[])
-
-    // Error messages for post2nfa
-    fn nvim_regexp_emsg_e874(); // E874: Could not pop the stack
-    fn nvim_regexp_emsg_e875(); // E875: too many states left on stack
-    fn nvim_regexp_emsg_e876(); // E876: Not enough space to store NFA
-}
 
 /// Allocate and initialize an NFA state from the pre-allocated state array.
 unsafe fn nfa_alloc_state(c: c_int, out: NfaStateHandle, out1: NfaStateHandle) -> NfaStateHandle {
@@ -9622,7 +9543,7 @@ unsafe fn st_pop(stackp: *mut *mut FragT, stack: *const FragT) -> FragT {
 unsafe fn pop_or_fail(stackp: *mut *mut FragT, stack: *mut FragT, out: &mut FragT) -> bool {
     *out = st_pop(stackp, stack);
     if (*stackp).cast_const() < stack.cast_const() {
-        nvim_regexp_emsg_e874();
+        errors::emsg_e874();
         xfree(stack.cast::<c_void>());
         return true;
     }
@@ -10337,14 +10258,14 @@ pub unsafe extern "C" fn rs_post2nfa(
     }
     if stackp != stack {
         xfree(stack.cast());
-        nvim_regexp_emsg_e875();
+        errors::emsg_e875();
         return core::ptr::null_mut();
     }
 
     let istate = ISTATE;
     if istate >= NSTATE {
         xfree(stack.cast());
-        nvim_regexp_emsg_e876();
+        errors::emsg_e876();
         return core::ptr::null_mut();
     }
 
@@ -10785,18 +10706,6 @@ pub unsafe extern "C" fn rs_nfa_regcomp(expr: *mut u8, re_flags: c_int) -> NfaPr
 // NFA Execution Engine — Phase 8: Pure helpers and accessor infrastructure
 // ============================================================================
 
-extern "C" {
-    // nfa_state_T id/lastlist accessors
-
-    // nfa_regprog_T execution field accessors
-    #[allow(dead_code)]
-    #[allow(dead_code)]
-    #[allow(dead_code)]
-    #[allow(dead_code)]
-    // Error wrapper
-    fn nvim_regexp_siemsg_ill_char_class(cls: i64);
-}
-
 /// Check for a match with a character class.
 /// Returns OK if `c` matches the class `cls`, FAIL otherwise.
 #[no_mangle]
@@ -10904,7 +10813,7 @@ pub unsafe extern "C" fn rs_check_char_class(cls: c_int, c: c_int) -> c_int {
         }
         _ => {
             // should not be here
-            nvim_regexp_siemsg_ill_char_class(cls as i64);
+            errors::siemsg_ill_char_class(cls as i64);
             return FAIL;
         }
     }
@@ -11729,7 +11638,7 @@ unsafe fn addstate_default_add(
         let newsize = (newlen as usize) * core::mem::size_of::<NfaThreadT>();
 
         if ((newsize >> 10) as i64) >= nvim_regexp_get_p_mmp() {
-            nvim_regexp_emsg_maxmempattern();
+            errors::emsg_maxmempattern();
             // Return null - caller (addstate_t) handles depth
             return core::ptr::null_mut();
         }
@@ -11983,7 +11892,7 @@ unsafe fn addstate_here_t(
             let newsize = (newlen as usize) * core::mem::size_of::<NfaThreadT>();
 
             if ((newsize >> 10) as i64) >= nvim_regexp_get_p_mmp() {
-                nvim_regexp_emsg_maxmempattern();
+                errors::emsg_maxmempattern();
                 return core::ptr::null_mut();
             }
             let newl = xmalloc(newsize).cast::<NfaThreadT>();
@@ -14403,7 +14312,6 @@ const fn ascii_isdigit_i(c: c_int) -> c_int {
 // Extern declarations for Phase 8.5 / Phase 7 C accessors
 extern "C" {
     // iemsg null error
-    fn nvim_regexp_call_iemsg_null();
 
     fn nvim_regexp_get_buf_ml_line_count(buf: *mut c_void) -> i32;
     fn nvim_regexp_get_re_extmatch_out() -> *mut c_void;
@@ -14634,7 +14542,7 @@ pub unsafe extern "C" fn rs_nfa_regexec_both(
 
     // Be paranoid...
     if prog.is_null() || line.is_null() {
-        nvim_regexp_call_iemsg_null();
+        errors::call_iemsg_null();
         if retval > 0 {
             nfa_regexec_validate_match();
         }
@@ -14911,7 +14819,7 @@ pub unsafe extern "C" fn rs_bt_regexec_both(
 
     // Be paranoid...
     if prog.is_null() || line.is_null() {
-        nvim_regexp_call_iemsg_null();
+        errors::call_iemsg_null();
         nvim_regexp_bt_cleanup_stacks_rust();
         return 0;
     }
@@ -15148,7 +15056,6 @@ extern "C" {
     fn msg_puts(s: *const c_char);
     fn nvim_regexp_call_vim_regcomp(pat: *const c_char, re_flags: c_int) -> *mut c_void;
     fn nvim_regexp_call_vim_regfree(prog: *mut c_void);
-    fn nvim_regexp_call_emsg_recursive();
 
     // regmatch_T handling for vim_regexec_prog
     fn nvim_regexp_get_regmatch_size() -> usize;
@@ -15279,7 +15186,7 @@ pub unsafe extern "C" fn rs_vim_regexec_string(
 
     // Cannot use the same prog recursively
     if ((*prog.cast::<RegprogT>()).re_in_use as c_int) != 0 {
-        nvim_regexp_call_emsg_recursive();
+        errors::call_emsg_recursive();
         return 0;
     }
     (*prog.cast::<RegprogT>()).re_in_use = true;
@@ -15365,7 +15272,7 @@ pub unsafe extern "C" fn rs_vim_regexec_multi(
 
     // Cannot use the same prog recursively
     if ((*prog.cast::<RegprogT>()).re_in_use as c_int) != 0 {
-        nvim_regexp_call_emsg_recursive();
+        errors::call_emsg_recursive();
         return 0;
     }
     (*prog.cast::<RegprogT>()).re_in_use = true;
@@ -15411,7 +15318,6 @@ extern "C" {
     fn nvim_regexp_get_called_emsg() -> c_int;
     fn nvim_regexp_call_nfa_regcomp(expr: *const u8, re_flags: c_int) -> *mut c_void;
     fn nvim_regexp_call_bt_regcomp(expr: *const u8, re_flags: c_int) -> *mut c_void;
-    fn nvim_regexp_call_emsg_e864();
 }
 
 /// Top-level regexp compilation dispatch.
@@ -15436,7 +15342,7 @@ pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) ->
             REGEXP_ENGINE = newengine;
             expr = expr.add(5);
         } else {
-            nvim_regexp_call_emsg_e864();
+            errors::call_emsg_e864();
             REGEXP_ENGINE = AUTOMATIC_ENGINE;
         }
     }
@@ -15489,14 +15395,13 @@ const RF_LOOKBH: c_uint = 8;
 extern "C" {
     fn nvim_regexp_alloc_bt_regprog(regsize_val: i64) -> *mut c_void;
     fn nvim_bt_prog_set_engine_bt(prog: *mut c_void);
-    fn nvim_regexp_call_emsg_e339();
 }
 
 /// BT compiler wrapper: two-pass compilation, allocation, optimization extraction.
 #[no_mangle]
 pub unsafe extern "C" fn rs_bt_regcomp(expr: *mut u8, re_flags: c_int) -> *mut c_void {
     if expr.is_null() {
-        nvim_regexp_call_iemsg_null();
+        errors::call_iemsg_null();
         nvim_regexp_set_rc_did_emsg(1);
         return std::ptr::null_mut();
     }
@@ -15525,7 +15430,7 @@ pub unsafe extern "C" fn rs_bt_regcomp(expr: *mut u8, re_flags: c_int) -> *mut c
         let was_toolong = REG_TOOLONG != 0;
         nvim_regexp_xfree(r);
         if was_toolong {
-            nvim_regexp_call_emsg_e339();
+            errors::call_emsg_e339();
         }
         return std::ptr::null_mut();
     }
