@@ -319,48 +319,7 @@ typedef struct {
 
 // sd_reader_skip deleted (Phase 2 plan 92c8078e): Rust rs_sd_reader_skip_bytes replaces it.
 
-/// Iterate over global variables
-///
-/// @warning No modifications to global variable Dict must be performed
-///          while iteration is in progress.
-///
-/// @param[in]   iter   Iterator. Pass NULL to start iteration.
-/// @param[out]  name   Variable name.
-/// @param[out]  rettv  Variable value.
-///
-/// @return Pointer that needs to be passed to next `var_shada_iter` invocation
-///         or NULL to indicate that iteration is over.
-static const void *var_shada_iter(const void *const iter, const char **const name, typval_T *rettv,
-                                  var_flavour_T flavour)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(2, 3)
-{
-  const hashitem_T *hi;
-  hashtab_T *globvarht = get_globvar_ht();
-  const hashitem_T *hifirst = globvarht->ht_array;
-  const size_t hinum = (size_t)globvarht->ht_mask + 1;
-  *name = NULL;
-  if (iter == NULL) {
-    hi = globvarht->ht_array;
-    while ((size_t)(hi - hifirst) < hinum
-           && (HASHITEM_EMPTY(hi)
-               || !(rs_var_flavour(hi->hi_key) & flavour))) {
-      hi++;
-    }
-    if ((size_t)(hi - hifirst) == hinum) {
-      return NULL;
-    }
-  } else {
-    hi = (const hashitem_T *)iter;
-  }
-  *name = TV_DICT_HI2DI(hi)->di_key;
-  tv_copy(&TV_DICT_HI2DI(hi)->di_tv, rettv);
-  while ((size_t)(++hi - hifirst) < hinum) {
-    if (!HASHITEM_EMPTY(hi) && (rs_var_flavour(hi->hi_key) & flavour)) {
-      return hi;
-    }
-  }
-  return NULL;
-}
+// var_shada_iter inlined into nvim_shada_var_shada_iter (plan b499a5d0 Phase 5).
 
 // find_buffer promoted to nvim_shada_find_buffer (plan b499a5d0 Phase 3): used by Rust.
 
@@ -1369,26 +1328,45 @@ const char *nvim_shada_gvar_get_name(const ShadaEntry *e) { return e->data.globa
 // SubString field accessors
 const char *nvim_shada_sub_get_string(const ShadaEntry *e) { return e->data.sub_string.sub; }
 
-// Global variable iteration accessor (wraps var_shada_iter).
+// Global variable iteration accessor (inlines var_shada_iter; plan b499a5d0 Phase 5).
 // flavour is a bitmask of VAR_FLAVOUR_DEFAULT | VAR_FLAVOUR_SESSION | VAR_FLAVOUR_SHADA.
 // On each call: *out_name set to variable name (static, do not free); *out_tv set to a
-// freshly xmalloc'd typval_T copy (caller must pass to nvim_shada_pack_gvar_entry which frees it).
+// freshly xmalloc'd typval_T copy (caller must pass to nvim_shada_build_gvar_entry which frees it).
 // Returns the next iter pointer (NULL when exhausted).
 const void *nvim_shada_var_shada_iter(const void *iter, const char **out_name, void **out_tv,
                                       unsigned flavour)
 {
-  typval_T vartv;
-  const char *name = NULL;
-  const void *next = var_shada_iter(iter, &name, &vartv, (var_flavour_T)flavour);
-  *out_name = name;
-  if (name == NULL) {
-    *out_tv = NULL;
-    return next;
+  hashtab_T *globvarht = get_globvar_ht();
+  const hashitem_T *hifirst = globvarht->ht_array;
+  const size_t hinum = (size_t)globvarht->ht_mask + 1;
+  *out_name = NULL;
+  const hashitem_T *hi;
+  if (iter == NULL) {
+    hi = globvarht->ht_array;
+    while ((size_t)(hi - hifirst) < hinum
+           && (HASHITEM_EMPTY(hi)
+               || !(rs_var_flavour(hi->hi_key) & (var_flavour_T)flavour))) {
+      hi++;
+    }
+    if ((size_t)(hi - hifirst) == hinum) {
+      *out_tv = NULL;
+      return NULL;
+    }
+  } else {
+    hi = (const hashitem_T *)iter;
   }
+  *out_name = TV_DICT_HI2DI(hi)->di_key;
+  typval_T vartv;
+  tv_copy(&TV_DICT_HI2DI(hi)->di_tv, &vartv);
   typval_T *tv_copy_ptr = xmalloc(sizeof(typval_T));
   *tv_copy_ptr = vartv;
   *out_tv = tv_copy_ptr;
-  return next;
+  while ((size_t)(++hi - hifirst) < hinum) {
+    if (!HASHITEM_EMPTY(hi) && (rs_var_flavour(hi->hi_key) & (var_flavour_T)flavour)) {
+      return hi;
+    }
+  }
+  return NULL;
 }
 
 // Get the v_type field of a typval_T pointer.
@@ -1397,18 +1375,17 @@ int nvim_shada_tv_get_type(const void *tv)
   return tv ? ((const typval_T *)tv)->v_type : 0;
 }
 
-// Pack a global variable entry via rs_shada_pack_entry.
-// Builds the ShadaEntry inline (C layout: inline typval_T), calls rs_shada_pack_entry,
-// then clears and frees tv (which was xmalloc'd by nvim_shada_var_shada_iter).
-// Returns SD_WRITE_SUCCESSFUL (1), SD_WRITE_FAILED (0), or SD_WRITE_IGN_ERROR (-1).
-int nvim_shada_pack_gvar_entry(PackerBuffer *packer, const char *name, void *tv,
-                               Timestamp ts)
+// Build a ShadaEntry for a global variable into *out (C layout: inline typval_T).
+// Copies tv into out->data.global_var.value, clears and frees tv (which was xmalloc'd
+// by nvim_shada_var_shada_iter). Caller must call nvim_shada_clear_gvar_entry_value
+// after rs_shada_pack_entry to release the copied typval. (plan b499a5d0 Phase 5)
+void nvim_shada_build_gvar_entry(const char *name, void *tv, Timestamp ts, ShadaEntry *out)
 {
   typval_T tgttv;
   tv_copy((typval_T *)tv, &tgttv);
   tv_clear((typval_T *)tv);
   xfree(tv);
-  ShadaEntry entry = {
+  *out = (ShadaEntry){
     .type = kSDItemVariable,
     .timestamp = ts,
     .data = {
@@ -1419,9 +1396,13 @@ int nvim_shada_pack_gvar_entry(PackerBuffer *packer, const char *name, void *tv,
     },
     .additional_data = NULL,
   };
-  int r = rs_shada_pack_entry(packer, &entry, 0);
-  tv_clear(&entry.data.global_var.value);
-  return r;
+}
+
+// Clear the inline typval_T of a global variable ShadaEntry built by nvim_shada_build_gvar_entry.
+// Must be called after rs_shada_pack_entry to release the copied typval. (plan b499a5d0 Phase 5)
+void nvim_shada_clear_gvar_entry_value(ShadaEntry *entry)
+{
+  tv_clear(&entry->data.global_var.value);
 }
 
 // =============================================================================

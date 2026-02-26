@@ -6062,7 +6062,7 @@ extern "C" {
     /// Iterate over shada-saveable global variables.
     /// flavour: bitmask of VAR_FLAVOUR_DEFAULT(1)|VAR_FLAVOUR_SESSION(2)|VAR_FLAVOUR_SHADA(4).
     /// On each call: *out_name set to variable name (static lifetime, do not free),
-    /// *out_tv set to a freshly xmalloc'd typval_T copy (must be passed to nvim_shada_pack_gvar_entry).
+    /// *out_tv set to a freshly xmalloc'd typval_T copy (must be passed to nvim_shada_build_gvar_entry).
     /// Returns next iter pointer (NULL when exhausted).
     fn nvim_shada_var_shada_iter(
         iter: *const c_void,
@@ -6072,14 +6072,17 @@ extern "C" {
     ) -> *const c_void;
     /// Get the v_type field of a typval_T pointer.
     fn nvim_shada_tv_get_type(tv: *const c_void) -> c_int;
-    /// Pack a global variable entry. Builds ShadaEntry inline in C (needed for inline typval_T
-    /// layout), calls rs_shada_pack_entry, then clears+frees tv.
-    fn nvim_shada_pack_gvar_entry(
-        packer: *mut ShadaPackerBuffer,
+    /// Build a ShadaEntry for a global variable into *out (C layout: inline typval_T).
+    /// Copies and consumes tv (clears+frees the xmalloc'd pointer).
+    /// Caller must call nvim_shada_clear_gvar_entry_value after rs_shada_pack_entry.
+    fn nvim_shada_build_gvar_entry(
         name: *const c_char,
         tv: *mut c_void,
         ts: Timestamp,
-    ) -> c_int;
+        out: *mut ShadaEntry,
+    );
+    /// Clear the inline typval_T of a global variable ShadaEntry (after packing).
+    fn nvim_shada_clear_gvar_entry_value(entry: *mut ShadaEntry);
 }
 
 /// Encode registers to a ShaDa-format string.
@@ -6216,8 +6219,11 @@ pub unsafe extern "C" fn rs_shada_encode_gvars() -> NvimString {
         // tv is non-null when name is non-null
         let vtype = nvim_shada_tv_get_type(tv);
         if vtype != VAR_FUNC && vtype != VAR_PARTIAL {
-            // nvim_shada_pack_gvar_entry copies tv, clears it, and frees the pointer
-            let r = nvim_shada_pack_gvar_entry(packer, name, tv, cur_timestamp);
+            // Build the ShadaEntry in C (inline typval_T layout), then pack, then clear.
+            let mut entry = ShadaEntry::default();
+            nvim_shada_build_gvar_entry(name, tv, cur_timestamp, &raw mut entry);
+            let r = rs_shada_pack_entry(packer, &raw const entry, 0);
+            nvim_shada_clear_gvar_entry_value(&raw mut entry);
             assert!(r != SD_WRITE_FAILED, "shada_encode_gvars: pack failed");
         } else {
             // Free the typval without packing it (we skip func/partial types)
@@ -6320,8 +6326,11 @@ pub unsafe extern "C" fn rs_shada_pack_all_gvars(
             }
         }
 
-        // Pack the variable entry (nvim_shada_pack_gvar_entry clears and frees tv).
-        let spe_ret = nvim_shada_pack_gvar_entry(packer, name, tv, cur_timestamp);
+        // Build the ShadaEntry in C (inline typval_T layout), then pack, then clear.
+        let mut gvar_entry = ShadaEntry::default();
+        nvim_shada_build_gvar_entry(name, tv, cur_timestamp, &raw mut gvar_entry);
+        let spe_ret = rs_shada_pack_entry(packer, &raw const gvar_entry, 0);
+        nvim_shada_clear_gvar_entry_value(&raw mut gvar_entry);
         if spe_ret == SD_WRITE_FAILED {
             return SD_WRITE_FAILED;
         }
