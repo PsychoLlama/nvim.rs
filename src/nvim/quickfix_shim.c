@@ -2143,38 +2143,13 @@ static qf_info_T *qf_cmd_get_or_alloc_stack(const exarg_T *eap, win_T **pwinp)
 }
 
 
+extern void rs_copy_loclist_stack(void *from, void *to);
+
 // Copy the location list stack 'from' window to 'to' window.
 void copy_loclist_stack(win_T *from, win_T *to)
   FUNC_ATTR_NONNULL_ALL
 {
-  // When copying from a location list window, copy the referenced
-  // location list. For other windows, copy the location list for
-  // that window.
-  qf_info_T *qi = IS_LL_WINDOW(from) ? from->w_llist_ref : from->w_llist;
-
-  if (qi == NULL) {                 // no location list to copy
-    return;
-  }
-
-  // allocate a new location list, set size of stack to 'from' window value
-  to->w_llist = qf_alloc_stack(QFLT_LOCATION, (int)from->w_p_lhi);
-  // set 'to' lhi to reflect new value
-  to->w_p_lhi = to->w_llist->qf_maxcount;
-
-  to->w_llist->qf_listcount = qi->qf_listcount;
-
-  // Copy the location lists one at a time
-  for (int idx = 0; idx < qi->qf_listcount; idx++) {
-    to->w_llist->qf_curlist = idx;
-
-    if (rs_copy_loclist(qf_get_list(qi, idx),
-                        qf_get_list(to->w_llist, idx)) == FAIL) {
-      qf_free_all(to);
-      return;
-    }
-  }
-
-  to->w_llist->qf_curlist = qi->qf_curlist;  // current list
+  rs_copy_loclist_stack((void *)from, (void *)to);
 }
 
 /// Also sets the b_has_qf_entry flag.
@@ -3068,160 +3043,197 @@ int grep_internal(cmdidx_T cmdidx)
 }
 
 
+// Phase 7: C accessor wrappers needed by rs_ex_make / rs_make_get_fullcmd / rs_get_mef_name
+
+// Global option accessors
+const char *nvim_get_p_shq(void) { return p_shq; }
+const char *nvim_get_p_sp(void) { return p_sp; }
+const char *nvim_get_p_mef(void) { return p_mef; }
+const char *nvim_get_p_efm(void) { return p_efm; }
+const char *nvim_get_p_menc(void) { return p_menc; }
+const char *nvim_get_p_gefm(void) { return p_gefm; }
+const char *nvim_get_p_ef(void) { return p_ef; }
+
+// curbuf option accessors
+const char *nvim_curbuf_get_b_p_menc(void) { return curbuf->b_p_menc; }
+const char *nvim_curbuf_get_b_p_gefm(void) { return curbuf->b_p_gefm; }
+const char *nvim_curbuf_get_b_fname(void) { return curbuf->b_fname; }
+
+// Shell/message helpers
+void nvim_append_redir(char *buf, size_t buflen, const char *opt, const char *name) { append_redir(buf, buflen, opt, name); }
+void nvim_msg_puts_colon_bang(void) { msg_puts(":!"); }
+void nvim_msg_outtrans_cmd(const char *cmd) { msg_outtrans(cmd, 0, false); }
+
+// autowrite, shell, remove
+void nvim_autowrite_all(void) { autowrite_all(); }
+void nvim_do_shell(const char *cmd) { do_shell(cmd, 0); }
+
+// vim_tempname wrapper
+char *nvim_vim_tempname(void) { return vim_tempname(); }
+
+// OS helpers for get_mef_name
+int nvim_os_get_pid(void) { return (int)os_get_pid(); }
+bool nvim_os_fileinfo_link_exists(const char *name) { FileInfo fi; return os_fileinfo_link(name, &fi); }
+void nvim_emsg_notmp(void) { emsg(_(e_notmp)); }
+
+// curlist id accessor for quickfix list change tracking
+unsigned nvim_qf_get_curlist_id(const void *qi_void)
+{
+  const qf_info_T *qi = (const qf_info_T *)qi_void;
+  return qi->qf_lists[qi->qf_curlist].qf_id;
+}
+
+// eap line setters for cbuffer_process_args
+// nvim_eap_set_line1, nvim_eap_set_line2 already declared in ex_docmd.c
+// nvim_win_get_p_lhi returns int (OptInt) -- already in lifecycle/window module
+
+// win_T lhi (p_lhi) setter for copy_loclist_stack
+void nvim_win_set_p_lhi(void *win, int v) { ((win_T *)win)->w_p_lhi = (OptInt)v; }
+
+// eap cmdlinep accessor (for qf_cmdtitle)
+char *nvim_eap_get_cmdlinep_deref_make(const void *eap) { return *((const exarg_T *)eap)->cmdlinep; }
+
+// set_option_direct wrapper for :cfile
+void nvim_set_option_direct_ef(const char *val) { set_option_direct(kOptErrorfile, CSTR_AS_OPTVAL(val), 0, 0); }
+
+// buf accessors for cbuffer_process_args
+// Note: nvim_buf_has_ml_mfp in memline_shim.c takes buf_T* (not void*);
+//       nvim_buf_get_ml_line_count in memline_shim.c takes buf_T*;
+//       nvim_buf_get_sfname in buffer.c takes buf_T*.
+// Use void* variants here so Rust can call them without needing buf_T layout.
+bool nvim_buf_has_ml_mfp_void(const void *buf) { return ((const buf_T *)buf)->b_ml.ml_mfp != NULL; }
+linenr_T nvim_buf_get_ml_line_count_void(const void *buf) { return ((const buf_T *)buf)->b_ml.ml_line_count; }
+const char *nvim_buf_get_sfname_void(const void *buf) { return ((const buf_T *)buf)->b_sfname; }
+void *nvim_buflist_findnr_ptr(int nr) { return (void *)buflist_findnr(nr); }
+void *nvim_curbuf_ptr(void) { return (void *)curbuf; }
+const char *nvim_skipdigits_str(const char *str) { return (const char *)skipdigits(str); }
+void nvim_emsg_invarg(void) { emsg(_(e_invarg)); }
+void nvim_emsg_buf_not_loaded(void) { emsg(_(e_buffer_is_not_loaded)); }
+
+// eval_expr / tv_free wrappers for ex_cexpr
+void *nvim_eval_expr(const void *arg_ptr, void *eap) { return (void *)eval_expr((char *)arg_ptr, (exarg_T *)eap); }
+// nvim_tv_get_type: already defined in eval/typval.h (takes const typval_T*)
+// nvim_tv_free: already defined in eval_shim.c (takes typval_T*)
+// Use void* wrappers with different names to avoid conflicts.
+int nvim_tv_get_type_void(const void *tv) { return ((const typval_T *)tv)->v_type; }
+const char *nvim_tv_get_vval_string(const void *tv) { return ((const typval_T *)tv)->vval.v_string; }
+bool nvim_tv_is_list(const void *tv) { return ((const typval_T *)tv)->v_type == VAR_LIST; }
+void nvim_tv_free_void(void *tv) { tv_free((typval_T *)tv); }
+void nvim_emsg_e777(void) { emsg(_("E777: String or List expected")); }
+
+// QuickFixCmdPre/Post autocmd wrappers for ex_make cluster
+// Returns true if autocmd fired and aborting() is false (OK to continue),
+// false if we should abort.
+bool nvim_qf_apply_autocmd_pre(const char *au_name)
+{
+  if (au_name == NULL) {
+    return true;
+  }
+  if (apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name, curbuf->b_fname, true, curbuf)) {
+    if (aborting()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Apply QuickFixCmdPre with explicit buffer fname (for :cfile which passes NULL).
+bool nvim_qf_apply_autocmd_pre_null(const char *au_name)
+{
+  if (au_name == NULL) {
+    return true;
+  }
+  if (apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name, NULL, false, curbuf)) {
+    if (aborting()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void nvim_qf_apply_autocmd_post(const char *au_name)
+{
+  if (au_name != NULL) {
+    apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, curbuf->b_fname, true, curbuf);
+  }
+}
+
+void nvim_qf_apply_autocmd_post_null(const char *au_name)
+{
+  if (au_name != NULL) {
+    apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, NULL, false, curbuf);
+  }
+}
+
+// Returns true if curbuf changed during autocmd post (for ex_cbuffer curbuf tracking)
+bool nvim_qf_apply_autocmd_post_track(const char *au_name)
+{
+  if (au_name == NULL) {
+    return false;
+  }
+  const buf_T *const old = curbuf;
+  apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, curbuf->b_fname, true, curbuf);
+  return curbuf != old;
+}
+
+// IObuff/IOSIZE for cbuffer title formatting
+// Note: nvim_qf_get_iobuff already defined above (returns char*).
+void nvim_qf_snprintf_iobuff(const char *title, const char *sfname)
+{
+  vim_snprintf(IObuff, IOSIZE, "%s (%s)", title, sfname);
+}
+
+// GET_LOC_LIST wrapper
+void *nvim_win_get_loclist_ptr(const void *wp) { return (void *)GET_LOC_LIST((const win_T *)wp); }
+
+// copy_loclist_stack accessors
+void *nvim_win_get_llist_or_ref(const void *from_win)
+{
+  const win_T *from = (const win_T *)from_win;
+  return (void *)(IS_LL_WINDOW(from) ? from->w_llist_ref : from->w_llist);
+}
+void nvim_win_set_llist(void *to_win, void *qi) { ((win_T *)to_win)->w_llist = (qf_info_T *)qi; }
+// nvim_win_get_p_lhi already defined at line 1121 (returns int).
+// nvim_win_set_p_lhi defined earlier in this file.
+int nvim_qi_get_listcount_qi(const void *qi) { return ((const qf_info_T *)qi)->qf_listcount; }
+void nvim_qi_set_listcount_qi(void *qi, int n) { ((qf_info_T *)qi)->qf_listcount = n; }
+int nvim_qi_get_curlist_qi(const void *qi) { return ((const qf_info_T *)qi)->qf_curlist; }
+void nvim_qi_set_curlist_qi(void *qi, int n) { ((qf_info_T *)qi)->qf_curlist = n; }
+void *nvim_qi_get_list_qi(void *qi, int idx) { return (void *)&((qf_info_T *)qi)->qf_lists[idx]; }
+int nvim_qi_get_maxcount_qi(const void *qi) { return ((const qf_info_T *)qi)->qf_maxcount; }
+void nvim_qf_free_all_win(void *to_win) { qf_free_all((win_T *)to_win); }
+
+// Extern declarations for Phase 7 Rust entry points
+extern void rs_ex_make(void *eap);
+extern void rs_ex_cfile(void *eap);
+extern void rs_ex_cbuffer(void *eap);
+extern void rs_ex_cexpr(void *eap);
+// rs_copy_loclist_stack declared earlier (before copy_loclist_stack)
+
 // Form the complete command line to invoke 'make'/'grep'. Quote the command
 // using 'shellquote' and append 'shellpipe'. Echo the fully formed command.
+// Now a thin wrapper; real implementation in Rust (rs_make_get_fullcmd).
+extern char *rs_make_get_fullcmd(const char *makecmd, const char *fname);
 static char *make_get_fullcmd(const char *makecmd, const char *fname)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
 {
-  size_t len = strlen(p_shq) * 2 + strlen(makecmd) + 1;
-  if (*p_sp != NUL) {
-    len += strlen(p_sp) + strlen(fname) + 3;
-  }
-  char *const cmd = xmalloc(len);
-  snprintf(cmd, len, "%s%s%s", p_shq, makecmd, p_shq);
-
-  // If 'shellpipe' empty: don't redirect to 'errorfile'.
-  if (*p_sp != NUL) {
-    append_redir(cmd, len, p_sp, fname);
-  }
-
-  // Display the fully formed command.  Output a newline if there's something
-  // else than the :make command that was typed (in which case the cursor is
-  // in column 0).
-  if (msg_col == 0) {
-    msg_didout = false;
-  }
-  msg_start();
-  msg_puts(":!");
-  msg_outtrans(cmd, 0, false);  // show what we are doing
-
-  return cmd;
+  return rs_make_get_fullcmd(makecmd, fname);
 }
 
 // Used for ":make", ":lmake", ":grep", ":lgrep", ":grepadd", and ":lgrepadd"
 void ex_make(exarg_T *eap)
 {
-  char *enc = (*curbuf->b_p_menc != NUL) ? curbuf->b_p_menc : p_menc;
-
-  // Redirect ":grep" to ":vimgrep" if 'grepprg' is "internal".
-  if (grep_internal(eap->cmdidx)) {
-    rs_ex_vimgrep(eap);
-    return;
-  }
-
-  char *const au_name = (char *)rs_make_get_auname(eap->cmdidx);
-  if (au_name != NULL && apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name,
-                                        curbuf->b_fname, true, curbuf)) {
-    if (aborting()) {
-      return;
-    }
-  }
-
-  win_T *wp = NULL;
-  if (is_loclist_cmd(eap->cmdidx)) {
-    wp = curwin;
-  }
-
-  autowrite_all();
-  char *fname = get_mef_name();
-  if (fname == NULL) {
-    return;
-  }
-  os_remove(fname);  // in case it's not unique
-
-  char *const cmd = make_get_fullcmd(eap->arg, fname);
-
-  do_shell(cmd, 0);
-
-  incr_quickfix_busy();
-
-  char *errorformat = (eap->cmdidx != CMD_make && eap->cmdidx != CMD_lmake)
-                      ? *curbuf->b_p_gefm != NUL ? curbuf->b_p_gefm : p_gefm
-                      : p_efm;
-
-  bool newlist = eap->cmdidx != CMD_grepadd && eap->cmdidx != CMD_lgrepadd;
-
-  int res = qf_init(wp, fname, errorformat, newlist, qf_cmdtitle(*eap->cmdlinep), enc);
-
-  qf_info_T *qi = ql_info;
-  assert(qi != NULL);
-  if (wp != NULL) {
-    qi = GET_LOC_LIST(wp);
-    if (qi == NULL) {
-      goto cleanup;
-    }
-  }
-  if (res >= 0) {
-    qf_list_changed(qf_get_curlist(qi));
-  }
-  // Remember the current quickfix list identifier, so that we can
-  // check for autocommands changing the current quickfix list.
-  unsigned save_qfid = qf_get_curlist(qi)->qf_id;
-  if (au_name != NULL) {
-    apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, curbuf->b_fname, true,
-                   curbuf);
-  }
-  if (res > 0 && !eap->forceit && rs_qflist_valid((void *)wp, save_qfid)) {
-    // display the first error
-    qf_jump_first(qi, save_qfid, false);
-  }
-
-cleanup:
-  decr_quickfix_busy();
-  os_remove(fname);
-  xfree(fname);
-  xfree(cmd);
+  rs_ex_make((void *)eap);
 }
 
 // Return the name for the errorfile, in allocated memory.
 // Find a new unique name when 'makeef' contains "##".
 // Returns NULL for error.
+// Now a thin wrapper; real implementation in Rust (rs_get_mef_name).
+extern char *rs_get_mef_name(void);
 static char *get_mef_name(void)
 {
-  char *name;
-  static int start = -1;
-  static int off = 0;
-
-  if (*p_mef == NUL) {
-    name = vim_tempname();
-    if (name == NULL) {
-      emsg(_(e_notmp));
-    }
-    return name;
-  }
-
-  char *p;
-
-  for (p = p_mef; *p; p++) {
-    if (p[0] == '#' && p[1] == '#') {
-      break;
-    }
-  }
-
-  if (*p == NUL) {
-    return xstrdup(p_mef);
-  }
-
-  // Keep trying until the name doesn't exist yet.
-  while (true) {
-    if (start == -1) {
-      start = (int)os_get_pid();
-    } else {
-      off += 19;
-    }
-    name = xmalloc(strlen(p_mef) + 30);
-    STRCPY(name, p_mef);
-    snprintf(name + (p - p_mef), strlen(name), "%d%d", start, off);
-    strcat(name, p + 2);
-    // Don't accept a symbolic link, it's a security risk.
-    FileInfo file_info;
-    bool file_or_link_found = os_fileinfo_link(name, &file_info);
-    if (!file_or_link_found) {
-      break;
-    }
-    xfree(name);
-  }
-  return name;
+  return rs_get_mef_name();
 }
 
 /// Returns the number of entries in the current quickfix/location list.
@@ -3370,63 +3382,7 @@ void nvim_os_breakcheck_qf(void) { os_breakcheck(); }
 // ":lfile"/":lgetfile"/":laddfile" commands.
 void ex_cfile(exarg_T *eap)
 {
-  win_T *wp = NULL;
-  qf_info_T *qi = ql_info;
-  assert(qi != NULL);
-
-  char *au_name = (char *)rs_cfile_get_auname(eap->cmdidx);
-  if (au_name != NULL
-      && apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name, NULL, false, curbuf)) {
-    if (aborting()) {
-      return;
-    }
-  }
-  if (*eap->arg != NUL) {
-    set_option_direct(kOptErrorfile, CSTR_AS_OPTVAL(eap->arg), 0, 0);
-  }
-
-  char *enc = (*curbuf->b_p_menc != NUL) ? curbuf->b_p_menc : p_menc;
-
-  if (is_loclist_cmd(eap->cmdidx)) {
-    wp = curwin;
-  }
-
-  incr_quickfix_busy();
-
-  // This function is used by the :cfile, :cgetfile and :caddfile
-  // commands.
-  // :cfile always creates a new quickfix list and may jump to the
-  // first error.
-  // :cgetfile creates a new quickfix list but doesn't jump to the
-  // first error.
-  // :caddfile adds to an existing quickfix list. If there is no
-  // quickfix list then a new list is created.
-  int res = qf_init(wp, p_ef, p_efm, (eap->cmdidx != CMD_caddfile
-                                      && eap->cmdidx != CMD_laddfile),
-                    qf_cmdtitle(*eap->cmdlinep), enc);
-  if (wp != NULL) {
-    qi = GET_LOC_LIST(wp);
-    if (qi == NULL) {
-      decr_quickfix_busy();
-      return;
-    }
-  }
-  if (res >= 0) {
-    qf_list_changed(qf_get_curlist(qi));
-  }
-  unsigned save_qfid = qf_get_curlist(qi)->qf_id;
-  if (au_name != NULL) {
-    apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, NULL, false, curbuf);
-  }
-  // Jump to the first error for a new list and if autocmds didn't free the
-  // list.
-  if (res > 0 && (eap->cmdidx == CMD_cfile || eap->cmdidx == CMD_lfile)
-      && rs_qflist_valid((void *)wp, save_qfid)) {
-    // display the first error
-    qf_jump_first(qi, save_qfid, eap->forceit);
-  }
-
-  decr_quickfix_busy();
+  rs_ex_cfile((void *)eap);
 }
 
 
@@ -4760,44 +4716,6 @@ bool set_ref_in_quickfix(int copyID)
 
 
 /// :cgetbuffer, :lbuffer, :laddbuffer, :lgetbuffer Ex commands.
-static int cbuffer_process_args(exarg_T *eap, buf_T **bufp, linenr_T *line1, linenr_T *line2)
-{
-  buf_T *buf = NULL;
-
-  if (*eap->arg == NUL) {
-    buf = curbuf;
-  } else if (*skipwhite(skipdigits(eap->arg)) == NUL) {
-    buf = buflist_findnr(atoi(eap->arg));
-  }
-
-  if (buf == NULL) {
-    emsg(_(e_invarg));
-    return FAIL;
-  }
-
-  if (buf->b_ml.ml_mfp == NULL) {
-    emsg(_(e_buffer_is_not_loaded));
-    return FAIL;
-  }
-
-  if (eap->addr_count == 0) {
-    eap->line1 = 1;
-    eap->line2 = buf->b_ml.ml_line_count;
-  }
-
-  if (eap->line1 < 1 || eap->line1 > buf->b_ml.ml_line_count
-      || eap->line2 < 1 || eap->line2 > buf->b_ml.ml_line_count) {
-    emsg(_(e_invrange));
-    return FAIL;
-  }
-
-  *line1 = eap->line1;
-  *line2 = eap->line2;
-  *bufp = buf;
-
-  return OK;
-}
-
 // ":[range]cbuffer [bufnr]" command.
 // ":[range]caddbuffer [bufnr]" command.
 // ":[range]cgetbuffer [bufnr]" command.
@@ -4806,125 +4724,14 @@ static int cbuffer_process_args(exarg_T *eap, buf_T **bufp, linenr_T *line1, lin
 // ":[range]lgetbuffer [bufnr]" command.
 void ex_cbuffer(exarg_T *eap)
 {
-  char *au_name = (char *)rs_cbuffer_get_auname(eap->cmdidx);
-  if (au_name != NULL && apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name,
-                                        curbuf->b_fname, true, curbuf)) {
-    if (aborting()) {
-      return;
-    }
-  }
-
-  // Must come after autocommands.
-  win_T *wp = NULL;
-  qf_info_T *qi = qf_cmd_get_or_alloc_stack(eap, &wp);
-
-  buf_T *buf = NULL;
-  linenr_T line1;
-  linenr_T line2;
-  if (cbuffer_process_args(eap, &buf, &line1, &line2) == FAIL) {
-    return;
-  }
-
-  char *qf_title = qf_cmdtitle(*eap->cmdlinep);
-
-  if (buf->b_sfname) {
-    vim_snprintf(IObuff, IOSIZE, "%s (%s)", qf_title, buf->b_sfname);
-    qf_title = IObuff;
-  }
-
-  incr_quickfix_busy();
-
-  int res = rs_qf_init_ext(qi, qi->qf_curlist, NULL, buf, NULL, p_efm,
-                        (eap->cmdidx != CMD_caddbuffer
-                         && eap->cmdidx != CMD_laddbuffer),
-                        eap->line1, eap->line2, qf_title, NULL);
-  if (rs_qf_stack_empty(qi)) {
-    decr_quickfix_busy();
-    return;
-  }
-  if (res >= 0) {
-    qf_list_changed(qf_get_curlist(qi));
-  }
-  // Remember the current quickfix list identifier, so that we can
-  // check for autocommands changing the current quickfix list.
-  unsigned save_qfid = qf_get_curlist(qi)->qf_id;
-  if (au_name != NULL) {
-    const buf_T *const curbuf_old = curbuf;
-    apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, curbuf->b_fname, true, curbuf);
-    if (curbuf != curbuf_old) {
-      // Autocommands changed buffer, don't jump now, "qi" may
-      // be invalid.
-      res = 0;
-    }
-  }
-  // Jump to the first error for new list and if autocmds didn't
-  // free the list.
-  if (res > 0 && (eap->cmdidx == CMD_cbuffer || eap->cmdidx == CMD_lbuffer)
-      && rs_qflist_valid((void *)wp, save_qfid)) {
-    // display the first error
-    qf_jump_first(qi, save_qfid, eap->forceit);
-  }
-
-  decr_quickfix_busy();
+  rs_ex_cbuffer((void *)eap);
 }
 
 
 /// ":lexpr {expr}", ":lgetexpr {expr}", ":laddexpr {expr}" command.
 void ex_cexpr(exarg_T *eap)
 {
-  char *au_name = (char *)rs_cexpr_get_auname(eap->cmdidx);
-  if (au_name != NULL && apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name,
-                                        curbuf->b_fname, true, curbuf)) {
-    if (aborting()) {
-      return;
-    }
-  }
-
-  win_T *wp = NULL;
-  qf_info_T *qi = qf_cmd_get_or_alloc_stack(eap, &wp);
-
-  // Evaluate the expression.  When the result is a string or a list we can
-  // use it to fill the errorlist.
-  typval_T *tv = eval_expr(eap->arg, eap);
-  if (tv == NULL) {
-    return;
-  }
-
-  if ((tv->v_type == VAR_STRING && tv->vval.v_string != NULL)
-      || tv->v_type == VAR_LIST) {
-    incr_quickfix_busy();
-    int res = rs_qf_init_ext(qi, qi->qf_curlist, NULL, NULL, tv, p_efm,
-                          (eap->cmdidx != CMD_caddexpr
-                           && eap->cmdidx != CMD_laddexpr),
-                          0, 0,
-                          qf_cmdtitle(*eap->cmdlinep), NULL);
-    if (rs_qf_stack_empty(qi)) {
-      decr_quickfix_busy();
-      goto cleanup;
-    }
-    if (res >= 0) {
-      qf_list_changed(qf_get_curlist(qi));
-    }
-    // Remember the current quickfix list identifier, so that we can
-    // check for autocommands changing the current quickfix list.
-    unsigned save_qfid = qf_get_curlist(qi)->qf_id;
-    if (au_name != NULL) {
-      apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, curbuf->b_fname, true, curbuf);
-    }
-    // Jump to the first error for a new list and if autocmds didn't
-    // free the list.
-    if (res > 0
-        && (eap->cmdidx == CMD_cexpr || eap->cmdidx == CMD_lexpr)
-        && rs_qflist_valid((void *)wp, save_qfid)) {
-      // display the first error
-      qf_jump_first(qi, save_qfid, eap->forceit);
-    }
-    decr_quickfix_busy();
-  } else {
-    emsg(_("E777: String or List expected"));
-  }
-cleanup:
-  tv_free(tv);
+  rs_ex_cexpr((void *)eap);
 }
 
 // Get the location list for ":lhelpgrep"

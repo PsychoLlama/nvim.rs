@@ -21,6 +21,7 @@ pub mod lifecycle;
 pub mod list;
 pub mod listdo;
 pub mod loclist;
+pub mod make;
 pub mod navigate;
 pub mod parse;
 pub mod stack;
