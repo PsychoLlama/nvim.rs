@@ -1976,7 +1976,7 @@ extern "C" {
     fn nvim_qf_set_directory(qfl: QfListHandleMut, dir: *mut c_char);
     fn nvim_qf_get_currfile(qfl: QfListHandle) -> *const c_char;
     fn nvim_qf_set_currfile(qfl: QfListHandleMut, file: *mut c_char);
-    fn nvim_qf_get_fnum(qfl: QfListHandleMut, directory: *mut c_char, fname: *mut c_char) -> c_int;
+    // nvim_qf_get_fnum removed: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5)
 
     fn nvim_qf_get_multiline(qfl: QfListHandle) -> bool;
     fn nvim_qf_set_multiline(qfl: QfListHandleMut, multiline: bool);
@@ -2070,6 +2070,20 @@ extern "C" {
     fn nvim_qf_get_curwin() -> *mut c_void;
     // nvim_qf_win_get_handle already declared above at line 102
 
+    // Phase 10 Pass 10 Phase 5: qf_get_fnum accessors
+    fn nvim_qf_fnum_cache_check(bufname: *const c_char) -> *mut c_void;
+    fn nvim_qf_fnum_cache_update(bufname: *const c_char, buf: *mut c_void);
+    fn nvim_qf_buflist_new(bufname: *mut c_char) -> *mut c_void;
+    fn nvim_qf_buf_fnum_from_ptr(buf: *const c_void) -> c_int;
+    fn nvim_qf_buf_set_has_qf_entry(buf: *mut c_void, is_qf_list: bool);
+    fn nvim_qf_vim_is_abs_name(fname: *const c_char) -> bool;
+    fn nvim_qf_concat_fnames(dir: *const c_char, fname: *const c_char) -> *mut c_char;
+    fn nvim_qf_is_qf_list(qfl: *const c_void) -> bool;
+    fn nvim_qf_clear_fnum_cache();
+    fn nvim_qf_os_path_exists(path: *const c_char) -> bool;
+    fn nvim_qf_xfree_buf(ptr: *mut c_void);
+    fn nvim_qf_xstrdup(s: *const c_char) -> *mut c_char;
+
     // Phase 8: Ex Commands and API Functions accessors
     // (nvim_qf_get_title and nvim_qf_get_changedtick already declared above)
     fn nvim_qf_is_qf_stack(qi: QfInfoHandle) -> bool;
@@ -2103,11 +2117,7 @@ extern "C" {
         user_data: *const c_void,
     );
     fn nvim_qf_mark_buf_has_entry(bufnum: c_int, is_location_list: bool);
-    fn nvim_qf_get_fnum_for_entry(
-        qfl: QfListHandleMut,
-        directory: *mut c_char,
-        fname: *mut c_char,
-    ) -> c_int;
+    // nvim_qf_get_fnum_for_entry removed: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5)
     fn nvim_qf_fix_fname(fname: *const c_char, bufnum: c_int) -> *mut c_char;
     fn nvim_qf_is_printc(c: c_int) -> bool;
 
@@ -2646,7 +2656,7 @@ pub unsafe extern "C" fn rs_qf_add_entry(
         let is_location_list = rs_qf_get_qfl_type(qfl) == qfl_types::QFLT_LOCATION;
         nvim_qf_mark_buf_has_entry(fnum, is_location_list);
     } else {
-        fnum = nvim_qf_get_fnum_for_entry(qfl, dir, fname.cast_mut());
+        fnum = rs_qf_get_fnum(qfl, dir, fname.cast_mut());
         nvim_qfline_set_fnum(qfp, fnum);
     }
 
@@ -2982,7 +2992,7 @@ pub unsafe extern "C" fn rs_qf_guess_filepath(
 ///
 /// Resolves the file path using the given directory (or the directory stack
 /// if the path is relative) and returns the buffer number. Creates the
-/// buffer if it doesn't exist.
+/// buffer if it doesn't exist. Uses a single-entry cache for speed.
 ///
 /// Returns the buffer number, or 0 if the file couldn't be found/created.
 ///
@@ -3000,7 +3010,65 @@ pub unsafe extern "C" fn rs_qf_get_fnum(
     if qfl.is_null() {
         return 0;
     }
-    nvim_qf_get_fnum(qfl, directory, fname)
+    // No file name: nothing to resolve.
+    if fname.is_null() || *fname == 0 {
+        return 0;
+    }
+
+    // Determine the effective buffer name.
+    // If directory is given and fname is not absolute, concatenate them.
+    let concat_ptr: *mut c_char = if !directory.is_null() && !nvim_qf_vim_is_abs_name(fname) {
+        let ptr = nvim_qf_concat_fnames(directory, fname);
+        // Verify the concatenated path exists; if not, guess via dir stack.
+        if nvim_qf_os_path_exists(ptr.cast_const()) {
+            ptr
+        } else {
+            nvim_qf_xfree_buf(ptr.cast());
+            let guessed = rs_qf_guess_filepath(qfl, fname);
+            if guessed.is_null() {
+                // No guess available; use fname as-is (xstrdup for owned allocation).
+                nvim_qf_xstrdup(fname)
+            } else {
+                nvim_qf_concat_fnames(guessed, fname)
+            }
+        }
+    } else {
+        std::ptr::null_mut()
+    };
+    let bufname: *mut c_char = if concat_ptr.is_null() {
+        fname
+    } else {
+        concat_ptr
+    };
+
+    // Check the single-entry cache.
+    let cached_buf = nvim_qf_fnum_cache_check(bufname.cast_const());
+    let buf: *mut c_void = if cached_buf.is_null() {
+        // Not in cache: create/find the buffer in the list.
+        let new_buf = nvim_qf_buflist_new(bufname);
+        nvim_qf_fnum_cache_update(bufname.cast_const(), new_buf);
+        // Free the concat_ptr (cache_update made a copy of bufname).
+        if !concat_ptr.is_null() {
+            nvim_qf_xfree_buf(concat_ptr.cast());
+        }
+        new_buf
+    } else {
+        // Cache hit: free the concat_ptr if we allocated one.
+        if !concat_ptr.is_null() {
+            nvim_qf_xfree_buf(concat_ptr.cast());
+        }
+        cached_buf
+    };
+
+    if buf.is_null() {
+        return 0;
+    }
+
+    // Mark the buffer as having a quickfix or location list entry.
+    let is_qf = nvim_qf_is_qf_list(qfl.cast_const());
+    nvim_qf_buf_set_has_qf_entry(buf, is_qf);
+
+    nvim_qf_buf_fnum_from_ptr(buf.cast_const())
 }
 
 /// Get the multiline flag from a quickfix list.

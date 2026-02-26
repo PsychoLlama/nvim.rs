@@ -2168,7 +2168,8 @@ extern "C" {
     // misc
     fn nvim_qf_line_breakcheck();
     fn nvim_qf_vim_isprintc(c: c_int) -> c_int;
-    fn nvim_qf_get_fnum_for_fields(qfl: *mut c_void, namebuf: *mut c_char, valid: bool) -> c_int;
+    fn nvim_qf_get_directory(qfl: *const c_void) -> *const c_char;
+    fn nvim_qf_get_currfile(qfl: *const c_void) -> *const c_char;
     fn nvim_qf_set_directory(qfl: *mut c_void, dir: *mut c_char);
     fn nvim_qf_set_currfile(qfl: *mut c_void, file: *mut c_char);
     fn nvim_qf_strmove(dst: *mut c_char, src: *const c_char);
@@ -2930,7 +2931,19 @@ unsafe fn qf_parse_multiline_pfx_rs(idx: c_char, qfl: *mut c_void, fields: *mut 
         // Update fnum if not set
         if nvim_qfline_get_fnum(qfprev_const) == 0 {
             let f = &*fields.cast::<crate::reader::QfAllFields>();
-            let fnum = nvim_qf_get_fnum_for_fields(qfl, f.namebuf, f.valid);
+            // Equivalent to C: qf_get_fnum(qfl, qfl->qf_directory,
+            //   *namebuf || qfl->qf_directory ? namebuf : qfl->qf_currfile && valid ? qfl->qf_currfile : NULL)
+            let dir = nvim_qf_get_directory(qfl.cast_const());
+            let currfile = nvim_qf_get_currfile(qfl.cast_const());
+            let namebuf_empty = f.namebuf.is_null() || *f.namebuf == 0;
+            let fname: *mut c_char = if !namebuf_empty || !dir.is_null() {
+                f.namebuf
+            } else if !currfile.is_null() && f.valid {
+                currfile.cast_mut()
+            } else {
+                std::ptr::null_mut()
+            };
+            let fnum = crate::rs_qf_get_fnum(qfl, dir.cast_mut(), fname);
             nvim_qfline_set_fnum(qfprev, fnum);
         }
     }

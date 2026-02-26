@@ -751,7 +751,7 @@ void nvim_qf_mark_buf_has_entry(int bufnum, bool is_location_list)
   }
 }
 
-int nvim_qf_get_fnum_for_entry(void *qfl_void, char *directory, char *fname) { return qfl_void == NULL ? 0 : qf_get_fnum((qf_list_T *)qfl_void, directory, fname); }
+// nvim_qf_get_fnum_for_entry deleted: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
 
 /// Returns allocated string or NULL (caller must free)
 char *nvim_qf_fix_fname(const char *fname, int bufnum)
@@ -857,7 +857,8 @@ void nvim_qf_shift_lists_down(void *qi_void)
 }
 
 
-static int qf_get_fnum(qf_list_T *qfl, char *directory, char *fname);
+// qf_get_fnum forward declaration deleted: migrated to Rust rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
+// nvim_qf_get_fnum deleted: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
 
 void *nvim_qf_get_dir_stack(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_dir_stack; }
 void nvim_qf_set_dir_stack(void *qfl_void, void *stack) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_dir_stack = (struct dir_stack_T *)stack; }
@@ -867,7 +868,6 @@ const char *nvim_qf_get_directory(const void *qfl_void) { return qfl_void == NUL
 void nvim_qf_set_directory(void *qfl_void, char *dir) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_directory = dir; }
 const char *nvim_qf_get_currfile(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_currfile; }
 void nvim_qf_set_currfile(void *qfl_void, char *file) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_currfile = file; }
-int nvim_qf_get_fnum(void *qfl_void, char *directory, char *fname) { return qfl_void == NULL ? 0 : qf_get_fnum((qf_list_T *)qfl_void, directory, fname); }
 
 // Phase 3 accessors: typval dict operations for property flag / index resolution functions
 
@@ -1853,21 +1853,7 @@ int nvim_qf_vim_isprintc(int c)
   return vim_isprintc(c);
 }
 
-/// Get the qf_get_fnum result for a qfl + namebuf/currfile/valid.
-/// Handles the complex conditional logic for directory + currfile selection.
-/// namebuf: the filename buffer from qffields; valid: whether the entry is valid.
-int nvim_qf_get_fnum_for_fields(void *qfl_void, char *namebuf, bool valid)
-{
-  if (qfl_void == NULL || namebuf == NULL) {
-    return 0;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  return qf_get_fnum(qfl, qfl->qf_directory,
-                     *namebuf || qfl->qf_directory
-                     ? namebuf
-                     : qfl->qf_currfile && valid
-                     ? qfl->qf_currfile : 0);
-}
+// nvim_qf_get_fnum_for_fields deleted: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
 
 /// Move memory: STRMOVE(dst, src) - move overlapping memory.
 void nvim_qf_strmove(char *dst, const char *src)
@@ -2258,63 +2244,7 @@ void copy_loclist_stack(win_T *from, win_T *to)
   rs_copy_loclist_stack((void *)from, (void *)to);
 }
 
-/// Also sets the b_has_qf_entry flag.
-static int qf_get_fnum(qf_list_T *qfl, char *directory, char *fname)
-{
-  char *ptr = NULL;
-  char *bufname;
-  buf_T *buf;
-  if (fname == NULL || *fname == NUL) {         // no file name
-    return 0;
-  }
-
-#ifdef BACKSLASH_IN_FILENAME
-  if (directory != NULL) {
-    slash_adjust(directory);
-  }
-  slash_adjust(fname);
-#endif
-  if (directory != NULL && !vim_isAbsName(fname)) {
-    ptr = concat_fnames(directory, fname, true);
-    // Here we check if the file really exists.
-    // This should normally be true, but if make works without
-    // "leaving directory"-messages we might have missed a
-    // directory change.
-    if (!os_path_exists(ptr)) {
-      xfree(ptr);
-      directory = (char *)rs_qf_guess_filepath(qfl, fname);
-      if (directory) {
-        ptr = concat_fnames(directory, fname, true);
-      } else {
-        ptr = xstrdup(fname);
-      }
-    }
-    // Use concatenated directory name and file name.
-    bufname = ptr;
-  } else {
-    bufname = fname;
-  }
-
-  if (qf_last_bufname != NULL
-      && strcmp(bufname, qf_last_bufname) == 0
-      && bufref_valid(&qf_last_bufref)) {
-    buf = qf_last_bufref.br_buf;
-    xfree(ptr);
-  } else {
-    xfree(qf_last_bufname);
-    buf = buflist_new(bufname, NULL, 0, BLN_NOOPT);
-    qf_last_bufname = (bufname == ptr) ? bufname : xstrdup(bufname);
-    set_bufref(&qf_last_bufref, buf);
-  }
-  if (buf == NULL) {
-    return 0;
-  }
-  buf->b_has_qf_entry =
-    IS_QF_LIST(qfl) ? BUF_HAS_QF_ENTRY : BUF_HAS_LL_ENTRY;
-  return buf->b_fnum;
-}
-
-
+// qf_get_fnum deleted: migrated to Rust rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
 
 // Find a window displaying a Vim help file in the current tab page.
 static win_T *qf_find_help_win(void)
@@ -2877,6 +2807,74 @@ bool qf_mark_adjust(buf_T *buf, win_T *wp, linenr_T line1, linenr_T line2, linen
                     linenr_T amount_after)
 {
   return rs_qf_mark_adjust_entry(buf, wp, line1, line2, amount, amount_after);
+}
+
+// Phase 10 Pass 10 Phase 5: C accessors for rs_qf_get_fnum
+
+/// Check the filename cache: if bufname matches and the bufref is still valid,
+/// return the cached buf_T pointer. Otherwise return NULL.
+void *nvim_qf_fnum_cache_check(const char *bufname)
+{
+  if (bufname == NULL) { return NULL; }
+  if (qf_last_bufname != NULL
+      && strcmp(bufname, qf_last_bufname) == 0
+      && bufref_valid(&qf_last_bufref)) {
+    return qf_last_bufref.br_buf;
+  }
+  return NULL;
+}
+
+/// Update the filename cache: free old name, store new buf.
+/// Always copies bufname (caller retains ownership of the passed pointer).
+void nvim_qf_fnum_cache_update(const char *bufname, void *buf)
+{
+  xfree(qf_last_bufname);
+  qf_last_bufname = xstrdup(bufname);
+  set_bufref(&qf_last_bufref, (buf_T *)buf);
+}
+
+/// Return buflist_new(bufname, NULL, 0, BLN_NOOPT).
+void *nvim_qf_buflist_new(char *bufname)
+{
+  return buflist_new(bufname, NULL, 0, BLN_NOOPT);
+}
+
+/// Return the fnum of a buf_T pointer.
+int nvim_qf_buf_fnum_from_ptr(const void *buf_void)
+{
+  return buf_void == NULL ? 0 : ((const buf_T *)buf_void)->b_fnum;
+}
+
+/// Set b_has_qf_entry on a buf_T (is_qf_list: true=QF, false=LL).
+void nvim_qf_buf_set_has_qf_entry(void *buf_void, bool is_qf_list)
+{
+  if (buf_void == NULL) { return; }
+  buf_T *buf = (buf_T *)buf_void;
+  buf->b_has_qf_entry = is_qf_list ? BUF_HAS_QF_ENTRY : BUF_HAS_LL_ENTRY;
+}
+
+/// Return vim_isAbsName(fname).
+bool nvim_qf_vim_is_abs_name(const char *fname)
+{
+  return fname != NULL && vim_isAbsName(fname);
+}
+
+/// Return concat_fnames(dir, fname, true) -- caller must free.
+char *nvim_qf_concat_fnames(const char *dir, const char *fname)
+{
+  return concat_fnames((char *)dir, (char *)fname, true);
+}
+
+/// Return IS_QF_LIST(qfl).
+bool nvim_qf_is_qf_list(const void *qfl_void)
+{
+  return qfl_void != NULL && IS_QF_LIST((const qf_list_T *)qfl_void);
+}
+
+/// Return nvim_qf_init_clear_last_bufname (XFREE_CLEAR(qf_last_bufname)).
+void nvim_qf_clear_fnum_cache(void)
+{
+  XFREE_CLEAR(qf_last_bufname);
 }
 
 // qf_set_cwindow_options: deleted -- migrated to nvim_qf_set_cwindow_options accessor
