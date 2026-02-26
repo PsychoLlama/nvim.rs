@@ -499,17 +499,7 @@ static const char e_empty_function_name[]
 /// Used for checking if local variables or arguments used in a lambda.
 bool *eval_lavars_used = NULL;
 
-/// Info used by a ":for" loop.
-typedef struct {
-  int fi_semicolon;             // true if ending in '; var]'
-  int fi_varcount;              // nr of variables in the list
-  listwatch_T fi_lw;            // keep an eye on the item used.
-  list_T *fi_list;              // list being used
-  int fi_bi;                    // index of blob
-  blob_T *fi_blob;              // blob being used
-  char *fi_string;            // copy of string being used
-  int fi_byte_idx;              // byte index in fi_string
-} forinfo_T;
+// forinfo_T typedef removed -- struct is now defined in Rust (for_loop.rs, Phase 2 pass 10).
 
 typedef enum {
   GLV_FAIL,
@@ -656,150 +646,7 @@ Object eval_foldtext(win_T *wp)
 // get_lval, clear_lval, set_var_lval: deleted -- Rust exports renamed to match C symbols (Phase 3 pass 9).
 // eval_for_line, next_for_item, free_for_info: deleted -- Rust exports renamed (Phase 3 pass 9).
 
-// =============================================================================
-// Accessors for eval_for_line / next_for_item / free_for_info (Rust)
-// All use void* to avoid exposing the local forinfo_T typedef in generated headers.
-// =============================================================================
-
-/// Allocate a zeroed forinfo_T and return as opaque pointer.
-void *nvim_forinfo_alloc(void)
-{
-  return xcalloc(1, sizeof(forinfo_T));
-}
-
-/// Free a forinfo_T struct (does NOT free list/blob/string refs).
-void nvim_forinfo_free(void *fi_void)
-{
-  xfree(fi_void);
-}
-
-/// Get fi->fi_varcount.
-int nvim_forinfo_get_varcount(void *fi_void)
-{
-  return ((forinfo_T *)fi_void)->fi_varcount;
-}
-
-/// Set fi->fi_varcount.
-void nvim_forinfo_set_varcount(void *fi_void, int n)
-{
-  ((forinfo_T *)fi_void)->fi_varcount = n;
-}
-
-/// Get fi->fi_semicolon.
-int nvim_forinfo_get_semicolon(void *fi_void)
-{
-  return ((forinfo_T *)fi_void)->fi_semicolon;
-}
-
-/// Set fi->fi_semicolon.
-void nvim_forinfo_set_semicolon(void *fi_void, int v)
-{
-  ((forinfo_T *)fi_void)->fi_semicolon = v;
-}
-
-/// Return true if fi->fi_list != NULL.
-bool nvim_forinfo_has_list(void *fi_void)
-{
-  return ((forinfo_T *)fi_void)->fi_list != NULL;
-}
-
-/// Return true if fi->fi_blob != NULL.
-bool nvim_forinfo_has_blob(void *fi_void)
-{
-  return ((forinfo_T *)fi_void)->fi_blob != NULL;
-}
-
-/// Return true if fi->fi_string != NULL.
-bool nvim_forinfo_has_string(void *fi_void)
-{
-  return ((forinfo_T *)fi_void)->fi_string != NULL;
-}
-
-/// Get fi->fi_bi.
-int nvim_forinfo_get_bi(void *fi_void)
-{
-  return ((forinfo_T *)fi_void)->fi_bi;
-}
-
-/// Set fi->fi_bi.
-void nvim_forinfo_set_bi(void *fi_void, int n)
-{
-  ((forinfo_T *)fi_void)->fi_bi = n;
-}
-
-/// Get fi->fi_byte_idx.
-int nvim_forinfo_get_byte_idx(void *fi_void)
-{
-  return ((forinfo_T *)fi_void)->fi_byte_idx;
-}
-
-/// Set fi->fi_byte_idx.
-void nvim_forinfo_set_byte_idx(void *fi_void, int n)
-{
-  ((forinfo_T *)fi_void)->fi_byte_idx = n;
-}
-
-/// Get fi->fi_string.
-char *nvim_forinfo_get_string(void *fi_void)
-{
-  return ((forinfo_T *)fi_void)->fi_string;
-}
-
-/// Set fi->fi_string (takes ownership).
-void nvim_forinfo_set_string(void *fi_void, char *s)
-{
-  ((forinfo_T *)fi_void)->fi_string = s;
-}
-
-/// Get fi->fi_list as void *.
-void *nvim_forinfo_get_list(void *fi_void)
-{
-  return ((forinfo_T *)fi_void)->fi_list;
-}
-
-/// Set fi->fi_list.
-void nvim_forinfo_set_list(void *fi_void, void *l)
-{
-  ((forinfo_T *)fi_void)->fi_list = (list_T *)l;
-}
-
-/// Get fi->fi_blob as void *.
-void *nvim_forinfo_get_blob(void *fi_void)
-{
-  return ((forinfo_T *)fi_void)->fi_blob;
-}
-
-/// Set fi->fi_blob.
-void nvim_forinfo_set_blob(void *fi_void, void *b)
-{
-  ((forinfo_T *)fi_void)->fi_blob = (blob_T *)b;
-}
-
-/// Get the lw_item (listitem_T *) from fi->fi_lw as void *.
-void *nvim_forinfo_get_lw_item(void *fi_void)
-{
-  return ((forinfo_T *)fi_void)->fi_lw.lw_item;
-}
-
-/// Set fi->fi_lw.lw_item.
-void nvim_forinfo_set_lw_item(void *fi_void, void *item)
-{
-  ((forinfo_T *)fi_void)->fi_lw.lw_item = (listitem_T *)item;
-}
-
-/// Call tv_list_watch_add(l, &fi->fi_lw).
-void nvim_forinfo_list_watch_add(void *fi_void, void *l)
-{
-  forinfo_T *fi = (forinfo_T *)fi_void;
-  tv_list_watch_add((list_T *)l, &fi->fi_lw);
-}
-
-/// Call tv_list_watch_remove(fi->fi_list, &fi->fi_lw).
-void nvim_forinfo_list_watch_remove(void *fi_void)
-{
-  forinfo_T *fi = (forinfo_T *)fi_void;
-  tv_list_watch_remove(fi->fi_list, &fi->fi_lw);
-}
+// nvim_forinfo_* accessors deleted -- ForInfo struct is now defined in Rust (for_loop.rs, Phase 2 pass 10).
 
 /// Get TV_LIST_ITEM_NEXT(fi->fi_list, item).
 listitem_T *nvim_list_item_next(list_T *l, listitem_T *item)
@@ -831,11 +678,6 @@ void nvim_tv_blob_copy(blob_T *from, typval_T *to)
   tv_blob_copy(from, to);
 }
 
-/// Call skip_var_list(arg, &varcount, &semicolon, nested).
-const char *nvim_skip_var_list(const char *arg, int *varcount, int *semicolon, bool nested)
-{
-  return skip_var_list(arg, varcount, semicolon, nested);
-}
 
 /// Call ex_let_vars with a number typval.
 bool nvim_ex_let_vars_number(char *arg, varnumber_T n, bool copy, int semicolon,

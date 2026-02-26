@@ -2,8 +2,8 @@
 //!
 //! Migrated from `eval_shim.c` Phase 3.
 //!
-//! The `forinfo_T` C struct is managed as an opaque heap allocation via C
-//! accessor functions (nvim_forinfo_*). Rust treats it as `*mut c_void`.
+//! The `ForInfo` struct is defined here in Rust with `#[repr(C)]` matching
+//! the layout of the old `forinfo_T` C typedef (deleted in Phase 2 pass 10).
 
 #![allow(clippy::too_many_lines)]
 #![allow(unsafe_op_in_unsafe_fn)]
@@ -27,59 +27,60 @@ const VAR_LIST: c_int = 4;
 const VAR_BLOB: c_int = 10;
 
 // =============================================================================
+// Struct definitions mirroring C layout
+// =============================================================================
+
+/// Mirrors C `listwatch_T` (struct listwatch_S) from eval/typval_defs.h.
+/// Two pointers: lw_item (listitem_T*) and lw_next (listwatch_T*).
+#[repr(C)]
+struct ListWatch {
+    lw_item: *mut c_void, // listitem_T*
+    lw_next: *mut c_void, // listwatch_T* (next watcher in linked list)
+}
+
+/// Mirrors the old `forinfo_T` typedef from eval_shim.c (now deleted).
+/// Rust now owns this struct -- no more opaque void* passing through accessors.
+///
+/// Layout (verified to match C forinfo_T):
+///   offset  0: fi_semicolon (int)
+///   offset  4: fi_varcount (int)
+///   offset  8: fi_lw (ListWatch, 16 bytes: two pointers)
+///   offset 24: fi_list (*mut c_void)
+///   offset 32: fi_bi (int)
+///   [4 bytes padding]
+///   offset 40: fi_blob (*mut c_void)
+///   offset 48: fi_string (*mut c_char)
+///   offset 56: fi_byte_idx (int)
+///   [4 bytes trailing padding]
+///   sizeof = 64
+#[repr(C)]
+struct ForInfo {
+    fi_semicolon: c_int,
+    fi_varcount: c_int,
+    fi_lw: ListWatch,
+    fi_list: *mut c_void, // list_T*
+    fi_bi: c_int,
+    // 4 bytes of C alignment padding inserted here by repr(C)
+    fi_blob: *mut c_void, // blob_T*
+    fi_string: *mut c_char,
+    fi_byte_idx: c_int,
+    // 4 bytes of trailing padding to bring sizeof to 64
+}
+
+// =============================================================================
 // C Extern Functions
 // =============================================================================
 
 extern "C" {
-    // forinfo_T accessors (all take void * to avoid exposing local typedef)
-    fn nvim_forinfo_alloc() -> *mut c_void;
-    fn nvim_forinfo_free(fi: *mut c_void);
-    fn nvim_forinfo_get_varcount(fi: *mut c_void) -> c_int;
-    fn nvim_forinfo_set_varcount(fi: *mut c_void, n: c_int);
-    fn nvim_forinfo_get_semicolon(fi: *mut c_void) -> c_int;
-    fn nvim_forinfo_set_semicolon(fi: *mut c_void, v: c_int);
-    fn nvim_forinfo_has_list(fi: *mut c_void) -> bool;
-    fn nvim_forinfo_has_blob(fi: *mut c_void) -> bool;
-    fn nvim_forinfo_has_string(fi: *mut c_void) -> bool;
-    fn nvim_forinfo_get_bi(fi: *mut c_void) -> c_int;
-    fn nvim_forinfo_set_bi(fi: *mut c_void, n: c_int);
-    fn nvim_forinfo_get_byte_idx(fi: *mut c_void) -> c_int;
-    fn nvim_forinfo_set_byte_idx(fi: *mut c_void, n: c_int);
-    fn nvim_forinfo_get_string(fi: *mut c_void) -> *mut c_char;
-    fn nvim_forinfo_set_string(fi: *mut c_void, s: *mut c_char);
-    fn nvim_forinfo_get_list(fi: *mut c_void) -> *mut c_void;
-    fn nvim_forinfo_set_list(fi: *mut c_void, l: *mut c_void);
-    fn nvim_forinfo_get_blob(fi: *mut c_void) -> *mut c_void;
-    fn nvim_forinfo_set_blob(fi: *mut c_void, b: *mut c_void);
-    fn nvim_forinfo_get_lw_item(fi: *mut c_void) -> *mut c_void;
-    fn nvim_forinfo_set_lw_item(fi: *mut c_void, item: *mut c_void);
-    fn nvim_forinfo_list_watch_add(fi: *mut c_void, l: *mut c_void);
-    fn nvim_forinfo_list_watch_remove(fi: *mut c_void);
-
-    // list/blob operations
-    fn nvim_list_item_next(l: *mut c_void, item: *mut c_void) -> *mut c_void;
-    fn nvim_tv_list_first(l: *mut c_void) -> *mut c_void;
-    fn nvim_tv_list_unref(l: *mut c_void);
-    fn nvim_tv_blob_unref(b: *mut c_void);
-    fn nvim_tv_blob_copy(from: *mut c_void, to: TypevalHandle);
-
-    // TV type / value accessors
-    fn nvim_tv_get_type(tv: TypevalHandle) -> c_int;
-    fn nvim_tv_get_list(tv: TypevalHandle) -> *mut c_void;
-    fn nvim_tv_get_blob(tv: TypevalHandle) -> *mut c_void;
-    fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
-    fn nvim_tv_set_vstring_owned(tv: TypevalHandle, s: *mut c_char);
-    fn tv_clear(tv: TypevalHandle);
-    fn nvim_blob_len(b: *const c_void) -> c_int;
-    fn nvim_blob_get(b: *const c_void, idx: c_int) -> c_int;
-
-    // skip_var_list / ex_let_vars
-    fn nvim_skip_var_list(
+    // skip_var_list / ex_let_vars (direct C calls, not through nvim_ wrappers)
+    fn skip_var_list(
         arg: *const c_char,
-        varcount: *mut c_int,
+        var_count: *mut c_int,
         semicolon: *mut c_int,
-        nested: bool,
+        silent: bool,
     ) -> *const c_char;
+
+    // ex_let_vars wrappers (kept as C thin wrappers -- construct typval_T in C)
     fn nvim_ex_let_vars_number(
         arg: *mut c_char,
         n: i64,
@@ -100,11 +101,32 @@ extern "C" {
         varcount: c_int,
     ) -> bool;
 
+    // tv_list_watch_add/remove (called directly with &fi.fi_lw)
+    fn tv_list_watch_add(l: *mut c_void, lw: *mut ListWatch);
+    fn tv_list_watch_remove(l: *mut c_void, lw: *mut ListWatch);
+
+    // list/blob operations
+    fn nvim_list_item_next(l: *mut c_void, item: *mut c_void) -> *mut c_void;
+    fn nvim_tv_list_first(l: *mut c_void) -> *mut c_void;
+    fn nvim_tv_list_unref(l: *mut c_void);
+    fn nvim_tv_blob_unref(b: *mut c_void);
+    fn nvim_tv_blob_copy(from: *mut c_void, to: TypevalHandle);
+
+    // TV type / value accessors
+    fn nvim_tv_get_type(tv: TypevalHandle) -> c_int;
+    fn nvim_tv_get_list(tv: TypevalHandle) -> *mut c_void;
+    fn nvim_tv_get_blob(tv: TypevalHandle) -> *mut c_void;
+    fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
+    fn nvim_tv_set_vstring_owned(tv: TypevalHandle, s: *mut c_char);
+    fn tv_clear(tv: TypevalHandle);
+    fn nvim_blob_len(b: *const c_void) -> c_int;
+    fn nvim_blob_get(b: *const c_void, idx: c_int) -> c_int;
+
     fn evalarg_get_flags(ea: EvalargHandle) -> c_int;
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn emsg(s: *const c_char) -> c_int;
 
-    // xmemdupz / xstrdup / xfree / xmalloc
+    // xmemdupz / xstrdup / xfree / xmalloc / xcalloc
     fn xmemdupz(src: *const c_void, len: usize) -> *mut c_char;
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut c_void);
@@ -149,6 +171,13 @@ unsafe fn get_byte(p: *const c_char) -> u8 {
     }
 }
 
+/// Allocate a zeroed ForInfo struct on the heap and return as *mut ForInfo.
+unsafe fn alloc_forinfo() -> *mut ForInfo {
+    let ptr = xmalloc(std::mem::size_of::<ForInfo>()) as *mut ForInfo;
+    ptr::write_bytes(ptr as *mut u8, 0, std::mem::size_of::<ForInfo>());
+    ptr
+}
+
 // =============================================================================
 // eval_for_line
 // =============================================================================
@@ -168,7 +197,7 @@ pub unsafe fn eval_for_line_impl(
     eap: ExargHandle,
     evalarg: EvalargHandle,
 ) -> *mut c_void {
-    let fi = nvim_forinfo_alloc();
+    let fi = alloc_forinfo();
     let skip = (evalarg_get_flags(evalarg) & EVAL_EVALUATE) == 0;
 
     // Default: there is an error.
@@ -176,12 +205,12 @@ pub unsafe fn eval_for_line_impl(
 
     let mut varcount: c_int = 0;
     let mut semicolon: c_int = 0;
-    let expr = nvim_skip_var_list(arg, &mut varcount, &mut semicolon, false);
-    nvim_forinfo_set_varcount(fi, varcount);
-    nvim_forinfo_set_semicolon(fi, semicolon);
+    let expr = skip_var_list(arg, &mut varcount, &mut semicolon, false);
+    (*fi).fi_varcount = varcount;
+    (*fi).fi_semicolon = semicolon;
 
     if expr.is_null() {
-        return fi;
+        return fi as *mut c_void;
     }
 
     let expr = skipwhite(expr);
@@ -192,7 +221,7 @@ pub unsafe fn eval_for_line_impl(
     let b2 = get_byte(expr.add(2));
     if b0 != b'i' || b1 != b'n' || !(b2 == 0 || nvim_ascii_iswhite(c_int::from(b2))) {
         emsg(E_MISSING_IN.as_ptr() as *const c_char);
-        return fi;
+        return fi as *mut c_void;
     }
 
     if skip {
@@ -212,33 +241,33 @@ pub unsafe fn eval_for_line_impl(
                     tv_clear(tv);
                 } else {
                     // No need to increment refcount, already set for list in tv
-                    nvim_forinfo_set_list(fi, l);
-                    nvim_forinfo_list_watch_add(fi, l);
+                    (*fi).fi_list = l;
+                    tv_list_watch_add(l, &mut (*fi).fi_lw);
                     let first = nvim_tv_list_first(l);
-                    nvim_forinfo_set_lw_item(fi, first);
+                    (*fi).fi_lw.lw_item = first;
                     // Don't call tv_clear: the list is now owned by fi
                 }
             } else if tv_type == VAR_BLOB {
-                nvim_forinfo_set_bi(fi, 0);
+                (*fi).fi_bi = 0;
                 let b = nvim_tv_get_blob(tv);
                 if !b.is_null() {
                     // Make a copy so iteration still works if blob is changed
                     let btv = alloc_typval();
                     nvim_tv_blob_copy(b, btv);
                     let blob_copy = nvim_tv_get_blob(btv);
-                    nvim_forinfo_set_blob(fi, blob_copy);
+                    (*fi).fi_blob = blob_copy;
                     free_typval(btv);
                 }
                 tv_clear(tv);
             } else if tv_type == VAR_STRING {
-                nvim_forinfo_set_byte_idx(fi, 0);
+                (*fi).fi_byte_idx = 0;
                 let s = nvim_tv_get_vstring(tv);
                 if s.is_null() {
                     let empty = xstrdup(c"".as_ptr());
-                    nvim_forinfo_set_string(fi, empty);
+                    (*fi).fi_string = empty;
                 } else {
                     // Take ownership of the string from tv
-                    nvim_forinfo_set_string(fi, s);
+                    (*fi).fi_string = s;
                     nvim_tv_set_vstring_owned(tv, ptr::null_mut());
                 }
                 tv_clear(tv);
@@ -259,7 +288,7 @@ pub unsafe fn eval_for_line_impl(
         nvim_emsg_skip_dec();
     }
 
-    fi
+    fi as *mut c_void
 }
 
 /// FFI export for eval_for_line.
@@ -285,43 +314,44 @@ pub unsafe extern "C" fn rs_eval_for_line(
 /// Returns `true` when a valid item was found, `false` when at end or error.
 ///
 /// # Safety
-/// - `fi_void` must be a valid `forinfo_T *` returned by `rs_eval_for_line`
+/// - `fi_void` must be a valid `ForInfo *` returned by `rs_eval_for_line`
 /// - `arg` must be a valid mutable C string (variable name(s))
 pub unsafe fn next_for_item_impl(fi_void: *mut c_void, arg: *mut c_char) -> bool {
-    let semicolon = nvim_forinfo_get_semicolon(fi_void);
-    let varcount = nvim_forinfo_get_varcount(fi_void);
+    let fi = fi_void as *mut ForInfo;
+    let semicolon = (*fi).fi_semicolon;
+    let varcount = (*fi).fi_varcount;
 
-    if nvim_forinfo_has_blob(fi_void) {
-        let blob = nvim_forinfo_get_blob(fi_void);
-        let bi = nvim_forinfo_get_bi(fi_void);
+    if !(*fi).fi_blob.is_null() {
+        let blob = (*fi).fi_blob;
+        let bi = (*fi).fi_bi;
         if bi >= nvim_blob_len(blob as *const c_void) {
             return false;
         }
         let byte_val = i64::from(nvim_blob_get(blob as *const c_void, bi));
-        nvim_forinfo_set_bi(fi_void, bi + 1);
+        (*fi).fi_bi = bi + 1;
         return nvim_ex_let_vars_number(arg, byte_val, true, semicolon, varcount);
     }
 
-    if nvim_forinfo_has_string(fi_void) {
-        let s = nvim_forinfo_get_string(fi_void);
-        let byte_idx = nvim_forinfo_get_byte_idx(fi_void);
+    if !(*fi).fi_string.is_null() {
+        let s = (*fi).fi_string;
+        let byte_idx = (*fi).fi_byte_idx;
         let len = utfc_ptr2len(s.add(byte_idx as usize));
         if len == 0 {
             return false;
         }
         let dup = xmemdupz(s.add(byte_idx as usize) as *const c_void, len as usize);
-        nvim_forinfo_set_byte_idx(fi_void, byte_idx + len);
+        (*fi).fi_byte_idx = byte_idx + len;
         return nvim_ex_let_vars_string_owned(arg, dup, semicolon, varcount);
     }
 
     // List iteration
-    let item = nvim_forinfo_get_lw_item(fi_void);
+    let item = (*fi).fi_lw.lw_item;
     if item.is_null() {
         return false;
     }
-    let list = nvim_forinfo_get_list(fi_void);
+    let list = (*fi).fi_list;
     let next = nvim_list_item_next(list, item);
-    nvim_forinfo_set_lw_item(fi_void, next);
+    (*fi).fi_lw.lw_item = next;
     nvim_ex_let_vars_list_item(arg, item, semicolon, varcount)
 }
 
@@ -341,25 +371,24 @@ pub unsafe extern "C" fn rs_next_for_item(fi_void: *mut c_void, arg: *mut c_char
 /// Free the structure used to store info used by `:for`.
 ///
 /// # Safety
-/// - `fi_void` must be a valid `forinfo_T *` or null
+/// - `fi_void` must be a valid `ForInfo *` or null
 pub unsafe fn free_for_info_impl(fi_void: *mut c_void) {
     if fi_void.is_null() {
         return;
     }
-    if nvim_forinfo_has_list(fi_void) {
-        nvim_forinfo_list_watch_remove(fi_void);
-        let l = nvim_forinfo_get_list(fi_void);
-        nvim_tv_list_unref(l);
-    } else if nvim_forinfo_has_blob(fi_void) {
-        let b = nvim_forinfo_get_blob(fi_void);
-        nvim_tv_blob_unref(b);
+    let fi = fi_void as *mut ForInfo;
+    if !(*fi).fi_list.is_null() {
+        tv_list_watch_remove((*fi).fi_list, &mut (*fi).fi_lw);
+        nvim_tv_list_unref((*fi).fi_list);
+    } else if !(*fi).fi_blob.is_null() {
+        nvim_tv_blob_unref((*fi).fi_blob);
     } else {
-        let s = nvim_forinfo_get_string(fi_void);
+        let s = (*fi).fi_string;
         if !s.is_null() {
             xfree(s as *mut c_void);
         }
     }
-    nvim_forinfo_free(fi_void);
+    xfree(fi_void);
 }
 
 /// FFI export for free_for_info.
