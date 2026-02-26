@@ -110,6 +110,15 @@ extern void rs_syn_store_bufstates(synstate_T *sp);
 extern void rs_syn_do_onoff_impl(exarg_T *eap, const char *name);
 extern void rs_syn_do_maybe_enable_impl(void);
 
+// Phase 11: keyword.rs Rust implementations for keyword_find and hash_insert_keyword
+extern keyentry_T *rs_syn_keyword_find(char *keyword, int use_ic);
+extern void rs_syn_hash_insert_keyword(const char *name_ic, int name_iclen,
+                                        int id, int inc_tag, int flags,
+                                        int conceal_char,
+                                        int16_t *cont_in_list_copy,
+                                        int16_t *next_list_copy,
+                                        int use_ic);
+
 // Phase 9.2: state_ops.rs Rust implementations
 extern void rs_syn_set_next_match_state(int idx, int col,
     int m_endpos_lnum, int m_endpos_col,
@@ -1428,12 +1437,7 @@ int nvim_syn_has_keywords_ic(void) { return syn_block != NULL && syn_block->b_ke
 
 keyentry_T *nvim_syn_keyword_find(char *keyword, int use_ic)
 {
-  if (syn_block == NULL) { return NULL; }
-  hashtab_T *ht = use_ic ? &syn_block->b_keywtab_ic : &syn_block->b_keywtab;
-  if (ht->ht_used == 0) { return NULL; }
-  hashitem_T *hi = hash_find(ht, keyword);
-  if (HASHITEM_EMPTY(hi)) { return NULL; }
-  return HI2KE(hi);
+  return rs_syn_keyword_find(keyword, use_ic);
 }
 
 char *nvim_syn_getcurline(void) { return syn_getcurline(); }
@@ -3059,29 +3063,9 @@ void nvim_syn_hash_insert_keyword(const char *name_ic, int name_iclen,
                                    int16_t *next_list_copy,
                                    int use_ic)
 {
-  keyentry_T *const kp = xmalloc(offsetof(keyentry_T, keyword) + (size_t)name_iclen + 1);
-  STRCPY(kp->keyword, name_ic);
-  kp->k_syn.id = (int16_t)id;
-  kp->k_syn.inc_tag = inc_tag;
-  kp->flags = flags;
-  kp->k_char = conceal_char;
-  kp->k_syn.cont_in_list = cont_in_list_copy;
-  if (cont_in_list_copy != NULL) {
-    curwin->w_s->b_syn_containedin = true;
-  }
-  kp->next_list = next_list_copy;
-
-  const hash_T hash = hash_hash(kp->keyword);
-  hashtab_T *const ht = use_ic ? &curwin->w_s->b_keywtab_ic : &curwin->w_s->b_keywtab;
-  hashitem_T *const hi = hash_lookup(ht, kp->keyword, (size_t)name_iclen, hash);
-
-  if (HASHITEM_EMPTY(hi)) {
-    kp->ke_next = NULL;
-    hash_add_item(ht, hi, kp->keyword, hash);
-  } else {
-    kp->ke_next = HI2KE(hi);
-    hi->hi_key = KE2HIKEY(kp);
-  }
+  rs_syn_hash_insert_keyword(name_ic, name_iclen, id, inc_tag, flags,
+                              conceal_char, cont_in_list_copy, next_list_copy,
+                              use_ic);
 }
 
 // =============================================================================
@@ -3600,4 +3584,41 @@ keyentry_T *nvim_ht_find_ke(hashtab_T *ht, char *keyword)
   hashitem_T *hi = hash_find(ht, keyword);
   if (HASHITEM_EMPTY(hi)) return NULL;
   return HI2KE(hi);
+}
+
+/// Allocate a keyentry_T, fill all fields, and insert into the given hashtab.
+/// This accessor owns the offsetof arithmetic that Rust cannot replicate.
+/// Ownership of cont_in_list_copy and next_list_copy is transferred.
+/// Sets curwin->w_s->b_syn_containedin if cont_in_list_copy is non-NULL.
+void nvim_ke_alloc_and_insert(hashtab_T *ht, const char *name_ic, int name_iclen,
+                               int id, int inc_tag, int flags, int conceal_char,
+                               int16_t *cont_in_list_copy, int16_t *next_list_copy)
+{
+  keyentry_T *const kp = xmalloc(offsetof(keyentry_T, keyword) + (size_t)name_iclen + 1);
+  STRCPY(kp->keyword, name_ic);
+  kp->k_syn.id = (int16_t)id;
+  kp->k_syn.inc_tag = inc_tag;
+  kp->flags = flags;
+  kp->k_char = conceal_char;
+  kp->k_syn.cont_in_list = cont_in_list_copy;
+  if (cont_in_list_copy != NULL) {
+    curwin->w_s->b_syn_containedin = true;
+  }
+  kp->next_list = next_list_copy;
+
+  const hash_T hash = hash_hash(kp->keyword);
+  hashitem_T *const hi = hash_lookup(ht, kp->keyword, (size_t)name_iclen, hash);
+  if (HASHITEM_EMPTY(hi)) {
+    kp->ke_next = NULL;
+    hash_add_item(ht, hi, kp->keyword, hash);
+  } else {
+    kp->ke_next = HI2KE(hi);
+    hi->hi_key = KE2HIKEY(kp);
+  }
+}
+
+/// Get the keywtab or keywtab_ic pointer for curwin's synblock.
+hashtab_T *nvim_curwin_get_keywtab(int use_ic)
+{
+  return use_ic ? &curwin->w_s->b_keywtab_ic : &curwin->w_s->b_keywtab;
 }

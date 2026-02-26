@@ -30,8 +30,7 @@ extern "C" {
     fn nvim_keyentry_has_next_list(ke: KeyEntryHandle) -> c_int;
     fn nvim_keyentry_has_cont_in_list(ke: KeyEntryHandle) -> c_int;
 
-    // Keyword matching functions
-    fn nvim_syn_keyword_find(keyword: *mut c_char, use_ic: c_int) -> KeyEntryHandle;
+    // Keyword matching functions (nvim_syn_keyword_find replaced by rs_syn_keyword_find Rust impl)
     fn nvim_syn_keyword_foldcase(src: *mut c_char, srclen: c_int, dst: *mut c_char, dstlen: c_int);
     fn nvim_syn_utfc_ptr2len(p: *mut c_char) -> c_int;
     fn nvim_syn_get_maxkeywlen() -> c_int;
@@ -54,6 +53,23 @@ extern "C" {
     // current_next_list access
     fn nvim_syn_has_current_next_list() -> c_int;
     fn nvim_syn_get_current_next_list() -> IdListHandle;
+
+    // Phase 11: Rust keyword_find and hash_insert_keyword implementation helpers
+    fn nvim_syn_get_syn_block() -> SynBlockHandle;
+    fn nvim_ht_get_used(ht: *const c_void) -> usize;
+    fn nvim_ht_find_ke(ht: *mut c_void, keyword: *mut c_char) -> KeyEntryHandle;
+    fn nvim_curwin_get_keywtab(use_ic: c_int) -> *mut c_void;
+    fn nvim_ke_alloc_and_insert(
+        ht: *mut c_void,
+        name_ic: *const c_char,
+        name_iclen: c_int,
+        id: c_int,
+        inc_tag: c_int,
+        flags: c_int,
+        conceal_char: c_int,
+        cont_in_list_copy: *mut i16,
+        next_list_copy: *mut i16,
+    );
 }
 
 // =============================================================================
@@ -197,6 +213,9 @@ impl Iterator for KeywordIter {
 
 /// Find a keyword in the hash table.
 ///
+/// Replaces C `nvim_syn_keyword_find`. Uses syn_block's appropriate hashtab
+/// (case-sensitive or insensitive) to look up the keyword.
+///
 /// # Arguments
 /// * `keyword` - The keyword to search for (C string pointer)
 /// * `use_ic` - If true, use case-insensitive matching
@@ -205,7 +224,70 @@ impl Iterator for KeywordIter {
 /// The keyword pointer must be valid and null-terminated.
 #[must_use]
 pub unsafe fn keyword_find(keyword: *mut c_char, use_ic: bool) -> KeyEntryHandle {
-    nvim_syn_keyword_find(keyword, if use_ic { 1 } else { 0 })
+    rs_syn_keyword_find(keyword, if use_ic { 1 } else { 0 })
+}
+
+/// Rust implementation of keyword lookup in syn_block's hashtab.
+///
+/// Replaces C `nvim_syn_keyword_find`.
+///
+/// # Safety
+/// The keyword pointer must be valid and null-terminated; calls C globals.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_keyword_find(
+    keyword: *mut c_char,
+    use_ic: c_int,
+) -> KeyEntryHandle {
+    let block = nvim_syn_get_syn_block();
+    if block.is_null() {
+        return KeyEntryHandle::null();
+    }
+    let ht = if use_ic != 0 {
+        nvim_synblock_get_keywtab_ic(block)
+    } else {
+        nvim_synblock_get_keywtab(block)
+    };
+    if ht.is_null() || nvim_ht_get_used(ht as *const c_void) == 0 {
+        return KeyEntryHandle::null();
+    }
+    nvim_ht_find_ke(ht, keyword)
+}
+
+/// Rust implementation of keyword insertion into curwin's hashtab.
+///
+/// Replaces C `nvim_syn_hash_insert_keyword`.
+/// Uses `nvim_ke_alloc_and_insert` for the offsetof-based allocation.
+///
+/// # Safety
+/// All pointer arguments follow the same ownership semantics as C add_keyword.
+/// `cont_in_list_copy` and `next_list_copy` ownership is transferred.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_hash_insert_keyword(
+    name_ic: *const c_char,
+    name_iclen: c_int,
+    id: c_int,
+    inc_tag: c_int,
+    flags: c_int,
+    conceal_char: c_int,
+    cont_in_list_copy: *mut i16,
+    next_list_copy: *mut i16,
+    use_ic: c_int,
+) {
+    let ht = nvim_curwin_get_keywtab(use_ic);
+    if ht.is_null() {
+        return;
+    }
+    nvim_ke_alloc_and_insert(
+        ht,
+        name_ic,
+        name_iclen,
+        id,
+        inc_tag,
+        flags,
+        conceal_char,
+        cont_in_list_copy,
+        next_list_copy,
+    );
 }
 
 /// Match a keyword considering the current syntax state.
@@ -493,17 +575,6 @@ impl KeywordMatch {
 
 extern "C" {
     fn nvim_syn_get_current_inc_tag() -> c_int;
-    fn nvim_syn_hash_insert_keyword(
-        name_ic: *const c_char,
-        name_iclen: c_int,
-        id: c_int,
-        inc_tag: c_int,
-        flags: c_int,
-        conceal_char: c_int,
-        cont_in_list_copy: *mut i16,
-        next_list_copy: *mut i16,
-        use_ic: c_int,
-    );
     fn nvim_syn_get_curwin_syn_ic() -> c_int;
 }
 
@@ -586,7 +657,7 @@ pub unsafe extern "C" fn rs_add_keyword(
     let cont_in_copy = copy_id_list_impl(cont_in_list);
     let next_copy = copy_id_list_impl(next_list);
 
-    nvim_syn_hash_insert_keyword(
+    rs_syn_hash_insert_keyword(
         name_ic_ptr,
         name_ic_len,
         id,
