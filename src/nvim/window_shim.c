@@ -287,6 +287,7 @@ extern int rs_win_close_validate(win_T *win, int free_buf, int force);
 extern WinCloseStructResult rs_win_close_structural(win_T *win, int help_window,
                                                      frame_T *win_frame);
 extern void rs_win_close_post_layout(int was_floating, int dir, frame_T *win_frame);
+extern void rs_win_close_buffer(win_T *win, int action, int abort_if_last);
 
 int nvim_win_get_locked(win_T *wp) { return wp->w_locked; }
 int nvim_win_get_floating(win_T *wp) { return wp->w_floating; }
@@ -867,42 +868,7 @@ static bool close_last_window_tabpage(win_T *win, bool free_buf, tabpage_T *prev
   return true;
 }
 
-/// Close the buffer of "win" and unload it if "action" is DOBUF_UNLOAD.
-/// "action" can also be zero (do nothing).
-/// "abort_if_last" is passed to close_buffer(): abort closing if all other
-/// windows are closed.
-static void win_close_buffer(win_T *win, int action, bool abort_if_last)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // Free independent synblock before the buffer is freed.
-  if (win->w_buffer != NULL) {
-    reset_synblock(win);
-  }
-
-  // When a quickfix/location list window is closed and the buffer is
-  // displayed in only one window, then unlist the buffer.
-  if (win->w_buffer != NULL && bt_quickfix(win->w_buffer)
-      && win->w_buffer->b_nwindows == 1) {
-    win->w_buffer->b_p_bl = false;
-  }
-
-  // Close the link to the buffer.
-  if (win->w_buffer != NULL) {
-    bufref_T bufref;
-    set_bufref(&bufref, curbuf);
-    win->w_locked = true;
-    close_buffer(win, win->w_buffer, action, abort_if_last, true);
-    if (rs_win_valid_any_tab(win)) {
-      win->w_locked = false;
-    }
-
-    // Make sure curbuf is valid. It can become invalid if 'bufhidden' is
-    // "wipe".
-    if (!bufref_valid(&bufref)) {
-      curbuf = firstbuf;
-    }
-  }
-}
+// win_close_buffer deleted: logic migrated to Rust close/helpers.rs (Phase 10)
 
 // Close window "win".  Only works for the current tab page.
 // If "free_buf" is true related buffer may be unloaded.
@@ -1005,7 +971,7 @@ int win_close(win_T *win, bool free_buf, bool force)
     return OK;
   }
 
-  win_close_buffer(win, free_buf ? DOBUF_UNLOAD : 0, true);
+  rs_win_close_buffer(win, free_buf ? DOBUF_UNLOAD : 0, true);
 
   if (rs_win_valid(win) && win->w_buffer == NULL
       && !win->w_floating && rs_last_window(win)) {
@@ -3199,4 +3165,34 @@ void nvim_fire_winscrolled(void *dict, const char *winid_str,
   restore_v_event(v_event, &save_v_event);
 }
 
+// =============================================================================
+// Phase 10 (Pass 2): win_close_buffer helpers
+// =============================================================================
+
+/// Set wp->w_locked.
+void nvim_win_set_locked(win_T *wp, int val) { if (wp) { wp->w_locked = (val != 0); } }
+
+/// Set buf->b_p_bl.
+void nvim_buf_set_p_bl(buf_T *buf, int val) { if (buf) { buf->b_p_bl = (val != 0); } }
+
+/// Compound wrapper for close_buffer with bufref guard.
+/// Calls close_buffer(win, win->w_buffer, action, abort_if_last, true).
+/// Returns 1 if curbuf became invalid (was wiped), 0 otherwise.
+int nvim_close_buffer_for_win(win_T *win, int action, int abort_if_last)
+{
+  if (!win || !win->w_buffer) {
+    return 0;
+  }
+  bufref_T bufref;
+  set_bufref(&bufref, curbuf);
+  win->w_locked = true;
+  close_buffer(win, win->w_buffer, action, abort_if_last != 0, true);
+  if (rs_win_valid_any_tab(win)) {
+    win->w_locked = false;
+  }
+  if (!bufref_valid(&bufref)) {
+    return 1;
+  }
+  return 0;
+}
 
