@@ -773,8 +773,7 @@ extern "C" {
     fn nvim_shada_wms_alloc() -> *mut c_void;
     /// Free a WriteMergerState (does not destroy PMap/Set fields).
     fn nvim_shada_wms_free(wms: *mut c_void);
-    /// Flush the packer buffer.
-    fn nvim_shada_packer_flush_buf(packer: *mut c_void);
+    // nvim_shada_packer_flush_buf deleted (Phase 1 plan c02d0f11): replaced by nvim_shada_packer_flush inline helper.
     /// Create a PackerBuffer for a FileDescriptor.
     fn nvim_shada_packer_buffer_for_file(fd: *mut c_void) -> ShadaPackerBuffer;
     /// Initialize a PackerBuffer for writing to a FileDescriptor (by pointer).
@@ -2446,22 +2445,75 @@ pub const extern "C" fn rs_shada_is_unknown_entry(entry_type: u64) -> c_int {
 // MessagePack Writing Utilities for ShaDa
 // =============================================================================
 
-/// ShaDa packing buffer - wraps PackerBuffer from msgpack crate
+/// ShaDa packing buffer - transparent view of C's PackerBuffer from packer_defs.h.
+///
+/// Layout must match `struct packer_buffer_t` exactly:
+/// ```c
+/// struct packer_buffer_t {
+///   char *startptr;
+///   char *ptr;
+///   char *endptr;
+///   void *anydata;
+///   int64_t anyint;
+///   void (*packer_flush)(PackerBuffer *self);
+/// };
+/// ```
 #[repr(C)]
 pub struct ShadaPackerBuffer {
-    _opaque: [u8; 0],
+    pub startptr: *mut c_char,
+    pub ptr: *mut c_char,
+    pub endptr: *mut c_char,
+    pub anydata: *mut c_void,
+    pub anyint: i64,
+    pub packer_flush: Option<unsafe extern "C" fn(*mut ShadaPackerBuffer)>,
 }
 
-// C accessor functions for packer buffer
+// Direct C function declarations replacing the 8 nvim_shada_packer_* wrappers.
 extern "C" {
-    fn nvim_shada_packer_get_ptr(packer: *mut ShadaPackerBuffer) -> *mut u8;
-    fn nvim_shada_packer_set_ptr(packer: *mut ShadaPackerBuffer, ptr: *mut u8);
-    fn nvim_shada_packer_get_endptr(packer: *mut ShadaPackerBuffer) -> *mut u8;
-    fn nvim_shada_packer_flush(packer: *mut ShadaPackerBuffer);
+    /// Create a string-backed packer buffer (from packer.c).
+    fn packer_string_buffer() -> ShadaPackerBuffer;
+    /// Take the packed string from a string-backed packer buffer (from packer.c).
+    fn packer_take_string(buf: *mut ShadaPackerBuffer) -> NvimString;
 }
 
 /// Minimum buffer size for packing items
 pub const SHADA_PACK_ITEM_SIZE: usize = 9;
+
+// Inline helpers replacing the deleted nvim_shada_packer_get_ptr / _set_ptr /
+// _get_endptr / _flush / _get_anyint C accessor functions.  All call sites
+// already use these names, so they compile unchanged after this change.
+
+#[inline]
+unsafe fn nvim_shada_packer_get_ptr(packer: *mut ShadaPackerBuffer) -> *mut u8 {
+    (*packer).ptr.cast::<u8>()
+}
+
+#[inline]
+unsafe fn nvim_shada_packer_set_ptr(packer: *mut ShadaPackerBuffer, ptr: *mut u8) {
+    (*packer).ptr = ptr.cast::<c_char>();
+}
+
+#[inline]
+unsafe fn nvim_shada_packer_flush(packer: *mut ShadaPackerBuffer) {
+    if let Some(flush) = (*packer).packer_flush {
+        flush(packer);
+    }
+}
+
+#[inline]
+unsafe fn nvim_shada_packer_get_anyint(packer: *mut ShadaPackerBuffer) -> i64 {
+    (*packer).anyint
+}
+
+#[inline]
+unsafe fn nvim_shada_packer_string_buffer(out: *mut ShadaPackerBuffer) {
+    *out = packer_string_buffer();
+}
+
+#[inline]
+unsafe fn nvim_shada_packer_take_string(buf: *mut ShadaPackerBuffer) -> NvimString {
+    packer_take_string(buf)
+}
 
 /// Ensure the packer buffer has enough space.
 ///
@@ -2474,12 +2526,14 @@ pub unsafe extern "C" fn rs_shada_check_buffer(packer: *mut ShadaPackerBuffer) {
         return;
     }
 
-    let ptr = nvim_shada_packer_get_ptr(packer);
-    let endptr = nvim_shada_packer_get_endptr(packer);
+    let ptr = (*packer).ptr.cast::<u8>();
+    let endptr = (*packer).endptr.cast::<u8>();
     let remaining = (endptr as usize).saturating_sub(ptr as usize);
 
     if remaining < 2 * SHADA_PACK_ITEM_SIZE {
-        nvim_shada_packer_flush(packer);
+        if let Some(flush) = (*packer).packer_flush {
+            flush(packer);
+        }
     }
 }
 
@@ -2506,7 +2560,7 @@ pub unsafe extern "C" fn rs_shada_pack_header(
 
     rs_shada_check_buffer(packer);
 
-    let mut ptr = nvim_shada_packer_get_ptr(packer);
+    let mut ptr = (*packer).ptr.cast::<u8>();
 
     // Pack entry type
     rs_mpack_uint64_inline(&raw mut ptr, entry_type);
@@ -2515,7 +2569,7 @@ pub unsafe extern "C" fn rs_shada_pack_header(
     // Pack length
     rs_mpack_uint64_inline(&raw mut ptr, length);
 
-    nvim_shada_packer_set_ptr(packer, ptr);
+    (*packer).ptr = ptr.cast::<c_char>();
 }
 
 /// Pack a 64-bit unsigned integer in MessagePack format (inline version).
@@ -2584,19 +2638,21 @@ pub unsafe extern "C" fn rs_shada_pack_raw(
 
     let mut pos: usize = 0;
     while pos < len {
-        let ptr = nvim_shada_packer_get_ptr(packer);
-        let endptr = nvim_shada_packer_get_endptr(packer);
+        let ptr = (*packer).ptr.cast::<u8>();
+        let endptr = (*packer).endptr.cast::<u8>();
         let remaining = (endptr as usize).saturating_sub(ptr as usize);
         let to_copy = (len - pos).min(remaining);
 
         if to_copy > 0 {
             std::ptr::copy_nonoverlapping(data.add(pos), ptr, to_copy);
-            nvim_shada_packer_set_ptr(packer, ptr.add(to_copy));
+            (*packer).ptr = ptr.add(to_copy).cast::<c_char>();
         }
         pos += to_copy;
 
         if pos < len {
-            nvim_shada_packer_flush(packer);
+            if let Some(flush) = (*packer).packer_flush {
+                flush(packer);
+            }
         }
     }
 
@@ -2659,8 +2715,9 @@ pub unsafe extern "C" fn rs_flush_file_buffer(packer: *mut ShadaPackerBuffer) {
         return;
     }
 
-    // The flush operation is handled by the C packer_flush callback
-    nvim_shada_packer_flush(packer);
+    if let Some(flush) = (*packer).packer_flush {
+        flush(packer);
+    }
 }
 
 /// Pack an entry type value (as uint64).
@@ -2678,9 +2735,9 @@ pub unsafe extern "C" fn rs_shada_pack_entry_type(
     }
 
     rs_shada_check_buffer(packer);
-    let mut ptr = nvim_shada_packer_get_ptr(packer);
+    let mut ptr = (*packer).ptr.cast::<u8>();
     rs_mpack_uint64_inline(&raw mut ptr, entry_type as u64);
-    nvim_shada_packer_set_ptr(packer, ptr);
+    (*packer).ptr = ptr.cast::<c_char>();
 }
 
 /// Pack a timestamp value (as uint64).
@@ -2698,9 +2755,9 @@ pub unsafe extern "C" fn rs_shada_pack_timestamp(
     }
 
     rs_shada_check_buffer(packer);
-    let mut ptr = nvim_shada_packer_get_ptr(packer);
+    let mut ptr = (*packer).ptr.cast::<u8>();
     rs_mpack_uint64_inline(&raw mut ptr, timestamp);
-    nvim_shada_packer_set_ptr(packer, ptr);
+    (*packer).ptr = ptr.cast::<c_char>();
 }
 
 /// Pack content length value (as uint64).
@@ -2715,9 +2772,9 @@ pub unsafe extern "C" fn rs_shada_pack_length(packer: *mut ShadaPackerBuffer, le
     }
 
     rs_shada_check_buffer(packer);
-    let mut ptr = nvim_shada_packer_get_ptr(packer);
+    let mut ptr = (*packer).ptr.cast::<u8>();
     rs_mpack_uint64_inline(&raw mut ptr, length);
-    nvim_shada_packer_set_ptr(packer, ptr);
+    (*packer).ptr = ptr.cast::<c_char>();
 }
 
 /// Check if entry should be written based on size constraints.
@@ -5064,7 +5121,7 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
     nvim_shada_wms_file_marks_destroy(wms.cast());
     nvim_shada_set_destroy_ptr(removable_bufs);
     // Flush packer.
-    nvim_shada_packer_flush_buf(packer.cast());
+    nvim_shada_packer_flush(packer);
     nvim_shada_wms_dumped_vars_destroy(wms.cast());
     nvim_xfree(wms.cast::<c_void>());
 
@@ -7557,10 +7614,6 @@ pub unsafe extern "C" fn rs_close_file(cookie: FileDescriptorHandle) {
 
 // C accessor functions for packing
 extern "C" {
-    /// Create a string-backed packer buffer.
-    fn nvim_shada_packer_string_buffer(out: *mut ShadaPackerBuffer);
-    /// Take the packed string from a string-backed packer buffer.
-    fn nvim_shada_packer_take_string(buf: *mut ShadaPackerBuffer) -> NvimString;
     /// Encode a typval_T to msgpack.
     fn nvim_encode_vim_to_msgpack(
         packer: *mut ShadaPackerBuffer,
@@ -7595,9 +7648,6 @@ extern "C" {
     fn nvim_shada_reg_contents_size(entry: *const ShadaEntry, i: usize) -> usize;
     /// Get number of register contents entries.
     fn nvim_shada_reg_contents_count(entry: *const ShadaEntry) -> usize;
-
-    /// Get the anyint error field from a packer buffer (non-zero means error).
-    fn nvim_shada_packer_get_anyint(packer: *mut ShadaPackerBuffer) -> i64;
 
     // Search pattern field accessors (Dict has OptionalKeys prefix, layout differs)
     fn nvim_shada_sp_get_magic(entry: *const ShadaEntry) -> bool;

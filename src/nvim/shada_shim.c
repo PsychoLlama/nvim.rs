@@ -438,37 +438,10 @@ void nvim_shada_decode_string_into(const char *s, size_t len, bool force_blob, v
 
 // shada_read_next_item deleted (Phase 2 plan 92c8078e): Rust rs_shada_read_next_item replaces it.
 
-// =============================================================================
-// Accessor functions for Rust shada crate (ShadaPackerBuffer == PackerBuffer)
-// =============================================================================
-
-/// Get the current write pointer from a packer buffer
-uint8_t *nvim_shada_packer_get_ptr(PackerBuffer *packer)
-{
-  return (uint8_t *)(packer ? packer->ptr : NULL);
-}
-
-/// Set the current write pointer in a packer buffer
-void nvim_shada_packer_set_ptr(PackerBuffer *packer, uint8_t *ptr)
-{
-  if (packer) {
-    packer->ptr = (char *)ptr;
-  }
-}
-
-/// Get the end pointer from a packer buffer
-uint8_t *nvim_shada_packer_get_endptr(PackerBuffer *packer)
-{
-  return (uint8_t *)(packer ? packer->endptr : NULL);
-}
-
-/// Flush the packer buffer
-void nvim_shada_packer_flush(PackerBuffer *packer)
-{
-  if (packer && packer->packer_flush) {
-    packer->packer_flush(packer);
-  }
-}
+// nvim_shada_packer_get_ptr deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
+// nvim_shada_packer_set_ptr deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
+// nvim_shada_packer_get_endptr deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
+// nvim_shada_packer_flush deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
 
 // Map operations for Rust hmll implementation (operate on inline PMap(cstr_t))
 void nvim_hmll_map_init(PMap(cstr_t) *map)
@@ -1148,20 +1121,8 @@ void *nvim_shada_hist_get_array(int i, int **out_hisidx, int **out_hisnum)
 // Phase 1 accessors: shada_pack_entry migration
 // =============================================================================
 
-/// Create a string-backed packer buffer. Writes the resulting buffer to *out.
-void nvim_shada_packer_string_buffer(PackerBuffer *out)
-{
-  if (out) {
-    *out = packer_string_buffer();
-  }
-}
-
-/// Take the packed string from a string-backed packer buffer.
-/// Returns the String value and zeroes out the buffer.
-String nvim_shada_packer_take_string(PackerBuffer *buf)
-{
-  return buf ? packer_take_string(buf) : (String)STRING_INIT;
-}
+// nvim_shada_packer_string_buffer deleted (Phase 1 plan c02d0f11): Rust calls packer_string_buffer() directly.
+// nvim_shada_packer_take_string deleted (Phase 1 plan c02d0f11): Rust calls packer_take_string() directly.
 
 /// Wrapper for encode_vim_to_msgpack (for encoding typval_T variables).
 int nvim_encode_vim_to_msgpack(PackerBuffer *packer, void *tv, const char *desc)
@@ -1269,11 +1230,7 @@ size_t nvim_shada_reg_contents_count(const ShadaEntry *entry)
   return entry ? entry->data.reg.contents_size : 0;
 }
 
-/// Get the anyint error field from a packer buffer (non-zero means error).
-int64_t nvim_shada_packer_get_anyint(PackerBuffer *packer)
-{
-  return packer ? packer->anyint : 0;
-}
+// nvim_shada_packer_get_anyint deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
 
 // Search pattern field accessors (Dict(_shada_search_pat) has OptionalKeys prefix)
 bool nvim_shada_sp_get_magic(const ShadaEntry *e) { return e->data.search_pattern.magic; }
@@ -1813,12 +1770,7 @@ void nvim_shada_wms_free(void *wms)
 }
 
 /// Flush the packer buffer.
-void nvim_shada_packer_flush_buf(PackerBuffer *packer)
-{
-  if (packer && packer->packer_flush) {
-    packer->packer_flush(packer);
-  }
-}
+// nvim_shada_packer_flush_buf deleted (Phase 1 plan c02d0f11): ShadaPackerBuffer transparent in Rust.
 
 /// Internal flush callback for file-backed PackerBuffers.
 static void nvim_shada_flush_file_buffer_(PackerBuffer *buffer)
