@@ -207,6 +207,10 @@ extern void rs_ins_compl_expand_multiple(const char *str);
 extern void rs_show_pum(int prev_w_wrow, int prev_w_leftcol);
 extern void rs_ins_compl_add_matches(int num_matches, char **matches, int icase);
 extern void rs_spell_back_to_badword(void);
+// Phase 1 (pass 7) Rust exports
+extern void rs_save_orig_extmarks(void);
+extern void rs_restore_orig_extmarks(void);
+extern void rs_free_insexpand_stuff(void);
 // Phase 2 (pass 6) Rust exports
 extern void rs_ins_compl_longest_match(void *match);
 extern const char *rs_find_common_prefix(size_t *prefix_len, int curbuf_only);
@@ -2011,20 +2015,27 @@ static void ins_compl_add_dict(dict_T *dict)
   }
 }
 
-/// Save extmarks in "compl_orig_text" so that they may be restored when the
-/// completion is cancelled, or the original text is completed.
-static void save_orig_extmarks(void)
+/// Compound accessor: save extmarks before completion modifies text.
+void nvim_save_orig_extmarks_impl(void)
 {
   extmark_splice_delete(curbuf, curwin->w_cursor.lnum - 1, compl_col, curwin->w_cursor.lnum - 1,
                         compl_col + compl_length, &compl_orig_extmarks, true, kExtmarkUndo);
 }
 
+/// Compound accessor: restore extmarks in reverse order.
 static void restore_orig_extmarks(void)
 {
   for (long i = (int)kv_size(compl_orig_extmarks) - 1; i > -1; i--) {
     ExtmarkUndoObject undo_info = kv_A(compl_orig_extmarks, i);
     extmark_apply_undo(undo_info, true);
   }
+}
+
+/// Save extmarks in "compl_orig_text" so that they may be restored when the
+/// completion is cancelled, or the original text is completed.
+static void save_orig_extmarks(void)
+{
+  rs_save_orig_extmarks();
 }
 
 /// Start completion for the complete() function.
@@ -3851,8 +3862,8 @@ static void show_pum(int prev_w_wrow, int prev_w_leftcol)
   rs_show_pum(prev_w_wrow, prev_w_leftcol);
 }
 
-#if defined(EXITFREE)
-void free_insexpand_stuff(void)
+/// Compound accessor: free all completion global state at process exit.
+void nvim_free_insexpand_stuff_impl(void)
 {
   API_CLEAR_STRING(compl_orig_text);
   kv_destroy(compl_orig_extmarks);
@@ -3860,6 +3871,12 @@ void free_insexpand_stuff(void)
   callback_free(&ofu_cb);
   callback_free(&tsrfu_cb);
   clear_cpt_callbacks(&cpt_cb, cpt_cb_count);
+}
+
+#if defined(EXITFREE)
+void free_insexpand_stuff(void)
+{
+  rs_free_insexpand_stuff();
 }
 #endif
 
