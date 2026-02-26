@@ -2848,41 +2848,10 @@ void nvim_synblock_dec_folditems(synblock_T *block)
 }
 
 /// Clear keyword entries with given syn id from a hashtab.
-/// Keeps all HI2KE/KE2HIKEY/hash_remove pointer arithmetic in C.
-/// NOTE: This must NOT call syn_clear_keyword() to avoid circular calls.
+/// Thin wrapper: logic is in rs_syn_clear_keyword (clearing.rs).
 void nvim_syn_clear_keyword_in_ht(int id, hashtab_T *ht)
 {
-  hash_lock(ht);
-  int todo = (int)ht->ht_used;
-  for (hashitem_T *hi = ht->ht_array; todo > 0; hi++) {
-    if (HASHITEM_EMPTY(hi)) {
-      continue;
-    }
-    todo--;
-    keyentry_T *kp_prev = NULL;
-    for (keyentry_T *kp = HI2KE(hi); kp != NULL;) {
-      if (kp->k_syn.id == id) {
-        keyentry_T *kp_next = kp->ke_next;
-        if (kp_prev == NULL) {
-          if (kp_next == NULL) {
-            hash_remove(ht, hi);
-          } else {
-            hi->hi_key = KE2HIKEY(kp_next);
-          }
-        } else {
-          kp_prev->ke_next = kp_next;
-        }
-        xfree(kp->next_list);
-        xfree(kp->k_syn.cont_in_list);
-        xfree(kp);
-        kp = kp_next;
-      } else {
-        kp_prev = kp;
-        kp = kp->ke_next;
-      }
-    }
-  }
-  hash_unlock(ht);
+  rs_syn_clear_keyword(id, ht);
 }
 
 // =============================================================================
@@ -2980,24 +2949,10 @@ void nvim_syn_clear_syn_state(synstate_T *p)
 // =============================================================================
 
 /// Clear a whole keyword hashtable (free entries, then hash_clear + hash_init).
-/// NOTE: This must NOT call clear_keywtab() to avoid circular calls.
+/// Thin wrapper: logic is in rs_clear_keywtab (clearing.rs).
 void nvim_syn_clear_keywtab_ht(hashtab_T *ht)
 {
-  keyentry_T *kp_next;
-  int todo = (int)ht->ht_used;
-  for (hashitem_T *hi = ht->ht_array; todo > 0; hi++) {
-    if (!HASHITEM_EMPTY(hi)) {
-      todo--;
-      for (keyentry_T *kp = HI2KE(hi); kp != NULL; kp = kp_next) {
-        kp_next = kp->ke_next;
-        xfree(kp->next_list);
-        xfree(kp->k_syn.cont_in_list);
-        xfree(kp);
-      }
-    }
-  }
-  hash_clear(ht);
-  hash_init(ht);
+  rs_clear_keywtab(ht);
 }
 
 /// Set current_state.ga_itemsize = 0 to mark state as invalid.
@@ -3573,4 +3528,76 @@ void nvim_synstate_ga_init_for_store(synstate_T *sp)
   ga_init(&sp->sst_union.sst_ga, (int)sizeof(bufstate_T), 1);
   ga_grow(&sp->sst_union.sst_ga, sp->sst_stacksize);
   sp->sst_union.sst_ga.ga_len = sp->sst_stacksize;
+}
+
+// =============================================================================
+// Phase 11: New C accessors for hashtab keyword operations (Phase 1)
+// =============================================================================
+
+/// Free a keyentry_T's owned lists and the entry itself.
+/// Frees kp->next_list, kp->k_syn.cont_in_list, and kp.
+void nvim_ke_free(keyentry_T *kp)
+{
+  if (!kp) return;
+  xfree(kp->next_list);
+  xfree(kp->k_syn.cont_in_list);
+  xfree(kp);
+}
+
+/// Call hash_clear + hash_init on a hashtab (for clearing keyword tables).
+void nvim_ht_clear_and_init(hashtab_T *ht)
+{
+  if (!ht) return;
+  hash_clear(ht);
+  hash_init(ht);
+}
+
+/// Lock a hashtab for iteration (wraps hash_lock).
+void nvim_ht_lock(hashtab_T *ht) { if (ht) hash_lock(ht); }
+
+/// Unlock a hashtab after iteration (wraps hash_unlock).
+void nvim_ht_unlock(hashtab_T *ht) { if (ht) hash_unlock(ht); }
+
+/// Set ke->ke_next to next (for chain relink during clear_keyword_in_ht).
+void nvim_ke_set_next(keyentry_T *kp, keyentry_T *next)
+{
+  if (kp) kp->ke_next = next;
+}
+
+/// Call hash_remove on ht at array index idx (hi = &ht->ht_array[idx]).
+void nvim_ht_remove_at(hashtab_T *ht, size_t idx)
+{
+  if (!ht || idx >= (ht->ht_mask + 1)) return;
+  hash_remove(ht, &ht->ht_array[idx]);
+}
+
+/// Get hi_key pointer for the KE2HIKEY of kp (the key used for hash chain relink).
+/// Returns KE2HIKEY(kp) = kp->keyword.
+char *nvim_ke_get_hikey(keyentry_T *kp)
+{
+  return kp ? KE2HIKEY(kp) : NULL;
+}
+
+/// Set hi_key at array index idx in ht to the given key (hi->hi_key = key).
+void nvim_ht_set_hikey_at(hashtab_T *ht, size_t idx, char *key)
+{
+  if (!ht || idx >= (ht->ht_mask + 1)) return;
+  ht->ht_array[idx].hi_key = key;
+}
+
+/// Get keyentry_T k_syn.id field (already exposed as nvim_keyentry_get_syn_id).
+/// Alias here for clarity in the Phase 1 iteration context.
+int nvim_ke_get_syn_id_int(keyentry_T *kp)
+{
+  return kp ? (int)kp->k_syn.id : 0;
+}
+
+/// Find a keyword in hashtab: wraps hash_find + HI2KE.
+/// Returns the keyentry_T * for the first match, or NULL if not found / empty.
+keyentry_T *nvim_ht_find_ke(hashtab_T *ht, char *keyword)
+{
+  if (!ht || !keyword) return NULL;
+  hashitem_T *hi = hash_find(ht, keyword);
+  if (HASHITEM_EMPTY(hi)) return NULL;
+  return HI2KE(hi);
 }

@@ -6,7 +6,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::types::{SynBlockHandle, SynClusterHandle, SynPatHandle, WinHandle};
+use crate::types::{KeyEntryHandle, SynBlockHandle, SynClusterHandle, SynPatHandle, WinHandle};
 
 // =============================================================================
 // FFI declarations
@@ -100,6 +100,47 @@ extern "C" {
 
     /// Clear a whole keyword hashtable (free all entries, reinitialize).
     fn nvim_syn_clear_keywtab_ht(ht: *mut c_void);
+
+    // Phase 11 accessors for hashtab keyword operations (Phase 1)
+
+    /// Get number of used entries in hashtab.
+    fn nvim_ht_get_used(ht: *const c_void) -> usize;
+
+    /// Get hashtab array size (ht_mask + 1).
+    fn nvim_ht_get_array_size(ht: *const c_void) -> usize;
+
+    /// Get HI2KE at array index (null if HASHITEM_EMPTY).
+    fn nvim_ht_item_at(ht: *const c_void, idx: usize) -> crate::types::KeyEntryHandle;
+
+    /// Get ke_next in collision chain.
+    fn nvim_keyentry_get_next(ke: crate::types::KeyEntryHandle) -> crate::types::KeyEntryHandle;
+
+    /// Free a keyentry_T and its owned lists.
+    fn nvim_ke_free(kp: crate::types::KeyEntryHandle);
+
+    /// hash_clear + hash_init on a hashtab.
+    fn nvim_ht_clear_and_init(ht: *mut c_void);
+
+    /// hash_lock a hashtab.
+    fn nvim_ht_lock(ht: *mut c_void);
+
+    /// hash_unlock a hashtab.
+    fn nvim_ht_unlock(ht: *mut c_void);
+
+    /// Get k_syn.id as int for a keyentry.
+    fn nvim_ke_get_syn_id_int(kp: crate::types::KeyEntryHandle) -> c_int;
+
+    /// Set ke->ke_next.
+    fn nvim_ke_set_next(kp: crate::types::KeyEntryHandle, next: crate::types::KeyEntryHandle);
+
+    /// hash_remove at array index idx.
+    fn nvim_ht_remove_at(ht: *mut c_void, idx: usize);
+
+    /// Get KE2HIKEY(kp) -- the hi_key string pointer for chain relink.
+    fn nvim_ke_get_hikey(kp: crate::types::KeyEntryHandle) -> *mut c_char;
+
+    /// Set ht_array[idx].hi_key = key.
+    fn nvim_ht_set_hikey_at(ht: *mut c_void, idx: usize, key: *mut c_char);
 
     /// Set current_state.ga_itemsize = 0 to mark current state invalid.
     fn nvim_syn_set_current_state_invalid();
@@ -231,7 +272,8 @@ pub unsafe extern "C" fn rs_syn_clear_one(id: c_int, syncing: c_int) {
 // =============================================================================
 
 /// Clear keyword entries with the given id from a hashtable.
-/// The HI2KE/KE2HIKEY pointer arithmetic stays in C (nvim_syn_clear_keyword_in_ht).
+/// Implements the logic of C nvim_syn_clear_keyword_in_ht using fine-grained
+/// C accessors for the HI2KE/KE2HIKEY pointer arithmetic.
 ///
 /// # Safety
 /// ht must be a valid hashtab_T pointer. Must be called from main thread.
@@ -240,10 +282,43 @@ pub unsafe extern "C" fn rs_syn_clear_keyword(id: c_int, ht: *mut c_void) {
     if ht.is_null() {
         return;
     }
-    nvim_syn_clear_keyword_in_ht(id, ht);
+    nvim_ht_lock(ht);
+    let array_size = nvim_ht_get_array_size(ht);
+    let mut todo = nvim_ht_get_used(ht) as c_int;
+    let mut idx: usize = 0;
+    while todo > 0 && idx < array_size {
+        let head = nvim_ht_item_at(ht, idx);
+        if !head.is_null() {
+            todo -= 1;
+            let mut kp_prev = KeyEntryHandle::null();
+            let mut kp = head;
+            while !kp.is_null() {
+                let kp_next = nvim_keyentry_get_next(kp);
+                if nvim_ke_get_syn_id_int(kp) == id {
+                    if kp_prev.is_null() {
+                        if kp_next.is_null() {
+                            nvim_ht_remove_at(ht, idx);
+                        } else {
+                            let key = nvim_ke_get_hikey(kp_next);
+                            nvim_ht_set_hikey_at(ht, idx, key);
+                        }
+                    } else {
+                        nvim_ke_set_next(kp_prev, kp_next);
+                    }
+                    nvim_ke_free(kp);
+                } else {
+                    kp_prev = kp;
+                }
+                kp = kp_next;
+            }
+        }
+        idx += 1;
+    }
+    nvim_ht_unlock(ht);
 }
 
 /// Clear a whole keyword table: free all entries and reinitialize.
+/// Implements the logic of C nvim_syn_clear_keywtab_ht.
 ///
 /// # Safety
 /// ht must be a valid hashtab_T pointer. Must be called from main thread.
@@ -252,7 +327,23 @@ pub unsafe extern "C" fn rs_clear_keywtab(ht: *mut c_void) {
     if ht.is_null() {
         return;
     }
-    nvim_syn_clear_keywtab_ht(ht);
+    let array_size = nvim_ht_get_array_size(ht);
+    let mut todo = nvim_ht_get_used(ht) as c_int;
+    let mut idx: usize = 0;
+    while todo > 0 && idx < array_size {
+        let head = nvim_ht_item_at(ht, idx);
+        if !head.is_null() {
+            todo -= 1;
+            let mut entry = head;
+            while !entry.is_null() {
+                let next = nvim_keyentry_get_next(entry);
+                nvim_ke_free(entry);
+                entry = next;
+            }
+        }
+        idx += 1;
+    }
+    nvim_ht_clear_and_init(ht);
 }
 
 /// Mark current_state invalid, clear next_list and keepend_level.
