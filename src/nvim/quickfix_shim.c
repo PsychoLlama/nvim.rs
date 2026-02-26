@@ -3019,54 +3019,43 @@ static void qf_update_win_titlevar(qf_info_T *qi)
 
 // qf_buf_add_line migrated to Rust (Phase 3) -- see rs_qf_buf_add_line in display.rs
 
-// Call the 'quickfixtextfunc' function to get the list of lines to display in
-// the quickfix window for the entries 'start_idx' to 'end_idx'.
-static list_T *call_qftf_func(qf_list_T *qfl, int qf_winid, int start_idx, int end_idx)
+// call_qftf_func deleted: migrated to Rust rs_call_qftf_func in display.rs (Phase 11).
+
+// C accessors for rs_call_qftf_func (Phase 11):
+
+/// Allocate a new VAR_FIXED-locked dict.
+void *nvim_tv_dict_alloc_lock_fixed(void) { return tv_dict_alloc_lock(VAR_FIXED); }
+
+/// Increment dict->dv_refcount by 1.
+void nvim_tv_dict_incr_refcount(void *dict) { if (dict != NULL) ((dict_T *)dict)->dv_refcount++; }
+
+/// Return true if callback cb has type kCallbackNone.
+bool nvim_callback_is_none(const void *cb) { return cb == NULL || ((const Callback *)cb)->type == kCallbackNone; }
+
+/// Call cb with a single VAR_DICT argument (dict) and write result to rettv.
+/// Returns true on success.
+bool nvim_callback_call_one_dict(void *cb, void *dict, void *rettv)
 {
-  Callback *cb = &qftf_cb;
-  list_T *qftf_list = NULL;
-  static bool recursive = false;
-
-  if (recursive) {
-    return NULL;  // this doesn't work properly recursively
-  }
-  recursive = true;
-
-  // If 'quickfixtextfunc' is set, then use the user-supplied function to get
-  // the text to display. Use the local value of 'quickfixtextfunc' if it is
-  // set.
-  if (qfl->qf_qftf_cb.type != kCallbackNone) {
-    cb = &qfl->qf_qftf_cb;
-  }
-  if (cb->type != kCallbackNone) {
-    typval_T args[1];
-    typval_T rettv;
-
-    // create the dict argument
-    dict_T *const dict = tv_dict_alloc_lock(VAR_FIXED);
-
-    tv_dict_add_nr(dict, S_LEN("quickfix"), IS_QF_LIST(qfl));
-    tv_dict_add_nr(dict, S_LEN("winid"), qf_winid);
-    tv_dict_add_nr(dict, S_LEN("id"), qfl->qf_id);
-    tv_dict_add_nr(dict, S_LEN("start_idx"), start_idx);
-    tv_dict_add_nr(dict, S_LEN("end_idx"), end_idx);
-    dict->dv_refcount++;
-    args[0].v_type = VAR_DICT;
-    args[0].vval.v_dict = dict;
-
-    if (callback_call(cb, 1, args, &rettv)) {
-      if (rettv.v_type == VAR_LIST) {
-        qftf_list = rettv.vval.v_list;
-        tv_list_ref(qftf_list);
-      }
-      tv_clear(&rettv);
-    }
-    tv_dict_unref(dict);
-  }
-
-  recursive = false;
-  return qftf_list;
+  if (cb == NULL || dict == NULL || rettv == NULL) { return false; }
+  typval_T args[1];
+  args[0].v_type = VAR_DICT;
+  args[0].vval.v_dict = (dict_T *)dict;
+  return callback_call((Callback *)cb, 1, args, (typval_T *)rettv);
 }
+
+/// If rettv->v_type == VAR_LIST, return rettv->vval.v_list; else NULL.
+void *nvim_tv_rettv_list_if_var_list(const void *rettv_void)
+{
+  if (rettv_void == NULL) { return NULL; }
+  const typval_T *rettv = (const typval_T *)rettv_void;
+  return rettv->v_type == VAR_LIST ? (void *)rettv->vval.v_list : NULL;
+}
+
+/// tv_list_ref (qf-specific void* version): increment list reference count.
+void nvim_qf_tv_list_ref(void *list) { if (list != NULL) tv_list_ref((list_T *)list); }
+
+/// tv_dict_unref (qf-specific void* version): decrement dict reference count and free if zero.
+void nvim_qf_tv_dict_unref(void *dict) { if (dict != NULL) tv_dict_unref((dict_T *)dict); }
 
 bool nvim_qf_buf_is_curbuf(const void *buf) { return (const buf_T *)buf == curbuf; }
 
@@ -3094,7 +3083,7 @@ void nvim_qf_zero_skipcol_for_curbuf(void)
 
 void nvim_qf_u_clearallandblockfree(void) { u_clearallandblockfree(curbuf); }
 
-void *nvim_call_qftf_func(void *qfl, int qf_winid, linenr_T start, int count) { return call_qftf_func((qf_list_T *)qfl, qf_winid, start, count); }
+// nvim_call_qftf_func deleted: Rust display.rs calls rs_call_qftf_func directly (Phase 11).
 
 char *nvim_tv_list_item_string(const void *li) { return li == NULL ? NULL : (char *)tv_get_string_chk(TV_LIST_ITEM_TV((const listitem_T *)li)); }
 

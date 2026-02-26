@@ -434,12 +434,26 @@ extern "C" {
     fn nvim_qfline_get_fnum(qfp: QfLinePtr) -> c_int;
     fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
     fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
-    fn nvim_call_qftf_func(
-        qfl: *mut c_void,
-        qf_winid: c_int,
-        start: LinenrT,
-        count: c_int,
-    ) -> ListPtr;
+    // Phase 11: rs_call_qftf_func accessors (replacing nvim_call_qftf_func)
+    fn nvim_tv_dict_alloc_lock_fixed() -> *mut c_void;
+    fn nvim_tv_dict_incr_refcount(dict: *mut c_void);
+    fn nvim_callback_is_none(cb: *const c_void) -> bool;
+    fn nvim_callback_call_one_dict(cb: *mut c_void, dict: *mut c_void, rettv: *mut c_void) -> bool;
+    fn nvim_tv_rettv_list_if_var_list(rettv: *const c_void) -> *mut c_void;
+    fn nvim_qf_tv_list_ref(list: *mut c_void);
+    fn nvim_qf_tv_dict_unref(dict: *mut c_void);
+    fn nvim_tv_clear(tv: *mut c_void);
+    fn nvim_tv_dict_add_nr_ret(
+        dict: *mut c_void,
+        key: *const c_char,
+        key_len: c_int,
+        nr: i64,
+    ) -> c_int;
+    fn nvim_qf_is_qf_list(qfl: *const c_void) -> bool;
+    fn nvim_qfl_get_id(qfl: *const c_void) -> u32;
+    fn nvim_qfl_get_qftf_cb_ptr(qfl: *mut c_void) -> *mut c_void;
+    fn nvim_qf_get_global_qftf_cb_ptr() -> *mut c_void;
+
     fn nvim_tv_list_first(list: *const c_void) -> ListItemPtr;
     fn nvim_tv_list_item_next(list: *const c_void, li: ListItemPtr) -> ListItemPtr;
     fn nvim_tv_list_item_string(li: ListItemPtr) -> *mut c_char;
@@ -482,6 +496,100 @@ extern "C" {
 
 const FAIL: c_int = 0;
 const OK: c_int = 1;
+
+// =============================================================================
+// Phase 11: rs_call_qftf_func (migrated from C call_qftf_func)
+// =============================================================================
+
+/// Static recursive guard for `rs_call_qftf_func`.
+/// `call_qftf_func` must not be called recursively (it would not work properly).
+static QFTF_RECURSIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Call the `quickfixtextfunc` callback to get display text for quickfix entries.
+///
+/// Mirrors C `call_qftf_func`. Returns a `list_T *` (or NULL if not set / recursive).
+/// The caller owns the returned list reference (from `tv_list_ref`).
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T`
+#[no_mangle]
+pub unsafe extern "C" fn rs_call_qftf_func(
+    qfl: *mut c_void,
+    qf_winid: c_int,
+    start_idx: LinenrT,
+    end_idx: c_int,
+) -> ListPtr {
+    use std::sync::atomic::Ordering;
+
+    if QFTF_RECURSIVE.load(Ordering::Relaxed) {
+        return std::ptr::null_mut();
+    }
+    QFTF_RECURSIVE.store(true, Ordering::Relaxed);
+
+    let result = call_qftf_func_inner(qfl, qf_winid, start_idx, end_idx);
+
+    QFTF_RECURSIVE.store(false, Ordering::Relaxed);
+    result
+}
+
+unsafe fn call_qftf_func_inner(
+    qfl: *mut c_void,
+    qf_winid: c_int,
+    start_idx: LinenrT,
+    end_idx: c_int,
+) -> ListPtr {
+    // Choose the callback: per-list takes precedence over global.
+    let cb: *mut c_void = {
+        let local_cb = nvim_qfl_get_qftf_cb_ptr(qfl);
+        if nvim_callback_is_none(local_cb) {
+            nvim_qf_get_global_qftf_cb_ptr()
+        } else {
+            local_cb
+        }
+    };
+
+    if nvim_callback_is_none(cb) {
+        return std::ptr::null_mut();
+    }
+
+    // Build the dict argument: { quickfix, winid, id, start_idx, end_idx }
+    let dict = nvim_tv_dict_alloc_lock_fixed();
+    if dict.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let is_qf = nvim_qf_is_qf_list(qfl);
+    let qf_id = nvim_qfl_get_id(qfl);
+
+    nvim_tv_dict_add_nr_ret(dict, c"quickfix".as_ptr(), 8, i64::from(is_qf));
+    nvim_tv_dict_add_nr_ret(dict, c"winid".as_ptr(), 5, i64::from(qf_winid));
+    nvim_tv_dict_add_nr_ret(dict, c"id".as_ptr(), 2, i64::from(qf_id));
+    nvim_tv_dict_add_nr_ret(dict, c"start_idx".as_ptr(), 9, i64::from(start_idx));
+    nvim_tv_dict_add_nr_ret(dict, c"end_idx".as_ptr(), 7, i64::from(end_idx));
+    // Increment refcount before passing to callback (matches C code pattern)
+    nvim_tv_dict_incr_refcount(dict);
+
+    // Allocate a zeroed typval_T for the return value (heap-allocated for safety)
+    // We use a stack array matching the C layout: VarType(4) + VarLock(4) + union(8) = 16 bytes
+    // Use 24 bytes for alignment safety.
+    let mut rettv_buf = [0u8; 24];
+    let rettv: *mut c_void = rettv_buf.as_mut_ptr().cast();
+
+    let mut qftf_list: ListPtr = std::ptr::null_mut();
+
+    if nvim_callback_call_one_dict(cb, dict, rettv) {
+        let list_ptr = nvim_tv_rettv_list_if_var_list(rettv);
+        if !list_ptr.is_null() {
+            nvim_qf_tv_list_ref(list_ptr);
+            qftf_list = list_ptr;
+        }
+        nvim_tv_clear(rettv);
+    }
+
+    nvim_qf_tv_dict_unref(dict);
+    qftf_list
+}
 
 // =============================================================================
 // Phase 3: qf_buf_add_line (migrated from quickfix_shim.c)
@@ -696,7 +804,7 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
         }
 
         let qf_count = nvim_qf_get_count(qfl);
-        let qftf_list = nvim_call_qftf_func(qfl, qf_winid, lnum + 1, qf_count);
+        let qftf_list = rs_call_qftf_func(qfl, qf_winid, lnum + 1, qf_count);
         let mut qftf_li = nvim_tv_list_first(qftf_list.cast_const());
 
         let mut prev_bufnr: c_int = -1;
