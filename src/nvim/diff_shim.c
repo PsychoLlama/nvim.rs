@@ -112,6 +112,7 @@ extern int rs_diff_write_buffer(buf_T *buf, char **m_ptr, int *m_size,
                                 linenr_T start, linenr_T end, int diff_flags);
 extern int rs_diff_file_internal(void *dio);
 extern int rs_diff_file(void *dio);
+extern int rs_check_external_diff(void *dio);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -273,86 +274,10 @@ void ex_diffupdate(exarg_T *eap)
 /// Do a quick test if "diff" really works.  Otherwise it looks like there
 /// are no differences.  Can't use the return value, it's non-zero when
 /// there are differences.
+/// Thin wrapper -- implementation moved to Rust (rs_check_external_diff in diffio.rs).
 static int check_external_diff(diffio_T *diffio)
 {
-  // May try twice, first with "-a" and then without.
-  bool io_error = false;
-  TriState ok = kFalse;
-  while (true) {
-    ok = kFalse;
-    FILE *fd = os_fopen(diffio->dio_orig.din_fname, "w");
-
-    if (fd == NULL) {
-      io_error = true;
-    } else {
-      if (fwrite("line1\n", 6, 1, fd) != 1) {
-        io_error = true;
-      }
-      fclose(fd);
-      fd = os_fopen(diffio->dio_new.din_fname, "w");
-
-      if (fd == NULL) {
-        io_error = true;
-      } else {
-        if (fwrite("line2\n", 6, 1, fd) != 1) {
-          io_error = true;
-        }
-        fclose(fd);
-        fd = diff_file(diffio) == OK
-             ? os_fopen(diffio->dio_diff.dout_fname, "r")
-             : NULL;
-
-        if (fd == NULL) {
-          io_error = true;
-        } else {
-          char linebuf[LBUFLEN];
-
-          while (true) {
-            // For normal diff there must be a line that contains
-            // "1c1".  For unified diff "@@ -1 +1 @@".
-            if (vim_fgets(linebuf, LBUFLEN, fd)) {
-              break;
-            }
-
-            if (strncmp(linebuf, "1c1", 3) == 0
-                || strncmp(linebuf, "@@ -1 +1 @@", 11) == 0) {
-              ok = kTrue;
-            }
-          }
-          fclose(fd);
-        }
-        os_remove(diffio->dio_diff.dout_fname);
-        os_remove(diffio->dio_new.din_fname);
-      }
-      os_remove(diffio->dio_orig.din_fname);
-    }
-
-    // When using 'diffexpr' break here.
-    if (*p_dex != NUL) {
-      break;
-    }
-
-    // If we checked if "-a" works already, break here.
-    if (diff_a_works != kNone) {
-      break;
-    }
-    diff_a_works = ok;
-
-    // If "-a" works break here, otherwise retry without "-a".
-    if (ok) {
-      break;
-    }
-  }
-
-  if (!ok) {
-    if (io_error) {
-      emsg(_("E810: Cannot read or write temp files"));
-    }
-    emsg(_("E97: Cannot create diffs"));
-    diff_a_works = kNone;
-    return FAIL;
-  }
-  return OK;
+  return rs_check_external_diff(diffio);
 }
 
 /// Invoke the xdiff function.
@@ -619,6 +544,12 @@ int nvim_diff_get_a_works(void) { return (int)diff_a_works; }
 void nvim_diff_set_a_works(int val) { diff_a_works = (TriState)val; }
 void nvim_diff_eval_diff(const char *orig, const char *new_f, const char *diff) { eval_diff((char *)orig, (char *)new_f, (char *)diff); }
 int nvim_diff_run_external_shell(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return FAIL; } char *tmp_orig = dio->dio_orig.din_fname; char *tmp_new = dio->dio_new.din_fname; char *tmp_diff = dio->dio_diff.dout_fname; const size_t len = (strlen(tmp_orig) + strlen(tmp_new) + strlen(tmp_diff) + strlen(p_srr) + 27); char *const cmd = xmalloc(len); if (os_env_exists("DIFF_OPTIONS", true)) { os_unsetenv("DIFF_OPTIONS"); } vim_snprintf(cmd, len, "diff %s%s%s%s%s%s%s%s %s", diff_a_works == kFalse ? "" : "-a ", "", (diff_flags & DIFF_IWHITE) ? "-b " : "", (diff_flags & DIFF_IWHITEALL) ? "-w " : "", (diff_flags & DIFF_IWHITEEOL) ? "-Z " : "", (diff_flags & DIFF_IBLANK) ? "-B " : "", (diff_flags & DIFF_ICASE) ? "-i " : "", tmp_orig, tmp_new); append_redir(cmd, len, p_srr, tmp_diff); block_autocmds(); call_shell(cmd, kShellOptFilter | kShellOptSilent | kShellOptDoOut, NULL); unblock_autocmds(); xfree(cmd); return OK; }
+// Phase 4 (check_external_diff) accessors
+void *nvim_diff_fopen_write(const char *fname) { return os_fopen(fname, "w"); }
+bool nvim_diff_fwrite_line(void *fd, const char *data, size_t len) { return fwrite(data, len, 1, (FILE *)fd) == 1; }
+void *nvim_diff_fopen_read(const char *fname) { return os_fopen(fname, "r"); }
+void nvim_diff_emsg_e810(void) { emsg(_("E810: Cannot read or write temp files")); }
+void nvim_diff_emsg_e97(void) { emsg(_("E97: Cannot create diffs")); }
 // Phase 5 (inline_compute) accessors
 int nvim_xdiff_internal_run(const char *orig_data, int orig_size, const char *new_data, int new_size, void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return FAIL; } dio->dio_orig.din_mmfile.ptr = (char *)orig_data; dio->dio_orig.din_mmfile.size = orig_size; dio->dio_new.din_mmfile.ptr = (char *)new_data; dio->dio_new.din_mmfile.size = new_size; return diff_file_internal(dio); }
 uint64_t *nvim_diffbuf_get_chartab(int idx) { if (idx < 0 || idx >= DB_COUNT || curtab->tp_diffbuf[idx] == NULL) { return NULL; } return curtab->tp_diffbuf[idx]->b_chartab; }

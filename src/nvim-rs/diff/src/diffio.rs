@@ -427,3 +427,127 @@ extern "C" {
     fn nvim_is_diffexpr_empty() -> bool;
     fn nvim_diffio_get_new_fname(dio: DiffioHandle) -> *const c_char;
 }
+
+// ============================================================================
+// Phase 4: check_external_diff (verify external diff works, manage -a flag)
+// ============================================================================
+
+// TriState constants (must match C kNone/kFalse/kTrue)
+const K_NONE: c_int = -1;
+const K_FALSE: c_int = 0;
+const K_TRUE: c_int = 1;
+
+// Line buffer length for reading diff output
+const LBUFLEN: usize = 50;
+
+extern "C" {
+    fn nvim_diff_fopen_write(fname: *const c_char) -> *mut std::ffi::c_void;
+    fn nvim_diff_fwrite_line(fd: *mut std::ffi::c_void, data: *const c_char, len: usize) -> bool;
+    fn nvim_diff_fopen_read(fname: *const c_char) -> *mut std::ffi::c_void;
+    fn nvim_diff_fclose(fd: *mut std::ffi::c_void);
+    fn nvim_diff_fgets(fd: *mut std::ffi::c_void, buf: *mut c_char, buflen: c_int) -> bool;
+    fn nvim_diff_os_remove(fname: *const c_char);
+    fn nvim_diff_get_a_works() -> c_int;
+    fn nvim_diff_set_a_works(val: c_int);
+    fn nvim_diff_emsg_e810();
+    fn nvim_diff_emsg_e97();
+}
+
+/// Verify that the external diff command works.
+///
+/// Replicates C `check_external_diff(diffio)`.
+/// Writes test files, runs diff, checks output for "1c1" or "@@ -1 +1 @@".
+/// Manages retry logic for `-a` flag via `diff_a_works` state.
+///
+/// # Safety
+/// `dio` must be a valid, non-null diffio handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_external_diff(dio: DiffioHandle) -> c_int {
+    // May try twice, first with "-a" and then without.
+    let mut io_error = false;
+    let mut ok;
+
+    loop {
+        ok = K_FALSE;
+
+        let orig_fname = nvim_diffio_get_orig_fname(dio);
+        let fd = nvim_diff_fopen_write(orig_fname);
+
+        if fd.is_null() {
+            io_error = true;
+        } else {
+            let line1 = b"line1\n";
+            if !nvim_diff_fwrite_line(fd, line1.as_ptr().cast(), line1.len()) {
+                io_error = true;
+            }
+            nvim_diff_fclose(fd);
+
+            let new_fname = nvim_diffio_get_new_fname(dio);
+            let fd2 = nvim_diff_fopen_write(new_fname);
+
+            if fd2.is_null() {
+                io_error = true;
+            } else {
+                let line2 = b"line2\n";
+                if !nvim_diff_fwrite_line(fd2, line2.as_ptr().cast(), line2.len()) {
+                    io_error = true;
+                }
+                nvim_diff_fclose(fd2);
+
+                let diff_fname = nvim_diffio_get_diff_fname(dio);
+                let fd3 = if rs_diff_file(dio) == OK {
+                    nvim_diff_fopen_read(diff_fname)
+                } else {
+                    std::ptr::null_mut()
+                };
+
+                if fd3.is_null() {
+                    io_error = true;
+                } else {
+                    let mut linebuf = [0u8; LBUFLEN];
+                    loop {
+                        if nvim_diff_fgets(fd3, linebuf.as_mut_ptr().cast(), LBUFLEN as c_int) {
+                            break;
+                        }
+                        let line = &linebuf[..];
+                        if line.starts_with(b"1c1") || line.starts_with(b"@@ -1 +1 @@") {
+                            ok = K_TRUE;
+                        }
+                    }
+                    nvim_diff_fclose(fd3);
+                }
+
+                nvim_diff_os_remove(diff_fname);
+                nvim_diff_os_remove(new_fname);
+            }
+            nvim_diff_os_remove(orig_fname);
+        }
+
+        // When using 'diffexpr' break here.
+        if !nvim_is_diffexpr_empty() {
+            break;
+        }
+
+        // If we checked if "-a" works already, break here.
+        let a_works = nvim_diff_get_a_works();
+        if a_works != K_NONE {
+            break;
+        }
+        nvim_diff_set_a_works(ok);
+
+        // If "-a" works break here, otherwise retry without "-a".
+        if ok == K_TRUE {
+            break;
+        }
+    }
+
+    if ok != K_TRUE {
+        if io_error {
+            nvim_diff_emsg_e810();
+        }
+        nvim_diff_emsg_e97();
+        nvim_diff_set_a_works(K_NONE);
+        return FAIL;
+    }
+    OK
+}
