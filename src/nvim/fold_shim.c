@@ -832,65 +832,40 @@ int nvim_get_need_diff_redraw(void) { return need_diff_redraw; }
 // Accessors for f_foldtext Rust implementation
 // ============================================================================
 
-/// Get VV_FOLDSTART vim variable as line number.
-linenr_T nvim_fold_get_foldstart(void)
+/// Get a vim variable as a number (generic).
+int64_t nvim_fold_get_vim_var_nr(int vv_idx)
 {
-  return (linenr_T)get_vim_var_nr(VV_FOLDSTART);
+  return (int64_t)get_vim_var_nr(vv_idx);
 }
 
-/// Get VV_FOLDEND vim variable as line number.
-linenr_T nvim_fold_get_foldend(void)
+/// Set a vim variable as a number (generic).
+void nvim_fold_set_vim_var_nr(int vv_idx, int64_t val)
 {
-  return (linenr_T)get_vim_var_nr(VV_FOLDEND);
+  set_vim_var_nr(vv_idx, (varnumber_T)val);
 }
 
-/// Get VV_FOLDDASHES vim variable as string.
-char *nvim_fold_get_folddashes(void)
+/// Get a vim variable as a string (generic).
+char *nvim_fold_get_vim_var_str(int vv_idx)
 {
-  return get_vim_var_str(VV_FOLDDASHES);
+  return get_vim_var_str(vv_idx);
 }
 
-/// Check if a line contains only whitespace (wraps linewhite).
-bool nvim_fold_linewhite(linenr_T lnum)
-{
-  return linewhite(lnum);
-}
-
-/// Get a buffer line from curbuf (wraps ml_get).
-char *nvim_fold_ml_get(linenr_T lnum)
-{
-  return ml_get(lnum);
-}
-
-/// Get the localized fold text format string (wraps NGETTEXT).
+/// Get the localized fold text header format string (wraps NGETTEXT for foldtext).
 const char *nvim_fold_ngettext_foldtext(int count)
 {
   return NGETTEXT("+-%s%3d line: ", "+-%s%3d lines: ", count);
 }
 
-/// Get curbuf's line count.
+/// Get the localized default fold text format string (wraps NGETTEXT for default).
+const char *nvim_fold_ngettext_default(int count)
+{
+  return NGETTEXT("+--%3d line folded", "+--%3d lines folded ", count);
+}
+
+/// Get curbuf's line count (still used by level.rs and lib.rs).
 linenr_T nvim_fold_get_curbuf_line_count(void)
 {
   return curbuf->b_ml.ml_line_count;
-}
-
-/// Allocate and format fold text header, appending line text, then return
-/// the xmalloc'd string ready for foldtext_cleanup.
-/// `out_header_len` receives the byte length of the formatted header part
-/// (before the line text is appended).
-/// Still used by Rust f_foldtext_impl (for the foldtext() VimL function).
-char *nvim_fold_build_foldtext(const char *txt, const char *dashes, int count,
-                               const char *line_text, size_t *out_header_len)
-{
-  size_t len = strlen(txt)
-               + strlen(dashes)
-               + 20
-               + strlen(line_text);
-  char *r = xmalloc(len);
-  snprintf(r, len, txt, dashes, count);
-  *out_header_len = strlen(r);
-  strcat(r, line_text);
-  return r;
 }
 
 // ============================================================================
@@ -1027,17 +1002,6 @@ void nvim_fold_set_vvars(linenr_T start, linenr_T end, int level)
 void nvim_fold_clear_vvars(void)
 {
   set_vim_var_string(VV_FOLDDASHES, NULL, -1);
-}
-
-/// Format default fold text "+--%3d line(s) folded" into buf.
-/// Returns number of bytes written (like snprintf).
-int nvim_fold_vim_snprintf_default(char *buf, int count)
-{
-  vim_snprintf(buf, FOLD_TEXT_LEN,
-               NGETTEXT("+--%3d line folded",
-                        "+--%3d lines folded ", count),
-               count);
-  return (int)strlen(buf);
 }
 
 /// Get wp->w_p_fdt (foldtext option string).
