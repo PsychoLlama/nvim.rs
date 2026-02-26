@@ -35,7 +35,7 @@ extern "C" {
     fn nvim_buf_has_ml_mfp(buf: *mut BufHandle) -> c_int;
 
     // -------------------------------------------------------------------------
-    // Swap File Operations (C implementations)
+    // Swap File Operations (C implementations -- to be migrated)
     // -------------------------------------------------------------------------
 
     /// Open memline for buffer, create swap file
@@ -43,12 +43,6 @@ extern "C" {
 
     /// Set the name of the swap file
     fn ml_setname(buf: *mut BufHandle);
-
-    /// Open swap files for all buffers
-    fn ml_open_files();
-
-    /// Open swap file for a specific buffer
-    fn ml_open_file(buf: *mut BufHandle);
 
     /// Close all memlines (buffer iteration stays in C via FOR_ALL_BUFFERS)
     fn ml_close_all(del_file: c_int);
@@ -155,26 +149,122 @@ pub unsafe extern "C" fn rs_ml_setname(buf: *mut BufHandle) {
 
 /// Open swap files for all buffers that need them.
 ///
-/// Called at startup after reading viminfo.
+/// Called when 'updatecount' changes from zero to non-zero.
+/// Iterates all buffers and opens a swap file for those that are not
+/// read-only or have been modified.
 ///
 /// # Safety
 /// Modifies global buffer state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_open_files() {
-    ml_open_files();
+    let mut buf = nvim_get_firstbuf();
+    while !buf.is_null() {
+        if nvim_buf_get_b_p_ro(buf) == 0 || nvim_buf_get_b_changed(buf) {
+            rs_ml_open_file(buf);
+        }
+        buf = nvim_buf_get_next(buf);
+    }
 }
 
 /// Open the swap file for a specific buffer.
 ///
-/// Creates the swap file if it doesn't exist.
+/// Creates the swap file if it doesn't exist. Tries all directories in
+/// 'directory' option. For spell buffers, uses a temp file name.
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
 #[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 pub unsafe extern "C" fn rs_ml_open_file(buf: *mut BufHandle) {
-    if !buf.is_null() {
-        ml_open_file(buf);
+    if buf.is_null() {
+        return;
     }
+
+    let mfp = nvim_buf_get_ml_mfp(buf);
+    if mfp.is_null()
+        || nvim_mf_get_fd(mfp) >= 0
+        || nvim_buf_get_p_swf(buf) == 0
+        || nvim_get_cmod_noswapfile() != 0
+        || nvim_buf_get_terminal(buf) != 0
+    {
+        return; // nothing to do
+    }
+
+    // For a spell buffer use a temp file name.
+    if nvim_buf_get_b_spell(buf) != 0 {
+        let fname = vim_tempname();
+        if !fname.is_null() {
+            mf_open_file(mfp, fname); // consumes fname!
+        }
+        nvim_buf_set_b_may_swap(buf, 0);
+        return;
+    }
+
+    // Try all directories in 'directory' option.
+    let p_dir = nvim_get_p_dir();
+    let mut dirp = p_dir;
+    let mut found_existing_dir = false;
+    loop {
+        if *dirp == 0 {
+            break;
+        }
+        // There is a small chance that between choosing the swapfile name
+        // and creating it, another Vim creates the file.  In that case the
+        // creation will fail and we will use another directory.
+        let fname = rs_findswapname(
+            buf,
+            &raw mut dirp,
+            std::ptr::null(),
+            &raw mut found_existing_dir,
+        );
+        if dirp.is_null() {
+            break; // out of memory
+        }
+        if fname.is_null() {
+            continue;
+        }
+        // MF_DIRTY_YES_NOSYNC = 2: don't sync yet in ml_sync_all()
+        if mf_open_file(mfp, fname) == crate::types::OK {
+            nvim_mf_set_dirty(mfp, 2); // MF_DIRTY_YES_NOSYNC
+            rs_ml_upd_block0(buf, UB_SAME_DIR as c_int);
+
+            // Flush block zero, so others can read it
+            if mf_sync(mfp, MFS_ZERO) == crate::types::OK {
+                // Mark all blocks that should be in the swapfile as dirty.
+                // Needed for when the 'swapfile' option was reset, so that
+                // the swapfile was deleted, and then on again.
+                rs_mf_set_dirty_all(mfp);
+                break;
+            }
+            // Writing block 0 failed: close the file and try another dir
+            rs_mf_close_file_impl(mfp);
+        }
+    }
+
+    // Report error if we tried directories but couldn't create a swap file
+    let p_dir_first = nvim_get_p_dir();
+    if *p_dir_first != 0 && nvim_mf_get_fname(mfp).is_null() {
+        nvim_set_need_wait_return(1); // call wait_return() later
+        nvim_inc_no_wait_return();
+        let spname = buf_spname(buf);
+        let display_name = if spname.is_null() {
+            nvim_buf_get_b_fname(buf).cast_mut()
+        } else {
+            spname
+        };
+        semsg(
+            c"E303: Unable to open swap file for \"%s\", recovery impossible".as_ptr(),
+            display_name,
+        );
+        nvim_dec_no_wait_return();
+    }
+
+    // don't try to open a swapfile again
+    nvim_buf_set_b_may_swap(buf, 0);
 }
 
 /// Check if a swap file needs to be created for the current buffer.
@@ -197,7 +287,7 @@ pub unsafe extern "C" fn rs_check_need_swap(newfile: c_int) {
         && nvim_buf_get_b_may_swap(curbuf)
         && (nvim_buf_get_b_p_ro(curbuf) == 0 || newfile == 0)
     {
-        ml_open_file(curbuf);
+        rs_ml_open_file(curbuf);
     }
 
     nvim_set_msg_silent(old_msg_silent);
@@ -329,6 +419,60 @@ pub unsafe extern "C" fn rs_ml_setflags(buf: *mut BufHandle) {
     // Mark block 0 dirty and sync
     nvim_bhdr_set_bh_flags_dirty(hp);
     mf_sync(mfp, MFS_ZERO);
+}
+
+// =============================================================================
+// Phase 9-1: ml_open_file + ml_open_files extern declarations
+// =============================================================================
+
+extern "C" {
+    /// Get buf->b_spell (returns 1 if true)
+    fn nvim_buf_get_b_spell(buf: *mut BufHandle) -> c_int;
+
+    /// Set buf->b_may_swap (0 = false, non-zero = true)
+    fn nvim_buf_set_b_may_swap(buf: *mut BufHandle, val: c_int);
+
+    /// Get buf->b_p_swf (swapfile option)
+    fn nvim_buf_get_p_swf(buf: *mut BufHandle) -> c_int;
+
+    /// Get cmdmod.cmod_flags & CMOD_NOSWAPFILE
+    fn nvim_get_cmod_noswapfile() -> c_int;
+
+    /// Get buf->terminal (returns 1 if terminal buffer)
+    fn nvim_buf_get_terminal(buf: *mut BufHandle) -> c_int;
+
+    /// Get p_dir option (directories for swap files)
+    fn nvim_get_p_dir() -> *mut c_char;
+
+    /// Get first buffer in buffer list
+    fn nvim_get_firstbuf() -> *mut BufHandle;
+
+    /// Get next buffer in buffer list
+    fn nvim_buf_get_next(buf: *mut BufHandle) -> *mut BufHandle;
+
+    /// buf_spname: returns special buffer name or NULL
+    fn buf_spname(buf: *mut BufHandle) -> *mut c_char;
+
+    /// vim_tempname: create a temp file name
+    fn vim_tempname() -> *mut c_char;
+
+    /// mf_open_file: open a swap file for memfile (consumes fname)
+    fn mf_open_file(mfp: *mut std::ffi::c_void, fname: *mut c_char) -> c_int;
+
+    /// rs_mf_close_file_impl: close swap file without getlines
+    fn rs_mf_close_file_impl(mfp: *mut std::ffi::c_void);
+
+    /// rs_mf_set_dirty_all: mark all blocks dirty
+    fn rs_mf_set_dirty_all(mfp: *mut std::ffi::c_void);
+
+    /// nvim_mf_set_dirty: set mf_dirty field to a specific value
+    fn nvim_mf_set_dirty(mfp: *mut std::ffi::c_void, val: c_int);
+
+    /// nvim_mf_get_fname: get mfp->mf_fname
+    fn nvim_mf_get_fname(mfp: *mut std::ffi::c_void) -> *mut c_char;
+
+    /// nvim_mf_get_fd: get mfp->mf_fd
+    fn nvim_mf_get_fd(mfp: *mut std::ffi::c_void) -> c_int;
 }
 
 // =============================================================================

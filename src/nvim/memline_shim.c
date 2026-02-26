@@ -308,6 +308,9 @@ extern char *rs_findswapname(buf_T *buf, char **dirp, const char *old_fname,
 // Pass 8 Phase 2: ml_preserve and ml_sync_one Rust function declarations
 extern void rs_ml_preserve(buf_T *buf, bool message, bool do_fsync);
 extern int rs_ml_sync_one(buf_T *buf, int check_file, int check_char, bool do_fsync);
+// Pass 9 Phase 1: ml_open_file + ml_open_files Rust function declarations
+extern void rs_ml_open_file(buf_T *buf);
+extern void rs_ml_open_files(void);
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -519,83 +522,12 @@ void ml_setname(buf_T *buf)
 /// Open a file for the memfile for all buffers that are not readonly or have
 /// been modified.
 /// Used when 'updatecount' changes from zero to non-zero.
-void ml_open_files(void)
-{
-  FOR_ALL_BUFFERS(buf) {
-    if (!buf->b_p_ro || buf->b_changed) {
-      ml_open_file(buf);
-    }
-  }
-}
+/// (thin wrapper calling Rust)
+void ml_open_files(void) { rs_ml_open_files(); }
 
 /// Open a swapfile for an existing memfile, if there is no swapfile yet.
-/// If we are unable to find a file name, mf_fname will be NULL
-/// and the memfile will be in memory only (no recovery possible).
-void ml_open_file(buf_T *buf)
-{
-  memfile_T *mfp = buf->b_ml.ml_mfp;
-  if (mfp == NULL || mfp->mf_fd >= 0 || !buf->b_p_swf
-      || (cmdmod.cmod_flags & CMOD_NOSWAPFILE)
-      || buf->terminal) {
-    return;  // nothing to do
-  }
-
-  // For a spell buffer use a temp file name.
-  if (buf->b_spell) {
-    char *fname = vim_tempname();
-    if (fname != NULL) {
-      mf_open_file(mfp, fname);           // consumes fname!
-    }
-    buf->b_may_swap = false;
-    return;
-  }
-
-  // Try all directories in 'directory' option.
-  char *dirp = p_dir;
-  bool found_existing_dir = false;
-  while (true) {
-    if (*dirp == NUL) {
-      break;
-    }
-    // There is a small chance that between choosing the swapfile name
-    // and creating it, another Vim creates the file.  In that case the
-    // creation will fail and we will use another directory.
-    char *fname = findswapname(buf, &dirp, NULL, &found_existing_dir);
-    if (dirp == NULL) {
-      break;        // out of memory
-    }
-    if (fname == NULL) {
-      continue;
-    }
-    if (mf_open_file(mfp, fname) == OK) {       // consumes fname!
-      // don't sync yet in ml_sync_all()
-      mfp->mf_dirty = MF_DIRTY_YES_NOSYNC;
-      ml_upd_block0(buf, UB_SAME_DIR);
-
-      // Flush block zero, so others can read it
-      if (mf_sync(mfp, MFS_ZERO) == OK) {
-        // Mark all blocks that should be in the swapfile as dirty.
-        // Needed for when the 'swapfile' option was reset, so that
-        // the swapfile was deleted, and then on again.
-        mf_set_dirty(mfp);
-        break;
-      }
-      // Writing block 0 failed: close the file and try another dir
-      mf_close_file(buf, false);
-    }
-  }
-
-  if (*p_dir != NUL && mfp->mf_fname == NULL) {
-    need_wait_return = true;  // call wait_return() later
-    no_wait_return++;
-    semsg(_("E303: Unable to open swap file for \"%s\", recovery impossible"),
-          buf_spname(buf) != NULL ? buf_spname(buf) : buf->b_fname);
-    no_wait_return--;
-  }
-
-  // don't try to open a swapfile again
-  buf->b_may_swap = false;
-}
+/// (thin wrapper calling Rust)
+void ml_open_file(buf_T *buf) { rs_ml_open_file(buf); }
 
 /// If still need to create a swapfile, and starting to edit a not-readonly
 /// file, or reading into an existing buffer, create a swapfile now.
@@ -1841,6 +1773,14 @@ int64_t nvim_get_file_mtime(const char *fname)
   }
   return 0;
 }
+
+// Pass 9 Phase 1: ml_open_file + ml_open_files accessors for Rust FFI
+
+/// Get buf->b_spell (returns 1 if true, 0 if false)
+int nvim_buf_get_b_spell(buf_T *buf) { return buf->b_spell ? 1 : 0; }
+
+/// Set buf->b_may_swap (0 = false, non-zero = true)
+void nvim_buf_set_b_may_swap(buf_T *buf, int val) { buf->b_may_swap = (val != 0); }
 
 // Pass 8 Phase 1: findswapname cluster accessors for Rust FFI
 
