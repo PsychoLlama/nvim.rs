@@ -88,7 +88,6 @@
 #include "nvim/os/time_defs.h"
 #include "nvim/path.h"
 #include "nvim/pos_defs.h"
-#include "nvim/spell.h"
 #include "nvim/statusline.h"
 #include "nvim/strings.h"
 #include "nvim/ui.h"
@@ -195,8 +194,6 @@ enum {
 // The 'fileencoding' is at the end of b0_fname[], with a NUL in front of it.
 // When empty there is only the NUL.
 #define B0_HAS_FENC     8
-
-#define STACK_INCR      5       // nr of entries added to ml_stack at a time
 
 // lowest_marked is now owned by Rust (LOWEST_MARKED in modify.rs).
 // Use rs_ml_get_lowest_marked() / rs_ml_set_lowest_marked() to access it.
