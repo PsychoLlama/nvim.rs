@@ -67,7 +67,6 @@
 
 // Rust rs_* function declarations (from src/nvim-rs/shada/src/lib.rs)
 extern int rs_magic_isset(void);
-// rs_vim_be64toh extern removed (Phase 3 plan 92c8078e): vim_be64toh wrapper deleted.
 extern int rs_marks_equal(pos_T a, pos_T b);
 extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i);
 extern int rs_compare_file_marks(const void *a, const void *b);
@@ -76,8 +75,6 @@ extern int rs_shada_write_file(const char *file, bool nomerge);
 extern void rs_shada_read(void *sd_reader, int flags);
 extern var_flavour_T rs_var_flavour(const char *varname);
 extern int rs_shada_pack_entry(PackerBuffer *packer, const ShadaEntry *entry, size_t max_kbyte);
-
-// Error-prefix macros removed (plan 9106c29c Phase 1): format strings moved to Rust.
 
 /// Generic semsg wrapper: one string argument.
 void nvim_shada_semsg_1s(const char *fmt, const char *arg)
@@ -322,10 +319,6 @@ typedef struct {
 
 #include "shada_shim.c.generated.h"
 
-// var_shada_iter inlined into nvim_shada_var_shada_iter (plan b499a5d0 Phase 5).
-
-// find_buffer promoted to nvim_shada_find_buffer (plan b499a5d0 Phase 3): used by Rust.
-
 /// Find buffer for given buffer name (cached).
 ///
 /// @param[in,out]  fname_bufs_handle  Opaque PMap(cstr_t) handle.
@@ -357,21 +350,9 @@ buf_T *nvim_shada_find_buffer(void *const fname_bufs_handle, const char *const f
   return NULL;
 }
 
-// Thin alias so internal C callers still compile.
-static inline buf_T *find_buffer(PMap(cstr_t) *fname_bufs, const char *fname)
-{
-  return nvim_shada_find_buffer((void *)fname_bufs, fname);
-}
 
 #define SHADA_MPACK_FREE_SPACE (4 * MPACK_ITEM_SIZE)
 
-
-// nvim_shada_semsg_readerr deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s_u64.
-// nvim_shada_semsg_rcerr_extra_bytes deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_u64.
-// nvim_shada_semsg_rcerr_incomplete deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_u64.
-// nvim_shada_semsg_rcerr_parse_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_u64.
-// nvim_shada_semsg_rcerr_too_long deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_u64.
-// nvim_shada_semsg_rcerr_missing deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_u64.
 
 /// Decode a msgpack binary string to a typval_T at dst.
 /// Wrapper for decode_string() that writes the result to an existing buffer.
@@ -441,19 +422,7 @@ char *nvim_xmemdupz(const char *s, size_t len)
   return xmemdupz(s, len);
 }
 
-bool nvim_strequal(const char *s1, const char *s2)
-{
-  if (s1 == s2) {
-    return true;
-  }
-  if (!s1 || !s2) {
-    return false;
-  }
-  return strcmp(s1, s2) == 0;
-}
 
-
-// nvim_filemarks_get_greatest_timestamp deleted (plan 9106c29c Phase 2): direct field access.
 
 const char *nvim_shada_get_p_shada(void) { return p_shada; }
 char *nvim_shada_home_replace_save(const void *buf, const char *src)
@@ -602,8 +571,6 @@ const void *nvim_shada_jumplist_iter(const void *iter, void *wp,
 
 const void *nvim_shada_buflist_findnr(int nr) { return buflist_findnr(nr); }
 
-// nvim_shada_siemsg deleted (plan 9106c29c Phase 1): replaced by nvim_shada_siemsg_1s.
-
 /// Free a Header ShadaEntry's dict (api_free_dict wrapper for Header entries).
 /// Called from Rust rs_shada_free_entry_contents when entry_type == Header.
 void nvim_shada_free_header_entry(ShadaEntry *entry)
@@ -682,9 +649,6 @@ char *nvim_shada_build_default_path(void)
   char *shada_dir = stdpaths_user_state_subpath("shada", 0, false);
   return concat_fnames_realloc(shada_dir, "main.shada", true);
 }
-
-// nvim_shada_semsg_close_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_1s.
-// nvim_shada_semsg_open_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
 
 /// Get the size of FileDescriptor struct for Rust allocation
 size_t nvim_shada_file_descriptor_size(void) { return sizeof(FileDescriptor); }
@@ -770,8 +734,6 @@ void nvim_shada_os_remove(const char *fname)
   os_remove(fname);
 }
 
-// nvim_shada_smsg_writing deleted (plan 9106c29c Phase 1): replaced by nvim_shada_smsg_1s.
-
 // =============================================================================
 // Phase 4 (plan fd426e0f): nvim_shada_platform_check_writable migration accessors
 // =============================================================================
@@ -812,18 +774,6 @@ int nvim_shada_os_fchown(void *sd_writer, uint64_t uid, uint64_t gid)
                    (uv_uid_t)uid, (uv_gid_t)gid);
 }
 
-// nvim_shada_semsg_not_writable deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_1s.
-// nvim_shada_semsg_fchown_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
-// nvim_shada_semsg_merge_read_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
-// nvim_shada_semsg_tempfile_open_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
-// nvim_shada_semsg_all_tmpfiles deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_1s.
-// nvim_shada_semsg_mkdir_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
-// nvim_shada_semsg_write_open_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
-// nvim_shada_semsg_rename_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
-// nvim_shada_semsg_not_shada deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
-// nvim_shada_semsg_write_errors deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
-// nvim_shada_semsg_remove_reminder deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
-
 // =============================================================================
 // Phase 3 (plan 11dd3cf4): shada_read migration accessors
 // =============================================================================
@@ -844,22 +794,6 @@ void nvim_shada_fname_bufs_destroy(void *handle)
   map_foreach_key(m, key, { xfree((char *)key); })
   map_destroy(cstr_t, m);
   xfree(m);
-}
-
-/// Allocate and initialize a Set(ptr_t) for cl_bufs.
-void *nvim_shada_cl_bufs_new(void)
-{
-  Set(ptr_t) *s = xcalloc(1, sizeof(Set(ptr_t)));
-  *s = (Set(ptr_t))SET_INIT;
-  return s;
-}
-
-/// Destroy a Set(ptr_t) and free the struct.
-void nvim_shada_cl_bufs_destroy(void *handle)
-{
-  Set(ptr_t) *s = (Set(ptr_t) *)handle;
-  set_destroy(ptr_t, s);
-  xfree(s);
 }
 
 /// Allocate and initialize a Set(cstr_t) for oldfiles dedup.
@@ -903,12 +837,6 @@ int nvim_shada_argcount(void)
 {
   return ARGCOUNT;
 }
-
-// nvim_shada_apply_entry was deleted in Phase 1 (plan 92c8078e).
-// Its logic now lives in rs_shada_apply_entry (Rust) which calls the
-// compound accessors nvim_shada_apply_search_pattern, nvim_shada_apply_sub_string,
-// nvim_shada_apply_register, nvim_shada_apply_variable, nvim_shada_apply_mark_or_jump,
-// nvim_shada_apply_buffer_list, and nvim_shada_apply_local_or_change.
 
 /// Update w_changelistidx for all windows that have buffers in cl_bufs.
 /// Called after shada_read completes.
@@ -1263,18 +1191,6 @@ void **nvim_shada_wms_file_marks_put_ref(void *wms_opaque, const char *fname,
   return (void **)val;
 }
 
-// nvim_shada_file_marks_alloc deleted (plan 9106c29c Phase 2): Rust uses nvim_xcalloc directly.
-// nvim_shada_file_marks_greatest_ts deleted (plan 9106c29c Phase 2): direct field access.
-// nvim_shada_file_marks_update_ts deleted (plan 9106c29c Phase 2): inline if in Rust.
-// nvim_shada_file_marks_get_mark deleted (plan 9106c29c Phase 2): &raw mut (*fm).marks[idx].
-// nvim_shada_file_marks_get_change deleted (plan 9106c29c Phase 2): &raw mut (*fm).changes[idx].
-// nvim_shada_file_marks_changes_size deleted (plan 9106c29c Phase 2): (*fm).changes_size.
-// nvim_shada_file_marks_set_changes_size deleted (plan 9106c29c Phase 2): assign field directly.
-// nvim_shada_file_marks_additional_size deleted (plan 9106c29c Phase 2): (*fm).additional_marks_size.
-// nvim_shada_file_marks_get_additional deleted (plan 9106c29c Phase 2): (*fm).additional_marks.add(idx).
-// nvim_shada_file_marks_free_additional deleted (plan 9106c29c Phase 2): inline nvim_xfree + null.
-// nvim_shada_file_marks_push_additional deleted (plan 9106c29c Phase 2): inline xrealloc + write.
-
 
 /// Collect all FileMarks from the PMap, sort by greatest_timestamp (descending),
 /// and return as an allocated array of void* pointers.
@@ -1454,12 +1370,8 @@ int nvim_shada_tv_get_list_copyid(const void *tv)
 }
 
 // =============================================================================
-// Phase 1 (plan 92c8078e): compound accessor functions for rs_shada_apply_entry
-// nvim_shada_apply_search_pattern deleted (plan b499a5d0 Phase 1): Rust rs_shada_apply_search_pattern.
-// nvim_shada_apply_sub_string deleted (plan b499a5d0 Phase 1): Rust rs_shada_apply_sub_string.
-// =============================================================================
-
 // Phase 1 (plan b499a5d0): thin C accessors for search/sub apply migration
+// =============================================================================
 
 /// Get current search or substitute pattern timestamp (0 if no pattern set).
 uint64_t nvim_shada_get_search_pattern_timestamp(int is_substitute)
@@ -1531,9 +1443,6 @@ void nvim_shada_set_sub_replacement_from_entry(ShadaEntry *entry)
   regtilde(entry->data.sub_string.sub, rs_magic_isset(), false);
 }
 
-// nvim_shada_apply_register deleted (plan b499a5d0 Phase 2): Rust rs_shada_apply_register.
-// nvim_shada_apply_variable deleted (plan b499a5d0 Phase 2): Rust rs_shada_apply_variable.
-
 // Phase 2 (plan b499a5d0): thin C accessors for register/variable apply migration
 
 /// Return 1 if register type is char/line/block-wise (valid for ShaDa), 0 otherwise.
@@ -1573,8 +1482,6 @@ void nvim_shada_var_set_global_from_entry(ShadaEntry *entry)
   entry->data.global_var.value.v_type = VAR_UNKNOWN;
 }
 
-// nvim_shada_apply_mark_or_jump deleted (plan b499a5d0 Phase 4): Rust rs_shada_apply_mark_or_jump.
-
 // Phase 4 (plan b499a5d0): thin C accessors for mark/jump and local/change apply migration
 
 /// Build xfmark_T from entry fields and call mark_set_global.
@@ -1584,8 +1491,7 @@ void nvim_shada_var_set_global_from_entry(ShadaEntry *entry)
 int nvim_shada_mark_set_global_from_entry(ShadaEntry *entry, void *fname_bufs_handle,
                                           int no_overwrite)
 {
-  PMap(cstr_t) *fname_bufs = (PMap(cstr_t) *)fname_bufs_handle;
-  buf_T *buf = find_buffer(fname_bufs, entry->data.filemark.fname);
+  buf_T *buf = nvim_shada_find_buffer(fname_bufs_handle, entry->data.filemark.fname);
   if (buf != NULL) {
     XFREE_CLEAR(entry->data.filemark.fname);
   }
@@ -1634,8 +1540,7 @@ int nvim_shada_jumplist_entry_fnum(int idx)
 /// Handles buf lookup, XFREE_CLEAR of fname when buf found.
 void nvim_shada_jumplist_set_from_entry(int idx, ShadaEntry *entry, void *fname_bufs_handle)
 {
-  PMap(cstr_t) *fname_bufs = (PMap(cstr_t) *)fname_bufs_handle;
-  buf_T *buf = find_buffer(fname_bufs, entry->data.filemark.fname);
+  buf_T *buf = nvim_shada_find_buffer(fname_bufs_handle, entry->data.filemark.fname);
   if (buf != NULL) {
     XFREE_CLEAR(entry->data.filemark.fname);
   }
@@ -1665,8 +1570,6 @@ void nvim_shada_jumplist_update_len_and_idx(int inserted_at)
     curwin->w_jumplistidx++;
   }
 }
-
-// nvim_shada_apply_buffer_list deleted (plan b499a5d0 Phase 3): Rust rs_shada_apply_buffer_list.
 
 // Phase 3 (plan b499a5d0): thin C accessors for buffer list apply migration
 
@@ -1699,8 +1602,6 @@ void nvim_shada_buf_set_cursor_and_data(void *buf_handle, ShadaEntry *entry, siz
   buf->additional_data = entry->data.buffer_list.buffers[i].additional_data;
   entry->data.buffer_list.buffers[i].additional_data = NULL;
 }
-
-// nvim_shada_apply_local_or_change deleted (plan b499a5d0 Phase 4): Rust rs_shada_apply_local_or_change.
 
 /// Handle oldfiles set/list update for a filemark entry.
 /// Adds fname to oldfiles_set and oldfiles_list if get_old_files is true and fname not yet seen.

@@ -556,8 +556,6 @@ extern "C" {
     // nvim_shada_read_next_item removed (Phase 2 plan 92c8078e): Rust uses rs_shada_read_next_item.
     fn nvim_shada_fname_bufs_new() -> *mut c_void;
     fn nvim_shada_fname_bufs_destroy(handle: *mut c_void);
-    fn nvim_shada_cl_bufs_new() -> *mut c_void;
-    fn nvim_shada_cl_bufs_destroy(handle: *mut c_void);
     fn nvim_shada_oldfiles_set_new() -> *mut c_void;
     fn nvim_shada_oldfiles_set_destroy(handle: *mut c_void);
     fn nvim_shada_get_oldfiles_list() -> *mut c_void;
@@ -4021,8 +4019,6 @@ extern "C" {
     fn nvim_expand_env(src: *const c_char, dst: *mut c_char, dstlen: usize) -> usize;
     /// Duplicate string with length and allocation.
     fn nvim_xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
-    /// Compare strings for equality.
-    fn nvim_strequal(s1: *const c_char, s2: *const c_char) -> bool;
 }
 
 /// Maximum path length for expansion.
@@ -4049,7 +4045,7 @@ pub unsafe extern "C" fn rs_shada_filename(file: *const c_char) -> *mut c_char {
         if !p_shadafile.is_null() && *p_shadafile != 0 {
             // Check if writing to ShaDa file was disabled ("-i NONE" or "--clean")
             let none_str = c"NONE".as_ptr();
-            if nvim_strequal(p_shadafile, none_str) {
+            if !p_shadafile.is_null() && libc::strcmp(p_shadafile, none_str) == 0 {
                 return std::ptr::null_mut();
             }
             p_shadafile
@@ -6111,7 +6107,7 @@ pub unsafe extern "C" fn rs_shada_read(sd_reader: *mut c_void, flags: c_int) {
     }
 
     let fname_bufs = nvim_shada_fname_bufs_new();
-    let cl_bufs = nvim_shada_cl_bufs_new();
+    let cl_bufs = nvim_shada_set_init_ptr();
     let oldfiles_set = nvim_shada_oldfiles_set_new();
     // Ensure VV_OLDFILES list exists when we need to gather old files.
     let oldfiles_list = nvim_shada_get_oldfiles_list();
@@ -6179,7 +6175,7 @@ pub unsafe extern "C" fn rs_shada_read(sd_reader: *mut c_void, flags: c_int) {
 
     nvim_shada_for_all_tab_windows_update_changelist(cl_bufs);
     nvim_shada_fname_bufs_destroy(fname_bufs);
-    nvim_shada_cl_bufs_destroy(cl_bufs);
+    nvim_shada_set_destroy_ptr(cl_bufs);
     nvim_shada_oldfiles_set_destroy(oldfiles_set);
 }
 
