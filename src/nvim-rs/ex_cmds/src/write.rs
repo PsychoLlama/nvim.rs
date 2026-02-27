@@ -269,7 +269,7 @@ extern "C" {
     fn nvim_excmds_dialog_msg_readonly(fmt_id: c_int, arg: *const c_char) -> *mut c_char;
     fn nvim_excmds_error_msg(error_id: c_int, arg: *const c_char);
     fn nvim_excmds_set_forceit(eap: *mut ExArgHandle, val: c_int);
-    fn nvim_excmds_eap_get_forceit(eap: *const ExArgHandle) -> c_int;
+    fn nvim_exarg_get_forceit(eap: *const ExArgHandle) -> c_int;
     fn xfree(ptr: *mut std::ffi::c_void);
 }
 
@@ -334,7 +334,7 @@ pub unsafe extern "C" fn rs_handle_mkdir_p_arg(
 /// `eap` and `buf` must be valid pointers.
 #[no_mangle]
 pub unsafe extern "C" fn rs_check_readonly(eap: *mut ExArgHandle, buf: *mut BufHandle) -> c_int {
-    let forceit = nvim_excmds_eap_get_forceit(eap);
+    let forceit = nvim_exarg_get_forceit(eap);
     if forceit != 0 {
         return 0; // not readonly when forced
     }
@@ -638,7 +638,7 @@ extern "C" {
 #[no_mangle]
 pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
     let mut error: c_int = 0;
-    let save_forceit = nvim_excmds_eap_get_forceit(eap);
+    let save_forceit = nvim_exarg_get_forceit(eap);
 
     let cmdidx = nvim_exarg_get_cmdidx(eap);
     let cmd_xall = nvim_excmds_cmd_xall();
@@ -685,7 +685,7 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
                 } else {
                     // Track buffer ref in case autocmds delete it
                     let bufref = nvim_excmds_new_bufref(buf);
-                    let forceit = nvim_excmds_eap_get_forceit(eap);
+                    let forceit = nvim_exarg_get_forceit(eap);
                     if nvim_excmds_handle_mkdir_p_wqall(eap, buf) == 0
                         || nvim_excmds_buf_write_all(buf, forceit) == 0
                     {
@@ -766,7 +766,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
         return 1; // OK
     }
 
-    let forceit = nvim_excmds_eap_get_forceit(eap);
+    let forceit = nvim_exarg_get_forceit(eap);
     let append = nvim_excmds_eap_get_append(eap);
 
     if forceit == 0 && append == 0 {
@@ -951,7 +951,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
         let line1 = nvim_excmds_eap_get_line1(eap);
         let line2 = nvim_excmds_eap_get_line2_val(eap);
         let line_count = nvim_curbuf_get_b_ml_ml_line_count();
-        let forceit = nvim_excmds_eap_get_forceit(eap);
+        let forceit = nvim_exarg_get_forceit(eap);
         let append = nvim_excmds_eap_get_append(eap);
         let p_wa = nvim_excmds_get_p_wa();
 
@@ -993,7 +993,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
 
         let name_was_missing = nvim_excmds_curbuf_ffname_null();
         let append = nvim_excmds_eap_get_append(eap);
-        let forceit = nvim_excmds_eap_get_forceit(eap);
+        let forceit = nvim_exarg_get_forceit(eap);
         let line1 = nvim_excmds_eap_get_line1(eap);
         let line2 = nvim_excmds_eap_get_line2_val(eap);
 

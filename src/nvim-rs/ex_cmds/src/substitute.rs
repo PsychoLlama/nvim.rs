@@ -1235,11 +1235,10 @@ extern "C" {
     fn nvim_excmds_line_breakcheck();
     fn nvim_do_sub_ml_get_len(lnum: c_int) -> c_int;
     fn nvim_do_sub_ml_get(lnum: c_int) -> *const c_char;
-    fn nvim_do_sub_set_eap_nextcmd(eap: *mut ExArgHandle, p: *mut c_char);
+    fn nvim_excmds_set_nextcmd_direct(eap: *mut ExArgHandle, p: *mut c_char);
     fn nvim_excmds_msg_empty();
     fn nvim_do_sub_save_pat(pat: *const c_char, patlen: usize, which_pat: c_int);
     fn nvim_do_sub_set_replacement(sub_str: *const c_char);
-    fn nvim_do_sub_get_old_sub() -> *const c_char;
 }
 
 // Additional C functions used by do_sub
@@ -1297,7 +1296,6 @@ extern "C" {
 
     // ex_substitute_preview accessors
     fn nvim_excmds_arg_has_valid_delim(eap: *const ExArgHandle) -> c_int;
-    fn nvim_excmds_get_arg_mut(eap: *mut ExArgHandle) -> *mut c_char;
     fn nvim_excmds_eap_arg_restore(eap: *mut ExArgHandle, saved: *mut c_char);
 }
 
@@ -1531,7 +1529,7 @@ pub unsafe extern "C" fn rs_do_sub(
         }
     } else if nvim_exarg_get_skip(eap) == 0 {
         // Use previous pattern and substitution
-        let old_sub = nvim_do_sub_get_old_sub();
+        let old_sub = nvim_excmds_old_sub_get_sub();
         if old_sub.is_null() {
             nvim_emsg_nopresub();
             return 0;
@@ -1629,7 +1627,7 @@ pub unsafe extern "C" fn rs_do_sub(
             xfree(sub as *mut std::ffi::c_void);
             return 0;
         }
-        nvim_do_sub_set_eap_nextcmd(eap, nextcmd);
+        nvim_excmds_set_nextcmd_direct(eap, nextcmd);
     }
 
     if nvim_exarg_get_skip(eap) != 0 {
@@ -2797,7 +2795,7 @@ pub unsafe extern "C" fn rs_ex_substitute_preview(
     // Only preview once the pattern delimiter has been typed:
     // proceed when *eap->arg is non-NUL and NOT alphanumeric (a valid delimiter).
     if nvim_excmds_arg_has_valid_delim(eap) != 0 {
-        let save_eap = nvim_excmds_get_arg_mut(eap);
+        let save_eap = nvim_exarg_get_arg(eap as *const ExArgHandle) as *mut c_char;
         let retv = rs_do_sub(eap, cmdpreview_ns, cmdpreview_bufnr, 1);
         nvim_excmds_eap_arg_restore(eap, save_eap);
         return retv;

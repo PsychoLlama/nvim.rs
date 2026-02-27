@@ -1994,9 +1994,6 @@ char *nvim_excmds_dialog_msg_readonly(int fmt_id, const char *arg)
 /// Set eap->forceit to val.
 void nvim_excmds_set_forceit(exarg_T *eap, int val) { eap->forceit = (bool)val; }
 
-/// Get eap->forceit.
-int nvim_excmds_eap_get_forceit(const exarg_T *eap) { return eap->forceit ? 1 : 0; }
-
 /// Get curwin->w_botline.
 int nvim_curwin_get_w_botline(void) { return (int)curwin->w_botline; }
 
@@ -2204,8 +2201,6 @@ int nvim_do_sub_ml_get_len(int lnum) { return (int)ml_get_len((linenr_T)lnum); }
 /// Get ml_get(lnum) for do_sub.
 const char *nvim_do_sub_ml_get(int lnum) { return ml_get((linenr_T)lnum); }
 
-/// Set eap->nextcmd.
-void nvim_do_sub_set_eap_nextcmd(exarg_T *eap, char *p) { eap->nextcmd = p; }
 
 /// Save substitute pattern and history via save_re_pat + add_to_history.
 void nvim_do_sub_save_pat(const char *pat, size_t patlen, int which_pat)
@@ -2224,8 +2219,6 @@ void nvim_do_sub_set_replacement(const char *sub)
   });
 }
 
-/// Get old_sub.sub pointer.
-const char *nvim_do_sub_get_old_sub(void) { return old_sub.sub; }
 
 // =============================================================================
 // regmmatch_T opaque handle accessors for do_sub
@@ -2321,8 +2314,6 @@ char *nvim_do_sub_regtilde(char *sub, int magic, int preview)
 
 // --- curbuf field accessors ---
 
-/// Get curbuf->b_nwindows
-int nvim_ecmd_curbuf_get_nwindows(void) { return curbuf->b_nwindows; }
 
 /// Get curbuf->b_flags
 int nvim_ecmd_curbuf_get_b_flags(void) { return curbuf->b_flags; }
@@ -2387,8 +2378,6 @@ int nvim_ecmd_curwin_get_topline(void) { return (int)curwin->w_topline; }
 /// Get curwin->w_alt_fnum
 int nvim_ecmd_curwin_get_alt_fnum(void) { return curwin->w_alt_fnum; }
 
-/// Set curwin->w_alt_fnum
-void nvim_ecmd_curwin_set_alt_fnum(int fnum) { curwin->w_alt_fnum = fnum; }
 
 /// Set curwin->w_pcmark.lnum and col
 void nvim_ecmd_curwin_set_pcmark(int lnum, int col)
@@ -2438,11 +2427,6 @@ int nvim_ecmd_curwin_ws_is_own_buf(void)
 
 // --- buf_T opaque handle accessors ---
 
-/// Get buf->b_fnum
-int nvim_ecmd_buf_get_b_fnum(buf_T *buf) { return buf->b_fnum; }
-
-/// Get buf->b_fname (short file name)
-const char *nvim_ecmd_buf_get_fname(buf_T *buf) { return buf->b_fname; }
 
 /// Get buf->b_ml.ml_mfp != NULL
 int nvim_ecmd_buf_has_memfile(buf_T *buf) { return buf->b_ml.ml_mfp != NULL ? 1 : 0; }
@@ -2487,8 +2471,6 @@ void nvim_ecmd_win_set_locked(win_T *win, int val) { win->w_locked = (bool)val; 
 /// Allocate a new bufref_T on the heap. Must be freed with nvim_ecmd_free_bufref.
 void *nvim_ecmd_new_bufref(void) { return xcalloc(1, sizeof(bufref_T)); }
 
-/// Free a heap-allocated bufref_T
-void nvim_ecmd_free_bufref(void *ref) { xfree(ref); }
 
 /// Call set_bufref(ref, curbuf)
 void nvim_ecmd_set_bufref_to_curbuf(void *ref) { set_bufref((bufref_T *)ref, curbuf); }
