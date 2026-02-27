@@ -27,12 +27,10 @@ extern "C" {
     fn nvim_syncluster_get_name_u(cluster: SynClusterHandle) -> *const c_char;
     fn nvim_syncluster_get_list(cluster: SynClusterHandle) -> IdListHandle;
     fn nvim_syncluster_has_list(cluster: SynClusterHandle) -> c_int;
-    fn nvim_syncluster_get_id(cluster: SynClusterHandle) -> c_int;
 
     // Synblock cluster accessors
     fn nvim_synblock_get_cluster_count(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_cluster(block: SynBlockHandle, idx: c_int) -> SynClusterHandle;
-    fn nvim_synblock_get_cluster_id(block: SynBlockHandle, idx: c_int) -> c_int;
     fn nvim_synblock_get_spell_cluster_id(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_nospell_cluster_id(block: SynBlockHandle) -> c_int;
 
@@ -88,12 +86,26 @@ pub fn cluster_has_list(cluster: SynClusterHandle) -> bool {
 }
 
 /// Get the ID of a cluster (SYNID_CLUSTER + index).
+/// The index is computed by iterating through curwin's synblock clusters.
+/// Returns 0 if the cluster is not found.
 #[must_use]
 pub fn cluster_id(cluster: SynClusterHandle) -> i32 {
     if cluster.is_null() {
         return 0;
     }
-    unsafe { nvim_syncluster_get_id(cluster) }
+    // Get the curwin synblock and find the cluster index by pointer comparison
+    let block = unsafe { nvim_syn_get_curwin_synblock() };
+    if block.is_null() {
+        return 0;
+    }
+    let count = unsafe { nvim_synblock_get_cluster_count(block) };
+    for i in 0..count {
+        let c = unsafe { nvim_synblock_get_cluster(block, i) };
+        if c.0 == cluster.0 {
+            return SYNID_CLUSTER + i;
+        }
+    }
+    0
 }
 
 // =============================================================================
@@ -119,12 +131,17 @@ pub fn synblock_get_cluster(block: SynBlockHandle, idx: i32) -> SynClusterHandle
 }
 
 /// Get the ID of a cluster by index (SYNID_CLUSTER + idx).
+/// Implements nvim_synblock_get_cluster_id arithmetic in Rust.
 #[must_use]
 pub fn synblock_cluster_id(block: SynBlockHandle, idx: i32) -> i32 {
-    if block.is_null() {
+    if block.is_null() || idx < 0 {
         return 0;
     }
-    unsafe { nvim_synblock_get_cluster_id(block, idx) }
+    let count = unsafe { nvim_synblock_get_cluster_count(block) };
+    if idx >= count {
+        return 0;
+    }
+    SYNID_CLUSTER + idx
 }
 
 /// Get the spell cluster ID for a synblock.

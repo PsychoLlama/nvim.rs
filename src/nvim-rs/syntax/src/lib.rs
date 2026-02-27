@@ -413,9 +413,6 @@ extern "C" {
     /// Check if cluster has a list
     fn nvim_syncluster_has_list(cluster: SynClusterHandle) -> c_int;
 
-    /// Get cluster ID from synblock at index
-    fn nvim_synblock_get_cluster_id(block: SynBlockHandle, idx: c_int) -> c_int;
-
     // -------------------------------------------------------------------------
     // Phase 4: ID list iteration helpers
     // -------------------------------------------------------------------------
@@ -445,9 +442,6 @@ extern "C" {
     // -------------------------------------------------------------------------
     // Phase 5: Cluster & containedin logic accessors
     // -------------------------------------------------------------------------
-
-    /// Get cluster ID from a cluster
-    fn nvim_syncluster_get_id(cluster: SynClusterHandle) -> c_int;
 
     // Note: nvim_synblock_get_cluster and nvim_synblock_get_pattern are already
     // declared above in the synblock accessors section
@@ -489,9 +483,6 @@ extern "C" {
     // -------------------------------------------------------------------------
     // Phase 18a: Synblock setters for :syntax commands
     // -------------------------------------------------------------------------
-
-    /// Check if a pattern at index is for syncing
-    fn nvim_synblock_pattern_is_syncing(block: SynBlockHandle, idx: c_int) -> c_int;
 
     /// Get the hl group ID from a pattern (minus 1)
     fn nvim_synpat_get_hl_group(pat: SynPatHandle) -> c_int;
@@ -1141,13 +1132,18 @@ pub fn syncluster_list(cluster: SynClusterHandle) -> Option<IdListHandle> {
     }
 }
 
-/// Get the cluster ID at an index in a synblock
+/// Get the cluster ID at an index in a synblock (SYNID_CLUSTER + idx).
+/// Implements nvim_synblock_get_cluster_id arithmetic in Rust.
 #[must_use]
 pub fn synblock_cluster_id(block: SynBlockHandle, idx: i32) -> i32 {
-    if block.is_null() {
+    if block.is_null() || idx < 0 {
         return 0;
     }
-    unsafe { nvim_synblock_get_cluster_id(block, idx) }
+    let count = unsafe { nvim_synblock_get_cluster_count(block) };
+    if idx >= count {
+        return 0;
+    }
+    SYNID_CLUSTER + idx
 }
 
 // =============================================================================
@@ -1248,13 +1244,11 @@ pub fn has_current_next_list() -> bool {
 // Phase 5: Cluster & containedin safe wrappers
 // =============================================================================
 
-/// Get the cluster ID from a cluster
+/// Get the cluster ID from a cluster (SYNID_CLUSTER + index).
+/// Delegates to cluster::cluster_id which finds the index by searching curwin's synblock.
 #[must_use]
 pub fn syncluster_id(cluster: SynClusterHandle) -> i32 {
-    if cluster.is_null() {
-        return 0;
-    }
-    unsafe { nvim_syncluster_get_id(cluster) }
+    cluster::cluster_id(cluster)
 }
 
 /// Get a cluster at an index from a synblock
@@ -1441,13 +1435,18 @@ pub fn subcommand_name(idx: i32) -> Option<&'static str> {
     std::str::from_utf8(without_nul).ok()
 }
 
-/// Check if a pattern at index is for syncing
+/// Check if a pattern at index is for syncing.
+/// Implements nvim_synblock_pattern_is_syncing in Rust using get_pattern + get_syncing.
 #[must_use]
 pub fn synblock_pattern_is_syncing(block: SynBlockHandle, idx: i32) -> bool {
-    if block.is_null() {
+    if block.is_null() || idx < 0 {
         return false;
     }
-    unsafe { nvim_synblock_pattern_is_syncing(block, idx) != 0 }
+    let pat = unsafe { nvim_synblock_get_pattern(block, idx) };
+    if pat.is_null() {
+        return false;
+    }
+    unsafe { nvim_synpat_get_syncing(pat) != 0 }
 }
 
 /// Get the highlight group ID from a pattern (minus 1)

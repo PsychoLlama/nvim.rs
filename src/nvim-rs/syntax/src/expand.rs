@@ -5,6 +5,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::types::{SynBlockHandle, SynClusterHandle};
+
 // =============================================================================
 // FFI declarations
 // =============================================================================
@@ -14,6 +16,8 @@ extern "C" {
     fn nvim_xp_set_context(xp: *mut c_void, val: c_int);
     fn nvim_xp_set_pattern(xp: *mut c_void, val: *mut c_char);
     fn nvim_xp_get_pattern(xp: *mut c_void) -> *mut c_char;
+    /// Get xp->xp_buf (EXPAND_BUF_LEN bytes).
+    fn nvim_xp_get_buf(xp: *mut c_void) -> *mut c_char;
 
     // include_link/default/none setters
     fn nvim_syn_set_include_link(val: c_int);
@@ -24,14 +28,19 @@ extern "C" {
     fn nvim_syn_get_expand_what() -> c_int;
     fn nvim_syn_set_expand_what(what: c_int);
 
-    // cluster expansion: format @name into xp->xp_buf and return it
-    fn nvim_syn_expand_cluster_name(xp: *mut c_void, idx: c_int) -> *mut c_char;
+    // cluster expansion: get count and name from current synblock
     fn nvim_syn_get_expand_cluster_count() -> c_int;
+    fn nvim_synblock_get_cluster(block: SynBlockHandle, idx: c_int) -> SynClusterHandle;
+    fn nvim_syncluster_get_name(cluster: SynClusterHandle) -> *const c_char;
+    fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
 
     // String helpers
     fn skiptowhite(s: *const c_char) -> *mut c_char;
     fn skipwhite(s: *const c_char) -> *mut c_char;
 }
+
+// Size of xp_buf (must match EXPAND_BUF_LEN in cmdexpand_defs.h)
+const EXPAND_BUF_LEN: usize = 256;
 
 // expand_what values (match C enum in syntax_accessors.c)
 const EXP_SUBCMD: c_int = 0;
@@ -219,7 +228,7 @@ pub unsafe extern "C" fn rs_get_syntax_name(xp: *mut c_void, idx: c_int) -> *mut
         w if w == EXP_CLUSTER => {
             let count = nvim_syn_get_expand_cluster_count();
             if idx < count {
-                nvim_syn_expand_cluster_name(xp, idx)
+                expand_cluster_name(xp, idx)
             } else {
                 std::ptr::null_mut()
             }
@@ -231,6 +240,45 @@ pub unsafe extern "C" fn rs_get_syntax_name(xp: *mut c_void, idx: c_int) -> *mut
 // =============================================================================
 // Helpers
 // =============================================================================
+
+/// Case-insensitive comparison of `s` (C string) with `expected` ASCII slice,
+/// Format cluster name "@name" into xp->xp_buf and return it.
+/// Replaces C `nvim_syn_expand_cluster_name`.
+///
+/// # Safety
+/// `xp` must be a valid pointer to expand_T; `idx` must be a valid cluster index.
+unsafe fn expand_cluster_name(xp: *mut c_void, idx: c_int) -> *mut c_char {
+    let block = nvim_syn_get_curwin_synblock();
+    if block.is_null() {
+        return std::ptr::null_mut();
+    }
+    let cluster = nvim_synblock_get_cluster(block, idx);
+    if cluster.is_null() {
+        return std::ptr::null_mut();
+    }
+    let name = nvim_syncluster_get_name(cluster);
+    if name.is_null() {
+        return std::ptr::null_mut();
+    }
+    let buf = nvim_xp_get_buf(xp);
+    if buf.is_null() {
+        return std::ptr::null_mut();
+    }
+    // Write "@name\0" into the buffer, respecting EXPAND_BUF_LEN
+    let name_len = std::ffi::CStr::from_ptr(name).to_bytes().len();
+    // +2 for '@' and NUL terminator
+    let needed = name_len + 2;
+    let avail = EXPAND_BUF_LEN;
+    // Write '@'
+    *buf = b'@' as c_char;
+    // Copy name bytes (truncated if needed)
+    let copy_len = std::cmp::min(name_len, avail - 2);
+    std::ptr::copy_nonoverlapping(name, buf.add(1), copy_len);
+    // NUL-terminate
+    *buf.add(copy_len + 1) = 0;
+    let _ = needed; // suppress unused warning
+    buf
+}
 
 /// Case-insensitive comparison of `s` (C string) with `expected` ASCII slice,
 /// checking exactly `len` bytes.

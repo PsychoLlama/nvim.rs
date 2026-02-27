@@ -887,48 +887,11 @@ int nvim_stateitem_has_cont_list(stateitem_T *item) { return item->si_cont_list 
 int nvim_syn_get_topgrp(void) { return curwin->w_s->b_syn_topgrp; }
 void nvim_syn_set_topgrp(int topgrp) { curwin->w_s->b_syn_topgrp = topgrp; }
 
-/// Check if a pattern at index is for syncing
-int nvim_synblock_pattern_is_syncing(synblock_T *block, int idx)
-{
-  if (idx < 0 || idx >= block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(block)[idx].sp_syncing;
-}
-
 int nvim_synpat_get_hl_group(synpat_T *pat) { return pat->sp_syn.id - 1; }
 
 int nvim_syn_get_expand_what(void) { return expand_what; }
 void nvim_syn_set_expand_what(int what) { expand_what = what; }
 
-/// Get cluster ID from synblock at index
-/// Returns the cluster ID (SYNID_CLUSTER + idx) or 0 if invalid
-int nvim_synblock_get_cluster_id(synblock_T *block, int idx)
-{
-  if (block == NULL || idx < 0 || idx >= block->b_syn_clusters.ga_len) {
-    return 0;
-  }
-  return SYNID_CLUSTER + idx;
-}
-
-/// Get cluster ID from a cluster pointer
-/// This computes the ID by finding the offset in the current synblock's clusters
-int nvim_syncluster_get_id(syn_cluster_T *cluster)
-{
-  if (cluster == NULL || curwin == NULL || curwin->w_s == NULL) {
-    return 0;
-  }
-  synblock_T *block = curwin->w_s;
-  syn_cluster_T *clusters = (syn_cluster_T *)block->b_syn_clusters.ga_data;
-  if (clusters == NULL) {
-    return 0;
-  }
-  int idx = (int)(cluster - clusters);
-  if (idx < 0 || idx >= block->b_syn_clusters.ga_len) {
-    return 0;
-  }
-  return SYNID_CLUSTER + idx;
-}
 int nvim_syn_state_item_spans_line(int idx, int lnum)
 {
   return rs_syn_state_item_spans_line(idx, lnum);
@@ -2198,18 +2161,6 @@ char *get_syntime_arg(expand_T *xp, int idx) { return rs_get_syntime_arg(xp, idx
 void nvim_syn_set_include_link(int val) { include_link = val; }
 void nvim_syn_set_include_default(int val) { include_default = val; }
 void nvim_syn_set_include_none(int val) { include_none = val; }
-
-/// Format cluster name "@name" into xp->xp_buf and return it.
-char *nvim_syn_expand_cluster_name(expand_T *xp, int idx)
-{
-  synblock_T *block = curwin->w_s;
-  if (idx < 0 || idx >= block->b_syn_clusters.ga_len) {
-    return NULL;
-  }
-  vim_snprintf(xp->xp_buf, EXPAND_BUF_LEN, "@%s",
-               SYN_CLSTR(block)[idx].scl_name);
-  return xp->xp_buf;
-}
 
 int nvim_syn_get_expand_cluster_count(void)
 {

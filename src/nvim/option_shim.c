@@ -2599,6 +2599,8 @@ void nvim_xp_set_prefix(expand_T *xp, int val) { xp->xp_prefix = (xp_prefix_T)va
 char *nvim_xp_get_line(expand_T *xp) { return xp->xp_line; }
 int nvim_xp_get_backslash(expand_T *xp) { return xp->xp_backslash; }
 void nvim_xp_set_backslash(expand_T *xp, int val) { xp->xp_backslash = val; }
+/// Return xp->xp_buf (fixed-size buffer, EXPAND_BUF_LEN bytes).
+char *nvim_xp_get_buf(expand_T *xp) { return xp->xp_buf; }
 
 // expand_option static variable get/set accessors
 OptIndex nvim_get_expand_option_idx(void) { return expand_option_idx; }

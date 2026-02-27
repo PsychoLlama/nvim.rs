@@ -23,7 +23,6 @@ extern "C" {
     fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
     fn nvim_synblock_get_folditems(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_pattern_is_syncing(block: SynBlockHandle, idx: c_int) -> c_int;
 
     // synpat_T field accessors
     fn nvim_synpat_get_type(pat: SynPatHandle) -> c_int;
@@ -142,13 +141,18 @@ pub fn synblock_fold_item_count(block: SynBlockHandle) -> i32 {
     unsafe { nvim_synblock_get_folditems(block) }
 }
 
-/// Check if a pattern at the given index is for syncing
+/// Check if a pattern at the given index is for syncing.
+/// Implements nvim_synblock_pattern_is_syncing in Rust using get_pattern + get_syncing.
 #[must_use]
 pub fn synblock_pattern_is_syncing(block: SynBlockHandle, idx: i32) -> bool {
     if block.is_null() || idx < 0 {
         return false;
     }
-    unsafe { nvim_synblock_pattern_is_syncing(block, idx) != 0 }
+    let pat = unsafe { nvim_synblock_get_pattern(block, idx) };
+    if pat.is_null() {
+        return false;
+    }
+    unsafe { nvim_synpat_get_syncing(pat) != 0 }
 }
 
 /// Count patterns with a specific highlight group ID.

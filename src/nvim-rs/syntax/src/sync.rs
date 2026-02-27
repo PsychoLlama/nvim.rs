@@ -43,9 +43,9 @@ extern "C" {
     fn nvim_synblock_get_sync_linebreaks(block: SynBlockHandle) -> c_int;
 
     // Pattern sync accessors
+    fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
     fn nvim_synpat_get_syncing(pat: SynPatHandle) -> c_int;
     fn nvim_synpat_get_sync_idx(pat: SynPatHandle) -> c_int;
-    fn nvim_synblock_pattern_is_syncing(block: SynBlockHandle, idx: c_int) -> c_int;
 
     // Current synblock sync accessors
     fn nvim_syn_get_sync_minlines() -> c_int;
@@ -200,12 +200,17 @@ pub fn synpat_sync_idx(pat: SynPatHandle) -> i32 {
 }
 
 /// Check if a pattern at a given index is a syncing pattern.
+/// Implements nvim_synblock_pattern_is_syncing in Rust using get_pattern + get_syncing.
 #[must_use]
 pub fn synblock_pattern_is_syncing(block: SynBlockHandle, idx: i32) -> bool {
-    if block.is_null() {
+    if block.is_null() || idx < 0 {
         return false;
     }
-    unsafe { nvim_synblock_pattern_is_syncing(block, idx) != 0 }
+    let pat = unsafe { nvim_synblock_get_pattern(block, idx) };
+    if pat.is_null() {
+        return false;
+    }
+    unsafe { nvim_synpat_get_syncing(pat) != 0 }
 }
 
 // =============================================================================
