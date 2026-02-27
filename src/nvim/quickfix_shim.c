@@ -2448,84 +2448,43 @@ bool nvim_qf_win_is_preview(const void *win) { return ((const win_T *)win)->w_p_
 
 bool nvim_qf_win_is_wfb(const void *win) { return ((const win_T *)win)->w_p_wfb; }
 
-/// qf_pattern may be NULL (use line/col instead).
-void nvim_qf_jump_goto_line(linenr_T qf_lnum, int qf_col, char qf_viscol, const char *qf_pattern)
+// Phase 14 Phase 2: Thin C accessors replacing nvim_qf_jump_goto_line and
+// nvim_qf_jump_print_msg (both deleted; logic inlined into Rust navigate.rs).
+
+linenr_T nvim_qf_curbuf_line_count(void) { return curbuf->b_ml.ml_line_count; }
+void nvim_qf_curwin_set_col(int col) { curwin->w_cursor.col = col; }
+void nvim_qf_curwin_set_coladd_zero(void) { curwin->w_cursor.coladd = 0; }
+void nvim_qf_curwin_set_curswant(void) { curwin->w_set_curswant = true; }
+void nvim_qf_coladvance(int col) { coladvance(curwin, col); }
+void nvim_qf_beginline_white_fix(void) { beginline(BL_WHITE | BL_FIX); }
+bool nvim_qf_do_search_pattern(const char *pat)
 {
-  if (qf_pattern == NULL) {
-    // Go to line with error, unless qf_lnum is 0.
-    linenr_T i = qf_lnum;
-    if (i > 0) {
-      i = MIN(i, curbuf->b_ml.ml_line_count);
-      curwin->w_cursor.lnum = i;
-    }
-    if (qf_col > 0) {
-      curwin->w_cursor.coladd = 0;
-      if (qf_viscol == true) {
-        coladvance(curwin, qf_col - 1);
-      } else {
-        curwin->w_cursor.col = qf_col - 1;
-      }
-      curwin->w_set_curswant = true;
-      check_cursor(curwin);
-    } else {
-      beginline(BL_WHITE | BL_FIX);
-    }
-  } else {
-    // Move the cursor to the first line in the buffer
-    pos_T save_cursor = curwin->w_cursor;
-    curwin->w_cursor.lnum = 0;
-    if (!do_search(NULL, '/', '/', (char *)qf_pattern, strlen(qf_pattern), 1, SEARCH_KEEP,
-                   NULL)) {
-      curwin->w_cursor = save_cursor;
-    }
+  pos_T save_cursor = curwin->w_cursor;
+  curwin->w_cursor.lnum = 0;
+  if (!do_search(NULL, '/', '/', (char *)pat, strlen(pat), 1, SEARCH_KEEP, NULL)) {
+    curwin->w_cursor = save_cursor;
+    return false;
   }
+  return true;
 }
-
-/// Print the "(N of M)" quickfix jump status message.
-void nvim_qf_jump_print_msg(void *qi_void, int qf_index, void *qf_ptr_void,
-                             void *old_curbuf_void, linenr_T old_lnum)
+bool nvim_msg_keep_qf(const char *s, int attr, bool keep, bool multiline)
 {
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  qfline_T *qf_ptr = (qfline_T *)qf_ptr_void;
-  buf_T *old_curbuf = (buf_T *)old_curbuf_void;
-
-  garray_T *const gap = qfga_get();
-
-  // Update the screen before showing the message, unless messages scrolled.
-  if (!msg_scrolled) {
-    update_topline(curwin);
-    if (must_redraw) {
-      update_screen();
-    }
-  }
-  char qf_types_buf[20];
-  vim_snprintf(IObuff, IOSIZE, _("(%d of %d)%s%s: "), qf_index,
-               qi->qf_lists[qi->qf_curlist].qf_count,
-               qf_ptr->qf_cleared ? _(" (line deleted)") : "",
-               rs_qf_types(qf_ptr->qf_type, qf_ptr->qf_nr, qf_types_buf, sizeof(qf_types_buf)));
-  // Add the message, skipping leading whitespace and newlines.
-  ga_concat(gap, IObuff);
-  char fmt_buf[IOSIZE];
-  size_t fmt_len = rs_qf_fmt_text(skipwhite(qf_ptr->qf_text), fmt_buf, sizeof(fmt_buf));
-  ga_concat_len(gap, fmt_buf, fmt_len);
-  ga_append(gap, NUL);
-
-  // Output the message.  Overwrite to avoid scrolling when the 'O'
-  // flag is present in 'shortmess'; But when not jumping, print the
-  // whole message.
-  linenr_T i = msg_scroll;
-  if (curbuf == old_curbuf && curwin->w_cursor.lnum == old_lnum) {
-    msg_scroll = true;
-  } else if ((msg_scrolled == 0 || (p_ch == 0 && msg_scrolled == 1))
-             && shortmess(SHM_OVERALL)) {
-    msg_scroll = false;
-  }
-  msg_ext_set_kind("quickfix");
-  msg_keep(gap->ga_data, 0, true, false);
-  msg_scroll = (int)i;
-
-  qfga_clear();
+  return msg_keep(s, attr, keep, multiline);
 }
+int nvim_qf_get_curlist_count(const void *qi_void)
+{
+  const qf_info_T *qi = (const qf_info_T *)qi_void;
+  return qi->qf_lists[qi->qf_curlist].qf_count;
+}
+bool nvim_qfline_get_cleared_bool(const void *qfp_void)
+{
+  return ((const qfline_T *)qfp_void)->qf_cleared != 0;
+}
+char nvim_qfline_get_type_char(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_type; }
+int nvim_qfline_get_nr_int(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_nr; }
+const char *nvim_qfline_get_text_ptr(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_text; }
+char *nvim_skipwhite_qf(const char *s) { return skipwhite(s); }
+const char *nvim_qf_gettext_line_deleted(void) { return _(" (line deleted)"); }
 
 void *nvim_qf_get_curbuf(void) { return curbuf; }
 

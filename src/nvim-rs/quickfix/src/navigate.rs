@@ -1632,19 +1632,6 @@ pub mod jump_machinery {
         fn nvim_qf_jump_emsg_ll_changed();
 
         // Phase 3 wrappers
-        fn nvim_qf_jump_goto_line(
-            qf_lnum: LinenrT,
-            qf_col: c_int,
-            qf_viscol: i8,
-            qf_pattern: *const i8,
-        );
-        fn nvim_qf_jump_print_msg(
-            qi: QfInfoHandleMut,
-            qf_index: c_int,
-            qf_ptr: QfLineHandle,
-            old_curbuf: BufHandle,
-            old_lnum: LinenrT,
-        );
         fn nvim_qf_get_curbuf() -> BufHandle;
         fn nvim_qf_fdo_quickfix() -> bool;
         #[link_name = "rs_foldOpenCursor"]
@@ -1670,6 +1657,47 @@ pub mod jump_machinery {
             prev_winid: c_int,
             opened_window: *mut bool,
         ) -> c_int;
+
+        // Phase 14 Phase 2: goto_line inlined accessors
+        fn nvim_qf_curbuf_line_count() -> LinenrT;
+        fn nvim_qf_curwin_set_cursor(lnum: LinenrT, col: c_int);
+        fn nvim_qf_curwin_set_col(col: c_int);
+        fn nvim_qf_curwin_set_coladd_zero();
+        fn nvim_qf_curwin_set_curswant();
+        fn nvim_qf_coladvance(col: c_int);
+        fn nvim_qf_beginline_white_fix();
+        fn nvim_qf_do_search_pattern(pat: *const std::ffi::c_char) -> bool;
+        fn nvim_qf_check_cursor_curwin();
+        // Phase 14 Phase 2: print_msg inlined accessors
+        fn nvim_get_msg_scrolled() -> c_int;
+        fn nvim_qf_update_topline_curwin();
+        fn nvim_get_must_redraw() -> c_int;
+        fn nvim_update_screen();
+        fn nvim_qf_get_curlist_count(qi: *const c_void) -> c_int;
+        fn nvim_qfline_get_cleared_bool(qfp: QfLineHandle) -> bool;
+        fn nvim_qfline_get_type_char(qfp: QfLineHandle) -> std::ffi::c_char;
+        fn nvim_qfline_get_nr_int(qfp: QfLineHandle) -> c_int;
+        fn nvim_qfline_get_text_ptr(qfp: QfLineHandle) -> *const std::ffi::c_char;
+        fn nvim_skipwhite_qf(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+        fn nvim_get_msg_scroll() -> c_int;
+        fn nvim_set_msg_scroll(val: c_int);
+        fn nvim_ecmd_shortmess_overall() -> c_int;
+        fn nvim_get_p_ch() -> i64;
+        fn nvim_msg_ext_set_kind(kind: *const std::ffi::c_char);
+        fn nvim_msg_keep_qf(
+            s: *const std::ffi::c_char,
+            attr: c_int,
+            keep: bool,
+            multiline: bool,
+        ) -> bool;
+        fn nvim_qf_gettext_line_deleted() -> *const std::ffi::c_char;
+        // rs_qf_fmt_text (from window.rs, intra-crate symbol)
+        #[link_name = "rs_qf_fmt_text"]
+        fn navigate_qf_fmt_text(
+            text: *const std::ffi::c_char,
+            out: *mut std::ffi::c_char,
+            out_size: usize,
+        ) -> usize;
     }
 
     /// Edit buffer, position cursor, open folds, and print message.
@@ -1708,10 +1736,11 @@ pub mod jump_machinery {
             nvim_qf_setpcmark();
         }
 
-        nvim_qf_jump_goto_line(
+        // Phase 14: inlined nvim_qf_jump_goto_line
+        qf_jump_goto_line(
             nvim_qfline_get_lnum(qf_ptr),
             nvim_qfline_get_col(qf_ptr),
-            i8::from(nvim_qfline_get_viscol(qf_ptr)),
+            nvim_qfline_get_viscol(qf_ptr),
             nvim_qfline_get_pattern(qf_ptr),
         );
 
@@ -1719,10 +1748,135 @@ pub mod jump_machinery {
             nvim_qf_fold_open_cursor();
         }
         if print_message {
-            nvim_qf_jump_print_msg(qi, qf_index, qf_ptr, old_curbuf, old_lnum);
+            // Phase 14: inlined nvim_qf_jump_print_msg
+            qf_jump_print_msg(qi, qf_index, qf_ptr, old_curbuf, old_lnum);
         }
 
         retval
+    }
+
+    /// Position cursor at the quickfix entry location.
+    /// Inlined from C `nvim_qf_jump_goto_line` (Phase 14).
+    ///
+    /// # Safety
+    ///
+    /// - `qf_pattern` may be null (use line/col positioning)
+    /// - If non-null, must be a valid NUL-terminated C string
+    unsafe fn qf_jump_goto_line(
+        qf_lnum: LinenrT,
+        qf_col: c_int,
+        qf_viscol: bool,
+        qf_pattern: *const std::ffi::c_char,
+    ) {
+        if qf_pattern.is_null() {
+            // Go to line with error, unless qf_lnum is 0.
+            if qf_lnum > 0 {
+                let line_count = nvim_qf_curbuf_line_count();
+                let i = qf_lnum.min(line_count);
+                nvim_qf_curwin_set_cursor(i, 0);
+            }
+            if qf_col > 0 {
+                nvim_qf_curwin_set_coladd_zero();
+                if qf_viscol {
+                    nvim_qf_coladvance(qf_col - 1);
+                } else {
+                    nvim_qf_curwin_set_col(qf_col - 1);
+                }
+                nvim_qf_curwin_set_curswant();
+                nvim_qf_check_cursor_curwin();
+            } else {
+                nvim_qf_beginline_white_fix();
+            }
+        } else {
+            // Pattern-based jump (helpgrep style)
+            nvim_qf_do_search_pattern(qf_pattern);
+        }
+    }
+
+    /// Print the "(N of M)" quickfix jump status message.
+    /// Inlined from C `nvim_qf_jump_print_msg` (Phase 14).
+    ///
+    /// # Safety
+    ///
+    /// All pointer parameters must be valid.
+    #[allow(clippy::too_many_lines)]
+    unsafe fn qf_jump_print_msg(
+        qi: QfInfoHandleMut,
+        qf_index: c_int,
+        qf_ptr: QfLineHandle,
+        old_curbuf: BufHandle,
+        old_lnum: LinenrT,
+    ) {
+        use std::ffi::c_char;
+
+        // Update the screen before showing the message, unless messages scrolled.
+        if nvim_get_msg_scrolled() == 0 {
+            nvim_qf_update_topline_curwin();
+            if nvim_get_must_redraw() != 0 {
+                nvim_update_screen();
+            }
+        }
+
+        // Build types string
+        let mut type_buf = [0u8; 20];
+        crate::display::qf_types_fmt(
+            c_int::from(nvim_qfline_get_type_char(qf_ptr)),
+            nvim_qfline_get_nr_int(qf_ptr),
+            &mut type_buf,
+        );
+        let type_len = type_buf.iter().position(|&b| b == 0).unwrap_or(20);
+        let type_str = std::str::from_utf8(&type_buf[..type_len]).unwrap_or("");
+
+        // Build cleared string
+        let cleared_str = if nvim_qfline_get_cleared_bool(qf_ptr) {
+            std::ffi::CStr::from_ptr(nvim_qf_gettext_line_deleted())
+                .to_str()
+                .unwrap_or(" (line deleted)")
+        } else {
+            ""
+        };
+
+        let count = nvim_qf_get_curlist_count(qi);
+
+        // Build the header prefix (mirrors C vim_snprintf(IObuff, ...))
+        let header = format!("({qf_index} of {count}){cleared_str}{type_str}: ");
+
+        // Build the fmt_text part: skip leading whitespace then qf_fmt_text
+        let qf_text_ptr = nvim_qfline_get_text_ptr(qf_ptr);
+        let fmt_text = if qf_text_ptr.is_null() {
+            String::new()
+        } else {
+            let text_no_ws = nvim_skipwhite_qf(qf_text_ptr.cast_mut());
+            let mut fmt_buf = vec![0i8; 1025];
+            let fmt_len =
+                navigate_qf_fmt_text(text_no_ws.cast_const(), fmt_buf.as_mut_ptr(), fmt_buf.len());
+            if fmt_len > 0 {
+                let bytes: Vec<u8> = fmt_buf[..fmt_len].iter().map(|&b| b as u8).collect();
+                String::from_utf8_lossy(&bytes).into_owned()
+            } else {
+                String::new()
+            }
+        };
+
+        // Combine header + fmt_text and NUL-terminate
+        let mut full_msg = header;
+        full_msg.push_str(&fmt_text);
+        full_msg.push('\0');
+
+        // Output the message.  Overwrite to avoid scrolling when the 'O'
+        // flag is present in 'shortmess'; But when not jumping, print the whole message.
+        let saved_scroll = nvim_get_msg_scroll();
+        if nvim_qf_curbuf_is(old_curbuf) && nvim_qf_get_cursor_lnum() == old_lnum {
+            nvim_set_msg_scroll(1);
+        } else if (nvim_get_msg_scrolled() == 0
+            || (nvim_get_p_ch() == 0 && nvim_get_msg_scrolled() == 1))
+            && nvim_ecmd_shortmess_overall() != 0
+        {
+            nvim_set_msg_scroll(0);
+        }
+        nvim_msg_ext_set_kind(c"quickfix".as_ptr());
+        nvim_msg_keep_qf(full_msg.as_ptr().cast::<c_char>(), 0, true, false);
+        nvim_set_msg_scroll(saved_scroll);
     }
 
     const QFLT_QUICKFIX: c_int = 0;
