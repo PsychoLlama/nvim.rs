@@ -1137,8 +1137,6 @@ int nvim_syn_extmatch_strings_equal(reg_extmatch_T *a, reg_extmatch_T *b,
   return rs_syn_extmatch_strings_equal(a, b, subidx, pat_idx);
 }
 
-int nvim_syn_get_nsubexp(void) { return NSUBEXP; }
-
 /// Get the sp_ic (ignore case) flag for a pattern at index
 int nvim_synblock_pattern_ic(int pat_idx)
 {
@@ -1373,7 +1371,6 @@ void nvim_syn_save_chartab(char *buf) { save_chartab(buf); }
 
 void nvim_syn_restore_chartab(char *buf) { restore_chartab(buf); }
 
-int nvim_syn_get_maxkeywlen(void) { return MAXKEYWLEN; }
 void nvim_syn_keyword_foldcase(char *src, int srclen, char *dst, int dstlen) { str_foldcase(src, srclen, dst, dstlen); }
 
 int nvim_syn_utfc_ptr2len(char *p) { return utfc_ptr2len(p); }
@@ -1562,11 +1559,6 @@ void nvim_stateitem_set_extmatch(stateitem_T *item, reg_extmatch_T *em)
   }
 }
 
-int nvim_syn_get_hl_oneline(void) { return HL_ONELINE; }
-int nvim_syn_get_hl_keepend(void) { return HL_KEEPEND; }
-int nvim_syn_get_hl_match(void) { return HL_MATCH; }
-int nvim_syn_get_hl_conceal(void) { return HL_CONCEAL; }
-int nvim_syn_get_hl_concealends(void) { return HL_CONCEALENDS; }
 void nvim_syn_start_line(void) { syn_start_line(); }
 
 int nvim_syn_finish_line(int syncing) { return rs_syn_finish_line(syncing); }
@@ -1600,11 +1592,6 @@ void nvim_syn_set_current_id(int id) { current_id = (int16_t)id; }
 void nvim_syn_set_current_trans_id(int id) { current_trans_id = (int16_t)id; }
 void nvim_syn_set_current_flags(int flags) { current_flags = (int16_t)flags; }
 void nvim_syn_set_current_seqnr(int seqnr) { current_seqnr = seqnr; }
-int nvim_syn_get_hl_matchcont(void) { return HL_MATCHCONT; }
-int nvim_syn_get_hl_extend(void) { return HL_EXTEND; }
-int nvim_syn_get_sf_ccomment(void) { return SF_CCOMMENT; }
-int nvim_syn_get_hl_sync_here(void) { return HL_SYNC_HERE; }
-int nvim_syn_get_hl_sync_there(void) { return HL_SYNC_THERE; }
 void nvim_syn_stack_alloc(void) { syn_stack_alloc(); }
 void *nvim_syn_stack_find_entry_ptr(int lnum) { return syn_stack_find_entry((linenr_T)lnum); }
 
@@ -3257,9 +3244,6 @@ void nvim_syn_set_next_match_extmatch_raw(reg_extmatch_T *em) { next_match_extma
 // =============================================================================
 // Phase 11: New C accessors for clear_syn_state / store_bufstates migration
 // =============================================================================
-
-/// Return SST_FIX_STATES constant (size of sst_stack[]).
-int nvim_synstate_get_sst_fix_states(void) { return SST_FIX_STATES; }
 
 /// Call ga_clear on state->sst_union.sst_ga (for use after unreffing all extmatches
 /// in the growarray path of clear_syn_state).

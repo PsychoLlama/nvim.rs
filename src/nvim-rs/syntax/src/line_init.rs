@@ -15,7 +15,7 @@ use std::ffi::{c_char, c_int, c_void};
 
 use crate::types::{
     BufStateHandle, ExtMatchHandle, StateItemHandle, SynStateHandle, HL_EXTEND, HL_KEEPEND,
-    HL_MATCHCONT, SPTYPE_MATCH,
+    HL_MATCHCONT, SPTYPE_MATCH, SST_FIX_STATES,
 };
 
 // =============================================================================
@@ -60,7 +60,6 @@ extern "C" {
     // (nvim_syn_exec_linecont replaced by crate::regexec::syn_exec_linecont)
 
     // clear_syn_state accessors (Phase 11)
-    fn nvim_synstate_get_sst_fix_states() -> c_int;
     fn nvim_synstate_ga_clear(state: SynStateHandle);
     fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
     fn nvim_synstate_get_stacksize(state: SynStateHandle) -> c_int;
@@ -216,7 +215,7 @@ pub unsafe extern "C" fn rs_clear_syn_state(p: SynStateHandle) {
         return;
     }
     let stacksize = nvim_synstate_get_stacksize(p);
-    let sst_fix_states = nvim_synstate_get_sst_fix_states();
+    let sst_fix_states = SST_FIX_STATES;
     // Unref all extmatch pointers
     for i in 0..stacksize {
         let bs = nvim_synstate_get_bufstate(p, i);

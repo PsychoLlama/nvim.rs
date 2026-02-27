@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::types::SynBlockHandle;
+use crate::types::{SynBlockHandle, SF_CCOMMENT};
 
 // =============================================================================
 // FFI declarations
@@ -73,9 +73,6 @@ extern "C" {
     fn semsg(fmt: *const c_char, ...);
     fn emsg(msg: *const c_char);
 
-    // Sync flag constants
-    fn nvim_syn_get_sf_ccomment() -> c_int;
-
     // Skip regexp
     fn nvim_syn_skip_regexp(arg: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
 }
@@ -138,7 +135,7 @@ unsafe fn synblock_set_linecont(
 /// # Safety
 /// Must be called from main thread during command execution.
 unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
-    let sf_ccomment = nvim_syn_get_sf_ccomment();
+    let sf_ccomment = SF_CCOMMENT;
 
     let mut arg_start = nvim_syn_get_eap_arg(eap);
 

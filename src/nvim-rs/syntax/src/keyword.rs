@@ -33,7 +33,6 @@ extern "C" {
     // Keyword matching functions (nvim_syn_keyword_find replaced by rs_syn_keyword_find Rust impl)
     fn nvim_syn_keyword_foldcase(src: *mut c_char, srclen: c_int, dst: *mut c_char, dstlen: c_int);
     fn nvim_syn_utfc_ptr2len(p: *mut c_char) -> c_int;
-    fn nvim_syn_get_maxkeywlen() -> c_int;
     fn nvim_syn_vim_iswordp_buf(p: *mut c_char) -> c_int;
 
     // Keyword table accessors
@@ -436,7 +435,7 @@ pub unsafe fn utfc_ptr2len(p: *mut c_char) -> i32 {
 /// Get the maximum keyword length constant.
 #[must_use]
 pub fn max_keyword_len() -> i32 {
-    unsafe { nvim_syn_get_maxkeywlen() }
+    MAXKEYWLEN
 }
 
 /// The maximum keyword length (constant).

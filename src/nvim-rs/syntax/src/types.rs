@@ -353,6 +353,8 @@ pub const KEYWORD_IDX: c_int = -1;
 pub const NONE_IDX: c_int = -2;
 /// Maximum length of a keyword
 pub const MAXKEYWLEN: c_int = 80;
+/// Number of regexp sub-expressions (matches NSUBEXP in regexp_defs.h)
+pub const NSUBEXP: c_int = 10;
 
 // =============================================================================
 // Constants - Syntax pattern offset types (SPO_*)

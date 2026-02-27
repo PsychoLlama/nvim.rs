@@ -33,15 +33,6 @@ extern "C" {
     // Keyword conceal char
     fn nvim_keyentry_get_char(ke: KeyEntryHandle) -> c_int;
 
-    // Current HL flags
-    fn nvim_syn_get_hl_oneline() -> c_int;
-    fn nvim_syn_get_hl_keepend() -> c_int;
-    fn nvim_syn_get_hl_match() -> c_int;
-    fn nvim_syn_get_hl_conceal() -> c_int;
-    fn nvim_syn_get_hl_concealends() -> c_int;
-    fn nvim_syn_get_hl_matchcont() -> c_int;
-    fn nvim_syn_get_hl_extend() -> c_int;
-
     // Concealed position check
     fn syn_get_concealed_id(wp: WinHandle, lnum: c_int, col: c_int) -> c_int;
 
@@ -167,43 +158,43 @@ pub fn keyentry_cchar(ke: KeyEntryHandle) -> i32 {
 /// Check if HL_ONELINE is currently set.
 #[must_use]
 pub fn hl_oneline() -> bool {
-    unsafe { nvim_syn_get_hl_oneline() != 0 }
+    HL_ONELINE != 0
 }
 
 /// Check if HL_KEEPEND is currently set.
 #[must_use]
 pub fn hl_keepend() -> bool {
-    unsafe { nvim_syn_get_hl_keepend() != 0 }
+    HL_KEEPEND != 0
 }
 
 /// Check if HL_MATCH is currently set.
 #[must_use]
 pub fn hl_match() -> bool {
-    unsafe { nvim_syn_get_hl_match() != 0 }
+    HL_MATCH != 0
 }
 
 /// Check if HL_CONCEAL is currently set.
 #[must_use]
 pub fn hl_conceal() -> bool {
-    unsafe { nvim_syn_get_hl_conceal() != 0 }
+    HL_CONCEAL != 0
 }
 
 /// Check if HL_CONCEALENDS is currently set.
 #[must_use]
 pub fn hl_concealends() -> bool {
-    unsafe { nvim_syn_get_hl_concealends() != 0 }
+    HL_CONCEALENDS != 0
 }
 
 /// Check if HL_MATCHCONT is currently set.
 #[must_use]
 pub fn hl_matchcont() -> bool {
-    unsafe { nvim_syn_get_hl_matchcont() != 0 }
+    HL_MATCHCONT != 0
 }
 
 /// Check if HL_EXTEND is currently set.
 #[must_use]
 pub fn hl_extend() -> bool {
-    unsafe { nvim_syn_get_hl_extend() != 0 }
+    HL_EXTEND != 0
 }
 
 // =============================================================================

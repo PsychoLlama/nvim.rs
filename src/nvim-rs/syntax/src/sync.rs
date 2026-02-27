@@ -51,10 +51,6 @@ extern "C" {
     fn nvim_syn_get_sync_flags() -> c_int;
     fn nvim_syn_get_sync_id() -> c_int;
 
-    // Sync highlight accessors
-    fn nvim_syn_get_hl_sync_here() -> c_int;
-    fn nvim_syn_get_hl_sync_there() -> c_int;
-
     // Update ends with syncing parameter
     fn nvim_syn_call_syn_update_ends(syncing: c_int);
 
@@ -219,13 +215,13 @@ pub fn sync_id() -> i32 {
 /// Get the HL_SYNC_HERE flag status.
 #[must_use]
 pub fn hl_sync_here() -> i32 {
-    unsafe { nvim_syn_get_hl_sync_here() }
+    HL_SYNC_HERE
 }
 
 /// Get the HL_SYNC_THERE flag status.
 #[must_use]
 pub fn hl_sync_there() -> i32 {
-    unsafe { nvim_syn_get_hl_sync_there() }
+    crate::types::HL_SYNC_THERE
 }
 
 // =============================================================================

@@ -560,8 +560,6 @@ extern "C" {
     /// Call update_si_attr for item at index
     fn nvim_syn_update_si_attr(idx: c_int);
 
-    /// Get NSUBEXP constant
-    fn nvim_syn_get_nsubexp() -> c_int;
     /// Get si_extmatch from a stateitem
     fn nvim_stateitem_get_extmatch(item: StateItemHandle) -> ExtMatchHandle;
 
@@ -2400,7 +2398,7 @@ pub unsafe extern "C" fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int {
     }
 
     // Compare each state item
-    let nsubexp = nvim_syn_get_nsubexp();
+    let nsubexp = crate::types::NSUBEXP;
     for i in (0..current_len).rev() {
         let bs = nvim_synstate_get_bufstate(sp, i);
         if bs.is_null() {

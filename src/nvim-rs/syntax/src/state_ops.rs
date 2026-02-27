@@ -85,7 +85,6 @@ extern "C" {
     fn nvim_extmatch_get_string(em: ExtMatchHandle, subidx: c_int) -> *const c_char;
     fn nvim_syn_mb_strcmp_ic(ic: c_int, a: *const c_char, b: *const c_char) -> c_int;
     fn nvim_synblock_pattern_ic(pat_idx: c_int) -> c_int;
-    fn nvim_syn_get_nsubexp() -> c_int;
 
     // Phase 3: stateitem setters for cur_state_set_matchcont
     fn nvim_stateitem_or_flags(item: StateItemHandle, flags: c_int);
@@ -365,7 +364,7 @@ pub unsafe extern "C" fn rs_syn_extmatch_strings_equal(
     subidx: c_int,
     pat_idx: c_int,
 ) -> c_int {
-    let nsubexp = nvim_syn_get_nsubexp();
+    let nsubexp = crate::types::NSUBEXP;
     if subidx < 0 || subidx >= nsubexp {
         return 0;
     }

@@ -8,7 +8,7 @@
 
 use std::ffi::c_int;
 
-use crate::types::{IdListHandle, SynBlockHandle, SynStateHandle};
+use crate::types::{IdListHandle, SynBlockHandle, SynStateHandle, SST_FIX_STATES};
 
 // =============================================================================
 // FFI declarations
@@ -48,7 +48,6 @@ extern "C" {
     fn nvim_syn_store_bufstates(sp: SynStateHandle);
 
     // Phase 11 accessors for rs_syn_store_bufstates Rust implementation
-    fn nvim_synstate_get_sst_fix_states() -> c_int;
     fn nvim_synstate_ga_init_for_store(sp: SynStateHandle);
     fn nvim_synstate_fill_bufstate_from_curstate(sp: SynStateHandle, i: c_int);
 
@@ -160,7 +159,7 @@ pub unsafe extern "C" fn rs_syn_store_bufstates(sp: SynStateHandle) {
         return;
     }
     let stacksize = nvim_synstate_get_stacksize(sp);
-    let sst_fix_states = nvim_synstate_get_sst_fix_states();
+    let sst_fix_states = SST_FIX_STATES;
     if stacksize > sst_fix_states {
         nvim_synstate_ga_init_for_store(sp);
     }

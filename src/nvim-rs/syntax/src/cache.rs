@@ -60,9 +60,6 @@ extern "C" {
     fn nvim_stateitem_get_cchar(item: crate::types::StateItemHandle) -> c_int;
     fn nvim_stateitem_get_extmatch(item: crate::types::StateItemHandle) -> ExtMatchHandle;
 
-    // NSUBEXP constant
-    fn nvim_syn_get_nsubexp() -> c_int;
-
     // Synblock accessors
     fn nvim_synblock_get_sst_first(block: SynBlockHandle) -> SynStateHandle;
     fn nvim_synblock_get_sst_len(block: SynBlockHandle) -> c_int;
@@ -613,7 +610,7 @@ pub unsafe fn syn_stack_equal(sp: SynStateHandle) -> bool {
     }
 
     // Compare each state item
-    let nsubexp = nvim_syn_get_nsubexp();
+    let nsubexp = crate::types::NSUBEXP;
     for i in (0..current_len).rev() {
         let bs = nvim_synstate_get_bufstate(sp, i);
         if bs.is_null() {
