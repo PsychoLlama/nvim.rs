@@ -2656,14 +2656,10 @@ void qf_list(exarg_T *eap)
   rs_ex_clist(eap);
 }
 
-/// quickfix/location list.
-
-/// into that buffer, or NULL to check the quickfix list.
+/// Adjust quickfix line numbers when buffer lines are added or removed.
 bool qf_mark_adjust(buf_T *buf, win_T *wp, linenr_T line1, linenr_T line2, linenr_T amount,
                     linenr_T amount_after)
-{
-  return rs_qf_mark_adjust_entry(buf, wp, line1, line2, amount, amount_after);
-}
+{ return rs_qf_mark_adjust_entry(buf, wp, line1, line2, amount, amount_after); }
 
 // Phase 10 Pass 10 Phase 5: C accessors for rs_qf_get_fnum
 
@@ -2744,14 +2740,10 @@ void nvim_qf_clear_fnum_cache(void)
 
 // qf_win_goto deleted: implementation moved to nvim_qf_win_goto_impl (Phase 10 Pass 10 Phase 2).
 
-// Return the number of the current entry (line number in the quickfix
-// window).
-linenr_T qf_current_entry(win_T *wp)
-{
-  return rs_qf_current_entry(wp);
-}
+// Return the number of the current entry (line number in the quickfix window).
+linenr_T qf_current_entry(win_T *wp) { return rs_qf_current_entry(wp); }
 
-linenr_T nvim_qf_current_entry(win_T *wp) { return qf_current_entry(wp); }
+linenr_T nvim_qf_current_entry(win_T *wp) { return rs_qf_current_entry(wp); }
 
 // qf_win_pos_update deleted: migrated to Rust rs_qf_win_pos_update (Phase 11).
 // is_qf_win deleted: logic inlined into rs_qf_find_win_for_stack / rs_qf_win_pos_update (Phase 11).
@@ -2894,14 +2886,8 @@ void nvim_qf_fill_buffer_internal_error(void) { internal_error("rs_qf_fill_buffe
 
 void *nvim_qf_get_start_nonnull(const void *qfl) { return qfl == NULL ? NULL : ((const qf_list_T *)qfl)->qf_start; }
 
-static void qf_list_changed(qf_list_T *qfl) { rs_qf_incr_changedtick(qfl); }
-
-// Jump to the first entry if there is one.
-static void qf_jump_first(qf_info_T *qi, unsigned save_qfid, int forceit)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_qf_jump_first(qi, save_qfid, forceit);
-}
+// qf_list_changed deleted: callers use rs_qf_incr_changedtick directly (Phase 14).
+// qf_jump_first deleted: callers use rs_qf_jump_first directly (Phase 14).
 
 // Return true when using ":vimgrep" for ":grep".
 int grep_internal(cmdidx_T cmdidx)
