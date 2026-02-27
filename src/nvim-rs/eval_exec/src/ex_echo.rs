@@ -5,6 +5,9 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 
 use std::ffi::{c_char, c_int, c_void};
+use std::ptr;
+
+use nvim_collections::garray::GArray;
 
 use crate::eval::{EvalargHandle, EvalargT, ExargHandle, TypevalHandle};
 
@@ -82,15 +85,7 @@ extern "C" {
     // echoerr
     fn nvim_emsg_multiline_echoerr(str: *const c_char);
 
-    // garray for ex_execute
-    fn nvim_ga_alloc_execute() -> *mut c_void;
-    fn nvim_ga_grow_wrapper(ga: *mut c_void, n: c_int);
-    fn nvim_ga_is_empty_execute(ga: *mut c_void) -> bool;
-    fn nvim_ga_append_space(ga: *mut c_void);
-    fn nvim_ga_append_str_len(ga: *mut c_void, str: *const c_char, len: c_int);
-    fn nvim_ga_get_data(ga: *const c_void) -> *mut c_char;
-    fn nvim_ga_data_is_null(ga: *const c_void) -> bool;
-    // ga_clear replaces nvim_ga_free (Phase 12, Phase 4)
+    // ga_clear for GArray cleanup
     fn ga_clear(ga: *mut c_void);
 
     // do_cmdline for :execute
@@ -316,7 +311,13 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
     let cmd_echomsg = nvim_docmd_cmd_echomsg();
     let cmd_echoerr = nvim_docmd_cmd_echoerr();
 
-    let ga = nvim_ga_alloc_execute();
+    // Heap-allocate a GArray for byte-string accumulation (ga_init(&ga, 1, 80))
+    let ga_raw = xmalloc(std::mem::size_of::<GArray>()) as *mut GArray;
+    ptr::write(ga_raw, GArray::default());
+    let ga = ga_raw;
+    (*ga).ga_itemsize = 1;
+    (*ga).ga_growsize = 80;
+
     let mut ret = OK;
 
     if skip {
@@ -347,13 +348,21 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
                 nvim_encode_tv2string_wrapper(rettv) as *const c_char
             };
 
-            let len = cstr_len(argstr);
-
-            nvim_ga_grow_wrapper(ga, len as c_int + 2);
-            if !nvim_ga_is_empty_execute(ga) {
-                nvim_ga_append_space(ga);
+            let len = cstr_len(argstr) as c_int;
+            nvim_collections::garray::rs_ga_grow(ga, len + 2);
+            if (*ga).ga_len > 0 {
+                // Append space separator between arguments
+                let data = (*ga).ga_data as *mut u8;
+                *data.add((*ga).ga_len as usize) = b' ';
+                (*ga).ga_len += 1;
             }
-            nvim_ga_append_str_len(ga, argstr, len as c_int);
+            // Copy str + NUL terminator into ga, advance ga_len by len
+            ptr::copy_nonoverlapping(
+                argstr,
+                ((*ga).ga_data as *mut c_char).add((*ga).ga_len as usize),
+                (len + 1) as usize,
+            );
+            (*ga).ga_len += len;
 
             if cmdidx != cmd_execute {
                 xfree(argstr as *mut c_void);
@@ -365,8 +374,8 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
         arg = skipwhite(arg);
     }
 
-    if ret != FAIL && !nvim_ga_data_is_null(ga) {
-        let data = nvim_ga_get_data(ga);
+    if ret != FAIL && !(*ga).ga_data.is_null() {
+        let data = (*ga).ga_data as *mut c_char;
         let echo_hl_id = ECHO_HL_ID;
         if cmdidx == cmd_echomsg {
             nvim_msg_ext_set_kind(KIND_ECHOMSG.as_ptr() as *const c_char);
@@ -383,9 +392,8 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
         }
     }
 
-    // Phase 12: replace nvim_ga_free with ga_clear + xfree
-    ga_clear(ga);
-    xfree(ga);
+    ga_clear(ga as *mut c_void);
+    xfree(ga as *mut c_void);
 
     if skip {
         emsg_skip -= 1;

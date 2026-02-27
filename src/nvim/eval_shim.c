@@ -1323,44 +1323,6 @@ void nvim_do_cmdline_execute(char *cmd, exarg_T *eap)
   do_cmdline(cmd, eap->ea_getline, eap->cookie, DOCMD_NOWAIT|DOCMD_VERBOSE);
 }
 
-/// Heap-allocate a char garray (ga_init(&ga, 1, 80)).
-garray_T *nvim_ga_alloc_execute(void)
-{
-  garray_T *ga = xcalloc(1, sizeof(garray_T));
-  ga_init(ga, 1, 80);
-  return ga;
-}
-
-/// Grow a garray - accessor for Rust.
-void nvim_ga_grow_wrapper(garray_T *ga, int n)
-{
-  ga_grow(ga, n);
-}
-
-/// Check if ga_data is NULL (GA_EMPTY equivalent for data ptr) - accessor for Rust.
-bool nvim_ga_data_is_null(const garray_T *ga)
-{
-  return ga->ga_data == NULL;
-}
-
-/// Append a space character to garray data[ga_len++] - accessor for Rust.
-void nvim_ga_append_space(garray_T *ga)
-{
-  ((char *)(ga->ga_data))[ga->ga_len++] = ' ';
-}
-
-/// Copy len+1 bytes from str to garray data[ga_len], advance ga_len - accessor for Rust.
-void nvim_ga_append_str_len(garray_T *ga, const char *str, int len)
-{
-  memcpy((char *)(ga->ga_data) + ga->ga_len, str, (size_t)len + 1);
-  ga->ga_len += len;
-}
-
-/// Get ga_data pointer - accessor for Rust.
-char *nvim_ga_get_data(const garray_T *ga)
-{
-  return (char *)ga->ga_data;
-}
 
 /// Get eap->skip - accessor for Rust (local, avoids dependency on ex_docmd).
 int nvim_eap_get_skip_local(const exarg_T *eap)
@@ -1380,12 +1342,6 @@ void nvim_eap_set_nextcmd_checked(exarg_T *eap, char *arg)
   eap->nextcmd = check_nextcmd(arg);
 }
 
-/// GA_EMPTY check (ga_len == 0) for ex_execute - accessor for Rust.
-/// Uses nvim_ga_is_empty_execute to avoid conflict with fold_shim.c's nvim_ga_is_empty.
-bool nvim_ga_is_empty_execute(garray_T *ga)
-{
-  return GA_EMPTY(ga);
-}
 
 /// Set did_emsg global - accessor for Rust.
 // nvim_set_did_emsg already defined in message.c -- no duplicate needed here.
