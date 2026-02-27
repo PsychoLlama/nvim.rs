@@ -190,6 +190,9 @@ extern void rs_marktree_move_region(MarkTree *b, int start_row, colnr_T start_co
 extern void rs_merge_node_intersect(MarkTree *b, MTNode *x, int x_old_n, MTNode *y, int y_n);
 extern void rs_pivot_right_intersect(MarkTree *b, MTNode *x, MTNode *y, int y_n);
 extern void rs_pivot_left_intersect(MarkTree *b, MTNode *x, int x_n, MTNode *y);
+
+// Phase 5 (pass 5): deletion rebalancing
+extern MTNode *rs_merge_node(MarkTree *b, MTNode *p, int i);
 extern bool rs_intersect_mov_test(const uint64_t *x, size_t nx, const uint64_t *y, size_t ny,
                                   const uint64_t *win, size_t nwin, uint64_t *wout, size_t *nwout,
                                   uint64_t *dout, size_t *ndout);
@@ -503,54 +506,7 @@ bool intersect_mov_test(const uint64_t *x, size_t nx, const uint64_t *y, size_t 
 
 static MTNode *merge_node(MarkTree *b, MTNode *p, int i)
 {
-  MTNode *x = p->ptr[i];
-  MTNode *y = p->ptr[i + 1];
-  int x_old_n = x->n;  // save before modification
-
-  x->key[x->n] = p->key[i];
-  refkey(b, x, x->n);
-  if (i > 0) {
-    rs_relative(p->key[i - 1].pos, &x->key[x->n].pos);
-  }
-
-  uint32_t meta_inc[kMTMetaCount];
-  rs_meta_describe_key(x->key[x->n], meta_inc);
-
-  memmove(&x->key[x->n + 1], y->key, (size_t)y->n * sizeof(MTKey));
-  for (int k = 0; k < y->n; k++) {
-    refkey(b, x, x->n + 1 + k);
-    rs_unrelative(x->key[x->n].pos, &x->key[x->n + 1 + k].pos);
-  }
-  if (x->level) {
-    // bubble down: ranges that intersected old-x but not old-y or vice versa
-    // must be moved to their respective children
-    memmove(&x->ptr[x->n + 1], y->ptr, ((size_t)y->n + 1) * sizeof(MTNode *));
-    memmove(&x->meta[x->n + 1], y->meta, ((size_t)y->n + 1) * sizeof(y->meta[0]));
-    // Fix parent/p_idx for y's children (now in x's second half)
-    for (int ky = 0; ky < y->n + 1; ky++) {
-      int k = x_old_n + ky + 1;
-      x->ptr[k]->parent = x;
-      x->ptr[k]->p_idx = (int16_t)k;
-    }
-    // Compute intersection merge and apply to children (Rust)
-    rs_merge_node_intersect(b, x, x_old_n, y, y->n);
-  }
-  x->n += y->n + 1;
-  for (int m = 0; m < kMTMetaCount; m++) {
-    // x now contains everything of y plus old p->key[i]
-    p->meta[i][m] += (p->meta[i + 1][m] + meta_inc[m]);
-  }
-
-  memmove(&p->key[i], &p->key[i + 1], (size_t)(p->n - i - 1) * sizeof(MTKey));
-  memmove(&p->ptr[i + 1], &p->ptr[i + 2], (size_t)(p->n - i - 1) * sizeof(MTKey *));
-  memmove(&p->meta[i + 1], &p->meta[i + 2], (size_t)(p->n - i - 1) * sizeof(p->meta[0]));
-  for (int j = i + 1; j < p->n; j++) {  // note: one has been deleted
-    p->ptr[j]->p_idx = (int16_t)j;
-  }
-  p->n--;
-  rs_marktree_free_node(b, y);
-
-  return x;
+  return rs_merge_node(b, p, i);
 }
 
 // TODO(bfredl): as a potential "micro" optimization, pivoting should balance

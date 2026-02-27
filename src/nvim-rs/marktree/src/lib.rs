@@ -3557,6 +3557,107 @@ pub extern "C" fn rs_bubble_up(x: MTNodeHandle) {
 // ============================================================================
 
 // ============================================================================
+// Rebalancing helpers: merge_node, pivot_right, pivot_left
+// ============================================================================
+
+/// Merge two sibling nodes during B-tree rebalancing.
+///
+/// Merges `p->ptr[i]` (left, x) with `p->ptr[i+1]` (right, y).
+/// The separator key `p->key[i]` is moved into x, then all keys/children
+/// from y are appended. Intersection lists merged via `rs_merge_node_intersect`
+/// for internal nodes. The right node y is freed. Returns the merged left node.
+#[must_use]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::many_single_char_names
+)]
+pub fn merge_node(b: MarkTreeHandle, p: MTNodeHandle, i: i32) -> MTNodeHandle {
+    let x = unsafe { nvim_mtnode_get_ptr(p, i) };
+    let y = unsafe { nvim_mtnode_get_ptr(p, i + 1) };
+    let x_old_n = unsafe { nvim_mtnode_get_n(x) }; // save before modification
+
+    // Move separator key p->key[i] into x->key[x_old_n]
+    let sep_key = unsafe { nvim_mtnode_get_key(p, i) };
+    unsafe { nvim_mtnode_set_key(x, x_old_n, sep_key) };
+    marktree_refkey(b, x, x_old_n);
+    if i > 0 {
+        let prev_pos = unsafe { nvim_mtnode_get_key(p, i - 1) }.pos;
+        let mut sep_adjusted = unsafe { nvim_mtnode_get_key(x, x_old_n) };
+        relative(prev_pos, &mut sep_adjusted.pos);
+        unsafe { nvim_mtnode_set_key(x, x_old_n, sep_adjusted) };
+    }
+
+    // Compute meta for the separator key (possibly relativized)
+    let sep_key_adjusted = unsafe { nvim_mtnode_get_key(x, x_old_n) };
+    let meta_inc = meta_describe_key(&sep_key_adjusted);
+
+    // Copy y's keys into x at positions x_old_n+1..x_old_n+1+y_n
+    let y_n = unsafe { nvim_mtnode_get_n(y) };
+    unsafe { nvim_mtnode_memcpy_keys(x, x_old_n + 1, y, 0, y_n) };
+    for k in 0..y_n {
+        marktree_refkey(b, x, x_old_n + 1 + k);
+        let mut moved_key = unsafe { nvim_mtnode_get_key(x, x_old_n + 1 + k) };
+        unrelative(sep_key_adjusted.pos, &mut moved_key.pos);
+        unsafe { nvim_mtnode_set_key(x, x_old_n + 1 + k, moved_key) };
+    }
+
+    let x_level = unsafe { nvim_mtnode_get_level(x) };
+    if x_level != 0 {
+        // Copy y's children/meta into x
+        unsafe {
+            nvim_mtnode_memcpy_ptr(x, x_old_n + 1, y, 0, y_n + 1);
+            nvim_mtnode_memcpy_meta(x, x_old_n + 1, y, 0, y_n + 1);
+        }
+        // Fix parent/p_idx for y's children now in x
+        for ky in 0..=y_n {
+            let k = x_old_n + ky + 1;
+            let child = unsafe { nvim_mtnode_get_ptr(x, k) };
+            unsafe {
+                nvim_mtnode_set_parent(child, x);
+                nvim_mtnode_set_p_idx(child, k);
+            }
+        }
+        // Merge intersection lists
+        crate::intersect_ops::rs_merge_node_intersect(b, x, x_old_n, y, y_n);
+    }
+
+    // x->n += y->n + 1
+    let new_x_n = x_old_n + y_n + 1;
+    unsafe { nvim_mtnode_set_n(x, new_x_n) };
+
+    // Update parent meta: p->meta[i] += p->meta[i+1] + meta_inc
+    for m in 0..K_MT_META_COUNT as i32 {
+        let m_i = unsafe { nvim_mtnode_get_meta(p, i, m) };
+        let m_i1 = unsafe { nvim_mtnode_get_meta(p, i + 1, m) };
+        unsafe {
+            nvim_mtnode_set_meta(p, i, m, m_i + m_i1 + meta_inc[m as usize]);
+        }
+    }
+
+    // Remove separator key from parent: memmove p->key[i] <- p->key[i+1]
+    let p_n = unsafe { nvim_mtnode_get_n(p) };
+    let count = p_n - i - 1;
+    if count > 0 {
+        unsafe { nvim_mtnode_memmove_keys(p, i, i + 1, count) };
+        unsafe { nvim_mtnode_memmove_ptr(p, i + 1, i + 2, count) };
+        unsafe { nvim_mtnode_memmove_meta(p, i + 1, i + 2, count) };
+    }
+    // Fix p_idx for shifted children
+    for j in (i + 1)..p_n {
+        let child = unsafe { nvim_mtnode_get_ptr(p, j) };
+        unsafe { nvim_mtnode_set_p_idx(child, j) };
+    }
+    unsafe { nvim_mtnode_set_n(p, p_n - 1) };
+
+    // Free the right node y
+    marktree_free_node(b, y);
+
+    x
+}
+
+// ============================================================================
 // Deletion Wrappers
 // ============================================================================
 
@@ -3799,6 +3900,12 @@ pub fn marktree_clear(b: MarkTreeHandle) {
 // ============================================================================
 // FFI Exports for Phase 5 & 7
 // ============================================================================
+
+/// Exported FFI version of `merge_node`.
+#[no_mangle]
+pub extern "C" fn rs_merge_node(b: MarkTreeHandle, p: MTNodeHandle, i: c_int) -> MTNodeHandle {
+    merge_node(b, p, i)
+}
 
 /// Exported FFI version of `marktree_del_itr`.
 #[no_mangle]
