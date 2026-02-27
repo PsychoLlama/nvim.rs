@@ -3545,6 +3545,18 @@ void nvim_buf_empty_string_field(buf_T *buf, ptrdiff_t offset)
   *field = empty_string_option;
 }
 
+/// Generic buf_T bool field setter: writes 0 or 1 via byte offset.
+void nvim_buf_set_bool_field(buf_T *buf, ptrdiff_t offset, int val)
+{
+  *(int *)(((char *)buf) + offset) = val != 0;
+}
+
+/// Generic buf_T OptInt field setter: writes OptInt value via byte offset.
+void nvim_buf_set_optint_field(buf_T *buf, ptrdiff_t offset, OptInt val)
+{
+  *(OptInt *)(((char *)buf) + offset) = val;
+}
+
 /// Sets buf->b_p_fenc = xstrdup(p_fenc).
 void nvim_buf_set_b_p_fenc_dup(buf_T *buf) { buf->b_p_fenc = xstrdup(p_fenc); }
 
@@ -3575,38 +3587,16 @@ void nvim_buf_set_b_p_cot_empty(buf_T *buf) { buf->b_p_cot = empty_string_option
 /// Sets buf->b_s.b_syn_isk = empty_string_option (b_s substructure -- not in offset table).
 void nvim_buf_set_b_s_syn_isk_empty(buf_T *buf) { buf->b_s.b_syn_isk = empty_string_option; }
 
-// Scalar field setters for the bulk copy:
-void nvim_buf_set_b_p_ai(buf_T *buf, int v) { buf->b_p_ai = v != 0; }
+// Scalar field setters kept for nopaste/nobin variants and special cases:
 void nvim_buf_set_b_p_ai_nopaste(buf_T *buf, int v) { buf->b_p_ai_nopaste = v != 0; }
-void nvim_buf_set_b_p_sw(buf_T *buf, OptInt v) { buf->b_p_sw = v; }
-void nvim_buf_set_b_p_scbk(buf_T *buf, OptInt v) { buf->b_p_scbk = v; }
-void nvim_buf_set_b_p_tw(buf_T *buf, OptInt v) { buf->b_p_tw = v; }
 void nvim_buf_set_b_p_tw_nopaste(buf_T *buf, OptInt v) { buf->b_p_tw_nopaste = v; }
 void nvim_buf_set_b_p_tw_nobin(buf_T *buf, OptInt v) { buf->b_p_tw_nobin = v; }
-void nvim_buf_set_b_p_wm(buf_T *buf, OptInt v) { buf->b_p_wm = v; }
 void nvim_buf_set_b_p_wm_nopaste(buf_T *buf, OptInt v) { buf->b_p_wm_nopaste = v; }
 void nvim_buf_set_b_p_wm_nobin(buf_T *buf, OptInt v) { buf->b_p_wm_nobin = v; }
-void nvim_buf_set_b_p_bin(buf_T *buf, int v) { buf->b_p_bin = v != 0; }
-void nvim_buf_set_b_p_bomb(buf_T *buf, int v) { buf->b_p_bomb = v != 0; }
-void nvim_buf_set_b_p_et(buf_T *buf, int v) { buf->b_p_et = v != 0; }
-void nvim_buf_set_b_p_fixeol(buf_T *buf, int v) { buf->b_p_fixeol = v != 0; }
 void nvim_buf_set_b_p_et_nobin(buf_T *buf, int v) { buf->b_p_et_nobin = v != 0; }
 void nvim_buf_set_b_p_et_nopaste(buf_T *buf, int v) { buf->b_p_et_nopaste = v != 0; }
-// nvim_buf_set_b_p_ml: already in buffer.c
 void nvim_buf_set_b_p_ml_nobin(buf_T *buf, int v) { buf->b_p_ml_nobin = v != 0; }
-void nvim_buf_set_b_p_inf(buf_T *buf, int v) { buf->b_p_inf = v != 0; }
-void nvim_buf_set_b_p_swf(buf_T *buf, int v) { buf->b_p_swf = v != 0; }
-void nvim_buf_set_b_p_si(buf_T *buf, int v) { buf->b_p_si = v != 0; }
-void nvim_buf_set_b_p_channel(buf_T *buf, OptInt v) { buf->b_p_channel = v; }
-void nvim_buf_set_b_p_ci(buf_T *buf, int v) { buf->b_p_ci = v != 0; }
-void nvim_buf_set_b_p_cin(buf_T *buf, int v) { buf->b_p_cin = v != 0; }
-void nvim_buf_set_b_p_pi(buf_T *buf, int v) { buf->b_p_pi = v != 0; }
-void nvim_buf_set_b_p_lisp(buf_T *buf, int v) { buf->b_p_lisp = v != 0; }
-void nvim_buf_set_b_p_smc(buf_T *buf, OptInt v) { buf->b_p_smc = v; }
-void nvim_buf_set_b_p_sts(buf_T *buf, OptInt v) { buf->b_p_sts = v; }
 void nvim_buf_set_b_p_sts_nopaste(buf_T *buf, OptInt v) { buf->b_p_sts_nopaste = v; }
-void nvim_buf_set_b_p_udf(buf_T *buf, int v) { buf->b_p_udf = v != 0; }
-void nvim_buf_set_b_p_ts(buf_T *buf, OptInt v) { buf->b_p_ts = v; }
 // nvim_buf_set_b_p_iminsert / nvim_buf_set_b_p_imsearch: already in buffer.c (int param)
 void nvim_buf_set_b_p_ma(buf_T *buf, int v) { buf->b_p_ma = v != 0; }
 
