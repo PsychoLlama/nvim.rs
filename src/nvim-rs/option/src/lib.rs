@@ -60,6 +60,37 @@ pub const OK: c_int = 1;
 /// Function failed
 pub const FAIL: c_int = 0;
 
+// buf_copy_options flags (BCO_* from option.h)
+pub const BCO_ENTER: c_int = 1;
+pub const BCO_ALWAYS: c_int = 2;
+pub const BCO_NOHELP: c_int = 4;
+
+// 'cpoptions' characters relevant to buf_copy_options (from option_vars.h)
+pub const CPO_BUFOPTGLOB: c_int = b'S' as c_int;
+pub const CPO_BUFOPT: c_int = b's' as c_int;
+
+// cmdmod flag for :noswapfile (from ex_cmds_defs.h)
+pub const CMOD_NOSWAPFILE: c_int = 0x2000;
+
+// Script context: don't set scriptID (from globals.h)
+pub const SID_NONE: c_int = -6;
+
+// kOptFlag* bitmask constants (from option_defs.h)
+pub const K_OPT_FLAG_UI_OPTION: c_uint = 1 << 5;
+pub const K_OPT_FLAG_REDR_WIN: c_uint = 1 << 8;
+pub const K_OPT_FLAG_REDR_BUF: c_uint = 1 << 9;
+pub const K_OPT_FLAG_REDR_ALL: c_uint = K_OPT_FLAG_REDR_BUF | K_OPT_FLAG_REDR_WIN;
+pub const K_OPT_FLAG_SECURE: c_uint = 1 << 14;
+pub const K_OPT_FLAG_INSECURE: c_uint = 1 << 18;
+pub const K_OPT_FLAG_CURSWANT: c_uint = 1 << 21;
+pub const K_OPT_FLAG_HL_ONLY: c_uint = 1 << 23;
+
+// OPT_MODELINE flag (from option.h)
+pub const OPT_MODELINE: c_int = 0x04;
+
+// UPD_NOT_VALID redraw level (from drawscreen.h)
+pub const UPD_NOT_VALID: c_int = 40;
+
 // =============================================================================
 // Option Value Types
 // =============================================================================

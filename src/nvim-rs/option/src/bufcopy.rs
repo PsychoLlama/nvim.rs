@@ -35,19 +35,13 @@ use crate::opt_index::{
     K_OPT_TAGS, K_OPT_THESAURUS, K_OPT_THESAURUSFUNC, K_OPT_VARSOFTTABSTOP, K_OPT_VARTABSTOP,
 };
 use crate::OptInt;
+use crate::{BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, CMOD_NOSWAPFILE, CPO_BUFOPT, CPO_BUFOPTGLOB};
 
 // =============================================================================
 // C FFI declarations
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_bco_enter() -> c_int;
-    fn nvim_get_bco_always() -> c_int;
-    fn nvim_get_bco_nohelp() -> c_int;
-    fn nvim_get_cpo_bufoptglob() -> c_int;
-    fn nvim_get_cpo_bufopt() -> c_int;
-    fn nvim_get_cmod_noswapfile() -> c_int;
-
     fn nvim_option_get_cpo() -> *const c_char;
     fn nvim_call_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
     fn nvim_cmdmod_get_cmod_flags() -> c_int;
@@ -283,7 +277,7 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_INFERCASE);
 
     // swapfile: suppress if :noswapfile modifier is active
-    if nvim_cmdmod_get_cmod_flags() & nvim_get_cmod_noswapfile() != 0 {
+    if nvim_cmdmod_get_cmod_flags() & CMOD_NOSWAPFILE != 0 {
         nvim_buf_set_b_p_swf(buf, 0);
     } else {
         nvim_buf_set_b_p_swf(buf, c_int::from(nvim_get_p_swf()));
@@ -520,11 +514,11 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
         return;
     }
 
-    let bco_enter = nvim_get_bco_enter();
-    let bco_always = nvim_get_bco_always();
-    let bco_nohelp = nvim_get_bco_nohelp();
-    let cpo_s = nvim_get_cpo_bufopt();
-    let cpo_cap_s = nvim_get_cpo_bufoptglob();
+    let bco_enter = BCO_ENTER;
+    let bco_always = BCO_ALWAYS;
+    let bco_nohelp = BCO_NOHELP;
+    let cpo_s = CPO_BUFOPT;
+    let cpo_cap_s = CPO_BUFOPTGLOB;
 
     let initialized = nvim_buf_get_b_p_initialized(buf) != 0;
 

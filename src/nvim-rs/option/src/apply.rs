@@ -13,6 +13,10 @@
 use std::ffi::{c_char, c_int, c_uint};
 
 use crate::storage::OptVal;
+use crate::{
+    K_OPT_FLAG_CURSWANT, K_OPT_FLAG_HL_ONLY, K_OPT_FLAG_INSECURE, K_OPT_FLAG_REDR_ALL,
+    K_OPT_FLAG_SECURE, K_OPT_FLAG_UI_OPTION, OPT_MODELINE, SID_NONE, UPD_NOT_VALID,
+};
 
 // =============================================================================
 // C External Declarations
@@ -117,19 +121,7 @@ extern "C" {
         -> *mut c_uint;
 
     // opt_flags constants accessors
-    fn nvim_get_opt_modeline() -> c_int;
     fn nvim_get_maxcol() -> c_int;
-    fn nvim_get_upd_not_valid() -> c_int;
-
-    // kOptFlag* constant accessors
-    fn nvim_get_koptflag_insecure() -> c_uint;
-    fn nvim_get_koptflag_secure() -> c_uint;
-    fn nvim_get_koptflag_curswant() -> c_uint;
-    fn nvim_get_koptflag_redr_all() -> c_uint;
-    fn nvim_get_koptflag_hl_only() -> c_uint;
-
-    // SID_NONE
-    fn nvim_get_sid_none() -> c_int;
 
     // is_option_local_value_unset (gated behind #[cfg(not(test))] in value.rs, call via FFI)
     fn rs_is_option_local_value_unset(opt_idx: c_int) -> c_int;
@@ -156,7 +148,6 @@ extern "C" {
         errmsg: *const c_char,
     );
     fn nvim_ui_call_option_set(opt_idx: c_int, saved_new_value: OptVal);
-    fn nvim_get_koptflag_ui_option() -> c_uint;
 }
 
 // OPT_LOCAL / OPT_GLOBAL flags
@@ -192,7 +183,6 @@ pub unsafe extern "C" fn rs_did_set_option(
     let mut value_changed = 0i32;
     let mut value_checked = 0i32;
 
-    let koptflag_secure = nvim_get_koptflag_secure();
     let opt_flags_val = nvim_option_get_flags_val(opt_idx);
 
     if direct != 0 {
@@ -202,7 +192,7 @@ pub unsafe extern "C" fn rs_did_set_option(
         // Disallow changing immutable options.
         errmsg = nvim_get_e_unsupportedoption();
     } else if (nvim_get_secure() != 0 || nvim_get_sandbox() != 0)
-        && (opt_flags_val & koptflag_secure) != 0
+        && (opt_flags_val & K_OPT_FLAG_SECURE) != 0
     {
         // Disallow changing some options from secure mode.
         errmsg = nvim_get_e_secure();
@@ -243,8 +233,7 @@ pub unsafe extern "C" fn rs_did_set_option(
     let new_value = rs_optval_from_varp(opt_idx, varp);
 
     // Set the script context.
-    let sid_none = nvim_get_sid_none();
-    if set_sid != sid_none {
+    if set_sid != SID_NONE {
         nvim_set_option_sctx_from_sid(opt_idx, opt_flags, set_sid);
     }
 
@@ -272,7 +261,6 @@ pub unsafe extern "C" fn rs_did_set_option(
 
     let curbuf = nvim_opt_get_curbuf();
     let curwin = nvim_opt_get_curwin();
-    let opt_modeline = nvim_get_opt_modeline();
 
     // Trigger autocmds for special options.
     let syn_addr = nvim_curbuf_b_p_syn_addr();
@@ -282,7 +270,7 @@ pub unsafe extern "C" fn rs_did_set_option(
     if varp == syn_addr {
         rs_do_syntax_autocmd(curbuf, value_changed);
     } else if varp == ft_addr {
-        if (opt_flags & opt_modeline) == 0 || value_changed != 0 {
+        if (opt_flags & OPT_MODELINE) == 0 || value_changed != 0 {
             nvim_do_filetype_autocmd(value_changed);
         }
     } else if varp == spl_addr {
@@ -297,24 +285,20 @@ pub unsafe extern "C" fn rs_did_set_option(
     let buf_flp_addr = nvim_curbuf_b_p_flp_addr();
     let wbr_addr = nvim_get_p_wbr_addr();
     let win_wbr_addr = nvim_curwin_p_wbr_addr();
-    let upd_not_valid = nvim_get_upd_not_valid();
 
     if varp == mouse_addr {
         nvim_call_setmouse();
     } else if (varp == flp_addr || varp == buf_flp_addr) && nvim_curwin_get_w_briopt_list() != 0 {
-        nvim_call_redraw_all_later(upd_not_valid);
+        nvim_call_redraw_all_later(UPD_NOT_VALID);
     } else if varp == wbr_addr || varp == win_wbr_addr {
         nvim_call_set_winbar();
     }
 
     let maxcol = nvim_get_maxcol();
-    let kflag_curswant = nvim_get_koptflag_curswant();
-    let kflag_redr_all = nvim_get_koptflag_redr_all();
-    let kflag_hl_only = nvim_get_koptflag_hl_only();
 
     if nvim_curwin_get_w_curswant() != maxcol
-        && (opt_flags_val & (kflag_curswant | kflag_redr_all)) != 0
-        && (opt_flags_val & kflag_hl_only) == 0
+        && (opt_flags_val & (K_OPT_FLAG_CURSWANT | K_OPT_FLAG_REDR_ALL)) != 0
+        && (opt_flags_val & K_OPT_FLAG_HL_ONLY) == 0
     {
         nvim_curwin_set_w_set_curswant(1);
     }
@@ -331,21 +315,19 @@ pub unsafe extern "C" fn rs_did_set_option(
             std::ptr::null_mut()
         };
 
-        let kflag_insecure = nvim_get_koptflag_insecure();
-
         if value_checked == 0
             && (nvim_get_secure() != 0
                 || nvim_get_sandbox() != 0
-                || (opt_flags & opt_modeline) != 0)
+                || (opt_flags & OPT_MODELINE) != 0)
         {
-            *flagsp |= kflag_insecure;
+            *flagsp |= K_OPT_FLAG_INSECURE;
             if !flagsp_local.is_null() {
-                *flagsp_local |= kflag_insecure;
+                *flagsp_local |= K_OPT_FLAG_INSECURE;
             }
         } else if value_replaced != 0 {
-            *flagsp &= !kflag_insecure;
+            *flagsp &= !K_OPT_FLAG_INSECURE;
             if !flagsp_local.is_null() {
-                *flagsp_local &= !kflag_insecure;
+                *flagsp_local &= !K_OPT_FLAG_INSECURE;
             }
         }
     }
@@ -426,11 +408,9 @@ pub unsafe extern "C" fn rs_set_option_impl(
     let secure_saved = nvim_get_secure();
 
     // Enable secure mode if needed.
-    let kflag_insecure = nvim_get_koptflag_insecure();
-    let opt_modeline = nvim_get_opt_modeline();
-    if (opt_flags & opt_modeline) != 0
+    if (opt_flags & OPT_MODELINE) != 0
         || nvim_get_sandbox() != 0
-        || (value_replaced == 0 && (*p & kflag_insecure) != 0)
+        || (value_replaced == 0 && (*p & K_OPT_FLAG_INSECURE) != 0)
     {
         nvim_set_secure(1);
     }
@@ -465,8 +445,7 @@ pub unsafe extern "C" fn rs_set_option_impl(
                 errmsg,
             );
         }
-        let kflag_ui_option = nvim_get_koptflag_ui_option();
-        if (nvim_option_get_flags_val(opt_idx) & kflag_ui_option) != 0 {
+        if (nvim_option_get_flags_val(opt_idx) & K_OPT_FLAG_UI_OPTION) != 0 {
             nvim_ui_call_option_set(opt_idx, saved_new_value);
         }
     }

@@ -16,6 +16,7 @@ use std::ffi::c_int;
 
 use crate::opt_index::K_OPT_COUNT;
 use crate::storage::OptVal;
+use crate::K_OPT_FLAG_INSECURE;
 
 extern "C" {
     /// Get options[opt_idx].def_val
@@ -512,8 +513,6 @@ extern "C" {
     /// rs_insecure_flag(wp, opt_idx, opt_flags) - get pointer to insecure flag
     fn rs_insecure_flag(wp: *mut std::ffi::c_void, opt_idx: c_int, opt_flags: c_int)
         -> *mut c_uint;
-    /// nvim_get_koptflag_insecure() - get kOptFlagInsecure constant
-    fn nvim_get_koptflag_insecure() -> c_uint;
     /// nvim_opt_get_curwin() - get current window handle
     fn nvim_opt_get_curwin() -> *mut std::ffi::c_void;
     /// set_option_direct with current_sctx.sc_sid
@@ -621,12 +620,11 @@ pub unsafe extern "C" fn rs_set_option_default(opt_idx: c_int, opt_flags: c_int)
 
     // The default value is not insecure.
     let curwin = nvim_opt_get_curwin();
-    let insecure_bit = nvim_get_koptflag_insecure();
     let flagsp = rs_insecure_flag(curwin, opt_idx, opt_flags);
-    *flagsp &= !insecure_bit;
+    *flagsp &= !K_OPT_FLAG_INSECURE;
     if both {
         let flagsp2 = rs_insecure_flag(curwin, opt_idx, OPT_LOCAL_P12);
-        *flagsp2 &= !insecure_bit;
+        *flagsp2 &= !K_OPT_FLAG_INSECURE;
     }
 }
 

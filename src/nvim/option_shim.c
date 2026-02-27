@@ -229,6 +229,22 @@ _Static_assert(UPD_CLEAR == 50, "UPD_CLEAR mismatch with Rust UpdateType::Clear"
 _Static_assert(NO_SCREEN == 2, "NO_SCREEN mismatch with Rust NO_SCREEN constant");
 _Static_assert(Ctrl_C == 3, "Ctrl_C mismatch with Rust CTRL_C constant");
 _Static_assert(K_KENTER == -16715, "K_KENTER mismatch with Rust K_KENTER constant");
+// Constant accessors replaced by Rust constants + static_assert validation
+_Static_assert(BCO_ENTER == 1, "BCO_ENTER mismatch with Rust BCO_ENTER constant");
+_Static_assert(BCO_ALWAYS == 2, "BCO_ALWAYS mismatch with Rust BCO_ALWAYS constant");
+_Static_assert(BCO_NOHELP == 4, "BCO_NOHELP mismatch with Rust BCO_NOHELP constant");
+_Static_assert(CPO_BUFOPTGLOB == 'S', "CPO_BUFOPTGLOB mismatch with Rust CPO_BUFOPTGLOB constant");
+_Static_assert(CPO_BUFOPT == 's', "CPO_BUFOPT mismatch with Rust CPO_BUFOPT constant");
+_Static_assert(CMOD_NOSWAPFILE == 0x2000, "CMOD_NOSWAPFILE mismatch with Rust CMOD_NOSWAPFILE constant");
+_Static_assert(SID_NONE == -6, "SID_NONE mismatch with Rust SID_NONE constant");
+_Static_assert(kOptFlagUIOption == (1 << 5), "kOptFlagUIOption mismatch with Rust K_OPT_FLAG_UI_OPTION constant");
+_Static_assert(kOptFlagRedrWin == (1 << 8), "kOptFlagRedrWin mismatch with Rust K_OPT_FLAG_REDR_WIN constant");
+_Static_assert(kOptFlagRedrBuf == (1 << 9), "kOptFlagRedrBuf mismatch with Rust K_OPT_FLAG_REDR_BUF constant");
+_Static_assert(kOptFlagSecure == (1 << 14), "kOptFlagSecure mismatch with Rust K_OPT_FLAG_SECURE constant");
+_Static_assert(kOptFlagInsecure == (1 << 18), "kOptFlagInsecure mismatch with Rust K_OPT_FLAG_INSECURE constant");
+_Static_assert(kOptFlagCurswant == (1 << 21), "kOptFlagCurswant mismatch with Rust K_OPT_FLAG_CURSWANT constant");
+_Static_assert(kOptFlagHLOnly == (1 << 23), "kOptFlagHLOnly mismatch with Rust K_OPT_FLAG_HL_ONLY constant");
+_Static_assert(OPT_MODELINE == 0x04, "OPT_MODELINE mismatch with Rust OPT_MODELINE constant");
 
 // Rust FFI callback declarations (referenced by options.generated.h)
 extern const char *rs_did_set_hlsearch(optset_T *args);
@@ -3309,25 +3325,7 @@ uint32_t nvim_option_get_flags_val(OptIndex opt_idx) { return options[opt_idx].f
 /// Get current_sctx
 sctx_T nvim_get_current_sctx(void) { return current_sctx; }
 
-/// Get SID_NONE constant
-int nvim_get_sid_none(void) { return (int)SID_NONE; }
-
 // nvim_get_maxcol is defined in memline_shim.c
-
-/// kOptFlagInsecure constant
-uint32_t nvim_get_koptflag_insecure(void) { return (uint32_t)kOptFlagInsecure; }
-/// kOptFlagSecure constant
-uint32_t nvim_get_koptflag_secure(void) { return (uint32_t)kOptFlagSecure; }
-/// kOptFlagCurswant constant
-uint32_t nvim_get_koptflag_curswant(void) { return (uint32_t)kOptFlagCurswant; }
-/// kOptFlagRedrAll constant
-uint32_t nvim_get_koptflag_redr_all(void) { return (uint32_t)kOptFlagRedrAll; }
-/// kOptFlagHLOnly constant
-uint32_t nvim_get_koptflag_hl_only(void) { return (uint32_t)kOptFlagHLOnly; }
-/// OPT_MODELINE constant
-int nvim_get_opt_modeline(void) { return (int)OPT_MODELINE; }
-/// UPD_NOT_VALID constant
-int nvim_get_upd_not_valid(void) { return (int)UPD_NOT_VALID; }
 
 /// Call get_varp_scope(&options[opt_idx], opt_flags)
 void *nvim_get_varp_scope_opt(OptIndex opt_idx, int opt_flags)
@@ -3344,9 +3342,6 @@ void *nvim_get_varp_opt(OptIndex opt_idx)
 // =============================================================================
 // Phase 9 (pass 9) trampolines: set_option / apply_optionset_autocmd
 // =============================================================================
-
-/// Get kOptFlagUIOption constant
-uint32_t nvim_get_koptflag_ui_option(void) { return (uint32_t)kOptFlagUIOption; }
 
 /// Apply the OptionSet autocommand: called from rs_set_option_impl in Rust.
 /// Keeps VimL type system interactions (optval_as_tv, set_vim_var_tv, etc.) in C.
@@ -3417,23 +3412,11 @@ int nvim_cmdmod_get_cmod_flags(void)
   return cmdmod.cmod_flags;
 }
 
-/// Returns the CMOD_NOSWAPFILE constant.
+/// Returns cmdmod.cmod_flags & CMOD_NOSWAPFILE (1 if :noswapfile is active, 0 otherwise).
 int nvim_get_cmod_noswapfile(void)
 {
-  return (int)CMOD_NOSWAPFILE;
+  return (cmdmod.cmod_flags & CMOD_NOSWAPFILE) != 0;
 }
-
-/// Returns BCO_ENTER constant.
-int nvim_get_bco_enter(void) { return (int)BCO_ENTER; }
-/// Returns BCO_ALWAYS constant.
-int nvim_get_bco_always(void) { return (int)BCO_ALWAYS; }
-/// Returns BCO_NOHELP constant.
-int nvim_get_bco_nohelp(void) { return (int)BCO_NOHELP; }
-
-/// Returns CPO_BUFOPTGLOB character ('S') as int.
-int nvim_get_cpo_bufoptglob(void) { return (unsigned char)CPO_BUFOPTGLOB; }
-/// Returns CPO_BUFOPT character ('s') as int.
-int nvim_get_cpo_bufopt(void) { return (unsigned char)CPO_BUFOPT; }
 
 /// Returns buf->b_p_initialized.
 int nvim_buf_get_b_p_initialized(buf_T *buf) { return buf->b_p_initialized ? 1 : 0; }
