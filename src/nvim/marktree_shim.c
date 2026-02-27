@@ -172,6 +172,11 @@ extern void rs_marktree_put_test(MarkTree *b, uint32_t ns, uint32_t id, int row,
                                   bool meta_inline);
 extern bool rs_mt_right_test(MTKey key);
 
+// Phase 4 (pass 4): splice
+extern bool rs_marktree_splice(MarkTree *b, int32_t start_line, int start_col,
+                               int old_extent_line, int old_extent_col,
+                               int new_extent_line, int new_extent_col);
+
 // Phase 1 (pass 2) migrations
 extern void rs_marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key);
 extern void rs_marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col);
@@ -195,15 +200,6 @@ extern bool rs_intersect_mov_test(const uint64_t *x, size_t nx, const uint64_t *
 #define ID_INCR (((uint64_t)1) << 2)
 
 #define rawkey(itr) ((itr)->x->key[(itr)->i])
-
-// Used by `marktree_splice`. Need to keep track of marks which moved
-// in order to repair intersections.
-typedef struct {
-  uint64_t id;
-  MTNode *old, *new;
-  int old_i, new_i;
-} Damage;
-typedef kvec_withinit_t(Damage, 8) DamageList;
 
 #include "marktree_shim.c.generated.h"
 
@@ -721,281 +717,11 @@ void marktree_restore_pair(MarkTree *b, MTKey key)
   rs_marktree_restore_pair(b, key);
 }
 
-static bool itr_eq(MarkTreeIter *itr1, MarkTreeIter *itr2)
-{
-  return (&rawkey(itr1) == &rawkey(itr2));
-}
-
-static void swap_keys(MarkTree *b, MarkTreeIter *itr1, MarkTreeIter *itr2, DamageList *damage)
-{
-  if (itr1->x != itr2->x) {
-    if (mt_paired(rawkey(itr1))) {
-      kvi_push(*damage, ((Damage){ mt_lookup_key(rawkey(itr1)), itr1->x, itr2->x,
-                                   itr1->i, itr2->i }));
-    }
-    if (mt_paired(rawkey(itr2))) {
-      kvi_push(*damage, ((Damage){ mt_lookup_key(rawkey(itr2)), itr2->x, itr1->x,
-                                   itr2->i, itr1->i }));
-    }
-
-    uint32_t meta_inc_1[kMTMetaCount];
-    rs_meta_describe_key(rawkey(itr1), meta_inc_1);
-    uint32_t meta_inc_2[kMTMetaCount];
-    rs_meta_describe_key(rawkey(itr2), meta_inc_2);
-
-    if (memcmp(meta_inc_1, meta_inc_2, sizeof(meta_inc_1)) != 0) {
-      MTNode *x1 = itr1->x;
-      MTNode *x2 = itr2->x;
-      while (x1 != x2) {
-        if (x1->level <= x2->level) {
-          // as the root node uniquely has the highest level, x1 cannot be it
-          uint32_t *meta_node = x1->parent->meta[x1->p_idx];
-          for (int m = 0; m < kMTMetaCount; m++) {
-            meta_node[m] += meta_inc_2[m] - meta_inc_1[m];
-          }
-          x1 = x1->parent;
-        }
-        if (x2->level < x1->level) {
-          uint32_t *meta_node = x2->parent->meta[x2->p_idx];
-          for (int m = 0; m < kMTMetaCount; m++) {
-            meta_node[m] += meta_inc_1[m] - meta_inc_2[m];
-          }
-          x2 = x2->parent;
-        }
-      }
-    }
-  }
-
-  MTKey key1 = rawkey(itr1);
-  MTKey key2 = rawkey(itr2);
-  rawkey(itr1) = key2;
-  rawkey(itr1).pos = key1.pos;
-  rawkey(itr2) = key1;
-  rawkey(itr2).pos = key2.pos;
-  refkey(b, itr1->x, itr1->i);
-  refkey(b, itr2->x, itr2->i);
-}
-
-static int damage_cmp(const void *s1, const void *s2)
-{
-  Damage *d1 = (Damage *)s1;
-  Damage *d2 = (Damage *)s2;
-  assert(d1->id != d2->id);
-  return d1->id > d2->id ? 1 : -1;
-}
-
 bool marktree_splice(MarkTree *b, int32_t start_line, int start_col, int old_extent_line,
                      int old_extent_col, int new_extent_line, int new_extent_col)
 {
-  MTPos start = { start_line, start_col };
-  MTPos old_extent = { old_extent_line, old_extent_col };
-  MTPos new_extent = { new_extent_line, new_extent_col };
-
-  bool may_delete = (old_extent.row != 0 || old_extent.col != 0);
-  bool same_line = old_extent.row == 0 && new_extent.row == 0;
-  rs_unrelative(start, &old_extent);
-  rs_unrelative(start, &new_extent);
-  MarkTreeIter itr[1] = { 0 };
-  MarkTreeIter enditr[1] = { 0 };
-
-  MTPos oldbase[MT_MAX_DEPTH] = { 0 };
-
-  rs_marktree_itr_get_ext_full(b, start, itr, false, true, oldbase, NULL);
-  if (!itr->x) {
-    // den e FÄRDIG
-    return false;
-  }
-  MTPos delta = { new_extent.row - old_extent.row,
-                  new_extent.col - old_extent.col };
-
-  if (may_delete) {
-    MTPos ipos = rs_marktree_itr_pos(itr);
-    if (!rs_pos_leq(old_extent, ipos)
-        || (old_extent.row == ipos.row && old_extent.col == ipos.col
-            && !mt_right(rawkey(itr)))) {
-      rs_marktree_itr_get_ext_full(b, old_extent, enditr, true, true, NULL, NULL);
-      assert(enditr->x);
-      // "assert" (itr <= enditr)
-    } else {
-      may_delete = false;
-    }
-  }
-
-  bool past_right = false;
-  bool moved = false;
-  DamageList damage;
-  kvi_init(damage);
-
-  // Follow the general strategy of messing things up and fix them later
-  // "oldbase" carries the information needed to calculate old position of
-  // children.
-  if (may_delete) {
-    while (itr->x && !past_right) {
-      MTPos loc_start = start;
-      MTPos loc_old = old_extent;
-      rs_relative(itr->pos, &loc_start);
-
-      rs_relative(oldbase[itr->lvl], &loc_old);
-
-continue_same_node:
-      // NB: strictly should be less than the right gravity of loc_old, but
-      // the iter comparison below will already break on that.
-      if (!rs_pos_leq(rawkey(itr).pos, loc_old)) {
-        break;
-      }
-
-      if (mt_right(rawkey(itr))) {
-        while (!itr_eq(itr, enditr)
-               && mt_right(rawkey(enditr))) {
-          rs_marktree_itr_prev(b, enditr);
-        }
-        if (!mt_right(rawkey(enditr))) {
-          swap_keys(b, itr, enditr, &damage);
-        } else {
-          past_right = true;  // NOLINT
-          (void)past_right;
-          break;
-        }
-      }
-
-      if (itr_eq(itr, enditr)) {
-        // actually, will be past_right after this key
-        past_right = true;
-      }
-
-      moved = true;
-      if (itr->x->level) {
-        oldbase[itr->lvl + 1] = rawkey(itr).pos;
-        rs_unrelative(oldbase[itr->lvl], &oldbase[itr->lvl + 1]);
-        rawkey(itr).pos = loc_start;
-        rs_marktree_itr_next_skip(b, itr,false, false, oldbase, NULL);
-      } else {
-        rawkey(itr).pos = loc_start;
-        if (itr->i < itr->x->n - 1) {
-          itr->i++;
-          if (!past_right) {
-            goto continue_same_node;
-          }
-        } else {
-          rs_marktree_itr_next(b, itr);
-        }
-      }
-    }
-    while (itr->x) {
-      MTPos loc_new = new_extent;
-      rs_relative(itr->pos, &loc_new);
-      MTPos limit = old_extent;
-
-      rs_relative(oldbase[itr->lvl], &limit);
-
-past_continue_same_node:
-
-      if (rs_pos_leq(limit, rawkey(itr).pos)) {
-        break;
-      }
-
-      MTPos oldpos = rawkey(itr).pos;
-      rawkey(itr).pos = loc_new;
-      moved = true;
-      if (itr->x->level) {
-        oldbase[itr->lvl + 1] = oldpos;
-        rs_unrelative(oldbase[itr->lvl], &oldbase[itr->lvl + 1]);
-
-        rs_marktree_itr_next_skip(b, itr,false, false, oldbase, NULL);
-      } else {
-        if (itr->i < itr->x->n - 1) {
-          itr->i++;
-          goto past_continue_same_node;
-        } else {
-          rs_marktree_itr_next(b, itr);
-        }
-      }
-    }
-  }
-
-  while (itr->x) {
-    rs_unrelative(oldbase[itr->lvl], &rawkey(itr).pos);
-    int realrow = rawkey(itr).pos.row;
-    assert(realrow >= old_extent.row);
-    bool done = false;
-    if (realrow == old_extent.row) {
-      if (delta.col) {
-        rawkey(itr).pos.col += delta.col;
-      }
-    } else {
-      if (same_line) {
-        // optimization: column only adjustment can skip remaining rows
-        done = true;
-      }
-    }
-    if (delta.row) {
-      rawkey(itr).pos.row += delta.row;
-      moved = true;
-    }
-    rs_relative(itr->pos, &rawkey(itr).pos);
-    if (done) {
-      break;
-    }
-    rs_marktree_itr_next_skip(b, itr,true, false, NULL, NULL);
-  }
-
-  if (kv_size(damage)) {
-    // TODO(bfredl): a full sort is not really needed. we just need a "start" node to find
-    // its corresponding "end" node. Set up some dedicated hash for this later (c.f. the
-    // "grow only" variant of khash_t branch)
-    qsort((void *)&kv_A(damage, 0), kv_size(damage), sizeof(kv_A(damage, 0)),
-          damage_cmp);
-
-    for (size_t i = 0; i < kv_size(damage); i++) {
-      Damage d = kv_A(damage, i);
-      assert(i == 0 || d.id > kv_A(damage, i - 1).id);
-      if (!(d.id & MARKTREE_END_FLAG)) {  // start
-        if (i + 1 < kv_size(damage) && kv_A(damage, i + 1).id == (d.id | MARKTREE_END_FLAG)) {
-          Damage d2 = kv_A(damage, i + 1);
-
-          // pair
-          rs_marktree_itr_set_node(b,itr, d.old, d.old_i);
-          rs_marktree_itr_set_node(b,enditr, d2.old, d2.old_i);
-          rs_marktree_intersect_pair(b, d.id, itr, enditr, true);
-          rs_marktree_itr_set_node(b,itr, d.new, d.new_i);
-          rs_marktree_itr_set_node(b,enditr, d2.new, d2.new_i);
-          rs_marktree_intersect_pair(b, d.id, itr, enditr, false);
-
-          i++;  // consume two items
-          continue;
-        }
-
-        // d is lone start, end didn't move
-        MarkTreeIter endpos[1];
-        rs_marktree_lookup(b, d.id | MARKTREE_END_FLAG, endpos);
-        if (endpos->x) {
-          rs_marktree_itr_set_node(b,itr, d.old, d.old_i);
-          *enditr = *endpos;
-          rs_marktree_intersect_pair(b, d.id, itr, enditr, true);
-          rs_marktree_itr_set_node(b,itr, d.new, d.new_i);
-          *enditr = *endpos;
-          rs_marktree_intersect_pair(b, d.id, itr, enditr, false);
-        }
-      } else {
-        // d is lone end, start didn't move
-        MarkTreeIter startpos[1];
-        uint64_t start_id = d.id & ~MARKTREE_END_FLAG;
-
-        rs_marktree_lookup(b, start_id, startpos);
-        if (startpos->x) {
-          *itr = *startpos;
-          rs_marktree_itr_set_node(b,enditr, d.old, d.old_i);
-          rs_marktree_intersect_pair(b, start_id, itr, enditr, true);
-          *itr = *startpos;
-          rs_marktree_itr_set_node(b,enditr, d.new, d.new_i);
-          rs_marktree_intersect_pair(b, start_id, itr, enditr, false);
-        }
-      }
-    }
-  }
-  kvi_destroy(damage);
-
-  return moved;
+  return rs_marktree_splice(b, start_line, start_col, old_extent_line, old_extent_col,
+                            new_extent_line, new_extent_col);
 }
 
 void marktree_move_region(MarkTree *b, int start_row, colnr_T start_col, int extent_row,
@@ -1342,9 +1068,6 @@ void nvim_rawkey_add_pos_row(MarkTreeIter *itr, int delta) { rawkey(itr).pos.row
 // Splice Operations (for Rust FFI)
 // ============================================================================
 
-bool nvim_marktree_splice(MarkTree *b, int32_t start_line, int start_col,
-                          int old_extent_line, int old_extent_col,
-                          int new_extent_line, int new_extent_col) { return marktree_splice(b, start_line, start_col, old_extent_line, old_extent_col, new_extent_line, new_extent_col); }
 void nvim_marktree_move_region(MarkTree *b, int start_row, colnr_T start_col,
                                int extent_row, colnr_T extent_col,
                                int new_row, colnr_T new_col) { marktree_move_region(b, start_row, start_col, extent_row, extent_col, new_row, new_col); }

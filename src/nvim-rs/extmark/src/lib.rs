@@ -348,16 +348,16 @@ extern "C" {
     /// Clear all marks from tree (Rust implementation).
     fn rs_marktree_clear(b: MarkTreeHandle);
 
-    /// Splice marks for text change.
-    fn nvim_marktree_splice(
+    /// Splice marks for text change (Rust implementation).
+    fn rs_marktree_splice(
         b: MarkTreeHandle,
         start_row: i32,
-        start_col: ColnrT,
+        start_col: c_int,
         old_row: c_int,
-        old_col: ColnrT,
+        old_col: c_int,
         new_row: c_int,
-        new_col: ColnrT,
-    );
+        new_col: c_int,
+    ) -> bool;
 
     /// Move region of marks.
     fn nvim_marktree_move_region(
@@ -1270,8 +1270,8 @@ pub fn extmark_splice_impl(
     }
 
     let tree = unsafe { nvim_buf_get_marktree(buf) };
-    unsafe {
-        nvim_marktree_splice(
+    let _ = unsafe {
+        rs_marktree_splice(
             tree, start_row, start_col, old_row, old_col, new_row, new_col,
         )
     };

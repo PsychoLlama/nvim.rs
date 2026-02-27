@@ -596,7 +596,6 @@ extern "C" {
     fn nvim_rawkey_clear_flags(itr: MarkTreeIterHandle, flags: u16);
 
     /// Set the pos field of the key at the iterator position.
-    #[allow(dead_code)]
     fn nvim_rawkey_set_pos(itr: MarkTreeIterHandle, pos: MTPos);
 
     /// Get the pos field of the key at the iterator position.
@@ -619,21 +618,6 @@ extern "C" {
 
     /// Copy iterator contents from src to dst (equivalent to `*dst = *src`).
     fn nvim_marktree_itr_copy(dst: MarkTreeIterHandle, src: MarkTreeIterHandle);
-
-    // ========================================================================
-    // Splice Operations (Phase 6)
-    // ========================================================================
-
-    /// Splice: handle text changes in buffer.
-    fn nvim_marktree_splice(
-        b: MarkTreeHandle,
-        start_line: i32,
-        start_col: c_int,
-        old_extent_line: c_int,
-        old_extent_col: c_int,
-        new_extent_line: c_int,
-        new_extent_col: c_int,
-    ) -> bool;
 
     // ========================================================================
     // Memory Management Accessors (Phase 7)
@@ -3900,7 +3884,6 @@ pub extern "C" fn rs_marktree_clear(b: MarkTreeHandle) {
 // ============================================================================
 
 /// Tracks a key that moved between nodes during splice so intersections can be repaired.
-#[allow(dead_code)]
 struct Damage {
     id: u64,
     old_node: MTNodeHandle,
@@ -3910,7 +3893,6 @@ struct Damage {
 }
 
 /// Check if two iterators point to the same key (same node and index).
-#[allow(dead_code)]
 fn itr_eq(itr1: MarkTreeIterHandle, itr2: MarkTreeIterHandle) -> bool {
     let x1 = unsafe { nvim_mtitr_get_x(itr1) };
     let x2 = unsafe { nvim_mtitr_get_x(itr2) };
@@ -3925,11 +3907,7 @@ fn itr_eq(itr1: MarkTreeIterHandle, itr2: MarkTreeIterHandle) -> bool {
 ///
 /// `damage` collects pairs of (id, old_node, new_node) so that intersections
 /// can be repaired after all moves are done.
-#[allow(
-    clippy::cast_possible_wrap,
-    clippy::cast_possible_truncation,
-    dead_code
-)]
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
 fn swap_keys(
     b: MarkTreeHandle,
     itr1: MarkTreeIterHandle,
@@ -4025,12 +4003,18 @@ fn swap_keys(
 /// Splice: handle text changes in buffer.
 ///
 /// Updates mark positions based on text change:
-/// - Marks at `start` with right gravity are moved to `new_extent`
-/// - Marks in the deleted region are moved to `start`
+/// - Right-gravity marks at deleted region edge stay at new_extent
+/// - Marks in the deleted region are moved to start
 /// - Marks after the deleted region are adjusted by delta
 ///
 /// Returns true if any marks were moved.
 #[must_use]
+#[allow(clippy::too_many_lines)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 pub fn marktree_splice(
     b: MarkTreeHandle,
     start_line: i32,
@@ -4040,17 +4024,292 @@ pub fn marktree_splice(
     new_extent_line: i32,
     new_extent_col: i32,
 ) -> bool {
-    unsafe {
-        nvim_marktree_splice(
-            b,
-            start_line,
-            start_col,
-            old_extent_line,
-            old_extent_col,
-            new_extent_line,
-            new_extent_col,
-        )
+    let start = MTPos {
+        row: start_line,
+        col: start_col,
+    };
+    let mut old_extent = MTPos {
+        row: old_extent_line,
+        col: old_extent_col,
+    };
+    let mut new_extent = MTPos {
+        row: new_extent_line,
+        col: new_extent_col,
+    };
+
+    let mut may_delete = old_extent.row != 0 || old_extent.col != 0;
+    let same_line = old_extent.row == 0 && new_extent.row == 0;
+    unrelative(start, &mut old_extent);
+    unrelative(start, &mut new_extent);
+
+    let mut oldbase = [MTPos { row: 0, col: 0 }; MT_MAX_DEPTH];
+
+    let itr = unsafe { nvim_alloc_marktreeiter() };
+    let _ = marktree_itr_get_ext_full(
+        b,
+        start,
+        itr,
+        false,
+        true,
+        oldbase.as_mut_ptr(),
+        std::ptr::null(),
+    );
+    if unsafe { nvim_mtitr_get_x(itr) }.is_null() {
+        unsafe { nvim_free_marktreeiter(itr) };
+        return false;
     }
+
+    let delta = MTPos {
+        row: new_extent.row - old_extent.row,
+        col: new_extent.col - old_extent.col,
+    };
+
+    let enditr = unsafe { nvim_alloc_marktreeiter() };
+
+    if may_delete {
+        let ipos = marktree_itr_pos(itr);
+        if !pos_leq(old_extent, ipos)
+            || (old_extent.row == ipos.row && old_extent.col == ipos.col && !mt_right(&rawkey(itr)))
+        {
+            let _ = marktree_itr_get_ext_full(
+                b,
+                old_extent,
+                enditr,
+                true,
+                true,
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            );
+        } else {
+            may_delete = false;
+        }
+    }
+
+    let mut past_right = false;
+    let mut moved = false;
+    let mut damage: Vec<Damage> = Vec::new();
+
+    // Loop 1: move marks within deleted region to start position.
+    // "oldbase" carries the information needed to calculate old position
+    // of children.
+    if may_delete {
+        'loop1: while !unsafe { nvim_mtitr_get_x(itr) }.is_null() && !past_right {
+            let itr_lvl = unsafe { nvim_mtitr_get_lvl(itr) } as usize;
+            let itr_pos = unsafe { nvim_mtitr_get_pos(itr) };
+            let mut loc_start = start;
+            relative(itr_pos, &mut loc_start);
+            let mut loc_old = old_extent;
+            relative(oldbase[itr_lvl], &mut loc_old);
+
+            // continue_same_node label -- inner loop for same leaf node
+            loop {
+                // NB: strictly should be less than the right gravity of loc_old, but
+                // the iter comparison below will already break on that.
+                if !pos_leq(rawkey(itr).pos, loc_old) {
+                    break 'loop1;
+                }
+
+                if mt_right(&rawkey(itr)) {
+                    while !itr_eq(itr, enditr) && mt_right(&rawkey(enditr)) {
+                        let _ = marktree_itr_prev(b, enditr);
+                    }
+                    if mt_right(&rawkey(enditr)) {
+                        // all remaining marks have right gravity
+                        break 'loop1;
+                    }
+                    swap_keys(b, itr, enditr, &mut damage);
+                }
+
+                if itr_eq(itr, enditr) {
+                    // actually, will be past_right after this key
+                    past_right = true;
+                }
+
+                moved = true;
+                let itr_x = unsafe { nvim_mtitr_get_x(itr) };
+                let itr_level = unsafe { nvim_mtnode_get_level(itr_x) };
+                if itr_level != 0 {
+                    // internal node: update oldbase and skip subtree
+                    let rkey_pos = rawkey(itr).pos;
+                    oldbase[itr_lvl + 1] = rkey_pos;
+                    unrelative(oldbase[itr_lvl], &mut oldbase[itr_lvl + 1]);
+                    unsafe { nvim_rawkey_set_pos(itr, loc_start) };
+                    let _ = marktree_itr_next_skip(
+                        b,
+                        itr,
+                        false,
+                        false,
+                        oldbase.as_mut_ptr(),
+                        std::ptr::null(),
+                    );
+                    break; // restart outer loop (loc_start/loc_old will be recomputed)
+                }
+                unsafe { nvim_rawkey_set_pos(itr, loc_start) };
+                let itr_i = unsafe { nvim_mtitr_get_i(itr) };
+                let itr_n = unsafe { nvim_mtnode_get_n(itr_x) };
+                if itr_i < itr_n - 1 && !past_right {
+                    unsafe { nvim_mtitr_set_i(itr, itr_i + 1) };
+                    // goto continue_same_node: continue inner loop with same loc_start/loc_old
+                } else if itr_i < itr_n - 1 {
+                    // past_right: advance but exit inner loop
+                    unsafe { nvim_mtitr_set_i(itr, itr_i + 1) };
+                    break;
+                } else {
+                    let _ = marktree_itr_next(b, itr);
+                    break;
+                }
+            }
+        }
+
+        // Loop 2: move marks just past the deleted region to new_extent.
+        'loop2: while !unsafe { nvim_mtitr_get_x(itr) }.is_null() {
+            let itr_lvl = unsafe { nvim_mtitr_get_lvl(itr) } as usize;
+            let itr_pos = unsafe { nvim_mtitr_get_pos(itr) };
+            let mut loc_new = new_extent;
+            relative(itr_pos, &mut loc_new);
+            let mut limit = old_extent;
+            relative(oldbase[itr_lvl], &mut limit);
+
+            // past_continue_same_node label -- inner loop for same leaf node
+            loop {
+                if pos_leq(limit, rawkey(itr).pos) {
+                    break 'loop2;
+                }
+
+                let oldpos = rawkey(itr).pos;
+                unsafe { nvim_rawkey_set_pos(itr, loc_new) };
+                moved = true;
+
+                let itr_x = unsafe { nvim_mtitr_get_x(itr) };
+                let itr_level = unsafe { nvim_mtnode_get_level(itr_x) };
+                if itr_level != 0 {
+                    oldbase[itr_lvl + 1] = oldpos;
+                    unrelative(oldbase[itr_lvl], &mut oldbase[itr_lvl + 1]);
+                    let _ = marktree_itr_next_skip(
+                        b,
+                        itr,
+                        false,
+                        false,
+                        oldbase.as_mut_ptr(),
+                        std::ptr::null(),
+                    );
+                    break; // restart outer loop
+                }
+                let itr_i = unsafe { nvim_mtitr_get_i(itr) };
+                let itr_n = unsafe { nvim_mtnode_get_n(itr_x) };
+                if itr_i < itr_n - 1 {
+                    unsafe { nvim_mtitr_set_i(itr, itr_i + 1) };
+                    // goto past_continue_same_node: continue inner loop
+                } else {
+                    let _ = marktree_itr_next(b, itr);
+                    break; // restart outer loop
+                }
+            }
+        }
+    }
+
+    // Loop 3: adjust positions of remaining marks after the splice point.
+    while !unsafe { nvim_mtitr_get_x(itr) }.is_null() {
+        let itr_lvl = unsafe { nvim_mtitr_get_lvl(itr) } as usize;
+        let itr_pos = unsafe { nvim_mtitr_get_pos(itr) };
+        let mut pos = rawkey(itr).pos;
+        unrelative(oldbase[itr_lvl], &mut pos);
+        let realrow = pos.row;
+        debug_assert!(realrow >= old_extent.row);
+        let mut done = false;
+        if realrow == old_extent.row {
+            if delta.col != 0 {
+                pos.col += delta.col;
+            }
+        } else if same_line {
+            // optimization: column only adjustment can skip remaining rows
+            done = true;
+        }
+        if delta.row != 0 {
+            pos.row += delta.row;
+            moved = true;
+        }
+        relative(itr_pos, &mut pos);
+        unsafe { nvim_rawkey_set_pos(itr, pos) };
+        if done {
+            break;
+        }
+        let _ = marktree_itr_next_skip(b, itr, true, false, std::ptr::null_mut(), std::ptr::null());
+    }
+
+    // Damage repair: fix intersections for moved paired marks.
+    if !damage.is_empty() {
+        // Sort by id so start/end pairs are adjacent.
+        damage.sort_by_key(|d| d.id);
+
+        let mut i = 0usize;
+        while i < damage.len() {
+            debug_assert!(i == 0 || damage[i].id > damage[i - 1].id);
+            if damage[i].id & MARKTREE_END_FLAG == 0 {
+                // start mark
+                if i + 1 < damage.len() && damage[i + 1].id == (damage[i].id | MARKTREE_END_FLAG) {
+                    // pair: both start and end moved
+                    let (d_part, rest) = damage.split_at(i + 1);
+                    let d = &d_part[i];
+                    let d2 = &rest[0];
+
+                    let _ = marktree_itr_set_node(b, itr, d.old_node, d.old_i);
+                    let _ = marktree_itr_set_node(b, enditr, d2.old_node, d2.old_i);
+                    marktree_intersect_pair(b, d.id, itr, enditr, true);
+                    let _ = marktree_itr_set_node(b, itr, d.new_node, d.new_i);
+                    let _ = marktree_itr_set_node(b, enditr, d2.new_node, d2.new_i);
+                    marktree_intersect_pair(b, d.id, itr, enditr, false);
+
+                    i += 2; // consume two items
+                    continue;
+                }
+
+                // lone start: end didn't move
+                let d_id = damage[i].id;
+                let d_old_node = damage[i].old_node;
+                let d_old_i = damage[i].old_i;
+                let d_new_node = damage[i].new_node;
+                let d_new_i = damage[i].new_i;
+                let endpos = unsafe { nvim_alloc_marktreeiter() };
+                let _ = marktree_lookup(b, d_id | MARKTREE_END_FLAG, endpos);
+                if !unsafe { nvim_mtitr_get_x(endpos) }.is_null() {
+                    let _ = marktree_itr_set_node(b, itr, d_old_node, d_old_i);
+                    unsafe { nvim_marktree_itr_copy(enditr, endpos) };
+                    marktree_intersect_pair(b, d_id, itr, enditr, true);
+                    let _ = marktree_itr_set_node(b, itr, d_new_node, d_new_i);
+                    unsafe { nvim_marktree_itr_copy(enditr, endpos) };
+                    marktree_intersect_pair(b, d_id, itr, enditr, false);
+                }
+                unsafe { nvim_free_marktreeiter(endpos) };
+            } else {
+                // lone end: start didn't move
+                let d_id = damage[i].id;
+                let d_old_node = damage[i].old_node;
+                let d_old_i = damage[i].old_i;
+                let d_new_node = damage[i].new_node;
+                let d_new_i = damage[i].new_i;
+                let start_id = d_id & !MARKTREE_END_FLAG;
+                let startpos = unsafe { nvim_alloc_marktreeiter() };
+                let _ = marktree_lookup(b, start_id, startpos);
+                if !unsafe { nvim_mtitr_get_x(startpos) }.is_null() {
+                    unsafe { nvim_marktree_itr_copy(itr, startpos) };
+                    let _ = marktree_itr_set_node(b, enditr, d_old_node, d_old_i);
+                    marktree_intersect_pair(b, start_id, itr, enditr, true);
+                    unsafe { nvim_marktree_itr_copy(itr, startpos) };
+                    let _ = marktree_itr_set_node(b, enditr, d_new_node, d_new_i);
+                    marktree_intersect_pair(b, start_id, itr, enditr, false);
+                }
+                unsafe { nvim_free_marktreeiter(startpos) };
+            }
+            i += 1;
+        }
+    }
+
+    unsafe {
+        nvim_free_marktreeiter(itr);
+        nvim_free_marktreeiter(enditr);
+    }
+    moved
 }
 
 /// Move region: move marks within a region to a new location.
