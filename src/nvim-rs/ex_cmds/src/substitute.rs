@@ -1178,18 +1178,11 @@ extern "C" {
     fn nvim_curbuf_set_b_p_ma(val: c_int);
     fn nvim_curbuf_set_deleted_bytes2(val: c_int);
     fn nvim_coladvance(col: c_int);
-    fn nvim_do_sub_changed_bytes(lnum: c_int, col: c_int);
-    fn nvim_do_sub_deleted_lines(lnum: c_int, count: c_int);
     fn nvim_u_inssub(lnum: c_int) -> c_int;
     fn nvim_u_savesub(lnum: c_int) -> c_int;
     fn nvim_u_savedel2(lnum: c_int, count: c_int) -> c_int;
     fn nvim_u_save_cursor() -> c_int;
     fn nvim_do_check_cursorbind_wrapper();
-    fn nvim_do_sub_scrollup_clamp();
-    fn nvim_do_sub_scrolldown_clamp();
-    fn nvim_do_sub_setmouse();
-    fn nvim_do_sub_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
-    fn nvim_do_sub_ml_replace(lnum: c_int, line: *mut c_char, copy: c_int);
     fn nvim_do_sub_getdigits_int(pp: *mut *mut c_char) -> c_int;
     fn nvim_option_get_p_rdt() -> i64;
     fn nvim_do_sub_skip_regexp_ex(
@@ -1198,7 +1191,6 @@ extern "C" {
         arg_ptr: *mut *mut c_char,
     ) -> *mut c_char;
     fn nvim_excmds_check_nextcmd(cmd: *const c_char) -> *mut c_char;
-    fn nvim_do_sub_get_search_pat() -> *const c_char;
     fn nvim_do_sub_changed_window_setting();
     fn nvim_curwin_get_cursor_col() -> c_int;
     fn nvim_option_get_p_cwh() -> c_int;
@@ -1244,12 +1236,9 @@ extern "C" {
         etype: c_int,
     );
     fn appended_lines(lnum: c_int, count: c_int);
-    fn nvim_do_sub_ml_delete(lnum: c_int);
     fn nvim_do_sub_changed_lines(first: c_int, last: c_int, xtra: c_int);
     fn nvim_excmds_buf_updates_send_changes(lnum: c_int, num_added: i64, num_removed: i64);
     fn nvim_excmds_line_breakcheck();
-    fn nvim_do_sub_ml_get_len(lnum: c_int) -> c_int;
-    fn nvim_do_sub_ml_get(lnum: c_int) -> *const c_char;
     fn nvim_excmds_set_nextcmd_direct(eap: *mut ExArgHandle, p: *mut c_char);
     fn nvim_excmds_msg_empty();
     fn nvim_do_sub_save_pat(pat: *const c_char, patlen: usize, which_pat: c_int);
@@ -1274,7 +1263,16 @@ extern "C" {
     fn xstrnsave(string: *const c_char, len: usize) -> *mut c_char;
     fn ml_get(lnum: c_int) -> *const c_char;
     fn ml_get_len(lnum: c_int) -> c_int;
+    fn ml_delete(lnum: c_int) -> c_int;
+    fn ml_replace(lnum: c_int, line: *mut c_char, copy: c_int);
     fn ml_append(lnum: c_int, line: *const c_char, len: c_int, newfile: c_int) -> c_int;
+    fn changed_bytes(lnum: c_int, col: c_int);
+    fn deleted_lines(lnum: c_int, count: c_int);
+    fn scrollup_clamp();
+    fn scrolldown_clamp();
+    fn setmouse();
+    fn concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
+    fn get_search_pat() -> *const c_char;
     fn skipwhite(p: *const c_char) -> *const c_char;
     fn vim_strchr(string: *const c_char, c: c_int) -> *const c_char;
     fn beginline(flags: c_int);
@@ -1783,8 +1781,8 @@ pub unsafe extern "C" fn rs_do_sub(
                 }
 
                 if sub_firstline.is_null() {
-                    let line = nvim_do_sub_ml_get(sub_firstlnum);
-                    sub_firstline = xstrnsave(line, nvim_do_sub_ml_get_len(sub_firstlnum) as usize);
+                    let line = ml_get(sub_firstlnum);
+                    sub_firstline = xstrnsave(line, ml_get_len(sub_firstlnum) as usize);
                 }
 
                 nvim_curwin_set_cursor_lnum(lnum);
@@ -1993,7 +1991,7 @@ pub unsafe extern "C" fn rs_do_sub(
                         if nvim_u_savesub(lnum) == 0 {
                             break;
                         }
-                        nvim_do_sub_ml_replace(lnum, new_start, 1);
+                        ml_replace(lnum, new_start, 1);
 
                         // Process extmarks
                         for md in &line_matches {
@@ -2017,7 +2015,7 @@ pub unsafe extern "C" fn rs_do_sub(
                                 break;
                             }
                             for _ in 0..nmatch_tl {
-                                nvim_do_sub_ml_delete(lnum);
+                                ml_delete(lnum);
                             }
                             nvim_excmds_mark_adjust(
                                 lnum,
@@ -2027,7 +2025,7 @@ pub unsafe extern "C" fn rs_do_sub(
                                 KEXTMARK_NOOP,
                             );
                             if subflags_local.do_ask {
-                                nvim_do_sub_deleted_lines(lnum, nmatch_tl);
+                                deleted_lines(lnum, nmatch_tl);
                             }
                             lnum -= 1;
                             line2 -= nmatch_tl;
@@ -2035,7 +2033,7 @@ pub unsafe extern "C" fn rs_do_sub(
                         }
 
                         if subflags_local.do_ask {
-                            nvim_do_sub_changed_bytes(lnum, 0);
+                            changed_bytes(lnum, 0);
                         } else {
                             if first_line == 0 {
                                 first_line = lnum;
@@ -2173,7 +2171,7 @@ pub unsafe extern "C" fn rs_do_sub(
                 nvim_excmds_emsg_by_id(8); // msg_empty
             }
         } else if subflags_local.do_error {
-            let pat_str = nvim_do_sub_get_search_pat();
+            let pat_str = get_search_pat();
             nvim_excmds_emsg_with_arg(3, pat_str); // semsg_patnotf2
         }
     }
@@ -2321,15 +2319,14 @@ unsafe fn handle_do_ask(
             nvim_option_set_lz(0);
 
             if !new_start.is_null() {
-                let orig = nvim_do_sub_ml_get(lnum);
-                let orig_len = nvim_do_sub_ml_get_len(lnum);
+                let orig = ml_get(lnum);
+                let orig_len = ml_get_len(lnum);
                 orig_line = xstrnsave(orig, orig_len as usize);
-                let new_line =
-                    nvim_do_sub_concat_str(new_start, sub_firstline.add(*copycol as usize));
+                let new_line = concat_str(new_start, sub_firstline.add(*copycol as usize));
                 len_change = strlen_c(new_line) as c_int - strlen_c(orig_line) as c_int;
                 let cur_col = nvim_curwin_get_cursor_col() + len_change;
                 nvim_curwin_set_cursor_col(cur_col);
-                nvim_do_sub_ml_replace(lnum, new_line, 0);
+                ml_replace(lnum, new_line, 0);
             }
 
             let endpos0_lnum = nvim_regmmatch_endpos0_lnum(regmatch);
@@ -2360,7 +2357,7 @@ unsafe fn handle_do_ask(
             nvim_set_RedrawingDisabled(temp);
 
             if !orig_line.is_null() {
-                nvim_do_sub_ml_replace(lnum, orig_line, 0);
+                ml_replace(lnum, orig_line, 0);
             }
             let _ = match_lines;
             let _ = save_state;
@@ -2391,16 +2388,16 @@ unsafe fn handle_do_ask(
         if typed == 5
         /* Ctrl-E */
         {
-            nvim_do_sub_scrollup_clamp();
+            scrollup_clamp();
         } else if typed == 25
         /* Ctrl-Y */
         {
-            nvim_do_sub_scrolldown_clamp();
+            scrolldown_clamp();
         }
     }
 
     // Restore state
-    nvim_do_sub_setmouse();
+    setmouse();
     if nvim_option_p_cpo_has_undo() != 0 {
         nvim_dec_no_u_sync();
     }
@@ -2575,7 +2572,7 @@ unsafe fn goto_sub_main(
     } else {
         let tl_lnum = *sub_firstlnum + *nmatch - 1;
         *nmatch_tl += *nmatch - 1;
-        nvim_do_sub_ml_get(tl_lnum)
+        ml_get(tl_lnum)
     };
 
     let copy_len = startpos0_col - *copycol;
@@ -2636,7 +2633,7 @@ unsafe fn goto_sub_main(
     // Calculate bytes replaced
     let mut replaced_bytes: i64 = 0;
     for i in 0..(*nmatch - 1) {
-        let line_len = nvim_do_sub_ml_get_len(*lnum_start + i);
+        let line_len = ml_get_len(*lnum_start + i);
         replaced_bytes += line_len as i64 + 1;
     }
     replaced_bytes += endpos0_col as i64 - startpos0_col as i64;
@@ -2732,8 +2729,8 @@ unsafe fn adjust_sub_firstlnum(
     if *nmatch > 1 {
         *sub_firstlnum += *nmatch - 1;
         xfree(*sub_firstline as *mut std::ffi::c_void);
-        let line = nvim_do_sub_ml_get(*sub_firstlnum);
-        *sub_firstline = xstrnsave(line, nvim_do_sub_ml_get_len(*sub_firstlnum) as usize);
+        let line = ml_get(*sub_firstlnum);
+        *sub_firstline = xstrnsave(line, ml_get_len(*sub_firstlnum) as usize);
         if *sub_firstlnum <= *line2 {
             *do_again = true;
         } else {
