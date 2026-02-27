@@ -68,12 +68,20 @@ extern "C" {
     fn nvim_syn_get_next_match_extmatch() -> ExtMatchHandle;
     fn nvim_syn_push_next_match() -> StateItemHandle;
 
-    // Next match position accessors
-    fn nvim_syn_get_next_match_h_startpos(lnum: *mut c_int, col: *mut c_int);
-    fn nvim_syn_get_next_match_m_endpos(lnum: *mut c_int, col: *mut c_int);
-    fn nvim_syn_get_next_match_h_endpos(lnum: *mut c_int, col: *mut c_int);
-    fn nvim_syn_get_next_match_eos_pos(lnum: *mut c_int, col: *mut c_int);
-    fn nvim_syn_get_next_match_eoe_pos(lnum: *mut c_int, col: *mut c_int);
+    // Bulk next match position getter
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_syn_get_next_match_positions(
+        h_start_lnum: *mut c_int,
+        h_start_col: *mut c_int,
+        m_end_lnum: *mut c_int,
+        m_end_col: *mut c_int,
+        h_end_lnum: *mut c_int,
+        h_end_col: *mut c_int,
+        eos_lnum: *mut c_int,
+        eos_col: *mut c_int,
+        eoe_lnum: *mut c_int,
+        eoe_col: *mut c_int,
+    );
 
     // Line operations
     fn nvim_syn_start_line();
@@ -445,59 +453,95 @@ pub fn next_match_extmatch() -> ExtMatchHandle {
     unsafe { nvim_syn_get_next_match_extmatch() }
 }
 
+/// All 5 next_match position fields in one bulk call.
+pub struct NextMatchPositions {
+    pub h_startpos: Position,
+    pub m_endpos: Position,
+    pub h_endpos: Position,
+    pub eos_pos: Position,
+    pub eoe_pos: Position,
+}
+
+/// Fetch all next_match position fields in a single C call.
+///
+/// # Safety
+/// Accesses C global syntax state; must be called from main thread.
+#[must_use]
+pub unsafe fn next_match_positions() -> NextMatchPositions {
+    let mut h_start_lnum: c_int = 0;
+    let mut h_start_col: c_int = 0;
+    let mut m_end_lnum: c_int = 0;
+    let mut m_end_col: c_int = 0;
+    let mut h_end_lnum: c_int = 0;
+    let mut h_end_col: c_int = 0;
+    let mut eos_lnum: c_int = 0;
+    let mut eos_col: c_int = 0;
+    let mut eoe_lnum: c_int = 0;
+    let mut eoe_col: c_int = 0;
+    nvim_syn_get_next_match_positions(
+        &mut h_start_lnum,
+        &mut h_start_col,
+        &mut m_end_lnum,
+        &mut m_end_col,
+        &mut h_end_lnum,
+        &mut h_end_col,
+        &mut eos_lnum,
+        &mut eos_col,
+        &mut eoe_lnum,
+        &mut eoe_col,
+    );
+    NextMatchPositions {
+        h_startpos: Position {
+            lnum: h_start_lnum,
+            col: h_start_col,
+        },
+        m_endpos: Position {
+            lnum: m_end_lnum,
+            col: m_end_col,
+        },
+        h_endpos: Position {
+            lnum: h_end_lnum,
+            col: h_end_col,
+        },
+        eos_pos: Position {
+            lnum: eos_lnum,
+            col: eos_col,
+        },
+        eoe_pos: Position {
+            lnum: eoe_lnum,
+            col: eoe_col,
+        },
+    }
+}
+
 /// Get the next match highlight start position.
 #[must_use]
 pub fn next_match_h_startpos() -> Position {
-    let mut lnum: c_int = 0;
-    let mut col: c_int = 0;
-    unsafe {
-        nvim_syn_get_next_match_h_startpos(&mut lnum, &mut col);
-    }
-    Position { lnum, col }
+    unsafe { next_match_positions().h_startpos }
 }
 
 /// Get the next match end position.
 #[must_use]
 pub fn next_match_m_endpos() -> Position {
-    let mut lnum: c_int = 0;
-    let mut col: c_int = 0;
-    unsafe {
-        nvim_syn_get_next_match_m_endpos(&mut lnum, &mut col);
-    }
-    Position { lnum, col }
+    unsafe { next_match_positions().m_endpos }
 }
 
 /// Get the next match highlight end position.
 #[must_use]
 pub fn next_match_h_endpos() -> Position {
-    let mut lnum: c_int = 0;
-    let mut col: c_int = 0;
-    unsafe {
-        nvim_syn_get_next_match_h_endpos(&mut lnum, &mut col);
-    }
-    Position { lnum, col }
+    unsafe { next_match_positions().h_endpos }
 }
 
 /// Get the next match end-of-start position.
 #[must_use]
 pub fn next_match_eos_pos() -> Position {
-    let mut lnum: c_int = 0;
-    let mut col: c_int = 0;
-    unsafe {
-        nvim_syn_get_next_match_eos_pos(&mut lnum, &mut col);
-    }
-    Position { lnum, col }
+    unsafe { next_match_positions().eos_pos }
 }
 
 /// Get the next match end-of-end position.
 #[must_use]
 pub fn next_match_eoe_pos() -> Position {
-    let mut lnum: c_int = 0;
-    let mut col: c_int = 0;
-    unsafe {
-        nvim_syn_get_next_match_eoe_pos(&mut lnum, &mut col);
-    }
-    Position { lnum, col }
+    unsafe { next_match_positions().eoe_pos }
 }
 
 /// Get all next match information at once.

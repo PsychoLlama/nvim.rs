@@ -84,10 +84,6 @@ extern "C" {
     fn nvim_syn_set_next_match_idx(idx: c_int);
     fn nvim_syn_set_next_match_col(col: c_int);
 
-    // Next match position getters
-    fn nvim_syn_get_next_match_m_endpos(lnum: *mut c_int, col: *mut c_int);
-    fn nvim_syn_get_next_match_h_endpos(lnum: *mut c_int, col: *mut c_int);
-
     // Next sequence number
     fn nvim_syn_incr_next_seqnr() -> c_int;
 
@@ -555,13 +551,11 @@ pub unsafe fn syn_current_attr(
                 if next_match_idx >= 0 && next_match_col == current_col {
                     // When a zero-width item matched which has a nextgroup,
                     // don't push the item but set nextgroup.
-                    let mut m_endpos_lnum: c_int = 0;
-                    let mut m_endpos_col: c_int = 0;
-                    nvim_syn_get_next_match_m_endpos(&mut m_endpos_lnum, &mut m_endpos_col);
+                    let nm_pos = crate::match_engine::next_match_positions();
                     let pat_next_list = nvim_syn_get_pattern_next_list(next_match_idx);
 
-                    if m_endpos_lnum == current_lnum
-                        && m_endpos_col == current_col
+                    if nm_pos.m_endpos.lnum == current_lnum
+                        && nm_pos.m_endpos.col == current_col
                         && !pat_next_list.0.is_null()
                     {
                         let pat_flags = nvim_syn_get_pattern_flags(next_match_idx);

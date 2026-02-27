@@ -437,13 +437,6 @@ void syn_set_timeout(proftime_T *tm)
   syn_tm = tm;
 }
 
-// We cannot simply discard growarrays full of state_items or buf_states; we
-// have to manually release their extmatch pointers first.
-// Thin wrapper: logic is in rs_clear_syn_state (line_init.rs).
-static void clear_syn_state(synstate_T *p)
-{
-  rs_clear_syn_state(p);
-}
 
 // Try to find a synchronisation point for line "lnum".
 //
@@ -469,20 +462,6 @@ static int syn_match_linecont(linenr_T lnum)
   return rs_syn_match_linecont((int)lnum);
 }
 
-// Prepare the current state for the start of a line.
-static void syn_start_line(void)
-{
-  rs_syn_start_line();
-}
-
-/// Check for items in the stack that need their end updated.
-///
-/// @param startofline  if true the last item is always updated.
-///                     if false the item with "keepend" is forcefully updated.
-static void syn_update_ends(bool startofline)
-{
-  rs_syn_update_ends(startofline ? 1 : 0);
-}
 
 /////////////////////////////////////////
 // Handling of the state stack cache.
@@ -572,10 +551,6 @@ static synstate_T *syn_stack_find_entry(linenr_T lnum)
 // End of handling of the state stack.
 // **************************************
 
-static void validate_current_state(void)
-{
-  rs_validate_current_state();
-}
 
 /// Update an entry in the current_state stack for a start-skip-end pattern.
 /// This finds the end of the current item, if it's in the current line.
@@ -584,17 +559,6 @@ static void validate_current_state(void)
 /// @param force     when true overrule a previous end
 ///
 
-/// Get current line in syntax buffer.
-static char *syn_getcurline(void)
-{
-  return rs_syn_getcurline();
-}
-
-/// Get length of current line in syntax buffer.
-static colnr_T syn_getcurline_len(void)
-{
-  return (colnr_T)rs_syn_getcurline_len();
-}
 
 /// Thin C helper: set up regmmatch_T, call vim_regexec_multi, extract results.
 /// Profiling/timeout/b_syn_slow logic is handled by the Rust caller.
@@ -780,12 +744,6 @@ int syn_get_stack_item(int i)
 // ":syntime" and "get_syntime_arg" are implemented in Rust (syntime.rs).
 // Their C thin wrappers are at the bottom of this file.
 
-// syn_clear_time is a file-local helper used by nvim_synpat_clear_time
-// and syn_start_line's b_syn_linecont_time reset.
-static void syn_clear_time(syn_time_T *st)
-{
-  rs_syn_clear_time(st);
-}
 
 int nvim_win_get_syn_patterns_len(win_T *win) { return win->w_s->b_syn_patterns.ga_len; }
 int nvim_win_get_syn_clusters_len(win_T *win) { return win->w_s->b_syn_clusters.ga_len; }
@@ -1064,7 +1022,7 @@ void nvim_syn_set_state_stored(int stored) { current_state_stored = stored ? tru
 
 void nvim_syn_clear_current_state(void) { rs_syn_clear_current_state(); }
 
-void nvim_syn_validate_current_state(void) { validate_current_state(); }
+void nvim_syn_validate_current_state(void) { rs_validate_current_state(); }
 
 void nvim_syn_invalidate_current_state(void) { rs_invalidate_current_state(); }
 
@@ -1300,13 +1258,13 @@ void nvim_syn_call_update_si_attr(int idx) { rs_update_si_attr(idx); }
 void nvim_syn_pop_current_state(void) { rs_syn_pop_current_state(); }
 void nvim_syn_push_current_state(int idx) { rs_syn_push_current_state(idx); }
 
-char nvim_syn_getcurline_at_col(void) { return syn_getcurline()[current_col]; }
+char nvim_syn_getcurline_at_col(void) { return rs_syn_getcurline()[current_col]; }
 
 void nvim_syn_set_current_finished(int finished) { current_finished = finished ? true : false; }
 
 int nvim_syn_id2attr_wrapper(int syn_id) { return syn_id2attr(syn_id); }
 
-void nvim_syn_call_syn_update_ends(int syncing) { syn_update_ends(syncing ? true : false); }
+void nvim_syn_call_syn_update_ends(int syncing) { rs_syn_update_ends(syncing ? 1 : 0); }
 
 int16_t *nvim_stateitem_get_next_list(stateitem_T *item) { return item ? item->si_next_list : NULL; }
 
@@ -1365,7 +1323,7 @@ keyentry_T *nvim_syn_keyword_find(char *keyword, int use_ic)
   return rs_syn_keyword_find(keyword, use_ic);
 }
 
-char *nvim_syn_getcurline(void) { return syn_getcurline(); }
+char *nvim_syn_getcurline(void) { return rs_syn_getcurline(); }
 
 void nvim_syn_save_chartab(char *buf) { save_chartab(buf); }
 
@@ -1398,59 +1356,23 @@ stateitem_T *nvim_syn_get_top_stateitem(void)
 
 int nvim_syn_incr_next_seqnr(void) { return next_seqnr++; }
 
-/// Get next_match_h_startpos
-void nvim_syn_get_next_match_h_startpos(int *lnum, int *col)
+/// Bulk getter for all 5 next_match position fields.
+void nvim_syn_get_next_match_positions(int *h_start_lnum, int *h_start_col,
+                                        int *m_end_lnum, int *m_end_col,
+                                        int *h_end_lnum, int *h_end_col,
+                                        int *eos_lnum, int *eos_col,
+                                        int *eoe_lnum, int *eoe_col)
 {
-  if (lnum) {
-    *lnum = next_match_h_startpos.lnum;
-  }
-  if (col) {
-    *col = next_match_h_startpos.col;
-  }
-}
-
-/// Get next_match_m_endpos
-void nvim_syn_get_next_match_m_endpos(int *lnum, int *col)
-{
-  if (lnum) {
-    *lnum = next_match_m_endpos.lnum;
-  }
-  if (col) {
-    *col = next_match_m_endpos.col;
-  }
-}
-
-/// Get next_match_h_endpos
-void nvim_syn_get_next_match_h_endpos(int *lnum, int *col)
-{
-  if (lnum) {
-    *lnum = next_match_h_endpos.lnum;
-  }
-  if (col) {
-    *col = next_match_h_endpos.col;
-  }
-}
-
-/// Get next_match_eos_pos
-void nvim_syn_get_next_match_eos_pos(int *lnum, int *col)
-{
-  if (lnum) {
-    *lnum = next_match_eos_pos.lnum;
-  }
-  if (col) {
-    *col = next_match_eos_pos.col;
-  }
-}
-
-/// Get next_match_eoe_pos
-void nvim_syn_get_next_match_eoe_pos(int *lnum, int *col)
-{
-  if (lnum) {
-    *lnum = next_match_eoe_pos.lnum;
-  }
-  if (col) {
-    *col = next_match_eoe_pos.col;
-  }
+  *h_start_lnum = next_match_h_startpos.lnum;
+  *h_start_col  = next_match_h_startpos.col;
+  *m_end_lnum   = next_match_m_endpos.lnum;
+  *m_end_col    = next_match_m_endpos.col;
+  *h_end_lnum   = next_match_h_endpos.lnum;
+  *h_end_col    = next_match_h_endpos.col;
+  *eos_lnum     = next_match_eos_pos.lnum;
+  *eos_col      = next_match_eos_pos.col;
+  *eoe_lnum     = next_match_eoe_pos.lnum;
+  *eoe_col      = next_match_eoe_pos.col;
 }
 
 int nvim_syn_get_next_match_flags(void) { return next_match_flags; }
@@ -1559,11 +1481,11 @@ void nvim_stateitem_set_extmatch(stateitem_T *item, reg_extmatch_T *em)
   }
 }
 
-void nvim_syn_start_line(void) { syn_start_line(); }
+void nvim_syn_start_line(void) { rs_syn_start_line(); }
 
 int nvim_syn_finish_line(int syncing) { return rs_syn_finish_line(syncing); }
 
-void nvim_syn_update_ends(int startofline) { syn_update_ends(startofline != 0); }
+void nvim_syn_update_ends(int startofline) { rs_syn_update_ends(startofline); }
 
 int nvim_syn_get_current_line_id(void) { return (int)current_line_id; }
 
@@ -1656,11 +1578,11 @@ int nvim_syn_current_state_valid(void) { return !INVALID_STATE(&current_state); 
 void nvim_syn_ensure_current_state_valid(void)
 {
   if (INVALID_STATE(&current_state)) {
-    validate_current_state();
+    rs_validate_current_state();
   }
 }
 
-const char *nvim_syn_get_current_line(void) { return syn_getcurline(); }
+const char *nvim_syn_get_current_line(void) { return rs_syn_getcurline(); }
 
 /// Get the attribute for the next match
 int nvim_syn_get_next_match_attr(void)
@@ -1774,7 +1696,7 @@ void nvim_syn_clear_extmatch_in(void)
   re_extmatch_in = NULL;
 }
 
-int nvim_syn_getcurline_byte_at(int col) { return (unsigned char)syn_getcurline()[col]; }
+int nvim_syn_getcurline_byte_at(int col) { return (unsigned char)rs_syn_getcurline()[col]; }
 
 void nvim_syn_set_current_attr(int attr) { current_attr = attr; }
 void nvim_syn_set_current_sub_char(int c) { current_sub_char = c; }
@@ -1991,11 +1913,7 @@ _Static_assert(SYNID_TOP == 21000, "SYNID_TOP");
 _Static_assert(SYNID_CONTAINED == 22000, "SYNID_CONTAINED");
 _Static_assert(HL_FOLD == 0x2000, "HL_FOLD");
 _Static_assert(HL_EXCLUDENL == 0x800, "HL_EXCLUDENL");
-_Static_assert(HL_HAS_EOL == 0x08, "HL_HAS_EOL");
 _Static_assert(HL_INCLUDED_TOPLEVEL == 0x80000, "HL_INCLUDED_TOPLEVEL");
-_Static_assert(SPTYPE_START == 2, "SPTYPE_START");
-_Static_assert(SPTYPE_SKIP == 4, "SPTYPE_SKIP");
-_Static_assert(SPTYPE_END == 3, "SPTYPE_END");
 
 // =============================================================================
 // Phase 1 accessors: get_syn_pattern migration
@@ -2023,7 +1941,7 @@ void nvim_synpat_set_off_flags(synpat_T *pat, int16_t flags) { pat->sp_off_flags
 // nvim_synpat_get_off_flags already defined at line 2875
 void nvim_synpat_set_offset(synpat_T *pat, int idx, int val) { pat->sp_offsets[idx] = val; }
 int nvim_synpat_get_offset(synpat_T *pat, int idx) { return pat->sp_offsets[idx]; }
-void nvim_synpat_clear_time(synpat_T *pat) { syn_clear_time(&pat->sp_time); }
+void nvim_synpat_clear_time(synpat_T *pat) { rs_syn_clear_time(&pat->sp_time); }
 
 // =============================================================================
 // Phase 2 accessors: syn_cmd_match migration
@@ -2911,10 +2829,10 @@ void nvim_synstate_set_stacksize(synstate_T *state, int size)
   if (state) state->sst_stacksize = size;
 }
 
-/// Call clear_syn_state on a synstate entry (releases extmatch pointers).
+/// Call rs_clear_syn_state on a synstate entry (releases extmatch pointers).
 void nvim_syn_do_clear_syn_state(synstate_T *p)
 {
-  clear_syn_state(p);
+  rs_clear_syn_state(p);
 }
 
 /// Allocate a new zeroed synstate array of given length.

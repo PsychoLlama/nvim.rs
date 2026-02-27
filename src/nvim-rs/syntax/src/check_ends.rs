@@ -38,11 +38,6 @@ extern "C" {
     fn nvim_syn_get_next_match_flags() -> c_int;
     fn nvim_syn_get_next_match_end_idx() -> c_int;
     fn nvim_syn_get_next_match_extmatch() -> ExtMatchHandle;
-    fn nvim_syn_get_next_match_h_startpos(lnum: *mut c_int, col: *mut c_int);
-    fn nvim_syn_get_next_match_m_endpos(lnum: *mut c_int, col: *mut c_int);
-    fn nvim_syn_get_next_match_h_endpos(lnum: *mut c_int, col: *mut c_int);
-    fn nvim_syn_get_next_match_eos_pos(lnum: *mut c_int, col: *mut c_int);
-    fn nvim_syn_get_next_match_eoe_pos(lnum: *mut c_int, col: *mut c_int);
     fn nvim_syn_get_next_match_col() -> c_int;
 
     // Next sequence number
@@ -345,10 +340,11 @@ pub unsafe fn push_next_match() -> StateItemHandle {
     let state_len = nvim_syn_get_current_state_len();
     let cur_si = nvim_syn_get_stateitem(state_len - 1);
 
-    // Read next_match position values
-    let mut h_start_lnum: c_int = 0;
-    let mut h_start_col: c_int = 0;
-    nvim_syn_get_next_match_h_startpos(&mut h_start_lnum, &mut h_start_col);
+    // Read all next_match position values in a single bulk call
+    let positions = crate::match_engine::next_match_positions();
+    let h_start_lnum = positions.h_startpos.lnum;
+    let h_start_col = positions.h_startpos.col;
+
     nvim_stateitem_set_h_startpos(cur_si, h_start_lnum, h_start_col);
     nvim_stateitem_set_m_startcol(cur_si, current_col);
     nvim_stateitem_set_m_lnum(cur_si, current_lnum);
@@ -373,29 +369,16 @@ pub unsafe fn push_next_match() -> StateItemHandle {
 
     if pat_type == SPTYPE_START && (pat_flags & HL_ONELINE == 0) {
         // Try to find the end pattern in the current line
-        let mut m_end_lnum: c_int = 0;
-        let mut m_end_col: c_int = 0;
-        nvim_syn_get_next_match_m_endpos(&mut m_end_lnum, &mut m_end_col);
-        crate::region::update_si_end(cur_si, m_end_col, true);
+        crate::region::update_si_end(cur_si, positions.m_endpos.col, true);
         check_keepend();
     } else {
-        let mut m_end_lnum: c_int = 0;
-        let mut m_end_col: c_int = 0;
-        nvim_syn_get_next_match_m_endpos(&mut m_end_lnum, &mut m_end_col);
-        nvim_stateitem_set_m_endpos(cur_si, m_end_lnum, m_end_col);
-
-        let mut h_end_lnum: c_int = 0;
-        let mut h_end_col: c_int = 0;
-        nvim_syn_get_next_match_h_endpos(&mut h_end_lnum, &mut h_end_col);
-        nvim_stateitem_set_h_endpos(cur_si, h_end_lnum, h_end_col);
+        nvim_stateitem_set_m_endpos(cur_si, positions.m_endpos.lnum, positions.m_endpos.col);
+        nvim_stateitem_set_h_endpos(cur_si, positions.h_endpos.lnum, positions.h_endpos.col);
 
         nvim_stateitem_set_ends(cur_si, 1);
         nvim_stateitem_or_flags(cur_si, nvim_syn_get_next_match_flags());
 
-        let mut eoe_lnum: c_int = 0;
-        let mut eoe_col: c_int = 0;
-        nvim_syn_get_next_match_eoe_pos(&mut eoe_lnum, &mut eoe_col);
-        nvim_stateitem_set_eoe_pos(cur_si, eoe_lnum, eoe_col);
+        nvim_stateitem_set_eoe_pos(cur_si, positions.eoe_pos.lnum, positions.eoe_pos.col);
         nvim_stateitem_set_end_idx(cur_si, nvim_syn_get_next_match_end_idx());
     }
 
@@ -422,11 +405,8 @@ pub unsafe fn push_next_match() -> StateItemHandle {
         nvim_stateitem_set_m_startcol(mg_si, current_col);
         nvim_stateitem_set_m_lnum(mg_si, current_lnum);
 
-        let mut eos_lnum: c_int = 0;
-        let mut eos_col: c_int = 0;
-        nvim_syn_get_next_match_eos_pos(&mut eos_lnum, &mut eos_col);
-        nvim_stateitem_set_m_endpos(mg_si, eos_lnum, eos_col);
-        nvim_stateitem_set_h_endpos(mg_si, eos_lnum, eos_col);
+        nvim_stateitem_set_m_endpos(mg_si, positions.eos_pos.lnum, positions.eos_pos.col);
+        nvim_stateitem_set_h_endpos(mg_si, positions.eos_pos.lnum, positions.eos_pos.col);
         nvim_stateitem_set_ends(mg_si, 1);
         nvim_stateitem_set_end_idx(mg_si, 0);
         nvim_stateitem_set_flags(mg_si, HL_MATCH);
