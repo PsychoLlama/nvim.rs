@@ -1063,7 +1063,19 @@ unsafe fn libc_strlen(s: *const c_char) -> usize {
 
 // =============================================================================
 // Phase 2 (eval_shim pass 5): prompt functions
+// Phase 16: consolidated to NvimPromptState bulk struct.
 // =============================================================================
+
+/// Bulk prompt state read from curbuf.
+/// Must match NvimPromptState typedef in eval.h exactly.
+#[repr(C)]
+struct NvimPromptState {
+    curbuf: *mut c_void,    // buf_T*
+    ml_line_count: i32,     // linenr_T = int32_t
+    prompt_start_lnum: i32, // linenr_T = int32_t
+    prompt_callback: *mut CallbackT,
+    prompt_interrupt: *mut CallbackT,
+}
 
 extern "C" {
     // Phase 2: prompt_get_input accessors
@@ -1075,26 +1087,28 @@ extern "C" {
     fn nvim_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
     // nvim_xstrdup declared in Phase 1 extern block above
 
-    // Phase 2: prompt_invoke_callback accessors
-    fn nvim_get_curbuf_ptr() -> *mut c_void; // buf_T*
-    fn nvim_curbuf_get_ml_line_count_lnr() -> i32; // linenr_T = i32
+    // Phase 16: bulk prompt state reader + writer
+    fn nvim_read_prompt_state(out: *mut NvimPromptState);
+    fn nvim_write_prompt_start_lnum(lnum: i32);
+
+    // Phase 2: prompt_invoke_callback accessors (kept)
     fn nvim_ml_append(lnum: i32, line: *const c_char, len: i32, newfile: bool) -> c_int;
     fn nvim_appended_lines_mark(lnum: i32, count: c_int);
     fn nvim_set_cursor_lnum(lnum: i32); // linenr_T
     fn nvim_set_cursor_col(col: c_int);
-    fn nvim_curbuf_set_prompt_start_lnum(lnum: i32);
-    fn nvim_curbuf_get_prompt_callback() -> *mut CallbackT;
-    fn nvim_curbuf_prompt_callback_call(user_input: *mut c_char) -> bool;
     fn nvim_curbuf_u_clearallandblockfree();
 
-    // Phase 2: invoke_prompt_interrupt accessors
-    fn nvim_curbuf_get_prompt_interrupt() -> *mut CallbackT;
+    // Phase 2: invoke_prompt_interrupt accessors (kept)
     fn nvim_excmds_clear_got_int();
-    fn nvim_curbuf_prompt_interrupt_call() -> c_int;
 }
 
 // kCallbackNone = 0
 const K_CALLBACK_NONE: c_int = 0;
+
+// TYPVAL_SIZE: sizeof(typval_T) == 16 (validated by _Static_assert in eval_shim.c)
+const TYPVAL_SIZE: usize = 16;
+// VAR_STRING (v_type = 2) for argv setup in prompt callbacks
+const VAR_STRING_TYPE: i32 = 2;
 
 /// Get the current user-input text from a prompt buffer.
 ///
@@ -1150,10 +1164,17 @@ pub unsafe extern "C" fn rs_prompt_get_input(buf: *mut c_void) -> *mut c_char {
 /// Uses global `curbuf` and `curwin`. Must be called from main thread.
 #[export_name = "prompt_invoke_callback"]
 pub unsafe extern "C" fn rs_prompt_invoke_callback() {
-    let curbuf = nvim_get_curbuf_ptr();
-    let lnum: i32 = nvim_curbuf_get_ml_line_count_lnr();
+    let mut ps = NvimPromptState {
+        curbuf: ptr::null_mut(),
+        ml_line_count: 0,
+        prompt_start_lnum: 0,
+        prompt_callback: ptr::null_mut(),
+        prompt_interrupt: ptr::null_mut(),
+    };
+    nvim_read_prompt_state(&mut ps);
+    let lnum: i32 = ps.ml_line_count;
 
-    let user_input = rs_prompt_get_input(curbuf);
+    let user_input = rs_prompt_get_input(ps.curbuf);
     if user_input.is_null() {
         return;
     }
@@ -1164,21 +1185,42 @@ pub unsafe extern "C" fn rs_prompt_invoke_callback() {
     nvim_appended_lines_mark(lnum, 1);
     nvim_set_cursor_lnum(lnum + 1);
     nvim_set_cursor_col(0);
-    nvim_curbuf_set_prompt_start_lnum(lnum + 1);
+    nvim_write_prompt_start_lnum(lnum + 1);
 
-    let callback = nvim_curbuf_get_prompt_callback();
+    let callback = ps.prompt_callback;
     // Direct field access: replaces nvim_eval_cb_get_type
     if (*callback).cb_type == K_CALLBACK_NONE {
         xfree(user_input as *mut c_void);
     } else {
-        // user_input ownership transferred to callback (freed by tv_clear)
-        nvim_curbuf_prompt_callback_call(user_input);
+        // Build argv[2] on the stack: [VAR_STRING(user_input), VAR_UNKNOWN]
+        // typval_T layout: v_type (int/4B at offset 0) + v_lock (int/4B at offset 4) + vval (8B at offset 8) = 16B
+        let mut argv_buf = [0u8; TYPVAL_SIZE * 2];
+        // argv[0].v_type = VAR_STRING (= 2) at offset 0 (4-byte int, LE)
+        let argv0_vtype = argv_buf.as_mut_ptr() as *mut i32;
+        *argv0_vtype = VAR_STRING_TYPE;
+        // argv[0].vval.v_string at offset 8 (pointer size)
+        let argv0_vstring = argv_buf.as_mut_ptr().add(8) as *mut *mut c_char;
+        *argv0_vstring = user_input;
+        // argv[1].v_type = VAR_UNKNOWN (= 0, already zeroed)
+
+        let mut rettv_buf = [0u8; TYPVAL_SIZE];
+        let rettv = TypevalHandle::from_ptr(rettv_buf.as_mut_ptr() as *mut c_void);
+        crate::callback::callback_call_impl(
+            callback,
+            1,
+            argv_buf.as_mut_ptr() as *mut c_void,
+            rettv,
+        );
+        // Free argv[0] (clears the VAR_STRING user_input) and rettv
+        tv_clear(TypevalHandle::from_ptr(argv_buf.as_mut_ptr() as *mut c_void));
+        tv_clear(rettv);
     }
 
     // clear undo history on submit
     nvim_curbuf_u_clearallandblockfree();
-    let new_lnum: i32 = nvim_curbuf_get_ml_line_count_lnr();
-    nvim_curbuf_set_prompt_start_lnum(new_lnum);
+    // Re-read ml_line_count after mutation
+    nvim_read_prompt_state(&mut ps);
+    nvim_write_prompt_start_lnum(ps.ml_line_count);
 }
 
 /// Invoke the prompt interrupt callback.
@@ -1189,15 +1231,34 @@ pub unsafe extern "C" fn rs_prompt_invoke_callback() {
 /// Uses global `curbuf`. Must be called from main thread.
 #[export_name = "invoke_prompt_interrupt"]
 pub unsafe extern "C" fn rs_invoke_prompt_interrupt() -> bool {
-    let callback = nvim_curbuf_get_prompt_interrupt();
+    let mut ps = NvimPromptState {
+        curbuf: ptr::null_mut(),
+        ml_line_count: 0,
+        prompt_start_lnum: 0,
+        prompt_callback: ptr::null_mut(),
+        prompt_interrupt: ptr::null_mut(),
+    };
+    nvim_read_prompt_state(&mut ps);
+    let callback = ps.prompt_interrupt;
     // Direct field access: replaces nvim_eval_cb_get_type
     if (*callback).cb_type == K_CALLBACK_NONE {
         return false;
     }
 
     nvim_excmds_clear_got_int(); // got_int = false
-    let ret = nvim_curbuf_prompt_interrupt_call();
-    ret != FAIL
+
+    // Build argv[1] on the stack: [VAR_UNKNOWN]
+    let mut argv_buf = [0u8; TYPVAL_SIZE]; // VAR_UNKNOWN = 0, already zeroed
+    let mut rettv_buf = [0u8; TYPVAL_SIZE];
+    let rettv = TypevalHandle::from_ptr(rettv_buf.as_mut_ptr() as *mut c_void);
+    let ret = crate::callback::callback_call_impl(
+        callback,
+        0,
+        argv_buf.as_mut_ptr() as *mut c_void,
+        rettv,
+    );
+    tv_clear(rettv);
+    ret
 }
 
 // =============================================================================

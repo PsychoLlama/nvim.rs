@@ -144,6 +144,16 @@ typedef struct {
   int curbuf_fnum;
 } NvimCursorVisualState;
 
+/// Bulk prompt state read from curbuf for Rust prompt functions (Phase 16).
+/// Mirror of Rust NvimPromptState (#[repr(C)]) in eval_top.rs.
+typedef struct {
+  buf_T *curbuf;
+  int32_t ml_line_count;      ///< curbuf->b_ml.ml_line_count
+  int32_t prompt_start_lnum;  ///< curbuf->b_prompt_start.mark.lnum
+  Callback *prompt_callback;  ///< &curbuf->b_prompt_callback
+  Callback *prompt_interrupt; ///< &curbuf->b_prompt_interrupt
+} NvimPromptState;
+
 /// types for expressions.
 typedef enum {
   EXPR_UNKNOWN = 0,

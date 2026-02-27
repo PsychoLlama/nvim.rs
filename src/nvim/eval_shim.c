@@ -1785,30 +1785,29 @@ void nvim_tv_list_last_fix_lock(list_T *l)
 
 // =============================================================================
 // Accessors for Phase 2 (eval_shim pass 5): prompt functions
+// Phase 16: consolidated into NvimPromptState bulk struct.
 // =============================================================================
+
+/// Bulk-read prompt state from curbuf into *out - accessor for Rust prompt functions.
+void nvim_read_prompt_state(NvimPromptState *out)
+{
+  out->curbuf = curbuf;
+  out->ml_line_count = (int32_t)curbuf->b_ml.ml_line_count;
+  out->prompt_start_lnum = (int32_t)curbuf->b_prompt_start.mark.lnum;
+  out->prompt_callback = &curbuf->b_prompt_callback;
+  out->prompt_interrupt = &curbuf->b_prompt_interrupt;
+}
+
+/// Write back prompt_start_lnum to curbuf - accessor for Rust prompt functions.
+void nvim_write_prompt_start_lnum(int32_t lnum)
+{
+  curbuf->b_prompt_start.mark.lnum = (linenr_T)lnum;
+}
 
 /// Get buf->b_prompt_start.mark.lnum - accessor for rs_prompt_get_input.
 linenr_T nvim_buf_get_prompt_start_lnum(buf_T *buf)
 {
   return buf->b_prompt_start.mark.lnum;
-}
-
-/// Set curbuf->b_prompt_start.mark.lnum - accessor for rs_prompt_invoke_callback.
-void nvim_curbuf_set_prompt_start_lnum(linenr_T lnum)
-{
-  curbuf->b_prompt_start.mark.lnum = lnum;
-}
-
-/// Get &curbuf->b_prompt_callback - accessor for rs_prompt_invoke_callback.
-Callback *nvim_curbuf_get_prompt_callback(void)
-{
-  return &curbuf->b_prompt_callback;
-}
-
-/// Get &curbuf->b_prompt_interrupt - accessor for rs_invoke_prompt_interrupt.
-Callback *nvim_curbuf_get_prompt_interrupt(void)
-{
-  return &curbuf->b_prompt_interrupt;
 }
 
 /// Wrap appended_lines_mark(lnum, count) - accessor for rs_prompt_invoke_callback.
@@ -1821,47 +1820,6 @@ void nvim_appended_lines_mark(linenr_T lnum, int count)
 void nvim_curbuf_u_clearallandblockfree(void)
 {
   u_clearallandblockfree(curbuf);
-}
-
-/// Get curbuf handle - accessor for rs_prompt_invoke_callback.
-buf_T *nvim_get_curbuf_ptr(void)
-{
-  return curbuf;
-}
-
-/// Get curbuf->b_ml.ml_line_count - accessor for rs_prompt_invoke_callback.
-linenr_T nvim_curbuf_get_ml_line_count_lnr(void)
-{
-  return (linenr_T)curbuf->b_ml.ml_line_count;
-}
-
-/// Call callback_call with a string argument - accessor for rs_prompt_invoke_callback.
-/// Constructs a [VAR_STRING(user_input), VAR_UNKNOWN] argv array on the stack
-/// and calls callback_call. user_input ownership is transferred (freed by tv_clear).
-/// Returns whether the callback was called successfully.
-bool nvim_curbuf_prompt_callback_call(char *user_input)
-{
-  typval_T rettv;
-  typval_T argv[2];
-  argv[0].v_type = VAR_STRING;
-  argv[0].vval.v_string = user_input;
-  argv[1].v_type = VAR_UNKNOWN;
-  callback_call(&curbuf->b_prompt_callback, 1, argv, &rettv);
-  tv_clear(&argv[0]);
-  tv_clear(&rettv);
-  return true;
-}
-
-/// Call callback_call with no arguments for b_prompt_interrupt.
-/// Returns the result of callback_call (OK/FAIL as bool).
-int nvim_curbuf_prompt_interrupt_call(void)
-{
-  typval_T rettv;
-  typval_T argv[1];
-  argv[0].v_type = VAR_UNKNOWN;
-  int ret = callback_call(&curbuf->b_prompt_interrupt, 0, argv, &rettv);
-  tv_clear(&rettv);
-  return ret;
 }
 
 // =============================================================================
