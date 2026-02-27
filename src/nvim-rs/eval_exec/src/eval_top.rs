@@ -824,8 +824,6 @@ extern "C" {
     // Phase 1: eval_fmt_source_name_line accessors
     fn nvim_sourcing_name_get() -> *const c_char;
     fn nvim_sourcing_lnum_get() -> i64; // linenr_T
-    fn nvim_snprintf_source_line(buf: *mut c_char, bufsize: usize, name: *const c_char, lnum: i64);
-    fn nvim_snprintf_question(buf: *mut c_char, bufsize: usize);
 
     // Phase 1: find_option_var_end accessors
     fn nvim_find_option_end_wrapper(p: *const c_char, opt_idxp: *mut c_int) -> *const c_char;
@@ -991,9 +989,27 @@ pub unsafe extern "C" fn rs_eval_fmt_source_name_line(buf: *mut c_char, bufsize:
     let name = nvim_sourcing_name_get();
     if !name.is_null() {
         let lnum = nvim_sourcing_lnum_get();
-        nvim_snprintf_source_line(buf, bufsize, name, lnum);
+        // Format "%s:%" PRIdLINENR into buf -- equivalent to snprintf(buf, bufsize, "%s:%ld", name, lnum)
+        let buf_slice = std::slice::from_raw_parts_mut(buf as *mut u8, bufsize);
+        let mut cursor = std::io::Cursor::new(buf_slice);
+        let name_cstr = std::ffi::CStr::from_ptr(name);
+        let name_str = name_cstr.to_bytes();
+        use std::io::Write;
+        let _ = write!(cursor, "{}:{}\0", String::from_utf8_lossy(name_str), lnum);
+        // Ensure NUL termination in case of truncation
+        let pos = cursor.position() as usize;
+        let buf_slice2 = std::slice::from_raw_parts_mut(buf as *mut u8, bufsize);
+        if pos >= bufsize {
+            buf_slice2[bufsize - 1] = 0;
+        }
     } else {
-        nvim_snprintf_question(buf, bufsize);
+        // Write "?" to buffer
+        if bufsize >= 2 {
+            *buf = b'?' as c_char;
+            *buf.add(1) = 0;
+        } else if bufsize == 1 {
+            *buf = 0;
+        }
     }
 }
 

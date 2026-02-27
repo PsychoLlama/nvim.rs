@@ -271,13 +271,6 @@ extern "C" {
 
     // Phase 4: make_expanded_name helpers (eval_to_string: renamed Rust export)
     fn eval_to_string(arg: *mut c_char, join_list: bool, use_simple_function: bool) -> *mut c_char;
-    fn nvim_snprintf_three(
-        buf: *mut c_char,
-        bufsize: usize,
-        a: *const c_char,
-        b: *const c_char,
-        c: *const c_char,
-    );
     fn xmalloc(size: usize) -> *mut c_char;
     fn xfree(ptr: *mut c_char);
 }
@@ -332,7 +325,13 @@ unsafe fn make_expanded_name_impl(
         let suffix_len = in_end.offset_from(expr_end) as usize;
         let retvalsize = prefix_len + result_len + suffix_len + 1;
         let buf = xmalloc(retvalsize);
-        nvim_snprintf_three(buf, retvalsize, in_start, temp_result, expr_end.add(1));
+        // Concatenate three C strings: in_start + temp_result + (expr_end + 1)
+        // Equivalent to: snprintf(buf, retvalsize, "%s%s%s", in_start, temp_result, expr_end+1)
+        let suffix_start = expr_end.add(1).cast_const();
+        std::ptr::copy_nonoverlapping(in_start, buf, prefix_len);
+        std::ptr::copy_nonoverlapping(temp_result, buf.add(prefix_len), result_len);
+        std::ptr::copy_nonoverlapping(suffix_start, buf.add(prefix_len + result_len), suffix_len);
+        *buf.add(prefix_len + result_len + suffix_len) = 0; // NUL terminator
         buf
     };
 

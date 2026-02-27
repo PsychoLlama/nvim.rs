@@ -1782,17 +1782,6 @@ void nvim_tv_list_last_fix_lock(list_T *l)
   TV_LIST_ITEM_TV(tv_list_last(l))->v_lock = VAR_FIXED;
 }
 
-/// snprintf wrapper for eval_fmt_source_name_line - accessor for Rust.
-void nvim_snprintf_source_line(char *buf, size_t bufsize, const char *name, linenr_T lnum)
-{
-  snprintf(buf, bufsize, "%s:%" PRIdLINENR, name, lnum);
-}
-
-/// snprintf single char wrapper - for "?" fallback in eval_fmt_source_name_line.
-void nvim_snprintf_question(char *buf, size_t bufsize)
-{
-  snprintf(buf, bufsize, "?");
-}
 
 // =============================================================================
 // Accessors for Phase 2 (eval_shim pass 5): prompt functions
@@ -1952,11 +1941,6 @@ int nvim_eval_fname_script(const char *p)
   return eval_fname_script(p);
 }
 
-/// Wrap vim_snprintf for make_expanded_name - accessor for rs_make_expanded_name.
-void nvim_snprintf_three(char *buf, size_t bufsize, const char *a, const char *b, const char *c)
-{
-  vim_snprintf(buf, bufsize, "%s%s%s", a, b, c);
-}
 
 // =============================================================================
 // Accessors for Phase 2 (eval_shim pass 6): tv_to_argv + system output
