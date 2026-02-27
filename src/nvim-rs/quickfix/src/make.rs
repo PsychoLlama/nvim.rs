@@ -184,12 +184,12 @@ extern "C" {
     fn nvim_win_get_llist_or_ref(from_win: *const c_void) -> *mut c_void;
     fn nvim_win_set_llist(to_win: *mut c_void, qi: *mut c_void);
     // nvim_win_get_p_lhi already declared in lifecycle.rs (returns c_int)
-    fn nvim_qi_get_listcount_qi(qi: *const c_void) -> c_int;
-    fn nvim_qi_set_listcount_qi(qi: *mut c_void, n: c_int);
-    fn nvim_qi_get_curlist_qi(qi: *const c_void) -> c_int;
-    fn nvim_qi_set_curlist_qi(qi: *mut c_void, n: c_int);
+    fn nvim_qf_get_listcount(qi: *const c_void) -> c_int;
+    fn nvim_qf_set_listcount(qi: *mut c_void, n: c_int);
+    // nvim_qf_get_curlist_idx already declared above (line 141)
+    fn nvim_qf_set_curlist_idx(qi: *mut c_void, n: c_int);
     fn nvim_qi_get_list_qi(qi: *mut c_void, idx: c_int) -> *mut c_void;
-    fn nvim_qi_get_maxcount_qi(qi: *const c_void) -> c_int;
+    fn nvim_qf_get_maxcount(qi: *const c_void) -> c_int;
     fn nvim_qf_free_all_win(to_win: *mut c_void);
     fn nvim_win_set_p_lhi(win: *mut c_void, v: c_int);
     fn nvim_win_get_p_lhi(win: *const c_void) -> c_int;
@@ -854,7 +854,7 @@ pub unsafe extern "C" fn rs_copy_loclist_stack(from: *mut c_void, to: *mut c_voi
     nvim_win_set_llist(to, new_qi);
 
     // new_qi->qf_maxcount is set by alloc; copy lhi from it.
-    let maxcount = nvim_qi_get_maxcount_qi(new_qi);
+    let maxcount = nvim_qf_get_maxcount(new_qi);
     // (The window's w_p_lhi is updated by nvim_win_set_llist in C side via
     //  the existing `nvim_win_set_p_lhi` accessor if needed; the C original
     //  sets to->w_p_lhi = to->w_llist->qf_maxcount. We mirror that via accessor.)
@@ -862,13 +862,13 @@ pub unsafe extern "C" fn rs_copy_loclist_stack(from: *mut c_void, to: *mut c_voi
     // We need to set that. Use existing accessor:
     nvim_win_set_p_lhi(to, maxcount);
 
-    let listcount = nvim_qi_get_listcount_qi(qi);
-    nvim_qi_set_listcount_qi(new_qi, listcount);
+    let listcount = nvim_qf_get_listcount(qi);
+    nvim_qf_set_listcount(new_qi, listcount);
 
     // Copy each location list.
     for idx in 0..listcount {
         // Set new_qi->qf_curlist = idx
-        nvim_qi_set_curlist_qi(new_qi, idx);
+        nvim_qf_set_curlist_idx(new_qi, idx);
 
         let from_list = nvim_qi_get_list_qi(qi, idx);
         let to_list = nvim_qi_get_list_qi(new_qi, idx);
@@ -880,6 +880,6 @@ pub unsafe extern "C" fn rs_copy_loclist_stack(from: *mut c_void, to: *mut c_voi
     }
 
     // Set new_qi->qf_curlist = qi->qf_curlist (current list).
-    let cur = nvim_qi_get_curlist_qi(qi);
-    nvim_qi_set_curlist_qi(new_qi, cur);
+    let cur = nvim_qf_get_curlist_idx(qi);
+    nvim_qf_set_curlist_idx(new_qi, cur);
 }

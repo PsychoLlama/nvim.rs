@@ -1184,12 +1184,12 @@ const VAR_STRING: c_int = 2;
 const VAR_LIST: c_int = 4;
 
 extern "C" {
-    // Phase 8 get-side accessors (qfl field accessors)
-    fn nvim_qfl_get_index(qfl: *const c_void) -> c_int;
-    fn nvim_qfl_get_count(qfl: *const c_void) -> c_int;
-    fn nvim_qfl_get_id(qfl: *const c_void) -> u32;
-    fn nvim_qfl_get_changedtick(qfl: *const c_void) -> c_int;
-    fn nvim_qfl_get_title(qfl: *const c_void) -> *const std::ffi::c_char;
+    // Phase 8 get-side accessors (qfl field accessors; Phase 15: merged into nvim_qf_get_*)
+    fn nvim_qf_get_index(qfl: *const c_void) -> c_int;
+    fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
+    fn nvim_qf_get_id(qfl: *const c_void) -> u32;
+    fn nvim_qf_get_changedtick(qfl: *const c_void) -> c_int;
+    fn nvim_qf_get_title(qfl: *const c_void) -> *const std::ffi::c_char;
     fn nvim_qfl_get_ctx(qfl: *const c_void) -> *mut c_void;
     fn nvim_qf_get_list_handle(qi: *const c_void, qf_idx: c_int) -> *mut c_void;
 
@@ -1466,13 +1466,13 @@ pub unsafe extern "C" fn rs_get_errorlist(
     }
 
     let qfl = nvim_qf_get_list_handle(qi, resolved_idx);
-    if qfl.is_null() || nvim_qfl_get_count(qfl) <= 0 {
+    if qfl.is_null() || nvim_qf_get_count(qfl) <= 0 {
         return C_FAIL;
     }
 
     let mut qfp = nvim_qf_get_start(qfl);
     let mut i: c_int = 1;
-    while !qfp.is_null() && !nvim_qf_got_int() && i <= nvim_qfl_get_count(qfl) {
+    while !qfp.is_null() && !nvim_qf_got_int() && i <= nvim_qf_get_count(qfl) {
         if eidx > 0 {
             if eidx == i {
                 return rs_get_qfline_items_impl(qfp, list);
@@ -1611,7 +1611,7 @@ pub unsafe extern "C" fn rs_qf_get_properties(
     let mut status = C_OK;
 
     if (flags & QF_GETLIST_TITLE) != 0 && status == C_OK {
-        let title = nvim_qfl_get_title(qfl);
+        let title = nvim_qf_get_title(qfl);
         status = if title.is_null() {
             dict_add_str(retdict, b"title", c"".as_ptr())
         } else {
@@ -1655,15 +1655,15 @@ pub unsafe extern "C" fn rs_qf_get_properties(
     }
 
     if (flags & QF_GETLIST_ID) != 0 && status == C_OK {
-        status = dict_add_nr(retdict, b"id", nvim_qfl_get_id(qfl).into());
+        status = dict_add_nr(retdict, b"id", nvim_qf_get_id(qfl).into());
     }
 
     if (flags & QF_GETLIST_IDX) != 0 && status == C_OK {
         let idx_val = if eidx == 0 {
-            if nvim_qfl_get_count(qfl) == 0 {
+            if nvim_qf_get_count(qfl) == 0 {
                 0
             } else {
-                nvim_qfl_get_index(qfl)
+                nvim_qf_get_index(qfl)
             }
         } else {
             eidx
@@ -1672,15 +1672,11 @@ pub unsafe extern "C" fn rs_qf_get_properties(
     }
 
     if (flags & QF_GETLIST_SIZE) != 0 && status == C_OK {
-        status = dict_add_nr(retdict, b"size", nvim_qfl_get_count(qfl).into());
+        status = dict_add_nr(retdict, b"size", nvim_qf_get_count(qfl).into());
     }
 
     if (flags & QF_GETLIST_TICK) != 0 && status == C_OK {
-        status = dict_add_nr(
-            retdict,
-            b"changedtick",
-            nvim_qfl_get_changedtick(qfl).into(),
-        );
+        status = dict_add_nr(retdict, b"changedtick", nvim_qf_get_changedtick(qfl).into());
     }
 
     if !wp.is_null() && (flags & QF_GETLIST_FILEWINID) != 0 && status == C_OK {
@@ -1829,7 +1825,7 @@ pub unsafe extern "C" fn rs_qf_set_properties(
     let di = nvim_tv_dict_find(what, c"items".as_ptr(), -1);
     if !di.is_null() && nvim_di_get_type(di) == VAR_LIST {
         // Pass borrowed title pointer; rs_qf_add_entries reads it but does not free it
-        let title_borrowed = nvim_qfl_get_title(qfl);
+        let title_borrowed = nvim_qf_get_title(qfl);
         let eff_action = if action == c_int::from(b' ') {
             c_int::from(b'a')
         } else {
@@ -1912,7 +1908,7 @@ pub unsafe extern "C" fn rs_qf_set_properties(
             && *di_str == b'$' as std::ffi::c_char
             && *di_str.add(1) == 0
         {
-            newidx = nvim_qfl_get_count(qfl);
+            newidx = nvim_qf_get_count(qfl);
             idx_ok = true;
         } else {
             let di_tv = nvim_qf_di_get_tv(di);
@@ -1922,14 +1918,14 @@ pub unsafe extern "C" fn rs_qf_set_properties(
             newidx = n;
         }
         if idx_ok && newidx >= 1 {
-            let clamped = newidx.min(nvim_qfl_get_count(qfl));
-            let old_qfidx = nvim_qfl_get_index(qfl);
+            let clamped = newidx.min(nvim_qf_get_count(qfl));
+            let old_qfidx = nvim_qf_get_index(qfl);
             let mut new_qfidx: c_int = clamped;
             let qf_ptr = rs_qf_get_nth_entry(qfl, clamped, &raw mut new_qfidx);
             if !qf_ptr.is_null() {
                 nvim_qf_set_ptr(qfl, qf_ptr);
                 nvim_qf_set_index(qfl, new_qfidx);
-                if nvim_qf_get_curlist_id(qi) == nvim_qfl_get_id(qfl) {
+                if nvim_qf_get_curlist_id(qi) == nvim_qf_get_id(qfl) {
                     rs_qf_win_pos_update(qi, old_qfidx);
                 }
                 retval = C_OK;

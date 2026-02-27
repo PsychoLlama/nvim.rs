@@ -185,7 +185,7 @@ extern void rs_qf_pop_stack(void *qi, bool adjust);
 
 int nvim_qf_get_listcount(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_listcount; }
 
-int nvim_qf_get_count(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_count; }
+int nvim_qf_get_count(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_count; }
 
 bool nvim_qf_get_nonevalid(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_nonevalid; }
 
@@ -203,7 +203,7 @@ void *nvim_qf_get_list_at(const void *qi_void, int idx) { return (void *)&((cons
 
 int nvim_qf_get_curlist_idx(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_curlist; }
 
-int nvim_qf_get_index(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_index; }
+int nvim_qf_get_index(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_index; }
 
 void *nvim_qf_get_ptr(const void *qfl_void) { return (void *)((const qf_list_T *)qfl_void)->qf_ptr; }
 
@@ -235,11 +235,11 @@ bool nvim_qfline_get_cleared(const void *qfp_void) { return ((const qfline_T *)q
 
 bool nvim_qfline_get_viscol(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_viscol != 0; }
 
-unsigned nvim_qf_get_id(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_id; }
+unsigned nvim_qf_get_id(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_id; }
 
-int nvim_qf_get_changedtick(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_changedtick; }
+int nvim_qf_get_changedtick(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_changedtick; }
 
-const char *nvim_qf_get_title(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_title; }
+const char *nvim_qf_get_title(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_title; }
 
 int nvim_qf_get_maxcount(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_maxcount; }
 
@@ -1104,20 +1104,7 @@ int nvim_qfline_get_valid_bufnr(const void *qfp_void)
   return bufnum;
 }
 
-/// Get the qfl->qf_index field.
-int nvim_qfl_get_index(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_index; }
-
-/// Get the qfl->qf_count field.
-int nvim_qfl_get_count(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_count; }
-
-/// Get the qfl->qf_id field.
-unsigned nvim_qfl_get_id(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_id; }
-
-/// Get the qfl->qf_changedtick field.
-int nvim_qfl_get_changedtick(const void *qfl_void) { return qfl_void == NULL ? 0 : ((const qf_list_T *)qfl_void)->qf_changedtick; }
-
-/// Get the qfl->qf_title field (may be NULL).
-const char *nvim_qfl_get_title(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_title; }
+// nvim_qfl_get_{index,count,id,changedtick,title} deleted: merged into nvim_qf_get_* (Phase 15).
 
 /// qf_alloc_stack wrapper for internal stacks (used by qf_get_list_from_lines).
 void *nvim_qf_alloc_internal_stack(void) { return qf_alloc_stack(QFLT_INTERNAL, 1); }
@@ -2900,12 +2887,9 @@ void *nvim_win_get_llist_or_ref(const void *from_win)
 void nvim_win_set_llist(void *to_win, void *qi) { ((win_T *)to_win)->w_llist = (qf_info_T *)qi; }
 // nvim_win_get_p_lhi already defined at line 1121 (returns int).
 // nvim_win_set_p_lhi defined earlier in this file.
-int nvim_qi_get_listcount_qi(const void *qi) { return ((const qf_info_T *)qi)->qf_listcount; }
-void nvim_qi_set_listcount_qi(void *qi, int n) { ((qf_info_T *)qi)->qf_listcount = n; }
-int nvim_qi_get_curlist_qi(const void *qi) { return ((const qf_info_T *)qi)->qf_curlist; }
-void nvim_qi_set_curlist_qi(void *qi, int n) { ((qf_info_T *)qi)->qf_curlist = n; }
+// nvim_qi_{get,set}_{listcount,curlist}_qi and nvim_qi_get_maxcount_qi deleted:
+// duplicates of nvim_qf_{get,set}_{listcount,curlist_idx,maxcount} (Phase 15).
 void *nvim_qi_get_list_qi(void *qi, int idx) { return (void *)&((qf_info_T *)qi)->qf_lists[idx]; }
-int nvim_qi_get_maxcount_qi(const void *qi) { return ((const qf_info_T *)qi)->qf_maxcount; }
 void nvim_qf_free_all_win(void *to_win) { qf_free_all((win_T *)to_win); }
 
 // Extern declarations for Phase 7 Rust entry points

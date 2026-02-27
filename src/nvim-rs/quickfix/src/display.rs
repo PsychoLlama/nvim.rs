@@ -450,7 +450,7 @@ extern "C" {
         nr: i64,
     ) -> c_int;
     fn nvim_qf_is_qf_list(qfl: *const c_void) -> bool;
-    fn nvim_qfl_get_id(qfl: *const c_void) -> u32;
+    fn nvim_qf_get_id(qfl: *const c_void) -> u32;
     fn nvim_qfl_get_qftf_cb_ptr(qfl: *mut c_void) -> *mut c_void;
     fn nvim_qf_get_global_qftf_cb_ptr() -> *mut c_void;
 
@@ -567,7 +567,7 @@ unsafe fn call_qftf_func_inner(
     }
 
     let is_qf = nvim_qf_is_qf_list(qfl);
-    let qf_id = nvim_qfl_get_id(qfl);
+    let qf_id = nvim_qf_get_id(qfl);
 
     nvim_tv_dict_add_nr_ret(dict, c"quickfix".as_ptr(), 8, i64::from(is_qf));
     nvim_tv_dict_add_nr_ret(dict, c"winid".as_ptr(), 5, i64::from(qf_winid));
