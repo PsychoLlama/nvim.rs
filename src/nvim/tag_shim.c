@@ -2,7 +2,6 @@
 
 #include <assert.h>
 #include <ctype.h>
-#include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -368,9 +367,6 @@ static taggy_T ptag_entry = { NULL, INIT_FMARK, 0, 0, NULL };
 static bool tfu_in_use = false;  // disallow recursive call of tagfunc
 static Callback tfu_cb;          // 'tagfunc' callback function
 
-// Used instead of NUL to separate tag fields in the growarrays.
-#define TAG_SEP 0x02
-
 // --- Rust FFI accessor functions for tag globals ---
 void nvim_xfree_clear_tagmatchname(void) { XFREE_CLEAR(tagmatchname); }
 const char *nvim_get_tagmatchname(void) { return tagmatchname; }
@@ -548,7 +544,6 @@ bool nvim_ignorecase(const char *pat) { return ignorecase((char *)pat); }
 bool nvim_ignorecase_opt(const char *pat, bool ic_strstrp, bool ic_strstrp2) { return ignorecase_opt((char *)pat, ic_strstrp, ic_strstrp2); }
 void nvim_findtags_prepare_pats(void *st_void, bool has_re) { findtags_state_T *st = (findtags_state_T *)st_void; rs_prepare_pats(st->orgpat, has_re); }
 // --- Rust FFI accessor functions for tag display and location list ---
-_Static_assert(IOSIZE == 1025, "IOSIZE value for Rust");
 
 void *nvim_tag_get_curwin(void) { return (void *)curwin; }
 void *nvim_tag_tv_dict_alloc(void) { return (void *)tv_dict_alloc(); }
