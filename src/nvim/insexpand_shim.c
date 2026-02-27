@@ -4099,3 +4099,33 @@ void *nvim_get_callback_if_cpt_func_impl(const char *p, int idx)
 
   return NULL;
 }
+
+// Phase 14 accessors: buffer/window traversal and search for ins_compl_next_buf migration.
+
+/// Returns buf->b_next (next buffer in the buffer list).
+buf_T *nvim_buf_get_b_next(buf_T *buf) { return buf->b_next; }
+
+/// Returns buf->b_scanned.
+int nvim_buf_get_b_scanned(buf_T *buf) { return buf->b_scanned; }
+
+/// Sets buf->b_scanned.
+void nvim_buf_set_b_scanned(buf_T *buf, int val) { buf->b_scanned = val; }
+
+/// Returns wp->w_next (next window in the window list).
+win_T *nvim_win_get_w_next(win_T *wp) { return wp->w_next; }
+
+/// Returns wp->w_config.focusable.
+int nvim_win_get_focusable(win_T *wp) { return wp->w_config.focusable ? 1 : 0; }
+
+/// Compound accessor: wraps the insexpand-specific searchit() call.
+/// Equivalent to: searchit(NULL, buf, pos, NULL, dir, pat, patlen, 1,
+///                         SEARCH_KEEP+SEARCH_NFMSG, RE_LAST, NULL)
+/// Returns FAIL/OK; modifies pos in place.
+int nvim_searchit_for_compl(buf_T *buf, pos_T *pos, int dir, char *pat, size_t patlen)
+{
+  return searchit(NULL, buf, pos, NULL, (Direction)dir, pat, patlen,
+                  1, SEARCH_KEEP + SEARCH_NFMSG, RE_LAST, NULL);
+}
+
+/// Returns ignorecase(pat).
+int nvim_ignorecase_pat(const char *pat) { return ignorecase(pat) ? 1 : 0; }
