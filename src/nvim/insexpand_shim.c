@@ -232,6 +232,8 @@ extern int rs_ins_compl_build_pum(void);
 extern void rs_setup_cpt_sources(void);
 extern void rs_prepare_cpt_compl_funcs(void);
 extern void rs_get_cpt_func_completion_matches(void *cb_opaque);
+// Phase 2 (pass 13) Rust export: get_userdefined_compl_info migration
+extern int rs_get_userdefined_compl_info(int curs_col, void *cb_opaque, int *startcol);
 // Phase 1 (pass 8) Rust exports
 extern int rs_ins_compl_next(int allow_get_expansion, int count, int insert_match);
 // Phase 2 (pass 8) Rust exports
@@ -2547,91 +2549,6 @@ static void set_compl_globals(int startcol, colnr_T curs_col, bool is_cpt_compl)
   rs_set_compl_globals(startcol, (int)curs_col, is_cpt_compl ? 1 : 0);
 }
 
-/// Get the pattern, column and length for user defined completion ('omnifunc',
-/// 'completefunc' and 'thesaurusfunc')
-/// Uses the global variable: spell_bad_len
-///
-/// @param cb        set if triggered by a function in the 'cpt' option, otherwise NULL
-/// @param startcol  when not NULL, contains the column returned by function.
-static int get_userdefined_compl_info(colnr_T curs_col, Callback *cb, int *startcol)
-{
-  // Call user defined function 'completefunc' with "a:findstart"
-  // set to 1 to obtain the length of text to use for completion.
-  const int save_State = State;
-
-  const bool is_cpt_function = (cb != NULL);
-  if (!is_cpt_function) {
-    // Call 'completefunc' or 'omnifunc' or 'thesaurusfunc' and get pattern
-    // length as a string
-    char *funcname = get_complete_funcname(ctrl_x_mode);
-    if (*funcname == NUL) {
-      semsg(_(e_notset), rs_ctrl_x_mode_function() ? "completefunc" : "omnifunc");
-      return FAIL;
-    }
-    cb = get_insert_callback(ctrl_x_mode);
-  }
-
-  typval_T args[3];
-  args[0].v_type = VAR_NUMBER;
-  args[1].v_type = VAR_STRING;
-  args[2].v_type = VAR_UNKNOWN;
-  args[0].vval.v_number = 1;
-  args[1].vval.v_string = "";
-
-  pos_T pos = curwin->w_cursor;
-  textlock++;
-  colnr_T col = (colnr_T)callback_call_retnr(cb, 2, args);
-  textlock--;
-
-  State = save_State;
-  curwin->w_cursor = pos;  // restore the cursor position
-  check_cursor(curwin);  // make sure cursor position is valid, just in case
-  validate_cursor(curwin);
-  if (!equalpos(curwin->w_cursor, pos)) {
-    emsg(_(e_compldel));
-    return FAIL;
-  }
-
-  if (startcol != NULL) {
-    *startcol = col;
-  }
-
-  // Return value -2 means the user complete function wants to cancel the
-  // complete without an error, do the same if the function did not execute
-  // successfully.
-  if (col == -2 || aborting()) {
-    return FAIL;
-  }
-
-  // Return value -3 does the same as -2 and leaves CTRL-X mode.
-  if (col == -3) {
-    if (is_cpt_function) {
-      return FAIL;
-    }
-    ctrl_x_mode = CTRL_X_NORMAL;
-    edit_submode = NULL;
-    if (!shortmess(SHM_COMPLETIONMENU)) {
-      msg_clr_cmdline();
-    }
-    return FAIL;
-  }
-
-  // Reset extended parameters of completion, when starting new
-  // completion.
-  compl_opt_refresh_always = false;
-
-  if (!is_cpt_function) {
-    set_compl_globals(col, curs_col, false);
-  }
-  return OK;
-}
-
-/// Compound accessor: call get_userdefined_compl_info for Rust dispatch.
-int nvim_get_userdefined_compl_info_impl(int curs_col)
-{
-  return get_userdefined_compl_info((colnr_T)curs_col, NULL, NULL);
-}
-
 /// Get the completion pattern, column and length.
 ///
 /// @param startcol  start column number of the completion pattern/text
@@ -3833,10 +3750,66 @@ size_t nvim_copy_option_part_ffi(char **src, char *buf, int maxlen, const char *
 // vim_strchr wrapper: returns pointer to first occurrence of c in s, or NULL.
 const char *nvim_vim_strchr_ffi(const char *s, int c) { return vim_strchr(s, c); }
 // nvim_xstrdup is defined in register.c; use it via the existing declaration.
-// get_userdefined_compl_info with startcol output: returns OK (0) or FAIL (-1).
-int nvim_get_userdefined_compl_info_with_startcol(int curs_col, void *cb_opaque, int *startcol)
+// Returns 1 if the completion function name for ctrl_x_mode is empty, 0 otherwise.
+int nvim_get_complete_funcname_empty(int ctrl_x_mode_val)
 {
-  return get_userdefined_compl_info((colnr_T)curs_col, (Callback *)cb_opaque, startcol);
+  return *get_complete_funcname(ctrl_x_mode_val) == NUL ? 1 : 0;
+}
+
+// Returns 1 if ctrl_x_mode is CTRL_X_FUNCTION (for error message selection).
+int nvim_ctrl_x_mode_is_function(void)
+{
+  return rs_ctrl_x_mode_function();
+}
+
+// Returns an opaque pointer to the Callback for the given ctrl_x_mode.
+void *nvim_get_insert_callback_opaque(int ctrl_x_mode_val)
+{
+  return (void *)get_insert_callback(ctrl_x_mode_val);
+}
+
+// Call the completion callback with findstart=1 to get the start column.
+// Saves/restores State and cursor. Returns the column number from the callback,
+// or INT_MIN if the cursor was moved (error emitted).
+int nvim_callback_call_findstart(void *cb_opaque)
+{
+  const int save_State = State;
+  typval_T args[3];
+  args[0].v_type = VAR_NUMBER;
+  args[1].v_type = VAR_STRING;
+  args[2].v_type = VAR_UNKNOWN;
+  args[0].vval.v_number = 1;
+  args[1].vval.v_string = "";
+
+  pos_T pos = curwin->w_cursor;
+  textlock++;
+  colnr_T col = (colnr_T)callback_call_retnr((Callback *)cb_opaque, 2, args);
+  textlock--;
+
+  State = save_State;
+  curwin->w_cursor = pos;
+  check_cursor(curwin);
+  validate_cursor(curwin);
+  if (!equalpos(curwin->w_cursor, pos)) {
+    emsg(_(e_compldel));
+    return INT_MIN;
+  }
+  return (int)col;
+}
+
+// Reset ctrl_x_mode to CTRL_X_NORMAL and clear the menu status message.
+void nvim_ctrl_x_mode_reset_to_normal(void)
+{
+  ctrl_x_mode = CTRL_X_NORMAL;
+  edit_submode = NULL;
+  if (!shortmess(SHM_COMPLETIONMENU)) {
+    msg_clr_cmdline();
+  }
+}
+// Emit "option not set" error for completefunc/omnifunc.
+void nvim_emit_completefunc_not_set_error(int is_function)
+{
+  semsg(_(e_notset), is_function ? "completefunc" : "omnifunc");
 }
 // expand_by_function with non-NULL callback (for cpt func sources).
 void nvim_expand_by_function_with_cb(void *cb_opaque)
@@ -4193,8 +4166,8 @@ void nvim_cpt_compl_refresh_impl(void)
       Callback *cb = (Callback *)nvim_get_callback_if_cpt_func_impl(p, cpt_sources_index);
       if (cb) {
         rs_remove_old_matches();
-        int startcol;
-        int ret = get_userdefined_compl_info(curwin->w_cursor.col, cb, &startcol);
+        int startcol = 0;
+        int ret = rs_get_userdefined_compl_info(curwin->w_cursor.col, cb, &startcol);
         if (ret == FAIL) {
           if (startcol == -3) {
             cpt_sources_array[cpt_sources_index].cs_refresh_always = false;

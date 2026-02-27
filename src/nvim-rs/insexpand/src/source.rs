@@ -298,7 +298,7 @@ extern "C" {
 
     // Callback/function-source accessors
     fn nvim_get_callback_if_cpt_func_impl(p: *const c_char, idx: c_int) -> *mut c_void;
-    fn nvim_get_userdefined_compl_info_with_startcol(
+    fn rs_get_userdefined_compl_info(
         curs_col: c_int,
         cb_opaque: *mut c_void,
         startcol: *mut c_int,
@@ -414,8 +414,7 @@ pub unsafe extern "C" fn rs_prepare_cpt_compl_funcs() {
             nvim_cpt_sources_set_startcol(idx, -3);
         } else {
             let mut startcol: c_int = 0;
-            let ret =
-                nvim_get_userdefined_compl_info_with_startcol(curs_col, cb, &raw mut startcol);
+            let ret = rs_get_userdefined_compl_info(curs_col, cb, &raw mut startcol);
             if ret == FAIL {
                 if startcol == -3 {
                     nvim_cpt_sources_set_refresh_always(idx, 0);

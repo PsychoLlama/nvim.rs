@@ -41,7 +41,11 @@ extern "C" {
     fn rs_get_cmdline_compl_info(line: *mut c_char, curs_col: c_int) -> c_int;
     fn rs_ins_compl_fixRedoBufForLeader(ptr_arg: *const c_char);
     fn rs_ins_compl_continue_search(line: *mut c_char);
-    fn nvim_get_userdefined_compl_info_impl(curs_col: c_int) -> c_int;
+    fn rs_get_userdefined_compl_info(
+        curs_col: c_int,
+        cb_opaque: *mut std::ffi::c_void,
+        startcol_out: *mut c_int,
+    ) -> c_int;
     fn nvim_internal_error_compl_get_info();
 
     // Accessors for ins_compl_start (Phase 10)
@@ -145,7 +149,8 @@ pub unsafe extern "C" fn rs_compl_get_info(
         || rs_ctrl_x_mode_omni() != 0
         || rs_thesaurus_func_complete(ctrl_x_mode) != 0
     {
-        if nvim_get_userdefined_compl_info_impl(curs_col) != OK {
+        if rs_get_userdefined_compl_info(curs_col, std::ptr::null_mut(), std::ptr::null_mut()) != OK
+        {
             return FAIL;
         }
         // "line" may have become invalid
