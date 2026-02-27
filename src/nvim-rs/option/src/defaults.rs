@@ -14,11 +14,10 @@ use std::ffi::c_int;
 // Phase 8 Option Default Value Management (Phase 2)
 // =============================================================================
 
+use crate::opt_index::K_OPT_COUNT;
 use crate::storage::OptVal;
 
 extern "C" {
-    /// Get the number of options (kOptCount)
-    fn nvim_get_kopt_count() -> c_int;
     /// Get options[opt_idx].def_val
     fn nvim_option_get_def_val(opt_idx: c_int) -> OptVal;
     /// Set options[opt_idx].def_val
@@ -54,7 +53,7 @@ const K_OPT_VAL_TYPE_STRING: c_int = 2;
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_alloc_options_default() {
-    let count = nvim_get_kopt_count();
+    let count = K_OPT_COUNT;
     for opt_idx in 0..count {
         let def_val = nvim_option_get_def_val(opt_idx);
         let copied = rs_optval_copy(def_val);
@@ -121,7 +120,7 @@ pub unsafe extern "C" fn rs_set_init_tablocal() {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_check_options() {
-    let count = nvim_get_kopt_count();
+    let count = K_OPT_COUNT;
     for opt_idx in 0..count {
         if nvim_get_option_type(opt_idx) == K_OPT_VAL_TYPE_STRING
             && !nvim_get_option_var(opt_idx).is_null()
@@ -639,7 +638,7 @@ pub unsafe extern "C" fn rs_set_option_default(opt_idx: c_int, opt_flags: c_int)
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_options_default(opt_flags: c_int) {
-    let count = nvim_get_kopt_count();
+    let count = K_OPT_COUNT;
     for opt_idx in 0..count {
         let flags = OptFlags(nvim_get_option_flags(opt_idx));
         if !flags.contains(OptFlags::NO_DEFAULT) {
@@ -661,7 +660,7 @@ pub unsafe extern "C" fn rs_set_options_default(opt_flags: c_int) {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_free_all_options() {
-    let count = nvim_get_kopt_count();
+    let count = K_OPT_COUNT;
     for opt_idx in 0..count {
         let hidden = rs_option_is_hidden(opt_idx) != 0;
         if rs_option_is_global_only(opt_idx) != 0 || hidden {

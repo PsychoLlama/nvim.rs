@@ -8,6 +8,8 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::opt_index::K_OPT_COUNT;
+
 // =============================================================================
 // Completion Context Types
 // =============================================================================
@@ -515,7 +517,6 @@ extern "C" {
     fn nvim_option_get_shortname(opt_idx: c_int) -> *const c_char;
     fn nvim_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;
-    fn nvim_get_kopt_count() -> c_int;
     fn nvim_xp_get_context(xp: *mut std::ffi::c_void) -> c_int;
     fn nvim_regmatch_get_rm_ic(regmatch: *const std::ffi::c_void) -> c_int;
     fn nvim_regmatch_set_rm_ic(regmatch: *mut std::ffi::c_void, val: c_int);
@@ -614,8 +615,6 @@ pub unsafe extern "C" fn rs_expand_option_settings(
     let ic = nvim_regmatch_get_rm_ic(regmatch);
     let fuzzy = can_fuzzy != 0 && nvim_option_cmdline_fuzzy_complete(fuzzystr) != 0;
     let mut fuzmatch: *mut std::ffi::c_void = std::ptr::null_mut();
-    let kopt_count = nvim_get_kopt_count();
-
     // Two-pass loop: loop==0 counts, loop==1 fills
     let mut loop_: c_int = 0;
     while loop_ <= 1 {
@@ -649,7 +648,7 @@ pub unsafe extern "C" fn rs_expand_option_settings(
         }
 
         // Match option names
-        for opt_idx in 0..kopt_count {
+        for opt_idx in 0..K_OPT_COUNT {
             if nvim_opt_is_hidden(opt_idx) != 0 {
                 continue;
             }

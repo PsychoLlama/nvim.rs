@@ -478,10 +478,6 @@ void nvim_callback_set_need_maketitle(int value) { need_maketitle = value != 0; 
 // Window diff accessor
 int nvim_win_get_diff(win_T *win) { return win ? win->w_p_diff : 0; }
 
-// Known option index accessors
-OptIndex nvim_get_opt_idx_foldmethod(void) { return kOptFoldmethod; }
-OptIndex nvim_get_opt_idx_wrap(void) { return kOptWrap; }
-
 // Full screen state (option module specific)
 int nvim_option_get_full_screen(void) { return full_screen; }
 
@@ -1236,9 +1232,6 @@ int nvim_curbuf_get_b_p_ma(void) { return curbuf->b_p_ma; }
 void nvim_curbuf_set_b_p_ma(int v) { curbuf->b_p_ma = v != 0; }
 // change_option_default wrapper (for reset_modifiable)
 void nvim_change_option_default_bool(OptIndex opt_idx, int value) { change_option_default(opt_idx, BOOLEAN_OPTVAL(value != 0)); }
-// kOptModifiable index accessor (for reset_modifiable)
-int nvim_get_opt_idx_modifiable(void) { return (int)kOptModifiable; }
-
 // Phase 4 pass 2: TTY and key accessors
 int nvim_option_get_t_colors(void) { return t_colors; }
 const char *nvim_option_get_p_term(void) { return p_term; }
@@ -1272,15 +1265,6 @@ uint32_t *nvim_win_allbuf_p_wrap_flags_ptr(win_T *wp) { return &wp->w_allbuf_opt
 uint32_t *nvim_win_allbuf_p_fde_flags_ptr(win_T *wp) { return &wp->w_allbuf_opt.wo_fde_flags; }
 uint32_t *nvim_win_allbuf_p_fdt_flags_ptr(win_T *wp) { return &wp->w_allbuf_opt.wo_fdt_flags; }
 uint32_t *nvim_option_get_flags_ptr(OptIndex opt_idx) { return &options[opt_idx].flags; }
-// Option index constants for insecure_flag (nvim_get_opt_idx_wrap already defined above)
-int nvim_get_opt_idx_statusline(void) { return (int)kOptStatusline; }
-int nvim_get_opt_idx_winbar(void) { return (int)kOptWinbar; }
-int nvim_get_opt_idx_foldexpr(void) { return (int)kOptFoldexpr; }
-int nvim_get_opt_idx_foldtext(void) { return (int)kOptFoldtext; }
-int nvim_get_opt_idx_indentexpr(void) { return (int)kOptIndentexpr; }
-int nvim_get_opt_idx_formatexpr(void) { return (int)kOptFormatexpr; }
-int nvim_get_opt_idx_includeexpr(void) { return (int)kOptIncludeexpr; }
-
 // set_option_sctx accessors (nvim_get_sourcing_lnum already defined in ex_docmd.c as int)
 int64_t nvim_option_get_sourcing_lnum(void) { return (int64_t)SOURCING_LNUM; }
 void nvim_call_nlua_set_sctx(sctx_T *sctx) { nlua_set_sctx(sctx); }
@@ -1307,13 +1291,6 @@ int nvim_call_put_escstr(FILE *fd, const char *str, int what) { return put_escst
 int nvim_call_put_eol(FILE *fd) { return put_eol(fd); }
 const void *nvim_option_get_p_wc_ptr(void) { return &p_wc; }
 const void *nvim_option_get_p_wcm_ptr(void) { return &p_wcm; }
-// opt idx constants for makefoldset (nvim_get_opt_idx_foldmethod already defined above)
-int nvim_get_opt_idx_foldmarker(void) { return (int)kOptFoldmarker; }
-int nvim_get_opt_idx_foldignore(void) { return (int)kOptFoldignore; }
-int nvim_get_opt_idx_foldlevel(void) { return (int)kOptFoldlevel; }
-int nvim_get_opt_idx_foldminlines(void) { return (int)kOptFoldminlines; }
-int nvim_get_opt_idx_foldnestmax(void) { return (int)kOptFoldnestmax; }
-int nvim_get_opt_idx_foldenable(void) { return (int)kOptFoldenable; }
 // curwin fold option varp pointers for rs_makefoldset
 void *nvim_curwin_p_fdm_varp(void) { return &curwin->w_p_fdm; }
 void *nvim_curwin_p_fde_varp(void) { return &curwin->w_p_fde; }
@@ -1384,8 +1361,6 @@ int nvim_call_makeset_if_line(FILE *fd, const char *optname, const char *val)
 const char *nvim_get_varp_string_val(const void *varp) { return *(char *const *)varp; }
 // Get the option fullname for writing to session files
 const char *nvim_option_get_fullname(OptIndex opt_idx) { return options[opt_idx].fullname; }
-// Get the option count
-int nvim_get_kopt_count(void) { return (int)kOptCount; }
 // Get kOptSyntax and kOptFiletype indices (already exist as enum values in opt_index.rs)
 
 // Phase 3 winopt accessors
@@ -3858,21 +3833,6 @@ void nvim_call_set_string_default_idx(int opt_idx, char *val, int allocated)
   set_string_default((OptIndex)opt_idx, val, allocated != 0);
 }
 
-/// Returns kOptBackupdir constant.
-int nvim_get_kopt_backupdir(void) { return (int)kOptBackupdir; }
-/// Returns kOptViewdir constant.
-int nvim_get_kopt_viewdir(void) { return (int)kOptViewdir; }
-/// Returns kOptDirectory constant.
-int nvim_get_kopt_directory(void) { return (int)kOptDirectory; }
-/// Returns kOptUndodir constant.
-int nvim_get_kopt_undodir(void) { return (int)kOptUndodir; }
-/// Returns kOptRuntimepath constant.
-int nvim_get_kopt_runtimepath(void) { return (int)kOptRuntimepath; }
-/// Returns kOptPackpath constant.
-int nvim_get_kopt_packpath(void) { return (int)kOptPackpath; }
-/// Returns kOptTermbidi constant.
-int nvim_get_kopt_termbidi(void) { return (int)kOptTermbidi; }
-
 /// set_init_expand_env() implementation called from Rust.
 /// Iterates over all options and expands environment variables for defaults.
 void nvim_call_set_init_expand_env(void)
@@ -3895,114 +3855,103 @@ void nvim_call_set_init_expand_env(void)
   }
 }
 
-/// kBufOptIskeyword constant.
-int nvim_get_kbufopt_iskeyword(void) { return (int)kBufOptIskeyword; }
-/// kBufOptTabstop constant.
-int nvim_get_kbufopt_tabstop(void) { return (int)kBufOptTabstop; }
-/// kBufOptVartabstop constant.
-int nvim_get_kbufopt_vartabstop(void) { return (int)kBufOptVartabstop; }
-/// kBufOptModifiable constant.
-int nvim_get_kbufopt_modifiable(void) { return (int)kBufOptModifiable; }
-/// kBufOptAutoindent constant.
-int nvim_get_kbufopt_autoindent(void) { return (int)kBufOptAutoindent; }
-/// kBufOptShiftwidth constant.
-int nvim_get_kbufopt_shiftwidth(void) { return (int)kBufOptShiftwidth; }
-/// kBufOptScrollback constant.
-int nvim_get_kbufopt_scrollback(void) { return (int)kBufOptScrollback; }
-/// kBufOptTextwidth constant.
-int nvim_get_kbufopt_textwidth(void) { return (int)kBufOptTextwidth; }
-/// kBufOptWrapmargin constant.
-int nvim_get_kbufopt_wrapmargin(void) { return (int)kBufOptWrapmargin; }
-/// kBufOptBinary constant.
-int nvim_get_kbufopt_binary(void) { return (int)kBufOptBinary; }
-/// kBufOptBomb constant.
-int nvim_get_kbufopt_bomb(void) { return (int)kBufOptBomb; }
-/// kBufOptExpandtab constant.
-int nvim_get_kbufopt_expandtab(void) { return (int)kBufOptExpandtab; }
-/// kBufOptFixendofline constant.
-int nvim_get_kbufopt_fixendofline(void) { return (int)kBufOptFixendofline; }
-/// kBufOptModeline constant.
-int nvim_get_kbufopt_modeline(void) { return (int)kBufOptModeline; }
-/// kBufOptInfercase constant.
-int nvim_get_kbufopt_infercase(void) { return (int)kBufOptInfercase; }
-/// kBufOptSwapfile constant.
-int nvim_get_kbufopt_swapfile(void) { return (int)kBufOptSwapfile; }
-/// kBufOptComplete constant.
-int nvim_get_kbufopt_complete(void) { return (int)kBufOptComplete; }
-/// kBufOptCompleteslash constant.
-int nvim_get_kbufopt_completeslash(void) { return (int)kBufOptCompleteslash; }
-/// kBufOptCompletefunc constant.
-int nvim_get_kbufopt_completefunc(void) { return (int)kBufOptCompletefunc; }
-/// kBufOptOmnifunc constant.
-int nvim_get_kbufopt_omnifunc(void) { return (int)kBufOptOmnifunc; }
-/// kBufOptTagfunc constant.
-int nvim_get_kbufopt_tagfunc(void) { return (int)kBufOptTagfunc; }
-/// kBufOptSofttabstop constant.
-int nvim_get_kbufopt_softtabstop(void) { return (int)kBufOptSofttabstop; }
-/// kBufOptVarsofttabstop constant.
-int nvim_get_kbufopt_varsofttabstop(void) { return (int)kBufOptVarsofttabstop; }
-/// kBufOptComments constant.
-int nvim_get_kbufopt_comments(void) { return (int)kBufOptComments; }
-/// kBufOptCommentstring constant.
-int nvim_get_kbufopt_commentstring(void) { return (int)kBufOptCommentstring; }
-/// kBufOptFormatoptions constant.
-int nvim_get_kbufopt_formatoptions(void) { return (int)kBufOptFormatoptions; }
-/// kBufOptFormatlistpat constant.
-int nvim_get_kbufopt_formatlistpat(void) { return (int)kBufOptFormatlistpat; }
-/// kBufOptNrformats constant.
-int nvim_get_kbufopt_nrformats(void) { return (int)kBufOptNrformats; }
-/// kBufOptMatchpairs constant.
-int nvim_get_kbufopt_matchpairs(void) { return (int)kBufOptMatchpairs; }
-/// kBufOptSmartindent constant.
-int nvim_get_kbufopt_smartindent(void) { return (int)kBufOptSmartindent; }
-/// kBufOptCopyindent constant.
-int nvim_get_kbufopt_copyindent(void) { return (int)kBufOptCopyindent; }
-/// kBufOptCindent constant.
-int nvim_get_kbufopt_cindent(void) { return (int)kBufOptCindent; }
-/// kBufOptCinkeys constant.
-int nvim_get_kbufopt_cinkeys(void) { return (int)kBufOptCinkeys; }
-/// kBufOptCinoptions constant.
-int nvim_get_kbufopt_cinoptions(void) { return (int)kBufOptCinoptions; }
-/// kBufOptCinscopedecls constant.
-int nvim_get_kbufopt_cinscopedecls(void) { return (int)kBufOptCinscopedecls; }
-/// kBufOptLispoptions constant.
-int nvim_get_kbufopt_lispoptions(void) { return (int)kBufOptLispoptions; }
-/// kBufOptPreserveindent constant.
-int nvim_get_kbufopt_preserveindent(void) { return (int)kBufOptPreserveindent; }
-/// kBufOptCinwords constant.
-int nvim_get_kbufopt_cinwords(void) { return (int)kBufOptCinwords; }
-/// kBufOptLisp constant.
-int nvim_get_kbufopt_lisp(void) { return (int)kBufOptLisp; }
-/// kBufOptSynmaxcol constant.
-int nvim_get_kbufopt_synmaxcol(void) { return (int)kBufOptSynmaxcol; }
-/// kBufOptSpellcapcheck constant.
-int nvim_get_kbufopt_spellcapcheck(void) { return (int)kBufOptSpellcapcheck; }
-/// kBufOptSpellfile constant.
-int nvim_get_kbufopt_spellfile(void) { return (int)kBufOptSpellfile; }
-/// kBufOptSpelllang constant.
-int nvim_get_kbufopt_spelllang(void) { return (int)kBufOptSpelllang; }
-/// kBufOptSpelloptions constant.
-int nvim_get_kbufopt_spelloptions(void) { return (int)kBufOptSpelloptions; }
-/// kBufOptIndentexpr constant.
-int nvim_get_kbufopt_indentexpr(void) { return (int)kBufOptIndentexpr; }
-/// kBufOptIndentkeys constant.
-int nvim_get_kbufopt_indentkeys(void) { return (int)kBufOptIndentkeys; }
-/// kBufOptFormatexpr constant.
-int nvim_get_kbufopt_formatexpr(void) { return (int)kBufOptFormatexpr; }
-/// kBufOptSuffixesadd constant.
-int nvim_get_kbufopt_suffixesadd(void) { return (int)kBufOptSuffixesadd; }
-/// kBufOptKeymap constant.
-int nvim_get_kbufopt_keymap(void) { return (int)kBufOptKeymap; }
-/// kBufOptIminsert constant.
-int nvim_get_kbufopt_iminsert(void) { return (int)kBufOptIminsert; }
-/// kBufOptImsearch constant.
-int nvim_get_kbufopt_imsearch(void) { return (int)kBufOptImsearch; }
-/// kBufOptIncludeexpr constant.
-int nvim_get_kbufopt_includeexpr(void) { return (int)kBufOptIncludeexpr; }
-/// kBufOptQuoteescape constant.
-int nvim_get_kbufopt_quoteescape(void) { return (int)kBufOptQuoteescape; }
-/// kBufOptUndofile constant.
-int nvim_get_kbufopt_undofile(void) { return (int)kBufOptUndofile; }
+/// Compile-time validation that Rust K_BUF_OPT_* constants match C kBufOpt* enum.
+/// If options.lua adds/reorders options, this will catch the mismatch at build time.
+static void nvim_validate_kbufopt_constants(void)
+{
+  _Static_assert((int)kBufOptAutocomplete == 0, "K_BUF_OPT_AUTOCOMPLETE mismatch");
+  _Static_assert((int)kBufOptAutoindent == 1, "K_BUF_OPT_AUTOINDENT mismatch");
+  _Static_assert((int)kBufOptAutoread == 2, "K_BUF_OPT_AUTOREAD mismatch");
+  _Static_assert((int)kBufOptBackupcopy == 3, "K_BUF_OPT_BACKUPCOPY mismatch");
+  _Static_assert((int)kBufOptBinary == 4, "K_BUF_OPT_BINARY mismatch");
+  _Static_assert((int)kBufOptBomb == 5, "K_BUF_OPT_BOMB mismatch");
+  _Static_assert((int)kBufOptBufhidden == 6, "K_BUF_OPT_BUFHIDDEN mismatch");
+  _Static_assert((int)kBufOptBuflisted == 7, "K_BUF_OPT_BUFLISTED mismatch");
+  _Static_assert((int)kBufOptBuftype == 8, "K_BUF_OPT_BUFTYPE mismatch");
+  _Static_assert((int)kBufOptBusy == 9, "K_BUF_OPT_BUSY mismatch");
+  _Static_assert((int)kBufOptChannel == 10, "K_BUF_OPT_CHANNEL mismatch");
+  _Static_assert((int)kBufOptCindent == 11, "K_BUF_OPT_CINDENT mismatch");
+  _Static_assert((int)kBufOptCinkeys == 12, "K_BUF_OPT_CINKEYS mismatch");
+  _Static_assert((int)kBufOptCinoptions == 13, "K_BUF_OPT_CINOPTIONS mismatch");
+  _Static_assert((int)kBufOptCinscopedecls == 14, "K_BUF_OPT_CINSCOPEDECLS mismatch");
+  _Static_assert((int)kBufOptCinwords == 15, "K_BUF_OPT_CINWORDS mismatch");
+  _Static_assert((int)kBufOptComments == 16, "K_BUF_OPT_COMMENTS mismatch");
+  _Static_assert((int)kBufOptCommentstring == 17, "K_BUF_OPT_COMMENTSTRING mismatch");
+  _Static_assert((int)kBufOptComplete == 18, "K_BUF_OPT_COMPLETE mismatch");
+  _Static_assert((int)kBufOptCompletefunc == 19, "K_BUF_OPT_COMPLETEFUNC mismatch");
+  _Static_assert((int)kBufOptCompleteopt == 20, "K_BUF_OPT_COMPLETEOPT mismatch");
+  _Static_assert((int)kBufOptCompleteslash == 21, "K_BUF_OPT_COMPLETESLASH mismatch");
+  _Static_assert((int)kBufOptCopyindent == 22, "K_BUF_OPT_COPYINDENT mismatch");
+  _Static_assert((int)kBufOptDefine == 23, "K_BUF_OPT_DEFINE mismatch");
+  _Static_assert((int)kBufOptDictionary == 24, "K_BUF_OPT_DICTIONARY mismatch");
+  _Static_assert((int)kBufOptDiffanchors == 25, "K_BUF_OPT_DIFFANCHORS mismatch");
+  _Static_assert((int)kBufOptEndoffile == 26, "K_BUF_OPT_ENDOFFILE mismatch");
+  _Static_assert((int)kBufOptEndofline == 27, "K_BUF_OPT_ENDOFLINE mismatch");
+  _Static_assert((int)kBufOptEqualprg == 28, "K_BUF_OPT_EQUALPRG mismatch");
+  _Static_assert((int)kBufOptErrorformat == 29, "K_BUF_OPT_ERRORFORMAT mismatch");
+  _Static_assert((int)kBufOptExpandtab == 30, "K_BUF_OPT_EXPANDTAB mismatch");
+  _Static_assert((int)kBufOptFileencoding == 31, "K_BUF_OPT_FILEENCODING mismatch");
+  _Static_assert((int)kBufOptFileformat == 32, "K_BUF_OPT_FILEFORMAT mismatch");
+  _Static_assert((int)kBufOptFiletype == 33, "K_BUF_OPT_FILETYPE mismatch");
+  _Static_assert((int)kBufOptFindfunc == 34, "K_BUF_OPT_FINDFUNC mismatch");
+  _Static_assert((int)kBufOptFixendofline == 35, "K_BUF_OPT_FIXENDOFLINE mismatch");
+  _Static_assert((int)kBufOptFormatexpr == 36, "K_BUF_OPT_FORMATEXPR mismatch");
+  _Static_assert((int)kBufOptFormatlistpat == 37, "K_BUF_OPT_FORMATLISTPAT mismatch");
+  _Static_assert((int)kBufOptFormatoptions == 38, "K_BUF_OPT_FORMATOPTIONS mismatch");
+  _Static_assert((int)kBufOptFormatprg == 39, "K_BUF_OPT_FORMATPRG mismatch");
+  _Static_assert((int)kBufOptGrepformat == 40, "K_BUF_OPT_GREPFORMAT mismatch");
+  _Static_assert((int)kBufOptGrepprg == 41, "K_BUF_OPT_GREPPRG mismatch");
+  _Static_assert((int)kBufOptIminsert == 42, "K_BUF_OPT_IMINSERT mismatch");
+  _Static_assert((int)kBufOptImsearch == 43, "K_BUF_OPT_IMSEARCH mismatch");
+  _Static_assert((int)kBufOptInclude == 44, "K_BUF_OPT_INCLUDE mismatch");
+  _Static_assert((int)kBufOptIncludeexpr == 45, "K_BUF_OPT_INCLUDEEXPR mismatch");
+  _Static_assert((int)kBufOptIndentexpr == 46, "K_BUF_OPT_INDENTEXPR mismatch");
+  _Static_assert((int)kBufOptIndentkeys == 47, "K_BUF_OPT_INDENTKEYS mismatch");
+  _Static_assert((int)kBufOptInfercase == 48, "K_BUF_OPT_INFERCASE mismatch");
+  _Static_assert((int)kBufOptIskeyword == 49, "K_BUF_OPT_ISKEYWORD mismatch");
+  _Static_assert((int)kBufOptKeymap == 50, "K_BUF_OPT_KEYMAP mismatch");
+  _Static_assert((int)kBufOptKeywordprg == 51, "K_BUF_OPT_KEYWORDPRG mismatch");
+  _Static_assert((int)kBufOptLisp == 52, "K_BUF_OPT_LISP mismatch");
+  _Static_assert((int)kBufOptLispoptions == 53, "K_BUF_OPT_LISPOPTIONS mismatch");
+  _Static_assert((int)kBufOptLispwords == 54, "K_BUF_OPT_LISPWORDS mismatch");
+  _Static_assert((int)kBufOptMakeencoding == 55, "K_BUF_OPT_MAKEENCODING mismatch");
+  _Static_assert((int)kBufOptMakeprg == 56, "K_BUF_OPT_MAKEPRG mismatch");
+  _Static_assert((int)kBufOptMatchpairs == 57, "K_BUF_OPT_MATCHPAIRS mismatch");
+  _Static_assert((int)kBufOptModeline == 58, "K_BUF_OPT_MODELINE mismatch");
+  _Static_assert((int)kBufOptModifiable == 59, "K_BUF_OPT_MODIFIABLE mismatch");
+  _Static_assert((int)kBufOptModified == 60, "K_BUF_OPT_MODIFIED mismatch");
+  _Static_assert((int)kBufOptNrformats == 61, "K_BUF_OPT_NRFORMATS mismatch");
+  _Static_assert((int)kBufOptOmnifunc == 62, "K_BUF_OPT_OMNIFUNC mismatch");
+  _Static_assert((int)kBufOptPath == 63, "K_BUF_OPT_PATH mismatch");
+  _Static_assert((int)kBufOptPreserveindent == 64, "K_BUF_OPT_PRESERVEINDENT mismatch");
+  _Static_assert((int)kBufOptQuoteescape == 65, "K_BUF_OPT_QUOTEESCAPE mismatch");
+  _Static_assert((int)kBufOptReadonly == 66, "K_BUF_OPT_READONLY mismatch");
+  _Static_assert((int)kBufOptScrollback == 67, "K_BUF_OPT_SCROLLBACK mismatch");
+  _Static_assert((int)kBufOptShiftwidth == 68, "K_BUF_OPT_SHIFTWIDTH mismatch");
+  _Static_assert((int)kBufOptSmartindent == 69, "K_BUF_OPT_SMARTINDENT mismatch");
+  _Static_assert((int)kBufOptSofttabstop == 70, "K_BUF_OPT_SOFTTABSTOP mismatch");
+  _Static_assert((int)kBufOptSpellcapcheck == 71, "K_BUF_OPT_SPELLCAPCHECK mismatch");
+  _Static_assert((int)kBufOptSpellfile == 72, "K_BUF_OPT_SPELLFILE mismatch");
+  _Static_assert((int)kBufOptSpelllang == 73, "K_BUF_OPT_SPELLLANG mismatch");
+  _Static_assert((int)kBufOptSpelloptions == 74, "K_BUF_OPT_SPELLOPTIONS mismatch");
+  _Static_assert((int)kBufOptSuffixesadd == 75, "K_BUF_OPT_SUFFIXESADD mismatch");
+  _Static_assert((int)kBufOptSwapfile == 76, "K_BUF_OPT_SWAPFILE mismatch");
+  _Static_assert((int)kBufOptSynmaxcol == 77, "K_BUF_OPT_SYNMAXCOL mismatch");
+  _Static_assert((int)kBufOptSyntax == 78, "K_BUF_OPT_SYNTAX mismatch");
+  _Static_assert((int)kBufOptTabstop == 79, "K_BUF_OPT_TABSTOP mismatch");
+  _Static_assert((int)kBufOptTagcase == 80, "K_BUF_OPT_TAGCASE mismatch");
+  _Static_assert((int)kBufOptTagfunc == 81, "K_BUF_OPT_TAGFUNC mismatch");
+  _Static_assert((int)kBufOptTags == 82, "K_BUF_OPT_TAGS mismatch");
+  _Static_assert((int)kBufOptTextwidth == 83, "K_BUF_OPT_TEXTWIDTH mismatch");
+  _Static_assert((int)kBufOptThesaurus == 84, "K_BUF_OPT_THESAURUS mismatch");
+  _Static_assert((int)kBufOptThesaurusfunc == 85, "K_BUF_OPT_THESAURUSFUNC mismatch");
+  _Static_assert((int)kBufOptUndofile == 86, "K_BUF_OPT_UNDOFILE mismatch");
+  _Static_assert((int)kBufOptUndolevels == 87, "K_BUF_OPT_UNDOLEVELS mismatch");
+  _Static_assert((int)kBufOptVarsofttabstop == 88, "K_BUF_OPT_VARSOFTTABSTOP mismatch");
+  _Static_assert((int)kBufOptVartabstop == 89, "K_BUF_OPT_VARTABSTOP mismatch");
+  _Static_assert((int)kBufOptWrapmargin == 90, "K_BUF_OPT_WRAPMARGIN mismatch");
+  _Static_assert(kBufOptCount == 91, "K_BUF_OPT_COUNT mismatch");
+}
 
 /// vim_strchr wrapper for Rust.
 const char *nvim_call_vim_strchr(const char *s, int c) { return vim_strchr(s, c); }

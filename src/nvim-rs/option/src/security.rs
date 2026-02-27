@@ -12,6 +12,10 @@
 
 use std::ffi::{c_int, c_uint};
 
+use crate::opt_index::{
+    K_OPT_FOLDEXPR, K_OPT_FOLDTEXT, K_OPT_FORMATEXPR, K_OPT_INCLUDEEXPR, K_OPT_INDENTEXPR,
+    K_OPT_STATUSLINE, K_OPT_WINBAR, K_OPT_WRAP,
+};
 use crate::{BufHandle, OptFlags, WinHandle};
 
 // =============================================================================
@@ -52,16 +56,6 @@ extern "C" {
     fn nvim_win_allbuf_p_fde_flags_ptr(wp: WinHandle) -> *mut c_uint;
     fn nvim_win_allbuf_p_fdt_flags_ptr(wp: WinHandle) -> *mut c_uint;
     fn nvim_option_get_flags_ptr(opt_idx: OptIndex) -> *mut c_uint;
-
-    // option index constants
-    fn nvim_get_opt_idx_wrap() -> c_int;
-    fn nvim_get_opt_idx_statusline() -> c_int;
-    fn nvim_get_opt_idx_winbar() -> c_int;
-    fn nvim_get_opt_idx_foldexpr() -> c_int;
-    fn nvim_get_opt_idx_foldtext() -> c_int;
-    fn nvim_get_opt_idx_indentexpr() -> c_int;
-    fn nvim_get_opt_idx_formatexpr() -> c_int;
-    fn nvim_get_opt_idx_includeexpr() -> c_int;
 
     // set_option_sctx
     fn nvim_option_get_sourcing_lnum() -> i64;
@@ -141,43 +135,30 @@ pub unsafe extern "C" fn rs_insecure_flag(
 ) -> *mut c_uint {
     if (opt_flags & OPT_LOCAL) != 0 {
         // wp must not be null
-        let k_wrap = nvim_get_opt_idx_wrap();
-        let k_statusline = nvim_get_opt_idx_statusline();
-        let k_winbar = nvim_get_opt_idx_winbar();
-        let k_foldexpr = nvim_get_opt_idx_foldexpr();
-        let k_foldtext = nvim_get_opt_idx_foldtext();
-        let k_indentexpr = nvim_get_opt_idx_indentexpr();
-        let k_formatexpr = nvim_get_opt_idx_formatexpr();
-        let k_includeexpr = nvim_get_opt_idx_includeexpr();
-
-        if opt_idx == k_wrap {
+        if opt_idx == K_OPT_WRAP {
             return nvim_win_get_p_wrap_flags_ptr(wp);
-        } else if opt_idx == k_statusline {
+        } else if opt_idx == K_OPT_STATUSLINE {
             return nvim_win_get_p_stl_flags_ptr(wp);
-        } else if opt_idx == k_winbar {
+        } else if opt_idx == K_OPT_WINBAR {
             return nvim_win_get_p_wbr_flags_ptr(wp);
-        } else if opt_idx == k_foldexpr {
+        } else if opt_idx == K_OPT_FOLDEXPR {
             return nvim_win_get_p_fde_flags_ptr(wp);
-        } else if opt_idx == k_foldtext {
+        } else if opt_idx == K_OPT_FOLDTEXT {
             return nvim_win_get_p_fdt_flags_ptr(wp);
-        } else if opt_idx == k_indentexpr {
+        } else if opt_idx == K_OPT_INDENTEXPR {
             return nvim_win_get_buf_p_inde_flags_ptr(wp);
-        } else if opt_idx == k_formatexpr {
+        } else if opt_idx == K_OPT_FORMATEXPR {
             return nvim_win_get_buf_p_fex_flags_ptr(wp);
-        } else if opt_idx == k_includeexpr {
+        } else if opt_idx == K_OPT_INCLUDEEXPR {
             return nvim_win_get_buf_p_inex_flags_ptr(wp);
         }
     } else {
         // For global value of window-local options, use flags in w_allbuf_opt.
-        let k_wrap = nvim_get_opt_idx_wrap();
-        let k_foldexpr = nvim_get_opt_idx_foldexpr();
-        let k_foldtext = nvim_get_opt_idx_foldtext();
-
-        if opt_idx == k_wrap {
+        if opt_idx == K_OPT_WRAP {
             return nvim_win_allbuf_p_wrap_flags_ptr(wp);
-        } else if opt_idx == k_foldexpr {
+        } else if opt_idx == K_OPT_FOLDEXPR {
             return nvim_win_allbuf_p_fde_flags_ptr(wp);
-        } else if opt_idx == k_foldtext {
+        } else if opt_idx == K_OPT_FOLDTEXT {
             return nvim_win_allbuf_p_fdt_flags_ptr(wp);
         }
     }

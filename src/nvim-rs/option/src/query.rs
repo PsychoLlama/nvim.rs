@@ -11,6 +11,7 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
+use crate::opt_index::K_OPT_MODIFIABLE;
 use crate::storage::{OptVal, String_};
 use crate::{BufHandle, OptValType, WinHandle};
 
@@ -65,7 +66,6 @@ extern "C" {
     fn nvim_option_set_p_ma(v: c_int);
     fn nvim_curbuf_set_b_p_ma(v: c_int);
     fn nvim_change_option_default_bool(opt_idx: c_int, value: c_int);
-    fn nvim_get_opt_idx_modifiable() -> c_int;
 
     // TTY options (Phase 2)
     fn nvim_option_get_t_colors() -> c_int;
@@ -224,8 +224,7 @@ pub unsafe extern "C" fn rs_set_imsearch_global(buf: BufHandle) {
 pub unsafe extern "C" fn rs_reset_modifiable() {
     nvim_curbuf_set_b_p_ma(0);
     nvim_option_set_p_ma(0);
-    let opt_idx = nvim_get_opt_idx_modifiable();
-    nvim_change_option_default_bool(opt_idx, 0);
+    nvim_change_option_default_bool(K_OPT_MODIFIABLE, 0);
 }
 
 // =============================================================================

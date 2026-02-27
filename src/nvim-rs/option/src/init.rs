@@ -9,6 +9,11 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::opt_index::{
+    K_OPT_BACKUPDIR, K_OPT_DIRECTORY, K_OPT_PACKPATH, K_OPT_RUNTIMEPATH, K_OPT_UNDODIR,
+    K_OPT_VIEWDIR,
+};
+
 // =============================================================================
 // C Function Declarations
 // =============================================================================
@@ -843,12 +848,6 @@ extern "C" {
     fn nvim_call_bind_textdomain_codeset();
     fn nvim_call_set_helplang_default_from_mess_lang();
 
-    fn nvim_get_kopt_backupdir() -> c_int;
-    fn nvim_get_kopt_viewdir() -> c_int;
-    fn nvim_get_kopt_directory() -> c_int;
-    fn nvim_get_kopt_undodir() -> c_int;
-    fn nvim_get_kopt_runtimepath() -> c_int;
-    fn nvim_get_kopt_packpath() -> c_int;
 }
 
 /// Rust implementation of `set_init_1`.
@@ -878,24 +877,24 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     // backupdir: prepend ".," to the state subpath
     let backupdir_raw = nvim_call_stdpaths_user_state_subpath(c"backup".as_ptr());
     let backupdir = prepend_dot_comma(backupdir_raw);
-    nvim_call_set_string_default_idx(nvim_get_kopt_backupdir(), backupdir, 1);
+    nvim_call_set_string_default_idx(K_OPT_BACKUPDIR, backupdir, 1);
 
     let viewdir = nvim_call_stdpaths_user_state_subpath(c"view".as_ptr());
-    nvim_call_set_string_default_idx(nvim_get_kopt_viewdir(), viewdir, 1);
+    nvim_call_set_string_default_idx(K_OPT_VIEWDIR, viewdir, 1);
 
     let directory = nvim_call_stdpaths_user_state_subpath(c"swap".as_ptr());
-    nvim_call_set_string_default_idx(nvim_get_kopt_directory(), directory, 1);
+    nvim_call_set_string_default_idx(K_OPT_DIRECTORY, directory, 1);
 
     let undodir = nvim_call_stdpaths_user_state_subpath(c"undo".as_ptr());
-    nvim_call_set_string_default_idx(nvim_get_kopt_undodir(), undodir, 1);
+    nvim_call_set_string_default_idx(K_OPT_UNDODIR, undodir, 1);
 
     // Set default for &runtimepath. All necessary expansions are performed in
     // runtimepath_default().
     let rtp = nvim_call_runtimepath_default(clean_arg);
     if !rtp.is_null() {
-        nvim_call_set_string_default_idx(nvim_get_kopt_runtimepath(), rtp, 1);
+        nvim_call_set_string_default_idx(K_OPT_RUNTIMEPATH, rtp, 1);
         // Make a copy of rtp for packpath (allocated=false means a copy is made)
-        nvim_call_set_string_default_idx(nvim_get_kopt_packpath(), rtp, 0);
+        nvim_call_set_string_default_idx(K_OPT_PACKPATH, rtp, 0);
         // rtp ownership was taken by runtimepath default; packpath copied it
     }
 

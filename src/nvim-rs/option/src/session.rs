@@ -37,7 +37,6 @@ extern "C" {
     ) -> c_int;
     fn nvim_get_varp_string_val(varp: *const std::ffi::c_void) -> *const c_char;
     fn nvim_option_get_fullname(opt_idx: c_int) -> *const c_char;
-    fn nvim_get_kopt_count() -> c_int;
 }
 
 extern "C" {
@@ -85,14 +84,6 @@ extern "C" {
     fn nvim_curwin_p_fml_varp() -> *mut std::ffi::c_void;
     fn nvim_curwin_p_fdn_varp() -> *mut std::ffi::c_void;
     fn nvim_curwin_p_fen_varp() -> *mut std::ffi::c_void;
-    fn nvim_get_opt_idx_foldmethod() -> c_int;
-    fn nvim_get_opt_idx_foldexpr() -> c_int;
-    fn nvim_get_opt_idx_foldmarker() -> c_int;
-    fn nvim_get_opt_idx_foldignore() -> c_int;
-    fn nvim_get_opt_idx_foldlevel() -> c_int;
-    fn nvim_get_opt_idx_foldminlines() -> c_int;
-    fn nvim_get_opt_idx_foldnestmax() -> c_int;
-    fn nvim_get_opt_idx_foldenable() -> c_int;
 }
 
 // OptValType int values matching C enum
@@ -417,54 +408,14 @@ unsafe fn write_int64(fd: *mut libc::FILE, val: i64) -> c_int {
 pub unsafe extern "C" fn rs_makefoldset(fd: *mut libc::FILE) -> c_int {
     let setlocal = c"setlocal".as_ptr();
 
-    if rs_put_set(
-        fd,
-        setlocal,
-        nvim_get_opt_idx_foldmethod(),
-        nvim_curwin_p_fdm_varp(),
-    ) == FAIL
-        || rs_put_set(
-            fd,
-            setlocal,
-            nvim_get_opt_idx_foldexpr(),
-            nvim_curwin_p_fde_varp(),
-        ) == FAIL
-        || rs_put_set(
-            fd,
-            setlocal,
-            nvim_get_opt_idx_foldmarker(),
-            nvim_curwin_p_fmr_varp(),
-        ) == FAIL
-        || rs_put_set(
-            fd,
-            setlocal,
-            nvim_get_opt_idx_foldignore(),
-            nvim_curwin_p_fdi_varp(),
-        ) == FAIL
-        || rs_put_set(
-            fd,
-            setlocal,
-            nvim_get_opt_idx_foldlevel(),
-            nvim_curwin_p_fdl_varp(),
-        ) == FAIL
-        || rs_put_set(
-            fd,
-            setlocal,
-            nvim_get_opt_idx_foldminlines(),
-            nvim_curwin_p_fml_varp(),
-        ) == FAIL
-        || rs_put_set(
-            fd,
-            setlocal,
-            nvim_get_opt_idx_foldnestmax(),
-            nvim_curwin_p_fdn_varp(),
-        ) == FAIL
-        || rs_put_set(
-            fd,
-            setlocal,
-            nvim_get_opt_idx_foldenable(),
-            nvim_curwin_p_fen_varp(),
-        ) == FAIL
+    if rs_put_set(fd, setlocal, K_OPT_FOLDMETHOD, nvim_curwin_p_fdm_varp()) == FAIL
+        || rs_put_set(fd, setlocal, K_OPT_FOLDEXPR, nvim_curwin_p_fde_varp()) == FAIL
+        || rs_put_set(fd, setlocal, K_OPT_FOLDMARKER, nvim_curwin_p_fmr_varp()) == FAIL
+        || rs_put_set(fd, setlocal, K_OPT_FOLDIGNORE, nvim_curwin_p_fdi_varp()) == FAIL
+        || rs_put_set(fd, setlocal, K_OPT_FOLDLEVEL, nvim_curwin_p_fdl_varp()) == FAIL
+        || rs_put_set(fd, setlocal, K_OPT_FOLDMINLINES, nvim_curwin_p_fml_varp()) == FAIL
+        || rs_put_set(fd, setlocal, K_OPT_FOLDNESTMAX, nvim_curwin_p_fdn_varp()) == FAIL
+        || rs_put_set(fd, setlocal, K_OPT_FOLDENABLE, nvim_curwin_p_fen_varp()) == FAIL
     {
         return FAIL;
     }
@@ -475,7 +426,11 @@ pub unsafe extern "C" fn rs_makefoldset(fd: *mut libc::FILE) -> c_int {
 // makeset (Phase 5 of option_shim migration)
 // =============================================================================
 
-use crate::opt_index::{K_OPT_FILETYPE, K_OPT_PACKPATH, K_OPT_RUNTIMEPATH, K_OPT_SYNTAX};
+use crate::opt_index::{
+    K_OPT_COUNT, K_OPT_FILETYPE, K_OPT_FOLDENABLE, K_OPT_FOLDEXPR, K_OPT_FOLDIGNORE,
+    K_OPT_FOLDLEVEL, K_OPT_FOLDMARKER, K_OPT_FOLDMETHOD, K_OPT_FOLDMINLINES, K_OPT_FOLDNESTMAX,
+    K_OPT_PACKPATH, K_OPT_RUNTIMEPATH, K_OPT_SYNTAX,
+};
 
 // Option flag constants (from OptFlags in lib.rs / option_defs.h)
 const K_OPT_FLAG_NO_MKRC: u32 = 1 << 4;
@@ -500,11 +455,9 @@ pub unsafe extern "C" fn rs_makeset(
     let rtp_var_ptr = nvim_option_get_var_ptr(K_OPT_RUNTIMEPATH);
     let pp_var_ptr = nvim_option_get_var_ptr(K_OPT_PACKPATH);
 
-    let kopt_count = nvim_get_kopt_count();
-
     // Do the loop over options[] twice: once for kOptFlagPriMkrc, once without.
     for pri in (0..=1i32).rev() {
-        for opt_idx in 0..kopt_count {
+        for opt_idx in 0..K_OPT_COUNT {
             let flags = nvim_get_option_flags(opt_idx);
 
             // Skip if kOptFlagNoMkrc is set

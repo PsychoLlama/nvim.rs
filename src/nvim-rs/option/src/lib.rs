@@ -14,6 +14,7 @@
 
 pub mod accessors;
 pub mod apply;
+pub mod buf_opt_index;
 pub mod bufcopy;
 pub mod callbacks;
 pub mod completion;

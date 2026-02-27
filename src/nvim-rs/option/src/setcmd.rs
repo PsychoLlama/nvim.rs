@@ -7,6 +7,7 @@ use std::ffi::{c_char, c_int, c_uint};
 use std::ptr;
 
 use crate::index::{val_type, OptIndex};
+use crate::opt_index::K_OPT_COUNT;
 use crate::storage::OptVal;
 use crate::{OptInt, OptScope, OptValType, SetPrefix, FAIL, OK};
 
@@ -1199,7 +1200,6 @@ extern "C" {
     fn nvim_option_is_global_only(opt_idx: c_int) -> c_int;
     fn nvim_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;
-    fn nvim_get_kopt_count() -> c_int;
     fn xmalloc(size: usize) -> *mut c_char;
     fn xfree(ptr: *mut c_char);
     fn strlen(s: *const c_char) -> usize;
@@ -1286,10 +1286,9 @@ pub unsafe extern "C" fn rs_showoneopt(opt_idx: c_int, opt_flags: c_int) {
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
-    let kopt_count = nvim_get_kopt_count();
     #[allow(clippy::cast_ptr_alignment)]
     let items: *mut c_int =
-        xmalloc((kopt_count as usize) * std::mem::size_of::<c_int>()).cast::<c_int>();
+        xmalloc((K_OPT_COUNT as usize) * std::mem::size_of::<c_int>()).cast::<c_int>();
 
     msg_ext_set_kind(c"list_cmd".as_ptr());
     // Highlight title
@@ -1312,7 +1311,7 @@ pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
         }
         // Collect the items in items[]
         let mut item_count: c_int = 0;
-        for opt_idx in 0..kopt_count {
+        for opt_idx in 0..K_OPT_COUNT {
             // Skip hidden options
             if nvim_opt_is_hidden(opt_idx) != 0 {
                 continue;

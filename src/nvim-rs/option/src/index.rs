@@ -5,6 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_uint};
 
+use crate::opt_index::{K_OPT_FOLDMETHOD, K_OPT_WRAP};
 use crate::{SetPrefix, FAIL, OK};
 
 // =============================================================================
@@ -450,12 +451,6 @@ pub mod known_opts {
     pub const WRAP: OptIndex = -3; // Placeholder, actual value from C
 }
 
-extern "C" {
-    // Get known option indices from C
-    fn nvim_get_opt_idx_foldmethod() -> OptIndex;
-    fn nvim_get_opt_idx_wrap() -> OptIndex;
-}
-
 /// Validate an option index for the :set command.
 ///
 /// Checks various conditions that would prevent setting an option:
@@ -537,15 +532,11 @@ pub unsafe extern "C" fn rs_validate_opt_idx(
         // "wrap" gets set.
         if !win.is_null() {
             let win_diff = nvim_win_get_diff(win) != 0;
-            if win_diff {
-                let opt_foldmethod = nvim_get_opt_idx_foldmethod();
-                let opt_wrap = nvim_get_opt_idx_wrap();
-                if opt_idx == opt_foldmethod || opt_idx == opt_wrap {
-                    return ValidateOptIdxResult {
-                        result: FAIL,
-                        errmsg: std::ptr::null(),
-                    };
-                }
+            if win_diff && (opt_idx == K_OPT_FOLDMETHOD || opt_idx == K_OPT_WRAP) {
+                return ValidateOptIdxResult {
+                    result: FAIL,
+                    errmsg: std::ptr::null(),
+                };
             }
         }
     }
