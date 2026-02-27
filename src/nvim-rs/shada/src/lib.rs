@@ -577,17 +577,20 @@ extern "C" {
         no_overwrite: c_int,
     ) -> c_int;
     fn nvim_shada_jumplist_len() -> c_int;
-    fn nvim_shada_jumplist_entry_timestamp(idx: c_int) -> u64;
-    fn nvim_shada_jumplist_entry_mark(idx: c_int, out_lnum: *mut i64, out_col: *mut i32);
-    fn nvim_shada_jumplist_entry_fname(idx: c_int) -> *const c_char;
-    fn nvim_shada_jumplist_entry_fnum(idx: c_int) -> c_int;
-    fn nvim_shada_jumplist_set_from_entry(
+    fn nvim_shada_jumplist_get_entry(
         idx: c_int,
+        out_ts: *mut u64,
+        out_lnum: *mut i64,
+        out_col: *mut i32,
+        out_fnum: *mut c_int,
+        out_fname: *mut *const c_char,
+    );
+    fn nvim_shada_jumplist_insert_entry(
+        i: c_int,
         entry: *mut ShadaEntry,
         fname_bufs: *mut c_void,
+        jl_len: c_int,
     );
-    fn nvim_shada_jumplist_free_first();
-    fn nvim_shada_jumplist_update_len_and_idx(inserted_at: c_int);
     fn nvim_shada_oldfiles_add(
         oldfiles_set: *mut c_void,
         oldfiles_list: *mut c_void,
@@ -5641,12 +5644,21 @@ unsafe fn rs_shada_apply_mark_or_jump(
 
     let mut i = jl_len;
     while i > 0 {
-        let jl_ts = nvim_shada_jumplist_entry_timestamp(i - 1);
+        let mut jl_ts: u64 = 0;
+        let mut jl_lnum: i64 = 0;
+        let mut jl_col: i32 = 0;
+        let mut jl_filenum: c_int = 0;
+        let mut jl_fname: *const c_char = std::ptr::null();
+        nvim_shada_jumplist_get_entry(
+            i - 1,
+            &raw mut jl_ts,
+            &raw mut jl_lnum,
+            &raw mut jl_col,
+            &raw mut jl_filenum,
+            &raw mut jl_fname,
+        );
         if jl_ts <= entry_ts {
             // Check for duplicate: same mark position AND same file identity.
-            let mut jl_lnum: i64 = 0;
-            let mut jl_col: i32 = 0;
-            nvim_shada_jumplist_entry_mark(i - 1, &raw mut jl_lnum, &raw mut jl_col);
             let entry_lnum: i64 = fm_mark.lnum;
             let entry_col: i32 = fm_mark.col;
             let jl_pos = Position::new(jl_lnum, jl_col, 0);
@@ -5654,12 +5666,10 @@ unsafe fn rs_shada_apply_mark_or_jump(
             if rs_marks_equal(jl_pos, entry_pos) != 0 {
                 let file_match = if compare_by_fnum {
                     // Buf was found: compare fnum.
-                    let jump_fnum = nvim_shada_jumplist_entry_fnum(i - 1);
                     let buf_fnum = nvim_shada_buf_get_fnum(fm_buf);
-                    jump_fnum == buf_fnum
+                    jl_filenum == buf_fnum
                 } else {
                     // No buf: compare fname strings.
-                    let jl_fname = nvim_shada_jumplist_entry_fname(i - 1);
                     !jl_fname.is_null() && libc::strcmp(entry_fname, jl_fname) == 0
                 };
                 if file_match {
@@ -5671,15 +5681,11 @@ unsafe fn rs_shada_apply_mark_or_jump(
         i -= 1;
     }
 
-    if i > 0 && jl_len as usize == JUMPLISTSIZE {
-        nvim_shada_jumplist_free_first();
-    }
     let i = nvim_shada_jumplist_marklist_insert(i);
     if i == -1 {
         rs_shada_free_entry_contents(entry);
     } else {
-        nvim_shada_jumplist_set_from_entry(i, entry, fname_bufs);
-        nvim_shada_jumplist_update_len_and_idx(i);
+        nvim_shada_jumplist_insert_entry(i, entry, fname_bufs, jl_len);
     }
 }
 

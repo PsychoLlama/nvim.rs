@@ -1511,40 +1511,33 @@ int nvim_shada_mark_set_global_from_entry(ShadaEntry *entry, void *fname_bufs_ha
 /// Return curwin->w_jumplistlen.
 int nvim_shada_jumplist_len(void) { return curwin->w_jumplistlen; }
 
-/// Return curwin->w_jumplist[idx].fmark.timestamp.
-uint64_t nvim_shada_jumplist_entry_timestamp(int idx)
+/// Return all fields of curwin->w_jumplist[idx] in one call.
+void nvim_shada_jumplist_get_entry(int idx, uint64_t *out_ts, int64_t *out_lnum,
+                                   int32_t *out_col, int *out_fnum,
+                                   const char **out_fname)
 {
-  return (uint64_t)curwin->w_jumplist[idx].fmark.timestamp;
+  const xfmark_T *jl = &curwin->w_jumplist[idx];
+  *out_ts = (uint64_t)jl->fmark.timestamp;
+  *out_lnum = (int64_t)jl->fmark.mark.lnum;
+  *out_col = (int32_t)jl->fmark.mark.col;
+  *out_fnum = jl->fmark.fnum;
+  *out_fname = jl->fname;
 }
 
-/// Return curwin->w_jumplist[idx].fmark.mark (position).
-void nvim_shada_jumplist_entry_mark(int idx, int64_t *out_lnum, int32_t *out_col)
+/// Insert a jumplist entry at position i from a ShadaEntry.
+/// Frees curwin->w_jumplist[0] if needed (when i > 0 && jl_len == JUMPLISTSIZE),
+/// builds and assigns xfmark_T from entry, then updates len and idx.
+void nvim_shada_jumplist_insert_entry(int i, ShadaEntry *entry,
+                                      void *fname_bufs_handle, int jl_len)
 {
-  *out_lnum = (int64_t)curwin->w_jumplist[idx].fmark.mark.lnum;
-  *out_col = (int32_t)curwin->w_jumplist[idx].fmark.mark.col;
-}
-
-/// Return curwin->w_jumplist[idx].fname.
-const char *nvim_shada_jumplist_entry_fname(int idx)
-{
-  return curwin->w_jumplist[idx].fname;
-}
-
-/// Return curwin->w_jumplist[idx].fmark.fnum.
-int nvim_shada_jumplist_entry_fnum(int idx)
-{
-  return curwin->w_jumplist[idx].fmark.fnum;
-}
-
-/// Build xfmark_T from entry fields and set curwin->w_jumplist[idx].
-/// Handles buf lookup, XFREE_CLEAR of fname when buf found.
-void nvim_shada_jumplist_set_from_entry(int idx, ShadaEntry *entry, void *fname_bufs_handle)
-{
+  if (i > 0 && jl_len == JUMPLISTSIZE) {
+    free_xfmark(curwin->w_jumplist[0]);
+  }
   buf_T *buf = nvim_shada_find_buffer(fname_bufs_handle, entry->data.filemark.fname);
   if (buf != NULL) {
     XFREE_CLEAR(entry->data.filemark.fname);
   }
-  curwin->w_jumplist[idx] = (xfmark_T) {
+  curwin->w_jumplist[i] = (xfmark_T) {
     .fname = buf == NULL ? entry->data.filemark.fname : NULL,
     .fmark = {
       .mark = entry->data.filemark.mark,
@@ -1554,18 +1547,10 @@ void nvim_shada_jumplist_set_from_entry(int idx, ShadaEntry *entry, void *fname_
       .additional_data = entry->additional_data,
     },
   };
-}
-
-/// Free curwin->w_jumplist[0] via free_xfmark.
-void nvim_shada_jumplist_free_first(void) { free_xfmark(curwin->w_jumplist[0]); }
-
-/// Increment w_jumplistlen if < JUMPLISTSIZE; increment w_jumplistidx if needed.
-void nvim_shada_jumplist_update_len_and_idx(int inserted_at)
-{
   if (curwin->w_jumplistlen < JUMPLISTSIZE) {
     curwin->w_jumplistlen++;
   }
-  if (curwin->w_jumplistidx >= inserted_at
+  if (curwin->w_jumplistidx >= i
       && curwin->w_jumplistidx + 1 <= curwin->w_jumplistlen) {
     curwin->w_jumplistidx++;
   }
