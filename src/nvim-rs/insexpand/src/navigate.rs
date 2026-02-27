@@ -34,9 +34,9 @@ extern "C" {
     fn nvim_set_compl_shows_dir(val: c_int);
     fn nvim_get_cpt_sources_index() -> c_int;
 
-    // leader-for-startcol accessors
-    fn nvim_get_leader_for_startcol_data(m: ComplMatch, cached: c_int) -> *const std::ffi::c_char;
-    fn nvim_get_leader_for_startcol_size(m: ComplMatch, cached: c_int) -> usize;
+    // leader-for-startcol (Rust implementation in leader.rs)
+    fn rs_get_leader_for_startcol_data(m: ComplMatch, cached: c_int) -> *const std::ffi::c_char;
+    fn rs_get_leader_for_startcol_size(m: ComplMatch, cached: c_int) -> usize;
 
     fn rs_ins_compl_equal(m: ComplMatch, str_: *const std::ffi::c_char, len: usize) -> c_int;
     fn rs_compl_shows_dir_forward() -> c_int;
@@ -74,7 +74,7 @@ unsafe fn is_first_match(m: ComplMatch) -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_update_shown_match() {
     // Clear the cache, then get the leader for the current shown match
-    let _ = nvim_get_leader_for_startcol_data(ComplMatch::null(), 1); // clear cache
+    let _ = rs_get_leader_for_startcol_data(ComplMatch::null(), 1); // clear cache
     let shown = nvim_compl_get_shown_match();
     if shown.is_null() {
         return;
@@ -82,8 +82,8 @@ pub unsafe extern "C" fn rs_ins_compl_update_shown_match() {
 
     let mut current = shown;
 
-    let mut leader_data = nvim_get_leader_for_startcol_data(current, 1);
-    let mut leader_size = nvim_get_leader_for_startcol_size(current, 1);
+    let mut leader_data = rs_get_leader_for_startcol_data(current, 1);
+    let mut leader_size = rs_get_leader_for_startcol_size(current, 1);
 
     while rs_ins_compl_equal(current, leader_data, leader_size) == 0 {
         let next = nvim_compl_match_get_next(current);
@@ -91,8 +91,8 @@ pub unsafe extern "C" fn rs_ins_compl_update_shown_match() {
             break;
         }
         current = next;
-        leader_data = nvim_get_leader_for_startcol_data(current, 1);
-        leader_size = nvim_get_leader_for_startcol_size(current, 1);
+        leader_data = rs_get_leader_for_startcol_data(current, 1);
+        leader_size = rs_get_leader_for_startcol_size(current, 1);
     }
 
     // If we didn't find it searching forward, and compl_shows_dir is
@@ -109,8 +109,8 @@ pub unsafe extern "C" fn rs_ins_compl_update_shown_match() {
                     break;
                 }
                 current = prev;
-                leader_data = nvim_get_leader_for_startcol_data(current, 1);
-                leader_size = nvim_get_leader_for_startcol_size(current, 1);
+                leader_data = rs_get_leader_for_startcol_data(current, 1);
+                leader_size = rs_get_leader_for_startcol_size(current, 1);
             }
         }
     }

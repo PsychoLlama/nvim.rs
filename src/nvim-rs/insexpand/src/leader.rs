@@ -249,6 +249,196 @@ pub unsafe extern "C" fn rs_leader_bytes_to_delete(cursor_col: c_int, compl_col:
 }
 
 // =============================================================================
+// Phase 1 (pass 11): get_leader_for_startcol + prepend_startcol_text
+// =============================================================================
+
+extern "C" {
+    fn nvim_ml_get_curline() -> *const c_char;
+    // nvim_get_compl_col already declared above
+    fn nvim_cpt_sources_array_exists() -> c_int;
+    fn nvim_get_cpt_source_startcol(idx: c_int) -> c_int;
+    fn nvim_xfree(ptr: *mut u8);
+    fn nvim_xmalloc(size: usize) -> *mut u8;
+    fn nvim_compl_match_get_cpt_source_idx(m: crate::match_list::ComplMatch) -> c_int;
+}
+
+/// Cache for the adjusted leader string.
+/// When non-zero, holds a heap-allocated (via nvim_xmalloc) byte buffer
+/// (pointer + size). Freed via nvim_xfree before reallocation.
+/// NULL pointer means no cached value.
+static mut ADJUSTED_LEADER_PTR: *mut c_char = std::ptr::null_mut();
+static mut ADJUSTED_LEADER_SIZE: usize = 0;
+
+/// Clear the adjusted leader cache, freeing any xmalloc'd memory.
+///
+/// # Safety
+/// Must only be called from single-threaded context (Neovim main thread).
+#[allow(clippy::ptr_cast_constness)]
+unsafe fn adjusted_leader_clear() {
+    // Safety: single-threaded; raw pointer read avoids static_mut_refs lint
+    let ptr = std::ptr::read(&raw const ADJUSTED_LEADER_PTR);
+    if !ptr.is_null() {
+        nvim_xfree(ptr.cast::<u8>());
+        std::ptr::write(&raw mut ADJUSTED_LEADER_PTR, std::ptr::null_mut());
+        std::ptr::write(&raw mut ADJUSTED_LEADER_SIZE, 0);
+    }
+}
+
+/// Constructs a string by prepending the line bytes from `startcol` up
+/// to `compl_col` before `src`.
+///
+/// Returns a heap-allocated buffer (via nvim_xmalloc) and its length.
+///
+/// # Safety
+/// Requires valid C allocation state (nvim_xmalloc / nvim_xfree).
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+unsafe fn prepend_startcol_text_rs(
+    src_data: *const c_char,
+    src_size: usize,
+    startcol: c_int,
+) -> (*mut c_char, usize) {
+    let compl_col = nvim_get_compl_col();
+    let prepend_len = (compl_col - startcol) as usize;
+    let new_length = prepend_len + src_size;
+
+    let buf = nvim_xmalloc(new_length + 1).cast::<c_char>();
+    let line = nvim_ml_get_curline();
+
+    // copy line[startcol..compl_col]
+    std::ptr::copy_nonoverlapping(line.add(startcol as usize), buf, prepend_len);
+    // copy src
+    std::ptr::copy_nonoverlapping(src_data, buf.add(prepend_len), src_size);
+    // NUL-terminate
+    *buf.add(new_length) = 0;
+
+    (buf, new_length)
+}
+
+/// Returns the completion leader data adjusted for a specific source's startcol.
+///
+/// If the source's startcol is before compl_col, prepends text from the
+/// buffer line to the original compl_leader. Uses a module-level static cache.
+///
+/// If `match` is null, clears the cache and returns null.
+///
+/// # Safety
+/// Requires valid completion and buffer state.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_cast_constness
+)]
+pub unsafe extern "C" fn rs_get_leader_for_startcol_data(
+    match_: crate::match_list::ComplMatch,
+    cached: c_int,
+) -> *const c_char {
+    // Clear-cache call: match == NULL
+    if match_.is_null() {
+        adjusted_leader_clear();
+        return std::ptr::null();
+    }
+
+    // No cpt_sources or no leader -> return compl_leader directly
+    if nvim_cpt_sources_array_exists() == 0 {
+        return nvim_get_compl_leader_data();
+    }
+    let leader_data = nvim_get_compl_leader_data();
+    if leader_data.is_null() {
+        return leader_data;
+    }
+
+    let cpt_idx = nvim_compl_match_get_cpt_source_idx(match_);
+    let compl_col = nvim_get_compl_col();
+    if cpt_idx < 0 || compl_col <= 0 {
+        return leader_data;
+    }
+
+    let startcol = nvim_get_cpt_source_startcol(cpt_idx);
+    if startcol >= 0 && startcol < compl_col {
+        let leader_size = nvim_get_compl_leader_size();
+        let prepend_len = (compl_col - startcol) as usize;
+        let new_length = prepend_len + leader_size;
+
+        // Return cached if sizes match
+        if cached != 0 {
+            let cached_ptr = std::ptr::read(&raw const ADJUSTED_LEADER_PTR);
+            let cached_size = std::ptr::read(&raw const ADJUSTED_LEADER_SIZE);
+            if !cached_ptr.is_null() && cached_size == new_length {
+                return cached_ptr.cast_const();
+            }
+        }
+
+        // Free old cache and allocate new one
+        adjusted_leader_clear();
+        let (buf, len) = prepend_startcol_text_rs(leader_data, leader_size, startcol);
+        std::ptr::write(&raw mut ADJUSTED_LEADER_PTR, buf);
+        std::ptr::write(&raw mut ADJUSTED_LEADER_SIZE, len);
+        buf.cast_const()
+    } else {
+        leader_data
+    }
+}
+
+/// Returns the byte length of the adjusted leader for a specific source's startcol.
+///
+/// # Safety
+/// Requires valid completion and buffer state.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+pub unsafe extern "C" fn rs_get_leader_for_startcol_size(
+    match_: crate::match_list::ComplMatch,
+    cached: c_int,
+) -> usize {
+    // Clear-cache call
+    if match_.is_null() {
+        return 0;
+    }
+
+    if nvim_cpt_sources_array_exists() == 0 {
+        return nvim_get_compl_leader_size();
+    }
+    let leader_data = nvim_get_compl_leader_data();
+    if leader_data.is_null() {
+        return 0;
+    }
+
+    let cpt_idx = nvim_compl_match_get_cpt_source_idx(match_);
+    let compl_col = nvim_get_compl_col();
+    if cpt_idx < 0 || compl_col <= 0 {
+        return nvim_get_compl_leader_size();
+    }
+
+    let startcol = nvim_get_cpt_source_startcol(cpt_idx);
+    if startcol >= 0 && startcol < compl_col {
+        let leader_size = nvim_get_compl_leader_size();
+        let prepend_len = (compl_col - startcol) as usize;
+        let new_length = prepend_len + leader_size;
+
+        // Return from cache if available and size matches
+        if cached != 0 {
+            let cached_ptr = std::ptr::read(&raw const ADJUSTED_LEADER_PTR);
+            let cached_size = std::ptr::read(&raw const ADJUSTED_LEADER_SIZE);
+            if !cached_ptr.is_null() && cached_size == new_length {
+                return cached_size;
+            }
+        }
+        new_length
+    } else {
+        nvim_get_compl_leader_size()
+    }
+}
+
+// =============================================================================
 // Phase 2: rs_ins_compl_bs
 // =============================================================================
 

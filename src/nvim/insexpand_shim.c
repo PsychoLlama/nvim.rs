@@ -222,6 +222,9 @@ extern int rs_ins_complete(int c, int enable_pum);
 // Phase 2 (pass 6) Rust exports
 extern void rs_ins_compl_longest_match(void *match);
 extern const char *rs_find_common_prefix(size_t *prefix_len, int curbuf_only);
+// Phase 1 (pass 11) Rust exports: leader-for-startcol
+extern const char *rs_get_leader_for_startcol_data(void *match, int cached);
+extern size_t rs_get_leader_for_startcol_size(void *match, int cached);
 // Phase 3 (pass 6) Rust exports
 extern void rs_setup_cpt_sources(void);
 extern void rs_prepare_cpt_compl_funcs(void);
@@ -998,58 +1001,6 @@ static int cp_compare_nearest(const void *a, const void *b)
 /// Constructs a new string by prepending text from the current line (from
 /// startcol to compl_col) to the given source string. Stores the result in
 /// dest.
-static void prepend_startcol_text(String *dest, String *src, int startcol)
-{
-  int prepend_len = compl_col - startcol;
-  int new_length = prepend_len + (int)src->size;
-
-  dest->size = (size_t)new_length;
-  dest->data = xmalloc((size_t)new_length + 1);  // +1 for NUL
-
-  char *line = ml_get(curwin->w_cursor.lnum);
-
-  memmove(dest->data, line + startcol, (size_t)prepend_len);
-  memmove(dest->data + prepend_len, src->data, src->size);
-  dest->data[new_length] = NUL;
-}
-
-/// Returns the completion leader string adjusted for a specific source's
-/// startcol. If the source's startcol is before compl_col, prepends text from
-/// the buffer line to the original compl_leader.
-static String *get_leader_for_startcol(compl_T *match, bool cached)
-{
-  static String adjusted_leader = STRING_INIT;
-
-  if (match == NULL) {
-    API_CLEAR_STRING(adjusted_leader);
-    return NULL;
-  }
-
-  if (cpt_sources_array == NULL || compl_leader.data == NULL) {
-    goto theend;
-  }
-
-  int cpt_idx = match->cp_cpt_source_idx;
-  if (cpt_idx < 0 || compl_col <= 0) {
-    goto theend;
-  }
-  int startcol = cpt_sources_array[cpt_idx].cs_startcol;
-
-  if (startcol >= 0 && startcol < compl_col) {
-    int prepend_len = compl_col - startcol;
-    int new_length = prepend_len + (int)compl_leader.size;
-    if (cached && (size_t)new_length == adjusted_leader.size
-        && adjusted_leader.data != NULL) {
-      return &adjusted_leader;
-    }
-
-    API_CLEAR_STRING(adjusted_leader);
-    prepend_startcol_text(&adjusted_leader, &compl_leader, startcol);
-    return &adjusted_leader;
-  }
-theend:
-  return &compl_leader;
-}
 
 /// Sort completion matches, excluding the node that contains the leader.
 static void sort_compl_match_list(MergeSortCompareFunc compare)
@@ -1122,23 +1073,24 @@ static int ins_compl_build_pum(void)
     match_count = xcalloc((size_t)cpt_sources_count, sizeof(int));
   }
 
-  (void)get_leader_for_startcol(NULL, true);  // Clear the cache
+  (void)rs_get_leader_for_startcol_data(NULL, 1);  // Clear the cache
 
   comp = compl_first_match;
   do {
     comp->cp_in_match_array = false;
 
-    String *leader = get_leader_for_startcol(comp, true);
+    const char *leader_data = rs_get_leader_for_startcol_data(comp, 1);
+    size_t leader_size = rs_get_leader_for_startcol_size(comp, 1);
 
     // Apply 'smartcase' behavior during normal mode
-    if (rs_ctrl_x_mode_normal() && !p_inf && leader->data
-        && !ignorecase(leader->data) && !rs_cot_fuzzy()) {
+    if (rs_ctrl_x_mode_normal() && !p_inf && leader_data
+        && !ignorecase(leader_data) && !rs_cot_fuzzy()) {
       comp->cp_flags &= ~CP_ICASE;
     }
 
     if (!match_at_original_text(comp)
-        && (leader->data == NULL
-            || rs_ins_compl_equal(comp, leader->data, leader->size)
+        && (leader_data == NULL
+            || rs_ins_compl_equal(comp, leader_data, leader_size)
             || (rs_cot_fuzzy() && comp->cp_score != FUZZY_SCORE_NONE))) {
       // Limit number of items from each source if max_items is set.
       bool match_limit_exceeded = false;
@@ -1534,7 +1486,7 @@ const char *nvim_compl_match_get_cp_str_data(void *m) { return m ? ((compl_T *)m
 size_t nvim_compl_match_get_cp_str_size(void *m) { return m ? ((compl_T *)m)->cp_str.size : 0; }
 int nvim_vim_strnicmp(const char *s1, const char *s2, size_t len) { return STRNICMP(s1, s2, len); }
 int nvim_fuzzy_match_str(char *str, const char *pat) { return fuzzy_match_str(str, pat); }
-const char *nvim_get_leader_for_startcol_data(void *match, int cached) { String *s = get_leader_for_startcol((compl_T *)match, cached != 0); return s ? s->data : NULL; }
+const char *nvim_get_leader_for_startcol_data(void *match, int cached) { return rs_get_leader_for_startcol_data(match, cached); }
 
 _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 
@@ -2675,22 +2627,23 @@ static char *find_common_prefix(size_t *prefix_len, bool curbuf_only)
 
   int *match_count = xcalloc((size_t)cpt_sources_count, sizeof(int));
 
-  (void)get_leader_for_startcol(NULL, true);  // Clear the cache
+  (void)rs_get_leader_for_startcol_data(NULL, 1);  // Clear the cache
 
   compl_T *compl = compl_first_match;
   char *first = NULL;
   int len = -1;
   do {
-    String *leader = get_leader_for_startcol(compl, true);
+    const char *leader_data = rs_get_leader_for_startcol_data(compl, 1);
+    size_t leader_size = rs_get_leader_for_startcol_size(compl, 1);
 
     // Apply 'smartcase' behavior during normal mode
-    if (rs_ctrl_x_mode_normal() && !p_inf && leader->data && !ignorecase(leader->data)) {
+    if (rs_ctrl_x_mode_normal() && !p_inf && leader_data && !ignorecase(leader_data)) {
       compl->cp_flags &= ~CP_ICASE;
     }
 
     if (!match_at_original_text(compl)
-        && (leader->data == NULL
-            || rs_ins_compl_equal(compl, leader->data, leader->size))) {
+        && (leader_data == NULL
+            || rs_ins_compl_equal(compl, leader_data, leader_size))) {
       // Limit number of items from each source if max_items is set.
       bool match_limit_exceeded = false;
       int cur_source = compl->cp_cpt_source_idx;
@@ -2802,7 +2755,15 @@ void nvim_set_compl_globals_impl(int startcol, int curs_col, int is_cpt_compl)
   if (is_cpt_compl) {
     API_CLEAR_STRING(cpt_compl_pattern);
     if (startcol < compl_col) {
-      prepend_startcol_text(&cpt_compl_pattern, &compl_orig_text, startcol);
+      // Inline prepend_startcol_text: prepend line[startcol..compl_col] to compl_orig_text
+      int prepend_len = compl_col - startcol;
+      int new_length = prepend_len + (int)compl_orig_text.size;
+      cpt_compl_pattern.size = (size_t)new_length;
+      cpt_compl_pattern.data = xmalloc((size_t)new_length + 1);
+      char *_line = ml_get(curwin->w_cursor.lnum);
+      memmove(cpt_compl_pattern.data, _line + startcol, (size_t)prepend_len);
+      memmove(cpt_compl_pattern.data + prepend_len, compl_orig_text.data, compl_orig_text.size);
+      cpt_compl_pattern.data[new_length] = NUL;
       return;
     } else {
       cpt_compl_pattern = copy_string(compl_orig_text, NULL);
@@ -3319,6 +3280,8 @@ const char *nvim_find_common_prefix_data(size_t *len_out, int icase) {
 int nvim_compl_shown_cp_cpt_source_idx(void) { return compl_shown_match ? compl_shown_match->cp_cpt_source_idx : -1; }
 int nvim_get_cpt_source_startcol(int idx) { return (cpt_sources_array && idx >= 0) ? cpt_sources_array[idx].cs_startcol : -1; }
 int nvim_cpt_sources_array_exists(void) { return cpt_sources_array != NULL ? 1 : 0; }
+int nvim_get_cpt_source_cs_flag(int idx) { return (cpt_sources_array && idx >= 0) ? (int)(unsigned char)cpt_sources_array[idx].cs_flag : 0; }
+int nvim_get_cpt_source_cs_max_matches(int idx) { return (cpt_sources_array && idx >= 0) ? cpt_sources_array[idx].cs_max_matches : 0; }
 void nvim_ins_compl_expand_multiple_skip(const char *str, int skip) {
   char *start = (char *)str + skip;
   char *curr = start;
@@ -3419,8 +3382,7 @@ int nvim_compl_shown_match_str_eq_orig(void) {
           && strequal(compl_shown_match->cp_str.data, compl_orig_text.data)) ? 1 : 0;
 }
 size_t nvim_get_leader_for_startcol_size(void *match, int cached) {
-  String *s = get_leader_for_startcol((compl_T *)match, cached != 0);
-  return s ? s->size : 0;
+  return rs_get_leader_for_startcol_size(match, cached);
 }
 
 extern int rs_ins_compl_next(int allow_get_expansion, int count, int insert_match);
