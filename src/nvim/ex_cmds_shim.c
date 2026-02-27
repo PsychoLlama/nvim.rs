@@ -741,7 +741,6 @@ void sub_set_replacement(SubReplacementString sub)
   rs_sub_set_replacement(sub.sub, (uint64_t)sub.timestamp, (void *)sub.additional_data);
 }
 
-
 /// Format and display the substitution count message.
 ///
 /// Handles the NGETTEXT formatting (which must stay in C for i18n) and message
@@ -886,8 +885,6 @@ bool prepare_tagpreview(bool undo_sync)
   return rs_prepare_tagpreview((int)undo_sync);
 }
 
-
-/// :substitute command.
 /// :substitute command. Thin wrapper calling Rust.
 void ex_substitute(exarg_T *eap)
 {
@@ -1294,7 +1291,6 @@ int nvim_excmds_shortmess_not_fileinfo(void) { return !shortmess(SHM_FILEINFO) ?
 /// Wrapper for fileinfo(false, false, forceit).
 void nvim_excmds_fileinfo(int forceit) { fileinfo(false, false, (bool)forceit); }
 
-
 // --- ex_update, ex_write, ex_wnext FFI accessors ---
 
 /// Check if current buffer has been changed (curbufIsChanged).
@@ -1550,11 +1546,10 @@ void nvim_excmds_curbuf_op_adjust_lnum(int delta)
   curbuf->b_op_end.lnum += (linenr_T)delta;
 }
 
-
 /// Get curbuf->b_ml.ml_line_count.
 int nvim_excmds_curbuf_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
 
-// --- Phase 5: getfile, set_swapcommand, delbuf_msg FFI accessors ---
+// --- getfile, set_swapcommand, delbuf_msg FFI accessors ---
 
 /// Wrap check_can_set_curbuf_forceit(forceit). Returns 1 if allowed.
 int nvim_excmds_check_can_set_curbuf_forceit(int forceit)
@@ -1622,7 +1617,7 @@ void nvim_excmds_set_vim_var_string_swapcommand(const char *p)
   set_vim_var_string(VV_SWAPCOMMAND, (char *)p, -1);
 }
 
-// --- Phase 4: do_wqall FFI accessors ---
+// --- do_wqall FFI accessors ---
 
 /// Get CMD_xall constant.
 int nvim_excmds_cmd_xall(void) { return (int)CMD_xall; }
@@ -1722,7 +1717,7 @@ int nvim_excmds_buf_write_all(buf_T *buf, int forceit)
   return buf_write_all(buf, (bool)forceit) == OK ? 1 : 0;
 }
 
-// --- Phase 3: check_overwrite FFI accessors ---
+// --- check_overwrite FFI accessors ---
 
 /// Wrap bt_nofilename(buf). Returns 1 if true.
 int nvim_excmds_bt_nofilename(const buf_T *buf) { return bt_nofilename((buf_T *)buf) ? 1 : 0; }
@@ -1790,7 +1785,7 @@ int nvim_excmds_dialog_swapfile(exarg_T *eap, const char *swapname)
   return 0;
 }
 
-// --- Phase 2: do_write FFI accessors ---
+// --- do_write FFI accessors ---
 
 /// Get eap->append.
 int nvim_excmds_eap_get_append(const exarg_T *eap) { return eap->append ? 1 : 0; }
@@ -1931,8 +1926,7 @@ void nvim_excmds_saveas_post_success(void)
 /// Check curbuf->b_ffname == NULL (name was missing before write).
 int nvim_excmds_curbuf_ffname_null(void) { return curbuf->b_ffname == NULL ? 1 : 0; }
 
-
-// --- Phase 1: Write Validation Helpers FFI accessors ---
+// --- Write Validation Helpers FFI accessors ---
 
 /// Get p_write option.
 int nvim_excmds_get_p_write(void) { return p_write ? 1 : 0; }
@@ -2234,7 +2228,7 @@ void nvim_do_sub_set_replacement(const char *sub)
 const char *nvim_do_sub_get_old_sub(void) { return old_sub.sub; }
 
 // =============================================================================
-// Phase 1: regmmatch_T opaque handle accessors for do_sub migration
+// regmmatch_T opaque handle accessors for do_sub
 // =============================================================================
 
 /// Get regmatch->startpos[0].lnum
@@ -2321,7 +2315,7 @@ char *nvim_do_sub_regtilde(char *sub, int magic, int preview)
 }
 
 // =============================================================================
-// Phase 2: do_ecmd accessor infrastructure
+// do_ecmd accessor infrastructure
 // These accessors are used by rs_do_ecmd in src/nvim-rs/ex_cmds/src/edit.rs
 // =============================================================================
 
