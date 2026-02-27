@@ -552,11 +552,8 @@ extern void rs_free_quickfix(void);
 extern void rs_foldOpenCursor(void);
 extern void rs_foldUpdateAll(win_T *win);
 
-static const char *e_no_more_items = N_("E553: No more items");
-static const char *e_current_quickfix_list_was_changed =
-  N_("E925: Current quickfix list was changed");
-static const char *e_current_location_list_was_changed =
-  N_("E926: Current location list was changed");
+// Phase 14: e_no_more_items, e_current_quickfix_list_was_changed,
+// e_current_location_list_was_changed statics deleted; error strings inlined into wrappers.
 
 enum { QF_WINHEIGHT = 10, };  ///< default height for quickfix window
 
@@ -626,7 +623,7 @@ bool nvim_qf_entry_present(const void *qfl_void, const void *qf_ptr_void)
 
 const char *nvim_qf_types(int c, int nr) { static char buf[20]; return rs_qf_types(c, nr, buf, sizeof(buf)); }
 
-void nvim_emsg_e_no_more_items(void) { emsg(_(e_no_more_items)); }
+void nvim_emsg_e_no_more_items(void) { emsg(_(N_("E553: No more items"))); }
 
 void nvim_qf_increment_listcount(void *qi_void) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_listcount++; }
 
@@ -1648,36 +1645,8 @@ void nvim_qf_incr_changedtick(void *qfl_void) { if (qfl_void != NULL) ((qf_list_
 static char *qf_last_bufname = NULL;
 static bufref_T qf_last_bufref = { NULL, 0, 0 };
 
-static garray_T qfga;
-
-/// many alloc/free calls.
-static garray_T *qfga_get(void)
-{
-  static bool initialized = false;
-
-  if (!initialized) {
-    initialized = true;
-    ga_init(&qfga, 1, 256);
-  }
-
-  // Reset the length to zero.  Retain ga_data from previous use to avoid
-  // many alloc/free calls.
-  qfga.ga_len = 0;
-
-  return &qfga;
-}
-
-/// grow array.  Otherwise just reset the grow array length.
-static void qfga_clear(void)
-{
-  if (qfga.ga_maxlen > 1000) {
-    ga_clear(&qfga);
-  } else {
-    qfga.ga_len = 0;
-  }
-}
-
 // quickfix_busy and qf_delq_head are now managed by Rust in lifecycle.rs.
+// qfga static grow-array deleted (Phase 14): all C callers were inlined into Rust.
 
 // qf_init_process_nextline deleted: inlined into Rust process_nextline in init.rs (Phase 9).
 
@@ -2312,9 +2281,9 @@ bool nvim_qf_jump_loc_win_closed(int prev_winid, void *qi_void)
 
 void nvim_qf_jump_emsg_win_closed(void) { emsg(_("E924: Current window was closed")); }
 
-void nvim_qf_jump_emsg_qf_changed(void) { emsg(_(e_current_quickfix_list_was_changed)); }
+void nvim_qf_jump_emsg_qf_changed(void) { emsg(_(N_("E925: Current quickfix list was changed"))); }
 
-void nvim_qf_jump_emsg_ll_changed(void) { emsg(_(e_current_location_list_was_changed)); }
+void nvim_qf_jump_emsg_ll_changed(void) { emsg(_(N_("E926: Current location list was changed"))); }
 
 _Static_assert(QFLT_QUICKFIX == 0, "QFLT_QUICKFIX must be 0");
 _Static_assert(QFLT_LOCATION == 1, "QFLT_LOCATION must be 1");
@@ -2698,19 +2667,10 @@ void nvim_qf_aucmd_restbuf_free(void *aco_void)
   xfree(aco_void);
 }
 
-// Highlight ids used for displaying entries from the quickfix list.
-static int qfFile_hl_id;
-static int qfSep_hl_id;
-static int qfLine_hl_id;
-
-/// quickfix list.
-static void qf_list_entry(qfline_T *qfp, int qf_idx, bool cursel)
-{
-  rs_qf_list_entry(qfp, qf_idx, cursel, qfFile_hl_id, qfSep_hl_id, qfLine_hl_id);
-}
-
 // ":clist": list all errors
 // ":llist": list all locations
+// Phase 14: qfFile_hl_id, qfSep_hl_id, qfLine_hl_id statics and qf_list_entry wrapper
+// deleted -- Rust rs_ex_clist computes hl_ids via nvim_syn_name2id_qf.
 void qf_list(exarg_T *eap)
 {
   rs_ex_clist(eap);
@@ -2917,11 +2877,6 @@ int nvim_ml_append_buf(void *buf, linenr_T lnum, char *line, int len, bool newfi
 const char *nvim_skipwhite_const(const char *str) { return skipwhite(str); }
 
 void nvim_ml_delete_one(linenr_T lnum) { ml_delete(lnum); }
-
-void nvim_qfga_clear(void) { qfga_clear(); }
-
-/// Fully free (ga_clear) the quickfix grow-array on exit (EXITFREE path).
-void nvim_qfga_free(void) { ga_clear(&qfga); }
 
 /// Set filetype, apply autocmds, and redraw for new qf buffer fill
 void nvim_qf_set_filetype_and_autocmds(void)
@@ -3312,7 +3267,7 @@ void nvim_ex_cd_arg(char *arg, bool is_lcd)
 }
 
 /// emsg for e_current_location_list_was_changed
-void nvim_qf_emsg_ll_changed(void) { emsg(_(e_current_location_list_was_changed)); }
+void nvim_qf_emsg_ll_changed(void) { emsg(_(N_("E926: Current location list was changed"))); }
 
 // Phase 3: path_try_shorten_fname wrapper (rename-compatible)
 char *nvim_path_try_shorten_fname(const char *full_fname) { return path_try_shorten_fname((char *)full_fname); }

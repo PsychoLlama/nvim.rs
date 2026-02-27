@@ -832,17 +832,13 @@ pub unsafe extern "C" fn rs_set_ref_in_quickfix(copy_id: c_int) -> bool {
 // Phase 7: free_quickfix
 // =============================================================================
 
-extern "C" {
-    /// Fully free (`ga_clear`) the quickfix grow-array on exit.
-    fn nvim_qfga_free();
-}
-
 /// Free all quickfix and location list resources at process exit.
 ///
 /// Corresponds to C `free_quickfix` (EXITFREE path).
 /// - Frees the global quickfix stack contents.
 /// - Frees every window's location list in every tab page.
-/// - Frees the qfga grow-array.
+///
+/// Phase 14: qfga grow-array removed; no longer freed here.
 ///
 /// # Safety
 ///
@@ -863,7 +859,4 @@ pub unsafe extern "C" fn rs_free_quickfix() {
         }
         tp = nvim_tabpage_get_next(tp.cast_const());
     }
-
-    // Fully free the quickfix grow-array.
-    nvim_qfga_free();
 }

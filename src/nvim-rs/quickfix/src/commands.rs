@@ -2147,8 +2147,6 @@ extern "C" {
     fn nvim_hlf_n() -> c_int;
     fn nvim_got_int_qf() -> bool;
     fn nvim_os_breakcheck_qf();
-    #[link_name = "nvim_qfga_clear"]
-    fn nvim_qfga_clear_clist();
     fn rs_qf_list_entry(
         qfp: *const c_void,
         qf_idx: c_int,
@@ -2270,5 +2268,4 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
         i += 1;
         qfp = crate::nvim_qfline_get_next(qfp);
     }
-    nvim_qfga_clear_clist();
 }
