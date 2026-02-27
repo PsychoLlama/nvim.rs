@@ -123,8 +123,35 @@ extern "C" {
     fn nvim_ins_compl_st_set_dict_from_ins_buf();
     fn nvim_ins_compl_st_advance_e_cpt() -> c_int;
 
-    // get_next_default_completion compound wrapper
-    fn nvim_get_next_default_completion_wrap(start_lnum: c_int, start_col: c_int) -> c_int;
+    // completion status
+    fn rs_compl_status_adding() -> c_int;
+    fn nvim_get_compl_length() -> c_int;
+
+    // Phase 4 accessors for rs_get_next_default_completion
+    fn nvim_compl_p_scs_save_set() -> c_int;
+    fn nvim_compl_p_ws_save_set() -> c_int;
+    fn nvim_compl_restore_p_scs_ws(save_p_scs: c_int, save_p_ws: c_int);
+    fn nvim_ins_compl_st_is_in_curbuf() -> c_int;
+    fn nvim_ins_compl_st_do_search(
+        in_fuzzy: c_int,
+        start_lnum: c_int,
+        start_col: c_int,
+        fuzzy_ptr_out: *mut *mut std::ffi::c_char,
+        fuzzy_len_out: *mut c_int,
+        fuzzy_score_out: *mut c_int,
+    ) -> c_int;
+    fn nvim_ins_compl_st_check_and_update_match_pos() -> c_int;
+    fn nvim_ins_compl_st_set_prev_from_cur();
+    fn nvim_ins_compl_st_get_cur_match_lnum() -> c_int;
+    fn nvim_ins_compl_st_get_cur_match_col() -> c_int;
+    fn nvim_ins_compl_st_get_prev_match_lnum() -> c_int;
+    fn nvim_ins_compl_st_get_prev_match_col() -> c_int;
+    fn nvim_ins_compl_st_add_word_or_line(
+        in_fuzzy: c_int,
+        fuzzy_ptr: *mut std::ffi::c_char,
+        fuzzy_len: c_int,
+        fuzzy_score: c_int,
+    ) -> c_int;
 
     // get_next_filename_completion compound wrapper
     fn nvim_get_next_filename_completion_wrap();
@@ -289,6 +316,108 @@ unsafe fn rs_process_next_cpt_value(
     status
 }
 
+// CONT_SOL is checked inside nvim_ins_compl_st_do_search on the C side.
+
+/// Rust translation of get_next_default_completion.
+///
+/// Searches `ins_compl_st.ins_buf` for the next match of `compl_pattern`,
+/// starting from `start_pos`, adding any found word/line to the completion
+/// list via `ins_compl_add_infercase`.
+///
+/// Returns OK if a new match was added, FAIL otherwise.
+///
+/// # Safety
+/// Requires valid `ins_compl_st` and global completion state.
+unsafe fn rs_get_next_default_completion(start_lnum: c_int, start_col: c_int) -> c_int {
+    let in_fuzzy = c_int::from(
+        rs_compl_status_adding() == 0 && rs_cot_fuzzy() != 0 && nvim_get_compl_length() > 0,
+    );
+    let in_curbuf = nvim_ins_compl_st_is_in_curbuf() != 0;
+
+    // Save and conditionally modify p_scs and p_ws.
+    let save_p_scs = nvim_compl_p_scs_save_set();
+    let save_p_ws = nvim_compl_p_ws_save_set();
+
+    let mut looped_around = false;
+    let mut found_new_match = FAIL;
+
+    loop {
+        // fuzzy search outputs
+        let mut fuzzy_ptr: *mut std::ffi::c_char = std::ptr::null_mut();
+        let mut fuzzy_len: c_int = 0;
+        #[allow(clippy::cast_possible_wrap)]
+        let mut fuzzy_score: c_int = i32::MIN; // FUZZY_SCORE_NONE
+
+        let mut found = nvim_ins_compl_st_do_search(
+            in_fuzzy,
+            start_lnum,
+            start_col,
+            &raw mut fuzzy_ptr,
+            &raw mut fuzzy_len,
+            &raw mut fuzzy_score,
+        );
+
+        // Check / update match positions.
+        // check == 0: first-time/set_match_pos (positions set; found stays as-is)
+        // check == -1: first==last → force FAIL
+        // check == 2: normal; run wrap-around detection
+        let check = nvim_ins_compl_st_check_and_update_match_pos();
+        if check == -1 {
+            found = FAIL;
+        } else if check == 2 {
+            // Wrap-around detection
+            let cur_lnum = nvim_ins_compl_st_get_cur_match_lnum();
+            let cur_col = nvim_ins_compl_st_get_cur_match_col();
+            let prev_lnum = nvim_ins_compl_st_get_prev_match_lnum();
+            let prev_col = nvim_ins_compl_st_get_prev_match_col();
+            if rs_compl_dir_forward() != 0 {
+                if prev_lnum > cur_lnum || (prev_lnum == cur_lnum && prev_col >= cur_col) {
+                    if looped_around {
+                        found = FAIL;
+                    } else {
+                        looped_around = true;
+                    }
+                }
+            } else if prev_lnum < cur_lnum || (prev_lnum == cur_lnum && prev_col <= cur_col) {
+                if looped_around {
+                    found = FAIL;
+                } else {
+                    looped_around = true;
+                }
+            }
+        }
+
+        nvim_ins_compl_st_set_prev_from_cur();
+
+        if found == FAIL {
+            break;
+        }
+
+        // Skip if ADDING and position matches start_pos (cursor position).
+        if rs_compl_status_adding() != 0
+            && in_curbuf
+            && nvim_ins_compl_st_get_cur_match_lnum() == start_lnum
+            && nvim_ins_compl_st_get_cur_match_col() == start_col
+        {
+            continue;
+        }
+
+        // Try to add the word/line at the current match position.
+        // Returns: 0=skip(ptr null/preinsert), 1=NOTDONE(dup), 2=added.
+        let add_result =
+            nvim_ins_compl_st_add_word_or_line(in_fuzzy, fuzzy_ptr, fuzzy_len, fuzzy_score);
+        if add_result >= 2 {
+            // successfully added
+            found_new_match = OK;
+            break;
+        }
+        // 0 or 1: skip/duplicate — continue the search loop
+    }
+
+    nvim_compl_restore_p_scs_ws(save_p_scs, save_p_ws);
+    found_new_match
+}
+
 /// Dispatch to the appropriate completion source for the given `type`.
 ///
 /// Returns FAIL/OK depending on whether new matches were found.
@@ -349,7 +478,7 @@ unsafe fn get_next_completion_match(
         }
         _ => {
             // normal ^P/^N and ^X^L
-            found_new_match = nvim_get_next_default_completion_wrap(start_lnum, start_col);
+            found_new_match = rs_get_next_default_completion(start_lnum, start_col);
             if found_new_match == FAIL && nvim_ins_compl_st_ins_buf_is_curbuf() != 0 {
                 nvim_ins_compl_st_set_found_all(1);
             }

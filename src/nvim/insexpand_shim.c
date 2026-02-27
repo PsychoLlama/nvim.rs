@@ -2008,222 +2008,9 @@ static void get_next_filename_completion(void)
 }
 
 
-/// Return the next word or line from buffer "ins_buf" at position
-/// "cur_match_pos" for completion.  The length of the match is set in "len".
-/// @param ins_buf        buffer being scanned
-/// @param cur_match_pos  current match position
-/// @param match_len
-/// @param cont_s_ipos    next ^X<> will set initial_pos
-static char *ins_compl_get_next_word_or_line(buf_T *ins_buf, pos_T *cur_match_pos, int *match_len,
-                                             bool *cont_s_ipos)
-{
-  *match_len = 0;
-  char *ptr = ml_get_buf(ins_buf, cur_match_pos->lnum) + cur_match_pos->col;
-  int len = ml_get_buf_len(ins_buf, cur_match_pos->lnum) - cur_match_pos->col;
-  if (rs_ctrl_x_mode_line_or_eval()) {
-    if (rs_compl_status_adding()) {
-      if (cur_match_pos->lnum >= ins_buf->b_ml.ml_line_count) {
-        return NULL;
-      }
-      ptr = ml_get_buf(ins_buf, cur_match_pos->lnum + 1);
-      len = ml_get_buf_len(ins_buf, cur_match_pos->lnum + 1);
-      if (!p_paste) {
-        char *tmp_ptr = ptr;
-        ptr = skipwhite(tmp_ptr);
-        len -= (int)(ptr - tmp_ptr);
-      }
-    }
-  } else {
-    char *tmp_ptr = ptr;
-
-    if (rs_compl_status_adding() && compl_length <= len) {
-      tmp_ptr += compl_length;
-      // Skip if already inside a word.
-      if (vim_iswordp(tmp_ptr)) {
-        return NULL;
-      }
-      // Find start of next word.
-      tmp_ptr = rs_find_word_start(tmp_ptr);
-    }
-    // Find end of this word.
-    tmp_ptr = rs_find_word_end(tmp_ptr);
-    len = (int)(tmp_ptr - ptr);
-
-    if (rs_compl_status_adding() && len == compl_length) {
-      if (cur_match_pos->lnum < ins_buf->b_ml.ml_line_count) {
-        // Try next line, if any. the new word will be "join" as if the
-        // normal command "J" was used. IOSIZE is always greater than
-        // compl_length, so the next strncpy always works -- Acevedo
-        strncpy(IObuff, ptr, (size_t)len);  // NOLINT(runtime/printf)
-        ptr = ml_get_buf(ins_buf, cur_match_pos->lnum + 1);
-        tmp_ptr = ptr = skipwhite(ptr);
-        // Find start of next word.
-        tmp_ptr = rs_find_word_start(tmp_ptr);
-        // Find end of next word.
-        tmp_ptr = rs_find_word_end(tmp_ptr);
-        if (tmp_ptr > ptr) {
-          if (*ptr != ')' && IObuff[len - 1] != TAB) {
-            if (IObuff[len - 1] != ' ') {
-              IObuff[len++] = ' ';
-            }
-            // IObuf =~ "\k.* ", thus len >= 2
-            if (p_js
-                && (IObuff[len - 2] == '.'
-                    || IObuff[len - 2] == '?'
-                    || IObuff[len - 2] == '!')) {
-              IObuff[len++] = ' ';
-            }
-          }
-          // copy as much as possible of the new word
-          if (tmp_ptr - ptr >= IOSIZE - len) {
-            tmp_ptr = ptr + IOSIZE - len - 1;
-          }
-          xstrlcpy(IObuff + len, ptr, (size_t)(IOSIZE - len));
-          len += (int)(tmp_ptr - ptr);
-          *cont_s_ipos = true;
-        }
-        IObuff[len] = NUL;
-        ptr = IObuff;
-      }
-      if (len == compl_length) {
-        return NULL;
-      }
-    }
-  }
-
-  *match_len = len;
-  return ptr;
-}
-
-/// Get the next set of words matching "compl_pattern" for default completion(s)
-/// (normal ^P/^N and ^X^L).
-/// Search for "compl_pattern" in the buffer "st->ins_buf" starting from the
-/// position "st->start_pos" in the "compl_direction" direction. If
-/// "st->set_match_pos" is true, then set the "st->first_match_pos" and
-/// "st->last_match_pos".
-///
-/// @return  OK if a new next match is found, otherwise FAIL.
-static int get_next_default_completion(ins_compl_next_state_T *st, pos_T *start_pos)
-{
-  char *ptr = NULL;
-  int len = 0;
-  bool in_fuzzy_collect = !rs_compl_status_adding() && rs_cot_fuzzy() && compl_length > 0;
-  char *leader = (char *)rs_ins_compl_leader();
-  int score = FUZZY_SCORE_NONE;
-  const bool in_curbuf = st->ins_buf == curbuf;
-
-  // If 'infercase' is set, don't use 'smartcase' here
-  const int save_p_scs = p_scs;
-  assert(st->ins_buf);
-  if (st->ins_buf->b_p_inf) {
-    p_scs = false;
-  }
-
-  // Buffers other than curbuf are scanned from the beginning or the
-  // end but never from the middle, thus setting nowrapscan in this
-  // buffers is a good idea, on the other hand, we always set
-  // wrapscan for curbuf to avoid missing matches -- Acevedo,Webb
-  const int save_p_ws = p_ws;
-  if (!in_curbuf) {
-    p_ws = false;
-  } else if (*st->e_cpt == '.') {
-    p_ws = true;
-  }
-  bool looped_around = false;
-  int found_new_match = FAIL;
-  while (true) {
-    bool cont_s_ipos = false;
-
-    msg_silent++;  // Don't want messages for wrapscan.
-
-    if (in_fuzzy_collect) {
-      found_new_match = search_for_fuzzy_match(st->ins_buf,
-                                               st->cur_match_pos, leader, compl_direction,
-                                               start_pos, &len, &ptr, &score);
-      // rs_ctrl_x_mode_line_or_eval() || word-wise search that
-      // has added a word that was at the beginning of the line.
-    } else if (rs_ctrl_x_mode_whole_line() || rs_ctrl_x_mode_eval()
-               || (compl_cont_status & CONT_SOL)) {
-      found_new_match = search_for_exact_line(st->ins_buf, st->cur_match_pos,
-                                              compl_direction, compl_pattern.data);
-    } else {
-      found_new_match = searchit(NULL, st->ins_buf, st->cur_match_pos,
-                                 NULL, compl_direction, compl_pattern.data,
-                                 compl_pattern.size,
-                                 1, SEARCH_KEEP + SEARCH_NFMSG, RE_LAST, NULL);
-    }
-    msg_silent--;
-    if (!compl_started || st->set_match_pos) {
-      // set "compl_started" even on fail
-      compl_started = true;
-      st->first_match_pos = *st->cur_match_pos;
-      st->last_match_pos = *st->cur_match_pos;
-      st->set_match_pos = false;
-    } else if (st->first_match_pos.lnum == st->last_match_pos.lnum
-               && st->first_match_pos.col == st->last_match_pos.col) {
-      found_new_match = FAIL;
-    } else if (rs_compl_dir_forward()
-               && (st->prev_match_pos.lnum > st->cur_match_pos->lnum
-                   || (st->prev_match_pos.lnum == st->cur_match_pos->lnum
-                       && st->prev_match_pos.col >= st->cur_match_pos->col))) {
-      if (looped_around) {
-        found_new_match = FAIL;
-      } else {
-        looped_around = true;
-      }
-    } else if (!rs_compl_dir_forward()
-               && (st->prev_match_pos.lnum < st->cur_match_pos->lnum
-                   || (st->prev_match_pos.lnum == st->cur_match_pos->lnum
-                       && st->prev_match_pos.col <= st->cur_match_pos->col))) {
-      if (looped_around) {
-        found_new_match = FAIL;
-      } else {
-        looped_around = true;
-      }
-    }
-    st->prev_match_pos = *st->cur_match_pos;
-    if (found_new_match == FAIL) {
-      break;
-    }
-
-    // when ADDING, the text before the cursor matches, skip it
-    if (rs_compl_status_adding() && in_curbuf
-        && start_pos->lnum == st->cur_match_pos->lnum
-        && start_pos->col == st->cur_match_pos->col) {
-      continue;
-    }
-
-    if (!in_fuzzy_collect) {
-      ptr = ins_compl_get_next_word_or_line(st->ins_buf,
-                                            st->cur_match_pos, &len, &cont_s_ipos);
-    }
-    if (ptr == NULL || (rs_ins_compl_has_preinsert()
-                        && strcmp(ptr, (char *)rs_ins_compl_leader()) == 0)) {
-      continue;
-    }
-
-    if (rs_is_nearest_active() && in_curbuf) {
-      score = st->cur_match_pos->lnum - curwin->w_cursor.lnum;
-      if (score < 0) {
-        score = -score;
-      }
-    }
-
-    if (ins_compl_add_infercase(ptr, len, p_ic,
-                                in_curbuf ? NULL : st->ins_buf->b_sfname,
-                                0, cont_s_ipos, score) != NOTDONE) {
-      if (in_fuzzy_collect && score == compl_first_match->cp_next->cp_score) {
-        compl_num_bests++;
-      }
-      found_new_match = OK;
-      break;
-    }
-  }
-  p_scs = save_p_scs;
-  p_ws = save_p_ws;
-
-  return found_new_match;
-}
+// NOTE: ins_compl_get_next_word_or_line and get_next_default_completion deleted (Phase 14, Phase 4).
+// Logic now lives in rs_get_next_default_completion (expand.rs) and the
+// nvim_ins_compl_st_do_search / nvim_ins_compl_st_add_word_or_line compound accessors.
 
 /// Return the callback function associated with "p" if it refers to a
 /// user-defined function in the 'complete' option.
@@ -2881,12 +2668,8 @@ void nvim_ins_compl_st_set_cur_match_dir(void) {
 // NOTE: nvim_process_next_cpt_value_wrap deleted (Phase 14, Phase 3).
 // rs_ins_compl_get_exp now calls rs_process_next_cpt_value directly.
 
-// Compound wrapper for get_next_default_completion.
-// Returns FAIL/OK.
-int nvim_get_next_default_completion_wrap(int start_lnum, int start_col) {
-  pos_T start_pos = { .lnum = (linenr_T)start_lnum, .col = (colnr_T)start_col };
-  return get_next_default_completion(&ins_compl_st, &start_pos);
-}
+// NOTE: nvim_get_next_default_completion_wrap deleted (Phase 14, Phase 4).
+// rs_get_next_default_completion in expand.rs calls compound accessors directly.
 
 // Wrapper for get_next_filename_completion.
 void nvim_get_next_filename_completion_wrap(void) {
@@ -4078,4 +3861,235 @@ int nvim_ins_compl_st_advance_e_cpt(void)
 {
   (void)copy_option_part(&ins_compl_st.e_cpt, IObuff, IOSIZE, ",");
   return rs_may_advance_cpt_index(ins_compl_st.e_cpt) != 0 ? 1 : 0;
+}
+
+// =============================================================================
+// Phase 4 (pass 14): get_next_default_completion / ins_compl_get_next_word_or_line
+// =============================================================================
+
+/// Save p_scs, and if ins_compl_st.ins_buf has 'infercase' set, disable p_scs.
+/// Returns the old p_scs value so caller can restore it.
+int nvim_compl_p_scs_save_set(void)
+{
+  int save = (int)p_scs;
+  if (ins_compl_st.ins_buf && ins_compl_st.ins_buf->b_p_inf) {
+    p_scs = false;
+  }
+  return save;
+}
+
+/// Save p_ws and set it based on in_curbuf and the current e_cpt flag.
+/// Returns the old p_ws value.
+int nvim_compl_p_ws_save_set(void)
+{
+  int save = (int)p_ws;
+  bool in_curbuf = ins_compl_st.ins_buf == curbuf;
+  if (!in_curbuf) {
+    p_ws = false;
+  } else if (*ins_compl_st.e_cpt == '.') {
+    p_ws = true;
+  }
+  return save;
+}
+
+/// Restore p_scs and p_ws to previously saved values.
+void nvim_compl_restore_p_scs_ws(int save_p_scs, int save_p_ws)
+{
+  p_scs = save_p_scs != 0;
+  p_ws  = save_p_ws  != 0;
+}
+
+/// Returns 1 if ins_compl_st.ins_buf == curbuf, else 0.
+int nvim_ins_compl_st_is_in_curbuf(void)
+{
+  return (ins_compl_st.ins_buf == curbuf) ? 1 : 0;
+}
+
+/// Call the appropriate search function (fuzzy / exact-line / searchit) for one
+/// step of the default-completion loop.  Increments msg_silent before the call
+/// and decrements it after (to suppress wrapscan messages).
+///
+/// Returns OK if a new position was found, FAIL otherwise.
+/// in_fuzzy: 1 if fuzzy-collect mode; start_lnum/start_col: the loop start pos.
+/// fuzzy_ptr_out/fuzzy_len_out/fuzzy_score_out: set only in fuzzy mode.
+int nvim_ins_compl_st_do_search(int in_fuzzy, int start_lnum, int start_col,
+                                char **fuzzy_ptr_out, int *fuzzy_len_out,
+                                int *fuzzy_score_out)
+{
+  int found = FAIL;
+  msg_silent++;
+  pos_T start_pos = { .lnum = (linenr_T)start_lnum, .col = (colnr_T)start_col };
+  if (in_fuzzy) {
+    char *leader = (char *)rs_ins_compl_leader();
+    found = (int)search_for_fuzzy_match(ins_compl_st.ins_buf,
+                                        ins_compl_st.cur_match_pos,
+                                        leader, compl_direction,
+                                        &start_pos,
+                                        fuzzy_len_out, fuzzy_ptr_out, fuzzy_score_out);
+  } else if (rs_ctrl_x_mode_whole_line() || rs_ctrl_x_mode_eval()
+             || (compl_cont_status & CONT_SOL)) {
+    found = search_for_exact_line(ins_compl_st.ins_buf, ins_compl_st.cur_match_pos,
+                                  compl_direction, compl_pattern.data);
+  } else {
+    found = searchit(NULL, ins_compl_st.ins_buf, ins_compl_st.cur_match_pos,
+                     NULL, compl_direction, compl_pattern.data, compl_pattern.size,
+                     1, SEARCH_KEEP + SEARCH_NFMSG, RE_LAST, NULL);
+  }
+  msg_silent--;
+  return found;
+}
+
+/// After a search step: if first-time or set_match_pos, update first/last match
+/// positions and set compl_started.  Returns:
+///   0  first/last positions were just set (caller should continue looping)
+///  -1  first_match_pos == last_match_pos (caller should break with FAIL)
+///   2  normal case (caller should proceed to add-step)
+int nvim_ins_compl_st_check_and_update_match_pos(void)
+{
+  if (!compl_started || ins_compl_st.set_match_pos) {
+    compl_started = true;
+    ins_compl_st.first_match_pos = *ins_compl_st.cur_match_pos;
+    ins_compl_st.last_match_pos  = *ins_compl_st.cur_match_pos;
+    ins_compl_st.set_match_pos   = false;
+    return 0;
+  }
+  if (ins_compl_st.first_match_pos.lnum == ins_compl_st.last_match_pos.lnum
+      && ins_compl_st.first_match_pos.col == ins_compl_st.last_match_pos.col) {
+    return -1;
+  }
+  return 2;
+}
+
+/// Sets ins_compl_st.prev_match_pos = *ins_compl_st.cur_match_pos.
+void nvim_ins_compl_st_set_prev_from_cur(void)
+{
+  ins_compl_st.prev_match_pos = *ins_compl_st.cur_match_pos;
+}
+
+/// Read accessors for cur_match_pos, prev_match_pos, first_match_pos, last_match_pos.
+int nvim_ins_compl_st_get_cur_match_lnum(void) { return (int)ins_compl_st.cur_match_pos->lnum; }
+int nvim_ins_compl_st_get_cur_match_col(void)  { return (int)ins_compl_st.cur_match_pos->col; }
+int nvim_ins_compl_st_get_prev_match_lnum(void) { return (int)ins_compl_st.prev_match_pos.lnum; }
+int nvim_ins_compl_st_get_prev_match_col(void)  { return (int)ins_compl_st.prev_match_pos.col; }
+
+/// Attempt to add the word or line at the current match position to the
+/// completion list.  Inlines ins_compl_get_next_word_or_line logic, then
+/// calls ins_compl_add_infercase.
+///
+/// Parameters:
+///   in_fuzzy    -- 1 if in fuzzy-collect mode (ptr/len/score already known)
+///   fuzzy_ptr   -- string pointer (used when in_fuzzy == 1)
+///   fuzzy_len   -- length (used when in_fuzzy == 1)
+///   fuzzy_score -- score (used when in_fuzzy == 1; also used for nearest-active)
+///
+/// Returns:
+///   0  ptr is NULL or preinsert-skip (caller should continue loop)
+///   1  ins_compl_add_infercase returned NOTDONE (duplicate)
+///   2  match successfully added (caller should break)
+int nvim_ins_compl_st_add_word_or_line(int in_fuzzy, char *fuzzy_ptr, int fuzzy_len,
+                                       int fuzzy_score)
+{
+  char *ptr  = fuzzy_ptr;
+  int   len  = fuzzy_len;
+  int   score = fuzzy_score;
+  bool  cont_s_ipos = false;
+
+  if (!in_fuzzy) {
+    // Inlined ins_compl_get_next_word_or_line logic:
+    buf_T *ins_buf = ins_compl_st.ins_buf;
+    pos_T *cur_match_pos = ins_compl_st.cur_match_pos;
+    len = 0;
+    ptr = ml_get_buf(ins_buf, cur_match_pos->lnum) + cur_match_pos->col;
+    int raw_len = ml_get_buf_len(ins_buf, cur_match_pos->lnum) - cur_match_pos->col;
+    len = raw_len;
+    if (rs_ctrl_x_mode_line_or_eval()) {
+      if (rs_compl_status_adding()) {
+        if (cur_match_pos->lnum >= ins_buf->b_ml.ml_line_count) {
+          ptr = NULL;
+          goto add_word_check;
+        }
+        ptr = ml_get_buf(ins_buf, cur_match_pos->lnum + 1);
+        len = ml_get_buf_len(ins_buf, cur_match_pos->lnum + 1);
+        if (!p_paste) {
+          char *tmp_ptr = ptr;
+          ptr = skipwhite(tmp_ptr);
+          len -= (int)(ptr - tmp_ptr);
+        }
+      }
+    } else {
+      char *tmp_ptr = ptr;
+      if (rs_compl_status_adding() && compl_length <= len) {
+        tmp_ptr += compl_length;
+        if (vim_iswordp(tmp_ptr)) {
+          ptr = NULL;
+          goto add_word_check;
+        }
+        tmp_ptr = rs_find_word_start(tmp_ptr);
+      }
+      tmp_ptr = rs_find_word_end(tmp_ptr);
+      len = (int)(tmp_ptr - ptr);
+      if (rs_compl_status_adding() && len == compl_length) {
+        if (cur_match_pos->lnum < ins_buf->b_ml.ml_line_count) {
+          strncpy(IObuff, ptr, (size_t)len);  // NOLINT(runtime/printf)
+          ptr = ml_get_buf(ins_buf, cur_match_pos->lnum + 1);
+          tmp_ptr = ptr = skipwhite(ptr);
+          tmp_ptr = rs_find_word_start(tmp_ptr);
+          tmp_ptr = rs_find_word_end(tmp_ptr);
+          if (tmp_ptr > ptr) {
+            if (*ptr != ')' && IObuff[len - 1] != TAB) {
+              if (IObuff[len - 1] != ' ') {
+                IObuff[len++] = ' ';
+              }
+              if (p_js
+                  && (IObuff[len - 2] == '.'
+                      || IObuff[len - 2] == '?'
+                      || IObuff[len - 2] == '!')) {
+                IObuff[len++] = ' ';
+              }
+            }
+            if (tmp_ptr - ptr >= IOSIZE - len) {
+              tmp_ptr = ptr + IOSIZE - len - 1;
+            }
+            xstrlcpy(IObuff + len, ptr, (size_t)(IOSIZE - len));
+            len += (int)(tmp_ptr - ptr);
+            cont_s_ipos = true;
+          }
+          IObuff[len] = NUL;
+          ptr = IObuff;
+        }
+        if (len == compl_length) {
+          ptr = NULL;
+          goto add_word_check;
+        }
+      }
+    }
+  }
+
+add_word_check:
+  if (ptr == NULL || (rs_ins_compl_has_preinsert()
+                      && strcmp(ptr, (char *)rs_ins_compl_leader()) == 0)) {
+    return 0;
+  }
+
+  if (rs_is_nearest_active() && ins_compl_st.ins_buf == curbuf) {
+    score = (int)ins_compl_st.cur_match_pos->lnum - (int)curwin->w_cursor.lnum;
+    if (score < 0) {
+      score = -score;
+    }
+  }
+
+  const char *sfname = (ins_compl_st.ins_buf == curbuf)
+                       ? NULL : ins_compl_st.ins_buf->b_sfname;
+
+  int add_r = ins_compl_add_infercase(ptr, len, p_ic, (char *)sfname,
+                                      0, cont_s_ipos, score);
+  if (add_r == NOTDONE) {
+    return 1;
+  }
+  // add_r is OK (or FAIL which shouldn't happen here)
+  if (in_fuzzy && compl_first_match && compl_first_match->cp_next
+      && score == compl_first_match->cp_next->cp_score) {
+    compl_num_bests++;
+  }
+  return 2;
 }
