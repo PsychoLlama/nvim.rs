@@ -612,10 +612,10 @@ extern "C" {
     fn nvim_rawkey_add_pos_row(itr: MarkTreeIterHandle, delta: c_int);
 
     /// Allocate a zeroed MarkTreeIter on the heap.
-    fn nvim_alloc_marktreeiter() -> MarkTreeIterHandle;
+    fn nvim_marktree_itr_alloc() -> MarkTreeIterHandle;
 
     /// Free a heap-allocated MarkTreeIter.
-    fn nvim_free_marktreeiter(itr: MarkTreeIterHandle);
+    fn nvim_marktree_itr_free(itr: MarkTreeIterHandle);
 
     /// Copy iterator contents from src to dst (equivalent to `*dst = *src`).
     fn nvim_marktree_itr_copy(dst: MarkTreeIterHandle, src: MarkTreeIterHandle);
@@ -3355,14 +3355,14 @@ pub fn marktree_put(
             col: end_col,
         };
         marktree_put_key(b, end_key);
-        let itr = unsafe { nvim_alloc_marktreeiter() };
-        let end_itr = unsafe { nvim_alloc_marktreeiter() };
+        let itr = unsafe { nvim_marktree_itr_alloc() };
+        let end_itr = unsafe { nvim_marktree_itr_alloc() };
         let _ = marktree_lookup(b, mt_lookup_key(&key), itr);
         let _ = marktree_lookup(b, mt_lookup_key(&end_key), end_itr);
         marktree_intersect_pair(b, mt_lookup_key(&key), itr, end_itr, false);
         unsafe {
-            nvim_free_marktreeiter(itr);
-            nvim_free_marktreeiter(end_itr);
+            nvim_marktree_itr_free(itr);
+            nvim_marktree_itr_free(end_itr);
         }
     }
 }
@@ -3948,19 +3948,19 @@ pub fn marktree_del_itr(b: MarkTreeHandle, itr: MarkTreeIterHandle, rev: bool) -
     let mut other: u64 = 0;
     if mt_paired(&raw) && (raw.flags & MT_FLAG_ORPHANED == 0) {
         other = mt_lookup_key_side(&raw, !mt_end(&raw));
-        let other_itr = unsafe { nvim_alloc_marktreeiter() };
+        let other_itr = unsafe { nvim_marktree_itr_alloc() };
         let _ = marktree_lookup(b, other, other_itr);
         rawkey_or_flags(other_itr, MT_FLAG_ORPHANED);
         // Remove intersect markers
         if mt_start(&raw) {
-            let this_itr = unsafe { nvim_alloc_marktreeiter() };
+            let this_itr = unsafe { nvim_marktree_itr_alloc() };
             unsafe { nvim_marktree_itr_copy(this_itr, itr) };
             marktree_intersect_pair(b, id, this_itr, other_itr, true);
-            unsafe { nvim_free_marktreeiter(this_itr) };
+            unsafe { nvim_marktree_itr_free(this_itr) };
         } else {
             marktree_intersect_pair(b, other, other_itr, itr, true);
         }
-        unsafe { nvim_free_marktreeiter(other_itr) };
+        unsafe { nvim_marktree_itr_free(other_itr) };
     }
 
     // Step 2: If internal node, steal predecessor
@@ -4350,8 +4350,8 @@ pub fn marktree_move(b: MarkTreeHandle, itr: MarkTreeIterHandle, row: i32, col: 
 ///
 /// Re-establishes intersection markers for a paired mark.
 pub fn marktree_restore_pair(b: MarkTreeHandle, key: MTKey) {
-    let itr = unsafe { nvim_alloc_marktreeiter() };
-    let end_itr = unsafe { nvim_alloc_marktreeiter() };
+    let itr = unsafe { nvim_marktree_itr_alloc() };
+    let end_itr = unsafe { nvim_marktree_itr_alloc() };
 
     let _ = marktree_lookup(b, mt_lookup_key_side(&key, false), itr);
     let _ = marktree_lookup(b, mt_lookup_key_side(&key, true), end_itr);
@@ -4362,8 +4362,8 @@ pub fn marktree_restore_pair(b: MarkTreeHandle, key: MTKey) {
     if !itr_valid || !end_itr_valid {
         // Other end might be waiting to be restored later
         unsafe {
-            nvim_free_marktreeiter(itr);
-            nvim_free_marktreeiter(end_itr);
+            nvim_marktree_itr_free(itr);
+            nvim_marktree_itr_free(end_itr);
         }
         return;
     }
@@ -4375,8 +4375,8 @@ pub fn marktree_restore_pair(b: MarkTreeHandle, key: MTKey) {
     marktree_intersect_pair(b, id, itr, end_itr, false);
 
     unsafe {
-        nvim_free_marktreeiter(itr);
-        nvim_free_marktreeiter(end_itr);
+        nvim_marktree_itr_free(itr);
+        nvim_marktree_itr_free(end_itr);
     }
 }
 
@@ -4720,7 +4720,7 @@ pub fn marktree_splice(
 
     let mut oldbase = [MTPos { row: 0, col: 0 }; MT_MAX_DEPTH];
 
-    let itr = unsafe { nvim_alloc_marktreeiter() };
+    let itr = unsafe { nvim_marktree_itr_alloc() };
     let _ = marktree_itr_get_ext_full(
         b,
         start,
@@ -4731,7 +4731,7 @@ pub fn marktree_splice(
         std::ptr::null(),
     );
     if unsafe { nvim_mtitr_get_x(itr) }.is_null() {
-        unsafe { nvim_free_marktreeiter(itr) };
+        unsafe { nvim_marktree_itr_free(itr) };
         return false;
     }
 
@@ -4740,7 +4740,7 @@ pub fn marktree_splice(
         col: new_extent.col - old_extent.col,
     };
 
-    let enditr = unsafe { nvim_alloc_marktreeiter() };
+    let enditr = unsafe { nvim_marktree_itr_alloc() };
 
     if may_delete {
         let ipos = marktree_itr_pos(itr);
@@ -4946,7 +4946,7 @@ pub fn marktree_splice(
                 let d_old_i = damage[i].old_i;
                 let d_new_node = damage[i].new_node;
                 let d_new_i = damage[i].new_i;
-                let endpos = unsafe { nvim_alloc_marktreeiter() };
+                let endpos = unsafe { nvim_marktree_itr_alloc() };
                 let _ = marktree_lookup(b, d_id | MARKTREE_END_FLAG, endpos);
                 if !unsafe { nvim_mtitr_get_x(endpos) }.is_null() {
                     let _ = marktree_itr_set_node(b, itr, d_old_node, d_old_i);
@@ -4956,7 +4956,7 @@ pub fn marktree_splice(
                     unsafe { nvim_marktree_itr_copy(enditr, endpos) };
                     marktree_intersect_pair(b, d_id, itr, enditr, false);
                 }
-                unsafe { nvim_free_marktreeiter(endpos) };
+                unsafe { nvim_marktree_itr_free(endpos) };
             } else {
                 // lone end: start didn't move
                 let d_id = damage[i].id;
@@ -4965,7 +4965,7 @@ pub fn marktree_splice(
                 let d_new_node = damage[i].new_node;
                 let d_new_i = damage[i].new_i;
                 let start_id = d_id & !MARKTREE_END_FLAG;
-                let startpos = unsafe { nvim_alloc_marktreeiter() };
+                let startpos = unsafe { nvim_marktree_itr_alloc() };
                 let _ = marktree_lookup(b, start_id, startpos);
                 if !unsafe { nvim_mtitr_get_x(startpos) }.is_null() {
                     unsafe { nvim_marktree_itr_copy(itr, startpos) };
@@ -4975,15 +4975,15 @@ pub fn marktree_splice(
                     let _ = marktree_itr_set_node(b, enditr, d_new_node, d_new_i);
                     marktree_intersect_pair(b, start_id, itr, enditr, false);
                 }
-                unsafe { nvim_free_marktreeiter(startpos) };
+                unsafe { nvim_marktree_itr_free(startpos) };
             }
             i += 1;
         }
     }
 
     unsafe {
-        nvim_free_marktreeiter(itr);
-        nvim_free_marktreeiter(enditr);
+        nvim_marktree_itr_free(itr);
+        nvim_marktree_itr_free(enditr);
     }
     moved
 }
@@ -5011,7 +5011,7 @@ pub fn marktree_move_region(
     let mut end = size;
     unrelative(start, &mut end);
 
-    let itr = unsafe { nvim_alloc_marktreeiter() };
+    let itr = unsafe { nvim_marktree_itr_alloc() };
     let _ = marktree_itr_get_ext_full(
         b,
         start,
@@ -5039,7 +5039,7 @@ pub fn marktree_move_region(
         let _ = marktree_del_itr(b, itr, false);
     }
 
-    unsafe { nvim_free_marktreeiter(itr) };
+    unsafe { nvim_marktree_itr_free(itr) };
 
     let _ = marktree_splice(b, start.row, start.col, size.row, size.col, 0, 0);
 
@@ -5067,13 +5067,13 @@ pub fn marktree_move_region(
 ///
 /// Panics if the mark specified by `ns`/`id` is not a paired mark.
 pub fn marktree_del_pair_test(b: MarkTreeHandle, ns: u32, id: u32) {
-    let itr = unsafe { nvim_alloc_marktreeiter() };
+    let itr = unsafe { nvim_marktree_itr_alloc() };
     let _ = marktree_lookup_ns(b, ns, id, false, itr);
     let other = marktree_del_itr(b, itr, false);
     assert_ne!(other, 0, "marktree_del_pair_test: mark is not paired");
     let _ = marktree_lookup(b, other, itr);
     let _ = marktree_del_itr(b, itr, false);
-    unsafe { nvim_free_marktreeiter(itr) };
+    unsafe { nvim_marktree_itr_free(itr) };
 }
 
 // ============================================================================
@@ -5334,7 +5334,7 @@ pub fn marktree_check_intersections(b: MarkTreeHandle) -> bool {
 
     // Step 2: iterate over all marks; for each start mark of a pair,
     // rebuild intersections
-    let itr = unsafe { nvim_alloc_marktreeiter() };
+    let itr = unsafe { nvim_marktree_itr_alloc() };
     let _ = marktree_itr_first(b, itr);
     loop {
         let mark = marktree_itr_current(itr);
@@ -5344,21 +5344,21 @@ pub fn marktree_check_intersections(b: MarkTreeHandle) -> bool {
 
         if mt_start(&mark) {
             let end_id = mt_lookup_id(mark.ns, mark.id, true);
-            let end_itr = unsafe { nvim_alloc_marktreeiter() };
+            let end_itr = unsafe { nvim_marktree_itr_alloc() };
             let k = marktree_lookup(b, end_id, end_itr);
             if k.pos.row >= 0 {
-                let start_itr = unsafe { nvim_alloc_marktreeiter() };
+                let start_itr = unsafe { nvim_marktree_itr_alloc() };
                 // Copy current iterator to start_itr (equivalent to `*start_itr = *itr`)
                 unsafe { nvim_marktree_itr_copy(start_itr, itr) };
                 marktree_intersect_pair(b, mt_lookup_key(&mark), start_itr, end_itr, false);
-                unsafe { nvim_free_marktreeiter(start_itr) };
+                unsafe { nvim_marktree_itr_free(start_itr) };
             }
-            unsafe { nvim_free_marktreeiter(end_itr) };
+            unsafe { nvim_marktree_itr_free(end_itr) };
         }
 
         let _ = marktree_itr_next(b, itr);
     }
-    unsafe { nvim_free_marktreeiter(itr) };
+    unsafe { nvim_marktree_itr_free(itr) };
 
     // Step 3: compare rebuilt intersections against saved ones
     let status = mt_recurse_nodes_compare_handle(root, &saved);

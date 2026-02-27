@@ -196,7 +196,6 @@ extern uint64_t rs_marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev);
 #include "marktree_shim.c.generated.h"
 
 #define ptr s->i_ptr
-#define meta s->i_meta
 // put functions
 
 
@@ -508,8 +507,6 @@ void nvim_marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col) { rs_m
 void nvim_marktree_restore_pair(MarkTree *b, MTKey key) { rs_marktree_restore_pair(b, key); }
 void nvim_marktree_del_id(MarkTree *b, uint64_t id) { pmap_del(uint64_t)(b->id2node, id, NULL); }
 void nvim_marktree_dec_n_keys(MarkTree *b) { b->n_keys--; }
-MarkTreeIter *nvim_alloc_marktreeiter(void) { return xcalloc(1, sizeof(MarkTreeIter)); }
-void nvim_free_marktreeiter(MarkTreeIter *itr) { xfree(itr); }
 void nvim_marktree_sub_meta_root(MarkTree *b, int m, uint32_t val) { b->meta_root[m] -= val; }
 MTKey nvim_rawkey(MarkTreeIter *itr) { return rawkey(itr); }
 void nvim_rawkey_set_flags(MarkTreeIter *itr, uint16_t flags) { rawkey(itr).flags = flags; }
