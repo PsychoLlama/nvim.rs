@@ -268,11 +268,21 @@ extern "C" {
     /// Get si_trans_id (highlight group ID, transparency removed)
     fn nvim_stateitem_get_trans_id(item: StateItemHandle) -> c_int;
 
-    /// Get si_m_lnum (lnum of the match)
-    fn nvim_stateitem_get_m_lnum(item: StateItemHandle) -> c_int;
-
-    /// Get si_m_startcol (starting column of the match)
-    fn nvim_stateitem_get_m_startcol(item: StateItemHandle) -> c_int;
+    /// Bulk position getter
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_get_positions(
+        item: StateItemHandle,
+        m_lnum: *mut c_int,
+        m_startcol: *mut c_int,
+        m_end_lnum: *mut c_int,
+        m_end_col: *mut c_int,
+        h_start_lnum: *mut c_int,
+        h_start_col: *mut c_int,
+        h_end_lnum: *mut c_int,
+        h_end_col: *mut c_int,
+        eoe_lnum: *mut c_int,
+        eoe_col: *mut c_int,
+    );
 
     /// Get si_attr (attributes in this state)
     fn nvim_stateitem_get_attr(item: StateItemHandle) -> c_int;
@@ -2656,7 +2666,21 @@ pub unsafe extern "C" fn rs_stateitem_get_m_lnum(item: StateItemHandle) -> c_int
     if item.is_null() {
         return 0;
     }
-    nvim_stateitem_get_m_lnum(item)
+    let mut v: c_int = 0;
+    nvim_stateitem_get_positions(
+        item,
+        &mut v,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+    );
+    v
 }
 
 /// Get stateitem m_startcol field.
@@ -2668,7 +2692,21 @@ pub unsafe extern "C" fn rs_stateitem_get_m_startcol(item: StateItemHandle) -> c
     if item.is_null() {
         return 0;
     }
-    nvim_stateitem_get_m_startcol(item)
+    let mut v: c_int = 0;
+    nvim_stateitem_get_positions(
+        item,
+        std::ptr::null_mut(),
+        &mut v,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+    );
+    v
 }
 // Note: Many constants and accessors defined earlier in this file are re-exported
 // through these Rust wrappers for Phase 143 compatibility.

@@ -35,13 +35,20 @@ extern "C" {
     // Stateitem field accessors
     fn nvim_stateitem_get_flags(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_extmatch(item: StateItemHandle) -> ExtMatchHandle;
-    fn nvim_stateitem_get_m_endpos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_m_endpos_col(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_h_startpos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_h_startpos_col(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_h_endpos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_h_endpos_col(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_eoe_pos_lnum(item: StateItemHandle) -> c_int;
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_get_positions(
+        item: StateItemHandle,
+        m_lnum: *mut c_int,
+        m_startcol: *mut c_int,
+        m_end_lnum: *mut c_int,
+        m_end_col: *mut c_int,
+        h_start_lnum: *mut c_int,
+        h_start_col: *mut c_int,
+        h_end_lnum: *mut c_int,
+        h_end_col: *mut c_int,
+        eoe_lnum: *mut c_int,
+        eoe_col: *mut c_int,
+    );
     fn nvim_stateitem_get_end_idx(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_set_idx(item: StateItemHandle, idx: c_int);
     fn nvim_stateitem_set_flags(item: StateItemHandle, flags: c_int);
@@ -206,10 +213,27 @@ pub unsafe extern "C" fn rs_syn_state_item_spans_line(idx: c_int, lnum: c_int) -
     if item.is_null() {
         return 0;
     }
-    if nvim_stateitem_get_h_startpos_lnum(item) >= lnum
-        || nvim_stateitem_get_m_endpos_lnum(item) >= lnum
-        || nvim_stateitem_get_h_endpos_lnum(item) >= lnum
-        || (nvim_stateitem_get_end_idx(item) != 0 && nvim_stateitem_get_eoe_pos_lnum(item) >= lnum)
+    let mut m_end_lnum: c_int = 0;
+    let mut h_start_lnum: c_int = 0;
+    let mut h_end_lnum: c_int = 0;
+    let mut eoe_lnum: c_int = 0;
+    nvim_stateitem_get_positions(
+        item,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        &mut m_end_lnum,
+        std::ptr::null_mut(),
+        &mut h_start_lnum,
+        std::ptr::null_mut(),
+        &mut h_end_lnum,
+        std::ptr::null_mut(),
+        &mut eoe_lnum,
+        std::ptr::null_mut(),
+    );
+    if h_start_lnum >= lnum
+        || m_end_lnum >= lnum
+        || h_end_lnum >= lnum
+        || (nvim_stateitem_get_end_idx(item) != 0 && eoe_lnum >= lnum)
     {
         return 1;
     }

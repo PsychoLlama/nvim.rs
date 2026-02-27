@@ -30,10 +30,22 @@ extern "C" {
 
     // State item region accessors
     fn nvim_stateitem_get_end_idx(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_eoe_pos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_eoe_pos_col(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_set_eoe_pos(item: StateItemHandle, lnum: c_int, col: c_int);
     fn nvim_stateitem_set_end_idx(item: StateItemHandle, end_idx: c_int);
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_get_positions(
+        item: StateItemHandle,
+        m_lnum: *mut c_int,
+        m_startcol: *mut c_int,
+        m_end_lnum: *mut c_int,
+        m_end_col: *mut c_int,
+        h_start_lnum: *mut c_int,
+        h_start_col: *mut c_int,
+        h_end_lnum: *mut c_int,
+        h_end_col: *mut c_int,
+        eoe_lnum: *mut c_int,
+        eoe_col: *mut c_int,
+    );
 
     // Pattern accessors for find_endpos
     fn nvim_syn_get_synblock_pattern_count() -> c_int;
@@ -61,7 +73,6 @@ extern "C" {
     fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_flags(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_extmatch(item: StateItemHandle) -> ExtMatchHandle;
-    fn nvim_stateitem_get_m_endpos_lnum(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_set_ends(item: StateItemHandle, ends: c_int);
     fn nvim_stateitem_set_m_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
     fn nvim_stateitem_set_h_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
@@ -416,7 +427,21 @@ pub unsafe fn update_si_end(sip: StateItemHandle, startcol: i32, force: bool) {
     let current_lnum = nvim_syn_get_current_lnum();
 
     // Don't update when it's already done
-    if !force && nvim_stateitem_get_m_endpos_lnum(sip) >= current_lnum {
+    let mut m_end_lnum_check: c_int = 0;
+    nvim_stateitem_get_positions(
+        sip,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        &mut m_end_lnum_check,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+    );
+    if !force && m_end_lnum_check >= current_lnum {
         return;
     }
 
@@ -537,10 +562,24 @@ pub fn stateitem_eoe_pos(item: StateItemHandle) -> Position {
     if item.is_null() {
         return Position::default();
     }
-    Position {
-        lnum: unsafe { nvim_stateitem_get_eoe_pos_lnum(item) },
-        col: unsafe { nvim_stateitem_get_eoe_pos_col(item) },
+    let mut lnum: c_int = 0;
+    let mut col: c_int = 0;
+    unsafe {
+        nvim_stateitem_get_positions(
+            item,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut lnum,
+            &mut col,
+        );
     }
+    Position { lnum, col }
 }
 
 /// Set the end-of-end position for a state item.

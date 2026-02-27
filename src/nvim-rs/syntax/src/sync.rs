@@ -87,10 +87,22 @@ extern "C" {
 
     // Stateitem accessors
     fn nvim_syn_get_top_stateitem() -> StateItemHandle;
-    fn nvim_stateitem_get_m_endpos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_m_endpos_col(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_set_h_startpos(item: StateItemHandle, lnum: c_int, col: c_int);
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_get_positions(
+        item: StateItemHandle,
+        m_lnum: *mut c_int,
+        m_startcol: *mut c_int,
+        m_end_lnum: *mut c_int,
+        m_end_col: *mut c_int,
+        h_start_lnum: *mut c_int,
+        h_start_col: *mut c_int,
+        h_end_lnum: *mut c_int,
+        h_end_col: *mut c_int,
+        eoe_lnum: *mut c_int,
+        eoe_col: *mut c_int,
+    );
 
     // Pattern accessors
     fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
@@ -344,8 +356,21 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
                     // continue to look for another one, further on in the line.
                     if had_sync_point && nvim_syn_get_current_state_len() > 0 {
                         let cur_si = nvim_syn_get_top_stateitem();
-                        let si_m_endpos_lnum = nvim_stateitem_get_m_endpos_lnum(cur_si);
-                        let si_m_endpos_col = nvim_stateitem_get_m_endpos_col(cur_si);
+                        let mut si_m_endpos_lnum: c_int = 0;
+                        let mut si_m_endpos_col: c_int = 0;
+                        nvim_stateitem_get_positions(
+                            cur_si,
+                            std::ptr::null_mut(),
+                            std::ptr::null_mut(),
+                            &mut si_m_endpos_lnum,
+                            &mut si_m_endpos_col,
+                            std::ptr::null_mut(),
+                            std::ptr::null_mut(),
+                            std::ptr::null_mut(),
+                            std::ptr::null_mut(),
+                            std::ptr::null_mut(),
+                            std::ptr::null_mut(),
+                        );
 
                         if si_m_endpos_lnum > start_lnum {
                             // ignore match that goes to after where started

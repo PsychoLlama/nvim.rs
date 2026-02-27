@@ -49,14 +49,20 @@ extern "C" {
     fn nvim_stateitem_get_flags(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_ends(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_end_idx(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_m_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_m_startcol(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_m_endpos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_m_endpos_col(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_h_endpos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_h_endpos_col(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_eoe_pos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_eoe_pos_col(item: StateItemHandle) -> c_int;
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_get_positions(
+        item: StateItemHandle,
+        m_lnum: *mut c_int,
+        m_startcol: *mut c_int,
+        m_end_lnum: *mut c_int,
+        m_end_col: *mut c_int,
+        h_start_lnum: *mut c_int,
+        h_start_col: *mut c_int,
+        h_end_lnum: *mut c_int,
+        h_end_col: *mut c_int,
+        eoe_lnum: *mut c_int,
+        eoe_col: *mut c_int,
+    );
     fn nvim_stateitem_get_next_list(item: StateItemHandle) -> IdListHandle;
     fn nvim_stateitem_get_attr(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_trans_id(item: StateItemHandle) -> c_int;
@@ -115,6 +121,51 @@ extern "C" {
 const MAXCOL: i32 = 0x7fffffff;
 const NUL: i32 = 0;
 
+/// All position fields of a stateitem_T, fetched in one call.
+struct ItemPositions {
+    m_lnum: c_int,
+    m_startcol: c_int,
+    m_end_lnum: c_int,
+    m_end_col: c_int,
+    #[allow(dead_code)]
+    h_start_lnum: c_int,
+    #[allow(dead_code)]
+    h_start_col: c_int,
+    h_end_lnum: c_int,
+    h_end_col: c_int,
+    eoe_lnum: c_int,
+    eoe_col: c_int,
+}
+
+unsafe fn get_item_positions(item: StateItemHandle) -> ItemPositions {
+    let mut p = ItemPositions {
+        m_lnum: 0,
+        m_startcol: 0,
+        m_end_lnum: 0,
+        m_end_col: 0,
+        h_start_lnum: 0,
+        h_start_col: 0,
+        h_end_lnum: 0,
+        h_end_col: 0,
+        eoe_lnum: 0,
+        eoe_col: 0,
+    };
+    nvim_stateitem_get_positions(
+        item,
+        &mut p.m_lnum,
+        &mut p.m_startcol,
+        &mut p.m_end_lnum,
+        &mut p.m_end_col,
+        &mut p.h_start_lnum,
+        &mut p.h_start_col,
+        &mut p.h_end_lnum,
+        &mut p.h_end_col,
+        &mut p.eoe_lnum,
+        &mut p.eoe_col,
+    );
+    p
+}
+
 // =============================================================================
 // did_match_already — prevents infinite zero-width loops
 // =============================================================================
@@ -136,12 +187,14 @@ pub unsafe fn did_match_already(idx: i32, gap_ptr: *mut c_int, gap_len: i32) -> 
     let mut i = state_len - 1;
     while i >= 0 {
         let item = nvim_syn_get_stateitem(i);
-        if !item.is_null()
-            && nvim_stateitem_get_m_startcol(item) == current_col
-            && nvim_stateitem_get_m_lnum(item) == current_lnum
-            && nvim_stateitem_get_idx(item) == idx
-        {
-            return true;
+        if !item.is_null() {
+            let pos = get_item_positions(item);
+            if pos.m_startcol == current_col
+                && pos.m_lnum == current_lnum
+                && nvim_stateitem_get_idx(item) == idx
+            {
+                return true;
+            }
         }
         i -= 1;
     }
@@ -262,25 +315,27 @@ pub unsafe fn check_keepend() {
             continue;
         }
 
+        let pos = get_item_positions(sip);
+
         if maxpos.lnum != 0 {
             // Limit all end positions to the keepend boundary
             let mut m_endpos = Position {
-                lnum: nvim_stateitem_get_m_endpos_lnum(sip),
-                col: nvim_stateitem_get_m_endpos_col(sip),
+                lnum: pos.m_end_lnum,
+                col: pos.m_end_col,
             };
             limit_pos_zero(&mut m_endpos, &maxpos);
             nvim_stateitem_set_m_endpos(sip, m_endpos.lnum, m_endpos.col);
 
             let mut h_endpos = Position {
-                lnum: nvim_stateitem_get_h_endpos_lnum(sip),
-                col: nvim_stateitem_get_h_endpos_col(sip),
+                lnum: pos.h_end_lnum,
+                col: pos.h_end_col,
             };
             limit_pos_zero(&mut h_endpos, &maxpos_h);
             nvim_stateitem_set_h_endpos(sip, h_endpos.lnum, h_endpos.col);
 
             let mut eoe_pos = Position {
-                lnum: nvim_stateitem_get_eoe_pos_lnum(sip),
-                col: nvim_stateitem_get_eoe_pos_col(sip),
+                lnum: pos.eoe_lnum,
+                col: pos.eoe_col,
             };
             limit_pos_zero(&mut eoe_pos, &maxpos);
             nvim_stateitem_set_eoe_pos(sip, eoe_pos.lnum, eoe_pos.col);
@@ -292,8 +347,8 @@ pub unsafe fn check_keepend() {
         let si_flags = nvim_stateitem_get_flags(sip);
         if si_ends != 0 && (si_flags & HL_KEEPEND != 0) {
             let m_end = Position {
-                lnum: nvim_stateitem_get_m_endpos_lnum(sip),
-                col: nvim_stateitem_get_m_endpos_col(sip),
+                lnum: pos.m_end_lnum,
+                col: pos.m_end_col,
             };
             if maxpos.lnum == 0
                 || maxpos.lnum > m_end.lnum
@@ -302,8 +357,8 @@ pub unsafe fn check_keepend() {
                 maxpos = m_end;
             }
             let h_end = Position {
-                lnum: nvim_stateitem_get_h_endpos_lnum(sip),
-                col: nvim_stateitem_get_h_endpos_col(sip),
+                lnum: pos.h_end_lnum,
+                col: pos.h_end_col,
             };
             if maxpos_h.lnum == 0
                 || maxpos_h.lnum > h_end.lnum
@@ -458,8 +513,9 @@ pub unsafe fn check_state_ends() {
         }
 
         let si_ends = nvim_stateitem_get_ends(cur_si);
-        let m_end_lnum = nvim_stateitem_get_m_endpos_lnum(cur_si);
-        let m_end_col = nvim_stateitem_get_m_endpos_col(cur_si);
+        let pos = get_item_positions(cur_si);
+        let m_end_lnum = pos.m_end_lnum;
+        let m_end_col = pos.m_end_col;
 
         if si_ends != 0
             && (m_end_lnum < current_lnum
@@ -467,8 +523,8 @@ pub unsafe fn check_state_ends() {
         {
             // Check if there is an end pattern group ID to highlight
             let end_idx = nvim_stateitem_get_end_idx(cur_si);
-            let eoe_lnum = nvim_stateitem_get_eoe_pos_lnum(cur_si);
-            let eoe_col = nvim_stateitem_get_eoe_pos_col(cur_si);
+            let eoe_lnum = pos.eoe_lnum;
+            let eoe_col = pos.eoe_col;
 
             if end_idx != 0
                 && (eoe_lnum > current_lnum || (eoe_lnum == current_lnum && eoe_col > current_col))

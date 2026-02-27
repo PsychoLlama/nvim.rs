@@ -815,8 +815,6 @@ char *nvim_syncluster_get_name_u(syn_cluster_T *cluster) { return cluster->scl_n
 int nvim_stateitem_get_idx(stateitem_T *item) { return item->si_idx; }
 int nvim_stateitem_get_id(stateitem_T *item) { return item->si_id; }
 int nvim_stateitem_get_trans_id(stateitem_T *item) { return item->si_trans_id; }
-int nvim_stateitem_get_m_lnum(stateitem_T *item) { return item->si_m_lnum; }
-int nvim_stateitem_get_m_startcol(stateitem_T *item) { return item->si_m_startcol; }
 int nvim_stateitem_get_attr(stateitem_T *item) { return item->si_attr; }
 int nvim_stateitem_get_flags(stateitem_T *item) { return item->si_flags; }
 int nvim_stateitem_get_seqnr(stateitem_T *item) { return item->si_seqnr; }
@@ -1113,14 +1111,39 @@ reg_extmatch_T *nvim_stateitem_get_extmatch(stateitem_T *item)
   return item->si_extmatch;
 }
 
-int nvim_stateitem_get_m_endpos_lnum(stateitem_T *item) { return item ? (int)item->si_m_endpos.lnum : 0; }
-int nvim_stateitem_get_m_endpos_col(stateitem_T *item) { return item ? (int)item->si_m_endpos.col : 0; }
-int nvim_stateitem_get_h_startpos_lnum(stateitem_T *item) { return item ? (int)item->si_h_startpos.lnum : 0; }
-int nvim_stateitem_get_h_startpos_col(stateitem_T *item) { return item ? (int)item->si_h_startpos.col : 0; }
-int nvim_stateitem_get_h_endpos_lnum(stateitem_T *item) { return item ? (int)item->si_h_endpos.lnum : 0; }
-int nvim_stateitem_get_h_endpos_col(stateitem_T *item) { return item ? (int)item->si_h_endpos.col : 0; }
-int nvim_stateitem_get_eoe_pos_lnum(stateitem_T *item) { return item ? (int)item->si_eoe_pos.lnum : 0; }
-int nvim_stateitem_get_eoe_pos_col(stateitem_T *item) { return item ? (int)item->si_eoe_pos.col : 0; }
+/// Bulk getter: fetch all position fields of a stateitem.
+/// Callers may pass NULL for fields they do not need.
+void nvim_stateitem_get_positions(stateitem_T *item,
+    int *m_lnum, int *m_startcol,
+    int *m_end_lnum, int *m_end_col,
+    int *h_start_lnum, int *h_start_col,
+    int *h_end_lnum, int *h_end_col,
+    int *eoe_lnum, int *eoe_col)
+{
+  if (!item) {
+    if (m_lnum) { *m_lnum = 0; }
+    if (m_startcol) { *m_startcol = 0; }
+    if (m_end_lnum) { *m_end_lnum = 0; }
+    if (m_end_col) { *m_end_col = 0; }
+    if (h_start_lnum) { *h_start_lnum = 0; }
+    if (h_start_col) { *h_start_col = 0; }
+    if (h_end_lnum) { *h_end_lnum = 0; }
+    if (h_end_col) { *h_end_col = 0; }
+    if (eoe_lnum) { *eoe_lnum = 0; }
+    if (eoe_col) { *eoe_col = 0; }
+    return;
+  }
+  if (m_lnum) { *m_lnum = item->si_m_lnum; }
+  if (m_startcol) { *m_startcol = item->si_m_startcol; }
+  if (m_end_lnum) { *m_end_lnum = (int)item->si_m_endpos.lnum; }
+  if (m_end_col) { *m_end_col = (int)item->si_m_endpos.col; }
+  if (h_start_lnum) { *h_start_lnum = (int)item->si_h_startpos.lnum; }
+  if (h_start_col) { *h_start_col = (int)item->si_h_startpos.col; }
+  if (h_end_lnum) { *h_end_lnum = (int)item->si_h_endpos.lnum; }
+  if (h_end_col) { *h_end_col = (int)item->si_h_endpos.col; }
+  if (eoe_lnum) { *eoe_lnum = (int)item->si_eoe_pos.lnum; }
+  if (eoe_col) { *eoe_col = (int)item->si_eoe_pos.col; }
+}
 
 /// Set si_m_endpos
 void nvim_stateitem_set_m_endpos(stateitem_T *item, int lnum, int col)

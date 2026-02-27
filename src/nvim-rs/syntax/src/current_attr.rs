@@ -56,10 +56,20 @@ extern "C" {
     fn nvim_stateitem_get_cchar(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_cont_list(item: StateItemHandle) -> IdListHandle;
     fn nvim_stateitem_get_next_list(item: StateItemHandle) -> IdListHandle;
-    fn nvim_stateitem_get_h_startpos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_h_startpos_col(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_h_endpos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_h_endpos_col(item: StateItemHandle) -> c_int;
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_get_positions(
+        item: StateItemHandle,
+        m_lnum: *mut c_int,
+        m_startcol: *mut c_int,
+        m_end_lnum: *mut c_int,
+        m_end_col: *mut c_int,
+        h_start_lnum: *mut c_int,
+        h_start_col: *mut c_int,
+        h_end_lnum: *mut c_int,
+        h_end_col: *mut c_int,
+        eoe_lnum: *mut c_int,
+        eoe_col: *mut c_int,
+    );
 
     // State item setters
     fn nvim_stateitem_set_m_startcol(item: StateItemHandle, col: c_int);
@@ -640,10 +650,23 @@ pub unsafe fn syn_current_attr(
     if cur_si_valid && state_len > 0 {
         for idx in (0..state_len).rev() {
             let sip = nvim_syn_get_stateitem(idx);
-            let h_start_lnum = nvim_stateitem_get_h_startpos_lnum(sip);
-            let h_start_col = nvim_stateitem_get_h_startpos_col(sip);
-            let h_end_lnum = nvim_stateitem_get_h_endpos_lnum(sip);
-            let h_end_col = nvim_stateitem_get_h_endpos_col(sip);
+            let mut h_start_lnum: c_int = 0;
+            let mut h_start_col: c_int = 0;
+            let mut h_end_lnum: c_int = 0;
+            let mut h_end_col: c_int = 0;
+            nvim_stateitem_get_positions(
+                sip,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut h_start_lnum,
+                &mut h_start_col,
+                &mut h_end_lnum,
+                &mut h_end_col,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            );
 
             if (current_lnum > h_start_lnum
                 || (current_lnum == h_start_lnum && current_col >= h_start_col))
@@ -760,8 +783,28 @@ fn did_match_already(idx: i32, zero_width_ga: &[i32]) -> bool {
 
     for i in (0..state_len).rev() {
         let si = unsafe { nvim_syn_get_stateitem(i) };
-        if unsafe { nvim_stateitem_get_m_startcol(si) } == current_col
-            && unsafe { nvim_stateitem_get_m_lnum(si) } == current_lnum
+        if si.is_null() {
+            continue;
+        }
+        let mut m_lnum: c_int = 0;
+        let mut m_startcol: c_int = 0;
+        unsafe {
+            nvim_stateitem_get_positions(
+                si,
+                &mut m_lnum,
+                &mut m_startcol,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            );
+        }
+        if m_startcol == current_col
+            && m_lnum == current_lnum
             && unsafe { nvim_stateitem_get_idx(si) } == idx
         {
             return true;
@@ -775,11 +818,6 @@ fn did_match_already(idx: i32, zero_width_ga: &[i32]) -> bool {
     }
 
     false
-}
-
-extern "C" {
-    fn nvim_stateitem_get_m_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_m_startcol(item: StateItemHandle) -> c_int;
 }
 
 /// Process a syntax line to the end, checking for sync matches.

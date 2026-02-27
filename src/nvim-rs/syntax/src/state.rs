@@ -46,8 +46,6 @@ extern "C" {
     fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_id(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_trans_id(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_m_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_m_startcol(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_attr(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_flags(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_seqnr(item: StateItemHandle) -> c_int;
@@ -58,15 +56,21 @@ extern "C" {
     fn nvim_stateitem_get_next_list(item: StateItemHandle) -> IdListHandle;
     fn nvim_stateitem_get_extmatch(item: StateItemHandle) -> ExtMatchHandle;
 
-    // Stateitem position accessors
-    fn nvim_stateitem_get_m_endpos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_m_endpos_col(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_h_startpos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_h_startpos_col(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_h_endpos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_h_endpos_col(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_eoe_pos_lnum(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_eoe_pos_col(item: StateItemHandle) -> c_int;
+    // Bulk stateitem position accessor
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_get_positions(
+        item: StateItemHandle,
+        m_lnum: *mut c_int,
+        m_startcol: *mut c_int,
+        m_end_lnum: *mut c_int,
+        m_end_col: *mut c_int,
+        h_start_lnum: *mut c_int,
+        h_start_col: *mut c_int,
+        h_end_lnum: *mut c_int,
+        h_end_col: *mut c_int,
+        eoe_lnum: *mut c_int,
+        eoe_col: *mut c_int,
+    );
 
     // Stateitem flag checks
     fn nvim_stateitem_has_trans_cont(item: StateItemHandle) -> c_int;
@@ -363,7 +367,23 @@ pub fn stateitem_m_lnum(item: StateItemHandle) -> i32 {
     if item.is_null() {
         return 0;
     }
-    unsafe { nvim_stateitem_get_m_lnum(item) }
+    let mut v: c_int = 0;
+    unsafe {
+        nvim_stateitem_get_positions(
+            item,
+            &mut v,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+    }
+    v
 }
 
 /// Get the match start column for a state item
@@ -372,7 +392,23 @@ pub fn stateitem_m_startcol(item: StateItemHandle) -> i32 {
     if item.is_null() {
         return 0;
     }
-    unsafe { nvim_stateitem_get_m_startcol(item) }
+    let mut v: c_int = 0;
+    unsafe {
+        nvim_stateitem_get_positions(
+            item,
+            std::ptr::null_mut(),
+            &mut v,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+    }
+    v
 }
 
 /// Get the attributes for a state item
@@ -466,9 +502,24 @@ pub fn stateitem_m_endpos(item: StateItemHandle) -> Position {
     if item.is_null() {
         return Position::default();
     }
-    Position::new(unsafe { nvim_stateitem_get_m_endpos_lnum(item) }, unsafe {
-        nvim_stateitem_get_m_endpos_col(item)
-    })
+    let mut lnum: c_int = 0;
+    let mut col: c_int = 0;
+    unsafe {
+        nvim_stateitem_get_positions(
+            item,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut lnum,
+            &mut col,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+    }
+    Position::new(lnum, col)
 }
 
 /// Get the highlight start position for a state item
@@ -477,10 +528,24 @@ pub fn stateitem_h_startpos(item: StateItemHandle) -> Position {
     if item.is_null() {
         return Position::default();
     }
-    Position::new(
-        unsafe { nvim_stateitem_get_h_startpos_lnum(item) },
-        unsafe { nvim_stateitem_get_h_startpos_col(item) },
-    )
+    let mut lnum: c_int = 0;
+    let mut col: c_int = 0;
+    unsafe {
+        nvim_stateitem_get_positions(
+            item,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut lnum,
+            &mut col,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+    }
+    Position::new(lnum, col)
 }
 
 /// Get the highlight end position for a state item
@@ -489,9 +554,24 @@ pub fn stateitem_h_endpos(item: StateItemHandle) -> Position {
     if item.is_null() {
         return Position::default();
     }
-    Position::new(unsafe { nvim_stateitem_get_h_endpos_lnum(item) }, unsafe {
-        nvim_stateitem_get_h_endpos_col(item)
-    })
+    let mut lnum: c_int = 0;
+    let mut col: c_int = 0;
+    unsafe {
+        nvim_stateitem_get_positions(
+            item,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut lnum,
+            &mut col,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+    }
+    Position::new(lnum, col)
 }
 
 /// Get the end-of-end position for a state item
@@ -500,9 +580,24 @@ pub fn stateitem_eoe_pos(item: StateItemHandle) -> Position {
     if item.is_null() {
         return Position::default();
     }
-    Position::new(unsafe { nvim_stateitem_get_eoe_pos_lnum(item) }, unsafe {
-        nvim_stateitem_get_eoe_pos_col(item)
-    })
+    let mut lnum: c_int = 0;
+    let mut col: c_int = 0;
+    unsafe {
+        nvim_stateitem_get_positions(
+            item,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut lnum,
+            &mut col,
+        );
+    }
+    Position::new(lnum, col)
 }
 
 // =============================================================================
