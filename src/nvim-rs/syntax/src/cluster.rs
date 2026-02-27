@@ -37,10 +37,7 @@ extern "C" {
     fn nvim_synblock_get_nospell_cluster_id(block: SynBlockHandle) -> c_int;
 
     // ID list operations
-    fn nvim_id_list_first(list: IdListHandle) -> i16;
     fn nvim_id_list_get(list: IdListHandle, idx: c_int) -> i16;
-    fn nvim_id_list_is_special(list: IdListHandle) -> c_int;
-    fn nvim_id_list_count(list: IdListHandle) -> c_int;
 
     // Phase 32.3: Cluster lookup and containedin
     fn nvim_synblock_has_containedin(block: SynBlockHandle) -> c_int;
@@ -171,12 +168,14 @@ pub fn synblock_nospell_cluster(block: SynBlockHandle) -> i32 {
 // =============================================================================
 
 /// Get the first item in an ID list.
+/// Implements nvim_id_list_first logic in Rust.
 #[must_use]
 pub fn id_list_first(list: IdListHandle) -> i16 {
     if list.is_null() {
         return 0;
     }
-    unsafe { nvim_id_list_first(list) }
+    // SAFETY: list is non-null and points to a NUL-terminated i16 array
+    unsafe { *list.0 }
 }
 
 /// Get an item from an ID list by index.
@@ -193,21 +192,34 @@ pub unsafe fn id_list_get(list: IdListHandle, idx: i32) -> i16 {
 }
 
 /// Check if an ID list starts with a special marker (ALLBUT/TOP/CONTAINED).
+/// Implements nvim_id_list_is_special logic in Rust.
 #[must_use]
 pub fn id_list_is_special(list: IdListHandle) -> bool {
     if list.is_null() {
         return false;
     }
-    unsafe { nvim_id_list_is_special(list) != 0 }
+    // SAFETY: list is non-null and points to a NUL-terminated i16 array
+    let first = unsafe { *list.0 } as i32;
+    first >= SYNID_ALLBUT && first < SYNID_CLUSTER
 }
 
 /// Count the number of items in an ID list (terminated by 0).
+/// Implements nvim_id_list_count logic in Rust.
 #[must_use]
 pub fn id_list_count(list: IdListHandle) -> i32 {
     if list.is_null() {
         return 0;
     }
-    unsafe { nvim_id_list_count(list) }
+    // SAFETY: list is non-null and points to a NUL-terminated i16 array
+    let mut count = 0i32;
+    let mut ptr = list.0;
+    unsafe {
+        while *ptr != 0 {
+            count += 1;
+            ptr = ptr.add(1);
+        }
+    }
+    count
 }
 
 // =============================================================================
@@ -319,7 +331,8 @@ pub fn id_list_is_allbut(list: IdListHandle) -> bool {
     if list.is_null() {
         return false;
     }
-    let first = unsafe { nvim_id_list_first(list) };
+    // SAFETY: list is non-null and points to a NUL-terminated i16 array
+    let first = unsafe { *list.0 };
     first == SYNID_ALLBUT as i16
 }
 

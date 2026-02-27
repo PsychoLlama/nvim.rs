@@ -870,40 +870,7 @@ int nvim_keyentry_has_cont_in_list(keyentry_T *ke) { return ke->k_syn.cont_in_li
 int16_t *nvim_syncluster_get_list(syn_cluster_T *cluster) { return cluster->scl_list; }
 int nvim_syncluster_has_list(syn_cluster_T *cluster) { return cluster->scl_list != NULL; }
 
-/// Get the first item in an ID list (returns 0 if list is NULL)
-int16_t nvim_id_list_first(int16_t *list)
-{
-  if (list == NULL) {
-    return 0;
-  }
-  return *list;
-}
-
 int16_t nvim_id_list_get(int16_t *list, int idx) { return list[idx]; }
-
-/// Check if list starts with ALLBUT/TOP/CONTAINED marker
-int nvim_id_list_is_special(int16_t *list)
-{
-  if (list == NULL) {
-    return 0;
-  }
-  int16_t first = *list;
-  return first >= SYNID_ALLBUT && first < SYNID_CLUSTER;
-}
-
-/// Count items in an ID list (terminated by 0)
-int nvim_id_list_count(int16_t *list)
-{
-  if (list == NULL) {
-    return 0;
-  }
-  int count = 0;
-  while (*list != 0) {
-    count++;
-    list++;
-  }
-  return count;
-}
 
 int nvim_syn_get_next_match_idx(void) { return next_match_idx; }
 int nvim_syn_get_next_match_col(void) { return next_match_col; }

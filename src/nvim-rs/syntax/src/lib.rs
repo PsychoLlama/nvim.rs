@@ -420,17 +420,8 @@ extern "C" {
     // Phase 4: ID list iteration helpers
     // -------------------------------------------------------------------------
 
-    /// Get first item in an ID list (returns 0 if NULL)
-    fn nvim_id_list_first(list: IdListHandle) -> i16;
-
     /// Get item at index in an ID list
     fn nvim_id_list_get(list: IdListHandle, idx: c_int) -> i16;
-
-    /// Check if list starts with ALLBUT/TOP/CONTAINED marker
-    fn nvim_id_list_is_special(list: IdListHandle) -> c_int;
-
-    /// Count items in an ID list
-    fn nvim_id_list_count(list: IdListHandle) -> c_int;
 
     // -------------------------------------------------------------------------
     // Phase 4: Pattern matching state accessors
@@ -1163,13 +1154,15 @@ pub fn synblock_cluster_id(block: SynBlockHandle, idx: i32) -> i32 {
 // Phase 4: ID list safe wrappers
 // =============================================================================
 
-/// Get the first item in an ID list
+/// Get the first item in an ID list (returns 0 if NULL).
+/// Implements nvim_id_list_first logic in Rust.
 #[must_use]
 pub fn id_list_first(list: IdListHandle) -> i16 {
     if list.is_null() {
         return 0;
     }
-    unsafe { nvim_id_list_first(list) }
+    // SAFETY: list is non-null and points to a NUL-terminated i16 array
+    unsafe { *list.0 }
 }
 
 /// Get an item at index in an ID list
@@ -1181,22 +1174,35 @@ pub fn id_list_get(list: IdListHandle, idx: i32) -> i16 {
     unsafe { nvim_id_list_get(list, idx) }
 }
 
-/// Check if an ID list starts with a special marker (ALLBUT/TOP/CONTAINED)
+/// Check if an ID list starts with a special marker (ALLBUT/TOP/CONTAINED).
+/// Implements nvim_id_list_is_special logic in Rust.
 #[must_use]
 pub fn id_list_is_special(list: IdListHandle) -> bool {
     if list.is_null() {
         return false;
     }
-    unsafe { nvim_id_list_is_special(list) != 0 }
+    // SAFETY: list is non-null and points to a NUL-terminated i16 array
+    let first = unsafe { *list.0 } as i32;
+    first >= SYNID_ALLBUT && first < SYNID_CLUSTER
 }
 
-/// Count the number of items in an ID list
+/// Count the number of items in an ID list (terminated by 0).
+/// Implements nvim_id_list_count logic in Rust.
 #[must_use]
 pub fn id_list_count(list: IdListHandle) -> i32 {
     if list.is_null() {
         return 0;
     }
-    unsafe { nvim_id_list_count(list) }
+    // SAFETY: list is non-null and points to a NUL-terminated i16 array
+    let mut count = 0i32;
+    let mut ptr = list.0;
+    unsafe {
+        while *ptr != 0 {
+            count += 1;
+            ptr = ptr.add(1);
+        }
+    }
+    count
 }
 
 // =============================================================================
