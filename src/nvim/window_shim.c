@@ -2531,28 +2531,6 @@ int nvim_tabpage_get_firstwin_winrow(tabpage_T *tp)
 // Phase 9 accessors: win_init migration
 // =============================================================================
 
-/// Copy buffer link: dst->w_buffer = src->w_buffer; dst->w_s = &src->w_buffer->b_s;
-/// src->w_buffer->b_nwindows++.
-void nvim_win_copy_buffer_link(win_T *dst, win_T *src)
-{
-  if (!dst || !src || !src->w_buffer) {
-    return;
-  }
-  dst->w_buffer = src->w_buffer;
-  dst->w_s = &src->w_buffer->b_s;
-  src->w_buffer->b_nwindows++;
-}
-
-/// Copy pcmarks: dst->w_pcmark = src->w_pcmark, dst->w_prev_pcmark = src->w_prev_pcmark.
-void nvim_win_copy_pcmarks(win_T *dst, win_T *src)
-{
-  if (!dst || !src) {
-    return;
-  }
-  dst->w_pcmark = src->w_pcmark;
-  dst->w_prev_pcmark = src->w_prev_pcmark;
-}
-
 /// Set w_alt_fnum.
 void nvim_win_set_alt_fnum(win_T *wp, int val)
 {
@@ -2561,47 +2539,43 @@ void nvim_win_set_alt_fnum(win_T *wp, int val)
   }
 }
 
-/// Wrap copy_jumplist(old, new) for Rust.
-void nvim_copy_jumplist_wrapper(win_T *old, win_T *new)
-{
-  if (old && new) {
-    copy_jumplist(old, new);
-  }
-}
+/// Get w_changelistidx.
+int nvim_win_get_changelistidx(win_T *wp) { return wp ? wp->w_changelistidx : 0; }
 
-/// Wrap copy_loclist_stack(old, new) for Rust.
-void nvim_copy_loclist_stack_wrapper(win_T *old, win_T *new)
-{
-  if (old && new) {
-    copy_loclist_stack(old, new);
-  }
-}
+/// Set w_changelistidx.
+void nvim_win_set_changelistidx(win_T *wp, int val) { if (wp) { wp->w_changelistidx = val; } }
 
-/// Set w_llist = NULL, w_llist_ref = NULL (skip location list copy).
-void nvim_win_clear_loclist(win_T *wp)
-{
-  if (wp) {
-    wp->w_llist = NULL;
-    wp->w_llist_ref = NULL;
-  }
-}
-
-/// Copy local directory strings with xstrdup (handles NULL).
-void nvim_win_copy_localdir(win_T *dst, win_T *src)
+/// Copy all compound data from src to dst for win_init.
+/// flags: WSP_NEWLOC (0x100) to skip location list copy.
+/// Handles: buffer link, pcmarks, jumplist, loclist, localdir,
+///          tagstack, alist, options, folding state.
+void nvim_win_init_copy_compound(win_T *dst, win_T *src, int flags)
 {
   if (!dst || !src) {
     return;
   }
+  // buffer link
+  if (src->w_buffer) {
+    dst->w_buffer = src->w_buffer;
+    dst->w_s = &src->w_buffer->b_s;
+    src->w_buffer->b_nwindows++;
+  }
+  // pcmarks
+  dst->w_pcmark = src->w_pcmark;
+  dst->w_prev_pcmark = src->w_prev_pcmark;
+  // jumplist
+  copy_jumplist(src, dst);
+  // loclist
+  if (flags & WSP_NEWLOC) {
+    dst->w_llist = NULL;
+    dst->w_llist_ref = NULL;
+  } else {
+    copy_loclist_stack(src, dst);
+  }
+  // localdir
   dst->w_localdir = (src->w_localdir == NULL) ? NULL : xstrdup(src->w_localdir);
   dst->w_prevdir = (src->w_prevdir == NULL) ? NULL : xstrdup(src->w_prevdir);
-}
-
-/// Copy entire tagstack from src to dst, with xstrdup of tagname/user_data strings.
-void nvim_win_copy_tagstack(win_T *dst, win_T *src)
-{
-  if (!dst || !src) {
-    return;
-  }
+  // tagstack
   for (int i = 0; i < src->w_tagstacklen; i++) {
     taggy_T *tag = &dst->w_tagstack[i];
     *tag = src->w_tagstack[i];
@@ -2614,39 +2588,16 @@ void nvim_win_copy_tagstack(win_T *dst, win_T *src)
   }
   dst->w_tagstackidx = src->w_tagstackidx;
   dst->w_tagstacklen = src->w_tagstacklen;
-}
-
-/// Get w_changelistidx.
-int nvim_win_get_changelistidx(win_T *wp) { return wp ? wp->w_changelistidx : 0; }
-
-/// Set w_changelistidx.
-void nvim_win_set_changelistidx(win_T *wp, int val) { if (wp) { wp->w_changelistidx = val; } }
-
-/// Wrap rs_copyFoldingState(old, new) callable from Rust.
-void nvim_copy_folding_state_wrapper(win_T *old, win_T *new)
-{
-  if (old && new) {
-    rs_copyFoldingState(old, new);
+  // alist
+  if (src->w_alist) {
+    dst->w_alist = src->w_alist;
+    dst->w_alist->al_refcount++;
+    dst->w_arg_idx = src->w_arg_idx;
   }
-}
-
-/// Copy alist: dst->w_alist = src->w_alist; al_refcount++; dst->w_arg_idx = src->w_arg_idx.
-void nvim_win_copy_alist(win_T *dst, win_T *src)
-{
-  if (!dst || !src || !src->w_alist) {
-    return;
-  }
-  dst->w_alist = src->w_alist;
-  dst->w_alist->al_refcount++;
-  dst->w_arg_idx = src->w_arg_idx;
-}
-
-/// Wrap win_copy_options(old, new) for Rust.
-void nvim_win_copy_options_wrapper(win_T *old, win_T *new)
-{
-  if (old && new) {
-    win_copy_options(old, new);
-  }
+  // options
+  win_copy_options(src, dst);
+  // folding state
+  rs_copyFoldingState(src, dst);
 }
 
 // =============================================================================
