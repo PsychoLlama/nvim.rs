@@ -891,7 +891,7 @@ static int ins_compl_add(char *const str, int len, char *const fname, char *cons
   // Find the longest common string if still doing that.
   if (compl_get_longest && (flags & CP_ORIGINAL_TEXT) == 0 && !rs_cot_fuzzy()
       && !rs_ins_compl_preinsert_longest()) {
-    ins_compl_longest_match(match);
+    rs_ins_compl_longest_match(match);
   }
 
   return OK;
@@ -903,19 +903,6 @@ static int ins_compl_add(char *const str, int len, char *const fname, char *cons
 int ins_compl_col_range_attr(linenr_T lnum, int col)
 {
   return rs_ins_compl_col_range_attr((int)lnum, col);
-}
-
-/// Reduce the longest common string for match "match".
-static void ins_compl_longest_match(compl_T *match)
-{
-  rs_ins_compl_longest_match(match);
-}
-
-/// Add an array of matches to the list of matches.
-/// Frees matches[].
-static void ins_compl_add_matches(int num_matches, char **matches, int icase)
-{
-  rs_ins_compl_add_matches(num_matches, matches, icase);
 }
 
 extern int rs_pum_enough_matches(int menuone);
@@ -1735,13 +1722,6 @@ static void restore_orig_extmarks(void)
   }
 }
 
-/// Save extmarks in "compl_orig_text" so that they may be restored when the
-/// completion is cancelled, or the original text is completed.
-static void save_orig_extmarks(void)
-{
-  rs_save_orig_extmarks();
-}
-
 /// Start completion for the complete() function.
 ///
 /// @param startcol  where the matched text starts (1 is first column).
@@ -2223,7 +2203,7 @@ static void get_next_filename_completion(void)
   }
 
   if (num_matches > 0) {
-    ins_compl_add_matches(num_matches, matches, p_fic || p_wic);
+    rs_ins_compl_add_matches(num_matches, matches, p_fic || p_wic);
   }
 }
 
@@ -2456,29 +2436,6 @@ static Callback *get_callback_if_cpt_func(char *p, int idx)
 }
 
 
-/// Strips carets followed by numbers. This suffix typically represents the
-/// max_matches setting.
-/// Call functions specified in the 'cpt' option with findstart=1,
-/// and retrieve the startcol.
-static void prepare_cpt_compl_funcs(void)
-{
-  rs_prepare_cpt_compl_funcs();
-}
-
-/// Get the next expansion(s), using "compl_pattern".
-/// NOTE: Body replaced by rs_ins_compl_get_exp (Phase 2, pass 8).
-static int ins_compl_get_exp(pos_T *ini)
-{
-  return rs_ins_compl_get_exp((int)ini->lnum, (int)ini->col);
-}
-
-/// Thin wrapper: delegates to rs_ins_compl_next in Rust.
-static int ins_compl_next(bool allow_get_expansion, int count, bool insert_match)
-{
-  return rs_ins_compl_next(allow_get_expansion ? 1 : 0, count, insert_match ? 1 : 0);
-}
-
-
 /// Compound accessor: get the pattern, column and length for command-line completion.
 /// Sets the global variables: compl_col, compl_length and compl_pattern.
 int nvim_get_cmdline_compl_info_impl(char *line, int curs_col)
@@ -2500,12 +2457,6 @@ int nvim_get_cmdline_compl_info_impl(char *line, int curs_col)
   compl_length = curs_col - compl_col;
 
   return OK;
-}
-
-/// Thin wrapper for rs_get_cmdline_compl_info.
-static int get_cmdline_compl_info(char *line, colnr_T curs_col)
-{
-  return rs_get_cmdline_compl_info(line, (int)curs_col);
 }
 
 /// Compound accessor: set global variables related to completion:
@@ -2541,12 +2492,6 @@ void nvim_set_compl_globals_impl(int startcol, int curs_col, int is_cpt_compl)
     compl_col = startcol;
     compl_length = len;
   }
-}
-
-/// Thin wrapper for rs_set_compl_globals.
-static void set_compl_globals(int startcol, colnr_T curs_col, bool is_cpt_compl)
-{
-  rs_set_compl_globals(startcol, (int)curs_col, is_cpt_compl ? 1 : 0);
 }
 
 /// Get the completion pattern, column and length.
@@ -2661,12 +2606,6 @@ const char *nvim_ml_get_curline(void)
   return ml_get(curwin->w_cursor.lnum);
 }
 
-/// Thin wrapper -- start insert mode completion.
-static int ins_compl_start(void)
-{
-  return rs_ins_compl_start();
-}
-
 /// Compound accessor: set compl_direction.
 void nvim_set_compl_direction(int val) { compl_direction = val; }
 
@@ -2736,12 +2675,6 @@ int ins_complete(int c, bool enable_pum)
   return rs_ins_complete(c, enable_pum ? 1 : 0);
 }
 
-/// Remove (if needed) and show the popup menu
-static void show_pum(int prev_w_wrow, int prev_w_leftcol)
-{
-  rs_show_pum(prev_w_wrow, prev_w_leftcol);
-}
-
 /// Compound accessor: free all completion global state at process exit.
 void nvim_free_insexpand_stuff_impl(void)
 {
@@ -2762,35 +2695,13 @@ void free_insexpand_stuff(void)
 
 /// Called when starting CTRL_X_SPELL mode: Move backwards to a previous badly
 /// spelled word, if there is one.
-static void spell_back_to_badword(void)
+void nvim_spell_back_to_badword_impl(void)
 {
   pos_T tpos = curwin->w_cursor;
   spell_bad_len = spell_move_to(curwin, BACKWARD, SMT_ALL, true, NULL);
   if (curwin->w_cursor.col != tpos.col) {
     start_arrow(&tpos);
   }
-}
-
-/// Setup completion sources.
-static void setup_cpt_sources(void)
-{
-  rs_setup_cpt_sources();
-}
-
-/// Retrieve completion matches using the callback function "cb" and store the
-/// 'refresh:always' flag.
-static void get_cpt_func_completion_matches(Callback *cb)
-{
-  rs_get_cpt_func_completion_matches(cb);
-}
-
-/// Retrieve completion matches from functions in the 'cpt' option where the
-/// 'refresh:always' flag is set.
-// NOTE: Body migrated to Rust rs_cpt_compl_refresh (Phase 9, pass 9).
-// Logic lives in nvim_cpt_compl_refresh_impl compound accessor.
-static void cpt_compl_refresh(void)
-{
-  nvim_cpt_compl_refresh_impl();
 }
 
 /// "preinserted()" function
@@ -2855,7 +2766,7 @@ void nvim_set_edit_submode_null(void) { edit_submode = NULL; }
 void nvim_set_edit_submode_pre_null(void) { edit_submode_pre = NULL; }
 void nvim_set_redraw_mode_true(void) { redraw_mode = true; }
 int nvim_get_state_replace_flag(void) { return (State & REPLACE_FLAG) ? 1 : 0; }
-void nvim_spell_back_safe(void) { emsg_off++; spell_back_to_badword(); emsg_off--; }
+void nvim_spell_back_safe(void) { emsg_off++; nvim_spell_back_to_badword_impl(); emsg_off--; }
 int nvim_vpeekc(void) { return vpeekc(); }
 int nvim_get_cpt_sources_index(void) { return cpt_sources_index; }
 
@@ -3291,7 +3202,7 @@ int nvim_is_cpt_func_refresh_always(void) {
   }
   return 0;
 }
-void nvim_cpt_compl_refresh(void) { cpt_compl_refresh(); }
+void nvim_cpt_compl_refresh(void) { nvim_cpt_compl_refresh_impl(); }
 void nvim_set_spell_bad_len(int val) { spell_bad_len = val; }
 void nvim_set_compl_restarting(int val) { compl_restarting = val != 0; }
 int nvim_ins_complete_ctrl_n(void) { return ins_complete(Ctrl_N, true); }
@@ -3323,7 +3234,7 @@ void nvim_get_next_cmdline_completion_impl(void)
   int num_matches;
   if (expand_cmdline(&compl_xp, compl_pattern.data,
                      (int)compl_pattern.size, &num_matches, &matches) == EXPAND_OK) {
-    ins_compl_add_matches(num_matches, matches, false);
+    rs_ins_compl_add_matches(num_matches, matches, false);
   }
 }
 
@@ -3332,7 +3243,7 @@ void nvim_get_next_spell_completion_impl(int lnum)
   char **matches;
   int num_matches = expand_spelling((linenr_T)lnum, compl_pattern.data, &matches);
   if (num_matches > 0) {
-    ins_compl_add_matches(num_matches, matches, p_ic);
+    rs_ins_compl_add_matches(num_matches, matches, p_ic);
   } else {
     xfree(matches);
   }
@@ -3465,8 +3376,8 @@ int nvim_get_normal_compl_info_impl(char *line, int startcol, int curs_col)
   // Call functions in 'complete' with 'findstart=1'
   if (rs_ctrl_x_mode_normal() && !(compl_cont_status & CONT_LOCAL)) {
     // ^N completion, not complete() or ^X^N
-    setup_cpt_sources();
-    prepare_cpt_compl_funcs();
+    rs_setup_cpt_sources();
+    rs_prepare_cpt_compl_funcs();
   }
 
   return OK;
@@ -3640,7 +3551,7 @@ void nvim_get_next_tag_completion_impl(void)
                 TAG_REGEXP | TAG_NAMES | TAG_NOIC | TAG_INS_COMP
                 | (rs_ctrl_x_mode_not_default() ? TAG_VERBOSE : 0),
                 TAG_MANY, curbuf->b_ffname) == OK && num_matches > 0) {
-    ins_compl_add_matches(num_matches, matches, p_ic);
+    rs_ins_compl_add_matches(num_matches, matches, p_ic);
   }
   g_tag_at_cursor = false;
   p_ic = save_p_ic;
@@ -3691,10 +3602,10 @@ int nvim_ins_compl_add_infercase_ffi(const char *str, int len, int icase, const 
 
 
 
-// Accessors for Phase 1 (pass 6): show_pum, ins_compl_add_matches, spell_back_to_badword
+// Accessors for Phase 1 (pass 6): show_pum, rs_ins_compl_add_matches, spell_back_to_badword
 void nvim_set_redrawing_disabled(int val) { RedrawingDisabled = val; }
 int nvim_get_curwin_w_wrow(void) { return curwin->w_wrow; }
-// Accessor for Phase 4 (pass 12): ins_compl_add_matches migration
+// Accessor for Phase 4 (pass 12): rs_ins_compl_add_matches migration
 int nvim_ins_compl_add_simple(const char *str, int len, int dir, int flags, int score)
 {
   return ins_compl_add((char *)str, len, NULL, NULL, false, NULL, (Direction)dir, flags, false,
@@ -4103,7 +4014,7 @@ void nvim_set_completion_impl(int startcol_arg, void *list_opaque)
   compl_length = curwin->w_cursor.col - startcol;
   compl_orig_text = cbuf_to_string(get_cursor_line_ptr() + compl_col,
                                    (size_t)compl_length);
-  save_orig_extmarks();
+  rs_save_orig_extmarks();
   if (p_ic) {
     flags |= CP_ICASE;
   }
@@ -4136,7 +4047,7 @@ void nvim_set_completion_impl(int startcol_arg, void *list_opaque)
   compl_enter_selects = compl_no_insert;
 
   if (!compl_interrupted) {
-    show_pum(save_w_wrow, save_w_leftcol);
+    rs_show_pum(save_w_wrow, save_w_leftcol);
   }
 
   may_trigger_modechanged();
@@ -4180,7 +4091,7 @@ void nvim_cpt_compl_refresh_impl(void)
         cpt_sources_array[cpt_sources_index].cs_startcol = startcol;
         if (ret == OK) {
           rs_compl_source_start_timer(cpt_sources_index);
-          get_cpt_func_completion_matches(cb);
+          rs_get_cpt_func_completion_matches(cb);
         }
       }
     }
