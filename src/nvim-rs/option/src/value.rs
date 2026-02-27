@@ -1143,9 +1143,9 @@ pub unsafe extern "C" fn rs_set_option_value(
         opt_idx,
         rs_optval_copy(value),
         opt_flags,
-        0,     // set_sid = 0 (use current)
-        0,     // direct = false
-        1,     // value_replaced = true
+        0, // set_sid = 0 (use current)
+        0, // direct = false
+        1, // value_replaced = true
         errbuf.as_mut_ptr(),
         IOSIZE,
     )

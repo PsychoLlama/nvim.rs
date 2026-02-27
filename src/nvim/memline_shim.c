@@ -229,29 +229,14 @@ extern int rs_get_fileformat(buf_T *buf);
 // Phase 1 Rust function declarations
 extern void rs_long_to_char(long n, char *s);
 extern long rs_char_to_long(const char *s);
-extern int rs_b0_magic_wrong(const ZeroBlock *b0p);
-extern int rs_ml_check_b0_id(const ZeroBlock *b0p);
-extern int rs_ml_check_b0_strings(const ZeroBlock *b0p);
-extern int rs_fnamecmp_ino(const char *fname_c, const char *fname_s, long ino_block0);
 // Phase 2 Rust function declarations
 extern int rs_swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname);
-extern void rs_set_b0_dir_flag(ZeroBlock *b0p, buf_T *buf);
-extern void rs_add_b0_fenc(ZeroBlock *b0p, buf_T *buf);
-extern bool rs_swapfile_unchanged(char *fname);
-// Phase 4 Rust function declarations
-extern void rs_ml_upd_block0(buf_T *buf, int what);
-extern void rs_set_b0_fname(ZeroBlock *b0p, buf_T *buf);
-extern void *rs_ml_new_data(memfile_T *mfp, bool negative, int page_count);
-extern void *rs_ml_new_ptr(memfile_T *mfp);
-extern void rs_ml_lineadd(buf_T *buf, int count);
 // Pass 2 Phase 1: Mark tracking Rust function declarations
 extern void rs_ml_setmarked(linenr_T lnum);
 extern linenr_T rs_ml_firstmarked(void);
 extern void rs_ml_clearmarked(void);
 extern linenr_T rs_ml_get_lowest_marked(void);
 extern void rs_ml_set_lowest_marked(linenr_T lnum);
-extern void rs_ml_adjust_lowest_marked_for_insert(linenr_T lnum);
-extern void rs_ml_adjust_lowest_marked_for_delete(linenr_T lnum);
 // Pass 2 Phase 2: Swap file path helper Rust function declarations
 extern char *rs_make_percent_swname(char *dir, char *dir_end, const char *name);
 #ifdef HAVE_READLINK
@@ -293,18 +278,10 @@ extern int rs_ml_delete_buf_impl(buf_T *buf, linenr_T lnum, bool message);
 extern int rs_ml_replace_buf_impl(buf_T *buf, linenr_T lnum, char *line, bool copy, bool noalloc);
 // Pass 4 Phase 3: ml_append_flush Rust function declaration
 extern int rs_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags);
-// Pass 5 Phase 1: ml_find_line Rust function declaration
-extern void *rs_ml_find_line(buf_T *buf, linenr_T lnum, int action);
 // Pass 5 Phase 2: ml_flush_line Rust function declaration
 extern void rs_ml_flush_line(buf_T *buf, int noalloc);
-// Pass 7 Phase 2: ml_append_int Rust function declaration
-extern int rs_ml_append_int(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags);
-// Pass 8 Phase 1: findswapname Rust function declaration
-extern char *rs_findswapname(buf_T *buf, char **dirp, const char *old_fname,
-                              bool *found_existing_dir);
-// Pass 8 Phase 2: ml_preserve and ml_sync_one Rust function declarations
+// Pass 8 Phase 2: ml_preserve Rust function declaration
 extern void rs_ml_preserve(buf_T *buf, bool message, bool do_fsync);
-extern int rs_ml_sync_one(buf_T *buf, int check_file, int check_char, bool do_fsync);
 // Pass 9 Phase 1: ml_open_file + ml_open_files Rust function declarations
 extern void rs_ml_open_file(buf_T *buf);
 extern void rs_ml_open_files(void);
@@ -385,12 +362,6 @@ void ml_close_notmod(void) { rs_ml_close_notmod(); }
 /// Used when the file has been written.
 void ml_timestamp(buf_T *buf) { rs_ml_timestamp(buf); }
 
-/// Update the timestamp or the B0_SAME_DIR flag of the .swp file.
-/// Update block 0 (thin wrapper calling Rust).
-static void ml_upd_block0(buf_T *buf, upd_block0_T what) { rs_ml_upd_block0(buf, what); }
-
-/// Write file name and timestamp into block 0 (thin wrapper calling Rust).
-static void set_b0_fname(ZeroBlock *b0p, buf_T *buf) { rs_set_b0_fname(b0p, buf); }
 
 // Forward declaration for Rust implementation (migrated from C)
 extern int rs_recover_names(const char *fname, int do_list, void *ret_list, int nr,
@@ -750,7 +721,6 @@ void nvim_pp_pe_linecount_add(void *pp, int idx, int count)
 }
 
 // upd_block0_T enum constants
-int nvim_get_ub_fname(void) { return UB_FNAME; }
 void nvim_iemsg_pointer_block_id_wrong_two(void) { iemsg(_(e_pointer_block_id_wrong_two)); }
 void nvim_iemsg_e304_upd_block0(void) { iemsg(_("E304: ml_upd_block0(): Didn't get block 0??")); }
 
@@ -822,13 +792,6 @@ void nvim_siemsg_line_count_wrong_in_block(int64_t bnum)
 /// Increment buf->flush_count
 void nvim_buf_inc_flush_count(buf_T *buf) { buf->flush_count++; }
 
-extern void rs_ml_updatechunk(buf_T *buf, linenr_T line, int len, int updtype);
-
-/// Public wrapper: calls Rust rs_ml_updatechunk (ml_updatechunk migrated to Rust).
-void nvim_ml_updatechunk(buf_T *buf, linenr_T line, int len, int updtype)
-{
-  rs_ml_updatechunk(buf, line, len, updtype);
-}
 
 // Pass 6 Phase 1: ml_delete_int accessors for Rust FFI
 
@@ -907,9 +870,6 @@ void nvim_buf_add_ml_chunksize_totalsize(buf_T *buf, int idx, int val)
   buf->b_ml.ml_chunksize[idx].mlcs_totalsize += val;
 }
 
-/// Get buf->b_ml.ml_numchunks
-int nvim_buf_get_ml_numchunks(buf_T *buf) { return buf->b_ml.ml_numchunks; }
-
 /// Set buf->b_ml.ml_numchunks
 void nvim_buf_set_ml_numchunks(buf_T *buf, int val) { buf->b_ml.ml_numchunks = val; }
 
@@ -950,25 +910,17 @@ void nvim_siemsg_e320_cannot_find_line(int64_t lnum)
   siemsg(_("E320: Cannot find line %" PRId64), lnum);
 }
 
-// buf->b_ffname accessor (use existing buffer.c version)
-// buf->b_mtime accessors
-int64_t nvim_buf_get_b_mtime(const buf_T *buf) { return buf->b_mtime; }
+// buf->b_mtime setters
 void nvim_buf_set_b_mtime(buf_T *buf, int64_t val) { buf->b_mtime = val; }
-int64_t nvim_buf_get_b_mtime_ns(const buf_T *buf) { return buf->b_mtime_ns; }
 void nvim_buf_set_b_mtime_ns(buf_T *buf, int64_t val) { buf->b_mtime_ns = val; }
-int64_t nvim_buf_get_b_mtime_read(const buf_T *buf) { return buf->b_mtime_read; }
 void nvim_buf_set_b_mtime_read(buf_T *buf, int64_t val) { buf->b_mtime_read = val; }
-int64_t nvim_buf_get_b_mtime_read_ns(const buf_T *buf) { return buf->b_mtime_read_ns; }
 void nvim_buf_set_b_mtime_read_ns(buf_T *buf, int64_t val) { buf->b_mtime_read_ns = val; }
-int64_t nvim_buf_get_b_orig_size(const buf_T *buf) { return (int64_t)buf->b_orig_size; }
 void nvim_buf_set_b_orig_size(buf_T *buf, int64_t val) { buf->b_orig_size = (uint64_t)val; }
-int nvim_buf_get_b_orig_mode(const buf_T *buf) { return buf->b_orig_mode; }
 void nvim_buf_set_b_orig_mode(buf_T *buf, int val) { buf->b_orig_mode = val; }
 
 // ZeroBlock field setters for set_b0_fname
 void nvim_b0_set_fname0(ZeroBlock *b0p) { b0p->b0_fname[0] = NUL; }
 char *nvim_b0_get_fname_for_replace(ZeroBlock *b0p) { return b0p->b0_fname; }
-int nvim_b0_get_fname0(const ZeroBlock *b0p) { return (unsigned char)b0p->b0_fname[0]; }
 // mtime/ino setters for set_b0_fname
 char *nvim_b0_get_mtime(ZeroBlock *b0p) { return b0p->b0_mtime; }
 char *nvim_b0_get_ino(ZeroBlock *b0p) { return b0p->b0_ino; }
@@ -998,7 +950,6 @@ int nvim_set_b0_mtime_ino(buf_T *buf, ZeroBlock *b0p)
 }
 
 // Position accessors/setters
-colnr_T nvim_pos_get_coladd(const pos_T *pos) { return pos->coladd; }
 void nvim_pos_set_lnum(pos_T *pos, linenr_T lnum) { pos->lnum = lnum; }
 void nvim_pos_set_col(pos_T *pos, colnr_T col) { pos->col = col; }
 void nvim_pos_set_coladd(pos_T *pos, colnr_T coladd) { pos->coladd = coladd; }
@@ -1180,8 +1131,6 @@ void nvim_dp_init_empty_line(void *dp_raw)
   *((char *)dp + dp->db_txt_start) = NUL;     // empty line
 }
 
-/// Get buf->b_p_swf (swapfile option); returns non-zero if true
-int nvim_buf_get_b_p_swf_mlopen(buf_T *buf) { return buf->b_p_swf ? 1 : 0; }
 
 /// Set buf->b_p_swf = false
 void nvim_buf_set_b_p_swf_false(buf_T *buf) { buf->b_p_swf = false; }
@@ -1413,33 +1362,11 @@ void nvim_emsg_preserve_failed(void) { emsg(_("E314: Preserve failed")); }
 /// Emit E313 "Cannot preserve, there is no swap file" error
 void nvim_emsg_no_swapfile(void) { emsg(_("E313: Cannot preserve, there is no swap file")); }
 
-/// Thin wrapper: ml_append_int migrated to Rust (rs_ml_append_int).
-static int ml_append_int(buf_T *buf, linenr_T lnum, char *line_arg, colnr_T len_arg, int flags)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_ml_append_int(buf, lnum, line_arg, len_arg, flags);
-}
-
-/// Flush any pending change and call ml_append_int()
-///
-/// @param buf
-/// @param lnum  append after this line (can be 0)
-/// @param line  text of the new line
-/// @param len  length of line, including NUL, or 0
-/// @param flags  ML_APPEND_ flags
-///
-/// @return  FAIL for failure, OK otherwise
-static int ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_ml_append_flush(buf, lnum, line, len, flags);
-}
-
-/// Public wrapper around static ml_append_flush, used by Rust _impl functions.
+/// Public wrapper around rs_ml_append_flush, used by Rust _impl functions.
 int nvim_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  return ml_append_flush(buf, lnum, line, len, flags);
+  return rs_ml_append_flush(buf, lnum, line, len, flags);
 }
 
 /// Append a line after lnum (may be 0 to insert a line in front of the file).
@@ -1547,26 +1474,6 @@ int ml_delete_buf(buf_T *buf, linenr_T lnum, bool message)
   return rs_ml_delete_buf_impl(buf, lnum, message);
 }
 
-/// Delete line `lnum` in the current buffer.
-///
-/// @param flags  ML_DEL_MESSAGE may give a "No lines in buffer" message.
-///               ML_DEL_UNDO this is called from undo.
-///
-/// @return  FAIL for failure, OK otherwise
-extern int rs_ml_delete_int(buf_T *buf, linenr_T lnum, int flags);
-
-static int ml_delete_int(buf_T *buf, linenr_T lnum, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_ml_delete_int(buf, lnum, flags);
-}
-
-/// Public wrapper: calls Rust rs_ml_delete_int (ml_delete_int migrated to Rust).
-int nvim_ml_delete_int(buf_T *buf, linenr_T lnum, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_ml_delete_int(buf, lnum, flags);
-}
 
 /// Delete line "lnum" in the current buffer.
 ///
@@ -1608,48 +1515,6 @@ void ml_flush_line(buf_T *buf, bool noalloc)
   rs_ml_flush_line(buf, noalloc);
 }
 
-/// create a new, empty, data block
-static bhdr_T *ml_new_data(memfile_T *mfp, bool negative, int page_count)
-{
-  return rs_ml_new_data(mfp, negative, page_count);
-}
-
-/// create a new, empty, pointer block
-static bhdr_T *ml_new_ptr(memfile_T *mfp)
-{
-  return rs_ml_new_ptr(mfp);
-}
-
-/// Lookup line 'lnum' in a memline (thin wrapper calling Rust).
-static bhdr_T *ml_find_line(buf_T *buf, linenr_T lnum, int action)
-{
-  return rs_ml_find_line(buf, lnum, action);
-}
-
-/// Public wrapper around the static ml_find_line, for Rust FFI.
-bhdr_T *nvim_ml_find_line(buf_T *buf, linenr_T lnum, int action)
-{
-  return rs_ml_find_line(buf, lnum, action);
-}
-
-/// add an entry to the info pointer stack
-///
-/// @return  number of the new entry
-/// Add entry to B-tree info pointer stack (thin wrapper calling Rust).
-static int ml_add_stack(buf_T *buf) { return rs_ml_add_stack(buf); }
-
-/// Update the pointer blocks on the stack for inserted/deleted lines.
-/// The stack itself is also updated.
-///
-/// When an insert/delete line action fails, the line is not inserted/deleted,
-/// but the pointer blocks have already been updated. That is fixed here by
-/// walking through the stack.
-///
-/// Count is the number of lines added, negative if lines have been deleted.
-static void ml_lineadd(buf_T *buf, int count)
-{
-  rs_ml_lineadd(buf, count);
-}
 
 #if defined(HAVE_READLINK)
 /// Resolve a symlink in the last component of a file name. (thin wrapper calling Rust)
@@ -1672,22 +1537,8 @@ char *get_file_in_dir(char *fname, char *dname)
 
 // attention_message, do_swapexists, findswapname migrated to Rust (swap.rs Phase 8 Pass 1)
 
-/// Find out what name to use for the swapfile for buffer 'buf'. (thin wrapper calling Rust)
-static char *findswapname(buf_T *buf, char **dirp, char *old_fname, bool *found_existing_dir)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1, 2, 4)
-{
-  return rs_findswapname(buf, dirp, old_fname, found_existing_dir);
-}
-
-
 /// Set the flags in the first block of the swapfile. (thin wrapper calling Rust)
 void ml_setflags(buf_T *buf) { rs_ml_setflags(buf); }
-
-/// Keep information for finding byte offset of a line (thin wrapper calling Rust).
-static void ml_updatechunk(buf_T *buf, linenr_T line, int len, int updtype)
-{
-  rs_ml_updatechunk(buf, line, len, updtype);
-}
 
 // ml_find_line_or_offset and goto_byte migrated to Rust (navigate.rs)
 
@@ -1759,8 +1610,6 @@ void nvim_bhdr_set_bh_data(bhdr_T *hp, void *data) { hp->bh_data = data; }
 /// Get the MIN_SWAP_PAGE_SIZE constant.
 unsigned nvim_get_min_swap_page_size(void) { return MIN_SWAP_PAGE_SIZE; }
 
-/// Get the NOTDONE constant (-1).
-int nvim_get_notdone(void) { return NOTDONE; }
 
 /// Get the HLF_E highlight ID.
 int nvim_get_hlf_e(void) { return HLF_E; }
@@ -1795,8 +1644,6 @@ unsigned nvim_dp_get_txt_end(const void *dp) { return ((const DataBlock *)dp)->d
 /// Set db_txt_end on a DataBlock.
 void nvim_dp_set_txt_end(void *dp, unsigned val) { ((DataBlock *)dp)->db_txt_end = val; }
 
-/// Get db_txt_start from a DataBlock.
-unsigned nvim_dp_get_txt_start(const void *dp) { return ((const DataBlock *)dp)->db_txt_start; }
 
 /// Get db_line_count from a DataBlock.
 long nvim_dp_get_line_count(const void *dp) { return ((const DataBlock *)dp)->db_line_count; }
@@ -1963,8 +1810,6 @@ int nvim_curbuf_get_b_changed(void) { return curbuf->b_changed ? 1 : 0; }
 /// ml_delete(curbuf->b_ml.ml_line_count) -- delete last line of curbuf.
 void nvim_ml_delete_last_curbuf(void) { ml_delete(curbuf->b_ml.ml_line_count); }
 
-/// ml_delete(lnum) -- delete a specific line of curbuf.
-void nvim_ml_delete_lnum_curbuf(linenr_T lnum) { ml_delete(lnum); }
 
 /// curbuf->b_ml.ml_line_count accessor.
 linenr_T nvim_get_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
@@ -1975,8 +1820,6 @@ int nvim_get_curbuf_ml_flags(void) { return curbuf->b_ml.ml_flags; }
 /// Get got_int global.
 int nvim_get_got_int_val(void) { return got_int ? 1 : 0; }
 
-/// Get no_wait_return global.
-int nvim_get_no_wait_return_val(void) { return no_wait_return; }
 
 /// ml_add_stack wrapper for recovery traversal (public, not static).
 int nvim_ml_add_stack_recovery(buf_T *buf) { return rs_ml_add_stack(buf); }
@@ -1990,8 +1833,6 @@ infoptr_T *nvim_buf_get_ml_stack_ip_recovery(buf_T *buf, int idx)
 /// Decrement and return buf->b_ml.ml_stack_top (for stack pop).
 int nvim_buf_dec_ml_stack_top(buf_T *buf) { return --(buf->b_ml.ml_stack_top); }
 
-/// Set buf->b_ml.ml_stack_top to 0 (reset stack).
-void nvim_buf_reset_ml_stack_top(buf_T *buf) { buf->b_ml.ml_stack_top = 0; }
 
 /// Reset stack memory for recovery (set to NULL, size 0).
 void nvim_buf_reset_ml_stack(buf_T *buf)
@@ -2078,8 +1919,6 @@ void nvim_emsg_ptr_block_corrupted(void) { emsg(_(e_warning_pointer_block_corrup
 /// emsg for E311: Recovery Interrupted
 void nvim_emsg_e311_interrupted(void) { emsg(_("E311: Recovery Interrupted")); }
 
-/// emsg for E312: Errors detected while recovering
-void nvim_emsg_e312_errors(void) { emsg(_("E312: Errors detected while recovering; look for lines starting with ???")); }
 
 /// Post-recovery success messages
 void nvim_recover_msg_success(int has_changes)
@@ -2094,12 +1933,6 @@ void nvim_recover_msg_success(int has_changes)
   msg_puts(_("\nYou may want to delete the .swp file now."));
 }
 
-/// Post-recovery "process still running" warning
-void nvim_recover_msg_proc_running(const ZeroBlock *b0p)
-{
-  msg_puts(_("\nNote: process STILL RUNNING: "));
-  msg_outnum((int)rs_char_to_long(b0p->b0_pid));
-}
 
 /// Post-recovery error block output (no_wait_return bracketed messages)
 void nvim_recover_msg_errors(void)
@@ -2130,14 +1963,7 @@ const char *nvim_b0_get_hname_for_display(const ZeroBlock *b0p) { return b0p->b0
 /// UPD_NOT_VALID constant for redraw
 int nvim_get_upd_not_valid_val(void) { return UPD_NOT_VALID; }
 
-/// rs_swapfile_proc_running for b0p/fname_used check at end of recovery
-int nvim_recover_proc_running(const ZeroBlock *b0p, const char *fname_used)
-{
-  return rs_swapfile_proc_running(b0p, fname_used) != 0 ? 1 : 0;
-}
 
-/// Get the BF_RECOVERED constant
-int nvim_get_bf_recovered(void) { return BF_RECOVERED; }
 
 /// Get sizeof(buf_T) for Rust allocation of temporary recovery buffer.
 size_t nvim_get_buf_t_size(void) { return sizeof(buf_T); }
