@@ -2139,8 +2139,7 @@ extern "C" {
         idx1: *mut c_int,
         idx2: *mut c_int,
     ) -> bool;
-    // nvim_semsg_trailing_arg from eval_shim.c
-    fn nvim_semsg_trailing_arg(arg: *const std::ffi::c_char);
+    // nvim_semsg_trailing_arg: now in nvim_eval::errors
     fn nvim_shorten_fnames_qf();
     fn nvim_syn_name2id_qf(name: *const std::ffi::c_char) -> c_int;
     fn nvim_hlf_d() -> c_int;
@@ -2195,7 +2194,7 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
     if !nvim_get_list_range(&raw mut arg, &raw mut idx1, &raw mut idx2)
         || (!arg.is_null() && *arg != 0)
     {
-        nvim_semsg_trailing_arg(arg.cast_const());
+        nvim_eval::errors::semsg_trailing_arg(arg.cast_const());
         return;
     }
 

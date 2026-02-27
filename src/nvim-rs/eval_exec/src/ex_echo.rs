@@ -41,8 +41,7 @@ extern "C" {
     fn nvim_set_did_emsg(val: c_int);
     fn nvim_get_force_abort() -> c_int;
 
-    // semsg with e_invexpr2
-    fn nvim_semsg_invexpr2(p: *const c_char);
+    // semsg with e_invexpr2: now in nvim_eval::errors
 
     // EAP accessors
     fn nvim_eap_get_skip_local(eap: ExargHandle) -> c_int;
@@ -234,7 +233,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
                 && nvim_get_did_emsg() == did_emsg_before
                 && called_emsg_get() == called_emsg_before
             {
-                nvim_semsg_invexpr2(p);
+                nvim_eval::errors::semsg_invexpr2(p);
             }
             nvim_set_need_clr_eos(0);
             free_typval(rettv);

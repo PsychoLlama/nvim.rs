@@ -19,7 +19,7 @@ use crate::funcexe::FuncExeT;
 extern "C" {
     // ----- provider infrastructure -----
     fn nvim_eval_nlua_is_deferred_safe() -> bool;
-    fn nvim_semsg_fast_api_disabled();
+    // nvim_semsg_fast_api_disabled: now in nvim_eval::errors
     fn nvim_eval_variable(
         name: *const c_char,
         len: c_int,
@@ -30,9 +30,7 @@ extern "C" {
     fn nvim_script_autoload(name: *const c_char, name_len: usize, reload: bool) -> bool;
     fn nvim_eval_find_func(name: *const c_char) -> bool;
     fn nvim_eval_get_p_lpl() -> bool;
-    fn nvim_semsg_provider_missing_var(name: *const c_char);
-    fn nvim_semsg_provider_no_call(name: *const c_char, funcname: *const c_char);
-    fn nvim_semsg_no_provider(provider: *const c_char);
+    // nvim_semsg_provider_*: now in nvim_eval::errors
 
     // ----- typval accessors -----
     fn nvim_tv_get_type(tv: *mut c_void) -> c_int;
@@ -134,7 +132,7 @@ pub unsafe extern "C" fn rs_eval_has_provider(feat: *const c_char, throw_if_fast
     }
 
     if throw_if_fast && !unsafe { nvim_eval_nlua_is_deferred_safe() } {
-        unsafe { nvim_semsg_fast_api_disabled() };
+        unsafe { nvim_eval::errors::semsg_fast_api_disabled() };
         return false;
     }
 
@@ -217,7 +215,7 @@ pub unsafe extern "C" fn rs_eval_has_provider(feat: *const c_char, throw_if_fast
             if unsafe { nvim_eval_find_func(call_buf.as_ptr() as *const c_char) }
                 && unsafe { nvim_eval_get_p_lpl() }
             {
-                unsafe { nvim_semsg_provider_missing_var(name_ptr) };
+                unsafe { nvim_eval::errors::semsg_provider_missing_var(name_ptr) };
             }
 
             unsafe { xfree(rettv) };
@@ -251,7 +249,12 @@ pub unsafe extern "C" fn rs_eval_has_provider(feat: *const c_char, throw_if_fast
         let _ = cp;
 
         if !unsafe { nvim_eval_find_func(call_buf.as_ptr() as *const c_char) } {
-            unsafe { nvim_semsg_provider_no_call(name_ptr, call_buf.as_ptr() as *const c_char) };
+            unsafe {
+                nvim_eval::errors::semsg_provider_no_call(
+                    name_ptr,
+                    call_buf.as_ptr() as *const c_char,
+                )
+            };
             return false;
         }
     }
@@ -281,7 +284,7 @@ pub unsafe extern "C" fn rs_eval_call_provider(
     out_rettv: *mut c_void,
 ) {
     if !unsafe { rs_eval_has_provider(provider, false) } {
-        unsafe { nvim_semsg_no_provider(provider) };
+        unsafe { nvim_eval::errors::semsg_no_provider(provider) };
         unsafe { nvim_tv_set_number_zero(out_rettv) };
         return;
     }

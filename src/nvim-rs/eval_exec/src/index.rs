@@ -133,14 +133,7 @@ extern "C" {
     fn rs_string_slice(s: *const c_char, first: i64, last: i64, exclusive: bool) -> *mut c_char;
     fn rs_char_from_string(s: *const c_char, index: i64) -> *mut c_char;
 
-    // Error message accessor functions
-    fn nvim_emsg_missbrac();
-    fn nvim_emsg_cannot_index_funcref();
-    fn nvim_emsg_using_float_as_string();
-    fn nvim_emsg_cannot_index_special();
-    fn nvim_emsg_cannot_slice_dict();
-    fn nvim_semsg_dictkey(key: *const c_char);
-    fn nvim_semsg_dictkey_len(keylen: isize, key: *const c_char);
+    // Error message accessor functions: now in nvim_eval::errors
 
     // Typval alloc/free helpers
     fn xmalloc(size: usize) -> *mut c_void;
@@ -181,25 +174,25 @@ pub unsafe fn check_can_index_impl(rettv: TypevalHandle, evaluate: bool, verbose
     match vtype {
         VAR_FUNC | VAR_PARTIAL => {
             if verbose {
-                nvim_emsg_cannot_index_funcref();
+                nvim_eval::errors::emsg_cannot_index_funcref();
             }
             FAIL
         }
         VAR_FLOAT => {
             if verbose {
-                nvim_emsg_using_float_as_string();
+                nvim_eval::errors::emsg_using_float_as_string();
             }
             FAIL
         }
         VAR_BOOL | VAR_SPECIAL => {
             if verbose {
-                nvim_emsg_cannot_index_special();
+                nvim_eval::errors::emsg_cannot_index_special();
             }
             FAIL
         }
         VAR_UNKNOWN => {
             if evaluate {
-                nvim_emsg_cannot_index_special();
+                nvim_eval::errors::emsg_cannot_index_special();
                 return FAIL;
             }
             // FALLTHROUGH: same as valid types
@@ -314,7 +307,7 @@ pub unsafe fn eval_index_impl(
         // Check for the ']'
         if **arg != b']' as c_char {
             if verbose {
-                nvim_emsg_missbrac();
+                nvim_eval::errors::emsg_missbrac();
             }
             if !empty1 {
                 tv_clear(var1);
@@ -398,7 +391,7 @@ pub unsafe fn eval_index_inner_impl(
     if is_range {
         if nvim_tv_get_type(rettv) == VAR_DICT {
             if verbose {
-                nvim_emsg_cannot_slice_dict();
+                nvim_eval::errors::emsg_cannot_slice_dict();
             }
             return FAIL;
         }
@@ -489,9 +482,9 @@ pub unsafe fn eval_index_inner_impl(
 
             if item.is_null() && verbose {
                 if keylen > 0 {
-                    nvim_semsg_dictkey_len(keylen, resolved_key);
+                    nvim_eval::errors::semsg_dictkey_len(keylen, resolved_key);
                 } else {
-                    nvim_semsg_dictkey(resolved_key);
+                    nvim_eval::errors::semsg_dictkey(resolved_key);
                 }
             }
 

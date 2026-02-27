@@ -3372,12 +3372,7 @@ extern "C" {
         rettv: TypevalHandle,
         evalarg: EvalargHandle,
     ) -> c_int;
-    // Emit e_nowhitespace
-    fn nvim_emsg_e_nowhitespace();
-    // semsg e_missingparen
-    fn nvim_semsg_e_missingparen(name: *const c_char);
-    // Emit e_empty_function_name
-    fn nvim_emsg_e_empty_function_name();
+    // Emit e_nowhitespace, e_missingparen, e_empty_function_name: now in nvim_eval::errors
     // Raw copy typval bytes from src to dst, sets src type to VAR_UNKNOWN
     fn nvim_tv_raw_copy_and_reset(dst: TypevalHandle, src: TypevalHandle);
 }
@@ -3425,7 +3420,7 @@ unsafe fn call_func_rettv_impl(
         } else {
             let vstr = nvim_tv_get_vstring(functv) as *const c_char;
             if vstr.is_null() || *vstr == 0 {
-                nvim_emsg_e_empty_function_name();
+                nvim_eval::errors::emsg_e_empty_function_name();
                 // jump to theend
                 tv_clear(functv);
                 free_typval(functv);
@@ -3531,9 +3526,9 @@ unsafe fn eval_lambda_impl(
     } else if get_byte(*arg) != b'(' {
         if verbose {
             if get_byte(skipwhite(*arg)) == b'(' {
-                nvim_emsg_e_nowhitespace();
+                nvim_eval::errors::emsg_e_nowhitespace();
             } else {
-                nvim_semsg_e_missingparen(E_LAMBDA_NAME.as_ptr() as *const c_char);
+                nvim_eval::errors::semsg_e_missingparen(E_LAMBDA_NAME.as_ptr() as *const c_char);
             }
         }
         tv_clear(rettv);
@@ -3597,8 +3592,7 @@ extern "C" {
     // Get tty option value as typval
     fn nvim_get_tty_option_as_tv(name: *const c_char, rettv: TypevalHandle);
     // Error messages for eval_option
-    fn nvim_semsg_e112_option_name_missing(arg: *const c_char);
-    fn nvim_semsg_e113_unknown_option(arg: *const c_char);
+    // nvim_semsg_e112_option_name_missing and nvim_semsg_e113_unknown_option: now in nvim_eval::errors
     // vim_getenv: returns allocated string or NULL
     fn nvim_vim_getenv(name: *const c_char) -> *mut c_char;
     // expand_env_save: expand $VAR from src
@@ -3633,7 +3627,7 @@ pub unsafe extern "C" fn rs_eval_option(
 
     if option_end.is_null() {
         if !rettv.is_null() {
-            nvim_semsg_e112_option_name_missing(*arg);
+            nvim_eval::errors::semsg_e112_option_name_missing(*arg);
         }
         return FAIL;
     }
@@ -3656,7 +3650,7 @@ pub unsafe extern "C" fn rs_eval_option(
     if opt_idx == K_OPT_INVALID && !is_tty_opt {
         // Only give error if result is going to be used.
         if !rettv.is_null() {
-            nvim_semsg_e113_unknown_option(*arg);
+            nvim_eval::errors::semsg_e113_unknown_option(*arg);
         }
         ret = FAIL;
     } else if !rettv.is_null() {

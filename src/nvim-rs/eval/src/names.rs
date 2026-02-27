@@ -268,7 +268,6 @@ extern "C" {
     // Phase 4: get_name_len helpers
     fn nvim_eval_fname_script(p: *const c_char) -> c_int;
     // skipwhite already declared above as returning *const c_char (link_name alias)
-    fn nvim_semsg_invexpr2(p: *const c_char);
 
     // Phase 4: make_expanded_name helpers (eval_to_string: renamed Rust export)
     fn eval_to_string(arg: *mut c_char, join_list: bool, use_simple_function: bool) -> *mut c_char;
@@ -460,7 +459,7 @@ pub unsafe extern "C" fn rs_get_name_len(
 
     // Only give an error when there is something; otherwise reported higher up.
     if len == 0 && verbose && **arg != 0 {
-        nvim_semsg_invexpr2(*arg);
+        crate::errors::semsg_invexpr2(*arg);
     }
 
     len

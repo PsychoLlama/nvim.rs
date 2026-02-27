@@ -438,22 +438,6 @@ void nvim_do_string_sub_restore_cpo_complex(char *save_cpo)
 
 #define loop_get_events(l) rs_loop_get_events(l)
 
-static const char *e_missbrac = N_("E111: Missing ']'");
-static const char e_cannot_slice_dictionary[]
-  = N_("E719: Cannot slice a Dictionary");
-static const char e_cannot_index_special_variable[]
-  = N_("E909: Cannot index a special variable");
-static const char *e_nowhitespace
-  = N_("E274: No white space allowed before parenthesis");
-static const char e_cannot_index_a_funcref[]
-  = N_("E695: Cannot index a Funcref");
-static const char e_variable_nested_too_deep_for_making_copy[]
-  = N_("E698: Variable nested too deep for making a copy");
-static const char e_dot_can_only_be_used_on_dictionary_str[]
-  = N_("E1203: Dot can only be used on a dictionary: %s");
-static const char e_empty_function_name[]
-  = N_("E1192: Empty function name");
-
 /// Used for checking if local variables or arguments used in a lambda.
 bool *eval_lavars_used = NULL;
 
@@ -927,19 +911,7 @@ evalarg_T *nvim_get_evalarg_evaluate_ptr(void)
   return &EVALARG_EVALUATE;
 }
 
-/// Emit "E488: Trailing characters: %s" error - accessor for Rust.
-void nvim_semsg_trailing_arg(const char *p)
-{
-  semsg(_(e_trailing_arg), p);
-}
-
-// nvim_semsg_invarg2 already exists in match.c - reuse it.
-
-/// Emit "E121: Undefined variable: %.*s" error - accessor for Rust.
-void nvim_semsg_undef_var(int len, const char *name)
-{
-  semsg(_("E121: Undefined variable: %.*s"), len, name);
-}
+// nvim_semsg_invarg2 is in match.c (not in eval_shim.c).
 
 // =============================================================================
 // Phase 3: set_var_lval helpers (additional lval_T accessors for rs_set_var_lval)
@@ -992,36 +964,6 @@ const char *nvim_di_get_key(const dictitem_T *di)
 int nvim_var_unlocked(void)
 {
   return VAR_UNLOCKED;
-}
-
-/// Emit "E988: cannot modify existing variable" error via e_cannot_mod - accessor for Rust.
-void nvim_emsg_cannot_mod(void)
-{
-  emsg(_(e_cannot_mod));
-}
-
-/// Emit "E1223: letwrong" error with operator - accessor for Rust.
-void nvim_semsg_letwrong(const char *op)
-{
-  semsg(_(e_letwrong), op);
-}
-
-/// Emit "E996: Cannot lock a range" error - accessor for Rust.
-void nvim_emsg_cannot_lock_range(void)
-{
-  emsg(_("E996: Cannot lock a range"));
-}
-
-/// Emit "E996: Cannot lock a list or dict" error - accessor for Rust.
-void nvim_emsg_cannot_lock_list_or_dict(void)
-{
-  emsg(_("E996: Cannot lock a list or dict"));
-}
-
-/// Emit e_dictkey error for a key - accessor for Rust.
-void nvim_semsg_dictkey(const char *key)
-{
-  semsg(_(e_dictkey), key);
 }
 
 /// value_check_lock wrapper - accessor for Rust.
@@ -1124,46 +1066,6 @@ void nvim_eval_tv_dict_set_ret(typval_T *rettv, dict_T *d)
   tv_dict_set_ret(rettv, d);
 }
 
-// =============================================================================
-// Phase 1: eval_index / check_can_index error message accessors
-// =============================================================================
-
-/// Emit E111 Missing ']' error - accessor for Rust rs_eval_index.
-void nvim_emsg_missbrac(void)
-{
-  emsg(_(e_missbrac));
-}
-
-/// Emit E695 Cannot index a Funcref error - accessor for Rust rs_check_can_index.
-void nvim_emsg_cannot_index_funcref(void)
-{
-  emsg(_(e_cannot_index_a_funcref));
-}
-
-/// Emit E806 Using a Float as a String error - accessor for Rust rs_check_can_index.
-void nvim_emsg_using_float_as_string(void)
-{
-  emsg(_(e_using_float_as_string));
-}
-
-/// Emit E909 Cannot index a special variable error - accessor for Rust rs_check_can_index.
-void nvim_emsg_cannot_index_special(void)
-{
-  emsg(_(e_cannot_index_special_variable));
-}
-
-/// Emit E719 Cannot slice a Dictionary error - accessor for Rust rs_eval_index_inner.
-void nvim_emsg_cannot_slice_dict(void)
-{
-  emsg(_(e_cannot_slice_dictionary));
-}
-
-/// Emit E716 Key not present (with length) error - accessor for Rust rs_eval_index_inner.
-void nvim_semsg_dictkey_len(ptrdiff_t keylen, const char *key)
-{
-  semsg(_(e_dictkey_len), keylen, key);
-}
-
 /// Get argvars[1] pointer from argvars array - accessor for Rust rs_f_slice.
 typval_T *nvim_f_slice_get_arg1(typval_T *argvars)
 {
@@ -1214,48 +1116,6 @@ bool nvim_lval_di_check_ro_lock(const lval_T *lp, const char *name, size_t name_
 void nvim_lval_set_tv_to_li_tv(lval_T *lp)
 {
   lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li);
-}
-
-/// Emit "E689: Can only index a List, Dictionary or Blob" - accessor for Rust.
-void nvim_emsg_e689(void)
-{
-  emsg(_("E689: Can only index a List, Dictionary or Blob"));
-}
-
-/// Emit "E708: [:] must come last" - accessor for Rust.
-void nvim_emsg_e708(void)
-{
-  emsg(_("E708: [:] must come last"));
-}
-
-/// Emit "E713: Cannot use empty key after ." - accessor for Rust.
-void nvim_emsg_e713(void)
-{
-  emsg(_("E713: Cannot use empty key after ."));
-}
-
-/// Emit "E709: [:] requires a List or Blob value" - accessor for Rust.
-void nvim_emsg_e709(void)
-{
-  emsg(_("E709: [:] requires a List or Blob value"));
-}
-
-/// Emit e_dot_can_only_be_used_on_dictionary_str with name - accessor for Rust.
-void nvim_semsg_e_dot_dict(const char *name)
-{
-  semsg(_(e_dot_can_only_be_used_on_dictionary_str), name);
-}
-
-/// Emit e_illvar with name (no translation - used for v:lua case) - accessor for Rust.
-void nvim_semsg_e_illvar_raw(const char *name)
-{
-  semsg(e_illvar, name);
-}
-
-/// Emit e_illvar with name (with translation) - accessor for Rust.
-void nvim_semsg_e_illvar(const char *name)
-{
-  semsg(_(e_illvar), name);
 }
 
 /// Increment dict refcount and assign to ll_tv->vval.v_dict; set ll_dict = dict - accessor for Rust.
@@ -1520,12 +1380,6 @@ void nvim_eap_set_nextcmd_checked(exarg_T *eap, char *arg)
   eap->nextcmd = check_nextcmd(arg);
 }
 
-/// semsg with e_invexpr2 format - accessor for Rust.
-void nvim_semsg_invexpr2(const char *p)
-{
-  semsg(_(e_invexpr2), p);
-}
-
 /// GA_EMPTY check (ga_len == 0) for ex_execute - accessor for Rust.
 /// Uses nvim_ga_is_empty_execute to avoid conflict with fold_shim.c's nvim_ga_is_empty.
 bool nvim_ga_is_empty_execute(garray_T *ga)
@@ -1766,24 +1620,6 @@ int nvim_get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg)
   return get_lambda_tv(arg, rettv, evalarg);
 }
 
-/// Emit "E274: No white space allowed before parenthesis" error.
-void nvim_emsg_e_nowhitespace(void)
-{
-  emsg(_(e_nowhitespace));
-}
-
-/// Emit "E15: Invalid expression: %s" with semsg.
-void nvim_semsg_e_missingparen(const char *name)
-{
-  semsg(_(e_missingparen), name);
-}
-
-/// Emit "E117: Unknown function" / empty function name error.
-void nvim_emsg_e_empty_function_name(void)
-{
-  emsg(_(e_empty_function_name));
-}
-
 /// Raw-copy a typval_T by value from src to dst (memcpy of sizeof(typval_T)).
 /// Sets src->v_type to VAR_UNKNOWN after the copy.
 /// Used by rs_call_func_rettv to implement `functv = *rettv; rettv->v_type = VAR_UNKNOWN`.
@@ -1826,18 +1662,6 @@ void nvim_get_tty_option_as_tv(const char *name, typval_T *rettv)
   OptVal value = get_tty_option(name);
   assert(value.type != kOptValTypeNil);
   *rettv = optval_as_tv(value, true);
-}
-
-/// Emit "E112: Option name missing: %s" semsg.
-void nvim_semsg_e112_option_name_missing(const char *arg)
-{
-  semsg(_("E112: Option name missing: %s"), arg);
-}
-
-/// Emit "E113: Unknown option: %s" semsg.
-void nvim_semsg_e113_unknown_option(const char *arg)
-{
-  semsg(_("E113: Unknown option: %s"), arg);
 }
 
 /// Call vim_getenv(name) - returns allocated string or NULL.
@@ -1919,21 +1743,9 @@ void nvim_tv_set_dict(typval_T *tv, dict_T *dict)
   tv->vval.v_dict = dict;
 }
 
-/// Emit "E698: variable nested too deep for making a copy" error.
-void nvim_emsg_nested_too_deep(void)
-{
-  emsg(_(e_variable_nested_too_deep_for_making_copy));
-}
-
 // =============================================================================
 // Accessors for Phase 4 (eval_shim pass 4): save_tv_as_string
 // =============================================================================
-
-/// Emit "E86: Buffer % does not exist" semsg.
-void nvim_semsg_e_nobufnr(varnumber_T nr)
-{
-  semsg(_(e_nobufnr), nr);
-}
 
 /// Get first item of list (tv_list_first). Returns NULL for empty/NULL list.
 listitem_T *nvim_list_first_item(const list_T *l)
@@ -2344,24 +2156,6 @@ list_T *nvim_tv_list_alloc_ret(typval_T *rettv, ptrdiff_t count_hint)
   return tv_list_alloc_ret(rettv, count_hint);
 }
 
-/// emit semsg(e_invarg2, "expected String or List")
-void nvim_semsg_tv_to_argv_type(void)
-{
-  semsg(_(e_invarg2), "expected String or List");
-}
-
-/// emit emsg(e_invarg) (list must have at least one item)
-void nvim_emsg_tv_to_argv_empty(void)
-{
-  emsg(_(e_invarg));
-}
-
-/// emit semsg(e_invargNval, "cmd", buf) for non-executable
-void nvim_semsg_tv_to_argv_notexe(const char *msg)
-{
-  semsg(_(e_invargNval), "cmd", msg);
-}
-
 /// os_can_exe wrapper for tv_to_argv -- check if the command is executable.
 /// Returns true if executable. Sets *abspath to the resolved path (caller must free).
 bool nvim_eval_os_can_exe(const char *name, char **abspath)
@@ -2402,24 +2196,6 @@ bool nvim_eval_get_p_lpl(void)
 bool nvim_eval_nlua_is_deferred_safe(void)
 {
   return nlua_is_deferred_safe();
-}
-
-/// semsg(e_fast_api_disabled, "Vimscript function") wrapper for Rust.
-void nvim_semsg_fast_api_disabled(void)
-{
-  semsg(e_fast_api_disabled, "Vimscript function");
-}
-
-/// provider: emit "provider: %s: missing required variable" error.
-void nvim_semsg_provider_missing_var(const char *name)
-{
-  semsg("provider: %s: missing required variable g:loaded_%s_provider", name, name);
-}
-
-/// provider: emit "provider: %s: g:loaded_..._provider=2 but %s is not defined" error.
-void nvim_semsg_provider_no_call(const char *name, const char *funcname)
-{
-  semsg("provider: %s: g:loaded_%s_provider=2 but %s is not defined", name, name, funcname);
 }
 
 /// Save the provider_caller_scope and related globals to an opaque heap blob.
@@ -2473,12 +2249,6 @@ void nvim_eval_list_ref(list_T *l)
 }
 
 // nvim_eval_save_funccal and nvim_eval_restore_funccal already defined above (line 3567).
-
-/// semsg E319 "No X provider found" wrapper.
-void nvim_semsg_no_provider(const char *provider)
-{
-  semsg("E319: No \"%s\" provider found. Run \":checkhealth vim.provider\"", provider);
-}
 
 /// Set typval_T to a VAR_NUMBER 0 return (provider not found fallback).
 void nvim_tv_set_number_zero(typval_T *tv)
@@ -2725,17 +2495,5 @@ int nvim_channel_is_valid_job(Channel *chan)
 int nvim_channel_is_not_proc(Channel *chan)
 {
   return (chan != NULL && chan->streamtype != kChannelStreamProc) ? 1 : 0;
-}
-
-/// Emit e_invchan error.
-void nvim_emsg_invchan(void)
-{
-  emsg(_(e_invchan));
-}
-
-/// Emit e_invchanjob error.
-void nvim_emsg_invchanjob(void)
-{
-  emsg(_(e_invchanjob));
 }
 

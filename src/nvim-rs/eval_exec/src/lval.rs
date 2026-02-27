@@ -173,10 +173,9 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
     fn strlen(s: *const c_char) -> usize;
 
-    // Error message helpers
-    fn nvim_semsg_trailing_arg(p: *const c_char);
+    // Error message helpers: trailing_arg and undef_var now in nvim_eval::errors
+    // nvim_semsg_invarg2 remains in match.c (not in eval_shim.c)
     fn nvim_semsg_invarg2(name: *const c_char);
-    fn nvim_semsg_undef_var(len: c_int, name: *const c_char);
 
     // make_expanded_name (Rust implementation in eval/src/names.rs)
     fn rs_make_expanded_name(
@@ -253,16 +252,7 @@ extern "C" {
     // tv_is_func (int return, existing)
     fn nvim_tv_is_func(tv: TypevalHandle) -> c_int;
 
-    // Error message wrappers (Phase 1)
-    fn nvim_emsg_e689();
-    fn nvim_emsg_e708();
-    fn nvim_emsg_e713();
-    fn nvim_emsg_e709();
-    fn nvim_semsg_e_dot_dict(name: *const c_char);
-    fn nvim_semsg_e_illvar_raw(name: *const c_char);
-    fn nvim_semsg_e_illvar(name: *const c_char);
-    fn nvim_emsg_cannot_slice_dict();
-    fn nvim_emsg_missbrac();
+    // Error message wrappers (Phase 1): now in nvim_eval::errors
 }
 
 // Composite C accessors needed for operations on nested structs.
@@ -398,21 +388,21 @@ unsafe fn get_lval_dict_item_impl(
         && len == -1
         && rettv.is_null()
     {
-        nvim_semsg_e_illvar_raw(c"v:['lua']".as_ptr());
+        nvim_eval::errors::semsg_e_illvar_raw(c"v:['lua']".as_ptr());
         return GlvStatus::Fail;
     }
 
     if nvim_lval_di_is_null(lp as *const c_void) {
         // Key not found -- check if we can add it
         if nvim_lval_dict_is_v_or_a_scope(lp as *const c_void) {
-            nvim_semsg_e_illvar(name);
+            nvim_eval::errors::semsg_e_illvar(name);
             return GlvStatus::Fail;
         }
 
         // Key doesn't exist: need to add it
         if *p == b'[' as c_char || *p == b'.' as c_char || unlet {
             if !quiet {
-                nvim_semsg_dictkey(key);
+                nvim_eval::errors::semsg_dictkey(key);
             }
             return GlvStatus::Fail;
         }
@@ -570,7 +560,7 @@ unsafe fn get_lval_subscript_impl(
         {
             if *p == b'.' as c_char && nvim_lval_tv_get_type(lp as *const c_void) != VAR_DICT_TYPE {
                 if !quiet {
-                    nvim_semsg_e_dot_dict(name);
+                    nvim_eval::errors::semsg_e_dot_dict(name);
                 }
                 break 'outer;
             }
@@ -578,7 +568,7 @@ unsafe fn get_lval_subscript_impl(
             let tv_type = nvim_lval_tv_get_type(lp as *const c_void);
             if tv_type != VAR_LIST_TYPE && tv_type != VAR_DICT_TYPE && tv_type != VAR_BLOB_TYPE {
                 if !quiet {
-                    nvim_emsg_e689();
+                    nvim_eval::errors::emsg_e689();
                 }
                 break 'outer;
             }
@@ -594,7 +584,7 @@ unsafe fn get_lval_subscript_impl(
 
             if (*lp).ll_range {
                 if !quiet {
-                    nvim_emsg_e708();
+                    nvim_eval::errors::emsg_e708();
                 }
                 break 'outer; // goto done
             }
@@ -613,7 +603,7 @@ unsafe fn get_lval_subscript_impl(
                 }
                 if len == 0 {
                     if !quiet {
-                        nvim_emsg_e713();
+                        nvim_eval::errors::emsg_e713();
                     }
                     // Return NULL immediately (no goto done, var1/var2 still clean)
                     tv_clear(var1);
@@ -644,7 +634,7 @@ unsafe fn get_lval_subscript_impl(
                 if *p == b':' as c_char {
                     if nvim_lval_tv_get_type(lp as *const c_void) == VAR_DICT_TYPE {
                         if !quiet {
-                            nvim_emsg_cannot_slice_dict();
+                            nvim_eval::errors::emsg_cannot_slice_dict();
                         }
                         break 'outer; // goto done
                     }
@@ -657,7 +647,7 @@ unsafe fn get_lval_subscript_impl(
                             || (rt == VAR_BLOB_TYPE && !rv_blob.is_null());
                         if !ok {
                             if !quiet {
-                                nvim_emsg_e709();
+                                nvim_eval::errors::emsg_e709();
                             }
                             break 'outer; // goto done
                         }
@@ -682,7 +672,7 @@ unsafe fn get_lval_subscript_impl(
 
                 if *p != b']' as c_char {
                     if !quiet {
-                        nvim_emsg_missbrac();
+                        nvim_eval::errors::emsg_missbrac();
                     }
                     break 'outer; // goto done
                 }
@@ -789,7 +779,7 @@ unsafe fn get_lval_impl(
             && *p != b'[' as c_char
             && *p != b'.' as c_char
         {
-            nvim_semsg_trailing_arg(p);
+            nvim_eval::errors::semsg_trailing_arg(p);
             return std::ptr::null_mut();
         }
 
@@ -833,7 +823,7 @@ unsafe fn get_lval_impl(
     let v = nvim_find_var((*lp).ll_name, (*lp).ll_name_len, ht_ptr, no_autoload);
 
     if v.is_null() && !quiet {
-        nvim_semsg_undef_var((*lp).ll_name_len as c_int, (*lp).ll_name);
+        nvim_eval::errors::semsg_undef_var((*lp).ll_name_len as c_int, (*lp).ll_name);
     }
     if v.is_null() {
         return std::ptr::null_mut();
@@ -930,12 +920,7 @@ extern "C" {
     // VAR_UNLOCKED constant
     fn nvim_var_unlocked() -> c_int;
 
-    // Error message helpers (Phase 3)
-    fn nvim_emsg_cannot_mod();
-    fn nvim_semsg_letwrong(op: *const c_char);
-    fn nvim_emsg_cannot_lock_range();
-    fn nvim_emsg_cannot_lock_list_or_dict();
-    fn nvim_semsg_dictkey(key: *const c_char);
+    // Error message helpers (Phase 3): now in nvim_eval::errors
     fn nvim_value_check_lock(lock: c_int, name: *const c_char) -> bool;
 
     // C functions used by set_var_lval
@@ -1020,7 +1005,7 @@ unsafe fn set_var_lval_impl(
         if !blob.is_null() {
             // Blob assignment
             if !op.is_null() && *op != b'=' as c_char {
-                nvim_semsg_letwrong(op);
+                nvim_eval::errors::semsg_letwrong(op);
                 *endp = cc as c_char;
                 return;
             }
@@ -1048,7 +1033,7 @@ unsafe fn set_var_lval_impl(
         } else if !op.is_null() && *op != b'=' as c_char {
             // Operator assignment (+=, -=, etc.)
             if is_const {
-                nvim_emsg_cannot_mod();
+                nvim_eval::errors::emsg_cannot_mod();
                 *endp = cc as c_char;
                 return;
             }
@@ -1083,7 +1068,7 @@ unsafe fn set_var_lval_impl(
     } else if (*lp).ll_range {
         // List range assignment
         if is_const {
-            nvim_emsg_cannot_lock_range();
+            nvim_eval::errors::emsg_cannot_lock_range();
             return;
         }
         tv_list_assign_range(
@@ -1098,7 +1083,7 @@ unsafe fn set_var_lval_impl(
     } else {
         // Dict/list item assignment
         if is_const {
-            nvim_emsg_cannot_lock_list_or_dict();
+            nvim_eval::errors::emsg_cannot_lock_list_or_dict();
             return;
         }
 
@@ -1113,7 +1098,7 @@ unsafe fn set_var_lval_impl(
             // New dict key
             is_new_key = true;
             if !op.is_null() && *op != b'=' as c_char {
-                nvim_semsg_dictkey(newkey);
+                nvim_eval::errors::semsg_dictkey(newkey);
                 nvim_tv_free(oldtv);
                 return;
             }
@@ -1242,8 +1227,7 @@ extern "C" {
     // Blob operations
     fn nvim_tv_blob_copy(from_blob: *mut c_void, to: TypevalHandle);
 
-    // Error: variable nested too deep
-    fn nvim_emsg_nested_too_deep();
+    // Error: variable nested too deep -- now in nvim_eval::errors
     // internal_error
     fn internal_error(where_: *const c_char);
 }
@@ -1301,7 +1285,7 @@ unsafe fn var_item_copy_impl(
     let recurse = VAR_ITEM_COPY_RECURSE.with(|r| r.get());
 
     if recurse >= DICT_MAXNEST {
-        nvim_emsg_nested_too_deep();
+        nvim_eval::errors::emsg_nested_too_deep();
         return FAIL;
     }
 

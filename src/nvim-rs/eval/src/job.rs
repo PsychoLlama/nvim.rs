@@ -66,9 +66,7 @@ extern "C" {
     fn nvim_channel_is_valid_job(chan: ChannelHandle) -> c_int;
     fn nvim_channel_is_not_proc(chan: ChannelHandle) -> c_int;
 
-    // -- Error messages --
-    fn nvim_emsg_invchan();
-    fn nvim_emsg_invchanjob();
+    // -- Error messages: now in crate::errors --
 }
 
 // kCallbackNone == 0 (verified by _Static_assert in eval_shim.c)
@@ -143,9 +141,9 @@ pub unsafe extern "C" fn rs_find_job(id: u64, show_error: bool) -> ChannelHandle
     if nvim_channel_is_valid_job(data) == 0 {
         if show_error {
             if nvim_channel_is_not_proc(data) != 0 {
-                nvim_emsg_invchanjob();
+                crate::errors::emsg_invchanjob();
             } else {
-                nvim_emsg_invchan();
+                crate::errors::emsg_invchan();
             }
         }
         return std::ptr::null_mut();

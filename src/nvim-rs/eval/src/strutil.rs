@@ -35,7 +35,6 @@ extern "C" {
     fn nvim_buflist_findnr(nr: c_int) -> *mut c_void; // buf_T*
     fn nvim_eval_buf_line_count(buf: *mut c_void) -> c_int;
     fn nvim_eval_ml_get_buf(buf: *mut c_void, lnum: i32) -> *const c_char;
-    fn nvim_semsg_e_nobufnr(nr: i64);
     fn nvim_eval_tv_get_list(tv: *const c_void) -> *mut c_void; // list_T*
     fn nvim_list_first_item(list: *mut c_void) -> *mut c_void; // listitem_T*
     fn nvim_list_item_next(list: *mut c_void, item: *mut c_void) -> *mut c_void; // listitem_T*
@@ -96,7 +95,7 @@ pub unsafe extern "C" fn rs_save_tv_as_string(
         let bufnr = nvim_eval_tv_get_vnumber(tv.cast_const());
         let buf = nvim_buflist_findnr(bufnr as c_int);
         if buf.is_null() {
-            nvim_semsg_e_nobufnr(bufnr);
+            crate::errors::semsg_e_nobufnr(bufnr);
             *len = -1;
             return std::ptr::null_mut();
         }

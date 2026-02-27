@@ -103,7 +103,6 @@ extern "C" {
         funcexe: *mut FuncExeT,
     ) -> c_int;
     fn skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_semsg_invexpr2(p: *const c_char);
     fn nvim_eap_get_skip_local(eap: ExargHandle) -> c_int;
 
     // Error globals
@@ -276,7 +275,7 @@ unsafe fn eval_expr_string_impl(expr: *const c_void, rettv: TypevalHandle) -> c_
     let trail = skipwhite(s);
     if !trail.is_null() && *trail != 0 {
         tv_clear(rettv);
-        nvim_semsg_invexpr2(s);
+        nvim_eval::errors::semsg_invexpr2(s);
         return FAIL;
     }
     OK
@@ -565,7 +564,7 @@ pub unsafe extern "C" fn rs_eval1_emsg(
         && did_emsg_get() == did_emsg_before
         && called_emsg_get() == called_emsg_before
     {
-        nvim_semsg_invexpr2(start);
+        nvim_eval::errors::semsg_invexpr2(start);
     }
 
     free_evalarg(evalarg, eap);

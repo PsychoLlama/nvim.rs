@@ -69,10 +69,7 @@ extern "C" {
     // ----- VV_SHELL_ERROR -----
     fn nvim_set_shell_error(status: c_int);
 
-    // ----- error messages -----
-    fn nvim_semsg_tv_to_argv_type();
-    fn nvim_semsg_tv_to_argv_notexe(msg: *const c_char);
-    fn nvim_emsg_tv_to_argv_empty();
+    // ----- error messages: now in crate::errors -----
 
     // ----- memory -----
     fn nvim_xcalloc(count: usize, size: usize) -> *mut c_void;
@@ -167,14 +164,14 @@ pub unsafe extern "C" fn rs_tv_to_argv(
     }
 
     if vtype != VAR_LIST {
-        nvim_semsg_tv_to_argv_type();
+        crate::errors::semsg_tv_to_argv_type();
         return ptr::null_mut();
     }
 
     let cmd_list = nvim_eval_tv_get_list(cmd_tv.cast_const());
     let list_len = nvim_tv_list_len(cmd_list);
     if list_len == 0 {
-        nvim_emsg_tv_to_argv_empty();
+        crate::errors::emsg_tv_to_argv_empty();
         return ptr::null_mut();
     }
 
@@ -188,7 +185,7 @@ pub unsafe extern "C" fn rs_tv_to_argv(
         if !cmd0.is_null() && !executable.is_null() {
             // Emit "'<cmd>' is not executable" error
             let msg = build_not_executable_msg(cmd0);
-            nvim_semsg_tv_to_argv_notexe(msg.as_ptr().cast::<c_char>());
+            crate::errors::semsg_tv_to_argv_notexe(msg.as_ptr().cast::<c_char>());
             *executable = false;
         }
         return ptr::null_mut();
