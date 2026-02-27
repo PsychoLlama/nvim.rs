@@ -2109,7 +2109,6 @@ void nvim_do_sub_set_replacement(const char *sub)
   });
 }
 
-
 // =============================================================================
 // regmmatch_T opaque handle accessors for do_sub
 // =============================================================================
@@ -2204,7 +2203,6 @@ char *nvim_do_sub_regtilde(char *sub, int magic, int preview)
 
 // --- curbuf field accessors ---
 
-
 /// Get curbuf->b_flags
 int nvim_ecmd_curbuf_get_b_flags(void) { return curbuf->b_flags; }
 
@@ -2268,7 +2266,6 @@ int nvim_ecmd_curwin_get_topline(void) { return (int)curwin->w_topline; }
 /// Get curwin->w_alt_fnum
 int nvim_ecmd_curwin_get_alt_fnum(void) { return curwin->w_alt_fnum; }
 
-
 /// Set curwin->w_pcmark.lnum and col
 void nvim_ecmd_curwin_set_pcmark(int lnum, int col)
 {
@@ -2317,7 +2314,6 @@ int nvim_ecmd_curwin_ws_is_own_buf(void)
 
 // --- buf_T opaque handle accessors ---
 
-
 /// Get buf->b_ml.ml_mfp != NULL
 int nvim_ecmd_buf_has_memfile(buf_T *buf) { return buf->b_ml.ml_mfp != NULL ? 1 : 0; }
 
@@ -2360,7 +2356,6 @@ void nvim_ecmd_win_set_locked(win_T *win, int val) { win->w_locked = (bool)val; 
 
 /// Allocate a new bufref_T on the heap. Must be freed with nvim_ecmd_free_bufref.
 void *nvim_ecmd_new_bufref(void) { return xcalloc(1, sizeof(bufref_T)); }
-
 
 /// Call set_bufref(ref, curbuf)
 void nvim_ecmd_set_bufref_to_curbuf(void *ref) { set_bufref((bufref_T *)ref, curbuf); }
