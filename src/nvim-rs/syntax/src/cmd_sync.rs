@@ -52,7 +52,7 @@ extern "C" {
     fn nvim_syn_do_clear_time(st: *mut c_void);
 
     // Current window synblock
-    fn nvim_get_curwin_synblock() -> SynBlockHandle;
+    fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
 
     // Forward dispatch to match/region/clear (C thin wrappers)
     fn nvim_syn_cmd_match_wrapper(eap: *mut c_void, syncing: c_int);
@@ -145,7 +145,7 @@ unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
         return;
     }
 
-    let block = nvim_get_curwin_synblock();
+    let block = nvim_syn_get_curwin_synblock();
     let skip = nvim_syn_get_eap_skip(eap);
 
     let mut illegal = false;
@@ -285,7 +285,7 @@ unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
         nvim_syn_set_nextcmd(eap, arg_start);
         // Phase 4: replaces nvim_syn_redraw_and_free_all
         nvim_syn_redraw_curbuf_later();
-        nvim_syn_stack_free_all(nvim_get_curwin_synblock());
+        nvim_syn_stack_free_all(nvim_syn_get_curwin_synblock());
     }
 }
 

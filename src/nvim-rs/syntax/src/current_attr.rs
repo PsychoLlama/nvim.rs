@@ -148,7 +148,7 @@ extern "C" {
     // Word check
     fn nvim_syn_vim_iswordp_buf(p: *mut i8) -> c_int;
     fn nvim_syn_utf_head_off(base: *mut i8, p: *mut i8) -> c_int;
-    fn nvim_syn_ascii_iswhite(c: c_int) -> c_int;
+    fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
 
     // getcurline
     fn nvim_syn_getcurline() -> *mut i8;
@@ -583,7 +583,7 @@ pub unsafe fn syn_current_attr(
                 let line_byte = nvim_syn_getcurline_byte_at(current_col);
 
                 if (current_next_flags & HL_SKIPWHITE) != 0
-                    && nvim_syn_ascii_iswhite(line_byte) != 0
+                    && nvim_syn_ascii_iswhite_char(line_byte) != 0
                 {
                     break;
                 }

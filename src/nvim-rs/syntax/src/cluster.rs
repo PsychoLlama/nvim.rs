@@ -666,7 +666,7 @@ extern "C" {
 
     // Redraw + free after cluster changes (Phase 4: decomposed)
     fn nvim_syn_redraw_curbuf_later();
-    fn nvim_get_curwin_synblock() -> SynBlockHandle;
+    fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
 
     // Set eap->nextcmd = find_nextcmd(arg)
@@ -762,7 +762,7 @@ unsafe fn syn_cmd_cluster_impl(eap: *mut c_void, _syncing: c_int) {
     if got_clstr {
         // Phase 4: replaces nvim_syn_redraw_and_free_all
         nvim_syn_redraw_curbuf_later();
-        nvim_syn_stack_free_all(nvim_get_curwin_synblock());
+        nvim_syn_stack_free_all(nvim_syn_get_curwin_synblock());
     }
 
     if !got_clstr {
@@ -802,7 +802,7 @@ extern "C" {
 /// # Safety
 /// `name` must be a valid null-terminated C string.
 unsafe fn syn_scl_name2id_impl(name: *mut c_char) -> c_int {
-    let block = nvim_get_curwin_synblock();
+    let block = nvim_syn_get_curwin_synblock();
     if block.is_null() {
         return 0;
     }
@@ -968,7 +968,7 @@ pub unsafe extern "C" fn rs_syn_add_cluster(name: *mut c_char) -> c_int {
 extern "C" {
     fn nvim_syn_skiptowhite(p: *const c_char) -> *mut c_char;
     fn nvim_syn_skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_syn_get_topgrp_curwin() -> c_int;
+    fn nvim_syn_get_topgrp() -> c_int;
     fn nvim_synblock_ga_init_patterns();
 }
 
@@ -1019,7 +1019,7 @@ pub unsafe extern "C" fn rs_syn_incl_toplevel(id: c_int, flagsp: *mut c_int) {
         return;
     }
     let flags = *flagsp;
-    let topgrp = nvim_syn_get_topgrp_curwin();
+    let topgrp = nvim_syn_get_topgrp();
 
     if (flags & HL_CONTAINED) != 0 || topgrp == 0 {
         return;

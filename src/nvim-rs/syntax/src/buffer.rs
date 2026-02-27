@@ -65,7 +65,7 @@ extern "C" {
     fn nvim_syn_line_breakcheck();
     fn nvim_syn_get_got_int() -> c_int;
     fn nvim_syn_get_sst_first() -> SynStateHandle;
-    fn nvim_syn_stack_find_entry_ptr(lnum: c_int) -> SynStateHandle;
+    fn nvim_syn_stack_find_entry(lnum: c_int) -> SynStateHandle;
     fn nvim_synstate_get_next(state: SynStateHandle) -> SynStateHandle;
     fn nvim_synstate_get_lnum(state: SynStateHandle) -> c_int;
     fn nvim_synstate_get_change_lnum(state: SynStateHandle) -> c_int;
@@ -212,7 +212,7 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
         let cur_lnum = nvim_syn_get_current_lnum();
         if cur_lnum >= first_stored {
             if prev.is_null() {
-                prev = nvim_syn_stack_find_entry_ptr(cur_lnum - 1);
+                prev = nvim_syn_stack_find_entry(cur_lnum - 1);
             }
 
             let mut sp = if prev.is_null() {
@@ -271,7 +271,7 @@ unsafe fn syntax_check_changed_impl(lnum: c_int) -> c_int {
 
     // Check the state stack when lnum is just below the previously syntaxed line.
     if nvim_syn_is_current_state_valid() != 0 && lnum == nvim_syn_get_current_lnum() + 1 {
-        let sp = nvim_syn_stack_find_entry_ptr(lnum);
+        let sp = nvim_syn_stack_find_entry(lnum);
         if !sp.is_null() && nvim_synstate_get_lnum(sp) == lnum {
             // finish the previous line (needed when not all of the line was drawn)
             nvim_syn_finish_line(0);
@@ -301,7 +301,7 @@ unsafe fn syntax_end_parsing_impl(wp: WinHandle, lnum: c_int) {
     if block.0 != wp_s.0 {
         return; // not the right window
     }
-    let sp = nvim_syn_stack_find_entry_ptr(lnum);
+    let sp = nvim_syn_stack_find_entry(lnum);
     if sp.is_null() {
         return;
     }

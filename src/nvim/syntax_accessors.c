@@ -853,8 +853,6 @@ int nvim_syn_get_current_sub_char(void) { return current_sub_char; }
 int nvim_syn_get_current_next_flags(void) { return current_next_flags; }
 int nvim_syn_get_keepend_level(void) { return keepend_level; }
 
-int nvim_syn_count_fold_items(void) { return rs_syn_count_fold_items(); }
-
 regprog_T *nvim_synpat_get_prog(synpat_T *pat) { return pat->sp_prog; }
 int nvim_synpat_has_prog(synpat_T *pat) { return pat->sp_prog != NULL; }
 int16_t *nvim_synpat_get_cont_list(synpat_T *pat) { return pat->sp_cont_list; }
@@ -1496,7 +1494,6 @@ void nvim_syn_set_current_trans_id(int id) { current_trans_id = (int16_t)id; }
 void nvim_syn_set_current_flags(int flags) { current_flags = (int16_t)flags; }
 void nvim_syn_set_current_seqnr(int seqnr) { current_seqnr = seqnr; }
 void nvim_syn_stack_alloc(void) { syn_stack_alloc(); }
-void *nvim_syn_stack_find_entry_ptr(int lnum) { return syn_stack_find_entry((linenr_T)lnum); }
 
 void *nvim_win_get_synblock(void *wp) { return wp ? ((win_T *)wp)->w_s : NULL; }
 
@@ -1522,8 +1519,8 @@ void nvim_syn_line_breakcheck(void) { line_breakcheck(); }
 int nvim_syn_get_got_int(void) { return got_int; }
 int nvim_syn_get_rows(void) { return (int)Rows; }
 
-void nvim_syn_stack_free_all(synblock_T *block) { syn_stack_free_all(block); }
-void nvim_syn_stack_apply_changes(buf_T *buf) { syn_stack_apply_changes(buf); }
+void nvim_syn_stack_free_all(synblock_T *block) { rs_syn_stack_free_all(block); }
+void nvim_syn_stack_apply_changes(buf_T *buf) { rs_syn_stack_apply_changes(buf); }
 
 int nvim_buf_get_mod_top(buf_T *buf) { return (int)buf->b_mod_top; }
 int nvim_buf_get_mod_bot(buf_T *buf) { return (int)buf->b_mod_bot; }
@@ -1577,11 +1574,9 @@ int nvim_syn_get_next_match_attr(void)
 
 win_T *nvim_syn_get_win(void) { return syn_win; }
 
-int nvim_syn_cur_foldlevel(void) { return nvim_syn_count_fold_items(); }
+int nvim_syn_cur_foldlevel(void) { return rs_syn_count_fold_items(); }
 
 char **nvim_syn_get_cmdlinep(void) { return syn_cmdlinep; }
-
-synblock_T *nvim_get_curwin_synblock(void) { return curwin->w_s; }
 
 // nvim_get_curwin already defined in window.c
 
@@ -1722,8 +1717,6 @@ int nvim_syn_get_syn_spell(void) { return syn_block->b_syn_spell; }
 int nvim_syn_vim_iswordp_buf(char *p) { return vim_iswordp_buf(p, syn_buf); }
 
 int nvim_syn_utf_head_off(char *base, char *p) { return utf_head_off(base, p); }
-
-int nvim_syn_ascii_iswhite(int c) { return ascii_iswhite(c); }
 
 void nvim_syn_set_next_match_state(
     int idx, int col,
@@ -2191,12 +2184,6 @@ int nvim_syn_include_source(exarg_T *eap, int use_source)
 // Phase 4 accessors: simple subcommands and syn_maybe_enable migration
 // =============================================================================
 
-/// Set eap->nextcmd = check_nextcmd(arg) (accessor for rs_syn_cmd_reset).
-void nvim_syn_check_nextcmd(exarg_T *eap, char *arg)
-{
-  eap->nextcmd = check_nextcmd(arg);
-}
-
 /// Wrap init_highlight for rs_syn_cmd_reset.
 void nvim_syn_init_highlight(int reset, int init)
 {
@@ -2419,19 +2406,7 @@ int nvim_curwin_syn_sync_linebreaks(void) { return (int)curwin->w_s->b_syn_sync_
 // nvim_syn_ends_excmd already defined above (as nvim_syn_ends_excmd).
 // nvim_syn_skiptowhite and nvim_syn_skipwhite already defined above.
 
-/// Wrap syn_name2id_len (int length version for listing).
-int nvim_syn_name2id_len(const char *name, int len)
-{
-  return (int)syn_name2id_len(name, (size_t)len);
-}
-
 // nvim_syn_scl_namen2id is already defined above.
-
-/// Wrap check_nextcmd and store in eap->nextcmd (for listing).
-void nvim_syn_eap_check_nextcmd(exarg_T *eap, char *arg)
-{
-  eap->nextcmd = check_nextcmd(arg);
-}
 
 // nvim_syn_get_eap_arg and nvim_syn_get_eap_skip already defined above.
 
@@ -2730,12 +2705,6 @@ void nvim_synblock_ga_init_patterns(void)
 // =============================================================================
 // Phase 6 accessors: syn_incl_toplevel migration
 // =============================================================================
-
-/// Get b_syn_topgrp from curwin->w_s.
-int nvim_syn_get_topgrp_curwin(void)
-{
-  return curwin->w_s->b_syn_topgrp;
-}
 
 // =============================================================================
 // Phase 6 accessors: add_keyword + copy_id_list migration

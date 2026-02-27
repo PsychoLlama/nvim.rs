@@ -21,7 +21,7 @@ extern "C" {
     // EAP accessors
     fn nvim_syn_get_eap_arg(eap: *const c_void) -> *mut c_char;
     fn nvim_syn_get_eap_skip(eap: *const c_void) -> c_int;
-    fn nvim_syn_eap_check_nextcmd(eap: *mut c_void, arg: *mut c_char);
+    fn nvim_syn_set_nextcmd(eap: *mut c_void, arg: *mut c_char);
 
     // String helpers
     fn nvim_syn_skipwhite(s: *const c_char) -> *mut c_char;
@@ -86,7 +86,7 @@ extern "C" {
 
     // Group name/ID lookup
     fn rs_syn_scl_namen2id(arg: *const c_char, len: c_int) -> c_int;
-    fn nvim_syn_name2id_len(name: *const c_char, len: c_int) -> c_int;
+    fn nvim_syn_name2id_len_wrapper(name: *const c_char, len: c_int) -> c_int;
 
     // vim_strchr wrapper
     fn nvim_syn_vim_strchr(s: *const c_char, c: c_int) -> c_int;
@@ -106,7 +106,7 @@ extern "C" {
     fn msg(s: *const c_char, hl_id: c_int) -> c_int;
 
     // curwin synblock
-    fn nvim_get_curwin_synblock() -> crate::types::SynBlockHandle;
+    fn nvim_syn_get_curwin_synblock() -> crate::types::SynBlockHandle;
 }
 
 // =============================================================================
@@ -500,7 +500,7 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
 
     // List keywords (not for syncing items)
     if !syncing {
-        let curwin_block = nvim_get_curwin_synblock();
+        let curwin_block = nvim_syn_get_curwin_synblock();
         let ht = nvim_synblock_get_keywtab(curwin_block);
         did_header = syn_list_keywords(id, ht, did_header, hl_id);
         let ht_ic = nvim_synblock_get_keywtab_ic(curwin_block);
@@ -662,7 +662,7 @@ unsafe fn syn_cmd_list_impl(eap: *mut c_void, syncing: c_int) {
 
     if nvim_syn_get_eap_skip(eap) != 0 {
         // Even on skip, set nextcmd
-        nvim_syn_eap_check_nextcmd(eap, arg);
+        nvim_syn_set_nextcmd(eap, arg);
         return;
     }
 
@@ -740,7 +740,7 @@ unsafe fn syn_cmd_list_impl(eap: *mut c_void, syncing: c_int) {
             } else {
                 // Group reference
                 let len = arg_end.offset_from(cur) as c_int;
-                let group_id = nvim_syn_name2id_len(cur, len);
+                let group_id = nvim_syn_name2id_len_wrapper(cur, len);
                 if group_id == 0 {
                     semsg(c"E28: No such highlight group name: %s".as_ptr(), cur);
                 } else {
@@ -751,7 +751,7 @@ unsafe fn syn_cmd_list_impl(eap: *mut c_void, syncing: c_int) {
         }
     }
 
-    nvim_syn_eap_check_nextcmd(eap, cur);
+    nvim_syn_set_nextcmd(eap, cur);
 }
 
 // =============================================================================

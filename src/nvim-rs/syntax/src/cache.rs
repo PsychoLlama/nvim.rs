@@ -21,7 +21,6 @@ extern "C" {
     // State stack management
     fn nvim_syn_stack_find_entry(lnum: c_int) -> SynStateHandle;
     fn nvim_syn_stack_alloc();
-    fn nvim_syn_stack_find_entry_ptr(lnum: c_int) -> SynStateHandle;
 
     // State accessors for comparison
     fn nvim_synstate_get_lnum(state: SynStateHandle) -> c_int;
@@ -434,7 +433,7 @@ pub fn stack_find_entry(lnum: i32) -> SynStateHandle {
 /// Find a synstate entry for the given line number (alternate interface).
 #[must_use]
 pub fn stack_find_entry_ptr(lnum: i32) -> SynStateHandle {
-    unsafe { nvim_syn_stack_find_entry_ptr(lnum) }
+    unsafe { nvim_syn_stack_find_entry(lnum) }
 }
 
 /// Remove a synstate entry from the cache.

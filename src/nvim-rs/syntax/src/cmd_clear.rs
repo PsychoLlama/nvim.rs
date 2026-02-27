@@ -24,7 +24,7 @@ extern "C" {
     fn nvim_syn_ends_excmd(c: c_int) -> c_int;
 
     // Synblock
-    fn nvim_get_curwin_synblock() -> SynBlockHandle;
+    fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
     fn nvim_synblock_get_topgrp(block: SynBlockHandle) -> c_int;
 
     // Group lookup
@@ -69,7 +69,7 @@ unsafe fn syn_cmd_clear_impl(eap: *mut c_void, syncing: c_int) {
         return;
     }
 
-    let block = nvim_get_curwin_synblock();
+    let block = nvim_syn_get_curwin_synblock();
 
     // Disabled within ":syn include @group filename" to avoid deleting @group
     if nvim_synblock_get_topgrp(block) != 0 {

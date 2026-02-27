@@ -35,7 +35,7 @@ extern "C" {
 
     // curwin synblock
     fn nvim_get_curwin() -> WinHandle;
-    fn nvim_get_curwin_synblock() -> SynBlockHandle;
+    fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
 
     // got_int flag
     fn nvim_syn_get_got_int() -> c_int;
@@ -152,7 +152,7 @@ unsafe fn syntime_clear_impl() {
         msg(MSG_NO_ITEMS.as_ptr().cast(), 0);
         return;
     }
-    let block = nvim_get_curwin_synblock();
+    let block = nvim_syn_get_curwin_synblock();
     let count = nvim_synblock_get_pattern_count(block);
     for idx in 0..count {
         let pat = nvim_synblock_get_pattern(block, idx);
@@ -169,7 +169,7 @@ unsafe fn syntime_report_impl() {
         return;
     }
 
-    let block = nvim_get_curwin_synblock();
+    let block = nvim_syn_get_curwin_synblock();
     let pat_count = nvim_synblock_get_pattern_count(block);
 
     // Collect entries with count > 0

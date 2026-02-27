@@ -48,7 +48,7 @@ extern "C" {
     fn nvim_synblock_dec_folditems(block: SynBlockHandle);
 
     // curwin synblock for syn_clear_one
-    fn nvim_get_curwin_synblock() -> SynBlockHandle;
+    fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
 
     // Hashtab for syn_clear_one
     fn nvim_synblock_get_keywtab(block: SynBlockHandle) -> *mut c_void;
@@ -236,7 +236,7 @@ pub unsafe extern "C" fn rs_syn_remove_pattern(block: SynBlockHandle, idx: c_int
 /// Must be called from main thread. id must be a valid syntax group ID.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_clear_one(id: c_int, syncing: c_int) {
-    let block = nvim_get_curwin_synblock();
+    let block = nvim_syn_get_curwin_synblock();
     if block.is_null() {
         return;
     }
@@ -426,7 +426,7 @@ pub unsafe extern "C" fn rs_reset_synblock(wp: WinHandle) {
 /// Must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syntax_sync_clear() {
-    let block = nvim_get_curwin_synblock();
+    let block = nvim_syn_get_curwin_synblock();
     if block.is_null() {
         return;
     }

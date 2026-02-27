@@ -19,7 +19,7 @@ extern "C" {
     fn nvim_syn_get_cmdlinep() -> *mut *mut c_char;
 
     // Current window synblock
-    fn nvim_get_curwin_synblock() -> SynBlockHandle;
+    fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
     fn nvim_get_curwin() -> WinHandle;
 
     // Syntax command state
@@ -408,7 +408,7 @@ pub unsafe fn cmdlinep() -> *mut *mut c_char {
 /// Must be called from the main thread.
 #[must_use]
 pub unsafe fn curwin_synblock() -> SynBlockHandle {
-    nvim_get_curwin_synblock()
+    nvim_syn_get_curwin_synblock()
 }
 
 /// Get the current window handle.
@@ -934,7 +934,7 @@ extern "C" {
     fn nvim_syn_get_eap_skip(eap: *const c_void) -> c_int;
 
     // check_nextcmd accessor (sets eap->nextcmd = check_nextcmd(arg))
-    fn nvim_syn_check_nextcmd(eap: *mut c_void, arg: *mut c_char);
+    fn nvim_syn_set_nextcmd(eap: *mut c_void, arg: *mut c_char);
 
     // Reset: calls init_highlight(true, true)
     fn nvim_syn_init_highlight(reset: c_int, init: c_int);
@@ -957,7 +957,7 @@ const SYNTAX_FNAME: &str = "$VIMRUNTIME/syntax/%s.vim";
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_cmd_reset(eap: *mut c_void, _syncing: c_int) {
     let arg = nvim_syn_get_eap_arg(eap);
-    nvim_syn_check_nextcmd(eap, arg);
+    nvim_syn_set_nextcmd(eap, arg);
     if nvim_syn_get_eap_skip(eap) == 0 {
         nvim_syn_init_highlight(1, 1);
     }
@@ -969,7 +969,7 @@ pub unsafe extern "C" fn rs_syn_cmd_reset(eap: *mut c_void, _syncing: c_int) {
 /// Must be called from main thread. `name` must be a valid NUL-terminated C string.
 unsafe fn do_onoff_impl(eap: *mut c_void, name: *const c_char) {
     let arg = nvim_syn_get_eap_arg(eap);
-    nvim_syn_check_nextcmd(eap, arg);
+    nvim_syn_set_nextcmd(eap, arg);
     if nvim_syn_get_eap_skip(eap) == 0 {
         nvim_syn_set_did_syntax_onoff(1);
         // Build "so $VIMRUNTIME/syntax/<name>.vim"
@@ -1047,7 +1047,7 @@ pub unsafe extern "C" fn rs_syn_cmd_case_dispatch(eap: *mut c_void, _syncing: c_
     if nvim_syn_get_eap_skip(eap) != 0 {
         return;
     }
-    let block = nvim_get_curwin_synblock();
+    let block = nvim_syn_get_curwin_synblock();
     let next = skiptowhite(arg);
     rs_syn_cmd_case(block, arg, next);
 }
@@ -1063,7 +1063,7 @@ pub unsafe extern "C" fn rs_syn_cmd_conceal_dispatch(eap: *mut c_void, _syncing:
     if nvim_syn_get_eap_skip(eap) != 0 {
         return;
     }
-    let block = nvim_get_curwin_synblock();
+    let block = nvim_syn_get_curwin_synblock();
     let next = skiptowhite(arg);
     rs_syn_cmd_conceal(block, arg, next);
 }
@@ -1079,7 +1079,7 @@ pub unsafe extern "C" fn rs_syn_cmd_foldlevel_dispatch(eap: *mut c_void, _syncin
     if nvim_syn_get_eap_skip(eap) != 0 {
         return;
     }
-    let block = nvim_get_curwin_synblock();
+    let block = nvim_syn_get_curwin_synblock();
     let arg_end = skiptowhite(arg);
     rs_syn_cmd_foldlevel(block, arg, arg_end);
 }
@@ -1095,7 +1095,7 @@ pub unsafe extern "C" fn rs_syn_cmd_spell_dispatch(eap: *mut c_void, _syncing: c
     if nvim_syn_get_eap_skip(eap) != 0 {
         return;
     }
-    let block = nvim_get_curwin_synblock();
+    let block = nvim_syn_get_curwin_synblock();
     let next = skiptowhite(arg);
     rs_syn_cmd_spell(block, arg, next);
     // assume spell checking changed, force a redraw
@@ -1301,7 +1301,7 @@ pub unsafe extern "C" fn rs_syn_cmd_iskeyword(eap: *mut c_void, _syncing: c_int)
     }
 
     let arg = skipwhite(nvim_syn_get_eap_arg(eap));
-    let block = nvim_get_curwin_synblock();
+    let block = nvim_syn_get_curwin_synblock();
 
     if *arg == 0 {
         // No argument: display current setting

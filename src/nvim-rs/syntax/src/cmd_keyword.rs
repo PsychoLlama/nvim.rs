@@ -51,7 +51,7 @@ extern "C" {
 
     // Redraw and free syntax state (Phase 4: decomposed from nvim_syn_keyword_redraw_and_free)
     fn nvim_syn_redraw_curbuf_later();
-    fn nvim_get_curwin_synblock() -> SynBlockHandle;
+    fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
 
     // String helpers
@@ -261,7 +261,7 @@ unsafe fn syn_cmd_keyword_impl(eap: *mut c_void, _syncing: c_int) {
 
     // Redraw and free syntax state (Phase 4: replaces nvim_syn_keyword_redraw_and_free)
     nvim_syn_redraw_curbuf_later();
-    nvim_syn_stack_free_all(nvim_get_curwin_synblock());
+    nvim_syn_stack_free_all(nvim_syn_get_curwin_synblock());
 }
 
 // =============================================================================
