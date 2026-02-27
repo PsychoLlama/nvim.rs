@@ -77,25 +77,43 @@ extern void rs_shada_read(void *sd_reader, int flags);
 extern var_flavour_T rs_var_flavour(const char *varname);
 extern int rs_shada_pack_entry(PackerBuffer *packer, const ShadaEntry *entry, size_t max_kbyte);
 
-/// Common prefix for all errors inside ShaDa file
-///
-/// I.e. errors occurred while parsing, but not system errors occurred while
-/// reading.
-#define RERR "E575: "
+// Error-prefix macros removed (plan 9106c29c Phase 1): format strings moved to Rust.
 
-/// Common prefix for critical read errors
-///
-/// I.e. errors that make shada_read_next_item return kSDReadStatusNotShaDa.
-#define RCERR "E576: "
+/// Generic semsg wrapper: one string argument.
+void nvim_shada_semsg_1s(const char *fmt, const char *arg)
+{
+  semsg(fmt, arg);
+}
 
-/// Common prefix for all “system” errors
-#define SERR "E886: "
+/// Generic semsg wrapper: two string arguments.
+void nvim_shada_semsg_2s(const char *fmt, const char *a, const char *b)
+{
+  semsg(fmt, a, b);
+}
 
-/// Common prefix for all “rename” errors
-#define RNERR "E136: "
+/// Generic semsg wrapper: one uint64 argument (cast to unsigned long long for portability).
+void nvim_shada_semsg_u64(const char *fmt, uint64_t val)
+{
+  semsg(fmt, (unsigned long long)val);
+}
 
-/// Common prefix for all ignorable “write” errors
-#define WERR "E574: "
+/// Generic semsg wrapper: two strings + uint64 + string (for readerr pattern).
+void nvim_shada_semsg_2s_u64(const char *fmt, const char *a, uint64_t val, const char *b)
+{
+  semsg(fmt, a, (unsigned long long)val, b);
+}
+
+/// Generic smsg wrapper: one string argument (for verbose writing message).
+void nvim_shada_smsg_1s(const char *fmt, const char *arg)
+{
+  smsg(0, fmt, arg);
+}
+
+/// Generic siemsg wrapper: one string argument.
+void nvim_shada_siemsg_1s(const char *fmt, const char *arg)
+{
+  siemsg(fmt, arg);
+}
 
 /// Possible ShaDa entry types
 ///
@@ -348,53 +366,12 @@ static inline buf_T *find_buffer(PMap(cstr_t) *fname_bufs, const char *fname)
 #define SHADA_MPACK_FREE_SPACE (4 * MPACK_ITEM_SIZE)
 
 
-/// Emit RERR "Error while reading ShaDa file" message (used by Rust parse functions).
-void nvim_shada_semsg_readerr(const char *entry_name, const char *error_desc, uint64_t position)
-{
-  semsg(_(RERR "Error while reading ShaDa file: "
-          "%s entry at position %" PRIu64 " %s"),
-        entry_name, position, error_desc);
-}
-
-/// Emit RCERR "extra bytes in msgpack string" error.
-void nvim_shada_semsg_rcerr_extra_bytes(uint64_t parse_pos)
-{
-  semsg(_(RCERR "Failed to parse ShaDa file: extra bytes in msgpack string "
-          "at position %" PRIu64), parse_pos);
-}
-
-/// Emit RCERR "incomplete msgpack string" error.
-void nvim_shada_semsg_rcerr_incomplete(uint64_t parse_pos)
-{
-  semsg(_(RCERR "Failed to parse ShaDa file: incomplete msgpack string "
-          "at position %" PRIu64), parse_pos);
-}
-
-/// Emit RCERR "msgpack parser error" error.
-void nvim_shada_semsg_rcerr_parse_error(uint64_t parse_pos)
-{
-  semsg(_(RCERR "Failed to parse ShaDa file due to a msgpack parser error "
-          "at position %" PRIu64), parse_pos);
-}
-
-/// Emit RCERR "too long" error message (used by rs_shada_read_next_item).
-void nvim_shada_semsg_rcerr_too_long(uint64_t initial_fpos)
-{
-  semsg(_(RCERR "Error while reading ShaDa file: "
-          "there is an item at position %" PRIu64 " "
-          "that is stated to be too long"),
-        initial_fpos);
-}
-
-/// Emit RCERR "missing item" error message (used by rs_shada_read_next_item).
-void nvim_shada_semsg_rcerr_missing(uint64_t initial_fpos)
-{
-  semsg(_(RCERR "Error while reading ShaDa file: "
-          "there is an item at position %" PRIu64 " "
-          "that must not be there: Missing items are "
-          "for internal uses only"),
-        initial_fpos);
-}
+// nvim_shada_semsg_readerr deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s_u64.
+// nvim_shada_semsg_rcerr_extra_bytes deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_u64.
+// nvim_shada_semsg_rcerr_incomplete deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_u64.
+// nvim_shada_semsg_rcerr_parse_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_u64.
+// nvim_shada_semsg_rcerr_too_long deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_u64.
+// nvim_shada_semsg_rcerr_missing deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_u64.
 
 /// Decode a msgpack binary string to a typval_T at dst.
 /// Wrapper for decode_string() that writes the result to an existing buffer.
@@ -643,10 +620,7 @@ const void *nvim_shada_jumplist_iter(const void *iter, void *wp,
 
 const void *nvim_shada_buflist_findnr(int nr) { return buflist_findnr(nr); }
 
-void nvim_shada_siemsg(const char *msg)
-{
-  siemsg("%s", msg);
-}
+// nvim_shada_siemsg deleted (plan 9106c29c Phase 1): replaced by nvim_shada_siemsg_1s.
 
 /// Free a Header ShadaEntry's dict (api_free_dict wrapper for Header entries).
 /// Called from Rust rs_shada_free_entry_contents when entry_type == Header.
@@ -737,18 +711,8 @@ char *nvim_shada_build_default_path(void)
   return concat_fnames_realloc(shada_dir, "main.shada", true);
 }
 
-/// Error message wrapper for close_file errors
-void nvim_shada_semsg_close_error(const char *strerror_msg)
-{
-  semsg(_(SERR "System error while closing ShaDa file: %s"), strerror_msg);
-}
-
-/// Error message wrapper for open-for-read errors
-void nvim_shada_semsg_open_error(const char *fname, const char *strerror_msg)
-{
-  semsg(_(SERR "System error while opening ShaDa file %s for reading: %s"),
-        fname, strerror_msg);
-}
+// nvim_shada_semsg_close_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_1s.
+// nvim_shada_semsg_open_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
 
 /// Get the size of FileDescriptor struct for Rust allocation
 size_t nvim_shada_file_descriptor_size(void) { return sizeof(FileDescriptor); }
@@ -834,11 +798,7 @@ void nvim_shada_os_remove(const char *fname)
   os_remove(fname);
 }
 
-/// Verbose message "Writing ShaDa file" used by rs_shada_write_file.
-void nvim_shada_smsg_writing(const char *fname)
-{
-  smsg(0, _("Writing ShaDa file \"%s\""), fname);
-}
+// nvim_shada_smsg_writing deleted (plan 9106c29c Phase 1): replaced by nvim_shada_smsg_1s.
 
 // =============================================================================
 // Phase 4 (plan fd426e0f): nvim_shada_platform_check_writable migration accessors
@@ -880,79 +840,17 @@ int nvim_shada_os_fchown(void *sd_writer, uint64_t uid, uint64_t gid)
                    (uv_uid_t)uid, (uv_gid_t)gid);
 }
 
-/// Error: ShaDa file is not writable (E137).
-void nvim_shada_semsg_not_writable(const char *fname)
-{
-  semsg(_("E137: ShaDa file is not writable: %s"), fname);
-}
-
-/// Error: fchown failed while writing ShaDa file.
-void nvim_shada_semsg_fchown_error(const char *tempname, const char *strerror_msg)
-{
-  semsg(_(RNERR "Failed setting uid and gid for file %s: %s"),
-        tempname, strerror_msg);
-}
-
-/// Error: merge reader open failed (for non-ENOENT errors)
-void nvim_shada_semsg_merge_read_error(const char *fname, const char *strerror_msg)
-{
-  semsg(_(SERR "System error while opening ShaDa file %s for reading "
-          "to merge before writing it: %s"), fname, strerror_msg);
-}
-
-/// Error: temp file open failed
-void nvim_shada_semsg_tempfile_open_error(const char *tempname, const char *strerror_msg)
-{
-  semsg(_(SERR "System error while opening temporary ShaDa file %s "
-          "for writing: %s"), tempname, strerror_msg);
-}
-
-/// Error: all .tmp.X files exist
-void nvim_shada_semsg_all_tmpfiles(const char *fname)
-{
-  semsg(_("E138: All %s.tmp.X files exist, cannot write ShaDa file!"), fname);
-}
-
-/// Error: mkdir failed
-void nvim_shada_semsg_mkdir_error(const char *failed_dir, const char *strerror_msg)
-{
-  semsg(_(SERR "Failed to create directory %s "
-          "for writing ShaDa file: %s"), failed_dir, strerror_msg);
-}
-
-/// Error: ShaDa file open for writing failed
-void nvim_shada_semsg_write_open_error(const char *fname, const char *strerror_msg)
-{
-  semsg(_(SERR "System error while opening ShaDa file %s for writing: %s"),
-        fname, strerror_msg);
-}
-
-/// Error: rename failed
-void nvim_shada_semsg_rename_error(const char *tempname, const char *fname)
-{
-  semsg(_(RNERR "Can't rename ShaDa file from %s to %s!"), tempname, fname);
-}
-
-/// Error: did not rename (not shada)
-void nvim_shada_semsg_not_shada(const char *tempname, const char *fname)
-{
-  semsg(_(RNERR "Did not rename %s because %s does not look like a ShaDa file"),
-        tempname, fname);
-}
-
-/// Error: did not rename (write errors)
-void nvim_shada_semsg_write_errors(const char *tempname, const char *fname)
-{
-  semsg(_(RNERR "Did not rename %s to %s because there were errors "
-          "during writing it"), tempname, fname);
-}
-
-/// Reminder: do not forget to remove temp file
-void nvim_shada_semsg_remove_reminder(const char *tempname, const char *fname)
-{
-  semsg(_(RNERR "Do not forget to remove %s or rename it manually to %s."),
-        tempname, fname);
-}
+// nvim_shada_semsg_not_writable deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_1s.
+// nvim_shada_semsg_fchown_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
+// nvim_shada_semsg_merge_read_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
+// nvim_shada_semsg_tempfile_open_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
+// nvim_shada_semsg_all_tmpfiles deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_1s.
+// nvim_shada_semsg_mkdir_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
+// nvim_shada_semsg_write_open_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
+// nvim_shada_semsg_rename_error deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
+// nvim_shada_semsg_not_shada deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
+// nvim_shada_semsg_write_errors deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
+// nvim_shada_semsg_remove_reminder deleted (plan 9106c29c Phase 1): replaced by nvim_shada_semsg_2s.
 
 // =============================================================================
 // Phase 3 (plan 11dd3cf4): shada_read migration accessors

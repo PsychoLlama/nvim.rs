@@ -486,7 +486,7 @@ extern "C" {
         out_additional_data: *mut *mut c_void,
     ) -> *const c_void;
     fn nvim_shada_buflist_findnr(nr: c_int) -> *const c_void;
-    fn nvim_shada_siemsg(msg: *const c_char);
+    // nvim_shada_siemsg removed (plan 9106c29c Phase 1): replaced by nvim_shada_siemsg_1s.
 
     // Phase 4: Entry free consolidation accessors
     fn nvim_shada_tv_clear(tv: *mut c_void);
@@ -512,8 +512,8 @@ extern "C" {
     );
     fn nvim_shada_get_p_fs() -> c_int;
     fn nvim_shada_build_default_path() -> *mut c_char;
-    fn nvim_shada_semsg_close_error(strerror_msg: *const c_char);
-    fn nvim_shada_semsg_open_error(fname: *const c_char, strerror_msg: *const c_char);
+    // nvim_shada_semsg_close_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_1s.
+    // nvim_shada_semsg_open_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
     fn nvim_shada_file_descriptor_size() -> usize;
 
     // Phase 6: curbuf accessors for check_marks_read
@@ -552,16 +552,16 @@ extern "C" {
     ) -> c_int;
     fn nvim_shada_vim_rename(from: *const c_char, to: *const c_char) -> c_int;
     fn nvim_shada_os_remove(fname: *const c_char);
-    fn nvim_shada_smsg_writing(fname: *const c_char);
-    fn nvim_shada_semsg_merge_read_error(fname: *const c_char, strerror_msg: *const c_char);
-    fn nvim_shada_semsg_tempfile_open_error(tempname: *const c_char, strerror_msg: *const c_char);
-    fn nvim_shada_semsg_all_tmpfiles(fname: *const c_char);
-    fn nvim_shada_semsg_mkdir_error(failed_dir: *const c_char, strerror_msg: *const c_char);
-    fn nvim_shada_semsg_write_open_error(fname: *const c_char, strerror_msg: *const c_char);
-    fn nvim_shada_semsg_rename_error(tempname: *const c_char, fname: *const c_char);
-    fn nvim_shada_semsg_not_shada(tempname: *const c_char, fname: *const c_char);
-    fn nvim_shada_semsg_write_errors(tempname: *const c_char, fname: *const c_char);
-    fn nvim_shada_semsg_remove_reminder(tempname: *const c_char, fname: *const c_char);
+    // nvim_shada_smsg_writing removed (plan 9106c29c Phase 1): use nvim_shada_smsg_1s.
+    // nvim_shada_semsg_merge_read_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
+    // nvim_shada_semsg_tempfile_open_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
+    // nvim_shada_semsg_all_tmpfiles removed (plan 9106c29c Phase 1): use nvim_shada_semsg_1s.
+    // nvim_shada_semsg_mkdir_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
+    // nvim_shada_semsg_write_open_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
+    // nvim_shada_semsg_rename_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
+    // nvim_shada_semsg_not_shada removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
+    // nvim_shada_semsg_write_errors removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
+    // nvim_shada_semsg_remove_reminder removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
 
     // Phase 3 (plan 11dd3cf4): shada_read migration accessors
     // nvim_shada_read_next_item removed (Phase 2 plan 92c8078e): Rust uses rs_shada_read_next_item.
@@ -658,10 +658,8 @@ extern "C" {
     // Phase 2 (plan 92c8078e): compound parsing accessors for rs_shada_read_next_item
     fn nvim_shada_file_try_read_buffered(fd: *mut c_void, len: usize) -> *mut c_char;
     fn nvim_shada_file_bytes_read(fd: *mut c_void) -> u64;
-    // Phase 6 plan 13c452f9: all keydict parse functions migrated to Rust.
-    // Kept: semsg_rcerr wrappers (called from rs_shada_read_next_item header parsing)
-    fn nvim_shada_semsg_rcerr_too_long(initial_fpos: u64);
-    fn nvim_shada_semsg_rcerr_missing(initial_fpos: u64);
+    // nvim_shada_semsg_rcerr_too_long removed (plan 9106c29c Phase 1): use nvim_shada_semsg_u64.
+    // nvim_shada_semsg_rcerr_missing removed (plan 9106c29c Phase 1): use nvim_shada_semsg_u64.
 }
 
 // =============================================================================
@@ -830,10 +828,8 @@ extern "C" {
     ) -> c_int;
     /// Call os_fchown on an open FileDescriptor (sd_writer).
     fn nvim_shada_os_fchown(sd_writer: *mut c_void, uid: u64, gid: u64) -> c_int;
-    /// Emit E137 "ShaDa file is not writable" error.
-    fn nvim_shada_semsg_not_writable(fname: *const c_char);
-    /// Emit RNERR "Failed setting uid and gid" error.
-    fn nvim_shada_semsg_fchown_error(tempname: *const c_char, strerror_msg: *const c_char);
+    // nvim_shada_semsg_not_writable removed (plan 9106c29c Phase 1): use nvim_shada_semsg_1s.
+    // nvim_shada_semsg_fchown_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
 }
 
 // =============================================================================
@@ -979,18 +975,22 @@ extern "C" {
         force_blob: bool,
         dst: *mut c_void,
     );
-    /// Emit RERR "Error while reading ShaDa file: <name> entry at <pos> <desc>".
-    fn nvim_shada_semsg_readerr(
-        entry_name: *const c_char,
-        error_desc: *const c_char,
-        position: u64,
-    );
-    /// Emit RCERR "Failed to parse ShaDa file: extra bytes in msgpack string".
-    fn nvim_shada_semsg_rcerr_extra_bytes(parse_pos: u64);
-    /// Emit RCERR "Failed to parse ShaDa file: incomplete msgpack string".
-    fn nvim_shada_semsg_rcerr_incomplete(parse_pos: u64);
-    /// Emit RCERR "Failed to parse ShaDa file due to a msgpack parser error".
-    fn nvim_shada_semsg_rcerr_parse_error(parse_pos: u64);
+    // nvim_shada_semsg_readerr removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s_u64.
+    // nvim_shada_semsg_rcerr_extra_bytes removed (plan 9106c29c Phase 1): use nvim_shada_semsg_u64.
+    // nvim_shada_semsg_rcerr_incomplete removed (plan 9106c29c Phase 1): use nvim_shada_semsg_u64.
+    // nvim_shada_semsg_rcerr_parse_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_u64.
+    /// Generic semsg wrapper: one string argument.
+    fn nvim_shada_semsg_1s(fmt: *const c_char, arg: *const c_char);
+    /// Generic semsg wrapper: two string arguments.
+    fn nvim_shada_semsg_2s(fmt: *const c_char, a: *const c_char, b: *const c_char);
+    /// Generic semsg wrapper: one u64 argument.
+    fn nvim_shada_semsg_u64(fmt: *const c_char, val: u64);
+    /// Generic semsg wrapper: two strings + u64 + string (for readerr pattern).
+    fn nvim_shada_semsg_2s_u64(fmt: *const c_char, a: *const c_char, val: u64, b: *const c_char);
+    /// Generic smsg wrapper: one string argument.
+    fn nvim_shada_smsg_1s(fmt: *const c_char, arg: *const c_char);
+    /// Generic siemsg wrapper: one string argument.
+    fn nvim_shada_siemsg_1s(fmt: *const c_char, arg: *const c_char);
     /// Unpack a msgpack dict into a typed keydict struct via field hash.
     /// Returns true on success; writes error string (xmalloc'd) to *error on failure.
     fn unpack_keydict(
@@ -1023,17 +1023,29 @@ unsafe fn rs_check_skip_status(status: c_int, read_size: usize, parse_pos: u64) 
     // MPACK_OK = 0, MPACK_EOF = 1, MPACK_ERROR = 2
     if status == MPACK_OK {
         if read_size != 0 {
-            nvim_shada_semsg_rcerr_extra_bytes(parse_pos);
+            nvim_shada_semsg_u64(
+                c"E576: Failed to parse ShaDa file: extra bytes in msgpack string at position %llu"
+                    .as_ptr(),
+                parse_pos,
+            );
             SD_READ_STATUS_NOT_SHADA
         } else {
             SD_READ_STATUS_SUCCESS
         }
     } else if status == 1 {
         // MPACK_EOF
-        nvim_shada_semsg_rcerr_incomplete(parse_pos);
+        nvim_shada_semsg_u64(
+            c"E576: Failed to parse ShaDa file: incomplete msgpack string at position %llu"
+                .as_ptr(),
+            parse_pos,
+        );
         SD_READ_STATUS_NOT_SHADA
     } else {
-        nvim_shada_semsg_rcerr_parse_error(parse_pos);
+        nvim_shada_semsg_u64(
+            c"E576: Failed to parse ShaDa file due to a msgpack parser error at position %llu"
+                .as_ptr(),
+            parse_pos,
+        );
         SD_READ_STATUS_NOT_SHADA
     }
 }
@@ -1155,38 +1167,42 @@ unsafe fn rs_parse_history(
 
     let len = unpack_array(&raw mut read_ptr, &raw mut read_size);
     if len < 2 {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"history".as_ptr(),
-            c"is not an array with enough elements".as_ptr(),
             initial_fpos,
+            c"is not an array with enough elements".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
 
     let mut hist_type: i64 = 0;
     if !unpack_integer(&raw mut read_ptr, &raw mut read_size, &raw mut hist_type) {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"history".as_ptr(),
-            c"has wrong history type type".as_ptr(),
             initial_fpos,
+            c"has wrong history type type".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
 
     let item = unpack_string(&raw mut read_ptr, &raw mut read_size);
     if item.is_null() {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"history".as_ptr(),
-            c"has wrong history string type".as_ptr(),
             initial_fpos,
+            c"has wrong history string type".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
     if !libc::memchr(item.data.cast::<c_void>(), 0, item.size).is_null() {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"history".as_ptr(),
-            c"contains string with zero byte inside".as_ptr(),
             initial_fpos,
+            c"contains string with zero byte inside".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
@@ -1196,19 +1212,21 @@ unsafe fn rs_parse_history(
 
     let sep: c_char = if is_hist_search {
         if len < 3 {
-            nvim_shada_semsg_readerr(
+            nvim_shada_semsg_2s_u64(
+                c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
                 c"search history".as_ptr(),
-                c"does not have separator character".as_ptr(),
                 initial_fpos,
+                c"does not have separator character".as_ptr(),
             );
             return SD_READ_STATUS_MALFORMED;
         }
         let mut sep_type: i64 = 0;
         if !unpack_integer(&raw mut read_ptr, &raw mut read_size, &raw mut sep_type) {
-            nvim_shada_semsg_readerr(
+            nvim_shada_semsg_2s_u64(
+                c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
                 c"search history".as_ptr(),
-                c"has wrong history separator type".as_ptr(),
                 initial_fpos,
+                c"has wrong history separator type".as_ptr(),
             );
             return SD_READ_STATUS_MALFORMED;
         }
@@ -1252,20 +1270,22 @@ unsafe fn rs_parse_variable(
 
     let len = unpack_array(&raw mut read_ptr, &raw mut read_size);
     if len < 2 {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"variable".as_ptr(),
-            c"is not an array with enough elements".as_ptr(),
             initial_fpos,
+            c"is not an array with enough elements".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
 
     let name = unpack_string(&raw mut read_ptr, &raw mut read_size);
     if name.is_null() {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"variable".as_ptr(),
-            c"has wrong variable name type".as_ptr(),
             initial_fpos,
+            c"has wrong variable name type".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
@@ -1284,10 +1304,11 @@ unsafe fn rs_parse_variable(
         let tv_ptr = nvim_shada_entry_var_value_ptr(entry);
         let status = unpack_typval(&raw mut read_ptr, &raw mut read_size, tv_ptr);
         if status != MPACK_OK {
-            nvim_shada_semsg_readerr(
+            nvim_shada_semsg_2s_u64(
+                c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
                 c"variable".as_ptr(),
-                c"has value that cannot be converted to the Vimscript value".as_ptr(),
                 initial_fpos,
+                c"has value that cannot be converted to the Vimscript value".as_ptr(),
             );
             return SD_READ_STATUS_MALFORMED;
         }
@@ -1299,10 +1320,11 @@ unsafe fn rs_parse_variable(
                 || type_val != 10
             // VAR_TYPE_BLOB
             {
-                nvim_shada_semsg_readerr(
+                nvim_shada_semsg_2s_u64(
+                    c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
                     c"variable".as_ptr(),
-                    c"has wrong variable type".as_ptr(),
                     initial_fpos,
+                    c"has wrong variable type".as_ptr(),
                 );
                 return SD_READ_STATUS_MALFORMED;
             }
@@ -1335,20 +1357,22 @@ unsafe fn rs_parse_substr(
 
     let len = unpack_array(&raw mut read_ptr, &raw mut read_size);
     if len < 1 {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"sub string".as_ptr(),
-            c"is not an array with enough elements".as_ptr(),
             initial_fpos,
+            c"is not an array with enough elements".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
 
     let sub = unpack_string(&raw mut read_ptr, &raw mut read_size);
     if sub.is_null() {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"sub string".as_ptr(),
-            c"has wrong sub string type".as_ptr(),
             initial_fpos,
+            c"has wrong sub string type".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
@@ -1390,7 +1414,12 @@ unsafe fn rs_parse_additional_data(
     }
 
     if rs != 0 {
-        nvim_shada_semsg_readerr(c"item".as_ptr(), c"additional bytes".as_ptr(), initial_fpos);
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
+            c"item".as_ptr(),
+            initial_fpos,
+            c"additional bytes".as_ptr(),
+        );
         if !ad.items.is_null() {
             nvim_xfree(ad.items.cast::<c_void>());
         }
@@ -1408,7 +1437,11 @@ unsafe fn rs_parse_additional_data(
 /// Rust replacement for nvim_shada_parse_search_pattern.
 /// Uses a local KeyDict_shada_search_pat with unpack_keydict, then copies fields
 /// into the Rust SearchPatternData in entry->data.search_pattern.
-#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::too_many_lines
+)]
 unsafe fn rs_parse_search_pattern(
     entry: *mut ShadaEntry,
     buf: *const c_char,
@@ -1445,17 +1478,23 @@ unsafe fn rs_parse_search_pattern(
         &raw mut read_size,
         &raw mut error_alloc,
     ) {
-        nvim_shada_semsg_readerr(c"search pattern".as_ptr(), error_alloc, initial_fpos);
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
+            c"search pattern".as_ptr(),
+            initial_fpos,
+            error_alloc,
+        );
         nvim_xfree(error_alloc.cast::<c_void>());
         return SD_READ_STATUS_MALFORMED;
     }
 
     // KEYSET_OPTIDX__shada_search_pat__sp = 8
     if !has_key(it.is_set, 8) {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"search pattern".as_ptr(),
-            c"has no pattern".as_ptr(),
             initial_fpos,
+            c"has no pattern".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
@@ -1561,7 +1600,12 @@ unsafe fn rs_parse_mark(
         &raw mut read_size,
         &raw mut error_alloc,
     ) {
-        nvim_shada_semsg_readerr(c"mark".as_ptr(), error_alloc, initial_fpos);
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
+            c"mark".as_ptr(),
+            initial_fpos,
+            error_alloc,
+        );
         nvim_xfree(error_alloc.cast::<c_void>());
         return SD_READ_STATUS_MALFORMED;
     }
@@ -1573,10 +1617,11 @@ unsafe fn rs_parse_mark(
     let name = if has_key(it.is_set, 4) {
         // n key only valid for local/global marks, not jump/change
         if type_u64 == SD_ITEM_JUMP as u64 || type_u64 == SD_ITEM_CHANGE as u64 {
-            nvim_shada_semsg_readerr(
+            nvim_shada_semsg_2s_u64(
+                c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
                 c"mark".as_ptr(),
-                c"has n key which is only valid for local and global mark entries".as_ptr(),
                 initial_fpos,
+                c"has n key which is only valid for local and global mark entries".as_ptr(),
             );
             return SD_READ_STATUS_MALFORMED;
         }
@@ -1602,26 +1647,29 @@ unsafe fn rs_parse_mark(
     };
 
     if fname.is_null() {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"mark".as_ptr(),
-            c"is missing file name".as_ptr(),
             initial_fpos,
+            c"is missing file name".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
     if lnum <= 0 {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"mark".as_ptr(),
-            c"has invalid line number".as_ptr(),
             initial_fpos,
+            c"has invalid line number".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
     if col < 0 {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"mark".as_ptr(),
-            c"has invalid column number".as_ptr(),
             initial_fpos,
+            c"has invalid column number".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
@@ -1672,7 +1720,12 @@ unsafe fn rs_parse_register(
         &raw mut read_size,
         &raw mut error_alloc,
     ) {
-        nvim_shada_semsg_readerr(c"register".as_ptr(), error_alloc, initial_fpos);
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
+            c"register".as_ptr(),
+            initial_fpos,
+            error_alloc,
+        );
         nvim_xfree(error_alloc.cast::<c_void>());
         nvim_xfree(it.rc.items.cast::<c_void>());
         return SD_READ_STATUS_MALFORMED;
@@ -1680,10 +1733,11 @@ unsafe fn rs_parse_register(
 
     // KEYSET_OPTIDX: n=1, rc=2, rt=3, ru=4, rw=5
     if it.rc.size == 0 {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"register".as_ptr(),
-            c"has rc key with missing or empty array".as_ptr(),
             initial_fpos,
+            c"has rc key with missing or empty array".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
@@ -1751,10 +1805,11 @@ unsafe fn rs_parse_buflist(
 
     let len = unpack_array(&raw mut read_ptr, &raw mut read_size);
     if len < 0 {
-        nvim_shada_semsg_readerr(
+        nvim_shada_semsg_2s_u64(
+            c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
             c"buffer list".as_ptr(),
-            c"is not an array".as_ptr(),
             initial_fpos,
+            c"is not an array".as_ptr(),
         );
         return SD_READ_STATUS_MALFORMED;
     }
@@ -1790,7 +1845,12 @@ unsafe fn rs_parse_buflist(
             &raw mut error_alloc,
         ) {
             // Build error message like C: "buffer list at position %u contains entry that %s"
-            nvim_shada_semsg_readerr(c"buffer list".as_ptr(), error_alloc, initial_fpos);
+            nvim_shada_semsg_2s_u64(
+                c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
+                c"buffer list".as_ptr(),
+                initial_fpos,
+                error_alloc,
+            );
             nvim_xfree(error_alloc.cast::<c_void>());
             nvim_xfree(it_ad.items.cast::<c_void>());
             (*entry).data.buffer_list = std::mem::ManuallyDrop::new(BufferListData {
@@ -1816,10 +1876,11 @@ unsafe fn rs_parse_buflist(
         }
 
         if e.pos.lnum <= 0 {
-            nvim_shada_semsg_readerr(
+            nvim_shada_semsg_2s_u64(
+                c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
                 c"buffer list".as_ptr(),
-                c"contains entry with invalid line number".as_ptr(),
                 initial_fpos,
+                c"contains entry with invalid line number".as_ptr(),
             );
             (*entry).data.buffer_list = std::mem::ManuallyDrop::new(BufferListData {
                 size: actual_size,
@@ -1828,10 +1889,11 @@ unsafe fn rs_parse_buflist(
             return SD_READ_STATUS_MALFORMED;
         }
         if e.pos.col < 0 {
-            nvim_shada_semsg_readerr(
+            nvim_shada_semsg_2s_u64(
+                c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
                 c"buffer list".as_ptr(),
-                c"contains entry with invalid column number".as_ptr(),
                 initial_fpos,
+                c"contains entry with invalid column number".as_ptr(),
             );
             (*entry).data.buffer_list = std::mem::ManuallyDrop::new(BufferListData {
                 size: actual_size,
@@ -1840,10 +1902,11 @@ unsafe fn rs_parse_buflist(
             return SD_READ_STATUS_MALFORMED;
         }
         if e.fname.is_null() {
-            nvim_shada_semsg_readerr(
+            nvim_shada_semsg_2s_u64(
+                c"E575: Error while reading ShaDa file: %s entry at position %llu %s".as_ptr(),
                 c"buffer list".as_ptr(),
-                c"contains entry that does not have a file name".as_ptr(),
                 initial_fpos,
+                c"contains entry that does not have a file name".as_ptr(),
             );
             (*entry).data.buffer_list = std::mem::ManuallyDrop::new(BufferListData {
                 size: actual_size,
@@ -4161,7 +4224,11 @@ pub unsafe extern "C" fn rs_shada_read_file(file: *const c_char, flags: c_int) -
 
     if of_ret != 0 {
         if of_ret != UV_ENOENT || (flags & SHADA_MISSING_ERROR as c_int) != 0 {
-            nvim_shada_semsg_open_error(fname, nvim_shada_os_strerror(of_ret));
+            nvim_shada_semsg_2s(
+                c"E886: System error while opening ShaDa file %s for reading: %s".as_ptr(),
+                fname,
+                nvim_shada_os_strerror(of_ret),
+            );
         }
         nvim_xfree(fname.cast::<c_void>());
         nvim_xfree(sd_reader);
@@ -5204,7 +5271,7 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
         );
         if error != 0 {
             if error != UV_ENOENT {
-                nvim_shada_semsg_merge_read_error(fname, nvim_shada_os_strerror(error));
+                nvim_shada_semsg_2s(c"E886: System error while opening ShaDa file %s for reading to merge before writing it: %s".as_ptr(), fname, nvim_shada_os_strerror(error));
                 // Try writing the file even if opening it emerged any issues besides
                 // file not existing: maybe writing will succeed nevertheless.
             }
@@ -5252,7 +5319,10 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
                     #[allow(clippy::cast_possible_wrap)]
                     if *wp == b'z' as c_char {
                         // Tried names from .tmp.a to .tmp.z, all failed.
-                        nvim_shada_semsg_all_tmpfiles(fname);
+                        nvim_shada_semsg_1s(
+                            c"E138: All %s.tmp.X files exist, cannot write ShaDa file!".as_ptr(),
+                            fname,
+                        );
                         nvim_xfree(fname.cast::<c_void>());
                         nvim_xfree(tempname.cast::<c_void>());
                         if did_open_reader {
@@ -5265,7 +5335,12 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
                     *wp += 1;
                     // continue loop
                 } else {
-                    nvim_shada_semsg_tempfile_open_error(tempname, nvim_shada_os_strerror(error));
+                    nvim_shada_semsg_2s(
+                        c"E886: System error while opening temporary ShaDa file %s for writing: %s"
+                            .as_ptr(),
+                        tempname,
+                        nvim_shada_os_strerror(error),
+                    );
                     break;
                 }
             }
@@ -5284,7 +5359,11 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
                 let mut failed_dir: *mut c_char = std::ptr::null_mut();
                 let ret = nvim_shada_os_mkdir_recurse(fname, 0o700, &raw mut failed_dir);
                 if ret != 0 {
-                    nvim_shada_semsg_mkdir_error(failed_dir, nvim_shada_os_strerror(ret));
+                    nvim_shada_semsg_2s(
+                        c"E886: Failed to create directory %s for writing ShaDa file: %s".as_ptr(),
+                        failed_dir,
+                        nvim_shada_os_strerror(ret),
+                    );
                     *tail_ptr = tail_save;
                     nvim_xfree(fname.cast::<c_void>());
                     nvim_xfree(failed_dir.cast::<c_void>());
@@ -5302,7 +5381,11 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
             0o600,
         );
         if error != 0 {
-            nvim_shada_semsg_write_open_error(fname, nvim_shada_os_strerror(error));
+            nvim_shada_semsg_2s(
+                c"E886: System error while opening ShaDa file %s for writing: %s".as_ptr(),
+                fname,
+                nvim_shada_os_strerror(error),
+            );
         } else {
             did_open_writer = true;
         }
@@ -5321,7 +5404,7 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
 
     if nvim_shada_get_p_verbose() > 1 {
         nvim_shada_verbose_enter();
-        nvim_shada_smsg_writing(fname);
+        nvim_shada_smsg_1s(c"Writing ShaDa file \"%s\"".as_ptr(), fname);
         nvim_shada_verbose_leave();
     }
 
@@ -5341,7 +5424,11 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
             let check_result = rs_shada_platform_check_writable(fname, sd_writer_mem, tempname);
             if check_result == 1 {
                 if nvim_shada_vim_rename(tempname, fname) == -1 {
-                    nvim_shada_semsg_rename_error(tempname, fname);
+                    nvim_shada_semsg_2s(
+                        c"E136: Can\'t rename ShaDa file from %s to %s!".as_ptr(),
+                        tempname,
+                        fname,
+                    );
                 } else {
                     did_remove = true;
                     nvim_shada_os_remove(tempname);
@@ -5349,12 +5436,25 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
             }
             // check_result == 0 or -1: E137/RNERR already emitted by accessor
         } else if sw_ret == K_SD_WRITE_READ_NOT_SHADA {
-            nvim_shada_semsg_not_shada(tempname, fname);
+            nvim_shada_semsg_2s(
+                c"E136: Did not rename %s because %s does not look like a ShaDa file".as_ptr(),
+                tempname,
+                fname,
+            );
         } else {
-            nvim_shada_semsg_write_errors(tempname, fname);
+            nvim_shada_semsg_2s(
+                c"E136: Did not rename %s to %s because there were errors during writing it"
+                    .as_ptr(),
+                tempname,
+                fname,
+            );
         }
         if !did_remove {
-            nvim_shada_semsg_remove_reminder(tempname, fname);
+            nvim_shada_semsg_2s(
+                c"E136: Do not forget to remove %s or rename it manually to %s.".as_ptr(),
+                tempname,
+                fname,
+            );
         }
         nvim_xfree(tempname.cast::<c_void>());
     }
@@ -5783,7 +5883,7 @@ unsafe fn rs_shada_read_next_item(
         }
 
         if length_u64 > isize::MAX as u64 {
-            nvim_shada_semsg_rcerr_too_long(initial_fpos);
+            nvim_shada_semsg_u64(c"E576: Error while reading ShaDa file: there is an item at position %llu that is stated to be too long".as_ptr(), initial_fpos);
             return SD_READ_STATUS_NOT_SHADA;
         }
 
@@ -5792,7 +5892,7 @@ unsafe fn rs_shada_read_next_item(
         (*entry).can_free_entry = true;
 
         if type_u64 == 0 {
-            nvim_shada_semsg_rcerr_missing(initial_fpos);
+            nvim_shada_semsg_u64(c"E576: Error while reading ShaDa file: there is an item at position %llu that must not be there: Missing items are for internal uses only".as_ptr(), initial_fpos);
             return SD_READ_STATUS_NOT_SHADA;
         }
 
@@ -7632,7 +7732,10 @@ pub unsafe extern "C" fn rs_shada_init_jumps(
 pub unsafe extern "C" fn rs_close_file(cookie: FileDescriptorHandle) {
     let error = nvim_file_close(cookie, nvim_shada_get_p_fs());
     if error != 0 {
-        nvim_shada_semsg_close_error(nvim_shada_os_strerror(error));
+        nvim_shada_semsg_1s(
+            c"E886: System error while closing ShaDa file: %s".as_ptr(),
+            nvim_shada_os_strerror(error),
+        );
     }
 }
 
@@ -8219,7 +8322,7 @@ unsafe fn rs_shada_platform_check_writable(
         &raw mut file_gid,
     );
     if info_ok == 0 {
-        nvim_shada_semsg_not_writable(fname);
+        nvim_shada_semsg_1s(c"E137: ShaDa file is not writable: %s".as_ptr(), fname);
         return 0;
     }
 
@@ -8235,7 +8338,11 @@ unsafe fn rs_shada_platform_check_writable(
             if file_uid != ROOT_UID || file_gid != egid {
                 let fchown_ret = nvim_shada_os_fchown(sd_writer, file_uid, file_gid);
                 if fchown_ret != 0 {
-                    nvim_shada_semsg_fchown_error(tempname, nvim_shada_os_strerror(fchown_ret));
+                    nvim_shada_semsg_2s(
+                        c"E136: Failed setting uid and gid for file %s: %s".as_ptr(),
+                        tempname,
+                        nvim_shada_os_strerror(fchown_ret),
+                    );
                     return -1;
                 }
             }
@@ -8248,7 +8355,7 @@ unsafe fn rs_shada_platform_check_writable(
                 (file_mode & 0o002) != 0
             };
             if !is_writable {
-                nvim_shada_semsg_not_writable(fname);
+                nvim_shada_semsg_1s(c"E137: ShaDa file is not writable: %s".as_ptr(), fname);
                 return 0;
             }
         }
