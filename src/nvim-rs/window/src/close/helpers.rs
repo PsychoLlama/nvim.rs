@@ -78,8 +78,8 @@ extern "C" {
     fn nvim_win_float_find_altwin(win: WinHandle, tp: TabpageHandle) -> WinHandle;
     /// xfree for frame_T*.
     fn nvim_xfree_frame(frp: *mut std::ffi::c_void);
-    /// win_free(win, tp) wrapper.
-    fn nvim_win_free_wrapper(win: WinHandle, tp: TabpageHandle);
+    /// win_free(win, tp) -- direct Rust call.
+    fn rs_win_free(win: WinHandle, tp: TabpageHandle);
     /// Check if win == cmdline_win; returns 1 if so.
     fn nvim_win_is_cmdline_win(win: WinHandle) -> c_int;
     /// Set cmdline_win = NULL.
@@ -237,7 +237,7 @@ pub unsafe extern "C" fn rs_win_free_mem(
         wp = nvim_win_float_find_altwin(win, tp);
     }
 
-    nvim_win_free_wrapper(win, tp);
+    rs_win_free(win, tp);
 
     // When deleting the current window in the tab, select a new current window.
     if nvim_tabpage_get_curwin(win_tp) == win {

@@ -1389,32 +1389,42 @@ void free_wininfo(WinInfo *wip, buf_T *bp)
   rs_free_wininfo(wip, bp);
 }
 
-/// Remove window 'wp' from the window list and free the structure.
-///
-/// @param tp  tab page "win" is in, NULL for current
-void win_free(win_T *wp, tabpage_T *tp)
+// Phase 12 compound C accessors for rs_win_free / rs_win_free_grid
+
+/// pmap_del the window handle from window_handles.
+void nvim_win_pmap_del(win_T *wp) { pmap_del(int)(&window_handles, wp->handle, NULL); }
+
+/// alist_unlink for the window's argument list.
+void nvim_win_alist_unlink(win_T *wp) { alist_unlink(wp->w_alist); }
+
+/// Destroy the w_ns_set (uint32_t Set).
+void nvim_win_clear_ns_set(win_T *wp) { set_destroy(uint32_t, &wp->w_ns_set); }
+
+/// Clear both winopt structs.
+void nvim_win_clear_winopts(win_T *wp)
 {
-  pmap_del(int)(&window_handles, wp->handle, NULL);
-  rs_clearFolding(wp);
-
-  // reduce the reference count to the argument list.
-  alist_unlink(wp->w_alist);
-
-  // Don't execute autocommands while the window is halfway being deleted.
-  block_autocmds();
-
-  set_destroy(uint32_t, &wp->w_ns_set);
-
   clear_winopt(&wp->w_onebuf_opt);
   clear_winopt(&wp->w_allbuf_opt);
+}
 
+/// Free lcs_chars multispace/leadmultispace.
+void nvim_win_free_lcs_chars(win_T *wp)
+{
   xfree(wp->w_p_lcs_chars.multispace);
   xfree(wp->w_p_lcs_chars.leadmultispace);
+}
 
-  vars_clear(&wp->w_vars->dv_hashtab);          // free all w: variables
+/// Free all w: variables.
+void nvim_win_clear_vars(win_T *wp)
+{
+  vars_clear(&wp->w_vars->dv_hashtab);
   hash_init(&wp->w_vars->dv_hashtab);
   unref_var_dict(wp->w_vars);
+}
 
+/// Fix prevwin: NULL out prevwin==wp, and tp_prevwin across all tabs.
+void nvim_win_fix_prevwin(win_T *wp)
+{
   if (prevwin == wp) {
     prevwin = NULL;
   }
@@ -1423,27 +1433,36 @@ void win_free(win_T *wp, tabpage_T *tp)
       ttp->tp_prevwin = NULL;
     }
   }
+}
 
-  xfree(wp->w_lines);
+/// Free w_lines.
+void nvim_win_free_lines(win_T *wp) { xfree(wp->w_lines); }
 
+/// Clear the tagstack entries.
+void nvim_win_clear_tagstack(win_T *wp)
+{
   for (int i = 0; i < wp->w_tagstacklen; i++) {
     rs_tagstack_clear_entry(&wp->w_tagstack[i]);
   }
+}
 
-  xfree(wp->w_localdir);
-  xfree(wp->w_prevdir);
+/// Free w_localdir and w_prevdir.
+void nvim_win_free_dirs(win_T *wp) { xfree(wp->w_localdir); xfree(wp->w_prevdir); }
 
+/// Clear all three click_defs arrays.
+void nvim_win_clear_click_defs_all(win_T *wp)
+{
   stl_clear_click_defs(wp->w_status_click_defs, wp->w_status_click_defs_size);
   xfree(wp->w_status_click_defs);
-
   stl_clear_click_defs(wp->w_winbar_click_defs, wp->w_winbar_click_defs_size);
   xfree(wp->w_winbar_click_defs);
-
   stl_clear_click_defs(wp->w_statuscol_click_defs, wp->w_statuscol_click_defs_size);
   xfree(wp->w_statuscol_click_defs);
+}
 
-  // Remove the window from the b_wininfo lists, it may happen that the
-  // freed memory is re-used for another window.
+/// Remove window from all b_wininfo kvecs (FOR_ALL_BUFFERS loop).
+void nvim_win_cleanup_b_wininfo(win_T *wp)
+{
   FOR_ALL_BUFFERS(buf) {
     WinInfo *wip_wp = NULL;
     size_t pos_wip = kv_size(buf->b_wininfo);
@@ -1469,44 +1488,65 @@ void win_free(win_T *wp, tabpage_T *tp)
       }
     }
   }
+}
 
-  // free the border text
+/// Clear border text virttext.
+void nvim_win_clear_config_virttext(win_T *wp)
+{
   clear_virttext(&wp->w_config.title_chunks);
   clear_virttext(&wp->w_config.footer_chunks);
+}
 
+/// clear_matches + free_jumplist + qf_free_all.
+void nvim_win_clear_matches_and_jumplist(win_T *wp)
+{
   clear_matches(wp);
-
   free_jumplist(wp);
-
   qf_free_all(wp);
+}
 
-  xfree(wp->w_p_cc_cols);
+/// Free w_p_cc_cols.
+void nvim_win_free_cc_cols(win_T *wp) { xfree(wp->w_p_cc_cols); }
 
-  win_free_grid(wp, false);
-
-  if (rs_win_valid_any_tab(wp)) {
-    rs_win_remove(wp, tp);
-  }
+/// Handle autocmd_busy pending free or direct xfree.
+void nvim_win_handle_pending_free(win_T *wp)
+{
   if (autocmd_busy) {
     wp->w_next = au_pending_free_win;
     au_pending_free_win = wp;
   } else {
     xfree(wp);
   }
-
-  unblock_autocmds();
 }
 
-void win_free_grid(win_T *wp, bool reinit)
+/// ui_call_grid_destroy for the window's grid (if handle != 0 and multigrid).
+void nvim_win_grid_destroy(win_T *wp)
 {
   if (wp->w_grid_alloc.handle != 0 && ui_has(kUIMultigrid)) {
     ui_call_grid_destroy(wp->w_grid_alloc.handle);
   }
-  grid_free(&wp->w_grid_alloc);
-  if (reinit) {
-    // if a float is turned into a split, the grid data structure will be reused
-    CLEAR_FIELD(wp->w_grid_alloc);
-  }
+}
+
+/// grid_free for the window's grid.
+void nvim_win_grid_free(win_T *wp) { grid_free(&wp->w_grid_alloc); }
+
+/// CLEAR_FIELD the window's grid (for reinit).
+void nvim_win_grid_clear_field(win_T *wp) { CLEAR_FIELD(wp->w_grid_alloc); }
+
+extern void rs_win_free(win_T *wp, tabpage_T *tp);
+extern void rs_win_free_grid(win_T *wp, int reinit);
+
+/// Remove window 'wp' from the window list and free the structure.
+///
+/// @param tp  tab page "win" is in, NULL for current
+void win_free(win_T *wp, tabpage_T *tp)
+{
+  rs_win_free(wp, tp);
+}
+
+void win_free_grid(win_T *wp, bool reinit)
+{
+  rs_win_free_grid(wp, reinit ? 1 : 0);
 }
 
 void win_new_screensize(void) { rs_win_new_screensize(); }
@@ -1737,7 +1777,7 @@ void nvim_frame_flatten_wrapper(frame_T *frp) { rs_frame_flatten(frp); }
 frame_T *nvim_xcalloc_frame(void) { return xcalloc(1, sizeof(frame_T)); }
 void nvim_ui_comp_remove_grid_win(win_T *wp) { if (wp) { ui_comp_remove_grid(&wp->w_grid_alloc); } }
 void nvim_ui_call_win_hide_win(win_T *wp) { if (wp) { ui_call_win_hide(wp->w_grid_alloc.handle); } }
-void nvim_win_free_grid_wrapper(win_T *wp, int reinit) { if (wp) { win_free_grid(wp, reinit != 0); } }
+// nvim_win_free_grid_wrapper deleted: callers updated to call rs_win_free_grid directly (Phase 12)
 
 /// Wrapper: merge_win_config(&wp->w_config, WIN_CONFIG_INIT) + CLEAR_FIELD(wp->w_border_adj).
 void nvim_merge_win_config_init(win_T *wp)
@@ -2945,7 +2985,7 @@ win_T *nvim_win_float_find_altwin(win_T *win, tabpage_T *tp)
 void nvim_xfree_frame(void *frp) { xfree(frp); }
 
 /// win_free(win, tp) wrapper.
-void nvim_win_free_wrapper(win_T *win, tabpage_T *tp) { win_free(win, tp); }
+// nvim_win_free_wrapper deleted: callers updated to call rs_win_free directly (Phase 12)
 
 /// Check if win == cmdline_win.
 int nvim_win_is_cmdline_win(win_T *win) { return (win == cmdline_win) ? 1 : 0; }

@@ -100,7 +100,7 @@ extern "C" {
     fn nvim_ui_comp_remove_grid_win(wp: WinHandle);
     fn nvim_ui_has_multigrid() -> c_int;
     fn nvim_ui_call_win_hide_win(wp: WinHandle);
-    fn nvim_win_free_grid_wrapper(wp: WinHandle, reinit: c_int);
+    fn rs_win_free_grid(wp: WinHandle, reinit: c_int);
     fn nvim_merge_win_config_init(wp: WinHandle);
     fn nvim_redraw_later_wrapper(wp: WinHandle, r#type: c_int);
     fn nvim_status_redraw_all_wrapper();
@@ -658,7 +658,7 @@ unsafe fn init_new_window(wp: WinHandle, new_wp: WinHandle, flags: c_int) {
             nvim_win_set_pos_changed(wp, 1);
         } else {
             nvim_ui_call_win_hide_win(wp);
-            nvim_win_free_grid_wrapper(wp, 1);
+            rs_win_free_grid(wp, 1);
         }
 
         if nvim_win_get_config_external_int(wp) != 0 {
