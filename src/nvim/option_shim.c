@@ -1158,9 +1158,6 @@ void nvim_didset_options(void);
 void nvim_didset_options2(void);
 int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
                           int prefix, const char **errmsg);
-const char *nvim_rs_set_option(OptIndex opt_idx, OptVal value, int opt_flags,
-                               int set_sid, int direct, int value_replaced,
-                               char *errbuf, size_t errbuflen);
 
 // set_fileformat helper: set the 'fileformat' option string and trigger redraws
 void nvim_set_fileformat_option(const char *p, int opt_flags)
@@ -2074,43 +2071,6 @@ static bool is_option_local_value_unset(OptIndex opt_idx)
   return rs_is_option_local_value_unset(opt_idx) != 0;
 }
 
-/// Handle side-effects of setting an option.
-///
-/// @param       opt_idx         Index in options[] table. Must not be kOptInvalid.
-/// @param[in]   varp            Option variable pointer, cannot be NULL.
-/// @param       old_value       Old option value.
-/// @param       opt_flags       Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-/// @param       set_sid         Script ID. Special values:
-///                                0: Use current script ID.
-///                                SID_NONE: Don't set script ID.
-/// @param       direct          Don't process side-effects.
-/// @param       value_replaced  Value was replaced completely.
-/// @param[out]  errbuf          Buffer for error message.
-/// @param       errbuflen       Length of error buffer.
-///
-/// @return  NULL on success, an untranslated error message on error.
-/// Set the value of an option using an OptVal.
-///
-/// @param       opt_idx         Index in options[] table. Must not be kOptInvalid.
-/// @param       value           New option value. Might get freed.
-/// @param       opt_flags       Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-/// @param       set_sid         Script ID. Special values:
-///                                0: Use current script ID.
-///                                SID_NONE: Don't set script ID.
-/// @param       direct          Don't process side-effects.
-/// @param       value_replaced  Value was replaced completely.
-/// @param[out]  errbuf          Buffer for error message.
-/// @param       errbuflen       Length of error buffer.
-///
-/// @return  NULL on success, an untranslated error message on error.
-static const char *set_option(const OptIndex opt_idx, OptVal value, int opt_flags, scid_T set_sid,
-                              const bool direct, const bool value_replaced, char *errbuf,
-                              size_t errbuflen)
-{
-  return rs_set_option_impl(opt_idx, value, opt_flags, set_sid, direct ? 1 : 0,
-                            value_replaced ? 1 : 0, errbuf, errbuflen);
-}
-
 /// Set option value directly, without processing any side effects.
 ///
 /// @param  opt_idx    Option index in options[] table.
@@ -2949,13 +2909,6 @@ int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t 
   return validate_opt_idx(win, opt_idx, opt_flags, flags, (set_prefix_T)prefix, errmsg);
 }
 
-/// Unset the local value of a global-local option.
-/// Wraps the static inline unset_option_local_value for Rust FFI.
-const char *nvim_call_unset_option_local_value(OptIndex opt_idx)
-{
-  return unset_option_local_value(opt_idx);
-}
-
 /// Parse a number from arg using vim_str2nr (STR2NR_ALL format).
 /// Sets *len_out to the number of characters consumed.
 /// Sets *num_out to the parsed value.
@@ -2965,28 +2918,10 @@ void nvim_call_vim_str2nr(const char *arg, int *len_out, int64_t *num_out)
   vim_str2nr(arg, NULL, len_out, STR2NR_ALL, num_out, NULL, 0, true, NULL);
 }
 
-/// Get the option value at global scope.
-/// Wraps get_option_value(opt_idx, OPT_GLOBAL) for Rust FFI.
-OptVal nvim_get_option_value_global(OptIndex opt_idx)
-{
-  return get_option_value(opt_idx, OPT_GLOBAL);
-}
-
 /// Get the e_number_required_after_equal error string.
 const char *nvim_get_e_number_required_after_equal(void)
 {
   return e_number_required_after_equal;
-}
-
-const char *nvim_rs_set_option(OptIndex opt_idx, OptVal value, int opt_flags,
-                               int set_sid, int direct, int value_replaced,
-                               char *errbuf, size_t errbuflen)
-{
-  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
-    return N_("E518: Unknown option");
-  }
-  return set_option(opt_idx, value, opt_flags, set_sid, direct != 0, value_replaced != 0, errbuf,
-                    errbuflen);
 }
 
 OptInt nvim_get_p_ss(void) { return p_ss; }

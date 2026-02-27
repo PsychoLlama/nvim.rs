@@ -484,7 +484,7 @@ extern "C" {
     fn option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     fn option_has_scope(opt_idx: c_int, scope: c_int) -> c_int;
     fn option_scope_idx(opt_idx: c_int, scope: c_int) -> c_int;
-    fn nvim_rs_set_option(
+    fn rs_set_option_impl(
         opt_idx: c_int,
         value: OptVal,
         opt_flags: c_int,
@@ -532,8 +532,8 @@ extern "C" {
     fn rs_get_option_default(opt_idx: c_int, opt_flags: c_int) -> OptVal;
     fn rs_option_is_global_local(opt_idx: c_int) -> c_int;
     fn nvim_get_varp_opt(opt_idx: c_int) -> *mut std::ffi::c_void;
-    fn nvim_call_unset_option_local_value(opt_idx: c_int) -> *const c_char;
-    fn nvim_get_option_value_global(opt_idx: c_int) -> OptVal;
+    fn rs_unset_option_local_value(opt_idx: c_int) -> *const c_char;
+    fn rs_get_option_value(opt_idx: c_int, opt_flags: c_int) -> OptVal;
     fn nvim_call_vim_str2nr(arg: *const c_char, len_out: *mut c_int, num_out: *mut crate::OptInt);
     fn rs_string_to_key(arg: *mut c_char) -> c_int;
     fn rs_stropt_get_newval(
@@ -925,7 +925,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
 
     // Set the option
     let value_replaced = c_int::from(op == 0);
-    *errmsg = nvim_rs_set_option(
+    *errmsg = rs_set_option_impl(
         opt_idx,
         newval,
         opt_flags,
@@ -980,9 +980,9 @@ unsafe fn get_option_newval_impl(
     if nextchar == b'<' {
         if rs_option_is_global_local(opt_idx) != 0 && (opt_flags & set_flags::OPT_LOCAL) == 0 {
             // Ignore the error from unset_option_local_value -- C did the same
-            nvim_call_unset_option_local_value(opt_idx);
+            rs_unset_option_local_value(opt_idx);
         }
-        return nvim_get_option_value_global(opt_idx);
+        return rs_get_option_value(opt_idx, set_flags::OPT_GLOBAL);
     }
 
     // When setting the local value of a global option, the old value may be the global value.
