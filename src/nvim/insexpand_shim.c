@@ -3814,110 +3814,71 @@ int nvim_ins_compl_add_simple(const char *str, int len, int dir, int flags, int 
                        NULL, score);
 }
 
-// Compound accessors for Phase 3 (pass 6): setup_cpt_sources,
-// prepare_cpt_compl_funcs, get_cpt_func_completion_matches
-void nvim_setup_cpt_sources_impl(void)
+// Accessors for Phase 5 (pass 12): cpt-source migration
+void nvim_cpt_sources_alloc(int count)
 {
   XFREE_CLEAR(cpt_sources_array);
   cpt_sources_index = -1;
   cpt_sources_count = 0;
-
-  int count = rs_get_cpt_sources_count();
-  if (count == 0) {
-    return;
+  if (count > 0) {
+    cpt_sources_array = xcalloc((size_t)count, sizeof(cpt_source_T));
+    cpt_sources_count = count;
   }
-
-  cpt_sources_array = xcalloc((size_t)count, sizeof(cpt_source_T));
-
-  char buf[LSIZE];
-  int idx = 0;
-  for (char *p = curbuf->b_p_cpt; *p;) {
-    while (*p == ',' || *p == ' ') {  // Skip delimiters
-      p++;
-    }
-    if (*p) {  // If not end of string, count this segment
-      cpt_sources_array[idx].cs_flag = *p;
-      memset(buf, 0, LSIZE);
-      size_t slen = copy_option_part(&p, buf, LSIZE, ",");  // Advance p
-      if (slen > 0) {
-        char *caret = vim_strchr(buf, '^');
-        if (caret != NULL) {
-          cpt_sources_array[idx].cs_max_matches = atoi(caret + 1);
-        }
-      }
-      idx++;
-    }
-  }
-
-  cpt_sources_count = count;
 }
-
-void nvim_prepare_cpt_compl_funcs_impl(void)
+void nvim_cpt_sources_set_flag(int idx, int flag)
 {
-  // Make a copy of 'cpt' in case the buffer gets wiped out
-  char *cpt = xstrdup(curbuf->b_p_cpt);
-  rs_strip_caret_numbers_in_place(cpt);
-
-  int idx = 0;
-  for (char *p = cpt; *p;) {
-    while (*p == ',' || *p == ' ') {  // Skip delimiters
-      p++;
-    }
-    if (*p == NUL) {
-      break;
-    }
-
-    Callback *cb = get_callback_if_cpt_func(p, idx);
-    if (cb) {
-      int startcol;
-      if (get_userdefined_compl_info(curwin->w_cursor.col, cb, &startcol) == FAIL) {
-        if (startcol == -3) {
-          cpt_sources_array[idx].cs_refresh_always = false;
-        } else {
-          startcol = -2;
-        }
-      } else if (startcol < 0 || startcol > curwin->w_cursor.col) {
-        startcol = curwin->w_cursor.col;
-      }
-      cpt_sources_array[idx].cs_startcol = startcol;
-    } else {
-      cpt_sources_array[idx].cs_startcol = -3;
-    }
-
-    (void)copy_option_part(&p, IObuff, IOSIZE, ",");  // Advance p
-    idx++;
+  if (cpt_sources_array && idx >= 0 && idx < cpt_sources_count) {
+    cpt_sources_array[idx].cs_flag = (char)flag;
   }
-
-  xfree(cpt);
 }
-
-void nvim_get_cpt_func_completion_matches_impl(void *cb_opaque)
+void nvim_cpt_sources_set_max_matches(int idx, int val)
 {
-  Callback *cb = (Callback *)cb_opaque;
-  cpt_source_T *cpt_src = &cpt_sources_array[cpt_sources_index];
-  int startcol = cpt_src->cs_startcol;
-
-  if (startcol == -2 || startcol == -3) {
-    return;
+  if (cpt_sources_array && idx >= 0 && idx < cpt_sources_count) {
+    cpt_sources_array[idx].cs_max_matches = val;
   }
-
-  set_compl_globals(startcol, curwin->w_cursor.col, true);
-
-  // Insert the leader string (previously removed) before expansion.
-  // This prevents flicker when `func` (e.g. an LSP client) is slow and
-  // calls 'sleep', which triggers ui_flush().
-  if (!cpt_src->cs_refresh_always) {
-    nvim_ins_compl_insert_bytes(rs_ins_compl_leader(), -1);
+}
+void nvim_cpt_sources_set_startcol(int idx, int val)
+{
+  if (cpt_sources_array && idx >= 0 && idx < cpt_sources_count) {
+    cpt_sources_array[idx].cs_startcol = val;
   }
-
-  expand_by_function(0, cpt_compl_pattern.data, cb);
-
-  if (!cpt_src->cs_refresh_always) {
-    rs_ins_compl_delete(0);
+}
+void nvim_cpt_sources_set_refresh_always(int idx, int val)
+{
+  if (cpt_sources_array && idx >= 0 && idx < cpt_sources_count) {
+    cpt_sources_array[idx].cs_refresh_always = val != 0;
   }
-
-  cpt_src->cs_refresh_always = compl_opt_refresh_always;
-  compl_opt_refresh_always = false;
+}
+int nvim_cpt_sources_get_refresh_always(int idx)
+{
+  return (cpt_sources_array && idx >= 0 && idx < cpt_sources_count)
+         ? (cpt_sources_array[idx].cs_refresh_always ? 1 : 0) : 0;
+}
+// copy_option_part wrapper: advances *src past the next option segment, writes to buf.
+// Returns the number of bytes written (excluding NUL).
+size_t nvim_copy_option_part_ffi(char **src, char *buf, int maxlen, const char *sep)
+{
+  return copy_option_part(src, buf, (size_t)maxlen, sep);
+}
+// vim_strchr wrapper: returns pointer to first occurrence of c in s, or NULL.
+const char *nvim_vim_strchr_ffi(const char *s, int c) { return vim_strchr(s, c); }
+// nvim_xstrdup is defined in register.c; use it via the existing declaration.
+// get_userdefined_compl_info with startcol output: returns OK (0) or FAIL (-1).
+int nvim_get_userdefined_compl_info_with_startcol(int curs_col, void *cb_opaque, int *startcol)
+{
+  return get_userdefined_compl_info((colnr_T)curs_col, (Callback *)cb_opaque, startcol);
+}
+// expand_by_function with non-NULL callback (for cpt func sources).
+void nvim_expand_by_function_with_cb(void *cb_opaque)
+{
+  expand_by_function(0, cpt_compl_pattern.data, (Callback *)cb_opaque);
+}
+// set compl_opt_refresh_always = false
+void nvim_clear_compl_opt_refresh_always(void) { compl_opt_refresh_always = false; }
+// Advance p past cpt option segment using IObuff (for prepare_cpt_compl_funcs)
+size_t nvim_copy_option_part_iobuff_ffi(char **src)
+{
+  return copy_option_part(src, IObuff, IOSIZE, ",");
 }
 
 // =============================================================================
