@@ -92,7 +92,7 @@ extern "C" {
     fn nvim_win_set_floating(wp: WinHandle, val: c_int);
 
     // --- Wrappers for complex operations ---
-    fn nvim_win_alloc_wrapper(after: WinHandle, hidden: c_int) -> WinHandle;
+    fn rs_win_alloc(after: WinHandle, hidden: c_int) -> WinHandle;
     fn rs_new_frame(wp: WinHandle);
     fn nvim_win_init_wrapper(wp: WinHandle, oldwin: WinHandle, flags: c_int);
     fn nvim_frame_flatten_wrapper(frp: *mut Frame);
@@ -638,7 +638,7 @@ unsafe fn alloc_and_link(
     };
 
     if new_wp.is_null() {
-        nvim_win_alloc_wrapper(place_after, 0)
+        rs_win_alloc(place_after, 0)
     } else {
         rs_win_append(place_after, new_wp, WinHandle::null());
         new_wp

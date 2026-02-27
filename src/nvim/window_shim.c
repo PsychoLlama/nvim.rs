@@ -1301,81 +1301,92 @@ static int last_win_id = LOWEST_WIN_ID - 1;
 
 int nvim_get_last_win_id(void) { return last_win_id; }
 
-/// @param hidden  allocate a window structure and link it in the window if
-//                 false.
-win_T *win_alloc(win_T *after, bool hidden)
+// =============================================================================
+// Phase 12 compound C accessors for rs_win_alloc / rs_free_wininfo
+// =============================================================================
+
+/// Allocate raw win_T via xcalloc.
+win_T *nvim_alloc_win_raw(void) { return xcalloc(1, sizeof(win_T)); }
+
+/// Increment last_win_id, set wp->handle, insert into window_handles map.
+void nvim_win_init_handle(win_T *wp)
 {
-  // allocate window structure and linesizes arrays
-  win_T *new_wp = xcalloc(1, sizeof(win_T));
-
-  new_wp->handle = ++last_win_id;
-  pmap_put(int)(&window_handles, new_wp->handle, new_wp);
-
-  new_wp->w_grid_alloc.mouse_enabled = true;
-
-  grid_assign_handle(&new_wp->w_grid_alloc);
-
-  // Init w: variables.
-  new_wp->w_vars = tv_dict_alloc();
-  init_var_dict(new_wp->w_vars, &new_wp->w_winvar, VAR_SCOPE);
-
-  // Don't execute autocommands while the window is not properly
-  // initialized yet.  gui_create_scrollbar() may trigger a FocusGained
-  // event.
-  block_autocmds();
-  // link the window in the window list
-  if (!hidden) {
-    tabpage_T *tp = NULL;
-    if (after) {
-      tp = rs_win_find_tabpage(after);
-      if (tp == curtab) {
-        tp = NULL;
-      }
-    }
-    rs_win_append(after, new_wp, tp);
-  }
-
-  new_wp->w_wincol = 0;
-  new_wp->w_width = Columns;
-
-  // position the display and the cursor at the top of the file.
-  new_wp->w_topline = 1;
-  new_wp->w_topfill = 0;
-  new_wp->w_botline = 2;
-  new_wp->w_cursor.lnum = 1;
-  new_wp->w_scbind_pos = 1;
-  new_wp->w_floating = 0;
-  new_wp->w_config = WIN_CONFIG_INIT;
-  new_wp->w_viewport_invalid = true;
-  new_wp->w_viewport_last_topline = 1;
-
-  new_wp->w_ns_hl = -1;
-
-  Set(uint32_t) ns_set = SET_INIT;
-  new_wp->w_ns_set = ns_set;
-
-  // use global option for global-local options
-  new_wp->w_allbuf_opt.wo_so = new_wp->w_p_so = -1;
-  new_wp->w_allbuf_opt.wo_siso = new_wp->w_p_siso = -1;
-
-  // We won't calculate w_fraction until resizing the window
-  new_wp->w_fraction = 0;
-  new_wp->w_prev_fraction_row = -1;
-
-  rs_foldInitWin(new_wp);
-  unblock_autocmds();
-  new_wp->w_next_match_id = 1000;  // up to 1000 can be picked by the user
-  return new_wp;
+  wp->handle = ++last_win_id;
+  pmap_put(int)(&window_handles, wp->handle, wp);
 }
 
-// Free one WinInfo.
-void free_wininfo(WinInfo *wip, buf_T *bp)
+/// Enable mouse on grid and assign a grid handle.
+void nvim_win_init_grid(win_T *wp)
+{
+  wp->w_grid_alloc.mouse_enabled = true;
+  grid_assign_handle(&wp->w_grid_alloc);
+}
+
+/// Allocate w_vars dict and initialize w: variable scope.
+void nvim_win_init_vars(win_T *wp)
+{
+  wp->w_vars = tv_dict_alloc();
+  init_var_dict(wp->w_vars, &wp->w_winvar, VAR_SCOPE);
+}
+
+/// Initialize w_ns_set with SET_INIT and set w_ns_hl = -1.
+void nvim_win_init_ns_set(win_T *wp)
+{
+  wp->w_ns_hl = -1;
+  Set(uint32_t) ns_set = SET_INIT;
+  wp->w_ns_set = ns_set;
+}
+
+/// Set global-local scroll offset options to -1 (use global value).
+void nvim_win_init_global_local_opts(win_T *wp)
+{
+  wp->w_allbuf_opt.wo_so = wp->w_p_so = -1;
+  wp->w_allbuf_opt.wo_siso = wp->w_p_siso = -1;
+}
+
+/// Set wp->w_config = WIN_CONFIG_INIT.
+void nvim_win_set_config_init(win_T *wp)
+{
+  WinConfig init = WIN_CONFIG_INIT;
+  wp->w_config = init;
+}
+
+/// Set w_next_match_id to 1000 (user-visible IDs start above this).
+void nvim_win_set_next_match_id(win_T *wp) { wp->w_next_match_id = 1000; }
+
+/// Compound: clear_winopt + deleteFoldRecurse + xfree for a WinInfo.
+void nvim_free_wininfo_raw(WinInfo *wip, buf_T *bp)
 {
   if (wip->wi_optset) {
     clear_winopt(&wip->wi_opt);
     deleteFoldRecurse(bp, &wip->wi_folds);
   }
   xfree(wip);
+}
+
+// =============================================================================
+// win_alloc: thin wrapper calling rs_win_alloc
+// =============================================================================
+
+extern win_T *rs_win_alloc(win_T *after, int hidden);
+
+/// @param hidden  allocate a window structure and link it in the window if
+//                 false.
+win_T *win_alloc(win_T *after, bool hidden)
+{
+  return rs_win_alloc(after, hidden ? 1 : 0);
+}
+
+// =============================================================================
+// free_wininfo: thin wrapper calling rs_free_wininfo
+// =============================================================================
+
+extern void rs_free_wininfo(WinInfo *wip, buf_T *bp);
+
+// Free one WinInfo.
+void free_wininfo(WinInfo *wip, buf_T *bp)
+{
+  rs_free_wininfo(wip, bp);
 }
 
 /// Remove window 'wp' from the window list and free the structure.
@@ -1719,7 +1730,7 @@ int nvim_get_p_ead_char(void) { return (p_ead && *p_ead) ? (int)(unsigned char)*
 
 void nvim_set_p_wiw(int64_t val) { p_wiw = val; }
 void nvim_set_p_wh(int64_t val) { p_wh = val; }
-win_T *nvim_win_alloc_wrapper(win_T *after, int hidden) { return win_alloc(after, hidden != 0); }
+// nvim_win_alloc_wrapper deleted: callers updated to call rs_win_alloc directly (Phase 12)
 // nvim_new_frame_wrapper deleted: callers updated to call rs_new_frame directly (Phase 12)
 void nvim_win_init_wrapper(win_T *wp, win_T *oldwin, int flags) { win_init(wp, oldwin, flags); }
 void nvim_frame_flatten_wrapper(frame_T *frp) { rs_frame_flatten(frp); }
