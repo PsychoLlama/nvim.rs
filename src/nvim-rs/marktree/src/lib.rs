@@ -595,6 +595,22 @@ extern "C" {
     /// AND-NOT flags on the raw key at iterator position.
     fn nvim_rawkey_clear_flags(itr: MarkTreeIterHandle, flags: u16);
 
+    /// Set the pos field of the key at the iterator position.
+    #[allow(dead_code)]
+    fn nvim_rawkey_set_pos(itr: MarkTreeIterHandle, pos: MTPos);
+
+    /// Get the pos field of the key at the iterator position.
+    #[allow(dead_code)]
+    fn nvim_rawkey_get_pos(itr: MarkTreeIterHandle) -> MTPos;
+
+    /// Add delta to pos.col of the key at the iterator position.
+    #[allow(dead_code)]
+    fn nvim_rawkey_add_pos_col(itr: MarkTreeIterHandle, delta: c_int);
+
+    /// Add delta to pos.row of the key at the iterator position.
+    #[allow(dead_code)]
+    fn nvim_rawkey_add_pos_row(itr: MarkTreeIterHandle, delta: c_int);
+
     /// Allocate a zeroed MarkTreeIter on the heap.
     fn nvim_alloc_marktreeiter() -> MarkTreeIterHandle;
 

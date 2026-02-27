@@ -1333,6 +1333,10 @@ MTKey nvim_rawkey(MarkTreeIter *itr) { return rawkey(itr); }
 void nvim_rawkey_set_flags(MarkTreeIter *itr, uint16_t flags) { rawkey(itr).flags = flags; }
 void nvim_rawkey_or_flags(MarkTreeIter *itr, uint16_t flags) { rawkey(itr).flags |= flags; }
 void nvim_rawkey_clear_flags(MarkTreeIter *itr, uint16_t flags) { rawkey(itr).flags &= (uint16_t)~flags; }
+void nvim_rawkey_set_pos(MarkTreeIter *itr, MTPos pos) { rawkey(itr).pos = pos; }
+MTPos nvim_rawkey_get_pos(MarkTreeIter *itr) { return rawkey(itr).pos; }
+void nvim_rawkey_add_pos_col(MarkTreeIter *itr, int delta) { rawkey(itr).pos.col += delta; }
+void nvim_rawkey_add_pos_row(MarkTreeIter *itr, int delta) { rawkey(itr).pos.row += delta; }
 
 // ============================================================================
 // Splice Operations (for Rust FFI)
