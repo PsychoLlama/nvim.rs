@@ -762,8 +762,6 @@ int nvim_option_was_set_window(void) { return option_was_set(kOptWindow); }
 // nvim_option_get_sm / nvim_option_set_sm are the canonical accessors; nvim_get_p_sm/nvim_set_p_sm removed
 int nvim_get_p_sta(void) { return p_sta; }
 void nvim_set_p_sta(int val) { p_sta = val != 0; }
-void nvim_set_p_ru(int val) { p_ru = val != 0; }
-void nvim_set_p_ri(int val) { p_ri = val != 0; }
 
 // fill_culopt_flags accessors
 const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
@@ -1148,8 +1146,6 @@ sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) {
 void nvim_set_options_default(int opt_flags);
 void nvim_didset_options(void);
 void nvim_didset_options2(void);
-void nvim_showoptions(int all, int opt_flags);
-void nvim_showoneopt(vimoption_T *opt, int opt_flags);
 int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
                           int prefix, const char **errmsg);
 const char *nvim_rs_set_option(OptIndex opt_idx, OptVal value, int opt_flags,
@@ -2626,11 +2622,9 @@ void nvim_xp_set_backslash(expand_T *xp, int val) { xp->xp_backslash = val; }
 // expand_option static variable get/set accessors
 OptIndex nvim_get_expand_option_idx(void) { return expand_option_idx; }
 void nvim_set_expand_option_idx(OptIndex val) { expand_option_idx = val; }
-int nvim_get_expand_option_start_col(void) { return expand_option_start_col; }
 void nvim_set_expand_option_start_col(int val) { expand_option_start_col = val; }
 int nvim_get_expand_option_flags(void) { return expand_option_flags; }
 void nvim_set_expand_option_flags(int val) { expand_option_flags = val; }
-int nvim_get_expand_option_append(void) { return (int)expand_option_append; }
 void nvim_set_expand_option_append(int val) { expand_option_append = (bool)val; }
 void nvim_get_expand_option_name(char out[5]) { memcpy(out, expand_option_name, 5); }
 const char *nvim_get_expand_option_name_ptr(void) { return expand_option_name; }
@@ -3013,8 +3007,6 @@ static Dict vimoption2dict(vimoption_T *opt, int opt_flags, buf_T *buf, win_T *w
 void nvim_set_options_default(int opt_flags) { set_options_default(opt_flags); }
 void nvim_didset_options(void) { didset_options(); }
 void nvim_didset_options2(void) { didset_options2(); }
-void nvim_showoptions(int all, int opt_flags) { showoptions(all != 0, opt_flags); }
-void nvim_showoneopt(vimoption_T *opt, int opt_flags) { showoneopt(opt, opt_flags); }
 
 int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
                           int prefix, const char **errmsg)
@@ -3293,9 +3285,6 @@ void nvim_call_buf_init_chartab(void) { buf_init_chartab(curbuf, true); }
 void nvim_call_setmouse(void) { setmouse(); }
 /// Call set_winbar(true)
 void nvim_call_set_winbar(void) { set_winbar(true); }
-/// Call check_redraw(flags)
-void nvim_call_check_redraw(uint32_t flags) { check_redraw(flags); }
-
 /// Call do_filetype_autocmd(curbuf, value_changed)
 void nvim_do_filetype_autocmd(int value_changed) { do_filetype_autocmd(curbuf, value_changed != 0); }
 
@@ -3325,8 +3314,6 @@ int nvim_get_sid_none(void) { return (int)SID_NONE; }
 
 // nvim_get_maxcol is defined in memline_shim.c
 
-/// kOptFlagWasSet constant
-uint32_t nvim_get_koptflag_was_set(void) { return (uint32_t)kOptFlagWasSet; }
 /// kOptFlagInsecure constant
 uint32_t nvim_get_koptflag_insecure(void) { return (uint32_t)kOptFlagInsecure; }
 /// kOptFlagSecure constant
@@ -3509,8 +3496,6 @@ void nvim_call_set_buflocal_cfu_callback(buf_T *buf) { set_buflocal_cfu_callback
 /// set_buflocal_ofu_callback(buf)
 void nvim_call_set_buflocal_ofu_callback(buf_T *buf) { set_buflocal_ofu_callback(buf); }
 
-/// Returns the 'keymap_init' flag constant (KEYMAP_INIT).
-int nvim_get_keymap_init(void) { return (int)KEYMAP_INIT; }
 /// buf->b_kmap_state |= KEYMAP_INIT
 void nvim_buf_kmap_state_set_init(buf_T *buf) { buf->b_kmap_state |= KEYMAP_INIT; }
 
@@ -3729,9 +3714,6 @@ void nvim_call_init_spell_chartab(void) { init_spell_chartab(); }
 
 /// lang_init() wrapper.
 void nvim_call_lang_init(void) { lang_init(); }
-
-/// get_mess_lang() wrapper.
-const char *nvim_call_get_mess_lang(void) { return get_mess_lang(); }
 
 /// set_option_value_give_err(kOptTermbidi, BOOLEAN_OPTVAL(true), 0) wrapper.
 void nvim_call_set_termbidi_true(void)
@@ -3956,27 +3938,6 @@ int nvim_option_p_icm_notnul(void) { return *p_icm != NUL ? 1 : 0; }
 // Each accessor handles a specific sub-operation that requires C pointer
 // comparisons against empty_string_option or free_string_option.
 // =============================================================================
-
-/// Get buf->b_p_tw (textwidth).
-OptInt nvim_buf_get_b_p_tw(buf_T *buf) { return buf->b_p_tw; }
-/// Get buf->b_p_wm (wrapmargin).
-OptInt nvim_buf_get_b_p_wm(buf_T *buf) { return buf->b_p_wm; }
-/// Get buf->b_p_sts (softtabstop).
-OptInt nvim_buf_get_b_p_sts(buf_T *buf) { return buf->b_p_sts; }
-/// Get buf->b_p_ai (autoindent).
-int nvim_buf_get_b_p_ai(buf_T *buf) { return buf->b_p_ai; }
-/// Get buf->b_p_et (expandtab).
-int nvim_buf_get_b_p_et(buf_T *buf) { return buf->b_p_et; }
-/// Get buf->b_p_tw_nopaste.
-OptInt nvim_buf_get_b_p_tw_nopaste(buf_T *buf) { return buf->b_p_tw_nopaste; }
-/// Get buf->b_p_wm_nopaste.
-OptInt nvim_buf_get_b_p_wm_nopaste(buf_T *buf) { return buf->b_p_wm_nopaste; }
-/// Get buf->b_p_sts_nopaste.
-OptInt nvim_buf_get_b_p_sts_nopaste(buf_T *buf) { return buf->b_p_sts_nopaste; }
-/// Get buf->b_p_ai_nopaste.
-int nvim_buf_get_b_p_ai_nopaste(buf_T *buf) { return buf->b_p_ai_nopaste; }
-/// Get buf->b_p_et_nopaste.
-int nvim_buf_get_b_p_et_nopaste(buf_T *buf) { return buf->b_p_et_nopaste; }
 
 /// Save buf paste scalar nopaste fields: copies tw/wm/sts/ai/et -> nopaste.
 void nvim_buf_paste_save_scalars(buf_T *buf)
