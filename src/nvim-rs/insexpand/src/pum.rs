@@ -190,8 +190,7 @@ extern "C" {
 // Accessors for rs_ins_compl_show_pum
 extern "C" {
     fn nvim_update_screen();
-    fn nvim_ins_compl_build_pum() -> c_int;
-    fn nvim_find_shown_match_in_array() -> c_int;
+    fn nvim_find_shown_match_in_match_array() -> c_int;
     fn nvim_trigger_complete_changed(cur: c_int);
     fn nvim_has_completechanged_event() -> c_int;
     fn nvim_set_dollar_vcol_minus_one();
@@ -233,11 +232,11 @@ pub unsafe extern "C" fn rs_ins_compl_show_pum() {
     if nvim_get_compl_match_array_exists() == 0 {
         array_changed = 1;
         // Need to build the popup menu list.
-        cur = nvim_ins_compl_build_pum();
+        cur = rs_ins_compl_build_pum();
     } else {
         array_changed = 0;
         // popup menu already exists, only need to find the current item.
-        cur = nvim_find_shown_match_in_array();
+        cur = nvim_find_shown_match_in_match_array();
     }
 
     if nvim_get_compl_match_array_exists() == 0 {

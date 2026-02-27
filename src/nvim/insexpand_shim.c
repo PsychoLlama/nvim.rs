@@ -1379,7 +1379,6 @@ const char *nvim_compl_match_get_cp_str_data(void *m) { return m ? ((compl_T *)m
 size_t nvim_compl_match_get_cp_str_size(void *m) { return m ? ((compl_T *)m)->cp_str.size : 0; }
 int nvim_vim_strnicmp(const char *s1, const char *s2, size_t len) { return STRNICMP(s1, s2, len); }
 int nvim_fuzzy_match_str(char *str, const char *pat) { return fuzzy_match_str(str, pat); }
-const char *nvim_get_leader_for_startcol_data(void *match, int cached) { return rs_get_leader_for_startcol_data(match, cached); }
 
 _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 
@@ -3007,8 +3006,8 @@ void nvim_internal_error_compl_get_info(void) { internal_error("ins_complete()")
 // Compound accessors for ins_compl_show_pum (Phase 2)
 // nvim_update_screen() already exists in drawscreen.c
 // nvim_get_cursor_col() already exists in normal_shim.c
-int nvim_ins_compl_build_pum(void) { return rs_ins_compl_build_pum(); }
-int nvim_find_shown_match_in_array(void) { return nvim_find_shown_match_in_match_array(); }
+// nvim_ins_compl_build_pum: deleted (Rust calls rs_ins_compl_build_pum directly)
+// nvim_find_shown_match_in_array: deleted (Rust calls nvim_find_shown_match_in_match_array directly)
 void nvim_trigger_complete_changed(int cur) { trigger_complete_changed_event(cur); }
 int nvim_has_completechanged_event(void) { return has_event(EVENT_COMPLETECHANGED) ? 1 : 0; }
 void nvim_set_dollar_vcol_minus_one(void) { dollar_vcol = -1; }
@@ -3058,9 +3057,7 @@ void nvim_set_cursor_col_to_ins_end(void) { curwin->w_cursor.col = (colnr_T)comp
 // Compound accessors for ins_compl_insert (Phase 3)
 const char *nvim_compl_shown_cp_str_data(void) { return compl_shown_match ? compl_shown_match->cp_str.data : NULL; }
 size_t nvim_compl_shown_cp_str_size(void) { return compl_shown_match ? compl_shown_match->cp_str.size : 0; }
-const char *nvim_find_common_prefix_data(size_t *len_out, int icase) {
-  return rs_find_common_prefix(len_out, icase);
-}
+// nvim_find_common_prefix_data: deleted (Rust calls rs_find_common_prefix directly)
 int nvim_compl_shown_cp_cpt_source_idx(void) { return compl_shown_match ? compl_shown_match->cp_cpt_source_idx : -1; }
 int nvim_get_cpt_source_startcol(int idx) { return (cpt_sources_array && idx >= 0) ? cpt_sources_array[idx].cs_startcol : -1; }
 int nvim_cpt_sources_array_exists(void) { return cpt_sources_array != NULL ? 1 : 0; }
@@ -3171,9 +3168,7 @@ int nvim_compl_shown_match_str_eq_orig(void) {
   return (compl_shown_match && compl_orig_text.data
           && strequal(compl_shown_match->cp_str.data, compl_orig_text.data)) ? 1 : 0;
 }
-size_t nvim_get_leader_for_startcol_size(void *match, int cached) {
-  return rs_get_leader_for_startcol_size(match, cached);
-}
+// nvim_get_leader_for_startcol_size: deleted (Rust calls rs_get_leader_for_startcol_size directly)
 
 extern int rs_ins_compl_next(int allow_get_expansion, int count, int insert_match);
 extern int rs_ins_compl_get_exp(int lnum, int col);

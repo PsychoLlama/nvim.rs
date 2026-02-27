@@ -166,7 +166,7 @@ extern "C" {
     // Accessors for rs_ins_compl_insert
     fn nvim_compl_shown_cp_str_data() -> *const c_char;
     fn nvim_compl_shown_cp_str_size() -> usize;
-    fn nvim_find_common_prefix_data(len_out: *mut usize, icase: c_int) -> *const c_char;
+    // rs_find_common_prefix is defined in Rust (leader.rs)
     fn nvim_compl_shown_cp_cpt_source_idx() -> c_int;
     fn nvim_get_cpt_source_startcol(idx: c_int) -> c_int;
     fn nvim_cpt_sources_array_exists() -> c_int;
@@ -283,10 +283,10 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
 
     if insert_prefix != 0 {
         let mut plen: usize = cp_str_len;
-        let p = nvim_find_common_prefix_data(&raw mut plen, 0);
+        let p = crate::leader::rs_find_common_prefix(&raw mut plen, 0);
         if p.is_null() {
             let mut plen2: usize = cp_str_len;
-            let p2 = nvim_find_common_prefix_data(&raw mut plen2, 1);
+            let p2 = crate::leader::rs_find_common_prefix(&raw mut plen2, 1);
             if p2.is_null() {
                 // keep original cp_str/cp_str_len
             } else {

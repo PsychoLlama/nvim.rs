@@ -32,9 +32,7 @@ extern "C" {
     fn nvim_compl_first_match_is_null() -> c_int;
     fn nvim_get_compl_match_array_exists() -> c_int;
 
-    // leader/startcol
-    fn nvim_get_leader_for_startcol_data(m: ComplMatch, cached: c_int) -> *const std::ffi::c_char;
-    fn nvim_get_leader_for_startcol_size(m: ComplMatch, cached: c_int) -> usize;
+    // leader/startcol: rs_get_leader_for_startcol_data/size are defined in Rust (leader.rs)
     fn nvim_get_compl_leader_data() -> *const std::ffi::c_char;
 
     // equal check
@@ -218,8 +216,8 @@ unsafe fn find_next_completion_match(
         }
 
         let shown = nvim_compl_get_shown_match();
-        let leader_data = nvim_get_leader_for_startcol_data(shown, 0);
-        let leader_size = nvim_get_leader_for_startcol_size(shown, 0);
+        let leader_data = crate::leader::rs_get_leader_for_startcol_data(shown, 0);
+        let leader_size = crate::leader::rs_get_leader_for_startcol_size(shown, 0);
 
         if nvim_compl_shown_match_at_orig_text() == 0
             && !leader_data.is_null()

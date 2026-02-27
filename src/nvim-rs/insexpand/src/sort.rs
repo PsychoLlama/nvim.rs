@@ -45,7 +45,7 @@ extern "C" {
     fn nvim_compl_match_set_score(m: ComplMatch, score: c_int);
     fn nvim_compl_match_get_cp_str_data(m: ComplMatch) -> *const c_char;
     fn nvim_fuzzy_match_str(str: *mut c_char, pat: *const c_char) -> c_int;
-    fn nvim_get_leader_for_startcol_data(m: ComplMatch, cached: c_int) -> *const c_char;
+    // rs_get_leader_for_startcol_data is defined in Rust (leader.rs)
     fn nvim_get_compl_leader_data() -> *const c_char;
     fn nvim_get_compl_leader_size() -> usize;
     fn nvim_get_compl_orig_text_data() -> *const c_char;
@@ -93,7 +93,7 @@ pub unsafe extern "C" fn rs_set_fuzzy_score() {
 
     let pattern = if use_leader {
         // Clear the leader cache once before the loop
-        let _ = nvim_get_leader_for_startcol_data(ComplMatch::null(), 1);
+        let _ = crate::leader::rs_get_leader_for_startcol_data(ComplMatch::null(), 1);
         std::ptr::null()
     } else {
         let orig_data = nvim_get_compl_orig_text_data();
@@ -107,7 +107,7 @@ pub unsafe extern "C" fn rs_set_fuzzy_score() {
     let mut comp = first;
     loop {
         let pat = if use_leader {
-            let p = nvim_get_leader_for_startcol_data(comp, 1);
+            let p = crate::leader::rs_get_leader_for_startcol_data(comp, 1);
             if p.is_null() {
                 pattern
             } else {
