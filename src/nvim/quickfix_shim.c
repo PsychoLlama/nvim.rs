@@ -3342,26 +3342,6 @@ void ex_cfile(exarg_T *eap)
 }
 
 
-/// Initialize the regmatch used by vimgrep for pattern "s".
-static void vgr_init_regmatch(regmmatch_T *regmatch, char *s)
-{
-  // Get the search pattern: either white-separated or enclosed in //.
-  regmatch->regprog = NULL;
-
-  if (s == NULL || *s == NUL) {
-    // Pattern is empty, use last search pattern.
-    if (last_search_pat() == NULL) {
-      emsg(_(e_noprevre));
-      return;
-    }
-    regmatch->regprog = vim_regcomp(last_search_pat(), RE_MAGIC);
-  } else {
-    regmatch->regprog = vim_regcomp(s, RE_MAGIC);
-  }
-
-  regmatch->rmm_ic = p_ic;
-  regmatch->rmm_maxcol = 0;
-}
 
 /// Display a file name when vimgrep is running.
 static void vgr_display_fname(char *fname)
@@ -3520,45 +3500,6 @@ static bool existing_swapfile(const buf_T *buf)
 }
 
 /// :{count}vimgrep /{pattern}/[g][j] {file} ...
-static int vgr_process_args(exarg_T *eap, vgr_args_T *args)
-{
-  CLEAR_POINTER(args);
-
-  args->regmatch.regprog = NULL;
-  {
-    char qftitle_buf[IOSIZE];
-    rs_qf_cmdtitle(*eap->cmdlinep, qftitle_buf, sizeof(qftitle_buf));
-    args->qf_title = xstrdup(qftitle_buf);
-  }
-  args->tomatch = eap->addr_count > 0 ? eap->line2 : MAXLNUM;
-
-  // Get the search pattern: either white-separated or enclosed in //
-  char *p = rs_skip_vimgrep_pat(eap->arg, &args->spat, &args->flags);
-  if (p == NULL) {
-    emsg(_(e_invalpat));
-    return FAIL;
-  }
-
-  vgr_init_regmatch(&args->regmatch, args->spat);
-  if (args->regmatch.regprog == NULL) {
-    return FAIL;
-  }
-
-  p = skipwhite(p);
-  if (*p == NUL) {
-    emsg(_("E683: File name missing or invalid pattern"));
-    return FAIL;
-  }
-
-  // Parse the list of arguments, wildcards have already been expanded.
-  if (get_arglist_exp(p, &args->fcount, &args->fnames, true) == FAIL
-      || args->fcount == 0) {
-    emsg(_(e_nomatch));
-    return FAIL;
-  }
-
-  return OK;
-}
 
 /// Returns dirname_start via *start_out, dirname_now via *now_out.
 void nvim_vgr_alloc_dirnames(char **start_out, char **now_out)
@@ -3662,57 +3603,6 @@ bool nvim_vgr_pre_check(void *eap_void)
   return true;
 }
 
-/// Returns false if vgr_process_args failed.
-bool nvim_vgr_setup(void *eap_void, void **qi_out, void **wp_out, void **args_out)
-{
-  exarg_T *eap = (exarg_T *)eap_void;
-  win_T *wp = NULL;
-  qf_info_T *qi = qf_cmd_get_or_alloc_stack(eap, &wp);
-  *qi_out = qi;
-  *wp_out = wp;
-
-  vgr_args_T *args = xcalloc(1, sizeof(vgr_args_T));
-  if (vgr_process_args(eap, args) == FAIL) {
-    xfree(args);
-    *args_out = NULL;
-    return false;
-  }
-  *args_out = args;
-
-  if ((eap->cmdidx != CMD_grepadd && eap->cmdidx != CMD_lgrepadd
-       && eap->cmdidx != CMD_vimgrepadd && eap->cmdidx != CMD_lvimgrepadd)
-      || rs_qf_stack_empty(qi)) {
-    rs_qf_new_list(qi, args->qf_title);
-  }
-
-  return true;
-}
-
-/// Get vgr_args fields for Rust.
-void nvim_vgr_args_get_fields(const void *args_void,
-                               int *fcount, const char *const **fnames,
-                               const char **spat, void **regmatch,
-                               int **tomatch, int *flags,
-                               const char **qf_title)
-{
-  const vgr_args_T *args = (const vgr_args_T *)args_void;
-  *fcount = args->fcount;
-  *fnames = (const char *const *)args->fnames;
-  *spat = args->spat;
-  *regmatch = (void *)&((vgr_args_T *)args)->regmatch;
-  *tomatch = &((vgr_args_T *)args)->tomatch;
-  *flags = args->flags;
-  *qf_title = args->qf_title;
-}
-
-/// Free vgr_args wild files.
-void nvim_vgr_free_wild(void *args_void)
-{
-  vgr_args_T *args = (vgr_args_T *)args_void;
-  FreeWild(args->fcount, args->fnames);
-  args->fnames = NULL;
-  args->fcount = 0;
-}
 
 /// Finalize the vimgrep list: set nonevalid, ptr, index, list_changed.
 void nvim_vgr_finalize_list(void *qi_void)
@@ -3761,16 +3651,69 @@ void nvim_decr_quickfix_busy(void) { decr_quickfix_busy(); }
 
 void nvim_vgr_foldUpdateAll_curwin(void) { rs_foldUpdateAll(curwin); }
 
-/// Cleanup vgr_args: free title and regprog.
-void nvim_vgr_cleanup_args(void *args_void)
+/// Heap-allocate and initialize a regmmatch_T for vimgrep.
+/// Returns the heap pointer (caller must free with nvim_vgr_regmatch_free),
+/// or NULL if compilation failed (error already emitted).
+void *nvim_vgr_regcomp_init(const char *pat)
 {
-  if (args_void == NULL) {
+  regmmatch_T *rm = xcalloc(1, sizeof(regmmatch_T));
+  rm->regprog = NULL;
+
+  if (pat == NULL || *pat == NUL) {
+    if (last_search_pat() == NULL) {
+      emsg(_(e_noprevre));
+      xfree(rm);
+      return NULL;
+    }
+    rm->regprog = vim_regcomp(last_search_pat(), RE_MAGIC);
+  } else {
+    rm->regprog = vim_regcomp((char *)pat, RE_MAGIC);
+  }
+
+  if (rm->regprog == NULL) {
+    xfree(rm);
+    return NULL;
+  }
+
+  rm->rmm_ic = p_ic;
+  rm->rmm_maxcol = 0;
+  return rm;
+}
+
+/// Free a heap-allocated regmmatch_T from nvim_vgr_regcomp_init.
+void nvim_vgr_regmatch_free(void *rm_void)
+{
+  if (rm_void == NULL) {
     return;
   }
-  vgr_args_T *args = (vgr_args_T *)args_void;
-  xfree(args->qf_title);
-  vim_regfree(args->regmatch.regprog);
-  xfree(args);
+  regmmatch_T *rm = (regmmatch_T *)rm_void;
+  vim_regfree(rm->regprog);
+  xfree(rm);
+}
+
+/// Wrapper for get_arglist_exp.
+int nvim_vgr_get_arglist_exp(const char *p, int *fcount_out, char ***fnames_out)
+{
+  return get_arglist_exp((char *)p, fcount_out, fnames_out, true);
+}
+
+/// FreeWild wrapper for vgr fnames.
+void nvim_vgr_free_wild_raw(int fcount, char **fnames) { FreeWild(fcount, fnames); }
+
+// Error message wrappers for vimgrep argument parsing.
+void nvim_vgr_emsg_invalpat(void) { emsg(_(e_invalpat)); }
+void nvim_vgr_emsg_no_filename(void) { emsg(_("E683: File name missing or invalid pattern")); }
+void nvim_vgr_emsg_nomatch(void) { emsg(_(e_nomatch)); }
+
+// apply_autocmds wrapper for QuickFixCmdPre/Post (for Phase 2 rs_ex_vimgrep).
+bool nvim_apply_autocmds_quickfixcmdpre(const char *au_name)
+{
+  return apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name, curbuf->b_fname, true, curbuf);
+}
+bool nvim_apply_autocmds_quickfixcmdpost(const char *au_name)
+{
+  apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, curbuf->b_fname, true, curbuf);
+  return true;
 }
 
 // Restore current working directory to "dirname_start" if they differ, taking
