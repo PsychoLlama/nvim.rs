@@ -2725,20 +2725,6 @@ int nvim_event_ignored_winresized(win_T *wp)
 int nvim_has_event_winscrolled(void) { return has_event(EVENT_WINSCROLLED) ? 1 : 0; }
 int nvim_has_event_winresized(void) { return has_event(EVENT_WINRESIZED) ? 1 : 0; }
 
-/// Initialize snapshot fields for a floating window that has no snapshot yet.
-void nvim_win_init_float_snapshot(win_T *wp)
-{
-  if (!wp) {
-    return;
-  }
-  wp->w_last_topline = wp->w_topline;
-  wp->w_last_topfill = wp->w_topfill;
-  wp->w_last_leftcol = wp->w_leftcol;
-  wp->w_last_skipcol = wp->w_skipcol;
-  wp->w_last_width = wp->w_width;
-  wp->w_last_height = wp->w_height;
-}
-
 /// Get buf handle (b_fnum / handle) for bufref validity check.
 int nvim_win_get_buf_fnum(win_T *wp)
 {

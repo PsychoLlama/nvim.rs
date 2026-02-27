@@ -399,8 +399,13 @@ extern "C" {
     fn nvim_win_get_leftcol(wp: WinHandle) -> c_int;
     fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
 
-    // Init floating window snapshot
-    fn nvim_win_init_float_snapshot(wp: WinHandle);
+    // Window snapshot field setters (Phase 13: absorb nvim_win_init_float_snapshot)
+    fn nvim_win_set_last_topline(wp: WinHandle, val: c_int);
+    fn nvim_win_set_last_topfill(wp: WinHandle, val: c_int);
+    fn nvim_win_set_last_leftcol(wp: WinHandle, val: c_int);
+    fn nvim_win_set_last_skipcol(wp: WinHandle, val: c_int);
+    fn nvim_win_set_last_width(wp: WinHandle, val: c_int);
+    fn nvim_win_set_last_height(wp: WinHandle, val: c_int);
 
     // Typval compound operations
     fn nvim_tv_dict_alloc_refcount1() -> DictHandle;
@@ -462,9 +467,15 @@ fn check_window_scroll_resize_scan() -> ScrollResizeScan {
     unsafe {
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
-            // Skip floating windows without a snapshot (init them instead)
+            // Skip floating windows without a snapshot (init them instead).
+            // Inlined nvim_win_init_float_snapshot: copy current state to w_last_* fields.
             if nvim_win_get_floating(wp) != 0 && nvim_win_get_last_topline(wp) == 0 {
-                nvim_win_init_float_snapshot(wp);
+                nvim_win_set_last_topline(wp, nvim_win_get_topline(wp));
+                nvim_win_set_last_topfill(wp, nvim_win_get_topfill(wp));
+                nvim_win_set_last_leftcol(wp, nvim_win_get_leftcol(wp));
+                nvim_win_set_last_skipcol(wp, nvim_win_get_skipcol(wp));
+                nvim_win_set_last_width(wp, nvim_win_get_w_width(wp));
+                nvim_win_set_last_height(wp, nvim_win_get_w_height(wp));
                 wp = nvim_win_get_next(wp);
                 continue;
             }
