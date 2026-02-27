@@ -1140,10 +1140,6 @@ bool nvim_findmatch_nul(oparg_T *oap, int *out_lnum, int *out_col, int *out_cola
   return true;
 }
 
-int nvim_mark_mb_adjustpos_cursor(void) { mark_mb_adjustpos(curbuf, &curwin->w_cursor); return curwin->w_cursor.col; }
-
-int nvim_mark_mb_adjustpos_visual(void) { mark_mb_adjustpos(curbuf, &VIsual); return VIsual.col; }
-
 /// Phase 2 accessor: mark_mb_adjustpos for arbitrary pos (by lnum/col/coladd).
 /// Updates *col_out after adjustment and returns new col.
 int nvim_mark_mb_adjustpos_pos(int lnum, int col, int *col_out) {
@@ -1709,14 +1705,6 @@ bool nvim_utf_iscomposing_check(int prev, int c, int32_t *state_ptr)
 
 /// utf_char2len(c) wrapper.
 int nvim_utf_char2len_wrapper(int c) { return utf_char2len(c); }
-
-/// Handle the composing character loop in normal_get_additional_char.
-/// Delegates to Rust implementation rs_normal_handle_composing_chars.
-extern void rs_normal_handle_composing_chars(void *sp);
-void nvim_normal_handle_composing_chars(void *sp)
-{
-  rs_normal_handle_composing_chars(sp);
-}
 
 // =============================================================================
 // normal_finish_command accessors for Rust FFI
