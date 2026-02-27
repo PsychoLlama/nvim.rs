@@ -3895,6 +3895,133 @@ pub extern "C" fn rs_marktree_clear(b: MarkTreeHandle) {
 // Phase 6: Splice Operations
 // ============================================================================
 
+// ============================================================================
+// Phase 6 Helpers: Damage tracking for intersection repair
+// ============================================================================
+
+/// Tracks a key that moved between nodes during splice so intersections can be repaired.
+#[allow(dead_code)]
+struct Damage {
+    id: u64,
+    old_node: MTNodeHandle,
+    new_node: MTNodeHandle,
+    old_i: c_int,
+    new_i: c_int,
+}
+
+/// Check if two iterators point to the same key (same node and index).
+#[allow(dead_code)]
+fn itr_eq(itr1: MarkTreeIterHandle, itr2: MarkTreeIterHandle) -> bool {
+    let x1 = unsafe { nvim_mtitr_get_x(itr1) };
+    let x2 = unsafe { nvim_mtitr_get_x(itr2) };
+    let i1 = unsafe { nvim_mtitr_get_i(itr1) };
+    let i2 = unsafe { nvim_mtitr_get_i(itr2) };
+    x1 == x2 && i1 == i2
+}
+
+/// Swap keys between two iterator positions. Keeps positions (pos) in place;
+/// only the key identity (ns, id, flags, decor_data) is swapped. If the
+/// iterators are on different nodes this may also need to fix parent meta counts.
+///
+/// `damage` collects pairs of (id, old_node, new_node) so that intersections
+/// can be repaired after all moves are done.
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    dead_code
+)]
+fn swap_keys(
+    b: MarkTreeHandle,
+    itr1: MarkTreeIterHandle,
+    itr2: MarkTreeIterHandle,
+    damage: &mut Vec<Damage>,
+) {
+    let x1 = unsafe { nvim_mtitr_get_x(itr1) };
+    let x2 = unsafe { nvim_mtitr_get_x(itr2) };
+    let i1 = unsafe { nvim_mtitr_get_i(itr1) };
+    let i2 = unsafe { nvim_mtitr_get_i(itr2) };
+
+    if x1 != x2 {
+        let key1 = rawkey(itr1);
+        let key2 = rawkey(itr2);
+
+        if mt_paired(&key1) {
+            damage.push(Damage {
+                id: mt_lookup_key(&key1),
+                old_node: x1,
+                new_node: x2,
+                old_i: i1,
+                new_i: i2,
+            });
+        }
+        if mt_paired(&key2) {
+            damage.push(Damage {
+                id: mt_lookup_key(&key2),
+                old_node: x2,
+                new_node: x1,
+                old_i: i2,
+                new_i: i1,
+            });
+        }
+
+        let meta_inc_1 = meta_describe_key(&key1);
+        let meta_inc_2 = meta_describe_key(&key2);
+
+        if meta_inc_1 != meta_inc_2 {
+            let mut cur1 = x1;
+            let mut cur2 = x2;
+            while cur1 != cur2 {
+                let level1 = unsafe { nvim_mtnode_get_level(cur1) };
+                let level2 = unsafe { nvim_mtnode_get_level(cur2) };
+                if level1 <= level2 {
+                    // cur1 is not root; walk it up
+                    let parent1 = unsafe { nvim_mtnode_get_parent(cur1) };
+                    let p_idx1 = unsafe { nvim_mtnode_get_p_idx(cur1) };
+                    for m in 0..K_MT_META_COUNT {
+                        let old_val = unsafe { nvim_mtnode_get_meta(parent1, p_idx1, m as c_int) };
+                        let new_val = old_val
+                            .wrapping_add(meta_inc_2[m])
+                            .wrapping_sub(meta_inc_1[m]);
+                        unsafe { nvim_mtnode_set_meta(parent1, p_idx1, m as c_int, new_val) };
+                    }
+                    cur1 = parent1;
+                }
+                // Re-read levels after potentially updating cur1
+                let level1_new = unsafe { nvim_mtnode_get_level(cur1) };
+                let level2_new = unsafe { nvim_mtnode_get_level(cur2) };
+                if level2_new < level1_new {
+                    let parent2 = unsafe { nvim_mtnode_get_parent(cur2) };
+                    let p_idx2 = unsafe { nvim_mtnode_get_p_idx(cur2) };
+                    for m in 0..K_MT_META_COUNT {
+                        let old_val = unsafe { nvim_mtnode_get_meta(parent2, p_idx2, m as c_int) };
+                        let new_val = old_val
+                            .wrapping_add(meta_inc_1[m])
+                            .wrapping_sub(meta_inc_2[m]);
+                        unsafe { nvim_mtnode_set_meta(parent2, p_idx2, m as c_int, new_val) };
+                    }
+                    cur2 = parent2;
+                }
+            }
+        }
+    }
+
+    // Now swap the key identities, keeping positions in place.
+    let key1 = rawkey(itr1);
+    let key2 = rawkey(itr2);
+    let pos1 = key1.pos;
+    let pos2 = key2.pos;
+
+    // Set itr1's key to key2's identity but keep pos1.
+    let new_key1 = MTKey { pos: pos1, ..key2 };
+    unsafe { nvim_mtnode_set_key(x1, i1, new_key1) };
+    marktree_refkey(b, x1, i1);
+
+    // Set itr2's key to key1's identity but keep pos2.
+    let new_key2 = MTKey { pos: pos2, ..key1 };
+    unsafe { nvim_mtnode_set_key(x2, i2, new_key2) };
+    marktree_refkey(b, x2, i2);
+}
+
 /// Splice: handle text changes in buffer.
 ///
 /// Updates mark positions based on text change:
