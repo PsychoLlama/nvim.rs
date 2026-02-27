@@ -453,11 +453,7 @@ bool nvim_strequal(const char *s1, const char *s2)
 }
 
 
-Timestamp nvim_filemarks_get_greatest_timestamp(const void *fm_ptr)
-{
-  const FileMarks *fm = fm_ptr;
-  return fm ? fm->greatest_timestamp : 0;
-}
+// nvim_filemarks_get_greatest_timestamp deleted (plan 9106c29c Phase 2): direct field access.
 
 const char *nvim_shada_get_p_shada(void) { return p_shada; }
 char *nvim_shada_home_replace_save(const void *buf, const char *src)
@@ -1291,100 +1287,17 @@ void **nvim_shada_wms_file_marks_put_ref(void *wms_opaque, const char *fname,
   return (void **)val;
 }
 
-/// Allocate a new FileMarks and zero-initialize it.
-void *nvim_shada_file_marks_alloc(void)
-{
-  return xcalloc(1, sizeof(FileMarks));
-}
-
-/// Get the greatest_timestamp from a FileMarks.
-uint64_t nvim_shada_file_marks_greatest_ts(const void *fm_ptr)
-{
-  return fm_ptr ? ((const FileMarks *)fm_ptr)->greatest_timestamp : 0;
-}
-
-/// Set the greatest_timestamp in a FileMarks if ts is larger.
-void nvim_shada_file_marks_update_ts(void *fm_ptr, uint64_t ts)
-{
-  if (fm_ptr && ts > ((FileMarks *)fm_ptr)->greatest_timestamp) {
-    ((FileMarks *)fm_ptr)->greatest_timestamp = ts;
-  }
-}
-
-/// Get a specific local mark entry from a FileMarks.
-ShadaEntry *nvim_shada_file_marks_get_mark(void *fm_ptr, int idx)
-{
-  if (!fm_ptr || idx < 0 || idx >= NLOCALMARKS) {
-    return NULL;
-  }
-  return &((FileMarks *)fm_ptr)->marks[idx];
-}
-
-/// Get a specific change entry from a FileMarks.
-ShadaEntry *nvim_shada_file_marks_get_change(void *fm_ptr, int idx)
-{
-  if (!fm_ptr || idx < 0 || idx >= JUMPLISTSIZE) {
-    return NULL;
-  }
-  return &((FileMarks *)fm_ptr)->changes[idx];
-}
-
-/// Get changes_size from FileMarks.
-size_t nvim_shada_file_marks_changes_size(const void *fm_ptr)
-{
-  return fm_ptr ? ((const FileMarks *)fm_ptr)->changes_size : 0;
-}
-
-/// Set changes_size in FileMarks.
-void nvim_shada_file_marks_set_changes_size(void *fm_ptr, size_t size)
-{
-  if (fm_ptr) {
-    ((FileMarks *)fm_ptr)->changes_size = size;
-  }
-}
-
-/// Get additional_marks_size from FileMarks.
-size_t nvim_shada_file_marks_additional_size(const void *fm_ptr)
-{
-  return fm_ptr ? ((const FileMarks *)fm_ptr)->additional_marks_size : 0;
-}
-
-/// Get pointer to an additional mark entry (for packing then freeing).
-ShadaEntry *nvim_shada_file_marks_get_additional(void *fm_ptr, size_t idx)
-{
-  if (!fm_ptr) {
-    return NULL;
-  }
-  FileMarks *fm = (FileMarks *)fm_ptr;
-  if (idx >= fm->additional_marks_size) {
-    return NULL;
-  }
-  return &fm->additional_marks[idx];
-}
-
-/// Free the additional_marks array of a FileMarks.
-void nvim_shada_file_marks_free_additional(void *fm_ptr)
-{
-  if (fm_ptr) {
-    FileMarks *fm = (FileMarks *)fm_ptr;
-    xfree(fm->additional_marks);
-    fm->additional_marks = NULL;
-    fm->additional_marks_size = 0;
-  }
-}
-
-/// Grow the additional_marks array of a FileMarks and set the last entry.
-void nvim_shada_file_marks_push_additional(void *fm_ptr, const ShadaEntry *entry)
-{
-  if (!fm_ptr || !entry) {
-    return;
-  }
-  FileMarks *fm = (FileMarks *)fm_ptr;
-  fm->additional_marks = xrealloc(fm->additional_marks,
-                                  (++fm->additional_marks_size
-                                   * sizeof(fm->additional_marks[0])));
-  fm->additional_marks[fm->additional_marks_size - 1] = *entry;
-}
+// nvim_shada_file_marks_alloc deleted (plan 9106c29c Phase 2): Rust uses nvim_xcalloc directly.
+// nvim_shada_file_marks_greatest_ts deleted (plan 9106c29c Phase 2): direct field access.
+// nvim_shada_file_marks_update_ts deleted (plan 9106c29c Phase 2): inline if in Rust.
+// nvim_shada_file_marks_get_mark deleted (plan 9106c29c Phase 2): &raw mut (*fm).marks[idx].
+// nvim_shada_file_marks_get_change deleted (plan 9106c29c Phase 2): &raw mut (*fm).changes[idx].
+// nvim_shada_file_marks_changes_size deleted (plan 9106c29c Phase 2): (*fm).changes_size.
+// nvim_shada_file_marks_set_changes_size deleted (plan 9106c29c Phase 2): assign field directly.
+// nvim_shada_file_marks_additional_size deleted (plan 9106c29c Phase 2): (*fm).additional_marks_size.
+// nvim_shada_file_marks_get_additional deleted (plan 9106c29c Phase 2): (*fm).additional_marks.add(idx).
+// nvim_shada_file_marks_free_additional deleted (plan 9106c29c Phase 2): inline nvim_xfree + null.
+// nvim_shada_file_marks_push_additional deleted (plan 9106c29c Phase 2): inline xrealloc + write.
 
 /// Get the size of the file_marks PMap in the WriteMergerState.
 size_t nvim_shada_wms_file_marks_size(const void *wms_opaque)

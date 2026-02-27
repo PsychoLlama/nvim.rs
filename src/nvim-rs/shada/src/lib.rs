@@ -382,6 +382,7 @@ extern "C" {
     fn nvim_xfree(ptr: *mut c_void);
     fn nvim_xmalloc(size: usize) -> *mut c_void;
     fn nvim_xcalloc(count: usize, size: usize) -> *mut c_void;
+    fn nvim_xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
 
     // Option access
@@ -391,8 +392,7 @@ extern "C" {
     // Error messages
     fn nvim_semsg(fmt: *const c_char, ...);
 
-    // FileMarks accessor
-    fn nvim_filemarks_get_greatest_timestamp(fm: *const c_void) -> Timestamp;
+    // nvim_filemarks_get_greatest_timestamp removed (plan 9106c29c Phase 2): direct field access.
 
     // Buffer/path filtering (Phase 2)
     fn nvim_shada_get_p_shada() -> *const c_char;
@@ -731,28 +731,18 @@ extern "C" {
         is_new: *mut bool,
         out_key: *mut *const c_char,
     ) -> *mut *mut c_void;
-    /// Allocate a new zeroed FileMarks.
-    fn nvim_shada_file_marks_alloc() -> *mut c_void;
-    /// Get greatest_timestamp from FileMarks.
-    fn nvim_shada_file_marks_greatest_ts(fm: *const c_void) -> Timestamp;
-    /// Update greatest_timestamp if ts is larger.
-    fn nvim_shada_file_marks_update_ts(fm: *mut c_void, ts: Timestamp);
-    /// Get pointer to marks[idx] in FileMarks.
-    fn nvim_shada_file_marks_get_mark(fm: *mut c_void, idx: c_int) -> *mut ShadaEntry;
-    /// Get pointer to changes[idx] in FileMarks.
-    fn nvim_shada_file_marks_get_change(fm: *mut c_void, idx: c_int) -> *mut ShadaEntry;
-    /// Get changes_size from FileMarks.
-    fn nvim_shada_file_marks_changes_size(fm: *const c_void) -> usize;
-    /// Set changes_size in FileMarks.
-    fn nvim_shada_file_marks_set_changes_size(fm: *mut c_void, size: usize);
-    /// Get additional_marks_size from FileMarks.
-    fn nvim_shada_file_marks_additional_size(fm: *const c_void) -> usize;
-    /// Get pointer to additional_marks[idx].
-    fn nvim_shada_file_marks_get_additional(fm: *mut c_void, idx: usize) -> *mut ShadaEntry;
-    /// Free additional_marks array.
-    fn nvim_shada_file_marks_free_additional(fm: *mut c_void);
-    /// Push a new entry onto additional_marks.
-    fn nvim_shada_file_marks_push_additional(fm: *mut c_void, entry: *const ShadaEntry);
+    // Phase 2 (plan 9106c29c): FileMarks accessor functions removed; direct struct field access used.
+    // nvim_shada_file_marks_alloc removed: use nvim_xcalloc(1, size_of::<FileMarks>()).cast::<FileMarks>()
+    // nvim_shada_file_marks_greatest_ts removed: use (*fm).greatest_timestamp
+    // nvim_shada_file_marks_update_ts removed: inline if ts > (*fm).greatest_timestamp
+    // nvim_shada_file_marks_get_mark removed: use &raw mut (*fm).marks[idx]
+    // nvim_shada_file_marks_get_change removed: use &raw mut (*fm).changes[idx]
+    // nvim_shada_file_marks_changes_size removed: use (*fm).changes_size
+    // nvim_shada_file_marks_set_changes_size removed: assign (*fm).changes_size
+    // nvim_shada_file_marks_additional_size removed: use (*fm).additional_marks_size
+    // nvim_shada_file_marks_get_additional removed: use (*fm).additional_marks.add(idx)
+    // nvim_shada_file_marks_free_additional removed: nvim_xfree + null out fields
+    // nvim_shada_file_marks_push_additional removed: inline xrealloc + write
     /// Get size of file_marks PMap in WMS.
     fn nvim_shada_wms_file_marks_size(wms: *const c_void) -> usize;
     /// Collect, sort, and return all FileMarks from WMS as array.
@@ -4489,20 +4479,34 @@ unsafe fn shada_read_when_writing(
                     // The key was xstrdup'd inside nvim_shada_wms_file_marks_put_ref.
                 }
                 if (*val_slot).is_null() {
-                    *val_slot = nvim_shada_file_marks_alloc().cast();
+                    *val_slot = nvim_xcalloc(1, std::mem::size_of::<FileMarks>());
                 }
-                let filemarks = (*val_slot).cast::<c_void>();
+                let filemarks: *mut FileMarks = (*val_slot).cast::<FileMarks>();
                 // Update greatest timestamp.
-                nvim_shada_file_marks_update_ts(filemarks, entry.timestamp);
+                if entry.timestamp > (*filemarks).greatest_timestamp {
+                    (*filemarks).greatest_timestamp = entry.timestamp;
+                }
 
                 if entry.entry_type == ShadaEntryType::LocalMark {
                     let mark_name = std::ptr::read(std::ptr::addr_of!((*entry.data.filemark).name));
                     let idx = nvim_shada_mark_local_index(c_int::from(mark_name as u8));
                     if idx < 0 {
                         // Unknown local mark: append to additional marks.
-                        nvim_shada_file_marks_push_additional(filemarks, &raw const entry);
+                        (*filemarks).additional_marks_size += 1;
+                        (*filemarks).additional_marks = nvim_xrealloc(
+                            (*filemarks).additional_marks.cast::<c_void>(),
+                            (*filemarks).additional_marks_size * std::mem::size_of::<ShadaEntry>(),
+                        )
+                        .cast::<ShadaEntry>();
+                        *(*filemarks)
+                            .additional_marks
+                            .add((*filemarks).additional_marks_size - 1) = entry;
                     } else {
-                        let wms_entry_ptr = nvim_shada_file_marks_get_mark(filemarks, idx);
+                        let wms_entry_ptr = if idx >= 0 && (idx as usize) < NLOCALMARKS {
+                            &raw mut (*filemarks).marks[idx as usize]
+                        } else {
+                            std::ptr::null_mut()
+                        };
                         let mut set_wms = true;
                         if !wms_entry_ptr.is_null()
                             && (*wms_entry_ptr).entry_type != ShadaEntryType::Missing
@@ -4560,11 +4564,16 @@ unsafe fn shada_read_when_writing(
                     }
                 } else {
                     // Change entry: insert into sorted changes list.
-                    let changes_size = nvim_shada_file_marks_changes_size(filemarks);
+                    let changes_size = (*filemarks).changes_size;
                     let mut i = changes_size as c_int;
                     while i > 0 {
                         i -= 1;
-                        let jl_entry_ptr = nvim_shada_file_marks_get_change(filemarks, i);
+                        let jl_entry_ptr: *mut ShadaEntry = if i >= 0 && (i as usize) < JUMPLISTSIZE
+                        {
+                            &raw mut (*filemarks).changes[i as usize]
+                        } else {
+                            std::ptr::null_mut()
+                        };
                         if jl_entry_ptr.is_null() {
                             break;
                         }
@@ -4582,13 +4591,13 @@ unsafe fn shada_read_when_writing(
                     }
                     if i >= 0 && changes_size == JUMPLISTSIZE {
                         // List is full; discard oldest.
-                        let oldest = nvim_shada_file_marks_get_change(filemarks, 0);
+                        let oldest: *mut ShadaEntry = &raw mut (*filemarks).changes[0];
                         if !oldest.is_null() {
                             rs_shada_free_entry_contents(oldest);
                         }
                     }
                     let new_i = rs_marklist_insert(
-                        nvim_shada_file_marks_get_change(filemarks, 0).cast::<c_void>(),
+                        (*filemarks).changes.as_mut_ptr().cast::<c_void>(),
                         std::mem::size_of::<ShadaEntry>(),
                         changes_size as c_int,
                         i,
@@ -4596,12 +4605,17 @@ unsafe fn shada_read_when_writing(
                     if new_i == -1 {
                         rs_shada_free_entry_contents(&raw mut entry);
                     } else {
-                        let slot = nvim_shada_file_marks_get_change(filemarks, new_i);
+                        let slot: *mut ShadaEntry = if new_i >= 0 && (new_i as usize) < JUMPLISTSIZE
+                        {
+                            &raw mut (*filemarks).changes[new_i as usize]
+                        } else {
+                            std::ptr::null_mut()
+                        };
                         if !slot.is_null() {
                             *slot = entry;
                         }
                         if changes_size < JUMPLISTSIZE {
-                            nvim_shada_file_marks_set_changes_size(filemarks, changes_size + 1);
+                            (*filemarks).changes_size = changes_size + 1;
                         }
                     }
                 }
@@ -4944,9 +4958,9 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
                     // key was xstrdup'd inside put_ref
                 }
                 if (*val_slot).is_null() {
-                    *val_slot = nvim_shada_file_marks_alloc().cast();
+                    *val_slot = nvim_xcalloc(1, std::mem::size_of::<FileMarks>());
                 }
-                let filemarks = (*val_slot).cast::<c_void>();
+                let filemarks: *mut FileMarks = (*val_slot).cast::<FileMarks>();
 
                 // Iterate local marks.
                 let mut local_marks_iter: *const c_void = std::ptr::null();
@@ -4970,7 +4984,11 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
                     }
                     let idx = nvim_shada_mark_local_index(c_int::from(mark_name as u8));
                     if idx >= 0 {
-                        let mark_slot = nvim_shada_file_marks_get_mark(filemarks, idx);
+                        let mark_slot = if idx >= 0 && (idx as usize) < NLOCALMARKS {
+                            &raw mut (*filemarks).marks[idx as usize]
+                        } else {
+                            std::ptr::null_mut()
+                        };
                         if !mark_slot.is_null() {
                             *mark_slot = ShadaEntry {
                                 entry_type: ShadaEntryType::LocalMark,
@@ -4986,7 +5004,9 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
                                 additional_data: mark_additional,
                             };
                         }
-                        nvim_shada_file_marks_update_ts(filemarks, mark_ts);
+                        if mark_ts > (*filemarks).greatest_timestamp {
+                            (*filemarks).greatest_timestamp = mark_ts;
+                        }
                     }
                     if local_marks_iter.is_null() {
                         break;
@@ -5008,7 +5028,11 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
                         &raw mut cl_ts,
                         &raw mut cl_additional,
                     );
-                    let cl_slot = nvim_shada_file_marks_get_change(filemarks, ci);
+                    let cl_slot: *mut ShadaEntry = if ci >= 0 && (ci as usize) < JUMPLISTSIZE {
+                        &raw mut (*filemarks).changes[ci as usize]
+                    } else {
+                        std::ptr::null_mut()
+                    };
                     if !cl_slot.is_null() {
                         *cl_slot = ShadaEntry {
                             entry_type: ShadaEntryType::Change,
@@ -5023,10 +5047,12 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
                             },
                             additional_data: cl_additional,
                         };
-                        nvim_shada_file_marks_update_ts(filemarks, cl_ts);
+                        if cl_ts > (*filemarks).greatest_timestamp {
+                            (*filemarks).greatest_timestamp = cl_ts;
+                        }
                     }
                 }
-                nvim_shada_file_marks_set_changes_size(filemarks, changelist_len as usize);
+                (*filemarks).changes_size = changelist_len as usize;
 
                 buf = nvim_shada_buf_next(buf);
             }
@@ -5123,11 +5149,11 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
             nvim_shada_wms_file_marks_get_sorted(wms.cast(), &raw mut sorted_size);
         let file_markss_to_dump = sorted_size.min(num_marked_files);
         for i in 0..file_markss_to_dump {
-            let fm_ptr = *all_file_markss.add(i);
+            let fm_ptr = (*all_file_markss.add(i)).cast::<FileMarks>();
 
             // Pack all local marks.
             for mi in 0..NLOCALMARKS {
-                let mark_slot = nvim_shada_file_marks_get_mark(fm_ptr, mi as c_int);
+                let mark_slot: *mut ShadaEntry = &raw mut (*fm_ptr).marks[mi];
                 if !mark_slot.is_null()
                     && (*mark_slot).entry_type != ShadaEntryType::Missing
                     && rs_shada_pack_pfreed_entry(packer, mark_slot, max_kbyte) == SD_WRITE_FAILED
@@ -5140,9 +5166,9 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
             }
 
             // Pack changes.
-            let changes_size = nvim_shada_file_marks_changes_size(fm_ptr);
+            let changes_size = (*fm_ptr).changes_size;
             for ci in 0..changes_size {
-                let change_slot = nvim_shada_file_marks_get_change(fm_ptr, ci as c_int);
+                let change_slot: *mut ShadaEntry = &raw mut (*fm_ptr).changes[ci];
                 if !change_slot.is_null()
                     && rs_shada_pack_pfreed_entry(packer, change_slot, max_kbyte) == SD_WRITE_FAILED
                 {
@@ -5153,21 +5179,29 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
             }
 
             // Pack additional marks.
-            let additional_size = nvim_shada_file_marks_additional_size(fm_ptr);
+            let additional_size = (*fm_ptr).additional_marks_size;
             for ai in 0..additional_size {
-                let add_slot = nvim_shada_file_marks_get_additional(fm_ptr, ai);
+                let add_slot: *mut ShadaEntry = if ai < (*fm_ptr).additional_marks_size {
+                    (*fm_ptr).additional_marks.add(ai)
+                } else {
+                    std::ptr::null_mut()
+                };
                 if !add_slot.is_null() {
                     if rs_shada_pack_entry(packer, add_slot, 0) == SD_WRITE_FAILED {
                         rs_shada_free_entry_contents(add_slot);
                         ret = SD_WRITE_FAILED;
-                        nvim_shada_file_marks_free_additional(fm_ptr);
+                        nvim_xfree((*fm_ptr).additional_marks.cast::<c_void>());
+                        (*fm_ptr).additional_marks = std::ptr::null_mut();
+                        (*fm_ptr).additional_marks_size = 0;
                         nvim_xfree(all_file_markss.cast::<c_void>());
                         break 'write_exit;
                     }
                     rs_shada_free_entry_contents(add_slot);
                 }
             }
-            nvim_shada_file_marks_free_additional(fm_ptr);
+            nvim_xfree((*fm_ptr).additional_marks.cast::<c_void>());
+            (*fm_ptr).additional_marks = std::ptr::null_mut();
+            (*fm_ptr).additional_marks_size = 0;
         }
         nvim_xfree(all_file_markss.cast::<c_void>());
 
@@ -7179,10 +7213,18 @@ pub unsafe extern "C" fn rs_marklist_insert(
 /// Both `a` and `b` must be valid pointers to `*const FileMarks`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_compare_file_marks(a: *const c_void, b: *const c_void) -> c_int {
-    let a_fm: *const c_void = (*(a.cast::<*const FileMarks>())).cast();
-    let b_fm: *const c_void = (*(b.cast::<*const FileMarks>())).cast();
-    let a_ts = nvim_filemarks_get_greatest_timestamp(a_fm);
-    let b_ts = nvim_filemarks_get_greatest_timestamp(b_fm);
+    let a_fm: *const FileMarks = *(a.cast::<*const FileMarks>());
+    let b_fm: *const FileMarks = *(b.cast::<*const FileMarks>());
+    let a_ts = if a_fm.is_null() {
+        0
+    } else {
+        (*a_fm).greatest_timestamp
+    };
+    let b_ts = if b_fm.is_null() {
+        0
+    } else {
+        (*b_fm).greatest_timestamp
+    };
     // Reverse order: greater timestamp comes first
     match b_ts.cmp(&a_ts) {
         std::cmp::Ordering::Less => -1,
