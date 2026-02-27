@@ -140,8 +140,9 @@ extern "C" {
     fn nvim_syn_get_current_line_id() -> c_int;
 
     // Spell
-    fn nvim_syn_get_spell_cluster_id() -> c_int;
-    fn nvim_syn_get_nospell_cluster_id() -> c_int;
+    fn nvim_syn_get_syn_block() -> crate::types::SynBlockHandle;
+    fn nvim_synblock_get_spell_cluster_id(block: crate::types::SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_nospell_cluster_id(block: crate::types::SynBlockHandle) -> c_int;
     fn nvim_syn_get_syn_spell() -> c_int;
     fn nvim_syn_in_id_list_spell(sip: StateItemHandle, list: IdListHandle, id: c_int) -> c_int;
 
@@ -662,7 +663,7 @@ pub unsafe fn syn_current_attr(
         // Default: Only do spelling when there is no @Spell cluster or when
         // ":syn spell toplevel" was used.
         let syn_spell = nvim_syn_get_syn_spell();
-        let spell_cluster = nvim_syn_get_spell_cluster_id();
+        let spell_cluster = nvim_synblock_get_spell_cluster_id(nvim_syn_get_syn_block());
         *can_spell = if syn_spell == SYNSPL_DEFAULT {
             (spell_cluster == 0) as c_int
         } else {
@@ -693,8 +694,9 @@ extern "C" {
 
 /// Compute can_spell based on spell clusters.
 unsafe fn compute_can_spell(sip: StateItemHandle, can_spell: *mut c_int) {
-    let spell_cluster = nvim_syn_get_spell_cluster_id();
-    let nospell_cluster = nvim_syn_get_nospell_cluster_id();
+    let block = nvim_syn_get_syn_block();
+    let spell_cluster = nvim_synblock_get_spell_cluster_id(block);
+    let nospell_cluster = nvim_synblock_get_nospell_cluster_id(block);
     let syn_spell = nvim_syn_get_syn_spell();
     let current_trans_id = if sip.is_null() {
         0

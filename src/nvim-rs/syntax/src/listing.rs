@@ -40,14 +40,18 @@ extern "C" {
     fn nvim_syn_highlight_group_name(idx: c_int) -> *mut c_char;
     fn nvim_syn_highlight_link_id(id: c_int) -> c_int;
 
-    // Cluster accessors for curwin
-    fn nvim_curwin_syncluster_count() -> c_int;
-    fn nvim_curwin_syncluster_name(idx: c_int) -> *mut c_char;
-    fn nvim_curwin_syncluster_list(idx: c_int) -> *mut i16;
+    // Cluster accessors (explicit block param)
+    fn nvim_synblock_get_cluster_count(block: crate::types::SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_cluster(
+        block: crate::types::SynBlockHandle,
+        idx: c_int,
+    ) -> crate::types::SynClusterHandle;
+    fn nvim_syncluster_get_name(cluster: crate::types::SynClusterHandle) -> *const c_char;
+    fn nvim_syncluster_get_list(cluster: crate::types::SynClusterHandle) -> *mut i16;
 
-    // Pattern accessors for curwin
-    fn nvim_curwin_synpat_count() -> c_int;
-    fn nvim_curwin_synpat_at(idx: c_int) -> SynPatHandle;
+    // Pattern accessors (explicit block param)
+    fn nvim_synblock_get_pattern_count(block: crate::types::SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_pattern(block: crate::types::SynBlockHandle, idx: c_int) -> SynPatHandle;
 
     // Synpat field accessors
     fn nvim_synpat_get_type(pat: SynPatHandle) -> c_int;
@@ -78,11 +82,11 @@ extern "C" {
     fn nvim_keyentry_get_next_list(ke: KeyEntryHandle) -> *mut i16;
     fn nvim_keyentry_get_cont_in_list(ke: KeyEntryHandle) -> *mut i16;
 
-    // Sync field accessors for curwin
-    fn nvim_curwin_syn_sync_flags() -> c_int;
-    fn nvim_curwin_syn_sync_minlines() -> c_int;
-    fn nvim_curwin_syn_sync_maxlines() -> c_int;
-    fn nvim_curwin_syn_sync_linebreaks() -> c_int;
+    // Sync field accessors (explicit block param)
+    fn nvim_synblock_get_sync_flags(block: crate::types::SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_sync_minlines(block: crate::types::SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_sync_maxlines(block: crate::types::SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_sync_linebreaks(block: crate::types::SynBlockHandle) -> c_int;
 
     // Group name/ID lookup
     fn rs_syn_scl_namen2id(arg: *const c_char, len: c_int) -> c_int;
@@ -203,8 +207,9 @@ static NAMELIST2: &[FlagEntry] = &[
 
 /// Output sync line count info (if any).
 unsafe fn syn_lines_msg() {
-    let maxlines = nvim_curwin_syn_sync_maxlines();
-    let minlines = nvim_curwin_syn_sync_minlines();
+    let block = nvim_syn_get_curwin_synblock();
+    let maxlines = nvim_synblock_get_sync_maxlines(block);
+    let minlines = nvim_synblock_get_sync_minlines(block);
     if maxlines > 0 || minlines > 0 {
         msg_puts(c"; ".as_ptr());
         if minlines == MAXLNUM {
@@ -228,7 +233,7 @@ unsafe fn syn_lines_msg() {
 
 /// Output sync line-break match info (if any).
 unsafe fn syn_match_msg() {
-    let linebreaks = nvim_curwin_syn_sync_linebreaks();
+    let linebreaks = nvim_synblock_get_sync_linebreaks(nvim_syn_get_curwin_synblock());
     if linebreaks > 0 {
         msg_puts(c"; match ".as_ptr());
         msg_outnum(linebreaks);
@@ -269,7 +274,12 @@ unsafe fn put_id_list(name: &[u8], list: *const i16, hl_id: c_int) {
         } else if id >= SYNID_CLUSTER {
             let scl_id = id - SYNID_CLUSTER;
             msg_putchar(b'@' as c_int);
-            let name_ptr = nvim_curwin_syncluster_name(scl_id);
+            let cluster = nvim_synblock_get_cluster(nvim_syn_get_curwin_synblock(), scl_id);
+            let name_ptr = if cluster.is_null() {
+                std::ptr::null()
+            } else {
+                nvim_syncluster_get_name(cluster)
+            };
             if !name_ptr.is_null() {
                 msg_outtrans(name_ptr, 0, false);
             }
@@ -499,8 +509,8 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
     let mut last_matchgroup: c_int = 0;
 
     // List keywords (not for syncing items)
+    let curwin_block = nvim_syn_get_curwin_synblock();
     if !syncing {
-        let curwin_block = nvim_syn_get_curwin_synblock();
         let ht = nvim_synblock_get_keywtab(curwin_block);
         did_header = syn_list_keywords(id, ht, did_header, hl_id);
         let ht_ic = nvim_synblock_get_keywtab_ic(curwin_block);
@@ -508,10 +518,10 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
     }
 
     // List patterns for this id
-    let pat_count = nvim_curwin_synpat_count();
+    let pat_count = nvim_synblock_get_pattern_count(curwin_block);
     let mut idx = 0;
     while idx < pat_count && nvim_syn_get_got_int() == 0 {
-        let spp = nvim_curwin_synpat_at(idx);
+        let spp = nvim_synblock_get_pattern(curwin_block, idx);
         if spp.is_null() {
             idx += 1;
             continue;
@@ -534,7 +544,7 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
         } else if sp_type == crate::types::SPTYPE_START {
             // Collect start/skip/end patterns
             while idx < pat_count {
-                let cur = nvim_curwin_synpat_at(idx);
+                let cur = nvim_synblock_get_pattern(curwin_block, idx);
                 if cur.is_null() || nvim_synpat_get_type(cur) != crate::types::SPTYPE_START {
                     break;
                 }
@@ -542,14 +552,14 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
                 idx += 1;
             }
             if idx < pat_count {
-                let cur = nvim_curwin_synpat_at(idx);
+                let cur = nvim_synblock_get_pattern(curwin_block, idx);
                 if !cur.is_null() && nvim_synpat_get_type(cur) == crate::types::SPTYPE_SKIP {
                     put_pattern(b"skip\0", b'=', cur, hl_id, &mut last_matchgroup);
                     idx += 1;
                 }
             }
             while idx < pat_count {
-                let cur = nvim_curwin_synpat_at(idx);
+                let cur = nvim_synblock_get_pattern(curwin_block, idx);
                 if cur.is_null() || nvim_synpat_get_type(cur) != crate::types::SPTYPE_END {
                     break;
                 }
@@ -588,7 +598,7 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
             msg_putchar(b' ' as c_int);
             let sync_idx = nvim_synpat_get_sync_idx(spp);
             if sync_idx >= 0 {
-                let sync_pat = nvim_curwin_synpat_at(sync_idx);
+                let sync_pat = nvim_synblock_get_pattern(curwin_block, sync_idx);
                 if !sync_pat.is_null() {
                     let group_name = nvim_syn_highlight_group_name(
                         i32::from(nvim_synpat_get_syn_id(sync_pat)) - 1,
@@ -625,7 +635,13 @@ unsafe fn syn_list_cluster(id: c_int) {
 
     // Slightly duplicate the guts of syn_list_header
     msg_putchar(b'\n' as c_int);
-    let name = nvim_curwin_syncluster_name(id);
+    let block = nvim_syn_get_curwin_synblock();
+    let cluster = nvim_synblock_get_cluster(block, id);
+    let name = if cluster.is_null() {
+        std::ptr::null()
+    } else {
+        nvim_syncluster_get_name(cluster)
+    };
     if !name.is_null() {
         msg_outtrans(name, 0, false);
     }
@@ -634,7 +650,11 @@ unsafe fn syn_list_cluster(id: c_int) {
     let advance_col = if col >= endcol { col + 1 } else { endcol };
     msg_advance(advance_col);
 
-    let list = nvim_curwin_syncluster_list(id);
+    let list = if cluster.is_null() {
+        std::ptr::null_mut()
+    } else {
+        nvim_syncluster_get_list(cluster)
+    };
     if !list.is_null() && *list != 0 {
         put_id_list(b"cluster\0", list, HLF_D);
     } else {
@@ -671,8 +691,9 @@ unsafe fn syn_cmd_list_impl(eap: *mut c_void, syncing: c_int) {
         return;
     }
 
-    let sync_flags = nvim_curwin_syn_sync_flags();
-    let minlines = nvim_curwin_syn_sync_minlines();
+    let curwin_block = nvim_syn_get_curwin_synblock();
+    let sync_flags = nvim_synblock_get_sync_flags(curwin_block);
+    let minlines = nvim_synblock_get_sync_minlines(curwin_block);
 
     if syncing != 0 {
         if sync_flags & SF_CCOMMENT != 0 {
@@ -696,8 +717,8 @@ unsafe fn syn_cmd_list_impl(eap: *mut c_void, syncing: c_int) {
             return;
         }
         msg_puts_title(c"\n--- Syntax sync items ---".as_ptr());
-        let maxlines = nvim_curwin_syn_sync_maxlines();
-        let linebreaks = nvim_curwin_syn_sync_linebreaks();
+        let maxlines = nvim_synblock_get_sync_maxlines(curwin_block);
+        let linebreaks = nvim_synblock_get_sync_linebreaks(curwin_block);
         if minlines > 0 || maxlines > 0 || linebreaks > 0 {
             msg_puts(c"\nsyncing on items".as_ptr());
             syn_lines_msg();
@@ -718,7 +739,7 @@ unsafe fn syn_cmd_list_impl(eap: *mut c_void, syncing: c_int) {
             syn_list_one(id, syncing != 0, false);
             id += 1;
         }
-        let cluster_count = nvim_curwin_syncluster_count();
+        let cluster_count = nvim_synblock_get_cluster_count(curwin_block);
         let mut cid = 0;
         while cid < cluster_count && nvim_syn_get_got_int() == 0 {
             syn_list_cluster(cid);

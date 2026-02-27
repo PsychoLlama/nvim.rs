@@ -148,7 +148,7 @@ extern "C" {
     fn nvim_buf_get_mod_top(buf: crate::types::BufHandle) -> c_int;
     fn nvim_buf_get_mod_bot(buf: crate::types::BufHandle) -> c_int;
     fn nvim_buf_get_mod_xlines(buf: crate::types::BufHandle) -> c_int;
-    fn nvim_synblock_get_linebreaks(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_sync_linebreaks(block: SynBlockHandle) -> c_int;
     fn nvim_synstate_set_lnum(state: SynStateHandle, lnum: c_int);
     fn nvim_synstate_next_list_eq(a: SynStateHandle, b: SynStateHandle) -> c_int;
 }
@@ -1024,7 +1024,7 @@ pub fn synblock_linebreaks(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_linebreaks(block) }
+    unsafe { nvim_synblock_get_sync_linebreaks(block) }
 }
 
 /// Set the line number for a syntax state.

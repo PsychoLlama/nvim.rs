@@ -88,7 +88,7 @@ extern "C" {
     fn nvim_synblock_set_sst_array(block: SynBlockHandle, ptr: SynStateHandle, len: c_int);
     fn nvim_synblock_get_sst_firstfree(block: SynBlockHandle) -> SynStateHandle;
     fn nvim_synblock_get_sst_lasttick(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_syn_sync_linebreaks_val(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_sync_linebreaks(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_sst_array_ptr(block: SynBlockHandle) -> SynStateHandle;
 
     // clear_syn_state wrapper
@@ -119,7 +119,7 @@ extern "C" {
     fn nvim_buf_get_mod_bot(buf: BufHandle) -> c_int;
     fn nvim_buf_get_mod_xlines(buf: BufHandle) -> c_int;
 
-    fn nvim_synblock_get_linebreaks(block: SynBlockHandle) -> c_int;
+    // nvim_synblock_get_sync_linebreaks already declared above
 }
 
 // =============================================================================
@@ -349,7 +349,7 @@ pub unsafe extern "C" fn rs_syn_stack_apply_changes_block(block: SynBlockHandle,
     if block.is_null() || buf.is_null() {
         return;
     }
-    let linebreaks = nvim_synblock_get_linebreaks(block);
+    let linebreaks = nvim_synblock_get_sync_linebreaks(block);
     let mod_top = nvim_buf_get_mod_top(buf);
     let mod_bot = nvim_buf_get_mod_bot(buf);
     let mod_xlines = nvim_buf_get_mod_xlines(buf);

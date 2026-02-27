@@ -1526,8 +1526,6 @@ int nvim_buf_get_mod_top(buf_T *buf) { return (int)buf->b_mod_top; }
 int nvim_buf_get_mod_bot(buf_T *buf) { return (int)buf->b_mod_bot; }
 int nvim_buf_get_mod_xlines(buf_T *buf) { return (int)buf->b_mod_xlines; }
 
-int nvim_synblock_get_linebreaks(synblock_T *block) { return block->b_syn_sync_linebreaks; }
-
 void nvim_synstate_set_lnum(synstate_T *state, int lnum) { state->sst_lnum = lnum; }
 
 int nvim_synstate_next_list_eq(synstate_T *a, synstate_T *b) { return a->sst_next_list == b->sst_next_list; }
@@ -1540,13 +1538,7 @@ int nvim_synpat_get_inc_tag(synpat_T *pat) { return pat ? pat->sp_syn.inc_tag : 
 int nvim_synblock_is_spell_cluster(synblock_T *block, int id) { return id == block->b_spell_cluster_id; }
 int nvim_synblock_is_nospell_cluster(synblock_T *block, int id) { return id == block->b_nospell_cluster_id; }
 
-// nvim_syn_get_current_lnum already defined at line ~6119
-
-// nvim_syn_get_current_col already defined at line ~6125
-
 void nvim_syn_set_current_col(int col) { current_col = col; }
-
-// nvim_synblock_get_syn_spell already defined at line ~5735
 
 int nvim_buf_get_synmaxcol(buf_T *buf) { return (int)buf->b_p_smc; }
 
@@ -1568,17 +1560,11 @@ int nvim_syn_get_next_match_attr(void)
   return 0;
 }
 
-// nvim_syn_get_next_match_idx already defined at line ~6413
-
-// nvim_syn_get_next_match_col already defined at line ~6419
-
 win_T *nvim_syn_get_win(void) { return syn_win; }
 
 int nvim_syn_cur_foldlevel(void) { return rs_syn_count_fold_items(); }
 
 char **nvim_syn_get_cmdlinep(void) { return syn_cmdlinep; }
-
-// nvim_get_curwin already defined in window.c
 
 int nvim_syn_get_include_link(void) { return include_link; }
 int nvim_syn_get_include_default(void) { return include_default; }
@@ -1592,16 +1578,6 @@ void nvim_synstate_set_tick(synstate_T *state, int tick)
     state->sst_tick = tick;
   }
 }
-
-// Note: The following accessor functions are already defined earlier in the file:
-
-// nvim_stateitem_get_m_lnum, nvim_stateitem_get_m_startcol,
-
-// nvim_stateitem_set_m_lnum, nvim_stateitem_set_m_startcol,
-
-// nvim_stateitem_set_cchar, nvim_stateitem_set_h_startpos,
-
-// nvim_stateitem_get_cchar, nvim_stateitem_get_end_idx, nvim_stateitem_get_ends
 
 /// Get a synpat offset value by pattern index and offset index.
 int nvim_syn_get_pattern_offset(int pat_idx, int off_idx)
@@ -1710,8 +1686,6 @@ int nvim_syn_in_id_list_spell(stateitem_T *sip, int16_t *list, int id)
   return rs_syn_in_id_list(sip, list, id, 0, NULL, 0);
 }
 
-int nvim_syn_get_spell_cluster_id(void) { return syn_block->b_spell_cluster_id; }
-int nvim_syn_get_nospell_cluster_id(void) { return syn_block->b_nospell_cluster_id; }
 int nvim_syn_get_syn_spell(void) { return syn_block->b_syn_spell; }
 
 int nvim_syn_vim_iswordp_buf(char *p) { return vim_iswordp_buf(p, syn_buf); }
@@ -1841,8 +1815,6 @@ void nvim_syn_fold_update_all_curwin(void) { rs_foldUpdateAll(curwin); }
 
 int nvim_syn_utf_ptr2char(const char *p) { return utf_ptr2char(p); }
 
-// nvim_syn_utfc_ptr2len already defined above (line ~6694) with char * param
-
 int nvim_syn_vim_isprintc(int c) { return vim_isprintc(c); }
 
 char *nvim_syn_xstrnsave(const char *s, int len) { return xstrnsave(s, (size_t)len); }
@@ -1908,7 +1880,6 @@ void nvim_synpat_set_pattern(synpat_T *pat, char *pattern) { pat->sp_pattern = p
 void nvim_synpat_set_prog(synpat_T *pat, void *prog) { pat->sp_prog = prog; }
 void nvim_synpat_set_ic(synpat_T *pat, int ic) { pat->sp_ic = ic; }
 void nvim_synpat_set_off_flags(synpat_T *pat, int16_t flags) { pat->sp_off_flags = flags; }
-// nvim_synpat_get_off_flags already defined at line 2875
 void nvim_synpat_set_offset(synpat_T *pat, int idx, int val) { pat->sp_offsets[idx] = val; }
 int nvim_synpat_get_offset(synpat_T *pat, int idx) { return pat->sp_offsets[idx]; }
 void nvim_synpat_clear_time(synpat_T *pat) { rs_syn_clear_time(&pat->sp_time); }
@@ -1973,9 +1944,6 @@ void nvim_syn_semsg_2s(const char *fmt, const char *arg1, const char *arg2)
   semsg(fmt, arg1, arg2);
 }
 
-// nvim_syn_keyword_redraw_and_free removed in pass 5 Phase 4 (replaced by
-// nvim_syn_redraw_curbuf_later + nvim_syn_stack_free_all calls from Rust).
-
 // =============================================================================
 // Phase 4 accessors: syn_cmd_cluster migration
 // =============================================================================
@@ -1986,9 +1954,6 @@ void nvim_syn_combine_cluster_list(int scl_id, int16_t **clstr_list, int list_op
 {
   rs_syn_combine_list(&SYN_CLSTR(curwin->w_s)[scl_id].scl_list, clstr_list, list_op);
 }
-
-// nvim_syn_redraw_and_free_all removed in pass 5 Phase 4 (replaced by
-// nvim_syn_redraw_curbuf_later + nvim_syn_stack_free_all calls from Rust).
 
 /// Set eap->nextcmd using find_nextcmd(arg).
 void nvim_syn_find_nextcmd(exarg_T *eap, char *arg)
@@ -2119,9 +2084,6 @@ void nvim_synblock_clear_cluster_scl_list(synblock_T *block, int scl_id)
 {
   XFREE_CLEAR(SYN_CLSTR(block)[scl_id].scl_list);
 }
-
-// nvim_syn_clear_one_wrapper, nvim_syntax_clear_wrapper, nvim_syntax_sync_clear_wrapper,
-// and nvim_syn_clear_unlet_vars removed in pass 5 Phase 4 (Rust now calls rs_* directly).
 
 // =============================================================================
 // Phase 3 accessors: syn_cmd_include migration
@@ -2328,8 +2290,6 @@ int nvim_syn_list_header(int did_header, int outlen, int id, int force_newline)
 /// Get msg_col.
 int nvim_get_msg_col_syn(void) { return msg_col; }
 
-/// nvim_msg_putchar already defined in message.c.
-
 /// Wrap msg_puts_hl.
 void nvim_msg_puts_hl_syn(const char *s, int hl_id, bool hist)
 {
@@ -2357,58 +2317,6 @@ keyentry_T *nvim_ht_item_at(const hashtab_T *ht, size_t idx)
   }
   return HI2KE(hi);
 }
-
-/// Get cluster name for curwin block at index.
-char *nvim_curwin_syncluster_name(int idx)
-{
-  if (idx < 0 || idx >= curwin->w_s->b_syn_clusters.ga_len) {
-    return NULL;
-  }
-  return SYN_CLSTR(curwin->w_s)[idx].scl_name;
-}
-
-/// Get cluster list for curwin block at index.
-int16_t *nvim_curwin_syncluster_list(int idx)
-{
-  if (idx < 0 || idx >= curwin->w_s->b_syn_clusters.ga_len) {
-    return NULL;
-  }
-  return SYN_CLSTR(curwin->w_s)[idx].scl_list;
-}
-
-/// Get curwin synblock cluster count.
-int nvim_curwin_syncluster_count(void) { return curwin->w_s->b_syn_clusters.ga_len; }
-
-/// Get curwin synblock pattern by index.
-synpat_T *nvim_curwin_synpat_at(int idx)
-{
-  if (idx < 0 || idx >= curwin->w_s->b_syn_patterns.ga_len) {
-    return NULL;
-  }
-  return &SYN_ITEMS(curwin->w_s)[idx];
-}
-
-/// Get curwin synblock pattern count.
-int nvim_curwin_synpat_count(void) { return curwin->w_s->b_syn_patterns.ga_len; }
-
-/// Get curwin synblock sync flags.
-int nvim_curwin_syn_sync_flags(void) { return curwin->w_s->b_syn_sync_flags; }
-
-/// Get curwin synblock sync minlines.
-int nvim_curwin_syn_sync_minlines(void) { return (int)curwin->w_s->b_syn_sync_minlines; }
-
-/// Get curwin synblock sync maxlines.
-int nvim_curwin_syn_sync_maxlines(void) { return (int)curwin->w_s->b_syn_sync_maxlines; }
-
-/// Get curwin synblock sync linebreaks.
-int nvim_curwin_syn_sync_linebreaks(void) { return (int)curwin->w_s->b_syn_sync_linebreaks; }
-
-// nvim_syn_ends_excmd already defined above (as nvim_syn_ends_excmd).
-// nvim_syn_skiptowhite and nvim_syn_skipwhite already defined above.
-
-// nvim_syn_scl_namen2id is already defined above.
-
-// nvim_syn_get_eap_arg and nvim_syn_get_eap_skip already defined above.
 
 // =============================================================================
 // Phase 2 (pass 4): ex_syntax dispatcher migration accessors
