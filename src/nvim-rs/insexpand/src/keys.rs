@@ -60,7 +60,6 @@ static CHECK_KEYS_COUNT: AtomicI32 = AtomicI32::new(0);
 extern "C" {
     fn nvim_vpeekc_any() -> c_int;
     fn nvim_test_disable_char_avail() -> c_int;
-    fn nvim_vim_is_ctrl_x_key(c: c_int) -> c_int;
     fn nvim_safe_vgetc() -> c_int;
     fn nvim_vungetc(c: c_int);
     fn nvim_got_int() -> c_int;
@@ -77,8 +76,6 @@ extern "C" {
     fn nvim_cpt_sources_array_exists() -> c_int;
     fn nvim_p_cto() -> c_int;
     fn nvim_set_compl_shows_dir(val: c_int);
-    fn nvim_ins_compl_key2dir(c: c_int) -> c_int;
-    fn nvim_ins_compl_key2count(c: c_int) -> c_int;
     fn nvim_ins_compl_next_wrap(allow_get_expansion: c_int, todo: c_int, advance: c_int);
     fn rs_ctrl_x_mode_normal() -> c_int;
     fn rs_ctrl_x_mode_line_or_eval() -> c_int;
@@ -125,9 +122,9 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
     if peeked != NUL && nvim_test_disable_char_avail() == 0 {
         // Eat or inspect the character
         let c = nvim_safe_vgetc();
-        if nvim_vim_is_ctrl_x_key(peeked) != 0 && peeked != CTRL_X && peeked != CTRL_R {
-            nvim_set_compl_shows_dir(nvim_ins_compl_key2dir(c));
-            let todo = nvim_ins_compl_key2count(c);
+        if crate::rs_vim_is_ctrl_x_key(peeked) != 0 && peeked != CTRL_X && peeked != CTRL_R {
+            nvim_set_compl_shows_dir(crate::rs_ins_compl_key2dir(c));
+            let todo = crate::rs_ins_compl_key2count(c);
             let advance = c_int::from(c != K_UP && c != K_DOWN);
             nvim_ins_compl_next_wrap(0, todo, advance);
         } else {

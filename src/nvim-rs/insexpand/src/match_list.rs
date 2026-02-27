@@ -65,7 +65,6 @@ extern "C" {
     fn nvim_compl_clear_leader();
 
     // Popup menu operations
-    fn nvim_ins_compl_del_pum();
     fn nvim_pum_clear();
 
     // cp_number accessors
@@ -158,7 +157,7 @@ pub unsafe extern "C" fn rs_ins_compl_free() {
         return;
     }
 
-    nvim_ins_compl_del_pum();
+    crate::pum::rs_ins_compl_del_pum();
     nvim_pum_clear();
 
     // Set curr_match to first_match to start iteration

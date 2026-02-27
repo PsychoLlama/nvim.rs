@@ -387,7 +387,6 @@ extern "C" {
     fn rs_ins_compl_restart();
     fn nvim_api_clear_compl_leader();
     fn nvim_set_compl_leader_from_cursor();
-    fn nvim_ins_compl_new_leader_wrapper();
 }
 
 /// Set the original text for the first completion match.
@@ -441,7 +440,7 @@ pub unsafe extern "C" fn rs_ins_compl_addleader(c: c_int) {
 
     nvim_api_clear_compl_leader();
     nvim_set_compl_leader_from_cursor();
-    nvim_ins_compl_new_leader_wrapper();
+    crate::leader::rs_ins_compl_new_leader();
 }
 
 // =============================================================================

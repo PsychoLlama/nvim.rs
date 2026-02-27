@@ -465,7 +465,8 @@ const FUZZY_SCORE_NONE: c_int = c_int::MIN;
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    clippy::too_many_lines
 )]
 pub unsafe extern "C" fn rs_get_next_filename_completion() {
     let mut matches: *mut *mut c_char = std::ptr::null_mut();

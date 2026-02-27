@@ -2065,7 +2065,7 @@ static int insert_execute(VimState *state, int key)
     // BS: Delete one character from "compl_leader".
     if ((s->c == K_BS || s->c == Ctrl_H)
         && curwin->w_cursor.col > rs_ins_compl_col()
-        && (s->c = ins_compl_bs()) == NUL) {
+        && (s->c = rs_ins_compl_bs()) == NUL) {
       return 1;  // continue
     }
 

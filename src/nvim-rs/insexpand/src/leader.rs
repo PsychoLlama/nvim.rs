@@ -450,7 +450,6 @@ extern "C" {
     fn nvim_api_clear_and_set_compl_leader(data: *const c_char, len: usize);
     fn nvim_compl_shown_match_is_null() -> c_int;
     fn nvim_compl_set_shown_to_first();
-    fn nvim_ins_compl_new_leader_wrapper();
     fn nvim_compl_set_curr_to_shown();
     fn nvim_get_compl_autocomplete() -> c_int;
     fn nvim_compl_first_match_is_null() -> c_int;
@@ -527,7 +526,7 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
         nvim_compl_set_shown_to_first();
     }
 
-    nvim_ins_compl_new_leader_wrapper();
+    rs_ins_compl_new_leader();
     if nvim_compl_shown_match_is_null() == 0 {
         // Make sure current match is not a hidden item.
         nvim_compl_set_curr_to_shown();
@@ -541,7 +540,6 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
 
 extern "C" {
     // For ins_compl_new_leader
-    fn nvim_ins_compl_del_pum();
     fn nvim_set_compl_used_match(val: c_int);
     fn nvim_get_compl_used_match() -> c_int;
     fn nvim_get_p_acl() -> c_int;
@@ -584,7 +582,7 @@ const FAIL: c_int = 0;
 #[no_mangle]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_ins_compl_new_leader() {
-    nvim_ins_compl_del_pum();
+    crate::pum::rs_ins_compl_del_pum();
     crate::insert::rs_ins_compl_delete(1);
     let leader_data = nvim_get_compl_leader_data();
     if !leader_data.is_null() {

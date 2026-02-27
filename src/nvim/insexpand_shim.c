@@ -897,13 +897,8 @@ static int ins_compl_add(char *const str, int len, char *const fname, char *cons
   return OK;
 }
 
-/// Checks if the column is within the currently inserted completion text
-/// column range. If it is, it returns a special highlight attribute.
-/// -1 means normal item.
-int ins_compl_col_range_attr(linenr_T lnum, int col)
-{
-  return rs_ins_compl_col_range_attr((int)lnum, col);
-}
+// NOTE: ins_compl_col_range_attr deleted (Phase 15).
+// drawline.c already calls rs_ins_compl_col_range_attr() directly.
 
 extern int rs_pum_enough_matches(int menuone);
 
@@ -1292,7 +1287,7 @@ int nvim_find_shown_match_in_match_array(void) {
 void nvim_compl_item_free(void *m) { if (m) ins_compl_item_free((compl_T *)m); }
 void nvim_compl_clear_pattern(void) { API_CLEAR_STRING(compl_pattern); }
 void nvim_compl_clear_leader(void) { API_CLEAR_STRING(compl_leader); }
-void nvim_ins_compl_del_pum(void) { rs_ins_compl_del_pum(); }
+// NOTE: nvim_ins_compl_del_pum deleted (Phase 15). Rust calls rs_ins_compl_del_pum() directly.
 void nvim_pum_clear(void) { pum_clear(); }
 int nvim_get_compl_match_array_exists(void) { return compl_match_array != NULL ? 1 : 0; }
 
@@ -1334,12 +1329,7 @@ int nvim_fuzzy_match_str(char *str, const char *pat) { return fuzzy_match_str(st
 
 _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 
-/// Delete one character before the cursor and show the subset of the matches
-/// that match the word that is now before the cursor.
-/// Returns the character to be used, NUL if the work is done and another char
-/// to be got from the user.
-int ins_compl_bs(void) { return rs_ins_compl_bs(); }
-
+// NOTE: ins_compl_bs deleted (Phase 15). edit.c now calls rs_ins_compl_bs() directly.
 
 // NOTE: ins_compl_next_buf migrated to Rust as rs_ins_compl_next_buf (Phase 14).
 
@@ -2378,7 +2368,7 @@ void nvim_setcursor(void) { setcursor(); }
 int nvim_compl_first_match_at_orig_text(void) { return compl_first_match ? (match_at_original_text(compl_first_match) ? 1 : 0) : 0; }
 int nvim_vpeekc_any(void) { return vpeekc_any(); }
 int nvim_test_disable_char_avail(void) { return test_disable_char_avail ? 1 : 0; }
-int nvim_vim_is_ctrl_x_key(int c) { return rs_vim_is_ctrl_x_key(c) ? 1 : 0; }
+// NOTE: nvim_vim_is_ctrl_x_key deleted (Phase 15). keys.rs calls rs_vim_is_ctrl_x_key() directly.
 int nvim_safe_vgetc(void) { return safe_vgetc(); }
 void nvim_vungetc(int c) { vungetc(c); }
 int nvim_got_int(void) { return got_int ? 1 : 0; }
@@ -2391,8 +2381,8 @@ void nvim_set_compl_pending(int val) { compl_pending = val; }
 int nvim_cot_flags_has_noinsert_fuzzy(void) { return (cot_flags & (kOptCotFlagNoinsert | kOptCotFlagFuzzy)) ? 1 : 0; }
 // nvim_get_compl_shows_dir: already defined above (line 5277)
 void nvim_set_compl_shows_dir(int val) { compl_shows_dir = val; }
-int nvim_ins_compl_key2dir(int c) { return rs_ins_compl_key2dir(c); }
-int nvim_ins_compl_key2count(int c) { return rs_ins_compl_key2count(c); }
+// NOTE: nvim_ins_compl_key2dir and nvim_ins_compl_key2count deleted (Phase 15).
+// keys.rs calls rs_ins_compl_key2dir() and rs_ins_compl_key2count() directly.
 
 // Phase 1 (pass 8) accessors for rs_ins_compl_next / find_next_completion_match
 int nvim_get_compl_startpos_lnum(void) { return (int)compl_startpos.lnum; }
@@ -2550,7 +2540,8 @@ void nvim_compl_pattern_set_from_alloc(char *data, size_t size)
 }
 char *nvim_compl_pattern_get_data(void) { return compl_pattern.data; }
 
-void nvim_ins_compl_new_leader_wrapper(void) { rs_ins_compl_new_leader(); }
+// NOTE: nvim_ins_compl_new_leader_wrapper deleted (Phase 15).
+// insert.rs and leader.rs call rs_ins_compl_new_leader() directly.
 // NOTE: nvim_ins_compl_addfrommatch_body deleted (Phase 15).
 // Ported to Rust as rs_ins_compl_addfrommatch in leader.rs.
 // edit.c now calls rs_ins_compl_addfrommatch() directly.
