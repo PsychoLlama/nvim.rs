@@ -53,7 +53,7 @@ extern "C" {
     fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
     fn nvim_win_set_winbar_height(wp: WinHandle, val: c_int);
     fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
-    fn nvim_win_set_inner_size_wrapper(wp: WinHandle, valid_cursor: c_int);
+    fn rs_win_set_inner_size(wp: WinHandle, valid_cursor: c_int);
     fn nvim_win_clear_winbar_click_defs(wp: WinHandle);
     /// Returns 1 if local w_p_wbr is empty (for floating window check).
     fn nvim_win_get_p_wbr_empty(wp: WinHandle) -> c_int;
@@ -311,7 +311,7 @@ unsafe fn set_winbar_win_impl(wp: WinHandle, make_room: bool, valid_cursor: bool
             }
         }
         nvim_win_set_winbar_height(wp, winbar_height);
-        nvim_win_set_inner_size_wrapper(wp, c_int::from(valid_cursor));
+        rs_win_set_inner_size(wp, c_int::from(valid_cursor));
 
         if winbar_height == 0 {
             // When removing winbar, deallocate the w_winbar_click_defs array.

@@ -46,11 +46,11 @@ extern "C" {
     fn nvim_set_first_tabpage(tp: TabpageHandle);
     fn nvim_tabpage_set_next(tp: TabpageHandle, next: TabpageHandle);
     fn nvim_set_redraw_tabline(val: c_int);
-    fn nvim_win_new_screen_rows_wrapper();
+    fn rs_win_new_screen_rows();
     fn nvim_can_close_floating_windows(tp: TabpageHandle) -> c_int;
     fn nvim_win_set_buffer_raw(wp: WinHandle, buf: BufHandle);
     fn nvim_buf_inc_nwindows(buf: BufHandle);
-    fn nvim_win_init_empty_wrapper(wp: WinHandle);
+    fn rs_win_init_empty(wp: WinHandle);
     fn nvim_get_firstbuf_wrapper() -> BufHandle;
     fn rs_free_tabpage(tp: TabpageHandle);
 
@@ -58,13 +58,6 @@ extern "C" {
     fn nvim_close_buffer_othertab(win: WinHandle, free_buf: c_int) -> c_int;
     fn nvim_apply_autocmds_tabclosed(idx_str: *const std::ffi::c_char, buf: BufHandle);
     fn nvim_has_event_tabclosed() -> c_int;
-    // Recursive call wrapper (Rust -> C -> Rust re-entrant pattern).
-    fn nvim_win_close_othertab_wrapper(
-        win: WinHandle,
-        free_buf: c_int,
-        tp: TabpageHandle,
-        force: c_int,
-    ) -> c_int;
 }
 
 // =============================================================================
@@ -111,7 +104,7 @@ pub unsafe extern "C" fn rs_win_close_othertab(
             if nvim_win_get_floating(lastwin) == 0 {
                 break;
             }
-            if nvim_win_close_othertab_wrapper(lastwin, free_buf, tp, 1) == 0 {
+            if rs_win_close_othertab(lastwin, free_buf, tp, 1) == 0 {
                 // goto leave_open
                 rs_close_othertab_leave_open(win, did_decrement, bufref_buf, 0);
                 return 0;
@@ -317,7 +310,7 @@ pub extern "C" fn rs_close_othertab_remove_tabpage(
 
         nvim_set_redraw_tabline(1);
         if h != rs_tabline_height() {
-            nvim_win_new_screen_rows_wrapper();
+            rs_win_new_screen_rows();
         }
 
         TabRemoveResult { free_tp_idx }
@@ -356,7 +349,7 @@ pub extern "C" fn rs_close_othertab_leave_open(
             let firstbuf = nvim_get_firstbuf_wrapper();
             nvim_win_set_buffer_raw(win, firstbuf);
             nvim_buf_inc_nwindows(firstbuf);
-            nvim_win_init_empty_wrapper(win);
+            rs_win_init_empty(win);
         } else if did_decrement != 0 && buf == bufref_buf && bufref_valid != 0 {
             // close_buffer decremented b_nwindows but we're keeping the window.
             nvim_buf_inc_nwindows(buf);

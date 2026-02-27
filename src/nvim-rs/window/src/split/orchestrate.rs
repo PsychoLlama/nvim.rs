@@ -94,8 +94,8 @@ extern "C" {
     // --- Wrappers for complex operations ---
     fn rs_win_alloc(after: WinHandle, hidden: c_int) -> WinHandle;
     fn rs_new_frame(wp: WinHandle);
-    fn nvim_win_init_wrapper(wp: WinHandle, oldwin: WinHandle, flags: c_int);
-    fn nvim_frame_flatten_wrapper(frp: *mut Frame);
+    fn rs_win_init(wp: WinHandle, oldwin: WinHandle, flags: c_int);
+    fn rs_frame_flatten(frp: *mut Frame);
     fn nvim_xcalloc_frame() -> *mut Frame;
     fn nvim_ui_comp_remove_grid_win(wp: WinHandle);
     fn nvim_ui_has_multigrid() -> c_int;
@@ -233,7 +233,7 @@ unsafe fn win_split_ins_impl(
 
     // --- Flatten frames if needed ---
     if !to_flatten.is_null() {
-        nvim_frame_flatten_wrapper(to_flatten);
+        rs_frame_flatten(to_flatten);
     }
 
     // --- Reorganize frame tree ---
@@ -650,7 +650,7 @@ unsafe fn init_new_window(wp: WinHandle, new_wp: WinHandle, flags: c_int) {
     if new_wp.is_null() {
         // Fresh allocation
         rs_new_frame(wp);
-        nvim_win_init_wrapper(wp, nvim_get_curwin(), flags);
+        rs_win_init(wp, nvim_get_curwin(), flags);
     } else if nvim_win_get_floating(wp) != 0 {
         // Moving a floating window into the layout
         nvim_ui_comp_remove_grid_win(wp);

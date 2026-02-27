@@ -484,7 +484,7 @@ extern "C" {
     fn rs_unuse_tabpage(tp: TabpageHandle);
 
     /// win_init(newp, oldp, 0).
-    fn nvim_win_init_wrapper(wp: WinHandle, oldwin: WinHandle, flags: c_int);
+    fn rs_win_init(wp: WinHandle, oldwin: WinHandle, flags: c_int);
 
     /// Allocate and initialize aucmd_win[idx] as a hidden float.
     fn nvim_win_alloc_aucmd_win_impl(idx: c_int);
@@ -519,7 +519,7 @@ unsafe fn win_alloc_firstwin_impl(oldwin: WinHandle) -> c_int {
     } else {
         // First window in a new tabpage: initialize from oldwin.
         nvim_set_curwin_to_wp(wp);
-        nvim_win_init_wrapper(wp, oldwin, 0);
+        rs_win_init(wp, oldwin, 0);
         // We don't want cursor- and scroll-binding in the first window.
         nvim_win_reset_binding(wp);
     }

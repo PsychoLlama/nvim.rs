@@ -52,11 +52,11 @@ extern "C" {
     /// Check if there is only one window in the tab.
     fn rs_one_window_in_tab(win: WinHandle, tp: TabpageHandle) -> c_int;
 
-    /// Call win_close(wp, false, false) and return FAIL/OK.
-    fn nvim_win_close_wrapper(wp: WinHandle, free_buf: c_int) -> c_int;
+    /// Call rs_win_close directly.
+    fn rs_win_close(wp: WinHandle, free_buf: c_int, force: c_int) -> c_int;
 
-    /// Call win_close_othertab(wp, free_buf, tp, force) -> 0=FAIL, 1=OK.
-    fn nvim_win_close_othertab_wrapper(
+    /// Call rs_win_close_othertab directly.
+    fn rs_win_close_othertab(
         wp: WinHandle,
         free_buf: c_int,
         tp: TabpageHandle,
@@ -101,7 +101,7 @@ unsafe fn close_windows_impl(buf: BufHandle, keep_curwin: c_int) {
             && rs_win_locked(wp) == 0
             && nvim_win_buf_b_locked(wp) == 0
         {
-            if nvim_win_close_wrapper(wp, 0) == FAIL {
+            if rs_win_close(wp, 0, 0) == FAIL {
                 // If closing the window fails, give up to avoid looping forever.
                 break;
             }
@@ -129,7 +129,7 @@ unsafe fn close_windows_impl(buf: BufHandle, keep_curwin: c_int) {
                     && rs_win_locked(inner_wp) == 0
                     && nvim_win_buf_b_locked(inner_wp) == 0
                 {
-                    if nvim_win_close_othertab_wrapper(inner_wp, 0, tp, 0) == 0 {
+                    if rs_win_close_othertab(inner_wp, 0, tp, 0) == 0 {
                         // If closing fails, give up to avoid looping forever.
                         break;
                     }

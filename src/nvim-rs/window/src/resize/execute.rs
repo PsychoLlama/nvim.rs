@@ -409,7 +409,7 @@ extern "C" {
     fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
     fn nvim_win_get_p_spk_char() -> c_int;
     fn nvim_get_exiting() -> c_int;
-    fn nvim_win_comp_scroll_wrapper(wp: WinHandle);
+    fn rs_win_comp_scroll(wp: WinHandle);
     fn nvim_validate_cursor_win(wp: WinHandle);
     fn nvim_changed_line_abv_curs_win(wp: WinHandle);
     fn nvim_invalidate_botline(wp: WinHandle);
@@ -492,7 +492,7 @@ fn win_set_inner_size_impl(wp: WinHandle, valid_cursor: bool) {
                 }
             }
             nvim_win_set_view_height(wp, height);
-            nvim_win_comp_scroll_wrapper(wp);
+            rs_win_comp_scroll(wp);
             if valid_cursor && nvim_get_exiting() == 0 {
                 let spk_char = nvim_win_get_p_spk_char();
                 let is_floating = nvim_win_get_floating(wp) != 0;

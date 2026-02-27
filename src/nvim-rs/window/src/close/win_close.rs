@@ -93,7 +93,7 @@ extern "C" {
     fn nvim_do_cmdline_cmd_diffoff();
     fn nvim_one_window_and_locked_split() -> c_int;
     fn nvim_curwin_set_buffer_to_curbuf();
-    fn nvim_win_close_othertab_wrapper(
+    fn rs_win_close_othertab(
         wp: WinHandle,
         free_buf: c_int,
         tp: TabpageHandle,
@@ -298,7 +298,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
         && rs_win_valid_any_tab(win) != 0
         && nvim_win_get_buffer(win).is_null()
     {
-        nvim_win_close_othertab_wrapper(win, 0, prev_curtab, force);
+        rs_win_close_othertab(win, 0, prev_curtab, force);
         return 1; // FAIL
     }
 

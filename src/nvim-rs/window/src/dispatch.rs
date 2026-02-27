@@ -165,10 +165,10 @@ extern "C" {
     fn nvim_swb_has_useopen() -> c_int;
     /// swb_flags & kOptSwbFlagUsetab.
     fn nvim_swb_has_usetab() -> c_int;
-    /// goto_tabpage_win wrapper.
-    fn nvim_goto_tabpage_win_wrapper(tp: TabpageHandle, wp: WinHandle);
-    /// win_close(wp, free_buf, false) wrapper.
-    fn nvim_win_close_wrapper(wp: WinHandle, free_buf: c_int) -> c_int;
+    /// goto_tabpage_win: call rs_goto_tabpage_win directly.
+    fn rs_goto_tabpage_win(tp: TabpageHandle, wp: WinHandle);
+    /// win_close: call rs_win_close directly.
+    fn rs_win_close(wp: WinHandle, free_buf: c_int, force: c_int) -> c_int;
     /// cmdmod.cmod_tab getter.
     fn nvim_get_cmdmod_tab() -> c_int;
     /// rs_check_text_or_curbuf_locked(NULL) -- true if text or curbuf locked.
@@ -198,14 +198,14 @@ extern "C" {
     #[link_name = "rs_reset_VIsual_and_resel"]
     fn nvim_reset_visual_wrapper();
     fn nvim_bt_quickfix_curbuf() -> c_int;
-    fn nvim_win_split_wrapper(size: c_int, flags: c_int) -> c_int;
+    fn rs_win_split(size: c_int, flags: c_int) -> c_int;
     // nvim_cmd_with_count_exec removed: replaced by rs_cmd_with_count_exec (Phase 4)
     fn nvim_do_cmdline_cmd_wrapper(cmd: *const u8) -> c_int;
     fn nvim_beep_flush_wrapper();
     #[link_name = "rs_one_window_in_tab"]
     fn nvim_one_window_curwin(wp: WinHandle, tp: TabpageHandle) -> c_int;
     fn nvim_msg_onlyone();
-    fn nvim_win_goto_wrapper(wp: WinHandle);
+    fn rs_win_goto(wp: WinHandle);
     fn nvim_get_curtab() -> TabpageHandle;
     fn rs_win_vert_neighbor(tp: TabpageHandle, wp: WinHandle, up: c_int, count: c_int)
         -> WinHandle;
@@ -217,7 +217,7 @@ extern "C" {
     ) -> WinHandle;
     // nvim_win_exchange_wrapper removed: replaced by rs_win_exchange
     // nvim_win_rotate_wrapper removed: replaced by rs_win_rotate
-    fn nvim_win_splitmove_wrapper(wp: WinHandle, size: c_int, flags: c_int) -> c_int;
+    fn rs_win_splitmove(wp: WinHandle, size: c_int, flags: c_int) -> c_int;
     fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
     fn nvim_get_min_set_ch() -> i64;
@@ -247,7 +247,7 @@ extern "C" {
     fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
     fn nvim_win_get_pvw(wp: WinHandle) -> c_int;
     fn nvim_emsg_e441_no_preview();
-    fn nvim_win_new_tabpage_wrapper(after: c_int, filename: *const u8) -> c_int;
+    fn rs_win_new_tabpage(after: c_int, filename: *const u8) -> c_int;
     fn nvim_al_goto_tabpage_tp(tp: TabpageHandle, trigger_enter: c_int, trigger_leave: c_int);
     fn nvim_al_win_close(wp: WinHandle, free_buf: c_int, force: c_int);
     fn nvim_apply_autocmds_tabnewentered();
@@ -390,11 +390,11 @@ unsafe fn do_window_goto_file(nchar: c_int, prenum1: c_int) {
         }
     }
 
-    if wp.is_null() && nvim_win_split_wrapper(0, 0) == OK_ECMD {
+    if wp.is_null() && rs_win_split(0, 0) == OK_ECMD {
         nvim_reset_binding_curwin();
         if nvim_do_ecmd_lastl_hide(ptr) == FAIL {
-            nvim_win_close_wrapper(nvim_get_curwin(), 0);
-            nvim_goto_tabpage_win_wrapper(oldtab, oldwin);
+            rs_win_close(nvim_get_curwin(), 0, 0);
+            rs_goto_tabpage_win(oldtab, oldwin);
         } else {
             wp = nvim_get_curwin();
         }
@@ -483,7 +483,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                     rs_do_window_new(nchar, prenum);
                     return;
                 }
-                nvim_win_split_wrapper(prenum, 0);
+                rs_win_split(prenum, 0);
             }
 
             // =================================================================
@@ -498,7 +498,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                     rs_do_window_new(nchar, prenum);
                     return;
                 }
-                nvim_win_split_wrapper(prenum, WSP_VERT);
+                rs_win_split(prenum, WSP_VERT);
             }
 
             // =================================================================
@@ -586,7 +586,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 }
                 let win = rs_win_vert_neighbor(nvim_get_curtab(), nvim_get_curwin(), 0, prenum1);
                 if !win.is_null() {
-                    nvim_win_goto_wrapper(win);
+                    rs_win_goto(win);
                 }
             }
 
@@ -599,7 +599,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 }
                 let win = rs_win_vert_neighbor(nvim_get_curtab(), nvim_get_curwin(), 1, prenum1);
                 if !win.is_null() {
-                    nvim_win_goto_wrapper(win);
+                    rs_win_goto(win);
                 }
             }
 
@@ -612,7 +612,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 }
                 let win = rs_win_horz_neighbor(nvim_get_curtab(), nvim_get_curwin(), 1, prenum1);
                 if !win.is_null() {
-                    nvim_win_goto_wrapper(win);
+                    rs_win_goto(win);
                 }
             }
 
@@ -625,7 +625,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 }
                 let win = rs_win_horz_neighbor(nvim_get_curtab(), nvim_get_curwin(), 0, prenum1);
                 if !win.is_null() {
-                    nvim_win_goto_wrapper(win);
+                    rs_win_goto(win);
                 }
             }
 
@@ -643,14 +643,14 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
             // Cursor to top-left window: 't', Ctrl-T
             // =================================================================
             CH_T | CTRL_T => {
-                nvim_win_goto_wrapper(nvim_get_firstwin());
+                rs_win_goto(nvim_get_firstwin());
             }
 
             // =================================================================
             // Cursor to bottom-right window: 'b', Ctrl-B
             // =================================================================
             CH_B | CTRL_B => {
-                nvim_win_goto_wrapper(nvim_lastwin_nofloating_wrapper());
+                rs_win_goto(nvim_lastwin_nofloating_wrapper());
             }
 
             // =================================================================
@@ -661,7 +661,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if pw.is_null() {
                     nvim_beep_flush_wrapper();
                 } else {
-                    nvim_win_goto_wrapper(pw);
+                    rs_win_goto(pw);
                 }
             }
 
@@ -718,7 +718,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                         WSP_BOT
                     };
                     let dir = vert | topbot;
-                    nvim_win_splitmove_wrapper(nvim_get_curwin(), prenum, dir);
+                    rs_win_splitmove(nvim_get_curwin(), prenum, dir);
                 }
             }
 
@@ -1032,7 +1032,7 @@ pub unsafe extern "C" fn rs_do_window_wW(nchar: c_int, prenum: c_int) {
         wp = if w.is_null() { firstwin } else { w };
     }
 
-    nvim_win_goto_wrapper(wp);
+    rs_win_goto(wp);
 }
 
 /// Rust implementation of `nvim_do_window_P`.
@@ -1059,7 +1059,7 @@ pub unsafe extern "C" fn rs_do_window_P() {
     if found.is_null() {
         nvim_emsg_e441_no_preview();
     } else {
-        nvim_win_goto_wrapper(found);
+        rs_win_goto(found);
     }
 }
 
@@ -1081,9 +1081,7 @@ pub unsafe extern "C" fn rs_do_window_T(prenum: c_int) {
     let oldtab = nvim_get_curtab();
     let wp = curwin;
 
-    if nvim_win_new_tabpage_wrapper(prenum, std::ptr::null()) == OK
-        && crate::rs_valid_tabpage(oldtab) != 0
-    {
+    if rs_win_new_tabpage(prenum, std::ptr::null()) == OK && crate::rs_valid_tabpage(oldtab) != 0 {
         let newtab = nvim_get_curtab();
         nvim_al_goto_tabpage_tp(oldtab, 1, 1);
         if nvim_get_curwin() == wp {
@@ -1125,7 +1123,7 @@ pub unsafe extern "C" fn rs_do_window_hat(prenum: c_int) {
         return;
     }
 
-    if nvim_curbuf_locked() == 0 && nvim_win_split_wrapper(0, 0) == OK {
+    if nvim_curbuf_locked() == 0 && rs_win_split(0, 0) == OK {
         nvim_buflist_getfile(alt_fnum, 0, GETF_ALT, 0);
     }
 }

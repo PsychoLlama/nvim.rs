@@ -80,8 +80,8 @@ extern "C" {
     /// Display "Already only one window" message.
     fn nvim_msg_onlyone();
 
-    /// Call win_close(wp, free_buf, false).
-    fn nvim_win_close_wrapper(wp: WinHandle, free_buf: c_int) -> c_int;
+    /// Call rs_win_close(wp, free_buf, 0) directly.
+    fn rs_win_close(wp: WinHandle, free_buf: c_int, force: c_int) -> c_int;
 }
 
 // =============================================================================
@@ -139,7 +139,7 @@ unsafe fn close_others_impl(message: c_int, forceit: c_int) {
         let buf = nvim_win_get_buffer_raw(wp);
         if nvim_buf_valid_ptr(buf) == 0 && rs_win_valid(wp) != 0 {
             nvim_win_set_buffer_raw(wp, BufHandle::null());
-            nvim_win_close_wrapper(wp, 0);
+            rs_win_close(wp, 0, 0);
             wp = nvim_get_firstwin();
             continue;
         }
@@ -170,7 +170,7 @@ unsafe fn close_others_impl(message: c_int, forceit: c_int) {
         }
 
         let free_buf = i32::from(nvim_win_buf_hide(wp) == 0 && nvim_win_bufIsChanged(wp) == 0);
-        nvim_win_close_wrapper(wp, free_buf);
+        rs_win_close(wp, free_buf, 0);
 
         // After closing a window, restart from firstwin since autocommands
         // may have changed the layout.

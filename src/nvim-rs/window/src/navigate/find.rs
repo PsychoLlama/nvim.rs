@@ -452,7 +452,7 @@ extern "C" {
     fn nvim_win_enter(wp: WinHandle, undo_sync: c_int);
 
     /// goto_tabpage_win(tp, wp).
-    fn nvim_goto_tabpage_win_wrapper(tp: crate::TabpageHandle, wp: WinHandle);
+    fn rs_goto_tabpage_win(tp: crate::TabpageHandle, wp: WinHandle);
 
     /// swb_flags & kOptSwbFlagUseopen.
     fn nvim_swb_has_useopen() -> c_int;
@@ -520,7 +520,7 @@ fn buf_jump_open_tab_impl(buf: BufHandle) -> WinHandle {
                 let mut wp = first;
                 while !wp.is_null() {
                     if nvim_win_get_buffer(wp) == buf {
-                        nvim_goto_tabpage_win_wrapper(tp, wp);
+                        rs_goto_tabpage_win(tp, wp);
                         // If curwin didn't switch, something went wrong.
                         let curwin = nvim_get_curwin();
                         if curwin != wp {

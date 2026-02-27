@@ -362,7 +362,7 @@ pub unsafe extern "C" fn rs_ex_diffsplit(eap: *mut std::ffi::c_void) {
     } else {
         0
     };
-    if nvim_win_split_wrapper(0, split_flags) == FAIL {
+    if rs_win_split(0, split_flags) == FAIL {
         nvim_diff_bufref_free(old_curbuf_ref);
         return;
     }
@@ -415,7 +415,7 @@ extern "C" {
     // Phase 2: ex_diffsplit accessors
     fn nvim_diff_validate_cursor_curwin();
     fn nvim_diff_set_cmdmod_tab_zero();
-    fn nvim_win_split_wrapper(size: c_int, flags: c_int) -> c_int; // in window_shim.c
+    fn rs_win_split(size: c_int, flags: c_int) -> c_int; // in window_shim.c
     fn nvim_diff_do_exedit_with_old_curwin(eap: *mut std::ffi::c_void, old_curwin: WinHandle);
     fn nvim_eap_set_cmdidx(eap: *mut std::ffi::c_void, idx: c_int); // in ex_docmd.c
     fn nvim_diff_get_CMD_split() -> c_int;

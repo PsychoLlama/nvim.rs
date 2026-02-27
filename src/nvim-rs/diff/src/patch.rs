@@ -70,7 +70,7 @@ extern "C" {
 
     // Window / ex command
     fn nvim_diff_get_diff_flags() -> c_int;
-    fn nvim_win_split_wrapper(size: c_int, flags: c_int) -> c_int;
+    fn rs_win_split(size: c_int, flags: c_int) -> c_int;
     fn nvim_diff_get_curwin() -> WinHandle;
     fn nvim_diff_set_cmdmod_tab_zero();
     fn nvim_eap_set_cmdidx(eap: *mut std::ffi::c_void, idx: c_int);
@@ -240,7 +240,7 @@ unsafe fn ex_diffpatch_body(
         0
     };
 
-    if nvim_win_split_wrapper(0, split_flags) != FAIL {
+    if rs_win_split(0, split_flags) != FAIL {
         // Pretend it was a ":split fname" command.
         let cmd_split = nvim_diff_get_CMD_split();
         nvim_eap_set_cmdidx(eap, cmd_split);

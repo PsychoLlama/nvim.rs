@@ -60,7 +60,6 @@ extern "C" {
     fn nvim_win_set_script_ctx_scroll(wp: WinHandle);
 
     // --- Screen size helpers ---
-    fn nvim_win_new_screen_rows_wrapper();
     fn nvim_win_reconfig_floats();
 
     // --- Rust resize functions used by screen size helpers ---
@@ -187,7 +186,7 @@ unsafe fn win_new_screensize_impl() {
             nvim_set_p_window(i64::from(rows) - 1);
         }
         OLD_ROWS.store(rows, Ordering::Relaxed);
-        nvim_win_new_screen_rows_wrapper(); // update window sizes
+        rs_win_new_screen_rows(); // update window sizes
     }
     if old_columns != columns {
         OLD_COLUMNS.store(columns, Ordering::Relaxed);

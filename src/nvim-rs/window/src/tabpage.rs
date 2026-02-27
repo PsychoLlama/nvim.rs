@@ -1073,9 +1073,6 @@ extern "C" {
     /// Get p_tpm (tabpagemax option).
     fn nvim_get_p_tpm() -> i64;
 
-    /// win_new_tabpage wrapper.
-    fn nvim_win_new_tabpage_wrapper(after: c_int, filename: *const u8) -> c_int;
-
     /// block_autocmds.
     fn nvim_block_autocmds();
 
@@ -1137,7 +1134,7 @@ unsafe fn make_tabpages_impl(maxcount: c_int) -> c_int {
 
     let mut todo = count - 1;
     while todo > 0 {
-        if nvim_win_new_tabpage_wrapper(0, std::ptr::null()) == FAIL {
+        if rs_win_new_tabpage(0, std::ptr::null()) == FAIL {
             break;
         }
         todo -= 1;
@@ -1256,7 +1253,7 @@ unsafe fn may_open_tabpage_impl() -> c_int {
     nvim_set_cmdmod_tab(0); // reset it to avoid doing it twice
     nvim_set_postponed_split_tab(0);
 
-    let status = nvim_win_new_tabpage_wrapper(n, std::ptr::null());
+    let status = rs_win_new_tabpage(n, std::ptr::null());
     if status != FAIL {
         nvim_apply_autocmds_tabnewentered();
     }
@@ -1571,7 +1568,7 @@ extern "C" {
     fn rs_tabline_height() -> c_int;
 
     /// rs_win_comp_scroll for curwin.
-    fn nvim_win_comp_scroll_wrapper(wp: WinHandle);
+    fn rs_win_comp_scroll(wp: WinHandle);
 }
 
 /// UPD_NOT_VALID constant (matches C define = 40).
@@ -1647,7 +1644,7 @@ unsafe fn win_new_tabpage_impl(after: c_int, filename: *const u8) -> c_int {
         let tabline_row = rs_tabline_height();
         nvim_win_set_winrow(firstwin, tabline_row);
         nvim_win_set_prev_winrow(firstwin, tabline_row);
-        nvim_win_comp_scroll_wrapper(curwin);
+        rs_win_comp_scroll(curwin);
 
         // Set tp_topframe to topframe
         nvim_tabpage_set_topframe(newtp, nvim_get_topframe());

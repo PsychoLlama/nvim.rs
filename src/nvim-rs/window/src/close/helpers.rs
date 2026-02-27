@@ -56,8 +56,8 @@ extern "C" {
     // --- close_last_window_tabpage helpers ---
     /// Safe terminal check: 1 if w_buffer != NULL && w_buffer->terminal != NULL.
     fn nvim_win_buf_has_terminal_safe(win: WinHandle) -> c_int;
-    /// win_close_othertab(wp, free_buf, tp, false) wrapper.
-    fn nvim_win_close_othertab_wrapper(
+    /// Call rs_win_close_othertab directly.
+    fn rs_win_close_othertab(
         wp: WinHandle,
         free_buf: c_int,
         tp: TabpageHandle,
@@ -184,7 +184,7 @@ pub unsafe extern "C" fn rs_close_last_window_tabpage(
         && rs_valid_tabpage_c(prev_curtab) != 0
         && nvim_tabpage_get_firstwin(prev_curtab) == win
     {
-        nvim_win_close_othertab_wrapper(win, do_free_buf, prev_curtab, 0);
+        rs_win_close_othertab(win, do_free_buf, prev_curtab, 0);
     }
 
     // Now trigger *Enter autocommands.

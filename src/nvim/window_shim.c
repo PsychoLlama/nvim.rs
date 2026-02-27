@@ -1626,7 +1626,6 @@ void nvim_win_set_winrow_off(win_T *wp, int val) { if (wp) { wp->w_winrow_off = 
 void nvim_win_set_wincol_off(win_T *wp, int val) { if (wp) { wp->w_wincol_off = val; } }
 int nvim_win_get_p_spk_char(void) { return (int)(unsigned char)*p_spk; }
 int nvim_get_exiting(void) { return exiting ? 1 : 0; }
-void nvim_win_comp_scroll_wrapper(win_T *wp) { if (wp) { rs_win_comp_scroll(wp); } }
 // nvim_validate_cursor_win already defined in move.c
 // nvim_changed_line_abv_curs_win already defined in change_ffi.c
 // nvim_invalidate_botline already defined in move.c
@@ -1729,8 +1728,6 @@ void nvim_set_p_wiw(int64_t val) { p_wiw = val; }
 void nvim_set_p_wh(int64_t val) { p_wh = val; }
 // nvim_win_alloc_wrapper deleted: callers updated to call rs_win_alloc directly (Phase 12)
 // nvim_new_frame_wrapper deleted: callers updated to call rs_new_frame directly (Phase 12)
-void nvim_win_init_wrapper(win_T *wp, win_T *oldwin, int flags) { win_init(wp, oldwin, flags); }
-void nvim_frame_flatten_wrapper(frame_T *frp) { rs_frame_flatten(frp); }
 frame_T *nvim_xcalloc_frame(void) { return xcalloc(1, sizeof(frame_T)); }
 void nvim_ui_comp_remove_grid_win(win_T *wp) { if (wp) { ui_comp_remove_grid(&wp->w_grid_alloc); } }
 void nvim_ui_call_win_hide_win(win_T *wp) { if (wp) { ui_call_win_hide(wp->w_grid_alloc.handle); } }
@@ -1761,7 +1758,6 @@ void nvim_tabpage_set_next(tabpage_T *tp, tabpage_T *next) { tp->tp_next = next;
 int nvim_win_get_tcl_flags(void) { return (int)tcl_flags; }
 void nvim_win_set_buffer_raw(win_T *wp, buf_T *buf) { wp->w_buffer = buf; }
 void nvim_buf_inc_nwindows(buf_T *buf) { buf->b_nwindows++; }
-void nvim_win_init_empty_wrapper(win_T *wp) { rs_win_init_empty(wp); }
 void nvim_emsg_e_floatonly(void) { emsg(e_floatonly); }
 void nvim_emsg_e_floatexchange(void) { emsg(e_floatexchange); }
 void nvim_emsg_e443(void) { emsg(_("E443: Cannot rotate when another window is split")); }
@@ -1771,7 +1767,6 @@ void nvim_win_copy_cursor(win_T *dst, win_T *src) { if (dst && src) { dst->w_cur
 void nvim_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync != 0); }
 void nvim_emsg_e_autocmd_close(void) { emsg(_(e_autocmd_close)); }
 void nvim_internal_error_othertab(void) { internal_error("win_close_othertab()"); }
-void nvim_win_new_screen_rows_wrapper(void) { win_new_screen_rows(); }
 // nvim_win_free_mem_wrapper deleted: rs_win_close_structural now calls rs_win_free_mem directly (Phase 10)
 void nvim_inc_split_disallowed(void) { split_disallowed++; }
 void nvim_dec_split_disallowed(void) { split_disallowed--; }
@@ -1785,9 +1780,6 @@ frame_T *nvim_win_get_frame_parent(win_T *wp) { return (wp && wp->w_frame) ? wp-
 
 buf_T *nvim_get_firstbuf_wrapper(void) { return firstbuf; }
 int nvim_can_close_floating_windows(tabpage_T *tp) { return rs_can_close_floating_windows_tp(tp) != 0 ? 1 : 0; }
-void nvim_win_goto_wrapper(win_T *wp) { win_goto(wp); }
-int nvim_win_split_wrapper(int size, int flags) { return win_split(size, flags); }
-int nvim_win_splitmove_wrapper(win_T *wp, int size, int flags) { return win_splitmove(wp, size, flags); }
 int nvim_do_cmdline_cmd_wrapper(const char *cmd) { return do_cmdline_cmd(cmd); }
 void nvim_emsg_e_cmdwin(void) { emsg(_(e_cmdwin)); }
 int nvim_bt_quickfix_curbuf(void) { return bt_quickfix(curbuf) ? 1 : 0; }
@@ -1806,7 +1798,6 @@ int nvim_may_open_tabpage(void) { return may_open_tabpage(); }
 int nvim_get_cmdmod_split(void) { return cmdmod.cmod_split; }
 void nvim_emsg_e442(void) { emsg(_("E442: Can't split topleft and botright at the same time")); }
 /// Wrapper for win_split_ins callable from Rust (handles win_enter_ext and option restore).
-win_T *nvim_win_split_ins_wrapper(int size, int flags, win_T *new_wp, int dir, frame_T *to_flatten) { return rs_win_split_ins_full(size, flags, new_wp, dir, to_flatten); }
 int nvim_win_get_floating_win(win_T *wp) { return (wp && wp->w_floating) ? 1 : 0; }
 win_T *nvim_win_get_prev_win(win_T *wp) { return wp ? wp->w_prev : NULL; }
 
@@ -2102,7 +2093,6 @@ void nvim_api_set_error_e_cmdwin(Error *err) { api_set_error(err, kErrorTypeExce
 void nvim_set_option_cmdheight(int64_t val) { set_option_value(kOptCmdheight, NUMBER_OPTVAL(val), 0); }
 // nvim_set_min_set_ch already exists below (line ~2867); no duplicate needed here
 void nvim_win_set_winbar_height(win_T *wp, int val) { if (wp) { wp->w_winbar_height = val; } }
-void nvim_win_set_inner_size_wrapper(win_T *wp, int valid_cursor) { win_set_inner_size(wp, valid_cursor != 0); }
 /// Returns 1 if local w_p_wbr is empty/NULL (for floating window check).
 int nvim_win_get_p_wbr_empty(win_T *wp) { return (!wp || !wp->w_p_wbr || *wp->w_p_wbr == NUL) ? 1 : 0; }
 /// Returns 1 if BOTH global p_wbr AND local w_p_wbr are empty (for non-floating window check).
@@ -2191,7 +2181,6 @@ void nvim_do_autocmd_dirchanged_global(const char *new_dir, int pre) {
 /// get curtab.
 tabpage_T *nvim_get_curtab_ptr(void) { return curtab; }
 /// goto_tabpage_win wrapper.
-void nvim_goto_tabpage_win_wrapper(tabpage_T *tp, win_T *wp) { goto_tabpage_win(tp, wp); }
 /// swb_flags & kOptSwbFlagUseopen.
 int nvim_swb_has_useopen(void) { return (swb_flags & kOptSwbFlagUseopen) ? 1 : 0; }
 /// swb_flags & kOptSwbFlagUsetab.
@@ -2277,13 +2266,6 @@ void nvim_apply_autocmds_tabnewentered(void)
   apply_autocmds(EVENT_TABNEWENTERED, NULL, NULL, false, curbuf);
 }
 
-/// win_new_tabpage wrapper (returns OK/FAIL as int).
-/// Now delegates directly to rs_win_new_tabpage (Phase 8).
-int nvim_win_new_tabpage_wrapper(int after, const char *filename)
-{
-  return rs_win_new_tabpage(after, filename);
-}
-
 /// get curwin->w_alt_fnum.
 int nvim_win_get_alt_fnum(win_T *wp) { return wp ? wp->w_alt_fnum : 0; }
 
@@ -2308,12 +2290,6 @@ extern void rs_cmd_with_count_exec(const char *cmd, int64_t prenum);
 void nvim_cmd_with_count_exec(const char *cmd, int64_t Prenum) { rs_cmd_with_count_exec(cmd, Prenum); }
 
 // Phase 2 accessors: tabpage helpers and check_split_disallowed_err migration
-
-/// free_tabpage wrapper for Rust.
-void nvim_free_tabpage_wrapper(tabpage_T *tp)
-{
-  free_tabpage(tp);
-}
 
 /// Get p_tpm (tabpagemax option).
 int64_t nvim_get_p_tpm(void) { return p_tpm; }
@@ -2390,12 +2366,6 @@ void nvim_set_curwin_from_wp(win_T *wp)
 /// Get the w_buffer field raw pointer.
 buf_T *nvim_win_get_buffer_raw(win_T *wp) { return wp ? wp->w_buffer : NULL; }
 
-/// Call win_close(wp, free_buf, false) from Rust.
-int nvim_win_close_wrapper(win_T *wp, int free_buf)
-{
-  return win_close(wp, free_buf != 0, false);
-}
-
 extern void rs_close_others(int message, int forceit);
 void close_others(int message, int forceit) { rs_close_others(message, forceit); }
 
@@ -2416,11 +2386,6 @@ int nvim_win_buf_b_locked(win_T *wp)
   return (wp && wp->w_buffer && wp->w_buffer->b_locked > 0) ? 1 : 0;
 }
 
-/// Wrap win_close_othertab(wp, free_buf, tp, force) returning int (0=FAIL, 1=OK).
-int nvim_win_close_othertab_wrapper(win_T *wp, int free_buf, tabpage_T *tp, int force)
-{
-  return win_close_othertab(wp, free_buf != 0, tp, force != 0) ? 1 : 0;
-}
 
 extern void rs_close_windows(buf_T *buf, int keep_curwin);
 void close_windows(buf_T *buf, bool keep_curwin) { rs_close_windows(buf, keep_curwin ? 1 : 0); }

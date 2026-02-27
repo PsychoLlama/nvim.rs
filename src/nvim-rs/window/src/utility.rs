@@ -75,7 +75,7 @@ extern "C" {
     fn rs_split_iteration_size(vertical: c_int, todo: c_int) -> c_int;
 
     /// nvim_win_split_wrapper: call win_split(size, flags).
-    fn nvim_win_split_wrapper(size: c_int, flags: c_int) -> c_int;
+    fn rs_win_split(size: c_int, flags: c_int) -> c_int;
 
     /// block_autocmds wrapper.
     fn nvim_block_autocmds();
@@ -348,7 +348,7 @@ fn make_windows_impl(count: c_int, vertical: c_int) -> c_int {
 
         while todo > 0 {
             let split_size = rs_split_iteration_size(vertical, todo);
-            if nvim_win_split_wrapper(split_size, flags) == FAIL {
+            if rs_win_split(split_size, flags) == FAIL {
                 break;
             }
             todo -= 1;
