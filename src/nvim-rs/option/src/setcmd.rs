@@ -1187,7 +1187,7 @@ extern "C" {
     fn msg_outtrans(s: *const c_char, hl_id: c_int, hist: bool) -> c_int;
     fn nvim_message_filtered(msg: *const c_char) -> c_int;
     fn nvim_vim_strsize(s: *const c_char) -> c_int;
-    fn nvim_excmds_os_breakcheck();
+    fn os_breakcheck();
     fn nvim_get_got_int() -> c_int;
     fn nvim_get_Columns() -> c_int;
     fn nvim_excmds_set_msg_col(val: c_int);
@@ -1384,7 +1384,7 @@ pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
                 col += INC;
                 i += rows;
             }
-            nvim_excmds_os_breakcheck();
+            os_breakcheck();
             row += 1;
         }
         run += 1;

@@ -430,7 +430,7 @@ extern "C" {
     fn nvim_excmds_no_write_message();
     fn nvim_excmds_no_wait_return_inc();
     fn nvim_excmds_no_wait_return_dec();
-    fn nvim_excmds_setpcmark();
+    fn setpcmark();
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_excmds_do_ecmd_getfile(
         fnum: c_int,
@@ -524,7 +524,7 @@ pub unsafe extern "C" fn rs_getfile(
         nvim_excmds_no_wait_return_dec();
     }
     if setpm != 0 {
-        nvim_excmds_setpcmark();
+        setpcmark();
     }
 
     if other == 0 {

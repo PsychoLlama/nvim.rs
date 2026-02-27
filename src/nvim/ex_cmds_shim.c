@@ -919,18 +919,12 @@ const char *nvim_excmds_oldfiles_find_str(int idx)
   return tv_list_find_str(l, idx);
 }
 
-void nvim_excmds_msg_start(void) { msg_start(); }
 void nvim_excmds_set_msg_scroll(int val) { msg_scroll = (bool)val; }
-void nvim_excmds_msg_outnum(int nr) { msg_outnum((long)nr); }
 void nvim_excmds_msg_outtrans(const char *s) { msg_outtrans((char *)s, 0, false); }
-void nvim_excmds_msg_clr_eos(void) { msg_clr_eos(); }
-void nvim_excmds_msg_putchar(int c) { msg_putchar(c); }
-void nvim_excmds_os_breakcheck(void) { os_breakcheck(); }
 void nvim_excmds_set_got_int(int val) { got_int = (bool)val; }
 int nvim_excmds_cmdmod_has_browse(void) { return (cmdmod.cmod_flags & CMOD_BROWSE) != 0; }
 void nvim_excmds_set_quit_more(int val) { quit_more = (bool)val; }
 int nvim_excmds_prompt_for_input(void) { return prompt_for_input(NULL, 0, false, NULL); }
-void nvim_excmds_msg_starthere(void) { msg_starthere(); }
 char *nvim_excmds_expand_env_save(const char *p) { return expand_env_save((char *)p); }
 void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
 {
@@ -1011,7 +1005,6 @@ void nvim_excmds_apply_autocmds_shellcmdpost(void)
 }
 
 // --- global_exe FFI accessors ---
-void nvim_excmds_setpcmark(void) { setpcmark(); }
 void nvim_excmds_set_global_busy(int val) { global_busy = val; }
 int nvim_excmds_get_global_need_beginline(void) { return global_need_beginline ? 1 : 0; }
 void nvim_excmds_set_global_need_beginline(int val) { global_need_beginline = (bool)val; }

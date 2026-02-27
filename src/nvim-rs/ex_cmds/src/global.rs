@@ -27,7 +27,7 @@ extern crate libc;
 
 extern "C" {
     // global_exe FFI
-    fn nvim_excmds_setpcmark();
+    fn setpcmark();
     fn nvim_excmds_set_msg_didout(val: c_int);
     fn nvim_excmds_set_sub_nsubs(val: c_int);
     fn nvim_excmds_set_sub_nlines(val: c_int);
@@ -40,7 +40,7 @@ extern "C" {
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_curwin_set_cursor_col(col: c_int);
     fn nvim_excmds_do_cmdline_global(cmd: *const c_char);
-    fn nvim_excmds_os_breakcheck();
+    fn os_breakcheck();
     fn nvim_excmds_get_global_need_beginline() -> c_int;
     fn beginline(flags: c_int);
     fn nvim_excmds_check_cursor_curwin();
@@ -416,7 +416,7 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
     // Set current position only once for a global command.
     // If global_busy is set, setpcmark() will not do anything.
     // If there is an error, global_busy will be incremented.
-    nvim_excmds_setpcmark();
+    setpcmark();
 
     // When the command writes a message, don't overwrite the command.
     nvim_excmds_set_msg_didout(1);
@@ -438,7 +438,7 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
         nvim_curwin_set_cursor_lnum(lnum);
         nvim_curwin_set_cursor_col(0);
         nvim_excmds_do_cmdline_global(cmd);
-        nvim_excmds_os_breakcheck();
+        os_breakcheck();
     }
 
     nvim_excmds_set_global_busy(0);

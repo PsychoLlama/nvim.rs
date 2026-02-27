@@ -1198,7 +1198,7 @@ extern "C" {
     fn nvim_do_sub_changed_window_setting();
     fn nvim_curwin_get_cursor_col() -> c_int;
     fn nvim_option_get_p_cwh() -> c_int;
-    fn nvim_excmds_setpcmark();
+    fn setpcmark();
     fn nvim_do_sub_getvcol_startcol(lnum: c_int, col: c_int, sc_out: *mut c_int);
     fn nvim_do_sub_getvcol_endcol(lnum: c_int, col: c_int, ec_out: *mut c_int);
     fn nvim_do_sub_getcmdline_prompt(prompt_str: *const c_char) -> c_int;
@@ -1740,7 +1740,7 @@ pub unsafe extern "C" fn rs_do_sub(
             let mut lnum_start: c_int = 0;
 
             if !got_match {
-                nvim_excmds_setpcmark();
+                setpcmark();
                 got_match = true;
             }
 

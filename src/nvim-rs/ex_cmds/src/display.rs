@@ -858,20 +858,20 @@ pub extern "C" fn rs_line_number_width(max_lnum: c_int) -> c_int {
 extern "C" {
     fn nvim_excmds_oldfiles_count() -> c_int;
     fn nvim_excmds_oldfiles_find_str(idx: c_int) -> *const std::ffi::c_char;
-    fn nvim_excmds_msg_start();
     fn nvim_excmds_set_msg_scroll(val: c_int);
-    fn nvim_excmds_msg_outnum(nr: c_int);
+    fn msg_start();
+    fn msg_outnum(nr: c_int);
     fn nvim_message_filtered(msg: *const std::ffi::c_char) -> c_int;
     fn nvim_excmds_msg_outtrans(s: *const std::ffi::c_char);
-    fn nvim_excmds_msg_clr_eos();
-    fn nvim_excmds_msg_putchar(c: c_int);
-    fn nvim_excmds_os_breakcheck();
+    fn msg_clr_eos();
+    fn msg_putchar(c: c_int);
+    fn os_breakcheck();
     fn nvim_excmds_got_int() -> c_int;
     fn nvim_excmds_set_got_int(val: c_int);
     fn nvim_excmds_cmdmod_has_browse() -> c_int;
     fn nvim_excmds_set_quit_more(val: c_int);
     fn nvim_excmds_prompt_for_input() -> c_int;
-    fn nvim_excmds_msg_starthere();
+    fn msg_starthere();
     fn nvim_excmds_expand_env_save(p: *const std::ffi::c_char) -> *mut std::ffi::c_char;
     fn nvim_excmds_do_exedit_edit(eap: *mut ExArgHandle, arg: *mut std::ffi::c_char);
     fn nvim_excmds_xfree(ptr: *mut std::ffi::c_void);
@@ -891,7 +891,7 @@ pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
         return;
     }
 
-    nvim_excmds_msg_start();
+    msg_start();
     nvim_excmds_set_msg_scroll(1);
 
     for i in 0..count {
@@ -904,14 +904,14 @@ pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
         }
         let nr = i + 1;
         if nvim_message_filtered(fname_ptr) == 0 {
-            nvim_excmds_msg_outnum(nr);
+            msg_outnum(nr);
             // Print ": " as individual chars
-            nvim_excmds_msg_putchar(b':' as c_int);
-            nvim_excmds_msg_putchar(b' ' as c_int);
+            msg_putchar(b':' as c_int);
+            msg_putchar(b' ' as c_int);
             nvim_excmds_msg_outtrans(fname_ptr);
-            nvim_excmds_msg_clr_eos();
-            nvim_excmds_msg_putchar(b'\n' as c_int);
-            nvim_excmds_os_breakcheck();
+            msg_clr_eos();
+            msg_putchar(b'\n' as c_int);
+            os_breakcheck();
         }
     }
 
@@ -922,7 +922,7 @@ pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
     if nvim_excmds_cmdmod_has_browse() != 0 {
         nvim_excmds_set_quit_more(0);
         let selected = nvim_excmds_prompt_for_input();
-        nvim_excmds_msg_starthere();
+        msg_starthere();
         let list_len = nvim_excmds_oldfiles_count();
         if selected > 0 && selected <= list_len {
             let p = nvim_excmds_oldfiles_find_str(selected - 1);

@@ -221,7 +221,7 @@ extern "C" {
     fn nvim_ecmd_shortmess_overall() -> c_int;
     fn nvim_ecmd_shortmess_fileinfo() -> c_int;
     fn msg_check_for_delay(check_msg_scroll: bool);
-    fn nvim_excmds_msg_start();
+    fn msg_start();
     fn nvim_fileinfo_call();
     fn nvim_ecmd_eap_get_do_ecmd_cmd(eap: *mut ExArgHandle) -> *const c_char;
     fn nvim_ecmd_do_cmdline(command: *const c_char);
@@ -845,7 +845,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             if nvim_excmds_get_msg_scroll() == 0 {
                 msg_check_for_delay(false);
             }
-            nvim_excmds_msg_start();
+            msg_start();
             nvim_set_msg_scroll(msg_scroll_save);
             nvim_ecmd_set_msg_scrolled_ign(1);
 

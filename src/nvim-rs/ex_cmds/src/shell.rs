@@ -1097,7 +1097,7 @@ extern "C" {
     fn nvim_excmds_curbuf_ml_line_count() -> c_int;
     fn nvim_excmds_get_curbuf_ptr() -> *mut std::ffi::c_void;
     fn nvim_excmds_aborting() -> c_int;
-    fn nvim_excmds_os_breakcheck();
+    fn os_breakcheck();
     fn u_save(top: c_int, bot: c_int) -> c_int;
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_curwin_set_cursor_col(col: c_int);
@@ -1293,7 +1293,7 @@ pub unsafe extern "C" fn rs_do_filter(
     xfree(cmd_buf as *mut std::ffi::c_void);
 
     nvim_excmds_after_shell();
-    nvim_excmds_os_breakcheck();
+    os_breakcheck();
     nvim_excmds_clear_got_int();
 
     if do_out {
