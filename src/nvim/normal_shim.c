@@ -840,7 +840,7 @@ bool nvim_valid_yank_reg(int regname, bool writing) { return valid_yank_reg(regn
 
 void nvim_set_reg_var(int regname) { set_reg_var(regname); }
 
-// nv_put_opt C accessors (Phase 1: some helpers inlined into Rust)
+// nv_put C accessors
 bool nvim_put_get_save_fen(void) { return curwin->w_p_fen; }
 int nvim_get_cb_flags(void) { return cb_flags; }
 void *nvim_put_copy_register(int regname) { return copy_register(regname); }
@@ -974,10 +974,6 @@ void nvim_buflist_getfile(int n, int lnum, int flags, bool setpm) { buflist_getf
 
 _Static_assert(GETF_SETMARK == 0x01, "GETF_SETMARK changed");
 _Static_assert(GETF_ALT == 0x02, "GETF_ALT changed");
-
-// =============================================================================
-// Visual mode accessors for Rust FFI
-// =============================================================================
 
 int nvim_get_curbuf_visual_vi_mode(void) { return curbuf->b_visual.vi_mode; }
 
@@ -1150,7 +1146,7 @@ char *nvim_getcmdline_for_search(cmdarg_T *cap)
   return cap->searchbuf;
 }
 
-// C wrappers for nv_ident Rust migration (Phase 7)
+// nv_ident C wrappers
 
 /// Initialize nv_ident: determine cmdchar/g_cmd, get visual text or ident under cursor.
 /// Returns 0 on success, -1 to return early (clearop done), -2 to return early (clearopq done).
@@ -1204,9 +1200,6 @@ bool nvim_findmatchlimit_forward(int64_t maxtravel,
   *out_coladd = pos->coladd;
   return true;
 }
-
-/// rs_is_ident wrapper (declared in Rust).
-extern bool rs_is_ident(const char *line, int offset);
 
 /// rs_find_decl Rust implementation.
 extern bool rs_find_decl(char *ptr, size_t len, bool locally, bool thisblock, int flags_arg);
@@ -1340,7 +1333,7 @@ bool nvim_get_p_to(void) { return p_to; }
 // Insert mode entry handler accessors for Rust FFI
 // =============================================================================
 
-// C wrappers for nv_replace (Phase 1: most helpers inlined into Rust)
+// nv_replace C wrappers
 
 /// Check if buffer is a prompt buffer and cursor is not in editable area.
 int nvim_replace_check_prompt(void) {
@@ -2209,7 +2202,6 @@ void nvim_scrollbind_sync_windows(win_T *old_curwin_arg, int vtopline_diff,
 /// When "check" is false, prepare for commands that scroll the window.
 /// When "check" is true, take care of scroll-binding after the window has
 /// scrolled.  Called from normal_cmd() and edit().
-/// Migrated to Rust (rs_do_check_scrollbind) in Phase 3; thin wrapper.
 extern void rs_do_check_scrollbind(bool check);
 void do_check_scrollbind(bool check)
 {
@@ -2218,7 +2210,6 @@ void do_check_scrollbind(bool check)
 
 /// Synchronize any windows that have "scrollbind" set, based on the
 /// number of rows by which the current window has changed.
-/// Migrated to Rust (rs_check_scrollbind) in Phase 3; thin wrapper.
 extern void rs_check_scrollbind(int vtopline_diff, int leftcol_diff);
 void check_scrollbind(linenr_T vtopline_diff, int leftcol_diff)
 {
@@ -2262,7 +2253,6 @@ void do_nv_ident(int c1, int c2) { rs_do_nv_ident(c1, c2); }
 /// Move position "*pp" back one character for 'selection' == "exclusive".
 ///
 /// @return  true when backed up to the previous line.
-/// Migrated to Rust (rs_unadjust_for_sel_inner) in Phase 2; thin wrapper remains for eval/funcs.c.
 extern bool rs_unadjust_for_sel_inner(int *lnum, int *col, int *coladd);
 bool unadjust_for_sel_inner(pos_T *pp)
 {
@@ -2276,7 +2266,7 @@ bool unadjust_for_sel_inner(pos_T *pp)
   return backed_up;
 }
 
-/// Thin wrapper: invoke_edit migrated to Rust (rs_invoke_edit) in Phase 4.
+/// invoke_edit thin wrapper.
 static void invoke_edit(cmdarg_T *cap, int repl, int cmd, int startln)
 {
   rs_invoke_edit(cap, repl, cmd, startln);
@@ -2293,9 +2283,7 @@ void normal_cmd(oparg_T *oap, bool toplevel)
   *oap = s.oa;
 }
 
-// =============================================================================
-// Accessors for rs_ident_build_and_exec (Phase 2)
-// =============================================================================
+// nv_ident build accessors
 
 /// Get the resolved keywordprg string (curbuf->b_p_kp or p_kp fallback).
 char *nvim_ident_get_kp(void)
