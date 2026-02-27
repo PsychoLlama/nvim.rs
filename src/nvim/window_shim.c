@@ -1420,19 +1420,6 @@ void nvim_win_clear_vars(win_T *wp)
   unref_var_dict(wp->w_vars);
 }
 
-/// Fix prevwin: NULL out prevwin==wp, and tp_prevwin across all tabs.
-void nvim_win_fix_prevwin(win_T *wp)
-{
-  if (prevwin == wp) {
-    prevwin = NULL;
-  }
-  FOR_ALL_TABS(ttp) {
-    if (ttp->tp_prevwin == wp) {
-      ttp->tp_prevwin = NULL;
-    }
-  }
-}
-
 /// Free w_lines.
 void nvim_win_free_lines(win_T *wp) { xfree(wp->w_lines); }
 
@@ -1495,35 +1482,8 @@ void nvim_win_clear_config_virttext(win_T *wp)
   clear_virttext(&wp->w_config.footer_chunks);
 }
 
-/// clear_matches + free_jumplist + qf_free_all.
-void nvim_win_clear_matches_and_jumplist(win_T *wp)
-{
-  clear_matches(wp);
-  free_jumplist(wp);
-  qf_free_all(wp);
-}
-
 /// Free w_p_cc_cols.
 void nvim_win_free_cc_cols(win_T *wp) { xfree(wp->w_p_cc_cols); }
-
-/// Handle autocmd_busy pending free or direct xfree.
-void nvim_win_handle_pending_free(win_T *wp)
-{
-  if (autocmd_busy) {
-    wp->w_next = au_pending_free_win;
-    au_pending_free_win = wp;
-  } else {
-    xfree(wp);
-  }
-}
-
-/// ui_call_grid_destroy for the window's grid (if handle != 0 and multigrid).
-void nvim_win_grid_destroy(win_T *wp)
-{
-  if (wp->w_grid_alloc.handle != 0 && ui_has(kUIMultigrid)) {
-    ui_call_grid_destroy(wp->w_grid_alloc.handle);
-  }
-}
 
 /// grid_free for the window's grid.
 void nvim_win_grid_free(win_T *wp) { grid_free(&wp->w_grid_alloc); }
@@ -1685,6 +1645,12 @@ int nvim_win_get_grid_alloc_handle(win_T *wp) { return wp ? wp->w_grid_alloc.han
 int nvim_win_get_w_handle(win_T *wp) { return wp ? wp->handle : 0; }
 // nvim_win_get_border_adj already defined earlier in this file
 int nvim_ui_has_multigrid(void) { return ui_has(kUIMultigrid) ? 1 : 0; }
+void nvim_ui_call_grid_destroy_handle(int handle) { ui_call_grid_destroy(handle); }
+void nvim_clear_matches_win(win_T *wp) { clear_matches(wp); }
+void nvim_free_jumplist_win(win_T *wp) { free_jumplist(wp); }
+win_T *nvim_get_au_pending_free_win(void) { return au_pending_free_win; }
+void nvim_set_au_pending_free_win(win_T *wp) { au_pending_free_win = wp; }
+void nvim_xfree_win_raw(win_T *wp) { xfree(wp); }
 void nvim_ui_call_win_viewport_margins_wrapper(win_T *wp) {
   if (wp && ui_has(kUIMultigrid)) {
     ui_call_win_viewport_margins(wp->w_grid_alloc.handle, wp->handle,

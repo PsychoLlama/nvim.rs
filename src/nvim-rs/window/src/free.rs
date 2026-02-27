@@ -6,6 +6,9 @@ use std::ffi::c_int;
 
 use crate::{TabpageHandle, WinHandle};
 
+// Imports for inlined compound accessors (Phase 13)
+use crate::list::{nvim_get_first_tabpage, nvim_tabpage_get_next};
+
 // =============================================================================
 // External C Functions
 // =============================================================================
@@ -37,9 +40,6 @@ extern "C" {
     /// Free all w: variables.
     fn nvim_win_clear_vars(wp: WinHandle);
 
-    /// Fix prevwin and tp_prevwin across all tabs.
-    fn nvim_win_fix_prevwin(wp: WinHandle);
-
     /// Free w_lines.
     fn nvim_win_free_lines(wp: WinHandle);
 
@@ -58,23 +58,14 @@ extern "C" {
     /// Clear border text virttext.
     fn nvim_win_clear_config_virttext(wp: WinHandle);
 
-    /// clear_matches + free_jumplist + qf_free_all.
-    fn nvim_win_clear_matches_and_jumplist(wp: WinHandle);
-
     /// Free w_p_cc_cols.
     fn nvim_win_free_cc_cols(wp: WinHandle);
-
-    /// ui_call_grid_destroy for the window's grid.
-    fn nvim_win_grid_destroy(wp: WinHandle);
 
     /// grid_free for the window's grid.
     fn nvim_win_grid_free(wp: WinHandle);
 
     /// CLEAR_FIELD the window's grid (for reinit).
     fn nvim_win_grid_clear_field(wp: WinHandle);
-
-    /// Handle autocmd_busy pending free or direct xfree.
-    fn nvim_win_handle_pending_free(wp: WinHandle);
 
     /// Unblock autocmds.
     fn nvim_unblock_autocmds();
@@ -84,6 +75,53 @@ extern "C" {
 
     /// Remove window from the window list.
     fn rs_win_remove(wp: WinHandle, tp: TabpageHandle);
+
+    // --- Phase 13: Inlined compound accessor helpers ---
+
+    /// Get the prevwin global.
+    fn nvim_get_prevwin() -> WinHandle;
+
+    /// Set the prevwin global.
+    fn nvim_set_prevwin(wp: WinHandle);
+
+    /// Get tp->tp_prevwin.
+    fn nvim_tabpage_get_prevwin(tp: TabpageHandle) -> WinHandle;
+
+    /// Set tp->tp_prevwin.
+    fn nvim_tabpage_set_prevwin(tp: TabpageHandle, wp: WinHandle);
+
+    /// Get the win's grid alloc handle.
+    fn nvim_win_get_grid_alloc_handle(wp: WinHandle) -> c_int;
+
+    /// Check if kUIMultigrid is active.
+    fn nvim_ui_has_multigrid() -> c_int;
+
+    /// Call ui_call_grid_destroy with a raw handle.
+    fn nvim_ui_call_grid_destroy_handle(handle: c_int);
+
+    /// clear_matches(wp).
+    fn nvim_clear_matches_win(wp: WinHandle);
+
+    /// free_jumplist(wp).
+    fn nvim_free_jumplist_win(wp: WinHandle);
+
+    /// qf_free_all(wp) -- from quickfix_shim.c, takes void*.
+    fn nvim_qf_free_all_win(wp: *mut std::ffi::c_void);
+
+    /// Get au_pending_free_win global.
+    fn nvim_get_au_pending_free_win() -> WinHandle;
+
+    /// Set au_pending_free_win global.
+    fn nvim_set_au_pending_free_win(wp: WinHandle);
+
+    /// Whether autocmd_busy is set.
+    fn nvim_get_autocmd_busy() -> bool;
+
+    /// Set wp->w_next.
+    fn nvim_win_set_next(wp: WinHandle, next: WinHandle);
+
+    /// xfree(wp) -- raw deallocation of a window struct.
+    fn nvim_xfree_win_raw(wp: WinHandle);
 }
 
 // =============================================================================
@@ -97,7 +135,11 @@ extern "C" {
 /// # Safety
 /// `wp` must be a valid `win_T*`.
 unsafe fn win_free_grid_impl(wp: WinHandle, reinit: bool) {
-    nvim_win_grid_destroy(wp);
+    // Inlined nvim_win_grid_destroy: conditionally call ui_call_grid_destroy
+    let grid_handle = nvim_win_get_grid_alloc_handle(wp);
+    if grid_handle != 0 && nvim_ui_has_multigrid() != 0 {
+        nvim_ui_call_grid_destroy_handle(grid_handle);
+    }
     nvim_win_grid_free(wp);
     if reinit {
         nvim_win_grid_clear_field(wp);
@@ -141,8 +183,17 @@ unsafe fn win_free_impl(wp: WinHandle, tp: TabpageHandle) {
     // Free all w: variables.
     nvim_win_clear_vars(wp);
 
-    // Fix prevwin references.
-    nvim_win_fix_prevwin(wp);
+    // Inlined nvim_win_fix_prevwin: NULL out prevwin==wp, tp_prevwin across all tabs.
+    if nvim_get_prevwin() == wp {
+        nvim_set_prevwin(WinHandle::null());
+    }
+    let mut ttp = nvim_get_first_tabpage();
+    while !ttp.is_null() {
+        if nvim_tabpage_get_prevwin(ttp) == wp {
+            nvim_tabpage_set_prevwin(ttp, WinHandle::null());
+        }
+        ttp = nvim_tabpage_get_next(ttp);
+    }
 
     nvim_win_free_lines(wp);
     nvim_win_clear_tagstack(wp);
@@ -155,7 +206,11 @@ unsafe fn win_free_impl(wp: WinHandle, tp: TabpageHandle) {
     // Free the border text.
     nvim_win_clear_config_virttext(wp);
 
-    nvim_win_clear_matches_and_jumplist(wp);
+    // Inlined nvim_win_clear_matches_and_jumplist.
+    nvim_clear_matches_win(wp);
+    nvim_free_jumplist_win(wp);
+    nvim_qf_free_all_win(wp.as_ptr());
+
     nvim_win_free_cc_cols(wp);
 
     win_free_grid_impl(wp, false);
@@ -164,7 +219,13 @@ unsafe fn win_free_impl(wp: WinHandle, tp: TabpageHandle) {
         rs_win_remove(wp, tp);
     }
 
-    nvim_win_handle_pending_free(wp);
+    // Inlined nvim_win_handle_pending_free: chain wp or xfree.
+    if nvim_get_autocmd_busy() {
+        nvim_win_set_next(wp, nvim_get_au_pending_free_win());
+        nvim_set_au_pending_free_win(wp);
+    } else {
+        nvim_xfree_win_raw(wp);
+    }
 
     nvim_unblock_autocmds();
 }
