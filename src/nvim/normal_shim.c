@@ -779,10 +779,6 @@ int nvim_inc_cursor(void) { return inc(&curwin->w_cursor); }
 
 int nvim_dec_cursor(void) { return dec(&curwin->w_cursor); }
 
-bool nvim_cpo_has_changew(void) { return vim_strchr(p_cpo, CPO_CHANGEW) != NULL; }
-
-bool nvim_ascii_iswhite(int c) { return ascii_iswhite(c); }
-
 bool nvim_lt_VIsual_cursor(void) { return lt(VIsual, curwin->w_cursor); }
 
 bool nvim_lt_pos_cursor(int lnum, int col) { pos_T startpos = { lnum, col, 0 }; return lt(startpos, curwin->w_cursor); }
@@ -800,8 +796,6 @@ int nvim_get_VIsual_mode(void) { return VIsual_mode; }
 bool nvim_get_VIsual_select_exclu_adj(void) { return VIsual_select_exclu_adj; }
 
 int nvim_searchc(cmdarg_T *cap, bool t_cmd) { return searchc(cap, t_cmd); }
-
-bool nvim_is_special(int key) { return IS_SPECIAL(key); }
 
 void nvim_getvcol_cursor(int *scol, int *ecol) { getvcol(curwin, &curwin->w_cursor, scol, NULL, ecol); }
 
@@ -1298,7 +1292,6 @@ int nvim_get_curwin_w_skipcol(void) { return (int)curwin->w_skipcol; }
 int nvim_get_curwin_w_topline(void) { return (int)curwin->w_topline; }
 bool nvim_get_curwin_w_cline_folded(void) { return curwin->w_cline_folded; }
 void nvim_clear_curwin_w_valid_wcol(void) { curwin->w_valid &= ~VALID_WCOL; }
-bool nvim_ascii_iswhite_or_nul(int c) { return ascii_iswhite_or_nul(c); }
 int nvim_utf_ptr2cells_cursor(void) { return utf_ptr2cells(get_cursor_pos_ptr()); }
 int nvim_getvvcol_cursor_end(void) { colnr_T vcol; getvvcol(curwin, &curwin->w_cursor, NULL, NULL, &vcol); return (int)vcol; }
 void nvim_hasFolding_cursor_set_lnum_up(void) { hasFolding(curwin, curwin->w_cursor.lnum, &curwin->w_cursor.lnum, NULL); }
@@ -1408,9 +1401,6 @@ void nvim_sync_fen_in_diff_windows(void)
 
 /// vim_strchr wrapper for a specific string
 bool nvim_vim_strchr_str(const char *str, int c) { return vim_strchr(str, c) != NULL; }
-
-/// Check if nchar is an ASCII digit.
-bool nvim_ascii_isdigit(int c) { return ascii_isdigit(c); }
 
 /// Get translated E352 error message.
 const char *nvim_get_e352_msg(void) { return _("E352: Cannot erase folds with current 'foldmethod'"); }

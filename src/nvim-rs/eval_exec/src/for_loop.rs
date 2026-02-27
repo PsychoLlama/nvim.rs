@@ -138,8 +138,7 @@ extern "C" {
     // Phase 12: emsg_skip accessed directly as a global
     static mut emsg_skip: c_int;
 
-    // ascii_iswhite (declared in normal_shim, takes int)
-    fn nvim_ascii_iswhite(c: c_int) -> bool;
+    fn rs_ascii_iswhite(c: c_int) -> c_int;
 }
 
 // Error messages
@@ -218,7 +217,7 @@ pub unsafe fn eval_for_line_impl(
     let b0 = get_byte(expr);
     let b1 = get_byte(expr.add(1));
     let b2 = get_byte(expr.add(2));
-    if b0 != b'i' || b1 != b'n' || !(b2 == 0 || nvim_ascii_iswhite(c_int::from(b2))) {
+    if b0 != b'i' || b1 != b'n' || !(b2 == 0 || rs_ascii_iswhite(c_int::from(b2)) != 0) {
         emsg(E_MISSING_IN.as_ptr() as *const c_char);
         return fi as *mut c_void;
     }

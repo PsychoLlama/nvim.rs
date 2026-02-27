@@ -25,6 +25,7 @@ pub mod scrollbind;
 pub mod showcmd;
 pub mod visual;
 
+use nvim_ascii::{rs_ascii_isdigit, rs_ascii_iswhite, rs_ascii_iswhite_or_nul};
 use std::ffi::{c_char, c_int, c_uint, c_void};
 use std::sync::atomic::{AtomicI32, Ordering};
 
@@ -1309,8 +1310,7 @@ extern "C" {
     fn nvim_set_cursor_coladd_zero();
     fn nvim_inc_cursor() -> c_int;
     fn nvim_mb_adjust_cursor();
-    fn nvim_cpo_has_changew() -> bool;
-    fn nvim_ascii_iswhite(c: c_int) -> bool;
+    fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
     fn nvim_get_p_sel_first() -> std::ffi::c_char;
     fn nvim_lt_VIsual_cursor() -> bool;
     fn nvim_lt_pos_cursor(lnum: c_int, col: c_int) -> bool;
@@ -1323,7 +1323,6 @@ extern "C" {
     #[link_name = "rs_unadjust_for_sel"]
     fn nvim_unadjust_for_sel() -> bool;
     fn nvim_searchc(cap: CapHandle, t_cmd: bool) -> c_int;
-    fn nvim_is_special(key: c_int) -> bool;
     fn nvim_getvcol_cursor(scol: *mut c_int, ecol: *mut c_int);
     fn nvim_set_cursor_coladd(val: c_int);
 
@@ -1529,7 +1528,7 @@ pub unsafe extern "C" fn rs_nv_wordcmd(cap: CapHandle) {
     // "cw" and "cW" are a special case.
     if !word_end && nvim_oap_get_op_type_ptr(oap) == OP_CHANGE {
         let n = nvim_gchar_cursor();
-        if n != NUL_CHAR && !nvim_ascii_iswhite(n) {
+        if n != NUL_CHAR && rs_ascii_iswhite(n) == 0 {
             // This is a little strange. To match what the real Vi does, we
             // effectively map "cw" to "ce", and "cW" to "cE", provided that we are
             // not on a space or a TAB. This seems impolite at first, but it's
@@ -1538,7 +1537,7 @@ pub unsafe extern "C" fn rs_nv_wordcmd(cap: CapHandle) {
             // Another strangeness: When standing on the end of a word "ce" will
             // change until the end of the next word, but "cw" will change only one
             // character! This is done by setting "flag".
-            if nvim_cpo_has_changew() {
+            if nvim_vim_strchr_p_cpo(i32::from(b'_')) {
                 nvim_oap_set_inclusive(oap, true);
                 word_end = true;
             }
@@ -2118,7 +2117,7 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
         if regname == 0
             || regname == b'"' as c_int
             || clipoverwrite
-            || nvim_ascii_isdigit(regname)
+            || rs_ascii_isdigit(regname) != 0
             || regname == b'-' as c_int
         {
             savereg = nvim_put_copy_register(regname);
@@ -2231,7 +2230,7 @@ pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
     let t_cmd = cmdchar == c_int::from(b't') || cmdchar == c_int::from(b'T');
 
     nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
-    if nvim_is_special(nchar) || nvim_searchc(cap, t_cmd) == FAIL {
+    if nchar < 0 || nvim_searchc(cap, t_cmd) == FAIL {
         rs_clearopbeep(oap);
         // Revert unadjust when failed.
         if cursor_dec {
@@ -4172,7 +4171,7 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
 
     // Abort if the character is a special key
     let nchar = nvim_cap_get_nchar(cap);
-    if nvim_is_special(nchar) {
+    if nchar < 0 {
         rs_clearopbeep(oap);
         return;
     }
@@ -4455,7 +4454,6 @@ extern "C" {
     fn nvim_inc_allow_keys();
     fn nvim_dec_allow_keys();
     fn nvim_vim_strchr_str(s: *const c_char, c: c_int) -> bool;
-    fn nvim_ascii_isdigit(c: c_int) -> bool;
     fn nvim_get_curwin() -> WinHandle;
 
     // Fold functions from fold crate
@@ -4615,7 +4613,7 @@ unsafe fn nv_z_get_count_impl(cap: CapHandle, nchar_arg: &mut c_int) -> bool {
 
         if nchar == K_DEL || nchar == K_KDEL {
             n /= 10;
-        } else if nvim_ascii_isdigit(nchar) {
+        } else if rs_ascii_isdigit(nchar) != 0 {
             if nvim_vim_append_digit_int(&raw mut n, nchar - c_int::from(b'0')) == FAIL {
                 rs_clearopbeep(oap);
                 break;
@@ -4676,7 +4674,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
 
     let siso = rs_get_sidescrolloff_value(curwin);
 
-    if nvim_ascii_isdigit(nchar) && !nv_z_get_count_impl(cap, &mut nchar) {
+    if rs_ascii_isdigit(nchar) != 0 && !nv_z_get_count_impl(cap, &mut nchar) {
         return;
     }
 
@@ -5563,7 +5561,6 @@ extern "C" {
     fn nvim_get_curwin_w_topline() -> c_int;
     fn nvim_get_curwin_w_cline_folded() -> bool;
     fn nvim_clear_curwin_w_valid_wcol();
-    fn nvim_ascii_iswhite_or_nul(c: c_int) -> bool;
     fn nvim_utf_ptr2cells_cursor() -> c_int;
     fn nvim_getvvcol_cursor_end() -> c_int;
     fn nvim_hasFolding_cursor_set_lnum_up();
@@ -5836,7 +5833,7 @@ pub unsafe extern "C" fn rs_nv_g_home_m_cmd(cap: CapHandle) {
     if flag {
         loop {
             let c = nvim_gchar_cursor();
-            if !nvim_ascii_iswhite(c) || nvim_oneright_call() != 0 {
+            if rs_ascii_iswhite(c) == 0 || nvim_oneright_call() != 0 {
                 break;
             }
         }
@@ -5923,7 +5920,7 @@ pub unsafe extern "C" fn rs_nv_g_dollar_cmd(cap: CapHandle) {
     if flag {
         loop {
             let c = nvim_gchar_cursor();
-            if !nvim_ascii_iswhite_or_nul(c) || nvim_oneleft_call() != 0 {
+            if rs_ascii_iswhite_or_nul(c) == 0 || nvim_oneleft_call() != 0 {
                 break;
             }
         }

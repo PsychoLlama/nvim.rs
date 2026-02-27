@@ -783,8 +783,7 @@ extern "C" {
     fn rs_ins_compl_leader_len() -> usize;
     fn nvim_mb_byte2len(b: c_int) -> c_int;
     fn nvim_get_curwin_cursor_col() -> c_int;
-    // nvim_ascii_iswhite_or_nul: defined in normal_shim.c as bool(int c)
-    fn nvim_ascii_iswhite_or_nul(c: c_int) -> bool;
+    fn rs_ascii_iswhite_or_nul(c: c_int) -> c_int;
     fn rs_find_word_end(ptr: *mut c_char) -> *mut c_char;
     // nvim_get_cursor_line_ptr already declared in Phase 2 extern block above
 }
@@ -954,7 +953,7 @@ pub unsafe extern "C" fn rs_find_common_prefix(
             let line = nvim_get_cursor_line_ptr();
             let cursor_col = nvim_get_curwin_cursor_col();
             let p = line.add(cursor_col as usize);
-            if !p.is_null() && !nvim_ascii_iswhite_or_nul(c_int::from(*p)) {
+            if !p.is_null() && rs_ascii_iswhite_or_nul(c_int::from(*p)) == 0 {
                 let end = rs_find_word_end(p);
                 let text_len = end.offset_from(p) as c_int;
                 if text_len > 0

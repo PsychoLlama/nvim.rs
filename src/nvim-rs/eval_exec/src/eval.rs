@@ -3193,8 +3193,6 @@ extern "C" {
     fn nvim_eval_partial_get_dict(pt: *const c_void) -> *mut c_void;
     // tv_is_func wrapper (returns int, matches other declarations in this crate)
     fn nvim_tv_is_func(tv: TypevalHandle) -> c_int;
-    // ascii_iswhite (available in normal_shim.c)
-    fn nvim_ascii_iswhite(c: c_int) -> bool;
     // rs_check_luafunc_name is in the eval crate (different crate)
     fn rs_check_luafunc_name(str: *const c_char, paren: bool) -> c_int;
 }
@@ -3284,7 +3282,7 @@ pub unsafe fn handle_subscript_impl(
         let is_subscript = (ch == b'['
             || (ch == b'.' && tv_type == VAR_DICT)
             || (ch == b'(' && (!evaluate || nvim_tv_is_func(rettv) != 0)))
-            && !nvim_ascii_iswhite(c_int::from(prev_ch));
+            && rs_ascii_iswhite(c_int::from(prev_ch)) == 0;
         let is_arrow = ch == b'-' && next_ch == b'>';
 
         if !is_subscript && !is_arrow {
