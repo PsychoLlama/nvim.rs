@@ -1089,6 +1089,15 @@ extern "C" {
 /// FAIL constant.
 const FAIL: c_int = 0;
 
+/// EVENT_* constants matching auevents_enum.generated.h
+const EVENT_BUFENTER: c_int = 3;
+const EVENT_BUFLEAVE: c_int = 7;
+const EVENT_TABENTER: c_int = 110;
+const EVENT_TABLEAVE: c_int = 111;
+const EVENT_WINENTER: c_int = 136;
+const EVENT_WINLEAVE: c_int = 137;
+const EVENT_WINNEW: c_int = 138;
+
 /// Close tabpage `tab` which has no windows.
 /// There must be another tabpage or this will crash.
 /// Equivalent to C `close_tabpage()`.
@@ -1279,9 +1288,7 @@ extern "C" {
     // leave_tabpage dependencies (cross-crate)
     fn rs_reset_VIsual_and_resel();
     fn nvim_get_curbuf() -> crate::BufHandle;
-    fn nvim_apply_autocmds_bufleave();
-    fn nvim_apply_autocmds_winleave();
-    fn nvim_apply_autocmds_tableave();
+    fn nvim_apply_autocmds_event(event: c_int);
     fn nvim_reset_dragwin();
     fn nvim_tabpage_set_prevwin(tp: TabpageHandle, wp: WinHandle);
     fn nvim_tabpage_set_old_rows_avail(tp: TabpageHandle, val: c_int);
@@ -1306,8 +1313,6 @@ extern "C" {
     fn nvim_tabpage_get_old_rows_avail(tp: TabpageHandle) -> c_int;
     fn nvim_get_starting() -> c_int;
     fn nvim_set_lastused_tabpage_from_rust(tp: TabpageHandle);
-    fn nvim_apply_autocmds_tabenter();
-    fn nvim_apply_autocmds_bufenter();
     fn nvim_redraw_all_later(type_: c_int);
 
     // goto_tabpage_tp dependencies
@@ -1346,16 +1351,16 @@ unsafe fn leave_tabpage_impl(new_curbuf: crate::BufHandle, trigger_leave: bool) 
     if trigger_leave {
         let curbuf = nvim_get_curbuf();
         if new_curbuf != curbuf {
-            nvim_apply_autocmds_bufleave();
+            nvim_apply_autocmds_event(EVENT_BUFLEAVE);
             if nvim_get_curtab() != tp {
                 return LEAVE_FAIL;
             }
         }
-        nvim_apply_autocmds_winleave();
+        nvim_apply_autocmds_event(EVENT_WINLEAVE);
         if nvim_get_curtab() != tp {
             return LEAVE_FAIL;
         }
-        nvim_apply_autocmds_tableave();
+        nvim_apply_autocmds_event(EVENT_TABLEAVE);
         if nvim_get_curtab() != tp {
             return LEAVE_FAIL;
         }
@@ -1458,10 +1463,10 @@ unsafe fn enter_tabpage_impl(
     nvim_set_lastused_tabpage_from_rust(old_curtab);
 
     if trigger_enter {
-        nvim_apply_autocmds_tabenter();
+        nvim_apply_autocmds_event(EVENT_TABENTER);
         let curbuf = nvim_get_curbuf();
         if old_curbuf != curbuf {
-            nvim_apply_autocmds_bufenter();
+            nvim_apply_autocmds_event(EVENT_BUFENTER);
         }
     }
 
@@ -1551,12 +1556,6 @@ extern "C" {
 
     /// Fire EVENT_TABNEW autocmd with optional filename.
     fn nvim_apply_autocmds_tabnew(filename: *const u8);
-
-    /// Apply WinNew autocmd.
-    fn nvim_apply_autocmds_winnew();
-
-    /// Apply WinEnter autocmd.
-    fn nvim_apply_autocmds_winenter();
 
     /// Set w_winrow on a window.
     fn nvim_win_set_winrow(wp: WinHandle, val: c_int);
@@ -1668,10 +1667,10 @@ unsafe fn win_new_tabpage_impl(after: c_int, filename: *const u8) -> c_int {
         crate::focus::rs_entering_window(curwin);
 
         // Fire autocmds in order: WinNew, WinEnter, TabNew, TabEnter
-        nvim_apply_autocmds_winnew();
-        nvim_apply_autocmds_winenter();
+        nvim_apply_autocmds_event(EVENT_WINNEW);
+        nvim_apply_autocmds_event(EVENT_WINENTER);
         nvim_apply_autocmds_tabnew(filename);
-        nvim_apply_autocmds_tabenter();
+        nvim_apply_autocmds_event(EVENT_TABENTER);
 
         return OK;
     }

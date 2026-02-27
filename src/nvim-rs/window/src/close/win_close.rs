@@ -100,16 +100,19 @@ extern "C" {
         force: c_int,
     ) -> c_int;
     fn nvim_win_float_find_altwin(win: WinHandle, tp: TabpageHandle) -> WinHandle;
-    fn nvim_apply_autocmds_bufleave();
-    fn nvim_apply_autocmds_winleave();
-    fn nvim_apply_autocmds_bufenter();
-    fn nvim_apply_autocmds_tableave();
+    fn nvim_apply_autocmds_event(event: std::ffi::c_int);
     fn nvim_excmds_aborting() -> c_int;
 }
 
 // =============================================================================
 // Constants
 // =============================================================================
+
+/// EVENT_* constants matching auevents_enum.generated.h
+const EVENT_BUFENTER: c_int = 3;
+const EVENT_BUFLEAVE: c_int = 7;
+const EVENT_TABLEAVE: c_int = 111;
+const EVENT_WINLEAVE: c_int = 137;
 
 /// `SNAP_HELP_IDX` from window.c.
 const SNAP_HELP_IDX: c_int = 0;
@@ -244,7 +247,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
                 return 1; // FAIL
             }
             nvim_win_set_locked(win, 1);
-            nvim_apply_autocmds_bufleave();
+            nvim_apply_autocmds_event(EVENT_BUFLEAVE);
             if nvim_win_valid_wrapper(win) == 0 {
                 return 1; // FAIL
             }
@@ -255,7 +258,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
         }
 
         nvim_win_set_locked(win, 1);
-        nvim_apply_autocmds_winleave();
+        nvim_apply_autocmds_event(EVENT_WINLEAVE);
         if nvim_win_valid_wrapper(win) == 0 {
             return 1; // FAIL
         }
@@ -321,12 +324,12 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
     if res.close_curwin != 0 {
         crate::enter::rs_win_enter_ext(wp, WEE_CLOSE_FLAGS);
         if other_buffer {
-            nvim_apply_autocmds_bufenter();
+            nvim_apply_autocmds_event(EVENT_BUFENTER);
         }
     }
 
     if nvim_one_window_and_locked_split() != 0 {
-        nvim_apply_autocmds_tableave();
+        nvim_apply_autocmds_event(EVENT_TABLEAVE);
     }
 
     nvim_dec_split_disallowed();

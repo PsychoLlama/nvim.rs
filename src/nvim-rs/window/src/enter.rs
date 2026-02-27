@@ -68,12 +68,8 @@ extern "C" {
     fn nvim_get_p_wh() -> i64;
     fn nvim_get_p_wiw() -> i64;
 
-    // Autocmd wrappers
-    fn nvim_apply_autocmds_bufleave();
-    fn nvim_apply_autocmds_winleave();
-    fn nvim_apply_autocmds_winnew();
-    fn nvim_apply_autocmds_winenter();
-    fn nvim_apply_autocmds_bufenter();
+    // Generic autocmd dispatcher
+    fn nvim_apply_autocmds_event(event: c_int);
 
     // aborting() check
     fn nvim_aborting() -> bool;
@@ -133,6 +129,16 @@ extern "C" {
 }
 
 // =============================================================================
+// EVENT_* constants matching auevents_enum.generated.h
+// =============================================================================
+
+const EVENT_BUFENTER: c_int = 3;
+const EVENT_BUFLEAVE: c_int = 7;
+const EVENT_WINENTER: c_int = 136;
+const EVENT_WINLEAVE: c_int = 137;
+const EVENT_WINNEW: c_int = 138;
+
+// =============================================================================
 // Implementation
 // =============================================================================
 
@@ -168,13 +174,13 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
             let curbuf = nvim_get_curbuf();
             let wp_buffer = nvim_win_get_buffer(wp);
             if wp_buffer != curbuf {
-                nvim_apply_autocmds_bufleave();
+                nvim_apply_autocmds_event(EVENT_BUFLEAVE);
                 other_buffer = true;
                 if rs_win_valid(wp) == 0 {
                     return;
                 }
             }
-            nvim_apply_autocmds_winleave();
+            nvim_apply_autocmds_event(EVENT_WINLEAVE);
             if rs_win_valid(wp) == 0 {
                 return;
             }
@@ -239,12 +245,12 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
 
         // Careful: autocommands may close the window and make "wp" invalid
         if (flags & WEE_TRIGGER_NEW_AUTOCMDS) != 0 {
-            nvim_apply_autocmds_winnew();
+            nvim_apply_autocmds_event(EVENT_WINNEW);
         }
         if (flags & WEE_TRIGGER_ENTER_AUTOCMDS) != 0 {
-            nvim_apply_autocmds_winenter();
+            nvim_apply_autocmds_event(EVENT_WINENTER);
             if other_buffer {
-                nvim_apply_autocmds_bufenter();
+                nvim_apply_autocmds_event(EVENT_BUFENTER);
             }
         }
 

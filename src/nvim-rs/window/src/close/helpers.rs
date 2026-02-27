@@ -66,10 +66,8 @@ extern "C" {
     /// entering_window(curwin) wrapper (= rs_entering_window).
     #[link_name = "rs_entering_window"]
     fn nvim_entering_window_c(win: WinHandle);
-    /// apply_autocmds(EVENT_WINENTER) wrapper.
-    fn nvim_apply_autocmds_winenter();
-    /// apply_autocmds(EVENT_TABENTER) wrapper.
-    fn nvim_apply_autocmds_tabenter();
+    /// Generic autocmd dispatcher.
+    fn nvim_apply_autocmds_event(event: std::ffi::c_int);
     /// apply_autocmds(EVENT_BUFENTER) if old_curbuf != curbuf.
     fn nvim_apply_autocmds_bufenter_if_changed(old_curbuf: BufHandle);
 
@@ -94,6 +92,10 @@ extern "C" {
 
 /// DOBUF_UNLOAD from buffer.h.
 const DOBUF_UNLOAD: c_int = 2;
+
+/// EVENT_* constants matching auevents_enum.generated.h
+const EVENT_TABENTER: c_int = 110;
+const EVENT_WINENTER: c_int = 136;
 
 // =============================================================================
 // Rust implementation of win_close_buffer
@@ -191,8 +193,8 @@ pub unsafe extern "C" fn rs_close_last_window_tabpage(
     let curwin = nvim_get_curwin();
     nvim_entering_window_c(curwin);
 
-    nvim_apply_autocmds_winenter();
-    nvim_apply_autocmds_tabenter();
+    nvim_apply_autocmds_event(EVENT_WINENTER);
+    nvim_apply_autocmds_event(EVENT_TABENTER);
     nvim_apply_autocmds_bufenter_if_changed(old_curbuf);
 
     1

@@ -2111,16 +2111,19 @@ void nvim_win_clear_winbar_click_defs(win_T *wp)
 // Phase 1 accessors: win_enter_ext migration
 // =============================================================================
 
-/// Apply BufLeave autocmd for current buffer.
-void nvim_apply_autocmds_bufleave(void) { apply_autocmds(EVENT_BUFLEAVE, NULL, NULL, false, curbuf); }
-/// Apply WinLeave autocmd for current buffer.
-void nvim_apply_autocmds_winleave(void) { apply_autocmds(EVENT_WINLEAVE, NULL, NULL, false, curbuf); }
-/// Apply WinNew autocmd for current buffer.
-void nvim_apply_autocmds_winnew(void) { apply_autocmds(EVENT_WINNEW, NULL, NULL, false, curbuf); }
-/// Apply WinEnter autocmd for current buffer.
-void nvim_apply_autocmds_winenter(void) { apply_autocmds(EVENT_WINENTER, NULL, NULL, false, curbuf); }
-/// Apply BufEnter autocmd for current buffer.
-void nvim_apply_autocmds_bufenter(void) { apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf); }
+/// Generic autocmd dispatcher: apply_autocmds(event, NULL, NULL, false, curbuf).
+/// Rust callers pass EVENT_* integer constants defined in auevents_enum.generated.h.
+_Static_assert(EVENT_BUFENTER == 3, "EVENT_BUFENTER value mismatch");
+_Static_assert(EVENT_BUFLEAVE == 7, "EVENT_BUFLEAVE value mismatch");
+_Static_assert(EVENT_TABENTER == 110, "EVENT_TABENTER value mismatch");
+_Static_assert(EVENT_TABLEAVE == 111, "EVENT_TABLEAVE value mismatch");
+_Static_assert(EVENT_WINENTER == 136, "EVENT_WINENTER value mismatch");
+_Static_assert(EVENT_WINLEAVE == 137, "EVENT_WINLEAVE value mismatch");
+_Static_assert(EVENT_WINNEW == 138, "EVENT_WINNEW value mismatch");
+void nvim_apply_autocmds_event(int event)
+{
+  apply_autocmds((event_T)event, NULL, NULL, false, curbuf);
+}
 
 /// Set prevwin global.
 void nvim_set_prevwin(win_T *wp) { prevwin = wp; }
@@ -2486,12 +2489,6 @@ void nvim_tabpage_set_old_columns(tabpage_T *tp, int val) { if (tp) { tp->tp_old
 
 /// Call reset_dragwin().
 void nvim_reset_dragwin(void) { reset_dragwin(); }
-
-/// Fire EVENT_TABLEAVE autocmd.
-void nvim_apply_autocmds_tableave(void) { apply_autocmds(EVENT_TABLEAVE, NULL, NULL, false, curbuf); }
-
-/// Fire EVENT_TABENTER autocmd.
-void nvim_apply_autocmds_tabenter(void) { apply_autocmds(EVENT_TABENTER, NULL, NULL, false, curbuf); }
 
 /// Set firstwin = NULL (without syncing curtab->tp_firstwin).
 void nvim_set_firstwin_null(void) { firstwin = NULL; }
