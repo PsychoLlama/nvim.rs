@@ -79,7 +79,6 @@ extern "C" {
     fn nvim_stateitem_set_trans_id(item: StateItemHandle, trans_id: c_int);
     fn nvim_stateitem_set_attr(item: StateItemHandle, attr: c_int);
     fn nvim_stateitem_set_flags(item: StateItemHandle, flags: c_int);
-    fn nvim_stateitem_add_flags(item: StateItemHandle, flags: c_int);
     fn nvim_stateitem_or_flags(item: StateItemHandle, flags: c_int);
     fn nvim_stateitem_set_seqnr(item: StateItemHandle, seqnr: c_int);
     fn nvim_stateitem_set_cchar(item: StateItemHandle, cchar: c_int);
@@ -122,7 +121,6 @@ extern "C" {
     fn nvim_syn_get_current_sub_char() -> c_int;
     fn nvim_syn_get_current_next_flags() -> c_int;
     fn nvim_syn_get_keepend_level() -> c_int;
-    fn nvim_syn_get_cur_state(idx: c_int) -> StateItemHandle;
     fn nvim_syn_is_current_state_empty() -> c_int;
     fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
     fn nvim_syn_get_top_stateitem() -> StateItemHandle;
@@ -580,7 +578,7 @@ pub fn stateitem_set_flags(item: StateItemHandle, flags: i32) {
 /// Add flags to a state item
 pub fn stateitem_add_flags(item: StateItemHandle, flags: i32) {
     if !item.is_null() {
-        unsafe { nvim_stateitem_add_flags(item, flags) }
+        unsafe { nvim_stateitem_or_flags(item, flags) }
     }
 }
 
@@ -837,7 +835,7 @@ pub fn keepend_level() -> i32 {
 /// Get a state item from the current state at the given index
 #[must_use]
 pub fn get_cur_state(idx: i32) -> Option<StateItemHandle> {
-    let item = unsafe { nvim_syn_get_cur_state(idx) };
+    let item = unsafe { nvim_syn_get_stateitem(idx) };
     if item.is_null() {
         None
     } else {

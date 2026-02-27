@@ -51,7 +51,7 @@ extern "C" {
     fn nvim_syn_set_current_next_flags(flags: c_int);
     fn nvim_syn_set_current_lnum(lnum: c_int);
     fn nvim_syn_update_si_attr(idx: c_int);
-    fn nvim_syn_get_cur_state(idx: c_int) -> crate::types::StateItemHandle;
+    fn nvim_syn_get_stateitem(idx: c_int) -> crate::types::StateItemHandle;
 
     // Stateitem accessors for comparison
     fn nvim_stateitem_get_idx(item: crate::types::StateItemHandle) -> c_int;
@@ -615,7 +615,7 @@ pub unsafe fn syn_stack_equal(sp: SynStateHandle) -> bool {
             return false;
         }
 
-        let cur_si = nvim_syn_get_cur_state(i);
+        let cur_si = nvim_syn_get_stateitem(i);
         if cur_si.is_null() {
             return false;
         }

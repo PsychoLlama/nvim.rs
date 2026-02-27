@@ -328,7 +328,7 @@ extern "C" {
     fn nvim_syn_get_keepend_level() -> c_int;
 
     /// Get state item at index (NULL if out of bounds)
-    fn nvim_syn_get_cur_state(idx: c_int) -> StateItemHandle;
+    fn nvim_syn_get_stateitem(idx: c_int) -> StateItemHandle;
 
     /// Get the current synblock
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
@@ -681,7 +681,7 @@ pub fn keepend_level() -> i32 {
 /// Get state item at index (None if out of bounds or state invalid)
 #[must_use]
 pub fn get_cur_state(idx: i32) -> Option<StateItemHandle> {
-    let handle = unsafe { nvim_syn_get_cur_state(idx) };
+    let handle = unsafe { nvim_syn_get_stateitem(idx) };
     if handle.is_null() {
         None
     } else {
@@ -2405,7 +2405,7 @@ pub unsafe extern "C" fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int {
             return 0;
         }
 
-        let cur_si = nvim_syn_get_cur_state(i);
+        let cur_si = nvim_syn_get_stateitem(i);
         if cur_si.is_null() {
             return 0;
         }

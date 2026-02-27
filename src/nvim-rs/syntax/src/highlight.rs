@@ -43,9 +43,9 @@ extern "C" {
     fn nvim_syn_is_current_state_stored() -> c_int;
     fn nvim_synblock_get_syn_spell(block: SynBlockHandle) -> c_int;
     fn nvim_buf_get_synmaxcol(buf: crate::types::BufHandle) -> c_int;
-    fn nvim_syn_current_state_valid() -> c_int;
+    fn nvim_syn_is_current_state_valid() -> c_int;
     fn nvim_syn_ensure_current_state_valid();
-    fn nvim_syn_get_current_line() -> *const std::ffi::c_char;
+    fn nvim_syn_getcurline() -> *mut std::ffi::c_char;
     fn nvim_syn_get_next_match_attr() -> c_int;
     fn nvim_syn_get_next_match_idx() -> c_int;
     fn nvim_syn_get_next_match_col() -> c_int;
@@ -461,7 +461,7 @@ unsafe fn get_syntax_attr_impl(col: c_int, keep_state: bool) -> SyntaxAttrResult
     }
 
     // Make sure current_state is valid
-    if nvim_syn_current_state_valid() == 0 {
+    if nvim_syn_is_current_state_valid() == 0 {
         nvim_syn_ensure_current_state_valid();
     }
 
@@ -550,7 +550,7 @@ pub fn buf_synmaxcol(buf: crate::types::BufHandle) -> i32 {
 /// Check if the current syntax state is valid.
 #[must_use]
 pub fn current_state_valid() -> bool {
-    unsafe { nvim_syn_current_state_valid() != 0 }
+    unsafe { nvim_syn_is_current_state_valid() != 0 }
 }
 
 /// Ensure the current syntax state is valid, validating if needed.
@@ -564,7 +564,7 @@ pub fn ensure_current_state_valid() {
 /// The returned pointer is only valid until the next syntax operation.
 #[must_use]
 pub unsafe fn get_current_line() -> *const std::ffi::c_char {
-    nvim_syn_get_current_line()
+    nvim_syn_getcurline()
 }
 
 /// Get the attribute for the next match.

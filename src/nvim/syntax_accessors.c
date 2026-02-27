@@ -853,15 +853,6 @@ int nvim_syn_get_current_sub_char(void) { return current_sub_char; }
 int nvim_syn_get_current_next_flags(void) { return current_next_flags; }
 int nvim_syn_get_keepend_level(void) { return keepend_level; }
 
-/// Get state item at index (NULL if out of bounds)
-stateitem_T *nvim_syn_get_cur_state(int idx)
-{
-  if (idx < 0 || idx >= current_state.ga_len) {
-    return NULL;
-  }
-  return &CUR_STATE(idx);
-}
-
 int nvim_syn_count_fold_items(void) { return rs_syn_count_fold_items(); }
 
 regprog_T *nvim_synpat_get_prog(synpat_T *pat) { return pat->sp_prog; }
@@ -1191,14 +1182,6 @@ void nvim_stateitem_set_flags(stateitem_T *item, int flags)
   }
 }
 
-/// Add flags to si_flags
-void nvim_stateitem_add_flags(stateitem_T *item, int flags)
-{
-  if (item) {
-    item->si_flags |= flags;
-  }
-}
-
 /// Set si_seqnr
 void nvim_stateitem_set_seqnr(stateitem_T *item, int seqnr)
 {
@@ -1252,8 +1235,6 @@ void nvim_syn_set_next_match_col(int col) { next_match_col = col; }
 void nvim_syn_set_current_next_list_ptr(int16_t *list) { current_next_list = list; }
 int16_t *nvim_syn_get_current_next_list_ptr(void) { return current_next_list; }
 void nvim_syn_check_state_ends(void) { rs_check_state_ends(); }
-
-void nvim_syn_call_update_si_attr(int idx) { rs_update_si_attr(idx); }
 
 void nvim_syn_pop_current_state(void) { rs_syn_pop_current_state(); }
 void nvim_syn_push_current_state(int idx) { rs_syn_push_current_state(idx); }
@@ -1572,8 +1553,6 @@ void nvim_syn_set_current_col(int col) { current_col = col; }
 
 int nvim_buf_get_synmaxcol(buf_T *buf) { return (int)buf->b_p_smc; }
 
-int nvim_syn_current_state_valid(void) { return !INVALID_STATE(&current_state); }
-
 /// Validate current state if needed
 void nvim_syn_ensure_current_state_valid(void)
 {
@@ -1581,8 +1560,6 @@ void nvim_syn_ensure_current_state_valid(void)
     rs_validate_current_state();
   }
 }
-
-const char *nvim_syn_get_current_line(void) { return rs_syn_getcurline(); }
 
 /// Get the attribute for the next match
 int nvim_syn_get_next_match_attr(void)
@@ -2970,14 +2947,8 @@ void nvim_syn_block_set_linecont_prog(void *prog)
   if (syn_block) syn_block->b_syn_linecont_prog = (regprog_T *)prog;
 }
 
-/// Increment current_line_id.
-void nvim_syn_incr_current_line_id_val(void) { current_line_id++; }
-
 /// Set next_seqnr to 1.
 void nvim_syn_reset_next_seqnr(void) { next_seqnr = 1; }
-
-/// Return true if current_state is non-empty.
-int nvim_syn_current_state_nonempty(void) { return !GA_EMPTY(&current_state) ? 1 : 0; }
 
 /// Call validate_current_state() to set itemsize/growsize.
 /// Direct implementation to avoid circular call.
@@ -3044,13 +3015,6 @@ void nvim_cur_state_set_h_startpos_cur(int i)
   if (i < 0 || i >= current_state.ga_len) return;
   CUR_STATE(i).si_h_startpos.col = 0;
   CUR_STATE(i).si_h_startpos.lnum = current_lnum;
-}
-
-/// Return pointer to CUR_STATE(i) for rs_update_si_end / rs_check_keepend.
-stateitem_T *nvim_cur_state_ptr(int i)
-{
-  if (i < 0 || i >= current_state.ga_len) return NULL;
-  return &CUR_STATE(i);
 }
 
 // =============================================================================

@@ -20,7 +20,6 @@ extern "C" {
     // State item flag accessors
     fn nvim_stateitem_get_flags(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_set_flags(item: StateItemHandle, flags: c_int);
-    fn nvim_stateitem_add_flags(item: StateItemHandle, flags: c_int);
     fn nvim_stateitem_or_flags(item: StateItemHandle, flags: c_int);
     fn nvim_stateitem_has_trans_cont(item: StateItemHandle) -> c_int;
 
@@ -89,7 +88,7 @@ pub unsafe fn set_stateitem_flags(item: StateItemHandle, flags: i32) {
 /// The item must be a valid non-null pointer.
 pub unsafe fn add_stateitem_flags(item: StateItemHandle, flags: i32) {
     if !item.is_null() {
-        nvim_stateitem_add_flags(item, flags);
+        nvim_stateitem_or_flags(item, flags);
     }
 }
 

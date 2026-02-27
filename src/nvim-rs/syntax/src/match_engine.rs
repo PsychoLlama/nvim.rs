@@ -102,7 +102,6 @@ extern "C" {
 
     // Update state item attribute
     fn nvim_syn_update_si_attr(idx: c_int);
-    fn nvim_syn_call_update_si_attr(idx: c_int);
 }
 
 // =============================================================================
@@ -714,7 +713,7 @@ pub unsafe fn update_si_attr(idx: i32) {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn call_update_si_attr(idx: i32) {
-    nvim_syn_call_update_si_attr(idx);
+    nvim_syn_update_si_attr(idx);
 }
 
 // =============================================================================

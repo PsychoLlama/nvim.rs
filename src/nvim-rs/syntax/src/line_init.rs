@@ -31,22 +31,22 @@ extern "C" {
     fn nvim_syn_set_current_finished(v: c_int);
     fn nvim_syn_set_current_col(col: c_int);
     fn nvim_syn_set_next_match_idx(idx: c_int);
-    fn nvim_syn_incr_current_line_id_val();
+    fn nvim_syn_incr_current_line_id();
     fn nvim_syn_reset_next_seqnr();
-    fn nvim_syn_current_state_nonempty() -> c_int;
+    fn nvim_syn_is_current_state_empty() -> c_int;
 
     // CUR_STATE accessors for syn_update_ends
     fn nvim_cur_state_get_si_idx(i: c_int) -> c_int;
     fn nvim_cur_state_get_m_endpos_lnum(i: c_int) -> c_int;
     fn nvim_cur_state_get_si_flags(i: c_int) -> c_int;
     fn nvim_cur_state_set_h_startpos_cur(i: c_int);
-    fn nvim_cur_state_ptr(i: c_int) -> StateItemHandle;
+    fn nvim_syn_get_stateitem(i: c_int) -> StateItemHandle;
     fn nvim_syn_get_sptype_at(idx: c_int) -> c_int;
 
     // validate_current_state
     fn nvim_syn_do_validate_current_state();
 
-    // syn_getcurline / syn_getcurline_len
+    // syn_getcurline / syn_getcurline_len (direct, avoids circularity with rs_syn_getcurline)
     fn nvim_syn_do_getcurline() -> *mut c_char;
     fn nvim_syn_do_getcurline_len() -> c_int;
 
@@ -125,7 +125,7 @@ pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
         if (flags & HL_KEEPEND) != 0 || (seen_keepend && !startofline) || (is_last && startofline) {
             nvim_cur_state_set_h_startpos_cur(i);
             if (flags & HL_MATCHCONT) == 0 {
-                let si_ptr = nvim_cur_state_ptr(i);
+                let si_ptr = nvim_syn_get_stateitem(i);
                 if !si_ptr.is_null() {
                     rs_update_si_end(si_ptr, current_col, if !startofline { 1 } else { 0 });
                 }
@@ -150,13 +150,13 @@ pub unsafe extern "C" fn rs_syn_start_line() {
     nvim_syn_set_current_finished(0);
     nvim_syn_set_current_col(0);
 
-    if nvim_syn_current_state_nonempty() != 0 {
+    if nvim_syn_is_current_state_empty() == 0 {
         rs_syn_update_ends(1); // startofline = true
         rs_check_state_ends();
     }
 
     nvim_syn_set_next_match_idx(-1);
-    nvim_syn_incr_current_line_id_val();
+    nvim_syn_incr_current_line_id();
     nvim_syn_reset_next_seqnr();
 }
 
