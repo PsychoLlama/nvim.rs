@@ -999,9 +999,6 @@ static int cp_compare_nearest(const void *a, const void *b)
 ///
 /// @param flags      DICT_FIRST and/or DICT_EXACT
 /// @param thesaurus  Thesaurus completion
-// Phase 3 (pass 5): rs_get_next_dict_tsr_completion -- Rust wrapper
-extern void rs_get_next_dict_tsr_completion(int compl_type, char *dict, int dict_f);
-
 /// Compound accessor for Phase 3 (pass 5): full ins_compl_dictionaries logic
 /// (previously ins_compl_dictionaries + ins_compl_files + thesaurus_add_words_in_line).
 /// Uses compl_pattern.data as the pattern.
@@ -1415,11 +1412,6 @@ static void copy_global_to_buflocal_cb(Callback *globcb, Callback *bufcb)
 }
 
 // Phase 5 (pass 5): Rust wrappers for callback management functions
-extern const char *rs_did_set_completefunc(void *args);
-extern const char *rs_did_set_omnifunc(void *args);
-extern const char *rs_did_set_thesaurusfunc(void *args);
-extern bool rs_set_ref_in_insexpand_funcs(int copyID);
-
 /// Compound accessor for Phase 5 (pass 5): did_set_completefunc implementation.
 const char *nvim_did_set_completefunc_impl(void *args_v)
 {
@@ -2967,11 +2959,6 @@ int nvim_compl_shown_match_str_eq_orig(void) {
   return (compl_shown_match && compl_orig_text.data
           && strequal(compl_shown_match->cp_str.data, compl_orig_text.data)) ? 1 : 0;
 }
-// nvim_get_leader_for_startcol_size: deleted (Rust calls rs_get_leader_for_startcol_size directly)
-
-extern int rs_ins_compl_next(int allow_get_expansion, int count, int insert_match);
-extern int rs_ins_compl_get_exp(int lnum, int col);
-
 void nvim_ins_compl_next_wrap(int allow_get_expansion, int todo, int advance) {
   rs_ins_compl_next(allow_get_expansion, todo, advance);
 }
@@ -3110,12 +3097,9 @@ void nvim_get_next_filename_completion_wrap(void) {
   get_next_filename_completion();
 }
 
-// Additional accessors for Phase 4 Rust migrations
-// nvim_set_compl_cont_mode: already defined above (line 5315)
 void nvim_ins_compl_new_leader_wrapper(void) { rs_ins_compl_new_leader(); }
 // ins_compl_addfrommatch compound accessor: handles match traversal in C
 // then calls rs_ins_compl_addleader for the actual insertion.
-extern void rs_ins_compl_addleader(int c);
 void nvim_ins_compl_addfrommatch_body(void) {
   int len = (int)curwin->w_cursor.col - (int)compl_col;
   assert(compl_shown_match != NULL);
@@ -3143,20 +3127,6 @@ void nvim_ins_compl_addfrommatch_body(void) {
   int c = utf_ptr2char(p);
   rs_ins_compl_addleader(c);
 }
-// Compound accessor for ins_compl_restart (calls update_screen then delegates
-// state reset to Rust).
-extern void rs_ins_compl_restart(void);
-// Compound accessor for ins_ctrl_x
-extern void rs_ins_ctrl_x(void);
-// Compound accessor for check_compl_option
-extern int rs_check_compl_option(int dict_opt);
-// Compound accessor for ins_compl_set_original_text
-extern void rs_ins_compl_set_original_text(const char *str, size_t len);
-// Compound accessor for ins_compl_addleader
-extern void rs_ins_compl_addleader(int c);
-// Compound accessor for ins_compl_check_keys
-extern void rs_ins_compl_check_keys(int frequency, int in_compl_func);
-
 // Accessors for Phase 2: ins_compl_bs migration
 // nvim_get_cursor_line_ptr: defined in change_ffi.c as char *nvim_get_cursor_line_ptr(void)
 const char *nvim_mb_ptr_back(const char *line, const char *p) {
