@@ -2085,58 +2085,48 @@ static bool qf_goto_tabwin_with_file(int fnum)
   return false;
 }
 
-/// post-validation), or -2 if can_abandon failed (skip post-validation).
-int nvim_qf_jump_open_help(int qf_fnum, int forceit, int prev_winid)
+// Phase 15 thin accessors for inlining jump-open helpers into Rust navigate.rs
+
+/// can_abandon(curbuf, forceit): check if current buffer can be abandoned.
+bool nvim_can_abandon_curbuf(int forceit) { return can_abandon(curbuf, forceit); }
+
+/// no_write_message(): emit "no write" warning.
+void nvim_no_write_message(void) { no_write_message(); }
+
+/// do_ecmd for help file: open fnum with ECMD_HIDE+ECMD_SET_HELP flags.
+int nvim_do_ecmd_help(int fnum, int prev_winid)
 {
-  if (!can_abandon(curbuf, forceit)) {
-    no_write_message();
-    return -2;  // sentinel: skip post-validation checks
-  }
-  return do_ecmd(qf_fnum, NULL, NULL, NULL, 1,
+  return do_ecmd(fnum, NULL, NULL, NULL, 1,
                  ECMD_HIDE + ECMD_SET_HELP,
                  prev_winid == curwin->handle ? curwin : NULL);
 }
 
-/// Sets *opened_window if a new window was split.
-int nvim_qf_jump_open_file(void *qi_void, int fnum, int forceit, bool *opened_window)
+/// buflist_getfile with GETF_SETMARK|GETF_SWITCH flags.
+int nvim_qf_buflist_getfile(int fnum, int forceit)
 {
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  int retval = OK;
-
-  if (!forceit && curwin->w_p_wfb && curbuf->b_fnum != fnum) {
-    if (qi->qfl_type == QFLT_LOCATION) {
-      emsg(_(e_winfixbuf_cannot_go_to_buffer));
-      return -2;  // sentinel: location list winfixbuf early return
-    }
-
-    if (rs_win_valid(prevwin) && !prevwin->w_p_wfb
-        && !bt_quickfix(prevwin->w_buffer)) {
-      win_goto(prevwin);
-    }
-    if (curwin->w_p_wfb) {
-      if (win_split(0, 0) == OK) {
-        *opened_window = true;
-      }
-      if (curwin->w_p_wfb) {
-        emsg(_(e_winfixbuf_cannot_go_to_buffer));
-        retval = FAIL;
-      }
-    }
-  }
-
-  if (retval == OK) {
-    retval = buflist_getfile(fnum, 1, GETF_SETMARK | GETF_SWITCH, forceit);
-  }
-  return retval;
+  return buflist_getfile(fnum, 1, GETF_SETMARK | GETF_SWITCH, forceit);
 }
 
-/// Check if the location list window was closed. Returns true if invalid.
-bool nvim_qf_jump_loc_win_closed(int prev_winid, void *qi_void)
+/// curwin->w_p_wfb accessor.
+bool nvim_curwin_get_wfb(void) { return curwin->w_p_wfb; }
+
+/// win_id2wp: return win_T* for a window handle id.
+void *nvim_win_id2wp(int id) { return win_id2wp(id); }
+
+/// Set p_swb to empty_string_option and swb_flags to 0.
+void nvim_qf_set_swb_empty_option(void) { p_swb = empty_string_option; swb_flags = 0; }
+
+/// Check if prevwin is valid and usable for winfixbuf goto.
+bool nvim_qf_prevwin_valid_for_wfb(void)
 {
-  win_T *wp = win_id2wp(prev_winid);
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  return wp == NULL && curwin->w_llist != qi;
+  return rs_win_valid(prevwin) && !prevwin->w_p_wfb && !bt_quickfix(prevwin->w_buffer);
 }
+
+/// Emit e_winfixbuf_cannot_go_to_buffer error.
+void nvim_qf_emsg_winfixbuf(void) { emsg(_(e_winfixbuf_cannot_go_to_buffer)); }
+
+// nvim_qf_jump_open_help, nvim_qf_jump_open_file, nvim_qf_jump_loc_win_closed
+// deleted: logic inlined into rs_qf_jump_edit_buffer (Phase 15).
 
 void nvim_qf_jump_emsg_win_closed(void) { emsg(_("E924: Current window was closed")); }
 
@@ -2193,24 +2183,7 @@ bool nvim_qf_goto_tabwin_with_file(int fnum)
   return false;
 }
 
-/// ll_ref may be NULL. Returns OK or FAIL.
-int nvim_qf_open_new_file_win(void *ll_ref)
-{
-  int flags = WSP_ABOVE;
-  if (ll_ref != NULL) {
-    flags |= WSP_NEWLOC;
-  }
-  if (win_split(0, flags) == FAIL) {
-    return FAIL;
-  }
-  p_swb = empty_string_option;
-  swb_flags = 0;
-  RESET_BINDING(curwin);
-  if (ll_ref != NULL) {
-    win_set_loclist(curwin, (qf_info_T *)ll_ref);
-  }
-  return OK;
-}
+// nvim_qf_open_new_file_win deleted: logic inlined into rs_qf_jump_to_win (Phase 15).
 
 void *nvim_qf_curwin_get_llist_ref(void) { return curwin->w_llist_ref; }
 

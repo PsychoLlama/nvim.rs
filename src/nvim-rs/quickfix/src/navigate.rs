@@ -1199,6 +1199,7 @@ mod jump_edit {
     type QfListHandle = *const c_void;
     type QfLineHandle = *const c_void;
 
+    const OK: c_int = 1;
     const FAIL: c_int = 0;
     const QFLT_QUICKFIX: c_int = 0;
     const QFLT_LOCATION: c_int = 1;
@@ -1219,18 +1220,25 @@ mod jump_edit {
         fn nvim_qflist_valid(qi: QfInfoHandle, qf_id: c_uint) -> bool;
         fn nvim_qf_entry_present(qfl: QfListHandle, qf_ptr: QfLineHandle) -> bool;
 
-        // New Phase 5 high-level wrappers
-        fn nvim_qf_jump_open_help(qf_fnum: c_int, forceit: c_int, prev_winid: c_int) -> c_int;
-        fn nvim_qf_jump_open_file(
-            qi: QfInfoHandleMut,
-            fnum: c_int,
-            forceit: c_int,
-            opened_window: *mut bool,
-        ) -> c_int;
-        fn nvim_qf_jump_loc_win_closed(prev_winid: c_int, qi: QfInfoHandleMut) -> bool;
         fn nvim_qf_jump_emsg_win_closed();
         fn nvim_qf_jump_emsg_qf_changed();
         fn nvim_qf_jump_emsg_ll_changed();
+
+        // Phase 15 thin primitives replacing thick jump-open wrappers
+        fn nvim_can_abandon_curbuf(forceit: c_int) -> bool;
+        fn nvim_no_write_message();
+        fn nvim_do_ecmd_help(fnum: c_int, prev_winid: c_int) -> c_int;
+        fn nvim_qf_buflist_getfile(fnum: c_int, forceit: c_int) -> c_int;
+        fn nvim_curwin_get_wfb() -> bool;
+        fn nvim_qf_curbuf_fnum() -> c_int;
+        fn nvim_qf_get_qi_type(qi: *const c_void) -> c_int;
+        fn nvim_qf_prevwin_valid_for_wfb() -> bool;
+        fn nvim_qf_emsg_winfixbuf();
+        fn nvim_win_id2wp(id: c_int) -> *mut c_void;
+        fn nvim_qf_curwin_get_loclist() -> *mut c_void;
+        fn nvim_qf_get_prevwin() -> *mut c_void;
+        fn nvim_qf_win_goto(win: *mut c_void);
+        fn nvim_qf_win_split(size: c_int, flags: c_int) -> c_int;
     }
 
     /// Edit the selected file or help file from quickfix.
@@ -1252,30 +1260,52 @@ mod jump_edit {
         let qfl_type = nvim_qf_get_qfl_type(qfl);
         let save_qfid = nvim_qf_get_id(qfl);
 
+        let fnum = nvim_qfline_get_fnum(qf_ptr);
         let retval = if nvim_qfline_get_type(qf_ptr) == 1 {
-            // Open help file
-            let result = nvim_qf_jump_open_help(nvim_qfline_get_fnum(qf_ptr), forceit, prev_winid);
-            if result == -2 {
-                // can_abandon failed: skip post-validation
-                return FAIL;
+            // Open help file: inline nvim_qf_jump_open_help
+            if !nvim_can_abandon_curbuf(forceit) {
+                nvim_no_write_message();
+                return FAIL; // sentinel: skip post-validation
             }
-            result
+            nvim_do_ecmd_help(fnum, prev_winid)
         } else {
-            // Open normal file (handles winfixbuf logic)
-            let fnum = nvim_qfline_get_fnum(qf_ptr);
-            let result = nvim_qf_jump_open_file(qi, fnum, forceit, opened_window);
-            if result == -2 {
-                // Location list winfixbuf early return (skip post-validation)
-                return FAIL;
+            // Open normal file: inline nvim_qf_jump_open_file (winfixbuf logic)
+            let mut retval = OK;
+            if forceit == 0 && nvim_curwin_get_wfb() && nvim_qf_curbuf_fnum() != fnum {
+                if nvim_qf_get_qi_type(qi) == QFLT_LOCATION {
+                    nvim_qf_emsg_winfixbuf();
+                    return FAIL; // sentinel: location list winfixbuf early return
+                }
+                if nvim_qf_prevwin_valid_for_wfb() {
+                    let prevwin = nvim_qf_get_prevwin();
+                    nvim_qf_win_goto(prevwin);
+                }
+                if nvim_curwin_get_wfb() {
+                    if nvim_qf_win_split(0, 0) == OK {
+                        *opened_window = true;
+                    }
+                    if nvim_curwin_get_wfb() {
+                        nvim_qf_emsg_winfixbuf();
+                        retval = FAIL;
+                    }
+                }
             }
-            result
+            if retval == OK {
+                retval = nvim_qf_buflist_getfile(fnum, forceit);
+            }
+            retval
         };
 
         // If a location list, check whether the associated window is still present.
-        if qfl_type == QFLT_LOCATION && nvim_qf_jump_loc_win_closed(prev_winid, qi) {
-            nvim_qf_jump_emsg_win_closed();
-            *opened_window = false;
-            return QF_ABORT;
+        // Inline nvim_qf_jump_loc_win_closed: win_id2wp returns NULL means win closed,
+        // and curwin->w_llist != qi means we're not in the right location list window.
+        if qfl_type == QFLT_LOCATION {
+            let wp = nvim_win_id2wp(prev_winid);
+            if wp.is_null() && nvim_qf_curwin_get_loclist() != qi {
+                nvim_qf_jump_emsg_win_closed();
+                *opened_window = false;
+                return QF_ABORT;
+            }
         }
 
         // Check if the quickfix list is still valid.
@@ -1323,6 +1353,7 @@ pub mod jump_machinery {
     const WSP_HELP: c_int = 0x20;
     const WSP_TOP: c_int = 0x08;
     const WSP_NEWLOC: c_int = 0x100;
+    const WSP_ABOVE: c_int = 0x80;
 
     #[allow(dead_code)]
     extern "C" {
@@ -1331,7 +1362,10 @@ pub mod jump_machinery {
         fn nvim_qf_find_win_with_loclist(ll: *const c_void) -> WinHandle;
         fn nvim_qf_find_win_with_normal_buf() -> WinHandle;
         fn nvim_qf_goto_tabwin_with_file(fnum: c_int) -> bool;
-        fn nvim_qf_open_new_file_win(ll_ref: *mut c_void) -> c_int;
+        // nvim_qf_open_new_file_win removed: inlined (Phase 15)
+        // Phase 15 thin primitives for open_new_file_win inlining
+        fn nvim_qf_set_swb_empty_option();
+        fn nvim_qf_curwin_reset_binding();
 
         // Window/buffer state accessors (Phase 1)
         fn nvim_qf_curwin_get_llist_ref() -> *mut c_void;
@@ -1597,9 +1631,19 @@ pub mod jump_machinery {
 
         // If there is only one window and it is the quickfix window, create a
         // new one above the quickfix window.
+        // Inline nvim_qf_open_new_file_win
         if (nvim_qf_is_one_window() && nvim_qf_curbuf_is_quickfix()) || !usable_win || newwin {
-            if nvim_qf_open_new_file_win(ll_ref) != OK {
+            let mut win_flags = WSP_ABOVE;
+            if !ll_ref.is_null() {
+                win_flags |= WSP_NEWLOC;
+            }
+            if nvim_qf_win_split(0, win_flags) == FAIL {
                 return FAIL;
+            }
+            nvim_qf_set_swb_empty_option();
+            nvim_qf_curwin_reset_binding();
+            if !ll_ref.is_null() {
+                nvim_qf_win_set_loclist(nvim_qf_get_curwin(), ll_ref);
             }
             *opened_window = true; // close it when fail
         } else if !nvim_qf_curwin_get_llist_ref().is_null() {
