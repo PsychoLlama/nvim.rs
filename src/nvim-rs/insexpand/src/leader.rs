@@ -652,27 +652,110 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
 }
 
 // =============================================================================
-// Phase 2 (pass 6): ins_compl_longest_match
+// Phase 2 (pass 12): ins_compl_longest_match -- full Rust implementation
 // =============================================================================
 
 use crate::match_list::ComplMatch;
 
 extern "C" {
-    // Compound accessor: full ins_compl_longest_match logic (compl_leader mutation)
-    fn nvim_ins_compl_longest_match_impl(m: ComplMatch);
+    fn nvim_utf_ptr2char(p: *const c_char) -> c_int;
+    fn nvim_mb_tolower(c: c_int) -> c_int;
+    fn nvim_cursor_col_gt_compl_col() -> c_int;
+    fn nvim_compl_match_get_flags(m: ComplMatch) -> c_int;
+    fn nvim_ins_redraw(ready: c_int);
 }
 
-/// Reduce the longest common string for a new completion match.
+// CP_ICASE flag (must match C definition)
+const CP_ICASE: c_int = 16;
+
+/// Reduce compl_leader to the longest common prefix with the given match.
 ///
-/// Rust entry point for C `ins_compl_longest_match()`. All mutation of
-/// `compl_leader` is delegated to the C compound accessor so that the
-/// static `String` field and the UTF-8 pointer arithmetic remain in C.
+/// Rust port of C `ins_compl_longest_match()`. Handles the first-match case
+/// (sets leader = match's cp_str) and the subsequent case (truncates leader
+/// at first character that differs, considering CP_ICASE flag).
 ///
 /// # Safety
 /// `m` must be a valid, non-null completion match pointer.
 #[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
-    nvim_ins_compl_longest_match_impl(m);
+    let leader_data = nvim_get_compl_leader_data();
+
+    if leader_data.is_null() {
+        // First match: use the whole cp_str as the leader.
+        let cp_data = nvim_compl_match_get_cp_str_data(m);
+        let cp_size = nvim_compl_match_get_cp_str_size(m);
+        nvim_api_clear_and_set_compl_leader(cp_data, cp_size);
+
+        let had_match = nvim_cursor_col_gt_compl_col() != 0;
+        let leader_after = nvim_get_compl_leader_data();
+        let compl_len = rs_get_compl_len() as usize;
+        rs_ins_compl_delete(0);
+        nvim_ins_compl_insert_bytes(leader_after.add(compl_len), -1);
+        nvim_ins_redraw(0);
+
+        if !had_match {
+            rs_ins_compl_delete(0);
+        }
+        nvim_set_compl_used_match(0);
+        return;
+    }
+
+    // Subsequent match: find longest common prefix with current leader.
+    let match_data = nvim_compl_match_get_cp_str_data(m);
+    let flags = nvim_compl_match_get_flags(m);
+    let icase = (flags & CP_ICASE) != 0;
+
+    let mut p = leader_data;
+    let mut s = match_data;
+
+    while *p != 0 {
+        let c1 = nvim_utf_ptr2char(p);
+        let c2 = nvim_utf_ptr2char(s);
+
+        let differs = if icase {
+            nvim_mb_tolower(c1) != nvim_mb_tolower(c2)
+        } else {
+            c1 != c2
+        };
+
+        if differs {
+            break;
+        }
+
+        // MB_PTR_ADV: advance by utfc_ptr2len bytes
+        p = p.add(rs_utfc_ptr2len(p) as usize);
+        s = s.add(rs_utfc_ptr2len(s) as usize);
+    }
+
+    if *p != 0 {
+        // Leader was shortened -- update it.
+        let new_len = p.offset_from(leader_data) as usize;
+
+        // Build truncated copy of current leader and set it.
+        // We read from leader_data which is valid for compl_leader.size bytes.
+        let leader_bytes = std::slice::from_raw_parts(leader_data.cast::<u8>(), new_len);
+        let mut buf = leader_bytes.to_vec();
+        buf.push(0); // NUL terminate (cbuf_to_string doesn't need it but it's safe)
+        nvim_api_clear_and_set_compl_leader(buf.as_ptr().cast::<c_char>(), new_len);
+
+        let had_match = nvim_cursor_col_gt_compl_col() != 0;
+        let new_leader = nvim_get_compl_leader_data();
+        let compl_len = rs_get_compl_len() as usize;
+        rs_ins_compl_delete(0);
+        nvim_ins_compl_insert_bytes(new_leader.add(compl_len), -1);
+        nvim_ins_redraw(0);
+
+        if !had_match {
+            rs_ins_compl_delete(0);
+        }
+    }
+
+    nvim_set_compl_used_match(0);
 }
 
 // =============================================================================

@@ -2979,6 +2979,10 @@ int nvim_get_cpt_sources_index(void) { return cpt_sources_index; }
 // Accessor for ins_compl_prep (Phase 2)
 void nvim_set_compl_used_match(int val) { compl_used_match = val != 0; }
 void nvim_ins_redraw(int ready) { ins_redraw(ready != 0); }
+// Accessors for Phase 2 (pass 12): ins_compl_longest_match
+// nvim_utf_ptr2char is defined in mbyte.c; re-use it via extern declaration
+int nvim_mb_tolower(int c) { return mb_tolower(c); }
+int nvim_cursor_col_gt_compl_col(void) { return curwin->w_cursor.col > compl_col ? 1 : 0; }
 
 // Accessors for ins_compl_stop (Phase 3)
 const char *nvim_get_compl_curr_match_str_data(void) { return compl_curr_match ? compl_curr_match->cp_str.data : NULL; }
@@ -3887,61 +3891,6 @@ void nvim_ins_compl_add_matches_impl(int num_matches, char **matches, int icase)
     }
   }
   FreeWild(num_matches, matches);
-}
-
-// Compound accessor for Phase 2 (pass 6): ins_compl_longest_match implementation
-void nvim_ins_compl_longest_match_impl(void *match_opaque)
-{
-  compl_T *match = (compl_T *)match_opaque;
-  if (compl_leader.data == NULL) {
-    // First match, use it as a whole.
-    compl_leader = copy_string(match->cp_str, NULL);
-
-    bool had_match = (curwin->w_cursor.col > compl_col);
-    rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1); ins_redraw(false);
-
-    // When the match isn't there (to avoid matching itself) remove it
-    // again after redrawing.
-    if (!had_match) {
-      rs_ins_compl_delete(0);
-    }
-    compl_used_match = false;
-
-    return;
-  }
-
-  // Reduce the text if this match differs from compl_leader.
-  char *p = compl_leader.data;
-  char *s = match->cp_str.data;
-  while (*p != NUL) {
-    int c1 = utf_ptr2char(p);
-    int c2 = utf_ptr2char(s);
-
-    if ((match->cp_flags & CP_ICASE)
-        ? (mb_tolower(c1) != mb_tolower(c2))
-        : (c1 != c2)) {
-      break;
-    }
-    MB_PTR_ADV(p);
-    MB_PTR_ADV(s);
-  }
-
-  if (*p != NUL) {
-    // Leader was shortened, need to change the inserted text.
-    *p = NUL;
-    compl_leader.size = (size_t)(p - compl_leader.data);
-
-    bool had_match = (curwin->w_cursor.col > compl_col);
-    rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(compl_leader.data + rs_get_compl_len(), -1); ins_redraw(false);
-
-    // When the match isn't there (to avoid matching itself) remove it
-    // again after redrawing.
-    if (!had_match) {
-      rs_ins_compl_delete(0);
-    }
-  }
-
-  compl_used_match = false;
 }
 
 // Compound accessors for Phase 3 (pass 6): setup_cpt_sources,
