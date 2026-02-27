@@ -228,58 +228,6 @@ void nvim_win_set_w_foldinvalid(win_T *wp, bool val)
   wp->w_foldinvalid = val;
 }
 
-/// Get the w_lines_valid field from a window.
-int nvim_win_get_w_lines_valid(win_T *wp)
-{
-  return wp->w_lines_valid;
-}
-
-/// Get a wline_T pointer at index in a window's w_lines array.
-/// Returns NULL if index is out of bounds.
-wline_T *nvim_win_get_wl_entry(win_T *wp, int idx)
-{
-  if (idx < 0 || idx >= wp->w_lines_valid) {
-    return NULL;
-  }
-  return &wp->w_lines[idx];
-}
-
-/// Get the wl_lnum field from a wline_T.
-linenr_T nvim_wline_get_lnum(wline_T *wl)
-{
-  return wl->wl_lnum;
-}
-
-/// Get the wl_foldend field from a wline_T.
-linenr_T nvim_wline_get_foldend(wline_T *wl)
-{
-  return wl->wl_foldend;
-}
-
-/// Get the wl_valid field from a wline_T.
-bool nvim_wline_get_valid(wline_T *wl)
-{
-  return wl->wl_valid;
-}
-
-/// Get the wl_folded field from a wline_T.
-bool nvim_wline_get_folded(wline_T *wl)
-{
-  return wl->wl_folded;
-}
-
-/// Get the wl_size field from a wline_T.
-uint16_t nvim_wline_get_size(wline_T *wl)
-{
-  return wl->wl_size;
-}
-
-/// Get the wl_lastlnum field from a wline_T.
-linenr_T nvim_wline_get_lastlnum(wline_T *wl)
-{
-  return wl->wl_lastlnum;
-}
-
 // ============================================================================
 // Accessors for recursive functions
 // ============================================================================
@@ -322,12 +270,6 @@ int nvim_win_get_p_fml(win_T *wp)
   return (int)wp->w_p_fml;
 }
 
-/// Get the number of screen lines for a physical line (no fold consideration).
-int nvim_plines_win_nofold(win_T *wp, linenr_T lnum)
-{
-  return plines_win_nofold(wp, lnum);
-}
-
 // ============================================================================
 // Foundation function accessors
 // ============================================================================
@@ -356,12 +298,6 @@ linenr_T nvim_win_get_buf_line_count(win_T *wp)
 char *nvim_win_get_p_fmr(win_T *wp)
 {
   return wp->w_p_fmr;
-}
-
-/// Get a line from a buffer (wrapper for ml_get_buf).
-char *nvim_ml_get_buf(buf_T *buf, linenr_T lnum)
-{
-  return ml_get_buf(buf, lnum);
 }
 
 /// Get the length of a buffer line (wrapper for ml_get_buf_len).
@@ -440,18 +376,6 @@ int nvim_get_sw_value(buf_T *buf)
 }
 
 // nvim_rs_diff_infold -- deleted (Rust calls rs_diff_infold directly)
-
-/// Skip whitespace at the beginning of a string (wrapper for skipwhite).
-char *nvim_skipwhite(const char *s)
-{
-  return skipwhite(s);
-}
-
-/// Find a character in a string (wrapper for vim_strchr).
-char *nvim_vim_strchr(const char *s, int c)
-{
-  return vim_strchr(s, c);
-}
 
 /// Get curbuf's commentstring option (b_p_cms).
 char *nvim_get_curbuf_b_p_cms(void)
@@ -536,22 +460,10 @@ void nvim_win_set_w_fold_manual(win_T *wp, bool val)
   wp->w_fold_manual = val;
 }
 
-/// Call changed_window_setting for a window.
-void nvim_changed_window_setting(win_T *wp)
-{
-  changed_window_setting(wp);
-}
-
 /// Emit the "no fold found" error message.
 void nvim_emsg_nofold(void)
 {
   emsg(_(e_nofold));
-}
-
-/// Get the w_p_scb (scrollbind) field from a window.
-bool nvim_win_get_p_scb(win_T *wp)
-{
-  return wp->w_p_scb;
 }
 
 /// Get the first window in the current tab.
@@ -626,43 +538,11 @@ void nvim_check_cursor_col(win_T *wp)
   check_cursor_col(wp);
 }
 
-/// Wrapper for changed_lines for Rust.
-void nvim_changed_lines(buf_T *buf, linenr_T first, int col, linenr_T last, linenr_T xtra,
-                        bool add_undo)
-{
-  changed_lines(buf, first, col, last, xtra, add_undo);
-}
-
-/// Wrapper for buf_updates_send_changes for Rust.
-void nvim_buf_updates_send_changes(buf_T *buf, linenr_T firstlnum, int64_t num_added,
-                                   int64_t num_removed)
-{
-  buf_updates_send_changes(buf, firstlnum, num_added, num_removed);
-}
-
-/// Redraw buffer later.
-void nvim_redraw_buf_later(buf_T *buf, int redraw_type)
-{
-  redraw_buf_later(buf, redraw_type);
-}
-
-/// Redraw the current buffer later.
-void nvim_redraw_curbuf_later(int redraw_type)
-{
-  redraw_curbuf_later(redraw_type);
-}
-
 // ============================================================================
 // IEMS Algorithm accessors
 // ============================================================================
 
 // Note: nvim_get_got_int is defined in ex_eval.c
-
-/// Call line_breakcheck.
-void nvim_line_breakcheck(void)
-{
-  line_breakcheck();
-}
 
 /// Get buffer line count (for fold Rust code).
 linenr_T nvim_fold_buf_get_line_count(buf_T *buf)

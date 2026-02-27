@@ -44,6 +44,7 @@
 #include "nvim/move.h"
 #include "nvim/option.h"
 #include "nvim/option_vars.h"
+#include "nvim/os/input.h"
 #include "nvim/os/time.h"
 #include "nvim/plines.h"
 #include "nvim/pos_defs.h"
@@ -486,9 +487,11 @@ size_t nvim_change_copy_option_part(char **option, char *buf, int maxlen, const 
 // String / character helpers for open_line
 // =============================================================================
 
-// nvim_skipwhite exists in fold.c
+/// Skip whitespace at the beginning of a string (wrapper for skipwhite).
+char *nvim_skipwhite(const char *s) { return skipwhite(s); }
 bool nvim_change_ascii_iswhite(int c) { return ascii_iswhite(c); }
-// nvim_vim_strchr exists in fold.c
+/// Find a character in a string (wrapper for vim_strchr).
+char *nvim_vim_strchr(const char *s, int c) { return vim_strchr(s, c); }
 
 // =============================================================================
 // Indent expression / lisp
@@ -529,3 +532,39 @@ bool nvim_change_virtual_active(win_T *win) { return virtual_active(win); }
 // changed_bytes/ins_bytes wrappers for open_line.rs
 void nvim_changed_bytes(linenr_T lnum, colnr_T col) { changed_bytes(lnum, col); }
 void nvim_ins_bytes(const char *p) { ins_bytes((char *)p); }
+
+// =============================================================================
+// Shared accessors relocated from fold_shim.c
+// =============================================================================
+
+/// Get a line from a buffer (wrapper for ml_get_buf).
+char *nvim_ml_get_buf(buf_T *buf, linenr_T lnum) { return ml_get_buf(buf, lnum); }
+
+/// Wrapper for changed_lines for Rust.
+void nvim_changed_lines(buf_T *buf, linenr_T first, int col, linenr_T last, linenr_T xtra,
+                        bool add_undo)
+{
+  changed_lines(buf, first, col, last, xtra, add_undo);
+}
+
+/// Wrapper for buf_updates_send_changes for Rust.
+void nvim_buf_updates_send_changes(buf_T *buf, linenr_T firstlnum, int64_t num_added,
+                                   int64_t num_removed)
+{
+  buf_updates_send_changes(buf, firstlnum, num_added, num_removed);
+}
+
+/// Call changed_window_setting for a window.
+void nvim_changed_window_setting(win_T *wp) { changed_window_setting(wp); }
+
+/// Redraw buffer later.
+void nvim_redraw_buf_later(buf_T *buf, int redraw_type) { redraw_buf_later(buf, redraw_type); }
+
+/// Redraw the current buffer later.
+void nvim_redraw_curbuf_later(int redraw_type) { redraw_curbuf_later(redraw_type); }
+
+/// Call line_breakcheck.
+void nvim_line_breakcheck(void) { line_breakcheck(); }
+
+/// Get the number of screen lines for a physical line (no fold consideration).
+int nvim_plines_win_nofold(win_T *wp, linenr_T lnum) { return plines_win_nofold(wp, lnum); }

@@ -3086,3 +3086,65 @@ int nvim_one_window_and_locked_split(void)
           && first_tabpage && first_tabpage->tp_next != NULL) ? 1 : 0;
 }
 
+// =============================================================================
+// Window/wline accessors (relocated from fold_shim.c)
+// =============================================================================
+
+/// Get the w_lines_valid field from a window.
+int nvim_win_get_w_lines_valid(win_T *wp)
+{
+  return wp->w_lines_valid;
+}
+
+/// Get a wline_T pointer at index in a window's w_lines array.
+/// Returns NULL if index is out of bounds.
+wline_T *nvim_win_get_wl_entry(win_T *wp, int idx)
+{
+  if (idx < 0 || idx >= wp->w_lines_valid) {
+    return NULL;
+  }
+  return &wp->w_lines[idx];
+}
+
+/// Get the wl_lnum field from a wline_T.
+linenr_T nvim_wline_get_lnum(wline_T *wl)
+{
+  return wl->wl_lnum;
+}
+
+/// Get the wl_foldend field from a wline_T.
+linenr_T nvim_wline_get_foldend(wline_T *wl)
+{
+  return wl->wl_foldend;
+}
+
+/// Get the wl_valid field from a wline_T.
+bool nvim_wline_get_valid(wline_T *wl)
+{
+  return wl->wl_valid;
+}
+
+/// Get the wl_folded field from a wline_T.
+bool nvim_wline_get_folded(wline_T *wl)
+{
+  return wl->wl_folded;
+}
+
+/// Get the wl_size field from a wline_T.
+uint16_t nvim_wline_get_size(wline_T *wl)
+{
+  return wl->wl_size;
+}
+
+/// Get the wl_lastlnum field from a wline_T.
+linenr_T nvim_wline_get_lastlnum(wline_T *wl)
+{
+  return wl->wl_lastlnum;
+}
+
+/// Get the w_p_scb (scrollbind) field from a window.
+bool nvim_win_get_p_scb(win_T *wp)
+{
+  return wp->w_p_scb;
+}
+
