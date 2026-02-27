@@ -63,10 +63,15 @@ extern "C" {
     fn nvim_taggy_set_cur_fnum(tg: *mut c_void, fnum: c_int);
     fn nvim_taggy_set_user_data(tg: *mut c_void, data: *mut c_char);
 
-    // Fmark accessors
-    fn nvim_taggy_get_fmark_lnum(tg: TaggyHandle) -> LinenrT;
-    fn nvim_taggy_get_fmark_col(tg: TaggyHandle) -> ColnrT;
-    fn nvim_taggy_get_fmark_fnum(tg: TaggyHandle) -> c_int;
+    // Taggy fmark accessor (returns opaque fmark pointer)
+    fn nvim_taggy_get_fmark(tg: TaggyHandle) -> *const c_void;
+
+    // Fmark field accessors (two-step pattern)
+    fn nvim_fmark_get_lnum(fm: *const c_void) -> LinenrT;
+    fn nvim_fmark_get_col(fm: *const c_void) -> ColnrT;
+    fn nvim_fmark_get_fnum(fm: *const c_void) -> c_int;
+
+    // Fmark setters (via taggy direct-field setters)
     fn nvim_taggy_set_fmark_lnum(tg: *mut c_void, lnum: LinenrT);
     fn nvim_taggy_set_fmark_col(tg: *mut c_void, col: ColnrT);
     fn nvim_taggy_set_fmark_fnum(tg: *mut c_void, fnum: c_int);
@@ -119,9 +124,10 @@ pub unsafe extern "C" fn rs_tagstack_copy_entry(dest: TaggyHandle, src: TaggyHan
     nvim_taggy_set_cur_match(dest_mut, nvim_taggy_get_cur_match(src));
     nvim_taggy_set_cur_fnum(dest_mut, nvim_taggy_get_cur_fnum(src));
     nvim_taggy_set_user_data(dest_mut, nvim_taggy_get_user_data(src) as *mut c_char);
-    nvim_taggy_set_fmark_lnum(dest_mut, nvim_taggy_get_fmark_lnum(src));
-    nvim_taggy_set_fmark_col(dest_mut, nvim_taggy_get_fmark_col(src));
-    nvim_taggy_set_fmark_fnum(dest_mut, nvim_taggy_get_fmark_fnum(src));
+    let src_fm = nvim_taggy_get_fmark(src);
+    nvim_taggy_set_fmark_lnum(dest_mut, nvim_fmark_get_lnum(src_fm));
+    nvim_taggy_set_fmark_col(dest_mut, nvim_fmark_get_col(src_fm));
+    nvim_taggy_set_fmark_fnum(dest_mut, nvim_fmark_get_fnum(src_fm));
 }
 
 /// Zero out a tag stack entry (without freeing memory).
@@ -490,7 +496,7 @@ pub unsafe extern "C" fn rs_tagstack_entry_mark_lnum(tg: TaggyHandle) -> LinenrT
     if tg.is_null() {
         return 0;
     }
-    nvim_taggy_get_fmark_lnum(tg)
+    nvim_fmark_get_lnum(nvim_taggy_get_fmark(tg))
 }
 
 /// Get the mark column from a stack entry.
@@ -499,7 +505,7 @@ pub unsafe extern "C" fn rs_tagstack_entry_mark_col(tg: TaggyHandle) -> ColnrT {
     if tg.is_null() {
         return 0;
     }
-    nvim_taggy_get_fmark_col(tg)
+    nvim_fmark_get_col(nvim_taggy_get_fmark(tg))
 }
 
 /// Get the mark file number from a stack entry.
@@ -508,7 +514,7 @@ pub unsafe extern "C" fn rs_tagstack_entry_mark_fnum(tg: TaggyHandle) -> c_int {
     if tg.is_null() {
         return 0;
     }
-    nvim_taggy_get_fmark_fnum(tg)
+    nvim_fmark_get_fnum(nvim_taggy_get_fmark(tg))
 }
 
 /// Check if a stack entry has a valid tag name.
@@ -545,7 +551,7 @@ pub unsafe extern "C" fn rs_tagstack_entry_has_mark(tg: TaggyHandle) -> bool {
     if tg.is_null() {
         return false;
     }
-    nvim_taggy_get_fmark_lnum(tg) > 0
+    nvim_fmark_get_lnum(nvim_taggy_get_fmark(tg)) > 0
 }
 
 /// Set the tag name for a stack entry.
