@@ -397,19 +397,17 @@ const char *nvim_qfline_get_fname(const void *qfp_void) { return ((const qfline_
 
 bool nvim_qf_get_has_user_data(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_has_user_data; }
 
-// Forward declarations for static functions
-void nvim_qf_store_title(void *qfl_void, const char *title)
+// Phase 14 Pass 4: thin replacement for nvim_qf_store_title
+/// Free old title and store a duplicate of the new one (NULL clears it).
+void nvim_qf_set_title_dup(void *qfl_void, const char *title)
 {
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  if (qfl == NULL) {
+  if (qfl_void == NULL) {
     return;
   }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
   XFREE_CLEAR(qfl->qf_title);
   if (title != NULL) {
-    size_t len = strlen(title) + 1;
-    char *p = xmallocz(len);
-    qfl->qf_title = p;
-    xstrlcpy(p, title, len + 1);
+    qfl->qf_title = xstrdup(title);
   }
 }
 
@@ -655,8 +653,8 @@ void nvim_qfline_set_prev(void *qfp_void, void *prev) { if (qfp_void != NULL) ((
 
 void *nvim_qfline_alloc(void) { return xcalloc(1, sizeof(qfline_T)); }
 
-/// Free a qfline_T structure and its string fields
-void nvim_qfline_free(void *qfp_void)
+/// Free qfline_T string fields and user_data, but NOT the struct itself.
+void nvim_qfline_free_fields(void *qfp_void)
 {
   if (qfp_void == NULL) {
     return;
@@ -667,7 +665,6 @@ void nvim_qfline_free(void *qfp_void)
   xfree(qfp->qf_pattern);
   xfree(qfp->qf_text);
   tv_clear(&qfp->qf_user_data);
-  xfree(qfp);
 }
 
 void nvim_qfline_set_fnum(void *qfp_void, int fnum) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_fnum = fnum; }
@@ -754,13 +751,12 @@ void nvim_qfline_set_user_data(void *qfp_void, void *qfl_void, const void *user_
   }
 }
 
-/// Mark buffer as having quickfix/location list entry
-void nvim_qf_mark_buf_has_entry(int bufnum, bool is_location_list)
+/// OR the appropriate flag into buf->b_has_qf_entry (used when adding entries).
+void nvim_qf_buf_or_has_entry(void *buf_void, bool is_location_list)
 {
-  buf_T *buf = buflist_findnr(bufnum);
-  if (buf != NULL) {
-    buf->b_has_qf_entry |= is_location_list ? BUF_HAS_LL_ENTRY : BUF_HAS_QF_ENTRY;
-  }
+  if (buf_void == NULL) { return; }
+  buf_T *buf = (buf_T *)buf_void;
+  buf->b_has_qf_entry |= is_location_list ? BUF_HAS_LL_ENTRY : BUF_HAS_QF_ENTRY;
 }
 
 // nvim_qf_get_fnum_for_entry deleted: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
@@ -1703,22 +1699,7 @@ char *nvim_qf_init_resolve_efm(char *errorformat, void *tv_void, void *buf_void)
 // nvim_qf_init_process_nextline, nvim_qf_init_state_no_fd_error deleted:
 // inlined into Rust rs_qf_init_ext / process_nextline (Phase 9).
 
-/// Sets qf_ptr, qf_index, and qf_nonevalid based on whether valid entries exist.
-void nvim_qf_init_finalize_list(void *qfl_void)
-{
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  if (qfl->qf_index == 0) {
-    // no valid entry found
-    qfl->qf_ptr = qfl->qf_start;
-    qfl->qf_index = 1;
-    qfl->qf_nonevalid = true;
-  } else {
-    qfl->qf_nonevalid = false;
-    if (qfl->qf_ptr == NULL) {
-      qfl->qf_ptr = qfl->qf_start;
-    }
-  }
-}
+// nvim_qf_init_finalize_list deleted: inlined into Rust init.rs (Phase 14).
 
 void nvim_qf_init_emsg_readerrf(void) { emsg(_(e_readerrf)); }
 
@@ -1812,19 +1793,18 @@ bool nvim_qf_vim_regexec(void *rm_void, const char *line)
   return vim_regexec((regmatch_T *)rm_void, line, 0);
 }
 
-/// Append text to qfline_T.qf_text with a newline separator.
-/// Handles the xrealloc + newline + STRCPY pattern safely.
-void nvim_qfline_append_text(void *qfp_void, const char *text)
+// nvim_qfline_append_text deleted: inlined into Rust parse.rs (Phase 14).
+
+/// Replace qf_text with the given string (xfrees old, xstrdups new).
+/// Used by Rust when it has already built the concatenated string.
+void nvim_qfline_replace_text(void *qfp_void, const char *text)
 {
-  if (qfp_void == NULL || text == NULL || *text == NUL) {
+  if (qfp_void == NULL) {
     return;
   }
   qfline_T *qfp = (qfline_T *)qfp_void;
-  size_t textlen = qfp->qf_text != NULL ? strlen(qfp->qf_text) : 0;
-  size_t errlen = strlen(text);
-  qfp->qf_text = xrealloc(qfp->qf_text, textlen + errlen + 2);
-  qfp->qf_text[textlen] = '\n';
-  STRCPY(qfp->qf_text + textlen + 1, text);
+  xfree(qfp->qf_text);
+  qfp->qf_text = text != NULL ? xstrdup(text) : NULL;
 }
 
 /// Wrapper for line_breakcheck().
@@ -2878,21 +2858,33 @@ const char *nvim_skipwhite_const(const char *str) { return skipwhite(str); }
 
 void nvim_ml_delete_one(linenr_T lnum) { ml_delete(lnum); }
 
-/// Set filetype, apply autocmds, and redraw for new qf buffer fill
-void nvim_qf_set_filetype_and_autocmds(void)
+// nvim_qf_set_filetype_and_autocmds deleted: inlined into Rust display.rs (Phase 14).
+
+/// Increment curbuf->b_ro_locked.
+void nvim_qf_curbuf_incr_ro_locked(void) { curbuf->b_ro_locked++; }
+/// Decrement curbuf->b_ro_locked.
+void nvim_qf_curbuf_decr_ro_locked(void) { curbuf->b_ro_locked--; }
+/// Set curbuf->b_p_ma = false.
+void nvim_qf_curbuf_set_ma_false(void) { curbuf->b_p_ma = false; }
+/// Set curbuf->b_keep_filetype = val.
+void nvim_qf_curbuf_set_keep_filetype(bool val) { curbuf->b_keep_filetype = val; }
+/// Call set_option_value_give_err(kOptFiletype, "qf", OPT_LOCAL).
+void nvim_qf_set_option_filetype_qf(void)
 {
-  curbuf->b_ro_locked++;
   set_option_value_give_err(kOptFiletype, STATIC_CSTR_AS_OPTVAL("qf"), OPT_LOCAL);
-  curbuf->b_p_ma = false;
-
-  curbuf->b_keep_filetype = true;
-  apply_autocmds(EVENT_BUFREADPOST, "quickfix", NULL, false, curbuf);
-  apply_autocmds(EVENT_BUFWINENTER, "quickfix", NULL, false, curbuf);
-  curbuf->b_keep_filetype = false;
-  curbuf->b_ro_locked--;
-
-  redraw_curbuf_later(UPD_NOT_VALID);
 }
+/// Call apply_autocmds(EVENT_BUFREADPOST, "quickfix", NULL, false, curbuf).
+void nvim_qf_apply_autocmds_bufreadpost_qf(void)
+{
+  apply_autocmds(EVENT_BUFREADPOST, "quickfix", NULL, false, curbuf);
+}
+/// Call apply_autocmds(EVENT_BUFWINENTER, "quickfix", NULL, false, curbuf).
+void nvim_qf_apply_autocmds_bufwinenter_qf(void)
+{
+  apply_autocmds(EVENT_BUFWINENTER, "quickfix", NULL, false, curbuf);
+}
+/// Call redraw_curbuf_later(UPD_NOT_VALID).
+void nvim_qf_redraw_curbuf_later(void) { redraw_curbuf_later(UPD_NOT_VALID); }
 
 bool nvim_qf_get_key_typed(void) { return KeyTyped; }
 

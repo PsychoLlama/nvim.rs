@@ -2163,7 +2163,8 @@ extern "C" {
     fn nvim_qfline_set_viscol(qfp: *mut c_void, viscol: c_char);
     fn nvim_qfline_set_end_col(qfp: *mut c_void, end_col: c_int);
     fn nvim_qfline_set_fnum(qfp: *mut c_void, fnum: c_int);
-    fn nvim_qfline_append_text(qfp: *mut c_void, text: *const c_char);
+    // nvim_qfline_append_text replaced by inline Rust + nvim_qfline_replace_text (Phase 14)
+    fn nvim_qfline_replace_text(qfp: *mut c_void, text: *const c_char);
 
     // misc
     fn nvim_qf_line_breakcheck();
@@ -2894,7 +2895,23 @@ unsafe fn qf_parse_multiline_pfx_rs(idx: c_char, qfl: *mut c_void, fields: *mut 
 
         let errmsg = fields_get_errmsg(fields);
         if !errmsg.is_null() && *errmsg != 0 {
-            nvim_qfline_append_text(qfprev, errmsg);
+            // Inlined nvim_qfline_append_text (Phase 14):
+            // Append errmsg to current qf_text with a newline separator.
+            let new_text = std::ffi::CStr::from_ptr(errmsg);
+            let new_bytes = new_text.to_bytes();
+            let current = nvim_qfline_get_text(qfprev);
+            let combined: std::ffi::CString = if current.is_null() {
+                // No existing text; just use the new message directly.
+                std::ffi::CString::from_vec_unchecked(new_bytes.to_vec())
+            } else {
+                let old_bytes = std::ffi::CStr::from_ptr(current).to_bytes();
+                let mut buf = Vec::with_capacity(old_bytes.len() + 1 + new_bytes.len() + 1);
+                buf.extend_from_slice(old_bytes);
+                buf.push(b'\n');
+                buf.extend_from_slice(new_bytes);
+                std::ffi::CString::from_vec_unchecked(buf)
+            };
+            nvim_qfline_replace_text(qfprev, combined.as_ptr());
         }
 
         // Update nr if not set

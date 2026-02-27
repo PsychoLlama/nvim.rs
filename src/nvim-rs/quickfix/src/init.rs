@@ -341,7 +341,12 @@ mod init_ext {
             tv: TvHandle,
             buf: BufHandle,
         ) -> *mut c_char;
-        fn nvim_qf_init_finalize_list(qfl: QfListHandleMut);
+        // nvim_qf_init_finalize_list deleted: inlined below (Phase 14)
+        fn nvim_qf_get_index(qfl: QfListHandle) -> c_int;
+        fn nvim_qf_set_index(qfl: QfListHandleMut, idx: c_int);
+        fn nvim_qf_set_ptr(qfl: QfListHandleMut, ptr: QfLineHandle);
+        fn nvim_qf_get_start(qfl: QfListHandle) -> QfLineHandle;
+        fn nvim_qf_set_nonevalid(qfl: QfListHandleMut, nonevalid: bool);
         fn nvim_qf_init_emsg_readerrf();
         fn nvim_qf_decrement_listcount(qi: QfInfoHandleMut);
         fn nvim_qf_set_curlist_idx(qi: QfInfoHandleMut, idx: c_int);
@@ -532,7 +537,17 @@ mod init_ext {
 
             // Check if file source had a read error (replaces nvim_qf_init_state_no_fd_error)
             if (*state).no_fd_error() {
-                nvim_qf_init_finalize_list(qfl);
+                // Inlined nvim_qf_init_finalize_list (Phase 14):
+                // Set qf_ptr/qf_index/qf_nonevalid based on whether valid entries exist.
+                if nvim_qf_get_index(qfl) == 0 {
+                    // no valid entry found
+                    nvim_qf_set_ptr(qfl, nvim_qf_get_start(qfl));
+                    nvim_qf_set_index(qfl, 1);
+                    nvim_qf_set_nonevalid(qfl, true);
+                } else {
+                    nvim_qf_set_nonevalid(qfl, false);
+                    // qf_ptr already set to the first valid entry by rs_qf_add_entry
+                }
                 nvim_qf_get_count(qfl) // success: return number of matches
             } else {
                 nvim_qf_init_emsg_readerrf();

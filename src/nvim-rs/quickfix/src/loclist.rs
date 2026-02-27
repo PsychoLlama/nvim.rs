@@ -740,7 +740,7 @@ use crate::{
     nvim_qf_get_nonevalid, nvim_qf_get_ptr, nvim_qf_get_qfl_type, nvim_qf_get_start,
     nvim_qf_get_title, nvim_qf_set_changedtick, nvim_qf_set_count, nvim_qf_set_has_user_data,
     nvim_qf_set_id, nvim_qf_set_index, nvim_qf_set_last, nvim_qf_set_nonevalid, nvim_qf_set_ptr,
-    nvim_qf_set_qfl_type, nvim_qf_set_start, nvim_qf_store_title, nvim_qfline_get_col,
+    nvim_qf_set_qfl_type, nvim_qf_set_start, nvim_qf_set_title_dup, nvim_qfline_get_col,
     nvim_qfline_get_end_col, nvim_qfline_get_end_lnum, nvim_qfline_get_fnum, nvim_qfline_get_lnum,
     nvim_qfline_get_module, nvim_qfline_get_next, nvim_qfline_get_nr, nvim_qfline_get_pattern,
     nvim_qfline_get_text, nvim_qfline_get_type, nvim_qfline_get_valid, nvim_qfline_get_viscol,
@@ -867,7 +867,7 @@ pub unsafe extern "C" fn rs_copy_loclist(from_qfl: *const c_void, to_qfl: *mut c
     nvim_qf_set_ptr(to_qfl, std::ptr::null());
 
     // Copy title
-    nvim_qf_store_title(to_qfl, nvim_qf_get_title(from_qfl));
+    nvim_qf_set_title_dup(to_qfl, nvim_qf_get_title(from_qfl));
 
     // Copy context (typval)
     nvim_qf_copy_ctx(from_qfl, to_qfl);

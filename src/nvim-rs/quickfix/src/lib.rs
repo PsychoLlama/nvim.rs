@@ -1955,7 +1955,8 @@ extern "C" {
     fn nvim_qf_get_has_user_data(qfl: QfListHandle) -> bool;
 
     // Phase 5: List lifecycle wrappers (call C functions)
-    fn nvim_qf_store_title(qfl: QfListHandleMut, title: *const c_char);
+    // nvim_qf_store_title replaced by nvim_qf_set_title_dup (Phase 14)
+    fn nvim_qf_set_title_dup(qfl: QfListHandleMut, title: *const c_char);
     fn nvim_get_ql_info() -> QfInfoHandleMut;
     fn nvim_qf_increment_listcount(qi: QfInfoHandleMut);
     fn nvim_qf_decrement_listcount(qi: QfInfoHandleMut);
@@ -2096,7 +2097,8 @@ extern "C" {
 
     // Phase 3 Extension: qfline_T allocation and field-setting
     fn nvim_qfline_alloc() -> QfLineHandleMut;
-    fn nvim_qfline_free(qfp: QfLineHandleMut);
+    // nvim_qfline_free replaced by nvim_qfline_free_fields + nvim_qf_xfree_buf (Phase 14)
+    fn nvim_qfline_free_fields(qfp: QfLineHandleMut);
     fn nvim_qfline_set_fnum(qfp: QfLineHandleMut, fnum: c_int);
     fn nvim_qfline_set_lnum(qfp: QfLineHandleMut, lnum: LinenrT);
     fn nvim_qfline_set_end_lnum(qfp: QfLineHandleMut, end_lnum: LinenrT);
@@ -2116,7 +2118,9 @@ extern "C" {
         qfl: QfListHandleMut,
         user_data: *const c_void,
     );
-    fn nvim_qf_mark_buf_has_entry(bufnum: c_int, is_location_list: bool);
+    // nvim_qf_mark_buf_has_entry replaced by nvim_buflist_findnr_ptr + nvim_qf_buf_or_has_entry (Phase 14)
+    fn nvim_buflist_findnr_ptr(nr: c_int) -> *mut c_void;
+    fn nvim_qf_buf_or_has_entry(buf: *mut c_void, is_location_list: bool);
     // nvim_qf_get_fnum_for_entry removed: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5)
     fn nvim_qf_fix_fname(fname: *const c_char, bufnum: c_int) -> *mut c_char;
     fn nvim_qf_is_printc(c: c_int) -> bool;
@@ -2301,7 +2305,7 @@ pub unsafe extern "C" fn rs_qf_new_list(qi: QfInfoHandleMut, title: *const c_cha
     nvim_qf_clear_list_struct(qfl);
 
     // Set the title
-    nvim_qf_store_title(qfl, title);
+    nvim_qf_set_title_dup(qfl, title);
 
     // Set list type from stack type
     let qi_type = nvim_qf_get_qi_type(qi);
@@ -2390,8 +2394,9 @@ pub unsafe extern "C" fn rs_qf_free_items(qfl: QfListHandleMut) {
             count = 1;
         }
 
-        // Free the entry (nvim_qfline_free handles all string fields and typval)
-        nvim_qfline_free(qfp.cast_mut());
+        // Free the entry: fields first, then the struct itself
+        nvim_qfline_free_fields(qfp.cast_mut());
+        nvim_qf_xfree_buf(qfp.cast_mut());
 
         if !is_circular {
             qfp = next;
@@ -2437,7 +2442,7 @@ pub unsafe extern "C" fn rs_qf_store_title(qfl: QfListHandleMut, title: *const c
     if qfl.is_null() {
         return;
     }
-    nvim_qf_store_title(qfl, title);
+    nvim_qf_set_title_dup(qfl, title);
 }
 
 /// Pop the oldest list from the quickfix stack (implementation in Rust).
@@ -2652,9 +2657,12 @@ pub unsafe extern "C" fn rs_qf_add_entry(
     if bufnum != 0 {
         fnum = bufnum;
         nvim_qfline_set_fnum(qfp, fnum);
-        // Mark the buffer as having a quickfix entry
+        // Mark the buffer as having a quickfix/location list entry
         let is_location_list = rs_qf_get_qfl_type(qfl) == qfl_types::QFLT_LOCATION;
-        nvim_qf_mark_buf_has_entry(fnum, is_location_list);
+        let buf = nvim_buflist_findnr_ptr(fnum);
+        if !buf.is_null() {
+            nvim_qf_buf_or_has_entry(buf, is_location_list);
+        }
     } else {
         fnum = rs_qf_get_fnum(qfl, dir, fname.cast_mut());
         nvim_qfline_set_fnum(qfp, fnum);

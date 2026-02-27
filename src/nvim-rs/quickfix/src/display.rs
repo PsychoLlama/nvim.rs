@@ -459,7 +459,15 @@ extern "C" {
     fn nvim_tv_list_item_string(li: ListItemPtr) -> *mut c_char;
     fn nvim_ml_delete_one(lnum: LinenrT);
     fn rs_check_lnums(do_curwin: c_int);
-    fn nvim_qf_set_filetype_and_autocmds();
+    // nvim_qf_set_filetype_and_autocmds replaced by thin accessors (Phase 14)
+    fn nvim_qf_curbuf_incr_ro_locked();
+    fn nvim_qf_curbuf_decr_ro_locked();
+    fn nvim_qf_curbuf_set_ma_false();
+    fn nvim_qf_curbuf_set_keep_filetype(val: bool);
+    fn nvim_qf_set_option_filetype_qf();
+    fn nvim_qf_apply_autocmds_bufreadpost_qf();
+    fn nvim_qf_apply_autocmds_bufwinenter_qf();
+    fn nvim_qf_redraw_curbuf_later();
     fn nvim_qf_get_key_typed() -> bool;
     fn nvim_qf_set_key_typed(val: bool);
 
@@ -853,7 +861,16 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
     rs_check_lnums(1);
 
     if old_last.is_null() {
-        nvim_qf_set_filetype_and_autocmds();
+        // Inlined nvim_qf_set_filetype_and_autocmds (Phase 14)
+        nvim_qf_curbuf_incr_ro_locked();
+        nvim_qf_set_option_filetype_qf();
+        nvim_qf_curbuf_set_ma_false();
+        nvim_qf_curbuf_set_keep_filetype(true);
+        nvim_qf_apply_autocmds_bufreadpost_qf();
+        nvim_qf_apply_autocmds_bufwinenter_qf();
+        nvim_qf_curbuf_set_keep_filetype(false);
+        nvim_qf_curbuf_decr_ro_locked();
+        nvim_qf_redraw_curbuf_later();
     }
 
     // Restore KeyTyped, setting 'filetype' may reset it.

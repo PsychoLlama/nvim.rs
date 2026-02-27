@@ -66,7 +66,8 @@ extern "C" {
     fn nvim_qfline_get_viscol(qfp: QfLineHandle) -> bool;
 
     // List operations
-    fn nvim_qf_store_title(qfl: QfListHandleMut, title: *const c_char);
+    // nvim_qf_store_title replaced by nvim_qf_set_title_dup (Phase 14)
+    fn nvim_qf_set_title_dup(qfl: QfListHandleMut, title: *const c_char);
 
     // Stack maxcount
     fn nvim_qf_get_maxcount(qi: QfInfoHandle) -> c_int;
@@ -1165,11 +1166,11 @@ pub unsafe extern "C" fn rs_qf_add_entries(
     } else if action_char == b'r' {
         select_first_entry = true;
         crate::rs_qf_free_items(qfl);
-        nvim_qf_store_title(qfl, title);
+        nvim_qf_set_title_dup(qfl, title);
     } else if action_char == b'u' {
         select_nearest_entry = true;
         crate::rs_qf_free_items(qfl);
-        nvim_qf_store_title(qfl, title);
+        nvim_qf_set_title_dup(qfl, title);
     }
 
     let mut entry_to_select: QfLineHandle = std::ptr::null();
