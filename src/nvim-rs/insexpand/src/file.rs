@@ -396,6 +396,216 @@ pub unsafe extern "C" fn rs_file_is_prefix(prefix: *const c_char, path: *const c
     1
 }
 
+// =============================================================================
+// Phase 15: rs_get_next_filename_completion -- full Rust implementation
+// =============================================================================
+
+extern "C" {
+    // Leader and fuzzy helpers
+    fn rs_ins_compl_leader() -> *const c_char;
+    fn rs_ins_compl_leader_len() -> usize;
+    fn rs_cot_fuzzy() -> c_int;
+    fn rs_fuzzy_longest_match();
+
+    // Wildcard expansion
+    fn nvim_expand_wildcards_files(
+        count: c_int,
+        pat: *mut *mut c_char,
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+    ) -> c_int;
+    fn nvim_tilde_replace_wrap(pat: *mut c_char, num_matches: c_int, matches: *mut *mut c_char);
+    fn nvim_get_p_fic_or_wic() -> c_int;
+
+    // compl_pattern management
+    fn nvim_compl_pattern_set_star();
+    fn nvim_compl_pattern_set_from_alloc(data: *mut c_char, size: usize);
+    fn nvim_compl_pattern_get_data() -> *mut c_char;
+
+    // Fuzzy matching
+    fn nvim_fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
+
+    // Match addition
+    fn nvim_ins_compl_add_simple(
+        str_: *const c_char,
+        len: c_int,
+        dir: c_int,
+        flags: c_int,
+        score: c_int,
+    ) -> c_int;
+    fn rs_ins_compl_add_matches(num_matches: c_int, matches: *mut *mut c_char, icase: c_int);
+
+    // Completion state (nvim_get_compl_direction already declared above)
+    fn nvim_get_compl_get_longest() -> c_int;
+    fn nvim_get_compl_num_bests() -> c_int;
+    fn nvim_set_compl_num_bests(val: c_int);
+
+    // xmalloc / FreeWild
+    fn nvim_xmalloc(size: usize) -> *mut u8;
+    fn rs_FreeWild(count: c_int, files: *mut *mut c_char);
+}
+
+// Constants matching C definitions
+const OK: c_int = 1;
+const FORWARD: c_int = 1;
+const CP_FAST: c_int = 32;
+const CP_ICASE: c_int = 16;
+// FUZZY_SCORE_NONE = INT_MIN (matches C fuzzy.h definition)
+const FUZZY_SCORE_NONE: c_int = c_int::MIN;
+
+/// Get the next set of filename matching compl_pattern.
+///
+/// Rust port of C `get_next_filename_completion()`. Performs wildcard
+/// expansion, optional fuzzy matching with score-sorted ordering, and adds
+/// filename matches to the completion list.
+///
+/// # Safety
+/// Must be called from insert mode with valid completion state.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+pub unsafe extern "C" fn rs_get_next_filename_completion() {
+    let mut matches: *mut *mut c_char = std::ptr::null_mut();
+    let mut num_matches: c_int = 0;
+
+    let leader = rs_ins_compl_leader().cast_mut();
+    let leader_len = rs_ins_compl_leader_len();
+    let mut in_fuzzy_collect = rs_cot_fuzzy() != 0 && leader_len > 0;
+    let need_collect_bests = in_fuzzy_collect && nvim_get_compl_get_longest() != 0;
+    let mut max_score: c_int = 0;
+    let mut dir = nvim_get_compl_direction();
+
+    // On Linux/non-Windows, pathsep is always '/'.
+    // BACKSLASH_IN_FILENAME blocks are Windows-only dead code on this platform.
+    let pathsep = b'/' as c_char;
+
+    let mut fuzzy_leader: *mut c_char = leader;
+    let mut fuzzy_leader_len = leader_len;
+
+    if in_fuzzy_collect {
+        // Find last path separator in leader
+        let mut last_sep: *const c_char = std::ptr::null();
+        let mut ptr: *mut c_char = leader;
+        while *ptr != 0 {
+            if *ptr == pathsep {
+                last_sep = ptr.cast_const();
+            }
+            ptr = ptr.add(1);
+        }
+
+        if last_sep.is_null() {
+            // No path separator: fuzzy match the whole leader against "*"
+            nvim_compl_pattern_set_star();
+        } else if *last_sep.add(1) == 0 {
+            // Separator is the last char: can't do fuzzy on empty file part
+            in_fuzzy_collect = false;
+        } else {
+            // Split leader into path + file parts: "path/*"
+            let path_len = (last_sep as usize - leader as usize) + 1; // includes sep
+            let buf_size = path_len + 2; // "path/*\0"
+            let buf: *mut c_char = nvim_xmalloc(buf_size).cast();
+
+            // Build "path_prefix*" string: copy path_len bytes then append '*'
+            std::ptr::copy_nonoverlapping(leader.cast::<u8>(), buf.cast::<u8>(), path_len);
+            *buf.add(path_len) = b'*' as c_char;
+            *buf.add(path_len + 1) = 0;
+
+            // Transfer ownership to compl_pattern
+            nvim_compl_pattern_set_from_alloc(buf, path_len + 1);
+
+            // Advance leader to the file part
+            fuzzy_leader = last_sep.add(1).cast_mut();
+            fuzzy_leader_len = leader_len - path_len;
+        }
+    }
+
+    // Expand wildcards using compl_pattern.data
+    let pat_data = nvim_compl_pattern_get_data();
+    if pat_data.is_null() {
+        return;
+    }
+
+    // pat_data is already *mut c_char (from nvim_compl_pattern_get_data)
+    let mut pat_ptr = pat_data;
+    if nvim_expand_wildcards_files(
+        1,
+        std::ptr::addr_of_mut!(pat_ptr),
+        std::ptr::addr_of_mut!(num_matches),
+        std::ptr::addr_of_mut!(matches),
+    ) != OK
+    {
+        return;
+    }
+
+    // May change home directory back to "~"
+    nvim_tilde_replace_wrap(pat_ptr, num_matches, matches);
+    // (BACKSLASH_IN_FILENAME path conversion omitted -- Linux only)
+
+    if in_fuzzy_collect {
+        // Collect fuzzy-matching indices with their scores, then sort descending.
+        let mut fuzzy_indices: Vec<c_int> = Vec::new();
+        let mut fuzzy_scores: Vec<c_int> = vec![0; num_matches as usize];
+
+        for (i, score_slot) in fuzzy_scores.iter_mut().enumerate() {
+            let ptr = *matches.add(i);
+            let score = nvim_fuzzy_match_str(ptr, fuzzy_leader.cast_const());
+            if score != FUZZY_SCORE_NONE {
+                fuzzy_indices.push(i as c_int);
+                *score_slot = score;
+            }
+        }
+
+        if !fuzzy_indices.is_empty() {
+            // Sort descending by score; ascending by index on ties
+            let scores = &fuzzy_scores;
+            fuzzy_indices.sort_unstable_by(|&a, &b| {
+                let sa = scores[a as usize];
+                let sb = scores[b as usize];
+                // descending score; ascending index for ties
+                sb.cmp(&sa).then_with(|| a.cmp(&b))
+            });
+
+            let flags = CP_FAST
+                | if nvim_get_p_fic_or_wic() != 0 {
+                    CP_ICASE
+                } else {
+                    0
+                };
+            for (i, &fidx) in fuzzy_indices.iter().enumerate() {
+                let idx = fidx as usize;
+                let match_str = *matches.add(idx);
+                let current_score = fuzzy_scores[idx];
+                if nvim_ins_compl_add_simple(match_str.cast_const(), -1, dir, flags, current_score)
+                    == OK
+                {
+                    dir = FORWARD;
+                }
+
+                if need_collect_bests && (i == 0 || current_score == max_score) {
+                    nvim_set_compl_num_bests(nvim_get_compl_num_bests() + 1);
+                    max_score = current_score;
+                }
+            }
+
+            rs_FreeWild(num_matches, matches);
+        } else if fuzzy_leader_len > 0 {
+            rs_FreeWild(num_matches, matches);
+        }
+
+        if nvim_get_compl_num_bests() > 0 && nvim_get_compl_get_longest() != 0 {
+            rs_fuzzy_longest_match();
+        }
+        return;
+    }
+
+    if num_matches > 0 {
+        rs_ins_compl_add_matches(num_matches, matches, nvim_get_p_fic_or_wic());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

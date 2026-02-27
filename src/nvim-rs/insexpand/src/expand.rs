@@ -153,8 +153,7 @@ extern "C" {
         fuzzy_score: c_int,
     ) -> c_int;
 
-    // get_next_filename_completion compound wrapper
-    fn nvim_get_next_filename_completion_wrap();
+    // (nvim_get_next_filename_completion_wrap deleted Phase 15; call rs_get_next_filename_completion directly)
 
     // expand_by_function wrapper
     fn nvim_expand_by_function_impl(compl_type: c_int);
@@ -449,7 +448,7 @@ unsafe fn get_next_completion_match(
             rs_get_next_tag_completion();
         }
         t if t == CTRL_X_FILES => {
-            nvim_get_next_filename_completion_wrap();
+            crate::file::rs_get_next_filename_completion();
         }
         t if t == CTRL_X_CMDLINE || t == CTRL_X_CMDLINE_CTRL_X => {
             rs_get_next_cmdline_completion();

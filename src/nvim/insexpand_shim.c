@@ -165,8 +165,7 @@ extern const char *rs_ins_compl_mode(void);
 extern int rs_thesaurus_func_complete(int type);
 // Phase 3 (pass 5) Rust exports
 extern void rs_get_next_dict_tsr_completion(int compl_type, char *dict, int dict_f);
-// Phase 4 (pass 5) Rust exports
-extern void rs_fuzzy_longest_match(void);
+// Phase 4 (pass 5) Rust exports -- rs_fuzzy_longest_match no longer called from C (Phase 15)
 // Phase 1 (pass 5) Rust exports
 extern void rs_get_register_completion(void);
 // Phase 5 (pass 5) Rust exports
@@ -510,7 +509,7 @@ static size_t spell_bad_len = 0;   // length of located bad word
 
 static int compl_selected_item = -1;
 
-static int *compl_fuzzy_scores;
+// compl_fuzzy_scores deleted (Phase 15): moved to Rust Vec in rs_get_next_filename_completion
 
 /// Define the structure for completion source (in 'cpt' option) information
 typedef struct cpt_source_T {
@@ -1858,155 +1857,8 @@ void f_complete_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 // NOTE: process_next_cpt_value, INS_COMPL_CPT_* enum migrated to Rust
 // as rs_process_next_cpt_value (Phase 14, Phase 3).
 
-/// Compare function for qsort
-static int compare_scores(const void *a, const void *b)
-{
-  int idx_a = *(const int *)a;
-  int idx_b = *(const int *)b;
-  int score_a = compl_fuzzy_scores[idx_a];
-  int score_b = compl_fuzzy_scores[idx_b];
-  return score_a == score_b ? (idx_a == idx_b ? 0 : (idx_a < idx_b ? -1 : 1))
-                            : (score_a > score_b ? -1 : 1);
-}
-
-/// Get the next set of filename matching "compl_pattern".
-static void get_next_filename_completion(void)
-{
-  char **matches;
-  int num_matches;
-  char *leader = (char *)rs_ins_compl_leader();
-  size_t leader_len = rs_ins_compl_leader_len();
-  bool in_fuzzy_collect = (rs_cot_fuzzy() && leader_len > 0);
-  bool need_collect_bests = in_fuzzy_collect && compl_get_longest;
-  int max_score = 0;
-  Direction dir = compl_direction;
-
-#ifdef BACKSLASH_IN_FILENAME
-  char pathsep = (curbuf->b_p_csl[0] == 's')
-                 ? '/' : (curbuf->b_p_csl[0] == 'b') ? '\\' : PATHSEP;
-#else
-  char pathsep = PATHSEP;
-#endif
-
-  if (in_fuzzy_collect) {
-#ifdef BACKSLASH_IN_FILENAME
-    if (curbuf->b_p_csl[0] == 's') {
-      for (size_t i = 0; i < leader_len; i++) {
-        if (leader[i] == '\\') {
-          leader[i] = '/';
-        }
-      }
-    } else if (curbuf->b_p_csl[0] == 'b') {
-      for (size_t i = 0; i < leader_len; i++) {
-        if (leader[i] == '/') {
-          leader[i] = '\\';
-        }
-      }
-    }
-#endif
-    char *last_sep = strrchr(leader, pathsep);
-    if (last_sep == NULL) {
-      // No path separator or separator is the last character,
-      // fuzzy match the whole leader
-      API_CLEAR_STRING(compl_pattern);
-      compl_pattern = cbuf_to_string("*", 1);
-    } else if (*(last_sep + 1) == NUL) {
-      in_fuzzy_collect = false;
-    } else {
-      // Split leader into path and file parts
-      size_t path_len = (size_t)(last_sep - leader) + 1;
-      char *path_with_wildcard = xmalloc(path_len + 2);
-      vim_snprintf(path_with_wildcard, path_len + 2, "%*.*s*",
-                   (int)path_len, (int)path_len, leader);
-      API_CLEAR_STRING(compl_pattern);
-      compl_pattern.data = path_with_wildcard;
-      compl_pattern.size = path_len + 1;
-
-      // Move leader to the file part
-      leader = last_sep + 1;
-      leader_len -= path_len;
-    }
-  }
-
-  if (expand_wildcards(1, &compl_pattern.data, &num_matches, &matches,
-                       EW_FILE|EW_DIR|EW_ADDSLASH|EW_SILENT) != OK) {
-    return;
-  }
-
-  // May change home directory back to "~".
-  tilde_replace(compl_pattern.data, num_matches, matches);
-#ifdef BACKSLASH_IN_FILENAME
-  if (curbuf->b_p_csl[0] != NUL) {
-    for (int i = 0; i < num_matches; i++) {
-      char *ptr = matches[i];
-      while (*ptr != NUL) {
-        if (curbuf->b_p_csl[0] == 's' && *ptr == '\\') {
-          *ptr = '/';
-        } else if (curbuf->b_p_csl[0] == 'b' && *ptr == '/') {
-          *ptr = '\\';
-        }
-        ptr += utfc_ptr2len(ptr);
-      }
-    }
-  }
-#endif
-
-  if (in_fuzzy_collect) {
-    garray_T fuzzy_indices;
-    ga_init(&fuzzy_indices, sizeof(int), 10);
-    compl_fuzzy_scores = (int *)xmalloc(sizeof(int) * (size_t)num_matches);
-
-    for (int i = 0; i < num_matches; i++) {
-      char *ptr = matches[i];
-      int score = fuzzy_match_str(ptr, leader);
-      if (score != FUZZY_SCORE_NONE) {
-        GA_APPEND(int, &fuzzy_indices, i);
-        compl_fuzzy_scores[i] = score;
-      }
-    }
-
-    // prevent qsort from deref NULL pointer
-    if (fuzzy_indices.ga_len > 0) {
-      int *fuzzy_indices_data = (int *)fuzzy_indices.ga_data;
-      qsort(fuzzy_indices_data, (size_t)fuzzy_indices.ga_len, sizeof(int), compare_scores);
-
-      for (int i = 0; i < fuzzy_indices.ga_len; i++) {
-        char *match = matches[fuzzy_indices_data[i]];
-        int current_score = compl_fuzzy_scores[fuzzy_indices_data[i]];
-        if (ins_compl_add(match, -1, NULL, NULL, false, NULL, dir,
-                          CP_FAST | ((p_fic || p_wic) ? CP_ICASE : 0),
-                          false, NULL, current_score) == OK) {
-          dir = FORWARD;
-        }
-
-        if (need_collect_bests) {
-          if (i == 0 || current_score == max_score) {
-            compl_num_bests++;
-            max_score = current_score;
-          }
-        }
-      }
-
-      FreeWild(num_matches, matches);
-    } else if (leader_len > 0) {
-      FreeWild(num_matches, matches);
-      num_matches = 0;
-    }
-
-    xfree(compl_fuzzy_scores);
-    ga_clear(&fuzzy_indices);
-
-    if (compl_num_bests > 0 && compl_get_longest) {
-      rs_fuzzy_longest_match();
-    }
-    return;
-  }
-
-  if (num_matches > 0) {
-    rs_ins_compl_add_matches(num_matches, matches, p_fic || p_wic);
-  }
-}
-
+// NOTE: compare_scores and get_next_filename_completion deleted (Phase 15).
+// Ported to Rust as rs_get_next_filename_completion in file.rs.
 
 // NOTE: ins_compl_get_next_word_or_line and get_next_default_completion deleted (Phase 14, Phase 4).
 // Logic now lives in rs_get_next_default_completion (expand.rs) and the
@@ -2671,10 +2523,32 @@ void nvim_ins_compl_st_set_cur_match_dir(void) {
 // NOTE: nvim_get_next_default_completion_wrap deleted (Phase 14, Phase 4).
 // rs_get_next_default_completion in expand.rs calls compound accessors directly.
 
-// Wrapper for get_next_filename_completion.
-void nvim_get_next_filename_completion_wrap(void) {
-  get_next_filename_completion();
+// NOTE: nvim_get_next_filename_completion_wrap deleted (Phase 15).
+// rs_get_next_filename_completion in file.rs calls compound accessors directly.
+
+// Phase 15: thin accessors for filename completion migration to Rust
+int nvim_expand_wildcards_files(int count, char **pat, int *num_matches, char ***matches)
+{
+  return expand_wildcards(count, pat, num_matches, matches,
+                          EW_FILE|EW_DIR|EW_ADDSLASH|EW_SILENT);
 }
+void nvim_tilde_replace_wrap(char *pat, int num_matches, char **matches)
+{
+  tilde_replace(pat, num_matches, matches);
+}
+int nvim_get_p_fic_or_wic(void) { return (p_fic || p_wic) ? 1 : 0; }
+void nvim_compl_pattern_set_star(void)
+{
+  API_CLEAR_STRING(compl_pattern);
+  compl_pattern = cbuf_to_string("*", 1);
+}
+void nvim_compl_pattern_set_from_alloc(char *data, size_t size)
+{
+  API_CLEAR_STRING(compl_pattern);
+  compl_pattern.data = data;
+  compl_pattern.size = size;
+}
+char *nvim_compl_pattern_get_data(void) { return compl_pattern.data; }
 
 void nvim_ins_compl_new_leader_wrapper(void) { rs_ins_compl_new_leader(); }
 // ins_compl_addfrommatch compound accessor: handles match traversal in C
