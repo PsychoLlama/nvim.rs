@@ -252,6 +252,42 @@ pub unsafe extern "C" fn rs_win_init_empty(wp: WinHandle) {
     win_init_empty_impl(wp);
 }
 
+// =============================================================================
+// rs_new_frame -- allocate a frame_T and link it to a window
+// =============================================================================
+
+extern "C" {
+    /// Allocate a raw frame_T via xcalloc.
+    fn nvim_alloc_frame_raw() -> *mut crate::Frame;
+
+    /// Set wp->w_frame.
+    fn nvim_win_set_frame(wp: WinHandle, frp: *mut crate::Frame);
+}
+
+/// Allocate a new frame_T and link it to window `wp`.
+///
+/// Port of C `new_frame()`.
+///
+/// # Safety
+/// Calls C accessor functions. `wp` must be a valid, non-null window.
+unsafe fn new_frame_impl(wp: WinHandle) {
+    let frp = nvim_alloc_frame_raw();
+    (*frp).fr_layout = crate::FR_LEAF;
+    (*frp).fr_win = wp;
+    nvim_win_set_frame(wp, frp);
+}
+
+/// FFI export for `new_frame`.
+///
+/// Allocates a frame_T and links it to window `wp`.
+///
+/// # Safety
+/// `wp` must be a valid, non-null window handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_new_frame(wp: WinHandle) {
+    new_frame_impl(wp);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

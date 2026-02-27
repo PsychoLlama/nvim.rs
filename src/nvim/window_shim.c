@@ -1032,62 +1032,110 @@ static int win_alloc_firstwin(win_T *oldwin)
   return OK;
 }
 
-// Create a frame for window "wp".
-static void new_frame(win_T *wp)
-{
-  frame_T *frp = xcalloc(1, sizeof(frame_T));
-
-  wp->w_frame = frp;
-  frp->fr_layout = FR_LEAF;
-  frp->fr_win = wp;
-}
-
 // Initialize the window and frame size to the maximum.
 void win_init_size(void) { rs_win_init_size(); }
 
-// Allocate a new tabpage_T and init the values.
-static tabpage_T *alloc_tabpage(void)
+// =============================================================================
+// Phase 12 compound C accessors for rs_alloc_tabpage / rs_free_tabpage
+// =============================================================================
+
+/// Allocate a raw tabpage_T (xcalloc only).
+tabpage_T *nvim_alloc_tabpage_raw(void) { return xcalloc(1, sizeof(tabpage_T)); }
+
+/// Increment last_tp_handle, set tp->handle, and insert into tabpage_handles map.
+void nvim_tabpage_init_handle(tabpage_T *tp)
 {
   static int last_tp_handle = 0;
-  tabpage_T *tp = xcalloc(1, sizeof(tabpage_T));
   tp->handle = ++last_tp_handle;
   pmap_put(int)(&tabpage_handles, tp->handle, tp);
+}
 
-  // Init t: variables.
+/// Allocate tp_vars dict and initialize t: variable scope.
+void nvim_tabpage_init_vars(tabpage_T *tp)
+{
   tp->tp_vars = tv_dict_alloc();
   init_var_dict(tp->tp_vars, &tp->tp_winvar, VAR_SCOPE);
-  tp->tp_diff_invalid = true;
-  tp->tp_ch_used = p_ch;
-
-  return tp;
 }
+
+// nvim_tabpage_set_diff_invalid: already defined in diff_shim.c
+
+/// Set tp->tp_ch_used = p_ch.
+void nvim_tabpage_set_ch_used_from_p_ch(tabpage_T *tp)
+{
+  tp->tp_ch_used = p_ch;
+}
+
+/// Remove tp from tabpage_handles map.
+void nvim_tabpage_pmap_del(tabpage_T *tp)
+{
+  pmap_del(int)(&tabpage_handles, tp->handle, NULL);
+}
+
+/// Clear t: variables and unref the dict.
+void nvim_tabpage_clear_vars(tabpage_T *tp)
+{
+  vars_clear(&tp->tp_vars->dv_hashtab);
+  hash_init(&tp->tp_vars->dv_hashtab);
+  unref_var_dict(tp->tp_vars);
+}
+
+/// Clear tp->tp_localdir and tp->tp_prevdir (xfree both).
+void nvim_tabpage_free_dirs(tabpage_T *tp)
+{
+  xfree(tp->tp_localdir);
+  xfree(tp->tp_prevdir);
+}
+
+/// Free raw tabpage struct (xfree only — does not clear fields).
+void nvim_xfree_tabpage_raw(tabpage_T *tp) { xfree(tp); }
+
+/// Get lastused_tabpage.
+tabpage_T *nvim_get_lastused_tabpage_raw(void) { return lastused_tabpage; }
+
+/// Set lastused_tabpage = NULL.
+void nvim_set_lastused_tabpage_null(void) { lastused_tabpage = NULL; }
+
+/// Allocate a raw frame_T (xcalloc only).
+frame_T *nvim_alloc_frame_raw(void) { return xcalloc(1, sizeof(frame_T)); }
+
+// =============================================================================
+// alloc_tabpage: thin wrapper calling rs_alloc_tabpage
+// =============================================================================
+
+extern tabpage_T *rs_alloc_tabpage(void);
+
+/// Allocate a new tabpage_T and init the values.
+static tabpage_T *alloc_tabpage(void)
+{
+  return rs_alloc_tabpage();
+}
+
+// =============================================================================
+// free_tabpage: thin wrapper calling rs_free_tabpage
+// =============================================================================
+
+extern void rs_free_tabpage(tabpage_T *tp);
 
 void free_tabpage(tabpage_T *tp)
 {
-  pmap_del(int)(&tabpage_handles, tp->handle, NULL);
-  rs_diff_clear(tp);
-  for (int idx = 0; idx < SNAP_COUNT; idx++) {
-    rs_clear_snapshot(tp, idx);
-  }
-  vars_clear(&tp->tp_vars->dv_hashtab);         // free all t: variables
-  hash_init(&tp->tp_vars->dv_hashtab);
-  unref_var_dict(tp->tp_vars);
+  rs_free_tabpage(tp);
+}
 
-  if (tp == lastused_tabpage) {
-    lastused_tabpage = NULL;
-  }
+// =============================================================================
+// new_frame: thin wrapper calling rs_new_frame
+// =============================================================================
 
-  xfree(tp->tp_localdir);
-  xfree(tp->tp_prevdir);
-  xfree(tp);
+extern void rs_new_frame(win_T *wp);
+
+// Create a frame for window "wp".
+static void new_frame(win_T *wp)
+{
+  rs_new_frame(wp);
 }
 
 // =============================================================================
 // Phase 8 wrappers for rs_win_new_tabpage
 // =============================================================================
-
-/// Allocate a new tabpage. Called once per win_new_tabpage invocation.
-tabpage_T *nvim_alloc_tabpage_wrapper(void) { return alloc_tabpage(); }
 
 /// Allocate first window in a new tabpage from oldwin.
 /// Returns OK (1) or FAIL (0).
@@ -1101,7 +1149,7 @@ void nvim_tabpage_copy_localdir(tabpage_T *dst, tabpage_T *src)
   }
 }
 
-/// Free a tabpage allocated by nvim_alloc_tabpage_wrapper on failure path.
+/// Free a tabpage on failure path (xfree only).
 void nvim_xfree_tabpage(tabpage_T *tp) { xfree(tp); }
 
 /// If curbuf has a terminal, call terminal_check_size on it.
@@ -1672,7 +1720,7 @@ int nvim_get_p_ead_char(void) { return (p_ead && *p_ead) ? (int)(unsigned char)*
 void nvim_set_p_wiw(int64_t val) { p_wiw = val; }
 void nvim_set_p_wh(int64_t val) { p_wh = val; }
 win_T *nvim_win_alloc_wrapper(win_T *after, int hidden) { return win_alloc(after, hidden != 0); }
-void nvim_new_frame_wrapper(win_T *wp) { new_frame(wp); }
+// nvim_new_frame_wrapper deleted: callers updated to call rs_new_frame directly (Phase 12)
 void nvim_win_init_wrapper(win_T *wp, win_T *oldwin, int flags) { win_init(wp, oldwin, flags); }
 void nvim_frame_flatten_wrapper(frame_T *frp) { rs_frame_flatten(frp); }
 frame_T *nvim_xcalloc_frame(void) { return xcalloc(1, sizeof(frame_T)); }

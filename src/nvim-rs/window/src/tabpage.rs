@@ -1070,9 +1070,6 @@ pub extern "C" fn rs_tabpage_close_alternate() -> TabpageHandle {
 // =============================================================================
 
 extern "C" {
-    /// free_tabpage wrapper.
-    fn nvim_free_tabpage_wrapper(tp: TabpageHandle);
-
     /// Get p_tpm (tabpagemax option).
     fn nvim_get_p_tpm() -> i64;
 
@@ -1120,7 +1117,7 @@ unsafe fn close_tabpage_impl(tab: TabpageHandle) {
     };
 
     nvim_al_goto_tabpage_tp(ptp, 0, 0);
-    nvim_free_tabpage_wrapper(tab);
+    free_tabpage_impl(tab);
 }
 
 /// Create up to `maxcount` tabpages with empty windows.
@@ -1542,9 +1539,6 @@ pub unsafe extern "C" fn rs_goto_tabpage_tp_impl(
 // =============================================================================
 
 extern "C" {
-    /// Allocate a new tabpage_T (thin wrapper around static alloc_tabpage()).
-    fn nvim_alloc_tabpage_wrapper() -> TabpageHandle;
-
     /// Allocate first window in a new tabpage from oldwin.
     /// Returns OK (1) or FAIL (0).
     fn nvim_win_alloc_firstwin_wrapper(oldwin: WinHandle) -> c_int;
@@ -1600,7 +1594,7 @@ unsafe fn win_new_tabpage_impl(after: c_int, filename: *const u8) -> c_int {
     let old_curtab = nvim_get_curtab();
 
     // Allocate the new tabpage
-    let newtp = nvim_alloc_tabpage_wrapper();
+    let newtp = alloc_tabpage_impl();
 
     // Leave the current tabpage (fires BufLeave/WinLeave/TabLeave autocmds)
     let curbuf = nvim_get_curbuf();
@@ -1698,6 +1692,114 @@ unsafe fn win_new_tabpage_impl(after: c_int, filename: *const u8) -> c_int {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_new_tabpage(after: c_int, filename: *const u8) -> c_int {
     win_new_tabpage_impl(after, filename)
+}
+
+// =============================================================================
+// Phase 12: rs_alloc_tabpage + rs_free_tabpage + rs_new_frame
+// =============================================================================
+
+extern "C" {
+    /// Allocate raw tabpage_T (xcalloc only).
+    fn nvim_alloc_tabpage_raw() -> TabpageHandle;
+
+    /// Init handle field and insert into tabpage_handles map.
+    fn nvim_tabpage_init_handle(tp: TabpageHandle);
+
+    /// Init tp_vars dict and t: variable scope.
+    fn nvim_tabpage_init_vars(tp: TabpageHandle);
+
+    /// Set tp_diff_invalid.
+    fn nvim_tabpage_set_diff_invalid(tp: TabpageHandle, val: c_int);
+
+    /// Set tp_ch_used = p_ch.
+    fn nvim_tabpage_set_ch_used_from_p_ch(tp: TabpageHandle);
+
+    /// Remove tp from tabpage_handles map.
+    fn nvim_tabpage_pmap_del(tp: TabpageHandle);
+
+    /// Clear t: variables and unref the dict.
+    fn nvim_tabpage_clear_vars(tp: TabpageHandle);
+
+    /// Free tp_localdir and tp_prevdir.
+    fn nvim_tabpage_free_dirs(tp: TabpageHandle);
+
+    /// xfree the raw tabpage struct.
+    fn nvim_xfree_tabpage_raw(tp: TabpageHandle);
+
+    /// Get lastused_tabpage.
+    fn nvim_get_lastused_tabpage_raw() -> TabpageHandle;
+
+    /// Set lastused_tabpage = NULL.
+    fn nvim_set_lastused_tabpage_null();
+
+    /// Clear diff state for a tabpage (from diff crate).
+    fn rs_diff_clear(tp: TabpageHandle);
+
+    /// Clear snapshot slot `idx` for tabpage `tp`.
+    fn rs_clear_snapshot(tp: TabpageHandle, idx: c_int);
+}
+
+/// SNAP_COUNT constant (number of snapshot slots per tabpage).
+const SNAP_COUNT: c_int = 2;
+
+/// Allocate and initialize a new tabpage_T.
+///
+/// Port of C `alloc_tabpage()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn alloc_tabpage_impl() -> TabpageHandle {
+    let tp = nvim_alloc_tabpage_raw();
+    nvim_tabpage_init_handle(tp);
+    nvim_tabpage_init_vars(tp);
+    nvim_tabpage_set_diff_invalid(tp, 1);
+    nvim_tabpage_set_ch_used_from_p_ch(tp);
+    tp
+}
+
+/// Free a tabpage and all its resources.
+///
+/// Port of C `free_tabpage()`.
+///
+/// # Safety
+/// Calls C accessor functions. `tp` must be a valid, non-null tabpage.
+unsafe fn free_tabpage_impl(tp: TabpageHandle) {
+    nvim_tabpage_pmap_del(tp);
+    rs_diff_clear(tp);
+    for idx in 0..SNAP_COUNT {
+        rs_clear_snapshot(tp, idx);
+    }
+    nvim_tabpage_clear_vars(tp);
+
+    // Clear lastused_tabpage if it points to this tabpage.
+    if nvim_get_lastused_tabpage_raw() == tp {
+        nvim_set_lastused_tabpage_null();
+    }
+
+    nvim_tabpage_free_dirs(tp);
+    nvim_xfree_tabpage_raw(tp);
+}
+
+/// FFI: Allocate and initialize a new tabpage_T.
+///
+/// Replaces C `alloc_tabpage()`.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_alloc_tabpage() -> TabpageHandle {
+    alloc_tabpage_impl()
+}
+
+/// FFI: Free a tabpage and all its resources.
+///
+/// Replaces C `free_tabpage()`.
+///
+/// # Safety
+/// Calls C accessor functions. `tp` must be a valid, non-null tabpage.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_free_tabpage(tp: TabpageHandle) {
+    free_tabpage_impl(tp);
 }
 
 #[cfg(test)]

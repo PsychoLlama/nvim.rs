@@ -52,7 +52,7 @@ extern "C" {
     fn nvim_buf_inc_nwindows(buf: BufHandle);
     fn nvim_win_init_empty_wrapper(wp: WinHandle);
     fn nvim_get_firstbuf_wrapper() -> BufHandle;
-    fn nvim_free_tabpage_wrapper(tp: TabpageHandle);
+    fn rs_free_tabpage(tp: TabpageHandle);
 
     // --- Phase 11 new accessors ---
     fn nvim_close_buffer_othertab(win: WinHandle, free_buf: c_int) -> c_int;
@@ -185,7 +185,7 @@ pub unsafe extern "C" fn rs_win_close_othertab(
     crate::close::helpers::rs_win_free_mem(win, std::ptr::addr_of_mut!(dir), tp);
 
     if res.free_tp_idx > 0 {
-        nvim_free_tabpage_wrapper(tp);
+        rs_free_tabpage(tp);
 
         if nvim_has_event_tabclosed() != 0 {
             // Format the tabpage index as a C string.

@@ -93,7 +93,7 @@ extern "C" {
 
     // --- Wrappers for complex operations ---
     fn nvim_win_alloc_wrapper(after: WinHandle, hidden: c_int) -> WinHandle;
-    fn nvim_new_frame_wrapper(wp: WinHandle);
+    fn rs_new_frame(wp: WinHandle);
     fn nvim_win_init_wrapper(wp: WinHandle, oldwin: WinHandle, flags: c_int);
     fn nvim_frame_flatten_wrapper(frp: *mut Frame);
     fn nvim_xcalloc_frame() -> *mut Frame;
@@ -649,7 +649,7 @@ unsafe fn alloc_and_link(
 unsafe fn init_new_window(wp: WinHandle, new_wp: WinHandle, flags: c_int) {
     if new_wp.is_null() {
         // Fresh allocation
-        nvim_new_frame_wrapper(wp);
+        rs_new_frame(wp);
         nvim_win_init_wrapper(wp, nvim_get_curwin(), flags);
     } else if nvim_win_get_floating(wp) != 0 {
         // Moving a floating window into the layout
@@ -667,7 +667,7 @@ unsafe fn init_new_window(wp: WinHandle, new_wp: WinHandle, flags: c_int) {
         }
 
         nvim_win_set_floating(wp, 0);
-        nvim_new_frame_wrapper(wp);
+        rs_new_frame(wp);
         nvim_merge_win_config_init(wp);
     }
 }
