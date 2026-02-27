@@ -3802,103 +3802,12 @@ void nvim_call_set_init_expand_env(void)
   }
 }
 
-/// Compile-time validation that Rust K_BUF_OPT_* constants match C kBufOpt* enum.
-/// If options.lua adds/reorders options, this will catch the mismatch at build time.
-static void nvim_validate_kbufopt_constants(void)
-{
-  _Static_assert((int)kBufOptAutocomplete == 0, "K_BUF_OPT_AUTOCOMPLETE mismatch");
-  _Static_assert((int)kBufOptAutoindent == 1, "K_BUF_OPT_AUTOINDENT mismatch");
-  _Static_assert((int)kBufOptAutoread == 2, "K_BUF_OPT_AUTOREAD mismatch");
-  _Static_assert((int)kBufOptBackupcopy == 3, "K_BUF_OPT_BACKUPCOPY mismatch");
-  _Static_assert((int)kBufOptBinary == 4, "K_BUF_OPT_BINARY mismatch");
-  _Static_assert((int)kBufOptBomb == 5, "K_BUF_OPT_BOMB mismatch");
-  _Static_assert((int)kBufOptBufhidden == 6, "K_BUF_OPT_BUFHIDDEN mismatch");
-  _Static_assert((int)kBufOptBuflisted == 7, "K_BUF_OPT_BUFLISTED mismatch");
-  _Static_assert((int)kBufOptBuftype == 8, "K_BUF_OPT_BUFTYPE mismatch");
-  _Static_assert((int)kBufOptBusy == 9, "K_BUF_OPT_BUSY mismatch");
-  _Static_assert((int)kBufOptChannel == 10, "K_BUF_OPT_CHANNEL mismatch");
-  _Static_assert((int)kBufOptCindent == 11, "K_BUF_OPT_CINDENT mismatch");
-  _Static_assert((int)kBufOptCinkeys == 12, "K_BUF_OPT_CINKEYS mismatch");
-  _Static_assert((int)kBufOptCinoptions == 13, "K_BUF_OPT_CINOPTIONS mismatch");
-  _Static_assert((int)kBufOptCinscopedecls == 14, "K_BUF_OPT_CINSCOPEDECLS mismatch");
-  _Static_assert((int)kBufOptCinwords == 15, "K_BUF_OPT_CINWORDS mismatch");
-  _Static_assert((int)kBufOptComments == 16, "K_BUF_OPT_COMMENTS mismatch");
-  _Static_assert((int)kBufOptCommentstring == 17, "K_BUF_OPT_COMMENTSTRING mismatch");
-  _Static_assert((int)kBufOptComplete == 18, "K_BUF_OPT_COMPLETE mismatch");
-  _Static_assert((int)kBufOptCompletefunc == 19, "K_BUF_OPT_COMPLETEFUNC mismatch");
-  _Static_assert((int)kBufOptCompleteopt == 20, "K_BUF_OPT_COMPLETEOPT mismatch");
-  _Static_assert((int)kBufOptCompleteslash == 21, "K_BUF_OPT_COMPLETESLASH mismatch");
-  _Static_assert((int)kBufOptCopyindent == 22, "K_BUF_OPT_COPYINDENT mismatch");
-  _Static_assert((int)kBufOptDefine == 23, "K_BUF_OPT_DEFINE mismatch");
-  _Static_assert((int)kBufOptDictionary == 24, "K_BUF_OPT_DICTIONARY mismatch");
-  _Static_assert((int)kBufOptDiffanchors == 25, "K_BUF_OPT_DIFFANCHORS mismatch");
-  _Static_assert((int)kBufOptEndoffile == 26, "K_BUF_OPT_ENDOFFILE mismatch");
-  _Static_assert((int)kBufOptEndofline == 27, "K_BUF_OPT_ENDOFLINE mismatch");
-  _Static_assert((int)kBufOptEqualprg == 28, "K_BUF_OPT_EQUALPRG mismatch");
-  _Static_assert((int)kBufOptErrorformat == 29, "K_BUF_OPT_ERRORFORMAT mismatch");
-  _Static_assert((int)kBufOptExpandtab == 30, "K_BUF_OPT_EXPANDTAB mismatch");
-  _Static_assert((int)kBufOptFileencoding == 31, "K_BUF_OPT_FILEENCODING mismatch");
-  _Static_assert((int)kBufOptFileformat == 32, "K_BUF_OPT_FILEFORMAT mismatch");
-  _Static_assert((int)kBufOptFiletype == 33, "K_BUF_OPT_FILETYPE mismatch");
-  _Static_assert((int)kBufOptFindfunc == 34, "K_BUF_OPT_FINDFUNC mismatch");
-  _Static_assert((int)kBufOptFixendofline == 35, "K_BUF_OPT_FIXENDOFLINE mismatch");
-  _Static_assert((int)kBufOptFormatexpr == 36, "K_BUF_OPT_FORMATEXPR mismatch");
-  _Static_assert((int)kBufOptFormatlistpat == 37, "K_BUF_OPT_FORMATLISTPAT mismatch");
-  _Static_assert((int)kBufOptFormatoptions == 38, "K_BUF_OPT_FORMATOPTIONS mismatch");
-  _Static_assert((int)kBufOptFormatprg == 39, "K_BUF_OPT_FORMATPRG mismatch");
-  _Static_assert((int)kBufOptGrepformat == 40, "K_BUF_OPT_GREPFORMAT mismatch");
-  _Static_assert((int)kBufOptGrepprg == 41, "K_BUF_OPT_GREPPRG mismatch");
-  _Static_assert((int)kBufOptIminsert == 42, "K_BUF_OPT_IMINSERT mismatch");
-  _Static_assert((int)kBufOptImsearch == 43, "K_BUF_OPT_IMSEARCH mismatch");
-  _Static_assert((int)kBufOptInclude == 44, "K_BUF_OPT_INCLUDE mismatch");
-  _Static_assert((int)kBufOptIncludeexpr == 45, "K_BUF_OPT_INCLUDEEXPR mismatch");
-  _Static_assert((int)kBufOptIndentexpr == 46, "K_BUF_OPT_INDENTEXPR mismatch");
-  _Static_assert((int)kBufOptIndentkeys == 47, "K_BUF_OPT_INDENTKEYS mismatch");
-  _Static_assert((int)kBufOptInfercase == 48, "K_BUF_OPT_INFERCASE mismatch");
-  _Static_assert((int)kBufOptIskeyword == 49, "K_BUF_OPT_ISKEYWORD mismatch");
-  _Static_assert((int)kBufOptKeymap == 50, "K_BUF_OPT_KEYMAP mismatch");
-  _Static_assert((int)kBufOptKeywordprg == 51, "K_BUF_OPT_KEYWORDPRG mismatch");
-  _Static_assert((int)kBufOptLisp == 52, "K_BUF_OPT_LISP mismatch");
-  _Static_assert((int)kBufOptLispoptions == 53, "K_BUF_OPT_LISPOPTIONS mismatch");
-  _Static_assert((int)kBufOptLispwords == 54, "K_BUF_OPT_LISPWORDS mismatch");
-  _Static_assert((int)kBufOptMakeencoding == 55, "K_BUF_OPT_MAKEENCODING mismatch");
-  _Static_assert((int)kBufOptMakeprg == 56, "K_BUF_OPT_MAKEPRG mismatch");
-  _Static_assert((int)kBufOptMatchpairs == 57, "K_BUF_OPT_MATCHPAIRS mismatch");
-  _Static_assert((int)kBufOptModeline == 58, "K_BUF_OPT_MODELINE mismatch");
-  _Static_assert((int)kBufOptModifiable == 59, "K_BUF_OPT_MODIFIABLE mismatch");
-  _Static_assert((int)kBufOptModified == 60, "K_BUF_OPT_MODIFIED mismatch");
-  _Static_assert((int)kBufOptNrformats == 61, "K_BUF_OPT_NRFORMATS mismatch");
-  _Static_assert((int)kBufOptOmnifunc == 62, "K_BUF_OPT_OMNIFUNC mismatch");
-  _Static_assert((int)kBufOptPath == 63, "K_BUF_OPT_PATH mismatch");
-  _Static_assert((int)kBufOptPreserveindent == 64, "K_BUF_OPT_PRESERVEINDENT mismatch");
-  _Static_assert((int)kBufOptQuoteescape == 65, "K_BUF_OPT_QUOTEESCAPE mismatch");
-  _Static_assert((int)kBufOptReadonly == 66, "K_BUF_OPT_READONLY mismatch");
-  _Static_assert((int)kBufOptScrollback == 67, "K_BUF_OPT_SCROLLBACK mismatch");
-  _Static_assert((int)kBufOptShiftwidth == 68, "K_BUF_OPT_SHIFTWIDTH mismatch");
-  _Static_assert((int)kBufOptSmartindent == 69, "K_BUF_OPT_SMARTINDENT mismatch");
-  _Static_assert((int)kBufOptSofttabstop == 70, "K_BUF_OPT_SOFTTABSTOP mismatch");
-  _Static_assert((int)kBufOptSpellcapcheck == 71, "K_BUF_OPT_SPELLCAPCHECK mismatch");
-  _Static_assert((int)kBufOptSpellfile == 72, "K_BUF_OPT_SPELLFILE mismatch");
-  _Static_assert((int)kBufOptSpelllang == 73, "K_BUF_OPT_SPELLLANG mismatch");
-  _Static_assert((int)kBufOptSpelloptions == 74, "K_BUF_OPT_SPELLOPTIONS mismatch");
-  _Static_assert((int)kBufOptSuffixesadd == 75, "K_BUF_OPT_SUFFIXESADD mismatch");
-  _Static_assert((int)kBufOptSwapfile == 76, "K_BUF_OPT_SWAPFILE mismatch");
-  _Static_assert((int)kBufOptSynmaxcol == 77, "K_BUF_OPT_SYNMAXCOL mismatch");
-  _Static_assert((int)kBufOptSyntax == 78, "K_BUF_OPT_SYNTAX mismatch");
-  _Static_assert((int)kBufOptTabstop == 79, "K_BUF_OPT_TABSTOP mismatch");
-  _Static_assert((int)kBufOptTagcase == 80, "K_BUF_OPT_TAGCASE mismatch");
-  _Static_assert((int)kBufOptTagfunc == 81, "K_BUF_OPT_TAGFUNC mismatch");
-  _Static_assert((int)kBufOptTags == 82, "K_BUF_OPT_TAGS mismatch");
-  _Static_assert((int)kBufOptTextwidth == 83, "K_BUF_OPT_TEXTWIDTH mismatch");
-  _Static_assert((int)kBufOptThesaurus == 84, "K_BUF_OPT_THESAURUS mismatch");
-  _Static_assert((int)kBufOptThesaurusfunc == 85, "K_BUF_OPT_THESAURUSFUNC mismatch");
-  _Static_assert((int)kBufOptUndofile == 86, "K_BUF_OPT_UNDOFILE mismatch");
-  _Static_assert((int)kBufOptUndolevels == 87, "K_BUF_OPT_UNDOLEVELS mismatch");
-  _Static_assert((int)kBufOptVarsofttabstop == 88, "K_BUF_OPT_VARSOFTTABSTOP mismatch");
-  _Static_assert((int)kBufOptVartabstop == 89, "K_BUF_OPT_VARTABSTOP mismatch");
-  _Static_assert((int)kBufOptWrapmargin == 90, "K_BUF_OPT_WRAPMARGIN mismatch");
-  _Static_assert(kBufOptCount == 91, "K_BUF_OPT_COUNT mismatch");
-}
+// Compile-time boundary validation for kBufOpt enum (Rust K_BUF_OPT_* constants).
+// Checks first value, last value, and count; specific index alignment is validated at
+// runtime by the offset table in varp.rs via buf_field_offsets().
+_Static_assert((int)kBufOptAutocomplete == 0, "K_BUF_OPT_AUTOCOMPLETE mismatch");
+_Static_assert((int)kBufOptWrapmargin == 90, "K_BUF_OPT_WRAPMARGIN mismatch");
+_Static_assert(kBufOptCount == 91, "K_BUF_OPT_COUNT mismatch");
 
 /// vim_strchr wrapper for Rust.
 const char *nvim_call_vim_strchr(const char *s, int c) { return vim_strchr(s, c); }
