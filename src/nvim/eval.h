@@ -154,6 +154,16 @@ typedef struct {
   Callback *prompt_interrupt; ///< &curbuf->b_prompt_interrupt
 } NvimPromptState;
 
+/// Bulk fold eval state read from a window for Rust fold functions (Phase 16).
+/// Mirror of Rust NvimFoldEvalState (#[repr(C)]) in eval_top.rs.
+typedef struct {
+  bool insecure_foldexpr;  ///< was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL)
+  bool insecure_foldtext;  ///< was_set_insecurely(wp, kOptFoldtext, OPT_LOCAL)
+  // 6 bytes implicit padding before char* pointers (align 8)
+  char *foldexpr;          ///< skipwhite(wp->w_p_fde)
+  char *foldtext;          ///< wp->w_p_fdt
+} NvimFoldEvalState;
+
 /// types for expressions.
 typedef enum {
   EXPR_UNKNOWN = 0,

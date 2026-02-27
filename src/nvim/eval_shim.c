@@ -1824,43 +1824,25 @@ void nvim_curbuf_u_clearallandblockfree(void)
 
 // =============================================================================
 // Accessors for Phase 3 (eval_shim pass 5): eval_foldexpr and eval_foldtext
+// Phase 16: consolidated into NvimFoldEvalState bulk struct.
 // =============================================================================
 
-/// Check was_set_insecurely for 'foldexpr' - accessor for rs_eval_foldexpr.
-bool nvim_win_was_set_insecurely_foldexpr(win_T *wp)
+/// Bulk-read fold eval state from wp into *out - accessor for Rust fold functions.
+void nvim_read_fold_eval_state(win_T *wp, NvimFoldEvalState *out)
 {
-  return was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL);
+  out->insecure_foldexpr = was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL);
+  out->insecure_foldtext = was_set_insecurely(wp, kOptFoldtext, OPT_LOCAL);
+  out->foldexpr = skipwhite(wp->w_p_fde);
+  out->foldtext = wp->w_p_fdt;
 }
 
-/// Check was_set_insecurely for 'foldtext' - accessor for rs_eval_foldtext.
-bool nvim_win_was_set_insecurely_foldtext(win_T *wp)
-{
-  return was_set_insecurely(wp, kOptFoldtext, OPT_LOCAL);
-}
-
-/// Return skipwhite(wp->w_p_fde) - accessor for rs_eval_foldexpr.
-char *nvim_win_get_foldexpr(win_T *wp)
-{
-  return skipwhite(wp->w_p_fde);
-}
-
-/// Return wp->w_p_fdt - accessor for rs_eval_foldtext.
-char *nvim_win_get_foldtext(win_T *wp)
-{
-  return wp->w_p_fdt;
-}
-
-/// Set current_sctx = wp->w_p_script_ctx[kWinOptFoldexpr] - accessor for rs_eval_foldexpr.
-void nvim_win_set_current_sctx_foldexpr(win_T *wp)
-{
-  current_sctx = wp->w_p_script_ctx[kWinOptFoldexpr];
-}
-
-/// Heap-allocate a copy of current_sctx and return it opaquely - for rs_eval_foldexpr save.
-sctx_T *nvim_save_current_sctx(void)
+/// Save current_sctx and set it from wp's foldexpr script context.
+/// Returns an opaque pointer to the saved sctx (caller must call nvim_restore_current_sctx).
+sctx_T *nvim_fold_sctx_save_and_set(win_T *wp)
 {
   sctx_T *saved = xmalloc(sizeof(sctx_T));
   *saved = current_sctx;
+  current_sctx = wp->w_p_script_ctx[kWinOptFoldexpr];
   return saved;
 }
 
@@ -1871,22 +1853,18 @@ void nvim_restore_current_sctx(sctx_T *saved)
   xfree(saved);
 }
 
-/// Write STRING_OBJ(NULL_STRING) into *out - for rs_eval_foldtext failure case.
-void nvim_foldtext_make_nil_obj(Object *out)
+/// Construct an Object result for foldtext evaluation.
+/// tv_type: VAR_LIST (4) -> vim_to_object; otherwise -> STRING_OBJ(cstr_to_string(tv_get_string)).
+/// If tv is NULL, write STRING_OBJ(NULL_STRING).
+void nvim_foldtext_make_obj(typval_T *tv, int tv_type, Object *out)
 {
-  *out = STRING_OBJ(NULL_STRING);
-}
-
-/// Write STRING_OBJ(cstr_to_string(tv_get_string(tv))) into *out.
-void nvim_foldtext_make_string_obj(typval_T *tv, Object *out)
-{
-  *out = STRING_OBJ(cstr_to_string(tv_get_string(tv)));
-}
-
-/// Write vim_to_object(tv, NULL, false) into *out.
-void nvim_foldtext_make_array_obj(typval_T *tv, Object *out)
-{
-  *out = vim_to_object(tv, NULL, false);
+  if (tv == NULL) {
+    *out = STRING_OBJ(NULL_STRING);
+  } else if (tv_type == VAR_LIST) {
+    *out = vim_to_object(tv, NULL, false);
+  } else {
+    *out = STRING_OBJ(cstr_to_string(tv_get_string(tv)));
+  }
 }
 
 // =============================================================================

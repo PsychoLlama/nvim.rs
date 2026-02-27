@@ -1263,25 +1263,34 @@ pub unsafe extern "C" fn rs_invoke_prompt_interrupt() -> bool {
 
 // =============================================================================
 // Phase 3 (eval_shim pass 5): eval_foldexpr and eval_foldtext
+// Phase 16: consolidated into NvimFoldEvalState bulk struct.
 // =============================================================================
 
+/// Bulk fold eval state read from a window.
+/// Must match NvimFoldEvalState typedef in eval.h exactly.
+/// Layout: bool(1) + bool(1) + pad(6) + *char(8) + *char(8) = 24 bytes.
+#[repr(C)]
+struct NvimFoldEvalState {
+    insecure_foldexpr: bool,
+    insecure_foldtext: bool,
+    // 6 bytes padding (implicit, C layout with 8-byte pointer alignment)
+    _pad: [u8; 6],
+    foldexpr: *mut c_char,
+    foldtext: *mut c_char,
+}
+
 extern "C" {
-    // Phase 3: foldexpr accessors
-    fn nvim_win_was_set_insecurely_foldexpr(wp: *mut c_void) -> bool;
-    fn nvim_win_was_set_insecurely_foldtext(wp: *mut c_void) -> bool;
-    fn nvim_win_get_foldexpr(wp: *mut c_void) -> *mut c_char;
-    fn nvim_win_get_foldtext(wp: *mut c_void) -> *mut c_char;
-    fn nvim_win_set_current_sctx_foldexpr(wp: *mut c_void);
-    fn nvim_save_current_sctx() -> *mut c_void; // returns sctx_T*
+    // Phase 16: bulk fold eval state reader
+    fn nvim_read_fold_eval_state(wp: *mut c_void, out: *mut NvimFoldEvalState);
+    // Phase 16: consolidated sctx save+set; restore kept separate
+    fn nvim_fold_sctx_save_and_set(wp: *mut c_void) -> *mut c_void; // returns sctx_T*
     fn nvim_restore_current_sctx(saved: *mut c_void); // frees saved sctx_T*
 
     // Phase 3: typval field accessors
     fn nvim_eval_tv_get_vnumber(tv: *const c_void) -> i64;
 
-    // Phase 3: foldtext Object construction helpers
-    fn nvim_foldtext_make_nil_obj(out: *mut c_void);
-    fn nvim_foldtext_make_string_obj(tv: TypevalHandle, out: *mut c_void);
-    fn nvim_foldtext_make_array_obj(tv: TypevalHandle, out: *mut c_void);
+    // Phase 16: unified foldtext object maker
+    fn nvim_foldtext_make_obj(tv: *mut c_void, tv_type: c_int, out: *mut c_void);
 }
 
 // typval type constants for fold functions
@@ -1298,11 +1307,19 @@ const VAR_STRING: c_int = 2;
 /// - `cp` must be a valid writable int pointer.
 #[export_name = "eval_foldexpr"]
 pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_int {
-    let saved_sctx = nvim_save_current_sctx();
-    let use_sandbox = nvim_win_was_set_insecurely_foldexpr(wp);
+    let mut fs = NvimFoldEvalState {
+        insecure_foldexpr: false,
+        insecure_foldtext: false,
+        _pad: [0u8; 6],
+        foldexpr: ptr::null_mut(),
+        foldtext: ptr::null_mut(),
+    };
+    nvim_read_fold_eval_state(wp, &mut fs);
+    let use_sandbox = fs.insecure_foldexpr;
+    let arg = fs.foldexpr;
 
-    let arg = nvim_win_get_foldexpr(wp);
-    nvim_win_set_current_sctx_foldexpr(wp);
+    // Save current_sctx and set it from the window's foldexpr script context
+    let saved_sctx = nvim_fold_sctx_save_and_set(wp);
 
     emsg_off += 1;
     if use_sandbox {
@@ -1386,8 +1403,16 @@ pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_
 /// - `out` must be a valid pointer to an Object (at least sizeof(Object) bytes).
 #[no_mangle]
 pub unsafe extern "C" fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void) {
-    let use_sandbox = nvim_win_was_set_insecurely_foldtext(wp);
-    let arg = nvim_win_get_foldtext(wp);
+    let mut fs = NvimFoldEvalState {
+        insecure_foldexpr: false,
+        insecure_foldtext: false,
+        _pad: [0u8; 6],
+        foldexpr: ptr::null_mut(),
+        foldtext: ptr::null_mut(),
+    };
+    nvim_read_fold_eval_state(wp, &mut fs);
+    let use_sandbox = fs.insecure_foldtext;
+    let arg = fs.foldtext;
 
     let funccal = nvim_eval_save_funccal();
     if use_sandbox {
@@ -1400,14 +1425,10 @@ pub unsafe extern "C" fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void) {
 
     let evalarg = nvim_get_evalarg_evaluate_ptr();
     if eval0_simple_funccal_impl(arg, tv_handle, ExargHandle::null(), evalarg) == FAIL {
-        nvim_foldtext_make_nil_obj(out);
+        nvim_foldtext_make_obj(ptr::null_mut(), 0, out);
     } else {
         let vtype = nvim_eval_tv_get_type(tv_handle);
-        if vtype == VAR_LIST {
-            nvim_foldtext_make_array_obj(tv_handle, out);
-        } else {
-            nvim_foldtext_make_string_obj(tv_handle, out);
-        }
+        nvim_foldtext_make_obj(tv, vtype, out);
         tv_clear(tv_handle);
     }
 
