@@ -1095,7 +1095,7 @@ extern "C" {
     fn nvim_excmds_curbuf_op_adjust_lnum(delta: c_int);
     fn nvim_bw_os_remove(path: *const c_char) -> c_int;
     fn nvim_excmds_curbuf_ml_line_count() -> c_int;
-    fn nvim_excmds_get_curbuf_ptr() -> *mut std::ffi::c_void;
+    fn nvim_excmds_get_curbuf_identity() -> *mut std::ffi::c_void;
     fn nvim_excmds_aborting() -> c_int;
     fn os_breakcheck();
     fn u_save(top: c_int, bot: c_int) -> c_int;
@@ -1145,7 +1145,7 @@ pub unsafe extern "C" fn rs_do_filter(
     }
 
     // Save state for cleanup
-    let old_curbuf = nvim_excmds_get_curbuf_ptr();
+    let old_curbuf = nvim_excmds_get_curbuf_identity();
     let stmp = nvim_excmds_get_p_stmp() != 0;
     let mut orig_start: u64 = 0;
     let mut orig_end: u64 = 0;
@@ -1244,7 +1244,7 @@ pub unsafe extern "C" fn rs_do_filter(
             );
             return;
         }
-        if nvim_excmds_get_curbuf_ptr() != old_curbuf {
+        if nvim_excmds_get_curbuf_identity() != old_curbuf {
             goto_filterend(
                 save_cmod_flags,
                 old_curbuf,
@@ -1317,7 +1317,7 @@ pub unsafe extern "C" fn rs_do_filter(
                 );
                 return;
             }
-            if nvim_excmds_get_curbuf_ptr() != old_curbuf {
+            if nvim_excmds_get_curbuf_identity() != old_curbuf {
                 goto_filterend(
                     save_cmod_flags,
                     old_curbuf,
@@ -1428,7 +1428,7 @@ unsafe fn goto_filterend(
 ) {
     nvim_excmds_cmdmod_restore_flags(save_cmod_flags);
 
-    if nvim_excmds_get_curbuf_ptr() != old_curbuf {
+    if nvim_excmds_get_curbuf_identity() != old_curbuf {
         nvim_excmds_no_wait_return_dec();
         nvim_excmds_error_msg(ERR_E135, std::ptr::null());
     } else if nvim_cmdmod_has_lockmarks() != 0 {

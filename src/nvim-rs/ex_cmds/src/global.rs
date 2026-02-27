@@ -47,7 +47,7 @@ extern "C" {
     fn nvim_excmds_changed_line_abv_curs();
     fn nvim_excmds_get_msg_col() -> c_int;
     fn nvim_excmds_get_msg_scrolled() -> c_int;
-    fn nvim_excmds_get_curbuf_ptr() -> *mut std::ffi::c_void;
+    fn nvim_excmds_get_curbuf_identity() -> *mut std::ffi::c_void;
     fn msgmore(n: c_int);
 
     // ex_global FFI
@@ -427,7 +427,7 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
     nvim_excmds_set_global_busy(1);
 
     let old_lcount = nvim_curbuf_get_b_ml_ml_line_count();
-    let old_buf = nvim_excmds_get_curbuf_ptr();
+    let old_buf = nvim_excmds_get_curbuf_identity();
 
     while nvim_excmds_got_int() == 0 {
         let lnum = nvim_excmds_ml_firstmarked();
@@ -463,7 +463,7 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
     // Don't report extra or deleted lines in the edge case where the buffer
     // we are in after execution is different from the buffer we started in.
     let sub_reported = rs_do_sub_msg(false);
-    if !sub_reported && nvim_excmds_get_curbuf_ptr() == old_buf {
+    if !sub_reported && nvim_excmds_get_curbuf_identity() == old_buf {
         let new_lcount = nvim_curbuf_get_b_ml_ml_line_count();
         msgmore(new_lcount - old_lcount);
     }

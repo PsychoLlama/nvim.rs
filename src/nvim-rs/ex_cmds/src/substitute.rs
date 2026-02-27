@@ -176,8 +176,6 @@ extern "C" {
     pub fn nvim_regmmatch_set_rmm_ic(rm: *mut crate::RegmmatchHandle, ic: c_int);
     /// Get regmatch->rmm_ic
     pub fn nvim_regmmatch_get_rmm_ic(rm: *mut crate::RegmmatchHandle) -> c_int;
-    /// Check if regmatch->regprog == NULL
-    pub fn nvim_regmmatch_regprog_null(rm: *mut crate::RegmmatchHandle) -> c_int;
     /// Call re_multiline(regmatch->regprog)
     pub fn nvim_regmmatch_re_multiline(rm: *mut crate::RegmmatchHandle) -> c_int;
     /// Wrap search_regcomp for do_sub, allocating and returning opaque regmmatch_T*
@@ -203,7 +201,7 @@ extern "C" {
         flags: c_int,
     ) -> c_int;
     /// Free the regmmatch_T opaque handle (vim_regfree + xfree)
-    pub fn nvim_do_sub_vim_regfree(rm: *mut crate::RegmmatchHandle);
+    pub fn nvim_excmds_vim_regfree_multi(rm: *mut std::ffi::c_void);
     /// Wrap regtilde for do_sub
     pub fn nvim_do_sub_regtilde(sub_str: *mut c_char, magic: c_int, preview: c_int) -> *mut c_char;
 }
@@ -1299,7 +1297,7 @@ extern "C" {
 
     // ex_substitute_preview accessors
     fn nvim_excmds_arg_has_valid_delim(eap: *const ExArgHandle) -> c_int;
-    fn nvim_excmds_eap_arg_save(eap: *mut ExArgHandle) -> *mut c_char;
+    fn nvim_excmds_get_arg_mut(eap: *mut ExArgHandle) -> *mut c_char;
     fn nvim_excmds_eap_arg_restore(eap: *mut ExArgHandle, saved: *mut c_char);
 }
 
@@ -2166,7 +2164,7 @@ pub unsafe extern "C" fn rs_do_sub(
         nvim_do_sub_changed_window_setting();
     }
 
-    nvim_do_sub_vim_regfree(regmatch);
+    nvim_excmds_vim_regfree_multi(regmatch as *mut std::ffi::c_void);
     xfree(sub as *mut std::ffi::c_void);
 
     // Restore saved flags
@@ -2799,7 +2797,7 @@ pub unsafe extern "C" fn rs_ex_substitute_preview(
     // Only preview once the pattern delimiter has been typed:
     // proceed when *eap->arg is non-NUL and NOT alphanumeric (a valid delimiter).
     if nvim_excmds_arg_has_valid_delim(eap) != 0 {
-        let save_eap = nvim_excmds_eap_arg_save(eap);
+        let save_eap = nvim_excmds_get_arg_mut(eap);
         let retv = rs_do_sub(eap, cmdpreview_ns, cmdpreview_bufnr, 1);
         nvim_excmds_eap_arg_restore(eap, save_eap);
         return retv;

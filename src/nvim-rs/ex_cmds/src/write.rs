@@ -820,7 +820,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
 // =============================================================================
 
 extern "C" {
-    fn nvim_excmds_eap_get_arg_rw(eap: *mut ExArgHandle) -> *mut c_char;
+    fn nvim_excmds_get_arg_mut(eap: *mut ExArgHandle) -> *mut c_char;
     fn nvim_excmds_eap_get_append(eap: *const ExArgHandle) -> c_int;
     fn nvim_excmds_eap_get_line1(eap: *const ExArgHandle) -> c_int;
     fn nvim_excmds_eap_get_line2_val(eap: *const ExArgHandle) -> c_int;
@@ -863,7 +863,7 @@ extern "C" {
     ) -> c_int;
     fn nvim_excmds_saveas_post_success();
     fn nvim_excmds_curbuf_ffname_null() -> c_int;
-    fn nvim_excmds_do_autochdir_wrapper();
+    fn nvim_excmds_do_autochdir();
     fn nvim_exarg_cmdidx_is_saveas(eap: *const ExArgHandle) -> c_int;
 }
 
@@ -882,7 +882,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
         return 0; // FAIL
     }
 
-    let arg = nvim_excmds_eap_get_arg_rw(eap);
+    let arg = nvim_excmds_get_arg_mut(eap);
     // Determine file names
     let (mut ffname, mut fname, free_fname, other) = {
         // Read first char of arg
@@ -1006,7 +1006,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
         }
 
         if is_saveas || name_was_missing != 0 {
-            nvim_excmds_do_autochdir_wrapper();
+            nvim_excmds_do_autochdir();
         }
     }
 

@@ -353,8 +353,6 @@ char *nvim_excmds_get_nextcmd(exarg_T *eap) { return eap->nextcmd; }
 void nvim_excmds_set_nextcmd_direct(exarg_T *eap, char *p) { eap->nextcmd = p; }
 // Get mutable eap->arg
 char *nvim_excmds_get_arg_mut(exarg_T *eap) { return eap->arg; }
-// Get eap->cookie
-void *nvim_excmds_get_cookie(exarg_T *eap) { return eap->cookie; }
 
 // --- sub_joining_lines + sub_grow_buf FFI accessors ---
 // Get eap->skip
@@ -1020,8 +1018,6 @@ void nvim_excmds_do_cmdline_global(const char *cmd)
 void nvim_excmds_check_cursor_curwin(void) { check_cursor(curwin); }
 void nvim_excmds_changed_line_abv_curs(void) { changed_line_abv_curs(); }
 int nvim_excmds_get_msg_scrolled(void) { return msg_scrolled; }
-void *nvim_excmds_get_curbuf_ptr(void) { return (void *)curbuf; }
-
 // --- show_sub FFI accessors ---
 
 /// Save and set p_shm to "F" (disable file info message). Returns strdup of p_shm.
@@ -1298,8 +1294,6 @@ int nvim_excmds_shortmess_not_fileinfo(void) { return !shortmess(SHM_FILEINFO) ?
 /// Wrapper for fileinfo(false, false, forceit).
 void nvim_excmds_fileinfo(int forceit) { fileinfo(false, false, (bool)forceit); }
 
-/// Get eap->arg (mutable).
-char *nvim_exarg_get_arg_mutable(exarg_T *eap) { return eap->arg; }
 
 // --- ex_update, ex_write, ex_wnext FFI accessors ---
 
@@ -1374,9 +1368,6 @@ int nvim_excmds_arg_has_valid_delim(const exarg_T *eap)
 {
   return (*eap->arg && !ASCII_ISALNUM(*eap->arg)) ? 1 : 0;
 }
-
-/// Save eap->arg and return saved pointer.
-char *nvim_excmds_eap_arg_save(exarg_T *eap) { return eap->arg; }
 
 /// Restore eap->arg to a saved pointer.
 void nvim_excmds_eap_arg_restore(exarg_T *eap, char *saved) { eap->arg = saved; }
@@ -1801,9 +1792,6 @@ int nvim_excmds_dialog_swapfile(exarg_T *eap, const char *swapname)
 
 // --- Phase 2: do_write FFI accessors ---
 
-/// Get eap->arg (the argument string, mutable).
-char *nvim_excmds_eap_get_arg_rw(exarg_T *eap) { return eap->arg; }
-
 /// Get eap->append.
 int nvim_excmds_eap_get_append(const exarg_T *eap) { return eap->append ? 1 : 0; }
 
@@ -1943,8 +1931,6 @@ void nvim_excmds_saveas_post_success(void)
 /// Check curbuf->b_ffname == NULL (name was missing before write).
 int nvim_excmds_curbuf_ffname_null(void) { return curbuf->b_ffname == NULL ? 1 : 0; }
 
-/// Wrap do_autochdir().
-void nvim_excmds_do_autochdir_wrapper(void) { do_autochdir(); }
 
 // --- Phase 1: Write Validation Helpers FFI accessors ---
 
@@ -2017,16 +2003,6 @@ void nvim_excmds_set_forceit(exarg_T *eap, int val) { eap->forceit = (bool)val; 
 /// Get eap->forceit.
 int nvim_excmds_eap_get_forceit(const exarg_T *eap) { return eap->forceit ? 1 : 0; }
 
-/// Get mutable pointer to eap->forceit field (for check_readonly pattern).
-int *nvim_excmds_eap_forceit_ptr(exarg_T *eap) { return (int *)&eap->forceit; }
-
-// nvim_do_sub_get_p_ch deleted -- use nvim_option_get_ch (option_shim.c)
-// nvim_do_sub_get_p_lz / nvim_do_sub_set_p_lz deleted -- use nvim_option_get_lz / nvim_option_set_lz (option_shim.c)
-// nvim_do_sub_get_p_cpo_has_undo deleted -- use nvim_option_p_cpo_has_undo (option_shim.c)
-
-// nvim_curwin_get_w_curswant -- defined in indent_ffi.c
-// nvim_curbuf_get_b_p_ma / nvim_curbuf_set_b_p_ma -- defined in option_shim.c
-
 /// Get curwin->w_botline.
 int nvim_curwin_get_w_botline(void) { return (int)curwin->w_botline; }
 
@@ -2041,8 +2017,6 @@ void nvim_curwin_set_w_p_fen(int val) { curwin->w_p_fen = (bool)val; }
 /// Set curbuf->deleted_bytes2.
 void nvim_curbuf_set_deleted_bytes2(int val) { curbuf->deleted_bytes2 = (bcount_t)val; }
 
-// nvim_do_sub_coladvance deleted -- use nvim_coladvance_curwin (normal_shim.c)
-
 /// Wrap changed_bytes(lnum, col).
 void nvim_do_sub_changed_bytes(int lnum, int col)
 {
@@ -2054,12 +2028,6 @@ void nvim_do_sub_deleted_lines(int lnum, int count)
 {
   deleted_lines((linenr_T)lnum, (linenr_T)count);
 }
-
-// nvim_do_sub_u_inssub deleted -- use nvim_u_inssub (undo.c)
-// nvim_do_sub_u_savesub deleted -- use nvim_u_savesub (undo.c)
-// nvim_do_sub_u_savedel deleted -- use nvim_u_savedel2 (undo.c)
-// nvim_do_sub_u_save_cursor deleted -- use nvim_u_save_cursor (change_ffi.c)
-// nvim_do_sub_do_check_cursorbind deleted -- use nvim_do_check_cursorbind_wrapper (normal_shim.c)
 
 /// Wrap scrollup_clamp().
 void nvim_do_sub_scrollup_clamp(void) { scrollup_clamp(); }
@@ -2106,8 +2074,6 @@ uint64_t nvim_do_sub_profile_zero(void)
   return (uint64_t)profile_zero();
 }
 
-// nvim_do_sub_get_p_rdt deleted -- use nvim_option_get_p_rdt (option_shim.c)
-
 /// Wrap skip_regexp_ex for do_sub. Updates *arg_ptr in place.
 char *nvim_do_sub_skip_regexp_ex(char *cmd, int delim, char **arg_ptr)
 {
@@ -2125,13 +2091,6 @@ const char *nvim_do_sub_get_search_pat(void) { return get_search_pat(); }
 
 /// Wrap changed_window_setting(curwin).
 void nvim_do_sub_changed_window_setting(void) { changed_window_setting(curwin); }
-
-// nvim_curwin_get_cursor_col -- defined in edit.c
-
-// nvim_do_sub_get_p_cwh deleted -- use nvim_option_get_p_cwh (option_shim.c)
-// nvim_do_sub_aborting deleted -- use nvim_excmds_aborting instead.
-// nvim_do_sub_os_time deleted -- had no call sites.
-// nvim_do_sub_setpcmark deleted -- use nvim_excmds_setpcmark (ex_cmds_shim.c line 1047)
 
 /// Wrap getvcol for start column (sc). Returns sc via out pointer.
 void nvim_do_sub_getvcol_startcol(int lnum, int col, int *sc_out)
@@ -2183,13 +2142,6 @@ void nvim_do_sub_update_screen_for_confirm(void)
   redraw_later(curwin, UPD_SOME_VALID);
 }
 
-// nvim_do_sub_gotocmdline deleted -- use nvim_al_gotocmdline(1) (arglist.c)
-// nvim_do_sub_number_width deleted -- use nvim_number_width_curwin (ex_cmds_shim.c line ~169)
-// nvim_do_sub_syn_check_sub_group deleted -- use nvim_excmds_syn_check_sub_group
-// nvim_do_sub_disable_inccommand deleted -- use nvim_excmds_disable_inccommand
-
-// nvim_do_sub_get_p_icm_notnul deleted -- use nvim_option_p_icm_notnul (option_shim.c)
-
 /// Set curbuf->b_op_start.lnum and col = 0.
 void nvim_do_sub_set_op_start(int lnum)
 {
@@ -2203,8 +2155,6 @@ void nvim_do_sub_set_op_end(int lnum)
   curbuf->b_op_end.col = 0;
 }
 
-// nvim_do_sub_modifiable deleted -- use nvim_curbuf_modifiable (normal_shim.c)
-
 /// Format the confirm prompt string into IObuff and return xstrdup of it.
 char *nvim_do_sub_format_confirm_prompt(const char *sub)
 {
@@ -2212,8 +2162,6 @@ char *nvim_do_sub_format_confirm_prompt(const char *sub)
   vim_snprintf(IObuff, IOSIZE, p, sub);
   return xstrdup(IObuff);
 }
-
-// nvim_do_sub_format_val_too_large_str deleted -- implemented in Rust
 
 /// Call extmark_splice on curbuf for do_sub.
 void nvim_do_sub_extmark_splice(int start_row, int start_col,
@@ -2256,13 +2204,6 @@ void nvim_do_sub_buf_updates_send_changes(int first, int64_t num_added, int64_t 
   buf_updates_send_changes(curbuf, (linenr_T)first, num_added, num_removed);
 }
 
-// nvim_do_sub_line_breakcheck deleted -- use nvim_excmds_line_breakcheck (ex_cmds_shim.c line 1196)
-// nvim_do_sub_eap_cmd_is_s deleted -- implemented in Rust
-// nvim_do_sub_ascii_iswhite deleted -- implemented in Rust
-// nvim_do_sub_is_sub_flag_or_digit deleted -- implemented in Rust
-// nvim_do_sub_is_backslash_delim deleted -- implemented in Rust
-// nvim_do_sub_ascii_isdigit deleted -- implemented in Rust
-
 /// Get ml_get_len(lnum) for do_sub.
 int nvim_do_sub_ml_get_len(int lnum) { return (int)ml_get_len((linenr_T)lnum); }
 
@@ -2271,11 +2212,6 @@ const char *nvim_do_sub_ml_get(int lnum) { return ml_get((linenr_T)lnum); }
 
 /// Set eap->nextcmd.
 void nvim_do_sub_set_eap_nextcmd(exarg_T *eap, char *p) { eap->nextcmd = p; }
-
-// nvim_do_sub_get_sub_nsubs, nvim_do_sub_set_sub_nsubs, nvim_do_sub_sub_nsubs_inc,
-// nvim_do_sub_get_sub_nlines, nvim_do_sub_set_sub_nlines, nvim_do_sub_sub_nlines_inc,
-// nvim_do_sub_get_global_busy, nvim_do_sub_set_global_need_beginline deleted --
-// use canonical nvim_excmds_* equivalents instead.
 
 /// Save substitute pattern and history via save_re_pat + add_to_history.
 void nvim_do_sub_save_pat(const char *pat, size_t patlen, int which_pat)
@@ -2337,12 +2273,6 @@ int nvim_regmmatch_get_rmm_ic(void *rm)
   return ((regmmatch_T *)rm)->rmm_ic ? 1 : 0;
 }
 
-/// Check if regmatch->regprog == NULL
-int nvim_regmmatch_regprog_null(void *rm)
-{
-  return ((regmmatch_T *)rm)->regprog == NULL ? 1 : 0;
-}
-
 /// Call re_multiline(regmatch->regprog)
 int nvim_regmmatch_re_multiline(void *rm)
 {
@@ -2380,14 +2310,6 @@ int nvim_do_sub_vim_regsub_multi(void *rm, int source_lnum, const char *sub,
 {
   return vim_regsub_multi((regmmatch_T *)rm, (linenr_T)source_lnum,
                           (char *)sub, dest, destlen, flags);
-}
-
-/// Wrap vim_regfree for do_sub (frees regprog inside the regmmatch_T, then xfree).
-void nvim_do_sub_vim_regfree(void *rm)
-{
-  if (rm == NULL) { return; }
-  vim_regfree(((regmmatch_T *)rm)->regprog);
-  xfree(rm);
 }
 
 /// Wrap regtilde for do_sub.
