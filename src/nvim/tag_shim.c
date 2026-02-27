@@ -550,15 +550,6 @@ void nvim_findtags_prepare_pats(void *st_void, bool has_re) { findtags_state_T *
 // --- Rust FFI accessor functions for tag display and location list ---
 _Static_assert(IOSIZE == 1025, "IOSIZE value for Rust");
 
-/// Get mt_names entry by index
-const char *nvim_tag_get_mt_name(int idx)
-{
-  if (idx < 0 || idx >= MT_COUNT / 2) {
-    return "   ";
-  }
-  return mt_names[idx];
-}
-
 void *nvim_tag_get_curwin(void) { return (void *)curwin; }
 void *nvim_tag_tv_dict_alloc(void) { return (void *)tv_dict_alloc(); }
 bool nvim_tag_tv_dict_find(void *dict, const char *key, int key_len) { return tv_dict_find((dict_T *)dict, key, key_len) != NULL; }
@@ -588,8 +579,6 @@ void nvim_tag_win_close_curwin(void)
 
 char *nvim_tag_fm_getname(const void *tg_void, int lead_len) { const taggy_T *tg = (const taggy_T *)tg_void; return fm_getname(&((taggy_T *)tg)->fmark, lead_len); }
 
-int nvim_tag_get_iosize(void) { return IOSIZE; }
-int nvim_tag_get_maxpathl(void) { return MAXPATHL; }
 void nvim_tag_xstrlcpy(char *dst, const char *src, size_t dstsize) { xstrlcpy(dst, src, dstsize); }
 void nvim_tag_xmemcpyz(char *dst, const char *src, size_t len) { xmemcpyz(dst, src, len); }
 const char *nvim_tag_gettext(const char *s) { return _(s); }
@@ -629,16 +618,6 @@ char *nvim_tag_tv_dict_get_string(const void *dict, const char *key, bool save) 
 int64_t nvim_tag_tv_dict_get_number(const void *dict, const char *key) { return (int64_t)tv_dict_get_number((const dict_T *)dict, key); }
 void *nvim_tag_tv_list_first(const void *list) { return (void *)tv_list_first((const list_T *)list); }
 void *nvim_tag_tv_list_item_next(const void *list, const void *li) { return (void *)TV_LIST_ITEM_NEXT((const list_T *)list, (const listitem_T *)li); }
-/// Get dict from list item (NULL if not a dict)
-void *nvim_tag_tv_list_item_dict(const void *li)
-{
-  const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li);
-  if (tv->v_type != VAR_DICT || tv->vval.v_dict == NULL) {
-    return NULL;
-  }
-  return (void *)tv->vval.v_dict;
-}
-
 /// Wrapper for list2fpos - fills pos and fnum from a list typval
 /// Returns OK or FAIL
 int nvim_tag_list2fpos(void *tv, int32_t *lnum, int32_t *col, int32_t *coladd, int *fnum)

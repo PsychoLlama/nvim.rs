@@ -953,7 +953,6 @@ extern "C" {
     fn nvim_get_curbuf_fnum() -> c_int;
 
     // Tag-specific accessors
-    fn nvim_tag_get_mt_name(idx: c_int) -> *const c_char;
     fn nvim_get_g_do_tagpreview() -> c_int;
     fn nvim_tag_get_ptag_cur_match() -> c_int;
     fn nvim_tag_get_curwin() -> *mut c_void;
@@ -1090,7 +1089,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
         // Format and print entry header (inline port of nvim_tag_list_format_entry)
         let match_byte = *(*matches.add(i as usize)) as u8;
         let mt_idx = (match_byte & MT_MASK) as c_int;
-        let mt_name = nvim_tag_get_mt_name(mt_idx);
+        let mt_name = crate::rs_tag_match_type_name(mt_idx);
         {
             // Format: "<prefix>%2d <mt_name> " where prefix is '>' or ' '
             let prefix = if is_current {
@@ -1593,7 +1592,7 @@ extern "C" {
     fn nvim_tag_tv_dict_get_number(dict: *const c_void, key: *const c_char) -> i64;
     fn nvim_tag_tv_list_first(list: *const c_void) -> *mut c_void;
     fn nvim_tag_tv_list_item_next(list: *const c_void, li: *const c_void) -> *mut c_void;
-    fn nvim_tag_tv_list_item_dict(li: *const c_void) -> *mut c_void;
+    fn nvim_tag_listitem_get_dict(li: *const c_void) -> *mut c_void;
     fn nvim_tag_list2fpos(
         tv: *mut c_void,
         lnum: *mut i32,
@@ -2033,7 +2032,7 @@ pub unsafe extern "C" fn rs_set_tagstack(
 unsafe fn tagstack_push_items_from_list(wp: *mut c_void, list: *mut c_void) {
     let mut li = nvim_tag_tv_list_first(list);
     while !li.is_null() {
-        let itemdict = nvim_tag_tv_list_item_dict(li);
+        let itemdict = nvim_tag_listitem_get_dict(li);
         if itemdict.is_null() {
             li = nvim_tag_tv_list_item_next(list, li);
             continue;
