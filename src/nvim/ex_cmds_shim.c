@@ -904,47 +904,7 @@ int ex_substitute_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_b
 
 // --- ex_oldfiles FFI accessors ---
 
-// Iterate v:oldfiles list: returns opaque iterator handle, or NULL if empty.
-// Each call to nvim_excmds_oldfiles_iter_next() returns the next filename string (or NULL).
-// Call nvim_excmds_oldfiles_iter_free() to release the handle.
-typedef struct {
-  list_T *list;
-  listitem_T *item;
-  int len;
-} OldfilesIter;
-
-void *nvim_excmds_oldfiles_iter_start(int *out_len)
-{
-  list_T *l = get_vim_var_list(VV_OLDFILES);
-  if (l == NULL) {
-    *out_len = 0;
-    return NULL;
-  }
-  OldfilesIter *it = xmalloc(sizeof(OldfilesIter));
-  it->list = l;
-  it->item = tv_list_first(l);
-  it->len = (int)tv_list_len(l);
-  *out_len = it->len;
-  return it;
-}
-
-const char *nvim_excmds_oldfiles_iter_next(void *handle)
-{
-  OldfilesIter *it = (OldfilesIter *)handle;
-  if (it->item == NULL) {
-    return NULL;
-  }
-  const char *s = tv_get_string(TV_LIST_ITEM_TV(it->item));
-  it->item = TV_LIST_ITEM_NEXT(it->list, it->item);
-  return s;
-}
-
-void nvim_excmds_oldfiles_iter_free(void *handle)
-{
-  xfree(handle);
-}
-
-int nvim_excmds_oldfiles_list_len(void)
+int nvim_excmds_oldfiles_count(void)
 {
   list_T *l = get_vim_var_list(VV_OLDFILES);
   return l == NULL ? 0 : (int)tv_list_len(l);

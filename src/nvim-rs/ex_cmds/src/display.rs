@@ -856,10 +856,7 @@ pub extern "C" fn rs_line_number_width(max_lnum: c_int) -> c_int {
 // =============================================================================
 
 extern "C" {
-    fn nvim_excmds_oldfiles_iter_start(out_len: *mut c_int) -> *mut std::ffi::c_void;
-    fn nvim_excmds_oldfiles_iter_next(handle: *mut std::ffi::c_void) -> *const std::ffi::c_char;
-    fn nvim_excmds_oldfiles_iter_free(handle: *mut std::ffi::c_void);
-    fn nvim_excmds_oldfiles_list_len() -> c_int;
+    fn nvim_excmds_oldfiles_count() -> c_int;
     fn nvim_excmds_oldfiles_find_str(idx: c_int) -> *const std::ffi::c_char;
     fn nvim_excmds_msg_start();
     fn nvim_excmds_set_msg_scroll(val: c_int);
@@ -887,10 +884,9 @@ extern "C" {
 /// `eap` must be a valid pointer to an exarg_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
-    let mut list_len: c_int = 0;
-    let iter = nvim_excmds_oldfiles_iter_start(&mut list_len);
+    let count = nvim_excmds_oldfiles_count();
 
-    if iter.is_null() {
+    if count == 0 {
         nvim_excmds_emsg_by_id(9); // msg_no_old_files
         return;
     }
@@ -898,16 +894,15 @@ pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
     nvim_excmds_msg_start();
     nvim_excmds_set_msg_scroll(1);
 
-    let mut nr: c_int = 0;
-    loop {
+    for i in 0..count {
         if nvim_excmds_got_int() != 0 {
             break;
         }
-        let fname_ptr = nvim_excmds_oldfiles_iter_next(iter);
+        let fname_ptr = nvim_excmds_oldfiles_find_str(i);
         if fname_ptr.is_null() {
-            break;
+            continue;
         }
-        nr += 1;
+        let nr = i + 1;
         if nvim_message_filtered(fname_ptr) == 0 {
             nvim_excmds_msg_outnum(nr);
             // Print ": " as individual chars
@@ -920,8 +915,6 @@ pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
         }
     }
 
-    nvim_excmds_oldfiles_iter_free(iter);
-
     // Reset got_int (it was set to truncate listing)
     nvim_excmds_set_got_int(0);
 
@@ -930,7 +923,7 @@ pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
         nvim_excmds_set_quit_more(0);
         let selected = nvim_excmds_prompt_for_input();
         nvim_excmds_msg_starthere();
-        let list_len = nvim_excmds_oldfiles_list_len();
+        let list_len = nvim_excmds_oldfiles_count();
         if selected > 0 && selected <= list_len {
             let p = nvim_excmds_oldfiles_find_str(selected - 1);
             if !p.is_null() {
