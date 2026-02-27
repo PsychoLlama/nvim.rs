@@ -1327,7 +1327,6 @@ extern "C" {
     fn nvim_is_special(key: c_int) -> bool;
     fn nvim_getvcol_cursor(scol: *mut c_int, ecol: *mut c_int);
     fn nvim_set_cursor_coladd(val: c_int);
-    fn nvim_get_TAB() -> c_int;
 
     // Mark command functions
     fn nvim_setmark(name: c_int) -> bool;
@@ -1388,7 +1387,6 @@ extern "C" {
     fn nvim_ins_char_bytes_from_cap(cap: CapHandle);
     fn nvim_set_last_insert_call(c: c_int);
     fn nvim_set_b_op_start_cursor();
-    fn nvim_get_MODE_REPLACE() -> c_int;
     fn nvim_AppendToRedobuff_composing(cap: CapHandle);
     fn nvim_do_pending_operator_call(cap: CapHandle, old_col: c_int, gui_yank: bool);
 
@@ -1668,6 +1666,10 @@ const MOD_MASK_CTRL_VALUE: c_int = 0x04;
 
 // TAB character
 const TAB_CHAR: c_int = 9;
+
+const MODE_REPLACE: c_int = 0x110;
+const GETF_SETMARK: c_int = 0x01;
+const GETF_ALT: c_int = 0x02;
 
 // =============================================================================
 // Mark Command Handlers
@@ -2241,7 +2243,7 @@ pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
 
     nvim_curwin_set_curswant(true);
     // Include a Tab for "tx" and for "dfx".
-    if nvim_gchar_cursor() == nvim_get_TAB()
+    if nvim_gchar_cursor() == TAB_CHAR
         && nvim_virtual_active()
         && arg == FORWARD
         && (t_cmd || nvim_oap_get_op_type_ptr(oap) != OP_NOP)
@@ -2275,8 +2277,6 @@ extern "C" {
     fn nvim_get_restart_VIsual_select() -> c_int;
     fn nvim_set_restart_VIsual_select(val: c_int);
     fn nvim_buflist_getfile(n: c_int, lnum: c_int, flags: c_int, setpm: bool);
-    fn nvim_get_GETF_SETMARK() -> c_int;
-    fn nvim_get_GETF_ALT() -> c_int;
     // Phase 4 accessors
     fn nvim_get_ex_normal_busy() -> c_int;
     fn nvim_get_typebuf_was_empty() -> bool;
@@ -2354,7 +2354,7 @@ pub unsafe extern "C" fn rs_nv_hat(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
     if !rs_checkclearopq(oap) {
         let count0 = nvim_cap_get_count0(cap);
-        let flags = nvim_get_GETF_SETMARK() | nvim_get_GETF_ALT();
+        let flags = GETF_SETMARK | GETF_ALT;
         nvim_buflist_getfile(count0, 0, flags, false);
     }
 }
@@ -2524,7 +2524,7 @@ pub unsafe extern "C" fn rs_nv_edit(cap: CapHandle) {
             if nvim_virtual_active()
                 && (nvim_get_cursor_coladd() > 0
                     || nvim_gchar_cursor() == NUL_CHAR
-                    || nvim_gchar_cursor() == nvim_get_TAB())
+                    || nvim_gchar_cursor() == TAB_CHAR)
             {
                 nvim_set_cursor_coladd(nvim_get_cursor_coladd() + 1);
             } else if nvim_gchar_cursor() != NUL_CHAR {
@@ -4269,7 +4269,7 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
         }
 
         for _ in 0..count1 {
-            nvim_set_State(nvim_get_MODE_REPLACE());
+            nvim_set_State(MODE_REPLACE);
             let ctrl_e = c_int::from(b'\x05'); // Ctrl-E
             let ctrl_y = c_int::from(b'\x19'); // Ctrl-Y
             if nchar == ctrl_e || nchar == ctrl_y {
@@ -6476,7 +6476,7 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
             }
         }
 
-        n if n == nvim_get_TAB() => {
+        n if n == TAB_CHAR => {
             if !rs_checkclearop(oap) && !nvim_goto_tabpage_lastused() {
                 rs_clearopbeep(oap);
             }

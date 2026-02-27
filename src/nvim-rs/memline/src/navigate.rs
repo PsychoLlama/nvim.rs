@@ -157,9 +157,6 @@ extern "C" {
     /// Set curwin->w_curswant
     fn nvim_edit_set_w_curswant(val: ColNr);
 
-    /// Get MAXCOL as ColNr
-    fn nvim_get_MAXCOL() -> c_int;
-
     /// coladvance(curwin, col) wrapper
     fn nvim_edit_coladvance(col: ColNr);
 
@@ -300,6 +297,8 @@ extern "C" {
 
 // EOL_DOS constant (matches buffer crate definition)
 const EOL_DOS: c_int = 1;
+
+const MAXCOL: ColNr = 0x7fff_ffff;
 
 // =============================================================================
 // B-tree Traversal: ml_find_line
@@ -1015,7 +1014,7 @@ pub unsafe extern "C" fn rs_goto_byte(cnt: c_int) {
         boff -= 1;
     }
     let lnum = LineNr::from(rs_ml_find_line_or_offset(curbuf, 0, &raw mut boff, 0));
-    let maxcol = nvim_get_MAXCOL() as ColNr;
+    let maxcol = MAXCOL;
     if lnum < 1 {
         // past the end
         let line_count = nvim_buf_get_ml_line_count(curbuf);

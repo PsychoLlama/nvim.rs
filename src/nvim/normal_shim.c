@@ -809,7 +809,7 @@ void nvim_getvcol_cursor(int *scol, int *ecol) { getvcol(curwin, &curwin->w_curs
 
 void nvim_set_cursor_coladd(int val) { curwin->w_cursor.coladd = val; }
 
-int nvim_get_TAB(void) { return TAB; }
+_Static_assert(TAB == 0x09, "TAB changed");
 
 // =============================================================================
 // Mark command accessors for Rust FFI
@@ -910,7 +910,6 @@ void nvim_ins_char_call(int c) { ins_char(c); }
 void nvim_ins_char_bytes_from_cap(cmdarg_T *cap) { if (cap && cap->nchar_len > 0) { ins_char_bytes((char *)cap->nchar_composing, (size_t)cap->nchar_len); } }
 void nvim_set_last_insert_call(int c) { set_last_insert(c); }
 void nvim_set_b_op_start_cursor(void) { curbuf->b_op_start = curwin->w_cursor; }
-int nvim_get_MODE_REPLACE(void) { return MODE_REPLACE; }
 void nvim_AppendToRedobuff_composing(cmdarg_T *cap) {
   if (cap && cap->nchar_len > 0) {
     AppendToRedobuff(cap->nchar_composing);
@@ -957,8 +956,7 @@ void nvim_update_curswant_force(void) { update_curswant_force(); }
 
 int nvim_get_curswant(void) { return curwin->w_curswant; }
 
-int nvim_get_MAXCOL(void) { return MAXCOL; }
-
+_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL changed");
 
 int nvim_cap_dec_count1(cmdarg_T *cap) { return cap ? --cap->count1 : 0; }
 
@@ -982,9 +980,8 @@ void nvim_set_restart_VIsual_select(int val) { restart_VIsual_select = val; }
 
 void nvim_buflist_getfile(int n, int lnum, int flags, bool setpm) { buflist_getfile(n, lnum, flags, setpm); }
 
-int nvim_get_GETF_SETMARK(void) { return GETF_SETMARK; }
-
-int nvim_get_GETF_ALT(void) { return GETF_ALT; }
+_Static_assert(GETF_SETMARK == 0x01, "GETF_SETMARK changed");
+_Static_assert(GETF_ALT == 0x02, "GETF_ALT changed");
 
 // =============================================================================
 // Visual mode accessors for Rust FFI
