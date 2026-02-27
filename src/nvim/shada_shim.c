@@ -516,32 +516,18 @@ const void *nvim_shada_hist_iter_raw(const void *iter, uint8_t history_type, int
   return ret;
 }
 
-// Search pattern accessors
-void nvim_shada_get_search_pattern(char **out_pat, int *out_magic, int *out_no_scs,
-                                   Timestamp *out_ts, int *out_off_line, int *out_off_end,
-                                   int64_t *out_off_off, char *out_off_dir,
+// Search/substitute pattern accessor (is_substitute=1 → substitute pattern)
+void nvim_shada_get_search_pattern(int is_substitute, char **out_pat, int *out_magic,
+                                   int *out_no_scs, Timestamp *out_ts, int *out_off_line,
+                                   int *out_off_end, int64_t *out_off_off, char *out_off_dir,
                                    void **out_additional_data)
 {
   SearchPattern pat;
-  get_search_pattern(&pat);
-  *out_pat = pat.pat;
-  *out_magic = pat.magic;
-  *out_no_scs = pat.no_scs;
-  *out_ts = pat.timestamp;
-  *out_off_line = pat.off.line;
-  *out_off_end = pat.off.end;
-  *out_off_off = pat.off.off;
-  *out_off_dir = pat.off.dir;
-  *out_additional_data = pat.additional_data;
-}
-
-void nvim_shada_get_substitute_pattern(char **out_pat, int *out_magic, int *out_no_scs,
-                                       Timestamp *out_ts, int *out_off_line, int *out_off_end,
-                                       int64_t *out_off_off, char *out_off_dir,
-                                       void **out_additional_data)
-{
-  SearchPattern pat;
-  get_substitute_pattern(&pat);
+  if (is_substitute) {
+    get_substitute_pattern(&pat);
+  } else {
+    get_search_pattern(&pat);
+  }
   *out_pat = pat.pat;
   *out_magic = pat.magic;
   *out_no_scs = pat.no_scs;
@@ -1538,9 +1524,10 @@ uint64_t nvim_shada_get_search_pattern_timestamp(int is_substitute)
   return pat.pat != NULL ? (uint64_t)pat.timestamp : 0;
 }
 
-/// Build SearchPattern from entry fields and call set_search_pattern.
+/// Build SearchPattern from entry fields and call set_search_pattern or
+/// set_substitute_pattern depending on is_substitute.
 /// Memory ownership: entry's pat.data and additional_data are consumed.
-void nvim_shada_set_search_pattern_from_entry(ShadaEntry *entry)
+void nvim_shada_set_search_pattern_from_entry(ShadaEntry *entry, int is_substitute)
 {
   SearchPattern spat = (SearchPattern) {
     .magic = entry->data.search_pattern.magic,
@@ -1556,28 +1543,11 @@ void nvim_shada_set_search_pattern_from_entry(ShadaEntry *entry)
     .additional_data = entry->additional_data,
     .timestamp = entry->timestamp,
   };
-  set_search_pattern(spat);
-}
-
-/// Build SearchPattern from entry fields and call set_substitute_pattern.
-/// Memory ownership: entry's pat.data and additional_data are consumed.
-void nvim_shada_set_substitute_pattern_from_entry(ShadaEntry *entry)
-{
-  SearchPattern spat = (SearchPattern) {
-    .magic = entry->data.search_pattern.magic,
-    .no_scs = !entry->data.search_pattern.smartcase,
-    .off = {
-      .dir = entry->data.search_pattern.search_backward ? '?' : '/',
-      .line = entry->data.search_pattern.has_line_offset,
-      .end = entry->data.search_pattern.place_cursor_at_end,
-      .off = entry->data.search_pattern.offset,
-    },
-    .pat = entry->data.search_pattern.pat.data,
-    .patlen = entry->data.search_pattern.pat.size,
-    .additional_data = entry->additional_data,
-    .timestamp = entry->timestamp,
-  };
-  set_substitute_pattern(spat);
+  if (is_substitute) {
+    set_substitute_pattern(spat);
+  } else {
+    set_search_pattern(spat);
+  }
 }
 
 /// Wrap set_last_used_pattern(is_substitute).

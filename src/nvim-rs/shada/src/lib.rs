@@ -435,17 +435,7 @@ extern "C" {
         out_additional_data: *mut *mut c_void,
     ) -> *const c_void;
     fn nvim_shada_get_search_pattern(
-        out_pat: *mut *mut c_char,
-        out_magic: *mut c_int,
-        out_no_scs: *mut c_int,
-        out_ts: *mut Timestamp,
-        out_off_line: *mut c_int,
-        out_off_end: *mut c_int,
-        out_off_off: *mut i64,
-        out_off_dir: *mut c_char,
-        out_additional_data: *mut *mut c_void,
-    );
-    fn nvim_shada_get_substitute_pattern(
+        is_substitute: c_int,
         out_pat: *mut *mut c_char,
         out_magic: *mut c_int,
         out_no_scs: *mut c_int,
@@ -631,8 +621,7 @@ extern "C" {
     fn nvim_shada_changelist_marklist_insert(buf: *mut c_void, i: c_int) -> c_int;
     // Phase 1 (plan b499a5d0): thin accessors for search/sub apply
     fn nvim_shada_get_search_pattern_timestamp(is_substitute: c_int) -> u64;
-    fn nvim_shada_set_search_pattern_from_entry(entry: *mut ShadaEntry);
-    fn nvim_shada_set_substitute_pattern_from_entry(entry: *mut ShadaEntry);
+    fn nvim_shada_set_search_pattern_from_entry(entry: *mut ShadaEntry, is_substitute: c_int);
     fn nvim_shada_set_last_used_pattern(is_substitute: c_int);
     fn nvim_shada_set_no_hlsearch(val: c_int);
     fn nvim_shada_get_sub_replacement_timestamp() -> u64;
@@ -5527,11 +5516,7 @@ unsafe fn rs_shada_apply_search_pattern(entry: *mut ShadaEntry, force: bool) {
             return;
         }
     }
-    if is_sub != 0 {
-        nvim_shada_set_substitute_pattern_from_entry(entry);
-    } else {
-        nvim_shada_set_search_pattern_from_entry(entry);
-    }
+    nvim_shada_set_search_pattern_from_entry(entry, is_sub);
     if read_union_field!(entry, search_pattern, is_last_used) {
         nvim_shada_set_last_used_pattern(is_sub);
         let highlighted = read_union_field!(entry, search_pattern, highlighted);
@@ -7470,31 +7455,18 @@ pub unsafe extern "C" fn rs_add_search_pattern(
     let mut off_dir: c_char = 0;
     let mut additional_data: *mut c_void = std::ptr::null_mut();
 
-    if is_sub {
-        nvim_shada_get_substitute_pattern(
-            &raw mut pat,
-            &raw mut magic,
-            &raw mut no_scs,
-            &raw mut ts,
-            &raw mut off_line,
-            &raw mut off_end,
-            &raw mut off_off,
-            &raw mut off_dir,
-            &raw mut additional_data,
-        );
-    } else {
-        nvim_shada_get_search_pattern(
-            &raw mut pat,
-            &raw mut magic,
-            &raw mut no_scs,
-            &raw mut ts,
-            &raw mut off_line,
-            &raw mut off_end,
-            &raw mut off_off,
-            &raw mut off_dir,
-            &raw mut additional_data,
-        );
-    }
+    nvim_shada_get_search_pattern(
+        c_int::from(is_sub),
+        &raw mut pat,
+        &raw mut magic,
+        &raw mut no_scs,
+        &raw mut ts,
+        &raw mut off_line,
+        &raw mut off_end,
+        &raw mut off_off,
+        &raw mut off_dir,
+        &raw mut additional_data,
+    );
 
     if !pat.is_null() {
         // Default values for substitute pattern fields
