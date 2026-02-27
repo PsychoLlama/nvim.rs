@@ -1793,13 +1793,24 @@ unsafe fn fmark_get_col_adj(fm: *mut c_void, lnum_match: i32) -> i32 {
 
 // --- reg_submatch ---
 
-extern "C" {
-    fn nvim_regexp_get_rsm_sm_match_startp(i: c_int) -> *const c_char;
-    fn nvim_regexp_get_rsm_sm_match_endp(i: c_int) -> *const c_char;
-    fn nvim_regexp_get_rsm_sm_mmatch_startpos_lnum(i: c_int) -> i32;
-    fn nvim_regexp_get_rsm_sm_mmatch_startpos_col(i: c_int) -> i32;
-    fn nvim_regexp_get_rsm_sm_mmatch_endpos_lnum(i: c_int) -> i32;
-    fn nvim_regexp_get_rsm_sm_mmatch_endpos_col(i: c_int) -> i32;
+/// RSM match position helpers — direct access to `RSM.sm_match`/`sm_mmatch` fields.
+unsafe fn rsm_sm_match_startp(no: usize) -> *const c_char {
+    (*RSM.sm_match.cast::<RegmatchT>()).startp[no].cast()
+}
+unsafe fn rsm_sm_match_endp(no: usize) -> *const c_char {
+    (*RSM.sm_match.cast::<RegmatchT>()).endp[no].cast()
+}
+unsafe fn rsm_sm_mmatch_startpos_lnum(no: usize) -> i32 {
+    (*RSM.sm_mmatch.cast::<RegmmatchT>()).startpos[no].lnum
+}
+unsafe fn rsm_sm_mmatch_startpos_col(no: usize) -> i32 {
+    (*RSM.sm_mmatch.cast::<RegmmatchT>()).startpos[no].col
+}
+unsafe fn rsm_sm_mmatch_endpos_lnum(no: usize) -> i32 {
+    (*RSM.sm_mmatch.cast::<RegmmatchT>()).endpos[no].lnum
+}
+unsafe fn rsm_sm_mmatch_endpos_col(no: usize) -> i32 {
+    (*RSM.sm_mmatch.cast::<RegmmatchT>()).endpos[no].col
 }
 
 /// Helper: get submatch line text via `rs_reg_getline_common` with `RGLF_SUBMATCH`.
@@ -1840,8 +1851,8 @@ pub unsafe extern "C" fn reg_submatch(no: c_int) -> *mut c_char {
 
         // Two passes: first measure, then copy
         for round in 1..=2 {
-            let mut lnum = nvim_regexp_get_rsm_sm_mmatch_startpos_lnum(no);
-            if lnum < 0 || nvim_regexp_get_rsm_sm_mmatch_endpos_lnum(no) < 0 {
+            let mut lnum = rsm_sm_mmatch_startpos_lnum(no as usize);
+            if lnum < 0 || rsm_sm_mmatch_endpos_lnum(no as usize) < 0 {
                 return std::ptr::null_mut();
             }
 
@@ -1850,11 +1861,11 @@ pub unsafe extern "C" fn reg_submatch(no: c_int) -> *mut c_char {
                 // anti-crash check
                 break;
             }
-            let start_col = nvim_regexp_get_rsm_sm_mmatch_startpos_col(no);
+            let start_col = rsm_sm_mmatch_startpos_col(no as usize);
             let s = s.add(start_col as usize);
 
-            let end_lnum = nvim_regexp_get_rsm_sm_mmatch_endpos_lnum(no);
-            let end_col = nvim_regexp_get_rsm_sm_mmatch_endpos_col(no);
+            let end_lnum = rsm_sm_mmatch_endpos_lnum(no as usize);
+            let end_col = rsm_sm_mmatch_endpos_col(no as usize);
 
             let len = if end_lnum == lnum {
                 // Within one line: take from start to end col
@@ -1902,8 +1913,8 @@ pub unsafe extern "C" fn reg_submatch(no: c_int) -> *mut c_char {
         retval
     } else {
         // Single-line match path (sm_match)
-        let s = nvim_regexp_get_rsm_sm_match_startp(no);
-        let e = nvim_regexp_get_rsm_sm_match_endp(no);
+        let s = rsm_sm_match_startp(no as usize);
+        let e = rsm_sm_match_endp(no as usize);
         if s.is_null() || e.is_null() {
             return std::ptr::null_mut();
         }
@@ -1934,14 +1945,14 @@ pub unsafe extern "C" fn reg_submatch_list(no: c_int) -> *mut c_void {
 
     if RSM.sm_match.is_null() {
         // Multi-line match path (sm_mmatch)
-        let slnum = nvim_regexp_get_rsm_sm_mmatch_startpos_lnum(no);
-        let elnum = nvim_regexp_get_rsm_sm_mmatch_endpos_lnum(no);
+        let slnum = rsm_sm_mmatch_startpos_lnum(no as usize);
+        let elnum = rsm_sm_mmatch_endpos_lnum(no as usize);
         if slnum < 0 || elnum < 0 {
             return core::ptr::null_mut();
         }
 
-        let scol = nvim_regexp_get_rsm_sm_mmatch_startpos_col(no);
-        let ecol = nvim_regexp_get_rsm_sm_mmatch_endpos_col(no);
+        let scol = rsm_sm_mmatch_startpos_col(no as usize);
+        let ecol = rsm_sm_mmatch_endpos_col(no as usize);
 
         list = nvim_regexp_tv_list_alloc((elnum - slnum + 1) as i64);
 
@@ -1962,8 +1973,8 @@ pub unsafe extern "C" fn reg_submatch_list(no: c_int) -> *mut c_void {
         }
     } else {
         // Single-line match path (sm_match)
-        let s = nvim_regexp_get_rsm_sm_match_startp(no);
-        let e = nvim_regexp_get_rsm_sm_match_endp(no);
+        let s = rsm_sm_match_startp(no as usize);
+        let e = rsm_sm_match_endp(no as usize);
         if s.is_null() || e.is_null() {
             return core::ptr::null_mut();
         }
@@ -2304,13 +2315,27 @@ const REGSUB_COPY: c_int = 1;
 const REGSUB_MAGIC: c_int = 2;
 const REGSUB_BACKSLASH: c_int = 4;
 
+/// REX match position helpers — direct access to `REX.reg_match`/`reg_mmatch` fields.
+unsafe fn rex_reg_match_startp(no: usize) -> *const c_char {
+    (*REX.reg_match.cast::<RegmatchT>()).startp[no].cast()
+}
+unsafe fn rex_reg_match_endp(no: usize) -> *const c_char {
+    (*REX.reg_match.cast::<RegmatchT>()).endp[no].cast()
+}
+unsafe fn rex_reg_mmatch_startpos_lnum(no: usize) -> i32 {
+    (*REX.reg_mmatch.cast::<RegmmatchT>()).startpos[no].lnum
+}
+unsafe fn rex_reg_mmatch_startpos_col(no: usize) -> i32 {
+    (*REX.reg_mmatch.cast::<RegmmatchT>()).startpos[no].col
+}
+unsafe fn rex_reg_mmatch_endpos_lnum(no: usize) -> i32 {
+    (*REX.reg_mmatch.cast::<RegmmatchT>()).endpos[no].lnum
+}
+unsafe fn rex_reg_mmatch_endpos_col(no: usize) -> i32 {
+    (*REX.reg_mmatch.cast::<RegmmatchT>()).endpos[no].col
+}
+
 extern "C" {
-    fn nvim_regexp_get_rex_reg_match_startp(no: c_int) -> *const c_char;
-    fn nvim_regexp_get_rex_reg_match_endp(no: c_int) -> *const c_char;
-    fn nvim_regexp_get_rex_reg_mmatch_startpos_lnum(no: c_int) -> i32;
-    fn nvim_regexp_get_rex_reg_mmatch_startpos_col(no: c_int) -> i32;
-    fn nvim_regexp_get_rex_reg_mmatch_endpos_lnum(no: c_int) -> i32;
-    fn nvim_regexp_get_rex_reg_mmatch_endpos_col(no: c_int) -> i32;
     fn utf_char2len(c: c_int) -> c_int;
     fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
 }
@@ -2376,31 +2401,31 @@ unsafe fn regsub_expand_backref(
     *early_exit = false;
 
     if reg_multi {
-        clnum = nvim_regexp_get_rex_reg_mmatch_startpos_lnum(no);
-        if clnum < 0 || nvim_regexp_get_rex_reg_mmatch_endpos_lnum(no) < 0 {
+        clnum = rex_reg_mmatch_startpos_lnum(no as usize);
+        if clnum < 0 || rex_reg_mmatch_endpos_lnum(no as usize) < 0 {
             return out;
         }
-        let start_col = nvim_regexp_get_rex_reg_mmatch_startpos_col(no);
+        let start_col = rex_reg_mmatch_startpos_col(no as usize);
         s = c_reg_getline(clnum).add(start_col as usize);
-        len = if nvim_regexp_get_rex_reg_mmatch_endpos_lnum(no) == clnum {
-            nvim_regexp_get_rex_reg_mmatch_endpos_col(no) - start_col
+        len = if rex_reg_mmatch_endpos_lnum(no as usize) == clnum {
+            rex_reg_mmatch_endpos_col(no as usize) - start_col
         } else {
             c_reg_getline_len(clnum) - start_col
         };
     } else {
-        s = nvim_regexp_get_rex_reg_match_startp(no);
-        if nvim_regexp_get_rex_reg_match_endp(no).is_null() {
+        s = rex_reg_match_startp(no as usize);
+        if rex_reg_match_endp(no as usize).is_null() {
             return out;
         }
         #[allow(clippy::cast_possible_truncation)]
         {
-            len = nvim_regexp_get_rex_reg_match_endp(no).offset_from(s) as c_int;
+            len = rex_reg_match_endp(no as usize).offset_from(s) as c_int;
         }
     }
 
     loop {
         if len == 0 {
-            if !reg_multi || nvim_regexp_get_rex_reg_mmatch_endpos_lnum(no) == clnum {
+            if !reg_multi || rex_reg_mmatch_endpos_lnum(no as usize) == clnum {
                 break;
             }
             if copy && regsub_check_space(out, dest, 1, lim) {
@@ -2413,8 +2438,8 @@ unsafe fn regsub_expand_backref(
             out = out.add(1);
             clnum += 1;
             s = c_reg_getline(clnum);
-            len = if nvim_regexp_get_rex_reg_mmatch_endpos_lnum(no) == clnum {
-                nvim_regexp_get_rex_reg_mmatch_endpos_col(no)
+            len = if rex_reg_mmatch_endpos_lnum(no as usize) == clnum {
+                rex_reg_mmatch_endpos_col(no as usize)
             } else {
                 c_reg_getline_len(clnum)
             };

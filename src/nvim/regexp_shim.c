@@ -270,13 +270,6 @@ void nvim_regexp_unref_re_extmatch_out(void) { unref_extmatch(re_extmatch_out); 
 void nvim_regexp_set_re_extmatch_out(void *em) { re_extmatch_out = (reg_extmatch_T *)em; }
 void *nvim_regexp_get_re_extmatch_out(void) { return (void *)re_extmatch_out; }
 void nvim_regexp_set_re_extmatch_out_match(int i, uint8_t *v) { re_extmatch_out->matches[i] = v; }
-// reg_submatch accessors for Rust FFI
-const char *nvim_regexp_get_rsm_sm_match_startp(int i) { return RSM_PTR->sm_match->startp[i]; }
-const char *nvim_regexp_get_rsm_sm_match_endp(int i) { return RSM_PTR->sm_match->endp[i]; }
-int32_t nvim_regexp_get_rsm_sm_mmatch_startpos_lnum(int i) { return (int32_t)RSM_PTR->sm_mmatch->startpos[i].lnum; }
-int32_t nvim_regexp_get_rsm_sm_mmatch_startpos_col(int i) { return (int32_t)RSM_PTR->sm_mmatch->startpos[i].col; }
-int32_t nvim_regexp_get_rsm_sm_mmatch_endpos_lnum(int i) { return (int32_t)RSM_PTR->sm_mmatch->endpos[i].lnum; }
-int32_t nvim_regexp_get_rsm_sm_mmatch_endpos_col(int i) { return (int32_t)RSM_PTR->sm_mmatch->endpos[i].col; }
 
 // Allocate a VimL list with a length hint (wrapper for tv_list_alloc with ptrdiff_t)
 list_T *nvim_regexp_tv_list_alloc(int64_t len) { return tv_list_alloc((ptrdiff_t)len); }
@@ -355,13 +348,6 @@ int32_t nvim_regexp_call_win_linetabsize(void *wp, int32_t lnum,
   return (int32_t)win_linetabsize((win_T *)wp, (linenr_T)lnum, (char *)line, (colnr_T)col);
 }
 
-// vim_regsub_both accessors for Rust FFI
-const char *nvim_regexp_get_rex_reg_match_startp(int no) { return REX_PTR->reg_match->startp[no]; }
-const char *nvim_regexp_get_rex_reg_match_endp(int no) { return REX_PTR->reg_match->endp[no]; }
-int32_t nvim_regexp_get_rex_reg_mmatch_startpos_lnum(int no) { return (int32_t)REX_PTR->reg_mmatch->startpos[no].lnum; }
-int32_t nvim_regexp_get_rex_reg_mmatch_startpos_col(int no) { return (int32_t)REX_PTR->reg_mmatch->startpos[no].col; }
-int32_t nvim_regexp_get_rex_reg_mmatch_endpos_lnum(int no) { return (int32_t)REX_PTR->reg_mmatch->endpos[no].lnum; }
-int32_t nvim_regexp_get_rex_reg_mmatch_endpos_col(int no) { return (int32_t)REX_PTR->reg_mmatch->endpos[no].col; }
 // nvim_regexp_setup_vim_regsub and nvim_regexp_setup_vim_regsub_multi inlined into Rust
 
 // reg_getline_common accessors for Rust FFI
