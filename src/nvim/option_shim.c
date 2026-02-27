@@ -172,6 +172,8 @@ extern int rs_get_option_prefix(char **argp);
 extern int rs_shortmess(int x);
 typedef struct { const char *end; int opt_idx; } FindOptionEndResult;
 extern FindOptionEndResult rs_find_option_end(const char *arg);
+extern OptIndex rs_find_option_len(const char *name, size_t len);
+extern OptIndex rs_find_option(const char *name);
 
 // Rust init functions (option pass 7 phase 2)
 extern void rs_set_init_2(int headless);
@@ -348,6 +350,10 @@ extern OptVal rs_optval_from_varp(OptIndex opt_idx, void *varp);
 extern void rs_set_option_varp(OptIndex opt_idx, void *varp, OptVal value, int free_oldval);
 extern int rs_is_option_local_value_unset(OptIndex opt_idx);
 extern char *rs_optval_to_cstr(OptVal o);
+
+// Phase 15 option value API (from Rust value.rs)
+extern OptVal rs_get_option_value(int opt_idx, int opt_flags);
+extern vimoption_T *rs_get_option_ptr(int opt_idx);
 
 // Rust FFI declarations (tag module)
 extern void rs_free_tagfunc_option(void);
@@ -1866,8 +1872,7 @@ bool set_tty_option(const char *name, char *value)
 OptIndex find_option_len(const char *const name, size_t len)
   FUNC_ATTR_NONNULL_ALL
 {
-  int index = find_option_hash(name, len);
-  return index >= 0 ? option_hash_elems[index].opt_idx : kOptInvalid;
+  return rs_find_option_len(name, len);
 }
 
 /// Find index for an option.
@@ -1878,7 +1883,7 @@ OptIndex find_option_len(const char *const name, size_t len)
 OptIndex find_option(const char *const name)
   FUNC_ATTR_NONNULL_ALL
 {
-  return find_option_len(name, strlen(name));
+  return rs_find_option(name);
 }
 
 
@@ -2030,21 +2035,14 @@ uint32_t get_option_flags(OptIndex opt_idx)
 /// @return [allocated] Option value. Returns NIL_OPTVAL for invalid option index.
 OptVal get_option_value(OptIndex opt_idx, int opt_flags)
 {
-  if (opt_idx == kOptInvalid) {  // option not in the options[] table.
-    return NIL_OPTVAL;
-  }
-
-  vimoption_T *opt = &options[opt_idx];
-  void *varp = get_varp_scope(opt, opt_flags);
-
-  return rs_optval_copy(optval_from_varp(opt_idx, varp));
+  return rs_get_option_value(opt_idx, opt_flags);
 }
 
 /// Return information for option at 'opt_idx'
 vimoption_T *get_option(OptIndex opt_idx)
 {
   assert(opt_idx != kOptInvalid);
-  return &options[opt_idx];
+  return rs_get_option_ptr(opt_idx);
 }
 
 /// Get option value that represents an unset local value for an option.
@@ -3301,6 +3299,12 @@ void *nvim_get_varp_scope_opt(OptIndex opt_idx, int opt_flags)
 void *nvim_get_varp_opt(OptIndex opt_idx)
 {
   return get_varp(&options[opt_idx]);
+}
+
+/// Return pointer to options[opt_idx] (vimoption_T *).
+vimoption_T *nvim_get_option_ptr_by_idx(OptIndex opt_idx)
+{
+  return &options[opt_idx];
 }
 
 // =============================================================================

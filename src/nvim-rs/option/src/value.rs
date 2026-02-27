@@ -779,6 +779,9 @@ extern "C" {
     fn rs_option_is_global_local(opt_idx: c_int) -> c_int;
     fn rs_get_option_unset_value(opt_idx: c_int) -> OptVal;
     fn nvim_get_varp_scope_by_idx(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
+    fn nvim_get_varp_scope_opt(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
+    fn nvim_get_option_ptr_by_idx(opt_idx: c_int) -> *mut std::ffi::c_void;
+    fn rs_optval_copy(o: OptVal) -> OptVal;
     fn xmalloc(size: usize) -> *mut c_char;
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
@@ -968,6 +971,37 @@ pub unsafe extern "C" fn rs_optval_to_cstr(o: OptVal) -> *mut c_char {
             buf
         }
     }
+}
+
+// =============================================================================
+// Phase 15: get_option_value, get_option_ptr
+// =============================================================================
+
+/// OPT_INVALID sentinel
+const OPT_INVALID: c_int = -1;
+
+/// Rust implementation of get_option_value.
+///
+/// Gets the value for an option, returning NIL_OPTVAL for invalid index.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_option_value(opt_idx: c_int, opt_flags: c_int) -> OptVal {
+    if opt_idx == OPT_INVALID {
+        return OptVal {
+            type_: StorageOptValType::Nil,
+            data: OptValData { number: 0 },
+        };
+    }
+    let varp = nvim_get_varp_scope_opt(opt_idx, opt_flags);
+    let val = rs_optval_from_varp(opt_idx, varp);
+    rs_optval_copy(val)
+}
+
+/// Rust implementation of get_option (returns pointer to vimoption_T).
+///
+/// Returns a pointer to &options[opt_idx].
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_option_ptr(opt_idx: c_int) -> *mut std::ffi::c_void {
+    nvim_get_option_ptr_by_idx(opt_idx)
 }
 
 // =============================================================================
