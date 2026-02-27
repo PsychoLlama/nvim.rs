@@ -398,490 +398,13 @@ static void set_b0_fname(ZeroBlock *b0p, buf_T *buf) { rs_set_b0_fname(b0p, buf)
 // Forward declaration for Rust implementation (migrated from C)
 extern int rs_recover_names(const char *fname, int do_list, void *ret_list, int nr,
                             char **fname_out);
+// Pass 10 Phase 1: ml_recover migrated to Rust
+extern void rs_ml_recover(int checkext);
 
-/// Try to recover curbuf from the .swp file.
+/// Try to recover curbuf from the .swp file. (thin wrapper calling Rust)
 ///
 /// @param checkext  if true, check the extension and detect whether it is a swapfile.
-void ml_recover(bool checkext)
-{
-  buf_T *buf = NULL;
-  memfile_T *mfp = NULL;
-  char *fname_used = NULL;
-  bhdr_T *hp = NULL;
-  char *b0_fenc = NULL;
-  infoptr_T *ip;
-  bool directly;
-  bool serious_error = true;
-  int orig_file_status = NOTDONE;
-
-  recoverymode = true;
-  int called_from_main = (curbuf->b_ml.ml_mfp == NULL);
-
-  // If the file name ends in ".s[a-w][a-z]" we assume this is the swapfile.
-  // Otherwise a search is done to find the swapfile(s).
-  char *fname = curbuf->b_fname;
-  if (fname == NULL) {              // When there is no file name
-    fname = "";
-  }
-  int len = (int)strlen(fname);
-  if (checkext && len >= 4
-      && STRNICMP(fname + len - 4, ".s", 2) == 0
-      && vim_strchr("abcdefghijklmnopqrstuvw", TOLOWER_ASC((uint8_t)fname[len - 2])) != NULL
-      && ASCII_ISALPHA(fname[len - 1])) {
-    directly = true;
-    fname_used = xstrdup(fname);     // make a copy for mf_open()
-  } else {
-    directly = false;
-
-    // count the number of matching swapfiles
-    len = rs_recover_names(fname, false, NULL, 0, NULL);
-    if (len == 0) {                 // no swapfiles found
-      semsg(_("E305: No swap file found for %s"), fname);
-      goto theend;
-    }
-    int i;
-    if (len == 1) {  // one swapfile found, use it
-      i = 1;
-    } else {  // several swapfiles found, choose
-      // list the names of the swapfiles
-      rs_recover_names(fname, true, NULL, 0, NULL);
-      msg_putchar('\n');
-      i = prompt_for_input(_("Enter number of swap file to use (0 to quit): "), 0, false, NULL);
-      if (i < 1 || i > len) {
-        goto theend;
-      }
-    }
-    // get the swapfile name that will be used
-    rs_recover_names(fname, false, NULL, i, &fname_used);
-  }
-  if (fname_used == NULL) {
-    goto theend;  // user chose invalid number.
-  }
-  // When called from main() still need to initialize storage structure
-  if (called_from_main && ml_open(curbuf) == FAIL) {
-    getout(1);
-  }
-
-  // Allocate a buffer structure for the swapfile that is used for recovery.
-  // Only the memline in it is really used.
-  buf = xmalloc(sizeof(buf_T));
-
-  // init fields in memline struct
-  buf->b_ml.ml_stack_size = 0;          // no stack yet
-  buf->b_ml.ml_stack = NULL;            // no stack yet
-  buf->b_ml.ml_stack_top = 0;           // nothing in the stack
-  buf->b_ml.ml_line_lnum = 0;           // no cached line
-  buf->b_ml.ml_line_offset = 0;
-  buf->b_ml.ml_locked = NULL;           // no locked block
-  buf->b_ml.ml_flags = 0;
-
-  // open the memfile from the old swapfile
-  char *p = xstrdup(fname_used);  // save "fname_used" for the message:
-  // mf_open() will consume "fname_used"!
-  mfp = mf_open(fname_used, O_RDONLY);
-  fname_used = p;
-  if (mfp == NULL || mfp->mf_fd < 0) {
-    semsg(_("E306: Cannot open %s"), fname_used);
-    goto theend;
-  }
-  buf->b_ml.ml_mfp = mfp;
-
-  // The page size set in mf_open() might be different from the page size
-  // used in the swapfile, we must get it from block 0.  But to read block
-  // 0 we need a page size.  Use the minimal size for block 0 here, it will
-  // be set to the real value below.
-  mfp->mf_page_size = MIN_SWAP_PAGE_SIZE;
-
-  int hl_id = HLF_E;
-  // try to read block 0
-  if ((hp = mf_get(mfp, 0, 1)) == NULL) {
-    msg_start();
-    msg_puts_hl(_("Unable to read block 0 from "), hl_id, true);
-    msg_outtrans(mfp->mf_fname, hl_id, true);
-    msg_puts_hl(_("\nMaybe no changes were made or Nvim did not update the swap file."), hl_id,
-                true);
-    msg_end();
-    goto theend;
-  }
-  ZeroBlock *b0p = hp->bh_data;
-  if (strncmp(b0p->b0_version, "VIM 3.0", 7) == 0) {
-    msg_start();
-    msg_outtrans(mfp->mf_fname, 0, true);
-    msg_puts_hl(_(" cannot be used with this version of Nvim.\n"), 0, true);
-    msg_puts_hl(_("Use Vim version 3.0.\n"), 0, true);
-    msg_end();
-    goto theend;
-  }
-  if (rs_ml_check_b0_id(b0p) != 0) {
-    semsg(_("E307: %s does not look like a Nvim swap file"), mfp->mf_fname);
-    goto theend;
-  }
-  if (rs_b0_magic_wrong(b0p)) {
-    msg_start();
-    msg_outtrans(mfp->mf_fname, hl_id, true);
-    msg_puts_hl(_(" cannot be used on this computer.\n"), hl_id, true);
-    msg_puts_hl(_("The file was created on "), hl_id, true);
-    // avoid going past the end of a corrupted hostname
-    b0p->b0_fname[0] = NUL;
-    msg_puts_hl(b0p->b0_hname, hl_id, true);
-    msg_puts_hl(_(",\nor the file has been damaged."), hl_id, true);
-    msg_end();
-    goto theend;
-  }
-
-  // If we guessed the wrong page size, we have to recalculate the
-  // highest block number in the file.
-  if (mfp->mf_page_size != (unsigned)rs_char_to_long(b0p->b0_page_size)) {
-    unsigned previous_page_size = mfp->mf_page_size;
-
-    mf_new_page_size(mfp, (unsigned)rs_char_to_long(b0p->b0_page_size));
-    if (mfp->mf_page_size < previous_page_size) {
-      msg_start();
-      msg_outtrans(mfp->mf_fname, hl_id, true);
-      msg_puts_hl(_(" has been damaged (page size is smaller than minimum value).\n"), hl_id, true);
-      msg_end();
-      goto theend;
-    }
-    off_T size = vim_lseek(mfp->mf_fd, 0, SEEK_END);
-    // 0 means no file or empty file
-    mfp->mf_blocknr_max = size <= 0 ? 0 : size / mfp->mf_page_size;
-    mfp->mf_infile_count = mfp->mf_blocknr_max;
-
-    // need to reallocate the memory used to store the data
-    p = xmalloc(mfp->mf_page_size);
-    memmove(p, hp->bh_data, previous_page_size);
-    xfree(hp->bh_data);
-    hp->bh_data = p;
-    b0p = hp->bh_data;
-  }
-
-  // If .swp file name given directly, use name from swapfile for buffer.
-  if (directly) {
-    expand_env(b0p->b0_fname, NameBuff, MAXPATHL);
-    if (setfname(curbuf, NameBuff, NULL, true) == FAIL) {
-      goto theend;
-    }
-  }
-
-  home_replace(NULL, mfp->mf_fname, NameBuff, MAXPATHL, true);
-  smsg(0, _("Using swap file \"%s\""), NameBuff);
-
-  if (buf_spname(curbuf) != NULL) {
-    xstrlcpy(NameBuff, buf_spname(curbuf), MAXPATHL);
-  } else {
-    home_replace(NULL, curbuf->b_ffname, NameBuff, MAXPATHL, true);
-  }
-  smsg(0, _("Original file \"%s\""), NameBuff);
-  msg_putchar('\n');
-
-  // check date of swapfile and original file
-  FileInfo org_file_info;
-  FileInfo swp_file_info;
-  int mtime = (int)rs_char_to_long(b0p->b0_mtime);
-  if (curbuf->b_ffname != NULL
-      && os_fileinfo(curbuf->b_ffname, &org_file_info)
-      && ((os_fileinfo(mfp->mf_fname, &swp_file_info)
-           && org_file_info.stat.st_mtim.tv_sec
-           > swp_file_info.stat.st_mtim.tv_sec)
-          || org_file_info.stat.st_mtim.tv_sec != mtime)) {
-    emsg(_("E308: Warning: Original file may have been changed"));
-  }
-  ui_flush();
-
-  // Get the 'fileformat' and 'fileencoding' from block zero.
-  int b0_ff = (b0p->b0_flags & B0_FF_MASK);
-  if (b0p->b0_flags & B0_HAS_FENC) {
-    int fnsize = B0_FNAME_SIZE_NOCRYPT;
-
-    for (p = b0p->b0_fname + fnsize; p > b0p->b0_fname && p[-1] != NUL; p--) {}
-    b0_fenc = xstrnsave(p, (size_t)(b0p->b0_fname + fnsize - p));
-  }
-
-  mf_put(mfp, hp, false, false);        // release block 0
-  hp = NULL;
-
-  // Now that we are sure that the file is going to be recovered, clear the
-  // contents of the current buffer.
-  while (!(curbuf->b_ml.ml_flags & ML_EMPTY)) {
-    ml_delete(1);
-  }
-
-  // Try reading the original file to obtain the values of 'fileformat',
-  // 'fileencoding', etc.  Ignore errors.  The text itself is not used.
-  if (curbuf->b_ffname != NULL) {
-    orig_file_status = readfile(curbuf->b_ffname, NULL, 0,
-                                0, MAXLNUM, NULL, READ_NEW, false);
-  }
-
-  // Use the 'fileformat' and 'fileencoding' as stored in the swapfile.
-  if (b0_ff != 0) {
-    set_fileformat(b0_ff - 1, OPT_LOCAL);
-  }
-  if (b0_fenc != NULL) {
-    set_option_value_give_err(kOptFileencoding, CSTR_AS_OPTVAL(b0_fenc), OPT_LOCAL);
-    xfree(b0_fenc);
-  }
-  unchanged(curbuf, true, true);
-
-  blocknr_T bnum = 1;       // start with block 1
-  unsigned page_count = 1;  // which is 1 page
-  linenr_T lnum = 0;        // append after line 0 in curbuf
-  linenr_T line_count = 0;
-  int idx = 0;              // start with first index in block 1
-  int error = 0;
-  buf->b_ml.ml_stack_top = 0;
-  buf->b_ml.ml_stack = NULL;
-  buf->b_ml.ml_stack_size = 0;
-
-  bool cannot_open = (curbuf->b_ffname == NULL);
-
-  serious_error = false;
-  for (; !got_int; line_breakcheck()) {
-    if (hp != NULL) {
-      mf_put(mfp, hp, false, false);            // release previous block
-    }
-    // get block
-    if ((hp = mf_get(mfp, bnum, page_count)) == NULL) {
-      if (bnum == 1) {
-        semsg(_("E309: Unable to read block 1 from %s"), mfp->mf_fname);
-        goto theend;
-      }
-      error++;
-      ml_append(lnum++, _("???MANY LINES MISSING"), 0, true);
-    } else {          // there is a block
-      PointerBlock *pp = hp->bh_data;
-      if (pp->pb_id == PTR_ID) {                // it is a pointer block
-        bool ptr_block_error = false;
-        if (pp->pb_count_max != PB_COUNT_MAX(mfp)) {
-          ptr_block_error = true;
-          pp->pb_count_max = PB_COUNT_MAX(mfp);
-        }
-        if (pp->pb_count > pp->pb_count_max) {
-          ptr_block_error = true;
-          pp->pb_count = pp->pb_count_max;
-        }
-        if (ptr_block_error) {
-          emsg(_(e_warning_pointer_block_corrupted));
-        }
-
-        // check line count when using pointer block first time
-        if (idx == 0 && line_count != 0) {
-          for (int i = 0; i < (int)pp->pb_count; i++) {
-            line_count -= pp->pb_pointer[i].pe_line_count;
-          }
-          if (line_count != 0) {
-            error++;
-            ml_append(lnum++, _("???LINE COUNT WRONG"), 0, true);
-          }
-        }
-
-        if (pp->pb_count == 0) {
-          ml_append(lnum++, _("???EMPTY BLOCK"), 0, true);
-          error++;
-        } else if (idx < (int)pp->pb_count) {         // go a block deeper
-          if (pp->pb_pointer[idx].pe_bnum < 0) {
-            // Data block with negative block number.
-            // Try to read lines from the original file.
-            // This is slow, but it works.
-            if (!cannot_open) {
-              line_count = pp->pb_pointer[idx].pe_line_count;
-              if (readfile(curbuf->b_ffname, NULL, lnum,
-                           pp->pb_pointer[idx].pe_old_lnum - 1, line_count,
-                           NULL, 0, false) != OK) {
-                cannot_open = true;
-              } else {
-                lnum += line_count;
-              }
-            }
-            if (cannot_open) {
-              error++;
-              ml_append(lnum++, _("???LINES MISSING"), 0, true);
-            }
-            idx++;                  // get same block again for next index
-            continue;
-          }
-
-          // going one block deeper in the tree
-          int top = ml_add_stack(buf);  // new entry in stack
-          ip = &(buf->b_ml.ml_stack[top]);
-          ip->ip_bnum = bnum;
-          ip->ip_index = idx;
-
-          bnum = pp->pb_pointer[idx].pe_bnum;
-          line_count = pp->pb_pointer[idx].pe_line_count;
-          page_count = (unsigned)pp->pb_pointer[idx].pe_page_count;
-          idx = 0;
-          continue;
-        }
-      } else {            // not a pointer block
-        DataBlock *dp = hp->bh_data;
-        if (dp->db_id != DATA_ID) {             // block id wrong
-          if (bnum == 1) {
-            semsg(_("E310: Block 1 ID wrong (%s not a .swp file?)"),
-                  mfp->mf_fname);
-            goto theend;
-          }
-          error++;
-          ml_append(lnum++, _("???BLOCK MISSING"), 0, true);
-        } else {
-          // It is a data block.
-          // Append all the lines in this block.
-          bool has_error = false;
-
-          // Check the length of the block.
-          // If wrong, use the length given in the pointer block.
-          if (page_count * mfp->mf_page_size != dp->db_txt_end) {
-            ml_append(lnum++,
-                      _("??? from here until ???END lines" " may be messed up"),
-                      0, true);
-            error++;
-            has_error = true;
-            dp->db_txt_end = page_count * mfp->mf_page_size;
-          }
-
-          // Make sure there is a NUL at the end of the block so we
-          // don't go over the end when copying text.
-          *((char *)dp + dp->db_txt_end - 1) = NUL;
-
-          // Check the number of lines in the block.
-          // If wrong, use the count in the data block.
-          if (line_count != dp->db_line_count) {
-            ml_append(lnum++,
-                      _("??? from here until ???END lines"
-                        " may have been inserted/deleted"),
-                      0, true);
-            error++;
-            has_error = true;
-          }
-
-          bool did_questions = false;
-          for (int i = 0; i < dp->db_line_count; i++) {
-            if ((char *)&(dp->db_index[i]) >= (char *)dp + dp->db_txt_start) {
-              // line count must be wrong
-              error++;
-              ml_append(lnum++, _("??? lines may be missing"), 0, true);
-              break;
-            }
-
-            int txt_start = (dp->db_index[i] & DB_INDEX_MASK);
-            if (txt_start <= (int)HEADER_SIZE
-                || txt_start >= (int)dp->db_txt_end) {
-              error++;
-              // avoid lots of lines with "???"
-              if (did_questions) {
-                continue;
-              }
-              did_questions = true;
-              p = "???";
-            } else {
-              did_questions = false;
-              p = (char *)dp + txt_start;
-            }
-            ml_append(lnum++, p, 0, true);
-          }
-          if (has_error) {
-            ml_append(lnum++, _("???END"), 0, true);
-          }
-        }
-      }
-    }
-
-    if (buf->b_ml.ml_stack_top == 0) {          // finished
-      break;
-    }
-
-    // go one block up in the tree
-    ip = &(buf->b_ml.ml_stack[--(buf->b_ml.ml_stack_top)]);
-    bnum = ip->ip_bnum;
-    idx = ip->ip_index + 1;         // go to next index
-    page_count = 1;
-  }
-
-  // Compare the buffer contents with the original file.  When they differ
-  // set the 'modified' flag.
-  // Lines 1 - lnum are the new contents.
-  // Lines lnum + 1 to ml_line_count are the original contents.
-  // Line ml_line_count + 1 in the dummy empty line.
-  if (orig_file_status != OK || curbuf->b_ml.ml_line_count != lnum * 2 + 1) {
-    // Recovering an empty file results in two lines and the first line is
-    // empty.  Don't set the modified flag then.
-    if (!(curbuf->b_ml.ml_line_count == 2 && *ml_get(1) == NUL)) {
-      changed_internal(curbuf);
-      buf_inc_changedtick(curbuf);
-    }
-  } else {
-    for (idx = 1; idx <= lnum; idx++) {
-      // Need to copy one line, fetching the other one may flush it.
-      p = xstrnsave(ml_get(idx), (size_t)ml_get_len(idx));
-      int i = strcmp(p, ml_get(idx + lnum));
-      xfree(p);
-      if (i != 0) {
-        changed_internal(curbuf);
-        buf_inc_changedtick(curbuf);
-        break;
-      }
-    }
-  }
-
-  // Delete the lines from the original file and the dummy line from the
-  // empty buffer.  These will now be after the last line in the buffer.
-  while (curbuf->b_ml.ml_line_count > lnum
-         && !(curbuf->b_ml.ml_flags & ML_EMPTY)) {
-    ml_delete(curbuf->b_ml.ml_line_count);
-  }
-  curbuf->b_flags |= BF_RECOVERED;
-  check_cursor(curwin);
-
-  recoverymode = false;
-  if (got_int) {
-    emsg(_("E311: Recovery Interrupted"));
-  } else if (error) {
-    no_wait_return++;
-    msg(">>>>>>>>>>>>>", 0);
-    emsg(_("E312: Errors detected while recovering; look for lines starting with ???"));
-    no_wait_return--;
-    msg(_("See \":help E312\" for more information."), 0);
-    msg(">>>>>>>>>>>>>", 0);
-  } else {
-    if (curbuf->b_changed) {
-      msg(_("Recovery completed. You should check if everything is OK."), 0);
-      msg_puts(_("\n(You might want to write out this file under another name\n"));
-      msg_puts(_("and run diff with the original file to check for changes)"));
-    } else {
-      msg(_("Recovery completed. Buffer contents equals file contents."), 0);
-    }
-    msg_puts(_("\nYou may want to delete the .swp file now."));
-    if (rs_swapfile_proc_running(b0p, fname_used)) {
-      // Warn there could be an active Vim on the same file, the user may
-      // want to kill it.
-      msg_puts(_("\nNote: process STILL RUNNING: "));
-      msg_outnum((int)rs_char_to_long(b0p->b0_pid));
-    }
-    msg_puts("\n\n");
-    cmdline_row = msg_row;
-  }
-  redraw_curbuf_later(UPD_NOT_VALID);
-
-theend:
-  xfree(fname_used);
-  recoverymode = false;
-  if (mfp != NULL) {
-    if (hp != NULL) {
-      mf_put(mfp, hp, false, false);
-    }
-    mf_close(mfp, false);           // will also xfree(mfp->mf_fname)
-  }
-  if (buf != NULL) {  // may be NULL if swapfile not found.
-    xfree(buf->b_ml.ml_stack);
-    xfree(buf);
-  }
-  if (serious_error && called_from_main) {
-    ml_close(curbuf, true);
-  } else {
-    apply_autocmds(EVENT_BUFREADPOST, NULL, curbuf->b_fname, false, curbuf);
-    apply_autocmds(EVENT_BUFWINENTER, NULL, curbuf->b_fname, false, curbuf);
-  }
-}
+void ml_recover(bool checkext) { rs_ml_recover(checkext ? 1 : 0); }
 
 // recover_names and recov_file_names migrated to Rust (recovery.rs)
 
@@ -2200,3 +1723,501 @@ bcount_t nvim_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool 
 {
   return rs_ml_find_line_or_offset(buf, lnum, offp, no_ff);
 }
+
+// ============================================================================
+// Pass 10 Phase 1: ml_recover migration accessors for Rust FFI
+// ============================================================================
+
+/// Set the recoverymode global
+void nvim_set_recoverymode(int val) { recoverymode = (val != 0); }
+
+/// Get the called_from_main flag (curbuf->b_ml.ml_mfp == NULL)
+int nvim_get_called_from_main(void) { return curbuf->b_ml.ml_mfp == NULL ? 1 : 0; }
+
+/// Open a memfile from an existing swapfile (O_RDONLY).
+/// Consumes fname (mf_open frees it). Returns mfp or NULL.
+memfile_T *nvim_mf_open_rdonly(char *fname) { return mf_open(fname, O_RDONLY); }
+
+/// Close a memfile without deleting the swap file.
+void nvim_mf_close_nodelete(memfile_T *mfp) { mf_close(mfp, false); }
+
+/// Get a block from a memfile (mf_get wrapper).
+bhdr_T *nvim_mf_get_block(memfile_T *mfp, int64_t bnum, unsigned page_count)
+{
+  return mf_get(mfp, (blocknr_T)bnum, page_count);
+}
+
+/// Release a block back to the memfile (mf_put wrapper).
+void nvim_mf_put_block(memfile_T *mfp, bhdr_T *hp, bool dirty, bool infile)
+{
+  mf_put(mfp, hp, dirty, infile);
+}
+
+/// Set the page size of a memfile (mf_new_page_size wrapper).
+void nvim_mf_new_page_size_wrapper(memfile_T *mfp, unsigned new_size) { mf_new_page_size(mfp, new_size); }
+
+/// Set hp->bh_data to a new pointer (for block reallocation during recovery).
+void nvim_bhdr_set_bh_data(bhdr_T *hp, void *data) { hp->bh_data = data; }
+
+/// Get the MIN_SWAP_PAGE_SIZE constant.
+unsigned nvim_get_min_swap_page_size(void) { return MIN_SWAP_PAGE_SIZE; }
+
+/// Get the NOTDONE constant (-1).
+int nvim_get_notdone(void) { return NOTDONE; }
+
+/// Get the HLF_E highlight ID.
+int nvim_get_hlf_e(void) { return HLF_E; }
+
+/// Get the PTR_ID constant for PointerBlock identification.
+uint16_t nvim_get_ptr_id(void) { return PTR_ID; }
+
+/// Get the DATA_ID constant for DataBlock identification.
+uint16_t nvim_get_data_id(void) { return DATA_ID; }
+
+/// Get the HEADER_SIZE constant (offsetof DataBlock db_index).
+unsigned nvim_get_header_size(void) { return (unsigned)HEADER_SIZE; }
+
+/// Get PB_COUNT_MAX for a memfile.
+uint16_t nvim_pp_count_max_for_mfp(memfile_T *mfp) { return PB_COUNT_MAX(mfp); }
+
+/// Set pb_count_max on a PointerBlock.
+void nvim_pp_set_count_max(void *pp, uint16_t val) { ((PointerBlock *)pp)->pb_count_max = val; }
+
+/// Set pb_count on a PointerBlock.
+void nvim_pp_set_count(void *pp, uint16_t val) { ((PointerBlock *)pp)->pb_count = val; }
+
+/// Get pe_old_lnum from a PointerEntry by index.
+linenr_T nvim_pp_pe_get_old_lnum(const void *pp, int idx)
+{
+  return ((const PointerBlock *)pp)->pb_pointer[idx].pe_old_lnum;
+}
+
+/// Get db_txt_end from a DataBlock.
+unsigned nvim_dp_get_txt_end(const void *dp) { return ((const DataBlock *)dp)->db_txt_end; }
+
+/// Set db_txt_end on a DataBlock.
+void nvim_dp_set_txt_end(void *dp, unsigned val) { ((DataBlock *)dp)->db_txt_end = val; }
+
+/// Get db_txt_start from a DataBlock.
+unsigned nvim_dp_get_txt_start(const void *dp) { return ((const DataBlock *)dp)->db_txt_start; }
+
+/// Get db_line_count from a DataBlock.
+long nvim_dp_get_line_count(const void *dp) { return ((const DataBlock *)dp)->db_line_count; }
+
+/// Get db_index[i] & DB_INDEX_MASK from a DataBlock.
+unsigned nvim_dp_get_index_masked(const void *dp, int i)
+{
+  return ((const DataBlock *)dp)->db_index[i] & DB_INDEX_MASK;
+}
+
+/// Check if &dp->db_index[i] >= (char *)dp + dp->db_txt_start (index overrun check).
+int nvim_dp_index_overruns_txt(const void *dp, int i)
+{
+  const DataBlock *d = (const DataBlock *)dp;
+  return (const char *)&d->db_index[i] >= (const char *)d + d->db_txt_start ? 1 : 0;
+}
+
+/// Get a pointer to text inside a DataBlock: (char *)dp + offset.
+const char *nvim_dp_get_txt_ptr(const void *dp, unsigned offset)
+{
+  return (const char *)dp + offset;
+}
+
+/// Write NUL at db_txt_end - 1 in a DataBlock (safety terminator).
+void nvim_dp_write_nul_at_txt_end(void *dp)
+{
+  DataBlock *d = (DataBlock *)dp;
+  *((char *)d + d->db_txt_end - 1) = NUL;
+}
+
+/// Set BF_RECOVERED flag on curbuf.
+void nvim_curbuf_set_b_flags_recovered(void) { curbuf->b_flags |= BF_RECOVERED; }
+
+/// Initialize ml fields for a temporary recovery buffer (allocate with xmalloc first).
+void nvim_buf_init_ml_for_recovery(buf_T *buf)
+{
+  buf->b_ml.ml_stack_size = 0;
+  buf->b_ml.ml_stack = NULL;
+  buf->b_ml.ml_stack_top = 0;
+  buf->b_ml.ml_line_lnum = 0;
+  buf->b_ml.ml_line_offset = 0;
+  buf->b_ml.ml_locked = NULL;
+  buf->b_ml.ml_flags = 0;
+}
+
+/// Set buf->b_ml.ml_mfp for a recovery buffer.
+void nvim_buf_set_ml_mfp_recovery(buf_T *buf, memfile_T *mfp) { buf->b_ml.ml_mfp = mfp; }
+
+/// Call getout(1) -- used when ml_open fails during recovery from main.
+void nvim_getout_one(void) { getout(1); }
+
+/// Call ml_open(curbuf) for recovery.
+int nvim_ml_open_curbuf(void) { return ml_open(curbuf); }
+
+/// Call ml_close(curbuf, true) for recovery cleanup.
+void nvim_ml_close_curbuf_true(void) { ml_close(curbuf, true); }
+
+/// Call setfname(curbuf, name, NULL, true) for recovery.
+/// Returns OK (1) or FAIL (0).
+int nvim_setfname_for_recovery(const char *name)
+{
+  return setfname(curbuf, (char *)name, NULL, true);
+}
+
+/// Get buf_spname(curbuf) -- special name for curbuf (e.g. "[No Name]"), or NULL.
+const char *nvim_buf_spname_curbuf(void) { return buf_spname(curbuf); }
+
+/// home_replace(NULL, mfp->mf_fname, NameBuff, MAXPATHL, true) -- fill NameBuff.
+void nvim_home_replace_into_namebuff(const char *fname)
+{
+  home_replace(NULL, (char *)fname, NameBuff, MAXPATHL, true);
+}
+
+/// home_replace(NULL, curbuf->b_ffname, NameBuff, MAXPATHL, true) -- fill NameBuff.
+void nvim_home_replace_curbuf_ffname_into_namebuff(void)
+{
+  home_replace(NULL, curbuf->b_ffname, NameBuff, MAXPATHL, true);
+}
+
+/// xstrlcpy(NameBuff, src, MAXPATHL) -- copy spname into NameBuff.
+void nvim_xstrlcpy_namebuff(const char *src)
+{
+  xstrlcpy(NameBuff, src, MAXPATHL);
+}
+
+/// expand_env(b0_fname, NameBuff, MAXPATHL) -- expand env vars from block0 fname.
+void nvim_expand_env_into_namebuff(const char *src)
+{
+  expand_env((char *)src, NameBuff, MAXPATHL);
+}
+
+/// Get pointer to NameBuff (read-only for passing to C funcs).
+const char *nvim_get_namebuff_ptr(void) { return NameBuff; }
+
+/// smsg(0, _("Using swap file \"%s\""), NameBuff)
+void nvim_smsg_using_swap_file(void) { smsg(0, _("Using swap file \"%s\""), NameBuff); }
+
+/// smsg(0, _("Original file \"%s\""), NameBuff)
+void nvim_smsg_original_file(void) { smsg(0, _("Original file \"%s\""), NameBuff); }
+
+/// Compare timestamps of swap file and original file (curbuf->b_ffname).
+/// Returns 1 if there is a timestamp mismatch warning, 0 otherwise.
+int nvim_recover_check_timestamps(memfile_T *mfp, int mtime_b0)
+{
+  if (curbuf->b_ffname == NULL) {
+    return 0;
+  }
+  FileInfo org_file_info;
+  FileInfo swp_file_info;
+  if (os_fileinfo(curbuf->b_ffname, &org_file_info)
+      && ((os_fileinfo(mfp->mf_fname, &swp_file_info)
+           && org_file_info.stat.st_mtim.tv_sec > swp_file_info.stat.st_mtim.tv_sec)
+          || org_file_info.stat.st_mtim.tv_sec != mtime_b0)) {
+    return 1;
+  }
+  return 0;
+}
+
+/// Get b0_mtime as an int (rs_char_to_long(b0p->b0_mtime)).
+int nvim_b0_get_mtime_int(const ZeroBlock *b0p)
+{
+  return (int)rs_char_to_long(b0p->b0_mtime);
+}
+
+/// Get b0_page_size as an unsigned int (rs_char_to_long(b0p->b0_page_size)).
+unsigned nvim_b0_get_page_size_int(const ZeroBlock *b0p)
+{
+  return (unsigned)rs_char_to_long(b0p->b0_page_size);
+}
+
+/// Get b0_pid as a char* pointer for rs_char_to_long / rs_swapfile_proc_running.
+const char *nvim_b0_get_pid_as_ptr(const ZeroBlock *b0p) { return b0p->b0_pid; }
+
+/// Read original file for recovery (readfile with READ_NEW flag, lnum=0, topline=0, MAXLNUM).
+int nvim_readfile_for_recovery(const char *fname)
+{
+  return readfile((char *)fname, NULL, 0, 0, MAXLNUM, NULL, READ_NEW, false);
+}
+
+/// Read lines from original file starting at lnum, from topline, count lines.
+int nvim_readfile_from_original(const char *fname, linenr_T lnum, linenr_T topline, linenr_T line_count)
+{
+  return readfile((char *)fname, NULL, lnum, topline, line_count, NULL, 0, false);
+}
+
+/// set_fileformat(ff, OPT_LOCAL) -- set file format from swap file.
+void nvim_set_fileformat_local(int ff) { set_fileformat(ff, OPT_LOCAL); }
+
+/// set_option_value_give_err(kOptFileencoding, fenc, OPT_LOCAL) -- set fileencoding.
+void nvim_set_fenc_local(const char *fenc)
+{
+  set_option_value_give_err(kOptFileencoding, CSTR_AS_OPTVAL((char *)fenc), OPT_LOCAL);
+}
+
+/// unchanged(curbuf, true, true) -- mark curbuf as unchanged.
+void nvim_unchanged_curbuf(void) { unchanged(curbuf, true, true); }
+
+/// changed_internal(curbuf) -- mark curbuf as changed without triggering autocmds.
+void nvim_changed_internal_curbuf(void) { changed_internal(curbuf); }
+
+/// Get curbuf->b_changed.
+int nvim_curbuf_get_b_changed(void) { return curbuf->b_changed ? 1 : 0; }
+
+/// ml_delete(curbuf->b_ml.ml_line_count) -- delete last line of curbuf.
+void nvim_ml_delete_last_curbuf(void) { ml_delete(curbuf->b_ml.ml_line_count); }
+
+/// ml_delete(lnum) -- delete a specific line of curbuf.
+void nvim_ml_delete_lnum_curbuf(linenr_T lnum) { ml_delete(lnum); }
+
+/// curbuf->b_ml.ml_line_count accessor.
+linenr_T nvim_get_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
+
+/// curbuf->b_ml.ml_flags accessor.
+int nvim_get_curbuf_ml_flags(void) { return curbuf->b_ml.ml_flags; }
+
+/// Get got_int global.
+int nvim_get_got_int_val(void) { return got_int ? 1 : 0; }
+
+/// Get no_wait_return global.
+int nvim_get_no_wait_return_val(void) { return no_wait_return; }
+
+/// ml_add_stack wrapper for recovery traversal (public, not static).
+int nvim_ml_add_stack_recovery(buf_T *buf) { return rs_ml_add_stack(buf); }
+
+/// Get &buf->b_ml.ml_stack[idx] -- infoptr for recovery stack traversal.
+infoptr_T *nvim_buf_get_ml_stack_ip_recovery(buf_T *buf, int idx)
+{
+  return &(buf->b_ml.ml_stack[idx]);
+}
+
+/// Decrement and return buf->b_ml.ml_stack_top (for stack pop).
+int nvim_buf_dec_ml_stack_top(buf_T *buf) { return --(buf->b_ml.ml_stack_top); }
+
+/// Set buf->b_ml.ml_stack_top to 0 (reset stack).
+void nvim_buf_reset_ml_stack_top(buf_T *buf) { buf->b_ml.ml_stack_top = 0; }
+
+/// Reset stack memory for recovery (set to NULL, size 0).
+void nvim_buf_reset_ml_stack(buf_T *buf)
+{
+  buf->b_ml.ml_stack_top = 0;
+  buf->b_ml.ml_stack = NULL;
+  buf->b_ml.ml_stack_size = 0;
+}
+
+/// apply_autocmds(EVENT_BUFREADPOST, NULL, curbuf->b_fname, false, curbuf).
+void nvim_apply_autocmds_bufreadpost(void)
+{
+  apply_autocmds(EVENT_BUFREADPOST, NULL, curbuf->b_fname, false, curbuf);
+}
+
+/// apply_autocmds(EVENT_BUFWINENTER, NULL, curbuf->b_fname, false, curbuf).
+void nvim_apply_autocmds_bufwinenter(void)
+{
+  apply_autocmds(EVENT_BUFWINENTER, NULL, curbuf->b_fname, false, curbuf);
+}
+
+/// semsg for E305: No swap file found for %s
+void nvim_semsg_e305_no_swap(const char *fname) { semsg(_("E305: No swap file found for %s"), fname); }
+
+/// semsg for E306: Cannot open %s
+void nvim_semsg_e306_cannot_open(const char *fname) { semsg(_("E306: Cannot open %s"), fname); }
+
+/// semsg for E307: %s does not look like a Nvim swap file
+void nvim_semsg_e307_not_swap(const char *fname) { semsg(_("E307: %s does not look like a Nvim swap file"), fname); }
+
+/// semsg for E309: Unable to read block 1 from %s
+void nvim_semsg_e309_block1(const char *fname) { semsg(_("E309: Unable to read block 1 from %s"), fname); }
+
+/// semsg for E310: Block 1 ID wrong (%s not a .swp file?)
+void nvim_semsg_e310_block1_id(const char *fname) { semsg(_("E310: Block 1 ID wrong (%s not a .swp file?)"), fname); }
+
+/// msg_start(); msg_puts_hl(msg, hl_id, true); msg_outtrans(fname, hl_id, true); for "Unable to read block 0"
+void nvim_recover_msg_block0_unreadable(const char *fname, int hl_id)
+{
+  msg_start();
+  msg_puts_hl(_("Unable to read block 0 from "), hl_id, true);
+  msg_outtrans(fname, hl_id, true);
+  msg_puts_hl(_("\nMaybe no changes were made or Nvim did not update the swap file."), hl_id, true);
+  msg_end();
+}
+
+/// msg for VIM 3.0 swap file
+void nvim_recover_msg_vim3(const char *fname)
+{
+  msg_start();
+  msg_outtrans(fname, 0, true);
+  msg_puts_hl(_(" cannot be used with this version of Nvim.\n"), 0, true);
+  msg_puts_hl(_("Use Vim version 3.0.\n"), 0, true);
+  msg_end();
+}
+
+/// msg for wrong byte order
+void nvim_recover_msg_wrong_byte_order(const char *fname, int hl_id, const char *hname)
+{
+  msg_start();
+  msg_outtrans(fname, hl_id, true);
+  msg_puts_hl(_(" cannot be used on this computer.\n"), hl_id, true);
+  msg_puts_hl(_("The file was created on "), hl_id, true);
+  msg_puts_hl(hname, hl_id, true);
+  msg_puts_hl(_(",\nor the file has been damaged."), hl_id, true);
+  msg_end();
+}
+
+/// msg for page size too small
+void nvim_recover_msg_page_size_too_small(const char *fname, int hl_id)
+{
+  msg_start();
+  msg_outtrans(fname, hl_id, true);
+  msg_puts_hl(_(" has been damaged (page size is smaller than minimum value).\n"), hl_id, true);
+  msg_end();
+}
+
+/// emsg for E308: Warning: Original file may have been changed
+void nvim_emsg_e308_original_changed(void) { emsg(_("E308: Warning: Original file may have been changed")); }
+
+/// emsg for pointer block corrupted
+void nvim_emsg_ptr_block_corrupted(void) { emsg(_(e_warning_pointer_block_corrupted)); }
+
+/// emsg for E311: Recovery Interrupted
+void nvim_emsg_e311_interrupted(void) { emsg(_("E311: Recovery Interrupted")); }
+
+/// emsg for E312: Errors detected while recovering
+void nvim_emsg_e312_errors(void) { emsg(_("E312: Errors detected while recovering; look for lines starting with ???")); }
+
+/// Post-recovery success messages
+void nvim_recover_msg_success(int has_changes)
+{
+  if (has_changes) {
+    msg(_("Recovery completed. You should check if everything is OK."), 0);
+    msg_puts(_("\n(You might want to write out this file under another name\n"));
+    msg_puts(_("and run diff with the original file to check for changes)"));
+  } else {
+    msg(_("Recovery completed. Buffer contents equals file contents."), 0);
+  }
+  msg_puts(_("\nYou may want to delete the .swp file now."));
+}
+
+/// Post-recovery "process still running" warning
+void nvim_recover_msg_proc_running(const ZeroBlock *b0p)
+{
+  msg_puts(_("\nNote: process STILL RUNNING: "));
+  msg_outnum((int)rs_char_to_long(b0p->b0_pid));
+}
+
+/// Post-recovery error block output (no_wait_return bracketed messages)
+void nvim_recover_msg_errors(void)
+{
+  no_wait_return++;
+  msg(">>>>>>>>>>>>>", 0);
+  emsg(_("E312: Errors detected while recovering; look for lines starting with ???"));
+  no_wait_return--;
+  msg(_("See \":help E312\" for more information."), 0);
+  msg(">>>>>>>>>>>>>", 0);
+}
+
+/// Final: cmdline_row = msg_row
+void nvim_set_cmdline_row_to_msg_row(void) { cmdline_row = msg_row; }
+
+/// prompt_for_input for recovery: returns chosen number (0 to quit)
+int nvim_prompt_for_recovery(void)
+{
+  return prompt_for_input(_("Enter number of swap file to use (0 to quit): "), 0, false, NULL);
+}
+
+/// Check if b0_fname[0] is NUL (used for setting up wrong_byte_order display).
+void nvim_b0_set_fname0_nul(ZeroBlock *b0p) { b0p->b0_fname[0] = NUL; }
+
+/// Get b0_hname pointer for display
+const char *nvim_b0_get_hname_for_display(const ZeroBlock *b0p) { return b0p->b0_hname; }
+
+/// UPD_NOT_VALID constant for redraw
+int nvim_get_upd_not_valid_val(void) { return UPD_NOT_VALID; }
+
+/// rs_swapfile_proc_running for b0p/fname_used check at end of recovery
+int nvim_recover_proc_running(const ZeroBlock *b0p, const char *fname_used)
+{
+  return rs_swapfile_proc_running(b0p, fname_used) != 0 ? 1 : 0;
+}
+
+/// Get the BF_RECOVERED constant
+int nvim_get_bf_recovered(void) { return BF_RECOVERED; }
+
+/// Get sizeof(buf_T) for Rust allocation of temporary recovery buffer.
+size_t nvim_get_buf_t_size(void) { return sizeof(buf_T); }
+
+/// Get ml_stack pointer (as void*) from buf for freeing during recovery cleanup.
+void *nvim_buf_get_ml_stack_void_recovery(buf_T *buf) { return buf->b_ml.ml_stack; }
+
+/// Get the whole b0 "proc running" check + pid message in one call at end of recovery.
+/// Re-reads block 0 from the swap file (fname_used) and checks if proc is still running.
+/// Prints "process STILL RUNNING: <pid>" if so. Returns 1 if running, 0 otherwise.
+int nvim_recover_check_proc_and_print(const char *fname_used)
+{
+  // Open the swap file read-only temporarily
+  int fd = os_open(fname_used, O_RDONLY, 0);
+  if (fd < 0) {
+    return 0;
+  }
+  ZeroBlock b0;
+  ssize_t n = read_eintr(fd, &b0, sizeof(b0));
+  close(fd);
+  if (n != (ssize_t)sizeof(b0)) {
+    return 0;
+  }
+  if (rs_swapfile_proc_running(&b0, fname_used)) {
+    msg_puts(_("\nNote: process STILL RUNNING: "));
+    msg_outnum((int)rs_char_to_long(b0.b0_pid));
+    return 1;
+  }
+  return 0;
+}
+
+/// Check if b0_version starts with "VIM 3.0" (7 bytes).
+int nvim_b0_is_vim3(const void *b0p)
+{
+  return strncmp(((const ZeroBlock *)b0p)->b0_version, "VIM 3.0", 7) == 0 ? 1 : 0;
+}
+
+/// Delete the first line of curbuf (ml_delete(1)).
+void nvim_ml_delete_first_curbuf(void) { ml_delete(1); }
+
+/// Extract the fileencoding string from block 0 b0_fname area (B0_HAS_FENC).
+/// Returns a newly allocated string (caller must xfree), or NULL if not present.
+char *nvim_b0_extract_fenc(const ZeroBlock *b0p)
+{
+  if (!(b0p->b0_flags & B0_HAS_FENC)) {
+    return NULL;
+  }
+  int fnsize = B0_FNAME_SIZE_NOCRYPT;
+  const char *p = b0p->b0_fname + fnsize;
+  while (p > b0p->b0_fname && p[-1] != NUL) {
+    p--;
+  }
+  return xstrnsave((char *)p, (size_t)(b0p->b0_fname + fnsize - p));
+}
+
+/// Get b0_flags & B0_FF_MASK (file format bits). Returns 0 if no ff stored.
+int nvim_b0_get_ff(const ZeroBlock *b0p) { return b0p->b0_flags & B0_FF_MASK; }
+
+/// Get the size of file by seeking to end (for page size recalculation).
+/// Returns the file size in bytes (or 0 on error).
+int64_t nvim_mf_get_file_size(memfile_T *mfp)
+{
+  off_T size = vim_lseek(mfp->mf_fd, 0, SEEK_END);
+  return (int64_t)(size <= 0 ? 0 : size);
+}
+
+/// ml_append wrapper for recovery (appends a line to curbuf).
+int nvim_ml_append_recovery(linenr_T lnum, const char *line, bool is_new)
+{
+  return ml_append(lnum, (char *)line, 0, is_new);
+}
+
+/// Get page count from pointer entry.
+unsigned nvim_pp_pe_get_page_count_uint(const void *pp, int idx)
+{
+  return (unsigned)((const PointerBlock *)pp)->pb_pointer[idx].pe_page_count;
+}
+
+/// Get the pb_count_max field from a PointerBlock.
+uint16_t nvim_pp_get_count_max(const void *pp) { return ((const PointerBlock *)pp)->pb_count_max; }

@@ -20,22 +20,15 @@
 //! Recovery operations read from potentially corrupted files and should
 //! be prepared to handle invalid data gracefully.
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
-use crate::types::BufHandle;
+use crate::types::{BlockNr, BufHandle, InfoPtrHandle};
 
 // =============================================================================
 // C Implementation Declarations
 // =============================================================================
 
 extern "C" {
-    // -------------------------------------------------------------------------
-    // Recovery Operations (C implementations)
-    // -------------------------------------------------------------------------
-
-    /// Recover from a swap file
-    fn ml_recover(checkext: c_int);
-
     // -------------------------------------------------------------------------
     // recover_names helpers (called from rs_recover_names)
     // -------------------------------------------------------------------------
@@ -139,19 +132,690 @@ const MAXPATHL: usize = 4096;
 const FAIL: c_int = 0;
 
 // =============================================================================
+// Recovery Functions — foreign declarations for rs_ml_recover
+// =============================================================================
+
+extern "C" {
+    fn nvim_set_recoverymode(val: c_int);
+    fn nvim_get_called_from_main() -> c_int;
+    fn nvim_get_curbuf_b_fname() -> *const c_char;
+    fn nvim_get_curbuf_b_ffname() -> *const c_char;
+    fn nvim_semsg_e305_no_swap(fname: *const c_char);
+    fn nvim_semsg_e306_cannot_open(fname: *const c_char);
+    fn nvim_semsg_e307_not_swap(fname: *const c_char);
+    fn nvim_semsg_e309_block1(fname: *const c_char);
+    fn nvim_semsg_e310_block1_id(fname: *const c_char);
+    fn nvim_mf_open_rdonly(fname: *mut c_char) -> *mut c_void;
+    fn nvim_mf_close_nodelete(mfp: *mut c_void);
+    fn nvim_mf_get_block(mfp: *mut c_void, bnum: i64, page_count: c_uint) -> *mut c_void;
+    fn nvim_mf_put_block(mfp: *mut c_void, hp: *mut c_void, dirty: bool, infile: bool);
+    fn nvim_mf_get_page_size(mfp: *mut c_void) -> c_uint;
+    fn nvim_mf_new_page_size_wrapper(mfp: *mut c_void, new_size: c_uint);
+    fn nvim_mf_get_file_size(mfp: *mut c_void) -> i64;
+    fn nvim_mf_set_blocknr_max(mfp: *mut c_void, val: i64);
+    fn nvim_mf_set_infile_count(mfp: *mut c_void, val: i64);
+    fn nvim_mf_get_fd(mfp: *mut c_void) -> c_int;
+    fn nvim_mf_get_fname(mfp: *mut c_void) -> *mut c_char;
+    fn nvim_bhdr_get_bh_data(hp: *mut c_void) -> *mut c_void;
+    fn nvim_bhdr_set_bh_data(hp: *mut c_void, data: *mut c_void);
+    fn nvim_b0_get_ff(b0p: *const c_void) -> c_int;
+    fn nvim_b0_extract_fenc(b0p: *const c_void) -> *mut c_char;
+    fn nvim_b0_get_mtime_int(b0p: *const c_void) -> c_int;
+    fn nvim_b0_get_page_size_int(b0p: *const c_void) -> c_uint;
+    fn nvim_b0_set_fname0_nul(b0p: *mut c_void);
+    fn nvim_b0_get_hname_for_display(b0p: *const c_void) -> *const c_char;
+    fn nvim_b0_is_vim3(b0p: *const c_void) -> c_int;
+    fn nvim_get_min_swap_page_size() -> c_uint;
+    fn nvim_get_hlf_e() -> c_int;
+    fn nvim_get_ptr_id() -> u16;
+    fn nvim_get_data_id() -> u16;
+    fn nvim_get_header_size() -> c_uint;
+    fn nvim_pp_get_id(pp: *const c_void) -> u16;
+    fn nvim_pp_get_count(pp: *const c_void) -> u16;
+    fn nvim_pp_get_count_max(pp: *const c_void) -> u16;
+    fn nvim_pp_count_max_for_mfp(mfp: *mut c_void) -> u16;
+    fn nvim_pp_set_count_max(pp: *mut c_void, val: u16);
+    fn nvim_pp_set_count(pp: *mut c_void, val: u16);
+    fn nvim_pp_pe_get_bnum(pp: *const c_void, idx: c_int) -> i64;
+    fn nvim_pp_pe_get_line_count(pp: *const c_void, idx: c_int) -> i64;
+    fn nvim_pp_pe_get_old_lnum(pp: *const c_void, idx: c_int) -> i64;
+    fn nvim_pp_pe_get_page_count_uint(pp: *const c_void, idx: c_int) -> c_uint;
+    fn nvim_dp_get_id(dp: *const c_void) -> u16;
+    fn nvim_dp_get_txt_end(dp: *const c_void) -> c_uint;
+    fn nvim_dp_set_txt_end(dp: *mut c_void, val: c_uint);
+    fn nvim_dp_get_line_count(dp: *const c_void) -> i64;
+    fn nvim_dp_get_index_masked(dp: *const c_void, i: c_int) -> c_uint;
+    fn nvim_dp_index_overruns_txt(dp: *const c_void, i: c_int) -> c_int;
+    fn nvim_dp_get_txt_ptr(dp: *const c_void, offset: c_uint) -> *const c_char;
+    fn nvim_dp_write_nul_at_txt_end(dp: *mut c_void);
+    fn nvim_curbuf_set_b_flags_recovered();
+    fn nvim_get_curbuf_ml_line_count() -> i64;
+    fn nvim_get_curbuf_ml_flags() -> c_int;
+    fn nvim_curbuf_get_b_changed() -> c_int;
+    fn nvim_ml_delete_last_curbuf();
+    fn nvim_ml_delete_first_curbuf();
+    fn nvim_changed_internal_curbuf();
+    fn nvim_unchanged_curbuf();
+    fn nvim_ml_open_curbuf() -> c_int;
+    fn nvim_ml_close_curbuf_true();
+    fn nvim_setfname_for_recovery(name: *const c_char) -> c_int;
+    fn nvim_buf_spname_curbuf() -> *const c_char;
+    fn nvim_home_replace_curbuf_ffname_into_namebuff();
+    fn nvim_xstrlcpy_namebuff(src: *const c_char);
+    fn nvim_get_namebuff_ptr() -> *const c_char;
+    fn nvim_smsg_using_swap_file();
+    fn nvim_smsg_original_file();
+    fn nvim_home_replace_into_namebuff(fname: *const c_char);
+    fn nvim_expand_env_into_namebuff(src: *const c_char);
+    fn nvim_recover_check_timestamps(mfp: *mut c_void, mtime_b0: c_int) -> c_int;
+    fn nvim_get_buf_t_size() -> usize;
+    fn nvim_buf_init_ml_for_recovery(buf: *mut c_void);
+    fn nvim_buf_set_ml_mfp_recovery(buf: *mut c_void, mfp: *mut c_void);
+    fn nvim_buf_get_ml_stack_void_recovery(buf: *mut c_void) -> *mut c_void;
+    fn nvim_buf_get_ml_stack_top(buf: *mut BufHandle) -> c_int;
+    fn nvim_ml_add_stack_recovery(buf: *mut c_void) -> c_int;
+    fn nvim_buf_get_ml_stack_ip_recovery(buf: *mut c_void, idx: c_int) -> *mut InfoPtrHandle;
+    fn nvim_buf_dec_ml_stack_top(buf: *mut c_void) -> c_int;
+    fn nvim_buf_reset_ml_stack(buf: *mut c_void);
+    fn nvim_ip_set_bnum(ip: *mut InfoPtrHandle, bnum: BlockNr);
+    fn nvim_ip_set_index(ip: *mut InfoPtrHandle, idx: c_int);
+    fn nvim_ip_get_bnum(ip: *const InfoPtrHandle) -> BlockNr;
+    fn nvim_ip_get_index(ip: *const InfoPtrHandle) -> c_int;
+    fn nvim_getout_one();
+    fn nvim_readfile_for_recovery(fname: *const c_char) -> c_int;
+    fn nvim_readfile_from_original(
+        fname: *const c_char,
+        lnum: i64,
+        topline: i64,
+        line_count: i64,
+    ) -> c_int;
+    fn nvim_set_fileformat_local(ff: c_int);
+    fn nvim_set_fenc_local(fenc: *const c_char);
+    fn nvim_ml_append_recovery(lnum: i64, line: *const c_char, is_new: bool) -> c_int;
+    fn nvim_ml_get(lnum: i64) -> *mut c_char;
+    fn nvim_ml_get_len(lnum: i64) -> i64;
+    fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+    fn nvim_buf_inc_changedtick(buf: *mut c_void);
+    fn nvim_check_cursor();
+    fn nvim_redraw_curbuf_later(redraw_type: c_int);
+    fn nvim_line_breakcheck();
+    fn nvim_get_got_int_val() -> c_int;
+    fn nvim_get_upd_not_valid_val() -> c_int;
+    fn nvim_prompt_for_recovery() -> c_int;
+    fn nvim_recover_msg_block0_unreadable(fname: *const c_char, hl_id: c_int);
+    fn nvim_recover_msg_vim3(fname: *const c_char);
+    fn nvim_recover_msg_wrong_byte_order(fname: *const c_char, hl_id: c_int, hname: *const c_char);
+    fn nvim_recover_msg_page_size_too_small(fname: *const c_char, hl_id: c_int);
+    fn nvim_emsg_e308_original_changed();
+    fn nvim_emsg_ptr_block_corrupted();
+    fn nvim_emsg_e311_interrupted();
+    fn nvim_recover_msg_success(has_changes: c_int);
+    fn nvim_recover_check_proc_and_print(fname_used: *const c_char) -> c_int;
+    fn nvim_recover_msg_errors();
+    fn nvim_set_cmdline_row_to_msg_row();
+    fn nvim_apply_autocmds_bufreadpost();
+    fn nvim_apply_autocmds_bufwinenter();
+}
+
+// C OK/NOTDONE constants used in recovery
+const OK_C: c_int = 1;
+const ML_EMPTY_FLAG: c_int = 0x0001;
+
+// =============================================================================
 // Recovery Functions
 // =============================================================================
 
 /// Recover the contents of a buffer from its swap file.
 ///
-/// This reads the swap file and reconstructs the buffer content.
-/// If `checkext` is true, verify the file extension is correct.
+/// This is the Rust port of the C `ml_recover` function.
+/// If `checkext` is true, verify the file extension is correct before recovery.
 ///
 /// # Safety
-/// Modifies buffer state and may read from corrupted files.
+/// Modifies global editor state; may read from corrupted swap files.
 #[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines
+)]
 pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
-    ml_recover(checkext);
+    let mut buf: *mut c_void = std::ptr::null_mut();
+    let mut mfp: *mut c_void = std::ptr::null_mut();
+    let mut fname_used: *mut c_char = std::ptr::null_mut();
+    let mut hp: *mut c_void = std::ptr::null_mut();
+    let mut b0_fenc: *mut c_char = std::ptr::null_mut();
+    let mut serious_error = true;
+    let mut orig_file_status: c_int = -1; // NOTDONE
+
+    nvim_set_recoverymode(1);
+    let called_from_main = nvim_get_called_from_main();
+
+    // Get curbuf's file name (empty string if NULL)
+    let fname_raw = nvim_get_curbuf_b_fname();
+    let fname: *const c_char = if fname_raw.is_null() {
+        c"".as_ptr()
+    } else {
+        fname_raw
+    };
+
+    let directly: bool;
+
+    'cleanup: {
+        // Determine if fname itself is a swap file (extension ".s[a-w][a-z]")
+        if checkext != 0 && is_swap_file_ext(fname) {
+            directly = true;
+            fname_used = xstrdup(fname);
+        } else {
+            directly = false;
+            let len = rs_recover_names(fname, 0, std::ptr::null_mut(), 0, std::ptr::null_mut());
+            if len == 0 {
+                nvim_semsg_e305_no_swap(fname);
+                break 'cleanup;
+            }
+            let chosen: c_int = if len == 1 {
+                1
+            } else {
+                rs_recover_names(fname, 1, std::ptr::null_mut(), 0, std::ptr::null_mut());
+                msg_putchar(c_int::from(b'\n'));
+                let i = nvim_prompt_for_recovery();
+                if i < 1 || i > len {
+                    break 'cleanup;
+                }
+                i
+            };
+            rs_recover_names(fname, 0, std::ptr::null_mut(), chosen, &raw mut fname_used);
+        }
+
+        if fname_used.is_null() {
+            break 'cleanup;
+        }
+
+        // When called from main(), initialize storage structure
+        if called_from_main != 0 && nvim_ml_open_curbuf() != OK_C {
+            nvim_getout_one();
+        }
+
+        // Allocate and init the recovery buf_T (zeroed)
+        let buf_size = nvim_get_buf_t_size();
+        buf = xmalloc(buf_size);
+        std::ptr::write_bytes(buf.cast::<u8>(), 0, buf_size);
+        nvim_buf_init_ml_for_recovery(buf);
+
+        // Open the swap file (mf_open() consumes fname_used, so save a copy)
+        let fname_copy = xstrdup(fname_used);
+        mfp = nvim_mf_open_rdonly(fname_used);
+        fname_used = fname_copy;
+
+        if mfp.is_null() || nvim_mf_get_fd(mfp) < 0 {
+            nvim_semsg_e306_cannot_open(fname_used);
+            break 'cleanup;
+        }
+        nvim_buf_set_ml_mfp_recovery(buf, mfp);
+
+        // Use minimum page size to be able to read block 0
+        nvim_mf_new_page_size_wrapper(mfp, nvim_get_min_swap_page_size());
+        let hl_id = nvim_get_hlf_e();
+
+        // Read block 0
+        hp = nvim_mf_get_block(mfp, 0, 1);
+        if hp.is_null() {
+            nvim_recover_msg_block0_unreadable(nvim_mf_get_fname(mfp), hl_id);
+            break 'cleanup;
+        }
+
+        let mut b0p = nvim_bhdr_get_bh_data(hp);
+
+        // VIM 3.0 swap file?
+        if nvim_b0_is_vim3(b0p) != 0 {
+            nvim_recover_msg_vim3(nvim_mf_get_fname(mfp));
+            break 'cleanup;
+        }
+        // Bad block 0 ID?
+        if rs_ml_check_b0_id(b0p) != 0 {
+            nvim_semsg_e307_not_swap(nvim_mf_get_fname(mfp));
+            break 'cleanup;
+        }
+        // Wrong byte order?
+        if rs_b0_magic_wrong(b0p) != 0 {
+            nvim_b0_set_fname0_nul(b0p);
+            let hname = nvim_b0_get_hname_for_display(b0p);
+            nvim_recover_msg_wrong_byte_order(nvim_mf_get_fname(mfp), hl_id, hname);
+            break 'cleanup;
+        }
+
+        // If page size in swap file differs from what we assumed, recalculate
+        let current_page_size = nvim_mf_get_page_size(mfp);
+        let b0_page_size = nvim_b0_get_page_size_int(b0p);
+        if current_page_size != b0_page_size {
+            let previous_page_size = current_page_size;
+            nvim_mf_new_page_size_wrapper(mfp, b0_page_size);
+            let new_page_size = nvim_mf_get_page_size(mfp);
+            if new_page_size < previous_page_size {
+                nvim_recover_msg_page_size_too_small(nvim_mf_get_fname(mfp), hl_id);
+                break 'cleanup;
+            }
+            let file_size = nvim_mf_get_file_size(mfp);
+            let blocknr_max = if file_size <= 0 {
+                0i64
+            } else {
+                file_size / i64::from(new_page_size)
+            };
+            nvim_mf_set_blocknr_max(mfp, blocknr_max);
+            nvim_mf_set_infile_count(mfp, blocknr_max);
+
+            // Reallocate block 0 data buffer to new page size
+            let new_data = xmalloc(new_page_size as usize);
+            let old_data = nvim_bhdr_get_bh_data(hp);
+            std::ptr::copy_nonoverlapping(
+                old_data.cast::<u8>(),
+                new_data.cast::<u8>(),
+                previous_page_size as usize,
+            );
+            xfree(old_data);
+            nvim_bhdr_set_bh_data(hp, new_data);
+            b0p = new_data; // b0p now points to new allocation
+        }
+
+        // If swap file was given directly, set buffer name from block 0 fname
+        if directly {
+            nvim_expand_env_into_namebuff(nvim_b0_get_fname_ptr(b0p));
+            if nvim_setfname_for_recovery(nvim_get_namebuff_ptr()) != OK_C {
+                break 'cleanup;
+            }
+        }
+
+        // Extract fileformat and encoding from block 0 before releasing it
+        let b0_ff = nvim_b0_get_ff(b0p);
+        b0_fenc = nvim_b0_extract_fenc(b0p);
+        let mtime_b0 = nvim_b0_get_mtime_int(b0p);
+
+        // Display swap file and original file names
+        nvim_home_replace_into_namebuff(nvim_mf_get_fname(mfp));
+        nvim_smsg_using_swap_file();
+        let spname = nvim_buf_spname_curbuf();
+        if spname.is_null() {
+            nvim_home_replace_curbuf_ffname_into_namebuff();
+        } else {
+            nvim_xstrlcpy_namebuff(spname);
+        }
+        nvim_smsg_original_file();
+        msg_putchar(c_int::from(b'\n'));
+
+        // Warn if original file was modified since swap file was written
+        if nvim_recover_check_timestamps(mfp, mtime_b0) != 0 {
+            nvim_emsg_e308_original_changed();
+        }
+        ui_flush();
+
+        // Release block 0 — we have everything we need
+        nvim_mf_put_block(mfp, hp, false, false);
+        hp = std::ptr::null_mut();
+
+        // Clear current buffer contents
+        while nvim_get_curbuf_ml_flags() & ML_EMPTY_FLAG == 0 {
+            nvim_ml_delete_first_curbuf();
+        }
+
+        // Read original file to get fileformat/encoding (errors ignored)
+        let buf_ffname = nvim_get_curbuf_b_ffname();
+        if !buf_ffname.is_null() {
+            orig_file_status = nvim_readfile_for_recovery(buf_ffname);
+        }
+
+        // Apply fileformat and encoding from swap file
+        if b0_ff != 0 {
+            nvim_set_fileformat_local(b0_ff - 1);
+        }
+        if !b0_fenc.is_null() {
+            nvim_set_fenc_local(b0_fenc);
+            xfree(b0_fenc.cast());
+            b0_fenc = std::ptr::null_mut();
+        }
+        nvim_unchanged_curbuf();
+
+        // Walk the B-tree and append all recovered lines to curbuf
+        let (lnum, error) = recover_btree(buf.cast::<BufHandle>(), mfp, &mut hp);
+
+        // Negative error = fatal error during traversal
+        if error < 0 {
+            break 'cleanup;
+        }
+
+        // Determine if recovered content differs from original
+        let curbuf_ptr = nvim_get_curbuf();
+        let total_lines = nvim_get_curbuf_ml_line_count();
+        if orig_file_status != OK_C || total_lines != lnum * 2 + 1 {
+            // Empty file special case: 2 lines with first line empty → not modified
+            let is_empty_recovery = total_lines == 2 && {
+                let first = nvim_ml_get(1);
+                !first.is_null() && *first == 0
+            };
+            if !is_empty_recovery {
+                nvim_changed_internal_curbuf();
+                nvim_buf_inc_changedtick(curbuf_ptr.cast());
+            }
+        } else {
+            // Compare recovered lines vs original line by line
+            let mut cidx = 1i64;
+            while cidx <= lnum {
+                let line_ptr = nvim_ml_get(cidx);
+                let line_len = nvim_ml_get_len(cidx) as usize;
+                let p = nvim_xstrnsave(line_ptr, line_len);
+                let other = nvim_ml_get(cidx + lnum);
+                let diff = libc_strcmp(p, other);
+                xfree(p.cast());
+                if diff != 0 {
+                    nvim_changed_internal_curbuf();
+                    nvim_buf_inc_changedtick(curbuf_ptr.cast());
+                    break;
+                }
+                cidx += 1;
+            }
+        }
+
+        // Delete the original lines (now after recovered lines) and dummy empty line
+        while nvim_get_curbuf_ml_line_count() > lnum
+            && nvim_get_curbuf_ml_flags() & ML_EMPTY_FLAG == 0
+        {
+            nvim_ml_delete_last_curbuf();
+        }
+        nvim_curbuf_set_b_flags_recovered();
+        nvim_check_cursor();
+
+        nvim_set_recoverymode(0);
+        serious_error = false;
+
+        // Final status messages
+        if nvim_get_got_int_val() != 0 {
+            nvim_emsg_e311_interrupted();
+        } else if error > 0 {
+            nvim_recover_msg_errors();
+        } else {
+            nvim_recover_msg_success(nvim_curbuf_get_b_changed());
+            nvim_recover_check_proc_and_print(fname_used);
+            msg_puts(c"\n\n".as_ptr());
+            nvim_set_cmdline_row_to_msg_row();
+        }
+        nvim_redraw_curbuf_later(nvim_get_upd_not_valid_val());
+    } // end 'cleanup
+
+    // Always-run cleanup
+    xfree(fname_used.cast());
+    nvim_set_recoverymode(0);
+    if !b0_fenc.is_null() {
+        xfree(b0_fenc.cast());
+    }
+    if !mfp.is_null() {
+        if !hp.is_null() {
+            nvim_mf_put_block(mfp, hp, false, false);
+        }
+        nvim_mf_close_nodelete(mfp);
+    }
+    if !buf.is_null() {
+        xfree(nvim_buf_get_ml_stack_void_recovery(buf));
+        xfree(buf);
+    }
+    if serious_error && called_from_main != 0 {
+        nvim_ml_close_curbuf_true();
+    } else {
+        nvim_apply_autocmds_bufreadpost();
+        nvim_apply_autocmds_bufwinenter();
+    }
+}
+
+/// Check if `fname` has a swap file extension: `.s[a-w][a-z]`
+#[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+unsafe fn is_swap_file_ext(fname: *const c_char) -> bool {
+    let len = libc_strlen(fname);
+    if len < 4 {
+        return false;
+    }
+    if *fname.add(len - 4) != b'.' as c_char {
+        return false;
+    }
+    let c2 = (*fname.add(len - 3) as u8).to_ascii_lowercase();
+    if c2 != b's' {
+        return false;
+    }
+    let c3 = (*fname.add(len - 2) as u8).to_ascii_lowercase();
+    if !(b'a'..=b'w').contains(&c3) {
+        return false;
+    }
+    (*fname.add(len - 1) as u8)
+        .to_ascii_lowercase()
+        .is_ascii_alphabetic()
+}
+
+// =============================================================================
+// B-tree traversal for recovery
+// =============================================================================
+
+/// Walk the swap file B-tree and append recovered lines to curbuf.
+///
+/// Returns `(lnum, error_count)` where `error_count < 0` signals a fatal error.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::if_not_else,
+    clippy::too_many_lines
+)]
+unsafe fn recover_btree(
+    buf: *mut BufHandle,
+    mfp: *mut c_void,
+    hp_out: &mut *mut c_void,
+) -> (i64, i64) {
+    let mut bnum: i64 = 1;
+    let mut page_count: c_uint = 1;
+    let mut lnum: i64 = 0;
+    let mut line_count: i64 = 0;
+    let mut idx: c_int = 0;
+    let mut error: i64 = 0;
+    let mut hp: *mut c_void = std::ptr::null_mut();
+
+    nvim_buf_reset_ml_stack(buf.cast::<c_void>());
+    let mut cannot_open = nvim_get_curbuf_b_ffname().is_null();
+
+    'traverse: loop {
+        if nvim_get_got_int_val() != 0 {
+            break 'traverse;
+        }
+        nvim_line_breakcheck();
+
+        if !hp.is_null() {
+            nvim_mf_put_block(mfp, hp, false, false);
+        }
+        hp = nvim_mf_get_block(mfp, bnum, page_count);
+
+        if hp.is_null() {
+            if bnum == 1 {
+                nvim_semsg_e309_block1(nvim_mf_get_fname(mfp));
+                *hp_out = std::ptr::null_mut();
+                return (lnum, -1); // fatal
+            }
+            error += 1;
+            nvim_ml_append_recovery(lnum, c"???MANY LINES MISSING".as_ptr(), true);
+            lnum += 1;
+        } else {
+            let data = nvim_bhdr_get_bh_data(hp);
+
+            if nvim_pp_get_id(data) == nvim_get_ptr_id() {
+                // ---- Pointer block ----
+                let expected_max = nvim_pp_count_max_for_mfp(mfp);
+                let actual_max = nvim_pp_get_count_max(data);
+                let mut ptr_block_error = false;
+                if actual_max != expected_max {
+                    ptr_block_error = true;
+                    nvim_pp_set_count_max(data, expected_max);
+                }
+                let pb_count = nvim_pp_get_count(data);
+                if pb_count > expected_max {
+                    ptr_block_error = true;
+                    nvim_pp_set_count(data, expected_max);
+                }
+                if ptr_block_error {
+                    nvim_emsg_ptr_block_corrupted();
+                }
+
+                // Re-read pb_count after potential correction
+                let pb_count_now = nvim_pp_get_count(data);
+
+                // Line count check on first entry into this pointer block
+                if idx == 0 && line_count != 0 {
+                    let mut lc = line_count;
+                    for i in 0..c_int::from(pb_count_now) {
+                        lc -= nvim_pp_pe_get_line_count(data, i);
+                    }
+                    if lc != 0 {
+                        error += 1;
+                        nvim_ml_append_recovery(lnum, c"???LINE COUNT WRONG".as_ptr(), true);
+                        lnum += 1;
+                    }
+                    line_count = 0;
+                }
+
+                if pb_count_now == 0 {
+                    error += 1;
+                    nvim_ml_append_recovery(lnum, c"???EMPTY BLOCK".as_ptr(), true);
+                    lnum += 1;
+                } else if idx < c_int::from(pb_count_now) {
+                    let pe_bnum = nvim_pp_pe_get_bnum(data, idx);
+                    if pe_bnum < 0 {
+                        // Negative block num: try reading from original file
+                        if !cannot_open {
+                            line_count = nvim_pp_pe_get_line_count(data, idx);
+                            let topline = nvim_pp_pe_get_old_lnum(data, idx) - 1;
+                            let ffname = nvim_get_curbuf_b_ffname();
+                            if nvim_readfile_from_original(ffname, lnum, topline, line_count)
+                                == OK_C
+                            {
+                                lnum += line_count;
+                            } else {
+                                cannot_open = true;
+                            }
+                        }
+                        if cannot_open {
+                            error += 1;
+                            nvim_ml_append_recovery(lnum, c"???LINES MISSING".as_ptr(), true);
+                            lnum += 1;
+                        }
+                        idx += 1;
+                        continue 'traverse;
+                    }
+
+                    // Push current position and descend
+                    let top = nvim_ml_add_stack_recovery(buf.cast::<c_void>());
+                    let ip = nvim_buf_get_ml_stack_ip_recovery(buf.cast::<c_void>(), top);
+                    nvim_ip_set_bnum(ip, bnum);
+                    nvim_ip_set_index(ip, idx);
+
+                    bnum = pe_bnum;
+                    line_count = nvim_pp_pe_get_line_count(data, idx);
+                    page_count = nvim_pp_pe_get_page_count_uint(data, idx);
+                    idx = 0;
+                    continue 'traverse;
+                }
+                // idx >= pb_count_now: fall through to stack pop
+            } else {
+                // ---- Data block ----
+                if nvim_dp_get_id(data) != nvim_get_data_id() {
+                    if bnum == 1 {
+                        nvim_semsg_e310_block1_id(nvim_mf_get_fname(mfp));
+                        *hp_out = hp;
+                        return (lnum, -1); // fatal
+                    }
+                    error += 1;
+                    nvim_ml_append_recovery(lnum, c"???BLOCK MISSING".as_ptr(), true);
+                    lnum += 1;
+                } else {
+                    let mut has_error = false;
+                    let page_size = nvim_mf_get_page_size(mfp);
+                    let expected_txt_end = page_count * page_size;
+                    let txt_end = nvim_dp_get_txt_end(data);
+
+                    if expected_txt_end != txt_end {
+                        nvim_ml_append_recovery(
+                            lnum,
+                            c"??? from here until ???END lines may be messed up".as_ptr(),
+                            true,
+                        );
+                        lnum += 1;
+                        error += 1;
+                        has_error = true;
+                        nvim_dp_set_txt_end(data, expected_txt_end);
+                    }
+                    nvim_dp_write_nul_at_txt_end(data);
+
+                    let dp_line_count = nvim_dp_get_line_count(data);
+                    if line_count != dp_line_count {
+                        nvim_ml_append_recovery(
+                            lnum,
+                            c"??? from here until ???END lines may have been inserted/deleted"
+                                .as_ptr(),
+                            true,
+                        );
+                        lnum += 1;
+                        error += 1;
+                        has_error = true;
+                    }
+
+                    let mut did_questions = false;
+                    let mut i: c_int = 0;
+                    while i < dp_line_count as c_int {
+                        if nvim_dp_index_overruns_txt(data, i) != 0 {
+                            error += 1;
+                            nvim_ml_append_recovery(
+                                lnum,
+                                c"??? lines may be missing".as_ptr(),
+                                true,
+                            );
+                            lnum += 1;
+                            break;
+                        }
+                        let txt_start = nvim_dp_get_index_masked(data, i);
+                        let header_size = nvim_get_header_size();
+                        let dp_txt_end = nvim_dp_get_txt_end(data);
+                        let line_ptr: *const c_char =
+                            if txt_start <= header_size || txt_start >= dp_txt_end {
+                                error += 1;
+                                if did_questions {
+                                    i += 1;
+                                    continue;
+                                }
+                                did_questions = true;
+                                c"???".as_ptr()
+                            } else {
+                                did_questions = false;
+                                nvim_dp_get_txt_ptr(data, txt_start)
+                            };
+                        nvim_ml_append_recovery(lnum, line_ptr, true);
+                        lnum += 1;
+                        i += 1;
+                    }
+                    if has_error {
+                        nvim_ml_append_recovery(lnum, c"???END".as_ptr(), true);
+                        lnum += 1;
+                    }
+                }
+            }
+        } // end block processing
+
+        // Check if traversal stack is empty (finished)
+        if nvim_buf_get_ml_stack_top(buf) == 0 {
+            break 'traverse;
+        }
+
+        // Pop one level and advance to next sibling
+        let new_top = nvim_buf_dec_ml_stack_top(buf.cast::<c_void>());
+        let ip = nvim_buf_get_ml_stack_ip_recovery(buf.cast::<c_void>(), new_top);
+        bnum = nvim_ip_get_bnum(ip);
+        idx = nvim_ip_get_index(ip) + 1;
+        page_count = 1;
+    }
+
+    *hp_out = hp;
+    (lnum, error)
 }
 
 /// Get the number of swap files for a given file name.

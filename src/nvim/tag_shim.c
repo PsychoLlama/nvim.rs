@@ -553,6 +553,7 @@ int nvim_get_tc_flags(void) { return (int)tc_flags; }
 int nvim_get_curbuf_tc_flags(void) { return (int)curbuf->b_tc_flags; }
 const char *nvim_get_p_hlg(void) { return p_hlg; }
 const char *nvim_get_curbuf_b_fname(void) { return curbuf->b_fname; }
+const char *nvim_get_curbuf_b_ffname(void) { return curbuf->b_ffname; }
 const char *nvim_get_curbuf_p_tfu(void) { return curbuf->b_p_tfu; }
 void nvim_set_curbuf_b_help(int val) { curbuf->b_help = val; }
 int nvim_get_curbuf_b_help(void) { return curbuf->b_help; }
