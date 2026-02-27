@@ -27,10 +27,6 @@ extern "C" {
     fn nvim_syn_get_include_default() -> c_int;
     fn nvim_syn_get_include_none() -> c_int;
 
-    // Option parsing helpers
-    fn nvim_syn_get_conceal_setting(block: SynBlockHandle) -> c_int;
-    fn nvim_syn_get_ic_setting(block: SynBlockHandle) -> c_int;
-
     // Running inc_tag for :syntax include
     fn nvim_syn_get_running_inc_tag() -> c_int;
     fn nvim_syn_set_running_inc_tag(tag: c_int);
@@ -475,7 +471,7 @@ pub unsafe fn synblock_conceal_setting(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    nvim_syn_get_conceal_setting(block) != 0
+    nvim_synblock_get_conceal(block) != 0
 }
 
 /// Get the case-insensitive setting for current window's synblock.
@@ -487,7 +483,7 @@ pub unsafe fn synblock_ic_setting(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    nvim_syn_get_ic_setting(block) != 0
+    nvim_synblock_get_syn_ic(block) != 0
 }
 
 // =============================================================================

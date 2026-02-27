@@ -25,7 +25,6 @@ extern "C" {
     fn nvim_syn_is_current_state_stored() -> c_int;
     fn nvim_syn_is_current_state_valid() -> c_int;
     fn nvim_syn_is_current_state_empty() -> c_int;
-    fn nvim_syn_current_state_is_empty() -> c_int;
     fn nvim_syn_set_current_finished(finished: c_int);
 
     // Current match attributes
@@ -45,7 +44,6 @@ extern "C" {
 
     // Current state management
     fn nvim_syn_get_current_state_len() -> c_int;
-    fn nvim_syn_current_state_len() -> c_int;
     fn nvim_syn_set_current_state_len(len: c_int);
     fn nvim_syn_validate_current_state();
     fn nvim_syn_invalidate_current_state();
@@ -63,7 +61,6 @@ extern "C" {
     fn nvim_syn_get_next_match_idx() -> c_int;
     fn nvim_syn_get_next_match_col() -> c_int;
     fn nvim_syn_has_next_match() -> c_int;
-    fn nvim_syn_get_next_match_idx_value() -> c_int;
     fn nvim_syn_set_next_match_idx(idx: c_int);
     fn nvim_syn_set_next_match_col(col: c_int);
     fn nvim_syn_get_next_match_flags() -> c_int;
@@ -158,7 +155,7 @@ pub fn is_current_state_valid() -> bool {
 /// Check if the current state stack is empty.
 #[must_use]
 pub fn is_current_state_empty() -> bool {
-    unsafe { nvim_syn_is_current_state_empty() != 0 || nvim_syn_current_state_is_empty() != 0 }
+    unsafe { nvim_syn_is_current_state_empty() != 0 }
 }
 
 /// Set whether the current line is finished.
@@ -258,7 +255,7 @@ pub unsafe fn set_current_seqnr(seqnr: i32) {
 /// Get the length of the current state stack.
 #[must_use]
 pub fn current_state_len() -> i32 {
-    unsafe { nvim_syn_get_current_state_len().max(nvim_syn_current_state_len()) }
+    unsafe { nvim_syn_get_current_state_len() }
 }
 
 /// Set the length of the current state stack.
@@ -411,7 +408,7 @@ pub fn has_next_match() -> bool {
 /// Get the next match index value.
 #[must_use]
 pub fn next_match_idx_value() -> i32 {
-    unsafe { nvim_syn_get_next_match_idx_value() }
+    unsafe { nvim_syn_get_next_match_idx() }
 }
 
 /// Set the next match index.

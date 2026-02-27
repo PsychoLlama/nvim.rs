@@ -44,7 +44,6 @@ extern "C" {
     fn nvim_syn_get_next_match_eos_pos(lnum: *mut c_int, col: *mut c_int);
     fn nvim_syn_get_next_match_eoe_pos(lnum: *mut c_int, col: *mut c_int);
     fn nvim_syn_get_next_match_col() -> c_int;
-    fn nvim_syn_set_next_match_col_val(col: c_int);
 
     // Next sequence number
     fn nvim_syn_incr_next_seqnr() -> c_int;
@@ -514,7 +513,7 @@ pub unsafe fn check_state_ends() {
 
                 // What matches next may be different now, clear it
                 nvim_syn_set_next_match_idx(0);
-                nvim_syn_set_next_match_col_val(MAXCOL);
+                nvim_syn_set_next_match_col(MAXCOL);
                 break;
             }
 

@@ -130,8 +130,8 @@ extern "C" {
 
     // Pattern sp_syn fields for containment check (Phase 2)
     fn nvim_syn_get_pattern_syn_id(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_inc_tag(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_syn_cont_in_list(idx: c_int) -> IdListHandle;
+    fn nvim_syn_get_pattern_sp_syn_inc_tag(idx: c_int) -> c_int;
+    fn nvim_syn_get_pattern_sp_syn_cont_in_list(idx: c_int) -> IdListHandle;
     // (nvim_syn_check_pattern_containment inlined in Rust as check_pattern_containment())
     // (nvim_syn_regexec_by_idx replaced by crate::regexec::syn_regexec_by_idx)
 
@@ -181,8 +181,8 @@ unsafe fn check_pattern_containment(
     use crate::types::{StateItemHandle, HL_CONTAINED};
 
     let syn_id = nvim_syn_get_pattern_syn_id(pat_idx);
-    let inc_tag = nvim_syn_get_pattern_inc_tag(pat_idx);
-    let cont_in_list = nvim_syn_get_pattern_syn_cont_in_list(pat_idx);
+    let inc_tag = nvim_syn_get_pattern_sp_syn_inc_tag(pat_idx);
+    let cont_in_list = nvim_syn_get_pattern_sp_syn_cont_in_list(pat_idx);
 
     if has_next_list {
         let next_list = nvim_syn_get_current_next_list();

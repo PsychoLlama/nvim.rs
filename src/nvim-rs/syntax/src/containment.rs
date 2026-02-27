@@ -52,7 +52,7 @@ extern "C" {
 
     // New accessors for Phase 2: rs_syn_in_id_list implementation
     fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
-    fn nvim_syn_get_pattern_sp_syn_id(idx: c_int) -> i16;
+    fn nvim_syn_get_pattern_syn_id(idx: c_int) -> c_int;
     fn nvim_syn_get_pattern_sp_syn_inc_tag(idx: c_int) -> c_int;
     fn nvim_syn_get_pattern_sp_syn_cont_in_list(idx: c_int) -> IdListHandle;
     fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
@@ -333,7 +333,7 @@ unsafe fn in_id_list_inner(
         // cur_si->si_idx is -1 for keywords; keywords never contain anything.
         let si_idx = nvim_stateitem_get_idx(actual_si);
         if si_idx >= 0 {
-            let pat_id = nvim_syn_get_pattern_sp_syn_id(si_idx);
+            let pat_id = nvim_syn_get_pattern_syn_id(si_idx) as i16;
             let pat_inc_tag = nvim_syn_get_pattern_sp_syn_inc_tag(si_idx);
             let pat_cont_in = nvim_syn_get_pattern_sp_syn_cont_in_list(si_idx);
             let pat_flags = nvim_syn_get_pattern_flags(si_idx);

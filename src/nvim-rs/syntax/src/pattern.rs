@@ -52,12 +52,6 @@ extern "C" {
     fn nvim_synpat_has_cont_in_list(pat: SynPatHandle) -> c_int;
 
     // Pattern index-based accessors (for current synblock)
-    fn nvim_synblock_pattern_type(idx: c_int) -> c_int;
-    fn nvim_synblock_pattern_flags(idx: c_int) -> c_int;
-    fn nvim_synblock_pattern_syn_id(idx: c_int) -> c_int;
-    fn nvim_synblock_pattern_match_id(idx: c_int) -> c_int;
-    fn nvim_synblock_pattern_cont_list(idx: c_int) -> IdListHandle;
-    fn nvim_synblock_pattern_next_list(idx: c_int) -> IdListHandle;
     fn nvim_synblock_pattern_ic(pat_idx: c_int) -> c_int;
 
     fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
@@ -65,6 +59,8 @@ extern "C" {
     fn nvim_syn_get_pattern_next_list(idx: c_int) -> IdListHandle;
     fn nvim_syn_get_pattern_type(idx: c_int) -> c_int;
     fn nvim_syn_get_pattern_syn_match_id(idx: c_int) -> c_int;
+    fn nvim_syn_get_pattern_syn_id(idx: c_int) -> c_int;
+    fn nvim_syn_get_pattern_cont_list(idx: c_int) -> IdListHandle;
 }
 
 // =============================================================================
@@ -454,43 +450,43 @@ pub fn synpat_containedin_list(pat: SynPatHandle) -> Option<IdListHandle> {
 /// Get pattern type by index from current synblock
 #[must_use]
 pub fn pattern_type_by_idx(idx: i32) -> PatternType {
-    PatternType::from(unsafe { nvim_synblock_pattern_type(idx) })
+    PatternType::from(unsafe { nvim_syn_get_pattern_type(idx) })
 }
 
 /// Get pattern type as raw integer by index from current synblock
 #[must_use]
 pub fn pattern_type_raw_by_idx(idx: i32) -> i32 {
-    unsafe { nvim_synblock_pattern_type(idx) }
+    unsafe { nvim_syn_get_pattern_type(idx) }
 }
 
 /// Get pattern flags by index from current synblock
 #[must_use]
 pub fn pattern_flags_by_idx(idx: i32) -> i32 {
-    unsafe { nvim_synblock_pattern_flags(idx) }
+    unsafe { nvim_syn_get_pattern_flags(idx) }
 }
 
 /// Get pattern syn_id by index from current synblock
 #[must_use]
 pub fn pattern_syn_id_by_idx(idx: i32) -> i32 {
-    unsafe { nvim_synblock_pattern_syn_id(idx) }
+    unsafe { nvim_syn_get_pattern_syn_id(idx) }
 }
 
 /// Get pattern match_id by index from current synblock
 #[must_use]
 pub fn pattern_match_id_by_idx(idx: i32) -> i32 {
-    unsafe { nvim_synblock_pattern_match_id(idx) }
+    unsafe { nvim_syn_get_pattern_syn_match_id(idx) }
 }
 
 /// Get pattern contains list by index from current synblock
 #[must_use]
 pub fn pattern_cont_list_by_idx(idx: i32) -> IdListHandle {
-    unsafe { nvim_synblock_pattern_cont_list(idx) }
+    unsafe { nvim_syn_get_pattern_cont_list(idx) }
 }
 
 /// Get pattern nextgroup list by index from current synblock
 #[must_use]
 pub fn pattern_next_list_by_idx(idx: i32) -> IdListHandle {
-    unsafe { nvim_synblock_pattern_next_list(idx) }
+    unsafe { nvim_syn_get_pattern_next_list(idx) }
 }
 
 /// Get pattern ignore-case flag by index from current synblock

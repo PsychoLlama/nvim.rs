@@ -331,7 +331,7 @@ extern "C" {
     fn nvim_syn_get_cur_state(idx: c_int) -> StateItemHandle;
 
     /// Get the current synblock
-    fn nvim_syn_get_synblock() -> SynBlockHandle;
+    fn nvim_syn_get_syn_block() -> SynBlockHandle;
 
     // -------------------------------------------------------------------------
     // Phase 4: Pattern matching accessors
@@ -455,10 +455,10 @@ extern "C" {
     fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
 
     /// Get the spell cluster ID from a synblock
-    fn nvim_synblock_get_spell_cluster(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_spell_cluster_id(block: SynBlockHandle) -> c_int;
 
     /// Get the nospell cluster ID from a synblock
-    fn nvim_synblock_get_nospell_cluster(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_nospell_cluster_id(block: SynBlockHandle) -> c_int;
 
     /// Check if a stateitem has the HL_TRANS_CONT flag
     fn nvim_stateitem_has_trans_cont(item: StateItemHandle) -> c_int;
@@ -483,10 +483,7 @@ extern "C" {
     fn nvim_syn_set_topgrp(topgrp: c_int);
 
     /// Get the syntax block's conceal setting
-    fn nvim_synblock_get_conceal_setting(block: SynBlockHandle) -> c_int;
-
-    /// Get the syntax block's case ignore setting
-    fn nvim_synblock_get_ic_setting(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
 
     // -------------------------------------------------------------------------
     // Phase 18a: Synblock setters for :syntax commands
@@ -697,7 +694,7 @@ pub fn get_cur_state(idx: i32) -> Option<StateItemHandle> {
 /// Get the current synblock (None if not set)
 #[must_use]
 pub fn get_synblock() -> Option<SynBlockHandle> {
-    let handle = unsafe { nvim_syn_get_synblock() };
+    let handle = unsafe { nvim_syn_get_syn_block() };
     if handle.is_null() {
         None
     } else {
@@ -1284,7 +1281,7 @@ pub fn synblock_spell_cluster(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_spell_cluster(block) }
+    unsafe { nvim_synblock_get_spell_cluster_id(block) }
 }
 
 /// Get the nospell cluster ID from a synblock
@@ -1293,7 +1290,7 @@ pub fn synblock_nospell_cluster(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_nospell_cluster(block) }
+    unsafe { nvim_synblock_get_nospell_cluster_id(block) }
 }
 
 /// Check if a stateitem has the HL_TRANS_CONT flag
@@ -1392,7 +1389,7 @@ pub fn synblock_conceal_setting(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_conceal_setting(block) }
+    unsafe { nvim_synblock_get_conceal(block) }
 }
 
 /// Get the syntax block's case ignore setting
@@ -1401,7 +1398,7 @@ pub fn synblock_ic_setting(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_ic_setting(block) }
+    unsafe { nvim_synblock_get_syn_ic(block) }
 }
 
 /// Get the number of syntax subcommands

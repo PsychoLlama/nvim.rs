@@ -194,7 +194,7 @@ extern "C" {
 
     // Syntax accessors
     /// Get current_sub_char static variable (conceal substitution character)
-    fn nvim_get_current_sub_char() -> c_int;
+    fn nvim_syn_get_current_sub_char() -> c_int;
 }
 
 // ============================================================================
@@ -5232,7 +5232,7 @@ pub unsafe extern "C" fn rs_hl_get_attr_by_id(
 /// Calls external C function to access static variable.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_get_sub_char() -> c_int {
-    nvim_get_current_sub_char()
+    nvim_syn_get_current_sub_char()
 }
 
 extern "C" {

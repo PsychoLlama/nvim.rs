@@ -64,8 +64,8 @@ extern "C" {
     fn nvim_synpat_get_cont_in_list(pat: SynPatHandle) -> *mut i16;
 
     // Keyword hashtable iteration
-    fn nvim_synblock_keywtab_ptr(block: crate::types::SynBlockHandle) -> *mut c_void;
-    fn nvim_synblock_keywtab_ic_ptr(block: crate::types::SynBlockHandle) -> *mut c_void;
+    fn nvim_synblock_get_keywtab(block: crate::types::SynBlockHandle) -> *mut c_void;
+    fn nvim_synblock_get_keywtab_ic(block: crate::types::SynBlockHandle) -> *mut c_void;
     fn nvim_ht_get_array_size(ht: *const c_void) -> usize;
     fn nvim_ht_get_used(ht: *const c_void) -> usize;
     fn nvim_ht_item_at(ht: *const c_void, idx: usize) -> KeyEntryHandle;
@@ -501,9 +501,9 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
     // List keywords (not for syncing items)
     if !syncing {
         let curwin_block = nvim_get_curwin_synblock();
-        let ht = nvim_synblock_keywtab_ptr(curwin_block);
+        let ht = nvim_synblock_get_keywtab(curwin_block);
         did_header = syn_list_keywords(id, ht, did_header, hl_id);
-        let ht_ic = nvim_synblock_keywtab_ic_ptr(curwin_block);
+        let ht_ic = nvim_synblock_get_keywtab_ic(curwin_block);
         did_header = syn_list_keywords(id, ht_ic, did_header, hl_id);
     }
 

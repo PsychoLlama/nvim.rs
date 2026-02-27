@@ -22,7 +22,6 @@ extern "C" {
 
     // Synblock conceal settings
     fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_conceal_setting(block: SynBlockHandle) -> c_int;
 
     // Pattern highlight group
     fn nvim_synpat_get_hl_group(pat: SynPatHandle) -> c_int;
@@ -49,8 +48,8 @@ extern "C" {
     // Phase 32.4: Line highlighting
     fn nvim_syn_get_current_col() -> c_int;
     fn nvim_syn_set_current_col(col: c_int);
-    fn nvim_syn_get_current_finished() -> c_int;
-    fn nvim_syn_get_current_state_stored() -> c_int;
+    fn nvim_syn_is_current_finished() -> c_int;
+    fn nvim_syn_is_current_state_stored() -> c_int;
     fn nvim_synblock_get_syn_spell(block: SynBlockHandle) -> c_int;
     fn nvim_buf_get_synmaxcol(buf: crate::types::BufHandle) -> c_int;
     fn nvim_syn_current_state_valid() -> c_int;
@@ -110,7 +109,7 @@ pub fn synblock_conceal_setting(block: SynBlockHandle) -> bool {
     if block.is_null() {
         return false;
     }
-    unsafe { nvim_synblock_get_conceal_setting(block) != 0 }
+    unsafe { nvim_synblock_get_conceal(block) != 0 }
 }
 
 // =============================================================================
@@ -520,13 +519,13 @@ pub fn set_current_col(col: i32) {
 /// Check if the current line processing is finished.
 #[must_use]
 pub fn current_finished() -> bool {
-    unsafe { nvim_syn_get_current_finished() != 0 }
+    unsafe { nvim_syn_is_current_finished() != 0 }
 }
 
 /// Check if the current state has been stored.
 #[must_use]
 pub fn current_state_stored() -> bool {
-    unsafe { nvim_syn_get_current_state_stored() != 0 }
+    unsafe { nvim_syn_is_current_state_stored() != 0 }
 }
 
 /// Spell checking mode constants.

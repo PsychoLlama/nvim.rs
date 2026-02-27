@@ -33,7 +33,7 @@ extern "C" {
 
     // Current buffer/window access
     fn nvim_syn_get_buf() -> BufHandle;
-    fn nvim_syn_get_block() -> SynBlockHandle;
+    fn nvim_syn_get_syn_block() -> SynBlockHandle;
     fn nvim_syn_get_win() -> WinHandle;
 
     // Fold level computation
@@ -110,7 +110,7 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
     nvim_syn_set_current_sub_char(0); // NUL
 
     // After switching buffers, invalidate current_state.
-    let syn_block = nvim_syn_get_block();
+    let syn_block = nvim_syn_get_syn_block();
     let syn_buf = nvim_syn_get_buf();
     let wp_s = nvim_win_get_synblock(wp);
     let wp_buf = nvim_syn_win_get_buffer_ptr(wp);
@@ -129,7 +129,7 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
 
     // Allocate syntax stack when needed.
     nvim_syn_stack_alloc();
-    let block = nvim_syn_get_block();
+    let block = nvim_syn_get_syn_block();
     if nvim_synblock_has_sst_array(block) == 0 {
         return; // out of memory
     }
@@ -296,7 +296,7 @@ unsafe fn syntax_check_changed_impl(lnum: c_int) -> c_int {
 /// # Safety
 /// Requires valid window handle and C global state.
 unsafe fn syntax_end_parsing_impl(wp: WinHandle, lnum: c_int) {
-    let block = nvim_syn_get_block();
+    let block = nvim_syn_get_syn_block();
     let wp_s = nvim_win_get_synblock(wp);
     if block.0 != wp_s.0 {
         return; // not the right window
@@ -542,7 +542,7 @@ pub unsafe fn current_syn_buf() -> BufHandle {
 /// Must be called from the main thread during syntax operations.
 #[must_use]
 pub unsafe fn current_syn_block() -> SynBlockHandle {
-    nvim_syn_get_block()
+    nvim_syn_get_syn_block()
 }
 
 /// Get the current syntax window.

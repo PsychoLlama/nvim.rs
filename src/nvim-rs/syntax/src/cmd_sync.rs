@@ -41,7 +41,7 @@ extern "C" {
 
     // Accessors for linecont fields (replacing nvim_synblock_set_linecont)
     fn nvim_syn_xstrnsave(s: *const c_char, len: c_int) -> *mut c_char;
-    fn nvim_synblock_get_b_syn_ic(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_syn_ic(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_set_linecont_pat(block: SynBlockHandle, pat: *mut c_char);
     fn nvim_synblock_get_linecont_pat(block: SynBlockHandle) -> *mut c_char;
     fn nvim_synblock_set_linecont_ic(block: SynBlockHandle, ic: c_int);
@@ -110,7 +110,7 @@ unsafe fn synblock_set_linecont(
     nvim_synblock_set_linecont_pat(block, pat);
 
     // Copy the block's ignore-case setting.
-    let ic = nvim_synblock_get_b_syn_ic(block);
+    let ic = nvim_synblock_get_syn_ic(block);
     nvim_synblock_set_linecont_ic(block, ic);
 
     // Compile the pattern with empty cpoptions (avoid 'l' flag side-effect).

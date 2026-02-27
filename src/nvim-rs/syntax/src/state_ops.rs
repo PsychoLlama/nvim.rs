@@ -57,7 +57,7 @@ extern "C" {
     fn nvim_syn_ref_extmatch(em: ExtMatchHandle) -> ExtMatchHandle;
 
     // next_match_idx
-    fn nvim_syn_set_next_match_idx_val(idx: c_int);
+    fn nvim_syn_set_next_match_idx(idx: c_int);
 
     // keepend_level
     fn nvim_syn_get_keepend_level() -> c_int;
@@ -70,7 +70,7 @@ extern "C" {
     fn nvim_syn_get_pattern_next_list(idx: c_int) -> IdListHandle;
 
     // Individual next_match setters
-    fn nvim_syn_set_next_match_col_val(col: c_int);
+    fn nvim_syn_set_next_match_col(col: c_int);
     fn nvim_syn_set_next_match_m_endpos(lnum: c_int, col: c_int);
     fn nvim_syn_set_next_match_h_endpos(lnum: c_int, col: c_int);
     fn nvim_syn_set_next_match_h_startpos(lnum: c_int, col: c_int);
@@ -122,8 +122,8 @@ pub unsafe extern "C" fn rs_syn_set_next_match_state(
     end_idx: c_int,
     extmatch: ExtMatchHandle,
 ) {
-    nvim_syn_set_next_match_idx_val(idx);
-    nvim_syn_set_next_match_col_val(col);
+    nvim_syn_set_next_match_idx(idx);
+    nvim_syn_set_next_match_col(col);
     nvim_syn_set_next_match_m_endpos(m_endpos_lnum, m_endpos_col);
     nvim_syn_set_next_match_h_endpos(h_endpos_lnum, h_endpos_col);
     nvim_syn_set_next_match_h_startpos(h_startpos_lnum, h_startpos_col);
@@ -158,7 +158,7 @@ pub unsafe extern "C" fn rs_syn_pop_current_state() {
     }
     nvim_syn_set_current_state_len(len - 1);
     // After end of a pattern, try matching a keyword or pattern next time
-    nvim_syn_set_next_match_idx_val(-1);
+    nvim_syn_set_next_match_idx(-1);
     // If first state with "keepend" is popped, reset keepend_level
     let keepend = nvim_syn_get_keepend_level();
     if keepend >= len - 1 {

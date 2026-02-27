@@ -123,8 +123,6 @@ extern "C" {
     fn nvim_syn_get_current_next_flags() -> c_int;
     fn nvim_syn_get_keepend_level() -> c_int;
     fn nvim_syn_get_cur_state(idx: c_int) -> StateItemHandle;
-    fn nvim_syn_current_state_len() -> c_int;
-    fn nvim_syn_current_state_is_empty() -> c_int;
     fn nvim_syn_is_current_state_empty() -> c_int;
     fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
     fn nvim_syn_get_top_stateitem() -> StateItemHandle;

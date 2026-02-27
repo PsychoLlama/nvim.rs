@@ -35,8 +35,6 @@ extern "C" {
     fn nvim_synblock_get_cluster_id(block: SynBlockHandle, idx: c_int) -> c_int;
     fn nvim_synblock_get_spell_cluster_id(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_nospell_cluster_id(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_spell_cluster(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_get_nospell_cluster(block: SynBlockHandle) -> c_int;
 
     // ID list operations
     fn nvim_id_list_first(list: IdListHandle) -> i16;
@@ -46,7 +44,7 @@ extern "C" {
 
     // Phase 32.3: Cluster lookup and containedin
     fn nvim_synblock_has_containedin(block: SynBlockHandle) -> c_int;
-    fn nvim_synblock_pattern_count(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
     fn nvim_synpat_get_inc_tag(pat: crate::types::SynPatHandle) -> c_int;
     fn nvim_synblock_is_spell_cluster(block: SynBlockHandle, id: c_int) -> c_int;
     fn nvim_synblock_is_nospell_cluster(block: SynBlockHandle, id: c_int) -> c_int;
@@ -156,7 +154,7 @@ pub fn synblock_spell_cluster(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_spell_cluster(block) }
+    unsafe { nvim_synblock_get_spell_cluster_id(block) }
 }
 
 /// Get the nospell cluster index for a synblock.
@@ -165,7 +163,7 @@ pub fn synblock_nospell_cluster(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_get_nospell_cluster(block) }
+    unsafe { nvim_synblock_get_nospell_cluster_id(block) }
 }
 
 // =============================================================================
@@ -374,7 +372,7 @@ pub fn synblock_pattern_count(block: SynBlockHandle) -> i32 {
     if block.is_null() {
         return 0;
     }
-    unsafe { nvim_synblock_pattern_count(block) }
+    unsafe { nvim_synblock_get_pattern_count(block) }
 }
 
 /// Get the inc_tag from a pattern.

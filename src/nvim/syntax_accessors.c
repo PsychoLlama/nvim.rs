@@ -769,9 +769,6 @@ int syn_get_concealed_id(win_T *wp, linenr_T lnum, colnr_T col)
   return rs_syn_get_concealed_id(wp, lnum, col);
 }
 
-// C accessor for current_sub_char (used by Rust)
-int nvim_get_current_sub_char(void) { return current_sub_char; }
-
 // Return the syntax ID at position "i" in the current stack.
 // The caller must have called syn_get_id() before to fill the stack.
 // Returns -1 when "i" is out of range.
@@ -907,8 +904,6 @@ stateitem_T *nvim_syn_get_cur_state(int idx)
   return &CUR_STATE(idx);
 }
 
-synblock_T *nvim_syn_get_synblock(void) { return syn_block; }
-
 int nvim_syn_count_fold_items(void) { return rs_syn_count_fold_items(); }
 
 regprog_T *nvim_synpat_get_prog(synpat_T *pat) { return pat->sp_prog; }
@@ -978,9 +973,6 @@ int16_t *nvim_syn_get_current_next_list(void) { return current_next_list; }
 int nvim_syn_has_current_next_list(void) { return current_next_list != NULL; }
 synblock_T *nvim_syn_get_curwin_synblock(void) { return curwin->w_s; }
 
-int nvim_synblock_get_spell_cluster(synblock_T *block) { return block->b_spell_cluster_id; }
-int nvim_synblock_get_nospell_cluster(synblock_T *block) { return block->b_nospell_cluster_id; }
-
 int nvim_stateitem_has_trans_cont(stateitem_T *item) { return (item->si_flags & HL_TRANS_CONT) != 0; }
 int nvim_stateitem_has_match(stateitem_T *item) { return (item->si_flags & HL_MATCH) != 0; }
 int16_t *nvim_stateitem_get_cont_list(stateitem_T *item) { return item->si_cont_list; }
@@ -988,9 +980,6 @@ int nvim_stateitem_has_cont_list(stateitem_T *item) { return item->si_cont_list 
 
 int nvim_syn_get_topgrp(void) { return curwin->w_s->b_syn_topgrp; }
 void nvim_syn_set_topgrp(int topgrp) { curwin->w_s->b_syn_topgrp = topgrp; }
-
-int nvim_synblock_get_conceal_setting(synblock_T *block) { return block->b_syn_conceal; }
-int nvim_synblock_get_ic_setting(synblock_T *block) { return block->b_syn_ic; }
 
 /// Subcommand names list (mirrors SUBCOMMANDS in Rust commands.rs).
 /// Used by tab-completion (expand.rs) to iterate subcommand names.
@@ -1302,7 +1291,6 @@ void nvim_stateitem_set_cont_list(stateitem_T *item, int16_t *list)
   }
 }
 
-int nvim_syn_get_next_match_idx_value(void) { return next_match_idx; }
 void nvim_syn_set_next_match_idx(int idx) { next_match_idx = idx; }
 void nvim_syn_set_next_match_col(int col) { next_match_col = col; }
 void nvim_syn_set_current_next_list_ptr(int16_t *list) { current_next_list = list; }
@@ -1316,63 +1304,7 @@ void nvim_syn_push_current_state(int idx) { rs_syn_push_current_state(idx); }
 
 char nvim_syn_getcurline_at_col(void) { return syn_getcurline()[current_col]; }
 
-int nvim_syn_current_state_is_empty(void) { return GA_EMPTY(&current_state) ? 1 : 0; }
-
 void nvim_syn_set_current_finished(int finished) { current_finished = finished ? true : false; }
-
-/// Get synpat_T sp_type for pattern at index
-int nvim_synblock_pattern_type(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_type;
-}
-
-/// Get synpat_T sp_flags for pattern at index
-int nvim_synblock_pattern_flags(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_flags;
-}
-
-/// Get synpat_T sp_syn.id for pattern at index
-int nvim_synblock_pattern_syn_id(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_syn.id;
-}
-
-/// Get synpat_T sp_syn_match_id for pattern at index
-int nvim_synblock_pattern_match_id(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_syn_match_id;
-}
-
-/// Get synpat_T sp_cont_list for pattern at index
-int16_t *nvim_synblock_pattern_cont_list(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return NULL;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_cont_list;
-}
-
-/// Get synpat_T sp_next_list for pattern at index
-int16_t *nvim_synblock_pattern_next_list(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return NULL;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_next_list;
-}
 
 int nvim_syn_id2attr_wrapper(int syn_id) { return syn_id2attr(syn_id); }
 
@@ -1399,15 +1331,6 @@ int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
 stateitem_T *nvim_stateitem_prev_if_trans_cont(stateitem_T *item)
 {
   return rs_stateitem_prev_if_trans_cont(item);
-}
-
-/// Get SYN_ITEMS(syn_block)[idx].sp_syn.id
-int16_t nvim_syn_get_pattern_sp_syn_id(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_syn.id;
 }
 
 /// Get SYN_ITEMS(syn_block)[idx].sp_syn.inc_tag
@@ -1457,8 +1380,6 @@ int nvim_syn_utfc_ptr2len(char *p) { return utfc_ptr2len(p); }
 
 void *nvim_syn_get_buf(void) { return syn_buf; }
 void nvim_syn_set_syn_buf(void *buf) { syn_buf = (buf_T *)buf; }
-
-int nvim_syn_current_state_len(void) { return current_state.ga_len; }
 
 /// Get a stateitem from current_state by index
 stateitem_T *nvim_syn_get_stateitem(int index)
@@ -1727,8 +1648,6 @@ int nvim_synstate_next_list_eq(synstate_T *a, synstate_T *b) { return a->sst_nex
 
 int nvim_synblock_has_containedin(synblock_T *block) { return block->b_syn_containedin ? 1 : 0; }
 
-int nvim_synblock_pattern_count(synblock_T *block) { return block->b_syn_patterns.ga_len; }
-
 int nvim_synpat_get_inc_tag(synpat_T *pat) { return pat ? pat->sp_syn.inc_tag : 0; }
 
 int nvim_synblock_is_spell_cluster(synblock_T *block, int id) { return id == block->b_spell_cluster_id; }
@@ -1739,8 +1658,6 @@ int nvim_synblock_is_nospell_cluster(synblock_T *block, int id) { return id == b
 // nvim_syn_get_current_col already defined at line ~6125
 
 void nvim_syn_set_current_col(int col) { current_col = col; }
-int nvim_syn_get_current_finished(void) { return current_finished; }
-int nvim_syn_get_current_state_stored(void) { return current_state_stored; }
 
 // nvim_synblock_get_syn_spell already defined at line ~5735
 
@@ -1772,7 +1689,6 @@ int nvim_syn_get_next_match_attr(void)
 
 // nvim_syn_get_next_match_col already defined at line ~6419
 
-synblock_T *nvim_syn_get_block(void) { return syn_block; }
 win_T *nvim_syn_get_win(void) { return syn_win; }
 
 int nvim_syn_cur_foldlevel(void) { return nvim_syn_count_fold_items(); }
@@ -1788,9 +1704,6 @@ int nvim_syn_get_include_default(void) { return include_default; }
 int nvim_syn_get_include_none(void) { return include_none; }
 int nvim_syn_get_running_inc_tag(void) { return running_syn_inc_tag; }
 void nvim_syn_set_running_inc_tag(int tag) { running_syn_inc_tag = tag; }
-int nvim_syn_get_conceal_setting(synblock_T *block) { return block->b_syn_conceal; }
-int nvim_syn_get_ic_setting(synblock_T *block) { return block->b_syn_ic; }
-
 /// Set tick on synstate
 void nvim_synstate_set_tick(synstate_T *state, int tick)
 {
@@ -1846,24 +1759,6 @@ int16_t *nvim_syn_get_pattern_cont_list(int idx)
   return SYN_ITEMS(syn_block)[idx].sp_cont_list;
 }
 
-/// Get the sp_syn.inc_tag by pattern index.
-int nvim_syn_get_pattern_inc_tag(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_syn.inc_tag;
-}
-
-/// Get the sp_syn.cont_in_list by pattern index.
-int16_t *nvim_syn_get_pattern_syn_cont_in_list(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return NULL;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_syn.cont_in_list;
-}
-
 /// Get pattern count in the current synblock.
 int nvim_syn_get_synblock_pattern_count(void)
 {
@@ -1891,8 +1786,6 @@ void nvim_syn_clear_extmatch_in(void)
   unref_extmatch(re_extmatch_in);
   re_extmatch_in = NULL;
 }
-
-void nvim_syn_set_next_match_col_val(int col) { next_match_col = col; }
 
 int nvim_syn_getcurline_byte_at(int col) { return (unsigned char)syn_getcurline()[col]; }
 
@@ -2280,9 +2173,6 @@ int nvim_synblock_get_linecont_pat_is_set(synblock_T *block)
   return block->b_syn_linecont_pat != NULL ? 1 : 0;
 }
 
-/// Get b_syn_ic from a synblock.
-int nvim_synblock_get_b_syn_ic(synblock_T *block) { return block->b_syn_ic; }
-
 /// Set b_syn_linecont_pat (takes ownership of pat).
 void nvim_synblock_set_linecont_pat(synblock_T *block, char *pat)
 {
@@ -2598,12 +2488,6 @@ keyentry_T *nvim_ht_item_at(const hashtab_T *ht, size_t idx)
   }
   return HI2KE(hi);
 }
-
-/// Get b_keywtab pointer for block.
-hashtab_T *nvim_synblock_keywtab_ptr(synblock_T *block) { return &block->b_keywtab; }
-
-/// Get b_keywtab_ic pointer for block.
-hashtab_T *nvim_synblock_keywtab_ic_ptr(synblock_T *block) { return &block->b_keywtab_ic; }
 
 /// Get cluster name for curwin block at index.
 char *nvim_curwin_syncluster_name(int idx)
@@ -3205,20 +3089,8 @@ void nvim_syn_block_set_linecont_prog(void *prog)
   if (syn_block) syn_block->b_syn_linecont_prog = (regprog_T *)prog;
 }
 
-/// Set current_finished.
-void nvim_syn_set_current_finished_val(int v) { current_finished = v ? true : false; }
-
-/// Set current_col.
-void nvim_syn_set_current_col_val(int col) { current_col = (colnr_T)col; }
-
-/// Get current_col.
-int nvim_syn_get_current_col_val(void) { return (int)current_col; }
-
 /// Increment current_line_id.
 void nvim_syn_incr_current_line_id_val(void) { current_line_id++; }
-
-/// Set next_match_idx.
-void nvim_syn_set_next_match_idx_val(int idx) { next_match_idx = idx; }
 
 /// Set next_seqnr to 1.
 void nvim_syn_reset_next_seqnr(void) { next_seqnr = 1; }
@@ -3299,12 +3171,6 @@ stateitem_T *nvim_cur_state_ptr(int i)
   if (i < 0 || i >= current_state.ga_len) return NULL;
   return &CUR_STATE(i);
 }
-
-/// Get keepend_level.
-int nvim_syn_get_keepend_level_val(void) { return keepend_level; }
-
-/// Get current_state.ga_len.
-int nvim_syn_get_current_state_len_val(void) { return current_state.ga_len; }
 
 // =============================================================================
 // Phase 9: New C accessors for state_entry.rs migration

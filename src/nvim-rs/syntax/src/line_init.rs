@@ -24,13 +24,13 @@ use crate::types::{
 
 extern "C" {
     // Current state globals
-    fn nvim_syn_get_current_state_len_val() -> c_int;
-    fn nvim_syn_get_current_col_val() -> c_int;
+    fn nvim_syn_get_current_state_len() -> c_int;
+    fn nvim_syn_get_current_col() -> c_int;
     fn nvim_syn_get_current_lnum() -> c_int;
-    fn nvim_syn_get_keepend_level_val() -> c_int;
-    fn nvim_syn_set_current_finished_val(v: c_int);
-    fn nvim_syn_set_current_col_val(col: c_int);
-    fn nvim_syn_set_next_match_idx_val(idx: c_int);
+    fn nvim_syn_get_keepend_level() -> c_int;
+    fn nvim_syn_set_current_finished(v: c_int);
+    fn nvim_syn_set_current_col(col: c_int);
+    fn nvim_syn_set_next_match_idx(idx: c_int);
     fn nvim_syn_incr_current_line_id_val();
     fn nvim_syn_reset_next_seqnr();
     fn nvim_syn_current_state_nonempty() -> c_int;
@@ -88,7 +88,7 @@ extern "C" {
 /// Accesses C global state; must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
-    let state_len = nvim_syn_get_current_state_len_val();
+    let state_len = nvim_syn_get_current_state_len();
     let current_lnum = nvim_syn_get_current_lnum();
     let startofline = startofline != 0;
 
@@ -107,7 +107,7 @@ pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
 
     // Find starting point for the second pass
     let mut i = state_len - 1;
-    let keepend_level = nvim_syn_get_keepend_level_val();
+    let keepend_level = nvim_syn_get_keepend_level();
     if keepend_level >= 0 {
         while i > keepend_level {
             if (nvim_cur_state_get_si_flags(i) & HL_EXTEND) != 0 {
@@ -118,7 +118,7 @@ pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
     }
 
     // Update end positions for relevant items
-    let current_col = nvim_syn_get_current_col_val();
+    let current_col = nvim_syn_get_current_col();
     let mut seen_keepend = false;
     while i < state_len {
         let flags = nvim_cur_state_get_si_flags(i);
@@ -148,15 +148,15 @@ pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
 /// Accesses C global state; must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_start_line() {
-    nvim_syn_set_current_finished_val(0);
-    nvim_syn_set_current_col_val(0);
+    nvim_syn_set_current_finished(0);
+    nvim_syn_set_current_col(0);
 
     if nvim_syn_current_state_nonempty() != 0 {
         rs_syn_update_ends(1); // startofline = true
         rs_check_state_ends();
     }
 
-    nvim_syn_set_next_match_idx_val(-1);
+    nvim_syn_set_next_match_idx(-1);
     nvim_syn_incr_current_line_id_val();
     nvim_syn_reset_next_seqnr();
 }

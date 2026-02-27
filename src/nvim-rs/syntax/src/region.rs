@@ -22,7 +22,6 @@ use crate::types::{
 extern "C" {
     // Pattern type accessors (from syntax.c)
     fn nvim_synpat_get_type(pat: SynPatHandle) -> c_int;
-    fn nvim_synblock_pattern_type(idx: c_int) -> c_int;
     fn nvim_syn_get_pattern_type(idx: c_int) -> c_int;
 
     // Matchgroup accessors
@@ -148,12 +147,6 @@ pub fn synpat_type(pat: SynPatHandle) -> PatternType {
         return PatternType::Unknown(0);
     }
     PatternType::from_c_int(unsafe { nvim_synpat_get_type(pat) })
-}
-
-/// Get the pattern type for the current synblock pattern by index.
-#[must_use]
-pub fn synblock_pattern_type_at_idx(idx: i32) -> PatternType {
-    PatternType::from_c_int(unsafe { nvim_synblock_pattern_type(idx) })
 }
 
 /// Get the pattern type for the current synblock's pattern by index.
