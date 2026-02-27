@@ -3601,6 +3601,22 @@ OptInt nvim_get_p_wm_nopaste(void) { return p_wm_nopaste; }
 OptInt nvim_get_p_sts_nopaste(void) { return p_sts_nopaste; }
 // nvim_get_p_tw_nobin / nvim_get_p_wm_nobin: already defined at lines 1331/1333
 
+// Generic helpers for offset-based buf_T field writes (used by bufcopy.rs):
+
+/// Set a buf_T char* field at the given byte offset to xstrdup(s).
+void nvim_buf_set_string_field(buf_T *buf, ptrdiff_t offset, const char *s)
+{
+  char **field = (char **)(((char *)buf) + offset);
+  *field = xstrdup(s);
+}
+
+/// Set a buf_T char* field at the given byte offset to empty_string_option.
+void nvim_buf_empty_string_field(buf_T *buf, ptrdiff_t offset)
+{
+  char **field = (char **)(((char *)buf) + offset);
+  *field = empty_string_option;
+}
+
 /// Sets buf->b_p_fenc = xstrdup(p_fenc).
 void nvim_buf_set_b_p_fenc_dup(buf_T *buf) { buf->b_p_fenc = xstrdup(p_fenc); }
 
@@ -3619,39 +3635,17 @@ void nvim_buf_set_b_p_bh_empty(buf_T *buf) { buf->b_p_bh = empty_string_option; 
 /// Sets buf->b_p_bt = empty_string_option.
 void nvim_buf_set_b_p_bt_empty(buf_T *buf) { buf->b_p_bt = empty_string_option; }
 
-/// Sets buf->b_p_ft = empty_string_option.
-void nvim_buf_set_b_p_ft_empty(buf_T *buf) { buf->b_p_ft = empty_string_option; }
-/// Sets buf->b_p_syn = empty_string_option.
-void nvim_buf_set_b_p_syn_empty(buf_T *buf) { buf->b_p_syn = empty_string_option; }
-/// Sets buf->b_p_fp = empty_string_option.
-void nvim_buf_set_b_p_fp_empty(buf_T *buf) { buf->b_p_fp = empty_string_option; }
-/// Sets buf->b_s.b_syn_isk = empty_string_option.
-void nvim_buf_set_b_s_syn_isk_empty(buf_T *buf) { buf->b_s.b_syn_isk = empty_string_option; }
-
 // Setters for global-local fields that default to "no local value":
+// Simple empty-string ones now handled via nvim_buf_empty_string_field.
 void nvim_buf_set_b_p_ac_minus1(buf_T *buf) { buf->b_p_ac = -1; }
 void nvim_buf_set_b_p_ar_minus1(buf_T *buf) { buf->b_p_ar = -1; }
 void nvim_buf_set_b_p_ul_no_local(buf_T *buf) { buf->b_p_ul = NO_LOCAL_UNDOLEVEL; }
+// These also zero flag fields, so they cannot be replaced by the generic helper:
 void nvim_buf_set_b_p_bkc_empty(buf_T *buf) { buf->b_p_bkc = empty_string_option; buf->b_bkc_flags = 0; }
-void nvim_buf_set_b_p_gefm_empty(buf_T *buf) { buf->b_p_gefm = empty_string_option; }
-void nvim_buf_set_b_p_gp_empty(buf_T *buf) { buf->b_p_gp = empty_string_option; }
-void nvim_buf_set_b_p_mp_empty(buf_T *buf) { buf->b_p_mp = empty_string_option; }
-void nvim_buf_set_b_p_efm_empty(buf_T *buf) { buf->b_p_efm = empty_string_option; }
-void nvim_buf_set_b_p_ep_empty(buf_T *buf) { buf->b_p_ep = empty_string_option; }
-void nvim_buf_set_b_p_ffu_empty(buf_T *buf) { buf->b_p_ffu = empty_string_option; }
-void nvim_buf_set_b_p_kp_empty(buf_T *buf) { buf->b_p_kp = empty_string_option; }
-void nvim_buf_set_b_p_path_empty(buf_T *buf) { buf->b_p_path = empty_string_option; }
-void nvim_buf_set_b_p_tags_empty(buf_T *buf) { buf->b_p_tags = empty_string_option; }
 void nvim_buf_set_b_p_tc_empty(buf_T *buf) { buf->b_p_tc = empty_string_option; buf->b_tc_flags = 0; }
-void nvim_buf_set_b_p_def_empty(buf_T *buf) { buf->b_p_def = empty_string_option; }
-void nvim_buf_set_b_p_inc_empty(buf_T *buf) { buf->b_p_inc = empty_string_option; }
 void nvim_buf_set_b_p_cot_empty(buf_T *buf) { buf->b_p_cot = empty_string_option; buf->b_cot_flags = 0; }
-void nvim_buf_set_b_p_dict_empty(buf_T *buf) { buf->b_p_dict = empty_string_option; }
-void nvim_buf_set_b_p_dia_empty(buf_T *buf) { buf->b_p_dia = empty_string_option; }
-void nvim_buf_set_b_p_tsr_empty(buf_T *buf) { buf->b_p_tsr = empty_string_option; }
-void nvim_buf_set_b_p_tsrfu_empty(buf_T *buf) { buf->b_p_tsrfu = empty_string_option; }
-void nvim_buf_set_b_p_lw_empty(buf_T *buf) { buf->b_p_lw = empty_string_option; }
-void nvim_buf_set_b_p_menc_empty(buf_T *buf) { buf->b_p_menc = empty_string_option; }
+/// Sets buf->b_s.b_syn_isk = empty_string_option (b_s substructure -- not in offset table).
+void nvim_buf_set_b_s_syn_isk_empty(buf_T *buf) { buf->b_s.b_syn_isk = empty_string_option; }
 
 // Scalar field setters for the bulk copy:
 void nvim_buf_set_b_p_ai(buf_T *buf, int v) { buf->b_p_ai = v != 0; }
@@ -3688,42 +3682,13 @@ void nvim_buf_set_b_p_ts(buf_T *buf, OptInt v) { buf->b_p_ts = v; }
 // nvim_buf_set_b_p_iminsert / nvim_buf_set_b_p_imsearch: already in buffer.c (int param)
 void nvim_buf_set_b_p_ma(buf_T *buf, int v) { buf->b_p_ma = v != 0; }
 
-// String field setters using xstrdup:
-void nvim_buf_set_b_p_cpt_dup(buf_T *buf, const char *s) { buf->b_p_cpt = xstrdup(s); }
-void nvim_buf_set_b_p_cfu_dup(buf_T *buf, const char *s) { buf->b_p_cfu = xstrdup(s); }
-void nvim_buf_set_b_p_ofu_dup(buf_T *buf, const char *s) { buf->b_p_ofu = xstrdup(s); }
-void nvim_buf_set_b_p_tfu_dup(buf_T *buf, const char *s) { buf->b_p_tfu = xstrdup(s); }
-void nvim_buf_set_b_p_vsts_dup(buf_T *buf, const char *s) { buf->b_p_vsts = xstrdup(s); }
+// String field setters using xstrdup that cannot use the generic helper:
+// (b_s substructure fields are not in the opt_field_offsets table)
 void nvim_buf_set_b_p_vsts_nopaste_dup(buf_T *buf, const char *s) { buf->b_p_vsts_nopaste = s ? xstrdup(s) : NULL; }
-void nvim_buf_set_b_p_com_dup(buf_T *buf, const char *s) { buf->b_p_com = xstrdup(s); }
-void nvim_buf_set_b_p_cms_dup(buf_T *buf, const char *s) { buf->b_p_cms = xstrdup(s); }
-void nvim_buf_set_b_p_fo_dup(buf_T *buf, const char *s) { buf->b_p_fo = xstrdup(s); }
-void nvim_buf_set_b_p_flp_dup(buf_T *buf, const char *s) { buf->b_p_flp = xstrdup(s); }
-void nvim_buf_set_b_p_nf_dup(buf_T *buf, const char *s) { buf->b_p_nf = xstrdup(s); }
-void nvim_buf_set_b_p_mps_dup(buf_T *buf, const char *s) { buf->b_p_mps = xstrdup(s); }
-void nvim_buf_set_b_p_cink_dup(buf_T *buf, const char *s) { buf->b_p_cink = xstrdup(s); }
-void nvim_buf_set_b_p_cino_dup(buf_T *buf, const char *s) { buf->b_p_cino = xstrdup(s); }
-void nvim_buf_set_b_p_cinsd_dup(buf_T *buf, const char *s) { buf->b_p_cinsd = xstrdup(s); }
-void nvim_buf_set_b_p_lop_dup(buf_T *buf, const char *s) { buf->b_p_lop = xstrdup(s); }
-void nvim_buf_set_b_p_cinw_dup(buf_T *buf, const char *s) { buf->b_p_cinw = xstrdup(s); }
 void nvim_buf_set_b_s_spc_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spc = xstrdup(s); }
 void nvim_buf_set_b_s_spf_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spf = xstrdup(s); }
 void nvim_buf_set_b_s_spl_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spl = xstrdup(s); }
 void nvim_buf_set_b_s_spo_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spo = xstrdup(s); }
-void nvim_buf_set_b_p_inde_dup(buf_T *buf, const char *s) { buf->b_p_inde = xstrdup(s); }
-void nvim_buf_set_b_p_indk_dup(buf_T *buf, const char *s) { buf->b_p_indk = xstrdup(s); }
-void nvim_buf_set_b_p_fex_dup(buf_T *buf, const char *s) { buf->b_p_fex = xstrdup(s); }
-void nvim_buf_set_b_p_sua_dup(buf_T *buf, const char *s) { buf->b_p_sua = xstrdup(s); }
-void nvim_buf_set_b_p_keymap_dup(buf_T *buf, const char *s) { buf->b_p_keymap = xstrdup(s); }
-void nvim_buf_set_b_p_qe_dup(buf_T *buf, const char *s) { buf->b_p_qe = xstrdup(s); }
-void nvim_buf_set_b_p_inex_dup(buf_T *buf, const char *s) { buf->b_p_inex = xstrdup(s); }
-void nvim_buf_set_b_p_isk_dup(buf_T *buf, const char *s) { buf->b_p_isk = xstrdup(s); }
-void nvim_buf_set_b_p_vts_dup(buf_T *buf, const char *s) { buf->b_p_vts = xstrdup(s); }
-#ifdef BACKSLASH_IN_FILENAME
-void nvim_buf_set_b_p_csl_dup(buf_T *buf, const char *s) { buf->b_p_csl = xstrdup(s); }
-#else
-void nvim_buf_set_b_p_csl_dup(buf_T *buf, const char *s) { (void)buf; (void)s; }
-#endif
 
 /// Copy global script_ctx for a buf-opt index to the buffer's script_ctx array.
 /// Implements COPY_OPT_SCTX(buf, bv).

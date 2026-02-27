@@ -82,7 +82,7 @@ static BUF_FIELD_OFFSETS: OnceLock<[isize; crate::opt_index::K_OPT_COUNT as usiz
     OnceLock::new();
 
 /// Get (and lazily initialize) the buf_T field offset table.
-fn buf_field_offsets() -> &'static [isize; crate::opt_index::K_OPT_COUNT as usize] {
+pub(crate) fn buf_field_offsets() -> &'static [isize; crate::opt_index::K_OPT_COUNT as usize] {
     BUF_FIELD_OFFSETS.get_or_init(|| {
         let mut table = [-1isize; crate::opt_index::K_OPT_COUNT as usize];
         // Safety: nvim_buf_opt_field_offsets writes exactly K_OPT_COUNT entries.
