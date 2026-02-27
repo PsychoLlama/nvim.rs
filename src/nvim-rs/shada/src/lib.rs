@@ -480,7 +480,6 @@ extern "C" {
 
     // Phase 4: Entry free consolidation accessors
     fn nvim_shada_tv_clear(tv: *mut c_void);
-    fn nvim_shada_free_reg_contents(contents_ptr: *mut c_void, contents_size: usize);
     fn nvim_shada_free_variable(entry: *mut ShadaEntry);
     // Phase 1 (plan 11dd3cf4): Free Header entry dict via C (Dict type mismatch prevents direct call)
     fn nvim_shada_free_header_entry(entry: *mut ShadaEntry);
@@ -732,8 +731,6 @@ extern "C" {
     // nvim_shada_file_marks_get_additional removed: use (*fm).additional_marks.add(idx)
     // nvim_shada_file_marks_free_additional removed: nvim_xfree + null out fields
     // nvim_shada_file_marks_push_additional removed: inline xrealloc + write
-    /// Get size of file_marks PMap in WMS.
-    fn nvim_shada_wms_file_marks_size(wms: *const c_void) -> usize;
     /// Collect, sort, and return all FileMarks from WMS as array.
     fn nvim_shada_wms_file_marks_get_sorted(
         wms: *const c_void,
@@ -747,8 +744,6 @@ extern "C" {
     fn nvim_shada_wms_dumped_vars_put(wms: *mut c_void, name: *const c_char);
     /// Destroy dumped_variables set in WMS.
     fn nvim_shada_wms_dumped_vars_destroy(wms: *mut c_void);
-    /// Get hmll.size of hms[i].
-    fn nvim_shada_wms_hms_size(wms: *const c_void, i: c_int) -> usize;
     /// Compare mark entry timestamps to determine if mark_get result is newer.
     fn nvim_shada_mark_get_cmp(
         buf: *const c_void,
@@ -758,15 +753,7 @@ extern "C" {
     ) -> c_int;
     /// Compare file paths (wraps nvim_mark_path_fnamecmp).
     fn nvim_shada_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
-    /// Free a C string key (wraps xfree).
-    fn nvim_shada_xfree_key(key: *mut c_void);
-    /// Allocate a zeroed WriteMergerState.
-    fn nvim_shada_wms_alloc() -> *mut c_void;
-    /// Free a WriteMergerState (does not destroy PMap/Set fields).
-    fn nvim_shada_wms_free(wms: *mut c_void);
     // nvim_shada_packer_flush_buf deleted (Phase 1 plan c02d0f11): replaced by nvim_shada_packer_flush inline helper.
-    /// Create a PackerBuffer for a FileDescriptor.
-    fn nvim_shada_packer_buffer_for_file(fd: *mut c_void) -> ShadaPackerBuffer;
     /// Initialize a PackerBuffer for writing to a FileDescriptor (by pointer).
     fn nvim_shada_packer_init_for_file(fd: *mut c_void, out: *mut ShadaPackerBuffer);
 }

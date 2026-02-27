@@ -617,16 +617,6 @@ void nvim_shada_tv_clear(typval_T *tv)
   tv_clear(tv);
 }
 
-/// Free register contents — each element is a String struct ({char*, size_t}).
-/// Frees each String's data and then the array itself.
-void nvim_shada_free_reg_contents(void *contents_ptr, size_t contents_size)
-{
-  String *contents = (String *)contents_ptr;
-  for (size_t i = 0; i < contents_size; i++) {
-    api_free_string(contents[i]);
-  }
-  xfree(contents);
-}
 
 /// Free the value portion of a global_var entry.
 /// Takes a pointer to the typval_T within the ShadaEntry union.
@@ -1285,12 +1275,6 @@ void **nvim_shada_wms_file_marks_put_ref(void *wms_opaque, const char *fname,
 // nvim_shada_file_marks_free_additional deleted (plan 9106c29c Phase 2): inline nvim_xfree + null.
 // nvim_shada_file_marks_push_additional deleted (plan 9106c29c Phase 2): inline xrealloc + write.
 
-/// Get the size of the file_marks PMap in the WriteMergerState.
-size_t nvim_shada_wms_file_marks_size(const void *wms_opaque)
-{
-  const WriteMergerState *wms = (const WriteMergerState *)wms_opaque;
-  return wms ? map_size(&wms->file_marks) : 0;
-}
 
 /// Collect all FileMarks from the PMap, sort by greatest_timestamp (descending),
 /// and return as an allocated array of void* pointers.
@@ -1363,15 +1347,6 @@ void nvim_shada_wms_dumped_vars_destroy(void *wms_opaque)
   }
 }
 
-/// Get the hmll.size of hms[i] (to check if history merging is active).
-size_t nvim_shada_wms_hms_size(const void *wms_opaque, int i)
-{
-  const WriteMergerState *wms = (const WriteMergerState *)wms_opaque;
-  if (!wms || i < 0 || i >= HIST_COUNT) {
-    return 0;
-  }
-  return wms->hms[i].hmll.size;
-}
 
 /// Get the (lnum, col) of the mark returned by mark_get for a local mark.
 /// Returns 1 if a mark was found with timestamp >= entry_ts, 0 otherwise.
@@ -1395,25 +1370,6 @@ int nvim_shada_path_fnamecmp(const char *a, const char *b)
   return nvim_mark_path_fnamecmp(a, b);
 }
 
-/// Get the xfree function pointer for use by Rust (wraps xfree).
-void nvim_shada_xfree_key(void *key)
-{
-  xfree(key);
-}
-
-/// Allocate and initialize a WriteMergerState on the heap (returns void*).
-void *nvim_shada_wms_alloc(void)
-{
-  return xcalloc(1, sizeof(WriteMergerState));
-}
-
-/// Free a WriteMergerState without destroying PMap/Set fields (those must be
-/// destroyed separately via nvim_shada_wms_file_marks_destroy and
-/// nvim_shada_wms_dumped_vars_destroy).
-void nvim_shada_wms_free(void *wms)
-{
-  xfree(wms);
-}
 
 /// Flush the packer buffer.
 
@@ -1426,14 +1382,16 @@ static void nvim_shada_flush_file_buffer_(PackerBuffer *buffer)
   buffer->ptr = fd->write_pos;
 }
 
-/// Create a PackerBuffer for writing to a FileDescriptor.
-PackerBuffer nvim_shada_packer_buffer_for_file(void *fd)
+/// Initialize a PackerBuffer for writing to a FileDescriptor (by pointer).
+/// @param fd     FileDescriptor to write to.
+/// @param out    Output: initialized PackerBuffer.
+void nvim_shada_packer_init_for_file(void *fd, PackerBuffer *out)
 {
   FileDescriptor *file = (FileDescriptor *)fd;
   if (file_space(file) < SHADA_MPACK_FREE_SPACE) {
     file_flush(file);
   }
-  return (PackerBuffer) {
+  *out = (PackerBuffer) {
     .startptr = file->buffer,
     .ptr = file->write_pos,
     .endptr = file->buffer + ARENA_BLOCK_SIZE,
@@ -1441,15 +1399,6 @@ PackerBuffer nvim_shada_packer_buffer_for_file(void *fd)
     .anyint = 0,
     .packer_flush = nvim_shada_flush_file_buffer_,
   };
-}
-
-/// Initialize a PackerBuffer for writing to a FileDescriptor (by pointer).
-/// This is the preferred accessor for Rust which cannot use by-value struct returns.
-/// @param fd     FileDescriptor to write to.
-/// @param out    Output: initialized PackerBuffer.
-void nvim_shada_packer_init_for_file(void *fd, PackerBuffer *out)
-{
-  *out = nvim_shada_packer_buffer_for_file(fd);
 }
 
 // =============================================================================
