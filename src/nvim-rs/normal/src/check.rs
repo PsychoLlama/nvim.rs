@@ -141,7 +141,7 @@ extern "C" {
     fn nvim_ui_flush_wrapper();
     fn nvim_may_trigger_modechanged();
     fn nvim_typebuf_maplen_wrapper() -> c_int;
-    fn nvim_typebuf_typed_wrapper() -> bool;
+    fn nvim_typebuf_typed() -> bool;
     fn nvim_ui_has_messages() -> c_int; // defined in message.c
     fn nvim_os_delay_wrapper(ms: c_int, can_interrupt: bool);
     fn nvim_showmode();
@@ -370,7 +370,7 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
     && nvim_oap_get_regname_ptr(oa) == 0
     && (nvim_cap_get_retval(ca) & CA_COMMAND_BUSY == 0)
     && nvim_stuff_empty()
-    && nvim_typebuf_typed_wrapper()
+    && nvim_typebuf_typed()
     && nvim_get_emsg_silent() == 0
     && !nvim_get_in_assert_fails()
     && !nvim_get_did_wait_return_val()

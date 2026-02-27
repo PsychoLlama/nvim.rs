@@ -1122,8 +1122,6 @@ void nvim_getvcols_call(int lnum1, int col1, int coladd1,
   *out_right = right;
 }
 
-void nvim_coladvance_call(int col) { coladvance(curwin, col); }
-
 /// findmatch wrapper: returns success and out-params for position.
 bool nvim_findmatch_nul(oparg_T *oap, int *out_lnum, int *out_col, int *out_coladd)
 {
@@ -1445,9 +1443,7 @@ const char *nvim_get_e352_msg(void) { return _("E352: Cannot erase folds with cu
 // g-command C accessors for Rust FFI
 bool nvim_current_search(int count, bool forward) { return current_search(count, forward); }
 int nvim_cursor_up(int count, bool upd_topline) { return cursor_up(count, upd_topline); }
-int nvim_cursor_down_call(int count, bool upd_topline) { return cursor_down(count, upd_topline); }
 int nvim_linetabsize_curwin(int lnum) { return linetabsize(curwin, lnum); }
-void nvim_coladvance_curwin(int col) { coladvance(curwin, (colnr_T)col); }
 void nvim_cursor_pos_info_call(void) { cursor_pos_info(NULL); }
 void nvim_invoke_edit_g(cmdarg_T *cap) { invoke_edit(cap, false, 'g', false); }
 void nvim_set_mod_mask_ctrl(void) { mod_mask = MOD_MASK_CTRL; }
@@ -1755,9 +1751,6 @@ bool nvim_get_in_assert_fails(void) { return in_assert_fails; }
 
 /// Get did_wait_return global.
 bool nvim_get_did_wait_return_val(void) { return did_wait_return; }
-
-/// Get typebuf_typed() result.
-bool nvim_typebuf_typed_wrapper(void) { return typebuf_typed(); }
 
 // nvim_ns_get_old_pos_col: defined before #undef NS below
 // nvim_get_cursor_lnum: defined at line 685
@@ -2413,9 +2406,6 @@ bool nvim_ident_curbuf_is_help(void) { return curbuf->b_help; }
 
 /// Return curbuf's filetype string.
 char *nvim_ident_get_curbuf_ft(void) { return curbuf->b_p_ft; }
-
-/// Set curwin->w_cursor.col.
-void nvim_ident_set_cursor_col(int col) { curwin->w_cursor.col = (colnr_T)col; }
 
 /// Return get_cursor_line_ptr().
 char *nvim_ident_get_cursor_line_ptr(void) { return get_cursor_line_ptr(); }

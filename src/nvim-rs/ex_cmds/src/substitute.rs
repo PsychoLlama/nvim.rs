@@ -1170,7 +1170,7 @@ extern "C" {
     fn nvim_curbuf_get_b_p_ma() -> c_int;
     fn nvim_curbuf_set_b_p_ma(val: c_int);
     fn nvim_curbuf_set_deleted_bytes2(val: c_int);
-    fn nvim_coladvance_curwin(col: c_int);
+    fn nvim_coladvance(col: c_int);
     fn nvim_do_sub_changed_bytes(lnum: c_int, col: c_int);
     fn nvim_do_sub_deleted_lines(lnum: c_int, count: c_int);
     fn nvim_u_inssub(lnum: c_int) -> c_int;
@@ -2129,7 +2129,7 @@ pub unsafe extern "C" fn rs_do_sub(
         if nvim_excmds_global_busy() == 0 {
             if !subflags_local.do_ask {
                 if endcolumn {
-                    nvim_coladvance_curwin(MAXCOL);
+                    nvim_coladvance(MAXCOL);
                 } else {
                     // BL_WHITE | BL_FIX = 1 | 4 = 5
                     beginline(5);
