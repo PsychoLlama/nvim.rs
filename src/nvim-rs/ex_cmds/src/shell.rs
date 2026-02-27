@@ -1101,10 +1101,6 @@ extern "C" {
     fn nvim_excmds_curbuf_op_restore(saved_start: u64, saved_end: u64);
     fn nvim_excmds_curbuf_op_adjust_lnum(delta: c_int);
     fn nvim_excmds_os_remove(path: *const c_char) -> c_int;
-    fn nvim_excmds_kShellOptFilter() -> c_int;
-    fn nvim_excmds_kShellOptRead() -> c_int;
-    fn nvim_excmds_kShellOptWrite() -> c_int;
-    fn nvim_excmds_kShellOptDoOut() -> c_int;
     fn nvim_excmds_curbuf_ml_line_count() -> c_int;
     fn nvim_excmds_get_curbuf_ptr() -> *mut std::ffi::c_void;
     fn nvim_excmds_aborting() -> c_int;
@@ -1121,6 +1117,12 @@ extern "C" {
 /// BL_WHITE | BL_FIX constants for beginline()
 const BL_WHITE: c_int = 1;
 const BL_FIX: c_int = 4;
+
+// kShellOpt* constants -- verified by _Static_assert in ex_cmds_shim.c
+const K_SHELL_OPT_FILTER: c_int = 1;
+const K_SHELL_OPT_READ: c_int = 16;
+const K_SHELL_OPT_WRITE: c_int = 32;
+const K_SHELL_OPT_DO_OUT: c_int = 4;
 
 /// Filter lines through an external command. Replaces C `do_filter`.
 ///
@@ -1160,10 +1162,10 @@ pub unsafe extern "C" fn rs_do_filter(
     nvim_excmds_changed_line_abv_curs();
     nvim_excmds_invalidate_botline();
 
-    let k_shell_opt_do_out = nvim_excmds_kShellOptDoOut();
-    let k_shell_opt_read = nvim_excmds_kShellOptRead();
-    let k_shell_opt_write = nvim_excmds_kShellOptWrite();
-    let k_shell_opt_filter = nvim_excmds_kShellOptFilter();
+    let k_shell_opt_do_out = K_SHELL_OPT_DO_OUT;
+    let k_shell_opt_read = K_SHELL_OPT_READ;
+    let k_shell_opt_write = K_SHELL_OPT_WRITE;
+    let k_shell_opt_filter = K_SHELL_OPT_FILTER;
 
     let mut shell_flags: c_int = 0;
     if do_out {

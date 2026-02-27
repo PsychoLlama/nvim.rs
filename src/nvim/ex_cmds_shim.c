@@ -429,6 +429,20 @@ _Static_assert(MODE_NORMAL == 0x01, "MODE_NORMAL mismatch");
 _Static_assert(B_IMODE_LMAP == 1, "B_IMODE_LMAP mismatch");
 _Static_assert(BL_SOL == 2, "BL_SOL mismatch");
 
+// Verify do_filter/write constants used as Rust compile-time values.
+_Static_assert(kShellOptFilter == 1, "kShellOptFilter mismatch - update Rust constant");
+_Static_assert(kShellOptRead == 16, "kShellOptRead mismatch - update Rust constant");
+_Static_assert(kShellOptWrite == 32, "kShellOptWrite mismatch - update Rust constant");
+_Static_assert(kShellOptDoOut == 4, "kShellOptDoOut mismatch - update Rust constant");
+_Static_assert(GETFILE_ERROR == 1, "GETFILE_ERROR mismatch - update Rust constant");
+_Static_assert(GETFILE_NOT_WRITTEN == 2, "GETFILE_NOT_WRITTEN mismatch - update Rust constant");
+_Static_assert(GETFILE_SAME_FILE == 0, "GETFILE_SAME_FILE mismatch - update Rust constant");
+_Static_assert(GETFILE_OPEN_OTHER == -1, "GETFILE_OPEN_OTHER mismatch - update Rust constant");
+_Static_assert(BF_NOTEDITED == 0x08, "BF_NOTEDITED mismatch - update Rust constant");
+_Static_assert(BF_NEW == 0x10, "BF_NEW mismatch - update Rust constant");
+_Static_assert(BF_READERR == 0x40, "BF_READERR mismatch - update Rust constant");
+_Static_assert(NODE_OTHER == 2, "NODE_OTHER mismatch - update Rust constant");
+
 // Verify do_sub constants used as Rust compile-time values.
 _Static_assert(CMD_tilde == 554, "CMD_tilde mismatch - update Rust constant");
 _Static_assert(MAXCOL == 0x7fffffff, "MAXCOL mismatch - update Rust constant");
@@ -1632,22 +1646,10 @@ void nvim_excmds_curbuf_op_adjust_lnum(int delta)
 /// os_remove wrapper.
 int nvim_excmds_os_remove(const char *path) { return os_remove(path); }
 
-/// kShellOpt* constants accessor.
-int nvim_excmds_kShellOptFilter(void) { return kShellOptFilter; }
-int nvim_excmds_kShellOptRead(void) { return kShellOptRead; }
-int nvim_excmds_kShellOptWrite(void) { return kShellOptWrite; }
-int nvim_excmds_kShellOptDoOut(void) { return kShellOptDoOut; }
-
 /// Get curbuf->b_ml.ml_line_count.
 int nvim_excmds_curbuf_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
 
 // --- Phase 5: getfile, set_swapcommand, delbuf_msg FFI accessors ---
-
-/// GETFILE_* constants.
-int nvim_excmds_getfile_error(void) { return GETFILE_ERROR; }
-int nvim_excmds_getfile_not_written(void) { return GETFILE_NOT_WRITTEN; }
-int nvim_excmds_getfile_same_file(void) { return GETFILE_SAME_FILE; }
-int nvim_excmds_getfile_open_other(void) { return GETFILE_OPEN_OTHER; }
 
 /// Wrap check_can_set_curbuf_forceit(forceit). Returns 1 if allowed.
 int nvim_excmds_check_can_set_curbuf_forceit(int forceit)
@@ -1706,18 +1708,11 @@ void nvim_excmds_curwin_set_cursor_lnum(int lnum) { curwin->w_cursor.lnum = (lin
 /// Wrap check_cursor_lnum(curwin).
 void nvim_excmds_check_cursor_lnum(void) { check_cursor_lnum(curwin); }
 
-/// BL_SOL | BL_FIX constants.
-int nvim_excmds_bl_sol_fix(void) { return BL_SOL | BL_FIX; }
-
 /// Wrap do_ecmd(fnum, ffname, sfname, NULL, lnum, flags, curwin). Returns 1=OK, 0=FAIL.
 int nvim_excmds_do_ecmd_getfile(int fnum, char *ffname, char *sfname, int lnum, int flags)
 {
   return do_ecmd(fnum, ffname, sfname, NULL, (linenr_T)lnum, flags, curwin) == OK ? 1 : 0;
 }
-
-/// ECMD_HIDE and ECMD_FORCEIT constants.
-int nvim_excmds_ecmd_hide(void) { return ECMD_HIDE; }
-int nvim_excmds_ecmd_forceit(void) { return ECMD_FORCEIT; }
 
 /// For set_swapcommand: get_vim_var_str(VV_SWAPCOMMAND). Returns the string (not owned).
 const char *nvim_excmds_get_vim_var_str_swapcommand(void)
@@ -1861,13 +1856,6 @@ int nvim_excmds_bt_nofilename(const buf_T *buf) { return bt_nofilename((buf_T *)
 
 /// Get buf->b_flags field.
 int nvim_excmds_buf_get_b_flags(const buf_T *buf) { return (int)buf->b_flags; }
-
-/// BF_NOTEDITED constant.
-int nvim_excmds_bf_notedited(void) { return BF_NOTEDITED; }
-/// BF_NEW constant.
-int nvim_excmds_bf_new(void) { return BF_NEW; }
-/// BF_READERR constant.
-int nvim_excmds_bf_readerr(void) { return BF_READERR; }
 
 /// Check vim_strchr(p_cpo, CPO_OVERNEW) == NULL. Returns 1 if not found.
 int nvim_excmds_cpo_no_overnew(void) { return vim_strchr(p_cpo, CPO_OVERNEW) == NULL ? 1 : 0; }
@@ -2104,9 +2092,6 @@ int nvim_excmds_get_p_write(void) { return p_write ? 1 : 0; }
 
 /// Wrap os_nodetype(fname). Returns NODE_OTHER constant value for comparison.
 int nvim_excmds_os_nodetype(const char *fname) { return (int)os_nodetype(fname); }
-
-/// Return NODE_OTHER constant value.
-int nvim_excmds_node_other_val(void) { return (int)NODE_OTHER; }
 
 /// Get eap->mkdir_p field.
 int nvim_excmds_eap_get_mkdir_p(const exarg_T *eap) { return eap->mkdir_p ? 1 : 0; }

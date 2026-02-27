@@ -258,7 +258,6 @@ pub extern "C" fn rs_should_write_update(is_modified: c_int) -> c_int {
 extern "C" {
     fn nvim_excmds_get_p_write() -> c_int;
     fn nvim_excmds_os_nodetype(fname: *const c_char) -> c_int;
-    fn nvim_excmds_node_other_val() -> c_int;
     fn nvim_excmds_eap_get_mkdir_p(eap: *const ExArgHandle) -> c_int;
     fn nvim_excmds_os_file_mkdir(fname: *const c_char) -> c_int;
     fn nvim_excmds_buf_get_b_p_ro(buf: *const BufHandle) -> c_int;
@@ -302,7 +301,7 @@ pub unsafe extern "C" fn rs_not_writing() -> c_int {
 pub unsafe extern "C" fn rs_check_writable(fname: *const c_char) -> c_int {
     #[cfg(unix)]
     {
-        if nvim_excmds_os_nodetype(fname) == nvim_excmds_node_other_val() {
+        if nvim_excmds_os_nodetype(fname) == NODE_OTHER_VAL {
             nvim_excmds_semsg_e503(fname);
             return 0; // FAIL
         }
@@ -382,11 +381,28 @@ pub unsafe extern "C" fn rs_check_readonly(eap: *mut ExArgHandle, buf: *mut BufH
 // Phase 5: getfile, set_swapcommand, delbuf_msg FFI declarations and implementations
 // =============================================================================
 
+// GETFILE_* constants -- verified by _Static_assert in ex_cmds_shim.c
+const GETFILE_ERROR_VAL: c_int = 1;
+const GETFILE_NOT_WRITTEN_VAL: c_int = 2;
+const GETFILE_SAME_FILE_VAL: c_int = 0;
+const GETFILE_OPEN_OTHER_VAL: c_int = -1;
+
+// ECMD_* constants -- verified by _Static_assert in ex_cmds_shim.c
+const ECMD_HIDE_VAL: c_int = 0x01;
+const ECMD_FORCEIT_VAL: c_int = 0x08;
+
+// BF_* constants -- verified by _Static_assert in ex_cmds_shim.c
+const BF_NOTEDITED_VAL: c_int = 0x08;
+const BF_NEW_VAL: c_int = 0x10;
+const BF_READERR_VAL: c_int = 0x40;
+
+// BL_SOL | BL_FIX -- verified by _Static_assert in ex_cmds_shim.c
+const BL_SOL_FIX_VAL: c_int = 6;
+
+// NODE_OTHER -- verified by _Static_assert in ex_cmds_shim.c
+const NODE_OTHER_VAL: c_int = 2;
+
 extern "C" {
-    fn nvim_excmds_getfile_error() -> c_int;
-    fn nvim_excmds_getfile_not_written() -> c_int;
-    fn nvim_excmds_getfile_same_file() -> c_int;
-    fn nvim_excmds_getfile_open_other() -> c_int;
     fn nvim_excmds_check_can_set_curbuf_forceit(forceit: c_int) -> c_int;
     fn nvim_excmds_text_locked() -> c_int;
     fn nvim_excmds_curbuf_locked() -> c_int;
@@ -409,7 +425,6 @@ extern "C" {
     fn nvim_excmds_setpcmark();
     fn nvim_excmds_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_excmds_check_cursor_lnum();
-    fn nvim_excmds_bl_sol_fix() -> c_int;
     fn nvim_excmds_do_ecmd_getfile(
         fnum: c_int,
         ffname: *mut c_char,
@@ -417,8 +432,6 @@ extern "C" {
         lnum: c_int,
         flags: c_int,
     ) -> c_int;
-    fn nvim_excmds_ecmd_hide() -> c_int;
-    fn nvim_excmds_ecmd_forceit() -> c_int;
     fn nvim_excmds_get_vim_var_str_swapcommand() -> *const c_char;
     fn nvim_excmds_set_vim_var_string_swapcommand(p: *const c_char);
     fn nvim_excmds_format_swapcommand(command: *const c_char, newlnum: i64) -> *mut c_char;
@@ -442,13 +455,13 @@ pub unsafe extern "C" fn rs_getfile(
     forceit: c_int,
 ) -> c_int {
     if nvim_excmds_check_can_set_curbuf_forceit(forceit) == 0 {
-        return nvim_excmds_getfile_error();
+        return GETFILE_ERROR_VAL;
     }
     if nvim_excmds_text_locked() != 0 {
-        return nvim_excmds_getfile_error();
+        return GETFILE_ERROR_VAL;
     }
     if nvim_excmds_curbuf_locked() != 0 {
-        return nvim_excmds_getfile_error();
+        return GETFILE_ERROR_VAL;
     }
 
     let (ffname, sfname, free_me, other) = if fnum == 0 {
@@ -497,9 +510,8 @@ pub unsafe extern "C" fn rs_getfile(
         if nvim_excmds_curbufIsChanged_val() != 0 {
             nvim_excmds_no_wait_return_dec();
             nvim_excmds_no_write_message();
-            retval = nvim_excmds_getfile_not_written();
             xfree(free_me.cast());
-            return retval;
+            return GETFILE_NOT_WRITTEN_VAL;
         }
     }
 
@@ -515,24 +527,20 @@ pub unsafe extern "C" fn rs_getfile(
             nvim_excmds_curwin_set_cursor_lnum(lnum);
         }
         nvim_excmds_check_cursor_lnum();
-        beginline(nvim_excmds_bl_sol_fix());
-        retval = nvim_excmds_getfile_same_file();
+        beginline(BL_SOL_FIX_VAL);
+        retval = GETFILE_SAME_FILE_VAL;
     } else {
         let hide_flag = if nvim_excmds_buf_hide_curbuf() != 0 {
-            nvim_excmds_ecmd_hide()
+            ECMD_HIDE_VAL
         } else {
             0
         };
-        let force_flag = if forceit != 0 {
-            nvim_excmds_ecmd_forceit()
-        } else {
-            0
-        };
+        let force_flag = if forceit != 0 { ECMD_FORCEIT_VAL } else { 0 };
         let flags = hide_flag + force_flag;
         if nvim_excmds_do_ecmd_getfile(fnum, ffname, sfname, lnum, flags) != 0 {
-            retval = nvim_excmds_getfile_open_other();
+            retval = GETFILE_OPEN_OTHER_VAL;
         } else {
-            retval = nvim_excmds_getfile_error();
+            retval = GETFILE_ERROR_VAL;
         }
     }
 
@@ -705,9 +713,6 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
 extern "C" {
     fn nvim_excmds_bt_nofilename(buf: *const BufHandle) -> c_int;
     fn nvim_excmds_buf_get_b_flags(buf: *const BufHandle) -> c_int;
-    fn nvim_excmds_bf_notedited() -> c_int;
-    fn nvim_excmds_bf_new() -> c_int;
-    fn nvim_excmds_bf_readerr() -> c_int;
     fn nvim_excmds_cpo_no_overnew() -> c_int;
     fn nvim_excmds_os_path_exists(ffname: *const c_char) -> c_int;
     fn nvim_excmds_os_isdir(ffname: *const c_char) -> c_int;
@@ -742,16 +747,13 @@ pub unsafe extern "C" fn rs_check_overwrite(
 ) -> c_int {
     // Check if overwrite check is needed
     let b_flags = nvim_excmds_buf_get_b_flags(buf);
-    let bf_notedited = nvim_excmds_bf_notedited();
-    let bf_new = nvim_excmds_bf_new();
-    let bf_readerr = nvim_excmds_bf_readerr();
     let is_nofilename = nvim_excmds_bt_nofilename(buf) != 0;
 
     let needs_check = other != 0
         || (!is_nofilename
-            && ((b_flags & bf_notedited) != 0
-                || ((b_flags & bf_new) != 0 && nvim_excmds_cpo_no_overnew() != 0)
-                || (b_flags & bf_readerr) != 0));
+            && ((b_flags & BF_NOTEDITED_VAL) != 0
+                || ((b_flags & BF_NEW_VAL) != 0 && nvim_excmds_cpo_no_overnew() != 0)
+                || (b_flags & BF_READERR_VAL) != 0));
 
     if !needs_check || nvim_excmds_get_p_wa() != 0 || nvim_excmds_os_path_exists(ffname) == 0 {
         return 1; // OK
