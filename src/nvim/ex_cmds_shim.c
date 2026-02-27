@@ -1578,25 +1578,26 @@ void nvim_excmds_msg_lines_filtered(int linecount)
   }
 }
 
-/// Emit E482 error: Can't create file.
-void nvim_excmds_semsg_e482(const char *fname)
+/// Unified error message dispatcher for do_filter/write/check_overwrite error paths.
+/// error_id values are defined as Rust constants (see shell.rs / write.rs).
+void nvim_excmds_error_msg(int error_id, const char *arg)
 {
-  semsg(_("E482: Can't create file %s"), fname);
-}
-
-/// Emit e_notread error with filename.
-void nvim_excmds_semsg_e_notread(const char *fname)
-{
-  semsg(_(e_notread), fname);
-}
-
-/// Emit e_notmp error.
-void nvim_excmds_emsg_e_notmp(void) { emsg(_(e_notmp)); }
-
-/// Emit E135 error.
-void nvim_excmds_emsg_e135(void)
-{
-  emsg(_("E135: *Filter* Autocommands must not change current buffer"));
+  switch (error_id) {
+  case 1:   semsg(_("E482: Can't create file %s"), arg); break;
+  case 2:   semsg(_(e_notread), arg); break;
+  case 3:   emsg(_(e_notmp)); break;
+  case 4:   emsg(_("E135: *Filter* Autocommands must not change current buffer")); break;
+  case 5:   emsg(_("E142: File not written: Writing is disabled by 'write' option")); break;
+  case 6:   semsg(_("E503: \"%s\" is not a file or writable device"), arg); break;
+  case 7:   semsg(_("E505: \"%s\" is read-only (add ! to override)"), arg); break;
+  case 8:   emsg(_(e_readonly)); break;
+  case 9:   semsg(_(e_isadir2), arg); break;
+  case 10:  emsg(_(e_exists)); break;
+  case 11:  semsg(_("E768: Swap file exists: %s (:silent! overrides)"), arg); break;
+  case 12:  emsg(_("E140: Use ! to write partial buffer")); break;
+  case 13:  emsg(_(e_argreq)); break;
+  default:  break;
+  }
 }
 
 /// Wrapper for wait_return(false).
@@ -1840,12 +1841,6 @@ int nvim_excmds_os_path_exists(const char *ffname) { return os_path_exists((char
 /// Wrap os_isdir(ffname). Returns 1 if true.
 int nvim_excmds_os_isdir(const char *ffname) { return os_isdir((char *)ffname) ? 1 : 0; }
 
-/// semsg e_isadir2: "%s" is a directory.
-void nvim_excmds_semsg_isadir2(const char *ffname) { semsg(_(e_isadir2), ffname); }
-
-/// emsg e_exists: File exists.
-void nvim_excmds_emsg_e_exists(void) { emsg(_(e_exists)); }
-
 /// Dialog: "Overwrite existing file "fname"?" Returns 1 if user said yes, sets forceit.
 int nvim_excmds_dialog_overwrite(exarg_T *eap, const char *fname)
 {
@@ -1895,12 +1890,6 @@ int nvim_excmds_dialog_swapfile(exarg_T *eap, const char *swapname)
     return 1;
   }
   return 0;
-}
-
-/// semsg E768: Swap file exists: %s.
-void nvim_excmds_semsg_e768(const char *swapname)
-{
-  semsg(_("E768: Swap file exists: %s (:silent! overrides)"), swapname);
 }
 
 // --- Phase 2: do_write FFI accessors ---
@@ -1974,15 +1963,6 @@ int nvim_excmds_dialog_write_partial(void)
 {
   return vim_dialog_yesno(VIM_QUESTION, NULL, _("Write partial file?"), 2) == VIM_YES ? 1 : 0;
 }
-
-/// emsg E140: Use ! to write partial buffer.
-void nvim_excmds_emsg_e140(void)
-{
-  emsg(_("E140: Use ! to write partial buffer"));
-}
-
-/// emsg(_(e_argreq)): Argument required.
-void nvim_excmds_emsg_e_argreq(void) { emsg(_(e_argreq)); }
 
 /// Wrap check_overwrite via rs_ (call it directly). Returns 1=OK, 0=FAIL.
 int nvim_excmds_check_overwrite(exarg_T *eap, buf_T *buf, const char *fname,
@@ -2122,27 +2102,6 @@ char *nvim_excmds_dialog_msg_readonly(int fmt_id, const char *arg)
                (char *)arg);
   }
   return buff;
-}
-
-/// emsg(_(e_readonly)). Returns 1 (true).
-int nvim_excmds_emsg_readonly(void) { return emsg(_(e_readonly)); }
-
-/// semsg E505: "%s" is not a file or writable device.
-void nvim_excmds_semsg_e503(const char *fname)
-{
-  semsg(_("E503: \"%s\" is not a file or writable device"), fname);
-}
-
-/// semsg E505: "%s" is read-only (add ! to override).
-void nvim_excmds_semsg_e505(const char *fname)
-{
-  semsg(_("E505: \"%s\" is read-only (add ! to override)"), fname);
-}
-
-/// emsg E142: File not written: Writing is disabled by 'write' option.
-void nvim_excmds_emsg_e142(void)
-{
-  emsg(_("E142: File not written: Writing is disabled by 'write' option"));
 }
 
 /// Set eap->forceit to val.

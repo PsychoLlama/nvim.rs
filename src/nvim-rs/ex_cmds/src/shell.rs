@@ -1090,10 +1090,7 @@ extern "C" {
     fn nvim_excmds_p_cpo_no_remmark() -> c_int;
     fn nvim_excmds_fold_update_curwin(top: c_int, bot: c_int);
     fn nvim_excmds_msg_lines_filtered(linecount: c_int);
-    fn nvim_excmds_semsg_e482(fname: *const c_char);
-    fn nvim_excmds_semsg_e_notread(fname: *const c_char);
-    fn nvim_excmds_emsg_e_notmp();
-    fn nvim_excmds_emsg_e135();
+    fn nvim_excmds_error_msg(error_id: c_int, arg: *const c_char);
     fn nvim_excmds_wait_return_false();
     fn nvim_excmds_curbuf_op_save(out_start: *mut u64, out_end: *mut u64);
     fn nvim_excmds_curbuf_op_restore(saved_start: u64, saved_end: u64);
@@ -1115,6 +1112,12 @@ extern "C" {
 /// BL_WHITE | BL_FIX constants for beginline()
 const BL_WHITE: c_int = 1;
 const BL_FIX: c_int = 4;
+
+// Error IDs for nvim_excmds_error_msg dispatcher (see ex_cmds_shim.c)
+const ERR_E482: c_int = 1; // "E482: Can't create file %s"
+const ERR_E_NOTREAD: c_int = 2; // e_notread with fname
+const ERR_E_NOTMP: c_int = 3; // e_notmp (no arg)
+const ERR_E135: c_int = 4; // E135 filter autocommand error
 
 // kShellOpt* constants -- verified by _Static_assert in ex_cmds_shim.c
 const K_SHELL_OPT_FILTER: c_int = 1;
@@ -1194,7 +1197,7 @@ pub unsafe extern "C" fn rs_do_filter(
         if do_in {
             itmp = nvim_excmds_vim_tempname();
             if itmp.is_null() {
-                nvim_excmds_emsg_e_notmp();
+                nvim_excmds_error_msg(ERR_E_NOTMP, std::ptr::null());
                 goto_filterend(
                     save_cmod_flags,
                     old_curbuf,
@@ -1209,7 +1212,7 @@ pub unsafe extern "C" fn rs_do_filter(
         if do_out {
             otmp = nvim_excmds_vim_tempname();
             if otmp.is_null() {
-                nvim_excmds_emsg_e_notmp();
+                nvim_excmds_error_msg(ERR_E_NOTMP, std::ptr::null());
                 goto_filterend(
                     save_cmod_flags,
                     old_curbuf,
@@ -1231,7 +1234,7 @@ pub unsafe extern "C" fn rs_do_filter(
             msg_putchar(b'\n' as c_int); // Keep message from buf_write()
             nvim_excmds_no_wait_return_dec();
             if nvim_excmds_aborting() == 0 {
-                nvim_excmds_semsg_e482(itmp);
+                nvim_excmds_error_msg(ERR_E482, itmp);
             }
             goto_filterend(
                 save_cmod_flags,
@@ -1300,7 +1303,7 @@ pub unsafe extern "C" fn rs_do_filter(
             if nvim_excmds_readfile_filter(otmp, line2, eap) == 0 {
                 if nvim_excmds_aborting() == 0 {
                     msg_putchar(b'\n' as c_int);
-                    nvim_excmds_semsg_e_notread(otmp);
+                    nvim_excmds_error_msg(ERR_E_NOTREAD, otmp);
                 }
                 // goto error
                 nvim_excmds_curwin_cursor_restore(cursor_save);
@@ -1429,7 +1432,7 @@ unsafe fn goto_filterend(
 
     if nvim_excmds_get_curbuf_ptr() != old_curbuf {
         nvim_excmds_no_wait_return_dec();
-        nvim_excmds_emsg_e135();
+        nvim_excmds_error_msg(ERR_E135, std::ptr::null());
     } else if nvim_cmdmod_has_lockmarks() != 0 {
         nvim_excmds_curbuf_op_restore(orig_start, orig_end);
     }

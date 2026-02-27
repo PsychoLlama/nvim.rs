@@ -267,10 +267,7 @@ extern "C" {
     fn nvim_excmds_p_confirm_or_cmod_confirm() -> c_int;
     fn nvim_excmds_vim_dialog_yesno_question(msg: *const c_char) -> c_int;
     fn nvim_excmds_dialog_msg_readonly(fmt_id: c_int, arg: *const c_char) -> *mut c_char;
-    fn nvim_excmds_emsg_readonly() -> c_int;
-    fn nvim_excmds_semsg_e503(fname: *const c_char);
-    fn nvim_excmds_semsg_e505(fname: *const c_char);
-    fn nvim_excmds_emsg_e142();
+    fn nvim_excmds_error_msg(error_id: c_int, arg: *const c_char);
     fn nvim_excmds_set_forceit(eap: *mut ExArgHandle, val: c_int);
     fn nvim_excmds_eap_get_forceit(eap: *const ExArgHandle) -> c_int;
     fn xfree(ptr: *mut std::ffi::c_void);
@@ -289,7 +286,7 @@ pub unsafe extern "C" fn rs_not_writing() -> c_int {
     if nvim_excmds_get_p_write() != 0 {
         return 0; // writing is enabled, no error
     }
-    nvim_excmds_emsg_e142();
+    nvim_excmds_error_msg(ERR_E142, std::ptr::null());
     1 // writing is disabled
 }
 
@@ -302,7 +299,7 @@ pub unsafe extern "C" fn rs_check_writable(fname: *const c_char) -> c_int {
     #[cfg(unix)]
     {
         if nvim_excmds_os_nodetype(fname) == NODE_OTHER_VAL {
-            nvim_excmds_semsg_e503(fname);
+            nvim_excmds_error_msg(ERR_E503, fname);
             return 0; // FAIL
         }
     }
@@ -370,9 +367,9 @@ pub unsafe extern "C" fn rs_check_readonly(eap: *mut ExArgHandle, buf: *mut BufH
 
     // No dialog: emit error
     if b_p_ro != 0 {
-        nvim_excmds_emsg_readonly();
+        nvim_excmds_error_msg(ERR_E_READONLY, std::ptr::null());
     } else {
-        nvim_excmds_semsg_e505(b_fname);
+        nvim_excmds_error_msg(ERR_E505, b_fname);
     }
     1 // readonly
 }
@@ -401,6 +398,17 @@ const BL_SOL_FIX_VAL: c_int = 6;
 
 // NODE_OTHER -- verified by _Static_assert in ex_cmds_shim.c
 const NODE_OTHER_VAL: c_int = 2;
+
+// Error IDs for nvim_excmds_error_msg dispatcher (see ex_cmds_shim.c)
+const ERR_E142: c_int = 5; // E142 Writing is disabled
+const ERR_E503: c_int = 6; // E503 not a file or writable device
+const ERR_E505: c_int = 7; // E505 read-only
+const ERR_E_READONLY: c_int = 8; // e_readonly
+const ERR_ISADIR2: c_int = 9; // e_isadir2 (fname)
+const ERR_E_EXISTS: c_int = 10; // e_exists
+const ERR_E768: c_int = 11; // E768 Swap file exists
+const ERR_E140: c_int = 12; // E140 partial buffer
+const ERR_E_ARGREQ: c_int = 13; // e_argreq
 
 extern "C" {
     fn nvim_excmds_check_can_set_curbuf_forceit(forceit: c_int) -> c_int;
@@ -714,8 +722,6 @@ extern "C" {
     fn nvim_excmds_cpo_no_overnew() -> c_int;
     fn nvim_excmds_os_path_exists(ffname: *const c_char) -> c_int;
     fn nvim_excmds_os_isdir(ffname: *const c_char) -> c_int;
-    fn nvim_excmds_semsg_isadir2(ffname: *const c_char);
-    fn nvim_excmds_emsg_e_exists();
     fn nvim_excmds_dialog_overwrite(eap: *mut ExArgHandle, fname: *const c_char) -> c_int;
     fn nvim_excmds_get_first_dir() -> *mut c_char;
     fn nvim_excmds_makeswapname(
@@ -725,7 +731,6 @@ extern "C" {
     ) -> *mut c_char;
     fn nvim_excmds_get_emsg_silent() -> c_int;
     fn nvim_excmds_dialog_swapfile(eap: *mut ExArgHandle, swapname: *const c_char) -> c_int;
-    fn nvim_excmds_semsg_e768(swapname: *const c_char);
 }
 
 /// Check if overwriting a file is allowed.
@@ -765,7 +770,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
         #[cfg(unix)]
         {
             if nvim_excmds_os_isdir(ffname) != 0 {
-                nvim_excmds_semsg_isadir2(ffname);
+                nvim_excmds_error_msg(ERR_ISADIR2, ffname);
                 return 0; // FAIL
             }
         }
@@ -776,7 +781,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
             }
             // forceit is set by nvim_excmds_dialog_overwrite
         } else {
-            nvim_excmds_emsg_e_exists();
+            nvim_excmds_error_msg(ERR_E_EXISTS, std::ptr::null());
             return 0; // FAIL
         }
     }
@@ -795,7 +800,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
                 }
                 // forceit set by dialog_swapfile
             } else {
-                nvim_excmds_semsg_e768(swapname);
+                nvim_excmds_error_msg(ERR_E768, swapname);
                 xfree(swapname.cast());
                 return 0; // FAIL
             }
@@ -831,8 +836,6 @@ extern "C" {
     fn nvim_excmds_curbuf_check_writable() -> c_int;
     fn nvim_excmds_get_p_wa() -> c_int;
     fn nvim_excmds_dialog_write_partial() -> c_int;
-    fn nvim_excmds_emsg_e140();
-    fn nvim_excmds_emsg_e_argreq();
     fn nvim_excmds_curbuf_get_ffname() -> *mut c_char;
     fn nvim_excmds_curbuf_get_fname() -> *mut c_char;
     fn nvim_get_curbuf() -> *mut BufHandle;
@@ -883,7 +886,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
         if first_char == 0 {
             // No argument
             if nvim_exarg_cmdidx_is_saveas(eap) != 0 {
-                nvim_excmds_emsg_e_argreq();
+                nvim_excmds_error_msg(ERR_E_ARGREQ, std::ptr::null());
                 return 0; // FAIL (goto theend with free_fname=NULL)
             }
             (
@@ -956,7 +959,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
                 }
                 nvim_excmds_set_forceit(eap, 1);
             } else {
-                nvim_excmds_emsg_e140();
+                nvim_excmds_error_msg(ERR_E140, std::ptr::null());
                 xfree(free_fname.cast());
                 return 0; // FAIL
             }
