@@ -605,16 +605,19 @@ extern "C" {
     ) -> c_int;
     fn nvim_shada_cl_bufs_set_put(cl_bufs: *mut c_void, buf: *mut c_void);
     fn nvim_shada_buf_get_changelistlen(buf: *const c_void) -> c_int;
-    fn nvim_shada_changelist_entry_timestamp(buf: *const c_void, idx: c_int) -> u64;
-    fn nvim_shada_changelist_entry_mark(
+    fn nvim_shada_changelist_get_entry(
         buf: *const c_void,
         idx: c_int,
+        out_ts: *mut u64,
         out_lnum: *mut i64,
         out_col: *mut i32,
     );
-    fn nvim_shada_changelist_set_from_entry(buf: *mut c_void, idx: c_int, entry: *mut ShadaEntry);
-    fn nvim_shada_changelist_free_first(buf: *mut c_void);
-    fn nvim_shada_changelist_update_len(buf: *mut c_void);
+    fn nvim_shada_changelist_insert_entry(
+        buf: *mut c_void,
+        i: c_int,
+        entry: *mut ShadaEntry,
+        cl_len: c_int,
+    );
     fn nvim_shada_fm_xfree_fname(entry: *mut ShadaEntry);
     fn nvim_shada_buf_get_fnum(buf: *const c_void) -> c_int;
     fn nvim_shada_jumplist_marklist_insert(i: c_int) -> c_int;
@@ -5741,12 +5744,18 @@ unsafe fn rs_shada_apply_local_or_change(
 
         let mut i = cl_len;
         while i > 0 {
-            let cl_ts = nvim_shada_changelist_entry_timestamp(buf, i - 1);
+            let mut cl_ts: u64 = 0;
+            let mut cl_lnum: i64 = 0;
+            let mut cl_col: i32 = 0;
+            nvim_shada_changelist_get_entry(
+                buf,
+                i - 1,
+                &raw mut cl_ts,
+                &raw mut cl_lnum,
+                &raw mut cl_col,
+            );
             if cl_ts <= entry_ts {
                 // Check for duplicate: same mark position.
-                let mut cl_lnum: i64 = 0;
-                let mut cl_col: i32 = 0;
-                nvim_shada_changelist_entry_mark(buf, i - 1, &raw mut cl_lnum, &raw mut cl_col);
                 let entry_lnum: i64 = cl_mark.lnum;
                 let entry_col: i32 = cl_mark.col;
                 let cl_pos = Position::new(cl_lnum, cl_col, 0);
@@ -5759,16 +5768,12 @@ unsafe fn rs_shada_apply_local_or_change(
             i -= 1;
         }
 
-        if i > 0 && cl_len as usize == JUMPLISTSIZE {
-            nvim_shada_changelist_free_first(buf);
-        }
         let i = nvim_shada_changelist_marklist_insert(buf, i);
         if i == -1 {
             // Duplicate: free the additional_data (rest of entry is stack-allocated).
             nvim_xfree((*entry).additional_data);
         } else {
-            nvim_shada_changelist_set_from_entry(buf, i, entry);
-            nvim_shada_changelist_update_len(buf);
+            nvim_shada_changelist_insert_entry(buf, i, entry, cl_len);
         }
     }
     // xfree entry->data.filemark.fname (mirrors C end-of-function xfree for both branches).

@@ -1644,45 +1644,34 @@ int nvim_shada_buf_get_changelistlen(const void *buf_handle)
   return ((const buf_T *)buf_handle)->b_changelistlen;
 }
 
-/// Return buf->b_changelist[idx].timestamp.
-uint64_t nvim_shada_changelist_entry_timestamp(const void *buf_handle, int idx)
-{
-  return (uint64_t)((const buf_T *)buf_handle)->b_changelist[idx].timestamp;
-}
-
-/// Return buf->b_changelist[idx].mark position.
-void nvim_shada_changelist_entry_mark(const void *buf_handle, int idx,
-                                      int64_t *out_lnum, int32_t *out_col)
+/// Return all fields of buf->b_changelist[idx] in one call.
+void nvim_shada_changelist_get_entry(const void *buf_handle, int idx,
+                                     uint64_t *out_ts, int64_t *out_lnum,
+                                     int32_t *out_col)
 {
   const fmark_T *fm = &((const buf_T *)buf_handle)->b_changelist[idx];
+  *out_ts = (uint64_t)fm->timestamp;
   *out_lnum = (int64_t)fm->mark.lnum;
   *out_col = (int32_t)fm->mark.col;
 }
 
-/// Build fmark_T from entry and set buf->b_changelist[idx].
-void nvim_shada_changelist_set_from_entry(void *buf_handle, int idx, ShadaEntry *entry)
+/// Insert a changelist entry at position i from a ShadaEntry.
+/// Frees buf->b_changelist[0] if needed (when i > 0 && cl_len == JUMPLISTSIZE),
+/// builds and assigns fmark_T from entry, then updates b_changelistlen.
+void nvim_shada_changelist_insert_entry(void *buf_handle, int i,
+                                        ShadaEntry *entry, int cl_len)
 {
   buf_T *buf = (buf_T *)buf_handle;
-  buf->b_changelist[idx] = (fmark_T) {
+  if (i > 0 && cl_len == JUMPLISTSIZE) {
+    free_fmark(buf->b_changelist[0]);
+  }
+  buf->b_changelist[i] = (fmark_T) {
     .mark = entry->data.filemark.mark,
     .fnum = 0,
     .timestamp = entry->timestamp,
     .view = INIT_FMARKV,
     .additional_data = entry->additional_data,
   };
-}
-
-/// Free buf->b_changelist[0] via free_fmark.
-void nvim_shada_changelist_free_first(void *buf_handle)
-{
-  buf_T *buf = (buf_T *)buf_handle;
-  free_fmark(buf->b_changelist[0]);
-}
-
-/// Increment b_changelistlen if < JUMPLISTSIZE.
-void nvim_shada_changelist_update_len(void *buf_handle)
-{
-  buf_T *buf = (buf_T *)buf_handle;
   if (buf->b_changelistlen < JUMPLISTSIZE) {
     buf->b_changelistlen++;
   }
