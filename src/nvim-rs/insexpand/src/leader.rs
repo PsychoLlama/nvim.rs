@@ -652,7 +652,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
 }
 
 // =============================================================================
-// Phase 2 (pass 6): ins_compl_longest_match and find_common_prefix
+// Phase 2 (pass 6): ins_compl_longest_match
 // =============================================================================
 
 use crate::match_list::ComplMatch;
@@ -660,9 +660,6 @@ use crate::match_list::ComplMatch;
 extern "C" {
     // Compound accessor: full ins_compl_longest_match logic (compl_leader mutation)
     fn nvim_ins_compl_longest_match_impl(m: ComplMatch);
-
-    // Compound accessor: find_common_prefix (already named nvim_find_common_prefix_data)
-    fn nvim_find_common_prefix_data(len_out: *mut usize, icase: c_int) -> *const c_char;
 }
 
 /// Reduce the longest common string for a new completion match.
@@ -678,24 +675,222 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
     nvim_ins_compl_longest_match_impl(m);
 }
 
-/// Find the longest common prefix among all completion matches.
+// =============================================================================
+// Phase 3 (pass 11): find_common_prefix migrated from C
+// =============================================================================
+
+extern "C" {
+    fn nvim_compl_get_first_match() -> ComplMatch;
+    fn nvim_compl_match_get_next(m: ComplMatch) -> ComplMatch;
+    fn nvim_compl_is_first_match(m: ComplMatch) -> c_int;
+    fn nvim_compl_match_at_original_text(m: ComplMatch) -> c_int;
+    fn nvim_compl_match_clear_icase(m: ComplMatch);
+    fn nvim_compl_match_get_cp_str_data(m: ComplMatch) -> *const c_char;
+    fn nvim_compl_match_get_cp_str_size(m: ComplMatch) -> usize;
+    fn nvim_get_cpt_source_cs_flag(idx: c_int) -> c_int;
+    fn nvim_get_cpt_source_cs_max_matches(idx: c_int) -> c_int;
+    fn nvim_get_cpt_sources_count() -> c_int;
+    fn nvim_xcalloc_ints(count: usize) -> *mut c_int;
+    // nvim_xfree already declared above
+    fn nvim_get_p_inf() -> c_int;
+    fn nvim_ignorecase(pat: *const c_char) -> bool;
+    fn rs_ins_compl_equal(m: ComplMatch, str_: *const c_char, len: usize) -> c_int;
+    fn rs_ctrl_x_mode_normal() -> c_int;
+    fn rs_ins_compl_leader() -> *const c_char;
+    fn rs_ins_compl_leader_len() -> usize;
+    fn nvim_mb_byte2len(b: c_int) -> c_int;
+    fn nvim_get_curwin_cursor_col() -> c_int;
+    // nvim_ascii_iswhite_or_nul: defined in normal_shim.c as bool(int c)
+    fn nvim_ascii_iswhite_or_nul(c: c_int) -> bool;
+    fn rs_find_word_end(ptr: *mut c_char) -> *mut c_char;
+    // nvim_get_cursor_line_ptr already declared in Phase 2 extern block above
+}
+
+/// Find the longest common prefix among the current completion matches.
 ///
-/// Rust entry point for C `find_common_prefix()`. All match-list iteration
-/// and `cpt_sources_array` access is delegated to the existing C compound
-/// accessor `nvim_find_common_prefix_data`.
+/// Returns a pointer to the first match string (C-owned), with `*prefix_len`
+/// set to the byte length of the common prefix. Returns NULL if no prefix
+/// longer than the current leader was found, or if not a cpt-completion.
 ///
-/// Returns a pointer into the first matching `cp_str` (C-owned), or NULL.
-/// Sets `*prefix_len` to the byte length of the common prefix.
+/// `curbuf_only` restricts matches to the current buffer ('.' source).
 ///
 /// # Safety
-/// `prefix_len` must be a valid pointer. The returned pointer is valid as
-/// long as the completion match list is not modified.
+/// `prefix_len` must be a valid non-null pointer. The returned pointer is
+/// valid as long as the completion match list is not modified.
 #[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_cast_constness,
+    clippy::too_many_lines
+)]
 pub unsafe extern "C" fn rs_find_common_prefix(
     prefix_len: *mut usize,
     curbuf_only: c_int,
 ) -> *const c_char {
-    nvim_find_common_prefix_data(prefix_len, curbuf_only)
+    // Only applies to cpt-completion
+    if nvim_cpt_sources_array_exists() == 0 {
+        return std::ptr::null();
+    }
+
+    let sources_count = nvim_get_cpt_sources_count();
+    if sources_count <= 0 {
+        return std::ptr::null();
+    }
+
+    let match_count = nvim_xcalloc_ints(sources_count as usize);
+
+    // Clear the adjusted-leader cache
+    let _ = rs_get_leader_for_startcol_data(ComplMatch::null(), 1);
+
+    let mut compl = nvim_compl_get_first_match();
+    let mut first: *const c_char = std::ptr::null();
+    let mut len: c_int = -1;
+
+    'outer: loop {
+        if compl.is_null() {
+            break;
+        }
+        // Stop when we wrap back to the first match
+        if !first.is_null() && nvim_compl_is_first_match(compl) != 0 {
+            break;
+        }
+
+        let leader_data = rs_get_leader_for_startcol_data(compl, 1);
+        let leader_size = rs_get_leader_for_startcol_size(compl, 1);
+
+        // Apply 'smartcase' behaviour in normal ctrl-x mode
+        if rs_ctrl_x_mode_normal() != 0
+            && nvim_get_p_inf() == 0
+            && !leader_data.is_null()
+            && !nvim_ignorecase(leader_data)
+        {
+            nvim_compl_match_clear_icase(compl);
+        }
+
+        if nvim_compl_match_at_original_text(compl) == 0
+            && (leader_data.is_null() || rs_ins_compl_equal(compl, leader_data, leader_size) != 0)
+        {
+            let mut match_limit_exceeded = false;
+            let cur_source = nvim_compl_match_get_cpt_source_idx(compl);
+
+            if cur_source != -1 {
+                let idx = cur_source as usize;
+                let cur = std::ptr::read(match_count.add(idx));
+                std::ptr::write(match_count.add(idx), cur + 1);
+                let max_matches = nvim_get_cpt_source_cs_max_matches(cur_source);
+                if max_matches > 0 && cur + 1 > max_matches {
+                    match_limit_exceeded = true;
+                }
+            }
+
+            // Check cs_flag == '.' (ascii 0x2E = 46) for curbuf_only
+            let cs_flag = nvim_get_cpt_source_cs_flag(cur_source);
+            if !match_limit_exceeded && (curbuf_only == 0 || cs_flag == c_int::from(b'.')) {
+                let cp_str = nvim_compl_match_get_cp_str_data(compl);
+                if cp_str.is_null() {
+                    // skip
+                } else if first.is_null() {
+                    // Check that cp_str starts with the leader
+                    let leader = rs_ins_compl_leader();
+                    let leader_len = rs_ins_compl_leader_len();
+                    let matches = if leader.is_null() || leader_len == 0 {
+                        true
+                    } else {
+                        let cp_size = nvim_compl_match_get_cp_str_size(compl);
+                        if cp_size < leader_len {
+                            false
+                        } else {
+                            std::slice::from_raw_parts(cp_str.cast::<u8>(), leader_len)
+                                == std::slice::from_raw_parts(leader.cast::<u8>(), leader_len)
+                        }
+                    };
+                    if matches {
+                        first = cp_str;
+                        // strlen: walk to NUL
+                        let mut p = cp_str;
+                        while *p != 0 {
+                            p = p.add(1);
+                        }
+                        len = p.offset_from(cp_str) as c_int;
+                    }
+                } else {
+                    // Intersect the common prefix using MB_BYTE2LEN
+                    let mut j: c_int = 0;
+                    let mut s1 = first;
+                    let mut s2 = cp_str;
+
+                    while j < len && *s1 != 0 && *s2 != 0 {
+                        let b1 = nvim_mb_byte2len(c_int::from(*s1));
+                        let b2 = nvim_mb_byte2len(c_int::from(*s2));
+                        if b1 != b2
+                            || std::slice::from_raw_parts(s1.cast::<u8>(), b1 as usize)
+                                != std::slice::from_raw_parts(s2.cast::<u8>(), b2 as usize)
+                        {
+                            break;
+                        }
+                        j += b1;
+                        s1 = s1.add(b1 as usize);
+                        s2 = s2.add(b2 as usize);
+                    }
+                    len = j;
+
+                    if len == 0 {
+                        break 'outer;
+                    }
+                }
+            }
+        }
+
+        compl = nvim_compl_match_get_next(compl);
+        // is_first_match guard at top of loop handles the do-while termination
+        if compl.is_null() {
+            break;
+        }
+        if nvim_compl_is_first_match(compl) != 0 {
+            break;
+        }
+    }
+
+    nvim_xfree(match_count.cast::<u8>());
+
+    let leader_len = rs_ins_compl_leader_len();
+    if len > leader_len as c_int {
+        // Avoid inserting text that duplicates text already present after the cursor
+        let cp_size = if first.is_null() {
+            0
+        } else {
+            let mut p = first;
+            while *p != 0 {
+                p = p.add(1);
+            }
+            p.offset_from(first) as c_int
+        };
+        if len == cp_size {
+            let line = nvim_get_cursor_line_ptr();
+            let cursor_col = nvim_get_curwin_cursor_col();
+            let p = line.add(cursor_col as usize);
+            if !p.is_null() && !nvim_ascii_iswhite_or_nul(c_int::from(*p)) {
+                let end = rs_find_word_end(p);
+                let text_len = end.offset_from(p) as c_int;
+                if text_len > 0
+                    && text_len < len - leader_len as c_int
+                    && std::slice::from_raw_parts(
+                        first.add((len - text_len) as usize).cast::<u8>(),
+                        text_len as usize,
+                    ) == std::slice::from_raw_parts(p.cast::<u8>(), text_len as usize)
+                {
+                    len -= text_len;
+                }
+            }
+        }
+
+        *prefix_len = len as usize;
+        return first;
+    }
+
+    std::ptr::null()
 }
 
 #[cfg(test)]

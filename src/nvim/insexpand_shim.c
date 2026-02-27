@@ -227,6 +227,7 @@ extern const char *rs_get_leader_for_startcol_data(void *match, int cached);
 extern size_t rs_get_leader_for_startcol_size(void *match, int cached);
 // Phase 2 (pass 11) Rust exports: ins_compl_build_pum
 extern int rs_ins_compl_build_pum(void);
+// Phase 3 (pass 11) Rust exports: find_common_prefix (replaces nvim_find_common_prefix_data)
 // Phase 3 (pass 6) Rust exports
 extern void rs_setup_cpt_sources(void);
 extern void rs_prepare_cpt_compl_funcs(void);
@@ -2504,106 +2505,6 @@ static int ins_compl_get_exp(pos_T *ini)
   return rs_ins_compl_get_exp((int)ini->lnum, (int)ini->col);
 }
 
-/// Find the longest common prefix among the current completion matches.
-/// Returns a pointer to the first match string, with *prefix_len set to
-/// the length of the common prefix.
-/// If "curbuf_only" is true, restrict matches to the current buffer
-/// ('.' source in 'complete').
-static char *find_common_prefix(size_t *prefix_len, bool curbuf_only)
-{
-  bool is_cpt_completion = (cpt_sources_array != NULL);
-
-  if (!is_cpt_completion) {
-    return NULL;
-  }
-
-  int *match_count = xcalloc((size_t)cpt_sources_count, sizeof(int));
-
-  (void)rs_get_leader_for_startcol_data(NULL, 1);  // Clear the cache
-
-  compl_T *compl = compl_first_match;
-  char *first = NULL;
-  int len = -1;
-  do {
-    const char *leader_data = rs_get_leader_for_startcol_data(compl, 1);
-    size_t leader_size = rs_get_leader_for_startcol_size(compl, 1);
-
-    // Apply 'smartcase' behavior during normal mode
-    if (rs_ctrl_x_mode_normal() && !p_inf && leader_data && !ignorecase(leader_data)) {
-      compl->cp_flags &= ~CP_ICASE;
-    }
-
-    if (!match_at_original_text(compl)
-        && (leader_data == NULL
-            || rs_ins_compl_equal(compl, leader_data, leader_size))) {
-      // Limit number of items from each source if max_items is set.
-      bool match_limit_exceeded = false;
-      int cur_source = compl->cp_cpt_source_idx;
-
-      if (cur_source != -1) {
-        match_count[cur_source]++;
-        int max_matches = cpt_sources_array[cur_source].cs_max_matches;
-        if (max_matches > 0 && match_count[cur_source] > max_matches) {
-          match_limit_exceeded = true;
-        }
-      }
-
-      if (!match_limit_exceeded
-          && (!curbuf_only || cpt_sources_array[cur_source].cs_flag == '.')) {
-        if (first == NULL && strncmp((char *)rs_ins_compl_leader(), compl->cp_str.data,
-                                     rs_ins_compl_leader_len()) == 0) {
-          first = compl->cp_str.data;
-          len = (int)strlen(first);
-        } else if (first != NULL) {
-          int j = 0;  // count in bytes
-          char *s1 = first;
-          char *s2 = compl->cp_str.data;
-
-          while (j < len && *s1 != NUL && *s2 != NUL) {
-            if (MB_BYTE2LEN((uint8_t)(*s1)) != MB_BYTE2LEN((uint8_t)(*s2))
-                || memcmp(s1, s2, MB_BYTE2LEN((uint8_t)(*s1))) != 0) {
-              break;
-            }
-
-            j += MB_BYTE2LEN((uint8_t)(*s1));
-            MB_PTR_ADV(s1);
-            MB_PTR_ADV(s2);
-          }
-          len = j;
-
-          if (len == 0) {
-            break;
-          }
-        }
-      }
-    }
-    compl = compl->cp_next;
-  } while (compl != NULL && !is_first_match(compl));
-
-  xfree(match_count);
-
-  if (len > (int)rs_ins_compl_leader_len()) {
-    assert(first != NULL);
-    // Avoid inserting text that duplicates the text already present
-    // after the cursor.
-    if (len == (int)strlen(first)) {
-      char *line = get_cursor_line_ptr();
-      char *p = line + curwin->w_cursor.col;
-      if (p && !ascii_iswhite_or_nul(*p)) {
-        char *end = rs_find_word_end(p);
-        int text_len = (int)(end - p);
-        if (text_len > 0 && text_len < (len - (int)rs_ins_compl_leader_len())
-            && strncmp(first + len - text_len, p, (size_t)text_len) == 0) {
-          len -= text_len;
-        }
-      }
-    }
-    *prefix_len = (size_t)len;
-    return first;
-  }
-  return NULL;
-}
-
 /// Thin wrapper: delegates to rs_ins_compl_next in Rust.
 static int ins_compl_next(bool allow_get_expansion, int count, bool insert_match)
 {
@@ -3158,13 +3059,19 @@ void nvim_set_cursor_col_to_ins_end(void) { curwin->w_cursor.col = (colnr_T)comp
 const char *nvim_compl_shown_cp_str_data(void) { return compl_shown_match ? compl_shown_match->cp_str.data : NULL; }
 size_t nvim_compl_shown_cp_str_size(void) { return compl_shown_match ? compl_shown_match->cp_str.size : 0; }
 const char *nvim_find_common_prefix_data(size_t *len_out, int icase) {
-  return find_common_prefix(len_out, icase != 0);
+  return rs_find_common_prefix(len_out, icase);
 }
 int nvim_compl_shown_cp_cpt_source_idx(void) { return compl_shown_match ? compl_shown_match->cp_cpt_source_idx : -1; }
 int nvim_get_cpt_source_startcol(int idx) { return (cpt_sources_array && idx >= 0) ? cpt_sources_array[idx].cs_startcol : -1; }
 int nvim_cpt_sources_array_exists(void) { return cpt_sources_array != NULL ? 1 : 0; }
 int nvim_get_cpt_source_cs_flag(int idx) { return (cpt_sources_array && idx >= 0) ? (int)(unsigned char)cpt_sources_array[idx].cs_flag : 0; }
 int nvim_get_cpt_source_cs_max_matches(int idx) { return (cpt_sources_array && idx >= 0) ? cpt_sources_array[idx].cs_max_matches : 0; }
+int nvim_mb_byte2len(int b) { return (b >= 0 && b <= 255) ? MB_BYTE2LEN((uint8_t)b) : 1; }
+// nvim_get_cursor_line_ptr: defined in change_ffi.c (returns char *)
+// nvim_get_curwin_cursor_col: defined in change_ffi.c (returns colnr_T)
+// nvim_ascii_iswhite_or_nul: defined in normal_shim.c as bool nvim_ascii_iswhite_or_nul(int c)
+int nvim_get_cpt_sources_count(void) { return cpt_sources_count; }
+int *nvim_xcalloc_ints(size_t count) { return xcalloc(count, sizeof(int)); }
 void nvim_ins_compl_expand_multiple_skip(const char *str, int skip) {
   char *start = (char *)str + skip;
   char *curr = start;
