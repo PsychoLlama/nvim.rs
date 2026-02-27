@@ -469,7 +469,7 @@ pub unsafe extern "C" fn rs_vim_isAbsName(name: *const c_char) -> c_int {
 
 extern "C" {
     fn nvim_option_get_sh() -> *const c_char;
-    fn nvim_option_get_ffs() -> *const c_char;
+    fn nvim_get_p_ffs() -> *const c_char;
 }
 
 /// Check if 'shell' option contains "csh" in the tail.
@@ -550,7 +550,7 @@ const EOL_MAC: c_int = 2;
 #[no_mangle]
 pub extern "C" fn rs_default_fileformat() -> c_int {
     unsafe {
-        let p_ffs = nvim_option_get_ffs();
+        let p_ffs = nvim_get_p_ffs();
         if p_ffs.is_null() || *p_ffs == 0 {
             return EOL_UNIX;
         }

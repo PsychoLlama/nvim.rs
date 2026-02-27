@@ -124,9 +124,9 @@ extern "C" {
     fn nvim_set_p_tw(v: OptInt);
     fn nvim_get_p_wm() -> OptInt;
     fn nvim_set_p_wm(v: OptInt);
-    fn nvim_option_get_ml() -> c_int;
+    fn nvim_get_p_ml() -> c_int;
     fn nvim_option_set_ml(v: c_int);
-    fn nvim_option_get_et() -> c_int;
+    fn nvim_get_p_et() -> c_int;
     fn nvim_option_set_et(v: c_int);
     fn nvim_set_p_bin(v: c_int);
     fn nvim_get_p_tw_nobin() -> OptInt;
@@ -757,8 +757,8 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
                 // save global options
                 nvim_set_p_tw_nobin(nvim_get_p_tw());
                 nvim_set_p_wm_nobin(nvim_get_p_wm());
-                nvim_set_p_ml_nobin(nvim_option_get_ml());
-                nvim_set_p_et_nobin(nvim_option_get_et());
+                nvim_set_p_ml_nobin(nvim_get_p_ml());
+                nvim_set_p_et_nobin(nvim_get_p_et());
             }
         }
 

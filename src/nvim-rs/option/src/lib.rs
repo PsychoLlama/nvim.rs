@@ -288,33 +288,33 @@ pub type BufHandle = *mut std::ffi::c_void;
 extern "C" {
     // String option accessors
     fn nvim_option_get_sh() -> *const c_char;
-    fn nvim_option_get_ffs() -> *const c_char;
+    fn nvim_get_p_ffs() -> *const c_char;
     fn nvim_option_get_cpo() -> *const c_char;
-    fn nvim_option_get_isk() -> *const c_char;
+    fn nvim_get_p_isk() -> *const c_char;
     fn nvim_option_get_isf() -> *const c_char;
     fn nvim_option_get_isp() -> *const c_char;
     fn nvim_option_get_isi() -> *const c_char;
     fn nvim_option_get_breakat() -> *const c_char;
     fn nvim_option_get_sel() -> *const c_char;
     fn nvim_option_get_enc() -> *const c_char;
-    fn nvim_option_get_ff() -> *const c_char;
-    fn nvim_option_get_fo() -> *const c_char;
-    fn nvim_option_get_mps() -> *const c_char;
-    fn nvim_option_get_nf() -> *const c_char;
+    fn nvim_get_p_ff() -> *const c_char;
+    fn nvim_get_p_fo() -> *const c_char;
+    fn nvim_get_p_mps() -> *const c_char;
+    fn nvim_get_p_nf() -> *const c_char;
     fn nvim_option_get_ww() -> *const c_char;
     fn nvim_option_get_mouse() -> *const c_char;
     fn nvim_option_get_shm() -> *const c_char;
 
     // Boolean option accessors
     fn nvim_get_p_ai() -> c_int;
-    fn nvim_option_get_et() -> c_int;
+    fn nvim_get_p_et() -> c_int;
     fn nvim_option_get_ic() -> c_int;
     fn nvim_option_get_scs() -> c_int;
     fn nvim_option_get_hls() -> c_int;
     fn nvim_option_get_is() -> c_int;
     fn nvim_option_get_magic() -> c_int;
     fn nvim_option_get_fic() -> c_int;
-    fn nvim_option_get_ml() -> c_int;
+    fn nvim_get_p_ml() -> c_int;
     fn nvim_option_get_mle() -> c_int;
     fn nvim_option_get_paste() -> c_int;
     fn nvim_option_get_ri() -> c_int;
@@ -406,7 +406,7 @@ pub fn get_shell() -> *const c_char {
 /// Get the 'fileformats' option value.
 #[inline]
 pub fn get_fileformats() -> *const c_char {
-    unsafe { nvim_option_get_ffs() }
+    unsafe { nvim_get_p_ffs() }
 }
 
 /// Get the 'cpoptions' option value.
@@ -418,7 +418,7 @@ pub fn get_cpoptions() -> *const c_char {
 /// Get the 'iskeyword' option value.
 #[inline]
 pub fn get_iskeyword() -> *const c_char {
-    unsafe { nvim_option_get_isk() }
+    unsafe { nvim_get_p_isk() }
 }
 
 /// Get the 'isfname' option value.
@@ -460,25 +460,25 @@ pub fn get_encoding() -> *const c_char {
 /// Get the 'fileformat' option value.
 #[inline]
 pub fn get_fileformat() -> *const c_char {
-    unsafe { nvim_option_get_ff() }
+    unsafe { nvim_get_p_ff() }
 }
 
 /// Get the 'formatoptions' option value.
 #[inline]
 pub fn get_formatoptions() -> *const c_char {
-    unsafe { nvim_option_get_fo() }
+    unsafe { nvim_get_p_fo() }
 }
 
 /// Get the 'matchpairs' option value.
 #[inline]
 pub fn get_matchpairs() -> *const c_char {
-    unsafe { nvim_option_get_mps() }
+    unsafe { nvim_get_p_mps() }
 }
 
 /// Get the 'nrformats' option value.
 #[inline]
 pub fn get_nrformats() -> *const c_char {
-    unsafe { nvim_option_get_nf() }
+    unsafe { nvim_get_p_nf() }
 }
 
 /// Get the 'whichwrap' option value.
@@ -508,7 +508,7 @@ pub fn get_autoindent() -> bool {
 /// Get the 'expandtab' option value.
 #[inline]
 pub fn get_expandtab() -> bool {
-    unsafe { nvim_option_get_et() != 0 }
+    unsafe { nvim_get_p_et() != 0 }
 }
 
 /// Get the 'ignorecase' option value.
@@ -550,7 +550,7 @@ pub fn get_fileignorecase() -> bool {
 /// Get the 'modeline' option value.
 #[inline]
 pub fn get_modeline() -> bool {
-    unsafe { nvim_option_get_ml() != 0 }
+    unsafe { nvim_get_p_ml() != 0 }
 }
 
 /// Get the 'modelineexpr' option value.

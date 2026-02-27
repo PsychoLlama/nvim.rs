@@ -365,33 +365,26 @@ int nvim_optset_get_flags(const void *args) { return ((const optset_T *)args)->o
 
 // String option accessors
 const char *nvim_option_get_sh(void) { return p_sh; }
-const char *nvim_option_get_ffs(void) { return p_ffs; }
 const char *nvim_option_get_cpo(void) { return p_cpo; }
-const char *nvim_option_get_isk(void) { return p_isk; }
 const char *nvim_option_get_isf(void) { return p_isf; }
 const char *nvim_option_get_isp(void) { return p_isp; }
 const char *nvim_option_get_isi(void) { return p_isi; }
 const char *nvim_option_get_breakat(void) { return p_breakat; }
 const char *nvim_option_get_sel(void) { return p_sel; }
 const char *nvim_option_get_enc(void) { return p_enc; }
-const char *nvim_option_get_ff(void) { return p_ff; }
-const char *nvim_option_get_fo(void) { return p_fo; }
-const char *nvim_option_get_mps(void) { return p_mps; }
-const char *nvim_option_get_nf(void) { return p_nf; }
 const char *nvim_option_get_ww(void) { return p_ww; }
 const char *nvim_option_get_mouse(void) { return p_mouse; }
 const char *nvim_option_get_shm(void) { return p_shm; }
 
 // Boolean option accessors
 // nvim_option_get_ai: consolidated into nvim_get_p_ai (Phase 12 Pass 4)
-int nvim_option_get_et(void) { return p_et; }
+// nvim_option_get_et / nvim_option_get_ml: consolidated into nvim_get_p_et / nvim_get_p_ml (Phase 13)
 int nvim_option_get_ic(void) { return p_ic; }
 int nvim_option_get_scs(void) { return p_scs; }
 int nvim_option_get_hls(void) { return p_hls; }
 int nvim_option_get_is(void) { return p_is; }
 int nvim_option_get_magic(void) { return p_magic; }
 int nvim_option_get_fic(void) { return p_fic; }
-int nvim_option_get_ml(void) { return p_ml; }
 int nvim_option_get_mle(void) { return p_mle; }
 int nvim_option_get_paste(void) { return p_paste; }
 int nvim_option_get_ri(void) { return p_ri; }
@@ -1223,7 +1216,7 @@ const char *nvim_option_get_p_ep(void) { return p_ep; }
 const char *nvim_curbuf_get_b_p_ffu(void) { return curbuf->b_p_ffu; }
 const char *nvim_option_get_p_ffu(void) { return p_ffu; }
 // p_flp / b_p_flp accessors (for get_flp_value)
-const char *nvim_option_get_p_flp(void) { return p_flp; }
+// nvim_option_get_p_flp: consolidated into nvim_get_p_flp (Phase 13)
 const char *nvim_buf_get_p_flp(buf_T *buf) { return buf->b_p_flp; }
 // ve_flags accessors (for get_ve_flags)
 unsigned nvim_get_ve_flags_global(void) { return ve_flags; }

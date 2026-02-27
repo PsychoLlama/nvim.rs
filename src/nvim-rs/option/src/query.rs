@@ -38,7 +38,7 @@ extern "C" {
     fn nvim_buf_get_bkc_flags(buf: BufHandle) -> c_uint;
 
     // get_flp_value
-    fn nvim_option_get_p_flp() -> *const c_char;
+    fn nvim_get_p_flp() -> *const c_char;
     fn nvim_buf_get_p_flp(buf: BufHandle) -> *const c_char;
 
     // get_ve_flags
@@ -157,7 +157,7 @@ pub unsafe extern "C" fn rs_get_flp_value(buf: BufHandle) -> *const c_char {
     if !b_p_flp.is_null() && *b_p_flp != 0 {
         b_p_flp
     } else {
-        nvim_option_get_p_flp()
+        nvim_get_p_flp()
     }
 }
 
