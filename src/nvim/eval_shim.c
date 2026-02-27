@@ -103,7 +103,6 @@ extern const char *rs_find_name_end(const char *arg, const char **expr_start,
                                     const char **expr_end, int flags);
 extern int rs_buf_byteidx_to_charidx(buf_T *buf, linenr_T lnum, int byteidx);
 extern int rs_buf_charidx_to_byteidx(buf_T *buf, linenr_T lnum, int charidx);
-// pattern_match: renamed Rust export (Phase 3 pass 8).
 extern int rs_is_tty_option(const char *name);
 extern int rs_get_callback_depth(void);
 extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
@@ -113,59 +112,27 @@ extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern bool rs_set_ref_in_callback_reader(CallbackReader *reader, int copyID,
                                           ht_stack_T **ht_stack, list_stack_T **list_stack);
-// eval0, eval1: renamed Rust exports (Phase 3 pass 8).
 extern int rs_eval_multdiv_number(typval_T *tv1, typval_T *tv2, int op);
 extern int rs_eval_func(char **arg, evalarg_T *evalarg, char *name, int name_len,
                         typval_T *rettv, int flags, typval_T *basetv);
-// get_lval, clear_lval, set_var_lval: renamed Rust exports (Phase 3 pass 9).
 extern int rs_eval_number(char **arg, typval_T *rettv, bool evaluate, bool want_string);
 extern int rs_eval_list(char **arg, typval_T *rettv, void *evalarg);
 extern int rs_eval_index(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 extern int rs_check_can_index(typval_T *rettv, bool evaluate, bool verbose);
 extern int rs_eval_index_inner(typval_T *rettv, bool is_range, typval_T *var1, typval_T *var2,
                                bool exclusive, const char *key, ptrdiff_t keylen, bool verbose);
-// f_slice: renamed Rust export (Phase 3 pass 8).
 extern int rs_eval_method(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 extern int rs_eval_lit_string(char **arg, typval_T *rettv, bool evaluate, bool interpolate);
 extern int rs_eval_string(char **arg, typval_T *rettv, bool evaluate, bool interpolate);
 extern int rs_eval_dict(char **arg, typval_T *rettv, evalarg_T *evalarg, bool literal);
 extern int rs_eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *evalarg);
-// eval6: renamed Rust export (Phase 3 pass 8).
 extern int rs_eval7(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
-// eval_interp_string: renamed Rust export (Phase 2 pass 9).
-// eval_for_line, next_for_item, free_for_info: renamed Rust exports (Phase 3 pass 9).
-// callback_call: renamed Rust export (Phase 3 pass 8).
 extern int rs_free_unref_items(int copyID);
-// handle_subscript: renamed Rust export (Phase 3 pass 9).
-// ex_echo, ex_execute: renamed Rust exports (Phase 3 pass 9).
-// eval_option, var_item_copy, save_tv_as_string: renamed Rust exports (Phase 2 pass 9).
-// call_vim_function, call_func_retstr, call_func_retlist: renamed Rust exports (Phase 2 pass 9).
-// set_argv_var: renamed Rust export (Phase 3 pass 9).
-// var_set_global: renamed Rust export (Phase 3 pass 9).
-// eval_fmt_source_name_line: renamed Rust export (Phase 3 pass 9).
-// find_option_var_end: renamed Rust export (Phase 12).
-// Phase 2 (eval_shim pass 5)
-// prompt_get_input: renamed Rust export (Phase 4 pass 9).
-// prompt_invoke_callback: renamed Rust export (Phase 4 pass 9).
-// invoke_prompt_interrupt: renamed Rust export (Phase 4 pass 9).
-// Phase 3 (eval_shim pass 5)
-// eval_foldexpr: renamed Rust export (Phase 3 pass 9).
-// rs_eval_foldtext: Rust implementation (eval_exec/src/eval_top.rs)
-// Phase 4 (eval_shim pass 5)
-// get_name_len: renamed Rust export (Phase 2 pass 9).
 extern char *rs_make_expanded_name(const char *in_start, char *expr_start, char *expr_end,
                                     char *in_end);
-// Phase 2 (eval_shim pass 7)
-// do_string_sub: renamed Rust export (Phase 3 pass 9).
-// Phase 4 (eval_shim pass 7)
 extern void rs_ex_echohl(exarg_T *eap);
 extern int rs_get_echo_hl_id(void);
-// Phase 1 (eval_shim pass 8): timer functions
-// find_timer_by_nr, add_timer_info, add_timer_info_all: renamed Rust exports (Phase 4 pass 9).
-// timer_due_cb, timer_start, timer_stop, timer_stop_all, timer_teardown: renamed (Phase 4 pass 9).
 extern void rs_timer_close_cb(TimeWatcher *tw, void *data);
-// Phase 2 (eval_shim pass 8): job helper functions
-// common_job_callbacks, find_job: renamed Rust exports (Phase 4 pass 9).
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
 _Static_assert(FNE_INCL_BR == 1, "FNE_INCL_BR mismatch");
@@ -256,11 +223,6 @@ void nvim_eval_partial_incref(partial_T *pt)
   pt->pt_refcount++;
 }
 
-// nvim_eval_cb_set_partial: deleted -- Rust eval/src/callback.rs uses CallbackT directly (Phase 12).
-// nvim_eval_cb_set_funcref: deleted -- Rust eval/src/callback.rs uses CallbackT directly (Phase 12).
-// nvim_eval_cb_set_none: deleted -- Rust eval/src/callback.rs uses CallbackT directly (Phase 12).
-// nvim_eval_emsg_e921: deleted -- Rust eval/src/callback.rs uses CallbackT directly (Phase 12).
-
 // _Static_assert for Callback layout (validated by Rust CallbackT #[repr(C)]):
 _Static_assert(sizeof(Callback) == 16, "Callback size must be 16 bytes");
 _Static_assert(offsetof(Callback, data) == 0, "Callback.data must be at offset 0");
@@ -330,9 +292,6 @@ ufunc_T *nvim_eval_partial_get_func(partial_T *pt)
 {
   return pt->pt_func;
 }
-
-// nvim_eval_cb_get_type: deleted -- Rust uses CallbackT directly (Phase 12).
-// nvim_eval_cb_get_partial: deleted -- Rust uses CallbackT directly (Phase 12).
 
 // CallbackReader accessors
 Callback *nvim_eval_cbr_get_cb(CallbackReader *reader)
@@ -418,9 +377,6 @@ list_T *nvim_eval_list_stack_pop(list_stack_T **stack)
   return list;
 }
 
-// nvim_eval_set_ref_dict_tv: deleted -- inlined in gc.rs as set_ref_in_item_dict (Phase 13).
-// nvim_eval_set_ref_partial_tv: deleted -- inlined in gc.rs as set_ref_in_item_partial (Phase 13).
-
 // C accessors for buffer operations (used by Rust indexing module)
 int nvim_eval_buf_ml_valid(const buf_T *buf)
 {
@@ -501,8 +457,6 @@ static const char e_empty_function_name[]
 /// Used for checking if local variables or arguments used in a lambda.
 bool *eval_lavars_used = NULL;
 
-// forinfo_T typedef removed -- struct is now defined in Rust (for_loop.rs, Phase 2 pass 10).
-
 typedef enum {
   GLV_FAIL,
   GLV_OK,
@@ -539,8 +493,6 @@ void restore_v_event(dict_T *v_event, save_v_event_T *sve)
   }
 }
 
-// eval_init: deleted -- Rust export renamed to match C symbol (Phase 12).
-
 #if defined(EXITFREE)
 void eval_clear(void)
 {
@@ -562,70 +514,10 @@ void eval_clear(void)
 
 #endif
 
-// fill_evalarg_from_eap, clear_evalarg, may_call_simple_func: renamed Rust exports (Phase 3 pass 8).
-// eval_expr_ext, partial_unref, typval_tostring: renamed Rust exports (Phase 2 pass 9).
-// eval_to_bool, eval_to_string_*, eval_to_number, skip_expr, eval_expr_typval, eval_expr_to_bool:
-//   renamed Rust exports (Phase 2 pass 9).
-
-// Rust implementations for Phase 1 (eval_shim pass 4, eval_exec crate)
 extern int rs_call_func_rettv(char **arg, evalarg_T *evalarg, typval_T *rettv, bool evaluate,
                               void *selfdict, typval_T *basetv, const char *lua_funcname);
 extern int rs_eval_lambda(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 extern int rs_eval1_emsg(char **arg, typval_T *rettv, exarg_T *eap);
-
-// var2fpos: renamed Rust export (Phase 12).
-// list2fpos: renamed Rust export (Phase 3 pass 9).
-
-// rs_last_set_msg: deleted -- last_set_msg now exported directly from Rust (Phase 12).
-// set_selfdict: renamed Rust export (Phase 3 pass 9).
-
-// Rust implementations for Phase 2 (eval_shim pass 6): tv_to_argv + system output
-// tv_to_argv: renamed Rust export (Phase 3 pass 9).
-// f_system, f_systemlist: renamed Rust exports (Phase 3 pass 8).
-
-// Rust implementations for Phase 3 (eval_shim pass 6): provider infrastructure
-// eval_has_provider: renamed Rust export (Phase 3 pass 9).
-// eval_call_provider: deleted -- callers updated to call rs_eval_call_provider directly (Phase 12).
-// script_host_eval: renamed Rust export (Phase 4 pass 9).
-
-// eval_to_bool, eval_expr_typval, eval_expr_to_bool, eval_to_string_skip,
-// skip_expr, eval_to_string_eap, eval_to_string, eval_to_string_safe,
-// eval_to_number, eval_expr_ext, call_vim_function, call_func_retstr,
-// call_func_retlist: deleted -- Rust exports renamed to match C symbols (Phase 2 pass 9).
-
-// eval1_emsg migrated to Rust (rs_eval1_emsg in eval_exec crate, eval.rs).
-
-// eval_expr: deleted -- Rust export renamed to match C symbol (Phase 3 pass 10).
-
-// eval_foldexpr: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
-
-// eval_foldtext: deleted -- no C callers; Rust code calls rs_eval_foldtext directly (Phase 12).
-
-/// Get an lvalue
-///
-/// Lvalue may be
-/// - variable: "name", "na{me}"
-/// - dictionary item: "dict.key", "dict['key']"
-/// - list item: "list[expr]"
-/// - list slice: "list[expr:expr]"
-///
-/// Indexing only works if trying to use it with an existing List or Dictionary.
-///
-/// @param[in]  name  Name to parse.
-/// @param  rettv  Pointer to the value to be assigned or NULL.
-/// @param[out]  lp  Lvalue definition. When evaluation errors occur `->ll_name`
-///                  is NULL.
-/// @param[in]  unlet  True if using `:unlet`. This results in slightly
-///                    different behaviour when something is wrong; must end in
-///                    space or cmd separator.
-/// @param[in]  skip  True when skipping.
-/// @param[in]  flags  @see GetLvalFlags.
-/// @param[in]  fne_flags  Flags for find_name_end().
-///
-// get_lval, clear_lval, set_var_lval: deleted -- Rust exports renamed to match C symbols (Phase 3 pass 9).
-// eval_for_line, next_for_item, free_for_info: deleted -- Rust exports renamed (Phase 3 pass 9).
-
-// nvim_forinfo_* accessors deleted -- ForInfo struct is now defined in Rust (for_loop.rs, Phase 2 pass 10).
 
 /// Get TV_LIST_ITEM_NEXT(fi->fi_list, item).
 listitem_T *nvim_list_item_next(list_T *l, listitem_T *item)
@@ -657,7 +549,6 @@ void nvim_tv_blob_copy(blob_T *from, typval_T *to)
   tv_blob_copy(from, to);
 }
 
-
 /// Call ex_let_vars with a number typval.
 bool nvim_ex_let_vars_number(char *arg, varnumber_T n, bool copy, int semicolon,
                              int varcount)
@@ -687,38 +578,13 @@ bool nvim_ex_let_vars_list_item(char *arg, listitem_T *item, int semicolon, int 
   return ex_let_vars(arg, TV_LIST_ITEM_TV(item), true, semicolon, varcount, false, NULL) == OK;
 }
 
-// nvim_emsg_skip_inc/dec: deleted -- Rust accesses emsg_skip global directly (Phase 12).
-
-// set_context_for_expression: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
 // Note: C callers pass cmdidx_T which implicitly converts to int (the Rust parameter type).
-
-// pattern_match: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
-// eval_func: deleted -- replaced by rs_eval_func (Rust, Phase 3 pass 8).
-// clear_evalarg: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
 
 /// The "eval" functions have an "evalarg" argument: When NULL or
 /// "evalarg->eval_flags" does not have EVAL_EVALUATE, then the argument is only
 /// parsed but not executed.  The functions may return OK, but the rettv will be
 /// of type VAR_UNKNOWN.  The functions still returns FAIL for a syntax error.
 
-// eval0: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
-// may_call_simple_func: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
-// eval1: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
-// eval6: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
-// eval7 and eval7_leader migrated to Rust (rs_eval7 in eval_exec crate).
-// call_func_rettv migrated to Rust (rs_call_func_rettv in eval_exec crate, eval.rs).
-// eval_lambda migrated to Rust (rs_eval_lambda in eval_exec crate, eval.rs).
-// eval_func: deleted -- replaced by rs_eval_func (Rust, Phase 3 pass 8).
-// eval_method: deleted -- replaced by rs_eval_method (Rust, Phase 3 pass 8).
-// eval_index: deleted -- replaced by rs_eval_index (Rust, Phase 3 pass 8).
-// check_can_index: deleted -- replaced by rs_check_can_index (Rust, Phase 3 pass 8).
-// f_slice: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
-// eval_index_inner: deleted -- replaced by rs_eval_index_inner (Rust, Phase 3 pass 8).
-
-// eval_option: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
-// eval_interp_string: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
-
-// nvim_ga_alloc_char/concat_str/append_nul/take_data/free: deleted -- Rust uses GArray struct
 // directly with ga_init/ga_concat/ga_append/ga_clear/xfree (Phase 12).
 
 /// Non-static wrapper for eval_one_expr_in_str -- used by rs_eval_interp_string.
@@ -748,8 +614,6 @@ char *nvim_partial_get_pt_func_uf_name(partial_T *pt)
   }
   return NULL;
 }
-
-// partial_unref: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
 // =============================================================================
 // GC composite iteration wrappers (for Rust garbage_collect, Phase 13)
@@ -922,31 +786,6 @@ void nvim_gc_verb_msg_abort(void)
   }
 }
 
-// garbage_collect: deleted -- replaced by rs_garbage_collect (Rust, Phase 13).
-
-// free_unref_items: deleted -- replaced by rs_free_unref_items (Rust, Phase 3 pass 8).
-
-/// Convert the string to a floating point number
-///
-/// This uses strtod().  setlocale(LC_NUMERIC, "C") has been used earlier to
-/// make sure this always uses a decimal point.
-///
-// eval_env_var: deleted -- replaced by rs_eval_env_var (Rust, Phase 2).
-
-// tv_to_argv: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
-
-// f_system: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
-// f_systemlist: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
-
-// callback_depth: deleted -- moved to Rust CALLBACK_DEPTH atomic static (eval_exec/callback.rs, Phase 12).
-// nvim_get_callback_depth: deleted -- rs_get_callback_depth is now defined in Rust (Phase 12).
-// nvim_cb_get_funcref_name: deleted -- Rust uses CallbackT directly (Phase 12).
-// nvim_cb_get_luaref: deleted -- Rust uses CallbackT directly (Phase 12).
-// nvim_callback_depth_inc: deleted -- Rust uses CALLBACK_DEPTH directly (Phase 12).
-// nvim_callback_depth_dec: deleted -- Rust uses CALLBACK_DEPTH directly (Phase 12).
-// nvim_callback_depth_exceeded: deleted -- Rust uses CALLBACK_DEPTH + nvim_p_mfd_get (Phase 12).
-// nvim_cb_check_vlua_funcref: deleted -- logic inlined in Rust check_vlua_funcref (Phase 12).
-
 /// Handle the kCallbackLua case: call nlua_call_ref and return LUARET_TRUTHY.
 /// Retained in C because LUARET_TRUTHY is a C macro that cannot be called from Rust.
 bool nvim_callback_call_lua(LuaRef luaref)
@@ -956,82 +795,18 @@ bool nvim_callback_call_lua(LuaRef luaref)
   return LUARET_TRUTHY(rv);
 }
 
-// nvim_callback_call_func: deleted -- Rust callback.rs constructs FuncExeT directly (Phase 11).
-
-// callback_call: deleted -- Rust export renamed to match C symbol (Phase 3 pass 8).
-
-// find_timer_by_nr: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-// add_timer_info: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-// add_timer_info_all: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-// timer_due_cb: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-// timer_start: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-// timer_stop: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-// timer_stop_all: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-// timer_teardown: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-
-// save_tv_as_string: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
-
-// var2fpos: deleted -- Rust export renamed to match C symbol (Phase 12).
-// list2fpos: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
-
-// get_name_len: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
-
-// make_expanded_name: deleted -- replaced by rs_make_expanded_name (Rust, Phase 3 pass 8).
-
-// set_argv_var: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
-
 /// Get v:lua partial pointer (accessor for Rust).
 partial_T *nvim_get_vlua_partial(void)
 {
   return get_vim_var_partial(VV_LUA);
 }
 
-// tv_is_luafunc: deleted -- inlined into callers (Phase 3 pass 8).
-
-// handle_subscript: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
-
-// set_selfdict: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
-
-// var_item_copy: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
-
-// ex_echo: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
-
-// ex_execute: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
-
-// find_option_var_end: deleted -- Rust export renamed to match C symbol (Phase 12).
-
-// var_set_global: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
-// Callers now pass a pointer to typval_T instead of by value.
-
-// last_set_msg: deleted -- Rust eval/src/display.rs exported as last_set_msg via #[export_name] (Phase 12).
 // _Static_assert for sctx_T layout:
 _Static_assert(sizeof(sctx_T) == 24, "sctx_T size must be 24 bytes");
-
-// do_string_sub: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
-
-// common_job_callbacks: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-// find_job: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-// script_host_eval: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-
-// eval_call_provider: deleted -- callers updated to call rs_eval_call_provider directly (Phase 12).
-
-// eval_has_provider: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
-
-// eval_fmt_source_name_line: deleted -- Rust export renamed to match C symbol (Phase 3 pass 9).
-
-// prompt_get_input: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-// prompt_invoke_callback: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-// invoke_prompt_interrupt: deleted -- Rust export renamed to match C symbol (Phase 4 pass 9).
-
-
-// typval_tostring: deleted -- Rust export renamed to match C symbol (Phase 2 pass 9).
 
 // =============================================================================
 // Accessor functions for Rust FFI
 // =============================================================================
-
-// evalarg_get_flags: deleted -- Rust EvalargHandle::flags() accesses field directly (Phase 14).
-// evalarg_set_flags: deleted -- Rust EvalargHandle::set_flags() accesses field directly (Phase 14).
 
 /// Get did_emsg global (accessor for Rust).
 int did_emsg_get(void)
@@ -1131,17 +906,6 @@ const char *nvim_get_tv_empty_string(void)
 // =============================================================================
 // Phase 2: get_lval / clear_lval helpers (lval_T accessors for rs_get_lval)
 // =============================================================================
-// nvim_lval_clear: deleted -- Rust uses std::ptr::write_bytes(lp, 0, 1) (Phase 11).
-// nvim_lval_get_name: deleted -- Rust accesses LvalT::ll_name directly (Phase 11).
-// nvim_lval_set_name: deleted -- Rust accesses LvalT::ll_name directly (Phase 11).
-// nvim_lval_get_name_len: deleted -- Rust accesses LvalT::ll_name_len directly (Phase 11).
-// nvim_lval_set_name_len: deleted -- Rust accesses LvalT::ll_name_len directly (Phase 11).
-// nvim_lval_get_exp_name: deleted -- Rust accesses LvalT::ll_exp_name directly (Phase 11).
-// nvim_lval_set_exp_name: deleted -- Rust accesses LvalT::ll_exp_name directly (Phase 11).
-// nvim_lval_get_tv: deleted -- Rust accesses LvalT::ll_tv directly (Phase 11).
-// nvim_lval_set_tv: deleted -- Rust accesses LvalT::ll_tv directly (Phase 11).
-// nvim_lval_get_newkey: deleted -- Rust accesses LvalT::ll_newkey directly (Phase 11).
-// nvim_lval_name_is_null: deleted -- Rust checks LvalT::ll_name.is_null() directly (Phase 11).
 
 /// Wrapper for find_var with no-write mode - accessor for Rust.
 /// Returns dictitem_T* for the named variable. Sets *htp if not NULL.
@@ -1157,15 +921,11 @@ typval_T *nvim_di_get_tv(dictitem_T *di)
   return &di->di_tv;
 }
 
-// nvim_tv_is_luafunc_wrapper: deleted -- inlined in Rust (Phase 3 pass 10).
-
 /// Return address of the EVALARG_EVALUATE global - accessor for Rust.
 evalarg_T *nvim_get_evalarg_evaluate_ptr(void)
 {
   return &EVALARG_EVALUATE;
 }
-
-// nvim_lval_compute_name_len: deleted -- Rust computes directly (Phase 11).
 
 /// Emit "E488: Trailing characters: %s" error - accessor for Rust.
 void nvim_semsg_trailing_arg(const char *p)
@@ -1184,15 +944,6 @@ void nvim_semsg_undef_var(int len, const char *name)
 // =============================================================================
 // Phase 3: set_var_lval helpers (additional lval_T accessors for rs_set_var_lval)
 // =============================================================================
-// nvim_lval_get_blob: deleted -- Rust accesses LvalT::ll_blob directly (Phase 11).
-// nvim_lval_get_range: deleted -- Rust accesses LvalT::ll_range directly (Phase 11).
-// nvim_lval_get_empty2: deleted -- Rust accesses LvalT::ll_empty2 directly (Phase 11).
-// nvim_lval_get_n1: deleted -- Rust accesses LvalT::ll_n1 directly (Phase 11).
-// nvim_lval_get_n2: deleted -- Rust accesses LvalT::ll_n2 directly (Phase 11).
-// nvim_lval_set_n2: deleted -- Rust accesses LvalT::ll_n2 directly (Phase 11).
-// nvim_lval_get_list: deleted -- Rust accesses LvalT::ll_list directly (Phase 11).
-// nvim_lval_get_dict: deleted -- Rust accesses LvalT::ll_dict directly (Phase 11).
-// nvim_lval_get_di: deleted -- Rust accesses LvalT::ll_di directly (Phase 11).
 
 /// Get bv_lock from a blob_T - accessor for Rust.
 VarLockStatus nvim_blob_get_bv_lock(const blob_T *blob)
@@ -1324,14 +1075,11 @@ bool nvim_tv_dict_is_watched(const dict_T *d)
   return tv_dict_is_watched(d);
 }
 
-
 /// Free a dictitem_T that failed to be added - accessor for Rust.
 void nvim_tv_dict_item_free(dictitem_T *di)
 {
   xfree(di);
 }
-
-// nvim_call_func_tv_wrapper: deleted -- Rust eval.rs constructs FuncExeT directly (Phase 11).
 
 // =============================================================================
 // Phase 3: eval_list accessor wrappers for Rust
@@ -1432,28 +1180,15 @@ typval_T *nvim_f_slice_get_arg2(typval_T *argvars)
 // Phase 1 (eval_method): new C accessor/wrapper functions
 // =============================================================================
 
-
 /// Set tv->vval.v_partial = pt without clearing - accessor for Rust rs_eval_method.
 void nvim_tv_set_partial_raw(typval_T *tv, partial_T *pt)
 {
   tv->vval.v_partial = pt;
 }
 
-// nvim_call_func_rettv_wrapper: deleted -- Rust calls call_func_rettv_impl directly (Phase 3 pass 10).
-
 // =============================================================================
 // Phase 1 (lval subscript): composite C accessor/wrapper functions for rs_get_lval_subscript
 // =============================================================================
-// nvim_lval_set_list: deleted -- Rust accesses LvalT::ll_list directly (Phase 11).
-// nvim_lval_set_dict: deleted -- Rust accesses LvalT::ll_dict directly (Phase 11).
-// nvim_lval_set_di: deleted -- Rust accesses LvalT::ll_di directly (Phase 11).
-// nvim_lval_set_n1: deleted -- Rust accesses LvalT::ll_n1 directly (Phase 11).
-// nvim_lval_set_range: deleted -- Rust accesses LvalT::ll_range directly (Phase 11).
-// nvim_lval_set_empty2: deleted -- Rust accesses LvalT::ll_empty2 directly (Phase 11).
-// nvim_lval_set_blob: deleted -- Rust accesses LvalT::ll_blob directly (Phase 11).
-// nvim_lval_set_li: deleted -- Rust accesses LvalT::ll_li directly (Phase 11).
-// nvim_lval_set_newkey: deleted -- Rust accesses LvalT::ll_newkey directly (Phase 11).
-// nvim_lval_get_li: deleted -- Rust accesses LvalT::ll_li directly (Phase 11).
 
 /// Returns true if ll_dict is v: or a: scope dict - composite accessor for Rust.
 bool nvim_lval_dict_is_v_or_a_scope(const lval_T *lp)
@@ -1523,7 +1258,6 @@ void nvim_semsg_e_illvar(const char *name)
   semsg(_(e_illvar), name);
 }
 
-
 /// Increment dict refcount and assign to ll_tv->vval.v_dict; set ll_dict = dict - accessor for Rust.
 /// Replicates: lp->ll_tv->vval.v_dict = tv_dict_alloc(); lp->ll_tv->vval.v_dict->dv_refcount++;
 /// lp->ll_dict = lp->ll_tv->vval.v_dict
@@ -1585,8 +1319,6 @@ void nvim_lval_set_tv_from_ll_di(lval_T *lp)
   lp->ll_tv = &lp->ll_di->di_tv;
 }
 
-// nvim_lval_di_is_luafunc: deleted -- inlined in Rust using nvim_lval_get_di + nvim_di_get_tv + rs_is_luafunc (Phase 3 pass 10).
-
 /// Check if lp->ll_di is NULL - accessor for Rust.
 bool nvim_lval_di_is_null(const lval_T *lp)
 {
@@ -1621,8 +1353,6 @@ int nvim_tv_list_check_range_index_two(lval_T *lp, bool quiet)
 // Phase 5 (handle_subscript): new C accessor/wrapper functions
 // =============================================================================
 
-// nvim_tv_get_dict already exists in eval/typval.c -- no duplicate needed here.
-
 /// Increment dict->dv_refcount - accessor for Rust rs_handle_subscript.
 void nvim_dict_refcount_inc(dict_T *dict)
 {
@@ -1636,10 +1366,6 @@ void nvim_dict_unref(dict_T *dict)
 {
   tv_dict_unref(dict);
 }
-
-// nvim_call_func_rettv_with_selfdict: deleted -- Rust calls call_func_rettv_impl directly (Phase 3 pass 10).
-
-// nvim_eval_lambda_wrapper: deleted -- Rust calls eval_lambda_impl directly (Phase 3 pass 10).
 
 /// make_partial wrapper - accessor for Rust rs_handle_subscript.
 void nvim_make_partial(dict_T *selfdict, typval_T *rettv)
@@ -1658,7 +1384,6 @@ bool nvim_partial_get_pt_auto(const partial_T *pt)
 {
   return pt->pt_auto;
 }
-
 
 /// Scope check for get_lval_dict_item: set key[len]=NUL, check scope, restore.
 /// Returns true if the variable is 'wrong' (validation failed).
@@ -1685,11 +1410,6 @@ bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *
 // Phase 6 (ex_echo + ex_execute): new C accessor/wrapper functions
 // =============================================================================
 
-// nvim_evalarg_alloc_from_eap: deleted -- Rust allocates Box<EvalargT> directly (Phase 14).
-// nvim_evalarg_clear_and_free: deleted -- Rust calls clear_evalarg + Box::from_raw (Phase 14).
-
-// nvim_eval1_emsg_wrapper: deleted -- Rust calls rs_eval1_emsg directly (Phase 3 pass 10).
-
 /// encode_tv2echo wrapper - accessor for Rust.
 char *nvim_encode_tv2echo(typval_T *tv)
 {
@@ -1714,8 +1434,6 @@ void nvim_msg_sb_eol(void)
 {
   msg_sb_eol();
 }
-
-// nvim_msg_start already defined in undo.c -- no duplicate needed here.
 
 /// Set msg_ext_append global - accessor for Rust.
 void nvim_set_msg_ext_append(bool val)
@@ -1783,7 +1501,6 @@ char *nvim_ga_get_data(const garray_T *ga)
 {
   return (char *)ga->ga_data;
 }
-
 
 /// Get eap->skip - accessor for Rust (local, avoids dependency on ex_docmd).
 int nvim_eap_get_skip_local(const exarg_T *eap)
@@ -1898,11 +1615,6 @@ char *nvim_eval_tv_list_join_nl(list_T *l)
   ga_append(&ga, NUL);
   return (char *)ga.ga_data;
 }
-
-
-
-// nvim_eval_call_func_partial: deleted -- Rust eval_top.rs constructs FuncExeT directly (Phase 11).
-// nvim_eval_call_func_simple: deleted -- Rust eval_top.rs constructs FuncExeT directly (Phase 11).
 
 /// xstrdup wrapper - accessor for eval_top.
 char *nvim_eval_xstrdup(const char *s)
@@ -2048,8 +1760,6 @@ int nvim_get_cursor_line_charlen(void)
 // Phase 1 (eval_shim pass 4): C accessors for rs_call_func_rettv / rs_eval_lambda
 // =============================================================================
 
-// nvim_call_func_tv_with_selfdict: deleted -- Rust eval.rs constructs FuncExeT directly (Phase 11).
-
 /// Wrap get_lambda_tv for Rust rs_eval_lambda.
 int nvim_get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg)
 {
@@ -2067,7 +1777,6 @@ void nvim_semsg_e_missingparen(const char *name)
 {
   semsg(_(e_missingparen), name);
 }
-
 
 /// Emit "E117: Unknown function" / empty function name error.
 void nvim_emsg_e_empty_function_name(void)
@@ -2192,15 +1901,11 @@ void nvim_tv_set_list(typval_T *tv, list_T *list)
   tv->vval.v_list = list;
 }
 
-// nvim_dict_get_copyid already exists in eval/typval.c -- no duplicate needed here.
-
 /// Get dict->dv_copydict.
 dict_T *nvim_dict_get_copydict(const dict_T *dict)
 {
   return dict->dv_copydict;
 }
-
-// nvim_dict_refcount_inc already exists above (line ~3863) -- no duplicate needed here.
 
 /// Call tv_dict_copy(conv, dict, deep, copyID) - deep copy a dict.
 dict_T *nvim_tv_dict_copy(const vimconv_T *conv, dict_T *dict, bool deep, int copyID)
@@ -2223,8 +1928,6 @@ void nvim_emsg_nested_too_deep(void)
 // =============================================================================
 // Accessors for Phase 4 (eval_shim pass 4): save_tv_as_string
 // =============================================================================
-
-// nvim_buflist_findnr already exists in buffer.c -- no duplicate needed here.
 
 /// Emit "E86: Buffer % does not exist" semsg.
 void nvim_semsg_e_nobufnr(varnumber_T nr)
@@ -2249,12 +1952,6 @@ const char *nvim_list_item_get_string(listitem_T *item)
 //   clear_evalarg, may_call_simple_func, eval_expr_ext, partial_unref,
 //   typval_tostring
 // =============================================================================
-
-// nvim_evalarg_init_skip: deleted -- Rust sets EvalargT fields directly (Phase 14).
-// nvim_sourcing_a_script: deleted -- Rust calls sourcing_a_script() directly (Phase 14).
-// nvim_evalarg_copy_getline_from_eap: deleted -- Rust uses nvim_eap_get_getline/cookie (Phase 14).
-// nvim_evalarg_get_tofree: deleted -- Rust accesses EvalargT::eval_tofree directly (Phase 14).
-// nvim_evalarg_set_tofree: deleted -- Rust accesses EvalargT::eval_tofree directly (Phase 14).
 
 /// Get eap->cmdline_tofree - accessor for Rust clear_evalarg.
 char *nvim_eap_get_cmdline_tofree(exarg_T *eap)
@@ -2334,8 +2031,6 @@ bool nvim_partial_decref_and_check(partial_T *pt)
 //   set_argv_var, var_set_global, eval_fmt_source_name_line, find_option_var_end
 // =============================================================================
 
-// nvim_call_func_with_partial: deleted -- Rust eval_top.rs constructs FuncExeT directly (Phase 11).
-
 /// Wrap set_var(name, name_len, tv, false) - accessor for rs_var_set_global.
 void nvim_set_var_wrapper(const char *name, size_t name_len, typval_T *tv)
 {
@@ -2400,8 +2095,6 @@ void nvim_snprintf_question(char *buf, size_t bufsize)
 {
   snprintf(buf, bufsize, "?");
 }
-
-// nvim_xstrdup is defined in register.c - no duplicate needed here.
 
 // =============================================================================
 // Accessors for Phase 2 (eval_shim pass 5): prompt functions
@@ -2651,8 +2344,6 @@ list_T *nvim_tv_list_alloc_ret(typval_T *rettv, ptrdiff_t count_hint)
   return tv_list_alloc_ret(rettv, count_hint);
 }
 
-// nvim_xcalloc and nvim_xstrdup are already defined in register.c
-
 /// emit semsg(e_invarg2, "expected String or List")
 void nvim_semsg_tv_to_argv_type(void)
 {
@@ -2670,7 +2361,6 @@ void nvim_semsg_tv_to_argv_notexe(const char *msg)
 {
   semsg(_(e_invargNval), "cmd", msg);
 }
-
 
 /// os_can_exe wrapper for tv_to_argv -- check if the command is executable.
 /// Returns true if executable. Sets *abspath to the resolved path (caller must free).
@@ -2732,7 +2422,6 @@ void nvim_semsg_provider_no_call(const char *name, const char *funcname)
   semsg("provider: %s: g:loaded_%s_provider=2 but %s is not defined", name, name, funcname);
 }
 
-
 /// Save the provider_caller_scope and related globals to an opaque heap blob.
 /// Returns a pointer that must be passed to nvim_restore_provider_caller_scope.
 void *nvim_save_provider_caller_scope(void)
@@ -2771,13 +2460,11 @@ void nvim_provider_call_nesting_dec(void)
   assert(provider_call_nesting >= 0);
 }
 
-
 /// tv_list_alloc with explicit count (for provider args list).
 list_T *nvim_eval_list_alloc_n(int n)
 {
   return tv_list_alloc((ptrdiff_t)n);
 }
-
 
 /// tv_list_ref wrapper for provider list argument.
 void nvim_eval_list_ref(list_T *l)
@@ -2786,8 +2473,6 @@ void nvim_eval_list_ref(list_T *l)
 }
 
 // nvim_eval_save_funccal and nvim_eval_restore_funccal already defined above (line 3567).
-
-// nvim_eval_provider_call_func: deleted -- Rust provider.rs constructs FuncExeT directly (Phase 11).
 
 /// semsg E319 "No X provider found" wrapper.
 void nvim_semsg_no_provider(const char *provider)
@@ -2953,12 +2638,6 @@ void nvim_timers_foreach(void (*cb)(timer_T *, void *), void *userdata)
   })
 }
 
-// nvim_tv_set_number is defined in eval/typval.c
-// nvim_tv_dict_alloc is defined in undo.c
-
-// nvim_callback_free: deleted -- now defined in Rust eval_exec/callback.rs (Phase 12).
-// nvim_callback_put: deleted -- now defined in Rust eval_exec/callback.rs (Phase 12).
-
 /// Alloc a dictitem_T with the given key.
 dictitem_T *nvim_tv_dict_item_alloc_key(const char *key)
 {
@@ -2970,8 +2649,6 @@ int nvim_tv_dict_add_item(dict_T *dict, dictitem_T *di)
 {
   return tv_dict_add(dict, di);
 }
-
-
 
 /// Wrapper for get_pressedreturn() -- returns 1 if true.
 int nvim_get_pressedreturn(void)
@@ -2994,7 +2671,6 @@ void nvim_discard_current_exception(void)
 // =============================================================================
 // Job helper accessors for Rust Phase 2 (eval_shim pass 8)
 // =============================================================================
-
 
 /// Set the buffered field of a CallbackReader.
 void nvim_cbr_set_buffered(CallbackReader *reader, int buffered)
