@@ -93,7 +93,7 @@ extern "C" {
     fn nvim_get_vgetc_mod_mask() -> c_int;
     fn nvim_get_km_startsel() -> bool;
     fn nvim_get_curwin_w_p_rl() -> bool;
-    fn nvim_get_curwin_w_curswant() -> c_int;
+    fn nvim_get_curswant() -> c_int;
     fn nvim_set_msg_nowait(val: c_int);
     fn nvim_set_msg_didout(val: c_int);
     fn nvim_set_msg_col(val: c_int);
@@ -161,7 +161,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
 
     nvim_ns_set_command_finished(s, false);
     nvim_ns_set_ctrl_w(s, false);
-    nvim_ns_set_old_col(s, nvim_get_curwin_w_curswant());
+    nvim_ns_set_old_col(s, nvim_get_curswant());
     nvim_ns_set_c(s, key);
 
     // LANGMAP_ADJUST

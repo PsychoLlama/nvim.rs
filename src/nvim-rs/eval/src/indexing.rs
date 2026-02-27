@@ -237,7 +237,7 @@ extern "C" {
 
     // Buffer accessors (Phase 3)
     fn nvim_curbuf_fnum() -> c_int;
-    fn nvim_curbuf_ml_line_count() -> i32;
+    fn nvim_get_line_count() -> i32;
     fn nvim_buflist_findnr(fnum: c_int) -> BufHandle;
 
     // Bulk cursor/visual state (Phase 15 bulk-read replaces 9 individual accessors)
@@ -306,7 +306,7 @@ pub unsafe extern "C" fn rs_var2fpos(
 
         // Get the line number.
         let lnum = nvim_tv_list_find_nr(l, 0, &raw mut error) as i32;
-        if error || lnum <= 0 || lnum > nvim_curbuf_ml_line_count() {
+        if error || lnum <= 0 || lnum > nvim_get_line_count() {
             // Invalid line number.
             return false;
         }
@@ -448,7 +448,7 @@ pub unsafe extern "C" fn rs_var2fpos(
     } else if name[0] == b'$' {
         // last column or line
         if dollar_lnum {
-            pos.lnum = nvim_curbuf_ml_line_count();
+            pos.lnum = nvim_get_line_count();
             pos.col = 0;
         } else {
             pos.lnum = cvs.cursor_lnum;
