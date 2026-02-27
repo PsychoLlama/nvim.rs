@@ -1309,7 +1309,6 @@ extern "C" {
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_set_cursor_col(col: c_int);
     fn nvim_set_cursor_coladd_zero();
-    fn nvim_gchar_cursor_call() -> c_int;
     fn nvim_inc_cursor() -> c_int;
     fn nvim_mb_adjust_cursor();
     fn nvim_cpo_has_changew() -> bool;
@@ -1369,7 +1368,6 @@ extern "C" {
     fn nvim_inc_msg_silent();
     fn nvim_dec_msg_silent();
     fn nvim_curbuf_ml_empty() -> bool;
-    fn nvim_get_VIsual_mode_val() -> c_int;
     fn nvim_get_cursor_col_vs_b_op_start_col() -> c_int;
     fn nvim_get_cursor_lnum_vs_b_op_start_lnum() -> c_int;
     fn nvim_set_b_visual_from_op();
@@ -1450,7 +1448,7 @@ unsafe fn adjust_cursor(oap: OapHandle) {
     #[allow(clippy::cast_possible_wrap)]
     let sel_o = b'o' as std::ffi::c_char;
     if nvim_get_cursor_col() > 0
-        && nvim_gchar_cursor_call() == NUL_CHAR
+        && nvim_gchar_cursor() == NUL_CHAR
         && (nvim_get_VIsual_active() == 0 || nvim_get_p_sel_first() == sel_o)
         && !nvim_virtual_active()
         && (nvim_get_ve_flags() & K_OPT_VE_FLAG_ONEMORE) == 0
@@ -1474,7 +1472,7 @@ unsafe fn adjust_for_sel(cap: CapHandle) {
     if nvim_get_VIsual_active() != 0
         && nvim_oap_get_inclusive(oap)
         && nvim_get_p_sel_first() == sel_e
-        && nvim_gchar_cursor_call() != NUL_CHAR
+        && nvim_gchar_cursor() != NUL_CHAR
         && nvim_lt_VIsual_cursor()
     {
         nvim_inc_cursor();
@@ -1534,7 +1532,7 @@ pub unsafe extern "C" fn rs_nv_wordcmd(cap: CapHandle) {
 
     // "cw" and "cW" are a special case.
     if !word_end && nvim_oap_get_op_type_ptr(oap) == OP_CHANGE {
-        let n = nvim_gchar_cursor_call();
+        let n = nvim_gchar_cursor();
         if n != NUL_CHAR && !nvim_ascii_iswhite(n) {
             // This is a little strange. To match what the real Vi does, we
             // effectively map "cw" to "ce", and "cW" to "cE", provided that we are
@@ -2146,7 +2144,7 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
         }
 
         // Inlined nvim_put_visual_flags: compute put flags for visual mode
-        let vis_mode = nvim_get_VIsual_mode_val();
+        let vis_mode = nvim_get_VIsual_mode();
         if vis_mode == b'V' as c_int {
             flags |= PUT_LINE;
         } else if vis_mode == b'v' as c_int {
@@ -2244,7 +2242,7 @@ pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
 
     nvim_curwin_set_curswant(true);
     // Include a Tab for "tx" and for "dfx".
-    if nvim_gchar_cursor_call() == nvim_get_TAB()
+    if nvim_gchar_cursor() == nvim_get_TAB()
         && nvim_virtual_active()
         && arg == FORWARD
         && (t_cmd || nvim_oap_get_op_type_ptr(oap) != OP_NOP)
@@ -2526,11 +2524,11 @@ pub unsafe extern "C" fn rs_nv_edit(cap: CapHandle) {
             // column otherwise, also to append after an unprintable char
             if nvim_virtual_active()
                 && (nvim_get_cursor_coladd() > 0
-                    || nvim_gchar_cursor_call() == NUL_CHAR
-                    || nvim_gchar_cursor_call() == nvim_get_TAB())
+                    || nvim_gchar_cursor() == NUL_CHAR
+                    || nvim_gchar_cursor() == nvim_get_TAB())
             {
                 nvim_set_cursor_coladd(nvim_get_cursor_coladd() + 1);
-            } else if nvim_gchar_cursor_call() != NUL_CHAR {
+            } else if nvim_gchar_cursor() != NUL_CHAR {
                 nvim_inc_cursor();
             }
         }
@@ -2562,7 +2560,6 @@ extern "C" {
     fn nvim_ident_vim_iswordp(p: *const c_char) -> bool;
     fn nvim_ident_mb_prevptr(line: *mut c_char, p: *mut c_char) -> *mut c_char;
     fn nvim_ident_set_g_tag_at_cursor(val: bool);
-    fn nvim_ident_emsg_noident();
 
     fn nvim_set_no_smartcase(val: c_int);
     fn rs_magic_isset() -> c_int;
@@ -2808,7 +2805,7 @@ unsafe fn nv_k_getcmd(
         }
         if n == 0 {
             // found dashes only
-            nvim_ident_emsg_noident();
+            nvim_emsg_no_ident_under_cursor();
             return None;
         }
 
@@ -2874,7 +2871,7 @@ pub unsafe extern "C" fn rs_ident_build_and_exec(
 
         #[allow(clippy::cast_sign_loss)]
         if kp_help && *skipwhite(ptr.cast_const()).cast::<u8>() == 0 {
-            nvim_ident_emsg_noident();
+            nvim_emsg_no_ident_under_cursor();
             return;
         }
         #[allow(clippy::cast_sign_loss)]
@@ -3252,7 +3249,7 @@ pub unsafe extern "C" fn rs_n_swapchar(cap: CapHandle) {
             did_change = true;
         }
         nvim_inc_cursor();
-        if nvim_gchar_cursor_call() == NUL_CHAR {
+        if nvim_gchar_cursor() == NUL_CHAR {
             if nvim_vim_strchr_p_ww(c_int::from(b'~'))
                 && nvim_get_cursor_lnum() < nvim_get_line_count()
             {
@@ -3596,7 +3593,7 @@ unsafe fn bracket_method_nav(
                 }
                 break 'outer;
             }
-            let c = nvim_gchar_cursor_call();
+            let c = nvim_gchar_cursor();
             if c == c_int::from(b'{') || c == c_int::from(b'}') {
                 let cur = (
                     nvim_get_cursor_lnum(),
@@ -4206,7 +4203,7 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
         if u_save_cursor() == 0 {
             return;
         }
-        let gc = nvim_gchar_cursor_call();
+        let gc = nvim_gchar_cursor();
         let count1 = nvim_cap_get_count1(cap);
         if gc == NUL_CHAR {
             let viscol = nvim_getviscol();
@@ -4401,7 +4398,6 @@ extern "C" {
     fn nvim_oneleft_call() -> c_int;
     fn nvim_cursor_col_inc_by_utfc();
     fn nvim_set_cursor_col_zero();
-    fn nvim_cursor_lnum_dec();
 }
 
 extern "C" {
@@ -5436,7 +5432,7 @@ pub unsafe extern "C" fn rs_nv_left(cap: CapHandle) {
                 && nvim_get_cursor_lnum() > 1;
 
             if wrap {
-                nvim_cursor_lnum_dec();
+                nvim_cursor_lnum_dec_val();
                 nvim_coladvance_curwin(MAXCOL);
                 nvim_curwin_set_curswant(true);
 
@@ -5617,7 +5613,7 @@ extern "C" {
     fn nvim_cursor_down_inner_curwin(n: c_int, skip_conceal: bool);
     fn nvim_oneright_call() -> c_int;
     fn nvim_get_cursor_char() -> c_int;
-    fn nvim_vim_isprintc(c: c_int) -> bool;
+    fn nvim_vim_isprintc_wrapper(c: c_int) -> bool;
     fn nvim_vim_strsize_call(s: *const c_char) -> c_int;
     fn nvim_adjust_skipcol_call();
     fn nvim_dec_cursor_col();
@@ -5766,7 +5762,7 @@ pub unsafe extern "C" fn rs_nv_screengo(
         if dir == FORWARD
             && virtcol < nvim_get_curwin_w_curswant()
             && nvim_get_curwin_w_curswant() <= width1
-            && !nvim_vim_isprintc(c)
+            && !nvim_vim_isprintc_wrapper(c)
             && c > 255
         {
             nvim_oneright_call();
@@ -5854,7 +5850,7 @@ pub unsafe extern "C" fn rs_nv_g_home_m_cmd(cap: CapHandle) {
 
     if flag {
         loop {
-            let c = nvim_gchar_cursor_call();
+            let c = nvim_gchar_cursor();
             if !nvim_ascii_iswhite(c) || nvim_oneright_call() != 0 {
                 break;
             }
@@ -5941,7 +5937,7 @@ pub unsafe extern "C" fn rs_nv_g_dollar_cmd(cap: CapHandle) {
 
     if flag {
         loop {
-            let c = nvim_gchar_cursor_call();
+            let c = nvim_gchar_cursor();
             if !nvim_ascii_iswhite_or_nul(c) || nvim_oneleft_call() != 0 {
                 break;
             }
@@ -7289,7 +7285,6 @@ extern "C" {
     // Phase 1: event
     fn nvim_state_handle_k_event();
     fn nvim_set_may_garbage_collect(val: bool);
-    fn nvim_get_restart_VIsual_select_val() -> c_int;
 }
 
 /// Command handler for CTRL-A and CTRL-X: Add or subtract from number/letter.
@@ -7429,7 +7424,7 @@ pub unsafe extern "C" fn rs_nv_paste(cap: CapHandle) {
 pub unsafe extern "C" fn rs_nv_event(cap: CapHandle) {
     // Disable garbage collection during event handling (see comment in C original).
     nvim_set_may_garbage_collect(false);
-    let may_restart = nvim_get_restart_edit() != 0 || nvim_get_restart_VIsual_select_val() != 0;
+    let may_restart = nvim_get_restart_edit() != 0 || nvim_get_restart_VIsual_select() != 0;
     nvim_state_handle_k_event();
     nvim_set_finish_op(false);
     if may_restart {
@@ -7704,7 +7699,7 @@ pub unsafe extern "C" fn rs_n_start_visual_mode(c: c_int) {
     // virtualedit. Recalculate curwin->w_cursor to avoid bad highlighting.
     if c == CTRL_V
         && (nvim_get_ve_flags() & K_OPT_VE_FLAG_BLOCK) != 0
-        && nvim_gchar_cursor_call() == TAB_CHAR
+        && nvim_gchar_cursor() == TAB_CHAR
     {
         nvim_validate_virtcol_curwin();
         nvim_coladvance_curwin(nvim_get_curwin_w_virtcol());

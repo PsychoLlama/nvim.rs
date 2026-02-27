@@ -777,8 +777,6 @@ void nvim_set_cursor_col(int col) { curwin->w_cursor.col = col; }
 
 void nvim_set_cursor_coladd_zero(void) { curwin->w_cursor.coladd = 0; }
 
-int nvim_gchar_cursor_call(void) { return gchar_cursor(); }
-
 int nvim_inc_cursor(void) { return inc(&curwin->w_cursor); }
 
 int nvim_dec_cursor(void) { return dec(&curwin->w_cursor); }
@@ -876,7 +874,6 @@ void nvim_dec_msg_silent(void) { msg_silent--; }
 bool nvim_curbuf_ml_empty(void) { return (curbuf->b_ml.ml_flags & ML_EMPTY) != 0; }
 
 // For nvim_put_visual_flags inlining
-int nvim_get_VIsual_mode_val(void) { return VIsual_mode; }
 int nvim_get_cursor_col_vs_b_op_start_col(void) { return curwin->w_cursor.col - curbuf->b_op_start.col; }
 int nvim_get_cursor_lnum_vs_b_op_start_lnum(void) { return (int)(curwin->w_cursor.lnum - curbuf->b_op_start.lnum); }
 
@@ -1469,7 +1466,6 @@ void nvim_cursor_up_inner_curwin(int n, bool skip_conceal) { cursor_up_inner(cur
 void nvim_cursor_down_inner_curwin(int n, bool skip_conceal) { cursor_down_inner(curwin, n, skip_conceal); }
 int nvim_oneright_call(void) { return oneright(); }
 int nvim_get_cursor_char(void) { return utf_ptr2char(get_cursor_pos_ptr()); }
-bool nvim_vim_isprintc(int c) { return vim_isprintc(c); }
 int nvim_vim_strsize_call(const char *s) { return vim_strsize((char *)s); }
 void nvim_adjust_skipcol_call(void) { adjust_skipcol(); }
 void nvim_dec_cursor_col(void) { curwin->w_cursor.col--; }
@@ -1482,8 +1478,6 @@ int nvim_utfc_ptr2len_cursor(void) { return utfc_ptr2len(get_cursor_pos_ptr()); 
 int nvim_oneleft_call(void) { return oneleft(); }
 void nvim_cursor_col_inc_by_utfc(void) { curwin->w_cursor.col += (colnr_T)utfc_ptr2len(get_cursor_pos_ptr()); }
 void nvim_set_cursor_col_zero(void) { curwin->w_cursor.col = 0; curwin->w_cursor.coladd = 0; }
-void nvim_cursor_lnum_dec(void) { curwin->w_cursor.lnum--; }
-
 // Phase 2 accessors: nv_object_impl
 static char *nvim_mps_save = NULL;
 void nvim_save_and_set_mps(void) { nvim_mps_save = curbuf->b_p_mps; curbuf->b_p_mps = "(:),{:},[:],<:>"; }
@@ -2436,9 +2430,6 @@ char *nvim_ident_mb_prevptr(char *line, char *p) { return mb_prevptr(line, p); }
 void nvim_ident_set_g_tag_at_cursor(bool val) { g_tag_at_cursor = val; }
 
 
-/// Emit the e_noident error message.
-void nvim_ident_emsg_noident(void) { emsg(_(e_noident)); }
-
 // =============================================================================
 // Phase 1 accessors: dispatch table handlers (nv_addsub, nv_colon, nv_record,
 // nv_paste, nv_event)
@@ -2474,9 +2465,6 @@ int nvim_get_oap_start_col(cmdarg_T *cap) { return (int)cap->oap->start.col; }
 
 /// Return did_emsg.
 int nvim_did_emsg_check(void) { return did_emsg; }
-
-/// Return restart_VIsual_select.
-int nvim_get_restart_VIsual_select_val(void) { return restart_VIsual_select; }
 
 /// Return the translated "E1292: Command-line window is already open" message.
 const char *nvim_get_e_cmdline_window_already_open(void) { return _(e_cmdline_window_already_open); }
