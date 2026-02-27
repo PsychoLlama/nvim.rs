@@ -393,8 +393,6 @@ const char *nvim_option_get_mouse(void) { return p_mouse; }
 const char *nvim_option_get_shm(void) { return p_shm; }
 
 // Boolean option accessors
-// nvim_option_get_ai: consolidated into nvim_get_p_ai (Phase 12 Pass 4)
-// nvim_option_get_et / nvim_option_get_ml: consolidated into nvim_get_p_et / nvim_get_p_ml (Phase 13)
 int nvim_option_get_ic(void) { return p_ic; }
 int nvim_option_get_scs(void) { return p_scs; }
 int nvim_option_get_hls(void) { return p_hls; }
@@ -413,7 +411,6 @@ int nvim_option_get_lz(void) { return p_lz; }
 int nvim_option_get_to(void) { return p_to; }
 
 // Numeric option accessors
-// nvim_option_get_sw/ts/sts/tw/wm/columns/lines/ch: consolidated into nvim_get_p_* (Phase 12 Pass 4)
 OptInt nvim_option_get_so(void) { return p_so; }
 OptInt nvim_option_get_siso(void) { return p_siso; }
 OptInt nvim_option_get_report(void) { return p_report; }
@@ -484,7 +481,6 @@ void nvim_option_set_magic_overruled(int value) { magic_overruled = (optmagic_T)
 
 // State accessors for callbacks
 int nvim_callback_get_starting(void) { return starting; }
-// nvim_option_get_hls (line ~302) is the canonical accessor; nvim_callback_get_p_hls removed
 OptInt nvim_callback_get_p_titlelen(void) { return p_titlelen; }
 int nvim_callback_get_no_hlsearch(void) { return no_hlsearch; }
 
@@ -536,7 +532,6 @@ void nvim_option_win_set_skipcol(win_T *win, int value) { if (win) win->w_skipco
 
 // Behavior callback accessors
 OptInt nvim_callback_get_p_uc(void) { return p_uc; }
-// nvim_option_get_ea (line ~312) is the canonical accessor; nvim_callback_get_p_ea removed
 int nvim_callback_is_one_window(void) { return ONE_WINDOW; }
 int nvim_callback_is_curbuf_help(void) { return curbuf->b_help; }
 int nvim_callback_get_curwin_height(void) { return curwin->w_height; }
@@ -709,14 +704,11 @@ const char **nvim_get_opt_spo_values(void) { return (const char **)opt_spo_value
 // Window ns_hl_winhl accessors
 int nvim_win_get_ns_hl_winhl(win_T *win) { return win->w_ns_hl_winhl; }
 void nvim_win_set_ns_hl_winhl(win_T *win, int val) { win->w_ns_hl_winhl = val; }
-// nvim_win_get_ns_hl is already defined in window_shim.c
 void nvim_win_set_ns_hl(win_T *win, int val) { win->w_ns_hl = val; }
-// nvim_win_set_hl_needs_update is already defined in window_shim.c (takes bool)
 // Return win->w_p_winhl (current winhighlight string)
 const char *nvim_win_get_p_winhl(win_T *win) { return win ? win->w_p_winhl : NULL; }
 // Return address of win->w_p_winhl for varp comparison
 const void *nvim_win_get_p_winhl_addr(win_T *win) { return win ? (const void *)&win->w_p_winhl : NULL; }
-// nvim_get_empty_string_option is already defined in window_shim.c (returns char*)
 // syn_check_group wrapper (reuse existing signature: name + len)
 int nvim_syn_check_group_for_winhl(const char *name, size_t len)
 {
@@ -774,8 +766,7 @@ OptInt nvim_get_p_columns(void) { return p_columns; }
 int nvim_option_was_set_window(void) { return option_was_set(kOptWindow); }
 
 // Paste callback accessors (nvim_get_p_paste defined in indent_c.c,
-//   nvim_get_p_ru defined in drawscreen.c, nvim_get_p_ri defined in edit.c)
-// nvim_option_get_sm / nvim_option_set_sm are the canonical accessors; nvim_get_p_sm/nvim_set_p_sm removed
+//   nvim_get_p_ru defined in drawscreen.c)
 int nvim_get_p_sta(void) { return p_sta; }
 void nvim_set_p_sta(int val) { p_sta = val != 0; }
 
@@ -783,15 +774,11 @@ void nvim_set_p_sta(int val) { p_sta = val != 0; }
 const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
 void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_culopt_flags = flags; }
 
-// set_fileformat accessors: nvim_set_redraw_tabline/nvim_set_need_maketitle are defined in drawscreen.c
-
 // set_options_bin global option accessors
 OptInt nvim_get_p_tw(void) { return p_tw; }
 void nvim_set_p_tw(OptInt v) { p_tw = v; }
 OptInt nvim_get_p_wm(void) { return p_wm; }
 void nvim_set_p_wm(OptInt v) { p_wm = v; }
-// nvim_option_get_ml / nvim_option_set_ml and nvim_option_get_et / nvim_option_set_et
-// are the canonical accessors; nvim_get_p_ml/nvim_set_p_ml/nvim_get_p_et/nvim_set_p_et removed
 void nvim_set_p_bin(int v) { p_bin = v != 0; }
 
 // set_helplang_default accessors
@@ -867,11 +854,6 @@ void nvim_optset_restore_oldval_number(const void *args)
   OptVal oldval = (OptVal){ .type = kOptValTypeNumber, .data = a->os_oldval };
   set_option_varp(a->os_idx, a->os_varp, oldval, false);
 }
-
-// The 6 nvim_paste_buf/global helpers were inlined into Rust (Phase 12 Pass 1).
-// See complex.rs: paste_buf_save_and_activate_cb, paste_buf_activate_only_cb,
-// paste_buf_restore_cb, and rs_did_set_paste_full.
-// The compound sub-operation accessors are at the bottom of this file.
 
 // =============================================================================
 // Accessor functions for Rust setcmd module (require options array)
@@ -1168,11 +1150,6 @@ const char *nvim_rs_set_option(OptIndex opt_idx, OptVal value, int opt_flags,
                                int set_sid, int direct, int value_replaced,
                                char *errbuf, size_t errbuflen);
 
-// nvim_paste_didset_options_sctx and p_paste_dep_opts removed (Phase 12 Pass 1).
-// Replaced by nvim_paste_didset_sctx_all at the bottom of this file.
-// p_bin_dep_opts and nvim_bin_didset_options_sctx removed (Phase 12 Pass 2).
-// Replaced by nvim_bin_didset_sctx_all at the bottom of this file.
-
 // set_fileformat helper: set the 'fileformat' option string and trigger redraws
 void nvim_set_fileformat_option(const char *p, int opt_flags)
 {
@@ -1189,10 +1166,8 @@ int nvim_curbuf_get_b_p_tw_nobin(void) { return (int)curbuf->b_p_tw_nobin; }
 void nvim_curbuf_set_b_p_tw_nobin(OptInt v) { curbuf->b_p_tw_nobin = v; }
 int nvim_curbuf_get_b_p_wm_nobin(void) { return (int)curbuf->b_p_wm_nobin; }
 void nvim_curbuf_set_b_p_wm_nobin(OptInt v) { curbuf->b_p_wm_nobin = v; }
-// nvim_curbuf_get_b_p_ml_nobin/et_nobin: consolidated into nvim_curbuf_get_b_p_ml/et (Phase 12 Pass 4)
 void nvim_curbuf_set_b_p_ml_nobin(int v) { curbuf->b_p_ml_nobin = v != 0; }
 void nvim_curbuf_set_b_p_et_nobin(int v) { curbuf->b_p_et_nobin = v != 0; }
-// nvim_curbuf_get_b_p_tw/wm are defined in ex_cmds_shim.c
 void nvim_curbuf_set_b_p_tw(OptInt v) { curbuf->b_p_tw = v; }
 void nvim_curbuf_set_b_p_wm(OptInt v) { curbuf->b_p_wm = v; }
 int nvim_curbuf_get_b_p_ml(void) { return curbuf->b_p_ml; }
@@ -1224,7 +1199,6 @@ const char *nvim_option_get_p_ep(void) { return p_ep; }
 const char *nvim_curbuf_get_b_p_ffu(void) { return curbuf->b_p_ffu; }
 const char *nvim_option_get_p_ffu(void) { return p_ffu; }
 // p_flp / b_p_flp accessors (for get_flp_value)
-// nvim_option_get_p_flp: consolidated into nvim_get_p_flp (Phase 13)
 const char *nvim_buf_get_p_flp(buf_T *buf) { return buf->b_p_flp; }
 // ve_flags accessors (for get_ve_flags)
 unsigned nvim_get_ve_flags_global(void) { return ve_flags; }
@@ -1238,13 +1212,12 @@ void nvim_set_p_imsearch(OptInt v) { p_imsearch = v; }
 OptInt nvim_buf_get_b_p_iminsert(buf_T *buf) { return buf->b_p_iminsert; }
 OptInt nvim_buf_get_b_p_imsearch(buf_T *buf) { return buf->b_p_imsearch; }
 // p_ma / b_p_ma accessors (for reset_modifiable)
-// nvim_option_get_p_ma: consolidated into nvim_get_p_ma (Phase 12 Pass 4)
 void nvim_option_set_p_ma(int v) { p_ma = v != 0; }
 int nvim_curbuf_get_b_p_ma(void) { return curbuf->b_p_ma; }
 void nvim_curbuf_set_b_p_ma(int v) { curbuf->b_p_ma = v != 0; }
 // change_option_default wrapper (for reset_modifiable)
 void nvim_change_option_default_bool(OptIndex opt_idx, int value) { change_option_default(opt_idx, BOOLEAN_OPTVAL(value != 0)); }
-// Phase 4 pass 2: TTY and key accessors
+// TTY and key accessors
 int nvim_option_get_t_colors(void) { return t_colors; }
 const char *nvim_option_get_p_term(void) { return p_term; }
 const char *nvim_option_get_p_ttytype(void) { return p_ttytype; }
@@ -1527,8 +1500,6 @@ static void set_init_default_cdpath(void)
   rs_set_init_default_cdpath();
 }
 
-// set_init_expand_env is now called via nvim_call_set_init_expand_env from Rust (Phase 11 section).
-
 extern void rs_set_init_fenc_default(void);
 
 /// Initialize the encoding used for "default" in 'fileencodings'.
@@ -1536,8 +1507,6 @@ static void set_init_fenc_default(void)
 {
   rs_set_init_fenc_default();
 }
-
-// set_init_1 is now in the Phase 11 section at the bottom of this file (delegates to rs_set_init_1).
 
 /// Get default value for option, based on the option's type and scope.
 ///
@@ -2595,8 +2564,6 @@ void didset_window_options(win_T *wp, bool valid_cursor)
   rs_didset_window_options(wp, (int)valid_cursor);
 }
 
-// buf_copy_options is now in the Phase 11 section at the bottom of this file.
-
 /// Reset the 'modifiable' option and its default value.
 void reset_modifiable(void)
 {
@@ -3310,7 +3277,6 @@ void nvim_option_set_was_set_flag(OptIndex opt_idx) { options[opt_idx].flags |= 
 /// Error message strings for did_set_option
 const char *nvim_get_e_unsupportedoption(void) { return e_unsupportedoption; }
 const char *nvim_get_e_secure(void) { return e_secure; }
-// nvim_get_e_invarg is defined in ex_docmd.c
 
 /// Call check_illegal_path_names(*(char**)varp, flags)
 /// Returns 1 if illegal path names detected, 0 otherwise.
@@ -3324,8 +3290,6 @@ uint32_t nvim_option_get_flags_val(OptIndex opt_idx) { return options[opt_idx].f
 
 /// Get current_sctx
 sctx_T nvim_get_current_sctx(void) { return current_sctx; }
-
-// nvim_get_maxcol is defined in memline_shim.c
 
 /// Call get_varp_scope(&options[opt_idx], opt_flags)
 void *nvim_get_varp_scope_opt(OptIndex opt_idx, int opt_flags)
@@ -3544,7 +3508,6 @@ bool nvim_get_p_ci(void) { return p_ci; }
 bool nvim_get_p_cin(void) { return p_cin; }
 int nvim_get_p_et(void) { return p_et; }
 bool nvim_get_p_fixeol(void) { return p_fixeol; }
-// nvim_get_p_inf: already defined in insexpand_shim.c (as int)
 bool nvim_get_p_lisp(void) { return p_lisp; }
 int nvim_get_p_ma(void) { return p_ma; }
 int nvim_get_p_ml(void) { return p_ml; }
@@ -3559,15 +3522,12 @@ OptInt nvim_get_p_scbk(void) { return p_scbk; }
 OptInt nvim_get_p_sts(void) { return p_sts; }
 OptInt nvim_get_p_ts(void) { return p_ts; }
 OptInt nvim_get_p_smc(void) { return p_smc; }
-// nvim_get_p_iminsert / nvim_get_p_imsearch: already defined at lines 1361-1363
 
 bool nvim_get_p_ai_nopaste(void) { return p_ai_nopaste; }
 bool nvim_get_p_et_nopaste(void) { return p_et_nopaste; }
-// nvim_get_p_et_nobin / nvim_get_p_ml_nobin: already defined as int at lines 1337/1335
 OptInt nvim_get_p_tw_nopaste(void) { return p_tw_nopaste; }
 OptInt nvim_get_p_wm_nopaste(void) { return p_wm_nopaste; }
 OptInt nvim_get_p_sts_nopaste(void) { return p_sts_nopaste; }
-// nvim_get_p_tw_nobin / nvim_get_p_wm_nobin: already defined at lines 1331/1333
 
 // Generic helpers for offset-based buf_T field writes (used by bufcopy.rs):
 
@@ -3707,20 +3667,8 @@ void nvim_call_set_termbidi_true(void)
 /// alloc_options_default() wrapper.
 void nvim_call_alloc_options_default(void) { alloc_options_default(); }
 
-/// set_options_default(0) wrapper.
-void nvim_call_set_options_default_0(void) { set_options_default(0); }
-
 /// check_win_options(curwin) wrapper.
 void nvim_call_check_win_options(void) { check_win_options(curwin); }
-
-/// check_options() wrapper (already exists as static, need non-static form).
-void nvim_call_check_options(void) { check_options(); }
-
-/// didset_options() wrapper.
-void nvim_call_didset_options(void) { didset_options(); }
-
-/// didset_options2() wrapper.
-void nvim_call_didset_options2(void) { didset_options2(); }
 
 /// set_helplang_default(get_mess_lang()) wrapper.
 void nvim_call_set_helplang_default_from_mess_lang(void)
@@ -3733,8 +3681,6 @@ void nvim_call_set_init_fenc_default(void) { set_init_fenc_default(); }
 
 /// rs_last_status(0) -- already a Rust fn; call it here for the shim.
 void nvim_call_rs_last_status_0(void) { rs_last_status(0); }
-
-// nvim_get_curbuf: already defined in window_shim.c (as buf_T *)
 
 /// curbuf->b_p_initialized = true
 void nvim_curbuf_set_b_p_initialized(void) { curbuf->b_p_initialized = true; }

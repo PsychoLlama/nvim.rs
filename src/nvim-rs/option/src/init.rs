@@ -827,22 +827,22 @@ extern "C" {
     fn nvim_call_stdpaths_user_state_subpath(name: *const c_char) -> *mut c_char;
     fn nvim_call_runtimepath_default(clean_arg: c_int) -> *mut c_char;
     fn nvim_call_set_string_default_idx(opt_idx: c_int, val: *mut c_char, allocated: c_int);
-    fn nvim_call_set_options_default_0();
+    fn nvim_set_options_default(opt_flags: c_int);
     fn nvim_curbuf_set_b_p_initialized();
     fn nvim_curbuf_set_b_p_ac_minus1();
     fn nvim_curbuf_set_b_p_ar_minus1();
     fn nvim_curbuf_set_b_p_ul_no_local();
     fn nvim_call_check_buf_options_curbuf();
     fn nvim_call_check_win_options();
-    fn nvim_call_check_options();
+    fn rs_check_options();
     fn nvim_call_rs_last_status_0();
-    fn nvim_call_didset_options();
+    fn nvim_didset_options();
     fn nvim_call_init_spell_chartab();
     fn nvim_call_set_init_expand_env();
     fn nvim_call_save_file_ff_curbuf();
     fn nvim_call_os_env_exists(name: *const c_char) -> c_int;
     fn nvim_call_set_termbidi_true();
-    fn nvim_call_didset_options2();
+    fn nvim_didset_options2();
     fn nvim_call_lang_init();
     fn nvim_call_set_init_fenc_default();
     fn nvim_call_bind_textdomain_codeset();
@@ -899,7 +899,7 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     }
 
     // Set all options (except terminal options) to their default value.
-    nvim_call_set_options_default_0();
+    nvim_set_options_default(0);
 
     nvim_curbuf_set_b_p_initialized();
     nvim_curbuf_set_b_p_ac_minus1();
@@ -907,13 +907,13 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     nvim_curbuf_set_b_p_ul_no_local();
     nvim_call_check_buf_options_curbuf();
     nvim_call_check_win_options();
-    nvim_call_check_options();
+    rs_check_options();
 
     // Set 'laststatus'
     nvim_call_rs_last_status_0();
 
     // Must be before option_expand(), because that one needs vim_isIDc()
-    nvim_call_didset_options();
+    nvim_didset_options();
 
     // Use the current chartab for the generic chartab.
     // This is not in didset_options() because it only depends on 'encoding'.
@@ -931,7 +931,7 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
         nvim_call_set_termbidi_true();
     }
 
-    nvim_call_didset_options2();
+    nvim_didset_options2();
 
     nvim_call_lang_init();
     nvim_call_set_init_fenc_default();
