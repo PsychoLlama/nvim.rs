@@ -17,6 +17,7 @@ pub mod callback;
 pub mod compare;
 pub mod dict;
 pub mod display;
+pub mod errors;
 pub mod expr;
 pub mod funcref;
 pub mod funcs;
