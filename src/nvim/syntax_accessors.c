@@ -1221,8 +1221,6 @@ void nvim_stateitem_set_cont_list(stateitem_T *item, int16_t *list)
 
 void nvim_syn_set_next_match_idx(int idx) { next_match_idx = idx; }
 void nvim_syn_set_next_match_col(int col) { next_match_col = col; }
-void nvim_syn_set_current_next_list_ptr(int16_t *list) { current_next_list = list; }
-int16_t *nvim_syn_get_current_next_list_ptr(void) { return current_next_list; }
 void nvim_syn_check_state_ends(void) { rs_check_state_ends(); }
 
 void nvim_syn_pop_current_state(void) { rs_syn_pop_current_state(); }
@@ -1639,6 +1637,27 @@ int nvim_syn_getcurline_byte_at(int col) { return (unsigned char)rs_syn_getcurli
 void nvim_syn_set_current_attr(int attr) { current_attr = attr; }
 void nvim_syn_set_current_sub_char(int c) { current_sub_char = c; }
 
+/// Set all current_* fields from a stateitem (replaces 6 individual FFI calls).
+void nvim_syn_set_current_from_stateitem(stateitem_T *item)
+{
+  current_attr = item->si_attr;
+  current_id = item->si_id;
+  current_trans_id = item->si_trans_id;
+  current_flags = item->si_flags;
+  current_seqnr = item->si_seqnr;
+  current_sub_char = item->si_cchar;
+}
+
+/// Zero all current_* highlight fields (replaces 5 individual FFI calls).
+void nvim_syn_zero_current(void)
+{
+  current_attr = 0;
+  current_id = 0;
+  current_trans_id = 0;
+  current_flags = 0;
+  current_seqnr = 0;
+}
+
 /// Get re_extmatch_out, take ownership (sets it to NULL in C)
 reg_extmatch_T *nvim_syn_take_re_extmatch_out(void)
 {
@@ -1915,7 +1934,6 @@ void nvim_synpat_set_cont_list(synpat_T *pat, int16_t *list) { pat->sp_cont_list
 void nvim_synpat_set_cont_in_list(synpat_T *pat, int16_t *list) { pat->sp_syn.cont_in_list = list; }
 void nvim_synpat_set_next_list(synpat_T *pat, int16_t *list) { pat->sp_next_list = list; }
 void nvim_synblock_set_containedin(int val) { curwin->w_s->b_syn_containedin = (bool)val; }
-void nvim_synblock_or_sync_flags_curwin(int flags) { curwin->w_s->b_syn_sync_flags |= flags; }
 void nvim_synblock_inc_folditems(void) { curwin->w_s->b_syn_folditems++; }
 
 /// Allocate a zeroed synpat_T on the heap and return it.
@@ -2719,12 +2737,6 @@ void nvim_syn_sst_copy_entry(synstate_T *dst, const synstate_T *src)
 int nvim_synblock_get_sst_lasttick(synblock_T *block)
 {
   return block ? (int)block->b_sst_lasttick : 0;
-}
-
-/// Get b_syn_sync_linebreaks for a synblock.
-int nvim_synblock_get_syn_sync_linebreaks_val(synblock_T *block)
-{
-  return block ? (int)block->b_syn_sync_linebreaks : 0;
 }
 
 /// Get b_ml.ml_line_count from syn_buf.

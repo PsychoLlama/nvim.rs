@@ -34,13 +34,9 @@ extern "C" {
     fn nvim_syn_set_current_finished(finished: c_int);
     fn nvim_syn_set_state_stored(stored: c_int);
 
-    // Current match attributes
-    fn nvim_syn_set_current_attr(attr: c_int);
-    fn nvim_syn_set_current_id(id: c_int);
-    fn nvim_syn_set_current_trans_id(id: c_int);
-    fn nvim_syn_set_current_flags(flags: c_int);
-    fn nvim_syn_set_current_seqnr(seqnr: c_int);
-    fn nvim_syn_set_current_sub_char(c: c_int);
+    // Current match attributes (bulk setters)
+    fn nvim_syn_set_current_from_stateitem(item: StateItemHandle);
+    fn nvim_syn_zero_current();
 
     // State stack
     fn nvim_syn_get_current_state_len() -> c_int;
@@ -49,12 +45,9 @@ extern "C" {
 
     // State item accessors
     fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_id(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_trans_id(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_attr(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_flags(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_seqnr(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_cchar(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_cont_list(item: StateItemHandle) -> IdListHandle;
     fn nvim_stateitem_get_next_list(item: StateItemHandle) -> IdListHandle;
     #[allow(clippy::too_many_arguments)]
@@ -657,11 +650,7 @@ pub unsafe fn syn_current_attr(
     nvim_syn_restore_chartab(buf_chartab.as_mut_ptr());
 
     // Use attributes from the current state, if within its highlighting.
-    nvim_syn_set_current_attr(0);
-    nvim_syn_set_current_id(0);
-    nvim_syn_set_current_trans_id(0);
-    nvim_syn_set_current_flags(0);
-    nvim_syn_set_current_seqnr(0);
+    nvim_syn_zero_current();
 
     let current_col = nvim_syn_get_current_col();
     let state_len = nvim_syn_get_current_state_len();
@@ -695,12 +684,7 @@ pub unsafe fn syn_current_attr(
                     || current_lnum < h_end_lnum
                     || (current_lnum == h_end_lnum && current_col < h_end_col))
             {
-                nvim_syn_set_current_attr(nvim_stateitem_get_attr(sip));
-                nvim_syn_set_current_id(nvim_stateitem_get_id(sip));
-                nvim_syn_set_current_trans_id(nvim_stateitem_get_trans_id(sip));
-                nvim_syn_set_current_flags(nvim_stateitem_get_flags(sip));
-                nvim_syn_set_current_seqnr(nvim_stateitem_get_seqnr(sip));
-                nvim_syn_set_current_sub_char(nvim_stateitem_get_cchar(sip));
+                nvim_syn_set_current_from_stateitem(sip);
                 sip_handle = sip;
                 break;
             }

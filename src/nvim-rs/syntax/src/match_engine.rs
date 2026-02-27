@@ -54,8 +54,6 @@ extern "C" {
     fn nvim_syn_has_current_next_list() -> c_int;
     fn nvim_syn_set_current_next_list(list: IdListHandle);
     fn nvim_syn_set_current_next_flags(flags: c_int);
-    fn nvim_syn_set_current_next_list_ptr(list: IdListHandle);
-    fn nvim_syn_get_current_next_list_ptr() -> IdListHandle;
 
     // Next match accessors
     fn nvim_syn_get_next_match_idx() -> c_int;
@@ -358,13 +356,13 @@ pub unsafe fn set_current_next_flags(flags: i32) {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn set_current_next_list_ptr(list: IdListHandle) {
-    nvim_syn_set_current_next_list_ptr(list);
+    nvim_syn_set_current_next_list(list);
 }
 
 /// Get the current next list pointer.
 #[must_use]
 pub fn current_next_list_ptr() -> IdListHandle {
-    unsafe { nvim_syn_get_current_next_list_ptr() }
+    unsafe { nvim_syn_get_current_next_list() }
 }
 
 // =============================================================================

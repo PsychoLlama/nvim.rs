@@ -9,8 +9,8 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::types::{
-    SynPatHandle, HL_EXCLUDENL, HL_FOLD, HL_HAS_EOL, HL_SYNC_HERE, HL_SYNC_THERE, SF_MATCH,
-    SPTYPE_END, SPTYPE_MATCH, SPTYPE_SKIP, SPTYPE_START,
+    SynBlockHandle, SynPatHandle, HL_EXCLUDENL, HL_FOLD, HL_HAS_EOL, HL_SYNC_HERE, HL_SYNC_THERE,
+    SF_MATCH, SPTYPE_END, SPTYPE_MATCH, SPTYPE_SKIP, SPTYPE_START,
 };
 
 // Item type constants (matching C #defines).
@@ -44,7 +44,7 @@ extern "C" {
     fn nvim_synpat_set_cont_in_list(pat: SynPatHandle, list: *mut i16);
     fn nvim_synpat_set_next_list(pat: SynPatHandle, list: *mut i16);
     fn nvim_synblock_set_containedin(val: c_int);
-    fn nvim_synblock_or_sync_flags_curwin(flags: c_int);
+    fn nvim_synblock_or_sync_flags(block: SynBlockHandle, flags: c_int);
     fn nvim_synblock_inc_folditems();
 
     // garray operations
@@ -55,8 +55,8 @@ extern "C" {
 
     // Redraw + cache invalidation
     fn nvim_syn_redraw_curbuf_later();
-    fn nvim_syn_stack_free_all(block: *mut c_void);
-    fn nvim_syn_get_curwin_synblock() -> *mut c_void;
+    fn nvim_syn_stack_free_all(block: SynBlockHandle);
+    fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
 }
 
 extern "C" {
@@ -184,7 +184,7 @@ pub unsafe fn store_match_pattern(
     nvim_synpat_set_next_list(spp, next_list);
 
     if flags & (HL_SYNC_HERE | HL_SYNC_THERE) != 0 {
-        nvim_synblock_or_sync_flags_curwin(SF_MATCH);
+        nvim_synblock_or_sync_flags(nvim_syn_get_curwin_synblock(), SF_MATCH);
     }
     if flags & HL_FOLD != 0 {
         nvim_synblock_inc_folditems();
