@@ -4004,36 +4004,27 @@ bool nvim_hgr_is_loclist_cmd(const void *eap_void) { return is_loclist_cmd(((con
 
 void *nvim_hgr_get_ll(bool *new_qi_out) { return hgr_get_ll(new_qi_out); }
 
-/// Returns true if the list was updated (regex compiled + search done).
-bool nvim_hgr_compile_and_search(void *eap_void, void *qi_void)
-{
-  exarg_T *eap = (exarg_T *)eap_void;
-  qf_info_T *qi = (qf_info_T *)qi_void;
+// nvim_hgr_compile_and_search deleted: list creation and finalization inlined into Rust.
+// The regex compile+search+free is now nvim_hgr_regex_search below.
 
-  char *const lang = check_help_lang(eap->arg);
+/// Get lang suffix from help pattern (strips @lang from end of arg). Returns pointer into arg.
+char *nvim_check_help_lang(char *arg) { return check_help_lang(arg); }
+
+/// Compile regex from pat, search all help files, free regex. Returns true on success.
+bool nvim_hgr_regex_search(char *pat, void *qi_void)
+{
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  char *const lang = check_help_lang(pat);
   regmatch_T regmatch = {
-    .regprog = vim_regcomp(eap->arg, RE_MAGIC + RE_STRING),
+    .regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING),
     .rm_ic = false,
   };
   if (regmatch.regprog == NULL) {
     return false;
   }
-
-  {
-    char qftitle_buf[IOSIZE];
-    rs_qf_cmdtitle(*eap->cmdlinep, qftitle_buf, sizeof(qftitle_buf));
-    rs_qf_new_list(qi, qftitle_buf);
-  }
   qf_list_T *const qfl = &qi->qf_lists[qi->qf_curlist];
-
   rs_hgr_search_in_rtp(qfl, &regmatch, lang);
-
   vim_regfree(regmatch.regprog);
-
-  qfl->qf_nonevalid = false;
-  qfl->qf_ptr = qfl->qf_start;
-  qfl->qf_index = 1;
-  qf_list_changed(qfl);
   return true;
 }
 

@@ -3,7 +3,7 @@
 //! This module provides helper functions for parsing and validating
 //! quickfix command arguments and implementing command logic.
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::{
     nvim_qf_get_count, nvim_qf_get_curlist_idx, nvim_qf_get_index, nvim_qf_get_listcount,
@@ -28,13 +28,21 @@ extern "C" {
     fn nvim_hgr_get_ll(new_qi_out: *mut bool) -> QfInfoHandleMut;
     fn nvim_incr_quickfix_busy();
     fn nvim_decr_quickfix_busy();
-    fn nvim_hgr_compile_and_search(eap: EapHandle, qi: QfInfoHandleMut) -> bool;
+    // nvim_hgr_compile_and_search deleted (Phase 3): inlined into Rust below.
+    fn nvim_hgr_regex_search(pat: *mut c_char, qi: QfInfoHandleMut) -> bool;
+    fn nvim_eap_get_cmdlinep_deref_make(eap: EapHandle) -> *mut c_char;
     fn nvim_hgr_restore_cpo(saved_cpo: *mut c_void);
     fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: *const c_void);
     fn nvim_hgr_post_autocmd(eap: EapHandle, qi: QfInfoHandleMut, new_qi: bool) -> bool;
     fn nvim_hgr_jump_or_nomatch(eap: EapHandle, qi: QfInfoHandleMut);
     fn nvim_hgr_is_lhelpgrep(eap: EapHandle) -> bool;
     fn nvim_hgr_cleanup(qi: QfInfoHandleMut, new_qi: bool);
+    fn nvim_qf_list_changed(qfl: *mut c_void);
+    // Used for finalization after compile+search (Phase 3)
+    fn nvim_qf_set_nonevalid(qfl: *mut c_void, nonevalid: bool);
+    fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *const c_void);
+    fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
+    fn nvim_qf_get_start(qfl: *const c_void) -> *const c_void;
 }
 
 // =============================================================================
@@ -1056,8 +1064,24 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
 
     nvim_incr_quickfix_busy();
 
-    // 4. Compile regex, create list, search help files
-    let updated = nvim_hgr_compile_and_search(eap, qi);
+    // 4a. Build command title and create new quickfix list
+    let eap_arg = nvim_eap_get_arg(eap);
+    let cmdline = nvim_eap_get_cmdlinep_deref_make(eap);
+    let mut title_buf = [0i8; 1024];
+    rs_qf_cmdtitle(cmdline, title_buf.as_mut_ptr(), title_buf.len());
+    crate::rs_qf_new_list(qi, title_buf.as_ptr());
+
+    // 4b. Compile regex, search help files, free regex
+    let updated = nvim_hgr_regex_search(eap_arg, qi);
+
+    // 4c. Finalize the list (set ptr/index/nonevalid/changedtick)
+    if updated {
+        let qfl = nvim_qf_get_curlist_mut(qi);
+        nvim_qf_set_nonevalid(qfl, false);
+        nvim_qf_set_ptr(qfl, nvim_qf_get_start(qfl.cast_const()));
+        nvim_qf_set_index(qfl, 1);
+        nvim_qf_list_changed(qfl);
+    }
 
     // 5. Restore cpoptions (handles plugin interference)
     nvim_hgr_restore_cpo(saved_cpo);
