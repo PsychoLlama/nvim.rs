@@ -16,10 +16,12 @@ use std::ffi::{c_char, c_int, c_void, CStr};
 type LinenrT = i32;
 /// Opaque handle to `qf_list_T`
 type QfListHandleMut = *mut c_void;
-/// Opaque handle to `regmatch_T`
+/// Opaque handle to `regmatch_T` (const for regmatch accessors)
 type RegmatchHandle = *mut c_void;
+/// Opaque const handle to `regmatch_T` (for indexed accessors that take const)
+type RegmatchConstHandle = *const c_void;
 /// Opaque FILE* handle
-type FileHandle = *mut c_void;
+type FileHandle = *mut libc::FILE;
 
 // =============================================================================
 // External C functions
@@ -27,21 +29,21 @@ type FileHandle = *mut c_void;
 
 extern "C" {
     // File I/O
-    fn nvim_hgr_os_fopen(fname: *const c_char) -> FileHandle;
-    fn nvim_hgr_vim_fgets(buf: *mut c_char, size: c_int, fd: FileHandle) -> bool;
-    fn nvim_hgr_fclose(fd: FileHandle);
+    fn nvim_os_fopen_read(fname: *const c_char) -> FileHandle;
+    fn nvim_qf_vim_fgets(buf: *mut c_char, size: c_int, fd: FileHandle) -> bool;
+    fn nvim_qf_fclose(fd: FileHandle);
 
     // Regex
-    fn nvim_hgr_vim_regexec(rmp: RegmatchHandle, line: *mut c_char) -> bool;
-    fn nvim_hgr_regmatch_startp(rmp: RegmatchHandle) -> *mut c_char;
-    fn nvim_hgr_regmatch_endp(rmp: RegmatchHandle) -> *mut c_char;
+    fn nvim_qf_vim_regexec(rmp: RegmatchHandle, line: *const c_char) -> bool;
+    fn nvim_qf_regmatch_startp(rmp: RegmatchConstHandle, idx: c_int) -> *const c_char;
+    fn nvim_qf_regmatch_endp(rmp: RegmatchConstHandle, idx: c_int) -> *const c_char;
 
     // Globals
-    fn nvim_hgr_get_IObuff() -> *mut c_char;
-    fn nvim_hgr_get_IOSIZE() -> c_int;
-    fn nvim_hgr_get_got_int() -> c_int;
-    fn nvim_hgr_set_got_int(val: c_int);
-    fn nvim_hgr_line_breakcheck();
+    fn nvim_qf_get_iobuff() -> *mut c_char;
+    fn nvim_qf_get_iosize() -> c_int;
+    fn nvim_qf_got_int() -> bool;
+    fn nvim_qf_set_got_int(val: bool);
+    fn nvim_qf_line_breakcheck();
 
     // Wildcard expansion
     fn nvim_hgr_gen_expand_wildcards(
@@ -96,19 +98,19 @@ const OK: c_int = 1;
 /// - `fname` must be a valid C string
 /// - `p_regmatch` must be a valid pointer to a `regmatch_T`
 unsafe fn hgr_search_file(qfl: QfListHandleMut, fname: *const c_char, p_regmatch: RegmatchHandle) {
-    let fd = nvim_hgr_os_fopen(fname);
+    let fd = nvim_os_fopen_read(fname);
     if fd.is_null() {
         return;
     }
 
-    let iobuff = nvim_hgr_get_IObuff();
-    let iosize = nvim_hgr_get_IOSIZE();
+    let iobuff = nvim_qf_get_iobuff();
+    let iosize = nvim_qf_get_iosize();
 
     let mut lnum: LinenrT = 1;
-    while !nvim_hgr_vim_fgets(iobuff, iosize, fd) && nvim_hgr_get_got_int() == 0 {
+    while !nvim_qf_vim_fgets(iobuff, iosize, fd) && !nvim_qf_got_int() {
         let line = iobuff;
 
-        if nvim_hgr_vim_regexec(p_regmatch, line) {
+        if nvim_qf_vim_regexec(p_regmatch, line.cast_const()) {
             // Compute byte length of line
             let mut l = CStr::from_ptr(line).to_bytes().len() as c_int;
 
@@ -118,10 +120,10 @@ unsafe fn hgr_search_file(qfl: QfListHandleMut, fname: *const c_char, p_regmatch
                 *line.add(l as usize) = 0;
             }
 
-            let startp = nvim_hgr_regmatch_startp(p_regmatch);
-            let endp = nvim_hgr_regmatch_endp(p_regmatch);
-            let col = (startp.offset_from(line) as c_int) + 1;
-            let end_col = (endp.offset_from(line) as c_int) + 1;
+            let startp = nvim_qf_regmatch_startp(p_regmatch.cast_const(), 0);
+            let endp = nvim_qf_regmatch_endp(p_regmatch.cast_const(), 0);
+            let col = (startp.offset_from(line.cast_const()) as c_int) + 1;
+            let end_col = (endp.offset_from(line.cast_const()) as c_int) + 1;
 
             if rs_qf_add_entry(
                 qfl,
@@ -142,14 +144,14 @@ unsafe fn hgr_search_file(qfl: QfListHandleMut, fname: *const c_char, p_regmatch
                 c_char::from(true), // valid
             ) == QF_FAIL
             {
-                nvim_hgr_set_got_int(1);
+                nvim_qf_set_got_int(true);
                 break;
             }
         }
         lnum += 1;
-        nvim_hgr_line_breakcheck();
+        nvim_qf_line_breakcheck();
     }
-    nvim_hgr_fclose(fd);
+    nvim_qf_fclose(fd);
 }
 
 /// Search for a pattern in all help files in the doc directory under `dirname`.
@@ -178,7 +180,7 @@ unsafe fn hgr_search_files_in_dir(
     if nvim_hgr_gen_expand_wildcards(dirname, &raw mut fcount, &raw mut fnames) == OK && fcount > 0
     {
         let mut fi = 0;
-        while fi < fcount && nvim_hgr_get_got_int() == 0 {
+        while fi < fcount && !nvim_qf_got_int() {
             let fname = nvim_hgr_fname_at(fnames, fi);
 
             // Skip files for a different language.
@@ -232,7 +234,7 @@ pub unsafe extern "C" fn rs_hgr_search_in_rtp(
 
     // Go through all directories in 'runtimepath'
     let mut p = nvim_hgr_get_p_rtp();
-    while *p != 0 && nvim_hgr_get_got_int() == 0 {
+    while *p != 0 && !nvim_qf_got_int() {
         nvim_hgr_copy_option_part(&raw mut p, name_buff, maxpathl);
         hgr_search_files_in_dir(qfl, name_buff, p_regmatch, lang);
     }

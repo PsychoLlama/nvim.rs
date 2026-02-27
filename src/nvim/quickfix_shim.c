@@ -1172,6 +1172,8 @@ void *nvim_qf_get_list_handle(const void *qi_void, int qf_idx)
 
 /// Get the got_int flag (qf-specific version to avoid conflict with insexpand_shim).
 bool nvim_qf_got_int(void) { return got_int; }
+/// Set the got_int flag.
+void nvim_qf_set_got_int(bool val) { got_int = val; }
 
 // Phase 8 set-side accessors
 
@@ -1926,6 +1928,18 @@ void nvim_qf_fclose(FILE *fd)
 bool nvim_qf_fgets(char *buf, int size, FILE *fd)
 {
   return fgets(buf, size, fd) != NULL;
+}
+
+/// vim_fgets wrapper: returns true on EOF/error (same semantics as vim_fgets).
+bool nvim_qf_vim_fgets(char *buf, int size, FILE *fd)
+{
+  return vim_fgets(buf, size, fd);
+}
+
+/// Open a file for reading using os_fopen. Returns NULL on failure (no error message).
+FILE *nvim_os_fopen_read(const char *fname)
+{
+  return os_fopen(fname, "r");
 }
 
 /// Return errno value (used for EINTR check after failed fgets).
@@ -3928,17 +3942,17 @@ static qf_info_T *hgr_get_ll(bool *new_ll)
 }
 
 // C accessor wrappers for rs_hgr_search_* functions (Phase 1)
-FILE *nvim_hgr_os_fopen(const char *fname) { return os_fopen(fname, "r"); }
-bool nvim_hgr_vim_fgets(char *buf, int size, FILE *fd) { return vim_fgets(buf, size, fd); }
-bool nvim_hgr_vim_regexec(void *rmp, char *line) { return vim_regexec((regmatch_T *)rmp, line, 0); }
-char *nvim_hgr_regmatch_startp(void *rmp) { return ((regmatch_T *)rmp)->startp[0]; }
-char *nvim_hgr_regmatch_endp(void *rmp) { return ((regmatch_T *)rmp)->endp[0]; }
-void nvim_hgr_fclose(FILE *fd) { fclose(fd); }
-char *nvim_hgr_get_IObuff(void) { return IObuff; }
-int nvim_hgr_get_IOSIZE(void) { return IOSIZE; }
-int nvim_hgr_get_got_int(void) { return got_int; }
-void nvim_hgr_set_got_int(int val) { got_int = val; }
-void nvim_hgr_line_breakcheck(void) { line_breakcheck(); }
+// nvim_hgr_os_fopen deleted: use nvim_os_fopen_read
+// nvim_hgr_vim_fgets deleted: use nvim_qf_vim_fgets
+// nvim_hgr_vim_regexec deleted: use nvim_qf_vim_regexec
+// nvim_hgr_regmatch_startp deleted: use nvim_qf_regmatch_startp(rmp, 0)
+// nvim_hgr_regmatch_endp deleted: use nvim_qf_regmatch_endp(rmp, 0)
+// nvim_hgr_fclose deleted: use nvim_qf_fclose
+// nvim_hgr_get_IObuff deleted: use nvim_qf_get_iobuff
+// nvim_hgr_get_IOSIZE deleted: use nvim_qf_get_iosize
+// nvim_hgr_get_got_int deleted: use nvim_qf_got_int (returns bool)
+// nvim_hgr_set_got_int deleted: use nvim_qf_set_got_int
+// nvim_hgr_line_breakcheck deleted: use nvim_qf_line_breakcheck
 int nvim_hgr_gen_expand_wildcards(char *dirname, int *fcount_out, char ***fnames_out)
 {
   return gen_expand_wildcards(1, &dirname, fcount_out, fnames_out, EW_FILE|EW_SILENT);
