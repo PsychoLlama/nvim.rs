@@ -357,6 +357,11 @@ extern vimoption_T *rs_get_option_ptr(int opt_idx);
 extern void rs_set_option_direct(int opt_idx, OptVal value, int opt_flags, int set_sid);
 extern void rs_set_option_direct_for(int opt_idx, OptVal value, int opt_flags, int set_sid,
                                      int scope, void *from);
+extern const char *rs_set_option_value(int opt_idx, OptVal value, int opt_flags);
+extern const char *rs_unset_option_local_value(int opt_idx);
+extern const char *rs_set_option_value_handle_tty(const char *name, int opt_idx, OptVal value,
+                                                   int opt_flags);
+extern void rs_set_option_value_give_err(int opt_idx, OptVal value, int opt_flags);
 
 // Rust FFI declarations (tag module)
 extern void rs_free_tagfunc_option(void);
@@ -2144,17 +2149,7 @@ void set_option_direct_for(OptIndex opt_idx, OptVal value, int opt_flags, scid_T
 /// @return  NULL on success, an untranslated error message on error.
 const char *set_option_value(const OptIndex opt_idx, const OptVal value, int opt_flags)
 {
-  assert(opt_idx != kOptInvalid);
-
-  static char errbuf[IOSIZE];
-  uint32_t flags = options[opt_idx].flags;
-
-  // Disallow changing some options in the sandbox
-  if (sandbox > 0 && (flags & kOptFlagSecure)) {
-    return _(e_sandbox);
-  }
-
-  return set_option(opt_idx, rs_optval_copy(value), opt_flags, 0, false, true, errbuf, sizeof(errbuf));
+  return rs_set_option_value(opt_idx, value, opt_flags);
 }
 
 /// Unset the local value of a global-local option.
@@ -2164,8 +2159,7 @@ const char *set_option_value(const OptIndex opt_idx, const OptVal value, int opt
 /// @return  NULL on success, an untranslated error message on error.
 static inline const char *unset_option_local_value(const OptIndex opt_idx)
 {
-  assert(option_is_global_local(opt_idx));
-  return set_option_value(opt_idx, get_option_unset_value(opt_idx), OPT_LOCAL);
+  return rs_unset_option_local_value(opt_idx);
 }
 
 /// Set the value of an option. Supports TTY options, unlike set_option_value().
@@ -2182,18 +2176,7 @@ const char *set_option_value_handle_tty(const char *name, OptIndex opt_idx, cons
                                         int opt_flags)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  static char errbuf[IOSIZE];
-
-  if (opt_idx == kOptInvalid) {
-    if (rs_is_tty_option(name)) {
-      return NULL;  // Fail silently; many old vimrcs set t_xx options.
-    }
-
-    snprintf(errbuf, sizeof(errbuf), _(e_unknown_option2), name);
-    return errbuf;
-  }
-
-  return set_option_value(opt_idx, value, opt_flags);
+  return rs_set_option_value_handle_tty(name, opt_idx, value, opt_flags);
 }
 
 /// Call set_option_value() and when an error is returned, report it.
@@ -2203,11 +2186,7 @@ const char *set_option_value_handle_tty(const char *name, OptIndex opt_idx, cons
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
 void set_option_value_give_err(const OptIndex opt_idx, OptVal value, int opt_flags)
 {
-  const char *errmsg = set_option_value(opt_idx, value, opt_flags);
-
-  if (errmsg != NULL) {
-    emsg(_(errmsg));
-  }
+  rs_set_option_value_give_err(opt_idx, value, opt_flags);
 }
 
 /// Switch current context to get/set option value for window/buffer.
@@ -3250,6 +3229,10 @@ void nvim_option_set_was_set_flag(OptIndex opt_idx) { options[opt_idx].flags |= 
 /// Error message strings for did_set_option
 const char *nvim_get_e_unsupportedoption(void) { return e_unsupportedoption; }
 const char *nvim_get_e_secure(void) { return e_secure; }
+const char *nvim_get_e_unknown_option2(void) { return e_unknown_option2; }
+
+/// Call emsg(_(msg)) -- translates and shows error message
+void nvim_call_emsg_translated(const char *msg) { emsg(_(msg)); }
 
 /// Call check_illegal_path_names(*(char**)varp, flags)
 /// Returns 1 if illegal path names detected, 0 otherwise.

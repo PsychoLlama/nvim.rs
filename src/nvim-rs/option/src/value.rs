@@ -783,6 +783,12 @@ extern "C" {
     fn nvim_get_option_ptr_by_idx(opt_idx: c_int) -> *mut std::ffi::c_void;
     fn rs_optval_copy(o: OptVal) -> OptVal;
     fn rs_option_is_hidden(opt_idx: c_int) -> c_int;
+    fn rs_get_option_flags(opt_idx: c_int) -> u32;
+    fn nvim_get_sandbox() -> c_int;
+    fn nvim_get_e_sandbox() -> *const c_char;
+    fn nvim_get_e_unknown_option2() -> *const c_char;
+    fn nvim_call_emsg_translated(msg: *const c_char);
+    fn rs_is_tty_option(name: *const c_char) -> c_int;
     fn rs_set_option_impl(
         opt_idx: c_int,
         value: OptVal,
@@ -1097,6 +1103,108 @@ pub unsafe extern "C" fn rs_get_option_value(opt_idx: c_int, opt_flags: c_int) -
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_option_ptr(opt_idx: c_int) -> *mut std::ffi::c_void {
     nvim_get_option_ptr_by_idx(opt_idx)
+}
+
+// =============================================================================
+// Phase 15: set_option_value, unset_option_local_value, set_option_value_handle_tty,
+//           set_option_value_give_err
+// =============================================================================
+
+/// kOptFlagSecure flag (matches option_defs.h kOptFlagSecure)
+const K_OPT_FLAG_SECURE: u32 = 1 << 14;
+
+/// Thread-local static error buffer for set_option_value_handle_tty.
+/// Using a Cell<[u8; IOSIZE]> so we can write to it in unsafe code.
+use std::cell::UnsafeCell;
+thread_local! {
+    static TTY_ERRBUF: UnsafeCell<[u8; IOSIZE]> = const { UnsafeCell::new([0u8; IOSIZE]) };
+}
+
+/// Rust implementation of set_option_value.
+///
+/// Sets the value of an option. Checks sandbox/secure flags before setting.
+///
+/// Returns NULL on success, untranslated error message on error.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_option_value(
+    opt_idx: c_int,
+    value: OptVal,
+    opt_flags: c_int,
+) -> *const c_char {
+    let flags = rs_get_option_flags(opt_idx);
+
+    // Disallow changing some options in the sandbox
+    if nvim_get_sandbox() > 0 && (flags & K_OPT_FLAG_SECURE) != 0 {
+        return nvim_get_e_sandbox();
+    }
+
+    let mut errbuf = [0i8; IOSIZE];
+    rs_set_option_impl(
+        opt_idx,
+        rs_optval_copy(value),
+        opt_flags,
+        0,     // set_sid = 0 (use current)
+        0,     // direct = false
+        1,     // value_replaced = true
+        errbuf.as_mut_ptr(),
+        IOSIZE,
+    )
+}
+
+/// Rust implementation of unset_option_local_value.
+///
+/// Unsets the local value of a global-local option.
+///
+/// Returns NULL on success, untranslated error message on error.
+#[no_mangle]
+pub unsafe extern "C" fn rs_unset_option_local_value(opt_idx: c_int) -> *const c_char {
+    let unset_val = rs_get_option_unset_value(opt_idx);
+    rs_set_option_value(opt_idx, unset_val, OPT_LOCAL)
+}
+
+/// Rust implementation of set_option_value_handle_tty.
+///
+/// Like set_option_value but also handles TTY options.
+/// If opt_idx is OPT_INVALID, checks if it's a TTY option (silently succeeds)
+/// or formats an unknown-option error message into a static buffer.
+///
+/// Returns NULL on success, error message pointer on error.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_option_value_handle_tty(
+    name: *const c_char,
+    opt_idx: c_int,
+    value: OptVal,
+    opt_flags: c_int,
+) -> *const c_char {
+    if opt_idx == OPT_INVALID {
+        if rs_is_tty_option(name) != 0 {
+            return std::ptr::null(); // Fail silently; many old vimrcs set t_xx options.
+        }
+        // Format error message into thread-local buffer
+        return TTY_ERRBUF.with(|cell| {
+            let buf = cell.get().cast::<c_char>();
+            let fmt = nvim_get_e_unknown_option2();
+            snprintf(buf, IOSIZE, fmt, name);
+            buf.cast_const()
+        });
+    }
+
+    rs_set_option_value(opt_idx, value, opt_flags)
+}
+
+/// Rust implementation of set_option_value_give_err.
+///
+/// Calls set_option_value and reports any error via emsg.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_option_value_give_err(
+    opt_idx: c_int,
+    value: OptVal,
+    opt_flags: c_int,
+) {
+    let errmsg = rs_set_option_value(opt_idx, value, opt_flags);
+    if !errmsg.is_null() {
+        nvim_call_emsg_translated(errmsg);
+    }
 }
 
 // =============================================================================
