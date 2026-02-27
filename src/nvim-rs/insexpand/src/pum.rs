@@ -307,6 +307,247 @@ pub const extern "C" fn rs_pum_calc_new_selection(
 }
 
 // =============================================================================
+// Phase 2 (pass 11): rs_ins_compl_build_pum
+// =============================================================================
+
+// Additional C accessors for Phase 2 (pass 11)
+extern "C" {
+    fn nvim_compl_match_set_in_match_array(m: ComplMatch, val: c_int);
+    fn nvim_compl_match_get_match_next(m: ComplMatch) -> ComplMatch;
+    fn nvim_compl_match_set_match_next(m: ComplMatch, next: ComplMatch);
+    fn nvim_compl_match_clear_icase(m: ComplMatch);
+    fn nvim_get_compl_match_arraysize() -> c_int;
+    fn nvim_set_compl_match_arraysize(val: c_int);
+    fn nvim_compl_leader_eq_orig_text() -> c_int;
+    fn nvim_set_compl_shown_to_first_or_next(no_select: c_int);
+    fn nvim_compl_get_shown_match() -> ComplMatch;
+    fn nvim_compl_set_shown_match(m: ComplMatch);
+    fn nvim_build_pum_fill_array(match_head: ComplMatch, count: c_int) -> c_int;
+    fn nvim_cpt_sources_array_exists() -> c_int;
+    fn nvim_get_cpt_source_cs_max_matches(idx: c_int) -> c_int;
+    fn nvim_xfree(ptr: *mut u8);
+    fn nvim_xmalloc_ints(count: usize) -> *mut c_int;
+
+    // From leader.rs (pass 11)
+    fn rs_get_leader_for_startcol_data(m: ComplMatch, cached: c_int) -> *const std::ffi::c_char;
+    fn rs_get_leader_for_startcol_size(m: ComplMatch, cached: c_int) -> usize;
+
+    // Options
+    // nvim_get_compl_autocomplete already declared above
+    fn nvim_compl_match_get_cpt_source_idx(m: ComplMatch) -> c_int;
+    fn nvim_compl_match_get_score(m: ComplMatch) -> c_int;
+    fn rs_ctrl_x_mode_normal() -> c_int;
+    fn nvim_get_p_inf() -> c_int;
+    fn nvim_ignorecase(pat: *const std::ffi::c_char) -> bool;
+    fn rs_ins_compl_equal(m: ComplMatch, str_: *const std::ffi::c_char, len: usize) -> c_int;
+    fn nvim_api_clear_compl_leader();
+    fn rs_ins_compl_need_restart() -> c_int;
+    fn rs_get_cpt_sources_count() -> c_int;
+}
+
+// kOptCotFlagNoselect = 0x40 (from option_vars.generated.h)
+const K_OPT_COT_FLAG_NOSELECT: c_uint = 0x40;
+
+// FUZZY_SCORE_NONE = -1 (from insexpand_shim.c)
+const FUZZY_SCORE_NONE: c_int = -1;
+
+/// Build the popup menu list from the completion match list.
+///
+/// Iterates the match list, filters by leader and max_matches, tracks the
+/// shown_match selection, and fills the compl_match_array via C compound accessor.
+///
+/// Returns the selected index, or -1 if nothing should be selected.
+///
+/// # Safety
+/// Requires valid global completion state.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn rs_ins_compl_build_pum() -> c_int {
+    // Reset match array size
+    nvim_set_compl_match_arraysize(0);
+
+    // If it's user complete function and refresh_always,
+    // do not use "compl_leader" as prefix filter.
+    if rs_ins_compl_need_restart() != 0 {
+        nvim_api_clear_compl_leader();
+    }
+
+    let compl_no_select = (crate::rs_get_cot_flags() & K_OPT_COT_FLAG_NOSELECT) != 0
+        || (nvim_get_compl_autocomplete() != 0 && crate::rs_ins_compl_has_preinsert() == 0);
+
+    let is_forward = crate::rs_compl_shows_dir_forward() != 0;
+    let is_cpt_completion = nvim_cpt_sources_array_exists() != 0;
+
+    // If the current match is the original text don't find the first
+    // match after it, don't highlight anything.
+    let shown_match = nvim_compl_get_shown_match();
+    let mut shown_match_ok = !shown_match.is_null() && match_at_original_text(shown_match);
+
+    if nvim_compl_leader_eq_orig_text() != 0 && !shown_match_ok {
+        nvim_set_compl_shown_to_first_or_next(c_int::from(compl_no_select));
+    }
+
+    let mut did_find_shown_match = false;
+    let mut shown_compl = ComplMatch::null();
+    let mut match_head = ComplMatch::null();
+    let mut match_tail = ComplMatch::null();
+    let mut array_size: c_int = 0;
+    let mut i: c_int = 0;
+    let mut cur: c_int = -1;
+
+    // Allocate per-source match counts if cpt completion
+    let match_count_ptr: *mut c_int = if is_cpt_completion {
+        let cnt = rs_get_cpt_sources_count();
+        if cnt > 0 {
+            let ptr = nvim_xmalloc_ints(cnt as usize);
+            // Zero-initialize
+            std::ptr::write_bytes(ptr, 0, cnt as usize);
+            ptr
+        } else {
+            std::ptr::null_mut()
+        }
+    } else {
+        std::ptr::null_mut()
+    };
+
+    // Clear the leader-for-startcol cache
+    let _ = rs_get_leader_for_startcol_data(ComplMatch::null(), 1);
+
+    let first = nvim_compl_get_first_match();
+    if first.is_null() {
+        if !match_count_ptr.is_null() {
+            nvim_xfree(match_count_ptr.cast::<u8>());
+        }
+        return -1;
+    }
+
+    let mut comp = first;
+    loop {
+        // Mark as not in match array
+        nvim_compl_match_set_in_match_array(comp, 0);
+
+        let leader_data = rs_get_leader_for_startcol_data(comp, 1);
+        let leader_size = rs_get_leader_for_startcol_size(comp, 1);
+
+        // Apply 'smartcase' behavior during normal mode
+        if rs_ctrl_x_mode_normal() != 0
+            && nvim_get_p_inf() == 0
+            && !leader_data.is_null()
+            && !nvim_ignorecase(leader_data)
+            && crate::rs_cot_fuzzy() == 0
+        {
+            nvim_compl_match_clear_icase(comp);
+        }
+
+        if !match_at_original_text(comp)
+            && (leader_data.is_null()
+                || rs_ins_compl_equal(comp, leader_data, leader_size) != 0
+                || (crate::rs_cot_fuzzy() != 0
+                    && nvim_compl_match_get_score(comp) != FUZZY_SCORE_NONE))
+        {
+            // Limit number of items from each source if max_matches is set.
+            let mut match_limit_exceeded = false;
+            let cur_source = nvim_compl_match_get_cpt_source_idx(comp);
+            if is_forward && cur_source >= 0 && is_cpt_completion && !match_count_ptr.is_null() {
+                let cnt = match_count_ptr.add(cur_source as usize);
+                *cnt += 1;
+                let max_matches = nvim_get_cpt_source_cs_max_matches(cur_source);
+                if max_matches > 0 && *cnt > max_matches {
+                    match_limit_exceeded = true;
+                }
+            }
+
+            if !match_limit_exceeded {
+                array_size += 1;
+                nvim_compl_match_set_in_match_array(comp, 1);
+                if match_head.is_null() {
+                    match_head = comp;
+                } else {
+                    nvim_compl_match_set_match_next(match_tail, comp);
+                }
+                match_tail = comp;
+
+                if !shown_match_ok && crate::rs_cot_fuzzy() == 0 {
+                    let current_shown = nvim_compl_get_shown_match();
+                    if comp == current_shown || did_find_shown_match {
+                        // This item is the shown match or the first displayed
+                        // item after the shown match.
+                        nvim_compl_set_shown_match(comp);
+                        did_find_shown_match = true;
+                        shown_match_ok = true;
+                    } else {
+                        // Remember this displayed match for when the shown
+                        // match is just below it.
+                        shown_compl = comp;
+                    }
+                    cur = i;
+                } else if crate::rs_cot_fuzzy() != 0 {
+                    if i == 0 {
+                        shown_compl = comp;
+                    }
+                    let current_shown = nvim_compl_get_shown_match();
+                    if !shown_match_ok && comp == current_shown {
+                        cur = i;
+                        shown_match_ok = true;
+                    }
+                }
+                i += 1;
+            }
+        }
+
+        if crate::rs_cot_fuzzy() == 0 {
+            let current_shown = nvim_compl_get_shown_match();
+            if comp == current_shown {
+                did_find_shown_match = true;
+                // When the original text is the shown match don't set compl_shown_match.
+                if match_at_original_text(comp) {
+                    shown_match_ok = true;
+                }
+                if !shown_match_ok && !shown_compl.is_null() {
+                    // The shown match isn't displayed, set it to the previously displayed match.
+                    nvim_compl_set_shown_match(shown_compl);
+                    shown_match_ok = true;
+                }
+            }
+        }
+
+        let next = nvim_compl_match_get_next(comp);
+        if next.is_null() || is_first_match(next) {
+            break;
+        }
+        comp = next;
+    }
+
+    if !match_count_ptr.is_null() {
+        nvim_xfree(match_count_ptr.cast::<u8>());
+    }
+
+    if array_size == 0 {
+        return -1;
+    }
+
+    nvim_set_compl_match_arraysize(array_size);
+
+    if crate::rs_cot_fuzzy() != 0 && !compl_no_select && !shown_match_ok {
+        nvim_compl_set_shown_match(shown_compl);
+        cur = 0;
+    }
+
+    // Build the pumitem_T array via C compound accessor
+    nvim_build_pum_fill_array(match_head, array_size);
+
+    if !shown_match_ok {
+        cur = -1;
+    }
+
+    cur
+}
+
+// =============================================================================
 // Phase 5: rs_ins_compl_del_pum
 // =============================================================================
 

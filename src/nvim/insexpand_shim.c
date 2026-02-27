@@ -225,6 +225,8 @@ extern const char *rs_find_common_prefix(size_t *prefix_len, int curbuf_only);
 // Phase 1 (pass 11) Rust exports: leader-for-startcol
 extern const char *rs_get_leader_for_startcol_data(void *match, int cached);
 extern size_t rs_get_leader_for_startcol_size(void *match, int cached);
+// Phase 2 (pass 11) Rust exports: ins_compl_build_pum
+extern int rs_ins_compl_build_pum(void);
 // Phase 3 (pass 6) Rust exports
 extern void rs_setup_cpt_sources(void);
 extern void rs_prepare_cpt_compl_funcs(void);
@@ -1032,169 +1034,6 @@ static void sort_compl_match_list(MergeSortCompareFunc compare)
   (void)rs_ins_compl_make_cyclic();
 }
 
-/// Build a popup menu to show the completion matches.
-///
-/// @return  the popup menu entry that should be selected,
-///          -1 if nothing should be selected.
-static int ins_compl_build_pum(void)
-{
-  // Need to build the popup menu list.
-  compl_match_arraysize = 0;
-
-  // If it's user complete function and refresh_always,
-  // do not use "compl_leader" as prefix filter.
-  if (rs_ins_compl_need_restart()) {
-    XFREE_CLEAR(compl_leader);
-  }
-
-  bool compl_no_select = (rs_get_cot_flags() & kOptCotFlagNoselect) != 0
-                         || (compl_autocomplete && !rs_ins_compl_has_preinsert());
-
-  compl_T *match_head = NULL, *match_tail = NULL;
-  int *match_count = NULL;
-  bool is_forward = rs_compl_shows_dir_forward();
-  bool is_cpt_completion = (cpt_sources_array != NULL);
-
-  // If the current match is the original text don't find the first
-  // match after it, don't highlight anything.
-  bool shown_match_ok = match_at_original_text(compl_shown_match);
-
-  if (strequal(compl_leader.data, compl_orig_text.data) && !shown_match_ok) {
-    compl_shown_match = compl_no_select ? compl_first_match : compl_first_match->cp_next;
-  }
-
-  bool did_find_shown_match = false;
-  compl_T *comp;
-  compl_T *shown_compl = NULL;
-  int i = 0;
-  int cur = -1;
-
-  if (is_cpt_completion) {
-    match_count = xcalloc((size_t)cpt_sources_count, sizeof(int));
-  }
-
-  (void)rs_get_leader_for_startcol_data(NULL, 1);  // Clear the cache
-
-  comp = compl_first_match;
-  do {
-    comp->cp_in_match_array = false;
-
-    const char *leader_data = rs_get_leader_for_startcol_data(comp, 1);
-    size_t leader_size = rs_get_leader_for_startcol_size(comp, 1);
-
-    // Apply 'smartcase' behavior during normal mode
-    if (rs_ctrl_x_mode_normal() && !p_inf && leader_data
-        && !ignorecase(leader_data) && !rs_cot_fuzzy()) {
-      comp->cp_flags &= ~CP_ICASE;
-    }
-
-    if (!match_at_original_text(comp)
-        && (leader_data == NULL
-            || rs_ins_compl_equal(comp, leader_data, leader_size)
-            || (rs_cot_fuzzy() && comp->cp_score != FUZZY_SCORE_NONE))) {
-      // Limit number of items from each source if max_items is set.
-      bool match_limit_exceeded = false;
-      int cur_source = comp->cp_cpt_source_idx;
-      if (is_forward && cur_source != -1 && is_cpt_completion) {
-        match_count[cur_source]++;
-        int max_matches = cpt_sources_array[cur_source].cs_max_matches;
-        if (max_matches > 0 && match_count[cur_source] > max_matches) {
-          match_limit_exceeded = true;
-        }
-      }
-
-      if (!match_limit_exceeded) {
-        compl_match_arraysize++;
-        comp->cp_in_match_array = true;
-        if (match_head == NULL) {
-          match_head = comp;
-        } else {
-          match_tail->cp_match_next = comp;
-        }
-        match_tail = comp;
-
-        if (!shown_match_ok && !rs_cot_fuzzy()) {
-          if (comp == compl_shown_match || did_find_shown_match) {
-            // This item is the shown match or this is the
-            // first displayed item after the shown match.
-            compl_shown_match = comp;
-            did_find_shown_match = true;
-            shown_match_ok = true;
-          } else {
-            // Remember this displayed match for when the
-            // shown match is just below it.
-            shown_compl = comp;
-          }
-          cur = i;
-        } else if (rs_cot_fuzzy()) {
-          if (i == 0) {
-            shown_compl = comp;
-          }
-
-          if (!shown_match_ok && comp == compl_shown_match) {
-            cur = i;
-            shown_match_ok = true;
-          }
-        }
-        i++;
-      }
-    }
-
-    if (comp == compl_shown_match && !rs_cot_fuzzy()) {
-      did_find_shown_match = true;
-      // When the original text is the shown match don't set
-      // compl_shown_match.
-      if (match_at_original_text(comp)) {
-        shown_match_ok = true;
-      }
-      if (!shown_match_ok && shown_compl != NULL) {
-        // The shown match isn't displayed, set it to the
-        // previously displayed match.
-        compl_shown_match = shown_compl;
-        shown_match_ok = true;
-      }
-    }
-    comp = comp->cp_next;
-  } while (comp != NULL && !is_first_match(comp));
-
-  xfree(match_count);
-
-  if (compl_match_arraysize == 0) {
-    return -1;
-  }
-
-  if (rs_cot_fuzzy() && !compl_no_select && !shown_match_ok) {
-    compl_shown_match = shown_compl;
-    shown_match_ok = true;
-    cur = 0;
-  }
-
-  assert(compl_match_arraysize >= 0);
-  compl_match_array = xcalloc((size_t)compl_match_arraysize, sizeof(pumitem_T));
-
-  i = 0;
-  comp = match_head;
-  while (comp != NULL) {
-    compl_match_array[i].pum_text = comp->cp_text[CPT_ABBR] != NULL
-                                    ? comp->cp_text[CPT_ABBR] : comp->cp_str.data;
-    compl_match_array[i].pum_kind = comp->cp_text[CPT_KIND];
-    compl_match_array[i].pum_info = comp->cp_text[CPT_INFO];
-    compl_match_array[i].pum_cpt_source_idx = comp->cp_cpt_source_idx;
-    compl_match_array[i].pum_user_abbr_hlattr = comp->cp_user_abbr_hlattr;
-    compl_match_array[i].pum_user_kind_hlattr = comp->cp_user_kind_hlattr;
-    compl_match_array[i++].pum_extra = comp->cp_text[CPT_MENU] != NULL
-                                       ? comp->cp_text[CPT_MENU] : comp->cp_fname;
-    compl_T *match_next = comp->cp_match_next;
-    comp->cp_match_next = NULL;
-    comp = match_next;
-  }
-
-  if (!shown_match_ok) {  // no displayed match at all
-    cur = -1;
-  }
-
-  return cur;
-}
 
 #define DICT_FIRST      (1)     ///< use just first element in "dict"
 #define DICT_EXACT      (2)     ///< "dict" is the exact name of a file
@@ -1442,6 +1281,59 @@ int nvim_compl_is_first_match(void *m) { return m == compl_first_match ? 1 : 0; 
 int nvim_compl_match_at_original_text(void *m) { return (m && (((compl_T *)m)->cp_flags & CP_ORIGINAL_TEXT)) ? 1 : 0; }
 int nvim_compl_match_get_cpt_source_idx(void *m) { return m ? ((compl_T *)m)->cp_cpt_source_idx : -1; }
 int nvim_compl_match_get_in_match_array(void *m) { return (m && ((compl_T *)m)->cp_in_match_array) ? 1 : 0; }
+// Phase 2 (pass 11): new match field accessors for ins_compl_build_pum migration
+void nvim_compl_match_set_in_match_array(void *m, int val) { if (m) ((compl_T *)m)->cp_in_match_array = (val != 0); }
+void *nvim_compl_match_get_match_next(void *m) { return m ? ((compl_T *)m)->cp_match_next : NULL; }
+void nvim_compl_match_set_match_next(void *m, void *next) { if (m) ((compl_T *)m)->cp_match_next = (compl_T *)next; }
+void nvim_compl_match_clear_icase(void *m) { if (m) ((compl_T *)m)->cp_flags &= ~CP_ICASE; }
+int nvim_get_compl_match_arraysize(void) { return compl_match_arraysize; }
+void nvim_set_compl_match_arraysize(int val) { compl_match_arraysize = val; }
+int nvim_compl_leader_eq_orig_text(void) {
+  return (compl_leader.data && compl_orig_text.data
+          && strequal(compl_leader.data, compl_orig_text.data)) ? 1 : 0;
+}
+void nvim_set_compl_shown_to_first_or_next(int no_select) {
+  compl_shown_match = no_select ? compl_first_match : compl_first_match->cp_next;
+}
+/// Build and fill compl_match_array from the cp_match_next linked list.
+/// Allocates compl_match_array[0..count-1] and populates pumitem_T fields.
+/// Returns the count of filled entries (same as count parameter).
+/// Allocate an integer array (for per-source match counts). Caller must free via nvim_xfree.
+int *nvim_xmalloc_ints(size_t count) { return xmalloc(count * sizeof(int)); }
+int nvim_build_pum_fill_array(void *match_head_void, int count) {
+  compl_T *match_head = (compl_T *)match_head_void;
+  assert(count >= 0);
+  compl_match_array = xcalloc((size_t)count, sizeof(pumitem_T));
+  int i = 0;
+  compl_T *comp = match_head;
+  while (comp != NULL) {
+    compl_match_array[i].pum_text = comp->cp_text[CPT_ABBR] != NULL
+                                    ? comp->cp_text[CPT_ABBR] : comp->cp_str.data;
+    compl_match_array[i].pum_kind = comp->cp_text[CPT_KIND];
+    compl_match_array[i].pum_info = comp->cp_text[CPT_INFO];
+    compl_match_array[i].pum_cpt_source_idx = comp->cp_cpt_source_idx;
+    compl_match_array[i].pum_user_abbr_hlattr = comp->cp_user_abbr_hlattr;
+    compl_match_array[i].pum_user_kind_hlattr = comp->cp_user_kind_hlattr;
+    compl_match_array[i++].pum_extra = comp->cp_text[CPT_MENU] != NULL
+                                       ? comp->cp_text[CPT_MENU] : comp->cp_fname;
+    compl_T *match_next = comp->cp_match_next;
+    comp->cp_match_next = NULL;
+    comp = match_next;
+  }
+  return i;
+}
+/// Find the shown match in the compl_match_array by pointer identity.
+/// Returns the index, or -1 if not found.
+int nvim_find_shown_match_in_match_array(void) {
+  if (!compl_match_array || !compl_shown_match) { return -1; }
+  for (int i = 0; i < compl_match_arraysize; i++) {
+    if (compl_match_array[i].pum_text == compl_shown_match->cp_str.data
+        || compl_match_array[i].pum_text == compl_shown_match->cp_text[CPT_ABBR]) {
+      return i;
+    }
+  }
+  return -1;
+}
 
 // Memory operations for Rust
 void nvim_compl_item_free(void *m) { if (m) ins_compl_item_free((compl_T *)m); }
@@ -3214,17 +3106,8 @@ void nvim_internal_error_compl_get_info(void) { internal_error("ins_complete()")
 // Compound accessors for ins_compl_show_pum (Phase 2)
 // nvim_update_screen() already exists in drawscreen.c
 // nvim_get_cursor_col() already exists in normal_shim.c
-int nvim_ins_compl_build_pum(void) { return ins_compl_build_pum(); }
-int nvim_find_shown_match_in_array(void) {
-  if (!compl_match_array || !compl_shown_match) { return -1; }
-  for (int i = 0; i < compl_match_arraysize; i++) {
-    if (compl_match_array[i].pum_text == compl_shown_match->cp_str.data
-        || compl_match_array[i].pum_text == compl_shown_match->cp_text[CPT_ABBR]) {
-      return i;
-    }
-  }
-  return -1;
-}
+int nvim_ins_compl_build_pum(void) { return rs_ins_compl_build_pum(); }
+int nvim_find_shown_match_in_array(void) { return nvim_find_shown_match_in_match_array(); }
 void nvim_trigger_complete_changed(int cur) { trigger_complete_changed_event(cur); }
 int nvim_has_completechanged_event(void) { return has_event(EVENT_COMPLETECHANGED) ? 1 : 0; }
 void nvim_set_dollar_vcol_minus_one(void) { dollar_vcol = -1; }
