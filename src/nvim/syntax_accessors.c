@@ -2868,34 +2868,10 @@ int nvim_synblock_get_sst_lasttick(synblock_T *block)
   return block ? (int)block->b_sst_lasttick : 0;
 }
 
-/// Get sst_tick for a synstate entry.
-int nvim_synstate_get_sst_tick(synstate_T *state)
-{
-  return state ? (int)state->sst_tick : 0;
-}
-
 /// Get b_syn_sync_linebreaks for a synblock.
 int nvim_synblock_get_syn_sync_linebreaks_val(synblock_T *block)
 {
   return block ? (int)block->b_syn_sync_linebreaks : 0;
-}
-
-/// Get sst_change_lnum for a synstate entry.
-int nvim_synstate_get_sst_change_lnum(synstate_T *state)
-{
-  return state ? (int)state->sst_change_lnum : 0;
-}
-
-/// Set sst_change_lnum on a synstate entry.
-void nvim_synstate_set_sst_change_lnum(synstate_T *state, int lnum)
-{
-  if (state) state->sst_change_lnum = (linenr_T)lnum;
-}
-
-/// Set sst_lnum on a synstate entry.
-void nvim_synstate_set_sst_lnum(synstate_T *state, int lnum)
-{
-  if (state) state->sst_lnum = (linenr_T)lnum;
 }
 
 /// Get b_ml.ml_line_count from syn_buf.

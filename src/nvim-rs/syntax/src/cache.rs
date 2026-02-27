@@ -79,10 +79,8 @@ extern "C" {
     fn nvim_synstate_get_next(state: SynStateHandle) -> SynStateHandle;
     fn nvim_synstate_set_next(state: SynStateHandle, next: SynStateHandle);
     fn nvim_synstate_get_tick(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_set_sst_change_lnum(state: SynStateHandle, lnum: c_int);
-    fn nvim_synstate_set_sst_lnum(state: SynStateHandle, lnum: c_int);
-    fn nvim_synstate_get_sst_change_lnum(state: SynStateHandle) -> c_int;
-    fn nvim_synstate_get_sst_tick(state: SynStateHandle) -> c_int;
+    fn nvim_synstate_set_lnum(state: SynStateHandle, lnum: c_int);
+    fn nvim_synstate_get_change_lnum(state: SynStateHandle) -> c_int;
 
     // synblock_T setters
     fn nvim_synblock_set_sst_first(block: SynBlockHandle, ptr: SynStateHandle);
@@ -260,7 +258,7 @@ pub unsafe extern "C" fn rs_syn_stack_cleanup() -> c_int {
         let prev_lnum = nvim_synstate_get_lnum(prev);
         let p_lnum = nvim_synstate_get_lnum(p);
         if prev_lnum + dist > p_lnum {
-            let p_tick = nvim_synstate_get_sst_tick(p);
+            let p_tick = nvim_synstate_get_tick(p);
             if p_tick > lasttick {
                 if !above || p_tick < tick {
                     tick = p_tick;
@@ -281,7 +279,7 @@ pub unsafe extern "C" fn rs_syn_stack_cleanup() -> c_int {
     while !p.is_null() {
         let prev_lnum = nvim_synstate_get_lnum(prev);
         let p_lnum = nvim_synstate_get_lnum(p);
-        let p_tick = nvim_synstate_get_sst_tick(p);
+        let p_tick = nvim_synstate_get_tick(p);
         let next = nvim_synstate_get_next(p);
         if p_tick == tick && prev_lnum + dist > p_lnum {
             // Move this entry from used list to free list
@@ -379,7 +377,7 @@ pub unsafe extern "C" fn rs_syn_stack_apply_changes_block(block: SynBlockHandle,
             }
 
             // This state is below the changed area.
-            let change_lnum = nvim_synstate_get_sst_change_lnum(p);
+            let change_lnum = nvim_synstate_get_change_lnum(p);
             let new_change_lnum = if change_lnum != 0 && change_lnum > mod_top {
                 if change_lnum + mod_xlines > mod_top {
                     change_lnum + mod_xlines
@@ -395,8 +393,8 @@ pub unsafe extern "C" fn rs_syn_stack_apply_changes_block(block: SynBlockHandle,
             } else {
                 new_change_lnum
             };
-            nvim_synstate_set_sst_change_lnum(p, final_change_lnum);
-            nvim_synstate_set_sst_lnum(p, n);
+            nvim_synstate_set_change_lnum(p, final_change_lnum);
+            nvim_synstate_set_lnum(p, n);
         }
 
         prev = p;

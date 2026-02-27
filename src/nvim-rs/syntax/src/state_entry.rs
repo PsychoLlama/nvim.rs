@@ -30,13 +30,13 @@ extern "C" {
     fn nvim_synstate_set_next(state: SynStateHandle, next: SynStateHandle);
     fn nvim_synstate_get_stacksize(state: SynStateHandle) -> c_int;
     fn nvim_synstate_set_stacksize(state: SynStateHandle, size: c_int);
-    fn nvim_synstate_set_sst_lnum(state: SynStateHandle, lnum: c_int);
+    fn nvim_synstate_set_lnum(state: SynStateHandle, lnum: c_int);
 
     // SynState setters for store
     fn nvim_syn_do_clear_syn_state(p: SynStateHandle);
     fn nvim_synstate_set_sst_next_flags(state: SynStateHandle, flags: c_int);
     fn nvim_synstate_set_sst_next_list(state: SynStateHandle, list: IdListHandle);
-    fn nvim_synstate_set_sst_change_lnum(state: SynStateHandle, lnum: c_int);
+    fn nvim_synstate_set_change_lnum(state: SynStateHandle, lnum: c_int);
     fn nvim_synstate_set_tick_to_display(state: SynStateHandle);
 
     // Stack size from current_state
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn rs_syn_stack_alloc_entry(
     }
 
     nvim_synstate_set_stacksize(p, 0);
-    nvim_synstate_set_sst_lnum(p, lnum);
+    nvim_synstate_set_lnum(p, lnum);
     p
 }
 
@@ -193,7 +193,7 @@ pub unsafe extern "C" fn rs_syn_store_state_to_entry(sp: SynStateHandle) {
     nvim_synstate_set_sst_next_flags(sp, nvim_syn_get_current_next_flags());
     nvim_synstate_set_sst_next_list(sp, nvim_syn_get_current_next_list());
     nvim_synstate_set_tick_to_display(sp);
-    nvim_synstate_set_sst_change_lnum(sp, 0);
+    nvim_synstate_set_change_lnum(sp, 0);
 }
 
 /// Reallocate b_sst_array, copy existing entries from used list,
