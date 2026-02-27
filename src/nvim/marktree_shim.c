@@ -186,38 +186,14 @@ extern void rs_marktree_move_region(MarkTree *b, int start_row, colnr_T start_co
                                     int extent_row, colnr_T extent_col,
                                     int new_row, colnr_T new_col);
 
-// Phase 2 (pass 2): intersection set operations
-extern void rs_merge_node_intersect(MarkTree *b, MTNode *x, int x_old_n, MTNode *y, int y_n);
-extern void rs_pivot_right_intersect(MarkTree *b, MTNode *x, MTNode *y, int y_n);
-extern void rs_pivot_left_intersect(MarkTree *b, MTNode *x, int x_n, MTNode *y);
-
 // Phase 5 (pass 5): deletion rebalancing
-extern MTNode *rs_merge_node(MarkTree *b, MTNode *p, int i);
-extern void rs_pivot_right(MarkTree *b, MTPos p_pos, MTNode *p, int i);
-extern void rs_pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i);
 extern uint64_t rs_marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev);
-extern bool rs_intersect_mov_test(const uint64_t *x, size_t nx, const uint64_t *y, size_t ny,
-                                  const uint64_t *win, size_t nwin, uint64_t *wout, size_t *nwout,
-                                  uint64_t *dout, size_t *ndout);
 
-#define T MT_BRANCH_FACTOR
 #define ILEN (sizeof(MTNode) + sizeof(struct mtnode_inner_s))
-
-#define ID_INCR (((uint64_t)1) << 2)
 
 #define rawkey(itr) ((itr)->x->key[(itr)->i])
 
 #include "marktree_shim.c.generated.h"
-
-static inline void refkey(MarkTree *b, MTNode *x, int i)
-{
-  pmap_put(uint64_t)(b->id2node, mt_lookup_key(x->key[i]), x);
-}
-
-static MTNode *id2node(MarkTree *b, uint64_t id)
-{
-  return pmap_get(uint64_t)(b->id2node, id);
-}
 
 #define ptr s->i_ptr
 #define meta s->i_meta
@@ -225,83 +201,6 @@ static MTNode *id2node(MarkTree *b, uint64_t id)
 
 
 
-
-
-
-void marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key)
-{
-  rs_marktree_revise_meta(b, itr, old_key);
-}
-
-bool intersect_mov_test(const uint64_t *x, size_t nx, const uint64_t *y, size_t ny,
-                        const uint64_t *win, size_t nwin, uint64_t *wout, size_t *nwout,
-                        uint64_t *dout, size_t *ndout)
-{
-  return rs_intersect_mov_test(x, nx, y, ny, win, nwin, wout, nwout, dout, ndout);
-}
-
-
-static MTNode *merge_node(MarkTree *b, MTNode *p, int i)
-{
-  return rs_merge_node(b, p, i);
-}
-
-static void pivot_right(MarkTree *b, MTPos p_pos, MTNode *p, const int i)
-{
-  rs_pivot_right(b, p_pos, p, i);
-}
-
-static void pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i)
-{
-  rs_pivot_left(b, p_pos, p, i);
-}
-
-
-/// @param itr iterator is invalid after call
-void marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col)
-{
-  rs_marktree_move(b, itr, row, col);
-}
-
-void marktree_restore_pair(MarkTree *b, MTKey key)
-{
-  rs_marktree_restore_pair(b, key);
-}
-
-bool marktree_splice(MarkTree *b, int32_t start_line, int start_col, int old_extent_line,
-                     int old_extent_col, int new_extent_line, int new_extent_col)
-{
-  return rs_marktree_splice(b, start_line, start_col, old_extent_line, old_extent_col,
-                            new_extent_line, new_extent_col);
-}
-
-void marktree_move_region(MarkTree *b, int start_row, colnr_T start_col, int extent_row,
-                          colnr_T extent_col, int new_row, colnr_T new_col)
-{
-  rs_marktree_move_region(b, start_row, start_col, extent_row, extent_col, new_row, new_col);
-}
-
-
-
-// for unit test
-void marktree_del_pair_test(MarkTree *b, uint32_t ns, uint32_t id)
-{
-  rs_marktree_del_pair_test(b, ns, id);
-}
-
-void marktree_check(MarkTree *b)
-{
-#ifndef NDEBUG
-  rs_marktree_check(b);
-#else
-  (void)b;
-#endif
-}
-
-bool marktree_check_intersections(MarkTree *b)
-{
-  return rs_marktree_check_intersections(b);
-}
 
 // TODO(bfredl): kv_print
 #define GA_PUT(x) ga_concat(ga, (char *)(x))
@@ -527,7 +426,7 @@ uint64_t nvim_mtnode_intersect_id(MTNode *x, size_t idx)
   return 0;
 }
 
-MTNode *nvim_marktree_id2node(MarkTree *b, uint64_t id) { return id2node(b, id); }
+MTNode *nvim_marktree_id2node(MarkTree *b, uint64_t id) { return pmap_get(uint64_t)(b->id2node, id); }
 size_t nvim_marktree_id2node_count(MarkTree *b) { return b->id2node ? map_size(b->id2node) : 0; }
 
 // ============================================================================
@@ -566,7 +465,7 @@ MTNode *nvim_marktree_alloc_node(MarkTree *b, bool internal)
   b->n_nodes++;
   return x;
 }
-void nvim_marktree_refkey(MarkTree *b, MTNode *x, int i) { refkey(b, x, i); }
+void nvim_marktree_refkey(MarkTree *b, MTNode *x, int i) { pmap_put(uint64_t)(b->id2node, mt_lookup_key(x->key[i]), x); }
 void nvim_marktree_set_root(MarkTree *b, MTNode *root) { b->root = root; }
 void nvim_marktree_inc_n_keys(MarkTree *b) { b->n_keys++; }
 void nvim_marktree_add_meta_root(MarkTree *b, int m, uint32_t val) { b->meta_root[m] += val; }
@@ -604,9 +503,9 @@ void nvim_mtnode_intersect_push(MTNode *x, uint64_t id)
 // ============================================================================
 
 uint64_t nvim_marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev) { return rs_marktree_del_itr(b, itr, rev); }
-void nvim_marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key) { marktree_revise_meta(b, itr, old_key); }
-void nvim_marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col) { marktree_move(b, itr, row, col); }
-void nvim_marktree_restore_pair(MarkTree *b, MTKey key) { marktree_restore_pair(b, key); }
+void nvim_marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key) { rs_marktree_revise_meta(b, itr, old_key); }
+void nvim_marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col) { rs_marktree_move(b, itr, row, col); }
+void nvim_marktree_restore_pair(MarkTree *b, MTKey key) { rs_marktree_restore_pair(b, key); }
 void nvim_marktree_del_id(MarkTree *b, uint64_t id) { pmap_del(uint64_t)(b->id2node, id, NULL); }
 void nvim_marktree_dec_n_keys(MarkTree *b) { b->n_keys--; }
 MarkTreeIter *nvim_alloc_marktreeiter(void) { return xcalloc(1, sizeof(MarkTreeIter)); }
@@ -627,13 +526,20 @@ void nvim_rawkey_add_pos_row(MarkTreeIter *itr, int delta) { rawkey(itr).pos.row
 
 void nvim_marktree_move_region(MarkTree *b, int start_row, colnr_T start_col,
                                int extent_row, colnr_T extent_col,
-                               int new_row, colnr_T new_col) { marktree_move_region(b, start_row, start_col, extent_row, extent_col, new_row, new_col); }
+                               int new_row, colnr_T new_col) { rs_marktree_move_region(b, start_row, start_col, extent_row, extent_col, new_row, new_col); }
 
 // ============================================================================
 // Debug and Validation (for Rust FFI)
 // ============================================================================
 
-void nvim_marktree_check(MarkTree *b) { marktree_check(b); }
+void nvim_marktree_check(MarkTree *b)
+{
+#ifndef NDEBUG
+  rs_marktree_check(b);
+#else
+  (void)b;
+#endif
+}
 
 // ============================================================================
 // MTKey Accessor Functions (for Rust sign crate)
