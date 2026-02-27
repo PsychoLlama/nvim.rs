@@ -4,9 +4,8 @@
 // Neovim's C internals.  Each function is called from one or more Rust
 // modules in src/nvim-rs/fold/.
 
-#include <assert.h>
-#include <inttypes.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
