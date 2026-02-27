@@ -1855,148 +1855,8 @@ void f_complete_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rs_get_complete_info(what_list, rettv->vval.v_dict);
 }
 
-/// Return value of process_next_cpt_value()
-enum {
-  INS_COMPL_CPT_OK = 1,
-  INS_COMPL_CPT_CONT,
-  INS_COMPL_CPT_END,
-};
-
-/// Process the next 'complete' option value in st->e_cpt.
-///
-/// If successful, the arguments are set as below:
-///   st->cpt - pointer to the next option value in "st->cpt"
-///   compl_type_arg - type of insert mode completion to use
-///   st->found_all - all matches of this type are found
-///   st->ins_buf - search for completions in this buffer
-///   st->first_match_pos - position of the first completion match
-///   st->last_match_pos - position of the last completion match
-///   st->set_match_pos - true if the first match position should be saved to
-///                       avoid loops after the search wraps around.
-///   st->dict - name of the dictionary or thesaurus file to search
-///   st->dict_f - flag specifying whether "dict" is an exact file name or not
-///
-/// @return  INS_COMPL_CPT_OK if the next value is processed successfully.
-///          INS_COMPL_CPT_CONT to skip the current completion source matching
-///          the "st->e_cpt" option value and process the next matching source.
-///          INS_COMPL_CPT_END if all the values in "st->e_cpt" are processed.
-static int process_next_cpt_value(ins_compl_next_state_T *st, int *compl_type_arg,
-                                  pos_T *start_match_pos, bool fuzzy_collect, bool *advance_cpt_idx)
-{
-  int compl_type = -1;
-  int status = INS_COMPL_CPT_OK;
-  bool skip_source = compl_autocomplete && compl_from_nonkeyword;
-
-  st->found_all = false;
-  *advance_cpt_idx = false;
-
-  while (*st->e_cpt == ',' || *st->e_cpt == ' ') {
-    st->e_cpt++;
-  }
-
-  if (*st->e_cpt == '.' && !curbuf->b_scanned && !skip_source
-      && !compl_time_slice_expired) {
-    st->ins_buf = curbuf;
-    st->first_match_pos = *start_match_pos;
-    // Move the cursor back one character so that ^N can match the
-    // word immediately after the cursor.
-    if (rs_ctrl_x_mode_normal() && (!fuzzy_collect && dec(&st->first_match_pos) < 0)) {
-      // Move the cursor to after the last character in the
-      // buffer, so that word at start of buffer is found
-      // correctly.
-      st->first_match_pos.lnum = st->ins_buf->b_ml.ml_line_count;
-      st->first_match_pos.col = ml_get_len(st->first_match_pos.lnum);
-    }
-    st->last_match_pos = st->first_match_pos;
-    compl_type = 0;
-
-    // Remember the first match so that the loop stops when we
-    // wrap and come back there a second time.
-    st->set_match_pos = true;
-  } else if (!skip_source && !compl_time_slice_expired
-             && vim_strchr("buwU", (uint8_t)(*st->e_cpt)) != NULL
-             && (st->ins_buf = rs_ins_compl_next_buf(st->ins_buf, *st->e_cpt)) != curbuf) {
-    // Scan a buffer, but not the current one.
-    if (st->ins_buf->b_ml.ml_mfp != NULL) {  // loaded buffer
-      compl_started = true;
-      st->first_match_pos.col = st->last_match_pos.col = 0;
-      st->first_match_pos.lnum = st->ins_buf->b_ml.ml_line_count + 1;
-      st->last_match_pos.lnum = 0;
-      compl_type = 0;
-    } else {  // unloaded buffer, scan like dictionary
-      st->found_all = true;
-      if (st->ins_buf->b_fname == NULL) {
-        status = INS_COMPL_CPT_CONT;
-        goto done;
-      }
-      compl_type = CTRL_X_DICTIONARY;
-      st->dict = st->ins_buf->b_fname;
-      st->dict_f = DICT_EXACT;
-    }
-    if (!shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete) {
-      msg_hist_off = true;  // reset in msg_trunc()
-      msg_ext_set_kind("completion");
-      vim_snprintf(IObuff, IOSIZE, _("Scanning: %s"),
-                   st->ins_buf->b_fname == NULL
-                   ? buf_spname(st->ins_buf)
-                   : st->ins_buf->b_sfname == NULL
-                   ? st->ins_buf->b_fname
-                   : st->ins_buf->b_sfname);
-      msg_trunc(IObuff, true, HLF_R);
-    }
-  } else if (*st->e_cpt == NUL) {
-    status = INS_COMPL_CPT_END;
-  } else {
-    if (rs_ctrl_x_mode_line_or_eval()) {
-      // compl_type = -1;
-    } else if (*st->e_cpt == 'F' || *st->e_cpt == 'o') {
-      compl_type = CTRL_X_FUNCTION;
-      st->func_cb = get_callback_if_cpt_func(st->e_cpt, cpt_sources_index);
-      if (!st->func_cb) {
-        compl_type = -1;
-      }
-    } else if (!skip_source) {
-      if (*st->e_cpt == 'k' || *st->e_cpt == 's') {
-        if (*st->e_cpt == 'k') {
-          compl_type = CTRL_X_DICTIONARY;
-        } else {
-          compl_type = CTRL_X_THESAURUS;
-        }
-        if (*++st->e_cpt != ',' && *st->e_cpt != NUL) {
-          st->dict = st->e_cpt;
-          st->dict_f = DICT_FIRST;
-        }
-      } else if (*st->e_cpt == 'i') {
-        compl_type = CTRL_X_PATH_PATTERNS;
-      } else if (*st->e_cpt == 'd') {
-        compl_type = CTRL_X_PATH_DEFINES;
-      } else if (*st->e_cpt == 'f') {
-        compl_type = CTRL_X_BUFNAMES;
-      } else if (*st->e_cpt == ']' || *st->e_cpt == 't') {
-        compl_type = CTRL_X_TAGS;
-        if (!shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete) {
-          msg_ext_set_kind("completion");
-          msg_hist_off = true;  // reset in msg_trunc()
-          vim_snprintf(IObuff, IOSIZE, "%s", _("Scanning tags."));
-          msg_trunc(IObuff, true, HLF_R);
-        }
-      }
-    }
-
-    // in any case e_cpt is advanced to the next entry
-    copy_option_part(&st->e_cpt, IObuff, IOSIZE, ",");
-    *advance_cpt_idx = rs_may_advance_cpt_index(st->e_cpt) != 0;
-
-    st->found_all = true;
-    if (compl_type == -1) {
-      status = INS_COMPL_CPT_CONT;
-    }
-  }
-
-done:
-  *compl_type_arg = compl_type;
-  return status;
-}
+// NOTE: process_next_cpt_value, INS_COMPL_CPT_* enum migrated to Rust
+// as rs_process_next_cpt_value (Phase 14, Phase 3).
 
 /// Compare function for qsort
 static int compare_scores(const void *a, const void *b)
@@ -3018,20 +2878,8 @@ void nvim_ins_compl_st_set_cur_match_dir(void) {
                                : &ins_compl_st.first_match_pos;
 }
 
-// Compound wrapper for process_next_cpt_value.
-// start_lnum/start_col: the current start position.
-// Returns INS_COMPL_CPT_OK / INS_COMPL_CPT_CONT / INS_COMPL_CPT_END.
-// *type_out: set to the compl type.
-// *advance_out: set if we should advance the cpt source index.
-int nvim_process_next_cpt_value_wrap(int *type_out, int start_lnum, int start_col,
-                                     int fuzzy_collect, int *advance_out) {
-  pos_T start_pos = { .lnum = (linenr_T)start_lnum, .col = (colnr_T)start_col };
-  bool advance = false;
-  int status = process_next_cpt_value(&ins_compl_st, type_out, &start_pos,
-                                      fuzzy_collect != 0, &advance);
-  *advance_out = advance ? 1 : 0;
-  return status;
-}
+// NOTE: nvim_process_next_cpt_value_wrap deleted (Phase 14, Phase 3).
+// rs_ins_compl_get_exp now calls rs_process_next_cpt_value directly.
 
 // Compound wrapper for get_next_default_completion.
 // Returns FAIL/OK.
@@ -4080,3 +3928,154 @@ int nvim_searchit_for_compl(buf_T *buf, pos_T *pos, int dir, char *pat, size_t p
 
 /// Returns ignorecase(pat).
 int nvim_ignorecase_pat(const char *pat) { return ignorecase(pat) ? 1 : 0; }
+
+// Phase 14 accessors for process_next_cpt_value migration (Phase 3).
+
+/// Returns curbuf->b_scanned.
+int nvim_curbuf_get_b_scanned(void) { return curbuf->b_scanned ? 1 : 0; }
+
+/// Returns the current character at ins_compl_st.e_cpt (as unsigned int).
+/// Returns 0 (NUL) if e_cpt is NULL.
+int nvim_ins_compl_st_get_e_cpt_char(void) {
+  return ins_compl_st.e_cpt ? (int)(unsigned char)*ins_compl_st.e_cpt : 0;
+}
+
+/// Skips commas and spaces at the start of ins_compl_st.e_cpt.
+void nvim_ins_compl_st_skip_delimiters(void) {
+  while (*ins_compl_st.e_cpt == ',' || *ins_compl_st.e_cpt == ' ') {
+    ins_compl_st.e_cpt++;
+  }
+}
+
+/// Sets ins_compl_st.ins_buf = curbuf and copies start_pos into first/last_match_pos.
+/// Performs the initial pos setup for the '.' (current buffer) case.
+/// Returns 1 if rs_ctrl_x_mode_normal() and dec(&first_match_pos) underflowed
+/// (i.e., position moved before the buffer start; caller should wrap to end).
+/// In that case, sets first_match_pos to (ml_line_count, ml_get_len(ml_line_count)).
+int nvim_ins_compl_st_set_dot_source(int start_lnum, int start_col, int fuzzy_collect)
+{
+  ins_compl_st.ins_buf = curbuf;
+  ins_compl_st.first_match_pos.lnum = (linenr_T)start_lnum;
+  ins_compl_st.first_match_pos.col  = (colnr_T)start_col;
+  int wrapped = 0;
+  if (rs_ctrl_x_mode_normal() && (!fuzzy_collect && dec(&ins_compl_st.first_match_pos) < 0)) {
+    ins_compl_st.first_match_pos.lnum = ins_compl_st.ins_buf->b_ml.ml_line_count;
+    ins_compl_st.first_match_pos.col  = ml_get_len(ins_compl_st.first_match_pos.lnum);
+    wrapped = 1;
+  }
+  ins_compl_st.last_match_pos = ins_compl_st.first_match_pos;
+  ins_compl_st.set_match_pos = true;
+  return wrapped;
+}
+
+/// Calls rs_ins_compl_next_buf(ins_compl_st.ins_buf, flag) and updates
+/// ins_compl_st.ins_buf. Returns 1 if the returned buffer != curbuf, else 0.
+/// If the buffer is loaded, sets compl_started=true and initialises match
+/// positions for a full-buffer scan. Otherwise marks found_all=true.
+/// Returns:
+///   2  = buffer found and loaded (compl_type should be 0)
+///   1  = buffer found but unloaded (compl_type should be CTRL_X_DICTIONARY)
+///   0  = no new buffer (wrapped back to curbuf)
+int nvim_ins_compl_st_advance_buf(int flag)
+{
+  buf_T *next = rs_ins_compl_next_buf(ins_compl_st.ins_buf, flag);
+  if (next == curbuf) {
+    return 0;
+  }
+  ins_compl_st.ins_buf = next;
+  if (ins_compl_st.ins_buf->b_ml.ml_mfp != NULL) {
+    // Loaded buffer: set up for full scan
+    compl_started = true;
+    ins_compl_st.first_match_pos.col = ins_compl_st.last_match_pos.col = 0;
+    ins_compl_st.first_match_pos.lnum = ins_compl_st.ins_buf->b_ml.ml_line_count + 1;
+    ins_compl_st.last_match_pos.lnum = 0;
+    return 2;
+  }
+  // Unloaded buffer: scan like dictionary
+  ins_compl_st.found_all = true;
+  return 1;
+}
+
+/// Returns ins_compl_st.ins_buf->b_fname (may be NULL) as a C string pointer.
+const char *nvim_ins_compl_st_get_ins_buf_fname(void)
+{
+  return ins_compl_st.ins_buf ? ins_compl_st.ins_buf->b_fname : NULL;
+}
+
+/// Returns ins_compl_st.ins_buf->b_sfname (may be NULL).
+const char *nvim_ins_compl_st_get_ins_buf_sfname(void)
+{
+  return ins_compl_st.ins_buf ? ins_compl_st.ins_buf->b_sfname : NULL;
+}
+
+/// Emits the "Scanning: <name>" completion message for ins_compl_st.ins_buf.
+void nvim_ins_compl_st_msg_scanning(void)
+{
+  if (!shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete) {
+    msg_hist_off = true;
+    msg_ext_set_kind("completion");
+    vim_snprintf(IObuff, IOSIZE, _("Scanning: %s"),
+                 ins_compl_st.ins_buf->b_fname == NULL
+                 ? buf_spname(ins_compl_st.ins_buf)
+                 : ins_compl_st.ins_buf->b_sfname == NULL
+                 ? ins_compl_st.ins_buf->b_fname
+                 : ins_compl_st.ins_buf->b_sfname);
+    msg_trunc(IObuff, true, HLF_R);
+  }
+}
+
+/// Emits the "Scanning tags." completion message.
+void nvim_ins_compl_st_msg_scanning_tags(void)
+{
+  if (!shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete) {
+    msg_ext_set_kind("completion");
+    msg_hist_off = true;
+    vim_snprintf(IObuff, IOSIZE, "%s", _("Scanning tags."));
+    msg_trunc(IObuff, true, HLF_R);
+  }
+}
+
+/// Sets ins_compl_st.dict = ins_compl_st.e_cpt and dict_f = DICT_FIRST.
+void nvim_ins_compl_st_set_dict_from_e_cpt(void)
+{
+  ins_compl_st.dict = ins_compl_st.e_cpt;
+  ins_compl_st.dict_f = DICT_FIRST;
+}
+
+/// Advances ins_compl_st.e_cpt by one character (for 'k'/'s' option path).
+void nvim_ins_compl_st_e_cpt_inc(void)
+{
+  ins_compl_st.e_cpt++;
+}
+
+/// Returns the character one past the current e_cpt position (peeks ahead).
+int nvim_ins_compl_st_get_e_cpt_next_char(void)
+{
+  return ins_compl_st.e_cpt ? (int)(unsigned char)ins_compl_st.e_cpt[1] : 0;
+}
+
+/// Sets ins_compl_st.func_cb via get_callback_if_cpt_func logic.
+/// Returns 1 if a valid callback was found, 0 if not.
+int nvim_ins_compl_st_set_func_cb_from_e_cpt(int cpt_idx)
+{
+  ins_compl_st.func_cb = get_callback_if_cpt_func(ins_compl_st.e_cpt, cpt_idx);
+  return ins_compl_st.func_cb != NULL ? 1 : 0;
+}
+
+/// Sets ins_compl_st.dict = ins_compl_st.ins_buf->b_fname and
+/// ins_compl_st.dict_f = DICT_EXACT.
+/// Caller should have verified b_fname != NULL first.
+void nvim_ins_compl_st_set_dict_from_ins_buf(void)
+{
+  ins_compl_st.dict   = ins_compl_st.ins_buf->b_fname;
+  ins_compl_st.dict_f = DICT_EXACT;
+}
+
+/// Advances ins_compl_st.e_cpt using copy_option_part (skips to next comma-
+/// separated entry). Returns 1 if rs_may_advance_cpt_index() says we should
+/// advance the cpt sources index, 0 otherwise.
+int nvim_ins_compl_st_advance_e_cpt(void)
+{
+  (void)copy_option_part(&ins_compl_st.e_cpt, IObuff, IOSIZE, ",");
+  return rs_may_advance_cpt_index(ins_compl_st.e_cpt) != 0 ? 1 : 0;
+}

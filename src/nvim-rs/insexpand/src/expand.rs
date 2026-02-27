@@ -104,14 +104,24 @@ extern "C" {
     fn nvim_compl_old_match_advance_curr();
     fn nvim_compl_curr_rewind_to_head();
 
-    // process_next_cpt_value compound wrapper
-    fn nvim_process_next_cpt_value_wrap(
-        type_out: *mut c_int,
+    // Phase 14 (Phase 3) accessors for rs_process_next_cpt_value
+    fn nvim_curbuf_get_b_scanned() -> c_int;
+    fn nvim_ins_compl_st_get_e_cpt_char() -> c_int;
+    fn nvim_ins_compl_st_skip_delimiters();
+    fn nvim_ins_compl_st_set_dot_source(
         start_lnum: c_int,
         start_col: c_int,
         fuzzy_collect: c_int,
-        advance_out: *mut c_int,
     ) -> c_int;
+    fn nvim_ins_compl_st_advance_buf(flag: c_int) -> c_int;
+    fn nvim_ins_compl_st_get_ins_buf_fname() -> *const std::ffi::c_char;
+    fn nvim_ins_compl_st_msg_scanning();
+    fn nvim_ins_compl_st_msg_scanning_tags();
+    fn nvim_ins_compl_st_set_dict_from_e_cpt();
+    fn nvim_ins_compl_st_e_cpt_inc();
+    fn nvim_ins_compl_st_set_func_cb_from_e_cpt(cpt_idx: c_int) -> c_int;
+    fn nvim_ins_compl_st_set_dict_from_ins_buf();
+    fn nvim_ins_compl_st_advance_e_cpt() -> c_int;
 
     // get_next_default_completion compound wrapper
     fn nvim_get_next_default_completion_wrap(start_lnum: c_int, start_col: c_int) -> c_int;
@@ -150,6 +160,133 @@ extern "C" {
     fn nvim_got_int() -> c_int;
     fn may_trigger_modechanged();
 
+}
+
+// Return value constant for INS_COMPL_CPT_OK
+const INS_COMPL_CPT_OK: c_int = 1;
+
+/// Process the next 'complete' option value in ins_compl_st.e_cpt.
+///
+/// This is a Rust translation of the C `process_next_cpt_value` function.
+///
+/// Returns INS_COMPL_CPT_OK / INS_COMPL_CPT_CONT / INS_COMPL_CPT_END.
+/// Sets `*compl_type_out` to the completion type for this entry.
+/// Sets `*advance_cpt_idx_out` if the cpt sources index should advance.
+///
+/// # Safety
+/// Requires valid ins_compl_st state. Mutates ins_compl_st fields via accessors.
+unsafe fn rs_process_next_cpt_value(
+    start_lnum: c_int,
+    start_col: c_int,
+    fuzzy_collect: c_int,
+    compl_type_out: &mut c_int,
+    advance_cpt_idx_out: &mut c_int,
+) -> c_int {
+    let mut compl_type: c_int = -1;
+    let mut status = INS_COMPL_CPT_OK;
+    let skip_source = nvim_get_compl_autocomplete() != 0 && nvim_get_compl_from_nonkeyword() != 0;
+
+    nvim_ins_compl_st_set_found_all(0);
+    *advance_cpt_idx_out = 0;
+
+    // Skip leading commas and spaces
+    nvim_ins_compl_st_skip_delimiters();
+
+    // nvim_ins_compl_st_get_e_cpt_char() returns an ASCII char value (0-127)
+    // or 0 for NUL. Truncation from i32 to u8 is safe for valid ASCII.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let e_char = nvim_ins_compl_st_get_e_cpt_char() as u8;
+
+    if e_char == b'.'
+        && nvim_curbuf_get_b_scanned() == 0
+        && !skip_source
+        && nvim_get_compl_time_slice_expired() == 0
+    {
+        // Current buffer ('.' entry)
+        nvim_ins_compl_st_set_dot_source(start_lnum, start_col, fuzzy_collect);
+        compl_type = 0;
+        // set_match_pos is set inside nvim_ins_compl_st_set_dot_source
+    } else if !skip_source
+        && nvim_get_compl_time_slice_expired() == 0
+        && matches!(e_char, b'b' | b'u' | b'w' | b'U')
+    {
+        // Buffer/window scan ('b', 'u', 'w', 'U' entries)
+        let result = nvim_ins_compl_st_advance_buf(c_int::from(e_char));
+        if result == 0 {
+            // No new buffer found (wrapped back to curbuf) -- skip
+            status = INS_COMPL_CPT_CONT;
+        } else if result == 2 {
+            // Loaded buffer
+            compl_type = 0;
+            nvim_ins_compl_st_msg_scanning();
+        } else {
+            // Unloaded buffer (result == 1): scan like dictionary
+            if nvim_ins_compl_st_get_ins_buf_fname().is_null() {
+                status = INS_COMPL_CPT_CONT;
+            } else {
+                nvim_ins_compl_st_set_dict_from_ins_buf();
+                compl_type = CTRL_X_DICTIONARY;
+                nvim_ins_compl_st_msg_scanning();
+            }
+        }
+    } else if e_char == 0 {
+        // NUL: end of 'complete' option
+        status = INS_COMPL_CPT_END;
+    } else {
+        // Other entries: 'F'/'o', 'k'/'s', 'i', 'd', 'f', ']'/'t'
+        if rs_ctrl_x_mode_line_or_eval() != 0 {
+            // compl_type = -1 (leave as default)
+        } else if e_char == b'F' || e_char == b'o' {
+            compl_type = CTRL_X_FUNCTION;
+            let idx = nvim_get_cpt_sources_index();
+            if nvim_ins_compl_st_set_func_cb_from_e_cpt(idx) == 0 {
+                compl_type = -1;
+            }
+        } else if !skip_source {
+            match e_char {
+                b'k' | b's' => {
+                    compl_type = if e_char == b'k' {
+                        CTRL_X_DICTIONARY
+                    } else {
+                        CTRL_X_THESAURUS
+                    };
+                    // Check if there's a specific dict/thesaurus path
+                    nvim_ins_compl_st_e_cpt_inc();
+                    // ASCII char value; truncation from i32 to u8 is safe.
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    let next_c = nvim_ins_compl_st_get_e_cpt_char() as u8;
+                    if next_c != b',' && next_c != 0 {
+                        nvim_ins_compl_st_set_dict_from_e_cpt();
+                    }
+                }
+                b'i' => {
+                    compl_type = CTRL_X_PATH_PATTERNS;
+                }
+                b'd' => {
+                    compl_type = CTRL_X_PATH_DEFINES;
+                }
+                b'f' => {
+                    compl_type = CTRL_X_BUFNAMES;
+                }
+                b']' | b't' => {
+                    compl_type = CTRL_X_TAGS;
+                    nvim_ins_compl_st_msg_scanning_tags();
+                }
+                _ => {}
+            }
+        }
+
+        // Advance e_cpt past this entry (copy_option_part + may_advance check)
+        *advance_cpt_idx_out = nvim_ins_compl_st_advance_e_cpt();
+
+        nvim_ins_compl_st_set_found_all(1);
+        if compl_type == -1 {
+            status = INS_COMPL_CPT_CONT;
+        }
+    }
+
+    *compl_type_out = compl_type;
+    status
 }
 
 /// Dispatch to the appropriate completion source for the given `type`.
@@ -295,12 +432,12 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
             && (nvim_get_compl_started() == 0 || nvim_ins_compl_st_get_found_all() != 0)
         {
             let mut new_type = compl_type;
-            let status = nvim_process_next_cpt_value_wrap(
-                &raw mut new_type,
+            let status = rs_process_next_cpt_value(
                 start_lnum,
                 start_col,
                 rs_cot_fuzzy(),
-                &raw mut may_advance_cpt_idx,
+                &mut new_type,
+                &mut may_advance_cpt_idx,
             );
             compl_type = new_type;
             if status == INS_COMPL_CPT_END {
