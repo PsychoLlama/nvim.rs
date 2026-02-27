@@ -926,7 +926,7 @@ extern "C" {
 
     // msg functions
     fn nvim_msg_putchar(c: c_int); // from message.c
-    fn nvim_tag_msg_advance(col: c_int);
+    fn msg_advance(col: c_int);
 
     // path comparison
     fn nvim_path_full_compare_equal(s1: *const c_char, s2: *const c_char) -> c_int;
@@ -970,9 +970,9 @@ pub unsafe extern "C" fn rs_tag_freematch() {
 pub unsafe extern "C" fn rs_taglen_advance(l: c_int) {
     if l == MAXCOL {
         nvim_msg_putchar(c_int::from(b'\n'));
-        nvim_tag_msg_advance(24);
+        msg_advance(24);
     } else {
-        nvim_tag_msg_advance(13 + l);
+        msg_advance(13 + l);
     }
 }
 

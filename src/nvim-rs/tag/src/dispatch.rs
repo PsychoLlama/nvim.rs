@@ -111,7 +111,7 @@ extern "C" {
     fn nvim_tag_ui_has_messages() -> bool;
     fn nvim_tag_ui_flush();
     fn nvim_tag_os_delay(msec: c_int);
-    fn nvim_tag_msg(msg: *const c_char, hlf: c_int);
+    fn msg(msg: *const c_char, hlf: c_int) -> c_int;
     fn nvim_tag_emsg_stack_empty();
     fn nvim_tag_emsg_at_bottom();
     fn nvim_tag_emsg_at_top();
@@ -1202,7 +1202,7 @@ pub unsafe extern "C" fn rs_do_tag(
                 }
                 let msg_str: *const c_char = msg_buf.as_ptr().cast();
                 if (NUM_MATCHES > prev_num_matches || new_tag) && NUM_MATCHES > 1 {
-                    nvim_tag_msg(msg_str, if ic { HLF_W } else { 0 });
+                    msg(msg_str, if ic { HLF_W } else { 0 });
                     nvim_tag_set_msg_scroll(1);
                 } else {
                     nvim_tag_give_warning(msg_str, ic);

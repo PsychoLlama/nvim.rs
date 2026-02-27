@@ -391,7 +391,6 @@ void nvim_xfree_clear_tagmatchname(void) { XFREE_CLEAR(tagmatchname); }
 const char *nvim_get_tagmatchname(void) { return tagmatchname; }
 void nvim_set_tagmatchname(char *name) { tagmatchname = name; }
 void *nvim_get_ptag_entry(void) { return &ptag_entry; }
-void nvim_tag_msg_advance(int col) { msg_advance(col); }
 int nvim_path_full_compare_equal(const char *s1, const char *s2) { return (path_full_compare((char *)s1, (char *)s2, true, true) & kEqualFiles); }
 bool nvim_tag_curwin_is_null(void) { return curwin == NULL; }
 // --- Rust FFI accessor functions for expand_tag_fname ---
@@ -588,18 +587,6 @@ const char *nvim_tag_get_mt_name(int idx)
   return mt_names[idx];
 }
 
-void nvim_tag_msg_puts(const char *s) { msg_puts(s); }
-void nvim_tag_msg_puts_title(const char *s) { msg_puts_title(s); }
-void nvim_tag_msg_outtrans(const char *str, int attr, bool right) { msg_outtrans(str, attr, right); }
-void nvim_tag_msg_outtrans_len(const char *str, int len, int attr, bool right) { msg_outtrans_len(str, len, attr, right); }
-const char *nvim_tag_msg_outtrans_one(const char *p, int hl_id, bool right) { return msg_outtrans_one((char *)p, hl_id, right); }
-void nvim_tag_msg(const char *msg_str, int hlf) { msg(msg_str, hlf); }
-void nvim_tag_msg_putchar(int c) { msg_putchar(c); }
-void nvim_tag_msg_start(void) { msg_start(); }
-void nvim_tag_os_breakcheck(void) { os_breakcheck(); }
-void nvim_tag_verbose_enter(void) { verbose_enter(); }
-void nvim_tag_verbose_leave(void) { verbose_leave(); }
-void nvim_tag_smsg_dup_field(const char *field_name) { smsg(0, _("Duplicate field name: %s"), field_name); }
 void *nvim_tag_get_curwin(void) { return (void *)curwin; }
 void *nvim_tag_tv_dict_alloc(void) { return (void *)tv_dict_alloc(); }
 bool nvim_tag_tv_dict_find(void *dict, const char *key, int key_len) { return tv_dict_find((dict_T *)dict, key, key_len) != NULL; }

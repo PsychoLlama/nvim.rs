@@ -919,20 +919,21 @@ extern "C" {
 
     // Message output functions
     fn nvim_msg_ext_set_kind(kind: *const c_char);
-    fn nvim_tag_msg_start();
+    fn msg_start();
     fn nvim_msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
     fn nvim_msg_clr_eos();
-    fn nvim_tag_msg_advance(col: c_int);
-    fn nvim_tag_msg_puts(s: *const c_char);
-    fn nvim_tag_msg_puts_title(s: *const c_char);
-    fn nvim_tag_msg_outtrans(str: *const c_char, attr: c_int, right: bool);
-    fn nvim_tag_msg_outtrans_len(str: *const c_char, len: c_int, attr: c_int, right: bool);
-    fn nvim_tag_msg_outtrans_one(p: *const c_char, hl_id: c_int, right: bool) -> *const c_char;
-    fn nvim_tag_msg_putchar(c: c_int);
-    fn nvim_tag_os_breakcheck();
-    fn nvim_tag_verbose_enter();
-    fn nvim_tag_verbose_leave();
-    fn nvim_tag_smsg_dup_field(field_name: *const c_char);
+    fn msg_advance(col: c_int);
+    fn msg_puts(s: *const c_char);
+    fn msg_puts_title(s: *const c_char);
+    fn msg_outtrans(str: *const c_char, attr: c_int, right: bool);
+    fn msg_outtrans_len(str: *const c_char, len: c_int, attr: c_int, right: bool);
+    fn msg_outtrans_one(p: *const c_char, hl_id: c_int, right: bool) -> *const c_char;
+    fn msg_putchar(c: c_int);
+    fn os_breakcheck();
+    fn verbose_enter();
+    fn verbose_leave();
+    fn smsg(hl_id: c_int, fmt: *const c_char, ...);
+    fn gettext(msgid: *const c_char) -> *const c_char;
 
     // Global variable accessors
     fn nvim_get_msg_col() -> c_int;
@@ -1062,7 +1063,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
         nvim_set_msg_didout(0); // overwrite previous message
     }
     nvim_msg_ext_set_kind(c"confirm".as_ptr());
-    nvim_tag_msg_start();
+    msg_start();
     nvim_msg_puts_hl(c"  # pri kind tag".as_ptr(), HLF_T, false);
     nvim_msg_clr_eos();
     rs_taglen_advance(taglen);
@@ -1100,7 +1101,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
                 i + 1,
                 mt_name,
             );
-            nvim_tag_msg_puts(buf.as_ptr().cast());
+            msg_puts(buf.as_ptr().cast());
         }
 
         // Print tag kind if available
@@ -1108,31 +1109,31 @@ pub unsafe extern "C" fn rs_print_tag_list(
         if !tagkind.is_null() {
             let tagkind_end = tagp_tagkind_end(tagp_ptr);
             let kind_len = tagkind_end.offset_from(tagkind) as c_int;
-            nvim_tag_msg_outtrans_len(tagkind, kind_len, 0, false);
+            msg_outtrans_len(tagkind, kind_len, 0, false);
         }
-        nvim_tag_msg_advance(13);
+        msg_advance(13);
 
         // Print tag name
         let tagname = tagp_tagname(tagp_ptr);
         let tagname_end = tagp_tagname_end(tagp_ptr);
         let name_len = tagname_end.offset_from(tagname) as c_int;
-        nvim_tag_msg_outtrans_len(tagname, name_len, HLF_T, false);
-        nvim_tag_msg_putchar(b' ' as c_int);
+        msg_outtrans_len(tagname, name_len, HLF_T, false);
+        msg_putchar(b' ' as c_int);
         rs_taglen_advance(taglen);
 
         // Print file name
         let p = rs_tag_full_fname(tagp_ptr.cast());
         if !p.is_null() {
-            nvim_tag_msg_outtrans(p, HLF_D, false);
+            msg_outtrans(p, HLF_D, false);
             xfree(p.cast());
         }
         if nvim_get_msg_col() > 0 {
-            nvim_tag_msg_putchar(b'\n' as c_int);
+            msg_putchar(b'\n' as c_int);
         }
         if nvim_get_got_int() != 0 {
             break;
         }
-        nvim_tag_msg_advance(15);
+        msg_advance(15);
 
         // Print extra fields
         let command_end = tagp_command_end(tagp_ptr);
@@ -1167,13 +1168,13 @@ pub unsafe extern "C" fn rs_print_tag_list(
                 let mut hl_id: c_int = HLF_CM;
                 while *p != 0 && *p as u8 != b'\r' && *p as u8 != b'\n' {
                     if nvim_get_msg_col() + nvim_ptr2cells(p) >= nvim_get_Columns() {
-                        nvim_tag_msg_putchar(b'\n' as c_int);
+                        msg_putchar(b'\n' as c_int);
                         if nvim_get_got_int() != 0 {
                             break;
                         }
-                        nvim_tag_msg_advance(15);
+                        msg_advance(15);
                     }
-                    p = nvim_tag_msg_outtrans_one(p, hl_id, false).cast_mut();
+                    p = msg_outtrans_one(p, hl_id, false).cast_mut();
                     if *p as u8 == TAB {
                         nvim_msg_puts_hl(c" ".as_ptr(), hl_id, false);
                         break;
@@ -1184,11 +1185,11 @@ pub unsafe extern "C" fn rs_print_tag_list(
                 }
             }
             if nvim_get_msg_col() > 15 {
-                nvim_tag_msg_putchar(b'\n' as c_int);
+                msg_putchar(b'\n' as c_int);
                 if nvim_get_got_int() != 0 {
                     break;
                 }
-                nvim_tag_msg_advance(15);
+                msg_advance(15);
             }
         }
 
@@ -1225,12 +1226,12 @@ pub unsafe extern "C" fn rs_print_tag_list(
                 nvim_ptr2cells(p)
             };
             if nvim_get_msg_col() + cell_width > nvim_get_Columns() {
-                nvim_tag_msg_putchar(b'\n' as c_int);
+                msg_putchar(b'\n' as c_int);
             }
             if nvim_get_got_int() != 0 {
                 break;
             }
-            nvim_tag_msg_advance(15);
+            msg_advance(15);
 
             // skip backslash used for escaping
             if *p as u8 == b'\\' && (*p.add(1) as u8 == command_char || *p.add(1) as u8 == b'\\') {
@@ -1238,10 +1239,10 @@ pub unsafe extern "C" fn rs_print_tag_list(
             }
 
             if *p as u8 == TAB {
-                nvim_tag_msg_putchar(b' ' as c_int);
+                msg_putchar(b' ' as c_int);
                 p = p.add(1);
             } else {
-                p = nvim_tag_msg_outtrans_one(p, 0, false).cast_mut();
+                p = msg_outtrans_one(p, 0, false).cast_mut();
             }
 
             // don't display the "$/;\"" and "$?;\""
@@ -1261,9 +1262,9 @@ pub unsafe extern "C" fn rs_print_tag_list(
         }
 
         if nvim_get_msg_col() != 0 && (nvim_ui_has_messages() == 0 || i < num_matches - 1) {
-            nvim_tag_msg_putchar(b'\n' as c_int);
+            msg_putchar(b'\n' as c_int);
         }
-        nvim_tag_os_breakcheck();
+        os_breakcheck();
     }
 
     if nvim_get_got_int() != 0 {
@@ -1429,7 +1430,7 @@ pub unsafe extern "C" fn rs_do_tags() {
     let tagstacklen = nvim_win_get_tagstacklen(curwin);
 
     // Highlight title
-    nvim_tag_msg_puts_title(c"\n  # TO tag         FROM line  in file/text".as_ptr());
+    msg_puts_title(c"\n  # TO tag         FROM line  in file/text".as_ptr());
 
     for i in 0..tagstacklen {
         let entry = nvim_win_get_tagstack_entry(curwin, i);
@@ -1443,7 +1444,7 @@ pub unsafe extern "C" fn rs_do_tags() {
             continue; // file name not available
         }
 
-        nvim_tag_msg_putchar(b'\n' as c_int);
+        msg_putchar(b'\n' as c_int);
 
         // Get fmark lnum
         let fmark = nvim_taggy_get_fmark(entry);
@@ -1468,18 +1469,18 @@ pub unsafe extern "C" fn rs_do_tags() {
             tagname,
             lnum,
         );
-        nvim_tag_msg_outtrans(line_buf.as_ptr().cast(), 0, false);
+        msg_outtrans(line_buf.as_ptr().cast(), 0, false);
 
         let fmark_fnum = nvim_taggy_get_fmark_fnum(entry);
         let curbuf_fnum = nvim_get_curbuf_fnum();
         let attr = if fmark_fnum == curbuf_fnum { HLF_D } else { 0 };
-        nvim_tag_msg_outtrans(name, attr, false);
+        msg_outtrans(name, attr, false);
         xfree(name.cast());
     }
 
     if tagstackidx == tagstacklen {
         // idx at top of stack
-        nvim_tag_msg_puts(c"\n>".as_ptr());
+        msg_puts(c"\n>".as_ptr());
     }
 }
 
@@ -1512,9 +1513,9 @@ pub unsafe extern "C" fn rs_add_tag_field(
     // Check that the field name doesn't exist yet
     if nvim_tag_tv_dict_find(dict, field_name, -1) {
         if nvim_get_p_verbose() > 0 {
-            nvim_tag_verbose_enter();
-            nvim_tag_smsg_dup_field(field_name);
-            nvim_tag_verbose_leave();
+            verbose_enter();
+            smsg(0, gettext(c"Duplicate field name: %s".as_ptr()), field_name);
+            verbose_leave();
         }
         return FAIL;
     }
