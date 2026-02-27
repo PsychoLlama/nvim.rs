@@ -352,7 +352,6 @@ linenr_T nvim_diffblock_get_lnum(diff_T *dp, int idx) { if (dp == NULL || idx < 
 linenr_T nvim_diffblock_get_count(diff_T *dp, int idx) { if (dp == NULL || idx < 0 || idx >= DB_COUNT) { return 0; } return dp->df_count[idx]; }
 void nvim_diffblock_set_lnum(diff_T *dp, int idx, linenr_T lnum) { if (dp == NULL || idx < 0 || idx >= DB_COUNT) { return; } dp->df_lnum[idx] = lnum; }
 void nvim_diffblock_set_count(diff_T *dp, int idx, linenr_T count) { if (dp == NULL || idx < 0 || idx >= DB_COUNT) { return; } dp->df_count[idx] = count; }
-int nvim_get_db_count(void) { return DB_COUNT; }
 bool nvim_diffblock_is_linematched(diff_T *dp) { if (dp == NULL) { return false; } return dp->is_linematched; }
 void nvim_diffblock_set_linematched(diff_T *dp, bool val) { if (dp == NULL) { return; } dp->is_linematched = val; }
 bool nvim_diffblock_has_changes(diff_T *dp) { if (dp == NULL) { return false; } return dp->df_changes.ga_len > 0; }
@@ -362,7 +361,6 @@ bool nvim_tabpage_is_diff_invalid(tabpage_T *tp) { if (tp == NULL) { return true
 void nvim_tabpage_set_diff_invalid(tabpage_T *tp, int val) { if (tp != NULL) { tp->tp_diff_invalid = val != 0; } }
 void nvim_tabpage_set_diff_update(tabpage_T *tp, int val) { if (tp != NULL) { tp->tp_diff_update = val != 0; } }
 diff_T *nvim_diff_alloc_new(tabpage_T *tp, diff_T *prev, diff_T *next) { diff_T *dnew = xmalloc(sizeof(diff_T)); CLEAR_POINTER(dnew); dnew->df_next = next; if (prev == NULL) { tp->tp_first_diff = dnew; } else { prev->df_next = dnew; } return dnew; }
-int nvim_diff_is_busy(void) { return diff_busy ? 1 : 0; }
 int nvim_diffblock_get_changes_len(diff_T *dp) { if (dp == NULL) { return 0; } return dp->df_changes.ga_len; }
 diffline_change_T *nvim_diffblock_get_change(diff_T *dp, int change_idx) { if (dp == NULL || change_idx < 0 || change_idx >= dp->df_changes.ga_len) { return NULL; } return &((diffline_change_T *)dp->df_changes.ga_data)[change_idx]; }
 void nvim_diff_write_buffer(buf_T *buf, void *m, linenr_T start, linenr_T end) { mmfile_t *mm = (mmfile_t *)m; rs_diff_write_buffer(buf, &mm->ptr, &mm->size, start, end, diff_flags); }
@@ -373,7 +371,6 @@ void nvim_tabpage_set_diffbuf(tabpage_T *tp, int idx, buf_T *buf) { if (tp != NU
 void nvim_tabpage_set_first_diff(tabpage_T *tp, diff_T *dp) { if (tp != NULL) { tp->tp_first_diff = dp; } }
 void nvim_diff_set_next(diff_T *dp, diff_T *next) { if (dp != NULL) { dp->df_next = next; } }
 void nvim_diffblock_clear_and_free(diff_T *dp) { if (dp != NULL) { ga_clear(&dp->df_changes); xfree(dp); } }
-void nvim_diffblock_init_changes(diff_T *dp) { if (dp != NULL) { dp->has_changes = false; ga_init(&dp->df_changes, sizeof(diffline_change_T), 20); } }
 void nvim_diffblock_init_new(diff_T *dp) { if (dp != NULL) { dp->is_linematched = false; dp->has_changes = false; ga_init(&dp->df_changes, sizeof(diffline_change_T), 20); } }
 void nvim_set_need_diff_redraw(bool val) { need_diff_redraw = val; }
 int nvim_diff_get_linematch_lines(void) { return linematch_lines; }
@@ -390,7 +387,6 @@ void nvim_diff_xfree(void *p) { xfree(p); }
 int nvim_upd_valid(void) { return UPD_VALID; }
 int nvim_upd_some_valid(void) { return UPD_SOME_VALID; }
 bool nvim_diff_get_busy(void) { return diff_busy; }
-bool nvim_diff_get_need_scrollbind(void) { return diff_need_scrollbind; }
 void nvim_diff_set_need_scrollbind(bool val) { diff_need_scrollbind = val; }
 linenr_T nvim_diff_maxlnum(void) { return MAXLNUM; }
 int nvim_diff_get_algorithm(void) { return diff_algorithm; }
