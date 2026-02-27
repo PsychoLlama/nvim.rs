@@ -18,11 +18,17 @@ extern "C" {
     fn nvim_get_p_wmw() -> i64;
     fn nvim_set_p_wmh(val: i64);
     fn nvim_set_p_wmw(val: i64);
-    fn nvim_emsg_noroom();
+    fn nvim_emsg_id(id: c_int);
     fn rs_min_rows_for_all_tabpages() -> c_int;
     fn rs_frame_minwidth(topfrp: *const crate::Frame, next_curwin: crate::WinHandle) -> c_int;
     fn nvim_get_topframe() -> *mut crate::Frame;
 }
+
+// =============================================================================
+// EMSG IDs
+// =============================================================================
+
+const EMSG_NOROOM: c_int = 13;
 
 // =============================================================================
 // Implementations
@@ -45,7 +51,7 @@ fn did_set_winminheight_impl() -> *const c_char {
             }
             nvim_set_p_wmh(nvim_get_p_wmh() - 1);
             if first {
-                nvim_emsg_noroom();
+                nvim_emsg_id(EMSG_NOROOM);
                 first = false;
             }
         }
@@ -69,7 +75,7 @@ fn did_set_winminwidth_impl() -> *const c_char {
             }
             nvim_set_p_wmw(nvim_get_p_wmw() - 1);
             if first {
-                nvim_emsg_noroom();
+                nvim_emsg_id(EMSG_NOROOM);
                 first = false;
             }
         }

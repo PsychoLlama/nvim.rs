@@ -14,6 +14,13 @@ use std::ffi::{c_char, c_int};
 use crate::{BufHandle, TabpageHandle, WinHandle};
 
 // =============================================================================
+// EMSG IDs for nvim_emsg_id dispatcher
+// =============================================================================
+
+const EMSG_E441_NO_PREVIEW: c_int = 6;
+const EMSG_NOALT: c_int = 7;
+
+// =============================================================================
 // Key code constants (verified by _Static_assert in window.c)
 // =============================================================================
 
@@ -246,14 +253,13 @@ extern "C" {
     fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
     fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
     fn nvim_win_get_pvw(wp: WinHandle) -> c_int;
-    fn nvim_emsg_e441_no_preview();
+    fn nvim_emsg_id(id: c_int);
     fn rs_win_new_tabpage(after: c_int, filename: *const u8) -> c_int;
     fn nvim_al_goto_tabpage_tp(tp: TabpageHandle, trigger_enter: c_int, trigger_leave: c_int);
     fn nvim_al_win_close(wp: WinHandle, free_buf: c_int, force: c_int);
     fn nvim_apply_autocmds_tabnewentered();
     fn nvim_win_get_alt_fnum(wp: WinHandle) -> c_int;
     fn nvim_curbuf_locked() -> c_int;
-    fn nvim_emsg_noalt();
     fn nvim_semsg_e92_buf_not_found(nr: i64);
     fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
     fn nvim_buflist_getfile(nr: c_int, lnum: c_int, flags: c_int, setpm: c_int);
@@ -1057,7 +1063,7 @@ pub unsafe extern "C" fn rs_do_window_P() {
     }
 
     if found.is_null() {
-        nvim_emsg_e441_no_preview();
+        nvim_emsg_id(EMSG_E441_NO_PREVIEW);
     } else {
         rs_win_goto(found);
     }
@@ -1116,7 +1122,7 @@ pub unsafe extern "C" fn rs_do_window_hat(prenum: c_int) {
     let buf: BufHandle = nvim_buflist_findnr(alt_fnum);
     if buf.is_null() {
         if prenum == 0 {
-            nvim_emsg_noalt();
+            nvim_emsg_id(EMSG_NOALT);
         } else {
             nvim_semsg_e92_buf_not_found(i64::from(prenum));
         }

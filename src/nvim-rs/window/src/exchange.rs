@@ -62,8 +62,8 @@ extern "C" {
     /// Check if text or buffer is locked.
     fn nvim_text_or_buf_locked() -> c_int;
 
-    /// Emit the e_floatexchange error message.
-    fn nvim_emsg_e_floatexchange();
+    /// Generic error message dispatcher.
+    fn nvim_emsg_id(id: c_int);
 
     /// Call beep_flush().
     fn nvim_beep_flush_wrapper();
@@ -113,9 +113,6 @@ extern "C" {
     /// Schedule redraw for a window.
     fn nvim_redraw_later_wrapper(wp: WinHandle, r#type: c_int);
 
-    /// Emit E443 error: Cannot rotate when another window is split.
-    fn nvim_emsg_e443();
-
     /// Redraw all windows later.
     fn nvim_redraw_all_later(r#type: c_int);
 
@@ -128,6 +125,15 @@ extern "C" {
     /// Emit iemsg for move-to-other-frame error.
     fn nvim_iemsg_move_other_frame();
 }
+
+// =============================================================================
+// EMSG IDs
+// =============================================================================
+
+/// E443: Cannot rotate when another window is split
+const EMSG_E443: c_int = 2;
+/// e_floatexchange: Cannot exchange or rotate floating windows
+const EMSG_E_FLOATEXCHANGE: c_int = 9;
 
 // =============================================================================
 // Exchange Validation
@@ -437,7 +443,7 @@ unsafe fn win_exchange_impl(prenum: c_int) {
 
     // Cannot exchange floating windows.
     if nvim_win_get_floating(curwin) != 0 {
-        nvim_emsg_e_floatexchange();
+        nvim_emsg_id(EMSG_E_FLOATEXCHANGE);
         return;
     }
 
@@ -566,7 +572,7 @@ unsafe fn win_rotate_impl(upwards: c_int, count: c_int) {
 
     // Cannot rotate floating windows.
     if nvim_win_get_floating(curwin) != 0 {
-        nvim_emsg_e_floatexchange();
+        nvim_emsg_id(EMSG_E_FLOATEXCHANGE);
         return;
     }
 
@@ -589,7 +595,7 @@ unsafe fn win_rotate_impl(upwards: c_int, count: c_int) {
     let mut frp = (*parent).fr_child;
     while !frp.is_null() {
         if (*frp).fr_win.is_null() {
-            nvim_emsg_e443();
+            nvim_emsg_id(EMSG_E443);
             return;
         }
         frp = (*frp).fr_next;

@@ -60,11 +60,8 @@ extern "C" {
     fn rs_restore_snapshot(idx: c_int, close_curwin: c_int);
 
     // --- Phase 2 wrappers (reused) ---
-    fn nvim_emsg_e_autocmd_close();
-    fn nvim_emsg_e_floatonly();
+    fn nvim_emsg_id(id: c_int);
     fn nvim_can_close_floating_windows(tp: TabpageHandle) -> c_int;
-    fn nvim_emsg_e444();
-    fn nvim_emsg_e814();
 
     // --- Phase 3 wrappers ---
     fn nvim_inc_split_disallowed();
@@ -113,6 +110,12 @@ const EVENT_BUFENTER: c_int = 3;
 const EVENT_BUFLEAVE: c_int = 7;
 const EVENT_TABLEAVE: c_int = 111;
 const EVENT_WINLEAVE: c_int = 137;
+
+/// EMSG_* IDs for nvim_emsg_id dispatcher (must match window_shim.c nvim_emsg_id).
+const EMSG_E444: c_int = 0;
+const EMSG_E814: c_int = 1;
+const EMSG_E_AUTOCMD_CLOSE: c_int = 10;
+const EMSG_E_FLOATONLY: c_int = 8;
 
 /// `SNAP_HELP_IDX` from window.c.
 const SNAP_HELP_IDX: c_int = 0;
@@ -176,16 +179,16 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
         // Specific error messages for last_window, locked, aucmd_win, E814.
         // Re-check conditions to emit the right message (mirrors C logic).
         if rs_last_window(win) != 0 {
-            nvim_emsg_e444();
+            nvim_emsg_id(EMSG_E444);
         } else if rs_is_aucmd_win(win) != 0 {
-            nvim_emsg_e_autocmd_close();
+            nvim_emsg_id(EMSG_E_AUTOCMD_CLOSE);
         } else {
             let lastwin = nvim_get_lastwin();
             if nvim_win_get_floating(lastwin) != 0
                 && rs_one_window_in_tab(win, TabpageHandle::null()) != 0
                 && rs_is_aucmd_win(lastwin) != 0
             {
-                nvim_emsg_e814();
+                nvim_emsg_id(EMSG_E814);
             }
             // else: locked window -- no error message (silent FAIL)
         }
@@ -207,7 +210,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
                 return 1; // FAIL
             }
         } else {
-            nvim_emsg_e_floatonly();
+            nvim_emsg_id(EMSG_E_FLOATONLY);
             return 1; // FAIL
         }
     }

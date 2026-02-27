@@ -33,7 +33,7 @@ extern "C" {
     fn nvim_comp_col();
     fn nvim_win_stl_clear_click_defs(wp: WinHandle);
     fn nvim_win_float_anchor_laststatus();
-    fn nvim_emsg_noroom();
+    fn nvim_emsg_id(id: c_int);
     fn rs_is_bottom_win(wp: WinHandle) -> c_int;
     fn rs_win_new_height(wp: WinHandle, height: c_int);
     fn rs_frame_new_height(
@@ -65,6 +65,12 @@ extern "C" {
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
     fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
 }
+
+// =============================================================================
+// EMSG IDs
+// =============================================================================
+
+const EMSG_NOROOM: c_int = 13;
 
 // =============================================================================
 // Implementations
@@ -141,7 +147,7 @@ fn resize_frame_for_status_impl(fr: *mut Frame) -> bool {
         let fp = find_horizontally_resizable_frame_impl(fr);
 
         if fp.is_null() {
-            nvim_emsg_noroom();
+            nvim_emsg_id(EMSG_NOROOM);
             false
         } else if fp != fr {
             rs_frame_new_height(fp, (*fp).fr_height - 1, 0, 0, 0);
@@ -170,7 +176,7 @@ fn resize_frame_for_winbar_impl(fr: *mut Frame) -> bool {
         let fp = find_horizontally_resizable_frame_impl(fr);
 
         if fp.is_null() || fp == fr {
-            nvim_emsg_noroom();
+            nvim_emsg_id(EMSG_NOROOM);
             return false;
         }
         rs_frame_new_height(fp, (*fp).fr_height - 1, 0, 0, 0);
@@ -304,7 +310,7 @@ unsafe fn set_winbar_win_impl(wp: WinHandle, make_room: bool, valid_cursor: bool
     if nvim_win_get_winbar_height(wp) != winbar_height {
         if winbar_height == 1 && nvim_win_get_view_height(wp) <= 1 {
             if nvim_win_get_floating(wp) != 0 {
-                nvim_emsg_noroom();
+                nvim_emsg_id(EMSG_NOROOM);
                 return SET_WINBAR_WIN_NOTDONE;
             } else if !make_room || rs_resize_frame_for_winbar(nvim_win_get_frame(wp)) == 0 {
                 return SET_WINBAR_WIN_FAIL;

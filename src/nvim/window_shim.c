@@ -1616,7 +1616,6 @@ int nvim_tabpage_get_ch_used(tabpage_T *tp) { return tp ? (int)tp->tp_ch_used : 
 int nvim_win_has_winnr(win_T *wp, tabpage_T *tp) { return (wp && tp) ? (int)win_has_winnr(wp, tp) : 0; }
 void nvim_set_p_wmh(int64_t val) { p_wmh = val; }
 void nvim_set_p_wmw(int64_t val) { p_wmw = val; }
-void nvim_emsg_noroom(void) { emsg(_(e_noroom)); }
 
 // Accessors for rs_win_set_inner_size (Phase 4)
 int nvim_win_get_width_request(win_T *wp) { return wp ? wp->w_width_request : 0; }
@@ -1762,14 +1761,10 @@ void nvim_tabpage_set_next(tabpage_T *tp, tabpage_T *next) { tp->tp_next = next;
 int nvim_win_get_tcl_flags(void) { return (int)tcl_flags; }
 void nvim_win_set_buffer_raw(win_T *wp, buf_T *buf) { wp->w_buffer = buf; }
 void nvim_buf_inc_nwindows(buf_T *buf) { buf->b_nwindows++; }
-void nvim_emsg_e_floatonly(void) { emsg(e_floatonly); }
-void nvim_emsg_e_floatexchange(void) { emsg(e_floatexchange); }
-void nvim_emsg_e443(void) { emsg(_("E443: Cannot rotate when another window is split")); }
 void nvim_iemsg_move_other_frame(void) { iemsg("INTERNAL: trying to move a window into another frame"); }
 int nvim_text_or_buf_locked(void) { return text_or_buf_locked() ? 1 : 0; }
 void nvim_win_copy_cursor(win_T *dst, win_T *src) { if (dst && src) { dst->w_cursor = src->w_cursor; } }
 void nvim_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync != 0); }
-void nvim_emsg_e_autocmd_close(void) { emsg(_(e_autocmd_close)); }
 void nvim_internal_error_othertab(void) { internal_error("win_close_othertab()"); }
 // nvim_win_free_mem_wrapper deleted: rs_win_close_structural now calls rs_win_free_mem directly (Phase 10)
 void nvim_inc_split_disallowed(void) { split_disallowed++; }
@@ -1791,16 +1786,12 @@ void nvim_msg_onlyone(void) { msg(_(m_onlyone), 0); }
 
 // Phase 1 accessors: curbuf/winfixbuf, split_disallowed, cmdwin state
 int nvim_get_curwin_p_wfb(void) { return curwin->w_p_wfb ? 1 : 0; }
-void nvim_emsg_e_winfixbuf(void) { emsg(_(e_winfixbuf_cannot_go_to_buffer)); }
 int nvim_get_split_disallowed(void) { return split_disallowed; }
 int nvim_win_buf_locked_split(win_T *wp) { return wp->w_buffer->b_locked_split ? 1 : 0; }
-void nvim_emsg_e242(void) { emsg(_("E242: Can't split a window while closing another")); }
-void nvim_emsg_e_cannot_split_when_closing(void) { emsg(_(e_cannot_split_window_when_closing_buffer)); }
 
 // Phase 2 accessors: win_split and win_splitmove orchestration
 int nvim_may_open_tabpage(void) { return may_open_tabpage(); }
 int nvim_get_cmdmod_split(void) { return cmdmod.cmod_split; }
-void nvim_emsg_e442(void) { emsg(_("E442: Can't split topleft and botright at the same time")); }
 /// Wrapper for win_split_ins callable from Rust (handles win_enter_ext and option restore).
 int nvim_win_get_floating_win(win_T *wp) { return (wp && wp->w_floating) ? 1 : 0; }
 win_T *nvim_win_get_prev_win(win_T *wp) { return wp ? wp->w_prev : NULL; }
@@ -2283,10 +2274,10 @@ void command_height(void) { rs_command_height(); }
 int nvim_curbuf_locked(void) { return curbuf_locked() ? 1 : 0; }
 
 /// Error: E441 no preview window.
-void nvim_emsg_e441_no_preview(void) { emsg(_("E441: There is no preview window")); }
+
 
 /// Error: E23 no alternate file.
-void nvim_emsg_noalt(void) { emsg(_(e_noalt)); }
+
 
 /// Error: E92 buffer N not found.
 void nvim_semsg_e92_buf_not_found(int64_t nr) { semsg(_("E92: Buffer %" PRId64 " not found"), nr); }
@@ -2381,9 +2372,6 @@ int nvim_get_cmdmod_confirm(void) { return (cmdmod.cmod_flags & CMOD_CONFIRM) ? 
 int nvim_get_p_write(void) { return p_write ? 1 : 0; }
 
 // nvim_get_autocmd_busy() is defined in change_ffi.c (returns bool)
-
-/// Emit E445 "Other window contains changes" error.
-void nvim_emsg_e445(void) { emsg(_("E445: Other window contains changes")); }
 
 /// Set curwin and curbuf from wp->w_buffer.
 void nvim_set_curwin_from_wp(win_T *wp)
@@ -2892,11 +2880,43 @@ void nvim_apply_autocmds_bufenter_if_changed(buf_T *old_curbuf)
 // Phase 11: win_close + win_close_othertab consolidation accessors
 // =============================================================================
 
-/// E444: Cannot close last window.
-void nvim_emsg_e444(void) { emsg(_("E444: Cannot close last window")); }
-
-/// E814: Cannot close window, only autocmd window would remain.
-void nvim_emsg_e814(void) { emsg(_("E814: Cannot close window, only autocmd window would remain")); }
+/// Generic error-message dispatcher.
+///
+/// ID constants (must match EMSG_* in Rust):
+///   0 = E444  "Cannot close last window"
+///   1 = E814  "Cannot close window, only autocmd window would remain"
+///   2 = E443  "Cannot rotate when another window is split"
+///   3 = E442  "Can't split topleft and botright at the same time"
+///   4 = E242  "Can't split a window while closing another"
+///   5 = E445  "Other window contains changes"
+///   6 = E441  "There is no preview window"
+///   7 = noalt (e_noalt)
+///   8 = e_floatonly
+///   9 = e_floatexchange
+///  10 = e_autocmd_close
+///  11 = e_winfixbuf_cannot_go_to_buffer
+///  12 = e_cannot_split_window_when_closing_buffer
+///  13 = e_noroom
+void nvim_emsg_id(int id)
+{
+  switch (id) {
+  case 0: emsg(_("E444: Cannot close last window")); break;
+  case 1: emsg(_("E814: Cannot close window, only autocmd window would remain")); break;
+  case 2: emsg(_("E443: Cannot rotate when another window is split")); break;
+  case 3: emsg(_("E442: Can't split topleft and botright at the same time")); break;
+  case 4: emsg(_("E242: Can't split a window while closing another")); break;
+  case 5: emsg(_("E445: Other window contains changes")); break;
+  case 6: emsg(_("E441: There is no preview window")); break;
+  case 7: emsg(_(e_noalt)); break;
+  case 8: emsg(e_floatonly); break;
+  case 9: emsg(e_floatexchange); break;
+  case 10: emsg(_(e_autocmd_close)); break;
+  case 11: emsg(_(e_winfixbuf_cannot_go_to_buffer)); break;
+  case 12: emsg(_(e_cannot_split_window_when_closing_buffer)); break;
+  case 13: emsg(_(e_noroom)); break;
+  default: break;
+  }
+}
 
 /// Returns 1 if wp->w_buffer is a help buffer (bt_help), 0 otherwise.
 int nvim_bt_help_win(win_T *wp)

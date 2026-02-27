@@ -159,6 +159,15 @@ extern "C" {
 const NOWIN: WinHandle = unsafe { WinHandle::from_ptr((-1isize) as *mut std::ffi::c_void) };
 
 // =============================================================================
+// EMSG IDs
+// =============================================================================
+
+/// E442: Can't split topleft and botright at the same time
+const EMSG_E442: c_int = 3;
+/// e_noroom: Not enough room
+const EMSG_NOROOM: c_int = 13;
+
+// =============================================================================
 // Result type
 // =============================================================================
 
@@ -442,7 +451,7 @@ unsafe fn calc_vertical_split(
     needed += minwidth;
 
     if available < needed {
-        nvim_emsg_noroom();
+        nvim_emsg_id(EMSG_NOROOM);
         return None;
     }
 
@@ -488,14 +497,6 @@ unsafe fn calc_vertical_split(
     })
 }
 
-/// Emit "Not enough room" error.
-unsafe fn nvim_emsg_noroom() {
-    extern "C" {
-        fn nvim_emsg_noroom();
-    }
-    nvim_emsg_noroom();
-}
-
 /// Calculate size for horizontal split. Returns None on "no room".
 unsafe fn calc_horizontal_split(
     flags: c_int,
@@ -506,7 +507,7 @@ unsafe fn calc_horizontal_split(
 ) -> Option<SplitCalc> {
     if need_status < 0 {
         // error already indicated by calc_need_status
-        nvim_emsg_noroom();
+        nvim_emsg_id(EMSG_NOROOM);
         return None;
     }
 
@@ -553,7 +554,7 @@ unsafe fn calc_horizontal_split(
     needed += minheight;
 
     if available < needed {
-        nvim_emsg_noroom();
+        nvim_emsg_id(EMSG_NOROOM);
         return None;
     }
 
@@ -1010,8 +1011,8 @@ extern "C" {
     /// nvim_get_cmdmod_split: get cmdmod.cmod_split flags.
     fn nvim_get_cmdmod_split() -> c_int;
 
-    /// nvim_emsg_e442: emit E442 error.
-    fn nvim_emsg_e442();
+    /// nvim_emsg_id: generic error message dispatcher.
+    fn nvim_emsg_id(id: c_int);
 
     /// nvim_get_curtab: get current tabpage.
     fn nvim_get_curtab() -> TabpageHandle;
@@ -1085,7 +1086,7 @@ unsafe fn win_split_impl(size: c_int, flags: c_int) -> c_int {
     // Add flags from :vertical, :topleft, :botright.
     let flags = flags | nvim_get_cmdmod_split();
     if (flags & WSP_TOP) != 0 && (flags & WSP_BOT) != 0 {
-        nvim_emsg_e442();
+        nvim_emsg_id(EMSG_E442);
         return FAIL;
     }
 

@@ -62,7 +62,7 @@ extern "C" {
     fn nvim_set_min_set_ch(val: i64);
 
     // emsg(e_noroom)
-    fn nvim_emsg_noroom();
+    fn nvim_emsg_id(id: c_int);
 
     // set p_ch (only for restoring when no room)
     fn nvim_set_p_ch(val: i64);
@@ -70,6 +70,12 @@ extern "C" {
     // w_p_wfh: winfixheight option
     fn nvim_win_get_wfh(wp: WinHandle) -> c_int;
 }
+
+// =============================================================================
+// EMSG IDs
+// =============================================================================
+
+const EMSG_NOROOM: c_int = 13;
 
 // =============================================================================
 // Implementation
@@ -134,7 +140,7 @@ fn command_height_impl() {
         let mut cur_p_ch = old_p_ch;
         while p_ch > cur_p_ch && command_frame_height {
             if frp.is_null() {
-                nvim_emsg_noroom();
+                nvim_emsg_id(EMSG_NOROOM);
                 nvim_set_p_ch(i64::from(cur_p_ch));
                 break;
             }

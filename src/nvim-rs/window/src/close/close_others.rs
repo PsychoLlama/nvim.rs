@@ -71,11 +71,8 @@ extern "C" {
     /// Get autocmd_busy flag (defined in change_ffi.c, returns bool).
     fn nvim_get_autocmd_busy() -> bool;
 
-    /// Emit E445 "Other window contains changes".
-    fn nvim_emsg_e445();
-
-    /// Emit e_floatonly error.
-    fn nvim_emsg_e_floatonly();
+    /// Generic error-message dispatcher.
+    fn nvim_emsg_id(id: std::ffi::c_int);
 
     /// Display "Already only one window" message.
     fn nvim_msg_onlyone();
@@ -83,6 +80,13 @@ extern "C" {
     /// Call rs_win_close(wp, free_buf, 0) directly.
     fn rs_win_close(wp: WinHandle, free_buf: c_int, force: c_int) -> c_int;
 }
+
+// =============================================================================
+// EMSG IDs for nvim_emsg_id dispatcher
+// =============================================================================
+
+const EMSG_E445: std::ffi::c_int = 5;
+const EMSG_E_FLOATONLY: std::ffi::c_int = 8;
 
 // =============================================================================
 // Implementation
@@ -100,7 +104,7 @@ unsafe fn close_others_impl(message: c_int, forceit: c_int) {
     // If current window is floating, we can only close other floating windows.
     if nvim_win_get_floating(old_curwin) != 0 {
         if message != 0 && !nvim_get_autocmd_busy() {
-            nvim_emsg_e_floatonly();
+            nvim_emsg_id(EMSG_E_FLOATONLY);
         }
         return;
     }
@@ -182,7 +186,7 @@ unsafe fn close_others_impl(message: c_int, forceit: c_int) {
     let lastwin = nvim_get_lastwin();
     let one_window = firstwin == lastwin;
     if message != 0 && !one_window {
-        nvim_emsg_e445();
+        nvim_emsg_id(EMSG_E445);
     }
 }
 

@@ -40,8 +40,7 @@ extern "C" {
     fn rs_do_autocmd_winclosed(win: WinHandle);
 
     // --- New Phase 2 wrappers ---
-    fn nvim_emsg_e_autocmd_close();
-    fn nvim_emsg_e_floatonly();
+    fn nvim_emsg_id(id: c_int);
     fn nvim_internal_error_othertab();
     fn nvim_set_first_tabpage(tp: TabpageHandle);
     fn nvim_tabpage_set_next(tp: TabpageHandle, next: TabpageHandle);
@@ -59,6 +58,13 @@ extern "C" {
     fn nvim_apply_autocmds_tabclosed(idx_str: *const std::ffi::c_char, buf: BufHandle);
     fn nvim_has_event_tabclosed() -> c_int;
 }
+
+// =============================================================================
+// EMSG IDs for nvim_emsg_id dispatcher
+// =============================================================================
+
+const EMSG_E_AUTOCMD_CLOSE: c_int = 10;
+const EMSG_E_FLOATONLY: c_int = 8;
 
 // =============================================================================
 // Return type
@@ -159,7 +165,7 @@ pub unsafe extern "C" fn rs_win_close_othertab(
     }
     let lastwin = nvim_tabpage_get_lastwin(tp);
     if nvim_win_get_floating(lastwin) != 0 && rs_one_window_in_tab(win, tp) != 0 {
-        nvim_emsg_e_floatonly();
+        nvim_emsg_id(EMSG_E_FLOATONLY);
         let bufref_valid = if bufref_buf.is_null() {
             0
         } else {
@@ -237,7 +243,7 @@ pub extern "C" fn rs_close_othertab_validate(
 
         // Check aucmd_win.
         if rs_is_aucmd_win(win) != 0 {
-            nvim_emsg_e_autocmd_close();
+            nvim_emsg_id(EMSG_E_AUTOCMD_CLOSE);
             return 1;
         }
 
@@ -248,7 +254,7 @@ pub extern "C" fn rs_close_othertab_validate(
                 // Signal caller to do recursive float close loop.
                 return 2;
             }
-            nvim_emsg_e_floatonly();
+            nvim_emsg_id(EMSG_E_FLOATONLY);
             return 3;
         }
 

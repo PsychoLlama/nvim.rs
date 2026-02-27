@@ -23,20 +23,14 @@ extern "C" {
     /// Get curwin->w_p_wfb (winfixbuf option).
     fn nvim_get_curwin_p_wfb() -> c_int;
 
-    /// Emit the e_winfixbuf error message.
-    fn nvim_emsg_e_winfixbuf();
+    /// Generic error message dispatcher.
+    fn nvim_emsg_id(id: c_int);
 
     /// Get the split_disallowed counter.
     fn nvim_get_split_disallowed() -> c_int;
 
     /// Get wp->w_buffer->b_locked_split.
     fn nvim_win_buf_locked_split(wp: WinHandle) -> c_int;
-
-    /// Emit E242 error.
-    fn nvim_emsg_e242();
-
-    /// Emit e_cannot_split_window_when_closing_buffer error.
-    fn nvim_emsg_e_cannot_split_when_closing();
 
     /// Get the curwin global.
     fn nvim_get_curwin() -> WinHandle;
@@ -94,6 +88,11 @@ extern "C" {
 const OK: c_int = 1;
 const FAIL: c_int = 0;
 
+// EMSG IDs for nvim_emsg_id dispatcher
+const EMSG_E_WINFIXBUF: c_int = 11;
+const EMSG_E242: c_int = 4;
+const EMSG_E_CANNOT_SPLIT: c_int = 12;
+
 // STATUS_HEIGHT constant
 const STATUS_HEIGHT: c_int = 1;
 
@@ -108,7 +107,7 @@ const STATUS_HEIGHT: c_int = 1;
 fn check_can_set_curbuf_disabled_impl() -> bool {
     unsafe {
         if nvim_get_curwin_p_wfb() != 0 {
-            nvim_emsg_e_winfixbuf();
+            nvim_emsg_id(EMSG_E_WINFIXBUF);
             return false;
         }
         true
@@ -133,7 +132,7 @@ pub extern "C" fn rs_check_can_set_curbuf_disabled() -> c_int {
 fn check_can_set_curbuf_forceit_impl(forceit: c_int) -> bool {
     unsafe {
         if forceit == 0 && nvim_get_curwin_p_wfb() != 0 {
-            nvim_emsg_e_winfixbuf();
+            nvim_emsg_id(EMSG_E_WINFIXBUF);
             return false;
         }
         true
@@ -185,11 +184,11 @@ pub extern "C" fn rs_prevwin_curwin() -> WinHandle {
 fn check_split_disallowed_impl(wp: WinHandle) -> bool {
     unsafe {
         if nvim_get_split_disallowed() > 0 {
-            nvim_emsg_e242();
+            nvim_emsg_id(EMSG_E242);
             return false;
         }
         if !wp.is_null() && nvim_win_buf_locked_split(wp) != 0 {
-            nvim_emsg_e_cannot_split_when_closing();
+            nvim_emsg_id(EMSG_E_CANNOT_SPLIT);
             return false;
         }
         true
