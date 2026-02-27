@@ -271,19 +271,6 @@ char *nvim_findtags_get_tag_fname_buf(void *st_void)
   return st->tag_fname;
 }
 
-// --- Rust FFI accessor functions for findtags_match_args_T ---
-/// Initialize findtags_match_args_T
-void nvim_findtags_matchargs_init(void *margs_void, int flags)
-{
-  findtags_match_args_T *margs = (findtags_match_args_T *)margs_void;
-  margs->matchoff = 0;
-  margs->match_re = false;
-  margs->match_no_ic = false;
-  margs->has_re = (flags & TAG_REGEXP);
-  margs->sortic = false;
-  margs->sort_error = false;
-}
-
 // --- Rust FFI accessor functions for tag file iteration (functions not using tag_fnames) ---
 bool nvim_curbuf_is_help(void) { return curbuf->b_help; }
 const char *nvim_get_p_hf(void) { return p_hf; }

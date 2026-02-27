@@ -1147,7 +1147,6 @@ extern "C" {
     fn nvim_findtags_free_orgpat(st: FindTagsStateHandle);
     // Match array init (keeps C macro loop)
     fn nvim_findtags_init_match_arrays(st: FindTagsStateHandle);
-    fn nvim_findtags_matchargs_init(margs: FindTagsMatchArgsHandle, flags: c_int);
 }
 
 /// Initialize a `findtags_state_T` struct for a tag search.
@@ -1219,7 +1218,11 @@ pub unsafe extern "C" fn rs_findtags_matchargs_init(margs: FindTagsMatchArgsHand
     if margs.is_null() {
         return;
     }
-    nvim_findtags_matchargs_init(margs, flags);
+    let margs = margs.cast::<FindTagsMatchArgs>();
+    *margs = FindTagsMatchArgs {
+        has_re: (flags & find_tags_flags::TAG_REGEXP) != 0,
+        ..FindTagsMatchArgs::default()
+    };
 }
 
 // =============================================================================
@@ -2469,8 +2472,11 @@ pub unsafe extern "C" fn rs_findtags_in_file(
     nvim_findtags_set_fp_null(st);
 
     // Initialize match args on stack
-    let mut margs = FindTagsMatchArgs::default();
-    rs_findtags_matchargs_init((&raw mut margs).cast(), nvim_findtags_get_flags(st));
+    let flags = nvim_findtags_get_flags(st);
+    let mut margs = FindTagsMatchArgs {
+        has_re: (flags & find_tags_flags::TAG_REGEXP) != 0,
+        ..FindTagsMatchArgs::default()
+    };
 
     // For help files, initialize language/priority
     if nvim_get_curbuf_b_help() != 0 && !rs_findtags_in_help_init(st) {
