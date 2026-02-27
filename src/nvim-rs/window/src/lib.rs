@@ -1573,11 +1573,8 @@ extern "C" {
     /// Get the global Columns value.
     fn nvim_get_Columns() -> c_int;
 
-    /// Get the w_height field from a window (raw field accessor).
-    fn nvim_win_field_height(wp: WinHandle) -> c_int;
-
     /// Set the w_height field of a window (raw field accessor).
-    fn nvim_win_field_set_height(wp: WinHandle, val: c_int);
+    fn nvim_win_set_field_height(wp: WinHandle, val: c_int);
 
     /// Set the w_hsep_height field of a window.
     fn nvim_win_set_hsep_height(wp: WinHandle, val: c_int);
@@ -1585,11 +1582,8 @@ extern "C" {
     /// Set the w_status_height field of a window.
     fn nvim_win_set_status_height(wp: WinHandle, val: c_int);
 
-    /// Get the w_width field from a window (raw field accessor).
-    fn nvim_win_field_width(wp: WinHandle) -> c_int;
-
     /// Set the w_width field of a window (raw field accessor).
-    fn nvim_win_field_set_width(wp: WinHandle, val: c_int);
+    fn nvim_win_set_field_width(wp: WinHandle, val: c_int);
 
     /// Set the w_vsep_width field of a window.
     fn nvim_win_set_vsep_width(wp: WinHandle, val: c_int);
@@ -1767,7 +1761,7 @@ fn frame_setheight_impl(curfrp: *mut Frame, mut height: c_int) {
                         - p_ch
                         - global_stl_height()
                         - (nvim_win_get_winrow(wp)
-                            + nvim_win_field_height(wp)
+                            + nvim_win_get_w_height(wp)
                             + nvim_win_get_hsep_height(wp)
                             + nvim_win_get_status_height(wp));
                     room_cmdline = std::cmp::max(room_cmdline, 0);
@@ -2511,7 +2505,7 @@ fn frame_set_vsep_impl(frp: *const Frame, add: bool) {
         if frame.fr_layout == FR_LEAF {
             let wp = frame.fr_win;
             let vsep_width = nvim_win_get_vsep_width(wp);
-            let w_width = nvim_win_field_width(wp);
+            let w_width = nvim_win_get_w_width(wp);
 
             if add && vsep_width == 0 {
                 if w_width > 0 {
@@ -2601,7 +2595,7 @@ fn frame_fix_width_impl(wp: WinHandle) {
     unsafe {
         let frame = nvim_win_get_frame(wp);
         if !frame.is_null() {
-            let w_width = nvim_win_field_width(wp);
+            let w_width = nvim_win_get_w_width(wp);
             let vsep_width = nvim_win_get_vsep_width(wp);
             nvim_frame_set_width(frame, w_width + vsep_width);
         }
@@ -2626,7 +2620,7 @@ fn frame_fix_height_impl(wp: WinHandle) {
     unsafe {
         let frame = nvim_win_get_frame(wp);
         if !frame.is_null() {
-            let w_height = nvim_win_field_height(wp);
+            let w_height = nvim_win_get_w_height(wp);
             let hsep_height = nvim_win_get_hsep_height(wp);
             let status_height = nvim_win_get_status_height(wp);
             nvim_frame_set_height(frame, w_height + hsep_height + status_height);

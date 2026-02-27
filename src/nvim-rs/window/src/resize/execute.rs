@@ -28,10 +28,10 @@ extern "C" {
     fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
 
     /// Get w_height from window.
-    fn nvim_win_field_height(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
 
     /// Get w_width from window.
-    fn nvim_win_field_width(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
 
     /// Get w_vsep_width from window.
     fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
@@ -157,7 +157,7 @@ fn win_total_height_impl(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        nvim_win_field_height(wp) + nvim_win_get_status_height(wp) + nvim_win_get_hsep_height(wp)
+        nvim_win_get_w_height(wp) + nvim_win_get_status_height(wp) + nvim_win_get_hsep_height(wp)
     }
 }
 
@@ -167,7 +167,7 @@ fn win_total_width_impl(wp: WinHandle) -> c_int {
         return 0;
     }
 
-    unsafe { nvim_win_field_width(wp) + nvim_win_get_vsep_width(wp) }
+    unsafe { nvim_win_get_w_width(wp) + nvim_win_get_vsep_width(wp) }
 }
 
 /// Calculate how much height is available for the text area.
@@ -181,7 +181,7 @@ fn win_text_height_impl(wp: WinHandle) -> c_int {
     unsafe {
         let frame = nvim_win_get_frame(wp);
         if frame.is_null() {
-            return nvim_win_field_height(wp);
+            return nvim_win_get_w_height(wp);
         }
 
         let frame_height = (*frame).fr_height;
@@ -203,7 +203,7 @@ fn win_text_width_impl(wp: WinHandle) -> c_int {
     unsafe {
         let frame = nvim_win_get_frame(wp);
         if frame.is_null() {
-            return nvim_win_field_width(wp);
+            return nvim_win_get_w_width(wp);
         }
 
         let frame_width = (*frame).fr_width;
@@ -433,8 +433,8 @@ extern "C" {
 extern "C" {
     fn rs_win_setheight_win(height: c_int, win: WinHandle);
     fn rs_win_setwidth_win(width: c_int, wp: WinHandle);
-    fn nvim_win_field_set_height(wp: WinHandle, val: c_int);
-    fn nvim_win_field_set_width(wp: WinHandle, val: c_int);
+    fn nvim_win_set_field_height(wp: WinHandle, val: c_int);
+    fn nvim_win_set_field_width(wp: WinHandle, val: c_int);
     fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
 }
 
@@ -462,7 +462,7 @@ fn win_set_inner_size_impl(wp: WinHandle, valid_cursor: bool) {
     unsafe {
         let width_request = nvim_win_get_width_request(wp);
         let width = if width_request == 0 {
-            nvim_win_field_width(wp)
+            nvim_win_get_w_width(wp)
         } else {
             width_request
         };
@@ -470,7 +470,7 @@ fn win_set_inner_size_impl(wp: WinHandle, valid_cursor: bool) {
         let prev_height = nvim_win_get_view_height(wp);
         let height_request = nvim_win_get_height_request(wp);
         let height = if height_request == 0 {
-            0_i32.max(nvim_win_field_height(wp) - nvim_win_get_winbar_height(wp))
+            0_i32.max(nvim_win_get_w_height(wp) - nvim_win_get_winbar_height(wp))
         } else {
             height_request
         };
@@ -602,11 +602,11 @@ pub(crate) fn win_new_height_impl(wp: WinHandle, height: c_int) {
     let height = height.max(0);
 
     unsafe {
-        if nvim_win_field_height(wp) == height {
+        if nvim_win_get_w_height(wp) == height {
             return; // nothing to do
         }
 
-        nvim_win_field_set_height(wp, height);
+        nvim_win_set_field_height(wp, height);
         nvim_win_set_pos_changed(wp, 1);
     }
     win_set_inner_size_impl(wp, true);
@@ -622,7 +622,7 @@ pub(crate) fn win_new_width_impl(wp: WinHandle, width: c_int) {
 
     unsafe {
         let w = if width < 0 { 0 } else { width };
-        nvim_win_field_set_width(wp, w);
+        nvim_win_set_field_width(wp, w);
         nvim_win_set_pos_changed(wp, 1);
     }
     win_set_inner_size_impl(wp, true);

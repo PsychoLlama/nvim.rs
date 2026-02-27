@@ -15,9 +15,9 @@ extern "C" {
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
     fn nvim_get_firstwin() -> WinHandle;
-    fn nvim_win_field_width(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
     fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
-    fn nvim_win_field_height(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
     fn nvim_win_get_frame(wp: WinHandle) -> *mut crate::Frame;
     fn nvim_get_rows_avail() -> c_int;
@@ -63,8 +63,8 @@ fn win_size_save_impl(gap: *mut c_void) {
 
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
-            let width = nvim_win_field_width(wp) + nvim_win_get_vsep_width(wp);
-            let height = nvim_win_field_height(wp);
+            let width = nvim_win_get_w_width(wp) + nvim_win_get_vsep_width(wp);
+            let height = nvim_win_get_w_height(wp);
             nvim_ga_set_int(gap, len, width);
             len += 1;
             nvim_ga_set_int(gap, len, height);

@@ -27,7 +27,7 @@ extern "C" {
     fn nvim_win_set_hsep_height(wp: WinHandle, val: c_int);
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
     fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
-    fn nvim_win_field_height(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
     fn nvim_win_get_prev_height(wp: WinHandle) -> c_int;
     fn nvim_win_set_prev_height(wp: WinHandle, val: c_int);
     fn nvim_comp_col();
@@ -117,7 +117,7 @@ fn win_remove_status_line_impl(wp: WinHandle, add_hsep: bool) {
             let height = if nvim_win_get_floating(wp) != 0 {
                 nvim_win_get_view_height(wp)
             } else {
-                nvim_win_field_height(wp)
+                nvim_win_get_w_height(wp)
             };
             rs_win_new_height(wp, height + STATUS_HEIGHT);
         }
@@ -149,7 +149,7 @@ fn resize_frame_for_status_impl(fr: *mut Frame) -> bool {
             rs_win_comp_pos();
             true
         } else {
-            rs_win_new_height(wp, nvim_win_field_height(wp) - 1);
+            rs_win_new_height(wp, nvim_win_get_w_height(wp) - 1);
             true
         }
     }
@@ -174,7 +174,7 @@ fn resize_frame_for_winbar_impl(fr: *mut Frame) -> bool {
             return false;
         }
         rs_frame_new_height(fp, (*fp).fr_height - 1, 0, 0, 0);
-        rs_win_new_height(wp, nvim_win_field_height(wp) + 1);
+        rs_win_new_height(wp, nvim_win_get_w_height(wp) + 1);
         rs_frame_fix_height(wp);
         rs_win_comp_pos();
         true
@@ -206,7 +206,7 @@ fn last_status_rec_impl(fr: *mut Frame, statusline: bool, is_stl_global: bool) {
                     nvim_comp_col();
                 }
                 // Set prev_height when difference is due to 'laststatus'.
-                let h = nvim_win_field_height(wp);
+                let h = nvim_win_get_w_height(wp);
                 let prev_h = nvim_win_get_prev_height(wp);
                 if (h - prev_h).abs() == 1 {
                     nvim_win_set_prev_height(wp, h);

@@ -28,8 +28,8 @@ extern "C" {
     // --- Window field setters ---
     fn nvim_win_set_field_height(wp: WinHandle, val: c_int);
     fn nvim_win_set_field_width(wp: WinHandle, val: c_int);
-    fn nvim_win_field_height(wp: WinHandle) -> c_int;
-    fn nvim_win_field_width(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
     fn nvim_win_set_prev_height(wp: WinHandle, val: c_int);
     fn nvim_win_set_view_height(wp: WinHandle, val: c_int);
     fn nvim_win_set_view_width(wp: WinHandle, val: c_int);
@@ -265,8 +265,8 @@ unsafe fn snapshot_windows_scroll_size_impl() {
         nvim_win_set_last_topfill(wp, nvim_win_get_topfill(wp));
         nvim_win_set_last_leftcol(wp, nvim_win_get_leftcol(wp));
         nvim_win_set_last_skipcol(wp, nvim_win_get_skipcol(wp));
-        nvim_win_set_last_width(wp, nvim_win_field_width(wp));
-        nvim_win_set_last_height(wp, nvim_win_field_height(wp));
+        nvim_win_set_last_width(wp, nvim_win_get_w_width(wp));
+        nvim_win_set_last_height(wp, nvim_win_get_w_height(wp));
         wp = nvim_win_get_next(wp);
     }
 }

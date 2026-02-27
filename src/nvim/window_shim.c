@@ -277,8 +277,8 @@ int nvim_win_get_locked(win_T *wp) { return wp->w_locked; }
 int nvim_win_get_floating(win_T *wp) { return wp->w_floating; }
 int nvim_win_get_pvw(win_T *wp) { return wp->w_p_pvw; }
 int nvim_win_get_ns_hl(win_T *wp) { return wp->w_ns_hl; }
-int nvim_win_get_hl_attr_normal(win_T *wp) { return wp->w_hl_attr_normal; }
-int nvim_win_get_hl_attr_normalnc(win_T *wp) { return wp->w_hl_attr_normalnc; }
+int nvim_win_get_hl_attr_normal(win_T *wp) { return wp ? wp->w_hl_attr_normal : 0; }
+int nvim_win_get_hl_attr_normalnc(win_T *wp) { return wp ? wp->w_hl_attr_normalnc : 0; }
 int nvim_win_get_ns_hl_active(win_T *wp) { return wp->w_ns_hl_active; }
 void nvim_win_set_ns_hl_active(win_T *wp, int val) { wp->w_ns_hl_active = val; }
 int *nvim_win_get_ns_hl_attr(win_T *wp) { return wp->w_ns_hl_attr; }
@@ -354,7 +354,7 @@ int nvim_win_folds_empty(win_T *wp) { return GA_EMPTY(&wp->w_folds); }
 int nvim_win_get_valid(win_T *wp) { return wp->w_valid; }
 void nvim_win_set_valid(win_T *wp, int val) { wp->w_valid = val; }
 void nvim_win_clear_valid_bits(win_T *wp, int bits) { wp->w_valid &= ~bits; }
-void nvim_win_set_lines_valid(win_T *wp, int val) { wp->w_lines_valid = val; }
+void nvim_win_set_lines_valid(win_T *wp, int val) { if (wp) { wp->w_lines_valid = val; } }
 int nvim_win_get_view_width(win_T *wp) { return wp->w_view_width; }
 int nvim_win_get_view_height(win_T *wp) { return wp->w_view_height; }
 
@@ -384,12 +384,8 @@ int nvim_get_p_sb(void) { return p_sb ? 1 : 0; }
 int nvim_get_p_spr(void) { return p_spr ? 1 : 0; }
 int nvim_get_Rows(void) { return Rows; }
 int nvim_get_Columns(void) { return Columns; }
-int nvim_win_field_height(win_T *wp) { return wp->w_height; }
-void nvim_win_field_set_height(win_T *wp, int val) { wp->w_height = val; }
 void nvim_win_set_hsep_height(win_T *wp, int val) { wp->w_hsep_height = val; }
 void nvim_win_set_status_height(win_T *wp, int val) { wp->w_status_height = val; }
-int nvim_win_field_width(win_T *wp) { return wp->w_width; }
-void nvim_win_field_set_width(win_T *wp, int val) { wp->w_width = val; }
 void nvim_win_set_vsep_width(win_T *wp, int val) { wp->w_vsep_width = val; }
 void nvim_frame_set_height(frame_T *frp, int val) { frp->fr_height = val; }
 void nvim_frame_set_width(frame_T *frp, int val) { frp->fr_width = val; }
@@ -1603,9 +1599,6 @@ void nvim_win_set_empty_rows(win_T *wp, int val) { if (wp) { wp->w_empty_rows = 
 int nvim_win_buffer_eq(win_T *wp, buf_T *buf) { return (wp && wp->w_buffer == buf) ? 1 : 0; }
 int nvim_win_grid_alloc_valid(win_T *wp) { return wp ? wp->w_grid_alloc.valid : 0; }
 void nvim_win_grid_alloc_set_valid(win_T *wp, int val) { if (wp) { wp->w_grid_alloc.valid = (val != 0); } }
-int nvim_win_get_w_redr_type(win_T *wp) { return wp ? wp->w_redr_type : 0; }
-void nvim_win_set_w_redr_type(win_T *wp, int val) { if (wp) { wp->w_redr_type = val; } }
-void nvim_win_set_w_lines_valid(win_T *wp, int val) { if (wp) { wp->w_lines_valid = (linenr_T)val; } }
 int nvim_win_get_filler_rows(win_T *wp) { return wp ? wp->w_filler_rows : 0; }
 void nvim_win_set_filler_rows(win_T *wp, int val) { if (wp) { wp->w_filler_rows = val; } }
 int nvim_win_get_botfill(win_T *wp) { return wp ? (wp->w_botfill ? 1 : 0) : 0; }
@@ -2156,11 +2149,6 @@ void nvim_do_autochdir_wrap(void) { do_autochdir(); }
 
 /// Get restart_edit global (non-zero if in restart-edit mode).
 int nvim_get_restart_edit_bool(void) { return restart_edit ? 1 : 0; }
-
-/// Get w_hl_attr_normal field.
-int nvim_win_get_hl_attr_normal_wrap(win_T *wp) { return wp ? wp->w_hl_attr_normal : 0; }
-/// Get w_hl_attr_normalnc field.
-int nvim_win_get_hl_attr_normalnc_wrap(win_T *wp) { return wp ? wp->w_hl_attr_normalnc : 0; }
 
 // =============================================================================
 // Phase 2 accessors: win_fix_current_dir, buf_jump_open_win/tab, swbuf_goto
@@ -3041,12 +3029,6 @@ int nvim_one_window_and_locked_split(void)
 // =============================================================================
 // Window/wline accessors (relocated from fold_shim.c)
 // =============================================================================
-
-/// Get the w_lines_valid field from a window.
-int nvim_win_get_w_lines_valid(win_T *wp)
-{
-  return wp->w_lines_valid;
-}
 
 /// Get a wline_T pointer at index in a window's w_lines array.
 /// Returns NULL if index is out of bounds.

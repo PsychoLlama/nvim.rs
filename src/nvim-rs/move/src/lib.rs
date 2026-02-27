@@ -4077,7 +4077,7 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
 
 extern "C" {
     // w_lines[] accessors
-    fn nvim_win_get_w_lines_valid(wp: WinHandle) -> c_int;
+    fn nvim_win_get_lines_valid(wp: WinHandle) -> c_int;
     fn nvim_win_get_wl_entry(wp: WinHandle, idx: c_int) -> WlineHandle;
     fn nvim_wline_get_lnum(wl: WlineHandle) -> LinenrT;
     fn nvim_wline_get_valid(wl: WlineHandle) -> bool;
@@ -4108,7 +4108,7 @@ pub unsafe extern "C" fn rs_curs_rows(wp: WinHandle) {
         return;
     }
 
-    let w_lines_valid = nvim_win_get_w_lines_valid(wp);
+    let w_lines_valid = nvim_win_get_lines_valid(wp);
     let topline = nvim_win_get_topline(wp);
     let cursor_lnum = nvim_win_get_cursor_lnum(wp);
 

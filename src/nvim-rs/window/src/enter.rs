@@ -57,8 +57,8 @@ extern "C" {
     fn nvim_win_get_wfh(wp: WinHandle) -> c_int;
     fn nvim_win_get_wfw(wp: WinHandle) -> c_int;
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
-    fn nvim_win_get_hl_attr_normal_wrap(wp: WinHandle) -> c_int;
-    fn nvim_win_get_hl_attr_normalnc_wrap(wp: WinHandle) -> c_int;
+    fn nvim_win_get_hl_attr_normal(wp: WinHandle) -> c_int;
+    fn nvim_win_get_hl_attr_normalnc(wp: WinHandle) -> c_int;
     fn nvim_win_set_cursor_coladd(wp: WinHandle, val: c_int);
 
     // p_spk (splitkeep option) -- returns first char as int
@@ -261,16 +261,16 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
 
         // Change background color according to NormalNC,
         // but only if actually defined (otherwise no extra redraw).
-        let hl_normal = nvim_win_get_hl_attr_normal_wrap(new_curwin);
-        let hl_normalnc = nvim_win_get_hl_attr_normalnc_wrap(new_curwin);
+        let hl_normal = nvim_win_get_hl_attr_normal(new_curwin);
+        let hl_normalnc = nvim_win_get_hl_attr_normalnc(new_curwin);
         if hl_normal != hl_normalnc {
             nvim_redraw_later_wrapper(new_curwin, UPD_NOT_VALID);
         }
 
         let prevwin = nvim_get_prevwin();
         if !prevwin.is_null() {
-            let pw_normal = nvim_win_get_hl_attr_normal_wrap(prevwin);
-            let pw_normalnc = nvim_win_get_hl_attr_normalnc_wrap(prevwin);
+            let pw_normal = nvim_win_get_hl_attr_normal(prevwin);
+            let pw_normalnc = nvim_win_get_hl_attr_normalnc(prevwin);
             if pw_normal != pw_normalnc {
                 nvim_redraw_later_wrapper(prevwin, UPD_NOT_VALID);
             }

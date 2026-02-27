@@ -998,14 +998,6 @@ pub unsafe extern "C" fn rs_calc_scroll_region(
 
 // Additional C accessor functions for window redraw management
 extern "C" {
-    // Window w_redr_type accessor
-    fn nvim_win_get_w_redr_type(wp: WinHandle) -> c_int;
-    fn nvim_win_set_w_redr_type(wp: WinHandle, val: c_int);
-
-    // Window w_lines_valid accessor
-    fn nvim_win_get_w_lines_valid(wp: WinHandle) -> c_int;
-    fn nvim_win_set_w_lines_valid(wp: WinHandle, val: c_int);
-
     // Grid invalidation
     fn nvim_win_grid_alloc_valid(wp: WinHandle) -> c_int;
     fn nvim_win_grid_alloc_set_valid(wp: WinHandle, val: c_int);
@@ -1037,17 +1029,17 @@ fn redraw_later_impl(wp: WinHandle, redraw_type: c_int) {
             return;
         }
 
-        let current_type = nvim_win_get_w_redr_type(wp);
+        let current_type = nvim_win_get_redr_type(wp);
         if current_type >= redraw_type {
             return;
         }
 
         // Set the new redraw type
-        nvim_win_set_w_redr_type(wp, redraw_type);
+        nvim_win_set_redr_type(wp, redraw_type);
 
         // If type >= UPD_NOT_VALID, invalidate line cache
         if redraw_type >= UPD_NOT_VALID {
-            nvim_win_set_w_lines_valid(wp, 0);
+            nvim_win_set_lines_valid(wp, 0);
         }
 
         // Update must_redraw global
@@ -1338,7 +1330,7 @@ pub extern "C" fn rs_win_should_skip_update(wp: WinHandle) -> c_int {
             // Draw separators and return skip
             rs_draw_hsep_win(wp);
             rs_draw_sep_connectors_win(wp);
-            nvim_win_set_w_redr_type(wp, 0);
+            nvim_win_set_redr_type(wp, 0);
             return 1;
         }
 
@@ -1346,7 +1338,7 @@ pub extern "C" fn rs_win_should_skip_update(wp: WinHandle) -> c_int {
             // Draw separators and return skip
             rs_draw_vsep_win(wp);
             rs_draw_sep_connectors_win(wp);
-            nvim_win_set_w_redr_type(wp, 0);
+            nvim_win_set_redr_type(wp, 0);
             return 1;
         }
 
@@ -1365,7 +1357,7 @@ extern "C" {
 pub extern "C" fn rs_win_update_reset_redr_type(wp: WinHandle) {
     if !wp.is_null() {
         unsafe {
-            nvim_win_set_w_redr_type(wp, 0);
+            nvim_win_set_redr_type(wp, 0);
         }
     }
 }
@@ -1378,7 +1370,7 @@ pub extern "C" fn rs_win_needs_full_update(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        let redr_type = nvim_win_get_w_redr_type(wp);
+        let redr_type = nvim_win_get_redr_type(wp);
         c_int::from(redr_type >= UPD_NOT_VALID)
     }
 }
@@ -1390,7 +1382,7 @@ pub extern "C" fn rs_win_get_effective_redr_type(wp: WinHandle) -> c_int {
         return 0;
     }
 
-    unsafe { nvim_win_get_w_redr_type(wp).clamp(0, UPD_CLEAR) }
+    unsafe { nvim_win_get_redr_type(wp).clamp(0, UPD_CLEAR) }
 }
 
 // =============================================================================
@@ -1446,7 +1438,7 @@ pub extern "C" fn rs_win_needs_border_redraw(wp: WinHandle) -> c_int {
 
     unsafe {
         let redr_border = nvim_win_get_redr_border(wp);
-        let redr_type = nvim_win_get_w_redr_type(wp);
+        let redr_type = nvim_win_get_redr_type(wp);
         c_int::from(redr_border != 0 || redr_type >= UPD_NOT_VALID)
     }
 }
@@ -1501,7 +1493,7 @@ pub extern "C" fn rs_win_post_update(wp: WinHandle) {
 
     unsafe {
         // Reset redraw type
-        nvim_win_set_w_redr_type(wp, 0);
+        nvim_win_set_redr_type(wp, 0);
         // Reset border redraw flag
         nvim_win_set_redr_border(wp, 0);
     }

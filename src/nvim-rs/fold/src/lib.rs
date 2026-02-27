@@ -322,7 +322,7 @@ extern "C" {
     // ========================================================================
 
     /// Get the w_lines_valid field from a window.
-    fn nvim_win_get_w_lines_valid(wp: WinHandle) -> c_int;
+    fn nvim_win_get_lines_valid(wp: WinHandle) -> c_int;
 
     /// Get a wline_T pointer at index in a window's w_lines array.
     fn nvim_win_get_wl_entry(wp: WinHandle, idx: c_int) -> WlineHandle;
@@ -722,7 +722,7 @@ fn find_wl_entry_impl(win: WinHandle, lnum: LineNr) -> c_int {
         return -1;
     }
 
-    let lines_valid = unsafe { nvim_win_get_w_lines_valid(win) };
+    let lines_valid = unsafe { nvim_win_get_lines_valid(win) };
 
     for i in 0..lines_valid {
         let wl = unsafe { nvim_win_get_wl_entry(win, i) };

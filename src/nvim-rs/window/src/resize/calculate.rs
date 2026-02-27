@@ -24,10 +24,10 @@ extern "C" {
     fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
 
     /// Get w_height from window.
-    fn nvim_win_field_height(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
 
     /// Get w_width from window.
-    fn nvim_win_field_width(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
 
     /// Get w_floating from window.
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;

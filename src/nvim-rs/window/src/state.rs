@@ -22,10 +22,8 @@ extern "C" {
     // Window dimension accessors
     fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-    fn nvim_win_field_width(wp: WinHandle) -> c_int;
-    fn nvim_win_field_height(wp: WinHandle) -> c_int;
-    fn nvim_win_field_set_width(wp: WinHandle, val: c_int);
-    fn nvim_win_field_set_height(wp: WinHandle, val: c_int);
+    fn nvim_win_set_field_width(wp: WinHandle, val: c_int);
+    fn nvim_win_set_field_height(wp: WinHandle, val: c_int);
 
     // Window position accessors
     fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
@@ -163,7 +161,7 @@ pub unsafe extern "C" fn rs_win_field_width(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_field_width(wp)
+    nvim_win_get_w_width(wp)
 }
 
 /// Get window field height (raw w_height).
@@ -172,14 +170,14 @@ pub unsafe extern "C" fn rs_win_field_height(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_field_height(wp)
+    nvim_win_get_w_height(wp)
 }
 
 /// Set window field width.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_field_width(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_field_set_width(wp, val);
+        nvim_win_set_field_width(wp, val);
     }
 }
 
@@ -187,7 +185,7 @@ pub unsafe extern "C" fn rs_win_set_field_width(wp: WinHandle, val: c_int) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_field_height(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_field_set_height(wp, val);
+        nvim_win_set_field_height(wp, val);
     }
 }
 

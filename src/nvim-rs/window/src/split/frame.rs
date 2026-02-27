@@ -37,10 +37,10 @@ extern "C" {
     fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
 
     /// Get w_width from a window.
-    fn nvim_win_field_width(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
 
     /// Get w_height from a window.
-    fn nvim_win_field_height(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
 
     /// Get w_vsep_width from a window.
     fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
@@ -165,7 +165,7 @@ fn calc_new_winrow_impl(oldwin: WinHandle, _new_height: c_int, before: bool) -> 
             old_winrow
         } else {
             // New window below - after old window + status
-            let old_height = nvim_win_field_height(oldwin);
+            let old_height = nvim_win_get_w_height(oldwin);
             let old_status = nvim_win_get_status_height(oldwin);
             old_winrow + old_height + old_status
         }
@@ -186,7 +186,7 @@ fn calc_new_wincol_impl(oldwin: WinHandle, _new_width: c_int, before: bool) -> c
             old_wincol
         } else {
             // New window right - after old window + separator
-            let old_width = nvim_win_field_width(oldwin);
+            let old_width = nvim_win_get_w_width(oldwin);
             old_wincol + old_width + 1
         }
     }
@@ -237,7 +237,7 @@ fn calc_frame_height_from_win_impl(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        nvim_win_field_height(wp) + nvim_win_get_status_height(wp) + nvim_win_get_hsep_height(wp)
+        nvim_win_get_w_height(wp) + nvim_win_get_status_height(wp) + nvim_win_get_hsep_height(wp)
     }
 }
 
@@ -247,7 +247,7 @@ fn calc_frame_width_from_win_impl(wp: WinHandle) -> c_int {
         return 0;
     }
 
-    unsafe { nvim_win_field_width(wp) + nvim_win_get_vsep_width(wp) }
+    unsafe { nvim_win_get_w_width(wp) + nvim_win_get_vsep_width(wp) }
 }
 
 /// Get appropriate status height for new window.
