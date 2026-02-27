@@ -140,11 +140,13 @@ extern "C" {
     fn nvim_get_called_from_main() -> c_int;
     fn nvim_get_curbuf_b_fname() -> *const c_char;
     fn nvim_get_curbuf_b_ffname() -> *const c_char;
-    fn nvim_semsg_e305_no_swap(fname: *const c_char);
-    fn nvim_semsg_e306_cannot_open(fname: *const c_char);
-    fn nvim_semsg_e307_not_swap(fname: *const c_char);
-    fn nvim_semsg_e309_block1(fname: *const c_char);
-    fn nvim_semsg_e310_block1_id(fname: *const c_char);
+    fn nvim_recover_msg(
+        msg_id: c_int,
+        fname: *const c_char,
+        extra: *const c_char,
+        hl_id: c_int,
+        int_arg: c_int,
+    );
     fn nvim_mf_open_rdonly(fname: *mut c_char) -> *mut c_void;
     fn nvim_mf_close_nodelete(mfp: *mut c_void);
     fn nvim_mf_get_block(mfp: *mut c_void, bnum: i64, page_count: c_uint) -> *mut c_void;
@@ -241,16 +243,7 @@ extern "C" {
     fn nvim_get_got_int_val() -> c_int;
     fn nvim_get_upd_not_valid_val() -> c_int;
     fn nvim_prompt_for_recovery() -> c_int;
-    fn nvim_recover_msg_block0_unreadable(fname: *const c_char, hl_id: c_int);
-    fn nvim_recover_msg_vim3(fname: *const c_char);
-    fn nvim_recover_msg_wrong_byte_order(fname: *const c_char, hl_id: c_int, hname: *const c_char);
-    fn nvim_recover_msg_page_size_too_small(fname: *const c_char, hl_id: c_int);
-    fn nvim_emsg_e308_original_changed();
-    fn nvim_emsg_ptr_block_corrupted();
-    fn nvim_emsg_e311_interrupted();
-    fn nvim_recover_msg_success(has_changes: c_int);
     fn nvim_recover_check_proc_and_print(fname_used: *const c_char) -> c_int;
-    fn nvim_recover_msg_errors();
     fn nvim_set_cmdline_row_to_msg_row();
     fn nvim_apply_autocmds_bufreadpost();
     fn nvim_apply_autocmds_bufwinenter();
@@ -259,6 +252,22 @@ extern "C" {
 // C OK/NOTDONE constants used in recovery
 const OK_C: c_int = 1;
 const ML_EMPTY_FLAG: c_int = 0x0001;
+
+// recover_msg_id_T enum values (must match C enum in memline_shim.c)
+const RECOVER_MSG_E305_NO_SWAP: c_int = 0;
+const RECOVER_MSG_E306_CANNOT_OPEN: c_int = 1;
+const RECOVER_MSG_E307_NOT_SWAP: c_int = 2;
+const RECOVER_MSG_E309_BLOCK1: c_int = 3;
+const RECOVER_MSG_E310_BLOCK1_ID: c_int = 4;
+const RECOVER_MSG_BLOCK0_UNREADABLE: c_int = 5;
+const RECOVER_MSG_VIM3: c_int = 6;
+const RECOVER_MSG_WRONG_BYTE_ORDER: c_int = 7;
+const RECOVER_MSG_PAGE_SIZE_TOO_SMALL: c_int = 8;
+const RECOVER_MSG_E308_ORIGINAL_CHANGED: c_int = 9;
+const RECOVER_MSG_PTR_BLOCK_CORRUPTED: c_int = 10;
+const RECOVER_MSG_E311_INTERRUPTED: c_int = 11;
+const RECOVER_MSG_SUCCESS: c_int = 12;
+const RECOVER_MSG_ERRORS: c_int = 13;
 
 // =============================================================================
 // Recovery Functions
@@ -309,7 +318,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
             directly = false;
             let len = rs_recover_names(fname, 0, std::ptr::null_mut(), 0, std::ptr::null_mut());
             if len == 0 {
-                nvim_semsg_e305_no_swap(fname);
+                nvim_recover_msg(RECOVER_MSG_E305_NO_SWAP, fname, std::ptr::null(), 0, 0);
                 break 'cleanup;
             }
             let chosen: c_int = if len == 1 {
@@ -347,7 +356,13 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         fname_used = fname_copy;
 
         if mfp.is_null() || nvim_mf_get_fd(mfp) < 0 {
-            nvim_semsg_e306_cannot_open(fname_used);
+            nvim_recover_msg(
+                RECOVER_MSG_E306_CANNOT_OPEN,
+                fname_used,
+                std::ptr::null(),
+                0,
+                0,
+            );
             break 'cleanup;
         }
         nvim_buf_set_ml_mfp(buf.cast::<BufHandle>(), mfp);
@@ -359,7 +374,13 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         // Read block 0
         hp = nvim_mf_get_block(mfp, 0, 1);
         if hp.is_null() {
-            nvim_recover_msg_block0_unreadable(nvim_mf_get_fname(mfp), hl_id);
+            nvim_recover_msg(
+                RECOVER_MSG_BLOCK0_UNREADABLE,
+                nvim_mf_get_fname(mfp),
+                std::ptr::null(),
+                hl_id,
+                0,
+            );
             break 'cleanup;
         }
 
@@ -367,19 +388,37 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
 
         // VIM 3.0 swap file?
         if nvim_b0_is_vim3(b0p) != 0 {
-            nvim_recover_msg_vim3(nvim_mf_get_fname(mfp));
+            nvim_recover_msg(
+                RECOVER_MSG_VIM3,
+                nvim_mf_get_fname(mfp),
+                std::ptr::null(),
+                0,
+                0,
+            );
             break 'cleanup;
         }
         // Bad block 0 ID?
         if rs_ml_check_b0_id(b0p) != 0 {
-            nvim_semsg_e307_not_swap(nvim_mf_get_fname(mfp));
+            nvim_recover_msg(
+                RECOVER_MSG_E307_NOT_SWAP,
+                nvim_mf_get_fname(mfp),
+                std::ptr::null(),
+                0,
+                0,
+            );
             break 'cleanup;
         }
         // Wrong byte order?
         if rs_b0_magic_wrong(b0p) != 0 {
             nvim_b0_set_fname0_nul(b0p);
             let hname = nvim_b0_get_hname_ptr(b0p);
-            nvim_recover_msg_wrong_byte_order(nvim_mf_get_fname(mfp), hl_id, hname);
+            nvim_recover_msg(
+                RECOVER_MSG_WRONG_BYTE_ORDER,
+                nvim_mf_get_fname(mfp),
+                hname,
+                hl_id,
+                0,
+            );
             break 'cleanup;
         }
 
@@ -391,7 +430,13 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
             nvim_mf_new_page_size_wrapper(mfp, b0_page_size);
             let new_page_size = nvim_mf_get_page_size(mfp);
             if new_page_size < previous_page_size {
-                nvim_recover_msg_page_size_too_small(nvim_mf_get_fname(mfp), hl_id);
+                nvim_recover_msg(
+                    RECOVER_MSG_PAGE_SIZE_TOO_SMALL,
+                    nvim_mf_get_fname(mfp),
+                    std::ptr::null(),
+                    hl_id,
+                    0,
+                );
                 break 'cleanup;
             }
             let file_size = nvim_mf_get_file_size(mfp);
@@ -443,7 +488,13 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
 
         // Warn if original file was modified since swap file was written
         if nvim_recover_check_timestamps(mfp, mtime_b0) != 0 {
-            nvim_emsg_e308_original_changed();
+            nvim_recover_msg(
+                RECOVER_MSG_E308_ORIGINAL_CHANGED,
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+                0,
+            );
         }
         ui_flush();
 
@@ -527,11 +578,23 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
 
         // Final status messages
         if nvim_get_got_int_val() != 0 {
-            nvim_emsg_e311_interrupted();
+            nvim_recover_msg(
+                RECOVER_MSG_E311_INTERRUPTED,
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+                0,
+            );
         } else if error > 0 {
-            nvim_recover_msg_errors();
+            nvim_recover_msg(RECOVER_MSG_ERRORS, std::ptr::null(), std::ptr::null(), 0, 0);
         } else {
-            nvim_recover_msg_success(nvim_curbuf_get_b_changed());
+            nvim_recover_msg(
+                RECOVER_MSG_SUCCESS,
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+                nvim_curbuf_get_b_changed(),
+            );
             nvim_recover_check_proc_and_print(fname_used);
             msg_puts(c"\n\n".as_ptr());
             nvim_set_cmdline_row_to_msg_row();
@@ -629,7 +692,13 @@ unsafe fn recover_btree(
 
         if hp.is_null() {
             if bnum == 1 {
-                nvim_semsg_e309_block1(nvim_mf_get_fname(mfp));
+                nvim_recover_msg(
+                    RECOVER_MSG_E309_BLOCK1,
+                    nvim_mf_get_fname(mfp),
+                    std::ptr::null(),
+                    0,
+                    0,
+                );
                 *hp_out = std::ptr::null_mut();
                 return (lnum, -1); // fatal
             }
@@ -654,7 +723,13 @@ unsafe fn recover_btree(
                     nvim_pp_set_count(data, expected_max);
                 }
                 if ptr_block_error {
-                    nvim_emsg_ptr_block_corrupted();
+                    nvim_recover_msg(
+                        RECOVER_MSG_PTR_BLOCK_CORRUPTED,
+                        std::ptr::null(),
+                        std::ptr::null(),
+                        0,
+                        0,
+                    );
                 }
 
                 // Re-read pb_count after potential correction
@@ -720,7 +795,13 @@ unsafe fn recover_btree(
                 // ---- Data block ----
                 if nvim_dp_get_id(data) != nvim_get_data_id() {
                     if bnum == 1 {
-                        nvim_semsg_e310_block1_id(nvim_mf_get_fname(mfp));
+                        nvim_recover_msg(
+                            RECOVER_MSG_E310_BLOCK1_ID,
+                            nvim_mf_get_fname(mfp),
+                            std::ptr::null(),
+                            0,
+                            0,
+                        );
                         *hp_out = hp;
                         return (lnum, -1); // fatal
                     }
@@ -1354,9 +1435,9 @@ pub unsafe extern "C" fn rs_swapfile_info(
     if file_mtime != 0 {
         mtime = file_mtime;
         if uname_found != 0 {
-            nvim_sb_swapinfo_owned_by(sb, uname_buf.as_ptr());
+            nvim_sb_swapinfo_msg(sb, SB_MSG_OWNED_BY, uname_buf.as_ptr(), 0);
         }
-        nvim_sb_swapinfo_dated(sb, uname_found);
+        nvim_sb_swapinfo_msg(sb, SB_MSG_DATED, std::ptr::null(), uname_found);
         nvim_sb_append_ctime(sb, mtime);
     }
 
@@ -1364,7 +1445,7 @@ pub unsafe extern "C" fn rs_swapfile_info(
     // O_RDONLY = 0
     let fd = os_open(fname, 0, 0);
     if fd < 0 {
-        nvim_sb_swapinfo_cannot_open(sb);
+        nvim_sb_swapinfo_msg(sb, SB_MSG_CANNOT_OPEN, std::ptr::null(), 0);
         nvim_sb_append_str(sb, c"\n".as_ptr());
         return mtime;
     }
@@ -1377,7 +1458,7 @@ pub unsafe extern "C" fn rs_swapfile_info(
     if bytes_read as usize != b0_size {
         // cast_sign_loss: allowed because bytes_read < 0 means error (mismatch with b0_size)
         xfree(b0_ptr);
-        nvim_sb_swapinfo_cannot_read(sb);
+        nvim_sb_swapinfo_msg(sb, SB_MSG_CANNOT_READ, std::ptr::null(), 0);
         nvim_sb_append_str(sb, c"\n".as_ptr());
         return mtime;
     }
@@ -1392,49 +1473,54 @@ pub unsafe extern "C" fn rs_swapfile_info(
     let is_vim3 = (0..7).all(|i| *version_ptr.add(i) as u8 == vim3[i]);
 
     if is_vim3 {
-        nvim_sb_swapinfo_vim3(sb);
+        nvim_sb_swapinfo_msg(sb, SB_MSG_VIM3, std::ptr::null(), 0);
     } else if rs_ml_check_b0_id(b0) != 0 {
-        nvim_sb_swapinfo_not_nvim(sb);
+        nvim_sb_swapinfo_msg(sb, SB_MSG_NOT_NVIM, std::ptr::null(), 0);
     } else if rs_ml_check_b0_strings(b0) != 0 {
-        nvim_sb_swapinfo_garbled(sb);
+        nvim_sb_swapinfo_msg(sb, SB_MSG_GARBLED, std::ptr::null(), 0);
     } else {
         // Print filename
         let fname_ptr = nvim_b0_get_fname_ptr(b0);
-        nvim_sb_swapinfo_filename(sb, fname_ptr);
+        nvim_sb_swapinfo_msg(sb, SB_MSG_FILENAME, fname_ptr, 0);
 
         // Print modified status
         let dirty = nvim_b0_get_dirty(b0);
-        nvim_sb_swapinfo_modified(sb, c_int::from(dirty != 0));
+        nvim_sb_swapinfo_msg(
+            sb,
+            SB_MSG_MODIFIED,
+            std::ptr::null(),
+            c_int::from(dirty != 0),
+        );
 
         // Print user name if present
         let uname_ptr = nvim_b0_get_uname_ptr(b0);
         let uname_present = *uname_ptr != 0;
         if uname_present {
-            nvim_sb_swapinfo_user(sb, uname_ptr);
+            nvim_sb_swapinfo_msg(sb, SB_MSG_USER, uname_ptr, 0);
         }
 
         // Print host name if present
         let hname_ptr = nvim_b0_get_hname_ptr(b0);
         let hname_present = *hname_ptr != 0;
         if hname_present {
-            nvim_sb_swapinfo_host(sb, hname_ptr, c_int::from(uname_present));
+            nvim_sb_swapinfo_msg(sb, SB_MSG_HOST, hname_ptr, c_int::from(uname_present));
         }
 
         // Print process ID if present
         let pid_ptr = nvim_b0_get_pid_ptr(b0);
         let pid_val = rs_char_to_long(pid_ptr);
         if pid_val != 0 {
-            nvim_sb_swapinfo_pid(sb, pid_val as c_int);
+            nvim_sb_swapinfo_msg(sb, SB_MSG_PID, std::ptr::null(), pid_val as c_int);
             let running = rs_swapfile_proc_running(b0, fname);
             *proc_running_out = running;
             if running != 0 {
-                nvim_sb_swapinfo_still_running(sb);
+                nvim_sb_swapinfo_msg(sb, SB_MSG_STILL_RUNNING, std::ptr::null(), 0);
             }
         }
 
         // Print if not usable on this computer (wrong byte order)
         if rs_b0_magic_wrong(b0) != 0 {
-            nvim_sb_swapinfo_not_usable(sb);
+            nvim_sb_swapinfo_msg(sb, SB_MSG_NOT_USABLE, std::ptr::null(), 0);
         }
     }
 
@@ -1571,24 +1657,26 @@ extern "C" {
     /// Append the ctime string for an mtime value to a StringBuilder.
     fn nvim_sb_append_ctime(sb: *mut c_void, mtime: i64);
 
-    // Translated message helpers for swapfile_info
-
-    fn nvim_sb_swapinfo_owned_by(sb: *mut c_void, uname: *const c_char);
-    fn nvim_sb_swapinfo_dated(sb: *mut c_void, has_owner: c_int);
-    fn nvim_sb_swapinfo_vim3(sb: *mut c_void);
-    fn nvim_sb_swapinfo_not_nvim(sb: *mut c_void);
-    fn nvim_sb_swapinfo_garbled(sb: *mut c_void);
-    fn nvim_sb_swapinfo_filename(sb: *mut c_void, b0_fname: *const c_char);
-    fn nvim_sb_swapinfo_modified(sb: *mut c_void, dirty: c_int);
-    fn nvim_sb_swapinfo_user(sb: *mut c_void, uname: *const c_char);
-    fn nvim_sb_swapinfo_host(sb: *mut c_void, hname: *const c_char, after_user: c_int);
-    fn nvim_sb_swapinfo_pid(sb: *mut c_void, pid: c_int);
-    fn nvim_sb_swapinfo_still_running(sb: *mut c_void);
-    fn nvim_sb_swapinfo_not_usable(sb: *mut c_void);
-    fn nvim_sb_swapinfo_cannot_read(sb: *mut c_void);
-    fn nvim_sb_swapinfo_cannot_open(sb: *mut c_void);
+    // Message dispatch for swapfile_info (replaces 14 individual wrappers)
+    fn nvim_sb_swapinfo_msg(sb: *mut c_void, msg_id: c_int, str_arg: *const c_char, int_arg: c_int);
     fn nvim_sb_append_str(sb: *mut c_void, s: *const c_char);
 }
+
+// sb_msg_id_T enum values (must match C enum in memline_shim.c)
+const SB_MSG_OWNED_BY: c_int = 0;
+const SB_MSG_DATED: c_int = 1;
+const SB_MSG_VIM3: c_int = 2;
+const SB_MSG_NOT_NVIM: c_int = 3;
+const SB_MSG_GARBLED: c_int = 4;
+const SB_MSG_FILENAME: c_int = 5;
+const SB_MSG_MODIFIED: c_int = 6;
+const SB_MSG_USER: c_int = 7;
+const SB_MSG_HOST: c_int = 8;
+const SB_MSG_PID: c_int = 9;
+const SB_MSG_STILL_RUNNING: c_int = 10;
+const SB_MSG_NOT_USABLE: c_int = 11;
+const SB_MSG_CANNOT_READ: c_int = 12;
+const SB_MSG_CANNOT_OPEN: c_int = 13;
 
 use crate::types::{
     B0_FNAME_SIZE_CRYPT, B0_HNAME_SIZE, B0_MAGIC_CHAR, B0_MAGIC_INT, B0_MAGIC_LONG, B0_MAGIC_SHORT,

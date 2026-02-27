@@ -615,93 +615,88 @@ void nvim_sb_append_ctime(void *sb, int64_t mtime)
   kv_printf(*(StringBuilder *)sb, "%s", os_ctime_r(&x, ctime_buf, sizeof(ctime_buf), true));
 }
 
-// Translated message helpers for rs_swapfile_info
+// Translated message dispatch for rs_swapfile_info
 
-void nvim_sb_swapinfo_owned_by(void *sb, const char *uname)
-{
-  kv_printf(*(StringBuilder *)sb, "%s%s", _("          owned by: "), uname);
-}
+typedef enum {
+  SB_MSG_OWNED_BY = 0,
+  SB_MSG_DATED,
+  SB_MSG_VIM3,
+  SB_MSG_NOT_NVIM,
+  SB_MSG_GARBLED,
+  SB_MSG_FILENAME,
+  SB_MSG_MODIFIED,
+  SB_MSG_USER,
+  SB_MSG_HOST,
+  SB_MSG_PID,
+  SB_MSG_STILL_RUNNING,
+  SB_MSG_NOT_USABLE,
+  SB_MSG_CANNOT_READ,
+  SB_MSG_CANNOT_OPEN,
+} sb_msg_id_T;
 
-void nvim_sb_swapinfo_dated(void *sb, int has_owner)
+void nvim_sb_swapinfo_msg(void *sb, int msg_id, const char *str_arg, int int_arg)
 {
-  if (has_owner) {
-    kv_printf(*(StringBuilder *)sb, _("   dated: "));
-  } else {
-    kv_printf(*(StringBuilder *)sb, _("             dated: "));
+  switch (msg_id) {
+  case SB_MSG_OWNED_BY:
+    kv_printf(*(StringBuilder *)sb, "%s%s", _("          owned by: "), str_arg);
+    break;
+  case SB_MSG_DATED:
+    if (int_arg) {
+      kv_printf(*(StringBuilder *)sb, _("   dated: "));
+    } else {
+      kv_printf(*(StringBuilder *)sb, _("             dated: "));
+    }
+    break;
+  case SB_MSG_VIM3:
+    kv_printf(*(StringBuilder *)sb, _("         [from Vim version 3.0]"));
+    break;
+  case SB_MSG_NOT_NVIM:
+    kv_printf(*(StringBuilder *)sb, _("         [does not look like a Nvim swap file]"));
+    break;
+  case SB_MSG_GARBLED:
+    kv_printf(*(StringBuilder *)sb, _("         [garbled strings (not nul terminated)]"));
+    break;
+  case SB_MSG_FILENAME:
+    kv_printf(*(StringBuilder *)sb, _("         file name: "));
+    if (str_arg[0] == NUL) {
+      kv_printf(*(StringBuilder *)sb, _("[No Name]"));
+    } else {
+      kv_printf(*(StringBuilder *)sb, "%s", str_arg);
+    }
+    break;
+  case SB_MSG_MODIFIED:
+    kv_printf(*(StringBuilder *)sb, _("\n          modified: "));
+    kv_printf(*(StringBuilder *)sb, int_arg ? _("YES") : _("no"));
+    break;
+  case SB_MSG_USER:
+    kv_printf(*(StringBuilder *)sb, _("\n         user name: "));
+    kv_printf(*(StringBuilder *)sb, "%s", str_arg);
+    break;
+  case SB_MSG_HOST:
+    if (int_arg) {
+      kv_printf(*(StringBuilder *)sb, _("   host name: "));
+    } else {
+      kv_printf(*(StringBuilder *)sb, _("\n         host name: "));
+    }
+    kv_printf(*(StringBuilder *)sb, "%s", str_arg);
+    break;
+  case SB_MSG_PID:
+    kv_printf(*(StringBuilder *)sb, _("\n        process ID: "));
+    kv_printf(*(StringBuilder *)sb, "%d", int_arg);
+    break;
+  case SB_MSG_STILL_RUNNING:
+    kv_printf(*(StringBuilder *)sb, _(" (STILL RUNNING)"));
+    break;
+  case SB_MSG_NOT_USABLE:
+    kv_printf(*(StringBuilder *)sb, _("\n         [not usable on this computer]"));
+    break;
+  case SB_MSG_CANNOT_READ:
+    kv_printf(*(StringBuilder *)sb, _("         [cannot be read]"));
+    break;
+  case SB_MSG_CANNOT_OPEN:
+    kv_printf(*(StringBuilder *)sb, _("         [cannot be opened]"));
+    break;
   }
-}
-
-void nvim_sb_swapinfo_vim3(void *sb)
-{
-  kv_printf(*(StringBuilder *)sb, _("         [from Vim version 3.0]"));
-}
-
-void nvim_sb_swapinfo_not_nvim(void *sb)
-{
-  kv_printf(*(StringBuilder *)sb, _("         [does not look like a Nvim swap file]"));
-}
-
-void nvim_sb_swapinfo_garbled(void *sb)
-{
-  kv_printf(*(StringBuilder *)sb, _("         [garbled strings (not nul terminated)]"));
-}
-
-void nvim_sb_swapinfo_filename(void *sb, const char *b0_fname)
-{
-  kv_printf(*(StringBuilder *)sb, _("         file name: "));
-  if (b0_fname[0] == NUL) {
-    kv_printf(*(StringBuilder *)sb, _("[No Name]"));
-  } else {
-    kv_printf(*(StringBuilder *)sb, "%s", b0_fname);
-  }
-}
-
-void nvim_sb_swapinfo_modified(void *sb, int dirty)
-{
-  kv_printf(*(StringBuilder *)sb, _("\n          modified: "));
-  kv_printf(*(StringBuilder *)sb, dirty ? _("YES") : _("no"));
-}
-
-void nvim_sb_swapinfo_user(void *sb, const char *uname)
-{
-  kv_printf(*(StringBuilder *)sb, _("\n         user name: "));
-  kv_printf(*(StringBuilder *)sb, "%s", uname);
-}
-
-void nvim_sb_swapinfo_host(void *sb, const char *hname, int after_user)
-{
-  if (after_user) {
-    kv_printf(*(StringBuilder *)sb, _("   host name: "));
-  } else {
-    kv_printf(*(StringBuilder *)sb, _("\n         host name: "));
-  }
-  kv_printf(*(StringBuilder *)sb, "%s", hname);
-}
-
-void nvim_sb_swapinfo_pid(void *sb, int pid)
-{
-  kv_printf(*(StringBuilder *)sb, _("\n        process ID: "));
-  kv_printf(*(StringBuilder *)sb, "%d", pid);
-}
-
-void nvim_sb_swapinfo_still_running(void *sb)
-{
-  kv_printf(*(StringBuilder *)sb, _(" (STILL RUNNING)"));
-}
-
-void nvim_sb_swapinfo_not_usable(void *sb)
-{
-  kv_printf(*(StringBuilder *)sb, _("\n         [not usable on this computer]"));
-}
-
-void nvim_sb_swapinfo_cannot_read(void *sb)
-{
-  kv_printf(*(StringBuilder *)sb, _("         [cannot be read]"));
-}
-
-void nvim_sb_swapinfo_cannot_open(void *sb)
-{
-  kv_printf(*(StringBuilder *)sb, _("         [cannot be opened]"));
 }
 
 // Phase 4 accessors for Rust FFI (ml_new_ptr, ml_new_data, ml_lineadd, ml_upd_block0)
@@ -1833,95 +1828,101 @@ void nvim_apply_autocmds_bufwinenter(void)
   apply_autocmds(EVENT_BUFWINENTER, NULL, curbuf->b_fname, false, curbuf);
 }
 
-/// semsg for E305: No swap file found for %s
-void nvim_semsg_e305_no_swap(const char *fname) { semsg(_("E305: No swap file found for %s"), fname); }
+// Recovery message dispatch enum and function
 
-/// semsg for E306: Cannot open %s
-void nvim_semsg_e306_cannot_open(const char *fname) { semsg(_("E306: Cannot open %s"), fname); }
+typedef enum {
+  RECOVER_MSG_E305_NO_SWAP = 0,
+  RECOVER_MSG_E306_CANNOT_OPEN,
+  RECOVER_MSG_E307_NOT_SWAP,
+  RECOVER_MSG_E309_BLOCK1,
+  RECOVER_MSG_E310_BLOCK1_ID,
+  RECOVER_MSG_BLOCK0_UNREADABLE,
+  RECOVER_MSG_VIM3,
+  RECOVER_MSG_WRONG_BYTE_ORDER,
+  RECOVER_MSG_PAGE_SIZE_TOO_SMALL,
+  RECOVER_MSG_E308_ORIGINAL_CHANGED,
+  RECOVER_MSG_PTR_BLOCK_CORRUPTED,
+  RECOVER_MSG_E311_INTERRUPTED,
+  RECOVER_MSG_SUCCESS,
+  RECOVER_MSG_ERRORS,
+} recover_msg_id_T;
 
-/// semsg for E307: %s does not look like a Nvim swap file
-void nvim_semsg_e307_not_swap(const char *fname) { semsg(_("E307: %s does not look like a Nvim swap file"), fname); }
-
-/// semsg for E309: Unable to read block 1 from %s
-void nvim_semsg_e309_block1(const char *fname) { semsg(_("E309: Unable to read block 1 from %s"), fname); }
-
-/// semsg for E310: Block 1 ID wrong (%s not a .swp file?)
-void nvim_semsg_e310_block1_id(const char *fname) { semsg(_("E310: Block 1 ID wrong (%s not a .swp file?)"), fname); }
-
-/// msg_start(); msg_puts_hl(msg, hl_id, true); msg_outtrans(fname, hl_id, true); for "Unable to read block 0"
-void nvim_recover_msg_block0_unreadable(const char *fname, int hl_id)
+void nvim_recover_msg(int msg_id, const char *fname, const char *extra, int hl_id, int int_arg)
 {
-  msg_start();
-  msg_puts_hl(_("Unable to read block 0 from "), hl_id, true);
-  msg_outtrans(fname, hl_id, true);
-  msg_puts_hl(_("\nMaybe no changes were made or Nvim did not update the swap file."), hl_id, true);
-  msg_end();
-}
-
-/// msg for VIM 3.0 swap file
-void nvim_recover_msg_vim3(const char *fname)
-{
-  msg_start();
-  msg_outtrans(fname, 0, true);
-  msg_puts_hl(_(" cannot be used with this version of Nvim.\n"), 0, true);
-  msg_puts_hl(_("Use Vim version 3.0.\n"), 0, true);
-  msg_end();
-}
-
-/// msg for wrong byte order
-void nvim_recover_msg_wrong_byte_order(const char *fname, int hl_id, const char *hname)
-{
-  msg_start();
-  msg_outtrans(fname, hl_id, true);
-  msg_puts_hl(_(" cannot be used on this computer.\n"), hl_id, true);
-  msg_puts_hl(_("The file was created on "), hl_id, true);
-  msg_puts_hl(hname, hl_id, true);
-  msg_puts_hl(_(",\nor the file has been damaged."), hl_id, true);
-  msg_end();
-}
-
-/// msg for page size too small
-void nvim_recover_msg_page_size_too_small(const char *fname, int hl_id)
-{
-  msg_start();
-  msg_outtrans(fname, hl_id, true);
-  msg_puts_hl(_(" has been damaged (page size is smaller than minimum value).\n"), hl_id, true);
-  msg_end();
-}
-
-/// emsg for E308: Warning: Original file may have been changed
-void nvim_emsg_e308_original_changed(void) { emsg(_("E308: Warning: Original file may have been changed")); }
-
-/// emsg for pointer block corrupted
-void nvim_emsg_ptr_block_corrupted(void) { emsg(_(e_warning_pointer_block_corrupted)); }
-
-/// emsg for E311: Recovery Interrupted
-void nvim_emsg_e311_interrupted(void) { emsg(_("E311: Recovery Interrupted")); }
-
-
-/// Post-recovery success messages
-void nvim_recover_msg_success(int has_changes)
-{
-  if (has_changes) {
-    msg(_("Recovery completed. You should check if everything is OK."), 0);
-    msg_puts(_("\n(You might want to write out this file under another name\n"));
-    msg_puts(_("and run diff with the original file to check for changes)"));
-  } else {
-    msg(_("Recovery completed. Buffer contents equals file contents."), 0);
+  switch (msg_id) {
+  case RECOVER_MSG_E305_NO_SWAP:
+    semsg(_("E305: No swap file found for %s"), fname);
+    break;
+  case RECOVER_MSG_E306_CANNOT_OPEN:
+    semsg(_("E306: Cannot open %s"), fname);
+    break;
+  case RECOVER_MSG_E307_NOT_SWAP:
+    semsg(_("E307: %s does not look like a Nvim swap file"), fname);
+    break;
+  case RECOVER_MSG_E309_BLOCK1:
+    semsg(_("E309: Unable to read block 1 from %s"), fname);
+    break;
+  case RECOVER_MSG_E310_BLOCK1_ID:
+    semsg(_("E310: Block 1 ID wrong (%s not a .swp file?)"), fname);
+    break;
+  case RECOVER_MSG_BLOCK0_UNREADABLE:
+    msg_start();
+    msg_puts_hl(_("Unable to read block 0 from "), hl_id, true);
+    msg_outtrans(fname, hl_id, true);
+    msg_puts_hl(_("\nMaybe no changes were made or Nvim did not update the swap file."), hl_id,
+                true);
+    msg_end();
+    break;
+  case RECOVER_MSG_VIM3:
+    msg_start();
+    msg_outtrans(fname, 0, true);
+    msg_puts_hl(_(" cannot be used with this version of Nvim.\n"), 0, true);
+    msg_puts_hl(_("Use Vim version 3.0.\n"), 0, true);
+    msg_end();
+    break;
+  case RECOVER_MSG_WRONG_BYTE_ORDER:
+    msg_start();
+    msg_outtrans(fname, hl_id, true);
+    msg_puts_hl(_(" cannot be used on this computer.\n"), hl_id, true);
+    msg_puts_hl(_("The file was created on "), hl_id, true);
+    msg_puts_hl(extra, hl_id, true);
+    msg_puts_hl(_(",\nor the file has been damaged."), hl_id, true);
+    msg_end();
+    break;
+  case RECOVER_MSG_PAGE_SIZE_TOO_SMALL:
+    msg_start();
+    msg_outtrans(fname, hl_id, true);
+    msg_puts_hl(_(" has been damaged (page size is smaller than minimum value).\n"), hl_id, true);
+    msg_end();
+    break;
+  case RECOVER_MSG_E308_ORIGINAL_CHANGED:
+    emsg(_("E308: Warning: Original file may have been changed"));
+    break;
+  case RECOVER_MSG_PTR_BLOCK_CORRUPTED:
+    emsg(_(e_warning_pointer_block_corrupted));
+    break;
+  case RECOVER_MSG_E311_INTERRUPTED:
+    emsg(_("E311: Recovery Interrupted"));
+    break;
+  case RECOVER_MSG_SUCCESS:
+    if (int_arg) {
+      msg(_("Recovery completed. You should check if everything is OK."), 0);
+      msg_puts(_("\n(You might want to write out this file under another name\n"));
+      msg_puts(_("and run diff with the original file to check for changes)"));
+    } else {
+      msg(_("Recovery completed. Buffer contents equals file contents."), 0);
+    }
+    msg_puts(_("\nYou may want to delete the .swp file now."));
+    break;
+  case RECOVER_MSG_ERRORS:
+    no_wait_return++;
+    msg(">>>>>>>>>>>>>", 0);
+    emsg(_("E312: Errors detected while recovering; look for lines starting with ???"));
+    no_wait_return--;
+    msg(_("See \":help E312\" for more information."), 0);
+    msg(">>>>>>>>>>>>>", 0);
+    break;
   }
-  msg_puts(_("\nYou may want to delete the .swp file now."));
-}
-
-
-/// Post-recovery error block output (no_wait_return bracketed messages)
-void nvim_recover_msg_errors(void)
-{
-  no_wait_return++;
-  msg(">>>>>>>>>>>>>", 0);
-  emsg(_("E312: Errors detected while recovering; look for lines starting with ???"));
-  no_wait_return--;
-  msg(_("See \":help E312\" for more information."), 0);
-  msg(">>>>>>>>>>>>>", 0);
 }
 
 /// Final: cmdline_row = msg_row
