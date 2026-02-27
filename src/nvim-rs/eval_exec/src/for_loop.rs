@@ -122,7 +122,7 @@ extern "C" {
     fn nvim_blob_len(b: *const c_void) -> c_int;
     fn nvim_blob_get(b: *const c_void, idx: c_int) -> c_int;
 
-    fn evalarg_get_flags(ea: EvalargHandle) -> c_int;
+    // evalarg_get_flags: deleted -- use EvalargHandle::flags() directly (Phase 14)
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn emsg(s: *const c_char) -> c_int;
 
@@ -197,7 +197,7 @@ pub unsafe fn eval_for_line_impl(
     evalarg: EvalargHandle,
 ) -> *mut c_void {
     let fi = alloc_forinfo();
-    let skip = (evalarg_get_flags(evalarg) & EVAL_EVALUATE) == 0;
+    let skip = (evalarg.flags() & EVAL_EVALUATE) == 0;
 
     // Default: there is an error.
     *errp = true;

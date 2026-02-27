@@ -21,6 +21,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::eval::EvalargHandle;
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -230,7 +232,7 @@ extern "C" {
     fn tv_get_string(tv: TypevalHandle) -> *const c_char;
 
     // eval1 (recursive subscript parsing)
-    fn eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: *mut c_void) -> c_int;
+    fn eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: EvalargHandle) -> c_int;
 
     // ASCII predicates
     fn rs_ascii_isalnum(c: c_int) -> c_int;
@@ -242,7 +244,7 @@ extern "C" {
     fn nvim_tv_list_check_range_index_two(lp: *mut c_void, quiet: bool) -> c_int;
 
     // EVALARG_EVALUATE accessor
-    fn nvim_get_evalarg_evaluate_ptr() -> *mut c_void;
+    fn nvim_get_evalarg_evaluate_ptr() -> EvalargHandle;
 
     // xstrdup / xmemdupz
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;

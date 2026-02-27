@@ -212,6 +212,12 @@ _Static_assert(offsetof(lval_T, ll_dict) == 64, "lval_T ll_dict offset mismatch"
 _Static_assert(offsetof(lval_T, ll_di) == 72, "lval_T ll_di offset mismatch");
 _Static_assert(offsetof(lval_T, ll_newkey) == 80, "lval_T ll_newkey offset mismatch");
 _Static_assert(offsetof(lval_T, ll_blob) == 88, "lval_T ll_blob offset mismatch");
+// Phase 14: evalarg_T layout assertions (Rust EvalargT must match exactly).
+_Static_assert(sizeof(evalarg_T) == 32, "evalarg_T size mismatch: Rust EvalargT must be updated");
+_Static_assert(offsetof(evalarg_T, eval_flags) == 0, "evalarg_T eval_flags offset mismatch");
+_Static_assert(offsetof(evalarg_T, eval_getline) == 8, "evalarg_T eval_getline offset mismatch");
+_Static_assert(offsetof(evalarg_T, eval_cookie) == 16, "evalarg_T eval_cookie offset mismatch");
+_Static_assert(offsetof(evalarg_T, eval_tofree) == 24, "evalarg_T eval_tofree offset mismatch");
 
 // C accessors for typval fields (used by Rust callback module)
 int nvim_eval_tv_get_type(const typval_T *tv)
@@ -1024,19 +1030,8 @@ _Static_assert(sizeof(sctx_T) == 24, "sctx_T size must be 24 bytes");
 // Accessor functions for Rust FFI
 // =============================================================================
 
-/// Get eval_flags from evalarg_T (accessor for Rust).
-int evalarg_get_flags(const evalarg_T *evalarg)
-{
-  return evalarg ? evalarg->eval_flags : 0;
-}
-
-/// Set eval_flags in evalarg_T (accessor for Rust).
-void evalarg_set_flags(evalarg_T *evalarg, int flags)
-{
-  if (evalarg) {
-    evalarg->eval_flags = flags;
-  }
-}
+// evalarg_get_flags: deleted -- Rust EvalargHandle::flags() accesses field directly (Phase 14).
+// evalarg_set_flags: deleted -- Rust EvalargHandle::set_flags() accesses field directly (Phase 14).
 
 /// Get did_emsg global (accessor for Rust).
 int did_emsg_get(void)
@@ -1690,21 +1685,8 @@ bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *
 // Phase 6 (ex_echo + ex_execute): new C accessor/wrapper functions
 // =============================================================================
 
-/// Allocate and fill an evalarg_T from eap on the heap.
-/// Caller must call nvim_evalarg_clear_and_free after use.
-evalarg_T *nvim_evalarg_alloc_from_eap(exarg_T *eap, bool skip)
-{
-  evalarg_T *ea = xcalloc(1, sizeof(evalarg_T));
-  fill_evalarg_from_eap(ea, eap, skip);
-  return ea;
-}
-
-/// Clear evalarg and free it.
-void nvim_evalarg_clear_and_free(evalarg_T *ea, exarg_T *eap)
-{
-  clear_evalarg(ea, eap);
-  xfree(ea);
-}
+// nvim_evalarg_alloc_from_eap: deleted -- Rust allocates Box<EvalargT> directly (Phase 14).
+// nvim_evalarg_clear_and_free: deleted -- Rust calls clear_evalarg + Box::from_raw (Phase 14).
 
 // nvim_eval1_emsg_wrapper: deleted -- Rust calls rs_eval1_emsg directly (Phase 3 pass 10).
 
@@ -2268,36 +2250,11 @@ const char *nvim_list_item_get_string(listitem_T *item)
 //   typval_tostring
 // =============================================================================
 
-/// Zero-init evalarg_T and set eval_flags based on skip - accessor for Rust.
-void nvim_evalarg_init_skip(evalarg_T *evalarg, bool skip)
-{
-  *evalarg = (evalarg_T){ .eval_flags = skip ? 0 : EVAL_EVALUATE };
-}
-
-/// Check if eap is sourcing a script - accessor for Rust fill_evalarg_from_eap.
-bool nvim_sourcing_a_script(exarg_T *eap)
-{
-  return sourcing_a_script(eap);
-}
-
-/// Copy eval_getline and eval_cookie from eap to evalarg - accessor for Rust.
-void nvim_evalarg_copy_getline_from_eap(evalarg_T *evalarg, const exarg_T *eap)
-{
-  evalarg->eval_getline = eap->ea_getline;
-  evalarg->eval_cookie = eap->cookie;
-}
-
-/// Get evalarg->eval_tofree - accessor for Rust clear_evalarg.
-char *nvim_evalarg_get_tofree(evalarg_T *evalarg)
-{
-  return evalarg->eval_tofree;
-}
-
-/// Set evalarg->eval_tofree - accessor for Rust clear_evalarg.
-void nvim_evalarg_set_tofree(evalarg_T *evalarg, char *val)
-{
-  evalarg->eval_tofree = val;
-}
+// nvim_evalarg_init_skip: deleted -- Rust sets EvalargT fields directly (Phase 14).
+// nvim_sourcing_a_script: deleted -- Rust calls sourcing_a_script() directly (Phase 14).
+// nvim_evalarg_copy_getline_from_eap: deleted -- Rust uses nvim_eap_get_getline/cookie (Phase 14).
+// nvim_evalarg_get_tofree: deleted -- Rust accesses EvalargT::eval_tofree directly (Phase 14).
+// nvim_evalarg_set_tofree: deleted -- Rust accesses EvalargT::eval_tofree directly (Phase 14).
 
 /// Get eap->cmdline_tofree - accessor for Rust clear_evalarg.
 char *nvim_eap_get_cmdline_tofree(exarg_T *eap)
@@ -2321,6 +2278,18 @@ char *nvim_eap_get_cmdlinep_deref(const exarg_T *eap)
 void nvim_eap_set_cmdlinep_deref(exarg_T *eap, char *val)
 {
   *eap->cmdlinep = val;
+}
+
+/// Get eap->ea_getline function pointer - accessor for Rust fill_evalarg_from_eap.
+LineGetter nvim_eap_get_getline(const exarg_T *eap)
+{
+  return eap->ea_getline;
+}
+
+/// Get eap->cookie - accessor for Rust fill_evalarg_from_eap.
+void *nvim_eap_get_cookie(const exarg_T *eap)
+{
+  return eap->cookie;
 }
 
 /// Wrapper for call_simple_luafunc - accessor for Rust may_call_simple_func.

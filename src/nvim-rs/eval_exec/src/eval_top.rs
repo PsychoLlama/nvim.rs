@@ -18,7 +18,7 @@ use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
 use crate::callback::CallbackT;
-use crate::eval::{EvalargHandle, ExargHandle, TypevalHandle};
+use crate::eval::{EvalargHandle, EvalargT, ExargHandle, LineGetter, TypevalHandle};
 use crate::funcexe::FuncExeT;
 
 // =============================================================================
@@ -52,11 +52,7 @@ extern "C" {
     fn eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: EvalargHandle) -> c_int;
 
     // Evalarg lifecycle
-    fn nvim_evalarg_alloc_from_eap(eap: ExargHandle, skip: bool) -> EvalargHandle;
-    fn nvim_evalarg_clear_and_free(ea: EvalargHandle, eap: ExargHandle);
     fn nvim_get_evalarg_evaluate_ptr() -> EvalargHandle;
-    fn evalarg_get_flags(ea: EvalargHandle) -> c_int;
-    fn evalarg_set_flags(ea: EvalargHandle, flags: c_int);
 
     // Phase 12: emsg_skip accessed directly as a global
     static mut emsg_skip: c_int;
@@ -116,11 +112,9 @@ extern "C" {
     fn called_emsg_get() -> c_int;
 
     // Phase 5: fill_evalarg_from_eap / clear_evalarg accessors
-    fn nvim_evalarg_init_skip(evalarg: EvalargHandle, skip: bool);
-    fn nvim_sourcing_a_script(eap: ExargHandle) -> bool;
-    fn nvim_evalarg_copy_getline_from_eap(evalarg: EvalargHandle, eap: ExargHandle);
-    fn nvim_evalarg_get_tofree(evalarg: EvalargHandle) -> *mut c_char;
-    fn nvim_evalarg_set_tofree(evalarg: EvalargHandle, val: *mut c_char);
+    fn sourcing_a_script(eap: ExargHandle) -> c_int;
+    fn nvim_eap_get_getline(eap: ExargHandle) -> LineGetter;
+    fn nvim_eap_get_cookie(eap: ExargHandle) -> *mut c_void;
     fn nvim_eap_get_cmdline_tofree(eap: ExargHandle) -> *mut c_char;
     fn nvim_eap_set_cmdline_tofree(eap: ExargHandle, val: *mut c_char);
     fn nvim_eap_get_cmdlinep_deref(eap: ExargHandle) -> *mut c_char;
@@ -144,6 +138,33 @@ extern "C" {
 // also needs it. We call the C thin wrapper `eval_to_string` which will call us via
 // rs_eval_to_string. To avoid circular deps, rs_eval_to_string_safe calls
 // rs_eval_to_string_eap directly.
+
+// =============================================================================
+// Internal: evalarg allocation helpers
+// =============================================================================
+
+/// Allocate a heap `EvalargT`, initialize via `fill_evalarg_from_eap`, and return a handle.
+///
+/// Caller must call `free_evalarg(evalarg, eap)` when done.
+///
+/// # Safety
+/// All C contracts for `fill_evalarg_from_eap` apply.
+unsafe fn alloc_evalarg(eap: ExargHandle, skip: bool) -> EvalargHandle {
+    let mut ea = Box::new(EvalargT::new_skip());
+    fill_evalarg_from_eap(EvalargHandle(ea.as_mut()), eap, skip);
+    EvalargHandle(Box::into_raw(ea))
+}
+
+/// Clear evalarg resources and free the heap `EvalargT`.
+///
+/// # Safety
+/// `evalarg` must have been returned by `alloc_evalarg`.
+unsafe fn free_evalarg(evalarg: EvalargHandle, eap: ExargHandle) {
+    clear_evalarg(evalarg, eap);
+    if !evalarg.is_null() {
+        drop(Box::from_raw(evalarg.as_ptr()));
+    }
+}
 
 // =============================================================================
 // Internal: typval2string
@@ -287,7 +308,7 @@ pub unsafe extern "C" fn rs_eval_to_bool(
     let mut tv_storage = [0u64; 8]; // enough space for typval_T
     let tv = TypevalHandle::from_ptr(tv_storage.as_mut_ptr() as *mut c_void);
 
-    let evalarg = nvim_evalarg_alloc_from_eap(eap, skip);
+    let evalarg = alloc_evalarg(eap, skip);
     if skip {
         emsg_skip += 1;
     }
@@ -320,7 +341,7 @@ pub unsafe extern "C" fn rs_eval_to_bool(
     if skip {
         emsg_skip -= 1;
     }
-    nvim_evalarg_clear_and_free(evalarg, eap);
+    free_evalarg(evalarg, eap);
 
     retval
 }
@@ -379,7 +400,7 @@ pub unsafe extern "C" fn rs_eval_to_string_skip(
     let mut tv_storage = [0u64; 8];
     let tv = TypevalHandle::from_ptr(tv_storage.as_mut_ptr() as *mut c_void);
 
-    let evalarg = nvim_evalarg_alloc_from_eap(eap, skip);
+    let evalarg = alloc_evalarg(eap, skip);
     if skip {
         emsg_skip += 1;
     }
@@ -396,7 +417,7 @@ pub unsafe extern "C" fn rs_eval_to_string_skip(
     if skip {
         emsg_skip -= 1;
     }
-    nvim_evalarg_clear_and_free(evalarg, eap);
+    free_evalarg(evalarg, eap);
 
     retval
 }
@@ -420,7 +441,7 @@ pub unsafe extern "C" fn rs_eval_to_string_eap(
 
     // Determine eap->skip (matches C: eap != NULL && eap->skip)
     let eap_skip = !eap.is_null() && nvim_eap_get_skip_local(eap) != 0;
-    let evalarg = nvim_evalarg_alloc_from_eap(eap, eap_skip);
+    let evalarg = alloc_evalarg(eap, eap_skip);
 
     let r = if use_simple_function {
         let r_simple = nvim_eval_may_call_simple_func(arg, tv);
@@ -441,7 +462,7 @@ pub unsafe extern "C" fn rs_eval_to_string_eap(
         s
     };
 
-    nvim_evalarg_clear_and_free(evalarg, ExargHandle::null());
+    free_evalarg(evalarg, ExargHandle::null());
     retval
 }
 
@@ -498,17 +519,13 @@ pub unsafe extern "C" fn rs_eval_to_string_safe(
 /// - `evalarg` may be null.
 #[export_name = "skip_expr"]
 pub unsafe extern "C" fn rs_skip_expr(pp: *mut *mut c_char, evalarg: EvalargHandle) -> c_int {
-    let save_flags = if evalarg.is_null() {
-        0
-    } else {
-        evalarg_get_flags(evalarg)
-    };
+    // EvalargHandle::flags() returns 0 if null
+    let save_flags = evalarg.flags();
 
-    // Don't evaluate the expression.
+    // Don't evaluate the expression -- clear EVAL_EVALUATE flag (bit 0).
     if !evalarg.is_null() {
-        let flags = evalarg_get_flags(evalarg);
-        // Clear EVAL_EVALUATE flag (bit 0)
-        evalarg_set_flags(evalarg, flags & !1);
+        let flags = (*evalarg.as_ptr()).eval_flags;
+        evalarg.set_flags(flags & !1);
     }
 
     *pp = skipwhite(*pp);
@@ -516,9 +533,7 @@ pub unsafe extern "C" fn rs_skip_expr(pp: *mut *mut c_char, evalarg: EvalargHand
     let rettv = TypevalHandle::from_ptr(tv_storage.as_mut_ptr() as *mut c_void);
     let res = eval1(pp, rettv, EvalargHandle::null());
 
-    if !evalarg.is_null() {
-        evalarg_set_flags(evalarg, save_flags);
-    }
+    evalarg.set_flags(save_flags);
 
     res
 }
@@ -542,7 +557,7 @@ pub unsafe extern "C" fn rs_eval1_emsg(
     let called_emsg_before = called_emsg_get();
 
     let skip = !eap.is_null() && nvim_eap_get_skip_local(eap) != 0;
-    let evalarg = nvim_evalarg_alloc_from_eap(eap, skip);
+    let evalarg = alloc_evalarg(eap, skip);
 
     let ret = eval1(arg, rettv, evalarg);
     if ret == FAIL
@@ -553,7 +568,7 @@ pub unsafe extern "C" fn rs_eval1_emsg(
         nvim_semsg_invexpr2(start);
     }
 
-    nvim_evalarg_clear_and_free(evalarg, eap);
+    free_evalarg(evalarg, eap);
     ret
 }
 
@@ -625,13 +640,18 @@ pub unsafe extern "C" fn fill_evalarg_from_eap(
     skip: bool,
 ) {
     // Zero-init and set eval_flags based on skip.
-    nvim_evalarg_init_skip(evalarg, skip);
+    *evalarg.as_ptr() = if skip {
+        EvalargT::new_skip()
+    } else {
+        EvalargT::new_evaluate()
+    };
     if eap.is_null() {
         return;
     }
-    if nvim_sourcing_a_script(eap) {
+    if sourcing_a_script(eap) != 0 {
         // Copy the getline function pointer and cookie from eap.
-        nvim_evalarg_copy_getline_from_eap(evalarg, eap);
+        (*evalarg.as_ptr()).eval_getline = nvim_eap_get_getline(eap);
+        (*evalarg.as_ptr()).eval_cookie = nvim_eap_get_cookie(eap);
     }
 }
 
@@ -647,7 +667,7 @@ pub unsafe extern "C" fn clear_evalarg(evalarg: EvalargHandle, eap: ExargHandle)
     if evalarg.is_null() {
         return;
     }
-    let tofree = nvim_evalarg_get_tofree(evalarg);
+    let tofree = (*evalarg.as_ptr()).eval_tofree;
     if tofree.is_null() {
         return;
     }
@@ -661,7 +681,7 @@ pub unsafe extern "C" fn clear_evalarg(evalarg: EvalargHandle, eap: ExargHandle)
     } else {
         xfree(tofree as *mut c_void);
     }
-    nvim_evalarg_set_tofree(evalarg, std::ptr::null_mut());
+    (*evalarg.as_ptr()).eval_tofree = std::ptr::null_mut();
 }
 
 /// Optimization: if arg is "FuncName()" with no other args, call it directly.
@@ -756,7 +776,7 @@ pub unsafe extern "C" fn rs_eval_expr_ext(
 
     let eap_skip = !eap.is_null() && nvim_eap_get_skip_local(eap) != 0;
 
-    let evalarg = nvim_evalarg_alloc_from_eap(eap, eap_skip);
+    let evalarg = alloc_evalarg(eap, eap_skip);
 
     let r = if use_simple_function {
         eval0_simple_funccal_impl(arg, tv_handle, eap, evalarg)
@@ -766,11 +786,11 @@ pub unsafe extern "C" fn rs_eval_expr_ext(
 
     if r == FAIL {
         xfree(tv);
-        nvim_evalarg_clear_and_free(evalarg, eap);
+        free_evalarg(evalarg, eap);
         return std::ptr::null_mut();
     }
 
-    nvim_evalarg_clear_and_free(evalarg, eap);
+    free_evalarg(evalarg, eap);
     tv
 }
 

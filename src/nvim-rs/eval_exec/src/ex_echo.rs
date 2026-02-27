@@ -6,16 +6,16 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::eval::{EvalargHandle, ExargHandle, TypevalHandle};
+use crate::eval::{EvalargHandle, EvalargT, ExargHandle, TypevalHandle};
 
 // =============================================================================
 // C Extern Functions
 // =============================================================================
 
 extern "C" {
-    // Evalarg management (heap-allocated)
-    fn nvim_evalarg_alloc_from_eap(eap: ExargHandle, skip: bool) -> EvalargHandle;
-    fn nvim_evalarg_clear_and_free(ea: EvalargHandle, eap: ExargHandle);
+    // fill_evalarg_from_eap and clear_evalarg are Rust #[no_mangle] exports
+    fn fill_evalarg_from_eap(evalarg: EvalargHandle, eap: ExargHandle, skip: bool);
+    fn clear_evalarg(evalarg: EvalargHandle, eap: ExargHandle);
 
     // eval1 (Rust FFI export, takes arg as *mut *mut c_char)
     fn eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: EvalargHandle) -> c_int;
@@ -205,7 +205,9 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
     let did_emsg_before = did_emsg_get();
     let called_emsg_before = called_emsg_get();
 
-    let evalarg = nvim_evalarg_alloc_from_eap(eap, skip);
+    let mut ea_box = Box::new(EvalargT::new_skip());
+    fill_evalarg_from_eap(EvalargHandle(ea_box.as_mut()), eap, skip);
+    let evalarg = EvalargHandle(Box::into_raw(ea_box));
 
     if skip {
         emsg_skip += 1;
@@ -270,7 +272,10 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
     }
 
     nvim_eap_set_nextcmd_checked(eap, arg);
-    nvim_evalarg_clear_and_free(evalarg, eap);
+    clear_evalarg(evalarg, eap);
+    if !evalarg.is_null() {
+        drop(Box::from_raw(evalarg.as_ptr()));
+    }
 
     if skip {
         emsg_skip -= 1;

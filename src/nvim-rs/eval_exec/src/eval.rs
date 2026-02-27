@@ -81,10 +81,65 @@ impl TypevalHandle {
     }
 }
 
-/// Opaque handle to evalarg_T
+/// Function pointer type matching C `LineGetter`.
+///
+/// C definition: `char *(*LineGetter)(int, void *, int, bool)`
+/// (from `src/nvim/ex_cmds_defs.h:94`)
+pub type LineGetter = Option<unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char>;
+
+/// Rust mirror of C `evalarg_T` (src/nvim/eval_defs.h).
+///
+/// Layout (32 bytes total):
+/// - `eval_flags` at offset 0 (c_int, 4 bytes)
+/// - 4 bytes alignment padding
+/// - `eval_getline` at offset 8 (fn pointer, 8 bytes)
+/// - `eval_cookie` at offset 16 (*mut c_void, 8 bytes)
+/// - `eval_tofree` at offset 24 (*mut c_char, 8 bytes)
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct EvalargT {
+    /// EVAL_ flag values (EVAL_EVALUATE = 1)
+    pub eval_flags: c_int,
+    /// Alignment padding to 8-byte boundary
+    _pad: [u8; 4],
+    /// Copied from exarg_T when "getline" is "getsourceline". Can be NULL.
+    pub eval_getline: LineGetter,
+    /// Argument for eval_getline()
+    pub eval_cookie: *mut c_void,
+    /// Pointer to the last line obtained with getsourceline()
+    pub eval_tofree: *mut c_char,
+}
+
+impl EvalargT {
+    /// Create a zero-initialized evalarg_T with no evaluation (skip=true).
+    pub fn new_skip() -> Self {
+        Self {
+            eval_flags: 0,
+            _pad: [0u8; 4],
+            eval_getline: None,
+            eval_cookie: ptr::null_mut(),
+            eval_tofree: ptr::null_mut(),
+        }
+    }
+
+    /// Create a zero-initialized evalarg_T with evaluation enabled (skip=false).
+    pub fn new_evaluate() -> Self {
+        Self {
+            eval_flags: EVAL_EVALUATE,
+            _pad: [0u8; 4],
+            eval_getline: None,
+            eval_cookie: ptr::null_mut(),
+            eval_tofree: ptr::null_mut(),
+        }
+    }
+}
+
+/// Handle to evalarg_T.
+///
+/// Wraps a raw pointer to `EvalargT`. May be null (meaning no evalarg).
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct EvalargHandle(*mut c_void);
+pub struct EvalargHandle(pub *mut EvalargT);
 
 impl EvalargHandle {
     /// Create a null handle
@@ -97,9 +152,47 @@ impl EvalargHandle {
         self.0.is_null()
     }
 
-    /// Get raw pointer
-    pub const fn as_ptr(self) -> *mut c_void {
+    /// Get raw pointer as `*mut EvalargT`
+    pub const fn as_ptr(self) -> *mut EvalargT {
         self.0
+    }
+
+    /// Get the eval_flags field (returns 0 if null).
+    ///
+    /// # Safety
+    /// If non-null, `self.0` must point to a valid `EvalargT`.
+    pub unsafe fn flags(self) -> c_int {
+        if self.is_null() {
+            0
+        } else {
+            (*self.0).eval_flags
+        }
+    }
+
+    /// Set the eval_flags field (no-op if null).
+    ///
+    /// # Safety
+    /// If non-null, `self.0` must point to a valid, writable `EvalargT`.
+    pub unsafe fn set_flags(self, flags: c_int) {
+        if !self.is_null() {
+            (*self.0).eval_flags = flags;
+        }
+    }
+
+    /// Get the eval_tofree field.
+    ///
+    /// # Safety
+    /// `self.0` must point to a valid `EvalargT` (must not be null).
+    pub unsafe fn tofree(self) -> *mut c_char {
+        (*self.0).eval_tofree
+    }
+
+    /// Set the eval_tofree field.
+    ///
+    /// # Safety
+    /// `self.0` must point to a valid, writable `EvalargT` (must not be null).
+    pub unsafe fn set_tofree(self, val: *mut c_char) {
+        (*self.0).eval_tofree = val;
     }
 }
 
@@ -158,9 +251,7 @@ extern "C" {
     fn nvim_tv_set_number(tv: TypevalHandle, n: i64);
     fn nvim_tv_set_float(tv: TypevalHandle, f: f64);
 
-    // Evalarg operations
-    fn evalarg_get_flags(ea: EvalargHandle) -> c_int;
-    fn evalarg_set_flags(ea: EvalargHandle, flags: c_int);
+    // Evalarg operations (clear_evalarg is a Rust function, declared as extern to call via C ABI)
     fn clear_evalarg(ea: EvalargHandle, eap: ExargHandle);
 
     // exarg operations
@@ -239,19 +330,15 @@ fn should_evaluate(evalarg: EvalargHandle) -> bool {
         false
     } else {
         // SAFETY: evalarg is not null
-        (unsafe { evalarg_get_flags(evalarg) } & EVAL_EVALUATE) != 0
+        (unsafe { evalarg.flags() } & EVAL_EVALUATE) != 0
     }
 }
 
 /// Get evaluation flags, defaulting to 0 if evalarg is null
 #[inline]
 fn get_eval_flags(evalarg: EvalargHandle) -> c_int {
-    if evalarg.is_null() {
-        0
-    } else {
-        // SAFETY: evalarg is not null
-        unsafe { evalarg_get_flags(evalarg) }
-    }
+    // EvalargHandle::flags() returns 0 if null
+    unsafe { evalarg.flags() }
 }
 
 // =============================================================================
@@ -414,7 +501,7 @@ pub unsafe fn eval1_impl(
         };
         let var2_evaluated = (new_flags & EVAL_EVALUATE) != 0;
         if !evalarg.is_null() {
-            evalarg_set_flags(evalarg, new_flags);
+            evalarg.set_flags(new_flags);
         }
 
         // Allocate var2 on stack (need proper C interop here)
@@ -422,7 +509,7 @@ pub unsafe fn eval1_impl(
         let var2 = alloc_typval();
         if eval1_impl(arg, var2, evalarg) == FAIL {
             if !evalarg.is_null() {
-                evalarg_set_flags(evalarg, orig_flags);
+                evalarg.set_flags(orig_flags);
             }
             free_typval(var2);
             return FAIL;
@@ -445,7 +532,7 @@ pub unsafe fn eval1_impl(
                     tv_clear(rettv);
                 }
                 if !evalarg.is_null() {
-                    evalarg_set_flags(evalarg, orig_flags);
+                    evalarg.set_flags(orig_flags);
                 }
                 return FAIL;
             }
@@ -458,7 +545,7 @@ pub unsafe fn eval1_impl(
                 orig_flags & !EVAL_EVALUATE
             };
             if !evalarg.is_null() {
-                evalarg_set_flags(evalarg, new_flags2);
+                evalarg.set_flags(new_flags2);
             }
 
             let var3 = alloc_typval();
@@ -467,7 +554,7 @@ pub unsafe fn eval1_impl(
                     tv_clear(rettv);
                 }
                 if !evalarg.is_null() {
-                    evalarg_set_flags(evalarg, orig_flags);
+                    evalarg.set_flags(orig_flags);
                 }
                 free_typval(var3);
                 return FAIL;
@@ -480,9 +567,7 @@ pub unsafe fn eval1_impl(
             free_typval(var3);
         }
 
-        if !evalarg.is_null() {
-            evalarg_set_flags(evalarg, orig_flags);
-        }
+        evalarg.set_flags(orig_flags);
     }
 
     OK
@@ -549,7 +634,7 @@ pub unsafe fn eval2_impl(
                 orig_flags & !EVAL_EVALUATE
             };
             if !evalarg.is_null() {
-                evalarg_set_flags(evalarg, new_flags);
+                evalarg.set_flags(new_flags);
             }
 
             let var2 = alloc_typval();
@@ -582,9 +667,7 @@ pub unsafe fn eval2_impl(
             p = *arg;
         }
 
-        if !evalarg.is_null() {
-            evalarg_set_flags(evalarg, orig_flags);
-        }
+        evalarg.set_flags(orig_flags);
     }
 
     OK
@@ -651,7 +734,7 @@ pub unsafe fn eval3_impl(
                 orig_flags & !EVAL_EVALUATE
             };
             if !evalarg.is_null() {
-                evalarg_set_flags(evalarg, new_flags);
+                evalarg.set_flags(new_flags);
             }
 
             let var2 = alloc_typval();
@@ -684,9 +767,7 @@ pub unsafe fn eval3_impl(
             p = *arg;
         }
 
-        if !evalarg.is_null() {
-            evalarg_set_flags(evalarg, orig_flags);
-        }
+        evalarg.set_flags(orig_flags);
     }
 
     OK
@@ -814,7 +895,7 @@ pub unsafe fn eval4_impl(
             return FAIL;
         }
 
-        if !evalarg.is_null() && (evalarg_get_flags(evalarg) & EVAL_EVALUATE) != 0 {
+        if !evalarg.is_null() && (evalarg.flags() & EVAL_EVALUATE) != 0 {
             let ret = crate::operators::typval_compare_impl(rettv, var2, typ, ic);
             tv_clear(var2);
             free_typval(var2);
@@ -1466,7 +1547,7 @@ unsafe fn eval_func_impl(
         len,
         rettv.as_ptr(),
         arg,
-        evalarg.as_ptr(),
+        evalarg.as_ptr() as *mut c_void,
         &mut funcexe,
     );
 
@@ -3165,7 +3246,7 @@ pub unsafe fn handle_subscript_impl(
     evalarg: EvalargHandle,
     verbose: bool,
 ) -> c_int {
-    let evaluate = !evalarg.is_null() && (evalarg_get_flags(evalarg) & EVAL_EVALUATE) != 0;
+    let evaluate = !evalarg.is_null() && (evalarg.flags() & EVAL_EVALUATE) != 0;
     let mut ret = OK;
     let mut selfdict: *mut c_void = std::ptr::null_mut();
     let mut lua_funcname: *const c_char = std::ptr::null();
@@ -3377,7 +3458,7 @@ unsafe fn call_func_rettv_impl(
         name_len,
         rettv.as_ptr(),
         arg,
-        evalarg.as_ptr(),
+        evalarg.as_ptr() as *mut c_void,
         &mut funcexe2,
     );
 
@@ -3434,7 +3515,7 @@ unsafe fn eval_lambda_impl(
     evalarg: EvalargHandle,
     verbose: bool,
 ) -> c_int {
-    let evaluate = !evalarg.is_null() && (evalarg_get_flags(evalarg) & EVAL_EVALUATE) != 0;
+    let evaluate = !evalarg.is_null() && (evalarg.flags() & EVAL_EVALUATE) != 0;
 
     // Skip over the ->
     *arg = (*arg).add(2);

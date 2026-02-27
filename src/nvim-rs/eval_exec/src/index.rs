@@ -77,9 +77,6 @@ extern "C" {
     fn nvim_tv_set_type(tv: TypevalHandle, vtype: c_int);
     fn nvim_tv_set_string(tv: TypevalHandle, s: *mut c_char);
 
-    // evalarg operations
-    fn evalarg_get_flags(ea: EvalargHandle) -> c_int;
-
     // eval1 (recursive subscript parsing)
     fn eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: EvalargHandle) -> c_int;
 
@@ -246,7 +243,7 @@ pub unsafe fn eval_index_impl(
     evalarg: EvalargHandle,
     verbose: bool,
 ) -> c_int {
-    let evaluate = !evalarg.is_null() && (evalarg_get_flags(evalarg) & EVAL_EVALUATE) != 0;
+    let evaluate = !evalarg.is_null() && (evalarg.flags() & EVAL_EVALUATE) != 0;
 
     if check_can_index_impl(rettv, evaluate, verbose) == FAIL {
         return FAIL;
