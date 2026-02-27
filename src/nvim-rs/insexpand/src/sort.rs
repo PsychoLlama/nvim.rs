@@ -44,6 +44,7 @@ extern "C" {
     // Fuzzy scoring accessors
     fn nvim_compl_match_set_score(m: ComplMatch, score: c_int);
     fn nvim_compl_match_get_cp_str_data(m: ComplMatch) -> *const c_char;
+    fn nvim_compl_match_get_cp_str_size(m: ComplMatch) -> usize;
     fn nvim_fuzzy_match_str(str: *mut c_char, pat: *const c_char) -> c_int;
     // rs_get_leader_for_startcol_data is defined in Rust (leader.rs)
     fn nvim_get_compl_leader_data() -> *const c_char;
@@ -60,8 +61,21 @@ extern "C" {
     fn rs_get_cot_flags() -> c_uint;
     fn rs_compl_shows_dir_forward() -> c_int;
     fn nvim_compl_set_first_match(m: ComplMatch);
-    /// Compound accessor: full fuzzy_longest_match implementation.
-    fn nvim_fuzzy_longest_match_impl();
+
+    // For rs_fuzzy_longest_match
+    fn nvim_ins_redraw(ready: c_int);
+    fn nvim_get_compl_num_bests() -> c_int;
+    fn nvim_set_compl_num_bests(val: c_int);
+    fn nvim_clear_compl_best_matches();
+    fn rs_ins_compl_delete(new_leader: c_int);
+    fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
+    fn rs_get_compl_len() -> c_int;
+    fn rs_utfc_ptr2len(ptr: *const c_char) -> c_int;
+    fn rs_ins_compl_leader() -> *const c_char;
+    fn rs_ins_compl_leader_len() -> usize;
+    fn rs_ctrl_x_mode_whole_line() -> c_int;
+    fn nvim_xmalloc(size: usize) -> *mut u8;
+    fn nvim_xfree(ptr: *mut u8);
 }
 
 /// Check if a match is the first match.
@@ -189,19 +203,145 @@ pub unsafe extern "C" fn rs_ins_compl_fuzzy_sort() {
 }
 
 // =============================================================================
-// Phase 4 (pass 5): rs_fuzzy_longest_match
+// Phase 1 (pass 12): rs_fuzzy_longest_match -- full Rust implementation
 // =============================================================================
 
 /// Calculate the longest common prefix among the best fuzzy matches and insert it.
 ///
-/// Delegates to the C compound accessor `nvim_fuzzy_longest_match_impl` which
-/// handles the compl_best_matches array, UTF-8 prefix computation, and insertion.
+/// Iterates `compl_best_matches` (top-scoring matches), computes the longest
+/// common prefix using UTF-8 character-level comparison, and inserts it.
 ///
 /// # Safety
 /// Requires valid completion list state with compl_num_bests > 0.
 #[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 pub unsafe extern "C" fn rs_fuzzy_longest_match() {
-    nvim_fuzzy_longest_match_impl();
+    let num_bests = nvim_get_compl_num_bests();
+    if num_bests == 0 {
+        return;
+    }
+
+    let first = nvim_compl_get_first_match();
+    if first.is_null() {
+        nvim_set_compl_num_bests(0);
+        return;
+    }
+
+    // nn_compl = first->cp_next->cp_next
+    let next1 = nvim_compl_match_get_next(first);
+    let nn_compl = if next1.is_null() {
+        ComplMatch::null()
+    } else {
+        nvim_compl_match_get_next(next1)
+    };
+    let more_candidates = !nn_compl.is_null() && nvim_compl_is_first_match(nn_compl) == 0;
+
+    // compl = whole_line ? first : first->cp_next
+    let compl = if rs_ctrl_x_mode_whole_line() != 0 {
+        first
+    } else {
+        nvim_compl_match_get_next(first)
+    };
+
+    if num_bests == 1 {
+        if !more_candidates && !compl.is_null() {
+            let str_data = nvim_compl_match_get_cp_str_data(compl);
+            let compl_len = rs_get_compl_len() as usize;
+            rs_ins_compl_delete(0);
+            nvim_ins_compl_insert_bytes(str_data.add(compl_len), -1);
+            nvim_ins_redraw(0);
+        }
+        nvim_set_compl_num_bests(0);
+        return;
+    }
+
+    // Collect best matches into a Vec
+    let mut best_matches: Vec<ComplMatch> = Vec::with_capacity(num_bests as usize);
+    let mut cur = compl;
+    let mut i = 0;
+    while !cur.is_null() && i < num_bests {
+        best_matches.push(cur);
+        cur = nvim_compl_match_get_next(cur);
+        i += 1;
+    }
+
+    if best_matches.is_empty() {
+        nvim_set_compl_num_bests(0);
+        nvim_clear_compl_best_matches();
+        return;
+    }
+
+    // prefix starts as data from first best match
+    let prefix = nvim_compl_match_get_cp_str_data(best_matches[0]);
+    let mut prefix_len = nvim_compl_match_get_cp_str_size(best_matches[0]) as c_int;
+
+    // Find the common prefix across all best matches (character-count based, matching C)
+    for m in best_matches.iter().skip(1) {
+        let cand_data = nvim_compl_match_get_cp_str_data(*m);
+        let mut pp = prefix;
+        let mut cp = cand_data;
+        let mut j: c_int = 0;
+
+        while j < prefix_len && *cp != 0 && *pp != 0 {
+            let char_len = rs_utfc_ptr2len(pp) as usize;
+            // Compare char_len bytes at pp vs cp
+            let mut eq = true;
+            for k in 0..char_len {
+                if *pp.add(k) != *cp.add(k) {
+                    eq = false;
+                    break;
+                }
+            }
+            if !eq {
+                break;
+            }
+            // MB_PTR_ADV equivalent
+            pp = pp.add(rs_utfc_ptr2len(pp) as usize);
+            cp = cp.add(rs_utfc_ptr2len(cp) as usize);
+            j += 1;
+        }
+
+        if j > 0 {
+            prefix_len = j;
+        }
+    }
+
+    let leader = rs_ins_compl_leader();
+    let leader_len = rs_ins_compl_leader_len();
+
+    // If leader is set, check prefix starts with leader
+    let skip_insert = leader_len > 0 && {
+        // strncmp(prefix, leader, leader_len)
+        let mut differs = false;
+        for k in 0..leader_len {
+            if *prefix.add(k) != *leader.add(k) {
+                differs = true;
+                break;
+            }
+        }
+        differs
+    };
+
+    if !skip_insert {
+        // xmemdupz(prefix, prefix_len)
+        let dup_len = prefix_len as usize;
+        let dup = nvim_xmalloc(dup_len + 1).cast::<c_char>();
+        std::ptr::copy_nonoverlapping(prefix, dup, dup_len);
+        *dup.add(dup_len) = 0;
+
+        let compl_len = rs_get_compl_len() as usize;
+        rs_ins_compl_delete(0);
+        nvim_ins_compl_insert_bytes(dup.add(compl_len), -1);
+        nvim_ins_redraw(0);
+        nvim_xfree(dup.cast::<u8>());
+    }
+
+    nvim_clear_compl_best_matches();
+    nvim_set_compl_num_bests(0);
 }
 
 #[cfg(test)]

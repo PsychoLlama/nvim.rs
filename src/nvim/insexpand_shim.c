@@ -2978,6 +2978,7 @@ int nvim_get_cpt_sources_index(void) { return cpt_sources_index; }
 
 // Accessor for ins_compl_prep (Phase 2)
 void nvim_set_compl_used_match(int val) { compl_used_match = val != 0; }
+void nvim_ins_redraw(int ready) { ins_redraw(ready != 0); }
 
 // Accessors for ins_compl_stop (Phase 3)
 const char *nvim_get_compl_curr_match_str_data(void) { return compl_curr_match ? compl_curr_match->cp_str.data : NULL; }
@@ -3868,74 +3869,6 @@ void nvim_get_register_completion_impl(void)
   }
 }
 
-// Compound accessor for Phase 4 (pass 5): fuzzy_longest_match implementation.
-void nvim_fuzzy_longest_match_impl(void)
-{
-  if (compl_num_bests == 0) {
-    return;
-  }
-
-  compl_T *nn_compl = compl_first_match->cp_next->cp_next;
-  bool more_candidates = nn_compl && nn_compl != compl_first_match;
-
-  compl_T *compl = rs_ctrl_x_mode_whole_line() ? compl_first_match
-                                            : compl_first_match->cp_next;
-  if (compl_num_bests == 1) {
-    if (!more_candidates) {
-      rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(compl->cp_str.data + rs_get_compl_len(), -1); ins_redraw(false);
-      compl_num_bests = 0;
-    }
-    compl_num_bests = 0;
-    return;
-  }
-
-  compl_best_matches = (compl_T **)xmalloc((size_t)compl_num_bests * sizeof(compl_T *));
-
-  for (int i = 0; compl != NULL && i < compl_num_bests; i++) {
-    compl_best_matches[i] = compl;
-    compl = compl->cp_next;
-  }
-
-  char *prefix = compl_best_matches[0]->cp_str.data;
-  int prefix_len = (int)compl_best_matches[0]->cp_str.size;
-
-  for (int i = 1; i < compl_num_bests; i++) {
-    char *match_str = compl_best_matches[i]->cp_str.data;
-    char *prefix_ptr = prefix;
-    char *match_ptr = match_str;
-    int j = 0;
-
-    while (j < prefix_len && *match_ptr != NUL && *prefix_ptr != NUL) {
-      if (strncmp(prefix_ptr, match_ptr, (size_t)utfc_ptr2len(prefix_ptr)) != 0) {
-        break;
-      }
-
-      MB_PTR_ADV(prefix_ptr);
-      MB_PTR_ADV(match_ptr);
-      j++;
-    }
-
-    if (j > 0) {
-      prefix_len = j;
-    }
-  }
-
-  char *leader = (char *)rs_ins_compl_leader();
-  size_t leader_len = rs_ins_compl_leader_len();
-
-  if (leader_len > 0 && strncmp(prefix, leader, leader_len) != 0) {
-    goto end;
-  }
-
-  prefix = xmemdupz(prefix, (size_t)prefix_len);
-  rs_ins_compl_delete(0); nvim_ins_compl_insert_bytes(prefix + rs_get_compl_len(), -1); ins_redraw(false);
-  xfree(prefix);
-
-end:
-  xfree(compl_best_matches);
-  compl_best_matches = NULL;
-  compl_num_bests = 0;
-}
 
 // Accessors for Phase 1 (pass 6): show_pum, ins_compl_add_matches, spell_back_to_badword
 void nvim_set_redrawing_disabled(int val) { RedrawingDisabled = val; }
