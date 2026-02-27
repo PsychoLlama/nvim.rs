@@ -975,6 +975,80 @@ pub unsafe extern "C" fn rs_find_common_prefix(
     std::ptr::null()
 }
 
+// =============================================================================
+// Phase 15 Phase 2: rs_ins_compl_addfrommatch -- Rust port of
+// nvim_ins_compl_addfrommatch_body (called from edit.c)
+// =============================================================================
+
+extern "C" {
+    fn nvim_compl_get_shown_match() -> crate::match_list::ComplMatch;
+    // rs_ins_compl_addleader is defined in crate::insert, call directly
+}
+
+/// Add one character from the currently shown match to the leader.
+///
+/// Rust port of C `nvim_ins_compl_addfrommatch_body()`. Traverses the match
+/// list to find the next character after the current cursor offset, then
+/// appends it via `rs_ins_compl_addleader`. Called from edit.c on CTRL-L.
+///
+/// # Safety
+/// Must be called from insert mode with valid completion state.
+/// `compl_shown_match` must not be NULL (asserted at the C level).
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+pub unsafe extern "C" fn rs_ins_compl_addfrommatch() {
+    use crate::match_list::ComplMatch;
+
+    let len = nvim_get_cursor_col() - nvim_get_compl_col();
+    let shown = nvim_compl_get_shown_match();
+    // If shown is null, return (safety: C caller checks this, but be defensive)
+    if shown.is_null() {
+        return;
+    }
+
+    let cp_data = nvim_compl_match_get_cp_str_data(shown);
+    let cp_size = nvim_compl_match_get_cp_str_size(shown);
+
+    // len is cursor_col - compl_col, always >= 0 at this call site
+    let len_usize = len as usize;
+
+    let p: *const c_char = if (cp_size as c_int) <= len {
+        // The shown match is shorter than what was already inserted.
+        // Only possible for the sentinel (original text).
+        if nvim_compl_match_at_original_text(shown) == 0 {
+            return;
+        }
+        // Walk cp_next looking for an equal match with enough length.
+        let mut found: *const c_char = std::ptr::null();
+        let mut found_size: usize = 0;
+        let mut cp: ComplMatch = nvim_compl_match_get_next(shown);
+        while !cp.is_null() && nvim_compl_is_first_match(cp) == 0 {
+            let leader_data = nvim_get_compl_leader_data();
+            let leader_size = nvim_get_compl_leader_size();
+            if leader_data.is_null() || rs_ins_compl_equal(cp, leader_data, leader_size) != 0 {
+                found = nvim_compl_match_get_cp_str_data(cp);
+                found_size = nvim_compl_match_get_cp_str_size(cp);
+                break;
+            }
+            cp = nvim_compl_match_get_next(cp);
+        }
+        if found.is_null() || (found_size as c_int) <= len {
+            return;
+        }
+        found
+    } else {
+        cp_data
+    };
+
+    // Advance p by len bytes, then extract the next character.
+    let c = nvim_utf_ptr2char(p.add(len_usize));
+    crate::insert::rs_ins_compl_addleader(c);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

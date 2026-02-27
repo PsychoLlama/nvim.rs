@@ -2077,7 +2077,7 @@ static int insert_execute(VimState *state, int key)
       if (s->c == Ctrl_L
           && (!rs_ctrl_x_mode_line_or_eval()
               || rs_ins_compl_long_shown_match())) {
-        nvim_ins_compl_addfrommatch_body();
+        rs_ins_compl_addfrommatch();
         return 1;  // continue
       }
 

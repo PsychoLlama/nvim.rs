@@ -2551,35 +2551,9 @@ void nvim_compl_pattern_set_from_alloc(char *data, size_t size)
 char *nvim_compl_pattern_get_data(void) { return compl_pattern.data; }
 
 void nvim_ins_compl_new_leader_wrapper(void) { rs_ins_compl_new_leader(); }
-// ins_compl_addfrommatch compound accessor: handles match traversal in C
-// then calls rs_ins_compl_addleader for the actual insertion.
-void nvim_ins_compl_addfrommatch_body(void) {
-  int len = (int)curwin->w_cursor.col - (int)compl_col;
-  assert(compl_shown_match != NULL);
-  char *p = compl_shown_match->cp_str.data;
-  if ((int)compl_shown_match->cp_str.size <= len) {
-    if (!match_at_original_text(compl_shown_match)) {
-      return;
-    }
-    p = NULL;
-    size_t plen = 0;
-    for (compl_T *cp = compl_shown_match->cp_next; cp != NULL
-         && !is_first_match(cp); cp = cp->cp_next) {
-      if (compl_leader.data == NULL
-          || rs_ins_compl_equal(cp, compl_leader.data, compl_leader.size)) {
-        p = cp->cp_str.data;
-        plen = cp->cp_str.size;
-        break;
-      }
-    }
-    if (p == NULL || (int)plen <= len) {
-      return;
-    }
-  }
-  p += len;
-  int c = utf_ptr2char(p);
-  rs_ins_compl_addleader(c);
-}
+// NOTE: nvim_ins_compl_addfrommatch_body deleted (Phase 15).
+// Ported to Rust as rs_ins_compl_addfrommatch in leader.rs.
+// edit.c now calls rs_ins_compl_addfrommatch() directly.
 // Accessors for Phase 2: ins_compl_bs migration
 // nvim_get_cursor_line_ptr: defined in change_ffi.c as char *nvim_get_cursor_line_ptr(void)
 const char *nvim_mb_ptr_back(const char *line, const char *p) {
