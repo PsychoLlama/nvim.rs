@@ -1394,41 +1394,6 @@ bool nvim_ga_is_empty_execute(garray_T *ga)
 // Phase 2 eval_top accessors - eval_to_* and eval_expr_* family
 // =============================================================================
 
-/// Increment emsg_off - accessor for Rust eval_top.
-void nvim_eval_emsg_off_inc(void)
-{
-  emsg_off++;
-}
-
-/// Decrement emsg_off - accessor for Rust eval_top.
-void nvim_eval_emsg_off_dec(void)
-{
-  emsg_off--;
-}
-
-/// Increment sandbox - accessor for Rust eval_top.
-void nvim_eval_sandbox_inc(void)
-{
-  sandbox++;
-}
-
-/// Decrement sandbox - accessor for Rust eval_top.
-void nvim_eval_sandbox_dec(void)
-{
-  sandbox--;
-}
-
-/// Increment textlock - accessor for Rust eval_top.
-void nvim_eval_textlock_inc(void)
-{
-  textlock++;
-}
-
-/// Decrement textlock - accessor for Rust eval_top.
-void nvim_eval_textlock_dec(void)
-{
-  textlock--;
-}
 
 /// Heap-allocate a funccal_entry_T and call save_funccal - accessor for Rust.
 /// Returns opaque void* so callers don't need the full type definition.

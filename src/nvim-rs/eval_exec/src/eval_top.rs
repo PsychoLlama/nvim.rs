@@ -57,15 +57,10 @@ extern "C" {
     // Phase 12: emsg_skip accessed directly as a global
     static mut emsg_skip: c_int;
 
-    // emsg_off inc/dec
-    fn nvim_eval_emsg_off_inc();
-    fn nvim_eval_emsg_off_dec();
-
-    // sandbox/textlock inc/dec
-    fn nvim_eval_sandbox_inc();
-    fn nvim_eval_sandbox_dec();
-    fn nvim_eval_textlock_inc();
-    fn nvim_eval_textlock_dec();
+    // Phase 16: emsg_off, sandbox, textlock accessed directly as globals
+    static mut emsg_off: c_int;
+    static mut sandbox: c_int;
+    static mut textlock: c_int;
 
     // funccal save/restore
     fn nvim_eval_save_funccal() -> *mut c_void;
@@ -360,7 +355,7 @@ pub unsafe extern "C" fn rs_eval_to_number(expr: *mut c_char, use_simple_functio
 
     let mut p = skipwhite(expr);
 
-    nvim_eval_emsg_off_inc();
+    emsg_off += 1;
 
     let mut r = NOTDONE;
     if use_simple_function {
@@ -379,7 +374,7 @@ pub unsafe extern "C" fn rs_eval_to_number(expr: *mut c_char, use_simple_functio
         n
     };
 
-    nvim_eval_emsg_off_dec();
+    emsg_off -= 1;
     retval
 }
 
@@ -494,16 +489,16 @@ pub unsafe extern "C" fn rs_eval_to_string_safe(
 ) -> *mut c_char {
     let entry = nvim_eval_save_funccal();
     if use_sandbox {
-        nvim_eval_sandbox_inc();
+        sandbox += 1;
     }
-    nvim_eval_textlock_inc();
+    textlock += 1;
 
     let retval = rs_eval_to_string(arg, false, use_simple_function);
 
     if use_sandbox {
-        nvim_eval_sandbox_dec();
+        sandbox -= 1;
     }
-    nvim_eval_textlock_dec();
+    textlock -= 1;
     nvim_eval_restore_funccal(entry);
 
     retval
@@ -1232,11 +1227,11 @@ pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_
     let arg = nvim_win_get_foldexpr(wp);
     nvim_win_set_current_sctx_foldexpr(wp);
 
-    nvim_eval_emsg_off_inc();
+    emsg_off += 1;
     if use_sandbox {
-        nvim_eval_sandbox_inc();
+        sandbox += 1;
     }
-    nvim_eval_textlock_inc();
+    textlock += 1;
     *cp = 0; // NUL
 
     let tv = nvim_alloc_typval();
@@ -1293,11 +1288,11 @@ pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_
             result
         };
 
-    nvim_eval_emsg_off_dec();
+    emsg_off -= 1;
     if use_sandbox {
-        nvim_eval_sandbox_dec();
+        sandbox -= 1;
     }
-    nvim_eval_textlock_dec();
+    textlock -= 1;
     clear_evalarg(evalarg, ExargHandle::null());
     nvim_restore_current_sctx(saved_sctx);
     xfree(tv);
@@ -1319,9 +1314,9 @@ pub unsafe extern "C" fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void) {
 
     let funccal = nvim_eval_save_funccal();
     if use_sandbox {
-        nvim_eval_sandbox_inc();
+        sandbox += 1;
     }
-    nvim_eval_textlock_inc();
+    textlock += 1;
 
     let tv = nvim_alloc_typval();
     let tv_handle = TypevalHandle::from_ptr(tv);
@@ -1342,9 +1337,9 @@ pub unsafe extern "C" fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void) {
     clear_evalarg(evalarg, ExargHandle::null());
 
     if use_sandbox {
-        nvim_eval_sandbox_dec();
+        sandbox -= 1;
     }
-    nvim_eval_textlock_dec();
+    textlock -= 1;
     nvim_eval_restore_funccal(funccal);
     xfree(tv);
 }
