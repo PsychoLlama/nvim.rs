@@ -54,10 +54,6 @@ extern "C" {
     fn nvim_synblock_get_keywtab(block: SynBlockHandle) -> *mut c_void;
     fn nvim_synblock_get_keywtab_ic(block: SynBlockHandle) -> *mut c_void;
 
-    /// C-side helper: remove all keyword entries with given id from hashtab.
-    /// Keeps HI2KE/KE2HIKEY pointer arithmetic in C.
-    fn nvim_syn_clear_keyword_in_ht(id: c_int, ht: *mut c_void);
-
     // Phase 15 bulk clearing accessors
 
     /// Full clear of a synblock (replaces 8 individual clearing functions).
@@ -77,11 +73,6 @@ extern "C" {
 
     /// Release ownsyntax block: clear it, free it, reset to buf's b_s.
     fn nvim_win_release_synblock(wp: WinHandle);
-
-    // Phase 3 accessors: syn_clear_keyword / clear_keywtab / invalidate_current_state
-
-    /// Clear a whole keyword hashtable (free all entries, reinitialize).
-    fn nvim_syn_clear_keywtab_ht(ht: *mut c_void);
 
     // Phase 11 accessors for hashtab keyword operations (Phase 1)
 
@@ -227,11 +218,11 @@ pub unsafe extern "C" fn rs_syn_clear_one(id: c_int, syncing: c_int) {
     if syncing == 0 {
         let ht = nvim_synblock_get_keywtab(block);
         if !ht.is_null() {
-            nvim_syn_clear_keyword_in_ht(id, ht);
+            rs_syn_clear_keyword(id, ht);
         }
         let ht_ic = nvim_synblock_get_keywtab_ic(block);
         if !ht_ic.is_null() {
-            nvim_syn_clear_keyword_in_ht(id, ht_ic);
+            rs_syn_clear_keyword(id, ht_ic);
         }
     }
 

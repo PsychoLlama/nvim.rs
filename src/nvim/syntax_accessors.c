@@ -892,11 +892,6 @@ int nvim_synpat_get_hl_group(synpat_T *pat) { return pat->sp_syn.id - 1; }
 int nvim_syn_get_expand_what(void) { return expand_what; }
 void nvim_syn_set_expand_what(int what) { expand_what = what; }
 
-int nvim_syn_state_item_spans_line(int idx, int lnum)
-{
-  return rs_syn_state_item_spans_line(idx, lnum);
-}
-
 synstate_T *nvim_syn_stack_find_entry(int lnum) { return syn_stack_find_entry((linenr_T)lnum); }
 
 void nvim_syn_stack_remove_entry(synstate_T *sp) { rs_syn_stack_remove_entry(sp); }
@@ -1192,11 +1187,6 @@ int16_t *nvim_syn_get_cluster_scl_list(int idx)
 }
 int nvim_syn_has_keywords(void) { return syn_block != NULL && syn_block->b_keywtab.ht_used > 0 ? 1 : 0; }
 int nvim_syn_has_keywords_ic(void) { return syn_block != NULL && syn_block->b_keywtab_ic.ht_used > 0 ? 1 : 0; }
-
-keyentry_T *nvim_syn_keyword_find(char *keyword, int use_ic)
-{
-  return rs_syn_keyword_find(keyword, use_ic);
-}
 
 char *nvim_syn_getcurline(void) { return rs_syn_getcurline(); }
 
@@ -1975,24 +1965,6 @@ void *nvim_syn_vim_regcomp_empty_cpo(char *pat, int flags)
   return prog;
 }
 
-/// Forward to rs_syn_cmd_match.
-void nvim_syn_cmd_match_wrapper(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_match(eap, syncing);
-}
-
-/// Forward to rs_syn_cmd_region.
-void nvim_syn_cmd_region_wrapper(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_region(eap, syncing);
-}
-
-/// Forward to rs_syn_cmd_clear.
-void nvim_syn_cmd_clear_wrapper(exarg_T *eap, int syncing)
-{
-  rs_syn_cmd_clear(eap, syncing);
-}
-
 // =============================================================================
 // Phase 2 accessors: syn_cmd_clear migration
 // =============================================================================
@@ -2080,13 +2052,6 @@ void nvim_syn_init_highlight(int reset, int init)
 int nvim_syn_get_did_syntax_onoff(void)
 {
   return did_syntax_onoff ? 1 : 0;
-}
-
-/// Execute the on/off/manual logic: set did_syntax_onoff, build "so ..." cmd, run it.
-/// Thin wrapper: logic is in rs_syn_cmd_onoff (commands.rs).
-void nvim_syn_do_onoff(exarg_T *eap, const char *name)
-{
-  rs_syn_do_onoff_impl(eap, name);
 }
 
 /// Wrap do_cmdline_cmd for Rust callers (Phase 11).
@@ -2292,14 +2257,6 @@ void nvim_syn_msg_outtrans(const char *s)
   msg_outtrans(s, 0, false);
 }
 
-/// Initialise ownsyntax: allocate new synblock for curwin (if sharing buffer's),
-/// initialise hashtabs, clear spell and string options.
-/// Returns 1 if a new block was created, 0 if curwin already owns its synblock.
-int nvim_syn_ownsyntax_init(void)
-{
-  return rs_syn_ownsyntax_init();
-}
-
 /// Get value of a Vim variable (b:current_syntax etc.).
 /// Returns pointer to the string (owned by Vim eval), or NULL.
 char *nvim_syn_get_var_value(const char *name)
@@ -2353,13 +2310,6 @@ void nvim_synblock_memmove_patterns(synblock_T *block, int dst_idx, int src_idx,
 void nvim_synblock_dec_folditems(synblock_T *block)
 {
   block->b_syn_folditems--;
-}
-
-/// Clear keyword entries with given syn id from a hashtab.
-/// Thin wrapper: logic is in rs_syn_clear_keyword (clearing.rs).
-void nvim_syn_clear_keyword_in_ht(int id, hashtab_T *ht)
-{
-  rs_syn_clear_keyword(id, ht);
 }
 
 // =============================================================================
@@ -2440,13 +2390,6 @@ void nvim_win_release_synblock(win_T *wp)
 // Phase 5 pass 5 Phase 3 accessors: syn_clear_keyword / clear_keywtab / invalidate_current_state
 // =============================================================================
 
-/// Clear a whole keyword hashtable (free entries, then hash_clear + hash_init).
-/// Thin wrapper: logic is in rs_clear_keywtab (clearing.rs).
-void nvim_syn_clear_keywtab_ht(hashtab_T *ht)
-{
-  rs_clear_keywtab(ht);
-}
-
 /// Set current_state.ga_itemsize = 0 to mark state as invalid.
 void nvim_syn_set_current_state_invalid(void)
 {
@@ -2456,14 +2399,6 @@ void nvim_syn_set_current_state_invalid(void)
 // =============================================================================
 // Phase 6 accessors: cluster management migration (syn_scl_name2id, syn_add_cluster)
 // =============================================================================
-
-/// Append a new (zeroed) cluster entry to curwin->w_s->b_syn_clusters.
-/// Initializes the garray if needed. Returns the index of the new entry,
-/// or -1 if we have hit MAX_CLUSTER_ID.
-int nvim_synblock_cluster_append(void)
-{
-  return rs_synblock_cluster_append();
-}
 
 /// Set the scl_name field of cluster at index idx in curwin->w_s->b_syn_clusters.
 void nvim_synblock_set_cluster_name(int idx, char *name)
@@ -2519,23 +2454,6 @@ void nvim_synblock_ga_init_patterns(void)
 // =============================================================================
 // Phase 6 accessors: add_keyword + copy_id_list migration
 // =============================================================================
-
-/// Perform the full hashtab keyword insertion for add_keyword.
-/// name_ic is a NUL-terminated foldcased (or original) keyword string.
-/// Allocates a keyentry_T of the appropriate size, fills all fields,
-/// and inserts into curwin->w_s->b_{keywtab,keywtab_ic}.
-/// Ownership of cont_in_list_copy and next_list_copy is transferred.
-void nvim_syn_hash_insert_keyword(const char *name_ic, int name_iclen,
-                                   int id, int inc_tag, int flags,
-                                   int conceal_char,
-                                   int16_t *cont_in_list_copy,
-                                   int16_t *next_list_copy,
-                                   int use_ic)
-{
-  rs_syn_hash_insert_keyword(name_ic, name_iclen, id, inc_tag, flags,
-                              conceal_char, cont_in_list_copy, next_list_copy,
-                              use_ic);
-}
 
 // =============================================================================
 // Phase 8: State stack cache management accessors (for Rust migration)

@@ -54,11 +54,6 @@ extern "C" {
     // Current window synblock
     fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
 
-    // Forward dispatch to match/region/clear (C thin wrappers)
-    fn nvim_syn_cmd_match_wrapper(eap: *mut c_void, syncing: c_int);
-    fn nvim_syn_cmd_region_wrapper(eap: *mut c_void, syncing: c_int);
-    fn nvim_syn_cmd_clear_wrapper(eap: *mut c_void, syncing: c_int);
-
     // Redraw and state reset (Phase 4: decomposed from nvim_syn_redraw_and_free_all)
     fn nvim_syn_redraw_curbuf_later();
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
@@ -263,11 +258,11 @@ unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
             // MATCH, REGION, CLEAR, or illegal keyword
             nvim_syn_set_eap_arg(eap, next_arg);
             if key_bytes == b"MATCH" {
-                nvim_syn_cmd_match_wrapper(eap, 1);
+                crate::cmd_match::rs_syn_cmd_match(eap, 1);
             } else if key_bytes == b"REGION" {
-                nvim_syn_cmd_region_wrapper(eap, 1);
+                crate::cmd_region::rs_syn_cmd_region(eap, 1);
             } else if key_bytes == b"CLEAR" {
-                nvim_syn_cmd_clear_wrapper(eap, 1);
+                crate::cmd_clear::rs_syn_cmd_clear(eap, 1);
             } else {
                 illegal = true;
             }
