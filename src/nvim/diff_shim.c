@@ -1,11 +1,25 @@
-/// @file diff.c
+/// @file diff_shim.c
 ///
-/// Code for diff'ing two, three or four buffers.
+/// Thin wrappers and accessor functions for the Rust diff implementation.
 ///
-/// There are three ways to diff:
-/// - Shell out to an external diff program, using files.
-/// - Use the compiled-in xdiff library.
-/// - Let 'diffexpr' do the work, using files.
+/// This file is the FFI bridge between C and the Rust `nvim-diff` crate. It
+/// contains:
+///   - Public thin wrappers (ex commands, VimL functions, normal-mode dispatch)
+///     that forward to rs_* Rust functions. These must remain as C entry points
+///     because dispatch tables (ex_cmds.lua, eval function table, nv_cmd table)
+///     resolve to C symbol names.
+///   - Accessor functions (nvim_*) providing Rust with access to C struct
+///     fields, globals, and library calls via FFI. These must remain as long as
+///     Rust relies on them.
+///   - Static variables (diff_flags, diff_busy, etc.) owned by C. Moving these
+///     to Rust would require restructuring all C code that reads them.
+///   - Type definitions (diffio_T, diffin_T, etc.) used by accessor functions
+///     that cast opaque pointers.
+///
+/// Structural floor: This file is at its minimum size for the current
+/// architecture. No further function-body migrations are possible without
+/// restructuring dispatch tables, giving Rust direct struct access, or
+/// transferring static state ownership to Rust.
 
 #include <assert.h>
 #include <ctype.h>
@@ -70,28 +84,9 @@
 #include "nvim/window.h"
 #include "xdiff/xdiff.h"
 
-// Rust implementations (only declarations still referenced by remaining C code)
-extern void rs_clear_diffblock(diff_T *dp);
-extern diff_T *rs_diff_alloc_new(tabpage_T *tp, diff_T *dprev, diff_T *dp);
-extern diff_T *rs_diff_free(tabpage_T *tp, diff_T *dprev, diff_T *dp);
-extern void rs_diff_clear(tabpage_T *tp);
-extern void rs_diff_buf_clear(void);
-extern void rs_diff_buf_add(buf_T *buf);
-extern void rs_diff_buf_adjust(win_T *win);
-extern bool rs_diff_equal_entry_full(diff_T *dp, int idx1, int idx2);
+// Rust function declarations called from C accessor bodies within this file
 extern int rs_lnum_compare(const void *s1, const void *s2);
-extern bool rs_valid_diff(diff_T *diff);
-extern void rs_set_diff_option(win_T *wp, bool value);
-extern void rs_diff_fold_update(diff_T *dp, int skip_idx);
 extern int rs_diff_buf_idx_tp(buf_T *buf, tabpage_T *tp);
-extern void rs_diff_read(int idx_orig, int idx_new, void *dio);
-extern int rs_diff_check_with_linestatus(win_T *wp, linenr_T lnum, int *linestatus);
-extern int rs_diff_check_fill(win_T *wp, linenr_T lnum);
-extern void rs_diff_set_topline(win_T *fromwin, win_T *towin);
-extern linenr_T rs_diff_get_corresponding_line(buf_T *buf1, linenr_T lnum1);
-extern bool rs_diff_change_parse(diffline_T *diffline, diffline_change_T *change,
-                                 int *change_start, int *change_end);
-extern bool rs_diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline);
 extern void rs_diff_ex_diffupdate(exarg_T *eap);
 extern void rs_f_diff_filler(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void rs_nv_diffgetput(bool put, size_t count);
@@ -102,9 +97,7 @@ extern void rs_diff_win_options(win_T *wp, bool addbuf);
 extern void rs_ex_diffoff(exarg_T *eap);
 extern void rs_ex_diffsplit(exarg_T *eap);
 extern void rs_ex_diffgetput(exarg_T *eap);
-extern void rs_diffgetput(int addr_count, int idx_cur, int idx_from, int idx_to, linenr_T line1, linenr_T line2);
 extern void rs_run_linematch(diff_T *dp);
-extern void rs_compute_inline_diff(diff_T *dp);
 extern int rs_parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, int *num_anchors);
 extern void rs_ex_diffpatch(exarg_T *eap);
 extern int rs_diff_write_buffer(buf_T *buf, char **m_ptr, int *m_size,
@@ -143,8 +136,6 @@ static int diff_flags = DIFF_INTERNAL | DIFF_FILLER | DIFF_CLOSE_OFF
 
 static int diff_algorithm = XDF_INDENT_HEURISTIC;
 static int linematch_lines = 40;
-
-#define LBUFLEN 50               // length of line in diff file
 
 // kTrue when "diff -a" works, kFalse when it doesn't work,
 // kNone when not checked yet
@@ -190,14 +181,9 @@ typedef enum {
 } diffstyle_T;
 
 #include "diff_shim.c.generated.h"
-extern int rs_win_valid(win_T *win);
 
-// Rust FFI declarations (window wrappers removed)
-extern void rs_set_fraction(win_T *wp);
-
-// Rust fold FFI declarations
+// Rust fold FFI declaration
 extern void rs_newFoldLevel(void);
-extern void rs_foldUpdateAll(win_T *win);
 
 #define FOR_ALL_DIFFBLOCKS_IN_TAB(tp, dp) \
   for ((dp) = (tp)->tp_first_diff; (dp) != NULL; (dp) = (dp)->df_next)
@@ -213,8 +199,6 @@ void diff_redraw(bool dofold)
 
 
 
-
-
 /// Completely update the diffs for the buffers involved.
 ///
 /// @param eap can be NULL
@@ -222,8 +206,6 @@ void ex_diffupdate(exarg_T *eap)
 {
   rs_diff_ex_diffupdate(eap);
 }
-
-
 
 
 /// Create a new version of a file from the current buffer and a diff file.
@@ -272,27 +254,6 @@ void ex_diffoff(exarg_T *eap)
 }
 
 
-/// Check diff status for line "lnum" in buffer "buf":
-///
-/// Returns > 0 for inserting that many filler lines above it (never happens
-/// when 'diffopt' doesn't contain "filler"). Otherwise returns 0.
-///
-/// "linestatus" (can be NULL) will be set to:
-/// 0 for nothing special.
-/// -1 for a line that should be highlighted as changed.
-/// -2 for a line that should be highlighted as added/deleted.
-///
-/// This should only be used for windows where 'diff' is set.
-///
-/// Note that it's possible for a changed/added/deleted line to also have filler
-/// lines above it. This happens when using linematch or using diff anchors (at
-/// the anchored lines).
-///
-/// @param wp
-/// @param lnum
-/// @param[out] linestatus
-
-
 /// used for simple inline diff algorithm
 static diffline_change_T simple_diffline_change;
 
@@ -310,9 +271,6 @@ void ex_diffgetput(exarg_T *eap)
 {
   rs_ex_diffgetput(eap);
 }
-
-
-/// Checks that the buffer is in diff-mode.
 
 
 /// "diff_filler()" function -- thin wrapper calling Rust rs_f_diff_filler.
