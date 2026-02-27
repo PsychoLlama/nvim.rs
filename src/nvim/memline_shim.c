@@ -1677,20 +1677,6 @@ void nvim_dp_write_nul_at_txt_end(void *dp)
 /// Set BF_RECOVERED flag on curbuf.
 void nvim_curbuf_set_b_flags_recovered(void) { curbuf->b_flags |= BF_RECOVERED; }
 
-/// Initialize ml fields for a temporary recovery buffer (allocate with xmalloc first).
-void nvim_buf_init_ml_for_recovery(buf_T *buf)
-{
-  buf->b_ml.ml_stack_size = 0;
-  buf->b_ml.ml_stack = NULL;
-  buf->b_ml.ml_stack_top = 0;
-  buf->b_ml.ml_line_lnum = 0;
-  buf->b_ml.ml_line_offset = 0;
-  buf->b_ml.ml_locked = NULL;
-  buf->b_ml.ml_flags = 0;
-}
-
-/// Set buf->b_ml.ml_mfp for a recovery buffer.
-void nvim_buf_set_ml_mfp_recovery(buf_T *buf, memfile_T *mfp) { buf->b_ml.ml_mfp = mfp; }
 
 /// Call getout(1) -- used when ml_open fails during recovery from main.
 void nvim_getout_one(void) { getout(1); }
@@ -1821,14 +1807,7 @@ int nvim_get_curbuf_ml_flags(void) { return curbuf->b_ml.ml_flags; }
 int nvim_get_got_int_val(void) { return got_int ? 1 : 0; }
 
 
-/// ml_add_stack wrapper for recovery traversal (public, not static).
-int nvim_ml_add_stack_recovery(buf_T *buf) { return rs_ml_add_stack(buf); }
 
-/// Get &buf->b_ml.ml_stack[idx] -- infoptr for recovery stack traversal.
-infoptr_T *nvim_buf_get_ml_stack_ip_recovery(buf_T *buf, int idx)
-{
-  return &(buf->b_ml.ml_stack[idx]);
-}
 
 /// Decrement and return buf->b_ml.ml_stack_top (for stack pop).
 int nvim_buf_dec_ml_stack_top(buf_T *buf) { return --(buf->b_ml.ml_stack_top); }
@@ -1957,8 +1936,6 @@ int nvim_prompt_for_recovery(void)
 /// Check if b0_fname[0] is NUL (used for setting up wrong_byte_order display).
 void nvim_b0_set_fname0_nul(ZeroBlock *b0p) { b0p->b0_fname[0] = NUL; }
 
-/// Get b0_hname pointer for display
-const char *nvim_b0_get_hname_for_display(const ZeroBlock *b0p) { return b0p->b0_hname; }
 
 /// UPD_NOT_VALID constant for redraw
 int nvim_get_upd_not_valid_val(void) { return UPD_NOT_VALID; }
@@ -1968,8 +1945,6 @@ int nvim_get_upd_not_valid_val(void) { return UPD_NOT_VALID; }
 /// Get sizeof(buf_T) for Rust allocation of temporary recovery buffer.
 size_t nvim_get_buf_t_size(void) { return sizeof(buf_T); }
 
-/// Get ml_stack pointer (as void*) from buf for freeing during recovery cleanup.
-void *nvim_buf_get_ml_stack_void_recovery(buf_T *buf) { return buf->b_ml.ml_stack; }
 
 /// Get the whole b0 "proc running" check + pid message in one call at end of recovery.
 /// Re-reads block 0 from the swap file (fname_used) and checks if proc is still running.

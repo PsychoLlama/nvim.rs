@@ -163,7 +163,6 @@ extern "C" {
     fn nvim_b0_get_mtime_int(b0p: *const c_void) -> c_int;
     fn nvim_b0_get_page_size_int(b0p: *const c_void) -> c_uint;
     fn nvim_b0_set_fname0_nul(b0p: *mut c_void);
-    fn nvim_b0_get_hname_for_display(b0p: *const c_void) -> *const c_char;
     fn nvim_b0_is_vim3(b0p: *const c_void) -> c_int;
     fn nvim_get_min_swap_page_size() -> c_uint;
     fn nvim_get_hlf_e() -> c_int;
@@ -209,12 +208,12 @@ extern "C" {
     fn nvim_expand_env_into_namebuff(src: *const c_char);
     fn nvim_recover_check_timestamps(mfp: *mut c_void, mtime_b0: c_int) -> c_int;
     fn nvim_get_buf_t_size() -> usize;
-    fn nvim_buf_init_ml_for_recovery(buf: *mut c_void);
-    fn nvim_buf_set_ml_mfp_recovery(buf: *mut c_void, mfp: *mut c_void);
-    fn nvim_buf_get_ml_stack_void_recovery(buf: *mut c_void) -> *mut c_void;
+    fn rs_ml_add_stack(buf: *mut BufHandle) -> c_int;
+    fn nvim_buf_init_ml_empty(buf: *mut BufHandle);
+    fn nvim_buf_set_ml_mfp(buf: *mut BufHandle, mfp: *mut c_void);
+    fn nvim_buf_get_ml_stack_void(buf: *mut BufHandle) -> *mut c_void;
     fn nvim_buf_get_ml_stack_top(buf: *mut BufHandle) -> c_int;
-    fn nvim_ml_add_stack_recovery(buf: *mut c_void) -> c_int;
-    fn nvim_buf_get_ml_stack_ip_recovery(buf: *mut c_void, idx: c_int) -> *mut InfoPtrHandle;
+    fn nvim_buf_get_ml_stack_ip(buf: *mut BufHandle, idx: c_int) -> *mut InfoPtrHandle;
     fn nvim_buf_dec_ml_stack_top(buf: *mut c_void) -> c_int;
     fn nvim_buf_reset_ml_stack(buf: *mut c_void);
     fn nvim_ip_set_bnum(ip: *mut InfoPtrHandle, bnum: BlockNr);
@@ -340,7 +339,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         let buf_size = nvim_get_buf_t_size();
         buf = xmalloc(buf_size);
         std::ptr::write_bytes(buf.cast::<u8>(), 0, buf_size);
-        nvim_buf_init_ml_for_recovery(buf);
+        nvim_buf_init_ml_empty(buf.cast::<BufHandle>());
 
         // Open the swap file (mf_open() consumes fname_used, so save a copy)
         let fname_copy = xstrdup(fname_used);
@@ -351,7 +350,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
             nvim_semsg_e306_cannot_open(fname_used);
             break 'cleanup;
         }
-        nvim_buf_set_ml_mfp_recovery(buf, mfp);
+        nvim_buf_set_ml_mfp(buf.cast::<BufHandle>(), mfp);
 
         // Use minimum page size to be able to read block 0
         nvim_mf_new_page_size_wrapper(mfp, nvim_get_min_swap_page_size());
@@ -379,7 +378,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         // Wrong byte order?
         if rs_b0_magic_wrong(b0p) != 0 {
             nvim_b0_set_fname0_nul(b0p);
-            let hname = nvim_b0_get_hname_for_display(b0p);
+            let hname = nvim_b0_get_hname_ptr(b0p);
             nvim_recover_msg_wrong_byte_order(nvim_mf_get_fname(mfp), hl_id, hname);
             break 'cleanup;
         }
@@ -553,7 +552,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         nvim_mf_close_nodelete(mfp);
     }
     if !buf.is_null() {
-        xfree(nvim_buf_get_ml_stack_void_recovery(buf));
+        xfree(nvim_buf_get_ml_stack_void(buf.cast::<BufHandle>()));
         xfree(buf);
     }
     if serious_error && called_from_main != 0 {
@@ -705,8 +704,8 @@ unsafe fn recover_btree(
                     }
 
                     // Push current position and descend
-                    let top = nvim_ml_add_stack_recovery(buf.cast::<c_void>());
-                    let ip = nvim_buf_get_ml_stack_ip_recovery(buf.cast::<c_void>(), top);
+                    let top = rs_ml_add_stack(buf);
+                    let ip = nvim_buf_get_ml_stack_ip(buf, top);
                     nvim_ip_set_bnum(ip, bnum);
                     nvim_ip_set_index(ip, idx);
 
@@ -808,7 +807,7 @@ unsafe fn recover_btree(
 
         // Pop one level and advance to next sibling
         let new_top = nvim_buf_dec_ml_stack_top(buf.cast::<c_void>());
-        let ip = nvim_buf_get_ml_stack_ip_recovery(buf.cast::<c_void>(), new_top);
+        let ip = nvim_buf_get_ml_stack_ip(buf, new_top);
         bnum = nvim_ip_get_bnum(ip);
         idx = nvim_ip_get_index(ip) + 1;
         page_count = 1;
