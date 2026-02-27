@@ -32,6 +32,14 @@ extern "C" {
 
     // Match node accessors
     fn nvim_compl_match_get_next(m: ComplMatch) -> ComplMatch;
+    fn nvim_compl_match_set_next(m: ComplMatch, next: ComplMatch);
+    fn nvim_compl_match_get_prev(m: ComplMatch) -> ComplMatch;
+    fn nvim_compl_match_set_prev(m: ComplMatch, prev: ComplMatch);
+
+    // Match list mutations
+    fn nvim_compl_set_first_match(m: ComplMatch);
+    fn nvim_compl_first_match_get_prev() -> ComplMatch;
+    fn nvim_compl_first_match_next_is_first() -> c_int;
 
     // Match identification
     fn nvim_compl_is_first_match(m: ComplMatch) -> c_int;
@@ -53,14 +61,13 @@ extern "C" {
     fn nvim_get_compl_orig_text_size() -> usize;
 
     // For rs_sort_compl_match_list and rs_ins_compl_fuzzy_sort
-    fn nvim_mergesort_compl_list(compare_type: c_int);
+    fn nvim_mergesort_compl_list_raw(head: ComplMatch, compare_type: c_int) -> ComplMatch;
     fn nvim_get_compl_autocomplete() -> c_int;
     fn nvim_compl_get_shown_match() -> ComplMatch;
     fn nvim_compl_set_shown_match(m: ComplMatch);
     fn nvim_compl_shown_match_is_sentinel(forward: c_int) -> c_int;
     fn rs_get_cot_flags() -> c_uint;
     fn rs_compl_shows_dir_forward() -> c_int;
-    fn nvim_compl_set_first_match(m: ComplMatch);
 
     // For rs_fuzzy_longest_match
     fn nvim_ins_redraw(ready: c_int);
@@ -149,15 +156,63 @@ pub unsafe extern "C" fn rs_set_fuzzy_score() {
 
 /// Sort completion matches using a comparator (fuzzy or nearest).
 ///
-/// Delegates to the C `sort_compl_match_list` via the compound accessor
-/// `nvim_mergesort_compl_list`. The compare_type selects the comparator:
-/// COMPARE_FUZZY (0) or COMPARE_NEAREST (1).
+/// Implements the full `sort_compl_match_list` logic: detaches the leader node,
+/// calls mergesort via `nvim_mergesort_compl_list_raw`, reattaches, and
+/// makes the list cyclic.
+///
+/// The compare_type selects the comparator: COMPARE_FUZZY (0) or COMPARE_NEAREST (1).
 ///
 /// # Safety
 /// Requires valid completion list state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_sort_compl_match_list(compare_type: c_int) {
-    nvim_mergesort_compl_list(compare_type);
+    let first = nvim_compl_get_first_match();
+    if first.is_null() {
+        return;
+    }
+    // No items to sort if first->cp_next is back to first (only leader node)
+    if nvim_compl_first_match_next_is_first() != 0 {
+        return;
+    }
+
+    // comp = tail of the list (compl_first_match->cp_prev)
+    let comp = nvim_compl_first_match_get_prev();
+
+    crate::match_list::rs_ins_compl_make_linear();
+
+    if rs_compl_shows_dir_forward() != 0 {
+        // Forward: sort all nodes after the leader (compl_first_match->cp_next)
+        let sort_head = nvim_compl_match_get_next(first);
+        // Detach sort_head from leader
+        nvim_compl_match_set_prev(sort_head, ComplMatch::null());
+        // Sort
+        let new_head = nvim_mergesort_compl_list_raw(sort_head, compare_type);
+        // Reattach: first->cp_next = new_head, new_head->cp_prev = first
+        nvim_compl_match_set_next(first, new_head);
+        nvim_compl_match_set_prev(new_head, first);
+    } else {
+        // Backward: sort from compl_first_match up to (but not including) comp.
+        // Detach: comp->cp_prev->cp_next = NULL
+        let comp_prev = nvim_compl_match_get_prev(comp);
+        nvim_compl_match_set_next(comp_prev, ComplMatch::null());
+        // Sort the detached list
+        let new_first = nvim_mergesort_compl_list_raw(first, compare_type);
+        nvim_compl_set_first_match(new_first);
+        // Find the new tail
+        let mut tail = new_first;
+        loop {
+            let next = nvim_compl_match_get_next(tail);
+            if next.is_null() {
+                break;
+            }
+            tail = next;
+        }
+        // Reattach comp at the end
+        nvim_compl_match_set_next(tail, comp);
+        nvim_compl_match_set_prev(comp, tail);
+    }
+
+    let _ = crate::match_list::rs_ins_compl_make_cyclic();
 }
 
 /// Calculate fuzzy scores and sort completion matches.

@@ -962,7 +962,8 @@ static void trigger_complete_changed_event(int cur)
   restore_v_event(v_event, &save_v_event);
 }
 
-// Helper functions for mergesort_list().
+// Helper functions for nvim_mergesort_compl_list_raw() -- C function pointer
+// callbacks required by mergesort_list(); sort logic lives in rs_sort_compl_match_list.
 
 static void *cp_get_next(void *node)
 {
@@ -1000,41 +1001,6 @@ static int cp_compare_nearest(const void *a, const void *b)
   }
   return (score_a > score_b) ? 1 : (score_a < score_b) ? -1 : 0;
 }
-
-/// Constructs a new string by prepending text from the current line (from
-/// startcol to compl_col) to the given source string. Stores the result in
-/// dest.
-
-/// Sort completion matches, excluding the node that contains the leader.
-static void sort_compl_match_list(MergeSortCompareFunc compare)
-{
-  if (!compl_first_match || is_first_match(compl_first_match->cp_next)) {
-    return;
-  }
-
-  compl_T *comp = compl_first_match->cp_prev;
-  rs_ins_compl_make_linear();
-  if (rs_compl_shows_dir_forward()) {
-    compl_first_match->cp_next->cp_prev = NULL;
-    compl_first_match->cp_next = mergesort_list(compl_first_match->cp_next,
-                                                cp_get_next, cp_set_next,
-                                                cp_get_prev, cp_set_prev,
-                                                compare);
-    compl_first_match->cp_next->cp_prev = compl_first_match;
-  } else {
-    comp->cp_prev->cp_next = NULL;
-    compl_first_match = mergesort_list(compl_first_match, cp_get_next, cp_set_next,
-                                       cp_get_prev, cp_set_prev, compare);
-    compl_T *tail = compl_first_match;
-    while (tail->cp_next != NULL) {
-      tail = tail->cp_next;
-    }
-    tail->cp_next = comp;
-    comp->cp_prev = tail;
-  }
-  (void)rs_ins_compl_make_cyclic();
-}
-
 
 #define DICT_FIRST      (1)     ///< use just first element in "dict"
 #define DICT_EXACT      (2)     ///< "dict" is the exact name of a file
@@ -3378,9 +3344,13 @@ void nvim_api_clear_and_set_compl_leader(const char *data, size_t len) {
 int nvim_compl_shown_match_is_null(void) { return compl_shown_match == NULL ? 1 : 0; }
 void nvim_compl_set_shown_to_first(void) { compl_shown_match = compl_first_match; }
 
-// Accessors for Phase 3: sort_compl_match_list / ins_compl_fuzzy_sort migration
-// compare_type: 0 = fuzzy, 1 = nearest
-void nvim_mergesort_compl_list(int compare_type) { sort_compl_match_list(compare_type == 0 ? cp_compare_fuzzy : cp_compare_nearest); }
+// Raw mergesort accessor: sorts linked list starting at `head`, returns new head.
+// compare_type: 0 = fuzzy (descending score), 1 = nearest (ascending score).
+void *nvim_mergesort_compl_list_raw(void *head, int compare_type)
+{
+  return mergesort_list(head, cp_get_next, cp_set_next, cp_get_prev, cp_set_prev,
+                        compare_type == 0 ? cp_compare_fuzzy : cp_compare_nearest);
+}
 void *nvim_compl_first_match_get_prev(void) { return compl_first_match ? compl_first_match->cp_prev : NULL; }
 // Returns 1 if compl_shown_match equals sentinel (compl_first_match for forward,
 // compl_first_match->cp_prev for backward), 0 otherwise

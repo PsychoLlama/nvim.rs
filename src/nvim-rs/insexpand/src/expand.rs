@@ -143,7 +143,7 @@ extern "C" {
     fn rs_fuzzy_longest_match();
     fn rs_ins_compl_fuzzy_sort();
     fn rs_ins_compl_leader_len() -> usize;
-    fn nvim_mergesort_compl_list(compare_type: c_int); // 1 = cp_compare_nearest
+    fn rs_sort_compl_match_list(compare_type: c_int); // 1 = cp_compare_nearest
 
     // misc
     fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func: c_int);
@@ -450,7 +450,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
     // Sort matches if needed
     if match_count > 0 && rs_ctrl_x_mode_spell() == 0 {
         if rs_is_nearest_active() != 0 && rs_ins_compl_has_preinsert() == 0 {
-            nvim_mergesort_compl_list(1); // cp_compare_nearest
+            rs_sort_compl_match_list(1); // cp_compare_nearest
         }
         if rs_cot_fuzzy() != 0 && rs_ins_compl_leader_len() > 0 {
             rs_ins_compl_fuzzy_sort();
