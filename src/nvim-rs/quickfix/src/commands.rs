@@ -22,21 +22,34 @@ type QfInfoHandleMut = *mut c_void;
 
 extern "C" {
     fn nvim_get_ql_info() -> QfInfoHandleMut;
-    fn nvim_hgr_pre_check(eap: EapHandle) -> bool;
-    fn nvim_hgr_save_cpo() -> *mut c_void;
-    fn nvim_hgr_is_loclist_cmd(eap: EapHandle) -> bool;
-    fn nvim_hgr_get_ll(new_qi_out: *mut bool) -> QfInfoHandleMut;
+    // nvim_hgr_pre_check deleted (Phase 4): inlined via nvim_qf_apply_autocmd_pre
+    fn nvim_qf_apply_autocmd_pre(au_name: *const c_char) -> bool;
+    // nvim_hgr_save_cpo renamed to nvim_save_cpo_set_empty (Phase 4)
+    fn nvim_save_cpo_set_empty() -> *mut c_void;
+    // nvim_hgr_is_loclist_cmd deleted (Phase 4): use nvim_is_loclist_cmd
+    fn nvim_is_loclist_cmd(cmdidx: c_int) -> bool;
+    // nvim_hgr_get_ll deleted (Phase 4): inlined in Rust
+    fn nvim_qf_curwin_buf_is_help() -> bool;
+    fn nvim_qf_find_help_win() -> *mut c_void;
+    fn nvim_qf_win_get_llist(win: *const c_void) -> *mut c_void;
     fn nvim_incr_quickfix_busy();
     fn nvim_decr_quickfix_busy();
     // nvim_hgr_compile_and_search deleted (Phase 3): inlined into Rust below.
     fn nvim_hgr_regex_search(pat: *mut c_char, qi: QfInfoHandleMut) -> bool;
     fn nvim_eap_get_cmdlinep_deref_make(eap: EapHandle) -> *mut c_char;
-    fn nvim_hgr_restore_cpo(saved_cpo: *mut c_void);
+    // nvim_hgr_restore_cpo renamed to nvim_restore_cpo (Phase 4)
+    fn nvim_restore_cpo(saved_cpo: *mut c_void);
     fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: *const c_void);
-    fn nvim_hgr_post_autocmd(eap: EapHandle, qi: QfInfoHandleMut, new_qi: bool) -> bool;
-    fn nvim_hgr_jump_or_nomatch(eap: EapHandle, qi: QfInfoHandleMut);
-    fn nvim_hgr_is_lhelpgrep(eap: EapHandle) -> bool;
-    fn nvim_hgr_cleanup(qi: QfInfoHandleMut, new_qi: bool);
+    // nvim_hgr_post_autocmd deleted (Phase 4): inlined via autocmd_post + is_ll_stack + find_win
+    fn nvim_qf_apply_autocmd_post(au_name: *const c_char);
+    fn nvim_qf_is_ll_stack_qi(qi: *const c_void) -> bool;
+    fn nvim_qf_find_win_with_loclist(ll: *const c_void) -> *mut c_void;
+    // nvim_hgr_jump_or_nomatch deleted (Phase 4): inlined via rs_qf_list_empty + rs_qf_jump_newwin
+    fn nvim_semsg_nomatch2(spat: *const c_char);
+    // nvim_hgr_is_lhelpgrep deleted (Phase 4): use nvim_eap_get_cmdidx comparison
+    // nvim_hgr_cleanup deleted (Phase 4): inlined via curwin accessors + rs_ll_free_all
+    fn nvim_qf_get_curwin() -> *mut c_void;
+    fn nvim_win_set_llist(win: *mut c_void, qi: *mut c_void);
     fn nvim_qf_list_changed(qfl: *mut c_void);
     // Used for finalization after compile+search (Phase 3)
     fn nvim_qf_set_nonevalid(qfl: *mut c_void, nonevalid: bool);
@@ -1040,6 +1053,29 @@ pub const extern "C" fn rs_qf_cnext_is_file_nav(cmd_type: CnextCmdType) -> bool 
 // ex_helpgrep — :helpgrep/:lhelpgrep command
 // =============================================================================
 
+// CMD_helpgrep and CMD_lhelpgrep enum values (from ex_cmds_enum.generated.h)
+const CMD_HELPGREP: c_int = 178;
+const CMD_LHELPGREP: c_int = 241;
+// Location list type constant (matches quickfix.h QFLT_LOCATION)
+const QFLT_LOCATION: c_int = 1;
+
+extern "C" {
+    fn rs_qf_alloc_stack(qfl_type: c_int, maxcount: c_int) -> *mut c_void;
+    fn rs_qf_list_empty(qfl: *const c_void) -> bool;
+    fn rs_qf_jump_newwin(qi: *mut c_void, dir: c_int, errornr: c_int, forceit: c_int, newwin: bool);
+    fn rs_ll_free_all(pqi: *mut *mut c_void);
+}
+
+/// Compute the helpgrep autocmd name from the command index.
+/// Returns `Some("helpgrep")` or `Some("lhelpgrep")`, or `None` for other commands.
+const fn hgr_au_name(cmdidx: c_int) -> Option<&'static std::ffi::CStr> {
+    match cmdidx {
+        x if x == CMD_HELPGREP => Some(c"helpgrep"),
+        x if x == CMD_LHELPGREP => Some(c"lhelpgrep"),
+        _ => None,
+    }
+}
+
 /// Rust implementation of `:helpgrep` / `:lhelpgrep`.
 ///
 /// # Safety
@@ -1047,19 +1083,44 @@ pub const extern "C" fn rs_qf_cnext_is_file_nav(cmd_type: CnextCmdType) -> bool 
 /// `eap` must be a valid pointer to a C `exarg_T`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+
     // 1. Pre-check: fire EVENT_QUICKFIXCMDPRE, check aborting()
-    if !nvim_hgr_pre_check(eap) {
+    // Inlined from nvim_hgr_pre_check.
+    let au_name_cstr = hgr_au_name(cmdidx);
+    let au_name_ptr = au_name_cstr.map_or(std::ptr::null(), std::ffi::CStr::as_ptr);
+    if !nvim_qf_apply_autocmd_pre(au_name_ptr) {
         return;
     }
 
     // 2. Save cpoptions and set to empty
-    let saved_cpo = nvim_hgr_save_cpo();
+    // Inlined from nvim_hgr_save_cpo (renamed nvim_save_cpo_set_empty).
+    let saved_cpo = nvim_save_cpo_set_empty();
 
     // 3. Setup qi — use global ql_info or allocate location list
+    // Inlined from nvim_hgr_is_loclist_cmd + nvim_hgr_get_ll.
     let mut qi = nvim_get_ql_info();
     let mut new_qi = false;
-    if nvim_hgr_is_loclist_cmd(eap) {
-        qi = nvim_hgr_get_ll(&raw mut new_qi);
+    if nvim_is_loclist_cmd(cmdidx) {
+        // Inline hgr_get_ll: find help window, use its llist or allocate new.
+        let wp = if nvim_qf_curwin_buf_is_help() {
+            // curwin is a help window — use it directly
+            nvim_qf_get_curwin()
+        } else {
+            nvim_qf_find_help_win()
+        };
+        let wp_llist = if wp.is_null() {
+            std::ptr::null_mut()
+        } else {
+            nvim_qf_win_get_llist(wp.cast_const())
+        };
+        if wp_llist.is_null() {
+            // Allocate a new location list for help text matches.
+            qi = rs_qf_alloc_stack(QFLT_LOCATION, 1);
+            new_qi = true;
+        } else {
+            qi = wp_llist;
+        }
     }
 
     nvim_incr_quickfix_busy();
@@ -1084,7 +1145,8 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
     }
 
     // 5. Restore cpoptions (handles plugin interference)
-    nvim_hgr_restore_cpo(saved_cpo);
+    // Inlined from nvim_hgr_restore_cpo (renamed nvim_restore_cpo).
+    nvim_restore_cpo(saved_cpo);
 
     // 6. Update quickfix buffer if list was populated
     if updated {
@@ -1092,19 +1154,42 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
     }
 
     // 7. Post autocmd — may invalidate location list
-    if !nvim_hgr_post_autocmd(eap, qi, new_qi) {
+    // Inlined from nvim_hgr_post_autocmd.
+    nvim_qf_apply_autocmd_post(au_name_ptr);
+    if !new_qi
+        && nvim_qf_is_ll_stack_qi(qi.cast_const())
+        && nvim_qf_find_win_with_loclist(qi.cast_const()).is_null()
+    {
         nvim_decr_quickfix_busy();
         return;
     }
 
     // 8. Jump to first match or show "no match" error
-    nvim_hgr_jump_or_nomatch(eap, qi);
+    // Inlined from nvim_hgr_jump_or_nomatch.
+    let qfl = nvim_qf_get_curlist_mut(qi);
+    if rs_qf_list_empty(qfl.cast_const()) {
+        nvim_semsg_nomatch2(eap_arg.cast_const());
+    } else {
+        rs_qf_jump_newwin(qi, 0, 0, 0, false);
+    }
 
     nvim_decr_quickfix_busy();
 
     // 9. Cleanup: free location list if :lhelpgrep and not needed
-    if nvim_hgr_is_lhelpgrep(eap) {
-        nvim_hgr_cleanup(qi, new_qi);
+    // Inlined from nvim_hgr_is_lhelpgrep + nvim_hgr_cleanup.
+    if cmdidx == CMD_LHELPGREP {
+        // If the help window is not opened or if it already points to the
+        // correct location list, then free the new location list.
+        let curwin = nvim_qf_get_curwin();
+        let curwin_llist = nvim_qf_win_get_llist(curwin.cast_const());
+        if !nvim_qf_curwin_buf_is_help() || curwin_llist == qi {
+            if new_qi {
+                rs_ll_free_all(&raw mut qi);
+            }
+        } else if curwin_llist.is_null() && new_qi {
+            // current window didn't have a location list — associate now.
+            nvim_win_set_llist(curwin, qi);
+        }
     }
 }
 
