@@ -5361,15 +5361,12 @@ extern "C" {
 
     // Mark support
     fn nvim_regexp_call_mark_get(mark: c_int) -> *mut c_void;
-    fn nvim_regexp_get_fmark_lnum(fm: *mut c_void) -> i32;
-    fn nvim_regexp_get_fmark_col(fm: *mut c_void) -> i32;
 
     // Window/cursor
     fn nvim_regexp_get_rex_reg_win_or_curwin() -> *mut c_void;
     fn nvim_regexp_has_rex_reg_win() -> c_int;
     fn nvim_regexp_get_rex_reg_win_cursor_lnum() -> i32;
     fn nvim_regexp_get_rex_reg_win_cursor_col() -> i32;
-    fn nvim_regexp_get_win_line_count(wp: *mut c_void) -> i32;
 
     // Virtual column: reuse existing nvim_regexp_call_win_linetabsize (declared above)
     // reg_getline_len: reuse existing nvim_regexp_call_reg_getline_len (declared above)
@@ -6428,11 +6425,11 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                             REX.input = new_line.add(col);
                         }
 
-                        if fm.is_null() || nvim_regexp_get_fmark_lnum(fm) <= 0 {
+                        if fm.is_null() || nvim_regexp_fmark_get_lnum(fm) <= 0 {
                             status = RA_NOMATCH;
                         } else {
-                            let pos_lnum = nvim_regexp_get_fmark_lnum(fm);
-                            let pos_col_raw = nvim_regexp_get_fmark_col(fm);
+                            let pos_lnum = nvim_regexp_fmark_get_lnum(fm);
+                            let pos_col_raw = nvim_regexp_fmark_get_col(fm);
                             let rex_cur_lnum = REX.lnum + REX.reg_firstlnum;
                             #[allow(clippy::cast_possible_truncation)]
                             let input_col = REX.input.offset_from(REX.line) as i32;
@@ -6488,7 +6485,8 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         } else {
                             1
                         };
-                        if is_reg_multi && (lnum <= 0 || lnum > nvim_regexp_get_win_line_count(wp))
+                        if is_reg_multi
+                            && (lnum <= 0 || lnum > nvim_regexp_get_win_buf_line_count(wp))
                         {
                             lnum = 1;
                         }

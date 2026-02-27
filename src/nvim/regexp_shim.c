@@ -647,17 +647,11 @@ uint8_t *nvim_regexp_get_re_extmatch_in_match(int no) {
 void *nvim_regexp_call_mark_get(int mark) {
   return (void *)mark_get(REX_PTR->reg_buf, curwin, NULL, kMarkBufLocal, mark);
 }
-int32_t nvim_regexp_get_fmark_lnum(void *fm) { return (int32_t)((fmark_T *)fm)->mark.lnum; }
-int32_t nvim_regexp_get_fmark_col(void *fm) { return (int32_t)((fmark_T *)fm)->mark.col; }
-
 // Window/cursor support
 void *nvim_regexp_get_rex_reg_win_or_curwin(void) {
   return (void *)(REX_PTR->reg_win == NULL ? curwin : REX_PTR->reg_win);
 }
 int nvim_regexp_has_rex_reg_win(void) { return REX_PTR->reg_win != NULL ? 1 : 0; }
-int32_t nvim_regexp_get_win_line_count(void *wp) {
-  return (int32_t)((win_T *)wp)->w_buffer->b_ml.ml_line_count;
-}
 int32_t nvim_regexp_get_rex_reg_win_cursor_lnum(void) {
   return REX_PTR->reg_win != NULL ? (int32_t)REX_PTR->reg_win->w_cursor.lnum : 0;
 }
@@ -725,25 +719,7 @@ int32_t nvim_regexp_fmark_get_col_adj(void *fm, int32_t lnum_match)
 
 void nvim_regexp_xfree(void *p) { xfree(p); }
 
-// nvim_regexp_nfa_regtry_setup/extract_multi/extract_single/extract_extmatch inlined into Rust
-// nvim_regexp_nfa_regexec_both_* and nvim_regexp_nfa_regexec_nl_setup inlined into Rust
-// nvim_regexp_call_init_regexec_multi inlined into Rust (as init_regexec_multi)
-
 // nfa_regexec_both: iemsg for null prog/line
-
-// Forward declarations for Rust-exported stack management
-void nvim_regexp_bt_init_stacks_rust(void);
-void nvim_regexp_bt_cleanup_stacks_rust(void);
-
-// Init regstack and backpos if not allocated yet (delegates to Rust)
-void nvim_regexp_bt_init_stacks(void) {
-  nvim_regexp_bt_init_stacks_rust();
-}
-
-// Cleanup stacks and reg_tofree after bt_regexec_both (delegates to Rust)
-void nvim_regexp_bt_cleanup_stacks(void) {
-  nvim_regexp_bt_cleanup_stacks_rust();
-}
 
 // curbuf and buf_T accessors
 void *nvim_regexp_get_curbuf(void) { return (void *)curbuf; }
