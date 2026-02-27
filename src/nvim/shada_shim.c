@@ -445,9 +445,23 @@ const char *nvim_shada_buf_get_ffname(const void *buf)
 {
   return buf ? ((const buf_T *)buf)->b_ffname : NULL;
 }
-int nvim_shada_buf_is_listed(const void *buf) { return buf ? ((const buf_T *)buf)->b_p_bl : 0; }
-int nvim_shada_buf_is_quickfix(const void *buf) { return buf ? bt_quickfix((const buf_T *)buf) : 0; }
-int nvim_shada_buf_is_terminal(const void *buf) { return buf ? bt_terminal((const buf_T *)buf) : 0; }
+/// Returns 1 if the buffer should be skipped (not listed, quickfix, or terminal), 0 otherwise.
+int nvim_shada_buf_should_skip(const void *buf)
+{
+  if (!buf) {
+    return 1;
+  }
+  if (!((const buf_T *)buf)->b_p_bl) {
+    return 1;
+  }
+  if (bt_quickfix((const buf_T *)buf)) {
+    return 1;
+  }
+  if (bt_terminal((const buf_T *)buf)) {
+    return 1;
+  }
+  return 0;
+}
 
 // Set(ptr_t) operations for Rust FFI
 void *nvim_shada_set_init_ptr(void)
@@ -533,15 +547,15 @@ const void *nvim_shada_reg_iter(const void *iter, char *out_name, int *out_type,
 int nvim_shada_op_reg_index(char name) { return op_reg_index(name); }
 
 // Buffer list accessors
-void nvim_shada_buf_get_cursor(const void *buf, pos_T *pos)
+
+/// Get last cursor position and additional data for buffer list entry.
+void nvim_shada_buf_get_buflist_info(const void *buf, pos_T *out_pos,
+                                     void **out_additional_data)
 {
   if (buf) {
-    *pos = ((const buf_T *)buf)->b_last_cursor.mark;
+    *out_pos = ((const buf_T *)buf)->b_last_cursor.mark;
+    *out_additional_data = ((const buf_T *)buf)->additional_data;
   }
-}
-void *nvim_shada_buf_get_additional_data(const void *buf)
-{
-  return buf ? ((const buf_T *)buf)->additional_data : NULL;
 }
 Timestamp nvim_shada_os_time(void) { return os_time(); }
 
@@ -1321,52 +1335,42 @@ void nvim_shada_packer_init_for_file(void *fd, PackerBuffer *out)
 // Phase 3 (plan fd426e0f): nvim_shada_pack_all_gvars migration accessors
 // =============================================================================
 
-/// Get the dv_hashtab pointer from a VAR_DICT typval (for rs_set_ref_in_ht).
-/// @param tv  xmalloc'd typval_T pointer with v_type == VAR_DICT.
-/// @return    pointer to tv->vval.v_dict->dv_hashtab, or NULL if dict is NULL.
-void *nvim_shada_tv_get_dict_ht(const void *tv)
-{
-  const typval_T *t = (const typval_T *)tv;
-  if (!t || !t->vval.v_dict) {
-    return NULL;
-  }
-  return &t->vval.v_dict->dv_hashtab;
-}
-
-/// Get the dv_copyID from a VAR_DICT typval.
-/// @param tv  xmalloc'd typval_T pointer with v_type == VAR_DICT.
-/// @return    dict->dv_copyID, or 0 if dict is NULL.
-int nvim_shada_tv_get_dict_copyid(const void *tv)
-{
-  const typval_T *t = (const typval_T *)tv;
-  if (!t || !t->vval.v_dict) {
-    return 0;
-  }
-  return t->vval.v_dict->dv_copyID;
-}
-
-/// Get the list_T pointer from a VAR_LIST typval (for rs_set_ref_in_list_items).
-/// @param tv  xmalloc'd typval_T pointer with v_type == VAR_LIST.
-/// @return    tv->vval.v_list pointer, or NULL.
-void *nvim_shada_tv_get_list(const void *tv)
+/// Get refcheck info from a typval for circular-reference detection.
+/// @param tv           xmalloc'd typval_T pointer.
+/// @param out_vtype    Output: v_type of the typval.
+/// @param out_container Output: for VAR_DICT: &dv_hashtab; for VAR_LIST: v_list; else NULL.
+/// @param out_copy_id  Output: dv_copyID or lv_copyID (0 if container is NULL).
+void nvim_shada_tv_get_refcheck_info(const void *tv, int *out_vtype,
+                                     void **out_container, int *out_copy_id)
 {
   const typval_T *t = (const typval_T *)tv;
   if (!t) {
-    return NULL;
+    *out_vtype = 0;
+    *out_container = NULL;
+    *out_copy_id = 0;
+    return;
   }
-  return t->vval.v_list;
-}
-
-/// Get the lv_copyID from a VAR_LIST typval.
-/// @param tv  xmalloc'd typval_T pointer with v_type == VAR_LIST.
-/// @return    list->lv_copyID, or 0 if list is NULL.
-int nvim_shada_tv_get_list_copyid(const void *tv)
-{
-  const typval_T *t = (const typval_T *)tv;
-  if (!t || !t->vval.v_list) {
-    return 0;
+  *out_vtype = t->v_type;
+  if (t->v_type == VAR_DICT) {
+    if (t->vval.v_dict) {
+      *out_container = &t->vval.v_dict->dv_hashtab;
+      *out_copy_id = t->vval.v_dict->dv_copyID;
+    } else {
+      *out_container = NULL;
+      *out_copy_id = 0;
+    }
+  } else if (t->v_type == VAR_LIST) {
+    if (t->vval.v_list) {
+      *out_container = t->vval.v_list;
+      *out_copy_id = t->vval.v_list->lv_copyID;
+    } else {
+      *out_container = NULL;
+      *out_copy_id = 0;
+    }
+  } else {
+    *out_container = NULL;
+    *out_copy_id = 0;
   }
-  return t->vval.v_list->lv_copyID;
 }
 
 // =============================================================================

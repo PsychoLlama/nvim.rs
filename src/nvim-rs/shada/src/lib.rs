@@ -415,9 +415,7 @@ extern "C" {
     fn nvim_shada_buf_first() -> *const c_void;
     fn nvim_shada_buf_next(buf: *const c_void) -> *const c_void;
     fn nvim_shada_buf_get_ffname(buf: *const c_void) -> *const c_char;
-    fn nvim_shada_buf_is_listed(buf: *const c_void) -> c_int;
-    fn nvim_shada_buf_is_quickfix(buf: *const c_void) -> c_int;
-    fn nvim_shada_buf_is_terminal(buf: *const c_void) -> c_int;
+    fn nvim_shada_buf_should_skip(buf: *const c_void) -> c_int;
     // Set(ptr_t) operations
     fn nvim_shada_set_init_ptr() -> *mut c_void;
     fn nvim_shada_set_has_ptr(set: *const c_void, ptr: *const c_void) -> c_int;
@@ -460,8 +458,11 @@ extern "C" {
         out_additional_data: *mut *mut c_void,
     ) -> *const c_void;
     fn nvim_shada_op_reg_index(name: c_char) -> c_int;
-    fn nvim_shada_buf_get_cursor(buf: *const c_void, pos: *mut Position);
-    fn nvim_shada_buf_get_additional_data(buf: *const c_void) -> *mut c_void;
+    fn nvim_shada_buf_get_buflist_info(
+        buf: *const c_void,
+        out_pos: *mut Position,
+        out_additional_data: *mut *mut c_void,
+    );
     fn nvim_shada_os_time() -> Timestamp;
     fn nvim_shada_setpcmark();
     fn nvim_shada_cleanup_jumplist(wp: *mut c_void, loadfiles: c_int);
@@ -767,14 +768,13 @@ extern "C" {
 // =============================================================================
 
 extern "C" {
-    /// Get dv_hashtab pointer from VAR_DICT typval.
-    fn nvim_shada_tv_get_dict_ht(tv: *const c_void) -> *mut c_void;
-    /// Get dv_copyID from VAR_DICT typval.
-    fn nvim_shada_tv_get_dict_copyid(tv: *const c_void) -> c_int;
-    /// Get list_T pointer from VAR_LIST typval.
-    fn nvim_shada_tv_get_list(tv: *const c_void) -> *mut c_void;
-    /// Get lv_copyID from VAR_LIST typval.
-    fn nvim_shada_tv_get_list_copyid(tv: *const c_void) -> c_int;
+    /// Get refcheck info from a typval (vtype, container ptr, copy_id) in one call.
+    fn nvim_shada_tv_get_refcheck_info(
+        tv: *const c_void,
+        out_vtype: *mut c_int,
+        out_container: *mut *mut c_void,
+        out_copy_id: *mut c_int,
+    );
     /// Mark all items in hashtab with copyID (from eval crate, opaque hashtab_T*).
     fn rs_set_ref_in_ht(ht: *mut c_void, copy_id: c_int, list_stack: *mut *mut c_void) -> bool;
     /// Mark all items in list with copyID (from eval crate, opaque list_T*).
@@ -6473,7 +6473,15 @@ pub unsafe extern "C" fn rs_shada_pack_all_gvars(
             break;
         }
 
-        let vtype = nvim_shada_tv_get_type(tv);
+        let mut vtype: c_int = 0;
+        let mut container: *mut c_void = std::ptr::null_mut();
+        let mut tv_copy_id: c_int = 0;
+        nvim_shada_tv_get_refcheck_info(
+            tv,
+            &raw mut vtype,
+            &raw mut container,
+            &raw mut tv_copy_id,
+        );
 
         // Skip function and partial types.
         if vtype == VAR_FUNC || vtype == VAR_PARTIAL {
@@ -6487,15 +6495,13 @@ pub unsafe extern "C" fn rs_shada_pack_all_gvars(
 
         // Circular reference detection for dict and list.
         if vtype == VAR_DICT {
-            let ht = nvim_shada_tv_get_dict_ht(tv);
             let copy_id = rs_get_copyID();
-            let set_result = if ht.is_null() {
+            let set_result = if container.is_null() {
                 false
             } else {
-                rs_set_ref_in_ht(ht, copy_id, std::ptr::null_mut())
+                rs_set_ref_in_ht(container, copy_id, std::ptr::null_mut())
             };
-            let dict_copy_id = nvim_shada_tv_get_dict_copyid(tv);
-            if !set_result && copy_id == dict_copy_id {
+            if !set_result && copy_id == tv_copy_id {
                 nvim_shada_tv_clear(tv.cast());
                 nvim_xfree(tv);
                 if var_iter.is_null() {
@@ -6504,15 +6510,13 @@ pub unsafe extern "C" fn rs_shada_pack_all_gvars(
                 continue;
             }
         } else if vtype == VAR_LIST {
-            let list = nvim_shada_tv_get_list(tv);
             let copy_id = rs_get_copyID();
-            let set_result = if list.is_null() {
+            let set_result = if container.is_null() {
                 false
             } else {
-                rs_set_ref_in_list_items(list, copy_id, std::ptr::null_mut())
+                rs_set_ref_in_list_items(container, copy_id, std::ptr::null_mut())
             };
-            let list_copy_id = nvim_shada_tv_get_list_copyid(tv);
-            if !set_result && copy_id == list_copy_id {
+            if !set_result && copy_id == tv_copy_id {
                 nvim_shada_tv_clear(tv.cast());
                 nvim_xfree(tv);
                 if var_iter.is_null() {
@@ -7332,13 +7336,7 @@ pub unsafe extern "C" fn rs_ignore_buf(buf: BufHandle, removable_bufs: SetPtrHan
     if ffname.is_null() {
         return 1;
     }
-    if nvim_shada_buf_is_listed(buf) == 0 {
-        return 1;
-    }
-    if nvim_shada_buf_is_quickfix(buf) != 0 {
-        return 1;
-    }
-    if nvim_shada_buf_is_terminal(buf) != 0 {
+    if nvim_shada_buf_should_skip(buf) != 0 {
         return 1;
     }
     if nvim_shada_set_has_ptr(removable_bufs, buf) != 0 {
@@ -7609,9 +7607,9 @@ pub unsafe extern "C" fn rs_shada_get_buflist(removable_bufs: SetPtrHandle) -> S
             break;
         }
         let mut pos = Position::DEFAULT;
-        nvim_shada_buf_get_cursor(buf, &raw mut pos);
+        let mut additional_data: *mut c_void = std::ptr::null_mut();
+        nvim_shada_buf_get_buflist_info(buf, &raw mut pos, &raw mut additional_data);
         let ffname = nvim_shada_buf_get_ffname(buf);
-        let additional_data = nvim_shada_buf_get_additional_data(buf);
         (*buffers.add(i)).pos = pos;
         (*buffers.add(i)).fname = ffname.cast_mut();
         (*buffers.add(i)).additional_data = additional_data;
