@@ -782,6 +782,22 @@ extern "C" {
     fn nvim_get_varp_scope_opt(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
     fn nvim_get_option_ptr_by_idx(opt_idx: c_int) -> *mut std::ffi::c_void;
     fn rs_optval_copy(o: OptVal) -> OptVal;
+    fn rs_option_is_hidden(opt_idx: c_int) -> c_int;
+    fn rs_set_option_impl(
+        opt_idx: c_int,
+        value: OptVal,
+        opt_flags: c_int,
+        set_sid: c_int,
+        direct: c_int,
+        value_replaced: c_int,
+        errbuf: *mut c_char,
+        errbuflen: usize,
+    ) -> *const c_char;
+    fn nvim_opt_get_curbuf() -> *mut std::ffi::c_void;
+    fn nvim_opt_get_curwin() -> *mut std::ffi::c_void;
+    fn nvim_opt_set_curbuf(buf: *mut std::ffi::c_void);
+    fn nvim_opt_set_curwin(win: *mut std::ffi::c_void);
+    fn nvim_win_get_w_buffer(win: *const std::ffi::c_void) -> *mut std::ffi::c_void;
     fn xmalloc(size: usize) -> *mut c_char;
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
@@ -979,6 +995,85 @@ pub unsafe extern "C" fn rs_optval_to_cstr(o: OptVal) -> *mut c_char {
 
 /// OPT_INVALID sentinel
 const OPT_INVALID: c_int = -1;
+
+/// IOSIZE matching C definition (1024+1 = 1025)
+const IOSIZE: usize = 1025;
+
+/// OptScope constants matching C enum (kOptScope*)
+#[allow(dead_code)]
+const K_OPT_SCOPE_GLOBAL: c_int = 0;
+const K_OPT_SCOPE_WIN: c_int = 1;
+const K_OPT_SCOPE_BUF: c_int = 2;
+
+// =============================================================================
+// Phase 15: set_option_direct, set_option_direct_for
+// =============================================================================
+
+/// Rust implementation of set_option_direct.
+///
+/// Sets an option value directly, without processing any side effects.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_option_direct(
+    opt_idx: c_int,
+    value: OptVal,
+    opt_flags: c_int,
+    set_sid: c_int,
+) {
+    if rs_option_is_hidden(opt_idx) != 0 {
+        return;
+    }
+
+    let mut errbuf = [0i8; IOSIZE];
+    let errmsg = rs_set_option_impl(
+        opt_idx,
+        rs_optval_copy(value),
+        opt_flags,
+        set_sid,
+        1, // direct = true
+        1, // value_replaced = true
+        errbuf.as_mut_ptr(),
+        IOSIZE,
+    );
+    debug_assert!(errmsg.is_null(), "set_option_direct should not fail");
+    let _ = errmsg;
+}
+
+/// Rust implementation of set_option_direct_for.
+///
+/// Sets an option value directly for a buffer/window, without side effects.
+/// Saves/restores curbuf and curwin around the call.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_option_direct_for(
+    opt_idx: c_int,
+    value: OptVal,
+    opt_flags: c_int,
+    set_sid: c_int,
+    scope: c_int,
+    from: *mut std::ffi::c_void,
+) {
+    let save_curbuf = nvim_opt_get_curbuf();
+    let save_curwin = nvim_opt_get_curwin();
+
+    // Adjust curbuf/curwin for the target scope.
+    // Don't use switch_option_context (that calls aucmd_prepbuf with side effects).
+    if scope == K_OPT_SCOPE_WIN {
+        nvim_opt_set_curwin(from);
+        let buf = nvim_win_get_w_buffer(from.cast_const());
+        nvim_opt_set_curbuf(buf);
+    } else if scope == K_OPT_SCOPE_BUF {
+        nvim_opt_set_curbuf(from);
+    }
+    // K_OPT_SCOPE_GLOBAL: no change to curbuf/curwin
+
+    rs_set_option_direct(opt_idx, value, opt_flags, set_sid);
+
+    nvim_opt_set_curwin(save_curwin);
+    nvim_opt_set_curbuf(save_curbuf);
+}
+
+// =============================================================================
+// Phase 15: get_option_value, get_option_ptr
+// =============================================================================
 
 /// Rust implementation of get_option_value.
 ///

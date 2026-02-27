@@ -354,6 +354,9 @@ extern char *rs_optval_to_cstr(OptVal o);
 // Phase 15 option value API (from Rust value.rs)
 extern OptVal rs_get_option_value(int opt_idx, int opt_flags);
 extern vimoption_T *rs_get_option_ptr(int opt_idx);
+extern void rs_set_option_direct(int opt_idx, OptVal value, int opt_flags, int set_sid);
+extern void rs_set_option_direct_for(int opt_idx, OptVal value, int opt_flags, int set_sid,
+                                     int scope, void *from);
 
 // Rust FFI declarations (tag module)
 extern void rs_free_tagfunc_option(void);
@@ -2113,16 +2116,7 @@ static const char *set_option(const OptIndex opt_idx, OptVal value, int opt_flag
 ///                      SID_NONE: Don't set script ID.
 void set_option_direct(OptIndex opt_idx, OptVal value, int opt_flags, scid_T set_sid)
 {
-  static char errbuf[IOSIZE];
-
-  if (is_option_hidden(opt_idx)) {
-    return;
-  }
-
-  const char *errmsg = set_option(opt_idx, rs_optval_copy(value), opt_flags, set_sid, true, true,
-                                  errbuf, sizeof(errbuf));
-  assert(errmsg == NULL);
-  (void)errmsg;  // ignore unused warning
+  rs_set_option_direct(opt_idx, value, opt_flags, (int)set_sid);
 }
 
 /// Set option value directly for buffer / window, without processing any side effects.
@@ -2138,28 +2132,7 @@ void set_option_direct(OptIndex opt_idx, OptVal value, int opt_flags, scid_T set
 void set_option_direct_for(OptIndex opt_idx, OptVal value, int opt_flags, scid_T set_sid,
                            OptScope scope, void *const from)
 {
-  buf_T *save_curbuf = curbuf;
-  win_T *save_curwin = curwin;
-
-  // Don't use switch_option_context(), as that calls aucmd_prepbuf(), which may have unintended
-  // side-effects when setting an option directly. Just change the values of curbuf and curwin if
-  // needed, no need to properly switch the window / buffer.
-  switch (scope) {
-  case kOptScopeGlobal:
-    break;
-  case kOptScopeWin:
-    curwin = (win_T *)from;
-    curbuf = curwin->w_buffer;
-    break;
-  case kOptScopeBuf:
-    curbuf = (buf_T *)from;
-    break;
-  }
-
-  set_option_direct(opt_idx, value, opt_flags, set_sid);
-
-  curwin = save_curwin;
-  curbuf = save_curbuf;
+  rs_set_option_direct_for(opt_idx, value, opt_flags, (int)set_sid, (int)scope, (void *)from);
 }
 
 /// Set the value of an option.
@@ -2691,6 +2664,8 @@ char *nvim_escape_option_str_cmdline(char *var)
 /// curbuf/curwin accessors for option expansion Rust code.
 buf_T *nvim_opt_get_curbuf(void) { return curbuf; }
 win_T *nvim_opt_get_curwin(void) { return curwin; }
+void nvim_opt_set_curbuf(buf_T *buf) { curbuf = buf; }
+void nvim_opt_set_curwin(win_T *win) { curwin = win; }
 
 /// Expansion handler for :set= when we just want to fill in with the existing value.
 extern int rs_expand_old_setting(int *numMatches, char ***matches);
