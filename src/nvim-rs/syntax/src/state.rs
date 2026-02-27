@@ -91,12 +91,21 @@ extern "C" {
     fn nvim_stateitem_set_cont_list(item: StateItemHandle, list: IdListHandle);
     fn nvim_stateitem_set_next_list(item: StateItemHandle, list: IdListHandle);
     fn nvim_stateitem_set_extmatch(item: StateItemHandle, em: ExtMatchHandle);
-    fn nvim_stateitem_set_m_lnum(item: StateItemHandle, lnum: c_int);
-    fn nvim_stateitem_set_m_startcol(item: StateItemHandle, col: c_int);
-    fn nvim_stateitem_set_m_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
-    fn nvim_stateitem_set_h_startpos(item: StateItemHandle, lnum: c_int, col: c_int);
-    fn nvim_stateitem_set_h_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
-    fn nvim_stateitem_set_eoe_pos(item: StateItemHandle, lnum: c_int, col: c_int);
+    // Bulk position setter (pass c_int::MIN for fields to skip)
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_set_positions(
+        item: StateItemHandle,
+        m_lnum: c_int,
+        m_startcol: c_int,
+        m_end_lnum: c_int,
+        m_end_col: c_int,
+        h_start_lnum: c_int,
+        h_start_col: c_int,
+        h_end_lnum: c_int,
+        h_end_col: c_int,
+        eoe_lnum: c_int,
+        eoe_col: c_int,
+    );
 
     // -------------------------------------------------------------------------
     // Synblock state accessors
@@ -733,45 +742,71 @@ pub fn stateitem_set_extmatch(item: StateItemHandle, em: ExtMatchHandle) {
     }
 }
 
+const SKIP: c_int = c_int::MIN;
+
 /// Set the match line number for a state item
 pub fn stateitem_set_m_lnum(item: StateItemHandle, lnum: i32) {
     if !item.is_null() {
-        unsafe { nvim_stateitem_set_m_lnum(item, lnum) }
+        unsafe {
+            nvim_stateitem_set_positions(
+                item, lnum, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP,
+            )
+        }
     }
 }
 
 /// Set the match start column for a state item
 pub fn stateitem_set_m_startcol(item: StateItemHandle, col: i32) {
     if !item.is_null() {
-        unsafe { nvim_stateitem_set_m_startcol(item, col) }
+        unsafe {
+            nvim_stateitem_set_positions(
+                item, SKIP, col, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP,
+            )
+        }
     }
 }
 
 /// Set the match end position for a state item
 pub fn stateitem_set_m_endpos(item: StateItemHandle, pos: Position) {
     if !item.is_null() {
-        unsafe { nvim_stateitem_set_m_endpos(item, pos.lnum, pos.col) }
+        unsafe {
+            nvim_stateitem_set_positions(
+                item, SKIP, SKIP, pos.lnum, pos.col, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP,
+            )
+        }
     }
 }
 
 /// Set the highlight start position for a state item
 pub fn stateitem_set_h_startpos(item: StateItemHandle, pos: Position) {
     if !item.is_null() {
-        unsafe { nvim_stateitem_set_h_startpos(item, pos.lnum, pos.col) }
+        unsafe {
+            nvim_stateitem_set_positions(
+                item, SKIP, SKIP, SKIP, SKIP, pos.lnum, pos.col, SKIP, SKIP, SKIP, SKIP,
+            )
+        }
     }
 }
 
 /// Set the highlight end position for a state item
 pub fn stateitem_set_h_endpos(item: StateItemHandle, pos: Position) {
     if !item.is_null() {
-        unsafe { nvim_stateitem_set_h_endpos(item, pos.lnum, pos.col) }
+        unsafe {
+            nvim_stateitem_set_positions(
+                item, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, pos.lnum, pos.col, SKIP, SKIP,
+            )
+        }
     }
 }
 
 /// Set the end-of-end position for a state item
 pub fn stateitem_set_eoe_pos(item: StateItemHandle, pos: Position) {
     if !item.is_null() {
-        unsafe { nvim_stateitem_set_eoe_pos(item, pos.lnum, pos.col) }
+        unsafe {
+            nvim_stateitem_set_positions(
+                item, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, pos.lnum, pos.col,
+            )
+        }
     }
 }
 

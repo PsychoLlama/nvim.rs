@@ -30,8 +30,22 @@ extern "C" {
 
     // State item region accessors
     fn nvim_stateitem_get_end_idx(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_set_eoe_pos(item: StateItemHandle, lnum: c_int, col: c_int);
     fn nvim_stateitem_set_end_idx(item: StateItemHandle, end_idx: c_int);
+    // Bulk position setter (pass c_int::MIN to skip a field)
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_set_positions(
+        item: StateItemHandle,
+        m_lnum: c_int,
+        m_startcol: c_int,
+        m_end_lnum: c_int,
+        m_end_col: c_int,
+        h_start_lnum: c_int,
+        h_start_col: c_int,
+        h_end_lnum: c_int,
+        h_end_col: c_int,
+        eoe_lnum: c_int,
+        eoe_col: c_int,
+    );
     #[allow(clippy::too_many_arguments)]
     fn nvim_stateitem_get_positions(
         item: StateItemHandle,
@@ -74,9 +88,9 @@ extern "C" {
     fn nvim_stateitem_get_flags(item: StateItemHandle) -> c_int;
     fn nvim_stateitem_get_extmatch(item: StateItemHandle) -> ExtMatchHandle;
     fn nvim_stateitem_set_ends(item: StateItemHandle, ends: c_int);
-    fn nvim_stateitem_set_m_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
-    fn nvim_stateitem_set_h_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
 }
+
+const SKIP: c_int = c_int::MIN;
 
 // =============================================================================
 // Pattern type enumeration
@@ -456,26 +470,43 @@ pub unsafe fn update_si_end(sip: StateItemHandle, startcol: i32, force: bool) {
     if result.m_endpos.lnum == 0 {
         // No end pattern matched
         let pat_flags = nvim_syn_get_pattern_flags(si_idx);
+        let line_len = nvim_syn_getcurline_len();
         if pat_flags & HL_ONELINE != 0 {
             // A "oneline" never continues in the next line
             nvim_stateitem_set_ends(sip, 1);
-            nvim_stateitem_set_m_endpos(sip, current_lnum, nvim_syn_getcurline_len());
+            nvim_stateitem_set_positions(
+                sip,
+                SKIP,
+                SKIP,
+                current_lnum,
+                line_len,
+                SKIP,
+                SKIP,
+                current_lnum,
+                line_len,
+                SKIP,
+                SKIP,
+            );
         } else {
             // Continues in the next line
             nvim_stateitem_set_ends(sip, 0);
-            nvim_stateitem_set_m_endpos(sip, 0, 0);
-        }
-        // h_endpos matches m_endpos for no-end-match case
-        if pat_flags & HL_ONELINE != 0 {
-            nvim_stateitem_set_h_endpos(sip, current_lnum, nvim_syn_getcurline_len());
-        } else {
-            nvim_stateitem_set_h_endpos(sip, 0, 0);
+            nvim_stateitem_set_positions(sip, SKIP, SKIP, 0, 0, SKIP, SKIP, 0, 0, SKIP, SKIP);
         }
     } else {
         // Match within this line
-        nvim_stateitem_set_m_endpos(sip, result.m_endpos.lnum, result.m_endpos.col);
-        nvim_stateitem_set_h_endpos(sip, result.hl_endpos.lnum, result.hl_endpos.col);
-        nvim_stateitem_set_eoe_pos(sip, result.end_endpos.lnum, result.end_endpos.col);
+        nvim_stateitem_set_positions(
+            sip,
+            SKIP,
+            SKIP,
+            result.m_endpos.lnum,
+            result.m_endpos.col,
+            SKIP,
+            SKIP,
+            result.hl_endpos.lnum,
+            result.hl_endpos.col,
+            result.end_endpos.lnum,
+            result.end_endpos.col,
+        );
         nvim_stateitem_set_ends(sip, 1);
         nvim_stateitem_set_end_idx(sip, result.end_idx);
     }
@@ -585,7 +616,9 @@ pub fn stateitem_eoe_pos(item: StateItemHandle) -> Position {
 /// Set the end-of-end position for a state item.
 pub unsafe fn set_stateitem_eoe_pos(item: StateItemHandle, pos: Position) {
     if !item.is_null() {
-        nvim_stateitem_set_eoe_pos(item, pos.lnum, pos.col);
+        nvim_stateitem_set_positions(
+            item, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, pos.lnum, pos.col,
+        );
     }
 }
 

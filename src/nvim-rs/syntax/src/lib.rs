@@ -583,14 +583,21 @@ extern "C" {
     // -------------------------------------------------------------------------
     // Phase 24.4: Pattern Stack Operations Helpers (new declarations only)
     // -------------------------------------------------------------------------
-    /// Set si_h_startpos
-    fn nvim_stateitem_set_h_startpos(item: StateItemHandle, lnum: c_int, col: c_int);
-
-    /// Set si_m_startcol
-    fn nvim_stateitem_set_m_startcol(item: StateItemHandle, col: c_int);
-
-    /// Set si_m_lnum
-    fn nvim_stateitem_set_m_lnum(item: StateItemHandle, lnum: c_int);
+    /// Bulk position setter (pass c_int::MIN to skip a field)
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_set_positions(
+        item: StateItemHandle,
+        m_lnum: c_int,
+        m_startcol: c_int,
+        m_end_lnum: c_int,
+        m_end_col: c_int,
+        h_start_lnum: c_int,
+        h_start_col: c_int,
+        h_end_lnum: c_int,
+        h_end_col: c_int,
+        eoe_lnum: c_int,
+        eoe_col: c_int,
+    );
     /// Set si_cchar
     fn nvim_stateitem_set_cchar(item: StateItemHandle, cchar: c_int);
     // -------------------------------------------------------------------------
@@ -2475,6 +2482,9 @@ pub unsafe extern "C" fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int {
 // =============================================================================
 // rs_update_si_end, rs_push_next_match, rs_find_endpos:
 // Now implemented in region.rs and check_ends.rs modules
+/// Sentinel value for nvim_stateitem_set_positions: skip this field.
+const SKIP: c_int = c_int::MIN;
+
 /// Set stateitem h_startpos.
 ///
 /// # Safety
@@ -2485,7 +2495,9 @@ pub unsafe extern "C" fn rs_stateitem_set_h_startpos(
     lnum: c_int,
     col: c_int,
 ) {
-    nvim_stateitem_set_h_startpos(item, lnum, col);
+    nvim_stateitem_set_positions(
+        item, SKIP, SKIP, SKIP, SKIP, lnum, col, SKIP, SKIP, SKIP, SKIP,
+    );
 }
 
 /// Set stateitem m_startcol.
@@ -2494,7 +2506,9 @@ pub unsafe extern "C" fn rs_stateitem_set_h_startpos(
 /// This function accesses C global state and must be called from the main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_stateitem_set_m_startcol(item: StateItemHandle, col: c_int) {
-    nvim_stateitem_set_m_startcol(item, col);
+    nvim_stateitem_set_positions(
+        item, SKIP, col, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP,
+    );
 }
 
 /// Set stateitem m_lnum.
@@ -2503,7 +2517,9 @@ pub unsafe extern "C" fn rs_stateitem_set_m_startcol(item: StateItemHandle, col:
 /// This function accesses C global state and must be called from the main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_stateitem_set_m_lnum(item: StateItemHandle, lnum: c_int) {
-    nvim_stateitem_set_m_lnum(item, lnum);
+    nvim_stateitem_set_positions(
+        item, lnum, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP,
+    );
 }
 /// Set stateitem cchar.
 ///

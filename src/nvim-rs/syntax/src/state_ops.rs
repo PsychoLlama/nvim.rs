@@ -56,7 +56,6 @@ extern "C" {
     fn nvim_stateitem_set_cchar(item: StateItemHandle, cchar: c_int);
     fn nvim_stateitem_set_extmatch(item: StateItemHandle, em: ExtMatchHandle);
     fn nvim_stateitem_set_ends(item: StateItemHandle, ends: c_int);
-    fn nvim_stateitem_set_m_lnum(item: StateItemHandle, lnum: c_int);
     fn nvim_stateitem_set_next_list(item: StateItemHandle, list: IdListHandle);
 
     // Extmatch reference management
@@ -86,9 +85,24 @@ extern "C" {
 
     // Phase 3: stateitem setters for cur_state_set_matchcont
     fn nvim_stateitem_or_flags(item: StateItemHandle, flags: c_int);
-    fn nvim_stateitem_set_m_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
-    fn nvim_stateitem_set_h_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
+    // Bulk position setter (pass c_int::MIN to skip a field)
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_set_positions(
+        item: StateItemHandle,
+        m_lnum: c_int,
+        m_startcol: c_int,
+        m_end_lnum: c_int,
+        m_end_col: c_int,
+        h_start_lnum: c_int,
+        h_start_col: c_int,
+        h_end_lnum: c_int,
+        h_end_col: c_int,
+        eoe_lnum: c_int,
+        eoe_col: c_int,
+    );
 }
+
+const SKIP: c_int = c_int::MIN;
 
 // =============================================================================
 // Phase 2 Rust implementations
@@ -168,7 +182,9 @@ pub unsafe extern "C" fn rs_syn_set_cur_state_item(
     let new_em = nvim_syn_ref_extmatch(extmatch);
     nvim_stateitem_set_extmatch(item, new_em);
     nvim_stateitem_set_ends(item, 0);
-    nvim_stateitem_set_m_lnum(item, 0);
+    nvim_stateitem_set_positions(
+        item, 0, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP,
+    );
     // Set si_next_list based on pattern's sp_next_list
     let next_list = if si_idx >= 0 {
         nvim_syn_get_pattern_next_list(si_idx)
@@ -381,7 +397,6 @@ pub unsafe extern "C" fn rs_cur_state_set_matchcont(i: c_int) {
         return;
     }
     nvim_stateitem_or_flags(item, HL_MATCHCONT);
-    nvim_stateitem_set_m_endpos(item, 0, 0);
-    nvim_stateitem_set_h_endpos(item, 0, 0);
+    nvim_stateitem_set_positions(item, SKIP, SKIP, 0, 0, SKIP, SKIP, 0, 0, SKIP, SKIP);
     nvim_stateitem_set_ends(item, 1);
 }

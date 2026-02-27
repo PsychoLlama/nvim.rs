@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -1145,32 +1146,6 @@ void nvim_stateitem_get_positions(stateitem_T *item,
   if (eoe_col) { *eoe_col = (int)item->si_eoe_pos.col; }
 }
 
-/// Set si_m_endpos
-void nvim_stateitem_set_m_endpos(stateitem_T *item, int lnum, int col)
-{
-  if (item) {
-    item->si_m_endpos.lnum = (linenr_T)lnum;
-    item->si_m_endpos.col = (colnr_T)col;
-  }
-}
-
-/// Set si_h_endpos
-void nvim_stateitem_set_h_endpos(stateitem_T *item, int lnum, int col)
-{
-  if (item) {
-    item->si_h_endpos.lnum = (linenr_T)lnum;
-    item->si_h_endpos.col = (colnr_T)col;
-  }
-}
-
-/// Set si_eoe_pos
-void nvim_stateitem_set_eoe_pos(stateitem_T *item, int lnum, int col)
-{
-  if (item) {
-    item->si_eoe_pos.lnum = (linenr_T)lnum;
-    item->si_eoe_pos.col = (colnr_T)col;
-  }
-}
 
 /// Set si_idx
 void nvim_stateitem_set_idx(stateitem_T *item, int idx)
@@ -1427,29 +1402,28 @@ int nvim_syn_get_pattern_syn_match_id(int idx)
 
 int nvim_syn_is_current_state_empty(void) { return GA_EMPTY(&current_state) ? 1 : 0; }
 
-/// Set si_h_startpos
-void nvim_stateitem_set_h_startpos(stateitem_T *item, int lnum, int col)
+/// Bulk setter for stateitem_T position fields.
+/// Pass INT_MIN for any field that should not be modified.
+void nvim_stateitem_set_positions(stateitem_T *item,
+    int m_lnum, int m_startcol,
+    int m_end_lnum, int m_end_col,
+    int h_start_lnum, int h_start_col,
+    int h_end_lnum, int h_end_col,
+    int eoe_lnum, int eoe_col)
 {
-  if (item) {
-    item->si_h_startpos.lnum = lnum;
-    item->si_h_startpos.col = col;
+  if (!item) {
+    return;
   }
-}
-
-/// Set si_m_startcol
-void nvim_stateitem_set_m_startcol(stateitem_T *item, int col)
-{
-  if (item) {
-    item->si_m_startcol = col;
-  }
-}
-
-/// Set si_m_lnum
-void nvim_stateitem_set_m_lnum(stateitem_T *item, int lnum)
-{
-  if (item) {
-    item->si_m_lnum = lnum;
-  }
+  if (m_lnum != INT_MIN) { item->si_m_lnum = m_lnum; }
+  if (m_startcol != INT_MIN) { item->si_m_startcol = m_startcol; }
+  if (m_end_lnum != INT_MIN) { item->si_m_endpos.lnum = (linenr_T)m_end_lnum; }
+  if (m_end_col != INT_MIN) { item->si_m_endpos.col = (colnr_T)m_end_col; }
+  if (h_start_lnum != INT_MIN) { item->si_h_startpos.lnum = (linenr_T)h_start_lnum; }
+  if (h_start_col != INT_MIN) { item->si_h_startpos.col = (colnr_T)h_start_col; }
+  if (h_end_lnum != INT_MIN) { item->si_h_endpos.lnum = (linenr_T)h_end_lnum; }
+  if (h_end_col != INT_MIN) { item->si_h_endpos.col = (colnr_T)h_end_col; }
+  if (eoe_lnum != INT_MIN) { item->si_eoe_pos.lnum = (linenr_T)eoe_lnum; }
+  if (eoe_col != INT_MIN) { item->si_eoe_pos.col = (colnr_T)eoe_col; }
 }
 
 /// Or si_flags with a value

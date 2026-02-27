@@ -8,6 +8,8 @@
 use std::ffi::c_int;
 
 use crate::check_ends::{check_keepend, check_state_ends, update_si_attr};
+
+const SKIP: c_int = c_int::MIN;
 use crate::current_attr::syn_finish_line;
 use crate::region::update_si_end;
 use crate::types::{
@@ -88,7 +90,21 @@ extern "C" {
     // Stateitem accessors
     fn nvim_syn_get_top_stateitem() -> StateItemHandle;
     fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_set_h_startpos(item: StateItemHandle, lnum: c_int, col: c_int);
+    // Bulk position setter (pass c_int::MIN to skip a field)
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_set_positions(
+        item: StateItemHandle,
+        m_lnum: c_int,
+        m_startcol: c_int,
+        m_end_lnum: c_int,
+        m_end_col: c_int,
+        h_start_lnum: c_int,
+        h_start_col: c_int,
+        h_end_lnum: c_int,
+        h_end_col: c_int,
+        eoe_lnum: c_int,
+        eoe_col: c_int,
+    );
     #[allow(clippy::too_many_arguments)]
     fn nvim_stateitem_get_positions(
         item: StateItemHandle,
@@ -441,10 +457,18 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
                 if found_flags & HL_SYNC_HERE != 0 {
                     if nvim_syn_get_current_state_len() > 0 {
                         let cur_si = nvim_syn_get_top_stateitem();
-                        nvim_stateitem_set_h_startpos(
+                        nvim_stateitem_set_positions(
                             cur_si,
+                            SKIP,
+                            SKIP,
+                            SKIP,
+                            SKIP,
                             found_current_lnum,
                             found_current_col,
+                            SKIP,
+                            SKIP,
+                            SKIP,
+                            SKIP,
                         );
                         update_si_end(cur_si, nvim_syn_get_current_col(), true);
                         check_keepend();

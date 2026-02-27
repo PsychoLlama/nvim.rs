@@ -83,12 +83,21 @@ extern "C" {
     fn nvim_stateitem_set_cont_list(item: StateItemHandle, list: IdListHandle);
     fn nvim_stateitem_set_next_list(item: StateItemHandle, list: IdListHandle);
     fn nvim_stateitem_set_extmatch(item: StateItemHandle, em: ExtMatchHandle);
-    fn nvim_stateitem_set_m_lnum(item: StateItemHandle, lnum: c_int);
-    fn nvim_stateitem_set_m_startcol(item: StateItemHandle, col: c_int);
-    fn nvim_stateitem_set_m_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
-    fn nvim_stateitem_set_h_startpos(item: StateItemHandle, lnum: c_int, col: c_int);
-    fn nvim_stateitem_set_h_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
-    fn nvim_stateitem_set_eoe_pos(item: StateItemHandle, lnum: c_int, col: c_int);
+    // Bulk position setter (pass c_int::MIN to skip a field)
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_set_positions(
+        item: StateItemHandle,
+        m_lnum: c_int,
+        m_startcol: c_int,
+        m_end_lnum: c_int,
+        m_end_col: c_int,
+        h_start_lnum: c_int,
+        h_start_col: c_int,
+        h_end_lnum: c_int,
+        h_end_col: c_int,
+        eoe_lnum: c_int,
+        eoe_col: c_int,
+    );
 
     // Current next list
     fn nvim_syn_set_current_next_list(list: IdListHandle);
@@ -120,6 +129,7 @@ extern "C" {
 
 const MAXCOL: i32 = 0x7fffffff;
 const NUL: i32 = 0;
+const SKIP: c_int = c_int::MIN;
 
 /// All position fields of a stateitem_T, fetched in one call.
 struct ItemPositions {
@@ -324,21 +334,32 @@ pub unsafe fn check_keepend() {
                 col: pos.m_end_col,
             };
             limit_pos_zero(&mut m_endpos, &maxpos);
-            nvim_stateitem_set_m_endpos(sip, m_endpos.lnum, m_endpos.col);
 
             let mut h_endpos = Position {
                 lnum: pos.h_end_lnum,
                 col: pos.h_end_col,
             };
             limit_pos_zero(&mut h_endpos, &maxpos_h);
-            nvim_stateitem_set_h_endpos(sip, h_endpos.lnum, h_endpos.col);
 
             let mut eoe_pos = Position {
                 lnum: pos.eoe_lnum,
                 col: pos.eoe_col,
             };
             limit_pos_zero(&mut eoe_pos, &maxpos);
-            nvim_stateitem_set_eoe_pos(sip, eoe_pos.lnum, eoe_pos.col);
+
+            nvim_stateitem_set_positions(
+                sip,
+                SKIP,
+                SKIP,
+                m_endpos.lnum,
+                m_endpos.col,
+                SKIP,
+                SKIP,
+                h_endpos.lnum,
+                h_endpos.col,
+                eoe_pos.lnum,
+                eoe_pos.col,
+            );
 
             nvim_stateitem_set_ends(sip, 1);
         }
@@ -400,9 +421,19 @@ pub unsafe fn push_next_match() -> StateItemHandle {
     let h_start_lnum = positions.h_startpos.lnum;
     let h_start_col = positions.h_startpos.col;
 
-    nvim_stateitem_set_h_startpos(cur_si, h_start_lnum, h_start_col);
-    nvim_stateitem_set_m_startcol(cur_si, current_col);
-    nvim_stateitem_set_m_lnum(cur_si, current_lnum);
+    nvim_stateitem_set_positions(
+        cur_si,
+        current_lnum,
+        current_col,
+        SKIP,
+        SKIP,
+        h_start_lnum,
+        h_start_col,
+        SKIP,
+        SKIP,
+        SKIP,
+        SKIP,
+    );
     nvim_stateitem_set_flags(cur_si, pat_flags);
     let seqnr = nvim_syn_incr_next_seqnr();
     nvim_stateitem_set_seqnr(cur_si, seqnr);
@@ -427,13 +458,22 @@ pub unsafe fn push_next_match() -> StateItemHandle {
         crate::region::update_si_end(cur_si, positions.m_endpos.col, true);
         check_keepend();
     } else {
-        nvim_stateitem_set_m_endpos(cur_si, positions.m_endpos.lnum, positions.m_endpos.col);
-        nvim_stateitem_set_h_endpos(cur_si, positions.h_endpos.lnum, positions.h_endpos.col);
+        nvim_stateitem_set_positions(
+            cur_si,
+            SKIP,
+            SKIP,
+            positions.m_endpos.lnum,
+            positions.m_endpos.col,
+            SKIP,
+            SKIP,
+            positions.h_endpos.lnum,
+            positions.h_endpos.col,
+            positions.eoe_pos.lnum,
+            positions.eoe_pos.col,
+        );
 
         nvim_stateitem_set_ends(cur_si, 1);
         nvim_stateitem_or_flags(cur_si, nvim_syn_get_next_match_flags());
-
-        nvim_stateitem_set_eoe_pos(cur_si, positions.eoe_pos.lnum, positions.eoe_pos.col);
         nvim_stateitem_set_end_idx(cur_si, nvim_syn_get_next_match_end_idx());
     }
 
@@ -456,12 +496,19 @@ pub unsafe fn push_next_match() -> StateItemHandle {
         let sl = nvim_syn_get_current_state_len();
         let mg_si = nvim_syn_get_stateitem(sl - 1);
 
-        nvim_stateitem_set_h_startpos(mg_si, h_start_lnum, h_start_col);
-        nvim_stateitem_set_m_startcol(mg_si, current_col);
-        nvim_stateitem_set_m_lnum(mg_si, current_lnum);
-
-        nvim_stateitem_set_m_endpos(mg_si, positions.eos_pos.lnum, positions.eos_pos.col);
-        nvim_stateitem_set_h_endpos(mg_si, positions.eos_pos.lnum, positions.eos_pos.col);
+        nvim_stateitem_set_positions(
+            mg_si,
+            current_lnum,
+            current_col,
+            positions.eos_pos.lnum,
+            positions.eos_pos.col,
+            h_start_lnum,
+            h_start_col,
+            positions.eos_pos.lnum,
+            positions.eos_pos.col,
+            SKIP,
+            SKIP,
+        );
         nvim_stateitem_set_ends(mg_si, 1);
         nvim_stateitem_set_end_idx(mg_si, 0);
         nvim_stateitem_set_flags(mg_si, HL_MATCH);
@@ -532,8 +579,10 @@ pub unsafe fn check_state_ends() {
                 // Switch the item to show the end pattern match
                 nvim_stateitem_set_idx(cur_si, end_idx);
                 nvim_stateitem_set_end_idx(cur_si, 0);
-                nvim_stateitem_set_m_endpos(cur_si, eoe_lnum, eoe_col);
-                nvim_stateitem_set_h_endpos(cur_si, eoe_lnum, eoe_col);
+                nvim_stateitem_set_positions(
+                    cur_si, SKIP, SKIP, eoe_lnum, eoe_col, SKIP, SKIP, eoe_lnum, eoe_col, SKIP,
+                    SKIP,
+                );
                 nvim_stateitem_or_flags(cur_si, HL_MATCH);
                 let seqnr = nvim_syn_incr_next_seqnr();
                 nvim_stateitem_set_seqnr(cur_si, seqnr);

@@ -18,6 +18,7 @@ use crate::types::{
 };
 
 const MAXCOL: i32 = 0x7fff_ffff;
+const SKIP: c_int = c_int::MIN;
 
 // =============================================================================
 // FFI declarations
@@ -72,10 +73,21 @@ extern "C" {
     );
 
     // State item setters
-    fn nvim_stateitem_set_m_startcol(item: StateItemHandle, col: c_int);
-    fn nvim_stateitem_set_h_startpos(item: StateItemHandle, lnum: c_int, col: c_int);
-    fn nvim_stateitem_set_m_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
-    fn nvim_stateitem_set_h_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
+    // Bulk position setter (pass c_int::MIN to skip a field)
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_stateitem_set_positions(
+        item: StateItemHandle,
+        m_lnum: c_int,
+        m_startcol: c_int,
+        m_end_lnum: c_int,
+        m_end_col: c_int,
+        h_start_lnum: c_int,
+        h_start_col: c_int,
+        h_end_lnum: c_int,
+        h_end_col: c_int,
+        eoe_lnum: c_int,
+        eoe_col: c_int,
+    );
     fn nvim_stateitem_set_ends(item: StateItemHandle, ends: c_int);
     fn nvim_stateitem_set_end_idx(item: StateItemHandle, end_idx: c_int);
     fn nvim_stateitem_set_flags(item: StateItemHandle, flags: c_int);
@@ -348,10 +360,19 @@ pub unsafe fn syn_current_attr(
                         crate::state_ops::rs_syn_push_current_state(KEYWORD_IDX);
                         let new_len = nvim_syn_get_current_state_len();
                         let cur_si = nvim_syn_get_stateitem(new_len - 1);
-                        nvim_stateitem_set_m_startcol(cur_si, current_col);
-                        nvim_stateitem_set_h_startpos(cur_si, current_lnum, 0);
-                        nvim_stateitem_set_m_endpos(cur_si, current_lnum, endcol);
-                        nvim_stateitem_set_h_endpos(cur_si, current_lnum, endcol);
+                        nvim_stateitem_set_positions(
+                            cur_si,
+                            current_lnum,
+                            current_col,
+                            current_lnum,
+                            endcol,
+                            current_lnum,
+                            0,
+                            current_lnum,
+                            endcol,
+                            SKIP,
+                            SKIP,
+                        );
                         nvim_stateitem_set_ends(cur_si, 1);
                         nvim_stateitem_set_end_idx(cur_si, 0);
                         nvim_stateitem_set_flags(cur_si, flags);
