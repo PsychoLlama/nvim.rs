@@ -163,7 +163,6 @@ extern "C" {
 
     // Cursor manipulation wrappers
     fn nvim_check_cursor();
-    fn nvim_excmds_check_cursor_lnum();
     fn nvim_ecmd_check_cursor_col();
     fn nvim_excmds_check_fname() -> c_int;
     fn nvim_beginline(flags: c_int);
@@ -810,7 +809,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             } else if newlnum > 0 {
                 // Line number from caller or old position
                 nvim_ecmd_curwin_set_cursor(newlnum, nvim_ecmd_curwin_get_cursor_col());
-                nvim_excmds_check_cursor_lnum();
+                crate::nvim_check_cursor_lnum_call();
                 if solcol >= 0 && nvim_get_p_sol() == 0 {
                     // 'sol' is off: use last known column
                     nvim_ecmd_curwin_set_cursor(nvim_excmds_curwin_cursor_lnum(), solcol);

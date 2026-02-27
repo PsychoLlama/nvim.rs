@@ -1497,12 +1497,6 @@ int nvim_excmds_cmdmod_save_clear_lockmarks(void)
 /// Restore cmdmod.cmod_flags.
 void nvim_excmds_cmdmod_restore_flags(int saved) { cmdmod.cmod_flags = saved; }
 
-/// Check if CMOD_LOCKMARKS is currently set.
-int nvim_excmds_cmdmod_has_lockmarks(void)
-{
-  return (cmdmod.cmod_flags & CMOD_LOCKMARKS) != 0 ? 1 : 0;
-}
-
 /// Check if CMOD_KEEPMARKS is currently set.
 int nvim_excmds_cmdmod_has_keepmarks_now(void)
 {
@@ -1560,19 +1554,10 @@ void nvim_excmds_redraw_curbuf_later_valid(void) { redraw_curbuf_later(UPD_VALID
 /// Wrapper for invalidate_botline(curwin).
 void nvim_excmds_invalidate_botline(void) { invalidate_botline(curwin); }
 
-/// Get p_report option value.
-int nvim_excmds_get_p_report_int(void) { return (int)p_report; }
-
 /// Check vim_strchr(p_cpo, CPO_REMMARK) == NULL (returns 1 if NULL, 0 if found).
 int nvim_excmds_p_cpo_no_remmark(void)
 {
   return vim_strchr(p_cpo, CPO_REMMARK) == NULL ? 1 : 0;
-}
-
-/// Call mark_adjust(line1, line2, amount, 0, kExtmarkNOOP).
-void nvim_excmds_mark_adjust_noop(int line1, int line2, int amount)
-{
-  mark_adjust((linenr_T)line1, (linenr_T)line2, (linenr_T)amount, 0, kExtmarkNOOP);
 }
 
 /// Wrapper for rs_foldUpdate(curwin, ...).
@@ -1643,8 +1628,6 @@ void nvim_excmds_curbuf_op_adjust_lnum(int delta)
   curbuf->b_op_end.lnum += (linenr_T)delta;
 }
 
-/// os_remove wrapper.
-int nvim_excmds_os_remove(const char *path) { return os_remove(path); }
 
 /// Get curbuf->b_ml.ml_line_count.
 int nvim_excmds_curbuf_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
@@ -1684,9 +1667,6 @@ int nvim_excmds_curbuf_get_b_nwindows(void) { return curbuf->b_nwindows; }
 /// Wrap buf_hide(curbuf). Returns 1 if true.
 int nvim_excmds_buf_hide_curbuf(void) { return buf_hide(curbuf) ? 1 : 0; }
 
-/// Wrap curbufIsChanged(). Returns 1 if true.
-int nvim_excmds_curbufIsChanged_val(void) { return curbufIsChanged() ? 1 : 0; }
-
 /// Wrap autowrite(curbuf, forceit). Returns 1=OK, 0=FAIL.
 int nvim_excmds_autowrite_curbuf(int forceit)
 {
@@ -1701,12 +1681,6 @@ void nvim_excmds_dialog_changed_curbuf(void) { dialog_changed(curbuf, false); }
 
 /// Wrap no_write_message().
 void nvim_excmds_no_write_message(void) { no_write_message(); }
-
-/// Set curwin->w_cursor.lnum.
-void nvim_excmds_curwin_set_cursor_lnum(int lnum) { curwin->w_cursor.lnum = (linenr_T)lnum; }
-
-/// Wrap check_cursor_lnum(curwin).
-void nvim_excmds_check_cursor_lnum(void) { check_cursor_lnum(curwin); }
 
 /// Wrap do_ecmd(fnum, ffname, sfname, NULL, lnum, flags, curwin). Returns 1=OK, 0=FAIL.
 int nvim_excmds_do_ecmd_getfile(int fnum, char *ffname, char *sfname, int lnum, int flags)

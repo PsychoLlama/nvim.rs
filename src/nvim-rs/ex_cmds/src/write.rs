@@ -415,7 +415,6 @@ extern "C" {
     fn nvim_excmds_curbuf_get_b_fnum() -> c_int;
     fn nvim_excmds_curbuf_get_b_nwindows() -> c_int;
     fn nvim_excmds_buf_hide_curbuf() -> c_int;
-    fn nvim_excmds_curbufIsChanged_val() -> c_int;
     fn nvim_excmds_autowrite_curbuf(forceit: c_int) -> c_int;
     fn nvim_excmds_get_p_confirm() -> c_int;
     fn nvim_excmds_dialog_changed_curbuf();
@@ -423,8 +422,7 @@ extern "C" {
     fn nvim_excmds_no_wait_return_inc();
     fn nvim_excmds_no_wait_return_dec();
     fn nvim_excmds_setpcmark();
-    fn nvim_excmds_curwin_set_cursor_lnum(lnum: c_int);
-    fn nvim_excmds_check_cursor_lnum();
+    fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_excmds_do_ecmd_getfile(
         fnum: c_int,
         ffname: *mut c_char,
@@ -501,13 +499,13 @@ pub unsafe extern "C" fn rs_getfile(
         && forceit == 0
         && nvim_excmds_curbuf_get_b_nwindows() == 1
         && nvim_excmds_buf_hide_curbuf() == 0
-        && nvim_excmds_curbufIsChanged_val() != 0
+        && nvim_excmds_curbufIsChanged() != 0
         && nvim_excmds_autowrite_curbuf(forceit) == 0
     {
         if nvim_excmds_get_p_confirm() != 0 && nvim_excmds_get_p_write() != 0 {
             nvim_excmds_dialog_changed_curbuf();
         }
-        if nvim_excmds_curbufIsChanged_val() != 0 {
+        if nvim_excmds_curbufIsChanged() != 0 {
             nvim_excmds_no_wait_return_dec();
             nvim_excmds_no_write_message();
             xfree(free_me.cast());
@@ -524,9 +522,9 @@ pub unsafe extern "C" fn rs_getfile(
 
     if other == 0 {
         if lnum != 0 {
-            nvim_excmds_curwin_set_cursor_lnum(lnum);
+            nvim_curwin_set_cursor_lnum(lnum);
         }
-        nvim_excmds_check_cursor_lnum();
+        crate::nvim_check_cursor_lnum_call();
         beginline(BL_SOL_FIX_VAL);
         retval = GETFILE_SAME_FILE_VAL;
     } else {

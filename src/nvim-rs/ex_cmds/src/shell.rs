@@ -1064,7 +1064,7 @@ extern "C" {
     fn nvim_excmds_curwin_cursor_restore(saved: u64);
     fn nvim_excmds_cmdmod_save_clear_lockmarks() -> c_int;
     fn nvim_excmds_cmdmod_restore_flags(saved: c_int);
-    fn nvim_excmds_cmdmod_has_lockmarks() -> c_int;
+    fn nvim_cmdmod_has_lockmarks() -> c_int;
     fn nvim_excmds_cmdmod_has_keepmarks_now() -> c_int;
     fn nvim_excmds_vim_tempname() -> *mut c_char;
     fn nvim_excmds_buf_write_filter(
@@ -1087,9 +1087,7 @@ extern "C" {
     fn nvim_excmds_write_lnum_adjust(offset: c_int);
     fn nvim_excmds_redraw_curbuf_later_valid();
     fn nvim_excmds_invalidate_botline();
-    fn nvim_excmds_get_p_report_int() -> c_int;
     fn nvim_excmds_p_cpo_no_remmark() -> c_int;
-    fn nvim_excmds_mark_adjust_noop(line1: c_int, line2: c_int, amount: c_int);
     fn nvim_excmds_fold_update_curwin(top: c_int, bot: c_int);
     fn nvim_excmds_msg_lines_filtered(linecount: c_int);
     fn nvim_excmds_semsg_e482(fname: *const c_char);
@@ -1100,7 +1098,7 @@ extern "C" {
     fn nvim_excmds_curbuf_op_save(out_start: *mut u64, out_end: *mut u64);
     fn nvim_excmds_curbuf_op_restore(saved_start: u64, saved_end: u64);
     fn nvim_excmds_curbuf_op_adjust_lnum(delta: c_int);
-    fn nvim_excmds_os_remove(path: *const c_char) -> c_int;
+    fn nvim_bw_os_remove(path: *const c_char) -> c_int;
     fn nvim_excmds_curbuf_ml_line_count() -> c_int;
     fn nvim_excmds_get_curbuf_ptr() -> *mut std::ffi::c_void;
     fn nvim_excmds_aborting() -> c_int;
@@ -1342,15 +1340,28 @@ pub unsafe extern "C" fn rs_do_filter(
 
         if do_in {
             if nvim_excmds_cmdmod_has_keepmarks_now() != 0 || nvim_excmds_p_cpo_no_remmark() != 0 {
+                // KEXTMARK_NOOP = 0
+                const KEXTMARK_NOOP: c_int = 0;
+                const MAXLNUM: c_int = 0x7FFF_FFFF;
                 if read_linecount >= linecount {
                     // move all marks
-                    nvim_excmds_mark_adjust_noop(line1, line2, linecount);
+                    crate::nvim_excmds_mark_adjust(line1, line2, linecount, 0, KEXTMARK_NOOP);
                 } else {
                     // move marks from valid range, delete marks in deleted lines
-                    nvim_excmds_mark_adjust_noop(line1, line1 + read_linecount - 1, linecount);
-                    // MAXLNUM = 0x7FFFFFFF
-                    const MAXLNUM: c_int = 0x7FFF_FFFF;
-                    nvim_excmds_mark_adjust_noop(line1 + read_linecount, line2, MAXLNUM);
+                    crate::nvim_excmds_mark_adjust(
+                        line1,
+                        line1 + read_linecount - 1,
+                        linecount,
+                        0,
+                        KEXTMARK_NOOP,
+                    );
+                    crate::nvim_excmds_mark_adjust(
+                        line1 + read_linecount,
+                        line2,
+                        MAXLNUM,
+                        0,
+                        KEXTMARK_NOOP,
+                    );
                 }
             }
 
@@ -1374,7 +1385,7 @@ pub unsafe extern "C" fn rs_do_filter(
         beginline(BL_WHITE | BL_FIX);
         nvim_excmds_no_wait_return_dec();
 
-        if linecount > nvim_excmds_get_p_report_int() {
+        if (linecount as i64) > crate::nvim_excmds_p_report() {
             if do_in {
                 nvim_excmds_msg_lines_filtered(linecount);
             } else {
@@ -1419,15 +1430,15 @@ unsafe fn goto_filterend(
     if nvim_excmds_get_curbuf_ptr() != old_curbuf {
         nvim_excmds_no_wait_return_dec();
         nvim_excmds_emsg_e135();
-    } else if nvim_excmds_cmdmod_has_lockmarks() != 0 {
+    } else if nvim_cmdmod_has_lockmarks() != 0 {
         nvim_excmds_curbuf_op_restore(orig_start, orig_end);
     }
 
     if !itmp.is_null() {
-        nvim_excmds_os_remove(itmp);
+        nvim_bw_os_remove(itmp);
     }
     if !otmp.is_null() {
-        nvim_excmds_os_remove(otmp);
+        nvim_bw_os_remove(otmp);
     }
     xfree(itmp as *mut std::ffi::c_void);
     xfree(otmp as *mut std::ffi::c_void);
