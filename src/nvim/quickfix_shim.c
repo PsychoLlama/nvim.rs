@@ -1253,135 +1253,14 @@ bool nvim_qfl_set_qftf_cb_from_tv(void *qfl_void, void *tv_void)
   return false;
 }
 
-/// Set qfl->qf_title from a title dict value (tv_dict_get_string for "title" key in what dict).
-/// Frees existing title. Returns OK.
-int nvim_qfl_set_title_from_what(void *qi_void, int qf_idx, const void *what_void, const void *di_void)
-{
-  if (qi_void == NULL || what_void == NULL || di_void == NULL) { return FAIL; }
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  const dictitem_T *di = (const dictitem_T *)di_void;
-  if (di->di_tv.v_type != VAR_STRING) { return FAIL; }
-  qf_list_T *qfl = &qi->qf_lists[qf_idx];
-  xfree(qfl->qf_title);
-  qfl->qf_title = tv_dict_get_string((const dict_T *)what_void, "title", true);
-  if (qf_idx == qi->qf_curlist) {
-    rs_qf_update_win_titlevar(qi);
-  }
-  return OK;
-}
-
-/// Set quickfix list items via rs_qf_add_entries. Returns OK or FAIL.
-int nvim_qfl_set_items(void *qi_void, int qf_idx, void *di_void, int action)
-{
-  if (qi_void == NULL || di_void == NULL) { return FAIL; }
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  dictitem_T *di = (dictitem_T *)di_void;
-  if (di->di_tv.v_type != VAR_LIST) { return FAIL; }
-  char *title_save = xstrdup(qi->qf_lists[qf_idx].qf_title);
-  int retval = rs_qf_add_entries(qi, qf_idx, di->di_tv.vval.v_list, title_save,
-                                  action == ' ' ? 'a' : action);
-  xfree(title_save);
-  return retval;
-}
-
-/// Set quickfix list items from lines via rs_qf_init_ext. Returns OK or FAIL.
-int nvim_qfl_set_items_from_lines(void *qi_void, int qf_idx, const void *what_void,
-                                   void *di_void, int action)
-{
-  if (qi_void == NULL || what_void == NULL || di_void == NULL) { return FAIL; }
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  const dict_T *what = (const dict_T *)what_void;
-  dictitem_T *di = (dictitem_T *)di_void;
-
-  const char *errorformat = p_efm;
-  const dictitem_T *efm_di = tv_dict_find(what, S_LEN("efm"));
-  if (efm_di != NULL) {
-    if (efm_di->di_tv.v_type != VAR_STRING || efm_di->di_tv.vval.v_string == NULL) {
-      return FAIL;
-    }
-    errorformat = efm_di->di_tv.vval.v_string;
-  }
-
-  if (di->di_tv.v_type != VAR_LIST || di->di_tv.vval.v_list == NULL) {
-    return FAIL;
-  }
-
-  if (action == 'r' || action == 'u') {
-    rs_qf_free_items(&qi->qf_lists[qf_idx]);
-  }
-  if (rs_qf_init_ext(qi, qf_idx, NULL, NULL, &di->di_tv, errorformat, false, 0, 0, NULL, NULL) >= 0) {
-    return OK;
-  }
-  return FAIL;
-}
-
-/// Set the current index in the specified quickfix list via rs_qf_get_nth_entry.
-/// Returns OK or FAIL.
-int nvim_qfl_set_curidx(void *qi_void, void *qfl_void, void *di_void)
-{
-  if (qi_void == NULL || qfl_void == NULL || di_void == NULL) { return FAIL; }
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  const dictitem_T *di = (const dictitem_T *)di_void;
-
-  int newidx;
-  if (di->di_tv.v_type == VAR_STRING
-      && di->di_tv.vval.v_string != NULL
-      && strcmp(di->di_tv.vval.v_string, "$") == 0) {
-    newidx = qfl->qf_count;
-  } else {
-    bool denote = false;
-    newidx = (int)tv_get_number_chk(&di->di_tv, &denote);
-    if (denote) { return FAIL; }
-  }
-
-  if (newidx < 1) { return FAIL; }
-  newidx = MIN(newidx, qfl->qf_count);
-  const int old_qfidx = qfl->qf_index;
-  qfline_T *const qf_ptr = rs_qf_get_nth_entry(qfl, newidx, &newidx);
-  if (qf_ptr == NULL) { return FAIL; }
-  qfl->qf_ptr = qf_ptr;
-  qfl->qf_index = newidx;
-
-  if (qi->qf_lists[qi->qf_curlist].qf_id == qfl->qf_id) {
-    rs_qf_win_pos_update(qi, old_qfidx);
-  }
-  return OK;
-}
-
-/// Set qf_list_changed + update buffer for a qfl.
-void nvim_qfl_list_changed_and_update_buf(void *qi_void, void *qfl_void)
-{
-  if (qi_void == NULL) { return; }
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  if (qfl_void != NULL) {
-    rs_qf_incr_changedtick((qf_list_T *)qfl_void);
-  }
-  rs_qf_update_buffer(qi, NULL);
-}
-
-/// qf_list_changed only (no buffer update).
-void nvim_qfl_list_changed(void *qfl_void)
-{
-  if (qfl_void != NULL) {
-    rs_qf_incr_changedtick((qf_list_T *)qfl_void);
-  }
-}
-
-/// Find a dictitem_T by key in what dict (NUL-terminated key). Returns di_tv ptr or NULL.
-void *nvim_tv_dict_find_di_tv(void *dict, const char *key)
-{
-  if (dict == NULL || key == NULL) { return NULL; }
-  dictitem_T *di = tv_dict_find((dict_T *)dict, key, -1);
-  return di == NULL ? NULL : (void *)di;
-}
-
-/// Check if the action_arg is VAR_STRING and get the string.
-const char *nvim_tv_get_string_if_string(const void *tv)
-{
-  if (tv == NULL || ((const typval_T *)tv)->v_type != VAR_STRING) { return NULL; }
-  return tv_get_string_chk((const typval_T *)tv);
-}
+// nvim_qfl_set_title_from_what deleted: inlined into rs_qf_set_properties (Phase 15)
+// nvim_qfl_set_items deleted: inlined into rs_qf_set_properties (Phase 15)
+// nvim_qfl_set_items_from_lines deleted: inlined into rs_qf_set_properties (Phase 15)
+// nvim_qfl_set_curidx deleted: inlined into rs_qf_set_properties (Phase 15)
+// nvim_qfl_list_changed_and_update_buf deleted: inlined into rs_qf_set_properties (Phase 15)
+// nvim_qfl_list_changed deleted: callers use rs_qf_incr_changedtick directly (Phase 15)
+// nvim_tv_dict_find_di_tv deleted: callers use nvim_tv_dict_find directly (Phase 15)
+// nvim_tv_get_string_if_string deleted: no longer called from Rust (Phase 15)
 
 /// Emit E927 invalid action error.
 void nvim_emsg_invact(const char *act)
