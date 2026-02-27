@@ -1203,8 +1203,13 @@ extern "C" {
     fn nvim_curwin_get_cursor_col() -> c_int;
     fn nvim_option_get_p_cwh() -> c_int;
     fn setpcmark();
-    fn nvim_do_sub_getvcol_startcol(lnum: c_int, col: c_int, sc_out: *mut c_int);
-    fn nvim_do_sub_getvcol_endcol(lnum: c_int, col: c_int, ec_out: *mut c_int);
+    fn nvim_do_sub_getvcol_start_end(
+        lnum: c_int,
+        start_col: c_int,
+        end_col: c_int,
+        sc_out: *mut c_int,
+        ec_out: *mut c_int,
+    );
     fn nvim_do_sub_getcmdline_prompt(prompt_str: *const c_char) -> c_int;
     fn nvim_do_sub_prompt_for_input(str_: *const c_char) -> c_int;
     fn nvim_do_sub_update_screen_for_confirm();
@@ -1213,8 +1218,7 @@ extern "C" {
     fn nvim_excmds_syn_check_sub_group() -> c_int;
     fn nvim_excmds_disable_inccommand();
     fn nvim_option_p_icm_notnul() -> c_int;
-    fn nvim_do_sub_set_op_start(lnum: c_int);
-    fn nvim_do_sub_set_op_end(lnum: c_int);
+    fn nvim_do_sub_set_op_start_end(start_lnum: c_int, end_lnum: c_int);
     fn nvim_curbuf_modifiable() -> bool;
     fn nvim_emsg_nopresub();
     fn nvim_emsg_modifiable();
@@ -2131,8 +2135,7 @@ pub unsafe extern "C" fn rs_do_sub(
     let cur_sub_nsubs = nvim_excmds_get_sub_nsubs();
     if cur_sub_nsubs > start_nsubs {
         if nvim_cmdmod_has_lockmarks() == 0 {
-            nvim_do_sub_set_op_start(nvim_exarg_get_line1(eap));
-            nvim_do_sub_set_op_end(line2);
+            nvim_do_sub_set_op_start_end(nvim_exarg_get_line1(eap), line2);
         }
 
         if nvim_excmds_global_busy() == 0 {
@@ -2271,11 +2274,16 @@ unsafe fn handle_do_ask(
             // Exmode: use getcmdline_prompt
             rs_print_line_no_prefix(lnum, subflags.do_number as c_int, subflags.do_list as c_int);
 
+            let endpos0_col = nvim_regmmatch_endpos0_col(regmatch);
             let mut sc: c_int = 0;
             let mut ec: c_int = 0;
-            nvim_do_sub_getvcol_startcol(lnum, startpos0_col, &mut sc);
-            let endpos0_col = nvim_regmmatch_endpos0_col(regmatch);
-            nvim_do_sub_getvcol_endcol(lnum, 0_i32.max(endpos0_col - 1), &mut ec);
+            nvim_do_sub_getvcol_start_end(
+                lnum,
+                startpos0_col,
+                0_i32.max(endpos0_col - 1),
+                &mut sc,
+                &mut ec,
+            );
             nvim_curwin_set_cursor_col(startpos0_col);
 
             if subflags.do_number || nvim_curwin_get_w_p_nu() != 0 {

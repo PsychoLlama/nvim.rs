@@ -2059,19 +2059,15 @@ const char *nvim_do_sub_get_search_pat(void) { return get_search_pat(); }
 /// Wrap changed_window_setting(curwin).
 void nvim_do_sub_changed_window_setting(void) { changed_window_setting(curwin); }
 
-/// Wrap getvcol for start column (sc). Returns sc via out pointer.
-void nvim_do_sub_getvcol_startcol(int lnum, int col, int *sc_out)
+/// Wrap getvcol for both start and end columns.
+void nvim_do_sub_getvcol_start_end(int lnum, int start_col, int end_col,
+                                    int *sc_out, int *ec_out)
 {
-  pos_T pos = { (linenr_T)lnum, (colnr_T)col, 0 };
+  pos_T pos = { (linenr_T)lnum, (colnr_T)start_col, 0 };
   colnr_T sc = 0;
   getvcol(curwin, &pos, &sc, NULL, NULL);
   *sc_out = (int)sc;
-}
-
-/// Wrap getvcol for end column (ec). Returns ec via out pointer.
-void nvim_do_sub_getvcol_endcol(int lnum, int col, int *ec_out)
-{
-  pos_T pos = { (linenr_T)lnum, (colnr_T)col, 0 };
+  pos.col = (colnr_T)end_col;
   colnr_T ec = 0;
   getvcol(curwin, &pos, NULL, NULL, &ec);
   *ec_out = (int)ec;
@@ -2109,16 +2105,12 @@ void nvim_do_sub_update_screen_for_confirm(void)
   redraw_later(curwin, UPD_SOME_VALID);
 }
 
-/// Set curbuf->b_op_start.lnum and col = 0.
-void nvim_do_sub_set_op_start(int lnum)
+/// Set curbuf->b_op_start.lnum and b_op_end.lnum (both col = 0).
+void nvim_do_sub_set_op_start_end(int start_lnum, int end_lnum)
 {
-  curbuf->b_op_start.lnum = (linenr_T)lnum;
+  curbuf->b_op_start.lnum = (linenr_T)start_lnum;
   curbuf->b_op_start.col = 0;
-}
-/// Set curbuf->b_op_end.lnum and col = 0.
-void nvim_do_sub_set_op_end(int lnum)
-{
-  curbuf->b_op_end.lnum = (linenr_T)lnum;
+  curbuf->b_op_end.lnum = (linenr_T)end_lnum;
   curbuf->b_op_end.col = 0;
 }
 
