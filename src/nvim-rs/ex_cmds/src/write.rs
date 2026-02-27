@@ -20,7 +20,7 @@
 //! - Validation utilities
 //! - Helper functions for the C implementation
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, CStr, CString};
 
 use crate::range::{LineNr, LineRange};
 use crate::{BufHandle, ExArgHandle};
@@ -409,6 +409,7 @@ const ERR_E_EXISTS: c_int = 10; // e_exists
 const ERR_E768: c_int = 11; // E768 Swap file exists
 const ERR_E140: c_int = 12; // E140 partial buffer
 const ERR_E_ARGREQ: c_int = 13; // e_argreq
+const ERR_E143: c_int = 14; // E143 autocommands deleted new buffer + clear au_new_curbuf
 
 extern "C" {
     fn nvim_excmds_check_can_set_curbuf_forceit(forceit: c_int) -> c_int;
@@ -440,8 +441,6 @@ extern "C" {
     ) -> c_int;
     fn nvim_excmds_get_vim_var_str_swapcommand() -> *const c_char;
     fn nvim_excmds_set_vim_var_string_swapcommand(p: *const c_char);
-    fn nvim_excmds_format_swapcommand(command: *const c_char, newlnum: i64) -> *mut c_char;
-    fn nvim_excmds_semsg_e143_and_clear(name: *const c_char);
     fn beginline(flags: c_int);
 }
 
@@ -572,9 +571,14 @@ pub unsafe extern "C" fn rs_set_swapcommand(command: *const c_char, newlnum: c_i
         return 0;
     }
 
-    let p = nvim_excmds_format_swapcommand(command, newlnum as i64);
-    nvim_excmds_set_vim_var_string_swapcommand(p);
-    xfree(p.cast());
+    // Format swapcommand string: ":%s\r" if command is set, else "<lnum>G".
+    let s = if !command.is_null() {
+        let cmd = CStr::from_ptr(command).to_string_lossy();
+        CString::new(format!(":{cmd}\r")).unwrap_or_default()
+    } else {
+        CString::new(format!("{}G", newlnum)).unwrap_or_default()
+    };
+    nvim_excmds_set_vim_var_string_swapcommand(s.as_ptr());
     1
 }
 
@@ -586,7 +590,7 @@ pub unsafe extern "C" fn rs_set_swapcommand(command: *const c_char, newlnum: c_i
 /// `name` must be a valid C-allocated string pointer or null.
 #[no_mangle]
 pub unsafe extern "C" fn rs_delbuf_msg(name: *mut c_char) {
-    nvim_excmds_semsg_e143_and_clear(name);
+    nvim_excmds_error_msg(ERR_E143, name);
     xfree(name.cast());
 }
 

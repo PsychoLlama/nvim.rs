@@ -1596,6 +1596,12 @@ void nvim_excmds_error_msg(int error_id, const char *arg)
   case 11:  semsg(_("E768: Swap file exists: %s (:silent! overrides)"), arg); break;
   case 12:  emsg(_("E140: Use ! to write partial buffer")); break;
   case 13:  emsg(_(e_argreq)); break;
+  case 14:
+    semsg(_("E143: Autocommands unexpectedly deleted new buffer %s"),
+          arg == NULL ? "" : arg);
+    au_new_curbuf.br_buf = NULL;
+    au_new_curbuf.br_buf_free_count = 0;
+    break;
   default:  break;
   }
 }
@@ -1699,29 +1705,6 @@ const char *nvim_excmds_get_vim_var_str_swapcommand(void)
 void nvim_excmds_set_vim_var_string_swapcommand(const char *p)
 {
   set_vim_var_string(VV_SWAPCOMMAND, (char *)p, -1);
-}
-
-/// For set_swapcommand: vim_snprintf into allocated buffer.
-/// Returns newly allocated string: ":%s\r" if command != NULL, else "NNG\0".
-char *nvim_excmds_format_swapcommand(const char *command, int64_t newlnum)
-{
-  size_t len = (command != NULL) ? strlen(command) + 3 : 30;
-  char *p = xmalloc(len);
-  if (command != NULL) {
-    vim_snprintf(p, len, ":%s\r", command);
-  } else {
-    vim_snprintf(p, len, "%" PRId64 "G", newlnum);
-  }
-  return p;
-}
-
-/// For delbuf_msg: semsg E143 and clear au_new_curbuf.
-void nvim_excmds_semsg_e143_and_clear(const char *name)
-{
-  semsg(_("E143: Autocommands unexpectedly deleted new buffer %s"),
-        name == NULL ? "" : name);
-  au_new_curbuf.br_buf = NULL;
-  au_new_curbuf.br_buf_free_count = 0;
 }
 
 // --- Phase 4: do_wqall FFI accessors ---
