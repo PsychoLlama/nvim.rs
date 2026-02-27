@@ -776,9 +776,7 @@ void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_cul
 
 // set_options_bin global option accessors
 OptInt nvim_get_p_tw(void) { return p_tw; }
-void nvim_set_p_tw(OptInt v) { p_tw = v; }
 OptInt nvim_get_p_wm(void) { return p_wm; }
-void nvim_set_p_wm(OptInt v) { p_wm = v; }
 void nvim_set_p_bin(int v) { p_bin = v != 0; }
 
 // set_helplang_default accessors

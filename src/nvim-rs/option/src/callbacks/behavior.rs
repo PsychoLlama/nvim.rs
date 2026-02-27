@@ -121,9 +121,7 @@ extern "C" {
 
     // set_options_bin global option accessors
     fn nvim_get_p_tw() -> OptInt;
-    fn nvim_set_p_tw(v: OptInt);
     fn nvim_get_p_wm() -> OptInt;
-    fn nvim_set_p_wm(v: OptInt);
     fn nvim_get_p_ml() -> c_int;
     fn nvim_option_set_ml(v: c_int);
     fn nvim_get_p_et() -> c_int;
@@ -771,8 +769,8 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
         }
         if (opt_flags & OPT_LOCAL_BIN) == 0 {
             // set bin-compatible global values
-            nvim_set_p_tw(0);
-            nvim_set_p_wm(0);
+            crate::set_textwidth(0);
+            crate::set_wrapmargin(0);
             nvim_option_set_ml(0);
             nvim_option_set_et(0);
             nvim_set_p_bin(1); // needed when called for the "-b" argument
@@ -786,8 +784,8 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
             nvim_curbuf_set_b_p_et(nvim_curbuf_get_b_p_et());
         }
         if (opt_flags & OPT_LOCAL_BIN) == 0 {
-            nvim_set_p_tw(nvim_get_p_tw_nobin());
-            nvim_set_p_wm(nvim_get_p_wm_nobin());
+            crate::set_textwidth(nvim_get_p_tw_nobin());
+            crate::set_wrapmargin(nvim_get_p_wm_nobin());
             nvim_option_set_ml(nvim_get_p_ml_nobin());
             nvim_option_set_et(nvim_get_p_et_nobin());
         }
