@@ -183,8 +183,18 @@ extern "C" {
     fn nvim_diffio_get_orig_fname(dio: DiffioHandle) -> *const c_char;
     fn nvim_diffio_is_internal(dio: DiffioHandle) -> bool;
     fn nvim_diff_eval_diff(orig: *const c_char, new_f: *const c_char, diff: *const c_char);
-    fn nvim_diff_run_external_shell(dio: DiffioHandle) -> c_int;
     fn nvim_diffio_get_diff_fname(dio: DiffioHandle) -> *const c_char;
+
+    // Phase 3b: run_external_shell accessors
+    fn nvim_diff_get_p_srr() -> *const c_char;
+    fn nvim_diff_env_clear_diff_options();
+    fn nvim_diff_call_shell_diff(cmd: *const c_char);
+    fn nvim_diff_get_a_works() -> c_int;
+    fn nvim_diff_set_a_works(val: c_int);
+    fn nvim_diff_xfree(p: *mut std::ffi::c_void);
+
+    /// rs_append_redir -- the Rust append_redir implementation (from ex_cmds crate).
+    fn rs_append_redir(buf: *mut c_char, buflen: usize, opt: *const c_char, fname: *const c_char);
 
     /// xdl_diff -- the xdiff library entry point.
     fn xdl_diff(
@@ -418,7 +428,7 @@ pub unsafe extern "C" fn rs_diff_file(dio: DiffioHandle) -> c_int {
     }
 
     // External shell diff.
-    nvim_diff_run_external_shell(dio)
+    rs_diff_run_external_shell(dio)
 }
 
 // Additional accessor used in rs_diff_file but declared in buffer.rs for other uses.
@@ -426,6 +436,97 @@ pub unsafe extern "C" fn rs_diff_file(dio: DiffioHandle) -> c_int {
 extern "C" {
     fn nvim_is_diffexpr_empty() -> bool;
     fn nvim_diffio_get_new_fname(dio: DiffioHandle) -> *const c_char;
+}
+
+// ============================================================================
+// Phase 3b: run_external_shell (build diff command and shell out)
+// ============================================================================
+
+// TriState value for diff_a_works = kFalse (diff -a is known to not work)
+const K_FALSE_A: c_int = 0;
+
+/// Run the external diff command for the given diffio.
+///
+/// Replicates C `nvim_diff_run_external_shell(dio)`:
+/// - Clears DIFF_OPTIONS environment variable if set
+/// - Builds `diff [-a] [-b] [-w] [-Z] [-B] [-i] orig new` command string
+/// - Appends shell redirect via rs_append_redir
+/// - Calls the shell with filter+silent+doout flags
+///
+/// # Safety
+/// `dio` must be a valid, non-null diffio handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_run_external_shell(dio: DiffioHandle) -> c_int {
+    let tmp_orig = nvim_diffio_get_orig_fname(dio);
+    let tmp_new = nvim_diffio_get_new_fname(dio);
+    let tmp_diff = nvim_diffio_get_diff_fname(dio);
+    let p_srr = nvim_diff_get_p_srr();
+
+    // Compute length just like C: sum of fname lengths + srr length + 27
+    let orig_len = libc::strlen(tmp_orig);
+    let new_len = libc::strlen(tmp_new);
+    let diff_len = libc::strlen(tmp_diff);
+    let srr_len = libc::strlen(p_srr);
+    let len = orig_len + new_len + diff_len + srr_len + 27;
+
+    // Allocate via xmalloc so append_redir / xfree are consistent
+    let cmd = nvim_diff_xmalloc(len);
+
+    // Clear DIFF_OPTIONS env var if set (prevents unexpected behavior)
+    nvim_diff_env_clear_diff_options();
+
+    // Build the diff command string
+    let diff_flags = nvim_diff_get_diff_flags();
+    let a_works = nvim_diff_get_a_works();
+
+    let a_flag = if a_works == K_FALSE_A { "" } else { "-a " };
+    let b_flag = if (diff_flags & DIFF_IWHITE) != 0 {
+        "-b "
+    } else {
+        ""
+    };
+    let w_flag = if (diff_flags & DIFF_IWHITEALL) != 0 {
+        "-w "
+    } else {
+        ""
+    };
+    let z_flag = if (diff_flags & DIFF_IWHITEEOL) != 0 {
+        "-Z "
+    } else {
+        ""
+    };
+    let cap_b_flag = if (diff_flags & DIFF_IBLANK) != 0 {
+        "-B "
+    } else {
+        ""
+    };
+    let i_flag = if (diff_flags & DIFF_ICASE) != 0 {
+        "-i "
+    } else {
+        ""
+    };
+
+    // Convert tmp_orig and tmp_new to Rust str slices for format!
+    let orig_str = std::ffi::CStr::from_ptr(tmp_orig).to_string_lossy();
+    let new_str = std::ffi::CStr::from_ptr(tmp_new).to_string_lossy();
+
+    let cmd_str =
+        format!("diff {a_flag}{b_flag}{w_flag}{z_flag}{cap_b_flag}{i_flag}{orig_str} {new_str}\0");
+
+    // Copy into the C-allocated buffer (must fit; len was computed to be sufficient)
+    let bytes = cmd_str.as_bytes();
+    std::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), cmd, bytes.len());
+
+    // Append redirect (modifies cmd buffer in place)
+    rs_append_redir(cmd, len, p_srr, tmp_diff);
+
+    // Run the shell command
+    nvim_diff_call_shell_diff(cmd);
+
+    // Free the C-allocated buffer
+    nvim_diff_xfree(cmd.cast());
+
+    OK
 }
 
 // ============================================================================
@@ -447,8 +548,6 @@ extern "C" {
     fn nvim_diff_fclose(fd: *mut std::ffi::c_void);
     fn nvim_diff_fgets(fd: *mut std::ffi::c_void, buf: *mut c_char, buflen: c_int) -> bool;
     fn nvim_diff_os_remove(fname: *const c_char);
-    fn nvim_diff_get_a_works() -> c_int;
-    fn nvim_diff_set_a_works(val: c_int);
     fn nvim_diff_emsg_e810();
     fn nvim_diff_emsg_e97();
 }

@@ -455,7 +455,11 @@ int nvim_diff_write_to_file(buf_T *buf, const char *fname, linenr_T start, linen
 int nvim_diff_get_a_works(void) { return (int)diff_a_works; }
 void nvim_diff_set_a_works(int val) { diff_a_works = (TriState)val; }
 void nvim_diff_eval_diff(const char *orig, const char *new_f, const char *diff) { eval_diff((char *)orig, (char *)new_f, (char *)diff); }
-int nvim_diff_run_external_shell(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; if (dio == NULL) { return FAIL; } char *tmp_orig = dio->dio_orig.din_fname; char *tmp_new = dio->dio_new.din_fname; char *tmp_diff = dio->dio_diff.dout_fname; const size_t len = (strlen(tmp_orig) + strlen(tmp_new) + strlen(tmp_diff) + strlen(p_srr) + 27); char *const cmd = xmalloc(len); if (os_env_exists("DIFF_OPTIONS", true)) { os_unsetenv("DIFF_OPTIONS"); } vim_snprintf(cmd, len, "diff %s%s%s%s%s%s%s%s %s", diff_a_works == kFalse ? "" : "-a ", "", (diff_flags & DIFF_IWHITE) ? "-b " : "", (diff_flags & DIFF_IWHITEALL) ? "-w " : "", (diff_flags & DIFF_IWHITEEOL) ? "-Z " : "", (diff_flags & DIFF_IBLANK) ? "-B " : "", (diff_flags & DIFF_ICASE) ? "-i " : "", tmp_orig, tmp_new); append_redir(cmd, len, p_srr, tmp_diff); block_autocmds(); call_shell(cmd, kShellOptFilter | kShellOptSilent | kShellOptDoOut, NULL); unblock_autocmds(); xfree(cmd); return OK; }
+extern int rs_diff_run_external_shell(void *dio);
+const char *nvim_diff_get_p_srr(void) { return p_srr; }
+void nvim_diff_env_clear_diff_options(void) { if (os_env_exists("DIFF_OPTIONS", true)) { os_unsetenv("DIFF_OPTIONS"); } }
+void nvim_diff_call_shell_diff(const char *cmd) { block_autocmds(); call_shell((char *)cmd, kShellOptFilter | kShellOptSilent | kShellOptDoOut, NULL); unblock_autocmds(); }
+int nvim_diff_run_external_shell(void *dio_ptr) { return rs_diff_run_external_shell(dio_ptr); }
 // Phase 4 (check_external_diff) accessors
 void *nvim_diff_fopen_write(const char *fname) { return os_fopen(fname, "w"); }
 bool nvim_diff_fwrite_line(void *fd, const char *data, size_t len) { return fwrite(data, len, 1, (FILE *)fd) == 1; }
