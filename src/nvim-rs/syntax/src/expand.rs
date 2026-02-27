@@ -24,10 +24,6 @@ extern "C" {
     fn nvim_syn_get_expand_what() -> c_int;
     fn nvim_syn_set_expand_what(what: c_int);
 
-    // subcommand name access
-    fn nvim_syn_get_subcommand_count() -> c_int;
-    fn nvim_syn_get_subcommand_name(idx: c_int) -> *const c_char;
-
     // cluster expansion: format @name into xp->xp_buf and return it
     fn nvim_syn_expand_cluster_name(xp: *mut c_void, idx: c_int) -> *mut c_char;
     fn nvim_syn_get_expand_cluster_count() -> c_int;
@@ -49,6 +45,30 @@ const EXP_CLUSTER: c_int = 4;
 const EXPAND_NOTHING: c_int = 0;
 const EXPAND_SYNTAX: c_int = 12;
 const EXPAND_HIGHLIGHT: c_int = 13;
+
+// Subcommand names for :syntax tab completion (NUL-terminated byte slices).
+// Mirrors the C subcommand_names[] array formerly in syntax_accessors.c.
+pub(crate) static SUBCOMMAND_NAMES: &[&[u8]] = &[
+    b"case\0",
+    b"clear\0",
+    b"cluster\0",
+    b"conceal\0",
+    b"enable\0",
+    b"foldlevel\0",
+    b"include\0",
+    b"iskeyword\0",
+    b"keyword\0",
+    b"list\0",
+    b"manual\0",
+    b"match\0",
+    b"on\0",
+    b"off\0",
+    b"region\0",
+    b"reset\0",
+    b"spell\0",
+    b"sync\0",
+    b"\0",
+];
 
 // Static argument arrays for tab completion (NUL-terminated byte slices)
 static CASE_ARGS: [&[u8]; 2] = [b"match\0", b"ignore\0"];
@@ -166,11 +186,11 @@ pub unsafe extern "C" fn rs_get_syntax_name(xp: *mut c_void, idx: c_int) -> *mut
     let what = nvim_syn_get_expand_what();
     match what {
         w if w == EXP_SUBCMD => {
-            let count = nvim_syn_get_subcommand_count();
-            if idx >= count {
+            let u = idx as usize;
+            if u >= SUBCOMMAND_NAMES.len() {
                 return std::ptr::null_mut();
             }
-            nvim_syn_get_subcommand_name(idx).cast_mut()
+            SUBCOMMAND_NAMES[u].as_ptr().cast::<c_char>().cast_mut()
         }
         w if w == EXP_CASE => {
             let u = idx as usize;

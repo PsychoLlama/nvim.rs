@@ -920,29 +920,6 @@ int nvim_stateitem_has_cont_list(stateitem_T *item) { return item->si_cont_list 
 int nvim_syn_get_topgrp(void) { return curwin->w_s->b_syn_topgrp; }
 void nvim_syn_set_topgrp(int topgrp) { curwin->w_s->b_syn_topgrp = topgrp; }
 
-/// Subcommand names list (mirrors SUBCOMMANDS in Rust commands.rs).
-/// Used by tab-completion (expand.rs) to iterate subcommand names.
-static const char *const subcommand_names[] = {
-  "case", "clear", "cluster", "conceal", "enable", "foldlevel",
-  "include", "iskeyword", "keyword", "list", "manual", "match",
-  "on", "off", "region", "reset", "spell", "sync", "",
-};
-
-int nvim_syn_get_subcommand_count(void)
-{
-  return (int)(sizeof(subcommand_names) / sizeof(subcommand_names[0]));
-}
-
-/// Get subcommand name by index
-const char *nvim_syn_get_subcommand_name(int idx)
-{
-  int count = (int)(sizeof(subcommand_names) / sizeof(subcommand_names[0]));
-  if (idx < 0 || idx >= count) {
-    return NULL;
-  }
-  return subcommand_names[idx];
-}
-
 /// Check if a pattern at index is for syncing
 int nvim_synblock_pattern_is_syncing(synblock_T *block, int idx)
 {

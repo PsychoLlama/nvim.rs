@@ -498,11 +498,6 @@ extern "C" {
     // -------------------------------------------------------------------------
     // Phase 18a: Synblock setters for :syntax commands
     // -------------------------------------------------------------------------
-    /// Get the number of subcommands
-    fn nvim_syn_get_subcommand_count() -> c_int;
-
-    /// Get subcommand name by index
-    fn nvim_syn_get_subcommand_name(idx: c_int) -> *const c_char;
 
     /// Check if a pattern at index is for syncing
     fn nvim_synblock_pattern_is_syncing(block: SynBlockHandle, idx: c_int) -> c_int;
@@ -1419,18 +1414,25 @@ pub fn synblock_ic_setting(block: SynBlockHandle) -> i32 {
 /// Get the number of syntax subcommands
 #[must_use]
 pub fn subcommand_count() -> i32 {
-    unsafe { nvim_syn_get_subcommand_count() }
+    expand::SUBCOMMAND_NAMES.len() as i32
 }
 
 /// Get subcommand name by index
 #[must_use]
 pub fn subcommand_name(idx: i32) -> Option<&'static str> {
-    let ptr = unsafe { nvim_syn_get_subcommand_name(idx) };
-    if ptr.is_null() {
+    let u = idx as usize;
+    let names = expand::SUBCOMMAND_NAMES;
+    if u >= names.len() {
         return None;
     }
-    // SAFETY: The subcommand names are static strings in C
-    unsafe { std::ffi::CStr::from_ptr(ptr).to_str().ok() }
+    // Strip trailing NUL and return as str
+    let bytes = names[u];
+    let without_nul = if bytes.last() == Some(&0) {
+        &bytes[..bytes.len() - 1]
+    } else {
+        bytes
+    };
+    std::str::from_utf8(without_nul).ok()
 }
 
 /// Check if a pattern at index is for syncing
