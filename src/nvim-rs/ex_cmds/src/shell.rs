@@ -424,7 +424,7 @@ extern "C" {
     fn nvim_excmds_get_autocmd_busy() -> c_int;
     fn nvim_excmds_get_msg_silent() -> c_int;
     fn nvim_excmds_any_buf_changed() -> c_int;
-    fn nvim_excmds_msg_puts_no_write_warning();
+    fn nvim_excmds_emsg_by_id(id: c_int);
     fn nvim_excmds_call_shell(cmd: *mut c_char, flags: c_int);
     fn nvim_excmds_set_msg_didout(val: c_int);
     fn nvim_excmds_set_did_check_timestamps(val: c_int);
@@ -457,8 +457,6 @@ extern "C" {
         do_out: bool,
     );
     fn nvim_excmds_apply_autocmds_shellfilterpost();
-    fn nvim_excmds_emsg_e_noprev();
-    fn nvim_excmds_msg_ext_set_kind_shell_cmd();
     fn msg_start();
     fn msg_putchar(c: c_int);
     fn nvim_excmds_msg_outtrans(s: *const c_char);
@@ -806,7 +804,7 @@ pub unsafe extern "C" fn rs_do_shell(cmd: *mut c_char, flags: c_int) {
         && nvim_excmds_get_msg_silent() == 0
         && nvim_excmds_any_buf_changed() != 0
     {
-        nvim_excmds_msg_puts_no_write_warning();
+        nvim_excmds_emsg_by_id(11); // msg_puts_no_write_warning
     }
 
     // This ui_cursor_goto is required for when the '\n' resulted in a
@@ -884,7 +882,7 @@ pub unsafe extern "C" fn rs_do_bang(
                 Some(ptr) if !ptr.is_null() => cstrlen(ptr),
                 _ => {
                     // Need prevcmd but it's not set
-                    nvim_excmds_emsg_e_noprev();
+                    nvim_excmds_emsg_by_id(1); // e_noprev
                     if !newcmd.is_null() {
                         xfree(newcmd as *mut std::ffi::c_void);
                     }
@@ -968,7 +966,7 @@ pub unsafe extern "C" fn rs_do_bang(
         let prevcmd_ptr = match PREVCMD {
             Some(ptr) if !ptr.is_null() => ptr,
             _ => {
-                nvim_excmds_emsg_e_noprev();
+                nvim_excmds_emsg_by_id(1); // e_noprev
                 if free_newcmd {
                     xfree(newcmd as *mut std::ffi::c_void);
                 }
@@ -1017,7 +1015,7 @@ pub unsafe extern "C" fn rs_do_bang(
     if addr_count == 0 {
         // :! -- echo the command and execute
         msg_start();
-        nvim_excmds_msg_ext_set_kind_shell_cmd();
+        nvim_excmds_emsg_by_id(10); // msg_ext_set_kind_shell_cmd
         msg_putchar(b':' as c_int);
         msg_putchar(b'!' as c_int);
         nvim_excmds_msg_outtrans(newcmd);

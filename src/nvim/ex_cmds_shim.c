@@ -984,7 +984,6 @@ void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
   eap->cmdidx = saved_cmdidx;
 }
 void nvim_excmds_xfree(void *ptr) { xfree(ptr); }
-void nvim_excmds_msg_no_old_files(void) { msg(_("No old files"), 0); }
 
 // ex_oldfiles implemented in Rust (rs_ex_oldfiles in ex_cmds/src/display.rs)
 extern void rs_ex_oldfiles(exarg_T *eap);
@@ -1023,8 +1022,6 @@ void nvim_excmds_apply_autocmds_shellfilterpost(void)
 {
   apply_autocmds(EVENT_SHELLFILTERPOST, NULL, NULL, false, curbuf);
 }
-void nvim_excmds_emsg_e_noprev(void) { emsg(_(e_noprev)); }
-void nvim_excmds_msg_ext_set_kind_shell_cmd(void) { msg_ext_set_kind("shell_cmd"); }
 
 // --- do_shell FFI accessors ---
 int nvim_excmds_get_p_warn(void) { return p_warn ? 1 : 0; }
@@ -1038,10 +1035,6 @@ int nvim_excmds_any_buf_changed(void)
     }
   }
   return 0;
-}
-void nvim_excmds_msg_puts_no_write_warning(void)
-{
-  msg_puts(_("[No write since last change]\n"));
 }
 void nvim_excmds_call_shell(char *cmd, int flags)
 {
@@ -1209,62 +1202,40 @@ void nvim_excmds_ml_clearmarked(void) { ml_clearmarked(); }
 /// Wrapper for line_breakcheck (used in global pass 1 loop).
 void nvim_excmds_line_breakcheck(void) { line_breakcheck(); }
 
-/// Emit "Pattern not found: %s" message.
-void nvim_excmds_smsg_pattern_not_found(const char *pat)
+/// Dispatch no-arg error/message by id.
+/// IDs: 1=e_noprev, 2=E147, 3=E148, 4=e_backslash, 5=e_invcmd, 6=e_interr(msg),
+///      7=e_zerocount, 8=msg_empty, 9=msg_no_old_files, 10=msg_ext_set_kind_shell_cmd,
+///      11=msg_puts_no_write_warning
+void nvim_excmds_emsg_by_id(int id)
 {
-  smsg(0, _("Pattern not found: %s"), pat);
+  switch (id) {
+  case 1: emsg(_(e_noprev)); break;
+  case 2: emsg(_("E147: Cannot do :global recursive with a range")); break;
+  case 3: emsg(_("E148: Regular expression missing from global")); break;
+  case 4: emsg(_(e_backslash)); break;
+  case 5: emsg(_(e_invcmd)); break;
+  case 6: msg(_(e_interr), 0); break;
+  case 7: emsg(_(e_zerocount)); break;
+  case 8: msg("", 0); break;
+  case 9: msg(_("No old files"), 0); break;
+  case 10: msg_ext_set_kind("shell_cmd"); break;
+  case 11: msg_puts(_("[No write since last change]\n")); break;
+  }
 }
 
-/// Emit "Pattern found in every line: %s" message.
-void nvim_excmds_smsg_pattern_found_every(const char *pat)
+/// Dispatch message-with-string-arg by id.
+/// IDs: 1=smsg_pattern_not_found, 2=smsg_pattern_found_every, 3=semsg_patnotf2,
+///      4=semsg_trailing, 5=semsg_val_too_large
+void nvim_excmds_emsg_with_arg(int id, const char *arg)
 {
-  smsg(0, _("Pattern found in every line: %s"), pat);
+  switch (id) {
+  case 1: smsg(0, _("Pattern not found: %s"), arg); break;
+  case 2: smsg(0, _("Pattern found in every line: %s"), arg); break;
+  case 3: semsg(_(e_patnotf2), arg); break;
+  case 4: semsg(_(e_trailing_arg), arg); break;
+  case 5: semsg(_(e_val_too_large), arg); break;
+  }
 }
-
-/// Emit E147 error: Cannot do :global recursive with a range.
-void nvim_excmds_emsg_e147(void)
-{
-  emsg(_("E147: Cannot do :global recursive with a range"));
-}
-
-/// Emit E148 error: Regular expression missing from global.
-void nvim_excmds_emsg_e148(void)
-{
-  emsg(_("E148: Regular expression missing from global"));
-}
-
-/// Emit e_backslash error.
-void nvim_excmds_emsg_backslash(void)
-{
-  emsg(_(e_backslash));
-}
-
-/// Emit e_invcmd error.
-void nvim_excmds_emsg_invcmd(void)
-{
-  emsg(_(e_invcmd));
-}
-
-/// Emit e_interr error message.
-void nvim_excmds_emsg_interr_msg(void)
-{
-  msg(_(e_interr), 0);
-}
-
-/// Emit e_zerocount error.
-void nvim_excmds_emsg_zerocount(void) { emsg(_(e_zerocount)); }
-
-/// Emit msg("", 0) (empty message).
-void nvim_excmds_msg_empty(void) { msg("", 0); }
-
-/// Emit semsg(_(e_patnotf2), pat).
-void nvim_excmds_semsg_patnotf2(const char *pat) { semsg(_(e_patnotf2), pat); }
-
-/// Emit semsg(_(e_trailing_arg), cmd).
-void nvim_excmds_semsg_trailing(const char *cmd) { semsg(_(e_trailing_arg), cmd); }
-
-/// Emit semsg(_(e_val_too_large), buf).
-void nvim_excmds_semsg_val_too_large(const char *buf) { semsg(_(e_val_too_large), buf); }
 
 /// Wrap syn_check_group("Substitute"). Returns hl_id.
 int nvim_excmds_syn_check_sub_group(void)

@@ -73,13 +73,8 @@ extern "C" {
     fn nvim_excmds_ml_setmarked(lnum: c_int);
     fn nvim_excmds_ml_clearmarked();
     fn nvim_excmds_line_breakcheck();
-    fn nvim_excmds_smsg_pattern_not_found(pat: *const c_char);
-    fn nvim_excmds_smsg_pattern_found_every(pat: *const c_char);
-    fn nvim_excmds_emsg_e147();
-    fn nvim_excmds_emsg_e148();
-    fn nvim_excmds_emsg_backslash();
-    fn nvim_excmds_emsg_invcmd();
-    fn nvim_excmds_emsg_interr_msg();
+    fn nvim_excmds_emsg_by_id(id: c_int);
+    fn nvim_excmds_emsg_with_arg(id: c_int, arg: *const c_char);
     fn nvim_excmds_curwin_cursor_lnum() -> c_int;
     fn nvim_excmds_curwin_set_col_zero();
     fn rs_check_regexp_delim(c: c_int) -> c_int;
@@ -576,7 +571,7 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
     // ":g/found/v/notfound/command".
     if nvim_excmds_global_busy() != 0 && (line1 != 1 || line2 != ml_line_count) {
         // will increment global_busy to break out of the loop
-        nvim_excmds_emsg_e147();
+        nvim_excmds_emsg_by_id(2); // E147: Cannot do :global recursive with a range
         return;
     }
 
@@ -597,7 +592,7 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
         // Check that next char is one of /?&
         let ok = vim_strchr(c"/?&".as_ptr(), *cmd as c_int);
         if ok.is_null() {
-            nvim_excmds_emsg_backslash();
+            nvim_excmds_emsg_by_id(4); // e_backslash
             return;
         }
         if *cmd == b'&' as c_char {
@@ -609,7 +604,7 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
         pat = c"".as_ptr();
         patlen = 0;
     } else if *cmd == 0 {
-        nvim_excmds_emsg_e148();
+        nvim_excmds_emsg_by_id(3); // E148: Regular expression missing from global
         return;
     } else if rs_check_regexp_delim(*cmd as c_int) == FAIL {
         return;
@@ -630,7 +625,7 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
     let mut used_pat: *const c_char = std::ptr::null();
     let regmatch = nvim_excmds_search_regcomp_multi(pat, patlen, &mut used_pat, which_pat);
     if regmatch.is_null() {
-        nvim_excmds_emsg_invcmd();
+        nvim_excmds_emsg_by_id(5); // e_invcmd
         return;
     }
 
@@ -662,12 +657,12 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
 
         // Pass 2: execute the command for each marked line
         if nvim_excmds_got_int() != 0 {
-            nvim_excmds_emsg_interr_msg();
+            nvim_excmds_emsg_by_id(6); // e_interr (msg)
         } else if ndone == 0 {
             if type_char == b'v' {
-                nvim_excmds_smsg_pattern_found_every(used_pat);
+                nvim_excmds_emsg_with_arg(2, used_pat); // smsg_pattern_found_every
             } else {
-                nvim_excmds_smsg_pattern_not_found(used_pat);
+                nvim_excmds_emsg_with_arg(1, used_pat); // smsg_pattern_not_found
             }
         } else {
             rs_global_exe(cmd);

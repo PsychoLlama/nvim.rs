@@ -878,7 +878,7 @@ extern "C" {
     fn nvim_excmds_expand_env_save(p: *const std::ffi::c_char) -> *mut std::ffi::c_char;
     fn nvim_excmds_do_exedit_edit(eap: *mut ExArgHandle, arg: *mut std::ffi::c_char);
     fn nvim_excmds_xfree(ptr: *mut std::ffi::c_void);
-    fn nvim_excmds_msg_no_old_files();
+    fn nvim_excmds_emsg_by_id(id: c_int);
 }
 
 /// List v:oldfiles in a nice way (`:oldfiles` command).
@@ -891,7 +891,7 @@ pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
     let iter = nvim_excmds_oldfiles_iter_start(&mut list_len);
 
     if iter.is_null() {
-        nvim_excmds_msg_no_old_files();
+        nvim_excmds_emsg_by_id(9); // msg_no_old_files
         return;
     }
 

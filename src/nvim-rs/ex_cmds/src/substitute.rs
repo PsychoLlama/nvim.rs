@@ -1213,14 +1213,10 @@ extern "C" {
     fn nvim_do_sub_set_op_end(lnum: c_int);
     fn nvim_curbuf_modifiable() -> bool;
     fn nvim_emsg_nopresub();
-    fn nvim_excmds_emsg_invcmd();
     fn nvim_emsg_modifiable();
-    fn nvim_excmds_emsg_zerocount();
-    fn nvim_excmds_emsg_backslash();
-    fn nvim_excmds_semsg_patnotf2(pat: *const c_char);
-    fn nvim_excmds_semsg_trailing(cmd: *const c_char);
+    fn nvim_excmds_emsg_by_id(id: c_int);
+    fn nvim_excmds_emsg_with_arg(id: c_int, arg: *const c_char);
     fn nvim_do_sub_format_confirm_prompt(sub_str: *const c_char) -> *mut c_char;
-    fn nvim_excmds_semsg_val_too_large(buf: *const c_char);
     fn nvim_do_sub_extmark_splice(
         start_row: c_int,
         start_col: c_int,
@@ -1610,12 +1606,12 @@ pub unsafe extern "C" fn rs_do_sub(
     if sub_ascii_isdigit(*cmd as u8) {
         let i = nvim_do_sub_getdigits_int(&mut cmd);
         if i <= 0 && nvim_exarg_get_skip(eap) == 0 && subflags_local.do_error {
-            nvim_excmds_emsg_zerocount();
+            nvim_excmds_emsg_by_id(7); // e_zerocount
             xfree(sub as *mut std::ffi::c_void);
             return 0;
         } else if i == c_int::MAX {
             let buf_str = std::ffi::CString::new(format!("{}", i)).unwrap_or_default();
-            nvim_excmds_semsg_val_too_large(buf_str.as_ptr());
+            nvim_excmds_emsg_with_arg(5, buf_str.as_ptr()); // semsg_val_too_large
             xfree(sub as *mut std::ffi::c_void);
             return 0;
         }
@@ -1631,7 +1627,7 @@ pub unsafe extern "C" fn rs_do_sub(
     if *cmd != 0 && *cmd != b'"' as i8 {
         let nextcmd = nvim_do_sub_check_nextcmd(cmd);
         if nextcmd.is_null() {
-            nvim_excmds_semsg_trailing(cmd);
+            nvim_excmds_emsg_with_arg(4, cmd); // semsg_trailing
             xfree(sub as *mut std::ffi::c_void);
             return 0;
         }
@@ -1658,7 +1654,7 @@ pub unsafe extern "C" fn rs_do_sub(
     );
     if regmatch.is_null() {
         if subflags_local.do_error {
-            nvim_excmds_emsg_invcmd();
+            nvim_excmds_emsg_by_id(5); // e_invcmd
         }
         xfree(sub as *mut std::ffi::c_void);
         return 0;
@@ -2140,7 +2136,7 @@ pub unsafe extern "C" fn rs_do_sub(
                 && subflags_local.do_ask
                 && nvim_callback_get_p_ch() > 0
             {
-                nvim_excmds_msg_empty();
+                nvim_excmds_emsg_by_id(8); // msg_empty
             }
         } else {
             nvim_excmds_set_global_need_beginline(1);
@@ -2158,11 +2154,11 @@ pub unsafe extern "C" fn rs_do_sub(
             nvim_excmds_emsg_interr();
         } else if got_match {
             if nvim_callback_get_p_ch() > 0 {
-                nvim_excmds_msg_empty();
+                nvim_excmds_emsg_by_id(8); // msg_empty
             }
         } else if subflags_local.do_error {
             let pat_str = nvim_do_sub_get_search_pat();
-            nvim_excmds_semsg_patnotf2(pat_str);
+            nvim_excmds_emsg_with_arg(3, pat_str); // semsg_patnotf2
         }
     }
 
