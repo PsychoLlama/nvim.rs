@@ -1480,58 +1480,23 @@ char *nvim_eval_xstrdup(const char *s)
 // Phase 3: C accessors for var2fpos / list2fpos (used by Rust indexing module)
 // ============================================================================
 
-/// Get curwin->w_cursor.lnum.
-int32_t nvim_curwin_cursor_lnum(void)
-{
-  return curwin->w_cursor.lnum;
-}
+// NvimCursorVisualState typedef is in eval.h (Phase 15).
+_Static_assert(sizeof(NvimCursorVisualState) == 40,
+               "NvimCursorVisualState size mismatch: expected 40 bytes");
 
-/// Get curwin->w_cursor.col.
-int nvim_curwin_cursor_col(void)
+/// Bulk-read cursor/visual state into *out.
+void nvim_read_cursor_visual_state(NvimCursorVisualState *out)
 {
-  return curwin->w_cursor.col;
-}
-
-/// Get curwin->w_cursor.coladd.
-int nvim_curwin_cursor_coladd(void)
-{
-  return curwin->w_cursor.coladd;
-}
-
-/// Get curwin->w_topline.
-int32_t nvim_curwin_topline(void)
-{
-  return curwin->w_topline;
-}
-
-/// Get curwin->w_botline.
-int32_t nvim_curwin_botline(void)
-{
-  return curwin->w_botline;
-}
-
-/// Get VIsual_active flag.
-bool nvim_visual_active(void)
-{
-  return VIsual_active;
-}
-
-/// Get VIsual.lnum.
-int32_t nvim_visual_lnum(void)
-{
-  return VIsual.lnum;
-}
-
-/// Get VIsual.col.
-int nvim_visual_col(void)
-{
-  return VIsual.col;
-}
-
-/// Get VIsual.coladd.
-int nvim_visual_coladd(void)
-{
-  return VIsual.coladd;
+  out->cursor_lnum = curwin->w_cursor.lnum;
+  out->cursor_col = curwin->w_cursor.col;
+  out->cursor_coladd = curwin->w_cursor.coladd;
+  out->topline = curwin->w_topline;
+  out->botline = curwin->w_botline;
+  out->visual_active = VIsual_active;
+  out->visual_lnum = VIsual.lnum;
+  out->visual_col = VIsual.col;
+  out->visual_coladd = VIsual.coladd;
+  out->curbuf_fnum = curbuf->b_fnum;
 }
 
 /// Get curbuf->b_fnum.

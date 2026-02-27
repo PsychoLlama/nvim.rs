@@ -127,6 +127,23 @@ typedef struct {
   bool paused;
 } NvimTimerFields;
 
+/// Bulk cursor/visual state for Rust var2fpos (Phase 15).
+/// Mirror of Rust NvimCursorVisualState (#[repr(C)]) in indexing.rs.
+/// Must stay in sync with the Rust struct and _Static_assert in eval_shim.c.
+typedef struct {
+  int32_t cursor_lnum;
+  int cursor_col;
+  int cursor_coladd;
+  int32_t topline;
+  int32_t botline;
+  bool visual_active;
+  // 3 bytes implicit padding (alignment of int32_t)
+  int32_t visual_lnum;
+  int visual_col;
+  int visual_coladd;
+  int curbuf_fnum;
+} NvimCursorVisualState;
+
 /// types for expressions.
 typedef enum {
   EXPR_UNKNOWN = 0,

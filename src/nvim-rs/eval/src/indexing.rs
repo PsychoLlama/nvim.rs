@@ -197,6 +197,25 @@ pub struct PosT {
     pub coladd: i32,
 }
 
+/// Bulk cursor/visual state (Phase 15).
+/// Mirror of NvimCursorVisualState typedef in eval.h.
+/// Must stay in sync with _Static_assert in eval_shim.c.
+#[repr(C)]
+#[derive(Default, Clone, Copy)]
+pub struct NvimCursorVisualState {
+    pub cursor_lnum: i32,
+    pub cursor_col: c_int,
+    pub cursor_coladd: c_int,
+    pub topline: i32,
+    pub botline: i32,
+    pub visual_active: bool,
+    // 3 bytes implicit padding (alignment of i32)
+    pub visual_lnum: i32,
+    pub visual_col: c_int,
+    pub visual_coladd: c_int,
+    pub curbuf_fnum: c_int,
+}
+
 /// VAR_LIST type constant (verified by _Static_assert in eval.c)
 const VAR_LIST: c_int = 4;
 /// OK return value
@@ -221,18 +240,8 @@ extern "C" {
     fn nvim_curbuf_ml_line_count() -> i32;
     fn nvim_buflist_findnr(fnum: c_int) -> BufHandle;
 
-    // Window/cursor accessors (Phase 3)
-    fn nvim_curwin_cursor_lnum() -> i32;
-    fn nvim_curwin_cursor_col() -> c_int;
-    fn nvim_curwin_cursor_coladd() -> c_int;
-    fn nvim_curwin_topline() -> i32;
-    fn nvim_curwin_botline() -> i32;
-
-    // Visual mode accessors (Phase 3)
-    fn nvim_visual_active() -> bool;
-    fn nvim_visual_lnum() -> i32;
-    fn nvim_visual_col() -> c_int;
-    fn nvim_visual_coladd() -> c_int;
+    // Bulk cursor/visual state (Phase 15 bulk-read replaces 9 individual accessors)
+    fn nvim_read_cursor_visual_state(out: *mut NvimCursorVisualState);
 
     // Mark accessor (Phase 3)
     fn nvim_mark_get_wrapper(
@@ -348,23 +357,27 @@ pub unsafe extern "C" fn rs_var2fpos(
         len + 1 // include NUL
     });
 
+    // Bulk-read cursor/visual state once (Phase 15).
+    let mut cvs = NvimCursorVisualState::default();
+    nvim_read_cursor_visual_state(&raw mut cvs);
+
     let mut pos = PosT::default();
 
     if name[0] == b'.' {
         // cursor
-        pos.lnum = nvim_curwin_cursor_lnum();
-        pos.col = nvim_curwin_cursor_col();
-        pos.coladd = nvim_curwin_cursor_coladd();
+        pos.lnum = cvs.cursor_lnum;
+        pos.col = cvs.cursor_col;
+        pos.coladd = cvs.cursor_coladd;
     } else if name[0] == b'v' && name[1] == 0 {
         // Visual start
-        if nvim_visual_active() {
-            pos.lnum = nvim_visual_lnum();
-            pos.col = nvim_visual_col();
-            pos.coladd = nvim_visual_coladd();
+        if cvs.visual_active {
+            pos.lnum = cvs.visual_lnum;
+            pos.col = cvs.visual_col;
+            pos.coladd = cvs.visual_coladd;
         } else {
-            pos.lnum = nvim_curwin_cursor_lnum();
-            pos.col = nvim_curwin_cursor_col();
-            pos.coladd = nvim_curwin_cursor_coladd();
+            pos.lnum = cvs.cursor_lnum;
+            pos.col = cvs.cursor_col;
+            pos.coladd = cvs.cursor_coladd;
         }
     } else if name[0] == b'\'' {
         // mark
@@ -415,18 +428,20 @@ pub unsafe extern "C" fn rs_var2fpos(
         if name[1] == b'0' {
             // "w0": first visible line
             nvim_update_topline_curwin();
+            // Re-read state after update (topline may have changed).
+            nvim_read_cursor_visual_state(&raw mut cvs);
             // In silent Ex mode topline is zero, but that's not a valid line
             // number; use one instead.
-            let topline = nvim_curwin_topline();
-            pos.lnum = if topline > 0 { topline } else { 1 };
+            pos.lnum = if cvs.topline > 0 { cvs.topline } else { 1 };
             *out = pos;
             return true;
         } else if name[1] == b'$' {
             // "w$": last visible line
             nvim_validate_botline_curwin();
+            // Re-read state after update (botline may have changed).
+            nvim_read_cursor_visual_state(&raw mut cvs);
             // In silent Ex mode botline is zero, return zero then.
-            let botline = nvim_curwin_botline();
-            pos.lnum = if botline > 0 { botline - 1 } else { 0 };
+            pos.lnum = if cvs.botline > 0 { cvs.botline - 1 } else { 0 };
             *out = pos;
             return true;
         }
@@ -436,7 +451,7 @@ pub unsafe extern "C" fn rs_var2fpos(
             pos.lnum = nvim_curbuf_ml_line_count();
             pos.col = 0;
         } else {
-            pos.lnum = nvim_curwin_cursor_lnum();
+            pos.lnum = cvs.cursor_lnum;
             if charcol {
                 pos.col = nvim_get_cursor_line_charlen();
             } else {
@@ -554,7 +569,9 @@ pub unsafe extern "C" fn rs_list2fpos(
             return FAIL;
         }
         let use_lnum = if lnum == 0 {
-            nvim_curwin_cursor_lnum()
+            let mut cvs2 = NvimCursorVisualState::default();
+            nvim_read_cursor_visual_state(&raw mut cvs2);
+            cvs2.cursor_lnum
         } else {
             lnum
         };
