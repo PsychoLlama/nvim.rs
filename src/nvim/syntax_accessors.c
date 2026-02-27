@@ -124,13 +124,6 @@ extern int rs_syn_ownsyntax_init(void);
 extern int rs_synblock_cluster_append(void);
 
 // Phase 9.2: state_ops.rs Rust implementations
-extern void rs_syn_set_next_match_state(int idx, int col,
-    int m_endpos_lnum, int m_endpos_col,
-    int h_endpos_lnum, int h_endpos_col,
-    int h_startpos_lnum, int h_startpos_col,
-    int flags, int eos_pos_lnum, int eos_pos_col,
-    int eoe_pos_lnum, int eoe_pos_col,
-    int end_idx, reg_extmatch_T *extmatch);
 extern void rs_syn_pop_current_state(void);
 extern void rs_syn_push_current_state(int idx);
 extern void rs_syn_set_cur_state_item(int idx, int si_idx, int si_flags, int si_seqnr,
@@ -1701,13 +1694,22 @@ void nvim_syn_set_next_match_state(
     int eoe_pos_lnum, int eoe_pos_col,
     int end_idx, reg_extmatch_T *extmatch)
 {
-  rs_syn_set_next_match_state(idx, col,
-      m_endpos_lnum, m_endpos_col,
-      h_endpos_lnum, h_endpos_col,
-      h_startpos_lnum, h_startpos_col,
-      flags, eos_pos_lnum, eos_pos_col,
-      eoe_pos_lnum, eoe_pos_col,
-      end_idx, extmatch);
+  next_match_idx = idx;
+  next_match_col = col;
+  next_match_m_endpos.lnum = (linenr_T)m_endpos_lnum;
+  next_match_m_endpos.col = (colnr_T)m_endpos_col;
+  next_match_h_endpos.lnum = (linenr_T)h_endpos_lnum;
+  next_match_h_endpos.col = (colnr_T)h_endpos_col;
+  next_match_h_startpos.lnum = (linenr_T)h_startpos_lnum;
+  next_match_h_startpos.col = (colnr_T)h_startpos_col;
+  next_match_flags = flags;
+  next_match_eos_pos.lnum = (linenr_T)eos_pos_lnum;
+  next_match_eos_pos.col = (colnr_T)eos_pos_col;
+  next_match_eoe_pos.lnum = (linenr_T)eoe_pos_lnum;
+  next_match_eoe_pos.col = (colnr_T)eoe_pos_col;
+  next_match_end_idx = end_idx;
+  unref_extmatch(next_match_extmatch);
+  next_match_extmatch = extmatch;
 }
 
 _Static_assert(SPO_MS_OFF == 0, "SPO_MS_OFF");
@@ -2935,46 +2937,6 @@ stateitem_T *nvim_syn_append_new_stateitem(void)
   CLEAR_POINTER(p);
   return p;
 }
-
-/// Set all next_match_* static variables (bulk setter for Rust migration).
-/// This variant takes explicit extmatch and does NOT do unref of old extmatch;
-/// the Rust caller handles unref separately.
-void nvim_syn_set_next_match_m_endpos(int lnum, int col)
-{
-  next_match_m_endpos.lnum = lnum;
-  next_match_m_endpos.col = col;
-}
-
-void nvim_syn_set_next_match_h_endpos(int lnum, int col)
-{
-  next_match_h_endpos.lnum = lnum;
-  next_match_h_endpos.col = col;
-}
-
-void nvim_syn_set_next_match_h_startpos(int lnum, int col)
-{
-  next_match_h_startpos.lnum = lnum;
-  next_match_h_startpos.col = col;
-}
-
-void nvim_syn_set_next_match_flags(int flags) { next_match_flags = flags; }
-
-void nvim_syn_set_next_match_eos_pos(int lnum, int col)
-{
-  next_match_eos_pos.lnum = lnum;
-  next_match_eos_pos.col = col;
-}
-
-void nvim_syn_set_next_match_eoe_pos(int lnum, int col)
-{
-  next_match_eoe_pos.lnum = lnum;
-  next_match_eoe_pos.col = col;
-}
-
-void nvim_syn_set_next_match_end_idx(int idx) { next_match_end_idx = idx; }
-
-/// Set next_match_extmatch (without unref of old value; Rust handles that).
-void nvim_syn_set_next_match_extmatch_raw(reg_extmatch_T *em) { next_match_extmatch = em; }
 
 // =============================================================================
 // Phase 11: New C accessors for clear_syn_state / store_bufstates migration

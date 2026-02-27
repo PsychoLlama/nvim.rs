@@ -155,7 +155,25 @@ extern "C" {
     fn nvim_syn_getcurline() -> *mut i8;
     fn nvim_syn_getcurline_len() -> c_int;
 
-    // Push next match (uses existing rs_push_next_match from check_ends.rs)
+    // Bulk next_match state setter (direct C implementation, no bounce)
+    #[allow(clippy::too_many_arguments)]
+    fn nvim_syn_set_next_match_state(
+        idx: c_int,
+        col: c_int,
+        m_endpos_lnum: c_int,
+        m_endpos_col: c_int,
+        h_endpos_lnum: c_int,
+        h_endpos_col: c_int,
+        h_startpos_lnum: c_int,
+        h_startpos_col: c_int,
+        flags: c_int,
+        eos_pos_lnum: c_int,
+        eos_pos_col: c_int,
+        eoe_pos_lnum: c_int,
+        eoe_pos_col: c_int,
+        end_idx: c_int,
+        extmatch: ExtMatchHandle,
+    );
 }
 
 // Use the Rust push_next_match from check_ends module
@@ -522,8 +540,8 @@ pub unsafe fn syn_current_attr(
                         }
                         limit_pos_zero(&mut hl_endpos, &endpos);
 
-                        // Store best match
-                        crate::state_ops::rs_syn_set_next_match_state(
+                        // Store best match (direct C bulk setter)
+                        nvim_syn_set_next_match_state(
                             idx,
                             startcol,
                             endpos.lnum,

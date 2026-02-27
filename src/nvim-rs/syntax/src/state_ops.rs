@@ -69,17 +69,8 @@ extern "C" {
     // Pattern next_list lookup
     fn nvim_syn_get_pattern_next_list(idx: c_int) -> IdListHandle;
 
-    // Individual next_match setters
+    // next_match col setter (kept; used standalone)
     fn nvim_syn_set_next_match_col(col: c_int);
-    fn nvim_syn_set_next_match_m_endpos(lnum: c_int, col: c_int);
-    fn nvim_syn_set_next_match_h_endpos(lnum: c_int, col: c_int);
-    fn nvim_syn_set_next_match_h_startpos(lnum: c_int, col: c_int);
-    fn nvim_syn_set_next_match_flags(flags: c_int);
-    fn nvim_syn_set_next_match_eos_pos(lnum: c_int, col: c_int);
-    fn nvim_syn_set_next_match_eoe_pos(lnum: c_int, col: c_int);
-    fn nvim_syn_set_next_match_end_idx(idx: c_int);
-    fn nvim_syn_set_next_match_extmatch_raw(em: ExtMatchHandle);
-    fn nvim_syn_get_next_match_extmatch() -> ExtMatchHandle;
 
     // Phase 3: extmatch string comparison helpers
     fn nvim_extmatch_get_string(em: ExtMatchHandle, subidx: c_int) -> *const c_char;
@@ -95,46 +86,6 @@ extern "C" {
 // =============================================================================
 // Phase 2 Rust implementations
 // =============================================================================
-
-/// Bulk setter for all next_match_* static variables.
-///
-/// Replaces C `nvim_syn_set_next_match_state`.
-///
-/// # Safety
-/// Accesses C global syntax state; must be called from main thread.
-#[no_mangle]
-#[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn rs_syn_set_next_match_state(
-    idx: c_int,
-    col: c_int,
-    m_endpos_lnum: c_int,
-    m_endpos_col: c_int,
-    h_endpos_lnum: c_int,
-    h_endpos_col: c_int,
-    h_startpos_lnum: c_int,
-    h_startpos_col: c_int,
-    flags: c_int,
-    eos_pos_lnum: c_int,
-    eos_pos_col: c_int,
-    eoe_pos_lnum: c_int,
-    eoe_pos_col: c_int,
-    end_idx: c_int,
-    extmatch: ExtMatchHandle,
-) {
-    nvim_syn_set_next_match_idx(idx);
-    nvim_syn_set_next_match_col(col);
-    nvim_syn_set_next_match_m_endpos(m_endpos_lnum, m_endpos_col);
-    nvim_syn_set_next_match_h_endpos(h_endpos_lnum, h_endpos_col);
-    nvim_syn_set_next_match_h_startpos(h_startpos_lnum, h_startpos_col);
-    nvim_syn_set_next_match_flags(flags);
-    nvim_syn_set_next_match_eos_pos(eos_pos_lnum, eos_pos_col);
-    nvim_syn_set_next_match_eoe_pos(eoe_pos_lnum, eoe_pos_col);
-    nvim_syn_set_next_match_end_idx(end_idx);
-    // Unref old extmatch, then set new
-    let old_em = nvim_syn_get_next_match_extmatch();
-    nvim_syn_unref_extmatch(old_em);
-    nvim_syn_set_next_match_extmatch_raw(extmatch);
-}
 
 /// Pop the top item from current_state.
 /// Unrefs si_extmatch, decrements ga_len, resets next_match_idx,
