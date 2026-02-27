@@ -2212,17 +2212,8 @@ void copy_loclist_stack(win_T *from, win_T *to)
 
 // qf_get_fnum deleted: migrated to Rust rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
 
-// Find a window displaying a Vim help file in the current tab page.
-static win_T *qf_find_help_win(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (bt_help(wp->w_buffer) && !wp->w_config.hide && wp->w_config.focusable) {
-      return wp;
-    }
-  }
-  return NULL;
-}
+// qf_find_help_win deleted (Phase 5): logic inlined into Rust rs_ex_helpgrep; public
+// nvim_qf_find_help_win wrapper at line 2333 retained for navigate.rs.
 
 static void win_set_loclist(win_T *wp, qf_info_T *qi) { wp->w_llist = qi; qi->qf_refcount++; }
 
@@ -3924,22 +3915,7 @@ void ex_cexpr(exarg_T *eap)
   rs_ex_cexpr((void *)eap);
 }
 
-// Get the location list for ":lhelpgrep"
-static qf_info_T *hgr_get_ll(bool *new_ll)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
-{
-  // If the current window is a help window, then use it, else find an existing help window
-  win_T *wp = bt_help(curwin->w_buffer) ? curwin : qf_find_help_win();
-
-  qf_info_T *qi = wp == NULL ? NULL : wp->w_llist;
-  if (qi == NULL) {
-    // Allocate a new location list for help text matches
-    qi = qf_alloc_stack(QFLT_LOCATION, 1);
-    *new_ll = true;
-  }
-
-  return qi;
-}
+// hgr_get_ll deleted (Phase 5): logic inlined into Rust rs_ex_helpgrep.
 
 // C accessor wrappers for rs_hgr_search_* functions (Phase 1 deleted, Phase 2 renamed)
 // nvim_hgr_os_fopen deleted: use nvim_os_fopen_read
