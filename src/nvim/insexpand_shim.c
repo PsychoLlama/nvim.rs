@@ -3807,20 +3807,11 @@ int nvim_ins_compl_add_infercase_ffi(const char *str, int len, int icase, const 
 // Accessors for Phase 1 (pass 6): show_pum, ins_compl_add_matches, spell_back_to_badword
 void nvim_set_redrawing_disabled(int val) { RedrawingDisabled = val; }
 int nvim_get_curwin_w_wrow(void) { return curwin->w_wrow; }
-// Compound accessor: ins_compl_add loop + FreeWild
-void nvim_ins_compl_add_matches_impl(int num_matches, char **matches, int icase)
+// Accessor for Phase 4 (pass 12): ins_compl_add_matches migration
+int nvim_ins_compl_add_simple(const char *str, int len, int dir, int flags, int score)
 {
-  int add_r = OK;
-  Direction dir = compl_direction;
-  for (int i = 0; i < num_matches && add_r != FAIL; i++) {
-    add_r = ins_compl_add(matches[i], -1, NULL, NULL, false, NULL, dir,
-                          CP_FAST | (icase ? CP_ICASE : 0), false, NULL,
-                          FUZZY_SCORE_NONE);
-    if (add_r == OK) {
-      dir = FORWARD;
-    }
-  }
-  FreeWild(num_matches, matches);
+  return ins_compl_add((char *)str, len, NULL, NULL, false, NULL, (Direction)dir, flags, false,
+                       NULL, score);
 }
 
 // Compound accessors for Phase 3 (pass 6): setup_cpt_sources,
