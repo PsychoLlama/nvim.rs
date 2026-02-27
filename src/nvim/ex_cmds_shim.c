@@ -2047,24 +2047,6 @@ int nvim_do_sub_getdigits_int(char **pp)
   return getdigits_int(pp, true, INT_MAX);
 }
 
-/// Wrap profile_passed_limit(timeout).
-int nvim_do_sub_profile_passed_limit(uint64_t timeout)
-{
-  return profile_passed_limit((proftime_T)timeout) ? 1 : 0;
-}
-
-/// Wrap profile_setlimit(ms). Returns proftime_T as uint64_t.
-uint64_t nvim_do_sub_profile_setlimit(int64_t ms)
-{
-  return (uint64_t)profile_setlimit((int64_t)ms);
-}
-
-/// Return profile_zero() as uint64_t.
-uint64_t nvim_do_sub_profile_zero(void)
-{
-  return (uint64_t)profile_zero();
-}
-
 /// Wrap skip_regexp_ex for do_sub. Updates *arg_ptr in place.
 char *nvim_do_sub_skip_regexp_ex(char *cmd, int delim, char **arg_ptr)
 {

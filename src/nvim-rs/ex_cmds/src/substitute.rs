@@ -27,6 +27,9 @@
 
 use std::ffi::{c_char, c_int};
 
+use nvim_profile::rs_profile_zero;
+use nvim_profile::timing::{rs_profile_passed_limit, rs_profile_setlimit};
+
 use crate::range::LineNr;
 use crate::ExArgHandle;
 use crate::SubIgnoreType;
@@ -1188,9 +1191,6 @@ extern "C" {
     fn nvim_do_sub_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
     fn nvim_do_sub_ml_replace(lnum: c_int, line: *mut c_char, copy: c_int);
     fn nvim_do_sub_getdigits_int(pp: *mut *mut c_char) -> c_int;
-    fn nvim_do_sub_profile_passed_limit(timeout: u64) -> c_int;
-    fn nvim_do_sub_profile_setlimit(ms: i64) -> u64;
-    fn nvim_do_sub_profile_zero() -> u64;
     fn nvim_option_get_p_rdt() -> i64;
     fn nvim_do_sub_skip_regexp_ex(
         cmd: *mut c_char,
@@ -1465,9 +1465,9 @@ pub unsafe extern "C" fn rs_do_sub(
 ) -> c_int {
     // Set up the timeout
     let timeout: u64 = if use_rdt != 0 {
-        nvim_do_sub_profile_setlimit(nvim_option_get_p_rdt())
+        rs_profile_setlimit(nvim_option_get_p_rdt())
     } else {
-        nvim_do_sub_profile_zero()
+        rs_profile_zero()
     };
 
     let mut which_pat: c_int;
@@ -2101,7 +2101,7 @@ pub unsafe extern "C" fn rs_do_sub(
 
         nvim_excmds_line_breakcheck();
 
-        if nvim_do_sub_profile_passed_limit(timeout) != 0 {
+        if rs_profile_passed_limit(timeout) {
             got_quit = true;
         }
 
@@ -2193,7 +2193,7 @@ pub unsafe extern "C" fn rs_do_sub(
 
     // Show inccommand preview
     if cmdpreview_ns > 0 && nvim_excmds_aborting() == 0 {
-        if got_quit || nvim_do_sub_profile_passed_limit(timeout) != 0 {
+        if got_quit || rs_profile_passed_limit(timeout) {
             nvim_excmds_disable_inccommand();
         } else if nvim_option_p_icm_notnul() != 0 && !pat.is_null() {
             let mut hl_id = PRE_HL_ID.load(std::sync::atomic::Ordering::Relaxed);
