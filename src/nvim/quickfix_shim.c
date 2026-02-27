@@ -3586,70 +3586,20 @@ void nvim_vgr_handle_dummy_buf(void *buf_void, bool found_match, bool duplicate_
   aucmd_restbuf(&aco);
 }
 
-/// Returns false if we should abort.
-bool nvim_vgr_pre_check(void *eap_void)
+/// Thin wrapper for static vgr_jump_to_match (for Phase 2 Rust inlining).
+void nvim_vgr_jump_to_match(void *qi_void, int forceit, bool *redraw_for_dummy,
+                             void *first_match_buf, char *target_dir)
 {
-  exarg_T *eap = (exarg_T *)eap_void;
-  if (!check_can_set_curbuf_forceit(eap->forceit)) {
-    return false;
-  }
-  char *au_name = (char *)rs_vgr_get_auname(eap->cmdidx);
-  if (au_name != NULL && apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name,
-                                        curbuf->b_fname, true, curbuf)) {
-    if (aborting()) {
-      return false;
-    }
-  }
-  return true;
+  vgr_jump_to_match((qf_info_T *)qi_void, forceit, redraw_for_dummy,
+                    (buf_T *)first_match_buf, target_dir);
 }
 
-
-/// Finalize the vimgrep list: set nonevalid, ptr, index, list_changed.
-void nvim_vgr_finalize_list(void *qi_void)
-{
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  qf_list_T *qfl = &qi->qf_lists[qi->qf_curlist];
-  qfl->qf_nonevalid = false;
-  qfl->qf_ptr = qfl->qf_start;
-  qfl->qf_index = 1;
-  qf_list_changed(qfl);
-  rs_qf_update_buffer(qi, NULL);
-}
-
-/// Apply QuickFixCmdPost autocmd for vimgrep.
-void nvim_vgr_post_autocmd(void *eap_void)
-{
-  exarg_T *eap = (exarg_T *)eap_void;
-  char *au_name = (char *)rs_vgr_get_auname(eap->cmdidx);
-  if (au_name != NULL) {
-    apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, curbuf->b_fname, true, curbuf);
-  }
-}
-
-bool nvim_vgr_list_still_valid(void *wp_void, void *qi_void, unsigned save_qfid) { return rs_qflist_valid((void *)wp_void, save_qfid) && rs_qf_restore_list((qf_info_T *)qi_void, save_qfid) != FAIL; }
-
-/// Jump to first match or emit nomatch error.
-void nvim_vgr_jump_or_nomatch(void *qi_void, void *eap_void, bool *redraw_for_dummy,
-                               void *first_match_buf, char *target_dir,
-                               int flags, const char *spat)
-{
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  exarg_T *eap = (exarg_T *)eap_void;
-  if (!rs_qf_list_empty(&qi->qf_lists[qi->qf_curlist])) {
-    if ((flags & VGR_NOJUMP) == 0) {
-      vgr_jump_to_match(qi, eap->forceit, redraw_for_dummy,
-                        (buf_T *)first_match_buf, target_dir);
-    }
-  } else {
-    semsg(_(e_nomatch2), spat);
-  }
-}
+/// semsg(e_nomatch2) wrapper for Rust.
+void nvim_semsg_nomatch2(const char *spat) { semsg(_(e_nomatch2), spat); }
 
 void nvim_incr_quickfix_busy(void) { incr_quickfix_busy(); }
 
 void nvim_decr_quickfix_busy(void) { decr_quickfix_busy(); }
-
-void nvim_vgr_foldUpdateAll_curwin(void) { rs_foldUpdateAll(curwin); }
 
 /// Heap-allocate and initialize a regmmatch_T for vimgrep.
 /// Returns the heap pointer (caller must free with nvim_vgr_regmatch_free),
