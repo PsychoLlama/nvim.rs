@@ -193,6 +193,8 @@ extern void rs_pivot_left_intersect(MarkTree *b, MTNode *x, int x_n, MTNode *y);
 
 // Phase 5 (pass 5): deletion rebalancing
 extern MTNode *rs_merge_node(MarkTree *b, MTNode *p, int i);
+extern void rs_pivot_right(MarkTree *b, MTPos p_pos, MTNode *p, int i);
+extern void rs_pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i);
 extern bool rs_intersect_mov_test(const uint64_t *x, size_t nx, const uint64_t *y, size_t ny,
                                   const uint64_t *win, size_t nwin, uint64_t *wout, size_t *nwout,
                                   uint64_t *dout, size_t *ndout);
@@ -509,156 +511,14 @@ static MTNode *merge_node(MarkTree *b, MTNode *p, int i)
   return rs_merge_node(b, p, i);
 }
 
-// TODO(bfredl): as a potential "micro" optimization, pivoting should balance
-// the two nodes instead of stealing just one key
-// x_pos is the absolute position of the key just before x (or a dummy key strictly less than any
-// key inside x, if x is the first leaf)
 static void pivot_right(MarkTree *b, MTPos p_pos, MTNode *p, const int i)
 {
-  MTNode *x = p->ptr[i];
-  MTNode *y = p->ptr[i + 1];
-  memmove(&y->key[1], y->key, (size_t)y->n * sizeof(MTKey));
-  if (y->level) {
-    memmove(&y->ptr[1], y->ptr, ((size_t)y->n + 1) * sizeof(MTNode *));
-    memmove(&y->meta[1], y->meta, ((size_t)y->n + 1) * sizeof(y->meta[0]));
-    for (int j = 1; j < y->n + 2; j++) {
-      y->ptr[j]->p_idx = (int16_t)j;
-    }
-  }
-
-  y->key[0] = p->key[i];
-  refkey(b, y, 0);
-  p->key[i] = x->key[x->n - 1];
-  refkey(b, p, i);
-
-  uint32_t meta_inc_y[kMTMetaCount];
-  rs_meta_describe_key(y->key[0], meta_inc_y);
-  uint32_t meta_inc_x[kMTMetaCount];
-  rs_meta_describe_key(p->key[i], meta_inc_x);
-
-  for (int m = 0; m < kMTMetaCount; m++) {
-    p->meta[i + 1][m] += meta_inc_y[m];
-    p->meta[i][m] -= meta_inc_x[m];
-  }
-
-  if (x->level) {
-    y->ptr[0] = x->ptr[x->n];
-    memcpy(y->meta[0], x->meta[x->n], sizeof(y->meta[0]));
-    for (int m = 0; m < kMTMetaCount; m++) {
-      p->meta[i + 1][m] += y->meta[0][m];
-      p->meta[i][m] -= y->meta[0][m];
-    }
-    y->ptr[0]->parent = y;
-    y->ptr[0]->p_idx = 0;
-  }
-  x->n--;
-  y->n++;
-  if (i > 0) {
-    rs_unrelative(p->key[i - 1].pos, &p->key[i].pos);
-  }
-  rs_relative(p->key[i].pos, &y->key[0].pos);
-  for (int k = 1; k < y->n; k++) {
-    rs_unrelative(y->key[0].pos, &y->key[k].pos);
-  }
-
-  // repair intersections of x
-  if (x->level) {
-    // y->ptr[0] was moved from x to y; adjust intersections via Rust
-    rs_pivot_right_intersect(b, x, y, y->n);
-
-    rs_bubble_up(x);
-  } else {
-    // if the last element of x used to be an end node, check if it now covers all of x
-    if (mt_end(p->key[i])) {
-      uint64_t pi = rs_pseudo_index(x, 0);  // note: sloppy pseudo-index
-      uint64_t start_id = mt_lookup_key_side(p->key[i], false);
-      uint64_t pi_start = rs_pseudo_index_for_id(b, start_id, true);
-      if (pi_start > 0 && pi_start < pi) {
-        rs_intersect_node(b, x, start_id);
-      }
-    }
-
-    if (mt_start(y->key[0])) {
-      // no need for a check, just delet it if it was there
-      rs_unintersect_node(b, y, mt_lookup_key(y->key[0]), false);
-    }
-  }
+  rs_pivot_right(b, p_pos, p, i);
 }
 
 static void pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i)
 {
-  MTNode *x = p->ptr[i];
-  MTNode *y = p->ptr[i + 1];
-
-  // reverse from how we "always" do it. but pivot_left
-  // is just the inverse of pivot_right, so reverse it literally.
-  for (int k = 1; k < y->n; k++) {
-    rs_relative(y->key[0].pos, &y->key[k].pos);
-  }
-  rs_unrelative(p->key[i].pos, &y->key[0].pos);
-  if (i > 0) {
-    rs_relative(p->key[i - 1].pos, &p->key[i].pos);
-  }
-
-  x->key[x->n] = p->key[i];
-  refkey(b, x, x->n);
-  p->key[i] = y->key[0];
-  refkey(b, p, i);
-
-  uint32_t meta_inc_x[kMTMetaCount];
-  rs_meta_describe_key(x->key[x->n], meta_inc_x);
-  uint32_t meta_inc_y[kMTMetaCount];
-  rs_meta_describe_key(p->key[i], meta_inc_y);
-  for (int m = 0; m < kMTMetaCount; m++) {
-    p->meta[i][m] += meta_inc_x[m];
-    p->meta[i + 1][m] -= meta_inc_y[m];
-  }
-
-  if (x->level) {
-    x->ptr[x->n + 1] = y->ptr[0];
-    memcpy(x->meta[x->n + 1], y->meta[0], sizeof(y->meta[0]));
-    for (int m = 0; m < kMTMetaCount; m++) {
-      p->meta[i + 1][m] -= y->meta[0][m];
-      p->meta[i][m] += y->meta[0][m];
-    }
-    x->ptr[x->n + 1]->parent = x;
-    x->ptr[x->n + 1]->p_idx = (int16_t)(x->n + 1);
-  }
-  memmove(y->key, &y->key[1], (size_t)(y->n - 1) * sizeof(MTKey));
-  if (y->level) {
-    memmove(y->ptr, &y->ptr[1], (size_t)y->n * sizeof(MTNode *));
-    memmove(y->meta, &y->meta[1], (size_t)y->n * sizeof(y->meta[0]));
-    for (int j = 0; j < y->n; j++) {  // note: last item deleted
-      y->ptr[j]->p_idx = (int16_t)j;
-    }
-  }
-  x->n++;
-  y->n--;
-
-  // repair intersections of x,y
-  if (x->level) {
-    // x->ptr[x->n] was moved from y to x; adjust intersections via Rust
-    rs_pivot_left_intersect(b, x, x->n, y);
-
-    rs_bubble_up(y);
-  } else {
-    // if the first element of y used to be an start node, check if it now covers all of y
-    if (mt_start(p->key[i])) {
-      uint64_t pi = rs_pseudo_index(y, 0);  // note: sloppy pseudo-index
-
-      uint64_t end_id = mt_lookup_key_side(p->key[i], true);
-      uint64_t pi_end = rs_pseudo_index_for_id(b, end_id, true);
-
-      if (pi_end > pi) {
-        rs_intersect_node(b, y, mt_lookup_key(p->key[i]));
-      }
-    }
-
-    if (mt_end(x->key[x->n - 1])) {
-      // no need for a check, just delet it if it was there
-      rs_unintersect_node(b, x, mt_lookup_key_side(x->key[x->n - 1], false), false);
-    }
-  }
+  rs_pivot_left(b, p_pos, p, i);
 }
 
 

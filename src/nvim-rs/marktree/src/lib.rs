@@ -3657,6 +3657,232 @@ pub fn merge_node(b: MarkTreeHandle, p: MTNodeHandle, i: i32) -> MTNodeHandle {
     x
 }
 
+/// Pivot right: steal last key from left sibling `x = p->ptr[i]`.
+///
+/// Moves `x->key[x->n - 1]` up to `p->key[i]` (new separator), pushes the
+/// old separator down to `y->key[0]` (right sibling `p->ptr[i+1]`).
+/// Adjusts positions, meta counts, and intersection lists.
+/// `p_pos` is the absolute position of the parent context (unused inside).
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::many_single_char_names
+)]
+pub fn pivot_right(b: MarkTreeHandle, _p_pos: MTPos, p: MTNodeHandle, i: i32) {
+    let x = unsafe { nvim_mtnode_get_ptr(p, i) };
+    let y = unsafe { nvim_mtnode_get_ptr(p, i + 1) };
+    let y_n = unsafe { nvim_mtnode_get_n(y) };
+    let y_level = unsafe { nvim_mtnode_get_level(y) };
+
+    // Shift y's keys right by 1
+    if y_n > 0 {
+        unsafe { nvim_mtnode_memmove_keys(y, 1, 0, y_n) };
+    }
+    if y_level != 0 {
+        unsafe { nvim_mtnode_memmove_ptr(y, 1, 0, y_n + 1) };
+        unsafe { nvim_mtnode_memmove_meta(y, 1, 0, y_n + 1) };
+        for j in 1..=y_n + 1 {
+            let child = unsafe { nvim_mtnode_get_ptr(y, j) };
+            unsafe { nvim_mtnode_set_p_idx(child, j) };
+        }
+    }
+
+    // y->key[0] = p->key[i] (separator goes down to y)
+    let sep_key = unsafe { nvim_mtnode_get_key(p, i) };
+    unsafe { nvim_mtnode_set_key(y, 0, sep_key) };
+    marktree_refkey(b, y, 0);
+
+    // p->key[i] = x->key[x->n - 1] (last key of x becomes new separator)
+    let x_n = unsafe { nvim_mtnode_get_n(x) };
+    let stolen_key = unsafe { nvim_mtnode_get_key(x, x_n - 1) };
+    unsafe { nvim_mtnode_set_key(p, i, stolen_key) };
+    marktree_refkey(b, p, i);
+
+    let meta_inc_y = meta_describe_key(&unsafe { nvim_mtnode_get_key(y, 0) });
+    let meta_inc_x = meta_describe_key(&unsafe { nvim_mtnode_get_key(p, i) });
+    for m in 0..K_MT_META_COUNT as i32 {
+        let m_i1 = unsafe { nvim_mtnode_get_meta(p, i + 1, m) };
+        unsafe { nvim_mtnode_set_meta(p, i + 1, m, m_i1 + meta_inc_y[m as usize]) };
+        let m_i = unsafe { nvim_mtnode_get_meta(p, i, m) };
+        unsafe { nvim_mtnode_set_meta(p, i, m, m_i - meta_inc_x[m as usize]) };
+    }
+
+    let x_level = unsafe { nvim_mtnode_get_level(x) };
+    if x_level != 0 {
+        // y->ptr[0] = x->ptr[x->n]
+        let stolen_child = unsafe { nvim_mtnode_get_ptr(x, x_n) };
+        unsafe { nvim_mtnode_set_ptr(y, 0, stolen_child) };
+        unsafe { nvim_mtnode_memcpy_meta(y, 0, x, x_n, 1) };
+        for m in 0..K_MT_META_COUNT as i32 {
+            let child_meta = unsafe { nvim_mtnode_get_meta(y, 0, m) };
+            let m_i1 = unsafe { nvim_mtnode_get_meta(p, i + 1, m) };
+            unsafe { nvim_mtnode_set_meta(p, i + 1, m, m_i1 + child_meta) };
+            let m_i = unsafe { nvim_mtnode_get_meta(p, i, m) };
+            unsafe { nvim_mtnode_set_meta(p, i, m, m_i - child_meta) };
+        }
+        unsafe {
+            nvim_mtnode_set_parent(stolen_child, y);
+            nvim_mtnode_set_p_idx(stolen_child, 0);
+        }
+    }
+
+    unsafe { nvim_mtnode_set_n(x, x_n - 1) };
+    unsafe { nvim_mtnode_set_n(y, y_n + 1) };
+
+    // Position adjustment
+    if i > 0 {
+        let prev_pos = unsafe { nvim_mtnode_get_key(p, i - 1) }.pos;
+        let mut sep = unsafe { nvim_mtnode_get_key(p, i) };
+        unrelative(prev_pos, &mut sep.pos);
+        unsafe { nvim_mtnode_set_key(p, i, sep) };
+    }
+    let new_sep_pos = unsafe { nvim_mtnode_get_key(p, i) }.pos;
+    let mut y0 = unsafe { nvim_mtnode_get_key(y, 0) };
+    relative(new_sep_pos, &mut y0.pos);
+    unsafe { nvim_mtnode_set_key(y, 0, y0) };
+    let new_y0_pos = unsafe { nvim_mtnode_get_key(y, 0) }.pos;
+    let new_y_n = unsafe { nvim_mtnode_get_n(y) };
+    for k in 1..new_y_n {
+        let mut yk = unsafe { nvim_mtnode_get_key(y, k) };
+        unrelative(new_y0_pos, &mut yk.pos);
+        unsafe { nvim_mtnode_set_key(y, k, yk) };
+    }
+
+    // Intersection repair
+    if x_level != 0 {
+        crate::intersect_ops::rs_pivot_right_intersect(b, x, y, new_y_n);
+        bubble_up(x);
+    } else {
+        let new_sep = unsafe { nvim_mtnode_get_key(p, i) };
+        if mt_end(&new_sep) {
+            let pi = pseudo_index(x, 0);
+            let start_id = mt_lookup_key_side(&new_sep, false);
+            let pi_start = pseudo_index_for_id(b, start_id, true);
+            if pi_start > 0 && pi_start < pi {
+                intersect_node(b, x, start_id);
+            }
+        }
+        let new_y0 = unsafe { nvim_mtnode_get_key(y, 0) };
+        if mt_start(&new_y0) {
+            unintersect_node(b, y, mt_lookup_key(&new_y0), false);
+        }
+    }
+}
+
+/// Pivot left: steal first key from right sibling `y = p->ptr[i+1]`.
+///
+/// Moves `y->key[0]` up to `p->key[i]` (new separator), pushes the
+/// old separator down to `x->key[x->n]` (left sibling `p->ptr[i]`).
+/// Adjusts positions, meta counts, and intersection lists.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::many_single_char_names
+)]
+pub fn pivot_left(b: MarkTreeHandle, _p_pos: MTPos, p: MTNodeHandle, i: i32) {
+    let x = unsafe { nvim_mtnode_get_ptr(p, i) };
+    let y = unsafe { nvim_mtnode_get_ptr(p, i + 1) };
+    let y_n = unsafe { nvim_mtnode_get_n(y) };
+    let y_level = unsafe { nvim_mtnode_get_level(y) };
+
+    // Reverse relative encoding in y: for k in 1..y->n: relative(y->key[0], &y->key[k])
+    let y0_pos = unsafe { nvim_mtnode_get_key(y, 0) }.pos;
+    for k in 1..y_n {
+        let mut yk = unsafe { nvim_mtnode_get_key(y, k) };
+        relative(y0_pos, &mut yk.pos);
+        unsafe { nvim_mtnode_set_key(y, k, yk) };
+    }
+    // rs_unrelative(p->key[i].pos, &y->key[0].pos)
+    let sep_pos = unsafe { nvim_mtnode_get_key(p, i) }.pos;
+    let mut y0 = unsafe { nvim_mtnode_get_key(y, 0) };
+    unrelative(sep_pos, &mut y0.pos);
+    unsafe { nvim_mtnode_set_key(y, 0, y0) };
+    // if i > 0: rs_relative(p->key[i-1].pos, &p->key[i].pos)
+    if i > 0 {
+        let prev_pos = unsafe { nvim_mtnode_get_key(p, i - 1) }.pos;
+        let mut sep = unsafe { nvim_mtnode_get_key(p, i) };
+        relative(prev_pos, &mut sep.pos);
+        unsafe { nvim_mtnode_set_key(p, i, sep) };
+    }
+
+    // x->key[x->n] = p->key[i]; p->key[i] = y->key[0]
+    let x_n = unsafe { nvim_mtnode_get_n(x) };
+    let sep_key = unsafe { nvim_mtnode_get_key(p, i) };
+    unsafe { nvim_mtnode_set_key(x, x_n, sep_key) };
+    marktree_refkey(b, x, x_n);
+    let stolen_key = unsafe { nvim_mtnode_get_key(y, 0) };
+    unsafe { nvim_mtnode_set_key(p, i, stolen_key) };
+    marktree_refkey(b, p, i);
+
+    let meta_inc_x = meta_describe_key(&unsafe { nvim_mtnode_get_key(x, x_n) });
+    let meta_inc_y = meta_describe_key(&unsafe { nvim_mtnode_get_key(p, i) });
+    for m in 0..K_MT_META_COUNT as i32 {
+        let m_i = unsafe { nvim_mtnode_get_meta(p, i, m) };
+        unsafe { nvim_mtnode_set_meta(p, i, m, m_i + meta_inc_x[m as usize]) };
+        let m_i1 = unsafe { nvim_mtnode_get_meta(p, i + 1, m) };
+        unsafe { nvim_mtnode_set_meta(p, i + 1, m, m_i1 - meta_inc_y[m as usize]) };
+    }
+
+    let x_level = unsafe { nvim_mtnode_get_level(x) };
+    if x_level != 0 {
+        // x->ptr[x->n+1] = y->ptr[0]; copy meta
+        let stolen_child = unsafe { nvim_mtnode_get_ptr(y, 0) };
+        unsafe { nvim_mtnode_set_ptr(x, x_n + 1, stolen_child) };
+        unsafe { nvim_mtnode_memcpy_meta(x, x_n + 1, y, 0, 1) };
+        for m in 0..K_MT_META_COUNT as i32 {
+            let child_meta = unsafe { nvim_mtnode_get_meta(y, 0, m) };
+            let m_i1 = unsafe { nvim_mtnode_get_meta(p, i + 1, m) };
+            unsafe { nvim_mtnode_set_meta(p, i + 1, m, m_i1 - child_meta) };
+            let m_i = unsafe { nvim_mtnode_get_meta(p, i, m) };
+            unsafe { nvim_mtnode_set_meta(p, i, m, m_i + child_meta) };
+        }
+        unsafe {
+            nvim_mtnode_set_parent(stolen_child, x);
+            nvim_mtnode_set_p_idx(stolen_child, x_n + 1);
+        }
+    }
+
+    // Shift y's keys left: memmove(y->key, &y->key[1], y->n - 1)
+    if y_n - 1 > 0 {
+        unsafe { nvim_mtnode_memmove_keys(y, 0, 1, y_n - 1) };
+    }
+    if y_level != 0 {
+        unsafe { nvim_mtnode_memmove_ptr(y, 0, 1, y_n) };
+        unsafe { nvim_mtnode_memmove_meta(y, 0, 1, y_n) };
+        for j in 0..y_n {
+            let child = unsafe { nvim_mtnode_get_ptr(y, j) };
+            unsafe { nvim_mtnode_set_p_idx(child, j) };
+        }
+    }
+
+    unsafe { nvim_mtnode_set_n(x, x_n + 1) };
+    unsafe { nvim_mtnode_set_n(y, y_n - 1) };
+
+    // Intersection repair
+    if x_level != 0 {
+        let new_x_n = unsafe { nvim_mtnode_get_n(x) };
+        crate::intersect_ops::rs_pivot_left_intersect(b, x, new_x_n, y);
+        bubble_up(y);
+    } else {
+        let new_sep = unsafe { nvim_mtnode_get_key(p, i) };
+        if mt_start(&new_sep) {
+            let pi = pseudo_index(y, 0);
+            let end_id = mt_lookup_key_side(&new_sep, true);
+            let pi_end = pseudo_index_for_id(b, end_id, true);
+            if pi_end > pi {
+                intersect_node(b, y, mt_lookup_key(&new_sep));
+            }
+        }
+        let new_x_n = unsafe { nvim_mtnode_get_n(x) };
+        let last_x_key = unsafe { nvim_mtnode_get_key(x, new_x_n - 1) };
+        if mt_end(&last_x_key) {
+            unintersect_node(b, x, mt_lookup_key_side(&last_x_key, false), false);
+        }
+    }
+}
+
 // ============================================================================
 // Deletion Wrappers
 // ============================================================================
@@ -3905,6 +4131,18 @@ pub fn marktree_clear(b: MarkTreeHandle) {
 #[no_mangle]
 pub extern "C" fn rs_merge_node(b: MarkTreeHandle, p: MTNodeHandle, i: c_int) -> MTNodeHandle {
     merge_node(b, p, i)
+}
+
+/// Exported FFI version of `pivot_right`.
+#[no_mangle]
+pub extern "C" fn rs_pivot_right(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: c_int) {
+    pivot_right(b, p_pos, p, i);
+}
+
+/// Exported FFI version of `pivot_left`.
+#[no_mangle]
+pub extern "C" fn rs_pivot_left(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: c_int) {
+    pivot_left(b, p_pos, p, i);
 }
 
 /// Exported FFI version of `marktree_del_itr`.
