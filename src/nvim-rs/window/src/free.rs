@@ -178,3 +178,109 @@ unsafe fn win_free_impl(wp: WinHandle, tp: TabpageHandle) {
 pub unsafe extern "C" fn rs_win_free(wp: WinHandle, tp: TabpageHandle) {
     win_free_impl(wp, tp);
 }
+
+// =============================================================================
+// rs_win_free_all (EXITFREE)
+// =============================================================================
+
+extern "C" {
+    /// Clear cmdwin state (for win_free_all).
+    fn nvim_clear_cmdwin_state();
+
+    /// tabpage_close(true) -- close a tab during EXITFREE.
+    fn nvim_tabpage_close_once();
+
+    /// Returns 1 if first_tabpage->tp_next != NULL.
+    fn nvim_first_tabpage_has_next() -> c_int;
+
+    /// lastwin pointer (0 = NULL).
+    fn nvim_get_lastwin() -> WinHandle;
+
+    /// Returns 1 if wp->w_floating.
+    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
+
+    /// rs_win_free_mem(wp, &dummy, NULL) -- returns dummy direction.
+    fn rs_win_free_mem(wp: WinHandle, dirp: *mut c_int, tp: TabpageHandle) -> WinHandle;
+
+    /// firstwin pointer (0 = NULL).
+    fn nvim_get_firstwin() -> WinHandle;
+
+    /// Returns AUCMD_WIN_COUNT.
+    fn nvim_aucmd_win_count() -> c_int;
+
+    /// Returns aucmd_win[idx].auc_win.
+    fn nvim_aucmd_win_get(idx: c_int) -> WinHandle;
+
+    /// aucmd_win[idx].auc_win = NULL.
+    fn nvim_aucmd_win_clear(idx: c_int);
+
+    /// kv_destroy(aucmd_win_vec).
+    fn nvim_kv_destroy_aucmd_win_vec();
+
+    /// curwin = NULL.
+    fn nvim_set_curwin_null();
+}
+
+/// Free all windows on exit (EXITFREE).
+///
+/// Port of C `win_free_all()`.
+///
+/// # Safety
+/// Must only be called from the EXITFREE path.
+unsafe fn win_free_all_impl() {
+    // Avoid an error for switching tabpage with the cmdline window open.
+    nvim_clear_cmdwin_state();
+
+    while nvim_first_tabpage_has_next() != 0 {
+        nvim_tabpage_close_once();
+    }
+
+    loop {
+        let lw = nvim_get_lastwin();
+        if lw.is_null() || nvim_win_get_floating(lw) == 0 {
+            break;
+        }
+        rs_win_remove(lw, TabpageHandle::null());
+        let mut dummy: c_int = 0;
+        rs_win_free_mem(lw, std::ptr::addr_of_mut!(dummy), TabpageHandle::null());
+        let count = nvim_aucmd_win_count();
+        for i in 0..count {
+            if nvim_aucmd_win_get(i) == lw {
+                nvim_aucmd_win_clear(i);
+            }
+        }
+    }
+
+    let count = nvim_aucmd_win_count();
+    for i in 0..count {
+        let aw = nvim_aucmd_win_get(i);
+        if !aw.is_null() {
+            let mut dummy: c_int = 0;
+            rs_win_free_mem(aw, std::ptr::addr_of_mut!(dummy), TabpageHandle::null());
+            nvim_aucmd_win_clear(i);
+        }
+    }
+
+    nvim_kv_destroy_aucmd_win_vec();
+
+    loop {
+        let fw = nvim_get_firstwin();
+        if fw.is_null() {
+            break;
+        }
+        let mut dummy: c_int = 0;
+        rs_win_free_mem(fw, std::ptr::addr_of_mut!(dummy), TabpageHandle::null());
+    }
+
+    // No window should be used after this.
+    nvim_set_curwin_null();
+}
+
+/// FFI export for `win_free_all`.
+///
+/// # Safety
+/// Must only be called from the EXITFREE path.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_win_free_all() {
+    win_free_all_impl();
+}

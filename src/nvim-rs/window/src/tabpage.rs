@@ -1541,7 +1541,7 @@ pub unsafe extern "C" fn rs_goto_tabpage_tp_impl(
 extern "C" {
     /// Allocate first window in a new tabpage from oldwin.
     /// Returns OK (1) or FAIL (0).
-    fn nvim_win_alloc_firstwin_wrapper(oldwin: WinHandle) -> c_int;
+    fn rs_win_alloc_firstwin(oldwin: WinHandle) -> c_int;
 
     /// Copy tp_localdir from src to dst (xstrdup, NULL-safe).
     fn nvim_tabpage_copy_localdir(dst: TabpageHandle, src: TabpageHandle);
@@ -1611,7 +1611,7 @@ unsafe fn win_new_tabpage_impl(after: c_int, filename: *const u8) -> c_int {
 
     // Allocate first window for the new tabpage
     let old_curwin = nvim_tabpage_get_curwin(old_curtab);
-    if nvim_win_alloc_firstwin_wrapper(old_curwin) == OK {
+    if rs_win_alloc_firstwin(old_curwin) == OK {
         // Link new tabpage into the list
         if after == 1 {
             // New tab page becomes the first one

@@ -839,46 +839,7 @@ bool win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, bool force)
 #if defined(EXITFREE)
 void win_free_all(void)
 {
-  // avoid an error for switching tabpage with the cmdline window open
-  cmdwin_type = 0;
-  cmdwin_buf = NULL;
-  cmdwin_win = NULL;
-  cmdwin_old_curwin = NULL;
-
-  while (first_tabpage->tp_next != NULL) {
-    tabpage_close(true);
-  }
-
-  while (lastwin != NULL && lastwin->w_floating) {
-    win_T *wp = lastwin;
-    rs_win_remove(lastwin, NULL);
-    int dummy;
-    rs_win_free_mem(wp, &dummy, NULL);
-    for (int i = 0; i < AUCMD_WIN_COUNT; i++) {
-      if (aucmd_win[i].auc_win == wp) {
-        aucmd_win[i].auc_win = NULL;
-      }
-    }
-  }
-
-  for (int i = 0; i < AUCMD_WIN_COUNT; i++) {
-    if (aucmd_win[i].auc_win != NULL) {
-      int dummy;
-      rs_win_free_mem(aucmd_win[i].auc_win, &dummy, NULL);
-      aucmd_win[i].auc_win = NULL;
-    }
-  }
-
-  kv_destroy(aucmd_win_vec);
-
-  while (firstwin != NULL) {
-    int dummy;
-    rs_win_free_mem(firstwin, &dummy, NULL);
-  }
-
-  // No window should be used after this. Set curwin to NULL to crash
-  // instead of using freed memory.
-  curwin = NULL;
+  rs_win_free_all();
 }
 
 #endif
@@ -968,23 +929,42 @@ static bool command_frame_height = true;
 /// unuse_tabpage() first.
 void use_tabpage(tabpage_T *tp) { rs_use_tabpage(tp); }
 
-// Allocate the first window and put an empty buffer in it.
-// Only called from main().
-void win_alloc_first(void)
-{
-  if (win_alloc_firstwin(NULL) == FAIL) {
-    // allocating first buffer before any autocmds should not fail.
-    abort();
-  }
+// Phase 12 compound C accessors for rs_win_alloc_first / rs_win_alloc_firstwin
+// / rs_win_alloc_aucmd_win / rs_win_free_all
 
-  first_tabpage = alloc_tabpage();
-  curtab = first_tabpage;
-  unuse_tabpage(first_tabpage);
+/// buflist_new(NULL, NULL, 1, BLN_LISTED): allocate initial buffer.
+buf_T *nvim_buflist_new_initial(void) { return buflist_new(NULL, NULL, 1, BLN_LISTED); }
+
+/// Set curwin->w_buffer = buf, curwin->w_s, curbuf->b_nwindows = 1, curwin->w_alist.
+void nvim_win_setup_first_buffer(win_T *wp, buf_T *buf)
+{
+  curwin = wp;
+  curbuf = buf;
+  wp->w_buffer = buf;
+  wp->w_s = &(buf->b_s);
+  buf->b_nwindows = 1;
+  wp->w_alist = &global_alist;
 }
 
-// Init `aucmd_win[idx]`. This can only be done after the first window
-// is fully initialized, thus it can't be in win_alloc_first().
-void win_alloc_aucmd_win(int idx)
+/// curwin_init() for current window.
+void nvim_curwin_init(void) { curwin_init(); }
+
+/// RESET_BINDING for window wp.
+void nvim_win_reset_binding(win_T *wp) { RESET_BINDING(wp); }
+
+/// Set topframe from wp->w_frame and compute frame dimensions.
+void nvim_alloc_firstwin_set_topframe(win_T *wp)
+{
+  topframe = wp->w_frame;
+  topframe->fr_width = Columns;
+  topframe->fr_height = Rows - (int)p_ch - rs_global_stl_height();
+}
+
+/// Set curwin = wp.
+void nvim_set_curwin_to_wp(win_T *wp) { curwin = wp; }
+
+/// Allocate and initialize aucmd_win[idx] as a hidden float.
+void nvim_win_alloc_aucmd_win_impl(int idx)
 {
   Error err = ERROR_INIT;
   WinConfig fconfig = WIN_CONFIG_INIT;
@@ -997,39 +977,59 @@ void win_alloc_aucmd_win(int idx)
   RESET_BINDING(aucmd_win[idx].auc_win);
 }
 
+/// Clear cmdwin state (for win_free_all).
+void nvim_clear_cmdwin_state(void)
+{
+  cmdwin_type = 0;
+  cmdwin_buf = NULL;
+  cmdwin_win = NULL;
+  cmdwin_old_curwin = NULL;
+}
+
+/// tabpage_close(true) -- close a tab during EXITFREE.
+void nvim_tabpage_close_once(void) { tabpage_close(true); }
+
+/// Returns AUCMD_WIN_COUNT.
+int nvim_aucmd_win_count(void) { return AUCMD_WIN_COUNT; }
+
+/// Returns aucmd_win[idx].auc_win.
+win_T *nvim_aucmd_win_get(int idx) { return aucmd_win[idx].auc_win; }
+
+/// aucmd_win[idx].auc_win = NULL.
+void nvim_aucmd_win_clear(int idx) { aucmd_win[idx].auc_win = NULL; }
+
+/// kv_destroy(aucmd_win_vec).
+void nvim_kv_destroy_aucmd_win_vec(void) { kv_destroy(aucmd_win_vec); }
+
+/// curwin = NULL.
+void nvim_set_curwin_null(void) { curwin = NULL; }
+
+extern void rs_win_alloc_first(void);
+extern int rs_win_alloc_firstwin(win_T *oldwin);
+extern void rs_win_alloc_aucmd_win(int idx);
+extern void rs_win_free_all(void);
+
+// Allocate the first window and put an empty buffer in it.
+// Only called from main().
+void win_alloc_first(void)
+{
+  rs_win_alloc_first();
+}
+
+// Init `aucmd_win[idx]`. This can only be done after the first window
+// is fully initialized, thus it can't be in win_alloc_first().
+void win_alloc_aucmd_win(int idx)
+{
+  rs_win_alloc_aucmd_win(idx);
+}
+
 // Allocate the first window or the first window in a new tab page.
 // When "oldwin" is NULL create an empty buffer for it.
 // When "oldwin" is not NULL copy info from it to the new window.
 // Return FAIL when something goes wrong (out of memory).
 static int win_alloc_firstwin(win_T *oldwin)
 {
-  curwin = win_alloc(NULL, false);
-  if (oldwin == NULL) {
-    // Very first window, need to create an empty buffer for it and
-    // initialize from scratch.
-    curbuf = buflist_new(NULL, NULL, 1, BLN_LISTED);
-    if (curbuf == NULL) {
-      return FAIL;
-    }
-    curwin->w_buffer = curbuf;
-    curwin->w_s = &(curbuf->b_s);
-    curbuf->b_nwindows = 1;     // there is one window
-    curwin->w_alist = &global_alist;
-    curwin_init();              // init current window
-  } else {
-    // First window in new tab page, initialize it from "oldwin".
-    win_init(curwin, oldwin, 0);
-
-    // We don't want cursor- and scroll-binding in the first window.
-    RESET_BINDING(curwin);
-  }
-
-  new_frame(curwin);
-  topframe = curwin->w_frame;
-  topframe->fr_width = Columns;
-  topframe->fr_height = Rows - (int)p_ch - rs_global_stl_height();
-
-  return OK;
+  return rs_win_alloc_firstwin(oldwin);
 }
 
 // Initialize the window and frame size to the maximum.
@@ -1137,9 +1137,7 @@ static void new_frame(win_T *wp)
 // Phase 8 wrappers for rs_win_new_tabpage
 // =============================================================================
 
-/// Allocate first window in a new tabpage from oldwin.
-/// Returns OK (1) or FAIL (0).
-int nvim_win_alloc_firstwin_wrapper(win_T *oldwin) { return win_alloc_firstwin(oldwin); }
+// nvim_win_alloc_firstwin_wrapper deleted: callers updated to call rs_win_alloc_firstwin directly (Phase 12)
 
 /// Copy tp_localdir from src to dst with xstrdup (NULL-safe).
 void nvim_tabpage_copy_localdir(tabpage_T *dst, tabpage_T *src)

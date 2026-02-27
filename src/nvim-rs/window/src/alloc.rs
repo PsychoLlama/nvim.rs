@@ -451,6 +451,133 @@ pub unsafe extern "C" fn rs_free_wininfo(wip: *mut std::ffi::c_void, bp: crate::
     free_wininfo_impl(wip, bp);
 }
 
+// =============================================================================
+// Phase 4: rs_win_alloc_first + rs_win_alloc_firstwin + rs_win_alloc_aucmd_win
+// =============================================================================
+
+extern "C" {
+    /// buflist_new(NULL, NULL, 1, BLN_LISTED): allocate initial buffer.
+    fn nvim_buflist_new_initial() -> crate::BufHandle;
+
+    /// Set curwin/curbuf and wire up the first buffer.
+    fn nvim_win_setup_first_buffer(wp: WinHandle, buf: crate::BufHandle);
+
+    /// curwin_init() for current window.
+    fn nvim_curwin_init();
+
+    /// RESET_BINDING for window wp.
+    fn nvim_win_reset_binding(wp: WinHandle);
+
+    /// Set topframe from wp->w_frame and compute frame dimensions.
+    fn nvim_alloc_firstwin_set_topframe(wp: WinHandle);
+
+    /// Set curwin = wp.
+    fn nvim_set_curwin_to_wp(wp: WinHandle);
+
+    /// curtab = tp.
+    fn nvim_set_curtab(tp: TabpageHandle);
+
+    /// first_tabpage = tp.
+    fn nvim_set_first_tabpage(tp: TabpageHandle);
+
+    /// unuse_tabpage(tp).
+    fn rs_unuse_tabpage(tp: TabpageHandle);
+
+    /// win_init(newp, oldp, 0).
+    fn nvim_win_init_wrapper(wp: WinHandle, oldwin: WinHandle, flags: c_int);
+
+    /// Allocate and initialize aucmd_win[idx] as a hidden float.
+    fn nvim_win_alloc_aucmd_win_impl(idx: c_int);
+}
+
+// OK / FAIL constants (matching C).
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+/// Allocate the first window in a tabpage.
+///
+/// When `oldwin` is null, create an empty buffer.
+/// When `oldwin` is non-null, copy info from it.
+///
+/// Port of C `win_alloc_firstwin()`.
+///
+/// Returns OK (1) or FAIL (0).
+///
+/// # Safety
+/// Calls C accessor functions. Must only be called at startup or tabnew time.
+unsafe fn win_alloc_firstwin_impl(oldwin: WinHandle) -> c_int {
+    let wp = win_alloc_impl(WinHandle::null(), false);
+
+    if oldwin.is_null() {
+        // Very first window: create an empty buffer.
+        let buf = nvim_buflist_new_initial();
+        if buf.is_null() {
+            return FAIL;
+        }
+        nvim_win_setup_first_buffer(wp, buf);
+        nvim_curwin_init();
+    } else {
+        // First window in a new tabpage: initialize from oldwin.
+        nvim_set_curwin_to_wp(wp);
+        nvim_win_init_wrapper(wp, oldwin, 0);
+        // We don't want cursor- and scroll-binding in the first window.
+        nvim_win_reset_binding(wp);
+    }
+
+    rs_new_frame(wp);
+    nvim_alloc_firstwin_set_topframe(wp);
+
+    OK
+}
+
+/// FFI export for `win_alloc_firstwin`.
+///
+/// # Safety
+/// `oldwin` must be null or a valid window handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_win_alloc_firstwin(oldwin: WinHandle) -> c_int {
+    win_alloc_firstwin_impl(oldwin)
+}
+
+/// Allocate the first window and put an empty buffer in it.
+///
+/// Port of C `win_alloc_first()`. Only called from `main()`.
+///
+/// # Safety
+/// Must only be called once at startup.
+unsafe fn win_alloc_first_impl() {
+    if win_alloc_firstwin_impl(WinHandle::null()) == FAIL {
+        // Allocating first buffer before any autocmds should not fail.
+        std::process::abort();
+    }
+
+    let tp = crate::tabpage::rs_alloc_tabpage();
+    nvim_set_first_tabpage(tp);
+    nvim_set_curtab(tp);
+    rs_unuse_tabpage(tp);
+}
+
+/// FFI export for `win_alloc_first`.
+///
+/// # Safety
+/// Must only be called once at startup.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_win_alloc_first() {
+    win_alloc_first_impl();
+}
+
+/// Initialize `aucmd_win[idx]` as a hidden floating window.
+///
+/// Port of C `win_alloc_aucmd_win()`. Must only be called after
+/// the first window is fully initialized.
+///
+/// # Safety
+/// Must only be called after startup.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_win_alloc_aucmd_win(idx: c_int) {
+    nvim_win_alloc_aucmd_win_impl(idx);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
