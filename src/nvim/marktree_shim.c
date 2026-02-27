@@ -42,12 +42,8 @@
 // Changes done by by the neovim project follow the Apache v2 license available
 // at the repo root.
 
-#include <assert.h>
-#include <inttypes.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uv.h>
 
 #include "klib/kvec.h"
 #include "nvim/macros_defs.h"
@@ -55,11 +51,6 @@
 #include "nvim/marktree.h"
 #include "nvim/memory.h"
 #include "nvim/pos_defs.h"
-// only for debug functions
-#include "nvim/api/private/defs.h"
-#include "nvim/api/private/helpers.h"
-#include "nvim/garray.h"
-#include "nvim/garray_defs.h"
 
 // Rust marktree FFI declarations
 // Position comparison and manipulation functions
@@ -189,136 +180,16 @@ extern void rs_marktree_move_region(MarkTree *b, int start_row, colnr_T start_co
 // Phase 5 (pass 5): deletion rebalancing
 extern uint64_t rs_marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev);
 
+// Phase 6 (pass 6): debug/inspection
+extern String rs_mt_inspect(MarkTree *b, bool keys, bool dot);
+
 #define ILEN (sizeof(MTNode) + sizeof(struct mtnode_inner_s))
 
 #define rawkey(itr) ((itr)->x->key[(itr)->i])
 
 #include "marktree_shim.c.generated.h"
 
-#define ptr s->i_ptr
-// put functions
-
-
-
-
-// TODO(bfredl): kv_print
-#define GA_PUT(x) ga_concat(ga, (char *)(x))
-#define GA_PRINT(fmt, ...) snprintf(buf, sizeof(buf), fmt, __VA_ARGS__); \
-  GA_PUT(buf);
-
-String mt_inspect(MarkTree *b, bool keys, bool dot)
-{
-  garray_T ga[1];
-  ga_init(ga, (int)sizeof(char), 80);
-  MTPos p = { 0, 0 };
-  if (b->root) {
-    if (dot) {
-      GA_PUT("digraph D {\n\n");
-      mt_inspect_dotfile_node(b, ga, b->root, p, NULL);
-      GA_PUT("\n}");
-    } else {
-      mt_inspect_node(b, ga, keys, b->root, p);
-    }
-  }
-  return ga_take_string(ga);
-}
-
-static inline uint64_t mt_dbg_id(uint64_t id)
-{
-  return (id >> 1) & 0xffffffff;
-}
-
-static void mt_inspect_node(MarkTree *b, garray_T *ga, bool keys, MTNode *n, MTPos off)
-{
-  static char buf[1024];
-  GA_PUT("[");
-  if (keys && kv_size(n->intersect)) {
-    for (size_t i = 0; i < kv_size(n->intersect); i++) {
-      GA_PUT(i == 0 ? "{" : ";");
-      // GA_PRINT("%"PRIu64, kv_A(n->intersect, i));
-      GA_PRINT("%" PRIu64, mt_dbg_id(kv_A(n->intersect, i)));
-    }
-    GA_PUT("},");
-  }
-  if (n->level) {
-    mt_inspect_node(b, ga, keys, n->ptr[0], off);
-  }
-  for (int i = 0; i < n->n; i++) {
-    MTPos p = n->key[i].pos;
-    rs_unrelative(off, &p);
-    GA_PRINT("%d/%d", p.row, p.col);
-    if (keys) {
-      MTKey key = n->key[i];
-      GA_PUT(":");
-      if (mt_start(key)) {
-        GA_PUT("<");
-      }
-      // GA_PRINT("%"PRIu64, mt_lookup_id(key.ns, key.id, false));
-      GA_PRINT("%" PRIu32, key.id);
-      if (mt_end(key)) {
-        GA_PUT(">");
-      }
-    }
-    if (n->level) {
-      mt_inspect_node(b, ga, keys, n->ptr[i + 1], p);
-    } else {
-      ga_concat(ga, ",");
-    }
-  }
-  ga_concat(ga, "]");
-}
-
-static void mt_inspect_dotfile_node(MarkTree *b, garray_T *ga, MTNode *n, MTPos off, char *parent)
-{
-  static char buf[1024];
-  char namebuf[64];
-  if (parent != NULL) {
-    snprintf(namebuf, sizeof namebuf, "%s_%c%d", parent, 'a' + n->level, n->p_idx);
-  } else {
-    snprintf(namebuf, sizeof namebuf, "MTNode");
-  }
-
-  GA_PRINT("  %s[shape=plaintext, label=<\n", namebuf);
-  GA_PUT("    <table border='0' cellborder='1' cellspacing='0'>\n");
-  if (kv_size(n->intersect)) {
-    GA_PUT("    <tr><td>");
-    for (size_t i = 0; i < kv_size(n->intersect); i++) {
-      if (i > 0) {
-        GA_PUT(", ");
-      }
-      GA_PRINT("%" PRIu64, mt_dbg_id(kv_A(n->intersect, i)));
-    }
-    GA_PUT("</td></tr>\n");
-  }
-
-  GA_PUT("    <tr><td>");
-  for (int i = 0; i < n->n; i++) {
-    MTKey k = n->key[i];
-    if (i > 0) {
-      GA_PUT(", ");
-    }
-    GA_PRINT("%d", k.id);
-    if (mt_paired(k)) {
-      GA_PUT(mt_end(k) ? "e" : "s");
-    }
-  }
-  GA_PUT("</td></tr>\n");
-  GA_PUT("    </table>\n");
-  GA_PUT(">];\n");
-  if (parent) {
-    GA_PRINT("  %s -> %s\n", parent, namebuf);
-  }
-  if (n->level) {
-    mt_inspect_dotfile_node(b, ga, n->ptr[0], off, namebuf);
-  }
-  for (int i = 0; i < n->n; i++) {
-    MTPos p = n->key[i].pos;
-    rs_unrelative(off, &p);
-    if (n->level) {
-      mt_inspect_dotfile_node(b, ga, n->ptr[i + 1], p, namebuf);
-    }
-  }
-}
+String mt_inspect(MarkTree *b, bool keys, bool dot) { return rs_mt_inspect(b, keys, dot); }
 
 // ============================================================================
 // Rust FFI Accessor Functions
@@ -327,7 +198,7 @@ static void mt_inspect_dotfile_node(MarkTree *b, garray_T *ga, MTNode *n, MTPos 
 int nvim_mtnode_get_n(MTNode *x) { return x->n; }
 int nvim_mtnode_get_level(MTNode *x) { return x->level; }
 MTKey nvim_mtnode_get_key(MTNode *x, int idx) { return x->key[idx]; }
-MTNode *nvim_mtnode_get_ptr(MTNode *x, int idx) { return x->ptr[idx]; }
+MTNode *nvim_mtnode_get_ptr(MTNode *x, int idx) { return x->s[0].i_ptr[idx]; }
 MTNode *nvim_marktree_get_root(MarkTree *b) { return b->root; }
 size_t nvim_marktree_get_n_keys(MarkTree *b) { return b->n_keys; }
 int nvim_marktree_get_root_level(MarkTree *b) { return b->root ? b->root->level : 0; }

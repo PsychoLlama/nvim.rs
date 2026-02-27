@@ -15,6 +15,7 @@
 #![allow(clippy::fn_params_excessive_bools)] // Matching C API signatures
 #![allow(clippy::items_after_statements)] // Allow const definitions in functions
 
+pub mod debug;
 pub mod delete;
 pub mod ffi;
 pub mod insert;
