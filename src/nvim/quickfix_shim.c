@@ -3273,59 +3273,11 @@ void *nvim_qf_get_curlist_mut(void *qi_void) { return (void *)&((qf_info_T *)qi_
 // Phase 3: qf_list_entry accessors
 // nvim_message_filtered already exists in ex_cmds_shim.c (returns int)
 
-/// Format quickfix entry prefix into IObuff and output the range+type+pattern+body
-/// fields via message API using garray for intermediate buffers.
-/// Takes Rust-computed text for range, type, pattern, and body.
-void nvim_qf_list_entry_output(const char *prefix, bool cursel, int qfFile_hl_id_in,
-                                int qfSep_hl_id_in, int qfLine_hl_id_in,
-                                int lnum_nonzero, const char *range_text, size_t range_len,
-                                const char *type_text,
-                                int has_pattern, const char *pattern_text, size_t pattern_len,
-                                const char *body_text, size_t body_len)
-{
-  msg_putchar('\n');
-  msg_outtrans(prefix, cursel ? HLF_QFL : qfFile_hl_id_in, false);
-
-  if (lnum_nonzero) {
-    msg_puts_hl(":", qfSep_hl_id_in, false);
-  }
-
-  garray_T *gap = qfga_get();
-  if (lnum_nonzero && range_text != NULL) {
-    ga_concat_len(gap, range_text, range_len);
-  }
-  ga_concat(gap, type_text);
-  ga_append(gap, NUL);
-  msg_puts_hl(gap->ga_data, qfLine_hl_id_in, false);
-  msg_puts_hl(":", qfSep_hl_id_in, false);
-
-  if (has_pattern && pattern_text != NULL) {
-    gap = qfga_get();
-    ga_concat_len(gap, pattern_text, pattern_len);
-    ga_append(gap, NUL);
-    msg_puts(gap->ga_data);
-    msg_puts_hl(":", qfSep_hl_id_in, false);
-  }
-
-  msg_puts(" ");
-
-  gap = qfga_get();
-  if (body_text != NULL) {
-    ga_concat_len(gap, body_text, body_len);
-  }
-  ga_append(gap, NUL);
-  msg_prt_line(gap->ga_data, false);
-}
-
-/// Format quickfix entry prefix: "%2d <name>" or "%2d" into buf.
-void nvim_qf_format_prefix(char *buf, size_t bufsz, int idx, const char *name)
-{
-  if (name != NULL) {
-    vim_snprintf(buf, bufsz, "%2d %s", idx, name);
-  } else {
-    snprintf(buf, bufsz, "%2d", idx);
-  }
-}
+// Phase 14: Direct message output accessors (replacing nvim_qf_list_entry_output and
+// nvim_qf_format_prefix which were deleted after inlining into Rust rs_qf_list_entry).
+void nvim_msg_outtrans_attr(const char *s, int attr) { msg_outtrans((char *)s, attr, false); }
+void nvim_msg_puts_plain(const char *s) { msg_puts(s); }
+int nvim_hlf_qfl(void) { return HLF_QFL; }
 
 // Phase 4: qf_list (:clist/:llist) accessors
 // nvim_eap_get_arg already exists in ex_docmd.c
