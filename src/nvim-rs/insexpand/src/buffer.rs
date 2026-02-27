@@ -7,6 +7,11 @@
 #![allow(dead_code, unused_imports)]
 use std::os::raw::c_int;
 
+use nvim_buffer::BufHandle;
+
+// Win pointer: use *mut u8 to match ctrl_x.rs and entry.rs conventions.
+type WinPtr = *mut u8;
+
 // C accessor functions
 extern "C" {
     fn nvim_get_ctrl_x_mode() -> c_int;
@@ -17,6 +22,25 @@ extern "C" {
 
     // Compound accessor for buffer name completion
     fn nvim_get_next_bufname_token_impl();
+
+    // ins_compl_next_buf buf accessors (Phase 14) - use BufHandle to match next.rs
+    fn nvim_buf_get_b_next(buf: BufHandle) -> BufHandle;
+    fn nvim_buf_get_b_scanned(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
+    fn nvim_buf_has_ml_mfp(buf: BufHandle) -> c_int;
+    fn nvim_get_curbuf() -> BufHandle;
+    fn nvim_get_firstbuf_wrapper() -> BufHandle;
+}
+
+// ins_compl_next_buf win accessors (Phase 14) - use *mut u8 to match entry.rs/ctrl_x.rs
+#[allow(clashing_extern_declarations)]
+extern "C" {
+    fn nvim_win_get_w_next(wp: WinPtr) -> WinPtr;
+    fn nvim_win_get_w_buffer_raw(wp: WinPtr) -> BufHandle;
+    fn nvim_win_get_focusable(wp: WinPtr) -> c_int;
+    fn nvim_get_curwin() -> WinPtr;
+    fn nvim_get_firstwin() -> WinPtr;
+    fn rs_win_valid(wp: WinPtr) -> c_int;
 }
 
 // CTRL-X mode for buffer names
@@ -40,6 +64,103 @@ const CONT_LOCAL: c_int = 32;
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_next_bufname_token() {
     nvim_get_next_bufname_token_impl();
+}
+
+// =============================================================================
+// Phase 14: ins_compl_next_buf migration
+// =============================================================================
+
+/// Persistent window pointer for the 'w' (windows) scan mode.
+///
+/// This mirrors the C `static win_T *wp = NULL` in `ins_compl_next_buf`.
+/// Initialized to null; updated as windows are walked.
+static mut NEXT_BUF_WP: WinPtr = std::ptr::null_mut();
+
+/// Iterate through buffers/windows to find the next unscanned buffer for
+/// completion.
+///
+/// Mirrors the C `ins_compl_next_buf(buf_T *buf, int flag)` function.
+///
+/// - flag `'w'` (119): walk windows, return the window's buffer.
+/// - flag `'b'` (98): walk loaded buffers only.
+/// - flag `'u'` (117): walk non-loaded buffers only.
+/// - flag `'U'` (85): walk unlisted buffers only.
+///
+/// Returns the next buffer to scan (may be curbuf if no unscanned buffer
+/// is found, which signals "done" to the caller).
+///
+/// # Safety
+/// Requires that the global buffer/window lists are valid. Uses a `static mut`
+/// for the persistent window pointer, so this function must not be called
+/// concurrently.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_next_buf(buf: BufHandle, flag: c_int) -> BufHandle {
+    let curbuf = nvim_get_curbuf();
+    let curwin = nvim_get_curwin();
+
+    if flag == c_int::from(b'w') {
+        // Walk windows to find an unscanned buffer
+        if buf == curbuf || rs_win_valid(NEXT_BUF_WP) == 0 {
+            // First call or window was closed: start from curwin
+            NEXT_BUF_WP = curwin;
+        }
+
+        loop {
+            // Advance to next window (wrap to firstwin at the end)
+            let next = nvim_win_get_w_next(NEXT_BUF_WP);
+            NEXT_BUF_WP = if next.is_null() {
+                nvim_get_firstwin()
+            } else {
+                next
+            };
+
+            // Stop if we wrapped back to curwin, or found an unscanned focusable buffer
+            let wp_buf = nvim_win_get_w_buffer_raw(NEXT_BUF_WP);
+            let scanned = nvim_buf_get_b_scanned(wp_buf) != 0;
+            let focusable = nvim_win_get_focusable(NEXT_BUF_WP) != 0;
+            if NEXT_BUF_WP == curwin || (!scanned && focusable) {
+                break;
+            }
+        }
+
+        return nvim_win_get_w_buffer_raw(NEXT_BUF_WP);
+    }
+
+    // Walk the buffer list
+    let mut cur = buf;
+    loop {
+        let next = nvim_buf_get_b_next(cur);
+        cur = if next.is_null() {
+            nvim_get_firstbuf_wrapper()
+        } else {
+            next
+        };
+
+        // Stop if we wrapped back to curbuf
+        if cur == curbuf {
+            break;
+        }
+
+        // Decide whether to skip this buffer based on flag
+        let skip = if flag == c_int::from(b'U') {
+            // 'U': unlisted buffers -- skip listed ones
+            nvim_buf_get_b_p_bl(cur) != 0
+        } else {
+            // 'b': only listed loaded buffers
+            // 'u': only listed unloaded buffers
+            // skip if not listed, or loaded/unloaded mismatch
+            let is_listed = nvim_buf_get_b_p_bl(cur) != 0;
+            let is_loaded = nvim_buf_has_ml_mfp(cur) != 0;
+            let want_unloaded = flag == c_int::from(b'u');
+            !is_listed || (is_loaded == want_unloaded)
+        };
+
+        if !skip && nvim_buf_get_b_scanned(cur) == 0 {
+            break;
+        }
+    }
+
+    cur
 }
 
 #[cfg(test)]

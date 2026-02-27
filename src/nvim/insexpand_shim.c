@@ -379,6 +379,7 @@ static bool ins_compl_st_cleared = false;
 
 #include "insexpand_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
+extern buf_T *rs_ins_compl_next_buf(buf_T *buf, int flag);
 
 /// values for cp_flags
 typedef enum {
@@ -1341,60 +1342,7 @@ _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 int ins_compl_bs(void) { return rs_ins_compl_bs(); }
 
 
-/// Loops through the list of windows, loaded-buffers or non-loaded-buffers
-/// (depending on flag) starting from buf and looking for a non-scanned
-/// buffer (other than curbuf).  curbuf is special, if it is called with
-/// buf=curbuf then it has to be the first call for a given flag/expansion.
-///
-/// Returns the buffer to scan, if any, otherwise returns curbuf -- Acevedo
-static buf_T *ins_compl_next_buf(buf_T *buf, int flag)
-{
-  static win_T *wp = NULL;
-
-  if (flag == 'w') {            // just windows
-    if (buf == curbuf || !rs_win_valid(wp)) {
-      // first call for this flag/expansion or window was closed
-      wp = curwin;
-    }
-
-    assert(wp);
-    while (true) {
-      // Move to next window (wrap to first window if at the end)
-      wp = (wp->w_next != NULL) ? wp->w_next : firstwin;
-      // Break if we're back at start or found an unscanned buffer (in a focusable window)
-      if (wp == curwin || (!wp->w_buffer->b_scanned && wp->w_config.focusable)) {
-        break;
-      }
-    }
-    buf = wp->w_buffer;
-  } else {
-    // 'b' (just loaded buffers), 'u' (just non-loaded buffers) or 'U'
-    // (unlisted buffers)
-    // When completing whole lines skip unloaded buffers.
-    while (true) {
-      // Move to next buffer (wrap to first buffer if at the end)
-      buf = (buf->b_next != NULL) ? buf->b_next : firstbuf;
-      // Break if we're back at start buffer
-      if (buf == curbuf) {
-        break;
-      }
-
-      bool skip_buffer;
-      // Check buffer conditions based on flag
-      if (flag == 'U') {
-        skip_buffer = buf->b_p_bl;
-      } else {
-        skip_buffer = !buf->b_p_bl || (buf->b_ml.ml_mfp == NULL) != (flag == 'u');
-      }
-
-      // Break if we found a buffer that matches our criteria
-      if (!skip_buffer && !buf->b_scanned) {
-        break;
-      }
-    }
-  }
-  return buf;
-}
+// NOTE: ins_compl_next_buf migrated to Rust as rs_ins_compl_next_buf (Phase 14).
 
 static Callback cfu_cb;    ///< 'completefunc' callback function
 static Callback ofu_cb;    ///< 'omnifunc' callback function
@@ -1967,7 +1915,7 @@ static int process_next_cpt_value(ins_compl_next_state_T *st, int *compl_type_ar
     st->set_match_pos = true;
   } else if (!skip_source && !compl_time_slice_expired
              && vim_strchr("buwU", (uint8_t)(*st->e_cpt)) != NULL
-             && (st->ins_buf = ins_compl_next_buf(st->ins_buf, *st->e_cpt)) != curbuf) {
+             && (st->ins_buf = rs_ins_compl_next_buf(st->ins_buf, *st->e_cpt)) != curbuf) {
     // Scan a buffer, but not the current one.
     if (st->ins_buf->b_ml.ml_mfp != NULL) {  // loaded buffer
       compl_started = true;
@@ -4116,6 +4064,9 @@ win_T *nvim_win_get_w_next(win_T *wp) { return wp->w_next; }
 
 /// Returns wp->w_config.focusable.
 int nvim_win_get_focusable(win_T *wp) { return wp->w_config.focusable ? 1 : 0; }
+
+/// Returns wp->w_buffer (for insexpand, distinct name to avoid declaration conflicts).
+buf_T *nvim_win_get_w_buffer_raw(win_T *wp) { return wp->w_buffer; }
 
 /// Compound accessor: wraps the insexpand-specific searchit() call.
 /// Equivalent to: searchit(NULL, buf, pos, NULL, dir, pat, patlen, 1,
