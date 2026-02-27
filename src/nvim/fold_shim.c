@@ -1,11 +1,12 @@
-// vim: set fdm=marker fdl=1 fdc=3
-
-// fold.c: code for folding
+// fold_shim.c: C accessor wrappers for the Rust fold crate (nvim-fold).
+//
+// These thin wrappers provide a stable C ABI for Rust code to call into
+// Neovim's C internals.  Each function is called from one or more Rust
+// modules in src/nvim-rs/fold/.
 
 #include <assert.h>
 #include <inttypes.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -13,11 +14,7 @@
 #include "nvim/api/extmark.h"
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/helpers.h"
-#include "nvim/ascii_defs.h"
 #include "nvim/buffer_defs.h"
-#include "nvim/buffer_updates.h"
-#include "nvim/change.h"
-#include "nvim/charset.h"
 #include "nvim/cursor.h"
 #include "nvim/decoration.h"
 #include "nvim/diff.h"
@@ -26,98 +23,28 @@
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/vars.h"
-#include "nvim/ex_session.h"
 #include "nvim/extmark.h"
 #include "nvim/extmark_defs.h"
 #include "nvim/fold.h"
 #include "nvim/garray.h"
-#include "nvim/garray_defs.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/indent.h"
-#include "nvim/mark.h"
-#include "nvim/mark_defs.h"
-#include "nvim/mbyte.h"
 #include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
-#include "nvim/move.h"
 #include "nvim/ops.h"
 #include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
-#include "nvim/os/input.h"
-#include "nvim/plines.h"
 #include "nvim/pos_defs.h"
-#include "nvim/search.h"
-#include "nvim/state_defs.h"
-#include "nvim/strings.h"
 #include "nvim/syntax.h"
 #include "nvim/types_defs.h"
 #include "nvim/undo.h"
-#include "nvim/vim_defs.h"
-
-// local declarations. {{{1
-
-// fold_T is defined in fold_defs.h
-
-// fold_changed, invalid_top, invalid_bot, prev_lnum, prev_lnum_lvl -- migrated to Rust statics (Phase 5 Pass 5)
-
-// static functions {{{2
 
 #include "fold_shim.c.generated.h"
 
 // Rust FFI declarations (internal-only; fold method checks are in fold.h)
 extern linenr_T rs_diff_lnum_win(linenr_T lnum, win_T *wp);
-
-static const char *e_nofold = N_("E490: No fold found");
-
-// foldstartmarkerlen/foldendmarker/foldendmarkerlen -- deleted (Rust uses parse_marker_impl directly)
-
-// hasFolding/hasFoldingWin/nvim_hasFolding -- migrated to Rust exports (Phase 5 Pass 5)
-// FoldingResult typedef and rs_hasFoldingWin extern -- deleted (Phase 5 Pass 5)
-// nvim_lineFolded -- deleted; callers use rs_lineFolded directly (Phase 5 Pass 5)
-
-// Exported folding functions. {{{1
-
-// foldUpdate() -- migrated to Rust (update.rs: fold_update_impl / rs_foldUpdate)
-
-// nvim_foldUpdateAll_c -- migrated to Rust export (Phase 5 Pass 5)
-
-// Internal functions for "fold_T" {{{1
-
-// foldFind() -- migrated to Rust (update.rs: fold_find_impl)
-
-// deleteFoldRecurse -- migrated to Rust (Phase 5 Pass 5)
-
-// foldCreateMarkers() -- migrated to Rust (markers.rs: fold_create_markers_impl)
-// foldAddMarker() -- migrated to Rust (markers.rs: fold_add_marker_impl)
-// deleteFoldMarkers() -- migrated to Rust (markers.rs: delete_fold_markers_impl)
-// foldDelMarker() -- migrated to Rust (markers.rs: fold_del_marker_impl)
-
-// get_foldtext() -- migrated to Rust (display.rs: get_foldtext_impl / rs_get_foldtext)
-
-// foldlevelIndent() -- migrated to Rust (level.rs: foldlevel_indent_result)
-
-// foldlevelDiff() -- migrated to Rust (level.rs: foldlevel_diff_result)
-
-// foldlevelExpr() -- migrated to Rust (level.rs: foldlevel_expr_result)
-
-// parseMarker() -- migrated to Rust (markers.rs: parse_marker_impl)
-
-// foldlevelSyntax() -- migrated to Rust (level.rs: foldlevel_syntax_result)
-
-// put_folds/put_folds_recurse/put_foldopen_recurse/put_fold_open_close
-// -- migrated to Rust (session.rs: put_folds_impl / rs_put_folds)
-
-// }}}1
-
-// foldclosed_both/f_foldclosed/f_foldclosedend/f_foldlevel/f_foldtext
-// -- migrated to Rust (lib.rs: rs_f_foldclosed, rs_f_foldclosedend, rs_f_foldlevel, rs_f_foldtext)
-// -- dispatch table wired directly to rs_* via eval.lua func = 'rs_f_*' entries
-
-// f_foldtextresult -- migrated to Rust (lib.rs: rs_f_foldtextresult)
-
-// nvim_get_foldtext -- migrated to Rust (display.rs: get_foldtext_concat_impl)
 
 // ============================================================================
 // VimL function accessors (for f_foldclosed, f_foldlevel, etc.)
@@ -143,7 +70,7 @@ void nvim_fold_rettv_init_string(typval_T *rettv, char *s)
 }
 
 // ============================================================================
-// Rust FFI accessor functions
+// Fold FFI accessors
 // ============================================================================
 
 /// Emit error message for cannot create fold with current foldmethod.
@@ -228,10 +155,6 @@ void nvim_win_set_w_foldinvalid(win_T *wp, bool val)
   wp->w_foldinvalid = val;
 }
 
-// ============================================================================
-// Accessors for recursive functions
-// ============================================================================
-
 /// Set the fd_flags field of a fold.
 void nvim_fold_set_fd_flags(fold_T *fp, int flags)
 {
@@ -260,19 +183,11 @@ void nvim_fold_swap(garray_T *gap, int idx1, int idx2)
   data[idx2] = tmp;
 }
 
-// ============================================================================
-// State query accessors
-// ============================================================================
-
 /// Get the w_p_fml (foldminlines) field from a window.
 int nvim_win_get_p_fml(win_T *wp)
 {
   return (int)wp->w_p_fml;
 }
-
-// ============================================================================
-// Foundation function accessors
-// ============================================================================
 
 /// Initialize the folds garray for a window (called from Rust).
 void nvim_ga_init_folds(garray_T *gap)
@@ -280,19 +195,11 @@ void nvim_ga_init_folds(garray_T *gap)
   ga_init(gap, (int)sizeof(fold_T), 10);
 }
 
-// ============================================================================
-// Core query accessors
-// ============================================================================
-
 /// Get the line count of the window's buffer.
 linenr_T nvim_win_get_buf_line_count(win_T *wp)
 {
   return wp->w_buffer->b_ml.ml_line_count;
 }
-
-// ============================================================================
-// Fold Markers accessors
-// ============================================================================
 
 /// Get the w_p_fmr (foldmarker option) field from a window.
 char *nvim_win_get_p_fmr(win_T *wp)
@@ -347,10 +254,6 @@ void *nvim_fold_xmalloc(size_t size)
   return xmalloc(size);
 }
 
-// ============================================================================
-// Fold Level Calculation accessors
-// ============================================================================
-
 /// Get the w_p_fdi (foldignore option) field from a window.
 char *nvim_win_get_p_fdi(win_T *wp)
 {
@@ -375,17 +278,11 @@ int nvim_get_sw_value(buf_T *buf)
   return (int)get_sw_value(buf);
 }
 
-// nvim_rs_diff_infold -- deleted (Rust calls rs_diff_infold directly)
-
 /// Get curbuf's commentstring option (b_p_cms).
 char *nvim_get_curbuf_b_p_cms(void)
 {
   return curbuf->b_p_cms;
 }
-
-// ============================================================================
-// Fold Tree Manipulation accessors
-// ============================================================================
 
 /// Grow a garray to hold at least n more fold_T entries.
 void nvim_ga_grow_folds(garray_T *gap, int n)
@@ -431,8 +328,6 @@ void nvim_fold_copy(fold_T *dst, const fold_T *src)
   *dst = *src;
 }
 
-// nvim_deleteFoldRecurse -- deleted; Rust calls delete_fold_recurse_impl directly (Phase 5 Pass 5)
-
 /// Free the ga_data pointer of a garray (for nested folds).
 void nvim_ga_free_data(garray_T *gap)
 {
@@ -448,12 +343,6 @@ void nvim_ga_clear(garray_T *gap)
   ga_clear(gap);
 }
 
-// nvim_set_fold_changed/nvim_get_fold_changed -- migrated to Rust static FOLD_CHANGED (Phase 5 Pass 5)
-
-// ============================================================================
-// Fold State Management accessors
-// ============================================================================
-
 /// Set the w_fold_manual field in a window.
 void nvim_win_set_w_fold_manual(win_T *wp, bool val)
 {
@@ -463,7 +352,7 @@ void nvim_win_set_w_fold_manual(win_T *wp, bool val)
 /// Emit the "no fold found" error message.
 void nvim_emsg_nofold(void)
 {
-  emsg(_(e_nofold));
+  emsg(_(N_("E490: No fold found")));
 }
 
 /// Get the first window in the current tab.
@@ -483,10 +372,6 @@ void nvim_win_set_p_fdl(win_T *wp, int fdl)
 {
   wp->w_p_fdl = fdl;
 }
-
-// ============================================================================
-// Fold Creation and Deletion accessors
-// ============================================================================
 
 /// Initialize a garray with specified itemsize and growsize.
 void nvim_ga_init_folds_ex(garray_T *gap, int itemsize, int growsize)
@@ -512,14 +397,6 @@ bool nvim_ga_is_empty(garray_T *gap)
   return GA_EMPTY(gap);
 }
 
-// nvim_foldCreateMarkers -- deleted (Rust calls markers::fold_create_markers_impl directly)
-// nvim_parseMarker -- deleted (Rust calls markers::parse_marker_impl directly)
-// nvim_deleteFoldMarkers -- deleted (Rust calls markers::delete_fold_markers_impl directly)
-
-// ============================================================================
-// Manual Fold Operations accessors
-// ============================================================================
-
 /// Check if buffer is modifiable (for fold operations).
 int nvim_fold_buf_is_modifiable(buf_T *buf)
 {
@@ -537,12 +414,6 @@ void nvim_check_cursor_col(win_T *wp)
 {
   check_cursor_col(wp);
 }
-
-// ============================================================================
-// IEMS Algorithm accessors
-// ============================================================================
-
-// Note: nvim_get_got_int is defined in ex_eval.c
 
 /// Get buffer line count (for fold Rust code).
 linenr_T nvim_fold_buf_get_line_count(buf_T *buf)
@@ -562,12 +433,6 @@ void nvim_redraw_win_range_later(win_T *wp, linenr_T top, linenr_T bot)
   redraw_win_range_later(wp, top, bot);
 }
 
-// nvim_foldlevelIndent/Diff/Expr/Syntax -- deleted (Rust calls level.rs directly)
-
-// nvim_foldFind -- deleted (Rust uses fold_find_impl directly)
-
-// nvim_get/set_invalid_top/bot, nvim_get/set_prev_lnum/lvl -- migrated to Rust statics (Phase 5 Pass 5)
-
 /// Get the p_fcl option value.
 char *nvim_get_p_fcl(void) { return p_fcl; }
 
@@ -576,10 +441,6 @@ int nvim_get_disable_fold_update(void) { return disable_fold_update; }
 
 /// Get the need_diff_redraw flag.
 int nvim_get_need_diff_redraw(void) { return need_diff_redraw; }
-
-// nvim_foldUpdate -- deleted (Rust calls rs_foldUpdate directly)
-
-// Note: nvim_win_get_p_fen is defined in window.c
 
 // ============================================================================
 // Accessors for f_foldtext Rust implementation
@@ -622,7 +483,7 @@ linenr_T nvim_fold_get_curbuf_line_count(void)
 }
 
 // ============================================================================
-// Accessors for Rust fold level calculation (Phase 1 migration)
+// Accessors for Rust fold level calculation
 // ============================================================================
 
 /// Get the syntax fold level for a line (wrapper for syn_get_foldlevel).
@@ -673,10 +534,8 @@ void nvim_fold_set_vim_var_nr_lnum(linenr_T lnum)
   set_vim_var_nr(VV_LNUM, (varnumber_T)lnum);
 }
 
-// nvim_fold_get_curbuf_line_count_c -- deleted (merged into nvim_fold_get_curbuf_line_count)
-
 // ============================================================================
-// Accessors for get_foldtext Rust migration (display.rs) -- Phase 3
+// Accessors for get_foldtext Rust migration (display.rs)
 // ============================================================================
 
 /// Save current_sctx into *out_saved (sctx_T), then set current_sctx from
@@ -708,18 +567,8 @@ void nvim_fold_parse_virt_text_from_obj(void *obj_ptr, void *vt_out, int *out_er
   api_clear_error(&err);
 }
 
-// nvim_fold_eval_foldtext_full -- migrated to Rust (display.rs: eval_foldtext_full_impl)
-
-// nvim_fold_set_vvars -- migrated to Rust (display.rs: set_fold_vvars_impl)
-// nvim_fold_clear_vvars -- migrated to Rust (display.rs: clear_fold_vvars_impl)
-
 /// Get wp->w_p_fdt (foldtext option string).
 char *nvim_fold_win_get_p_fdt(win_T *wp)
 {
   return wp->w_p_fdt;
 }
-
-
-// nvim_fold_virt_text_concat -- migrated to Rust (display.rs: virt_text_concat_impl)
-
-
