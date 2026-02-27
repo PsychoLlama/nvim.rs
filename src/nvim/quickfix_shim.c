@@ -3343,23 +3343,63 @@ void ex_cfile(exarg_T *eap)
 
 
 
-/// Display a file name when vimgrep is running.
-static void vgr_display_fname(char *fname)
+// Phase 3 message API accessors for vgr_display_fname migration
+// nvim_msg_start: already defined in undo.c
+// nvim_msg_clr_eos: already defined in change_ffi.c
+// nvim_ui_flush: already defined in change_ffi.c
+char *nvim_msg_strtrunc_free(char *fname) { return msg_strtrunc(fname, true); }
+void nvim_msg_outtrans(const char *str) { msg_outtrans((char *)str, 0, false); }
+void nvim_msg_set_nowait(void) { msg_nowait = true; }
+void nvim_msg_set_col_zero(void) { msg_col = 0; }
+void nvim_msg_set_didout_false(void) { msg_didout = false; }
+
+// Phase 3 buffer management accessors
+// nvim_buf_has_ml_mfp already exists in memline_shim.c (returns int, takes buf_T*)
+// nvim_buflist_findname_exp already exists in window_shim.c (returns buf_T*, takes const char*)
+const char *nvim_buf_get_mfp_fname(const void *buf)
 {
-  msg_start();
-  char *p = msg_strtrunc(fname, true);
-  if (p == NULL) {
-    msg_outtrans(fname, 0, false);
-  } else {
-    msg_outtrans(p, 0, false);
-    xfree(p);
+  const buf_T *b = (const buf_T *)buf;
+  if (b->b_ml.ml_mfp != NULL) {
+    return b->b_ml.ml_mfp->mf_fname;
   }
-  msg_clr_eos();
-  msg_didout = false;  // overwrite this message
-  msg_nowait = true;   // don't wait for this message
-  msg_col = 0;
-  ui_flush();
+  return NULL;
 }
+char nvim_buf_get_bh_first_char(const void *buf) { return ((const buf_T *)buf)->b_p_bh[0]; }
+bool nvim_cmdmod_has_cmod_hide(void) { return (cmdmod.cmod_flags & CMOD_HIDE) != 0; }
+void nvim_buf_clear_bf_dummy(void *buf) { ((buf_T *)buf)->b_flags &= ~BF_DUMMY; }
+void nvim_wipe_dummy_buffer(void *buf, char *dirname_start) { wipe_dummy_buffer((buf_T *)buf, dirname_start); }
+void nvim_unload_dummy_buffer(void *buf, char *dirname_start) { unload_dummy_buffer((buf_T *)buf, dirname_start); }
+void *nvim_load_dummy_buf(const char *fname, char *dirname_start, char *dirname_now)
+{
+  return vgr_load_dummy_buf((char *)fname, dirname_start, dirname_now);
+}
+
+/// Apply Filetype autocmds and modelines to buf (for dummy buffer finalization).
+void nvim_apply_filetype_autocmds_and_modelines(void *buf_void)
+{
+  buf_T *buf = (buf_T *)buf_void;
+  aco_save_T aco;
+  aucmd_prepbuf(&aco, buf);
+  apply_autocmds(EVENT_FILETYPE, buf->b_p_ft, buf->b_fname, true, buf);
+  do_modelines(OPT_NOWIN);
+  aucmd_restbuf(&aco);
+}
+
+/// Execute ex_cd with either CMD_cd or CMD_lcd.
+void nvim_ex_cd_arg(char *arg, bool is_lcd)
+{
+  exarg_T ea = {
+    .arg = arg,
+    .cmdidx = is_lcd ? CMD_lcd : CMD_cd,
+  };
+  ex_cd(&ea);
+}
+
+/// emsg for e_current_location_list_was_changed
+void nvim_qf_emsg_ll_changed(void) { emsg(_(e_current_location_list_was_changed)); }
+
+// Phase 3: path_try_shorten_fname wrapper (rename-compatible)
+char *nvim_path_try_shorten_fname(const char *full_fname) { return path_try_shorten_fname((char *)full_fname); }
 
 /// Load a dummy buffer to search for a pattern using vimgrep.
 static buf_T *vgr_load_dummy_buf(char *fname, char *dirname_start, char *dirname_now)
@@ -3381,27 +3421,6 @@ static buf_T *vgr_load_dummy_buf(char *fname, char *dirname_start, char *dirname
   return buf;
 }
 
-/// create a new list.
-static bool vgr_qflist_valid(win_T *wp, qf_info_T *qi, unsigned qfid, char *title)
-{
-  // Verify that the quickfix/location list was not freed by an autocmd
-  if (!rs_qflist_valid((void *)wp, qfid)) {
-    if (wp != NULL) {
-      // An autocmd has freed the location list
-      emsg(_(e_current_location_list_was_changed));
-      return false;
-    }
-    // Quickfix list is not found, create a new one.
-    rs_qf_new_list(qi, title);
-    return true;
-  }
-  if (rs_qf_restore_list(qi, qfid) == FAIL) {
-    return false;
-  }
-
-  return true;
-}
-
 int nvim_vim_regexec_multi(regmmatch_T *rm, void *win, void *buf, linenr_T lnum, colnr_T col) { return vim_regexec_multi(rm, (win_T *)win, (buf_T *)buf, lnum, col, NULL, NULL); }
 
 linenr_T nvim_regmatch_startpos_lnum(const regmmatch_T *rm, int idx) { return rm->startpos[idx].lnum; }
@@ -3420,12 +3439,6 @@ int nvim_fuzzy_match(const char *str, const char *pat, bool matchseq,
 {
   return fuzzy_match((char *)str, pat, matchseq, score, matches, max_matches);
 }
-
-// _Static_assert for constants used by rs_vgr_match_buflines
-_Static_assert(VGR_GLOBAL == 1, "VGR_GLOBAL mismatch");
-_Static_assert(VGR_NOJUMP == 2, "VGR_NOJUMP mismatch");
-_Static_assert(VGR_FUZZY == 4, "VGR_FUZZY mismatch");
-_Static_assert(FUZZY_MATCH_MAX_LEN == 1024, "FUZZY_MATCH_MAX_LEN mismatch");
 
 // _Static_assert for Phase 1 CMD_* constants used in Rust auname lookups
 _Static_assert(CMD_make == 273, "CMD_make mismatch");
@@ -3463,139 +3476,11 @@ _Static_assert(CMD_ldo == 228, "CMD_ldo mismatch");
 _Static_assert(CMD_cfdo == 66, "CMD_cfdo mismatch");
 _Static_assert(CMD_lfdo == 234, "CMD_lfdo mismatch");
 
-/// Jump to the first match and update the directory.
-static void vgr_jump_to_match(qf_info_T *qi, int forceit, bool *redraw_for_dummy,
-                              buf_T *first_match_buf, char *target_dir)  // NOLINT(readability-non-const-parameter)
-{
-  buf_T *buf = curbuf;
-  rs_qf_jump_newwin(qi, 0, 0, forceit, false);
-  if (buf != curbuf) {
-    // If we jumped to another buffer redrawing will already be
-    // taken care of.
-    *redraw_for_dummy = false;
-  }
-
-  // Jump to the directory used after loading the buffer.
-  if (curbuf == first_match_buf && target_dir != NULL) {
-    exarg_T ea = {
-      .arg = target_dir,
-      .cmdidx = CMD_lcd,
-    };
-    ex_cd(&ea);
-  }
-}
-
-// Return true if "buf" had an existing swap file, the current swap file does
-// not end in ".swp".
-static bool existing_swapfile(const buf_T *buf)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if (buf->b_ml.ml_mfp != NULL && buf->b_ml.ml_mfp->mf_fname != NULL) {
-    const char *const fname = buf->b_ml.ml_mfp->mf_fname;
-    const size_t len = strlen(fname);
-
-    return fname[len - 1] != 'p' || fname[len - 2] != 'w';
-  }
-  return false;
-}
-
-/// :{count}vimgrep /{pattern}/[g][j] {file} ...
-
-/// Returns dirname_start via *start_out, dirname_now via *now_out.
-void nvim_vgr_alloc_dirnames(char **start_out, char **now_out)
-{
-  *start_out = xmalloc(MAXPATHL);
-  *now_out = xmalloc(MAXPATHL);
-  os_dirname(*start_out, MAXPATHL);
-}
-
-void nvim_vgr_free_dirnames(char *start, char *now) { xfree(now); xfree(start); }
-
-char *nvim_vgr_shorten_fname(const char *full_fname) { return path_try_shorten_fname((char *)full_fname); }
-
-void nvim_vgr_display_fname_wrapper(const char *fname) { vgr_display_fname((char *)fname); }
-
-/// Returns: the buffer handle (or NULL), and sets *has_mfp if buffer has ml_mfp.
-void *nvim_vgr_find_buf(const char *fname, bool *has_mfp)
-{
-  buf_T *buf = buflist_findname_exp((char *)fname);
-  if (buf != NULL) {
-    *has_mfp = (buf->b_ml.ml_mfp != NULL);
-  } else {
-    *has_mfp = false;
-  }
-  return buf;
-}
-
-void *nvim_vgr_load_dummy_buf_wrapper(const char *fname, char *dirname_start, char *dirname_now) { return vgr_load_dummy_buf((char *)fname, dirname_start, dirname_now); }
-
-bool nvim_vgr_qflist_valid_wrapper(void *wp, void *qi, unsigned qfid, const char *title) { return vgr_qflist_valid((win_T *)wp, (qf_info_T *)qi, qfid, title); }
-
-void nvim_vgr_smsg_cannot_open(const char *fname) { smsg(0, _("Cannot open file \"%s\""), fname); }
-
-long nvim_vgr_time_now(void) { return (long)time(NULL); }
-
-/// first_match_buf and target_dir may be updated.
-void nvim_vgr_handle_dummy_buf(void *buf_void, bool found_match, bool duplicate_name,
-                                int flags, char *dirname_start, char *dirname_now,
-                                void **first_match_buf, char **target_dir)
-{
-  buf_T *buf = (buf_T *)buf_void;
-  buf_T **fmb = (buf_T **)first_match_buf;
-
-  if (found_match && *fmb == NULL) {
-    *fmb = buf;
-  }
-
-  if (duplicate_name) {
-    wipe_dummy_buffer(buf, dirname_start);
-    return;
-  }
-
-  if ((cmdmod.cmod_flags & CMOD_HIDE) == 0
-      || buf->b_p_bh[0] == 'u'
-      || buf->b_p_bh[0] == 'w'
-      || buf->b_p_bh[0] == 'd') {
-    if (!found_match) {
-      wipe_dummy_buffer(buf, dirname_start);
-      return;
-    }
-    if (buf != *fmb
-        || (flags & VGR_NOJUMP)
-        || existing_swapfile(buf)) {
-      unload_dummy_buffer(buf, dirname_start);
-      buf->b_flags &= ~BF_DUMMY;
-      return;
-    }
-  }
-
-  // Buffer is kept loaded
-  buf->b_flags &= ~BF_DUMMY;
-
-  if (buf == *fmb
-      && *target_dir == NULL
-      && strcmp(dirname_start, dirname_now) != 0) {
-    *target_dir = xstrdup(dirname_now);
-  }
-
-  // Apply Filetype autocommands and modelines
-  aco_save_T aco;
-  aucmd_prepbuf(&aco, buf);
-  apply_autocmds(EVENT_FILETYPE, buf->b_p_ft, buf->b_fname, true, buf);
-  do_modelines(OPT_NOWIN);
-  aucmd_restbuf(&aco);
-}
-
-/// Thin wrapper for static vgr_jump_to_match (for Phase 2 Rust inlining).
-void nvim_vgr_jump_to_match(void *qi_void, int forceit, bool *redraw_for_dummy,
-                             void *first_match_buf, char *target_dir)
-{
-  vgr_jump_to_match((qf_info_T *)qi_void, forceit, redraw_for_dummy,
-                    (buf_T *)first_match_buf, target_dir);
-}
-
 /// semsg(e_nomatch2) wrapper for Rust.
 void nvim_semsg_nomatch2(const char *spat) { semsg(_(e_nomatch2), spat); }
+
+/// smsg wrapper for "Cannot open file" (used by rs_vgr_process_files).
+void nvim_vgr_smsg_cannot_open(const char *fname) { smsg(0, _("Cannot open file \"%s\""), fname); }
 
 void nvim_incr_quickfix_busy(void) { incr_quickfix_busy(); }
 
