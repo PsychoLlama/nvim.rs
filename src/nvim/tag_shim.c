@@ -26,7 +26,6 @@
 #include "nvim/ex_docmd.h"
 #include "nvim/file_search.h"
 #include "nvim/fileio.h"
-#include "nvim/fold.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
 #include "nvim/gettext_defs.h"
@@ -319,44 +318,14 @@ bool nvim_check_can_set_curbuf_forceit(int forceit) { return check_can_set_curbu
 void nvim_set_nofile_fname(const char *fname) { xfree(nofile_fname); nofile_fname = fname != NULL ? xstrdup(fname) : NULL; }
 const char *nvim_get_nofile_fname(void) { return nofile_fname; }
 // --- Rust FFI function declarations ---
-// Parse functions
-extern int rs_parse_match(char *lbuf, tagptrs_T *tagp);
-extern bool rs_test_for_static(const tagptrs_T *tagp);
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
                                    list_stack_T **list_stack);
-
-// Leaf utilities
-extern void rs_tagname_free(void *tnp);
-
-// Pattern/state initialization
 extern void rs_prepare_pats(pat_T *pats, bool has_re);
-extern void rs_findtags_state_init(findtags_state_T *st, char *pat, int flags, int mincount);
-extern void rs_findtags_state_free(findtags_state_T *st);
-
-// Tag file enumeration and filename expansion
-extern int rs_get_tagfname(tagname_T *tnp, int first, char *buf);
 extern bool rs_found_tagfile_cb(int num_fnames, char **fnames, bool all, void *cookie);
-extern char *rs_expand_tag_fname(char *fname, char *tag_fname, bool expand);
-
-// Search orchestration
-extern int rs_findtags_copy_matches(findtags_state_T *st, char ***matchesp);
-extern void rs_findtags_in_file(findtags_state_T *st, int flags, char *buf_ffname);
-
-// Tag display
 extern void rs_do_tags(void);
-
-// Tagfunc option management
 extern const char *rs_did_set_tagfunc(void *args);
-extern int rs_find_tagfunc_tags(char *pat, void *ga, int *match_count, int flags, char *buf_ffname);
-
-// Tag operations
-extern void rs_do_tag(char *tag, int type, int count, int forceit, bool verbose);
 
 #include "tag_shim.c.generated.h"
-extern int rs_win_valid(win_T *win);
-
-// Rust fold FFI declaration
-extern void rs_foldOpenCursor(void);
 
 static char *tagmatchname = NULL;   // name of last used tag
 
@@ -704,22 +673,6 @@ void *nvim_tag_rettv_get_list(const void *rettv_storage)
 /// Size in bytes of pos_T (for stack allocation in Rust).
 size_t nvim_tag_pos_size(void) { return sizeof(pos_T); }
 
-// Forward declaration for the Rust implementation
-int rs_tag_call_tagfunc(const char *pat, int flags, const char *buf_ffname,
-                        void **out_list, void *rettv_storage);
-
-/// Call the tagfunc callback and validate the result.
-/// Returns:
-///   0 (OK) with *out_list set to the returned list (caller must call nvim_tag_tv_clear_rettv)
-///   1 (FAIL) if callback call failed
-///   2 (NOTDONE) if result was v:null
-///   3 if result was not a list (emsg already shown)
-///   4 if curbuf tfu is empty or callback is none
-int nvim_tag_call_tagfunc(const char *pat, int flags, const char *buf_ffname,
-                          void **out_list, void *rettv_storage)
-{
-  return rs_tag_call_tagfunc(pat, flags, buf_ffname, out_list, rettv_storage);
-}
 
 void nvim_tag_tv_clear_rettv(void *rettv_storage) { tv_clear((typval_T *)rettv_storage); }
 size_t nvim_tag_rettv_size(void) { return sizeof(typval_T); }
@@ -848,8 +801,6 @@ int nvim_tag_get_postponed_split_flags(void) { return postponed_split_flags; }
 /// RESET_BINDING(curwin) wrapper.
 void nvim_tag_reset_binding_curwin(void) { RESET_BINDING(curwin); }
 
-/// Returns keep_help_flag.
-bool nvim_tag_get_keep_help_flag(void) { return keep_help_flag; }
 /// Sets keep_help_flag.
 void nvim_tag_set_keep_help_flag(bool val) { keep_help_flag = val; }
 
@@ -985,9 +936,6 @@ void nvim_tag_save_cursor_in_entry(void *tg_void, int idx)
 
 void nvim_tag_copy_fmark_from_entry(void *tg_void, int idx, void *out_buf) { taggy_T *tg = (taggy_T *)tg_void; memcpy(out_buf, &tg[idx].fmark, sizeof(fmark_T)); }
 void nvim_tag_restore_fmark_to_entry(void *tg_void, int idx, const void *buf) { taggy_T *tg = (taggy_T *)tg_void; memcpy(&tg[idx].fmark, buf, sizeof(fmark_T)); }
-size_t nvim_tag_fmark_size(void) { return sizeof(fmark_T); }
-_Static_assert(sizeof(fmark_T) <= 64, "fmark_T must fit in 64 bytes for Rust stack buffer");
-
 int nvim_tag_prompt_for_selection(void) { return prompt_for_input(NULL, 0, false, NULL); }
 void nvim_tag_clear_swap_command(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
 /// Format "tag N of M[or more]" into caller-provided buffer.
