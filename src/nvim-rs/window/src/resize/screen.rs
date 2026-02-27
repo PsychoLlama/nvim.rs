@@ -7,6 +7,18 @@ use std::ffi::c_int;
 
 use crate::{Frame, TabpageHandle, WinHandle};
 
+/// Bulk scroll/resize snapshot (matches C WinSnapshot exactly).
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct WinSnapshot {
+    topline: c_int,
+    topfill: c_int,
+    leftcol: c_int,
+    skipcol: c_int,
+    width: c_int,
+    height: c_int,
+}
+
 // =============================================================================
 // C Accessor Functions
 // =============================================================================
@@ -38,13 +50,9 @@ extern "C" {
     fn nvim_win_set_winrow_off(wp: WinHandle, val: c_int);
     fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
 
-    // --- Snapshot field setters ---
-    fn nvim_win_set_last_topline(wp: WinHandle, val: i32);
-    fn nvim_win_set_last_topfill(wp: WinHandle, val: c_int);
-    fn nvim_win_set_last_leftcol(wp: WinHandle, val: c_int);
-    fn nvim_win_set_last_skipcol(wp: WinHandle, val: c_int);
-    fn nvim_win_set_last_width(wp: WinHandle, val: c_int);
-    fn nvim_win_set_last_height(wp: WinHandle, val: c_int);
+    // --- Bulk snapshot accessors ---
+    fn nvim_win_set_snapshot(wp: WinHandle, s: *const WinSnapshot);
+    fn nvim_win_get_scroll_fields(wp: WinHandle, out: *mut WinSnapshot);
 
     // --- Snapshot field getters ---
     fn nvim_win_get_topline(wp: WinHandle) -> i32;
@@ -260,12 +268,9 @@ unsafe fn snapshot_windows_scroll_size_impl() {
     let curtab = nvim_get_curtab();
     let mut wp = nvim_tabpage_get_firstwin(curtab);
     while !wp.is_null() {
-        nvim_win_set_last_topline(wp, nvim_win_get_topline(wp));
-        nvim_win_set_last_topfill(wp, nvim_win_get_topfill(wp));
-        nvim_win_set_last_leftcol(wp, nvim_win_get_leftcol(wp));
-        nvim_win_set_last_skipcol(wp, nvim_win_get_skipcol(wp));
-        nvim_win_set_last_width(wp, nvim_win_get_w_width(wp));
-        nvim_win_set_last_height(wp, nvim_win_get_w_height(wp));
+        let mut cur = WinSnapshot::default();
+        nvim_win_get_scroll_fields(wp, std::ptr::addr_of_mut!(cur));
+        nvim_win_set_snapshot(wp, std::ptr::addr_of!(cur));
         wp = nvim_win_get_next(wp);
     }
 }

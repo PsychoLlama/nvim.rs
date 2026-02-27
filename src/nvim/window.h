@@ -35,4 +35,22 @@ enum {
 
 EXTERN int tabpage_move_disallowed INIT( = 0);  ///< moving tabpages around disallowed
 
+// Bulk snapshot structs used by window_shim accessor functions.
+// Must be defined before window_shim.h.generated.h which references them.
+typedef struct {
+  int topline;
+  int topfill;
+  int leftcol;
+  int skipcol;
+  int width;
+  int height;
+} WinSnapshot;
+
+typedef struct {
+  int32_t topline;
+  int32_t botline;
+  int32_t topfill;
+  int32_t skipcol;
+} WinViewportSnapshot;
+
 #include "window_shim.h.generated.h"

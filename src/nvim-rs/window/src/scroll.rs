@@ -377,14 +377,24 @@ type DictHandle = *mut std::ffi::c_void;
 /// Opaque handle to a C list_T*.
 type ListHandle = *mut std::ffi::c_void;
 
+/// Bulk scroll/resize snapshot (matches C WinSnapshot exactly).
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct WinSnapshot {
+    topline: c_int,
+    topfill: c_int,
+    leftcol: c_int,
+    skipcol: c_int,
+    width: c_int,
+    height: c_int,
+}
+
 extern "C" {
-    // Window snapshot field getters
-    fn nvim_win_get_last_topline(wp: WinHandle) -> c_int;
-    fn nvim_win_get_last_topfill(wp: WinHandle) -> c_int;
-    fn nvim_win_get_last_leftcol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_last_skipcol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_last_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_last_height(wp: WinHandle) -> c_int;
+    // Bulk snapshot accessors
+    fn nvim_win_get_snapshot(wp: WinHandle, out: *mut WinSnapshot);
+    fn nvim_win_set_snapshot(wp: WinHandle, s: *const WinSnapshot);
+    /// Read current scroll fields (topline/topfill/leftcol/skipcol/width/height) into snapshot.
+    fn nvim_win_get_scroll_fields(wp: WinHandle, out: *mut WinSnapshot);
 
     // Event ignored/has_event wrappers
     fn nvim_event_ignored_winscrolled(wp: WinHandle) -> c_int;
@@ -398,14 +408,6 @@ extern "C" {
     fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
     fn nvim_win_get_leftcol(wp: WinHandle) -> c_int;
     fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
-
-    // Window snapshot field setters (Phase 13: absorb nvim_win_init_float_snapshot)
-    fn nvim_win_set_last_topline(wp: WinHandle, val: c_int);
-    fn nvim_win_set_last_topfill(wp: WinHandle, val: c_int);
-    fn nvim_win_set_last_leftcol(wp: WinHandle, val: c_int);
-    fn nvim_win_set_last_skipcol(wp: WinHandle, val: c_int);
-    fn nvim_win_set_last_width(wp: WinHandle, val: c_int);
-    fn nvim_win_set_last_height(wp: WinHandle, val: c_int);
 
     // Typval compound operations
     fn nvim_tv_dict_alloc_refcount1() -> DictHandle;
@@ -469,21 +471,26 @@ fn check_window_scroll_resize_scan() -> ScrollResizeScan {
         while !wp.is_null() {
             // Skip floating windows without a snapshot (init them instead).
             // Inlined nvim_win_init_float_snapshot: copy current state to w_last_* fields.
-            if nvim_win_get_floating(wp) != 0 && nvim_win_get_last_topline(wp) == 0 {
-                nvim_win_set_last_topline(wp, nvim_win_get_topline(wp));
-                nvim_win_set_last_topfill(wp, nvim_win_get_topfill(wp));
-                nvim_win_set_last_leftcol(wp, nvim_win_get_leftcol(wp));
-                nvim_win_set_last_skipcol(wp, nvim_win_get_skipcol(wp));
-                nvim_win_set_last_width(wp, nvim_win_get_w_width(wp));
-                nvim_win_set_last_height(wp, nvim_win_get_w_height(wp));
+            let mut snap = WinSnapshot::default();
+            nvim_win_get_snapshot(wp, std::ptr::addr_of_mut!(snap));
+            if nvim_win_get_floating(wp) != 0 && snap.topline == 0 {
+                let mut cur = WinSnapshot::default();
+                nvim_win_get_scroll_fields(wp, std::ptr::addr_of_mut!(cur));
+                nvim_win_set_snapshot(wp, std::ptr::addr_of!(cur));
                 wp = nvim_win_get_next(wp);
                 continue;
             }
 
+            let cur_width = nvim_win_get_w_width(wp);
+            let cur_height = nvim_win_get_w_height(wp);
+            let cur_topline = nvim_win_get_topline(wp);
+            let cur_topfill = nvim_win_get_topfill(wp);
+            let cur_leftcol = nvim_win_get_leftcol(wp);
+            let cur_skipcol = nvim_win_get_skipcol(wp);
+
             let ignore_scroll = nvim_event_ignored_winscrolled(wp) != 0;
             let size_changed = nvim_event_ignored_winresized(wp) == 0
-                && (nvim_win_get_last_width(wp) != nvim_win_get_w_width(wp)
-                    || nvim_win_get_last_height(wp) != nvim_win_get_w_height(wp));
+                && (snap.width != cur_width || snap.height != cur_height);
 
             if size_changed {
                 result.size_count += 1;
@@ -498,10 +505,10 @@ fn check_window_scroll_resize_scan() -> ScrollResizeScan {
             }
 
             let scroll_changed = !ignore_scroll
-                && (nvim_win_get_last_topline(wp) != nvim_win_get_topline(wp)
-                    || nvim_win_get_last_topfill(wp) != nvim_win_get_topfill(wp)
-                    || nvim_win_get_last_leftcol(wp) != nvim_win_get_leftcol(wp)
-                    || nvim_win_get_last_skipcol(wp) != nvim_win_get_skipcol(wp));
+                && (snap.topline != cur_topline
+                    || snap.topfill != cur_topfill
+                    || snap.leftcol != cur_leftcol
+                    || snap.skipcol != cur_skipcol);
 
             if scroll_changed && result.first_scroll_win.is_null() {
                 result.first_scroll_win = wp;
@@ -520,14 +527,16 @@ fn check_window_scroll_resize_build_list(list: ListHandle) {
     unsafe {
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
-            if nvim_win_get_floating(wp) != 0 && nvim_win_get_last_topline(wp) == 0 {
+            let mut snap = WinSnapshot::default();
+            nvim_win_get_snapshot(wp, std::ptr::addr_of_mut!(snap));
+            if nvim_win_get_floating(wp) != 0 && snap.topline == 0 {
                 wp = nvim_win_get_next(wp);
                 continue;
             }
 
             let size_changed = nvim_event_ignored_winresized(wp) == 0
-                && (nvim_win_get_last_width(wp) != nvim_win_get_w_width(wp)
-                    || nvim_win_get_last_height(wp) != nvim_win_get_w_height(wp));
+                && (snap.width != nvim_win_get_w_width(wp)
+                    || snap.height != nvim_win_get_w_height(wp));
 
             if size_changed {
                 nvim_tv_list_append_number(list, nvim_win_get_handle(wp));
@@ -617,29 +626,37 @@ fn check_window_scroll_resize_build_dict() -> DictHandle {
 
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
-            if nvim_win_get_floating(wp) != 0 && nvim_win_get_last_topline(wp) == 0 {
+            let mut snap = WinSnapshot::default();
+            nvim_win_get_snapshot(wp, std::ptr::addr_of_mut!(snap));
+            if nvim_win_get_floating(wp) != 0 && snap.topline == 0 {
                 wp = nvim_win_get_next(wp);
                 continue;
             }
 
+            let cur_width = nvim_win_get_w_width(wp);
+            let cur_height = nvim_win_get_w_height(wp);
+            let cur_topline = nvim_win_get_topline(wp);
+            let cur_topfill = nvim_win_get_topfill(wp);
+            let cur_leftcol = nvim_win_get_leftcol(wp);
+            let cur_skipcol = nvim_win_get_skipcol(wp);
+
             let ignore_scroll = nvim_event_ignored_winscrolled(wp) != 0;
             let size_changed = nvim_event_ignored_winresized(wp) == 0
-                && (nvim_win_get_last_width(wp) != nvim_win_get_w_width(wp)
-                    || nvim_win_get_last_height(wp) != nvim_win_get_w_height(wp));
+                && (snap.width != cur_width || snap.height != cur_height);
 
             let scroll_changed = !ignore_scroll
-                && (nvim_win_get_last_topline(wp) != nvim_win_get_topline(wp)
-                    || nvim_win_get_last_topfill(wp) != nvim_win_get_topfill(wp)
-                    || nvim_win_get_last_leftcol(wp) != nvim_win_get_leftcol(wp)
-                    || nvim_win_get_last_skipcol(wp) != nvim_win_get_skipcol(wp));
+                && (snap.topline != cur_topline
+                    || snap.topfill != cur_topfill
+                    || snap.leftcol != cur_leftcol
+                    || snap.skipcol != cur_skipcol);
 
             if size_changed || scroll_changed {
-                let width = nvim_win_get_w_width(wp) - nvim_win_get_last_width(wp);
-                let height = nvim_win_get_w_height(wp) - nvim_win_get_last_height(wp);
-                let topline = nvim_win_get_topline(wp) - nvim_win_get_last_topline(wp);
-                let topfill = nvim_win_get_topfill(wp) - nvim_win_get_last_topfill(wp);
-                let leftcol = nvim_win_get_leftcol(wp) - nvim_win_get_last_leftcol(wp);
-                let skipcol = nvim_win_get_skipcol(wp) - nvim_win_get_last_skipcol(wp);
+                let width = cur_width - snap.width;
+                let height = cur_height - snap.height;
+                let topline = cur_topline - snap.topline;
+                let topfill = cur_topfill - snap.topfill;
+                let leftcol = cur_leftcol - snap.leftcol;
+                let skipcol = cur_skipcol - snap.skipcol;
 
                 let d = make_win_info_dict_rs(width, height, topline, topfill, leftcol, skipcol);
                 if d.is_null() {

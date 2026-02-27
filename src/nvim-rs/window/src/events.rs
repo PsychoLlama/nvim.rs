@@ -530,6 +530,16 @@ pub unsafe extern "C" fn rs_ui_ext_win_position(wp: WinHandle, validate: bool) {
 /// MAXCOL from pos_defs.h.
 const MAXCOL: i64 = 0x7fff_ffff;
 
+/// Bulk viewport snapshot (matches C WinViewportSnapshot exactly).
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct WinViewportSnapshot {
+    topline: i32,
+    botline: i32,
+    topfill: i32,
+    skipcol: i32,
+}
+
 extern "C" {
     fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
     fn nvim_win_get_topline(wp: WinHandle) -> i32;
@@ -541,14 +551,8 @@ extern "C" {
     fn nvim_win_get_empty_rows(wp: WinHandle) -> c_int;
     fn nvim_win_get_viewport_invalid(wp: WinHandle) -> c_int;
     fn nvim_win_set_viewport_invalid(wp: WinHandle, val: c_int);
-    fn nvim_win_get_viewport_last_topline(wp: WinHandle) -> i32;
-    fn nvim_win_set_viewport_last_topline(wp: WinHandle, val: i32);
-    fn nvim_win_get_viewport_last_botline(wp: WinHandle) -> i32;
-    fn nvim_win_set_viewport_last_botline(wp: WinHandle, val: i32);
-    fn nvim_win_get_viewport_last_topfill(wp: WinHandle) -> c_int;
-    fn nvim_win_set_viewport_last_topfill(wp: WinHandle, val: i32);
-    fn nvim_win_get_viewport_last_skipcol(wp: WinHandle) -> i64;
-    fn nvim_win_set_viewport_last_skipcol(wp: WinHandle, val: i64);
+    fn nvim_win_get_viewport_snapshot(wp: WinHandle, out: *mut WinViewportSnapshot);
+    fn nvim_win_set_viewport_snapshot(wp: WinHandle, s: *const WinViewportSnapshot);
     fn nvim_ui_call_win_viewport_wrapper(
         grid: c_int,
         win: c_int,
@@ -604,18 +608,17 @@ unsafe fn ui_ext_win_viewport_impl(wp: WinHandle) {
 
     let mut delta: i64 = 0;
 
-    let raw_last_topline = nvim_win_get_viewport_last_topline(wp);
-    let mut last_botline = nvim_win_get_viewport_last_botline(wp);
+    let mut vsnap = WinViewportSnapshot::default();
+    nvim_win_get_viewport_snapshot(wp, std::ptr::addr_of_mut!(vsnap));
+
+    let raw_last_topline = vsnap.topline;
+    let mut last_botline = vsnap.botline;
 
     let (last_topline, last_topfill, last_skipcol) = if raw_last_topline > line_count {
         delta -= i64::from(raw_last_topline - line_count);
         (line_count, 0_i32, MAXCOL)
     } else {
-        (
-            raw_last_topline,
-            nvim_win_get_viewport_last_topfill(wp),
-            nvim_win_get_viewport_last_skipcol(wp),
-        )
+        (raw_last_topline, vsnap.topfill, i64::from(vsnap.skipcol))
     };
     last_botline = last_botline.min(line_count);
 
@@ -684,10 +687,13 @@ unsafe fn ui_ext_win_viewport_impl(wp: WinHandle) {
     );
 
     nvim_win_set_viewport_invalid(wp, 0);
-    nvim_win_set_viewport_last_topline(wp, nvim_win_get_topline(wp));
-    nvim_win_set_viewport_last_botline(wp, nvim_win_get_botline(wp));
-    nvim_win_set_viewport_last_topfill(wp, nvim_win_get_topfill(wp));
-    nvim_win_set_viewport_last_skipcol(wp, i64::from(nvim_win_get_skipcol(wp)));
+    let new_vsnap = WinViewportSnapshot {
+        topline: nvim_win_get_topline(wp),
+        botline: nvim_win_get_botline(wp),
+        topfill: nvim_win_get_topfill(wp),
+        skipcol: nvim_win_get_skipcol(wp),
+    };
+    nvim_win_set_viewport_snapshot(wp, std::ptr::addr_of!(new_vsnap));
 }
 
 /// FFI: Emit `win_viewport` UI event for window `wp`.

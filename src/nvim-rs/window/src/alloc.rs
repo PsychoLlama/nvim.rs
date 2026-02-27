@@ -180,6 +180,16 @@ const UPD_NOT_VALID: c_int = 40;
 /// linenr_T is int32_t in C.
 type LinenrT = i32;
 
+/// Bulk viewport snapshot (matches C WinViewportSnapshot exactly).
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct WinViewportSnapshot {
+    topline: i32,
+    botline: i32,
+    topfill: i32,
+    skipcol: i32,
+}
+
 extern "C" {
     /// Schedule a later redraw for the window.
     fn nvim_redraw_later_wrapper(wp: WinHandle, update_type: c_int);
@@ -335,8 +345,8 @@ extern "C" {
     /// Set w_viewport_invalid.
     fn nvim_win_set_viewport_invalid(wp: WinHandle, val: c_int);
 
-    /// Set w_viewport_last_topline.
-    fn nvim_win_set_viewport_last_topline(wp: WinHandle, val: LinenrT);
+    /// Bulk-set w_viewport_last_* fields from a WinViewportSnapshot.
+    fn nvim_win_set_viewport_snapshot(wp: WinHandle, s: *const WinViewportSnapshot);
 
     /// Initialize w_ns_set (SET_INIT) and w_ns_hl = -1.
     fn nvim_win_init_ns_set(wp: WinHandle);
@@ -404,7 +414,11 @@ unsafe fn win_alloc_impl(after: WinHandle, hidden: bool) -> WinHandle {
     nvim_win_set_floating(wp, 0);
     nvim_win_set_config_init(wp);
     nvim_win_set_viewport_invalid(wp, 1);
-    nvim_win_set_viewport_last_topline(wp, 1);
+    let vsnap = WinViewportSnapshot {
+        topline: 1,
+        ..WinViewportSnapshot::default()
+    };
+    nvim_win_set_viewport_snapshot(wp, std::ptr::addr_of!(vsnap));
 
     nvim_win_init_ns_set(wp);
     nvim_win_init_global_local_opts(wp);

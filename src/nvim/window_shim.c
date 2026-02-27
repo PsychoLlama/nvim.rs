@@ -86,6 +86,10 @@
 
 #include "window_shim.c.generated.h"
 
+// Static assertions for bulk snapshot struct sizes (types defined in window.h).
+_Static_assert(sizeof(WinSnapshot) == 6 * sizeof(int), "WinSnapshot size mismatch");
+_Static_assert(sizeof(WinViewportSnapshot) == 4 * sizeof(int32_t), "WinViewportSnapshot size mismatch");
+
 // Rust FFI declarations (tag module)
 extern void rs_tagstack_clear_entry(void *tg);
 extern void rs_reset_VIsual_and_resel(void);
@@ -2041,23 +2045,47 @@ void nvim_win_set_script_ctx_scroll(win_T *wp)
 /// Call win_reconfig_floats() (for win_new_screen_cols).
 void nvim_win_reconfig_floats(void) { win_reconfig_floats(); }
 
-/// Set w_last_topline snapshot field.
-void nvim_win_set_last_topline(win_T *wp, linenr_T val) { if (wp) { wp->w_last_topline = val; } }
+/// Bulk-set all w_last_* snapshot fields from a WinSnapshot struct.
+void nvim_win_set_snapshot(win_T *wp, const WinSnapshot *s)
+{
+  if (!wp || !s) {
+    return;
+  }
+  wp->w_last_topline = (linenr_T)s->topline;
+  wp->w_last_topfill = s->topfill;
+  wp->w_last_leftcol = (colnr_T)s->leftcol;
+  wp->w_last_skipcol = (colnr_T)s->skipcol;
+  wp->w_last_width = s->width;
+  wp->w_last_height = s->height;
+}
 
-/// Set w_last_topfill snapshot field.
-void nvim_win_set_last_topfill(win_T *wp, int val) { if (wp) { wp->w_last_topfill = val; } }
+/// Bulk-get all w_last_* snapshot fields into a WinSnapshot struct.
+void nvim_win_get_snapshot(win_T *wp, WinSnapshot *out)
+{
+  if (!wp || !out) {
+    return;
+  }
+  out->topline = (int)wp->w_last_topline;
+  out->topfill = wp->w_last_topfill;
+  out->leftcol = (int)wp->w_last_leftcol;
+  out->skipcol = (int)wp->w_last_skipcol;
+  out->width = wp->w_last_width;
+  out->height = wp->w_last_height;
+}
 
-/// Set w_last_leftcol snapshot field.
-void nvim_win_set_last_leftcol(win_T *wp, colnr_T val) { if (wp) { wp->w_last_leftcol = val; } }
-
-/// Set w_last_skipcol snapshot field.
-void nvim_win_set_last_skipcol(win_T *wp, colnr_T val) { if (wp) { wp->w_last_skipcol = val; } }
-
-/// Set w_last_width snapshot field.
-void nvim_win_set_last_width(win_T *wp, int val) { if (wp) { wp->w_last_width = val; } }
-
-/// Set w_last_height snapshot field.
-void nvim_win_set_last_height(win_T *wp, int val) { if (wp) { wp->w_last_height = val; } }
+/// Bulk-get current scroll fields into a WinSnapshot struct (for float init).
+void nvim_win_get_scroll_fields(win_T *wp, WinSnapshot *out)
+{
+  if (!wp || !out) {
+    return;
+  }
+  out->topline = (int)wp->w_topline;
+  out->topfill = wp->w_topfill;
+  out->leftcol = (int)wp->w_leftcol;
+  out->skipcol = (int)wp->w_skipcol;
+  out->width = wp->w_width;
+  out->height = wp->w_height;
+}
 
 // Phase 3 accessors: win_fix_scroll, win_fix_cursor, may_make_initial_scroll_size_snapshot
 int nvim_get_skip_win_fix_cursor(void) { return skip_win_fix_cursor ? 1 : 0; }
@@ -2395,14 +2423,29 @@ void close_windows(buf_T *buf, bool keep_curwin) { rs_close_windows(buf, keep_cu
 
 // Phase 6 accessors: ui_ext_win_viewport
 
-linenr_T nvim_win_get_viewport_last_topline(win_T *wp) { return wp ? wp->w_viewport_last_topline : 0; }
-void nvim_win_set_viewport_last_topline(win_T *wp, int32_t val) { if (wp) { wp->w_viewport_last_topline = (linenr_T)val; } }
-linenr_T nvim_win_get_viewport_last_botline(win_T *wp) { return wp ? wp->w_viewport_last_botline : 0; }
-void nvim_win_set_viewport_last_botline(win_T *wp, int32_t val) { if (wp) { wp->w_viewport_last_botline = (linenr_T)val; } }
-int nvim_win_get_viewport_last_topfill(win_T *wp) { return wp ? wp->w_viewport_last_topfill : 0; }
-void nvim_win_set_viewport_last_topfill(win_T *wp, int32_t val) { if (wp) { wp->w_viewport_last_topfill = (linenr_T)val; } }
-int64_t nvim_win_get_viewport_last_skipcol(win_T *wp) { return wp ? (int64_t)wp->w_viewport_last_skipcol : 0; }
-void nvim_win_set_viewport_last_skipcol(win_T *wp, int64_t val) { if (wp) { wp->w_viewport_last_skipcol = (linenr_T)val; } }
+/// Bulk-get w_viewport_last_* fields into a WinViewportSnapshot.
+void nvim_win_get_viewport_snapshot(win_T *wp, WinViewportSnapshot *out)
+{
+  if (!wp || !out) {
+    return;
+  }
+  out->topline = (int32_t)wp->w_viewport_last_topline;
+  out->botline = (int32_t)wp->w_viewport_last_botline;
+  out->topfill = (int32_t)wp->w_viewport_last_topfill;
+  out->skipcol = (int32_t)wp->w_viewport_last_skipcol;
+}
+
+/// Bulk-set w_viewport_last_* fields from a WinViewportSnapshot.
+void nvim_win_set_viewport_snapshot(win_T *wp, const WinViewportSnapshot *s)
+{
+  if (!wp || !s) {
+    return;
+  }
+  wp->w_viewport_last_topline = (linenr_T)s->topline;
+  wp->w_viewport_last_botline = (linenr_T)s->botline;
+  wp->w_viewport_last_topfill = (int)s->topfill;
+  wp->w_viewport_last_skipcol = (colnr_T)s->skipcol;
+}
 
 /// Wrap ui_call_win_viewport for Rust.
 void nvim_ui_call_win_viewport_wrapper(int grid, int win, int topline, int botline,
@@ -2603,14 +2646,6 @@ void nvim_win_init_copy_compound(win_T *dst, win_T *src, int flags)
 // =============================================================================
 // Phase 9 accessors: may_trigger_win_scrolled_resized migration
 // =============================================================================
-
-// Window snapshot field getters
-linenr_T nvim_win_get_last_topline(win_T *wp) { return wp ? wp->w_last_topline : 0; }
-int nvim_win_get_last_topfill(win_T *wp) { return wp ? wp->w_last_topfill : 0; }
-colnr_T nvim_win_get_last_leftcol(win_T *wp) { return wp ? wp->w_last_leftcol : 0; }
-colnr_T nvim_win_get_last_skipcol(win_T *wp) { return wp ? wp->w_last_skipcol : 0; }
-int nvim_win_get_last_width(win_T *wp) { return wp ? wp->w_last_width : 0; }
-int nvim_win_get_last_height(win_T *wp) { return wp ? wp->w_last_height : 0; }
 
 // Event ignored wrappers
 int nvim_event_ignored_winscrolled(win_T *wp)
