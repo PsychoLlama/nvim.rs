@@ -58,9 +58,6 @@ extern "C" {
 
     // skip_regexp_err accessor
 
-    // reg_nextline accessors
-    fn nvim_regexp_call_reg_getline(lnum: i32) -> *mut c_char;
-
     // reg_prev_class accessors
     fn nvim_regexp_get_rex_reg_buf_chartab() -> *mut i64;
     fn mb_get_class_tab(p: *const c_char, chartab: *const i64) -> c_int;
@@ -1541,7 +1538,7 @@ pub unsafe extern "C" fn rs_reg_prev_class() -> c_int {
 pub unsafe extern "C" fn rs_reg_nextline() {
     let lnum = REX.lnum + 1;
     REX.lnum = lnum;
-    let line = nvim_regexp_call_reg_getline(lnum).cast::<u8>();
+    let line = c_reg_getline(lnum).cast::<u8>();
     {
         REX.line = line;
         REX.input = line;
@@ -1666,7 +1663,7 @@ pub unsafe extern "C" fn rs_reg_match_visual() -> c_int {
 
         // getvvcol() flushes rex.line, need to get it again
         let rex_lnum = REX.lnum;
-        let new_line = nvim_regexp_call_reg_getline(rex_lnum).cast::<u8>();
+        let new_line = c_reg_getline(rex_lnum).cast::<u8>();
         REX.line = new_line;
         REX.input = new_line.add(col as usize);
 
@@ -1764,6 +1761,33 @@ pub unsafe extern "C" fn rs_reg_getline_common(
     }
     if get_length {
         *length = nvim_regexp_call_ml_get_buf_len(firstlnum);
+    }
+}
+
+/// Get pointer to line `lnum` relative to `reg_firstlnum`.
+unsafe fn c_reg_getline(lnum: i32) -> *mut c_char {
+    let mut line: *mut c_char = core::ptr::null_mut();
+    rs_reg_getline_common(lnum, RGLF_LINE, &mut line, core::ptr::null_mut());
+    line
+}
+
+/// Get length of line `lnum` relative to `reg_firstlnum`.
+unsafe fn c_reg_getline_len(lnum: i32) -> i32 {
+    let mut length: i32 = 0;
+    rs_reg_getline_common(lnum, RGLF_LENGTH, core::ptr::null_mut(), &mut length);
+    length
+}
+
+/// Rust equivalent of C `nvim_regexp_fmark_get_col_adj`.
+/// Returns adjusted column for a fmark: if lnum matches and col is MAXCOL,
+/// return the line length; otherwise return the raw column.
+unsafe fn fmark_get_col_adj(fm: *mut c_void, lnum_match: i32) -> i32 {
+    let pos_lnum = nvim_regexp_fmark_get_lnum(fm);
+    let pos_col = nvim_regexp_fmark_get_col(fm);
+    if pos_lnum == lnum_match && pos_col == MAXCOL_I32 {
+        c_reg_getline_len(pos_lnum - REX.reg_firstlnum)
+    } else {
+        pos_col
     }
 }
 
@@ -2150,7 +2174,6 @@ const RA_NOMATCH: c_int = 5;
 extern "C" {
     fn nvim_regexp_get_got_int() -> c_int;
     fn mb_strnicmp(s1: *const c_char, s2: *const c_char, nn: usize) -> c_int;
-    fn nvim_regexp_call_reg_getline_len(lnum: i32) -> i32;
 }
 
 /// Check whether a backreference matches.
@@ -2200,13 +2223,13 @@ pub unsafe extern "C" fn rs_match_with_backref(
         }
 
         // Get the line to compare with.
-        let p = nvim_regexp_call_reg_getline(clnum);
+        let p = c_reg_getline(clnum);
         assert!(!p.is_null());
 
         let mut len = if clnum == end_lnum {
             end_col - ccol
         } else {
-            nvim_regexp_call_reg_getline_len(clnum) - ccol
+            c_reg_getline_len(clnum) - ccol
         };
 
         let input: *mut c_char = REX.input.cast();
@@ -2358,11 +2381,11 @@ unsafe fn regsub_expand_backref(
             return out;
         }
         let start_col = nvim_regexp_get_rex_reg_mmatch_startpos_col(no);
-        s = nvim_regexp_call_reg_getline(clnum).add(start_col as usize);
+        s = c_reg_getline(clnum).add(start_col as usize);
         len = if nvim_regexp_get_rex_reg_mmatch_endpos_lnum(no) == clnum {
             nvim_regexp_get_rex_reg_mmatch_endpos_col(no) - start_col
         } else {
-            nvim_regexp_call_reg_getline_len(clnum) - start_col
+            c_reg_getline_len(clnum) - start_col
         };
     } else {
         s = nvim_regexp_get_rex_reg_match_startp(no);
@@ -2389,11 +2412,11 @@ unsafe fn regsub_expand_backref(
             }
             out = out.add(1);
             clnum += 1;
-            s = nvim_regexp_call_reg_getline(clnum);
+            s = c_reg_getline(clnum);
             len = if nvim_regexp_get_rex_reg_mmatch_endpos_lnum(no) == clnum {
                 nvim_regexp_get_rex_reg_mmatch_endpos_col(no)
             } else {
-                nvim_regexp_call_reg_getline_len(clnum)
+                c_reg_getline_len(clnum)
             };
         } else if *s == 0 {
             if copy {
@@ -4676,7 +4699,7 @@ pub unsafe extern "C" fn rs_reg_restore(save: *const RegsaveT, ga_len: *mut c_in
             // Only call reg_getline() when the line number changed to save
             // a bit of time.
             REX.lnum = (*save).rs_u.pos.lnum;
-            let line = nvim_regexp_call_reg_getline((*save).rs_u.pos.lnum).cast::<u8>();
+            let line = c_reg_getline((*save).rs_u.pos.lnum).cast::<u8>();
             REX.line = line;
         }
         REX.input = REX.line.add((*save).rs_u.pos.col as usize);
@@ -4861,7 +4884,7 @@ pub unsafe extern "C" fn rs_regtry(
                 let end_lnum = REG_ENDZPOS[idx as usize].lnum;
                 let end_col = REG_ENDZPOS[idx as usize].col;
                 if start_lnum >= 0 && end_lnum == start_lnum && end_col >= start_col {
-                    let line = nvim_regexp_call_reg_getline(start_lnum);
+                    let line = c_reg_getline(start_lnum);
                     (*em).matches[i] =
                         xstrnsave(line.add(start_col as usize), (end_col - start_col) as usize)
                             .cast::<u8>();
@@ -5367,7 +5390,6 @@ extern "C" {
     fn nvim_regexp_get_rex_reg_win_cursor_col() -> i32;
 
     // Virtual column: reuse existing nvim_regexp_call_win_linetabsize (declared above)
-    // reg_getline_len: reuse existing nvim_regexp_call_reg_getline_len (declared above)
 
     // Error/utility
     fn nvim_regexp_call_profile_passed_limit(tm: *const c_void) -> c_int;
@@ -6418,7 +6440,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
 
                         // Line may have been freed, get it again.
                         if is_reg_multi {
-                            let new_line = nvim_regexp_call_reg_getline(REX.lnum).cast::<u8>();
+                            let new_line = c_reg_getline(REX.lnum).cast::<u8>();
                             REX.line = new_line;
                             REX.input = new_line.add(col);
                         }
@@ -6433,7 +6455,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                             let input_col = REX.input.offset_from(REX.line) as i32;
 
                             let pos_col = if pos_lnum == rex_cur_lnum && pos_col_raw == MAXCOL_I32 {
-                                nvim_regexp_call_reg_getline_len(pos_lnum - REX.reg_firstlnum)
+                                c_reg_getline_len(pos_lnum - REX.reg_firstlnum)
                             } else {
                                 pos_col_raw
                             };
@@ -6713,10 +6735,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                             if !no_advance && (*rp).rs_un.regsave.rs_u.pos.col == 0 {
                                 (*rp).rs_un.regsave.rs_u.pos.lnum -= 1;
                                 if (*rp).rs_un.regsave.rs_u.pos.lnum < (*bp).rs_u.pos.lnum
-                                    || nvim_regexp_call_reg_getline(
-                                        (*rp).rs_un.regsave.rs_u.pos.lnum,
-                                    )
-                                    .is_null()
+                                    || c_reg_getline((*rp).rs_un.regsave.rs_u.pos.lnum).is_null()
                                 {
                                     no_advance = true;
                                 } else {
@@ -6731,8 +6750,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                                 }
                             } else if !no_advance {
                                 let line =
-                                    nvim_regexp_call_reg_getline((*rp).rs_un.regsave.rs_u.pos.lnum)
-                                        .cast::<u8>();
+                                    c_reg_getline((*rp).rs_un.regsave.rs_u.pos.lnum).cast::<u8>();
                                 let col = (*rp).rs_un.regsave.rs_u.pos.col;
                                 let head = utf_head_off(
                                     line.cast::<c_char>(),
@@ -6891,17 +6909,14 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                                         }
                                         let new_lnum = REX.lnum - 1;
                                         REX.lnum = new_lnum;
-                                        let new_line =
-                                            nvim_regexp_call_reg_getline(new_lnum).cast::<u8>();
+                                        let new_line = c_reg_getline(new_lnum).cast::<u8>();
                                         // Just in case regrepeat() didn't count right.
                                         if new_line.is_null() {
                                             break;
                                         }
                                         REX.line = new_line;
-                                        REX.input = new_line
-                                            .add(
-                                                nvim_regexp_call_reg_getline_len(new_lnum) as usize
-                                            );
+                                        REX.input =
+                                            new_line.add(c_reg_getline_len(new_lnum) as usize);
                                         rs_reg_breakcheck();
                                     } else {
                                         let backed = mb_ptr_back(line, inp);
@@ -12423,10 +12438,10 @@ unsafe fn recursive_regmatch_t(
         if state_val <= 0 {
             if is_multi {
                 let new_lnum = REX.lnum - 1;
-                let line = nvim_regexp_call_reg_getline(new_lnum);
+                let line = c_reg_getline(new_lnum);
                 if line.is_null() {
                     // can't go before the first line
-                    let _ = nvim_regexp_call_reg_getline(REX.lnum);
+                    let _ = c_reg_getline(REX.lnum);
                 } else {
                     REX.lnum = new_lnum;
                     REX.line = line.cast::<u8>();
@@ -12437,15 +12452,15 @@ unsafe fn recursive_regmatch_t(
             if is_multi && (REX.input.offset_from(REX.line) as c_int) < state_val {
                 // Not enough bytes in this line, go to end of previous line.
                 let new_lnum = REX.lnum - 1;
-                let line = nvim_regexp_call_reg_getline(new_lnum);
+                let line = c_reg_getline(new_lnum);
                 if line.is_null() {
                     // can't go before the first line
-                    let _ = nvim_regexp_call_reg_getline(REX.lnum);
+                    let _ = c_reg_getline(REX.lnum);
                     REX.input = REX.line;
                 } else {
                     REX.lnum = new_lnum;
                     REX.line = line.cast::<u8>();
-                    let line_len = nvim_regexp_call_reg_getline_len(new_lnum);
+                    let line_len = c_reg_getline_len(new_lnum);
                     REX.input = REX.line.offset(line_len as isize);
                 }
             }
@@ -12502,7 +12517,7 @@ unsafe fn recursive_regmatch_t(
     // Restore position in input text
     REX.lnum = save_reglnum;
     if is_multi {
-        REX.line = nvim_regexp_call_reg_getline(save_reglnum).cast::<u8>();
+        REX.line = c_reg_getline(save_reglnum).cast::<u8>();
     }
     REX.input = REX.line.offset(save_reginput_col as isize);
     if result != NFA_TOO_EXPENSIVE {
@@ -12559,7 +12574,6 @@ extern "C" {
     fn nvim_regexp_fmark_is_set(fm: *mut c_void) -> c_int;
     fn nvim_regexp_fmark_get_lnum(fm: *mut c_void) -> i32;
     fn nvim_regexp_fmark_get_col(fm: *mut c_void) -> i32;
-    fn nvim_regexp_fmark_get_col_adj(fm: *mut c_void, lnum_match: i32) -> i32;
 
     // List thread count setter
 
@@ -14001,7 +14015,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
 
                     // Line may have been freed, get it again.
                     if (REX.reg_match.is_null() as c_int) != 0 {
-                        let new_line = nvim_regexp_call_reg_getline(REX.lnum) as *mut u8;
+                        let new_line = c_reg_getline(REX.lnum) as *mut u8;
                         REX.line = new_line;
                         REX.input = new_line.add(col_sz);
                     }
@@ -14009,7 +14023,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                     if nvim_regexp_fmark_is_set(fm) != 0 {
                         let pos_lnum = nvim_regexp_fmark_get_lnum(fm);
                         let lnum_match = REX.lnum + REX.reg_firstlnum;
-                        let pos_col = nvim_regexp_fmark_get_col_adj(fm, lnum_match);
+                        let pos_col = fmark_get_col_adj(fm, lnum_match);
                         let input_col = (REX.input as isize - REX.line as isize) as i32;
 
                         result = if pos_lnum == lnum_match {
@@ -14478,7 +14492,7 @@ unsafe fn nfa_regtry_extract_extmatch(subs: *mut RegsubsT) {
                 && mpos.start_lnum == mpos.end_lnum
                 && mpos.end_col >= mpos.start_col
             {
-                let line = nvim_regexp_call_reg_getline(mpos.start_lnum);
+                let line = c_reg_getline(mpos.start_lnum);
                 let src = line.add(mpos.start_col as usize);
                 let len = (mpos.end_col - mpos.start_col) as usize;
                 let saved = xstrnsave(src, len);
@@ -14624,7 +14638,7 @@ pub unsafe extern "C" fn rs_nfa_regexec_both(
     // Inlined nvim_regexp_nfa_regexec_both_get_line:
     // for multi-line, get line 0 from reg_getline; for single-line use `line`
     let line: *mut u8 = if REX.reg_match.is_null() {
-        nvim_regexp_call_reg_getline(0).cast::<u8>()
+        c_reg_getline(0).cast::<u8>()
     } else {
         line
     };
@@ -14898,7 +14912,7 @@ pub unsafe extern "C" fn rs_bt_regexec_both(
 
     // Inlined nvim_regexp_nfa_regexec_both_get_line: get line for multi or use arg
     let line: *mut u8 = if REX.reg_match.is_null() {
-        nvim_regexp_call_reg_getline(0).cast::<u8>()
+        c_reg_getline(0).cast::<u8>()
     } else {
         line
     };
@@ -15084,7 +15098,7 @@ unsafe fn bt_try_unanchored(
         // If not currently on the first line, get it again
         if REX.lnum != 0 {
             REX.lnum = 0;
-            REX.line = nvim_regexp_call_reg_getline(0).cast::<u8>();
+            REX.line = c_reg_getline(0).cast::<u8>();
         }
         let rex_line = REX.line;
         if *rex_line.add(*col as usize) == 0 {

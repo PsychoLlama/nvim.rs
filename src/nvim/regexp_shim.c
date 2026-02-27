@@ -72,11 +72,6 @@ extern int rs_vim_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                 int32_t col, void *tm, int *timed_out);
 extern void *rs_vim_regcomp(const uint8_t *expr, int re_flags);
 extern void *rs_bt_regcomp(uint8_t *expr, int re_flags);
-typedef enum {
-  RGLF_LINE = 0x01,
-  RGLF_LENGTH = 0x02,
-  RGLF_SUBMATCH = 0x04,
-} reg_getline_flags_T;
 
 /// Structure returned by vim_regcomp() to pass on to vim_regexec().
 /// This is the general structure. For the actual matcher, two specific
@@ -260,46 +255,13 @@ typedef struct {
   int sm_line_lbr;
 } regsubmatch_T;
 
-/// Common code for reg_getline(), reg_getline_len(), reg_getline_submatch() and
-/// reg_getline_submatch_len().
-///
-/// @param flags  a bitmask that controls what info is to be returned
-///               and whether or not submatch is in effect.
-extern void rs_reg_getline_common(int32_t lnum, int flags, char **line, int32_t *length);
-
-static void reg_getline_common(linenr_T lnum, reg_getline_flags_T flags, char **line,
-                               colnr_T *length)
-{
-  rs_reg_getline_common((int32_t)lnum, (int)flags, line, (int32_t *)length);
-}
-
-/// Get pointer to the line "lnum", which is relative to "reg_firstlnum".
-static char *reg_getline(linenr_T lnum)
-{
-  char *line;
-  reg_getline_common(lnum, RGLF_LINE, &line, NULL);
-  return line;
-}
-
-/// Get length of line "lnum", which is relative to "reg_firstlnum".
-static colnr_T reg_getline_len(linenr_T lnum)
-{
-  colnr_T length;
-  reg_getline_common(lnum, RGLF_LENGTH, NULL, &length);
-  return length;
-}
-
 // true if using multi-line regexp.
 #define REG_MULTI       (REX_PTR->reg_match == NULL)
 
 // reg_prev_class accessors for Rust FFI
 int64_t *nvim_regexp_get_rex_reg_buf_chartab(void) { return REX_PTR->reg_buf->b_chartab; }
 
-// reg_nextline accessors for Rust FFI
-char *nvim_regexp_call_reg_getline(int32_t lnum) { return reg_getline((linenr_T)lnum); }
-
 int nvim_regexp_get_got_int(void) { return got_int; }
-int32_t nvim_regexp_call_reg_getline_len(int32_t lnum) { return (int32_t)reg_getline_len((linenr_T)lnum); }
 
 // regrepeat accessors for Rust FFI
 int nvim_regexp_call_vim_iswordp_buf(const char *p) { return vim_iswordp_buf(p, REX_PTR->reg_buf); }
@@ -689,14 +651,6 @@ void *nvim_regexp_call_mark_get_for_nfa(void *buf, void *win, int mark_val) { re
 int nvim_regexp_fmark_is_set(void *fm) { return fm != NULL && ((fmark_T *)fm)->mark.lnum > 0; }
 int32_t nvim_regexp_fmark_get_lnum(void *fm) { return (int32_t)((fmark_T *)fm)->mark.lnum; }
 int32_t nvim_regexp_fmark_get_col(void *fm) { return (int32_t)((fmark_T *)fm)->mark.col; }
-int32_t nvim_regexp_fmark_get_col_adj(void *fm, int32_t lnum_match)
-{
-  fmark_T *f = (fmark_T *)fm;
-  if (f->mark.lnum == lnum_match && f->mark.col == MAXCOL) {
-    return (int32_t)reg_getline_len(f->mark.lnum - REX_PTR->reg_firstlnum);
-  }
-  return (int32_t)f->mark.col;
-}
 
 void nvim_regexp_xfree(void *p) { xfree(p); }
 
