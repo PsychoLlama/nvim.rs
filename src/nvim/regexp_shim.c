@@ -145,12 +145,6 @@ extern int rs_get_char_class(char **pp);
 
 #include "regexp_shim.c.generated.h"
 
-// Accessors for Rust FFI (static helpers exposed for the regexp crate)
-int nvim_regexp_get_char_class(char **pp) { return rs_get_char_class(pp); }
-
-unsigned int nvim_regexp_get_regflags(const regprog_T *prog) { return prog->regflags; }
-
-
 /// Skip strings inside [ and ].
 char *skip_regexp(char *startp, int delim, int magic)
 {
@@ -406,21 +400,11 @@ int32_t nvim_regexp_get_rex_reg_mmatch_startpos_lnum(int no) { return (int32_t)R
 int32_t nvim_regexp_get_rex_reg_mmatch_startpos_col(int no) { return (int32_t)REX_PTR->reg_mmatch->startpos[no].col; }
 int32_t nvim_regexp_get_rex_reg_mmatch_endpos_lnum(int no) { return (int32_t)REX_PTR->reg_mmatch->endpos[no].lnum; }
 int32_t nvim_regexp_get_rex_reg_mmatch_endpos_col(int no) { return (int32_t)REX_PTR->reg_mmatch->endpos[no].col; }
-int nvim_regexp_call_prog_magic_wrong(void) { return prog_magic_wrong(); }
-
 // nvim_regexp_setup_vim_regsub and nvim_regexp_setup_vim_regsub_multi inlined into Rust
 
 // reg_getline_common accessors for Rust FFI
 char *nvim_regexp_call_ml_get_buf(int32_t lnum) { return ml_get_buf(REX_PTR->reg_buf, (linenr_T)lnum); }
 int32_t nvim_regexp_call_ml_get_buf_len(int32_t lnum) { return (int32_t)ml_get_buf_len(REX_PTR->reg_buf, (linenr_T)lnum); }
-
-// prog_magic_wrong logic is now in Rust (rs_prog_magic_wrong).
-// The C accessor wraps the Rust implementation.
-extern int rs_prog_magic_wrong(void);
-static int prog_magic_wrong(void)
-{
-  return rs_prog_magic_wrong();
-}
 
 ////////////////////////////////////////////////////////////////
 //                    regsub stuff                            //
@@ -651,7 +635,6 @@ void *nvim_regexp_call_mark_get(int mark) {
 void *nvim_regexp_get_rex_reg_win_or_curwin(void) {
   return (void *)(REX_PTR->reg_win == NULL ? curwin : REX_PTR->reg_win);
 }
-int nvim_regexp_has_rex_reg_win(void) { return REX_PTR->reg_win != NULL ? 1 : 0; }
 int32_t nvim_regexp_get_rex_reg_win_cursor_lnum(void) {
   return REX_PTR->reg_win != NULL ? (int32_t)REX_PTR->reg_win->w_cursor.lnum : 0;
 }
@@ -689,8 +672,6 @@ char *nvim_regexp_xstrdup(const char *s) { return xstrdup(s); }
 // siemsg wrapper for check_char_class
 
 
-
-int nvim_regexp_get_nfa_has_zsubexpr(void) { return REX_PTR->nfa_has_zsubexpr; }
 
 // NFA prog allocation: allocates the prog and updates Rust-owned STATE_PTR via nvim_regexp_set_state_ptr
 extern void nvim_regexp_set_state_ptr(void *v);  // exported by Rust, sets STATE_PTR static

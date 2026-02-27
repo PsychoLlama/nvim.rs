@@ -33,11 +33,9 @@ extern "C" {
 }
 extern "C" {
     fn utfc_ptr2len(p: *const c_char) -> c_int;
-    fn nvim_regexp_get_char_class(pp: *mut *mut c_char) -> c_int;
     fn nvim_get_p_cpo() -> *const c_char;
     fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
     fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
-    fn nvim_regexp_get_regflags(prog: *const c_void) -> c_uint;
 
     // Multibyte helpers
     fn utf_ptr2len(p: *const c_char) -> c_int;
@@ -766,8 +764,9 @@ const RF_HASNL: c_uint = 4;
 ///
 /// `prog` must be a valid pointer to a `regprog_T`.
 #[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
 pub unsafe extern "C" fn re_multiline(prog: *const c_void) -> c_int {
-    (nvim_regexp_get_regflags(prog) & RF_HASNL) as c_int
+    ((*prog.cast::<RegprogT>()).regflags & RF_HASNL) as c_int
 }
 
 // --- Number parsers (pure-logic cores + FFI wrappers) ---
@@ -2722,7 +2721,7 @@ pub unsafe extern "C" fn rs_vim_regsub_both(
         errors::emsg_e_null();
         return 0;
     }
-    if nvim_regexp_call_prog_magic_wrong() != 0 {
+    if rs_prog_magic_wrong() != 0 {
         return 0;
     }
     #[allow(clippy::cast_possible_truncation)]
@@ -3608,7 +3607,7 @@ unsafe fn parse_collection(flagp: *mut c_int, extra: c_int) -> *mut u8 {
             }
         } else if *regparse == b'[' as c_char {
             let mut rp = regparse;
-            let c_class = nvim_regexp_get_char_class(&mut rp);
+            let c_class = rs_get_char_class(&mut rp);
             startc = -1;
             // Characters assumed to be 8 bits!
             if c_class == CLASS_NONE {
@@ -5364,7 +5363,6 @@ extern "C" {
 
     // Window/cursor
     fn nvim_regexp_get_rex_reg_win_or_curwin() -> *mut c_void;
-    fn nvim_regexp_has_rex_reg_win() -> c_int;
     fn nvim_regexp_get_rex_reg_win_cursor_lnum() -> i32;
     fn nvim_regexp_get_rex_reg_win_cursor_col() -> i32;
 
@@ -6397,7 +6395,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
 
                     // --- Phase 6: Special position opcodes ---
                     CURSOR => {
-                        if nvim_regexp_has_rex_reg_win() == 0
+                        if REX.reg_win.is_null()
                             || REX.lnum + REX.reg_firstlnum
                                 != nvim_regexp_get_rex_reg_win_cursor_lnum()
                             || (REX.input.offset_from(REX.line) as i32
@@ -8457,7 +8455,7 @@ unsafe fn nfa_handle_collection(mut extra: c_int, old_rp: *mut c_char) -> c_int 
             if *regparse_u8() == b'[' {
                 // Check for [: :], [= =], [. .]
                 let mut rp = REGPARSE;
-                let charclass = nvim_regexp_get_char_class(&mut rp);
+                let charclass = rs_get_char_class(&mut rp);
                 REGPARSE = rp;
 
                 if charclass == CLASS_NONE {
@@ -11132,14 +11130,10 @@ type RegsubsHandle = *mut c_void; // regsubs_T*
 /// NFA PIM result constants.
 const NFA_PIM_UNUSED: c_int = 0;
 
-extern "C" {
-
-    // C wrapper functions for complex operations
-    // (match_backref, match_zref, find_match_text, skip_to_start
-    //  migrated to Rust -- extern declarations removed)
-    fn nvim_regexp_get_nfa_has_zsubexpr() -> c_int;
-
-}
+// C wrapper functions for complex operations
+// (match_backref, match_zref, find_match_text, skip_to_start
+//  migrated to Rust -- extern declarations removed; nvim_regexp_get_nfa_has_zsubexpr
+//  replaced by REX.nfa_has_zsubexpr direct access)
 
 // ============================================================================
 // Submatch operations — migrated from C regexp.c
@@ -11302,7 +11296,7 @@ unsafe fn copy_pim(to: *mut NfaPimT, from: *const NfaPimT) {
     (*to).result = (*from).result;
     (*to).state = (*from).state;
     copy_sub(&mut (*to).subs.norm, &(*from).subs.norm);
-    if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+    if REX.nfa_has_zsubexpr != 0 {
         copy_sub(&mut (*to).subs.synt, &(*from).subs.synt);
     }
     (*to).end = (*from).end;
@@ -11470,7 +11464,7 @@ unsafe fn has_state_with_pos_t(
         let thread = &*(*l).t.offset(i as isize);
         if (*thread.state).id == (*state).id
             && sub_equal(&thread.subs.norm, &(*subs).norm, REX.nfa_has_backref)
-            && (nvim_regexp_get_nfa_has_zsubexpr() == 0
+            && (REX.nfa_has_zsubexpr == 0
                 || sub_equal(&thread.subs.synt, &(*subs).synt, REX.nfa_has_backref))
             && pim_equal_t(&thread.pim, pim)
         {
@@ -11752,7 +11746,7 @@ unsafe fn addstate_default_add(
             // "subs" may point into the current array, need to make a
             // copy before it becomes invalid.
             copy_sub(&mut (*temp_subs).norm, &(*subs).norm);
-            if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+            if REX.nfa_has_zsubexpr != 0 {
                 copy_sub(&mut (*temp_subs).synt, &(*subs).synt);
             }
             subs = temp_subs;
@@ -11775,7 +11769,7 @@ unsafe fn addstate_default_add(
         (*l).has_pim = 1;
     }
     copy_sub(&mut thread.subs.norm, &(*subs).norm);
-    if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+    if REX.nfa_has_zsubexpr != 0 {
         copy_sub(&mut thread.subs.synt, &(*subs).synt);
     }
 
@@ -12081,7 +12075,7 @@ pub unsafe extern "C" fn rs_has_state_with_pos(
         ) {
             continue;
         }
-        if nvim_regexp_get_nfa_has_zsubexpr() != 0
+        if REX.nfa_has_zsubexpr != 0
             && !sub_equal_o(
                 (&raw mut (*(*l.cast::<NfaListT>()).t.add(i as usize)).subs.synt).cast::<c_void>(),
                 subs_synt,
@@ -12785,7 +12779,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                                 .subs
                                 .norm as *mut c_void,
                         );
-                        if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                        if REX.nfa_has_zsubexpr != 0 {
                             copy_sub_o(
                                 &raw mut (*submatch.cast::<RegsubsT>()).synt as *mut c_void,
                                 &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
@@ -12848,7 +12842,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                                 .subs
                                 .norm as *mut c_void,
                         );
-                        if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                        if REX.nfa_has_zsubexpr != 0 {
                             copy_sub_o(
                                 &raw mut (*m.cast::<RegsubsT>()).synt as *mut c_void,
                                 &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
@@ -12897,7 +12891,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                                 .subs
                                 .norm as *mut c_void,
                         );
-                        if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                        if REX.nfa_has_zsubexpr != 0 {
                             copy_sub_off_o(
                                 &raw mut (*m.cast::<RegsubsT>()).synt as *mut c_void,
                                 &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
@@ -12933,7 +12927,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                                     .norm as *mut c_void,
                                 &raw mut (*m.cast::<RegsubsT>()).norm as *mut c_void,
                             );
-                            if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                            if REX.nfa_has_zsubexpr != 0 {
                                 copy_sub_off_o(
                                     &raw mut (*(*thislist.cast::<NfaListT>())
                                         .t
@@ -13036,7 +13030,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                             &raw mut (*m.cast::<RegsubsT>()).norm as *mut c_void,
                             subs_norm,
                         );
-                        if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                        if REX.nfa_has_zsubexpr != 0 {
                             copy_sub_off_o(
                                 &raw mut (*m.cast::<RegsubsT>()).synt as *mut c_void,
                                 subs_synt,
@@ -13064,7 +13058,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                                     .norm as *mut c_void,
                                 &raw mut (*m.cast::<RegsubsT>()).norm as *mut c_void,
                             );
-                            if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                            if REX.nfa_has_zsubexpr != 0 {
                                 copy_sub_off_o(
                                     &raw mut (*(*thislist.cast::<NfaListT>())
                                         .t
@@ -14058,7 +14052,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_CURSOR => {
-                    result = if nvim_regexp_has_rex_reg_win() != 0
+                    result = if !REX.reg_win.is_null()
                         && (REX.lnum + REX.reg_firstlnum
                             == nvim_regexp_get_rex_reg_win_cursor_lnum())
                         && ((REX.input as isize - REX.line as isize) as i32
@@ -14168,7 +14162,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                                 &raw mut (*pim_ptr.cast::<NfaPimT>()).subs.norm as *mut c_void,
                                 &raw mut (*m.cast::<RegsubsT>()).norm as *mut c_void,
                             );
-                            if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                            if REX.nfa_has_zsubexpr != 0 {
                                 copy_sub_off_o(
                                     &raw mut (*pim_ptr.cast::<NfaPimT>()).subs.synt as *mut c_void,
                                     &raw mut (*m.cast::<RegsubsT>()).synt as *mut c_void,
@@ -14193,7 +14187,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                                 .norm as *mut c_void,
                             &raw mut (*pim_ptr.cast::<NfaPimT>()).subs.norm as *mut c_void,
                         );
-                        if nvim_regexp_get_nfa_has_zsubexpr() != 0 {
+                        if REX.nfa_has_zsubexpr != 0 {
                             copy_sub_off_o(
                                 &raw mut (*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
                                     .subs
@@ -14814,10 +14808,6 @@ pub unsafe extern "C" fn rs_nfa_regexec_multi(
 
 // --- Phase 9.1: BT dispatch wrappers ---
 
-extern "C" {
-    fn nvim_regexp_call_prog_magic_wrong() -> c_int;
-}
-
 /// BT regexp execution for single-line matching.
 /// (Phase 7: inlined `nfa_regexec_nl_setup` logic)
 #[no_mangle]
@@ -14930,7 +14920,7 @@ pub unsafe extern "C" fn rs_bt_regexec_both(
     }
 
     // Check validity of program
-    if nvim_regexp_call_prog_magic_wrong() != 0 {
+    if rs_prog_magic_wrong() != 0 {
         nvim_regexp_bt_cleanup_stacks_rust();
         return 0;
     }
