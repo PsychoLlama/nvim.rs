@@ -3941,7 +3941,7 @@ static qf_info_T *hgr_get_ll(bool *new_ll)
   return qi;
 }
 
-// C accessor wrappers for rs_hgr_search_* functions (Phase 1)
+// C accessor wrappers for rs_hgr_search_* functions (Phase 1 deleted, Phase 2 renamed)
 // nvim_hgr_os_fopen deleted: use nvim_os_fopen_read
 // nvim_hgr_vim_fgets deleted: use nvim_qf_vim_fgets
 // nvim_hgr_vim_regexec deleted: use nvim_qf_vim_regexec
@@ -3953,22 +3953,22 @@ static qf_info_T *hgr_get_ll(bool *new_ll)
 // nvim_hgr_get_got_int deleted: use nvim_qf_got_int (returns bool)
 // nvim_hgr_set_got_int deleted: use nvim_qf_set_got_int
 // nvim_hgr_line_breakcheck deleted: use nvim_qf_line_breakcheck
-int nvim_hgr_gen_expand_wildcards(char *dirname, int *fcount_out, char ***fnames_out)
+// nvim_hgr_get_MAXPATHL deleted: use nvim_get_maxpathl (memline_shim.c, returns size_t)
+// nvim_hgr_get_NameBuff deleted: use nvim_get_namebuff (buffer.c, returns char*)
+int nvim_gen_expand_wildcards_file_silent(char *dirname, int *fcount_out, char ***fnames_out)
 {
   return gen_expand_wildcards(1, &dirname, fcount_out, fnames_out, EW_FILE|EW_SILENT);
 }
-void nvim_hgr_free_wild(int fcount, char **fnames) { FreeWild(fcount, fnames); }
-char *nvim_hgr_fname_at(char **fnames, int idx) { return fnames[idx]; }
-void nvim_hgr_add_pathsep(char *dirname) { add_pathsep(dirname); }
+void nvim_free_wild(int fcount, char **fnames) { FreeWild(fcount, fnames); }
+char *nvim_fname_at(char **fnames, int idx) { return fnames[idx]; }
+void nvim_add_pathsep(char *dirname) { add_pathsep(dirname); }
 void nvim_hgr_strcat_doc_glob(char *dirname) { strcat(dirname, "doc/*.\\(txt\\|??x\\)"); }  // NOLINT
-int nvim_hgr_STRNICMP(const char *a, const char *b, int n) { return STRNICMP(a, b, (size_t)n); }
-char *nvim_hgr_get_p_rtp(void) { return p_rtp; }
-void nvim_hgr_copy_option_part(char **pp, char *buf, int maxlen)
+int nvim_strnicmp(const char *a, const char *b, int n) { return STRNICMP(a, b, (size_t)n); }
+char *nvim_get_p_rtp(void) { return p_rtp; }
+void nvim_copy_option_part_comma(char **pp, char *buf, int maxlen)
 {
   copy_option_part(pp, buf, (size_t)maxlen, ",");
 }
-int nvim_hgr_get_MAXPATHL(void) { return MAXPATHL; }
-char *nvim_hgr_get_NameBuff(void) { return NameBuff; }
 
 /// Returns true if we should proceed, false if aborting.
 bool nvim_hgr_pre_check(void *eap_void)
