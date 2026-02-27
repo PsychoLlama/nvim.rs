@@ -2071,12 +2071,6 @@ char *nvim_do_sub_skip_regexp_ex(char *cmd, int delim, char **arg_ptr)
   return skip_regexp_ex(cmd, (char)delim, rs_magic_isset(), arg_ptr, NULL, NULL);
 }
 
-/// Wrap check_nextcmd(cmd). Returns pointer to next command or NULL.
-char *nvim_do_sub_check_nextcmd(const char *cmd)
-{
-  return check_nextcmd((char *)cmd);
-}
-
 /// Wrap get_search_pat(). Returns pointer to last search pattern string.
 const char *nvim_do_sub_get_search_pat(void) { return get_search_pat(); }
 
@@ -2154,32 +2148,6 @@ char *nvim_do_sub_format_confirm_prompt(const char *sub)
   return xstrdup(IObuff);
 }
 
-/// Call extmark_splice on curbuf for do_sub.
-void nvim_do_sub_extmark_splice(int start_row, int start_col,
-                                 int old_row, int old_col, int64_t old_bytes,
-                                 int new_row, int new_col, int64_t new_bytes,
-                                 int etype)
-{
-  extmark_splice(curbuf, start_row, (colnr_T)start_col,
-                 old_row, (colnr_T)old_col, (bcount_t)old_bytes,
-                 new_row, (colnr_T)new_col, (bcount_t)new_bytes, (ExtmarkOp)etype);
-}
-
-/// Call mark_adjust(lnum+1, MAXLNUM, 1, 0, kExtmarkNOOP) for do_sub insert.
-void nvim_do_sub_mark_adjust_insert(int lnum)
-{
-  mark_adjust((linenr_T)lnum + 1, (linenr_T)MAXLNUM, 1, 0, kExtmarkNOOP);
-}
-
-/// Call mark_adjust(lnum, lnum+count-1, MAXLNUM, -count, kExtmarkNOOP) for do_sub delete.
-void nvim_do_sub_mark_adjust_delete(int lnum, int count)
-{
-  mark_adjust((linenr_T)lnum, (linenr_T)lnum + count - 1, MAXLNUM, (long)-count, kExtmarkNOOP);
-}
-
-/// Call appended_lines(lnum-1, 1) for do_sub.
-void nvim_do_sub_appended_lines(int lnum) { appended_lines((linenr_T)lnum - 1, 1); }
-
 /// Wrap ml_delete(lnum) for do_sub.
 void nvim_do_sub_ml_delete(int lnum) { ml_delete((linenr_T)lnum); }
 
@@ -2189,18 +2157,11 @@ void nvim_do_sub_changed_lines(int first, int last, int xtra)
   changed_lines(curbuf, (linenr_T)first, 0, (linenr_T)last, (linenr_T)xtra, false);
 }
 
-/// Wrap buf_updates_send_changes(curbuf, first, num_added, num_removed) for do_sub.
-void nvim_do_sub_buf_updates_send_changes(int first, int64_t num_added, int64_t num_removed)
-{
-  buf_updates_send_changes(curbuf, (linenr_T)first, num_added, num_removed);
-}
-
 /// Get ml_get_len(lnum) for do_sub.
 int nvim_do_sub_ml_get_len(int lnum) { return (int)ml_get_len((linenr_T)lnum); }
 
 /// Get ml_get(lnum) for do_sub.
 const char *nvim_do_sub_ml_get(int lnum) { return ml_get((linenr_T)lnum); }
-
 
 /// Save substitute pattern and history via save_re_pat + add_to_history.
 void nvim_do_sub_save_pat(const char *pat, size_t patlen, int which_pat)
