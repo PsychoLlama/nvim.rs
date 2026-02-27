@@ -571,6 +571,7 @@ extern "C" {
     // ========================================================================
 
     /// Delete mark at iterator position.
+    #[allow(dead_code)]
     fn nvim_marktree_del_itr(b: MarkTreeHandle, itr: MarkTreeIterHandle, rev: bool) -> u64;
 
     /// Delete key from id2node map.
@@ -3887,13 +3888,343 @@ pub fn pivot_left(b: MarkTreeHandle, _p_pos: MTPos, p: MTNodeHandle, i: i32) {
 // Deletion Wrappers
 // ============================================================================
 
+/// Tracks which index field `lasti` points to during the rebalancing loop.
+///
+/// Mirrors C's `int *lasti` which alternates between `&itr->i` and
+/// `&itr->s[rlvl].i` depending on whether we've already moved up one level.
+enum LastiRef {
+    /// `lasti == &itr->i`
+    ItrI,
+    /// `lasti == &itr->s[level].i`
+    S(i32),
+}
+
+impl LastiRef {
+    fn get(&self, itr: MarkTreeIterHandle) -> i32 {
+        match self {
+            Self::ItrI => unsafe { nvim_mtitr_get_i(itr) },
+            Self::S(lvl) => unsafe { nvim_mtitr_get_s_i(itr, *lvl) },
+        }
+    }
+
+    fn set(&self, itr: MarkTreeIterHandle, val: i32) {
+        match self {
+            Self::ItrI => unsafe { nvim_mtitr_set_i(itr, val) },
+            Self::S(lvl) => unsafe { nvim_mtitr_set_s_i(itr, *lvl, val) },
+        }
+    }
+
+    fn add(&self, itr: MarkTreeIterHandle, delta: i32) {
+        let v = self.get(itr);
+        self.set(itr, v + delta);
+    }
+}
+
 /// Delete mark at iterator position.
 ///
 /// Returns the ID of the paired end mark (if any), or 0 if unpaired.
 /// The iterator is updated to point at the key after the deleted one.
+///
+/// `rev` should be true if we plan to iterate backwards and delete stuff
+/// before this key. Most of the time this is false.
 #[must_use]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::many_single_char_names,
+    clippy::too_many_lines,
+    clippy::missing_panics_doc
+)]
 pub fn marktree_del_itr(b: MarkTreeHandle, itr: MarkTreeIterHandle, rev: bool) -> u64 {
-    unsafe { nvim_marktree_del_itr(b, itr, rev) }
+    let mut adjustment: i32 = 0;
+
+    let cur = unsafe { nvim_mtitr_get_x(itr) };
+    let curi = unsafe { nvim_mtitr_get_i(itr) };
+    let id = mt_lookup_key(&unsafe { nvim_mtnode_get_key(cur, curi) });
+
+    // Step 1: Handle paired marks
+    let raw = rawkey(itr);
+    let mut other: u64 = 0;
+    if mt_paired(&raw) && (raw.flags & MT_FLAG_ORPHANED == 0) {
+        other = mt_lookup_key_side(&raw, !mt_end(&raw));
+        let other_itr = unsafe { nvim_alloc_marktreeiter() };
+        let _ = marktree_lookup(b, other, other_itr);
+        rawkey_or_flags(other_itr, MT_FLAG_ORPHANED);
+        // Remove intersect markers
+        if mt_start(&raw) {
+            let this_itr = unsafe { nvim_alloc_marktreeiter() };
+            unsafe { nvim_marktree_itr_copy(this_itr, itr) };
+            marktree_intersect_pair(b, id, this_itr, other_itr, true);
+            unsafe { nvim_free_marktreeiter(this_itr) };
+        } else {
+            marktree_intersect_pair(b, other, other_itr, itr, true);
+        }
+        unsafe { nvim_free_marktreeiter(other_itr) };
+    }
+
+    // Step 2: If internal node, steal predecessor
+    let cur_x = unsafe { nvim_mtitr_get_x(itr) };
+    if unsafe { nvim_mtnode_get_level(cur_x) } != 0 {
+        assert!(!rev, "marktree_del_itr: rev on internal node not supported");
+        let _ = marktree_itr_prev(b, itr);
+        adjustment = -1;
+    }
+
+    // Step 3: Delete key from leaf
+    let x = unsafe { nvim_mtitr_get_x(itr) };
+    debug_assert!(unsafe { nvim_mtnode_get_level(x) } == 0);
+    let itr_i = unsafe { nvim_mtitr_get_i(itr) };
+    let intkey = unsafe { nvim_mtnode_get_key(x, itr_i) };
+
+    let mut meta_inc = meta_describe_key(&intkey);
+    let x_n = unsafe { nvim_mtnode_get_n(x) };
+    if x_n > itr_i + 1 {
+        unsafe { nvim_mtnode_memmove_keys(x, itr_i, itr_i + 1, x_n - itr_i - 1) };
+    }
+    unsafe { nvim_mtnode_set_n(x, x_n - 1) };
+    unsafe { nvim_marktree_dec_n_keys(b) };
+    unsafe { nvim_marktree_del_id(b, id) };
+
+    // Step 4: Replace internal key if we stole a predecessor
+    if adjustment == -1 {
+        let mut ilvl = unsafe { nvim_mtitr_get_lvl(itr) } - 1;
+        let mut lnode = x;
+        let mut start_id: u64 = 0;
+        let mut did_bubble = false;
+        let mut intkey_adj = intkey; // intkey with pos adjusted as we walk up
+        if mt_end(&intkey) {
+            start_id = mt_lookup_key_side(&intkey, false);
+        }
+
+        // Walk up from leaf to cur, adjusting intkey.pos and updating meta
+        loop {
+            let p = unsafe { nvim_mtnode_get_parent(lnode) };
+            debug_assert!(ilvl >= 0, "ilvl went negative during del_itr walk");
+            let i = unsafe { nvim_mtitr_get_s_i(itr, ilvl) };
+            debug_assert!(unsafe { nvim_mtnode_get_ptr(p, i) } == lnode);
+            if i > 0 {
+                let prev_pos = unsafe { nvim_mtnode_get_key(p, i - 1) }.pos;
+                unrelative(prev_pos, &mut intkey_adj.pos);
+            }
+
+            if p != cur && start_id != 0 {
+                let ptr0 = unsafe { nvim_mtnode_get_ptr(p, 0) };
+                if intersection_has(ptr0, start_id) {
+                    // Undo the addition from the previous step if needed
+                    let last = i32::from(lnode != x);
+                    let p_n = unsafe { nvim_mtnode_get_n(p) };
+                    for k in 0..p_n + last {
+                        let child = unsafe { nvim_mtnode_get_ptr(p, k) };
+                        unintersect_node(b, child, start_id, true);
+                    }
+                    intersect_node(b, p, start_id);
+                    did_bubble = true;
+                }
+            }
+
+            // p->meta[lnode->p_idx][m] -= meta_inc[m]
+            let p_idx = unsafe { nvim_mtnode_get_p_idx(lnode) };
+            for m in 0..K_MT_META_COUNT as i32 {
+                let val = unsafe { nvim_mtnode_get_meta(p, p_idx, m) };
+                unsafe { nvim_mtnode_set_meta(p, p_idx, m, val - meta_inc[m as usize]) };
+            }
+
+            lnode = p;
+            ilvl -= 1;
+
+            if lnode == cur {
+                break;
+            }
+        }
+
+        // Replace cur->key[curi] with intkey
+        let deleted = unsafe { nvim_mtnode_get_key(cur, curi) };
+        meta_inc = meta_describe_key(&deleted);
+        unsafe { nvim_mtnode_set_key(cur, curi, intkey_adj) };
+        marktree_refkey(b, cur, curi);
+
+        // Check intersection for end marks
+        if mt_end(&unsafe { nvim_mtnode_get_key(cur, curi) }) && !did_bubble {
+            let pi = pseudo_index(x, 0); // sloppy pseudo-index
+            let pi_start = pseudo_index_for_id(b, start_id, true);
+            if pi_start > 0 && pi_start < pi {
+                intersect_node(b, x, start_id);
+            }
+        }
+
+        // Adjust positions of rightward subtree
+        let mut rel_deleted = deleted;
+        relative(intkey_adj.pos, &mut rel_deleted.pos);
+        let mut y = unsafe { nvim_mtnode_get_ptr(cur, curi + 1) };
+        if rel_deleted.pos.row != 0 || rel_deleted.pos.col != 0 {
+            while !y.is_null() {
+                let y_n = unsafe { nvim_mtnode_get_n(y) };
+                for k in 0..y_n {
+                    let mut yk = unsafe { nvim_mtnode_get_key(y, k) };
+                    unrelative(rel_deleted.pos, &mut yk.pos);
+                    unsafe { nvim_mtnode_set_key(y, k, yk) };
+                }
+                let y_level = unsafe { nvim_mtnode_get_level(y) };
+                y = if y_level != 0 {
+                    unsafe { nvim_mtnode_get_ptr(y, 0) }
+                } else {
+                    MTNodeHandle::null()
+                };
+            }
+        }
+
+        // itr->i--
+        let cur_itr_i = unsafe { nvim_mtitr_get_i(itr) };
+        unsafe { nvim_mtitr_set_i(itr, cur_itr_i - 1) };
+    }
+
+    // Propagate meta decrement up to root
+    let mut lnode = cur;
+    loop {
+        let parent = unsafe { nvim_mtnode_get_parent(lnode) };
+        if parent.is_null() {
+            break;
+        }
+        let p_idx = unsafe { nvim_mtnode_get_p_idx(lnode) };
+        for m in 0..K_MT_META_COUNT as i32 {
+            let val = unsafe { nvim_mtnode_get_meta(parent, p_idx, m) };
+            unsafe { nvim_mtnode_set_meta(parent, p_idx, m, val - meta_inc[m as usize]) };
+        }
+        lnode = parent;
+    }
+    // Update meta_root
+    for m in 0..K_MT_META_COUNT as i32 {
+        unsafe { nvim_marktree_sub_meta_root(b, m, meta_inc[m as usize]) };
+    }
+
+    // Step 5: Rebalance
+    let mut itr_dirty = false;
+    let mut rlvl = unsafe { nvim_mtitr_get_lvl(itr) } - 1;
+    let mut lasti = LastiRef::ItrI;
+    let mut ppos = unsafe { nvim_mtitr_get_pos(itr) };
+    let root = unsafe { nvim_marktree_get_root(b) };
+    let mut x_node = unsafe { nvim_mtitr_get_x(itr) };
+
+    while x_node != root {
+        debug_assert!(rlvl >= 0);
+        let p = unsafe { nvim_mtnode_get_parent(x_node) };
+        let x_n = unsafe { nvim_mtnode_get_n(x_node) };
+        if x_n >= MT_BRANCH_FACTOR as i32 - 1 {
+            // Node has enough keys, done
+            break;
+        }
+        let pi = unsafe { nvim_mtitr_get_s_i(itr, rlvl) };
+        debug_assert!(unsafe { nvim_mtnode_get_ptr(p, pi) } == x_node);
+        if pi > 0 {
+            let row_delta = unsafe { nvim_mtnode_get_key(p, pi - 1) }.pos.row;
+            ppos.row -= row_delta;
+            ppos.col = unsafe { nvim_mtitr_get_s_oldcol(itr, rlvl) };
+        }
+        // ppos is now the pos of p
+
+        let left_n = if pi > 0 {
+            let left_sib = unsafe { nvim_mtnode_get_ptr(p, pi - 1) };
+            unsafe { nvim_mtnode_get_n(left_sib) }
+        } else {
+            0
+        };
+        let right_n = if pi < unsafe { nvim_mtnode_get_n(p) } {
+            let right_sib = unsafe { nvim_mtnode_get_ptr(p, pi + 1) };
+            unsafe { nvim_mtnode_get_n(right_sib) }
+        } else {
+            0
+        };
+
+        if pi > 0 && left_n > MT_BRANCH_FACTOR as i32 - 1 {
+            // Steal from left: pivot_right
+            lasti.add(itr, 1);
+            itr_dirty = true;
+            pivot_right(b, ppos, p, pi - 1);
+            break;
+        } else if pi < unsafe { nvim_mtnode_get_n(p) } && right_n > MT_BRANCH_FACTOR as i32 - 1 {
+            // Steal from right: pivot_left
+            pivot_left(b, ppos, p, pi);
+            break;
+        } else if pi > 0 {
+            // Merge with left neighbour
+            debug_assert!(left_n == MT_BRANCH_FACTOR as i32 - 1);
+            lasti.add(itr, MT_BRANCH_FACTOR as i32);
+            x_node = merge_node(b, p, pi - 1);
+            // If lasti was ItrI, update itr->x to merged node
+            if matches!(lasti, LastiRef::ItrI) {
+                unsafe { nvim_mtitr_set_x(itr, x_node) };
+            }
+            // itr->s[rlvl].i--
+            let s_i = unsafe { nvim_mtitr_get_s_i(itr, rlvl) };
+            unsafe { nvim_mtitr_set_s_i(itr, rlvl, s_i - 1) };
+            itr_dirty = true;
+        } else {
+            // Merge with right neighbour
+            debug_assert!(
+                pi < unsafe { nvim_mtnode_get_n(p) } && right_n == MT_BRANCH_FACTOR as i32 - 1
+            );
+            let _ = merge_node(b, p, pi);
+            // no iter adjustment needed
+        }
+
+        lasti = LastiRef::S(rlvl);
+        rlvl -= 1;
+        x_node = p;
+    }
+
+    // Step 6: Root collapse
+    let root = unsafe { nvim_marktree_get_root(b) };
+    if !root.is_null() && unsafe { nvim_mtnode_get_n(root) } == 0 {
+        let itr_lvl = unsafe { nvim_mtitr_get_lvl(itr) };
+        if itr_lvl > 0 {
+            // memmove(itr->s, itr->s + 1, (itr->lvl - 1) * sizeof(*itr->s))
+            for j in 0..itr_lvl - 1 {
+                let next_i = unsafe { nvim_mtitr_get_s_i(itr, j + 1) };
+                let next_oldcol = unsafe { nvim_mtitr_get_s_oldcol(itr, j + 1) };
+                unsafe { nvim_mtitr_set_s_i(itr, j, next_i) };
+                unsafe { nvim_mtitr_set_s_oldcol(itr, j, next_oldcol) };
+            }
+            unsafe { nvim_mtitr_set_lvl(itr, itr_lvl - 1) };
+        }
+        if unsafe { nvim_mtnode_get_level(root) } != 0 {
+            let oldroot = root;
+            let new_root = unsafe { nvim_mtnode_get_ptr(oldroot, 0) };
+            // assert meta_root matches oldroot->meta[0]
+            unsafe { nvim_marktree_set_root(b, new_root) };
+            unsafe { nvim_mtnode_set_parent(new_root, MTNodeHandle::null()) };
+            marktree_free_node(b, oldroot);
+        } else {
+            // Tree is empty
+            unsafe { nvim_mtitr_set_x(itr, MTNodeHandle::null()) };
+        }
+    }
+
+    // Fix iterator position if needed
+    let itr_x = unsafe { nvim_mtitr_get_x(itr) };
+    if !itr_x.is_null() && itr_dirty {
+        marktree_itr_fix_pos(b, itr);
+    }
+
+    // Bonus: Advance iterator to key after deleted one
+    if adjustment == -1 {
+        // We stand at the deleted space in previous leaf; skip stolen key and its replacement
+        let _ = marktree_itr_next(b, itr);
+        let _ = marktree_itr_next(b, itr);
+    } else {
+        let itr_x = unsafe { nvim_mtitr_get_x(itr) };
+        if !itr_x.is_null() {
+            let itr_i = unsafe { nvim_mtitr_get_i(itr) };
+            let itr_x_n = unsafe { nvim_mtnode_get_n(itr_x) };
+            if itr_i >= itr_x_n {
+                // Deleted last key of leaf; go to inner key after it
+                debug_assert!(unsafe { nvim_mtnode_get_level(itr_x) } == 0);
+                let _ = marktree_itr_next(b, itr);
+            }
+        }
+    }
+
+    other
 }
 
 /// Revise meta counts after modifying a key's flags.

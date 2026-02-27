@@ -195,6 +195,7 @@ extern void rs_pivot_left_intersect(MarkTree *b, MTNode *x, int x_n, MTNode *y);
 extern MTNode *rs_merge_node(MarkTree *b, MTNode *p, int i);
 extern void rs_pivot_right(MarkTree *b, MTPos p_pos, MTNode *p, int i);
 extern void rs_pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i);
+extern uint64_t rs_marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev);
 extern bool rs_intersect_mov_test(const uint64_t *x, size_t nx, const uint64_t *y, size_t ny,
                                   const uint64_t *win, size_t nwin, uint64_t *wout, size_t *nwout,
                                   uint64_t *dout, size_t *ndout);
@@ -223,275 +224,9 @@ static MTNode *id2node(MarkTree *b, uint64_t id)
 // put functions
 
 
-static MTNode *marktree_alloc_node(MarkTree *b, bool internal)
-{
-  MTNode *x = xcalloc(1, internal ? ILEN : sizeof(MTNode));
-  kvi_init(x->intersect);
-  b->n_nodes++;
-  return x;
-}
 
 
 
-/// INITIATING DELETION PROTOCOL:
-///
-/// 1. Construct a valid iterator to the node to delete (argument)
-/// 2. If an "internal" key. Iterate one step to the left or right,
-///     which gives an internal key "auxiliary key".
-/// 3. Now delete this internal key (intended or auxiliary).
-///    The leaf node X might become undersized.
-/// 4. If step two was done: now replace the key that _should_ be
-///    deleted with the auxiliary key. Adjust relative
-/// 5. Now "repair" the tree as needed. We always start at a leaf node X.
-///     - if the node is big enough, terminate
-///     - if we can steal from the left, steal
-///     - if we can steal from the right, steal
-///     - otherwise merge this node with a neighbour. This might make our
-///       parent undersized. So repeat 5 for the parent.
-/// 6. If 4 went all the way to the root node. The root node
-///    might have ended up with size 0. Delete it then.
-///
-/// The iterator remains valid, and now points at the key _after_ the deleted
-/// one.
-///
-/// @param rev should be true if we plan to iterate _backwards_ and delete
-///            stuff before this key. Most of the time this is false (the
-///            recommended strategy is to always iterate forward)
-uint64_t marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
-{
-  int adjustment = 0;
-
-  MTNode *cur = itr->x;
-  int curi = itr->i;
-  uint64_t id = mt_lookup_key(cur->key[curi]);
-
-  MTKey raw = rawkey(itr);
-  uint64_t other = 0;
-  if (mt_paired(raw) && !(raw.flags & MT_FLAG_ORPHANED)) {
-    other = mt_lookup_key_side(raw, !mt_end(raw));
-
-    MarkTreeIter other_itr[1];
-    rs_marktree_lookup(b, other, other_itr);
-    rawkey(other_itr).flags |= MT_FLAG_ORPHANED;
-    // Remove intersect markers. NB: must match exactly!
-    if (mt_start(raw)) {
-      MarkTreeIter this_itr[1] = { *itr };  // mutated copy
-      rs_marktree_intersect_pair(b, id, this_itr, other_itr, true);
-    } else {
-      rs_marktree_intersect_pair(b, other, other_itr, itr, true);
-    }
-  }
-
-  // 2.
-  if (itr->x->level) {
-    if (rev) {
-      abort();
-    } else {
-      // steal previous node
-      rs_marktree_itr_prev(b, itr);
-      adjustment = -1;
-    }
-  }
-
-  // 3.
-  MTNode *x = itr->x;
-  assert(x->level == 0);
-  MTKey intkey = x->key[itr->i];
-
-  uint32_t meta_inc[kMTMetaCount];
-  rs_meta_describe_key(intkey, meta_inc);
-  if (x->n > itr->i + 1) {
-    memmove(&x->key[itr->i], &x->key[itr->i + 1],
-            sizeof(MTKey) * (size_t)(x->n - itr->i - 1));
-  }
-  x->n--;
-
-  b->n_keys--;
-  pmap_del(uint64_t)(b->id2node, id, NULL);
-
-  // 4.
-  // if (adjustment == 1) {
-  //   abort();
-  // }
-  if (adjustment == -1) {
-    int ilvl = itr->lvl - 1;
-    MTNode *lnode = x;
-    uint64_t start_id = 0;
-    bool did_bubble = false;
-    if (mt_end(intkey)) {
-      start_id = mt_lookup_key_side(intkey, false);
-    }
-    do {
-      MTNode *p = lnode->parent;
-      if (ilvl < 0) {
-        abort();
-      }
-      int i = itr->s[ilvl].i;
-      assert(p->ptr[i] == lnode);
-      if (i > 0) {
-        rs_unrelative(p->key[i - 1].pos, &intkey.pos);
-      }
-
-      if (p != cur && start_id) {
-        if (rs_intersection_has(p->ptr[0], start_id)) {
-          // if not the first time, we need to undo the addition in the
-          // previous step (`rs_intersect_node` just below)
-          int last = (lnode != x) ? 1 : 0;
-          for (int k = 0; k < p->n + last; k++) {  // one less as p->ptr[n] is the last
-            rs_unintersect_node(b, p->ptr[k], start_id, true);
-          }
-          rs_intersect_node(b, p, start_id);
-          did_bubble = true;
-        }
-      }
-
-      for (int m = 0; m < kMTMetaCount; m++) {
-        p->meta[lnode->p_idx][m] -= meta_inc[m];
-      }
-
-      lnode = p;
-      ilvl--;
-    } while (lnode != cur);
-
-    MTKey deleted = cur->key[curi];
-    rs_meta_describe_key(deleted, meta_inc);
-    cur->key[curi] = intkey;
-    refkey(b, cur, curi);
-    // if `did_bubble` then we already added `start_id` to some parent
-    if (mt_end(cur->key[curi]) && !did_bubble) {
-      uint64_t pi = rs_pseudo_index(x, 0);  // note: sloppy pseudo-index
-      uint64_t pi_start = rs_pseudo_index_for_id(b, start_id, true);
-      if (pi_start > 0 && pi_start < pi) {
-        rs_intersect_node(b, x, start_id);
-      }
-    }
-
-    rs_relative(intkey.pos, &deleted.pos);
-    MTNode *y = cur->ptr[curi + 1];
-    if (deleted.pos.row || deleted.pos.col) {
-      while (y) {
-        for (int k = 0; k < y->n; k++) {
-          rs_unrelative(deleted.pos, &y->key[k].pos);
-        }
-        y = y->level ? y->ptr[0] : NULL;
-      }
-    }
-    itr->i--;
-  }
-
-  MTNode *lnode = cur;
-  while (lnode->parent) {
-    uint32_t *meta_p = lnode->parent->meta[lnode->p_idx];
-    for (int m = 0; m < kMTMetaCount; m++) {
-      meta_p[m] -= meta_inc[m];
-    }
-
-    lnode = lnode->parent;
-  }
-  for (int m = 0; m < kMTMetaCount; m++) {
-    assert(b->meta_root[m] >= meta_inc[m]);
-    b->meta_root[m] -= meta_inc[m];
-  }
-
-  // 5.
-  bool itr_dirty = false;
-  int rlvl = itr->lvl - 1;
-  int *lasti = &itr->i;
-  MTPos ppos = itr->pos;
-  while (x != b->root) {
-    assert(rlvl >= 0);
-    MTNode *p = x->parent;
-    if (x->n >= T - 1) {
-      // we are done, if this node is fine the rest of the tree will be
-      break;
-    }
-    int pi = itr->s[rlvl].i;
-    assert(p->ptr[pi] == x);
-    if (pi > 0) {
-      ppos.row -= p->key[pi - 1].pos.row;
-      ppos.col = itr->s[rlvl].oldcol;
-    }
-    // ppos is now the pos of p
-
-    if (pi > 0 && p->ptr[pi - 1]->n > T - 1) {
-      *lasti += 1;
-      itr_dirty = true;
-      // steal one key from the left neighbour
-      pivot_right(b, ppos, p, pi - 1);
-      break;
-    } else if (pi < p->n && p->ptr[pi + 1]->n > T - 1) {
-      // steal one key from right neighbour
-      pivot_left(b, ppos, p, pi);
-      break;
-    } else if (pi > 0) {
-      assert(p->ptr[pi - 1]->n == T - 1);
-      // merge with left neighbour
-      *lasti += T;
-      x = merge_node(b, p, pi - 1);
-      if (lasti == &itr->i) {
-        // TRICKY: we merged the node the iterator was on
-        itr->x = x;
-      }
-      itr->s[rlvl].i--;
-      itr_dirty = true;
-    } else {
-      assert(pi < p->n && p->ptr[pi + 1]->n == T - 1);
-      merge_node(b, p, pi);
-      // no iter adjustment needed
-    }
-    lasti = &itr->s[rlvl].i;
-    rlvl--;
-    x = p;
-  }
-
-  // 6.
-  if (b->root->n == 0) {
-    if (itr->lvl > 0) {
-      memmove(itr->s, itr->s + 1, (size_t)(itr->lvl - 1) * sizeof(*itr->s));
-      itr->lvl--;
-    }
-    if (b->root->level) {
-      MTNode *oldroot = b->root;
-      b->root = b->root->ptr[0];
-      for (int m = 0; m < kMTMetaCount; m++) {
-        assert(b->meta_root[m] == oldroot->meta[0][m]);
-      }
-
-      b->root->parent = NULL;
-      rs_marktree_free_node(b, oldroot);
-    } else {
-      // no items, nothing for iterator to point to
-      // not strictly needed, should handle delete right-most mark anyway
-      itr->x = NULL;
-    }
-  }
-
-  if (itr->x && itr_dirty) {
-    rs_marktree_itr_fix_pos(b, itr);
-  }
-
-  // BONUS STEP: fix the iterator, so that it points to the key afterwards
-  // TODO(bfredl): with "rev" should point before
-  // if (adjustment == 1) {
-  //   abort();
-  // }
-  if (adjustment == -1) {
-    // tricky: we stand at the deleted space in the previous leaf node.
-    // But the inner key is now the previous key we stole, so we need
-    // to skip that one as well.
-    rs_marktree_itr_next(b, itr);
-    rs_marktree_itr_next(b, itr);
-  } else {
-    if (itr->x && itr->i >= itr->x->n) {
-      // we deleted the last key of a leaf node
-      // go to the inner key after that.
-      assert(itr->x->level == 0);
-      rs_marktree_itr_next(b, itr);
-    }
-  }
-
-  return other;
-}
 
 void marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key)
 {
@@ -824,7 +559,13 @@ void nvim_mtnode_memcpy_meta(MTNode *dst, int dst_idx, MTNode *src, int src_idx,
 // Tree Mutation Functions (for Rust FFI)
 // ============================================================================
 
-MTNode *nvim_marktree_alloc_node(MarkTree *b, bool internal) { return marktree_alloc_node(b, internal); }
+MTNode *nvim_marktree_alloc_node(MarkTree *b, bool internal)
+{
+  MTNode *x = xcalloc(1, internal ? ILEN : sizeof(MTNode));
+  kvi_init(x->intersect);
+  b->n_nodes++;
+  return x;
+}
 void nvim_marktree_refkey(MarkTree *b, MTNode *x, int i) { refkey(b, x, i); }
 void nvim_marktree_set_root(MarkTree *b, MTNode *root) { b->root = root; }
 void nvim_marktree_inc_n_keys(MarkTree *b) { b->n_keys++; }
@@ -862,7 +603,7 @@ void nvim_mtnode_intersect_push(MTNode *x, uint64_t id)
 // B-tree Deletion Operations (for Rust FFI)
 // ============================================================================
 
-uint64_t nvim_marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev) { return marktree_del_itr(b, itr, rev); }
+uint64_t nvim_marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev) { return rs_marktree_del_itr(b, itr, rev); }
 void nvim_marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key) { marktree_revise_meta(b, itr, old_key); }
 void nvim_marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col) { marktree_move(b, itr, row, col); }
 void nvim_marktree_restore_pair(MarkTree *b, MTKey key) { marktree_restore_pair(b, key); }
