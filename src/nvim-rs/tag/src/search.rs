@@ -95,6 +95,14 @@ pub enum TagMatchStatus {
 }
 
 // =============================================================================
+// Error message string constants (replaces C static error strings)
+// =============================================================================
+
+use std::ffi::CStr;
+
+const E_INVALID_RETURN_VALUE_FROM_TAGFUNC: &CStr = c"E987: Invalid return value from tagfunc";
+
+// =============================================================================
 // Binary search info structure
 // =============================================================================
 
@@ -2153,15 +2161,16 @@ extern "C" {
     fn nvim_get_got_int() -> c_int;
     fn nvim_ins_compl_check_keys(interval: c_int, pum_wanted: bool);
     fn rs_ins_compl_interrupted() -> c_int;
-    fn nvim_verbose_searching_tags(tag_fname: *const c_char);
+    fn verbose_enter();
+    fn verbose_leave();
     fn nvim_ignorecase(pat: *const c_char) -> bool;
     fn nvim_ignorecase_opt(pat: *const c_char, ic_strstrp: bool, ic_strstrp2: bool) -> bool;
 
-    // Error messages
-    fn nvim_semsg_e431(tag_fname: *const c_char);
-    fn nvim_semsg_before_byte(offset: i64);
-    fn nvim_semsg_e432(tag_fname: *const c_char);
-    fn nvim_emsg_e433();
+    // Error/message functions
+    fn emsg(s: *const c_char) -> c_int;
+    fn semsg(fmt: *const c_char, ...) -> c_int;
+    fn smsg(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
+    fn gettext(msgid: *const c_char) -> *const c_char;
 
     // tfu_in_use guard accessors
     fn nvim_tag_get_tfu_in_use() -> bool;
@@ -2416,9 +2425,12 @@ pub unsafe extern "C" fn rs_findtags_get_all_tags(
         }
         if retval == TAG_MATCH_FAIL {
             let tag_fname = nvim_findtags_get_tag_fname(st);
-            nvim_semsg_e431(tag_fname);
+            semsg(
+                c"E431: Format error in tags file \"%s\"".as_ptr(),
+                tag_fname,
+            );
             let offset = nvim_findtags_ftell(st);
-            nvim_semsg_before_byte(offset);
+            semsg(c"Before byte %ld".as_ptr(), offset);
             nvim_findtags_set_stop_searching(st, true);
             xfree(tagp);
             return;
@@ -2473,7 +2485,9 @@ pub unsafe extern "C" fn rs_findtags_in_file(
     // Verbose message
     if nvim_get_p_verbose() >= 5 {
         let tag_fname = nvim_findtags_get_tag_fname(st);
-        nvim_verbose_searching_tags(tag_fname);
+        verbose_enter();
+        smsg(0, c"Searching tags file %s".as_ptr(), tag_fname);
+        verbose_leave();
     }
 
     nvim_findtags_set_did_open(st);
@@ -2491,7 +2505,7 @@ pub unsafe extern "C" fn rs_findtags_in_file(
 
     if margs.sort_error {
         let tag_fname = nvim_findtags_get_tag_fname(st);
-        nvim_semsg_e432(tag_fname);
+        semsg(c"E432: Tags file not sorted: %s".as_ptr(), tag_fname);
     }
 
     // Stop searching if sufficient tags have been found.
@@ -2679,7 +2693,7 @@ pub unsafe extern "C" fn rs_find_tags(
             if !nvim_findtags_get_stop_searching(st) {
                 let verbose = (flags & find_tags_flags::TAG_VERBOSE) != 0;
                 if !nvim_findtags_get_did_open(st) && verbose {
-                    nvim_emsg_e433();
+                    emsg(c"E433: No tags file".as_ptr());
                 }
                 retval = OK;
             }
@@ -2748,8 +2762,6 @@ extern "C" {
         key_len: usize,
         val: *mut c_char,
     ) -> c_int;
-    // Accessor: emit error message for invalid tagfunc return
-    fn nvim_tag_emsg_invalid_tagfunc();
     // tv_clear for rettv storage
     fn nvim_tag_tv_clear_rettv(rettv_storage: *mut c_void);
 }
@@ -2870,7 +2882,7 @@ pub unsafe extern "C" fn rs_tag_call_tagfunc(
     let list = nvim_tag_rettv_get_list(rettv_storage);
     if list.is_null() {
         nvim_tag_tv_clear_rettv(rettv_storage);
-        nvim_tag_emsg_invalid_tagfunc();
+        emsg(gettext(E_INVALID_RETURN_VALUE_FROM_TAGFUNC.as_ptr()));
         return 3;
     }
 
@@ -2894,7 +2906,6 @@ extern "C" {
     fn nvim_tag_dict_iter_key(iter: *const c_void) -> *const c_char;
     fn nvim_tag_dict_iter_value_is_string(iter: *const c_void) -> bool;
     fn nvim_tag_dict_iter_value_string(iter: *const c_void) -> *const c_char;
-    fn nvim_tag_emsg_invalid_tagfunc_return();
     fn nvim_tag_ga_grow_append(ga: *mut c_void, mfp: *mut c_char);
     fn xstrdup(s: *const c_char) -> *mut c_char;
 }
@@ -3052,13 +3063,13 @@ pub unsafe extern "C" fn rs_find_tagfunc_tags(
     let mut li = nvim_tag_tv_list_first(list);
     while !li.is_null() {
         if !nvim_tag_listitem_is_dict(li) {
-            nvim_tag_emsg_invalid_tagfunc_return();
+            emsg(gettext(E_INVALID_RETURN_VALUE_FROM_TAGFUNC.as_ptr()));
             break;
         }
 
         let dict = nvim_tag_listitem_get_dict(li);
         if dict.is_null() {
-            nvim_tag_emsg_invalid_tagfunc_return();
+            emsg(gettext(E_INVALID_RETURN_VALUE_FROM_TAGFUNC.as_ptr()));
             break;
         }
 
@@ -3079,7 +3090,7 @@ pub unsafe extern "C" fn rs_find_tagfunc_tags(
         );
 
         if tag_name.is_null() || tag_file.is_null() || tag_cmd.is_null() {
-            nvim_tag_emsg_invalid_tagfunc_return();
+            emsg(gettext(E_INVALID_RETURN_VALUE_FROM_TAGFUNC.as_ptr()));
             break;
         }
 

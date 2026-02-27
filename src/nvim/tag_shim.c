@@ -359,21 +359,6 @@ extern int rs_win_valid(win_T *win);
 // Rust fold FFI declaration
 extern void rs_foldOpenCursor(void);
 
-static const char e_tag_stack_empty[]
-  = N_("E73: Tag stack empty");
-static const char e_tag_not_found_str[]
-  = N_("E426: Tag not found: %s");
-static const char e_at_bottom_of_tag_stack[]
-  = N_("E555: At bottom of tag stack");
-static const char e_at_top_of_tag_stack[]
-  = N_("E556: At top of tag stack");
-static const char e_cannot_modify_tag_stack_within_tagfunc[]
-  = N_("E986: Cannot modify the tag stack within tagfunc");
-static const char e_invalid_return_value_from_tagfunc[]
-  = N_("E987: Invalid return value from tagfunc");
-static const char e_window_unexpectedly_close_while_searching_for_tags[]
-  = N_("E1299: Window unexpectedly closed while searching for tags");
-
 static char *tagmatchname = NULL;   // name of last used tag
 
 // Tag for preview window is remembered separately, to avoid messing up the
@@ -559,21 +544,8 @@ int nvim_get_curbuf_b_help(void) { return curbuf->b_help; }
 // Function wrappers for search orchestration
 
 void nvim_ins_compl_check_keys(int interval, bool pum_wanted) { rs_ins_compl_check_keys(interval, pum_wanted ? 1 : 0); }
-/// verbose_enter/leave + smsg for "Searching tags file %s"
-void nvim_verbose_searching_tags(const char *tag_fname)
-{
-  verbose_enter();
-  smsg(0, _("Searching tags file %s"), tag_fname);
-  verbose_leave();
-}
-
 bool nvim_ignorecase(const char *pat) { return ignorecase((char *)pat); }
 bool nvim_ignorecase_opt(const char *pat, bool ic_strstrp, bool ic_strstrp2) { return ignorecase_opt((char *)pat, ic_strstrp, ic_strstrp2); }
-void nvim_semsg_e431(const char *tag_fname) { semsg(_("E431: Format error in tags file \"%s\""), tag_fname); }
-void nvim_semsg_before_byte(int64_t offset) { semsg(_("Before byte %" PRId64), offset); }
-void nvim_semsg_e432(const char *tag_fname) { semsg(_("E432: Tags file not sorted: %s"), tag_fname); }
-void nvim_emsg_e433(void) { emsg(_("E433: No tags file")); }
-
 void nvim_findtags_prepare_pats(void *st_void, bool has_re) { findtags_state_T *st = (findtags_state_T *)st_void; rs_prepare_pats(st->orgpat, has_re); }
 // --- Rust FFI accessor functions for tag display and location list ---
 _Static_assert(IOSIZE == 1025, "IOSIZE value for Rust");
@@ -648,8 +620,6 @@ bool nvim_tag_get_tfu_in_use(void) { return tfu_in_use; }
 void nvim_tag_set_tfu_in_use(bool val) { tfu_in_use = val; }
 void *nvim_findtags_get_ga_match_ptr(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; return (void *)st->ga_match; }
 int *nvim_findtags_get_match_count_ptr(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; return &st->match_count; }
-void nvim_tag_emsg_tfu_in_use(void) { emsg(_(e_cannot_modify_tag_stack_within_tagfunc)); }
-void nvim_tag_emsg_listreq(void) { emsg(_(e_listreq)); }
 void *nvim_tag_tv_dict_find_item(const void *dict, const char *key, int key_len) { return (void *)tv_dict_find((const dict_T *)dict, key, key_len); }
 void *nvim_tag_dictitem_tv(void *di) { return (void *)&((dictitem_T *)di)->di_tv; }
 bool nvim_tag_tv_is_list(const void *tv) { return ((const typval_T *)tv)->v_type == VAR_LIST; }
@@ -760,9 +730,6 @@ void *nvim_tag_rettv_get_list(const void *rettv_storage)
 /// Size in bytes of pos_T (for stack allocation in Rust).
 size_t nvim_tag_pos_size(void) { return sizeof(pos_T); }
 
-/// Emit the "invalid return value from tagfunc" error.
-void nvim_tag_emsg_invalid_tagfunc(void) { emsg(_(e_invalid_return_value_from_tagfunc)); }
-
 // Forward declaration for the Rust implementation
 int rs_tag_call_tagfunc(const char *pat, int flags, const char *buf_ffname,
                         void **out_list, void *rettv_storage);
@@ -860,7 +827,6 @@ const char *nvim_tag_dict_iter_value_string(const void *hi_void)
   return di->di_tv.vval.v_string;
 }
 
-void nvim_tag_emsg_invalid_tagfunc_return(void) { emsg(_(e_invalid_return_value_from_tagfunc)); }
 /// Grow a garray_T by 1 and append a string pointer
 void nvim_tag_ga_grow_append(void *ga_void, char *mfp)
 {
@@ -991,11 +957,6 @@ void nvim_tag_wait_return(void) { wait_return(true); }
 /// check_cursor(curwin) wrapper.
 void nvim_tag_check_cursor(void) { check_cursor(curwin); }
 
-/// Emit E434 "Can't find tag pattern" error.
-void nvim_tag_emsg_e434(void) { emsg(_("E434: Can't find tag pattern")); }
-/// Emit E435 "Couldn't find tag, just guessing!" message.
-void nvim_tag_msg_e435(void) { msg(_("E435: Couldn't find tag, just guessing!"), 0); }
-
 // Verify constants used in Rust rs_tag_jumpto_run_search
 /// High-level executor for jumpto_tag (thin wrapper calling Rust).
 int nvim_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
@@ -1068,16 +1029,6 @@ void nvim_tag_append_ic_warning_to_buf(char *buf, int buf_size)
   xstrlcat(buf, _("  Using tag with different case!"), (size_t)buf_size);
 }
 
-void nvim_tag_emsg_stack_empty(void) { emsg(_(e_tag_stack_empty)); }
-void nvim_tag_emsg_at_bottom(void) { emsg(_(e_at_bottom_of_tag_stack)); }
-void nvim_tag_emsg_at_top(void) { emsg(_(e_at_top_of_tag_stack)); }
-void nvim_tag_semsg_not_found(const char *name) { semsg(_(e_tag_not_found_str), name); }
-void nvim_tag_emsg_before_first(void) { emsg(_("E425: Cannot go before first matching tag")); }
-void nvim_tag_emsg_only_one(void) { emsg(_("E427: There is only one matching tag")); }
-void nvim_tag_emsg_beyond_last(void) { emsg(_("E428: Cannot go beyond last matching tag")); }
-void nvim_tag_smsg_nofile(const char *fname) { smsg(0, _("File \"%s\" does not exist"), fname); }
-void nvim_tag_semsg_nofile(const char *fname) { semsg(_("E429: File \"%s\" does not exist"), fname); }
-void nvim_tag_emsg_window_closed(void) { emsg(_(e_window_unexpectedly_close_while_searching_for_tags)); }
 void nvim_tag_free_nofile_fname(void) { free_string_option(nofile_fname); nofile_fname = NULL; }
 bool nvim_tag_nofile_fname_is_null(void) { return nofile_fname == NULL; }
 // --- End of do_tag() accessor functions ---

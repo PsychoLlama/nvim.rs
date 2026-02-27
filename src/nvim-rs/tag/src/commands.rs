@@ -11,10 +11,15 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::doc_markdown)]
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_void, CStr};
 
 use crate::tag_cmd;
 use crate::TAGSTACKSIZE;
+
+// Error message string constants
+const E_CANNOT_MODIFY_TAG_STACK_WITHIN_TAGFUNC: &CStr =
+    c"E986: Cannot modify the tag stack within tagfunc";
+const E_LISTREQ: &CStr = c"E714: List required";
 
 // =============================================================================
 // Opaque handle types
@@ -932,7 +937,8 @@ extern "C" {
     fn os_breakcheck();
     fn verbose_enter();
     fn verbose_leave();
-    fn smsg(hl_id: c_int, fmt: *const c_char, ...);
+    fn smsg(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
+    fn emsg(s: *const c_char) -> c_int;
     fn gettext(msgid: *const c_char) -> *const c_char;
 
     // Global variable accessors
@@ -1570,8 +1576,6 @@ extern "C" {
     fn nvim_tag_mb_ptr_adv(p: *const c_char) -> *mut c_char;
     fn nvim_tag_ascii_iswhite(c: c_int) -> bool;
     fn nvim_tag_get_tfu_in_use() -> bool;
-    fn nvim_tag_emsg_tfu_in_use();
-    fn nvim_tag_emsg_listreq();
     fn nvim_tag_tv_dict_find_item(
         dict: *const c_void,
         key: *const c_char,
@@ -1978,7 +1982,7 @@ pub unsafe extern "C" fn rs_set_tagstack(
 
     // not allowed to alter the tag stack entries from inside tagfunc
     if nvim_tag_get_tfu_in_use() {
-        nvim_tag_emsg_tfu_in_use();
+        emsg(gettext(E_CANNOT_MODIFY_TAG_STACK_WITHIN_TAGFUNC.as_ptr()));
         return FAIL;
     }
 
@@ -1989,7 +1993,7 @@ pub unsafe extern "C" fn rs_set_tagstack(
     if !di.is_null() {
         let tv = nvim_tag_dictitem_tv(di);
         if !nvim_tag_tv_is_list(tv) {
-            nvim_tag_emsg_listreq();
+            emsg(gettext(E_LISTREQ.as_ptr()));
             return FAIL;
         }
         list = nvim_tag_tv_get_list(tv);

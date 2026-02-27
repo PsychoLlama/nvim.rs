@@ -535,8 +535,8 @@ extern "C" {
     fn nvim_tag_do_cmdline_cmd(cmd: *mut c_char);
     fn nvim_tag_wait_return();
     fn nvim_tag_check_cursor();
-    fn nvim_tag_emsg_e434();
-    fn nvim_tag_msg_e435();
+    fn emsg(s: *const c_char) -> c_int;
+    fn msg(s: *const c_char, hl_id: c_int) -> c_int;
     fn nvim_tag_get_msg_scrolled() -> c_int;
     fn nvim_tag_get_msg_silent() -> c_int;
     fn nvim_tag_ui_has_messages() -> bool;
@@ -677,11 +677,11 @@ unsafe fn rs_tag_jumpto_run_search(
             }
 
             if found == 0 {
-                nvim_tag_emsg_e434();
+                emsg(c"E434: Can't find tag pattern".as_ptr());
                 nvim_tag_set_cursor_lnum(save_lnum);
             } else {
                 if found == 2 || save_p_ic == 0 {
-                    nvim_tag_msg_e435();
+                    msg(c"E435: Couldn't find tag, just guessing!".as_ptr(), 0);
                     // Only delay if not scrolled and not silent and no UI messages
                     if nvim_tag_get_msg_scrolled() == 0
                         && nvim_tag_get_msg_silent() == 0

@@ -12,8 +12,21 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::doc_markdown)]
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_void, CStr};
 use std::ptr;
+
+// =============================================================================
+// Error message string constants (replaces C static error strings)
+// =============================================================================
+
+const E_TAG_STACK_EMPTY: &CStr = c"E73: Tag stack empty";
+const E_AT_BOTTOM_OF_TAG_STACK: &CStr = c"E555: At bottom of tag stack";
+const E_AT_TOP_OF_TAG_STACK: &CStr = c"E556: At top of tag stack";
+const E_CANNOT_MODIFY_TAG_STACK_WITHIN_TAGFUNC: &CStr =
+    c"E986: Cannot modify the tag stack within tagfunc";
+const E_TAG_NOT_FOUND_STR: &CStr = c"E426: Tag not found: %s";
+const E_WINDOW_UNEXPECTEDLY_CLOSE_WHILE_SEARCHING_FOR_TAGS: &CStr =
+    c"E1299: Window unexpectedly closed while searching for tags";
 
 // =============================================================================
 // Command type constants (match tag.h enum values)
@@ -68,7 +81,10 @@ extern "C" {
     fn nvim_tag_get_curbuf_fnum() -> c_int;
     fn nvim_tag_get_got_int() -> bool;
     fn nvim_tag_get_tfu_in_use() -> bool;
-    fn nvim_tag_emsg_tfu_in_use();
+    fn emsg(s: *const c_char) -> c_int;
+    fn semsg(fmt: *const c_char, ...) -> c_int;
+    fn smsg(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
+    fn gettext(msgid: *const c_char) -> *const c_char;
     fn nvim_tag_buflist_findnr_ffname(fnum: c_int) -> *mut c_char;
     fn nvim_tag_buflist_getfile_with_result(
         fnum: c_int,
@@ -112,16 +128,6 @@ extern "C" {
     fn nvim_tag_ui_flush();
     fn nvim_tag_os_delay(msec: c_int);
     fn msg(msg: *const c_char, hlf: c_int) -> c_int;
-    fn nvim_tag_emsg_stack_empty();
-    fn nvim_tag_emsg_at_bottom();
-    fn nvim_tag_emsg_at_top();
-    fn nvim_tag_semsg_not_found(name: *const c_char);
-    fn nvim_tag_emsg_before_first();
-    fn nvim_tag_emsg_only_one();
-    fn nvim_tag_emsg_beyond_last();
-    fn nvim_tag_smsg_nofile(fname: *const c_char);
-    fn nvim_tag_semsg_nofile(fname: *const c_char);
-    fn nvim_tag_emsg_window_closed();
     fn nvim_tag_free_nofile_fname();
     fn nvim_tag_nofile_fname_is_null() -> bool;
     fn nvim_get_nofile_fname() -> *const c_char;
@@ -726,7 +732,7 @@ pub unsafe extern "C" fn rs_do_tag(
 
     // Disallow recursive tagfunc calls
     if nvim_tag_get_tfu_in_use() {
-        nvim_tag_emsg_tfu_in_use();
+        emsg(gettext(E_CANNOT_MODIFY_TAG_STACK_WITHIN_TAGFUNC.as_ptr()));
         return;
     }
 
@@ -837,7 +843,7 @@ pub unsafe extern "C" fn rs_do_tag(
                 tagstacklen == 0
             };
             if stack_empty {
-                nvim_tag_emsg_stack_empty();
+                emsg(gettext(E_TAG_STACK_EMPTY.as_ptr()));
                 do_tag_cleanup(use_tagstack, tagstackidx, tofree);
                 return;
             }
@@ -846,7 +852,7 @@ pub unsafe extern "C" fn rs_do_tag(
                 // Go to older position
                 tagstackidx -= count;
                 if tagstackidx < 0 {
-                    nvim_tag_emsg_at_bottom();
+                    emsg(gettext(E_AT_BOTTOM_OF_TAG_STACK.as_ptr()));
                     if tagstackidx + count == 0 {
                         tagstackidx = 0;
                         do_tag_cleanup(use_tagstack, tagstackidx, tofree);
@@ -858,7 +864,7 @@ pub unsafe extern "C" fn rs_do_tag(
                 // Inline Rust port of nvim_tag_do_pop_jump (Phase 1)
                 if tagstackidx >= tagstacklen {
                     // count == 0 case
-                    nvim_tag_emsg_at_top();
+                    emsg(gettext(E_AT_TOP_OF_TAG_STACK.as_ptr()));
                     do_tag_cleanup(use_tagstack, tagstackidx, tofree);
                     return;
                 }
@@ -910,10 +916,10 @@ pub unsafe extern "C" fn rs_do_tag(
                     tagstackidx += count - 1;
                     if tagstackidx >= tagstacklen {
                         tagstackidx = tagstacklen - 1;
-                        nvim_tag_emsg_at_top();
+                        emsg(gettext(E_AT_TOP_OF_TAG_STACK.as_ptr()));
                         save_pos = false;
                     } else if tagstackidx < 0 {
-                        nvim_tag_emsg_at_bottom();
+                        emsg(gettext(E_AT_BOTTOM_OF_TAG_STACK.as_ptr()));
                         tagstackidx = 0;
                         do_tag_cleanup(use_tagstack, tagstackidx, tofree);
                         return;
@@ -953,7 +959,7 @@ pub unsafe extern "C" fn rs_do_tag(
                 if cur_match == MAXCOL {
                     cur_match = MAXCOL - 1;
                 } else if cur_match < 0 {
-                    nvim_tag_emsg_before_first();
+                    emsg(c"E425: Cannot go before first matching tag".as_ptr());
                     skip_msg = true;
                     cur_match = 0;
                     cur_fnum = nvim_tag_get_curbuf_fnum();
@@ -1069,7 +1075,9 @@ pub unsafe extern "C" fn rs_do_tag(
 
             // Check if tagstack pointer changed (window closed)
             if nvim_tag_tagstack_changed(tagstack_ptr) {
-                nvim_tag_emsg_window_closed();
+                emsg(gettext(
+                    E_WINDOW_UNEXPECTEDLY_CLOSE_WHILE_SEARCHING_FOR_TAGS.as_ptr(),
+                ));
                 nvim_tag_free_wild(new_num_matches, new_matches);
                 break;
             }
@@ -1086,7 +1094,7 @@ pub unsafe extern "C" fn rs_do_tag(
 
         if NUM_MATCHES <= 0 {
             if verbose {
-                nvim_tag_semsg_not_found(name);
+                semsg(gettext(E_TAG_NOT_FOUND_STR.as_ptr()), name);
             }
             nvim_set_g_do_tagpreview(0);
         } else {
@@ -1129,9 +1137,9 @@ pub unsafe extern "C" fn rs_do_tag(
                     && nvim_tag_nofile_fname_is_null()
                 {
                     if NUM_MATCHES == 1 {
-                        nvim_tag_emsg_only_one();
+                        emsg(c"E427: There is only one matching tag".as_ptr());
                     } else {
-                        nvim_tag_emsg_beyond_last();
+                        emsg(c"E428: Cannot go beyond last matching tag".as_ptr());
                     }
                     skip_msg = true;
                 }
@@ -1173,7 +1181,11 @@ pub unsafe extern "C" fn rs_do_tag(
 
             // Report previous file-not-found
             if !nvim_tag_nofile_fname_is_null() && error_cur_match != cur_match {
-                nvim_tag_smsg_nofile(nvim_get_nofile_fname());
+                smsg(
+                    0,
+                    c"File \"%s\" does not exist".as_ptr(),
+                    nvim_get_nofile_fname(),
+                );
             }
 
             // Show "tag X of Y" message
@@ -1250,7 +1262,10 @@ pub unsafe extern "C" fn rs_do_tag(
                     }
                     continue;
                 }
-                nvim_tag_semsg_nofile(nvim_get_nofile_fname());
+                semsg(
+                    c"E429: File \"%s\" does not exist".as_ptr(),
+                    nvim_get_nofile_fname(),
+                );
             } else {
                 // May have jumped to another window
                 if use_tagstack && tagstackidx > nvim_win_get_tagstacklen(nvim_tag_get_curwin()) {
