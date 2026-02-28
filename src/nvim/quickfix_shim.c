@@ -368,6 +368,11 @@ extern void rs_ll_resize_stack(void *wp, int n);
 extern void rs_qf_sync_llw_to_win(void *llw);
 extern void rs_qf_sync_win_to_llw(void *pwp);
 
+// Phase 3: lifecycle functions (migrated to Rust)
+extern void *rs_qf_alloc_stack(int qfltype, int n);
+extern void *rs_ll_get_or_alloc_list(void *wp);
+extern void *rs_qf_cmd_get_stack(void *eap, bool print_emsg);
+
 // Pass 4: stack query entry points (Phase 1)
 extern size_t rs_qf_get_size_eap(void *eap);
 extern size_t rs_qf_get_valid_size_eap(void *eap);
@@ -1107,7 +1112,7 @@ int nvim_qfline_get_valid_bufnr(const void *qfp_void)
 // nvim_qfl_get_{index,count,id,changedtick,title} deleted: merged into nvim_qf_get_* (Phase 15).
 
 /// qf_alloc_stack wrapper for internal stacks (used by qf_get_list_from_lines).
-void *nvim_qf_alloc_internal_stack(void) { return qf_alloc_stack(QFLT_INTERNAL, 1); }
+void *nvim_qf_alloc_internal_stack(void) { return rs_qf_alloc_stack(QFLT_INTERNAL, 1); }
 
 /// qf_free_lists wrapper (free qi->qf_lists array after iterating).
 void nvim_qf_free_lists_for_qi(void *qi_void)
@@ -1463,12 +1468,6 @@ bool nvim_is_loclist_cmd(int cmdidx) { return is_loclist_cmd((cmdidx_T)cmdidx); 
 
 // nvim_eap_get_cmdidx: already exists in ex_docmd.c
 
-// ---- Rust Phase 3 forward declarations ----
-extern void *rs_qf_alloc_stack(int qfltype, int n);
-extern void *rs_ll_get_or_alloc_list(void *wp);
-extern void *rs_qf_cmd_get_stack(void *eap, bool print_emsg);
-extern void *rs_qf_cmd_get_or_alloc_stack(const void *eap, void **pwinp);
-
 // ---- Phase 4 accessors ----
 
 /// Set wp->w_llist_ref = qi (raw assignment; caller manages refcount separately).
@@ -1516,17 +1515,16 @@ static bufref_T qf_last_bufref = { NULL, 0, 0 };
 int qf_init(win_T *wp, const char *restrict efile, char *restrict errorformat, int newlist,
             const char *restrict qf_title, char *restrict enc)
 {
-  qf_info_T *qi = wp == NULL ? ql_info : ll_get_or_alloc_list(wp);
+  qf_info_T *qi = wp == NULL ? ql_info : (qf_info_T *)rs_ll_get_or_alloc_list((void *)wp);
   assert(qi != NULL);
 
   return rs_qf_init_ext(qi, qi->qf_curlist, efile, curbuf, NULL, errorformat,
                      newlist, 0, 0, qf_title, enc);
 }
 
-// Maximum number of bytes allowed per line while reading an errorfile.
+// LINE_MAXLEN deleted: migrated to Rust reader.rs (Phase 16).
 // efm_to_regpat, fmt_start, free_efm_list, parse_efm_option deleted:
 // migrated to Rust parse_efm_option / EfmPattern in reader.rs (Phase 9).
-static const size_t LINE_MAXLEN = 4096;
 
 // callback function for 'quickfixtextfunc'
 static Callback qftf_cb;
@@ -1947,29 +1945,12 @@ int qf_stack_get_bufnr(void) { assert(ql_info != NULL); return ql_info->qf_bufnr
 
 // wipe_qf_buffer, ll_free_all deleted: migrated to Rust in lifecycle.rs.
 // incr_quickfix_busy, decr_quickfix_busy, check_quickfix_busy deleted: migrated to Rust in lifecycle.rs.
-
-/// Free all lists in a qf_info_T and the struct itself.
-/// (Was the static C qf_free_lists; now delegates to C accessor helpers that
-/// mirror what the Rust qf_free_lists_and_info function does.)
-static void qf_free_lists(qf_info_T *qi)
-{
-  for (int i = 0; i < qi->qf_listcount; i++) {
-    rs_qf_free_list(&qi->qf_lists[i]);
-  }
-  nvim_qf_free_lists_array((void *)qi);
-  nvim_qf_free_info((void *)qi);
-}
-
-/// Thin C wrapper: forward to Rust rs_ll_free_all.
-/// Kept for callers inside this file that pass a qf_info_T** directly.
-static void ll_free_all(qf_info_T **pqi) { rs_ll_free_all((void **)pqi); }
+// qf_free_lists deleted: dead static (Phase 16).
+// ll_free_all deleted: dead static (Phase 16).
 
 /// Free all the quickfix/location lists in the stack.
 /// Thin wrapper calling Rust rs_qf_free_all.
 void qf_free_all(win_T *wp) { rs_qf_free_all((void *)wp); }
-
-static void incr_quickfix_busy(void) { rs_incr_quickfix_busy(); }
-static void decr_quickfix_busy(void) { rs_decr_quickfix_busy(); }
 
 #if defined(EXITFREE)
 void check_quickfix_busy(void) { rs_check_quickfix_busy(); }
@@ -1983,38 +1964,14 @@ void ll_resize_stack(win_T *wp, int n) { rs_ll_resize_stack((void *)wp, n); }
 
 // qf_resize_stack_base deleted: migrated to Rust rs_qf_resize_stack_base (Phase 11).
 
-void qf_init_stack(void) { ql_info = qf_alloc_stack(QFLT_QUICKFIX, (int)p_chi); }
+void qf_init_stack(void) { ql_info = (qf_info_T *)rs_qf_alloc_stack(QFLT_QUICKFIX, (int)p_chi); }
 
 // qf_sync_llw_to_win deleted: migrated to Rust rs_qf_sync_llw_to_win (Phase 11).
 // qf_sync_win_to_llw deleted: migrated to Rust rs_qf_sync_win_to_llw (Phase 11).
 
 // qf_alloc_stack, qf_alloc_list_stack, ll_get_or_alloc_list,
 // qf_cmd_get_stack, qf_cmd_get_or_alloc_stack deleted: migrated to Rust in lifecycle.rs.
-
-/// Thin C wrapper for callers inside this file.
-static qf_info_T *qf_alloc_stack(qfltype_T qfltype, int n)
-{
-  return (qf_info_T *)rs_qf_alloc_stack((int)qfltype, n);
-}
-
-/// Thin C wrapper for callers inside this file.
-static qf_info_T *ll_get_or_alloc_list(win_T *wp)
-{
-  return (qf_info_T *)rs_ll_get_or_alloc_list((void *)wp);
-}
-
-/// Thin C wrapper for callers inside this file.
-static qf_info_T *qf_cmd_get_stack(exarg_T *eap, bool print_emsg)
-{
-  return (qf_info_T *)rs_qf_cmd_get_stack((void *)eap, print_emsg);
-}
-
-/// Thin C wrapper for callers inside this file.
-static qf_info_T *qf_cmd_get_or_alloc_stack(const exarg_T *eap, win_T **pwinp)
-{
-  return (qf_info_T *)rs_qf_cmd_get_or_alloc_stack((const void *)eap, (void **)pwinp);
-}
-
+// Dead static wrappers removed in Phase 16.
 
 extern void rs_copy_loclist_stack(void *from, void *to);
 
@@ -2030,47 +1987,12 @@ void copy_loclist_stack(win_T *from, win_T *to)
 // qf_find_help_win deleted (Phase 5): logic inlined into Rust rs_ex_helpgrep; public
 // nvim_qf_find_help_win wrapper at line 2333 retained for navigate.rs.
 
-static void win_set_loclist(win_T *wp, qf_info_T *qi) { wp->w_llist = qi; qi->qf_refcount++; }
+// win_set_loclist, qf_find_win_with_loclist, qf_find_win_with_normal_buf,
+// qf_goto_tabwin_with_file deleted: dead statics (Phase 16).
+// Their nvim_qf_* public counterparts below are the Rust-callable versions.
 
 // Rust exports for jump machinery
 extern void rs_qf_jump_newwin(void *qi, int dir, int errornr, int forceit, bool newwin);
-
-/// Returns NULL if a matching window is not found.
-static win_T *qf_find_win_with_loclist(const qf_info_T *ll)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_llist == ll && !bt_quickfix(wp->w_buffer)) {
-      return wp;
-    }
-  }
-  return NULL;
-}
-
-/// Find a window containing a normal buffer in the current tab page.
-static win_T *qf_find_win_with_normal_buf(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (bt_normal(wp->w_buffer)) {
-      return wp;
-    }
-  }
-  return NULL;
-}
-
-// Go to a window in any tabpage containing the specified file.  Returns true
-// if successfully jumped to the window. Otherwise returns false.
-static bool qf_goto_tabwin_with_file(int fnum)
-{
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (wp->w_buffer->b_fnum == fnum) {
-      goto_tabpage_win(tp, wp);
-      return true;
-    }
-  }
-  return false;
-}
 
 // Phase 15 thin accessors for inlining jump-open helpers into Rust navigate.rs
 
@@ -2198,7 +2120,11 @@ int nvim_qf_win_buf_fnum(const void *win) { return ((const win_T *)win)->w_buffe
 
 void *nvim_qf_win_get_llist(const void *win) { return ((const win_T *)win)->w_llist; }
 
-void nvim_qf_win_set_loclist(void *win, void *qi) { win_set_loclist((win_T *)win, (qf_info_T *)qi); }
+void nvim_qf_win_set_loclist(void *win, void *qi)
+{
+  ((win_T *)win)->w_llist = (qf_info_T *)qi;
+  ((qf_info_T *)qi)->qf_refcount++;
+}
 
 int nvim_qf_get_cmdmod_split(void) { return cmdmod.cmod_split; }
 
@@ -2899,30 +2825,13 @@ extern void rs_ex_cbuffer(void *eap);
 extern void rs_ex_cexpr(void *eap);
 // rs_copy_loclist_stack declared earlier (before copy_loclist_stack)
 
-// Form the complete command line to invoke 'make'/'grep'. Quote the command
-// using 'shellquote' and append 'shellpipe'. Echo the fully formed command.
-// Now a thin wrapper; real implementation in Rust (rs_make_get_fullcmd).
-extern char *rs_make_get_fullcmd(const char *makecmd, const char *fname);
-static char *make_get_fullcmd(const char *makecmd, const char *fname)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
-{
-  return rs_make_get_fullcmd(makecmd, fname);
-}
+// make_get_fullcmd deleted: dead static wrapper (Phase 16). Real impl in Rust rs_make_get_fullcmd.
+// get_mef_name deleted: dead static wrapper (Phase 16). Real impl in Rust rs_get_mef_name.
 
 // Used for ":make", ":lmake", ":grep", ":lgrep", ":grepadd", and ":lgrepadd"
 void ex_make(exarg_T *eap)
 {
   rs_ex_make((void *)eap);
-}
-
-// Return the name for the errorfile, in allocated memory.
-// Find a new unique name when 'makeef' contains "##".
-// Returns NULL for error.
-// Now a thin wrapper; real implementation in Rust (rs_get_mef_name).
-extern char *rs_get_mef_name(void);
-static char *get_mef_name(void)
-{
-  return rs_get_mef_name();
 }
 
 /// Returns the number of entries in the current quickfix/location list.
@@ -2953,7 +2862,7 @@ int qf_get_cur_valid_idx(exarg_T *eap)
 }
 
 /// For :cfdo and :lfdo, returns the 'n'th valid file entry.
-void *nvim_qf_cmd_get_stack(void *eap_void, bool print_emsg) { return qf_cmd_get_stack((exarg_T *)eap_void, print_emsg); }
+void *nvim_qf_cmd_get_stack(void *eap_void, bool print_emsg) { return rs_qf_cmd_get_stack(eap_void, print_emsg); }
 
 void nvim_qf_msg(void *qi_void, int which, const char *lead) { rs_qf_msg(qi_void, which, lead); }
 
@@ -3167,9 +3076,9 @@ void nvim_semsg_nomatch2(const char *spat) { semsg(_(e_nomatch2), spat); }
 /// smsg wrapper for "Cannot open file" (used by rs_vgr_process_files).
 void nvim_vgr_smsg_cannot_open(const char *fname) { smsg(0, _("Cannot open file \"%s\""), fname); }
 
-void nvim_incr_quickfix_busy(void) { incr_quickfix_busy(); }
+void nvim_incr_quickfix_busy(void) { rs_incr_quickfix_busy(); }
 
-void nvim_decr_quickfix_busy(void) { decr_quickfix_busy(); }
+void nvim_decr_quickfix_busy(void) { rs_decr_quickfix_busy(); }
 
 /// Heap-allocate and initialize a regmmatch_T for vimgrep.
 /// Returns the heap pointer (caller must free with nvim_vgr_regmatch_free),
