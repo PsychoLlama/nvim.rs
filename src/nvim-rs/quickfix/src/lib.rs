@@ -2675,6 +2675,7 @@ pub unsafe extern "C" fn rs_qfline_set_prev(qfp: QfLineHandleMut, prev: QfLineHa
 // =============================================================================
 
 extern "C" {
+    #[allow(dead_code)]
     fn xfree(ptr: *mut c_void);
 }
 

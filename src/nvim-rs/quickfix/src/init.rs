@@ -623,9 +623,20 @@ mod init_ext {
         assert!(!qi.is_null());
         let curlist = nvim_qf_get_curlist_idx(qi);
         let buf = nvim_curbuf_ptr();
-        rs_qf_init_ext(qi, curlist, efile, buf, std::ptr::null_mut(), errorformat, newlist, 0, 0, qf_title, enc)
+        rs_qf_init_ext(
+            qi,
+            curlist,
+            efile,
+            buf,
+            std::ptr::null_mut(),
+            errorformat,
+            newlist,
+            0,
+            0,
+            qf_title,
+            enc,
+        )
     }
-
 }
 
 // =============================================================================

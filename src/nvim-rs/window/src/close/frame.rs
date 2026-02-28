@@ -896,6 +896,8 @@ unsafe fn winframe_find_altwin_full_impl(
     wp
 }
 
+/// # Safety
+/// `win` must be a valid window handle.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_winframe_find_altwin_full(

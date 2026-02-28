@@ -1200,6 +1200,7 @@ pub unsafe extern "C" fn rs_win_split(size: c_int, flags: c_int) -> c_int {
 ///
 /// # Safety
 /// Calls C accessor functions.
+#[must_use]
 #[unsafe(export_name = "win_split")]
 pub unsafe extern "C" fn win_split(size: c_int, flags: c_int) -> c_int {
     win_split_impl(size, flags)
@@ -1218,6 +1219,7 @@ pub unsafe extern "C" fn rs_win_splitmove(wp: WinHandle, size: c_int, flags: c_i
 ///
 /// # Safety
 /// Calls C accessor functions.
+#[must_use]
 #[unsafe(export_name = "win_splitmove")]
 pub unsafe extern "C" fn win_splitmove(wp: WinHandle, size: c_int, flags: c_int) -> c_int {
     win_splitmove_impl(wp, size, flags)

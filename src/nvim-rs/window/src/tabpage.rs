@@ -1252,6 +1252,7 @@ pub unsafe extern "C" fn rs_make_tabpages(maxcount: c_int) -> c_int {
 ///
 /// # Safety
 /// Calls C accessor functions.
+#[must_use]
 #[unsafe(export_name = "make_tabpages")]
 pub unsafe extern "C" fn make_tabpages(maxcount: c_int) -> c_int {
     make_tabpages_impl(maxcount)
@@ -1757,6 +1758,7 @@ pub unsafe extern "C" fn rs_win_new_tabpage(after: c_int, filename: *const u8) -
 ///
 /// # Safety
 /// Calls C accessor functions.
+#[must_use]
 #[unsafe(export_name = "win_new_tabpage")]
 pub unsafe extern "C" fn win_new_tabpage(after: c_int, filename: *const u8) -> c_int {
     win_new_tabpage_impl(after, filename)

@@ -569,6 +569,7 @@ pub extern "C" fn rs_buf_jump_open_win(buf: BufHandle) -> WinHandle {
 }
 
 /// C export: `buf_jump_open_win` — eliminates the C thin wrapper.
+#[must_use]
 #[unsafe(export_name = "buf_jump_open_win")]
 pub extern "C" fn buf_jump_open_win(buf: BufHandle) -> WinHandle {
     buf_jump_open_win_impl(buf)
@@ -581,6 +582,7 @@ pub extern "C" fn rs_buf_jump_open_tab(buf: BufHandle) -> WinHandle {
 }
 
 /// C export: `buf_jump_open_tab` — eliminates the C thin wrapper.
+#[must_use]
 #[unsafe(export_name = "buf_jump_open_tab")]
 pub extern "C" fn buf_jump_open_tab(buf: BufHandle) -> WinHandle {
     buf_jump_open_tab_impl(buf)
@@ -593,6 +595,7 @@ pub extern "C" fn rs_swbuf_goto_win_with_buf(buf: BufHandle) -> WinHandle {
 }
 
 /// C export: `swbuf_goto_win_with_buf` — eliminates the C thin wrapper.
+#[must_use]
 #[unsafe(export_name = "swbuf_goto_win_with_buf")]
 pub extern "C" fn swbuf_goto_win_with_buf(buf: BufHandle) -> WinHandle {
     swbuf_goto_win_with_buf_impl(buf)
