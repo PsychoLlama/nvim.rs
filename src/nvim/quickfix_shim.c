@@ -733,36 +733,8 @@ void nvim_qf_buf_or_has_entry(void *buf_void, bool is_location_list)
 }
 
 // nvim_qf_get_fnum_for_entry deleted: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
-
-/// Returns allocated string or NULL (caller must free)
-char *nvim_qf_fix_fname(const char *fname, int bufnum)
-{
-  if (fname == NULL) {
-    return NULL;
-  }
-
-  char *fullname = fix_fname((char *)fname);
-  if (fullname == NULL) {
-    return NULL;
-  }
-
-  buf_T *buf = buflist_findnr(bufnum);
-  if (buf != NULL && buf->b_ffname != NULL) {
-    if (path_fnamecmp(fullname, buf->b_ffname) != 0) {
-      char *p = path_try_shorten_fname(fullname);
-      if (p != NULL) {
-        char *result = xstrdup(p);
-        xfree(fullname);
-        return result;
-      }
-    }
-  }
-
-  xfree(fullname);
-  return NULL;
-}
-
-bool nvim_qf_is_printc(int c) { return vim_isprintc(c); }
+// nvim_qf_fix_fname deleted: migrated to Rust rs_qf_fix_fname (Phase 16).
+// nvim_qf_is_printc deleted: no callers (Phase 16).
 
 void nvim_qf_set_id(void *qfl_void, unsigned id) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_id = id; }
 

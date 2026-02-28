@@ -2146,8 +2146,14 @@ extern "C" {
     fn nvim_buflist_findnr_ptr(nr: c_int) -> *mut c_void;
     fn nvim_qf_buf_or_has_entry(buf: *mut c_void, is_location_list: bool);
     // nvim_qf_get_fnum_for_entry removed: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5)
-    fn nvim_qf_fix_fname(fname: *const c_char, bufnum: c_int) -> *mut c_char;
-    fn nvim_qf_is_printc(c: c_int) -> bool;
+    // nvim_qf_fix_fname removed: replaced by rs_qf_fix_fname below (Phase 16)
+    fn nvim_qf_vim_isprintc(c: c_int) -> c_int;
+
+    // Phase 16: fix_fname migration accessors
+    fn rs_fix_fname(fname: *const c_char) -> *mut c_char;
+    fn nvim_buf_get_b_ffname(buf: *mut c_void) -> *const c_char;
+    fn rs_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+    fn nvim_path_try_shorten_fname(full: *const c_char) -> *mut c_char;
 
     // Phase 1: Core List Lifecycle accessors
     fn nvim_qf_set_id(qfl: QfListHandleMut, id: u32);
@@ -2177,6 +2183,46 @@ pub mod qfl_types {
     pub const QFLT_LOCATION: c_int = 1;
     /// Internal type
     pub const QFLT_INTERNAL: c_int = 2;
+}
+
+// =============================================================================
+// Phase 16: Filename fix function
+// =============================================================================
+
+/// Fix a quickfix filename for display (expand to full path, optionally shorten).
+///
+/// Returns allocated string or NULL. The caller must free the result.
+/// This replaces the C function `nvim_qf_fix_fname` (Phase 16).
+///
+/// # Safety
+///
+/// - `fname` must be a valid C string or NULL
+/// - `bufnum` is the buffer number to compare against
+#[no_mangle]
+#[allow(clippy::similar_names)]
+pub unsafe extern "C" fn rs_qf_fix_fname(fname: *const c_char, bufnum: c_int) -> *mut c_char {
+    if fname.is_null() {
+        return std::ptr::null_mut();
+    }
+    let fullname = rs_fix_fname(fname);
+    if fullname.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let buf = nvim_buflist_findnr_ptr(bufnum);
+    if !buf.is_null() {
+        let ffname = nvim_buf_get_b_ffname(buf);
+        if !ffname.is_null() && rs_path_fnamecmp(fullname, ffname) != 0 {
+            let p = nvim_path_try_shorten_fname(fullname);
+            if !p.is_null() {
+                let result = nvim_qf_xstrdup(p);
+                nvim_qf_xfree_buf(fullname.cast());
+                return result;
+            }
+        }
+    }
+    nvim_qf_xfree_buf(fullname.cast());
+    std::ptr::null_mut()
 }
 
 /// Get the last entry in a quickfix list.
@@ -2694,13 +2740,12 @@ pub unsafe extern "C" fn rs_qf_add_entry(
 
     // Set the filename if it differs from buffer name
     if !fname.is_null() {
-        let fixed_fname = nvim_qf_fix_fname(fname, fnum);
+        let fixed_fname = rs_qf_fix_fname(fname, fnum);
         if !fixed_fname.is_null() {
             nvim_qfline_set_fname(qfp, fixed_fname);
-            // The C function duplicates the string, but nvim_qf_fix_fname
-            // returns an allocated string that we need to handle properly.
-            // Since set_fname duplicates it, we need to free the original.
-            xfree(fixed_fname.cast());
+            // rs_qf_fix_fname returns an allocated string that we need to free
+            // after set_fname duplicates it.
+            nvim_qf_xfree_buf(fixed_fname.cast());
         }
     }
 
@@ -2726,7 +2771,7 @@ pub unsafe extern "C" fn rs_qf_add_entry(
 
     // Validate and set type character
     #[allow(clippy::cast_sign_loss)]
-    let final_type = if type_char != 1 && !nvim_qf_is_printc(c_int::from(type_char as u8)) {
+    let final_type = if type_char != 1 && nvim_qf_vim_isprintc(c_int::from(type_char as u8)) == 0 {
         0
     } else {
         type_char
