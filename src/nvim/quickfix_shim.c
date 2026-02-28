@@ -340,6 +340,9 @@ extern void rs_hgr_search_in_rtp(void *qfl, void *p_regmatch, const char *lang);
 extern int rs_qf_init_ext(void *qi, int qf_idx, const char *efile, void *buf,
                            void *tv, char *errorformat, bool newlist, linenr_T lnumfirst,
                            linenr_T lnumlast, const char *qf_title, char *enc);
+extern int rs_qf_init(void *wp, const char *efile, char *errorformat, bool newlist,
+                      const char *qf_title, char *enc);
+extern int rs_qf_stack_get_bufnr(void);
 
 extern void rs_ex_vimgrep(void *eap);
 
@@ -1452,14 +1455,11 @@ static bufref_T qf_last_bufref = { NULL, 0, 0 };
 // qf_init_process_nextline deleted: inlined into Rust process_nextline in init.rs (Phase 9).
 
 /// @returns -1 for error, number of errors for success.
+// qf_init body migrated to rs_qf_init in Rust init.rs (Phase 16).
 int qf_init(win_T *wp, const char *restrict efile, char *restrict errorformat, int newlist,
             const char *restrict qf_title, char *restrict enc)
 {
-  qf_info_T *qi = wp == NULL ? ql_info : (qf_info_T *)rs_ll_get_or_alloc_list((void *)wp);
-  assert(qi != NULL);
-
-  return rs_qf_init_ext(qi, qi->qf_curlist, efile, curbuf, NULL, errorformat,
-                     newlist, 0, 0, qf_title, enc);
+  return rs_qf_init((void *)wp, efile, errorformat, (bool)newlist, qf_title, enc);
 }
 
 // LINE_MAXLEN deleted: migrated to Rust reader.rs (Phase 16).
@@ -1487,19 +1487,8 @@ static Callback qftf_cb;
 // nvim_qf_init_setup_state, nvim_qf_init_cleanup_state deleted:
 // replaced by rs_qf_parser_state_new / rs_qf_parser_state_free in Rust (Phase 9).
 
-void nvim_qf_init_clear_last_bufname(void) { XFREE_CLEAR(qf_last_bufname); }
-
-/// Returns the efm string to use (NOT a copy - do not free).
-char *nvim_qf_init_resolve_efm(char *errorformat, void *tv_void, void *buf_void)
-{
-  typval_T *tv = (typval_T *)tv_void;
-  buf_T *buf = (buf_T *)buf_void;
-  if (errorformat == p_efm && tv == NULL && buf && *buf->b_p_efm != NUL) {
-    return buf->b_p_efm;
-  }
-  return errorformat;
-}
-
+// nvim_qf_init_clear_last_bufname deleted: Rust calls nvim_qf_clear_fnum_cache instead (Phase 16).
+// nvim_qf_init_resolve_efm deleted: logic inlined into rs_qf_init_ext in Rust init.rs (Phase 16).
 // nvim_qf_init_process_nextline, nvim_qf_init_state_no_fd_error deleted:
 // inlined into Rust rs_qf_init_ext / process_nextline (Phase 9).
 
@@ -1891,7 +1880,8 @@ void nvim_qf_emsg_efm_e378(void) { emsg(_("E378: 'errorformat' contains no patte
 
 // locstack_queue_delreq deleted: migrated to Rust rs_locstack_queue_delreq in lifecycle.rs.
 
-int qf_stack_get_bufnr(void) { assert(ql_info != NULL); return ql_info->qf_bufnr; }
+// qf_stack_get_bufnr body migrated to rs_qf_stack_get_bufnr in Rust (Phase 16).
+int qf_stack_get_bufnr(void) { return rs_qf_stack_get_bufnr(); }
 
 // wipe_qf_buffer, ll_free_all deleted: migrated to Rust in lifecycle.rs.
 // incr_quickfix_busy, decr_quickfix_busy, check_quickfix_busy deleted: migrated to Rust in lifecycle.rs.

@@ -336,6 +336,12 @@ const char *nvim_buf_get_b_sfname(buf_T *buf)
   return buf->b_sfname;
 }
 
+/// Get the b_p_efm (errorformat option) field from a buffer.
+const char *nvim_buf_get_b_p_efm(buf_T *buf)
+{
+  return buf->b_p_efm;
+}
+
 /// Get the b_p_ro (readonly option) field from a buffer.
 int nvim_buf_get_b_p_ro(buf_T *buf)
 {

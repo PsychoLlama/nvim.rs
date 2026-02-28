@@ -334,13 +334,18 @@ mod init_ext {
         fn nvim_set_got_int(val: c_int);
         fn nvim_line_breakcheck();
 
-        // C-side helpers still needed
-        fn nvim_qf_init_clear_last_bufname();
-        fn nvim_qf_init_resolve_efm(
-            errorformat: *mut c_char,
-            tv: TvHandle,
-            buf: BufHandle,
-        ) -> *mut c_char;
+        // C-side helpers
+        // nvim_qf_init_clear_last_bufname removed: use nvim_qf_clear_fnum_cache (Phase 16)
+        fn nvim_qf_clear_fnum_cache();
+        // nvim_qf_init_resolve_efm removed: logic inlined into rs_qf_init_ext (Phase 16)
+        fn nvim_get_p_efm() -> *const c_char;
+        fn nvim_buf_get_b_p_efm(buf: BufHandle) -> *const c_char;
+
+        // Phase 16: rs_qf_init accessors
+        fn nvim_get_ql_info() -> QfInfoHandleMut;
+        fn rs_ll_get_or_alloc_list(wp: *mut c_void) -> QfInfoHandleMut;
+        fn nvim_curbuf_ptr() -> BufHandle;
+
         // nvim_qf_init_finalize_list deleted: inlined below (Phase 14)
         fn nvim_qf_get_index(qfl: QfListHandle) -> c_int;
         fn nvim_qf_set_index(qfl: QfListHandleMut, idx: c_int);
@@ -473,7 +478,8 @@ mod init_ext {
         enc: *mut c_char,
     ) -> c_int {
         // Do not use the cached buffer, it may have been wiped out.
-        nvim_qf_init_clear_last_bufname();
+        // nvim_qf_init_clear_last_bufname removed: use nvim_qf_clear_fnum_cache (Phase 16)
+        nvim_qf_clear_fnum_cache();
 
         // Allocate fields in Rust (Phase 2)
         let fields = crate::reader::rs_qf_alloc_fields();
@@ -509,7 +515,21 @@ mod init_ext {
             }
 
             // Resolve the effective errorformat.
-            let efm = nvim_qf_init_resolve_efm(errorformat, tv, buf);
+            // Inlined from nvim_qf_init_resolve_efm (Phase 16):
+            // If errorformat is the global p_efm, tv is NULL, and buf has its own efm, use buf's.
+            let efm = {
+                let p_efm = nvim_get_p_efm();
+                if errorformat.cast_const() == p_efm && tv.is_null() && !buf.is_null() {
+                    let b_p_efm = nvim_buf_get_b_p_efm(buf);
+                    if !b_p_efm.is_null() && *b_p_efm != 0 {
+                        b_p_efm.cast_mut()
+                    } else {
+                        errorformat
+                    }
+                } else {
+                    errorformat
+                }
+            };
 
             // Update the cached efm parsing (Phase 2: Rust-owned cache)
             let fmt_first = crate::reader::rs_qf_init_update_efm_cache(efm);
@@ -576,6 +596,63 @@ mod init_ext {
 
         retval
     }
+
+    /// Entry point for C `qf_init`: resolve qi and call `rs_qf_init_ext`.
+    ///
+    /// Replaces the C `qf_init` body. The C function becomes a thin wrapper.
+    ///
+    /// # Safety
+    ///
+    /// - `wp` may be NULL (uses global quickfix stack) or a valid `win_T *`
+    /// - Other pointers follow the same contract as `rs_qf_init_ext`
+    #[no_mangle]
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe extern "C" fn rs_qf_init(
+        wp: *mut c_void,
+        efile: *const c_char,
+        errorformat: *mut c_char,
+        newlist: bool,
+        qf_title: *const c_char,
+        enc: *mut c_char,
+    ) -> c_int {
+        let qi = if wp.is_null() {
+            nvim_get_ql_info()
+        } else {
+            rs_ll_get_or_alloc_list(wp)
+        };
+        assert!(!qi.is_null());
+        let curlist = nvim_qf_get_curlist_idx(qi);
+        let buf = nvim_curbuf_ptr();
+        rs_qf_init_ext(qi, curlist, efile, buf, std::ptr::null_mut(), errorformat, newlist, 0, 0, qf_title, enc)
+    }
+
+}
+
+// =============================================================================
+// Phase 16: qf_stack_get_bufnr migration
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_ql_info() -> *mut std::ffi::c_void;
+    fn nvim_qf_get_bufnr(qi: *const std::ffi::c_void) -> std::ffi::c_int;
+}
+
+/// Returns the quickfix buffer number for the global quickfix stack.
+///
+/// Replaces C `qf_stack_get_bufnr` (Phase 16).
+///
+/// # Safety
+///
+/// `nvim_get_ql_info()` must return a non-null pointer.
+///
+/// # Panics
+///
+/// Panics if `nvim_get_ql_info()` returns null (indicates uninitialized quickfix stack).
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_stack_get_bufnr() -> std::ffi::c_int {
+    let qi = nvim_get_ql_info();
+    assert!(!qi.is_null());
+    nvim_qf_get_bufnr(qi)
 }
 
 // =============================================================================
