@@ -58,9 +58,8 @@ pub mod option_flags {
 // =============================================================================
 
 extern "C" {
-    // Option lookup
-    fn find_option_len(name: *const c_char, len: usize) -> OptIndex;
-    fn find_option(name: *const c_char) -> OptIndex;
+    // Option lookup (direct hash — avoids circular delegation through find_option_len/find_option)
+    fn nvim_find_option_len_hash(name: *const c_char, len: usize) -> OptIndex;
 
     // C shim functions (thin wrappers that call Rust, needed for legacy callers)
     fn option_has_type(opt_idx: OptIndex, val_type: c_int) -> c_int;
@@ -112,6 +111,17 @@ fn is_power_of_two(v: u32) -> bool {
 // Option Index Lookup
 // =============================================================================
 
+/// Measure the length of a C string without a libc dependency.
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    let mut len = 0usize;
+    let mut p = s;
+    while *p != 0 {
+        len += 1;
+        p = p.add(1);
+    }
+    len
+}
+
 /// Find option index by name.
 ///
 /// # Safety
@@ -122,7 +132,8 @@ pub unsafe extern "C" fn rs_find_option(name: *const c_char) -> OptIndex {
     if name.is_null() {
         return OPT_INVALID;
     }
-    find_option(name)
+    let len = libc_strlen(name);
+    nvim_find_option_len_hash(name, len)
 }
 
 /// Find option index by name with specified length.
@@ -135,7 +146,7 @@ pub unsafe extern "C" fn rs_find_option_len(name: *const c_char, len: usize) -> 
     if name.is_null() || len == 0 {
         return OPT_INVALID;
     }
-    find_option_len(name, len)
+    nvim_find_option_len_hash(name, len)
 }
 
 // =============================================================================
@@ -193,7 +204,7 @@ pub unsafe extern "C" fn rs_find_option_end(arg: *const c_char) -> FindOptionEnd
 
     // Calculate length and look up option
     let len = p.offset_from(arg) as usize;
-    let opt_idx = find_option_len(arg, len);
+    let opt_idx = nvim_find_option_len_hash(arg, len);
 
     FindOptionEndResult { end: p, opt_idx }
 }

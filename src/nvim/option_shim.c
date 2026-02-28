@@ -1891,7 +1891,14 @@ OptIndex find_option(const char *const name)
   return rs_find_option(name);
 }
 
-
+/// Direct hash-based option lookup for use by Rust (avoids circular delegation).
+///
+/// Called from rs_find_option_len / rs_find_option in index.rs.
+OptIndex nvim_find_option_len_hash(const char *name, size_t len)
+{
+  int index = find_option_hash(name, len);
+  return index >= 0 ? option_hash_elems[index].opt_idx : kOptInvalid;
+}
 
 /// Get type of option.
 static OptValType option_get_type(const OptIndex opt_idx)
