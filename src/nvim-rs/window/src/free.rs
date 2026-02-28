@@ -240,6 +240,16 @@ pub unsafe extern "C" fn rs_win_free(wp: WinHandle, tp: TabpageHandle) {
     win_free_impl(wp, tp);
 }
 
+/// C export: `win_free` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*`. `tp` is the tabpage `wp` is in, or NULL for
+/// the current tabpage.
+#[unsafe(export_name = "win_free")]
+pub unsafe extern "C" fn win_free(wp: WinHandle, tp: TabpageHandle) {
+    win_free_impl(wp, tp);
+}
+
 // =============================================================================
 // rs_win_free_all (EXITFREE)
 // =============================================================================

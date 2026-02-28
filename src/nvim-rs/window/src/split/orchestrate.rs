@@ -998,6 +998,21 @@ pub unsafe extern "C" fn rs_win_split_ins_full(
     win_split_ins_full_impl(size, flags, new_wp, dir, to_flatten)
 }
 
+/// C export: `win_split_ins` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid or null.
+#[unsafe(export_name = "win_split_ins")]
+pub unsafe extern "C" fn win_split_ins(
+    size: c_int,
+    flags: c_int,
+    new_wp: WinHandle,
+    dir: c_int,
+    to_flatten: *mut Frame,
+) -> WinHandle {
+    win_split_ins_full_impl(size, flags, new_wp, dir, to_flatten)
+}
+
 // =============================================================================
 // Phase 2: win_split and win_splitmove orchestration
 // =============================================================================
@@ -1181,11 +1196,29 @@ pub unsafe extern "C" fn rs_win_split(size: c_int, flags: c_int) -> c_int {
     win_split_impl(size, flags)
 }
 
+/// C export: `win_split` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(export_name = "win_split")]
+pub unsafe extern "C" fn win_split(size: c_int, flags: c_int) -> c_int {
+    win_split_impl(size, flags)
+}
+
 /// FFI: win_splitmove — move window into a new split position.
 ///
 /// # Safety
 /// Calls C accessor functions.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_splitmove(wp: WinHandle, size: c_int, flags: c_int) -> c_int {
+    win_splitmove_impl(wp, size, flags)
+}
+
+/// C export: `win_splitmove` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(export_name = "win_splitmove")]
+pub unsafe extern "C" fn win_splitmove(wp: WinHandle, size: c_int, flags: c_int) -> c_int {
     win_splitmove_impl(wp, size, flags)
 }

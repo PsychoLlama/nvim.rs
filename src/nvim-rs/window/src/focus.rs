@@ -402,12 +402,30 @@ pub unsafe extern "C" fn rs_leaving_window(win: WinHandle) {
     leaving_window_impl(win);
 }
 
+/// C export: `leaving_window` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions with a valid window handle.
+#[unsafe(export_name = "leaving_window")]
+pub unsafe extern "C" fn leaving_window(win: WinHandle) {
+    leaving_window_impl(win);
+}
+
 /// FFI export for `entering_window`.
 ///
 /// # Safety
 /// Calls C accessor functions with a valid window handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_entering_window(win: WinHandle) {
+    entering_window_impl(win);
+}
+
+/// C export: `entering_window` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions with a valid window handle.
+#[unsafe(export_name = "entering_window")]
+pub unsafe extern "C" fn entering_window(win: WinHandle) {
     entering_window_impl(win);
 }
 
@@ -462,6 +480,15 @@ unsafe fn win_goto_impl(wp: WinHandle) {
 /// Calls C accessor functions with a valid window handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_goto(wp: WinHandle) {
+    win_goto_impl(wp);
+}
+
+/// C export: `win_goto` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions with a valid window handle.
+#[unsafe(export_name = "win_goto")]
+pub unsafe extern "C" fn win_goto(wp: WinHandle) {
     win_goto_impl(wp);
 }
 

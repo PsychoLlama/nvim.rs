@@ -191,6 +191,12 @@ pub extern "C" fn rs_win_init(newp: WinHandle, oldp: WinHandle, flags: c_int) {
     win_init_impl(newp, oldp, flags);
 }
 
+/// C export: `win_init` — eliminates the C thin wrapper.
+#[unsafe(export_name = "win_init")]
+pub extern "C" fn win_init(newp: WinHandle, oldp: WinHandle, flags: c_int) {
+    win_init_impl(newp, oldp, flags);
+}
+
 // =============================================================================
 // Static assertions via tests
 // =============================================================================

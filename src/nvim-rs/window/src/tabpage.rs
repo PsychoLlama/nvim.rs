@@ -1027,12 +1027,30 @@ pub unsafe extern "C" fn rs_unuse_tabpage(tp: TabpageHandle) {
     unuse_tabpage_impl(tp);
 }
 
+/// C export: `unuse_tabpage` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// tp must be a valid, non-null tabpage pointer.
+#[unsafe(export_name = "unuse_tabpage")]
+pub unsafe extern "C" fn unuse_tabpage(tp: TabpageHandle) {
+    unuse_tabpage_impl(tp);
+}
+
 /// FFI export for `use_tabpage`.
 ///
 /// # Safety
 /// tp must be a valid, non-null tabpage pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_use_tabpage(tp: TabpageHandle) {
+    use_tabpage_impl(tp);
+}
+
+/// C export: `use_tabpage` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// tp must be a valid, non-null tabpage pointer.
+#[unsafe(export_name = "use_tabpage")]
+pub unsafe extern "C" fn use_tabpage(tp: TabpageHandle) {
     use_tabpage_impl(tp);
 }
 
@@ -1795,6 +1813,15 @@ pub unsafe extern "C" fn rs_alloc_tabpage() -> TabpageHandle {
 /// Calls C accessor functions. `tp` must be a valid, non-null tabpage.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_free_tabpage(tp: TabpageHandle) {
+    free_tabpage_impl(tp);
+}
+
+/// C export: `free_tabpage` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions. `tp` must be a valid, non-null tabpage.
+#[unsafe(export_name = "free_tabpage")]
+pub unsafe extern "C" fn free_tabpage(tp: TabpageHandle) {
     free_tabpage_impl(tp);
 }
 

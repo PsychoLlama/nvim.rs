@@ -170,6 +170,12 @@ pub extern "C" fn rs_prevwin_curwin() -> WinHandle {
     prevwin_curwin_impl()
 }
 
+/// C export: `prevwin_curwin` — eliminates the C thin wrapper.
+#[unsafe(export_name = "prevwin_curwin")]
+pub extern "C" fn prevwin_curwin() -> WinHandle {
+    prevwin_curwin_impl()
+}
+
 // =============================================================================
 // check_split_disallowed
 // =============================================================================
@@ -200,6 +206,18 @@ fn check_split_disallowed_impl(wp: WinHandle) -> bool {
 /// Returns OK (1) if split is allowed, FAIL (0) otherwise.
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_check_split_disallowed(wp: WinHandle) -> c_int {
+    if check_split_disallowed_impl(wp) {
+        OK
+    } else {
+        FAIL
+    }
+}
+
+/// C export: `check_split_disallowed` — eliminates the C thin wrapper.
+///
+/// Returns OK (1) if split is allowed, FAIL (0) otherwise.
+#[unsafe(export_name = "check_split_disallowed")]
+pub extern "C" fn check_split_disallowed(wp: WinHandle) -> c_int {
     if check_split_disallowed_impl(wp) {
         OK
     } else {

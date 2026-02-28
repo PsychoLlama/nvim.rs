@@ -96,9 +96,6 @@ extern void rs_reset_VIsual_and_resel(void);
 extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
 extern size_t rs_find_ident_under_cursor(char **text, int find_type);
 
-// Phase 9: win_init migration
-extern void rs_win_init(win_T *newp, win_T *oldp, int flags);
-
 // Phase 9: may_trigger_win_scrolled_resized migration
 extern void rs_may_trigger_win_scrolled_resized(void);
 
@@ -136,24 +133,15 @@ extern WinframeResult rs_winframe_find_altwin(win_T *wp, frame_T *altfr_initial)
 
 // New Rust replacements for frame tree operations
 extern void rs_frame_flatten(frame_T *frp);
-extern win_T *rs_winframe_remove(win_T *win, int *dirp, tabpage_T *tp, frame_T **unflat_altfr);
-extern void rs_winframe_restore(win_T *wp, int dir, frame_T *unflat_altfr);
 
 // New Rust replacements for tabpage operations (Phase 2)
 extern tabpage_T *rs_alt_tabpage(void);
 extern void rs_tabpage_move(int nr);
 extern void rs_goto_tabpage(int n);
 
-// New Rust replacements for window transition helpers (Phase 3)
-extern void rs_leaving_window(win_T *win);
-extern void rs_entering_window(win_T *win);
-extern void rs_win_init_empty(win_T *wp);
-
 // New Rust replacements for screen size and scroll helpers (Phase 4)
-extern void rs_win_comp_scroll(win_T *wp);
 extern void rs_win_new_screensize(void);
 extern void rs_win_new_screen_cols(void);
-extern void rs_win_init_size(void);
 extern void rs_snapshot_windows_scroll_size(void);
 
 extern int rs_frame_minheight(frame_T *topfrp, win_T *next_curwin);
@@ -193,14 +181,9 @@ extern void rs_frame_new_height(frame_T *topfrp, int height, int topfirst, int w
 // Colorcolumn
 extern const char *rs_check_colorcolumn(const char *cc, win_T *wp);
 
-// Win exchange / rotate / move_after
+// Win exchange / rotate
 extern void rs_win_exchange(int prenum);
 extern void rs_win_rotate(int upwards, int count);
-extern void rs_win_move_after(win_T *win1, win_T *win2);
-
-// Phase 1: rs_win_split_ins_full absorbs C post-processing
-extern win_T *rs_win_split_ins_full(int size, int flags, win_T *new_wp, int dir,
-                                    frame_T *to_flatten);
 
 // Snapshot lifecycle
 extern void rs_clear_snapshot(tabpage_T *tp, int idx);
@@ -208,44 +191,30 @@ extern void rs_make_snapshot(int idx);
 extern int rs_check_snapshot_rec(frame_T *sn, frame_T *fr);
 extern win_T *rs_restore_snapshot_rec(frame_T *sn, frame_T *fr);
 
-// Phase 1: Utility and validation helpers
+// Utility and validation helpers
 extern bool rs_check_can_set_curbuf_disabled(void);
 extern bool rs_check_can_set_curbuf_forceit(int forceit);
-extern win_T *rs_prevwin_curwin(void);
-extern int rs_check_split_disallowed(win_T *wp);
 
-// Phase 2: Tabpage helpers and check_split_disallowed_err
+// Tabpage helpers and check_split_disallowed_err
 extern void rs_close_tabpage(tabpage_T *tab);
 extern int rs_make_tabpages(int maxcount);
 extern int rs_goto_tabpage_lastused(void);
 extern void rs_goto_tabpage_win(tabpage_T *tp, win_T *wp);
 extern int rs_check_split_disallowed_err(const win_T *wp, Error *err);
 
-// Phase 3: winframe_find_altwin, can_close_floating_windows
-extern win_T *rs_winframe_find_altwin_full(win_T *win, int *dirp, tabpage_T *tp,
-                                           frame_T **altfr);
+// can_close_floating_windows, maximum_wincount, make_windows
 extern int rs_can_close_floating_windows_tp(tabpage_T *tp);
 extern int rs_get_maximum_wincount(frame_T *fr, int height);
 extern int rs_make_windows(int count, int vertical);
 
-// Phase 2: win_split and win_splitmove orchestration
-extern int rs_win_split(int size, int flags);
-extern int rs_win_splitmove(win_T *wp, int size, int flags);
-
-// Phase 3: win_fix_scroll, win_fix_cursor, may_make_initial_scroll_size_snapshot
+// win_fix_scroll, win_fix_cursor, may_make_initial_scroll_size_snapshot
 extern void rs_win_fix_scroll(int resize);
 extern void rs_win_fix_cursor(int normal);
 extern void rs_may_make_initial_scroll_size_snapshot(void);
 extern int rs_get_did_initial_scroll_size_snapshot(void);
 
-// Phase 4: win_new_screen_rows, unuse_tabpage, use_tabpage, win_goto,
-//          restore_snapshot, do_autocmd_winclosed, can_close_in_cmdwin,
-//          set_winbar_win, set_winbar
+// do_autocmd_winclosed, can_close_in_cmdwin, set_winbar_win, set_winbar
 extern void rs_win_new_screen_rows(void);
-extern void rs_unuse_tabpage(tabpage_T *tp);
-extern void rs_use_tabpage(tabpage_T *tp);
-extern void rs_win_goto(win_T *wp);
-extern void rs_restore_snapshot(int idx, int close_curwin);
 extern void rs_do_autocmd_winclosed(win_T *win);
 extern bool rs_can_close_in_cmdwin(win_T *win, Error *err);
 extern int rs_set_winbar_win(win_T *wp, int make_room, int valid_cursor);
@@ -607,14 +576,6 @@ bool check_can_set_curbuf_forceit(int forceit)
   return rs_check_can_set_curbuf_forceit(forceit);
 }
 
-/// @return the current window, unless in the cmdline window and "prevwin" is
-/// set, then return "prevwin".
-win_T *prevwin_curwin(void)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_prevwin_curwin();
-}
-
 // swbuf_goto_win_with_buf: thin wrapper defined in Phase 2 accessors section.
 
 // 'cmdheight' value explicitly set by the user: window commands are allowed to
@@ -687,14 +648,6 @@ void ui_ext_win_position(win_T *wp, bool validate)
   rs_ui_ext_win_position(wp, validate);
 }
 
-/// If "split_disallowed" is set, or "wp"'s buffer is closing, give an error and return FAIL.
-/// Otherwise return OK.
-int check_split_disallowed(const win_T *wp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_check_split_disallowed((win_T *)wp);
-}
-
 /// Like `check_split_disallowed`, but set `err` to the (untranslated) error message on failure and
 /// return false. Otherwise return true.
 /// @see check_split_disallowed
@@ -702,49 +655,6 @@ bool check_split_disallowed_err(const win_T *wp, Error *err)
   FUNC_ATTR_NONNULL_ALL
 {
   return rs_check_split_disallowed_err(wp, err);
-}
-
-// split the current window, implements CTRL-W s and :split
-//
-// "size" is the height or width for the new window, 0 to use half of current
-// height or width.
-//
-// "flags":
-// WSP_ROOM: require enough room for new window
-// WSP_VERT: vertical split.
-// WSP_TOP:  open window at the top-left of the screen (help window).
-// WSP_BOT:  open window at the bottom-right of the screen (quickfix window).
-// WSP_HELP: creating the help window, keep layout snapshot
-// WSP_NOENTER: do not enter the new window or trigger WinNew autocommands
-//
-// return FAIL for failure, OK otherwise
-int win_split(int size, int flags)
-{
-  return rs_win_split(size, flags);
-}
-
-/// When "new_wp" is NULL: split the current window in two.
-/// When "new_wp" is not NULL: insert this window at the far
-/// top/left/right/bottom.
-/// When "to_flatten" is not NULL: flatten this frame before reorganising frames;
-/// remains unflattened on failure.
-///
-/// On failure, if "new_wp" was not NULL, no changes will have been made to the
-/// window layout or sizes.
-/// @return  NULL for failure, or pointer to new window
-win_T *win_split_ins(int size, int flags, win_T *new_wp, int dir, frame_T *to_flatten)
-{
-  return rs_win_split_ins_full(size, flags, new_wp, dir, to_flatten);
-}
-
-// Initialize window "newp" from window "oldp".
-// Used when splitting a window and when creating a new tab page.
-// The windows will both edit the same buffer.
-// WSP_NEWLOC may be specified in flags to prevent the location list from
-// being copied.
-void win_init(win_T *newp, win_T *oldp, int flags)
-{
-  rs_win_init(newp, oldp, flags);
 }
 
 /// Make "count" windows on the screen.
@@ -758,31 +668,6 @@ int make_windows(int count, bool vertical)
 {
   return rs_make_windows(count, vertical ? 1 : 0);
 }
-
-
-/// Move "wp" into a new split in a given direction, possibly relative to the
-/// current window.
-/// "wp" must be valid in the current tabpage.
-/// Returns FAIL for failure, OK otherwise.
-int win_splitmove(win_T *wp, int size, int flags)
-{
-  return rs_win_splitmove(wp, size, flags);
-}
-
-// Move window "win1" to below/right of "win2" and make "win1" the current
-// window.  Only works within the same frame!
-void win_move_after(win_T *win1, win_T *win2)
-{
-  rs_win_move_after(win1, win2);
-}
-
-void leaving_window(win_T *const win) { rs_leaving_window(win); }
-
-void entering_window(win_T *const win) { rs_entering_window(win); }
-
-void win_init_empty(win_T *wp) { rs_win_init_empty(wp); }
-
-void curwin_init(void) { rs_win_init_empty(curwin); }
 
 // can_close_floating_windows deleted: logic migrated to Rust close/win_close.rs (Phase 11)
 
@@ -844,47 +729,6 @@ void win_free_all(void)
 
 #endif
 
-/// Remove a window and its frame from the tree of frames.
-///
-/// @param dirp  set to 'v' or 'h' for direction if 'ea'
-/// @param tp    tab page "win" is in, NULL for current
-/// @param unflat_altfr if not NULL, set to pointer of frame that got
-///                     the space, and it is not flattened
-///
-/// @return      a pointer to the window that got the freed up space.
-win_T *winframe_remove(win_T *win, int *dirp, tabpage_T *tp, frame_T **unflat_altfr)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  return rs_winframe_remove(win, dirp, tp, unflat_altfr);
-}
-
-/// Find the window that will get the freed space from a call to `winframe_remove`.
-/// Makes no changes to the window layout.
-///
-/// @param dirp  set to 'v' or 'h' for the direction where "altfr" will be resized
-///              to fill the space
-/// @param tp    tab page "win" is in, NULL for current
-/// @param altfr if not NULL, set to pointer of frame that will get the space
-///
-/// @return      a pointer to the window that will get the freed up space, or NULL
-///              if there is no other non-float to receive the space.
-win_T *winframe_find_altwin(win_T *win, int *dirp, tabpage_T *tp, frame_T **altfr)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  return rs_winframe_find_altwin_full(win, dirp, tp, altfr);
-}
-
-
-/// Undo changes from a prior call to winframe_remove, also restoring lost
-/// vertical separators and statuslines, and changed window positions for
-/// windows within "unflat_altfr".
-/// Caller must ensure no other changes were made to the layout or window sizes!
-void winframe_restore(win_T *wp, int dir, frame_T *unflat_altfr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_winframe_restore(wp, dir, unflat_altfr);
-}
-
 // Return the tabpage that will be used if the current one is closed.
 static tabpage_T *alt_tabpage(void)
 {
@@ -917,17 +761,10 @@ static void frame_new_width(frame_T *topfrp, int width, bool leftfirst, bool wfw
 /// Used by ":bdel" and ":only".
 ///
 /// @param forceit  always hide all other windows
-/// Store the relevant window pointers for tab page "tp".  To be used before
-/// use_tabpage().
-void unuse_tabpage(tabpage_T *tp) { rs_unuse_tabpage(tp); }
 
 // When switching tabpage, handle other side-effects in command_height(), but
 // avoid setting frame sizes which are still correct.
 static bool command_frame_height = true;
-
-/// Set the relevant pointers to use tab page "tp".  May want to call
-/// unuse_tabpage() first.
-void use_tabpage(tabpage_T *tp) { rs_use_tabpage(tp); }
 
 // Phase 12 compound C accessors for rs_win_alloc_first / rs_win_alloc_firstwin
 // / rs_win_alloc_aucmd_win / rs_win_free_all
@@ -1004,24 +841,8 @@ void nvim_kv_destroy_aucmd_win_vec(void) { kv_destroy(aucmd_win_vec); }
 /// curwin = NULL.
 void nvim_set_curwin_null(void) { curwin = NULL; }
 
-extern void rs_win_alloc_first(void);
 extern int rs_win_alloc_firstwin(win_T *oldwin);
-extern void rs_win_alloc_aucmd_win(int idx);
 extern void rs_win_free_all(void);
-
-// Allocate the first window and put an empty buffer in it.
-// Only called from main().
-void win_alloc_first(void)
-{
-  rs_win_alloc_first();
-}
-
-// Init `aucmd_win[idx]`. This can only be done after the first window
-// is fully initialized, thus it can't be in win_alloc_first().
-void win_alloc_aucmd_win(int idx)
-{
-  rs_win_alloc_aucmd_win(idx);
-}
 
 // Allocate the first window or the first window in a new tab page.
 // When "oldwin" is NULL create an empty buffer for it.
@@ -1031,9 +852,6 @@ static int win_alloc_firstwin(win_T *oldwin)
 {
   return rs_win_alloc_firstwin(oldwin);
 }
-
-// Initialize the window and frame size to the maximum.
-void win_init_size(void) { rs_win_init_size(); }
 
 // =============================================================================
 // Phase 12 compound C accessors for rs_alloc_tabpage / rs_free_tabpage
@@ -1108,17 +926,6 @@ extern tabpage_T *rs_alloc_tabpage(void);
 static tabpage_T *alloc_tabpage(void)
 {
   return rs_alloc_tabpage();
-}
-
-// =============================================================================
-// free_tabpage: thin wrapper calling rs_free_tabpage
-// =============================================================================
-
-extern void rs_free_tabpage(tabpage_T *tp);
-
-void free_tabpage(tabpage_T *tp)
-{
-  rs_free_tabpage(tp);
 }
 
 // =============================================================================
@@ -1267,14 +1074,6 @@ void tabpage_move(int nr)
   rs_tabpage_move(nr);
 }
 
-/// Go to another window.
-/// When jumping to another buffer, stop Visual mode.  Do this before
-/// changing windows so we can yank the selection into the '*' register.
-/// (note: this may trigger ModeChanged autocommand!)
-/// When jumping to another window on the same buffer, adjust its cursor
-/// position to keep the same Visual area.
-void win_goto(win_T *wp) { rs_win_goto(wp); }
-
 /// Make window `wp` the current window.
 ///
 /// @warning Autocmds may close the window immediately, so caller must check
@@ -1373,18 +1172,6 @@ extern win_T *rs_win_alloc(win_T *after, int hidden);
 win_T *win_alloc(win_T *after, bool hidden)
 {
   return rs_win_alloc(after, hidden ? 1 : 0);
-}
-
-// =============================================================================
-// free_wininfo: thin wrapper calling rs_free_wininfo
-// =============================================================================
-
-extern void rs_free_wininfo(WinInfo *wip, buf_T *bp);
-
-// Free one WinInfo.
-void free_wininfo(WinInfo *wip, buf_T *bp)
-{
-  rs_free_wininfo(wip, bp);
 }
 
 // Phase 12 compound C accessors for rs_win_free / rs_win_free_grid
@@ -1491,16 +1278,7 @@ void nvim_win_grid_free(win_T *wp) { grid_free(&wp->w_grid_alloc); }
 /// CLEAR_FIELD the window's grid (for reinit).
 void nvim_win_grid_clear_field(win_T *wp) { CLEAR_FIELD(wp->w_grid_alloc); }
 
-extern void rs_win_free(win_T *wp, tabpage_T *tp);
 extern void rs_win_free_grid(win_T *wp, int reinit);
-
-/// Remove window 'wp' from the window list and free the structure.
-///
-/// @param tp  tab page "win" is in, NULL for current
-void win_free(win_T *wp, tabpage_T *tp)
-{
-  rs_win_free(wp, tp);
-}
 
 void win_free_grid(win_T *wp, bool reinit)
 {
@@ -1546,8 +1324,6 @@ void win_set_inner_size(win_T *wp, bool valid_cursor)
   rs_win_set_inner_size(wp, valid_cursor ? 1 : 0);
 }
 
-void win_comp_scroll(win_T *wp) { rs_win_comp_scroll(wp); }
-
 // command_height: thin wrapper defined in Phase 3 accessors section.
 
 /// Add or remove window bar from window "wp".
@@ -1576,13 +1352,6 @@ void set_winbar(bool make_room) { rs_set_winbar(make_room ? 1 : 0); }
 // fr_next
 // fr_child
 // fr_win (only valid for the old curwin, NULL otherwise)
-
-/// Restore a previously created snapshot, if there is any.
-/// This is only done if the screen size didn't change and the window layout is
-/// still the same.
-///
-/// @param close_curwin  closing current window
-void restore_snapshot(int idx, int close_curwin) { rs_restore_snapshot(idx, close_curwin); }
 
 /// Simple int comparison function for use with qsort()
 /// Check "cc" as 'colorcolumn' and update the members of "wp" (thin wrapper).

@@ -813,6 +813,12 @@ pub extern "C" fn rs_win_move_after(win1: WinHandle, win2: WinHandle) {
     unsafe { win_move_after_impl(win1, win2) }
 }
 
+/// C export: `win_move_after` — eliminates the C thin wrapper.
+#[unsafe(export_name = "win_move_after")]
+pub extern "C" fn win_move_after(win1: WinHandle, win2: WinHandle) {
+    unsafe { win_move_after_impl(win1, win2) }
+}
+
 /// FFI: Check if window can be exchanged.
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_exchange_can_exchange(wp: WinHandle) -> c_int {

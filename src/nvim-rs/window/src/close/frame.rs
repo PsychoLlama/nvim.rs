@@ -298,6 +298,21 @@ pub unsafe extern "C" fn rs_winframe_remove(
     winframe_remove_impl(win, dirp, tp, unflat_altfr)
 }
 
+/// C export: `winframe_remove` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// `win` must be a valid window handle. `dirp` must be a valid pointer.
+/// `tp` may be null (meaning current tabpage). `unflat_altfr` may be null.
+#[unsafe(export_name = "winframe_remove")]
+pub unsafe extern "C" fn winframe_remove(
+    win: WinHandle,
+    dirp: *mut c_int,
+    tp: *mut std::ffi::c_void,
+    unflat_altfr: *mut *mut Frame,
+) -> WinHandle {
+    winframe_remove_impl(win, dirp, tp, unflat_altfr)
+}
+
 /// FFI: Undo `winframe_remove`, restoring the frame tree.
 ///
 /// Replaces C `winframe_restore()`.
@@ -306,6 +321,15 @@ pub unsafe extern "C" fn rs_winframe_remove(
 /// All pointer arguments must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_winframe_restore(wp: WinHandle, dir: c_int, unflat_altfr: *mut Frame) {
+    winframe_restore_impl(wp, dir, unflat_altfr);
+}
+
+/// C export: `winframe_restore` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[unsafe(export_name = "winframe_restore")]
+pub unsafe extern "C" fn winframe_restore(wp: WinHandle, dir: c_int, unflat_altfr: *mut Frame) {
     winframe_restore_impl(wp, dir, unflat_altfr);
 }
 
@@ -842,8 +866,7 @@ pub extern "C" fn rs_winframe_find_altwin(
 /// `win` must be valid. `dirp` must be a valid non-null pointer.
 /// `tp` and `altfr_out` may be null.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_winframe_find_altwin_full(
+unsafe fn winframe_find_altwin_full_impl(
     win: WinHandle,
     dirp: *mut c_int,
     tp: TabpageHandle,
@@ -855,7 +878,6 @@ pub unsafe extern "C" fn rs_winframe_find_altwin_full(
     }
 
     // Get the initial alternate frame via win_altframe logic.
-    // (win_altframe never returns the alt_tabpage path here since we guarded above.)
     let frp2 = win_altframe_impl(win);
 
     // Refine: find the best altframe considering wfh/wfw constraints.
@@ -872,6 +894,33 @@ pub unsafe extern "C" fn rs_winframe_find_altwin_full(
     }
 
     wp
+}
+
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_winframe_find_altwin_full(
+    win: WinHandle,
+    dirp: *mut c_int,
+    tp: TabpageHandle,
+    altfr_out: *mut *mut Frame,
+) -> WinHandle {
+    winframe_find_altwin_full_impl(win, dirp, tp, altfr_out)
+}
+
+/// C export: `winframe_find_altwin` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// `win` must be valid. `dirp` must be a valid non-null pointer.
+/// `tp` and `altfr_out` may be null.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[unsafe(export_name = "winframe_find_altwin")]
+pub unsafe extern "C" fn winframe_find_altwin(
+    win: WinHandle,
+    dirp: *mut c_int,
+    tp: TabpageHandle,
+    altfr_out: *mut *mut Frame,
+) -> WinHandle {
+    winframe_find_altwin_full_impl(win, dirp, tp, altfr_out)
 }
 
 /// FFI: Check if frame should be flattened after removal.

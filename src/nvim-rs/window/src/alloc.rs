@@ -34,6 +34,7 @@ extern "C" {
     fn nvim_get_firstwin() -> WinHandle;
     fn nvim_get_lastwin() -> WinHandle;
     fn nvim_get_curtab() -> TabpageHandle;
+    fn nvim_get_curwin() -> WinHandle;
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
     fn nvim_tabpage_get_lastwin(tp: TabpageHandle) -> WinHandle;
 
@@ -262,6 +263,27 @@ pub unsafe extern "C" fn rs_win_init_empty(wp: WinHandle) {
     win_init_empty_impl(wp);
 }
 
+/// C export: `win_init_empty` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions with a valid window handle.
+#[unsafe(export_name = "win_init_empty")]
+pub unsafe extern "C" fn win_init_empty(wp: WinHandle) {
+    win_init_empty_impl(wp);
+}
+
+/// C export: `curwin_init` — eliminates the C thin wrapper.
+///
+/// Initializes the current window with an empty buffer.
+///
+/// # Safety
+/// Must be called from a valid initialized context.
+#[unsafe(export_name = "curwin_init")]
+pub unsafe extern "C" fn curwin_init() {
+    let curwin = nvim_get_curwin();
+    win_init_empty_impl(curwin);
+}
+
 // =============================================================================
 // rs_new_frame -- allocate a frame_T and link it to a window
 // =============================================================================
@@ -465,6 +487,15 @@ pub unsafe extern "C" fn rs_free_wininfo(wip: *mut std::ffi::c_void, bp: crate::
     free_wininfo_impl(wip, bp);
 }
 
+/// C export: `free_wininfo` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// `wip` must be a valid, non-null WinInfo pointer.
+#[unsafe(export_name = "free_wininfo")]
+pub unsafe extern "C" fn free_wininfo(wip: *mut std::ffi::c_void, bp: crate::BufHandle) {
+    free_wininfo_impl(wip, bp);
+}
+
 // =============================================================================
 // Phase 4: rs_win_alloc_first + rs_win_alloc_firstwin + rs_win_alloc_aucmd_win
 // =============================================================================
@@ -580,6 +611,15 @@ pub unsafe extern "C" fn rs_win_alloc_first() {
     win_alloc_first_impl();
 }
 
+/// C export: `win_alloc_first` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Must only be called once at startup.
+#[unsafe(export_name = "win_alloc_first")]
+pub unsafe extern "C" fn win_alloc_first() {
+    win_alloc_first_impl();
+}
+
 /// Initialize `aucmd_win[idx]` as a hidden floating window.
 ///
 /// Port of C `win_alloc_aucmd_win()`. Must only be called after
@@ -589,6 +629,15 @@ pub unsafe extern "C" fn rs_win_alloc_first() {
 /// Must only be called after startup.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_alloc_aucmd_win(idx: c_int) {
+    nvim_win_alloc_aucmd_win_impl(idx);
+}
+
+/// C export: `win_alloc_aucmd_win` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Must only be called after startup.
+#[unsafe(export_name = "win_alloc_aucmd_win")]
+pub unsafe extern "C" fn win_alloc_aucmd_win(idx: c_int) {
     nvim_win_alloc_aucmd_win_impl(idx);
 }
 

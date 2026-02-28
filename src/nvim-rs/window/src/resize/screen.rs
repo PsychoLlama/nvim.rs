@@ -123,6 +123,15 @@ pub unsafe extern "C" fn rs_win_comp_scroll(wp: WinHandle) {
     win_comp_scroll_impl(wp);
 }
 
+/// C export: `win_comp_scroll` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions with a valid window handle.
+#[unsafe(export_name = "win_comp_scroll")]
+pub unsafe extern "C" fn win_comp_scroll(wp: WinHandle) {
+    win_comp_scroll_impl(wp);
+}
+
 // =============================================================================
 // win_new_screen_cols
 // =============================================================================
@@ -250,6 +259,15 @@ unsafe fn win_init_size_impl() {
 /// Calls C accessor functions. firstwin and topframe must be initialized.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_init_size() {
+    win_init_size_impl();
+}
+
+/// C export: `win_init_size` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions. firstwin and topframe must be initialized.
+#[unsafe(export_name = "win_init_size")]
+pub unsafe extern "C" fn win_init_size() {
     win_init_size_impl();
 }
 

@@ -304,6 +304,15 @@ pub unsafe extern "C" fn rs_restore_snapshot(idx: c_int, close_curwin: c_int) {
     restore_snapshot_impl(idx, close_curwin != 0);
 }
 
+/// C export: `restore_snapshot` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(export_name = "restore_snapshot")]
+pub unsafe extern "C" fn restore_snapshot(idx: c_int, close_curwin: c_int) {
+    restore_snapshot_impl(idx, close_curwin != 0);
+}
+
 // =============================================================================
 // Tests
 // =============================================================================

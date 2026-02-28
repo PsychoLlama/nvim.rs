@@ -53,4 +53,33 @@ typedef struct {
   int32_t skipcol;
 } WinViewportSnapshot;
 
+// Declarations for Rust-exported window functions (Phase 15).
+// These replace the auto-generated declarations that were lost when the
+// corresponding C thin wrappers were deleted.
+win_T *prevwin_curwin(void);
+int check_split_disallowed(const win_T *wp);
+int win_split(int size, int flags);
+win_T *win_split_ins(int size, int flags, win_T *new_wp, int dir, frame_T *to_flatten);
+void win_init(win_T *newp, win_T *oldp, int flags);
+int win_splitmove(win_T *wp, int size, int flags);
+void win_move_after(win_T *win1, win_T *win2);
+void leaving_window(win_T *win);
+void entering_window(win_T *win);
+void win_init_empty(win_T *wp);
+void curwin_init(void);
+win_T *winframe_remove(win_T *win, int *dirp, tabpage_T *tp, frame_T **unflat_altfr);
+win_T *winframe_find_altwin(win_T *win, int *dirp, tabpage_T *tp, frame_T **altfr);
+void winframe_restore(win_T *wp, int dir, frame_T *unflat_altfr);
+void unuse_tabpage(tabpage_T *tp);
+void use_tabpage(tabpage_T *tp);
+void win_alloc_first(void);
+void win_alloc_aucmd_win(int idx);
+void win_init_size(void);
+void free_tabpage(tabpage_T *tp);
+void win_goto(win_T *wp);
+void free_wininfo(WinInfo *wip, buf_T *bp);
+void win_free(win_T *wp, tabpage_T *tp);
+void win_comp_scroll(win_T *wp);
+void restore_snapshot(int idx, int close_curwin);
+
 #include "window_shim.h.generated.h"
