@@ -1602,6 +1602,16 @@ void *nvim_qf_regmatch_create_ic(void *prog)
   return rm;
 }
 
+/// Create a regmatch_T on the heap with given ic flag, assign the given prog.
+/// Returns an opaque handle. The caller owns the memory; free after extracting prog.
+void *nvim_qf_regmatch_create(void *prog, bool ic)
+{
+  regmatch_T *rm = xcalloc(1, sizeof(regmatch_T));
+  rm->rm_ic = ic;
+  rm->regprog = (regprog_T *)prog;
+  return rm;
+}
+
 /// Extract the regprog from a regmatch_T and free the regmatch_T struct.
 /// Returns the prog (which may have been updated by vim_regexec).
 void *nvim_qf_regmatch_extract_prog(void *rm_void)
@@ -3516,28 +3526,8 @@ void nvim_copy_option_part_comma(char **pp, char *buf, int maxlen)
 //   nvim_qf_get_curwin, nvim_qf_win_get_llist, rs_ll_free_all, nvim_win_set_llist.
 
 // nvim_hgr_compile_and_search deleted (Phase 3): list creation and finalization inlined into Rust.
-// The regex compile+search+free is now nvim_hgr_regex_search below.
-
-/// Get lang suffix from help pattern (strips @lang from end of arg). Returns pointer into arg.
-char *nvim_check_help_lang(char *arg) { return check_help_lang(arg); }
-
-/// Compile regex from pat, search all help files, free regex. Returns true on success.
-bool nvim_hgr_regex_search(char *pat, void *qi_void)
-{
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  char *const lang = check_help_lang(pat);
-  regmatch_T regmatch = {
-    .regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING),
-    .rm_ic = false,
-  };
-  if (regmatch.regprog == NULL) {
-    return false;
-  }
-  qf_list_T *const qfl = &qi->qf_lists[qi->qf_curlist];
-  rs_hgr_search_in_rtp(qfl, &regmatch, lang);
-  vim_regfree(regmatch.regprog);
-  return true;
-}
+// nvim_check_help_lang deleted (Phase 16): call check_help_lang directly from Rust.
+// nvim_hgr_regex_search deleted (Phase 16): inlined into rs_ex_helpgrep in Rust commands.rs.
 
 /// Save p_cpo and set it to empty. Returns the old value as an opaque pointer.
 void *nvim_save_cpo_set_empty(void)

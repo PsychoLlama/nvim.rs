@@ -35,8 +35,15 @@ extern "C" {
     fn nvim_incr_quickfix_busy();
     fn nvim_decr_quickfix_busy();
     // nvim_hgr_compile_and_search deleted (Phase 3): inlined into Rust below.
-    fn nvim_hgr_regex_search(pat: *mut c_char, qi: QfInfoHandleMut) -> bool;
+    // nvim_hgr_regex_search deleted (Phase 16): inlined into rs_ex_helpgrep below.
     fn nvim_eap_get_cmdlinep_deref_make(eap: EapHandle) -> *mut c_char;
+    // Phase 16: helpgrep regex inlining
+    fn check_help_lang(arg: *mut c_char) -> *mut c_char;
+    fn nvim_qf_vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
+    fn nvim_qf_regmatch_create(prog: *mut c_void, ic: bool) -> *mut c_void;
+    fn nvim_qf_regmatch_extract_prog(rm: *mut c_void) -> *mut c_void;
+    fn nvim_qf_vim_regfree(prog: *mut c_void);
+    fn rs_hgr_search_in_rtp(qfl: *mut c_void, regmatch: *mut c_void, lang: *const c_char);
     // nvim_hgr_restore_cpo renamed to nvim_restore_cpo (Phase 4)
     fn nvim_restore_cpo(saved_cpo: *mut c_void);
     fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: *const c_void);
@@ -1132,8 +1139,21 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
     rs_qf_cmdtitle(cmdline, title_buf.as_mut_ptr(), title_buf.len());
     crate::rs_qf_new_list(qi, title_buf.as_ptr());
 
-    // 4b. Compile regex, search help files, free regex
-    let updated = nvim_hgr_regex_search(eap_arg, qi);
+    // 4b. Compile regex, search help files, free regex.
+    // Inlined from nvim_hgr_regex_search (Phase 16).
+    // RE_MAGIC=256, RE_STRING=4
+    let lang = check_help_lang(eap_arg);
+    let prog = nvim_qf_vim_regcomp(eap_arg.cast_const(), 256 + 4);
+    let updated = if prog.is_null() {
+        false
+    } else {
+        let regmatch = nvim_qf_regmatch_create(prog, false);
+        let qfl = nvim_qf_get_curlist_mut(qi);
+        rs_hgr_search_in_rtp(qfl, regmatch, lang.cast_const());
+        let prog_out = nvim_qf_regmatch_extract_prog(regmatch);
+        nvim_qf_vim_regfree(prog_out);
+        true
+    };
 
     // 4c. Finalize the list (set ptr/index/nonevalid/changedtick)
     if updated {
