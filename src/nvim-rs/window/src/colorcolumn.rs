@@ -200,3 +200,13 @@ unsafe fn check_colorcolumn_impl(cc: *const c_char, wp: WinHandle) -> *const c_c
 pub unsafe extern "C" fn rs_check_colorcolumn(cc: *const c_char, wp: WinHandle) -> *const c_char {
     check_colorcolumn_impl(cc, wp)
 }
+
+/// C export: `check_colorcolumn` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// - `cc` must be NULL or a valid NUL-terminated C string.
+/// - `wp` must be NULL or a valid window handle.
+#[unsafe(export_name = "check_colorcolumn")]
+pub unsafe extern "C" fn check_colorcolumn(cc: *const c_char, wp: WinHandle) -> *const c_char {
+    check_colorcolumn_impl(cc, wp)
+}

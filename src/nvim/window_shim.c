@@ -96,9 +96,6 @@ extern void rs_reset_VIsual_and_resel(void);
 extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
 extern size_t rs_find_ident_under_cursor(char **text, int find_type);
 
-// Phase 9: may_trigger_win_scrolled_resized migration
-extern void rs_may_trigger_win_scrolled_resized(void);
-
 // Rust fold FFI declarations
 extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
 extern void rs_clearFolding(win_T *win);
@@ -137,11 +134,6 @@ extern void rs_frame_flatten(frame_T *frp);
 // New Rust replacements for tabpage operations
 extern tabpage_T *rs_alt_tabpage(void);
 
-// New Rust replacements for screen size and scroll helpers (Phase 4)
-extern void rs_win_new_screensize(void);
-extern void rs_win_new_screen_cols(void);
-extern void rs_snapshot_windows_scroll_size(void);
-
 extern int rs_frame_minheight(frame_T *topfrp, win_T *next_curwin);
 extern int rs_win_comp_pos(void);
 extern void rs_frame_comp_pos(frame_T *topfrp, int *row, int *col);
@@ -168,16 +160,12 @@ extern int rs_diffopt_closeoff(void);
 
 // Pure calculations and thin wrappers
 extern int64_t rs_win_default_scroll(win_T *wp);
-extern void rs_scroll_to_fraction(win_T *wp, int prev_height);
 extern void rs_win_setheight(int height);
 extern void rs_win_setwidth(int width);
 
 // Height/width setters
 extern void rs_frame_new_width(frame_T *topfrp, int width, int leftfirst, int wfw);
 extern void rs_frame_new_height(frame_T *topfrp, int height, int topfirst, int wfh, int set_ch);
-
-// Colorcolumn
-extern const char *rs_check_colorcolumn(const char *cc, win_T *wp);
 
 // Win exchange / rotate
 extern void rs_win_exchange(int prenum);
@@ -202,14 +190,11 @@ extern int rs_can_close_floating_windows_tp(tabpage_T *tp);
 extern int rs_get_maximum_wincount(frame_T *fr, int height);
 extern int rs_make_windows(int count, int vertical);
 
-// win_fix_scroll, win_fix_cursor, may_make_initial_scroll_size_snapshot
+// win_fix_scroll, win_fix_cursor
 extern void rs_win_fix_scroll(int resize);
 extern void rs_win_fix_cursor(int normal);
-extern void rs_may_make_initial_scroll_size_snapshot(void);
-extern int rs_get_did_initial_scroll_size_snapshot(void);
 
 // do_autocmd_winclosed, can_close_in_cmdwin, set_winbar_win, set_winbar
-extern void rs_win_new_screen_rows(void);
 extern void rs_do_autocmd_winclosed(win_T *win);
 extern bool rs_can_close_in_cmdwin(win_T *win, Error *err);
 extern int rs_set_winbar_win(win_T *wp, int make_room, int valid_cursor);
@@ -1228,37 +1213,16 @@ void win_free_grid(win_T *wp, bool reinit)
   rs_win_free_grid(wp, reinit ? 1 : 0);
 }
 
-void win_new_screensize(void) { rs_win_new_screensize(); }
-/// Called from win_new_screensize() after Rows changed.
-///
-/// This only does the current tab page, others must be done when made active.
-void win_new_screen_rows(void) { rs_win_new_screen_rows(); }
-
-/// Called from win_new_screensize() after Columns changed.
-void win_new_screen_cols(void) { rs_win_new_screen_cols(); }
-
-/// Make a snapshot of all the window scroll positions and sizes of the current
-/// tab page.
-void snapshot_windows_scroll_size(void) { rs_snapshot_windows_scroll_size(); }
-
-void may_make_initial_scroll_size_snapshot(void) { rs_may_make_initial_scroll_size_snapshot(); }
-
-/// Trigger WinScrolled and/or WinResized if any window in the current tab page
-/// scrolled or changed size.
-void may_trigger_win_scrolled_resized(void)
-{
-  rs_may_trigger_win_scrolled_resized();
-}
+// win_new_screensize, win_new_screen_rows, win_new_screen_cols,
+// snapshot_windows_scroll_size, may_make_initial_scroll_size_snapshot,
+// may_trigger_win_scrolled_resized: exported directly from Rust (Phase 15)
 
 #define FRACTION_MULT   16384
 
 void win_fix_scroll(bool resize) { rs_win_fix_scroll(resize ? 1 : 0); }
 static void win_fix_cursor(bool normal) { rs_win_fix_cursor(normal ? 1 : 0); }
 
-void scroll_to_fraction(win_T *wp, int prev_height)
-{
-  rs_scroll_to_fraction(wp, prev_height);
-}
+// scroll_to_fraction: exported directly from Rust (Phase 15)
 
 extern void rs_win_set_inner_size(win_T *wp, int valid_cursor);
 
@@ -1296,17 +1260,7 @@ void set_winbar(bool make_room) { rs_set_winbar(make_room ? 1 : 0); }
 // fr_child
 // fr_win (only valid for the old curwin, NULL otherwise)
 
-/// Simple int comparison function for use with qsort()
-/// Check "cc" as 'colorcolumn' and update the members of "wp" (thin wrapper).
-///
-/// @param cc  when NULL: use "wp->w_p_cc"
-/// @param wp  when NULL: only parse "cc"
-///
-/// @return error message, NULL if it's OK.
-const char *check_colorcolumn(char *cc, win_T *wp)
-{
-  return rs_check_colorcolumn(cc, wp);
-}
+// check_colorcolumn: exported directly from Rust (Phase 15)
 
 int nvim_win_get_empty_rows(win_T *wp) { return wp ? wp->w_empty_rows : 0; }
 void nvim_win_set_leftcol(win_T *wp, int val) { if (wp) { wp->w_leftcol = (colnr_T)val; } }
@@ -2082,8 +2036,7 @@ void nvim_set_curwin_from_wp(win_T *wp)
 /// Get the w_buffer field raw pointer.
 buf_T *nvim_win_get_buffer_raw(win_T *wp) { return wp ? wp->w_buffer : NULL; }
 
-extern void rs_close_others(int message, int forceit);
-void close_others(int message, int forceit) { rs_close_others(message, forceit); }
+// close_others: exported directly from Rust (Phase 15)
 
 // Phase 6 accessors: close_windows
 
@@ -2139,8 +2092,7 @@ void nvim_ui_call_win_viewport_wrapper(int grid, int win, int topline, int botli
   ui_call_win_viewport(grid, win, topline, botline, curline, curcol, line_count, delta);
 }
 
-extern void rs_ui_ext_win_viewport(win_T *wp);
-void ui_ext_win_viewport(win_T *wp) { rs_ui_ext_win_viewport(wp); }
+// ui_ext_win_viewport: exported directly from Rust (Phase 15)
 
 // Phase 6 accessors: tabpage_check_windows + win_ui_flush
 

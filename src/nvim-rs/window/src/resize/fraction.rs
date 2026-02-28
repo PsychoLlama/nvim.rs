@@ -284,6 +284,12 @@ pub extern "C" fn rs_scroll_to_fraction(wp: WinHandle, prev_height: c_int) {
     scroll_to_fraction_impl(wp, prev_height);
 }
 
+/// C export: `scroll_to_fraction` — eliminates the C thin wrapper.
+#[unsafe(export_name = "scroll_to_fraction")]
+pub extern "C" fn scroll_to_fraction(wp: WinHandle, prev_height: c_int) {
+    scroll_to_fraction_impl(wp, prev_height);
+}
+
 // =============================================================================
 // Tests
 // =============================================================================

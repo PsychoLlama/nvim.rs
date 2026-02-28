@@ -169,6 +169,12 @@ pub extern "C" fn rs_may_make_initial_scroll_size_snapshot() {
     may_make_initial_scroll_size_snapshot_impl();
 }
 
+/// C export: `may_make_initial_scroll_size_snapshot` — eliminates the C thin wrapper.
+#[unsafe(export_name = "may_make_initial_scroll_size_snapshot")]
+pub extern "C" fn may_make_initial_scroll_size_snapshot() {
+    may_make_initial_scroll_size_snapshot_impl();
+}
+
 /// FFI export: get the did_initial_scroll_size_snapshot flag.
 ///
 /// Used by C's `may_trigger_win_scrolled_resized` in window_shim.c.
@@ -829,6 +835,12 @@ fn may_trigger_win_scrolled_resized_impl() {
 /// FFI export for `may_trigger_win_scrolled_resized`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_may_trigger_win_scrolled_resized() {
+    may_trigger_win_scrolled_resized_impl();
+}
+
+/// C export: `may_trigger_win_scrolled_resized` — eliminates the C thin wrapper.
+#[unsafe(export_name = "may_trigger_win_scrolled_resized")]
+pub extern "C" fn may_trigger_win_scrolled_resized() {
     may_trigger_win_scrolled_resized_impl();
 }
 

@@ -97,4 +97,16 @@ win_T *buf_jump_open_tab(buf_T *buf);
 win_T *swbuf_goto_win_with_buf(buf_T *buf);
 void command_height(void);
 
+// Phase 15.3: Screen/scroll/UI
+void win_new_screensize(void);
+void win_new_screen_rows(void);
+void win_new_screen_cols(void);
+void snapshot_windows_scroll_size(void);
+void may_make_initial_scroll_size_snapshot(void);
+void may_trigger_win_scrolled_resized(void);
+void scroll_to_fraction(win_T *wp, int prev_height);
+const char *check_colorcolumn(char *cc, win_T *wp);
+void close_others(int message, int forceit);
+void ui_ext_win_viewport(win_T *wp);
+
 #include "window_shim.h.generated.h"

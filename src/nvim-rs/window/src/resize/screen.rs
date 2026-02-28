@@ -172,6 +172,15 @@ pub unsafe extern "C" fn rs_win_new_screen_cols() {
     win_new_screen_cols_impl();
 }
 
+/// C export: `win_new_screen_cols` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions and Rust resize functions.
+#[unsafe(export_name = "win_new_screen_cols")]
+pub unsafe extern "C" fn win_new_screen_cols() {
+    win_new_screen_cols_impl();
+}
+
 // =============================================================================
 // win_new_screensize
 // =============================================================================
@@ -217,6 +226,15 @@ unsafe fn win_new_screensize_impl() {
 /// Calls C accessor functions and Rust resize functions.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_new_screensize() {
+    win_new_screensize_impl();
+}
+
+/// C export: `win_new_screensize` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions and Rust resize functions.
+#[unsafe(export_name = "win_new_screensize")]
+pub unsafe extern "C" fn win_new_screensize() {
     win_new_screensize_impl();
 }
 
@@ -302,6 +320,15 @@ pub unsafe extern "C" fn rs_snapshot_windows_scroll_size() {
     snapshot_windows_scroll_size_impl();
 }
 
+/// C export: `snapshot_windows_scroll_size` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(export_name = "snapshot_windows_scroll_size")]
+pub unsafe extern "C" fn snapshot_windows_scroll_size() {
+    snapshot_windows_scroll_size_impl();
+}
+
 // =============================================================================
 // win_new_screen_rows
 // =============================================================================
@@ -348,5 +375,14 @@ unsafe fn win_new_screen_rows_impl() {
 /// Calls C accessor functions.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_new_screen_rows() {
+    win_new_screen_rows_impl();
+}
+
+/// C export: `win_new_screen_rows` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(export_name = "win_new_screen_rows")]
+pub unsafe extern "C" fn win_new_screen_rows() {
     win_new_screen_rows_impl();
 }

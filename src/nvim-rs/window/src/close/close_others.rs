@@ -205,6 +205,15 @@ pub unsafe extern "C" fn rs_close_others(message: c_int, forceit: c_int) {
     close_others_impl(message, forceit);
 }
 
+/// C export: `close_others` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Accesses global Neovim state via C accessor functions.
+#[unsafe(export_name = "close_others")]
+pub unsafe extern "C" fn close_others(message: c_int, forceit: c_int) {
+    close_others_impl(message, forceit);
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

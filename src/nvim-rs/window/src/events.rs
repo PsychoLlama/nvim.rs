@@ -706,3 +706,12 @@ unsafe fn ui_ext_win_viewport_impl(wp: WinHandle) {
 pub unsafe extern "C" fn rs_ui_ext_win_viewport(wp: WinHandle) {
     ui_ext_win_viewport_impl(wp);
 }
+
+/// C export: `ui_ext_win_viewport` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Accesses global Neovim state via C accessor functions.
+#[unsafe(export_name = "ui_ext_win_viewport")]
+pub unsafe extern "C" fn ui_ext_win_viewport(wp: WinHandle) {
+    ui_ext_win_viewport_impl(wp);
+}
