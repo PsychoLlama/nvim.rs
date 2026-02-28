@@ -56,6 +56,8 @@ typedef struct {
 // Declarations for Rust-exported window functions (Phase 15).
 // These replace the auto-generated declarations that were lost when the
 // corresponding C thin wrappers were deleted.
+
+// Phase 15.1: Core window operations
 win_T *prevwin_curwin(void);
 int check_split_disallowed(const win_T *wp);
 int win_split(int size, int flags);
@@ -81,5 +83,18 @@ void free_wininfo(WinInfo *wip, buf_T *bp);
 void win_free(win_T *wp, tabpage_T *tp);
 void win_comp_scroll(win_T *wp);
 void restore_snapshot(int idx, int close_curwin);
+
+// Phase 15.2: Tabpage and navigation
+int win_new_tabpage(int after, char *filename);
+int make_tabpages(int maxcount);
+void close_tabpage(tabpage_T *tp);
+void goto_tabpage(int n);
+void goto_tabpage_win(tabpage_T *tp, win_T *wp);
+void tabpage_move(int nr);
+void win_fix_current_dir(void);
+win_T *buf_jump_open_win(buf_T *buf);
+win_T *buf_jump_open_tab(buf_T *buf);
+win_T *swbuf_goto_win_with_buf(buf_T *buf);
+void command_height(void);
 
 #include "window_shim.h.generated.h"

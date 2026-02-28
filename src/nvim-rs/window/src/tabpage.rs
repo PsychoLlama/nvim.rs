@@ -905,6 +905,15 @@ pub unsafe extern "C" fn rs_tabpage_move(nr: c_int) {
     tabpage_move_impl(nr);
 }
 
+/// C export: `tabpage_move` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(export_name = "tabpage_move")]
+pub unsafe extern "C" fn tabpage_move(nr: c_int) {
+    tabpage_move_impl(nr);
+}
+
 /// FFI: Navigate to tab page number `n`.
 ///
 /// Replaces C `goto_tabpage()`.
@@ -913,6 +922,15 @@ pub unsafe extern "C" fn rs_tabpage_move(nr: c_int) {
 /// Calls C accessor functions including goto_tabpage_tp.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_goto_tabpage(n: c_int) {
+    goto_tabpage_impl(n);
+}
+
+/// C export: `goto_tabpage` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(export_name = "goto_tabpage")]
+pub unsafe extern "C" fn goto_tabpage(n: c_int) {
     goto_tabpage_impl(n);
 }
 
@@ -1210,6 +1228,15 @@ pub unsafe extern "C" fn rs_close_tabpage(tab: TabpageHandle) {
     close_tabpage_impl(tab);
 }
 
+/// C export: `close_tabpage` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// tab must be a valid, non-null tabpage with no windows.
+#[unsafe(export_name = "close_tabpage")]
+pub unsafe extern "C" fn close_tabpage(tab: TabpageHandle) {
+    close_tabpage_impl(tab);
+}
+
 /// FFI: Create up to `maxcount` tabpages with empty windows.
 ///
 /// Returns the actual number of tabpages.
@@ -1218,6 +1245,15 @@ pub unsafe extern "C" fn rs_close_tabpage(tab: TabpageHandle) {
 /// Calls C accessor functions.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_make_tabpages(maxcount: c_int) -> c_int {
+    make_tabpages_impl(maxcount)
+}
+
+/// C export: `make_tabpages` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(export_name = "make_tabpages")]
+pub unsafe extern "C" fn make_tabpages(maxcount: c_int) -> c_int {
     make_tabpages_impl(maxcount)
 }
 
@@ -1238,6 +1274,15 @@ pub unsafe extern "C" fn rs_goto_tabpage_lastused() -> c_int {
 /// Calls C accessor functions.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_goto_tabpage_win(tp: TabpageHandle, wp: WinHandle) {
+    goto_tabpage_win_impl(tp, wp);
+}
+
+/// C export: `goto_tabpage_win` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(export_name = "goto_tabpage_win")]
+pub unsafe extern "C" fn goto_tabpage_win(tp: TabpageHandle, wp: WinHandle) {
     goto_tabpage_win_impl(tp, wp);
 }
 
@@ -1705,6 +1750,15 @@ unsafe fn win_new_tabpage_impl(after: c_int, filename: *const u8) -> c_int {
 /// Calls C accessor functions.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_new_tabpage(after: c_int, filename: *const u8) -> c_int {
+    win_new_tabpage_impl(after, filename)
+}
+
+/// C export: `win_new_tabpage` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[unsafe(export_name = "win_new_tabpage")]
+pub unsafe extern "C" fn win_new_tabpage(after: c_int, filename: *const u8) -> c_int {
     win_new_tabpage_impl(after, filename)
 }
 

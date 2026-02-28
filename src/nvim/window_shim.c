@@ -134,10 +134,8 @@ extern WinframeResult rs_winframe_find_altwin(win_T *wp, frame_T *altfr_initial)
 // New Rust replacements for frame tree operations
 extern void rs_frame_flatten(frame_T *frp);
 
-// New Rust replacements for tabpage operations (Phase 2)
+// New Rust replacements for tabpage operations
 extern tabpage_T *rs_alt_tabpage(void);
-extern void rs_tabpage_move(int nr);
-extern void rs_goto_tabpage(int n);
 
 // New Rust replacements for screen size and scroll helpers (Phase 4)
 extern void rs_win_new_screensize(void);
@@ -196,10 +194,7 @@ extern bool rs_check_can_set_curbuf_disabled(void);
 extern bool rs_check_can_set_curbuf_forceit(int forceit);
 
 // Tabpage helpers and check_split_disallowed_err
-extern void rs_close_tabpage(tabpage_T *tab);
-extern int rs_make_tabpages(int maxcount);
 extern int rs_goto_tabpage_lastused(void);
-extern void rs_goto_tabpage_win(tabpage_T *tp, win_T *wp);
 extern int rs_check_split_disallowed_err(const win_T *wp, Error *err);
 
 // can_close_floating_windows, maximum_wincount, make_windows
@@ -940,9 +935,7 @@ static void new_frame(win_T *wp)
   rs_new_frame(wp);
 }
 
-// =============================================================================
-// Phase 8 wrappers for rs_win_new_tabpage
-// =============================================================================
+// win_new_tabpage: exported directly from Rust (Phase 15)
 
 // nvim_win_alloc_firstwin_wrapper deleted: callers updated to call rs_win_alloc_firstwin directly (Phase 12)
 
@@ -971,41 +964,7 @@ void nvim_apply_autocmds_tabnew(const char *filename)
   apply_autocmds(EVENT_TABNEW, (char *)filename, (char *)filename, false, curbuf);
 }
 
-// =============================================================================
-// win_new_tabpage: body replaced by thin wrapper calling rs_win_new_tabpage
-// =============================================================================
-
-extern int rs_win_new_tabpage(int after, const char *filename);
-
-/// Create a new tabpage with one window.
-///
-/// It will edit the current buffer, like after :split.
-///
-/// @param after Put new tabpage after tabpage "after", or after the current
-///              tabpage in case of 0.
-/// @param filename Will be passed to apply_autocmds().
-/// @return Was the new tabpage created successfully? FAIL or OK.
-int win_new_tabpage(int after, char *filename)
-{
-  return rs_win_new_tabpage(after, filename);
-}
-
-// Open a new tab page if ":tab cmd" was used.  It will edit the same buffer,
-// like with ":split".
-// Returns OK if a new tab page was created, FAIL otherwise.
-// Create up to "maxcount" tabpages with empty windows.
-// Returns the number of resulting tab pages.
-int make_tabpages(int maxcount)
-{
-  return rs_make_tabpages(maxcount);
-}
-
-/// Close tabpage `tab`, assuming it has no windows in it.
-/// There must be another tabpage or this will crash.
-void close_tabpage(tabpage_T *tab)
-{
-  rs_close_tabpage(tab);
-}
+// win_new_tabpage, make_tabpages, close_tabpage: exported directly from Rust (Phase 15)
 
 /// Prepare for leaving the current tab page.
 /// When autocommands change "curtab" we don't leave the tab page and return
@@ -1037,12 +996,7 @@ static void enter_tabpage(tabpage_T *tp, buf_T *old_curbuf, bool trigger_enter_a
 ///
 /// External floats are considered independent of tabpages. This is
 /// implemented by always moving them to curtab.
-// Go to tab page "n".  For ":tab N" and "Ngt".
-// When "n" is 9999 go to the last tab page.
-void goto_tabpage(int n)
-{
-  rs_goto_tabpage(n);
-}
+// goto_tabpage: exported directly from Rust (Phase 15)
 
 /// Go to tabpage "tp".
 /// Note: doesn't update the GUI tab.
@@ -1061,18 +1015,7 @@ bool goto_tabpage_lastused(void)
   return rs_goto_tabpage_lastused();
 }
 
-// Enter window "wp" in tab page "tp".
-// Also updates the GUI tab.
-void goto_tabpage_win(tabpage_T *tp, win_T *wp)
-{
-  rs_goto_tabpage_win(tp, wp);
-}
-
-// Move the current tab page to after tab page "nr".
-void tabpage_move(int nr)
-{
-  rs_tabpage_move(nr);
-}
+// goto_tabpage_win, tabpage_move: exported directly from Rust (Phase 15)
 
 /// Make window `wp` the current window.
 ///
@@ -1976,21 +1919,8 @@ tabpage_T *nvim_get_curtab_ptr(void) { return curtab; }
 int nvim_swb_has_useopen(void) { return (swb_flags & kOptSwbFlagUseopen) ? 1 : 0; }
 /// swb_flags & kOptSwbFlagUsetab.
 int nvim_swb_has_usetab(void) { return (swb_flags & kOptSwbFlagUsetab) ? 1 : 0; }
-/// win_fix_current_dir thin wrapper.
-extern void rs_win_fix_current_dir(void);
-void win_fix_current_dir(void) { rs_win_fix_current_dir(); }
-
-/// buf_jump_open_win thin wrapper.
-extern win_T *rs_buf_jump_open_win(buf_T *buf);
-win_T *buf_jump_open_win(buf_T *buf) { return rs_buf_jump_open_win(buf); }
-
-/// buf_jump_open_tab thin wrapper.
-extern win_T *rs_buf_jump_open_tab(buf_T *buf);
-win_T *buf_jump_open_tab(buf_T *buf) { return rs_buf_jump_open_tab(buf); }
-
-/// swbuf_goto_win_with_buf thin wrapper.
-extern win_T *rs_swbuf_goto_win_with_buf(buf_T *buf);
-win_T *swbuf_goto_win_with_buf(buf_T *buf) { return rs_swbuf_goto_win_with_buf(buf); }
+// win_fix_current_dir, buf_jump_open_win, buf_jump_open_tab,
+// swbuf_goto_win_with_buf: exported directly from Rust (Phase 15)
 
 // =============================================================================
 // Phase 3 accessors: command_height migration
@@ -2031,9 +1961,7 @@ void nvim_grid_clear_cmd_area(void)
   msg_row = cmdline_row;
 }
 
-/// command_height thin wrapper.
-extern void rs_command_height(void);
-void command_height(void) { rs_command_height(); }
+// command_height: exported directly from Rust (Phase 15)
 
 // =============================================================================
 // Phase 4: CTRL-W dispatch wrapper accessors

@@ -136,3 +136,12 @@ fn win_fix_current_dir_impl() {
 pub unsafe extern "C" fn rs_win_fix_current_dir() {
     win_fix_current_dir_impl();
 }
+
+/// C export: `win_fix_current_dir` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Called from C via FFI.
+#[unsafe(export_name = "win_fix_current_dir")]
+pub unsafe extern "C" fn win_fix_current_dir() {
+    win_fix_current_dir_impl();
+}

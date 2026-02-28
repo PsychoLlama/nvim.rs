@@ -188,3 +188,12 @@ fn command_height_impl() {
 pub unsafe extern "C" fn rs_command_height() {
     command_height_impl();
 }
+
+/// C export: `command_height` — eliminates the C thin wrapper.
+///
+/// # Safety
+/// Called from C via FFI.
+#[unsafe(export_name = "command_height")]
+pub unsafe extern "C" fn command_height() {
+    command_height_impl();
+}
