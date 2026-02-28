@@ -6055,7 +6055,13 @@ unsafe fn rs_shada_read_next_item(
         }
 
         // Parse additional data (Phase 6: Rust implementation)
-        if num_additional > 0 || body_read_size > 0 {
+        // Only array-based parsers (history, variable, substr) set num_additional
+        // and write back body_read_ptr/body_read_size. Keydict-based parsers
+        // (search_pattern, mark, register, buflist) use local copies of read_ptr/
+        // read_size and do not update body_read_size; they handle unknown keys
+        // internally via unpack_keydict, so body_read_size remains the original
+        // body size and must not be used as a "remaining bytes" signal here.
+        if num_additional > 0 {
             let ad_ret = rs_parse_additional_data(
                 entry,
                 body_read_ptr,
