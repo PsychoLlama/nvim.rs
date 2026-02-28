@@ -590,41 +590,9 @@ void *nvim_qf_find_win_handle(const void *qi_void) { return (void *)rs_qf_find_w
 
 int nvim_qf_win_get_handle(const void *wp_void) { return wp_void == NULL ? 0 : ((const win_T *)wp_void)->handle; }
 
-/// This is equivalent to qflist_valid() but works with a quickfix stack pointer
-bool nvim_qflist_valid(const void *qi_void, unsigned qf_id)
-{
-  if (qi_void == NULL) {
-    return false;
-  }
-  const qf_info_T *qi = (const qf_info_T *)qi_void;
-  for (int i = 0; i < qi->qf_listcount; i++) {
-    if (qi->qf_lists[i].qf_id == qf_id) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/// This is equivalent to is_qf_entry_present()
-bool nvim_qf_entry_present(const void *qfl_void, const void *qf_ptr_void)
-{
-  if (qfl_void == NULL || qf_ptr_void == NULL) {
-    return false;
-  }
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  const qfline_T *target = (const qfline_T *)qf_ptr_void;
-
-  qfline_T *qfp;
-  int i;
-  FOR_ALL_QFL_ITEMS(qfl, qfp, i) {
-    if (qfp == target) {
-      return true;
-    }
-  }
-  return false;
-}
-
-const char *nvim_qf_types(int c, int nr) { static char buf[20]; return rs_qf_types(c, nr, buf, sizeof(buf)); }
+// nvim_qflist_valid deleted: logic migrated to rs_qflist_valid Rust loop (Phase 16).
+// nvim_qf_entry_present deleted: logic migrated to rs_qf_entry_present Rust loop (Phase 16).
+// nvim_qf_types deleted: no callers; rs_qf_types handles logic directly (Phase 16).
 
 void nvim_emsg_e_no_more_items(void) { emsg(_(N_("E553: No more items"))); }
 

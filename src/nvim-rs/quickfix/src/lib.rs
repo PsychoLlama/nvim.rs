@@ -100,8 +100,8 @@ extern "C" {
     fn nvim_win_get_loclist(wp: *const c_void) -> QfInfoHandle;
     fn nvim_qf_find_win_handle(qi: QfInfoHandle) -> *const c_void;
     fn nvim_qf_win_get_handle(wp: *const c_void) -> c_int;
-    fn nvim_qflist_valid(qi: QfInfoHandle, qf_id: u32) -> bool;
-    fn nvim_qf_entry_present(qfl: QfListHandle, qf_ptr: QfLineHandle) -> bool;
+    // nvim_qflist_valid removed: logic inlined into rs_qflist_valid (Phase 16)
+    // nvim_qf_entry_present removed: logic inlined into rs_qf_entry_present (Phase 16)
 }
 
 // =============================================================================
@@ -414,7 +414,16 @@ pub unsafe extern "C" fn rs_qflist_valid(wp: WinHandle, qf_id: u32) -> bool {
         return false;
     }
 
-    nvim_qflist_valid(qi, qf_id)
+    // Iterate over all lists in the stack checking for qf_id match.
+    // Replaces C nvim_qflist_valid (Phase 16).
+    let listcount = nvim_qf_get_listcount(qi);
+    for i in 0..listcount {
+        let qfl = nvim_qf_get_list_at(qi, i);
+        if !qfl.is_null() && nvim_qf_get_id(qfl) == qf_id {
+            return true;
+        }
+    }
+    false
 }
 
 /// Check if a quickfix entry is present in the quickfix list.
@@ -434,7 +443,22 @@ pub unsafe extern "C" fn rs_qf_entry_present(qfl: QfListHandle, qf_ptr: QfLineHa
     if qfl.is_null() || qf_ptr.is_null() {
         return false;
     }
-    nvim_qf_entry_present(qfl, qf_ptr)
+    // Walk the linked list checking for pointer equality.
+    // Replaces C nvim_qf_entry_present (Phase 16).
+    // Note: C version checked got_int at each step; we omit that because
+    // false negatives from interruption were already acceptable there.
+    let count = nvim_qf_get_count(qfl);
+    let mut qfp = nvim_qf_get_start(qfl);
+    for _ in 0..count {
+        if qfp.is_null() {
+            break;
+        }
+        if qfp == qf_ptr {
+            return true;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+    }
+    false
 }
 
 /// Convert a quickfix list ID to its index in the stack.
