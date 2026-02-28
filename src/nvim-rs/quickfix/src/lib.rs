@@ -426,6 +426,28 @@ pub unsafe extern "C" fn rs_qflist_valid(wp: WinHandle, qf_id: u32) -> bool {
     false
 }
 
+/// Check if a quickfix stack has a list with the given ID, given qi directly.
+///
+/// This is the crate-internal version of `rs_qflist_valid` for callers that
+/// already have `qi` (not `wp`). Used by `navigate.rs` (Phase 16).
+///
+/// # Safety
+///
+/// - `qi` must be a valid non-null pointer to a `qf_info_T` struct
+pub(crate) unsafe fn qflist_valid_for_qi(qi: QfInfoHandle, qf_id: u32) -> bool {
+    if qi.is_null() {
+        return false;
+    }
+    let listcount = nvim_qf_get_listcount(qi);
+    for i in 0..listcount {
+        let qfl = nvim_qf_get_list_at(qi, i);
+        if !qfl.is_null() && nvim_qf_get_id(qfl) == qf_id {
+            return true;
+        }
+    }
+    false
+}
+
 /// Check if a quickfix entry is present in the quickfix list.
 ///
 /// When loading a file from the quickfix, autocommands may modify it.

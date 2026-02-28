@@ -1216,9 +1216,8 @@ mod jump_edit {
         fn nvim_qfline_get_type(qfp: QfLineHandle) -> i8;
         fn nvim_qfline_get_fnum(qfp: QfLineHandle) -> c_int;
 
-        // Validation (already exist)
-        fn nvim_qflist_valid(qi: QfInfoHandle, qf_id: c_uint) -> bool;
-        fn nvim_qf_entry_present(qfl: QfListHandle, qf_ptr: QfLineHandle) -> bool;
+        // nvim_qflist_valid removed: use crate::qflist_valid_for_qi (Phase 16)
+        // nvim_qf_entry_present removed: use crate::rs_qf_entry_present (Phase 16)
 
         fn nvim_qf_jump_emsg_win_closed();
         fn nvim_qf_jump_emsg_qf_changed();
@@ -1309,7 +1308,7 @@ mod jump_edit {
         }
 
         // Check if the quickfix list is still valid.
-        if qfl_type == QFLT_QUICKFIX && !nvim_qflist_valid(qi, save_qfid) {
+        if qfl_type == QFLT_QUICKFIX && !crate::qflist_valid_for_qi(qi, save_qfid) {
             nvim_qf_jump_emsg_qf_changed();
             return QF_ABORT;
         }
@@ -1317,7 +1316,7 @@ mod jump_edit {
         // Check if the list was changed by autocommands.
         if old_qf_curlist != nvim_qf_get_curlist_idx(qi)
             || old_changetick != nvim_qf_get_changedtick(qfl)
-            || !nvim_qf_entry_present(qfl, qf_ptr)
+            || !crate::rs_qf_entry_present(qfl, qf_ptr)
         {
             if qfl_type == QFLT_QUICKFIX {
                 nvim_qf_jump_emsg_qf_changed();
@@ -1671,7 +1670,7 @@ pub mod jump_machinery {
         fn nvim_qf_get_changedtick(qfl: *const c_void) -> c_int;
         fn nvim_qf_get_qfl_type(qfl: *const c_void) -> c_int;
         fn nvim_qfline_get_type(qfp: QfLineHandle) -> i8;
-        fn nvim_qf_entry_present(qfl: *const c_void, qf_ptr: QfLineHandle) -> bool;
+        // nvim_qf_entry_present removed: use crate::rs_qf_entry_present (Phase 16)
         fn nvim_qf_jump_emsg_qf_changed();
         fn nvim_qf_jump_emsg_ll_changed();
 
@@ -1939,7 +1938,7 @@ pub mod jump_machinery {
     ) -> Option<c_int> {
         if old_qf_curlist != nvim_qf_get_curlist_idx(qi)
             || old_changetick != nvim_qf_get_changedtick(qfl)
-            || !nvim_qf_entry_present(qfl, qf_ptr)
+            || !crate::rs_qf_entry_present(qfl, qf_ptr)
         {
             if qfl_type == QFLT_QUICKFIX {
                 nvim_qf_jump_emsg_qf_changed();
