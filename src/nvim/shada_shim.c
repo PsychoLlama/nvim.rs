@@ -204,6 +204,12 @@ enum SRNIFlags {
 // Note: SRNIFlags enum name was created only to make it possible to reference
 // it. This name is not actually used anywhere outside of the documentation.
 
+/// Convert a Rust-layout position (int64_t lnum) to pos_T (int32_t lnum).
+/// Used when extracting mark/pos fields from ShadaEntry to pass to Neovim APIs.
+#define RS_POS_TO_POST(p) \
+  ((pos_T){ .lnum = (linenr_T)(p).lnum, .col = (colnr_T)(p).col, \
+            .coladd = (colnr_T)(p).coladd })
+
 /// Structure defining a single ShaDa file entry
 typedef struct ShadaEntry {
   ShadaEntryType type;
@@ -216,7 +222,10 @@ typedef struct ShadaEntry {
     Dict header;
     struct shada_filemark {
       char name;
-      pos_T mark;
+      // Rust FilemarkData uses Position { lnum: i64, col: i32, coladd: i32 },
+      // which is 16 bytes (vs pos_T's 12). The C layout must match exactly so
+      // that fname lands at the correct offset (24, not 16).
+      struct { int64_t lnum; int32_t col; int32_t coladd; } mark;
       char *fname;
     } filemark;
     Dict(_shada_search_pat) search_pattern;
@@ -248,7 +257,8 @@ typedef struct ShadaEntry {
     struct buffer_list {
       size_t size;
       struct buffer_list_buffer {
-        pos_T pos;
+        // Matches Rust BufferListBuffer { pos: Position { lnum: i64, col: i32, coladd: i32 } }.
+        struct { int64_t lnum; int32_t col; int32_t coladd; } pos;
         char *fname;
         AdditionalData *additional_data;
       } *buffers;
@@ -1502,7 +1512,7 @@ int nvim_shada_mark_set_global_from_entry(ShadaEntry *entry, void *fname_bufs_ha
   xfmark_T fm = (xfmark_T) {
     .fname = buf == NULL ? entry->data.filemark.fname : NULL,
     .fmark = {
-      .mark = entry->data.filemark.mark,
+      .mark = RS_POS_TO_POST(entry->data.filemark.mark),
       .fnum = (buf == NULL ? 0 : buf->b_fnum),
       .timestamp = entry->timestamp,
       .view = INIT_FMARKV,
@@ -1544,7 +1554,7 @@ void nvim_shada_jumplist_insert_entry(int i, ShadaEntry *entry,
   curwin->w_jumplist[i] = (xfmark_T) {
     .fname = buf == NULL ? entry->data.filemark.fname : NULL,
     .fmark = {
-      .mark = entry->data.filemark.mark,
+      .mark = RS_POS_TO_POST(entry->data.filemark.mark),
       .fnum = (buf == NULL ? 0 : buf->b_fnum),
       .timestamp = entry->timestamp,
       .view = INIT_FMARKV,
@@ -1584,7 +1594,7 @@ void nvim_shada_buf_set_cursor_and_data(void *buf_handle, ShadaEntry *entry, siz
   buf_T *const buf = (buf_T *)buf_handle;
   fmarkv_T view = INIT_FMARKV;
   RESET_FMARK(&buf->b_last_cursor,
-              entry->data.buffer_list.buffers[i].pos, 0, view);
+              RS_POS_TO_POST(entry->data.buffer_list.buffers[i].pos), 0, view);
   buflist_setfpos(buf, curwin, buf->b_last_cursor.mark.lnum,
                   buf->b_last_cursor.mark.col, false);
   xfree(buf->additional_data);
@@ -1626,7 +1636,7 @@ int nvim_shada_mark_set_local_from_entry(ShadaEntry *entry, void *buf_handle, in
 {
   buf_T *buf = (buf_T *)buf_handle;
   fmark_T fm = (fmark_T) {
-    .mark = entry->data.filemark.mark,
+    .mark = RS_POS_TO_POST(entry->data.filemark.mark),
     .fnum = 0,
     .timestamp = entry->timestamp,
     .view = INIT_FMARKV,
@@ -1670,7 +1680,7 @@ void nvim_shada_changelist_insert_entry(void *buf_handle, int i,
     free_fmark(buf->b_changelist[0]);
   }
   buf->b_changelist[i] = (fmark_T) {
-    .mark = entry->data.filemark.mark,
+    .mark = RS_POS_TO_POST(entry->data.filemark.mark),
     .fnum = 0,
     .timestamp = entry->timestamp,
     .view = INIT_FMARKV,
