@@ -45,4 +45,4 @@ typedef struct {
   void *tn_search_ctx;
 } tagname_T;
 
-#include "tag.h.generated.h"
+#include "tag_shim.h.generated.h"
