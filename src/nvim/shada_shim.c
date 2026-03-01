@@ -234,12 +234,15 @@ typedef struct ShadaEntry {
       char *string;
       char sep;
     } history_item;
-    struct reg {  // yankreg_T
+    struct reg {  // RegisterData (must match Rust layout exactly)
       char name;
-      MotionType type;
-      String *contents;
-      bool is_unnamed;
-      size_t contents_size;
+      int type;  // MotionType — same underlying int, same offset
+      // Rust RegisterData uses *mut *mut c_char (thin 8-byte pointers, no inline size).
+      // C yankreg_T uses String* (fat 16-byte {data,size} pairs). These are NOT layout-
+      // compatible; nvim_shada_op_reg_set_from_entry converts between them.
+      char **contents;
+      size_t contents_size;  // before is_unnamed (matches Rust field order)
+      bool is_unnamed;       // after contents_size (matches Rust field order)
       size_t width;
     } reg;
     struct global_var {
@@ -1478,14 +1481,43 @@ uint64_t nvim_shada_op_reg_get_timestamp(char name)
 /// Returns 1 if memory was consumed (do not free entry), 0 if op_reg_set rejected.
 int nvim_shada_op_reg_set_from_entry(ShadaEntry *entry)
 {
-  return op_reg_set(entry->data.reg.name, (yankreg_T) {
-    .y_array = entry->data.reg.contents,
-    .y_size = entry->data.reg.contents_size,
-    .y_type = entry->data.reg.type,
+  // entry->data.reg.contents is char** (Rust thin-pointer layout): one char* per line.
+  // yankreg_T.y_array expects String* (fat {data,size} pairs, 16 bytes each).
+  // Build a String* array by stealing the char* pointers from the Rust array.
+  size_t n = entry->data.reg.contents_size;
+  char **chars = entry->data.reg.contents;
+  // Clear from entry so rs_shada_free_entry_contents won't double-free on failure.
+  entry->data.reg.contents = NULL;
+  entry->data.reg.contents_size = 0;
+
+  String *strings = NULL;
+  if (n > 0 && chars != NULL) {
+    strings = xmalloc(n * sizeof(String));
+    for (size_t i = 0; i < n; i++) {
+      char *data = chars[i];
+      strings[i] = cbuf_as_string(data, data ? strlen(data) : 0);
+    }
+    xfree(chars);  // free container; elements are now owned by strings[]
+  }
+
+  bool ok = op_reg_set(entry->data.reg.name, (yankreg_T) {
+    .y_array = strings,
+    .y_size = n,
+    .y_type = (MotionType)entry->data.reg.type,
     .y_width = (colnr_T)entry->data.reg.width,
     .timestamp = entry->timestamp,
     .additional_data = entry->additional_data,
-  }, entry->data.reg.is_unnamed) ? 1 : 0;
+  }, entry->data.reg.is_unnamed);
+
+  if (!ok) {
+    // op_reg_set rejected the name; free the String* array we built.
+    for (size_t i = 0; i < n; i++) {
+      xfree(strings[i].data);
+    }
+    xfree(strings);
+    return 0;
+  }
+  return 1;
 }
 
 /// Call var_set_global with entry's name and value, then clear the typval.
