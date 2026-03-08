@@ -19,10 +19,10 @@ use std::ffi::{c_char, c_int, c_void};
 const RE_MAGIC: c_int = 1;
 /// RE_STRING flag for vim_regcomp
 const RE_STRING: c_int = 2;
-/// REGSUB_MAGIC flag for vim_regsub
-const REGSUB_MAGIC: c_int = 1;
-/// REGSUB_COPY flag for vim_regsub
-const REGSUB_COPY: c_int = 2;
+/// REGSUB_COPY flag for vim_regsub (must match regexp_defs.h: REGSUB_COPY=1)
+const REGSUB_COPY: c_int = 1;
+/// REGSUB_MAGIC flag for vim_regsub (must match regexp_defs.h: REGSUB_MAGIC=2)
+const REGSUB_MAGIC: c_int = 2;
 
 /// Maximum number of subexpressions in a regexp
 const NSUBEXP: usize = 10;
