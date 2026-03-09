@@ -226,47 +226,18 @@ extern int rs_get_echo_hl_id(void);
 extern int rs_win_valid(win_T *win);
 extern int rs_last_window(win_T *win);
 
-// Rust FFI declarations (window wrappers removed)
+// Rust FFI declarations
 extern int rs_global_stl_height(void);
-extern win_T *rs_lastwin_nofloating(void);
 // Phase 3: Rust-implemented functions replacing C static/non-static functions
 extern void correct_screencol(int idx, int cells, int *col);
 extern void rs_win_size_restore(garray_T *gap);
 extern void rs_win_size_save(garray_T *gap);
 extern void rs_clear_showcmd(void);
 
-extern int rs_csh_like_shell(void);
 extern int rs_magic_isset(void);
 
-// Phase 6: Additional cmdline functions from Rust
-extern int rs_cmdline_state_overstrike(void);
-extern int rs_cmdline_state_at_end(void);
-extern int rs_cmdline_state_is_empty(void);
-extern int rs_cmdline_state_is_search(void);
-extern int rs_cmdline_state_is_ex_cmd(void);
-extern int rs_cmdline_get_level(void);
-extern int rs_cmdline_at_max_level(void);
-extern int rs_cmdline_get_cmdpos(void);
-extern int rs_cmdline_get_cmdlen(void);
-extern void rs_cmdline_set_cmdpos(int pos);
-extern int rs_cmdline_get_redraw_state(void);
-extern void rs_cmdline_set_redraw_state(int state);
-extern int rs_cmdline_get_one_key(void);
-extern void rs_cmdline_set_one_key(int one_key);
-extern int rs_cmdline_get_hl_id(void);
-extern void rs_cmdline_set_hl_id(int hl_id);
-extern int rs_cmdline_insert_char(int c, int overstrike);
 extern int rs_cmdline_delete_char_before(void);
-extern int rs_cmdline_delete_char_at(void);
 extern int rs_cmdline_delete_word_before(void);
-extern int rs_cmdline_delete_to_start(void);
-extern int rs_cmdline_cursor_left(void);
-extern int rs_cmdline_cursor_right(void);
-extern int rs_cmdline_cursor_home(void);
-extern int rs_cmdline_cursor_end(void);
-extern int rs_cmdline_cursor_word_left(void);
-extern int rs_cmdline_cursor_word_right(void);
-extern int rs_cmdline_insert_str(const char *s, size_t len);
 
 // Phase 1: History browsing from Rust
 typedef struct {
@@ -284,26 +255,18 @@ extern int rs_command_line_browse_history(HistoryBrowseState *state);
 extern void rs_init_incsearch_state(incsearch_state_T *state);
 extern void rs_finish_incsearch_highlighting(int gotesc, incsearch_state_T *state,
                                              int call_update_screen);
-extern int rs_should_do_incsearch(int firstc);
-extern int rs_incsearch_should_postpone(void);
 
 // Rust key dispatch helpers
 extern int rs_invert_rtl_key(int key);
 extern int rs_should_end_wildmenu(int key, int p_wc, int p_wcm);
 extern int rs_should_end_wildmenu_pum(int key);
-extern int rs_triggers_cmdline_leave_pre(int key);
-extern int rs_should_free_lookfor(int key);
 extern int rs_is_stab_to_ctrl_p(int key, int p_wc);
 
-// Phase 6: Entry/exit orchestration helpers from Rust
+// Entry/exit orchestration helpers from Rust
 extern int rs_entry_should_use_cmdmsg_rl(int firstc, int win_p_rl, int win_p_rlc_has_s);
-extern int rs_entry_should_use_lmap(int firstc, int64_t b_p_imsearch);
-extern int rs_entry_use_b_p_iminsert(int firstc, int64_t b_p_imsearch);
-extern int rs_entry_validate(int level, int has_cmdbuff, int clear_ccline);
 extern int rs_entry_should_add_to_history(int histype, int cmdlen, int firstc, int some_key_typed);
 extern int rs_entry_should_save_last_cmdline(int firstc);
 extern int rs_entry_hist_char2type(int firstc);
-extern int rs_entry_is_search(int firstc);
 extern int rs_entry_cmdline_type(int firstc);
 
 // Phase 7: Command window helpers from Rust
@@ -318,15 +281,11 @@ extern int rs_cmdwin_needs_vim_filetype(int histtype);
 extern int rs_cmdwin_cleanup_had_error(int old_curwin_valid, int old_curbuf_valid, int buf_changed);
 extern int rs_cmdwin_to_hist_type(int win_type);
 
-// Phase 9: Drawing and coloring helpers from Rust
-extern int rs_color_cache_valid(unsigned int cache_prompt_id, unsigned int current_prompt_id,
-                                int cache_cmdbuff_is_null);
+// Drawing and coloring helpers from Rust
 extern int rs_should_skip_coloring(unsigned int current_prompt_id, unsigned int prev_prompt_id,
                                    int prev_errors);
 extern int rs_should_reset_callback_errors(unsigned int current_prompt_id,
                                            unsigned int prev_prompt_id);
-extern int rs_calculate_draw_len(int start, int requested_len, int cmdlen);
-extern int rs_should_draw(int cmdbuff_is_null, int start, int len, int cmdlen);
 
 // Phase 10: VimL API helpers from Rust
 extern int rs_clamp_cmdpos(int pos, int cmdlen);
@@ -2353,8 +2312,7 @@ handle_T cmdpreview_get_bufnr(void)
 // C accessor for cmdpreview_ns (used by Rust)
 int nvim_get_cmdpreview_ns(void) { return cmdpreview_ns; }
 
-// Phase 8: Command preview helpers from Rust
-extern void rs_cmdpreview_set_ns(int ns);
+// Command preview helpers from Rust
 extern int rs_cmdpreview_should_skip_buffer(int64_t buf_handle, int64_t preview_bufnr);
 extern int rs_cmdpreview_needs_undo_restore(int64_t current_seq, int64_t saved_seq);
 
