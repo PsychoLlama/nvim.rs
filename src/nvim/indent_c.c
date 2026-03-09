@@ -32,76 +32,8 @@
 
 extern const char *rs_skip_to_option_part(const char *p);
 extern bool rs_cindent_on(void);
-
-// Phase 137: C indentation Rust helpers
-// Comment detection
-extern bool rs_cin_iscomment(const char *p);
-extern bool rs_cin_islinecomment(const char *p);
-extern bool rs_cin_ispreproc(const char *s);
-extern const char *rs_cin_skipcomment(const char *s);
-extern bool rs_cin_nocode(const char *s);
-// String handling
-extern const char *rs_skip_string(const char *p);
 extern bool rs_is_pos_in_string(const char *line, int col);
-// Keyword detection
-extern bool rs_cin_starts_with(const char *s, const char *word);
-extern bool rs_cin_isif(const char *p);
-extern bool rs_cin_iselse(const char *p);
-extern bool rs_cin_isdo(const char *p);
-extern bool rs_cin_isbreak(const char *p);
-extern bool rs_cin_isdefault(const char *s);
 extern bool rs_cin_iscase(const char *s, bool strict);
-extern bool rs_cin_has_js_key(const char *text);
-extern bool rs_cin_is_cpp_namespace(const char *s);
-extern bool rs_cin_ends_in(const char *s, const char *find);
-extern const char *rs_cin_skip_comment_and_string(const char *s);
-// Bracket matching
-typedef struct {
-  bool found;
-  int col;
-} BracketMatch;
-extern BracketMatch rs_find_last_paren(const char *line, char start, char end);
-extern int rs_count_unmatched_open(const char *line, char start, char end, int max_col);
-extern bool rs_is_inside_brackets(const char *line, int col, char start, char end);
-extern int rs_cin_skip2pos_col(const char *line, int col);
-extern bool rs_cin_iscomment_pos(const char *line, int col);
-// Statement detection
-extern char rs_cin_isterminated(const char *s, bool incl_open, bool incl_comma);
-extern bool rs_cin_is_terminated(const char *s);
-extern bool rs_cin_iswhile(const char *p);
-extern bool rs_cin_isfor(const char *p);
-extern bool rs_cin_isreturn(const char *p);
-extern bool rs_cin_iscontinue(const char *p);
-extern bool rs_cin_isgoto(const char *p);
-extern bool rs_cin_isswitch(const char *p);
-extern int rs_cin_find_equal(const char *s);
-extern bool rs_cin_is_compound_init(const char *s);
-extern bool rs_cin_istypedef(const char *p);
-extern bool rs_cin_isstatic(const char *p);
-extern bool rs_cin_ispublic(const char *p);
-extern bool rs_cin_isprotected(const char *p);
-extern bool rs_cin_isprivate(const char *p);
-extern bool rs_cin_isenum(const char *p);
-extern bool rs_cin_isstruct(const char *p);
-extern bool rs_cin_isclass(const char *p);
-extern bool rs_cin_isunion(const char *p);
-// Indentation helpers
-extern bool rs_cin_ends_in_backslash(const char *s);
-extern bool rs_linewhite(const char *s);
-extern bool rs_cin_looks_like_funcdecl(const char *s);
-extern bool rs_cin_is_kr_param(const char *s);
-extern bool rs_cin_is_cpp_lambda(const char *s);
-extern bool rs_cin_is_template_decl(const char *s);
-extern bool rs_cin_is_extern_c(const char *s);
-extern bool rs_cin_starts_multiline_comment(const char *s);
-extern bool rs_cin_inside_multiline_comment(const char *s);
-extern bool rs_cin_ends_multiline_comment(const char *s);
-extern bool rs_cin_is_closing_brace_line(const char *s);
-extern bool rs_cin_is_opening_brace_line(const char *s);
-extern bool rs_cin_is_ternary_continuation(const char *s);
-extern bool rs_cin_is_bool_continuation(const char *s);
-extern int rs_cin_brace_position(const char *line, int brace_col);
-extern bool rs_cin_is_operator_continuation(const char *s);
 
 /// C accessor for p_paste global option.
 int nvim_get_p_paste(void)
@@ -200,16 +132,7 @@ int nvim_cindent_get_indent_lnum(int lnum)
   return get_indent_lnum(lnum);
 }
 
-// Phase 2 Rust function declarations
-extern bool rs_cin_islabel_skip(const char *s, int *new_offset);
-extern const char *rs_after_label(const char *l);
-extern bool rs_cin_is_if_for_while_before_offset(const char *line, int *poffset);
-extern int rs_corr_ind_maxparen(int startpos_lnum);
-extern bool rs_cin_isinit(const char *line);
 extern bool rs_cin_is_cinword(const char *line);
-extern int rs_cin_ispreproc_cont(int lnum, int amount, int *out_lnum, int *out_amount);
-
-// Phase 5: parse_cino
 extern void rs_parse_cino(const char *cino, int sw, CindentOptions *opts);
 
 /// C accessor for curbuf->b_p_cinsd (cinscopedecls option).
@@ -293,48 +216,12 @@ const char *nvim_cindent_get_cursor_line_ptr(void)
   return get_cursor_line_ptr();
 }
 
-// Phase 3 Rust function declarations
 extern FindMatchResult rs_find_start_comment(int ind_maxcomment);
-extern FindMatchResult rs_find_start_rawstring(int ind_maxcomment);
-extern void rs_ind_find_start_CORS(int *out_lnum, int *out_col, int *is_raw);
-extern int rs_cin_skip2pos_lnum_col(int lnum, int col);
-extern FindMatchResult rs_find_match_char(int c, int ind_maxparen);
-extern FindMatchResult rs_find_match_paren(int ind_maxparen);
-extern FindMatchResult rs_find_start_brace(void);
-extern FindMatchResult rs_find_match_paren_after_brace(int ind_maxparen);
-extern int rs_cin_first_id_amount(void);
-extern int rs_cin_get_equal_amount(int lnum);
-extern int rs_get_indent_nolabel(int lnum);
-extern int rs_get_baseclass_amount(int col);
-extern FindMatchResult rs_find_line_comment(void);
-extern bool rs_cin_iswhileofdo(const char *p, int lnum);
-extern bool rs_cin_iswhileofdo_end(int terminated);
-
-// Phase 4: Complex state machine functions
 extern bool rs_cin_isscopedecl(const char *p);
 extern bool rs_cin_islabel(void);
-extern int rs_cin_isfuncdecl(const char **sp, int first_lnum, int min_lnum);
-extern int rs_cin_is_cpp_baseclass(int *found, int *pos_lnum, int *pos_col);
-extern int rs_skip_label(int lnum, const char **pp);
-extern int rs_find_match(int lookfor, int ourscope);
-
-// Phase 6: get_c_indent in Rust
 extern int rs_get_c_indent(const CindentOptions *opts);
 
-// Find result cache for cpp_baseclass
-typedef struct {
-  int found;
-  lpos_T lpos;
-} cpp_baseclass_cache_T;
-
 #include "indent_c.c.generated.h"
-// Find the start of a comment, not knowing if we are in a comment right now.
-// Search starts at w_cursor.lnum and goes backwards.
-// Return NULL when not inside a comment.
-static pos_T *ind_find_start_comment(void)  // XXX
-{
-  return find_start_comment(curbuf->b_ind_maxcomment);
-}
 
 pos_T *find_start_comment(int ind_maxcomment)  // XXX
 {
@@ -346,50 +233,6 @@ pos_T *find_start_comment(int ind_maxcomment)  // XXX
     return &pos_copy;
   }
   return NULL;
-}
-
-static pos_T *find_start_rawstring(int ind_maxcomment)  // XXX
-{
-  static pos_T pos_copy;
-  FindMatchResult result = rs_find_start_rawstring(ind_maxcomment);
-  if (result.found) {
-    pos_copy.lnum = result.lnum;
-    pos_copy.col = result.col;
-    return &pos_copy;
-  }
-  return NULL;
-}
-
-/// Find the start of a comment or raw string, not knowing if we are in a
-/// comment or raw string right now.
-/// Search starts at w_cursor.lnum and goes backwards.
-/// If is_raw is given and returns start of raw_string, sets it to true.
-///
-/// @returns NULL when not inside a comment or raw string.
-///
-/// @note "CORS" -> Comment Or Raw String
-static pos_T *ind_find_start_CORS(linenr_T *is_raw)
-{
-  static pos_T pos_copy;
-  int out_lnum = -1, out_col = 0;
-  int raw_lnum = 0;
-  rs_ind_find_start_CORS(&out_lnum, &out_col, is_raw != NULL ? &raw_lnum : NULL);
-  if (out_lnum == -1) {
-    return NULL;
-  }
-  if (is_raw != NULL && raw_lnum != 0) {
-    *is_raw = raw_lnum;
-  }
-  pos_copy.lnum = out_lnum;
-  pos_copy.col = out_col;
-  return &pos_copy;
-}
-
-// Skip to the end of a "string" and a 'c' character.
-// If there is no string or character, return argument unmodified.
-static const char *skip_string(const char *p)
-{
-  return rs_skip_string(p);
 }
 
 /// @returns true if "line[col]" is inside a C string.
@@ -416,82 +259,6 @@ bool cindent_on(void)
   return rs_cindent_on();
 }
 
-// Skip over white space and C comments within the line.
-// Also skip over Perl/shell comments if desired.
-static const char *cin_skipcomment(const char *s)
-{
-  return rs_cin_skipcomment(s);
-}
-
-/// Return true if there is no code at *s.  White space and comments are
-/// not considered code.
-static int cin_nocode(const char *s)
-{
-  return rs_cin_nocode(s);
-}
-
-// Check previous lines for a "//" line comment, skipping over blank lines.
-static pos_T *find_line_comment(void)  // XXX
-{
-  static pos_T pos;
-  FindMatchResult result = rs_find_line_comment();
-  if (result.found) {
-    pos.lnum = result.lnum;
-    pos.col = result.col;
-    return &pos;
-  }
-  return NULL;
-}
-
-/// Checks if `text` starts with "key:".
-static bool cin_has_js_key(const char *text)
-{
-  return rs_cin_has_js_key(text);
-}
-
-/// Checks if string matches "label:"; move to character after ':' if true.
-/// "*s" must point to the start of the label, if there is one.
-static bool cin_islabel_skip(const char **s)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int new_offset = 0;
-  if (rs_cin_islabel_skip(*s, &new_offset)) {
-    *s = *s + new_offset;
-    return true;
-  }
-  return false;
-}
-
-// Recognize a label: "label:".
-// Note: curwin->w_cursor must be where we are looking for the label.
-static bool cin_islabel(void)  // XXX
-{
-  return rs_cin_islabel();
-}
-
-/// Strings can be concatenated with comments between:
-/// "string0" |*comment*| "string1"
-static const char *cin_skip_comment_and_string(const char *s)
-{
-  return rs_cin_skip_comment_and_string(s);
-}
-
-/// Recognize structure or compound literal initialization:
-/// =|return [&][(typecast)] [{]
-/// The number of opening braces is arbitrary.
-static bool cin_is_compound_init(const char *s)
-{
-  return rs_cin_is_compound_init(s);
-}
-
-/// Recognize enumerations:
-/// "[typedef] [static|public|protected|private] enum"
-/// Calls another function to recognize structure initialization.
-static bool cin_isinit(void)
-{
-  return rs_cin_isinit(get_cursor_line_ptr());
-}
-
 /// Recognize a switch label: "case .*:" or "default:".
 ///
 /// @param strict  Allow relaxed check of case statement for JS
@@ -500,325 +267,16 @@ static bool cin_iscase(const char *s, bool strict)
   return rs_cin_iscase(s, strict);
 }
 
-// Recognize a "default" switch label.
-static int cin_isdefault(const char *s)
-{
-  return rs_cin_isdefault(s);
-}
-
 /// Recognize a scope declaration label from the 'cinscopedecls' option.
 static bool cin_isscopedecl(const char *p)
 {
   return rs_cin_isscopedecl(p);
 }
 
-// Maximum number of lines to search back for a "namespace" line.
-#define FIND_NAMESPACE_LIM 20
-
-// Recognize a "namespace" scope declaration.
-static bool cin_is_cpp_namespace(const char *s)
+/// Recognize a label: "label:".
+static bool cin_islabel(void)  // XXX
 {
-  return rs_cin_is_cpp_namespace(s);
-}
-
-// Return a pointer to the first non-empty non-comment character after a ':'.
-// Return NULL if not found.
-//        case 234:    a = b;
-//                     ^
-static const char *after_label(const char *l)
-{
-  return rs_after_label(l);
-}
-
-// Get indent of line "lnum", skipping a label.
-// Return 0 if there is nothing after the label.
-static int get_indent_nolabel(linenr_T lnum)  // XXX
-{
-  return rs_get_indent_nolabel(lnum);
-}
-
-// Find indent for line "lnum", ignoring any case or jump label.
-// Also return a pointer to the text (after the label) in "pp".
-//   label:     if (asdf && asdfasdf)
-//              ^
-static int skip_label(linenr_T lnum, const char **pp)
-{
-  return rs_skip_label(lnum, pp);
-}
-
-// Return the indent of the first variable name after a type in a declaration.
-//  int     a,                  indent of "a"
-//  static struct foo    b,     indent of "b"
-//  enum bla    c,              indent of "c"
-// Returns zero when it doesn't look like a declaration.
-static int cin_first_id_amount(void)
-{
-  return rs_cin_first_id_amount();
-}
-
-// Return the indent of the first non-blank after an equal sign.
-//       char *foo = "here";
-// Return zero if no (useful) equal sign found.
-// Return -1 if the line above "lnum" ends in a backslash.
-//      foo = "asdf{backslash}
-//             asdf{backslash}
-//             here";
-static int cin_get_equal_amount(linenr_T lnum)
-{
-  return rs_cin_get_equal_amount(lnum);
-}
-
-// Recognize a preprocessor statement: Any line that starts with '#'.
-static int cin_ispreproc(const char *s)
-{
-  return rs_cin_ispreproc(s);
-}
-
-/// Return true if line "*pp" at "*lnump" is a preprocessor statement or a
-/// continuation line of a preprocessor statement.  Decrease "*lnump" to the
-/// start and return the line in "*pp".
-/// Put the amount of indent in "*amount".
-static int cin_ispreproc_cont(const char **pp, linenr_T *lnump, int *amount)
-{
-  int out_lnum = *lnump;
-  int out_amount = *amount;
-  int retval = rs_cin_ispreproc_cont(*lnump, *amount, &out_lnum, &out_amount);
-  if (retval) {
-    if (out_lnum != *lnump) {
-      *pp = ml_get(out_lnum);
-    }
-    *lnump = out_lnum;
-    *amount = out_amount;
-  }
-  return retval;
-}
-
-// Recognize the start of a C or C++ comment.
-static int cin_iscomment(const char *p)
-{
-  return rs_cin_iscomment(p);
-}
-
-// Recognize the start of a "//" comment.
-static int cin_islinecomment(const char *p)
-{
-  return rs_cin_islinecomment(p);
-}
-
-/// Recognize a line that starts with '{' or '}', or ends with ';', ',', '{' or
-/// '}'.
-/// Don't consider "} else" a terminated line.
-/// If a line begins with an "else", only consider it terminated if no unmatched
-/// opening braces follow (handle "else { foo();" correctly).
-///
-/// @param incl_open   include '{' at the end as terminator
-/// @param incl_comma  recognize a trailing comma
-///
-/// @return  the character terminating the line (ending char's have precedence if
-///          both apply in order to determine initializations).
-static char cin_isterminated(const char *s, int incl_open, int incl_comma)
-{
-  return rs_cin_isterminated(s, (bool)incl_open, (bool)incl_comma);
-}
-
-/// Recognizes the basic picture of a function declaration -- it needs to
-/// have an open paren somewhere and a close paren at the end of the line and
-/// no semicolons anywhere.
-/// When a line ends in a comma we continue looking in the next line.
-///
-/// @param[in]  sp  Points to a string with the line. When looking at other
-///                 lines it must be restored to the line. When it's NULL fetch
-///                 lines here.
-/// @param[in]  first_lnum Where to start looking.
-/// @param[in]  min_lnum The line before which we will not be looking.
-static int cin_isfuncdecl(const char **sp, linenr_T first_lnum, linenr_T min_lnum)
-{
-  return rs_cin_isfuncdecl(sp, first_lnum, min_lnum);
-}
-
-static int cin_isif(const char *p)
-{
-  return rs_cin_isif(p);
-}
-
-static int cin_iselse(const char *p)
-{
-  return rs_cin_iselse(p);
-}
-
-static int cin_isdo(const char *p)
-{
-  return rs_cin_isdo(p);
-}
-
-// Check if this is a "while" that should have a matching "do".
-// We only accept a "while (condition) ;", with only white space between the
-// ')' and ';'. The condition may be spread over several lines.
-static int cin_iswhileofdo(const char *p, linenr_T lnum)  // XXX
-{
-  return rs_cin_iswhileofdo(p, lnum);
-}
-
-// Check whether in "p" there is an "if", "for" or "while" before "*poffset".
-// Return 0 if there is none.
-// Otherwise return !0 and update "*poffset" to point to the place where the
-// string was found.
-static int cin_is_if_for_while_before_offset(const char *line, int *poffset)
-{
-  return rs_cin_is_if_for_while_before_offset(line, poffset);
-}
-
-/// Return true if we are at the end of a do-while.
-///    do
-///       nothing;
-///    while (foo
-///             && bar);  <-- here
-/// Adjust the cursor to the line with "while".
-static int cin_iswhileofdo_end(int terminated)
-{
-  return rs_cin_iswhileofdo_end(terminated);
-}
-
-static int cin_isbreak(const char *p)
-{
-  return rs_cin_isbreak(p);
-}
-
-// Find the position of a C++ base-class declaration or
-// constructor-initialization. eg:
-//
-// class MyClass :
-//      baseClass               <-- here
-// class MyClass : public baseClass,
-//      anotherBaseClass        <-- here (should probably lineup ??)
-// MyClass::MyClass(...) :
-//      baseClass(...)          <-- here (constructor-initialization)
-//
-// This is a lot of guessing.  Watch out for "cond ? func() : foo".
-static int cin_is_cpp_baseclass(cpp_baseclass_cache_T *cached)
-{
-  int found = cached->found;
-  int pos_lnum = cached->lpos.lnum;
-  int pos_col = cached->lpos.col;
-  int result = rs_cin_is_cpp_baseclass(&found, &pos_lnum, &pos_col);
-  cached->found = found;
-  cached->lpos.lnum = pos_lnum;
-  cached->lpos.col = pos_col;
-  return result;
-}
-
-static int get_baseclass_amount(int col)
-{
-  return rs_get_baseclass_amount(col);
-}
-
-/// Return true if string "s" ends with the string "find", possibly followed by
-/// white space and comments.  Skip strings and comments.
-static int cin_ends_in(const char *s, const char *find)
-{
-  return rs_cin_ends_in(s, find);
-}
-
-/// Return true when "s" starts with "word" and then a non-ID character.
-static int cin_starts_with(const char *s, const char *word)
-{
-  return rs_cin_starts_with(s, word);
-}
-
-/// Recognize a `extern "C"` or `extern "C++"` linkage specifications.
-static int cin_is_cpp_extern_c(const char *s)
-{
-  return rs_cin_is_extern_c(s);
-}
-
-// Skip strings, chars and comments until at or past "trypos".
-// Return the column found.
-static int cin_skip2pos(pos_T *trypos)
-{
-  return rs_cin_skip2pos_col(ml_get(trypos->lnum), trypos->col);
-}
-
-// Find the '{' at the start of the block we are in.
-// Return NULL if no match found.
-// Ignore a '{' that is in a comment, makes indenting the next three lines
-// work.
-// foo()
-// {
-// }
-
-static pos_T *find_start_brace(void)  // XXX
-{
-  static pos_T pos_copy;
-  FindMatchResult result = rs_find_start_brace();
-  if (result.found) {
-    pos_copy.lnum = result.lnum;
-    pos_copy.col = result.col;
-    return &pos_copy;
-  }
-  return NULL;
-}
-
-/// Find the matching '(', ignoring it if it is in a comment.
-/// @returns NULL or the found match.
-static pos_T *find_match_paren(int ind_maxparen)
-{
-  static pos_T pos_copy;
-  FindMatchResult result = rs_find_match_paren(ind_maxparen);
-  if (result.found) {
-    pos_copy.lnum = result.lnum;
-    pos_copy.col = result.col;
-    return &pos_copy;
-  }
-  return NULL;
-}
-
-static pos_T *find_match_char(char c, int ind_maxparen)
-{
-  static pos_T pos_copy;
-  FindMatchResult result = rs_find_match_char((int)(uint8_t)c, ind_maxparen);
-  if (result.found) {
-    pos_copy.lnum = result.lnum;
-    pos_copy.col = result.col;
-    return &pos_copy;
-  }
-  return NULL;
-}
-
-/// Find the matching '(', ignoring it if it is in a comment or before an
-/// unmatched {.
-/// @returns NULL or the found match.
-static pos_T *find_match_paren_after_brace(int ind_maxparen)
-{
-  static pos_T pos_copy;
-  FindMatchResult result = rs_find_match_paren_after_brace(ind_maxparen);
-  if (result.found) {
-    pos_copy.lnum = result.lnum;
-    pos_copy.col = result.col;
-    return &pos_copy;
-  }
-  return NULL;
-}
-
-// Return ind_maxparen corrected for the difference in line number between the
-// cursor position and "startpos".  This makes sure that searching for a
-// matching paren above the cursor line doesn't find a match because of
-// looking a few lines further.
-static int corr_ind_maxparen(pos_T *startpos)
-{
-  return rs_corr_ind_maxparen(startpos->lnum);
-}
-
-// Set w_cursor.col to the column number of the last unmatched ')' or '{' in
-// line "l".  "l" must point to the start of the line.
-static int find_last_paren(const char *l, char start, char end)
-{
-  BracketMatch result = rs_find_last_paren(l, start, end);
-  if (result.found) {
-    curwin->w_cursor.col = result.col;
-  } else {
-    curwin->w_cursor.col = 0;
-  }
-  return result.found;
+  return rs_cin_islabel();
 }
 
 // Parse 'cinoptions' and set the values in "curbuf".
@@ -914,10 +372,6 @@ int get_c_indent(void)
   opts.ind_pragma = curbuf->b_ind_pragma;
 
   return rs_get_c_indent(&opts);
-}
-static int find_match(int lookfor, linenr_T ourscope)
-{
-  return rs_find_match(lookfor, ourscope);
 }
 
 /// Check that "cinkeys" contains the key "keytyped",
