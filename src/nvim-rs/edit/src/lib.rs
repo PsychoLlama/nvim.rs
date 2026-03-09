@@ -12,6 +12,7 @@ pub mod completion;
 pub mod editing;
 pub mod helpers;
 pub mod insert;
+pub mod insertchar;
 pub mod key_handlers;
 pub mod keys;
 pub mod mode;

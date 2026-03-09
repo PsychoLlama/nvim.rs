@@ -73,7 +73,7 @@ extern "C" {
     fn nvim_textfmt_get_expr_indent() -> c_int;
 
     // Existing accessors
-    fn nvim_edit_insertchar(c: c_int, flags: c_int, second_indent: c_int);
+    fn insertchar(c: c_int, flags: c_int, second_indent: c_int);
     fn nvim_mark_col_adjust(
         lnum: c_int,
         col: c_int,
@@ -325,7 +325,7 @@ pub(crate) unsafe fn format_lines_impl(line_count: c_int, avoid_fex: bool) {
                 if avoid_fex {
                     flags += INSCHAR_NO_FEX;
                 }
-                nvim_edit_insertchar(0, flags, second_indent);
+                insertchar(0, flags, second_indent);
 
                 nvim_set_State(old_state);
                 nvim_textfmt_set_p_smd(smd_save);

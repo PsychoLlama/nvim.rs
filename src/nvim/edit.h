@@ -43,3 +43,5 @@ bool ins_tab(void);
 bool ins_eol(int c);
 // ins_bs: handles backspace/delete in insert mode (backspace.rs)
 bool ins_bs(int c, int mode, int *inserted_space_p);
+// insertchar: character insertion with formatting (insertchar.rs, export_name = "insertchar")
+void insertchar(int c, int flags, int second_indent);

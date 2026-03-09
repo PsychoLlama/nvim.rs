@@ -1027,10 +1027,133 @@ void nvim_edit_ins_str(const char *p, size_t len)
   ins_str((char *)p, len);
 }
 
-/// Call insertchar(c, flags, second_indent) (accessor for Rust).
-void nvim_edit_insertchar(int c, int flags, int second_indent)
+// -- Phase 3 accessors (for insertchar Rust migration) --
+
+/// Call comp_textwidth(ff) (accessor for Rust).
+int nvim_edit_comp_textwidth(int ff)
 {
-  insertchar(c, flags, second_indent);
+  return comp_textwidth((bool)ff);
+}
+
+/// Call internal_format(textwidth, second_indent, flags, format_only, c) (accessor for Rust).
+void nvim_edit_internal_format(int textwidth, int second_indent, int flags, int format_only, int c)
+{
+  internal_format(textwidth, second_indent, flags, (bool)format_only, c);
+}
+
+/// Call fex_format(lnum, count, c) (accessor for Rust).
+int nvim_edit_fex_format(linenr_T lnum, long count, int c)
+{
+  return fex_format(lnum, count, c);
+}
+
+/// Call char2cells(c) (accessor for Rust).
+int nvim_edit_char2cells(int c)
+{
+  return char2cells(c);
+}
+
+/// Call gchar_cursor() (accessor for Rust).
+int nvim_edit_gchar_cursor(void)
+{
+  return gchar_cursor();
+}
+
+/// Call byte2cells(b) (accessor for Rust).
+int nvim_edit_byte2cells(int b)
+{
+  return byte2cells((uint8_t)b);
+}
+
+/// Call vpeekc() (accessor for Rust).
+int nvim_edit_vpeekc(void)
+{
+  return vpeekc();
+}
+
+/// Call vgetc() (accessor for Rust).
+int nvim_edit_vgetc(void)
+{
+  return vgetc();
+}
+
+/// Call do_digraph(c) (accessor for Rust).
+int nvim_edit_do_digraph(int c)
+{
+  return do_digraph(c);
+}
+
+/// Call ins_char(c) (accessor for Rust).
+void nvim_edit_ins_char(int c)
+{
+  ins_char(c);
+}
+
+/// Call ins_char_bytes(buf, charlen) (accessor for Rust).
+void nvim_edit_ins_char_bytes(const char *buf, size_t charlen)
+{
+  ins_char_bytes((char *)buf, charlen);
+}
+
+/// Call utf_char2len(c) (accessor for Rust).
+int nvim_edit_utf_char2len(int c)
+{
+  return utf_char2len(c);
+}
+
+/// Check if curbuf->b_p_fex (formatexpr) is non-empty (accessor for Rust).
+int nvim_edit_has_b_p_fex(void)
+{
+  return *curbuf->b_p_fex != NUL ? 1 : 0;
+}
+
+/// Handle the end_comment_pending char replacement for insertchar (accessor for Rust).
+/// This is the complex comment-leader removal section from insertchar().
+void nvim_edit_handle_end_comment_pending(int c)
+{
+  char *p;
+  char lead_end[COM_MAX_LEN];  // end-comment string
+
+  // Need to remove existing (middle) comment leader and insert end
+  // comment leader.  First, check what comment leader we can find.
+  char *line = get_cursor_line_ptr();
+  int i = get_leader_len(line, &p, false, true);
+  if (i > 0 && vim_strchr(p, COM_MIDDLE) != NULL) {  // Just checking
+    // Skip middle-comment string
+    while (*p && p[-1] != ':') {  // find end of middle flags
+      p++;
+    }
+    int middle_len = (int)copy_option_part(&p, lead_end, COM_MAX_LEN, ",");
+    // Don't count trailing white space for middle_len
+    while (middle_len > 0 && ascii_iswhite(lead_end[middle_len - 1])) {
+      middle_len--;
+    }
+
+    // Find the end-comment string
+    while (*p && p[-1] != ':') {  // find end of end flags
+      p++;
+    }
+    int end_len = (int)copy_option_part(&p, lead_end, COM_MAX_LEN, ",");
+
+    // Skip white space before the cursor
+    i = curwin->w_cursor.col;
+    while (--i >= 0 && ascii_iswhite(line[i])) {}
+    i++;
+
+    // Skip to before the middle leader
+    i -= middle_len;
+
+    // Check some expected things before we go on
+    if (i >= 0 && end_len > 0
+        && (uint8_t)lead_end[end_len - 1] == end_comment_pending) {
+      // Backspace over all the stuff we want to replace
+      backspace_until_column(i);
+
+      // Insert the end-comment string, except for the last
+      // character, which will get inserted as normal later.
+      ins_bytes_len(lead_end, (size_t)(end_len - 1));
+    }
+  }
 }
 
 /// Call stop_insert(end_insert_pos, esc, nomove) (accessor for Rust).
@@ -3184,216 +3307,6 @@ int get_literal(bool no_simplify)
 static void insert_special(int c, int allow_modmask, int ctrlv)
 {
   rs_insert_special(c, allow_modmask, ctrlv);
-}
-
-// Special characters in this context are those that need processing other
-// than the simple insertion that can be performed here. This includes ESC
-// which terminates the insert, and CR/NL which need special processing to
-// open up a new line. This routine tries to optimize insertions performed by
-// the "redo", "undo" or "put" commands, so it needs to know when it should
-// stop and defer processing to the "normal" mechanism.
-// '0' and '^' are special, because they can be followed by CTRL-D.
-#define ISSPECIAL(c)   ((c) < ' ' || (c) >= DEL || (c) == '0' || (c) == '^')
-
-/// "flags": INSCHAR_FORMAT - force formatting
-///          INSCHAR_CTRLV  - char typed just after CTRL-V
-///          INSCHAR_NO_FEX - don't use 'formatexpr'
-///
-///   NOTE: passes the flags value straight through to internal_format() which,
-///         beside INSCHAR_FORMAT (above), is also looking for these:
-///          INSCHAR_DO_COM   - format comments
-///          INSCHAR_COM_LIST - format comments with num list or 2nd line indent
-///
-/// @param c              character to insert or NUL
-/// @param flags          INSCHAR_FORMAT, etc.
-/// @param second_indent  indent for second line if >= 0
-void insertchar(int c, int flags, int second_indent)
-{
-  char *p;
-  int force_format = flags & INSCHAR_FORMAT;
-
-  const int textwidth = comp_textwidth(force_format);
-  const bool fo_ins_blank = has_format_option(FO_INS_BLANK);
-
-  // Try to break the line in two or more pieces when:
-  // - Always do this if we have been called to do formatting only.
-  // - Always do this when 'formatoptions' has the 'a' flag and the line
-  //   ends in white space.
-  // - Otherwise:
-  //     - Don't do this if inserting a blank
-  //     - Don't do this if an existing character is being replaced, unless
-  //       we're in MODE_VREPLACE state.
-  //     - Do this if the cursor is not on the line where insert started
-  //     or - 'formatoptions' doesn't have 'l' or the line was not too long
-  //           before the insert.
-  //        - 'formatoptions' doesn't have 'b' or a blank was inserted at or
-  //          before 'textwidth'
-  if (textwidth > 0
-      && (force_format
-          || (!ascii_iswhite(c)
-              && !((State & REPLACE_FLAG)
-                   && !(State & VREPLACE_FLAG)
-                   && *get_cursor_pos_ptr() != NUL)
-              && (curwin->w_cursor.lnum != Insstart.lnum
-                  || ((!has_format_option(FO_INS_LONG)
-                       || Insstart_textlen <= (colnr_T)textwidth)
-                      && (!fo_ins_blank
-                          || Insstart_blank_vcol <= (colnr_T)textwidth)))))) {
-    // Format with 'formatexpr' when it's set.  Use internal formatting
-    // when 'formatexpr' isn't set or it returns non-zero.
-    bool do_internal = true;
-    colnr_T virtcol = get_nolist_virtcol()
-                      + char2cells(c != NUL ? c : gchar_cursor());
-
-    if (*curbuf->b_p_fex != NUL && (flags & INSCHAR_NO_FEX) == 0
-        && (force_format || virtcol > (colnr_T)textwidth)) {
-      do_internal = (fex_format(curwin->w_cursor.lnum, 1, c) != 0);
-      // It may be required to save for undo again, e.g. when setline()
-      // was called.
-      ins_need_undo = true;
-    }
-    if (do_internal) {
-      internal_format(textwidth, second_indent, flags, c == NUL, c);
-    }
-  }
-
-  if (c == NUL) {           // only formatting was wanted
-    return;
-  }
-
-  // Check whether this character should end a comment.
-  if (did_ai && c == end_comment_pending) {
-    char lead_end[COM_MAX_LEN];  // end-comment string
-
-    // Need to remove existing (middle) comment leader and insert end
-    // comment leader.  First, check what comment leader we can find.
-    char *line = get_cursor_line_ptr();
-    int i = get_leader_len(line, &p, false, true);
-    if (i > 0 && vim_strchr(p, COM_MIDDLE) != NULL) {  // Just checking
-      // Skip middle-comment string
-      while (*p && p[-1] != ':') {  // find end of middle flags
-        p++;
-      }
-      int middle_len = (int)copy_option_part(&p, lead_end, COM_MAX_LEN, ",");
-      // Don't count trailing white space for middle_len
-      while (middle_len > 0 && ascii_iswhite(lead_end[middle_len - 1])) {
-        middle_len--;
-      }
-
-      // Find the end-comment string
-      while (*p && p[-1] != ':') {  // find end of end flags
-        p++;
-      }
-      int end_len = (int)copy_option_part(&p, lead_end, COM_MAX_LEN, ",");
-
-      // Skip white space before the cursor
-      i = curwin->w_cursor.col;
-      while (--i >= 0 && ascii_iswhite(line[i])) {}
-      i++;
-
-      // Skip to before the middle leader
-      i -= middle_len;
-
-      // Check some expected things before we go on
-      if (i >= 0 && end_len > 0
-          && (uint8_t)lead_end[end_len - 1] == end_comment_pending) {
-        // Backspace over all the stuff we want to replace
-        backspace_until_column(i);
-
-        // Insert the end-comment string, except for the last
-        // character, which will get inserted as normal later.
-        ins_bytes_len(lead_end, (size_t)(end_len - 1));
-      }
-    }
-  }
-  end_comment_pending = NUL;
-
-  did_ai = false;
-  did_si = false;
-  can_si = false;
-  can_si_back = false;
-
-  // If there's any pending input, grab up to INPUT_BUFLEN at once.
-  // This speeds up normal text input considerably.
-  // Don't do this when 'cindent' or 'indentexpr' is set, because we might
-  // need to re-indent at a ':', or any other character (but not what
-  // 'paste' is set)..
-  // Don't do this when there an InsertCharPre autocommand is defined,
-  // because we need to fire the event for every character.
-  // Do the check for InsertCharPre before the call to vpeekc() because the
-  // InsertCharPre autocommand could change the input buffer.
-  if (!ISSPECIAL(c)
-      && (utf_char2len(c) == 1)
-      && !has_event(EVENT_INSERTCHARPRE)
-      && !test_disable_char_avail
-      && vpeekc() != NUL
-      && !(State & REPLACE_FLAG)
-      && !cindent_on()
-      && !p_ri) {
-#define INPUT_BUFLEN 100
-    char buf[INPUT_BUFLEN + 1];
-    colnr_T virtcol = 0;
-
-    buf[0] = (char)c;
-    int i = 1;
-    if (textwidth > 0) {
-      virtcol = get_nolist_virtcol();
-    }
-    // Stop the string when:
-    // - no more chars available
-    // - finding a special character (command key)
-    // - buffer is full
-    // - running into the 'textwidth' boundary
-    // - need to check for abbreviation: A non-word char after a word-char
-    while ((c = vpeekc()) != NUL
-           && !ISSPECIAL(c)
-           && MB_BYTE2LEN(c) == 1
-           && i < INPUT_BUFLEN
-           && (textwidth == 0
-               || (virtcol += byte2cells((uint8_t)buf[i - 1])) < (colnr_T)textwidth)
-           && !(!no_abbr && !vim_iswordc(c) && vim_iswordc((uint8_t)buf[i - 1]))) {
-      c = vgetc();
-      buf[i++] = (char)c;
-    }
-
-    do_digraph(-1);                     // clear digraphs
-    do_digraph((uint8_t)buf[i - 1]);               // may be the start of a digraph
-    buf[i] = NUL;
-    ins_str(buf, (size_t)i);
-    if (flags & INSCHAR_CTRLV) {
-      redo_literal((uint8_t)(*buf));
-      i = 1;
-    } else {
-      i = 0;
-    }
-    if (buf[i] != NUL) {
-      AppendToRedobuffLit(buf + i, -1);
-    }
-  } else {
-    int cc;
-
-    if ((cc = utf_char2len(c)) > 1) {
-      char buf[MB_MAXCHAR + 1];
-
-      utf_char2bytes(c, buf);
-      buf[cc] = NUL;
-      ins_char_bytes(buf, (size_t)cc);
-      AppendCharToRedobuff(c);
-    } else {
-      ins_char(c);
-      if (flags & INSCHAR_CTRLV) {
-        redo_literal(c);
-      } else {
-        AppendCharToRedobuff(c);
-      }
-    }
-  }
-}
-
-// Put a character in the redo buffer, for when just after a CTRL-V.
-static void redo_literal(int c)
-{
-  rs_redo_literal(c);
 }
 
 /// start_arrow() is called when an arrow key is used in insert mode.

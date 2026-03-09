@@ -58,7 +58,7 @@ extern "C" {
     fn nvim_edit_get_special_key_name(c: c_int, modifiers: c_int) -> *mut c_char;
     fn nvim_edit_ins_str(p: *const c_char, len: usize);
     fn nvim_edit_AppendToRedobuffLit(s: *const c_char, len: c_int);
-    fn nvim_edit_insertchar(c: c_int, flags: c_int, second_indent: c_int);
+    fn insertchar(c: c_int, flags: c_int, second_indent: c_int);
     fn rs_stop_arrow() -> c_int;
 
     // -- get_literal dependencies --
@@ -386,7 +386,7 @@ unsafe fn insert_special_impl(mut c: c_int, mut allow_modmask: c_int, mut ctrlv:
         }
     }
     if rs_stop_arrow() == OK {
-        nvim_edit_insertchar(c, if ctrlv != 0 { INSCHAR_CTRLV } else { 0 }, -1);
+        insertchar(c, if ctrlv != 0 { INSCHAR_CTRLV } else { 0 }, -1);
     }
 }
 
