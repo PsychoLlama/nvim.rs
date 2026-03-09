@@ -2052,3 +2052,19 @@ void nvim_curwin_set_cursor_from_pos(const pos_T *pos) { curwin->w_cursor = *pos
 /// Set curwin->w_cursor.coladd.
 void nvim_curwin_set_cursor_coladd(int v) { curwin->w_cursor.coladd = (colnr_T)v; }
 
+// =============================================================================
+// cursor_pos_info shims for Rust inline absorption of nvim_cpi_* functions
+// =============================================================================
+
+/// Get the file format of the current buffer (returns EOL_UNIX or EOL_DOS).
+int nvim_curbuf_get_fileformat(void) { return rs_get_fileformat((buf_T *)curbuf); }
+
+/// Call os_breakcheck() — replaces nvim_cpi_os_breakcheck.
+void nvim_os_breakcheck(void) { os_breakcheck(); }
+
+/// Get BOM size — replaces nvim_cpi_get_bomb_size.
+int nvim_bomb_size(void) { return bomb_size(); }
+
+/// Show the "no lines in buffer" message — replaces nvim_cpi_show_empty_msg.
+void nvim_msg_no_lines(void) { msg(_(no_lines_msg), 0); }
+

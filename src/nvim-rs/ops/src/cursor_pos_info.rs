@@ -2,7 +2,7 @@
 //!
 //! Migrated from `cursor_pos_info()` in ops.c.
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
 
 /// Maximum column constant (matches C `MAXCOL = 0x7fffffff`)
 const MAXCOL: c_int = 0x7fff_ffff;
@@ -43,24 +43,17 @@ pub struct CpiLineCountResult {
     pub char_count: i64,
 }
 
+/// EOL format constant (matches C `EOL_DOS = 1`)
+const EOL_DOS: c_int = 1;
+
 extern "C" {
     // Buffer state (generic shims)
     fn nvim_curbuf_ml_empty() -> bool;
     fn nvim_curbuf_get_ml_line_count() -> c_int;
-    fn nvim_cpi_get_eol_size() -> c_int;
+    fn nvim_curbuf_get_fileformat() -> c_int;
 
     // Visual state (out is CpiVisualState*, passed as void*)
     fn nvim_cpi_get_visual_state(out: *mut c_void);
-
-    // Counting (out is CpiLineCountResult*, passed as void*)
-    fn nvim_cpi_line_count_info(lnum: c_int, col_limit: c_int, eol_size: c_int, out: *mut c_void);
-    fn nvim_cpi_line_count_info_at(
-        lnum: c_int,
-        start_col: c_int,
-        len: c_int,
-        eol_size: c_int,
-        out: *mut c_void,
-    );
 
     // Block visual
     fn nvim_cpi_setup_block_visual(
@@ -77,12 +70,12 @@ extern "C" {
     fn nvim_cpi_last_line_no_eol() -> c_int;
     fn nvim_cpi_last_line_short(lnum: c_int, len: c_int) -> c_int;
 
-    // Interrupt
-    fn nvim_cpi_os_breakcheck();
+    // Interrupt / breakcheck
+    fn nvim_os_breakcheck();
     fn nvim_got_int() -> c_int;
 
-    // Output
-    fn nvim_cpi_show_empty_msg();
+    // Output / display
+    fn nvim_msg_no_lines();
     fn nvim_cpi_format_visual_msg(
         line_count_selected: c_int,
         start_vcol: c_int,
@@ -105,7 +98,7 @@ extern "C" {
         byte_count: i64,
     );
     fn nvim_cpi_append_bom_and_display(bom_count: i64);
-    fn nvim_cpi_get_bomb_size() -> c_int;
+    fn nvim_bomb_size() -> c_int;
     fn nvim_cpi_populate_dict(
         dict: *mut c_void,
         visual_active: c_int,
@@ -117,12 +110,121 @@ extern "C" {
         char_count_cursor: i64,
         byte_count_cursor: i64,
     );
+
+    // Low-level buffer line access
+    fn nvim_ml_get(lnum: c_int) -> *const c_char;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
 }
 
 /// `_Static_assert` constants are verified in the C accessor file.
 #[inline]
 fn lcr_void(lcr: &mut CpiLineCountResult) -> *mut c_void {
     std::ptr::from_mut(lcr).cast::<c_void>()
+}
+
+/// Rust port of `line_count_info()` from ops.c (C version deleted).
+///
+/// Count bytes, words, chars in a NUL-terminated C string up to `limit` bytes.
+/// Returns byte count. `wc` and `cc` are incremented by word and char counts.
+///
+/// # Safety
+/// `line` must point to a valid NUL-terminated C string.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+unsafe fn line_count_info(
+    line: *const c_char,
+    wc: &mut i64,
+    cc: &mut i64,
+    limit: i64,
+    eol_size: c_int,
+) -> i64 {
+    // space (0x20) and tab (0x09) as c_char (i8)
+    const SPACE: c_char = b' ' as i8;
+    const TAB: c_char = b'\t' as i8;
+    let mut i: i64 = 0;
+    let mut words: i64 = 0;
+    let mut chars: i64 = 0;
+    let mut is_word = false;
+
+    loop {
+        if i >= limit {
+            break;
+        }
+        let byte = unsafe { *line.add(i as usize) };
+        if byte == 0 {
+            break;
+        }
+        let is_space = byte == SPACE || byte == TAB;
+        if is_word {
+            if is_space {
+                words += 1;
+                is_word = false;
+            }
+        } else if !is_space {
+            is_word = true;
+        }
+        chars += 1;
+        let char_len = unsafe { utfc_ptr2len(line.add(i as usize)) };
+        i += i64::from(char_len);
+    }
+
+    if is_word {
+        words += 1;
+    }
+    *wc += words;
+
+    // Add eol_size if end-of-line reached before limit
+    if i < limit && unsafe { *line.add(i as usize) } == 0 {
+        i += i64::from(eol_size);
+        chars += i64::from(eol_size);
+    }
+    *cc += chars;
+    i
+}
+
+/// Count bytes/words/chars on a buffer line (Rust replacement for nvim_cpi_line_count_info).
+///
+/// # Safety
+/// Calls `nvim_ml_get` to get a valid line pointer.
+unsafe fn cpi_line_count_info(
+    lnum: c_int,
+    col_limit: c_int,
+    eol_size: c_int,
+) -> CpiLineCountResult {
+    let line = nvim_ml_get(lnum);
+    let mut wc: i64 = 0;
+    let mut cc: i64 = 0;
+    let bc = line_count_info(line, &mut wc, &mut cc, i64::from(col_limit), eol_size);
+    CpiLineCountResult {
+        byte_count: bc,
+        word_count: wc,
+        char_count: cc,
+    }
+}
+
+/// Count bytes/words/chars on a buffer line starting at start_col (Rust replacement for nvim_cpi_line_count_info_at).
+///
+/// # Safety
+/// Calls `nvim_ml_get` to get a valid line pointer.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn cpi_line_count_info_at(
+    lnum: c_int,
+    start_col: c_int,
+    len: c_int,
+    eol_size: c_int,
+) -> CpiLineCountResult {
+    let line = nvim_ml_get(lnum).add(start_col as usize);
+    let mut wc: i64 = 0;
+    let mut cc: i64 = 0;
+    let bc = line_count_info(line, &mut wc, &mut cc, i64::from(len), eol_size);
+    CpiLineCountResult {
+        byte_count: bc,
+        word_count: wc,
+        char_count: cc,
+    }
 }
 
 /// Accumulated word/char/byte counts.
@@ -161,7 +263,7 @@ unsafe fn count_visual_line(p: &CountParams, lnum: c_int) -> CpiLineCountResult 
             nvim_cpi_block_line_count(lnum, p.eol_size, lcr_void(&mut lcr));
         }
         VISUAL_LINE => {
-            nvim_cpi_line_count_info(lnum, MAXCOL, p.eol_size, lcr_void(&mut lcr));
+            lcr = cpi_line_count_info(lnum, MAXCOL, p.eol_size);
         }
         VISUAL_CHAR => {
             let col_start = if lnum == p.min_lnum { p.min_col } else { 0 };
@@ -170,7 +272,7 @@ unsafe fn count_visual_line(p: &CountParams, lnum: c_int) -> CpiLineCountResult 
             } else {
                 MAXCOL
             };
-            nvim_cpi_line_count_info_at(lnum, col_start, col_end, p.eol_size, lcr_void(&mut lcr));
+            lcr = cpi_line_count_info_at(lnum, col_start, col_end, p.eol_size);
         }
         _ => {}
     }
@@ -194,7 +296,7 @@ unsafe fn count_lines(p: &CountParams) -> Option<Counts> {
 
     for lnum in 1..=p.line_count {
         if c.byte_count > last_check {
-            nvim_cpi_os_breakcheck();
+            nvim_os_breakcheck();
             if nvim_got_int() != 0 {
                 return None;
             }
@@ -217,15 +319,13 @@ unsafe fn count_lines(p: &CountParams) -> Option<Counts> {
         } else if !p.visual_active && lnum == p.cursor_lnum {
             c.word_count_cursor += c.word_count;
             c.char_count_cursor += c.char_count;
-            let mut lcr = CpiLineCountResult::default();
-            nvim_cpi_line_count_info(lnum, p.cursor_col + 1, p.eol_size, lcr_void(&mut lcr));
+            let lcr = cpi_line_count_info(lnum, p.cursor_col + 1, p.eol_size);
             c.byte_count_cursor = c.byte_count + lcr.byte_count;
             c.word_count_cursor += lcr.word_count;
             c.char_count_cursor += lcr.char_count;
         }
 
-        let mut lcr = CpiLineCountResult::default();
-        nvim_cpi_line_count_info(lnum, MAXCOL, p.eol_size, lcr_void(&mut lcr));
+        let lcr = cpi_line_count_info(lnum, MAXCOL, p.eol_size);
         c.byte_count += lcr.byte_count;
         c.word_count += lcr.word_count;
         c.char_count += lcr.char_count;
@@ -253,7 +353,7 @@ struct VisualDisplayParams {
 /// # Safety
 /// Calls C accessor functions.
 unsafe fn output_results(dict: *mut c_void, vp: &VisualDisplayParams, c: &Counts) {
-    let bom_count = i64::from(nvim_cpi_get_bomb_size());
+    let bom_count = i64::from(nvim_bomb_size());
 
     if dict.is_null() {
         if vp.visual_active {
@@ -311,14 +411,18 @@ pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
     // Check for empty buffer
     if nvim_curbuf_ml_empty() {
         if dict.is_null() {
-            nvim_cpi_show_empty_msg();
+            nvim_msg_no_lines();
         } else {
             nvim_cpi_populate_dict(dict, 0, 0, 0, 0, 0, 0, 0, 0);
         }
         return;
     }
 
-    let eol_size = nvim_cpi_get_eol_size();
+    let eol_size: c_int = if nvim_curbuf_get_fileformat() == EOL_DOS {
+        2
+    } else {
+        1
+    };
     let line_count = nvim_curbuf_get_ml_line_count();
 
     // Get visual state

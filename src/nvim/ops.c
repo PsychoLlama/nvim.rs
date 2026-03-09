@@ -2260,18 +2260,8 @@ void clear_oparg(oparg_T *oap)
   CLEAR_POINTER(oap);
 }
 
-///  Count the number of bytes, characters and "words" in a line.
-///
-///  "Words" are counted by looking for boundaries between non-space and
-///  space characters.  (it seems to produce results that match 'wc'.)
-///
-///  Return value is byte count; word count for the line is added to "*wc".
-///  Char count is added to "*cc".
-///
-///  The function will only examine the first "limit" characters in the
-///  line, stopping if it encounters an end-of-line (NUL byte).  In that
-///  case, eol_size will be added to the character count to account for
-///  the size of the EOL character.
+/// Count bytes, words, chars in a line up to limit.
+/// Used by nvim_cpi_block_line_count.
 static varnumber_T line_count_info(char *line, varnumber_T *wc, varnumber_T *cc, varnumber_T limit,
                                    int eol_size)
 {
@@ -2298,7 +2288,6 @@ static varnumber_T line_count_info(char *line, varnumber_T *wc, varnumber_T *cc,
   }
   *wc += words;
 
-  // Add eol_size if the end of line was reached before hitting limit.
   if (i < limit && line[i] == NUL) {
     i += eol_size;
     chars += eol_size;
@@ -2338,11 +2327,6 @@ typedef struct {
 
 
 /// Get EOL size based on file format (1 for unix, 2 for DOS).
-int nvim_cpi_get_eol_size(void)
-{
-  return (rs_get_fileformat((buf_T *)curbuf) == EOL_DOS) ? 2 : 1;
-}
-
 /// Get visual mode state in one batch call.
 void nvim_cpi_get_visual_state(void *out_ptr)
 {
@@ -2357,31 +2341,6 @@ void nvim_cpi_get_visual_state(void *out_ptr)
   out->curswant = (int)curwin->w_curswant;
 }
 
-/// Count words, chars, bytes in a line up to col_limit.
-void nvim_cpi_line_count_info(int lnum, int col_limit, int eol_size,
-                              void *out_ptr)
-{
-  CpiLineCountResult *out = (CpiLineCountResult *)out_ptr;
-  varnumber_T wc = 0, cc = 0;
-  varnumber_T bc = line_count_info(ml_get((linenr_T)lnum), &wc, &cc,
-                                   (varnumber_T)col_limit, eol_size);
-  out->byte_count = (int64_t)bc;
-  out->word_count = (int64_t)wc;
-  out->char_count = (int64_t)cc;
-}
-
-/// Count words, chars, bytes starting at a column offset within a line.
-void nvim_cpi_line_count_info_at(int lnum, int start_col, int len, int eol_size,
-                                 void *out_ptr)
-{
-  CpiLineCountResult *out = (CpiLineCountResult *)out_ptr;
-  varnumber_T wc = 0, cc = 0;
-  char *s = ml_get((linenr_T)lnum) + start_col;
-  varnumber_T bc = line_count_info(s, &wc, &cc, (varnumber_T)len, eol_size);
-  out->byte_count = (int64_t)bc;
-  out->word_count = (int64_t)wc;
-  out->char_count = (int64_t)cc;
-}
 
 /// Set up block visual mode: get virtual columns with sbr temporarily cleared.
 void nvim_cpi_setup_block_visual(int min_lnum, int min_col,
@@ -2483,24 +2442,6 @@ int nvim_cpi_last_line_short(int lnum, int byte_count)
   return 1;
 }
 
-/// Call os_breakcheck for interrupt detection.
-void nvim_cpi_os_breakcheck(void)
-{
-  os_breakcheck();
-}
-
-
-/// Show the "no lines" message for empty buffers.
-void nvim_cpi_show_empty_msg(void)
-{
-  msg(_(no_lines_msg), 0);
-}
-
-/// Get BOM size.
-int nvim_cpi_get_bomb_size(void)
-{
-  return bomb_size();
-}
 
 /// Format and display the visual mode message.
 void nvim_cpi_format_visual_msg(int line_count_selected,
