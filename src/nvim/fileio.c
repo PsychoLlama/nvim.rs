@@ -100,6 +100,15 @@ extern bool rs_is_dev_fd_file(const char *fname);
 extern const char *rs_check_for_bom(const uint8_t *data, int size, int *lenp, int flags);
 extern bool rs_need_conversion(const char *fenc);
 extern int rs_get_fio_flags(const char *name);
+// Binary I/O (Phase 2)
+extern int rs_get2c(FILE *fd);
+extern int rs_get3c(FILE *fd);
+extern int rs_get4c(FILE *fd);
+extern time_t rs_get8ctime(FILE *fd);
+extern char *rs_read_string(FILE *fd, size_t cnt);
+extern bool rs_put_bytes(FILE *fd, uintmax_t number, size_t len);
+extern int rs_put_time(FILE *fd, time_t time_);
+extern bool rs_vim_fgets(char *buf, int size, FILE *fp);
 extern void rs_check_marks_read(void);
 extern void rs_diff_invalidate(buf_T *buf);
 
@@ -2316,160 +2325,21 @@ char *modname(const char *fname, const char *ext, bool prepend_dot)
 bool vim_fgets(char *buf, int size, FILE *fp)
   FUNC_ATTR_NONNULL_ALL
 {
-  char *retval;
-
-  assert(size > 0);
-  buf[size - 2] = NUL;
-
-  do {
-    errno = 0;
-    retval = fgets(buf, size, fp);
-  } while (retval == NULL && errno == EINTR && ferror(fp));
-
-  if (buf[size - 2] != NUL && buf[size - 2] != '\n') {
-    char tbuf[200];
-
-    buf[size - 1] = NUL;  // Truncate the line.
-
-    // Now throw away the rest of the line:
-    do {
-      tbuf[sizeof(tbuf) - 2] = NUL;
-      errno = 0;
-      retval = fgets(tbuf, sizeof(tbuf), fp);
-      if (retval == NULL && (feof(fp) || errno != EINTR)) {
-        break;
-      }
-    } while (tbuf[sizeof(tbuf) - 2] != NUL && tbuf[sizeof(tbuf) - 2] != '\n');
-  }
-  return retval == NULL;
+  return rs_vim_fgets(buf, size, fp);
 }
 
-/// Read 2 bytes from "fd" and turn them into an int, MSB first.
-///
-/// @return  -1 when encountering EOF.
-int get2c(FILE *fd)
-{
-  const int n = getc(fd);
-  if (n == EOF) {
-    return -1;
-  }
-  const int c = getc(fd);
-  if (c == EOF) {
-    return -1;
-  }
-  return (n << 8) + c;
-}
+int get2c(FILE *fd) { return rs_get2c(fd); }
+int get3c(FILE *fd) { return rs_get3c(fd); }
+int get4c(FILE *fd) { return rs_get4c(fd); }
+time_t get8ctime(FILE *fd) { return (time_t)rs_get8ctime(fd); }
+char *read_string(FILE *fd, size_t cnt) { return rs_read_string(fd, cnt); }
 
-/// Read 3 bytes from "fd" and turn them into an int, MSB first.
-///
-/// @return  -1 when encountering EOF.
-int get3c(FILE *fd)
-{
-  int n = getc(fd);
-  if (n == EOF) {
-    return -1;
-  }
-  int c = getc(fd);
-  if (c == EOF) {
-    return -1;
-  }
-  n = (n << 8) + c;
-  c = getc(fd);
-  if (c == EOF) {
-    return -1;
-  }
-  return (n << 8) + c;
-}
-
-/// Read 4 bytes from "fd" and turn them into an int, MSB first.
-///
-/// @return  -1 when encountering EOF.
-int get4c(FILE *fd)
-{
-  // Use unsigned rather than int otherwise result is undefined
-  // when left-shift sets the MSB.
-  unsigned n;
-
-  int c = getc(fd);
-  if (c == EOF) {
-    return -1;
-  }
-  n = (unsigned)c;
-  c = getc(fd);
-  if (c == EOF) {
-    return -1;
-  }
-  n = (n << 8) + (unsigned)c;
-  c = getc(fd);
-  if (c == EOF) {
-    return -1;
-  }
-  n = (n << 8) + (unsigned)c;
-  c = getc(fd);
-  if (c == EOF) {
-    return -1;
-  }
-  n = (n << 8) + (unsigned)c;
-  return (int)n;
-}
-
-/// Read 8 bytes from `fd` and turn them into a time_t, MSB first.
-///
-/// @return  -1 when encountering EOF.
-time_t get8ctime(FILE *fd)
-{
-  time_t n = 0;
-
-  for (int i = 0; i < 8; i++) {
-    const int c = getc(fd);
-    if (c == EOF) {
-      return -1;
-    }
-    n = (n << 8) + c;
-  }
-  return n;
-}
-
-/// Reads a string of length "cnt" from "fd" into allocated memory.
-///
-/// @return  pointer to the string or NULL when unable to read that many bytes.
-char *read_string(FILE *fd, size_t cnt)
-{
-  char *str = xmallocz(cnt);
-  for (size_t i = 0; i < cnt; i++) {
-    int c = getc(fd);
-    if (c == EOF) {
-      xfree(str);
-      return NULL;
-    }
-    str[i] = (char)c;
-  }
-  return str;
-}
-
-/// Writes a number to file "fd", most significant bit first, in "len" bytes.
-///
-/// @return  false in case of an error.
 bool put_bytes(FILE *fd, uintmax_t number, size_t len)
 {
-  assert(len > 0);
-  for (size_t i = len - 1; i < len; i--) {
-    if (putc((int)(number >> (i * 8)), fd) == EOF) {
-      return false;
-    }
-  }
-  return true;
+  return rs_put_bytes(fd, (uint64_t)number, len);
 }
 
-/// Writes time_t to file "fd" in 8 bytes.
-///
-/// @return  FAIL when the write failed.
-int put_time(FILE *fd, time_t time_)
-{
-  uint8_t buf[8];
-  time_to_bytes(time_, buf);
-  return fwrite(buf, sizeof(uint8_t), ARRAY_SIZE(buf), fd) == 1 ? OK : FAIL;
-}
+int put_time(FILE *fd, time_t time_) { return rs_put_time(fd, (int64_t)time_); }
 
 static int rename_with_tmp(const char *const from, const char *const to)
 {
