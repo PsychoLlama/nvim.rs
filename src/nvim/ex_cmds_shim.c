@@ -14,6 +14,7 @@
 #include "auto/config.h"
 #include "klib/kvec.h"
 #include "nvim/arglist.h"
+#include "nvim/assert_defs.h"
 #include "nvim/ascii_defs.h"
 #include "nvim/autocmd.h"
 #include "nvim/autocmd_defs.h"
@@ -2678,4 +2679,117 @@ void nvim_ecmd_dec_curwin_buf_nwindows_safe(void)
   if (curwin->w_buffer != NULL && curwin->w_buffer->b_nwindows > 1) {
     curwin->w_buffer->b_nwindows--;
   }
+}
+
+// =============================================================================
+// cursor_pos_info display accessors (moved from ops.c Phase 5)
+// =============================================================================
+
+/// Format and display the visual mode message.
+void nvim_cpi_format_visual_msg(int line_count_selected,
+                                int start_vcol,
+                                int end_vcol,
+                                int is_block_mode,
+                                int curswant_is_max,
+                                int64_t word_count_cursor,
+                                int64_t word_count,
+                                int64_t char_count_cursor,
+                                int64_t char_count,
+                                int64_t byte_count_cursor,
+                                int64_t byte_count)
+{
+  char buf1[50];
+
+  if (is_block_mode && !curswant_is_max) {
+    int64_t cols;
+    STRICT_SUB(end_vcol + 1, start_vcol, &cols, int64_t);
+    vim_snprintf(buf1, sizeof(buf1), _("%" PRId64 " Cols; "), cols);
+  } else {
+    buf1[0] = NUL;
+  }
+
+  if (char_count_cursor == byte_count_cursor
+      && char_count == byte_count) {
+    vim_snprintf(IObuff, IOSIZE,
+                 _("Selected %s%" PRId64 " of %" PRId64 " Lines;"
+                   " %" PRId64 " of %" PRId64 " Words;"
+                   " %" PRId64 " of %" PRId64 " Bytes"),
+                 buf1, (int64_t)line_count_selected,
+                 (int64_t)curbuf->b_ml.ml_line_count,
+                 word_count_cursor, word_count,
+                 byte_count_cursor, byte_count);
+  } else {
+    vim_snprintf(IObuff, IOSIZE,
+                 _("Selected %s%" PRId64 " of %" PRId64 " Lines;"
+                   " %" PRId64 " of %" PRId64 " Words;"
+                   " %" PRId64 " of %" PRId64 " Chars;"
+                   " %" PRId64 " of %" PRId64 " Bytes"),
+                 buf1, (int64_t)line_count_selected,
+                 (int64_t)curbuf->b_ml.ml_line_count,
+                 word_count_cursor, word_count,
+                 char_count_cursor, char_count,
+                 byte_count_cursor, byte_count);
+  }
+}
+
+/// Format and display the normal mode message.
+void nvim_cpi_format_normal_msg(int64_t word_count_cursor,
+                                int64_t word_count,
+                                int64_t char_count_cursor,
+                                int64_t char_count,
+                                int64_t byte_count_cursor,
+                                int64_t byte_count)
+{
+  char buf1[50];
+  char buf2[40];
+
+  char *p = get_cursor_line_ptr();
+  validate_virtcol(curwin);
+  col_print(buf1, sizeof(buf1), (int)curwin->w_cursor.col + 1,
+            (int)curwin->w_virtcol + 1);
+  col_print(buf2, sizeof(buf2), get_cursor_line_len(), linetabsize_str(p));
+
+  if (char_count_cursor == byte_count_cursor
+      && char_count == byte_count) {
+    vim_snprintf(IObuff, IOSIZE,
+                 _("Col %s of %s; Line %" PRId64 " of %" PRId64 ";"
+                   " Word %" PRId64 " of %" PRId64 ";"
+                   " Byte %" PRId64 " of %" PRId64 ""),
+                 buf1, buf2,
+                 (int64_t)curwin->w_cursor.lnum,
+                 (int64_t)curbuf->b_ml.ml_line_count,
+                 word_count_cursor, word_count,
+                 byte_count_cursor, byte_count);
+  } else {
+    vim_snprintf(IObuff, IOSIZE,
+                 _("Col %s of %s; Line %" PRId64 " of %" PRId64 ";"
+                   " Word %" PRId64 " of %" PRId64 ";"
+                   " Char %" PRId64 " of %" PRId64 ";"
+                   " Byte %" PRId64 " of %" PRId64 ""),
+                 buf1, buf2,
+                 (int64_t)curwin->w_cursor.lnum,
+                 (int64_t)curbuf->b_ml.ml_line_count,
+                 word_count_cursor, word_count,
+                 char_count_cursor, char_count,
+                 byte_count_cursor, byte_count);
+  }
+}
+
+/// Append BOM info to IObuff and display the message.
+void nvim_cpi_append_bom_and_display(int64_t bom_count)
+{
+  if (bom_count > 0) {
+    const size_t len = strlen(IObuff);
+    vim_snprintf(IObuff + len, IOSIZE - len,
+                 _("(+%" PRId64 " for BOM)"), bom_count);
+  }
+  // Don't shorten this message, the user asked for it.
+  char *p = p_shm;
+  p_shm = "";
+  if (p_ch < 1) {
+    msg_start();
+    msg_scroll = true;
+  }
+  msg(IObuff, 0);
+  p_shm = p;
 }
