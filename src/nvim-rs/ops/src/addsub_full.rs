@@ -35,14 +35,6 @@ pub struct AddsubParseResult {
     pub overflow: c_int,
 }
 
-/// Result from the alpha-change operation.
-#[repr(C)]
-#[derive(Debug, Clone, Default)]
-pub struct AddsubAlphaResult {
-    pub did_change: c_int,
-    pub endpos_col: c_int,
-}
-
 /// Parameters for number arithmetic after parsing.
 struct NumArithParams {
     op_type: c_int,
@@ -74,14 +66,6 @@ extern "C" {
         out_blank: *mut c_int,
     );
 
-    fn nvim_addsub_do_alpha(
-        col: c_int,
-        firstdigit: c_int,
-        op_type: c_int,
-        prenum1: c_int,
-        out: *mut c_void,
-    );
-
     fn nvim_get_cursor_lnum() -> c_int;
     fn nvim_get_VIsual_mode() -> c_int;
     fn nvim_get_b_visual_vi_curswant() -> c_int;
@@ -101,6 +85,7 @@ extern "C" {
     fn nvim_gchar_cursor() -> c_int;
     fn del_char(fixpos: bool) -> c_int;
     fn nvim_ins_str(ptr: *const std::ffi::c_char, len: usize);
+    fn nvim_ins_char_call(c: c_int);
 
     fn nvim_addsub_set_marks(startpos_col: c_int, endpos_col: c_int);
     fn nvim_addsub_cleanup(visual: c_int, did_change: c_int, save_coladd: c_int);
@@ -404,6 +389,65 @@ unsafe fn addsub_parse_number(
     }
 }
 
+/// Inline equivalent of `CHAR_ORD(c)` macro from ascii_defs.h.
+/// Returns 0-25 for 'a'-'z' or 'A'-'Z'.
+#[inline]
+#[allow(clippy::cast_sign_loss)]
+fn char_ord(c: c_int) -> c_int {
+    let byte = (c & 0xFF) as u8;
+    if byte < b'a' {
+        i32::from(byte.wrapping_sub(b'A'))
+    } else {
+        i32::from(byte.wrapping_sub(b'a'))
+    }
+}
+
+/// Rust port of `nvim_addsub_do_alpha` from ops.c.
+/// Increments or decrements an alphabetic character.
+///
+/// Returns `(did_change, endpos_col)`.
+///
+/// # Safety
+/// - Modifies buffer content via del_char/ins_char
+/// - Accesses cursor via C shims
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+unsafe fn addsub_do_alpha(
+    col: c_int,
+    firstdigit: c_int,
+    op_type: c_int,
+    prenum1: c_int,
+) -> (bool, c_int) {
+    let is_upper = (firstdigit as u8).is_ascii_uppercase();
+    let mut fd = firstdigit;
+
+    if op_type == OP_NR_SUB {
+        if char_ord(fd) < prenum1 {
+            fd = if is_upper {
+                i32::from(b'A')
+            } else {
+                i32::from(b'a')
+            };
+        } else {
+            fd -= prenum1;
+        }
+    } else if 26 - char_ord(fd) - 1 < prenum1 {
+        fd = if is_upper {
+            i32::from(b'Z')
+        } else {
+            i32::from(b'z')
+        };
+    } else {
+        fd += prenum1;
+    }
+
+    nvim_set_cursor_col(col);
+    del_char(false);
+    nvim_ins_char_call(fd);
+    let endpos_col = nvim_get_cursor_col();
+    nvim_set_cursor_col(col);
+    (true, endpos_col)
+}
+
 /// NUMBUFLEN: large enough for any number representation (65 bytes).
 const NUMBUFLEN: usize = 65;
 
@@ -700,17 +744,9 @@ pub unsafe extern "C" fn rs_do_addsub(
     }
 
     let did_change = if scan.is_alpha != 0 {
-        let mut alpha_result = AddsubAlphaResult::default();
-        nvim_addsub_do_alpha(
-            scan.col,
-            scan.firstdigit,
-            op_type,
-            prenum1,
-            std::ptr::from_mut(&mut alpha_result).cast::<c_void>(),
-        );
-        let changed = alpha_result.did_change != 0;
+        let (changed, endpos_col) = addsub_do_alpha(scan.col, scan.firstdigit, op_type, prenum1);
         if changed {
-            nvim_addsub_set_marks(scan.col, alpha_result.endpos_col);
+            nvim_addsub_set_marks(scan.col, endpos_col);
         }
         changed
     } else {

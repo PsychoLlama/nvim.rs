@@ -2277,11 +2277,6 @@ typedef struct {
   int overflow;
 } AddsubParseResult;
 
-/// Struct matching Rust AddsubAlphaResult
-typedef struct {
-  int did_change;
-  int endpos_col;
-} AddsubAlphaResult;
 
 /// Setup: save state, get line info, set cursor.
 void nvim_addsub_setup(pos_T *pos, int *out_save_coladd, int *out_linelen, int *out_visual)
@@ -2307,35 +2302,6 @@ void nvim_addsub_get_nrformats(int *out_hex, int *out_oct, int *out_bin,
   *out_alpha = vim_strchr(curbuf->b_p_nf, 'p') != NULL;
   *out_unsigned = vim_strchr(curbuf->b_p_nf, 'u') != NULL;
   *out_blank = vim_strchr(curbuf->b_p_nf, 'k') != NULL;
-}
-
-
-/// Handle alpha character increment/decrement.
-void nvim_addsub_do_alpha(int col, int firstdigit, int op_type, int prenum1,
-                          void *out_ptr)
-{
-  AddsubAlphaResult *out = (AddsubAlphaResult *)out_ptr;
-  memset(out, 0, sizeof(*out));
-
-  if (op_type == OP_NR_SUB) {
-    if (CHAR_ORD(firstdigit) < prenum1) {
-      firstdigit = isupper(firstdigit) ? 'A' : 'a';
-    } else {
-      firstdigit -= prenum1;
-    }
-  } else {
-    if (26 - CHAR_ORD(firstdigit) - 1 < prenum1) {
-      firstdigit = isupper(firstdigit) ? 'Z' : 'z';
-    } else {
-      firstdigit += prenum1;
-    }
-  }
-  curwin->w_cursor.col = col;
-  out->did_change = 1;
-  del_char(false);
-  ins_char(firstdigit);
-  out->endpos_col = (int)curwin->w_cursor.col;
-  curwin->w_cursor.col = col;
 }
 
 
