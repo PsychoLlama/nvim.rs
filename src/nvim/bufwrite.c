@@ -99,6 +99,12 @@ _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY");
 _Static_assert(FORCE_BIN == 1, "FORCE_BIN");
 _Static_assert(SHA256_SUM_SIZE == 32, "UNDO_HASH_SIZE");
 
+// Rust FFI forward declarations (used by accessor functions below)
+extern int rs_time_differs(int64_t file_sec, int64_t file_nsec, int64_t mtime, int64_t mtime_ns,
+                           int fat_tolerance);
+extern int rs_get_fio_flags(const char *name);
+extern bool rs_need_conversion(const char *fenc);
+
 static const char *err_readonly = "is read-only (cannot override: \"W\" in 'cpoptions')";
 static const char e_no_matching_autocommands_for_buftype_str_buffer[]
   = N_("E676: No matching autocommands for buftype=%s buffer");
@@ -172,7 +178,7 @@ void nvim_bw_xfree(char *ptr)
 
 int nvim_bw_get_fio_flags(const char *name)
 {
-  return get_fio_flags(name);
+  return rs_get_fio_flags(name);
 }
 
 // File info accessors
@@ -229,7 +235,13 @@ int64_t nvim_bw_buf_get_mtime_read_ns(buf_T *buf)
 
 int nvim_bw_time_differs(FileInfo *info, int64_t mtime, int64_t mtime_ns)
 {
-  return time_differs(info, mtime, mtime_ns);
+#if defined(__linux__) || defined(MSWIN)
+  return rs_time_differs(info->stat.st_mtim.tv_sec, info->stat.st_mtim.tv_nsec,
+                         mtime, mtime_ns, 1);
+#else
+  return rs_time_differs(info->stat.st_mtim.tv_sec, info->stat.st_mtim.tv_nsec,
+                         mtime, mtime_ns, 0);
+#endif
 }
 
 // Globals
@@ -512,7 +524,7 @@ int nvim_bw_match_file_list(const char *list, const char *sfname, const char *ff
 
 // Encoding
 char *nvim_bw_enc_canonize(const char *enc) { return enc_canonize((char *)enc); }
-int nvim_bw_need_conversion(const char *fenc) { return need_conversion(fenc); }
+int nvim_bw_need_conversion(const char *fenc) { return rs_need_conversion(fenc); }
 int nvim_bw_get_fileformat_force(buf_T *buf, exarg_T *eap) { return get_fileformat_force(buf, eap); }
 
 // iconv

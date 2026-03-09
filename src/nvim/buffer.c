@@ -115,6 +115,7 @@
 #include "nvim/winfloat.h"
 
 #include "buffer.c.generated.h"
+extern bool rs_is_dev_fd_file(const char *fname);
 extern int rs_win_valid(win_T *win);
 extern int rs_win_valid_any_tab(win_T *win);
 extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
@@ -341,7 +342,7 @@ int open_buffer(bool read_stdin, exarg_T *eap, int flags_arg)
                       || S_ISSOCK(perm)
 # ifdef OPEN_CHR_FILES
                       || (S_ISCHR(perm)
-                          && is_dev_fd_file(curbuf->b_ffname))
+                          && rs_is_dev_fd_file(curbuf->b_ffname))
 # endif
                       )) {
       read_fifo = true;

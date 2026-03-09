@@ -98,6 +98,8 @@ extern int rs_time_differs(int64_t file_sec, int64_t file_nsec, int64_t mtime, i
                            int fat_tolerance);
 extern bool rs_is_dev_fd_file(const char *fname);
 extern const char *rs_check_for_bom(const uint8_t *data, int size, int *lenp, int flags);
+extern bool rs_need_conversion(const char *fenc);
+extern int rs_get_fio_flags(const char *name);
 extern void rs_check_marks_read(void);
 extern void rs_diff_invalidate(buf_T *buf);
 
@@ -372,7 +374,7 @@ int readfile(char *fname, char *sfname, linenr_T from, linenr_T lines_to_skip,
   }
 
 #ifdef OPEN_CHR_FILES
-# define IS_CHR_DEV(perm, fname) S_ISCHR(perm) && is_dev_fd_file(fname)
+# define IS_CHR_DEV(perm, fname) S_ISCHR(perm) && rs_is_dev_fd_file(fname)
 #else
 # define IS_CHR_DEV(perm, fname) false
 #endif
@@ -815,7 +817,7 @@ retry:
   // Conversion may be required when the encoding of the file is different
   // from 'encoding' or 'encoding' is UTF-16, UCS-2 or UCS-4.
   fio_flags = 0;
-  converted = need_conversion(fenc);
+  converted = rs_need_conversion(fenc);
   if (converted) {
     // "ucs-bom" means we need to check the first bytes of the file
     // for a BOM.
@@ -829,7 +831,7 @@ retry:
       // appears not to handle this correctly.  This works just like
       // conversion to UTF-8 except how the resulting character is put in
       // the buffer.
-      fio_flags = get_fio_flags(fenc);
+      fio_flags = rs_get_fio_flags(fenc);
     }
 
     // Try using iconv() if we can't convert internally.
@@ -1077,8 +1079,8 @@ retry:
         if (size < 2 || curbuf->b_p_bin) {
           ccname = NULL;
         } else {
-          ccname = check_for_bom(ptr, (int)size, &blen,
-                                 fio_flags == FIO_UCSBOM ? FIO_ALL : get_fio_flags(fenc));
+          ccname = rs_check_for_bom((const uint8_t *)ptr, (int)size, &blen,
+                                    fio_flags == FIO_UCSBOM ? FIO_ALL : rs_get_fio_flags(fenc));
         }
         if (ccname != NULL) {
           // Remove BOM from the text
@@ -1897,19 +1899,6 @@ theend:
   return retval;
 }
 
-#ifdef OPEN_CHR_FILES
-/// Returns true if the file name argument is of the form "/dev/fd/\d\+",
-/// which is the name of files used for process substitution output by
-/// some shells on some operating systems, e.g., bash on SunOS.
-/// Do not accept "/dev/fd/[012]", opening these may hang Vim.
-///
-/// @param fname file name to check
-bool is_dev_fd_file(char *fname)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_is_dev_fd_file(fname);
-}
-#endif
 
 /// From the current line count and characters read after that, estimate the
 /// line number where we are now.
@@ -2170,99 +2159,9 @@ void msg_add_lines(int insert_space, linenr_T lnum, off_T nchars)
   }
 }
 
-bool time_differs(const FileInfo *file_info, int64_t mtime, int64_t mtime_ns)
-  FUNC_ATTR_CONST
-{
-#if defined(__linux__) || defined(MSWIN)
-  return rs_time_differs(file_info->stat.st_mtim.tv_sec, file_info->stat.st_mtim.tv_nsec,
-                         mtime, mtime_ns, 1);
-#else
-  return rs_time_differs(file_info->stat.st_mtim.tv_sec, file_info->stat.st_mtim.tv_nsec,
-                         mtime, mtime_ns, 0);
-#endif
-}
 
-/// Return true if file encoding "fenc" requires conversion from or to
-/// 'encoding'.
-///
-/// @param fenc file encoding to check
-///
-/// @return true if conversion is required
-bool need_conversion(const char *fenc)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  bool same_encoding;
-  int fenc_flags;
 
-  if (*fenc == NUL || strcmp(p_enc, fenc) == 0) {
-    same_encoding = true;
-    fenc_flags = 0;
-  } else {
-    // Ignore difference between "ansi" and "latin1", "ucs-4" and
-    // "ucs-4be", etc.
-    int enc_flags = get_fio_flags(p_enc);
-    fenc_flags = get_fio_flags(fenc);
-    same_encoding = (enc_flags != 0 && fenc_flags == enc_flags);
-  }
-  if (same_encoding) {
-    // Specified file encoding matches UTF-8.
-    return false;
-  }
 
-  // Encodings differ.  However, conversion is not needed when 'enc' is any
-  // Unicode encoding and the file is UTF-8.
-  return !(fenc_flags == FIO_UTF8);
-}
-
-/// Return the FIO_ flags needed for the internal conversion if 'name' was
-/// unicode or latin1, otherwise 0. If "name" is an empty string,
-/// use 'encoding'.
-///
-/// @param name string to check for encoding
-int get_fio_flags(const char *name)
-{
-  if (*name == NUL) {
-    name = p_enc;
-  }
-  int prop = enc_canon_props(name);
-  if (prop & ENC_UNICODE) {
-    if (prop & ENC_2BYTE) {
-      if (prop & ENC_ENDIAN_L) {
-        return FIO_UCS2 | FIO_ENDIAN_L;
-      }
-      return FIO_UCS2;
-    }
-    if (prop & ENC_4BYTE) {
-      if (prop & ENC_ENDIAN_L) {
-        return FIO_UCS4 | FIO_ENDIAN_L;
-      }
-      return FIO_UCS4;
-    }
-    if (prop & ENC_2WORD) {
-      if (prop & ENC_ENDIAN_L) {
-        return FIO_UTF16 | FIO_ENDIAN_L;
-      }
-      return FIO_UTF16;
-    }
-    return FIO_UTF8;
-  }
-  if (prop & ENC_LATIN1) {
-    return FIO_LATIN1;
-  }
-  // must be ENC_DBCS, requires iconv()
-  return 0;
-}
-
-/// Check for a Unicode BOM (Byte Order Mark) at the start of p[size].
-/// "size" must be at least 2.
-///
-/// @return  the name of the encoding and set "*lenp" to the length or,
-///          NULL when no BOM found.
-static char *check_for_bom(const char *p_in, int size, int *lenp, int flags)
-{
-  // Delegate to Rust implementation
-  return (char *)rs_check_for_bom((const uint8_t *)p_in, size, lenp, flags);
-}
 
 /// Shorten filename of a buffer.
 ///
@@ -2851,7 +2750,14 @@ int buf_check_timestamp(buf_T *buf)
   if (!(buf->b_flags & BF_NOTEDITED)
       && buf->b_mtime != 0
       && (!(file_info_ok = os_fileinfo(buf->b_ffname, &file_info))
-          || time_differs(&file_info, buf->b_mtime, buf->b_mtime_ns)
+          || rs_time_differs(file_info.stat.st_mtim.tv_sec, file_info.stat.st_mtim.tv_nsec,
+                             buf->b_mtime, buf->b_mtime_ns,
+#if defined(__linux__) || defined(MSWIN)
+                             1
+#else
+                             0
+#endif
+                             )
           || (int)file_info.stat.st_mode != buf->b_orig_mode)) {
     const int64_t prev_b_mtime = buf->b_mtime;
 

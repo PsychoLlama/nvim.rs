@@ -44,6 +44,8 @@ pub const ENC_MACROMAN: c_int = 0x800;
 extern "C" {
     /// Get encoding properties from the mbyte crate.
     fn rs_enc_canon_props(name: *const c_char) -> c_int;
+    /// Get the current 'encoding' option value.
+    fn nvim_get_p_enc() -> *const c_char;
 }
 
 // =============================================================================
@@ -107,20 +109,29 @@ pub fn get_fio_flags_from_props(prop: c_int) -> c_int {
 /// `name` must be a valid C string pointer or null.
 ///
 /// # Arguments
-/// * `name` - Encoding name as a C string. If null or empty, uses 'encoding'.
+/// * `name` - Encoding name as a C string. If null or empty, uses 'encoding' (p_enc).
 ///
 /// # Returns
 /// FIO_* flags for the encoding, or 0 if iconv() is required.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_fio_flags(name: *const c_char) -> c_int {
-    // If name is null or empty, the C code passes p_enc.
-    // We can't access p_enc from Rust, so this function expects the caller
-    // to handle that case.
     if name.is_null() {
         return 0;
     }
 
-    let prop = rs_enc_canon_props(name);
+    // If name is empty, fall back to the current 'encoding' option (p_enc),
+    // matching the behavior of the C get_fio_flags() function.
+    let effective_name = if unsafe { *name == 0 } {
+        let p_enc = unsafe { nvim_get_p_enc() };
+        if p_enc.is_null() {
+            return 0;
+        }
+        p_enc
+    } else {
+        name
+    };
+
+    let prop = unsafe { rs_enc_canon_props(effective_name) };
     get_fio_flags_from_props(prop)
 }
 
@@ -188,6 +199,58 @@ pub extern "C" fn rs_need_conversion_flags(
     same_name: c_int,
 ) -> c_int {
     c_int::from(need_conversion_flags(fenc_flags, enc_flags, same_name != 0))
+}
+
+/// Check if file encoding `fenc` requires conversion from or to 'encoding'.
+///
+/// Replaces the C `need_conversion()` function. Reads `p_enc` via the C
+/// accessor and computes flags using `rs_get_fio_flags`.
+///
+/// # Safety
+/// `fenc` must be a valid C string pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_need_conversion(fenc: *const c_char) -> c_int {
+    if fenc.is_null() {
+        return 0;
+    }
+
+    let fenc_bytes = unsafe { std::ffi::CStr::from_ptr(fenc).to_bytes() };
+
+    // Empty fenc: original C returns false (no conversion needed)
+    if fenc_bytes.is_empty() {
+        return 0;
+    }
+
+    // Get the current 'encoding' option
+    let p_enc_ptr = unsafe { nvim_get_p_enc() };
+
+    let same_encoding;
+    let fenc_flags;
+
+    if !p_enc_ptr.is_null() {
+        let p_enc_bytes = unsafe { std::ffi::CStr::from_ptr(p_enc_ptr).to_bytes() };
+        if p_enc_bytes == fenc_bytes {
+            // Same name => same_encoding = true, fenc_flags = 0
+            return 0;
+        }
+        // Ignore difference between aliases by comparing FIO flags
+        let enc_flags = unsafe { rs_get_fio_flags(p_enc_ptr) };
+        fenc_flags = unsafe { rs_get_fio_flags(fenc) };
+        same_encoding = enc_flags != 0 && fenc_flags == enc_flags;
+    } else {
+        fenc_flags = unsafe { rs_get_fio_flags(fenc) };
+        same_encoding = false;
+    }
+
+    if same_encoding {
+        return 0;
+    }
+
+    // Encodings differ. Conversion is not needed when 'enc' is any Unicode
+    // encoding and the file is UTF-8.
+    // need_conversion_flags(fenc_flags, enc_flags, same_name=false) =>
+    //   returns fenc_flags != FIO_UTF8
+    c_int::from(fenc_flags != crate::FIO_UTF8)
 }
 
 // =============================================================================
