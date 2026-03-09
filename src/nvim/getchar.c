@@ -1036,42 +1036,9 @@ typedef enum {
   map_result_nomatch,  // no matching mapping, get char
 } map_result_T;
 
-/// Put "string[new_slen]" in typebuf.
-/// Remove "slen" bytes.
-/// @return  FAIL for error, OK otherwise.
-static int put_string_in_typebuf(int offset, int slen, uint8_t *string, int new_slen)
-{
-  int extra = new_slen - slen;
-  string[new_slen] = NUL;
-  if (extra < 0) {
-    // remove matched chars, taking care of noremap
-    del_typebuf(-extra, offset);
-  } else if (extra > 0) {
-    // insert the extra space we need
-    if (ins_typebuf((char *)string + slen, REMAP_YES, offset, false, false) == FAIL) {
-      return FAIL;
-    }
-  }
-  // Careful: del_typebuf() and ins_typebuf() may have reallocated
-  // typebuf.tb_buf[]!
-  memmove(typebuf.tb_buf + typebuf.tb_off + offset, string, (size_t)new_slen);
-  return OK;
-}
-
-/// Check if the bytes at the start of the typeahead buffer are a character used
-/// in Insert mode completion.  This includes the form with a CTRL modifier.
-static bool at_ins_compl_key(void)
-{
-  uint8_t *p = typebuf.tb_buf + typebuf.tb_off;
-  int c = *p;
-
-  if (typebuf.tb_len > 3 && c == K_SPECIAL && p[1] == KS_MODIFIER && (p[2] & MOD_MASK_CTRL)) {
-    c = p[3] & 0x1f;
-  }
-  return (rs_ctrl_x_mode_not_default()
-          && (rs_ins_compl_pum_key(c) || rs_vim_is_ctrl_x_key(c)))
-         || (rs_compl_status_local() && (c == Ctrl_N || c == Ctrl_P));
-}
+// put_string_in_typebuf and at_ins_compl_key moved to Rust (typebuf.rs) -- Phase 5
+int put_string_in_typebuf(int offset, int slen, uint8_t *string, int new_slen);
+bool at_ins_compl_key(void);
 
 /// Check if typebuf.tb_buf[] contains a modifier plus key that can be changed
 /// into just a key, apply that.

@@ -1017,6 +1017,99 @@ pub unsafe extern "C" fn flush_buffers_export(flush_typeahead: c_int) {
     increment_typebuf_change_cnt();
 }
 
+// =============================================================================
+// Phase 5: put_string_in_typebuf and at_ins_compl_key (migrated from C)
+// =============================================================================
+
+extern "C" {
+    fn rs_ctrl_x_mode_not_default() -> c_int;
+    fn rs_compl_status_local() -> c_int;
+    fn rs_ins_compl_pum_key(c: c_int) -> c_int;
+    fn rs_vim_is_ctrl_x_key(c: c_int) -> c_int;
+}
+
+/// K_SPECIAL byte (0x80)
+const K_SPECIAL_BYTE: u8 = 0x80;
+/// KS_MODIFIER
+const KS_MODIFIER_BYTE: u8 = 252;
+/// MOD_MASK_CTRL
+const MOD_MASK_CTRL: u8 = 0x04;
+/// Ctrl-N and Ctrl-P
+const CTRL_N: c_int = 14;
+const CTRL_P: c_int = 16;
+/// REMAP_YES = 0
+const REMAP_YES: c_int = 0;
+
+/// `put_string_in_typebuf(int, int, uint8_t*, int)` -- Phase 5 export replacing C static
+///
+/// Put `string[new_slen]` in typebuf, replacing `slen` bytes at `offset`.
+/// Returns FAIL for error, OK otherwise.
+///
+/// # Safety
+/// `string` must point to at least `new_slen + 1` bytes.
+/// Calls C accessor functions.
+#[must_use]
+#[export_name = "put_string_in_typebuf"]
+pub unsafe extern "C" fn put_string_in_typebuf_export(
+    offset: c_int,
+    slen: c_int,
+    string: *mut u8,
+    new_slen: c_int,
+) -> c_int {
+    let extra = new_slen - slen;
+    *string.add(new_slen as usize) = 0; // NUL-terminate
+
+    if extra < 0 {
+        rs_del_typebuf(-extra, offset);
+    } else if extra > 0 {
+        let str_part = string.add(slen as usize);
+        if rs_ins_typebuf(str_part, REMAP_YES, offset, 0, 0) == FAIL {
+            return FAIL;
+        }
+    }
+
+    // Copy the new content into place (del/ins_typebuf may have reallocated)
+    let tb_buf = nvim_get_typebuf_buf();
+    let tb_off = nvim_get_typebuf_off();
+    std::ptr::copy(
+        string,
+        tb_buf.add((tb_off + offset) as usize),
+        new_slen as usize,
+    );
+
+    OK
+}
+
+/// `at_ins_compl_key(void)` -- Phase 5 export replacing C static
+///
+/// Check if the bytes at the start of the typeahead buffer are a character used
+/// in Insert mode completion. Includes the form with a CTRL modifier.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[must_use]
+#[export_name = "at_ins_compl_key"]
+pub unsafe extern "C" fn at_ins_compl_key_export() -> bool {
+    let tb_buf = nvim_get_typebuf_buf();
+    let tb_off = nvim_get_typebuf_off();
+    let tb_len = nvim_get_typebuf_len();
+
+    let p = tb_buf.add(tb_off as usize);
+    let c = if tb_len > 3
+        && *p == K_SPECIAL_BYTE
+        && *p.add(1) == KS_MODIFIER_BYTE
+        && (*p.add(2) & MOD_MASK_CTRL != 0)
+    {
+        c_int::from(*p.add(3) & 0x1f)
+    } else {
+        c_int::from(*p)
+    };
+
+    (rs_ctrl_x_mode_not_default() != 0
+        && (rs_ins_compl_pum_key(c) != 0 || rs_vim_is_ctrl_x_key(c) != 0))
+        || (rs_compl_status_local() != 0 && (c == CTRL_N || c == CTRL_P))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
