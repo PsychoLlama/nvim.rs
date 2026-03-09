@@ -119,10 +119,6 @@ char nvim_get_p_bg(void)
   return *p_bg;
 }
 
-// Rust implementations
-extern int rs_highlight_num_groups(void);
-extern const char *rs_highlight_has_attr(int id, int flag, int modec);
-
 /// \addtogroup SG_SET
 /// @{
 enum {
@@ -838,12 +834,6 @@ const char *const highlight_init_cmdline[] = {
   NULL,
 };
 
-/// Returns the number of highlight groups.
-int highlight_num_groups(void)
-{
-  return rs_highlight_num_groups();
-}
-
 /// Returns the name of a highlight group.
 char *highlight_group_name(int id)
 {
@@ -1063,6 +1053,7 @@ static int lookup_color(const int idx, const bool foreground, TriState *const bo
   // bold == -1 means unchanged, leave boldp as-is
   return result.color;
 }
+
 
 void set_hl_group(int id, HlAttrs attrs, Dict(highlight) *dict, int link_id)
 {
@@ -1703,15 +1694,6 @@ void free_highlight(void)
 
 #endif
 
-/// Reset the cterm colors to what they were before Vim was started, if
-/// possible.  Otherwise reset them to zero.
-extern void rs_restore_cterm_colors(void);
-
-void restore_cterm_colors(void)
-{
-  rs_restore_cterm_colors();
-}
-
 /// @param check_link  if true also check for an existing link.
 ///
 /// @return true if highlight group "idx" has any settings.
@@ -1934,19 +1916,6 @@ static bool highlight_list_arg(const int id, bool didh, const int type, int iarg
   return didh;
 }
 
-/// Check whether highlight group has attribute
-///
-/// @param[in]  id  Highlight group to check.
-/// @param[in]  flag  Attribute to check.
-/// @param[in]  modec  'g' for GUI, 'c' for term.
-///
-/// @return "1" if highlight group has attribute, NULL otherwise.
-const char *highlight_has_attr(const int id, const int flag, const int modec)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_highlight_has_attr(id, flag, modec);
-}
-
 /// Return color name of the given highlight group
 ///
 /// @param[in]  id  Highlight group to work with.
@@ -2117,45 +2086,6 @@ int syn_name2id(const char *name)
   return syn_name2id_len(name, strlen(name));
 }
 
-/// Lookup a highlight group name and return its ID.
-///
-/// @param highlight name e.g. 'Cursor', 'Normal'
-/// @return the highlight id, else 0 if \p name does not exist
-extern int rs_syn_name2id_len(const char *name, size_t len);
-
-int syn_name2id_len(const char *name, size_t len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_syn_name2id_len(name, len);
-}
-
-/// Lookup a highlight group name and return its attributes.
-/// Return zero if not found.
-extern int rs_syn_name2attr(const char *name);
-
-int syn_name2attr(const char *name)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_syn_name2attr(name);
-}
-
-/// Return true if highlight group "name" exists.
-extern int rs_highlight_exists(const char *name);
-
-int highlight_exists(const char *name)
-{
-  return rs_highlight_exists(name);
-}
-
-/// Return the name of highlight group "id".
-/// When not a valid ID return an empty string.
-extern const char *rs_syn_id2name(int id);
-
-char *syn_id2name(int id)
-{
-  return (char *)rs_syn_id2name(id);
-}
-
 /// Find highlight group name in the table and return its ID.
 /// If it doesn't exist yet, a new entry is created.
 ///
@@ -2170,18 +2100,6 @@ static int syn_add_group(const char *name, size_t len);
 int c_syn_add_group(const char *name, size_t len)
 {
   return syn_add_group(name, len);
-}
-
-extern int rs_syn_check_group(const char *name, size_t len);
-
-int syn_check_group(const char *name, size_t len)
-{
-  // Handle error message for name too long in C (emsg needs C context)
-  if (len > MAX_SYN_NAME) {
-    emsg(_(e_highlight_group_name_too_long));
-    return 0;
-  }
-  return rs_syn_check_group(name, len);
 }
 
 /// Add new highlight group and return its ID.
@@ -2248,38 +2166,6 @@ static int syn_add_group(const char *name, size_t len)
   map_put(cstr_t, int)(&highlight_unames, hlgp->sg_name_u, id);
 
   return id;
-}
-
-/// Translate a group ID to highlight attributes.
-/// @see syn_attr2entry
-extern int rs_syn_id2attr(int hl_id);
-
-int syn_id2attr(int hl_id)
-{
-  return rs_syn_id2attr(hl_id);
-}
-
-extern int rs_syn_ns_id2attr(int ns_id, int hl_id, bool *optional);
-
-int syn_ns_id2attr(int ns_id, int hl_id, bool *optional)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_syn_ns_id2attr(ns_id, hl_id, optional);
-}
-
-/// Translate a group ID to the final group ID (following links).
-extern int rs_syn_get_final_id(int hl_id);
-
-int syn_get_final_id(int hl_id)
-{
-  return rs_syn_get_final_id(hl_id);
-}
-
-extern bool rs_syn_ns_get_final_id(int *ns_id, int *hl_idp);
-
-bool syn_ns_get_final_id(int *ns_id, int *hl_idp)
-{
-  return rs_syn_ns_get_final_id(ns_id, hl_idp);
 }
 
 /// Refresh the color attributes of all highlight groups.
@@ -3239,36 +3125,3 @@ color_name_table_T color_name_table[] = {
   { NULL, 0 },
 };
 
-/// Translate to RgbValue if \p name is an hex value (e.g. #XXXXXX),
-/// else look into color_name_table to translate a color name to  its
-/// hex value
-///
-/// @param[in] name string value to convert to RGB
-/// @param[out] idx index in color table or special value
-/// return the hex value or -1 if could not find a correct value
-typedef struct {
-  int color;
-  int idx;
-} NameToColorResult;
-extern NameToColorResult rs_name_to_color(const char *name);
-
-RgbValue name_to_color(const char *name, int *idx)
-{
-  NameToColorResult result = rs_name_to_color(name);
-  *idx = result.idx;
-  return result.color;
-}
-
-extern const char *rs_coloridx_to_name(int idx, int val, char *hexbuf);
-
-const char *coloridx_to_name(int idx, int val, char hexbuf[8])
-{
-  return rs_coloridx_to_name(idx, val, hexbuf);
-}
-
-extern int rs_name_to_ctermcolor(const char *name);
-
-int name_to_ctermcolor(const char *name)
-{
-  return rs_name_to_ctermcolor(name);
-}

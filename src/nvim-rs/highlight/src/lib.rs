@@ -1563,7 +1563,7 @@ static EMPTY_STRING: &CStr = c"";
 ///
 /// This mirrors the C function `syn_id2name(int id)` from highlight_group.c.
 /// Note: The returned pointer points to memory owned by C (highlight_arena).
-#[no_mangle]
+#[export_name = "syn_id2name"]
 pub extern "C" fn rs_syn_id2name(id: c_int) -> *const c_char {
     let num_groups = unsafe { highlight_num_groups() };
     if id <= 0 || id > num_groups {
@@ -1580,7 +1580,7 @@ pub extern "C" fn rs_syn_id2name(id: c_int) -> *const c_char {
 ///
 /// # Safety
 /// The name pointer must be valid for at least `len` bytes.
-#[no_mangle]
+#[export_name = "syn_name2id_len"]
 pub unsafe extern "C" fn rs_syn_name2id_len(name: *const c_char, len: usize) -> c_int {
     if name.is_null() || len == 0 || len > MAX_SYN_NAME {
         return 0;
@@ -1602,24 +1602,29 @@ pub unsafe extern "C" fn rs_syn_name2id_len(name: *const c_char, len: usize) -> 
 extern "C" {
     /// Add a new highlight group (stays in C due to Arena allocation)
     fn c_syn_add_group(name: *const c_char, len: usize) -> c_int;
+    /// Emit an error message
+    fn emsg(s: *const c_char) -> c_int;
+    /// extern error string for highlight group name too long
+    static e_highlight_group_name_too_long: c_char;
+    /// gettext translation function (no-op in many builds, but required for correctness)
+    fn gettext(s: *const c_char) -> *const c_char;
 }
 
 /// Find highlight group name in the table and return its ID.
 /// If it doesn't exist yet, a new entry is created (via C).
 ///
-/// This mirrors the C function `syn_check_group(const char *name, size_t len)`.
+/// This directly provides the C symbol `syn_check_group`, replacing the thin wrapper.
 /// Returns the highlight group ID (1-based), or 0 for failure.
-///
-/// Note: The error message for name too long is still in C since emsg() requires
-/// C context. We return 0 to signal failure.
 ///
 /// # Safety
 /// The name pointer must be valid for at least `len` bytes.
-#[no_mangle]
+#[export_name = "syn_check_group"]
 pub unsafe extern "C" fn rs_syn_check_group(name: *const c_char, len: usize) -> c_int {
-    // Note: We don't emit the error message here - the C wrapper handles it
-    // for len > MAX_SYN_NAME since emsg() needs C context
-    if name.is_null() || len == 0 || len > MAX_SYN_NAME {
+    if name.is_null() || len == 0 {
+        return 0;
+    }
+    if len > MAX_SYN_NAME {
+        emsg(gettext(&e_highlight_group_name_too_long as *const c_char));
         return 0;
     }
 
@@ -1647,7 +1652,7 @@ pub unsafe extern "C" fn rs_syn_check_group(name: *const c_char, len: usize) -> 
 ///
 /// # Safety
 /// Both pointers must be valid.
-#[no_mangle]
+#[export_name = "syn_ns_get_final_id"]
 pub unsafe extern "C" fn rs_syn_ns_get_final_id(ns_id: *mut c_int, hl_idp: *mut c_int) -> bool {
     let mut hl_id = *hl_idp;
     let mut used = false;
@@ -1720,7 +1725,7 @@ pub unsafe extern "C" fn rs_syn_ns_get_final_id(ns_id: *mut c_int, hl_idp: *mut 
 ///
 /// # Safety
 /// The optional pointer must be valid.
-#[no_mangle]
+#[export_name = "syn_ns_id2attr"]
 pub unsafe extern "C" fn rs_syn_ns_id2attr(
     mut ns_id: c_int,
     mut hl_id: c_int,
@@ -1758,7 +1763,7 @@ pub unsafe extern "C" fn rs_syn_ns_id2attr(
 /// This is a simple wrapper around rs_syn_ns_id2attr(-1, hl_id, &optional).
 ///
 /// This mirrors the C function `syn_id2attr(int hl_id)`.
-#[no_mangle]
+#[export_name = "syn_id2attr"]
 pub unsafe extern "C" fn rs_syn_id2attr(hl_id: c_int) -> c_int {
     let mut optional = false;
     rs_syn_ns_id2attr(-1, hl_id, &mut optional)
@@ -1772,7 +1777,7 @@ pub unsafe extern "C" fn rs_syn_id2attr(hl_id: c_int) -> c_int {
 /// Note: This function needs access to curwin->w_ns_hl_active which
 /// requires a window accessor. For now we pass -1 to use the current
 /// active namespace.
-#[no_mangle]
+#[export_name = "syn_get_final_id"]
 pub unsafe extern "C" fn rs_syn_get_final_id(mut hl_id: c_int) -> c_int {
     // Get current window's active namespace via C accessor
     let mut ns_id = c_curwin_ns_hl_active();
@@ -1787,7 +1792,7 @@ pub unsafe extern "C" fn rs_syn_get_final_id(mut hl_id: c_int) -> c_int {
 ///
 /// # Safety
 /// The name pointer must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "syn_name2attr"]
 pub unsafe extern "C" fn rs_syn_name2attr(name: *const c_char) -> c_int {
     if name.is_null() {
         return 0;
@@ -1808,7 +1813,7 @@ pub unsafe extern "C" fn rs_syn_name2attr(name: *const c_char) -> c_int {
 ///
 /// # Safety
 /// The name pointer must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "highlight_exists"]
 pub unsafe extern "C" fn rs_highlight_exists(name: *const c_char) -> c_int {
     if name.is_null() {
         return 0;
@@ -1848,7 +1853,7 @@ extern "C" {
 /// Resets normal_fg, normal_bg, normal_sp to -1 and cterm colors to 0.
 ///
 /// This mirrors the C function `restore_cterm_colors(void)`.
-#[no_mangle]
+#[export_name = "restore_cterm_colors"]
 pub extern "C" fn rs_restore_cterm_colors() {
     unsafe {
         nvim_set_normal_fg(-1);
@@ -3027,7 +3032,7 @@ fn str_icmp(a: &str, b: &str) -> bool {
 ///
 /// # Safety
 /// `name` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "name_to_ctermcolor"]
 pub unsafe extern "C" fn rs_name_to_ctermcolor(name: *const c_char) -> c_int {
     if name.is_null() {
         return -1;
@@ -3899,6 +3904,19 @@ pub unsafe extern "C" fn rs_name_to_color(name: *const c_char) -> NameToColorRes
     }
 }
 
+/// Translate to RgbValue if name is a hex value or named color.
+/// Directly provides the C symbol `name_to_color`, replacing the thin wrapper.
+///
+/// # Safety
+/// `name` must be a valid null-terminated C string.
+/// `idx` must be a valid pointer to an int.
+#[export_name = "name_to_color"]
+pub unsafe extern "C" fn rs_name_to_color_adapted(name: *const c_char, idx: *mut c_int) -> c_int {
+    let result = rs_name_to_color(name);
+    *idx = result.idx;
+    result.color
+}
+
 // ============================================================================
 // Color Name Tables (C-string versions for FFI)
 // ============================================================================
@@ -4632,7 +4650,7 @@ static BG_STR: &CStr = c"bg";
 /// # Safety
 /// - hexbuf must be a valid pointer to at least 8 bytes of writable memory
 /// - The returned pointer is valid for the lifetime of the static string or hexbuf
-#[no_mangle]
+#[export_name = "coloridx_to_name"]
 pub unsafe extern "C" fn rs_coloridx_to_name(
     idx: c_int,
     val: c_int,
@@ -5245,7 +5263,7 @@ extern "C" {
 static ATTR_TRUE: &[u8; 2] = b"1\0";
 
 /// Returns the number of highlight groups.
-#[no_mangle]
+#[export_name = "highlight_num_groups"]
 pub unsafe extern "C" fn rs_highlight_num_groups() -> c_int {
     nvim_get_highlight_ga_len()
 }
@@ -5259,7 +5277,7 @@ pub unsafe extern "C" fn rs_highlight_num_groups() -> c_int {
 ///
 /// # Returns
 /// Pointer to "1" if attribute is set, NULL otherwise
-#[no_mangle]
+#[export_name = "highlight_has_attr"]
 pub unsafe extern "C" fn rs_highlight_has_attr(
     id: c_int,
     flag: c_int,
