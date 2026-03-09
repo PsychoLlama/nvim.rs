@@ -59,6 +59,14 @@ void compute_cmdrow(void);
 void cursorcmd(void);
 void gotocmdline(bool clr);
 
+// Phase 4+5: Functions implemented in Rust
+int get_list_range(char **str, int *num1, int *num2);
+void f_getcmdline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_getcmdpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_getcmdprompt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_getcmdscreenpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_getcmdtype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 #ifdef __cplusplus
 }
 #endif

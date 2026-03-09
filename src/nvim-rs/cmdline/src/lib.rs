@@ -34,6 +34,7 @@ pub mod state;
 pub mod ui;
 pub mod usercomplete;
 pub mod viewstate;
+pub mod viml;
 pub mod wildmenu;
 
 use std::os::raw::c_int;

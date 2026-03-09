@@ -4045,23 +4045,6 @@ static int get_cmdline_type(void)
   return p->cmdfirstc;
 }
 
-/// Get the current command line in allocated memory.
-/// Only works when the command line is being edited.
-///
-/// @return  NULL when something is wrong.
-static char *get_cmdline_str(void)
-{
-  if (cmdline_star > 0) {
-    return NULL;
-  }
-  CmdlineInfo *p = get_ccline_ptr();
-
-  if (p == NULL) {
-    return NULL;
-  }
-  return xstrnsave(p->cmdbuff, (size_t)p->cmdlen);
-}
-
 /// Get the current command-line completion pattern.
 static char *get_cmdline_completion_pattern(void)
 {
@@ -4129,46 +4112,6 @@ void f_getcmdcompltype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   rettv->v_type = VAR_STRING;
   rettv->vval.v_string = get_cmdline_completion();
-}
-
-/// "getcmdline()" function
-void f_getcmdline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = get_cmdline_str();
-}
-
-/// "getcmdpos()" function
-void f_getcmdpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  CmdlineInfo *p = get_ccline_ptr();
-  // Use Rust helper to convert internal 0-based to Vim 1-based position.
-  rettv->vval.v_number = p != NULL ? rs_internal_pos_to_vim(p->cmdpos) : 0;
-}
-
-/// "getcmdprompt()" function
-void f_getcmdprompt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  CmdlineInfo *p = get_ccline_ptr();
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = p != NULL && p->cmdprompt != NULL
-                         ? xstrdup(p->cmdprompt) : NULL;
-}
-
-/// "getcmdscreenpos()" function
-void f_getcmdscreenpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  CmdlineInfo *p = get_ccline_ptr();
-  // Use Rust helper to convert internal 0-based to Vim 1-based position.
-  rettv->vval.v_number = p != NULL ? rs_internal_pos_to_vim(p->cmdspos) : 0;
-}
-
-/// "getcmdtype()" function
-void f_getcmdtype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = xmallocz(1);
-  rettv->vval.v_string[0] = (char)get_cmdline_type();
 }
 
 /// Set the command line str to "str".
@@ -4255,53 +4198,6 @@ void f_setcmdpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 // C accessor for ccline.cmdfirstc (used by Rust)
 int nvim_get_ccline_cmdfirstc(void) { return ccline.cmdfirstc; }
 
-
-/// Get indices that specify a range within a list (not a range of text lines
-/// in a buffer!) from a string.  Used for ":history" and ":clist".
-///
-/// @param str string to parse range from
-/// @param num1 from
-/// @param num2 to
-///
-/// @return OK if parsed successfully, otherwise FAIL.
-int get_list_range(char **str, int *num1, int *num2)
-{
-  int len;
-  bool first = false;
-  varnumber_T num;
-
-  *str = skipwhite((*str));
-  if (**str == '-' || ascii_isdigit(**str)) {  // parse "from" part of range
-    vim_str2nr(*str, NULL, &len, 0, &num, NULL, 0, false, NULL);
-    *str += len;
-    // overflow
-    if (num > INT_MAX) {
-      return FAIL;
-    }
-
-    *num1 = (int)num;
-    first = true;
-  }
-  *str = skipwhite((*str));
-  if (**str == ',') {                   // parse "to" part of range
-    *str = skipwhite((*str) + 1);
-    vim_str2nr(*str, NULL, &len, 0, &num, NULL, 0, false, NULL);
-    if (len > 0) {
-      *str = skipwhite((*str) + len);
-      // overflow
-      if (num > INT_MAX) {
-        return FAIL;
-      }
-
-      *num2 = (int)num;
-    } else if (!first) {                  // no number given at all
-      return FAIL;
-    }
-  } else if (first) {                     // only one number given
-    *num2 = *num1;
-  }
-  return OK;
-}
 
 void cmdline_init(void)
 {
