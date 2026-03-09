@@ -2309,116 +2309,6 @@ void nvim_addsub_get_nrformats(int *out_hex, int *out_oct, int *out_bin,
   *out_blank = vim_strchr(curbuf->b_p_nf, 'k') != NULL;
 }
 
-/// Scan for number/alpha on the line. Encapsulates the complex scanning logic.
-void nvim_addsub_scan(pos_T *pos, int length,
-                      int do_hex, int do_oct, int do_bin,
-                      int do_alpha, int do_unsigned, int do_blank,
-                      int visual, void *out_ptr)
-{
-  AddsubScanResult *out = (AddsubScanResult *)out_ptr;
-  memset(out, 0, sizeof(*out));
-  out->was_positive = 1;
-  out->length = length;
-
-  char *ptr = ml_get(pos->lnum);
-  int linelen = ml_get_len(pos->lnum);
-  int col = pos->col;
-  int save_coladd = virtual_active(curwin) ? (int)pos->coladd : 0;
-
-  if (col + !!save_coladd >= linelen) {
-    out->past_end = 1;
-    return;
-  }
-
-  // Number scanning logic (non-visual)
-  if (!visual) {
-    if (do_bin) {
-      while (col > 0 && ascii_isbdigit(ptr[col])) {
-        col--;
-        col -= utf_head_off(ptr, ptr + col);
-      }
-    }
-    if (do_hex) {
-      while (col > 0 && ascii_isxdigit(ptr[col])) {
-        col--;
-        col -= utf_head_off(ptr, ptr + col);
-      }
-    }
-    if (do_bin && do_hex
-        && !((col > 0
-              && (ptr[col] == 'X' || ptr[col] == 'x')
-              && ptr[col - 1] == '0'
-              && !utf_head_off(ptr, ptr + col - 1)
-              && ascii_isxdigit(ptr[col + 1])))) {
-      col = curwin->w_cursor.col;
-      while (col > 0 && ascii_isdigit(ptr[col])) {
-        col--;
-        col -= utf_head_off(ptr, ptr + col);
-      }
-    }
-
-    if ((do_hex && col > 0
-         && (ptr[col] == 'X' || ptr[col] == 'x')
-         && ptr[col - 1] == '0'
-         && !utf_head_off(ptr, ptr + col - 1)
-         && ascii_isxdigit(ptr[col + 1]))
-        || (do_bin && col > 0
-            && (ptr[col] == 'B' || ptr[col] == 'b')
-            && ptr[col - 1] == '0'
-            && !utf_head_off(ptr, ptr + col - 1)
-            && ascii_isbdigit(ptr[col + 1]))) {
-      col--;
-      col -= utf_head_off(ptr, ptr + col);
-    } else {
-      col = pos->col;
-      while (ptr[col] != NUL
-             && !ascii_isdigit(ptr[col])
-             && !(do_alpha && ASCII_ISALPHA(ptr[col]))) {
-        col++;
-      }
-      while (col > 0
-             && ascii_isdigit(ptr[col - 1])
-             && !(do_alpha && ASCII_ISALPHA(ptr[col]))) {
-        col--;
-      }
-    }
-  }
-
-  if (visual) {
-    while (ptr[col] != NUL && length > 0 && !ascii_isdigit(ptr[col])
-           && !(do_alpha && ASCII_ISALPHA(ptr[col]))) {
-      int mb_len = utfc_ptr2len(ptr + col);
-      col += mb_len;
-      length -= mb_len;
-    }
-    if (length == 0) {
-      out->past_end = 1;
-      return;
-    }
-    out->length = length;
-
-    if (col > pos->col && ptr[col - 1] == '-'
-        && !utf_head_off(ptr, ptr + col - 1)
-        && !do_unsigned) {
-      if (do_blank && col >= 2 && !ascii_iswhite(ptr[col - 2])) {
-        out->blank_unsigned = 1;
-      } else {
-        out->negative = 1;
-        out->was_positive = 0;
-      }
-    }
-  }
-
-  int firstdigit = (uint8_t)ptr[col];
-  if (!ascii_isdigit(firstdigit) && !(do_alpha && ASCII_ISALPHA(firstdigit))) {
-    out->no_digit = 1;
-    return;
-  }
-
-  out->col = col;
-  out->firstdigit = firstdigit;
-  out->is_alpha = (do_alpha && ASCII_ISALPHA(firstdigit)) ? 1 : 0;
-}
 
 /// Handle alpha character increment/decrement.
 void nvim_addsub_do_alpha(int col, int firstdigit, int op_type, int prenum1,
@@ -2611,11 +2501,6 @@ void nvim_addsub_cleanup(int visual, int did_change, int save_coladd)
   }
 }
 
-/// Beep for no digit found.
-void nvim_addsub_beep(void)
-{
-  beep_flush();
-}
 
 void clear_oparg(oparg_T *oap)
 {

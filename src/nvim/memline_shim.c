@@ -504,6 +504,7 @@ char *nvim_buf_get_ml_line_ptr(buf_T *buf) { return buf->b_ml.ml_line_ptr; }
 // Position accessors
 linenr_T nvim_pos_get_lnum(const pos_T *pos) { return pos->lnum; }
 colnr_T nvim_pos_get_col(const pos_T *pos) { return pos->col; }
+colnr_T nvim_pos_get_coladd(const pos_T *pos) { return pos->coladd; }
 
 // Constants
 colnr_T nvim_get_maxcol(void) { return MAXCOL; }

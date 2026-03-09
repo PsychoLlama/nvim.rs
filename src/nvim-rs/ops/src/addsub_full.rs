@@ -65,19 +65,6 @@ extern "C" {
         out_visual: *mut c_int,
     );
 
-    fn nvim_addsub_scan(
-        pos: *mut c_void,
-        length: c_int,
-        do_hex: c_int,
-        do_oct: c_int,
-        do_bin: c_int,
-        do_alpha: c_int,
-        do_unsigned: c_int,
-        do_blank: c_int,
-        visual: c_int,
-        out: *mut c_void,
-    );
-
     fn nvim_addsub_get_nrformats(
         out_hex: *mut c_int,
         out_oct: *mut c_int,
@@ -121,7 +108,207 @@ extern "C" {
 
     fn nvim_addsub_set_marks(startpos_col: c_int, endpos_col: c_int);
     fn nvim_addsub_cleanup(visual: c_int, did_change: c_int, save_coladd: c_int);
-    fn nvim_addsub_beep();
+    fn nvim_beep_flush();
+
+    // Low-level accessors used by inline scan port
+    fn nvim_pos_get_lnum(pos: *const c_void) -> c_int;
+    fn nvim_pos_get_col(pos: *const c_void) -> c_int;
+    fn nvim_pos_get_coladd(pos: *const c_void) -> c_int;
+    fn nvim_ml_get(lnum: c_int) -> *const std::ffi::c_char;
+    fn nvim_ml_get_len(lnum: c_int) -> c_int;
+    fn nvim_virtual_active() -> bool;
+    fn nvim_get_cursor_col() -> c_int;
+    fn utf_head_off(base: *const std::ffi::c_char, p: *const std::ffi::c_char) -> c_int;
+    fn utfc_ptr2len(p: *const std::ffi::c_char) -> c_int;
+}
+
+// ============================================================================
+// Inline char predicates (mirror of nvim-ascii crate logic)
+// ============================================================================
+
+#[inline]
+fn ascii_isdigit(c: c_int) -> bool {
+    c >= i32::from(b'0') && c <= i32::from(b'9')
+}
+
+#[inline]
+fn ascii_isxdigit(c: c_int) -> bool {
+    (c >= i32::from(b'0') && c <= i32::from(b'9'))
+        || (c >= i32::from(b'a') && c <= i32::from(b'f'))
+        || (c >= i32::from(b'A') && c <= i32::from(b'F'))
+}
+
+#[inline]
+fn ascii_isbdigit(c: c_int) -> bool {
+    c == i32::from(b'0') || c == i32::from(b'1')
+}
+
+#[inline]
+fn ascii_isalpha(c: c_int) -> bool {
+    (c >= i32::from(b'a') && c <= i32::from(b'z')) || (c >= i32::from(b'A') && c <= i32::from(b'Z'))
+}
+
+#[inline]
+fn ascii_iswhite(c: c_int) -> bool {
+    c == i32::from(b' ') || c == i32::from(b'\t')
+}
+
+// ============================================================================
+// Rust port of nvim_addsub_scan (C version deleted)
+// ============================================================================
+
+/// Scan for number/alpha start position.
+///
+/// Rust port of `nvim_addsub_scan` from ops.c.
+///
+/// # Safety
+/// - `pos` must be a valid `pos_T *`
+/// - Accesses current buffer and cursor via C shims
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::suspicious_operation_groupings
+)]
+unsafe fn addsub_scan(
+    pos: *mut c_void,
+    length: c_int,
+    do_hex: c_int,
+    do_oct: c_int,
+    do_bin: c_int,
+    do_alpha: c_int,
+    do_unsigned: c_int,
+    do_blank: c_int,
+    visual: c_int,
+) -> AddsubScanResult {
+    let _ = do_oct; // used via C parse_number only
+    let mut out = AddsubScanResult {
+        was_positive: 1,
+        length,
+        ..AddsubScanResult::default()
+    };
+
+    let lnum = nvim_pos_get_lnum(pos);
+    let line_ptr = nvim_ml_get(lnum);
+    let linelen = nvim_ml_get_len(lnum);
+    let pos_col = nvim_pos_get_col(pos);
+    let pos_coladd = nvim_pos_get_coladd(pos);
+
+    let save_coladd = if nvim_virtual_active() { pos_coladd } else { 0 };
+    let mut col = pos_col;
+
+    if col + c_int::from(save_coladd != 0) >= linelen {
+        out.past_end = 1;
+        return out;
+    }
+
+    // Helper: get byte at offset from line_ptr
+    let byte_at =
+        |offset: c_int| -> c_int { c_int::from(unsafe { *line_ptr.add(offset as usize) as u8 }) };
+
+    // Number scanning logic (non-visual)
+    if visual == 0 {
+        if do_bin != 0 {
+            while col > 0 && ascii_isbdigit(byte_at(col)) {
+                col -= 1;
+                col -= utf_head_off(line_ptr, line_ptr.add(col as usize));
+            }
+        }
+        if do_hex != 0 {
+            while col > 0 && ascii_isxdigit(byte_at(col)) {
+                col -= 1;
+                col -= utf_head_off(line_ptr, line_ptr.add(col as usize));
+            }
+        }
+        if do_bin != 0
+            && do_hex != 0
+            && !(col > 0
+                && (byte_at(col) == i32::from(b'X') || byte_at(col) == i32::from(b'x'))
+                && byte_at(col - 1) == i32::from(b'0')
+                && utf_head_off(line_ptr, line_ptr.add((col - 1) as usize)) == 0
+                && ascii_isxdigit(byte_at(col + 1)))
+        {
+            col = nvim_get_cursor_col();
+            while col > 0 && ascii_isdigit(byte_at(col)) {
+                col -= 1;
+                col -= utf_head_off(line_ptr, line_ptr.add(col as usize));
+            }
+        }
+
+        if (do_hex != 0
+            && col > 0
+            && (byte_at(col) == i32::from(b'X') || byte_at(col) == i32::from(b'x'))
+            && byte_at(col - 1) == i32::from(b'0')
+            && utf_head_off(line_ptr, line_ptr.add((col - 1) as usize)) == 0
+            && ascii_isxdigit(byte_at(col + 1)))
+            || (do_bin != 0
+                && col > 0
+                && (byte_at(col) == i32::from(b'B') || byte_at(col) == i32::from(b'b'))
+                && byte_at(col - 1) == i32::from(b'0')
+                && utf_head_off(line_ptr, line_ptr.add((col - 1) as usize)) == 0
+                && ascii_isbdigit(byte_at(col + 1)))
+        {
+            col -= 1;
+            col -= utf_head_off(line_ptr, line_ptr.add(col as usize));
+        } else {
+            col = pos_col;
+            while byte_at(col) != 0
+                && !ascii_isdigit(byte_at(col))
+                && !(do_alpha != 0 && ascii_isalpha(byte_at(col)))
+            {
+                col += 1;
+            }
+            while col > 0
+                && ascii_isdigit(byte_at(col - 1))
+                && !(do_alpha != 0 && ascii_isalpha(byte_at(col)))
+            {
+                col -= 1;
+            }
+        }
+    }
+
+    // Visual mode scanning
+    let mut length = length;
+    if visual != 0 {
+        while byte_at(col) != 0
+            && length > 0
+            && !ascii_isdigit(byte_at(col))
+            && !(do_alpha != 0 && ascii_isalpha(byte_at(col)))
+        {
+            let mb_len = utfc_ptr2len(line_ptr.add(col as usize));
+            col += mb_len;
+            length -= mb_len;
+        }
+        if length == 0 {
+            out.past_end = 1;
+            return out;
+        }
+        out.length = length;
+
+        if col > pos_col
+            && byte_at(col - 1) == i32::from(b'-')
+            && utf_head_off(line_ptr, line_ptr.add((col - 1) as usize)) == 0
+            && do_unsigned == 0
+        {
+            if do_blank != 0 && col >= 2 && !ascii_iswhite(byte_at(col - 2)) {
+                out.blank_unsigned = 1;
+            } else {
+                out.negative = 1;
+                out.was_positive = 0;
+            }
+        }
+    }
+
+    let firstdigit = byte_at(col);
+    if !(ascii_isdigit(firstdigit) || (do_alpha != 0 && ascii_isalpha(firstdigit))) {
+        out.no_digit = 1;
+        return out;
+    }
+
+    out.col = col;
+    out.firstdigit = firstdigit;
+    out.is_alpha = c_int::from(do_alpha != 0 && ascii_isalpha(firstdigit));
+    out
 }
 
 // Perform number arithmetic: parse, compute, replace.
@@ -244,8 +431,7 @@ pub unsafe extern "C" fn rs_do_addsub(
         &raw mut do_blank,
     );
 
-    let mut scan = AddsubScanResult::default();
-    nvim_addsub_scan(
+    let scan = addsub_scan(
         pos,
         length,
         do_hex,
@@ -255,7 +441,6 @@ pub unsafe extern "C" fn rs_do_addsub(
         do_unsigned,
         do_blank,
         visual_flag,
-        std::ptr::from_mut(&mut scan).cast::<c_void>(),
     );
 
     if scan.past_end != 0 {
@@ -264,7 +449,7 @@ pub unsafe extern "C" fn rs_do_addsub(
     }
 
     if scan.no_digit != 0 {
-        nvim_addsub_beep();
+        nvim_beep_flush();
         nvim_addsub_cleanup(visual_flag, 0, save_coladd);
         return false;
     }
