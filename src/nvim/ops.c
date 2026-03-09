@@ -2338,57 +2338,6 @@ void nvim_addsub_do_alpha(int col, int firstdigit, int op_type, int prenum1,
   curwin->w_cursor.col = col;
 }
 
-/// Parse number with vim_str2nr.
-void nvim_addsub_parse_number(int col, int length, int negative,
-                              int do_hex, int do_oct, int do_bin,
-                              int visual, void *out_ptr)
-{
-  AddsubParseResult *out = (AddsubParseResult *)out_ptr;
-  memset(out, 0, sizeof(*out));
-
-  char *ptr = ml_get(curwin->w_cursor.lnum);
-  int linelen = ml_get_len(curwin->w_cursor.lnum);
-  int maxlen = 0;
-
-  // Check for minus sign before the digit
-  if (!visual && col > 0 && ptr[col - 1] == '-'
-      && !utf_head_off(ptr, ptr + col - 1)
-      && !vim_strchr(curbuf->b_p_nf, 'u')) {
-    if (vim_strchr(curbuf->b_p_nf, 'k') && col >= 2 && !ascii_iswhite(ptr[col - 2])) {
-      // blank_unsigned case - handled by caller
-    } else {
-      col--;
-      negative = 1;
-    }
-  }
-
-  if (visual && VIsual_mode != 'V') {
-    maxlen = curbuf->b_visual.vi_curswant == MAXCOL ? linelen - col : length;
-  }
-
-  int pre = 0;
-  uvarnumber_T n = 0;
-  bool overflow = false;
-  vim_str2nr(ptr + col, &pre, &length,
-             0 + (do_bin ? STR2NR_BIN : 0)
-             + (do_oct ? STR2NR_OCT : 0)
-             + (do_hex ? STR2NR_HEX : 0),
-             NULL, &n, maxlen, false, &overflow);
-
-  // ignore leading '-' for hex, octal and bin numbers
-  if (pre && negative) {
-    col++;
-    length--;
-    negative = 0;
-  }
-
-  out->pre = pre;
-  out->length = length;
-  out->n_lo = (uint64_t)n;
-  out->col = col;
-  out->negative = negative;
-  out->overflow = overflow ? 1 : 0;
-}
 
 /// Delete old number and insert the new formatted number.
 void nvim_addsub_replace_number(int col, int length, int pre,

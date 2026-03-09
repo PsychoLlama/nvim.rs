@@ -82,15 +82,19 @@ extern "C" {
         out: *mut c_void,
     );
 
-    fn nvim_addsub_parse_number(
-        col: c_int,
-        length: c_int,
-        negative: c_int,
-        do_hex: c_int,
-        do_oct: c_int,
-        do_bin: c_int,
-        visual: c_int,
-        out: *mut c_void,
+    fn nvim_get_cursor_lnum() -> c_int;
+    fn nvim_get_VIsual_mode() -> c_int;
+    fn nvim_get_b_visual_vi_curswant() -> c_int;
+    fn vim_str2nr(
+        start: *const std::ffi::c_char,
+        prep: *mut c_int,
+        len: *mut c_int,
+        what: c_int,
+        nptr: *mut i64,
+        unptr: *mut u64,
+        maxlen: c_int,
+        strict: bool,
+        overflow: *mut bool,
     );
 
     fn nvim_addsub_replace_number(
@@ -311,20 +315,117 @@ unsafe fn addsub_scan(
     out
 }
 
+// STR2NR constants (from charset.h)
+const STR2NR_BIN: c_int = 1 << 0;
+const STR2NR_OCT: c_int = 1 << 1;
+const STR2NR_HEX: c_int = 1 << 2;
+const MAXCOL: c_int = 0x7fff_ffff;
+
+/// Rust port of `nvim_addsub_parse_number` from ops.c.
+///
+/// # Safety
+/// - Accesses current buffer/cursor via C shims
+/// - `scan_col` and `length` must be valid column values
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::suspicious_operation_groupings,
+    clippy::too_many_arguments
+)]
+unsafe fn addsub_parse_number(
+    scan_col: c_int,
+    length: c_int,
+    negative: c_int,
+    do_hex: c_int,
+    do_oct: c_int,
+    do_bin: c_int,
+    do_unsigned: c_int,
+    do_blank: c_int,
+    visual: c_int,
+) -> AddsubParseResult {
+    let cursor_lnum = nvim_get_cursor_lnum();
+    let line_ptr = nvim_ml_get(cursor_lnum);
+    let linelen = nvim_ml_get_len(cursor_lnum);
+
+    let byte_at = |offset: c_int| -> c_int { c_int::from(*line_ptr.add(offset as usize) as u8) };
+
+    let mut col = scan_col;
+    let mut negative = negative;
+    let mut length = length;
+
+    // Check for minus sign before the digit (non-visual only)
+    if visual == 0
+        && col > 0
+        && byte_at(col - 1) == i32::from(b'-')
+        && utf_head_off(line_ptr, line_ptr.add((col - 1) as usize)) == 0
+        && do_unsigned == 0
+    {
+        if do_blank != 0 && col >= 2 && !ascii_iswhite(byte_at(col - 2)) {
+            // blank_unsigned case - handled by caller
+        } else {
+            col -= 1;
+            negative = 1;
+        }
+    }
+
+    let maxlen = if visual != 0 && nvim_get_VIsual_mode() != i32::from(b'V') {
+        if nvim_get_b_visual_vi_curswant() == MAXCOL {
+            linelen - col
+        } else {
+            length
+        }
+    } else {
+        0
+    };
+
+    let mut pre: c_int = 0;
+    let mut n: u64 = 0;
+    let mut overflow = false;
+    let what = if do_bin != 0 { STR2NR_BIN } else { 0 }
+        | if do_oct != 0 { STR2NR_OCT } else { 0 }
+        | if do_hex != 0 { STR2NR_HEX } else { 0 };
+    vim_str2nr(
+        line_ptr.add(col as usize),
+        &raw mut pre,
+        &raw mut length,
+        what,
+        std::ptr::null_mut(),
+        &raw mut n,
+        maxlen,
+        false,
+        &raw mut overflow,
+    );
+
+    // Ignore leading '-' for hex, octal and bin numbers
+    if pre != 0 && negative != 0 {
+        col += 1;
+        length -= 1;
+        negative = 0;
+    }
+
+    AddsubParseResult {
+        pre,
+        length,
+        n_lo: n,
+        col,
+        negative,
+        overflow: c_int::from(overflow),
+    }
+}
+
 // Perform number arithmetic: parse, compute, replace.
 // Returns the endpos column for mark setting.
 #[allow(clippy::cast_sign_loss)]
 unsafe fn do_number_addsub(scan: &AddsubScanResult, params: &NumArithParams) -> c_int {
-    let mut parse = AddsubParseResult::default();
-    nvim_addsub_parse_number(
+    let parse = addsub_parse_number(
         scan.col,
         scan.length,
         scan.negative,
         params.do_hex,
         params.do_oct,
         params.do_bin,
+        params.do_unsigned,
+        params.blank_unsigned,
         params.visual_flag,
-        std::ptr::from_mut(&mut parse).cast::<c_void>(),
     );
 
     let mut negative = parse.negative != 0;
