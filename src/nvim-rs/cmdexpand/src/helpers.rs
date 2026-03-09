@@ -250,7 +250,7 @@ pub unsafe extern "C" fn rs_expand_escape(
 /// # Safety
 ///
 /// `xp` must be a valid `expand_T` handle.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ExpandInit")]
 pub unsafe extern "C" fn rs_expand_init(xp: ExpandHandle) {
     nvim_expand_clear(xp);
     nvim_expand_set_backslash(xp, XP_BS_NONE);
@@ -266,7 +266,7 @@ pub unsafe extern "C" fn rs_expand_init(xp: ExpandHandle) {
 /// # Safety
 ///
 /// `xp` must be a valid `expand_T` handle.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ExpandCleanup")]
 pub unsafe extern "C" fn rs_expand_cleanup(xp: ExpandHandle) {
     if nvim_expand_get_numfiles(xp) >= 0 {
         nvim_expand_free_wild(xp);
@@ -276,7 +276,7 @@ pub unsafe extern "C" fn rs_expand_cleanup(xp: ExpandHandle) {
 }
 
 /// Clear the static `cmdline_orig` variable.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "clear_cmdline_orig")]
 pub extern "C" fn rs_clear_cmdline_orig() {
     // SAFETY: `nvim_clear_cmdline_orig` is a simple accessor that frees and
     // NULLs the static `cmdline_orig` variable.

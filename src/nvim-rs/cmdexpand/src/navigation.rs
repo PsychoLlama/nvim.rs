@@ -87,8 +87,6 @@ extern "C" {
     fn xfree(ptr: *mut libc::c_void);
     fn xmalloc(size: usize) -> *mut c_char;
 
-    // Rust functions from this crate (callable via FFI)
-    fn rs_expand_cleanup(xp: ExpandHandle);
 }
 
 /// `kOptBoFlagWildmode` value (generated enum, 0x80000).
@@ -356,7 +354,7 @@ const XP_PREFIX_INV: c_int = 2;
 ///
 /// `xp` must be a valid `expand_T` handle. `str_` must be a valid C string.
 /// `orig` must be a valid C string or NULL.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ExpandOne")]
 pub unsafe extern "C" fn rs_expand_one(
     xp: ExpandHandle,
     str_: *mut c_char,
@@ -429,7 +427,7 @@ pub unsafe extern "C" fn rs_expand_one(
     }
 
     if mode == WILD_EXPAND_FREE || mode == WILD_ALL {
-        rs_expand_cleanup(xp);
+        crate::helpers::rs_expand_cleanup(xp);
     }
 
     // Free "orig" if it wasn't stored in "xp->xp_orig".

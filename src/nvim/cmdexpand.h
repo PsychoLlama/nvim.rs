@@ -45,4 +45,14 @@ enum {
   WILD_FUNC_TRIGGER         = 0x10000,  ///< called from wildtrigger()
 };
 
+// Functions implemented in Rust (export_name = original C name)
+#include "nvim/cmdexpand_defs.h"  // for expand_T
+char *ExpandOne(expand_T *xp, char *str, char *orig, int options, int mode);
+void ExpandInit(expand_T *xp);
+void ExpandCleanup(expand_T *xp);
+void clear_cmdline_orig(void);
+char *addstar(char *fname, size_t len, int context);
+bool cmdline_fuzzy_complete(const char *const fuzzystr);
+bool cmdline_pum_active(void);
+
 #include "cmdexpand.h.generated.h"

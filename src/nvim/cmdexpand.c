@@ -110,8 +110,6 @@ static int compl_selected;
 static char *cmdline_orig = NULL;
 
 extern int rs_magic_isset(void);
-extern int rs_cmdline_fuzzy_complete(const char *fuzzystr);
-extern int rs_cmdline_pum_active(void);
 extern int rs_cmdline_fuzzy_completion_supported(int context);
 
 
@@ -124,19 +122,12 @@ extern int rs_expand_showtail(expand_T *xp);
 extern void rs_wildescape(expand_T *xp, const char *str, int numfiles, char **files);
 extern void rs_expand_escape(expand_T *xp, char *str, int numfiles, char **files, int options);
 
-// Phase 2: Expand struct operations
-extern void rs_expand_init(expand_T *xp);
-extern void rs_expand_cleanup(expand_T *xp);
-extern void rs_clear_cmdline_orig(void);
-extern char *rs_addstar(const char *fname, size_t len, int context);
 
 // Phase 3: Match navigation
 extern char *rs_get_next_or_prev_match(int mode, expand_T *xp);
 extern char *rs_expand_one_start(int mode, expand_T *xp, const char *str, int options);
 extern char *rs_find_longest_match(expand_T *xp, int options);
 
-// Phase 4: ExpandOne orchestrator
-extern char *rs_expand_one(expand_T *xp, char *str, char *orig, int options, int mode);
 
 // Phase 5: Context-setting helpers
 extern const char *rs_find_cmd_after_global_cmd(const char *arg);
@@ -427,9 +418,6 @@ void nvim_clear_cmdline_orig(void)
   XFREE_CLEAR(cmdline_orig);
 }
 
-// Static assert for XP_PREFIX_NONE used in rs_expand_init
-_Static_assert(XP_PREFIX_NONE == 0, "XP_PREFIX_NONE mismatch");
-
 // =============================================================================
 // Phase 3: C accessors for match navigation
 // =============================================================================
@@ -577,10 +565,6 @@ char *nvim_cmdexpand_xstpcpy(char *dst, const char *src)
 {
   return xstpcpy(dst, src);
 }
-
-// Static asserts for XP_PREFIX values used in rs_expand_one
-_Static_assert(XP_PREFIX_NO == 1, "XP_PREFIX_NO mismatch");
-_Static_assert(XP_PREFIX_INV == 2, "XP_PREFIX_INV mismatch");
 
 // =============================================================================
 // Phase 5: Static enums and constants (moved here for accessor visibility)
@@ -764,14 +748,6 @@ static bool cmdline_fuzzy_completion_supported(const expand_T *const xp)
   return wop_flags & kOptWopFlagFuzzy;
 }
 
-/// Returns true if fuzzy completion for cmdline completion is enabled and
-/// "fuzzystr" is not empty.  If search pattern is empty, then don't use fuzzy
-/// matching.
-bool cmdline_fuzzy_complete(const char *const fuzzystr)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
-{
-  return rs_cmdline_fuzzy_complete(fuzzystr) != 0;
-}
 
 /// Sort function for the completion matches.
 /// <SNR> functions should be sorted to the end. Rust implementation.
@@ -965,11 +941,6 @@ void cmdline_pum_display(bool changed_array)
               changed_array, compl_startcol);
 }
 
-/// Returns true if the cmdline completion popup menu is being displayed.
-bool cmdline_pum_active(void)
-{
-  return rs_cmdline_pum_active() != 0;
-}
 
 /// Remove the cmdline completion popup menu (if present), free the list of items.
 void cmdline_pum_remove(bool defer_redraw)
@@ -1262,31 +1233,6 @@ static char *find_longest_match(expand_T *xp, int options)
 ///
 /// The variables xp->xp_context and xp->xp_backslash must have been set!
 ///
-/// @param orig  allocated copy of original of expanded string
-/// Do wildcard expansion on the string "str". Rust implementation.
-char *ExpandOne(expand_T *xp, char *str, char *orig, int options, int mode)
-{
-  return rs_expand_one(xp, str, orig, options, mode);
-}
-
-/// Prepare an expand structure for use. Rust implementation.
-void ExpandInit(expand_T *xp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_expand_init(xp);
-}
-
-/// Cleanup an expand structure after use. Rust implementation.
-void ExpandCleanup(expand_T *xp)
-{
-  rs_expand_cleanup(xp);
-}
-
-/// Clear the static cmdline_orig. Rust implementation.
-void clear_cmdline_orig(void)
-{
-  rs_clear_cmdline_orig();
-}
 
 /// Display one line of completion matches. Multiple matches are displayed in
 /// each line (used by wildmode=list and CTRL-D)
@@ -1480,19 +1426,6 @@ static bool expand_showtail(expand_T *xp)
   return rs_expand_showtail(xp) != 0;
 }
 
-/// Prepare a string for expansion. Rust implementation.
-///
-/// When expanding file names: The string will be used with expand_wildcards().
-/// Copy "fname[len]" into allocated memory and add a '*' at the end.
-/// When expanding other names: The string will be used with regcomp().  Copy
-/// the name into allocated memory and prepend "^".
-///
-/// @param context EXPAND_FILES etc.
-char *addstar(char *fname, size_t len, int context)
-  FUNC_ATTR_NONNULL_RET
-{
-  return rs_addstar(fname, len, context);
-}
 
 /// Must parse the command line so far to work out what context we are in.
 /// Completion can then be done based on that context.

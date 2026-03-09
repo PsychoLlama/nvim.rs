@@ -217,7 +217,8 @@ pub fn should_append_star(fname: &[u8], tail_start: usize) -> bool {
 ///
 /// `fname` must be a valid pointer to a string of at least `len` bytes.
 /// The returned pointer must be freed with `xfree()`.
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "addstar")]
 pub unsafe extern "C" fn rs_addstar(
     fname: *const c_char,
     len: usize,

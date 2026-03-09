@@ -50,8 +50,8 @@ pub mod keys {
 
 #[allow(dead_code)]
 extern "C" {
-    // Check if cmdline pum is active
-    fn rs_cmdline_pum_active() -> c_int;
+    // Check if cmdline pum is active (exported as cmdline_pum_active from cmdexpand crate)
+    fn cmdline_pum_active() -> c_int;
 
     // Access to wild_menu_showing global
     fn nvim_get_wild_menu_showing() -> c_int;
@@ -158,7 +158,7 @@ pub unsafe extern "C" fn rs_wildmenu_translate_arrow_keys(
     key: c_int,
     did_wild_list: c_int,
 ) -> c_int {
-    let pum_active = rs_cmdline_pum_active() != 0;
+    let pum_active = cmdline_pum_active() != 0;
     let wild_showing = nvim_get_wild_menu_showing() != 0;
 
     translate_arrow_keys(key, pum_active, did_wild_list != 0, wild_showing)

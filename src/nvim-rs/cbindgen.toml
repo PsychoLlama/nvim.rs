@@ -299,8 +299,8 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_valid_backupskip_path", "rs_has_trailing_pathsep",
            "rs_make_backupskip_pattern", "rs_is_unix", "rs_default_tmpdir",
            # Command line subsystem (Phase 1-5)
-           "rs_cmdline_overstrike", "rs_cmdline_at_end", "rs_cmdline_fuzzy_complete",
-           "rs_is_in_cmdwin", "rs_cmdline_pum_active", "rs_cmdpreview_get_ns",
+           "rs_cmdline_overstrike", "rs_cmdline_at_end",
+           "rs_is_in_cmdwin", "rs_cmdpreview_get_ns",
            "rs_get_cmdline_firstc",
            # Command line state
            "rs_cmdline_get_cmdpos", "rs_cmdline_get_cmdlen", "rs_cmdline_get_level",
@@ -330,7 +330,7 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_key_to_history_direction", "rs_key_uses_prefix_match",
            "rs_direction_forward", "rs_direction_backward",
            # Pattern processing
-           "rs_process_pattern_backslashes", "rs_addstar", "rs_calculate_file_expand_flags",
+           "rs_process_pattern_backslashes", "rs_calculate_file_expand_flags",
            "rs_map_wildopts_to_ewflags", "rs_file_completion_case_sensitive",
            # Wildmenu
            "rs_skip_wildmenu_char", "rs_wildmenu_match_len", "rs_wildmenu_translate_arrow_keys",

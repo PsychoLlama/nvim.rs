@@ -125,7 +125,8 @@ unsafe fn cstr_to_str<'a>(ptr: *const c_char) -> Option<&'a str> {
 /// # Safety
 ///
 /// `fuzzystr` must be a valid null-terminated C string or null.
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "cmdline_fuzzy_complete")]
 pub unsafe extern "C" fn rs_cmdline_fuzzy_complete(fuzzystr: *const c_char) -> c_int {
     let Some(s) = cstr_to_str(fuzzystr) else {
         return 0;
@@ -135,7 +136,8 @@ pub unsafe extern "C" fn rs_cmdline_fuzzy_complete(fuzzystr: *const c_char) -> c
 }
 
 /// Check if cmdline popup menu is active (FFI version).
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "cmdline_pum_active")]
 pub extern "C" fn rs_cmdline_pum_active() -> c_int {
     c_int::from(cmdline_pum_active())
 }
