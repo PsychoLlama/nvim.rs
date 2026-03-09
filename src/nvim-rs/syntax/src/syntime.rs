@@ -19,16 +19,9 @@ extern "C" {
     fn nvim_syn_get_syn_time_on() -> c_int;
     fn nvim_syn_set_syn_time_on(val: c_int);
 
-    // synpat count and timing fields
+    // synblock pattern access (synblock_T is not repr(C) yet)
     fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
-    fn nvim_synpat_clear_time(pat: SynPatHandle);
-    fn nvim_synpat_get_time_count(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_time_match(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_time_total(pat: SynPatHandle) -> Proftime;
-    fn nvim_synpat_get_time_slowest(pat: SynPatHandle) -> Proftime;
-    fn nvim_synpat_get_syn_id(pat: SynPatHandle) -> i16;
-    fn nvim_synpat_get_pattern(pat: SynPatHandle) -> *const c_char;
 
     // syntax_present(curwin)
     fn nvim_syn_syntax_present_curwin() -> c_int;
@@ -157,7 +150,8 @@ unsafe fn syntime_clear_impl() {
     for idx in 0..count {
         let pat = nvim_synblock_get_pattern(block, idx);
         if !pat.is_null() {
-            nvim_synpat_clear_time(pat);
+            let st_ptr = &mut (*pat.as_ptr()).sp_time as *mut _ as *mut c_void;
+            crate::line_init::rs_syn_clear_time(st_ptr);
         }
     }
 }
@@ -182,19 +176,20 @@ unsafe fn syntime_report_impl() {
         if pat.is_null() {
             continue;
         }
-        let count = nvim_synpat_get_time_count(pat);
+        let pp = pat.as_ptr();
+        let count = (*pp).sp_time.count;
         if count > 0 {
-            let total = nvim_synpat_get_time_total(pat);
+            let total = (*pp).sp_time.total;
             total_total = rs_profile_add(total_total, total);
             let average = rs_profile_divide(total, count);
             entries.push(TimeEntry {
                 total,
                 count,
-                match_count: nvim_synpat_get_time_match(pat),
-                slowest: nvim_synpat_get_time_slowest(pat),
+                match_count: (*pp).sp_time.match_,
+                slowest: (*pp).sp_time.slowest,
                 average,
-                id: nvim_synpat_get_syn_id(pat),
-                pattern: nvim_synpat_get_pattern(pat),
+                id: (*pp).sp_syn.id,
+                pattern: (*pp).sp_pattern as *const c_char,
             });
             total_count += count;
         }

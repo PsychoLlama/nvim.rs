@@ -29,20 +29,7 @@ extern "C" {
     fn nvim_syn_set_reg_do_extmatch(val: c_int);
     fn nvim_syn_vim_regcomp_had_eol() -> c_int;
 
-    // Pattern field setters on SynPatHandle
-    fn nvim_synpat_copy_from(dst: SynPatHandle, src: SynPatHandle);
-    fn nvim_synpat_set_syncing(pat: SynPatHandle, syncing: c_int);
-    fn nvim_synpat_set_type(pat: SynPatHandle, sptype: c_int);
-    fn nvim_synpat_set_flags(pat: SynPatHandle, flags: c_int);
-    fn nvim_synpat_or_flags(pat: SynPatHandle, flags: c_int);
-    fn nvim_synpat_set_syn_id(pat: SynPatHandle, id: c_int);
-    fn nvim_synpat_set_syn_inc_tag(pat: SynPatHandle, tag: c_int);
-    fn nvim_synpat_set_syn_match_id(pat: SynPatHandle, id: c_int);
-    fn nvim_synpat_set_cchar(pat: SynPatHandle, c: c_int);
-    fn nvim_synpat_set_sync_idx(pat: SynPatHandle, idx: c_int);
-    fn nvim_synpat_set_cont_list(pat: SynPatHandle, list: *mut i16);
-    fn nvim_synpat_set_cont_in_list(pat: SynPatHandle, list: *mut i16);
-    fn nvim_synpat_set_next_list(pat: SynPatHandle, list: *mut i16);
+    // (synpat_T setters removed -- use direct repr(C) field access)
     fn nvim_synblock_set_containedin(val: c_int);
     fn nvim_synblock_or_sync_flags(block: SynBlockHandle, flags: c_int);
     fn nvim_synblock_inc_folditems();
@@ -112,7 +99,7 @@ pub unsafe fn compile_pattern(
         && nvim_syn_vim_regcomp_had_eol() != 0
         && (opt_flags & HL_EXCLUDENL) == 0
     {
-        nvim_synpat_or_flags(pat, HL_HAS_EOL);
+        (*pat.as_ptr()).sp_flags |= HL_HAS_EOL;
     }
 
     *rest_out = rest;
@@ -168,20 +155,23 @@ pub unsafe fn store_match_pattern(
     syncing: c_int,
 ) {
     let spp = nvim_synblock_ga_append_pattern();
-    nvim_synpat_copy_from(spp, pat);
-    nvim_synpat_set_syncing(spp, syncing);
-    nvim_synpat_set_type(spp, SPTYPE_MATCH);
-    nvim_synpat_set_syn_id(spp, syn_id);
-    nvim_synpat_set_syn_inc_tag(spp, nvim_syn_get_current_inc_tag());
-    nvim_synpat_set_flags(spp, flags);
-    nvim_synpat_set_sync_idx(spp, sync_idx);
-    nvim_synpat_set_cont_list(spp, cont_list);
-    nvim_synpat_set_cont_in_list(spp, cont_in_list);
-    nvim_synpat_set_cchar(spp, conceal_char);
+    std::ptr::copy_nonoverlapping(pat.as_ptr(), spp.as_ptr(), 1);
+    {
+        let p = spp.as_ptr();
+        (*p).sp_syncing = syncing != 0;
+        (*p).sp_type = SPTYPE_MATCH as i8;
+        (*p).sp_syn.id = syn_id as i16;
+        (*p).sp_syn.inc_tag = nvim_syn_get_current_inc_tag();
+        (*p).sp_flags = flags;
+        (*p).sp_sync_idx = sync_idx;
+        (*p).sp_cont_list = cont_list;
+        (*p).sp_syn.cont_in_list = cont_in_list;
+        (*p).sp_cchar = conceal_char;
+        (*p).sp_next_list = next_list;
+    }
     if !cont_in_list.is_null() {
         nvim_synblock_set_containedin(1);
     }
-    nvim_synpat_set_next_list(spp, next_list);
 
     if flags & (HL_SYNC_HERE | HL_SYNC_THERE) != 0 {
         nvim_synblock_or_sync_flags(nvim_syn_get_curwin_synblock(), SF_MATCH);
@@ -226,8 +216,7 @@ pub unsafe fn store_region_patterns(
 
     for &(pat, matchgroup_id, item_type) in pats {
         let spp = nvim_synblock_ga_append_pattern();
-        nvim_synpat_copy_from(spp, pat);
-        nvim_synpat_set_syncing(spp, syncing);
+        std::ptr::copy_nonoverlapping(pat.as_ptr(), spp.as_ptr(), 1);
         let sptype = if item_type == ITEM_START {
             SPTYPE_START
         } else if item_type == ITEM_SKIP {
@@ -235,19 +224,23 @@ pub unsafe fn store_region_patterns(
         } else {
             SPTYPE_END
         };
-        nvim_synpat_set_type(spp, sptype);
-        nvim_synpat_or_flags(spp, flags);
-        nvim_synpat_set_syn_id(spp, syn_id);
-        nvim_synpat_set_syn_inc_tag(spp, inc_tag);
-        nvim_synpat_set_syn_match_id(spp, matchgroup_id);
-        nvim_synpat_set_cchar(spp, conceal_char);
-        if item_type == ITEM_START {
-            nvim_synpat_set_cont_list(spp, cont_list);
-            nvim_synpat_set_cont_in_list(spp, cont_in_list);
-            if !cont_in_list.is_null() {
-                nvim_synblock_set_containedin(1);
+        {
+            let p = spp.as_ptr();
+            (*p).sp_syncing = syncing != 0;
+            (*p).sp_type = sptype as i8;
+            (*p).sp_flags |= flags;
+            (*p).sp_syn.id = syn_id as i16;
+            (*p).sp_syn.inc_tag = inc_tag;
+            (*p).sp_syn_match_id = matchgroup_id as i16;
+            (*p).sp_cchar = conceal_char;
+            if item_type == ITEM_START {
+                (*p).sp_cont_list = cont_list;
+                (*p).sp_syn.cont_in_list = cont_in_list;
+                if !cont_in_list.is_null() {
+                    nvim_synblock_set_containedin(1);
+                }
+                (*p).sp_next_list = next_list;
             }
-            nvim_synpat_set_next_list(spp, next_list);
         }
         if flags & HL_FOLD != 0 {
             nvim_synblock_inc_folditems();

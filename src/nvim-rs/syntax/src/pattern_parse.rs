@@ -27,15 +27,7 @@ extern "C" {
     fn nvim_syn_set_p_cpo(val: *mut c_char);
     fn nvim_syn_get_empty_string_option() -> *mut c_char;
 
-    // synpat_T setters
-    fn nvim_synpat_set_pattern(pat: SynPatHandle, pattern: *mut c_char);
-    fn nvim_synpat_set_prog(pat: SynPatHandle, prog: *mut c_void);
-    fn nvim_synpat_set_ic(pat: SynPatHandle, ic: c_int);
-    fn nvim_synpat_set_off_flags(pat: SynPatHandle, flags: i16);
-    fn nvim_synpat_get_off_flags(pat: SynPatHandle) -> i16;
-    fn nvim_synpat_set_offset(pat: SynPatHandle, idx: c_int, val: c_int);
-    fn nvim_synpat_get_offset(pat: SynPatHandle, idx: c_int) -> c_int;
-    fn nvim_synpat_clear_time(pat: SynPatHandle);
+    // (synpat_T setters/getters removed -- use direct repr(C) field access)
 
     // curwin accessor
     fn nvim_syn_get_curwin_syn_ic() -> c_int;
@@ -92,7 +84,7 @@ unsafe fn get_syn_pattern_impl(arg: *mut c_char, ci: SynPatHandle) -> *mut c_cha
     // Store the pattern (xstrnsave(arg+1, end - arg - 1))
     let pat_len = end.offset_from(arg) as c_int - 1;
     let pattern = nvim_syn_xstrnsave(arg.add(1), pat_len);
-    nvim_synpat_set_pattern(ci, pattern);
+    (*ci.as_ptr()).sp_pattern = pattern;
 
     // Make 'cpoptions' empty to avoid the 'l' flag, then compile
     let cpo_save = nvim_syn_get_p_cpo();
@@ -104,9 +96,10 @@ unsafe fn get_syn_pattern_impl(arg: *mut c_char, ci: SynPatHandle) -> *mut c_cha
         return std::ptr::null_mut();
     }
 
-    nvim_synpat_set_prog(ci, prog);
-    nvim_synpat_set_ic(ci, nvim_syn_get_curwin_syn_ic());
-    nvim_synpat_clear_time(ci);
+    (*ci.as_ptr()).sp_prog = prog;
+    (*ci.as_ptr()).sp_ic = nvim_syn_get_curwin_syn_ic();
+    let st_ptr = &mut (*ci.as_ptr()).sp_time as *mut _ as *mut c_void;
+    crate::line_init::rs_syn_clear_time(st_ptr);
 
     // Check for match/highlight/region offset specifiers after the closing delimiter.
     let mut cur = end.add(1);
@@ -144,20 +137,20 @@ unsafe fn get_syn_pattern_impl(arg: *mut c_char, ci: SynPatHandle) -> *mut c_cha
         }
 
         // Set the flag bit
-        let old_flags = nvim_synpat_get_off_flags(ci);
-        nvim_synpat_set_off_flags(ci, old_flags | (1i16 << eff_idx));
+        let old_flags = (*ci.as_ptr()).sp_off_flags;
+        (*ci.as_ptr()).sp_off_flags = old_flags | (1i16 << eff_idx);
 
         if idx == SPO_LC_OFF {
             // lc= -- advance past 3-char name, read decimal
             cur = cur.add(3);
             let val = nvim_syn_getdigits_int(&mut cur, 1, 0);
-            nvim_synpat_set_offset(ci, idx, val);
+            (*ci.as_ptr()).sp_offsets[idx as usize] = val;
 
             // lc= automatically sets ms= if not already set
-            let flags_now = nvim_synpat_get_off_flags(ci);
+            let flags_now = (*ci.as_ptr()).sp_off_flags;
             if flags_now & (1i16 << SPO_MS_OFF) == 0 {
-                nvim_synpat_set_off_flags(ci, flags_now | (1i16 << SPO_MS_OFF));
-                nvim_synpat_set_offset(ci, SPO_MS_OFF, val);
+                (*ci.as_ptr()).sp_off_flags = flags_now | (1i16 << SPO_MS_OFF);
+                (*ci.as_ptr()).sp_offsets[SPO_MS_OFF as usize] = val;
             }
         } else {
             // yy=x+99 or yy=x-99 -- advance past 4 chars (name + s/b/e char)
@@ -171,7 +164,7 @@ unsafe fn get_syn_pattern_impl(arg: *mut c_char, ci: SynPatHandle) -> *mut c_cha
             } else {
                 0
             };
-            nvim_synpat_set_offset(ci, eff_idx, val);
+            (*ci.as_ptr()).sp_offsets[idx as usize] = val;
         }
 
         if *cur as u8 != b',' {

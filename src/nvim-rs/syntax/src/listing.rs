@@ -51,23 +51,12 @@ extern "C" {
     fn nvim_synblock_get_pattern_count(block: crate::types::SynBlockHandle) -> c_int;
     fn nvim_synblock_get_pattern(block: crate::types::SynBlockHandle, idx: c_int) -> SynPatHandle;
 
-    // Synpat offset accessor (has C logic, kept as accessor)
-    fn nvim_synpat_get_offset(pat: SynPatHandle, idx: c_int) -> c_int;
-
     // Keyword hashtable iteration
     fn nvim_synblock_get_keywtab(block: crate::types::SynBlockHandle) -> *mut c_void;
     fn nvim_synblock_get_keywtab_ic(block: crate::types::SynBlockHandle) -> *mut c_void;
     fn nvim_ht_get_array_size(ht: *const c_void) -> usize;
     fn nvim_ht_get_used(ht: *const c_void) -> usize;
     fn nvim_ht_item_at(ht: *const c_void, idx: usize) -> KeyEntryHandle;
-
-    // Keyentry field accessors
-    fn nvim_keyentry_get_next(ke: KeyEntryHandle) -> KeyEntryHandle;
-    fn nvim_keyentry_get_syn_id(ke: KeyEntryHandle) -> i16;
-    fn nvim_keyentry_get_flags(ke: KeyEntryHandle) -> c_int;
-    fn nvim_keyentry_get_keyword(ke: KeyEntryHandle) -> *const c_char;
-    fn nvim_keyentry_get_next_list(ke: KeyEntryHandle) -> *mut i16;
-    fn nvim_keyentry_get_cont_in_list(ke: KeyEntryHandle) -> *mut i16;
 
     // Sync field accessors (explicit block param)
     fn nvim_synblock_get_sync_flags(block: crate::types::SynBlockHandle) -> c_int;
@@ -349,7 +338,7 @@ unsafe fn put_pattern(
             msg_putchar(b',' as c_int);
         }
         msg_puts(spo_name.as_ptr().cast());
-        let n = nvim_synpat_get_offset(spp, i as c_int);
+        let n = (*spp.as_ptr()).sp_offsets[i];
         if i != SPO_LC_OFF {
             if off_flags & mask != 0 {
                 msg_putchar(b's' as c_int);
@@ -397,11 +386,11 @@ unsafe fn syn_list_keywords(
         todo -= 1;
         let mut kp = kp_start;
         while !kp.is_null() && nvim_syn_get_got_int() == 0 {
-            let kp_next = nvim_keyentry_get_next(kp);
-            if i32::from(nvim_keyentry_get_syn_id(kp)) == id {
-                let kp_flags = nvim_keyentry_get_flags(kp);
-                let kp_next_list = nvim_keyentry_get_next_list(kp);
-                let kp_cont_in_list = nvim_keyentry_get_cont_in_list(kp);
+            let kp_next = KeyEntryHandle((*kp.as_ptr()).ke_next);
+            if i32::from((*kp.as_ptr()).k_syn.id) == id {
+                let kp_flags = (*kp.as_ptr()).flags;
+                let kp_next_list = (*kp.as_ptr()).next_list;
+                let kp_cont_in_list = (*kp.as_ptr()).k_syn.cont_in_list;
 
                 let kp_contained = kp_flags & HL_CONTAINED;
                 let kp_skipnl = kp_flags & HL_SKIPNL;
@@ -418,7 +407,7 @@ unsafe fn syn_list_keywords(
                 let outlen = if force_newline {
                     0
                 } else {
-                    let keyword = nvim_keyentry_get_keyword(kp);
+                    let keyword = crate::ffi_types::KeyEntry::keyword_ptr(kp.as_ptr());
                     if keyword.is_null() {
                         0
                     } else {
@@ -473,7 +462,7 @@ unsafe fn syn_list_keywords(
                     }
                     prev_next_list = kp_next_list as *const i16;
                 }
-                let keyword = nvim_keyentry_get_keyword(kp);
+                let keyword = crate::ffi_types::KeyEntry::keyword_ptr(kp.as_ptr());
                 if !keyword.is_null() {
                     msg_outtrans(keyword, 0, false);
                 }

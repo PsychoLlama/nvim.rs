@@ -47,10 +47,7 @@ extern "C" {
     // Timing update: updates syn_time_T fields (total, slowest, count, match)
     fn nvim_syn_time_update(st_ptr: *mut c_void, elapsed: u64, matched: c_int);
 
-    // synpat accessors (typed handles)
-    fn nvim_synpat_get_ic(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_prog(pat: SynPatHandle) -> *mut c_void;
-    fn nvim_synpat_set_prog(pat: SynPatHandle, prog: *mut c_void);
+    // (synpat_T setters removed -- use direct repr(C) field access)
 
     // Get pointer to sp_time for a pattern at idx in the current synblock
     fn nvim_syn_get_pat_time_ptr(idx: c_int) -> *mut c_void;
@@ -174,13 +171,13 @@ pub unsafe fn syn_regexec_pat(
         return 0;
     }
 
-    let ic = nvim_synpat_get_ic(pat);
-    let regprog = nvim_synpat_get_prog(pat);
+    let ic = (*pat.as_ptr()).sp_ic;
+    let regprog = (*pat.as_ptr()).sp_prog;
     let st_ptr = nvim_syn_get_pat_time_ptr(idx);
     let mut new_regprog: *mut c_void = std::ptr::null_mut();
 
     let result = syn_regexec_impl(regprog, ic, lnum, col, st_ptr, &mut new_regprog);
-    nvim_synpat_set_prog(pat, new_regprog);
+    (*pat.as_ptr()).sp_prog = new_regprog;
 
     if let Some((sl, sc, el, ec)) = result {
         if !start_lnum.is_null() {
@@ -227,13 +224,13 @@ pub unsafe fn syn_regexec_by_idx(
         return 0;
     }
 
-    let ic = nvim_synpat_get_ic(pat);
-    let regprog = nvim_synpat_get_prog(pat);
+    let ic = (*pat.as_ptr()).sp_ic;
+    let regprog = (*pat.as_ptr()).sp_prog;
     let st_ptr = nvim_syn_get_pat_time_ptr(idx);
     let mut new_regprog: *mut c_void = std::ptr::null_mut();
 
     let result = syn_regexec_impl(regprog, ic, lnum, col, st_ptr, &mut new_regprog);
-    nvim_synpat_set_prog(pat, new_regprog);
+    (*pat.as_ptr()).sp_prog = new_regprog;
 
     if let Some((sl, sc, el, ec)) = result {
         *s_lnum = sl;

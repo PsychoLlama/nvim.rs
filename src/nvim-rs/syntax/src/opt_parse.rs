@@ -51,12 +51,10 @@ extern "C" {
     fn nvim_syn_check_group_wrapper(name: *const c_char, len: c_int) -> c_int;
     fn nvim_syn_highlight_num_groups() -> c_int;
     fn nvim_syn_highlight_group_name(idx: c_int) -> *mut c_char;
-    // Synpat accessors (explicit block param)
+    // Synblock accessors (synblock_T is not repr(C) yet)
     fn nvim_syn_get_curwin_synblock() -> crate::types::SynBlockHandle;
     fn nvim_synblock_get_pattern_count(block: crate::types::SynBlockHandle) -> c_int;
     fn nvim_synblock_get_pattern(block: crate::types::SynBlockHandle, idx: c_int) -> SynPatHandle;
-    fn nvim_synpat_get_syn_id(pat: SynPatHandle) -> i16;
-    fn nvim_synpat_get_type(pat: SynPatHandle) -> c_int;
 
     // Regexp
     fn nvim_syn_vim_regcomp(pat: *mut c_char, flags: c_int) -> *mut c_void;
@@ -98,8 +96,8 @@ unsafe fn find_sync_pattern_idx(syn_id: c_int) -> c_int {
     while i >= 0 {
         let pat = nvim_synblock_get_pattern(block, i);
         if !pat.is_null()
-            && nvim_synpat_get_syn_id(pat) as c_int == syn_id
-            && nvim_synpat_get_type(pat) == SPTYPE_START
+            && i32::from((*pat.as_ptr()).sp_syn.id) == syn_id
+            && i32::from((*pat.as_ptr()).sp_type) == SPTYPE_START
         {
             return i;
         }
