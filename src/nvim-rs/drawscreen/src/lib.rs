@@ -147,10 +147,13 @@ extern "C" {
     fn rs_grid_line_fill(start_col: c_int, end_col: c_int, sc: ScharT, attr: c_int) -> c_int;
     fn rs_grid_line_flush();
 
+    static do_redraw: bool;
+}
+
+extern "C" {
     // Phase 1: Flag/guard function accessors
     fn nvim_char_avail() -> c_int;
     fn nvim_get_KeyTyped() -> bool;
-    fn nvim_get_do_redraw() -> c_int;
     fn nvim_get_State() -> c_int;
     fn nvim_ui_has_messages() -> c_int;
     fn nvim_cmdline_mouse_used() -> c_int;
@@ -1846,11 +1849,8 @@ const MIN_COLUMNS: c_int = 12;
 /// Rust equivalent of `redrawing()` in drawscreen.c.
 fn redrawing_impl() -> bool {
     unsafe {
-        RedrawingDisabled == 0
-            && !(p_lz != 0
-                && nvim_char_avail() != 0
-                && !nvim_get_KeyTyped()
-                && nvim_get_do_redraw() == 0)
+        (do_redraw || nvim_get_KeyTyped() || nvim_char_avail() == 0 || p_lz == 0)
+            && RedrawingDisabled == 0
     }
 }
 

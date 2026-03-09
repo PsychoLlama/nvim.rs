@@ -1849,9 +1849,6 @@ bool nvim_get_skip_redraw(void) { return skip_redraw; }
 /// Set skip_redraw global.
 void nvim_set_skip_redraw(bool val) { skip_redraw = val; }
 
-/// Set do_redraw global.
-void nvim_set_do_redraw(bool val) { do_redraw = val; }
-
 /// setcursor() wrapper.
 void nvim_setcursor_wrapper(void) { setcursor(); }
 

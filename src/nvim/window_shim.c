@@ -2830,6 +2830,23 @@ int nvim_win_get_w_p_nu(win_T *wp) { return wp ? wp->w_p_nu : 0; }
 /// Get w_p_rnu option for a window (show relative line numbers).
 int nvim_win_get_w_p_rnu(win_T *wp) { return wp ? wp->w_p_rnu : 0; }
 
+// Moved from drawscreen.c — display Rust FFI wrappers
+
+/// Wrapper for win_check_ns_hl() for Rust FFI.
+void nvim_win_check_ns_hl(win_T *wp) { win_check_ns_hl(wp); }
+
+/// Wrapper for win_redr_winbar() for Rust FFI.
+void nvim_win_redr_winbar(win_T *wp) { win_redr_winbar(wp); }
+
+/// Wrapper for win_redr_status() for Rust FFI.
+void nvim_win_redr_status(win_T *wp) { win_redr_status(wp); }
+
+/// Wrapper for draw_tabline() for Rust FFI.
+void nvim_draw_tabline(void) { draw_tabline(); }
+
+/// Wrapper for maketitle() for Rust FFI.
+void nvim_maketitle(void) { maketitle(); }
+
 // Moved from drawscreen.c — title/icon Rust FFI helpers
 
 /// Call trans_characters() on a buffer (for maketitle icon).

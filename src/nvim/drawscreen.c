@@ -2150,18 +2150,7 @@ void win_scroll_lines(win_T *wp, int row, int line_count)
 _Static_assert(HLF_FC == 29, "HLF_FC must be 29");
 _Static_assert(HLF_SC == 35, "HLF_SC must be 35");
 _Static_assert(HLF_N == 12, "HLF_N must be 12");
-
-
-
-
-// =============================================================================
-// Phase D1: Screen Update Loop FFI Accessors
-// =============================================================================
-
-// Phase 1 accessors for Rust FFI
-
-/// Get the do_redraw flag.
-int nvim_get_do_redraw(void) { return do_redraw ? 1 : 0; }
+// FFI Accessors for Rust
 
 /// Check if cmdline mouse_used is set (for cmdline_number_prompt).
 int nvim_cmdline_mouse_used(void)
@@ -2171,35 +2160,14 @@ int nvim_cmdline_mouse_used(void)
 
 _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
 
-// Phase 2 accessors for comp_col()
-
 /// Set v:echospace variable.
 void nvim_set_vim_var_echospace(int val) { set_vim_var_nr(VV_ECHOSPACE, val); }
 
 _Static_assert(COL_RULER == 17, "COL_RULER must be 17");
 _Static_assert(SHOWCMD_COLS == 10, "SHOWCMD_COLS must be 10");
 
-// Phase 3 accessors for skip_showmode() / unshowmode()
-
 /// Wrapper for clearmode() for Rust FFI.
 void nvim_clearmode(void) { clearmode(); }
-
-// Phase 4 accessors for redraw_statuslines() / redraw_custom_title_later()
-
-/// Wrapper for win_check_ns_hl() for Rust FFI.
-void nvim_win_check_ns_hl(win_T *wp) { win_check_ns_hl(wp); }
-
-/// Wrapper for win_redr_winbar() for Rust FFI.
-void nvim_win_redr_winbar(win_T *wp) { win_redr_winbar(wp); }
-
-/// Wrapper for win_redr_status() for Rust FFI.
-void nvim_win_redr_status(win_T *wp) { win_redr_status(wp); }
-
-/// Wrapper for draw_tabline() for Rust FFI.
-void nvim_draw_tabline(void) { draw_tabline(); }
-
-/// Wrapper for maketitle() for Rust FFI.
-void nvim_maketitle(void) { maketitle(); }
 
 _Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");
 _Static_assert(STL_IN_TITLE == 2, "STL_IN_TITLE must be 2");

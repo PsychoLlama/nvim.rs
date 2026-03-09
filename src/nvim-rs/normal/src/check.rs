@@ -30,6 +30,10 @@ const CA_COMMAND_BUSY: c_int = 1;
 // =============================================================================
 
 extern "C" {
+    static mut do_redraw: bool;
+}
+
+extern "C" {
     // NormalState accessors
     fn nvim_ns_get_cmdwin(s: NormalStateHandle) -> bool;
     fn nvim_ns_get_noexmode(s: NormalStateHandle) -> bool;
@@ -68,8 +72,6 @@ extern "C" {
     fn nvim_get_quit_more() -> bool;
     fn nvim_get_skip_redraw() -> bool;
     fn nvim_set_skip_redraw(val: bool);
-    fn nvim_get_do_redraw() -> c_int;
-    fn nvim_set_do_redraw(val: bool);
     fn nvim_get_diff_need_scrollbind() -> bool;
     fn nvim_set_diff_need_scrollbind(val: bool);
     fn nvim_get_time_fd_not_null() -> bool;
@@ -502,7 +504,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
     if nvim_get_skip_redraw() || nvim_get_exmode_active() {
         nvim_set_skip_redraw(false);
         nvim_setcursor_wrapper();
-    } else if nvim_get_do_redraw() != 0 || nvim_stuff_empty() {
+    } else if do_redraw || nvim_stuff_empty() {
         // Ensure curwin->w_topline and curwin->w_leftcol are up to date
         // before triggering a WinScrolled autocommand.
         nvim_update_topline_call();
@@ -530,7 +532,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
 
         normal_check_folds(s);
         rs_normal_redraw(s);
-        nvim_set_do_redraw(false);
+        do_redraw = false;
 
         // Now that we have drawn the first screen all the startup stuff
         // has been done, close any file for startup messages.
