@@ -149,6 +149,7 @@ extern void rs_reset_VIsual_and_resel(void);
 extern buf_T *rs_find_buffer_for_delete(int buf_fnum, int *update_jumplist);
 extern buf_T *rs_find_and_validate_buffer(int action, int start, int dir, int count, int flags,
                                           int unload);
+extern int rs_buf_effective_action(buf_T *buf, int action);
 
 
 // Accessor functions for Rust opaque handle pattern.
@@ -1370,6 +1371,8 @@ static bool can_unload_buffer(buf_T *buf)
 /// @return  true if b_nwindows was decremented directly by this call (e.g: not via autocmds).
 bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool ignore_abort)
 {
+  // Adjust action for 'bufhidden' and terminal: migrated to Rust.
+  action = rs_buf_effective_action(buf, action);
   bool unload_buf = (action != 0);
   bool del_buf = (action == DOBUF_DEL || action == DOBUF_WIPE);
   bool wipe_buf = (action == DOBUF_WIPE);
@@ -1377,30 +1380,6 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
   bool is_curwin = (curwin != NULL && curwin->w_buffer == buf);
   win_T *the_curwin = curwin;
   tabpage_T *the_curtab = curtab;
-
-  // Force unloading or deleting when 'bufhidden' says so, but not for terminal
-  // buffers.
-  // The caller must take care of NOT deleting/freeing when 'bufhidden' is
-  // "hide" (otherwise we could never free or delete a buffer).
-  if (!buf->terminal) {
-    if (buf->b_p_bh[0] == 'd') {         // 'bufhidden' == "delete"
-      del_buf = true;
-      unload_buf = true;
-    } else if (buf->b_p_bh[0] == 'w') {  // 'bufhidden' == "wipe"
-      del_buf = true;
-      unload_buf = true;
-      wipe_buf = true;
-    } else if (buf->b_p_bh[0] == 'u') {  // 'bufhidden' == "unload"
-      unload_buf = true;
-    }
-  }
-
-  if (buf->terminal && (unload_buf || del_buf || wipe_buf)) {
-    // terminal buffers can only be wiped
-    unload_buf = true;
-    del_buf = true;
-    wipe_buf = true;
-  }
 
   // Disallow deleting the buffer when it is locked (already being closed or
   // halfway a command that relies on it). Unloading is allowed.
