@@ -44,9 +44,9 @@ pub struct CpiLineCountResult {
 }
 
 extern "C" {
-    // Buffer state
-    fn nvim_cpi_is_empty_buf() -> c_int;
-    fn nvim_cpi_get_ml_line_count() -> c_int;
+    // Buffer state (generic shims)
+    fn nvim_curbuf_ml_empty() -> bool;
+    fn nvim_curbuf_get_ml_line_count() -> c_int;
     fn nvim_cpi_get_eol_size() -> c_int;
 
     // Visual state (out is CpiVisualState*, passed as void*)
@@ -79,7 +79,7 @@ extern "C" {
 
     // Interrupt
     fn nvim_cpi_os_breakcheck();
-    fn nvim_cpi_got_int() -> c_int;
+    fn nvim_got_int() -> c_int;
 
     // Output
     fn nvim_cpi_show_empty_msg();
@@ -195,7 +195,7 @@ unsafe fn count_lines(p: &CountParams) -> Option<Counts> {
     for lnum in 1..=p.line_count {
         if c.byte_count > last_check {
             nvim_cpi_os_breakcheck();
-            if nvim_cpi_got_int() != 0 {
+            if nvim_got_int() != 0 {
                 return None;
             }
             last_check = c.byte_count + 100_000;
@@ -309,7 +309,7 @@ unsafe fn output_results(dict: *mut c_void, vp: &VisualDisplayParams, c: &Counts
 #[allow(clippy::similar_names)]
 pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
     // Check for empty buffer
-    if nvim_cpi_is_empty_buf() != 0 {
+    if nvim_curbuf_ml_empty() {
         if dict.is_null() {
             nvim_cpi_show_empty_msg();
         } else {
@@ -319,7 +319,7 @@ pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
     }
 
     let eol_size = nvim_cpi_get_eol_size();
-    let line_count = nvim_cpi_get_ml_line_count();
+    let line_count = nvim_curbuf_get_ml_line_count();
 
     // Get visual state
     let mut vs = CpiVisualState::default();

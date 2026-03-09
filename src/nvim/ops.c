@@ -894,11 +894,6 @@ int nvim_opd_charwise_delete(oparg_T *oap)
   return OK;
 }
 
-/// Get current line count for msgmore.
-int nvim_opd_get_ml_line_count(void)
-{
-  return (int)curbuf->b_ml.ml_line_count;
-}
 
 /// Finish: msgmore + setmarks.
 void nvim_opd_finish(oparg_T *oap, int old_lcount)
@@ -2703,17 +2698,6 @@ typedef struct {
   int64_t char_count;
 } CpiLineCountResult;
 
-/// Check if current buffer is empty.
-int nvim_cpi_is_empty_buf(void)
-{
-  return (curbuf->b_ml.ml_flags & ML_EMPTY) ? 1 : 0;
-}
-
-/// Get line count of current buffer.
-int nvim_cpi_get_ml_line_count(void)
-{
-  return (int)curbuf->b_ml.ml_line_count;
-}
 
 /// Get EOL size based on file format (1 for unix, 2 for DOS).
 int nvim_cpi_get_eol_size(void)
@@ -2867,11 +2851,6 @@ void nvim_cpi_os_breakcheck(void)
   os_breakcheck();
 }
 
-/// Check got_int flag.
-int nvim_cpi_got_int(void)
-{
-  return got_int ? 1 : 0;
-}
 
 /// Show the "no lines" message for empty buffers.
 void nvim_cpi_show_empty_msg(void)

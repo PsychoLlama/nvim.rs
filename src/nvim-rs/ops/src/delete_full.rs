@@ -29,7 +29,7 @@ extern "C" {
     fn nvim_opd_charwise_delete(oap: *mut c_void) -> c_int;
     fn nvim_opd_finish(oap: *mut c_void, old_lcount: c_int);
     fn nvim_opd_setmarks(oap: *mut c_void);
-    fn nvim_opd_get_ml_line_count() -> c_int;
+    fn nvim_curbuf_get_ml_line_count() -> c_int;
 }
 
 /// Full migration of `op_delete()`.
@@ -76,7 +76,7 @@ pub unsafe extern "C" fn rs_op_delete(oap: *mut c_void) -> c_int {
     }
     // yank_result == 1 means proceed normally
 
-    let old_lcount = nvim_opd_get_ml_line_count();
+    let old_lcount = nvim_curbuf_get_ml_line_count();
     let motion_type = nvim_oap_get_motion_type(oap);
 
     let result = if motion_type == K_MT_BLOCK_WISE {
