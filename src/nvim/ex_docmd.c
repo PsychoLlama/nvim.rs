@@ -274,6 +274,10 @@ extern bool rs_parse_cmdline(char **cmdline, exarg_T *eap, CmdParseInfo *cmdinfo
                              const char **errormsg);
 extern void rs_profile_cmd(const exarg_T *eap, cstack_T *cstack, LineGetter fgetline,
                            void *cookie);
+extern bool rs_changedir_func(char *new_dir, int scope);
+extern int rs_expand_filename(exarg_T *eap, char **cmdlinep, const char **errormsgp);
+extern char *rs_repl_cmdline(exarg_T *eap, char *src, size_t srclen, char *repl,
+                             char **cmdlinep);
 
 // Helper function to get first character of command name for Rust FFI
 // Returns 0 if cmdidx is out of bounds
@@ -2176,153 +2180,7 @@ char *replace_makeprg(exarg_T *eap, char *arg, char **cmdlinep)
 /// @return  FAIL for failure, OK otherwise.
 int expand_filename(exarg_T *eap, char **cmdlinep, const char **errormsgp)
 {
-  // Skip a regexp pattern for ":vimgrep[add] pat file..."
-  char *p = skip_grep_pat(eap);
-
-  // Decide to expand wildcards *before* replacing '%', '#', etc.  If
-  // the file name contains a wildcard it should not cause expanding.
-  // (it will be expanded anyway if there is a wildcard before replacing).
-  bool has_wildcards = path_has_wildcard(p);
-  while (*p != NUL) {
-    // Skip over `=expr`, wildcards in it are not expanded.
-    if (p[0] == '`' && p[1] == '=') {
-      p += 2;
-      skip_expr(&p, NULL);
-      if (*p == '`') {
-        p++;
-      }
-      continue;
-    }
-    // Quick check if this cannot be the start of a special string.
-    // Also removes backslash before '%', '#' and '<'.
-    if (vim_strchr("%#<", (uint8_t)(*p)) == NULL) {
-      p++;
-      continue;
-    }
-
-    // Try to find a match at this position.
-    size_t srclen;
-    int escaped;
-    char *repl = eval_vars(p, eap->arg, &srclen, &(eap->do_ecmd_lnum),
-                           errormsgp, &escaped, true);
-    if (*errormsgp != NULL) {           // error detected
-      return FAIL;
-    }
-    if (repl == NULL) {                 // no match found
-      p += srclen;
-      continue;
-    }
-
-    // Wildcards won't be expanded below, the replacement is taken
-    // literally.  But do expand "~/file", "~user/file" and "$HOME/file".
-    if (vim_strchr(repl, '$') != NULL || vim_strchr(repl, '~') != NULL) {
-      char *l = repl;
-
-      repl = expand_env_save(repl);
-      xfree(l);
-    }
-
-    // Need to escape white space et al. with a backslash.
-    // Don't do this for:
-    // - replacement that already has been escaped: "##"
-    // - shell commands (may have to use quotes instead).
-    if (!eap->usefilter
-        && !escaped
-        && eap->cmdidx != CMD_bang
-        && eap->cmdidx != CMD_grep
-        && eap->cmdidx != CMD_grepadd
-        && eap->cmdidx != CMD_lgrep
-        && eap->cmdidx != CMD_lgrepadd
-        && eap->cmdidx != CMD_lmake
-        && eap->cmdidx != CMD_make
-        && eap->cmdidx != CMD_terminal
-        && !(eap->argt & EX_NOSPC)) {
-      char *l;
-#ifdef BACKSLASH_IN_FILENAME
-      // Don't escape a backslash here, because rem_backslash() doesn't
-      // remove it later.
-      static char *nobslash = " \t\"|";
-# define ESCAPE_CHARS nobslash
-#else
-# define ESCAPE_CHARS escape_chars
-#endif
-
-      for (l = repl; *l; l++) {
-        if (vim_strchr(ESCAPE_CHARS, (uint8_t)(*l)) != NULL) {
-          l = vim_strsave_escaped(repl, ESCAPE_CHARS);
-          xfree(repl);
-          repl = l;
-          break;
-        }
-      }
-    }
-
-    // For a shell command a '!' must be escaped.
-    if ((eap->usefilter
-         || eap->cmdidx == CMD_bang
-         || eap->cmdidx == CMD_terminal)
-        && strpbrk(repl, "!") != NULL) {
-      char *l = vim_strsave_escaped(repl, "!");
-      xfree(repl);
-      repl = l;
-    }
-
-    p = repl_cmdline(eap, p, srclen, repl, cmdlinep);
-    xfree(repl);
-  }
-
-  // One file argument: Expand wildcards.
-  // Don't do this with ":r !command" or ":w !command".
-  if ((eap->argt & EX_NOSPC) && !eap->usefilter) {
-    // Replace environment variables.
-    if (has_wildcards) {
-      // May expand environment variables.  This
-      // can be done much faster with expand_env() than with
-      // something else (e.g., calling a shell).
-      // After expanding environment variables, check again
-      // if there are still wildcards present.
-      if (vim_strchr(eap->arg, '$') != NULL
-          || vim_strchr(eap->arg, '~') != NULL) {
-        expand_env_esc(eap->arg, NameBuff, MAXPATHL, true, true, NULL);
-        has_wildcards = path_has_wildcard(NameBuff);
-        p = NameBuff;
-      } else {
-        p = NULL;
-      }
-      if (p != NULL) {
-        repl_cmdline(eap, eap->arg, strlen(eap->arg), p, cmdlinep);
-      }
-    }
-
-    // Halve the number of backslashes (this is Vi compatible).
-    // For Unix, when wildcards are expanded, this is
-    // done by ExpandOne() below.
-#ifdef UNIX
-    if (!has_wildcards) {
-      backslash_halve(eap->arg);
-    }
-#else
-    backslash_halve(eap->arg);
-#endif
-
-    if (has_wildcards) {
-      expand_T xpc;
-      int options = WILD_LIST_NOTFOUND | WILD_NOERROR | WILD_ADD_SLASH;
-
-      ExpandInit(&xpc);
-      xpc.xp_context = EXPAND_FILES;
-      if (p_wic) {
-        options += WILD_ICASE;
-      }
-      p = ExpandOne(&xpc, eap->arg, NULL, options, WILD_EXPAND_FREE);
-      if (p == NULL) {
-        return FAIL;
-      }
-      repl_cmdline(eap, eap->arg, strlen(eap->arg), p, cmdlinep);
-      xfree(p);
-    }
-  }
-  return OK;
+  return rs_expand_filename(eap, cmdlinep, errormsgp);
 }
 
 /// Replace part of the command line, keeping eap->cmd, eap->arg, eap->args and
@@ -2333,56 +2191,7 @@ int expand_filename(exarg_T *eap, char **cmdlinep, const char **errormsgp)
 /// @return  a pointer to the character after the replaced string.
 static char *repl_cmdline(exarg_T *eap, char *src, size_t srclen, char *repl, char **cmdlinep)
 {
-  // The new command line is build in new_cmdline[].
-  // First allocate it.
-  // Careful: a "+cmd" argument may have been NUL terminated.
-  size_t len = strlen(repl);
-  size_t i = (size_t)(src - *cmdlinep) + strlen(src + srclen) + len + 3;
-  if (eap->nextcmd != NULL) {
-    i += strlen(eap->nextcmd);    // add space for next command
-  }
-  char *new_cmdline = xmalloc(i);
-  size_t offset = (size_t)(src - *cmdlinep);
-
-  // Copy the stuff before the expanded part.
-  // Copy the expanded stuff.
-  // Copy what came after the expanded part.
-  // Copy the next commands, if there are any.
-  i = offset;   // length of part before match
-  memmove(new_cmdline, *cmdlinep, i);
-
-  memmove(new_cmdline + i, repl, len);
-  i += len;                             // remember the end of the string
-  STRCPY(new_cmdline + i, src + srclen);
-  src = new_cmdline + i;                // remember where to continue
-
-  if (eap->nextcmd != NULL) {           // append next command
-    i = strlen(new_cmdline) + 1;
-    STRCPY(new_cmdline + i, eap->nextcmd);
-    eap->nextcmd = new_cmdline + i;
-  }
-  eap->cmd = new_cmdline + (eap->cmd - *cmdlinep);
-  eap->arg = new_cmdline + (eap->arg - *cmdlinep);
-
-  for (size_t j = 0; j < eap->argc; j++) {
-    if (offset >= (size_t)(eap->args[j] - *cmdlinep)) {
-      // If replaced text is after or in the same position as the argument,
-      // the argument's position relative to the beginning of the cmdline stays the same.
-      eap->args[j] = new_cmdline + (eap->args[j] - *cmdlinep);
-    } else {
-      // Otherwise, argument gets shifted alongside the replaced text.
-      // The amount of the shift is equal to the difference of the old and new string length.
-      eap->args[j] = new_cmdline + ((eap->args[j] - *cmdlinep) + (ptrdiff_t)(len - srclen));
-    }
-  }
-
-  if (eap->do_ecmd_cmd != NULL && eap->do_ecmd_cmd != dollar_command) {
-    eap->do_ecmd_cmd = new_cmdline + (eap->do_ecmd_cmd - *cmdlinep);
-  }
-  xfree(*cmdlinep);
-  *cmdlinep = new_cmdline;
-
-  return src;
+  return rs_repl_cmdline(eap, src, srclen, repl, cmdlinep);
 }
 
 /// Check for '|' to separate commands and '"' to start comments.
@@ -4081,62 +3890,7 @@ static void post_chdir(CdScope scope, bool trigger_dirchanged)
 /// @return true if the directory is successfully changed.
 bool changedir_func(char *new_dir, CdScope scope)
 {
-  if (new_dir == NULL || allbuf_locked()) {
-    return false;
-  }
-
-  char *pdir = NULL;
-  // ":cd -": Change to previous directory
-  if (strcmp(new_dir, "-") == 0) {
-    pdir = get_prevdir(scope);
-    if (pdir == NULL) {
-      emsg(_("E186: No previous directory"));
-      return false;
-    }
-    new_dir = pdir;
-  }
-
-  if (os_dirname(NameBuff, MAXPATHL) == OK) {
-    pdir = xstrdup(NameBuff);
-  } else {
-    pdir = NULL;
-  }
-
-  // For UNIX ":cd" means: go to home directory.
-  // On other systems too if 'cdhome' is set.
-  if (*new_dir == NUL && p_cdh) {
-    // Use NameBuff for home directory name.
-    expand_env("$HOME", NameBuff, MAXPATHL);
-    new_dir = NameBuff;
-  }
-
-  bool dir_differs = pdir == NULL || pathcmp(pdir, new_dir, -1) != 0;
-  if (dir_differs) {
-    do_autocmd_dirchanged(new_dir, scope, kCdCauseManual, true);
-    if (vim_chdir(new_dir) != 0) {
-      emsg(_(e_failed));
-      xfree(pdir);
-      return false;
-    }
-  }
-
-  char **pp;
-  switch (scope) {
-  case kCdScopeTabpage:
-    pp = &curtab->tp_prevdir;
-    break;
-  case kCdScopeWindow:
-    pp = &curwin->w_prevdir;
-    break;
-  default:
-    pp = &prev_dir;
-  }
-  xfree(*pp);
-  *pp = pdir;
-
-  post_chdir(scope, dir_differs);
-
-  return true;
+  return rs_changedir_func(new_dir, (int)scope);
 }
 
 /// ":cd", ":tcd", ":lcd", ":chdir", "tchdir" and ":lchdir".
@@ -7010,3 +6764,140 @@ int nvim_parse_count_ex(exarg_T *eap, const char **errormsg, bool validate)
 {
   return parse_count(eap, errormsg, validate);
 }
+
+// Phase 3 C accessor wrappers
+
+// changedir_func helpers
+bool nvim_allbuf_locked(void) { return allbuf_locked(); }
+
+// Get previous directory string for scope (0=global, 1=tabpage, 2=window).
+char *nvim_get_prevdir(int scope)
+{
+  return get_prevdir((CdScope)scope);
+}
+
+// Set previous directory for scope. Returns old pdir (caller must free if replaced).
+void nvim_set_prevdir(int scope, char *pdir)
+{
+  char **pp;
+  switch ((CdScope)scope) {
+  case kCdScopeTabpage:
+    pp = &curtab->tp_prevdir;
+    break;
+  case kCdScopeWindow:
+    pp = &curwin->w_prevdir;
+    break;
+  default:
+    pp = &prev_dir;
+    break;
+  }
+  xfree(*pp);
+  *pp = pdir;
+}
+
+// os_dirname into NameBuff and return OK/FAIL.
+int nvim_os_dirname_namebuff(void) { return (int)os_dirname(NameBuff, MAXPATHL); }
+
+// expand_env("$HOME", NameBuff, MAXPATHL).
+void nvim_expand_env_home_namebuff(void) { expand_env("$HOME", NameBuff, MAXPATHL); }
+
+// Get p_cdh option value.
+int nvim_get_p_cdh(void) { return p_cdh ? 1 : 0; }
+
+// vim_chdir wrapper.
+int nvim_vim_chdir(const char *dir) { return vim_chdir(dir); }
+
+// do_autocmd_dirchanged with kCdCauseManual, pre==true.
+void nvim_do_autocmd_dirchanged_manual_pre(const char *new_dir, int scope)
+{
+  do_autocmd_dirchanged(new_dir, (CdScope)scope, kCdCauseManual, true);
+}
+
+// post_chdir wrapper.
+void nvim_post_chdir(int scope, bool dir_differs)
+{
+  post_chdir((CdScope)scope, dir_differs);
+}
+
+// CdScope constants for Rust
+int nvim_get_cd_scope_global(void) { return (int)kCdScopeGlobal; }
+int nvim_get_cd_scope_tabpage(void) { return (int)kCdScopeTabpage; }
+int nvim_get_cd_scope_window(void) { return (int)kCdScopeWindow; }
+const char *nvim_get_e_failed(void) { return _(e_failed); }
+
+// Phase 3: expand_filename / repl_cmdline helpers
+
+// eap->do_ecmd_cmd accessor
+char *nvim_eap_get_do_ecmd_cmd(const exarg_T *eap) { return eap->do_ecmd_cmd; }
+void nvim_eap_set_do_ecmd_cmd(exarg_T *eap, char *p) { eap->do_ecmd_cmd = p; }
+char *nvim_docmd_get_do_ecmd_cmd_dollar(void) { return dollar_command; }
+
+// eval_vars wrapper that returns the result and updates src/escaped via out-params.
+// Returns NULL if no match, or the replacement string (caller must free).
+char *nvim_eval_vars_wrap(exarg_T *eap, char *p, size_t *srclenp, const char **errormsgp,
+                          int *escapedp)
+{
+  int escaped = 0;
+  char *repl = eval_vars(p, eap->arg, srclenp, &eap->do_ecmd_lnum, errormsgp, &escaped, true);
+  *escapedp = escaped;
+  return repl;
+}
+
+// eap->usefilter accessor
+bool nvim_eap_get_usefilter(const exarg_T *eap) { return eap->usefilter; }
+
+// EX_NOSPC constant
+uint32_t nvim_get_ex_nospc(void) { return EX_NOSPC; }
+
+// p_wic option
+int nvim_get_p_wic(void) { return p_wic ? 1 : 0; }
+
+// backslash_halve wrapper
+void nvim_backslash_halve(char *p) { backslash_halve(p); }
+
+// expand_env_esc into NameBuff with $ and ~ expansion.
+// expand_env_esc(str, NameBuff, MAXPATHL, false, true, NULL)
+void nvim_expand_env_esc_namebuff_notilde(const char *str)
+{
+  expand_env_esc(str, NameBuff, MAXPATHL, false, true, NULL);
+}
+
+size_t nvim_ExpandT_size(void) { return sizeof(expand_T); }
+void nvim_ExpandInit(expand_T *xpc) { ExpandInit(xpc); }
+char *nvim_ExpandOne_files(expand_T *xpc, const char *str, int wildflags, bool icase)
+{
+  int opts = wildflags;
+  if (icase) {
+    opts += WILD_ICASE;
+  }
+  return ExpandOne(xpc, str, NULL, opts, WILD_EXPAND_FREE);
+}
+
+// strpbrk("!", ...) check for shell commands
+bool nvim_repl_has_exclaim(const char *repl) { return strpbrk(repl, "!") != NULL; }
+
+// vim_strsave_escaped with escape_chars (ESCAPE_CHARS on Linux = escape_chars)
+char *nvim_vim_strsave_escaped_shell(const char *s)
+{
+#ifdef BACKSLASH_IN_FILENAME
+  static char *nobslash = " \t\"|";
+  return vim_strsave_escaped(s, nobslash);
+#else
+  return vim_strsave_escaped(s, escape_chars);
+#endif
+}
+char *nvim_vim_strsave_escaped_bang(const char *s) { return vim_strsave_escaped(s, "!"); }
+
+// Check if string has $ or ~ for environment variable expansion
+bool nvim_has_dollar_or_tilde(const char *s)
+{
+  return vim_strchr(s, '$') != NULL || vim_strchr(s, '~') != NULL;
+}
+
+// vim_strchr check for %, #, < characters
+bool nvim_is_expand_char(int c)
+{
+  return vim_strchr("%#<", (uint8_t)c) != NULL;
+}
+
+// nvim_path_has_wildcard is defined in tag_shim.c

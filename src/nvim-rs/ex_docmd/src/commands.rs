@@ -223,12 +223,34 @@ extern "C" {
     fn win_close(wp: WinHandle, free_buf: bool, force: bool) -> c_int;
     fn nvim_docmd_one_window_p(addr_count: c_int) -> c_int;
 
+    // memory allocation
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+
+    // eap argt and other needed accessors
+    fn nvim_eap_get_argt(eap: ExArgHandle) -> u32;
+    fn nvim_skip_expr_arg(arg: *mut *mut c_char);
+
     // is_other_file helpers
     fn nvim_docmd_get_curbuf_fnum() -> c_int;
     fn nvim_docmd_curbuf_file_id_valid() -> c_int;
     fn nvim_docmd_get_curbuf_sfname() -> *const c_char;
     fn path_fnamecmp(s1: *const c_char, s2: *const c_char) -> c_int;
     fn otherfile(fname: *const c_char) -> c_int;
+
+    // Phase 3: changedir_func helpers
+    fn nvim_allbuf_locked() -> bool;
+    fn nvim_get_prevdir(scope: c_int) -> *mut c_char;
+    fn nvim_set_prevdir(scope: c_int, pdir: *mut c_char);
+    fn nvim_os_dirname_namebuff() -> c_int;
+    fn nvim_expand_env_home_namebuff();
+    fn nvim_get_p_cdh() -> c_int;
+    fn nvim_vim_chdir(dir: *const c_char) -> c_int;
+    fn nvim_do_autocmd_dirchanged_manual_pre(new_dir: *const c_char, scope: c_int);
+    fn nvim_post_chdir(scope: c_int, dir_differs: bool);
+    fn nvim_pathcmp_unlen(a: *const c_char, b: *const c_char) -> c_int;
+    fn nvim_get_namebuff() -> *mut c_char;
+    fn nvim_get_e_failed() -> *const c_char;
+    fn xstrdup(str: *const c_char) -> *mut c_char;
 }
 
 // =============================================================================
@@ -1105,4 +1127,375 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
         let free_buf = !buf_hidden || forceit_bool;
         win_close(wp, free_buf, forceit_bool);
     }
+}
+
+// =============================================================================
+// Phase 3: Filename Expansion and Edit Handlers
+// =============================================================================
+
+/// Rust implementation of changedir_func.
+///
+/// Changes the current directory with scope (global/tab/window) and handles
+/// previous directory tracking.
+///
+/// # Safety
+///
+/// `new_dir` must be a valid C string or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_changedir_func(new_dir: *mut c_char, scope: c_int) -> bool {
+    if new_dir.is_null() || nvim_allbuf_locked() {
+        return false;
+    }
+
+    // ":cd -": Change to previous directory
+    let mut new_dir = new_dir;
+    let is_dash = std::ffi::CStr::from_ptr(new_dir as *const c_char).to_bytes() == b"-";
+    if is_dash {
+        let pdir = nvim_get_prevdir(scope);
+        if pdir.is_null() {
+            emsg(c"E186: No previous directory".as_ptr());
+            return false;
+        }
+        new_dir = pdir;
+    }
+
+    // Get current directory into pdir (OS_DIRNAME returns 1 (OK) on success).
+    let pdir = if nvim_os_dirname_namebuff() == 1 {
+        xstrdup(nvim_get_namebuff() as *const c_char)
+    } else {
+        std::ptr::null_mut()
+    };
+
+    // For UNIX ":cd" means: go to home directory.
+    // On other systems too if 'cdhome' is set.
+    if *new_dir == 0 && nvim_get_p_cdh() != 0 {
+        nvim_expand_env_home_namebuff();
+        new_dir = nvim_get_namebuff();
+    }
+
+    let dir_differs = pdir.is_null() || nvim_pathcmp_unlen(pdir, new_dir) != 0;
+    if dir_differs {
+        nvim_do_autocmd_dirchanged_manual_pre(new_dir, scope);
+        if nvim_vim_chdir(new_dir) != 0 {
+            emsg(nvim_get_e_failed());
+            xfree(pdir as *mut c_void);
+            return false;
+        }
+    }
+
+    nvim_set_prevdir(scope, pdir);
+    nvim_post_chdir(scope, dir_differs);
+
+    true
+}
+
+// =============================================================================
+// Phase 3: Filename Expansion and Edit Handlers
+// =============================================================================
+
+/// Opaque handle to expand_T (for wildcard expansion).
+type ExpandTHandle = *mut c_void;
+
+/// EX_NOSPC = 0x010
+const EX_NOSPC: u32 = 0x010;
+
+extern "C" {
+    // expand_filename helpers
+    fn rs_skip_grep_pat(eap: ExArgHandle) -> *mut c_char;
+    fn nvim_path_has_wildcard(p: *const c_char) -> bool;
+    fn nvim_is_expand_char(c: c_int) -> bool;
+    fn nvim_eval_vars_wrap(
+        eap: ExArgHandle,
+        p: *mut c_char,
+        srclenp: *mut usize,
+        errormsgp: *mut *const c_char,
+        escapedp: *mut c_int,
+    ) -> *mut c_char;
+    fn nvim_has_dollar_or_tilde(s: *const c_char) -> bool;
+    fn nvim_expand_env_save(s: *const c_char) -> *mut c_char;
+    fn nvim_eap_get_usefilter(eap: ExArgHandle) -> bool;
+    // repl_cmdline accessors
+    fn nvim_eap_get_cmd(eap: ExArgHandle) -> *mut c_char;
+    fn nvim_eap_set_cmd(eap: ExArgHandle, p: *mut c_char);
+    fn nvim_eap_set_arg(eap: ExArgHandle, p: *mut c_char);
+    fn nvim_eap_get_nextcmd(eap: ExArgHandle) -> *mut c_char;
+    fn nvim_eap_set_nextcmd(eap: ExArgHandle, p: *mut c_char);
+    fn nvim_eap_get_argc(eap: ExArgHandle) -> usize;
+    fn nvim_eap_get_args(eap: ExArgHandle) -> *mut *mut c_char;
+    fn nvim_eap_get_do_ecmd_cmd(eap: ExArgHandle) -> *mut c_char;
+    fn nvim_eap_set_do_ecmd_cmd(eap: ExArgHandle, p: *mut c_char);
+    fn nvim_docmd_get_do_ecmd_cmd_dollar() -> *mut c_char;
+    fn nvim_repl_has_exclaim(s: *const c_char) -> bool;
+    fn nvim_vim_strsave_escaped_shell(s: *const c_char) -> *mut c_char;
+    fn nvim_vim_strsave_escaped_bang(s: *const c_char) -> *mut c_char;
+    fn nvim_expand_env_esc_namebuff_notilde(str: *const c_char);
+    fn nvim_backslash_halve(p: *mut c_char);
+    fn nvim_ExpandT_size() -> usize;
+    fn nvim_ExpandInit(xpc: ExpandTHandle);
+    fn nvim_ExpandOne_files(
+        xpc: ExpandTHandle,
+        str: *const c_char,
+        wildflags: c_int,
+        icase: bool,
+    ) -> *mut c_char;
+    fn nvim_get_p_wic() -> c_int;
+}
+
+/// Rust implementation of repl_cmdline.
+///
+/// Replaces `src[0..srclen]` in `*cmdlinep` with `repl`, reallocating the
+/// command line buffer and fixing up all pointers inside `eap` that referred
+/// into the old buffer.
+///
+/// Returns a pointer into the new buffer pointing just after the replacement.
+///
+/// # Safety
+///
+/// All pointers must be valid. `src` must point into `*cmdlinep`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_repl_cmdline(
+    eap: ExArgHandle,
+    src: *mut c_char,
+    srclen: usize,
+    repl: *mut c_char,
+    cmdlinep: *mut *mut c_char,
+) -> *mut c_char {
+    let old_cmdline = *cmdlinep;
+    let repl_len = strlen(repl as *const c_char);
+    let offset = (src as usize).wrapping_sub(old_cmdline as usize);
+
+    // Length of tail: everything after the replaced span
+    let tail_start = src.add(srclen);
+    let tail_len = strlen(tail_start as *const c_char);
+
+    // Allocate new buffer: prefix + repl + tail + NUL + optional nextcmd + NUL
+    let nextcmd = nvim_eap_get_nextcmd(eap);
+    let nextcmd_extra = if !nextcmd.is_null() {
+        strlen(nextcmd as *const c_char) + 1
+    } else {
+        0
+    };
+    let new_len = offset + repl_len + tail_len + 2 + nextcmd_extra;
+    let new_cmdline = xmalloc(new_len) as *mut c_char;
+
+    // Copy prefix (before replacement)
+    std::ptr::copy_nonoverlapping(old_cmdline, new_cmdline, offset);
+
+    // Copy replacement
+    std::ptr::copy_nonoverlapping(repl, new_cmdline.add(offset), repl_len);
+
+    // Copy tail (after replaced span)
+    let new_tail = new_cmdline.add(offset + repl_len);
+    std::ptr::copy_nonoverlapping(tail_start, new_tail, tail_len + 1); // +1 for NUL
+
+    // The return value: pointer just after the replacement in the new buffer
+    let ret_src = new_tail;
+
+    // Fix up nextcmd
+    if !nextcmd.is_null() {
+        let nc_offset = offset + repl_len + tail_len + 1;
+        let nc_dst = new_cmdline.add(nc_offset);
+        let nc_len = nextcmd_extra - 1;
+        std::ptr::copy_nonoverlapping(nextcmd, nc_dst, nc_len + 1);
+        nvim_eap_set_nextcmd(eap, nc_dst);
+    }
+
+    // Fix up eap->cmd
+    let old_cmd = nvim_eap_get_cmd(eap);
+    let cmd_offset = (old_cmd as usize).wrapping_sub(old_cmdline as usize);
+    nvim_eap_set_cmd(eap, new_cmdline.add(cmd_offset));
+
+    // Fix up eap->arg
+    let old_arg = nvim_eap_get_arg(eap);
+    let arg_offset = (old_arg as usize).wrapping_sub(old_cmdline as usize);
+    nvim_eap_set_arg(eap, new_cmdline.add(arg_offset));
+
+    // Fix up eap->args[j]
+    let argc = nvim_eap_get_argc(eap);
+    let args = nvim_eap_get_args(eap);
+    for j in 0..argc {
+        let arg_j = *args.add(j);
+        let arg_j_offset = (arg_j as usize).wrapping_sub(old_cmdline as usize);
+        if offset >= arg_j_offset {
+            // Replacement is after this arg: offset relative to start stays the same
+            *args.add(j) = new_cmdline.add(arg_j_offset);
+        } else {
+            // Replacement is before this arg: shift by (repl_len - srclen)
+            let new_offset = (arg_j_offset as isize + repl_len as isize - srclen as isize) as usize;
+            *args.add(j) = new_cmdline.add(new_offset);
+        }
+    }
+
+    // Fix up eap->do_ecmd_cmd (if set and not dollar_command)
+    let do_ecmd_cmd = nvim_eap_get_do_ecmd_cmd(eap);
+    let dollar_cmd = nvim_docmd_get_do_ecmd_cmd_dollar();
+    if !do_ecmd_cmd.is_null() && do_ecmd_cmd != dollar_cmd {
+        let dec_offset = (do_ecmd_cmd as usize).wrapping_sub(old_cmdline as usize);
+        nvim_eap_set_do_ecmd_cmd(eap, new_cmdline.add(dec_offset));
+    }
+
+    // Free old command line and update cmdlinep
+    xfree(old_cmdline as *mut c_void);
+    *cmdlinep = new_cmdline;
+
+    ret_src
+}
+
+/// Rust implementation of expand_filename.
+///
+/// Expands `%`, `#`, `<cword>` etc. in eap->arg, and optionally expands
+/// wildcards if EX_NOSPC is set.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_expand_filename(
+    eap: ExArgHandle,
+    cmdlinep: *mut *mut c_char,
+    errormsgp: *mut *const c_char,
+) -> c_int {
+    const OK_VAL: c_int = 1;
+    const FAIL_VAL: c_int = 0;
+    const WILD_LIST_NOTFOUND: c_int = 0x01;
+    const WILD_NOERROR: c_int = 0x02;
+    const WILD_ADD_SLASH: c_int = 0x04;
+    // CMD_ constants for no-escape cases
+    const CMD_BANG: c_int = 64;
+    const CMD_GREP: c_int = 173;
+    const CMD_GREPADD: c_int = 174;
+    const CMD_LGREP: c_int = 238;
+    const CMD_LGREPADD: c_int = 239;
+    const CMD_LMAKE: c_int = 242;
+    const CMD_MAKE: c_int = 269;
+    const CMD_TERMINAL: c_int = 497;
+
+    // Skip a regexp pattern for ":vimgrep[add] pat file..."
+    let mut p: *mut c_char = rs_skip_grep_pat(eap);
+
+    let has_wildcards = nvim_path_has_wildcard(p);
+
+    while *p != 0 {
+        // Skip over `=expr`, wildcards in it are not expanded.
+        if *p == b'`' as c_char && *p.add(1) == b'=' as c_char {
+            p = p.add(2);
+            nvim_skip_expr_arg(&mut p);
+            if *p == b'`' as c_char {
+                p = p.add(1);
+            }
+            continue;
+        }
+
+        // Quick check for expansion chars (%, #, <).
+        if !nvim_is_expand_char(*p as c_int) {
+            p = p.add(1);
+            continue;
+        }
+
+        let mut srclen: usize = 0;
+        let mut escaped: c_int = 0;
+        let repl = nvim_eval_vars_wrap(eap, p, &mut srclen, errormsgp, &mut escaped);
+        if !(*errormsgp).is_null() {
+            return FAIL_VAL;
+        }
+        if repl.is_null() {
+            p = p.add(srclen);
+            continue;
+        }
+
+        // Expand ~/file and $HOME/file in replacement.
+        let repl = if nvim_has_dollar_or_tilde(repl as *const c_char) {
+            let new_repl = nvim_expand_env_save(repl as *const c_char);
+            xfree(repl as *mut c_void);
+            new_repl
+        } else {
+            repl
+        };
+
+        let cmdidx = nvim_eap_get_cmdidx(eap);
+        let usefilter = nvim_eap_get_usefilter(eap);
+        let argt = nvim_eap_get_argt(eap);
+
+        // Escape whitespace for non-shell commands.
+        let repl = if !usefilter
+            && escaped == 0
+            && cmdidx != CMD_BANG
+            && cmdidx != CMD_GREP
+            && cmdidx != CMD_GREPADD
+            && cmdidx != CMD_LGREP
+            && cmdidx != CMD_LGREPADD
+            && cmdidx != CMD_LMAKE
+            && cmdidx != CMD_MAKE
+            && cmdidx != CMD_TERMINAL
+            && (argt & EX_NOSPC) == 0
+        {
+            let new_repl = nvim_vim_strsave_escaped_shell(repl as *const c_char);
+            xfree(repl as *mut c_void);
+            new_repl
+        } else {
+            repl
+        };
+
+        // Escape '!' for shell commands.
+        let repl = if (usefilter || cmdidx == CMD_BANG || cmdidx == CMD_TERMINAL)
+            && nvim_repl_has_exclaim(repl as *const c_char)
+        {
+            let new_repl = nvim_vim_strsave_escaped_bang(repl as *const c_char);
+            xfree(repl as *mut c_void);
+            new_repl
+        } else {
+            repl
+        };
+
+        p = rs_repl_cmdline(eap, p, srclen, repl, cmdlinep);
+        xfree(repl as *mut c_void);
+    }
+
+    // One file argument: Expand wildcards.
+    // Don't do this with ":r !command" or ":w !command".
+    let argt = nvim_eap_get_argt(eap);
+    if (argt & EX_NOSPC) != 0 && !nvim_eap_get_usefilter(eap) {
+        let mut has_wildcards = has_wildcards;
+
+        // May expand environment variables.
+        if has_wildcards {
+            let arg = nvim_eap_get_arg(eap);
+            if nvim_has_dollar_or_tilde(arg as *const c_char) {
+                nvim_expand_env_esc_namebuff_notilde(arg as *const c_char);
+                let nb = nvim_get_namebuff();
+                has_wildcards = nvim_path_has_wildcard(nb as *const c_char);
+                let arglen = strlen(arg as *const c_char);
+                rs_repl_cmdline(eap, arg, arglen, nb, cmdlinep);
+            }
+        }
+
+        // Halve backslashes (Vi compatible). On Unix: only if no wildcards.
+        let arg = nvim_eap_get_arg(eap);
+        #[cfg(unix)]
+        if !has_wildcards {
+            nvim_backslash_halve(arg);
+        }
+        #[cfg(not(unix))]
+        nvim_backslash_halve(arg);
+
+        if has_wildcards {
+            let wildflags = WILD_LIST_NOTFOUND | WILD_NOERROR | WILD_ADD_SLASH;
+            let icase = nvim_get_p_wic() != 0;
+            let xpc_size = nvim_ExpandT_size();
+            let xpc = xcalloc(1, xpc_size) as ExpandTHandle;
+            nvim_ExpandInit(xpc);
+            let arg = nvim_eap_get_arg(eap);
+            let p_result = nvim_ExpandOne_files(xpc, arg as *const c_char, wildflags, icase);
+            xfree(xpc);
+
+            if p_result.is_null() {
+                return FAIL_VAL;
+            }
+            let arglen = strlen(arg as *const c_char);
+            rs_repl_cmdline(eap, arg, arglen, p_result, cmdlinep);
+            xfree(p_result as *mut c_void);
+        }
+    }
+
+    OK_VAL
 }
