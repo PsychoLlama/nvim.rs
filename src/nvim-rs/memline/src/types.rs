@@ -369,10 +369,14 @@ pub type ColNr = i32;
 pub struct PointerEntry {
     /// Block number of the child block
     pub pe_bnum: BlockNr,
-    /// Number of lines in this branch
-    pub pe_line_count: LineNr,
-    /// Line number for recovery
-    pub pe_old_lnum: LineNr,
+    /// Number of lines in this branch.
+    /// C type: `linenr_T = int32_t` (4 bytes).  Must NOT be widened to i64
+    /// here, as the field is part of a `#[repr(C)]` struct that must match
+    /// the C `PointerEntry` layout exactly (sizeof = 24).
+    pub pe_line_count: i32,
+    /// Line number for recovery.
+    /// C type: `linenr_T = int32_t` (4 bytes).
+    pub pe_old_lnum: i32,
     /// Number of pages in the child block
     pub pe_page_count: c_int,
 }
@@ -393,8 +397,8 @@ impl PointerEntry {
     #[must_use]
     pub const fn with_values(
         bnum: BlockNr,
-        line_count: LineNr,
-        old_lnum: LineNr,
+        line_count: i32,
+        old_lnum: i32,
         page_count: c_int,
     ) -> Self {
         Self {
@@ -437,6 +441,9 @@ pub struct PointerBlockHeader {
     pub pb_count: u16,
     /// Maximum number of entries that fit in this block
     pub pb_count_max: u16,
+    /// Padding to match C layout: `pb_pointer[]` starts at offset 8
+    /// (C compiler inserts 2 bytes here for PointerEntry's 8-byte alignment)
+    _pad: u16,
 }
 
 impl PointerBlockHeader {
@@ -447,6 +454,7 @@ impl PointerBlockHeader {
             pb_id: PTR_ID,
             pb_count: 0,
             pb_count_max: count_max,
+            _pad: 0,
         }
     }
 
@@ -475,6 +483,7 @@ impl Default for PointerBlockHeader {
             pb_id: PTR_ID,
             pb_count: 0,
             pb_count_max: 0,
+            _pad: 0,
         }
     }
 }
@@ -641,6 +650,18 @@ mod tests {
     }
 
     #[test]
+    fn test_layout_compat() {
+        // PointerEntry: pe_bnum(i64,8) + pe_line_count(i32,4) + pe_old_lnum(i32,4)
+        //             + pe_page_count(i32,4) + padding(4) = 24 bytes (matches C)
+        assert_eq!(std::mem::size_of::<PointerEntry>(), 24);
+        // PointerBlockHeader: pb_id(2) + pb_count(2) + pb_count_max(2) + _pad(2) = 8 bytes
+        assert_eq!(std::mem::size_of::<PointerBlockHeader>(), 8);
+        // DataBlockHeader: db_id(2)+pad(2) + db_free(4) + db_txt_start(4) + db_txt_end(4)
+        //                + pad(4? no) + db_line_count(long=8) = 24 bytes (matches C)
+        assert_eq!(std::mem::size_of::<DataBlockHeader>(), 24);
+    }
+
+    #[test]
     fn test_pointer_block_header() {
         let header = PointerBlockHeader::new(128);
         assert!(header.is_valid());
@@ -663,10 +684,10 @@ mod tests {
 
     #[test]
     fn test_pb_count_max() {
-        // For a 4096-byte page
+        // For a 4096-byte page, header is 8 bytes (3 u16 + 2 bytes padding),
+        // entry is 32 bytes (8+8+8+4+4 padding).
+        // (4096 - 8) / 32 = 127 entries
         let count = pb_count_max(4096);
-        // Header is 6 bytes, entry is ~24 bytes (8 + 8 + 8 + 4)
-        // So we should get around (4096 - 6) / 28 = ~146 entries
         assert!(count > 100);
         assert!(count < 200);
     }

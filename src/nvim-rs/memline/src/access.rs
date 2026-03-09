@@ -121,7 +121,6 @@ extern "C" {
     fn rs_ml_add_deleted_len_buf(buf: *mut BufHandle, ptr: *mut c_char, len: isize);
 
     /// Duplicate memory of given length
-    fn xmemdup(data: *const c_void, len: usize) -> *mut c_void;
 
     /// Emit "invalid lnum" siemsg (wraps siemsg + gettext)
     fn nvim_siemsg_ml_get_invalid_lnum(lnum: i64);
@@ -524,22 +523,6 @@ pub unsafe extern "C" fn rs_ml_get_buf_impl(
         let flags = nvim_buf_get_ml_flags(buf);
         nvim_buf_set_ml_flags(buf, flags | ML_LOCKED_DIRTY | ML_LOCKED_POS);
         rs_ml_add_deleted_len_buf(buf, nvim_buf_get_ml_line_ptr(buf), -1);
-    }
-
-    // ML_GET_ALLOC_LINES: ensure line text is in allocated memory (address sanitizer path).
-    {
-        let flags = nvim_buf_get_ml_flags(buf);
-        if (flags & (ML_LINE_DIRTY | ML_ALLOCATED)) == 0 {
-            let line_ptr = nvim_buf_get_ml_line_ptr(buf);
-            let line_len = nvim_buf_get_ml_line_len(buf) as usize;
-            let new_ptr: *mut c_char = xmemdup(line_ptr.cast(), line_len).cast();
-            nvim_buf_set_ml_line_ptr(buf, new_ptr);
-            nvim_buf_set_ml_flags(buf, flags | ML_ALLOCATED);
-            if will_change != 0 {
-                // Can't make the change in the data block.
-                nvim_buf_set_ml_flags(buf, flags | ML_ALLOCATED | ML_LINE_DIRTY);
-            }
-        }
     }
 
     nvim_buf_get_ml_line_ptr(buf)

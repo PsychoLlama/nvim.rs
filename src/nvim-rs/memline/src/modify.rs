@@ -1215,18 +1215,17 @@ pub unsafe extern "C" fn rs_ml_append_int(
                     );
                 }
                 nvim_pp_inc_count(pp);
-                (*ptr_arr.add(pb_idx as usize)).pe_line_count = LineNr::from(line_count_left_cur);
+                (*ptr_arr.add(pb_idx as usize)).pe_line_count = line_count_left_cur as i32;
                 (*ptr_arr.add(pb_idx as usize)).pe_bnum = bnum_left_cur;
                 (*ptr_arr.add(pb_idx as usize)).pe_page_count = page_count_left_cur;
-                (*ptr_arr.add((pb_idx + 1) as usize)).pe_line_count =
-                    LineNr::from(line_count_right_cur);
+                (*ptr_arr.add((pb_idx + 1) as usize)).pe_line_count = line_count_right_cur as i32;
                 (*ptr_arr.add((pb_idx + 1) as usize)).pe_bnum = bnum_right_cur;
                 (*ptr_arr.add((pb_idx + 1) as usize)).pe_page_count = page_count_right_cur;
                 if lnum_left_cur != 0 {
-                    (*ptr_arr.add(pb_idx as usize)).pe_old_lnum = lnum_left_cur;
+                    (*ptr_arr.add(pb_idx as usize)).pe_old_lnum = lnum_left_cur as i32;
                 }
                 if lnum_right_cur != 0 {
-                    (*ptr_arr.add((pb_idx + 1) as usize)).pe_old_lnum = lnum_right_cur;
+                    (*ptr_arr.add((pb_idx + 1) as usize)).pe_old_lnum = lnum_right_cur as i32;
                 }
 
                 mf_put(mfp, block_hp, true, false);
@@ -1281,7 +1280,7 @@ pub unsafe extern "C" fn rs_ml_append_int(
                 (*pp_root).pb_count = 1;
                 let root_arr = pb_pointer_ptr(cur_pp);
                 (*root_arr).pe_bnum = nvim_bhdr_get_bh_bnum(hp_new);
-                (*root_arr).pe_line_count = nvim_buf_get_ml_line_count(buf);
+                (*root_arr).pe_line_count = nvim_buf_get_ml_line_count(buf) as i32;
                 (*root_arr).pe_old_lnum = 1;
                 (*root_arr).pe_page_count = 1;
                 mf_put(mfp, cur_block_hp, true, false); // release block 1
@@ -1319,24 +1318,24 @@ pub unsafe extern "C" fn rs_ml_append_int(
                     ((*pp_header_cur).pb_count - (total_moved as u16 - 1)) as u16;
                 (*ptr_arr_old.add((cur_pb_idx + 1) as usize)).pe_bnum = bnum_right_cur;
                 (*ptr_arr_old.add((cur_pb_idx + 1) as usize)).pe_line_count =
-                    LineNr::from(line_count_right_cur);
+                    line_count_right_cur as i32;
                 (*ptr_arr_old.add((cur_pb_idx + 1) as usize)).pe_page_count = page_count_right_cur;
                 if lnum_right_cur != 0 {
-                    (*ptr_arr_old.add((cur_pb_idx + 1) as usize)).pe_old_lnum = lnum_right_cur;
+                    (*ptr_arr_old.add((cur_pb_idx + 1) as usize)).pe_old_lnum =
+                        lnum_right_cur as i32;
                 }
             } else {
                 (*pp_split_header).pb_count = 1;
                 (*ptr_arr_new.add(0)).pe_bnum = bnum_right_cur;
-                (*ptr_arr_new.add(0)).pe_line_count = LineNr::from(line_count_right_cur);
+                (*ptr_arr_new.add(0)).pe_line_count = line_count_right_cur as i32;
                 (*ptr_arr_new.add(0)).pe_page_count = page_count_right_cur;
-                (*ptr_arr_new.add(0)).pe_old_lnum = lnum_right_cur;
+                (*ptr_arr_new.add(0)).pe_old_lnum = lnum_right_cur as i32;
             }
             (*ptr_arr_old.add(cur_pb_idx as usize)).pe_bnum = bnum_left_cur;
-            (*ptr_arr_old.add(cur_pb_idx as usize)).pe_line_count =
-                LineNr::from(line_count_left_cur);
+            (*ptr_arr_old.add(cur_pb_idx as usize)).pe_line_count = line_count_left_cur as i32;
             (*ptr_arr_old.add(cur_pb_idx as usize)).pe_page_count = page_count_left_cur;
             if lnum_left_cur != 0 {
-                (*ptr_arr_old.add(cur_pb_idx as usize)).pe_old_lnum = lnum_left_cur;
+                (*ptr_arr_old.add(cur_pb_idx as usize)).pe_old_lnum = lnum_left_cur as i32;
             }
 
             lnum_left_cur = 0;

@@ -465,7 +465,7 @@ pub unsafe extern "C" fn rs_ml_pe_get_line_count(entry: *const PointerEntry) -> 
     if entry.is_null() {
         return 0;
     }
-    (*entry).pe_line_count
+    LineNr::from((*entry).pe_line_count)
 }
 
 /// Set the line count in a PointerEntry.
@@ -473,9 +473,10 @@ pub unsafe extern "C" fn rs_ml_pe_get_line_count(entry: *const PointerEntry) -> 
 /// # Safety
 /// - `entry` must be a valid pointer to a PointerEntry
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_ml_pe_set_line_count(entry: *mut PointerEntry, count: LineNr) {
     if !entry.is_null() {
-        (*entry).pe_line_count = count;
+        (*entry).pe_line_count = count as i32; // linenr_T is int32_t in C
     }
 }
 
@@ -488,7 +489,7 @@ pub unsafe extern "C" fn rs_ml_pe_get_old_lnum(entry: *const PointerEntry) -> Li
     if entry.is_null() {
         return 0;
     }
-    (*entry).pe_old_lnum
+    LineNr::from((*entry).pe_old_lnum)
 }
 
 /// Set the old line number in a PointerEntry.
@@ -496,9 +497,10 @@ pub unsafe extern "C" fn rs_ml_pe_get_old_lnum(entry: *const PointerEntry) -> Li
 /// # Safety
 /// - `entry` must be a valid pointer to a PointerEntry
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_ml_pe_set_old_lnum(entry: *mut PointerEntry, lnum: LineNr) {
     if !entry.is_null() {
-        (*entry).pe_old_lnum = lnum;
+        (*entry).pe_old_lnum = lnum as i32; // linenr_T is int32_t in C
     }
 }
 

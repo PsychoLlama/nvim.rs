@@ -1303,7 +1303,7 @@ pub unsafe extern "C" fn rs_ml_find_ptr_entry(
     for idx in 0..count {
         #[allow(clippy::cast_sign_loss)]
         let entry = &*entries.add(idx as usize);
-        let line_count = entry.pe_line_count;
+        let line_count = LineNr::from(entry.pe_line_count);
 
         // Check if line count is zero (corrupted block)
         if line_count == 0 {
