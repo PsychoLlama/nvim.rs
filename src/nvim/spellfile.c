@@ -440,6 +440,11 @@ extern int rs_read_tree_peek_nodecount(const uint8_t *buf, size_t buf_len, uint3
 extern int rs_read_tree_node_count(const uint8_t *buf, size_t buf_len, uint32_t *count_out,
                                    size_t *consumed_out);
 
+// Phase 2: Write helpers
+extern int rs_write_prefcond_section(uint8_t *buf, size_t buf_len,
+                                     const uint8_t **strs, size_t count,
+                                     size_t *written_out);
+
 // Phase B6: Affix file parsing infrastructure
 // The main spell_read_aff() function remains in C due to its complexity
 // (~738 LOC, text file parsing, encoding conversion, hash tables).
@@ -5924,32 +5929,40 @@ static int set_spell_finish(spelltab_T *new_st)
 
 // Write the table with prefix conditions to the .spl file.
 // When "fd" is NULL only count the length of what is written.
+// Uses Rust (rs_write_prefcond_section) to serialize the section.
 static int write_spell_prefcond(FILE *fd, garray_T *gap, size_t *fwv)
 {
   assert(gap->ga_len >= 0);
+  int count = gap->ga_len;
+
+  // Compute maximum buffer size: 2 bytes header + count * (1 + max_str_len)
+  // Use generous estimate: each condition string up to 256 bytes.
+  size_t max_len = 2 + (size_t)count * (1 + 256);
+  uint8_t *sec_buf = xmalloc(max_len);
+
+  // Build array of string pointers for Rust.
+  const uint8_t **strs = xmalloc((size_t)count * sizeof(uint8_t *));
+  for (int i = 0; i < count; i++) {
+    char *p = ((char **)gap->ga_data)[i];
+    strs[i] = (const uint8_t *)(p != NULL ? p : "");
+  }
+
+  size_t written = 0;
+  int res = rs_write_prefcond_section(sec_buf, max_len, strs, (size_t)count, &written);
+  xfree(strs);
+
+  if (res != 0) {
+    xfree(sec_buf);
+    return 0;
+  }
 
   if (fd != NULL) {
-    put_bytes(fd, (uintmax_t)gap->ga_len, 2);           // <prefcondcnt>
-  }
-  size_t totlen = 2 + (size_t)gap->ga_len;  // <prefcondcnt> and <condlen> bytes
-  for (int i = 0; i < gap->ga_len; i++) {
-    // <prefcond> : <condlen> <condstr>
-    char *p = ((char **)gap->ga_data)[i];
-    if (p != NULL) {
-      size_t len = strlen(p);
-      if (fd != NULL) {
-        assert(len <= INT_MAX);
-        fputc((int)len, fd);
-        *fwv &= fwrite(p, len, 1, fd);
-      }
-      totlen += len;
-    } else if (fd != NULL) {
-      fputc(0, fd);
-    }
+    *fwv &= fwrite(sec_buf, written, 1, fd);
   }
 
-  assert(totlen <= INT_MAX);
-  return (int)totlen;
+  xfree(sec_buf);
+  assert(written <= INT_MAX);
+  return (int)written;
 }
 
 // Use map string "map" for languages "lp".

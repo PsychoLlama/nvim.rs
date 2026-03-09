@@ -1841,6 +1841,103 @@ pub unsafe extern "C" fn rs_write_compound_header(
 }
 
 // =============================================================================
+// Prefix Condition Section Writing
+// =============================================================================
+
+/// Write the prefix condition section to a buffer.
+///
+/// Format: <prefcondcnt (2 bytes BE)>
+///         for each condition: <condlen (1 byte)> <condstr (N bytes)>
+///
+/// `strings` is a slice of byte slices (each is a NUL-terminated C string
+/// or a raw byte slice). Returns the number of bytes written.
+pub fn write_prefcond_section(buf: &mut [u8], strings: &[&[u8]]) -> Option<usize> {
+    let count = strings.len();
+    if count > 0xFFFF {
+        return None;
+    }
+
+    // Calculate total size needed.
+    let mut total = 2; // <prefcondcnt>
+    for s in strings {
+        total += 1 + s.len(); // <condlen> + <condstr>
+    }
+
+    if buf.len() < total {
+        return None;
+    }
+
+    // Write <prefcondcnt>
+    let count_bytes = (count as u16).to_be_bytes();
+    buf[0] = count_bytes[0];
+    buf[1] = count_bytes[1];
+    let mut offset = 2;
+
+    // Write each <condlen> <condstr>
+    for s in strings {
+        let len = s.len();
+        if len > 255 {
+            return None;
+        }
+        buf[offset] = len as u8;
+        offset += 1;
+        buf[offset..offset + len].copy_from_slice(s);
+        offset += len;
+    }
+
+    Some(offset)
+}
+
+/// FFI wrapper for writing the prefix condition section.
+///
+/// `strs` is an array of `count` pointers to NUL-terminated C strings.
+/// Each string is written as `<condlen (1 byte)> <condstr>`.
+///
+/// # Safety
+/// All pointers must be valid. `strs` must point to `count` valid C string pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_prefcond_section(
+    buf: *mut u8,
+    buf_len: usize,
+    strs: *const *const u8,
+    count: usize,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+    if count > 0 && strs.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    // Collect string slices from C string pointers.
+    let mut string_slices: Vec<&[u8]> = Vec::with_capacity(count);
+    for i in 0..count {
+        let ptr = *strs.add(i);
+        if ptr.is_null() {
+            // NULL pointer means empty string.
+            string_slices.push(&[]);
+        } else {
+            // Find the NUL terminator.
+            let mut len = 0;
+            while *ptr.add(len) != 0 {
+                len += 1;
+            }
+            string_slices.push(std::slice::from_raw_parts(ptr, len));
+        }
+    }
+
+    let out_slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_prefcond_section(out_slice, &string_slices) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+// =============================================================================
 // Tree Node Count Writing
 // =============================================================================
 
