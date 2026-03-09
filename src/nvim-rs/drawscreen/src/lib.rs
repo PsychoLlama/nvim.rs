@@ -59,6 +59,14 @@ extern "C" {
     static mut redraw_mode: c_int;
     /// p_sc (showcmd) option.
     static p_sc: c_int;
+    /// p_icon (icon) option.
+    static p_icon: c_int;
+    /// p_title (title) option.
+    static p_title: c_int;
+    /// stl_syntax flags.
+    static stl_syntax: c_int;
+    /// p_ru (ruler) option.
+    static p_ru: c_int;
 }
 
 /// Opaque handle to C's buf_T.
@@ -130,7 +138,6 @@ extern "C" {
     // Global functions
     #[link_name = "rs_global_stl_height"]
     fn global_stl_height() -> c_int;
-    fn nvim_get_p_ru() -> c_int;
     fn nvim_set_redraw_cmdline(val: bool);
     fn nvim_get_default_gridview() -> GridViewHandle;
 
@@ -598,7 +605,7 @@ fn status_redraw_buf_impl(buf: BufHandle) {
         // Redraw the ruler if it is in the command line and was not marked for redraw above
         let curwin_status_h = nvim_win_get_status_height(curwin);
         let curwin_redr_status = nvim_win_get_redr_status(curwin);
-        if nvim_get_p_ru() != 0 && curwin_status_h == 0 && curwin_redr_status == 0 {
+        if p_ru != 0 && curwin_status_h == 0 && curwin_redr_status == 0 {
             nvim_set_redraw_cmdline(true);
             redraw_later(curwin, UPD_VALID);
         }
@@ -1913,7 +1920,7 @@ pub extern "C" fn rs_comp_col() {
         let mut new_sc_col: c_int = 0;
         let mut new_ru_col: c_int = 0;
 
-        if nvim_get_p_ru() != 0 {
+        if p_ru != 0 {
             new_ru_col = (if ru_wid != 0 { ru_wid } else { COL_RULER }) + 1;
             // no last status line, adjust sc_col
             if !last_has_status {
@@ -1924,7 +1931,7 @@ pub extern "C" fn rs_comp_col() {
         let p_sloc_is_last = *p_sloc == b'l' as c_char;
         if p_sc != 0 && p_sloc_is_last {
             new_sc_col += SHOWCMD_COLS;
-            if nvim_get_p_ru() == 0 || last_has_status {
+            if p_ru == 0 || last_has_status {
                 // no need for separating space
                 new_sc_col += 1;
             }
@@ -1999,9 +2006,6 @@ pub extern "C" fn rs_unshowmode(force: bool) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_p_icon() -> c_int;
-    fn nvim_get_p_title() -> c_int;
-    fn nvim_get_stl_syntax() -> c_int;
     fn nvim_win_check_ns_hl(wp: WinHandle);
     fn nvim_win_redr_winbar(wp: WinHandle);
     fn nvim_win_redr_status(wp: WinHandle);
@@ -2048,9 +2052,8 @@ pub extern "C" fn rs_redraw_statuslines() {
 #[unsafe(export_name = "redraw_custom_title_later")]
 pub extern "C" fn rs_redraw_custom_title_later() -> c_int {
     unsafe {
-        let stl_syntax = nvim_get_stl_syntax();
-        if (nvim_get_p_icon() != 0 && (stl_syntax & STL_IN_ICON) != 0)
-            || (nvim_get_p_title() != 0 && (stl_syntax & STL_IN_TITLE) != 0)
+        if (p_icon != 0 && (stl_syntax & STL_IN_ICON) != 0)
+            || (p_title != 0 && (stl_syntax & STL_IN_TITLE) != 0)
         {
             need_maketitle = true;
             return 1;

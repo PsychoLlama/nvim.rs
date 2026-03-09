@@ -10,6 +10,10 @@ use std::ffi::{c_char, c_int, c_void};
 
 use super::{callback_ok, CallbackResult};
 
+extern "C" {
+    static p_ru: c_int;
+}
+
 // =============================================================================
 // Error Messages
 // =============================================================================
@@ -1016,7 +1020,6 @@ extern "C" {
     fn nvim_get_p_paste() -> c_int;
     fn nvim_option_get_sm() -> c_int;
     fn nvim_get_p_sta() -> c_int;
-    fn nvim_get_p_ru() -> c_int;
     fn nvim_get_p_ri() -> c_int;
     // Compound paste buf operations (Phase 12 Pass 1)
     fn nvim_buf_paste_save_scalars(buf: *mut c_void);
@@ -1077,7 +1080,7 @@ pub unsafe extern "C" fn rs_did_set_paste_full(_args: *mut c_void) -> CallbackRe
             nvim_for_all_buffers(paste_buf_save_and_activate_cb);
             PASTE_SAVE_SM = nvim_option_get_sm();
             PASTE_SAVE_STA = nvim_get_p_sta();
-            PASTE_SAVE_RU = nvim_get_p_ru();
+            PASTE_SAVE_RU = unsafe { p_ru };
             PASTE_SAVE_RI = nvim_get_p_ri();
             nvim_paste_global_save_scalars();
             nvim_paste_global_save_vsts();

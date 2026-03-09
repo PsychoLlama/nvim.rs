@@ -2799,6 +2799,25 @@ void nvim_validate_cursor_for_win(win_T *wp)
   validate_cursor(wp);
 }
 
+/// Get VIsual_active state (Rust FFI).
+int nvim_VIsual_active(void) { return VIsual_active ? 1 : 0; }
+
+/// Mark status lines for redraw for all windows (Rust incsearch).
+void nvim_status_redraw_all(void)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (wp->w_status_height > 0 || (wp == curwin && rs_global_stl_height() > 0)) {
+      wp->w_redr_status = true;
+    }
+    if (wp->w_winbar_height > 0) {
+      wp->w_redr_status = true;
+    }
+  }
+}
+
+/// Trigger a full screen update (Rust incsearch).
+void nvim_update_screen(void) { update_screen(); }
+
 /// Get w_view_width for a window (visible text column count).
 int nvim_win_get_w_view_width(win_T *wp) { return wp ? wp->w_view_width : 0; }
 

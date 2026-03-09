@@ -15,6 +15,13 @@ use std::ffi::{c_char, c_int, c_void};
 
 use crate::{BufHandle, WinHandle};
 
+extern "C" {
+    static p_icon: c_int;
+    static p_title: c_int;
+    static stl_syntax: c_int;
+    static p_ru: c_int;
+}
+
 // Buffer flags (from buffer_defs.h) — correct values matching C header.
 const BF_NOTEDITED: c_int = 0x08;
 const BF_NEW: c_int = 0x10;
@@ -50,8 +57,6 @@ extern "C" {
 
     fn nvim_shortmess_mod() -> c_int;
     fn nvim_shortmess_ro() -> c_int;
-
-    fn nvim_get_p_ru() -> c_int;
 
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
     fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
@@ -93,13 +98,10 @@ extern "C" {
     // --- maketitle / resettitle / free_titles ---
     fn nvim_redrawing() -> c_int;
     fn nvim_set_need_maketitle(val: c_int);
-    fn nvim_get_p_title() -> c_int;
-    fn nvim_get_p_icon() -> c_int;
     fn nvim_get_p_titlelen() -> c_int;
     fn nvim_get_Columns() -> c_int;
     fn nvim_get_p_titlestring() -> *const c_char;
     fn nvim_get_p_iconstring() -> *const c_char;
-    fn nvim_get_stl_syntax() -> c_int;
     /// Call `rs_build_stl_str_hl_wrap` (the actual Rust impl of `build_stl_str_hl`).
     fn rs_build_stl_str_hl_wrap(
         wp: WinHandle,
@@ -274,11 +276,11 @@ pub unsafe fn maketitle_impl() {
 
     nvim_set_need_maketitle(0);
 
-    let p_title = nvim_get_p_title();
-    let p_icon = nvim_get_p_icon();
+    let opt_p_title = unsafe { p_title };
+    let opt_p_icon = unsafe { p_icon };
 
-    if p_title == 0
-        && p_icon == 0
+    if opt_p_title == 0
+        && opt_p_icon == 0
         && nvim_buf_get_lasttitle().is_null()
         && nvim_buf_get_lasticon().is_null()
     {
@@ -287,7 +289,7 @@ pub unsafe fn maketitle_impl() {
 
     let curwin = nvim_get_curwin();
 
-    if p_title != 0 {
+    if opt_p_title != 0 {
         let titlelen = nvim_get_p_titlelen();
         let maxlen: c_int = if titlelen > 0 {
             (titlelen * nvim_get_Columns() / 100).max(10)
@@ -316,7 +318,7 @@ pub unsafe fn maketitle_impl() {
                 std::ptr::null_mut(),
             );
             title_str = buf.as_ptr().cast::<c_char>();
-        } else if nvim_get_stl_syntax() & STL_IN_TITLE != 0 {
+        } else if unsafe { stl_syntax } & STL_IN_TITLE != 0 {
             rs_build_stl_str_hl_wrap(
                 curwin,
                 buf.as_mut_ptr().cast::<c_char>(),
@@ -340,7 +342,7 @@ pub unsafe fn maketitle_impl() {
     let mustset =
         value_change_via_accessor(title_str, nvim_buf_get_lasttitle, nvim_buf_set_lasttitle);
 
-    if p_icon != 0 {
+    if opt_p_icon != 0 {
         let p_iconstring = nvim_get_p_iconstring();
         let iconstring_empty = p_iconstring.is_null() || *p_iconstring == 0;
 
@@ -361,7 +363,7 @@ pub unsafe fn maketitle_impl() {
             };
             strcpy_to_buf(buf.as_mut_ptr().cast::<c_char>(), IOSIZE, name);
             nvim_trans_characters(buf.as_mut_ptr().cast::<c_char>(), IOSIZE);
-        } else if nvim_get_stl_syntax() & STL_IN_ICON != 0 {
+        } else if unsafe { stl_syntax } & STL_IN_ICON != 0 {
             rs_build_stl_str_hl_wrap(
                 curwin,
                 buf.as_mut_ptr().cast::<c_char>(),
@@ -529,7 +531,7 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
     if (ml_flags & ML_EMPTY) != 0 {
         // "--No lines in buffer--"
         pos = append_cstr(&mut buffer, pos, nvim_no_lines_msg());
-    } else if nvim_get_p_ru() != 0 {
+    } else if unsafe { p_ru } != 0 {
         // Ruler already on screen — just show "N line(s) --P%--"
         let lnum = nvim_win_get_cursor_lnum(curwin);
         let pct = rs_calc_percentage(i64::from(lnum), i64::from(ml_line_count));

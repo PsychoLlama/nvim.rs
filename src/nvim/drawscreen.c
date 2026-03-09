@@ -2152,36 +2152,6 @@ _Static_assert(HLF_SC == 35, "HLF_SC must be 35");
 _Static_assert(HLF_N == 12, "HLF_N must be 12");
 
 
-/// Get VIsual_active state (Rust FFI).
-int nvim_VIsual_active(void)
-{
-  return VIsual_active ? 1 : 0;
-}
-
-// Accessor for p_ru option (ruler)
-int nvim_get_p_ru(void)
-{
-  return p_ru;
-}
-
-/// C accessor for status_redraw_all for Rust incsearch (avoids recursion).
-void nvim_status_redraw_all(void)
-{
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_status_height > 0 || (wp == curwin && rs_global_stl_height() > 0)) {
-      wp->w_redr_status = true;
-    }
-    if (wp->w_winbar_height > 0) {
-      wp->w_redr_status = true;
-    }
-  }
-}
-
-/// C accessor for update_screen for Rust incsearch.
-void nvim_update_screen(void)
-{
-  update_screen();
-}
 
 
 // =============================================================================
@@ -2224,15 +2194,6 @@ void nvim_set_redraw_tabline(int val) { redraw_tabline = (val != 0); }
 
 /// Set need_maketitle flag.
 void nvim_set_need_maketitle(int val) { need_maketitle = (val != 0); }
-
-/// Get p_icon option.
-int nvim_get_p_icon(void) { return p_icon; }
-
-/// Get p_title option.
-int nvim_get_p_title(void) { return p_title; }
-
-/// Get stl_syntax flags.
-int nvim_get_stl_syntax(void) { return stl_syntax; }
 
 /// Wrapper for win_check_ns_hl() for Rust FFI.
 void nvim_win_check_ns_hl(win_T *wp) { win_check_ns_hl(wp); }
