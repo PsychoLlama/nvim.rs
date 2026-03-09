@@ -138,7 +138,7 @@ pub unsafe fn free_compiled_pattern(pat: SynPatHandle) {
 /// now owned by the garray and must NOT be freed here.
 pub unsafe fn free_compiled_pattern_shell(pat: SynPatHandle) {
     if !pat.is_null() {
-        nvim_syn_xfree(pat.0);
+        nvim_syn_xfree(pat.0 as *mut c_void);
     }
 }
 

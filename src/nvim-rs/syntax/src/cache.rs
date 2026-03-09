@@ -8,6 +8,7 @@
 
 use std::ffi::{c_int, c_void};
 
+use crate::ffi_types::{BufState, StateItem};
 use crate::types::{
     BufHandle, BufStateHandle, ExtMatchHandle, IdListHandle, SynBlockHandle, SynStateHandle,
     HL_KEEPEND, SST_DIST, SST_MAX_ENTRIES, SST_MIN_ENTRIES,
@@ -30,13 +31,6 @@ extern "C" {
     fn nvim_synstate_get_bufstate(state: SynStateHandle, idx: c_int) -> BufStateHandle;
     fn nvim_synstate_set_change_lnum(state: SynStateHandle, lnum: c_int);
 
-    // Bufstate accessors
-    fn nvim_bufstate_get_idx(bs: BufStateHandle) -> c_int;
-    fn nvim_bufstate_get_flags(bs: BufStateHandle) -> c_int;
-    fn nvim_bufstate_get_seqnr(bs: BufStateHandle) -> c_int;
-    fn nvim_bufstate_get_cchar(bs: BufStateHandle) -> c_int;
-    fn nvim_bufstate_get_extmatch(bs: BufStateHandle) -> ExtMatchHandle;
-
     // Current state accessors
     fn nvim_syn_get_current_lnum() -> c_int;
     fn nvim_syn_get_current_state_len() -> c_int;
@@ -51,13 +45,6 @@ extern "C" {
     fn nvim_syn_set_current_lnum(lnum: c_int);
     fn nvim_syn_update_si_attr(idx: c_int);
     fn nvim_syn_get_stateitem(idx: c_int) -> crate::types::StateItemHandle;
-
-    // Stateitem accessors for comparison
-    fn nvim_stateitem_get_idx(item: crate::types::StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_flags(item: crate::types::StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_seqnr(item: crate::types::StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_cchar(item: crate::types::StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_extmatch(item: crate::types::StateItemHandle) -> ExtMatchHandle;
 
     // Synblock accessors
     fn nvim_synblock_get_sst_first(block: SynBlockHandle) -> SynStateHandle;
@@ -546,11 +533,12 @@ pub unsafe fn load_current_state(from: SynStateHandle) {
                 continue;
             }
 
-            let bs_idx = nvim_bufstate_get_idx(bs);
-            let bs_flags = nvim_bufstate_get_flags(bs);
-            let bs_seqnr = nvim_bufstate_get_seqnr(bs);
-            let bs_cchar = nvim_bufstate_get_cchar(bs);
-            let extmatch = nvim_bufstate_get_extmatch(bs);
+            let bs_ptr: *mut BufState = bs.as_ptr();
+            let bs_idx = unsafe { (*bs_ptr).bs_idx };
+            let bs_flags = unsafe { (*bs_ptr).bs_flags };
+            let bs_seqnr = unsafe { (*bs_ptr).bs_seqnr };
+            let bs_cchar = unsafe { (*bs_ptr).bs_cchar };
+            let extmatch = ExtMatchHandle(unsafe { (*bs_ptr).bs_extmatch as *mut _ });
 
             // Set the state item (this also sets si_next_list based on pattern)
             crate::state_ops::rs_syn_set_cur_state_item(
@@ -620,22 +608,24 @@ pub unsafe fn syn_stack_equal(sp: SynStateHandle) -> bool {
         }
 
         // Compare basic fields
-        if nvim_bufstate_get_idx(bs) != nvim_stateitem_get_idx(cur_si) {
+        let bs_ptr: *mut BufState = bs.as_ptr();
+        let si_ptr: *mut StateItem = cur_si.as_ptr();
+        if unsafe { (*bs_ptr).bs_idx != (*si_ptr).si_idx } {
             return false;
         }
-        if nvim_bufstate_get_flags(bs) != nvim_stateitem_get_flags(cur_si) {
+        if unsafe { (*bs_ptr).bs_flags != (*si_ptr).si_flags } {
             return false;
         }
-        if nvim_bufstate_get_seqnr(bs) != nvim_stateitem_get_seqnr(cur_si) {
+        if unsafe { (*bs_ptr).bs_seqnr != (*si_ptr).si_seqnr } {
             return false;
         }
-        if nvim_bufstate_get_cchar(bs) != nvim_stateitem_get_cchar(cur_si) {
+        if unsafe { (*bs_ptr).bs_cchar != (*si_ptr).si_cchar } {
             return false;
         }
 
         // Compare external matches
-        let bs_extmatch = nvim_bufstate_get_extmatch(bs);
-        let si_extmatch = nvim_stateitem_get_extmatch(cur_si);
+        let bs_extmatch = ExtMatchHandle(unsafe { (*bs_ptr).bs_extmatch as *mut _ });
+        let si_extmatch = ExtMatchHandle(unsafe { (*si_ptr).si_extmatch as *mut _ });
 
         // If both are null, they're equal
         if bs_extmatch.is_null() && si_extmatch.is_null() {

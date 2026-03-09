@@ -1127,7 +1127,7 @@ mod tests {
         assert!(null_list.is_null());
 
         // Non-null handle creation for testing
-        let fake_ptr = std::ptr::dangling_mut::<std::ffi::c_void>();
+        let fake_ptr = std::ptr::dangling_mut::<crate::ffi_types::SynCluster>();
         let non_null_cluster = SynClusterHandle(fake_ptr);
         assert!(!non_null_cluster.is_null());
     }

@@ -64,7 +64,6 @@ extern "C" {
     fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
     fn nvim_synstate_get_stacksize(state: SynStateHandle) -> c_int;
     fn nvim_synstate_get_bufstate(state: SynStateHandle, idx: c_int) -> BufStateHandle;
-    fn nvim_bufstate_get_extmatch(bs: BufStateHandle) -> ExtMatchHandle;
 
     // syn_clear_time (wraps syn_clear_time)
     fn nvim_syn_do_clear_time(st: *mut c_void);
@@ -220,7 +219,7 @@ pub unsafe extern "C" fn rs_clear_syn_state(p: SynStateHandle) {
     for i in 0..stacksize {
         let bs = nvim_synstate_get_bufstate(p, i);
         if !bs.0.is_null() {
-            let em = nvim_bufstate_get_extmatch(bs);
+            let em = ExtMatchHandle(unsafe { (*bs.as_ptr()).bs_extmatch as *mut _ });
             nvim_syn_unref_extmatch(em);
         }
     }

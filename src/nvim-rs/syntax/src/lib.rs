@@ -36,6 +36,7 @@ pub mod containment;
 pub mod current_attr;
 pub mod engine;
 pub mod expand;
+pub mod ffi_types;
 pub mod fold;
 pub mod group;
 pub mod highlight;

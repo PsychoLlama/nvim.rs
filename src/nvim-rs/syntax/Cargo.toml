@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 nvim-api = { path = "../api" }
+nvim-collections = { path = "../collections" }
 nvim-memory = { path = "../memory" }

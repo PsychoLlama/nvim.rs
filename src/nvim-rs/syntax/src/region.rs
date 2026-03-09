@@ -708,7 +708,7 @@ mod tests {
         assert!(null_pat.is_null());
         assert!(null_item.is_null());
 
-        let fake_ptr = std::ptr::dangling_mut::<std::ffi::c_void>();
+        let fake_ptr = std::ptr::dangling_mut::<crate::ffi_types::SynPat>();
         let non_null_pat = SynPatHandle(fake_ptr);
         assert!(!non_null_pat.is_null());
     }

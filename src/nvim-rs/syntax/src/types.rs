@@ -7,6 +7,8 @@
 
 use std::ffi::c_int;
 
+use crate::ffi_types::{BufState, KeyEntry, StateItem, SynCluster, SynPat};
+
 // =============================================================================
 // Opaque handle types for C interop
 // =============================================================================
@@ -43,10 +45,13 @@ impl SynStateHandle {
     }
 }
 
-/// Opaque handle to a synpat_T (syntax pattern)
+/// Typed handle to a synpat_T (syntax pattern).
+///
+/// This is now a typed pointer to the repr(C) `SynPat` struct.
+/// Use `as_ptr()` for direct field access.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub struct SynPatHandle(pub(crate) *mut std::ffi::c_void);
+pub struct SynPatHandle(pub(crate) *mut SynPat);
 
 impl SynPatHandle {
     /// Check if the handle is null
@@ -54,18 +59,17 @@ impl SynPatHandle {
     pub fn is_null(self) -> bool {
         self.0.is_null()
     }
-}
 
-/// Opaque handle to a syn_cluster_T (syntax cluster)
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct SynClusterHandle(pub(crate) *mut std::ffi::c_void);
-
-impl SynClusterHandle {
-    /// Check if the handle is null
+    /// Get the raw typed pointer
     #[must_use]
-    pub fn is_null(self) -> bool {
-        self.0.is_null()
+    pub fn as_ptr(self) -> *mut SynPat {
+        self.0
+    }
+
+    /// Create from a raw typed pointer
+    #[must_use]
+    pub fn from_ptr(p: *mut SynPat) -> Self {
+        Self(p)
     }
 
     /// Create a null handle
@@ -75,10 +79,45 @@ impl SynClusterHandle {
     }
 }
 
-/// Opaque handle to a stateitem_T (current state stack item)
+/// Typed handle to a syn_cluster_T (syntax cluster).
+///
+/// This is now a typed pointer to the repr(C) `SynCluster` struct.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub struct StateItemHandle(pub(crate) *mut std::ffi::c_void);
+pub struct SynClusterHandle(pub(crate) *mut SynCluster);
+
+impl SynClusterHandle {
+    /// Check if the handle is null
+    #[must_use]
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Get the raw typed pointer
+    #[must_use]
+    pub fn as_ptr(self) -> *mut SynCluster {
+        self.0
+    }
+
+    /// Create from a raw typed pointer
+    #[must_use]
+    pub fn from_ptr(p: *mut SynCluster) -> Self {
+        Self(p)
+    }
+
+    /// Create a null handle
+    #[must_use]
+    pub fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
+/// Typed handle to a stateitem_T (current state stack item).
+///
+/// This is now a typed pointer to the repr(C) `StateItem` struct.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct StateItemHandle(pub(crate) *mut StateItem);
 
 impl StateItemHandle {
     /// Check if the handle is null
@@ -86,18 +125,83 @@ impl StateItemHandle {
     pub fn is_null(self) -> bool {
         self.0.is_null()
     }
+
+    /// Get the raw typed pointer
+    #[must_use]
+    pub fn as_ptr(self) -> *mut StateItem {
+        self.0
+    }
+
+    /// Create from a raw typed pointer
+    #[must_use]
+    pub fn from_ptr(p: *mut StateItem) -> Self {
+        Self(p)
+    }
+
+    /// Create a null handle
+    #[must_use]
+    pub fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
 }
 
-/// Opaque handle to a keyentry_T (keyword entry in hashtable)
+/// Typed handle to a keyentry_T (keyword entry in hashtable).
+///
+/// This is now a typed pointer to the repr(C) `KeyEntry` struct.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub struct KeyEntryHandle(pub(crate) *mut std::ffi::c_void);
+pub struct KeyEntryHandle(pub(crate) *mut KeyEntry);
 
 impl KeyEntryHandle {
     /// Check if the handle is null
     #[must_use]
     pub fn is_null(self) -> bool {
         self.0.is_null()
+    }
+
+    /// Get the raw typed pointer
+    #[must_use]
+    pub fn as_ptr(self) -> *mut KeyEntry {
+        self.0
+    }
+
+    /// Create from a raw typed pointer
+    #[must_use]
+    pub fn from_ptr(p: *mut KeyEntry) -> Self {
+        Self(p)
+    }
+
+    /// Create a null handle
+    #[must_use]
+    pub fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
+/// Typed handle to a bufstate_T (stored state for state stack entry).
+///
+/// This is now a typed pointer to the repr(C) `BufState` struct.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct BufStateHandle(pub(crate) *mut BufState);
+
+impl BufStateHandle {
+    /// Check if the handle is null
+    #[must_use]
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Get the raw typed pointer
+    #[must_use]
+    pub fn as_ptr(self) -> *mut BufState {
+        self.0
+    }
+
+    /// Create from a raw typed pointer
+    #[must_use]
+    pub fn from_ptr(p: *mut BufState) -> Self {
+        Self(p)
     }
 
     /// Create a null handle
@@ -132,25 +236,6 @@ impl RegProgHandle {
 pub struct IdListHandle(pub(crate) *mut i16);
 
 impl IdListHandle {
-    /// Check if the handle is null
-    #[must_use]
-    pub fn is_null(self) -> bool {
-        self.0.is_null()
-    }
-
-    /// Create a null handle
-    #[must_use]
-    pub fn null() -> Self {
-        Self(std::ptr::null_mut())
-    }
-}
-
-/// Opaque handle to a bufstate_T (stored state for state stack entry)
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct BufStateHandle(pub(crate) *mut std::ffi::c_void);
-
-impl BufStateHandle {
     /// Check if the handle is null
     #[must_use]
     pub fn is_null(self) -> bool {

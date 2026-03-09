@@ -11,6 +11,8 @@
 
 use std::ffi::{c_int, c_void};
 
+use crate::types::{SynBlockHandle, SynPatHandle};
+
 // ============================================================================
 // FFI declarations
 // ============================================================================
@@ -45,18 +47,18 @@ extern "C" {
     // Timing update: updates syn_time_T fields (total, slowest, count, match)
     fn nvim_syn_time_update(st_ptr: *mut c_void, elapsed: u64, matched: c_int);
 
-    // synpat accessors (take synpat_T * as *mut c_void)
-    fn nvim_synpat_get_ic(pat: *mut c_void) -> c_int;
-    fn nvim_synpat_get_prog(pat: *mut c_void) -> *mut c_void;
-    fn nvim_synpat_set_prog(pat: *mut c_void, prog: *mut c_void);
+    // synpat accessors (typed handles)
+    fn nvim_synpat_get_ic(pat: SynPatHandle) -> c_int;
+    fn nvim_synpat_get_prog(pat: SynPatHandle) -> *mut c_void;
+    fn nvim_synpat_set_prog(pat: SynPatHandle, prog: *mut c_void);
 
     // Get pointer to sp_time for a pattern at idx in the current synblock
     fn nvim_syn_get_pat_time_ptr(idx: c_int) -> *mut c_void;
 
     // Current synblock pattern access
     fn nvim_syn_get_synblock_pattern_count() -> c_int;
-    fn nvim_syn_get_syn_block() -> *mut c_void;
-    fn nvim_synblock_get_pattern(block: *mut c_void, idx: c_int) -> *mut c_void;
+    fn nvim_syn_get_syn_block() -> SynBlockHandle;
+    fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
 
     // linecont pattern accessors
     fn nvim_syn_block_get_linecont_prog() -> *mut c_void;

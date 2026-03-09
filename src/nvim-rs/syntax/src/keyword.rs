@@ -691,7 +691,7 @@ mod tests {
         assert!(null_win.is_null());
 
         // Non-null handle creation (for testing purposes)
-        let fake_ptr = std::ptr::dangling_mut::<std::ffi::c_void>();
+        let fake_ptr = std::ptr::dangling_mut::<crate::ffi_types::KeyEntry>();
         let non_null_ke = KeyEntryHandle(fake_ptr);
         assert!(!non_null_ke.is_null());
     }

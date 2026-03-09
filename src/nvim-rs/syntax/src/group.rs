@@ -309,7 +309,7 @@ mod tests {
         assert!(null_block.is_null());
 
         // Non-null handles
-        let non_null_pat = SynPatHandle(std::ptr::dangling_mut::<std::ffi::c_void>());
+        let non_null_pat = SynPatHandle(std::ptr::dangling_mut::<crate::ffi_types::SynPat>());
         let non_null_block = SynBlockHandle(std::ptr::dangling_mut::<std::ffi::c_void>());
 
         assert!(!non_null_pat.is_null());
