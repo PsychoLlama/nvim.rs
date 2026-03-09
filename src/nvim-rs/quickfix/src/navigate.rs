@@ -1341,6 +1341,10 @@ pub mod jump_machinery {
     use std::ffi::{c_int, c_void};
     use std::ptr;
 
+    extern "C" {
+        static must_redraw: c_int;
+    }
+
     /// Opaque handles
     type QfInfoHandleMut = *mut c_void;
     type WinHandle = *mut c_void;
@@ -1714,7 +1718,6 @@ pub mod jump_machinery {
         // Phase 14 Phase 2: print_msg inlined accessors
         fn nvim_get_msg_scrolled() -> c_int;
         fn nvim_qf_update_topline_curwin();
-        fn nvim_get_must_redraw() -> c_int;
         fn nvim_update_screen();
         fn nvim_qf_get_curlist_count(qi: *const c_void) -> c_int;
         fn nvim_qfline_get_cleared_bool(qfp: QfLineHandle) -> bool;
@@ -1855,7 +1858,7 @@ pub mod jump_machinery {
         // Update the screen before showing the message, unless messages scrolled.
         if nvim_get_msg_scrolled() == 0 {
             nvim_qf_update_topline_curwin();
-            if nvim_get_must_redraw() != 0 {
+            if unsafe { must_redraw } != 0 {
                 nvim_update_screen();
             }
         }

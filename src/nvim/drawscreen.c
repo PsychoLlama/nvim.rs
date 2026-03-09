@@ -2198,24 +2198,6 @@ void win_draw_end(win_T *wp, schar_T c1, bool draw_margin, int startrow, int end
 }
 
 
-/// Get the current must_redraw value (Rust FFI).
-int nvim_get_must_redraw(void)
-{
-  return must_redraw;
-}
-
-/// Set the must_redraw value directly (Rust FFI).
-void nvim_set_must_redraw(int val)
-{
-  must_redraw = val;
-}
-
-/// Get the redraw_not_allowed flag (Rust FFI).
-int nvim_get_redraw_not_allowed(void)
-{
-  return redraw_not_allowed ? 1 : 0;
-}
-
 /// Get VIsual_active state (Rust FFI).
 int nvim_VIsual_active(void)
 {
@@ -2252,139 +2234,10 @@ void nvim_update_screen(void)
 // Phase D1: Screen Update Loop FFI Accessors
 // =============================================================================
 
-/// Check if screen updating is currently in progress.
-int nvim_get_updating_screen(void)
-{
-  return updating_screen ? 1 : 0;
-}
-
-/// Set the updating_screen flag.
-void nvim_set_updating_screen(int val)
-{
-  updating_screen = (val != 0);
-}
-
-/// Check if redrawing is currently disabled.
-int nvim_get_redrawing_disabled(void)
-{
-  return RedrawingDisabled;
-}
-
-/// Get the window's redr_border flag.
-int nvim_win_get_redr_border(win_T *wp)
-{
-  return wp ? wp->w_redr_border : 0;
-}
-
-/// Set the window's redr_border flag.
-void nvim_win_set_redr_border(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_redr_border = (val != 0);
-  }
-}
-
-/// Get the buffer's mod_set flag.
-int nvim_buf_get_mod_set(buf_T *buf)
-{
-  return buf ? buf->b_mod_set : 0;
-}
-
-/// Set the buffer's mod_set flag.
-void nvim_buf_set_mod_set(buf_T *buf, int val)
-{
-  if (buf) {
-    buf->b_mod_set = (val != 0);
-  }
-}
-
-/// Get the visual mode value.
-int nvim_get_visual_mode(void)
-{
-  return VIsual_mode;
-}
-
-/// Get the window's old_visual_mode.
-int nvim_win_get_old_visual_mode(win_T *wp)
-{
-  return wp ? wp->w_old_visual_mode : 0;
-}
-
-/// Set the window's old_visual_mode.
-void nvim_win_set_old_visual_mode(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_old_visual_mode = (char)val;
-  }
-}
-
-/// Get the window's old_cursor_lnum.
-linenr_T nvim_win_get_old_cursor_lnum(win_T *wp)
-{
-  return wp ? wp->w_old_cursor_lnum : 0;
-}
-
-/// Set the window's old_cursor_lnum.
-void nvim_win_set_old_cursor_lnum(win_T *wp, linenr_T val)
-{
-  if (wp) {
-    wp->w_old_cursor_lnum = val;
-  }
-}
-
-/// Get the window's old_visual_lnum.
-linenr_T nvim_win_get_old_visual_lnum(win_T *wp)
-{
-  return wp ? wp->w_old_visual_lnum : 0;
-}
-
-/// Set the window's old_visual_lnum.
-void nvim_win_set_old_visual_lnum(win_T *wp, linenr_T val)
-{
-  if (wp) {
-    wp->w_old_visual_lnum = val;
-  }
-}
-
-/// Get the window's old_visual_col.
-colnr_T nvim_win_get_old_visual_col(win_T *wp)
-{
-  return wp ? wp->w_old_visual_col : 0;
-}
-
-/// Set the window's old_visual_col.
-void nvim_win_set_old_visual_col(win_T *wp, colnr_T val)
-{
-  if (wp) {
-    wp->w_old_visual_col = val;
-  }
-}
-
-/// Check if redrawing is currently being done (accessor for Rust).
-int nvim_redrawing(void)
-{
-  return redrawing() ? 1 : 0;
-}
-
-/// Scroll lines in window (wrapper for win_scroll_lines for Rust FFI).
-void nvim_win_scroll_lines(win_T *wp, int row, int line_count)
-{
-  win_scroll_lines(wp, row, line_count);
-}
-
 // Phase 1 accessors for Rust FFI
-
-/// Get the 'lazyredraw' option value.
-int nvim_get_p_lz(void) { return p_lz; }
 
 /// Get the do_redraw flag.
 int nvim_get_do_redraw(void) { return do_redraw ? 1 : 0; }
-
-/// Set the Rows global.
-void nvim_set_Rows(int val) { Rows = val; }
-
-/// Set the Columns global.
-void nvim_set_Columns(int val) { Columns = val; }
 
 /// Wrapper for rs_min_rows_for_all_tabpages() for Rust FFI.
 int nvim_min_rows_for_all_tabpages(void) { return rs_min_rows_for_all_tabpages(); }
@@ -2399,23 +2252,8 @@ _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
 
 // Phase 2 accessors for comp_col()
 
-/// Get ruler width override.
-int nvim_get_ru_wid(void) { return ru_wid; }
-
 /// Get 'showcmd' option.
 int nvim_get_p_sc(void) { return p_sc; }
-
-/// Check if 'showcmdloc' is "last".
-int nvim_get_p_sloc_is_last(void) { return *p_sloc == 'l' ? 1 : 0; }
-
-/// Set sc_col global.
-void nvim_set_sc_col(int val) { sc_col = val; }
-
-/// Get ru_col global.
-int nvim_get_ru_col(void) { return ru_col; }
-
-/// Set ru_col global.
-void nvim_set_ru_col(int val) { ru_col = val; }
 
 /// Wrapper for last_stl_height(false) for Rust FFI.
 int nvim_last_stl_height(void) { return rs_last_stl_height(0); }
@@ -2428,25 +2266,13 @@ _Static_assert(SHOWCMD_COLS == 10, "SHOWCMD_COLS must be 10");
 
 // Phase 3 accessors for skip_showmode() / unshowmode()
 
-/// Get redraw_mode flag.
-int nvim_get_redraw_mode(void) { return redraw_mode ? 1 : 0; }
-
-/// Set redraw_mode flag.
-void nvim_set_redraw_mode(int val) { redraw_mode = (val != 0); }
-
 /// Wrapper for clearmode() for Rust FFI.
 void nvim_clearmode(void) { clearmode(); }
 
 // Phase 4 accessors for redraw_statuslines() / redraw_custom_title_later()
 
-/// Get redraw_tabline flag.
-int nvim_get_redraw_tabline(void) { return redraw_tabline ? 1 : 0; }
-
 /// Set redraw_tabline flag.
 void nvim_set_redraw_tabline(int val) { redraw_tabline = (val != 0); }
-
-/// Get need_maketitle flag.
-int nvim_get_need_maketitle(void) { return need_maketitle ? 1 : 0; }
 
 /// Set need_maketitle flag.
 void nvim_set_need_maketitle(int val) { need_maketitle = (val != 0); }
@@ -2515,9 +2341,6 @@ int nvim_win_get_w_p_cul(win_T *wp) { return wp ? wp->w_p_cul : 0; }
 
 /// Set w_cursorline for a window.
 void nvim_win_set_w_cursorline(win_T *wp, linenr_T val) { if (wp) { wp->w_cursorline = val; } }
-
-/// Get w_cursorline for a window.
-linenr_T nvim_win_get_w_cursorline(win_T *wp) { return wp ? wp->w_cursorline : 0; }
 
 /// Call fold_info and write results to output fields. Returns fi_level.
 int nvim_fold_info(win_T *wp, linenr_T lnum, linenr_T *out_fi_lnum, linenr_T *out_fi_lines,

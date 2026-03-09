@@ -10,6 +10,11 @@ use std::ffi::c_int;
 use crate::dispatch::types::NormalStateHandle;
 use crate::WinHandle;
 
+extern "C" {
+    static must_redraw: c_int;
+    static redraw_mode: c_int;
+}
+
 // =============================================================================
 // Constants (verified with _Static_assert in normal.c)
 // =============================================================================
@@ -91,7 +96,6 @@ extern "C" {
     fn nvim_get_msg_silent() -> c_int;
     fn nvim_get_clear_cmdline() -> bool;
     fn nvim_get_redraw_cmdline() -> bool;
-    fn nvim_get_redraw_mode() -> c_int; // defined in drawscreen.c
     fn nvim_get_msg_didout() -> c_int; // defined in message.c
     fn nvim_get_msg_didany() -> c_int; // defined in message.c
     fn nvim_set_msg_didany(val: c_int); // defined in message.c
@@ -110,7 +114,6 @@ extern "C" {
     fn nvim_get_cursor_col() -> c_int;
 
     // Redraw/display globals
-    fn nvim_get_must_redraw() -> c_int;
     fn nvim_get_keep_msg_not_null() -> bool;
     fn nvim_get_need_fileinfo() -> c_int; // defined in message.c
     fn nvim_set_need_fileinfo(val: c_int); // defined in message.c
@@ -301,11 +304,11 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
 
     nvim_show_cursor_info_later();
 
-    if nvim_get_must_redraw() != 0 {
+    if unsafe { must_redraw } != 0 {
         nvim_update_screen_call();
     } else {
         nvim_redraw_statuslines_call();
-        if nvim_get_redraw_cmdline() || nvim_get_clear_cmdline() || nvim_get_redraw_mode() != 0 {
+        if nvim_get_redraw_cmdline() || nvim_get_clear_cmdline() || unsafe { redraw_mode } != 0 {
             nvim_showmode();
         }
     }

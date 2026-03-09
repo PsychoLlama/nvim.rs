@@ -29,6 +29,10 @@ use nvim_ascii::{rs_ascii_isdigit, rs_ascii_iswhite, rs_ascii_iswhite_or_nul};
 use std::ffi::{c_char, c_int, c_uint, c_void};
 use std::sync::atomic::{AtomicI32, Ordering};
 
+extern "C" {
+    static mut redraw_mode: c_int;
+}
+
 // =============================================================================
 // Key Constants (from keycodes.h)
 // =============================================================================
@@ -2281,7 +2285,6 @@ extern "C" {
     fn nvim_vim_beep_esc();
     fn nvim_get_curbuf_terminal() -> bool;
     fn nvim_esc_show_msg();
-    fn nvim_set_redraw_mode(val: c_int);
     fn nvim_get_State() -> c_int;
     fn nvim_set_State(val: c_int);
     fn nvim_getviscol() -> c_int;
@@ -2445,7 +2448,7 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
             nvim_esc_show_msg();
         }
         if nvim_get_restart_edit() != 0 {
-            nvim_set_redraw_mode(1); // remove "-- (insert) --"
+            redraw_mode = 1; // remove "-- (insert) --"
         }
         nvim_set_restart_edit(0);
         if nvim_normal_get_cmdwin_type() != 0 {

@@ -9,6 +9,13 @@ use std::ffi::{c_char, c_int, c_void};
 use crate::callbacks::{callback_ok, request_redraw_all, CallbackResult, UpdateType};
 use crate::{OptInt, WinHandle};
 
+// Direct C globals.
+extern "C" {
+    static updating_screen: bool;
+    static mut Rows: c_int;
+    static mut Columns: c_int;
+}
+
 // =============================================================================
 // C Function Declarations
 // =============================================================================
@@ -70,9 +77,6 @@ extern "C" {
     fn nvim_get_p_columns() -> OptInt;
     fn nvim_get_Rows() -> c_int;
     fn nvim_get_Columns() -> c_int;
-    fn nvim_set_Rows(val: c_int);
-    fn nvim_set_Columns(val: c_int);
-    fn nvim_get_updating_screen() -> c_int;
     fn nvim_get_full_screen() -> bool;
     fn screen_resize(width: c_int, height: c_int);
     fn check_screensize();
@@ -430,15 +434,15 @@ pub unsafe extern "C" fn rs_did_set_lines_or_columns(args: *mut c_void) -> Callb
     let columns = nvim_get_Columns();
 
     if p_lines != OptInt::from(rows) || p_columns != OptInt::from(columns) {
-        if nvim_get_updating_screen() != 0 {
+        if updating_screen {
             // Cannot resize while updating the screen; restore old value.
             nvim_optset_restore_oldval_number(args);
         } else if nvim_get_full_screen() {
             screen_resize(p_columns as c_int, p_lines as c_int);
         } else {
             // Postpone the resizing.
-            nvim_set_Rows(p_lines as c_int);
-            nvim_set_Columns(p_columns as c_int);
+            Rows = p_lines as c_int;
+            Columns = p_columns as c_int;
             check_screensize();
             let p_ch = nvim_get_p_ch();
             let new_row = nvim_get_Rows() - std::cmp::max(p_ch as c_int, 1);

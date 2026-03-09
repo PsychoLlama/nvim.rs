@@ -5,10 +5,14 @@
 
 use std::os::raw::{c_char, c_int};
 
+// Direct access to C globals.
+extern "C" {
+    static mut RedrawingDisabled: c_int;
+}
+
 // C accessor functions
 extern "C" {
-    // RedrawingDisabled
-    fn nvim_get_redrawing_disabled() -> c_int;
+    // RedrawingDisabled (nvim_set_redrawing_disabled still needed for non-trivial logic)
     fn nvim_set_redrawing_disabled(val: c_int);
 
     // Cursor position
@@ -54,7 +58,7 @@ const FORWARD: c_int = 1;
 #[no_mangle]
 pub unsafe extern "C" fn rs_show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) {
     // RedrawingDisabled may be set when invoked through complete().
-    let n = nvim_get_redrawing_disabled();
+    let n = RedrawingDisabled;
     nvim_set_redrawing_disabled(0);
 
     // If the cursor moved or the display scrolled we need to remove the pum first.

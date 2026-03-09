@@ -21,9 +21,43 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_safety_doc)] // FFI functions follow standard C calling conventions
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
 
 use nvim_window::{rs_frame2win, Frame, WinHandle, FR_COL, FR_LEAF, FR_ROW};
+
+// Direct access to C globals (avoids thin C accessor functions).
+extern "C" {
+    /// Global must_redraw flag (int in C).
+    static mut must_redraw: c_int;
+    /// Global redraw_not_allowed flag (bool in C, mapped as c_int for atomics).
+    static mut redraw_not_allowed: bool;
+    /// Global updating_screen flag.
+    static mut updating_screen: bool;
+    /// Global RedrawingDisabled counter.
+    static mut RedrawingDisabled: c_int;
+    /// Global VIsual_mode character.
+    static mut VIsual_mode: c_int;
+    /// p_lz lazyredraw option.
+    static p_lz: c_int;
+    /// ru_wid ruler width.
+    static ru_wid: c_int;
+    /// sc_col show-command column.
+    static mut sc_col: c_int;
+    /// ru_col ruler column.
+    static mut ru_col: c_int;
+    /// p_sloc showcmdloc option string.
+    static p_sloc: *const c_char;
+    /// Rows global.
+    static mut Rows: c_int;
+    /// Columns global.
+    static mut Columns: c_int;
+    /// redraw_tabline flag.
+    static mut redraw_tabline: bool;
+    /// need_maketitle flag.
+    static mut need_maketitle: bool;
+    /// redraw_mode flag (show mode in status line).
+    static mut redraw_mode: c_int;
+}
 
 /// Opaque handle to C's buf_T.
 #[repr(transparent)]
@@ -105,14 +139,11 @@ extern "C" {
     fn rs_grid_line_flush();
 
     // Phase 1: Flag/guard function accessors
-    fn nvim_get_p_lz() -> c_int;
     fn nvim_char_avail() -> c_int;
     fn nvim_get_KeyTyped() -> bool;
     fn nvim_get_do_redraw() -> c_int;
     fn nvim_get_Rows() -> c_int;
-    fn nvim_set_Rows(val: c_int);
     fn nvim_get_Columns() -> c_int;
-    fn nvim_set_Columns(val: c_int);
     fn nvim_get_State() -> c_int;
     fn nvim_ui_has_messages() -> c_int;
     fn nvim_cmdline_mouse_used() -> c_int;
@@ -625,9 +656,6 @@ extern "C" {
     fn nvim_win_set_redraw_bot(wp: WinHandle, val: LinenrT);
     fn nvim_win_get_topline(wp: WinHandle) -> LinenrT;
     fn nvim_win_get_botline(wp: WinHandle) -> LinenrT;
-    fn nvim_get_must_redraw() -> c_int;
-    fn nvim_set_must_redraw(val: c_int);
-    fn nvim_get_redraw_not_allowed() -> c_int;
 }
 
 /// Get the redraw type for a window.
@@ -693,29 +721,29 @@ pub unsafe extern "C" fn rs_win_get_botline(wp: WinHandle) -> LinenrT {
 /// Get the global must_redraw flag.
 #[no_mangle]
 pub extern "C" fn rs_get_must_redraw() -> c_int {
-    unsafe { nvim_get_must_redraw() }
+    unsafe { must_redraw }
 }
 
 /// Set the global must_redraw flag.
 #[no_mangle]
 pub extern "C" fn rs_set_must_redraw(val: c_int) {
-    unsafe { nvim_set_must_redraw(val) };
+    unsafe { must_redraw = val };
 }
 
 /// Check if redraw is currently allowed.
 #[no_mangle]
 pub extern "C" fn rs_redraw_allowed() -> c_int {
-    unsafe { c_int::from(nvim_get_redraw_not_allowed() == 0) }
+    unsafe { c_int::from(!redraw_not_allowed) }
 }
 
 /// Set the must_redraw global only if type is higher.
 #[unsafe(export_name = "set_must_redraw")]
 pub extern "C" fn rs_set_must_redraw_max(redraw_type: c_int) {
     unsafe {
-        if nvim_get_redraw_not_allowed() == 0 {
-            let current = nvim_get_must_redraw();
+        if !redraw_not_allowed {
+            let current = must_redraw;
             if redraw_type > current {
-                nvim_set_must_redraw(redraw_type);
+                must_redraw = redraw_type;
             }
         }
     }
@@ -1021,7 +1049,7 @@ fn redraw_later_impl(wp: WinHandle, redraw_type: c_int) {
 
     unsafe {
         // Check if redraw is allowed and type is higher than current
-        if nvim_get_redraw_not_allowed() != 0 {
+        if redraw_not_allowed {
             return;
         }
 
@@ -1039,9 +1067,8 @@ fn redraw_later_impl(wp: WinHandle, redraw_type: c_int) {
         }
 
         // Update must_redraw global
-        let must_redraw = nvim_get_must_redraw();
         if redraw_type > must_redraw {
-            nvim_set_must_redraw(redraw_type);
+            must_redraw = redraw_type;
         }
     }
 }
@@ -1065,11 +1092,8 @@ fn redraw_all_later_impl(redraw_type: c_int) {
         }
 
         // Also update must_redraw directly
-        if nvim_get_redraw_not_allowed() == 0 {
-            let must_redraw = nvim_get_must_redraw();
-            if redraw_type > must_redraw {
-                nvim_set_must_redraw(redraw_type);
-            }
+        if !redraw_not_allowed && redraw_type > must_redraw {
+            must_redraw = redraw_type;
         }
     }
 }
@@ -1248,11 +1272,8 @@ fn redraw_buf_status_later_impl(buf: BufHandle) {
                 nvim_win_set_redr_status(wp, 1);
 
                 // Set must_redraw to at least UPD_VALID
-                if nvim_get_redraw_not_allowed() == 0 {
-                    let must_redraw = nvim_get_must_redraw();
-                    if UPD_VALID > must_redraw {
-                        nvim_set_must_redraw(UPD_VALID);
-                    }
+                if !redraw_not_allowed && UPD_VALID > must_redraw {
+                    must_redraw = UPD_VALID;
                 }
             }
             wp = nvim_win_get_next(wp);
@@ -1393,11 +1414,6 @@ pub extern "C" fn rs_win_get_effective_redr_type(wp: WinHandle) -> c_int {
 
 // Additional C function declarations for screen update
 extern "C" {
-    // Global flags
-    fn nvim_get_updating_screen() -> c_int;
-    fn nvim_set_updating_screen(val: c_int);
-    fn nvim_get_redrawing_disabled() -> c_int;
-
     // Window clear state
     fn nvim_win_get_redr_border(wp: WinHandle) -> c_int;
     fn nvim_win_set_redr_border(wp: WinHandle, val: c_int);
@@ -1412,14 +1428,14 @@ extern "C" {
 /// Returns 1 if updating_screen is set, 0 otherwise.
 #[no_mangle]
 pub extern "C" fn rs_is_updating_screen() -> c_int {
-    unsafe { nvim_get_updating_screen() }
+    unsafe { c_int::from(updating_screen) }
 }
 
 /// Set the updating_screen flag.
 #[no_mangle]
 pub extern "C" fn rs_set_updating_screen(val: c_int) {
     unsafe {
-        nvim_set_updating_screen(val);
+        updating_screen = val != 0;
     }
 }
 
@@ -1428,7 +1444,7 @@ pub extern "C" fn rs_set_updating_screen(val: c_int) {
 /// Returns 1 if RedrawingDisabled is set, 0 otherwise.
 #[no_mangle]
 pub extern "C" fn rs_is_redrawing_disabled() -> c_int {
-    unsafe { nvim_get_redrawing_disabled() }
+    unsafe { RedrawingDisabled }
 }
 
 /// Check if a window needs its border redrawn.
@@ -1508,7 +1524,6 @@ pub extern "C" fn rs_win_post_update(wp: WinHandle) {
 // Additional C function declarations for visual mode
 extern "C" {
     fn nvim_get_visual_active() -> c_int;
-    fn nvim_get_visual_mode() -> c_int;
     fn nvim_win_get_old_visual_mode(wp: WinHandle) -> c_int;
     fn nvim_win_set_old_visual_mode(wp: WinHandle, val: c_int);
     fn nvim_win_get_old_cursor_lnum(wp: WinHandle) -> LinenrT;
@@ -1540,7 +1555,7 @@ pub extern "C" fn rs_visual_selection_changed(wp: WinHandle) -> c_int {
         }
 
         if visual_active {
-            let current_mode = nvim_get_visual_mode();
+            let current_mode = VIsual_mode;
             if current_mode != old_visual_mode {
                 return 1;
             }
@@ -1566,7 +1581,7 @@ pub extern "C" fn rs_update_visual_state(
         let visual_active = nvim_get_visual_active() != 0;
 
         if visual_active {
-            let visual_mode = nvim_get_visual_mode();
+            let visual_mode = VIsual_mode;
             nvim_win_set_old_visual_mode(wp, visual_mode);
             nvim_win_set_old_cursor_lnum(wp, cursor_lnum);
             nvim_win_set_old_visual_lnum(wp, visual_lnum);
@@ -1823,8 +1838,8 @@ const MIN_COLUMNS: c_int = 12;
 /// Rust equivalent of `redrawing()` in drawscreen.c.
 fn redrawing_impl() -> bool {
     unsafe {
-        nvim_get_redrawing_disabled() == 0
-            && !(nvim_get_p_lz() != 0
+        RedrawingDisabled == 0
+            && !(p_lz != 0
                 && nvim_char_avail() != 0
                 && !nvim_get_KeyTyped()
                 && nvim_get_do_redraw() == 0)
@@ -1846,10 +1861,10 @@ pub extern "C" fn rs_check_screensize() {
     unsafe {
         let rows = nvim_get_Rows();
         let min_rows = nvim_min_rows_for_all_tabpages();
-        nvim_set_Rows(rows.clamp(min_rows, 1000));
+        Rows = rows.clamp(min_rows, 1000);
 
         let cols = nvim_get_Columns();
-        nvim_set_Columns(cols.clamp(MIN_COLUMNS, 10000));
+        Columns = cols.clamp(MIN_COLUMNS, 10000);
     }
 }
 
@@ -1875,11 +1890,7 @@ pub extern "C" fn rs_cmdline_number_prompt() -> c_int {
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_ru_wid() -> c_int;
     fn nvim_get_p_sc() -> c_int;
-    fn nvim_get_p_sloc_is_last() -> c_int;
-    fn nvim_set_sc_col(val: c_int);
-    fn nvim_set_ru_col(val: c_int);
     fn nvim_last_stl_height() -> c_int;
     fn nvim_set_vim_var_echospace(val: c_int);
 }
@@ -1901,38 +1912,39 @@ pub extern "C" fn rs_comp_col() {
         let last_has_status = nvim_last_stl_height() > 0;
         let columns = nvim_get_Columns();
 
-        let mut sc_col: c_int = 0;
-        let mut ru_col: c_int = 0;
+        let mut new_sc_col: c_int = 0;
+        let mut new_ru_col: c_int = 0;
 
         if nvim_get_p_ru() != 0 {
-            let ru_wid = nvim_get_ru_wid();
-            ru_col = (if ru_wid != 0 { ru_wid } else { COL_RULER }) + 1;
+            new_ru_col = (if ru_wid != 0 { ru_wid } else { COL_RULER }) + 1;
             // no last status line, adjust sc_col
             if !last_has_status {
-                sc_col = ru_col;
+                new_sc_col = new_ru_col;
             }
         }
-        if nvim_get_p_sc() != 0 && nvim_get_p_sloc_is_last() != 0 {
-            sc_col += SHOWCMD_COLS;
+        #[allow(clippy::cast_possible_wrap)]
+        let p_sloc_is_last = *p_sloc == b'l' as c_char;
+        if nvim_get_p_sc() != 0 && p_sloc_is_last {
+            new_sc_col += SHOWCMD_COLS;
             if nvim_get_p_ru() == 0 || last_has_status {
                 // no need for separating space
-                sc_col += 1;
+                new_sc_col += 1;
             }
         }
-        debug_assert!(sc_col >= 0 && c_int::MIN + sc_col <= columns);
-        sc_col = columns - sc_col;
-        debug_assert!(ru_col >= 0 && c_int::MIN + ru_col <= columns);
-        ru_col = columns - ru_col;
-        if sc_col <= 0 {
+        debug_assert!(new_sc_col >= 0 && c_int::MIN + new_sc_col <= columns);
+        new_sc_col = columns - new_sc_col;
+        debug_assert!(new_ru_col >= 0 && c_int::MIN + new_ru_col <= columns);
+        new_ru_col = columns - new_ru_col;
+        if new_sc_col <= 0 {
             // screen too narrow, will become a mess
-            sc_col = 1;
+            new_sc_col = 1;
         }
-        if ru_col <= 0 {
-            ru_col = 1;
+        if new_ru_col <= 0 {
+            new_ru_col = 1;
         }
-        nvim_set_sc_col(sc_col);
-        nvim_set_ru_col(ru_col);
-        nvim_set_vim_var_echospace(sc_col - 1);
+        sc_col = new_sc_col;
+        ru_col = new_ru_col;
+        nvim_set_vim_var_echospace(new_sc_col - 1);
     }
 }
 
@@ -1943,8 +1955,6 @@ pub extern "C" fn rs_comp_col() {
 extern "C" {
     fn nvim_get_global_busy() -> c_int;
     fn nvim_get_msg_silent() -> c_int;
-    fn nvim_get_redraw_mode() -> c_int;
-    fn nvim_set_redraw_mode(val: c_int);
     fn nvim_clearmode();
 }
 
@@ -1962,7 +1972,7 @@ pub extern "C" fn rs_skip_showmode() -> bool {
             || !redrawing_impl()
             || (nvim_char_avail() != 0 && !nvim_get_KeyTyped())
         {
-            nvim_set_redraw_mode(1); // show mode later
+            redraw_mode = 1; // show mode later
             return true;
         }
         false
@@ -1991,12 +2001,9 @@ pub extern "C" fn rs_unshowmode(force: bool) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_redraw_tabline() -> c_int;
-    fn nvim_get_need_maketitle() -> c_int;
     fn nvim_get_p_icon() -> c_int;
     fn nvim_get_p_title() -> c_int;
     fn nvim_get_stl_syntax() -> c_int;
-    fn nvim_set_need_maketitle(val: c_int);
     fn nvim_win_check_ns_hl(wp: WinHandle);
     fn nvim_win_redr_winbar(wp: WinHandle);
     fn nvim_win_redr_status(wp: WinHandle);
@@ -2026,11 +2033,11 @@ pub extern "C" fn rs_redraw_statuslines() {
         }
 
         nvim_win_check_ns_hl(WinHandle::null());
-        if nvim_get_redraw_tabline() != 0 {
+        if redraw_tabline {
             nvim_draw_tabline();
         }
 
-        if nvim_get_need_maketitle() != 0 {
+        if need_maketitle {
             nvim_maketitle();
         }
     }
@@ -2047,7 +2054,7 @@ pub extern "C" fn rs_redraw_custom_title_later() -> c_int {
         if (nvim_get_p_icon() != 0 && (stl_syntax & STL_IN_ICON) != 0)
             || (nvim_get_p_title() != 0 && (stl_syntax & STL_IN_TITLE) != 0)
         {
-            nvim_set_need_maketitle(1);
+            need_maketitle = true;
             return 1;
         }
         0
