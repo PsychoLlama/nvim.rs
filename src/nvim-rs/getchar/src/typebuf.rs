@@ -963,6 +963,58 @@ extern "C" {
     fn nvim_init_typebuf();
     fn nvim_state_no_longer_safe();
     fn nvim_grow_typebuf(new_buflen: c_int) -> c_int;
+    /// Read input characters into buf (up to maxlen), waiting wait_time ms.
+    fn inchar(buf: *mut u8, maxlen: c_int, wait_time: std::ffi::c_long) -> c_int;
+}
+
+/// `flush_buffers_T` enum constants -- must match C enum order
+const FLUSH_MINIMAL: c_int = 0;
+// FLUSH_TYPEAHEAD = 1 is the implicit else branch (clear typebuf without draining inchar)
+const FLUSH_INPUT: c_int = 2;
+
+/// `flush_buffers(flush_buffers_T)` -- Phase 3 export replacing C implementation
+///
+/// Remove the contents of the stuff buffer and the mapped characters in the
+/// typeahead buffer (used in case of an error). If `flush_typeahead` is
+/// `FLUSH_INPUT`, also flush all typeahead characters (used when interrupted
+/// by CTRL-C).
+///
+/// # Safety
+/// Calls C accessor functions and performs pointer operations.
+#[export_name = "flush_buffers"]
+pub unsafe extern "C" fn flush_buffers_export(flush_typeahead: c_int) {
+    nvim_init_typebuf();
+
+    crate::buffheader::rs_start_stuff();
+    while crate::buffheader::rs_read_readbuffers(1) != 0 {}
+
+    if flush_typeahead == FLUSH_MINIMAL {
+        // Remove only mapped characters at the start
+        let maplen = nvim_get_typebuf_maplen();
+        let off = nvim_get_typebuf_off();
+        let len = nvim_get_typebuf_len();
+        nvim_set_typebuf_off(off + maplen);
+        nvim_set_typebuf_len(len - maplen);
+    } else {
+        // Remove all typeahead
+        if flush_typeahead == FLUSH_INPUT {
+            // Drain all pending input chars (may be part of escape sequence)
+            let buf = nvim_get_typebuf_buf();
+            let buflen = nvim_get_typebuf_buflen();
+            while inchar(buf, buflen - 1, 10) != 0 {}
+        }
+        nvim_set_typebuf_off(nvim_get_maxmaplen());
+        nvim_set_typebuf_len(0);
+        // Reset the flag that text received from a client or feedkeys() was
+        // inserted in the typeahead buffer.
+        nvim_set_typebuf_was_filled(0);
+    }
+
+    nvim_set_typebuf_maplen(0);
+    nvim_set_typebuf_silent(0);
+    nvim_set_cmd_silent(0);
+    nvim_set_typebuf_no_abbr_cnt(0);
+    increment_typebuf_change_cnt();
 }
 
 #[cfg(test)]

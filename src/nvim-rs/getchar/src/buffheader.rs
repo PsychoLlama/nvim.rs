@@ -818,6 +818,31 @@ extern "C" {
     fn nvim_get_restart_edit() -> c_int;
 }
 
+/// Neovim API `String` type: `{ char *data; size_t size; }`.
+///
+/// Must match the C layout exactly so it can be returned by value from
+/// `#[export_name = "get_inserted"]`.
+#[repr(C)]
+pub struct NvimString {
+    pub data: *mut u8,
+    pub size: usize,
+}
+
+/// `get_inserted(void)` -- Phase 3 export replacing C wrapper
+///
+/// Returns the contents of the redo buffer (the last inserted text) as a
+/// Neovim API `String` struct.
+///
+/// # Safety
+/// Accesses Rust buffer statics.
+#[must_use]
+#[export_name = "get_inserted"]
+pub unsafe extern "C" fn get_inserted_export() -> NvimString {
+    let data = rs_get_inserted();
+    let size = rs_get_inserted_len();
+    NvimString { data, size }
+}
+
 // =============================================================================
 // Phase 1: export_name wrappers -- replace C thin wrappers
 // =============================================================================

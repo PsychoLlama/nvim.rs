@@ -583,6 +583,138 @@ pub unsafe extern "C" fn rs_stuffescaped(arg: *const u8, literally: c_int) {
 }
 
 // =============================================================================
+// Phase 3: paste_store (migrated from C)
+// =============================================================================
+
+/// Neovim API `String` type: `{ char *data; size_t size; }`.
+/// Must match the C layout exactly.
+#[repr(C)]
+pub struct NvimString {
+    pub data: *mut u8,
+    pub size: usize,
+}
+
+/// `TriState` enum constants matching C `types_defs.h`
+const K_NONE: c_int = -1;
+const K_FALSE: c_int = 0;
+// K_TRUE = 1 (not referenced explicitly, implicit else)
+
+/// Keycodes for paste start/end. Match `TERMCAP2KEY('P', 'S')` and `TERMCAP2KEY('P', 'E')`.
+const K_PASTE_START: c_int = -(0x50 + (0x53_i32 << 8));
+const K_PASTE_END_CODE: c_int = -(0x50 + (0x45_i32 << 8));
+
+/// Mode flags (matching C defines)
+const MODE_CMDLINE: c_int = 0x08;
+const MODE_INSERT: c_int = 0x10;
+
+extern "C" {
+    fn nvim_get_state() -> c_int;
+    fn nvim_get_reg_recording() -> c_int;
+    fn rs_is_internal_call(channel_id: u64) -> c_int;
+}
+
+/// `paste_store(uint64_t, TriState, String, bool)` -- Phase 3 export replacing C implementation
+///
+/// Wraps pasted text stream with K_PASTE_START and K_PASTE_END, and
+/// appends to redo buffer and/or record buffer if needed.
+/// Escapes all K_SPECIAL and NUL bytes in the content.
+///
+/// # Safety
+/// Calls C accessor functions. `str.data` must be valid for `str.size` bytes.
+#[export_name = "paste_store"]
+pub unsafe extern "C" fn paste_store_export(
+    channel_id: u64,
+    state: c_int,
+    str: NvimString,
+    crlf: bool,
+) {
+    use crate::buffheader::{
+        rs_ResetRedobuff, rs_add_buff_recordbuff, rs_add_buff_redobuff,
+        rs_add_byte_buff_recordbuff, rs_add_byte_buff_redobuff, rs_add_char_buff_recordbuff,
+        rs_add_char_buff_redobuff, rs_get_block_redo,
+    };
+
+    let cur_state = nvim_get_state();
+    if cur_state & MODE_CMDLINE != 0 {
+        return;
+    }
+
+    let need_redo = rs_get_block_redo() == 0;
+    let need_record = nvim_get_reg_recording() != 0 && rs_is_internal_call(channel_id) == 0;
+
+    if !need_redo && !need_record {
+        return;
+    }
+
+    if state != K_NONE {
+        let c = if state == K_FALSE {
+            K_PASTE_START
+        } else {
+            K_PASTE_END_CODE
+        };
+        if need_redo {
+            if state == K_FALSE && (cur_state & MODE_INSERT == 0) {
+                rs_ResetRedobuff();
+            }
+            rs_add_char_buff_redobuff(c);
+        }
+        if need_record {
+            rs_add_char_buff_recordbuff(c);
+        }
+        return;
+    }
+
+    // state == kNone: append the paste content
+    if str.data.is_null() || str.size == 0 {
+        return;
+    }
+
+    let mut s: *const u8 = str.data;
+    let str_end: *const u8 = str.data.add(str.size);
+
+    while s < str_end {
+        let start = s;
+        // Scan for bytes that need special handling
+        while s < str_end {
+            let b = c_int::from(*s);
+            if b == c_int::from(K_SPECIAL) || b == 0 || b == NL || (crlf && b == CAR) {
+                break;
+            }
+            s = s.add(1);
+        }
+
+        // Append the plain segment
+        if s > start {
+            let len = s.offset_from(start);
+            if need_redo {
+                rs_add_buff_redobuff(start, len);
+            }
+            if need_record {
+                rs_add_buff_recordbuff(start, len);
+            }
+        }
+
+        // Handle the special byte
+        if s < str_end {
+            let mut c = c_int::from(*s);
+            s = s.add(1);
+            if crlf && c == CAR {
+                if s < str_end && c_int::from(*s) == NL {
+                    s = s.add(1);
+                }
+                c = NL;
+            }
+            if need_redo {
+                rs_add_byte_buff_redobuff(c);
+            }
+            if need_record {
+                rs_add_byte_buff_recordbuff(c);
+            }
+        }
+    }
+}
+
+// =============================================================================
 // Phase 3: Redo replay (migrated from C)
 // =============================================================================
 

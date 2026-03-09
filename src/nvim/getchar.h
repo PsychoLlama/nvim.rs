@@ -37,6 +37,10 @@ void stuffescaped(const char *arg, bool literally);
 bool stuff_empty(void);
 bool readbuf1_empty(void);
 
+// Inserted text
+String get_inserted(void);
+void paste_store(uint64_t channel_id, TriState state, String str, bool crlf);
+
 // Redo buffer
 void AppendToRedobuff(const char *s);
 void AppendToRedobuffLit(const char *str, int len);
@@ -51,6 +55,9 @@ int start_redo(int count, bool old_redo);
 int start_redo_ins(void);
 void stop_redo_ins(void);
 char *get_recorded(void);
+
+// Typeahead / buffer flushing
+void flush_buffers(flush_buffers_T flush_typeahead);
 
 // Typeahead input state
 int ins_typebuf(char *str, int noremap, int offset, bool nottyped, bool silent);

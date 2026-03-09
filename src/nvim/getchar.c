@@ -204,53 +204,8 @@ static const char e_cmd_mapping_must_end_with_cr_before_second_cmd[]
 // Buffer primitive functions (free_buff, get_buffcont, add_buff, etc.)
 // have been removed. Use rs_* FFI functions instead.
 
-/// Return the contents of the redo buffer as a single string.
-/// K_SPECIAL in the returned string is escaped.
-String get_inserted(void)
-{
-  size_t len = rs_get_inserted_len();
-  char *str = (char *)rs_get_inserted();
-  return cbuf_as_string(str, len);
-}
+// (Buffer primitive functions and get_inserted() removed - now in Rust buffheader module)
 
-// (Buffer primitive functions removed - now in Rust buffheader module)
-
-/// Remove the contents of the stuff buffer and the mapped characters in the
-/// typeahead buffer (used in case of an error).  If "flush_typeahead" is true,
-/// flush all typeahead characters (used when interrupted by a CTRL-C).
-void flush_buffers(flush_buffers_T flush_typeahead)
-{
-  init_typebuf();
-
-  rs_start_stuff();
-  while (rs_read_readbuffers(true) != NUL) {}
-
-  if (flush_typeahead == FLUSH_MINIMAL) {
-    // remove mapped characters at the start only
-    typebuf.tb_off += typebuf.tb_maplen;
-    typebuf.tb_len -= typebuf.tb_maplen;
-  } else {
-    // remove typeahead
-    if (flush_typeahead == FLUSH_INPUT) {
-      // We have to get all characters, because we may delete the first
-      // part of an escape sequence.  In an xterm we get one char at a
-      // time and we have to get them all.
-      while (inchar(typebuf.tb_buf, typebuf.tb_buflen - 1, 10) != 0) {}
-    }
-    typebuf.tb_off = MAXMAPLEN;
-    typebuf.tb_len = 0;
-    // Reset the flag that text received from a client or from feedkeys()
-    // was inserted in the typeahead buffer.
-    typebuf_was_filled = false;
-  }
-  typebuf.tb_maplen = 0;
-  typebuf.tb_silent = 0;
-  cmd_silent = false;
-  typebuf.tb_no_abbr_cnt = 0;
-  if (++typebuf.tb_change_cnt == 0) {
-    typebuf.tb_change_cnt = 1;
-  }
-}
 
 /// Initialize typebuf.tb_buf to point to typebuf_init.
 /// alloc() cannot be used here: In out-of-memory situations it would
@@ -2226,77 +2181,6 @@ bool map_execute_lua(bool may_repeat, bool discard)
   return true;
 }
 
-/// Wraps pasted text stream with K_PASTE_START and K_PASTE_END, and
-/// appends to redo buffer and/or record buffer if needed.
-/// Escapes all K_SPECIAL and NUL bytes in the content.
-///
-/// @param state  kFalse for the start of a paste
-///               kTrue for the end of a paste
-///               kNone for the content of a paste
-/// @param str    the content of the paste (only used when state is kNone)
-void paste_store(const uint64_t channel_id, const TriState state, const String str, const bool crlf)
-{
-  if (State & MODE_CMDLINE) {
-    return;
-  }
-
-  const bool need_redo = !rs_get_block_redo();
-  const bool need_record = reg_recording != 0 && !is_internal_call(channel_id);
-
-  if (!need_redo && !need_record) {
-    return;
-  }
-
-  if (state != kNone) {
-    const int c = state == kFalse ? K_PASTE_START : K_PASTE_END;
-    if (need_redo) {
-      if (state == kFalse && !(State & MODE_INSERT)) {
-        ResetRedobuff();
-      }
-      rs_add_char_buff_redobuff(c);
-    }
-    if (need_record) {
-      rs_add_char_buff_recordbuff(c);
-    }
-    return;
-  }
-
-  const char *s = str.data;
-  const char *const str_end = str.data + str.size;
-
-  while (s < str_end) {
-    const char *start = s;
-    while (s < str_end && (uint8_t)(*s) != K_SPECIAL && *s != NUL
-           && *s != NL && !(crlf && *s == CAR)) {
-      s++;
-    }
-
-    if (s > start) {
-      if (need_redo) {
-        rs_add_buff_redobuff((const uint8_t *)start, s - start);
-      }
-      if (need_record) {
-        rs_add_buff_recordbuff((const uint8_t *)start, s - start);
-      }
-    }
-
-    if (s < str_end) {
-      int c = (uint8_t)(*s++);
-      if (crlf && c == CAR) {
-        if (s < str_end && *s == NL) {
-          s++;
-        }
-        c = NL;
-      }
-      if (need_redo) {
-        rs_add_byte_buff_redobuff(c);
-      }
-      if (need_record) {
-        rs_add_byte_buff_recordbuff(c);
-      }
-    }
-  }
-}
 
 /// Gets a paste stored by paste_store() from typeahead and repeats it.
 void paste_repeat(int count)
