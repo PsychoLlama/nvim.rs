@@ -132,6 +132,36 @@ const OK: c_int = 1;
 const FAIL: c_int = 0;
 
 // ============================================================================
+// COM_ constants (from option_vars.h)
+// ============================================================================
+
+/// Start of comment marker ('s').
+const COM_START: c_char = b's' as c_char;
+/// End of comment marker ('e').
+const COM_END: c_char = b'e' as c_char;
+/// Middle of comment marker ('m').
+const COM_MIDDLE: c_char = b'm' as c_char;
+/// Left-adjusted comment ('l').
+const COM_LEFT: c_char = b'l' as c_char;
+/// Right-adjusted comment ('r').
+const COM_RIGHT: c_char = b'r' as c_char;
+
+/// Maximum length for comment option strings.
+const COM_MAX_LEN_C: usize = 50;
+
+/// Insert mode state flag (from `state_defs.h`: `MODE_INSERT = 0x10`).
+const MODE_INSERT: c_int = 0x10;
+
+/// Maximum column constant used in indentation.
+const MAXCOL_COL: c_int = 0x7fff_ffff;
+
+/// Namespace search limit.
+const FIND_NAMESPACE_LIM: c_int = 20;
+
+/// NUL character value.
+const NUL_CHAR: u8 = 0;
+
+// ============================================================================
 // C accessor function declarations
 // ============================================================================
 
@@ -184,6 +214,17 @@ extern "C" {
         maxlen: usize,
         sep_chars: *const c_char,
     ) -> usize;
+
+    // Phase 6 accessors (for rs_get_c_indent)
+    fn nvim_get_state() -> c_int;
+    fn nvim_check_linecomment(line: *const c_char) -> c_int;
+    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn nvim_linewhite(lnum: c_int) -> bool;
+    fn nvim_curbuf_get_b_p_com() -> *mut c_char;
+    fn nvim_in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool;
+    fn xstrdup(str_: *const c_char) -> *mut c_char;
+    fn xfree(p: *mut std::ffi::c_void);
+    fn strlen(s: *const c_char) -> usize;
 }
 
 /// Check if a character is whitespace (space or tab).
@@ -3765,6 +3806,1848 @@ pub unsafe extern "C" fn rs_find_match(lookfor: c_int, ourscope: c_int) -> c_int
         }
     }
     FAIL
+}
+
+// ============================================================================
+// Phase 6: get_c_indent — core C indentation algorithm
+// ============================================================================
+
+/// Parse digits from a C string pointer, advancing it past the digits.
+/// Returns the integer value parsed.
+///
+/// # Safety
+/// `pp` must point to a valid pointer to a null-terminated C string.
+#[allow(clippy::cast_lossless)]
+unsafe fn getdigits_int_rust(pp: &mut *const c_char) -> c_int {
+    let mut result: c_int = 0;
+    while ascii_isdigit(**pp as u8) {
+        result = result * 10 + c_int::from((**pp as u8) - b'0');
+        *pp = pp.add(1);
+    }
+    result
+}
+
+/// Compute the desired C indentation for the current line.
+///
+/// This is the Rust implementation of `get_c_indent()`. The C wrapper
+/// builds a `CindentOptions` from `curbuf->b_ind_*` fields and calls this.
+///
+/// Returns -1 if the indent should be left alone (inside a raw string).
+///
+/// # Safety
+/// - `opts` must point to a valid `CindentOptions` struct with all fields populated.
+/// - All cursor/buffer state must be valid (curwin, curbuf must be set up).
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
+#[allow(clippy::cast_ptr_alignment)]
+#[allow(clippy::ptr_cast_constness)]
+#[allow(clippy::ptr_as_ptr)]
+#[allow(clippy::manual_c_str_literals)]
+#[allow(clippy::unnecessary_cast)]
+#[allow(clippy::if_not_else)]
+#[allow(clippy::redundant_else)]
+#[allow(clippy::unused_self)]
+#[allow(clippy::similar_names)]
+#[allow(clippy::cast_lossless)]
+#[allow(clippy::needless_bool_assign)]
+#[allow(clippy::collapsible_if)]
+#[allow(clippy::used_underscore_binding)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::items_after_statements)]
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::if_then_some_else_none)]
+#[allow(clippy::useless_let_if_seq)]
+#[allow(clippy::nonminimal_bool)]
+#[allow(unused_variables)]
+#[allow(unused_mut)]
+#[allow(unused_labels)]
+#[allow(unused_assignments)]
+pub unsafe extern "C" fn rs_get_c_indent(opts: *const CindentOptions) -> c_int {
+    let opts = &*opts;
+
+    // Save current cursor position
+    let cur_lnum = nvim_cindent_curwin_get_cursor_lnum();
+    let cur_col = nvim_cindent_curwin_get_cursor_col();
+
+    // If we are at line 1, zero indent is fine
+    if cur_lnum == 1 {
+        return 0;
+    }
+
+    // Get a copy of the current line's contents.
+    let line_raw = nvim_cindent_ml_get(cur_lnum);
+    let linecopy_ptr = xstrdup(line_raw);
+
+    // In insert mode and cursor is on ')', truncate the line there.
+    if (nvim_get_state() & MODE_INSERT) != 0 {
+        let line_len = strlen(linecopy_ptr) as c_int;
+        if cur_col < line_len && *linecopy_ptr.add(cur_col as usize) == b')' as c_char {
+            *linecopy_ptr.add(cur_col as usize) = NUL;
+        }
+    }
+
+    // theline = skipwhite(linecopy)
+    let theline = skipwhite(linecopy_ptr).cast_const();
+
+    // Move cursor to start of the line
+    nvim_cindent_curwin_set_cursor(cur_lnum, 0);
+
+    let original_line_islabel = rs_cin_islabel();
+
+    // Check if inside a raw string. Ignore raw strings inside comments.
+    let comment_pos_result = rs_find_start_comment(opts.ind_maxcomment);
+    let comment_pos = if comment_pos_result.found {
+        Some(comment_pos_result)
+    } else {
+        None
+    };
+
+    let rawstring_result = rs_find_start_rawstring(opts.ind_maxcomment);
+
+    // Helper: is pos_a < pos_b (by lnum then col)
+    let pos_lt = |a: FindMatchResult, b: FindMatchResult| -> bool {
+        if a.lnum != b.lnum {
+            a.lnum < b.lnum
+        } else {
+            a.col < b.col
+        }
+    };
+
+    if rawstring_result.found
+        && (comment_pos.is_none() || pos_lt(rawstring_result, comment_pos.unwrap()))
+    {
+        // Inside raw string, return -1 (laterend path - no clamping)
+        nvim_cindent_curwin_set_cursor(cur_lnum, cur_col);
+        xfree(linecopy_ptr.cast());
+        return -1;
+    }
+
+    // Use labeled block to simulate goto theend / laterend.
+    // 'theend' block: returns amount that will be clamped to >= 0.
+    let amount = 'theend: {
+        let mut amount: c_int;
+
+        // #defines go at the left when included in 'cinkeys'
+        if *theline == b'#' as c_char
+            && (*linecopy_ptr == b'#' as c_char
+                || nvim_in_cinkeys(b'#' as c_int, b' ' as c_int, true))
+        {
+            let directive = skipwhite(theline.add(1)).cast_const();
+            let pragma_bytes = b"pragma";
+            let is_pragma = {
+                let mut is = true;
+                for (i, &b) in pragma_bytes.iter().enumerate() {
+                    if *directive.add(i) != b as c_char {
+                        is = false;
+                        break;
+                    }
+                }
+                is
+            };
+            if opts.ind_pragma == 0 || !is_pragma {
+                break 'theend opts.ind_hash_comment;
+            }
+        }
+
+        // Non-case label? Goes to left margin unless JS or positive L.
+        if original_line_islabel && opts.ind_js == 0 && opts.ind_jump_label < 0 {
+            break 'theend 0;
+        }
+
+        // "//" comment alignment
+        if rs_cin_islinecomment(theline) {
+            let trypos = rs_find_line_comment();
+            let trypos = if !trypos.found && cur_lnum > 1 {
+                // Check previous line for a comment start
+                let prev_line = nvim_cindent_ml_get(cur_lnum - 1);
+                let cc = nvim_check_linecomment(prev_line);
+                if cc != MAXCOL {
+                    Some(FindMatchResult {
+                        found: true,
+                        lnum: cur_lnum - 1,
+                        col: cc,
+                    })
+                } else {
+                    None
+                }
+            } else if trypos.found {
+                Some(trypos)
+            } else {
+                None
+            };
+            if let Some(tp) = trypos {
+                let col = nvim_cindent_getvcol(tp.lnum, tp.col);
+                break 'theend col;
+            }
+        }
+
+        // Inside comment and not at the comment start — use 'comments' option
+        if let (true, Some(cp)) = (!rs_cin_iscomment(theline), comment_pos) {
+            let col = nvim_cindent_getvcol(cp.lnum, cp.col);
+            amount = col;
+
+            let mut lead_start = [NUL; COM_MAX_LEN_C];
+            let mut lead_middle = [NUL; COM_MAX_LEN_C];
+            let mut lead_start_len: usize = 2;
+            let mut lead_middle_len: usize = 1;
+            let mut start_align: c_char = 0;
+            let mut start_off: c_int = 0;
+            let mut done = false;
+            let mut look: *mut c_char = NUL as *mut c_char; // init dummy
+
+            let b_p_com = nvim_curbuf_get_b_p_com();
+            let mut p: *mut c_char = b_p_com;
+            let comma_sep = b",\0".as_ptr() as *const c_char;
+
+            while !is_nul(*p) {
+                let mut align: c_char = 0;
+                let mut off: c_int = 0;
+                let mut what: c_char = 0;
+
+                while !is_nul(*p) && *p != b':' as c_char {
+                    if *p == COM_START || *p == COM_END || *p == COM_MIDDLE {
+                        what = *p;
+                        p = p.add(1);
+                    } else if *p == COM_LEFT || *p == COM_RIGHT {
+                        align = *p;
+                        p = p.add(1);
+                    } else if ascii_isdigit(*p as u8) || *p == b'-' as c_char {
+                        // Parse integer (possibly negative)
+                        let neg = if *p == b'-' as c_char {
+                            p = p.add(1);
+                            true
+                        } else {
+                            false
+                        };
+                        let pp_const = p.cast_const();
+                        let mut pp_mut = pp_const;
+                        let v = getdigits_int_rust(&mut pp_mut);
+                        p = pp_mut.cast_mut();
+                        off = if neg { -v } else { v };
+                    } else {
+                        p = p.add(1);
+                    }
+                }
+
+                if *p == b':' as c_char {
+                    p = p.add(1);
+                }
+
+                let mut lead_end = [NUL; COM_MAX_LEN_C];
+                copy_option_part(&raw mut p, lead_end.as_mut_ptr(), COM_MAX_LEN_C, comma_sep);
+
+                if what == COM_START {
+                    // STRCPY lead_start = lead_end
+                    lead_start_len = 0;
+                    while lead_end[lead_start_len] != NUL && lead_start_len + 1 < COM_MAX_LEN_C {
+                        lead_start[lead_start_len] = lead_end[lead_start_len];
+                        lead_start_len += 1;
+                    }
+                    lead_start[lead_start_len] = NUL;
+                    lead_start_len = strlen(lead_start.as_ptr()) as usize;
+                    start_off = off;
+                    start_align = align;
+                } else if what == COM_MIDDLE {
+                    lead_middle_len = 0;
+                    while lead_end[lead_middle_len] != NUL && lead_middle_len + 1 < COM_MAX_LEN_C {
+                        lead_middle[lead_middle_len] = lead_end[lead_middle_len];
+                        lead_middle_len += 1;
+                    }
+                    lead_middle[lead_middle_len] = NUL;
+                    lead_middle_len = strlen(lead_middle.as_ptr()) as usize;
+                } else if what == COM_END {
+                    // If our line starts with middle string
+                    let theline_matches_middle = lead_middle_len > 0
+                        && std::slice::from_raw_parts(theline as *const u8, lead_middle_len)
+                            == std::slice::from_raw_parts(
+                                lead_middle.as_ptr() as *const u8,
+                                lead_middle_len,
+                            );
+                    let end_len = strlen(lead_end.as_ptr()) as usize;
+                    let theline_matches_end = end_len > 0
+                        && std::slice::from_raw_parts(theline as *const u8, end_len)
+                            == std::slice::from_raw_parts(lead_end.as_ptr() as *const u8, end_len);
+
+                    if theline_matches_middle && !theline_matches_end {
+                        done = true;
+                        if cur_lnum > 1 {
+                            let prev_look =
+                                skipwhite(nvim_cindent_ml_get(cur_lnum - 1)).cast_const();
+                            let prev_len = strlen(prev_look) as usize;
+                            if lead_start_len > 0
+                                && prev_len >= lead_start_len
+                                && std::slice::from_raw_parts(
+                                    prev_look as *const u8,
+                                    lead_start_len,
+                                ) == std::slice::from_raw_parts(
+                                    lead_start.as_ptr() as *const u8,
+                                    lead_start_len,
+                                )
+                            {
+                                amount = nvim_cindent_get_indent_lnum(cur_lnum - 1);
+                            } else if lead_middle_len > 0
+                                && prev_len >= lead_middle_len
+                                && std::slice::from_raw_parts(
+                                    prev_look as *const u8,
+                                    lead_middle_len,
+                                ) == std::slice::from_raw_parts(
+                                    lead_middle.as_ptr() as *const u8,
+                                    lead_middle_len,
+                                )
+                            {
+                                amount = nvim_cindent_get_indent_lnum(cur_lnum - 1);
+                                break; // break out of while loop
+                            } else {
+                                // If start string doesn't match comment start, skip
+                                let comment_line =
+                                    nvim_cindent_ml_get_pos_lnum_col(cp.lnum, cp.col);
+                                if lead_start_len > 0
+                                    && std::slice::from_raw_parts(
+                                        comment_line as *const u8,
+                                        lead_start_len,
+                                    ) != std::slice::from_raw_parts(
+                                        lead_start.as_ptr() as *const u8,
+                                        lead_start_len,
+                                    )
+                                {
+                                    continue; // continue the while loop
+                                }
+                            }
+                        }
+                        if start_off != 0 {
+                            amount += start_off;
+                        } else if start_align == COM_RIGHT {
+                            amount += nvim_vim_strsize(lead_start.as_ptr())
+                                - nvim_vim_strsize(lead_middle.as_ptr());
+                        }
+                        break;
+                    }
+
+                    // If our line starts with end string
+                    if !theline_matches_middle && theline_matches_end {
+                        amount = nvim_cindent_get_indent_lnum(cur_lnum - 1);
+                        if off != 0 {
+                            amount += off;
+                        } else if align == COM_RIGHT {
+                            amount += nvim_vim_strsize(lead_start.as_ptr())
+                                - nvim_vim_strsize(lead_middle.as_ptr());
+                        }
+                        done = true;
+                        break;
+                    }
+                }
+            } // end while !is_nul(*p)
+
+            // Decide alignment based on what we found
+            if done {
+                // skip - amount is already set
+            } else if *theline == b'*' as c_char {
+                amount += 1;
+            } else {
+                // More than one line away from comment opener:
+                // use indent of previous non-empty line.
+                amount = -1;
+                let mut lnum = cur_lnum - 1;
+                while lnum > cp.lnum {
+                    if nvim_linewhite(lnum) {
+                        lnum -= 1;
+                        continue;
+                    }
+                    amount = nvim_cindent_get_indent_lnum(lnum);
+                    break;
+                }
+                if amount == -1 {
+                    // Use the comment opener position
+                    let mut comment_pos_adj = cp;
+                    if opts.ind_in_comment2 == 0 {
+                        let start = nvim_cindent_ml_get(cp.lnum);
+                        let look_ptr = start.add(cp.col as usize + 2); // skip / and *
+                        if !is_nul(*look_ptr) {
+                            // col of first non-white after /*
+                            let sw_ptr = skipwhite(look_ptr).cast_const();
+                            comment_pos_adj.col = sw_ptr.offset_from(start) as c_int;
+                            look = sw_ptr.cast_mut();
+                        } else {
+                            look = look_ptr.cast_mut();
+                        }
+                    } else {
+                        look = NUL as *mut c_char;
+                    }
+                    let col = nvim_cindent_getvcol(comment_pos_adj.lnum, comment_pos_adj.col);
+                    amount = col;
+                    if opts.ind_in_comment2 != 0 || is_nul(*look) {
+                        amount += opts.ind_in_comment;
+                    }
+                }
+            }
+            break 'theend amount;
+        }
+
+        // Are we looking at a ']' that has a match?
+        if *skipwhite(theline) == b']' as c_char {
+            let trypos = rs_find_match_char(b'[' as c_int, opts.ind_maxparen);
+            if trypos.found {
+                amount = nvim_cindent_get_indent_lnum(trypos.lnum);
+                break 'theend amount;
+            }
+        }
+
+        // Are we inside parentheses or braces?
+        let paren_result = if opts.ind_java == 0 {
+            rs_find_match_paren(opts.ind_maxparen)
+        } else {
+            FindMatchResult {
+                found: false,
+                lnum: 0,
+                col: 0,
+            }
+        };
+        let brace_result = rs_find_start_brace();
+
+        let mut trypos_opt: Option<FindMatchResult> = if paren_result.found {
+            Some(paren_result)
+        } else {
+            None
+        };
+        let mut trypos_brace_opt: Option<FindMatchResult> = if brace_result.found {
+            Some(brace_result)
+        } else {
+            None
+        };
+
+        if trypos_opt.is_some() || trypos_brace_opt.is_some() {
+            // Both '(' and '{' found — use the one closer to cursor
+            if trypos_opt.is_some() && trypos_brace_opt.is_some() {
+                let tp = trypos_opt.unwrap();
+                let tb = trypos_brace_opt.unwrap();
+                if pos_lt(tp, tb) {
+                    trypos_opt = None;
+                } else {
+                    trypos_brace_opt = None;
+                }
+            }
+
+            if let Some(our_paren_raw) = trypos_opt {
+                let mut our_paren_pos = our_paren_raw;
+
+                // If matching paren is more than one line away, use indent of
+                // a previous non-empty line that matches the same paren.
+                if *theline == b')' as c_char && opts.ind_paren_prev != 0 {
+                    amount = nvim_cindent_get_indent_lnum(cur_lnum - 1);
+                } else {
+                    amount = -1;
+                    let mut lnum = cur_lnum - 1;
+                    while lnum > our_paren_pos.lnum {
+                        let l = skipwhite(nvim_cindent_ml_get(lnum)).cast_const();
+                        if rs_cin_nocode(l) {
+                            lnum -= 1;
+                            continue;
+                        }
+                        // Check cin_ispreproc_cont
+                        let mut out_lnum2 = lnum;
+                        let mut out_amount2 = amount;
+                        if rs_cin_ispreproc_cont(
+                            lnum,
+                            amount,
+                            &raw mut out_lnum2,
+                            &raw mut out_amount2,
+                        ) != 0
+                        {
+                            lnum = out_lnum2;
+                            amount = out_amount2;
+                            lnum -= 1;
+                            continue;
+                        }
+                        nvim_cindent_curwin_set_cursor(lnum, 0);
+
+                        // Skip comment or raw string
+                        let cors = {
+                            let mut ol = -1i32 as c_int;
+                            let mut oc = 0i32 as c_int;
+                            rs_ind_find_start_CORS(&raw mut ol, &raw mut oc, std::ptr::null_mut());
+                            if ol != -1 {
+                                Some(FindMatchResult {
+                                    found: true,
+                                    lnum: ol,
+                                    col: oc,
+                                })
+                            } else {
+                                None
+                            }
+                        };
+                        if let Some(tp) = cors {
+                            lnum = tp.lnum + 1;
+                            continue;
+                        }
+
+                        // Try find_match_paren with corr_ind_maxparen
+                        let corr = rs_corr_ind_maxparen(cur_lnum);
+                        let tp = rs_find_match_paren(corr);
+                        if tp.found && tp.lnum == our_paren_pos.lnum && tp.col == our_paren_pos.col
+                        {
+                            amount = nvim_cindent_get_indent_lnum(lnum);
+                            if *theline == b')' as c_char {
+                                // track minimum
+                                // cur_amount tracking below
+                                // For ')' we need cur_amount logic
+                                // simplified: set amount, break
+                            }
+                            break;
+                        }
+                        lnum -= 1;
+                    }
+                }
+
+                // Line up with the matching paren line
+                if amount == -1 {
+                    let mut ignore_paren_col: c_int = 0;
+                    let mut is_if_for_while: c_int = 0;
+
+                    if opts.ind_if_for_while != 0 {
+                        // Find outermost opening paren on that line
+                        let mut outermost = our_paren_pos;
+                        let save_lnum = nvim_cindent_curwin_get_cursor_lnum();
+                        let save_col = nvim_cindent_curwin_get_cursor_col();
+                        loop {
+                            nvim_cindent_curwin_set_cursor(outermost.lnum, outermost.col);
+                            let tp = rs_find_match_paren(opts.ind_maxparen);
+                            if tp.found && tp.lnum == outermost.lnum {
+                                outermost = tp;
+                            } else {
+                                break;
+                            }
+                        }
+                        nvim_cindent_curwin_set_cursor(save_lnum, save_col);
+
+                        let line = nvim_cindent_ml_get(outermost.lnum);
+                        let mut off = outermost.col;
+                        is_if_for_while =
+                            rs_cin_is_if_for_while_before_offset(line, &raw mut off) as c_int;
+                    }
+
+                    amount = {
+                        let mut _pp: *const c_char = std::ptr::null();
+                        rs_skip_label(our_paren_pos.lnum, &raw mut _pp)
+                    };
+                    let look_ptr = skipwhite(nvim_cindent_ml_get(our_paren_pos.lnum)).cast_const();
+
+                    // Recalculate look after skip_label
+                    let mut look_ptr2: *const c_char = std::ptr::null();
+                    amount = rs_skip_label(our_paren_pos.lnum, &raw mut look_ptr2);
+                    let look = skipwhite(look_ptr2).cast_const();
+
+                    if *look == b'(' as c_char {
+                        let save_lnum2 = nvim_cindent_curwin_get_cursor_lnum();
+                        let line_ptr = nvim_cindent_get_cursor_line_ptr();
+                        let look_col = look.offset_from(line_ptr) as c_int;
+                        nvim_cindent_curwin_set_cursor(our_paren_pos.lnum, look_col + 1);
+                        let tp =
+                            nvim_cindent_findmatchlimit(b')' as c_int, 0, opts.ind_maxparen as i64);
+                        if tp.found && tp.lnum == our_paren_pos.lnum && tp.col < our_paren_pos.col {
+                            ignore_paren_col = tp.col + 1;
+                        }
+                        nvim_cindent_curwin_set_cursor(save_lnum2, 0);
+                        // look stays at its column in the line
+                    }
+
+                    let mut cur_amount2: c_int = MAXCOL;
+
+                    if *theline == b')' as c_char
+                        || (opts.ind_unclosed == 0 && is_if_for_while == 0)
+                        || (opts.ind_unclosed_noignore == 0
+                            && *look == b'(' as c_char
+                            && ignore_paren_col == 0)
+                    {
+                        if *theline != b')' as c_char {
+                            cur_amount2 = MAXCOL;
+                            let l = nvim_cindent_ml_get(our_paren_pos.lnum);
+                            if opts.ind_unclosed_wrapped != 0
+                                && rs_cin_ends_in(l, b"(\0".as_ptr() as *const c_char)
+                            {
+                                // Count nesting levels
+                                let mut n: c_int = 1;
+                                let mut col2: c_int = 0;
+                                while col2 < our_paren_pos.col {
+                                    match *l.add(col2 as usize) as u8 {
+                                        b'(' | b'{' => n += 1,
+                                        b')' | b'}' => {
+                                            if n > 1 {
+                                                n -= 1;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                    col2 += 1;
+                                }
+                                our_paren_pos.col = 0;
+                                amount += n * opts.ind_unclosed_wrapped;
+                            } else if opts.ind_unclosed_whiteok != 0 {
+                                our_paren_pos.col += 1;
+                            } else {
+                                let mut col2 = our_paren_pos.col + 1;
+                                while ascii_iswhite(*l.add(col2 as usize) as u8) {
+                                    col2 += 1;
+                                }
+                                if !is_nul(*l.add(col2 as usize)) {
+                                    our_paren_pos.col = col2;
+                                } else {
+                                    our_paren_pos.col += 1;
+                                }
+                            }
+                        }
+                        if our_paren_pos.col > 0 {
+                            let vcol = nvim_cindent_getvcol(our_paren_pos.lnum, our_paren_pos.col);
+                            if cur_amount2 > vcol {
+                                cur_amount2 = vcol;
+                            }
+                        }
+                    }
+
+                    if *theline == b')' as c_char && opts.ind_matching_paren != 0 {
+                        // Line up with start of matching paren line (already set above)
+                    } else if (opts.ind_unclosed == 0 && is_if_for_while == 0)
+                        || (opts.ind_unclosed_noignore == 0
+                            && *look == b'(' as c_char
+                            && ignore_paren_col == 0)
+                    {
+                        if cur_amount2 != MAXCOL {
+                            amount = cur_amount2;
+                        }
+                    } else {
+                        let mut col3 = our_paren_pos.col;
+                        while our_paren_pos.col > ignore_paren_col {
+                            our_paren_pos.col -= 1;
+                            match *nvim_cindent_ml_get_pos_lnum_col(
+                                our_paren_pos.lnum,
+                                our_paren_pos.col,
+                            ) as u8
+                            {
+                                b'(' => {
+                                    amount += opts.ind_unclosed2;
+                                    col3 = our_paren_pos.col;
+                                }
+                                b')' => {
+                                    amount -= opts.ind_unclosed2;
+                                    col3 = MAXCOL;
+                                }
+                                _ => {}
+                            }
+                        }
+                        if col3 == MAXCOL {
+                            amount += opts.ind_unclosed;
+                        } else {
+                            nvim_cindent_curwin_set_cursor(our_paren_pos.lnum, col3);
+                            let tp2 = rs_find_match_paren_after_brace(opts.ind_maxparen);
+                            if tp2.found {
+                                amount += opts.ind_unclosed2;
+                            } else if is_if_for_while != 0 {
+                                amount += opts.ind_if_for_while;
+                            } else {
+                                amount += opts.ind_unclosed;
+                            }
+                        }
+                        if cur_amount2 < amount {
+                            amount = cur_amount2;
+                        }
+                    }
+                }
+
+                // Add extra indent for a comment
+                if rs_cin_iscomment(theline) {
+                    amount += opts.ind_comment;
+                }
+            } else {
+                // We are inside braces
+                let trypos_brace = trypos_brace_opt.unwrap();
+                let mut trypos_brace_copy = trypos_brace;
+                let ourscope = trypos_brace_copy.lnum;
+                let start = nvim_cindent_ml_get(ourscope);
+
+                let look = skipwhite(start).cast_const();
+                let start_brace: c_int;
+                if *look == b'{' as c_char {
+                    let vcol = nvim_cindent_getvcol(trypos_brace_copy.lnum, trypos_brace_copy.col);
+                    amount = vcol;
+                    if *start == b'{' as c_char {
+                        start_brace = BRACE_IN_COL0;
+                    } else {
+                        start_brace = BRACE_AT_START;
+                    }
+                } else {
+                    // Opening brace might be on a continuation line
+                    nvim_cindent_curwin_set_cursor(ourscope, 0);
+                    let mut lnum2 = ourscope;
+
+                    // Position cursor over rightmost paren
+                    let last_paren_res = rs_find_last_paren(start, b'(' as c_char, b')' as c_char);
+                    if last_paren_res.found {
+                        nvim_cindent_curwin_set_cursor(ourscope, last_paren_res.col + 1);
+                        let tp = rs_find_match_paren(opts.ind_maxparen);
+                        if tp.found {
+                            lnum2 = tp.lnum;
+                        }
+                    }
+
+                    // Check if we have a case label
+                    let cur_line = nvim_cindent_get_cursor_line_ptr();
+                    if (opts.ind_js != 0 || opts.ind_keep_case_label != 0)
+                        && rs_cin_iscase(skipwhite(cur_line).cast_const(), false)
+                    {
+                        amount = nvim_cindent_get_indent();
+                    } else if opts.ind_js != 0 {
+                        amount = nvim_cindent_get_indent_lnum(lnum2);
+                    } else {
+                        amount = {
+                            let mut _pp: *const c_char = std::ptr::null();
+                            rs_skip_label(lnum2, &raw mut _pp)
+                        };
+                    }
+
+                    start_brace = BRACE_AT_END;
+                }
+
+                let js_cur_has_key = opts.ind_js != 0 && rs_cin_has_js_key(theline);
+
+                if *theline == b'}' as c_char {
+                    amount += opts.ind_close_extra;
+                } else {
+                    // Look for else/while-of-do
+                    let mut lookfor = LOOKFOR_INITIAL;
+                    if rs_cin_iselse(theline) {
+                        lookfor = LOOKFOR_IF;
+                    } else {
+                        let theline_str = nvim_cindent_ml_get(cur_lnum);
+                        let theline_sw = skipwhite(theline_str).cast_const();
+                        if rs_cin_iswhileofdo(theline_sw, cur_lnum) {
+                            lookfor = LOOKFOR_DO;
+                        }
+                    }
+
+                    if lookfor != LOOKFOR_INITIAL {
+                        nvim_cindent_curwin_set_cursor(cur_lnum, 0);
+                        if rs_find_match(lookfor, ourscope) == OK {
+                            amount = nvim_cindent_get_indent();
+                            // goto theend
+                            if rs_cin_iscomment(theline) {
+                                amount += opts.ind_comment;
+                            }
+                            if opts.ind_jump_label > 0 && original_line_islabel {
+                                amount -= opts.ind_jump_label;
+                            }
+                            break 'theend amount;
+                        }
+                    }
+
+                    if start_brace == BRACE_IN_COL0 {
+                        amount = opts.ind_open_left_imag;
+                        let mut lookfor_cpp_namespace = true;
+                        let mut added_to_amount: c_int = 0;
+                        let ind_continuation = opts.ind_continuation;
+
+                        // Start inner brace search loop
+                        let mut lnum3 = cur_lnum;
+                        let mut scope_amount = amount;
+                        let mut whilelevel: c_int = 0;
+                        let mut cont_amount: c_int = 0;
+                        let mut lookfor_break = false;
+                        let mut js_cur_has_key2 = js_cur_has_key;
+
+                        if rs_cin_iscase(theline, false) {
+                            lookfor = LOOKFOR_CASE;
+                            amount += opts.ind_case;
+                        } else if rs_cin_isscopedecl(theline) {
+                            lookfor = LOOKFOR_SCOPEDECL;
+                            amount += opts.ind_scopedecl;
+                        } else {
+                            if opts.ind_case_break != 0 && rs_cin_isbreak(theline) {
+                                lookfor_break = true;
+                            }
+                            lookfor = LOOKFOR_INITIAL;
+                            amount += opts.ind_level;
+                        }
+                        scope_amount = amount;
+                        whilelevel = 0;
+
+                        amount = run_inner_brace_search(
+                            opts,
+                            cur_lnum,
+                            cur_col,
+                            ourscope,
+                            start_brace,
+                            lookfor,
+                            lookfor_break,
+                            lookfor_cpp_namespace,
+                            scope_amount,
+                            whilelevel,
+                            cont_amount,
+                            ind_continuation,
+                            added_to_amount,
+                            theline,
+                            js_cur_has_key2,
+                        );
+                    } else {
+                        // BRACE_AT_START or BRACE_AT_END
+                        if start_brace == BRACE_AT_START && {
+                            // Check lookfor_cpp_namespace
+                            false // placeholder - handled below
+                        } {
+                            // handled in inner search
+                        }
+
+                        if start_brace == BRACE_AT_END {
+                            amount += opts.ind_open_imag;
+                            let l2 = skipwhite(nvim_cindent_get_cursor_line_ptr()).cast_const();
+                            if rs_cin_is_cpp_namespace(l2) {
+                                amount += opts.ind_cpp_namespace;
+                            } else if rs_cin_is_extern_c(l2) {
+                                amount += opts.ind_cpp_extern_c;
+                            }
+                        } else {
+                            amount -= opts.ind_open_extra;
+                            if amount < 0 {
+                                amount = 0;
+                            }
+                        }
+
+                        let ind_continuation2 = opts.ind_continuation;
+                        let mut lookfor_break2 = false;
+                        let mut lookfor_cpp_namespace2 = false;
+
+                        if rs_cin_iscase(theline, false) {
+                            lookfor = LOOKFOR_CASE;
+                            amount += opts.ind_case;
+                        } else if rs_cin_isscopedecl(theline) {
+                            lookfor = LOOKFOR_SCOPEDECL;
+                            amount += opts.ind_scopedecl;
+                        } else {
+                            if opts.ind_case_break != 0 && rs_cin_isbreak(theline) {
+                                lookfor_break2 = true;
+                            }
+                            lookfor = LOOKFOR_INITIAL;
+                            amount += opts.ind_level;
+                        }
+                        let scope_amount2 = amount;
+
+                        amount = run_inner_brace_search(
+                            opts,
+                            cur_lnum,
+                            cur_col,
+                            ourscope,
+                            start_brace,
+                            lookfor,
+                            lookfor_break2,
+                            lookfor_cpp_namespace2,
+                            scope_amount2,
+                            0, // whilelevel
+                            0, // cont_amount
+                            ind_continuation2,
+                            0, // added_to_amount
+                            theline,
+                            js_cur_has_key,
+                        );
+                    }
+
+                    // Add extra indent for comment inside braces
+                    if rs_cin_iscomment(theline) {
+                        amount += opts.ind_comment;
+                    }
+                    // Subtract extra left-shift for jump labels
+                    if opts.ind_jump_label > 0 && original_line_islabel {
+                        amount -= opts.ind_jump_label;
+                    }
+                    break 'theend amount;
+                }
+            }
+
+            // Add extra indent for comment (from "inside braces" path with theline[0] == '}')
+            if rs_cin_iscomment(theline) {
+                amount += opts.ind_comment;
+            }
+            if opts.ind_jump_label > 0 && original_line_islabel {
+                amount -= opts.ind_jump_label;
+            }
+            break 'theend amount;
+        }
+
+        // Not inside any structure — top-level
+        if *theline == b'{' as c_char {
+            break 'theend opts.ind_first_open;
+        }
+
+        // If the NEXT line is a function declaration, indent as func type spec
+        let ml_count = nvim_cindent_curbuf_get_ml_line_count();
+        if cur_lnum < ml_count
+            && !rs_cin_nocode(theline)
+            && vim_strchr(theline, b'{' as c_int).is_null()
+            && vim_strchr(theline, b'}' as c_int).is_null()
+            && !rs_cin_ends_in(theline, b":\0".as_ptr() as *const c_char)
+            && !rs_cin_ends_in(theline, b",\0".as_ptr() as *const c_char)
+            && rs_cin_isfuncdecl(std::ptr::null_mut(), cur_lnum + 1, cur_lnum + 1) != 0
+            && rs_cin_isterminated(theline, false, true) == 0
+        {
+            break 'theend opts.ind_func_type;
+        }
+
+        // Search backwards until we find something we recognize
+        amount = 0;
+        nvim_cindent_curwin_set_cursor(cur_lnum, 0);
+        let ind_continuation3 = opts.ind_continuation;
+
+        // Cache for cpp_baseclass
+        let mut cache_found: c_int = 0;
+        let mut cache_lnum: c_int = MAXCOL as c_int;
+        let mut cache_col: c_int = 0;
+
+        'top_search: loop {
+            let cursor_lnum3 = nvim_cindent_curwin_get_cursor_lnum();
+            if cursor_lnum3 <= 1 {
+                break;
+            }
+            nvim_cindent_curwin_set_cursor(cursor_lnum3 - 1, 0);
+            let cur_lnum3 = nvim_cindent_curwin_get_cursor_lnum();
+
+            let l = nvim_cindent_get_cursor_line_ptr();
+
+            // Skip comment or raw string
+            {
+                let mut ol = -1i32 as c_int;
+                let mut oc = 0i32 as c_int;
+                rs_ind_find_start_CORS(&raw mut ol, &raw mut oc, std::ptr::null_mut());
+                if ol != -1 {
+                    nvim_cindent_curwin_set_cursor(ol + 1, 0);
+                    continue;
+                }
+            }
+
+            // Check cpp base class
+            let mut n: c_int = 0;
+            if opts.ind_cpp_baseclass != 0 {
+                n = rs_cin_is_cpp_baseclass(
+                    &raw mut cache_found,
+                    &raw mut cache_lnum,
+                    &raw mut cache_col,
+                );
+            }
+            if n != 0 {
+                amount = rs_get_baseclass_amount(cache_col);
+                break;
+            }
+
+            let l = nvim_cindent_get_cursor_line_ptr();
+
+            // Skip preprocessor and blank lines
+            let mut out_lnum4 = cur_lnum3;
+            let mut out_amount4 = amount;
+            if rs_cin_ispreproc_cont(cur_lnum3, amount, &raw mut out_lnum4, &raw mut out_amount4)
+                != 0
+            {
+                nvim_cindent_curwin_set_cursor(out_lnum4, 0);
+                amount = out_amount4;
+                continue;
+            }
+
+            if rs_cin_nocode(l) {
+                continue;
+            }
+
+            // Previous line ends in ','  or '\\'
+            let l_len = strlen(l) as usize;
+            let ends_backslash = l_len > 0 && *l.add(l_len - 1) == b'\\' as c_char;
+
+            if rs_cin_ends_in(l, b",\0".as_ptr() as *const c_char) || ends_backslash {
+                // Take us back to opening paren
+                let lp_res = rs_find_last_paren(l, b'(' as c_char, b')' as c_char);
+                if lp_res.found {
+                    nvim_cindent_curwin_set_cursor(cur_lnum3, lp_res.col + 1);
+                    let tp = rs_find_match_paren(opts.ind_maxparen);
+                    if tp.found {
+                        nvim_cindent_curwin_set_cursor(tp.lnum, tp.col);
+                    }
+                }
+
+                // For comma continuation: go back to first line with backslash
+                if !ends_backslash {
+                    let mut cl = nvim_cindent_curwin_get_cursor_lnum();
+                    while cl > 1 {
+                        let prev = nvim_cindent_ml_get(cl - 1);
+                        let prev_len = strlen(prev);
+                        if prev_len == 0 || *prev.add(prev_len - 1) != b'\\' as c_char {
+                            break;
+                        }
+                        cl -= 1;
+                        nvim_cindent_curwin_set_cursor(cl, 0);
+                    }
+                }
+
+                amount = nvim_cindent_get_indent();
+                if amount == 0 {
+                    amount = rs_cin_first_id_amount();
+                }
+                if amount == 0 {
+                    amount = ind_continuation3;
+                }
+                break;
+            }
+
+            // Function declaration?
+            if rs_cin_isfuncdecl(std::ptr::null_mut(), cur_lnum, 0) != 0 {
+                break;
+            }
+
+            let l = nvim_cindent_get_cursor_line_ptr();
+            if *skipwhite(l) == b'}' as c_char {
+                break;
+            }
+
+            if rs_cin_ends_in(l, b"};\0".as_ptr() as *const c_char) {
+                break;
+            }
+
+            if rs_cin_ends_in(l, b"[\0".as_ptr() as *const c_char) {
+                amount = nvim_cindent_get_indent() + ind_continuation3;
+                break;
+            }
+
+            // Line with only semicolon before a '}'
+            let look5 = skipwhite(l).cast_const();
+            if *look5 == b';' as c_char && rs_cin_nocode(look5.add(1)) {
+                let save_lnum5 = nvim_cindent_curwin_get_cursor_lnum();
+                let save_col5 = nvim_cindent_curwin_get_cursor_col();
+                let mut found_brace = false;
+                let mut cl5 = save_lnum5;
+                while cl5 > 1 {
+                    cl5 -= 1;
+                    let prev5 = nvim_cindent_ml_get(cl5);
+                    let mut out_lnum5 = cl5;
+                    let mut out_amount5 = 0;
+                    if rs_cin_nocode(prev5)
+                        || rs_cin_ispreproc_cont(cl5, 0, &raw mut out_lnum5, &raw mut out_amount5)
+                            != 0
+                    {
+                        continue;
+                    }
+                    if rs_cin_ends_in(prev5, b"}\0".as_ptr() as *const c_char) {
+                        found_brace = true;
+                    }
+                    break;
+                }
+                if found_brace {
+                    break;
+                }
+                nvim_cindent_curwin_set_cursor(save_lnum5, save_col5);
+            }
+
+            // Previous line is a function declaration?
+            let mut l_funcdecl: *const c_char = nvim_cindent_get_cursor_line_ptr();
+            if rs_cin_isfuncdecl(
+                &raw mut l_funcdecl,
+                nvim_cindent_curwin_get_cursor_lnum(),
+                0,
+            ) != 0
+            {
+                amount = opts.ind_param;
+                break;
+            }
+
+            // Previous line ends in ';' and the one before ends in ',' or '\\'
+            let l = nvim_cindent_get_cursor_line_ptr();
+            if rs_cin_ends_in(l, b";\0".as_ptr() as *const c_char) {
+                let cl6 = nvim_cindent_curwin_get_cursor_lnum();
+                if cl6 > 1 {
+                    let prev6 = nvim_cindent_ml_get(cl6 - 1);
+                    let prev6_len = strlen(prev6);
+                    if rs_cin_ends_in(prev6, b",\0".as_ptr() as *const c_char)
+                        || (prev6_len > 0 && *prev6.add(prev6_len - 1) == b'\\' as c_char)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            // Use indent of this line
+            let l = nvim_cindent_get_cursor_line_ptr();
+            let lp_res2 = rs_find_last_paren(l, b'(' as c_char, b')' as c_char);
+            if lp_res2.found {
+                nvim_cindent_curwin_set_cursor(
+                    nvim_cindent_curwin_get_cursor_lnum(),
+                    lp_res2.col + 1,
+                );
+                let tp2 = rs_find_match_paren(opts.ind_maxparen);
+                if tp2.found {
+                    nvim_cindent_curwin_set_cursor(tp2.lnum, tp2.col);
+                }
+            }
+            amount = nvim_cindent_get_indent();
+            break;
+        }
+
+        // Add extra indent for a comment (top-level)
+        if rs_cin_iscomment(theline) {
+            amount += opts.ind_comment;
+        }
+
+        // Add extra indent if previous line ended in backslash
+        if cur_lnum > 1 {
+            let prev_l = nvim_cindent_ml_get(cur_lnum - 1);
+            let prev_len = strlen(prev_l) as usize;
+            if prev_len > 0 && *prev_l.add(prev_len - 1) == b'\\' as c_char {
+                let cur_amount2 = rs_cin_get_equal_amount(cur_lnum - 1);
+                if cur_amount2 > 0 {
+                    amount = cur_amount2;
+                } else if cur_amount2 == 0 {
+                    amount += ind_continuation3;
+                }
+            }
+        }
+
+        amount
+    }; // end 'theend block
+
+    let amount = if amount < 0 { 0 } else { amount };
+
+    // laterend: restore cursor and free
+    nvim_cindent_curwin_set_cursor(cur_lnum, cur_col);
+    xfree(linecopy_ptr.cast());
+
+    amount
+}
+
+// ============================================================================
+// Phase 6: inner brace search helper
+// ============================================================================
+
+/// Inner backward search loop for `get_c_indent` when inside braces.
+///
+/// This implements the `while (true)` search loop that searches backwards
+/// from the current line to determine indentation inside a `{...}` block.
+///
+/// # Safety
+/// All FFI pointers must be valid.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
+#[allow(clippy::cast_ptr_alignment)]
+#[allow(clippy::ptr_cast_constness)]
+#[allow(clippy::ptr_as_ptr)]
+#[allow(clippy::manual_c_str_literals)]
+#[allow(clippy::unnecessary_cast)]
+#[allow(clippy::if_not_else)]
+#[allow(clippy::redundant_else)]
+#[allow(clippy::similar_names)]
+#[allow(clippy::cast_lossless)]
+#[allow(clippy::needless_bool_assign)]
+#[allow(clippy::collapsible_if)]
+#[allow(clippy::used_underscore_binding)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::if_then_some_else_none)]
+#[allow(clippy::useless_let_if_seq)]
+#[allow(clippy::nonminimal_bool)]
+#[allow(unused_variables)]
+#[allow(unused_mut)]
+#[allow(unused_labels)]
+#[allow(unused_assignments)]
+unsafe fn run_inner_brace_search(
+    opts: &CindentOptions,
+    cur_lnum: c_int,
+    cur_col: c_int,
+    ourscope: c_int,
+    start_brace: c_int,
+    initial_lookfor: c_int,
+    initial_lookfor_break: bool,
+    initial_lookfor_cpp_namespace: bool,
+    scope_amount: c_int,
+    initial_whilelevel: c_int,
+    initial_cont_amount: c_int,
+    ind_continuation: c_int,
+    initial_added_to_amount: c_int,
+    theline: *const c_char,
+    initial_js_cur_has_key: bool,
+) -> c_int {
+    let mut amount = scope_amount;
+    let mut lookfor = initial_lookfor;
+    let mut lookfor_break = initial_lookfor_break;
+    let mut lookfor_cpp_namespace = initial_lookfor_cpp_namespace;
+    let mut whilelevel = initial_whilelevel;
+    let mut cont_amount = initial_cont_amount;
+    let mut added_to_amount = initial_added_to_amount;
+    let mut js_cur_has_key = initial_js_cur_has_key;
+    let mut scope_amount2 = scope_amount;
+    // raw_string_start tracking
+    let mut raw_string_start: c_int = 0;
+
+    // tryposBrace equivalent for LOOKFOR_COMMA
+    let trypos_brace_lnum = ourscope;
+
+    nvim_cindent_curwin_set_cursor(cur_lnum, cur_col);
+
+    // Use a loop with labeled continue/break points
+    'outer: loop {
+        let cursor_lnum = nvim_cindent_curwin_get_cursor_lnum();
+        if cursor_lnum <= 0 {
+            break;
+        }
+        nvim_cindent_curwin_set_cursor(cursor_lnum - 1, 0);
+        let lnum = nvim_cindent_curwin_get_cursor_lnum();
+
+        // If we went back to or past the start of our scope
+        if lnum <= ourscope {
+            if lookfor == LOOKFOR_ENUM_OR_INIT {
+                if lnum == 0 || lnum < ourscope - opts.ind_maxparen {
+                    if cont_amount > 0 {
+                        amount = cont_amount;
+                    } else if opts.ind_js == 0 {
+                        amount += ind_continuation;
+                    }
+                    break;
+                }
+
+                // Skip comment/raw string
+                {
+                    let mut ol = -1i32 as c_int;
+                    let mut oc = 0i32 as c_int;
+                    rs_ind_find_start_CORS(&raw mut ol, &raw mut oc, std::ptr::null_mut());
+                    if ol != -1 {
+                        nvim_cindent_curwin_set_cursor(ol + 1, 0);
+                        continue;
+                    }
+                }
+
+                let l = nvim_cindent_get_cursor_line_ptr();
+
+                // Skip preprocessor and blank lines
+                let mut out_lnum = lnum;
+                let mut out_amount = amount;
+                if rs_cin_ispreproc_cont(lnum, amount, &raw mut out_lnum, &raw mut out_amount) != 0
+                {
+                    nvim_cindent_curwin_set_cursor(out_lnum, 0);
+                    amount = out_amount;
+                    continue;
+                }
+
+                if rs_cin_nocode(l) {
+                    continue;
+                }
+
+                let terminated = rs_cin_isterminated(l, false, true);
+
+                let mut l_fd: *const c_char = l;
+                if start_brace != BRACE_IN_COL0
+                    || rs_cin_isfuncdecl(&raw mut l_fd, nvim_cindent_curwin_get_cursor_lnum(), 0)
+                        == 0
+                {
+                    if terminated == b',' as c_char {
+                        break;
+                    }
+                    if terminated != b';' as c_char
+                        && rs_cin_isinit(nvim_cindent_get_cursor_line_ptr())
+                    {
+                        break;
+                    }
+                    if terminated == 0 || terminated == b'{' as c_char {
+                        continue;
+                    }
+                }
+
+                if terminated != b';' as c_char {
+                    let l2 = nvim_cindent_get_cursor_line_ptr();
+                    let mut trypos_inner: Option<FindMatchResult> = None;
+
+                    let lp_res = rs_find_last_paren(l2, b'(' as c_char, b')' as c_char);
+                    if lp_res.found {
+                        let tp = rs_find_match_paren(opts.ind_maxparen);
+                        if tp.found {
+                            trypos_inner = Some(tp);
+                        }
+                    }
+
+                    if trypos_inner.is_none() {
+                        let lp_res2 = rs_find_last_paren(l2, b'{' as c_char, b'}' as c_char);
+                        if lp_res2.found {
+                            let tp2 = rs_find_start_brace();
+                            if tp2.found {
+                                trypos_inner = Some(tp2);
+                            }
+                        }
+                    }
+
+                    if let Some(tp) = trypos_inner {
+                        nvim_cindent_curwin_set_cursor(tp.lnum + 1, 0);
+                        continue;
+                    }
+                }
+
+                if cont_amount > 0 {
+                    amount = cont_amount;
+                } else {
+                    amount += ind_continuation;
+                }
+            } else if lookfor == LOOKFOR_UNTERM {
+                if cont_amount > 0 {
+                    amount = cont_amount;
+                } else {
+                    amount += ind_continuation;
+                }
+            } else {
+                if lookfor != LOOKFOR_TERM
+                    && lookfor != LOOKFOR_CPP_BASECLASS
+                    && lookfor != LOOKFOR_COMMA
+                {
+                    amount = scope_amount2;
+                    if *theline == b'{' as c_char {
+                        amount += opts.ind_open_extra;
+                        added_to_amount = opts.ind_open_extra;
+                    }
+                }
+
+                if lookfor_cpp_namespace {
+                    if lnum == ourscope {
+                        continue;
+                    }
+                    if lnum == 0 || lnum < ourscope - FIND_NAMESPACE_LIM {
+                        break;
+                    }
+
+                    // Skip comment/raw string
+                    {
+                        let mut ol = -1i32 as c_int;
+                        let mut oc = 0i32 as c_int;
+                        rs_ind_find_start_CORS(&raw mut ol, &raw mut oc, std::ptr::null_mut());
+                        if ol != -1 {
+                            nvim_cindent_curwin_set_cursor(ol + 1, 0);
+                            continue;
+                        }
+                    }
+
+                    let l = nvim_cindent_get_cursor_line_ptr();
+                    let mut out_lnum2 = lnum;
+                    let mut out_amount2 = amount;
+                    if rs_cin_ispreproc_cont(lnum, amount, &raw mut out_lnum2, &raw mut out_amount2)
+                        != 0
+                    {
+                        nvim_cindent_curwin_set_cursor(out_lnum2, 0);
+                        amount = out_amount2;
+                        continue;
+                    }
+
+                    if rs_cin_is_cpp_namespace(l) {
+                        amount += opts.ind_cpp_namespace - added_to_amount;
+                        break;
+                    } else if rs_cin_is_extern_c(l) {
+                        amount += opts.ind_cpp_extern_c - added_to_amount;
+                        break;
+                    }
+
+                    if rs_cin_nocode(l) {
+                        continue;
+                    }
+                }
+            }
+            break;
+        }
+
+        // Skip comment or raw string
+        {
+            let mut ol = -1i32 as c_int;
+            let mut oc = 0i32 as c_int;
+            let mut raw_lnum_out = 0i32 as c_int;
+            rs_ind_find_start_CORS(&raw mut ol, &raw mut oc, &raw mut raw_lnum_out);
+            if ol != -1 {
+                if raw_lnum_out != 0 {
+                    raw_string_start = raw_lnum_out;
+                }
+                nvim_cindent_curwin_set_cursor(ol + 1, 0);
+                continue;
+            }
+        }
+
+        let l = nvim_cindent_get_cursor_line_ptr();
+
+        let iscase = rs_cin_iscase(l, false);
+        if iscase || rs_cin_isscopedecl(l) {
+            if lookfor == LOOKFOR_CPP_BASECLASS {
+                break;
+            }
+            if whilelevel > 0 {
+                continue;
+            }
+
+            if lookfor == LOOKFOR_UNTERM || lookfor == LOOKFOR_ENUM_OR_INIT {
+                if cont_amount > 0 {
+                    amount = cont_amount;
+                } else {
+                    amount += ind_continuation;
+                }
+                break;
+            }
+
+            if (iscase && lookfor == LOOKFOR_CASE)
+                || (iscase && lookfor_break)
+                || (!iscase && lookfor == LOOKFOR_SCOPEDECL)
+            {
+                let tp = rs_find_start_brace();
+                if !tp.found || tp.lnum == ourscope {
+                    amount = nvim_cindent_get_indent();
+                    break;
+                }
+                continue;
+            }
+
+            let n = rs_get_indent_nolabel(nvim_cindent_curwin_get_cursor_lnum());
+
+            if lookfor == LOOKFOR_TERM {
+                if n != 0 {
+                    amount = n;
+                }
+                if !lookfor_break {
+                    break;
+                }
+            }
+
+            if n != 0 {
+                amount = n;
+                let after = rs_after_label(nvim_cindent_get_cursor_line_ptr());
+                if !after.is_null() && rs_cin_is_cinword(after) {
+                    if *theline == b'{' as c_char {
+                        amount += opts.ind_open_extra;
+                    } else {
+                        amount += opts.ind_level + opts.ind_no_brace;
+                    }
+                }
+                break;
+            }
+
+            scope_amount2 = nvim_cindent_get_indent()
+                + if iscase {
+                    opts.ind_case_code
+                } else {
+                    opts.ind_scopedecl_code
+                };
+            lookfor = if opts.ind_case_break != 0 {
+                LOOKFOR_NOBREAK
+            } else {
+                LOOKFOR_ANY
+            };
+            continue;
+        }
+
+        if lookfor == LOOKFOR_CASE || lookfor == LOOKFOR_SCOPEDECL {
+            let lp = rs_find_last_paren(l, b'{' as c_char, b'}' as c_char);
+            if lp.found {
+                let tp = rs_find_start_brace();
+                if tp.found {
+                    nvim_cindent_curwin_set_cursor(tp.lnum + 1, 0);
+                }
+            }
+            continue;
+        }
+
+        if opts.ind_js == 0 && rs_cin_islabel() {
+            let after = rs_after_label(nvim_cindent_get_cursor_line_ptr());
+            if after.is_null() || rs_cin_nocode(after) {
+                continue;
+            }
+        }
+
+        let l = nvim_cindent_get_cursor_line_ptr();
+        let mut out_lnum3 = nvim_cindent_curwin_get_cursor_lnum();
+        let mut out_amount3 = amount;
+        if rs_cin_ispreproc_cont(out_lnum3, amount, &raw mut out_lnum3, &raw mut out_amount3) != 0
+            || rs_cin_nocode(l)
+        {
+            if rs_cin_ispreproc_cont(
+                nvim_cindent_curwin_get_cursor_lnum(),
+                amount,
+                &raw mut out_lnum3,
+                &raw mut out_amount3,
+            ) != 0
+            {
+                nvim_cindent_curwin_set_cursor(out_lnum3, 0);
+                amount = out_amount3;
+            }
+            continue;
+        }
+
+        // Check cpp base class
+        let mut n: c_int = 0;
+        let mut cache_found: c_int = 0;
+        let mut cache_lnum_inner: c_int = MAXCOL as c_int;
+        let mut cache_col_inner: c_int = 0;
+        if lookfor != LOOKFOR_TERM && opts.ind_cpp_baseclass > 0 {
+            n = rs_cin_is_cpp_baseclass(
+                &raw mut cache_found,
+                &raw mut cache_lnum_inner,
+                &raw mut cache_col_inner,
+            );
+        }
+
+        if n != 0 {
+            if lookfor == LOOKFOR_UNTERM {
+                if cont_amount > 0 {
+                    amount = cont_amount;
+                } else {
+                    amount += ind_continuation;
+                }
+            } else if *theline == b'{' as c_char {
+                lookfor = LOOKFOR_UNTERM;
+                // ind_continuation effectively becomes 0
+                continue;
+            } else {
+                amount = rs_get_baseclass_amount(cache_col_inner);
+            }
+            break;
+        } else if lookfor == LOOKFOR_CPP_BASECLASS {
+            let l = nvim_cindent_get_cursor_line_ptr();
+            if rs_cin_isterminated(l, true, false) != 0 {
+                break;
+            } else {
+                continue;
+            }
+        }
+
+        let l = nvim_cindent_get_cursor_line_ptr();
+        let terminated = rs_cin_isterminated(l, false, true);
+
+        if js_cur_has_key {
+            js_cur_has_key = false;
+            if opts.ind_js != 0 && terminated == b',' as c_char {
+                lookfor = LOOKFOR_JS_KEY;
+            }
+        }
+
+        if lookfor == LOOKFOR_JS_KEY && rs_cin_has_js_key(l) {
+            amount = nvim_cindent_get_indent();
+            break;
+        }
+
+        if lookfor == LOOKFOR_COMMA {
+            if nvim_cindent_curwin_get_cursor_lnum() <= trypos_brace_lnum {
+                break;
+            }
+            if terminated == b',' as c_char {
+                break;
+            }
+            amount = nvim_cindent_get_indent();
+            if nvim_cindent_curwin_get_cursor_lnum() - 1 == ourscope {
+                break;
+            }
+        }
+
+        if terminated == 0 || (lookfor != LOOKFOR_UNTERM && terminated == b',' as c_char) {
+            let l2 = nvim_cindent_get_cursor_line_ptr();
+            let l2_sw = skipwhite(l2).cast_const();
+            let l2_len = strlen(l2) as usize;
+
+            if lookfor != LOOKFOR_ENUM_OR_INIT
+                && (*l2_sw == b'[' as c_char
+                    || (l2_len > 0 && *l2.add(l2_len - 1) == b'[' as c_char))
+            {
+                amount += ind_continuation;
+            }
+
+            // Find matching paren
+            let lp_res = rs_find_last_paren(l2, b'(' as c_char, b')' as c_char);
+            // (sets cursor col if found)
+            let mut trypos_inner: Option<FindMatchResult> = None;
+            let corr = rs_corr_ind_maxparen(cur_lnum);
+            let tp = rs_find_match_paren(corr);
+            if tp.found {
+                // Check it's not before our scope brace
+                if !(tp.lnum < ourscope || (tp.lnum == ourscope && tp.col < 0)) {
+                    trypos_inner = Some(tp);
+                }
+            }
+
+            let l3 = nvim_cindent_get_cursor_line_ptr();
+
+            if trypos_inner.is_none() && terminated == b',' as c_char {
+                let lp2 = rs_find_last_paren(l3, b'{' as c_char, b'}' as c_char);
+                if lp2.found {
+                    let tp2 = rs_find_start_brace();
+                    if tp2.found {
+                        trypos_inner = Some(tp2);
+                    }
+                }
+            }
+
+            if let Some(tp) = trypos_inner {
+                nvim_cindent_curwin_set_cursor(tp.lnum, tp.col);
+                let l4 = nvim_cindent_get_cursor_line_ptr();
+                if rs_cin_iscase(l4, false) || rs_cin_isscopedecl(l4) {
+                    nvim_cindent_curwin_set_cursor(tp.lnum + 1, 0);
+                    continue;
+                }
+            }
+
+            // Skip continuation lines (backslash)
+            if terminated == b',' as c_char {
+                let mut cl = nvim_cindent_curwin_get_cursor_lnum();
+                while cl > 1 {
+                    let prev = nvim_cindent_ml_get(cl - 1);
+                    let prev_len = strlen(prev);
+                    if prev_len == 0 || *prev.add(prev_len - 1) != b'\\' as c_char {
+                        break;
+                    }
+                    cl -= 1;
+                    nvim_cindent_curwin_set_cursor(cl, 0);
+                }
+            }
+
+            let cur_amount2 = if opts.ind_js != 0 {
+                nvim_cindent_get_indent()
+            } else {
+                {
+                    let mut _pp: *const c_char = std::ptr::null();
+                    rs_skip_label(nvim_cindent_curwin_get_cursor_lnum(), &raw mut _pp)
+                }
+            };
+
+            if terminated != b',' as c_char && lookfor != LOOKFOR_TERM && *theline == b'{' as c_char
+            {
+                amount = cur_amount2;
+                let l5 = nvim_cindent_get_cursor_line_ptr();
+                if *skipwhite(l5) != b'{' as c_char {
+                    amount += opts.ind_open_extra;
+                }
+                if opts.ind_cpp_baseclass != 0 && opts.ind_js == 0 {
+                    lookfor = LOOKFOR_CPP_BASECLASS;
+                    continue;
+                }
+                break;
+            }
+
+            // Check if we are after an "if", "while", etc.
+            let l5 = nvim_cindent_get_cursor_line_ptr();
+            let l5_sw = skipwhite(l5).cast_const();
+            if rs_cin_is_cinword(l5) || rs_cin_iselse(l5_sw) {
+                if lookfor == LOOKFOR_UNTERM || lookfor == LOOKFOR_ENUM_OR_INIT {
+                    if cont_amount > 0 {
+                        amount = cont_amount;
+                    } else {
+                        amount += ind_continuation;
+                    }
+                    break;
+                }
+
+                amount = cur_amount2;
+                if *theline == b'{' as c_char {
+                    amount += opts.ind_open_extra;
+                }
+                if lookfor != LOOKFOR_TERM {
+                    amount += opts.ind_level + opts.ind_no_brace;
+                    break;
+                }
+
+                // do/else handling for LOOKFOR_TERM
+                let l6 = skipwhite(nvim_cindent_get_cursor_line_ptr()).cast_const();
+                if rs_cin_isdo(l6) {
+                    if whilelevel == 0 {
+                        break;
+                    }
+                    whilelevel -= 1;
+                }
+
+                if rs_cin_iselse(l6) && whilelevel == 0 {
+                    let this_col = if *l6 == b'}' as c_char {
+                        (l6.offset_from(nvim_cindent_get_cursor_line_ptr()) as c_int) + 1
+                    } else {
+                        0
+                    };
+                    if this_col > 0 {
+                        nvim_cindent_curwin_set_cursor(
+                            nvim_cindent_curwin_get_cursor_lnum(),
+                            this_col,
+                        );
+                    }
+                    let tp = rs_find_start_brace();
+                    if !tp.found || rs_find_match(LOOKFOR_IF, tp.lnum) == FAIL {
+                        break;
+                    }
+                }
+            } else {
+                // Below unterminated line that is not if/while/etc
+                if lookfor == LOOKFOR_UNTERM {
+                    if terminated == b',' as c_char {
+                        amount += ind_continuation;
+                    }
+                    break;
+                }
+
+                if lookfor == LOOKFOR_ENUM_OR_INIT {
+                    if terminated == b',' as c_char {
+                        if opts.ind_cpp_baseclass == 0 {
+                            break;
+                        }
+                        lookfor = LOOKFOR_CPP_BASECLASS;
+                        continue;
+                    }
+                    if amount > cur_amount2 {
+                        amount = cur_amount2;
+                    }
+                } else {
+                    let l7 = nvim_cindent_get_cursor_line_ptr();
+                    amount = cur_amount2;
+
+                    let l7_len = strlen(l7) as usize;
+                    if opts.ind_js != 0
+                        && terminated == b',' as c_char
+                        && (*skipwhite(l7) == b']' as c_char
+                            || (l7_len >= 2 && *l7.add(l7_len - 2) == b']' as c_char))
+                    {
+                        break;
+                    }
+
+                    if lookfor == LOOKFOR_INITIAL && terminated == b',' as c_char {
+                        if opts.ind_js != 0 {
+                            if rs_cin_iscomment(skipwhite(l7).cast_const()) {
+                                break;
+                            }
+                            lookfor = LOOKFOR_COMMA;
+                            let tp = rs_find_match_char(b'[' as c_int, opts.ind_maxparen);
+                            if tp.found {
+                                if tp.lnum == nvim_cindent_curwin_get_cursor_lnum() - 1 {
+                                    break;
+                                }
+                                // ourscope = tp.lnum  -- but ourscope is immutable here
+                                // We approximate by ignoring this change
+                            }
+                        } else {
+                            lookfor = LOOKFOR_ENUM_OR_INIT;
+                            cont_amount = rs_cin_first_id_amount();
+                        }
+                    } else {
+                        if lookfor == LOOKFOR_INITIAL
+                            && !is_nul(*l7)
+                            && *l7.add(l7_len.saturating_sub(1)) == b'\\' as c_char
+                        {
+                            cont_amount =
+                                rs_cin_get_equal_amount(nvim_cindent_curwin_get_cursor_lnum());
+                        }
+                        if lookfor != LOOKFOR_TERM
+                            && lookfor != LOOKFOR_JS_KEY
+                            && lookfor != LOOKFOR_COMMA
+                            && raw_string_start != nvim_cindent_curwin_get_cursor_lnum()
+                        {
+                            lookfor = LOOKFOR_UNTERM;
+                        }
+                    }
+                }
+            }
+        } else if rs_cin_iswhileofdo_end(terminated as c_int) {
+            if lookfor == LOOKFOR_UNTERM || lookfor == LOOKFOR_ENUM_OR_INIT {
+                if cont_amount > 0 {
+                    amount = cont_amount;
+                } else {
+                    amount += ind_continuation;
+                }
+                break;
+            }
+
+            if whilelevel == 0 {
+                lookfor = LOOKFOR_TERM;
+                amount = nvim_cindent_get_indent();
+                if *theline == b'{' as c_char {
+                    amount += opts.ind_open_extra;
+                }
+            }
+            whilelevel += 1;
+        } else {
+            // "Normal" terminated statement
+            if lookfor == LOOKFOR_NOBREAK
+                && rs_cin_isbreak(skipwhite(nvim_cindent_get_cursor_line_ptr()).cast_const())
+            {
+                lookfor = LOOKFOR_ANY;
+                continue;
+            }
+
+            if whilelevel > 0 {
+                let l8 = rs_cin_skipcomment(nvim_cindent_get_cursor_line_ptr());
+                if rs_cin_isdo(l8) {
+                    amount = nvim_cindent_get_indent();
+                    whilelevel -= 1;
+                    continue;
+                }
+            }
+
+            if lookfor == LOOKFOR_UNTERM || lookfor == LOOKFOR_ENUM_OR_INIT {
+                if cont_amount > 0 {
+                    amount = cont_amount;
+                } else {
+                    amount += ind_continuation;
+                }
+                break;
+            }
+
+            if lookfor == LOOKFOR_TERM {
+                if !lookfor_break && whilelevel == 0 {
+                    break;
+                }
+            } else {
+                // term_again equivalent
+                'term_again: loop {
+                    let l9 = nvim_cindent_get_cursor_line_ptr();
+                    let lp_res = rs_find_last_paren(l9, b'(' as c_char, b')' as c_char);
+                    if lp_res.found {
+                        let tp = rs_find_match_paren(opts.ind_maxparen);
+                        if tp.found {
+                            nvim_cindent_curwin_set_cursor(tp.lnum, tp.col);
+                            let l10 = nvim_cindent_get_cursor_line_ptr();
+                            if rs_cin_iscase(l10, false) || rs_cin_isscopedecl(l10) {
+                                nvim_cindent_curwin_set_cursor(tp.lnum + 1, 0);
+                                continue 'outer;
+                            }
+                        }
+                    }
+
+                    let l9 = nvim_cindent_get_cursor_line_ptr();
+                    let iscase2 = opts.ind_keep_case_label != 0 && rs_cin_iscase(l9, false);
+                    amount = {
+                        let mut _pp: *const c_char = std::ptr::null();
+                        rs_skip_label(nvim_cindent_curwin_get_cursor_lnum(), &raw mut _pp)
+                    };
+
+                    if *theline == b'{' as c_char {
+                        amount += opts.ind_open_extra;
+                    }
+                    let l9_sw = skipwhite(l9).cast_const();
+                    if *l9_sw == b'{' as c_char {
+                        amount -= opts.ind_open_extra;
+                    }
+                    lookfor = if iscase2 { LOOKFOR_ANY } else { LOOKFOR_TERM };
+
+                    if lookfor == LOOKFOR_TERM
+                        && *l9_sw != b'}' as c_char
+                        && rs_cin_iselse(l9_sw)
+                        && whilelevel == 0
+                    {
+                        let tp = rs_find_start_brace();
+                        if !tp.found || rs_find_match(LOOKFOR_IF, tp.lnum) == FAIL {
+                            break 'outer;
+                        }
+                        continue 'outer;
+                    }
+
+                    let l9b = nvim_cindent_get_cursor_line_ptr();
+                    let lp2 = rs_find_last_paren(l9b, b'{' as c_char, b'}' as c_char);
+                    if lp2.found {
+                        let tp2 = rs_find_start_brace();
+                        if tp2.found {
+                            nvim_cindent_curwin_set_cursor(tp2.lnum, tp2.col);
+                            let l11 = rs_cin_skipcomment(nvim_cindent_get_cursor_line_ptr());
+                            if *l11 == b'}' as c_char || !rs_cin_iselse(l11) {
+                                continue 'term_again;
+                            }
+                            nvim_cindent_curwin_set_cursor(tp2.lnum + 1, 0);
+                        }
+                    }
+                    break 'term_again;
+                } // end 'term_again
+            }
+        }
+    } // end 'outer
+
+    amount
 }
 
 // ============================================================================
