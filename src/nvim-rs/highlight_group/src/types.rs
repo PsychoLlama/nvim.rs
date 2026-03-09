@@ -202,6 +202,24 @@ impl Default for HlGroup {
     }
 }
 
+/// Growing array (matches C's `garray_T`).
+///
+/// Used to store the highlight group table (`highlight_ga`).
+#[repr(C)]
+#[derive(Debug)]
+pub struct GArray {
+    /// Current number of items used
+    pub ga_len: c_int,
+    /// Maximum number of items possible
+    pub ga_maxlen: c_int,
+    /// sizeof(item)
+    pub ga_itemsize: c_int,
+    /// Number of items to grow each time
+    pub ga_growsize: c_int,
+    /// Pointer to the first item
+    pub ga_data: *mut std::ffi::c_void,
+}
+
 /// Maximum length for a syntax name
 pub const MAX_SYN_NAME: usize = 200;
 

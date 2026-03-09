@@ -11,21 +11,8 @@
 
 use std::ffi::c_int;
 
+use crate::ffi::{cterm_normal_bg_color, cterm_normal_fg_color, normal_bg, normal_fg, normal_sp};
 use crate::types::RgbValue;
-
-// FFI declarations for accessing C global state
-extern "C" {
-    fn nvim_get_normal_fg() -> c_int;
-    fn nvim_get_normal_bg() -> c_int;
-    fn nvim_get_normal_sp() -> c_int;
-    fn nvim_set_normal_fg(val: c_int);
-    fn nvim_set_normal_bg(val: c_int);
-    fn nvim_set_normal_sp(val: c_int);
-    fn nvim_get_cterm_normal_fg_color() -> c_int;
-    fn nvim_get_cterm_normal_bg_color() -> c_int;
-    fn nvim_set_cterm_normal_fg_color(val: c_int);
-    fn nvim_set_cterm_normal_bg_color(val: c_int);
-}
 
 /// The Normal highlight colors (RGB).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -152,9 +139,9 @@ impl NormalCtermColors {
 pub fn get_normal_colors() -> NormalColors {
     unsafe {
         NormalColors {
-            fg: nvim_get_normal_fg(),
-            bg: nvim_get_normal_bg(),
-            sp: nvim_get_normal_sp(),
+            fg: normal_fg,
+            bg: normal_bg,
+            sp: normal_sp,
         }
     }
 }
@@ -166,9 +153,9 @@ pub fn get_normal_colors() -> NormalColors {
 #[inline]
 pub fn set_normal_colors(colors: &NormalColors) {
     unsafe {
-        nvim_set_normal_fg(colors.fg);
-        nvim_set_normal_bg(colors.bg);
-        nvim_set_normal_sp(colors.sp);
+        normal_fg = colors.fg;
+        normal_bg = colors.bg;
+        normal_sp = colors.sp;
     }
 }
 
@@ -180,8 +167,8 @@ pub fn set_normal_colors(colors: &NormalColors) {
 pub fn get_cterm_normal_colors() -> NormalCtermColors {
     unsafe {
         NormalCtermColors {
-            fg: nvim_get_cterm_normal_fg_color(),
-            bg: nvim_get_cterm_normal_bg_color(),
+            fg: cterm_normal_fg_color,
+            bg: cterm_normal_bg_color,
         }
     }
 }
@@ -193,8 +180,8 @@ pub fn get_cterm_normal_colors() -> NormalCtermColors {
 #[inline]
 pub fn set_cterm_normal_colors(colors: &NormalCtermColors) {
     unsafe {
-        nvim_set_cterm_normal_fg_color(colors.fg);
-        nvim_set_cterm_normal_bg_color(colors.bg);
+        cterm_normal_fg_color = colors.fg;
+        cterm_normal_bg_color = colors.bg;
     }
 }
 
@@ -208,11 +195,11 @@ pub fn set_cterm_normal_colors(colors: &NormalCtermColors) {
 /// This function modifies global state through FFI.
 pub fn reset_normal_colors() {
     unsafe {
-        nvim_set_normal_fg(-1);
-        nvim_set_normal_bg(-1);
-        nvim_set_normal_sp(-1);
-        nvim_set_cterm_normal_fg_color(0);
-        nvim_set_cterm_normal_bg_color(0);
+        normal_fg = -1;
+        normal_bg = -1;
+        normal_sp = -1;
+        cterm_normal_fg_color = 0;
+        cterm_normal_bg_color = 0;
     }
 }
 
