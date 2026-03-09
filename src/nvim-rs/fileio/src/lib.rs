@@ -19,6 +19,7 @@ pub mod encoding;
 pub mod modeline;
 pub mod operations;
 pub mod read;
+pub mod rename;
 pub mod sync;
 pub mod write;
 

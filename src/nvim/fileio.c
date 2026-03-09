@@ -100,6 +100,10 @@ extern bool rs_is_dev_fd_file(const char *fname);
 extern const char *rs_check_for_bom(const uint8_t *data, int size, int *lenp, int flags);
 extern bool rs_need_conversion(const char *fenc);
 extern int rs_get_fio_flags(const char *name);
+// File operations (Phase 3)
+extern char *rs_modname(const char *fname, const char *ext, int prepend_dot);
+extern int rs_vim_rename(const char *from, const char *to);
+extern int rs_vim_copyfile(const char *from, const char *to);
 // Binary I/O (Phase 2)
 extern int rs_get2c(FILE *fd);
 extern int rs_get3c(FILE *fd);
@@ -2247,71 +2251,7 @@ void shorten_fnames(int force)
 char *modname(const char *fname, const char *ext, bool prepend_dot)
   FUNC_ATTR_NONNULL_ARG(2)
 {
-  char *retval;
-  size_t fnamelen;
-  size_t extlen = strlen(ext);
-
-  // If there is no file name we must get the name of the current directory
-  // (we need the full path in case :cd is used).
-  if (fname == NULL || *fname == NUL) {
-    retval = xmalloc(MAXPATHL + extlen + 3);  // +3 for PATHSEP, "_" (Win), NUL
-    if (os_dirname(retval, MAXPATHL) == FAIL
-        || strlen(retval) == 0) {
-      xfree(retval);
-      return NULL;
-    }
-    add_pathsep(retval);
-    fnamelen = strlen(retval);
-    prepend_dot = false;  // nothing to prepend a dot to
-  } else {
-    fnamelen = strlen(fname);
-    retval = xmalloc(fnamelen + extlen + 3);
-    strcpy(retval, fname);  // NOLINT(runtime/printf)
-  }
-
-  // Search backwards until we hit a '/', '\' or ':'.
-  // Then truncate what is after the '/', '\' or ':' to BASENAMELEN characters.
-  char *ptr = NULL;
-  for (ptr = retval + fnamelen; ptr > retval; MB_PTR_BACK(retval, ptr)) {
-    if (vim_ispathsep(*ptr)) {
-      ptr++;
-      break;
-    }
-  }
-
-  // the file name has at most BASENAMELEN characters.
-  if (strlen(ptr) > BASENAMELEN) {
-    ptr[BASENAMELEN] = NUL;
-  }
-
-  char *s = ptr + strlen(ptr);
-
-  // Append the extension.
-  // ext can start with '.' and cannot exceed 3 more characters.
-  strcpy(s, ext);  // NOLINT(runtime/printf)
-
-  char *e;
-  // Prepend the dot if needed.
-  if (prepend_dot && *(e = path_tail(retval)) != '.') {
-    STRMOVE(e + 1, e);
-    *e = '.';
-  }
-
-  // Check that, after appending the extension, the file name is really
-  // different.
-  if (fname != NULL && strcmp(fname, retval) == 0) {
-    // we search for a character that can be replaced by '_'
-    while (--s >= ptr) {
-      if (*s != '_') {
-        *s = '_';
-        break;
-      }
-    }
-    if (s < ptr) {  // fname was "________.<ext>", how tricky!
-      *ptr = 'v';
-    }
-  }
-  return retval;
+  return rs_modname(fname, ext, (int)prepend_dot);
 }
 
 /// Like fgets(), but if the file line is too long, it is truncated and the
@@ -2341,139 +2281,21 @@ bool put_bytes(FILE *fd, uintmax_t number, size_t len)
 
 int put_time(FILE *fd, time_t time_) { return rs_put_time(fd, (int64_t)time_); }
 
-static int rename_with_tmp(const char *const from, const char *const to)
-{
-  // Find a name that doesn't exist and is in the same directory.
-  // Rename "from" to "tempname" and then rename "tempname" to "to".
-  if (strlen(from) >= MAXPATHL - 5) {
-    return -1;
-  }
-
-  char tempname[MAXPATHL + 1];
-  STRCPY(tempname, from);
-  for (int n = 123; n < 99999; n++) {
-    char *tail = path_tail(tempname);
-    snprintf(tail, (size_t)((MAXPATHL + 1) - (tail - tempname)), "%d", n);
-
-    if (!os_path_exists(tempname)) {
-      if (os_rename(from, tempname) == OK) {
-        if (os_rename(tempname, to) == OK) {
-          return 0;
-        }
-        // Strange, the second step failed.  Try moving the
-        // file back and return failure.
-        os_rename(tempname, from);
-        return -1;
-      }
-      // If it fails for one temp name it will most likely fail
-      // for any temp name, give up.
-      return -1;
-    }
-  }
-  return -1;
-}
-
 /// os_rename() only works if both files are on the same file system, this
-/// function will (attempts to?) copy the file across if rename fails -- webb
+/// function will (attempts to?) copy the file across if rename fails.
 ///
 /// @return  -1 for failure, 0 for success
 int vim_rename(const char *from, const char *to)
   FUNC_ATTR_NONNULL_ALL
 {
-  bool use_tmp_file = false;
-
-  // When the names are identical, there is nothing to do.  When they refer
-  // to the same file (ignoring case and slash/backslash differences) but
-  // the file name differs we need to go through a temp file.
-  if (path_fnamecmp(from, to) == 0) {
-    if (p_fic && (strcmp(path_tail(from), path_tail(to)) != 0)) {
-      use_tmp_file = true;
-    } else {
-      return 0;
-    }
-  }
-
-  // Fail if the "from" file doesn't exist. Avoids that "to" is deleted.
-  FileInfo from_info;
-  if (!os_fileinfo(from, &from_info)) {
-    return -1;
-  }
-
-  // It's possible for the source and destination to be the same file.
-  // This happens when "from" and "to" differ in case and are on a FAT32
-  // filesystem. In that case go through a temp file name.
-  FileInfo to_info;
-  if (os_fileinfo(to, &to_info) && os_fileinfo_id_equal(&from_info,  &to_info)) {
-    use_tmp_file = true;
-  }
-
-  if (use_tmp_file) {
-    return rename_with_tmp(from, to);
-  }
-
-  // Delete the "to" file, this is required on some systems to make the
-  // os_rename() work, on other systems it makes sure that we don't have
-  // two files when the os_rename() fails.
-
-  os_remove(to);
-
-  // First try a normal rename, return if it works.
-  if (os_rename(from, to) == OK) {
-    return 0;
-  }
-
-  // Rename() failed, try copying the file.
-  int ret = vim_copyfile(from, to);
-  if (ret != OK) {
-    return -1;
-  }
-
-  if (os_fileinfo(from, &from_info)) {
-    os_remove(from);
-  }
-
-  return 0;
+  return rs_vim_rename(from, to);
 }
 
 /// Create the new file with same permissions as the original.
 /// Return FAIL for failure, OK for success.
 int vim_copyfile(const char *from, const char *to)
 {
-  char *errmsg = NULL;
-
-#ifdef HAVE_READLINK
-  FileInfo from_info;
-  if (os_fileinfo_link(from, &from_info) && S_ISLNK(from_info.stat.st_mode)) {
-    int ret = -1;
-
-    char linkbuf[MAXPATHL + 1];
-    ssize_t len = readlink(from, linkbuf, MAXPATHL);
-    if (len > 0) {
-      linkbuf[len] = NUL;
-
-      // Create link
-      ret = symlink(linkbuf, to);
-    }
-
-    return ret == 0 ? OK : FAIL;
-  }
-#endif
-
-  // For systems that support ACL: get the ACL from the original file.
-  vim_acl_T acl = os_get_acl(from);
-
-  if (os_copy(from, to, UV_FS_COPYFILE_EXCL) != 0) {
-    os_free_acl(acl);
-    return FAIL;
-  }
-
-  os_set_acl(to, acl);
-  os_free_acl(acl);
-  if (errmsg != NULL) {
-    semsg(errmsg, to);
-    return FAIL;
-  }
-  return OK;
+  return rs_vim_copyfile(from, to);
 }
 
 static bool already_warned = false;
