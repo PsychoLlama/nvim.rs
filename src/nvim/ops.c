@@ -99,87 +99,12 @@ extern int rs_get_fileformat(buf_T *buf);
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
                                    list_stack_T **list_stack);
 
-// Rust implementations of operator functions
-extern int rs_op_on_lines(int op);
-extern int rs_op_is_change(int op);
-extern int rs_get_op_char(int optype);
-extern int rs_get_extra_op_char(int optype);
-extern int rs_get_op_type(int char1, int char2);
-extern void rs_cursor_pos_info(dict_T *dict);
 extern bool rs_do_addsub(int op_type, pos_T *pos, int length, linenr_T Prenum1);
 
-// Flags for third item in "opchars".
-#define OPF_LINES  1  // operator always works on lines
-#define OPF_CHANGE 2  // operator changes text
-
-/// The names of operators.
-/// IMPORTANT: Index must correspond with defines in ops.h!!!
-/// The third field indicates whether the operator always works on lines.
-static const char opchars[][3] = {
-  { NUL, NUL, 0 },                       // OP_NOP
-  { 'd', NUL, OPF_CHANGE },              // OP_DELETE
-  { 'y', NUL, 0 },                       // OP_YANK
-  { 'c', NUL, OPF_CHANGE },              // OP_CHANGE
-  { '<', NUL, OPF_LINES | OPF_CHANGE },  // OP_LSHIFT
-  { '>', NUL, OPF_LINES | OPF_CHANGE },  // OP_RSHIFT
-  { '!', NUL, OPF_LINES | OPF_CHANGE },  // OP_FILTER
-  { 'g', '~', OPF_CHANGE },              // OP_TILDE
-  { '=', NUL, OPF_LINES | OPF_CHANGE },  // OP_INDENT
-  { 'g', 'q', OPF_LINES | OPF_CHANGE },  // OP_FORMAT
-  { ':', NUL, OPF_LINES },               // OP_COLON
-  { 'g', 'U', OPF_CHANGE },              // OP_UPPER
-  { 'g', 'u', OPF_CHANGE },              // OP_LOWER
-  { 'J', NUL, OPF_LINES | OPF_CHANGE },  // DO_JOIN
-  { 'g', 'J', OPF_LINES | OPF_CHANGE },  // DO_JOIN_NS
-  { 'g', '?', OPF_CHANGE },              // OP_ROT13
-  { 'r', NUL, OPF_CHANGE },              // OP_REPLACE
-  { 'I', NUL, OPF_CHANGE },              // OP_INSERT
-  { 'A', NUL, OPF_CHANGE },              // OP_APPEND
-  { 'z', 'f', 0         },               // OP_FOLD
-  { 'z', 'o', OPF_LINES },               // OP_FOLDOPEN
-  { 'z', 'O', OPF_LINES },               // OP_FOLDOPENREC
-  { 'z', 'c', OPF_LINES },               // OP_FOLDCLOSE
-  { 'z', 'C', OPF_LINES },               // OP_FOLDCLOSEREC
-  { 'z', 'd', OPF_LINES },               // OP_FOLDDEL
-  { 'z', 'D', OPF_LINES },               // OP_FOLDDELREC
-  { 'g', 'w', OPF_LINES | OPF_CHANGE },  // OP_FORMAT2
-  { 'g', '@', OPF_CHANGE },              // OP_FUNCTION
-  { Ctrl_A, NUL, OPF_CHANGE },           // OP_NR_ADD
-  { Ctrl_X, NUL, OPF_CHANGE },           // OP_NR_SUB
-};
-
-/// Translate a command name into an operator type.
-/// Must only be called with a valid operator name!
-int get_op_type(int char1, int char2)
-{
-  return rs_get_op_type(char1, char2);
-}
-
-/// @return  true if operator "op" always works on whole lines.
-int op_on_lines(int op)
-{
-  return rs_op_on_lines(op);
-}
-
-/// @return  true if operator "op" changes text.
-int op_is_change(int op)
-{
-  return rs_op_is_change(op);
-}
-
-/// Get first operator command character.
-///
-/// @return  'g' or 'z' if there is another command character.
-int get_op_char(int optype)
-{
-  return rs_get_op_char(optype);
-}
-
-/// Get second operator command character.
-int get_extra_op_char(int optype)
-{
-  return rs_get_extra_op_char(optype);
-}
+// Functions now exported from Rust (via #[export_name]) but still called within ops.c
+extern int get_op_char(int optype);
+extern int get_extra_op_char(int optype);
+extern int op_on_lines(int op);
 
 /// handle a shift operation
 void op_shift(oparg_T *oap, bool curs_top, int amount)
@@ -724,8 +649,6 @@ static void block_insert(oparg_T *oap, const char *s, size_t slen, bool b_insert
 // op_delete C accessors for Rust migration (Phase 4)
 // ===========================================================================
 
-extern int rs_op_delete(void *oap);
-
 /// Check if buffer ML_EMPTY.
 int nvim_opd_is_ml_empty(void)
 {
@@ -1071,11 +994,6 @@ void nvim_opd_setmarks(oparg_T *oap)
   }
 }
 
-int op_delete(oparg_T *oap)
-{
-  return rs_op_delete(oap);
-}
-
 /// Adjust end of operating area for ending on a multi-byte character.
 /// Used for deletion.
 static void mb_adjust_opend(oparg_T *oap)
@@ -1120,7 +1038,8 @@ static void replace_character(int c)
 // op_replace C accessors for Rust migration (Phase 3)
 // ===========================================================================
 
-extern int rs_op_replace(void *oap, int c);
+// op_replace is now exported from Rust via #[export_name]
+extern int op_replace(oparg_T *oap, int c);
 
 _Static_assert(kMTBlockWise == 2, "kMTBlockWise must be 2");
 
@@ -1332,12 +1251,6 @@ void nvim_opr_finish(oparg_T *oap)
     curbuf->b_op_start = oap->start;
     curbuf->b_op_end = oap->end;
   }
-}
-
-/// Replace a whole area with one character.
-static int op_replace(oparg_T *oap, int c)
-{
-  return rs_op_replace(oap, c);
 }
 
 /// Handle the (non-standard vi) tilde operator.  Also for "gu", "gU" and "g?".
@@ -3201,16 +3114,6 @@ void nvim_cpi_populate_dict(dict_T *dict,
                  sizeof("visual_words") - 1, (varnumber_T)word_count_cursor);
 }
 
-/// Give some info about the position of the cursor (for "g CTRL-G").
-/// In Visual mode, give some info about the selected region.  (In this case,
-/// the *_count_cursor variables store running totals for the selection.)
-///
-/// @param dict  when not NULL, store the info there instead of showing it.
-void cursor_pos_info(dict_T *dict)
-{
-  rs_cursor_pos_info(dict);
-}
-
 /// Handle indent and format operators and visual mode ":".
 static void op_colon(oparg_T *oap)
 {
@@ -3425,8 +3328,6 @@ static bool is_ex_cmdchar(cmdarg_T *cap)
 // do_pending_operator C accessors for Rust migration (Phase 5)
 // ===========================================================================
 
-extern void rs_do_pending_operator(void *cap, int old_col, int gui_yank);
-
 // File-scope statics for do_pending_operator (bridges across accessor calls)
 static redo_VIsual_T dpo_redo_VIsual = { NUL, 0, 0, 0, 0 };
 static bool dpo_include_line_break;
@@ -3436,6 +3337,9 @@ static pos_T dpo_saved_old_cursor;
 /// Check if we should process the pending operator.
 int nvim_dpo_should_process(cmdarg_T *cap)
 {
+  // Save state needed by postamble/restore_lbr across accessor calls.
+  dpo_saved_lbr = curwin->w_p_lbr;
+  dpo_saved_old_cursor = curwin->w_cursor;
   oparg_T *oap = cap->oap;
   return ((finish_op || VIsual_active) && oap->op_type != OP_NOP) ? 1 : 0;
 }
@@ -4005,14 +3909,6 @@ void nvim_dpo_restore_lbr(cmdarg_T *cap)
   (void)cap;
   // We need the lbr_saved from function entry. Use a static.
   restore_lbr(dpo_saved_lbr);
-}
-
-void do_pending_operator(cmdarg_T *cap, int old_col, bool gui_yank)
-{
-  // Save state that the Rust side needs across accessor calls
-  dpo_saved_lbr = curwin->w_p_lbr;
-  dpo_saved_old_cursor = curwin->w_cursor;
-  rs_do_pending_operator(cap, old_col, (int)gui_yank);
 }
 
 /// Get the byte count of buffer region. End-exclusive.

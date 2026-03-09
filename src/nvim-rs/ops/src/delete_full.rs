@@ -55,7 +55,7 @@ extern "C" {
 /// # Safety
 /// - `oap` must be a valid `oparg_T *`
 /// - Accesses global state via C accessors
-#[no_mangle]
+#[unsafe(export_name = "op_delete")]
 pub unsafe extern "C" fn rs_op_delete(oap: *mut c_void) -> c_int {
     if nvim_opd_is_ml_empty() != 0 {
         return OK;

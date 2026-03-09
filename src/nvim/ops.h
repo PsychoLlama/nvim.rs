@@ -52,4 +52,17 @@ enum {
 #include "ops.h.generated.h"
 #include "ops.h.inline.generated.h"
 
+// Functions migrated to Rust (exported via #[unsafe(export_name = "...")]).
+// These declarations replace the auto-generated ones that were removed when
+// the C implementations were deleted.
+int get_op_type(int char1, int char2);
+int op_on_lines(int op);
+int op_is_change(int op);
+int get_op_char(int optype);
+int get_extra_op_char(int optype);
+int op_delete(oparg_T *oap);
+int op_replace(oparg_T *oap, int c);
+void cursor_pos_info(dict_T *dict);
+void do_pending_operator(cmdarg_T *cap, int old_col, bool gui_yank);
+
 EXTERN LuaRef repeat_luaref INIT( = LUA_NOREF);  ///< LuaRef for "."

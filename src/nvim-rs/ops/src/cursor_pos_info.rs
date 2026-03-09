@@ -305,7 +305,7 @@ unsafe fn output_results(dict: *mut c_void, vp: &VisualDisplayParams, c: &Counts
 ///
 /// - `dict` may be null (display mode) or a valid `dict_T *`
 /// - Accesses global state via C accessors
-#[no_mangle]
+#[unsafe(export_name = "cursor_pos_info")]
 #[allow(clippy::similar_names)]
 pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
     // Check for empty buffer

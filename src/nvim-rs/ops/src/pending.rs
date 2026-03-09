@@ -30,13 +30,14 @@ extern "C" {
 /// # Safety
 /// - `cap` must be a valid `cmdarg_T *`
 /// - Accesses global state via C accessors
-#[no_mangle]
-pub unsafe extern "C" fn rs_do_pending_operator(cap: *mut c_void, old_col: c_int, gui_yank: c_int) {
+#[unsafe(export_name = "do_pending_operator")]
+pub unsafe extern "C" fn rs_do_pending_operator(cap: *mut c_void, old_col: c_int, gui_yank: bool) {
+    let gui_yank_int = c_int::from(gui_yank);
     if nvim_dpo_should_process(cap) != 0 {
-        nvim_dpo_preamble(cap, gui_yank);
-        nvim_dpo_setup_positions(cap, gui_yank);
-        nvim_dpo_dispatch_operator(cap, gui_yank);
-        nvim_dpo_postamble(cap, old_col, gui_yank);
+        nvim_dpo_preamble(cap, gui_yank_int);
+        nvim_dpo_setup_positions(cap, gui_yank_int);
+        nvim_dpo_dispatch_operator(cap, gui_yank_int);
+        nvim_dpo_postamble(cap, old_col, gui_yank_int);
     }
     nvim_dpo_restore_lbr(cap);
 }

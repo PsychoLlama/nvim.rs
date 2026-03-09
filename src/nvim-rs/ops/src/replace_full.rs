@@ -34,7 +34,7 @@ extern "C" {
 /// # Safety
 /// - `oap` must be a valid `oparg_T *`
 /// - Accesses global state via C accessors
-#[no_mangle]
+#[unsafe(export_name = "op_replace")]
 pub unsafe extern "C" fn rs_op_replace(oap: *mut c_void, c: c_int) -> c_int {
     if nvim_opr_is_empty(oap) != 0 {
         return OK;

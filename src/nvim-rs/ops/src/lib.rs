@@ -114,8 +114,9 @@ fn op_on_lines_impl(op: c_int) -> bool {
     (OPCHARS[op as usize][2] & OPF_LINES) != 0
 }
 
-/// FFI wrapper for `op_on_lines`.
-#[no_mangle]
+/// FFI export for `op_on_lines`.
+#[must_use]
+#[unsafe(export_name = "op_on_lines")]
 pub extern "C" fn rs_op_on_lines(op: c_int) -> c_int {
     c_int::from(op_on_lines_impl(op))
 }
@@ -132,8 +133,9 @@ fn op_is_change_impl(op: c_int) -> bool {
     (OPCHARS[op as usize][2] & OPF_CHANGE) != 0
 }
 
-/// FFI wrapper for `op_is_change`.
-#[no_mangle]
+/// FFI export for `op_is_change`.
+#[must_use]
+#[unsafe(export_name = "op_is_change")]
 pub extern "C" fn rs_op_is_change(op: c_int) -> c_int {
     c_int::from(op_is_change_impl(op))
 }
@@ -150,8 +152,9 @@ fn get_op_char_impl(optype: c_int) -> c_int {
     c_int::from(OPCHARS[optype as usize][0])
 }
 
-/// FFI wrapper for `get_op_char`.
-#[no_mangle]
+/// FFI export for `get_op_char`.
+#[must_use]
+#[unsafe(export_name = "get_op_char")]
 pub extern "C" fn rs_get_op_char(optype: c_int) -> c_int {
     get_op_char_impl(optype)
 }
@@ -166,8 +169,9 @@ fn get_extra_op_char_impl(optype: c_int) -> c_int {
     c_int::from(OPCHARS[optype as usize][1])
 }
 
-/// FFI wrapper for `get_extra_op_char`.
-#[no_mangle]
+/// FFI export for `get_extra_op_char`.
+#[must_use]
+#[unsafe(export_name = "get_extra_op_char")]
 pub extern "C" fn rs_get_extra_op_char(optype: c_int) -> c_int {
     get_extra_op_char_impl(optype)
 }
@@ -215,8 +219,9 @@ fn get_op_type_impl(char1: c_int, char2: c_int) -> c_int {
     OP_NOP
 }
 
-/// FFI wrapper for `get_op_type`.
-#[no_mangle]
+/// FFI export for `get_op_type`.
+#[must_use]
+#[unsafe(export_name = "get_op_type")]
 pub extern "C" fn rs_get_op_type(char1: c_int, char2: c_int) -> c_int {
     get_op_type_impl(char1, char2)
 }
