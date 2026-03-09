@@ -267,6 +267,13 @@ extern void rs_ex_redir(exarg_T *eap);
 extern void rs_ex_normal(exarg_T *eap);
 extern void rs_ex_filetype(exarg_T *eap);
 extern void rs_ex_quit(exarg_T *eap);
+extern void rs_shift_cmd_args(exarg_T *eap);
+extern int rs_execute_cmd0(int *retv, exarg_T *eap, const char **errormsg, bool preview);
+extern int rs_execute_cmd(exarg_T *eap, CmdParseInfo *cmdinfo, bool preview);
+extern bool rs_parse_cmdline(char **cmdline, exarg_T *eap, CmdParseInfo *cmdinfo,
+                             const char **errormsg);
+extern void rs_profile_cmd(const exarg_T *eap, cstack_T *cstack, LineGetter fgetline,
+                           void *cookie);
 
 // Helper function to get first character of command name for Rust FFI
 // Returns 0 if cmdidx is out of bounds
@@ -1321,242 +1328,18 @@ bool cmd_has_expr_args(cmdidx_T cmdidx)
 /// @return Success or failure
 bool parse_cmdline(char **cmdline, exarg_T *eap, CmdParseInfo *cmdinfo, const char **errormsg)
 {
-  char *after_modifier = NULL;
-  bool retval = false;
-  // parsing the command modifiers may set ex_pressedreturn
-  const bool save_ex_pressedreturn = ex_pressedreturn;
-  // parsing the command range may require moving the cursor
-  const pos_T save_cursor = curwin->w_cursor;
-  // parsing the command range may set the last search pattern
-  save_last_search_pattern();
-
-  // Initialize cmdinfo
-  CLEAR_POINTER(cmdinfo);
-
-  // Initialize eap
-  *eap = (exarg_T){
-    .line1 = 1,
-    .line2 = 1,
-    .cmd = *cmdline,
-    .cmdlinep = cmdline,
-    .ea_getline = NULL,
-    .cookie = NULL,
-  };
-
-  // Parse command modifiers
-  if (parse_command_modifiers(eap, errormsg, &cmdinfo->cmdmod, false) == FAIL) {
-    goto end;
-  }
-  after_modifier = eap->cmd;
-
-  // We need the command name to know what kind of range it uses.
-  char *p = find_excmd_after_range(eap);
-  if (p == NULL) {
-    *errormsg = _(e_ambiguous_use_of_user_defined_command);
-    goto end;
-  }
-
-  // Set command address type and parse command range
-  set_cmd_addr_type(eap, p);
-  if (parse_cmd_address(eap, errormsg, true) == FAIL) {
-    goto end;
-  }
-
-  // Skip colon and whitespace
-  eap->cmd = skip_colon_white(eap->cmd, true);
-  // Fail if command is a comment or if command doesn't exist
-  if (*eap->cmd == NUL || *eap->cmd == '"') {
-    goto end;
-  }
-  // Fail if command is invalid
-  if (eap->cmdidx == CMD_SIZE) {
-    xstrlcpy(IObuff, _(e_not_an_editor_command), IOSIZE);
-    // If the modifier was parsed OK the error must be in the following command
-    char *cmdname = after_modifier ? after_modifier : *cmdline;
-    append_command(cmdname);
-    *errormsg = IObuff;
-    goto end;
-  }
-
-  // Correctly set 'forceit' for commands
-  eap->forceit = parse_bang(eap, &p);
-
-  // Parse arguments.
-  if (!IS_USER_CMDIDX(eap->cmdidx)) {
-    eap->argt = cmdnames[(int)eap->cmdidx].cmd_argt;
-  }
-  // Skip to start of argument.
-  // Don't do this for the ":!" command, because ":!! -l" needs the space.
-  eap->arg = eap->cmdidx == CMD_bang ? p : skipwhite(p);
-
-  // Don't treat ":r! filter" like a bang
-  if (eap->cmdidx == CMD_read && eap->forceit) {
-    eap->forceit = false;  // :r! filter
-  }
-
-  // Check for '|' to separate commands and '"' to start comments.
-  // Don't do this for ":read !cmd" and ":write !cmd".
-  if ((eap->argt & EX_TRLBAR)) {
-    separate_nextcmd(eap);
-  } else if (cmd_has_expr_args(eap->cmdidx)) {
-    // For commands without EX_TRLBAR, check for '|' separator
-    // by skipping over expressions (including string literals)
-    char *arg = eap->arg;
-    while (*arg != NUL && *arg != '|' && *arg != '\n') {
-      char *start = arg;
-      skip_expr(&arg, NULL);
-      // If skip_expr didn't advance, move forward to avoid infinite loop
-      if (arg == start) {
-        arg++;
-      }
-    }
-    if (*arg == '|' || *arg == '\n') {
-      eap->nextcmd = check_nextcmd(arg);
-      *arg = NUL;
-    }
-  }
-  // Fail if command doesn't support bang but is used with a bang
-  if (!(eap->argt & EX_BANG) && eap->forceit) {
-    *errormsg = _(e_nobang);
-    goto end;
-  }
-  // Fail if command doesn't support a range but it is given a range
-  if (!(eap->argt & EX_RANGE) && eap->addr_count > 0) {
-    *errormsg = _(e_norange);
-    goto end;
-  }
-  // Set default range for command if required
-  if ((eap->argt & EX_DFLALL) && eap->addr_count == 0) {
-    set_cmd_dflall_range(eap);
-  }
-
-  // Parse register and count
-  parse_register(eap);
-  if (parse_count(eap, errormsg, false) == FAIL) {
-    goto end;
-  }
-
-  // Remove leading whitespace and colon from next command
-  if (eap->nextcmd) {
-    eap->nextcmd = skip_colon_white(eap->nextcmd, true);
-  }
-
-  // Set the "magic" values (characters that get treated specially)
-  if (eap->argt & EX_XFILE) {
-    cmdinfo->magic.file = true;
-  }
-  if (eap->argt & EX_TRLBAR) {
-    cmdinfo->magic.bar = true;
-  }
-
-  retval = true;
-end:
-  if (!retval) {
-    undo_cmdmod(&cmdinfo->cmdmod);
-  }
-  ex_pressedreturn = save_ex_pressedreturn;
-  curwin->w_cursor = save_cursor;
-  restore_last_search_pattern();
-  return retval;
+  return rs_parse_cmdline(cmdline, eap, cmdinfo, errormsg);
 }
 
 // Shift Ex-command arguments to the right.
 static void shift_cmd_args(exarg_T *eap)
 {
-  assert(eap->args != NULL && eap->argc > 0);
-
-  char **oldargs = eap->args;
-  size_t *oldarglens = eap->arglens;
-
-  eap->argc--;
-  eap->args = eap->argc > 0 ? xcalloc(eap->argc, sizeof(char *)) : NULL;
-  eap->arglens = eap->argc > 0 ? xcalloc(eap->argc, sizeof(size_t)) : NULL;
-
-  for (size_t i = 0; i < eap->argc; i++) {
-    eap->args[i] = oldargs[i + 1];
-    eap->arglens[i] = oldarglens[i + 1];
-  }
-
-  // If there are no arguments, make eap->arg point to the end of string.
-  eap->arg = (eap->argc > 0 ? eap->args[0] : (oldargs[0] + oldarglens[0]));
-
-  xfree(oldargs);
-  xfree(oldarglens);
+  rs_shift_cmd_args(eap);
 }
 
 static int execute_cmd0(int *retv, exarg_T *eap, const char **errormsg, bool preview)
 {
-  // If filename expansion is enabled, expand filenames
-  if (eap->argt & EX_XFILE) {
-    if (expand_filename(eap, eap->cmdlinep, errormsg) == FAIL) {
-      return FAIL;
-    }
-  }
-
-  // Accept buffer name.  Cannot be used at the same time with a buffer
-  // number.  Don't do this for a user command.
-  if ((eap->argt & EX_BUFNAME) && *eap->arg != NUL && eap->addr_count == 0
-      && !IS_USER_CMDIDX(eap->cmdidx)) {
-    if (eap->args == NULL) {
-      // If argument positions are not specified, search the argument for the buffer name.
-      // :bdelete, :bwipeout and :bunload take several arguments, separated by spaces:
-      // find next space (skipping over escaped characters).
-      // The others take one argument: ignore trailing spaces.
-      char *p;
-
-      if (eap->cmdidx == CMD_bdelete || eap->cmdidx == CMD_bwipeout
-          || eap->cmdidx == CMD_bunload) {
-        p = skiptowhite_esc(eap->arg);
-      } else {
-        p = eap->arg + strlen(eap->arg);
-        while (p > eap->arg && ascii_iswhite(p[-1])) {
-          p--;
-        }
-      }
-      eap->line2 = buflist_findpat(eap->arg, p, (eap->argt & EX_BUFUNL) != 0,
-                                   false, false);
-      eap->addr_count = 1;
-      eap->arg = skipwhite(p);
-    } else {
-      // If argument positions are specified, just use the first argument
-      eap->line2 = buflist_findpat(eap->args[0],
-                                   eap->args[0] + eap->arglens[0],
-                                   (eap->argt & EX_BUFUNL) != 0, false, false);
-      eap->addr_count = 1;
-      shift_cmd_args(eap);
-    }
-    if (eap->line2 < 0) {  // failed
-      return FAIL;
-    }
-  }
-
-  // The :try command saves the emsg_silent flag, reset it here when
-  // ":silent! try" was used, it should only apply to :try itself.
-  if (eap->cmdidx == CMD_try && cmdmod.cmod_did_esilent > 0) {
-    emsg_silent -= cmdmod.cmod_did_esilent;
-    emsg_silent = MAX(emsg_silent, 0);
-    cmdmod.cmod_did_esilent = 0;
-  }
-
-  // Execute the command
-  if (IS_USER_CMDIDX(eap->cmdidx)) {
-    // Execute a user-defined command.
-    *retv = do_ucmd(eap, preview);
-  } else {
-    // Call the function to execute the builtin command or the preview callback.
-    eap->errmsg = NULL;
-    if (preview) {
-      *retv = (cmdnames[eap->cmdidx].cmd_preview_func)(eap, cmdpreview_get_ns(),
-                                                       cmdpreview_get_bufnr());
-    } else {
-      (cmdnames[eap->cmdidx].cmd_func)(eap);
-    }
-    if (eap->errmsg != NULL) {
-      *errormsg = eap->errmsg;
-    }
-  }
-
-  return OK;
+  return rs_execute_cmd0(retv, eap, errormsg, preview);
 }
 
 /// Execute an Ex command using parsed command line information.
@@ -1567,119 +1350,12 @@ static int execute_cmd0(int *retv, exarg_T *eap, const char **errormsg, bool pre
 /// @param preview Execute command preview callback instead of actual command
 int execute_cmd(exarg_T *eap, CmdParseInfo *cmdinfo, bool preview)
 {
-  int retv = 0;
-  if (do_cmdline_start() == FAIL) {
-    emsg(_(e_command_too_recursive));
-    return retv;
-  }
-
-  const char *errormsg = NULL;
-
-  cmdmod_T save_cmdmod = cmdmod;
-  cmdmod = cmdinfo->cmdmod;
-
-  // Apply command modifiers
-  apply_cmdmod(&cmdmod);
-
-  if (!MODIFIABLE(curbuf) && (eap->argt & EX_MODIFY)
-      // allow :put in terminals
-      && !(curbuf->terminal && (eap->cmdidx == CMD_put || eap->cmdidx == CMD_iput))) {
-    errormsg = _(e_modifiable);
-    goto end;
-  }
-  if (!IS_USER_CMDIDX(eap->cmdidx)) {
-    if (cmdwin_type != 0 && !(eap->argt & EX_CMDWIN)) {
-      // Command not allowed in the command line window
-      errormsg = _(e_cmdwin);
-      goto end;
-    }
-    if (text_locked() && !(eap->argt & EX_LOCK_OK)) {
-      // Command not allowed when text is locked
-      errormsg = _(get_text_locked_msg());
-      goto end;
-    }
-  }
-  // Disallow editing another buffer when "curbuf->b_ro_locked" is set.
-  // Do allow ":checktime" (it is postponed).
-  // Do allow ":edit" (check for an argument later).
-  // Do allow ":file" with no arguments
-  if (!(eap->argt & EX_CMDWIN)
-      && eap->cmdidx != CMD_checktime
-      && eap->cmdidx != CMD_edit
-      && !(eap->cmdidx == CMD_file && *eap->arg == NUL)
-      && !IS_USER_CMDIDX(eap->cmdidx)
-      && curbuf_locked()) {
-    goto end;
-  }
-
-  correct_range(eap);
-
-  if (((eap->argt & EX_WHOLEFOLD) || eap->addr_count >= 2) && !global_busy
-      && eap->addr_type == ADDR_LINES) {
-    // Put the first line at the start of a closed fold, put the last line
-    // at the end of a closed fold.
-    hasFolding(curwin, eap->line1, &eap->line1, NULL);
-    hasFolding(curwin, eap->line2, NULL, &eap->line2);
-  }
-
-  // Use first argument as count when possible
-  if (parse_count(eap, &errormsg, true) == FAIL) {
-    goto end;
-  }
-
-  cstack_T cstack = { .cs_idx = -1 };
-  eap->cstack = &cstack;
-
-  // Execute the command
-  execute_cmd0(&retv, eap, &errormsg, preview);
-
-end:
-  if (errormsg != NULL && *errormsg != NUL) {
-    emsg(errormsg);
-  }
-
-  // Undo command modifiers
-  undo_cmdmod(&cmdmod);
-  cmdmod = save_cmdmod;
-
-  do_cmdline_end();
-  return retv;
+  return rs_execute_cmd(eap, cmdinfo, preview);
 }
 
 static void profile_cmd(const exarg_T *eap, cstack_T *cstack, LineGetter fgetline, void *cookie)
 {
-  // Count this line for profiling if skip is true.
-  if (do_profiling == PROF_YES
-      && (!eap->skip || cstack->cs_idx == 0
-          || (cstack->cs_idx > 0
-              && (cstack->cs_flags[cstack->cs_idx - 1] & CSF_ACTIVE)))) {
-    bool skip = did_emsg || got_int || did_throw;
-
-    if (eap->cmdidx == CMD_catch) {
-      skip = !skip && !(cstack->cs_idx >= 0
-                        && (cstack->cs_flags[cstack->cs_idx] & CSF_THROWN)
-                        && !(cstack->cs_flags[cstack->cs_idx] & CSF_CAUGHT));
-    } else if (eap->cmdidx == CMD_else || eap->cmdidx == CMD_elseif) {
-      skip = skip || !(cstack->cs_idx >= 0
-                       && !(cstack->cs_flags[cstack->cs_idx]
-                            & (CSF_ACTIVE | CSF_TRUE)));
-    } else if (eap->cmdidx == CMD_finally) {
-      skip = false;
-    } else if (eap->cmdidx != CMD_endif
-               && eap->cmdidx != CMD_endfor
-               && eap->cmdidx != CMD_endtry
-               && eap->cmdidx != CMD_endwhile) {
-      skip = eap->skip;
-    }
-
-    if (!skip) {
-      if (getline_equal(fgetline, cookie, get_func_line)) {
-        func_line_exec(getline_cookie(fgetline, cookie));
-      } else if (getline_equal(fgetline, cookie, getsourceline)) {
-        script_line_exec();
-      }
-    }
-  }
+  rs_profile_cmd(eap, cstack, fgetline, cookie);
 }
 
 static bool skip_cmd(const exarg_T *eap)
@@ -7124,3 +6800,213 @@ const char *nvim_docmd_get_curbuf_sfname(void) { return curbuf->b_sfname; }
 
 // e_invarg2 accessor (already in ex_docmd.c at line ~6369, named nvim_get_e_invarg2)
 // e_secure accessor (in option_shim.c as nvim_get_e_secure)
+
+// =============================================================================
+// Phase 2 accessor functions for Rust FFI (commands.rs / execute.rs)
+// =============================================================================
+
+// eap args/arglens/argc accessors
+size_t nvim_eap_get_argc(const exarg_T *eap) { return (size_t)eap->argc; }
+void nvim_eap_set_argc(exarg_T *eap, size_t n) { eap->argc = (int)n; }
+char **nvim_eap_get_args(const exarg_T *eap) { return eap->args; }
+void nvim_eap_set_args(exarg_T *eap, char **args) { eap->args = args; }
+size_t *nvim_eap_get_arglens(const exarg_T *eap) { return eap->arglens; }
+void nvim_eap_set_arglens(exarg_T *eap, size_t *arglens) { eap->arglens = arglens; }
+bool nvim_eap_is_user_cmdidx(const exarg_T *eap) { return IS_USER_CMDIDX(eap->cmdidx); }
+bool nvim_cmdidx_is_user(int cmdidx) { return IS_USER_CMDIDX((cmdidx_T)cmdidx); }
+
+// Dispatch wrappers (cmdnames[] access)
+void nvim_cmd_dispatch(exarg_T *eap) { (cmdnames[eap->cmdidx].cmd_func)(eap); }
+int nvim_cmd_preview_dispatch(exarg_T *eap, int ns, int bufnr)
+{
+  return (cmdnames[eap->cmdidx].cmd_preview_func)(eap, ns, bufnr);
+}
+
+// cmdmod accessors for execute_cmd
+int nvim_cmdmod_get_did_esilent(void) { return cmdmod.cmod_did_esilent; }
+void nvim_cmdmod_set_did_esilent(int val) { cmdmod.cmod_did_esilent = val; }
+void nvim_cmdmod_load_from_cmdinfo(const CmdParseInfo *cmdinfo) { cmdmod = cmdinfo->cmdmod; }
+void nvim_cmdmod_store_to_save(cmdmod_T *save) { *save = cmdmod; }
+void nvim_cmdmod_restore_from_save(const cmdmod_T *save) { cmdmod = *save; }
+size_t nvim_sizeof_cmdmod_T(void) { return sizeof(cmdmod_T); }
+
+// execute_cmd helpers
+cstack_T *nvim_cstack_alloc(void)
+{
+  cstack_T *cs = xcalloc(1, sizeof(cstack_T));
+  cs->cs_idx = -1;
+  return cs;
+}
+void nvim_cstack_free(cstack_T *cs) { xfree(cs); }
+void nvim_eap_set_cstack(exarg_T *eap, cstack_T *cstack) { eap->cstack = cstack; }
+// nvim_curbuf_modifiable already exists in normal_shim.c (returns bool)
+int nvim_curbuf_is_terminal(void) { return curbuf->terminal != NULL ? 1 : 0; }
+const char *nvim_get_e_command_too_recursive(void) { return _(e_command_too_recursive); }
+const char *nvim_get_e_modifiable(void) { return _(e_modifiable); }
+// nvim_get_e_cmdwin already exists in ex_getln.c
+// nvim_get_global_busy already exists in undo.c (returns bool)
+int nvim_get_eap_addr_type_lines(const exarg_T *eap) { return eap->addr_type == ADDR_LINES ? 1 : 0; }
+void nvim_hasFolding_line1(linenr_T lnum, linenr_T *line1_out)
+{
+  hasFolding(curwin, lnum, line1_out, NULL);
+}
+void nvim_hasFolding_line2(linenr_T lnum, linenr_T *line2_out)
+{
+  hasFolding(curwin, lnum, NULL, line2_out);
+}
+
+// cstack indexed field accessors
+int nvim_cstack_get_idx(const cstack_T *cs) { return cs->cs_idx; }
+int nvim_cstack_get_flags(const cstack_T *cs, int idx) { return cs->cs_flags[idx]; }
+
+// profile_cmd helpers
+bool nvim_getline_equal_func_line(LineGetter fgetline, void *cookie)
+{
+  return getline_equal(fgetline, cookie, get_func_line);
+}
+bool nvim_getline_equal_getsourceline(LineGetter fgetline, void *cookie)
+{
+  return getline_equal(fgetline, cookie, getsourceline);
+}
+void *nvim_getline_cookie(LineGetter fgetline, void *cookie)
+{
+  return getline_cookie(fgetline, cookie);
+}
+void nvim_func_line_exec(void *cookie) { func_line_exec(cookie); }
+void nvim_script_line_exec(void) { script_line_exec(); }
+
+// parse_cmdline helpers
+void nvim_eap_init(exarg_T *eap, char *cmdline_val, char **cmdlinep)
+{
+  *eap = (exarg_T){
+    .line1 = 1,
+    .line2 = 1,
+    .cmd = cmdline_val,
+    .cmdlinep = cmdlinep,
+    .ea_getline = NULL,
+    .cookie = NULL,
+  };
+}
+// nvim_get_ex_pressedreturn already exists above (returns int)
+void nvim_set_ex_pressedreturn(bool val) { ex_pressedreturn = val; }
+void nvim_save_cursor(pos_T *save) { *save = curwin->w_cursor; }
+void nvim_restore_cursor(const pos_T *save) { curwin->w_cursor = *save; }
+size_t nvim_sizeof_pos_T(void) { return sizeof(pos_T); }
+char *nvim_find_excmd_after_range(exarg_T *eap) { return find_excmd_after_range(eap); }
+const char *nvim_get_e_ambiguous_use_of_user_defined_command(void) {
+  return _(e_ambiguous_use_of_user_defined_command);
+}
+void nvim_set_cmd_addr_type(exarg_T *eap, char *p) { set_cmd_addr_type(eap, p); }
+char *nvim_skip_colon_white(const char *p, bool skipleadingwhite)
+{
+  return skip_colon_white(p, skipleadingwhite);
+}
+int nvim_eap_get_cmdsize(void) { return (int)CMD_SIZE; }
+char *nvim_eap_get_cmd_field(const exarg_T *eap) { return eap->cmd; }
+bool nvim_parse_bang(exarg_T *eap, char **p_ptr) { return parse_bang(eap, p_ptr); }
+void nvim_eap_set_argt(exarg_T *eap, uint32_t argt) { eap->argt = argt; }
+void nvim_set_eap_arg_from_p(exarg_T *eap, char *p)
+{
+  eap->arg = (eap->cmdidx == CMD_bang) ? p : skipwhite(p);
+}
+void nvim_eap_set_forceit(exarg_T *eap, bool forceit) { eap->forceit = forceit; }
+bool nvim_eap_get_forceit_bool(const exarg_T *eap) { return eap->forceit; }
+void nvim_separate_nextcmd(exarg_T *eap) { separate_nextcmd(eap); }
+bool nvim_cmd_has_expr_args(int cmdidx) { return cmd_has_expr_args((cmdidx_T)cmdidx); }
+void nvim_skip_expr_arg(char **arg) { skip_expr(arg, NULL); }
+char *nvim_check_nextcmd(const char *p) { return check_nextcmd(p); }
+void nvim_eap_set_nextcmd_from_colon_white(exarg_T *eap)
+{
+  if (eap->nextcmd) {
+    eap->nextcmd = skip_colon_white(eap->nextcmd, true);
+  }
+}
+bool nvim_eap_argt_has_xfile(const exarg_T *eap) { return (eap->argt & EX_XFILE) != 0; }
+bool nvim_eap_argt_has_trlbar(const exarg_T *eap) { return (eap->argt & EX_TRLBAR) != 0; }
+bool nvim_eap_argt_has_bang(const exarg_T *eap) { return (eap->argt & EX_BANG) != 0; }
+bool nvim_eap_argt_has_range(const exarg_T *eap) { return (eap->argt & EX_RANGE) != 0; }
+bool nvim_eap_argt_has_dflall(const exarg_T *eap) { return (eap->argt & EX_DFLALL) != 0; }
+void nvim_set_cmd_dflall_range(exarg_T *eap) { set_cmd_dflall_range(eap); }
+void nvim_parse_register(exarg_T *eap) { parse_register(eap); }
+int nvim_parse_count(exarg_T *eap, const char **errormsg, bool after_unknown_range)
+{
+  return parse_count(eap, errormsg, after_unknown_range);
+}
+void nvim_undo_cmdmod(CmdParseInfo *cmdinfo) { undo_cmdmod(&cmdinfo->cmdmod); }
+void nvim_clear_cmdinfo(CmdParseInfo *cmdinfo) { CLEAR_POINTER(cmdinfo); }
+bool nvim_eap_cmd_is_nul_or_comment(const exarg_T *eap)
+{
+  return *eap->cmd == NUL || *eap->cmd == '"';
+}
+size_t nvim_iosize(void) { return IOSIZE; }
+void nvim_xstrlcpy(char *dst, const char *src, size_t n) { xstrlcpy(dst, src, n); }
+// nvim_get_iobuff already exists in option_shim.c
+void nvim_append_command(const char *cmdname) { append_command(cmdname); }
+const char *nvim_get_e_not_an_editor_command(void) { return _(e_not_an_editor_command); }
+void nvim_save_last_search_pattern(void) { save_last_search_pattern(); }
+void nvim_restore_last_search_pattern(void) { restore_last_search_pattern(); }
+void nvim_parse_command_modifiers_init(exarg_T *eap, const char **errormsg,
+                                       CmdParseInfo *cmdinfo)
+{
+  // Not needed as wrapper - parse_command_modifiers is already public
+}
+// Note: parse_command_modifiers, parse_cmd_address, correct_range, parse_count
+//       are all public functions accessible from Rust via extern "C"
+
+// buflist_findpat wrapper (returns buf number, FAIL = -1)
+linenr_T nvim_buflist_findpat_for_cmd(const char *pat, const char *pat_end, bool unlisted)
+{
+  return buflist_findpat(pat, pat_end, unlisted, false, false);
+}
+char *nvim_skiptowhite_esc_wrap(const char *p) { return skiptowhite_esc(p); }
+
+// apply_cmdmod / undo_cmdmod on global cmdmod
+void nvim_apply_global_cmdmod(void) { apply_cmdmod(&cmdmod); }
+void nvim_undo_global_cmdmod(void) { undo_cmdmod(&cmdmod); }
+void nvim_undo_cmdmod_p(CmdParseInfo *cmdinfo) { undo_cmdmod(&cmdinfo->cmdmod); }
+
+// e_nobang and e_norange error strings
+const char *nvim_get_e_nobang(void) { return _(e_nobang); }
+// nvim_get_e_norange already exists above
+
+// ascii_iswhite wrapper (the inline version can't be called from Rust)
+int nvim_ascii_iswhite_fn(int c) { return ascii_iswhite(c) ? 1 : 0; }
+
+// IS_USER_CMDIDX check by number (for execute_cmd0 which has raw cmdidx)
+bool nvim_is_user_cmdidx(int cmdidx) { return IS_USER_CMDIDX((cmdidx_T)cmdidx); }
+
+// CMD_try value (for execute_cmd0 special case)
+int nvim_get_cmd_try(void) { return (int)CMD_try; }
+int nvim_get_cmd_bdelete(void) { return (int)CMD_bdelete; }
+int nvim_get_cmd_bwipeout(void) { return (int)CMD_bwipeout; }
+int nvim_get_cmd_bunload(void) { return (int)CMD_bunload; }
+int nvim_get_cmd_bang(void) { return (int)CMD_bang; }
+int nvim_get_cmd_read(void) { return (int)CMD_read; }
+int nvim_get_cmd_put(void) { return (int)CMD_put; }
+int nvim_get_cmd_iput(void) { return (int)CMD_iput; }
+int nvim_get_cmd_checktime(void) { return (int)CMD_checktime; }
+int nvim_get_cmd_edit(void) { return (int)CMD_edit; }
+int nvim_get_cmd_file(void) { return (int)CMD_file; }
+
+// EX_ flag values
+uint32_t nvim_get_ex_xfile(void) { return EX_XFILE; }
+uint32_t nvim_get_ex_bufname(void) { return EX_BUFNAME; }
+uint32_t nvim_get_ex_bufunl(void) { return EX_BUFUNL; }
+uint32_t nvim_get_ex_modify(void) { return EX_MODIFY; }
+uint32_t nvim_get_ex_cmdwin(void) { return EX_CMDWIN; }
+uint32_t nvim_get_ex_lock_ok(void) { return EX_LOCK_OK; }
+uint32_t nvim_get_ex_wholefold(void) { return EX_WHOLEFOLD; }
+uint32_t nvim_get_ex_bang(void) { return EX_BANG; }
+uint32_t nvim_get_ex_range(void) { return EX_RANGE; }
+uint32_t nvim_get_ex_dflall(void) { return EX_DFLALL; }
+uint32_t nvim_get_ex_trlbar(void) { return EX_TRLBAR; }
+
+// Wrappers for static Phase 2 helpers called from Rust
+int nvim_do_cmdline_start(void) { return do_cmdline_start(); }
+void nvim_do_cmdline_end(void) { do_cmdline_end(); }
+void nvim_correct_range(exarg_T *eap) { correct_range(eap); }
+// nvim_parse_count_ex: alias for nvim_parse_count (same signature)
+int nvim_parse_count_ex(exarg_T *eap, const char **errormsg, bool validate)
+{
+  return parse_count(eap, errormsg, validate);
+}
