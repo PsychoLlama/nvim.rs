@@ -118,16 +118,6 @@ static char lastc_bytes[MAX_SCHAR_SIZE + 1];
 // Rust FFI declarations for character search state
 extern int rs_magic_isset(void);
 
-// Rust FFI declarations for search statistics
-extern void rs_update_search_stat(int dirc, int pos_lnum, int pos_col, int pos_coladd,
-                                  int cursor_lnum, int cursor_col, int cursor_coladd,
-                                  searchstat_T *stat, bool recompute,
-                                  int maxcount, int timeout);
-extern void rs_cmdline_search_stat(int dirc, int pos_lnum, int pos_col, int pos_coladd,
-                                   int cursor_lnum, int cursor_col, int cursor_coladd,
-                                   bool show_top_bot_msg, char *msgbuf, size_t msgbuflen,
-                                   bool recompute, int maxcount, int timeout);
-
 // Rust FFI declaration for find_pattern_in_path
 extern void rs_find_pattern_in_path(const char *ptr, int dir, size_t len,
                                     int whole, int skip_comments,
@@ -144,16 +134,6 @@ extern int rs_ins_compl_interrupted(void);
 extern char *rs_find_word_start(char *ptr);
 extern char *rs_find_word_end(char *ptr);
 extern int rs_needs_previous_pattern(const char *pat);
-
-// Rust FFI declarations for pattern accessors
-extern const char *rs_get_search_pattern(void);
-extern const char *rs_get_subst_pattern(void);
-extern const char *rs_get_last_used_pattern(void);
-extern const char *rs_get_mr_pattern(void);
-
-// Rust FFI declarations for incremental search
-extern void rs_incsearch_state_save(void *state);
-extern void rs_incsearch_state_restore(const void *state);
 
 // Rust FFI declarations for Phase 7 integration functions
 extern int rs_is_zero_width(const char *pattern, size_t patternlen, bool move,
@@ -423,13 +403,6 @@ typedef struct {
 ///
 /// @return          FAIL if failed, OK otherwise.
 
-/// Get search pattern used by search_regcomp().
-char *get_search_pat(void)
-{
-  return mr_pattern;
-}
-
-
 // Save the search patterns, so they can be restored later.
 // Used before/after executing autocommands and user functions.
 static int save_level = 0;
@@ -557,29 +530,11 @@ int nvim_get_p_hls(void)
 
 
 
-char *last_search_pattern(void)
-{
-  return spats[RE_SEARCH].pat;
-}
-
-size_t last_search_pattern_len(void)
-{
-  return spats[RE_SEARCH].patlen;
-}
 
 
 
 
 
-
-
-
-
-
-char *last_search_pat(void)
-{
-  return spats[last_idx].pat;
-}
 
 
 
@@ -850,32 +805,6 @@ int current_search(int count, bool forward)
 }
 
 
-
-/// Add the search count "[3/19]" to "msgbuf".
-/// See update_search_stat() for other arguments.
-static void cmdline_search_stat(int dirc, pos_T *pos, pos_T *cursor_pos, bool show_top_bot_msg,
-                                char *msgbuf, size_t msgbuflen, bool recompute, int maxcount,
-                                int timeout)
-{
-  rs_cmdline_search_stat(dirc, pos->lnum, pos->col, pos->coladd,
-                         cursor_pos->lnum, cursor_pos->col, cursor_pos->coladd,
-                         show_top_bot_msg, msgbuf, msgbuflen,
-                         recompute, maxcount, timeout);
-}
-
-// Add the search count information to "stat".
-// "stat" must not be NULL.
-// When "recompute" is true always recompute the numbers.
-// dirc == 0: don't find the next/previous match (only set the result to "stat")
-// dirc == '/': find the next match
-// dirc == '?': find the previous match
-static void update_search_stat(int dirc, pos_T *pos, pos_T *cursor_pos, searchstat_T *stat,
-                               bool recompute, int maxcount, int timeout)
-{
-  rs_update_search_stat(dirc, pos->lnum, pos->col, pos->coladd,
-                        cursor_pos->lnum, cursor_pos->col, cursor_pos->coladd,
-                        stat, recompute, maxcount, timeout);
-}
 
 // "searchcount()" function
 void f_searchcount(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)

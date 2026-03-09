@@ -181,5 +181,12 @@ bool search_was_last_used(void);
 void set_last_used_pattern(bool is_substitute_pattern);
 void set_substitute_pattern(SearchPattern pat);
 int search_regcomp(char *pat, size_t patlen, char **used_pat, int pat_save, int pat_use, int options, regmmatch_T *regmatch);
+// Phase 6: small accessor functions replaced by Rust exports
+char *get_search_pat(void);
+char *last_search_pattern(void);
+size_t last_search_pattern_len(void);
+char *last_search_pat(void);
+void update_search_stat(int dirc, pos_T *pos, pos_T *cursor_pos, searchstat_T *stat, bool recompute, int maxcount, int timeout);
+void cmdline_search_stat(int dirc, pos_T *pos, pos_T *cursor_pos, bool show_top_bot_msg, char *msgbuf, size_t msgbuflen, bool recompute, int maxcount, int timeout);
 
 #include "search.h.generated.h"

@@ -374,7 +374,7 @@ pub extern "C" fn rs_subst_pattern_magic() -> c_int {
 ///
 /// # Safety
 /// Returns a pointer to static memory that may be invalidated by subsequent searches.
-#[no_mangle]
+#[unsafe(export_name = "get_search_pat")]
 pub unsafe extern "C" fn rs_get_mr_pattern() -> *const c_char {
     get_mr_pattern()
 }
@@ -383,6 +383,30 @@ pub unsafe extern "C" fn rs_get_mr_pattern() -> *const c_char {
 #[no_mangle]
 pub extern "C" fn rs_get_mr_pattern_len() -> usize {
     get_mr_pattern_len()
+}
+
+/// FFI: Return the search pattern string (spats[RE_SEARCH].pat).
+///
+/// # Safety
+/// Returns a pointer to allocated memory owned by C. Do not free.
+#[unsafe(export_name = "last_search_pattern")]
+pub unsafe extern "C" fn rs_last_search_pattern() -> *mut c_char {
+    nvim_get_spat_pat(state::RE_SEARCH) as *mut c_char
+}
+
+/// FFI: Return the search pattern length (spats[RE_SEARCH].patlen).
+#[unsafe(export_name = "last_search_pattern_len")]
+pub extern "C" fn rs_last_search_pattern_len() -> usize {
+    state::get_spat_patlen(state::RE_SEARCH)
+}
+
+/// FFI: Return the last used pattern string (spats[last_idx].pat).
+///
+/// # Safety
+/// Returns a pointer to allocated memory owned by C. Do not free.
+#[unsafe(export_name = "last_search_pat")]
+pub unsafe extern "C" fn rs_last_search_pat() -> *mut c_char {
+    nvim_get_spat_pat(state::get_last_idx()) as *mut c_char
 }
 
 /// FFI: Check if mr_pattern is empty.

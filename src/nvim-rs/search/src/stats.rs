@@ -552,10 +552,10 @@ extern "C" {
 /// Position type matching pos_T (lnum: i32, col: i32, coladd: i32).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
-struct PosT {
-    lnum: i32,
-    col: i32,
-    coladd: i32,
+pub struct PosT {
+    pub lnum: i32,
+    pub col: i32,
+    pub coladd: i32,
 }
 
 const FAIL: c_int = 0;
@@ -857,6 +857,67 @@ pub unsafe extern "C" fn rs_cmdline_search_stat(
 
     // Display the message
     nvim_cmdline_stat_display(msgbuf);
+}
+
+// =============================================================================
+// Phase 6: export_name wrappers accepting pos_T* directly
+// =============================================================================
+
+/// Direct C replacement for update_search_stat().
+///
+/// # Safety
+/// `pos`, `cursor_pos`, and `stat` must be valid non-null pointers.
+#[unsafe(export_name = "update_search_stat")]
+pub unsafe extern "C" fn update_search_stat_export(
+    dirc: c_int,
+    pos: *mut PosT,
+    cursor_pos: *mut PosT,
+    stat: *mut SearchStat,
+    recompute: bool,
+    maxcount: c_int,
+    timeout: c_int,
+) {
+    let p = *pos;
+    let cp = *cursor_pos;
+    rs_update_search_stat(
+        dirc, p.lnum, p.col, p.coladd, cp.lnum, cp.col, cp.coladd, stat, recompute, maxcount,
+        timeout,
+    );
+}
+
+/// Direct C replacement for cmdline_search_stat().
+///
+/// # Safety
+/// `pos`, `cursor_pos`, and `msgbuf` must be valid non-null pointers.
+#[unsafe(export_name = "cmdline_search_stat")]
+pub unsafe extern "C" fn cmdline_search_stat_export(
+    dirc: c_int,
+    pos: *mut PosT,
+    cursor_pos: *mut PosT,
+    show_top_bot_msg: bool,
+    msgbuf: *mut c_char,
+    msgbuflen: usize,
+    recompute: bool,
+    maxcount: c_int,
+    timeout: c_int,
+) {
+    let p = *pos;
+    let cp = *cursor_pos;
+    rs_cmdline_search_stat(
+        dirc,
+        p.lnum,
+        p.col,
+        p.coladd,
+        cp.lnum,
+        cp.col,
+        cp.coladd,
+        show_top_bot_msg,
+        msgbuf,
+        msgbuflen,
+        recompute,
+        maxcount,
+        timeout,
+    );
 }
 
 // =============================================================================
