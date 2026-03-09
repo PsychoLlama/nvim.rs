@@ -2606,6 +2606,7 @@ extern "C" {
     fn nvim_get_state() -> c_int;
 
     /// Redraw later with specified type.
+    #[link_name = "redraw_later"]
     fn nvim_redraw_later(wp: WinHandle, redraw_type: c_int);
 
 }

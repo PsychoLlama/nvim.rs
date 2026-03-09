@@ -323,6 +323,7 @@ extern "C" {
     fn rs_get_sidescrolloff_value(wp: WinHandle) -> c_int;
 
     /// Call `redraw_later`
+    #[link_name = "redraw_later"]
     fn nvim_redraw_later(wp: WinHandle, r#type: c_int);
 }
 

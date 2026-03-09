@@ -628,7 +628,6 @@ extern "C" {
     fn nvim_get_must_redraw() -> c_int;
     fn nvim_set_must_redraw(val: c_int);
     fn nvim_get_redraw_not_allowed() -> c_int;
-    fn nvim_redraw_later(wp: WinHandle, redraw_type: c_int);
 }
 
 /// Get the redraw type for a window.
@@ -710,7 +709,7 @@ pub extern "C" fn rs_redraw_allowed() -> c_int {
 }
 
 /// Set the must_redraw global only if type is higher.
-#[no_mangle]
+#[unsafe(export_name = "set_must_redraw")]
 pub extern "C" fn rs_set_must_redraw_max(redraw_type: c_int) {
     unsafe {
         if nvim_get_redraw_not_allowed() == 0 {
@@ -782,7 +781,7 @@ pub unsafe extern "C" fn rs_update_redraw_range(wp: WinHandle, first: LinenrT, l
         }
 
         // Mark window for redraw
-        nvim_redraw_later(wp, UPD_VALID);
+        redraw_later_impl(wp, UPD_VALID);
     }
 }
 
@@ -999,6 +998,9 @@ extern "C" {
     // Buffer comparison
     fn nvim_win_buffer_eq(wp: WinHandle, buf: BufHandle) -> c_int;
 
+    // Buffer accessors
+    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
+
     // Floating window check
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
 }
@@ -1044,10 +1046,8 @@ fn redraw_later_impl(wp: WinHandle, redraw_type: c_int) {
     }
 }
 
-/// FFI wrapper for `redraw_later`.
-///
 /// Marks a window for later redraw with the specified type.
-#[no_mangle]
+#[unsafe(export_name = "redraw_later")]
 pub extern "C" fn rs_redraw_later(wp: WinHandle, redraw_type: c_int) {
     redraw_later_impl(wp, redraw_type);
 }
@@ -1074,10 +1074,8 @@ fn redraw_all_later_impl(redraw_type: c_int) {
     }
 }
 
-/// FFI wrapper for `redraw_all_later`.
-///
 /// Marks all windows in the current tab for later redraw.
-#[no_mangle]
+#[unsafe(export_name = "redraw_all_later")]
 pub extern "C" fn rs_redraw_all_later(redraw_type: c_int) {
     redraw_all_later_impl(redraw_type);
 }
@@ -1097,10 +1095,8 @@ fn redraw_buf_later_impl(buf: BufHandle, redraw_type: c_int) {
     }
 }
 
-/// FFI wrapper for `redraw_buf_later`.
-///
 /// Marks all windows displaying the given buffer for redraw.
-#[no_mangle]
+#[unsafe(export_name = "redraw_buf_later")]
 pub extern "C" fn rs_redraw_buf_later(buf: BufHandle, redraw_type: c_int) {
     redraw_buf_later_impl(buf, redraw_type);
 }
@@ -1115,10 +1111,8 @@ fn redraw_curbuf_later_impl(redraw_type: c_int) {
     }
 }
 
-/// FFI wrapper for `redraw_curbuf_later`.
-///
 /// Marks all windows displaying the current buffer for redraw.
-#[no_mangle]
+#[unsafe(export_name = "redraw_curbuf_later")]
 pub extern "C" fn rs_redraw_curbuf_later(redraw_type: c_int) {
     redraw_curbuf_later_impl(redraw_type);
 }
@@ -1137,10 +1131,8 @@ fn screen_invalidate_highlights_impl() {
     }
 }
 
-/// FFI wrapper for `screen_invalidate_highlights`.
-///
 /// Invalidates highlights for all windows, forcing full redraw.
-#[no_mangle]
+#[unsafe(export_name = "screen_invalidate_highlights")]
 pub extern "C" fn rs_screen_invalidate_highlights() {
     screen_invalidate_highlights_impl();
 }
@@ -1174,10 +1166,8 @@ fn redraw_win_range_later_impl(wp: WinHandle, first: LinenrT, last: LinenrT) {
     }
 }
 
-/// FFI wrapper for `redraw_win_range_later`.
-///
 /// Marks a range of lines in a window for redraw.
-#[no_mangle]
+#[unsafe(export_name = "redraw_win_range_later")]
 pub extern "C" fn rs_redraw_win_range_later(wp: WinHandle, first: LinenrT, last: LinenrT) {
     redraw_win_range_later_impl(wp, first, last);
 }
@@ -1185,9 +1175,31 @@ pub extern "C" fn rs_redraw_win_range_later(wp: WinHandle, first: LinenrT, last:
 /// Mark a single line in a window for redraw.
 ///
 /// This is the Rust equivalent of `redrawWinline()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "redrawWinline")]
+#[allow(non_snake_case)]
 pub extern "C" fn rs_redrawWinline(wp: WinHandle, lnum: LinenrT) {
     redraw_win_range_later_impl(wp, lnum, lnum);
+}
+
+/// Mark a specific line in all windows showing a buffer for redraw.
+///
+/// This is the Rust equivalent of `redraw_buf_line_later()` in drawscreen.c.
+#[unsafe(export_name = "redraw_buf_line_later")]
+pub extern "C" fn rs_redraw_buf_line_later(buf: BufHandle, line: LinenrT, force: bool) {
+    unsafe {
+        let ml_line_count = nvim_buf_get_ml_line_count(buf);
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            if nvim_win_buffer_eq(wp, buf) != 0 {
+                let clamped = line.min(ml_line_count);
+                redraw_win_range_later_impl(wp, clamped, clamped);
+                if force && line > ml_line_count {
+                    nvim_win_set_redraw_bot(wp, line);
+                }
+            }
+            wp = nvim_win_get_next(wp);
+        }
+    }
 }
 
 /// Mark a line range in all windows showing a buffer.
@@ -1205,10 +1217,8 @@ fn redraw_buf_range_later_impl(buf: BufHandle, first: LinenrT, last: LinenrT) {
     }
 }
 
-/// FFI wrapper for `redraw_buf_range_later`.
-///
 /// Marks a range of lines in all windows displaying the buffer.
-#[no_mangle]
+#[unsafe(export_name = "redraw_buf_range_later")]
 pub extern "C" fn rs_redraw_buf_range_later(buf: BufHandle, first: LinenrT, last: LinenrT) {
     redraw_buf_range_later_impl(buf, first, last);
 }
@@ -1250,10 +1260,8 @@ fn redraw_buf_status_later_impl(buf: BufHandle) {
     }
 }
 
-/// FFI wrapper for `redraw_buf_status_later`.
-///
 /// Marks status lines of windows displaying the buffer for redraw.
-#[no_mangle]
+#[unsafe(export_name = "redraw_buf_status_later")]
 pub extern "C" fn rs_redraw_buf_status_later(buf: BufHandle) {
     redraw_buf_status_later_impl(buf);
 }

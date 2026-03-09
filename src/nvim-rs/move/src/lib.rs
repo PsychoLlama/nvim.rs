@@ -789,8 +789,11 @@ extern "C" {
     fn nvim_win_set_skipcol(wp: WinHandle, val: ColnrT);
 
     // Redraw functions
+    #[link_name = "redraw_later"]
     fn nvim_redraw_later(wp: WinHandle, type_: c_int);
+    #[link_name = "redrawWinline"]
     fn nvim_redrawWinline(wp: WinHandle, lnum: LinenrT);
+    #[link_name = "redraw_buf_later"]
     fn nvim_redraw_buf_later(buf: *mut std::ffi::c_void, type_: c_int);
 
     // Popup menu visibility

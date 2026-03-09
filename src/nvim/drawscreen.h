@@ -59,5 +59,17 @@ DLLEXPORT bool win_cursorline_standout(const win_T *wp);
 DLLEXPORT void win_update_cursorline(win_T *wp, foldinfo_T *foldinfo);
 DLLEXPORT int compute_foldcolumn(win_T *wp, int col);
 DLLEXPORT int number_width(win_T *wp);
+// Phase 2: redraw scheduling functions now exported from Rust
+DLLEXPORT void redraw_later(win_T *wp, int type);
+DLLEXPORT void redraw_all_later(int type);
+DLLEXPORT void set_must_redraw(int type);
+DLLEXPORT void screen_invalidate_highlights(void);
+DLLEXPORT void redraw_curbuf_later(int type);
+DLLEXPORT void redraw_buf_later(buf_T *buf, int type);
+DLLEXPORT void redraw_buf_line_later(buf_T *buf, linenr_T line, bool force);
+DLLEXPORT void redraw_win_range_later(win_T *wp, linenr_T first, linenr_T last);
+DLLEXPORT void redrawWinline(win_T *wp, linenr_T lnum);
+DLLEXPORT void redraw_buf_range_later(buf_T *buf, linenr_T first, linenr_T last);
+DLLEXPORT void redraw_buf_status_later(buf_T *buf);
 
 #include "drawscreen.h.generated.h"

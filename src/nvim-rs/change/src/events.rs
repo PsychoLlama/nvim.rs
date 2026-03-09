@@ -79,6 +79,7 @@ extern "C" {
     fn nvim_diff_lnum_win(lnum: LinenrT, win: WinHandle) -> LinenrT;
 
     // Redraw functions
+    #[link_name = "redraw_later"]
     fn nvim_redraw_later(win: WinHandle, rtype: c_int);
 
     // Window iteration

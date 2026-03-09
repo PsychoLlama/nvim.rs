@@ -2198,48 +2198,6 @@ void win_draw_end(win_T *wp, schar_T c1, bool draw_margin, int startrow, int end
 }
 
 
-/// Redraw a window later, with wp->w_redr_type >= type.
-///
-/// Set must_redraw only if not already set to a higher value.
-/// e.g. if must_redraw is UPD_CLEAR, type UPD_NOT_VALID will do nothing.
-void redraw_later(win_T *wp, int type)
-{
-  // curwin may have been set to NULL when exiting
-  assert(wp != NULL || exiting);
-  if (!exiting && !redraw_not_allowed && wp->w_redr_type < type) {
-    wp->w_redr_type = type;
-    if (type >= UPD_NOT_VALID) {
-      wp->w_lines_valid = 0;
-    }
-    must_redraw = MAX(must_redraw, type);  // must_redraw is the maximum of all windows
-  }
-}
-
-/// Wrapper for redraw_later for Rust FFI.
-void nvim_redraw_later(win_T *wp, int type)
-{
-  redraw_later(wp, type);
-}
-
-/// Mark all windows to be redrawn later.
-void redraw_all_later(int type)
-{
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    redraw_later(wp, type);
-  }
-  // This may be needed when switching tabs.
-  set_must_redraw(type);
-}
-
-/// Set "must_redraw" to "type" unless it already has a higher value
-/// or it is currently not allowed.
-void set_must_redraw(int type)
-{
-  if (!redraw_not_allowed) {
-    must_redraw = MAX(must_redraw, type);
-  }
-}
-
 /// Get the current must_redraw value (Rust FFI).
 int nvim_get_must_redraw(void)
 {
@@ -2262,89 +2220,6 @@ int nvim_get_redraw_not_allowed(void)
 int nvim_VIsual_active(void)
 {
   return VIsual_active ? 1 : 0;
-}
-
-void screen_invalidate_highlights(void)
-{
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    redraw_later(wp, UPD_NOT_VALID);
-    wp->w_grid_alloc.valid = false;
-  }
-}
-
-/// Mark all windows that are editing the current buffer to be updated later.
-void redraw_curbuf_later(int type)
-{
-  redraw_buf_later(curbuf, type);
-}
-
-void redraw_buf_later(buf_T *buf, int type)
-{
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_buffer == buf) {
-      redraw_later(wp, type);
-    }
-  }
-}
-
-void redraw_buf_line_later(buf_T *buf, linenr_T line, bool force)
-{
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_buffer == buf) {
-      redrawWinline(wp, MIN(line, buf->b_ml.ml_line_count));
-      if (force && line > buf->b_ml.ml_line_count) {
-        wp->w_redraw_bot = line;
-      }
-    }
-  }
-}
-
-void redraw_win_range_later(win_T *wp, linenr_T first, linenr_T last)
-{
-  if (last >= wp->w_topline && first < wp->w_botline) {
-    if (wp->w_redraw_top == 0 || wp->w_redraw_top > first) {
-      wp->w_redraw_top = first;
-    }
-    if (wp->w_redraw_bot == 0 || wp->w_redraw_bot < last) {
-      wp->w_redraw_bot = last;
-    }
-    redraw_later(wp, UPD_VALID);
-  }
-}
-
-/// Changed something in the current window, at buffer line "lnum", that
-/// requires that line and possibly other lines to be redrawn.
-/// Used when entering/leaving Insert mode with the cursor on a folded line.
-/// Used to remove the "$" from a change command.
-/// Note that when also inserting/deleting lines w_redraw_top and w_redraw_bot
-/// may become invalid and the whole window will have to be redrawn.
-void redrawWinline(win_T *wp, linenr_T lnum)
-  FUNC_ATTR_NONNULL_ALL
-{
-  redraw_win_range_later(wp, lnum, lnum);
-}
-
-void redraw_buf_range_later(buf_T *buf, linenr_T first, linenr_T last)
-{
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_buffer == buf) {
-      redraw_win_range_later(wp, first, last);
-    }
-  }
-}
-
-/// called when the status bars for the buffer 'buf' need to be updated
-void redraw_buf_status_later(buf_T *buf)
-{
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_buffer == buf
-        && (wp->w_status_height
-            || (wp == curwin && rs_global_stl_height())
-            || wp->w_winbar_height)) {
-      wp->w_redr_status = true;
-      set_must_redraw(UPD_VALID);
-    }
-  }
 }
 
 // Accessor for p_ru option (ruler)
