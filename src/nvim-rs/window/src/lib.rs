@@ -2682,13 +2682,11 @@ fn win_redraw_last_status_impl(frp: *const Frame) {
     }
 }
 
-/// FFI wrapper for `win_redraw_last_status`.
-///
 /// Marks all status lines at the bottom of a frame tree for redraw.
 ///
 /// # Safety
 /// `frp` must be a valid frame pointer or null.
-#[no_mangle]
+#[unsafe(export_name = "win_redraw_last_status")]
 pub extern "C" fn rs_win_redraw_last_status(frp: *const Frame) {
     win_redraw_last_status_impl(frp);
 }

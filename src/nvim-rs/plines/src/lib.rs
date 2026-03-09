@@ -12,6 +12,7 @@
 #![allow(clippy::cast_lossless)] // Character literals fit in c_int
 #![allow(clippy::cast_possible_truncation)] // OptInt values fit in c_int for these options
 #![allow(clippy::similar_names)] // p_nu and p_rnu are standard Vim option names
+#![allow(clippy::must_use_candidate)] // FFI exports don't use #[must_use]
 
 use std::ffi::{c_char, c_int, c_void};
 
@@ -595,7 +596,7 @@ fn win_cursorline_standout_impl(wp: WinHandle) -> bool {
         let cul = nvim_win_get_p_cul(wp) != 0;
         let is_curwin = nvim_win_is_curwin(wp) != 0;
         let cole = nvim_win_get_p_cole(wp);
-        let conceal_cursor = rs_conceal_cursor_line(wp) != 0;
+        let conceal_cursor = rs_conceal_cursor_line(wp);
 
         cul || (is_curwin && cole > 0 && !conceal_cursor)
     }
@@ -742,7 +743,7 @@ fn win_border_width_impl(wp: WinHandle) -> c_int {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid `win_T*` pointer or null.
-#[no_mangle]
+#[unsafe(export_name = "compute_foldcolumn")]
 pub extern "C" fn rs_compute_foldcolumn(wp: WinHandle, col: c_int) -> c_int {
     compute_foldcolumn_impl(wp, col)
 }
@@ -751,7 +752,7 @@ pub extern "C" fn rs_compute_foldcolumn(wp: WinHandle, col: c_int) -> c_int {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid `win_T*` pointer or null.
-#[no_mangle]
+#[unsafe(export_name = "number_width")]
 pub extern "C" fn rs_number_width(wp: WinHandle) -> c_int {
     number_width_impl(wp)
 }
@@ -760,9 +761,9 @@ pub extern "C" fn rs_number_width(wp: WinHandle) -> c_int {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid `win_T*` pointer or null.
-#[no_mangle]
-pub extern "C" fn rs_conceal_cursor_line(wp: WinHandle) -> c_int {
-    c_int::from(conceal_cursor_line_impl(wp))
+#[unsafe(export_name = "conceal_cursor_line")]
+pub extern "C" fn rs_conceal_cursor_line(wp: WinHandle) -> bool {
+    conceal_cursor_line_impl(wp)
 }
 
 /// Get the number of cells taken up on the screen at given virtual column.
@@ -876,9 +877,9 @@ pub extern "C" fn rs_sms_marker_overlap(wp: WinHandle, extra2: c_int) -> c_int {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid `win_T*` pointer or null.
-#[no_mangle]
-pub extern "C" fn rs_win_cursorline_standout(wp: WinHandle) -> c_int {
-    c_int::from(win_cursorline_standout_impl(wp))
+#[unsafe(export_name = "win_cursorline_standout")]
+pub extern "C" fn rs_win_cursorline_standout(wp: WinHandle) -> bool {
+    win_cursorline_standout_impl(wp)
 }
 
 /// Return the effective 'scrolloff' value for the current window.

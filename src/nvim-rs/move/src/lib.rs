@@ -77,7 +77,8 @@ extern "C" {
     // Concealment checking
     fn nvim_win_get_p_cole(wp: WinHandle) -> i64;
     fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
-    fn rs_conceal_cursor_line(wp: WinHandle) -> c_int;
+    #[link_name = "conceal_cursor_line"]
+    fn rs_conceal_cursor_line(wp: WinHandle) -> bool;
     fn nvim_decor_conceal_line(wp: WinHandle, lnum: LinenrT, check_toggle: c_int) -> c_int;
     #[link_name = "changed_window_setting"]
     fn rs_changed_window_setting(wp: WinHandle);
@@ -157,7 +158,7 @@ pub unsafe extern "C" fn rs_check_cursor_moved(wp: WinHandle) {
         // Check for concealed line visibility toggle
         let is_curwin = nvim_win_is_curwin(wp) != 0;
         let p_cole = nvim_win_get_p_cole(wp);
-        let conceal_cursor = rs_conceal_cursor_line(wp) != 0;
+        let conceal_cursor = rs_conceal_cursor_line(wp);
 
         if is_curwin && valid_cursor_lnum > 0 && p_cole >= 2 && !conceal_cursor {
             // Check if either old or new line has concealment
@@ -802,7 +803,8 @@ extern "C" {
     fn nvim_win_get_p_culopt_flags(wp: WinHandle) -> c_int;
 
     // Cursorline standout check (from plines crate)
-    fn rs_win_cursorline_standout(wp: WinHandle) -> c_int;
+    #[link_name = "win_cursorline_standout"]
+    fn rs_win_cursorline_standout(wp: WinHandle) -> bool;
 
     // Visual mode state
     fn nvim_VIsual_active() -> c_int;
@@ -903,7 +905,7 @@ pub unsafe extern "C" fn rs_redraw_for_cursorline(wp: WinHandle) {
     }
 
     let p_rnu = nvim_win_get_p_rnu(wp) != 0;
-    let cursorline_standout = rs_win_cursorline_standout(wp) != 0;
+    let cursorline_standout = rs_win_cursorline_standout(wp);
 
     if p_rnu || cursorline_standout {
         // win_line() will redraw the number column and cursorline only.
@@ -928,7 +930,7 @@ pub unsafe extern "C" fn rs_redraw_for_cursorcolumn(wp: WinHandle) {
     // current line needs to be redrawn to calculate the correct cursor position.
     let is_curwin = nvim_win_is_curwin(wp) != 0;
     let p_cole = nvim_win_get_p_cole(wp);
-    if is_curwin && p_cole > 0 && rs_conceal_cursor_line(wp) != 0 {
+    if is_curwin && p_cole > 0 && rs_conceal_cursor_line(wp) {
         let cursor_lnum = nvim_win_get_cursor_lnum(wp);
         nvim_redrawWinline(wp, cursor_lnum);
     }

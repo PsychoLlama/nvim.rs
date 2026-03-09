@@ -235,6 +235,7 @@ extern "C" {
     fn rs_win_col_off(wp: WinHandle) -> c_int;
     #[link_name = "win_col_off2"]
     fn rs_win_col_off2(wp: WinHandle) -> c_int;
+    #[link_name = "number_width"]
     fn rs_number_width(wp: WinHandle) -> c_int;
 
     // Linebuf access
@@ -665,8 +666,9 @@ fn fill_foldcolumn_impl(
 /// Setup for drawing the 'foldcolumn', if there is one.
 fn draw_foldcolumn_impl(wp: WinHandle, wlv: *mut WinLineVars) {
     unsafe {
-        // compute_foldcolumn is rs_compute_foldcolumn in C
+        // compute_foldcolumn is now exported directly with its C name
         extern "C" {
+            #[link_name = "compute_foldcolumn"]
             fn rs_compute_foldcolumn(wp: WinHandle, col: c_int) -> c_int;
         }
 

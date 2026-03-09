@@ -142,19 +142,9 @@ extern int rs_hasAnyFolding(win_T *win);
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
 extern void rs_clear_showcmd(void);
 
-// Rust FFI declarations for display calculations
-extern int rs_compute_foldcolumn(win_T *wp, int col);
-extern int rs_number_width(win_T *wp);
-extern int rs_conceal_cursor_line(const win_T *wp);
-
-// Rust FFI declarations for separator connection checks
-extern int rs_hsep_connected(win_T *wp, WindowCorner corner);
-extern int rs_vsep_connected(win_T *wp, WindowCorner corner);
-
 // Rust FFI declarations for separator drawing
 extern void rs_draw_vsep_win(win_T *wp);
 extern void rs_draw_hsep_win(win_T *wp);
-extern schar_T rs_get_corner_sep_connector(win_T *wp, WindowCorner corner);
 extern void rs_draw_sep_connectors_win(win_T *wp);
 
 static bool redraw_popupmenu = false;
@@ -162,15 +152,6 @@ static bool msg_grid_invalid = false;
 static bool resizing_autocmd = false;
 static bool conceal_cursor_used = false;
 
-extern void rs_conceal_check_cursor_line(void);
-
-/// Check if the cursor line needs to be redrawn because of 'concealcursor'.
-///
-/// When cursor is moved at the same time, both lines will be redrawn regardless.
-void conceal_check_cursor_line(void)
-{
-  rs_conceal_check_cursor_line();
-}
 
 /// Resize default_grid to Rows and Columns.
 ///
@@ -431,22 +412,6 @@ void screen_resize(int width, int height)
   resizing_screen = false;
 }
 
-extern void rs_check_screensize(void);
-
-/// Check if the new Nvim application "screen" dimensions are valid.
-/// Correct it if it's too small or way too big.
-void check_screensize(void)
-{
-  rs_check_screensize();
-}
-
-extern int rs_redrawing(void);
-
-/// Return true if redrawing should currently be done.
-bool redrawing(void)
-{
-  return rs_redrawing() != 0;
-}
 
 /// Redraw the parts of the screen that is marked for redraw.
 ///
@@ -739,46 +704,6 @@ int update_screen(void)
   return OK;
 }
 
-extern void rs_start_search_hl(void);
-extern void rs_end_search_hl(void);
-
-/// Prepare for 'hlsearch' highlighting.
-void start_search_hl(void)
-{
-  rs_start_search_hl();
-}
-
-/// Clean up for 'hlsearch' highlighting.
-void end_search_hl(void)
-{
-  rs_end_search_hl();
-}
-
-extern void rs_setcursor(void);
-extern void rs_setcursor_mayforce(win_T *wp, int force);
-
-/// Set cursor to its position in the current window.
-void setcursor(void)
-{
-  rs_setcursor();
-}
-
-/// Set cursor to its position in the current window.
-/// @param force  when true, also when not redrawing.
-void setcursor_mayforce(win_T *wp, bool force)
-{
-  rs_setcursor_mayforce(wp, force ? 1 : 0);
-}
-
-extern int rs_redraw_custom_title_later(void);
-
-/// Mark the title and icon for redraw if either of them uses statusline format.
-///
-/// @return  whether either title or icon uses statusline format.
-bool redraw_custom_title_later(void)
-{
-  return rs_redraw_custom_title_later() != 0;
-}
 
 /// Show current cursor info in ruler and various other places
 ///
@@ -833,14 +758,6 @@ void show_cursor_info_later(bool force)
   }
 }
 
-extern int rs_skip_showmode(void);
-
-/// @return true when postponing displaying the mode message: when not redrawing
-/// or inside a mapping.
-bool skip_showmode(void)
-{
-  return rs_skip_showmode() != 0;
-}
 
 /// Show the current mode and ruler.
 ///
@@ -1033,15 +950,6 @@ static void msg_pos_mode(void)
   msg_row = Rows - 1;
 }
 
-extern void rs_unshowmode(int force);
-
-/// Delete mode message.  Used when ESC is typed which is expected to end
-/// Insert mode (but Insert mode didn't end yet!).
-/// Caller should check "mode_displayed".
-void unshowmode(bool force)
-{
-  rs_unshowmode(force ? 1 : 0);
-}
 
 // Clear the mode message.
 void clearmode(void)
@@ -1075,17 +983,6 @@ static void recording_mode(int hl_id)
 
 #define COL_RULER 17        // columns needed by standard ruler
 
-extern void rs_comp_col(void);
-
-/// Compute columns for ruler and shown command. 'sc_col' is also used to
-/// decide what the maximum length of a message on the status line can be.
-/// If there is a status line for the last window, 'sc_col' is independent
-/// of 'ru_col'.
-void comp_col(void)
-{
-  rs_comp_col();
-}
-
 /// Redraw entire window "wp" if "auto" 'signcolumn' width has changed.
 static bool win_redraw_signcols(win_T *wp)
 {
@@ -1115,44 +1012,6 @@ static bool win_redraw_signcols(win_T *wp)
   return (wp->w_scwidth != scwidth || rebuild_stc);
 }
 
-/// Check if horizontal separator of window "wp" at specified window corner is connected to the
-/// horizontal separator of another window
-/// Assumes global statusline is enabled
-static bool hsep_connected(win_T *wp, WindowCorner corner)
-{
-  return rs_hsep_connected(wp, corner) != 0;
-}
-
-/// Check if vertical separator of window "wp" at specified window corner is connected to the
-/// vertical separator of another window
-static bool vsep_connected(win_T *wp, WindowCorner corner)
-{
-  return rs_vsep_connected(wp, corner) != 0;
-}
-
-/// Draw the vertical separator right of window "wp"
-static void draw_vsep_win(win_T *wp)
-{
-  rs_draw_vsep_win(wp);
-}
-
-/// Draw the horizontal separator below window "wp"
-static void draw_hsep_win(win_T *wp)
-{
-  rs_draw_hsep_win(wp);
-}
-
-/// Get the separator connector for specified window corner of window "wp"
-static schar_T get_corner_sep_connector(win_T *wp, WindowCorner corner)
-{
-  return rs_get_corner_sep_connector(wp, corner);
-}
-
-/// Draw separator connecting characters on the corners of window "wp"
-static void draw_sep_connectors_win(win_T *wp)
-{
-  rs_draw_sep_connectors_win(wp);
-}
 
 /// Update a single window.
 ///
@@ -1218,8 +1077,8 @@ static void win_update(win_T *wp)
   // Window is zero-height: Only need to draw the separator
   if (wp->w_view_height == 0) {
     // draw the horizontal separator below this window
-    draw_hsep_win(wp);
-    draw_sep_connectors_win(wp);
+    rs_draw_hsep_win(wp);
+    rs_draw_sep_connectors_win(wp);
     wp->w_redr_type = 0;
     return;
   }
@@ -1227,8 +1086,8 @@ static void win_update(win_T *wp)
   // Window is zero-width: Only need to draw the separator.
   if (wp->w_view_width == 0) {
     // draw the vertical separator right of this window
-    draw_vsep_win(wp);
-    draw_sep_connectors_win(wp);
+    rs_draw_vsep_win(wp);
+    rs_draw_sep_connectors_win(wp);
     wp->w_redr_type = 0;
     return;
   }
@@ -2196,9 +2055,9 @@ redr_statuscol:
   }
 
   if (wp->w_redr_type >= UPD_REDRAW_TOP) {
-    draw_vsep_win(wp);
-    draw_hsep_win(wp);
-    draw_sep_connectors_win(wp);
+    rs_draw_vsep_win(wp);
+    rs_draw_hsep_win(wp);
+    rs_draw_sep_connectors_win(wp);
   }
   syn_set_timeout(NULL);
 
@@ -2338,20 +2197,6 @@ void win_draw_end(win_T *wp, schar_T c1, bool draw_margin, int startrow, int end
   }
 }
 
-/// Compute the width of the foldcolumn.  Based on 'foldcolumn' and how much
-/// space is available for window "wp", minus "col".
-int compute_foldcolumn(win_T *wp, int col)
-{
-  return rs_compute_foldcolumn(wp, col);
-}
-
-/// Return the width of the 'number' and 'relativenumber' column.
-/// Caller may need to check if 'number' or 'relativenumber' is set.
-/// Otherwise it depends on 'numberwidth' and the line count.
-int number_width(win_T *wp)
-{
-  return rs_number_width(wp);
-}
 
 /// Redraw a window later, with wp->w_redr_type >= type.
 ///
@@ -2508,17 +2353,6 @@ int nvim_get_p_ru(void)
   return p_ru;
 }
 
-// Rust implementations
-extern void rs_status_redraw_all(void);
-extern void rs_status_redraw_curbuf(void);
-extern void rs_status_redraw_buf(buf_T *buf);
-
-/// Mark all status lines and window bars for redraw; used after first :cd
-void status_redraw_all(void)
-{
-  rs_status_redraw_all();
-}
-
 /// C accessor for status_redraw_all for Rust incsearch (avoids recursion).
 void nvim_status_redraw_all(void)
 {
@@ -2538,64 +2372,6 @@ void nvim_update_screen(void)
   update_screen();
 }
 
-/// Marks all status lines and window bars of the current buffer for redraw.
-void status_redraw_curbuf(void)
-{
-  rs_status_redraw_curbuf();
-}
-
-/// Marks all status lines and window bars of the given buffer for redraw.
-void status_redraw_buf(buf_T *buf)
-{
-  rs_status_redraw_buf(buf);
-}
-
-extern void rs_redraw_statuslines(void);
-
-/// Redraw all status lines that need to be redrawn.
-void redraw_statuslines(void)
-{
-  rs_redraw_statuslines();
-}
-
-// Rust implementation of win_redraw_last_status
-extern void rs_win_redraw_last_status(const frame_T *frp);
-
-/// Redraw all status lines at the bottom of frame "frp".
-void win_redraw_last_status(const frame_T *frp)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  rs_win_redraw_last_status(frp);
-}
-
-/// Return true if the cursor line in window "wp" may be concealed, according
-/// to the 'concealcursor' option.
-bool conceal_cursor_line(const win_T *wp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_conceal_cursor_line(wp) != 0;
-}
-
-extern int rs_win_cursorline_standout(win_T *wp);
-
-/// Whether cursorline is drawn in a special way
-///
-/// If true, both old and new cursorline will need to be redrawn when moving cursor within windows.
-bool win_cursorline_standout(const win_T *wp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_win_cursorline_standout((win_T *)wp);
-}
-
-extern void rs_win_update_cursorline(win_T *wp, foldinfo_T *foldinfo);
-
-/// Update w_cursorline, taking care to set it to the to the start of a closed fold.
-///
-/// @param[out] foldinfo foldinfo for the cursor line
-void win_update_cursorline(win_T *wp, foldinfo_T *foldinfo)
-{
-  rs_win_update_cursorline(wp, foldinfo);
-}
 
 // =============================================================================
 // Phase D1: Screen Update Loop FFI Accessors
@@ -2712,7 +2488,7 @@ void nvim_win_set_old_visual_col(win_T *wp, colnr_T val)
 /// Check if redrawing is currently being done (accessor for Rust).
 int nvim_redrawing(void)
 {
-  return rs_redrawing();
+  return redrawing() ? 1 : 0;
 }
 
 /// Scroll lines in window (wrapper for win_scroll_lines for Rust FFI).

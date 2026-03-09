@@ -518,10 +518,8 @@ fn status_redraw_all_impl() {
     }
 }
 
-/// FFI wrapper for `status_redraw_all`.
-///
 /// Marks all status lines and window bars in the current tab for redraw.
-#[no_mangle]
+#[unsafe(export_name = "status_redraw_all")]
 pub extern "C" fn rs_status_redraw_all() {
     status_redraw_all_impl();
 }
@@ -575,10 +573,8 @@ fn status_redraw_buf_impl(buf: BufHandle) {
     }
 }
 
-/// FFI wrapper for `status_redraw_buf`.
-///
 /// Marks status lines and window bars of the given buffer for redraw.
-#[no_mangle]
+#[unsafe(export_name = "status_redraw_buf")]
 pub extern "C" fn rs_status_redraw_buf(buf: BufHandle) {
     status_redraw_buf_impl(buf);
 }
@@ -594,10 +590,8 @@ fn status_redraw_curbuf_impl() {
     }
 }
 
-/// FFI wrapper for `status_redraw_curbuf`.
-///
 /// Marks status lines and window bars of the current buffer for redraw.
-#[no_mangle]
+#[unsafe(export_name = "status_redraw_curbuf")]
 pub extern "C" fn rs_status_redraw_curbuf() {
     status_redraw_curbuf_impl();
 }
@@ -1830,16 +1824,16 @@ fn redrawing_impl() -> bool {
 }
 
 /// FFI export for `redrawing()`.
-#[no_mangle]
-pub extern "C" fn rs_redrawing() -> c_int {
-    c_int::from(redrawing_impl())
+#[unsafe(export_name = "redrawing")]
+pub extern "C" fn rs_redrawing() -> bool {
+    redrawing_impl()
 }
 
 /// Check if the new Nvim application "screen" dimensions are valid.
 /// Correct it if it's too small or way too big.
 ///
 /// Rust equivalent of `check_screensize()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "check_screensize")]
 pub extern "C" fn rs_check_screensize() {
     unsafe {
         let rows = nvim_get_Rows();
@@ -1853,8 +1847,7 @@ pub extern "C" fn rs_check_screensize() {
 
 /// Unlike cmdline "one_key" prompts, the message part of the prompt is not stored
 /// to be re-emitted: avoid clearing the prompt from the message grid.
-///
-/// Rust equivalent of `cmdline_number_prompt()` in drawscreen.c.
+/// This is static in C so we keep the rs_ prefix for now.
 fn cmdline_number_prompt_impl() -> bool {
     unsafe {
         nvim_ui_has_messages() == 0
@@ -1894,7 +1887,7 @@ const SHOWCMD_COLS: c_int = 10;
 /// the status line can be. If there is a status line for the last window,
 /// 'sc_col' is independent of 'ru_col'.
 /// Rust equivalent of `comp_col()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "comp_col")]
 pub extern "C" fn rs_comp_col() {
     unsafe {
         let last_has_status = nvim_last_stl_height() > 0;
@@ -1951,8 +1944,8 @@ extern "C" {
 ///
 /// Returns true when not redrawing or inside a mapping.
 /// Rust equivalent of `skip_showmode()` in drawscreen.c.
-#[no_mangle]
-pub extern "C" fn rs_skip_showmode() -> c_int {
+#[unsafe(export_name = "skip_showmode")]
+pub extern "C" fn rs_skip_showmode() -> bool {
     unsafe {
         // Call char_avail() only when we are going to show something, because it
         // takes a bit of time.  redrawing() may also call char_avail().
@@ -1962,9 +1955,9 @@ pub extern "C" fn rs_skip_showmode() -> c_int {
             || (nvim_char_avail() != 0 && !nvim_get_KeyTyped())
         {
             nvim_set_redraw_mode(1); // show mode later
-            return 1;
+            return true;
         }
-        0
+        false
     }
 }
 
@@ -1973,11 +1966,11 @@ pub extern "C" fn rs_skip_showmode() -> c_int {
 /// Used when ESC is typed which is expected to end Insert mode
 /// (but Insert mode didn't end yet!).
 /// Rust equivalent of `unshowmode()` in drawscreen.c.
-#[no_mangle]
-pub extern "C" fn rs_unshowmode(force: c_int) {
+#[unsafe(export_name = "unshowmode")]
+pub extern "C" fn rs_unshowmode(force: bool) {
     unsafe {
         // Don't delete it right now, when not redrawing or inside a mapping.
-        if !redrawing_impl() || (force == 0 && nvim_char_avail() != 0 && !nvim_get_KeyTyped()) {
+        if !redrawing_impl() || (!force && nvim_char_avail() != 0 && !nvim_get_KeyTyped()) {
             nvim_set_redraw_cmdline(true); // delete mode later
         } else {
             nvim_clearmode();
@@ -2011,7 +2004,7 @@ const STL_IN_TITLE: c_int = 2;
 /// Redraw all status lines that need to be redrawn.
 ///
 /// Rust equivalent of `redraw_statuslines()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "redraw_statuslines")]
 pub extern "C" fn rs_redraw_statuslines() {
     unsafe {
         let mut wp = nvim_get_firstwin();
@@ -2039,7 +2032,7 @@ pub extern "C" fn rs_redraw_statuslines() {
 ///
 /// Returns 1 if either title or icon uses statusline format.
 /// Rust equivalent of `redraw_custom_title_later()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "redraw_custom_title_later")]
 pub extern "C" fn rs_redraw_custom_title_later() -> c_int {
     unsafe {
         let stl_syntax = nvim_get_stl_syntax();
@@ -2077,19 +2070,21 @@ extern "C" {
         out_fi_lines: *mut LinenrT,
         out_foldinfo: FoldinfoHandle,
     ) -> c_int;
-    // Already-migrated functions in other crates
-    fn rs_conceal_cursor_line(wp: WinHandle) -> c_int;
-    fn rs_win_cursorline_standout(wp: WinHandle) -> c_int;
+    // Already-migrated functions in other crates (now exported with C names)
+    #[link_name = "conceal_cursor_line"]
+    fn rs_conceal_cursor_line(wp: WinHandle) -> bool;
+    #[link_name = "win_cursorline_standout"]
+    fn rs_win_cursorline_standout(wp: WinHandle) -> bool;
 }
 
 /// Check if the cursor line needs to be redrawn because of 'concealcursor'.
 ///
 /// Rust equivalent of `conceal_check_cursor_line()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "conceal_check_cursor_line")]
 pub extern "C" fn rs_conceal_check_cursor_line() {
     unsafe {
         let curwin = nvim_get_curwin();
-        let should_conceal = rs_conceal_cursor_line(curwin) != 0;
+        let should_conceal = rs_conceal_cursor_line(curwin);
         if nvim_win_get_w_p_cole(curwin) <= 0
             || (nvim_get_conceal_cursor_used() != 0) == should_conceal
         {
@@ -2112,12 +2107,12 @@ pub extern "C" fn rs_conceal_check_cursor_line() {
 /// Update w_cursorline, setting it to the start of a closed fold.
 ///
 /// Rust equivalent of `win_update_cursorline()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "win_update_cursorline")]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn rs_win_update_cursorline(wp: WinHandle, foldinfo: FoldinfoHandle) {
     unsafe {
         let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-        let cursorline = if rs_win_cursorline_standout(wp) != 0 {
+        let cursorline = if rs_win_cursorline_standout(wp) {
             cursor_lnum
         } else {
             0
@@ -2158,20 +2153,20 @@ extern "C" {
 /// Set cursor to its position in the current window.
 ///
 /// Rust equivalent of `setcursor()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "setcursor")]
 pub extern "C" fn rs_setcursor() {
     unsafe {
-        rs_setcursor_mayforce(nvim_get_curwin(), 0);
+        rs_setcursor_mayforce(nvim_get_curwin(), false);
     }
 }
 
 /// Set cursor to its position in a window.
 ///
 /// Rust equivalent of `setcursor_mayforce()` in drawscreen.c.
-#[no_mangle]
-pub extern "C" fn rs_setcursor_mayforce(wp: WinHandle, force: c_int) {
+#[unsafe(export_name = "setcursor_mayforce")]
+pub extern "C" fn rs_setcursor_mayforce(wp: WinHandle, force: bool) {
     unsafe {
-        if force != 0 || redrawing_impl() {
+        if force || redrawing_impl() {
             nvim_validate_cursor_for_win(wp);
 
             let row = nvim_win_get_w_wrow(wp);
@@ -2203,7 +2198,7 @@ extern "C" {
 /// Prepare for 'hlsearch' highlighting.
 ///
 /// Rust equivalent of `start_search_hl()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "start_search_hl")]
 pub extern "C" fn rs_start_search_hl() {
     unsafe {
         if nvim_get_p_hls() == 0 || nvim_get_no_hlsearch() != 0 {
@@ -2218,7 +2213,7 @@ pub extern "C" fn rs_start_search_hl() {
 /// Clean up for 'hlsearch' highlighting.
 ///
 /// Rust equivalent of `end_search_hl()` in drawscreen.c.
-#[no_mangle]
+#[unsafe(export_name = "end_search_hl")]
 pub extern "C" fn rs_end_search_hl() {
     unsafe {
         if nvim_search_hl_has_regprog() == 0 {

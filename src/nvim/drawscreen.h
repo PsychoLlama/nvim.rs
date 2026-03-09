@@ -3,6 +3,7 @@
 #include <stdbool.h>
 
 #include "nvim/buffer_defs.h"
+#include "nvim/fold_defs.h"
 #include "nvim/macros_defs.h"
 #include "nvim/pos_defs.h"
 
@@ -34,5 +35,29 @@ EXTERN linenr_T search_hl_has_cursor_lnum INIT( = 0);
 
 #define W_ENDCOL(wp)   ((wp)->w_wincol + (wp)->w_width)
 #define W_ENDROW(wp)   ((wp)->w_winrow + (wp)->w_height)
+
+// Declarations for functions now exported directly from Rust (via export_name).
+// These were previously thin C wrappers calling rs_* functions.
+DLLEXPORT void conceal_check_cursor_line(void);
+DLLEXPORT void check_screensize(void);
+DLLEXPORT bool redrawing(void);
+DLLEXPORT void start_search_hl(void);
+DLLEXPORT void end_search_hl(void);
+DLLEXPORT void setcursor(void);
+DLLEXPORT void setcursor_mayforce(win_T *wp, bool force);
+DLLEXPORT bool redraw_custom_title_later(void);
+DLLEXPORT bool skip_showmode(void);
+DLLEXPORT void unshowmode(bool force);
+DLLEXPORT void comp_col(void);
+DLLEXPORT void status_redraw_all(void);
+DLLEXPORT void status_redraw_curbuf(void);
+DLLEXPORT void status_redraw_buf(buf_T *buf);
+DLLEXPORT void redraw_statuslines(void);
+DLLEXPORT void win_redraw_last_status(const frame_T *frp);
+DLLEXPORT bool conceal_cursor_line(const win_T *wp);
+DLLEXPORT bool win_cursorline_standout(const win_T *wp);
+DLLEXPORT void win_update_cursorline(win_T *wp, foldinfo_T *foldinfo);
+DLLEXPORT int compute_foldcolumn(win_T *wp, int col);
+DLLEXPORT int number_width(win_T *wp);
 
 #include "drawscreen.h.generated.h"
