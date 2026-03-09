@@ -152,9 +152,6 @@ static bool did_syntax_onoff = false;
 #define SPO_LC_OFF      6       // leading context offset
 #define SPO_COUNT       7
 
-static const char e_trailing_char_after_rsb_str_str[]
-  = N_("E890: Trailing char after ']': %s]%s");
-
 // The patterns that are being searched for are stored in a syn_pattern.
 // A match item consists of one pattern.
 // A start/end item consists of n start patterns and m end patterns.
@@ -292,9 +289,6 @@ extern void rs_syn_cmd_off_dispatch(exarg_T *eap, int syncing);
 extern void rs_syn_cmd_iskeyword(exarg_T *eap, int syncing);
 extern void rs_ex_ownsyntax(exarg_T *eap);
 
-static char *(spo_name_tab[SPO_COUNT]) =
-{ "ms=", "me=", "hs=", "he=", "rs=", "re=", "lc=" };
-
 // The sp_off_flags are computed like this:
 // offset from the start of the matched text: (1 << SPO_XX_OFF)
 // offset from the end   of the matched text: (1 << (SPO_XX_OFF + SPO_COUNT))
@@ -371,8 +365,6 @@ static keyentry_T dumkey;
 // stack the first item with "keepend" is present.  When "-1", there is no
 // "keepend" on the stack.
 static int keepend_level = -1;
-
-static char msg_no_items[] = N_("No Syntax items defined for this buffer");
 
 // value of si_idx for keywords
 #define KEYWORD_IDX     (-1)
@@ -798,37 +790,6 @@ int nvim_synstate_get_next_flags(synstate_T *state) { return state->sst_next_fla
 int nvim_synstate_get_tick(synstate_T *state) { return (int)state->sst_tick; }
 int nvim_synstate_get_change_lnum(synstate_T *state) { return (int)state->sst_change_lnum; }
 
-int nvim_synpat_get_type(synpat_T *pat) { return (int)pat->sp_type; }
-int nvim_synpat_get_syncing(synpat_T *pat) { return pat->sp_syncing ? 1 : 0; }
-int16_t nvim_synpat_get_syn_match_id(synpat_T *pat) { return pat->sp_syn_match_id; }
-int16_t nvim_synpat_get_off_flags(synpat_T *pat) { return pat->sp_off_flags; }
-int nvim_synpat_get_flags(synpat_T *pat) { return pat->sp_flags; }
-int nvim_synpat_get_cchar(synpat_T *pat) { return pat->sp_cchar; }
-int nvim_synpat_get_ic(synpat_T *pat) { return pat->sp_ic; }
-int nvim_synpat_get_sync_idx(synpat_T *pat) { return pat->sp_sync_idx; }
-char *nvim_synpat_get_pattern(synpat_T *pat) { return pat->sp_pattern; }
-int16_t nvim_synpat_get_syn_id(synpat_T *pat) { return pat->sp_syn.id; }
-int nvim_synpat_get_syn_inc_tag(synpat_T *pat) { return pat->sp_syn.inc_tag; }
-
-char *nvim_syncluster_get_name(syn_cluster_T *cluster) { return cluster->scl_name; }
-char *nvim_syncluster_get_name_u(syn_cluster_T *cluster) { return cluster->scl_name_u; }
-
-int nvim_stateitem_get_idx(stateitem_T *item) { return item->si_idx; }
-int nvim_stateitem_get_id(stateitem_T *item) { return item->si_id; }
-int nvim_stateitem_get_trans_id(stateitem_T *item) { return item->si_trans_id; }
-int nvim_stateitem_get_attr(stateitem_T *item) { return item->si_attr; }
-int nvim_stateitem_get_flags(stateitem_T *item) { return item->si_flags; }
-int nvim_stateitem_get_seqnr(stateitem_T *item) { return item->si_seqnr; }
-int nvim_stateitem_get_cchar(stateitem_T *item) { return item->si_cchar; }
-int nvim_stateitem_get_end_idx(stateitem_T *item) { return item->si_end_idx; }
-int nvim_stateitem_get_ends(stateitem_T *item) { return item->si_ends; }
-
-keyentry_T *nvim_keyentry_get_next(keyentry_T *ke) { return ke->ke_next; }
-int16_t nvim_keyentry_get_syn_id(keyentry_T *ke) { return ke->k_syn.id; }
-int nvim_keyentry_get_syn_inc_tag(keyentry_T *ke) { return ke->k_syn.inc_tag; }
-int nvim_keyentry_get_flags(keyentry_T *ke) { return ke->flags; }
-int nvim_keyentry_get_char(keyentry_T *ke) { return ke->k_char; }
-char *nvim_keyentry_get_keyword(keyentry_T *ke) { return ke->keyword; }
 
 int nvim_syn_get_current_lnum(void) { return (int)current_lnum; }
 int nvim_syn_get_current_col(void) { return (int)current_col; }
@@ -845,15 +806,6 @@ int nvim_syn_get_current_sub_char(void) { return current_sub_char; }
 int nvim_syn_get_current_next_flags(void) { return current_next_flags; }
 int nvim_syn_get_keepend_level(void) { return keepend_level; }
 
-regprog_T *nvim_synpat_get_prog(synpat_T *pat) { return pat->sp_prog; }
-int nvim_synpat_has_prog(synpat_T *pat) { return pat->sp_prog != NULL; }
-int16_t *nvim_synpat_get_cont_list(synpat_T *pat) { return pat->sp_cont_list; }
-int16_t *nvim_synpat_get_next_list(synpat_T *pat) { return pat->sp_next_list; }
-int16_t *nvim_synpat_get_cont_in_list(synpat_T *pat) { return pat->sp_syn.cont_in_list; }
-int nvim_synpat_has_cont_list(synpat_T *pat) { return pat->sp_cont_list != NULL; }
-int nvim_synpat_has_next_list(synpat_T *pat) { return pat->sp_next_list != NULL; }
-int nvim_synpat_has_cont_in_list(synpat_T *pat) { return pat->sp_syn.cont_in_list != NULL; }
-
 hashtab_T *nvim_synblock_get_keywtab(synblock_T *block) { return &block->b_keywtab; }
 hashtab_T *nvim_synblock_get_keywtab_ic(synblock_T *block) { return &block->b_keywtab_ic; }
 int nvim_synblock_has_keywords(synblock_T *block) { return block->b_keywtab.ht_used > 0; }
@@ -861,14 +813,6 @@ int nvim_synblock_has_keywords_ic(synblock_T *block) { return block->b_keywtab_i
 
 size_t nvim_synblock_keywtab_count(synblock_T *block) { return block->b_keywtab.ht_used; }
 size_t nvim_synblock_keywtab_ic_count(synblock_T *block) { return block->b_keywtab_ic.ht_used; }
-
-int16_t *nvim_keyentry_get_next_list(keyentry_T *ke) { return ke->next_list; }
-int16_t *nvim_keyentry_get_cont_in_list(keyentry_T *ke) { return ke->k_syn.cont_in_list; }
-int nvim_keyentry_has_next_list(keyentry_T *ke) { return ke->next_list != NULL; }
-int nvim_keyentry_has_cont_in_list(keyentry_T *ke) { return ke->k_syn.cont_in_list != NULL; }
-
-int16_t *nvim_syncluster_get_list(syn_cluster_T *cluster) { return cluster->scl_list; }
-int nvim_syncluster_has_list(syn_cluster_T *cluster) { return cluster->scl_list != NULL; }
 
 int16_t nvim_id_list_get(int16_t *list, int idx) { return list[idx]; }
 
@@ -879,15 +823,8 @@ int16_t *nvim_syn_get_current_next_list(void) { return current_next_list; }
 int nvim_syn_has_current_next_list(void) { return current_next_list != NULL; }
 synblock_T *nvim_syn_get_curwin_synblock(void) { return curwin->w_s; }
 
-int nvim_stateitem_has_trans_cont(stateitem_T *item) { return (item->si_flags & HL_TRANS_CONT) != 0; }
-int nvim_stateitem_has_match(stateitem_T *item) { return (item->si_flags & HL_MATCH) != 0; }
-int16_t *nvim_stateitem_get_cont_list(stateitem_T *item) { return item->si_cont_list; }
-int nvim_stateitem_has_cont_list(stateitem_T *item) { return item->si_cont_list != NULL; }
-
 int nvim_syn_get_topgrp(void) { return curwin->w_s->b_syn_topgrp; }
 void nvim_syn_set_topgrp(int topgrp) { curwin->w_s->b_syn_topgrp = topgrp; }
-
-int nvim_synpat_get_hl_group(synpat_T *pat) { return pat->sp_syn.id - 1; }
 
 int nvim_syn_get_expand_what(void) { return expand_what; }
 void nvim_syn_set_expand_what(int what) { expand_what = what; }
@@ -1418,8 +1355,6 @@ int nvim_synstate_next_list_eq(synstate_T *a, synstate_T *b) { return a->sst_nex
 
 int nvim_synblock_has_containedin(synblock_T *block) { return block->b_syn_containedin ? 1 : 0; }
 
-int nvim_synpat_get_inc_tag(synpat_T *pat) { return pat ? pat->sp_syn.inc_tag : 0; }
-
 int nvim_synblock_is_spell_cluster(synblock_T *block, int id) { return id == block->b_spell_cluster_id; }
 int nvim_synblock_is_nospell_cluster(synblock_T *block, int id) { return id == block->b_nospell_cluster_id; }
 
@@ -1791,14 +1726,6 @@ void nvim_syn_set_p_cpo(char *val) { p_cpo = val; }
 char *nvim_syn_get_empty_string_option(void) { return empty_string_option; }
 int nvim_syn_get_curwin_syn_ic(void) { return curwin->w_s->b_syn_ic; }
 
-void nvim_synpat_set_pattern(synpat_T *pat, char *pattern) { pat->sp_pattern = pattern; }
-void nvim_synpat_set_prog(synpat_T *pat, void *prog) { pat->sp_prog = prog; }
-void nvim_synpat_set_ic(synpat_T *pat, int ic) { pat->sp_ic = ic; }
-void nvim_synpat_set_off_flags(synpat_T *pat, int16_t flags) { pat->sp_off_flags = flags; }
-void nvim_synpat_set_offset(synpat_T *pat, int idx, int val) { pat->sp_offsets[idx] = val; }
-int nvim_synpat_get_offset(synpat_T *pat, int idx) { return pat->sp_offsets[idx]; }
-void nvim_synpat_clear_time(synpat_T *pat) { rs_syn_clear_time(&pat->sp_time); }
-
 // =============================================================================
 // Phase 2 accessors: syn_cmd_match migration
 // =============================================================================
@@ -1815,21 +1742,6 @@ synpat_T *nvim_synblock_ga_append_pattern(void)
   return GA_APPEND_VIA_PTR(synpat_T, &curwin->w_s->b_syn_patterns);
 }
 
-/// Copy synpat_T: *dst = *src.
-void nvim_synpat_copy_from(synpat_T *dst, synpat_T *src) { *dst = *src; }
-
-void nvim_synpat_set_syncing(synpat_T *pat, int syncing) { pat->sp_syncing = syncing; }
-void nvim_synpat_set_type(synpat_T *pat, int type) { pat->sp_type = type; }
-void nvim_synpat_set_flags(synpat_T *pat, int flags) { pat->sp_flags = flags; }
-void nvim_synpat_or_flags(synpat_T *pat, int flags) { pat->sp_flags |= flags; }
-void nvim_synpat_set_syn_id(synpat_T *pat, int id) { pat->sp_syn.id = (int16_t)id; }
-void nvim_synpat_set_syn_inc_tag(synpat_T *pat, int tag) { pat->sp_syn.inc_tag = tag; }
-void nvim_synpat_set_syn_match_id(synpat_T *pat, int id) { pat->sp_syn_match_id = (int16_t)id; }
-void nvim_synpat_set_cchar(synpat_T *pat, int c) { pat->sp_cchar = c; }
-void nvim_synpat_set_sync_idx(synpat_T *pat, int idx) { pat->sp_sync_idx = idx; }
-void nvim_synpat_set_cont_list(synpat_T *pat, int16_t *list) { pat->sp_cont_list = list; }
-void nvim_synpat_set_cont_in_list(synpat_T *pat, int16_t *list) { pat->sp_syn.cont_in_list = list; }
-void nvim_synpat_set_next_list(synpat_T *pat, int16_t *list) { pat->sp_next_list = list; }
 void nvim_synblock_set_containedin(int val) { curwin->w_s->b_syn_containedin = (bool)val; }
 void nvim_synblock_inc_folditems(void) { curwin->w_s->b_syn_folditems++; }
 
