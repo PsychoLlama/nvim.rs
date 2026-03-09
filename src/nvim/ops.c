@@ -99,7 +99,6 @@ extern int rs_get_fileformat(buf_T *buf);
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
                                    list_stack_T **list_stack);
 
-extern bool rs_do_addsub(int op_type, pos_T *pos, int length, linenr_T Prenum1);
 
 // Functions now exported from Rust (via #[export_name]) but still called within ops.c
 extern int get_op_char(int optype);
@@ -2314,6 +2313,9 @@ void op_addsub(oparg_T *oap, linenr_T Prenum1, bool g_cmd)
 // C accessor functions for rs_do_addsub (Phase 2)
 // =============================================================================
 
+// File-scope static: cursor saved by setup, restored by cleanup on visual exit.
+static pos_T addsub_saved_cursor;
+
 // Verify constants used in Rust
 _Static_assert(OP_NR_SUB == 29, "OP_NR_SUB mismatch");
 
@@ -2349,6 +2351,7 @@ typedef struct {
 /// Setup: save state, get line info, set cursor.
 void nvim_addsub_setup(pos_T *pos, int *out_save_coladd, int *out_linelen, int *out_visual)
 {
+  addsub_saved_cursor = curwin->w_cursor;
   *out_visual = VIsual_active ? 1 : 0;
   *out_save_coladd = 0;
   if (virtual_active(curwin)) {
@@ -2665,7 +2668,7 @@ void nvim_addsub_set_marks(int startpos_col, int endpos_col)
 void nvim_addsub_cleanup(int visual, int did_change, int save_coladd)
 {
   if (visual) {
-    // Visual mode cursor restore is handled by the thin wrapper (do_addsub)
+    curwin->w_cursor = addsub_saved_cursor;
   } else if (did_change) {
     curwin->w_set_curswant = true;
   } else if (virtual_active(curwin)) {
@@ -2677,17 +2680,6 @@ void nvim_addsub_cleanup(int visual, int did_change, int save_coladd)
 void nvim_addsub_beep(void)
 {
   beep_flush();
-}
-
-/// Add or subtract from a number in a line.
-bool do_addsub(int op_type, pos_T *pos, int length, linenr_T Prenum1)
-{
-  pos_T save_cursor = curwin->w_cursor;
-  bool result = rs_do_addsub(op_type, pos, length, Prenum1);
-  if (VIsual_active) {
-    curwin->w_cursor = save_cursor;
-  }
-  return result;
 }
 
 void clear_oparg(oparg_T *oap)

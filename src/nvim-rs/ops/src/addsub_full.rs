@@ -211,7 +211,7 @@ unsafe fn do_number_addsub(scan: &AddsubScanResult, params: &NumArithParams) -> 
 /// # Safety
 /// - `pos` must be a valid `pos_T *`
 /// - Accesses global state via C accessors
-#[no_mangle]
+#[unsafe(export_name = "do_addsub")]
 pub unsafe extern "C" fn rs_do_addsub(
     op_type: c_int,
     pos: *mut c_void,

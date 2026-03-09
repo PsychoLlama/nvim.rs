@@ -64,5 +64,6 @@ int op_delete(oparg_T *oap);
 int op_replace(oparg_T *oap, int c);
 void cursor_pos_info(dict_T *dict);
 void do_pending_operator(cmdarg_T *cap, int old_col, bool gui_yank);
+bool do_addsub(int op_type, pos_T *pos, int length, linenr_T Prenum1);
 
 EXTERN LuaRef repeat_luaref INIT( = LUA_NOREF);  ///< LuaRef for "."
