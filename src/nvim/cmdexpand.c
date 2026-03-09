@@ -492,7 +492,7 @@ int nvim_cmdexpand_expand_from_context(expand_T *xp, const char *pat, int option
 /// Wrapper for ExpandEscape (for Rust FFI).
 void nvim_cmdexpand_expand_escape(expand_T *xp, const char *str, int options)
 {
-  ExpandEscape(xp, (char *)str, xp->xp_numfiles, xp->xp_files, options);
+  rs_expand_escape(xp, (char *)str, xp->xp_numfiles, xp->xp_files, options);
 }
 
 /// Wrapper for match_suffix on xp->xp_files[i] (for Rust FFI).
@@ -706,7 +706,7 @@ int nvim_cmdexpand_get_filetype_expand_what(void)
 }
 
 
-#define SHOW_MATCH(m) (showtail ? showmatches_gettail(matches[m], false) : matches[m])
+#define SHOW_MATCH(m) (showtail ? rs_showmatches_gettail(matches[m], false) : matches[m])
 
 /// Returns true if fuzzy completion is supported for a given cmdline completion
 /// context.
@@ -749,24 +749,6 @@ static bool cmdline_fuzzy_completion_supported(const expand_T *const xp)
 }
 
 
-/// Sort function for the completion matches.
-/// <SNR> functions should be sorted to the end. Rust implementation.
-static int sort_func_compare(const void *s1, const void *s2)
-{
-  return rs_sort_func_compare(s1, s2);
-}
-
-/// Escape special characters in the cmdline completion matches. Rust implementation.
-static void wildescape(expand_T *xp, const char *str, int numfiles, char **files)
-{
-  rs_wildescape(xp, str, numfiles, files);
-}
-
-/// Escape special characters in the cmdline completion matches. Rust implementation.
-static void ExpandEscape(expand_T *xp, char *str, int numfiles, char **files, int options)
-{
-  rs_expand_escape(xp, str, numfiles, files, options);
-}
 
 /// Return FAIL if this is not an appropriate context in which to do
 /// completion of anything, return OK if it is (even if there are no matches).
@@ -797,7 +779,7 @@ int nextwild(expand_T *xp, int type, int options, bool escape)
     if (xp->xp_context == EXPAND_LUA) {
       nlua_expand_pat(xp);
     }
-    cmd_showtail = expand_showtail(xp);
+    cmd_showtail = rs_expand_showtail(xp) != 0;
   }
 
   if (xp->xp_context == EXPAND_UNSUCCESSFUL) {
@@ -927,7 +909,7 @@ static void cmdline_pum_create(CmdlineInfo *ccline, expand_T *xp, char **matches
   }
 
   // Compute the popup menu starting column
-  char *endpos = showtail ? showmatches_gettail(xp->xp_pattern, noselect) : xp->xp_pattern;
+  char *endpos = showtail ? rs_showmatches_gettail(xp->xp_pattern, noselect) : xp->xp_pattern;
   if (ui_has(kUICmdline) && cmdline_win == NULL) {
     compl_startcol = (int)(endpos - ccline->cmdbuff);
   } else {
@@ -970,30 +952,6 @@ bool cmdline_compl_is_fuzzy(void)
   return xp != NULL && cmdline_fuzzy_completion_supported(xp);
 }
 
-/// Checks whether popup menu should be used for cmdline completion wildmenu.
-/// Rust implementation.
-///
-/// @param wildmenu  whether wildmenu is needed by current 'wildmode' part
-static bool cmdline_compl_use_pum(bool need_wildmenu)
-{
-  return rs_cmdline_compl_use_pum(need_wildmenu) != 0;
-}
-
-/// Return the number of characters that should be skipped in the wildmenu
-/// These are backslashes used for escaping.  Do show backslashes in help tags
-/// and in search pattern completion matches.
-/// Rust implementation.
-static int skip_wildmenu_char(expand_T *xp, char *s)
-{
-  return rs_skip_wildmenu_char(xp, s);
-}
-
-/// Get the length of an item as it will be shown in the status line.
-/// Rust implementation.
-static int wildmenu_match_len(expand_T *xp, char *s)
-{
-  return rs_wildmenu_match_len(xp, s);
-}
 
 /// Show wildchar matches in the status line.
 /// Show at least the "match" item.
@@ -1023,7 +981,7 @@ static void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int m
     highlight = false;
   }
   // count 1 for the ending ">"
-  int clen = wildmenu_match_len(xp, SHOW_MATCH(match)) + 3;  // length in screen cells
+  int clen = rs_wildmenu_match_len(xp, SHOW_MATCH(match)) + 3;  // length in screen cells
   if (match == 0) {
     first_match = 0;
   } else if (match < first_match) {
@@ -1033,7 +991,7 @@ static void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int m
   } else {
     // check if match fits on the screen
     for (i = first_match; i < match; i++) {
-      clen += wildmenu_match_len(xp, SHOW_MATCH(i)) + 2;
+      clen += rs_wildmenu_match_len(xp, SHOW_MATCH(i)) + 2;
     }
     if (first_match > 0) {
       clen += 2;
@@ -1044,7 +1002,7 @@ static void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int m
       // if showing the last match, we can add some on the left
       clen = 2;
       for (i = match; i < num_matches; i++) {
-        clen += wildmenu_match_len(xp, SHOW_MATCH(i)) + 2;
+        clen += rs_wildmenu_match_len(xp, SHOW_MATCH(i)) + 2;
         if (clen >= Columns) {
           break;
         }
@@ -1056,7 +1014,7 @@ static void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int m
   }
   if (add_left) {
     while (first_match > 0) {
-      clen += wildmenu_match_len(xp, SHOW_MATCH(first_match - 1)) + 2;
+      clen += rs_wildmenu_match_len(xp, SHOW_MATCH(first_match - 1)) + 2;
       if (clen >= Columns) {
         break;
       }
@@ -1079,7 +1037,7 @@ static void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int m
   clen = len;
 
   i = first_match;
-  while (clen + wildmenu_match_len(xp, SHOW_MATCH(i)) + 2 < Columns) {
+  while (clen + rs_wildmenu_match_len(xp, SHOW_MATCH(i)) + 2 < Columns) {
     if (i == match) {
       selstart = buf + len;
       selstart_col = clen;
@@ -1095,7 +1053,7 @@ static void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int m
       clen += l;
     } else {
       for (; *s != NUL; s++) {
-        s += skip_wildmenu_char(xp, s);
+        s += rs_skip_wildmenu_char(xp, s);
         clen += ptr2cells(s);
         if ((l = utfc_ptr2len(s)) > 1) {
           strncpy(buf + len, s, (size_t)l);  // NOLINT(runtime/printf)
@@ -1174,26 +1132,6 @@ static void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int m
   xfree(buf);
 }
 
-/// Get the next or prev cmdline completion match. The index of the match is set
-/// in "xp->xp_selected"
-/// Navigate to next/previous completion match. Rust implementation.
-static char *get_next_or_prev_match(int mode, expand_T *xp)
-{
-  return rs_get_next_or_prev_match(mode, xp);
-}
-
-/// Start the command-line expansion and get the matches. Rust implementation.
-static char *ExpandOne_start(int mode, expand_T *xp, char *str, int options)
-{
-  return rs_expand_one_start(mode, xp, str, options);
-}
-
-/// Return the longest common part in the list of cmdline completion matches.
-/// Rust implementation.
-static char *find_longest_match(expand_T *xp, int options)
-{
-  return rs_find_longest_match(xp, options);
-}
 
 /// Do wildcard expansion on the string "str".
 /// Chars that should not be expanded must be preceded with a backslash.
@@ -1323,14 +1261,14 @@ int showmatches(expand_T *xp, bool display_wildmenu, bool display_list, bool nos
     if (retval != EXPAND_OK) {
       return retval;
     }
-    showtail = expand_showtail(xp);
+    showtail = rs_expand_showtail(xp) != 0;
   } else {
     numMatches = xp->xp_numfiles;
     matches = xp->xp_files;
     showtail = cmd_showtail;
   }
 
-  if (cmdline_compl_use_pum(display_wildmenu && !display_list)) {
+  if (rs_cmdline_compl_use_pum(display_wildmenu && !display_list)) {
     cmdline_pum_create(ccline, xp, matches, numMatches, showtail, noselect);
     compl_selected = noselect ? -1 : 0;
     pum_clear();
@@ -1410,21 +1348,6 @@ int showmatches(expand_T *xp, bool display_wildmenu, bool display_list, bool nos
   return EXPAND_OK;
 }
 
-/// path_tail() version for showmatches() and redraw_wildmenu():
-/// Return the tail of file name path "s", ignoring a trailing "/".
-/// Rust implementation.
-static char *showmatches_gettail(char *s, bool eager)
-{
-  return rs_showmatches_gettail(s, eager);
-}
-
-/// Return true if we only need to show the tail of completion matches.
-/// When not completing file names or there is a wildcard in the path false is
-/// returned. Rust implementation.
-static bool expand_showtail(expand_T *xp)
-{
-  return rs_expand_showtail(xp) != 0;
-}
 
 
 /// Must parse the command line so far to work out what context we are in.
@@ -1594,91 +1517,6 @@ static void set_context_for_wildcard_arg(exarg_T *eap, const char *arg, bool use
   rs_set_context_for_wildcard_arg(arg, is_shell_cmd ? 1 : 0, xp, complp);
 }
 
-/// Set the completion context for the "++opt=arg" argument.  Always returns NULL.
-static const char *set_context_in_argopt(expand_T *xp, const char *arg)
-{
-  return rs_set_context_in_argopt(xp, arg);
-}
-
-/// Set the completion context for the :filter command. Returns a pointer to the
-/// next command after the :filter command.
-static const char *set_context_in_filter_cmd(expand_T *xp, const char *arg)
-{
-  return rs_set_context_in_filter_cmd(xp, arg);
-}
-
-/// Set the completion context for the :match command. Returns a pointer to the
-/// next command after the :match command.
-static const char *set_context_in_match_cmd(expand_T *xp, const char *arg)
-{
-  return rs_set_context_in_match_cmd(xp, arg);
-}
-
-/// Returns a pointer to the next command after a :global or a :v command.
-/// Returns NULL if there is no next command.
-static const char *find_cmd_after_global_cmd(const char *arg)
-{
-  return rs_find_cmd_after_global_cmd(arg);
-}
-
-/// Returns a pointer to the next command after a :substitute or a :& command.
-/// Returns NULL if there is no next command.
-static const char *find_cmd_after_substitute_cmd(const char *arg)
-{
-  return rs_find_cmd_after_substitute_cmd(arg);
-}
-
-/// Returns a pointer to the next command after a :isearch/:dsearch/:ilist
-/// :dlist/:ijump/:psearch/:djump/:isplit/:dsplit command.
-/// Returns NULL if there is no next command.
-static const char *find_cmd_after_isearch_cmd(expand_T *xp, const char *arg)
-{
-  return rs_find_cmd_after_isearch_cmd(xp, arg);
-}
-
-/// Set the completion context for the :unlet command. Always returns NULL.
-static const char *set_context_in_unlet_cmd(expand_T *xp, const char *arg)
-{
-  return rs_set_context_in_unlet_cmd(xp, arg);
-}
-
-/// Set the completion context for the :language command. Always returns NULL.
-static const char *set_context_in_lang_cmd(expand_T *xp, const char *arg)
-{
-  return rs_set_context_in_lang_cmd(xp, arg);
-}
-
-/// Set the completion context for the :breakadd command. Always returns NULL.
-static const char *set_context_in_breakadd_cmd(expand_T *xp, const char *arg, cmdidx_T cmdidx)
-{
-  int breakpt_cmd_type;
-  if (cmdidx == CMD_breakadd) {
-    breakpt_cmd_type = 0;  // BREAKPT_CMD_ADD
-  } else if (cmdidx == CMD_breakdel) {
-    breakpt_cmd_type = 1;  // BREAKPT_CMD_DEL
-  } else {
-    breakpt_cmd_type = 2;  // BREAKPT_CMD_PROFDEL
-  }
-  return rs_set_context_in_breakadd_cmd(xp, arg, breakpt_cmd_type);
-}
-
-static const char *set_context_in_scriptnames_cmd(expand_T *xp, const char *arg)
-{
-  return rs_set_context_in_scriptnames_cmd(xp, arg);
-}
-
-/// Set the completion context for the :filetype command. Always returns NULL.
-static const char *set_context_in_filetype_cmd(expand_T *xp, const char *arg)
-{
-  return rs_set_context_in_filetype_cmd(xp, arg);
-}
-
-/// Sets the completion context for commands that involve a search pattern
-/// and a line range (e.g., :s, :g, :v).
-static void set_context_with_pattern(expand_T *xp)
-{
-  rs_set_context_with_pattern(xp);
-}
 
 /// Set the completion context in "xp" for command "cmd" with index "cmdidx".
 /// The argument to the command is "arg" and the argument flags is "argt".
@@ -1754,10 +1592,10 @@ static const char *set_context_by_cmdname(const char *cmd, cmdidx_T cmdidx, expa
     return arg;
 
   case CMD_filter:
-    return set_context_in_filter_cmd(xp, arg);
+    return rs_set_context_in_filter_cmd(xp, arg);
 
   case CMD_match:
-    return set_context_in_match_cmd(xp, arg);
+    return rs_set_context_in_match_cmd(xp, arg);
 
   // All completion for the +cmdline_compl feature goes here.
 
@@ -1771,17 +1609,17 @@ static const char *set_context_by_cmdname(const char *cmd, cmdidx_T cmdidx, expa
 
   case CMD_global:
   case CMD_vglobal:
-    nextcmd = find_cmd_after_global_cmd(arg);
+    nextcmd = rs_find_cmd_after_global_cmd(arg);
     if (!nextcmd && may_expand_pattern) {
-      set_context_with_pattern(xp);
+      rs_set_context_with_pattern(xp);
     }
     return nextcmd;
 
   case CMD_and:
   case CMD_substitute:
-    nextcmd = find_cmd_after_substitute_cmd(arg);
+    nextcmd = rs_find_cmd_after_substitute_cmd(arg);
     if (!nextcmd && may_expand_pattern) {
-      set_context_with_pattern(xp);
+      rs_set_context_with_pattern(xp);
     }
     return nextcmd;
 
@@ -1794,7 +1632,7 @@ static const char *set_context_by_cmdname(const char *cmd, cmdidx_T cmdidx, expa
   case CMD_djump:
   case CMD_isplit:
   case CMD_dsplit:
-    return find_cmd_after_isearch_cmd(xp, arg);
+    return rs_find_cmd_after_isearch_cmd(xp, arg);
   case CMD_autocmd:
     return set_context_in_autocmd(xp, (char *)arg, false);
 
@@ -1857,7 +1695,7 @@ static const char *set_context_by_cmdname(const char *cmd, cmdidx_T cmdidx, expa
     break;
 
   case CMD_unlet:
-    return set_context_in_unlet_cmd(xp, arg);
+    return rs_set_context_in_unlet_cmd(xp, arg);
   case CMD_function:
   case CMD_delfunction:
     xp->xp_context = EXPAND_USER_FUNC;
@@ -2016,7 +1854,7 @@ static const char *set_context_by_cmdname(const char *cmd, cmdidx_T cmdidx, expa
     break;
 
   case CMD_language:
-    return set_context_in_lang_cmd(xp, arg);
+    return rs_set_context_in_lang_cmd(xp, arg);
 
   case CMD_profile:
     set_context_in_profile_cmd(xp, arg);
@@ -2054,14 +1892,16 @@ static const char *set_context_by_cmdname(const char *cmd, cmdidx_T cmdidx, expa
 
   case CMD_breakadd:
   case CMD_profdel:
-  case CMD_breakdel:
-    return set_context_in_breakadd_cmd(xp, arg, cmdidx);
+  case CMD_breakdel: {
+    int breakpt_cmd_type = (cmdidx == CMD_breakadd) ? 0 : (cmdidx == CMD_breakdel) ? 1 : 2;
+    return rs_set_context_in_breakadd_cmd(xp, arg, breakpt_cmd_type);
+  }
 
   case CMD_scriptnames:
-    return set_context_in_scriptnames_cmd(xp, arg);
+    return rs_set_context_in_scriptnames_cmd(xp, arg);
 
   case CMD_filetype:
-    return set_context_in_filetype_cmd(xp, arg);
+    return rs_set_context_in_filetype_cmd(xp, arg);
 
   case CMD_lua:
   case CMD_equal:
@@ -2154,7 +1994,7 @@ static const char *set_one_cmd_context(expand_T *xp, const char *buff)
       // Still touching the command after "++"?
       if (*p == NUL) {
         if (ea.argt & EX_ARGOPT) {
-          return set_context_in_argopt(xp, arg + 2);
+          return rs_set_context_in_argopt(xp, arg + 2);
         }
       }
 
@@ -2442,21 +2282,6 @@ static int expand_files_and_dirs(expand_T *xp, char *pat, char ***matches, int *
   return ret;
 }
 
-/// Function given to ExpandGeneric() to obtain the possible arguments of the
-/// ":filetype {plugin,indent}" command.
-static char *get_filetypecmd_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
-{
-  return rs_get_filetypecmd_arg(xp, idx);
-}
-
-/// Function given to ExpandGeneric() to obtain the possible arguments of the
-/// ":breakadd {expr, file, func, here}" command.
-/// ":breakdel {func, file, here}" command.
-static char *get_breakadd_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
-{
-  return rs_get_breakadd_arg(xp, idx);
-}
-
 /// Function given to ExpandGeneric() to obtain the possible arguments for the
 /// ":scriptnames" command.
 static char *get_scriptnames_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
@@ -2470,24 +2295,6 @@ static char *get_scriptnames_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
   return NameBuff;
 }
 
-/// Function given to ExpandGeneric() to obtain the possible arguments of the
-/// ":retab {-indentonly}" option.
-static char *get_retab_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
-{
-  return rs_get_retab_arg(xp, idx);
-}
-
-/// Function given to ExpandGeneric() to obtain the possible arguments of the
-/// ":messages {clear}" command.
-static char *get_messages_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
-{
-  return rs_get_messages_arg(xp, idx);
-}
-
-static char *get_mapclear_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
-{
-  return rs_get_mapclear_arg(xp, idx);
-}
 
 /// Completion for |:checkhealth| command.
 ///
@@ -2527,9 +2334,9 @@ static int ExpandOther(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches
     int escaped;
   } tab[] = {
     { EXPAND_COMMANDS, get_command_name, false, true },
-    { EXPAND_FILETYPECMD, get_filetypecmd_arg, true, true },
-    { EXPAND_MAPCLEAR, get_mapclear_arg, true, true },
-    { EXPAND_MESSAGES, get_messages_arg, true, true },
+    { EXPAND_FILETYPECMD, rs_get_filetypecmd_arg, true, true },
+    { EXPAND_MAPCLEAR, rs_get_mapclear_arg, true, true },
+    { EXPAND_MESSAGES, rs_get_messages_arg, true, true },
     { EXPAND_HISTORY, get_history_arg, true, true },
     { EXPAND_USER_COMMANDS, get_user_commands, false, true },
     { EXPAND_USER_ADDR_TYPE, get_user_cmd_addr_type, false, true },
@@ -2554,9 +2361,9 @@ static int ExpandOther(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches
     { EXPAND_ENV_VARS, get_env_name, true, true },
     { EXPAND_USER, get_users, true, false },
     { EXPAND_ARGLIST, get_arglist_name, true, false },
-    { EXPAND_BREAKPOINT, get_breakadd_arg, true, true },
+    { EXPAND_BREAKPOINT, rs_get_breakadd_arg, true, true },
     { EXPAND_SCRIPTNAMES, get_scriptnames_arg, true, false },
-    { EXPAND_RETAB, get_retab_arg, true, true },
+    { EXPAND_RETAB, rs_get_retab_arg, true, true },
     { EXPAND_CHECKHEALTH, get_healthcheck_names, true, false },
   };
   int ret = FAIL;
@@ -2813,7 +2620,7 @@ void ExpandGeneric(const char *const pat, expand_T *xp, regmatch_T *regmatch, ch
   if (sort_matches) {
     if (funcsort) {
       // <SNR> functions should be sorted to the end.
-      qsort(ga.ga_data, (size_t)ga.ga_len, sizeof(char *), sort_func_compare);
+      qsort(ga.ga_data, (size_t)ga.ga_len, sizeof(char *), rs_sort_func_compare);
     } else {
       sort_strings(ga.ga_data, ga.ga_len);
     }
@@ -3206,7 +3013,7 @@ void globpath(char *path, char *file, garray_T *ga, int expand_options, bool dir
       int num_p = 0;
       ExpandFromContext(&xpc, buf, &p, &num_p, WILD_SILENT | expand_options);
       if (num_p > 0) {
-        ExpandEscape(&xpc, buf, num_p, p, WILD_SILENT | expand_options);
+        rs_expand_escape(&xpc, buf, num_p, p, WILD_SILENT | expand_options);
 
         // Concatenate new results to previous ones.
         ga_grow(ga, num_p);
