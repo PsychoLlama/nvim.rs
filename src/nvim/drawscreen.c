@@ -75,7 +75,6 @@
 #include "nvim/digraph.h"
 #include "nvim/drawline.h"
 #include "nvim/drawscreen.h"
-#include "nvim/eval/vars.h"
 #include "nvim/ex_getln.h"
 #include "nvim/fold.h"
 #include "nvim/fold_defs.h"
@@ -131,18 +130,15 @@ typedef enum {
 
 #include "drawscreen.c.generated.h"
 
-// Rust FFI declarations (window wrappers removed)
+// Rust FFI declarations
 extern int rs_global_stl_height(void);
 extern int rs_min_rows(tabpage_T *tp);
 extern int rs_min_rows_for_all_tabpages(void);
 extern int rs_last_stl_height(int morewin);
-
-// Rust fold FFI declarations
+extern int rs_cmdline_number_prompt(void);
 extern int rs_hasAnyFolding(win_T *win);
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
 extern void rs_clear_showcmd(void);
-
-// Rust FFI declarations for separator drawing
 extern void rs_draw_vsep_win(win_T *wp);
 extern void rs_draw_hsep_win(win_T *wp);
 extern void rs_draw_sep_connectors_win(win_T *wp);
@@ -262,21 +258,12 @@ void screenclear(void)
   }
 }
 
-extern int rs_cmdline_number_prompt(void);
-
-/// Unlike cmdline "one_key" prompts, the message part of the prompt is not stored
-/// to be re-emitted: avoid clearing the prompt from the message grid.
-static bool cmdline_number_prompt(void)
-{
-  return rs_cmdline_number_prompt() != 0;
-}
-
 /// Set dimensions of the Nvim application "screen".
 void screen_resize(int width, int height)
 {
   // Avoid recursiveness, can happen when setting the window size causes
   // another window-changed signal.
-  if (updating_screen || resizing_screen || cmdline_number_prompt()) {
+  if (updating_screen || resizing_screen || rs_cmdline_number_prompt() != 0) {
     return;
   }
 
@@ -443,7 +430,7 @@ int update_screen(void)
 
   // Postpone the redrawing when it's not needed and when being called
   // recursively.
-  if (!redrawing() || updating_screen || cmdline_number_prompt()) {
+  if (!redrawing() || updating_screen || rs_cmdline_number_prompt() != 0) {
     return FAIL;
   }
 
@@ -2126,37 +2113,14 @@ _Static_assert(HLF_FC == 29, "HLF_FC must be 29");
 _Static_assert(HLF_SC == 35, "HLF_SC must be 35");
 _Static_assert(HLF_N == 12, "HLF_N must be 12");
 _Static_assert(HLF_CM == 11, "HLF_CM must be 11");
-// FFI Accessors for Rust
-
-/// Check if cmdline mouse_used is set (for cmdline_number_prompt).
-int nvim_cmdline_mouse_used(void)
-{
-  return get_cmdline_info()->mouse_used != NULL ? 1 : 0;
-}
-
-_Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
-
-/// Set v:echospace variable.
-void nvim_set_vim_var_echospace(int val) { set_vim_var_nr(VV_ECHOSPACE, val); }
-
 _Static_assert(COL_RULER == 17, "COL_RULER must be 17");
 _Static_assert(SHOWCMD_COLS == 10, "SHOWCMD_COLS must be 10");
-
-_Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");
-_Static_assert(STL_IN_TITLE == 2, "STL_IN_TITLE must be 2");
-_Static_assert(kOptTitlestring == 327, "kOptTitlestring mismatch");
-_Static_assert(kOptIconstring == 138, "kOptIconstring mismatch");
-
-// Phase 5 accessors for conceal_check_cursor_line() / win_update_cursorline()
 
 /// Get conceal_cursor_used (file-static).
 int nvim_get_conceal_cursor_used(void) { return conceal_cursor_used ? 1 : 0; }
 
 /// Set conceal_cursor_used (file-static).
 void nvim_set_conceal_cursor_used(int val) { conceal_cursor_used = (val != 0); }
-
-
-// Phase 7 accessors for start_search_hl() / end_search_hl()
 
 /// Check if screen_search_hl has a regprog.
 int nvim_search_hl_has_regprog(void) { return screen_search_hl.rm.regprog != NULL ? 1 : 0; }

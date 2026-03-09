@@ -2860,3 +2860,21 @@ int nvim_utf_cp_bounds_end_off(const char *str, const char *ptr)
 {
   return utf_cp_bounds((char *)str, (char *)ptr).end_off;
 }
+
+// Moved from drawscreen.c — Rust FFI accessors
+
+/// Check if cmdline mouse_used is set (for cmdline_number_prompt).
+int nvim_cmdline_mouse_used(void)
+{
+  return get_cmdline_info()->mouse_used != NULL ? 1 : 0;
+}
+
+/// Set v:echospace variable.
+void nvim_set_vim_var_echospace(int val) { set_vim_var_nr(VV_ECHOSPACE, val); }
+
+// Compile-time constant checks for Rust FFI (constants used in buffer/info crate)
+_Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
+_Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");
+_Static_assert(STL_IN_TITLE == 2, "STL_IN_TITLE must be 2");
+_Static_assert(kOptTitlestring == 327, "kOptTitlestring mismatch");
+_Static_assert(kOptIconstring == 138, "kOptIconstring mismatch");
