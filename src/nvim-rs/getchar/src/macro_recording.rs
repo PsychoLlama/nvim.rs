@@ -248,6 +248,15 @@ pub unsafe extern "C" fn rs_check_end_reg_executing(advance: c_int) {
     }
 }
 
+/// `check_end_reg_executing(bool advance)` -- Phase 1 export replacing C wrapper
+///
+/// # Safety
+/// Calls C accessor functions.
+#[export_name = "check_end_reg_executing"]
+pub unsafe extern "C" fn check_end_reg_executing_export(advance: bool) {
+    rs_check_end_reg_executing(c_int::from(advance));
+}
+
 // =============================================================================
 // Phase 4: gotchars / ungetchars / gotchars_ignore
 // =============================================================================
@@ -312,7 +321,7 @@ pub unsafe extern "C" fn rs_gotchars(chars: *const u8, len: usize) {
 }
 
 /// Record an <Ignore> key.
-#[no_mangle]
+#[export_name = "gotchars_ignore"]
 pub unsafe extern "C" fn rs_gotchars_ignore() {
     let nop_buf: [u8; 3] = [K_SPECIAL, crate::stuff::KS_EXTRA, crate::stuff::KE_IGNORE];
     nvim_add_on_key_ignore_len(3);
@@ -326,7 +335,7 @@ extern "C" {
 /// Undo the last gotchars() for "len" bytes. To be used when putting a typed
 /// character back into the typeahead buffer, thus gotchars() will be called
 /// again. Only affects recorded characters.
-#[no_mangle]
+#[export_name = "ungetchars"]
 pub unsafe extern "C" fn rs_ungetchars(len: c_int) {
     if nvim_get_reg_recording() == 0 {
         return;

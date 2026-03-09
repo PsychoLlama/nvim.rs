@@ -818,6 +818,136 @@ extern "C" {
     fn nvim_get_restart_edit() -> c_int;
 }
 
+// =============================================================================
+// Phase 1: export_name wrappers -- replace C thin wrappers
+// =============================================================================
+
+#[allow(
+    non_snake_case,
+    clippy::module_name_repetitions,
+    clippy::wildcard_imports
+)]
+pub(crate) mod phase1_exports {
+    use super::*;
+
+    /// `stuffReadbuff(const char *s)` -- append to stuff buffer (NUL-terminated)
+    ///
+    /// # Safety
+    /// `s` must be a valid NUL-terminated C string pointer.
+    #[export_name = "stuffReadbuff"]
+    pub unsafe extern "C" fn stuff_readbuff(s: *const u8) {
+        rs_add_buff_readbuf1(s, -1);
+    }
+
+    /// `stuffReadbuffLen(const char *s, ptrdiff_t len)` -- append to stuff buffer
+    ///
+    /// # Safety
+    /// `s` must be a valid pointer to at least `len` bytes.
+    #[export_name = "stuffReadbuffLen"]
+    pub unsafe extern "C" fn stuff_readbuff_len(s: *const u8, len: isize) {
+        rs_add_buff_readbuf1(s, len);
+    }
+
+    /// `stuffRedoReadbuff(const char *s)` -- append to redo stuff buffer
+    ///
+    /// # Safety
+    /// `s` must be a valid NUL-terminated C string pointer.
+    #[export_name = "stuffRedoReadbuff"]
+    pub unsafe extern "C" fn stuff_redo_readbuff(s: *const u8) {
+        rs_add_buff_readbuf2(s, -1);
+    }
+
+    /// `stuffcharReadbuff(int c)` -- append char to stuff buffer
+    #[export_name = "stuffcharReadbuff"]
+    pub unsafe extern "C" fn stuffchar_readbuff(c: c_int) {
+        rs_add_char_buff_readbuf1(c);
+    }
+
+    /// `stuffnumReadbuff(int n)` -- append number to stuff buffer
+    #[export_name = "stuffnumReadbuff"]
+    pub unsafe extern "C" fn stuffnum_readbuff(n: c_int) {
+        rs_add_num_buff_readbuf1(n);
+    }
+
+    /// `AppendToRedobuff(const char *s)` -- append to redo buffer (NUL-terminated)
+    ///
+    /// # Safety
+    /// `s` must be a valid NUL-terminated C string pointer.
+    #[export_name = "AppendToRedobuff"]
+    pub unsafe extern "C" fn append_to_redobuff(s: *const u8) {
+        rs_add_buff_redobuff(s, -1);
+    }
+
+    /// `AppendCharToRedobuff(int c)` -- append char to redo buffer
+    #[export_name = "AppendCharToRedobuff"]
+    pub unsafe extern "C" fn append_char_to_redobuff(c: c_int) {
+        rs_add_char_buff_redobuff(c);
+    }
+
+    /// `AppendNumberToRedobuff(int n)` -- append number to redo buffer
+    #[export_name = "AppendNumberToRedobuff"]
+    pub unsafe extern "C" fn append_number_to_redobuff(n: c_int) {
+        rs_add_num_buff_redobuff(n);
+    }
+
+    /// `AppendToRedobuffLit(const char *str, int len)` -- append literal to redo buffer
+    ///
+    /// # Safety
+    /// `s` must be a valid pointer to at least `len` bytes, or NUL-terminated if len < 0.
+    #[export_name = "AppendToRedobuffLit"]
+    pub unsafe extern "C" fn append_to_redobuff_lit(s: *const u8, len: c_int) {
+        crate::stuff::rs_AppendToRedobuffLit(s, len);
+    }
+
+    /// `AppendToRedobuffSpec(const char *s)` -- append with special key escaping to redo buffer
+    ///
+    /// # Safety
+    /// `s` must be a valid NUL-terminated C string pointer.
+    #[export_name = "AppendToRedobuffSpec"]
+    pub unsafe extern "C" fn append_to_redobuff_spec(s: *const u8) {
+        crate::stuff::rs_AppendToRedobuffSpec(s);
+    }
+
+    /// `ResetRedobuff(void)` -- reset redo buffer
+    #[export_name = "ResetRedobuff"]
+    pub unsafe extern "C" fn reset_redobuff() {
+        rs_ResetRedobuff();
+    }
+
+    /// `CancelRedo(void)` -- cancel redo
+    #[export_name = "CancelRedo"]
+    pub unsafe extern "C" fn cancel_redo() {
+        rs_CancelRedo();
+    }
+
+    /// `saveRedobuff(save_redo_T *save_redo)` -- save redo buffers (ignores pointer)
+    ///
+    /// # Safety
+    /// `save_redo` may be any pointer; it is ignored. Save state is in Rust statics.
+    #[export_name = "saveRedobuff"]
+    pub unsafe extern "C" fn save_redobuff(_save_redo: *mut std::ffi::c_void) {
+        rs_saveRedobuff();
+    }
+
+    /// `restoreRedobuff(save_redo_T *save_redo)` -- restore redo buffers (ignores pointer)
+    ///
+    /// # Safety
+    /// `save_redo` may be any pointer; it is ignored. Save state is in Rust statics.
+    #[export_name = "restoreRedobuff"]
+    pub unsafe extern "C" fn restore_redobuff(_save_redo: *mut std::ffi::c_void) {
+        rs_restoreRedobuff();
+    }
+
+    /// `get_recorded(void)` -- return record buffer contents and clear it
+    ///
+    /// # Safety
+    /// Calls rs_get_recorded().
+    #[export_name = "get_recorded"]
+    pub unsafe extern "C" fn get_recorded() -> *mut u8 {
+        rs_get_recorded()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

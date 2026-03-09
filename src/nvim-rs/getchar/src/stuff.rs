@@ -336,7 +336,7 @@ const K_OPT_BO_FLAG_ERROR: c_int = 0x40;
 ///
 /// # Safety
 /// Calls C accessor function.
-#[no_mangle]
+#[export_name = "typeahead_noflush"]
 pub unsafe extern "C" fn rs_typeahead_noflush(c: c_int) {
     nvim_set_typeahead_char(c);
 }
@@ -345,7 +345,7 @@ pub unsafe extern "C" fn rs_typeahead_noflush(c: c_int) {
 ///
 /// # Safety
 /// Calls C functions.
-#[no_mangle]
+#[export_name = "beep_flush"]
 pub unsafe extern "C" fn rs_beep_flush() {
     if nvim_get_emsg_silent() == 0 {
         nvim_call_flush_buffers(FLUSH_MINIMAL);
@@ -354,7 +354,7 @@ pub unsafe extern "C" fn rs_beep_flush() {
 }
 
 /// Stop redo insert mode (unblock redo buffer).
-#[no_mangle]
+#[export_name = "stop_redo_ins"]
 pub unsafe extern "C" fn rs_stop_redo_ins() {
     buffheader::set_block_redo(false);
 }
@@ -765,6 +765,54 @@ extern "C" {
 }
 
 // Note: rs_to_special and rs_is_special are already exported from input.rs
+
+// =============================================================================
+// Phase 1: export_name wrappers -- replace C thin wrappers
+// =============================================================================
+
+/// `stuffescaped(const char *arg, bool literally)` -- stuff with escaping
+///
+/// # Safety
+/// `arg` must be a valid NUL-terminated C string pointer.
+#[export_name = "stuffescaped"]
+pub unsafe extern "C" fn stuffescaped_export(arg: *const u8, literally: bool) {
+    rs_stuffescaped(arg, c_int::from(literally));
+}
+
+/// `stuffReadbuffSpec(const char *s)` -- stuff with special key escaping
+///
+/// # Safety
+/// `s` must be a valid NUL-terminated C string pointer.
+#[export_name = "stuffReadbuffSpec"]
+pub unsafe extern "C" fn stuff_readbuff_spec_export(s: *const u8) {
+    rs_stuffReadbuffSpec(s);
+}
+
+/// `start_redo(int count, bool old_redo)` -- start redo operation
+/// Returns OK/FAIL (C convention: OK=1, FAIL=0 -- but C callers check != FAIL).
+///
+/// # Safety
+/// Calls Rust redo buffer functions.
+#[must_use]
+#[export_name = "start_redo"]
+pub unsafe extern "C" fn start_redo_export(count: c_int, old_redo: bool) -> c_int {
+    // rs_start_redo returns 0=OK, 1=FAIL; C start_redo returns FAIL or OK
+    // C: return rs_start_redo(...) != 0 ? FAIL : OK  => FAIL=0, OK=1
+    // 0 = FAIL, 1 = OK (inverted from rs_ convention)
+    c_int::from(rs_start_redo(count, c_int::from(old_redo)) == 0)
+}
+
+/// `start_redo_ins(void)` -- repeat last insert by stuffing redo buffer
+/// Returns OK/FAIL.
+///
+/// # Safety
+/// Calls Rust redo buffer functions.
+#[must_use]
+#[export_name = "start_redo_ins"]
+pub unsafe extern "C" fn start_redo_ins_export() -> c_int {
+    // 0 = FAIL, 1 = OK
+    c_int::from(rs_start_redo_ins() == 0)
+}
 
 #[cfg(test)]
 mod tests {

@@ -405,7 +405,7 @@ pub unsafe extern "C" fn rs_can_get_old_char() -> c_int {
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
+#[export_name = "vungetc"]
 pub unsafe extern "C" fn rs_vungetc(c: c_int) {
     nvim_set_old_char(c);
     nvim_set_old_mod_mask(nvim_get_mod_mask());
@@ -549,7 +549,7 @@ pub extern "C" fn rs_translate_keypad_key(c: c_int) -> c_int {
 ///
 /// # Safety
 /// `modifiers` must be a valid pointer.
-#[no_mangle]
+#[export_name = "merge_modifiers"]
 pub unsafe extern "C" fn rs_merge_modifiers(c_arg: c_int, modifiers: *mut c_int) -> c_int {
     let mut c = c_arg;
     let mods = &mut *modifiers;
@@ -578,7 +578,7 @@ pub unsafe extern "C" fn rs_merge_modifiers(c_arg: c_int, modifiers: *mut c_int)
 ///
 /// # Safety
 /// `buf` must point to a buffer with at least `len * 3` bytes of capacity.
-#[no_mangle]
+#[export_name = "fix_input_buffer"]
 pub unsafe extern "C" fn rs_fix_input_buffer(buf: *mut u8, len: c_int) -> c_int {
     if rs_using_script() == 0 {
         // Not reading from script - don't escape K_SPECIAL
@@ -627,6 +627,25 @@ pub unsafe extern "C" fn rs_fix_input_buffer(buf: *mut u8, len: c_int) -> c_int 
     }
     *p = 0; // NUL terminate
     new_len
+}
+
+// =============================================================================
+// Phase 1: export_name wrappers -- replace C thin wrappers with bool params
+// =============================================================================
+
+/// `ins_char_typebuf(int c, int modifiers, bool on_key_ignore)`
+/// Put character `c` back into the typeahead buffer.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[must_use]
+#[export_name = "ins_char_typebuf"]
+pub unsafe extern "C" fn ins_char_typebuf_export(
+    c: c_int,
+    modifiers: c_int,
+    on_key_ignore: bool,
+) -> c_int {
+    rs_ins_char_typebuf(c, modifiers, c_int::from(on_key_ignore))
 }
 
 #[cfg(test)]

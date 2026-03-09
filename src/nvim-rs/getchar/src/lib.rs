@@ -57,6 +57,16 @@ pub unsafe extern "C" fn rs_stuff_empty() -> c_int {
     c_int::from(buffheader::readbuf1().is_empty() && buffheader::readbuf2().is_empty())
 }
 
+/// `stuff_empty(void)` -> bool: Phase 1 export replacing C wrapper
+///
+/// # Safety
+/// Accesses Rust buffer statics.
+#[must_use]
+#[export_name = "stuff_empty"]
+pub unsafe extern "C" fn stuff_empty_export() -> bool {
+    buffheader::readbuf1().is_empty() && buffheader::readbuf2().is_empty()
+}
+
 /// Returns true if `readbuf1` is empty. There may still be redo characters in
 /// `readbuf2`.
 ///
@@ -65,6 +75,16 @@ pub unsafe extern "C" fn rs_stuff_empty() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_readbuf1_empty() -> c_int {
     c_int::from(buffheader::readbuf1().is_empty())
+}
+
+/// `readbuf1_empty(void)` -> bool: Phase 1 export replacing C wrapper
+///
+/// # Safety
+/// Accesses Rust buffer static.
+#[must_use]
+#[export_name = "readbuf1_empty"]
+pub unsafe extern "C" fn readbuf1_empty_export() -> bool {
+    buffheader::readbuf1().is_empty()
 }
 
 /// Check if the typeahead buffer was changed.
@@ -83,6 +103,21 @@ pub unsafe extern "C" fn rs_typebuf_changed(tb_change_cnt: c_int) -> c_int {
     c_int::from(current_cnt != tb_change_cnt || was_filled != 0)
 }
 
+/// `typebuf_changed(int tb_change_cnt)` -> bool: Phase 1 export replacing C wrapper
+///
+/// # Safety
+/// Calls C accessor functions for `typebuf`.
+#[must_use]
+#[export_name = "typebuf_changed"]
+pub unsafe extern "C" fn typebuf_changed_export(tb_change_cnt: c_int) -> bool {
+    if tb_change_cnt == 0 {
+        return false;
+    }
+    let current_cnt = nvim_get_typebuf_change_cnt();
+    let was_filled = nvim_get_typebuf_was_filled();
+    current_cnt != tb_change_cnt || was_filled != 0
+}
+
 /// Return true if there are no characters in the typeahead buffer that have
 /// not been typed (result from a mapping or come from `:normal`).
 ///
@@ -90,6 +125,16 @@ pub unsafe extern "C" fn rs_typebuf_changed(tb_change_cnt: c_int) -> c_int {
 /// Calls C accessor function for `typebuf.tb_maplen`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_typebuf_typed() -> c_int {
+    c_int::from(nvim_get_typebuf_maplen() == 0)
+}
+
+/// `typebuf_typed(void)` -- Phase 1 export replacing C wrapper
+///
+/// # Safety
+/// Calls C accessor function for `typebuf.tb_maplen`.
+#[must_use]
+#[export_name = "typebuf_typed"]
+pub unsafe extern "C" fn typebuf_typed_export() -> c_int {
     c_int::from(nvim_get_typebuf_maplen() == 0)
 }
 
@@ -102,12 +147,32 @@ pub unsafe extern "C" fn rs_typebuf_maplen() -> c_int {
     nvim_get_typebuf_maplen()
 }
 
+/// `typebuf_maplen(void)` -- Phase 1 export replacing C wrapper
+///
+/// # Safety
+/// Calls C accessor function for `typebuf.tb_maplen`.
+#[must_use]
+#[export_name = "typebuf_maplen"]
+pub unsafe extern "C" fn typebuf_maplen_export() -> c_int {
+    nvim_get_typebuf_maplen()
+}
+
 /// Return true when reading keys from a script file.
 ///
 /// # Safety
 /// Calls C accessor function for `curscript`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_using_script() -> c_int {
+    c_int::from(nvim_get_curscript() >= 0)
+}
+
+/// `using_script(void)` -- Phase 1 export replacing C wrapper
+///
+/// # Safety
+/// Calls C accessor function for `curscript`.
+#[must_use]
+#[export_name = "using_script"]
+pub unsafe extern "C" fn using_script_export() -> c_int {
     c_int::from(nvim_get_curscript() >= 0)
 }
 
@@ -125,6 +190,19 @@ pub unsafe extern "C" fn rs_noremap_keys() -> c_int {
     c_int::from((keynoremap & (rm_none | rm_script)) != 0)
 }
 
+/// `noremap_keys(void)` -> bool: Phase 1 export replacing C wrapper
+///
+/// # Safety
+/// Calls C accessor functions for `KeyNoremap` and remap constants.
+#[must_use]
+#[export_name = "noremap_keys"]
+pub unsafe extern "C" fn noremap_keys_export() -> bool {
+    let keynoremap = nvim_get_keynoremap();
+    let rm_none = nvim_get_rm_none();
+    let rm_script = nvim_get_rm_script();
+    (keynoremap & (rm_none | rm_script)) != 0
+}
+
 /// Mode flags
 const MODE_INSERT: c_int = 0x10;
 const MODE_CMDLINE: c_int = 0x08;
@@ -137,7 +215,7 @@ const MODE_CMDLINE: c_int = 0x08;
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
+#[export_name = "may_sync_undo"]
 pub unsafe extern "C" fn rs_may_sync_undo() {
     let state = nvim_get_state();
     let arrow_used = nvim_get_arrow_used() != 0;

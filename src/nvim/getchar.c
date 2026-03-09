@@ -81,36 +81,13 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern int rs_ctrl_x_mode_not_default(void);
 extern int rs_compl_status_local(void);
 
-extern int rs_stuff_empty(void);
-extern int rs_readbuf1_empty(void);
-extern int rs_typebuf_changed(int tb_change_cnt);
-extern int rs_typebuf_typed(void);
-extern int rs_typebuf_maplen(void);
-extern int rs_using_script(void);
-extern int rs_noremap_keys(void);
-extern void rs_vungetc(int c);
+// Rust FFI declarations (functions called directly from remaining C code)
 extern int rs_can_get_old_char(void);
 extern int rs_get_old_char(void);
 extern void rs_clear_old_char(void);
 extern void rs_restore_old_char_state(void);
-extern int rs_ins_char_typebuf(int c, int modifiers, int on_key_ignore);
-extern int rs_merge_modifiers(int c_arg, int *modifiers);
-extern int rs_fix_input_buffer(uint8_t *buf, int len);
-extern void rs_may_sync_undo(void);
-extern void rs_stop_redo_ins(void);
-extern void rs_typeahead_noflush(int c);
-extern void rs_beep_flush(void);
-extern void rs_check_end_reg_executing(int advance);
 
-// Phase 2: Buffer FFI functions (buffers owned by Rust)
-extern void rs_add_buff_readbuf1(const uint8_t *s, ptrdiff_t len);
-extern void rs_add_char_buff_readbuf1(int c);
-extern void rs_add_num_buff_readbuf1(int n);
-extern void rs_free_buff_readbuf1(void);
-extern void rs_add_buff_readbuf2(const uint8_t *s, ptrdiff_t len);
-extern void rs_add_char_buff_readbuf2(int c);
-extern void rs_add_num_buff_readbuf2(int n);
-extern void rs_free_buff_readbuf2(void);
+// Buffer FFI functions (buffers owned by Rust)
 extern void rs_add_buff_redobuff(const uint8_t *s, ptrdiff_t len);
 extern void rs_add_char_buff_redobuff(int c);
 extern void rs_add_byte_buff_redobuff(int c);
@@ -130,10 +107,6 @@ extern int rs_readbuf1_is_empty(void);
 extern int rs_readbuf2_is_empty(void);
 extern int rs_get_block_redo(void);
 extern void rs_set_block_redo(int val);
-extern void rs_ResetRedobuff(void);
-extern void rs_CancelRedo(void);
-extern void rs_saveRedobuff(void);
-extern void rs_restoreRedobuff(void);
 extern int rs_read_redo_init(int old_redo);
 extern int rs_read_redo_byte(void);
 extern int rs_read_redo_peek(void);
@@ -143,19 +116,8 @@ extern uint8_t *rs_get_recorded(void);
 extern uint8_t *rs_get_inserted(void);
 extern size_t rs_get_inserted_len(void);
 
-// Phase 3: Redo/stuff operations (full functions in Rust)
-extern void rs_AppendToRedobuffLit(const uint8_t *s, int len);
-extern void rs_AppendToRedobuffSpec(const uint8_t *s);
-extern void rs_stuffReadbuffSpec(const uint8_t *s);
-extern void rs_stuffescaped(const uint8_t *arg, int literally);
-extern void rs_copy_redo(int old_redo);
-extern int rs_start_redo(int count, int old_redo);
-extern int rs_start_redo_ins(void);
-
-// Phase 4: Recording/gotchars operations (full functions in Rust)
+// Recording/gotchars operations (full functions in Rust)
 extern void rs_gotchars(const uint8_t *chars, size_t len);
-extern void rs_ungetchars(int len);
-extern void rs_gotchars_ignore(void);
 
 // Static assertions for constants hardcoded in Rust
 _Static_assert(MOD_MASK_CTRL == 0x04, "MOD_MASK_CTRL");
@@ -242,14 +204,6 @@ static const char e_cmd_mapping_must_end_with_cr_before_second_cmd[]
 // Buffer primitive functions (free_buff, get_buffcont, add_buff, etc.)
 // have been removed. Use rs_* FFI functions instead.
 
-/// Return the contents of the record buffer as a single string
-/// and clear the record buffer.
-/// K_SPECIAL in the returned string is escaped.
-char *get_recorded(void)
-{
-  return (char *)rs_get_recorded();
-}
-
 /// Return the contents of the redo buffer as a single string.
 /// K_SPECIAL in the returned string is escaped.
 String get_inserted(void)
@@ -260,27 +214,6 @@ String get_inserted(void)
 }
 
 // (Buffer primitive functions removed - now in Rust buffheader module)
-
-/// @return  true if the stuff buffer is empty.
-bool stuff_empty(void)
-  FUNC_ATTR_PURE
-{
-  return rs_stuff_empty() != 0;
-}
-
-/// @return  true if readbuf1 is empty.  There may still be redo characters in
-///          redbuf2.
-bool readbuf1_empty(void)
-  FUNC_ATTR_PURE
-{
-  return rs_readbuf1_empty() != 0;
-}
-
-/// Set a typeahead character that won't be flushed.
-void typeahead_noflush(int c)
-{
-  rs_typeahead_noflush(c);
-}
 
 /// Remove the contents of the stuff buffer and the mapped characters in the
 /// typeahead buffer (used in case of an error).  If "flush_typeahead" is true,
@@ -319,152 +252,6 @@ void flush_buffers(flush_buffers_T flush_typeahead)
   }
 }
 
-/// flush map and typeahead buffers and give a warning for an error
-void beep_flush(void)
-{
-  rs_beep_flush();
-}
-
-/// The previous contents of the redo buffer is kept in old_redobuffer.
-/// This is used for the CTRL-O <.> command in insert mode.
-void ResetRedobuff(void)
-{
-  rs_ResetRedobuff();
-}
-
-/// Discard the contents of the redo buffer and restore the previous redo
-/// buffer.
-void CancelRedo(void)
-{
-  rs_CancelRedo();
-}
-
-/// Save redobuff and old_redobuff to save_redobuff and save_old_redobuff.
-/// Used before executing autocommands and user functions.
-void saveRedobuff(save_redo_T *save_redo)
-{
-  (void)save_redo;  // save state is now in Rust statics
-  rs_saveRedobuff();
-}
-
-/// Restore redobuff and old_redobuff from save_redobuff and save_old_redobuff.
-/// Used after executing autocommands and user functions.
-void restoreRedobuff(save_redo_T *save_redo)
-{
-  (void)save_redo;  // save state is now in Rust statics
-  rs_restoreRedobuff();
-}
-
-/// Append "s" to the redo buffer.
-/// K_SPECIAL should already have been escaped.
-void AppendToRedobuff(const char *s)
-{
-  rs_add_buff_redobuff((const uint8_t *)s, -1);
-}
-
-/// Append to Redo buffer literally, escaping special characters with CTRL-V.
-/// K_SPECIAL is escaped as well.
-///
-/// @param str  String to append
-/// @param len  Length of `str` or -1 for up to the NUL.
-void AppendToRedobuffLit(const char *str, int len)
-{
-  rs_AppendToRedobuffLit((const uint8_t *)str, len);
-}
-
-/// Append "s" to the redo buffer, leaving 3-byte special key codes unmodified
-/// and escaping other K_SPECIAL bytes.
-void AppendToRedobuffSpec(const char *s)
-{
-  rs_AppendToRedobuffSpec((const uint8_t *)s);
-}
-
-/// Append a character to the redo buffer.
-/// Translates special keys, NUL, K_SPECIAL and multibyte characters.
-void AppendCharToRedobuff(int c)
-{
-  rs_add_char_buff_redobuff(c);
-}
-
-// Append a number to the redo buffer.
-void AppendNumberToRedobuff(int n)
-{
-  rs_add_num_buff_redobuff(n);
-}
-
-/// Append string "s" to the stuff buffer.
-/// K_SPECIAL must already have been escaped.
-void stuffReadbuff(const char *s)
-{
-  rs_add_buff_readbuf1((const uint8_t *)s, -1);
-}
-
-/// Append string "s" to the redo stuff buffer.
-/// @remark K_SPECIAL must already have been escaped.
-void stuffRedoReadbuff(const char *s)
-{
-  rs_add_buff_readbuf2((const uint8_t *)s, -1);
-}
-
-void stuffReadbuffLen(const char *s, ptrdiff_t len)
-{
-  rs_add_buff_readbuf1((const uint8_t *)s, len);
-}
-
-/// Stuff "s" into the stuff buffer, leaving special key codes unmodified and
-/// escaping other K_SPECIAL bytes.
-/// Change CR, LF and ESC into a space.
-void stuffReadbuffSpec(const char *s)
-{
-  rs_stuffReadbuffSpec((const uint8_t *)s);
-}
-
-/// Append a character to the stuff buffer.
-/// Translates special keys, NUL, K_SPECIAL and multibyte characters.
-void stuffcharReadbuff(int c)
-{
-  rs_add_char_buff_readbuf1(c);
-}
-
-// Append a number to the stuff buffer.
-void stuffnumReadbuff(int n)
-{
-  rs_add_num_buff_readbuf1(n);
-}
-
-/// Stuff a string into the typeahead buffer, such that edit() will insert it
-/// literally ("literally" true) or interpret is as typed characters.
-void stuffescaped(const char *arg, bool literally)
-{
-  rs_stuffescaped((const uint8_t *)arg, literally ? 1 : 0);
-}
-
-/// Stuff the redo buffer into readbuf2.
-/// Insert the redo count into the command.
-/// If "old_redo" is true, the last but one command is repeated
-/// instead of the last command (inserting text). This is used for
-/// CTRL-O <.> in insert mode
-///
-/// @return  FAIL for failure, OK otherwise
-int start_redo(int count, bool old_redo)
-{
-  return rs_start_redo(count, old_redo ? 1 : 0) != 0 ? FAIL : OK;
-}
-
-/// Repeat the last insert (R, o, O, a, A, i or I command) by stuffing
-/// the redo buffer into readbuf2.
-///
-/// @return  FAIL for failure, OK otherwise
-int start_redo_ins(void)
-{
-  return rs_start_redo_ins() != 0 ? FAIL : OK;
-}
-
-void stop_redo_ins(void)
-{
-  rs_stop_redo_ins();
-}
-
 /// Initialize typebuf.tb_buf to point to typebuf_init.
 /// alloc() cannot be used here: In out-of-memory situations it would
 /// be impossible to type anything.
@@ -480,12 +267,6 @@ static void init_typebuf(void)
   typebuf.tb_len = 0;
   typebuf.tb_off = MAXMAPLEN + 4;
   typebuf.tb_change_cnt = 1;
-}
-
-/// @return true when keys cannot be remapped.
-bool noremap_keys(void)
-{
-  return rs_noremap_keys() != 0;
 }
 
 /// Insert a string in position "offset" in the typeahead buffer.
@@ -618,49 +399,6 @@ int ins_typebuf(char *str, int noremap, int offset, bool nottyped, bool silent)
   return OK;
 }
 
-/// Put character "c" back into the typeahead buffer.
-/// Can be used for a character obtained by vgetc() that needs to be put back.
-/// Uses cmd_silent, KeyTyped and KeyNoremap to restore the flags belonging to
-/// the char.
-///
-/// @param on_key_ignore don't store these bytes for vim.on_key()
-///
-/// @return the length of what was inserted
-int ins_char_typebuf(int c, int modifiers, bool on_key_ignore)
-{
-  return rs_ins_char_typebuf(c, modifiers, on_key_ignore ? 1 : 0);
-}
-
-/// Return true if the typeahead buffer was changed (while waiting for a
-/// character to arrive).  Happens when a message was received from a client or
-/// from feedkeys().
-/// But check in a more generic way to avoid trouble: When "typebuf.tb_buf"
-/// changed it was reallocated and the old pointer can no longer be used.
-/// Or "typebuf.tb_off" may have been changed and we would overwrite characters
-/// that was just added.
-///
-/// @param tb_change_cnt  old value of typebuf.tb_change_cnt
-bool typebuf_changed(int tb_change_cnt)
-  FUNC_ATTR_PURE
-{
-  return rs_typebuf_changed(tb_change_cnt) != 0;
-}
-
-/// Return true if there are no characters in the typeahead buffer that have
-/// not been typed (result from a mapping or come from ":normal").
-int typebuf_typed(void)
-  FUNC_ATTR_PURE
-{
-  return rs_typebuf_typed();
-}
-
-/// Get the number of characters that are mapped (or not typed).
-int typebuf_maplen(void)
-  FUNC_ATTR_PURE
-{
-  return rs_typebuf_maplen();
-}
-
 /// Remove "len" characters from typebuf.tb_buf[typebuf.tb_off + offset]
 void del_typebuf(int len, int offset)
 {
@@ -780,28 +518,6 @@ static void gotchars(const uint8_t *chars, size_t len)
   FUNC_ATTR_NONNULL_ALL
 {
   rs_gotchars(chars, len);
-}
-
-/// Record an <Ignore> key.
-void gotchars_ignore(void)
-{
-  rs_gotchars_ignore();
-}
-
-/// Undo the last gotchars() for "len" bytes.  To be used when putting a typed
-/// character back into the typeahead buffer, thus gotchars() will be called
-/// again.
-/// Only affects recorded characters.
-void ungetchars(int len)
-{
-  rs_ungetchars(len);
-}
-
-/// Sync undo.  Called when typed characters are obtained from the typeahead
-/// buffer, or when a menu is used.
-void may_sync_undo(void)
-{
-  rs_may_sync_undo();
 }
 
 /// Make "typebuf" empty and allocate new buffers.
@@ -997,13 +713,6 @@ bool open_scriptin(char *scriptin_name)
   return true;
 }
 
-/// Return true when reading keys from a script file.
-int using_script(void)
-  FUNC_ATTR_PURE
-{
-  return rs_using_script();
-}
-
 /// This function is called just before doing a blocking wait.  Thus after
 /// waiting 'updatetime' for a character to arrive.
 void before_blocking(void)
@@ -1032,12 +741,6 @@ static void updatescript(int c)
                 (!!p_fs || idle));  // Always fsync at idle (CursorHold).
     count = 0;
   }
-}
-
-/// Merge "modifiers" into "c_arg".
-int merge_modifiers(int c_arg, int *modifiers)
-{
-  return rs_merge_modifiers(c_arg, modifiers);
 }
 
 /// Add a single byte to 'showcmd' for a partially matched mapping.
@@ -2026,21 +1729,6 @@ static int handle_mapping(int *keylenp, const bool *timedout, int *mapdepth)
   return map_result_nomatch;
 }
 
-/// unget one character (can only be done once!)
-/// If the character was stuffed, vgetc() will get it next time it is called.
-/// Otherwise vgetc() will only get it when the stuff buffer is empty.
-void vungetc(int c)
-{
-  rs_vungetc(c);
-}
-
-/// When peeking and not getting a character, reg_executing cannot be cleared
-/// yet, so set a flag to clear it later.
-void check_end_reg_executing(bool advance)
-{
-  rs_check_end_reg_executing(advance ? 1 : 0);
-}
-
 /// Gets a byte:
 /// 1. from the stuffbuffer
 ///    This is used for abbreviated commands like "D" -> "d$".
@@ -2597,15 +2285,6 @@ int inchar(uint8_t *buf, int maxlen, long wait_time)
   }
 
   return fix_input_buffer(buf, len);
-}
-
-/// Fix typed characters for use by vgetc().
-/// "buf[]" must have room to triple the number of bytes!
-/// Returns the new length.
-int fix_input_buffer(uint8_t *buf, int len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_fix_input_buffer(buf, len);
 }
 
 /// Function passed to do_cmdline() to get the command after a <Cmd> key from
