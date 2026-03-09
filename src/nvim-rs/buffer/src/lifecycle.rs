@@ -8,7 +8,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(dead_code)]
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::BufHandle;
 
@@ -20,8 +20,10 @@ extern "C" {
     fn nvim_get_firstbuf() -> BufHandle;
     fn nvim_get_lastbuf() -> BufHandle;
     fn nvim_get_curbuf() -> BufHandle;
+    fn nvim_get_curwin() -> *mut c_void;
     fn nvim_buf_get_prev(buf: BufHandle) -> BufHandle;
     fn nvim_buf_get_next(buf: BufHandle) -> BufHandle;
+    fn nvim_buf_get_b_next(buf: BufHandle) -> BufHandle;
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
     fn nvim_buf_get_ffname(buf: BufHandle) -> *const c_char;
     fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
@@ -32,7 +34,31 @@ extern "C" {
     fn nvim_buf_get_bufhidden(buf: BufHandle) -> c_char;
     fn nvim_buf_get_changed(buf: BufHandle) -> c_int;
     fn nvim_buf_get_ml_mfp(buf: BufHandle) -> *mut c_void;
+    fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_b_help(buf: BufHandle) -> c_int;
+    fn nvim_buf_has_memfile(buf: BufHandle) -> c_int;
+
+    // Jump list accessors (implemented in mark.c)
+    fn nvim_mark_win_get_jumplistlen(win: *mut c_void) -> c_int;
+    fn nvim_mark_win_set_jumplistidx(win: *mut c_void, idx: c_int);
+    fn nvim_mark_win_get_jumplistidx(win: *mut c_void) -> c_int;
+    fn nvim_mark_win_get_jumplist_fnum(win: *mut c_void, idx: c_int) -> c_int;
+    fn nvim_mark_get_jop_flags() -> c_uint;
+    fn mark_jumplist_forget_file(win: *mut c_void, fnum: c_int);
+
+    // au_new_curbuf accessors (implemented in ex_cmds_shim.c)
+    fn nvim_ecmd_au_new_curbuf_valid() -> c_int;
+    fn nvim_ecmd_au_new_curbuf_get_buf() -> BufHandle;
+
+    // bt_quickfix (implemented in Rust, re-exported)
+    fn rs_bt_quickfix(buf: BufHandle) -> bool;
+
+    // buflist_findnr (implemented in Rust, re-exported)
+    fn rs_buflist_findnr(nr: c_int) -> BufHandle;
 }
+
+// kOptJopFlagClean flag value (from option_vars.generated.h)
+const K_OPT_JOP_FLAG_CLEAN: c_uint = 0x04;
 
 // =============================================================================
 // Buffer Flags (from buffer_defs.h)
@@ -403,6 +429,197 @@ pub unsafe fn get_lifecycle_position(buf: BufHandle) -> LifecyclePosition {
 }
 
 // =============================================================================
+// Find Next Buffer When Deleting Current Buffer
+// =============================================================================
+
+/// Find the best buffer to switch to when deleting `curbuf` (`buf_fnum`).
+///
+/// Mirrors the search logic in `do_buffer_ext` lines 2280-2386:
+/// 1. Use `au_new_curbuf` if valid.
+/// 2. Search the jump list (most-recently-visited loaded buffer).
+/// 3. Walk forward then backward through the buffer list.
+/// 4. Fall back to any listed non-quickfix buffer.
+/// 5. Last resort: adjacent buffer.
+///
+/// Returns NULL if no suitable buffer was found (caller must call `empty_curbuf`).
+///
+/// `update_jumplist` is set to 0 when the jump list search found a buffer via
+/// `kOptJopFlagClean` (telling `set_curbuf` not to add another jump entry).
+///
+/// # Safety
+///
+/// Must be called on the main thread with valid Neovim state.
+#[allow(clippy::too_many_lines)]
+pub unsafe fn find_buffer_for_delete(buf_fnum: c_int, update_jumplist: *mut c_int) -> BufHandle {
+    let curbuf = nvim_get_curbuf();
+    let curwin = nvim_get_curwin();
+    let jop_flags = nvim_mark_get_jop_flags();
+    let jop_clean = (jop_flags & K_OPT_JOP_FLAG_CLEAN) != 0;
+
+    // 1. Use au_new_curbuf if set and still valid.
+    if !nvim_ecmd_au_new_curbuf_get_buf().is_null() && nvim_ecmd_au_new_curbuf_valid() != 0 {
+        return nvim_ecmd_au_new_curbuf_get_buf();
+    }
+
+    let mut result: BufHandle = BufHandle(std::ptr::null_mut());
+    let mut bp: BufHandle = BufHandle(std::ptr::null_mut()); // fallback: first unloaded candidate
+
+    // 2. Search the jump list for a recently-visited loaded buffer.
+    let mut jumplistlen = nvim_mark_win_get_jumplistlen(curwin);
+    if jumplistlen > 0 {
+        if jop_clean {
+            mark_jumplist_forget_file(curwin, buf_fnum);
+            jumplistlen = nvim_mark_win_get_jumplistlen(curwin);
+        }
+
+        if jumplistlen > 0 {
+            let jumplistidx = nvim_mark_win_get_jumplistidx(curwin);
+
+            let mut jumpidx = if jop_clean {
+                // If idx == len, the current pos was not yet added; go to last entry.
+                if jumplistidx == jumplistlen {
+                    let new_idx = jumplistlen - 1;
+                    nvim_mark_win_set_jumplistidx(curwin, new_idx);
+                    new_idx
+                } else {
+                    jumplistidx
+                }
+            } else {
+                let idx = jumplistidx - 1;
+                if idx < 0 {
+                    jumplistlen - 1
+                } else {
+                    idx
+                }
+            };
+
+            let forward = jumpidx;
+            loop {
+                if !jop_clean && jumpidx == jumplistidx {
+                    break;
+                }
+
+                let fnum = nvim_mark_win_get_jumplist_fnum(curwin, jumpidx);
+                let candidate = rs_buflist_findnr(fnum);
+
+                let mut found = false;
+                if !candidate.is_null() {
+                    // Skip curbuf, unlisted, and quickfix buffers.
+                    if candidate == curbuf
+                        || nvim_buf_get_b_p_bl(candidate) == 0
+                        || rs_bt_quickfix(candidate)
+                    {
+                        // Not suitable
+                    } else if nvim_buf_has_memfile(candidate) == 0 {
+                        // Unloaded: remember as fallback
+                        if bp.is_null() {
+                            bp = candidate;
+                        }
+                    } else {
+                        // Found a valid loaded buffer
+                        result = candidate;
+                        if jop_clean {
+                            nvim_mark_win_set_jumplistidx(curwin, jumpidx);
+                            if !update_jumplist.is_null() {
+                                *update_jumplist = 0;
+                            }
+                        }
+                        found = true;
+                    }
+                }
+
+                if found {
+                    return result;
+                }
+
+                // Advance to older jump list entry
+                if jumpidx == 0 && jumplistidx == jumplistlen {
+                    break;
+                }
+                jumpidx -= 1;
+                if jumpidx < 0 {
+                    jumpidx = jumplistlen - 1;
+                }
+                if jumpidx == forward {
+                    break; // list exhausted
+                }
+            }
+        }
+    }
+
+    // 3. Walk forward then backward through buffer list.
+    if result.is_null() {
+        let mut forward = true;
+        let mut buf = nvim_buf_get_b_next(curbuf);
+        loop {
+            if buf.is_null() {
+                if !forward {
+                    break; // tried both directions
+                }
+                buf = nvim_buf_get_prev(curbuf);
+                forward = false;
+                continue;
+            }
+            // Prefer same help-buffer type, listed, non-quickfix
+            if nvim_buf_get_b_help(buf) == nvim_buf_get_b_help(curbuf)
+                && nvim_buf_get_b_p_bl(buf) != 0
+                && !rs_bt_quickfix(buf)
+            {
+                if nvim_buf_has_memfile(buf) != 0 {
+                    result = buf;
+                    break;
+                }
+                if bp.is_null() {
+                    bp = buf;
+                }
+            }
+            buf = if forward {
+                nvim_buf_get_b_next(buf)
+            } else {
+                nvim_buf_get_prev(buf)
+            };
+        }
+    }
+
+    // 4. Fall back to any unloaded buffer found during search.
+    if result.is_null() {
+        result = bp;
+    }
+
+    // 5. Fall back to any listed non-quickfix buffer.
+    if result.is_null() {
+        let mut buf = nvim_get_firstbuf();
+        while !buf.is_null() {
+            if nvim_buf_get_b_p_bl(buf) != 0 && buf != curbuf && !rs_bt_quickfix(buf) {
+                result = buf;
+                break;
+            }
+            buf = nvim_buf_get_b_next(buf);
+        }
+    }
+
+    // 6. Last resort: adjacent buffer (even if quickfix).
+    if result.is_null() {
+        let next = nvim_buf_get_b_next(curbuf);
+        let prev = nvim_buf_get_prev(curbuf);
+        result = if !next.is_null() && !rs_bt_quickfix(next) {
+            next
+        } else if !prev.is_null() && !rs_bt_quickfix(prev) {
+            prev
+        } else {
+            // absolute last resort: any adjacent
+            if next.is_null() {
+                prev
+            } else {
+                next
+            }
+        };
+    }
+
+    result
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -467,6 +684,20 @@ pub unsafe extern "C" fn rs_buf_nwindows(buf: BufHandle) -> c_int {
         return 0;
     }
     nvim_buf_get_nwindows(buf)
+}
+
+/// Find the best buffer to switch to when deleting the current buffer.
+///
+/// `buf_fnum` is the file number of the buffer being deleted.
+/// `update_jumplist` is set to 0 when `jop_clean` caused a jump-list selection
+/// (so caller should pass `false` to `set_curbuf`).
+/// Returns NULL if no suitable buffer was found (caller should call `empty_curbuf`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_find_buffer_for_delete(
+    buf_fnum: c_int,
+    update_jumplist: *mut c_int,
+) -> BufHandle {
+    find_buffer_for_delete(buf_fnum, update_jumplist)
 }
 
 // =============================================================================

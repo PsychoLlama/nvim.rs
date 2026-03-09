@@ -146,6 +146,7 @@ extern int rs_diffopt_hiddenoff(void);
 extern bool rs_otherfile_buf_4(buf_T *buf, char *ffname, void *file_id_p, bool file_id_valid);
 
 extern void rs_reset_VIsual_and_resel(void);
+extern buf_T *rs_find_buffer_for_delete(int buf_fnum, int *update_jumplist);
 
 
 // Accessor functions for Rust opaque handle pattern.
@@ -2178,7 +2179,6 @@ static int do_buffer_ext(int action, int start, int dir, int count, int flags)
 
   // delete buffer "buf" from memory and/or the list
   if (unload) {
-    int forward;
     bufref_T bufref;
     if (!can_unload_buffer(buf)) {
       return FAIL;
@@ -2272,118 +2272,9 @@ static int do_buffer_ext(int action, int start, int dir, int count, int flags)
     // Deleting the current buffer: Need to find another buffer to go to.
     // There should be another, otherwise it would have been handled
     // above.  However, autocommands may have deleted all buffers.
-    // First use au_new_curbuf.br_buf, if it is valid.
-    // Then prefer the buffer we most recently visited.
-    // Else try to find one that is loaded, after the current buffer,
-    // then before the current buffer.
-    // Finally use any buffer.
-    buf = NULL;  // Selected buffer.
-    bp = NULL;   // Used when no loaded buffer found.
-    if (au_new_curbuf.br_buf != NULL && bufref_valid(&au_new_curbuf)) {
-      buf = au_new_curbuf.br_buf;
-    } else if (curwin->w_jumplistlen > 0) {
-      if (jop_flags & kOptJopFlagClean) {
-        // Remove the buffer from the jump list.
-        mark_jumplist_forget_file(curwin, buf_fnum);
-      }
-
-      // It's possible that we removed all jump list entries, in that case we need to try another
-      // approach
-      if (curwin->w_jumplistlen > 0) {
-        int jumpidx = curwin->w_jumplistidx;
-
-        if (jop_flags & kOptJopFlagClean) {
-          // If the index is the same as the length, the current position was not yet added to the
-          // jump list. So we can safely go back to the last entry and search from there.
-          if (jumpidx == curwin->w_jumplistlen) {
-            jumpidx = curwin->w_jumplistidx = curwin->w_jumplistlen - 1;
-          }
-        } else {
-          jumpidx--;
-          if (jumpidx < 0) {
-            jumpidx = curwin->w_jumplistlen - 1;
-          }
-        }
-
-        forward = jumpidx;
-        while ((jop_flags & kOptJopFlagClean) || jumpidx != curwin->w_jumplistidx) {
-          buf = buflist_findnr(curwin->w_jumplist[jumpidx].fmark.fnum);
-
-          if (buf != NULL) {
-            // Skip current and unlisted bufs.  Also skip a quickfix
-            // buffer, it might be deleted soon.
-            if (buf == curbuf || !buf->b_p_bl || bt_quickfix(buf)) {
-              buf = NULL;
-            } else if (buf->b_ml.ml_mfp == NULL) {
-              // skip unloaded buf, but may keep it for later
-              if (bp == NULL) {
-                bp = buf;
-              }
-              buf = NULL;
-            }
-          }
-          if (buf != NULL) {         // found a valid buffer: stop searching
-            if (jop_flags & kOptJopFlagClean) {
-              curwin->w_jumplistidx = jumpidx;
-              update_jumplist = false;
-            }
-            break;
-          }
-          // advance to older entry in jump list
-          if (!jumpidx && curwin->w_jumplistidx == curwin->w_jumplistlen) {
-            break;
-          }
-          if (--jumpidx < 0) {
-            jumpidx = curwin->w_jumplistlen - 1;
-          }
-          if (jumpidx == forward) {               // List exhausted for sure
-            break;
-          }
-        }
-      }
-    }
-
-    if (buf == NULL) {          // No previous buffer, Try 2'nd approach
-      forward = true;
-      buf = curbuf->b_next;
-      while (true) {
-        if (buf == NULL) {
-          if (!forward) {               // tried both directions
-            break;
-          }
-          buf = curbuf->b_prev;
-          forward = false;
-          continue;
-        }
-        // in non-help buffer, try to skip help buffers, and vv
-        if (buf->b_help == curbuf->b_help && buf->b_p_bl && !bt_quickfix(buf)) {
-          if (buf->b_ml.ml_mfp != NULL) {           // found loaded buffer
-            break;
-          }
-          if (bp == NULL) {             // remember unloaded buf for later
-            bp = buf;
-          }
-        }
-        buf = forward ? buf->b_next : buf->b_prev;
-      }
-    }
-    if (buf == NULL) {          // No loaded buffer, use unloaded one
-      buf = bp;
-    }
-    if (buf == NULL) {          // No loaded buffer, find listed one
-      FOR_ALL_BUFFERS(buf2) {
-        if (buf2->b_p_bl && buf2 != curbuf && !bt_quickfix(buf2)) {
-          buf = buf2;
-          break;
-        }
-      }
-    }
-    if (buf == NULL) {          // Still no buffer, just take one
-      buf = curbuf->b_next != NULL ? curbuf->b_next : curbuf->b_prev;
-      if (bt_quickfix(buf)) {
-        buf = NULL;
-      }
-    }
+    int update_jumplist_int = update_jumplist ? 1 : 0;
+    buf = rs_find_buffer_for_delete(buf_fnum, &update_jumplist_int);
+    update_jumplist = (update_jumplist_int != 0);
   }
 
   if (buf == NULL) {

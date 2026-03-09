@@ -2377,6 +2377,9 @@ void nvim_ecmd_au_new_curbuf_set(buf_T *buf) { set_bufref(&au_new_curbuf, buf); 
 /// Returns 1 if bufref_valid(&au_new_curbuf)
 int nvim_ecmd_au_new_curbuf_valid(void) { return bufref_valid(&au_new_curbuf) ? 1 : 0; }
 
+/// Returns au_new_curbuf.br_buf (NULL if not set)
+buf_T *nvim_ecmd_au_new_curbuf_get_buf(void) { return au_new_curbuf.br_buf; }
+
 /// Save au_new_curbuf into a heap-allocated bufref, return void*
 void *nvim_ecmd_au_new_curbuf_save(void)
 {
