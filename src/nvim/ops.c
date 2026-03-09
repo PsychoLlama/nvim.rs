@@ -2415,31 +2415,6 @@ void nvim_cpi_append_bom_and_display(int64_t bom_count)
   p_shm = p;
 }
 
-/// Populate the dictionary with word count info.
-void nvim_cpi_populate_dict(dict_T *dict,
-                            int visual_active,
-                            int64_t word_count,
-                            int64_t char_count,
-                            int64_t byte_count,
-                            int64_t bom_count,
-                            int64_t word_count_cursor,
-                            int64_t char_count_cursor,
-                            int64_t byte_count_cursor)
-{
-  tv_dict_add_nr(dict, S_LEN("words"), (varnumber_T)word_count);
-  tv_dict_add_nr(dict, S_LEN("chars"), (varnumber_T)char_count);
-  tv_dict_add_nr(dict, S_LEN("bytes"), (varnumber_T)(byte_count + bom_count));
-
-  STATIC_ASSERT(sizeof("visual") == sizeof("cursor"),
-                "key_len argument in tv_dict_add_nr is wrong");
-  tv_dict_add_nr(dict, visual_active ? "visual_bytes" : "cursor_bytes",
-                 sizeof("visual_bytes") - 1, (varnumber_T)byte_count_cursor);
-  tv_dict_add_nr(dict, visual_active ? "visual_chars" : "cursor_chars",
-                 sizeof("visual_chars") - 1, (varnumber_T)char_count_cursor);
-  tv_dict_add_nr(dict, visual_active ? "visual_words" : "cursor_words",
-                 sizeof("visual_words") - 1, (varnumber_T)word_count_cursor);
-}
-
 /// Handle indent and format operators and visual mode ":".
 static void op_colon(oparg_T *oap)
 {

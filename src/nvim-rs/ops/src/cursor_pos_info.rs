@@ -89,17 +89,14 @@ extern "C" {
     );
     fn nvim_cpi_append_bom_and_display(bom_count: i64);
     fn nvim_bomb_size() -> c_int;
-    fn nvim_cpi_populate_dict(
+
+    // dict operations (for nvim_cpi_populate_dict absorption)
+    fn nvim_tag_tv_dict_add_nr(
         dict: *mut c_void,
-        visual_active: c_int,
-        word_count: i64,
-        char_count: i64,
-        byte_count: i64,
-        bom_count: i64,
-        word_count_cursor: i64,
-        char_count_cursor: i64,
-        byte_count_cursor: i64,
-    );
+        key: *const c_char,
+        key_len: usize,
+        nr: i64,
+    ) -> c_int;
 
     // Low-level buffer line access
     fn nvim_ml_get(lnum: c_int) -> *const c_char;
@@ -113,6 +110,46 @@ extern "C" {
 /// Reads from curbuf option fields via C shims.
 unsafe fn last_line_no_eol() -> bool {
     !nvim_curbuf_get_b_p_eol() && (nvim_curbuf_get_b_p_bin() != 0 || !nvim_curbuf_get_b_p_fixeol())
+}
+
+/// Inline port of `nvim_cpi_populate_dict`.
+/// Populates a wordcount dict_T with word/char/byte counts.
+///
+/// # Safety
+/// `dict` must be a valid `dict_T *` or null.
+#[allow(clippy::too_many_arguments)]
+unsafe fn cpi_populate_dict(
+    dict: *mut c_void,
+    visual_active: c_int,
+    word_count: i64,
+    char_count: i64,
+    byte_count: i64,
+    bom_count: i64,
+    word_count_cursor: i64,
+    char_count_cursor: i64,
+    byte_count_cursor: i64,
+) {
+    nvim_tag_tv_dict_add_nr(dict, c"words".as_ptr(), 5, word_count);
+    nvim_tag_tv_dict_add_nr(dict, c"chars".as_ptr(), 5, char_count);
+    nvim_tag_tv_dict_add_nr(dict, c"bytes".as_ptr(), 5, byte_count + bom_count);
+    let bytes_key = if visual_active != 0 {
+        c"visual_bytes"
+    } else {
+        c"cursor_bytes"
+    };
+    let chars_key = if visual_active != 0 {
+        c"visual_chars"
+    } else {
+        c"cursor_chars"
+    };
+    let words_key = if visual_active != 0 {
+        c"visual_words"
+    } else {
+        c"cursor_words"
+    };
+    nvim_tag_tv_dict_add_nr(dict, bytes_key.as_ptr(), 12, byte_count_cursor);
+    nvim_tag_tv_dict_add_nr(dict, chars_key.as_ptr(), 12, char_count_cursor);
+    nvim_tag_tv_dict_add_nr(dict, words_key.as_ptr(), 12, word_count_cursor);
 }
 
 /// `_Static_assert` constants are verified in the C accessor file.
@@ -377,7 +414,7 @@ unsafe fn output_results(dict: *mut c_void, vp: &VisualDisplayParams, c: &Counts
         }
         nvim_cpi_append_bom_and_display(bom_count);
     } else {
-        nvim_cpi_populate_dict(
+        cpi_populate_dict(
             dict,
             c_int::from(vp.visual_active),
             c.word_count,
@@ -408,7 +445,7 @@ pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
         if dict.is_null() {
             nvim_msg_no_lines();
         } else {
-            nvim_cpi_populate_dict(dict, 0, 0, 0, 0, 0, 0, 0, 0);
+            cpi_populate_dict(dict, 0, 0, 0, 0, 0, 0, 0, 0);
         }
         return;
     }
