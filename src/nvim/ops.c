@@ -2300,46 +2300,12 @@ static varnumber_T line_count_info(char *line, varnumber_T *wc, varnumber_T *cc,
 // C accessor functions for rs_cursor_pos_info (Phase 1)
 // =============================================================================
 
-// Verify constants used in Rust
-_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL mismatch");
-_Static_assert(Ctrl_V == 22, "Ctrl_V mismatch");
-_Static_assert('V' == 0x56, "V char mismatch");
-_Static_assert('v' == 0x76, "v char mismatch");
-
-/// Struct matching Rust CpiVisualState
-typedef struct {
-  int active;
-  int mode;
-  int visual_lnum;
-  int visual_col;
-  int cursor_lnum;
-  int cursor_col;
-  int sel_exclusive;
-  int curswant;
-} CpiVisualState;
-
-/// Struct matching Rust CpiLineCountResult
+/// Struct matching Rust CpiLineCountResult (still needed by nvim_cpi_block_line_count)
 typedef struct {
   int64_t byte_count;
   int64_t word_count;
   int64_t char_count;
 } CpiLineCountResult;
-
-
-/// Get EOL size based on file format (1 for unix, 2 for DOS).
-/// Get visual mode state in one batch call.
-void nvim_cpi_get_visual_state(void *out_ptr)
-{
-  CpiVisualState *out = (CpiVisualState *)out_ptr;
-  out->active = VIsual_active;
-  out->mode = VIsual_mode;
-  out->visual_lnum = (int)VIsual.lnum;
-  out->visual_col = (int)VIsual.col;
-  out->cursor_lnum = (int)curwin->w_cursor.lnum;
-  out->cursor_col = (int)curwin->w_cursor.col;
-  out->sel_exclusive = (*p_sel == 'e') ? 1 : 0;
-  out->curswant = (int)curwin->w_curswant;
-}
 
 
 /// Set up block visual mode: get virtual columns with sbr temporarily cleared.

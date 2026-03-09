@@ -16,31 +16,13 @@ const VISUAL_LINE: c_int = 0x56;
 /// 'v' character (charwise visual)
 const VISUAL_CHAR: c_int = 0x76;
 
-/// Result from visual state query.
-#[repr(C)]
-#[derive(Debug, Clone, Default)]
-pub struct CpiVisualState {
-    pub active: c_int,
-    pub mode: c_int,
-    /// VIsual position
-    pub visual_lnum: c_int,
-    pub visual_col: c_int,
-    /// Cursor position
-    pub cursor_lnum: c_int,
-    pub cursor_col: c_int,
-    /// Selection option: 1 if p_sel[0] == 'e'
-    pub sel_exclusive: c_int,
-    /// curswant value
-    pub curswant: c_int,
-}
-
 /// Result from line_count_info call.
-#[repr(C)]
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Clone, Default)]
-pub struct CpiLineCountResult {
-    pub byte_count: i64,
-    pub word_count: i64,
-    pub char_count: i64,
+struct CpiLineCountResult {
+    byte_count: i64,
+    word_count: i64,
+    char_count: i64,
 }
 
 /// EOL format constant (matches C `EOL_DOS = 1`)
@@ -52,8 +34,15 @@ extern "C" {
     fn nvim_curbuf_get_ml_line_count() -> c_int;
     fn nvim_curbuf_get_fileformat() -> c_int;
 
-    // Visual state (out is CpiVisualState*, passed as void*)
-    fn nvim_cpi_get_visual_state(out: *mut c_void);
+    // Visual state: individual shims replace nvim_cpi_get_visual_state
+    fn nvim_get_VIsual_active() -> c_int;
+    fn nvim_get_VIsual_mode() -> c_int;
+    fn nvim_get_VIsual_lnum() -> c_int;
+    fn nvim_get_VIsual_col() -> c_int;
+    fn nvim_get_cursor_lnum() -> c_int;
+    fn nvim_get_cursor_col() -> c_int;
+    fn nvim_p_sel_is_exclusive() -> bool;
+    fn nvim_curwin_get_w_curswant() -> c_int;
 
     // Block visual
     fn nvim_cpi_setup_block_visual(
@@ -425,24 +414,29 @@ pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
     };
     let line_count = nvim_curbuf_get_ml_line_count();
 
-    // Get visual state
-    let mut vs = CpiVisualState::default();
-    nvim_cpi_get_visual_state(std::ptr::from_mut(&mut vs).cast::<c_void>());
+    // Get visual state via individual shims (nvim_cpi_get_visual_state absorbed)
+    let visual_active_int = nvim_get_VIsual_active();
+    let visual_mode = nvim_get_VIsual_mode();
+    let visual_lnum = nvim_get_VIsual_lnum();
+    let visual_col = nvim_get_VIsual_col();
+    let cursor_lnum = nvim_get_cursor_lnum();
+    let cursor_col = nvim_get_cursor_col();
+    let sel_exclusive = c_int::from(nvim_p_sel_is_exclusive());
+    let curswant = nvim_curwin_get_w_curswant();
 
-    let visual_active = vs.active != 0;
-    let visual_mode = vs.mode;
+    let visual_active = visual_active_int != 0;
 
     // Set up visual mode positions
     let (min_lnum, min_col, max_lnum, max_col, line_count_selected) = if visual_active {
-        let (min_l, min_c, max_l, max_c) = if vs.visual_lnum < vs.cursor_lnum
-            || (vs.visual_lnum == vs.cursor_lnum && vs.visual_col <= vs.cursor_col)
+        let (min_l, min_c, max_l, max_c) = if visual_lnum < cursor_lnum
+            || (visual_lnum == cursor_lnum && visual_col <= cursor_col)
         {
-            (vs.visual_lnum, vs.visual_col, vs.cursor_lnum, vs.cursor_col)
+            (visual_lnum, visual_col, cursor_lnum, cursor_col)
         } else {
-            (vs.cursor_lnum, vs.cursor_col, vs.visual_lnum, vs.visual_col)
+            (cursor_lnum, cursor_col, visual_lnum, visual_col)
         };
 
-        let max_c = if vs.sel_exclusive != 0 && max_c > 0 {
+        let max_c = if sel_exclusive != 0 && max_c > 0 {
             max_c - 1
         } else {
             max_c
@@ -465,7 +459,7 @@ pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
             &raw mut blk_start_vcol,
             &raw mut blk_end_vcol,
         );
-        if vs.curswant == MAXCOL {
+        if curswant == MAXCOL {
             blk_end_vcol = MAXCOL;
         }
         // Swap if needed
@@ -486,8 +480,8 @@ pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
         min_col,
         max_lnum,
         max_col,
-        cursor_lnum: vs.cursor_lnum,
-        cursor_col: vs.cursor_col,
+        cursor_lnum,
+        cursor_col,
     };
     let Some(c) = count_lines(&params) else {
         return; // interrupted
@@ -496,7 +490,7 @@ pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
     let vp = VisualDisplayParams {
         visual_active,
         visual_mode,
-        curswant: vs.curswant,
+        curswant,
         line_count_selected,
         blk_start_vcol,
         blk_end_vcol,
@@ -514,19 +508,6 @@ mod tests {
         assert_eq!(CTRL_V, 22);
         assert_eq!(VISUAL_LINE, 0x56);
         assert_eq!(VISUAL_CHAR, 0x76);
-    }
-
-    #[test]
-    fn test_visual_state_default() {
-        let vs = CpiVisualState::default();
-        assert_eq!(vs.active, 0);
-        assert_eq!(vs.mode, 0);
-        assert_eq!(vs.visual_lnum, 0);
-        assert_eq!(vs.visual_col, 0);
-        assert_eq!(vs.cursor_lnum, 0);
-        assert_eq!(vs.cursor_col, 0);
-        assert_eq!(vs.sel_exclusive, 0);
-        assert_eq!(vs.curswant, 0);
     }
 
     #[test]
