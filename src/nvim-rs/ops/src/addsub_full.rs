@@ -97,18 +97,10 @@ extern "C" {
         overflow: *mut bool,
     );
 
-    fn nvim_addsub_replace_number(
-        col: c_int,
-        length: c_int,
-        pre: c_int,
-        n_lo: u64,
-        negative: c_int,
-        was_positive: c_int,
-        visual: c_int,
-        firstdigit: c_int,
-        do_oct: c_int,
-        out_endpos_col: *mut c_int,
-    );
+    fn nvim_set_cursor_col(col: c_int);
+    fn nvim_gchar_cursor() -> c_int;
+    fn del_char(fixpos: bool) -> c_int;
+    fn nvim_ins_str(ptr: *const std::ffi::c_char, len: usize);
 
     fn nvim_addsub_set_marks(startpos_col: c_int, endpos_col: c_int);
     fn nvim_addsub_cleanup(visual: c_int, did_change: c_int, save_coladd: c_int);
@@ -412,6 +404,160 @@ unsafe fn addsub_parse_number(
     }
 }
 
+/// NUMBUFLEN: large enough for any number representation (65 bytes).
+const NUMBUFLEN: usize = 65;
+
+/// Persistent state: whether the last hex digit deleted was uppercase.
+/// Mirrors the C static `bool hexupper = false` in nvim_addsub_replace_number.
+static HEXUPPER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Rust port of `nvim_addsub_replace_number` from ops.c.
+/// Deletes the old number and inserts the new formatted number.
+///
+/// Returns the end column position.
+///
+/// # Safety
+/// - Modifies buffer content via del_char/ins_str
+/// - Accesses cursor via C shims
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::too_many_arguments,
+    clippy::too_many_lines
+)]
+unsafe fn addsub_replace_number(
+    col: c_int,
+    length: c_int,
+    pre: c_int,
+    n: u64,
+    negative: bool,
+    was_positive: bool,
+    visual: bool,
+    firstdigit: c_int,
+    do_oct: c_int,
+) -> c_int {
+    nvim_set_cursor_col(col);
+    let mut todel = length;
+    let mut c = nvim_gchar_cursor();
+
+    let mut length = length;
+    // Don't include the '-' in the length
+    if c == i32::from(b'-') {
+        length -= 1;
+    }
+    while todel > 0 {
+        todel -= 1;
+        // Track whether hex digit was uppercase
+        if c < 0x100 && (c as u8).is_ascii_alphabetic() {
+            HEXUPPER.store(
+                (c as u8).is_ascii_uppercase(),
+                std::sync::atomic::Ordering::Relaxed,
+            );
+        }
+        del_char(false);
+        c = nvim_gchar_cursor();
+    }
+
+    // Build the output string in a fixed-size buffer
+    let mut buf: [u8; NUMBUFLEN * 2 + 4] = [0; NUMBUFLEN * 2 + 4];
+    let mut pos = 0usize;
+
+    // Leading minus sign
+    if negative && (!visual || was_positive) {
+        buf[pos] = b'-';
+        pos += 1;
+    }
+    // Prefix: '0' for oct/hex/bin, then 'b'/'B'/'x'/'X' for bin/hex
+    if pre != 0 {
+        buf[pos] = b'0';
+        pos += 1;
+        length -= 1;
+    }
+    if pre == i32::from(b'b')
+        || pre == i32::from(b'B')
+        || pre == i32::from(b'x')
+        || pre == i32::from(b'X')
+    {
+        buf[pos] = pre as u8;
+        pos += 1;
+        length -= 1;
+    }
+
+    // Format the number into buf2
+    let mut buf2 = [0u8; NUMBUFLEN];
+    let buf2_slice = if pre == i32::from(b'b') || pre == i32::from(b'B') {
+        // Binary format
+        let mut bits: u32 = 64;
+        while bits > 0 && (n >> (bits - 1)) & 1 == 0 {
+            bits -= 1;
+        }
+        let mut out_len = 0usize;
+        let mut b = bits;
+        while b > 0 && out_len < NUMBUFLEN - 1 {
+            b -= 1;
+            buf2[out_len] = if (n >> b) & 1 != 0 { b'1' } else { b'0' };
+            out_len += 1;
+        }
+        &buf2[..out_len]
+    } else if pre == 0 {
+        // Decimal
+        let s = format!("{n}");
+        let bytes = s.as_bytes();
+        let len = bytes.len().min(NUMBUFLEN - 1);
+        buf2[..len].copy_from_slice(&bytes[..len]);
+        &buf2[..len]
+    } else if pre == i32::from(b'0') {
+        // Octal
+        let s = format!("{n:o}");
+        let bytes = s.as_bytes();
+        let len = bytes.len().min(NUMBUFLEN - 1);
+        buf2[..len].copy_from_slice(&bytes[..len]);
+        &buf2[..len]
+    } else if HEXUPPER.load(std::sync::atomic::Ordering::Relaxed) {
+        // Hex uppercase
+        let s = format!("{n:X}");
+        let bytes = s.as_bytes();
+        let len = bytes.len().min(NUMBUFLEN - 1);
+        buf2[..len].copy_from_slice(&bytes[..len]);
+        &buf2[..len]
+    } else {
+        // Hex lowercase
+        let s = format!("{n:x}");
+        let bytes = s.as_bytes();
+        let len = bytes.len().min(NUMBUFLEN - 1);
+        buf2[..len].copy_from_slice(&bytes[..len]);
+        &buf2[..len]
+    };
+    let buf2len = buf2_slice.len() as c_int;
+    length -= buf2len;
+
+    // Zero-pad if needed (e.g., when original had leading zeros)
+    if firstdigit == i32::from(b'0') && !(do_oct != 0 && pre == 0) {
+        let mut pad = length;
+        while pad > 0 {
+            buf[pos] = b'0';
+            pos += 1;
+            pad -= 1;
+        }
+    }
+
+    // Append buf2
+    for &byte in buf2_slice {
+        buf[pos] = byte;
+        pos += 1;
+    }
+
+    // Insert the formatted string using nvim_ins_str
+    nvim_ins_str(buf.as_ptr().cast(), pos);
+
+    let endpos_col = nvim_get_cursor_col();
+    if endpos_col > 0 {
+        nvim_set_cursor_col(endpos_col - 1);
+    }
+    endpos_col
+}
+
 // Perform number arithmetic: parse, compute, replace.
 // Returns the endpos column for mark setting.
 #[allow(clippy::cast_sign_loss)]
@@ -476,18 +622,16 @@ unsafe fn do_number_addsub(scan: &AddsubScanResult, params: &NumArithParams) -> 
         adj_length += 1;
     }
 
-    let mut endpos_col: c_int = 0;
-    nvim_addsub_replace_number(
+    let endpos_col = addsub_replace_number(
         col,
         adj_length,
         pre,
         n,
-        c_int::from(negative),
-        c_int::from(was_positive),
-        params.visual_flag,
+        negative,
+        was_positive,
+        visual,
         params.firstdigit,
         params.do_oct,
-        &raw mut endpos_col,
     );
 
     nvim_addsub_set_marks(col, endpos_col);
