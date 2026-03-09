@@ -235,11 +235,6 @@ extern void rs_clear_showcmd(void);
 
 extern int rs_csh_like_shell(void);
 extern int rs_magic_isset(void);
-extern int rs_cmdline_overstrike(void);
-extern int rs_cmdline_at_end(void);
-extern int rs_is_in_cmdwin(void);
-extern int rs_text_locked(void);
-extern const char *rs_get_text_locked_msg(void);
 
 // Phase 6: Additional cmdline functions from Rust
 extern int rs_cmdline_state_overstrike(void);
@@ -2387,15 +2382,9 @@ handle_T cmdpreview_get_bufnr(void)
 int nvim_get_cmdpreview_ns(void) { return cmdpreview_ns; }
 
 // Phase 8: Command preview helpers from Rust
-extern int rs_cmdpreview_get_ns(void);
 extern void rs_cmdpreview_set_ns(int ns);
 extern int rs_cmdpreview_should_skip_buffer(int64_t buf_handle, int64_t preview_bufnr);
 extern int rs_cmdpreview_needs_undo_restore(int64_t current_seq, int64_t saved_seq);
-
-int cmdpreview_get_ns(void)
-{
-  return rs_cmdpreview_get_ns();
-}
 
 /// Sets up command preview buffer.
 ///
@@ -3027,23 +3016,11 @@ int check_opt_wim(void)
   return OK;
 }
 
-/// Return true when the text must not be changed and we can't switch to
-/// another window or buffer.  True when editing the command line etc.
-bool text_locked(void)
-{
-  return rs_text_locked() != 0;
-}
-
 // Give an error message for a command that isn't allowed while the cmdline
 // window is open or editing the cmdline in another way.
 void text_locked_msg(void)
 {
   emsg(_(get_text_locked_msg()));
-}
-
-const char *get_text_locked_msg(void)
-{
-  return rs_get_text_locked_msg();
 }
 
 /// Check for text, window or buffer locked.
@@ -3149,155 +3126,6 @@ char *getexline(int c, void *cookie, int indent, bool do_concat)
   return getcmdline(c, 1, indent, do_concat);
 }
 
-bool cmdline_overstrike(void)
-  FUNC_ATTR_PURE
-{
-  return rs_cmdline_overstrike() != 0;
-}
-
-/// Return true if the cursor is at the end of the cmdline.
-bool cmdline_at_end(void)
-  FUNC_ATTR_PURE
-{
-  return rs_cmdline_at_end() != 0;
-}
-
-// =============================================================================
-// Phase 6: Wrapper functions using Rust implementations
-// =============================================================================
-
-/// Check if cmdline is empty. Rust implementation.
-bool cmdline_is_empty(void)
-  FUNC_ATTR_PURE
-{
-  return rs_cmdline_state_is_empty() != 0;
-}
-
-/// Check if cmdline is in search mode. Rust implementation.
-bool cmdline_is_search(void)
-  FUNC_ATTR_PURE
-{
-  return rs_cmdline_state_is_search() != 0;
-}
-
-/// Check if cmdline is in ex command mode. Rust implementation.
-bool cmdline_is_ex_cmd(void)
-  FUNC_ATTR_PURE
-{
-  return rs_cmdline_state_is_ex_cmd() != 0;
-}
-
-/// Get command line nesting level. Rust implementation.
-int cmdline_level(void)
-  FUNC_ATTR_PURE
-{
-  return rs_cmdline_get_level();
-}
-
-/// Check if at max cmdline level. Rust implementation.
-bool cmdline_at_max_level(void)
-  FUNC_ATTR_PURE
-{
-  return rs_cmdline_at_max_level() != 0;
-}
-
-/// Get cursor position in cmdline. Rust implementation.
-int cmdline_get_pos(void)
-  FUNC_ATTR_PURE
-{
-  return rs_cmdline_get_cmdpos();
-}
-
-/// Get cmdline length. Rust implementation.
-int cmdline_get_len(void)
-  FUNC_ATTR_PURE
-{
-  return rs_cmdline_get_cmdlen();
-}
-
-/// Check if in password mode. Rust implementation.
-bool cmdline_is_password(void)
-  FUNC_ATTR_PURE
-{
-  return rs_is_password_mode() != 0;
-}
-
-/// Parse search delimiter from pattern. Rust implementation.
-int cmdline_parse_search_delim(const char *pattern, size_t len)
-  FUNC_ATTR_PURE
-{
-  return rs_parse_search_delimiter(pattern, len);
-}
-
-/// Check if pattern is literal. Rust implementation.
-bool cmdline_is_literal_pattern(const char *pattern, size_t len)
-  FUNC_ATTR_PURE
-{
-  return rs_is_literal_pattern(pattern, len) != 0;
-}
-
-/// Check if pattern has word boundary. Rust implementation.
-bool cmdline_has_word_boundary(const char *pattern, size_t len)
-  FUNC_ATTR_PURE
-{
-  return rs_has_word_boundary(pattern, len) != 0;
-}
-
-/// Check bracket balance in expr. Rust implementation.
-int cmdline_check_bracket_balance(const char *expr, size_t len)
-  FUNC_ATTR_PURE
-{
-  return rs_check_bracket_balance(expr, len);
-}
-
-/// Check if expression is likely complete. Rust implementation.
-bool cmdline_is_expr_complete(const char *expr, size_t len)
-  FUNC_ATTR_PURE
-{
-  return rs_is_expr_likely_complete(expr, len) != 0;
-}
-
-/// Find last token start in expression. Rust implementation.
-int cmdline_find_last_token(const char *expr, size_t len)
-  FUNC_ATTR_PURE
-{
-  return rs_find_last_token_start(expr, len);
-}
-
-/// Check if fname needs leading escape. Rust implementation.
-bool cmdline_fname_needs_escape(const char *fname, size_t len)
-  FUNC_ATTR_PURE
-{
-  return rs_fname_needs_leading_escape(fname, len) != 0;
-}
-
-/// Check if path starts with ~/. Rust implementation.
-bool cmdline_starts_with_tilde(const char *path, size_t len)
-  FUNC_ATTR_PURE
-{
-  return rs_starts_with_tilde_slash(path, len) != 0;
-}
-
-/// Check if expansion supports fuzzy matching. Rust implementation.
-bool cmdline_expand_fuzzy_supported(const void *xp)
-  FUNC_ATTR_PURE
-{
-  return rs_expand_fuzzy_supported(xp) != 0;
-}
-
-/// Check if expansion is file context. Rust implementation.
-bool cmdline_expand_is_file_context(const void *xp)
-  FUNC_ATTR_PURE
-{
-  return rs_expand_is_file_context(xp) != 0;
-}
-
-/// Check if expansion uses internal matching. Rust implementation.
-bool cmdline_expand_uses_internal(const void *xp)
-  FUNC_ATTR_PURE
-{
-  return rs_expand_uses_internal_matching(xp) != 0;
-}
 
 /// Deallocate a command line buffer, updating the buffer size and length.
 void dealloc_cmdbuff(void)
@@ -4549,14 +4377,6 @@ void f_setcmdpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 // C accessor for ccline.cmdfirstc (used by Rust)
 int nvim_get_ccline_cmdfirstc(void) { return ccline.cmdfirstc; }
 
-// Rust implementation
-extern int rs_get_cmdline_firstc(void);
-
-/// Return the first character of the current command line.
-int get_cmdline_firstc(void)
-{
-  return rs_get_cmdline_firstc();
-}
 
 /// Get indices that specify a range within a list (not a range of text lines
 /// in a buffer!) from a string.  Used for ":history" and ":clist".
@@ -4911,12 +4731,6 @@ static int open_cmdwin(void)
   return cmdwin_result;
 }
 
-/// @return true if in the cmdwin, not editing the command line.
-bool is_in_cmdwin(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_is_in_cmdwin() != 0;
-}
 
 /// Get script string
 ///

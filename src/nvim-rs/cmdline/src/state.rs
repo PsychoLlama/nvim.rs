@@ -369,6 +369,17 @@ pub unsafe extern "C" fn rs_cmdline_state_is_empty() -> c_int {
     c_int::from(nvim_get_ccline_cmdlen() == 0)
 }
 
+/// Direct C replacement for cmdline_is_empty().
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[must_use]
+#[export_name = "cmdline_is_empty"]
+pub unsafe extern "C" fn cmdline_is_empty_rs() -> bool {
+    nvim_get_ccline_cmdlen() == 0
+}
+
 /// Check if the current command line is a search command.
 ///
 /// # Safety
@@ -383,6 +394,19 @@ pub unsafe extern "C" fn rs_cmdline_state_is_search() -> c_int {
     )
 }
 
+/// Direct C replacement for cmdline_is_search().
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[must_use]
+#[export_name = "cmdline_is_search"]
+pub unsafe extern "C" fn cmdline_is_search_rs() -> bool {
+    let firstc = nvim_get_ccline_cmdfirstc();
+    firstc == c_int::from(prompt_type::FORWARD_SEARCH)
+        || firstc == c_int::from(prompt_type::BACKWARD_SEARCH)
+}
+
 /// Check if the current command line is an Ex command.
 ///
 /// # Safety
@@ -393,6 +417,17 @@ pub unsafe extern "C" fn rs_cmdline_state_is_ex_cmd() -> c_int {
     c_int::from(nvim_get_ccline_cmdfirstc() == c_int::from(prompt_type::EX_CMD))
 }
 
+/// Direct C replacement for cmdline_is_ex_cmd().
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[must_use]
+#[export_name = "cmdline_is_ex_cmd"]
+pub unsafe extern "C" fn cmdline_is_ex_cmd_rs() -> bool {
+    nvim_get_ccline_cmdfirstc() == c_int::from(prompt_type::EX_CMD)
+}
+
 /// Get the current command line level.
 ///
 /// # Safety
@@ -400,6 +435,17 @@ pub unsafe extern "C" fn rs_cmdline_state_is_ex_cmd() -> c_int {
 /// Calls external C function to access static variable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_cmdline_get_level() -> c_int {
+    nvim_get_ccline_level()
+}
+
+/// Direct C replacement for cmdline_level().
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[must_use]
+#[export_name = "cmdline_level"]
+pub unsafe extern "C" fn cmdline_level_rs() -> c_int {
     nvim_get_ccline_level()
 }
 
@@ -413,6 +459,17 @@ pub unsafe extern "C" fn rs_cmdline_at_max_level() -> c_int {
     c_int::from(nvim_get_ccline_level() >= MAX_CMDLINE_LEVEL)
 }
 
+/// Direct C replacement for cmdline_at_max_level().
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[must_use]
+#[export_name = "cmdline_at_max_level"]
+pub unsafe extern "C" fn cmdline_at_max_level_rs() -> bool {
+    nvim_get_ccline_level() >= MAX_CMDLINE_LEVEL
+}
+
 /// Get the current cursor position in the command buffer.
 ///
 /// # Safety
@@ -423,6 +480,17 @@ pub unsafe extern "C" fn rs_cmdline_get_cmdpos() -> c_int {
     nvim_get_ccline_cmdpos()
 }
 
+/// Direct C replacement for cmdline_get_pos().
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[must_use]
+#[export_name = "cmdline_get_pos"]
+pub unsafe extern "C" fn cmdline_get_pos_rs() -> c_int {
+    nvim_get_ccline_cmdpos()
+}
+
 /// Get the current command line length.
 ///
 /// # Safety
@@ -430,6 +498,17 @@ pub unsafe extern "C" fn rs_cmdline_get_cmdpos() -> c_int {
 /// Calls external C function to access static variable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_cmdline_get_cmdlen() -> c_int {
+    nvim_get_ccline_cmdlen()
+}
+
+/// Direct C replacement for cmdline_get_len().
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[must_use]
+#[export_name = "cmdline_get_len"]
+pub unsafe extern "C" fn cmdline_get_len_rs() -> c_int {
     nvim_get_ccline_cmdlen()
 }
 

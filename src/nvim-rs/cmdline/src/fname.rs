@@ -245,6 +245,21 @@ pub unsafe extern "C" fn rs_fname_needs_leading_escape(fname: *const c_char, len
     c_int::from(needs_leading_escape(bytes))
 }
 
+/// Direct C replacement for cmdline_fname_needs_escape().
+///
+/// # Safety
+///
+/// `fname` must be a valid pointer, `len` must be the string length.
+#[must_use]
+#[export_name = "cmdline_fname_needs_escape"]
+pub unsafe extern "C" fn cmdline_fname_needs_escape_rs(fname: *const c_char, len: usize) -> bool {
+    if fname.is_null() || len == 0 {
+        return false;
+    }
+    let bytes = std::slice::from_raw_parts(fname.cast::<u8>(), len);
+    needs_leading_escape(bytes)
+}
+
 /// Check if a character is a valid filename character.
 #[no_mangle]
 pub extern "C" fn rs_is_fname_char(c: c_int) -> c_int {
@@ -275,6 +290,21 @@ pub unsafe extern "C" fn rs_starts_with_tilde_slash(path: *const c_char, len: us
     }
     let bytes = std::slice::from_raw_parts(path.cast::<u8>(), len);
     c_int::from(starts_with_tilde_slash(bytes))
+}
+
+/// Direct C replacement for cmdline_starts_with_tilde().
+///
+/// # Safety
+///
+/// `path` must be a valid pointer, `len` must be the string length.
+#[must_use]
+#[export_name = "cmdline_starts_with_tilde"]
+pub unsafe extern "C" fn cmdline_starts_with_tilde_rs(path: *const c_char, len: usize) -> bool {
+    if path.is_null() {
+        return false;
+    }
+    let bytes = std::slice::from_raw_parts(path.cast::<u8>(), len);
+    starts_with_tilde_slash(bytes)
 }
 
 /// Check if a character is a path separator.

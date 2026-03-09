@@ -621,6 +621,26 @@ pub unsafe extern "C" fn rs_expand_fuzzy_supported(xp: *const ()) -> c_int {
     c_int::from(context.supports_fuzzy() && fuzzy_enabled)
 }
 
+/// Direct C replacement for cmdline_expand_fuzzy_supported().
+///
+/// # Safety
+///
+/// `xp` must be a valid pointer to an `expand_T` structure.
+#[must_use]
+#[export_name = "cmdline_expand_fuzzy_supported"]
+pub unsafe extern "C" fn cmdline_expand_fuzzy_supported_rs(xp: *const ()) -> bool {
+    if xp.is_null() {
+        return false;
+    }
+    let context_raw = nvim_expand_get_context(xp);
+    let Some(context) = ExpandContext::from_raw(context_raw) else {
+        return false;
+    };
+    let wop_flags = nvim_get_wop_flags();
+    let fuzzy_enabled = (wop_flags & 0x01) != 0;
+    context.supports_fuzzy() && fuzzy_enabled
+}
+
 /// Get the expansion context type as a raw integer.
 ///
 /// # Safety
@@ -653,6 +673,24 @@ pub unsafe extern "C" fn rs_expand_is_file_context(xp: *const ()) -> c_int {
     c_int::from(context.is_file_expansion())
 }
 
+/// Direct C replacement for cmdline_expand_is_file_context().
+///
+/// # Safety
+///
+/// `xp` must be a valid pointer to an `expand_T` structure.
+#[must_use]
+#[export_name = "cmdline_expand_is_file_context"]
+pub unsafe extern "C" fn cmdline_expand_is_file_context_rs(xp: *const ()) -> bool {
+    if xp.is_null() {
+        return false;
+    }
+    let context_raw = nvim_expand_get_context(xp);
+    let Some(context) = ExpandContext::from_raw(context_raw) else {
+        return false;
+    };
+    context.is_file_expansion()
+}
+
 /// Check if the context uses internal pattern matching.
 ///
 /// # Safety
@@ -670,6 +708,24 @@ pub unsafe extern "C" fn rs_expand_uses_internal_matching(xp: *const ()) -> c_in
     };
 
     c_int::from(context.uses_internal_matching())
+}
+
+/// Direct C replacement for cmdline_expand_uses_internal().
+///
+/// # Safety
+///
+/// `xp` must be a valid pointer to an `expand_T` structure.
+#[must_use]
+#[export_name = "cmdline_expand_uses_internal"]
+pub unsafe extern "C" fn cmdline_expand_uses_internal_rs(xp: *const ()) -> bool {
+    if xp.is_null() {
+        return true; // Default to internal matching
+    }
+    let context_raw = nvim_expand_get_context(xp);
+    let Some(context) = ExpandContext::from_raw(context_raw) else {
+        return true;
+    };
+    context.uses_internal_matching()
 }
 
 // =============================================================================

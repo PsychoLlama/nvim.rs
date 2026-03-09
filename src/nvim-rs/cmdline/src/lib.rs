@@ -58,6 +58,17 @@ pub unsafe extern "C" fn rs_cmdline_overstrike() -> c_int {
     nvim_get_ccline_overstrike()
 }
 
+/// Direct C replacement for cmdline_overstrike().
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[must_use]
+#[export_name = "cmdline_overstrike"]
+pub unsafe extern "C" fn cmdline_overstrike_rs() -> bool {
+    nvim_get_ccline_overstrike() != 0
+}
+
 /// Check if cursor is at the end of the command line.
 ///
 /// Returns true if cmdpos >= cmdlen.
@@ -68,6 +79,17 @@ pub unsafe extern "C" fn rs_cmdline_overstrike() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_cmdline_at_end() -> c_int {
     c_int::from(nvim_get_ccline_cmdpos() >= nvim_get_ccline_cmdlen())
+}
+
+/// Direct C replacement for cmdline_at_end().
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[must_use]
+#[export_name = "cmdline_at_end"]
+pub unsafe extern "C" fn cmdline_at_end_rs() -> bool {
+    nvim_get_ccline_cmdpos() >= nvim_get_ccline_cmdlen()
 }
 
 /// NUL character constant
@@ -88,6 +110,19 @@ pub unsafe extern "C" fn rs_is_in_cmdwin() -> c_int {
     c_int::from(cmdwin_type != 0 && cmdline_type == NUL)
 }
 
+/// Direct C replacement for is_in_cmdwin().
+///
+/// # Safety
+///
+/// Calls external C functions to access global state.
+#[must_use]
+#[export_name = "is_in_cmdwin"]
+pub unsafe extern "C" fn is_in_cmdwin_rs() -> bool {
+    let cmdwin_type = nvim_get_cmdwin_type();
+    let cmdline_type = nvim_get_cmdline_type();
+    cmdwin_type != 0 && cmdline_type == NUL
+}
+
 /// Get the command preview namespace.
 ///
 /// Returns the `cmdpreview_ns` static variable.
@@ -99,6 +134,16 @@ pub unsafe extern "C" fn rs_cmdpreview_get_ns() -> c_int {
     nvim_get_cmdpreview_ns()
 }
 
+/// Direct C replacement for cmdpreview_get_ns().
+///
+/// # Safety
+/// Calls external C function to access static variable.
+#[must_use]
+#[export_name = "cmdpreview_get_ns"]
+pub unsafe extern "C" fn cmdpreview_get_ns_rs() -> c_int {
+    nvim_get_cmdpreview_ns()
+}
+
 /// Get the first character of the current command line.
 ///
 /// Returns `ccline.cmdfirstc`.
@@ -107,6 +152,16 @@ pub unsafe extern "C" fn rs_cmdpreview_get_ns() -> c_int {
 /// Calls external C function to access struct field.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_cmdline_firstc() -> c_int {
+    nvim_get_ccline_cmdfirstc()
+}
+
+/// Direct C replacement for get_cmdline_firstc().
+///
+/// # Safety
+/// Calls external C function to access struct field.
+#[must_use]
+#[export_name = "get_cmdline_firstc"]
+pub unsafe extern "C" fn get_cmdline_firstc_rs() -> c_int {
     nvim_get_ccline_cmdfirstc()
 }
 

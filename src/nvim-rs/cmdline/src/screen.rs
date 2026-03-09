@@ -335,6 +335,17 @@ pub unsafe extern "C" fn rs_is_password_mode() -> c_int {
     c_int::from(is_password_mode())
 }
 
+/// Direct C replacement for cmdline_is_password().
+///
+/// # Safety
+///
+/// Calls C function to access global.
+#[must_use]
+#[export_name = "cmdline_is_password"]
+pub unsafe extern "C" fn cmdline_is_password_rs() -> bool {
+    is_password_mode()
+}
+
 /// Get screen columns.
 ///
 /// # Safety

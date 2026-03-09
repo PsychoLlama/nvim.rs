@@ -324,6 +324,43 @@ pub unsafe extern "C" fn rs_is_expr_likely_complete(expr: *const c_char, len: us
     c_int::from(is_likely_complete(bytes))
 }
 
+/// Direct C replacement for cmdline_is_expr_complete().
+///
+/// # Safety
+///
+/// `expr` must be a valid pointer to a string of at least `len` bytes.
+#[must_use]
+#[export_name = "cmdline_is_expr_complete"]
+pub unsafe extern "C" fn cmdline_is_expr_complete_rs(expr: *const c_char, len: usize) -> bool {
+    if expr.is_null() {
+        return true; // Empty is complete
+    }
+    let bytes = std::slice::from_raw_parts(expr.cast::<u8>(), len);
+    is_likely_complete(bytes)
+}
+
+/// Direct C replacement for cmdline_check_bracket_balance().
+///
+/// # Safety
+///
+/// `expr` must be a valid pointer to a string of at least `len` bytes.
+#[must_use]
+#[export_name = "cmdline_check_bracket_balance"]
+pub unsafe extern "C" fn cmdline_check_bracket_balance_rs(
+    expr: *const c_char,
+    len: usize,
+) -> c_int {
+    if expr.is_null() || len == 0 {
+        return 0; // Empty is balanced
+    }
+    let bytes = std::slice::from_raw_parts(expr.cast::<u8>(), len);
+    match check_bracket_balance(bytes) {
+        BracketBalance::Balanced => 0,
+        BracketBalance::Unclosed => 1,
+        BracketBalance::ExtraClose => -1,
+    }
+}
+
 /// Find the start of the last token in an expression (FFI).
 ///
 /// # Safety
@@ -336,6 +373,22 @@ pub unsafe extern "C" fn rs_find_last_token_start(expr: *const c_char, len: usiz
         return 0;
     }
 
+    let bytes = std::slice::from_raw_parts(expr.cast::<u8>(), len);
+    find_last_token_start(bytes) as c_int
+}
+
+/// Direct C replacement for cmdline_find_last_token().
+///
+/// # Safety
+///
+/// `expr` must be a valid pointer to a string of at least `len` bytes.
+#[must_use]
+#[export_name = "cmdline_find_last_token"]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn cmdline_find_last_token_rs(expr: *const c_char, len: usize) -> c_int {
+    if expr.is_null() || len == 0 {
+        return 0;
+    }
     let bytes = std::slice::from_raw_parts(expr.cast::<u8>(), len);
     find_last_token_start(bytes) as c_int
 }

@@ -623,6 +623,24 @@ pub unsafe extern "C" fn rs_parse_search_delimiter(pattern: *const c_char, len: 
     parse_search_delimiter(bytes).map_or(0, c_int::from)
 }
 
+/// Direct C replacement for cmdline_parse_search_delim().
+///
+/// # Safety
+///
+/// `pattern` must be a valid pointer to a string of at least `len` bytes.
+#[must_use]
+#[export_name = "cmdline_parse_search_delim"]
+pub unsafe extern "C" fn cmdline_parse_search_delim_rs(
+    pattern: *const c_char,
+    len: usize,
+) -> c_int {
+    if pattern.is_null() || len == 0 {
+        return 0;
+    }
+    let bytes = std::slice::from_raw_parts(pattern.cast::<u8>(), len);
+    parse_search_delimiter(bytes).map_or(0, c_int::from)
+}
+
 /// Find end of search pattern (FFI).
 ///
 /// # Safety
@@ -658,6 +676,21 @@ pub unsafe extern "C" fn rs_is_literal_pattern(pattern: *const c_char, len: usiz
     c_int::from(is_literal_pattern(bytes))
 }
 
+/// Direct C replacement for cmdline_is_literal_pattern().
+///
+/// # Safety
+///
+/// `pattern` must be a valid pointer to a string of at least `len` bytes.
+#[must_use]
+#[export_name = "cmdline_is_literal_pattern"]
+pub unsafe extern "C" fn cmdline_is_literal_pattern_rs(pattern: *const c_char, len: usize) -> bool {
+    if pattern.is_null() || len == 0 {
+        return true; // Empty is literal
+    }
+    let bytes = std::slice::from_raw_parts(pattern.cast::<u8>(), len);
+    is_literal_pattern(bytes)
+}
+
 /// Check if pattern has word boundary markers (FFI).
 ///
 /// # Safety
@@ -671,6 +704,21 @@ pub unsafe extern "C" fn rs_has_word_boundary(pattern: *const c_char, len: usize
 
     let bytes = std::slice::from_raw_parts(pattern.cast::<u8>(), len);
     c_int::from(has_word_boundary(bytes))
+}
+
+/// Direct C replacement for cmdline_has_word_boundary().
+///
+/// # Safety
+///
+/// `pattern` must be a valid pointer to a string of at least `len` bytes.
+#[must_use]
+#[export_name = "cmdline_has_word_boundary"]
+pub unsafe extern "C" fn cmdline_has_word_boundary_rs(pattern: *const c_char, len: usize) -> bool {
+    if pattern.is_null() || len == 0 {
+        return false;
+    }
+    let bytes = std::slice::from_raw_parts(pattern.cast::<u8>(), len);
+    has_word_boundary(bytes)
 }
 
 // =============================================================================

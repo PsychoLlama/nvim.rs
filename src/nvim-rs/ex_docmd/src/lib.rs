@@ -281,6 +281,25 @@ pub unsafe extern "C" fn rs_text_locked() -> c_int {
     c_int::from(textlock != 0)
 }
 
+/// Direct C replacement for text_locked().
+///
+/// # Safety
+///
+/// Calls external C functions to access global variables.
+#[must_use]
+#[export_name = "text_locked"]
+pub unsafe extern "C" fn text_locked_rs() -> bool {
+    let cmdwin_type = nvim_get_cmdwin_type();
+    if cmdwin_type != 0 {
+        return true;
+    }
+    if rs_expr_map_locked() != 0 {
+        return true;
+    }
+    let textlock = nvim_get_textlock();
+    textlock != 0
+}
+
 /// Get the appropriate error message for text being locked.
 ///
 /// Returns a pointer to either e_cmdwin or e_textlock based on
@@ -291,6 +310,21 @@ pub unsafe extern "C" fn rs_text_locked() -> c_int {
 /// Returns a pointer to a static C string. Caller must not free it.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_text_locked_msg() -> *const c_char {
+    if nvim_get_cmdwin_type() != 0 {
+        nvim_get_e_cmdwin()
+    } else {
+        nvim_get_e_textlock()
+    }
+}
+
+/// Direct C replacement for get_text_locked_msg().
+///
+/// # Safety
+///
+/// Returns a pointer to a static C string. Caller must not free it.
+#[must_use]
+#[export_name = "get_text_locked_msg"]
+pub unsafe extern "C" fn get_text_locked_msg_rs() -> *const c_char {
     if nvim_get_cmdwin_type() != 0 {
         nvim_get_e_cmdwin()
     } else {
