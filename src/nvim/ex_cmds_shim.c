@@ -159,6 +159,28 @@ void nvim_curbuf_set_op_end(linenr_T lnum, colnr_T col)
   curbuf->b_op_end.col = col;
 }
 
+/// Copy oap->start to curbuf->b_op_start (full pos_T, including coladd).
+void nvim_curbuf_set_op_start_from_oap_start(void *oap_ptr)
+{
+  oparg_T *oap = (oparg_T *)oap_ptr;
+  curbuf->b_op_start = oap->start;
+}
+
+/// Copy oap->start to curbuf->b_op_end (full pos_T, including coladd).
+void nvim_curbuf_set_op_end_from_oap_start(void *oap_ptr)
+{
+  oparg_T *oap = (oparg_T *)oap_ptr;
+  curbuf->b_op_end = oap->start;
+}
+
+/// Set curbuf->b_op_end for block-wise delete: end.lnum + start.col.
+void nvim_curbuf_set_op_end_blockwise(void *oap_ptr)
+{
+  oparg_T *oap = (oparg_T *)oap_ptr;
+  curbuf->b_op_end.lnum = oap->end.lnum;
+  curbuf->b_op_end.col = oap->start.col;
+}
+
 void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist, bool *need_clear)
 {
   msg_multiline(cstr_as_string(s), hl_id, check_int, hist, need_clear);

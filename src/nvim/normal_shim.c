@@ -1083,6 +1083,8 @@ void nvim_set_b_visual_vi_curswant(int val) { curbuf->b_visual.vi_curswant = val
 void nvim_set_curbuf_visual_mode_eval(int val) { curbuf->b_visual_mode_eval = val; }
 
 void nvim_set_VIsual_select_reg(int val) { VIsual_select_reg = val; }
+int nvim_get_VIsual_select_reg(void) { return VIsual_select_reg; }
+int nvim_get_virtual_op(void) { return (int)virtual_op; }
 
 void nvim_update_topline_call(void) { update_topline(curwin); }
 

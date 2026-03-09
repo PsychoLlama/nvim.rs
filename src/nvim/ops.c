@@ -620,57 +620,14 @@ static void block_insert(oparg_T *oap, const char *s, size_t slen, bool b_insert
 // ===========================================================================
 // op_delete C accessors for Rust migration (Phase 4)
 // ===========================================================================
+// nvim_opd_setup_visual_reg, nvim_opd_maybe_promote_to_linewise,
+// nvim_opd_check_empty_line, nvim_opd_finish, nvim_opd_setmarks
+// have been absorbed into Rust (delete_full.rs).
 
-/// Setup visual select register.
-void nvim_opd_setup_visual_reg(oparg_T *oap)
-{
-  if (VIsual_select && oap->is_VIsual) {
-    oap->regname = VIsual_select_reg;
-  }
-}
-
-/// Adjust multi-byte opend for delete.
+/// Adjust multi-byte opend for delete (called from Rust op_delete and op_replace).
 void nvim_opd_mb_adjust_opend(oparg_T *oap)
 {
   mb_adjust_opend(oap);
-}
-
-/// Check if charwise delete should be promoted to linewise.
-void nvim_opd_maybe_promote_to_linewise(oparg_T *oap)
-{
-  if (oap->motion_type == kMTCharWise
-      && !oap->is_VIsual
-      && oap->line_count > 1
-      && oap->motion_force == NUL
-      && oap->op_type == OP_DELETE) {
-    char *ptr = ml_get(oap->end.lnum) + oap->end.col;
-    if (*ptr != NUL) {
-      ptr += oap->inclusive;
-    }
-    ptr = skipwhite(ptr);
-    if (*ptr == NUL && inindent(0)) {
-      oap->motion_type = kMTLineWise;
-    }
-  }
-}
-
-/// Check for empty line delete.
-/// Returns: 0 = proceed, 1 = return OK, 2 = goto setmarks.
-int nvim_opd_check_empty_line(oparg_T *oap)
-{
-  if (oap->motion_type != kMTLineWise
-      && oap->line_count == 1
-      && oap->op_type == OP_DELETE
-      && *ml_get(oap->start.lnum) == NUL) {
-    if (virtual_op) {
-      return 2;  // goto setmarks
-    }
-    if (vim_strchr(p_cpo, CPO_EMPTYREGION) != NULL) {
-      beep_flush();
-    }
-    return 1;  // return OK
-  }
-  return 0;  // proceed
 }
 
 /// Do yank and register handling.
@@ -894,36 +851,6 @@ int nvim_opd_charwise_delete(oparg_T *oap)
   return OK;
 }
 
-
-/// Finish: msgmore + setmarks.
-void nvim_opd_finish(oparg_T *oap, int old_lcount)
-{
-  msgmore(curbuf->b_ml.ml_line_count - (linenr_T)old_lcount);
-
-  if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-    if (oap->motion_type == kMTBlockWise) {
-      curbuf->b_op_end.lnum = oap->end.lnum;
-      curbuf->b_op_end.col = oap->start.col;
-    } else {
-      curbuf->b_op_end = oap->start;
-    }
-    curbuf->b_op_start = oap->start;
-  }
-}
-
-/// Setmarks only (for goto setmarks case).
-void nvim_opd_setmarks(oparg_T *oap)
-{
-  if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-    if (oap->motion_type == kMTBlockWise) {
-      curbuf->b_op_end.lnum = oap->end.lnum;
-      curbuf->b_op_end.col = oap->start.col;
-    } else {
-      curbuf->b_op_end = oap->start;
-    }
-    curbuf->b_op_start = oap->start;
-  }
-}
 
 /// Adjust end of operating area for ending on a multi-byte character.
 /// Used for deletion.

@@ -390,3 +390,5 @@ int nvim_lisp_skip_word(linenr_T lnum, char *line, int amount, char *ptr, char *
 
 /// Get the character value at ptr (for checking against '"', '\'', '#', digits).
 int nvim_utf_ptr2char_value(const char *ptr) { return utf_ptr2CharInfo(ptr).value; }
+
+bool nvim_inindent_zero(void) { return inindent(0); }

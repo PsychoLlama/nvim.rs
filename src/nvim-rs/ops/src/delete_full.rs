@@ -1,13 +1,19 @@
 //! Full `op_delete` migration (Phase 4)
 //!
 //! Migrated from `op_delete()` in ops.c — delete operations (d, x, D, etc).
+//! Phase 3 absorption: simple accessor functions ported inline.
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
 
 const OK: c_int = 1;
 const FAIL: c_int = 0;
 const K_MT_BLOCK_WISE: c_int = 2;
 const K_MT_LINE_WISE: c_int = 1;
+
+const CPO_EMPTYREGION: c_int = b'E' as c_int;
+const OP_DELETE: c_int = 1;
+const K_MT_CHAR_WISE: c_int = 0;
+const NUL: c_int = 0;
 
 extern "C" {
     // Generic buffer/undo accessors (reuse existing C shims)
@@ -17,19 +23,162 @@ extern "C" {
     fn nvim_curbuf_is_modifiable() -> bool;
     fn nvim_emsg_modifiable();
     fn nvim_oap_get_motion_type(oap: *const c_void) -> c_int;
+    fn nvim_curbuf_get_ml_line_count() -> c_int;
+
+    // oap field accessors
+    fn nvim_oap_get_is_visual(oap: *const c_void) -> c_int;
+    fn nvim_oap_set_regname(oap: *mut c_void, val: c_int);
+    fn nvim_oap_get_motion_force(oap: *const c_void) -> c_int;
+    fn nvim_oap_get_op_type_ptr(oap: *const c_void) -> c_int;
+    fn nvim_oap_get_line_count(oap: *const c_void) -> c_int;
+    fn nvim_oap_get_start_lnum(oap: *const c_void) -> c_int;
+    fn nvim_oap_get_end_lnum(oap: *const c_void) -> c_int;
+    fn nvim_oap_get_end_col(oap: *const c_void) -> c_int;
+    fn nvim_oap_get_inclusive(oap: *const c_void) -> bool;
+    fn nvim_oap_set_motion_type(oap: *mut c_void, val: c_int);
+
+    // VIsual state
+    fn nvim_get_VIsual_select() -> bool;
+    fn nvim_get_VIsual_select_reg() -> c_int;
+
+    // Virtual op flag
+    fn nvim_get_virtual_op() -> c_int;
+
+    // cpo option
+    fn nvim_p_cpo_get() -> *mut c_char;
+    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+
+    // Beep
+    fn nvim_beep_flush();
+
+    // Line content
+    fn nvim_ml_get(lnum: c_int) -> *const c_char;
+
+    // skipwhite and inindent
+    fn nvim_skipwhite(s: *const c_char) -> *mut c_char;
+    fn nvim_inindent_zero() -> bool;
+
+    // marks: set curbuf->b_op_start/end from oap
+    fn nvim_cmdmod_has_lockmarks() -> c_int;
+    fn nvim_curbuf_set_op_start_from_oap_start(oap: *mut c_void);
+    fn nvim_curbuf_set_op_end_from_oap_start(oap: *mut c_void);
+    fn nvim_curbuf_set_op_end_blockwise(oap: *mut c_void);
+
+    // msgmore
+    fn nvim_textfmt_msgmore(n: c_int);
 
     // Complex ops: still delegated to C
     fn nvim_opd_mb_adjust_opend(oap: *mut c_void);
-    fn nvim_opd_setup_visual_reg(oap: *mut c_void);
-    fn nvim_opd_maybe_promote_to_linewise(oap: *mut c_void);
-    fn nvim_opd_check_empty_line(oap: *mut c_void) -> c_int;
     fn nvim_opd_do_yank_and_registers(oap: *mut c_void) -> c_int;
     fn nvim_opd_block_delete(oap: *mut c_void) -> c_int;
     fn nvim_opd_linewise_delete(oap: *mut c_void) -> c_int;
     fn nvim_opd_charwise_delete(oap: *mut c_void) -> c_int;
-    fn nvim_opd_finish(oap: *mut c_void, old_lcount: c_int);
-    fn nvim_opd_setmarks(oap: *mut c_void);
-    fn nvim_curbuf_get_ml_line_count() -> c_int;
+}
+
+/// Inline port of `nvim_opd_setup_visual_reg`.
+/// If VIsual_select and oap->is_VIsual, set oap->regname = VIsual_select_reg.
+///
+/// # Safety
+/// Reads global VIsual_select state via C shims.
+#[inline]
+unsafe fn opd_setup_visual_reg(oap: *mut c_void) {
+    let oap_const: *const c_void = oap;
+    if nvim_get_VIsual_select() && nvim_oap_get_is_visual(oap_const) != 0 {
+        nvim_oap_set_regname(oap, nvim_get_VIsual_select_reg());
+    }
+}
+
+/// Inline port of `nvim_opd_check_empty_line`.
+/// Returns: 0 = proceed, 1 = return OK, 2 = goto setmarks.
+///
+/// # Safety
+/// Reads oap fields and buffer state via C shims.
+unsafe fn opd_check_empty_line(oap: *const c_void) -> c_int {
+    let motion_type = nvim_oap_get_motion_type(oap);
+    let line_count = nvim_oap_get_line_count(oap);
+    let op_type = nvim_oap_get_op_type_ptr(oap);
+    if motion_type != K_MT_LINE_WISE && line_count == 1 && op_type == OP_DELETE {
+        let start_lnum = nvim_oap_get_start_lnum(oap);
+        let line = nvim_ml_get(start_lnum);
+        if !line.is_null() && unsafe { *line } == 0 {
+            if nvim_get_virtual_op() != 0 {
+                return 2; // goto setmarks
+            }
+            let p_cpo = nvim_p_cpo_get();
+            if !nvim_vim_strchr(p_cpo, CPO_EMPTYREGION).is_null() {
+                nvim_beep_flush();
+            }
+            return 1; // return OK
+        }
+    }
+    0 // proceed
+}
+
+/// Inline port of `nvim_opd_maybe_promote_to_linewise`.
+/// If the delete motion ends at whitespace-only suffix, promote to linewise.
+///
+/// # Safety
+/// Reads oap fields and buffer state via C shims.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn opd_maybe_promote_to_linewise(oap: *mut c_void) {
+    let oap_const: *const c_void = oap;
+    let motion_type = nvim_oap_get_motion_type(oap_const);
+    let is_visual = nvim_oap_get_is_visual(oap_const);
+    let line_count = nvim_oap_get_line_count(oap_const);
+    let motion_force = nvim_oap_get_motion_force(oap_const);
+    let op_type = nvim_oap_get_op_type_ptr(oap_const);
+    if motion_type == K_MT_CHAR_WISE
+        && is_visual == 0
+        && line_count > 1
+        && motion_force == NUL
+        && op_type == OP_DELETE
+    {
+        let end_lnum = nvim_oap_get_end_lnum(oap_const);
+        let end_col = nvim_oap_get_end_col(oap_const);
+        let line = nvim_ml_get(end_lnum);
+        if line.is_null() {
+            return;
+        }
+        let mut ptr = line.add(end_col as usize);
+        if unsafe { *ptr } != 0 {
+            let inclusive = nvim_oap_get_inclusive(oap_const);
+            ptr = ptr.add(usize::from(inclusive));
+        }
+        let ptr = nvim_skipwhite(ptr);
+        if unsafe { *ptr } == 0 && nvim_inindent_zero() {
+            nvim_oap_set_motion_type(oap, K_MT_LINE_WISE);
+        }
+    }
+}
+
+/// Inline port of `nvim_opd_setmarks`.
+/// Sets curbuf->b_op_start and b_op_end from oap, respecting LOCKMARKS.
+///
+/// # Safety
+/// Reads oap fields and sets curbuf marks via C shims.
+#[inline]
+unsafe fn opd_setmarks(oap: *mut c_void) {
+    if nvim_cmdmod_has_lockmarks() != 0 {
+        return;
+    }
+    let oap_const: *const c_void = oap;
+    if nvim_oap_get_motion_type(oap_const) == K_MT_BLOCK_WISE {
+        nvim_curbuf_set_op_end_blockwise(oap);
+    } else {
+        nvim_curbuf_set_op_end_from_oap_start(oap);
+    }
+    nvim_curbuf_set_op_start_from_oap_start(oap);
+}
+
+/// Inline port of `nvim_opd_finish`.
+/// Calls msgmore, then sets marks.
+///
+/// # Safety
+/// Reads oap fields and curbuf state via C shims.
+#[inline]
+unsafe fn opd_finish(oap: *mut c_void, old_lcount: c_int) {
+    nvim_textfmt_msgmore(nvim_curbuf_get_ml_line_count() - old_lcount);
+    opd_setmarks(oap);
 }
 
 /// Full migration of `op_delete()`.
@@ -52,18 +201,19 @@ pub unsafe extern "C" fn rs_op_delete(oap: *mut c_void) -> c_int {
         return FAIL;
     }
 
-    nvim_opd_setup_visual_reg(oap);
+    opd_setup_visual_reg(oap);
     nvim_opd_mb_adjust_opend(oap);
-    nvim_opd_maybe_promote_to_linewise(oap);
+    opd_maybe_promote_to_linewise(oap);
 
     // Check for empty line special cases
-    let empty_check = nvim_opd_check_empty_line(oap);
+    let oap_const: *const c_void = oap;
+    let empty_check = opd_check_empty_line(oap_const);
     if empty_check == 1 {
         return OK;
     }
     if empty_check == 2 {
         // goto setmarks
-        nvim_opd_setmarks(oap);
+        opd_setmarks(oap);
         return OK;
     }
 
@@ -74,10 +224,10 @@ pub unsafe extern "C" fn rs_op_delete(oap: *mut c_void) -> c_int {
         // (the C code returns OK after beep_flush)
         return OK;
     }
-    // yank_result == 1 means proceed normally
+    // yank_result == 2 means proceed normally
 
     let old_lcount = nvim_curbuf_get_ml_line_count();
-    let motion_type = nvim_oap_get_motion_type(oap);
+    let motion_type = nvim_oap_get_motion_type(oap_const);
 
     let result = if motion_type == K_MT_BLOCK_WISE {
         nvim_opd_block_delete(oap)
@@ -91,7 +241,7 @@ pub unsafe extern "C" fn rs_op_delete(oap: *mut c_void) -> c_int {
         return FAIL;
     }
 
-    nvim_opd_finish(oap, old_lcount);
+    opd_finish(oap, old_lcount);
     OK
 }
 
