@@ -1,0 +1,146 @@
+#!/usr/bin/env expect
+# open_file.exp — launch nvim ., search for a file via netrw, open it, confirm content
+#
+# Smoke-tests that nvim starts, opens a file via netrw navigation, and renders
+# content without crashing.  ShaDa errors are intentionally surfaced (not
+# dismissed) so they fail the test.
+#
+# Usage:
+#   expect scripts/open_file.exp <filename> [expected_content]
+#
+#   filename:         filename to search for in the netrw listing (/<filename><cr><cr>)
+#   expected_content: literal string to confirm is visible in the buffer
+#                     (defaults to filename appearing in the statusline)
+#
+# Environment:
+#   NVIM      path to nvim binary (default: nvim)
+#   VIMRUNTIME inherited and passed through to the spawned process
+#
+# Exit codes: 0 = success, 1 = failure (timeout, crash, ShaDa error, etc.)
+
+set timeout 15
+
+set filename [lindex $argv 0]
+set expected [lindex $argv 1]
+
+if {$filename eq ""} {
+    puts stderr "Usage: $argv0 <filename> \[expected_content\]"
+    exit 1
+}
+
+# Strip ANSI/VT escape sequences and collapse whitespace for readable output.
+proc strip_escapes {s} {
+    regsub -all {\x1b\[[0-9;?]*[a-zA-Z]} $s {} s  ;# CSI sequences
+    regsub -all {\x1b[^a-zA-Z]*[a-zA-Z]} $s {} s  ;# other ESC sequences
+    regsub -all {[\r\x00-\x1f\x7f]+} $s { } s      ;# remaining control chars
+    return [string trim $s]
+}
+
+set nvim [expr {[info exists env(NVIM)] ? $env(NVIM) : "nvim"}]
+
+# ── Launch ────────────────────────────────────────────────────────────────────
+
+# No -u flag: plugins (including netrwPlugin) load normally from runtimepath.
+# VIMRUNTIME is the sole source of runtime files.
+spawn $nvim .
+log_user 0
+
+# Wait for netrw to render the directory listing.  The header line
+# "Netrw Directory Listing" is the most reliable signal that the buffer is
+# ready.  Also catch E484 (wrong VIMRUNTIME) and ShaDa errors immediately.
+expect {
+    timeout {
+        puts stderr "ERROR: nvim did not start within ${timeout}s"
+        exit 1
+    }
+    "E484:" {
+        puts stderr "ERROR: VIMRUNTIME not found (E484) — check VIMRUNTIME env var"
+        exit 1
+    }
+    -re {E\d+:.*[Ss]ha[Dd]a} {
+        puts stderr "ERROR: ShaDa error on startup: $expect_out(0,string)"
+        exit 1
+    }
+    "Netrw Directory Listing" {
+        # netrw listing rendered — directory buffer is ready
+    }
+}
+
+# ── Find the file via netrw ───────────────────────────────────────────────────
+
+# Escape to Normal mode to ensure we're not in an insert/command state.
+send "\033"
+after 100
+
+# /pattern<cr> searches the netrw listing; <cr> again opens the file under cursor.
+send "/$filename\r\r"
+
+# ── Wait for content ──────────────────────────────────────────────────────────
+
+set match [expr {$expected ne "" ? $expected : $filename}]
+
+expect {
+    timeout {
+        puts stderr "ERROR: timed out waiting for: $match"
+        send ":q!\r"
+        expect eof
+        exit 1
+    }
+    eof {
+        set detail [strip_escapes $expect_out(buffer)]
+        if {$detail ne ""} {
+            puts stderr "ERROR: nvim crashed before '$match' appeared: $detail"
+        } else {
+            puts stderr "ERROR: nvim crashed before '$match' appeared"
+        }
+        exit 1
+    }
+    "E486:" {
+        puts stderr "ERROR: '$filename' not found in netrw listing"
+        send ":q!\r"
+        expect eof
+        exit 1
+    }
+    -re {E\d+:.*[Ss]ha[Dd]a} {
+        puts stderr "ERROR: ShaDa error while opening file: $expect_out(0,string)"
+        send ":q!\r"
+        expect eof
+        exit 1
+    }
+    "$match" {
+        puts "OK: '$match' visible"
+    }
+}
+
+# ── Done ──────────────────────────────────────────────────────────────────────
+
+send ":q!\r"
+
+# Wait for clean exit.  A "Press ENTER" here means an error surfaced — treat
+# it as failure and report what nvim printed before the prompt.
+expect {
+    "Press ENTER" {
+        set msg [strip_escapes $expect_out(buffer)]
+        puts stderr "ERROR: nvim error on quit: $msg"
+        send "\r"
+        expect eof
+        exit 1
+    }
+    eof {
+        set detail [strip_escapes $expect_out(buffer)]
+        if {$detail ne ""} {
+            puts stderr "CRASH: $detail"
+        }
+    }
+    timeout {}
+}
+
+# Check nvim's exit status.  A crash (SIGABRT, SIGSEGV, etc.) produces a
+# non-zero exit code; surface it so the smoke test fails.
+set status [wait]
+# wait returns: {pid spawn_id flag exit_code}
+set exit_code [lindex $status 3]
+if {$exit_code != 0} {
+    puts stderr "ERROR: nvim exited with status $exit_code (crash or error)"
+    exit 1
+}

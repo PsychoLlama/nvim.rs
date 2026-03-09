@@ -47,7 +47,13 @@ run *ARGS:
 # leaving zombie processes. It exercises buffer search (vim_regexec_multi),
 # substitution, and syntax highlighting — paths the baseline test doesn't cover.
 smoke-test:
-    timeout 30 bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean +qa' || { echo "FAIL: nvim startup smoke test timed out or failed (exit $?)"; exit 1; }
+    @just smoke-test-run
+    @just smoke-test-regexp
+
+smoke-test-run:
+    NVIM=./build/bin/nvim VIMRUNTIME=./runtime timeout 30 expect scripts/open_file.exp justfile just || { echo "FAIL: nvim startup smoke test timed out or failed (exit $?)"; exit 1; }
+
+smoke-test-regexp:
     timeout 30 bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/regexp_smoke.vim 2>&1' || { echo "FAIL: regexp smoke test timed out or failed (exit $?)"; exit 1; }
 
 # Show nvim version

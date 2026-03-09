@@ -6,17 +6,25 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = import nixpkgs { inherit system; };
 
         # Lua environment with required packages for building
-        luaEnv = pkgs.luajit.withPackages (ps: with ps; [
-          lpeg
-          luabitop
-          mpack
-        ]);
+        luaEnv = pkgs.luajit.withPackages (
+          ps: with ps; [
+            lpeg
+            luabitop
+            mpack
+          ]
+        );
 
         # Build dependencies
         buildInputs = with pkgs; [
@@ -54,10 +62,12 @@
         checkInputs = with pkgs; [
           nodejs
           fish
-          (python3.withPackages (ps: with ps; [
-            pynvim
-            msgpack
-          ]))
+          (python3.withPackages (
+            ps: with ps; [
+              pynvim
+              msgpack
+            ]
+          ))
         ];
 
       in
@@ -66,7 +76,13 @@
         devShells.default = pkgs.mkShell {
           inherit buildInputs nativeBuildInputs;
 
-          packages = checkInputs ++ rustToolchain ++ [ pkgs.just ];
+          packages =
+            checkInputs
+            ++ rustToolchain
+            ++ [
+              pkgs.just
+              pkgs.expect
+            ];
 
           # Ensure pkg-config can find our dependencies
           PKG_CONFIG_PATH = pkgs.lib.makeSearchPath "lib/pkgconfig" buildInputs;
