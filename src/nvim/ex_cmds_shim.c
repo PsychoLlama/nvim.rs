@@ -181,6 +181,20 @@ void nvim_curbuf_set_op_end_blockwise(void *oap_ptr)
   curbuf->b_op_end.col = oap->start.col;
 }
 
+/// Copy oap->end to curbuf->b_op_end (full pos_T, including coladd).
+void nvim_curbuf_set_op_end_from_oap_end(void *oap_ptr)
+{
+  oparg_T *oap = (oparg_T *)oap_ptr;
+  curbuf->b_op_end = oap->end;
+}
+
+/// Set curwin->w_cursor = oap->start.
+void nvim_curwin_set_cursor_from_oap_start(void *oap_ptr)
+{
+  oparg_T *oap = (oparg_T *)oap_ptr;
+  curwin->w_cursor = oap->start;
+}
+
 void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist, bool *need_clear)
 {
   msg_multiline(cstr_as_string(s), hl_id, check_int, hist, need_clear);

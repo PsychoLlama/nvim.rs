@@ -2,6 +2,7 @@
 //!
 //! Migrated from `op_replace()` in ops.c — the `r` command for
 //! replacing characters in visual/operator mode.
+//! Phase 4 absorption: nvim_opr_finish ported inline.
 
 use std::ffi::{c_int, c_void};
 
@@ -20,6 +21,7 @@ extern "C" {
     fn nvim_oap_get_motion_type(oap: *const c_void) -> c_int;
     fn nvim_opd_mb_adjust_opend(oap: *mut c_void);
     fn nvim_oap_get_start_lnum(oap: *const c_void) -> c_int;
+    fn nvim_oap_get_start_col(oap: *const c_void) -> c_int;
     fn nvim_oap_get_end_lnum(oap: *const c_void) -> c_int;
     fn nvim_u_save(top: c_int, bot: c_int) -> c_int;
 
@@ -29,8 +31,31 @@ extern "C" {
     // Charwise/linewise mode: setup + full loop delegated to C
     fn nvim_opr_charwise_loop(oap: *mut c_void, c: c_int);
 
-    // Cleanup: restore cursor, changed_lines, set marks
-    fn nvim_opr_finish(oap: *mut c_void);
+    // Finish: restore cursor, changed_lines, set marks (absorbed below)
+    fn nvim_curwin_set_cursor_from_oap_start(oap: *mut c_void);
+    fn nvim_check_cursor();
+    fn nvim_changed_lines_call(lnum: c_int, col: c_int, lnum_end: c_int, do_concealed: bool);
+    fn nvim_cmdmod_has_lockmarks() -> c_int;
+    fn nvim_curbuf_set_op_start_from_oap_start(oap: *mut c_void);
+    fn nvim_curbuf_set_op_end_from_oap_end(oap: *mut c_void);
+}
+
+/// Inline port of `nvim_opr_finish`.
+///
+/// # Safety
+/// Reads oap fields and sets cursor/marks via C shims.
+unsafe fn opr_finish(oap: *mut c_void) {
+    let oap_const: *const c_void = oap;
+    nvim_curwin_set_cursor_from_oap_start(oap);
+    nvim_check_cursor();
+    let start_lnum = nvim_oap_get_start_lnum(oap_const);
+    let start_col = nvim_oap_get_start_col(oap_const);
+    let end_lnum = nvim_oap_get_end_lnum(oap_const);
+    nvim_changed_lines_call(start_lnum, start_col, end_lnum + 1, true);
+    if nvim_cmdmod_has_lockmarks() == 0 {
+        nvim_curbuf_set_op_start_from_oap_start(oap);
+        nvim_curbuf_set_op_end_from_oap_end(oap);
+    }
 }
 
 /// Full migration of `op_replace()`.
@@ -65,7 +90,7 @@ pub unsafe extern "C" fn rs_op_replace(oap: *mut c_void, c: c_int) -> c_int {
         nvim_opr_charwise_loop(oap, c);
     }
 
-    nvim_opr_finish(oap);
+    opr_finish(oap);
     OK
 }
 

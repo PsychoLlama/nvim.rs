@@ -1073,20 +1073,6 @@ void nvim_opr_charwise_loop(oparg_T *oap, int c)
   }
 }
 
-/// Finish: restore cursor, mark changed lines, set marks.
-void nvim_opr_finish(oparg_T *oap)
-{
-  curwin->w_cursor = oap->start;
-  check_cursor(curwin);
-  changed_lines(curbuf, oap->start.lnum, oap->start.col,
-                oap->end.lnum + 1, 0, true);
-
-  if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-    curbuf->b_op_start = oap->start;
-    curbuf->b_op_end = oap->end;
-  }
-}
-
 /// Handle the (non-standard vi) tilde operator.  Also for "gu", "gU" and "g?".
 void op_tilde(oparg_T *oap)
 {
