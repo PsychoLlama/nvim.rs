@@ -357,7 +357,8 @@ unsafe fn replace_push_impl(data: *const u8, len: usize) {
     });
 }
 
-#[unsafe(no_mangle)]
+/// Exported as the canonical C symbol, replacing the thin wrapper in `edit.c`.
+#[unsafe(export_name = "replace_push")]
 pub unsafe extern "C" fn rs_replace_push(str_ptr: *const c_char, len: usize) {
     replace_push_impl(str_ptr.cast::<u8>(), len);
 }

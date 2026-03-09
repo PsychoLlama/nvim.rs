@@ -196,8 +196,9 @@ pub unsafe extern "C" fn rs_echeck_abbr(c: c_int) -> c_int {
 /// Truncate trailing whitespace from a line.
 ///
 /// In replace mode, also removes NUL separators from the replace stack
-/// for each removed space.
-#[unsafe(no_mangle)]
+/// for each removed space. Exported as the canonical C symbol, replacing the
+/// thin wrapper in `edit.c`.
+#[unsafe(export_name = "truncate_spaces")]
 pub unsafe extern "C" fn rs_truncate_spaces(line: *mut c_char, len: usize) {
     if line.is_null() {
         return;

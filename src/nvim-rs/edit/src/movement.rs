@@ -344,7 +344,8 @@ unsafe fn cursor_up_inner_impl(wp: WinHandle, mut n: LinenrT, skip_conceal: bool
     nvim_edit_win_set_cursor_lnum(wp, lnum);
 }
 
-#[unsafe(no_mangle)]
+/// Exported as the canonical C symbol, replacing the thin wrapper in `edit.c`.
+#[unsafe(export_name = "cursor_up_inner")]
 pub unsafe extern "C" fn rs_cursor_up_inner(wp: WinHandle, n: LinenrT, skip_conceal: bool) {
     cursor_up_inner_impl(wp, n, skip_conceal);
 }
@@ -425,7 +426,8 @@ unsafe fn cursor_down_inner_impl(wp: WinHandle, mut n: c_int, skip_conceal: bool
     nvim_edit_win_set_cursor_lnum(wp, lnum);
 }
 
-#[unsafe(no_mangle)]
+/// Exported as the canonical C symbol, replacing the thin wrapper in `edit.c`.
+#[unsafe(export_name = "cursor_down_inner")]
 pub unsafe extern "C" fn rs_cursor_down_inner(wp: WinHandle, n: c_int, skip_conceal: bool) {
     cursor_down_inner_impl(wp, n, skip_conceal);
 }

@@ -2764,10 +2764,7 @@ bool edit(int cmdchar, bool startln, int count)
   return s->c == Ctrl_O;
 }
 
-bool ins_need_undo_get(void)
-{
-  return rs_ins_need_undo_get() != 0;
-}
+// ins_need_undo_get: now exported directly from Rust (export_name = "ins_need_undo_get").
 
 /// Redraw for Insert mode.
 /// This is postponed until getting the next character to make '$' in the 'cpo'
@@ -2995,12 +2992,7 @@ static void init_prompt(int cmdchar_todo)
   check_cursor(curwin);
 }
 
-/// @return  true if the cursor is in the editable position of the prompt line.
-bool prompt_curpos_editable(void)
-  FUNC_ATTR_PURE
-{
-  return rs_prompt_curpos_editable();
-}
+// prompt_curpos_editable: now exported directly from Rust (export_name = "prompt_curpos_editable").
 
 // Undo the previous edit_putchar().
 void edit_unputchar(void)
@@ -3051,13 +3043,7 @@ void undisplay_dollar(void)
   rs_undisplay_dollar();
 }
 
-/// Truncate the space at the end of a line.  This is to be used only in an
-/// insert mode.  It handles fixing the replace stack for MODE_REPLACE and
-/// MODE_VREPLACE modes.
-void truncate_spaces(char *line, size_t len)
-{
-  rs_truncate_spaces(line, len);
-}
+// truncate_spaces: now exported directly from Rust (export_name = "truncate_spaces").
 
 /// Backspace the cursor until the given column.  Handles MODE_REPLACE and
 /// MODE_VREPLACE modes correctly.  May also be used when not in insert mode at
@@ -3287,12 +3273,7 @@ int oneleft(void)
   return rs_oneleft();
 }
 
-/// Move the cursor up "n" lines in window "wp". Takes care of closed folds.
-/// Skips over concealed lines when "skip_conceal" is true.
-void cursor_up_inner(win_T *wp, linenr_T n, bool skip_conceal)
-{
-  rs_cursor_up_inner(wp, n, skip_conceal);
-}
+// cursor_up_inner: now exported directly from Rust (export_name = "cursor_up_inner").
 
 /// @param upd_topline  When true: update topline
 int cursor_up(linenr_T n, bool upd_topline)
@@ -3300,12 +3281,7 @@ int cursor_up(linenr_T n, bool upd_topline)
   return rs_cursor_up(n, upd_topline ? 1 : 0);
 }
 
-/// Move the cursor down "n" lines in window "wp". Takes care of closed folds.
-/// Skips over concealed lines when "skip_conceal" is true.
-void cursor_down_inner(win_T *wp, int n, bool skip_conceal)
-{
-  rs_cursor_down_inner(wp, n, skip_conceal);
-}
+// cursor_down_inner: now exported directly from Rust (export_name = "cursor_down_inner").
 
 /// @param upd_topline  When true: update topline
 int cursor_down(int n, bool upd_topline)
@@ -3371,13 +3347,7 @@ static bool echeck_abbr(int c)
 /// replace_offset is normally 0, in which case replace_push will add a new
 /// character at the end of the stack.  If replace_offset is not 0, that many
 /// characters will be left on the stack above the newly inserted character.
-///
-/// @param str character that is replaced (NUL is none)
-/// @param len length of character in bytes
-void replace_push(char *str, size_t len)
-{
-  rs_replace_push(str, len);
-}
+// replace_push: now exported directly from Rust (export_name = "replace_push").
 
 void replace_push_nul(void)
 {
@@ -3772,10 +3742,7 @@ static char *do_insert_char_pre(int c)
   return rs_do_insert_char_pre(c);
 }
 
-bool get_can_cindent(void)
-{
-  return rs_get_can_cindent() != 0;
-}
+// get_can_cindent: now exported directly from Rust (export_name = "get_can_cindent").
 
 void set_can_cindent(bool val)
 {

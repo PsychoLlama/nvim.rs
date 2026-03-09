@@ -69,16 +69,22 @@ fn ins_need_undo_get_impl() -> bool {
 }
 
 /// FFI wrapper for `ins_need_undo_get`.
-#[no_mangle]
+/// Exported as the canonical C symbol, replacing the thin wrapper in `edit.c`.
+#[must_use]
+#[unsafe(export_name = "ins_need_undo_get")]
 pub extern "C" fn rs_ins_need_undo_get() -> c_int {
     c_int::from(ins_need_undo_get_impl())
 }
 
 /// Get whether cindenting may be done on this line.
 ///
+/// Exported as the canonical C symbol `get_can_cindent`, replacing the thin
+/// wrapper in `edit.c`.
+///
 /// # Safety
 /// Calls C accessor function for `can_cindent` static.
-#[no_mangle]
+#[must_use]
+#[unsafe(export_name = "get_can_cindent")]
 pub unsafe extern "C" fn rs_get_can_cindent() -> c_int {
     nvim_get_can_cindent()
 }
@@ -154,10 +160,12 @@ pub unsafe extern "C" fn rs_prompt_text() -> *const c_char {
 /// Check if the cursor is in the editable position of the prompt line.
 ///
 /// Returns true if the cursor is past the prompt text on the prompt line.
+/// Exported as the canonical C symbol, replacing the thin wrapper in `edit.c`.
 ///
 /// # Safety
 /// Accesses curwin and curbuf globals via accessor functions.
-#[no_mangle]
+#[must_use]
+#[unsafe(export_name = "prompt_curpos_editable")]
 pub unsafe extern "C" fn rs_prompt_curpos_editable() -> bool {
     let cursor_lnum = nvim_curwin_get_cursor_lnum();
     let prompt_start_lnum = nvim_curbuf_get_b_prompt_start_lnum();

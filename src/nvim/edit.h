@@ -45,3 +45,12 @@ bool ins_eol(int c);
 bool ins_bs(int c, int mode, int *inserted_space_p);
 // insertchar: character insertion with formatting (insertchar.rs, export_name = "insertchar")
 void insertchar(int c, int flags, int second_indent);
+
+// Phase 6 thin-wrapper eliminations: C body deleted, Rust provides the symbol directly.
+bool ins_need_undo_get(void);
+bool prompt_curpos_editable(void);
+void truncate_spaces(char *line, size_t len);
+void cursor_up_inner(win_T *wp, linenr_T n, bool skip_conceal);
+void cursor_down_inner(win_T *wp, int n, bool skip_conceal);
+void replace_push(char *str, size_t len);
+bool get_can_cindent(void);
