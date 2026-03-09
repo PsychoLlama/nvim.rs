@@ -8,6 +8,7 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::ffi_types::StateItem;
 use crate::offset::{limit_pos, syn_add_end_off, RegMatch};
 use crate::state::Position;
 use crate::types::{
@@ -21,45 +22,10 @@ use crate::types::{
 
 extern "C" {
     // Pattern type accessors (from syntax.c)
-    fn nvim_synpat_get_type(pat: SynPatHandle) -> c_int;
     fn nvim_syn_get_pattern_type(idx: c_int) -> c_int;
 
     // Matchgroup accessors
-    fn nvim_synpat_get_syn_match_id(pat: SynPatHandle) -> i16;
     fn nvim_syn_get_pattern_syn_match_id(idx: c_int) -> c_int;
-
-    // State item region accessors
-    fn nvim_stateitem_get_end_idx(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_set_end_idx(item: StateItemHandle, end_idx: c_int);
-    // Bulk position setter (pass c_int::MIN to skip a field)
-    #[allow(clippy::too_many_arguments)]
-    fn nvim_stateitem_set_positions(
-        item: StateItemHandle,
-        m_lnum: c_int,
-        m_startcol: c_int,
-        m_end_lnum: c_int,
-        m_end_col: c_int,
-        h_start_lnum: c_int,
-        h_start_col: c_int,
-        h_end_lnum: c_int,
-        h_end_col: c_int,
-        eoe_lnum: c_int,
-        eoe_col: c_int,
-    );
-    #[allow(clippy::too_many_arguments)]
-    fn nvim_stateitem_get_positions(
-        item: StateItemHandle,
-        m_lnum: *mut c_int,
-        m_startcol: *mut c_int,
-        m_end_lnum: *mut c_int,
-        m_end_col: *mut c_int,
-        h_start_lnum: *mut c_int,
-        h_start_col: *mut c_int,
-        h_end_lnum: *mut c_int,
-        h_end_col: *mut c_int,
-        eoe_lnum: *mut c_int,
-        eoe_col: *mut c_int,
-    );
 
     // Pattern accessors for find_endpos
     fn nvim_syn_get_synblock_pattern_count() -> c_int;
@@ -82,15 +48,7 @@ extern "C" {
     fn nvim_syn_getcurline_len() -> c_int;
     fn nvim_syn_get_line_len(lnum: c_int) -> c_int;
     fn nvim_syn_get_current_lnum() -> c_int;
-
-    // State item accessors for update_si_end
-    fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_flags(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_extmatch(item: StateItemHandle) -> ExtMatchHandle;
-    fn nvim_stateitem_set_ends(item: StateItemHandle, ends: c_int);
 }
-
-const SKIP: c_int = c_int::MIN;
 
 // =============================================================================
 // Pattern type enumeration
@@ -171,7 +129,7 @@ pub fn synpat_type(pat: SynPatHandle) -> PatternType {
     if pat.is_null() {
         return PatternType::Unknown(0);
     }
-    PatternType::from_c_int(unsafe { nvim_synpat_get_type(pat) })
+    PatternType::from_c_int(i32::from(unsafe { (*pat.as_ptr()).sp_type }))
 }
 
 /// Get the pattern type for the current synblock's pattern by index.
@@ -431,7 +389,8 @@ pub unsafe fn update_si_end(sip: StateItemHandle, startcol: i32, force: bool) {
         return;
     }
 
-    let si_idx = nvim_stateitem_get_idx(sip);
+    let p: *mut StateItem = sip.as_ptr();
+    let si_idx = (*p).si_idx;
 
     // Return quickly for a keyword
     if si_idx < 0 {
@@ -441,21 +400,7 @@ pub unsafe fn update_si_end(sip: StateItemHandle, startcol: i32, force: bool) {
     let current_lnum = nvim_syn_get_current_lnum();
 
     // Don't update when it's already done
-    let mut m_end_lnum_check: c_int = 0;
-    nvim_stateitem_get_positions(
-        sip,
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        &mut m_end_lnum_check,
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-    );
-    if !force && m_end_lnum_check >= current_lnum {
+    if !force && (*p).si_m_endpos.lnum >= current_lnum {
         return;
     }
 
@@ -464,7 +409,7 @@ pub unsafe fn update_si_end(sip: StateItemHandle, startcol: i32, force: bool) {
         lnum: current_lnum,
         col: startcol,
     };
-    let extmatch = nvim_stateitem_get_extmatch(sip);
+    let extmatch = ExtMatchHandle((*p).si_extmatch as *mut _);
     let result = find_endpos(si_idx, &startpos, extmatch);
 
     if result.m_endpos.lnum == 0 {
@@ -473,42 +418,29 @@ pub unsafe fn update_si_end(sip: StateItemHandle, startcol: i32, force: bool) {
         let line_len = nvim_syn_getcurline_len();
         if pat_flags & HL_ONELINE != 0 {
             // A "oneline" never continues in the next line
-            nvim_stateitem_set_ends(sip, 1);
-            nvim_stateitem_set_positions(
-                sip,
-                SKIP,
-                SKIP,
-                current_lnum,
-                line_len,
-                SKIP,
-                SKIP,
-                current_lnum,
-                line_len,
-                SKIP,
-                SKIP,
-            );
+            (*p).si_ends = 1;
+            (*p).si_m_endpos.lnum = current_lnum;
+            (*p).si_m_endpos.col = line_len;
+            (*p).si_h_endpos.lnum = current_lnum;
+            (*p).si_h_endpos.col = line_len;
         } else {
             // Continues in the next line
-            nvim_stateitem_set_ends(sip, 0);
-            nvim_stateitem_set_positions(sip, SKIP, SKIP, 0, 0, SKIP, SKIP, 0, 0, SKIP, SKIP);
+            (*p).si_ends = 0;
+            (*p).si_m_endpos.lnum = 0;
+            (*p).si_m_endpos.col = 0;
+            (*p).si_h_endpos.lnum = 0;
+            (*p).si_h_endpos.col = 0;
         }
     } else {
         // Match within this line
-        nvim_stateitem_set_positions(
-            sip,
-            SKIP,
-            SKIP,
-            result.m_endpos.lnum,
-            result.m_endpos.col,
-            SKIP,
-            SKIP,
-            result.hl_endpos.lnum,
-            result.hl_endpos.col,
-            result.end_endpos.lnum,
-            result.end_endpos.col,
-        );
-        nvim_stateitem_set_ends(sip, 1);
-        nvim_stateitem_set_end_idx(sip, result.end_idx);
+        (*p).si_m_endpos.lnum = result.m_endpos.lnum;
+        (*p).si_m_endpos.col = result.m_endpos.col;
+        (*p).si_h_endpos.lnum = result.hl_endpos.lnum;
+        (*p).si_h_endpos.col = result.hl_endpos.col;
+        (*p).si_eoe_pos.lnum = result.end_endpos.lnum;
+        (*p).si_eoe_pos.col = result.end_endpos.col;
+        (*p).si_ends = 1;
+        (*p).si_end_idx = result.end_idx;
     }
 }
 
@@ -565,7 +497,7 @@ pub fn synpat_matchgroup_id(pat: SynPatHandle) -> i16 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_syn_match_id(pat) }
+    unsafe { (*pat.as_ptr()).sp_syn_match_id }
 }
 
 /// Get the matchgroup ID for a pattern by index.
@@ -584,7 +516,7 @@ pub fn stateitem_end_idx(item: StateItemHandle) -> i32 {
     if item.is_null() {
         return 0;
     }
-    unsafe { nvim_stateitem_get_end_idx(item) }
+    unsafe { (*item.as_ptr()).si_end_idx }
 }
 
 /// Get the end-of-end position for a state item.
@@ -593,39 +525,25 @@ pub fn stateitem_eoe_pos(item: StateItemHandle) -> Position {
     if item.is_null() {
         return Position::default();
     }
-    let mut lnum: c_int = 0;
-    let mut col: c_int = 0;
-    unsafe {
-        nvim_stateitem_get_positions(
-            item,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            &mut lnum,
-            &mut col,
-        );
+    let eoe = unsafe { (*item.as_ptr()).si_eoe_pos };
+    Position {
+        lnum: eoe.lnum,
+        col: eoe.col,
     }
-    Position { lnum, col }
 }
 
 /// Set the end-of-end position for a state item.
 pub unsafe fn set_stateitem_eoe_pos(item: StateItemHandle, pos: Position) {
     if !item.is_null() {
-        nvim_stateitem_set_positions(
-            item, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, pos.lnum, pos.col,
-        );
+        (*item.as_ptr()).si_eoe_pos.lnum = pos.lnum;
+        (*item.as_ptr()).si_eoe_pos.col = pos.col;
     }
 }
 
 /// Set the end pattern index for a state item.
 pub unsafe fn set_stateitem_end_idx(item: StateItemHandle, end_idx: i32) {
     if !item.is_null() {
-        nvim_stateitem_set_end_idx(item, end_idx);
+        (*item.as_ptr()).si_end_idx = end_idx;
     }
 }
 

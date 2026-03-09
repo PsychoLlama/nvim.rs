@@ -23,13 +23,6 @@ extern "C" {
     // Synblock conceal settings
     fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
 
-    // Pattern highlight group
-    fn nvim_synpat_get_hl_group(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_cchar(pat: SynPatHandle) -> c_int;
-
-    // State item conceal char
-    fn nvim_stateitem_get_cchar(item: StateItemHandle) -> c_int;
-
     // Keyword conceal char
     fn nvim_keyentry_get_char(ke: KeyEntryHandle) -> c_int;
 
@@ -108,12 +101,14 @@ pub fn synblock_conceal_setting(block: SynBlockHandle) -> bool {
 // =============================================================================
 
 /// Get the highlight group for a pattern.
+///
+/// Returns sp_syn.id - 1 (zero-based index).
 #[must_use]
 pub fn synpat_hl_group(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_hl_group(pat) }
+    i32::from(unsafe { (*pat.as_ptr()).sp_syn.id }) - 1
 }
 
 /// Get the conceal character for a pattern.
@@ -122,7 +117,7 @@ pub fn synpat_cchar(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_cchar(pat) }
+    unsafe { (*pat.as_ptr()).sp_cchar }
 }
 
 // =============================================================================
@@ -135,7 +130,7 @@ pub fn stateitem_cchar(item: StateItemHandle) -> i32 {
     if item.is_null() {
         return 0;
     }
-    unsafe { nvim_stateitem_get_cchar(item) }
+    unsafe { (*item.as_ptr()).si_cchar }
 }
 
 // =============================================================================
