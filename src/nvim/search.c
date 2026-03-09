@@ -120,38 +120,17 @@ extern int rs_last_csearch_forward(void);
 extern int rs_last_csearch_until(void);
 extern const char *rs_last_csearch(void);
 extern int rs_search_was_last_used(void);
-extern void rs_set_last_csearch(int c, const char *s, int len);
-extern void rs_set_csearch_direction(int dir);
-extern void rs_set_csearch_until(int until);
-extern void rs_set_search_direction_raw(int cdir);
-extern void rs_reset_search_dir(void);
 extern int rs_search_linewhite(int lnum);
 extern int rs_magic_isset(void);
 
-// Rust FFI declarations for pattern save/restore
-extern void rs_save_search_patterns(void);
-extern void rs_restore_search_patterns(void);
-extern void rs_save_last_search_pattern(void);
-extern void rs_restore_last_search_pattern(void);
-extern void rs_save_incsearch_state(void);
-extern void rs_restore_incsearch_state(void);
-
 // Rust FFI declarations for ShaDa pattern get/set
-extern void rs_get_search_pattern_shada(SearchPattern *pat);
-extern void rs_get_substitute_pattern_shada(SearchPattern *pat);
-extern void rs_set_search_pattern_shada(const SearchPattern *pat);
 extern void rs_set_substitute_pattern_shada(const SearchPattern *pat);
 extern void rs_set_last_used_pattern(int is_substitute_pattern);
-extern void rs_free_search_patterns(void);
 
 // Rust FFI declarations for search_regcomp and pattern compilation
 extern int rs_search_regcomp(char *pat, size_t patlen, char **used_pat,
                               int pat_save, int pat_use, int options,
                               regmmatch_T *regmatch);
-extern void rs_save_re_pat(int idx, const char *pat, size_t patlen, int magic);
-extern void rs_set_last_search_pat(const char *s, int idx, int magic, int setlast);
-extern void rs_last_pat_prog(regmmatch_T *regmatch);
-extern void rs_set_vv_searchforward(void);
 
 // Rust FFI declarations for searchc()
 extern int rs_searchc(cmdarg_T *cap, bool t_cmd);
@@ -190,7 +169,6 @@ extern void rs_incsearch_state_save(void *state);
 extern void rs_incsearch_state_restore(const void *state);
 
 // Rust FFI declarations for Phase 7 integration functions
-extern int rs_check_linecomment(const char *line);
 extern int rs_is_zero_width(const char *pattern, size_t patternlen, bool move,
                              int cur_lnum, int cur_col, int cur_coladd, int direction);
 extern int rs_search_for_exact_line(void *buf, int *pos_lnum, int *pos_col,
@@ -471,10 +449,6 @@ char *get_search_pat(void)
   return mr_pattern;
 }
 
-void save_re_pat(int idx, char *pat, size_t patlen, int magic)
-{
-  rs_save_re_pat(idx, pat, patlen, magic);
-}
 
 // Save the search patterns, so they can be restored later.
 // Used before/after executing autocommands and user functions.
@@ -486,15 +460,7 @@ int nvim_get_save_level(void)
   return save_level;
 }
 
-void save_search_patterns(void)
-{
-  rs_save_search_patterns();
-}
 
-void restore_search_patterns(void)
-{
-  rs_restore_search_patterns();
-}
 
 static inline void free_spat(SearchPattern *const spat)
 {
@@ -502,13 +468,6 @@ static inline void free_spat(SearchPattern *const spat)
   xfree(spat->additional_data);
 }
 
-#if defined(EXITFREE)
-void free_search_patterns(void)
-{
-  rs_free_search_patterns();
-}
-
-#endif
 
 // copy of spats[RE_SEARCH], for keeping the search patterns while incremental
 // searching
@@ -615,28 +574,8 @@ int nvim_get_p_hls(void)
 /// It's similar to but different from save_search_patterns() and
 /// restore_search_patterns(), because the search pattern must be restored when
 /// cancelling incremental searching even if it's called inside user functions.
-void save_last_search_pattern(void)
-{
-  rs_save_last_search_pattern();
-}
 
-void restore_last_search_pattern(void)
-{
-  rs_restore_last_search_pattern();
-}
 
-/// Save and restore the incsearch highlighting variables.
-/// This is required so that calling searchcount() at does not invalidate the
-/// incsearch highlighting.
-static void save_incsearch_state(void)
-{
-  rs_save_incsearch_state();
-}
-
-static void restore_incsearch_state(void)
-{
-  rs_restore_incsearch_state();
-}
 
 char *last_search_pattern(void)
 {
@@ -734,46 +673,16 @@ int last_csearch_until(void)
   return rs_last_csearch_until();
 }
 
-void set_last_csearch(int c, char *s, int len)
-{
-  rs_set_last_csearch(c, s, len);
-}
 
-void set_csearch_direction(Direction cdir)
-{
-  rs_set_csearch_direction(cdir);
-}
 
-void set_csearch_until(int t_cmd)
-{
-  rs_set_csearch_until(t_cmd);
-}
 
 char *last_search_pat(void)
 {
   return spats[last_idx].pat;
 }
 
-// Reset search direction to forward.  For "gd" and "gD" commands.
-void reset_search_dir(void)
-{
-  rs_reset_search_dir();
-}
 
-// Set the last search pattern.  For ":let @/ =" and ShaDa file.
-// Also set the saved search pattern, so that this works in an autocommand.
-void set_last_search_pat(const char *s, int idx, int magic, bool setlast)
-{
-  rs_set_last_search_pat(s, idx, magic, setlast);
-}
 
-// Get a regexp program for the last used search pattern.
-// This is used for highlighting all matches in a window.
-// Values returned in regmatch->regprog and regmatch->rmm_ic.
-void last_pat_prog(regmmatch_T *regmatch)
-{
-  rs_last_pat_prog(regmatch);
-}
 
 /// Lowest level search function.
 /// Search for 'count'th occurrence of pattern "pat" in direction "dir".
@@ -881,10 +790,6 @@ int searchit(win_T *win, buf_T *buf, pos_T *pos, pos_T *end_pos, Direction dir, 
   return retval;
 }
 
-void set_search_direction(int cdir)
-{
-  rs_set_search_direction_raw(cdir);
-}
 
 static void set_vv_searchforward(void)
 {
@@ -1011,12 +916,6 @@ pos_T *findmatchlimit(oparg_T *oap, int initc, int flags, int64_t maxtravel)
 }
 
 
-/// Check if line[] contains a / / comment.
-/// @returns MAXCOL if not, otherwise return the column.
-int check_linecomment(const char *line)
-{
-  return rs_check_linecomment(line);
-}
 
 /// Move cursor briefly to character matching the one under the cursor.
 /// Used for Insert mode and "r" command.
@@ -2067,23 +1966,8 @@ static void show_pat_in_path(char *line, int type, bool did_show, int action, FI
   }
 }
 
-/// Get last search pattern
-void get_search_pattern(SearchPattern *const pat)
-{
-  rs_get_search_pattern_shada(pat);
-}
 
-/// Get last substitute pattern
-void get_substitute_pattern(SearchPattern *const pat)
-{
-  rs_get_substitute_pattern_shada(pat);
-}
 
-/// Set last search pattern
-void set_search_pattern(const SearchPattern pat)
-{
-  rs_set_search_pattern_shada(&pat);
-}
 
 /// Set last substitute pattern
 void set_substitute_pattern(const SearchPattern pat)

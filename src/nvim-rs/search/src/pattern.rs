@@ -399,7 +399,7 @@ pub extern "C" fn rs_mr_pattern_is_empty() -> c_int {
 ///
 /// # Safety
 /// `pat` must point to a valid, properly aligned SearchPattern-sized buffer.
-#[no_mangle]
+#[unsafe(export_name = "get_search_pattern")]
 pub unsafe extern "C" fn rs_get_search_pattern_shada(pat: *mut SearchPatternC) {
     nvim_spat_memcpy_out(state::RE_SEARCH, pat);
 }
@@ -408,7 +408,7 @@ pub unsafe extern "C" fn rs_get_search_pattern_shada(pat: *mut SearchPatternC) {
 ///
 /// # Safety
 /// `pat` must point to a valid, properly aligned SearchPattern-sized buffer.
-#[no_mangle]
+#[unsafe(export_name = "get_substitute_pattern")]
 pub unsafe extern "C" fn rs_get_substitute_pattern_shada(pat: *mut SearchPatternC) {
     nvim_spat_memcpy_out(state::RE_SUBST, pat);
     // Clear the offset fields, matching original get_substitute_pattern behavior
@@ -429,6 +429,19 @@ pub unsafe extern "C" fn rs_get_substitute_pattern_shada(pat: *mut SearchPattern
 pub unsafe extern "C" fn rs_set_search_pattern_shada(pat: *const SearchPatternC) {
     nvim_spat_memcpy_in(state::RE_SEARCH, pat);
     nvim_call_set_vv_searchforward();
+}
+
+/// set_search_pattern: C ABI entry point taking SearchPattern by value.
+///
+/// The C callers pass SearchPattern by value; we take a pointer to the
+/// on-stack copy that the calling convention creates.
+///
+/// # Safety
+/// `pat` must be a valid SearchPattern value.
+#[unsafe(export_name = "set_search_pattern")]
+pub unsafe extern "C" fn set_search_pattern_export(pat: SearchPatternC) {
+    // Pass pointer to the by-value argument
+    rs_set_search_pattern_shada(&pat as *const SearchPatternC);
 }
 
 /// Set last substitute pattern (free old, memcpy in, clear off).
@@ -540,7 +553,7 @@ pub unsafe extern "C" fn rs_search_regcomp(
 ///
 /// # Safety
 /// `pat` must be a valid pointer.
-#[no_mangle]
+#[unsafe(export_name = "save_re_pat")]
 pub unsafe extern "C" fn rs_save_re_pat(
     idx: c_int,
     pat: *const c_char,
@@ -554,7 +567,7 @@ pub unsafe extern "C" fn rs_save_re_pat(
 ///
 /// # Safety
 /// `s` must be a valid null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "set_last_search_pat")]
 pub unsafe extern "C" fn rs_set_last_search_pat(
     s: *const c_char,
     idx: c_int,
@@ -568,7 +581,7 @@ pub unsafe extern "C" fn rs_set_last_search_pat(
 ///
 /// # Safety
 /// `regmatch` must be a valid pointer to a regmmatch_T.
-#[no_mangle]
+#[unsafe(export_name = "last_pat_prog")]
 pub unsafe extern "C" fn rs_last_pat_prog(regmatch: *mut std::ffi::c_void) {
     let last_idx = crate::state::get_last_idx();
     if nvim_spats_pat_is_null(last_idx) != 0 {
@@ -609,7 +622,7 @@ pub extern "C" fn rs_set_vv_searchforward() {
 /// Save search patterns (for autocmds/user functions).
 ///
 /// Uses nesting via save_level: only acts at the top level.
-#[no_mangle]
+#[unsafe(export_name = "save_search_patterns")]
 pub extern "C" fn rs_save_search_patterns() {
     unsafe {
         // Increment save_level; only do the actual save if it was 0
@@ -623,7 +636,7 @@ pub extern "C" fn rs_save_search_patterns() {
 /// Restore search patterns (for autocmds/user functions).
 ///
 /// Uses nesting via save_level: only acts when it reaches 0.
-#[no_mangle]
+#[unsafe(export_name = "restore_search_patterns")]
 pub extern "C" fn rs_restore_search_patterns() {
     unsafe {
         // Decrement save_level; only do the actual restore if it reaches 0
@@ -637,7 +650,7 @@ pub extern "C" fn rs_restore_search_patterns() {
 /// Save last search pattern for incremental search.
 ///
 /// Uses nesting via did_save_last_search_spat.
-#[no_mangle]
+#[unsafe(export_name = "save_last_search_pattern")]
 pub extern "C" fn rs_save_last_search_pattern() {
     unsafe {
         // Increment counter; only save if first call (old value was 0)
@@ -651,7 +664,7 @@ pub extern "C" fn rs_save_last_search_pattern() {
 /// Restore last search pattern for incremental search.
 ///
 /// Uses nesting via did_save_last_search_spat.
-#[no_mangle]
+#[unsafe(export_name = "restore_last_search_pattern")]
 pub extern "C" fn rs_restore_last_search_pattern() {
     unsafe {
         // Decrement counter
@@ -678,7 +691,7 @@ pub extern "C" fn rs_free_spat(idx: c_int) {
 }
 
 /// Free all search patterns (for EXITFREE).
-#[no_mangle]
+#[unsafe(export_name = "free_search_patterns")]
 pub extern "C" fn rs_free_search_patterns() {
     unsafe {
         nvim_free_spat(state::RE_SEARCH);

@@ -729,7 +729,7 @@ const MAXCOL: c_int = 0x7fffffff;
 ///
 /// # Safety
 /// `line` must be a valid null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "check_linecomment")]
 pub unsafe extern "C" fn rs_check_linecomment(line: *const c_char) -> c_int {
     if line.is_null() {
         return MAXCOL;

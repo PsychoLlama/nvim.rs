@@ -352,7 +352,7 @@ pub unsafe fn set_last_csearch(c: c_int, s: *const c_char, len: c_int) {
 ///
 /// # Safety
 /// `s` must be a valid pointer to `len` bytes (or NULL if `len` is 0).
-#[no_mangle]
+#[unsafe(export_name = "set_last_csearch")]
 pub unsafe extern "C" fn rs_set_last_csearch(c: c_int, s: *const c_char, len: c_int) {
     set_last_csearch(c, s, len);
 }
@@ -370,7 +370,7 @@ pub extern "C" fn rs_get_csearch_direction() -> c_int {
 }
 
 /// FFI: Set the character search direction.
-#[no_mangle]
+#[unsafe(export_name = "set_csearch_direction")]
 pub extern "C" fn rs_set_csearch_direction(dir: c_int) {
     set_csearch_direction(dir);
 }
@@ -382,7 +382,7 @@ pub extern "C" fn rs_get_csearch_until() -> c_int {
 }
 
 /// FFI: Set whether csearch is 't' command.
-#[no_mangle]
+#[unsafe(export_name = "set_csearch_until")]
 pub extern "C" fn rs_set_csearch_until(until: c_int) {
     set_csearch_until(until != 0);
 }

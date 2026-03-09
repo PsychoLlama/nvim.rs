@@ -250,13 +250,13 @@ pub fn set_search_direction_raw(dir: c_char) {
 /// FFI: Set the search direction (raw, without updating vim variable).
 ///
 /// This matches the C `set_search_direction()` semantics exactly.
-#[no_mangle]
+#[unsafe(export_name = "set_search_direction")]
 pub extern "C" fn rs_set_search_direction_raw(cdir: c_int) {
     set_search_direction_raw(cdir as c_char);
 }
 
 /// FFI: Reset search direction to forward.
-#[no_mangle]
+#[unsafe(export_name = "reset_search_dir")]
 pub extern "C" fn rs_reset_search_dir() {
     reset_search_dir();
 }
