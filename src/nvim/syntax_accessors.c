@@ -1644,6 +1644,33 @@ _Static_assert(SYNSPL_TOP == 1, "SYNSPL_TOP");
 _Static_assert(SYNSPL_NOTOP == 2, "SYNSPL_NOTOP");
 _Static_assert(KEYWORD_IDX == -1, "KEYWORD_IDX");
 
+// Struct layout assertions: verify sizes and field offsets match Rust repr(C)
+// definitions in src/nvim-rs/syntax/src/ffi_types.rs.
+_Static_assert(sizeof(synpat_T) == 136, "synpat_T size");
+_Static_assert(offsetof(synpat_T, sp_type) == 0, "synpat_T.sp_type");
+_Static_assert(offsetof(synpat_T, sp_syncing) == 1, "synpat_T.sp_syncing");
+_Static_assert(offsetof(synpat_T, sp_syn_match_id) == 2, "synpat_T.sp_syn_match_id");
+_Static_assert(offsetof(synpat_T, sp_off_flags) == 4, "synpat_T.sp_off_flags");
+_Static_assert(offsetof(synpat_T, sp_offsets) == 8, "synpat_T.sp_offsets");
+_Static_assert(offsetof(synpat_T, sp_flags) == 36, "synpat_T.sp_flags");
+_Static_assert(offsetof(synpat_T, sp_cchar) == 40, "synpat_T.sp_cchar");
+_Static_assert(offsetof(synpat_T, sp_ic) == 44, "synpat_T.sp_ic");
+_Static_assert(offsetof(synpat_T, sp_sync_idx) == 48, "synpat_T.sp_sync_idx");
+_Static_assert(offsetof(synpat_T, sp_line_id) == 52, "synpat_T.sp_line_id");
+_Static_assert(offsetof(synpat_T, sp_startcol) == 56, "synpat_T.sp_startcol");
+_Static_assert(offsetof(synpat_T, sp_cont_list) == 64, "synpat_T.sp_cont_list");
+_Static_assert(offsetof(synpat_T, sp_next_list) == 72, "synpat_T.sp_next_list");
+_Static_assert(offsetof(synpat_T, sp_syn) == 80, "synpat_T.sp_syn");
+_Static_assert(offsetof(synpat_T, sp_pattern) == 96, "synpat_T.sp_pattern");
+_Static_assert(offsetof(synpat_T, sp_prog) == 104, "synpat_T.sp_prog");
+_Static_assert(offsetof(synpat_T, sp_time) == 112, "synpat_T.sp_time");
+
+_Static_assert(sizeof(syn_time_T) == 24, "syn_time_T size");
+_Static_assert(offsetof(syn_time_T, total) == 0, "syn_time_T.total");
+_Static_assert(offsetof(syn_time_T, slowest) == 8, "syn_time_T.slowest");
+_Static_assert(offsetof(syn_time_T, count) == 16, "syn_time_T.count");
+_Static_assert(offsetof(syn_time_T, match) == 20, "syn_time_T.match");
+
 int nvim_syn_get_current_inc_tag(void) { return current_syn_inc_tag; }
 int nvim_syn_get_b_syn_conceal(void) { return curwin->w_s->b_syn_conceal; }
 int nvim_syn_name2id_wrapper(const char *name) { return syn_name2id(name); }
