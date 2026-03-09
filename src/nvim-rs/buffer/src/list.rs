@@ -819,6 +819,199 @@ pub unsafe extern "C" fn buflist_list_export(eap: *const c_void) {
 }
 
 // =============================================================================
+// buflist_findpat (Phase 8)
+// =============================================================================
+
+// Additional accessors for buflist_findpat.
+extern "C" {
+    fn nvim_path_file_pat_to_reg_pat(
+        pat: *const c_char,
+        pat_end: *const c_char,
+        no_bslash: *mut c_char,
+        allow_dirs: c_int,
+    ) -> *mut c_char;
+    fn nvim_blfp_regex_compile(pat: *const c_char, magic: c_int) -> *mut c_void;
+    fn nvim_blfp_regex_valid(handle: *mut c_void) -> c_int;
+    fn nvim_blfp_regex_free(handle: *mut c_void);
+    fn nvim_blfp_buflist_match(
+        handle: *mut c_void,
+        buf: BufHandle,
+        ignore_case: bool,
+    ) -> *const c_char;
+    fn nvim_blfp_errmsg_e93(pattern: *const c_char);
+    fn nvim_blfp_errmsg_e94(pattern: *const c_char);
+    fn rs_magic_isset() -> c_int;
+    fn rs_diff_mode_buf(buf: BufHandle) -> bool;
+}
+
+// RE_MAGIC constant (from regexp_defs.h)
+const RE_MAGIC: c_int = 1;
+
+/// Find file in buffer list by a regexp pattern.
+///
+/// # Parameters
+/// - `pattern` / `pattern_end`: pointer range for the pattern (`pattern_end` is first char after)
+/// - `unlisted`: also search unlisted buffers
+/// - `diffmode`: only match diff-mode buffers
+/// - `curtab_only`: only match buffers open in the current tab (always false in practice)
+///
+/// Returns the fnum of the found buffer, or -1 for no match / error.
+/// Emits E93 if multiple matches, E94 if no match.
+///
+/// # Safety
+///
+/// Must be called on the Neovim main thread with valid state.
+#[must_use]
+#[allow(clippy::too_many_lines)]
+pub unsafe fn buflist_findpat_impl(
+    pattern: *const c_char,
+    pattern_end: *const c_char,
+    unlisted: bool,
+    diffmode: bool,
+    _curtab_only: bool,
+) -> c_int {
+    let pat_len = if pattern_end.is_null() {
+        libc::strlen(pattern)
+    } else {
+        pattern_end.offset_from(pattern) as usize
+    };
+
+    // Special single-char patterns: '%' = curbuf, '#' = alt buffer
+    if pat_len == 1 {
+        let ch = *pattern as u8;
+        if ch == b'%' || ch == b'#' {
+            let found_fnum = if ch == b'%' {
+                nvim_buf_get_fnum(nvim_get_curbuf())
+            } else {
+                nvim_curwin_get_alt_fnum()
+            };
+            if diffmode {
+                let found_buf = rs_buflist_findnr(found_fnum);
+                if found_buf.is_null() || !rs_diff_mode_buf(found_buf) {
+                    // emit E94 with the original pattern char
+                    nvim_blfp_errmsg_e94(pattern);
+                    return -1;
+                }
+            }
+            return found_fnum;
+        }
+    }
+
+    // Convert glob pattern to regex via file_pat_to_reg_pat
+    let pat_end_ptr = if pattern_end.is_null() {
+        pattern.add(pat_len)
+    } else {
+        pattern_end
+    };
+
+    let pat_c = nvim_path_file_pat_to_reg_pat(pattern, pat_end_ptr, std::ptr::null_mut(), 0);
+    if pat_c.is_null() {
+        return -1;
+    }
+
+    // Work with a mutable Vec<u8> copy so we can toggle '$'
+    let pat_len_c = libc::strlen(pat_c);
+    let mut pat_bytes: Vec<u8> =
+        std::slice::from_raw_parts(pat_c as *const u8, pat_len_c + 1).to_vec(); // includes NUL
+    xfree(pat_c.cast::<c_void>());
+
+    // toggledollar: if the last non-NUL char is '$', we toggle it off/on per attempt
+    let pat_body_len = pat_bytes.len() - 1; // excluding NUL
+    let toggledollar = pat_body_len > 1 && pat_bytes[pat_body_len - 1] == b'$';
+
+    let mut match_fnum: c_int = -1;
+
+    // Two passes: first find listed, then (if unlisted) unlisted buffers
+    let mut find_listed = true;
+    loop {
+        // 4 attempts: vary '^' prefix and '$' suffix
+        'attempt_loop: for attempt in 0..=3i32 {
+            // Toggle '$' at end (attempt 0,1 => no '$', attempt 2,3 => with '$')
+            if toggledollar {
+                if attempt < 2 {
+                    pat_bytes[pat_body_len - 1] = 0; // remove '$'
+                } else {
+                    pat_bytes[pat_body_len - 1] = b'$'; // restore '$'
+                }
+            }
+
+            // Determine start of pattern: skip '^' on odd attempts
+            let skip_caret = pat_bytes[0] == b'^' && (attempt & 1) == 0;
+            let pat_start: *const c_char = if skip_caret {
+                pat_bytes.as_ptr().add(1).cast::<c_char>()
+            } else {
+                pat_bytes.as_ptr().cast::<c_char>()
+            };
+
+            let magic = if rs_magic_isset() != 0 { RE_MAGIC } else { 0 };
+            let regex_handle = nvim_blfp_regex_compile(pat_start, magic);
+
+            // Walk buffers backwards
+            let mut buf = nvim_get_lastbuf();
+            while !buf.is_null() {
+                if nvim_blfp_regex_valid(regex_handle) == 0 {
+                    // Regex engine switched — abort
+                    nvim_blfp_regex_free(regex_handle);
+                    return -1;
+                }
+
+                let bl = nvim_buf_get_b_p_bl(buf) != 0;
+                if bl == find_listed
+                    && (!diffmode || rs_diff_mode_buf(buf))
+                    && !nvim_blfp_buflist_match(regex_handle, buf, false).is_null()
+                {
+                    // curtab_only check omitted: all callers pass false
+                    if match_fnum >= 0 {
+                        // Multiple matches
+                        match_fnum = -2;
+                        buf = nvim_buf_get_prev(buf);
+                        continue;
+                    }
+                    match_fnum = nvim_buf_get_fnum(buf);
+                }
+
+                buf = nvim_buf_get_prev(buf);
+            }
+
+            nvim_blfp_regex_free(regex_handle);
+
+            if match_fnum >= 0 {
+                break 'attempt_loop; // found exactly one match
+            }
+        }
+
+        // Only search unlisted if no match yet
+        if !unlisted || !find_listed || match_fnum != -1 {
+            break;
+        }
+        find_listed = false;
+        match_fnum = -1;
+    }
+
+    // Emit error messages
+    if match_fnum == -2 {
+        nvim_blfp_errmsg_e93(pattern);
+    } else if match_fnum < 0 {
+        nvim_blfp_errmsg_e94(pattern);
+    }
+
+    match_fnum
+}
+
+/// C export: `buflist_findpat`.
+#[must_use]
+#[unsafe(export_name = "buflist_findpat")]
+pub unsafe extern "C" fn buflist_findpat_export(
+    pattern: *const c_char,
+    pattern_end: *const c_char,
+    unlisted: bool,
+    diffmode: bool,
+    curtab_only: bool,
+) -> c_int {
+    buflist_findpat_impl(pattern, pattern_end, unlisted, diffmode, curtab_only)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

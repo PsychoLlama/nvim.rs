@@ -170,6 +170,9 @@ static inline void fname_expand(buf_T *buf, char **ffname, char **sfname) { rs_f
 static inline void buflist_altfpos(win_T *win) { rs_buflist_altfpos(win); }
 static inline void do_modelines(int flags) { rs_do_modelines(flags); }
 static inline int ExpandBufnames(char *pat, int *num_file, char ***file, int options) { return rs_ExpandBufnames(pat, num_file, file, options); }
+// buflist_findpat() is implemented in Rust (src/nvim-rs/buffer/src/list.rs).
+int buflist_findpat(const char *pattern, const char *pattern_end, bool unlisted, bool diffmode,
+                    bool curtab_only);
 
 /// Get b:changedtick value
 ///

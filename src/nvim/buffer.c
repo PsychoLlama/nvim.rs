@@ -2984,115 +2984,58 @@ static buf_T *buflist_findname_file_id(char *ffname, FileID *file_id, bool file_
   return NULL;
 }
 
-/// Find file in buffer list by a regexp pattern.
-///
-/// @param pattern_end  pointer to first char after pattern
-/// @param unlisted  find unlisted buffers
-/// @param diffmode  find diff-mode buffers only
-/// @param curtab_only  find buffers in current tab only
-///
-/// @return  fnum of the found buffer or < 0 for error.
-int buflist_findpat(const char *pattern, const char *pattern_end, bool unlisted, bool diffmode,
-                    bool curtab_only)
-  FUNC_ATTR_NONNULL_ARG(1)
+// --- buflist_findpat Rust FFI accessor helpers ---
+
+/// Compile a regex for buflist_findpat, returning heap-allocated regmatch_T or NULL.
+void *nvim_blfp_regex_compile(const char *pat, int magic)
 {
-  int match = -1;
-
-  if (pattern_end == pattern + 1 && (*pattern == '%' || *pattern == '#')) {
-    match = *pattern == '%' ? curbuf->b_fnum : curwin->w_alt_fnum;
-    buf_T *found_buf = buflist_findnr(match);
-    if (diffmode && !(found_buf && rs_diff_mode_buf(found_buf))) {
-      match = -1;
-    }
-  } else {
-    // Try four ways of matching a listed buffer:
-    // attempt == 0: without '^' or '$' (at any position)
-    // attempt == 1: with '^' at start (only at position 0)
-    // attempt == 2: with '$' at end (only match at end)
-    // attempt == 3: with '^' at start and '$' at end (only full match)
-    // Repeat this for finding an unlisted buffer if there was no matching
-    // listed buffer.
-
-    char *pat = file_pat_to_reg_pat(pattern, pattern_end, NULL, false);
-    if (pat == NULL) {
-      return -1;
-    }
-    char *patend = pat + strlen(pat) - 1;
-    bool toggledollar = (patend > pat && *patend == '$');
-
-    // First try finding a listed buffer.  If not found and "unlisted"
-    // is true, try finding an unlisted buffer.
-
-    int find_listed = true;
-    while (true) {
-      for (int attempt = 0; attempt <= 3; attempt++) {
-        // may add '^' and '$'
-        if (toggledollar) {
-          *patend = (attempt < 2) ? NUL : '$';           // add/remove '$'
-        }
-        char *p = pat;
-        if (*p == '^' && !(attempt & 1)) {               // add/remove '^'
-          p++;
-        }
-
-        regmatch_T regmatch;
-        regmatch.regprog = vim_regcomp(p, rs_magic_isset() ? RE_MAGIC : 0);
-
-        FOR_ALL_BUFFERS_BACKWARDS(buf) {
-          if (regmatch.regprog == NULL) {
-            // invalid pattern, possibly after switching engine
-            xfree(pat);
-            return -1;
-          }
-          if (buf->b_p_bl == find_listed
-              && (!diffmode || rs_diff_mode_buf(buf))
-              && buflist_match(&regmatch, buf, false) != NULL) {
-            if (curtab_only) {
-              // Ignore the match if the buffer is not open in
-              // the current tab.
-              bool found_window = false;
-              FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-                if (wp->w_buffer == buf) {
-                  found_window = true;
-                  break;
-                }
-              }
-              if (!found_window) {
-                continue;
-              }
-            }
-            if (match >= 0) {                   // already found a match
-              match = -2;
-              break;
-            }
-            match = buf->b_fnum;                // remember first match
-          }
-        }
-
-        vim_regfree(regmatch.regprog);
-        if (match >= 0) {                       // found one match
-          break;
-        }
-      }
-
-      // Only search for unlisted buffers if there was no match with
-      // a listed buffer.
-      if (!unlisted || !find_listed || match != -1) {
-        break;
-      }
-      find_listed = false;
-    }
-
-    xfree(pat);
-  }
-
-  if (match == -2) {
-    semsg(_("E93: More than one match for %s"), pattern);
-  } else if (match < 0) {
-    semsg(_("E94: No matching buffer for %s"), pattern);
-  }
-  return match;
+  regmatch_T *rmp = xmalloc(sizeof(regmatch_T));
+  rmp->regprog = vim_regcomp((char *)pat, magic);
+  return rmp;
 }
+
+/// Returns 1 if the regprog is still valid (non-NULL).
+int nvim_blfp_regex_valid(void *handle)
+{
+  if (handle == NULL) { return 0; }
+  return ((regmatch_T *)handle)->regprog != NULL ? 1 : 0;
+}
+
+/// Free a heap-allocated regmatch_T handle.
+void nvim_blfp_regex_free(void *handle)
+{
+  if (handle == NULL) { return; }
+  vim_regfree(((regmatch_T *)handle)->regprog);
+  xfree(handle);
+}
+
+/// Wrapper for buflist_match(). Returns a matched name or NULL.
+const char *nvim_blfp_buflist_match(void *handle, buf_T *buf, bool ignore_case)
+{
+  if (handle == NULL) { return NULL; }
+  return buflist_match((regmatch_T *)handle, buf, ignore_case);
+}
+
+/// Error message E92: Buffer N not found.
+void nvim_blfp_errmsg_e92(int64_t n)
+{
+  semsg(_("E92: Buffer %" PRId64 " not found"), n);
+}
+
+/// Error message E93: More than one match for <pattern>.
+void nvim_blfp_errmsg_e93(const char *pattern)
+{
+  semsg(_("E93: More than one match for %s"), pattern);
+}
+
+/// Error message E94: No matching buffer for <pattern>.
+void nvim_blfp_errmsg_e94(const char *pattern)
+{
+  semsg(_("E94: No matching buffer for %s"), pattern);
+}
+
+// buflist_findpat() is implemented in Rust (see src/nvim-rs/buffer/src/list.rs).
+// Deleted here (100 lines) in Phase 8.
 
 // Phase 5 accessor functions for ExpandBufnames.
 
@@ -3165,7 +3108,7 @@ void nvim_fuzzymatches_to_strmatches(void *fuzmatch, char ***file, int count, bo
 
 // ExpandBufnames() is implemented in Rust (see src/nvim-rs/buffer/src/expand.rs).
 // The C declaration is in buffer.h as a static inline wrapper.
-// buflist_match() and fname_match() are kept as static C helpers for buflist_findpat().
+// buflist_match() and fname_match() are kept as static C helpers for nvim_blfp_buflist_match() and nvim_bufname_regex_match().
 // NOTE: int ExpandBufnames(char *pat, int *num_file, char ***file, int options)
 // was deleted here (152 lines) in Phase 5.
 // buf_time_compare() was deleted here (10 lines) in Phase 5.
