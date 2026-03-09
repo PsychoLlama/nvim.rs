@@ -142,6 +142,12 @@ typedef struct {
   bool nomove;
 } InsertState;
 
+// Forward declarations for functions now implemented in Rust (dispatch.rs).
+extern int insert_handle_key(InsertState *s);
+extern void insert_do_complete(InsertState *s);
+extern void insert_do_cindent(InsertState *s);
+extern void insert_handle_key_post(InsertState *s);
+
 #include "edit.c.generated.h"
 
 extern int rs_get_scrolloff_value(win_T *wp);
@@ -589,6 +595,12 @@ void nvim_set_arrow_used(int val)
 int nvim_get_p_ri(void)
 {
   return p_ri;
+}
+
+/// Get p_ari (allowrevins option) (accessor for Rust).
+int nvim_get_p_ari(void)
+{
+  return p_ari;
 }
 
 // ============================================================================
@@ -1533,6 +1545,278 @@ void nvim_edit_ins_del(void)
   AppendCharToRedobuff(K_DEL);
 }
 
+// -- Phase 4 dispatch module accessors --
+
+/// Check if pum (popup menu) is visible (accessor for Rust).
+int nvim_edit_pum_visible(void)
+{
+  return pum_visible() ? 1 : 0;
+}
+
+/// Get pum_want.active (accessor for Rust).
+int nvim_edit_get_pum_want_active(void)
+{
+  return pum_want.active ? 1 : 0;
+}
+
+/// Set pum_want.active (accessor for Rust).
+void nvim_edit_set_pum_want_active(int val)
+{
+  pum_want.active = val != 0;
+}
+
+/// Get pum_want.finish (accessor for Rust).
+int nvim_edit_get_pum_want_finish(void)
+{
+  return pum_want.finish ? 1 : 0;
+}
+
+/// Set edit_submode_extra to NULL (accessor for Rust).
+void nvim_edit_clear_edit_submode_extra(void)
+{
+  edit_submode_extra = NULL;
+}
+
+/// Get cmdwin_type (accessor for Rust).
+int nvim_edit_get_cmdwin_type(void)
+{
+  return cmdwin_type;
+}
+
+/// Set cmdwin_result (accessor for Rust).
+void nvim_edit_set_cmdwin_result(int val)
+{
+  cmdwin_result = val;
+}
+
+/// Get ins_at_eol (accessor for Rust).
+int nvim_edit_get_ins_at_eol(void)
+{
+  return ins_at_eol ? 1 : 0;
+}
+
+/// Set ins_at_eol (accessor for Rust).
+void nvim_edit_set_ins_at_eol(int val)
+{
+  ins_at_eol = val != 0;
+}
+
+/// Set did_cursorhold (accessor for Rust).
+void nvim_edit_set_did_cursorhold(int val)
+{
+  did_cursorhold = val != 0;
+}
+
+/// Increment disable_fold_update (accessor for Rust).
+void nvim_edit_inc_disable_fold_update(void)
+{
+  disable_fold_update++;
+}
+
+/// Decrement disable_fold_update (accessor for Rust).
+void nvim_edit_dec_disable_fold_update(void)
+{
+  disable_fold_update--;
+}
+
+/// Set compl_busy (accessor for Rust).
+void nvim_edit_set_compl_busy(int val)
+{
+  compl_busy = val != 0;
+}
+
+/// Call may_do_si() and assign to can_si (accessor for Rust).
+void nvim_edit_update_can_si_from_may_do_si(void)
+{
+  can_si = may_do_si();
+}
+
+/// Call ins_complete(c, true) (accessor for Rust).
+int nvim_edit_ins_complete(int c)
+{
+  return ins_complete(c, true);
+}
+
+/// Call check_compl_option(allow_always) (accessor for Rust).
+int nvim_edit_check_compl_option(int allow_always)
+{
+  return check_compl_option(allow_always != 0) ? 1 : 0;
+}
+
+/// Call ins_ctrl_x() (accessor for Rust).
+void nvim_edit_ins_ctrl_x(void)
+{
+  ins_ctrl_x();
+}
+
+/// Call do_cmdline(NULL, getcmdkeycmd, NULL, 0) (accessor for Rust).
+void nvim_edit_do_cmdline_getcmdkeycmd(void)
+{
+  do_cmdline(NULL, getcmdkeycmd, NULL, 0);
+}
+
+/// Call map_execute_lua(false, false) (accessor for Rust).
+void nvim_edit_map_execute_lua(void)
+{
+  map_execute_lua(false, false);
+}
+
+/// Call paste_repeat(1) (accessor for Rust).
+void nvim_edit_paste_repeat(void)
+{
+  paste_repeat(1);
+}
+
+/// Call state_handle_k_event() (accessor for Rust).
+void nvim_edit_state_handle_k_event(void)
+{
+  state_handle_k_event();
+}
+
+/// Check if curwin->w_llist_ref is NULL (for quickfix window check) (accessor for Rust).
+int nvim_edit_curwin_is_qf_not_ll(void)
+{
+  return curwin->w_llist_ref == NULL ? 1 : 0;
+}
+
+/// Call do_cmdline_cmd(".cc") for quickfix (accessor for Rust).
+void nvim_edit_quickfix_cc(void)
+{
+  do_cmdline_cmd(".cc");
+}
+
+/// Call do_cmdline_cmd(".ll") for location list (accessor for Rust).
+void nvim_edit_quickfix_ll(void)
+{
+  do_cmdline_cmd(".ll");
+}
+
+/// Call invoke_prompt_interrupt() (accessor for Rust).
+int nvim_edit_invoke_prompt_interrupt(void)
+{
+  return invoke_prompt_interrupt() ? 1 : 0;
+}
+
+/// Call prompt_invoke_callback() (accessor for Rust).
+void nvim_edit_prompt_invoke_callback(void)
+{
+  prompt_invoke_callback();
+}
+
+/// Get curbuf->b_u_synced (accessor for Rust).
+int nvim_edit_get_curbuf_b_u_synced(void)
+{
+  return curbuf->b_u_synced ? 1 : 0;
+}
+
+/// Get p_paste option (accessor for Rust).
+int nvim_edit_get_p_paste(void)
+{
+  return p_paste ? 1 : 0;
+}
+
+/// Call char_before_cursor() (accessor for Rust).
+int nvim_edit_char_before_cursor(void)
+{
+  return char_before_cursor();
+}
+
+/// Call char_avail() (accessor for Rust).
+int nvim_edit_char_avail(void)
+{
+  return char_avail() ? 1 : 0;
+}
+
+/// Call inindent(0) (accessor for Rust).
+int nvim_edit_inindent(void)
+{
+  return inindent(0) ? 1 : 0;
+}
+
+/// Call auto_format(false, force_format) (accessor for Rust).
+void nvim_edit_auto_format(int force_format)
+{
+  auto_format(false, force_format != 0);
+}
+
+/// Call in_cinkeys(c, type, line_is_white) (accessor for Rust).
+int nvim_edit_in_cinkeys(int c, int type, int line_is_white)
+{
+  return in_cinkeys(c, (char)type, line_is_white != 0) ? 1 : 0;
+}
+
+/// Call do_c_expr_indent() (accessor for Rust).
+void nvim_edit_do_c_expr_indent(void)
+{
+  do_c_expr_indent();
+}
+
+/// Call ins_reg() (accessor for Rust).
+void nvim_edit_ins_reg(void)
+{
+  ins_reg();
+}
+
+/// Call ins_try_si(c) (accessor for Rust).
+void nvim_edit_ins_try_si(int c)
+{
+  ins_try_si(c);
+}
+
+/// Call update_screen() (accessor for Rust).
+void nvim_edit_update_screen(void)
+{
+  update_screen();
+}
+
+/// Call ui_flush() (accessor for Rust).
+void nvim_edit_ui_flush(void)
+{
+  ui_flush();
+}
+
+/// Check if bt_quickfix(curbuf) (accessor for Rust).
+int nvim_edit_bt_quickfix_curbuf(void)
+{
+  return bt_quickfix(curbuf) ? 1 : 0;
+}
+
+/// Check if bt_prompt(curbuf) (accessor for Rust).
+int nvim_edit_bt_prompt_curbuf(void)
+{
+  return bt_prompt(curbuf) ? 1 : 0;
+}
+
+/// Get curwin->w_p_rl (right-to-left option) (accessor for Rust).
+int nvim_edit_get_curwin_p_rl(void)
+{
+  return curwin->w_p_rl ? 1 : 0;
+}
+
+/// Check if curwin->w_cursor.col >= rs_ins_compl_col() (accessor for Rust).
+int nvim_edit_cursor_col_ge_compl_col(void)
+{
+  return curwin->w_cursor.col >= rs_ins_compl_col() ? 1 : 0;
+}
+
+/// Get curbuf->b_p_cpt (complete option), first char (accessor for Rust).
+int nvim_edit_get_cpt_first_char(void)
+{
+  return (unsigned char)*curbuf->b_p_cpt;
+}
+
+/// Get vim_iswordc(c) (accessor for Rust -- thin wrapper to avoid name clashes).
+int nvim_edit_vim_iswordc_dispatch(int c)
+{
+  return vim_iswordc(c) ? 1 : 0;
+}
+
+/// Get get_ve_flags(curwin) & kOptVeFlagOnemore (accessor for Rust).
+int nvim_edit_ve_onemore(void)
+{
+  return (get_ve_flags(curwin) & kOptVeFlagOnemore) ? 1 : 0;
+}
+
 // Static asserts for Phase 4 constants
 _Static_assert(kOptBoFlagCursor == 0x04, "kOptBoFlagCursor mismatch");
 _Static_assert(kOptBoFlagCtrlg == 0x20, "kOptBoFlagCtrlg mismatch");
@@ -2334,591 +2618,9 @@ static int insert_execute(VimState *state, int key)
   return insert_handle_key(s);
 }
 
-static int insert_handle_key(InsertState *s)
-{
-  // The big switch to handle a character in insert mode.
-  // TODO(tarruda): This could look better if a lookup table is used.
-  // (similar to normal mode `nv_cmds[]`)
-  switch (s->c) {
-  case ESC:           // End input mode
-    if (echeck_abbr(ESC + ABBR_OFF)) {
-      break;
-    }
-    FALLTHROUGH;
-
-  case Ctrl_C:        // End input mode
-    if (s->c == Ctrl_C && cmdwin_type != 0) {
-      // Close the cmdline window.
-      cmdwin_result = K_IGNORE;
-      got_int = false;         // don't stop executing autocommands et al
-      s->nomove = true;
-      return 0;  // exit insert mode
-    }
-    if (s->c == Ctrl_C && bt_prompt(curbuf)) {
-      if (invoke_prompt_interrupt()) {
-        if (!bt_prompt(curbuf)) {
-          // buffer changed to a non-prompt buffer, get out of
-          // Insert mode
-          return 0;
-        }
-        break;
-      }
-    }
-
-    return 0;  // exit insert mode
-
-  case Ctrl_Z:
-    goto normalchar;                // insert CTRL-Z as normal char
-
-  case Ctrl_O:        // execute one command
-    if (rs_ctrl_x_mode_omni()) {
-      insert_do_complete(s);
-      break;
-    }
-
-    if (echeck_abbr(Ctrl_O + ABBR_OFF)) {
-      break;
-    }
-
-    ins_ctrl_o();
-
-    // don't move the cursor left when 'virtualedit' has "onemore".
-    if (get_ve_flags(curwin) & kOptVeFlagOnemore) {
-      ins_at_eol = false;
-      s->nomove = true;
-    }
-
-    s->count = 0;
-    return 0;  // exit insert mode
-
-  case K_INS:         // toggle insert/replace mode
-  case K_KINS:
-    ins_insert(s->replaceState);
-    break;
-
-  case K_SELECT:      // end of Select mode mapping - ignore
-    break;
-
-  case K_HELP:        // Help key works like <ESC> <Help>
-  case K_F1:
-  case K_XF1:
-    stuffcharReadbuff(K_HELP);
-    return 0;  // exit insert mode
-
-  case ' ':
-    if (mod_mask != MOD_MASK_CTRL) {
-      goto normalchar;
-    }
-    FALLTHROUGH;
-  case K_ZERO:        // Insert the previously inserted text.
-  case NUL:
-  case Ctrl_A:
-    // For ^@ the trailing ESC will end the insert, unless there is an
-    // error.
-    if (stuff_inserted(NUL, 1, (s->c == Ctrl_A)) == FAIL
-        && s->c != Ctrl_A) {
-      return 0;  // exit insert mode
-    }
-    s->inserted_space = false;
-    break;
-
-  case Ctrl_R:        // insert the contents of a register
-    if (rs_ctrl_x_mode_register() && !rs_ins_compl_active()) {
-      insert_do_complete(s);
-      break;
-    }
-    ins_reg();
-    auto_format(false, true);
-    s->inserted_space = false;
-    break;
-
-  case Ctrl_G:        // commands starting with CTRL-G
-    ins_ctrl_g();
-    break;
-
-  case Ctrl_HAT:      // switch input mode and/or langmap
-    ins_ctrl_hat();
-    break;
-
-  case Ctrl__:        // switch between languages
-    if (!p_ari) {
-      goto normalchar;
-    }
-    ins_ctrl_();
-    break;
-
-  case Ctrl_D:        // Make indent one shiftwidth smaller.
-    if (rs_ctrl_x_mode_path_defines()) {
-      insert_do_complete(s);
-      break;
-    }
-    FALLTHROUGH;
-
-  case Ctrl_T:        // Make indent one shiftwidth greater.
-    if (s->c == Ctrl_T && rs_ctrl_x_mode_thesaurus()) {
-      if (check_compl_option(false)) {
-        insert_do_complete(s);
-      }
-      break;
-    }
-    ins_shift(s->c, s->lastc);
-    auto_format(false, true);
-    s->inserted_space = false;
-    break;
-
-  case K_DEL:         // delete character under the cursor
-  case K_KDEL:
-    ins_del();
-    auto_format(false, true);
-    break;
-
-  case K_BS:          // delete character before the cursor
-  case Ctrl_H:
-    s->did_backspace = ins_bs(s->c, BACKSPACE_CHAR, &s->inserted_space);
-    auto_format(false, true);
-    if (s->did_backspace) {
-      MAY_TRIGGER_AUTOCOMPLETE(s->c);
-    }
-    break;
-
-  case Ctrl_W:        // delete word before the cursor
-    if (bt_prompt(curbuf) && (mod_mask & MOD_MASK_SHIFT) == 0) {
-      // In a prompt window CTRL-W is used for window commands.
-      // Use Shift-CTRL-W to delete a word.
-      stuffcharReadbuff(Ctrl_W);
-      restart_edit = 'A';
-      s->nomove = true;
-      s->count = 0;
-      return 0;
-    }
-    s->did_backspace = ins_bs(s->c, BACKSPACE_WORD, &s->inserted_space);
-    auto_format(false, true);
-    if (s->did_backspace) {
-      MAY_TRIGGER_AUTOCOMPLETE(s->c);
-    }
-    break;
-
-  case Ctrl_U:        // delete all inserted text in current line
-    // CTRL-X CTRL-U completes with 'completefunc'.
-    if (rs_ctrl_x_mode_function()) {
-      insert_do_complete(s);
-    } else {
-      s->did_backspace = ins_bs(s->c, BACKSPACE_LINE, &s->inserted_space);
-      auto_format(false, true);
-      s->inserted_space = false;
-      if (s->did_backspace) {
-        MAY_TRIGGER_AUTOCOMPLETE(s->c);
-      }
-    }
-    break;
-
-  case K_LEFTMOUSE:     // mouse keys
-  case K_LEFTMOUSE_NM:
-  case K_LEFTDRAG:
-  case K_LEFTRELEASE:
-  case K_LEFTRELEASE_NM:
-  case K_MOUSEMOVE:
-  case K_MIDDLEMOUSE:
-  case K_MIDDLEDRAG:
-  case K_MIDDLERELEASE:
-  case K_RIGHTMOUSE:
-  case K_RIGHTDRAG:
-  case K_RIGHTRELEASE:
-  case K_X1MOUSE:
-  case K_X1DRAG:
-  case K_X1RELEASE:
-  case K_X2MOUSE:
-  case K_X2DRAG:
-  case K_X2RELEASE:
-    ins_mouse(s->c);
-    break;
-
-  case K_MOUSEDOWN:   // Default action for scroll wheel up: scroll up
-    ins_mousescroll(MSCR_DOWN);
-    break;
-
-  case K_MOUSEUP:     // Default action for scroll wheel down: scroll down
-    ins_mousescroll(MSCR_UP);
-    break;
-
-  case K_MOUSELEFT:   // Scroll wheel left
-    ins_mousescroll(MSCR_LEFT);
-    break;
-
-  case K_MOUSERIGHT:  // Scroll wheel right
-    ins_mousescroll(MSCR_RIGHT);
-    break;
-
-  case K_IGNORE:      // Something mapped to nothing
-    break;
-
-  case K_PASTE_START:
-    paste_repeat(1);
-    goto check_pum;
-
-  case K_EVENT:       // some event
-    state_handle_k_event();
-    // If CTRL-G U was used apply it to the next typed key.
-    if (dont_sync_undo == kTrue) {
-      dont_sync_undo = kNone;
-    }
-    goto check_pum;
-
-  case K_COMMAND:     // <Cmd>command<CR>
-    do_cmdline(NULL, getcmdkeycmd, NULL, 0);
-    goto check_pum;
-
-  case K_LUA:
-    map_execute_lua(false, false);
-
-check_pum:
-    // nvim_select_popupmenu_item() can be called from the handling of
-    // K_EVENT, K_COMMAND, or K_LUA.
-    // TODO(bfredl): Not entirely sure this indirection is necessary
-    // but doing like this ensures using nvim_select_popupmenu_item is
-    // equivalent to selecting the item with a typed key.
-    if (pum_want.active) {
-      if (pum_visible()) {
-        // Set this to NULL so that ins_complete() will update the message.
-        edit_submode_extra = NULL;
-        insert_do_complete(s);
-        if (pum_want.finish) {
-          // accept the item and stop completion
-          rs_ins_compl_prep(Ctrl_Y);
-        }
-      }
-      pum_want.active = false;
-    }
-
-    if (curbuf->b_u_synced) {
-      // The K_EVENT, K_COMMAND, or K_LUA caused undo to be synced.
-      // Need to save the line for undo before inserting the next char.
-      ins_need_undo = true;
-    }
-    break;
-
-  case K_HOME:        // <Home>
-  case K_KHOME:
-  case K_S_HOME:
-  case K_C_HOME:
-    ins_home(s->c);
-    break;
-
-  case K_END:         // <End>
-  case K_KEND:
-  case K_S_END:
-  case K_C_END:
-    ins_end(s->c);
-    break;
-
-  case K_LEFT:        // <Left>
-    if (mod_mask & (MOD_MASK_SHIFT|MOD_MASK_CTRL)) {
-      ins_s_left();
-    } else {
-      ins_left();
-    }
-    break;
-
-  case K_S_LEFT:      // <S-Left>
-  case K_C_LEFT:
-    ins_s_left();
-    break;
-
-  case K_RIGHT:       // <Right>
-    if (mod_mask & (MOD_MASK_SHIFT|MOD_MASK_CTRL)) {
-      ins_s_right();
-    } else {
-      ins_right();
-    }
-    break;
-
-  case K_S_RIGHT:     // <S-Right>
-  case K_C_RIGHT:
-    ins_s_right();
-    break;
-
-  case K_UP:          // <Up>
-    if (pum_visible()) {
-      insert_do_complete(s);
-    } else if (mod_mask & MOD_MASK_SHIFT) {
-      ins_pageup();
-    } else {
-      ins_up(false);
-    }
-    break;
-
-  case K_S_UP:        // <S-Up>
-  case K_PAGEUP:
-  case K_KPAGEUP:
-    if (pum_visible()) {
-      insert_do_complete(s);
-    } else {
-      ins_pageup();
-    }
-    break;
-
-  case K_DOWN:        // <Down>
-    if (pum_visible()) {
-      insert_do_complete(s);
-    } else if (mod_mask & MOD_MASK_SHIFT) {
-      ins_pagedown();
-    } else {
-      ins_down(false);
-    }
-    break;
-
-  case K_S_DOWN:      // <S-Down>
-  case K_PAGEDOWN:
-  case K_KPAGEDOWN:
-    if (pum_visible()) {
-      insert_do_complete(s);
-    } else {
-      ins_pagedown();
-    }
-    break;
-
-  case K_S_TAB:       // When not mapped, use like a normal TAB
-    s->c = TAB;
-    FALLTHROUGH;
-
-  case TAB:           // TAB or Complete patterns along path
-    if (rs_ctrl_x_mode_path_patterns()) {
-      insert_do_complete(s);
-      break;
-    }
-    s->inserted_space = false;
-    if (ins_tab()) {
-      goto normalchar;                // insert TAB as a normal char
-    }
-    auto_format(false, true);
-    break;
-
-  case K_KENTER:      // <Enter>
-    s->c = CAR;
-    FALLTHROUGH;
-  case CAR:
-  case NL:
-    // In a quickfix window a <CR> jumps to the error under the
-    // cursor.
-    if (bt_quickfix(curbuf) && s->c == CAR) {
-      if (curwin->w_llist_ref == NULL) {          // quickfix window
-        do_cmdline_cmd(".cc");
-      } else {                                    // location list window
-        do_cmdline_cmd(".ll");
-      }
-      break;
-    }
-    if (cmdwin_type != 0) {
-      // Execute the command in the cmdline window.
-      cmdwin_result = CAR;
-      return 0;
-    }
-    if ((mod_mask & MOD_MASK_SHIFT) == 0 && bt_prompt(curbuf)) {
-      prompt_invoke_callback();
-      if (!bt_prompt(curbuf)) {
-        // buffer changed to a non-prompt buffer, get out of
-        // Insert mode
-        return 0;
-      }
-      break;
-    }
-    if (!ins_eol(s->c)) {
-      return 0;  // out of memory
-    }
-    auto_format(false, false);
-    s->inserted_space = false;
-    break;
-
-  case Ctrl_K:        // digraph or keyword completion
-    if (rs_ctrl_x_mode_dictionary()) {
-      if (check_compl_option(true)) {
-        insert_do_complete(s);
-      }
-      break;
-    }
-
-    s->c = ins_digraph();
-    if (s->c == NUL) {
-      break;
-    }
-    goto normalchar;
-
-  case Ctrl_X:        // Enter CTRL-X mode
-    ins_ctrl_x();
-    break;
-
-  case Ctrl_RSB:      // Tag name completion after ^X
-    if (!rs_ctrl_x_mode_tags()) {
-      goto normalchar;
-    } else {
-      insert_do_complete(s);
-    }
-    break;
-
-  case Ctrl_F:        // File name completion after ^X
-    if (!rs_ctrl_x_mode_files()) {
-      goto normalchar;
-    } else {
-      insert_do_complete(s);
-    }
-    break;
-
-  case 's':           // Spelling completion after ^X
-  case Ctrl_S:
-    if (!rs_ctrl_x_mode_spell()) {
-      goto normalchar;
-    } else {
-      insert_do_complete(s);
-    }
-    break;
-
-  case Ctrl_L:        // Whole line completion after ^X
-    if (!rs_ctrl_x_mode_whole_line()) {
-      goto normalchar;
-    }
-    FALLTHROUGH;
-
-  case Ctrl_P:        // Do previous/next pattern completion
-  case Ctrl_N:
-    // if 'complete' is empty then plain ^P is no longer special,
-    // but it is under other ^X modes
-    if (*curbuf->b_p_cpt == NUL
-        && (rs_ctrl_x_mode_normal() || rs_ctrl_x_mode_whole_line())
-        && !rs_compl_status_local()) {
-      goto normalchar;
-    }
-
-    insert_do_complete(s);
-    break;
-
-  case Ctrl_Y:        // copy from previous line or scroll down
-  case Ctrl_E:        // copy from next line or scroll up
-    s->c = ins_ctrl_ey(s->c);
-    break;
-
-  default:
-
-normalchar:
-    // Insert a normal character.
-
-    if (!p_paste) {
-      // Trigger InsertCharPre.
-      char *str = do_insert_char_pre(s->c);
-
-      if (str != NULL) {
-        if (*str != NUL && stop_arrow() != FAIL) {
-          // Insert the new value of v:char literally.
-          for (char *p = str; *p != NUL; MB_PTR_ADV(p)) {
-            s->c = utf_ptr2char(p);
-            if (s->c == CAR || s->c == K_KENTER || s->c == NL) {
-              ins_eol(s->c);
-            } else {
-              ins_char(s->c);
-            }
-          }
-          AppendToRedobuffLit(str, -1);
-        }
-        xfree(str);
-        s->c = NUL;
-      }
-
-      // If the new value is already inserted or an empty string
-      // then don't insert any character.
-      if (s->c == NUL) {
-        break;
-      }
-    }
-    // Try to perform smart-indenting.
-    ins_try_si(s->c);
-
-    if (s->c == ' ') {
-      s->inserted_space = true;
-      if (inindent(0)) {
-        can_cindent = false;
-      }
-      if (Insstart_blank_vcol == MAXCOL
-          && curwin->w_cursor.lnum == Insstart.lnum) {
-        Insstart_blank_vcol = get_nolist_virtcol();
-      }
-    }
-
-    // Insert a normal character and check for abbreviations on a
-    // special character.  Let CTRL-] expand abbreviations without
-    // inserting it.
-    if (vim_iswordc(s->c)
-        // Add ABBR_OFF for characters above 0x100, this is
-        // what check_abbr() expects.
-        || (!echeck_abbr((s->c >= 0x100) ? (s->c + ABBR_OFF) : s->c)
-            && s->c != Ctrl_RSB)) {
-      insert_special(s->c, false, false);
-      revins_legal++;
-      revins_chars++;
-    }
-
-    auto_format(false, true);
-
-    // When inserting a character the cursor line must never be in a
-    // closed fold.
-    rs_foldOpenCursor();
-    // Trigger autocompletion
-    if (rs_ins_compl_has_autocomplete() && !char_avail() && vim_isprintc(s->c)) {
-      TRIGGER_AUTOCOMPLETE();
-    }
-
-    break;
-  }       // end of switch (s->c)
-
-  insert_handle_key_post(s);
-  return 1;  // continue
-}
-
-static void insert_do_complete(InsertState *s)
-{
-  compl_busy = true;
-  disable_fold_update++;  // don't redraw folds here
-  if (ins_complete(s->c, true) == FAIL) {
-    rs_compl_status_clear();
-  }
-  disable_fold_update--;
-  compl_busy = false;
-  can_si = may_do_si();  // allow smartindenting
-}
-
-static void insert_do_cindent(InsertState *s)
-{
-  // Indent now if a key was typed that is in 'cinkeys'.
-  if (in_cinkeys(s->c, ' ', s->line_is_white)) {
-    if (stop_arrow() == OK) {
-      // re-indent the current line
-      do_c_expr_indent();
-    }
-  }
-}
-
-static void insert_handle_key_post(InsertState *s)
-{
-  // If typed something may trigger CursorHoldI again.
-  if (s->c != K_EVENT
-      // but not in CTRL-X mode, a script can't restore the state
-      && rs_ctrl_x_mode_normal()) {
-    did_cursorhold = false;
-  }
-
-  // Check if we need to cancel completion mode because the window
-  // or tab page was changed
-  if (rs_ins_compl_active() && !rs_ins_compl_win_active(curwin)) {
-    rs_ins_compl_cancel();
-  }
-
-  // If the cursor was moved we didn't just insert a space
-  if (arrow_used) {
-    s->inserted_space = false;
-  }
-
-  if (can_cindent && cindent_on() && rs_ctrl_x_mode_normal()) {
-    insert_do_cindent(s);
-  }
-}
+// insert_handle_key, insert_do_complete, insert_do_cindent, and
+// insert_handle_key_post are now implemented in Rust (dispatch.rs).
+// Forward declarations are near the top of this file.
 
 /// edit(): Start inserting text.
 ///

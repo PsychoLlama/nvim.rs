@@ -9,6 +9,7 @@
 pub mod abbrev;
 pub mod backspace;
 pub mod completion;
+pub mod dispatch;
 pub mod editing;
 pub mod helpers;
 pub mod insert;
