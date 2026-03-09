@@ -790,6 +790,52 @@ bool nvim_apply_autocmds_bufdelete(buf_T *buf)
   return apply_autocmds(EVENT_BUFDELETE, NULL, NULL, false, buf);
 }
 
+// Phase 4 accessor functions for buflist_list.
+
+// nvim_get_firstbuf is already defined in undo.c.
+// nvim_buf_get_next is already defined in undo.c.
+// nvim_msg_ext_set_kind is already defined in change_ffi.c.
+// nvim_eap_get_arg is already defined in ex_docmd.c.
+// nvim_eap_get_forceit is already defined in indent_ffi.c.
+
+/// Get buf->b_last_used (accessor for Rust).
+int64_t nvim_buf_get_last_used(buf_T *buf)
+{
+  return buf ? (int64_t)buf->b_last_used : 0;
+}
+
+/// Check if the buffer's terminal is running (accessor for Rust).
+int nvim_buf_terminal_running(buf_T *buf)
+{
+  if (!buf || !buf->terminal) {
+    return 0;
+  }
+  return terminal_running(buf->terminal) ? 1 : 0;
+}
+
+/// Check if buf's channel job is running (accessor for Rust).
+int nvim_buf_channel_job_running(buf_T *buf)
+{
+  if (!buf || !buf->terminal) {
+    return 0;
+  }
+  return channel_job_running((uint64_t)buf->b_p_channel) ? 1 : 0;
+}
+
+/// Write formatted time to buf (for buflist display) (accessor for Rust).
+void nvim_undo_fmt_time(char *buf, size_t buflen, int64_t last_used)
+{
+  undo_fmt_time(buf, buflen, (time_t)last_used);
+}
+
+// nvim_get_iobuff is already defined in option_shim.c.
+
+/// Get translated "line %" PRId64 format string (accessor for Rust).
+const char *nvim_buflist_line_fmt(void)
+{
+  return _("line %" PRId64);
+}
+
 // Phase 3 accessor functions for fileinfo.
 // NOTE: nvim_get_p_ru is already defined in drawscreen.c.
 
@@ -3506,110 +3552,8 @@ fmark_T *buflist_findfmark(buf_T *buf)
 
 
 /// List all known file names (for :files and :buffers command).
-void buflist_list(exarg_T *eap)
-{
-  buf_T *buf = firstbuf;
-
-  garray_T buflist;
-  buf_T **buflist_data = NULL;
-
-  msg_ext_set_kind("list_cmd");
-  if (vim_strchr(eap->arg, 't')) {
-    ga_init(&buflist, sizeof(buf_T *), 50);
-    for (buf = firstbuf; buf != NULL; buf = buf->b_next) {
-      ga_grow(&buflist, 1);
-      ((buf_T **)buflist.ga_data)[buflist.ga_len++] = buf;
-    }
-
-    qsort(buflist.ga_data, (size_t)buflist.ga_len,
-          sizeof(buf_T *), buf_time_compare);
-
-    buflist_data = (buf_T **)buflist.ga_data;
-    buf = *buflist_data;
-  }
-  buf_T **p = buflist_data;
-
-  for (;
-       buf != NULL && !got_int;
-       buf = buflist_data != NULL
-             ? (++p < buflist_data + buflist.ga_len ? *p : NULL) : buf->b_next) {
-    const bool is_terminal = buf->terminal;
-    const bool job_running = buf->terminal && terminal_running(buf->terminal);
-
-    // skip unspecified buffers
-    if ((!buf->b_p_bl && !eap->forceit && !vim_strchr(eap->arg, 'u'))
-        || (vim_strchr(eap->arg, 'u') && buf->b_p_bl)
-        || (vim_strchr(eap->arg, '+')
-            && ((buf->b_flags & BF_READERR) || !bufIsChanged(buf)))
-        || (vim_strchr(eap->arg, 'a')
-            && (buf->b_ml.ml_mfp == NULL || buf->b_nwindows == 0))
-        || (vim_strchr(eap->arg, 'h')
-            && (buf->b_ml.ml_mfp == NULL || buf->b_nwindows != 0))
-        || (vim_strchr(eap->arg, 'R') && (!is_terminal || !job_running))
-        || (vim_strchr(eap->arg, 'F') && (!is_terminal || job_running))
-        || (vim_strchr(eap->arg, '-') && buf->b_p_ma)
-        || (vim_strchr(eap->arg, '=') && !buf->b_p_ro)
-        || (vim_strchr(eap->arg, 'x') && !(buf->b_flags & BF_READERR))
-        || (vim_strchr(eap->arg, '%') && buf != curbuf)
-        || (vim_strchr(eap->arg, '#')
-            && (buf == curbuf || curwin->w_alt_fnum != buf->b_fnum))) {
-      continue;
-    }
-    char *name = buf_spname(buf);
-    if (name != NULL) {
-      xstrlcpy(NameBuff, name, MAXPATHL);
-    } else {
-      home_replace(buf, buf->b_fname, NameBuff, MAXPATHL, true);
-    }
-
-    if (message_filtered(NameBuff)) {
-      continue;
-    }
-
-    const int changed_char = (buf->b_flags & BF_READERR)
-                             ? 'x'
-                             : (bufIsChanged(buf) ? '+' : ' ');
-    int ro_char = !MODIFIABLE(buf) ? '-' : (buf->b_p_ro ? '=' : ' ');
-    if (buf->terminal) {
-      ro_char = channel_job_running((uint64_t)buf->b_p_channel) ? 'R' : 'F';
-    }
-
-    msg_putchar('\n');
-    int len = (int)vim_snprintf_safelen(IObuff, IOSIZE - 20, "%3d%c%c%c%c%c \"%s\"",
-                                        buf->b_fnum,
-                                        buf->b_p_bl ? ' ' : 'u',
-                                        buf == curbuf ? '%'
-                                                      : (curwin->w_alt_fnum
-                                                         == buf->b_fnum ? '#' : ' '),
-                                        buf->b_ml.ml_mfp == NULL ? ' '
-                                                                 : (buf->b_nwindows
-                                                                    == 0 ? 'h' : 'a'),
-                                        ro_char,
-                                        changed_char,
-                                        NameBuff);
-
-    len = MIN(len, IOSIZE - 20);
-
-    // put "line 999" in column 40 or after the file name
-    int i = 40 - vim_strsize(IObuff);
-    do {
-      IObuff[len++] = ' ';
-    } while (--i > 0 && len < IOSIZE - 18);
-    if (vim_strchr(eap->arg, 't') && buf->b_last_used) {
-      undo_fmt_time(IObuff + len, (size_t)(IOSIZE - len), buf->b_last_used);
-    } else {
-      vim_snprintf(IObuff + len, (size_t)(IOSIZE - len), _("line %" PRId64),
-                   buf == curbuf ? (int64_t)curwin->w_cursor.lnum : (int64_t)buflist_findlnum(buf));
-    }
-
-    msg_outtrans(IObuff, 0, false);
-    line_breakcheck();
-  }
-
-  if (buflist_data) {
-    ga_clear(&buflist);
-  }
-}
+// buflist_list() is implemented in Rust (see src/nvim-rs/buffer/src/list.rs).
+// The C declaration is in buffer.h as a static inline wrapper.
 
 
 /// Set the file name for "buf" to "ffname_arg", short file name to

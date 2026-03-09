@@ -9,6 +9,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
+#![allow(clippy::too_many_lines)]
 #![allow(dead_code)]
 
 use std::ffi::{c_char, c_int, c_void};
@@ -554,6 +555,267 @@ pub unsafe extern "C" fn rs_buflist_findname_exp(fname: *mut c_char) -> BufHandl
     let buf = rs_buflist_findname(ffname);
     xfree(ffname.cast());
     buf
+}
+
+// =============================================================================
+// buflist_list helpers (Phase 4)
+// =============================================================================
+
+// Additional accessors for buflist_list (not already declared above).
+extern "C" {
+    fn nvim_get_curwin() -> crate::WinHandle;
+    fn nvim_win_get_cursor_lnum(wp: crate::WinHandle) -> c_int;
+    fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
+    fn nvim_msg_ext_set_kind(kind: *const c_char);
+    fn nvim_eap_get_arg(eap: *const c_void) -> *const c_char;
+    fn nvim_eap_get_forceit(eap: *const c_void) -> bool;
+    fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_ml_mfp_null(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_b_p_ma(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_b_p_ro(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_terminal(buf: BufHandle) -> c_int;
+    fn nvim_buf_terminal_running(buf: BufHandle) -> c_int;
+    fn nvim_buf_channel_job_running(buf: BufHandle) -> c_int;
+    fn nvim_buf_is_changed(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_last_used(buf: BufHandle) -> i64;
+    fn rs_buf_spname(buf: BufHandle) -> *mut c_char;
+    fn nvim_home_replace(
+        buf: BufHandle,
+        src: *const c_char,
+        dst: *mut c_char,
+        dstlen: usize,
+        one: bool,
+    ) -> usize;
+    fn nvim_message_filtered(msg: *const c_char) -> c_int;
+    fn nvim_got_int() -> c_int;
+    fn nvim_msg_putchar(c: c_int);
+    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn nvim_msg_outtrans(s: *const c_char);
+    fn nvim_line_breakcheck();
+    fn nvim_undo_fmt_time(buf: *mut c_char, buflen: usize, last_used: i64);
+    fn nvim_get_iobuff() -> *mut c_char;
+    fn nvim_buflist_line_fmt() -> *const c_char;
+}
+
+// WinHandle is used via crate::WinHandle in extern "C" blocks above.
+
+// Buffer flags for buflist (correct values from buffer_defs.h).
+const BF_READERR_LIST: c_int = 0x40;
+
+// IOSIZE constant
+const IOSIZE_LIST: usize = 1025;
+// MAXPATHL constant
+const MAXPATHL: usize = 4096;
+
+/// Print the buffer list (`:ls` / `:buffers` command implementation).
+///
+/// # Safety
+///
+/// Calls external C functions. `eap` must be a valid `exarg_T*`.
+pub unsafe fn buflist_list_impl(eap: *const c_void) {
+    let eap_arg = nvim_eap_get_arg(eap);
+    let forceit = nvim_eap_get_forceit(eap);
+    let curbuf = nvim_get_curbuf();
+    let curwin = nvim_get_curwin();
+    let alt_fnum = nvim_curwin_get_alt_fnum();
+
+    // Check if 't' flag: sort by time
+    let sort_by_time = !eap_arg.is_null() && {
+        let arg = std::ffi::CStr::from_ptr(eap_arg);
+        arg.to_bytes().contains(&b't')
+    };
+
+    nvim_msg_ext_set_kind(c"list_cmd".as_ptr().cast::<c_char>());
+
+    // Collect buffers
+    let mut bufs: Vec<BufHandle> = Vec::new();
+    let mut buf = nvim_get_firstbuf();
+    while !buf.is_null() {
+        bufs.push(buf);
+        buf = nvim_buf_get_next(buf);
+    }
+
+    // Optionally sort by last used time
+    if sort_by_time {
+        bufs.sort_by(|a, b| {
+            let ta = nvim_buf_get_last_used(*a);
+            let tb = nvim_buf_get_last_used(*b);
+            // Same ordering as buf_time_compare: sort ascending by time
+            ta.cmp(&tb)
+        });
+    }
+
+    // Iterate
+    for buf in bufs {
+        if nvim_got_int() != 0 {
+            break;
+        }
+
+        let is_terminal = nvim_buf_get_terminal(buf) != 0;
+        let job_running = nvim_buf_terminal_running(buf) != 0;
+        let bl = nvim_buf_get_b_p_bl(buf) != 0;
+        let flags = nvim_buf_get_flags(buf);
+        let ml_mfp_null = nvim_buf_get_ml_mfp_null(buf) != 0;
+        let nwindows = nvim_buf_get_nwindows(buf);
+        let is_changed = nvim_buf_is_changed(buf) != 0;
+        let is_ro = nvim_buf_get_b_p_ro(buf) != 0;
+        let is_ma = nvim_buf_get_b_p_ma(buf) != 0;
+        let fnum = nvim_buf_get_fnum(buf);
+
+        // Check filter flags
+        let arg_bytes: &[u8] = if eap_arg.is_null() {
+            b""
+        } else {
+            std::ffi::CStr::from_ptr(eap_arg).to_bytes()
+        };
+
+        let has_arg = |c: u8| arg_bytes.contains(&c);
+
+        if (!bl && !forceit && !has_arg(b'u'))
+            || (has_arg(b'u') && bl)
+            || (has_arg(b'+') && ((flags & BF_READERR_LIST) != 0 || !is_changed))
+            || (has_arg(b'a') && (ml_mfp_null || nwindows == 0))
+            || (has_arg(b'h') && (ml_mfp_null || nwindows != 0))
+            || (has_arg(b'R') && (!is_terminal || !job_running))
+            || (has_arg(b'F') && (!is_terminal || job_running))
+            || (has_arg(b'-') && is_ma)
+            || (has_arg(b'=') && !is_ro)
+            || (has_arg(b'x') && (flags & BF_READERR_LIST) == 0)
+            || (has_arg(b'%') && buf != curbuf)
+            || (has_arg(b'#') && (buf == curbuf || alt_fnum != fnum))
+        {
+            continue;
+        }
+
+        // Get buffer name into NameBuff equivalent
+        let mut name_buf = [0u8; MAXPATHL];
+        let spname = rs_buf_spname(buf);
+        if spname.is_null() {
+            let b_fname = nvim_buf_get_b_fname(buf);
+            nvim_home_replace(
+                buf,
+                b_fname,
+                name_buf.as_mut_ptr().cast::<c_char>(),
+                MAXPATHL,
+                true,
+            );
+        } else {
+            let len = libc::strlen(spname).min(MAXPATHL - 1);
+            std::ptr::copy_nonoverlapping(spname.cast::<u8>(), name_buf.as_mut_ptr(), len);
+            name_buf[len] = 0;
+        }
+
+        if nvim_message_filtered(name_buf.as_ptr().cast::<c_char>()) != 0 {
+            continue;
+        }
+
+        // Determine display characters
+        let changed_char: u8 = if (flags & BF_READERR_LIST) != 0 {
+            b'x'
+        } else if is_changed {
+            b'+'
+        } else {
+            b' '
+        };
+        let ro_char: u8 = if is_terminal {
+            if nvim_buf_channel_job_running(buf) != 0 {
+                b'R'
+            } else {
+                b'F'
+            }
+        } else if !is_ma {
+            b'-'
+        } else if is_ro {
+            b'='
+        } else {
+            b' '
+        };
+        let load_char: u8 = if ml_mfp_null {
+            b' '
+        } else if nwindows == 0 {
+            b'h'
+        } else {
+            b'a'
+        };
+        let cur_char: u8 = if buf == curbuf {
+            b'%'
+        } else if alt_fnum == fnum {
+            b'#'
+        } else {
+            b' '
+        };
+        let bl_char: u8 = if bl { b' ' } else { b'u' };
+
+        // Build the formatted line into IObuff
+        let iobuff = nvim_get_iobuff();
+        let name_cstr = name_buf.as_ptr().cast::<c_char>();
+
+        // Format: "%3d%c%c%c%c%c \"%s\""
+        let n = libc::snprintf(
+            iobuff,
+            IOSIZE_LIST - 20,
+            c"%3d%c%c%c%c%c \"%s\"".as_ptr().cast::<c_char>(),
+            fnum,
+            c_int::from(bl_char),
+            c_int::from(cur_char),
+            c_int::from(load_char),
+            c_int::from(ro_char),
+            c_int::from(changed_char),
+            name_cstr,
+        );
+        let n = if n > 0 {
+            (n as usize).min(IOSIZE_LIST - 21)
+        } else {
+            0
+        };
+
+        // Pad to column 40
+        let displayed_width = nvim_vim_strsize(iobuff);
+        let mut pad = 40 - displayed_width;
+        let mut len = n;
+        while pad > 0 && len < IOSIZE_LIST - 19 {
+            *iobuff.add(len) = b' ' as c_char;
+            len += 1;
+            pad -= 1;
+        }
+
+        // Append time or line number
+        if has_arg(b't') && nvim_buf_get_last_used(buf) != 0 {
+            nvim_undo_fmt_time(
+                iobuff.add(len),
+                IOSIZE_LIST - len,
+                nvim_buf_get_last_used(buf),
+            );
+        } else {
+            let lnum: i64 = if buf == curbuf {
+                i64::from(nvim_win_get_cursor_lnum(curwin))
+            } else {
+                i64::from(nvim_buf_get_ml_line_count(buf))
+            };
+            let fmt = nvim_buflist_line_fmt();
+            libc::snprintf(iobuff.add(len), IOSIZE_LIST - len, fmt, lnum);
+        }
+
+        nvim_msg_putchar(c_int::from(b'\n'));
+        nvim_msg_outtrans(iobuff.cast::<c_char>());
+        nvim_line_breakcheck();
+    }
+}
+
+/// List the buffer list (`:ls` command).
+///
+/// # Safety
+///
+/// Must be called on the Neovim main thread with valid `eap`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_buflist_list(eap: *const c_void) {
+    buflist_list_impl(eap);
+}
+
+/// C export: `buflist_list`.
+#[unsafe(export_name = "buflist_list")]
+pub unsafe extern "C" fn buflist_list_export(eap: *const c_void) {
+    buflist_list_impl(eap);
 }
 
 // =============================================================================

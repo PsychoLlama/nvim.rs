@@ -118,6 +118,7 @@ extern int rs_buflist_findlnum(buf_T *buf);
 extern void rs_set_buflisted(int on);
 extern void rs_buf_clear_file(buf_T *buf);
 extern void rs_fileinfo(int fullname, bool shorthelp, bool dont_truncate);
+extern void rs_buflist_list(exarg_T *eap);
 extern void rs_buf_inc_changedtick(buf_T *buf);
 extern void rs_wipe_buffer(buf_T *buf, bool aucmd);
 extern void rs_buf_set_file_id(buf_T *buf);
@@ -159,6 +160,7 @@ static inline linenr_T buflist_findlnum(buf_T *buf) { return (linenr_T)rs_buflis
 static inline void set_buflisted(int on) { rs_set_buflisted(on); }
 static inline void buf_clear_file(buf_T *buf) { rs_buf_clear_file(buf); }
 static inline void fileinfo(int fullname, bool shorthelp, bool dont_truncate) { rs_fileinfo(fullname, shorthelp, dont_truncate); }
+static inline void buflist_list(exarg_T *eap) { rs_buflist_list(eap); }
 static inline void buf_inc_changedtick(buf_T *buf) { rs_buf_inc_changedtick(buf); }
 static inline void wipe_buffer(buf_T *buf, bool aucmd) { rs_wipe_buffer(buf, aucmd); }
 static inline void buf_set_file_id(buf_T *buf) { rs_buf_set_file_id(buf); }
