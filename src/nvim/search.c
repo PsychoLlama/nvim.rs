@@ -136,9 +136,6 @@ extern int rs_ins_compl_len(void);
 extern int rs_ins_compl_interrupted(void);
 extern char *rs_find_word_start(char *ptr);
 extern char *rs_find_word_end(char *ptr);
-extern int rs_pat_has_uppercase(const char *pat);
-extern int rs_ignorecase(const char *pat);
-extern int rs_ignorecase_opt(const char *pat, int ic, int scs);
 extern int rs_needs_previous_pattern(const char *pat);
 
 // Rust FFI declarations for pattern accessors
@@ -563,70 +560,6 @@ char *last_search_pattern(void)
 size_t last_search_pattern_len(void)
 {
   return spats[RE_SEARCH].patlen;
-}
-
-/// Return true when case should be ignored for search pattern "pat".
-/// Uses the 'ignorecase' and 'smartcase' options.
-int ignorecase(char *pat)
-{
-  return ignorecase_opt(pat, p_ic, p_scs);
-}
-
-/// As ignorecase() but pass the "ic" and "scs" flags.
-int ignorecase_opt(char *pat, int ic_in, int scs)
-{
-  int ic = ic_in;
-  if (ic && !no_smartcase && scs
-      && !(rs_ctrl_x_mode_not_default()
-           && curbuf->b_p_inf)) {
-    ic = !pat_has_uppercase(pat);
-  }
-  no_smartcase = false;
-
-  return ic;
-}
-
-/// Returns true if pattern `pat` has an uppercase character.
-bool pat_has_uppercase(char *pat)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char *p = pat;
-  magic_T magic_val = MAGIC_ON;
-
-  // get the magicness of the pattern
-  skip_regexp_ex(pat, NUL, rs_magic_isset(), NULL, NULL, &magic_val);
-
-  while (*p != NUL) {
-    const int l = utfc_ptr2len(p);
-
-    if (l > 1) {
-      if (mb_isupper(utf_ptr2char(p))) {
-        return true;
-      }
-      p += l;
-    } else if (*p == '\\' && magic_val <= MAGIC_ON) {
-      if (p[1] == '_' && p[2] != NUL) {  // skip "\_X"
-        p += 3;
-      } else if (p[1] == '%' && p[2] != NUL) {  // skip "\%X"
-        p += 3;
-      } else if (p[1] != NUL) {  // skip "\X"
-        p += 2;
-      } else {
-        p += 1;
-      }
-    } else if ((*p == '%' || *p == '_') && magic_val == MAGIC_ALL) {
-      if (p[1] != NUL) {  // skip "_X" and %X
-        p += 2;
-      } else {
-        p++;
-      }
-    } else if (mb_isupper((uint8_t)(*p))) {
-      return true;
-    } else {
-      p++;
-    }
-  }
-  return false;
 }
 
 

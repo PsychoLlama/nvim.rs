@@ -161,6 +161,10 @@ int check_linecomment(const char *line);
 void get_search_pattern(SearchPattern *pat);
 void get_substitute_pattern(SearchPattern *pat);
 void set_search_pattern(SearchPattern pat);
+// Phase 4: already-migrated logic functions
+int ignorecase(char *pat);
+int ignorecase_opt(char *pat, int ic_in, int scs);
+bool pat_has_uppercase(char *pat);
 // Phase 3: return-value wrappers
 const char *last_csearch(void);
 int last_csearch_forward(void);

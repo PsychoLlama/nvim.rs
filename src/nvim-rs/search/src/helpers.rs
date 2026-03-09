@@ -662,11 +662,20 @@ pub unsafe extern "C" fn rs_pat_has_uppercase(pat: *const std::ffi::c_char) -> c
     c_int::from(pat_has_uppercase(pat))
 }
 
+/// C ABI export for `pat_has_uppercase`, returning `bool` to match C callers.
+///
+/// # Safety
+/// `pat` must be a valid null-terminated C string.
+#[unsafe(export_name = "pat_has_uppercase")]
+pub unsafe extern "C" fn pat_has_uppercase_export(pat: *const std::ffi::c_char) -> bool {
+    pat_has_uppercase(pat)
+}
+
 /// FFI: Determine case sensitivity for pattern.
 ///
 /// # Safety
 /// `pat` must be a valid null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "ignorecase")]
 pub unsafe extern "C" fn rs_ignorecase(pat: *const std::ffi::c_char) -> c_int {
     c_int::from(ignorecase(pat))
 }
@@ -675,7 +684,7 @@ pub unsafe extern "C" fn rs_ignorecase(pat: *const std::ffi::c_char) -> c_int {
 ///
 /// # Safety
 /// `pat` must be a valid null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "ignorecase_opt")]
 pub unsafe extern "C" fn rs_ignorecase_opt(
     pat: *const std::ffi::c_char,
     ic: c_int,
