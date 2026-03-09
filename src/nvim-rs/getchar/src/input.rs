@@ -44,18 +44,18 @@ const NUL: u8 = 0;
 // C FFI Declarations
 // =============================================================================
 
+// Phase 4: old_mouse_* moved from C statics to Rust statics.
+// These are only used by rs_vungetc and rs_restore_old_char_state (both in Rust).
+static mut OLD_MOUSE_GRID: c_int = 0;
+static mut OLD_MOUSE_ROW: c_int = 0;
+static mut OLD_MOUSE_COL: c_int = 0;
+
 extern "C" {
     // Global state accessors for old_char (vungetc/can_get_old_char)
     fn nvim_get_old_char() -> c_int;
     fn nvim_set_old_char(val: c_int);
     fn nvim_get_old_mod_mask() -> c_int;
     fn nvim_set_old_mod_mask(val: c_int);
-    fn nvim_get_old_mouse_grid() -> c_int;
-    fn nvim_set_old_mouse_grid(val: c_int);
-    fn nvim_get_old_mouse_row() -> c_int;
-    fn nvim_set_old_mouse_row(val: c_int);
-    fn nvim_get_old_mouse_col() -> c_int;
-    fn nvim_set_old_mouse_col(val: c_int);
     #[allow(dead_code)]
     fn nvim_get_old_keystuffed() -> c_int;
     fn nvim_set_old_keystuffed(val: c_int);
@@ -409,9 +409,9 @@ pub unsafe extern "C" fn rs_can_get_old_char() -> c_int {
 pub unsafe extern "C" fn rs_vungetc(c: c_int) {
     nvim_set_old_char(c);
     nvim_set_old_mod_mask(nvim_get_mod_mask());
-    nvim_set_old_mouse_grid(nvim_get_mouse_grid());
-    nvim_set_old_mouse_row(nvim_get_mouse_row());
-    nvim_set_old_mouse_col(nvim_get_mouse_col());
+    OLD_MOUSE_GRID = nvim_get_mouse_grid();
+    OLD_MOUSE_ROW = nvim_get_mouse_row();
+    OLD_MOUSE_COL = nvim_get_mouse_col();
     nvim_set_old_keystuffed(nvim_get_keystuffed());
 }
 
@@ -443,9 +443,9 @@ pub unsafe extern "C" fn rs_clear_old_char() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_restore_old_char_state() {
     nvim_set_mod_mask(nvim_get_old_mod_mask());
-    nvim_set_mouse_grid(nvim_get_old_mouse_grid());
-    nvim_set_mouse_row(nvim_get_old_mouse_row());
-    nvim_set_mouse_col(nvim_get_old_mouse_col());
+    nvim_set_mouse_grid(OLD_MOUSE_GRID);
+    nvim_set_mouse_row(OLD_MOUSE_ROW);
+    nvim_set_mouse_col(OLD_MOUSE_COL);
     nvim_set_old_char(-1);
 }
 

@@ -326,9 +326,7 @@ static void save_typebuf(void)
 
 static int old_char = -1;   ///< character put back by vungetc()
 static int old_mod_mask;    ///< mod_mask for ungotten character
-static int old_mouse_grid;  ///< mouse_grid related to old_char
-static int old_mouse_row;   ///< mouse_row related to old_char
-static int old_mouse_col;   ///< mouse_col related to old_char
+// old_mouse_grid, old_mouse_row, old_mouse_col moved to Rust (input.rs) -- Phase 4
 static int old_KeyStuffed;  ///< whether old_char was stuffed
 
 static bool can_get_old_char(void)
@@ -2522,36 +2520,6 @@ void nvim_set_typeahead_char(int val)
   typeahead_char = val;
 }
 
-// Additional old_char state accessors for Rust vungetc/can_get_old_char
-int nvim_get_old_mouse_grid(void)
-{
-  return old_mouse_grid;
-}
-
-void nvim_set_old_mouse_grid(int val)
-{
-  old_mouse_grid = val;
-}
-
-int nvim_get_old_mouse_row(void)
-{
-  return old_mouse_row;
-}
-
-void nvim_set_old_mouse_row(int val)
-{
-  old_mouse_row = val;
-}
-
-int nvim_get_old_mouse_col(void)
-{
-  return old_mouse_col;
-}
-
-void nvim_set_old_mouse_col(int val)
-{
-  old_mouse_col = val;
-}
 
 int nvim_get_old_keystuffed(void)
 {
