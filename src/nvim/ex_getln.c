@@ -258,7 +258,6 @@ extern void rs_cmdline_set_hl_id(int hl_id);
 extern int rs_cmdline_get_xp_context(void);
 extern int rs_cmd_startcol(void);
 extern int rs_cmdline_charsize(int idx);
-extern int rs_cmd_screencol(int bytepos);
 extern int rs_cursor_screencol(void);
 extern int rs_is_password_mode(void);
 extern int rs_parse_search_delimiter(const char *pattern, size_t len);
@@ -3065,38 +3064,6 @@ static int cmd_startcol(void)
 {
   return ccline.cmdindent + ((ccline.cmdfirstc != NUL) ? 1 : 0);
 }
-
-/// Compute the column position for a byte position on the command line.
-int cmd_screencol(int bytepos)
-{
-  int m;  // maximum column
-  int col = cmd_startcol();
-  if (KeyTyped) {
-    m = cmdline_win ? cmdline_win->w_view_width * cmdline_win->w_view_height : Columns * Rows;
-    if (m < 0) {        // overflow, Columns or Rows at weird value
-      m = MAXCOL;
-    }
-  } else {
-    m = MAXCOL;
-  }
-
-  for (int i = 0; i < ccline.cmdlen && i < bytepos;
-       i += utfc_ptr2len(ccline.cmdbuff + i)) {
-    int c = cmdline_charsize(i);
-    // Count ">" for double-wide multi-byte char that doesn't fit.
-    correct_screencol(i, c, &col);
-
-    // If the cmdline doesn't fit, show cursor on last visible char.
-    // Don't move the cursor itself, so we can still append.
-    if ((col += c) >= m) {
-      col -= c;
-      break;
-    }
-  }
-  return col;
-}
-
-// correct_screencol() is implemented in Rust; declared at top of file.
 
 /// Get an Ex command line for the ":" command.
 ///

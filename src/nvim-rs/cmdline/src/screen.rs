@@ -307,10 +307,13 @@ pub unsafe extern "C" fn rs_cmdline_charsize(idx: c_int) -> c_int {
 
 /// Compute screen column for byte position.
 ///
+/// Direct C replacement for `cmd_screencol()`.
+///
 /// # Safety
 ///
 /// `bytepos` must be valid byte offset.
-#[unsafe(no_mangle)]
+#[must_use]
+#[export_name = "cmd_screencol"]
 pub unsafe extern "C" fn rs_cmd_screencol(bytepos: c_int) -> c_int {
     cmd_screencol(bytepos)
 }
