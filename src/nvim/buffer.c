@@ -3203,179 +3203,81 @@ int buflist_findpat(const char *pattern, const char *pattern_end, bool unlisted,
   return match;
 }
 
-typedef struct {
-  buf_T *buf;
-  char *match;
-} bufmatch_T;
+// Phase 5 accessor functions for ExpandBufnames.
 
-/// Compare functions for qsort() below, that compares b_last_used.
-static int buf_time_compare(const void *s1, const void *s2)
+/// Check if pattern should use fuzzy matching (accessor for Rust).
+int nvim_cmdline_fuzzy_complete(const char *pat)
 {
-  buf_T *buf1 = *(buf_T **)s1;
-  buf_T *buf2 = *(buf_T **)s2;
+  return cmdline_fuzzy_complete(pat) ? 1 : 0;
+}
 
-  if (buf1->b_last_used == buf2->b_last_used) {
+/// Compile a regex pattern for buffer name matching. Returns opaque handle or NULL.
+void *nvim_bufname_regex_compile(char *pat)
+{
+  regmatch_T *rmp = xmalloc(sizeof(regmatch_T));
+  rmp->regprog = vim_regcomp(pat, RE_MAGIC);
+  if (rmp->regprog == NULL) {
+    xfree(rmp);
+    return NULL;
+  }
+  return rmp;
+}
+
+/// Check if buffer matches the compiled regex. Returns matched name or NULL.
+const char *nvim_bufname_regex_match(void *handle, buf_T *buf, bool ignore_case)
+{
+  if (handle == NULL) {
+    return NULL;
+  }
+  return buflist_match((regmatch_T *)handle, buf, ignore_case);
+}
+
+/// Check if the compiled regex handle is still valid (regprog not NULL).
+int nvim_bufname_regex_valid(void *handle)
+{
+  if (handle == NULL) {
     return 0;
   }
-  return buf1->b_last_used > buf2->b_last_used ? -1 : 1;
+  return ((regmatch_T *)handle)->regprog != NULL ? 1 : 0;
 }
 
-/// Find all buffer names that match.
-/// For command line expansion of ":buf" and ":sbuf".
-///
-/// @return  OK if matches found, FAIL otherwise.
-int ExpandBufnames(char *pat, int *num_file, char ***file, int options)
+/// Free a compiled regex handle from nvim_bufname_regex_compile.
+void nvim_bufname_regex_free(void *handle)
 {
-  bufmatch_T *matches = NULL;
-  bool to_free = false;
-
-  *num_file = 0;                    // return values in case of FAIL
-  *file = NULL;
-
-  if ((options & BUF_DIFF_FILTER) && !curwin->w_p_diff) {
-    return FAIL;
+  if (handle == NULL) {
+    return;
   }
-
-  const bool fuzzy = cmdline_fuzzy_complete(pat);
-
-  char *patc = NULL;
-  fuzmatch_str_T *fuzmatch = NULL;
-  regmatch_T regmatch;
-
-  // Make a copy of "pat" and change "^" to "\(^\|[\/]\)" (if doing regular
-  // expression matching)
-  if (!fuzzy) {
-    if (*pat == '^' && pat[1] != NUL) {
-      patc = xstrdup(pat + 1);
-      to_free = true;
-    } else if (*pat == '^') {
-      patc = "";
-    } else {
-      patc = pat;
-    }
-    regmatch.regprog = vim_regcomp(patc, RE_MAGIC);
-  }
-
-  int count = 0;
-  int score = 0;
-  // round == 1: Count the matches.
-  // round == 2: Build the array to keep the matches.
-  for (int round = 1; round <= 2; round++) {
-    count = 0;
-    FOR_ALL_BUFFERS(buf) {
-      if (!buf->b_p_bl) {             // skip unlisted buffers
-        continue;
-      }
-      if (options & BUF_DIFF_FILTER) {
-        // Skip buffers not suitable for
-        // :diffget or :diffput completion.
-        if (buf == curbuf || !rs_diff_mode_buf(buf)) {
-          continue;
-        }
-      }
-
-      char *p = NULL;
-      if (!fuzzy) {
-        if (regmatch.regprog == NULL) {
-          // invalid pattern, possibly after recompiling
-          if (to_free) {
-            xfree(patc);
-          }
-          return FAIL;
-        }
-        p = buflist_match(&regmatch, buf, p_wic);
-      } else {
-        p = NULL;
-        // first try matching with the short file name
-        if ((score = fuzzy_match_str(buf->b_sfname, pat)) != FUZZY_SCORE_NONE) {
-          p = buf->b_sfname;
-        }
-        if (p == NULL) {
-          // next try matching with the full path file name
-          if ((score = fuzzy_match_str(buf->b_ffname, pat)) != FUZZY_SCORE_NONE) {
-            p = buf->b_ffname;
-          }
-        }
-      }
-
-      if (p == NULL) {
-        continue;
-      }
-
-      if (round == 1) {
-        count++;
-        continue;
-      }
-
-      if (options & WILD_HOME_REPLACE) {
-        p = home_replace_save(buf, p);
-      } else {
-        p = xstrdup(p);
-      }
-
-      if (!fuzzy) {
-        if (matches != NULL) {
-          matches[count].buf = buf;
-          matches[count].match = p;
-          count++;
-        } else {
-          (*file)[count++] = p;
-        }
-      } else {
-        fuzmatch[count].idx = count;
-        fuzmatch[count].str = p;
-        fuzmatch[count].score = score;
-        count++;
-      }
-    }
-    if (count == 0) {         // no match found, break here
-      break;
-    }
-    if (round == 1) {
-      if (!fuzzy) {
-        *file = xmalloc((size_t)count * sizeof(**file));
-        if (options & WILD_BUFLASTUSED) {
-          matches = xmalloc((size_t)count * sizeof(*matches));
-        }
-      } else {
-        fuzmatch = xmalloc((size_t)count * sizeof(fuzmatch_str_T));
-      }
-    }
-  }
-
-  if (!fuzzy) {
-    vim_regfree(regmatch.regprog);
-    if (to_free) {
-      xfree(patc);
-    }
-  }
-
-  if (!fuzzy) {
-    if (matches != NULL) {
-      if (count > 1) {
-        qsort(matches, (size_t)count, sizeof(bufmatch_T), buf_time_compare);
-      }
-
-      // if the current buffer is first in the list, place it at the end
-      if (matches[0].buf == curbuf) {
-        for (int i = 1; i < count; i++) {
-          (*file)[i - 1] = matches[i].match;
-        }
-        (*file)[count - 1] = matches[0].match;
-      } else {
-        for (int i = 0; i < count; i++) {
-          (*file)[i] = matches[i].match;
-        }
-      }
-      xfree(matches);
-    }
-  } else {
-    fuzzymatches_to_strmatches(fuzmatch, file, count, false);
-  }
-
-  *num_file = count;
-  return count == 0 ? FAIL : OK;
+  regmatch_T *rmp = handle;
+  vim_regfree(rmp->regprog);
+  xfree(rmp);
 }
+
+/// Get curwin->w_p_diff value (accessor for Rust).
+int nvim_curwin_get_p_diff(void)
+{
+  return curwin->w_p_diff ? 1 : 0;
+}
+
+/// Call home_replace_save() for a buffer (accessor for Rust).
+/// Caller is responsible for freeing the returned string with nvim_xfree().
+char *nvim_home_replace_save_buf(buf_T *buf, const char *src)
+{
+  return home_replace_save(buf, src);
+}
+
+/// Call fuzzymatches_to_strmatches() (accessor for Rust).
+/// fuzmatch is an array of count fuzmatch_str_T items (idx: int, str: char*, score: int).
+void nvim_fuzzymatches_to_strmatches(void *fuzmatch, char ***file, int count, bool escape)
+{
+  fuzzymatches_to_strmatches((fuzmatch_str_T *)fuzmatch, file, count, escape);
+}
+
+// ExpandBufnames() is implemented in Rust (see src/nvim-rs/buffer/src/expand.rs).
+// The C declaration is in buffer.h as a static inline wrapper.
+// buflist_match() and fname_match() are kept as static C helpers for buflist_findpat().
+// NOTE: int ExpandBufnames(char *pat, int *num_file, char ***file, int options)
+// was deleted here (152 lines) in Phase 5.
+// buf_time_compare() was deleted here (10 lines) in Phase 5.
 
 /// Check for a match on the file name for buffer "buf" with regprog "prog".
 /// Note that rmp->regprog may become NULL when switching regexp engine.
