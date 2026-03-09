@@ -9,8 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uv.h>
-
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/ascii_defs.h"
@@ -99,11 +97,6 @@ extern int rs_get_fileformat(buf_T *buf);
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
                                    list_stack_T **list_stack);
 
-
-// Functions now exported from Rust (via #[export_name]) but still called within ops.c
-extern int get_op_char(int optype);
-extern int get_extra_op_char(int optype);
-extern int op_on_lines(int op);
 
 /// handle a shift operation
 void op_shift(oparg_T *oap, bool curs_top, int amount)
@@ -1975,101 +1968,6 @@ void op_addsub(oparg_T *oap, linenr_T Prenum1, bool g_cmd)
 void clear_oparg(oparg_T *oap)
 {
   CLEAR_POINTER(oap);
-}
-
-/// Rust port of line_count_info (replaces the deleted static C version).
-extern varnumber_T nvim_rs_line_count_info(char *line, varnumber_T *wc, varnumber_T *cc,
-                                           varnumber_T limit, int eol_size);
-
-/// Struct matching Rust CpiLineCountResult (still needed by nvim_cpi_block_line_count)
-typedef struct {
-  int64_t byte_count;
-  int64_t word_count;
-  int64_t char_count;
-} CpiLineCountResult;
-
-
-/// Set up block visual mode: get virtual columns with sbr temporarily cleared.
-void nvim_cpi_setup_block_visual(int min_lnum, int min_col,
-                                 int max_lnum, int max_col,
-                                 int *out_start_vcol, int *out_end_vcol)
-{
-  pos_T min_pos = { .lnum = min_lnum, .col = min_col, .coladd = 0 };
-  pos_T max_pos = { .lnum = max_lnum, .col = max_col, .coladd = 0 };
-
-  char *const saved_sbr = p_sbr;
-  char *const saved_w_sbr = curwin->w_p_sbr;
-  p_sbr = empty_string_option;
-  curwin->w_p_sbr = empty_string_option;
-
-  oparg_T oparg;
-  memset(&oparg, 0, sizeof(oparg));
-  oparg.is_VIsual = true;
-  oparg.motion_type = kMTBlockWise;
-  oparg.op_type = OP_NOP;
-  getvcols(curwin, &min_pos, &max_pos, &oparg.start_vcol, &oparg.end_vcol);
-
-  p_sbr = saved_sbr;
-  curwin->w_p_sbr = saved_w_sbr;
-
-  *out_start_vcol = (int)oparg.start_vcol;
-  *out_end_vcol = (int)oparg.end_vcol;
-}
-
-/// Count info for a block visual line (using block_prep).
-void nvim_cpi_block_line_count(int lnum, int eol_size, void *out_ptr)
-{
-  CpiLineCountResult *out = (CpiLineCountResult *)out_ptr;
-  oparg_T oparg;
-  memset(&oparg, 0, sizeof(oparg));
-  oparg.is_VIsual = true;
-  oparg.motion_type = kMTBlockWise;
-  oparg.op_type = OP_NOP;
-
-  // We need the vcols from the current visual selection.
-  // Re-derive them from VIsual and cursor.
-  pos_T min_pos, max_pos;
-  if (lt(VIsual, curwin->w_cursor)) {
-    min_pos = VIsual;
-    max_pos = curwin->w_cursor;
-  } else {
-    min_pos = curwin->w_cursor;
-    max_pos = VIsual;
-  }
-  if (*p_sel == 'e' && max_pos.col > 0) {
-    max_pos.col--;
-  }
-
-  char *const saved_sbr = p_sbr;
-  char *const saved_w_sbr = curwin->w_p_sbr;
-  p_sbr = empty_string_option;
-  curwin->w_p_sbr = empty_string_option;
-  getvcols(curwin, &min_pos, &max_pos, &oparg.start_vcol, &oparg.end_vcol);
-  p_sbr = saved_sbr;
-  curwin->w_p_sbr = saved_w_sbr;
-
-  if (curwin->w_curswant == MAXCOL) {
-    oparg.end_vcol = MAXCOL;
-  }
-  if (oparg.end_vcol < oparg.start_vcol) {
-    oparg.end_vcol += oparg.start_vcol;
-    oparg.start_vcol = oparg.end_vcol - oparg.start_vcol;
-    oparg.end_vcol -= oparg.start_vcol;
-  }
-
-  struct block_def bd;
-  virtual_op = virtual_active(curwin);
-  block_prep(&oparg, &bd, (linenr_T)lnum, false);
-  virtual_op = kNone;
-
-  varnumber_T wc = 0, cc = 0;
-  varnumber_T bc = 0;
-  if (bd.textstart != NULL) {
-    bc = nvim_rs_line_count_info(bd.textstart, &wc, &cc, (varnumber_T)bd.textlen, eol_size);
-  }
-  out->byte_count = (int64_t)bc;
-  out->word_count = (int64_t)wc;
-  out->char_count = (int64_t)cc;
 }
 
 /// Handle indent and format operators and visual mode ":".
