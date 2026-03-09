@@ -136,8 +136,9 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
 
 // Rust FFI declarations from nvim-terminal crate
-extern int rs_terminal_running(void *term);
-extern int rs_terminal_buf(void *term);
+extern int rs_terminal_is_filter_char_flags(int c, int flags);
+extern int rs_terminal_row_to_linenr_term(void *term, int row);
+extern int rs_terminal_linenr_to_row_term(void *term, int linenr);
 
 // Result of rs_terminal_convert_key: VTerm key code and modifier mask.
 typedef struct {
@@ -298,7 +299,7 @@ static void schedule_termrequest(Terminal *term)
   term->pending.send = xmalloc(sizeof(StringBuilder));
   kv_init(*term->pending.send);
 
-  int line = row_to_linenr(term, term->cursor.row);
+  int line = rs_terminal_row_to_linenr_term(term, term->cursor.row);
   multiqueue_put(loop_get_events(&main_loop), emit_termrequest, term,
                  xmemdup(term->termrequest_buffer.items, term->termrequest_buffer.size),
                  (void *)(intptr_t)term->termrequest_buffer.size, term->pending.send,
@@ -860,14 +861,14 @@ static void terminal_check_cursor(void)
 {
   Terminal *term = curbuf->terminal;
   curwin->w_cursor.lnum = MIN(curbuf->b_ml.ml_line_count,
-                              row_to_linenr(term, term->cursor.row));
+                              rs_terminal_row_to_linenr_term(term, term->cursor.row));
   const linenr_T topline = MAX(curbuf->b_ml.ml_line_count - curwin->w_view_height + 1, 1);
   // Don't update topline if unchanged to avoid unnecessary redraws.
   if (topline != curwin->w_topline) {
     set_topline(curwin, topline);
   }
   // Nudge cursor when returning to normal-mode.
-  int off = is_focused(term) ? 0 : (curwin->w_p_rl ? 1 : -1);
+  int off = (State & MODE_TERMINAL && curbuf->terminal == term) ? 0 : (curwin->w_p_rl ? 1 : -1);
   coladvance(curwin, MAX(0, term->cursor.col + off));
 }
 
@@ -1092,38 +1093,6 @@ static void terminal_send(Terminal *term, const char *data, size_t size)
   term->opts.write_cb(data, size, term->opts.data);
 }
 
-static bool is_filter_char(int c)
-{
-  unsigned flag = 0;
-  switch (c) {
-  case 0x08:
-    flag = kOptTpfFlagBS;
-    break;
-  case 0x09:
-    flag = kOptTpfFlagHT;
-    break;
-  case 0x0A:
-  case 0x0D:
-    break;
-  case 0x0C:
-    flag = kOptTpfFlagFF;
-    break;
-  case 0x1b:
-    flag = kOptTpfFlagESC;
-    break;
-  case 0x7F:
-    flag = kOptTpfFlagDEL;
-    break;
-  default:
-    if (c < ' ') {
-      flag = kOptTpfFlagC0;
-    } else if (c >= 0x80 && c <= 0x9F) {
-      flag = kOptTpfFlagC1;
-    }
-  }
-  return !!(tpf_flags & flag);
-}
-
 void terminal_paste(int count, String *y_array, size_t y_size)
 {
   if (y_size == 0) {
@@ -1153,7 +1122,7 @@ void terminal_paste(int count, String *y_array, size_t y_size)
       while (*src != NUL) {
         len = (size_t)utf_ptr2len(src);
         int c = utf_ptr2char(src);
-        if (!is_filter_char(c)) {
+        if (!rs_terminal_is_filter_char_flags(c, (int)tpf_flags)) {
           memcpy(dst, src, len);
           dst += len;
         }
@@ -1234,7 +1203,7 @@ void terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *te
   vterm_get_size(term->vt, &height, &width);
   VTermState *state = vterm_obtain_state(term->vt);
   assert(linenr);
-  int row = linenr_to_row(term, linenr);
+  int row = rs_terminal_linenr_to_row_term(term, linenr);
   if (row >= height) {
     // Terminal height was decreased but the change wasn't reflected into the
     // buffer yet
@@ -1291,16 +1260,6 @@ void terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *te
 
     term_attrs[col] = attr_id;
   }
-}
-
-Buffer terminal_buf(const Terminal *term)
-{
-  return rs_terminal_buf((void *)term);
-}
-
-bool terminal_running(const Terminal *term)
-{
-  return rs_terminal_running((void *)term) != 0;
 }
 
 void terminal_notify_theme(Terminal *term, bool dark)
@@ -1816,7 +1775,7 @@ static void refresh_terminal(Terminal *term)
 static void refresh_cursor(Terminal *term, bool *cursor_visible)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (!is_focused(term)) {
+  if (!(State & MODE_TERMINAL && curbuf->terminal == term)) {
     return;
   }
   if (term->cursor.visible != *cursor_visible) {
@@ -2003,7 +1962,7 @@ static void refresh_screen(Terminal *term, buf_T *buf)
     return;
   }
 
-  for (int r = term->invalid_start, linenr = row_to_linenr(term, r);
+  for (int r = term->invalid_start, linenr = rs_terminal_row_to_linenr_term(term, r);
        r < term->invalid_end; r++, linenr++) {
     fetch_row(term, r, width);
 
@@ -2016,7 +1975,7 @@ static void refresh_screen(Terminal *term, buf_T *buf)
     }
   }
 
-  int change_start = row_to_linenr(term, term->invalid_start);
+  int change_start = rs_terminal_row_to_linenr_term(term, term->invalid_start);
   int change_end = change_start + changed;
   changed_lines(buf, change_start, 0, change_end, added, true);
   term->invalid_start = INT_MAX;
@@ -2029,7 +1988,7 @@ static void adjust_topline_cursor(Terminal *term, buf_T *buf, int added)
 
   FOR_ALL_TAB_WINDOWS(tp, wp) {
     if (wp->w_buffer == buf) {
-      if (wp == curwin && is_focused(term)) {
+      if (wp == curwin && (State & MODE_TERMINAL && curbuf->terminal == term)) {
         // Move window cursor to terminal cursor's position and "follow" output.
         terminal_check_cursor();
         continue;
@@ -2058,21 +2017,6 @@ static void adjust_topline_cursor(Terminal *term, buf_T *buf, int added)
       wip->wi_mark.mark.lnum = ml_end;
     }
   }
-}
-
-static int row_to_linenr(Terminal *term, int row)
-{
-  return row != INT_MAX ? row + (int)term->sb_current + 1 : INT_MAX;
-}
-
-static int linenr_to_row(Terminal *term, int linenr)
-{
-  return linenr - (int)term->sb_current - 1;
-}
-
-static bool is_focused(Terminal *term)
-{
-  return State & MODE_TERMINAL && curbuf->terminal == term;
 }
 
 static char *get_config_string(char *key)

@@ -313,6 +313,14 @@ pub extern "C" fn rs_terminal_running(term: TerminalHandle) -> c_int {
     c_int::from(terminal_running_impl(term))
 }
 
+/// Direct replacement for C `terminal_running`.
+///
+/// Returns C `bool` (`_Bool`) matching the C signature.
+#[export_name = "terminal_running"]
+pub extern "C" fn terminal_running_export(term: TerminalHandle) -> bool {
+    terminal_running_impl(term)
+}
+
 // =============================================================================
 // Terminal Buffer Functions
 // =============================================================================
@@ -322,6 +330,17 @@ pub extern "C" fn rs_terminal_running(term: TerminalHandle) -> c_int {
 /// This is the Rust equivalent of `terminal_buf()` in terminal.c.
 #[no_mangle]
 pub extern "C" fn rs_terminal_buf(term: TerminalHandle) -> c_int {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { term.as_ref().buf_handle }
+}
+
+/// Direct replacement for C `terminal_buf`.
+///
+/// Returns `Buffer` (i32) matching the C signature.
+#[export_name = "terminal_buf"]
+pub extern "C" fn terminal_buf_export(term: TerminalHandle) -> c_int {
     if term.is_null() {
         return 0;
     }

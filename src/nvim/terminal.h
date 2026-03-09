@@ -24,4 +24,9 @@ typedef struct {
   bool force_crlf;
 } TerminalOptions;
 
+// Functions provided by Rust (nvim-terminal crate via #[export_name]).
+// These symbols are defined in the Rust nvim-terminal crate.
+Buffer terminal_buf(const Terminal *term);
+bool terminal_running(const Terminal *term);
+
 #include "terminal.h.generated.h"
