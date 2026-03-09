@@ -50,15 +50,14 @@ impl TerminalHandle {
 }
 
 // =============================================================================
-// External C Functions
+// Internal Helpers
 // =============================================================================
 
-#[allow(dead_code)]
-extern "C" {
-    fn nvim_terminal_get_sb_current(term: TerminalHandle) -> usize;
-    fn nvim_terminal_get_sb_size(term: TerminalHandle) -> usize;
-    fn nvim_terminal_get_sb_pending(term: TerminalHandle) -> c_int;
-    fn nvim_terminal_get_sb_deleted(term: TerminalHandle) -> usize;
+/// Helper: get shared reference to CTerminal from a handle.
+/// # Safety: handle must be non-null and valid.
+#[inline]
+unsafe fn term_ref(term: TerminalHandle) -> &'static crate::CTerminal {
+    unsafe { &*(term.0 as *const crate::CTerminal) }
 }
 
 // =============================================================================
@@ -134,13 +133,12 @@ pub fn get_scrollback_state(term: TerminalHandle) -> ScrollbackState {
         return ScrollbackState::empty();
     }
 
-    unsafe {
-        ScrollbackState {
-            current: nvim_terminal_get_sb_current(term),
-            size: nvim_terminal_get_sb_size(term),
-            pending: nvim_terminal_get_sb_pending(term),
-            deleted: nvim_terminal_get_sb_deleted(term),
-        }
+    let t = unsafe { term_ref(term) };
+    ScrollbackState {
+        current: t.sb_current,
+        size: t.sb_size,
+        pending: t.sb_pending,
+        deleted: t.sb_deleted,
     }
 }
 
@@ -197,10 +195,8 @@ pub fn is_valid_scrollback_index(term: TerminalHandle, index: usize) -> bool {
         return false;
     }
 
-    unsafe {
-        let current = nvim_terminal_get_sb_current(term);
-        index < current
-    }
+    let current = unsafe { term_ref(term).sb_current };
+    index < current
 }
 
 /// Calculate the new scrollback size based on an option change.

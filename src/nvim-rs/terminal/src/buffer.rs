@@ -69,22 +69,11 @@ impl BufHandle {
 // External C Functions
 // =============================================================================
 
-#[allow(dead_code)]
-extern "C" {
-    // Terminal accessors
-    fn nvim_terminal_get_buf_handle(term: TerminalHandle) -> c_int;
-    fn nvim_terminal_get_closed(term: TerminalHandle) -> c_int;
-    fn nvim_terminal_get_sb_current(term: TerminalHandle) -> usize;
-    fn nvim_terminal_get_sb_size(term: TerminalHandle) -> usize;
-    fn nvim_terminal_get_invalid_start(term: TerminalHandle) -> c_int;
-    fn nvim_terminal_get_invalid_end(term: TerminalHandle) -> c_int;
-
-    // VTerm accessors
-    fn nvim_terminal_get_vterm(term: TerminalHandle) -> *mut c_void;
-    fn nvim_terminal_get_vterm_screen(term: TerminalHandle) -> *mut c_void;
-
-    // Buffer functions
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
+/// Helper: get shared reference to CTerminal from a handle.
+/// # Safety: handle must be non-null and valid.
+#[inline]
+unsafe fn term_ref(term: TerminalHandle) -> &'static crate::CTerminal {
+    unsafe { &*(term.as_ptr() as *const crate::CTerminal) }
 }
 
 // =============================================================================
@@ -142,16 +131,14 @@ pub fn get_terminal_buffer_state(term: TerminalHandle) -> TerminalBufferState {
     if term.is_null() {
         return TerminalBufferState::empty();
     }
-
-    unsafe {
-        TerminalBufferState {
-            buf_handle: nvim_terminal_get_buf_handle(term),
-            closed: nvim_terminal_get_closed(term) != 0,
-            sb_current: nvim_terminal_get_sb_current(term),
-            sb_size: nvim_terminal_get_sb_size(term),
-            invalid_start: nvim_terminal_get_invalid_start(term),
-            invalid_end: nvim_terminal_get_invalid_end(term),
-        }
+    let t = unsafe { term_ref(term) };
+    TerminalBufferState {
+        buf_handle: t.buf_handle,
+        closed: t.closed,
+        sb_current: t.sb_current,
+        sb_size: t.sb_size,
+        invalid_start: t.invalid_start,
+        invalid_end: t.invalid_end,
     }
 }
 
@@ -169,28 +156,17 @@ pub fn row_to_linenr(term: TerminalHandle, row: c_int) -> LinenrT {
     if term.is_null() {
         return 0;
     }
-
-    unsafe {
-        let sb_current = nvim_terminal_get_sb_current(term) as LinenrT;
-        row + sb_current + 1
-    }
+    let sb_current = unsafe { term_ref(term).sb_current } as LinenrT;
+    row + sb_current + 1
 }
 
 /// Convert a buffer line number to a terminal row number.
-///
-/// Buffer line numbers are 1-based and include scrollback.
-/// Terminal rows are 0-based from the top of the visible screen.
-///
-/// The formula is: row = linenr - sb_current - 1
 pub fn linenr_to_row(term: TerminalHandle, linenr: LinenrT) -> c_int {
     if term.is_null() {
         return 0;
     }
-
-    unsafe {
-        let sb_current = nvim_terminal_get_sb_current(term) as LinenrT;
-        linenr - sb_current - 1
-    }
+    let sb_current = unsafe { term_ref(term).sb_current } as LinenrT;
+    linenr - sb_current - 1
 }
 
 /// Check if a line number is in the scrollback region.
@@ -198,11 +174,8 @@ pub fn is_scrollback_line(term: TerminalHandle, linenr: LinenrT) -> bool {
     if term.is_null() || linenr < 1 {
         return false;
     }
-
-    unsafe {
-        let sb_current = nvim_terminal_get_sb_current(term) as LinenrT;
-        linenr <= sb_current
-    }
+    let sb_current = unsafe { term_ref(term).sb_current } as LinenrT;
+    linenr <= sb_current
 }
 
 /// Check if a line number is in the visible screen region.
@@ -210,11 +183,8 @@ pub fn is_screen_line(term: TerminalHandle, linenr: LinenrT) -> bool {
     if term.is_null() || linenr < 1 {
         return false;
     }
-
-    unsafe {
-        let sb_current = nvim_terminal_get_sb_current(term) as LinenrT;
-        linenr > sb_current
-    }
+    let sb_current = unsafe { term_ref(term).sb_current } as LinenrT;
+    linenr > sb_current
 }
 
 // =============================================================================
@@ -240,17 +210,13 @@ pub fn validate_terminal_buffer(term: TerminalHandle) -> BufferValidation {
     if term.is_null() {
         return BufferValidation::NullTerminal;
     }
-
-    unsafe {
-        if nvim_terminal_get_closed(term) != 0 {
-            return BufferValidation::Closed;
-        }
-
-        if nvim_terminal_get_buf_handle(term) <= 0 {
-            return BufferValidation::InvalidBuffer;
-        }
+    let t = unsafe { term_ref(term) };
+    if t.closed {
+        return BufferValidation::Closed;
     }
-
+    if t.buf_handle <= 0 {
+        return BufferValidation::InvalidBuffer;
+    }
     BufferValidation::Valid
 }
 
@@ -328,12 +294,10 @@ pub fn get_invalid_region(term: TerminalHandle) -> InvalidRegion {
     if term.is_null() {
         return InvalidRegion::none();
     }
-
-    unsafe {
-        InvalidRegion {
-            start_row: nvim_terminal_get_invalid_start(term),
-            end_row: nvim_terminal_get_invalid_end(term),
-        }
+    let t = unsafe { term_ref(term) };
+    InvalidRegion {
+        start_row: t.invalid_start,
+        end_row: t.invalid_end,
     }
 }
 

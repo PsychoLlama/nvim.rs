@@ -56,16 +56,14 @@ impl WinHandle {
 }
 
 // =============================================================================
-// External C Functions
+// Internal Helpers
 // =============================================================================
 
-#[allow(dead_code)]
-extern "C" {
-    fn nvim_terminal_get_closed(term: TerminalHandle) -> c_int;
-    fn nvim_terminal_get_cursor_visible(term: TerminalHandle) -> c_int;
-    fn nvim_terminal_get_cursor_shape(term: TerminalHandle) -> c_int;
-    fn nvim_terminal_get_cursor_blink(term: TerminalHandle) -> c_int;
-    fn nvim_terminal_get_forward_mouse(term: TerminalHandle) -> c_int;
+/// Helper: get shared reference to CTerminal from a handle.
+/// # Safety: handle must be non-null and valid.
+#[inline]
+const unsafe fn term_ref(term: TerminalHandle) -> &'static crate::CTerminal {
+    unsafe { &*(term.0 as *const crate::CTerminal) }
 }
 
 // =============================================================================
@@ -175,13 +173,11 @@ pub fn get_terminal_cursor(term: TerminalHandle) -> TerminalCursor {
         return TerminalCursor::default_state();
     }
 
-    unsafe {
-        let shape_raw = nvim_terminal_get_cursor_shape(term);
-        TerminalCursor {
-            visible: nvim_terminal_get_cursor_visible(term) != 0,
-            shape: CursorShape::from_raw(shape_raw).unwrap_or(CursorShape::Block),
-            blink: nvim_terminal_get_cursor_blink(term) != 0,
-        }
+    let t = unsafe { term_ref(term) };
+    TerminalCursor {
+        visible: t.cursor.visible,
+        shape: CursorShape::from_raw(t.cursor.shape).unwrap_or(CursorShape::Block),
+        blink: t.cursor.blink,
     }
 }
 
@@ -227,13 +223,12 @@ pub fn get_terminal_state(term: TerminalHandle, mode: TerminalMode) -> TerminalS
         return TerminalState::inactive();
     }
 
-    unsafe {
-        TerminalState {
-            mode,
-            closed: nvim_terminal_get_closed(term) != 0,
-            cursor: get_terminal_cursor(term),
-            forward_mouse: nvim_terminal_get_forward_mouse(term) != 0,
-        }
+    let t = unsafe { term_ref(term) };
+    TerminalState {
+        mode,
+        closed: t.closed,
+        cursor: get_terminal_cursor(term),
+        forward_mouse: t.forward_mouse,
     }
 }
 
@@ -288,10 +283,8 @@ pub fn validate_mode_transition(
         return ModeTransitionResult::NullTerminal;
     }
 
-    unsafe {
-        if nvim_terminal_get_closed(term) != 0 {
-            return ModeTransitionResult::Closed;
-        }
+    if unsafe { term_ref(term).closed } {
+        return ModeTransitionResult::Closed;
     }
 
     if from == to {

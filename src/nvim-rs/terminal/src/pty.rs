@@ -40,9 +40,11 @@ impl TerminalHandle {
 // External C Functions
 // =============================================================================
 
-#[allow(dead_code)]
-extern "C" {
-    fn nvim_terminal_get_closed(term: TerminalHandle) -> c_int;
+/// Helper: get shared reference to CTerminal from a handle.
+/// # Safety: handle must be non-null and valid.
+#[inline]
+unsafe fn term_ref(term: TerminalHandle) -> &'static crate::CTerminal {
+    unsafe { &*(term.0 as *const crate::CTerminal) }
 }
 
 // =============================================================================
@@ -323,8 +325,7 @@ pub fn is_pty_ready(term: TerminalHandle) -> bool {
     if term.is_null() {
         return false;
     }
-
-    unsafe { nvim_terminal_get_closed(term) == 0 }
+    !unsafe { term_ref(term).closed }
 }
 
 // =============================================================================
