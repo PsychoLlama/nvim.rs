@@ -3977,344 +3977,7 @@ static void ins_del(void)
   rs_ins_del();
 }
 
-/// Handle Backspace, delete-word and delete-line in Insert mode.
-///
-/// @param          c                 character that was typed
-/// @param          mode              backspace mode to use
-/// @param[in,out]  inserted_space_p  whether a space was the last
-//                                    character inserted
-///
-/// @return true when backspace was actually used.
-static bool ins_bs(int c, int mode, int *inserted_space_p)
-  FUNC_ATTR_NONNULL_ARG(3)
-{
-  int cc;
-  int temp = 0;                     // init for GCC
-  bool did_backspace = false;
-  bool call_fix_indent = false;
-
-  // can't delete anything in an empty file
-  // can't backup past first character in buffer
-  // can't backup past starting point unless 'backspace' > 1
-  // can backup to a previous line if 'backspace' == 0
-  if (buf_is_empty(curbuf)
-      || (!revins_on
-          && ((curwin->w_cursor.lnum == 1 && curwin->w_cursor.col == 0)
-              || (!can_bs(BS_START)
-                  && ((arrow_used && !bt_prompt(curbuf))
-                      || (curwin->w_cursor.lnum == Insstart_orig.lnum
-                          && curwin->w_cursor.col <= Insstart_orig.col)))
-              || (!can_bs(BS_INDENT) && !arrow_used && ai_col > 0
-                  && curwin->w_cursor.col <= ai_col)
-              || (!can_bs(BS_EOL) && curwin->w_cursor.col == 0)))) {
-    vim_beep(kOptBoFlagBackspace);
-    return false;
-  }
-
-  if (stop_arrow() == FAIL) {
-    return false;
-  }
-  bool in_indent = inindent(0);
-  if (in_indent) {
-    can_cindent = false;
-  }
-  end_comment_pending = NUL;  // After BS, don't auto-end comment
-  if (revins_on) {            // put cursor after last inserted char
-    inc_cursor();
-  }
-  // Virtualedit:
-  //    BACKSPACE_CHAR eats a virtual space
-  //    BACKSPACE_WORD eats all coladd
-  //    BACKSPACE_LINE eats all coladd and keeps going
-  if (curwin->w_cursor.coladd > 0) {
-    if (mode == BACKSPACE_CHAR) {
-      curwin->w_cursor.coladd--;
-      return true;
-    }
-    if (mode == BACKSPACE_WORD) {
-      curwin->w_cursor.coladd = 0;
-      return true;
-    }
-    curwin->w_cursor.coladd = 0;
-  }
-
-  // Delete newline!
-  if (curwin->w_cursor.col == 0) {
-    linenr_T lnum = Insstart.lnum;
-    if (curwin->w_cursor.lnum == lnum || revins_on) {
-      if (u_save((linenr_T)(curwin->w_cursor.lnum - 2),
-                 (linenr_T)(curwin->w_cursor.lnum + 1)) == FAIL) {
-        return false;
-      }
-      Insstart.lnum--;
-      Insstart.col = ml_get_len(Insstart.lnum);
-    }
-    // In replace mode:
-    // cc < 0: NL was inserted, delete it
-    // cc >= 0: NL was replaced, put original characters back
-    cc = -1;
-    if (State & REPLACE_FLAG) {
-      cc = replace_pop_if_nul();  // returns -1 if NL was inserted
-    }
-    // In replace mode, in the line we started replacing, we only move the
-    // cursor.
-    if ((State & REPLACE_FLAG) && curwin->w_cursor.lnum <= lnum) {
-      dec_cursor();
-    } else {
-      if (!(State & VREPLACE_FLAG)
-          || curwin->w_cursor.lnum > orig_line_count) {
-        temp = gchar_cursor();          // remember current char
-        curwin->w_cursor.lnum--;
-
-        // When "aw" is in 'formatoptions' we must delete the space at
-        // the end of the line, otherwise the line will be broken
-        // again when auto-formatting.
-        if (has_format_option(FO_AUTO)
-            && has_format_option(FO_WHITE_PAR)) {
-          char *ptr = ml_get_buf_mut(curbuf, curwin->w_cursor.lnum);
-          int len = get_cursor_line_len();
-          if (len > 0 && ptr[len - 1] == ' ') {
-            ptr[len - 1] = NUL;
-            curbuf->b_ml.ml_line_len--;
-          }
-        }
-
-        do_join(2, false, false, false, false);
-        if (temp == NUL && gchar_cursor() != NUL) {
-          inc_cursor();
-        }
-      } else {
-        dec_cursor();
-      }
-
-      // In MODE_REPLACE mode we have to put back the text that was
-      // replaced by the NL. On the replace stack is first a
-      // NUL-terminated sequence of characters that were deleted and then
-      // the characters that NL replaced.
-      if (State & REPLACE_FLAG) {
-        // Do the next ins_char() in MODE_NORMAL state, to
-        // prevent ins_char() from replacing characters and
-        // avoiding showmatch().
-        int oldState = State;
-        State = MODE_NORMAL;
-        // restore characters (blanks) deleted after cursor
-        while (cc > 0) {
-          colnr_T save_col = curwin->w_cursor.col;
-          mb_replace_pop_ins();
-          curwin->w_cursor.col = save_col;
-          cc = replace_pop_if_nul();
-        }
-        // restore the characters that NL replaced
-        replace_pop_ins();
-        State = oldState;
-      }
-    }
-    did_ai = false;
-  } else {
-    // Delete character(s) before the cursor.
-    if (revins_on) {            // put cursor on last inserted char
-      dec_cursor();
-    }
-    colnr_T mincol = 0;
-    // keep indent
-    if (mode == BACKSPACE_LINE
-        && (curbuf->b_p_ai || cindent_on())
-        && !revins_on) {
-      colnr_T save_col = curwin->w_cursor.col;
-      beginline(BL_WHITE);
-      if (curwin->w_cursor.col < save_col) {
-        mincol = curwin->w_cursor.col;
-        // should now fix the indent to match with the previous line
-        call_fix_indent = true;
-      }
-      curwin->w_cursor.col = save_col;
-    }
-
-    // Handle deleting one 'shiftwidth' or 'softtabstop'.
-    if (mode == BACKSPACE_CHAR
-        && ((p_sta && in_indent)
-            || ((get_sts_value() != 0 || tabstop_count(curbuf->b_p_vsts_array))
-                && curwin->w_cursor.col > 0
-                && (*(get_cursor_pos_ptr() - 1) == TAB
-                    || (*(get_cursor_pos_ptr() - 1) == ' '
-                        && (!*inserted_space_p || arrow_used)))))) {
-      *inserted_space_p = false;
-
-      bool const use_ts = !curwin->w_p_list || curwin->w_p_lcs_chars.tab1;
-      char *const line = get_cursor_line_ptr();
-      char *const cursor_ptr = line + curwin->w_cursor.col;
-
-      colnr_T vcol = 0;
-      colnr_T space_vcol = 0;
-      StrCharInfo sci = utf_ptr2StrCharInfo(line);
-      StrCharInfo space_sci = sci;
-      bool prev_space = false;
-
-      // Compute virtual column of cursor position, and find the last
-      // whitespace before cursor that is preceded by non-whitespace.
-      // Use charsize_nowrap() so that virtual text and wrapping are ignored.
-      while (sci.ptr < cursor_ptr) {
-        bool cur_space = ascii_iswhite(sci.chr.value);
-        if (!prev_space && cur_space) {
-          space_sci = sci;
-          space_vcol = vcol;
-        }
-        vcol += charsize_nowrap(curbuf, sci.ptr, use_ts, vcol, sci.chr.value);
-        sci = utfc_next(sci);
-        prev_space = cur_space;
-      }
-
-      // Compute the virtual column where we want to be.
-      colnr_T want_vcol = vcol > 0 ? vcol - 1 : 0;
-      if (p_sta && in_indent) {
-        want_vcol -= want_vcol % get_sw_value(curbuf);
-      } else {
-        want_vcol = tabstop_start(want_vcol, get_sts_value(), curbuf->b_p_vsts_array);
-      }
-
-      // Find the position to stop backspacing.
-      // Use charsize_nowrap() so that virtual text and wrapping are ignored.
-      while (true) {
-        int size = charsize_nowrap(curbuf, space_sci.ptr, use_ts, space_vcol, space_sci.chr.value);
-        if (space_vcol + size > want_vcol) {
-          break;
-        }
-        space_vcol += size;
-        space_sci = utfc_next(space_sci);
-      }
-      colnr_T const want_col = (int)(space_sci.ptr - line);
-
-      // Delete characters until we are at or before want_col.
-      while (curwin->w_cursor.col > want_col) {
-        dec_cursor();
-        if (State & REPLACE_FLAG) {
-          // Don't delete characters before the insert point when in Replace mode.
-          if (curwin->w_cursor.lnum != Insstart.lnum
-              || curwin->w_cursor.col >= Insstart.col) {
-            replace_do_bs(-1);
-          }
-        } else {
-          del_char(false);
-        }
-      }
-
-      // Insert extra spaces until we are at want_vcol.
-      for (; space_vcol < want_vcol; space_vcol++) {
-        // Remember the first char we inserted.
-        if (curwin->w_cursor.lnum == Insstart_orig.lnum
-            && curwin->w_cursor.col < Insstart_orig.col) {
-          Insstart_orig.col = curwin->w_cursor.col;
-        }
-
-        if (State & VREPLACE_FLAG) {
-          ins_char(' ');
-        } else {
-          ins_str(S_LEN(" "));
-          if ((State & REPLACE_FLAG)) {
-            replace_push_nul();
-          }
-        }
-      }
-    } else {
-      // Delete up to starting point, start of line or previous word.
-
-      int cclass = mb_get_class(get_cursor_pos_ptr());
-      do {
-        if (!revins_on) {   // put cursor on char to be deleted
-          dec_cursor();
-        }
-        cc = gchar_cursor();
-        // look multi-byte character class
-        int prev_cclass = cclass;
-        cclass = mb_get_class(get_cursor_pos_ptr());
-        if (mode == BACKSPACE_WORD && !ascii_isspace(cc)) {   // start of word?
-          mode = BACKSPACE_WORD_NOT_SPACE;
-          temp = vim_iswordc(cc);
-        } else if (mode == BACKSPACE_WORD_NOT_SPACE
-                   && ((ascii_isspace(cc) || vim_iswordc(cc) != temp)
-                       || prev_cclass != cclass)) {   // end of word?
-          if (!revins_on) {
-            inc_cursor();
-          } else if (State & REPLACE_FLAG) {
-            dec_cursor();
-          }
-          break;
-        }
-        if (State & REPLACE_FLAG) {
-          replace_do_bs(-1);
-        } else {
-          bool has_composing = false;
-          if (p_deco) {
-            char *p0 = get_cursor_pos_ptr();
-            has_composing = utf_composinglike(p0, p0 + utf_ptr2len(p0), NULL);
-          }
-          del_char(false);
-          // If there are combining characters and 'delcombine' is set
-          // move the cursor back.  Don't back up before the base character.
-          if (has_composing) {
-            inc_cursor();
-          }
-          if (revins_chars) {
-            revins_chars--;
-            revins_legal++;
-          }
-          if (revins_on && gchar_cursor() == NUL) {
-            break;
-          }
-        }
-        // Just a single backspace?:
-        if (mode == BACKSPACE_CHAR) {
-          break;
-        }
-      } while (revins_on
-               || (curwin->w_cursor.col > mincol
-                   && (can_bs(BS_NOSTOP)
-                       || (curwin->w_cursor.lnum != Insstart_orig.lnum
-                           || curwin->w_cursor.col != Insstart_orig.col))));
-    }
-    did_backspace = true;
-  }
-  did_si = false;
-  can_si = false;
-  can_si_back = false;
-  if (curwin->w_cursor.col <= 1) {
-    did_ai = false;
-  }
-
-  if (call_fix_indent) {
-    fix_indent();
-  }
-
-  // It's a little strange to put backspaces into the redo
-  // buffer, but it makes auto-indent a lot easier to deal
-  // with.
-  AppendCharToRedobuff(c);
-
-  // If deleted before the insertion point, adjust it
-  if (curwin->w_cursor.lnum == Insstart_orig.lnum
-      && curwin->w_cursor.col < Insstart_orig.col) {
-    Insstart_orig.col = curwin->w_cursor.col;
-  }
-
-  // vi behaviour: the cursor moves backward but the character that
-  //               was there remains visible
-  // Vim behaviour: the cursor moves backward and the character that
-  //                was there is erased from the screen.
-  // We can emulate the vi behaviour by pretending there is a dollar
-  // displayed even when there isn't.
-  //  --pkv Sun Jan 19 01:56:40 EST 2003
-  if (vim_strchr(p_cpo, CPO_BACKSPACE) != NULL && dollar_vcol == -1) {
-    dollar_vcol = curwin->w_virtcol;
-  }
-
-  // When deleting a char the cursor line must never be in a closed fold.
-  // E.g., when 'foldmethod' is indent and deleting the first non-white
-  // char before a Tab.
-  if (did_backspace) {
-    rs_foldOpenCursor();
-  }
-  return did_backspace;
-}
+// ins_bs is now implemented in Rust (src/nvim-rs/edit/src/backspace.rs).
 
 static void ins_left(void)
 {
@@ -4657,3 +4320,212 @@ bool nvim_edit_ins_tab_replace_spaces(bool p_sta_val, bool ind)
 // Static asserts for Phase 1 (ins_tab)
 _Static_assert(MAXCOL == 0x7fffffff, "MAXCOL mismatch");
 _Static_assert(ABBR_OFF == 0x100, "ABBR_OFF mismatch (Phase1)");
+
+// =============================================================================
+// Phase 2: ins_bs accessors and helpers
+// =============================================================================
+
+// Static asserts for Phase 2 constants
+_Static_assert(BACKSPACE_CHAR == 1, "BACKSPACE_CHAR mismatch");
+_Static_assert(BACKSPACE_WORD == 2, "BACKSPACE_WORD mismatch");
+_Static_assert(BACKSPACE_WORD_NOT_SPACE == 3, "BACKSPACE_WORD_NOT_SPACE mismatch");
+_Static_assert(BACKSPACE_LINE == 4, "BACKSPACE_LINE mismatch");
+_Static_assert(kOptBoFlagBackspace == 0x02, "kOptBoFlagBackspace mismatch (Phase2)");
+_Static_assert(FO_AUTO == 'a', "FO_AUTO mismatch");
+_Static_assert(FO_WHITE_PAR == 'w', "FO_WHITE_PAR mismatch");
+
+/// Check if backspace mode is allowed (accessor for Rust).
+int nvim_edit_can_bs(int what)
+{
+  return can_bs((char)what) ? 1 : 0;
+}
+
+/// Increment cursor position (accessor for Rust).
+void nvim_edit_inc_cursor(void)
+{
+  inc_cursor();
+}
+
+/// Decrement cursor position (accessor for Rust).
+void nvim_edit_dec_cursor(void)
+{
+  dec_cursor();
+}
+
+// nvim_edit_get_cursor_coladd and nvim_edit_set_cursor_coladd are defined
+// in the Phase 3 accessors section (lines ~701-710).
+
+/// Call u_save(lnum1, lnum2) (accessor for Rust).
+int nvim_edit_u_save(int lnum1, int lnum2)
+{
+  return u_save((linenr_T)lnum1, (linenr_T)lnum2);
+}
+
+/// Get ml_get_len(lnum) (accessor for Rust).
+int nvim_edit_ml_get_len(int lnum)
+{
+  return ml_get_len((linenr_T)lnum);
+}
+
+/// Get cursor line length (accessor for Rust).
+int nvim_edit_get_cursor_line_len(void)
+{
+  return get_cursor_line_len();
+}
+
+/// Get has_format_option(c) (accessor for Rust).
+int nvim_edit_has_format_option(int c)
+{
+  return has_format_option((char)c) ? 1 : 0;
+}
+
+/// Trim last char of previous line if space (FO_WHITE_PAR helper).
+void nvim_edit_trim_eol_space(void)
+{
+  char *ptr = ml_get_buf_mut(curbuf, curwin->w_cursor.lnum);
+  int len = get_cursor_line_len();
+  if (len > 0 && ptr[len - 1] == ' ') {
+    ptr[len - 1] = NUL;
+    curbuf->b_ml.ml_line_len--;
+  }
+}
+
+/// Call do_join(2, false, false, false, false) (accessor for Rust).
+void nvim_edit_do_join_simple(void)
+{
+  do_join(2, false, false, false, false);
+}
+
+/// Get mb_get_class(get_cursor_pos_ptr()) (accessor for Rust).
+int nvim_edit_mb_get_class_cursor(void)
+{
+  return mb_get_class(get_cursor_pos_ptr());
+}
+
+/// Get vim_iswordc(c) (accessor for Rust).
+int nvim_edit_vim_iswordc(int c)
+{
+  return vim_iswordc((unsigned)c) ? 1 : 0;
+}
+
+/// Check utf_composinglike at cursor (accessor for Rust).
+int nvim_edit_cursor_has_composing(void)
+{
+  if (!p_deco) {
+    return 0;
+  }
+  char *p0 = get_cursor_pos_ptr();
+  return utf_composinglike(p0, p0 + utf_ptr2len(p0), NULL) ? 1 : 0;
+}
+
+/// Call fix_indent() (accessor for Rust).
+void nvim_edit_fix_indent(void)
+{
+  fix_indent();
+}
+
+/// Check if p_cpo contains CPO_BACKSPACE (accessor for Rust).
+int nvim_edit_p_cpo_has_backspace(void)
+{
+  return vim_strchr(p_cpo, CPO_BACKSPACE) != NULL ? 1 : 0;
+}
+
+/// Get cindent_on() (accessor for Rust).
+int nvim_edit_cindent_on(void)
+{
+  return cindent_on() ? 1 : 0;
+}
+
+/// Handle softtabstop-aware backspace alignment (helper for Rust ins_bs).
+///
+/// Handles the BACKSPACE_CHAR case when softtabstop or smarttab is active:
+/// finds the target column and deletes/inserts spaces to align properly.
+/// Returns true if the softtabstop case was handled.
+bool nvim_edit_ins_bs_softtabstop(int *inserted_space_p, bool in_indent)
+{
+  bool const use_ts = !curwin->w_p_list || curwin->w_p_lcs_chars.tab1;
+  char *const line = get_cursor_line_ptr();
+  char *const cursor_ptr = line + curwin->w_cursor.col;
+
+  colnr_T vcol = 0;
+  colnr_T space_vcol = 0;
+  StrCharInfo sci = utf_ptr2StrCharInfo(line);
+  StrCharInfo space_sci = sci;
+  bool prev_space = false;
+
+  // Compute virtual column of cursor position.
+  while (sci.ptr < cursor_ptr) {
+    bool cur_space = ascii_iswhite(sci.chr.value);
+    if (!prev_space && cur_space) {
+      space_sci = sci;
+      space_vcol = vcol;
+    }
+    vcol += charsize_nowrap(curbuf, sci.ptr, use_ts, vcol, sci.chr.value);
+    sci = utfc_next(sci);
+    prev_space = cur_space;
+  }
+
+  // Compute the virtual column where we want to be.
+  colnr_T want_vcol = vcol > 0 ? vcol - 1 : 0;
+  if (p_sta && in_indent) {
+    want_vcol -= want_vcol % get_sw_value(curbuf);
+  } else {
+    want_vcol = tabstop_start(want_vcol, get_sts_value(), curbuf->b_p_vsts_array);
+  }
+
+  // Find stop position.
+  while (true) {
+    int size = charsize_nowrap(curbuf, space_sci.ptr, use_ts, space_vcol, space_sci.chr.value);
+    if (space_vcol + size > want_vcol) {
+      break;
+    }
+    space_vcol += size;
+    space_sci = utfc_next(space_sci);
+  }
+  colnr_T const want_col = (int)(space_sci.ptr - line);
+
+  // Delete characters until we are at or before want_col.
+  while (curwin->w_cursor.col > want_col) {
+    dec_cursor();
+    if (State & REPLACE_FLAG) {
+      if (curwin->w_cursor.lnum != Insstart.lnum
+          || curwin->w_cursor.col >= Insstart.col) {
+        replace_do_bs(-1);
+      }
+    } else {
+      del_char(false);
+    }
+  }
+
+  // Insert extra spaces until we are at want_vcol.
+  for (; space_vcol < want_vcol; space_vcol++) {
+    if (curwin->w_cursor.lnum == Insstart_orig.lnum
+        && curwin->w_cursor.col < Insstart_orig.col) {
+      Insstart_orig.col = curwin->w_cursor.col;
+    }
+    if (State & VREPLACE_FLAG) {
+      ins_char(' ');
+    } else {
+      ins_str(S_LEN(" "));
+      if (State & REPLACE_FLAG) {
+        replace_push_nul();
+      }
+    }
+  }
+  return true;
+}
+
+/// Check if softtabstop-aware backspace should be used (accessor for Rust).
+/// Returns true when the BACKSPACE_CHAR softtabstop path is taken.
+bool nvim_edit_ins_bs_check_sts(int *inserted_space_p, bool in_indent)
+{
+  if (curwin->w_cursor.col == 0) {
+    return false;
+  }
+  return (p_sta && in_indent)
+    || ((get_sts_value() != 0 || tabstop_count(curbuf->b_p_vsts_array))
+        && curwin->w_cursor.col > 0
+        && (*(get_cursor_pos_ptr() - 1) == TAB
+            || (*(get_cursor_pos_ptr() - 1) == ' '
+                && (!*inserted_space_p || arrow_used))));
+}

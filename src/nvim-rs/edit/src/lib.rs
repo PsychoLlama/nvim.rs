@@ -7,6 +7,7 @@
 #![allow(unsafe_code)] // FFI requires unsafe
 
 pub mod abbrev;
+pub mod backspace;
 pub mod completion;
 pub mod editing;
 pub mod helpers;

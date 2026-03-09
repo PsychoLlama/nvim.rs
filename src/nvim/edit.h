@@ -41,3 +41,5 @@ enum {
 bool ins_tab(void);
 // ins_eol: handles CR/NL insertion (editing.rs, export_name = "ins_eol")
 bool ins_eol(int c);
+// ins_bs: handles backspace/delete in insert mode (backspace.rs)
+bool ins_bs(int c, int mode, int *inserted_space_p);
