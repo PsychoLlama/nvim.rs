@@ -367,17 +367,23 @@ typedef struct {
   uint16_t count;
 } RsSalHeader;
 
+// Parsed SAL item from rs_parse_sal_item().
+// The 'from' buffer holds lead\0[oneof\0]rules\0 consecutively.
+// oneof_offset == 0xFFFF means no oneof field.
 typedef struct {
-  uint8_t from[256];
-  uint8_t from_len;
-  uint8_t to[256];
-  uint8_t to_len;
+  uint8_t from[512];      // combined lead+NUL+oneof+NUL+rules+NUL buffer
+  uint16_t from_used;     // total bytes used in from (including NULs)
+  uint16_t lead_offset;   // always 0; lead starts at from[0]
+  uint16_t lead_len;      // length of lead (excluding NUL)
+  uint16_t oneof_offset;  // offset of oneof in from (0xFFFF = absent)
+  uint16_t rules_offset;  // offset of rules in from
+  uint8_t to[256];        // to string (null-terminated)
+  uint16_t to_len;        // length of to (0 if none/empty)
+  bool has_to;            // whether 'to' is present
 } RsSalItem;
 
 extern int rs_parse_sal_header(const uint8_t *buf, size_t buf_len, RsSalHeader *header_out,
                                size_t *consumed_out);
-extern int rs_parse_sal_count(const uint8_t *buf, size_t buf_len, uint16_t *count_out,
-                              size_t *consumed_out);
 extern int rs_parse_sal_item(const uint8_t *buf, size_t buf_len, RsSalItem *item_out,
                              size_t *consumed_out);
 
@@ -407,6 +413,24 @@ typedef struct {
 
 extern int rs_parse_compound_header(const uint8_t *buf, size_t buf_len, RsCompoundHeader *header_out,
                                     size_t *consumed_out);
+
+// Compound flags pattern builder result from rs_parse_compound_flags().
+// MAXWLEN == 254 from spell_defs.h.
+#define RS_MAXWLEN 254
+typedef struct {
+  uint8_t pattern[4096];         // regex pattern "^\(...\)$" (null-terminated)
+  uint32_t pattern_len;          // length of pattern (excluding NUL)
+  uint8_t startflags[RS_MAXWLEN + 1];  // flags that can start a compound word
+  uint32_t startflags_len;
+  uint8_t allflags[RS_MAXWLEN + 1];    // all non-special flags seen
+  uint32_t allflags_len;
+  uint8_t comprules[RS_MAXWLEN + 1];   // original rules bytes (if no wildcards)
+  uint32_t comprules_len;
+  bool comprules_valid;          // false if a wildcard was encountered
+} RsCompoundFlagsResult;
+
+extern int rs_parse_compound_flags(const uint8_t *buf, size_t buf_len,
+                                   RsCompoundFlagsResult *result_out);
 
 // Phase B2: Tree reading functions
 extern int rs_read_tree(const uint8_t *buf, size_t buf_len, uint8_t *byts, int32_t *idxs,
@@ -880,11 +904,11 @@ slang_T *spell_load_file(char *fname, char *lang, slang_T *old_lp, bool silent)
       break;
 
     case SN_SAL:
-      res = read_sal_section(fd, lp);
+      res = read_sal_section(fd, lp, len);
       break;
 
     case SN_SOFO:
-      res = read_sofo_section(fd, lp);
+      res = read_sofo_section(fd, lp, len);
       break;
 
     case SN_MAP:
@@ -1382,19 +1406,25 @@ static int read_rep_section(FILE *fd, garray_T *gap, int16_t *first)
 
 // Read SN_SAL section: <salflags> <salcount> <sal> ...
 // Return SP_*ERROR flags.
-// Uses Rust for parsing SAL header.
-static int read_sal_section(FILE *fd, slang_T *slang)
+// Uses Rust (rs_parse_sal_header, rs_parse_sal_item) to parse binary data.
+static int read_sal_section(FILE *fd, slang_T *slang, int len)
 {
   slang->sl_sofo = false;
 
-  // Read SAL header: <salflags> <salcount> (3 bytes)
-  uint8_t header_buf[3];
-  SPELL_READ_BYTES((char *)header_buf, 3, fd,; );
+  if (len < 3) {
+    return SP_FORMERROR;
+  }
 
+  // Read entire section into buffer, then parse with Rust.
+  uint8_t *section_buf = xmalloc((size_t)len);
+  SPELL_READ_BYTES((char *)section_buf, (size_t)len, fd, xfree(section_buf));
+
+  // Parse SAL header: <salflags> <salcount> (3 bytes)
   RsSalHeader sal_header;
   size_t consumed;
-  int res = rs_parse_sal_header(header_buf, 3, &sal_header, &consumed);
+  int res = rs_parse_sal_header(section_buf, (size_t)len, &sal_header, &consumed);
   if (res != 0) {
+    xfree(section_buf);
     return res;
   }
 
@@ -1410,73 +1440,49 @@ static int read_sal_section(FILE *fd, slang_T *slang)
   }
 
   int cnt = (int)sal_header.count;
+  size_t offset = consumed;
 
   garray_T *gap = &slang->sl_sal;
   ga_init(gap, sizeof(salitem_T), 10);
   ga_grow(gap, cnt + 1);
 
   // <sal> : <salfromlen> <salfrom> <saltolen> <salto>
+  // Parse each item with Rust, then build salitem_T in C.
   for (; gap->ga_len < cnt; gap->ga_len++) {
-    int c = NUL;
+    RsSalItem rs_item;
+    size_t item_consumed;
+    res = rs_parse_sal_item(section_buf + offset, (size_t)len - offset,
+                            &rs_item, &item_consumed);
+    if (res != 0) {
+      xfree(section_buf);
+      return res;
+    }
+    offset += item_consumed;
 
     salitem_T *smp = &((salitem_T *)gap->ga_data)[gap->ga_len];
-    int ccnt = getc(fd);                            // <salfromlen>
-    if (ccnt < 0) {
-      return SP_TRUNCERROR;
-    }
-    char *p = xmalloc((size_t)ccnt + 2);
-    smp->sm_lead = p;
 
-    // Read up to the first special char into sm_lead.
-    int i = 0;
-    for (; i < ccnt; i++) {
-      c = getc(fd);                             // <salfrom>
-      if (vim_strchr("0123456789(-<^$", c) != NULL) {
-        break;
-      }
-      *p++ = (char)(uint8_t)c;
-    }
-    smp->sm_leadlen = (int)(p - smp->sm_lead);
-    *p++ = NUL;
+    // Allocate the from buffer (lead+NUL+oneof+NUL+rules+NUL).
+    char *p = xmalloc((size_t)rs_item.from_used + 1);
+    memcpy(p, rs_item.from, rs_item.from_used);
 
-    // Put (abc) chars in sm_oneof, if any.
-    if (c == '(') {
-      smp->sm_oneof = p;
-      for (++i; i < ccnt; i++) {
-        c = getc(fd);                           // <salfrom>
-        if (c == ')') {
-          break;
-        }
-        *p++ = (char)(uint8_t)c;
-      }
-      *p++ = NUL;
-      if (++i < ccnt) {
-        c = getc(fd);
-      }
-    } else {
+    smp->sm_lead = p + rs_item.lead_offset;
+    smp->sm_leadlen = (int)rs_item.lead_len;
+
+    if (rs_item.oneof_offset == 0xFFFF) {
       smp->sm_oneof = NULL;
+    } else {
+      smp->sm_oneof = p + rs_item.oneof_offset;
     }
 
-    // Any following chars go in sm_rules.
-    smp->sm_rules = p;
-    if (i < ccnt) {
-      // store the char we got while checking for end of sm_lead
-      *p++ = (char)(uint8_t)c;
-    }
-    i++;
-    if (i < ccnt) {
-      SPELL_READ_NONNUL_BYTES(                  // <salfrom>
-                                                p, (size_t)(ccnt - i), fd,
-                                                xfree(smp->sm_lead));
-      p += (ccnt - i);
-    }
-    *p++ = NUL;
+    smp->sm_rules = p + rs_item.rules_offset;
 
-    // <saltolen> <salto>
-    smp->sm_to = read_cnt_string(fd, 1, &ccnt);
-    if (ccnt < 0) {
-      xfree(smp->sm_lead);
-      return ccnt;
+    if (rs_item.has_to && rs_item.to_len > 0) {
+      char *to_p = xmalloc((size_t)rs_item.to_len + 1);
+      memcpy(to_p, rs_item.to, rs_item.to_len);
+      to_p[rs_item.to_len] = '\0';
+      smp->sm_to = to_p;
+    } else {
+      smp->sm_to = NULL;
     }
 
     // convert the multi-byte strings to wide char strings
@@ -1493,6 +1499,8 @@ static int read_sal_section(FILE *fd, slang_T *slang)
       smp->sm_to_w = mb_str2wide(smp->sm_to);
     }
   }
+
+  xfree(section_buf);
 
   if (!GA_EMPTY(gap)) {
     // Add one extra entry to mark the end with an empty sm_lead.  Avoids
@@ -1549,217 +1557,164 @@ static int read_words_section(FILE *fd, slang_T *lp, int len)
 
 // SN_SOFO: <sofofromlen> <sofofrom> <sofotolen> <sofoto>
 // Return SP_*ERROR flags.
-// Uses Rust for parsing SOFO section data.
-static int read_sofo_section(FILE *fd, slang_T *slang)
+// Uses Rust (rs_parse_sofo_section) to parse the full SOFO section buffer.
+static int read_sofo_section(FILE *fd, slang_T *slang, int len)
 {
-  int res;
-
   slang->sl_sofo = true;
 
-  // Read length headers first to determine buffer size
-  // <sofofromlen> (2 bytes) + <sofofrom> (N bytes) + <sofotolen> (2 bytes) + <sofoto> (N bytes)
-  uint8_t len_buf[2];
-
-  // Read sofofromlen
-  SPELL_READ_BYTES((char *)len_buf, 2, fd,; );
-  int from_len = ((int)len_buf[0] << 8) | len_buf[1];
-
-  // Allocate buffer for entire section: 2 + from_len + 2 + max_to_len
-  // We need to read incrementally
-  char *from = NULL;
-  char *to = NULL;
-
-  if (from_len > 0) {
-    from = xmallocz((size_t)from_len);
-    SPELL_READ_BYTES(from, (size_t)from_len, fd, xfree(from));
+  if (len <= 0) {
+    return SP_FORMERROR;
   }
 
-  // Read sofotolen
-  SPELL_READ_BYTES((char *)len_buf, 2, fd, xfree(from));
-  int to_len = ((int)len_buf[0] << 8) | len_buf[1];
+  // Read entire section into buffer and let Rust parse it.
+  uint8_t *section_buf = xmalloc((size_t)len);
+  SPELL_READ_BYTES((char *)section_buf, (size_t)len, fd, xfree(section_buf));
 
-  if (to_len > 0) {
-    to = xmallocz((size_t)to_len);
-    SPELL_READ_BYTES(to, (size_t)to_len, fd, { xfree(from); xfree(to); });
+  RsSofoSection section;
+  size_t consumed;
+  int res = rs_parse_sofo_section(section_buf, (size_t)len, &section, &consumed);
+  xfree(section_buf);
+
+  if (res != 0) {
+    return res;
   }
 
-  // Store the info in slang->sl_sal and/or slang->sl_sal_first.
-  if (from != NULL && to != NULL) {
-    res = set_sofo(slang, from, to);
-  } else if (from != NULL || to != NULL) {
-    res = SP_FORMERROR;        // only one of two strings is an error
-  } else {
-    res = 0;
+  // Apply results: call set_sofo() with the parsed from/to strings.
+  // Null-terminate the strings (they come from fixed-size Rust arrays).
+  char from_str[513];
+  char to_str[513];
+
+  if (section.from_len == 0 && section.to_len == 0) {
+    return 0;
+  }
+  if (section.from_len == 0 || section.to_len == 0) {
+    return SP_FORMERROR;  // only one of two strings is an error
   }
 
-  xfree(from);
-  xfree(to);
-  return res;
+  memcpy(from_str, section.from, section.from_len);
+  from_str[section.from_len] = '\0';
+  memcpy(to_str, section.to, section.to_len);
+  to_str[section.to_len] = '\0';
+
+  return set_sofo(slang, from_str, to_str);
 }
 
 // Read the compound section from the .spl file:
 //      <compmax> <compminlen> <compsylmax> <compoptions> <compflags>
 // Returns SP_*ERROR flags.
-// Uses Rust for parsing compound header when possible.
+// Uses Rust (rs_parse_compound_flags) to build regex pattern and flag lists.
 static int read_compound(FILE *fd, slang_T *slang, int len)
 {
-  int todo = len;
-  int cnt;
-
-  if (todo < 2) {
+  if (len < 2) {
     return SP_FORMERROR;        // need at least two bytes
   }
 
-  // Read first 3 mandatory bytes: <compmax> <compminlen> <compsylmax>
-  uint8_t header_buf[3];
-  SPELL_READ_BYTES((char *)header_buf, 3, fd,; );
-  todo -= 3;
+  // Read the entire compound section into a buffer.
+  uint8_t *section_buf = xmalloc((size_t)len);
+  SPELL_READ_BYTES((char *)section_buf, (size_t)len, fd, xfree(section_buf));
 
-  // Apply compound settings with default handling
-  int c = header_buf[0];  // <compmax>
-  if (c < 2) {
-    c = MAXWLEN;
-  }
-  slang->sl_compmax = c;
+  size_t offset = 0;
 
-  c = header_buf[1];  // <compminlen>
-  if (c < 1) {
-    c = 0;
-  }
-  slang->sl_compminlen = c;
-
-  c = header_buf[2];  // <compsylmax>
-  if (c < 1) {
-    c = MAXWLEN;
-  }
-  slang->sl_compsylmax = c;
-
-  // Check for compoptions (Vim 7.0b+ format)
-  c = getc(fd);                                         // <compoptions>
-  if (c != 0) {
-    ungetc(c, fd);          // be backwards compatible with Vim 7.0b
-  } else {
-    todo--;
-    c = getc(fd);           // only use the lower byte for now
-    todo--;
-    slang->sl_compoptions = c;
-
-    garray_T *gap = &slang->sl_comppat;
-    c = get2c(fd);                                      // <comppatcount>
-    if (c < 0) {
-      return SP_TRUNCERROR;
-    }
-    todo -= 2;
-    ga_init(gap, sizeof(char *), c);
-    ga_grow(gap, c);
-    while (--c >= 0) {
-      ((char **)(gap->ga_data))[gap->ga_len++] = read_cnt_string(fd, 1, &cnt);
-      // <comppatlen> <comppattext>
-      if (cnt < 0) {
-        return cnt;
-      }
-      todo -= cnt + 1;
-    }
-  }
-  if (todo < 0) {
+  // Apply compound settings with default handling (first 3 bytes).
+  if ((size_t)len < 3) {
+    xfree(section_buf);
     return SP_FORMERROR;
   }
 
-  // Turn the COMPOUNDRULE items into a regexp pattern:
-  // "a[bc]/a*b+" -> "^\(a[bc]\|a*b\+\)$".
-  // Inserting backslashes may double the length, "^\(\)$<Nul>" is 7 bytes.
-  // Conversion to utf-8 may double the size.
-  c = todo * 2 + 7;
-  c += todo * 2;
-  char *pat = xmalloc((size_t)c);
+  int c = section_buf[offset++];  // <compmax>
+  slang->sl_compmax = (c < 2) ? MAXWLEN : c;
 
-  // We also need a list of all flags that can appear at the start and one
-  // for all flags.
-  uint8_t *cp = xmalloc((size_t)todo + 1);
-  slang->sl_compstartflags = cp;
-  *cp = NUL;
+  c = section_buf[offset++];  // <compminlen>
+  slang->sl_compminlen = (c < 1) ? 0 : c;
 
-  uint8_t *ap = xmalloc((size_t)todo + 1);
-  slang->sl_compallflags = ap;
-  *ap = NUL;
+  c = section_buf[offset++];  // <compsylmax>
+  slang->sl_compsylmax = (c < 1) ? MAXWLEN : c;
 
-  // And a list of all patterns in their original form, for checking whether
-  // compounding may work in match_compoundrule().  This is freed when we
-  // encounter a wildcard, the check doesn't work then.
-  uint8_t *crp = xmalloc((size_t)todo + 1);
-  slang->sl_comprules = crp;
+  // Check for compoptions (Vim 7.0b+ format).
+  // Old format: first byte of flags is non-zero, treat all remaining bytes as flags.
+  // New format: first byte is 0, next byte is lower options byte, then 2-byte patcount.
+  if (offset < (size_t)len && section_buf[offset] != 0) {
+    // Old format (Vim 7.0b): treat remaining bytes as compound flags directly.
+    // Fall through with offset pointing to start of flags.
+  } else if (offset + 1 < (size_t)len && section_buf[offset] == 0) {
+    offset++;  // skip the 0 byte
+    slang->sl_compoptions = section_buf[offset++];  // lower byte of options
 
-  char *pp = pat;
-  *pp++ = '^';
-  *pp++ = '\\';
-  *pp++ = '(';
-
-  int atstart = 1;
-  while (todo-- > 0) {
-    c = getc(fd);                                       // <compflags>
-    if (c == EOF) {
-      xfree(pat);
+    if (offset + 2 > (size_t)len) {
+      xfree(section_buf);
       return SP_TRUNCERROR;
     }
+    int pat_count = ((int)section_buf[offset] << 8) | section_buf[offset + 1];
+    offset += 2;
 
-    // Add all flags to "sl_compallflags".
-    if (vim_strchr("?*+[]/", c) == NULL
-        && !byte_in_str(slang->sl_compallflags, c)) {
-      *ap++ = (uint8_t)c;
-      *ap = NUL;
-    }
+    garray_T *gap = &slang->sl_comppat;
+    ga_init(gap, sizeof(char *), pat_count);
+    ga_grow(gap, pat_count);
 
-    if (atstart != 0) {
-      // At start of item: copy flags to "sl_compstartflags".  For a
-      // [abc] item set "atstart" to 2 and copy up to the ']'.
-      if (c == '[') {
-        atstart = 2;
-      } else if (c == ']') {
-        atstart = 0;
-      } else {
-        if (!byte_in_str(slang->sl_compstartflags, c)) {
-          *cp++ = (uint8_t)c;
-          *cp = NUL;
-        }
-        if (atstart == 1) {
-          atstart = 0;
-        }
+    // Read <comppatlen> <comppattext> pairs.
+    for (int i = 0; i < pat_count; i++) {
+      if (offset >= (size_t)len) {
+        xfree(section_buf);
+        return SP_TRUNCERROR;
       }
-    }
-
-    // Copy flag to "sl_comprules", unless we run into a wildcard.
-    if (crp != NULL) {
-      if (c == '?' || c == '+' || c == '*') {
-        XFREE_CLEAR(slang->sl_comprules);
-        crp = NULL;
-      } else {
-        *crp++ = (uint8_t)c;
+      int pat_len = section_buf[offset++];
+      if (offset + (size_t)pat_len > (size_t)len) {
+        xfree(section_buf);
+        return SP_TRUNCERROR;
       }
+      char *pat_str = xmalloc((size_t)pat_len + 1);
+      memcpy(pat_str, section_buf + offset, (size_t)pat_len);
+      pat_str[pat_len] = '\0';
+      ((char **)(gap->ga_data))[gap->ga_len++] = pat_str;
+      offset += (size_t)pat_len;
     }
-
-    if (c == '/') {         // slash separates two items
-      *pp++ = '\\';
-      *pp++ = '|';
-      atstart = 1;
-    } else {              // normal char, "[abc]" and '*' are copied as-is
-      if (c == '?' || c == '+' || c == '~') {
-        *pp++ = '\\';               // "a?" becomes "a\?", "a+" becomes "a\+"
-      }
-      pp += utf_char2bytes(c, pp);
-    }
+  } else {
+    // No remaining bytes; no flags.
+    xfree(section_buf);
+    return SP_FORMERROR;
   }
 
-  *pp++ = '\\';
-  *pp++ = ')';
-  *pp++ = '$';
-  *pp = NUL;
-
-  if (crp != NULL) {
-    *crp = NUL;
+  if (offset > (size_t)len) {
+    xfree(section_buf);
+    return SP_FORMERROR;
   }
 
-  slang->sl_compprog = vim_regcomp(pat, RE_MAGIC + RE_STRING + RE_STRICT);
-  xfree(pat);
+  // Remaining bytes are the compound flags.
+  // Use Rust to build the regex pattern, startflags, allflags, and comprules.
+  size_t flags_len = (size_t)len - offset;
+  if (flags_len == 0) {
+    xfree(section_buf);
+    return SP_FORMERROR;
+  }
+
+  RsCompoundFlagsResult flags_result;
+  int res = rs_parse_compound_flags(section_buf + offset, flags_len, &flags_result);
+  xfree(section_buf);
+
+  if (res != 0) {
+    return res;
+  }
+
+  // Allocate and copy startflags, allflags, comprules from Rust result.
+  uint8_t *cp = xmalloc((size_t)flags_result.startflags_len + 1);
+  memcpy(cp, flags_result.startflags, (size_t)flags_result.startflags_len + 1);
+  slang->sl_compstartflags = cp;
+
+  uint8_t *ap = xmalloc((size_t)flags_result.allflags_len + 1);
+  memcpy(ap, flags_result.allflags, (size_t)flags_result.allflags_len + 1);
+  slang->sl_compallflags = ap;
+
+  if (flags_result.comprules_valid) {
+    uint8_t *crp = xmalloc((size_t)flags_result.comprules_len + 1);
+    memcpy(crp, flags_result.comprules, (size_t)flags_result.comprules_len + 1);
+    slang->sl_comprules = crp;
+  } else {
+    slang->sl_comprules = NULL;
+  }
+
+  // Compile the regex pattern (vim_regcomp must stay in C).
+  slang->sl_compprog = vim_regcomp((char *)flags_result.pattern,
+                                   RE_MAGIC + RE_STRING + RE_STRICT);
   if (slang->sl_compprog == NULL) {
     return SP_FORMERROR;
   }

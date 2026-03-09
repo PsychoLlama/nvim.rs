@@ -902,6 +902,445 @@ pub unsafe extern "C" fn rs_parse_compound_header(
 }
 
 // =============================================================================
+// Compound Flags Pattern Building
+// =============================================================================
+
+/// Maximum length for word in compound pattern buffer.
+pub const MAXWLEN: usize = 254;
+
+/// Result of parsing compound flags.
+///
+/// The C wrapper allocates `sl_compstartflags`, `sl_compallflags`, and
+/// `sl_comprules` from these fields, then calls `vim_regcomp(pattern, ...)`.
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct CompoundFlagsResult {
+    /// Regex pattern string (null-terminated).
+    /// Format: "^\(rule1\|rule2\)$"
+    /// Max size: flags_len * 4 + 7 bytes (backslash doubling + utf8 + prefix/suffix)
+    pub pattern: [u8; 4096],
+    /// Length of the pattern (excluding null terminator).
+    pub pattern_len: u32,
+    /// Start flags (flags that can appear at start of compound word).
+    pub startflags: [u8; MAXWLEN + 1],
+    /// Length of startflags.
+    pub startflags_len: u32,
+    /// All flags (all non-special flags seen in compound rules).
+    pub allflags: [u8; MAXWLEN + 1],
+    /// Length of allflags.
+    pub allflags_len: u32,
+    /// Compound rules in original form (NULL if a wildcard was seen).
+    pub comprules: [u8; MAXWLEN + 1],
+    /// Length of comprules (0 if invalidated by wildcard).
+    pub comprules_len: u32,
+    /// Whether comprules is valid (false when wildcard was encountered).
+    pub comprules_valid: bool,
+}
+
+impl Default for CompoundFlagsResult {
+    fn default() -> Self {
+        Self {
+            pattern: [0; 4096],
+            pattern_len: 0,
+            startflags: [0; MAXWLEN + 1],
+            startflags_len: 0,
+            allflags: [0; MAXWLEN + 1],
+            allflags_len: 0,
+            comprules: [0; MAXWLEN + 1],
+            comprules_len: 0,
+            comprules_valid: true,
+        }
+    }
+}
+
+/// Encode a Unicode codepoint to UTF-8 bytes.
+///
+/// Returns the number of bytes written.
+fn char2utf8(c: u32, buf: &mut [u8]) -> usize {
+    if c < 0x80 {
+        buf[0] = c as u8;
+        1
+    } else if c < 0x800 {
+        buf[0] = (0xC0 | (c >> 6)) as u8;
+        buf[1] = (0x80 | (c & 0x3F)) as u8;
+        2
+    } else if c < 0x1_0000 {
+        buf[0] = (0xE0 | (c >> 12)) as u8;
+        buf[1] = (0x80 | ((c >> 6) & 0x3F)) as u8;
+        buf[2] = (0x80 | (c & 0x3F)) as u8;
+        3
+    } else {
+        // Values > 0xFFFF shouldn't occur for byte-range compound flags,
+        // but handle for completeness.
+        buf[0] = (0xF0 | (c >> 18)) as u8;
+        buf[1] = (0x80 | ((c >> 12) & 0x3F)) as u8;
+        buf[2] = (0x80 | ((c >> 6) & 0x3F)) as u8;
+        buf[3] = (0x80 | (c & 0x3F)) as u8;
+        4
+    }
+}
+
+/// Check if a byte value is already present in a NUL-terminated byte string.
+fn byte_in_str(s: &[u8], len: usize, b: u8) -> bool {
+    s[..len].contains(&b)
+}
+
+/// Parse compound flags and build the regex pattern and flag lists.
+///
+/// Takes the raw `<compflags>` bytes (after header and pattern strings have
+/// been consumed). Builds:
+/// - A Vim regex pattern: `"^\(rule1\|rule2\)$"` from `/`-separated rules
+/// - `startflags`: flags that appear at the start of any compound rule item
+/// - `allflags`: all non-special flags seen in the rules
+/// - `comprules`: the original rules bytes (invalidated if wildcards are found)
+///
+/// Returns `Err(SP_FORMERROR)` if the pattern buffer overflows.
+pub fn parse_compound_flags(flags_buf: &[u8]) -> Result<CompoundFlagsResult, c_int> {
+    let mut result = CompoundFlagsResult::default();
+
+    // Pattern starts with "^\("
+    let prefix = b"^\\(";
+    if result.pattern.len() < prefix.len() {
+        return Err(SP_FORMERROR);
+    }
+    result.pattern[..prefix.len()].copy_from_slice(prefix);
+    let mut pp = prefix.len();
+
+    let mut atstart: i32 = 1; // 1 = at start of item, 2 = inside [...]
+    let mut comprules_valid = true;
+    let mut crp = 0usize; // index into comprules
+
+    for &c in flags_buf {
+        // Add non-special flags to allflags.
+        if !matches!(c, b'?' | b'*' | b'+' | b'[' | b']' | b'/')
+            && !byte_in_str(&result.allflags, result.allflags_len as usize, c)
+        {
+            let aidx = result.allflags_len as usize;
+            if aidx < MAXWLEN {
+                result.allflags[aidx] = c;
+                result.allflags_len += 1;
+            }
+        }
+
+        if atstart != 0 {
+            // At start of item: copy flags to startflags.
+            // For a [abc] item set atstart to 2 and copy up to the ']'.
+            if c == b'[' {
+                atstart = 2;
+            } else if c == b']' {
+                atstart = 0;
+            } else {
+                if !byte_in_str(&result.startflags, result.startflags_len as usize, c) {
+                    let sidx = result.startflags_len as usize;
+                    if sidx < MAXWLEN {
+                        result.startflags[sidx] = c;
+                        result.startflags_len += 1;
+                    }
+                }
+                if atstart == 1 {
+                    atstart = 0;
+                }
+            }
+        }
+
+        // Copy flag to comprules, unless we already hit a wildcard.
+        if comprules_valid {
+            if c == b'?' || c == b'+' || c == b'*' {
+                comprules_valid = false;
+                result.comprules_valid = false;
+            } else if crp < MAXWLEN {
+                result.comprules[crp] = c;
+                crp += 1;
+                result.comprules_len = crp as u32;
+            }
+        }
+
+        // Append to pattern.
+        if c == b'/' {
+            // Slash separates two items: write "\|"
+            if pp + 2 > result.pattern.len() - 4 {
+                return Err(SP_FORMERROR);
+            }
+            result.pattern[pp] = b'\\';
+            result.pattern[pp + 1] = b'|';
+            pp += 2;
+            atstart = 1;
+        } else {
+            // Normal char; "a?" becomes "a\?", "a+" becomes "a\+"
+            let needs_backslash = matches!(c, b'?' | b'+' | b'~');
+            let utf8_len = char2utf8(c as u32, &mut [0u8; 4]);
+            let extra = usize::from(needs_backslash);
+            if pp + extra + utf8_len > result.pattern.len() - 4 {
+                return Err(SP_FORMERROR);
+            }
+            if needs_backslash {
+                result.pattern[pp] = b'\\';
+                pp += 1;
+            }
+            let written = char2utf8(c as u32, &mut result.pattern[pp..pp + utf8_len]);
+            pp += written;
+        }
+    }
+
+    // Append "\)$\0"
+    if pp + 4 > result.pattern.len() {
+        return Err(SP_FORMERROR);
+    }
+    result.pattern[pp] = b'\\';
+    result.pattern[pp + 1] = b')';
+    result.pattern[pp + 2] = b'$';
+    result.pattern[pp + 3] = 0;
+    result.pattern_len = (pp + 3) as u32;
+
+    // Null-terminate flags arrays
+    let sl = result.startflags_len as usize;
+    result.startflags[sl] = 0;
+    let al = result.allflags_len as usize;
+    result.allflags[al] = 0;
+    if comprules_valid {
+        result.comprules[crp] = 0;
+    }
+
+    Ok(result)
+}
+
+/// FFI wrapper for parsing compound flags and building the regex pattern.
+///
+/// # Safety
+/// All pointers must be valid. `buf` must point to `buf_len` bytes of compound
+/// flags data (the raw `<compflags>` bytes only, NOT including the header).
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_compound_flags(
+    buf: *const u8,
+    buf_len: usize,
+    result_out: *mut CompoundFlagsResult,
+) -> c_int {
+    if buf.is_null() || result_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts(buf, buf_len);
+    match parse_compound_flags(slice) {
+        Ok(result) => {
+            *result_out = result;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+// =============================================================================
+// SAL Item Parsing (buffer-based)
+// =============================================================================
+
+/// Maximum size of a SAL "from" string (lead + oneof + rules).
+pub const SAL_FROM_MAX: usize = 512;
+/// Maximum size of a SAL "to" string.
+pub const SAL_TO_MAX: usize = 256;
+
+/// A single parsed SAL (soundalike) item.
+///
+/// The C wrapper uses this to populate a `salitem_T` via xmalloc+copy.
+/// `lead`, `oneof`, and `rules` are sub-slices of the `from` buffer.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SalItem {
+    /// The combined "from" buffer containing lead+NUL+oneof+NUL+rules+NUL.
+    pub from: [u8; SAL_FROM_MAX],
+    /// Total bytes used in `from` (including all NUL terminators).
+    pub from_used: u16,
+    /// Byte offset of lead within `from`.
+    pub lead_offset: u16,
+    /// Length of lead (bytes, not including NUL).
+    pub lead_len: u16,
+    /// Byte offset of oneof within `from` (0xFFFF if no oneof).
+    pub oneof_offset: u16,
+    /// Byte offset of rules within `from`.
+    pub rules_offset: u16,
+    /// The "to" string (null-terminated).
+    pub to: [u8; SAL_TO_MAX],
+    /// Length of to string (0 if none/empty).
+    pub to_len: u16,
+    /// Whether `to` is present (even if empty).
+    pub has_to: bool,
+}
+
+impl Default for SalItem {
+    fn default() -> Self {
+        Self {
+            from: [0; SAL_FROM_MAX],
+            from_used: 0,
+            lead_offset: 0,
+            lead_len: 0,
+            oneof_offset: 0xFFFF,
+            rules_offset: 0,
+            to: [0; SAL_TO_MAX],
+            to_len: 0,
+            has_to: false,
+        }
+    }
+}
+
+/// Parse one SAL item from a buffer.
+///
+/// The format is:
+/// - 1 byte: from_len
+/// - from_len bytes: from data (split by special chars into lead/oneof/rules)
+/// - 1 byte: to_len
+/// - to_len bytes: to data
+///
+/// Returns the parsed item and number of bytes consumed on success.
+#[allow(clippy::too_many_lines)]
+pub fn parse_sal_item(buf: &[u8]) -> Result<(SalItem, usize), c_int> {
+    let mut offset = 0;
+    let mut item = SalItem::default();
+
+    if offset >= buf.len() {
+        return Err(SP_TRUNCERROR);
+    }
+    let from_len = buf[offset] as usize;
+    offset += 1;
+
+    if offset + from_len > buf.len() {
+        return Err(SP_TRUNCERROR);
+    }
+
+    let from_data = &buf[offset..offset + from_len];
+    offset += from_len;
+
+    // Parse from_data into lead / oneof / rules sections.
+    // Special chars that mark end of lead: "0123456789(-<^$"
+    let special_chars = b"0123456789(-<^$";
+    let is_special = |c: u8| special_chars.contains(&c);
+
+    let mut fp = 0usize; // index into item.from buffer
+
+    // Lead: copy bytes until special char or end.
+    let lead_start = fp;
+    let mut i = 0;
+    let mut trigger = 0u8; // the char that ended the lead
+    while i < from_len {
+        let c = from_data[i];
+        if is_special(c) {
+            trigger = c;
+            break;
+        }
+        if fp >= SAL_FROM_MAX - 3 {
+            break; // truncate gracefully
+        }
+        item.from[fp] = c;
+        fp += 1;
+        i += 1;
+    }
+    item.lead_offset = lead_start as u16;
+    item.lead_len = (fp - lead_start) as u16;
+    item.from[fp] = 0; // NUL terminate lead
+    fp += 1;
+
+    // Oneof: present if trigger == '('
+    if trigger == b'(' {
+        i += 1; // skip '('
+        let oneof_start = fp;
+        item.oneof_offset = oneof_start as u16;
+        while i < from_len {
+            let c = from_data[i];
+            i += 1;
+            if c == b')' {
+                break;
+            }
+            if fp >= SAL_FROM_MAX - 2 {
+                break;
+            }
+            item.from[fp] = c;
+            fp += 1;
+        }
+        item.from[fp] = 0; // NUL terminate oneof
+        fp += 1;
+        // Next char after ')' is the first rules char (if any)
+        if i < from_len {
+            trigger = from_data[i];
+            i += 1;
+        } else {
+            trigger = 0;
+        }
+    } else {
+        item.oneof_offset = 0xFFFF; // no oneof
+    }
+
+    // Rules: remainder of from_data (starting from trigger char)
+    let rules_start = fp;
+    item.rules_offset = rules_start as u16;
+    if trigger != 0 && i <= from_len {
+        // Store the trigger char that ended the lead scan
+        if fp < SAL_FROM_MAX - 1 {
+            item.from[fp] = trigger;
+            fp += 1;
+        }
+    }
+    while i < from_len {
+        let c = from_data[i];
+        i += 1;
+        if fp >= SAL_FROM_MAX - 1 {
+            break;
+        }
+        item.from[fp] = c;
+        fp += 1;
+    }
+    item.from[fp] = 0; // NUL terminate rules
+    fp += 1;
+    item.from_used = fp as u16;
+
+    // Parse "to" string: 1 byte length + data
+    if offset >= buf.len() {
+        return Err(SP_TRUNCERROR);
+    }
+    let to_len = buf[offset] as usize;
+    offset += 1;
+
+    if to_len > 0 {
+        if offset + to_len > buf.len() {
+            return Err(SP_TRUNCERROR);
+        }
+        let copy_len = to_len.min(SAL_TO_MAX - 1);
+        item.to[..copy_len].copy_from_slice(&buf[offset..offset + copy_len]);
+        item.to[copy_len] = 0;
+        item.to_len = copy_len as u16;
+        item.has_to = true;
+        offset += to_len;
+    } else {
+        item.has_to = false;
+    }
+
+    Ok((item, offset))
+}
+
+/// FFI wrapper for parsing a single SAL item from a buffer.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_sal_item(
+    buf: *const u8,
+    buf_len: usize,
+    item_out: *mut SalItem,
+    consumed_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || item_out.is_null() || consumed_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts(buf, buf_len);
+    match parse_sal_item(slice) {
+        Ok((item, consumed)) => {
+            *item_out = item;
+            *consumed_out = consumed;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+// =============================================================================
 // Suggestion File Section Parsing
 // =============================================================================
 
@@ -2088,150 +2527,6 @@ pub unsafe extern "C" fn rs_build_rep_first_table(
                 *first.add(byte_val) = i as i16;
             }
         }
-    }
-}
-
-// =============================================================================
-// SAL Section Parsing
-// =============================================================================
-
-/// A soundalike item parsed from the spell file.
-///
-/// This is a simplified version that stores the raw data. The full
-/// splitting into sm_lead/sm_oneof/sm_rules is done in C.
-#[repr(C)]
-#[derive(Debug, Clone)]
-pub struct SalItem {
-    /// "From" pattern (raw, includes lead/oneof/rules)
-    pub from: [u8; 256],
-    /// Length of from pattern
-    pub from_len: u8,
-    /// "To" replacement
-    pub to: [u8; 256],
-    /// Length of to string
-    pub to_len: u8,
-}
-
-impl Default for SalItem {
-    fn default() -> Self {
-        Self {
-            from: [0; 256],
-            from_len: 0,
-            to: [0; 256],
-            to_len: 0,
-        }
-    }
-}
-
-/// Parse a single SAL item from buffer.
-///
-/// Format: <salfromlen (1 byte)> <salfrom (N bytes)>
-///         <saltolen (1 byte)> <salto (N bytes)>
-///
-/// Returns (item, bytes_consumed) or error.
-pub fn parse_sal_item(buf: &[u8]) -> Result<(SalItem, usize), c_int> {
-    let mut offset = 0;
-
-    // Read from pattern
-    if buf.is_empty() {
-        return Err(SP_TRUNCERROR);
-    }
-    let from_len = buf[0] as usize;
-    offset += 1;
-
-    if offset + from_len >= buf.len() {
-        return Err(SP_TRUNCERROR);
-    }
-
-    let mut item = SalItem::default();
-
-    if from_len > 0 {
-        let copy_len = from_len.min(255);
-        item.from[..copy_len].copy_from_slice(&buf[offset..offset + copy_len]);
-        item.from_len = copy_len as u8;
-    }
-    offset += from_len;
-
-    // Read to string
-    if offset >= buf.len() {
-        return Err(SP_TRUNCERROR);
-    }
-    let to_len = buf[offset] as usize;
-    offset += 1;
-
-    if offset + to_len > buf.len() {
-        return Err(SP_TRUNCERROR);
-    }
-
-    if to_len > 0 {
-        let copy_len = to_len.min(255);
-        item.to[..copy_len].copy_from_slice(&buf[offset..offset + copy_len]);
-        item.to_len = copy_len as u8;
-    }
-    offset += to_len;
-
-    Ok((item, offset))
-}
-
-/// FFI wrapper for parsing a SAL item.
-///
-/// # Safety
-/// All pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_parse_sal_item(
-    buf: *const u8,
-    buf_len: usize,
-    item_out: *mut SalItem,
-    consumed_out: *mut usize,
-) -> c_int {
-    if buf.is_null() || item_out.is_null() || consumed_out.is_null() {
-        return SP_OTHERERROR;
-    }
-
-    let slice = std::slice::from_raw_parts(buf, buf_len);
-    match parse_sal_item(slice) {
-        Ok((item, consumed)) => {
-            *item_out = item;
-            *consumed_out = consumed;
-            0
-        }
-        Err(e) => e,
-    }
-}
-
-/// Parse SAL section count.
-///
-/// Format: <salcount (2 bytes BE)>
-///
-/// Returns the count of SAL items.
-pub fn parse_sal_count(buf: &[u8]) -> Result<(u16, usize), c_int> {
-    let count = read_be_u16(buf).ok_or(SP_TRUNCERROR)?;
-    Ok((count, 2))
-}
-
-/// FFI wrapper for parsing SAL count.
-///
-/// # Safety
-/// All pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_parse_sal_count(
-    buf: *const u8,
-    buf_len: usize,
-    count_out: *mut u16,
-    consumed_out: *mut usize,
-) -> c_int {
-    if buf.is_null() || count_out.is_null() || consumed_out.is_null() {
-        return SP_OTHERERROR;
-    }
-
-    let slice = std::slice::from_raw_parts(buf, buf_len);
-    match parse_sal_count(slice) {
-        Ok((count, consumed)) => {
-            *count_out = count;
-            *consumed_out = consumed;
-            0
-        }
-        Err(e) => e,
     }
 }
 
@@ -3650,37 +3945,48 @@ mod tests {
     }
 
     // =========================================================================
-    // SAL Section Parsing Tests
+    // SAL Item Parsing Tests
     // =========================================================================
 
     #[test]
     fn test_parse_sal_item_basic() {
-        // Simple SAL item: "a" -> "b"
+        // Simple SAL item: "a" -> "b" (no special chars, so lead="a", no oneof, rules="")
         let buf = [1, b'a', 1, b'b'];
         let (item, consumed) = parse_sal_item(&buf).unwrap();
         assert_eq!(consumed, 4);
-        assert_eq!(item.from_len, 1);
+        // lead is "a\0" at offset 0
+        assert_eq!(item.lead_len, 1);
         assert_eq!(item.from[0], b'a');
+        assert_eq!(item.from[1], 0); // NUL terminator
+        assert_eq!(item.oneof_offset, 0xFFFF); // no oneof
         assert_eq!(item.to_len, 1);
         assert_eq!(item.to[0], b'b');
+        assert!(item.has_to);
     }
 
     #[test]
     fn test_parse_sal_item_empty_to() {
-        // SAL item with empty "to": "abc" -> ""
+        // SAL item with empty "to": "abc" -> "" (no special chars, lead="abc")
         let buf = [3, b'a', b'b', b'c', 0];
         let (item, consumed) = parse_sal_item(&buf).unwrap();
         assert_eq!(consumed, 5);
-        assert_eq!(item.from_len, 3);
+        assert_eq!(item.lead_len, 3);
         assert_eq!(item.to_len, 0);
+        assert!(!item.has_to);
     }
 
     #[test]
-    fn test_parse_sal_count() {
-        let buf = [0x00, 0x14]; // 20 items
-        let (count, consumed) = parse_sal_count(&buf).unwrap();
-        assert_eq!(count, 20);
-        assert_eq!(consumed, 2);
+    fn test_parse_sal_item_with_special() {
+        // SAL item: "ab1c" -> "x" -- '1' is a special char, so lead="ab", rules="1c"
+        let buf = [4, b'a', b'b', b'1', b'c', 1, b'x'];
+        let (item, consumed) = parse_sal_item(&buf).unwrap();
+        assert_eq!(consumed, 7);
+        assert_eq!(item.lead_len, 2); // "ab"
+        assert_eq!(item.from[0], b'a');
+        assert_eq!(item.from[1], b'b');
+        assert_eq!(item.oneof_offset, 0xFFFF); // no oneof
+        assert_eq!(item.to_len, 1);
+        assert_eq!(item.to[0], b'x');
     }
 
     // =========================================================================
