@@ -988,24 +988,68 @@ truncerr:
     }
   }
 
-  // <LWORDTREE>
-  res = spell_read_tree(fd, &lp->sl_fbyts, &lp->sl_fbyts_len,
-                        &lp->sl_fidxs, false, 0);
-  if (res != 0) {
-    goto someerror;
-  }
+  // Read all remaining tree data (<LWORDTREE> <KWORDTREE> <PREFIXTREE>) into
+  // a single buffer and process with Rust (rs_read_tree).
+  {
+    // Read from current position to EOF.
+    long pos_before = ftell(fd);
+    fseek(fd, 0, SEEK_END);
+    long pos_end = ftell(fd);
+    fseek(fd, pos_before, SEEK_SET);
 
-  // <KWORDTREE>
-  res = spell_read_tree(fd, &lp->sl_kbyts, NULL, &lp->sl_kidxs, false, 0);
-  if (res != 0) {
-    goto someerror;
-  }
+    size_t tree_data_size = (pos_end > pos_before) ? (size_t)(pos_end - pos_before) : 0;
+    if (tree_data_size == 0) {
+      goto truncerr;
+    }
 
-  // <PREFIXTREE>
-  res = spell_read_tree(fd, &lp->sl_pbyts, NULL, &lp->sl_pidxs, true,
-                        lp->sl_prefixcnt);
-  if (res != 0) {
-    goto someerror;
+    uint8_t *tree_data = xmalloc(tree_data_size);
+    if (fread(tree_data, 1, tree_data_size, fd) != tree_data_size) {
+      xfree(tree_data);
+      goto truncerr;
+    }
+
+    size_t toff = 0;  // offset into tree_data
+
+    // Helper macro: read one tree from the buffer.
+    // Reads nodecount, allocates arrays, calls rs_read_tree.
+    // bytsp_len_p may be NULL (for trees that don't need the length stored).
+    #define READ_TREE_FROM_BUF(bytsp, bytsp_len_p, idxsp, is_prefix, prefcnt) \
+      do { \
+        size_t _remaining = tree_data_size - toff; \
+        if (_remaining < 4) { xfree(tree_data); goto truncerr; } \
+        uint32_t _nodecount = 0; \
+        if (rs_read_tree_peek_nodecount(tree_data + toff, _remaining, &_nodecount) != 0) { \
+          xfree(tree_data); goto truncerr; \
+        } \
+        if (_nodecount == 0) { \
+          (bytsp) = NULL; \
+          if ((bytsp_len_p) != NULL) { *(int *)(bytsp_len_p) = 0; } \
+          (idxsp) = NULL; \
+          toff += 4; \
+        } else { \
+          (bytsp) = xmalloc((size_t)_nodecount); \
+          if ((bytsp_len_p) != NULL) { *(int *)(bytsp_len_p) = (int)_nodecount; } \
+          (idxsp) = xcalloc((size_t)_nodecount, sizeof(idx_T)); \
+          size_t _consumed = 0; \
+          int _ncnt = 0; \
+          res = rs_read_tree(tree_data + toff, _remaining, (bytsp), \
+                             (int32_t *)(idxsp), (size_t)_nodecount, \
+                             (is_prefix), (prefcnt), &_consumed, &_ncnt); \
+          if (res != 0) { xfree(tree_data); goto someerror; } \
+          toff += _consumed; \
+        } \
+      } while (0)
+
+    // <LWORDTREE>
+    READ_TREE_FROM_BUF(lp->sl_fbyts, &lp->sl_fbyts_len, lp->sl_fidxs, false, 0);
+    // <KWORDTREE>
+    READ_TREE_FROM_BUF(lp->sl_kbyts, NULL, lp->sl_kidxs, false, 0);
+    // <PREFIXTREE>
+    READ_TREE_FROM_BUF(lp->sl_pbyts, NULL, lp->sl_pidxs, true, lp->sl_prefixcnt);
+
+    #undef READ_TREE_FROM_BUF
+
+    xfree(tree_data);
   }
 
   // For a new file link it in the list of spell files.
@@ -1858,13 +1902,18 @@ static int *mb_str2wide(const char *s)
 /// @param prefixcnt  when "prefixtree" is true: prefix count
 ///
 /// @return  zero when OK, SP_ value for an error.
+// Uses Rust (rs_read_tree) for buffer-based tree parsing.
 static int spell_read_tree(FILE *fd, uint8_t **bytsp, int *bytsp_len, idx_T **idxsp,
                            bool prefixtree, int prefixcnt)
   FUNC_ATTR_NONNULL_ARG(1, 2, 4)
 {
-  // The tree size was computed when writing the file, so that we can
-  // allocate it as one long block. <nodecount>
-  int len = get4c(fd);
+  // Read the nodecount (4 bytes, big-endian). <nodecount>
+  uint8_t hdr[4];
+  if (fread(hdr, 1, 4, fd) != 4) {
+    return feof(fd) ? SP_TRUNCERROR : SP_OTHERERROR;
+  }
+  int len = ((int)hdr[0] << 24) | ((int)hdr[1] << 16) | ((int)hdr[2] << 8) | hdr[3];
+
   if (len < 0) {
     return SP_TRUNCERROR;
   }
@@ -1872,137 +1921,55 @@ static int spell_read_tree(FILE *fd, uint8_t **bytsp, int *bytsp_len, idx_T **id
     // Invalid length, multiply with sizeof(int) would overflow.
     return SP_FORMERROR;
   }
-  if (len <= 0) {
+  if (len == 0) {
     return 0;
   }
 
-  // Allocate the byte array.
+  // Allocate the byte and index arrays.
   uint8_t *bp = xmalloc((size_t)len);
   *bytsp = bp;
   if (bytsp_len != NULL) {
     *bytsp_len = len;
   }
-
-  // Allocate the index array.
   idx_T *ip = xcalloc((size_t)len, sizeof(*ip));
   *idxsp = ip;
 
-  // Recursively read the tree and store it in the array.
-  int idx = read_tree_node(fd, bp, ip, len, 0, prefixtree, prefixcnt);
-  if (idx < 0) {
-    return idx;
-  }
-  return 0;
-}
+  // Read tree data into a buffer. Each node uses at most ~6 bytes on disk
+  // (siblingcount + flags + region + affixID + index). Use a generous
+  // estimate; rs_read_tree will stop when it has parsed all nodecount nodes.
+  // The 4-byte header is re-included so rs_read_tree can read the nodecount.
+  size_t buf_max = 4 + (size_t)len * 6 + 64;  // generous upper bound
+  uint8_t *tree_buf = xmalloc(buf_max);
 
-/// Read one row of siblings from the spell file and store it in the byte array
-/// "byts" and index array "idxs".  Recursively read the children.
-///
-/// NOTE: The code here must match put_node()!
-///
-/// Returns the index (>= 0) following the siblings.
-/// Returns SP_TRUNCERROR if the file is shorter than expected.
-/// Returns SP_FORMERROR if there is a format error.
-///
-/// @param maxidx  size of arrays
-/// @param startidx  current index in "byts" and "idxs"
-/// @param prefixtree  true for reading PREFIXTREE
-/// @param maxprefcondnr  maximum for <prefcondnr>
-static idx_T read_tree_node(FILE *fd, uint8_t *byts, idx_T *idxs, int maxidx, idx_T startidx,
-                            bool prefixtree, int maxprefcondnr)
-{
-  idx_T idx = startidx;
-#define SHARED_MASK     0x8000000
+  // Put the header back into the buffer.
+  memcpy(tree_buf, hdr, 4);
 
-  int len = getc(fd);                                       // <siblingcount>
-  if (len <= 0) {
+  // Read tree data bytes after the header.
+  size_t data_read = fread(tree_buf + 4, 1, buf_max - 4, fd);
+  if (data_read == 0 && len > 0) {
+    xfree(tree_buf);
     return SP_TRUNCERROR;
   }
 
-  if (startidx + len >= maxidx) {
-    return SP_FORMERROR;
-  }
-  byts[idx++] = (uint8_t)len;
+  // Parse the tree using Rust. The buffer starts from the nodecount header.
+  size_t bytes_consumed = 0;
+  int node_count = 0;
+  int res = rs_read_tree(tree_buf, 4 + data_read, bp, (int32_t *)ip, (size_t)len,
+                         prefixtree, prefixcnt, &bytes_consumed, &node_count);
 
-  // Read the byte values, flag/region bytes and shared indexes.
-  for (int i = 1; i <= len; i++) {
-    int c = getc(fd);                                       // <byte>
-    if (c < 0) {
-      return SP_TRUNCERROR;
-    }
-    if (c <= BY_SPECIAL) {
-      if (c == BY_NOFLAGS && !prefixtree) {
-        // No flags, all regions.
-        idxs[idx] = 0;
-      } else if (c != BY_INDEX) {
-        if (prefixtree) {
-          // Read the optional pflags byte, the prefix ID and the
-          // condition nr.  In idxs[] store the prefix ID in the low
-          // byte, the condition index shifted up 8 bits, the flags
-          // shifted up 24 bits.
-          if (c == BY_FLAGS) {
-            c = getc(fd) << 24;                         // <pflags>
-          } else {
-            c = 0;
-          }
-
-          c |= getc(fd);                                // <affixID>
-
-          int n = get2c(fd);                                // <prefcondnr>
-          if (n >= maxprefcondnr) {
-            return SP_FORMERROR;
-          }
-          c |= (n << 8);
-        } else {    // c must be BY_FLAGS or BY_FLAGS2
-                    // Read flags and optional region and prefix ID.  In
-                    // idxs[] the flags go in the low two bytes, region above
-                    // that and prefix ID above the region.
-          int c2 = c;
-          c = getc(fd);                                 // <flags>
-          if (c2 == BY_FLAGS2) {
-            c = (getc(fd) << 8) + c;                    // <flags2>
-          }
-          if (c & WF_REGION) {
-            c = (getc(fd) << 16) + c;                   // <region>
-          }
-          if (c & WF_AFX) {
-            c = (getc(fd) << 24) + c;                   // <affixID>
-          }
-        }
-
-        idxs[idx] = c;
-        c = 0;
-      } else {  // c == BY_INDEX
-        // <nodeidx>
-        int n = get3c(fd);
-        if (n < 0 || n >= maxidx) {
-          return SP_FORMERROR;
-        }
-        idxs[idx] = n + SHARED_MASK;
-        c = getc(fd);                                   // <xbyte>
-      }
-    }
-    byts[idx++] = (uint8_t)c;
+  // Seek back to restore file position: we over-read by (4 + data_read - bytes_consumed) bytes.
+  // Since we can't un-read from a FILE*, use fseek to go back.
+  long over_read = (long)(4 + data_read) - (long)bytes_consumed;
+  if (over_read > 0) {
+    fseek(fd, -over_read, SEEK_CUR);
   }
 
-  // Recursively read the children for non-shared siblings.
-  // Skip the end-of-word ones (zero byte value) and the shared ones (and
-  // remove SHARED_MASK)
-  for (int i = 1; i <= len; i++) {
-    if (byts[startidx + i] != 0) {
-      if (idxs[startidx + i] & SHARED_MASK) {
-        idxs[startidx + i] &= ~SHARED_MASK;
-      } else {
-        idxs[startidx + i] = idx;
-        idx = read_tree_node(fd, byts, idxs, maxidx, idx, prefixtree, maxprefcondnr);
-        if (idx < 0) {
-          break;
-        }
-      }
-    }
-  }
+  xfree(tree_buf);
 
-  return idx;
+  if (res != 0) {
+    return res;
+  }
+  return 0;
 }
 
 /// Reload the spell file "fname" if it's loaded.
