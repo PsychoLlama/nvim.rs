@@ -9,7 +9,7 @@ use std::ffi::c_int;
 
 use crate::types::{
     IdListHandle, StateItemHandle, SynPatHandle, HL_CONTAINED, HL_INCLUDED_TOPLEVEL, HL_MATCH,
-    HL_TRANSP, SYNID_ALLBUT, SYNID_CLUSTER, SYNID_CONTAINED, SYNID_TOP,
+    HL_TRANSP, HL_TRANS_CONT, SYNID_ALLBUT, SYNID_CLUSTER, SYNID_CONTAINED, SYNID_TOP,
 };
 
 // =============================================================================
@@ -17,40 +17,7 @@ use crate::types::{
 // =============================================================================
 
 extern "C" {
-    // State item flag accessors
-    fn nvim_stateitem_get_flags(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_set_flags(item: StateItemHandle, flags: c_int);
-    fn nvim_stateitem_or_flags(item: StateItemHandle, flags: c_int);
-    fn nvim_stateitem_has_trans_cont(item: StateItemHandle) -> c_int;
-
-    // State item list accessors
-    fn nvim_stateitem_get_cont_list(item: StateItemHandle) -> IdListHandle;
-    fn nvim_stateitem_has_cont_list(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_set_cont_list(item: StateItemHandle, list: IdListHandle);
-
-    // Pattern flag accessors
-    fn nvim_synpat_get_flags(pat: SynPatHandle) -> c_int;
-
-    // Pattern list accessors
-    fn nvim_synpat_get_cont_list(pat: SynPatHandle) -> IdListHandle;
-    fn nvim_synpat_get_next_list(pat: SynPatHandle) -> IdListHandle;
-    fn nvim_synpat_get_cont_in_list(pat: SynPatHandle) -> IdListHandle;
-    fn nvim_synpat_has_cont_list(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_has_next_list(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_has_cont_in_list(pat: SynPatHandle) -> c_int;
-
-    // ID list check (old C delegation - kept for reference during migration)
-    fn nvim_syn_in_id_list(
-        cur_si: StateItemHandle,
-        list: IdListHandle,
-        id: c_int,
-        inc_tag: c_int,
-        cont_in_list: IdListHandle,
-        flags: c_int,
-    ) -> c_int;
-
     // New accessors for Phase 2: rs_syn_in_id_list implementation
-    fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
     fn nvim_syn_get_pattern_syn_id(idx: c_int) -> c_int;
     fn nvim_syn_get_pattern_sp_syn_inc_tag(idx: c_int) -> c_int;
     fn nvim_syn_get_pattern_sp_syn_cont_in_list(idx: c_int) -> IdListHandle;
@@ -69,7 +36,7 @@ pub fn stateitem_flags(item: StateItemHandle) -> i32 {
     if item.is_null() {
         return 0;
     }
-    unsafe { nvim_stateitem_get_flags(item) }
+    unsafe { (*item.as_ptr()).si_flags }
 }
 
 /// Set the flags for a state item.
@@ -78,7 +45,7 @@ pub fn stateitem_flags(item: StateItemHandle) -> i32 {
 /// The item must be a valid non-null pointer.
 pub unsafe fn set_stateitem_flags(item: StateItemHandle, flags: i32) {
     if !item.is_null() {
-        nvim_stateitem_set_flags(item, flags);
+        (*item.as_ptr()).si_flags = flags;
     }
 }
 
@@ -88,7 +55,7 @@ pub unsafe fn set_stateitem_flags(item: StateItemHandle, flags: i32) {
 /// The item must be a valid non-null pointer.
 pub unsafe fn add_stateitem_flags(item: StateItemHandle, flags: i32) {
     if !item.is_null() {
-        nvim_stateitem_or_flags(item, flags);
+        (*item.as_ptr()).si_flags |= flags;
     }
 }
 
@@ -98,7 +65,7 @@ pub unsafe fn add_stateitem_flags(item: StateItemHandle, flags: i32) {
 /// The item must be a valid non-null pointer.
 pub unsafe fn or_stateitem_flags(item: StateItemHandle, flags: i32) {
     if !item.is_null() {
-        nvim_stateitem_or_flags(item, flags);
+        (*item.as_ptr()).si_flags |= flags;
     }
 }
 
@@ -113,7 +80,7 @@ pub fn stateitem_has_trans_cont(item: StateItemHandle) -> bool {
     if item.is_null() {
         return false;
     }
-    unsafe { nvim_stateitem_has_trans_cont(item) != 0 }
+    (unsafe { (*item.as_ptr()).si_flags } & HL_TRANS_CONT) != 0
 }
 
 /// Check if a state item is transparent (has HL_TRANSP flag).
@@ -153,7 +120,7 @@ pub fn stateitem_cont_list(item: StateItemHandle) -> IdListHandle {
     if item.is_null() {
         return IdListHandle::null();
     }
-    unsafe { nvim_stateitem_get_cont_list(item) }
+    IdListHandle(unsafe { (*item.as_ptr()).si_cont_list })
 }
 
 /// Check if a state item has a cont_list.
@@ -162,7 +129,7 @@ pub fn stateitem_has_cont_list(item: StateItemHandle) -> bool {
     if item.is_null() {
         return false;
     }
-    unsafe { nvim_stateitem_has_cont_list(item) != 0 }
+    !unsafe { (*item.as_ptr()).si_cont_list }.is_null()
 }
 
 /// Set the cont_list for a state item.
@@ -171,7 +138,7 @@ pub fn stateitem_has_cont_list(item: StateItemHandle) -> bool {
 /// The item must be a valid non-null pointer.
 pub unsafe fn set_stateitem_cont_list(item: StateItemHandle, list: IdListHandle) {
     if !item.is_null() {
-        nvim_stateitem_set_cont_list(item, list);
+        (*item.as_ptr()).si_cont_list = list.0;
     }
 }
 
@@ -185,7 +152,7 @@ pub fn synpat_flags(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_flags(pat) }
+    unsafe { (*pat.as_ptr()).sp_flags }
 }
 
 /// Check if a pattern is transparent.
@@ -216,7 +183,7 @@ pub fn synpat_cont_list(pat: SynPatHandle) -> IdListHandle {
     if pat.is_null() {
         return IdListHandle::null();
     }
-    unsafe { nvim_synpat_get_cont_list(pat) }
+    IdListHandle(unsafe { (*pat.as_ptr()).sp_cont_list })
 }
 
 /// Get the next_list for a pattern.
@@ -225,7 +192,7 @@ pub fn synpat_next_list(pat: SynPatHandle) -> IdListHandle {
     if pat.is_null() {
         return IdListHandle::null();
     }
-    unsafe { nvim_synpat_get_next_list(pat) }
+    IdListHandle(unsafe { (*pat.as_ptr()).sp_next_list })
 }
 
 /// Get the cont_in_list for a pattern.
@@ -234,7 +201,7 @@ pub fn synpat_cont_in_list(pat: SynPatHandle) -> IdListHandle {
     if pat.is_null() {
         return IdListHandle::null();
     }
-    unsafe { nvim_synpat_get_cont_in_list(pat) }
+    IdListHandle(unsafe { (*pat.as_ptr()).sp_syn.cont_in_list })
 }
 
 /// Check if a pattern has a cont_list.
@@ -243,7 +210,7 @@ pub fn synpat_has_cont_list(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_has_cont_list(pat) != 0 }
+    !unsafe { (*pat.as_ptr()).sp_cont_list }.is_null()
 }
 
 /// Check if a pattern has a next_list.
@@ -252,7 +219,7 @@ pub fn synpat_has_next_list(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_has_next_list(pat) != 0 }
+    !unsafe { (*pat.as_ptr()).sp_next_list }.is_null()
 }
 
 /// Check if a pattern has a cont_in_list.
@@ -261,7 +228,7 @@ pub fn synpat_has_cont_in_list(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_has_cont_in_list(pat) != 0 }
+    !unsafe { (*pat.as_ptr()).sp_syn.cont_in_list }.is_null()
 }
 
 // =============================================================================
@@ -330,7 +297,7 @@ unsafe fn in_id_list_inner(
         let actual_si = crate::state_ops::rs_stateitem_prev_if_trans_cont(cur_si);
 
         // cur_si->si_idx is -1 for keywords; keywords never contain anything.
-        let si_idx = nvim_stateitem_get_idx(actual_si);
+        let si_idx = (*actual_si.as_ptr()).si_idx;
         if si_idx >= 0 {
             let pat_id = nvim_syn_get_pattern_syn_id(si_idx) as i16;
             let pat_inc_tag = nvim_syn_get_pattern_sp_syn_inc_tag(si_idx);

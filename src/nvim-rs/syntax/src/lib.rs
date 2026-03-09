@@ -241,58 +241,6 @@ extern "C" {
     fn nvim_synstate_get_change_lnum(state: SynStateHandle) -> c_int;
 
     // -------------------------------------------------------------------------
-    // synpat_T accessors (syntax pattern)
-    // -------------------------------------------------------------------------
-
-    /// Get sp_type (SPTYPE_* values)
-    fn nvim_synpat_get_type(pat: SynPatHandle) -> c_int;
-
-    /// Get sp_syncing (this item used for syncing)
-    fn nvim_synpat_get_syncing(pat: SynPatHandle) -> c_int;
-    /// Get sp_flags (HL_ flags)
-    fn nvim_synpat_get_flags(pat: SynPatHandle) -> c_int;
-    /// Get sp_syn.id (highlight group ID)
-    fn nvim_synpat_get_syn_id(pat: SynPatHandle) -> i16;
-    // -------------------------------------------------------------------------
-    // syn_cluster_T accessors (syntax cluster)
-    // -------------------------------------------------------------------------
-    // -------------------------------------------------------------------------
-    // stateitem_T accessors (current state item)
-    // -------------------------------------------------------------------------
-
-    /// Get si_idx (index of syntax pattern or KEYWORD_IDX)
-    fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
-
-    /// Get si_id (highlight group ID for keywords)
-    fn nvim_stateitem_get_id(item: StateItemHandle) -> c_int;
-
-    /// Get si_trans_id (highlight group ID, transparency removed)
-    fn nvim_stateitem_get_trans_id(item: StateItemHandle) -> c_int;
-
-    /// Bulk position getter
-    #[allow(clippy::too_many_arguments)]
-    fn nvim_stateitem_get_positions(
-        item: StateItemHandle,
-        m_lnum: *mut c_int,
-        m_startcol: *mut c_int,
-        m_end_lnum: *mut c_int,
-        m_end_col: *mut c_int,
-        h_start_lnum: *mut c_int,
-        h_start_col: *mut c_int,
-        h_end_lnum: *mut c_int,
-        h_end_col: *mut c_int,
-        eoe_lnum: *mut c_int,
-        eoe_col: *mut c_int,
-    );
-
-    /// Get si_attr (attributes in this state)
-    fn nvim_stateitem_get_attr(item: StateItemHandle) -> c_int;
-    /// Get si_cchar (substitution character for conceal)
-    fn nvim_stateitem_get_cchar(item: StateItemHandle) -> c_int;
-    // -------------------------------------------------------------------------
-    // keyentry_T accessors (keyword entry)
-    // -------------------------------------------------------------------------
-    // -------------------------------------------------------------------------
     // Syntax state global accessors
     // -------------------------------------------------------------------------
 
@@ -345,34 +293,6 @@ extern "C" {
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
 
     // -------------------------------------------------------------------------
-    // Phase 4: Pattern matching accessors
-    // -------------------------------------------------------------------------
-
-    /// Get sp_prog (compiled regex program)
-    fn nvim_synpat_get_prog(pat: SynPatHandle) -> RegProgHandle;
-
-    /// Check if pattern has a compiled program
-    fn nvim_synpat_has_prog(pat: SynPatHandle) -> c_int;
-
-    /// Get sp_cont_list (contains list)
-    fn nvim_synpat_get_cont_list(pat: SynPatHandle) -> IdListHandle;
-
-    /// Get sp_next_list (nextgroup list)
-    fn nvim_synpat_get_next_list(pat: SynPatHandle) -> IdListHandle;
-
-    /// Get sp_syn.cont_in_list (containedin list)
-    fn nvim_synpat_get_cont_in_list(pat: SynPatHandle) -> IdListHandle;
-
-    /// Check if pattern has a contains list
-    fn nvim_synpat_has_cont_list(pat: SynPatHandle) -> c_int;
-
-    /// Check if pattern has a nextgroup list
-    fn nvim_synpat_has_next_list(pat: SynPatHandle) -> c_int;
-
-    /// Check if pattern has a containedin list
-    fn nvim_synpat_has_cont_in_list(pat: SynPatHandle) -> c_int;
-
-    // -------------------------------------------------------------------------
     // Phase 4: Keyword hashtable accessors
     // -------------------------------------------------------------------------
 
@@ -387,32 +307,6 @@ extern "C" {
 
     /// Get count of ignore-case keywords
     fn nvim_synblock_keywtab_ic_count(block: SynBlockHandle) -> usize;
-
-    // -------------------------------------------------------------------------
-    // Phase 4: Keyentry list accessors
-    // -------------------------------------------------------------------------
-
-    /// Get ke_next_list (nextgroup list for keyword)
-    fn nvim_keyentry_get_next_list(ke: KeyEntryHandle) -> IdListHandle;
-
-    /// Get k_syn.cont_in_list (containedin list for keyword)
-    fn nvim_keyentry_get_cont_in_list(ke: KeyEntryHandle) -> IdListHandle;
-
-    /// Check if keyword has a nextgroup list
-    fn nvim_keyentry_has_next_list(ke: KeyEntryHandle) -> c_int;
-
-    /// Check if keyword has a containedin list
-    fn nvim_keyentry_has_cont_in_list(ke: KeyEntryHandle) -> c_int;
-
-    // -------------------------------------------------------------------------
-    // Phase 4: Cluster list accessors
-    // -------------------------------------------------------------------------
-
-    /// Get scl_list (cluster contains list)
-    fn nvim_syncluster_get_list(cluster: SynClusterHandle) -> IdListHandle;
-
-    /// Check if cluster has a list
-    fn nvim_syncluster_has_list(cluster: SynClusterHandle) -> c_int;
 
     // -------------------------------------------------------------------------
     // Phase 4: ID list iteration helpers
@@ -456,18 +350,6 @@ extern "C" {
     /// Get the nospell cluster ID from a synblock
     fn nvim_synblock_get_nospell_cluster_id(block: SynBlockHandle) -> c_int;
 
-    /// Check if a stateitem has the HL_TRANS_CONT flag
-    fn nvim_stateitem_has_trans_cont(item: StateItemHandle) -> c_int;
-
-    /// Check if a stateitem has the HL_MATCH flag
-    fn nvim_stateitem_has_match(item: StateItemHandle) -> c_int;
-
-    /// Get si_cont_list (containedin list for state item)
-    fn nvim_stateitem_get_cont_list(item: StateItemHandle) -> IdListHandle;
-
-    /// Check if stateitem has a containedin list
-    fn nvim_stateitem_has_cont_list(item: StateItemHandle) -> c_int;
-
     // -------------------------------------------------------------------------
     // Phase 6: Command & user interface accessors
     // -------------------------------------------------------------------------
@@ -480,13 +362,6 @@ extern "C" {
 
     /// Get the syntax block's conceal setting
     fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
-
-    // -------------------------------------------------------------------------
-    // Phase 18a: Synblock setters for :syntax commands
-    // -------------------------------------------------------------------------
-
-    /// Get the hl group ID from a pattern (minus 1)
-    fn nvim_synpat_get_hl_group(pat: SynPatHandle) -> c_int;
 
     /// Get expand_what variable
     fn nvim_syn_get_expand_what() -> c_int;
@@ -530,54 +405,9 @@ extern "C" {
     /// Get bufstate item from synstate at index
     fn nvim_synstate_get_bufstate(state: SynStateHandle, idx: c_int) -> BufStateHandle;
 
-    /// Get bs_idx from bufstate
-    fn nvim_bufstate_get_idx(bs: BufStateHandle) -> c_int;
-
-    /// Get bs_flags from bufstate
-    fn nvim_bufstate_get_flags(bs: BufStateHandle) -> c_int;
-
-    /// Get bs_seqnr from bufstate
-    fn nvim_bufstate_get_seqnr(bs: BufStateHandle) -> c_int;
-
-    /// Get bs_cchar from bufstate
-    fn nvim_bufstate_get_cchar(bs: BufStateHandle) -> c_int;
-
-    /// Get bs_extmatch from bufstate (opaque pointer)
-    fn nvim_bufstate_get_extmatch(bs: BufStateHandle) -> ExtMatchHandle;
-
     /// Call update_si_attr for item at index
     fn nvim_syn_update_si_attr(idx: c_int);
 
-    /// Get si_extmatch from a stateitem
-    fn nvim_stateitem_get_extmatch(item: StateItemHandle) -> ExtMatchHandle;
-
-    // -------------------------------------------------------------------------
-    // Phase 24.2: Core Pattern Matching Helpers
-    // -------------------------------------------------------------------------
-    // -------------------------------------------------------------------------
-    // Phase 24.3: Keyword Matching Helpers
-    // -------------------------------------------------------------------------
-    // NOTE: Keyword-related FFI functions moved to keyword.rs module
-    // -------------------------------------------------------------------------
-    // Phase 24.4: Pattern Stack Operations Helpers (new declarations only)
-    // -------------------------------------------------------------------------
-    /// Bulk position setter (pass c_int::MIN to skip a field)
-    #[allow(clippy::too_many_arguments)]
-    fn nvim_stateitem_set_positions(
-        item: StateItemHandle,
-        m_lnum: c_int,
-        m_startcol: c_int,
-        m_end_lnum: c_int,
-        m_end_col: c_int,
-        h_start_lnum: c_int,
-        h_start_col: c_int,
-        h_end_lnum: c_int,
-        h_end_col: c_int,
-        eoe_lnum: c_int,
-        eoe_col: c_int,
-    );
-    /// Set si_cchar
-    fn nvim_stateitem_set_cchar(item: StateItemHandle, cchar: c_int);
     // -------------------------------------------------------------------------
     // Phase 24.5: Sync and Line Operations Helpers
     // -------------------------------------------------------------------------
@@ -819,7 +649,7 @@ pub fn synpat_type(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_type(pat) }
+    i32::from(unsafe { (*pat.as_ptr()).sp_type })
 }
 
 /// Get the flags for a pattern
@@ -828,7 +658,7 @@ pub fn synpat_flags(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_flags(pat) }
+    unsafe { (*pat.as_ptr()).sp_flags }
 }
 
 /// Get the highlight group ID for a pattern
@@ -837,7 +667,7 @@ pub fn synpat_syn_id(pat: SynPatHandle) -> i16 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_syn_id(pat) }
+    unsafe { (*pat.as_ptr()).sp_syn.id }
 }
 
 /// Check if a pattern is for syncing
@@ -846,7 +676,7 @@ pub fn synpat_is_syncing(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_get_syncing(pat) != 0 }
+    unsafe { (*pat.as_ptr()).sp_syncing }
 }
 
 /// Check if a pattern is transparent
@@ -879,7 +709,7 @@ pub fn stateitem_idx(item: StateItemHandle) -> i32 {
     if item.is_null() {
         return 0;
     }
-    unsafe { nvim_stateitem_get_idx(item) }
+    unsafe { (*item.as_ptr()).si_idx }
 }
 
 /// Check if a state item is for a keyword
@@ -894,7 +724,7 @@ pub fn stateitem_id(item: StateItemHandle) -> i32 {
     if item.is_null() {
         return 0;
     }
-    unsafe { nvim_stateitem_get_id(item) }
+    unsafe { (*item.as_ptr()).si_id }
 }
 
 /// Get the transparent ID for a state item
@@ -903,7 +733,7 @@ pub fn stateitem_trans_id(item: StateItemHandle) -> i32 {
     if item.is_null() {
         return 0;
     }
-    unsafe { nvim_stateitem_get_trans_id(item) }
+    unsafe { (*item.as_ptr()).si_trans_id }
 }
 
 /// Get the attributes for a state item
@@ -912,7 +742,7 @@ pub fn stateitem_attr(item: StateItemHandle) -> i32 {
     if item.is_null() {
         return 0;
     }
-    unsafe { nvim_stateitem_get_attr(item) }
+    unsafe { (*item.as_ptr()).si_attr }
 }
 
 /// Get the conceal character for a state item
@@ -921,7 +751,7 @@ pub fn stateitem_cchar(item: StateItemHandle) -> i32 {
     if item.is_null() {
         return 0;
     }
-    unsafe { nvim_stateitem_get_cchar(item) }
+    unsafe { (*item.as_ptr()).si_cchar }
 }
 
 // =============================================================================
@@ -934,7 +764,7 @@ pub fn synpat_has_prog(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_has_prog(pat) != 0 }
+    !unsafe { (*pat.as_ptr()).sp_prog }.is_null()
 }
 
 /// Get the compiled regex program for a pattern
@@ -943,11 +773,11 @@ pub fn synpat_prog(pat: SynPatHandle) -> Option<RegProgHandle> {
     if pat.is_null() {
         return None;
     }
-    let prog = unsafe { nvim_synpat_get_prog(pat) };
+    let prog = unsafe { (*pat.as_ptr()).sp_prog };
     if prog.is_null() {
         None
     } else {
-        Some(prog)
+        Some(RegProgHandle(prog))
     }
 }
 
@@ -957,7 +787,7 @@ pub fn synpat_has_contains(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_has_cont_list(pat) != 0 }
+    !unsafe { (*pat.as_ptr()).sp_cont_list }.is_null()
 }
 
 /// Get the contains list for a pattern
@@ -966,11 +796,11 @@ pub fn synpat_contains_list(pat: SynPatHandle) -> Option<IdListHandle> {
     if pat.is_null() {
         return None;
     }
-    let list = unsafe { nvim_synpat_get_cont_list(pat) };
+    let list = unsafe { (*pat.as_ptr()).sp_cont_list };
     if list.is_null() {
         None
     } else {
-        Some(list)
+        Some(IdListHandle(list))
     }
 }
 
@@ -980,7 +810,7 @@ pub fn synpat_has_nextgroup(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_has_next_list(pat) != 0 }
+    !unsafe { (*pat.as_ptr()).sp_next_list }.is_null()
 }
 
 /// Get the nextgroup list for a pattern
@@ -989,11 +819,11 @@ pub fn synpat_nextgroup_list(pat: SynPatHandle) -> Option<IdListHandle> {
     if pat.is_null() {
         return None;
     }
-    let list = unsafe { nvim_synpat_get_next_list(pat) };
+    let list = unsafe { (*pat.as_ptr()).sp_next_list };
     if list.is_null() {
         None
     } else {
-        Some(list)
+        Some(IdListHandle(list))
     }
 }
 
@@ -1003,7 +833,7 @@ pub fn synpat_has_containedin(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_has_cont_in_list(pat) != 0 }
+    !unsafe { (*pat.as_ptr()).sp_syn.cont_in_list }.is_null()
 }
 
 /// Get the containedin list for a pattern
@@ -1012,11 +842,11 @@ pub fn synpat_containedin_list(pat: SynPatHandle) -> Option<IdListHandle> {
     if pat.is_null() {
         return None;
     }
-    let list = unsafe { nvim_synpat_get_cont_in_list(pat) };
+    let list = unsafe { (*pat.as_ptr()).sp_syn.cont_in_list };
     if list.is_null() {
         None
     } else {
-        Some(list)
+        Some(IdListHandle(list))
     }
 }
 
@@ -1066,7 +896,7 @@ pub fn keyentry_has_nextgroup(ke: KeyEntryHandle) -> bool {
     if ke.is_null() {
         return false;
     }
-    unsafe { nvim_keyentry_has_next_list(ke) != 0 }
+    !unsafe { (*ke.as_ptr()).next_list }.is_null()
 }
 
 /// Get the nextgroup list for a keyword
@@ -1075,11 +905,11 @@ pub fn keyentry_nextgroup_list(ke: KeyEntryHandle) -> Option<IdListHandle> {
     if ke.is_null() {
         return None;
     }
-    let list = unsafe { nvim_keyentry_get_next_list(ke) };
+    let list = unsafe { (*ke.as_ptr()).next_list };
     if list.is_null() {
         None
     } else {
-        Some(list)
+        Some(IdListHandle(list))
     }
 }
 
@@ -1089,7 +919,7 @@ pub fn keyentry_has_containedin(ke: KeyEntryHandle) -> bool {
     if ke.is_null() {
         return false;
     }
-    unsafe { nvim_keyentry_has_cont_in_list(ke) != 0 }
+    !unsafe { (*ke.as_ptr()).k_syn.cont_in_list }.is_null()
 }
 
 /// Get the containedin list for a keyword
@@ -1098,11 +928,11 @@ pub fn keyentry_containedin_list(ke: KeyEntryHandle) -> Option<IdListHandle> {
     if ke.is_null() {
         return None;
     }
-    let list = unsafe { nvim_keyentry_get_cont_in_list(ke) };
+    let list = unsafe { (*ke.as_ptr()).k_syn.cont_in_list };
     if list.is_null() {
         None
     } else {
-        Some(list)
+        Some(IdListHandle(list))
     }
 }
 
@@ -1116,7 +946,7 @@ pub fn syncluster_has_list(cluster: SynClusterHandle) -> bool {
     if cluster.is_null() {
         return false;
     }
-    unsafe { nvim_syncluster_has_list(cluster) != 0 }
+    !unsafe { (*cluster.as_ptr()).scl_list }.is_null()
 }
 
 /// Get the contains list for a cluster
@@ -1125,11 +955,11 @@ pub fn syncluster_list(cluster: SynClusterHandle) -> Option<IdListHandle> {
     if cluster.is_null() {
         return None;
     }
-    let list = unsafe { nvim_syncluster_get_list(cluster) };
+    let list = unsafe { (*cluster.as_ptr()).scl_list };
     if list.is_null() {
         None
     } else {
-        Some(list)
+        Some(IdListHandle(list))
     }
 }
 
@@ -1310,7 +1140,7 @@ pub fn stateitem_has_trans_cont(item: StateItemHandle) -> bool {
     if item.is_null() {
         return false;
     }
-    unsafe { nvim_stateitem_has_trans_cont(item) != 0 }
+    (unsafe { (*item.as_ptr()).si_flags } & HL_TRANS_CONT) != 0
 }
 
 /// Check if a stateitem has the HL_MATCH flag
@@ -1319,7 +1149,7 @@ pub fn stateitem_has_match(item: StateItemHandle) -> bool {
     if item.is_null() {
         return false;
     }
-    unsafe { nvim_stateitem_has_match(item) != 0 }
+    (unsafe { (*item.as_ptr()).si_flags } & HL_MATCH) != 0
 }
 
 /// Get the containedin list for a state item
@@ -1328,11 +1158,11 @@ pub fn stateitem_cont_list(item: StateItemHandle) -> Option<IdListHandle> {
     if item.is_null() {
         return None;
     }
-    let list = unsafe { nvim_stateitem_get_cont_list(item) };
+    let list = unsafe { (*item.as_ptr()).si_cont_list };
     if list.is_null() {
         None
     } else {
-        Some(list)
+        Some(IdListHandle(list))
     }
 }
 
@@ -1342,7 +1172,7 @@ pub fn stateitem_has_cont_list(item: StateItemHandle) -> bool {
     if item.is_null() {
         return false;
     }
-    unsafe { nvim_stateitem_has_cont_list(item) != 0 }
+    !unsafe { (*item.as_ptr()).si_cont_list }.is_null()
 }
 
 /// Cluster operation type for combining cluster lists
@@ -1437,7 +1267,7 @@ pub fn subcommand_name(idx: i32) -> Option<&'static str> {
 }
 
 /// Check if a pattern at index is for syncing.
-/// Implements nvim_synblock_pattern_is_syncing in Rust using get_pattern + get_syncing.
+/// Implements nvim_synblock_pattern_is_syncing in Rust using get_pattern + sp_syncing.
 #[must_use]
 pub fn synblock_pattern_is_syncing(block: SynBlockHandle, idx: i32) -> bool {
     if block.is_null() || idx < 0 {
@@ -1447,7 +1277,7 @@ pub fn synblock_pattern_is_syncing(block: SynBlockHandle, idx: i32) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_get_syncing(pat) != 0 }
+    unsafe { (*pat.as_ptr()).sp_syncing }
 }
 
 /// Get the highlight group ID from a pattern (minus 1)
@@ -1456,7 +1286,7 @@ pub fn synpat_hl_group(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return -1;
     }
-    unsafe { nvim_synpat_get_hl_group(pat) }
+    i32::from(unsafe { (*pat.as_ptr()).sp_syn.id }) - 1
 }
 
 /// Count patterns with a specific highlight group ID.
@@ -1471,7 +1301,7 @@ pub fn synblock_count_patterns_for_id(block: SynBlockHandle, id: i32) -> i32 {
     let mut n = 0;
     for i in 0..count {
         let pat = unsafe { nvim_synblock_get_pattern(block, i) };
-        if !pat.is_null() && unsafe { nvim_synpat_get_syn_id(pat) } as i32 == id {
+        if !pat.is_null() && i32::from(unsafe { (*pat.as_ptr()).sp_syn.id }) == id {
             n += 1;
         }
     }
@@ -2365,11 +2195,16 @@ pub unsafe extern "C" fn rs_load_current_state(from: SynStateHandle) {
                 continue;
             }
 
-            let bs_idx = nvim_bufstate_get_idx(bs);
-            let bs_flags = nvim_bufstate_get_flags(bs);
-            let bs_seqnr = nvim_bufstate_get_seqnr(bs);
-            let bs_cchar = nvim_bufstate_get_cchar(bs);
-            let extmatch = nvim_bufstate_get_extmatch(bs);
+            let (bs_idx, bs_flags, bs_seqnr, bs_cchar, extmatch) = {
+                let p = bs.as_ptr();
+                (
+                    (*p).bs_idx,
+                    (*p).bs_flags,
+                    (*p).bs_seqnr,
+                    (*p).bs_cchar,
+                    ExtMatchHandle((*p).bs_extmatch as *mut _),
+                )
+            };
 
             // Set the state item (this also sets si_next_list based on pattern)
             crate::state_ops::rs_syn_set_cur_state_item(
@@ -2436,15 +2271,15 @@ pub unsafe extern "C" fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int {
         }
 
         // Compare indices
-        let bs_idx = nvim_bufstate_get_idx(bs);
-        let si_idx = nvim_stateitem_get_idx(cur_si);
+        let bs_idx = (*bs.as_ptr()).bs_idx;
+        let si_idx = (*cur_si.as_ptr()).si_idx;
         if bs_idx != si_idx {
             return 0;
         }
 
         // Compare extmatch
-        let bs_extmatch = nvim_bufstate_get_extmatch(bs);
-        let si_extmatch = nvim_stateitem_get_extmatch(cur_si);
+        let bs_extmatch = ExtMatchHandle((*bs.as_ptr()).bs_extmatch as *mut _);
+        let si_extmatch = ExtMatchHandle((*cur_si.as_ptr()).si_extmatch as *mut _);
         let cmp = crate::state_ops::rs_syn_extmatch_equal(bs_extmatch, si_extmatch);
 
         if cmp == 1 {
@@ -2490,9 +2325,6 @@ pub unsafe extern "C" fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int {
 // =============================================================================
 // rs_update_si_end, rs_push_next_match, rs_find_endpos:
 // Now implemented in region.rs and check_ends.rs modules
-/// Sentinel value for nvim_stateitem_set_positions: skip this field.
-const SKIP: c_int = c_int::MIN;
-
 /// Set stateitem h_startpos.
 ///
 /// # Safety
@@ -2503,9 +2335,11 @@ pub unsafe extern "C" fn rs_stateitem_set_h_startpos(
     lnum: c_int,
     col: c_int,
 ) {
-    nvim_stateitem_set_positions(
-        item, SKIP, SKIP, SKIP, SKIP, lnum, col, SKIP, SKIP, SKIP, SKIP,
-    );
+    if !item.is_null() {
+        let p = item.as_ptr();
+        (*p).si_h_startpos.lnum = lnum;
+        (*p).si_h_startpos.col = col;
+    }
 }
 
 /// Set stateitem m_startcol.
@@ -2514,9 +2348,9 @@ pub unsafe extern "C" fn rs_stateitem_set_h_startpos(
 /// This function accesses C global state and must be called from the main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_stateitem_set_m_startcol(item: StateItemHandle, col: c_int) {
-    nvim_stateitem_set_positions(
-        item, SKIP, col, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP,
-    );
+    if !item.is_null() {
+        (*item.as_ptr()).si_m_startcol = col;
+    }
 }
 
 /// Set stateitem m_lnum.
@@ -2525,17 +2359,20 @@ pub unsafe extern "C" fn rs_stateitem_set_m_startcol(item: StateItemHandle, col:
 /// This function accesses C global state and must be called from the main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_stateitem_set_m_lnum(item: StateItemHandle, lnum: c_int) {
-    nvim_stateitem_set_positions(
-        item, lnum, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP,
-    );
+    if !item.is_null() {
+        (*item.as_ptr()).si_m_lnum = lnum;
+    }
 }
+
 /// Set stateitem cchar.
 ///
 /// # Safety
 /// This function accesses C global state and must be called from the main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_stateitem_set_cchar(item: StateItemHandle, cchar: c_int) {
-    nvim_stateitem_set_cchar(item, cchar);
+    if !item.is_null() {
+        (*item.as_ptr()).si_cchar = cchar;
+    }
 }
 // =============================================================================
 // Phase 24.5: Sync and Line Operations Exports
@@ -2690,21 +2527,7 @@ pub unsafe extern "C" fn rs_stateitem_get_m_lnum(item: StateItemHandle) -> c_int
     if item.is_null() {
         return 0;
     }
-    let mut v: c_int = 0;
-    nvim_stateitem_get_positions(
-        item,
-        &mut v,
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-    );
-    v
+    (*item.as_ptr()).si_m_lnum
 }
 
 /// Get stateitem m_startcol field.
@@ -2716,21 +2539,7 @@ pub unsafe extern "C" fn rs_stateitem_get_m_startcol(item: StateItemHandle) -> c
     if item.is_null() {
         return 0;
     }
-    let mut v: c_int = 0;
-    nvim_stateitem_get_positions(
-        item,
-        std::ptr::null_mut(),
-        &mut v,
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-    );
-    v
+    (*item.as_ptr()).si_m_startcol
 }
 // Note: Many constants and accessors defined earlier in this file are re-exported
 // through these Rust wrappers for Phase 143 compatibility.

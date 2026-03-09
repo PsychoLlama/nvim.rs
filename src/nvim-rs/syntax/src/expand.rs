@@ -31,7 +31,6 @@ extern "C" {
     // cluster expansion: get count and name from current synblock
     fn nvim_syn_get_expand_cluster_count() -> c_int;
     fn nvim_synblock_get_cluster(block: SynBlockHandle, idx: c_int) -> SynClusterHandle;
-    fn nvim_syncluster_get_name(cluster: SynClusterHandle) -> *const c_char;
     fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
 
     // String helpers
@@ -256,7 +255,7 @@ unsafe fn expand_cluster_name(xp: *mut c_void, idx: c_int) -> *mut c_char {
     if cluster.is_null() {
         return std::ptr::null_mut();
     }
-    let name = nvim_syncluster_get_name(cluster);
+    let name = (*cluster.as_ptr()).scl_name;
     if name.is_null() {
         return std::ptr::null_mut();
     }

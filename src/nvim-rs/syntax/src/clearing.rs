@@ -16,22 +16,10 @@ extern "C" {
     // Pattern accessors
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
     fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
-    fn nvim_synpat_get_type(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_flags(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_syn_id(pat: SynPatHandle) -> i16;
-    fn nvim_synpat_get_syncing(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_pattern(pat: SynPatHandle) -> *const c_char;
-    fn nvim_synpat_get_prog(pat: SynPatHandle) -> *mut c_void;
-    fn nvim_synpat_get_cont_list(pat: SynPatHandle) -> *mut i16;
-    fn nvim_synpat_get_next_list(pat: SynPatHandle) -> *mut i16;
-    fn nvim_synpat_get_cont_in_list(pat: SynPatHandle) -> *mut i16;
 
     // Cluster accessors
     fn nvim_synblock_get_cluster_count(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_cluster(block: SynBlockHandle, idx: c_int) -> SynClusterHandle;
-    fn nvim_syncluster_get_name(cluster: SynClusterHandle) -> *const c_char;
-    fn nvim_syncluster_get_name_u(cluster: SynClusterHandle) -> *const c_char;
-    fn nvim_syncluster_get_list(cluster: SynClusterHandle) -> *mut i16;
 
     // Memory management
     fn nvim_syn_xfree(ptr: *mut c_void);
@@ -85,9 +73,6 @@ extern "C" {
     /// Get HI2KE at array index (null if HASHITEM_EMPTY).
     fn nvim_ht_item_at(ht: *const c_void, idx: usize) -> crate::types::KeyEntryHandle;
 
-    /// Get ke_next in collision chain.
-    fn nvim_keyentry_get_next(ke: crate::types::KeyEntryHandle) -> crate::types::KeyEntryHandle;
-
     /// Free a keyentry_T and its owned lists.
     fn nvim_ke_free(kp: crate::types::KeyEntryHandle);
 
@@ -99,9 +84,6 @@ extern "C" {
 
     /// hash_unlock a hashtab.
     fn nvim_ht_unlock(ht: *mut c_void);
-
-    /// Get k_syn.id as int for a keyentry.
-    fn nvim_ke_get_syn_id_int(kp: crate::types::KeyEntryHandle) -> c_int;
 
     /// Set ke->ke_next.
     fn nvim_ke_set_next(kp: crate::types::KeyEntryHandle, next: crate::types::KeyEntryHandle);
@@ -146,8 +128,9 @@ pub unsafe extern "C" fn rs_syn_clear_pattern(block: SynBlockHandle, i: c_int) {
         return;
     }
 
-    nvim_syn_xfree(nvim_synpat_get_pattern(pat) as *mut c_void);
-    nvim_syn_vim_regfree(nvim_synpat_get_prog(pat));
+    let pp = pat.as_ptr();
+    nvim_syn_xfree((*pp).sp_pattern as *mut c_void);
+    nvim_syn_vim_regfree((*pp).sp_prog);
 
     // Only free sp_cont_list, sp_next_list, and sp_syn.cont_in_list for
     // the first start pattern of a group (i == 0 or prev is not SPTYPE_START).
@@ -155,13 +138,13 @@ pub unsafe extern "C" fn rs_syn_clear_pattern(block: SynBlockHandle, i: c_int) {
         true
     } else {
         let prev = nvim_synblock_get_pattern(block, i - 1);
-        prev.is_null() || nvim_synpat_get_type(prev) != SPTYPE_START
+        prev.is_null() || i32::from((*prev.as_ptr()).sp_type) != SPTYPE_START
     };
 
     if free_lists {
-        nvim_syn_xfree(nvim_synpat_get_cont_list(pat).cast());
-        nvim_syn_xfree(nvim_synpat_get_next_list(pat).cast());
-        nvim_syn_xfree(nvim_synpat_get_cont_in_list(pat).cast());
+        nvim_syn_xfree((*pp).sp_cont_list.cast());
+        nvim_syn_xfree((*pp).sp_next_list.cast());
+        nvim_syn_xfree((*pp).sp_syn.cont_in_list.cast());
     }
 }
 
@@ -175,9 +158,10 @@ pub unsafe extern "C" fn rs_syn_clear_cluster(block: SynBlockHandle, i: c_int) {
     if cluster.is_null() {
         return;
     }
-    nvim_syn_xfree(nvim_syncluster_get_name(cluster) as *mut c_void);
-    nvim_syn_xfree(nvim_syncluster_get_name_u(cluster) as *mut c_void);
-    nvim_syn_xfree(nvim_syncluster_get_list(cluster).cast());
+    let cp = cluster.as_ptr();
+    nvim_syn_xfree((*cp).scl_name as *mut c_void);
+    nvim_syn_xfree((*cp).scl_name_u as *mut c_void);
+    nvim_syn_xfree((*cp).scl_list.cast());
 }
 
 /// Remove one pattern from the buffer's pattern list (compact with memmove).
@@ -188,7 +172,7 @@ pub unsafe extern "C" fn rs_syn_clear_cluster(block: SynBlockHandle, i: c_int) {
 pub unsafe extern "C" fn rs_syn_remove_pattern(block: SynBlockHandle, idx: c_int) {
     // Decrement fold item count if the pattern has HL_FOLD
     let pat = nvim_synblock_get_pattern(block, idx);
-    if !pat.is_null() && (nvim_synpat_get_flags(pat) & HL_FOLD) != 0 {
+    if !pat.is_null() && ((*pat.as_ptr()).sp_flags & HL_FOLD) != 0 {
         nvim_synblock_dec_folditems(block);
     }
 
@@ -231,8 +215,8 @@ pub unsafe extern "C" fn rs_syn_clear_one(id: c_int, syncing: c_int) {
     while idx >= 0 {
         let pat = nvim_synblock_get_pattern(block, idx);
         if !pat.is_null()
-            && nvim_synpat_get_syn_id(pat) as c_int == id
-            && nvim_synpat_get_syncing(pat) == syncing
+            && i32::from((*pat.as_ptr()).sp_syn.id) == id
+            && ((*pat.as_ptr()).sp_syncing as c_int) == syncing
         {
             rs_syn_remove_pattern(block, idx);
         }
@@ -266,8 +250,8 @@ pub unsafe extern "C" fn rs_syn_clear_keyword(id: c_int, ht: *mut c_void) {
             let mut kp_prev = KeyEntryHandle::null();
             let mut kp = head;
             while !kp.is_null() {
-                let kp_next = nvim_keyentry_get_next(kp);
-                if nvim_ke_get_syn_id_int(kp) == id {
+                let kp_next = KeyEntryHandle((*kp.as_ptr()).ke_next);
+                if i32::from((*kp.as_ptr()).k_syn.id) == id {
                     if kp_prev.is_null() {
                         if kp_next.is_null() {
                             nvim_ht_remove_at(ht, idx);
@@ -309,7 +293,7 @@ pub unsafe extern "C" fn rs_clear_keywtab(ht: *mut c_void) {
             todo -= 1;
             let mut entry = head;
             while !entry.is_null() {
-                let next = nvim_keyentry_get_next(entry);
+                let next = KeyEntryHandle((*entry.as_ptr()).ke_next);
                 nvim_ke_free(entry);
                 entry = next;
             }
@@ -397,7 +381,7 @@ pub unsafe extern "C" fn rs_syntax_sync_clear() {
     let mut i = nvim_synblock_get_pattern_count(block) - 1;
     while i >= 0 {
         let pat = nvim_synblock_get_pattern(block, i);
-        if !pat.is_null() && nvim_synpat_get_syncing(pat) != 0 {
+        if !pat.is_null() && (*pat.as_ptr()).sp_syncing {
             rs_syn_remove_pattern(block, i);
         }
         i -= 1;

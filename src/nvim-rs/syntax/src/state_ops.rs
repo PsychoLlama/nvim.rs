@@ -32,32 +32,6 @@ extern "C" {
     // Stateitem access
     fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
 
-    // Stateitem field accessors
-    fn nvim_stateitem_get_flags(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_extmatch(item: StateItemHandle) -> ExtMatchHandle;
-    #[allow(clippy::too_many_arguments)]
-    fn nvim_stateitem_get_positions(
-        item: StateItemHandle,
-        m_lnum: *mut c_int,
-        m_startcol: *mut c_int,
-        m_end_lnum: *mut c_int,
-        m_end_col: *mut c_int,
-        h_start_lnum: *mut c_int,
-        h_start_col: *mut c_int,
-        h_end_lnum: *mut c_int,
-        h_end_col: *mut c_int,
-        eoe_lnum: *mut c_int,
-        eoe_col: *mut c_int,
-    );
-    fn nvim_stateitem_get_end_idx(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_set_idx(item: StateItemHandle, idx: c_int);
-    fn nvim_stateitem_set_flags(item: StateItemHandle, flags: c_int);
-    fn nvim_stateitem_set_seqnr(item: StateItemHandle, seqnr: c_int);
-    fn nvim_stateitem_set_cchar(item: StateItemHandle, cchar: c_int);
-    fn nvim_stateitem_set_extmatch(item: StateItemHandle, em: ExtMatchHandle);
-    fn nvim_stateitem_set_ends(item: StateItemHandle, ends: c_int);
-    fn nvim_stateitem_set_next_list(item: StateItemHandle, list: IdListHandle);
-
     // Extmatch reference management
     fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
     fn nvim_syn_ref_extmatch(em: ExtMatchHandle) -> ExtMatchHandle;
@@ -83,26 +57,7 @@ extern "C" {
     fn nvim_syn_mb_strcmp_ic(ic: c_int, a: *const c_char, b: *const c_char) -> c_int;
     fn nvim_synblock_pattern_ic(pat_idx: c_int) -> c_int;
 
-    // Phase 3: stateitem setters for cur_state_set_matchcont
-    fn nvim_stateitem_or_flags(item: StateItemHandle, flags: c_int);
-    // Bulk position setter (pass c_int::MIN to skip a field)
-    #[allow(clippy::too_many_arguments)]
-    fn nvim_stateitem_set_positions(
-        item: StateItemHandle,
-        m_lnum: c_int,
-        m_startcol: c_int,
-        m_end_lnum: c_int,
-        m_end_col: c_int,
-        h_start_lnum: c_int,
-        h_start_col: c_int,
-        h_end_lnum: c_int,
-        h_end_col: c_int,
-        eoe_lnum: c_int,
-        eoe_col: c_int,
-    );
 }
-
-const SKIP: c_int = c_int::MIN;
 
 // =============================================================================
 // Phase 2 Rust implementations
@@ -124,7 +79,7 @@ pub unsafe extern "C" fn rs_syn_pop_current_state() {
     }
     let top = nvim_syn_get_stateitem(len - 1);
     if !top.is_null() {
-        let em = nvim_stateitem_get_extmatch(top);
+        let em = ExtMatchHandle((*top.as_ptr()).si_extmatch as *mut _);
         nvim_syn_unref_extmatch(em);
     }
     nvim_syn_set_current_state_len(len - 1);
@@ -148,7 +103,7 @@ pub unsafe extern "C" fn rs_syn_pop_current_state() {
 pub unsafe extern "C" fn rs_syn_push_current_state(idx: c_int) {
     let p = nvim_syn_append_new_stateitem();
     if !p.is_null() {
-        nvim_stateitem_set_idx(p, idx);
+        (*p.as_ptr()).si_idx = idx;
     }
 }
 
@@ -175,23 +130,27 @@ pub unsafe extern "C" fn rs_syn_set_cur_state_item(
     if item.is_null() {
         return;
     }
-    nvim_stateitem_set_idx(item, si_idx);
-    nvim_stateitem_set_flags(item, si_flags);
-    nvim_stateitem_set_seqnr(item, si_seqnr);
-    nvim_stateitem_set_cchar(item, si_cchar);
+    {
+        let p = item.as_ptr();
+        (*p).si_idx = si_idx;
+        (*p).si_flags = si_flags;
+        (*p).si_seqnr = si_seqnr;
+        (*p).si_cchar = si_cchar;
+    }
     let new_em = nvim_syn_ref_extmatch(extmatch);
-    nvim_stateitem_set_extmatch(item, new_em);
-    nvim_stateitem_set_ends(item, 0);
-    nvim_stateitem_set_positions(
-        item, 0, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP, SKIP,
-    );
+    (*item.as_ptr()).si_extmatch = new_em.0 as *mut _;
+    {
+        let p = item.as_ptr();
+        (*p).si_ends = 0;
+        (*p).si_m_lnum = 0;
+    }
     // Set si_next_list based on pattern's sp_next_list
     let next_list = if si_idx >= 0 {
         nvim_syn_get_pattern_next_list(si_idx)
     } else {
         IdListHandle::null()
     };
-    nvim_stateitem_set_next_list(item, next_list);
+    (*item.as_ptr()).si_next_list = next_list.0;
 }
 
 /// Count items with HL_FOLD flag in current_state.
@@ -206,7 +165,7 @@ pub unsafe extern "C" fn rs_syn_count_fold_items() -> c_int {
     let mut count = 0;
     for i in 0..len {
         let item = nvim_syn_get_stateitem(i);
-        if !item.is_null() && (nvim_stateitem_get_flags(item) & HL_FOLD) != 0 {
+        if !item.is_null() && ((*item.as_ptr()).si_flags & HL_FOLD) != 0 {
             count += 1;
         }
     }
@@ -229,27 +188,20 @@ pub unsafe extern "C" fn rs_syn_state_item_spans_line(idx: c_int, lnum: c_int) -
     if item.is_null() {
         return 0;
     }
-    let mut m_end_lnum: c_int = 0;
-    let mut h_start_lnum: c_int = 0;
-    let mut h_end_lnum: c_int = 0;
-    let mut eoe_lnum: c_int = 0;
-    nvim_stateitem_get_positions(
-        item,
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        &mut m_end_lnum,
-        std::ptr::null_mut(),
-        &mut h_start_lnum,
-        std::ptr::null_mut(),
-        &mut h_end_lnum,
-        std::ptr::null_mut(),
-        &mut eoe_lnum,
-        std::ptr::null_mut(),
-    );
+    let (m_end_lnum, h_start_lnum, h_end_lnum, eoe_lnum, si_end_idx) = {
+        let p = item.as_ptr();
+        (
+            (*p).si_m_endpos.lnum,
+            (*p).si_h_startpos.lnum,
+            (*p).si_h_endpos.lnum,
+            (*p).si_eoe_pos.lnum,
+            (*p).si_end_idx,
+        )
+    };
     if h_start_lnum >= lnum
         || m_end_lnum >= lnum
         || h_end_lnum >= lnum
-        || (nvim_stateitem_get_end_idx(item) != 0 && eoe_lnum >= lnum)
+        || (si_end_idx != 0 && eoe_lnum >= lnum)
     {
         return 1;
     }
@@ -268,7 +220,7 @@ pub unsafe extern "C" fn rs_syn_clear_current_state() {
     for i in 0..len {
         let item = nvim_syn_get_stateitem(i);
         if !item.is_null() {
-            let em = nvim_stateitem_get_extmatch(item);
+            let em = ExtMatchHandle((*item.as_ptr()).si_extmatch as *mut _);
             nvim_syn_unref_extmatch(em);
         }
     }
@@ -307,7 +259,7 @@ pub unsafe extern "C" fn rs_stateitem_prev_if_trans_cont(item: StateItemHandle) 
     let mut cur_idx = idx;
     while cur_idx > 0 {
         let cur = nvim_syn_get_stateitem(cur_idx);
-        if cur.is_null() || (nvim_stateitem_get_flags(cur) & HL_TRANS_CONT) == 0 {
+        if cur.is_null() || ((*cur.as_ptr()).si_flags & HL_TRANS_CONT) == 0 {
             return cur;
         }
         cur_idx -= 1;
@@ -396,7 +348,13 @@ pub unsafe extern "C" fn rs_cur_state_set_matchcont(i: c_int) {
     if item.is_null() {
         return;
     }
-    nvim_stateitem_or_flags(item, HL_MATCHCONT);
-    nvim_stateitem_set_positions(item, SKIP, SKIP, 0, 0, SKIP, SKIP, 0, 0, SKIP, SKIP);
-    nvim_stateitem_set_ends(item, 1);
+    {
+        let p = item.as_ptr();
+        (*p).si_flags |= HL_MATCHCONT;
+        (*p).si_m_endpos.lnum = 0;
+        (*p).si_m_endpos.col = 0;
+        (*p).si_h_endpos.lnum = 0;
+        (*p).si_h_endpos.col = 0;
+        (*p).si_ends = 1;
+    }
 }

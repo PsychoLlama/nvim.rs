@@ -9,7 +9,6 @@ use std::ffi::c_int;
 
 use crate::check_ends::{check_keepend, check_state_ends, update_si_attr};
 
-const SKIP: c_int = c_int::MIN;
 use crate::current_attr::syn_finish_line;
 use crate::region::update_si_end;
 use crate::types::{
@@ -44,8 +43,6 @@ extern "C" {
 
     // Pattern sync accessors
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
-    fn nvim_synpat_get_syncing(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_sync_idx(pat: SynPatHandle) -> c_int;
 
     // Current synblock sync accessors
     fn nvim_syn_get_sync_minlines() -> c_int;
@@ -89,36 +86,6 @@ extern "C" {
 
     // Stateitem accessors
     fn nvim_syn_get_top_stateitem() -> StateItemHandle;
-    fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
-    // Bulk position setter (pass c_int::MIN to skip a field)
-    #[allow(clippy::too_many_arguments)]
-    fn nvim_stateitem_set_positions(
-        item: StateItemHandle,
-        m_lnum: c_int,
-        m_startcol: c_int,
-        m_end_lnum: c_int,
-        m_end_col: c_int,
-        h_start_lnum: c_int,
-        h_start_col: c_int,
-        h_end_lnum: c_int,
-        h_end_col: c_int,
-        eoe_lnum: c_int,
-        eoe_col: c_int,
-    );
-    #[allow(clippy::too_many_arguments)]
-    fn nvim_stateitem_get_positions(
-        item: StateItemHandle,
-        m_lnum: *mut c_int,
-        m_startcol: *mut c_int,
-        m_end_lnum: *mut c_int,
-        m_end_col: *mut c_int,
-        h_start_lnum: *mut c_int,
-        h_start_col: *mut c_int,
-        h_end_lnum: *mut c_int,
-        h_end_col: *mut c_int,
-        eoe_lnum: *mut c_int,
-        eoe_col: *mut c_int,
-    );
 
     // Pattern accessors
     fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
@@ -187,7 +154,7 @@ pub fn synpat_is_syncing(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_get_syncing(pat) != 0 }
+    unsafe { (*pat.as_ptr()).sp_syncing }
 }
 
 /// Get the sync index for a pattern.
@@ -196,7 +163,7 @@ pub fn synpat_sync_idx(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_sync_idx(pat) }
+    unsafe { (*pat.as_ptr()).sp_sync_idx }
 }
 
 /// Check if a pattern at a given index is a syncing pattern.
@@ -210,7 +177,7 @@ pub fn synblock_pattern_is_syncing(block: SynBlockHandle, idx: i32) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_get_syncing(pat) != 0 }
+    unsafe { (*pat.as_ptr()).sp_syncing }
 }
 
 // =============================================================================
@@ -377,21 +344,10 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
                     // continue to look for another one, further on in the line.
                     if had_sync_point && nvim_syn_get_current_state_len() > 0 {
                         let cur_si = nvim_syn_get_top_stateitem();
-                        let mut si_m_endpos_lnum: c_int = 0;
-                        let mut si_m_endpos_col: c_int = 0;
-                        nvim_stateitem_get_positions(
-                            cur_si,
-                            std::ptr::null_mut(),
-                            std::ptr::null_mut(),
-                            &mut si_m_endpos_lnum,
-                            &mut si_m_endpos_col,
-                            std::ptr::null_mut(),
-                            std::ptr::null_mut(),
-                            std::ptr::null_mut(),
-                            std::ptr::null_mut(),
-                            std::ptr::null_mut(),
-                            std::ptr::null_mut(),
-                        );
+                        let (si_m_endpos_lnum, si_m_endpos_col) = {
+                            let p = cur_si.as_ptr();
+                            ((*p).si_m_endpos.lnum, (*p).si_m_endpos.col)
+                        };
 
                         if si_m_endpos_lnum > start_lnum {
                             // ignore match that goes to after where started
@@ -399,7 +355,7 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
                             break;
                         }
 
-                        let si_idx = nvim_stateitem_get_idx(cur_si);
+                        let si_idx = (*cur_si.as_ptr()).si_idx;
                         if si_idx < 0 {
                             // Cannot happen?
                             found_flags = 0;
@@ -462,19 +418,11 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
                 if found_flags & HL_SYNC_HERE != 0 {
                     if nvim_syn_get_current_state_len() > 0 {
                         let cur_si = nvim_syn_get_top_stateitem();
-                        nvim_stateitem_set_positions(
-                            cur_si,
-                            SKIP,
-                            SKIP,
-                            SKIP,
-                            SKIP,
-                            found_current_lnum,
-                            found_current_col,
-                            SKIP,
-                            SKIP,
-                            SKIP,
-                            SKIP,
-                        );
+                        {
+                            let p = cur_si.as_ptr();
+                            (*p).si_h_startpos.lnum = found_current_lnum;
+                            (*p).si_h_startpos.col = found_current_col;
+                        }
                         update_si_end(cur_si, nvim_syn_get_current_col(), true);
                         check_keepend();
                     }

@@ -18,18 +18,6 @@ use crate::types::{
 // =============================================================================
 
 extern "C" {
-    // Keyword entry accessors
-    fn nvim_keyentry_get_next(ke: KeyEntryHandle) -> KeyEntryHandle;
-    fn nvim_keyentry_get_syn_id(ke: KeyEntryHandle) -> i16;
-    fn nvim_keyentry_get_syn_inc_tag(ke: KeyEntryHandle) -> c_int;
-    fn nvim_keyentry_get_flags(ke: KeyEntryHandle) -> c_int;
-    fn nvim_keyentry_get_char(ke: KeyEntryHandle) -> c_int;
-    fn nvim_keyentry_get_keyword(ke: KeyEntryHandle) -> *const c_char;
-    fn nvim_keyentry_get_next_list(ke: KeyEntryHandle) -> IdListHandle;
-    fn nvim_keyentry_get_cont_in_list(ke: KeyEntryHandle) -> IdListHandle;
-    fn nvim_keyentry_has_next_list(ke: KeyEntryHandle) -> c_int;
-    fn nvim_keyentry_has_cont_in_list(ke: KeyEntryHandle) -> c_int;
-
     // Keyword matching functions (nvim_syn_keyword_find replaced by rs_syn_keyword_find Rust impl)
     fn nvim_syn_keyword_foldcase(src: *mut c_char, srclen: c_int, dst: *mut c_char, dstlen: c_int);
     fn nvim_syn_utfc_ptr2len(p: *mut c_char) -> c_int;
@@ -81,7 +69,7 @@ pub fn keyentry_next(ke: KeyEntryHandle) -> KeyEntryHandle {
     if ke.is_null() {
         return KeyEntryHandle::null();
     }
-    unsafe { nvim_keyentry_get_next(ke) }
+    KeyEntryHandle(unsafe { (*ke.as_ptr()).ke_next })
 }
 
 /// Get the syntax ID (highlight group ID) for a keyword entry.
@@ -90,7 +78,7 @@ pub fn keyentry_syn_id(ke: KeyEntryHandle) -> i16 {
     if ke.is_null() {
         return 0;
     }
-    unsafe { nvim_keyentry_get_syn_id(ke) }
+    unsafe { (*ke.as_ptr()).k_syn.id }
 }
 
 /// Get the include tag for a keyword entry.
@@ -99,7 +87,7 @@ pub fn keyentry_inc_tag(ke: KeyEntryHandle) -> i32 {
     if ke.is_null() {
         return 0;
     }
-    unsafe { nvim_keyentry_get_syn_inc_tag(ke) }
+    unsafe { (*ke.as_ptr()).k_syn.inc_tag }
 }
 
 /// Get the flags for a keyword entry.
@@ -108,7 +96,7 @@ pub fn keyentry_flags(ke: KeyEntryHandle) -> i32 {
     if ke.is_null() {
         return 0;
     }
-    unsafe { nvim_keyentry_get_flags(ke) }
+    unsafe { (*ke.as_ptr()).flags }
 }
 
 /// Get the conceal character for a keyword entry.
@@ -117,7 +105,7 @@ pub fn keyentry_cchar(ke: KeyEntryHandle) -> i32 {
     if ke.is_null() {
         return 0;
     }
-    unsafe { nvim_keyentry_get_char(ke) }
+    unsafe { (*ke.as_ptr()).k_char }
 }
 
 /// Get the keyword string for a keyword entry.
@@ -127,7 +115,7 @@ pub fn keyentry_keyword_ptr(ke: KeyEntryHandle) -> *const c_char {
     if ke.is_null() {
         return std::ptr::null();
     }
-    unsafe { nvim_keyentry_get_keyword(ke) }
+    unsafe { crate::ffi_types::KeyEntry::keyword_ptr(ke.as_ptr()) }
 }
 
 /// Get the next_list for a keyword entry.
@@ -136,7 +124,7 @@ pub fn keyentry_next_list(ke: KeyEntryHandle) -> IdListHandle {
     if ke.is_null() {
         return IdListHandle::null();
     }
-    unsafe { nvim_keyentry_get_next_list(ke) }
+    IdListHandle(unsafe { (*ke.as_ptr()).next_list })
 }
 
 /// Get the cont_in_list for a keyword entry.
@@ -145,7 +133,7 @@ pub fn keyentry_cont_in_list(ke: KeyEntryHandle) -> IdListHandle {
     if ke.is_null() {
         return IdListHandle::null();
     }
-    unsafe { nvim_keyentry_get_cont_in_list(ke) }
+    IdListHandle(unsafe { (*ke.as_ptr()).k_syn.cont_in_list })
 }
 
 /// Check if a keyword entry has a next_list.
@@ -154,7 +142,7 @@ pub fn keyentry_has_next_list(ke: KeyEntryHandle) -> bool {
     if ke.is_null() {
         return false;
     }
-    unsafe { nvim_keyentry_has_next_list(ke) != 0 }
+    !unsafe { (*ke.as_ptr()).next_list }.is_null()
 }
 
 /// Check if a keyword entry has a cont_in_list.
@@ -163,7 +151,7 @@ pub fn keyentry_has_cont_in_list(ke: KeyEntryHandle) -> bool {
     if ke.is_null() {
         return false;
     }
-    unsafe { nvim_keyentry_has_cont_in_list(ke) != 0 }
+    !unsafe { (*ke.as_ptr()).k_syn.cont_in_list }.is_null()
 }
 
 /// Check if a keyword entry is contained (not top-level).
@@ -172,8 +160,7 @@ pub fn keyentry_is_contained(ke: KeyEntryHandle) -> bool {
     if ke.is_null() {
         return false;
     }
-    let flags = unsafe { nvim_keyentry_get_flags(ke) };
-    (flags & HL_CONTAINED) != 0
+    (unsafe { (*ke.as_ptr()).flags } & HL_CONTAINED) != 0
 }
 
 // =============================================================================
@@ -319,10 +306,11 @@ pub unsafe fn match_keyword(
     };
     let mut entry = kp;
     while !entry.is_null() {
-        let kp_id = nvim_keyentry_get_syn_id(entry) as c_int;
-        let kp_inc_tag = nvim_keyentry_get_syn_inc_tag(entry);
-        let kp_cont_in = nvim_keyentry_get_cont_in_list(entry);
-        let kp_flags = nvim_keyentry_get_flags(entry);
+        let ke_ptr = entry.as_ptr();
+        let kp_id = i32::from(unsafe { (*ke_ptr).k_syn.id });
+        let kp_inc_tag = unsafe { (*ke_ptr).k_syn.inc_tag };
+        let kp_cont_in = IdListHandle(unsafe { (*ke_ptr).k_syn.cont_in_list });
+        let kp_flags = unsafe { (*ke_ptr).flags };
         let matched = if has_next_list {
             crate::containment::rs_syn_in_id_list(
                 StateItemHandle(std::ptr::null_mut()),
@@ -343,7 +331,7 @@ pub unsafe fn match_keyword(
         if matched {
             return entry;
         }
-        entry = nvim_keyentry_get_next(entry);
+        entry = KeyEntryHandle(unsafe { (*entry.as_ptr()).ke_next });
     }
     KeyEntryHandle::null()
 }
@@ -406,10 +394,11 @@ pub unsafe fn check_keyword_id(
 
     if !kp.is_null() {
         *endcolp = startcol + kwlen;
-        *flagsp = nvim_keyentry_get_flags(kp);
-        *next_listp = nvim_keyentry_get_next_list(kp);
-        *ccharp = nvim_keyentry_get_char(kp);
-        return nvim_keyentry_get_syn_id(kp) as c_int;
+        let kp_ptr = kp.as_ptr();
+        *flagsp = unsafe { (*kp_ptr).flags };
+        *next_listp = IdListHandle(unsafe { (*kp_ptr).next_list });
+        *ccharp = unsafe { (*kp_ptr).k_char };
+        return i32::from(unsafe { (*kp_ptr).k_syn.id });
     }
 
     0

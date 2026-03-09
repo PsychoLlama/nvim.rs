@@ -22,12 +22,6 @@ extern "C" {
 // =============================================================================
 
 extern "C" {
-    // Cluster accessors
-    fn nvim_syncluster_get_name(cluster: SynClusterHandle) -> *const c_char;
-    fn nvim_syncluster_get_name_u(cluster: SynClusterHandle) -> *const c_char;
-    fn nvim_syncluster_get_list(cluster: SynClusterHandle) -> IdListHandle;
-    fn nvim_syncluster_has_list(cluster: SynClusterHandle) -> c_int;
-
     // Synblock cluster accessors
     fn nvim_synblock_get_cluster_count(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_cluster(block: SynBlockHandle, idx: c_int) -> SynClusterHandle;
@@ -40,7 +34,6 @@ extern "C" {
     // Phase 32.3: Cluster lookup and containedin
     fn nvim_synblock_has_containedin(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
-    fn nvim_synpat_get_inc_tag(pat: crate::types::SynPatHandle) -> c_int;
     fn nvim_synblock_is_spell_cluster(block: SynBlockHandle, id: c_int) -> c_int;
     fn nvim_synblock_is_nospell_cluster(block: SynBlockHandle, id: c_int) -> c_int;
 }
@@ -55,7 +48,7 @@ pub fn cluster_name(cluster: SynClusterHandle) -> *const c_char {
     if cluster.is_null() {
         return std::ptr::null();
     }
-    unsafe { nvim_syncluster_get_name(cluster) }
+    unsafe { (*cluster.as_ptr()).scl_name }
 }
 
 /// Get the uppercase name of a syntax cluster.
@@ -64,7 +57,7 @@ pub fn cluster_name_upper(cluster: SynClusterHandle) -> *const c_char {
     if cluster.is_null() {
         return std::ptr::null();
     }
-    unsafe { nvim_syncluster_get_name_u(cluster) }
+    unsafe { (*cluster.as_ptr()).scl_name_u }
 }
 
 /// Get the ID list for a syntax cluster.
@@ -73,7 +66,7 @@ pub fn cluster_list(cluster: SynClusterHandle) -> IdListHandle {
     if cluster.is_null() {
         return IdListHandle::null();
     }
-    unsafe { nvim_syncluster_get_list(cluster) }
+    IdListHandle(unsafe { (*cluster.as_ptr()).scl_list })
 }
 
 /// Check if a cluster has a list of IDs.
@@ -82,7 +75,7 @@ pub fn cluster_has_list(cluster: SynClusterHandle) -> bool {
     if cluster.is_null() {
         return false;
     }
-    unsafe { nvim_syncluster_has_list(cluster) != 0 }
+    !unsafe { (*cluster.as_ptr()).scl_list }.is_null()
 }
 
 /// Get the ID of a cluster (SYNID_CLUSTER + index).
@@ -411,7 +404,7 @@ pub fn synpat_inc_tag(pat: crate::types::SynPatHandle) -> i32 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_inc_tag(pat) }
+    unsafe { (*pat.as_ptr()).sp_syn.inc_tag }
 }
 
 /// Check if a cluster ID is the @Spell cluster.
@@ -847,7 +840,7 @@ unsafe fn syn_scl_name2id_impl(name: *mut c_char) -> c_int {
     while i >= 0 {
         let cluster = nvim_synblock_get_cluster(block, i);
         if !cluster.is_null() {
-            let name_u_c = nvim_syncluster_get_name_u(cluster);
+            let name_u_c = (*cluster.as_ptr()).scl_name_u;
             if !name_u_c.is_null() {
                 // strcmp of two C strings
                 let a = std::ffi::CStr::from_ptr(name_u);

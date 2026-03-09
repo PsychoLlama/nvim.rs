@@ -18,7 +18,6 @@ use crate::types::{
 };
 
 const MAXCOL: i32 = 0x7fff_ffff;
-const SKIP: c_int = c_int::MIN;
 
 // =============================================================================
 // FFI declarations
@@ -42,56 +41,6 @@ extern "C" {
     fn nvim_syn_get_current_state_len() -> c_int;
     fn nvim_syn_is_current_state_empty() -> c_int;
     fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
-
-    // State item accessors
-    fn nvim_stateitem_get_idx(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_trans_id(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_attr(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_flags(item: StateItemHandle) -> c_int;
-    fn nvim_stateitem_get_cont_list(item: StateItemHandle) -> IdListHandle;
-    fn nvim_stateitem_get_next_list(item: StateItemHandle) -> IdListHandle;
-    #[allow(clippy::too_many_arguments)]
-    fn nvim_stateitem_get_positions(
-        item: StateItemHandle,
-        m_lnum: *mut c_int,
-        m_startcol: *mut c_int,
-        m_end_lnum: *mut c_int,
-        m_end_col: *mut c_int,
-        h_start_lnum: *mut c_int,
-        h_start_col: *mut c_int,
-        h_end_lnum: *mut c_int,
-        h_end_col: *mut c_int,
-        eoe_lnum: *mut c_int,
-        eoe_col: *mut c_int,
-    );
-
-    // State item setters
-    // Bulk position setter (pass c_int::MIN to skip a field)
-    #[allow(clippy::too_many_arguments)]
-    fn nvim_stateitem_set_positions(
-        item: StateItemHandle,
-        m_lnum: c_int,
-        m_startcol: c_int,
-        m_end_lnum: c_int,
-        m_end_col: c_int,
-        h_start_lnum: c_int,
-        h_start_col: c_int,
-        h_end_lnum: c_int,
-        h_end_col: c_int,
-        eoe_lnum: c_int,
-        eoe_col: c_int,
-    );
-    fn nvim_stateitem_set_ends(item: StateItemHandle, ends: c_int);
-    fn nvim_stateitem_set_end_idx(item: StateItemHandle, end_idx: c_int);
-    fn nvim_stateitem_set_flags(item: StateItemHandle, flags: c_int);
-    fn nvim_stateitem_or_flags(item: StateItemHandle, flags: c_int);
-    fn nvim_stateitem_set_seqnr(item: StateItemHandle, seqnr: c_int);
-    fn nvim_stateitem_set_cchar(item: StateItemHandle, cchar: c_int);
-    fn nvim_stateitem_set_id(item: StateItemHandle, id: c_int);
-    fn nvim_stateitem_set_trans_id(item: StateItemHandle, trans_id: c_int);
-    fn nvim_stateitem_set_attr(item: StateItemHandle, attr: c_int);
-    fn nvim_stateitem_set_cont_list(item: StateItemHandle, list: IdListHandle);
-    fn nvim_stateitem_set_next_list(item: StateItemHandle, list: IdListHandle);
 
     // Next match
     fn nvim_syn_get_next_match_idx() -> c_int;
@@ -233,7 +182,7 @@ unsafe fn check_pattern_containment(
         }
     } else {
         let cur_si = nvim_syn_get_stateitem(si_idx);
-        let cont_list = nvim_stateitem_get_cont_list(cur_si);
+        let cont_list = IdListHandle((*cur_si.as_ptr()).si_cont_list);
         let flags = nvim_syn_get_pattern_flags(pat_idx);
         rs_syn_in_id_list(cur_si, cont_list, syn_id, inc_tag, cont_in_list, flags)
     }
@@ -313,7 +262,7 @@ pub unsafe fn syn_current_attr(
 
         if nvim_syn_has_containedin() != 0 || !cur_si_valid || {
             let si = nvim_syn_get_stateitem(state_len - 1);
-            !nvim_stateitem_get_cont_list(si).0.is_null()
+            !(*si.as_ptr()).si_cont_list.is_null()
         } {
             // 2. Check for keywords
             if do_keywords {
@@ -353,54 +302,56 @@ pub unsafe fn syn_current_attr(
                         crate::state_ops::rs_syn_push_current_state(KEYWORD_IDX);
                         let new_len = nvim_syn_get_current_state_len();
                         let cur_si = nvim_syn_get_stateitem(new_len - 1);
-                        nvim_stateitem_set_positions(
-                            cur_si,
-                            current_lnum,
-                            current_col,
-                            current_lnum,
-                            endcol,
-                            current_lnum,
-                            0,
-                            current_lnum,
-                            endcol,
-                            SKIP,
-                            SKIP,
-                        );
-                        nvim_stateitem_set_ends(cur_si, 1);
-                        nvim_stateitem_set_end_idx(cur_si, 0);
-                        nvim_stateitem_set_flags(cur_si, flags);
-                        nvim_stateitem_set_seqnr(cur_si, nvim_syn_incr_next_seqnr());
-                        nvim_stateitem_set_cchar(cur_si, cchar);
+                        {
+                            let p = cur_si.as_ptr();
+                            (*p).si_m_lnum = current_lnum;
+                            (*p).si_m_startcol = current_col;
+                            (*p).si_m_endpos.lnum = current_lnum;
+                            (*p).si_m_endpos.col = endcol;
+                            (*p).si_h_startpos.lnum = current_lnum;
+                            (*p).si_h_startpos.col = 0;
+                            (*p).si_h_endpos.lnum = current_lnum;
+                            (*p).si_h_endpos.col = endcol;
+                            (*p).si_ends = 1;
+                            (*p).si_end_idx = 0;
+                            (*p).si_flags = flags;
+                            (*p).si_seqnr = nvim_syn_incr_next_seqnr();
+                            (*p).si_cchar = cchar;
+                        }
 
                         if new_len > 1 {
                             let prev_si = nvim_syn_get_stateitem(new_len - 2);
-                            let prev_flags = nvim_stateitem_get_flags(prev_si);
-                            if prev_flags & HL_CONCEAL != 0 {
-                                nvim_stateitem_or_flags(cur_si, HL_CONCEAL);
+                            if (*prev_si.as_ptr()).si_flags & HL_CONCEAL != 0 {
+                                (*cur_si.as_ptr()).si_flags |= HL_CONCEAL;
                             }
                         }
 
-                        nvim_stateitem_set_id(cur_si, syn_id);
-                        nvim_stateitem_set_trans_id(cur_si, syn_id);
+                        {
+                            let p = cur_si.as_ptr();
+                            (*p).si_id = syn_id;
+                            (*p).si_trans_id = syn_id;
+                        }
 
                         if flags & HL_TRANSP != 0 {
                             if new_len < 2 {
-                                nvim_stateitem_set_attr(cur_si, 0);
-                                nvim_stateitem_set_trans_id(cur_si, 0);
+                                let p = cur_si.as_ptr();
+                                (*p).si_attr = 0;
+                                (*p).si_trans_id = 0;
                             } else {
                                 let prev_si = nvim_syn_get_stateitem(new_len - 2);
-                                nvim_stateitem_set_attr(cur_si, nvim_stateitem_get_attr(prev_si));
-                                nvim_stateitem_set_trans_id(
-                                    cur_si,
-                                    nvim_stateitem_get_trans_id(prev_si),
-                                );
+                                let p = cur_si.as_ptr();
+                                (*p).si_attr = (*prev_si.as_ptr()).si_attr;
+                                (*p).si_trans_id = (*prev_si.as_ptr()).si_trans_id;
                             }
                         } else {
-                            nvim_stateitem_set_attr(cur_si, nvim_syn_id2attr_wrapper(syn_id));
+                            (*cur_si.as_ptr()).si_attr = nvim_syn_id2attr_wrapper(syn_id);
                         }
 
-                        nvim_stateitem_set_cont_list(cur_si, IdListHandle(std::ptr::null_mut()));
-                        nvim_stateitem_set_next_list(cur_si, next_list);
+                        {
+                            let p = cur_si.as_ptr();
+                            (*p).si_cont_list = std::ptr::null_mut();
+                            (*p).si_next_list = next_list.0;
+                        }
                         check_keepend();
                         cur_si_valid = true;
                     }
@@ -660,23 +611,15 @@ pub unsafe fn syn_current_attr(
     if cur_si_valid && state_len > 0 {
         for idx in (0..state_len).rev() {
             let sip = nvim_syn_get_stateitem(idx);
-            let mut h_start_lnum: c_int = 0;
-            let mut h_start_col: c_int = 0;
-            let mut h_end_lnum: c_int = 0;
-            let mut h_end_col: c_int = 0;
-            nvim_stateitem_get_positions(
-                sip,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                &mut h_start_lnum,
-                &mut h_start_col,
-                &mut h_end_lnum,
-                &mut h_end_col,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-            );
+            let (h_start_lnum, h_start_col, h_end_lnum, h_end_col) = {
+                let p = sip.as_ptr();
+                (
+                    (*p).si_h_startpos.lnum,
+                    (*p).si_h_startpos.col,
+                    (*p).si_h_endpos.lnum,
+                    (*p).si_h_endpos.col,
+                )
+            };
 
             if (current_lnum > h_start_lnum
                 || (current_lnum == h_start_lnum && current_col >= h_start_col))
@@ -756,7 +699,7 @@ unsafe fn compute_can_spell(sip: StateItemHandle, can_spell: *mut c_int) {
         if nospell_cluster == 0 || current_trans_id == 0 {
             *can_spell = (syn_spell != SYNSPL_NOTOP) as c_int;
         } else {
-            let cont_list = nvim_stateitem_get_cont_list(sip);
+            let cont_list = IdListHandle((*sip.as_ptr()).si_cont_list);
             *can_spell = (nvim_syn_in_id_list_spell(sip, cont_list, nospell_cluster) == 0) as c_int;
         }
     } else {
@@ -764,7 +707,7 @@ unsafe fn compute_can_spell(sip: StateItemHandle, can_spell: *mut c_int) {
         if current_trans_id == 0 {
             *can_spell = (syn_spell == SYNSPL_TOP) as c_int;
         } else {
-            let cont_list = nvim_stateitem_get_cont_list(sip);
+            let cont_list = IdListHandle((*sip.as_ptr()).si_cont_list);
             *can_spell = nvim_syn_in_id_list_spell(sip, cont_list, spell_cluster);
 
             if nospell_cluster != 0
@@ -791,27 +734,11 @@ fn did_match_already(idx: i32, zero_width_ga: &[i32]) -> bool {
         if si.is_null() {
             continue;
         }
-        let mut m_lnum: c_int = 0;
-        let mut m_startcol: c_int = 0;
-        unsafe {
-            nvim_stateitem_get_positions(
-                si,
-                &mut m_lnum,
-                &mut m_startcol,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-            );
-        }
-        if m_startcol == current_col
-            && m_lnum == current_lnum
-            && unsafe { nvim_stateitem_get_idx(si) } == idx
-        {
+        let (m_lnum, m_startcol, si_idx) = unsafe {
+            let p = si.as_ptr();
+            ((*p).si_m_lnum, (*p).si_m_startcol, (*p).si_idx)
+        };
+        if m_startcol == current_col && m_lnum == current_lnum && si_idx == idx {
             return true;
         }
     }
@@ -836,7 +763,7 @@ pub unsafe fn syn_finish_line(syncing: bool) -> bool {
         if syncing && nvim_syn_get_current_state_len() > 0 {
             let state_len = nvim_syn_get_current_state_len();
             let cur_si = nvim_syn_get_stateitem(state_len - 1);
-            let si_idx = nvim_stateitem_get_idx(cur_si);
+            let si_idx = unsafe { (*cur_si.as_ptr()).si_idx };
             if si_idx >= 0 {
                 let pat_flags = nvim_syn_get_pattern_flags(si_idx);
                 if (pat_flags & (HL_SYNC_HERE | HL_SYNC_THERE)) != 0 {

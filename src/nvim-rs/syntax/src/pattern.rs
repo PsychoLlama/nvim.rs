@@ -24,32 +24,6 @@ extern "C" {
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
     fn nvim_synblock_get_folditems(block: SynBlockHandle) -> c_int;
 
-    // synpat_T field accessors
-    fn nvim_synpat_get_type(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_syncing(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_syn_match_id(pat: SynPatHandle) -> i16;
-    fn nvim_synpat_get_off_flags(pat: SynPatHandle) -> i16;
-    fn nvim_synpat_get_flags(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_cchar(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_ic(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_sync_idx(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_pattern(pat: SynPatHandle) -> *const c_char;
-    fn nvim_synpat_get_syn_id(pat: SynPatHandle) -> i16;
-    fn nvim_synpat_get_syn_inc_tag(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_hl_group(pat: SynPatHandle) -> c_int;
-
-    // Pattern program accessors
-    fn nvim_synpat_get_prog(pat: SynPatHandle) -> RegProgHandle;
-    fn nvim_synpat_has_prog(pat: SynPatHandle) -> c_int;
-
-    // Pattern list accessors
-    fn nvim_synpat_get_cont_list(pat: SynPatHandle) -> IdListHandle;
-    fn nvim_synpat_get_next_list(pat: SynPatHandle) -> IdListHandle;
-    fn nvim_synpat_get_cont_in_list(pat: SynPatHandle) -> IdListHandle;
-    fn nvim_synpat_has_cont_list(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_has_next_list(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_has_cont_in_list(pat: SynPatHandle) -> c_int;
-
     // Pattern index-based accessors (for current synblock)
     fn nvim_synblock_pattern_ic(pat_idx: c_int) -> c_int;
 
@@ -152,7 +126,7 @@ pub fn synblock_pattern_is_syncing(block: SynBlockHandle, idx: i32) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_get_syncing(pat) != 0 }
+    unsafe { (*pat.as_ptr()).sp_syncing }
 }
 
 /// Count patterns with a specific highlight group ID.
@@ -167,7 +141,7 @@ pub fn synblock_count_patterns_for_id(block: SynBlockHandle, id: i32) -> i32 {
     let mut n = 0;
     for i in 0..count {
         let pat = unsafe { nvim_synblock_get_pattern(block, i) };
-        if !pat.is_null() && unsafe { nvim_synpat_get_syn_id(pat) } as i32 == id {
+        if !pat.is_null() && i32::from(unsafe { (*pat.as_ptr()).sp_syn.id }) == id {
             n += 1;
         }
     }
@@ -184,7 +158,7 @@ pub fn synpat_type(pat: SynPatHandle) -> PatternType {
     if pat.is_null() {
         return PatternType::Unknown(0);
     }
-    PatternType::from(unsafe { nvim_synpat_get_type(pat) })
+    PatternType::from(i32::from(unsafe { (*pat.as_ptr()).sp_type }))
 }
 
 /// Get the pattern type as raw integer
@@ -193,7 +167,7 @@ pub fn synpat_type_raw(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_type(pat) }
+    i32::from(unsafe { (*pat.as_ptr()).sp_type })
 }
 
 /// Get the flags for a pattern
@@ -202,7 +176,7 @@ pub fn synpat_flags(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_flags(pat) }
+    unsafe { (*pat.as_ptr()).sp_flags }
 }
 
 /// Get the highlight group ID for a pattern
@@ -211,7 +185,7 @@ pub fn synpat_syn_id(pat: SynPatHandle) -> i16 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_syn_id(pat) }
+    unsafe { (*pat.as_ptr()).sp_syn.id }
 }
 
 /// Get the match ID for a pattern
@@ -220,7 +194,7 @@ pub fn synpat_match_id(pat: SynPatHandle) -> i16 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_syn_match_id(pat) }
+    unsafe { (*pat.as_ptr()).sp_syn_match_id }
 }
 
 /// Get the include tag for a pattern
@@ -229,7 +203,7 @@ pub fn synpat_inc_tag(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_syn_inc_tag(pat) }
+    unsafe { (*pat.as_ptr()).sp_syn.inc_tag }
 }
 
 /// Get the offset flags for a pattern
@@ -238,7 +212,7 @@ pub fn synpat_off_flags(pat: SynPatHandle) -> i16 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_off_flags(pat) }
+    unsafe { (*pat.as_ptr()).sp_off_flags }
 }
 
 /// Get the conceal character for a pattern
@@ -247,7 +221,7 @@ pub fn synpat_cchar(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_cchar(pat) }
+    unsafe { (*pat.as_ptr()).sp_cchar }
 }
 
 /// Get the ignore-case flag for a pattern
@@ -256,7 +230,7 @@ pub fn synpat_ic(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_get_ic(pat) != 0 }
+    unsafe { (*pat.as_ptr()).sp_ic != 0 }
 }
 
 /// Get the sync index for a pattern (syncing only)
@@ -265,7 +239,7 @@ pub fn synpat_sync_idx(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_sync_idx(pat) }
+    unsafe { (*pat.as_ptr()).sp_sync_idx }
 }
 
 /// Get the pattern string
@@ -274,16 +248,16 @@ pub fn synpat_pattern_str(pat: SynPatHandle) -> *const c_char {
     if pat.is_null() {
         return std::ptr::null();
     }
-    unsafe { nvim_synpat_get_pattern(pat) }
+    unsafe { (*pat.as_ptr()).sp_pattern }
 }
 
-/// Get the highlight group from a pattern (minus 1)
+/// Get the highlight group from a pattern (syn_id - 1, zero-based)
 #[must_use]
 pub fn synpat_hl_group(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return -1;
     }
-    unsafe { nvim_synpat_get_hl_group(pat) }
+    i32::from(unsafe { (*pat.as_ptr()).sp_syn.id }) - 1
 }
 
 // =============================================================================
@@ -296,7 +270,7 @@ pub fn synpat_is_syncing(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_get_syncing(pat) != 0 }
+    unsafe { (*pat.as_ptr()).sp_syncing }
 }
 
 /// Check if a pattern is transparent
@@ -357,7 +331,7 @@ pub fn synpat_has_prog(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_has_prog(pat) != 0 }
+    !unsafe { (*pat.as_ptr()).sp_prog }.is_null()
 }
 
 /// Get the compiled regex program for a pattern
@@ -366,11 +340,11 @@ pub fn synpat_prog(pat: SynPatHandle) -> Option<RegProgHandle> {
     if pat.is_null() {
         return None;
     }
-    let prog = unsafe { nvim_synpat_get_prog(pat) };
+    let prog = unsafe { (*pat.as_ptr()).sp_prog };
     if prog.is_null() {
         None
     } else {
-        Some(prog)
+        Some(RegProgHandle(prog))
     }
 }
 
@@ -384,7 +358,7 @@ pub fn synpat_has_contains(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_has_cont_list(pat) != 0 }
+    !unsafe { (*pat.as_ptr()).sp_cont_list }.is_null()
 }
 
 /// Get the contains list for a pattern
@@ -393,11 +367,11 @@ pub fn synpat_contains_list(pat: SynPatHandle) -> Option<IdListHandle> {
     if pat.is_null() {
         return None;
     }
-    let list = unsafe { nvim_synpat_get_cont_list(pat) };
+    let list = unsafe { (*pat.as_ptr()).sp_cont_list };
     if list.is_null() {
         None
     } else {
-        Some(list)
+        Some(IdListHandle(list))
     }
 }
 
@@ -407,7 +381,7 @@ pub fn synpat_has_nextgroup(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_has_next_list(pat) != 0 }
+    !unsafe { (*pat.as_ptr()).sp_next_list }.is_null()
 }
 
 /// Get the nextgroup list for a pattern
@@ -416,11 +390,11 @@ pub fn synpat_nextgroup_list(pat: SynPatHandle) -> Option<IdListHandle> {
     if pat.is_null() {
         return None;
     }
-    let list = unsafe { nvim_synpat_get_next_list(pat) };
+    let list = unsafe { (*pat.as_ptr()).sp_next_list };
     if list.is_null() {
         None
     } else {
-        Some(list)
+        Some(IdListHandle(list))
     }
 }
 
@@ -430,7 +404,7 @@ pub fn synpat_has_containedin(pat: SynPatHandle) -> bool {
     if pat.is_null() {
         return false;
     }
-    unsafe { nvim_synpat_has_cont_in_list(pat) != 0 }
+    !unsafe { (*pat.as_ptr()).sp_syn.cont_in_list }.is_null()
 }
 
 /// Get the containedin list for a pattern
@@ -439,11 +413,11 @@ pub fn synpat_containedin_list(pat: SynPatHandle) -> Option<IdListHandle> {
     if pat.is_null() {
         return None;
     }
-    let list = unsafe { nvim_synpat_get_cont_in_list(pat) };
+    let list = unsafe { (*pat.as_ptr()).sp_syn.cont_in_list };
     if list.is_null() {
         None
     } else {
-        Some(list)
+        Some(IdListHandle(list))
     }
 }
 

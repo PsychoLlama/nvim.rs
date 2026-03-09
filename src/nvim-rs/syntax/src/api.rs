@@ -153,7 +153,6 @@ extern "C" {
     fn nvim_syn_invalidate_current_state();
     fn nvim_syn_set_current_col(col: c_int);
     fn nvim_syn_get_stateitem(idx: c_int) -> StateItemHandle;
-    fn nvim_stateitem_get_id(item: StateItemHandle) -> c_int;
 }
 
 /// MAXCOL: large column value used to invalidate column state.
@@ -238,7 +237,7 @@ pub unsafe fn syn_get_stack_item_impl(i: c_int) -> c_int {
         return -1;
     }
     let item = nvim_syn_get_stateitem(i);
-    nvim_stateitem_get_id(item)
+    (*item.as_ptr()).si_id
 }
 
 // =============================================================================

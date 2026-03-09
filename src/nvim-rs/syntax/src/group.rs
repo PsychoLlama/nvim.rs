@@ -17,10 +17,6 @@ use crate::types::{SynBlockHandle, SynPatHandle, WinHandle};
 // =============================================================================
 
 extern "C" {
-    // Pattern group accessors
-    fn nvim_synpat_get_syn_id(pat: SynPatHandle) -> i16;
-    fn nvim_synpat_get_syn_match_id(pat: SynPatHandle) -> i16;
-    fn nvim_synpat_get_hl_group(pat: SynPatHandle) -> c_int;
 
     // Synblock group settings
     fn nvim_synblock_get_topgrp(block: SynBlockHandle) -> c_int;
@@ -53,7 +49,7 @@ pub fn synpat_syn_id(pat: SynPatHandle) -> i16 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_syn_id(pat) }
+    unsafe { (*pat.as_ptr()).sp_syn.id }
 }
 
 /// Get the match group ID from a pattern (for contained matches).
@@ -62,16 +58,16 @@ pub fn synpat_match_id(pat: SynPatHandle) -> i16 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_syn_match_id(pat) }
+    unsafe { (*pat.as_ptr()).sp_syn_match_id }
 }
 
-/// Get the highlight group from a pattern.
+/// Get the highlight group from a pattern (syn_id - 1, zero-based).
 #[must_use]
 pub fn synpat_hl_group(pat: SynPatHandle) -> i32 {
     if pat.is_null() {
         return 0;
     }
-    unsafe { nvim_synpat_get_hl_group(pat) }
+    i32::from(unsafe { (*pat.as_ptr()).sp_syn.id }) - 1
 }
 
 // =============================================================================

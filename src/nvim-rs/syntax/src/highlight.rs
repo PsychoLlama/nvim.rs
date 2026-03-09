@@ -23,9 +23,6 @@ extern "C" {
     // Synblock conceal settings
     fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
 
-    // Keyword conceal char
-    fn nvim_keyentry_get_char(ke: KeyEntryHandle) -> c_int;
-
     // Concealed position check
     fn syn_get_concealed_id(wp: WinHandle, lnum: c_int, col: c_int) -> c_int;
 
@@ -143,7 +140,7 @@ pub fn keyentry_cchar(ke: KeyEntryHandle) -> i32 {
     if ke.is_null() {
         return 0;
     }
-    unsafe { nvim_keyentry_get_char(ke) }
+    unsafe { (*ke.as_ptr()).k_char }
 }
 
 // =============================================================================
