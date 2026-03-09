@@ -790,6 +790,139 @@ bool nvim_apply_autocmds_bufdelete(buf_T *buf)
   return apply_autocmds(EVENT_BUFDELETE, NULL, NULL, false, buf);
 }
 
+// Phase 3 accessor functions for fileinfo.
+// NOTE: nvim_get_p_ru is already defined in drawscreen.c.
+
+/// Get msg_scroll value (accessor for Rust).
+int nvim_msg_scroll_get(void)
+{
+  return msg_scroll;
+}
+
+/// Set msg_scroll value (accessor for Rust).
+void nvim_msg_scroll_set(int val)
+{
+  msg_scroll = val;
+}
+
+/// Get restart_edit value (accessor for Rust).
+int nvim_restart_edit_get(void)
+{
+  return restart_edit;
+}
+
+/// Get msg_scrolled value (accessor for Rust).
+int nvim_msg_scrolled_get(void)
+{
+  return msg_scrolled;
+}
+
+/// Get need_wait_return value (accessor for Rust).
+bool nvim_need_wait_return_get(void)
+{
+  return need_wait_return;
+}
+
+/// Call msg() with a string and hl_id (accessor for Rust).
+bool nvim_msg_call(const char *s, int hl_id)
+{
+  return msg(s, hl_id);
+}
+
+/// Call msg_trunc() (accessor for Rust).
+char *nvim_msg_trunc(char *s, bool force, int hl_id)
+{
+  return msg_trunc(s, force, hl_id);
+}
+
+/// Call set_keep_msg() with hl_id=0 (accessor for Rust).
+void nvim_set_keep_msg(const char *s)
+{
+  set_keep_msg(s, 0);
+}
+
+/// home_replace() wrapper for Rust - replaces home dir in name, writing into dst.
+/// Returns number of bytes written (excluding NUL).
+size_t nvim_home_replace(const buf_T *buf, const char *src, char *dst, size_t dstlen, bool one)
+{
+  return home_replace(buf, src, dst, dstlen, one);
+}
+
+/// Get curbuf->b_fname (short filename) (accessor for Rust).
+const char *nvim_curbuf_get_fname(void)
+{
+  return curbuf->b_fname;
+}
+
+/// Get translated plural line-count format string (accessor for Rust).
+/// Returns "%" PRId64 " line --%d%%--" (singular) or "%" PRId64 " lines --%d%%--" (plural).
+const char *nvim_ngettext_line_count(int64_t n)
+{
+  return NGETTEXT("%" PRId64 " line --%d%%--",
+                  "%" PRId64 " lines --%d%%--",
+                  (unsigned long)n);
+}
+
+/// Get translated "[Modified]" string (accessor for Rust).
+const char *nvim_msg_modified(void)
+{
+  return _(" [Modified]");
+}
+
+/// Get translated "[Not edited]" string (accessor for Rust).
+const char *nvim_msg_not_edited(void)
+{
+  return _("[Not edited]");
+}
+
+/// Get translated "[New]" string (accessor for Rust).
+const char *nvim_msg_new(void)
+{
+  return _("[New]");
+}
+
+/// Get translated "[Read errors]" string (accessor for Rust).
+const char *nvim_msg_read_errors(void)
+{
+  return _("[Read errors]");
+}
+
+/// Get translated "[RO]" string (accessor for Rust).
+const char *nvim_msg_ro(void)
+{
+  return _("[RO]");
+}
+
+/// Get translated "[readonly]" string (accessor for Rust).
+const char *nvim_msg_readonly(void)
+{
+  return _("[readonly]");
+}
+
+/// Get translated "--No lines in buffer--" string (accessor for Rust).
+const char *nvim_no_lines_msg(void)
+{
+  return _(no_lines_msg);
+}
+
+/// Get shortmess(SHM_MOD) (accessor for Rust).
+int nvim_shortmess_mod(void)
+{
+  return shortmess(SHM_MOD) ? 1 : 0;
+}
+
+/// Get shortmess(SHM_RO) (accessor for Rust).
+int nvim_shortmess_ro(void)
+{
+  return shortmess(SHM_RO) ? 1 : 0;
+}
+
+/// Get translated line-position format string "line %..." (accessor for Rust).
+const char *nvim_fileinfo_line_fmt(void)
+{
+  return _("line %" PRId64 " of %" PRId64 " --%d%%-- col ");
+}
+
 // Static assertions for constants used in Rust (Phase 1).
 _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch with Rust");
 _Static_assert(DOBUF_WIPE == 4, "DOBUF_WIPE mismatch with Rust");
@@ -3630,102 +3763,8 @@ void buflist_slash_adjust(void)
 #endif
 
 
-/// Print info about the current buffer.
-///
-/// @param fullname  when non-zero print full path
-void fileinfo(int fullname, int shorthelp, bool dont_truncate)
-{
-  char *buffer = xmalloc(IOSIZE);
-  size_t bufferlen = 0;
-
-  if (fullname > 1) {       // 2 CTRL-G: include buffer number
-    bufferlen = vim_snprintf_safelen(buffer, IOSIZE, "buf %d: ", curbuf->b_fnum);
-  }
-
-  buffer[bufferlen++] = '"';
-
-  char *name = buf_spname(curbuf);
-  if (name != NULL) {
-    bufferlen += vim_snprintf_safelen(buffer + bufferlen,
-                                      IOSIZE - bufferlen, "%s", name);
-  } else {
-    name = (!fullname && curbuf->b_fname != NULL) ? curbuf->b_fname : curbuf->b_ffname;
-    home_replace(shorthelp ? curbuf : NULL, name, buffer + bufferlen,
-                 IOSIZE - bufferlen, true);
-    bufferlen += strlen(buffer + bufferlen);
-  }
-
-  bool dontwrite = bt_dontwrite(curbuf);
-  bufferlen += vim_snprintf_safelen(buffer + bufferlen,
-                                    IOSIZE - bufferlen,
-                                    "\"%s%s%s%s%s%s",
-                                    curbufIsChanged()
-                                    ? (shortmess(SHM_MOD) ? " [+]" : _(" [Modified]"))
-                                    : " ",
-                                    (curbuf->b_flags & BF_NOTEDITED) && !dontwrite
-                                    ? _("[Not edited]") : "",
-                                    (curbuf->b_flags & BF_NEW) && !dontwrite
-                                    ? _("[New]") : "",
-                                    (curbuf->b_flags & BF_READERR)
-                                    ? _("[Read errors]") : "",
-                                    curbuf->b_p_ro
-                                    ? (shortmess(SHM_RO) ? _("[RO]") : _("[readonly]"))
-                                    : "",
-                                    (curbufIsChanged()
-                                     || (curbuf->b_flags & BF_WRITE_MASK)
-                                     || curbuf->b_p_ro)
-                                    ? " " : "");
-
-  if (curbuf->b_ml.ml_flags & ML_EMPTY) {
-    bufferlen += vim_snprintf_safelen(buffer + bufferlen,
-                                      IOSIZE - bufferlen, "%s", _(no_lines_msg));
-  } else if (p_ru) {
-    // Current line and column are already on the screen -- webb
-    bufferlen += vim_snprintf_safelen(buffer + bufferlen,
-                                      IOSIZE - bufferlen,
-                                      NGETTEXT("%" PRId64 " line --%d%%--",
-                                               "%" PRId64 " lines --%d%%--",
-                                               curbuf->b_ml.ml_line_count),
-                                      (int64_t)curbuf->b_ml.ml_line_count,
-                                      calc_percentage(curwin->w_cursor.lnum,
-                                                      curbuf->b_ml.ml_line_count));
-  } else {
-    bufferlen += vim_snprintf_safelen(buffer + bufferlen,
-                                      IOSIZE - bufferlen,
-                                      _("line %" PRId64 " of %" PRId64 " --%d%%-- col "),
-                                      (int64_t)curwin->w_cursor.lnum,
-                                      (int64_t)curbuf->b_ml.ml_line_count,
-                                      calc_percentage(curwin->w_cursor.lnum,
-                                                      curbuf->b_ml.ml_line_count));
-    validate_virtcol(curwin);
-    bufferlen += (size_t)col_print(buffer + bufferlen, IOSIZE - bufferlen,
-                                   curwin->w_cursor.col + 1, curwin->w_virtcol + 1);
-  }
-
-  append_arg_number(curwin, buffer + bufferlen, IOSIZE - bufferlen);
-
-  if (dont_truncate) {
-    // Temporarily set msg_scroll to avoid the message being truncated.
-    // First call msg_start() to get the message in the right place.
-    msg_start();
-    int n = msg_scroll;
-    msg_scroll = true;
-    msg(buffer, 0);
-    msg_scroll = n;
-  } else {
-    char *p = msg_trunc(buffer, false, 0);
-    if (restart_edit != 0 || (msg_scrolled && !need_wait_return)) {
-      // Need to repeat the message after redrawing when:
-      // - When restart_edit is set (otherwise there will be a delay
-      //   before redrawing).
-      // - When the screen was scrolled but there is no wait-return
-      //   prompt.
-      set_keep_msg(p, 0);
-    }
-  }
-
-  xfree(buffer);
-}
+// fileinfo() is implemented in Rust (see src/nvim-rs/buffer/src/info.rs).
+// The C declaration is in buffer.h as a static inline wrapper.
 
 
 static char *lasttitle = NULL;
