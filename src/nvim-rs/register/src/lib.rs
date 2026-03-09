@@ -1,16 +1,20 @@
 //! Register utilities for Neovim
 //!
-//! This crate provides functions for validating register names and operations.
+//! This crate provides functions for managing yank registers.
 
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
 
 pub mod blockwise;
 
 pub use blockwise::*;
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 /// MotionType values matching `normal_defs.h`.
 pub const K_MT_CHAR_WISE: c_int = 0;
@@ -20,11 +24,6 @@ pub const K_MT_UNKNOWN: c_int = -1;
 
 /// CTRL-V character (0x16 = 22 decimal).
 const CTRL_V: u8 = 0x16;
-
-/// Opaque handle to yankreg_T.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct YankRegHandle(*mut std::ffi::c_void);
 
 /// String type matching C's `String` struct (data pointer + size).
 #[repr(C)]
@@ -43,89 +42,135 @@ impl Default for NvimString {
     }
 }
 
-// FFI declarations for C accessor functions
+/// Register struct matching C's `yankreg_T` exactly (40 bytes on 64-bit).
+///
+/// Layout matches `register_defs.h`:
+/// ```c
+/// typedef struct {
+///   String *y_array;          // Pointer to an array of Strings.
+///   size_t y_size;            // Number of lines in y_array.
+///   MotionType y_type;        // Register type
+///   colnr_T y_width;          // Register width (only valid for blockwise).
+///   Timestamp timestamp;      // Time when register was last modified.
+///   AdditionalData *additional_data;  // Additional data from ShaDa file.
+/// } yankreg_T;
+/// ```
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct YankReg {
+    pub y_array: *mut NvimString,
+    pub y_size: usize,
+    pub y_type: c_int,  // MotionType
+    pub y_width: c_int, // colnr_T
+    pub timestamp: u64, // Timestamp
+    pub additional_data: *mut c_void,
+}
+
+const _: () = assert!(std::mem::size_of::<YankReg>() == 40);
+
+impl YankReg {
+    /// A zero-initialised register (empty, no array).
+    pub const ZERO: Self = Self {
+        y_array: std::ptr::null_mut(),
+        y_size: 0,
+        y_type: K_MT_CHAR_WISE,
+        y_width: 0,
+        timestamp: 0,
+        additional_data: std::ptr::null_mut(),
+    };
+
+    /// Return true when the register holds no meaningful text.
+    pub fn is_empty(&self) -> bool {
+        self.y_array.is_null()
+            || self.y_size == 0
+            || (self.y_size == 1
+                && self.y_type == K_MT_CHAR_WISE
+                && unsafe { (*self.y_array).size == 0 })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Global register state – owned by Rust, referenced by C via `extern`.
+// ---------------------------------------------------------------------------
+
+/// All yank registers.
+#[no_mangle]
+pub static mut y_regs: [YankReg; 39] = [YankReg::ZERO; 39];
+
+/// Pointer to the last-written register ("" unnamed paste source).
+#[no_mangle]
+pub static mut y_previous: *mut YankReg = std::ptr::null_mut();
+
+/// The saved expression-register source line.
+#[no_mangle]
+pub static mut expr_line: *mut c_char = std::ptr::null_mut();
+
+/// Last character used with `@` (for `@@` repeat).
+#[no_mangle]
+pub static mut execreg_lastc: c_int = 0;
+
+// ---------------------------------------------------------------------------
+// FFI declarations – real C functions, no wrapper overhead.
+// ---------------------------------------------------------------------------
+
 extern "C" {
-    /// Get the index of the unnamed register (y_previous - y_regs), or -1 if NULL.
-    fn nvim_get_y_previous_index() -> c_int;
+    // Memory management
+    fn xfree(ptr: *mut c_void);
+    fn xstrdup(str: *const c_char) -> *mut c_char;
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+    fn xmallocz(size: usize) -> *mut c_char;
+    fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
+    #[allow(dead_code)]
+    fn xmemdup(src: *const c_void, len: usize) -> *mut c_void;
 
-    // yankreg_T accessors
-    fn nvim_yankreg_get_size(reg: YankRegHandle) -> usize;
-    fn nvim_yankreg_get_type(reg: YankRegHandle) -> c_int;
-    fn nvim_yankreg_get_width(reg: YankRegHandle) -> c_int;
-    fn nvim_yankreg_set_width(reg: YankRegHandle, width: c_int);
-    fn nvim_yankreg_get_line_data(reg: YankRegHandle, idx: usize) -> *const c_char;
-    fn nvim_yankreg_get_line_size(reg: YankRegHandle, idx: usize) -> usize;
-    fn nvim_yankreg_is_empty(reg: YankRegHandle) -> bool;
+    // String helpers
+    fn cstr_to_string(str: *const c_char) -> NvimString;
+    fn copy_string(s: NvimString, arena: *mut c_void) -> NvimString;
 
-    // Global register array accessors
-    fn nvim_get_y_regs_ptr(idx: c_int) -> YankRegHandle;
-    fn nvim_set_y_previous_by_index(idx: c_int);
-    fn nvim_free_register(reg: YankRegHandle);
-    fn nvim_copy_yankreg(dst: YankRegHandle, src: YankRegHandle);
-    fn nvim_clear_yankreg_array(reg: YankRegHandle);
+    // Time
+    fn os_time() -> u64;
 
-    // mbyte function for calculating string width
+    // Expression evaluation
+    fn eval_to_string(expr: *mut c_char, want_retval: bool, in_sandbox: bool) -> *mut c_char;
+
+    // Multibyte
     fn rs_mb_string2cells_len(str: *const c_char, size: usize) -> usize;
+    fn mb_string2cells(str: *const c_char) -> usize;
+    fn utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int;
+    fn utf_ptr2len_len(p: *const c_char, size: c_int) -> c_int;
 
-    // Expression register accessors
-    fn nvim_get_expr_line() -> *const c_char;
-    fn nvim_set_expr_line_ptr(new_line: *mut c_char);
-    fn nvim_xfree(ptr: *mut std::ffi::c_void);
-    fn nvim_xstrdup(str: *const c_char) -> *mut c_char;
-    fn nvim_eval_to_string(expr: *const c_char, want_retval: bool, in_sandbox: bool)
-        -> *mut c_char;
+    // Memory utilities
+    fn memcnt(str: *const c_char, c: c_char, len: usize) -> usize;
+    fn memchrsub(data: *mut c_char, from: c_char, to: c_char, len: usize);
 
-    // Phase 4 accessors: init_write_reg / finish_write_reg support
-    fn nvim_get_yank_register_for_write(regname: c_int) -> YankRegHandle;
-    fn nvim_emsg_invreg(name: c_int);
-    fn nvim_get_y_previous() -> YankRegHandle;
-    fn nvim_set_y_previous(reg: YankRegHandle);
-    fn nvim_set_clipboard(name: c_int, reg: YankRegHandle);
+    // Clipboard
+    fn get_clipboard(name: c_int, target: *mut *mut YankReg, quiet: bool) -> bool;
+    fn set_clipboard(name: c_int, reg: *mut YankReg);
 
-    // Phase 5 accessors: get_reg_type support
-    fn nvim_get_yank_register_for_paste(regname: c_int) -> YankRegHandle;
+    // Error messages
+    fn emsg_invreg(name: c_int);
 
-    // Phase 7/8 accessors: free_register and stuff_yank support
-    fn nvim_xmalloc(size: usize) -> *mut std::ffi::c_void;
-    fn nvim_os_time() -> u64;
-    fn nvim_yankreg_has_array(reg: YankRegHandle) -> bool;
-    fn nvim_yankreg_free_additional_data(reg: YankRegHandle);
-    fn nvim_yankreg_clear_string_at(reg: YankRegHandle, idx: usize);
-    fn nvim_yankreg_free_array(reg: YankRegHandle);
-    fn nvim_yankreg_set_size(reg: YankRegHandle, size: usize);
-    fn nvim_yankreg_set_type(reg: YankRegHandle, reg_type: c_int);
-    fn nvim_yankreg_set_timestamp(reg: YankRegHandle, ts: u64);
-    fn nvim_yankreg_null_additional_data(reg: YankRegHandle);
-    fn nvim_yankreg_alloc_array(reg: YankRegHandle, count: usize);
-    fn nvim_yankreg_set_line(reg: YankRegHandle, idx: usize, data: *mut c_char, len: usize);
-    fn nvim_yankreg_get_last_line_data(reg: YankRegHandle) -> *const c_char;
-    fn nvim_yankreg_get_last_line_size(reg: YankRegHandle) -> usize;
-    fn nvim_yankreg_replace_last_line(reg: YankRegHandle, data: *mut c_char, len: usize);
+    // Buffer list (for write_reg_contents_ex)
+    fn buflist_findnr(nr: c_int) -> *mut c_void;
+    fn buflist_findpat(
+        pat: *const c_char,
+        patend: *const c_char,
+        unlisted: bool,
+        diffmode: bool,
+        curtab_only: bool,
+    ) -> c_int;
 
-    // Phase 8 accessors: copy_register support
-    fn nvim_alloc_yankreg() -> YankRegHandle;
-    fn nvim_xcalloc(count: usize, size: usize) -> *mut std::ffi::c_void;
-    fn nvim_copy_yankreg_line(
-        dst: YankRegHandle,
-        dst_idx: usize,
-        src: YankRegHandle,
-        src_idx: usize,
+    // Search pattern
+    fn set_last_search_pat(
+        s: *const c_char,
+        which: c_int,
+        keep_capitalize: bool,
+        update_prev: bool,
     );
-    fn nvim_yankreg_set_array_ptr(reg: YankRegHandle, array: *mut std::ffi::c_void);
 
-    // Phase 9 accessors: str_to_reg support
-    fn nvim_memcnt(str: *const c_char, c: c_char, len: usize) -> usize;
-    fn nvim_xmallocz(size: usize) -> *mut c_char;
-    fn nvim_memchrsub(data: *mut c_char, from: c_char, to: c_char, len: usize);
-    fn nvim_cstr_to_string(str: *const c_char) -> NvimString;
-    fn nvim_mb_string2cells(str: *const c_char) -> usize;
-    fn nvim_utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int;
-    fn nvim_utf_ptr2len_len(p: *const c_char, size: c_int) -> c_int;
-    fn nvim_yankreg_realloc_array(reg: YankRegHandle, count: usize);
-    fn nvim_yankreg_set_string_at(reg: YankRegHandle, idx: usize, s: NvimString);
-    fn nvim_yankreg_get_data_at(reg: YankRegHandle, idx: usize) -> *mut c_char;
-    fn nvim_yankreg_get_size_at(reg: YankRegHandle, idx: usize) -> usize;
-    fn nvim_yankreg_free_data_at(reg: YankRegHandle, idx: usize);
+    // Command line
+    fn getcmdline(firstc: c_int, count: i64, indent: c_int, do_concat: bool) -> *mut c_char;
 }
 
 /// Register index constants (matching `register_defs.h`).
@@ -134,6 +179,16 @@ pub const NUM_SAVED_REGISTERS: c_int = 37;
 pub const STAR_REGISTER: c_int = 37;
 pub const PLUS_REGISTER: c_int = 38;
 pub const NUM_REGISTERS: c_int = 39;
+
+/// RE_SEARCH constant for set_last_search_pat.
+const RE_SEARCH: c_int = 0;
+
+/// NUL character.
+const NUL: c_int = 0;
+
+// ---------------------------------------------------------------------------
+// Pure helper functions (no FFI, no unsafe).
+// ---------------------------------------------------------------------------
 
 /// Check if a character is an ASCII alphanumeric character (A-Z, a-z, 0-9).
 #[inline]
@@ -159,21 +214,22 @@ const fn ascii_isupper(c: u8) -> bool {
     c >= b'A' && c <= b'Z'
 }
 
-/// Check if a character appears in a string.
+/// Check if a character appears in a byte string literal.
 #[inline]
 fn strchr(s: &[u8], c: u8) -> bool {
     s.contains(&c)
 }
 
+// ---------------------------------------------------------------------------
+// Register name / index helpers (exported with original C names via Phase 2).
+// ---------------------------------------------------------------------------
+
 /// Check if register should be inserted literally (selection or clipboard).
-///
-/// Returns true for '*', '+', or any alphanumeric register name.
-#[inline]
 pub fn is_literal_register(c: u8) -> bool {
     c == b'*' || c == b'+' || ascii_isalnum(c)
 }
 
-/// FFI wrapper for literal register check.
+/// FFI wrapper.
 #[no_mangle]
 pub extern "C" fn rs_is_literal_register(regname: c_int) -> c_int {
     let Ok(c) = u8::try_from(regname) else {
@@ -184,20 +240,17 @@ pub extern "C" fn rs_is_literal_register(regname: c_int) -> c_int {
 
 /// Convert register name into register index.
 ///
-/// Returns the index in the `y_regs` array, or -1 if the register name is not recognized.
+/// Returns the index in the `y_regs` array, or -1 if the register name is not recognised.
 #[no_mangle]
 pub extern "C" fn rs_op_reg_index(regname: c_int) -> c_int {
     let Ok(c) = u8::try_from(regname) else {
         return -1;
     };
     if ascii_isdigit(c) {
-        // Digits 0-9 map to indices 0-9
         c_int::from(c - b'0')
     } else if ascii_islower(c) {
-        // Lowercase a-z maps to indices 10-35
         c_int::from(c - b'a') + 10
     } else if ascii_isupper(c) {
-        // Uppercase A-Z maps to indices 10-35 (same as lowercase)
         c_int::from(c - b'A') + 10
     } else if c == b'-' {
         DELETION_REGISTER
@@ -217,19 +270,6 @@ pub extern "C" fn rs_is_append_register(regname: c_int) -> c_int {
         return 0;
     };
     c_int::from(ascii_isupper(c))
-}
-
-/// Get the index of the register that "" points to.
-///
-/// Returns the index of `y_previous` in the `y_regs` array, or -1 if
-/// `y_previous` is NULL (no previous yank).
-///
-/// # Safety
-///
-/// Calls external C function to access global register state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_unname_register() -> c_int {
-    nvim_get_y_previous_index()
 }
 
 /// Get the character name of the register with the given index.
@@ -254,114 +294,186 @@ pub extern "C" fn rs_get_register_name(num: c_int) -> c_int {
 
 /// Check if `regname` is a valid name of a yank register.
 ///
-/// There is no check for 0 (default register), caller should do this.
-/// The black hole register '_' is regarded as valid.
-///
-/// # Arguments
-///
-/// * `regname` - name of register (as a character code)
-/// * `writing` - allow only writable registers
-///
-/// # Returns
-///
-/// `true` if the register name is valid
-#[no_mangle]
+/// Exported as both `rs_valid_yank_reg` (legacy alias kept for Rust internal use)
+/// and `valid_yank_reg` (the canonical C-visible name).
+#[unsafe(export_name = "valid_yank_reg")]
 pub extern "C" fn rs_valid_yank_reg(regname: c_int, writing: bool) -> bool {
-    // Convert to u8, invalid values return false
     let Ok(c) = u8::try_from(regname) else {
         return false;
     };
-
-    // Named registers (a-z, A-Z, 0-9)
     if regname > 0 && ascii_isalnum(c) {
         return true;
     }
-
-    // Read-only registers (only valid when not writing): . / % : =
     if !writing && strchr(b"/.%:=", c) {
         return true;
     }
-
-    // Special registers: # " - _ * +
     matches!(c, b'#' | b'"' | b'-' | b'_' | b'*' | b'+')
 }
 
-/// Updates the "y_width" of a blockwise register based on its contents.
-/// Does nothing on a non-blockwise register.
+// ---------------------------------------------------------------------------
+// Global state accessors
+// ---------------------------------------------------------------------------
+
+/// Get the index of the register that "" points to.
+///
+/// Returns the index of `y_previous` in `y_regs`, or -1 if NULL.
 ///
 /// # Safety
 ///
-/// The `reg` handle must be a valid pointer to a yankreg_T.
-#[no_mangle]
-pub unsafe extern "C" fn rs_update_yankreg_width(reg: YankRegHandle) {
-    if reg.0.is_null() {
-        return;
+/// Reads `y_regs` and `y_previous` globals.
+#[unsafe(export_name = "get_unname_register")]
+pub unsafe extern "C" fn rs_get_unname_register() -> c_int {
+    if y_previous.is_null() {
+        return -1;
     }
-
-    let reg_type = nvim_yankreg_get_type(reg);
-    if reg_type != K_MT_BLOCK_WISE {
-        return;
+    let base = (&raw const y_regs).cast::<YankReg>();
+    let idx = y_previous.offset_from(base);
+    if idx >= 0 && idx < NUM_REGISTERS as isize {
+        idx as c_int
+    } else {
+        -1
     }
-
-    let y_size = nvim_yankreg_get_size(reg);
-    let mut maxlen: usize = 0;
-
-    for i in 0..y_size {
-        let data = nvim_yankreg_get_line_data(reg, i);
-        let size = nvim_yankreg_get_line_size(reg, i);
-        let rowlen = rs_mb_string2cells_len(data, size);
-        maxlen = maxlen.max(rowlen);
-    }
-
-    let current_width = nvim_yankreg_get_width(reg);
-    // maxlen - 1, but maxlen can be 0
-    let new_width = if maxlen > 0 { (maxlen - 1) as c_int } else { 0 };
-    nvim_yankreg_set_width(reg, current_width.max(new_width));
 }
 
-/// Get the number of non-empty registers.
+/// Get a pointer to `y_regs[reg]`.
 ///
 /// # Safety
 ///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_op_reg_amount() -> usize {
-    let mut count: usize = 0;
-    for i in 0..NUM_SAVED_REGISTERS {
-        let reg = nvim_get_y_regs_ptr(i);
-        if !nvim_yankreg_is_empty(reg) {
-            count += 1;
-        }
+/// `reg` must be in `0..NUM_REGISTERS`.
+#[unsafe(export_name = "get_y_register")]
+pub unsafe extern "C" fn rs_get_y_register(reg: c_int) -> *mut YankReg {
+    &raw mut y_regs[reg as usize]
+}
+
+/// Get the previous yank register pointer.
+///
+/// # Safety
+///
+/// Reads `y_previous`.
+#[unsafe(export_name = "get_y_previous")]
+pub unsafe extern "C" fn rs_get_y_previous() -> *mut YankReg {
+    y_previous
+}
+
+// ---------------------------------------------------------------------------
+// Register iteration (ported from C op_reg_iter / op_global_reg_iter).
+// ---------------------------------------------------------------------------
+
+/// Iterate over registers in `regs`.
+///
+/// Pass `iter = NULL` to start.  Returns NULL when done.
+///
+/// # Safety
+///
+/// All pointer arguments must be valid.
+#[unsafe(export_name = "op_reg_iter")]
+pub unsafe extern "C" fn rs_op_reg_iter(
+    iter: *const c_void,
+    regs: *const YankReg,
+    name: *mut c_char,
+    reg: *mut YankReg,
+    is_unnamed: *mut bool,
+) -> *const c_void {
+    *name = b'\0' as c_char;
+
+    let mut iter_reg: *const YankReg = if iter.is_null() {
+        regs
+    } else {
+        iter as *const YankReg
+    };
+
+    // Advance past empty registers.
+    while iter_reg.offset_from(regs) < NUM_SAVED_REGISTERS as isize && (*iter_reg).is_empty() {
+        iter_reg = iter_reg.add(1);
     }
-    count
+
+    if iter_reg.offset_from(regs) == NUM_SAVED_REGISTERS as isize || (*iter_reg).is_empty() {
+        return std::ptr::null();
+    }
+
+    let iter_off = iter_reg.offset_from(regs) as c_int;
+    *name = rs_get_register_name(iter_off) as c_char;
+    *reg = *iter_reg;
+    *is_unnamed = std::ptr::eq(iter_reg, y_previous as *const _);
+
+    // Find next non-empty register.
+    iter_reg = iter_reg.add(1);
+    while iter_reg.offset_from(regs) < NUM_SAVED_REGISTERS as isize {
+        if !(*iter_reg).is_empty() {
+            return iter_reg as *const c_void;
+        }
+        iter_reg = iter_reg.add(1);
+    }
+    std::ptr::null()
+}
+
+/// Iterate over global registers.
+///
+/// # Safety
+///
+/// All pointer arguments must be valid.
+#[unsafe(export_name = "op_global_reg_iter")]
+pub unsafe extern "C" fn rs_op_global_reg_iter(
+    iter: *const c_void,
+    name: *mut c_char,
+    reg: *mut YankReg,
+    is_unnamed: *mut bool,
+) -> *const c_void {
+    rs_op_reg_iter(
+        iter,
+        (&raw const y_regs).cast::<YankReg>(),
+        name,
+        reg,
+        is_unnamed,
+    )
+}
+
+/// Get number of non-empty registers.
+///
+/// # Safety
+///
+/// Reads `y_regs`.
+#[unsafe(export_name = "op_reg_amount")]
+pub unsafe extern "C" fn rs_op_reg_amount() -> usize {
+    y_regs[..NUM_SAVED_REGISTERS as usize]
+        .iter()
+        .filter(|r| !r.is_empty())
+        .count()
+}
+
+/// Set register `name` to `reg`, optionally marking it as unnamed.
+///
+/// # Safety
+///
+/// Modifies `y_regs` and optionally `y_previous`.
+#[unsafe(export_name = "op_reg_set")]
+pub unsafe extern "C" fn rs_op_reg_set(name: c_char, reg: YankReg, is_unnamed: bool) -> bool {
+    let i = rs_op_reg_index(c_int::from(name as u8));
+    if i == -1 {
+        return false;
+    }
+    rs_free_register(&raw mut y_regs[i as usize]);
+    y_regs[i as usize] = reg;
+    if is_unnamed {
+        y_previous = &raw mut y_regs[i as usize];
+    }
+    true
 }
 
 /// Get register with the given name.
 ///
-/// Returns a pointer to the register contents, or NULL if the register name is invalid.
+/// Returns a pointer to the register contents, or NULL if the name is invalid.
 ///
 /// # Safety
 ///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_op_reg_get(name: c_char) -> YankRegHandle {
-    let i = rs_op_reg_index(c_int::from(name));
+/// Reads `y_regs`.
+#[unsafe(export_name = "op_reg_get")]
+pub unsafe extern "C" fn rs_op_reg_get(name: c_char) -> *mut YankReg {
+    let i = rs_op_reg_index(c_int::from(name as u8));
     if i == -1 {
-        return YankRegHandle(std::ptr::null_mut());
+        return std::ptr::null_mut();
     }
-    nvim_get_y_regs_ptr(i)
-}
-
-/// Get the previous yank register.
-///
-/// Returns the `y_previous` pointer (the register that "" points to).
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_y_previous() -> YankRegHandle {
-    nvim_get_y_previous()
+    &raw mut y_regs[i as usize]
 }
 
 /// Set the previous yank register.
@@ -370,297 +482,347 @@ pub unsafe extern "C" fn rs_get_y_previous() -> YankRegHandle {
 ///
 /// # Safety
 ///
-/// Modifies global register state via C FFI.
-#[no_mangle]
+/// Modifies `y_previous`.
+#[unsafe(export_name = "op_reg_set_previous")]
 pub unsafe extern "C" fn rs_op_reg_set_previous(name: c_char) -> bool {
-    let i = rs_op_reg_index(c_int::from(name));
+    let i = rs_op_reg_index(c_int::from(name as u8));
     if i == -1 {
         return false;
     }
-    nvim_set_y_previous_by_index(i);
+    y_previous = &raw mut y_regs[i as usize];
     true
 }
 
-/// Shift the delete registers: "9 is cleared, "8 becomes "9, etc.
+// ---------------------------------------------------------------------------
+// get_yank_register (ported from C).
+// ---------------------------------------------------------------------------
+
+/// Return a pointer to the register to use for `regname`.
+///
+/// Cannot handle the `_` (black hole) register.
+/// Must only be called with a valid register name!
 ///
 /// # Safety
 ///
-/// Modifies global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_shift_delete_registers(y_append: bool) {
-    // Free register "9
-    let reg9 = nvim_get_y_regs_ptr(9);
-    nvim_free_register(reg9);
+/// Reads/writes `y_regs` and `y_previous`.
+#[unsafe(export_name = "get_yank_register")]
+pub unsafe extern "C" fn rs_get_yank_register(regname: c_int, mode: c_int) -> *mut YankReg {
+    const YREG_PASTE: c_int = 0;
+    const YREG_YANK: c_int = 1;
+    const YREG_PUT: c_int = 2;
 
-    // Shift registers: 9 <- 8 <- 7 <- ... <- 2 <- 1
-    for n in (2..=9).rev() {
-        let dst = nvim_get_y_regs_ptr(n);
-        let src = nvim_get_y_regs_ptr(n - 1);
-        nvim_copy_yankreg(dst, src);
+    // Try clipboard for paste/put modes.
+    if mode == YREG_PASTE || mode == YREG_PUT {
+        let mut reg: *mut YankReg = std::ptr::null_mut();
+        if get_clipboard(regname, &raw mut reg, false) {
+            return reg;
+        }
     }
 
-    // Set y_previous to register "1 if not appending
-    if !y_append {
-        nvim_set_y_previous_by_index(1);
+    if mode == YREG_PUT && (regname == c_int::from(b'*') || regname == c_int::from(b'+')) {
+        // Clipboard not available; return an empty register.
+        static mut EMPTY_REG: YankReg = YankReg::ZERO;
+        return &raw mut EMPTY_REG;
     }
 
-    // Set register "1 to empty
-    let reg1 = nvim_get_y_regs_ptr(1);
-    nvim_clear_yankreg_array(reg1);
+    if mode != YREG_YANK
+        && (regname == 0
+            || regname == c_int::from(b'"')
+            || regname == c_int::from(b'*')
+            || regname == c_int::from(b'+'))
+        && !y_previous.is_null()
+    {
+        return y_previous;
+    }
+
+    let mut i = rs_op_reg_index(regname);
+    if i == -1 {
+        i = 0;
+    }
+    let reg = &raw mut y_regs[i as usize];
+
+    if mode == YREG_YANK {
+        y_previous = reg;
+    }
+    reg
 }
 
-/// Set the expression for the '=' register.
-/// Argument must be a C-allocated string (takes ownership).
+// ---------------------------------------------------------------------------
+// clear_registers (EXITFREE cleanup).
+// ---------------------------------------------------------------------------
+
+/// Free all registers.
 ///
 /// # Safety
 ///
-/// The `new_line` pointer must be a valid C-allocated string or NULL.
-/// This function takes ownership of the string.
-#[no_mangle]
+/// Modifies `y_regs`.
+#[unsafe(export_name = "clear_registers")]
+pub unsafe extern "C" fn rs_clear_registers() {
+    let base = (&raw mut y_regs).cast::<YankReg>();
+    for i in 0..NUM_REGISTERS as usize {
+        rs_free_register(base.add(i));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// update_yankreg_width
+// ---------------------------------------------------------------------------
+
+/// Updates the `y_width` of a blockwise register based on its contents.
+///
+/// # Safety
+///
+/// `reg` must be a valid pointer to a `YankReg`.
+#[unsafe(export_name = "update_yankreg_width")]
+pub unsafe extern "C" fn rs_update_yankreg_width(reg: *mut YankReg) {
+    if reg.is_null() {
+        return;
+    }
+    let r = &mut *reg;
+    if r.y_type != K_MT_BLOCK_WISE {
+        return;
+    }
+    let mut maxlen: usize = 0;
+    for i in 0..r.y_size {
+        let s = &*r.y_array.add(i);
+        let rowlen = rs_mb_string2cells_len(s.data, s.size);
+        maxlen = maxlen.max(rowlen);
+    }
+    let new_width = if maxlen > 0 { (maxlen - 1) as c_int } else { 0 };
+    r.y_width = r.y_width.max(new_width);
+}
+
+// ---------------------------------------------------------------------------
+// Expression register
+// ---------------------------------------------------------------------------
+
+/// Set the expression for the `=` register (takes ownership of `new_line`).
+///
+/// # Safety
+///
+/// `new_line` must be a C-allocated string or NULL.
+#[unsafe(export_name = "set_expr_line")]
 pub unsafe extern "C" fn rs_set_expr_line(new_line: *mut c_char) {
-    // Free the old expression line
-    let old_line = nvim_get_expr_line();
-    if !old_line.is_null() {
-        nvim_xfree(old_line as *mut std::ffi::c_void);
+    if !expr_line.is_null() {
+        xfree(expr_line as *mut c_void);
     }
-    // Set the new expression line
-    nvim_set_expr_line_ptr(new_line);
+    expr_line = new_line;
 }
 
-/// Get the '=' register expression itself, without evaluating it.
-/// Returns a newly allocated copy, or NULL if no expression is set.
+/// Get the `=` register expression itself, without evaluating it.
+///
+/// Returns a newly allocated copy, or NULL.
 ///
 /// # Safety
 ///
-/// Returns a C-allocated string that must be freed by the caller.
-#[no_mangle]
+/// Returns a C-allocated string that the caller must free.
+#[unsafe(export_name = "get_expr_line_src")]
 pub unsafe extern "C" fn rs_get_expr_line_src() -> *mut c_char {
-    let expr_line = nvim_get_expr_line();
     if expr_line.is_null() {
         return std::ptr::null_mut();
     }
-    nvim_xstrdup(expr_line)
+    xstrdup(expr_line)
 }
 
-/// Get the result of the '=' register expression.
-/// Returns a newly allocated string with the evaluated result, or NULL for failure.
+/// Get the result of the `=` register expression.
 ///
-/// When invoked recursively (more than 10 levels), returns the expression as-is.
+/// Returns a newly allocated evaluated string, or NULL for failure.
 ///
 /// # Safety
 ///
-/// Returns a C-allocated string that must be freed by the caller.
-#[no_mangle]
+/// Returns a C-allocated string that the caller must free.
+#[unsafe(export_name = "get_expr_line")]
 pub unsafe extern "C" fn rs_get_expr_line() -> *mut c_char {
-    // Use a static counter for recursion depth
     static mut NESTED: i32 = 0;
 
-    let expr_line = nvim_get_expr_line();
     if expr_line.is_null() {
         return std::ptr::null_mut();
     }
 
-    // Make a copy of the expression, because evaluating it may cause it to be changed
-    let expr_copy = nvim_xstrdup(expr_line);
+    // Copy so that evaluation cannot corrupt the stored expression.
+    let expr_copy = xstrdup(expr_line);
 
-    // When we are invoked recursively limit the evaluation to 10 levels
-    // Then return the string as-is
     if NESTED >= 10 {
         return expr_copy;
     }
 
     NESTED += 1;
-    let rv = nvim_eval_to_string(expr_copy, true, false);
+    let rv = eval_to_string(expr_copy, true, false);
     NESTED -= 1;
-    nvim_xfree(expr_copy as *mut std::ffi::c_void);
+    xfree(expr_copy as *mut c_void);
     rv
 }
 
-/// Initialize a register for writing.
-///
-/// Validates the register name, saves the old y_previous, gets the register,
-/// and optionally frees it if not appending.
-///
-/// # Arguments
-///
-/// * `name` - Register name character.
-/// * `old_y_previous` - Output pointer to save the old y_previous.
-/// * `must_append` - If true, don't free the register even for non-append registers.
-///
-/// # Returns
-///
-/// Pointer to the register, or NULL if the register name is invalid.
+// ---------------------------------------------------------------------------
+// free_register
+// ---------------------------------------------------------------------------
+
+/// Free a `YankReg`'s contents (does not free the struct itself).
 ///
 /// # Safety
 ///
-/// The `old_y_previous` pointer must be valid.
-#[no_mangle]
+/// `reg` must be a valid pointer to a `YankReg`.
+#[unsafe(export_name = "free_register")]
+pub unsafe extern "C" fn rs_free_register(reg: *mut YankReg) {
+    let r = &mut *reg;
+
+    // Free additional_data.
+    if !r.additional_data.is_null() {
+        xfree(r.additional_data);
+        r.additional_data = std::ptr::null_mut();
+    }
+
+    if r.y_array.is_null() {
+        return;
+    }
+
+    // Free each string entry from last to first.
+    for i in (0..r.y_size).rev() {
+        let s = &mut *r.y_array.add(i);
+        if !s.data.is_null() {
+            xfree(s.data as *mut c_void);
+            s.data = std::ptr::null_mut();
+        }
+    }
+
+    // Free the array itself.
+    xfree(r.y_array as *mut c_void);
+    r.y_array = std::ptr::null_mut();
+}
+
+// ---------------------------------------------------------------------------
+// init_write_reg / finish_write_reg
+// ---------------------------------------------------------------------------
+
+/// Initialise a register for writing.
+///
+/// # Safety
+///
+/// `old_y_previous` must be valid or NULL.
+#[unsafe(export_name = "init_write_reg")]
 pub unsafe extern "C" fn rs_init_write_reg(
     name: c_int,
-    old_y_previous: *mut YankRegHandle,
+    old_y_previous: *mut *mut YankReg,
     must_append: bool,
-) -> YankRegHandle {
-    // Check for valid register name
+) -> *mut YankReg {
     if !rs_valid_yank_reg(name, true) {
-        nvim_emsg_invreg(name);
-        return YankRegHandle(std::ptr::null_mut());
+        emsg_invreg(name);
+        return std::ptr::null_mut();
     }
 
-    // Save old y_previous - don't want to change the current (unnamed) register
     if !old_y_previous.is_null() {
-        *old_y_previous = nvim_get_y_previous();
+        *old_y_previous = y_previous;
     }
 
-    // Get the register for writing
-    let reg = nvim_get_yank_register_for_write(name);
+    let reg = rs_get_yank_register(name, 1 /* YREG_YANK */);
 
-    // Free the register if not appending
     if rs_is_append_register(name) == 0 && !must_append {
-        nvim_free_register(reg);
+        rs_free_register(reg);
     }
 
     reg
 }
 
-/// Finalize a register write operation.
-///
-/// Sends the register to the clipboard and restores y_previous if needed.
-///
-/// # Arguments
-///
-/// * `name` - Register name character.
-/// * `reg` - The register that was written.
-/// * `old_y_previous` - The saved y_previous to restore.
+/// Finalise a register write operation.
 ///
 /// # Safety
 ///
-/// The `reg` handle must be valid.
-#[no_mangle]
+/// `reg` must be valid.
+#[unsafe(export_name = "finish_write_reg")]
 pub unsafe extern "C" fn rs_finish_write_reg(
     name: c_int,
-    reg: YankRegHandle,
-    old_y_previous: YankRegHandle,
+    reg: *mut YankReg,
+    old_y_previous: *mut YankReg,
 ) {
-    // Send text of clipboard register to the clipboard
-    nvim_set_clipboard(name, reg);
+    set_clipboard(name, reg);
 
-    // ':let @" = "val"' should change the meaning of the "" register
     if name != c_int::from(b'"') {
-        nvim_set_y_previous(old_y_previous);
+        y_previous = old_y_previous;
     }
 }
+
+// ---------------------------------------------------------------------------
+// yank_register_mline / get_reg_type
+// ---------------------------------------------------------------------------
 
 // Control key constants from ascii_defs.h
 const CTRL_A: c_int = 1;
 const CTRL_F: c_int = 6;
 const CTRL_P: c_int = 16;
+#[allow(dead_code)]
 const CTRL_R: c_int = 18;
+#[allow(dead_code)]
 const CTRL_U: c_int = 21;
 const CTRL_W: c_int = 23;
-const NUL: c_int = 0;
 
-// Key code constants from keycodes.h
-const K_SPECIAL: u8 = 0x80;
+/// Return values.
+const OK: c_int = 1;
+const FAIL: c_int = 0;
 
-/// Check if the current yank register has kMTLineWise register type.
-///
-/// For valid, non-blackhole registers also provides pointer to the register
-/// structure prepared for pasting.
-///
-/// # Arguments
-///
-/// * `regname` - The name of the register used or 0 for the unnamed register.
-/// * `reg` - Output pointer to store the register handle.
-///
-/// # Returns
-///
-/// True if the register is linewise, false otherwise.
-/// Sets `*reg` to the register handle, or NULL for invalid/blackhole registers.
+/// Check if the current yank register has `kMTLineWise` type.
 ///
 /// # Safety
 ///
-/// The `reg` output pointer must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_yank_register_mline(regname: c_int, reg: *mut YankRegHandle) -> bool {
-    // Set output to NULL initially
+/// `reg` output pointer must be valid.
+#[unsafe(export_name = "yank_register_mline")]
+pub unsafe extern "C" fn rs_yank_register_mline(regname: c_int, reg: *mut *mut YankReg) -> bool {
     if !reg.is_null() {
-        *reg = YankRegHandle(std::ptr::null_mut());
+        *reg = std::ptr::null_mut();
     }
 
-    // Validate register name (0 is allowed for unnamed register)
     if regname != 0 && !rs_valid_yank_reg(regname, false) {
         return false;
     }
 
-    // Black hole register is always empty
     if regname == c_int::from(b'_') {
         return false;
     }
 
-    // Get the register for pasting
-    let yankreg = nvim_get_yank_register_for_paste(regname);
+    let yankreg = rs_get_yank_register(regname, 0 /* YREG_PASTE */);
 
-    // Set output register pointer
     if !reg.is_null() {
         *reg = yankreg;
     }
 
-    // Return whether it's linewise
-    nvim_yankreg_get_type(yankreg) == K_MT_LINE_WISE
+    (*yankreg).y_type == K_MT_LINE_WISE
 }
 
 /// Get the type of a register.
 ///
-/// Used for getregtype().
-///
-/// # Arguments
-///
-/// * `regname` - The register name character.
-/// * `reg_width` - Output pointer for block width (only set for blockwise registers).
-///
-/// # Returns
-///
-/// The MotionType of the register, or kMTUnknown for error.
-///
 /// # Safety
 ///
-/// The `reg_width` pointer must be valid or NULL.
-#[no_mangle]
+/// `reg_width` must be valid or NULL.
+#[unsafe(export_name = "get_reg_type")]
 pub unsafe extern "C" fn rs_get_reg_type(regname: c_int, reg_width: *mut c_int) -> c_int {
-    // Special registers that are always character-wise
     match regname {
-        r if r == c_int::from(b'%') => return K_MT_CHAR_WISE, // file name
-        r if r == c_int::from(b'#') => return K_MT_CHAR_WISE, // alternate file name
-        r if r == c_int::from(b'=') => return K_MT_CHAR_WISE, // expression
-        r if r == c_int::from(b':') => return K_MT_CHAR_WISE, // last command line
-        r if r == c_int::from(b'/') => return K_MT_CHAR_WISE, // last search-pattern
-        r if r == c_int::from(b'.') => return K_MT_CHAR_WISE, // last inserted text
-        r if r == CTRL_F => return K_MT_CHAR_WISE,            // Filename under cursor
-        r if r == CTRL_P => return K_MT_CHAR_WISE,            // Path under cursor
-        r if r == CTRL_W => return K_MT_CHAR_WISE,            // word under cursor
-        r if r == CTRL_A => return K_MT_CHAR_WISE,            // WORD under cursor
-        r if r == c_int::from(b'_') => return K_MT_CHAR_WISE, // black hole: always empty
+        r if r == c_int::from(b'%') => return K_MT_CHAR_WISE,
+        r if r == c_int::from(b'#') => return K_MT_CHAR_WISE,
+        r if r == c_int::from(b'=') => return K_MT_CHAR_WISE,
+        r if r == c_int::from(b':') => return K_MT_CHAR_WISE,
+        r if r == c_int::from(b'/') => return K_MT_CHAR_WISE,
+        r if r == c_int::from(b'.') => return K_MT_CHAR_WISE,
+        r if r == CTRL_F => return K_MT_CHAR_WISE,
+        r if r == CTRL_P => return K_MT_CHAR_WISE,
+        r if r == CTRL_W => return K_MT_CHAR_WISE,
+        r if r == CTRL_A => return K_MT_CHAR_WISE,
+        r if r == c_int::from(b'_') => return K_MT_CHAR_WISE,
         _ => {}
     }
 
-    // Check for valid register name
     if regname != NUL && !rs_valid_yank_reg(regname, false) {
         return K_MT_UNKNOWN;
     }
 
-    // Get the register for pasting
-    let reg = nvim_get_yank_register_for_paste(regname);
+    let reg = rs_get_yank_register(regname, 0 /* YREG_PASTE */);
 
-    // Check if register has content
-    if nvim_yankreg_is_empty(reg) {
+    if (*reg).is_empty() {
         return K_MT_UNKNOWN;
     }
 
-    let reg_type = nvim_yankreg_get_type(reg);
+    let reg_type = (*reg).y_type;
 
-    // Set width for blockwise registers
     if !reg_width.is_null() && reg_type == K_MT_BLOCK_WISE {
-        *reg_width = nvim_yankreg_get_width(reg);
+        *reg_width = (*reg).y_width;
     }
 
     reg_type
@@ -668,17 +830,10 @@ pub unsafe extern "C" fn rs_get_reg_type(regname: c_int, reg_width: *mut c_int) 
 
 /// Format the register type as a string.
 ///
-/// # Arguments
-///
-/// * `reg_type` - The register type (MotionType).
-/// * `reg_width` - The width, only used if "reg_type" is kMTBlockWise.
-/// * `buf` - Buffer to store formatted string.
-/// * `buf_len` - The allocated size of the buffer.
-///
 /// # Safety
 ///
-/// The `buf` pointer must be valid and point to a buffer of at least `buf_len` bytes.
-#[no_mangle]
+/// `buf` must be valid and at least `buf_len` bytes.
+#[unsafe(export_name = "format_reg_type")]
 pub unsafe extern "C" fn rs_format_reg_type(
     reg_type: c_int,
     reg_width: c_int,
@@ -701,206 +856,166 @@ pub unsafe extern "C" fn rs_format_reg_type(
             buf_slice[1] = 0;
         }
         K_MT_BLOCK_WISE => {
-            // Format as ^V{width+1}
             let width = reg_width + 1;
             let formatted = format!("{}", width);
             let formatted_bytes = formatted.as_bytes();
-
             buf_slice[0] = CTRL_V;
             let copy_len = formatted_bytes.len().min(buf_len - 2);
             buf_slice[1..1 + copy_len].copy_from_slice(&formatted_bytes[..copy_len]);
             buf_slice[1 + copy_len] = 0;
         }
         _ => {
-            // kMTUnknown or invalid
             buf_slice[0] = 0;
         }
     }
 }
 
-/// Return values matching nvim/vim_defs.h
-const OK: c_int = 1;
-const FAIL: c_int = 0;
+// ---------------------------------------------------------------------------
+// stuff_yank
+// ---------------------------------------------------------------------------
 
-/// Free a yankreg_T register's contents.
-///
-/// Frees additional_data and all lines in y_array.
+/// Stuff string `p` into yank register `regname` as a single line.
 ///
 /// # Safety
 ///
-/// The `reg` handle must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_free_register(reg: YankRegHandle) {
-    // Free additional_data
-    nvim_yankreg_free_additional_data(reg);
-
-    // If y_array is NULL, nothing more to do
-    if !nvim_yankreg_has_array(reg) {
-        return;
-    }
-
-    // Free each line from y_size - 1 to 0
-    let size = nvim_yankreg_get_size(reg);
-    for i in (0..size).rev() {
-        nvim_yankreg_clear_string_at(reg, i);
-    }
-
-    // Free the array itself
-    nvim_yankreg_free_array(reg);
-}
-
-/// Stuff string `p` in a yank register.
-///
-/// Used by the `setreg()` function to store data.
-/// If the `'<` or `'>` register is written to, the text is inserted in the
-/// buffer instead.
-///
-/// # Arguments
-///
-/// * `regname` - Register name character.
-/// * `p` - String to store (takes ownership, will be freed).
-///
-/// # Returns
-///
-/// OK on success, FAIL on error.
-///
-/// # Safety
-///
-/// The `p` pointer must be valid and point to a C string allocated with xmalloc.
-#[no_mangle]
+/// `p` must be a valid C-allocated string.
+#[unsafe(export_name = "stuff_yank")]
 pub unsafe extern "C" fn rs_stuff_yank(regname: c_int, p: *mut c_char) -> c_int {
-    // Check for read-only register
     if regname != 0 && !rs_valid_yank_reg(regname, true) {
-        nvim_xfree(p as *mut std::ffi::c_void);
+        xfree(p as *mut c_void);
         return FAIL;
     }
 
-    // Black hole register: don't do anything
     if regname == c_int::from(b'_') {
-        nvim_xfree(p as *mut std::ffi::c_void);
+        xfree(p as *mut c_void);
         return OK;
     }
 
-    // Calculate string length
     let plen = libc::strlen(p as *const _);
+    let reg = rs_get_yank_register(regname, 1 /* YREG_YANK */);
+    let r = &mut *reg;
 
-    // Get the register for writing
-    let reg = nvim_get_yank_register_for_write(regname);
-
-    // Check if we should append
-    if rs_is_append_register(regname) != 0 && nvim_yankreg_has_array(reg) {
-        // Append to last line
-        let last_data = nvim_yankreg_get_last_line_data(reg);
-        let last_size = nvim_yankreg_get_last_line_size(reg);
+    if rs_is_append_register(regname) != 0 && !r.y_array.is_null() {
+        // Append to the last line.
+        let last = &*r.y_array.add(r.y_size - 1);
+        let last_size = last.size;
         let tmplen = last_size + plen;
-
-        // Allocate new buffer
-        let tmp = nvim_xmalloc(tmplen + 1) as *mut c_char;
-
-        // Copy existing data
-        std::ptr::copy_nonoverlapping(last_data, tmp, last_size);
-        // Copy new data
+        let tmp = xmalloc(tmplen + 1) as *mut c_char;
+        std::ptr::copy_nonoverlapping(last.data, tmp, last_size);
         std::ptr::copy_nonoverlapping(p, tmp.add(last_size), plen);
-        // Null-terminate
         *tmp.add(tmplen) = 0;
-
-        // Free p since we took ownership
-        nvim_xfree(p as *mut std::ffi::c_void);
-
-        // Replace the last line (this frees the old data)
-        nvim_yankreg_replace_last_line(reg, tmp, tmplen);
+        xfree(p as *mut c_void);
+        // Replace last line.
+        let last_mut = &mut *r.y_array.add(r.y_size - 1);
+        xfree(last_mut.data as *mut c_void);
+        *last_mut = NvimString {
+            data: tmp,
+            size: tmplen,
+        };
     } else {
-        // Replace register contents
         rs_free_register(reg);
-        nvim_yankreg_null_additional_data(reg);
-        nvim_yankreg_alloc_array(reg, 1);
-        nvim_yankreg_set_line(reg, 0, p, plen);
-        nvim_yankreg_set_size(reg, 1);
-        nvim_yankreg_set_type(reg, K_MT_CHAR_WISE);
+        r.additional_data = std::ptr::null_mut();
+        r.y_array = xmalloc(std::mem::size_of::<NvimString>()) as *mut NvimString;
+        *r.y_array = NvimString {
+            data: p,
+            size: plen,
+        };
+        r.y_size = 1;
+        r.y_type = K_MT_CHAR_WISE;
     }
 
-    nvim_yankreg_set_timestamp(reg, nvim_os_time());
+    r.timestamp = os_time();
     OK
 }
 
-/// Size of the String struct (data pointer + size_t).
-const STRING_SIZE: usize = std::mem::size_of::<usize>() * 2;
+// ---------------------------------------------------------------------------
+// copy_register
+// ---------------------------------------------------------------------------
 
-/// Copy a register and return a pointer to a newly allocated register.
-///
-/// # Arguments
-///
-/// * `name` - Register name character.
-///
-/// # Returns
-///
-/// Pointer to the newly allocated copy.
+/// Copy a register and return a pointer to a newly allocated copy.
 ///
 /// # Safety
 ///
-/// The returned register must be freed by the caller.
-#[no_mangle]
-pub unsafe extern "C" fn rs_copy_register(name: c_int) -> YankRegHandle {
-    // Get the source register
-    let src = nvim_get_yank_register_for_paste(name);
+/// Caller must free the returned register.
+#[unsafe(export_name = "copy_register")]
+pub unsafe extern "C" fn rs_copy_register(name: c_int) -> *mut YankReg {
+    let src = rs_get_yank_register(name, 0 /* YREG_PASTE */);
 
-    // Allocate a new register
-    let copy = nvim_alloc_yankreg();
+    let copy = xmalloc(std::mem::size_of::<YankReg>()) as *mut YankReg;
+    // Shallow copy.
+    *copy = *src;
 
-    // Shallow copy all fields using nvim_copy_yankreg
-    nvim_copy_yankreg(copy, src);
-
-    // Get the size
-    let size = nvim_yankreg_get_size(copy);
-
+    let size = (*src).y_size;
     if size == 0 {
-        // Set y_array to NULL
-        nvim_yankreg_set_array_ptr(copy, std::ptr::null_mut());
+        (*copy).y_array = std::ptr::null_mut();
     } else {
-        // Allocate new array
-        let array = nvim_xcalloc(size, STRING_SIZE);
-        nvim_yankreg_set_array_ptr(copy, array);
-
-        // Deep copy each string
+        let array = xcalloc(size, std::mem::size_of::<NvimString>()) as *mut NvimString;
+        (*copy).y_array = array;
         for i in 0..size {
-            nvim_copy_yankreg_line(copy, i, src, i);
+            *array.add(i) = copy_string(*(*src).y_array.add(i), std::ptr::null_mut());
         }
     }
 
     copy
 }
 
-/// NL (newline) character.
+// ---------------------------------------------------------------------------
+// shift_delete_registers
+// ---------------------------------------------------------------------------
+
+/// Shift the delete registers: "9 is cleared, "8 becomes "9, etc.
+///
+/// # Safety
+///
+/// Modifies `y_regs` and `y_previous`.
+#[unsafe(export_name = "shift_delete_registers")]
+pub unsafe extern "C" fn rs_shift_delete_registers(y_append: bool) {
+    // Free register "9.
+    rs_free_register(&raw mut y_regs[9]);
+
+    // Shift: 9 <- 8 <- ... <- 2 <- 1.
+    for n in (2..=9usize).rev() {
+        y_regs[n] = y_regs[n - 1];
+    }
+
+    if !y_append {
+        y_previous = &raw mut y_regs[1];
+    }
+
+    // Clear register "1 (will be set by caller).
+    y_regs[1] = YankReg::ZERO;
+}
+
+// ---------------------------------------------------------------------------
+// str_to_reg
+// ---------------------------------------------------------------------------
+
+/// NL / CR / NUL constants.
 const NL: c_char = b'\n' as c_char;
-/// CAR (carriage return) character.
 const CAR: c_char = b'\r' as c_char;
-/// NUL character.
 const NUL_CHAR: c_char = 0;
 
 /// Convert a string to register contents.
 ///
-/// This function handles two modes:
-/// - str_list=true: str is actually a char** (NULL-terminated array of C strings)
-/// - str_list=false: str is a regular string with embedded newlines
-///
 /// # Safety
 ///
-/// All pointers must be valid. If str_list is true, str must be a valid char**.
-#[no_mangle]
+/// All pointers must be valid.
+#[unsafe(export_name = "str_to_reg")]
 pub unsafe extern "C" fn rs_str_to_reg(
-    y_ptr: YankRegHandle,
+    y_ptr: *mut YankReg,
     mut yank_type: c_int,
     str: *const c_char,
     len: usize,
     blocklen: c_int,
     str_list: bool,
 ) {
-    // If y_array is NULL, set y_size to 0
-    if !nvim_yankreg_has_array(y_ptr) {
-        nvim_yankreg_set_size(y_ptr, 0);
+    let r = &mut *y_ptr;
+
+    if r.y_array.is_null() {
+        r.y_size = 0;
     }
 
-    // Determine yank type if unknown
+    // Determine yank type if unknown.
     if yank_type == K_MT_UNKNOWN {
         if str_list {
             yank_type = K_MT_LINE_WISE;
@@ -920,50 +1035,48 @@ pub unsafe extern "C" fn rs_str_to_reg(
     let mut extraline = false;
     let mut append = false;
 
-    // Count the number of lines within the string
     if str_list {
-        // str is actually a char**
         let mut ss = str as *const *const c_char;
         while !(*ss).is_null() {
             newlines += 1;
             ss = ss.add(1);
         }
     } else {
-        newlines = nvim_memcnt(str, b'\n' as c_char, len);
+        newlines = memcnt(str, b'\n' as c_char, len);
         if yank_type == K_MT_CHAR_WISE || len == 0 || *str.add(len - 1) != b'\n' as c_char {
             extraline = true;
             newlines += 1;
         }
-        let y_size = nvim_yankreg_get_size(y_ptr);
-        let y_type = nvim_yankreg_get_type(y_ptr);
-        if y_size > 0 && y_type == K_MT_CHAR_WISE {
+        if r.y_size > 0 && r.y_type == K_MT_CHAR_WISE {
             append = true;
             newlines -= 1;
         }
     }
 
-    let y_size = nvim_yankreg_get_size(y_ptr);
+    let y_size = r.y_size;
 
-    // Without any lines make the register empty
     if y_size + newlines == 0 {
-        nvim_yankreg_free_array(y_ptr);
+        xfree(r.y_array as *mut c_void);
+        r.y_array = std::ptr::null_mut();
         return;
     }
 
-    // Grow the register array to hold the pointers to the new lines
-    nvim_yankreg_realloc_array(y_ptr, y_size + newlines);
+    // Grow the array.
+    r.y_array = xrealloc(
+        r.y_array as *mut c_void,
+        (y_size + newlines) * std::mem::size_of::<NvimString>(),
+    ) as *mut NvimString;
 
     let mut lnum = y_size;
     let mut maxlen: usize = 0;
 
-    // Find the end of each line and save it into the array
     if str_list {
         let mut ss = str as *const *const c_char;
         while !(*ss).is_null() {
-            let s = nvim_cstr_to_string(*ss);
-            nvim_yankreg_set_string_at(y_ptr, lnum, s);
+            let s = cstr_to_string(*ss);
+            *r.y_array.add(lnum) = s;
             if yank_type == K_MT_BLOCK_WISE {
-                let charlen = nvim_mb_string2cells(*ss);
+                let charlen = mb_string2cells(*ss);
                 if charlen > maxlen {
                     maxlen = charlen;
                 }
@@ -974,28 +1087,25 @@ pub unsafe extern "C" fn rs_str_to_reg(
     } else {
         let end = str.add(len);
         let mut start = str;
-        let extraline_offset = if extraline { 1isize } else { 0isize };
+        let extraline_offset: isize = if extraline { 1 } else { 0 };
 
         while start < end.offset(extraline_offset) {
             let mut charlen: c_int = 0;
             let mut line_end = start;
 
-            // Find the end of the line
             while line_end < end {
                 if *line_end == b'\n' as c_char {
                     break;
                 }
                 if yank_type == K_MT_BLOCK_WISE {
-                    charlen += nvim_utf_ptr2cells_len(
-                        line_end,
-                        (end as isize - line_end as isize) as c_int,
-                    );
+                    charlen +=
+                        utf_ptr2cells_len(line_end, (end as isize - line_end as isize) as c_int);
                 }
 
                 if *line_end == NUL_CHAR {
                     line_end = line_end.add(1);
                 } else {
-                    line_end = line_end.add(nvim_utf_ptr2len_len(
+                    line_end = line_end.add(utf_ptr2len_len(
                         line_end,
                         (end as isize - line_end as isize) as c_int,
                     ) as usize);
@@ -1007,17 +1117,16 @@ pub unsafe extern "C" fn rs_str_to_reg(
                 maxlen = charlen as usize;
             }
 
-            // When appending, copy the previous line and free it after
             let extra = if append {
                 lnum -= 1;
-                nvim_yankreg_get_size_at(y_ptr, lnum)
+                (*r.y_array.add(lnum)).size
             } else {
                 0
             };
 
-            let s = nvim_xmallocz(line_len + extra);
+            let s = xmallocz(line_len + extra);
             if extra > 0 {
-                let prev_data = nvim_yankreg_get_data_at(y_ptr, lnum);
+                let prev_data = (*r.y_array.add(lnum)).data;
                 std::ptr::copy_nonoverlapping(prev_data, s, extra);
             }
             if line_len > 0 {
@@ -1026,149 +1135,337 @@ pub unsafe extern "C" fn rs_str_to_reg(
             let s_len = extra + line_len;
 
             if append {
-                nvim_yankreg_free_data_at(y_ptr, lnum);
+                let prev = &mut *r.y_array.add(lnum);
+                xfree(prev.data as *mut c_void);
                 append = false;
             }
 
-            // Set the string
             let new_string = NvimString {
                 data: s,
                 size: s_len,
             };
-            nvim_yankreg_set_string_at(y_ptr, lnum, new_string);
+            *r.y_array.add(lnum) = new_string;
 
-            // Convert NULs to '\n' to prevent truncation
-            nvim_memchrsub(s, NUL_CHAR, b'\n' as c_char, s_len);
+            // Convert NULs to '\n' to prevent truncation.
+            memchrsub(s, NUL_CHAR, b'\n' as c_char, s_len);
 
             lnum += 1;
             start = line_end.add(1);
         }
     }
 
-    nvim_yankreg_set_type(y_ptr, yank_type);
-    nvim_yankreg_set_size(y_ptr, lnum);
-    nvim_yankreg_free_additional_data(y_ptr);
-    nvim_yankreg_set_timestamp(y_ptr, nvim_os_time());
+    r.y_type = yank_type;
+    r.y_size = lnum;
+    // Free additional_data.
+    if !r.additional_data.is_null() {
+        xfree(r.additional_data);
+        r.additional_data = std::ptr::null_mut();
+    }
+    r.timestamp = os_time();
 
     if yank_type == K_MT_BLOCK_WISE {
-        let width = if blocklen == -1 {
+        r.y_width = if blocklen == -1 {
             (maxlen as c_int) - 1
         } else {
             blocklen
         };
-        nvim_yankreg_set_width(y_ptr, width);
     } else {
-        nvim_yankreg_set_width(y_ptr, 0);
+        r.y_width = 0;
     }
 }
 
-// =============================================================================
-// Phase 3: Register System Foundation - Additional Functions
-// =============================================================================
+// ---------------------------------------------------------------------------
+// get_default_register_name (Phase 3: thin wrapper over adjust_clipboard_name)
+// ---------------------------------------------------------------------------
 
-/// Get the register index for the unnamed register ("").
-/// Returns the index of y_previous, or -1 if not set.
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_unnamed_register_index() -> c_int {
-    nvim_get_y_previous_index()
+extern "C" {
+    fn adjust_clipboard_name(name: *mut c_int, quiet: bool, writing: bool) -> *mut YankReg;
 }
 
-/// Check if a register contains any text.
+/// Check if the default register should be a clipboard register.
+///
+/// Returns the clipboard register name, or NUL if none.
 ///
 /// # Safety
 ///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_register_has_content(regname: c_int) -> bool {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return false;
+/// Calls `adjust_clipboard_name` which reads global state.
+#[unsafe(export_name = "get_default_register_name")]
+pub unsafe extern "C" fn rs_get_default_register_name() -> c_int {
+    let mut name: c_int = 0;
+    adjust_clipboard_name(&raw mut name, true, false);
+    name
+}
+
+// ---------------------------------------------------------------------------
+// get_expr_register
+// ---------------------------------------------------------------------------
+
+/// Get an expression for the `"=expr1"` or `CTRL-R =expr1`.
+///
+/// Returns `'='` when OK, NUL otherwise.
+///
+/// # Safety
+///
+/// Calls `getcmdline`.
+#[unsafe(export_name = "get_expr_register")]
+pub unsafe extern "C" fn rs_get_expr_register() -> c_int {
+    let new_line = getcmdline(c_int::from(b'='), 0, 0, true);
+    if new_line.is_null() {
+        return 0; // NUL
     }
-    let reg = nvim_get_y_regs_ptr(i);
-    !nvim_yankreg_is_empty(reg)
-}
-
-/// Get the line count of a register.
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_register_get_line_count(regname: c_int) -> usize {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return 0;
+    if *new_line == 0 {
+        // use previous line
+        xfree(new_line as *mut c_void);
+    } else {
+        rs_set_expr_line(new_line);
     }
-    let reg = nvim_get_y_regs_ptr(i);
-    nvim_yankreg_get_size(reg)
+    c_int::from(b'=')
 }
 
-/// Get the motion type of a register (linewise, charwise, blockwise).
+// ---------------------------------------------------------------------------
+// write_reg_contents family
+// ---------------------------------------------------------------------------
+
+extern "C" {
+    fn semsg(msg: *const c_char, ...);
+    fn emsg(msg: *const c_char);
+}
+
+/// Store `str` in register `name`.
 ///
 /// # Safety
 ///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_register_get_motion_type(regname: c_int) -> c_int {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return K_MT_UNKNOWN;
+/// All pointers must be valid.
+#[unsafe(export_name = "write_reg_contents")]
+pub unsafe extern "C" fn rs_write_reg_contents(
+    name: c_int,
+    str: *const c_char,
+    len: isize,
+    must_append: c_int,
+) {
+    rs_write_reg_contents_ex(name, str, len, must_append != 0, K_MT_UNKNOWN, 0);
+}
+
+/// Store a list of strings in register `name`.
+///
+/// # Safety
+///
+/// All pointers must be valid. `strings` must be NULL-terminated.
+#[unsafe(export_name = "write_reg_contents_lst")]
+pub unsafe extern "C" fn rs_write_reg_contents_lst(
+    name: c_int,
+    strings: *mut *mut c_char,
+    must_append: bool,
+    yank_type: c_int,
+    block_len: c_int,
+) {
+    if name == c_int::from(b'/') || name == c_int::from(b'=') {
+        let s = if (*strings).is_null() {
+            b"\0" as *const u8 as *const c_char
+        } else if !(*strings.add(1)).is_null() {
+            // E883: search pattern and expression register may not contain two or more lines
+            static E883: &[u8] =
+                b"E883: Search pattern and expression register may not contain two or more lines\0";
+            emsg(E883.as_ptr() as *const c_char);
+            return;
+        } else {
+            *strings as *const c_char
+        };
+        rs_write_reg_contents_ex(name, s, -1, must_append, yank_type, block_len);
+        return;
     }
-    let reg = nvim_get_y_regs_ptr(i);
-    if nvim_yankreg_is_empty(reg) {
-        return K_MT_UNKNOWN;
+
+    if name == c_int::from(b'_') {
+        return;
     }
-    nvim_yankreg_get_type(reg)
-}
 
-/// Get the block width of a register (only meaningful for blockwise).
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_register_get_block_width(regname: c_int) -> c_int {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return 0;
+    let mut old_y_previous: *mut YankReg = std::ptr::null_mut();
+    let reg = rs_init_write_reg(name, &raw mut old_y_previous, must_append);
+    if reg.is_null() {
+        return;
     }
-    let reg = nvim_get_y_regs_ptr(i);
-    nvim_yankreg_get_width(reg)
+
+    // str_to_reg with str_list=true interprets str as char**; len is unused in that mode.
+    rs_str_to_reg(reg, yank_type, strings as *const c_char, 0, block_len, true);
+    rs_finish_write_reg(name, reg, old_y_previous);
 }
 
-/// Check if a register is linewise.
+/// Write `str` (length `len`) to register `name`.
 ///
 /// # Safety
 ///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_register_is_linewise(regname: c_int) -> bool {
-    rs_register_get_motion_type(regname) == K_MT_LINE_WISE
+/// All pointers must be valid.
+#[unsafe(export_name = "write_reg_contents_ex")]
+pub unsafe extern "C" fn rs_write_reg_contents_ex(
+    name: c_int,
+    str: *const c_char,
+    len: isize,
+    must_append: bool,
+    yank_type: c_int,
+    block_len: c_int,
+) {
+    let len: usize = if len < 0 {
+        libc::strlen(str)
+    } else {
+        len as usize
+    };
+
+    if name == c_int::from(b'/') {
+        set_last_search_pat(str, RE_SEARCH, true, true);
+        return;
+    }
+
+    if name == c_int::from(b'#') {
+        // Set alternate file number.
+        let first_char = *str as u8;
+        if ascii_isdigit(first_char) {
+            // parse decimal number from str
+            let mut num: c_int = 0;
+            let mut p = str;
+            while ascii_isdigit(*p as u8) {
+                num = num * 10 + (*p as c_int - b'0' as c_int);
+                p = p.add(1);
+            }
+            let buf = buflist_findnr(num);
+            if buf.is_null() {
+                static FMTBUF: &[u8] = b"E86: Buffer %lld does not exist\0";
+                semsg(FMTBUF.as_ptr() as *const c_char, num as i64);
+            } else {
+                // Set curwin->w_alt_fnum.
+                set_alt_fnum(buf);
+            }
+        } else {
+            let buf_nr = buflist_findpat(str, str.add(len), true, false, false);
+            let buf = buflist_findnr(buf_nr);
+            if !buf.is_null() {
+                set_alt_fnum(buf);
+            }
+        }
+        return;
+    }
+
+    if name == c_int::from(b'=') {
+        let offset: usize;
+        let totlen: usize;
+        if must_append && !expr_line.is_null() {
+            let exprlen = libc::strlen(expr_line);
+            totlen = exprlen + len;
+            offset = exprlen;
+        } else {
+            totlen = len;
+            offset = 0;
+        }
+        expr_line = xrealloc(expr_line as *mut c_void, totlen + 1) as *mut c_char;
+        std::ptr::copy_nonoverlapping(str, expr_line.add(offset), len);
+        *expr_line.add(totlen) = 0;
+        return;
+    }
+
+    if name == c_int::from(b'_') {
+        return;
+    }
+
+    let mut old_y_previous: *mut YankReg = std::ptr::null_mut();
+    let reg = rs_init_write_reg(name, &raw mut old_y_previous, must_append);
+    if reg.is_null() {
+        return;
+    }
+    rs_str_to_reg(reg, yank_type, str, len, block_len, false);
+    rs_finish_write_reg(name, reg, old_y_previous);
 }
 
-/// Check if a register is charwise.
+// Helper: set curwin->w_alt_fnum from a buf_T pointer.
+// We reach into C for this tiny detail.
+extern "C" {
+    fn nvim_register_set_alt_fnum(buf: *mut c_void);
+}
+
+unsafe fn set_alt_fnum(buf: *mut c_void) {
+    nvim_register_set_alt_fnum(buf);
+}
+
+// ---------------------------------------------------------------------------
+// prepare_yankreg_from_object / finish_yankreg_from_object
+// ---------------------------------------------------------------------------
+
+extern "C" {
+    fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
+}
+
+/// Prepare a `YankReg` from an object (API setreg).
 ///
 /// # Safety
 ///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_register_is_charwise(regname: c_int) -> bool {
-    rs_register_get_motion_type(regname) == K_MT_CHAR_WISE
+/// `reg` must point to an empty `YankReg`. `regtype` is a `NvimString` by value.
+#[unsafe(export_name = "prepare_yankreg_from_object")]
+pub unsafe extern "C" fn rs_prepare_yankreg_from_object(
+    reg: *mut YankReg,
+    regtype: NvimString,
+    _lines: usize,
+) -> bool {
+    let r = &mut *reg;
+    let type_char = if !regtype.data.is_null() && regtype.size > 0 {
+        *regtype.data as u8
+    } else {
+        0
+    };
+
+    r.y_type = match type_char {
+        0 => K_MT_UNKNOWN,
+        b'v' | b'c' => K_MT_CHAR_WISE,
+        b'V' | b'l' => K_MT_LINE_WISE,
+        b'b' | 0x16 /* Ctrl_V */ => K_MT_BLOCK_WISE,
+        _ => return false,
+    };
+
+    r.y_width = 0;
+    if regtype.size > 1 {
+        if r.y_type != K_MT_BLOCK_WISE {
+            return false;
+        }
+        if !ascii_isdigit(*regtype.data.add(1) as u8) {
+            return false;
+        }
+        let mut p = regtype.data.add(1);
+        r.y_width = getdigits_int(&raw mut p, false, 1) - 1;
+        if regtype.size > (p as usize - regtype.data as usize) {
+            return false;
+        }
+    }
+
+    r.additional_data = std::ptr::null_mut();
+    r.timestamp = 0;
+    true
 }
 
-/// Check if a register is blockwise.
+/// Adjust a `YankReg` after object set.
 ///
 /// # Safety
 ///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_register_is_blockwise(regname: c_int) -> bool {
-    rs_register_get_motion_type(regname) == K_MT_BLOCK_WISE
+/// `reg` must be valid.
+#[unsafe(export_name = "finish_yankreg_from_object")]
+pub unsafe extern "C" fn rs_finish_yankreg_from_object(reg: *mut YankReg, clipboard_adjust: bool) {
+    let r = &mut *reg;
+
+    if r.y_size > 0 && (*r.y_array.add(r.y_size - 1)).size == 0 {
+        if r.y_type != K_MT_CHAR_WISE {
+            if r.y_type == K_MT_UNKNOWN || clipboard_adjust {
+                r.y_size -= 1;
+            }
+            if r.y_type == K_MT_UNKNOWN {
+                r.y_type = K_MT_LINE_WISE;
+            }
+        }
+    } else if r.y_type == K_MT_UNKNOWN {
+        r.y_type = K_MT_CHAR_WISE;
+    }
+
+    rs_update_yankreg_width(reg);
 }
+
+// ---------------------------------------------------------------------------
+// Utility functions kept for callers in other crates.
+// ---------------------------------------------------------------------------
 
 /// Check if a register is a clipboard register (* or +).
 #[no_mangle]
@@ -1179,261 +1476,44 @@ pub extern "C" fn rs_register_is_clipboard(regname: c_int) -> bool {
     c == b'*' || c == b'+'
 }
 
-/// Check if a register is a special register (not alphanumeric).
-#[no_mangle]
-pub extern "C" fn rs_register_is_special(regname: c_int) -> bool {
-    let Ok(c) = u8::try_from(regname) else {
-        return false;
-    };
-    !ascii_isalnum(c)
-}
+// ---------------------------------------------------------------------------
+// Additional helpers used by shada / ops callers.
+// ---------------------------------------------------------------------------
 
-/// Check if a register is a named register (a-z).
-#[no_mangle]
-pub extern "C" fn rs_register_is_named(regname: c_int) -> bool {
-    let Ok(c) = u8::try_from(regname) else {
-        return false;
-    };
-    ascii_islower(c)
-}
-
-/// Check if a register is a numbered register (0-9).
-#[no_mangle]
-pub extern "C" fn rs_register_is_numbered(regname: c_int) -> bool {
-    let Ok(c) = u8::try_from(regname) else {
-        return false;
-    };
-    ascii_isdigit(c)
-}
-
-/// Check if a register is read-only.
-#[no_mangle]
-pub extern "C" fn rs_register_is_readonly(regname: c_int) -> bool {
-    let Ok(c) = u8::try_from(regname) else {
-        return false;
-    };
-    // Read-only registers: . / % : =
-    strchr(b"/.%:=", c)
-}
-
-/// Check if a register is the black hole register (_).
-#[no_mangle]
-pub extern "C" fn rs_register_is_blackhole(regname: c_int) -> bool {
-    regname == c_int::from(b'_')
-}
-
-/// Check if a register is the expression register (=).
-#[no_mangle]
-pub extern "C" fn rs_register_is_expression(regname: c_int) -> bool {
-    regname == c_int::from(b'=')
-}
-
-/// Check if a register is the search register (/).
-#[no_mangle]
-pub extern "C" fn rs_register_is_search(regname: c_int) -> bool {
-    regname == c_int::from(b'/')
-}
-
-/// Check if a register is the command register (:).
-#[no_mangle]
-pub extern "C" fn rs_register_is_command(regname: c_int) -> bool {
-    regname == c_int::from(b':')
-}
-
-/// Check if a register is the filename register (%).
-#[no_mangle]
-pub extern "C" fn rs_register_is_filename(regname: c_int) -> bool {
-    regname == c_int::from(b'%')
-}
-
-/// Check if a register is the alternate filename register (#).
-#[no_mangle]
-pub extern "C" fn rs_register_is_altfile(regname: c_int) -> bool {
-    regname == c_int::from(b'#')
-}
-
-/// Check if a register is the insertion register (.).
-#[no_mangle]
-pub extern "C" fn rs_register_is_insertion(regname: c_int) -> bool {
-    regname == c_int::from(b'.')
-}
-
-/// Check if a register is the unnamed register (").
-#[no_mangle]
-pub extern "C" fn rs_register_is_unnamed(regname: c_int) -> bool {
-    regname == c_int::from(b'"')
-}
-
-/// Check if a register is the small delete register (-).
-#[no_mangle]
-pub extern "C" fn rs_register_is_small_delete(regname: c_int) -> bool {
-    regname == c_int::from(b'-')
-}
-
-// =============================================================================
-// Phase 4: Register Operations - Additional Functions
-// =============================================================================
-
-/// Clear a register's contents.
+/// Check if a register contains any text.
 ///
 /// # Safety
 ///
-/// Accesses global register state via C FFI.
+/// Accesses global register state.
 #[no_mangle]
-pub unsafe extern "C" fn rs_register_clear(regname: c_int) -> c_int {
+pub unsafe extern "C" fn rs_register_has_content(regname: c_int) -> bool {
     let i = rs_op_reg_index(regname);
     if i == -1 {
-        return FAIL;
+        return false;
     }
-    let reg = nvim_get_y_regs_ptr(i);
-    nvim_free_register(reg);
-    nvim_clear_yankreg_array(reg);
-    OK
+    !y_regs[i as usize].is_empty()
 }
 
-/// Get a line from a register by index.
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-/// The returned pointer is only valid while the register is unchanged.
-#[no_mangle]
-pub unsafe extern "C" fn rs_register_get_line(regname: c_int, idx: usize) -> *const c_char {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return std::ptr::null();
-    }
-    let reg = nvim_get_y_regs_ptr(i);
-    let size = nvim_yankreg_get_size(reg);
-    if idx >= size {
-        return std::ptr::null();
-    }
-    nvim_yankreg_get_line_data(reg, idx)
-}
-
-/// Get the size of a line in a register.
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_register_get_line_size(regname: c_int, idx: usize) -> usize {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return 0;
-    }
-    let reg = nvim_get_y_regs_ptr(i);
-    let size = nvim_yankreg_get_size(reg);
-    if idx >= size {
-        return 0;
-    }
-    nvim_yankreg_get_line_size(reg, idx)
-}
-
-/// Get the total character count of a register's contents.
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_register_get_total_size(regname: c_int) -> usize {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return 0;
-    }
-    let reg = nvim_get_y_regs_ptr(i);
-    let line_count = nvim_yankreg_get_size(reg);
-
-    let mut total: usize = 0;
-    for idx in 0..line_count {
-        total += nvim_yankreg_get_line_size(reg, idx);
-        // Add 1 for newline (except for the last line in charwise mode)
-        if idx < line_count - 1 || nvim_yankreg_get_type(reg) == K_MT_LINE_WISE {
-            total += 1;
-        }
-    }
-    total
-}
-
-/// Check if a register name is valid for reading.
-#[no_mangle]
-pub extern "C" fn rs_register_valid_for_read(regname: c_int) -> bool {
-    rs_valid_yank_reg(regname, false) || regname == 0
-}
-
-/// Check if a register name is valid for writing.
-#[no_mangle]
-pub extern "C" fn rs_register_valid_for_write(regname: c_int) -> bool {
-    rs_valid_yank_reg(regname, true)
-}
-
-/// Convert register character to lowercase (for named registers).
-#[no_mangle]
-pub extern "C" fn rs_register_to_lowercase(regname: c_int) -> c_int {
-    let Ok(c) = u8::try_from(regname) else {
-        return regname;
-    };
-    if ascii_isupper(c) {
-        c_int::from(c - b'A' + b'a')
-    } else {
-        regname
-    }
-}
-
-/// Get the number of non-empty named registers (a-z).
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_register_count_named() -> c_int {
-    let mut count: c_int = 0;
-    for c in b'a'..=b'z' {
-        let i = rs_op_reg_index(c_int::from(c));
-        if i != -1 {
-            let reg = nvim_get_y_regs_ptr(i);
-            if !nvim_yankreg_is_empty(reg) {
-                count += 1;
-            }
-        }
-    }
-    count
-}
-
-/// Get the number of non-empty numbered registers (0-9).
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_register_count_numbered() -> c_int {
-    let mut count: c_int = 0;
-    for c in b'0'..=b'9' {
-        let i = rs_op_reg_index(c_int::from(c));
-        if i != -1 {
-            let reg = nvim_get_y_regs_ptr(i);
-            if !nvim_yankreg_is_empty(reg) {
-                count += 1;
-            }
-        }
-    }
-    count
-}
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
+    fn test_yankreg_size() {
+        assert_eq!(std::mem::size_of::<YankReg>(), 40);
+    }
+
+    #[test]
     fn test_valid_yank_reg_named() {
-        // Alphabetic registers (a-z, A-Z)
         assert!(rs_valid_yank_reg(c_int::from(b'a'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'z'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'A'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'Z'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'a'), true));
-
-        // Numeric registers (0-9)
         assert!(rs_valid_yank_reg(c_int::from(b'0'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'9'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'5'), true));
@@ -1441,15 +1521,11 @@ mod tests {
 
     #[test]
     fn test_valid_yank_reg_readonly() {
-        // Read-only registers: . / % : =
-        // These are only valid when NOT writing
         assert!(rs_valid_yank_reg(c_int::from(b'.'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'/'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'%'), false));
         assert!(rs_valid_yank_reg(c_int::from(b':'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'='), false));
-
-        // Not valid when writing
         assert!(!rs_valid_yank_reg(c_int::from(b'.'), true));
         assert!(!rs_valid_yank_reg(c_int::from(b'/'), true));
         assert!(!rs_valid_yank_reg(c_int::from(b'%'), true));
@@ -1459,57 +1535,30 @@ mod tests {
 
     #[test]
     fn test_valid_yank_reg_special() {
-        // Special registers: # " - _ * +
         assert!(rs_valid_yank_reg(c_int::from(b'#'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'"'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'-'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'_'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'*'), false));
         assert!(rs_valid_yank_reg(c_int::from(b'+'), false));
-
-        // Also valid when writing
-        assert!(rs_valid_yank_reg(c_int::from(b'#'), true));
-        assert!(rs_valid_yank_reg(c_int::from(b'"'), true));
-        assert!(rs_valid_yank_reg(c_int::from(b'-'), true));
-        assert!(rs_valid_yank_reg(c_int::from(b'_'), true));
-        assert!(rs_valid_yank_reg(c_int::from(b'*'), true));
-        assert!(rs_valid_yank_reg(c_int::from(b'+'), true));
     }
 
     #[test]
     fn test_valid_yank_reg_invalid() {
-        // Invalid register names
         assert!(!rs_valid_yank_reg(c_int::from(b' '), false));
         assert!(!rs_valid_yank_reg(c_int::from(b'!'), false));
-        assert!(!rs_valid_yank_reg(c_int::from(b'@'), false));
-        assert!(!rs_valid_yank_reg(c_int::from(b'$'), false));
-        assert!(!rs_valid_yank_reg(c_int::from(b'^'), false));
-        assert!(!rs_valid_yank_reg(c_int::from(b'&'), false));
-        assert!(!rs_valid_yank_reg(c_int::from(b'('), false));
-        assert!(!rs_valid_yank_reg(c_int::from(b')'), false));
-
-        // Negative values
         assert!(!rs_valid_yank_reg(-1, false));
-
-        // Values > 255
         assert!(!rs_valid_yank_reg(256, false));
-
-        // Zero (not handled by this function - caller's responsibility)
         assert!(!rs_valid_yank_reg(0, false));
     }
 
     #[test]
     fn test_is_literal_register() {
-        // Alphanumeric registers are literal
         assert_ne!(rs_is_literal_register(c_int::from(b'a')), 0);
         assert_ne!(rs_is_literal_register(c_int::from(b'Z')), 0);
         assert_ne!(rs_is_literal_register(c_int::from(b'0')), 0);
-
-        // Star and plus are literal
         assert_ne!(rs_is_literal_register(c_int::from(b'*')), 0);
         assert_ne!(rs_is_literal_register(c_int::from(b'+')), 0);
-
-        // Other special registers are not literal
         assert_eq!(rs_is_literal_register(c_int::from(b'-')), 0);
         assert_eq!(rs_is_literal_register(c_int::from(b'"')), 0);
         assert_eq!(rs_is_literal_register(c_int::from(b'#')), 0);
@@ -1517,3271 +1566,17 @@ mod tests {
 
     #[test]
     fn test_op_reg_index() {
-        // Digits map to 0-9
         assert_eq!(rs_op_reg_index(c_int::from(b'0')), 0);
         assert_eq!(rs_op_reg_index(c_int::from(b'9')), 9);
-
-        // Lowercase letters map to 10-35
         assert_eq!(rs_op_reg_index(c_int::from(b'a')), 10);
         assert_eq!(rs_op_reg_index(c_int::from(b'z')), 35);
-
-        // Uppercase letters also map to 10-35
         assert_eq!(rs_op_reg_index(c_int::from(b'A')), 10);
         assert_eq!(rs_op_reg_index(c_int::from(b'Z')), 35);
-
-        // Special registers
         assert_eq!(rs_op_reg_index(c_int::from(b'-')), DELETION_REGISTER);
         assert_eq!(rs_op_reg_index(c_int::from(b'*')), STAR_REGISTER);
         assert_eq!(rs_op_reg_index(c_int::from(b'+')), PLUS_REGISTER);
-
-        // Invalid returns -1
         assert_eq!(rs_op_reg_index(c_int::from(b'@')), -1);
         assert_eq!(rs_op_reg_index(-1), -1);
         assert_eq!(rs_op_reg_index(256), -1);
     }
-
-    #[test]
-    fn test_is_append_register() {
-        // Uppercase letters are append registers
-        assert_ne!(rs_is_append_register(c_int::from(b'A')), 0);
-        assert_ne!(rs_is_append_register(c_int::from(b'Z')), 0);
-
-        // Lowercase letters are not append registers
-        assert_eq!(rs_is_append_register(c_int::from(b'a')), 0);
-        assert_eq!(rs_is_append_register(c_int::from(b'z')), 0);
-
-        // Other characters are not append registers
-        assert_eq!(rs_is_append_register(c_int::from(b'0')), 0);
-        assert_eq!(rs_is_append_register(c_int::from(b'-')), 0);
-    }
-
-    #[test]
-    fn test_get_register_name() {
-        // -1 returns '"'
-        assert_eq!(rs_get_register_name(-1), c_int::from(b'"'));
-
-        // 0-9 return '0'-'9'
-        assert_eq!(rs_get_register_name(0), c_int::from(b'0'));
-        assert_eq!(rs_get_register_name(9), c_int::from(b'9'));
-
-        // 10-35 return 'a'-'z'
-        assert_eq!(rs_get_register_name(10), c_int::from(b'a'));
-        assert_eq!(rs_get_register_name(35), c_int::from(b'z'));
-
-        // Special registers
-        assert_eq!(rs_get_register_name(DELETION_REGISTER), c_int::from(b'-'));
-        assert_eq!(rs_get_register_name(STAR_REGISTER), c_int::from(b'*'));
-        assert_eq!(rs_get_register_name(PLUS_REGISTER), c_int::from(b'+'));
-    }
-
-    #[test]
-    fn test_format_reg_type() {
-        let mut buf = [0u8; 20];
-
-        // kMTLineWise -> 'V'
-        unsafe {
-            rs_format_reg_type(
-                K_MT_LINE_WISE,
-                0,
-                buf.as_mut_ptr() as *mut c_char,
-                buf.len(),
-            );
-        }
-        assert_eq!(buf[0], b'V');
-        assert_eq!(buf[1], 0);
-
-        // kMTCharWise -> 'v'
-        buf = [0u8; 20];
-        unsafe {
-            rs_format_reg_type(
-                K_MT_CHAR_WISE,
-                0,
-                buf.as_mut_ptr() as *mut c_char,
-                buf.len(),
-            );
-        }
-        assert_eq!(buf[0], b'v');
-        assert_eq!(buf[1], 0);
-
-        // kMTBlockWise -> ^V{width+1}
-        buf = [0u8; 20];
-        unsafe {
-            rs_format_reg_type(
-                K_MT_BLOCK_WISE,
-                9,
-                buf.as_mut_ptr() as *mut c_char,
-                buf.len(),
-            );
-        }
-        assert_eq!(buf[0], CTRL_V);
-        assert_eq!(buf[1], b'1');
-        assert_eq!(buf[2], b'0');
-        assert_eq!(buf[3], 0);
-
-        // kMTBlockWise with width 0 -> ^V1
-        buf = [0u8; 20];
-        unsafe {
-            rs_format_reg_type(
-                K_MT_BLOCK_WISE,
-                0,
-                buf.as_mut_ptr() as *mut c_char,
-                buf.len(),
-            );
-        }
-        assert_eq!(buf[0], CTRL_V);
-        assert_eq!(buf[1], b'1');
-        assert_eq!(buf[2], 0);
-
-        // kMTUnknown -> empty
-        buf = [0u8; 20];
-        unsafe {
-            rs_format_reg_type(K_MT_UNKNOWN, 0, buf.as_mut_ptr() as *mut c_char, buf.len());
-        }
-        assert_eq!(buf[0], 0);
-    }
-
-    #[test]
-    fn test_motion_type_constants() {
-        // Verify motion type constants match C definitions
-        assert_eq!(K_MT_CHAR_WISE, 0);
-        assert_eq!(K_MT_LINE_WISE, 1);
-        assert_eq!(K_MT_BLOCK_WISE, 2);
-        assert_eq!(K_MT_UNKNOWN, -1);
-    }
-
-    #[test]
-    fn test_register_index_constants() {
-        // Verify register index constants match C definitions
-        assert_eq!(DELETION_REGISTER, 36);
-        assert_eq!(NUM_SAVED_REGISTERS, 37);
-        assert_eq!(STAR_REGISTER, 37);
-        assert_eq!(PLUS_REGISTER, 38);
-        assert_eq!(NUM_REGISTERS, 39);
-    }
-
-    #[test]
-    fn test_ctrl_key_constants() {
-        // Verify control key constants match C definitions
-        assert_eq!(CTRL_V, 0x16);
-        assert_eq!(CTRL_A, 1);
-        assert_eq!(CTRL_F, 6);
-        assert_eq!(CTRL_P, 16);
-        assert_eq!(CTRL_W, 23);
-        assert_eq!(NUL, 0);
-    }
-
-    #[test]
-    fn test_return_value_constants() {
-        // Verify OK/FAIL constants match C definitions
-        assert_eq!(OK, 1);
-        assert_eq!(FAIL, 0);
-    }
-
-    #[test]
-    fn test_char_constants() {
-        // Verify character constants match C definitions
-        assert_eq!(NL, b'\n' as c_char);
-        assert_eq!(CAR, b'\r' as c_char);
-        assert_eq!(NUL_CHAR, 0);
-    }
-
-    #[test]
-    fn test_register_type_checks() {
-        // Clipboard registers
-        assert!(rs_register_is_clipboard(c_int::from(b'*')));
-        assert!(rs_register_is_clipboard(c_int::from(b'+')));
-        assert!(!rs_register_is_clipboard(c_int::from(b'a')));
-
-        // Named registers
-        assert!(rs_register_is_named(c_int::from(b'a')));
-        assert!(rs_register_is_named(c_int::from(b'z')));
-        assert!(!rs_register_is_named(c_int::from(b'A')));
-        assert!(!rs_register_is_named(c_int::from(b'0')));
-
-        // Numbered registers
-        assert!(rs_register_is_numbered(c_int::from(b'0')));
-        assert!(rs_register_is_numbered(c_int::from(b'9')));
-        assert!(!rs_register_is_numbered(c_int::from(b'a')));
-
-        // Special registers
-        assert!(rs_register_is_blackhole(c_int::from(b'_')));
-        assert!(rs_register_is_expression(c_int::from(b'=')));
-        assert!(rs_register_is_search(c_int::from(b'/')));
-        assert!(rs_register_is_command(c_int::from(b':')));
-        assert!(rs_register_is_filename(c_int::from(b'%')));
-        assert!(rs_register_is_altfile(c_int::from(b'#')));
-        assert!(rs_register_is_insertion(c_int::from(b'.')));
-        assert!(rs_register_is_unnamed(c_int::from(b'"')));
-        assert!(rs_register_is_small_delete(c_int::from(b'-')));
-    }
-
-    #[test]
-    fn test_register_to_lowercase() {
-        assert_eq!(
-            rs_register_to_lowercase(c_int::from(b'A')),
-            c_int::from(b'a')
-        );
-        assert_eq!(
-            rs_register_to_lowercase(c_int::from(b'Z')),
-            c_int::from(b'z')
-        );
-        assert_eq!(
-            rs_register_to_lowercase(c_int::from(b'a')),
-            c_int::from(b'a')
-        );
-        assert_eq!(
-            rs_register_to_lowercase(c_int::from(b'0')),
-            c_int::from(b'0')
-        );
-    }
-
-    #[test]
-    fn test_register_validation() {
-        // Valid for reading but not writing
-        assert!(rs_register_valid_for_read(c_int::from(b'.')));
-        assert!(!rs_register_valid_for_write(c_int::from(b'.')));
-
-        // Valid for both
-        assert!(rs_register_valid_for_read(c_int::from(b'a')));
-        assert!(rs_register_valid_for_write(c_int::from(b'a')));
-
-        // Unnamed register (0) is valid for reading
-        assert!(rs_register_valid_for_read(0));
-    }
-}
-
-// =============================================================================
-// Phase 401: Register Iteration and Basic Access
-// =============================================================================
-
-extern "C" {
-    /// Check if register is empty (calls C reg_empty inline function).
-    fn nvim_reg_empty(reg: YankRegHandle) -> bool;
-
-    /// Compare y_previous pointer with a register.
-    fn nvim_is_y_previous(reg: YankRegHandle) -> bool;
-}
-
-/// Opaque iterator state for register iteration.
-/// Points to the current position in the register array.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct RegIterHandle(*const std::ffi::c_void);
-
-impl Default for RegIterHandle {
-    fn default() -> Self {
-        Self(std::ptr::null())
-    }
-}
-
-/// Check if a register is empty.
-///
-/// A register is empty if:
-/// - y_array is NULL
-/// - y_size is 0
-/// - y_size is 1, y_type is charwise, and the single line has size 0
-///
-/// # Safety
-///
-/// The `reg` handle must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_reg_empty(reg: YankRegHandle) -> bool {
-    if reg.0.is_null() {
-        return true;
-    }
-
-    if !nvim_yankreg_has_array(reg) {
-        return true;
-    }
-
-    let size = nvim_yankreg_get_size(reg);
-    if size == 0 {
-        return true;
-    }
-
-    if size == 1
-        && nvim_yankreg_get_type(reg) == K_MT_CHAR_WISE
-        && nvim_yankreg_get_line_size(reg, 0) == 0
-    {
-        return true;
-    }
-
-    false
-}
-
-/// Iterate over registers in an array.
-///
-/// # Arguments
-///
-/// * `iter` - Iterator state. Pass NULL to start iteration.
-/// * `regs` - Base pointer to register array.
-/// * `name` - Output: register name character.
-/// * `reg` - Output: copy of register contents (yankreg_T).
-/// * `is_unnamed` - Output: true if this register is y_previous.
-///
-/// # Returns
-///
-/// Pointer that must be passed to next call, or NULL if iteration is complete.
-///
-/// # Safety
-///
-/// All pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_op_reg_iter(
-    iter: RegIterHandle,
-    regs: YankRegHandle,
-    name: *mut c_char,
-    reg: YankRegHandle,
-    is_unnamed: *mut bool,
-) -> RegIterHandle {
-    // Initialize name to NUL
-    if !name.is_null() {
-        *name = 0;
-    }
-
-    // Calculate the starting position
-    let base = regs.0 as *const std::ffi::c_void;
-
-    // Get pointer to current register (or start from beginning if iter is NULL)
-    let mut iter_reg = if iter.0.is_null() {
-        regs
-    } else {
-        YankRegHandle(iter.0 as *mut std::ffi::c_void)
-    };
-
-    // Calculate offset from base
-    let yankreg_size: usize = 40; // sizeof(yankreg_T) - verified against C
-    let get_offset =
-        |ptr: YankRegHandle| -> isize { (ptr.0 as isize - base as isize) / yankreg_size as isize };
-
-    // Skip empty registers until we find a non-empty one or reach the end
-    while get_offset(iter_reg) < NUM_SAVED_REGISTERS as isize && nvim_reg_empty(iter_reg) {
-        iter_reg =
-            YankRegHandle((iter_reg.0 as *mut u8).add(yankreg_size) as *mut std::ffi::c_void);
-    }
-
-    // Check if we've reached the end
-    if get_offset(iter_reg) >= NUM_SAVED_REGISTERS as isize || nvim_reg_empty(iter_reg) {
-        return RegIterHandle(std::ptr::null());
-    }
-
-    // Get the register index
-    let iter_off = get_offset(iter_reg) as c_int;
-
-    // Set the output name
-    if !name.is_null() {
-        *name = rs_get_register_name(iter_off) as c_char;
-    }
-
-    // Copy register contents to output
-    if !reg.0.is_null() {
-        nvim_copy_yankreg(reg, iter_reg);
-    }
-
-    // Check if this is the unnamed register
-    if !is_unnamed.is_null() {
-        *is_unnamed = nvim_is_y_previous(iter_reg);
-    }
-
-    // Find the next non-empty register for the return value
-    let mut next_reg =
-        YankRegHandle((iter_reg.0 as *mut u8).add(yankreg_size) as *mut std::ffi::c_void);
-    while get_offset(next_reg) < NUM_SAVED_REGISTERS as isize {
-        if !nvim_reg_empty(next_reg) {
-            return RegIterHandle(next_reg.0);
-        }
-        next_reg =
-            YankRegHandle((next_reg.0 as *mut u8).add(yankreg_size) as *mut std::ffi::c_void);
-    }
-
-    RegIterHandle(std::ptr::null())
-}
-
-/// Iterate over global registers.
-///
-/// This is a convenience wrapper around rs_op_reg_iter that uses the global y_regs array.
-///
-/// # Arguments
-///
-/// * `iter` - Iterator state. Pass NULL to start iteration.
-/// * `name` - Output: register name character.
-/// * `reg` - Output: copy of register contents.
-/// * `is_unnamed` - Output: true if this register is y_previous.
-///
-/// # Returns
-///
-/// Pointer that must be passed to next call, or NULL if iteration is complete.
-///
-/// # Safety
-///
-/// All pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_op_global_reg_iter(
-    iter: RegIterHandle,
-    name: *mut c_char,
-    reg: YankRegHandle,
-    is_unnamed: *mut bool,
-) -> RegIterHandle {
-    let regs = nvim_get_y_regs_ptr(0);
-    rs_op_reg_iter(iter, regs, name, reg, is_unnamed)
-}
-
-/// Set a register to a given value.
-///
-/// # Arguments
-///
-/// * `name` - Register name character.
-/// * `reg` - Register value to set (contents are copied).
-/// * `is_unnamed` - Whether to set y_previous to point to this register.
-///
-/// # Returns
-///
-/// true on success, false if register name is invalid.
-///
-/// # Safety
-///
-/// The `reg` handle must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_op_reg_set(name: c_char, reg: YankRegHandle, is_unnamed: bool) -> bool {
-    let i = rs_op_reg_index(c_int::from(name));
-    if i == -1 {
-        return false;
-    }
-
-    // Free the old register contents
-    let dest = nvim_get_y_regs_ptr(i);
-    nvim_free_register(dest);
-
-    // Copy the new contents
-    nvim_copy_yankreg(dest, reg);
-
-    // Set y_previous if requested
-    if is_unnamed {
-        nvim_set_y_previous_by_index(i);
-    }
-
-    true
-}
-
-/// Get the first non-empty register index starting from a given index.
-///
-/// # Arguments
-///
-/// * `start_idx` - Index to start searching from (0-based).
-///
-/// # Returns
-///
-/// Index of first non-empty register, or -1 if none found.
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_find_next_nonempty_register(start_idx: c_int) -> c_int {
-    for i in start_idx..NUM_SAVED_REGISTERS {
-        let reg = nvim_get_y_regs_ptr(i);
-        if !nvim_yankreg_is_empty(reg) {
-            return i;
-        }
-    }
-    -1
-}
-
-/// Get the count of non-empty registers in a range.
-///
-/// # Arguments
-///
-/// * `start_idx` - Start index (inclusive).
-/// * `end_idx` - End index (exclusive).
-///
-/// # Returns
-///
-/// Number of non-empty registers in the range.
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_count_nonempty_registers_range(
-    start_idx: c_int,
-    end_idx: c_int,
-) -> c_int {
-    let mut count: c_int = 0;
-    for i in start_idx..end_idx.min(NUM_REGISTERS) {
-        let reg = nvim_get_y_regs_ptr(i);
-        if !nvim_yankreg_is_empty(reg) {
-            count += 1;
-        }
-    }
-    count
-}
-
-/// Check if a register index is valid.
-///
-/// # Arguments
-///
-/// * `idx` - Register index to check.
-///
-/// # Returns
-///
-/// true if index is within valid range [0, NUM_REGISTERS).
-#[no_mangle]
-pub extern "C" fn rs_is_valid_register_index(idx: c_int) -> bool {
-    (0..NUM_REGISTERS).contains(&idx)
-}
-
-/// Get the register index range for a category.
-///
-/// # Arguments
-///
-/// * `category` - 0=numbered (0-9), 1=named (a-z), 2=special (deletion, star, plus)
-/// * `start` - Output: start index (inclusive).
-/// * `end` - Output: end index (exclusive).
-///
-/// # Returns
-///
-/// true if category is valid.
-///
-/// # Safety
-///
-/// Output pointers must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_register_range(
-    category: c_int,
-    start: *mut c_int,
-    end: *mut c_int,
-) -> bool {
-    let (s, e) = match category {
-        0 => (0, 10),                            // numbered 0-9
-        1 => (10, 36),                           // named a-z
-        2 => (DELETION_REGISTER, NUM_REGISTERS), // special
-        _ => return false,
-    };
-
-    if !start.is_null() {
-        *start = s;
-    }
-    if !end.is_null() {
-        *end = e;
-    }
-    true
-}
-
-/// Get the timestamp of a register by name.
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_register_get_timestamp(regname: c_int) -> u64 {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return 0;
-    }
-    let reg = nvim_get_y_regs_ptr(i);
-    nvim_yankreg_get_timestamp(reg)
-}
-
-extern "C" {
-    fn nvim_yankreg_get_timestamp(reg: YankRegHandle) -> u64;
-}
-
-/// Compare two registers by timestamp.
-///
-/// # Returns
-///
-/// -1 if reg1 is older, 0 if equal, 1 if reg1 is newer.
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_compare_register_timestamps(regname1: c_int, regname2: c_int) -> c_int {
-    let ts1 = rs_register_get_timestamp(regname1);
-    let ts2 = rs_register_get_timestamp(regname2);
-
-    match ts1.cmp(&ts2) {
-        std::cmp::Ordering::Less => -1,
-        std::cmp::Ordering::Equal => 0,
-        std::cmp::Ordering::Greater => 1,
-    }
-}
-
-/// Find the most recently modified register in a range.
-///
-/// # Arguments
-///
-/// * `start_idx` - Start index (inclusive).
-/// * `end_idx` - End index (exclusive).
-///
-/// # Returns
-///
-/// Index of most recently modified register, or -1 if all empty.
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_find_most_recent_register(start_idx: c_int, end_idx: c_int) -> c_int {
-    let mut best_idx: c_int = -1;
-    let mut best_ts: u64 = 0;
-
-    for i in start_idx..end_idx.min(NUM_REGISTERS) {
-        let reg = nvim_get_y_regs_ptr(i);
-        if !nvim_yankreg_is_empty(reg) {
-            let ts = nvim_yankreg_get_timestamp(reg);
-            if best_idx == -1 || ts > best_ts {
-                best_idx = i;
-                best_ts = ts;
-            }
-        }
-    }
-    best_idx
-}
-
-// =============================================================================
-// Phase 402: Special Register Reading
-// =============================================================================
-
-/// Special register type constants for categorization.
-pub const SPEC_REG_NONE: c_int = 0;
-pub const SPEC_REG_FILENAME: c_int = 1; // %
-pub const SPEC_REG_ALTFILE: c_int = 2; // #
-pub const SPEC_REG_EXPRESSION: c_int = 3; // =
-pub const SPEC_REG_CMDLINE: c_int = 4; // :
-pub const SPEC_REG_SEARCH: c_int = 5; // /
-pub const SPEC_REG_INSERTED: c_int = 6; // .
-pub const SPEC_REG_FILENAME_CURSOR: c_int = 7; // Ctrl-F
-pub const SPEC_REG_PATH_CURSOR: c_int = 8; // Ctrl-P
-pub const SPEC_REG_WORD_CURSOR: c_int = 9; // Ctrl-W
-pub const SPEC_REG_WORD_ALL_CURSOR: c_int = 10; // Ctrl-A
-pub const SPEC_REG_LINE_CURSOR: c_int = 11; // Ctrl-L
-pub const SPEC_REG_BLACKHOLE: c_int = 12; // _
-
-/// Classify a special register by name.
-///
-/// Returns the special register type constant, or SPEC_REG_NONE if
-/// the register is not a special register.
-#[no_mangle]
-pub extern "C" fn rs_classify_special_register(regname: c_int) -> c_int {
-    match regname {
-        r if r == c_int::from(b'%') => SPEC_REG_FILENAME,
-        r if r == c_int::from(b'#') => SPEC_REG_ALTFILE,
-        r if r == c_int::from(b'=') => SPEC_REG_EXPRESSION,
-        r if r == c_int::from(b':') => SPEC_REG_CMDLINE,
-        r if r == c_int::from(b'/') => SPEC_REG_SEARCH,
-        r if r == c_int::from(b'.') => SPEC_REG_INSERTED,
-        r if r == CTRL_F => SPEC_REG_FILENAME_CURSOR,
-        r if r == CTRL_P => SPEC_REG_PATH_CURSOR,
-        r if r == CTRL_W => SPEC_REG_WORD_CURSOR,
-        r if r == CTRL_A => SPEC_REG_WORD_ALL_CURSOR,
-        12 => SPEC_REG_LINE_CURSOR, // Ctrl-L
-        r if r == c_int::from(b'_') => SPEC_REG_BLACKHOLE,
-        _ => SPEC_REG_NONE,
-    }
-}
-
-/// Check if a register is a special (computed) register.
-///
-/// Special registers have their values computed on access rather than
-/// stored in the y_regs array. This includes %, #, =, :, /, ., Ctrl keys, and _.
-///
-/// Note: This is more comprehensive than rs_is_special_register in ex_docmd
-/// which only checks for a subset of special registers.
-#[no_mangle]
-pub extern "C" fn rs_is_computed_register(regname: c_int) -> bool {
-    rs_classify_special_register(regname) != SPEC_REG_NONE
-}
-
-/// Check if a special register requires errmsg=true to return a value.
-///
-/// Some special registers (Ctrl-F, Ctrl-P, Ctrl-W, Ctrl-A, Ctrl-L) only
-/// return values when errmsg is true, because they need to be able to
-/// report errors.
-#[no_mangle]
-pub extern "C" fn rs_special_register_requires_errmsg(regname: c_int) -> bool {
-    matches!(
-        rs_classify_special_register(regname),
-        SPEC_REG_FILENAME_CURSOR
-            | SPEC_REG_PATH_CURSOR
-            | SPEC_REG_WORD_CURSOR
-            | SPEC_REG_WORD_ALL_CURSOR
-            | SPEC_REG_LINE_CURSOR
-    )
-}
-
-/// Check if a special register's value should be marked as allocated.
-///
-/// Some special registers return newly allocated strings that the caller
-/// must free, while others return pointers to existing data.
-#[no_mangle]
-pub extern "C" fn rs_special_register_allocates(regname: c_int) -> bool {
-    matches!(
-        rs_classify_special_register(regname),
-        SPEC_REG_EXPRESSION
-            | SPEC_REG_INSERTED
-            | SPEC_REG_FILENAME_CURSOR
-            | SPEC_REG_PATH_CURSOR
-            | SPEC_REG_WORD_CURSOR
-            | SPEC_REG_WORD_ALL_CURSOR
-    )
-}
-
-/// Check if a special register always returns empty string.
-///
-/// The black hole register (_) always returns an empty string.
-#[no_mangle]
-pub extern "C" fn rs_special_register_is_always_empty(regname: c_int) -> bool {
-    rs_classify_special_register(regname) == SPEC_REG_BLACKHOLE
-}
-
-/// Check if a register is a "cursor" special register.
-///
-/// Cursor registers get their value from the text under or around the cursor.
-#[no_mangle]
-pub extern "C" fn rs_is_cursor_register(regname: c_int) -> bool {
-    matches!(
-        rs_classify_special_register(regname),
-        SPEC_REG_FILENAME_CURSOR
-            | SPEC_REG_PATH_CURSOR
-            | SPEC_REG_WORD_CURSOR
-            | SPEC_REG_WORD_ALL_CURSOR
-            | SPEC_REG_LINE_CURSOR
-    )
-}
-
-/// Get a description string for a special register type.
-///
-/// Returns a pointer to a static string describing the register type.
-/// Returns NULL for unknown types.
-#[no_mangle]
-pub extern "C" fn rs_special_register_description(reg_type: c_int) -> *const c_char {
-    static DESC_FILENAME: &[u8] = b"file name\0";
-    static DESC_ALTFILE: &[u8] = b"alternate file name\0";
-    static DESC_EXPRESSION: &[u8] = b"expression result\0";
-    static DESC_CMDLINE: &[u8] = b"last command line\0";
-    static DESC_SEARCH: &[u8] = b"last search pattern\0";
-    static DESC_INSERTED: &[u8] = b"last inserted text\0";
-    static DESC_FILENAME_CURSOR: &[u8] = b"filename under cursor\0";
-    static DESC_PATH_CURSOR: &[u8] = b"path under cursor\0";
-    static DESC_WORD_CURSOR: &[u8] = b"word under cursor\0";
-    static DESC_WORD_ALL_CURSOR: &[u8] = b"WORD under cursor\0";
-    static DESC_LINE_CURSOR: &[u8] = b"line under cursor\0";
-    static DESC_BLACKHOLE: &[u8] = b"black hole\0";
-
-    match reg_type {
-        SPEC_REG_FILENAME => DESC_FILENAME.as_ptr() as *const c_char,
-        SPEC_REG_ALTFILE => DESC_ALTFILE.as_ptr() as *const c_char,
-        SPEC_REG_EXPRESSION => DESC_EXPRESSION.as_ptr() as *const c_char,
-        SPEC_REG_CMDLINE => DESC_CMDLINE.as_ptr() as *const c_char,
-        SPEC_REG_SEARCH => DESC_SEARCH.as_ptr() as *const c_char,
-        SPEC_REG_INSERTED => DESC_INSERTED.as_ptr() as *const c_char,
-        SPEC_REG_FILENAME_CURSOR => DESC_FILENAME_CURSOR.as_ptr() as *const c_char,
-        SPEC_REG_PATH_CURSOR => DESC_PATH_CURSOR.as_ptr() as *const c_char,
-        SPEC_REG_WORD_CURSOR => DESC_WORD_CURSOR.as_ptr() as *const c_char,
-        SPEC_REG_WORD_ALL_CURSOR => DESC_WORD_ALL_CURSOR.as_ptr() as *const c_char,
-        SPEC_REG_LINE_CURSOR => DESC_LINE_CURSOR.as_ptr() as *const c_char,
-        SPEC_REG_BLACKHOLE => DESC_BLACKHOLE.as_ptr() as *const c_char,
-        _ => std::ptr::null(),
-    }
-}
-
-// FFI declarations for special register accessors
-extern "C" {
-    fn nvim_get_curbuf_fname() -> *const c_char;
-    fn nvim_get_altfname(errmsg: bool) -> *mut c_char;
-    fn nvim_get_last_cmdline() -> *const c_char;
-    fn nvim_get_last_search_pat() -> *const c_char;
-    fn nvim_get_last_insert_save() -> *mut c_char;
-    fn nvim_check_fname();
-    fn nvim_emsg_nolastcmd();
-    fn nvim_emsg_noprevre();
-    fn nvim_emsg_noinstext();
-}
-
-/// Result structure for get_spec_reg.
-#[repr(C)]
-pub struct SpecRegResult {
-    /// Pointer to the result string, or NULL if not available.
-    pub value: *mut c_char,
-    /// True if value was allocated and must be freed by caller.
-    pub allocated: bool,
-    /// True if the register name was recognized as a special register.
-    pub is_special: bool,
-}
-
-impl Default for SpecRegResult {
-    fn default() -> Self {
-        Self {
-            value: std::ptr::null_mut(),
-            allocated: false,
-            is_special: false,
-        }
-    }
-}
-
-/// GRegFlags for get_reg_contents compatibility.
-pub const K_GREG_NO_EXPR: c_int = 1; // Do not allow expression register
-pub const K_GREG_EXPR_SRC: c_int = 2; // Return expression itself for "=" register
-pub const K_GREG_LIST: c_int = 4; // Return list (not supported in Rust impl)
-
-/// Get the value of a special register (partial implementation).
-///
-/// This handles registers that can be retrieved without complex dependencies:
-/// - '%': filename (if available)
-/// - '=': expression result
-/// - ':': last command line
-/// - '/': last search pattern
-/// - '.': last inserted text
-/// - '_': black hole (empty string)
-///
-/// For cursor-based registers (Ctrl-F, Ctrl-P, Ctrl-W, Ctrl-A, Ctrl-L),
-/// this function returns is_special=true but value=NULL, indicating the
-/// caller should use the C implementation.
-///
-/// # Arguments
-///
-/// * `regname` - Register name character.
-/// * `errmsg` - Whether to emit error messages for missing values.
-///
-/// # Returns
-///
-/// A SpecRegResult structure with the value and metadata.
-///
-/// # Safety
-///
-/// Accesses global state via C FFI. Caller must free value if allocated=true.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_spec_reg(regname: c_int, errmsg: bool) -> SpecRegResult {
-    let mut result = SpecRegResult::default();
-
-    let reg_type = rs_classify_special_register(regname);
-    if reg_type == SPEC_REG_NONE {
-        return result;
-    }
-
-    result.is_special = true;
-
-    match reg_type {
-        SPEC_REG_FILENAME => {
-            if errmsg {
-                nvim_check_fname();
-            }
-            result.value = nvim_get_curbuf_fname() as *mut c_char;
-            result.allocated = false;
-        }
-        SPEC_REG_ALTFILE => {
-            result.value = nvim_get_altfname(errmsg);
-            result.allocated = false;
-        }
-        SPEC_REG_EXPRESSION => {
-            result.value = rs_get_expr_line();
-            result.allocated = true;
-        }
-        SPEC_REG_CMDLINE => {
-            let cmdline = nvim_get_last_cmdline();
-            if cmdline.is_null() && errmsg {
-                nvim_emsg_nolastcmd();
-            }
-            result.value = cmdline as *mut c_char;
-            result.allocated = false;
-        }
-        SPEC_REG_SEARCH => {
-            let pat = nvim_get_last_search_pat();
-            if pat.is_null() && errmsg {
-                nvim_emsg_noprevre();
-            }
-            result.value = pat as *mut c_char;
-            result.allocated = false;
-        }
-        SPEC_REG_INSERTED => {
-            result.value = nvim_get_last_insert_save();
-            result.allocated = true;
-            if result.value.is_null() && errmsg {
-                nvim_emsg_noinstext();
-            }
-        }
-        SPEC_REG_BLACKHOLE => {
-            // Black hole register always returns empty string
-            // We return a pointer to a static empty string
-            static EMPTY: &[u8] = b"\0";
-            result.value = EMPTY.as_ptr() as *mut c_char;
-            result.allocated = false;
-        }
-        // Cursor-based registers require complex dependencies
-        // Return is_special=true but let C handle the actual retrieval
-        SPEC_REG_FILENAME_CURSOR
-        | SPEC_REG_PATH_CURSOR
-        | SPEC_REG_WORD_CURSOR
-        | SPEC_REG_WORD_ALL_CURSOR
-        | SPEC_REG_LINE_CURSOR => {
-            if !errmsg {
-                // These registers require errmsg=true to return a value
-                result.is_special = false;
-            }
-            // value remains NULL, caller should use C implementation
-        }
-        _ => {
-            result.is_special = false;
-        }
-    }
-
-    result
-}
-
-// =============================================================================
-// Phase 403: Register Contents Retrieval
-// =============================================================================
-
-/// Result structure for get_reg_contents_string.
-#[repr(C)]
-pub struct RegContentsResult {
-    /// Pointer to the allocated string, or NULL on error.
-    pub data: *mut c_char,
-    /// Length of the string (not including NUL terminator).
-    pub len: usize,
-    /// True if this is valid (data may still be NULL for empty).
-    pub valid: bool,
-}
-
-impl Default for RegContentsResult {
-    fn default() -> Self {
-        Self {
-            data: std::ptr::null_mut(),
-            len: 0,
-            valid: false,
-        }
-    }
-}
-
-/// Compute the total length needed for register contents as a string.
-///
-/// # Arguments
-///
-/// * `reg` - The register handle.
-///
-/// # Returns
-///
-/// Total length including newlines, not including NUL terminator.
-///
-/// # Safety
-///
-/// The `reg` handle must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_compute_reg_contents_len(reg: YankRegHandle) -> usize {
-    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
-        return 0;
-    }
-
-    let y_size = nvim_yankreg_get_size(reg);
-    let y_type = nvim_yankreg_get_type(reg);
-
-    let mut len: usize = 0;
-    for i in 0..y_size {
-        len += nvim_yankreg_get_line_size(reg, i);
-        // Insert a newline between lines and after last line if linewise
-        if y_type == K_MT_LINE_WISE || i < y_size - 1 {
-            len += 1;
-        }
-    }
-    len
-}
-
-/// Copy register contents into a pre-allocated buffer.
-///
-/// The buffer must be at least `rs_compute_reg_contents_len(reg) + 1` bytes.
-///
-/// # Arguments
-///
-/// * `reg` - The register handle.
-/// * `buf` - Output buffer.
-/// * `buf_len` - Size of output buffer.
-///
-/// # Returns
-///
-/// Number of bytes written (not including NUL), or 0 on error.
-///
-/// # Safety
-///
-/// The `reg` handle must be valid. Buffer must be large enough.
-#[no_mangle]
-pub unsafe extern "C" fn rs_copy_reg_contents_to_buf(
-    reg: YankRegHandle,
-    buf: *mut c_char,
-    buf_len: usize,
-) -> usize {
-    if reg.0.is_null() || buf.is_null() || !nvim_yankreg_has_array(reg) {
-        if !buf.is_null() && buf_len > 0 {
-            *buf = 0;
-        }
-        return 0;
-    }
-
-    let y_size = nvim_yankreg_get_size(reg);
-    let y_type = nvim_yankreg_get_type(reg);
-
-    let mut pos: usize = 0;
-    for i in 0..y_size {
-        let line_data = nvim_yankreg_get_line_data(reg, i);
-        let line_size = nvim_yankreg_get_line_size(reg, i);
-
-        // Check if we have room
-        if pos + line_size >= buf_len {
-            break;
-        }
-
-        // Copy line data
-        if line_size > 0 && !line_data.is_null() {
-            std::ptr::copy_nonoverlapping(line_data, buf.add(pos), line_size);
-            pos += line_size;
-        }
-
-        // Add newline if needed
-        let needs_newline = y_type == K_MT_LINE_WISE || i < y_size - 1;
-        if needs_newline && pos < buf_len - 1 {
-            *buf.add(pos) = b'\n' as c_char;
-            pos += 1;
-        }
-    }
-
-    // NUL terminate
-    if pos < buf_len {
-        *buf.add(pos) = 0;
-    }
-
-    pos
-}
-
-/// Get the contents of a yank register as an allocated string.
-///
-/// This is the string-mode portion of get_reg_contents (not list mode).
-///
-/// # Arguments
-///
-/// * `regname` - Register name character. Use '@' for unnamed.
-///
-/// # Returns
-///
-/// RegContentsResult with allocated string or NULL on error.
-/// Caller must free result.data if non-NULL.
-///
-/// # Safety
-///
-/// Accesses global register state. Caller must free returned string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_reg_contents_string(regname: c_int) -> RegContentsResult {
-    let mut result = RegContentsResult::default();
-
-    // "@@" is used for unnamed register
-    let actual_regname = if regname == c_int::from(b'@') {
-        c_int::from(b'"')
-    } else {
-        regname
-    };
-
-    // Check for valid regname (but 0/NUL is allowed)
-    if actual_regname != 0 && !rs_valid_yank_reg(actual_regname, false) {
-        return result;
-    }
-
-    // Get the register for reading
-    let reg = nvim_get_yank_register_for_paste(actual_regname);
-    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
-        return result;
-    }
-
-    let y_size = nvim_yankreg_get_size(reg);
-    if y_size == 0 {
-        // Empty register - return empty string
-        result.data = nvim_xmallocz(0);
-        result.len = 0;
-        result.valid = true;
-        return result;
-    }
-
-    // Compute length
-    let len = rs_compute_reg_contents_len(reg);
-
-    // Allocate buffer
-    let buf = nvim_xmallocz(len);
-    if buf.is_null() {
-        return result;
-    }
-
-    // Copy contents
-    let written = rs_copy_reg_contents_to_buf(reg, buf, len + 1);
-
-    result.data = buf;
-    result.len = written;
-    result.valid = true;
-    result
-}
-
-/// Check if get_reg_contents should handle a register specially.
-///
-/// Returns true if the register is '=' (expression) and the caller
-/// should handle it specially based on flags.
-#[no_mangle]
-pub extern "C" fn rs_reg_contents_needs_special_handling(regname: c_int, flags: c_int) -> bool {
-    if regname == c_int::from(b'=') {
-        // Expression register needs special handling
-        return true;
-    }
-
-    // Check if it's a special register that get_spec_reg handles
-    let spec_type = rs_classify_special_register(regname);
-    if spec_type != SPEC_REG_NONE {
-        // Don't handle cursor-based registers
-        if !rs_is_cursor_register(regname) {
-            return true;
-        }
-    }
-
-    // List mode not handled by Rust
-    flags & K_GREG_LIST != 0
-}
-
-/// Get expression register contents with flag handling.
-///
-/// # Arguments
-///
-/// * `flags` - GRegFlags (kGRegNoExpr, kGRegExprSrc, etc.)
-///
-/// # Returns
-///
-/// Allocated string or NULL. Caller must free.
-///
-/// # Safety
-///
-/// Accesses global state via FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_expr_reg_contents(flags: c_int) -> *mut c_char {
-    // Don't allow using an expression register inside an expression
-    if flags & K_GREG_NO_EXPR != 0 {
-        return std::ptr::null_mut();
-    }
-
-    if flags & K_GREG_EXPR_SRC != 0 {
-        // Return expression itself
-        rs_get_expr_line_src()
-    } else {
-        // Return evaluated result
-        rs_get_expr_line()
-    }
-}
-
-/// Count total lines in a register.
-///
-/// # Safety
-///
-/// Accesses global register state via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_reg_line_count(regname: c_int) -> usize {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return 0;
-    }
-    let reg = nvim_get_y_regs_ptr(i);
-    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
-        return 0;
-    }
-    nvim_yankreg_get_size(reg)
-}
-
-/// Get a specific line from a register (returns pointer to internal data).
-///
-/// # Arguments
-///
-/// * `regname` - Register name.
-/// * `line_idx` - Zero-based line index.
-/// * `line_len` - Output: length of the line.
-///
-/// # Returns
-///
-/// Pointer to line data (internal, do not free), or NULL.
-///
-/// # Safety
-///
-/// The returned pointer is only valid while the register is unchanged.
-#[no_mangle]
-pub unsafe extern "C" fn rs_reg_get_line_ptr(
-    regname: c_int,
-    line_idx: usize,
-    line_len: *mut usize,
-) -> *const c_char {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        if !line_len.is_null() {
-            *line_len = 0;
-        }
-        return std::ptr::null();
-    }
-
-    let reg = nvim_get_y_regs_ptr(i);
-    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
-        if !line_len.is_null() {
-            *line_len = 0;
-        }
-        return std::ptr::null();
-    }
-
-    let y_size = nvim_yankreg_get_size(reg);
-    if line_idx >= y_size {
-        if !line_len.is_null() {
-            *line_len = 0;
-        }
-        return std::ptr::null();
-    }
-
-    if !line_len.is_null() {
-        *line_len = nvim_yankreg_get_line_size(reg, line_idx);
-    }
-    nvim_yankreg_get_line_data(reg, line_idx)
-}
-
-// =============================================================================
-// Phase 404: Core Register Access
-// =============================================================================
-
-/// Register access mode constants (matching yreg_mode_t).
-pub const YREG_PASTE: c_int = 0;
-pub const YREG_YANK: c_int = 1;
-pub const YREG_PUT: c_int = 2;
-
-/// Check if a register access should try clipboard synchronization.
-///
-/// Returns true if the mode and register name combination should
-/// attempt clipboard provider access.
-#[no_mangle]
-pub extern "C" fn rs_should_sync_clipboard(regname: c_int, mode: c_int) -> bool {
-    // Clipboard sync only for paste/put modes
-    if mode != YREG_PASTE && mode != YREG_PUT {
-        return false;
-    }
-
-    // Only for clipboard registers or unnamed register
-    regname == 0
-        || regname == c_int::from(b'"')
-        || regname == c_int::from(b'*')
-        || regname == c_int::from(b'+')
-}
-
-/// Check if a register access should fall back to y_previous.
-///
-/// When clipboard is not available, certain registers should fall back
-/// to the previously used register.
-#[no_mangle]
-pub extern "C" fn rs_should_use_previous_register(regname: c_int, mode: c_int) -> bool {
-    // Don't use previous for yank mode
-    if mode == YREG_YANK {
-        return false;
-    }
-
-    // Use previous for unnamed or clipboard registers
-    regname == 0
-        || regname == c_int::from(b'"')
-        || regname == c_int::from(b'*')
-        || regname == c_int::from(b'+')
-}
-
-/// Check if we should return an empty register for clipboard fallback.
-///
-/// When in PUT mode and clipboard is not available, return empty register
-/// for clipboard-specific registers.
-#[no_mangle]
-pub extern "C" fn rs_should_return_empty_clipboard_register(regname: c_int, mode: c_int) -> bool {
-    mode == YREG_PUT && (regname == c_int::from(b'*') || regname == c_int::from(b'+'))
-}
-
-/// Get the index for a register, with fallback to register 0.
-///
-/// Unlike rs_op_reg_index, this always returns a valid index (defaults to 0).
-#[no_mangle]
-pub extern "C" fn rs_get_register_index_with_fallback(regname: c_int) -> c_int {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        0
-    } else {
-        i
-    }
-}
-
-/// Check if yank mode should update y_previous.
-#[no_mangle]
-pub extern "C" fn rs_yank_updates_previous(mode: c_int) -> bool {
-    mode == YREG_YANK
-}
-
-/// Get register for yank operation (simple path without clipboard).
-///
-/// This is the simple case of get_yank_register for YREG_YANK mode
-/// where clipboard synchronization is not needed.
-///
-/// # Safety
-///
-/// Accesses global register state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_yank_register_for_yank(regname: c_int) -> YankRegHandle {
-    let i = rs_get_register_index_with_fallback(regname);
-    let reg = nvim_get_y_regs_ptr(i);
-
-    // Remember the written register for unnamed paste
-    nvim_set_y_previous_by_index(i);
-
-    reg
-}
-
-/// Determine which register index to use for unnamed operations by mode.
-///
-/// Returns the index that should be used when no register is specified.
-/// For yank operations, this is register 0.
-/// For paste operations, this depends on y_previous.
-#[no_mangle]
-pub extern "C" fn rs_get_unnamed_register_index_by_mode(mode: c_int) -> c_int {
-    if mode == YREG_YANK {
-        // For yank, use register 0
-        0
-    } else {
-        // For paste, use previous register index (handled by C for clipboard)
-        // Return -1 to indicate caller should check y_previous
-        -1
-    }
-}
-
-/// Get register type (motion type) for a named register.
-///
-/// # Safety
-///
-/// Accesses global register state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_register_motion_type(regname: c_int) -> c_int {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return K_MT_UNKNOWN;
-    }
-    let reg = nvim_get_y_regs_ptr(i);
-    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
-        return K_MT_UNKNOWN;
-    }
-    nvim_yankreg_get_type(reg)
-}
-
-/// Get register width (for blockwise registers).
-///
-/// # Safety
-///
-/// Accesses global register state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_register_width(regname: c_int) -> c_int {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return 0;
-    }
-    let reg = nvim_get_y_regs_ptr(i);
-    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
-        return 0;
-    }
-    nvim_yankreg_get_width(reg)
-}
-
-/// Check if a register is empty (by name).
-///
-/// # Safety
-///
-/// Accesses global register state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_is_register_empty(regname: c_int) -> bool {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return true;
-    }
-    let reg = nvim_get_y_regs_ptr(i);
-    nvim_yankreg_is_empty(reg)
-}
-
-/// Get the "unnamed" register index (register 0).
-#[no_mangle]
-pub extern "C" fn rs_get_yank_register_index() -> c_int {
-    0
-}
-
-/// Check if register should be treated as writable clipboard.
-///
-/// Returns true if the register is a clipboard register and clipboard
-/// provider should be notified of writes.
-#[no_mangle]
-pub extern "C" fn rs_is_writable_clipboard_register(regname: c_int) -> bool {
-    regname == c_int::from(b'*') || regname == c_int::from(b'+')
-}
-
-/// Check if register name needs clipboard query on read.
-#[no_mangle]
-pub extern "C" fn rs_needs_clipboard_query_on_read(regname: c_int) -> bool {
-    regname == c_int::from(b'*')
-        || regname == c_int::from(b'+')
-        || regname == 0
-        || regname == c_int::from(b'"')
-}
-
-// =============================================================================
-// Phase 405: Write Operations
-// =============================================================================
-
-/// Write target type for write_reg_contents routing.
-#[repr(C)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum WriteRegTarget {
-    /// Normal yank register
-    YankRegister = 0,
-    /// Search pattern register ('/')
-    SearchPattern = 1,
-    /// Alternate file register ('#')
-    AlternateFile = 2,
-    /// Expression register ('=')
-    Expression = 3,
-    /// Black hole register ('_')
-    BlackHole = 4,
-}
-
-/// Determine the write target type for a register name.
-#[no_mangle]
-pub extern "C" fn rs_get_write_target_type(regname: c_int) -> WriteRegTarget {
-    match regname as u8 {
-        b'/' => WriteRegTarget::SearchPattern,
-        b'#' => WriteRegTarget::AlternateFile,
-        b'=' => WriteRegTarget::Expression,
-        b'_' => WriteRegTarget::BlackHole,
-        _ => WriteRegTarget::YankRegister,
-    }
-}
-
-/// Check if a register write should be skipped (black hole).
-#[no_mangle]
-pub extern "C" fn rs_is_write_noop(regname: c_int) -> bool {
-    regname == c_int::from(b'_')
-}
-
-/// Check if writing to search or expression register with multiple lines
-/// should produce an error.
-///
-/// Search pattern and expression registers can only hold single lines.
-#[no_mangle]
-pub extern "C" fn rs_write_rejects_multiline(regname: c_int) -> bool {
-    regname == c_int::from(b'/') || regname == c_int::from(b'=')
-}
-
-/// Check if write operation should append based on register name.
-///
-/// Uppercase letter registers always append.
-#[no_mangle]
-pub extern "C" fn rs_write_should_append(regname: c_int, must_append: bool) -> bool {
-    must_append || rs_is_append_register(regname) != 0
-}
-
-/// Determine the effective motion type from string content.
-///
-/// If yank_type is unknown and string ends with newline, returns linewise.
-/// Otherwise returns the given type or charwise as default.
-///
-/// # Safety
-///
-/// str_ptr must be valid for len bytes (if len > 0).
-#[no_mangle]
-pub unsafe extern "C" fn rs_determine_motion_type_from_string(
-    str_ptr: *const c_char,
-    len: isize,
-    yank_type: c_int,
-) -> c_int {
-    // If type is already specified, use it
-    if yank_type != K_MT_UNKNOWN {
-        return yank_type;
-    }
-
-    // Auto-detect: if string ends with newline, use linewise
-    if len > 0 && !str_ptr.is_null() {
-        let last_char = *str_ptr.offset(len - 1) as u8;
-        if last_char == b'\n' || last_char == b'\r' {
-            return K_MT_LINE_WISE;
-        }
-    }
-
-    K_MT_CHAR_WISE
-}
-
-/// Parse register type string (for setreg()).
-///
-/// Accepts: 'v'/'c' (charwise), 'V'/'l' (linewise), 'b'/Ctrl-V (blockwise).
-/// Returns motion type constant or K_MT_UNKNOWN for invalid input.
-#[no_mangle]
-pub extern "C" fn rs_parse_register_type_char(type_char: c_int) -> c_int {
-    match type_char as u8 {
-        0 => K_MT_UNKNOWN,
-        b'v' | b'c' => K_MT_CHAR_WISE,
-        b'V' | b'l' => K_MT_LINE_WISE,
-        b'b' | 0x16 => K_MT_BLOCK_WISE, // 0x16 is Ctrl-V
-        _ => -1,                        // Invalid
-    }
-}
-
-/// Check if register type string is valid.
-#[no_mangle]
-pub extern "C" fn rs_is_valid_register_type_string(type_char: c_int) -> bool {
-    rs_parse_register_type_char(type_char) != -1
-}
-
-/// Count newlines in a string.
-///
-/// Used to determine number of lines when converting string to register.
-///
-/// # Safety
-///
-/// str_ptr must be valid for len bytes.
-#[no_mangle]
-pub unsafe extern "C" fn rs_count_newlines(str_ptr: *const c_char, len: usize) -> usize {
-    if str_ptr.is_null() || len == 0 {
-        return 0;
-    }
-
-    let slice = std::slice::from_raw_parts(str_ptr as *const u8, len);
-    slice.iter().filter(|&&c| c == b'\n').count()
-}
-
-/// Calculate number of lines when string is split by newlines.
-///
-/// Returns count of segments (lines) that would result from splitting.
-/// Empty string produces 1 line (empty).
-///
-/// # Safety
-///
-/// str_ptr must be valid for len bytes.
-#[no_mangle]
-pub unsafe extern "C" fn rs_count_lines_in_string(str_ptr: *const c_char, len: usize) -> usize {
-    if str_ptr.is_null() || len == 0 {
-        return 1;
-    }
-
-    let newlines = rs_count_newlines(str_ptr, len);
-
-    // Check if string ends with newline (doesn't create extra line)
-    let slice = std::slice::from_raw_parts(str_ptr as *const u8, len);
-    let ends_with_newline = slice.last().is_some_and(|&c| c == b'\n');
-
-    if ends_with_newline {
-        // "a\nb\n" has 2 lines
-        newlines
-    } else {
-        // "a\nb" has 2 lines
-        newlines + 1
-    }
-}
-
-extern "C" {
-    fn strlen(s: *const c_char) -> usize;
-}
-
-/// Prepare expression register for append.
-///
-/// Returns the current length of expr_line if appending, or 0 if not.
-///
-/// # Safety
-///
-/// Accesses global expr_line via FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_prepare_expr_append(must_append: bool) -> usize {
-    if !must_append {
-        return 0;
-    }
-
-    let expr = nvim_get_expr_line();
-    if expr.is_null() {
-        return 0;
-    }
-
-    // Calculate length of existing expr_line
-    strlen(expr)
-}
-
-/// Check if a regtype string specifies a block width.
-///
-/// Format: "b7" means blockwise with width 7.
-/// Returns the width if present (>= 0), or -1 if no width specified.
-///
-/// # Safety
-///
-/// regtype must be valid for len bytes.
-#[no_mangle]
-pub unsafe extern "C" fn rs_parse_block_width_from_regtype(
-    regtype: *const c_char,
-    len: usize,
-) -> c_int {
-    if regtype.is_null() || len < 2 {
-        return -1;
-    }
-
-    let first = *regtype as u8;
-    if first != b'b' && first != CTRL_V {
-        return -1;
-    }
-
-    let second = *regtype.offset(1) as u8;
-    if !second.is_ascii_digit() {
-        return -1;
-    }
-
-    // Parse the number
-    let slice = std::slice::from_raw_parts(regtype.offset(1) as *const u8, len - 1);
-    let mut width: c_int = 0;
-    for &c in slice {
-        if c.is_ascii_digit() {
-            width = width * 10 + (c - b'0') as c_int;
-        } else {
-            break;
-        }
-    }
-
-    // Width is stored as width - 1 in neovim
-    width - 1
-}
-
-/// Format register type as a character for display.
-///
-/// Returns 'v' for charwise, 'V' for linewise, Ctrl-V for blockwise.
-#[no_mangle]
-pub extern "C" fn rs_motion_type_to_char(motion_type: c_int) -> c_int {
-    match motion_type {
-        K_MT_CHAR_WISE => c_int::from(b'v'),
-        K_MT_LINE_WISE => c_int::from(b'V'),
-        K_MT_BLOCK_WISE => c_int::from(CTRL_V),
-        _ => 0,
-    }
-}
-
-// =============================================================================
-// Phase 406: Yank Register Utilities
-// =============================================================================
-
-/// Check if a yank should shift delete registers.
-///
-/// Delete registers (1-9) are shifted when the delete is at least one line.
-/// This is used in shift_delete_registers.
-#[no_mangle]
-pub extern "C" fn rs_should_shift_delete_registers(
-    motion_type: c_int,
-    use_small_delete: bool,
-) -> bool {
-    // Don't shift if using small delete register
-    if use_small_delete {
-        return false;
-    }
-    // Shift for linewise deletes
-    motion_type == K_MT_LINE_WISE
-}
-
-/// Get the small delete register name ('-').
-#[no_mangle]
-pub extern "C" fn rs_get_small_delete_register() -> c_int {
-    c_int::from(b'-')
-}
-
-/// Check if a delete should use the small delete register.
-///
-/// Small delete register is used for deletes that are less than one line.
-#[no_mangle]
-pub extern "C" fn rs_use_small_delete_register(motion_type: c_int, is_delete: bool) -> bool {
-    is_delete && motion_type != K_MT_LINE_WISE
-}
-
-/// Get the index to use for shifting delete registers.
-///
-/// Delete registers 1-9 correspond to indices 1-9 in y_regs.
-#[no_mangle]
-pub extern "C" fn rs_get_delete_register_index(num: c_int) -> c_int {
-    // Registers 1-9 are at indices 1-9
-    if (1..=9).contains(&num) {
-        num
-    } else {
-        -1
-    }
-}
-
-/// Get the number of delete registers (9).
-#[no_mangle]
-pub extern "C" fn rs_get_num_delete_registers() -> c_int {
-    9
-}
-
-/// Check if a register index is a delete register.
-#[no_mangle]
-pub extern "C" fn rs_is_delete_register_index(idx: c_int) -> bool {
-    (1..=9).contains(&idx)
-}
-
-/// Check if register contents should have trailing newline removed.
-///
-/// When copying from clipboard, charwise registers with empty last line
-/// should have it removed. Also used for determining motion type.
-///
-/// # Safety
-///
-/// `reg` must be a valid YankRegHandle obtained from C code.
-#[no_mangle]
-pub unsafe extern "C" fn rs_should_remove_trailing_empty_line(
-    reg: YankRegHandle,
-    is_clipboard: bool,
-) -> bool {
-    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
-        return false;
-    }
-
-    let y_size = nvim_yankreg_get_size(reg);
-    if y_size == 0 {
-        return false;
-    }
-
-    // Check if last line is empty
-    let last_size = nvim_yankreg_get_line_size(reg, y_size - 1);
-    if last_size != 0 {
-        return false;
-    }
-
-    let y_type = nvim_yankreg_get_type(reg);
-
-    // Charwise registers can have trailing newline
-    if y_type == K_MT_CHAR_WISE {
-        return false;
-    }
-
-    // Unknown type or linewise from clipboard should be adjusted
-    if y_type == K_MT_UNKNOWN || is_clipboard {
-        return true;
-    }
-
-    false
-}
-
-/// Calculate updated register width for blockwise yanks.
-///
-/// Returns the maximum display width across all lines.
-///
-/// # Safety
-///
-/// reg must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_calculate_register_width(reg: YankRegHandle) -> c_int {
-    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
-        return 0;
-    }
-
-    let y_size = nvim_yankreg_get_size(reg);
-    let mut max_width: c_int = 0;
-
-    for i in 0..y_size {
-        let line_data = nvim_yankreg_get_line_data(reg, i);
-        if !line_data.is_null() {
-            let width = nvim_mb_string2cells(line_data) as c_int;
-            if width > max_width {
-                max_width = width;
-            }
-        }
-    }
-
-    max_width
-}
-
-/// Check if this is a yank operation (as opposed to delete/change).
-///
-/// Yank uses register 0 by default, while delete shifts 1-9.
-#[no_mangle]
-pub extern "C" fn rs_is_yank_operation(op_type: c_int) -> bool {
-    // OP_YANK = 0 in C code (this is a simplified check)
-    op_type == 0
-}
-
-/// Get the default register for yank operation (register 0).
-#[no_mangle]
-pub extern "C" fn rs_get_default_yank_register() -> c_int {
-    0
-}
-
-/// Check if we need to notify clipboard provider after yank.
-///
-/// Returns true if register is a clipboard register or unnamed register
-/// with clipboard=unnamed option.
-#[no_mangle]
-pub extern "C" fn rs_needs_clipboard_notify_after_yank(regname: c_int) -> bool {
-    regname == c_int::from(b'*')
-        || regname == c_int::from(b'+')
-        || regname == 0
-        || regname == c_int::from(b'"')
-}
-
-/// Format register info for :reg command display.
-///
-/// Returns the character representation of the register type.
-#[no_mangle]
-pub extern "C" fn rs_get_register_display_type(motion_type: c_int) -> c_char {
-    match motion_type {
-        K_MT_CHAR_WISE => b'c' as c_char,
-        K_MT_LINE_WISE => b'l' as c_char,
-        K_MT_BLOCK_WISE => b'b' as c_char,
-        _ => b' ' as c_char,
-    }
-}
-
-/// Check if register should be displayed in :reg output.
-///
-/// Skips empty registers.
-///
-/// # Safety
-///
-/// Accesses global register state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_should_display_register(regname: c_int) -> bool {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return false;
-    }
-    let reg = nvim_get_y_regs_ptr(i);
-    !nvim_yankreg_is_empty(reg)
-}
-
-/// Get the total character count across all lines in a register.
-///
-/// # Safety
-///
-/// Accesses global register state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_register_char_count(regname: c_int) -> usize {
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return 0;
-    }
-    let reg = nvim_get_y_regs_ptr(i);
-    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
-        return 0;
-    }
-
-    let y_size = nvim_yankreg_get_size(reg);
-    let mut total: usize = 0;
-    for i in 0..y_size {
-        total += nvim_yankreg_get_line_size(reg, i);
-    }
-    total
-}
-
-// =============================================================================
-// Phase 407: Recording operations helpers
-// =============================================================================
-
-/// Check if a register name is valid for recording macros.
-///
-/// Valid recording registers are: 0-9, a-z, A-Z, "
-#[inline]
-pub fn is_valid_recording_register(c: u8) -> bool {
-    c.is_ascii_alphanumeric() || c == b'"'
-}
-
-/// FFI wrapper for recording register validation.
-#[no_mangle]
-pub extern "C" fn rs_is_valid_recording_register(c: c_int) -> bool {
-    if c < 0 {
-        return false;
-    }
-    is_valid_recording_register(c as u8)
-}
-
-/// Check if a register name is valid for macro execution.
-///
-/// Valid execution registers are: 0-9, a-z, A-Z, @, ", -, _, =, :, .
-/// (Note: % and # are NOT valid for execution)
-#[inline]
-pub fn is_valid_execreg(c: u8) -> bool {
-    c.is_ascii_alphanumeric()
-        || c == b'@'
-        || c == b'"'
-        || c == b'-'
-        || c == b'_'
-        || c == b'='
-        || c == b':'
-        || c == b'.'
-}
-
-/// FFI wrapper for execution register validation.
-#[no_mangle]
-pub extern "C" fn rs_is_valid_execreg(c: c_int) -> bool {
-    if c < 0 {
-        return false;
-    }
-    is_valid_execreg(c as u8)
-}
-
-/// Check if a register name would use the "repeat previous" behavior.
-///
-/// In @@ or when regname is '@', it repeats the last executed register.
-#[inline]
-pub const fn is_repeat_register(c: u8) -> bool {
-    c == b'@'
-}
-
-/// FFI wrapper for repeat register check.
-#[no_mangle]
-pub extern "C" fn rs_is_repeat_register(c: c_int) -> bool {
-    is_repeat_register(c as u8)
-}
-
-/// Check if a register name is the expression register.
-#[inline]
-pub const fn is_expr_register(c: u8) -> bool {
-    c == b'='
-}
-
-/// FFI wrapper for expression register check.
-#[no_mangle]
-pub extern "C" fn rs_is_expr_register_for_exec(c: c_int) -> bool {
-    is_expr_register(c as u8)
-}
-
-/// Check if a register name is the last command register.
-#[inline]
-pub const fn is_cmdline_register(c: u8) -> bool {
-    c == b':'
-}
-
-/// FFI wrapper for cmdline register check.
-#[no_mangle]
-pub extern "C" fn rs_is_cmdline_register(c: c_int) -> bool {
-    is_cmdline_register(c as u8)
-}
-
-/// Check if a register name is the last inserted text register.
-#[inline]
-pub const fn is_insert_register(c: u8) -> bool {
-    c == b'.'
-}
-
-/// FFI wrapper for insert register check.
-#[no_mangle]
-pub extern "C" fn rs_is_insert_register(c: c_int) -> bool {
-    is_insert_register(c as u8)
-}
-
-/// Check if a register execution would require special handling.
-///
-/// Special execution registers: =, :, .
-/// These require fetching content from special sources rather than
-/// the normal yank register array.
-#[inline]
-pub const fn needs_special_exec_handling(c: u8) -> bool {
-    c == b'=' || c == b':' || c == b'.'
-}
-
-/// FFI wrapper for special execution handling check.
-#[no_mangle]
-pub extern "C" fn rs_needs_special_exec_handling(c: c_int) -> bool {
-    needs_special_exec_handling(c as u8)
-}
-
-/// Check if register execution needs to insert newlines.
-///
-/// Linewise registers need newlines between lines and after the last line.
-#[no_mangle]
-pub extern "C" fn rs_execreg_needs_newline(
-    motion_type: c_int,
-    line_index: usize,
-    total_lines: usize,
-    add_cr: bool,
-) -> bool {
-    // Insert NL between lines and after last line if type is kMTLineWise
-    motion_type == K_MT_LINE_WISE || line_index < total_lines.saturating_sub(1) || add_cr
-}
-
-/// Determine the remap mode for register execution.
-///
-/// For :@r (colon mode), remapping is disabled.
-/// For normal @r, remapping is enabled.
-///
-/// Returns: REMAP_NONE (0) for colon mode, REMAP_YES (1) otherwise.
-#[no_mangle]
-pub extern "C" fn rs_get_execreg_remap_mode(colon: bool) -> c_int {
-    if colon {
-        0
-    } else {
-        1
-    } // REMAP_NONE = 0, REMAP_YES = 1
-}
-
-/// Get the register name to display when recording.
-///
-/// Returns 0 for unnamed register (to display as '"'), otherwise
-/// returns the register name unchanged.
-#[no_mangle]
-pub extern "C" fn rs_get_recording_display_name(regname: c_int) -> c_int {
-    if regname == 0 {
-        c_int::from(b'"')
-    } else {
-        regname
-    }
-}
-
-/// Get the register name to use for reg_executing.
-///
-/// When regname is 0 (unnamed), returns '"'.
-/// Otherwise returns the regname unchanged.
-#[no_mangle]
-pub extern "C" fn rs_get_reg_executing_name(regname: c_int) -> c_int {
-    if regname == 0 {
-        c_int::from(b'"')
-    } else {
-        regname
-    }
-}
-
-/// Check if a character should be escaped for typeahead when executing
-/// the command line register.
-///
-/// Control characters (0x01-0x1f) need CTRL-V escaping.
-#[inline]
-pub const fn needs_ctrl_v_escape(c: u8) -> bool {
-    c >= 0x01 && c <= 0x1f
-}
-
-/// FFI wrapper for CTRL-V escape check.
-#[no_mangle]
-pub extern "C" fn rs_needs_ctrl_v_escape(c: c_int) -> bool {
-    if !(0..=0xff).contains(&c) {
-        return false;
-    }
-    needs_ctrl_v_escape(c as u8)
-}
-
-/// Check if line is a continuation line (starts with \ or "\ ).
-///
-/// Used for line-continuation in :@register execution.
-#[inline]
-pub fn is_continuation_line(line: &[u8]) -> bool {
-    // Skip whitespace
-    let trimmed = skip_whitespace(line);
-    if trimmed.is_empty() {
-        return false;
-    }
-    // Check for \ or "\
-    if trimmed[0] == b'\\' {
-        return true;
-    }
-    if trimmed.len() >= 3 && trimmed[0] == b'"' && trimmed[1] == b'\\' && trimmed[2] == b' ' {
-        return true;
-    }
-    false
-}
-
-/// Skip leading whitespace bytes.
-fn skip_whitespace(s: &[u8]) -> &[u8] {
-    let mut i = 0;
-    while i < s.len() && (s[i] == b' ' || s[i] == b'\t') {
-        i += 1;
-    }
-    &s[i..]
-}
-
-/// FFI wrapper for execreg continuation line check.
-///
-/// # Safety
-///
-/// `line` must be a valid null-terminated string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_is_execreg_continuation_line(line: *const c_char) -> bool {
-    if line.is_null() {
-        return false;
-    }
-    // Find string length
-    let mut len = 0;
-    let mut ptr = line;
-    while *ptr != 0 {
-        len += 1;
-        ptr = ptr.add(1);
-    }
-    if len == 0 {
-        return false;
-    }
-    let slice = std::slice::from_raw_parts(line as *const u8, len);
-    is_continuation_line(slice)
-}
-
-/// Check if the Visual mode prefix "'<,'>" should be stripped.
-///
-/// When in Visual mode and executing :@:, the prefix is automatically
-/// added, so we should strip it if it's already there.
-///
-/// # Safety
-///
-/// `cmd` must be a valid null-terminated string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_should_strip_visual_prefix(
-    cmd: *const c_char,
-    visual_active: bool,
-) -> bool {
-    if !visual_active || cmd.is_null() {
-        return false;
-    }
-    // Check for "'<,'>", which is 5 characters
-    let prefix = b"'<,'>";
-    let mut ptr = cmd;
-    for &expected in prefix {
-        if *ptr as u8 != expected {
-            return false;
-        }
-        ptr = ptr.add(1);
-    }
-    true
-}
-
-/// Get the reedit command for put_reedit_in_typebuf.
-///
-/// When restart_edit is 'V', returns "gR".
-/// When restart_edit is 'I', returns "i".
-/// Otherwise returns the character as a single-char string.
-///
-/// Returns the length of the command (1 or 2).
-///
-/// # Safety
-///
-/// `buf` must be a valid pointer to a buffer of at least 3 bytes.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_reedit_command(restart_edit: c_int, buf: *mut u8) -> c_int {
-    if buf.is_null() {
-        return 0;
-    }
-    if restart_edit == c_int::from(b'V') {
-        *buf = b'g';
-        *buf.add(1) = b'R';
-        *buf.add(2) = 0;
-        2
-    } else {
-        let c = if restart_edit == c_int::from(b'I') {
-            b'i'
-        } else {
-            restart_edit as u8
-        };
-        *buf = c;
-        *buf.add(1) = 0;
-        1
-    }
-}
-
-/// Check if a recording is currently active based on reg_recording value.
-#[no_mangle]
-pub extern "C" fn rs_is_recording_active(reg_recording: c_int) -> bool {
-    reg_recording != 0
-}
-
-/// Check if starting recording should fail due to invalid register.
-#[no_mangle]
-pub extern "C" fn rs_recording_start_should_fail(c: c_int) -> bool {
-    c < 0 || !rs_is_valid_recording_register(c)
-}
-
-/// Check if execution of a register is disallowed.
-///
-/// % and # registers cannot be executed.
-#[no_mangle]
-pub extern "C" fn rs_execreg_disallowed(regname: c_int) -> bool {
-    regname == c_int::from(b'%') || regname == c_int::from(b'#')
-}
-
-// =============================================================================
-// Phase 408: Register execution helpers
-// =============================================================================
-
-/// Get the actual register name to execute after handling '@' repeat.
-///
-/// If regname is '@', returns the lastc (previously executed register).
-/// Otherwise returns the regname unchanged.
-#[no_mangle]
-pub extern "C" fn rs_resolve_execreg_name(regname: c_int, lastc: c_int) -> c_int {
-    if regname == c_int::from(b'@') {
-        lastc
-    } else {
-        regname
-    }
-}
-
-/// Check if the execreg lastc is valid (not NUL).
-#[no_mangle]
-pub extern "C" fn rs_execreg_lastc_valid(lastc: c_int) -> bool {
-    lastc != 0
-}
-
-/// Check if execution should use escape mode for typeahead.
-///
-/// When executing special registers (:, =), escape mode is used.
-/// For normal register execution, escape depends on the content type.
-#[no_mangle]
-pub extern "C" fn rs_execreg_use_escape(regname: c_int) -> bool {
-    let c = regname as u8;
-    c == b':' || c == b'='
-}
-
-/// Check if execution should add colon prefix.
-///
-/// For command line register (:), colon is added.
-/// For expression register (=), colon is based on the parameter.
-#[no_mangle]
-pub extern "C" fn rs_execreg_should_add_colon(regname: c_int) -> bool {
-    regname == c_int::from(b':')
-}
-
-/// Calculate the number of lines to iterate when executing a register.
-///
-/// Returns the size of the register's y_array.
-///
-/// # Safety
-///
-/// `reg` must be a valid YankRegHandle.
-#[no_mangle]
-pub unsafe extern "C" fn rs_execreg_line_count(reg: YankRegHandle) -> usize {
-    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
-        return 0;
-    }
-    nvim_yankreg_get_size(reg)
-}
-
-/// Check if we should process lines in reverse order for typeahead.
-///
-/// Lines are inserted into typeahead in reverse order (last to first).
-/// This returns true to indicate reverse iteration is needed.
-#[no_mangle]
-pub extern "C" fn rs_execreg_iterate_reverse() -> bool {
-    true
-}
-
-/// Get the iteration index for a given position when iterating in reverse.
-///
-/// For reverse iteration from size-1 down to 0.
-#[no_mangle]
-pub extern "C" fn rs_execreg_reverse_index(size: usize, forward_idx: usize) -> usize {
-    size.saturating_sub(1).saturating_sub(forward_idx)
-}
-
-/// Check if this is the last line in reverse iteration.
-///
-/// In reverse iteration, line index 0 is the "last" processed line.
-#[no_mangle]
-pub extern "C" fn rs_execreg_is_last_line(line_idx: usize) -> bool {
-    line_idx == 0
-}
-
-/// Check if we need to check for line continuation at this position.
-///
-/// Line continuation is only checked when:
-/// - colon mode is enabled
-/// - we're not at the first line (i > 0)
-#[no_mangle]
-pub extern "C" fn rs_should_check_line_continuation(colon: bool, line_idx: usize) -> bool {
-    colon && line_idx > 0
-}
-
-/// Get the line that starts the continuation block.
-///
-/// When processing line continuation, we need to find where the
-/// continuation starts. This searches backwards from the current
-/// position to find the first non-continuation line.
-///
-/// Returns the starting index for the continuation block.
-#[no_mangle]
-pub extern "C" fn rs_find_continuation_start(current_idx: usize) -> usize {
-    // The actual logic for finding continuation start is in C
-    // since it needs to access the line contents.
-    // This is a placeholder that just returns current_idx - 1.
-    current_idx.saturating_sub(1)
-}
-
-/// Check if a register can be executed (has content).
-///
-/// # Safety
-///
-/// Accesses global register state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_can_execute_register(regname: c_int) -> bool {
-    // Black hole register always "succeeds" (does nothing)
-    if regname == c_int::from(b'_') {
-        return true;
-    }
-
-    // Special registers need special handling
-    if needs_special_exec_handling(regname as u8) {
-        return true; // Will be checked when fetching content
-    }
-
-    // Check if normal register has content
-    let i = rs_op_reg_index(regname);
-    if i == -1 {
-        return false;
-    }
-    let reg = nvim_get_y_regs_ptr(i);
-    !reg.0.is_null() && nvim_yankreg_has_array(reg)
-}
-
-/// Get escape string for control character escaping in command line register.
-///
-/// Control characters 0x01-0x1f need to be escaped with CTRL-V.
-/// This returns a static string with the escape characters.
-#[no_mangle]
-pub extern "C" fn rs_get_cmdline_escape_chars() -> *const c_char {
-    // This is the escape string used in do_execreg for the : register
-    // Contains characters 0x01-0x1f that need escaping
-    static ESCAPE_CHARS: [u8; 32] = [
-        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e,
-        0x1f, 0x00,
-    ];
-    ESCAPE_CHARS.as_ptr() as *const c_char
-}
-
-/// Check if typeahead insertion should use REMAP_NONE.
-///
-/// REMAP_NONE is used for:
-/// - Colon mode (:@r)
-/// - Escaped content
-#[no_mangle]
-pub extern "C" fn rs_use_remap_none(colon: bool, escaped: bool) -> bool {
-    colon || escaped
-}
-
-/// Get the CTRL-V character value for escaping.
-#[no_mangle]
-pub extern "C" fn rs_get_ctrl_v() -> c_int {
-    c_int::from(CTRL_V)
-}
-
-/// Check if line should have colon prepended in :@r mode.
-///
-/// When executing :@r, each line gets a ':' prepended.
-#[no_mangle]
-pub extern "C" fn rs_execreg_prepend_colon(colon: bool) -> bool {
-    colon
-}
-
-/// Calculate position adjustment after line continuation.
-///
-/// After processing a continuation block, we need to adjust
-/// our position to skip the lines that were already processed.
-#[no_mangle]
-pub extern "C" fn rs_adjust_position_after_continuation(
-    _current_idx: usize,
-    continuation_start: usize,
-) -> usize {
-    continuation_start
-}
-
-/// Check if we're iterating over a valid line index.
-#[no_mangle]
-pub extern "C" fn rs_execreg_valid_index(idx: usize, size: usize) -> bool {
-    idx < size
-}
-
-/// Get the next index when iterating backwards.
-///
-/// Returns the previous index, or usize::MAX if we've gone past 0.
-#[no_mangle]
-pub extern "C" fn rs_execreg_prev_index(idx: usize) -> usize {
-    idx.wrapping_sub(1)
-}
-
-/// Check if we've finished iterating (reached before index 0).
-#[no_mangle]
-pub extern "C" fn rs_execreg_iteration_done(idx: usize) -> bool {
-    idx == usize::MAX
-}
-
-// =============================================================================
-// Phase 409: Insert register helpers
-// =============================================================================
-
-/// Check if register name is valid for insert_reg.
-///
-/// NUL is valid (uses unnamed register), as are all valid yank registers.
-#[no_mangle]
-pub extern "C" fn rs_insert_reg_valid(regname: c_int) -> bool {
-    regname == 0 || rs_valid_yank_reg(regname, false)
-}
-
-/// Check if insert should use the "last inserted" register.
-///
-/// Register '.' contains the last inserted text.
-#[no_mangle]
-pub extern "C" fn rs_is_last_insert_register(regname: c_int) -> bool {
-    regname == c_int::from(b'.')
-}
-
-/// Check if insert should use literal mode.
-///
-/// Some registers are always inserted literally regardless of the
-/// literally_arg parameter.
-#[no_mangle]
-pub extern "C" fn rs_insert_reg_use_literal(regname: c_int, literally_arg: bool) -> bool {
-    literally_arg || is_literal_register(regname as u8)
-}
-
-/// Check if this is the small delete register with charwise content.
-///
-/// The small delete register (-) has special handling in insert mode
-/// when the content is charwise.
-#[no_mangle]
-pub extern "C" fn rs_is_small_delete_charwise(regname: c_int, motion_type: c_int) -> bool {
-    regname == c_int::from(b'-') && motion_type == K_MT_CHAR_WISE
-}
-
-/// Check if insert_reg should insert a newline after the current line.
-///
-/// Newlines are inserted:
-/// - Between all lines (i < size - 1)
-/// - After the last line if the register is linewise
-#[no_mangle]
-pub extern "C" fn rs_insert_reg_needs_newline(
-    motion_type: c_int,
-    line_idx: usize,
-    total_lines: usize,
-) -> bool {
-    motion_type == K_MT_LINE_WISE || line_idx < total_lines.saturating_sub(1)
-}
-
-/// Get the register to use for insert_reg when no reg is provided.
-///
-/// When reg is NULL, uses get_yank_register with YREG_PASTE mode.
-/// Returns the regname that should be used for looking up the register.
-#[no_mangle]
-pub extern "C" fn rs_insert_reg_get_regname(regname: c_int) -> c_int {
-    regname
-}
-
-/// Check if we should use special register handling for insert_reg.
-///
-/// Special registers (%, #, etc.) are handled by get_spec_reg.
-#[no_mangle]
-pub extern "C" fn rs_insert_reg_is_special(regname: c_int) -> bool {
-    rs_classify_special_register(regname) != 0
-}
-
-/// Check if register content can be inserted.
-///
-/// # Safety
-///
-/// `reg` must be a valid YankRegHandle.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_reg_has_content(reg: YankRegHandle) -> bool {
-    !reg.0.is_null() && nvim_yankreg_has_array(reg) && nvim_yankreg_get_size(reg) > 0
-}
-
-/// Get the number of lines to insert from a register.
-///
-/// # Safety
-///
-/// `reg` must be a valid YankRegHandle.
-#[no_mangle]
-pub unsafe extern "C" fn rs_insert_reg_line_count(reg: YankRegHandle) -> usize {
-    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
-        return 0;
-    }
-    nvim_yankreg_get_size(reg)
-}
-
-// =============================================================================
-// Cmdline paste register helpers
-// =============================================================================
-
-/// Check if cmdline paste should use literal mode.
-#[no_mangle]
-pub extern "C" fn rs_cmdline_paste_use_literal(regname: c_int, literally_arg: bool) -> bool {
-    literally_arg || is_literal_register(regname as u8)
-}
-
-/// Check if cmdline paste should insert CR between lines.
-///
-/// CR (^M) is inserted between lines unless remcr is true.
-#[no_mangle]
-pub extern "C" fn rs_cmdline_paste_insert_cr(
-    line_idx: usize,
-    total_lines: usize,
-    remcr: bool,
-) -> bool {
-    line_idx < total_lines.saturating_sub(1) && !remcr
-}
-
-/// Get the CR character for cmdline paste.
-#[no_mangle]
-pub extern "C" fn rs_get_cr_char() -> c_int {
-    c_int::from(b'\r')
-}
-
-/// Check if cmdline paste register is valid.
-///
-/// Only non-special registers can be pasted to cmdline.
-#[no_mangle]
-pub extern "C" fn rs_cmdline_paste_valid(regname: c_int) -> bool {
-    // cmdline_paste_reg only works with non-special registers
-    // Special registers are handled differently in the caller
-    rs_valid_yank_reg(regname, false) && rs_classify_special_register(regname) == 0
-}
-
-/// Get the line size for cmdline paste bounds checking.
-///
-/// # Safety
-///
-/// `reg` must be a valid YankRegHandle.
-#[no_mangle]
-pub unsafe extern "C" fn rs_cmdline_paste_line_count(reg: YankRegHandle) -> usize {
-    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
-        return 0;
-    }
-    nvim_yankreg_get_size(reg)
-}
-
-// =============================================================================
-// Stuffing helpers (for insert mode register insertion)
-// =============================================================================
-
-/// Check if character needs escaping when stuffing.
-///
-/// Special characters like K_SPECIAL need escaping.
-#[no_mangle]
-pub extern "C" fn rs_stuff_needs_escape(c: c_int) -> bool {
-    // K_SPECIAL needs escaping
-    c == c_int::from(K_SPECIAL)
-}
-
-/// Get the K_SPECIAL character value.
-#[no_mangle]
-pub extern "C" fn rs_get_k_special() -> c_int {
-    c_int::from(K_SPECIAL)
-}
-
-/// Check if insert_reg is handling a register that needs special processing.
-///
-/// The small delete register (-) with charwise content has special behavior
-/// in replace mode.
-#[no_mangle]
-pub extern "C" fn rs_insert_reg_special_small_delete(
-    regname: c_int,
-    motion_type: c_int,
-    is_replace_mode: bool,
-) -> bool {
-    regname == c_int::from(b'-') && motion_type == K_MT_CHAR_WISE && is_replace_mode
-}
-
-/// Get CTRL-R character for redo buffer.
-#[no_mangle]
-pub extern "C" fn rs_get_ctrl_r() -> c_int {
-    c_int::from(CTRL_R)
-}
-
-/// Determine direction for small delete register put in replace mode.
-///
-/// Returns BACKWARD (0) normally, FORWARD (1) if at end of line.
-#[no_mangle]
-pub extern "C" fn rs_get_small_delete_put_direction(at_eol: bool) -> c_int {
-    if at_eol {
-        1 // FORWARD
-    } else {
-        0 // BACKWARD
-    }
-}
-
-// =============================================================================
-// Phase 410: Yank operations helpers
-// =============================================================================
-
-/// Check if the motion type should be converted to linewise.
-///
-/// If the cursor was in column 1 before and after the movement, and the
-/// operator is not inclusive, the yank is always linewise.
-#[no_mangle]
-pub extern "C" fn rs_yank_should_be_linewise(
-    motion_type: c_int,
-    start_col: c_int,
-    end_col: c_int,
-    inclusive: bool,
-    is_visual: bool,
-    sel_is_o: bool,
-    line_count: usize,
-) -> bool {
-    motion_type == K_MT_CHAR_WISE
-        && start_col == 0
-        && !inclusive
-        && (!is_visual || sel_is_o)
-        && end_col == 0
-        && line_count > 1
-}
-
-/// Calculate adjusted yank line count for linewise conversion.
-///
-/// When converting charwise to linewise, decrease yanklines by 1.
-#[no_mangle]
-pub extern "C" fn rs_yank_adjusted_line_count(line_count: usize, converted: bool) -> usize {
-    if converted {
-        line_count.saturating_sub(1)
-    } else {
-        line_count
-    }
-}
-
-/// Calculate block width for blockwise yank.
-///
-/// Width is end_vcol - start_vcol, adjusted if curswant is MAXCOL.
-#[no_mangle]
-pub extern "C" fn rs_yank_block_width(
-    start_vcol: c_int,
-    end_vcol: c_int,
-    curswant_is_maxcol: bool,
-) -> c_int {
-    let width = end_vcol - start_vcol;
-    if curswant_is_maxcol && width > 0 {
-        width - 1
-    } else {
-        width
-    }
-}
-
-/// Check if block copy should exclude trailing whitespace.
-#[no_mangle]
-pub extern "C" fn rs_yank_exclude_trailing_ws(excl_tr_ws: bool) -> bool {
-    excl_tr_ws
-}
-
-/// Calculate block line size including spaces.
-///
-/// size = startspaces + endspaces + textlen
-#[no_mangle]
-pub extern "C" fn rs_yank_block_line_size(
-    startspaces: c_int,
-    endspaces: c_int,
-    textlen: c_int,
-) -> c_int {
-    startspaces + endspaces + textlen
-}
-
-/// Check if we should append the new yank to existing content.
-#[no_mangle]
-pub extern "C" fn rs_yank_should_append(append: bool, has_content: bool) -> bool {
-    append && has_content
-}
-
-/// Determine if linewise type should override other types when appending.
-///
-/// kMTLineWise overrides kMTCharWise and kMTBlockWise.
-#[no_mangle]
-pub extern "C" fn rs_yank_linewise_overrides(yank_type: c_int) -> bool {
-    yank_type == K_MT_LINE_WISE
-}
-
-/// Check if charwise append should concatenate last/first lines.
-///
-/// When appending charwise content and CPO_REGAPPEND is not set,
-/// the last line of old and first line of new should be concatenated.
-#[no_mangle]
-pub extern "C" fn rs_yank_should_concatenate_lines(
-    curr_type: c_int,
-    cpo_regappend_set: bool,
-) -> bool {
-    curr_type == K_MT_CHAR_WISE && !cpo_regappend_set
-}
-
-/// Calculate combined size for concatenating two strings.
-#[no_mangle]
-pub extern "C" fn rs_yank_concat_size(size1: usize, size2: usize) -> usize {
-    size1.saturating_add(size2)
-}
-
-/// Calculate new array size after append.
-#[no_mangle]
-pub extern "C" fn rs_yank_append_array_size(curr_size: usize, reg_size: usize) -> usize {
-    curr_size.saturating_add(reg_size)
-}
-
-/// Determine if yank message should be displayed.
-///
-/// Only display if:
-/// - message flag is true
-/// - For charwise single line, set yanklines to 0
-/// - For lines > p_report, show message
-#[no_mangle]
-pub extern "C" fn rs_yank_should_show_message(
-    message: bool,
-    yank_type: c_int,
-    line_count: usize,
-    p_report: i64,
-) -> bool {
-    if !message {
-        return false;
-    }
-    // charwise single line doesn't count
-    let adjusted_lines = if yank_type == K_MT_CHAR_WISE && line_count == 1 {
-        0
-    } else {
-        line_count
-    };
-    adjusted_lines > p_report as usize
-}
-
-/// Get the adjusted line count for yank messages.
-///
-/// Charwise single line yanklines is reported as 0.
-#[no_mangle]
-pub extern "C" fn rs_yank_message_line_count(yank_type: c_int, line_count: usize) -> usize {
-    if yank_type == K_MT_CHAR_WISE && line_count == 1 {
-        0
-    } else {
-        line_count
-    }
-}
-
-/// Check if marks should be updated after yank.
-#[no_mangle]
-pub extern "C" fn rs_yank_should_update_marks(lockmarks: bool) -> bool {
-    !lockmarks
-}
-
-/// Determine end column for mark setting.
-///
-/// For linewise, col should be MAXCOL. For others, depends on inclusive.
-#[no_mangle]
-pub extern "C" fn rs_yank_mark_end_col_is_maxcol(yank_type: c_int) -> bool {
-    yank_type == K_MT_LINE_WISE
-}
-
-/// Check if end position should be excluded for marks.
-///
-/// For non-linewise and non-inclusive operations, exclude the end position.
-#[no_mangle]
-pub extern "C" fn rs_yank_should_exclude_end(yank_type: c_int, inclusive: bool) -> bool {
-    yank_type != K_MT_LINE_WISE && !inclusive
-}
-
-/// Check if regname should be displayed in message.
-#[no_mangle]
-pub extern "C" fn rs_yank_show_regname_in_message(regname: c_int) -> bool {
-    regname != 0
-}
-
-/// Calculate total size of startspaces padding.
-#[no_mangle]
-pub extern "C" fn rs_yank_startspaces_size(startspaces: c_int) -> c_int {
-    if startspaces > 0 {
-        startspaces
-    } else {
-        0
-    }
-}
-
-/// Calculate text position offset after startspaces.
-#[no_mangle]
-pub extern "C" fn rs_yank_text_offset_after_startspaces(startspaces: c_int) -> c_int {
-    if startspaces > 0 {
-        startspaces
-    } else {
-        0
-    }
-}
-
-/// Get initial y_idx for yank iteration.
-#[no_mangle]
-pub extern "C" fn rs_yank_initial_idx() -> usize {
-    0
-}
-
-/// Increment yank index.
-#[no_mangle]
-pub extern "C" fn rs_yank_next_idx(idx: usize) -> usize {
-    idx.saturating_add(1)
-}
-
-/// Check if yank iteration is complete.
-#[no_mangle]
-pub extern "C" fn rs_yank_iteration_complete(idx: usize, total: usize) -> bool {
-    idx >= total
-}
-
-/// Calculate starting y_idx for append copy.
-///
-/// When concatenating charwise, skip the first line (index 0).
-/// Otherwise start from 0.
-#[no_mangle]
-pub extern "C" fn rs_yank_append_start_idx(concatenated: bool) -> usize {
-    if concatenated {
-        1
-    } else {
-        0
-    }
-}
-
-/// Calculate the space character for padding.
-#[no_mangle]
-pub extern "C" fn rs_yank_space_char() -> c_int {
-    c_int::from(b' ')
-}
-
-// =============================================================================
-// Phase 411: Put operations core helpers (do_put part 1)
-// =============================================================================
-
-// PUT flags constants
-/// Leave cursor after end of new text
-pub const PUT_CURSEND: c_int = 0x01;
-/// Force linewise put
-pub const PUT_LINE: c_int = 0x02;
-/// Put in Visual block mode
-pub const PUT_BLOCK_INNER: c_int = 0x04;
-/// Put in Visual line mode, split lines
-pub const PUT_LINE_SPLIT: c_int = 0x08;
-/// Put lines forward
-pub const PUT_LINE_FORWARD: c_int = 0x10;
-/// In Visual line mode
-pub const PUT_LINE_VISUAL: c_int = 0x20;
-
-// Direction constants
-/// Put before cursor
-pub const DIR_BACKWARD: c_int = 0;
-/// Put after cursor
-pub const DIR_FORWARD: c_int = 1;
-
-/// Check if put is using the '.' (last inserted) register.
-#[no_mangle]
-pub extern "C" fn rs_put_is_insert_register(regname: c_int, reg_is_null: bool) -> bool {
-    regname == c_int::from(b'.') && reg_is_null
-}
-
-/// Check if put should use linewise handling for '.' register.
-#[no_mangle]
-pub extern "C" fn rs_put_insert_is_linewise(flags: c_int) -> bool {
-    (flags & PUT_LINE) != 0
-}
-
-/// Determine the command start character for '.' register put.
-///
-/// 'c' for non-linewise visual, 'i' for linewise PUT_LINE or backward,
-/// 'a' for forward.
-#[no_mangle]
-pub extern "C" fn rs_put_insert_command_char(
-    non_linewise_vis: bool,
-    flags: c_int,
-    dir: c_int,
-) -> c_int {
-    if non_linewise_vis {
-        c_int::from(b'c')
-    } else if (flags & PUT_LINE) != 0 {
-        c_int::from(b'i')
-    } else if dir == DIR_FORWARD {
-        c_int::from(b'a')
-    } else {
-        c_int::from(b'i')
-    }
-}
-
-/// Check if put should use special register handling.
-#[no_mangle]
-pub extern "C" fn rs_put_needs_special_reg(regname: c_int) -> bool {
-    rs_classify_special_register(regname) != 0
-}
-
-/// Check if expression register needs line splitting.
-#[no_mangle]
-pub extern "C" fn rs_put_expr_needs_split(regname: c_int) -> bool {
-    regname == c_int::from(b'=')
-}
-
-/// Determine the type for special register put.
-///
-/// Default is charwise, unless the content ends with a newline.
-#[no_mangle]
-pub extern "C" fn rs_put_special_reg_type(ends_with_newline: bool) -> c_int {
-    if ends_with_newline {
-        K_MT_LINE_WISE
-    } else {
-        K_MT_CHAR_WISE
-    }
-}
-
-/// Check if put should force linewise mode.
-#[no_mangle]
-pub extern "C" fn rs_put_force_linewise(flags: c_int) -> bool {
-    (flags & PUT_LINE) != 0
-}
-
-/// Check if put content is empty.
-#[no_mangle]
-pub extern "C" fn rs_put_content_empty(y_size: usize, y_array_null: bool) -> bool {
-    y_size == 0 || y_array_null
-}
-
-/// Check if linewise put should split lines.
-#[no_mangle]
-pub extern "C" fn rs_put_should_split_lines(y_type: c_int, flags: c_int) -> bool {
-    y_type == K_MT_LINE_WISE && (flags & PUT_LINE_SPLIT) != 0
-}
-
-/// Check if linewise put should go forward.
-#[no_mangle]
-pub extern "C" fn rs_put_should_forward(flags: c_int) -> bool {
-    (flags & PUT_LINE_FORWARD) != 0
-}
-
-/// Check if cursor should be at end after put.
-#[no_mangle]
-pub extern "C" fn rs_put_cursor_at_end(flags: c_int) -> bool {
-    (flags & PUT_CURSEND) != 0
-}
-
-/// Calculate lnum for blockwise u_save.
-///
-/// lnum = curwin->w_cursor.lnum + y_size + 1, clamped to max line count + 1.
-#[no_mangle]
-pub extern "C" fn rs_put_block_usave_lnum(
-    cursor_lnum: i64,
-    y_size: usize,
-    max_line_count: i64,
-) -> i64 {
-    let lnum = cursor_lnum + y_size as i64 + 1;
-    if lnum > max_line_count + 1 {
-        max_line_count + 1
-    } else {
-        lnum
-    }
-}
-
-/// Check if put is linewise.
-#[no_mangle]
-pub extern "C" fn rs_put_is_linewise(y_type: c_int) -> bool {
-    y_type == K_MT_LINE_WISE
-}
-
-/// Check if put is blockwise.
-#[no_mangle]
-pub extern "C" fn rs_put_is_blockwise(y_type: c_int) -> bool {
-    y_type == K_MT_BLOCK_WISE
-}
-
-/// Check if put is charwise.
-#[no_mangle]
-pub extern "C" fn rs_put_is_charwise(y_type: c_int) -> bool {
-    y_type == K_MT_CHAR_WISE
-}
-
-/// Get the regname string for error messages.
-///
-/// Returns '"' for unnamed register (regname == 0).
-#[no_mangle]
-pub extern "C" fn rs_put_regname_for_error(regname: c_int) -> c_int {
-    if regname == 0 {
-        c_int::from(b'"')
-    } else {
-        regname
-    }
-}
-
-/// Check if linewise put needs to adjust cursor for forward direction.
-#[no_mangle]
-pub extern "C" fn rs_put_linewise_forward(dir: c_int) -> bool {
-    dir == DIR_FORWARD
-}
-
-/// Calculate line number after linewise put.
-///
-/// Returns cursor lnum if backward, cursor lnum + 1 if forward.
-#[no_mangle]
-pub extern "C" fn rs_put_linewise_lnum(cursor_lnum: i64, dir: c_int) -> i64 {
-    if dir == DIR_FORWARD {
-        cursor_lnum + 1
-    } else {
-        cursor_lnum
-    }
-}
-
-/// Check if charwise put starts at end of line.
-#[no_mangle]
-pub extern "C" fn rs_put_at_eol(cursor_at_eol: bool) -> bool {
-    cursor_at_eol
-}
-
-/// Check if charwise put with single line should use different handling.
-#[no_mangle]
-pub extern "C" fn rs_put_charwise_single_line(y_size: usize) -> bool {
-    y_size == 1
-}
-
-/// Calculate total length for charwise single-line put.
-#[no_mangle]
-pub extern "C" fn rs_put_single_line_totlen(line_len: usize, count: usize) -> usize {
-    line_len.saturating_mul(count)
-}
-
-/// Calculate string repeat count for charwise put.
-#[no_mangle]
-pub extern "C" fn rs_put_repeat_count(count: c_int) -> usize {
-    if count > 0 {
-        count as usize
-    } else {
-        1
-    }
-}
-
-/// Check if PUT_CURSEND with PUT_LINE should stuff "j0".
-#[no_mangle]
-pub extern "C" fn rs_put_stuff_j0(flags: c_int) -> bool {
-    (flags & PUT_CURSEND) != 0 && (flags & PUT_LINE) != 0
-}
-
-/// Check if PUT_LINE without PUT_CURSEND should stuff "g'[".
-#[no_mangle]
-pub extern "C" fn rs_put_stuff_goto_mark(flags: c_int) -> bool {
-    (flags & PUT_CURSEND) == 0 && (flags & PUT_LINE) != 0
-}
-
-/// Get Ctrl-U character for put operation.
-#[no_mangle]
-pub extern "C" fn rs_put_ctrl_u() -> c_int {
-    c_int::from(CTRL_U)
-}
-
-/// Check if charwise put should move cursor forward one character.
-#[no_mangle]
-pub extern "C" fn rs_put_forward_one_char(dir: c_int, cursor_char_not_nul: bool) -> bool {
-    dir == DIR_FORWARD && cursor_char_not_nul
-}
-
-/// Get newline character for line splitting.
-#[no_mangle]
-pub extern "C" fn rs_put_newline_char() -> c_int {
-    c_int::from(b'\n')
-}
-
-// =============================================================================
-// Phase 412: Put operations completion helpers (do_put part 2)
-// Block mode and visual mode
-// =============================================================================
-
-/// Check if block mode put should handle virtual edit.
-#[no_mangle]
-pub extern "C" fn rs_put_block_ve_all(ve_flags: c_int) -> bool {
-    // kOptVeFlagAll = 1
-    ve_flags == 1
-}
-
-/// Check if block mode should move to next multi-byte character.
-#[no_mangle]
-pub extern "C" fn rs_put_block_advance_col(dir: c_int, c_not_nul: bool) -> bool {
-    dir == DIR_FORWARD && c_not_nul
-}
-
-/// Calculate block column adjustment with virtual edit.
-#[no_mangle]
-pub extern "C" fn rs_put_block_col_adjust(col: c_int, coladd: c_int) -> c_int {
-    col + coladd
-}
-
-/// Check if line is too short for block put (needs padding).
-#[no_mangle]
-pub extern "C" fn rs_put_block_line_short(vcol: c_int, col: c_int, ptr_is_nul: bool) -> bool {
-    vcol < col || (vcol == col && ptr_is_nul)
-}
-
-/// Calculate startspaces for short line padding.
-#[no_mangle]
-pub extern "C" fn rs_put_block_startspaces_short(col: c_int, vcol: c_int) -> c_int {
-    if col > vcol {
-        col - vcol
-    } else {
-        0
-    }
-}
-
-/// Calculate endspaces when vcol > col.
-#[no_mangle]
-pub extern "C" fn rs_put_block_endspaces(vcol: c_int, col: c_int) -> c_int {
-    if vcol > col {
-        vcol - col
-    } else {
-        0
-    }
-}
-
-/// Calculate startspaces when splitting a character.
-#[no_mangle]
-pub extern "C" fn rs_put_block_startspaces_split(incr: c_int, endspaces: c_int) -> c_int {
-    incr - endspaces
-}
-
-/// Check if character at position is a Tab (can be split).
-#[no_mangle]
-pub extern "C" fn rs_put_block_can_split(c: c_int) -> bool {
-    c == c_int::from(b'\t')
-}
-
-/// Check if block inner mode is set.
-#[no_mangle]
-pub extern "C" fn rs_put_block_inner(flags: c_int) -> bool {
-    (flags & PUT_BLOCK_INNER) != 0
-}
-
-/// Calculate spaces for right side of block.
-///
-/// spaces = y_width + 1 (for normal block put)
-#[no_mangle]
-pub extern "C" fn rs_put_block_initial_spaces(y_width: c_int) -> c_int {
-    y_width + 1
-}
-
-/// Calculate spaces after subtracting charlen.
-///
-/// spaces -= charlen, but at least 0
-#[no_mangle]
-pub extern "C" fn rs_put_block_spaces_subtract(spaces: c_int, charlen: c_int) -> c_int {
-    if spaces > charlen {
-        spaces - charlen
-    } else {
-        0
-    }
-}
-
-/// Calculate total size for block line insert.
-///
-/// totlen = count * (yanklen + spaces) + bd.startspaces + bd.endspaces
-#[no_mangle]
-pub extern "C" fn rs_put_block_totlen(
-    count: usize,
-    yanklen: usize,
-    spaces: usize,
-    startspaces: usize,
-    endspaces: usize,
-) -> usize {
-    count
-        .saturating_mul(yanklen.saturating_add(spaces))
-        .saturating_add(startspaces)
-        .saturating_add(endspaces)
-}
-
-/// Calculate new line length after block insert.
-#[no_mangle]
-pub extern "C" fn rs_put_block_newlen(oldlen: usize, totlen: usize, delcount: usize) -> usize {
-    oldlen.saturating_add(totlen).saturating_sub(delcount)
-}
-
-/// Check if new line needs to be appended during block put.
-#[no_mangle]
-pub extern "C" fn rs_put_block_need_append(cursor_lnum: i64, max_line_count: i64) -> bool {
-    cursor_lnum > max_line_count
-}
-
-/// Calculate visual edit column increment for forward direction.
-#[no_mangle]
-pub extern "C" fn rs_put_ve_forward_incr(dir: c_int, c_is_nul: bool) -> c_int {
-    if dir == DIR_FORWARD && c_is_nul {
-        1
-    } else {
-        0
-    }
-}
-
-/// Check if tab needs backward cursor adjustment.
-#[no_mangle]
-pub extern "C" fn rs_put_tab_backward_adjust(
-    dir: c_int,
-    c_is_tab: bool,
-    cursor_col_nonzero: bool,
-) -> bool {
-    dir == DIR_BACKWARD && c_is_tab && cursor_col_nonzero
-}
-
-/// Check if tab needs forward cursor adjustment.
-#[no_mangle]
-pub extern "C" fn rs_put_tab_forward_adjust(
-    dir: c_int,
-    c_is_tab: bool,
-    col_minus_1_eq_endcol2: bool,
-) -> bool {
-    dir == DIR_FORWARD && c_is_tab && col_minus_1_eq_endcol2
-}
-
-/// Check if charwise put with virtualedit should use special handling.
-#[no_mangle]
-pub extern "C" fn rs_put_ve_charwise(ve_flags: c_int, y_type: c_int) -> bool {
-    ve_flags == 1 && y_type == K_MT_CHAR_WISE // kOptVeFlagAll = 1
-}
-
-/// Check if cursor is on a Tab.
-#[no_mangle]
-pub extern "C" fn rs_put_cursor_on_tab(c: c_int) -> bool {
-    c == c_int::from(b'\t')
-}
-
-/// Get Tab character value.
-#[no_mangle]
-pub extern "C" fn rs_put_tab_char() -> c_int {
-    c_int::from(b'\t')
-}
-
-/// Calculate number of lines added by put operation.
-#[no_mangle]
-pub extern "C" fn rs_put_nr_lines_added(y_size: usize, nr_lines: usize) -> usize {
-    y_size.saturating_add(nr_lines)
-}
-
-/// Check if put operation should display message.
-#[no_mangle]
-pub extern "C" fn rs_put_should_message(nr_lines: i64, p_report: i64) -> bool {
-    nr_lines > p_report
-}
-
-/// Calculate new cursor column after charwise put.
-#[no_mangle]
-pub extern "C" fn rs_put_charwise_new_col(col: c_int, totlen: c_int, cursor_at_end: bool) -> c_int {
-    if cursor_at_end {
-        col + totlen
-    } else {
-        col
-    }
-}
-
-/// Determine if cursor should stay at original position.
-#[no_mangle]
-pub extern "C" fn rs_put_cursor_original(flags: c_int) -> bool {
-    (flags & PUT_CURSEND) == 0 && (flags & PUT_LINE) == 0
-}
-
-/// Calculate mark end column for block mode.
-///
-/// For block mode, end column is col + y_width.
-#[no_mangle]
-pub extern "C" fn rs_put_block_mark_end_col(col: c_int, y_width: c_int) -> c_int {
-    col + y_width
-}
-
-/// Calculate mark end line for multi-line put.
-#[no_mangle]
-pub extern "C" fn rs_put_mark_end_lnum(start_lnum: i64, nr_lines: i64) -> i64 {
-    start_lnum + nr_lines - 1
-}
-
-/// Check if visual mode put should delete old content first.
-#[no_mangle]
-pub extern "C" fn rs_put_visual_delete_first(visual_active: bool) -> bool {
-    visual_active
-}
-
-/// Get the line count adjustment for linewise visual put.
-///
-/// Visual linewise puts may delete existing lines.
-#[no_mangle]
-pub extern "C" fn rs_put_visual_line_adjust(visual_lines: i64, put_lines: i64) -> i64 {
-    put_lines - visual_lines
-}
-
-/// Check if charwise put should advance past end of line.
-#[no_mangle]
-pub extern "C" fn rs_put_charwise_past_eol(ve_flags: c_int, cursor_at_eol: bool) -> bool {
-    ve_flags != 0 && cursor_at_eol
-}
-
-/// Get NUL character value.
-#[no_mangle]
-pub extern "C" fn rs_put_nul_char() -> c_int {
-    0
 }

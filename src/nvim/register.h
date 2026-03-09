@@ -13,6 +13,41 @@ extern int rs_op_reg_index(int regname);
 extern int rs_is_append_register(int regname);
 extern int rs_get_register_name(int num);
 
+// Functions implemented in Rust (src/nvim-rs/register/src/lib.rs) with #[export_name].
+// These replace the former C implementations that have been deleted.
+extern int rs_get_unname_register(void);
+extern int get_unname_register(void);
+extern yankreg_T *get_y_register(int reg);
+extern yankreg_T *get_y_previous(void);
+extern int get_expr_register(void);
+extern void set_expr_line(char *new_line);
+extern char *get_expr_line(void);
+extern char *get_expr_line_src(void);
+extern bool valid_yank_reg(int regname, bool writing);
+extern int get_default_register_name(void);
+extern const void *op_reg_iter(const void *const iter, const yankreg_T *const regs, char *const name, yankreg_T *const reg, bool *is_unnamed);
+extern const void *op_global_reg_iter(const void *const iter, char *const name, yankreg_T *const reg, bool *is_unnamed);
+extern size_t op_reg_amount(void);
+extern bool op_reg_set(const char name, const yankreg_T reg, bool is_unnamed);
+extern const yankreg_T *op_reg_get(const char name);
+extern bool op_reg_set_previous(const char name);
+extern void update_yankreg_width(yankreg_T *reg);
+extern yankreg_T *get_yank_register(int regname, int mode);
+extern bool yank_register_mline(int regname, yankreg_T **reg);
+extern yankreg_T *copy_register(int name);
+extern void shift_delete_registers(bool y_append);
+extern void free_register(yankreg_T *reg);
+extern MotionType get_reg_type(int regname, colnr_T *reg_width);
+extern void format_reg_type(MotionType reg_type, colnr_T reg_width, char *buf, size_t buf_len);
+extern void write_reg_contents(int name, const char *str, ssize_t len, int must_append);
+extern void write_reg_contents_lst(int name, char **strings, bool must_append, MotionType yank_type, colnr_T block_len);
+extern void write_reg_contents_ex(int name, const char *str, ssize_t len, bool must_append, MotionType yank_type, colnr_T block_len);
+extern bool prepare_yankreg_from_object(yankreg_T *reg, String regtype, size_t lines);
+extern void finish_yankreg_from_object(yankreg_T *reg, bool clipboard_adjust);
+#if defined(EXITFREE)
+extern void clear_registers(void);
+#endif
+
 /// @see get_yank_register
 /// @return  true when register should be inserted literally
 /// (selection or clipboard)

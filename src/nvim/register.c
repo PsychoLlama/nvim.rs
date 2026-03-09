@@ -3,10 +3,6 @@
 #include <stdbool.h>
 
 #include "nvim/api/private/helpers.h"
-
-extern bool rs_valid_yank_reg(int regname, bool writing);
-extern int rs_get_unname_register(void);
-extern void rs_format_reg_type(int reg_type, int reg_width, char *buf, size_t buf_len);
 #include "nvim/autocmd.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
@@ -29,6 +25,7 @@ extern void rs_format_reg_type(int reg_type, int reg_width, char *buf, size_t bu
 #include "nvim/getchar.h"
 #include "nvim/globals.h"
 #include "nvim/indent.h"
+#include "nvim/memory.h"
 #include "nvim/keycodes.h"
 #include "nvim/mark.h"
 #include "nvim/mbyte.h"
@@ -52,736 +49,79 @@ extern void rs_format_reg_type(int reg_type, int reg_width, char *buf, size_t bu
 
 #include "register.c.generated.h"
 
-extern void rs_update_yankreg_width(yankreg_T *reg);
-extern size_t rs_op_reg_amount(void);
-extern yankreg_T *rs_op_reg_get(char name);
-extern bool rs_op_reg_set_previous(char name);
-extern yankreg_T *rs_get_y_previous(void);
-extern void rs_shift_delete_registers(bool y_append);
-extern void rs_set_expr_line(char *new_line);
-extern char *rs_get_expr_line_src(void);
-extern char *rs_get_expr_line(void);
-extern yankreg_T *rs_init_write_reg(int name, yankreg_T **old_y_previous, bool must_append);
-extern void rs_finish_write_reg(int name, yankreg_T *reg, yankreg_T *old_y_previous);
-extern MotionType rs_get_reg_type(int regname, colnr_T *reg_width);
-extern bool rs_yank_register_mline(int regname, yankreg_T **reg);
-extern void rs_free_register(yankreg_T *reg);
-extern int rs_stuff_yank(int regname, char *p);
-extern yankreg_T *rs_copy_register(int name);
-extern void rs_str_to_reg(yankreg_T *y_ptr, MotionType yank_type, const char *str, size_t len,
-                          colnr_T blocklen, bool str_list);
+// Global register state owned by Rust (src/nvim-rs/register/src/lib.rs).
+extern yankreg_T y_regs[NUM_REGISTERS];
+extern yankreg_T *y_previous;
+extern char *expr_line;
+extern int execreg_lastc;
 
-_Static_assert(sizeof(yankreg_T) == 40,
-               "sizeof(yankreg_T) changed - update Rust yankreg_size in register/src/lib.rs");
-
-// Keep the last expression line here, for repeating.
-static char *expr_line = NULL;
-
-static int execreg_lastc = NUL;
-
-static yankreg_T y_regs[NUM_REGISTERS] = { 0 };
-
-static yankreg_T *y_previous = NULL;  // ptr to last written yankreg
-
-static const char e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines[]
-  = N_("E883: Search pattern and expression register may not contain two or more lines");
-
-/// C accessor for Rust to get y_previous index.
-int nvim_get_y_previous_index(void)
+/// Set curwin->w_alt_fnum from a buf_T pointer (called from Rust write_reg_contents_ex).
+void nvim_register_set_alt_fnum(buf_T *buf)
 {
-  return y_previous == NULL ? -1 : (int)(y_previous - &y_regs[0]);
+  curwin->w_alt_fnum = buf->b_fnum;
 }
 
-// C accessors for yankreg_T fields (used by Rust)
+// Functions now implemented in Rust (src/nvim-rs/register/src/lib.rs) with #[export_name].
+extern int stuff_yank(int regname, char *p);
 
-size_t nvim_yankreg_get_size(yankreg_T *reg)
-{
-  return reg->y_size;
-}
+// ---------------------------------------------------------------------------
+// C accessor wrappers used by Rust crates via FFI.
+// These thin wrappers delegate to Neovim's memory allocator and error helpers.
+// ---------------------------------------------------------------------------
 
-int nvim_yankreg_get_type(yankreg_T *reg)
-{
-  return (int)reg->y_type;
-}
-
-colnr_T nvim_yankreg_get_width(yankreg_T *reg)
-{
-  return reg->y_width;
-}
-
-void nvim_yankreg_set_width(yankreg_T *reg, colnr_T width)
-{
-  reg->y_width = width;
-}
-
-const char *nvim_yankreg_get_line_data(yankreg_T *reg, size_t idx)
-{
-  return reg->y_array[idx].data;
-}
-
-size_t nvim_yankreg_get_line_size(yankreg_T *reg, size_t idx)
-{
-  return reg->y_array[idx].size;
-}
-
-bool nvim_yankreg_is_empty(yankreg_T *reg)
-{
-  return reg_empty(reg);
-}
-
-yankreg_T *nvim_get_y_regs_ptr(int idx)
-{
-  return &y_regs[idx];
-}
-
-void nvim_set_y_previous_by_index(int idx)
-{
-  if (idx >= 0 && idx < NUM_REGISTERS) {
-    y_previous = &y_regs[idx];
-  } else {
-    y_previous = NULL;
-  }
-}
-
+/// Free a register's contents (delegating to the Rust free_register export).
+extern void free_register(yankreg_T *reg);
 void nvim_free_register(yankreg_T *reg)
 {
   free_register(reg);
 }
 
-void nvim_copy_yankreg(yankreg_T *dst, const yankreg_T *src)
-{
-  *dst = *src;
-}
-
-void nvim_clear_yankreg_array(yankreg_T *reg)
-{
-  reg->y_array = NULL;
-}
-
-// Expression register accessors for Rust
-
-const char *nvim_get_expr_line(void)
-{
-  return expr_line;
-}
-
-void nvim_set_expr_line_ptr(char *new_line)
-{
-  expr_line = new_line;
-}
-
+/// Generic xfree wrapper used by Rust crates that cannot call xfree directly.
 void nvim_xfree(void *ptr)
 {
   xfree(ptr);
 }
 
+/// Generic xstrdup wrapper.
 char *nvim_xstrdup(const char *str)
 {
   return xstrdup(str);
 }
 
-char *nvim_eval_to_string(const char *expr, bool want_retval, bool in_sandbox)
-{
-  // Need to cast away const since eval_to_string takes char*
-  return eval_to_string((char *)expr, want_retval, in_sandbox);
-}
-
-// Phase 4 accessors: init_write_reg / finish_write_reg support
-
-/// Get the yank register for writing (YREG_YANK mode).
-yankreg_T *nvim_get_yank_register_for_write(int regname)
-{
-  return get_yank_register(regname, YREG_YANK);
-}
-
-/// Emit "Invalid register name" error message.
-void nvim_emsg_invreg(int name)
-{
-  emsg_invreg(name);
-}
-
-/// Get current y_previous pointer.
-yankreg_T *nvim_get_y_previous(void)
-{
-  return y_previous;
-}
-
-/// Set y_previous to a specific register pointer.
-void nvim_set_y_previous(yankreg_T *reg)
-{
-  y_previous = reg;
-}
-
-/// Send register to clipboard.
-void nvim_set_clipboard(int name, yankreg_T *reg)
-{
-  set_clipboard(name, reg);
-}
-
-/// Get the yank register for pasting (YREG_PASTE mode).
-yankreg_T *nvim_get_yank_register_for_paste(int regname)
-{
-  return get_yank_register(regname, YREG_PASTE);
-}
-
-// Phase 7/8 accessors: free_register and stuff_yank support
-
-/// Allocate memory (wrapper for xmalloc).
+/// Generic xmalloc wrapper.
 void *nvim_xmalloc(size_t size)
 {
   return xmalloc(size);
 }
 
-/// Get the current timestamp.
-Timestamp nvim_os_time(void)
-{
-  return os_time();
-}
-
-/// Check if yankreg has an array (y_array != NULL).
-bool nvim_yankreg_has_array(yankreg_T *reg)
-{
-  return reg->y_array != NULL;
-}
-
-/// Check if yankreg has additional_data (additional_data != NULL).
-bool nvim_yankreg_has_additional_data(yankreg_T *reg)
-{
-  return reg->additional_data != NULL;
-}
-
-/// Free additional_data and set to NULL.
-void nvim_yankreg_free_additional_data(yankreg_T *reg)
-{
-  XFREE_CLEAR(reg->additional_data);
-}
-
-/// Clear (free) a String at the given index in y_array.
-void nvim_yankreg_clear_string_at(yankreg_T *reg, size_t idx)
-{
-  API_CLEAR_STRING(reg->y_array[idx]);
-}
-
-/// Free y_array and set to NULL.
-void nvim_yankreg_free_array(yankreg_T *reg)
-{
-  XFREE_CLEAR(reg->y_array);
-}
-
-/// Set y_size.
-void nvim_yankreg_set_size(yankreg_T *reg, size_t size)
-{
-  reg->y_size = size;
-}
-
-/// Set y_type.
-void nvim_yankreg_set_type(yankreg_T *reg, int type)
-{
-  reg->y_type = (MotionType)type;
-}
-
-/// Set timestamp.
-void nvim_yankreg_set_timestamp(yankreg_T *reg, Timestamp ts)
-{
-  reg->timestamp = ts;
-}
-
-/// Set y_array to NULL (for clearing without freeing).
-void nvim_yankreg_null_additional_data(yankreg_T *reg)
-{
-  reg->additional_data = NULL;
-}
-
-/// Allocate y_array with given count of String entries.
-void nvim_yankreg_alloc_array(yankreg_T *reg, size_t count)
-{
-  reg->y_array = xmalloc(count * sizeof(String));
-}
-
-/// Set a line in y_array from a char* and length (takes ownership of data).
-void nvim_yankreg_set_line(yankreg_T *reg, size_t idx, char *data, size_t len)
-{
-  reg->y_array[idx] = cbuf_as_string(data, len);
-}
-
-/// Get pointer to y_array[idx].data for reading.
-const char *nvim_yankreg_get_last_line_data(yankreg_T *reg)
-{
-  return reg->y_array[reg->y_size - 1].data;
-}
-
-/// Get y_array[y_size-1].size.
-size_t nvim_yankreg_get_last_line_size(yankreg_T *reg)
-{
-  return reg->y_array[reg->y_size - 1].size;
-}
-
-/// Free and replace the last line in y_array.
-void nvim_yankreg_replace_last_line(yankreg_T *reg, char *data, size_t len)
-{
-  xfree(reg->y_array[reg->y_size - 1].data);
-  reg->y_array[reg->y_size - 1] = cbuf_as_string(data, len);
-}
-
-// Phase 8 accessors: copy_register support
-
-/// Allocate a new yankreg_T.
-yankreg_T *nvim_alloc_yankreg(void)
-{
-  return xmalloc(sizeof(yankreg_T));
-}
-
-/// Allocate zeroed memory.
+/// Generic xcalloc wrapper.
 void *nvim_xcalloc(size_t count, size_t size)
 {
   return xcalloc(count, size);
 }
 
-/// Copy a string from src register at src_idx to dst register at dst_idx.
-void nvim_copy_yankreg_line(yankreg_T *dst, size_t dst_idx, yankreg_T *src, size_t src_idx)
-{
-  dst->y_array[dst_idx] = copy_string(src->y_array[src_idx], NULL);
-}
-
-/// Get the timestamp of a register.
-Timestamp nvim_yankreg_get_timestamp(yankreg_T *reg)
-{
-  return reg->timestamp;
-}
-
-/// Get additional_data pointer (for shallow copy).
-void *nvim_yankreg_get_additional_data(yankreg_T *reg)
-{
-  return reg->additional_data;
-}
-
-/// Set additional_data pointer.
-void nvim_yankreg_set_additional_data(yankreg_T *reg, void *data)
-{
-  reg->additional_data = data;
-}
-
-/// Set y_array pointer directly.
-void nvim_yankreg_set_array_ptr(yankreg_T *reg, void *array)
-{
-  reg->y_array = array;
-}
-
-// Phase 9 accessors: str_to_reg support
-
-/// Count occurrences of character in memory region.
-size_t nvim_memcnt(const char *str, char c, size_t len)
-{
-  return memcnt(str, c, len);
-}
-
-/// Reallocate memory.
+/// Generic xrealloc wrapper.
 void *nvim_xrealloc(void *ptr, size_t size)
 {
   return xrealloc(ptr, size);
 }
 
-/// Allocate zero-terminated memory.
+/// Generic xmallocz wrapper (allocates size+1 bytes zeroed at end).
 char *nvim_xmallocz(size_t size)
 {
   return xmallocz(size);
 }
 
-/// Substitute characters in memory region.
-void nvim_memchrsub(char *data, char from, char to, size_t len)
-{
-  memchrsub(data, from, to, len);
-}
-
-/// Convert C string to String (makes a copy).
-String nvim_cstr_to_string(const char *str)
-{
-  return cstr_to_string(str);
-}
-
-/// Get display width of a string.
-size_t nvim_mb_string2cells(const char *str)
-{
-  return mb_string2cells(str);
-}
-
-/// Get display width of a character at pointer with length limit.
-int nvim_utf_ptr2cells_len(const char *p, int size)
-{
-  return utf_ptr2cells_len(p, size);
-}
-
-/// Get byte length of UTF-8 character at pointer with length limit.
-int nvim_utf_ptr2len_len(const char *p, int size)
-{
-  return utf_ptr2len_len(p, size);
-}
-
-/// Reallocate y_array to hold count entries.
-void nvim_yankreg_realloc_array(yankreg_T *reg, size_t count)
-{
-  reg->y_array = xrealloc(reg->y_array, count * sizeof(String));
-}
-
-/// Get y_array pointer.
-String *nvim_yankreg_get_array(yankreg_T *reg)
-{
-  return reg->y_array;
-}
-
-/// Set a String directly at index (for str_list mode).
-void nvim_yankreg_set_string_at(yankreg_T *reg, size_t idx, String s)
-{
-  reg->y_array[idx] = s;
-}
-
-/// Get data pointer at index.
-char *nvim_yankreg_get_data_at(yankreg_T *reg, size_t idx)
-{
-  return reg->y_array[idx].data;
-}
-
-/// Get size at index.
-size_t nvim_yankreg_get_size_at(yankreg_T *reg, size_t idx)
-{
-  return reg->y_array[idx].size;
-}
-
-/// Free data at index.
-void nvim_yankreg_free_data_at(yankreg_T *reg, size_t idx)
-{
-  xfree(reg->y_array[idx].data);
-}
-
-// Phase 401 accessors: Register iteration support
-
-/// Check if register is empty (wrapper for inline function).
-bool nvim_reg_empty(const yankreg_T *reg)
-{
-  return reg_empty(reg);
-}
-
-/// Check if a register pointer equals y_previous.
-bool nvim_is_y_previous(const yankreg_T *reg)
-{
-  return reg == y_previous;
-}
-
-// Phase 402 accessors: Special register support
-
-/// Get current buffer's filename (b_fname).
-const char *nvim_get_curbuf_fname(void)
-{
-  return curbuf->b_fname;
-}
-
-/// Wrapper for getaltfname().
-char *nvim_get_altfname(bool errmsg)
-{
-  return getaltfname(errmsg);
-}
-
-/// Get last command line.
-const char *nvim_get_last_cmdline(void)
-{
-  return last_cmdline;
-}
-
-/// Get last search pattern.
-const char *nvim_get_last_search_pat(void)
-{
-  return last_search_pat();
-}
-
-/// Get last inserted text (allocated copy).
-char *nvim_get_last_insert_save(void)
-{
-  return get_last_insert_save();
-}
-
-/// Wrapper for check_fname().
-void nvim_check_fname(void)
-{
-  check_fname();
-}
-
-/// Emit "No last command line" error.
-void nvim_emsg_nolastcmd(void)
-{
-  emsg(_(e_nolastcmd));
-}
-
-/// Emit "No previous regular expression" error.
+/// Emit "E35: No previous regular expression" error.
 void nvim_emsg_noprevre(void)
 {
   emsg(_(e_noprevre));
 }
 
-/// Emit "No inserted text" error.
+/// Emit "E29: No inserted text yet" error.
 void nvim_emsg_noinstext(void)
 {
   emsg(_(e_noinstext));
-}
-
-/// @return the index of the register "" points to.
-int get_unname_register(void)
-{
-  return rs_get_unname_register();
-}
-
-yankreg_T *get_y_register(int reg)
-{
-  return &y_regs[reg];
-}
-
-yankreg_T *get_y_previous(void)
-  FUNC_ATTR_PURE
-{
-  return rs_get_y_previous();
-}
-
-/// Get an expression for the "\"=expr1" or "CTRL-R =expr1"
-///
-/// @return  '=' when OK, NUL otherwise.
-int get_expr_register(void)
-{
-  char *new_line = getcmdline('=', 0, 0, true);
-  if (new_line == NULL) {
-    return NUL;
-  }
-  if (*new_line == NUL) {  // use previous line
-    xfree(new_line);
-  } else {
-    set_expr_line(new_line);
-  }
-  return '=';
-}
-
-/// Set the expression for the '=' register.
-/// Argument must be an allocated string.
-void set_expr_line(char *new_line)
-{
-  rs_set_expr_line(new_line);
-}
-
-/// Get the result of the '=' register expression.
-///
-/// @return  a pointer to allocated memory, or NULL for failure.
-char *get_expr_line(void)
-{
-  return rs_get_expr_line();
-}
-
-/// Get the '=' register expression itself, without evaluating it.
-char *get_expr_line_src(void)
-{
-  return rs_get_expr_line_src();
-}
-
-/// @return  whether `regname` is a valid name of a yank register.
-///
-/// @note: There is no check for 0 (default register), caller should do this.
-/// The black hole register '_' is regarded as valid.
-///
-/// @param regname name of register
-/// @param writing allow only writable registers
-bool valid_yank_reg(int regname, bool writing)
-{
-  return rs_valid_yank_reg(regname, writing);
-}
-
-/// Check if the default register (used in an unnamed paste) should be a
-/// clipboard register. This happens when `clipboard=unnamed[plus]` is set
-/// and a provider is available.
-///
-/// @returns the name of of a clipboard register that should be used, or `NUL` if none.
-int get_default_register_name(void)
-{
-  int name = NUL;
-  adjust_clipboard_name(&name, true, false);
-  return name;
-}
-
-/// Iterate over registers `regs`.
-///
-/// @param[in]   iter      Iterator. Pass NULL to start iteration.
-/// @param[in]   regs      Registers list to be iterated.
-/// @param[out]  name      Register name.
-/// @param[out]  reg       Register contents.
-///
-/// @return Pointer that must be passed to next `op_register_iter` call or
-///         NULL if iteration is over.
-const void *op_reg_iter(const void *const iter, const yankreg_T *const regs, char *const name,
-                        yankreg_T *const reg, bool *is_unnamed)
-  FUNC_ATTR_NONNULL_ARG(3, 4, 5) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  *name = NUL;
-  const yankreg_T *iter_reg = (iter == NULL
-                               ? &(regs[0])
-                               : (const yankreg_T *const)iter);
-  while (iter_reg - &(regs[0]) < NUM_SAVED_REGISTERS && reg_empty(iter_reg)) {
-    iter_reg++;
-  }
-  if (iter_reg - &(regs[0]) == NUM_SAVED_REGISTERS || reg_empty(iter_reg)) {
-    return NULL;
-  }
-  int iter_off = (int)(iter_reg - &(regs[0]));
-  *name = (char)get_register_name(iter_off);
-  *reg = *iter_reg;
-  *is_unnamed = (iter_reg == y_previous);
-  while (++iter_reg - &(regs[0]) < NUM_SAVED_REGISTERS) {
-    if (!reg_empty(iter_reg)) {
-      return (void *)iter_reg;
-    }
-  }
-  return NULL;
-}
-
-/// Iterate over global registers.
-///
-/// @see op_register_iter
-const void *op_global_reg_iter(const void *const iter, char *const name, yankreg_T *const reg,
-                               bool *is_unnamed)
-  FUNC_ATTR_NONNULL_ARG(2, 3, 4) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return op_reg_iter(iter, y_regs, name, reg, is_unnamed);
-}
-
-/// Get a number of non-empty registers
-size_t op_reg_amount(void)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_op_reg_amount();
-}
-
-/// Set register to a given value
-///
-/// @param[in]  name  Register name.
-/// @param[in]  reg  Register value.
-/// @param[in]  is_unnamed  Whether to set the unnamed regiseter to reg
-///
-/// @return true on success, false on failure.
-bool op_reg_set(const char name, const yankreg_T reg, bool is_unnamed)
-{
-  int i = op_reg_index(name);
-  if (i == -1) {
-    return false;
-  }
-  free_register(&y_regs[i]);
-  y_regs[i] = reg;
-
-  if (is_unnamed) {
-    y_previous = &y_regs[i];
-  }
-  return true;
-}
-
-/// Get register with the given name
-///
-/// @param[in]  name  Register name.
-///
-/// @return Pointer to the register contents or NULL.
-const yankreg_T *op_reg_get(const char name)
-{
-  return rs_op_reg_get(name);
-}
-
-/// Set the previous yank register
-///
-/// @param[in]  name  Register name.
-///
-/// @return true on success, false on failure.
-bool op_reg_set_previous(const char name)
-{
-  return rs_op_reg_set_previous(name);
-}
-
-/// Updates the "y_width" of a blockwise register based on its contents.
-/// Do nothing on a non-blockwise register.
-void update_yankreg_width(yankreg_T *reg)
-{
-  rs_update_yankreg_width(reg);
-}
-
-/// @return yankreg_T to use, according to the value of `regname`.
-/// Cannot handle the '_' (black hole) register.
-/// Must only be called with a valid register name!
-///
-/// @param regname The name of the register used or 0 for the unnamed register
-/// @param mode One of the following three flags:
-///
-/// `YREG_PASTE`:
-/// Prepare for pasting the register `regname`. With no regname specified,
-/// read from last written register, or from unnamed clipboard (depending on the
-/// `clipboard=unnamed` option). Queries the clipboard provider if necessary.
-///
-/// `YREG_YANK`:
-/// Preparare for yanking into `regname`. With no regname specified,
-/// yank into `"0` register. Update `y_previous` for next unnamed paste.
-///
-/// `YREG_PUT`:
-/// Obtain the location that would be read when pasting `regname`.
-yankreg_T *get_yank_register(int regname, int mode)
-{
-  yankreg_T *reg;
-
-  if ((mode == YREG_PASTE || mode == YREG_PUT)
-      && get_clipboard(regname, &reg, false)) {
-    // reg is set to clipboard contents.
-    return reg;
-  } else if (mode == YREG_PUT && (regname == '*' || regname == '+')) {
-    // in case clipboard not available and we aren't actually pasting,
-    // return an empty register
-    static yankreg_T empty_reg = { .y_array = NULL };
-    return &empty_reg;
-  } else if (mode != YREG_YANK
-             && (regname == 0 || regname == '"' || regname == '*' || regname == '+')
-             && y_previous != NULL) {
-    // in case clipboard not available, paste from previous used register
-    return y_previous;
-  }
-
-  int i = op_reg_index(regname);
-  // when not 0-9, a-z, A-Z or '-'/'+'/'*': use register 0
-  if (i == -1) {
-    i = 0;
-  }
-  reg = &y_regs[i];
-
-  if (mode == YREG_YANK) {
-    // remember the written register for unnamed paste
-    y_previous = reg;
-  }
-  return reg;
-}
-
-/// Check if the current yank register has kMTLineWise register type
-/// For valid, non-blackhole registers also provides pointer to the register
-/// structure prepared for pasting.
-///
-/// @param regname The name of the register used or 0 for the unnamed register
-/// @param reg Pointer to store yankreg_T* for the requested register. Will be
-///        set to NULL for invalid or blackhole registers.
-bool yank_register_mline(int regname, yankreg_T **reg)
-{
-  return rs_yank_register_mline(regname, reg);
-}
-
-/// @return  a copy of contents in register `name` for use in do_put. Should be
-///          freed by caller.
-yankreg_T *copy_register(int name)
-  FUNC_ATTR_NONNULL_RET
-{
-  return rs_copy_register(name);
-}
-
-/// Stuff string "p" into yank register "regname" as a single line (append if
-/// uppercase). "p" must have been allocated.
-///
-/// @return  FAIL for failure, OK otherwise
-static int stuff_yank(int regname, char *p)
-{
-  return rs_stuff_yank(regname, p);
 }
 
 /// Start or stop recording into a yank register.
@@ -1284,31 +624,6 @@ bool cmdline_paste_reg(int regname, bool literally_arg, bool remcr)
   return OK;
 }
 
-/// Shift the delete registers: "9 is cleared, "8 becomes "9, etc.
-void shift_delete_registers(bool y_append)
-{
-  rs_shift_delete_registers(y_append);
-}
-
-#if defined(EXITFREE)
-void clear_registers(void)
-{
-  for (int i = 0; i < NUM_REGISTERS; i++) {
-    free_register(&y_regs[i]);
-  }
-}
-#endif
-
-/// Free contents of yankreg `reg`.
-/// Called for normal freeing and in case of error.
-///
-/// @param reg  must not be NULL (but `reg->y_array` might be)
-void free_register(yankreg_T *reg)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_free_register(reg);
-}
-
 /// Copy a block range into a register.
 ///
 /// @param exclude_trailing_space  if true, do not copy trailing whitespaces.
@@ -1504,16 +819,6 @@ void op_yank_reg(oparg_T *oap, bool message, yankreg_T *reg, bool append)
 /// Format the register type as a string.
 ///
 /// @param reg_type The register type.
-/// @param reg_width The width, only used if "reg_type" is kMTBlockWise.
-/// @param[out] buf Buffer to store formatted string. The allocated size should
-///                 be at least NUMBUFLEN+2 to always fit the value.
-/// @param buf_len The allocated size of the buffer.
-void format_reg_type(MotionType reg_type, colnr_T reg_width, char *buf, size_t buf_len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_format_reg_type((int)reg_type, (int)reg_width, buf, buf_len);
-}
-
 /// Execute autocommands for TextYankPost.
 ///
 /// @param oap Operator arguments.
@@ -2560,14 +1865,6 @@ void ex_display(exarg_T *eap)
   msg_ext_skip_flush = false;
 }
 
-/// Used for getregtype()
-///
-/// @return  the type of a register or
-///          kMTUnknown for error.
-MotionType get_reg_type(int regname, colnr_T *reg_width)
-{
-  return (MotionType)rs_get_reg_type(regname, reg_width);
-}
 
 /// When `flags` has `kGRegList` return a list with text `s`.
 /// Otherwise just return `s`.
@@ -2668,222 +1965,3 @@ void *get_reg_contents(int regname, int flags)
   return retval;
 }
 
-static yankreg_T *init_write_reg(int name, yankreg_T **old_y_previous, bool must_append)
-{
-  return rs_init_write_reg(name, old_y_previous, must_append);
-}
-
-/// str_to_reg - Put a string into a register.
-///
-/// When the register is not empty, the string is appended.
-///
-/// @param y_ptr pointer to yank register
-/// @param yank_type The motion type (kMTUnknown to auto detect)
-/// @param str string or list of strings to put in register
-/// @param len length of the string (Ignored when str_list=true.)
-/// @param blocklen width of visual block, or -1 for "I don't know."
-/// @param str_list True if str is `char **`.
-static void str_to_reg(yankreg_T *y_ptr, MotionType yank_type, const char *str, size_t len,
-                       colnr_T blocklen, bool str_list)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_str_to_reg(y_ptr, yank_type, str, len, blocklen, str_list);
-}
-
-static void finish_write_reg(int name, yankreg_T *reg, yankreg_T *old_y_previous)
-{
-  rs_finish_write_reg(name, reg, old_y_previous);
-}
-
-/// store `str` in register `name`
-///
-/// @see write_reg_contents_ex
-void write_reg_contents(int name, const char *str, ssize_t len, int must_append)
-{
-  write_reg_contents_ex(name, str, len, must_append, kMTUnknown, 0);
-}
-
-void write_reg_contents_lst(int name, char **strings, bool must_append, MotionType yank_type,
-                            colnr_T block_len)
-{
-  if (name == '/' || name == '=') {
-    char *s = strings[0];
-    if (strings[0] == NULL) {
-      s = "";
-    } else if (strings[1] != NULL) {
-      emsg(_(e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines));
-      return;
-    }
-    write_reg_contents_ex(name, s, -1, must_append, yank_type, block_len);
-    return;
-  }
-
-  // black hole: nothing to do
-  if (name == '_') {
-    return;
-  }
-
-  yankreg_T *old_y_previous, *reg;
-  if (!(reg = init_write_reg(name, &old_y_previous, must_append))) {
-    return;
-  }
-
-  str_to_reg(reg, yank_type, (char *)strings, strlen((char *)strings),
-             block_len, true);
-  finish_write_reg(name, reg, old_y_previous);
-}
-
-/// write_reg_contents_ex - store `str` in register `name`
-///
-/// If `str` ends in '\n' or '\r', use linewise, otherwise use charwise.
-///
-/// @warning when `name` is '/', `len` and `must_append` are ignored. This
-///          means that `str` MUST be NUL-terminated.
-///
-/// @param name The name of the register
-/// @param str The contents to write
-/// @param len If >= 0, write `len` bytes of `str`. Otherwise, write
-///               `strlen(str)` bytes. If `len` is larger than the
-///               allocated size of `src`, the behaviour is undefined.
-/// @param must_append If true, append the contents of `str` to the current
-///                    contents of the register. Note that regardless of
-///                    `must_append`, this function will append when `name`
-///                    is an uppercase letter.
-/// @param yank_type The motion type (kMTUnknown to auto detect)
-/// @param block_len width of visual block
-void write_reg_contents_ex(int name, const char *str, ssize_t len, bool must_append,
-                           MotionType yank_type, colnr_T block_len)
-{
-  if (len < 0) {
-    len = (ssize_t)strlen(str);
-  }
-
-  // Special case: '/' search pattern
-  if (name == '/') {
-    set_last_search_pat(str, RE_SEARCH, true, true);
-    return;
-  }
-
-  if (name == '#') {
-    buf_T *buf;
-
-    if (ascii_isdigit(*str)) {
-      int num = atoi(str);
-
-      buf = buflist_findnr(num);
-      if (buf == NULL) {
-        semsg(_(e_nobufnr), (int64_t)num);
-      }
-    } else {
-      buf = buflist_findnr(buflist_findpat(str, str + len, true, false, false));
-    }
-    if (buf == NULL) {
-      return;
-    }
-    curwin->w_alt_fnum = buf->b_fnum;
-    return;
-  }
-
-  if (name == '=') {
-    size_t offset = 0;
-    size_t totlen = (size_t)len;
-
-    if (must_append && expr_line) {
-      // append has been specified and expr_line already exists, so we'll
-      // append the new string to expr_line.
-      size_t exprlen = strlen(expr_line);
-
-      totlen += exprlen;
-      offset = exprlen;
-    }
-
-    // modify the global expr_line, extend/shrink it if necessary (realloc).
-    // Copy the input string into the adjusted memory at the specified
-    // offset.
-    expr_line = xrealloc(expr_line, totlen + 1);
-    memcpy(expr_line + offset, str, (size_t)len);
-    expr_line[totlen] = NUL;
-
-    return;
-  }
-
-  if (name == '_') {        // black hole: nothing to do
-    return;
-  }
-
-  yankreg_T *old_y_previous, *reg;
-  if (!(reg = init_write_reg(name, &old_y_previous, must_append))) {
-    return;
-  }
-  str_to_reg(reg, yank_type, str, (size_t)len, block_len, false);
-  finish_write_reg(name, reg, old_y_previous);
-}
-
-/// @param[out] reg Expected to be empty
-bool prepare_yankreg_from_object(yankreg_T *reg, String regtype, size_t lines)
-{
-  char type = regtype.data ? regtype.data[0] : NUL;
-
-  switch (type) {
-  case 0:
-    reg->y_type = kMTUnknown;
-    break;
-  case 'v':
-  case 'c':
-    reg->y_type = kMTCharWise;
-    break;
-  case 'V':
-  case 'l':
-    reg->y_type = kMTLineWise;
-    break;
-  case 'b':
-  case Ctrl_V:
-    reg->y_type = kMTBlockWise;
-    break;
-  default:
-    return false;
-  }
-
-  reg->y_width = 0;
-  if (regtype.size > 1) {
-    if (reg->y_type != kMTBlockWise) {
-      return false;
-    }
-
-    // allow "b7" for a block at least 7 spaces wide
-    if (!ascii_isdigit(regtype.data[1])) {
-      return false;
-    }
-    const char *p = regtype.data + 1;
-    reg->y_width = getdigits_int((char **)&p, false, 1) - 1;
-    if (regtype.size > (size_t)(p - regtype.data)) {
-      return false;
-    }
-  }
-
-  reg->additional_data = NULL;
-  reg->timestamp = 0;
-  return true;
-}
-
-void finish_yankreg_from_object(yankreg_T *reg, bool clipboard_adjust)
-{
-  if (reg->y_size > 0 && reg->y_array[reg->y_size - 1].size == 0) {
-    // a known-to-be charwise yank might have a final linebreak
-    // but otherwise there is no line after the final newline
-    if (reg->y_type != kMTCharWise) {
-      if (reg->y_type == kMTUnknown || clipboard_adjust) {
-        reg->y_size--;
-      }
-      if (reg->y_type == kMTUnknown) {
-        reg->y_type = kMTLineWise;
-      }
-    }
-  } else {
-    if (reg->y_type == kMTUnknown) {
-      reg->y_type = kMTCharWise;
-    }
-  }
-
-  update_yankreg_width(reg);
-}
