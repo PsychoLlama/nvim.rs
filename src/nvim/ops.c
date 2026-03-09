@@ -2251,86 +2251,8 @@ void op_addsub(oparg_T *oap, linenr_T Prenum1, bool g_cmd)
 // File-scope static: cursor saved by setup, restored by cleanup on visual exit.
 static pos_T addsub_saved_cursor;
 
-// Verify constants used in Rust
-_Static_assert(OP_NR_SUB == 29, "OP_NR_SUB mismatch");
-
-/// Struct matching Rust AddsubScanResult
-typedef struct {
-  int col;
-  int length;
-  int firstdigit;
-  int negative;
-  int was_positive;
-  int blank_unsigned;
-  int past_end;
-  int no_digit;
-  int is_alpha;
-} AddsubScanResult;
-
-/// Struct matching Rust AddsubParseResult
-typedef struct {
-  int pre;
-  int length;
-  uint64_t n_lo;
-  int col;
-  int negative;
-  int overflow;
-} AddsubParseResult;
-
-
-/// Setup: save state, get line info, set cursor.
-void nvim_addsub_setup(pos_T *pos, int *out_save_coladd, int *out_linelen, int *out_visual)
-{
-  addsub_saved_cursor = curwin->w_cursor;
-  *out_visual = VIsual_active ? 1 : 0;
-  *out_save_coladd = 0;
-  if (virtual_active(curwin)) {
-    *out_save_coladd = (int)pos->coladd;
-    pos->coladd = 0;
-  }
-  curwin->w_cursor = *pos;
-  *out_linelen = ml_get_len(pos->lnum);
-}
-
-/// Get nrformats flags.
-void nvim_addsub_get_nrformats(int *out_hex, int *out_oct, int *out_bin,
-                               int *out_alpha, int *out_unsigned, int *out_blank)
-{
-  *out_hex = vim_strchr(curbuf->b_p_nf, 'x') != NULL;
-  *out_oct = vim_strchr(curbuf->b_p_nf, 'o') != NULL;
-  *out_bin = vim_strchr(curbuf->b_p_nf, 'b') != NULL;
-  *out_alpha = vim_strchr(curbuf->b_p_nf, 'p') != NULL;
-  *out_unsigned = vim_strchr(curbuf->b_p_nf, 'u') != NULL;
-  *out_blank = vim_strchr(curbuf->b_p_nf, 'k') != NULL;
-}
-
-
-
-/// Set the '[ and '] marks after addsub.
-void nvim_addsub_set_marks(int startpos_col, int endpos_col)
-{
-  if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-    curbuf->b_op_start = curwin->w_cursor;
-    curbuf->b_op_start.col = startpos_col;
-    curbuf->b_op_end = curwin->w_cursor;
-    curbuf->b_op_end.col = endpos_col;
-    if (curbuf->b_op_end.col > 0) {
-      curbuf->b_op_end.col--;
-    }
-  }
-}
-
-/// Cleanup: restore cursor position.
-void nvim_addsub_cleanup(int visual, int did_change, int save_coladd)
-{
-  if (visual) {
-    curwin->w_cursor = addsub_saved_cursor;
-  } else if (did_change) {
-    curwin->w_set_curswant = true;
-  } else if (virtual_active(curwin)) {
-    curwin->w_cursor.coladd = save_coladd;
-  }
-}
+void nvim_addsub_save_cursor(void) { addsub_saved_cursor = curwin->w_cursor; }
+void nvim_addsub_restore_cursor(void) { curwin->w_cursor = addsub_saved_cursor; }
 
 
 void clear_oparg(oparg_T *oap)

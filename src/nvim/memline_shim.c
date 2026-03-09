@@ -2021,3 +2021,34 @@ unsigned nvim_pp_pe_get_page_count_uint(const void *pp, int idx)
 
 /// Get the pb_count_max field from a PointerBlock.
 uint16_t nvim_pp_get_count_max(const void *pp) { return ((const PointerBlock *)pp)->pb_count_max; }
+
+// =============================================================================
+// Addsub shims for Rust inline absorption of nvim_addsub_* functions
+// =============================================================================
+
+/// Returns nonzero if char c is in curbuf->b_p_nf (nrformats option).
+int nvim_curbuf_nf_has(int c) { return vim_strchr(curbuf->b_p_nf, c) != NULL; }
+
+/// Copy curwin->w_cursor to curbuf->b_op_start, override col.
+void nvim_curbuf_set_op_start_to_cursor_col(int col)
+{
+  curbuf->b_op_start = curwin->w_cursor;
+  curbuf->b_op_start.col = col;
+}
+
+/// Copy curwin->w_cursor to curbuf->b_op_end, override col, decrement if > 0.
+void nvim_curbuf_set_op_end_to_cursor_col(int col)
+{
+  curbuf->b_op_end = curwin->w_cursor;
+  curbuf->b_op_end.col = col;
+  if (curbuf->b_op_end.col > 0) {
+    curbuf->b_op_end.col--;
+  }
+}
+
+/// Copy pos_T into curwin->w_cursor.
+void nvim_curwin_set_cursor_from_pos(const pos_T *pos) { curwin->w_cursor = *pos; }
+
+/// Set curwin->w_cursor.coladd.
+void nvim_curwin_set_cursor_coladd(int v) { curwin->w_cursor.coladd = (colnr_T)v; }
+

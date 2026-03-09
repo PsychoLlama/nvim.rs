@@ -9,30 +9,28 @@ use std::ffi::{c_int, c_void};
 const OP_NR_SUB: c_int = 29;
 
 /// Result from the number-scanning phase.
-#[repr(C)]
 #[derive(Debug, Clone, Default)]
-pub struct AddsubScanResult {
-    pub col: c_int,
-    pub length: c_int,
-    pub firstdigit: c_int,
-    pub negative: c_int,
-    pub was_positive: c_int,
-    pub blank_unsigned: c_int,
-    pub past_end: c_int,
-    pub no_digit: c_int,
-    pub is_alpha: c_int,
+struct AddsubScanResult {
+    col: c_int,
+    length: c_int,
+    firstdigit: c_int,
+    negative: c_int,
+    was_positive: c_int,
+    blank_unsigned: c_int,
+    past_end: c_int,
+    no_digit: c_int,
+    is_alpha: c_int,
 }
 
 /// Result from the number-parse phase (after scanning).
-#[repr(C)]
 #[derive(Debug, Clone, Default)]
-pub struct AddsubParseResult {
-    pub pre: c_int,
-    pub length: c_int,
-    pub n_lo: u64,
-    pub col: c_int,
-    pub negative: c_int,
-    pub overflow: c_int,
+struct AddsubParseResult {
+    pre: c_int,
+    length: c_int,
+    n_lo: u64,
+    col: c_int,
+    negative: c_int,
+    overflow: c_int,
 }
 
 /// Parameters for number arithmetic after parsing.
@@ -50,21 +48,16 @@ struct NumArithParams {
 }
 
 extern "C" {
-    fn nvim_addsub_setup(
-        pos: *mut c_void,
-        out_save_coladd: *mut c_int,
-        out_linelen: *mut c_int,
-        out_visual: *mut c_int,
-    );
-
-    fn nvim_addsub_get_nrformats(
-        out_hex: *mut c_int,
-        out_oct: *mut c_int,
-        out_bin: *mut c_int,
-        out_alpha: *mut c_int,
-        out_unsigned: *mut c_int,
-        out_blank: *mut c_int,
-    );
+    fn nvim_addsub_save_cursor();
+    fn nvim_addsub_restore_cursor();
+    fn nvim_curbuf_nf_has(c: c_int) -> c_int;
+    fn nvim_cmdmod_has_lockmarks() -> c_int;
+    fn nvim_curbuf_set_op_start_to_cursor_col(col: c_int);
+    fn nvim_curbuf_set_op_end_to_cursor_col(col: c_int);
+    fn nvim_curwin_set_cursor_from_pos(pos: *const c_void);
+    fn nvim_curwin_set_w_set_curswant(v: bool);
+    fn nvim_curwin_set_cursor_coladd(v: c_int);
+    fn nvim_VIsual_active() -> c_int;
 
     fn nvim_get_cursor_lnum() -> c_int;
     fn nvim_get_VIsual_mode() -> c_int;
@@ -87,14 +80,13 @@ extern "C" {
     fn nvim_ins_str(ptr: *const std::ffi::c_char, len: usize);
     fn nvim_ins_char_call(c: c_int);
 
-    fn nvim_addsub_set_marks(startpos_col: c_int, endpos_col: c_int);
-    fn nvim_addsub_cleanup(visual: c_int, did_change: c_int, save_coladd: c_int);
     fn nvim_beep_flush();
 
     // Low-level accessors used by inline scan port
     fn nvim_pos_get_lnum(pos: *const c_void) -> c_int;
     fn nvim_pos_get_col(pos: *const c_void) -> c_int;
     fn nvim_pos_get_coladd(pos: *const c_void) -> c_int;
+    fn nvim_pos_set_coladd(pos: *mut c_void, v: c_int);
     fn nvim_ml_get(lnum: c_int) -> *const std::ffi::c_char;
     fn nvim_ml_get_len(lnum: c_int) -> c_int;
     fn nvim_virtual_active() -> bool;
@@ -678,8 +670,29 @@ unsafe fn do_number_addsub(scan: &AddsubScanResult, params: &NumArithParams) -> 
         params.do_oct,
     );
 
-    nvim_addsub_set_marks(col, endpos_col);
+    addsub_set_marks(col, endpos_col);
     endpos_col
+}
+
+/// Inline replacement of `nvim_addsub_set_marks` (C function deleted).
+/// Sets b_op_start/b_op_end based on current cursor + provided columns.
+unsafe fn addsub_set_marks(startpos_col: c_int, endpos_col: c_int) {
+    if nvim_cmdmod_has_lockmarks() == 0 {
+        nvim_curbuf_set_op_start_to_cursor_col(startpos_col);
+        nvim_curbuf_set_op_end_to_cursor_col(endpos_col);
+    }
+}
+
+/// Inline replacement of `nvim_addsub_cleanup` (C function deleted).
+/// Restores cursor position or sets w_set_curswant.
+unsafe fn addsub_cleanup(visual: c_int, did_change: c_int, save_coladd: c_int) {
+    if visual != 0 {
+        nvim_addsub_restore_cursor();
+    } else if did_change != 0 {
+        nvim_curwin_set_w_set_curswant(true);
+    } else if nvim_virtual_active() {
+        nvim_curwin_set_cursor_coladd(save_coladd);
+    }
 }
 
 /// Full migration of `do_addsub()`.
@@ -694,31 +707,28 @@ pub unsafe extern "C" fn rs_do_addsub(
     length: c_int,
     prenum1: c_int,
 ) -> bool {
-    let mut save_coladd: c_int = 0;
-    let mut linelen: c_int = 0;
-    let mut visual_flag: c_int = 0;
+    // === Inline nvim_addsub_setup ===
+    nvim_addsub_save_cursor();
+    let visual_flag: c_int = nvim_VIsual_active();
+    let save_coladd: c_int = if nvim_virtual_active() {
+        let coladd = nvim_pos_get_coladd(pos);
+        nvim_pos_set_coladd(pos, 0);
+        coladd
+    } else {
+        0
+    };
+    nvim_curwin_set_cursor_from_pos(pos);
+    let linelen = nvim_ml_get_len(nvim_pos_get_lnum(pos));
 
-    nvim_addsub_setup(
-        pos,
-        &raw mut save_coladd,
-        &raw mut linelen,
-        &raw mut visual_flag,
-    );
+    // === Inline nvim_addsub_get_nrformats ===
+    let do_hex: c_int = nvim_curbuf_nf_has(c_int::from(b'x'));
+    let do_oct: c_int = nvim_curbuf_nf_has(c_int::from(b'o'));
+    let do_bin: c_int = nvim_curbuf_nf_has(c_int::from(b'b'));
+    let do_alpha: c_int = nvim_curbuf_nf_has(c_int::from(b'p'));
+    let do_unsigned: c_int = nvim_curbuf_nf_has(c_int::from(b'u'));
+    let do_blank: c_int = nvim_curbuf_nf_has(c_int::from(b'k'));
 
-    let mut do_hex: c_int = 0;
-    let mut do_oct: c_int = 0;
-    let mut do_bin: c_int = 0;
-    let mut do_alpha: c_int = 0;
-    let mut do_unsigned: c_int = 0;
-    let mut do_blank: c_int = 0;
-    nvim_addsub_get_nrformats(
-        &raw mut do_hex,
-        &raw mut do_oct,
-        &raw mut do_bin,
-        &raw mut do_alpha,
-        &raw mut do_unsigned,
-        &raw mut do_blank,
-    );
+    let _ = linelen; // used by C setup for bounds checking; scan does its own
 
     let scan = addsub_scan(
         pos,
@@ -733,20 +743,20 @@ pub unsafe extern "C" fn rs_do_addsub(
     );
 
     if scan.past_end != 0 {
-        nvim_addsub_cleanup(visual_flag, 0, save_coladd);
+        addsub_cleanup(visual_flag, 0, save_coladd);
         return false;
     }
 
     if scan.no_digit != 0 {
         nvim_beep_flush();
-        nvim_addsub_cleanup(visual_flag, 0, save_coladd);
+        addsub_cleanup(visual_flag, 0, save_coladd);
         return false;
     }
 
     let did_change = if scan.is_alpha != 0 {
         let (changed, endpos_col) = addsub_do_alpha(scan.col, scan.firstdigit, op_type, prenum1);
         if changed {
-            nvim_addsub_set_marks(scan.col, endpos_col);
+            addsub_set_marks(scan.col, endpos_col);
         }
         changed
     } else {
@@ -766,7 +776,7 @@ pub unsafe extern "C" fn rs_do_addsub(
         true
     };
 
-    nvim_addsub_cleanup(visual_flag, c_int::from(did_change), save_coladd);
+    addsub_cleanup(visual_flag, c_int::from(did_change), save_coladd);
     did_change
 }
 
