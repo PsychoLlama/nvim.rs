@@ -135,69 +135,18 @@ extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
 
 // Rust implementations
 extern int rs_magic_isset(void);
-extern int rs_calc_percentage(int64_t part, int64_t whole);
-extern int rs_bt_prompt(buf_T *buf);
-extern int rs_bt_normal(buf_T *buf);
-extern int rs_bt_quickfix(buf_T *buf);
-extern int rs_bt_terminal(buf_T *buf);
-extern int rs_bt_nofile(buf_T *buf);
-extern int rs_bt_help(buf_T *buf);
-extern int rs_bt_nofilename(buf_T *buf);
-extern int rs_bt_dontwrite(buf_T *buf);
 extern int rs_bt_nofileread(buf_T *buf);
-extern int rs_buf_valid(buf_T *buf);
-extern int rs_get_highest_fnum(void);
-extern int rs_buf_hide(buf_T *buf);
-extern int rs_bufref_valid(bufref_T *bufref);
-extern int rs_col_print(uint8_t *buf, size_t buflen, int col, int vcol);
 
-// Additional buffer state/lifecycle functions from Rust
-extern int rs_buf_is_modified(buf_T *buf);
-extern int rs_buf_has_filename(buf_T *buf);
-extern int rs_buf_is_dummy(buf_T *buf);
-extern int rs_buf_is_never_loaded(buf_T *buf);
-extern int rs_buf_is_readonly(buf_T *buf);
-extern int rs_buf_is_modifiable(buf_T *buf);
-extern int rs_buf_is_listed(buf_T *buf);
-extern int rs_buf_is_empty(buf_T *buf);
-extern int rs_buf_nwindows(buf_T *buf);
-extern int rs_buf_can_unload(buf_T *buf);
-extern char *rs_buf_get_fname(buf_T *buf);
-extern bool rs_bt_dontwrite_msg(buf_T *buf);
-extern bool rs_curbuf_reusable(void);
-extern bool rs_otherfile(char *ffname);
-extern void rs_buf_set_file_id(buf_T *buf);
-extern int rs_buflist_name_nr(int fnum, char **fname, linenr_T *lnum);
-extern char *rs_buf_spname(buf_T *buf);
-extern char *rs_getaltfname(bool errmsg);
-extern int rs_append_arg_number(win_T *wp, char *buf, size_t buflen);
-extern int rs_get_rel_pos(win_T *wp, char *buf, int buflen);
 extern void rs_diff_buf_delete(buf_T *buf);
 extern void rs_diff_buf_add(buf_T *buf);
 extern bool rs_diff_mode_buf(buf_T *buf);
 extern int rs_diffopt_hiddenoff(void);
 
-// Phase 1 (Wave 2): buffer state management functions from Rust
-extern void rs_buf_clear_file(buf_T *buf);
-extern void rs_buf_inc_changedtick(buf_T *buf);
-extern void rs_wipe_buffer(buf_T *buf, bool aucmd);
-
-// Phase 2 (Wave 2): buffer lookup functions from Rust
-extern buf_T *rs_buflist_findnr(int nr);
-extern char *rs_buflist_nr2name(int n, int fullname, int helptail);
-extern buf_T *rs_buflist_findname(char *ffname);
-extern buf_T *rs_buflist_findname_exp(char *fname);
-
-// Phase 3 (Wave 2): file identity helpers from Rust
+// File identity helpers from Rust
 extern bool rs_otherfile_buf_4(buf_T *buf, char *ffname, void *file_id_p, bool file_id_valid);
-extern void rs_fname_expand(buf_T *buf, char **ffname, char **sfname);
-extern int rs_buflist_add(char *fname, int flags);
 
-// Phase 4 (Wave 2): buffer display & info helpers from Rust
-extern void rs_buflist_altfpos(win_T *win);
-extern linenr_T rs_buflist_findlnum(buf_T *buf);
-extern void rs_set_buflisted(int on);
 extern void rs_reset_VIsual_and_resel(void);
+
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
@@ -854,17 +803,6 @@ typedef enum {
   kBffInitChangedtick = 2,
 } BufFreeFlags;
 
-/// Calculate the percentage that `part` is of the `whole`.
-int calc_percentage(int64_t part, int64_t whole)
-{
-  return rs_calc_percentage(part, whole);
-}
-
-/// @return  the highest possible buffer number
-int get_highest_fnum(void)
-{
-  return rs_get_highest_fnum();
-}
 
 /// Read data from buffer for retrying.
 ///
@@ -1004,7 +942,7 @@ int open_buffer(bool read_stdin, exarg_T *eap, int flags_arg)
 
   // A buffer without an actual file should not use the buffer name to read a
   // file.
-  if (bt_nofileread(curbuf)) {
+  if (rs_bt_nofileread(curbuf)) {
     flags |= READ_NOFILE;
   }
 
@@ -1150,29 +1088,6 @@ void set_bufref(bufref_T *bufref, buf_T *buf)
   bufref->br_buf_free_count = buf_free_count;
 }
 
-/// Return true if "bufref->br_buf" points to the same buffer as when
-/// set_bufref() was called and it is a valid buffer.
-/// Only goes through the buffer list if buf_free_count changed.
-/// Also checks if b_fnum is still the same, a :bwipe followed by :new might get
-/// the same allocated memory, but it's a different buffer.
-///
-/// @param bufref Buffer reference to check for.
-bool bufref_valid(bufref_T *bufref)
-  FUNC_ATTR_PURE
-{
-  return rs_bufref_valid(bufref) != 0;
-}
-
-/// Check that "buf" points to a valid buffer in the buffer list.
-///
-/// Can be slow if there are many buffers, prefer using bufref_valid().
-///
-/// @param buf The buffer to check for.
-bool buf_valid(buf_T *buf)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_buf_valid(buf) != 0;
-}
 
 /// Return true when buffer "buf" can be unloaded.
 /// Give an error message and return false when the buffer is locked or the
@@ -1465,11 +1380,6 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
   return true;
 }
 
-/// Make buffer not contain a file.
-void buf_clear_file(buf_T *buf)
-{
-  rs_buf_clear_file(buf);
-}
 
 /// Clears the current buffer contents.
 void buf_clear(void)
@@ -2753,12 +2663,6 @@ buf_T *buflist_new(char *ffname_arg, char *sfname_arg, linenr_T lnum, int flags)
   return buf;
 }
 
-/// Return true if the current buffer is empty, unnamed, unmodified and used in
-/// only one window. That means it can be reused.
-bool curbuf_reusable(void)
-{
-  return rs_curbuf_reusable();
-}
 
 /// Free the memory for the options of a buffer.
 /// If "free_p_ff" is true also free 'fileformat', 'buftype' and
@@ -2944,23 +2848,6 @@ static void buflist_getfpos(void)
   }
 }
 
-/// Find file in buffer list by name (it has to be for the current window).
-///
-/// @return  buffer or NULL if not found
-buf_T *buflist_findname_exp(char *fname)
-{
-  return rs_buflist_findname_exp(fname);
-}
-
-/// Find file in buffer list by name (it has to be for the current window).
-/// "ffname" must have a full path.
-/// Skips dummy buffers.
-///
-/// @return  buffer or NULL if not found
-buf_T *buflist_findname(char *ffname)
-{
-  return rs_buflist_findname(ffname);
-}
 
 /// Same as buflist_findname(), but pass the FileID structure to avoid
 /// getting it twice for the same file.
@@ -2969,11 +2856,9 @@ buf_T *buflist_findname(char *ffname)
 static buf_T *buflist_findname_file_id(char *ffname, FileID *file_id, bool file_id_valid)
   FUNC_ATTR_PURE
 {
-  // Delegate to the 4-arg otherfile_buf wrapper via backward buffer iteration.
-  // Start at the last buffer, expect to find a match sooner.
   FOR_ALL_BUFFERS_BACKWARDS(buf) {
     if ((buf->b_flags & BF_DUMMY) == 0
-        && !otherfile_buf(buf, ffname, file_id, file_id_valid)) {
+        && !rs_otherfile_buf_4(buf, ffname, (void *)file_id, file_id_valid)) {
       return buf;
     }
   }
@@ -3309,23 +3194,6 @@ static char *fname_match(regmatch_T *rmp, char *name, bool ignore_case)
   return match;
 }
 
-/// Find a file in the buffer list by buffer number.
-buf_T *buflist_findnr(int nr)
-{
-  return rs_buflist_findnr(nr);
-}
-
-/// Get name of file 'n' in the buffer list.
-/// When the file has no name an empty string is returned.
-/// home_replace() is used to shorten the file name (used for marks).
-///
-/// @param helptail  for help buffers return tail only
-///
-/// @return  a pointer to allocated memory, of NULL when failed.
-char *buflist_nr2name(int n, int fullname, int helptail)
-{
-  return rs_buflist_nr2name(n, fullname, helptail);
-}
 
 /// Set the line and column numbers for the given buffer and window
 ///
@@ -3503,11 +3371,6 @@ fmark_T *buflist_findfmark(buf_T *buf)
   return (wip == NULL) ? &no_position : &(wip->wi_mark);
 }
 
-/// Find the lnum for the buffer 'buf' for the current window.
-linenr_T buflist_findlnum(buf_T *buf)
-{
-  return rs_buflist_findlnum(buf);
-}
 
 /// List all known file names (for :files and :buffers command).
 void buflist_list(exarg_T *eap)
@@ -3615,15 +3478,6 @@ void buflist_list(exarg_T *eap)
   }
 }
 
-/// Get file name and line number for file 'fnum'.
-/// Used by DoOneCmd() for translating '%' and '#'.
-/// Used by insert_reg() and cmdline_paste() for '#' register.
-///
-/// @return  FAIL if not found, OK for success.
-int buflist_name_nr(int fnum, char **fname, linenr_T *lnum)
-{
-  return rs_buflist_name_nr(fnum, (char **)fname, lnum);
-}
 
 /// Set the file name for "buf" to "ffname_arg", short file name to
 /// "sfname_arg".
@@ -3758,23 +3612,6 @@ buf_T *setaltfname(char *ffname, char *sfname, linenr_T lnum)
   return buf;
 }
 
-/// Get alternate file name for current window.
-/// Return NULL if there isn't any, and give error message if requested.
-///
-/// @param errmsg  give error message
-char *getaltfname(bool errmsg)
-{
-  return rs_getaltfname(errmsg);
-}
-
-/// Add a file name to the buflist and return its number.
-/// Uses same flags as buflist_new(), except BLN_DUMMY.
-///
-/// Used by qf_init(), main() and doarglist()
-int buflist_add(char *fname, int flags)
-{
-  return rs_buflist_add(fname, flags);
-}
 
 #if defined(BACKSLASH_IN_FILENAME)
 /// Adjust slashes in file names.  Called after 'shellslash' was set.
@@ -3792,43 +3629,6 @@ void buflist_slash_adjust(void)
 
 #endif
 
-/// Set alternate cursor position for the current buffer and window "win".
-/// Also save the local window option values.
-void buflist_altfpos(win_T *win)
-{
-  rs_buflist_altfpos(win);
-}
-
-/// Check that "ffname" is not the same file as current file.
-/// Fname must have a full path (expanded by path_to_absolute()).
-///
-/// @param  ffname  full path name to check
-bool otherfile(char *ffname)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_otherfile(ffname);
-}
-
-/// Check that "ffname" is not the same file as the file loaded in "buf".
-/// Fname must have a full path (expanded by path_to_absolute()).
-///
-/// @param  buf            buffer to check
-/// @param  ffname         full path name to check
-/// @param  file_id_p      information about the file at "ffname".
-/// @param  file_id_valid  whether a valid "file_id_p" was passed in.
-static bool otherfile_buf(buf_T *buf, char *ffname, FileID *file_id_p, bool file_id_valid)
-{
-  return rs_otherfile_buf_4(buf, ffname, (void *)file_id_p, file_id_valid);
-}
-
-/// Set file_id for a buffer.
-/// Must always be called when b_fname is changed!
-void buf_set_file_id(buf_T *buf)
-{
-  rs_buf_set_file_id(buf);
-}
-
-// buf_same_file_id is now Rust-internal (buf_same_file_id in lib.rs)
 
 /// Print info about the current buffer.
 ///
@@ -3927,10 +3727,6 @@ void fileinfo(int fullname, int shorthelp, bool dont_truncate)
   xfree(buffer);
 }
 
-int col_print(char *buf, size_t buflen, int col, int vcol)
-{
-  return rs_col_print((uint8_t *)buf, buflen, col, vcol);
-}
 
 static char *lasttitle = NULL;
 static char *lasticon = NULL;
@@ -4052,43 +3848,6 @@ void free_titles(void)
 
 #endif
 
-/// Get relative cursor position in window into "buf[]", in the localized
-/// percentage form like %99, 99%; using "Top", "Bot" or "All" when appropriate.
-int get_rel_pos(win_T *wp, char *buf, int buflen)
-{
-  return rs_get_rel_pos(wp, buf, buflen);
-}
-
-/// Append (2 of 8) to "buf[]", if editing more than one file.
-///
-/// @param          wp        window whose buffers to check
-/// @param[in,out]  buf       string buffer to add the text to
-/// @param          buflen    length of the string buffer
-///
-/// @return  the number of characters appended.
-int append_arg_number(win_T *wp, char *buf, size_t buflen)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_append_arg_number(wp, buf, buflen);
-}
-
-/// Make "*ffname" a full file name, set "*sfname" to "*ffname" if not NULL.
-/// "*ffname" becomes a pointer to allocated memory (or NULL).
-/// When resolving a link both "*sfname" and "*ffname" will point to the same
-/// allocated memory.
-/// The "*ffname" and "*sfname" pointer values on call will not be freed.
-/// Note that the resulting "*ffname" pointer should be considered not allocated.
-void fname_expand(buf_T *buf, char **ffname, char **sfname)
-{
-  rs_fname_expand(buf, ffname, sfname);
-}
-
-/// @return  true if "buf" is a prompt buffer.
-bool bt_prompt(buf_T *buf)
-  FUNC_ATTR_PURE
-{
-  return rs_bt_prompt(buf);
-}
 
 /// Open a window for a number of buffers.
 void ex_buffer_all(exarg_T *eap)
@@ -4435,98 +4194,6 @@ static int chk_modeline(linenr_T lnum, int flags)
   return retval;
 }
 
-/// @return  true if "buf" is a help buffer.
-bool bt_help(const buf_T *const buf)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_bt_help((buf_T *)buf);
-}
-
-/// @return  true if "buf" is a normal buffer, 'buftype' is empty.
-bool bt_normal(const buf_T *const buf)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_bt_normal((buf_T *)buf);
-}
-
-/// @return  true if "buf" is the quickfix buffer.
-bool bt_quickfix(const buf_T *const buf)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_bt_quickfix((buf_T *)buf);
-}
-
-/// @return  true if "buf" is a terminal buffer.
-bool bt_terminal(const buf_T *const buf)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_bt_terminal((buf_T *)buf);
-}
-
-/// @return  true if "buf" is a "nofile", "acwrite", "terminal" or "prompt"
-///          buffer.  This means the buffer name may not be a file name,
-///          at least not for writing the buffer.
-bool bt_nofilename(const buf_T *const buf)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_bt_nofilename((buf_T *)buf);
-}
-
-/// @return  true if "buf" is a "nofile", "quickfix", "terminal" or "prompt"
-///          buffer.  This means the buffer is not to be read from a file.
-static bool bt_nofileread(const buf_T *const buf)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_bt_nofileread((buf_T *)buf);
-}
-
-/// @return  true if "buf" has 'buftype' set to "nofile".
-bool bt_nofile(const buf_T *const buf)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_bt_nofile((buf_T *)buf);
-}
-
-/// @return  true if "buf" is a "nowrite", "nofile", "terminal" or "prompt"
-///          buffer.
-bool bt_dontwrite(const buf_T *const buf)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_bt_dontwrite((buf_T *)buf);
-}
-
-bool bt_dontwrite_msg(const buf_T *const buf)
-{
-  return rs_bt_dontwrite_msg((buf_T *)buf);
-}
-
-/// @return  true if the buffer should be hidden, according to 'hidden', ":hide"
-///          and 'bufhidden'.
-bool buf_hide(const buf_T *const buf)
-  FUNC_ATTR_PURE
-{
-  return rs_buf_hide((buf_T *)buf) != 0;
-}
-
-/// @return  special buffer name or
-///          NULL when the buffer has a normal file name.
-char *buf_spname(buf_T *buf)
-{
-  return rs_buf_spname(buf);
-}
-
-/// Get "buf->b_fname", use "[No Name]" if it is NULL.
-char *buf_get_fname(const buf_T *buf)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_buf_get_fname((buf_T *)buf);
-}
-
-/// Set 'buflisted' for curbuf to "on" and trigger autocommands if it changed.
-void set_buflisted(int on)
-{
-  rs_set_buflisted(on);
-}
 
 /// Read the file for "buf" again and check if the contents changed.
 /// Return true if it changed or this could not be checked.
@@ -4586,15 +4253,6 @@ bool buf_contents_changed(buf_T *buf)
   return differ;
 }
 
-/// Wipe out a buffer and decrement the last buffer number if it was used for
-/// this buffer.  Call this to wipe out a temp buffer that does not contain any
-/// marks.
-///
-/// @param aucmd  When true trigger autocommands.
-void wipe_buffer(buf_T *buf, bool aucmd)
-{
-  rs_wipe_buffer(buf, aucmd);
-}
 
 /// Creates or switches to a scratch buffer. :h special-buffers
 /// Scratch buffer is:
@@ -4624,21 +4282,6 @@ int buf_open_scratch(handle_T bufnr, char *bufname)
   return OK;
 }
 
-bool buf_is_empty(buf_T *buf)
-{
-  return rs_buf_is_empty(buf);
-}
-
-/// Increment b:changedtick value
-///
-/// Also checks b: for consistency in case of debug build.
-///
-/// @param[in,out]  buf  Buffer to increment value in.
-void buf_inc_changedtick(buf_T *const buf)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_buf_inc_changedtick(buf);
-}
 
 /// Set b:changedtick, also checking b: for consistency in debug build
 ///

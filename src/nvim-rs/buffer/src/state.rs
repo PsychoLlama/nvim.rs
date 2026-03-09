@@ -323,8 +323,8 @@ pub unsafe fn buf_is_empty(buf: BufHandle) -> bool {
 
 /// FFI wrapper for `buf_is_empty`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_buf_is_empty(buf: BufHandle) -> c_int {
-    c_int::from(buf_is_empty(buf))
+pub unsafe extern "C" fn rs_buf_is_empty(buf: BufHandle) -> bool {
+    buf_is_empty(buf)
 }
 
 /// Check if changedtick has changed.
@@ -403,6 +403,35 @@ pub unsafe extern "C" fn rs_wipe_buffer(buf: BufHandle, aucmd: bool) {
     if !aucmd {
         unblock_autocmds();
     }
+}
+
+// =============================================================================
+// C-named symbol exports (for Rust crates that call by canonical C name)
+// =============================================================================
+
+/// C export: `buf_clear_file`.
+#[unsafe(export_name = "buf_clear_file")]
+pub unsafe extern "C" fn buf_clear_file_export(buf: BufHandle) {
+    rs_buf_clear_file(buf);
+}
+
+/// C export: `wipe_buffer`.
+#[unsafe(export_name = "wipe_buffer")]
+pub unsafe extern "C" fn wipe_buffer_export(buf: BufHandle, aucmd: bool) {
+    rs_wipe_buffer(buf, aucmd);
+}
+
+/// C export: `buf_is_empty`.
+#[must_use]
+#[unsafe(export_name = "buf_is_empty")]
+pub unsafe extern "C" fn buf_is_empty_export(buf: BufHandle) -> bool {
+    buf_is_empty(buf)
+}
+
+/// C export: `buf_inc_changedtick`.
+#[unsafe(export_name = "buf_inc_changedtick")]
+pub unsafe extern "C" fn buf_inc_changedtick_export(buf: BufHandle) {
+    rs_buf_inc_changedtick(buf);
 }
 
 // =============================================================================

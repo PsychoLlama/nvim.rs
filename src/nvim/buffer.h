@@ -76,6 +76,93 @@ EXTERN char *msg_qflist INIT( = N_("[Quickfix List]"));
 #include "buffer.h.generated.h"
 #include "buffer.h.inline.generated.h"
 
+// Rust FFI declarations for buffer functions (now implemented in Rust).
+// The rs_* symbols are exported from libnvim_rs.a; the C-named inline
+// wrappers below provide backward-compatible access from C call sites.
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+// Forward-declare the Rust rs_* symbols used by the inline wrappers.
+extern int rs_buf_valid(buf_T *buf);
+extern int rs_bufref_valid(bufref_T *bufref);
+extern int rs_buf_is_empty(buf_T *buf);
+extern int rs_buf_hide(buf_T *buf);
+extern bool rs_bt_prompt(buf_T *buf);
+extern bool rs_bt_help(buf_T *buf);
+extern bool rs_bt_normal(buf_T *buf);
+extern bool rs_bt_quickfix(buf_T *buf);
+extern bool rs_bt_terminal(buf_T *buf);
+extern bool rs_bt_nofilename(buf_T *buf);
+extern bool rs_bt_nofile(buf_T *buf);
+extern bool rs_bt_dontwrite(buf_T *buf);
+extern bool rs_bt_dontwrite_msg(buf_T *buf);
+extern bool rs_curbuf_reusable(void);
+extern bool rs_otherfile(char *ffname);
+extern int rs_get_fileformat(buf_T *buf);
+extern int rs_get_highest_fnum(void);
+extern int rs_calc_percentage(int64_t part, int64_t whole);
+extern int rs_col_print(uint8_t *buf, size_t buflen, int col, int vcol);
+extern int rs_get_rel_pos(win_T *wp, char *buf, int buflen);
+extern int rs_append_arg_number(win_T *wp, char *buf, size_t buflen);
+extern int rs_buflist_name_nr(int fnum, char **fname, linenr_T *lnum);
+extern int rs_buflist_add(char *fname, int flags);
+extern char *rs_buf_spname(buf_T *buf);
+extern char *rs_buf_get_fname(buf_T *buf);
+extern char *rs_getaltfname(bool errmsg);
+extern char *rs_buflist_nr2name(int n, int fullname, int helptail);
+extern buf_T *rs_buflist_findnr(int nr);
+extern buf_T *rs_buflist_findname(char *ffname);
+extern buf_T *rs_buflist_findname_exp(char *fname);
+extern int rs_buflist_findlnum(buf_T *buf);
+extern void rs_set_buflisted(int on);
+extern void rs_buf_clear_file(buf_T *buf);
+extern void rs_buf_inc_changedtick(buf_T *buf);
+extern void rs_wipe_buffer(buf_T *buf, bool aucmd);
+extern void rs_buf_set_file_id(buf_T *buf);
+extern void rs_fname_expand(buf_T *buf, char **ffname, char **sfname);
+extern void rs_buflist_altfpos(win_T *win);
+
+// Inline wrappers: these replace the C wrapper functions deleted from buffer.c
+static inline bool buf_valid(buf_T *buf) { return rs_buf_valid(buf) != 0; }
+static inline bool bufref_valid(bufref_T *bufref) { return rs_bufref_valid(bufref) != 0; }
+static inline bool buf_is_empty(buf_T *buf) { return rs_buf_is_empty(buf) != 0; }
+static inline bool buf_hide(const buf_T *buf) { return rs_buf_hide((buf_T *)buf) != 0; }
+static inline bool bt_prompt(buf_T *buf) { return rs_bt_prompt(buf); }
+static inline bool bt_help(const buf_T *buf) { return rs_bt_help((buf_T *)buf); }
+static inline bool bt_normal(const buf_T *buf) { return rs_bt_normal((buf_T *)buf); }
+static inline bool bt_quickfix(const buf_T *buf) { return rs_bt_quickfix((buf_T *)buf); }
+static inline bool bt_terminal(const buf_T *buf) { return rs_bt_terminal((buf_T *)buf); }
+static inline bool bt_nofilename(const buf_T *buf) { return rs_bt_nofilename((buf_T *)buf); }
+static inline bool bt_nofile(const buf_T *buf) { return rs_bt_nofile((buf_T *)buf); }
+static inline bool bt_dontwrite(const buf_T *buf) { return rs_bt_dontwrite((buf_T *)buf); }
+static inline bool bt_dontwrite_msg(const buf_T *buf) { return rs_bt_dontwrite_msg((buf_T *)buf); }
+static inline bool curbuf_reusable(void) { return rs_curbuf_reusable(); }
+static inline bool otherfile(char *ffname) { return rs_otherfile(ffname); }
+static inline int get_fileformat(buf_T *buf) { return rs_get_fileformat(buf); }
+static inline int get_highest_fnum(void) { return rs_get_highest_fnum(); }
+static inline int calc_percentage(int64_t part, int64_t whole) { return rs_calc_percentage(part, whole); }
+static inline int col_print(char *buf, size_t buflen, int col, int vcol) { return rs_col_print((uint8_t *)buf, buflen, col, vcol); }
+static inline int get_rel_pos(win_T *wp, char *buf, int buflen) { return rs_get_rel_pos(wp, buf, buflen); }
+static inline int append_arg_number(win_T *wp, char *buf, size_t buflen) { return rs_append_arg_number(wp, buf, buflen); }
+static inline int buflist_name_nr(int fnum, char **fname, linenr_T *lnum) { return rs_buflist_name_nr(fnum, fname, lnum); }
+static inline int buflist_add(char *fname, int flags) { return rs_buflist_add(fname, flags); }
+static inline char *buf_spname(buf_T *buf) { return rs_buf_spname(buf); }
+static inline char *buf_get_fname(const buf_T *buf) { return rs_buf_get_fname((buf_T *)buf); }
+static inline char *getaltfname(bool errmsg) { return rs_getaltfname(errmsg); }
+static inline char *buflist_nr2name(int n, int fullname, int helptail) { return rs_buflist_nr2name(n, fullname, helptail); }
+static inline buf_T *buflist_findnr(int nr) { return rs_buflist_findnr(nr); }
+static inline buf_T *buflist_findname(char *ffname) { return rs_buflist_findname(ffname); }
+static inline buf_T *buflist_findname_exp(char *fname) { return rs_buflist_findname_exp(fname); }
+static inline linenr_T buflist_findlnum(buf_T *buf) { return (linenr_T)rs_buflist_findlnum(buf); }
+static inline void set_buflisted(int on) { rs_set_buflisted(on); }
+static inline void buf_clear_file(buf_T *buf) { rs_buf_clear_file(buf); }
+static inline void buf_inc_changedtick(buf_T *buf) { rs_buf_inc_changedtick(buf); }
+static inline void wipe_buffer(buf_T *buf, bool aucmd) { rs_wipe_buffer(buf, aucmd); }
+static inline void buf_set_file_id(buf_T *buf) { rs_buf_set_file_id(buf); }
+static inline void fname_expand(buf_T *buf, char **ffname, char **sfname) { rs_fname_expand(buf, ffname, sfname); }
+static inline void buflist_altfpos(win_T *win) { rs_buflist_altfpos(win); }
+
 /// Get b:changedtick value
 ///
 /// Faster then querying b:.

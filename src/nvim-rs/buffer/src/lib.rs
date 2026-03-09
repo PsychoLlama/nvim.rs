@@ -365,8 +365,8 @@ fn bt_prompt_impl(buf: BufHandle) -> bool {
 
 /// FFI wrapper for `bt_prompt`.
 #[no_mangle]
-pub extern "C" fn rs_bt_prompt(buf: BufHandle) -> c_int {
-    c_int::from(bt_prompt_impl(buf))
+pub extern "C" fn rs_bt_prompt(buf: BufHandle) -> bool {
+    bt_prompt_impl(buf)
 }
 
 /// Check if buffer is a normal buffer ('buftype' is empty/NUL).
@@ -381,8 +381,8 @@ fn bt_normal_impl(buf: BufHandle) -> bool {
 
 /// FFI wrapper for `bt_normal`.
 #[no_mangle]
-pub extern "C" fn rs_bt_normal(buf: BufHandle) -> c_int {
-    c_int::from(bt_normal_impl(buf))
+pub extern "C" fn rs_bt_normal(buf: BufHandle) -> bool {
+    bt_normal_impl(buf)
 }
 
 /// Check if buffer is the quickfix buffer ('buftype' starts with 'q').
@@ -397,8 +397,8 @@ fn bt_quickfix_impl(buf: BufHandle) -> bool {
 
 /// FFI wrapper for `bt_quickfix`.
 #[no_mangle]
-pub extern "C" fn rs_bt_quickfix(buf: BufHandle) -> c_int {
-    c_int::from(bt_quickfix_impl(buf))
+pub extern "C" fn rs_bt_quickfix(buf: BufHandle) -> bool {
+    bt_quickfix_impl(buf)
 }
 
 /// Check if buffer is a terminal buffer ('buftype' starts with 't').
@@ -413,8 +413,8 @@ fn bt_terminal_impl(buf: BufHandle) -> bool {
 
 /// FFI wrapper for `bt_terminal`.
 #[no_mangle]
-pub extern "C" fn rs_bt_terminal(buf: BufHandle) -> c_int {
-    c_int::from(bt_terminal_impl(buf))
+pub extern "C" fn rs_bt_terminal(buf: BufHandle) -> bool {
+    bt_terminal_impl(buf)
 }
 
 /// Check if buffer has 'buftype' set to "nofile".
@@ -433,8 +433,8 @@ fn bt_nofile_impl(buf: BufHandle) -> bool {
 
 /// FFI wrapper for `bt_nofile`.
 #[no_mangle]
-pub extern "C" fn rs_bt_nofile(buf: BufHandle) -> c_int {
-    c_int::from(bt_nofile_impl(buf))
+pub extern "C" fn rs_bt_nofile(buf: BufHandle) -> bool {
+    bt_nofile_impl(buf)
 }
 
 /// Check if buffer is a help buffer.
@@ -449,8 +449,8 @@ fn bt_help_impl(buf: BufHandle) -> bool {
 
 /// FFI wrapper for `bt_help`.
 #[no_mangle]
-pub extern "C" fn rs_bt_help(buf: BufHandle) -> c_int {
-    c_int::from(bt_help_impl(buf))
+pub extern "C" fn rs_bt_help(buf: BufHandle) -> bool {
+    bt_help_impl(buf)
 }
 
 /// Check if buffer has a name that may not be a file name.
@@ -478,8 +478,8 @@ fn bt_nofilename_impl(buf: BufHandle) -> bool {
 
 /// FFI wrapper for `bt_nofilename`.
 #[no_mangle]
-pub extern "C" fn rs_bt_nofilename(buf: BufHandle) -> c_int {
-    c_int::from(bt_nofilename_impl(buf))
+pub extern "C" fn rs_bt_nofilename(buf: BufHandle) -> bool {
+    bt_nofilename_impl(buf)
 }
 
 /// Check if buffer should not be written.
@@ -502,8 +502,8 @@ fn bt_dontwrite_impl(buf: BufHandle) -> bool {
 
 /// FFI wrapper for `bt_dontwrite`.
 #[no_mangle]
-pub extern "C" fn rs_bt_dontwrite(buf: BufHandle) -> c_int {
-    c_int::from(bt_dontwrite_impl(buf))
+pub extern "C" fn rs_bt_dontwrite(buf: BufHandle) -> bool {
+    bt_dontwrite_impl(buf)
 }
 
 /// Check if buffer should not be read from a file.
@@ -531,8 +531,8 @@ fn bt_nofileread_impl(buf: BufHandle) -> bool {
 
 /// FFI wrapper for `bt_nofileread`.
 #[no_mangle]
-pub extern "C" fn rs_bt_nofileread(buf: BufHandle) -> c_int {
-    c_int::from(bt_nofileread_impl(buf))
+pub extern "C" fn rs_bt_nofileread(buf: BufHandle) -> bool {
+    bt_nofileread_impl(buf)
 }
 
 /// End-of-line type constants (matching C defines in `option_vars.h`).
@@ -622,8 +622,8 @@ fn buf_hide_impl(buf: BufHandle) -> bool {
 
 /// FFI wrapper for `buf_hide`.
 #[no_mangle]
-pub extern "C" fn rs_buf_hide(buf: BufHandle) -> c_int {
-    c_int::from(buf_hide_impl(buf))
+pub extern "C" fn rs_buf_hide(buf: BufHandle) -> bool {
+    buf_hide_impl(buf)
 }
 
 /// Get `buf->b_fname`, use "[No Name]" if it is NULL.
@@ -1148,6 +1148,75 @@ pub unsafe extern "C" fn rs_set_buflisted(on: c_int) {
     } else {
         nvim_apply_autocmds_bufdelete(buf);
     }
+}
+
+// =============================================================================
+// C-named symbol exports (for Rust crates that call functions by their C name)
+// These duplicate the rs_* implementations under the canonical C symbol name.
+// =============================================================================
+
+/// C export: `buf_valid` - called by some Rust crates directly.
+#[must_use]
+#[export_name = "buf_valid"]
+pub extern "C" fn buf_valid_export(buf: BufHandle) -> bool {
+    buf_valid_impl(buf)
+}
+
+/// C export: `bufref_valid`.
+#[must_use]
+#[export_name = "bufref_valid"]
+pub extern "C" fn bufref_valid_export(bufref: *const std::ffi::c_void) -> bool {
+    bufref_valid_impl(bufref)
+}
+
+/// C export: `buf_hide`.
+#[must_use]
+#[export_name = "buf_hide"]
+pub extern "C" fn buf_hide_export(buf: BufHandle) -> bool {
+    buf_hide_impl(buf)
+}
+
+/// C export: `buf_spname`.
+///
+/// # Safety
+///
+/// `buf` must be a valid buffer handle.
+#[must_use]
+#[export_name = "buf_spname"]
+pub unsafe extern "C" fn buf_spname_export(buf: BufHandle) -> *mut c_char {
+    rs_buf_spname(buf)
+}
+
+/// C export: `otherfile`.
+///
+/// # Safety
+///
+/// `ffname` must be a valid C string.
+#[must_use]
+#[export_name = "otherfile"]
+pub unsafe extern "C" fn otherfile_export(ffname: *const c_char) -> bool {
+    otherfile_buf_impl(nvim_get_curbuf(), ffname)
+}
+
+/// C export: `set_buflisted`.
+///
+/// # Safety
+///
+/// Accesses global state via C FFI.
+#[export_name = "set_buflisted"]
+pub unsafe extern "C" fn set_buflisted_export(on: c_int) {
+    rs_set_buflisted(on);
+}
+
+/// C export: `buflist_findnr`.
+///
+/// # Safety
+///
+/// Accesses global state via C FFI.
+#[must_use]
+#[export_name = "buflist_findnr"]
+pub unsafe extern "C" fn buflist_findnr_export(nr: c_int) -> BufHandle {
+    list::rs_buflist_findnr(nr)
 }
 
 #[cfg(test)]
