@@ -989,25 +989,85 @@ unsafe fn line_putchar_impl(
 // ============================================================================
 
 /// Get the 'listchars' "extends" character.
-#[no_mangle]
+#[must_use]
+#[export_name = "get_lcs_ext"]
 pub extern "C" fn rs_get_lcs_ext(wp: WinHandle) -> ScharT {
     get_lcs_ext_impl(wp)
 }
 
 /// Get the rightmost virtual column that needs drawing.
-#[no_mangle]
+#[must_use]
+#[export_name = "get_rightmost_vcol"]
 pub extern "C" fn rs_get_rightmost_vcol(wp: WinHandle, color_cols: *const c_int) -> c_int {
     get_rightmost_vcol_impl(wp, color_cols)
 }
 
-/// Compute cursorline margins.
-#[no_mangle]
+/// Compute cursorline margins (with caching matching the C margin_columns_win).
+#[allow(clippy::too_many_lines)]
+#[export_name = "margin_columns_win"]
 pub unsafe extern "C" fn rs_margin_columns_win(
     wp: WinHandle,
     left_col: *mut c_int,
     right_col: *mut c_int,
 ) {
+    use std::cell::Cell;
+    use std::sync::OnceLock;
+
+    // Cache state: matches the C static variables in margin_columns_win.
+    struct Cache {
+        saved_w_virtcol: Cell<ColnrT>,
+        prev_wp: Cell<WinHandle>,
+        prev_width1: Cell<c_int>,
+        prev_width2: Cell<c_int>,
+        prev_left_col: Cell<c_int>,
+        prev_right_col: Cell<c_int>,
+    }
+
+    // Safety: single-threaded Neovim main loop; WinHandle is a raw pointer
+    // which is not Send/Sync by default, but Neovim is single-threaded so
+    // this is safe.
+    #[allow(clippy::non_send_fields_in_send_ty)]
+    unsafe impl Send for Cache {}
+    unsafe impl Sync for Cache {}
+
+    static CACHE: OnceLock<Cache> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Cache {
+        saved_w_virtcol: Cell::new(-1),
+        prev_wp: Cell::new(WinHandle::null()),
+        prev_width1: Cell::new(-1),
+        prev_width2: Cell::new(-1),
+        prev_left_col: Cell::new(0),
+        prev_right_col: Cell::new(0),
+    });
+
+    let cur_col_off = rs_win_col_off(wp);
+    let width1 = nvim_win_get_view_width(wp) - cur_col_off;
+    let width2 = width1 + rs_win_col_off2(wp);
+    let virtcol = nvim_win_get_virtcol(wp);
+
+    if cache.saved_w_virtcol.get() == virtcol
+        && cache.prev_wp.get().as_ptr() == wp.as_ptr()
+        && cache.prev_width1.get() == width1
+        && cache.prev_width2.get() == width2
+    {
+        if !right_col.is_null() {
+            *right_col = cache.prev_right_col.get();
+        }
+        if !left_col.is_null() {
+            *left_col = cache.prev_left_col.get();
+        }
+        return;
+    }
+
     let (left, right) = margin_columns_win_impl(wp);
+
+    cache.prev_left_col.set(left);
+    cache.prev_right_col.set(right);
+    cache.prev_wp.set(wp);
+    cache.prev_width1.set(width1);
+    cache.prev_width2.set(width2);
+    cache.saved_w_virtcol.set(virtcol);
+
     if !left_col.is_null() {
         *left_col = left;
     }
@@ -1048,7 +1108,8 @@ pub unsafe extern "C" fn rs_fill_foldcolumn_buffer(
 }
 
 /// Check if cursor line highlight should be used.
-#[no_mangle]
+#[must_use]
+#[export_name = "use_cursor_line_highlight"]
 pub extern "C" fn rs_use_cursor_line_highlight(wp: WinHandle, lnum: LinenrT) -> bool {
     use_cursor_line_highlight_impl(wp, lnum)
 }
@@ -1085,7 +1146,7 @@ unsafe fn apply_cursorline_highlight_impl(wp: WinHandle, wlv: *mut WinLineVars) 
 }
 
 /// Apply cursorline highlight (FFI export).
-#[no_mangle]
+#[export_name = "apply_cursorline_highlight"]
 pub unsafe extern "C" fn rs_apply_cursorline_highlight(wp: WinHandle, wlv: *mut WinLineVars) {
     apply_cursorline_highlight_impl(wp, wlv);
 }
@@ -1114,7 +1175,7 @@ unsafe fn set_line_attr_for_diff_impl(wp: WinHandle, wlv: *mut WinLineVars) {
 }
 
 /// Set line attribute for diff mode (FFI export).
-#[no_mangle]
+#[export_name = "set_line_attr_for_diff"]
 pub unsafe extern "C" fn rs_set_line_attr_for_diff(wp: WinHandle, wlv: *mut WinLineVars) {
     set_line_attr_for_diff_impl(wp, wlv);
 }
@@ -1201,7 +1262,7 @@ unsafe fn handle_breakindent_impl(wp: WinHandle, wlv: *mut WinLineVars) {
 }
 
 /// Handle breakindent (FFI export).
-#[no_mangle]
+#[export_name = "handle_breakindent"]
 pub unsafe extern "C" fn rs_handle_breakindent(wp: WinHandle, wlv: *mut WinLineVars) {
     handle_breakindent_impl(wp, wlv);
 }
@@ -1277,7 +1338,7 @@ unsafe fn handle_showbreak_and_filler_impl(wp: WinHandle, wlv: *mut WinLineVars)
 }
 
 /// Handle showbreak and filler (FFI export).
-#[no_mangle]
+#[export_name = "handle_showbreak_and_filler"]
 pub unsafe extern "C" fn rs_handle_showbreak_and_filler(wp: WinHandle, wlv: *mut WinLineVars) {
     handle_showbreak_and_filler_impl(wp, wlv);
 }
@@ -1342,13 +1403,13 @@ unsafe fn has_more_inline_virt_impl(wlv: *mut WinLineVars, v: isize) -> bool {
 }
 
 /// Check for more inline virtual text (FFI export).
-#[no_mangle]
+#[export_name = "has_more_inline_virt"]
 pub unsafe extern "C" fn rs_has_more_inline_virt(wlv: *mut WinLineVars, v: isize) -> bool {
     has_more_inline_virt_impl(wlv, v)
 }
 
 /// Fill cells with a character.
-#[no_mangle]
+#[export_name = "draw_col_fill"]
 pub extern "C" fn rs_draw_col_fill(
     wlv: *mut WinLineVars,
     fillchar: ScharT,
@@ -1359,7 +1420,7 @@ pub extern "C" fn rs_draw_col_fill(
 }
 
 /// Fill fold column (full implementation with linebuf support).
-#[no_mangle]
+#[export_name = "fill_foldcolumn"]
 pub unsafe extern "C" fn rs_fill_foldcolumn(
     wp: WinHandle,
     foldinfo: FoldInfo,
@@ -1374,37 +1435,37 @@ pub unsafe extern "C" fn rs_fill_foldcolumn(
 }
 
 /// Draw fold column.
-#[no_mangle]
+#[export_name = "draw_foldcolumn"]
 pub extern "C" fn rs_draw_foldcolumn(wp: WinHandle, wlv: *mut WinLineVars) {
     draw_foldcolumn_impl(wp, wlv);
 }
 
 /// Check if cursor line number highlight should be used.
-#[no_mangle]
+#[export_name = "use_cursor_line_nr"]
 pub extern "C" fn rs_use_cursor_line_nr(wp: WinHandle, wlv: *mut WinLineVars) -> bool {
     use_cursor_line_nr_impl(wp, wlv)
 }
 
 /// Get line number attribute.
-#[no_mangle]
+#[export_name = "get_line_number_attr"]
 pub extern "C" fn rs_get_line_number_attr(wp: WinHandle, wlv: *mut WinLineVars) -> c_int {
     get_line_number_attr_impl(wp, wlv)
 }
 
 /// Draw sign in sign or number column.
-#[no_mangle]
+#[export_name = "draw_sign"]
 pub extern "C" fn rs_draw_sign(nrcol: bool, wp: WinHandle, wlv: *mut WinLineVars, sign_idx: c_int) {
     draw_sign_impl(nrcol, wp, wlv, sign_idx);
 }
 
 /// Draw line number column.
-#[no_mangle]
+#[export_name = "draw_lnum_col"]
 pub extern "C" fn rs_draw_lnum_col(wp: WinHandle, wlv: *mut WinLineVars) {
     draw_lnum_col_impl(wp, wlv);
 }
 
 /// Advance color_cols past current vcol.
-#[no_mangle]
+#[export_name = "advance_color_col"]
 pub extern "C" fn rs_advance_color_col(wlv: *mut WinLineVars, vcol: c_int) {
     advance_color_col_impl(wlv, vcol);
 }
@@ -1415,7 +1476,7 @@ pub extern "C" fn rs_advance_color_col(wlv: *mut WinLineVars, vcol: c_int) {
 /// - `pp` must be a valid pointer to a pointer to a NUL-terminated UTF-8 string
 /// - `dest` must be a valid pointer to at least `maxcells` schar_T values
 /// - `dest[0]` must not be 0 (caller ensures not overwriting right half of double-width)
-#[no_mangle]
+#[export_name = "line_putchar"]
 pub unsafe extern "C" fn rs_line_putchar(
     buf: BufHandle,
     pp: *mut *const c_char,
@@ -1563,7 +1624,7 @@ unsafe fn draw_virt_text_item_impl(
 }
 
 /// Draw a virtual text item (FFI export).
-#[no_mangle]
+#[export_name = "draw_virt_text_item"]
 pub unsafe extern "C" fn rs_draw_virt_text_item(
     buf: BufHandle,
     col: c_int,
@@ -1723,7 +1784,7 @@ unsafe fn draw_virt_text_impl(
 }
 
 /// Draw virtual text (FFI export).
-#[no_mangle]
+#[export_name = "draw_virt_text"]
 pub unsafe extern "C" fn rs_draw_virt_text(
     wp: WinHandle,
     buf: BufHandle,
@@ -1767,7 +1828,7 @@ unsafe fn win_line_start_impl(wp: WinHandle, wlv: *mut WinLineVars) {
 }
 
 /// FFI export for win_line_start.
-#[no_mangle]
+#[export_name = "win_line_start"]
 pub unsafe extern "C" fn rs_win_line_start(wp: WinHandle, wlv: *mut WinLineVars) {
     win_line_start_impl(wp, wlv);
 }
@@ -1807,7 +1868,7 @@ unsafe fn fix_for_boguscols_impl(wlv: *mut WinLineVars) {
 }
 
 /// FFI export for fix_for_boguscols.
-#[no_mangle]
+#[export_name = "fix_for_boguscols"]
 pub unsafe extern "C" fn rs_fix_for_boguscols(wlv: *mut WinLineVars) {
     fix_for_boguscols_impl(wlv);
 }
@@ -1898,7 +1959,7 @@ unsafe fn draw_col_buf_impl(
 }
 
 /// FFI export for draw_col_buf.
-#[no_mangle]
+#[export_name = "draw_col_buf"]
 pub unsafe extern "C" fn rs_draw_col_buf(
     wp: WinHandle,
     wlv: *mut WinLineVars,
@@ -2105,7 +2166,7 @@ unsafe fn handle_inline_virtual_text_impl(
 }
 
 /// FFI export for handle_inline_virtual_text.
-#[no_mangle]
+#[export_name = "handle_inline_virtual_text"]
 pub unsafe extern "C" fn rs_handle_inline_virtual_text(
     wp: WinHandle,
     wlv: *mut WinLineVars,
@@ -2223,7 +2284,7 @@ unsafe fn wlv_put_linebuf_impl(
 }
 
 /// FFI export for wlv_put_linebuf.
-#[no_mangle]
+#[export_name = "wlv_put_linebuf"]
 pub unsafe extern "C" fn rs_wlv_put_linebuf(
     wp: WinHandle,
     wlv: *mut WinLineVars,

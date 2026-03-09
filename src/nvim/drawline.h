@@ -30,4 +30,23 @@ typedef struct {
   linenr_T spv_capcol_lnum;   ///< line number for "cap_col"
 } spellvars_T;
 
+// Rust-exported functions callable from other translation units.
+// These were previously declared in drawline.h.generated.h as C implementations;
+// now they are implemented in Rust and exported with the same symbol names.
+#include "nvim/buffer_defs.h"  // IWYU pragma: keep (win_T, buf_T)
+#include "nvim/fold_defs.h"    // IWYU pragma: keep (foldinfo_T)
+#include "nvim/sign_defs.h"    // IWYU pragma: keep (colnr_T, schar_T)
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern bool use_cursor_line_highlight(win_T *wp, linenr_T lnum);
+extern void fill_foldcolumn(win_T *wp, foldinfo_T foldinfo, linenr_T lnum, int attr, int fdc,
+                            int *wlv_off, colnr_T *out_vcol, schar_T *out_buffer);
+
+#ifdef __cplusplus
+}
+#endif
+
 #include "drawline.h.generated.h"

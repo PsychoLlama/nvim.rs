@@ -132,43 +132,45 @@ typedef struct {
 
 #include "drawline.c.generated.h"
 
-// Rust implementations
+// Rust implementations (rs_* names, called from win_line via generated extern decls)
 extern int rs_ins_compl_win_active(win_T *wp);
 extern int rs_ins_compl_lnum_in_range(int lnum);
 extern const char *rs_get_showbreak_value(win_T *win);
-extern schar_T rs_get_lcs_ext(win_T *wp);
-extern void rs_margin_columns_win(win_T *wp, int *left_col, int *right_col);
-extern int rs_get_rightmost_vcol(win_T *wp, const int *color_cols);
-extern bool rs_use_cursor_line_highlight(win_T *wp, linenr_T lnum);
-extern void rs_draw_col_fill(winlinevars_T *wlv, schar_T fillchar, int width, int attr);
-extern void rs_fill_foldcolumn(win_T *wp, foldinfo_T foldinfo, linenr_T lnum, int attr,
-                               int fdc, int *wlv_off, colnr_T *out_vcol, schar_T *out_buffer);
-extern void rs_draw_foldcolumn(win_T *wp, winlinevars_T *wlv);
-extern bool rs_use_cursor_line_nr(win_T *wp, winlinevars_T *wlv);
-extern int rs_get_line_number_attr(win_T *wp, winlinevars_T *wlv);
-extern void rs_draw_sign(bool nrcol, win_T *wp, winlinevars_T *wlv, int sign_idx);
-extern void rs_draw_lnum_col(win_T *wp, winlinevars_T *wlv);
-extern void rs_advance_color_col(winlinevars_T *wlv, int vcol);
-extern int rs_line_putchar(buf_T *buf, const char **pp, schar_T *dest, int maxcells, int vcol);
-extern int rs_draw_virt_text_item(buf_T *buf, int col, VirtText vt, int hl_mode, int max_col,
-                                  int vcol, int skip_cells);
-extern void rs_draw_virt_text(win_T *wp, buf_T *buf, int col_off, int *end_col, int win_row);
-extern void rs_win_line_start(win_T *wp, winlinevars_T *wlv);
-extern void rs_fix_for_boguscols(winlinevars_T *wlv);
-extern void rs_draw_col_buf(win_T *wp, winlinevars_T *wlv, const char *text, size_t len,
-                            int attr, const colnr_T *fold_vcol, bool inc_vcol);
-extern void rs_apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv);
-extern void rs_set_line_attr_for_diff(win_T *wp, winlinevars_T *wlv);
-extern void rs_handle_breakindent(win_T *wp, winlinevars_T *wlv);
-extern void rs_handle_showbreak_and_filler(win_T *wp, winlinevars_T *wlv);
-extern bool rs_has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v);
-extern void rs_handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t v, bool selected);
-extern void rs_wlv_put_linebuf(win_T *wp, const winlinevars_T *wlv, int endcol, bool clear_end,
-                               int bg_attr, int flags);
 extern int rs_diff_check_with_linestatus(win_T *wp, linenr_T lnum, int *linestatus);
 extern bool rs_diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline);
 extern bool rs_diff_change_parse(diffline_T *diffline, diffline_change_T *change,
                                  int *change_start, int *change_end);
+
+// Rust-exported functions (export_name = original C name, called directly from C)
+extern schar_T get_lcs_ext(win_T *wp);
+extern void advance_color_col(winlinevars_T *wlv, int vcol);
+extern void margin_columns_win(win_T *wp, int *left_col, int *right_col);
+extern int line_putchar(buf_T *buf, const char **pp, schar_T *dest, int maxcells, int vcol);
+extern void draw_virt_text(win_T *wp, buf_T *buf, int col_off, int *end_col, int win_row);
+extern int draw_virt_text_item(buf_T *buf, int col, VirtText vt, HlMode hl_mode, int max_col,
+                               int vcol, int skip_cells);
+extern void draw_col_buf(win_T *wp, winlinevars_T *wlv, const char *text, size_t len, int attr,
+                         const colnr_T *fold_vcol, bool inc_vcol);
+extern void draw_col_fill(winlinevars_T *wlv, schar_T fillchar, int width, int attr);
+extern bool use_cursor_line_highlight(win_T *wp, linenr_T lnum);
+extern void draw_foldcolumn(win_T *wp, winlinevars_T *wlv);
+extern void fill_foldcolumn(win_T *wp, foldinfo_T foldinfo, linenr_T lnum, int attr, int fdc,
+                            int *wlv_off, colnr_T *out_vcol, schar_T *out_buffer);
+extern void draw_sign(bool nrcol, win_T *wp, winlinevars_T *wlv, int sign_idx);
+extern bool use_cursor_line_nr(win_T *wp, winlinevars_T *wlv);
+extern int get_line_number_attr(win_T *wp, winlinevars_T *wlv);
+extern void draw_lnum_col(win_T *wp, winlinevars_T *wlv);
+extern void handle_breakindent(win_T *wp, winlinevars_T *wlv);
+extern void handle_showbreak_and_filler(win_T *wp, winlinevars_T *wlv);
+extern void apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv);
+extern void set_line_attr_for_diff(win_T *wp, winlinevars_T *wlv);
+extern bool has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v);
+extern void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t v, bool selected);
+extern void win_line_start(win_T *wp, winlinevars_T *wlv);
+extern void fix_for_boguscols(winlinevars_T *wlv);
+extern int get_rightmost_vcol(win_T *wp, const int *color_cols);
+extern void wlv_put_linebuf(win_T *wp, const winlinevars_T *wlv, int endcol, bool clear_end,
+                            int bg_attr, int flags);
 
 /// Return type of rs_get_foldtext (matches Rust FoldTextResult repr(C)).
 typedef struct {
@@ -224,140 +226,20 @@ void drawline_free_all_mem(void)
 }
 #endif
 
-/// Get the 'listchars' "extends" characters to use for "wp", or NUL if it
-/// shouldn't be used.
-static schar_T get_lcs_ext(win_T *wp)
-{
-  return rs_get_lcs_ext(wp);
-}
 
-/// Advance wlv->color_cols if not NULL
-static void advance_color_col(winlinevars_T *wlv, int vcol)
-{
-  rs_advance_color_col(wlv, vcol);
-}
 
-/// Used when 'cursorlineopt' contains "screenline": compute the margins between
-/// which the highlighting is used.
-static void margin_columns_win(win_T *wp, int *left_col, int *right_col)
-{
-  // cache previous calculations depending on w_virtcol
-  static int saved_w_virtcol;
-  static win_T *prev_wp;
-  static int prev_width1;
-  static int prev_width2;
-  static int prev_left_col;
-  static int prev_right_col;
 
-  int cur_col_off = win_col_off(wp);
-  int width1 = wp->w_view_width - cur_col_off;
-  int width2 = width1 + win_col_off2(wp);
 
-  if (saved_w_virtcol == wp->w_virtcol && prev_wp == wp
-      && prev_width1 == width1 && prev_width2 == width2) {
-    *right_col = prev_right_col;
-    *left_col = prev_left_col;
-    return;
-  }
 
-  // Compute using Rust implementation
-  rs_margin_columns_win(wp, left_col, right_col);
 
-  // cache values
-  prev_left_col = *left_col;
-  prev_right_col = *right_col;
-  prev_wp = wp;
-  prev_width1 = width1;
-  prev_width2 = width2;
-  saved_w_virtcol = wp->w_virtcol;
-}
 
-/// Put a single char from an UTF-8 buffer into a line buffer.
-///
-/// If `*pp` is a double-width char and only one cell is left, emit a space,
-/// and don't advance *pp
-///
-/// Handles composing chars
-static int line_putchar(buf_T *buf, const char **pp, schar_T *dest, int maxcells, int vcol)
-{
-  return rs_line_putchar(buf, pp, dest, maxcells, vcol);
-}
 
-static void draw_virt_text(win_T *wp, buf_T *buf, int col_off, int *end_col, int win_row)
-{
-  rs_draw_virt_text(wp, buf, col_off, end_col, win_row);
-}
 
-static int draw_virt_text_item(buf_T *buf, int col, VirtText vt, HlMode hl_mode, int max_col,
-                               int vcol, int skip_cells)
-{
-  return rs_draw_virt_text_item(buf, col, vt, hl_mode, max_col, vcol, skip_cells);
-}
 
-// TODO(bfredl): integrate with grid.c linebuf code? madness?
-static void draw_col_buf(win_T *wp, winlinevars_T *wlv, const char *text, size_t len, int attr,
-                         const colnr_T *fold_vcol, bool inc_vcol)
-{
-  rs_draw_col_buf(wp, wlv, text, len, attr, fold_vcol, inc_vcol);
-}
 
-static void draw_col_fill(winlinevars_T *wlv, schar_T fillchar, int width, int attr)
-{
-  rs_draw_col_fill(wlv, fillchar, width, attr);
-}
 
-/// Return true if CursorLineSign highlight is to be used.
-bool use_cursor_line_highlight(win_T *wp, linenr_T lnum)
-{
-  return rs_use_cursor_line_highlight(wp, lnum);
-}
 
-/// Setup for drawing the 'foldcolumn', if there is one.
-static void draw_foldcolumn(win_T *wp, winlinevars_T *wlv)
-{
-  rs_draw_foldcolumn(wp, wlv);
-}
 
-/// Draw the foldcolumn or fill "out_buffer". Assume monocell characters.
-///
-/// @param fdc  Current width of the foldcolumn
-/// @param[out] wlv_off  Pointer to linebuf offset, incremented for default column
-/// @param[out] out_buffer  Char array to fill, only used for 'statuscolumn'
-/// @param[out] out_vcol  vcol array to fill, only used for 'statuscolumn'
-void fill_foldcolumn(win_T *wp, foldinfo_T foldinfo, linenr_T lnum, int attr, int fdc, int *wlv_off,
-                     colnr_T *out_vcol, schar_T *out_buffer)
-{
-  rs_fill_foldcolumn(wp, foldinfo, lnum, attr, fdc, wlv_off, out_vcol, out_buffer);
-}
-
-/// Get information needed to display the sign in line "wlv->lnum" in window "wp".
-/// If "nrcol" is true, the sign is going to be displayed in the number column.
-/// Otherwise the sign is going to be displayed in the sign column. If there is no
-/// sign, draw blank cells instead.
-static void draw_sign(bool nrcol, win_T *wp, winlinevars_T *wlv, int sign_idx)
-{
-  rs_draw_sign(nrcol, wp, wlv, sign_idx);
-}
-
-/// Return true if CursorLineNr highlight is to be used for the number column.
-static bool use_cursor_line_nr(win_T *wp, winlinevars_T *wlv)
-{
-  return rs_use_cursor_line_nr(wp, wlv);
-}
-
-/// Return line number attribute, combining the appropriate LineNr* highlight
-/// with the highest priority sign numhl highlight, if any.
-static int get_line_number_attr(win_T *wp, winlinevars_T *wlv)
-{
-  return rs_get_line_number_attr(wp, wlv);
-}
-
-/// Display the absolute or relative line number.  After the first row fill with
-/// blanks when the 'n' flag isn't in 'cpo'.
-static void draw_lnum_col(win_T *wp, winlinevars_T *wlv)
-{
-  rs_draw_lnum_col(wp, wlv);
-}
 
 /// Build and draw the 'statuscolumn' string for line "lnum" in window "wp".
 static void draw_statuscol(win_T *wp, winlinevars_T *wlv, int virtnum, int col_rows,
@@ -432,52 +314,14 @@ static void draw_statuscol(win_T *wp, winlinevars_T *wlv, int virtnum, int col_r
   draw_col_fill(wlv, schar_from_ascii(' '), stcp->width - width, cur_attr);
 }
 
-static void handle_breakindent(win_T *wp, winlinevars_T *wlv)
-{
-  rs_handle_breakindent(wp, wlv);
-}
 
-static void handle_showbreak_and_filler(win_T *wp, winlinevars_T *wlv)
-{
-  rs_handle_showbreak_and_filler(wp, wlv);
-}
 
-static void apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv)
-{
-  rs_apply_cursorline_highlight(wp, wlv);
-}
 
-static void set_line_attr_for_diff(win_T *wp, winlinevars_T *wlv)
-{
-  rs_set_line_attr_for_diff(wp, wlv);
-}
 
-/// Checks if there is more inline virtual text that need to be drawn.
-static bool has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v)
-{
-  return rs_has_more_inline_virt(wlv, v);
-}
 
-static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t v, bool selected)
-{
-  rs_handle_inline_virtual_text(wp, wlv, v, selected);
-}
 
-/// Start a screen line at column zero.
-static void win_line_start(win_T *wp, winlinevars_T *wlv)
-{
-  rs_win_line_start(wp, wlv);
-}
 
-static void fix_for_boguscols(winlinevars_T *wlv)
-{
-  rs_fix_for_boguscols(wlv);
-}
 
-static int get_rightmost_vcol(win_T *wp, const int *color_cols)
-{
-  return rs_get_rightmost_vcol(wp, color_cols);
-}
 
 // =============================================================================
 // Phase D2: Line Rendering FFI Accessors
@@ -2665,13 +2509,6 @@ end_check:
 /// Also takes care of putting "<<<" on the first line for 'smoothscroll'
 /// when 'showbreak' is not set.
 ///
-/// @param clear_end  clear until the end of the screen line.
-/// @param flags  for grid_put_linebuf(), but shouldn't contain SLF_RIGHTLEFT.
-static void wlv_put_linebuf(win_T *wp, const winlinevars_T *wlv, int endcol, bool clear_end,
-                            int bg_attr, int flags)
-{
-  rs_wlv_put_linebuf(wp, wlv, endcol, clear_end, bg_attr, flags);
-}
 
 static int decor_providers_setup(int rows_to_draw, bool draw_from_line_start, linenr_T lnum,
                                  colnr_T col, win_T *wp)
