@@ -1402,30 +1402,6 @@ int op_change(oparg_T *oap)
 
 /// When the cursor is on the NUL past the end of the line and it should not be
 /// there move it left.
-void adjust_cursor_eol(void)
-{
-  unsigned cur_ve_flags = get_ve_flags(curwin);
-
-  const bool adj_cursor = (curwin->w_cursor.col > 0
-                           && gchar_cursor() == NUL
-                           && (cur_ve_flags & kOptVeFlagOnemore) == 0
-                           && !(restart_edit || (State & MODE_INSERT)));
-  if (!adj_cursor) {
-    return;
-  }
-
-  // Put the cursor on the last character in the line.
-  dec_cursor();
-
-  if (cur_ve_flags == kOptVeFlagAll) {
-    colnr_T scol, ecol;
-
-    // Coladd is set to the width of the last character.
-    getvcol(curwin, &curwin->w_cursor, &scol, NULL, &ecol);
-    curwin->w_cursor.coladd = ecol - scol + 1;
-  }
-}
-
 /// If \p "process" is true and the line begins with a comment leader (possibly
 /// after some white space), return a pointer to the text after it.
 /// Put a boolean value indicating whether the line ends with an unclosed

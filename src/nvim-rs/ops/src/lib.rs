@@ -510,6 +510,60 @@ pub extern "C" fn rs_calc_op_byte_count(line_count: c_int, avg_line_len: c_int) 
     calc_op_byte_count(line_count, avg_line_len)
 }
 
+// =============================================================================
+// Phase 6: adjust_cursor_eol
+// =============================================================================
+
+const K_OPT_VE_FLAG_ONEMORE: c_int = 0x08;
+const K_OPT_VE_FLAG_ALL: c_int = 0x04;
+const MODE_INSERT: c_int = 0x10;
+
+extern "C" {
+    // Cursor position accessors
+    fn nvim_get_cursor_col() -> c_int;
+    fn nvim_gchar_cursor() -> c_int;
+    fn nvim_get_ve_flags() -> c_int;
+    fn nvim_get_restart_edit() -> c_int;
+    fn nvim_get_State() -> c_int;
+    fn nvim_dec_cursor() -> c_int;
+    // getvcol for cursor (returns scol and ecol via out-params)
+    fn nvim_getvcol_cursor(scol: *mut c_int, ecol: *mut c_int);
+    fn nvim_set_cursor_coladd(val: c_int);
+}
+
+/// Adjust the cursor column if we're at EOL and not in 'virtualedit' onemore.
+///
+/// Ported from `adjust_cursor_eol()` in ops.c.
+///
+/// # Safety
+/// Accesses global cursor state via C accessors.
+#[unsafe(export_name = "adjust_cursor_eol")]
+pub unsafe extern "C" fn rs_adjust_cursor_eol() {
+    let cur_ve_flags = nvim_get_ve_flags();
+
+    let col = nvim_get_cursor_col();
+    let ch = nvim_gchar_cursor();
+    let onemore = (cur_ve_flags & K_OPT_VE_FLAG_ONEMORE) == 0;
+    let restart = nvim_get_restart_edit() != 0;
+    let state = nvim_get_State();
+    let in_insert = (state & MODE_INSERT) != 0;
+
+    let adj_cursor = col > 0 && ch == 0 && onemore && !restart && !in_insert;
+    if !adj_cursor {
+        return;
+    }
+
+    // Put the cursor on the last character in the line.
+    nvim_dec_cursor();
+
+    if cur_ve_flags == K_OPT_VE_FLAG_ALL {
+        let mut scol: c_int = 0;
+        let mut ecol: c_int = 0;
+        nvim_getvcol_cursor(&raw mut scol, &raw mut ecol);
+        nvim_set_cursor_coladd(ecol - scol + 1);
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {

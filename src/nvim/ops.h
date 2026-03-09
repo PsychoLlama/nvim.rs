@@ -66,5 +66,6 @@ void cursor_pos_info(dict_T *dict);
 void do_pending_operator(cmdarg_T *cap, int old_col, bool gui_yank);
 bool do_addsub(int op_type, pos_T *pos, int length, linenr_T Prenum1);
 void shift_line(bool left, bool round, int amount, int call_changed_bytes);
+void adjust_cursor_eol(void);
 
 EXTERN LuaRef repeat_luaref INIT( = LUA_NOREF);  ///< LuaRef for "."
