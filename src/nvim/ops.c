@@ -979,30 +979,6 @@ extern int op_replace(oparg_T *oap, int c);
 
 _Static_assert(kMTBlockWise == 2, "kMTBlockWise must be 2");
 
-/// Check if buffer is empty or oap->empty.
-int nvim_opr_is_empty(oparg_T *oap)
-{
-  return ((curbuf->b_ml.ml_flags & ML_EMPTY) || oap->empty) ? 1 : 0;
-}
-
-/// Get motion type.
-int nvim_opr_get_motion_type(oparg_T *oap)
-{
-  return (int)oap->motion_type;
-}
-
-/// Adjust multi-byte opend.
-void nvim_opr_mb_adjust_opend(oparg_T *oap)
-{
-  mb_adjust_opend(oap);
-}
-
-/// Save undo for the replace operation range.
-int nvim_opr_u_save(oparg_T *oap)
-{
-  return u_save((linenr_T)(oap->start.lnum - 1),
-                (linenr_T)(oap->end.lnum + 1));
-}
 
 /// Block mode replacement loop — all lines in the block.
 void nvim_opr_block_loop(oparg_T *oap, int c, int had_ctrl_v_cr)

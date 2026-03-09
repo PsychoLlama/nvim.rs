@@ -14,10 +14,14 @@ const REPLACE_NL_NCHAR: c_int = -2;
 const K_MT_BLOCK_WISE: c_int = 2;
 
 extern "C" {
-    fn nvim_opr_is_empty(oap: *mut c_void) -> c_int;
-    fn nvim_opr_get_motion_type(oap: *mut c_void) -> c_int;
-    fn nvim_opr_mb_adjust_opend(oap: *mut c_void);
-    fn nvim_opr_u_save(oap: *mut c_void) -> c_int;
+    // Generic accessors (reuse existing C shims)
+    fn nvim_curbuf_ml_empty() -> bool;
+    fn nvim_oap_get_empty(oap: *const c_void) -> c_int;
+    fn nvim_oap_get_motion_type(oap: *const c_void) -> c_int;
+    fn nvim_opd_mb_adjust_opend(oap: *mut c_void);
+    fn nvim_oap_get_start_lnum(oap: *const c_void) -> c_int;
+    fn nvim_oap_get_end_lnum(oap: *const c_void) -> c_int;
+    fn nvim_u_save(top: c_int, bot: c_int) -> c_int;
 
     // Block mode: full iteration + replacement delegated to C
     fn nvim_opr_block_loop(oap: *mut c_void, c: c_int, had_ctrl_v_cr: c_int);
@@ -36,7 +40,7 @@ extern "C" {
 /// - Accesses global state via C accessors
 #[unsafe(export_name = "op_replace")]
 pub unsafe extern "C" fn rs_op_replace(oap: *mut c_void, c: c_int) -> c_int {
-    if nvim_opr_is_empty(oap) != 0 {
+    if nvim_curbuf_ml_empty() || nvim_oap_get_empty(oap) != 0 {
         return OK;
     }
 
@@ -47,13 +51,15 @@ pub unsafe extern "C" fn rs_op_replace(oap: *mut c_void, c: c_int) -> c_int {
         _ => (c, false),
     };
 
-    nvim_opr_mb_adjust_opend(oap);
+    nvim_opd_mb_adjust_opend(oap);
 
-    if nvim_opr_u_save(oap) == FAIL {
+    let start_lnum = nvim_oap_get_start_lnum(oap);
+    let end_lnum = nvim_oap_get_end_lnum(oap);
+    if nvim_u_save(start_lnum - 1, end_lnum + 1) == FAIL {
         return FAIL;
     }
 
-    if nvim_opr_get_motion_type(oap) == K_MT_BLOCK_WISE {
+    if nvim_oap_get_motion_type(oap) == K_MT_BLOCK_WISE {
         nvim_opr_block_loop(oap, c, c_int::from(had_ctrl_v_cr));
     } else {
         nvim_opr_charwise_loop(oap, c);
