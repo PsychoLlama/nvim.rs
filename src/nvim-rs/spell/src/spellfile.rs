@@ -3794,6 +3794,188 @@ pub unsafe extern "C" fn rs_spell_find_duplicate_word(
 }
 
 // =============================================================================
+// mkspell Argument Parsing (Phase 5)
+// =============================================================================
+
+/// Result of `rs_mkspell_output_fname`.
+#[repr(C)]
+pub struct MkspellFnameResult {
+    /// NUL-terminated output filename (at most MAXPATHL bytes including NUL).
+    pub fname: [u8; 4096],
+    /// Length of the filename (excluding NUL).
+    pub fname_len: u16,
+    /// Whether the output is an .add.spl file (detected from filename).
+    pub is_add: bool,
+    /// Whether the output is an ascii .spl file (detected from filename).
+    pub is_ascii: bool,
+}
+
+/// Compute the output `.spl` filename from `mkspell` arguments.
+///
+/// Logic mirrors the C code in `mkspell()`:
+/// - `fcount == 1` and name ends in `.add`: output is `name.spl`
+/// - `fcount == 1` (bare name): output is `name.<enc>.spl`
+/// - name already ends in `.spl`: use as-is
+/// - otherwise: output is `name.<enc>.spl`
+///
+/// `enc` is the encoding string (e.g. `"ascii"` or the result of `spell_enc()`),
+/// passed from C as a NUL-terminated string.
+///
+/// Returns `0` on success, `-1` on error (NULL pointer or buffer overflow).
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mkspell_output_fname(
+    fnames: *const *const u8,
+    fcount: c_int,
+    enc: *const u8,
+    result_out: *mut MkspellFnameResult,
+) -> c_int {
+    if fnames.is_null() || enc.is_null() || result_out.is_null() || fcount < 1 {
+        return -1;
+    }
+
+    let first = *fnames;
+    if first.is_null() {
+        return -1;
+    }
+
+    // Measure first filename length.
+    let mut name_len = 0usize;
+    while *first.add(name_len) != 0 {
+        name_len += 1;
+    }
+    let name = std::slice::from_raw_parts(first, name_len);
+
+    // Measure encoding length.
+    let mut enc_len = 0usize;
+    while *enc.add(enc_len) != 0 {
+        enc_len += 1;
+    }
+    let enc_bytes = std::slice::from_raw_parts(enc, enc_len);
+
+    let result = &mut *result_out;
+    let buf = &mut result.fname;
+    let mut out_len = 0usize;
+
+    macro_rules! append {
+        ($slice:expr) => {
+            let s: &[u8] = $slice;
+            if out_len + s.len() >= buf.len() {
+                return -1;
+            }
+            buf[out_len..out_len + s.len()].copy_from_slice(s);
+            out_len += s.len();
+        };
+    }
+
+    if fcount == 1 && name_len > 4 && &name[name_len - 4..] == b".add" {
+        // "path/en.latin1.add" -> "path/en.latin1.add.spl"
+        append!(name);
+        append!(b".spl");
+    } else if fcount == 1 && name_len > 4 && &name[name_len - 4..] == b".spl" {
+        // Already ends in ".spl" - use as-is
+        append!(name);
+    } else if name_len > 4 && &name[name_len - 4..] == b".spl" {
+        // Multi-file case where first arg ends in ".spl"
+        append!(name);
+    } else {
+        // Build "name.<enc>.spl"
+        append!(name);
+        append!(b".");
+        append!(enc_bytes);
+        append!(b".spl");
+    }
+
+    buf[out_len] = 0; // NUL-terminate
+
+    // Detect .ascii. and .add. in the tail of the output filename.
+    // Find path tail (last '/' or start).
+    let fname_so_far = &buf[..out_len];
+    let tail_start = fname_so_far
+        .iter()
+        .rposition(|&b| b == b'/')
+        .map_or(0, |p| p + 1);
+    let tail = &buf[tail_start..out_len];
+
+    result.is_ascii = tail.windows(7).any(|w| w == b".ascii.");
+    result.is_add = tail.windows(5).any(|w| w == b".add.");
+    result.fname_len = out_len as u16;
+    0
+}
+
+/// Validate `mkspell` input filenames and extract region names.
+///
+/// For `incount > 1`, each input filename must have a `_XX` suffix (two-char
+/// region code). This function extracts those region chars into `region_name_out`
+/// (a buffer of at least `incount * 2` bytes).
+///
+/// Returns:
+/// - `0`: OK
+/// - `1`: filename tail is too short to contain `_XX` suffix
+/// - `2`: `incount > MAXREGIONS` (8)
+/// - `-1`: NULL pointer or invalid arguments
+///
+/// When `incount == 1`, no region validation is needed and this function
+/// returns `0` immediately.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mkspell_validate_args(
+    innames: *const *const u8,
+    incount: c_int,
+    region_name_out: *mut u8,
+) -> c_int {
+    const MAXREGIONS: i32 = 8;
+
+    if innames.is_null() || region_name_out.is_null() || incount < 0 {
+        return -1;
+    }
+
+    if incount > MAXREGIONS {
+        return 2;
+    }
+
+    if incount <= 1 {
+        return 0; // single input: no region validation needed
+    }
+
+    for i in 0..incount.unsigned_abs() as usize {
+        let name_ptr = *innames.add(i);
+        if name_ptr.is_null() {
+            return -1;
+        }
+
+        // Measure length.
+        let mut len = 0usize;
+        while *name_ptr.add(len) != 0 {
+            len += 1;
+        }
+        let name = std::slice::from_raw_parts(name_ptr, len);
+
+        // Find the tail (after last '/').
+        let tail_start = name.iter().rposition(|&b| b == b'/').map_or(0, |p| p + 1);
+        let tail = &name[tail_start..];
+
+        // Tail must be at least 5 chars: "ab_XX" (name + underscore + 2-char region)
+        // and name[len-3] must be '_'.
+        if tail.len() < 5 || name[len - 3] != b'_' {
+            return 1;
+        }
+
+        // Extract region chars (lowercased).
+        let r0 = name[len - 2].to_ascii_lowercase();
+        let r1 = name[len - 1].to_ascii_lowercase();
+        *region_name_out.add(i * 2) = r0;
+        *region_name_out.add(i * 2 + 1) = r1;
+    }
+
+    0
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

@@ -477,6 +477,22 @@ extern bool rs_spell_find_duplicate_word(const uint8_t *file_content, size_t con
                                          const uint8_t *word, size_t word_len,
                                          size_t *offset_out);
 
+// Phase 5: mkspell argument parsing helpers
+
+typedef struct {
+  uint8_t  fname[4096];    // NUL-terminated output filename
+  uint16_t fname_len;      // length of fname (excluding NUL)
+  bool     is_add;         // detected .add.spl output
+  bool     is_ascii;       // detected .ascii.spl output
+} RsMkspellFnameResult;
+
+extern int rs_mkspell_output_fname(const uint8_t *const *fnames, int fcount,
+                                   const uint8_t *enc,
+                                   RsMkspellFnameResult *result_out);
+
+extern int rs_mkspell_validate_args(const uint8_t *const *innames, int incount,
+                                    uint8_t *region_name_out);
+
 // Phase B6: Affix file parsing infrastructure
 // The main spell_read_aff() function remains in C due to its complexity
 // (~738 LOC, text file parsing, encoding conversion, hash tables).
@@ -5424,35 +5440,24 @@ static void mkspell(int fcount, char **fnames, bool ascii, bool over_write, bool
 
   char *wfname = xmalloc(MAXPATHL);
 
+  // Use Rust to compute the output .spl filename and detect .add/.ascii flags.
   if (fcount >= 1) {
-    int len = (int)strlen(fnames[0]);
-    if (fcount == 1 && len > 4 && strcmp(fnames[0] + len - 4, ".add") == 0) {
-      // For ":mkspell path/en.latin1.add" output file is
-      // "path/en.latin1.add.spl".
-      incount = 1;
-      vim_snprintf(wfname, MAXPATHL, "%s.spl", fnames[0]);
-    } else if (fcount == 1) {
-      // For ":mkspell path/vim" output file is "path/vim.latin1.spl".
-      incount = 1;
-      vim_snprintf(wfname, MAXPATHL, SPL_FNAME_TMPL,
-                   fnames[0], spin.si_ascii ? "ascii" : spell_enc());
-    } else if (len > 4 && strcmp(fnames[0] + len - 4, ".spl") == 0) {
-      // Name ends in ".spl", use as the file name.
-      xstrlcpy(wfname, fnames[0], MAXPATHL);
-    } else {
-      // Name should be language, make the file name from it.
-      vim_snprintf(wfname, MAXPATHL, SPL_FNAME_TMPL,
-                   fnames[0], spin.si_ascii ? "ascii" : spell_enc());
-    }
-
-    // Check for .ascii.spl.
-    if (strstr(path_tail(wfname), SPL_FNAME_ASCII) != NULL) {
-      spin.si_ascii = true;
-    }
-
-    // Check for .add.spl.
-    if (strstr(path_tail(wfname), SPL_FNAME_ADD) != NULL) {
-      spin.si_add = true;
+    const char *enc_str = spin.si_ascii ? "ascii" : spell_enc();
+    RsMkspellFnameResult fname_res;
+    int fret = rs_mkspell_output_fname((const uint8_t *const *)fnames, fcount,
+                                       (const uint8_t *)enc_str, &fname_res);
+    if (fret == 0 && fname_res.fname_len > 0) {
+      xstrlcpy(wfname, (const char *)fname_res.fname, MAXPATHL);
+      if (fname_res.is_ascii) {
+        spin.si_ascii = true;
+      }
+      if (fname_res.is_add) {
+        spin.si_add = true;
+      }
+      // For single .add input file, incount must be 1.
+      if (fcount == 1) {
+        incount = 1;
+      }
     }
   }
 
@@ -5476,21 +5481,28 @@ static void mkspell(int fcount, char **fnames, bool ascii, bool over_write, bool
 
     fname = xmalloc(MAXPATHL);
 
+    // Use Rust to validate input filenames and extract region names for
+    // multi-region builds.
+    if (incount > 1) {
+      int vret = rs_mkspell_validate_args((const uint8_t *const *)innames,
+                                          incount,
+                                          (uint8_t *)spin.si_region_name);
+      if (vret == 1) {
+        // Find the offending filename and report it.
+        for (int i = 0; i < incount; i++) {
+          int len = (int)strlen(innames[i]);
+          if (strlen(path_tail(innames[i])) < 5 || innames[i][len - 3] != '_') {
+            semsg(_("E755: Invalid region in %s"), innames[i]);
+            goto theend;
+          }
+        }
+        goto theend;
+      }
+    }
+
     // Init the aff and dic pointers.
-    // Get the region names if there are more than 2 arguments.
     for (int i = 0; i < incount; i++) {
       afile[i] = NULL;
-
-      if (incount > 1) {
-        int len = (int)strlen(innames[i]);
-        if (strlen(path_tail(innames[i])) < 5
-            || innames[i][len - 3] != '_') {
-          semsg(_("E755: Invalid region in %s"), innames[i]);
-          goto theend;
-        }
-        spin.si_region_name[i * 2] = (char)(uint8_t)TOLOWER_ASC(innames[i][len - 2]);
-        spin.si_region_name[i * 2 + 1] = (char)(uint8_t)TOLOWER_ASC(innames[i][len - 1]);
-      }
     }
     spin.si_region_count = incount;
 
