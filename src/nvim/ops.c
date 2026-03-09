@@ -470,16 +470,6 @@ static void block_insert(oparg_T *oap, const char *s, size_t slen, bool b_insert
   }
 }
 
-/// Handle a delete operation.
-///
-/// @return  FAIL if undo failed, OK otherwise.
-// ===========================================================================
-// op_delete C accessors for Rust migration (Phase 4)
-// ===========================================================================
-// nvim_opd_setup_visual_reg, nvim_opd_maybe_promote_to_linewise,
-// nvim_opd_check_empty_line, nvim_opd_finish, nvim_opd_setmarks
-// have been absorbed into Rust (delete_full.rs).
-
 /// Adjust multi-byte opend for delete (called from Rust op_delete and op_replace).
 void nvim_opd_mb_adjust_opend(oparg_T *oap)
 {
@@ -747,13 +737,6 @@ static void replace_character(int c)
   // Backup to the replaced character.
   dec_cursor();
 }
-
-// ===========================================================================
-// op_replace C accessors for Rust migration (Phase 3)
-// ===========================================================================
-
-// op_replace is now exported from Rust via #[export_name]
-extern int op_replace(oparg_T *oap, int c);
 
 _Static_assert(kMTBlockWise == 2, "kMTBlockWise must be 2");
 
@@ -1989,25 +1972,10 @@ void op_addsub(oparg_T *oap, linenr_T Prenum1, bool g_cmd)
   }
 }
 
-// =============================================================================
-// C accessor functions for rs_do_addsub (Phase 2)
-// =============================================================================
-
-// File-scope static: cursor saved by setup, restored by cleanup on visual exit.
-static pos_T addsub_saved_cursor;
-
-void nvim_addsub_save_cursor(void) { addsub_saved_cursor = curwin->w_cursor; }
-void nvim_addsub_restore_cursor(void) { curwin->w_cursor = addsub_saved_cursor; }
-
-
 void clear_oparg(oparg_T *oap)
 {
   CLEAR_POINTER(oap);
 }
-
-// =============================================================================
-// C accessor functions for rs_cursor_pos_info (Phase 1)
-// =============================================================================
 
 /// Rust port of line_count_info (replaces the deleted static C version).
 extern varnumber_T nvim_rs_line_count_info(char *line, varnumber_T *wc, varnumber_T *cc,
@@ -2314,10 +2282,6 @@ static bool is_ex_cmdchar(cmdarg_T *cap)
 
 /// Handle an operator after Visual mode or when the movement is finished.
 /// "gui_yank" is true when yanking text for the clipboard.
-// ===========================================================================
-// do_pending_operator C accessors for Rust migration (Phase 5)
-// ===========================================================================
-
 // File-scope statics for do_pending_operator (bridges across accessor calls)
 static redo_VIsual_T dpo_redo_VIsual = { NUL, 0, 0, 0, 0 };
 static bool dpo_include_line_break;

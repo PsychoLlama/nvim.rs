@@ -8,6 +8,10 @@ use std::ffi::{c_int, c_void};
 /// OP_NR_SUB constant (matches ops.h).
 const OP_NR_SUB: c_int = 29;
 
+/// Saved cursor position for addsub visual mode (mirrors `addsub_saved_cursor` C static).
+/// Neovim is single-threaded; mutated only under the Neovim GIL equivalent.
+static mut ADDSUB_SAVED_CURSOR: [i32; 3] = [0; 3];
+
 /// Result from the number-scanning phase.
 #[derive(Debug, Clone, Default)]
 struct AddsubScanResult {
@@ -48,8 +52,7 @@ struct NumArithParams {
 }
 
 extern "C" {
-    fn nvim_addsub_save_cursor();
-    fn nvim_addsub_restore_cursor();
+    fn nvim_get_curwin_cursor_pos(pos: *mut [i32; 3]);
     fn nvim_curbuf_nf_has(c: c_int) -> c_int;
     fn nvim_cmdmod_has_lockmarks() -> c_int;
     fn nvim_curbuf_set_op_start_to_cursor_col(col: c_int);
@@ -93,6 +96,25 @@ extern "C" {
     fn nvim_get_cursor_col() -> c_int;
     fn utf_head_off(base: *const std::ffi::c_char, p: *const std::ffi::c_char) -> c_int;
     fn utfc_ptr2len(p: *const std::ffi::c_char) -> c_int;
+}
+
+/// Save the current window cursor to the addsub static (replaces C `nvim_addsub_save_cursor`).
+///
+/// # Safety
+/// Must be called only from the Neovim main thread.
+#[unsafe(export_name = "nvim_addsub_save_cursor")]
+pub unsafe extern "C" fn rs_addsub_save_cursor() {
+    nvim_get_curwin_cursor_pos(&raw mut ADDSUB_SAVED_CURSOR);
+}
+
+/// Restore the window cursor from the addsub static (replaces C `nvim_addsub_restore_cursor`).
+///
+/// # Safety
+/// Must be called only from the Neovim main thread.
+#[unsafe(export_name = "nvim_addsub_restore_cursor")]
+pub unsafe extern "C" fn rs_addsub_restore_cursor() {
+    let pos = ADDSUB_SAVED_CURSOR;
+    nvim_curwin_set_cursor_from_pos(pos.as_ptr().cast());
 }
 
 // ============================================================================
@@ -687,7 +709,7 @@ unsafe fn addsub_set_marks(startpos_col: c_int, endpos_col: c_int) {
 /// Restores cursor position or sets w_set_curswant.
 unsafe fn addsub_cleanup(visual: c_int, did_change: c_int, save_coladd: c_int) {
     if visual != 0 {
-        nvim_addsub_restore_cursor();
+        rs_addsub_restore_cursor();
     } else if did_change != 0 {
         nvim_curwin_set_w_set_curswant(true);
     } else if nvim_virtual_active() {
@@ -708,7 +730,7 @@ pub unsafe extern "C" fn rs_do_addsub(
     prenum1: c_int,
 ) -> bool {
     // === Inline nvim_addsub_setup ===
-    nvim_addsub_save_cursor();
+    rs_addsub_save_cursor();
     let visual_flag: c_int = nvim_VIsual_active();
     let save_coladd: c_int = if nvim_virtual_active() {
         let coladd = nvim_pos_get_coladd(pos);
