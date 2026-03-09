@@ -33,5 +33,6 @@ bool syn_ns_get_final_id(int *ns_id, int *hl_idp);
 RgbValue name_to_color(const char *name, int *idx);
 const char *coloridx_to_name(int idx, int val, char hexbuf[8]);
 int name_to_ctermcolor(const char *name);
+void syn_init_cmdline_highlight(bool reset, bool init);
 
 #include "highlight_group.h.generated.h"
