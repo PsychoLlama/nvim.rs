@@ -49,6 +49,11 @@ bool cmdline_expand_fuzzy_supported(const void *xp);
 bool cmdline_expand_is_file_context(const void *xp);
 bool cmdline_expand_uses_internal(const void *xp);
 
+// Phase 2: Pure logic functions implemented in Rust
+char *vim_strsave_fnameescape(const char *fname, int what);
+void escape_fname(char **pp);
+void tilde_replace(char *orig_pat, int num_files, char **files);
+
 #ifdef __cplusplus
 }
 #endif

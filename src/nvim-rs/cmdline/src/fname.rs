@@ -317,6 +317,131 @@ pub extern "C" fn rs_is_path_separator(c: c_int) -> c_int {
 }
 
 // =============================================================================
+// C FFI for vim_strsave_fnameescape / escape_fname / tilde_replace
+// =============================================================================
+
+extern "C" {
+    fn vim_strsave_escaped(s: *const c_char, esc: *const c_char) -> *mut c_char;
+    fn xfree(ptr: *mut c_char);
+    fn xmalloc(size: usize) -> *mut c_char;
+    fn rs_csh_like_shell() -> c_int;
+    fn home_replace_save(dummy: *const (), src: *const c_char) -> *mut c_char;
+    fn vim_ispathsep(c: c_int) -> c_int;
+}
+
+/// Direct C replacement for vim_strsave_fnameescape().
+///
+/// Escapes special characters in fname for use in Vim commands.
+/// Uses #[export_name] to replace the C function directly.
+///
+/// # Safety
+///
+/// `fname` must be a valid NUL-terminated C string.
+#[must_use]
+#[export_name = "vim_strsave_fnameescape"]
+pub unsafe extern "C" fn vim_strsave_fnameescape_rs(
+    fname: *const c_char,
+    what: c_int,
+) -> *mut c_char {
+    // Unix path: PATH_ESC_CHARS = " \t\n*?[{`$\\%#'\"|!<"
+    // SHELL_ESC_CHARS            = " \t\n*?[{`$\\%#'\"|!<>();&"
+    // BUFFER_ESC_CHARS           = " \t\n*?[`$\\%#'\"|!<"
+    let esc_chars: *const c_char = match what {
+        1 => c" \t\n*?[{`$\\%#'\"|!<>();&".as_ptr(),
+        2 => c" \t\n*?[`$\\%#'\"|!<".as_ptr(),
+        _ => c" \t\n*?[{`$\\%#'\"|!<".as_ptr(),
+    };
+
+    let mut p = vim_strsave_escaped(fname, esc_chars);
+
+    // For csh-like shells, also escape '!' with an extra backslash.
+    if what == 1 && rs_csh_like_shell() != 0 {
+        let s = vim_strsave_escaped(p, c"!".as_ptr());
+        xfree(p);
+        p = s;
+    }
+
+    // '>' and '+' are special at the start of some commands (:edit, :write).
+    // '-' alone is special (cd -). If so, prepend a backslash.
+    let first = *p;
+    let needs_escape = first == b'>' as c_char
+        || first == b'+' as c_char
+        || (first == b'-' as c_char && *p.add(1) == 0);
+    if needs_escape {
+        p = escape_fname_prepend_backslash(p);
+    }
+
+    p
+}
+
+/// Helper: prepend a backslash to an allocated string in place.
+///
+/// Frees the old string and returns a new one with a leading backslash.
+///
+/// # Safety
+///
+/// `p` must point to a C-heap-allocated NUL-terminated string.
+unsafe fn escape_fname_prepend_backslash(p: *mut c_char) -> *mut c_char {
+    // Calculate length using raw pointer arithmetic
+    let mut len = 0usize;
+    while *p.add(len) != 0 {
+        len += 1;
+    }
+    let new_p = xmalloc(len + 2); // +1 for backslash, +1 for NUL
+    *new_p = b'\\' as c_char;
+    std::ptr::copy_nonoverlapping(p, new_p.add(1), len + 1); // includes NUL
+    xfree(p);
+    new_p
+}
+
+/// Direct C replacement for escape_fname().
+///
+/// Prepends a backslash to a filename in allocated memory.
+///
+/// # Safety
+///
+/// `pp` must be a valid pointer to a C-heap-allocated NUL-terminated string.
+#[export_name = "escape_fname"]
+pub unsafe extern "C" fn escape_fname_rs(pp: *mut *mut c_char) {
+    let p_old = *pp;
+    *pp = escape_fname_prepend_backslash(p_old);
+}
+
+/// Direct C replacement for tilde_replace().
+///
+/// For each file in files[], if orig_pat starts with "~/",
+/// replaces the home directory prefix with "~".
+///
+/// # Safety
+///
+/// `orig_pat` must be a NUL-terminated string.
+/// `files` must be an array of `num_files` pointers to C-heap-allocated strings.
+#[export_name = "tilde_replace"]
+pub unsafe extern "C" fn tilde_replace_rs(
+    orig_pat: *const c_char,
+    num_files: c_int,
+    files: *mut *mut c_char,
+) {
+    if orig_pat.is_null() || num_files <= 0 || files.is_null() {
+        return;
+    }
+    let first = *orig_pat as u8;
+    let second = if first != 0 {
+        *orig_pat.add(1) as u8
+    } else {
+        0
+    };
+    if first == b'~' && vim_ispathsep(c_int::from(second)) != 0 {
+        for i in 0..num_files as usize {
+            let old = *files.add(i);
+            let new_p = home_replace_save(std::ptr::null(), old);
+            xfree(old);
+            *files.add(i) = new_p;
+        }
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
