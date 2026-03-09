@@ -37,10 +37,6 @@
 
 #include "strings.c.generated.h"
 
-// Used by vim_strsave_shellescape (will be removed in Phase 2)
-extern int rs_csh_like_shell(void);
-extern int rs_fish_like_shell(void);
-
 static const char e_cannot_mix_positional_and_non_positional_str[]
   = N_("E1500: Cannot mix positional and non-positional arguments: %s");
 static const char e_fmt_arg_nr_unused_str[]
@@ -71,127 +67,6 @@ static const char typename_char[] = N_("char");
 static const char typename_string[] = N_("string");
 static const char typename_float[] = N_("float");
 
-
-/// Escape "string" for use as a shell argument with system().
-/// This uses single quotes, except when we know we need to use double quotes
-/// (MS-Windows without 'shellslash' set).
-/// Escape a newline, depending on the 'shell' option.
-/// When "do_special" is true also replace "!", "%", "#" and things starting
-/// with "<" like "<cfile>".
-/// When "do_newline" is false do not escape newline unless it is csh shell.
-///
-/// @return  the result in allocated memory.
-char *vim_strsave_shellescape(const char *string, bool do_special, bool do_newline)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
-{
-  size_t l;
-
-  // Only csh and similar shells expand '!' within single quotes.  For sh and
-  // the like we must not put a backslash before it, it will be taken
-  // literally.  If do_special is set the '!' will be escaped twice.
-  // Csh also needs to have "\n" escaped twice when do_special is set.
-  int csh_like = rs_csh_like_shell();
-
-  // Fish shell uses '\' as an escape character within single quotes, so '\'
-  // itself must be escaped to get a literal '\'.
-  bool fish_like = rs_fish_like_shell();
-
-  // First count the number of extra bytes required.
-  size_t length = strlen(string) + 3;       // two quotes and a trailing NUL
-  for (const char *p = string; *p != NUL; MB_PTR_ADV(p)) {
-#ifdef MSWIN
-    if (!p_ssl) {
-      if (*p == '"') {
-        length++;                       // " -> ""
-      }
-    } else
-#endif
-    if (*p == '\'') {
-      length += 3;                      // ' => '\''
-    }
-    if ((*p == '\n' && (csh_like || do_newline))
-        || (*p == '!' && (csh_like || do_special))) {
-      length++;                         // insert backslash
-      if (csh_like && do_special) {
-        length++;                       // insert backslash
-      }
-    }
-    if (do_special && find_cmdline_var(p, &l) >= 0) {
-      length++;                         // insert backslash
-      p += l - 1;
-    }
-    if (*p == '\\' && fish_like) {
-      length++;  // insert backslash
-    }
-  }
-
-  // Allocate memory for the result and fill it.
-  char *escaped_string = xmalloc(length);
-  char *d = escaped_string;
-
-  // add opening quote
-#ifdef MSWIN
-  if (!p_ssl) {
-    *d++ = '"';
-  } else
-#endif
-  *d++ = '\'';
-
-  for (const char *p = string; *p != NUL;) {
-#ifdef MSWIN
-    if (!p_ssl) {
-      if (*p == '"') {
-        *d++ = '"';
-        *d++ = '"';
-        p++;
-        continue;
-      }
-    } else
-#endif
-    if (*p == '\'') {
-      *d++ = '\'';
-      *d++ = '\\';
-      *d++ = '\'';
-      *d++ = '\'';
-      p++;
-      continue;
-    }
-    if ((*p == '\n' && (csh_like || do_newline))
-        || (*p == '!' && (csh_like || do_special))) {
-      *d++ = '\\';
-      if (csh_like && do_special) {
-        *d++ = '\\';
-      }
-      *d++ = *p++;
-      continue;
-    }
-    if (do_special && find_cmdline_var(p, &l) >= 0) {
-      *d++ = '\\';                    // insert backslash
-      memcpy(d, p, l);                // copy the var
-      d += l;
-      p += l;
-      continue;
-    }
-    if (*p == '\\' && fish_like) {
-      *d++ = '\\';
-      *d++ = *p++;
-      continue;
-    }
-
-    mb_copy_char(&p, &d);
-  }
-
-  // add terminating quote and finish with a NUL
-#ifdef MSWIN
-  if (!p_ssl) {
-    *d++ = '"';
-  } else
-#endif
-  *d++ = '\'';
-  *d = NUL;
-
-  return escaped_string;
-}
 
 
 #if (!defined(HAVE_STRCASECMP) && !defined(HAVE_STRICMP))

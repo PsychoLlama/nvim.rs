@@ -1323,6 +1323,145 @@ pub unsafe extern "C" fn rs_strcase_save_export(orig: *const c_char, upper: bool
     unsafe { rs_strcase_save(orig, case_fn) }
 }
 
+// =============================================================================
+// Shell Escaping
+// =============================================================================
+
+extern "C" {
+    fn rs_csh_like_shell() -> c_int;
+    fn rs_fish_like_shell() -> c_int;
+    fn find_cmdline_var(src: *const c_char, usedlen: *mut usize) -> isize;
+    fn mb_copy_char(fp: *mut *const c_char, tp: *mut *mut c_char);
+}
+
+/// Escape a string for use as a shell argument.
+///
+/// Wraps the string in single quotes and escapes special characters.
+/// `do_special` enables escaping of `!` and `%`/`#` cmdline variables.
+/// `do_newline` enables escaping of newlines.
+///
+/// # Safety
+///
+/// `string` must be a valid null-terminated C string.
+/// Returns a newly allocated string that the caller must free.
+#[export_name = "vim_strsave_shellescape"]
+pub unsafe extern "C" fn rs_vim_strsave_shellescape(
+    string: *const c_char,
+    do_special: bool,
+    do_newline: bool,
+) -> *mut c_char {
+    let csh_like = unsafe { rs_csh_like_shell() } != 0;
+    let fish_like = unsafe { rs_fish_like_shell() } != 0;
+
+    // First pass: count bytes needed.
+    // strlen(string) + 2 quotes + NUL, then extra bytes per special char.
+    let string_len = unsafe { libc::strlen(string) };
+    let mut length: usize = string_len + 3;
+    let mut p = string;
+    unsafe {
+        while *p != 0 {
+            if *p as u8 == b'\'' {
+                length += 3; // ' => '\''
+            }
+            if (*p as u8 == b'\n' && (csh_like || do_newline))
+                || (*p as u8 == b'!' && (csh_like || do_special))
+            {
+                length += 1; // insert backslash
+                if csh_like && do_special {
+                    length += 1; // insert extra backslash for csh
+                }
+            }
+            if do_special {
+                let mut l: usize = 0;
+                if find_cmdline_var(p, &raw mut l) >= 0 {
+                    length += 1; // insert backslash
+                    p = p.add(l);
+                    continue;
+                }
+            }
+            if *p as u8 == b'\\' && fish_like {
+                length += 1; // insert backslash
+            }
+            // Advance by UTF-8 char length
+            let char_len = rs_utfc_ptr2len(p);
+            let advance = if char_len > 0 { char_len as usize } else { 1 };
+            p = p.add(advance);
+        }
+    }
+
+    let escaped_string = unsafe { libc::malloc(length) as *mut c_char };
+    if escaped_string.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Add opening single quote
+    let mut d = escaped_string;
+    unsafe {
+        *d = b'\'' as c_char;
+        d = d.add(1);
+    }
+
+    // Second pass: copy with escaping
+    let mut p = string;
+    unsafe {
+        while *p != 0 {
+            if *p as u8 == b'\'' {
+                *d = b'\'' as c_char;
+                d = d.add(1);
+                *d = b'\\' as c_char;
+                d = d.add(1);
+                *d = b'\'' as c_char;
+                d = d.add(1);
+                *d = b'\'' as c_char;
+                d = d.add(1);
+                p = p.add(1);
+                continue;
+            }
+            if (*p as u8 == b'\n' && (csh_like || do_newline))
+                || (*p as u8 == b'!' && (csh_like || do_special))
+            {
+                *d = b'\\' as c_char;
+                d = d.add(1);
+                if csh_like && do_special {
+                    *d = b'\\' as c_char;
+                    d = d.add(1);
+                }
+                *d = *p;
+                d = d.add(1);
+                p = p.add(1);
+                continue;
+            }
+            if do_special {
+                let mut l: usize = 0;
+                if find_cmdline_var(p, &raw mut l) >= 0 {
+                    *d = b'\\' as c_char;
+                    d = d.add(1);
+                    std::ptr::copy_nonoverlapping(p, d, l);
+                    d = d.add(l);
+                    p = p.add(l);
+                    continue;
+                }
+            }
+            if *p as u8 == b'\\' && fish_like {
+                *d = b'\\' as c_char;
+                d = d.add(1);
+                *d = *p;
+                d = d.add(1);
+                p = p.add(1);
+                continue;
+            }
+            mb_copy_char(&raw mut p, &raw mut d);
+        }
+
+        // Add closing quote and NUL
+        *d = b'\'' as c_char;
+        d = d.add(1);
+        *d = 0;
+    }
+
+    escaped_string
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {

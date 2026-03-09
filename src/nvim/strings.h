@@ -56,6 +56,8 @@ char *concat_str(const char *restrict str1, const char *restrict str2)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL;
 char *reverse_text(char *s) FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET;
 char *strrep(const char *src, const char *what, const char *rep);
+char *vim_strsave_shellescape(const char *string, bool do_special, bool do_newline)
+  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL;
 
 /// Append string to string and return pointer to the next byte
 ///
