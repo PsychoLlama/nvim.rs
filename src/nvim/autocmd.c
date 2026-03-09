@@ -1783,24 +1783,6 @@ const char *nvim_get_p_ei(void)
   return p_ei;
 }
 
-/// Duplicate memory with NUL termination (used by Rust FFI).
-char *nvim_autocmd_xmemdupz(const char *src, size_t len)
-{
-  return xmemdupz(src, len);
-}
-
-/// Allocate a string of given max size, copying src (used by Rust FFI).
-char *nvim_autocmd_xstrnsave(const char *src, size_t len)
-{
-  return xstrnsave(src, len);
-}
-
-/// Free memory allocated by xmalloc/xmemdupz/etc. (used by Rust FFI).
-void nvim_autocmd_xfree(char *ptr)
-{
-  xfree(ptr);
-}
-
 /// Set the 'eventignore' option value (used by Rust FFI).
 void nvim_autocmd_set_option_eventignore(const char *val)
 {
@@ -1984,18 +1966,6 @@ void nvim_autocmd_list_group_names(void)
   msg_end();
 }
 
-/// Wrapper for emsg().
-void nvim_autocmd_emsg(const char *msg)
-{
-  emsg(msg);
-}
-
-/// Wrapper for semsg() with one string arg.
-void nvim_autocmd_semsg_str(const char *fmt, const char *arg)
-{
-  semsg(fmt, arg);
-}
-
 /// Get the localized e_argreq message string.
 const char *nvim_autocmd_get_e_argreq(void)
 {
@@ -2107,47 +2077,6 @@ void nvim_autocmd_show_last_set(int event, size_t idx)
   }
 }
 
-/// Wrapper for msg_putchar.
-void nvim_autocmd_msg_putchar(int c)
-{
-  msg_putchar(c);
-}
-
-/// Wrapper for msg_puts with highlight.
-void nvim_autocmd_msg_puts_hl(const char *s, int hlf, bool append)
-{
-  msg_puts_hl(s, hlf, append);
-}
-
-/// Wrapper for msg_outtrans.
-void nvim_autocmd_msg_outtrans(const char *s)
-{
-  msg_outtrans(s, 0, false);
-}
-
-/// Set msg_col value.
-void nvim_autocmd_msg_col_set(int col)
-{
-  msg_col = col;
-}
-
-/// Get msg_col value.
-int nvim_autocmd_msg_col_get(void)
-{
-  return msg_col;
-}
-
-/// Get got_int flag.
-int nvim_autocmd_get_got_int(void)
-{
-  return got_int ? 1 : 0;
-}
-
-/// Get p_verbose.
-int nvim_autocmd_get_p_verbose(void)
-{
-  return (int)p_verbose;
-}
 
 /// Check if autocmd at (event, idx) matches file for has_autocmd.
 /// This consolidates the match_file_pat + buflocal check.
@@ -2171,41 +2100,6 @@ bool nvim_autocmd_match_file(int event, size_t idx,
   return buf_fnum != 0 && ap->buflocal_nr == buf_fnum;
 }
 
-/// Wrapper for path_tail.
-const char *nvim_autocmd_path_tail(const char *fname)
-{
-  return path_tail((char *)fname);
-}
-
-/// Wrapper for FullName_save.
-char *nvim_autocmd_fullname_save(const char *fname)
-{
-  return FullName_save((char *)fname, false);
-}
-
-/// Wrapper for path_fnamecmp.
-int nvim_autocmd_path_fnamecmp(const char *a, const char *b)
-{
-  return path_fnamecmp(a, b);
-}
-
-/// Get curbuf->b_fnum for au_exists.
-int nvim_autocmd_get_curbuf_fnum(void)
-{
-  return curbuf->b_fnum;
-}
-
-/// Wrapper for msg_puts (no highlight).
-void nvim_autocmd_msg_puts(const char *s)
-{
-  msg_puts(s);
-}
-
-/// Wrapper for xmallocz.
-char *nvim_autocmd_xmallocz(size_t len)
-{
-  return xmallocz(len);
-}
 
 /// Wrapper for callback_to_string.
 char *nvim_autocmd_callback_to_string(int event, size_t idx)
@@ -2215,12 +2109,6 @@ char *nvim_autocmd_callback_to_string(int event, size_t idx)
     return NULL;
   }
   return callback_to_string(&kv_A(*acs, idx).handler_fn, NULL);
-}
-
-/// Wrapper for xstrdup.
-char *nvim_autocmd_xstrdup(const char *s)
-{
-  return xstrdup(s);
 }
 
 // Phase 7: :autocmd command + registration accessors
@@ -2235,24 +2123,6 @@ const char *nvim_autocmd_eap_get_nextcmd(void *eap)
 void nvim_autocmd_eap_set_nextcmd(void *eap, char *val)
 {
   ((exarg_T *)eap)->nextcmd = val;
-}
-
-/// Wrapper for vim_strchr.
-const char *nvim_autocmd_vim_strchr(const char *s, int c)
-{
-  return vim_strchr(s, c);
-}
-
-/// Wrapper for expand_env_save.
-char *nvim_autocmd_expand_env_save(const char *pat)
-{
-  return expand_env_save((char *)pat);
-}
-
-/// Wrapper for expand_sfile.
-char *nvim_autocmd_expand_sfile(const char *cmd)
-{
-  return expand_sfile((char *)cmd);
 }
 
 /// Wrapper for msg_ext_set_kind + msg_puts_title for autocmd listing header.
@@ -2308,13 +2178,7 @@ int nvim_autocmd_fail(void)
   return FAIL;
 }
 
-// Phase 8a: Simple wrappers + blocking accessors
-
-/// Get the string value of a Vim variable.
-const char *nvim_autocmd_get_vim_var_str(int vv)
-{
-  return get_vim_var_str(vv);
-}
+// Phase 8a: Static variable accessors (cannot use link_name - access C statics)
 
 /// Get the saved old_termresponse pointer.
 const char *nvim_autocmd_get_old_termresponse(void)
@@ -2340,7 +2204,7 @@ void nvim_autocmd_dec_blocked(void)
   autocmd_blocked--;
 }
 
-/// Call apply_autocmds_group from Rust.
+/// Call apply_autocmds_group from Rust (casts void* to typed pointers).
 bool nvim_autocmd_apply_autocmds_group(int event, char *fname, char *fname_io, bool force,
                                        int group, void *buf, void *eap, void *data)
 {
@@ -2348,22 +2212,42 @@ bool nvim_autocmd_apply_autocmds_group(int event, char *fname, char *fname_io, b
                               (buf_T *)buf, (exarg_T *)eap, (Object *)data);
 }
 
-/// Wrap should_abort for Rust.
-bool nvim_autocmd_should_abort(int retval)
-{
-  return should_abort(retval);
-}
-
-/// Wrap aborting for Rust.
-bool nvim_autocmd_aborting(void)
-{
-  return aborting();
-}
-
 /// Get curbuf as opaque pointer.
 void *nvim_autocmd_get_curbuf_ptr(void)
 {
   return curbuf;
+}
+
+// Phase 8b: Wrappers that cannot use link_name (variadic/multi-arg/global statics)
+
+/// Wrapper for semsg with a single string arg (variadic - can't call from Rust).
+void nvim_autocmd_semsg_str(const char *fmt, const char *arg)
+{
+  semsg(fmt, arg);
+}
+
+/// Return got_int as int (got_int is bool, ABI differs).
+int nvim_autocmd_get_got_int(void)
+{
+  return got_int ? 1 : 0;
+}
+
+/// Call msg_outtrans with fixed args (Rust only passes string).
+void nvim_autocmd_msg_outtrans(const char *s)
+{
+  msg_outtrans(s, 0, false);
+}
+
+/// Return p_verbose as int (p_verbose is OptInt/int64_t).
+int nvim_autocmd_get_p_verbose(void)
+{
+  return (int)p_verbose;
+}
+
+/// Call FullName_save with fixed false arg.
+char *nvim_autocmd_fullname_save(const char *fname)
+{
+  return FullName_save((char *)fname, false);
 }
 
 // Phase 8e: Event triggers + doautocmd accessors

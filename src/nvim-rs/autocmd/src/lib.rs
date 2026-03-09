@@ -88,6 +88,7 @@ extern "C" {
     // Phase 5: :augroup command + arg parsing accessors
     fn nvim_autocmd_set_current_augroup(val: c_int);
     fn nvim_autocmd_list_group_names();
+    #[link_name = "emsg"]
     fn nvim_autocmd_emsg(msg: *const c_char);
     fn nvim_autocmd_semsg_str(fmt: *const c_char, arg: *const c_char);
     fn nvim_autocmd_get_e_argreq() -> *const c_char;
@@ -96,7 +97,9 @@ extern "C" {
     fn nvim_autocmd_get_e215() -> *const c_char;
     fn nvim_autocmd_get_e_duparg2() -> *const c_char;
     fn nvim_skipwhite(p: *const c_char) -> *mut c_char;
+    #[link_name = "xmemdupz"]
     fn nvim_autocmd_xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
+    #[link_name = "xfree"]
     fn nvim_autocmd_xfree(ptr: *mut c_char);
 
     // Phase 6: Display + Query accessors
@@ -107,10 +110,14 @@ extern "C" {
     fn nvim_autocmd_get_desc(event: c_int, idx: usize) -> *const c_char;
     fn nvim_autocmd_has_handler_cmd(event: c_int, idx: usize) -> bool;
     fn nvim_autocmd_show_last_set(event: c_int, idx: usize);
+    #[link_name = "msg_putchar"]
     fn nvim_autocmd_msg_putchar(c: c_int);
+    #[link_name = "msg_puts_hl"]
     fn nvim_autocmd_msg_puts_hl(s: *const c_char, hlf: c_int, append: bool);
     fn nvim_autocmd_msg_outtrans(s: *const c_char);
+    #[link_name = "nvim_set_msg_col"]
     fn nvim_autocmd_msg_col_set(col: c_int);
+    #[link_name = "nvim_get_msg_col"]
     fn nvim_autocmd_msg_col_get() -> c_int;
     fn nvim_autocmd_get_got_int() -> c_int;
     fn nvim_autocmd_get_p_verbose() -> c_int;
@@ -122,18 +129,27 @@ extern "C" {
         tail: *const c_char,
         buf_fnum: c_int,
     ) -> bool;
+    #[link_name = "path_tail"]
     fn nvim_autocmd_path_tail(fname: *const c_char) -> *const c_char;
     fn nvim_autocmd_fullname_save(fname: *const c_char) -> *mut c_char;
+    #[link_name = "path_fnamecmp"]
     fn nvim_autocmd_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+    #[link_name = "nvim_get_curbuf_fnum"]
     fn nvim_autocmd_get_curbuf_fnum() -> c_int;
+    #[link_name = "msg_puts"]
     fn nvim_autocmd_msg_puts(s: *const c_char);
+    #[link_name = "xmallocz"]
     fn nvim_autocmd_xmallocz(len: usize) -> *mut c_char;
+    #[link_name = "xstrdup"]
     fn nvim_autocmd_xstrdup(s: *const c_char) -> *mut c_char;
 
     // Phase 7: :autocmd command + registration accessors
     fn nvim_autocmd_eap_set_nextcmd(eap: *mut c_void, val: *mut c_char);
+    #[link_name = "vim_strchr"]
     fn nvim_autocmd_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    #[link_name = "expand_env_save"]
     fn nvim_autocmd_expand_env_save(pat: *const c_char) -> *mut c_char;
+    #[link_name = "expand_sfile"]
     fn nvim_autocmd_expand_sfile(cmd: *const c_char) -> *mut c_char;
     fn nvim_autocmd_show_header();
     fn nvim_autocmd_get_e_cannot_define_for_all() -> *const c_char;
@@ -151,6 +167,7 @@ extern "C" {
     fn nvim_autocmd_ok() -> c_int;
 
     // Phase 8a: Simple wrappers + blocking accessors
+    #[link_name = "get_vim_var_str"]
     fn nvim_autocmd_get_vim_var_str(vv: c_int) -> *const c_char;
     fn nvim_autocmd_get_old_termresponse() -> *const c_char;
     fn nvim_autocmd_set_old_termresponse(ptr: *const c_char);
@@ -166,7 +183,9 @@ extern "C" {
         eap: *mut c_void,
         data: *mut c_void,
     ) -> bool;
+    #[link_name = "should_abort"]
     fn nvim_autocmd_should_abort(retval: c_int) -> bool;
+    #[link_name = "aborting"]
     fn nvim_autocmd_aborting() -> bool;
     fn nvim_autocmd_get_curbuf_ptr() -> *mut c_void;
 
