@@ -880,12 +880,6 @@ bufstate_T *nvim_synstate_get_bufstate(synstate_T *state, int idx)
   return &bp[idx];
 }
 
-int nvim_bufstate_get_idx(bufstate_T *bs) { return bs ? bs->bs_idx : 0; }
-int nvim_bufstate_get_flags(bufstate_T *bs) { return bs ? bs->bs_flags : 0; }
-int nvim_bufstate_get_seqnr(bufstate_T *bs) { return bs ? bs->bs_seqnr : 0; }
-int nvim_bufstate_get_cchar(bufstate_T *bs) { return bs ? bs->bs_cchar : 0; }
-reg_extmatch_T *nvim_bufstate_get_extmatch(bufstate_T *bs) { return bs ? bs->bs_extmatch : NULL; }
-
 void nvim_syn_set_cur_state_item(int idx, int si_idx, int si_flags, int si_seqnr,
                                   int si_cchar, reg_extmatch_T *extmatch)
 {
@@ -986,78 +980,6 @@ void nvim_stateitem_get_positions(stateitem_T *item,
 }
 
 
-/// Set si_idx
-void nvim_stateitem_set_idx(stateitem_T *item, int idx)
-{
-  if (item) {
-    item->si_idx = idx;
-  }
-}
-
-/// Set si_end_idx
-void nvim_stateitem_set_end_idx(stateitem_T *item, int end_idx)
-{
-  if (item) {
-    item->si_end_idx = end_idx;
-  }
-}
-
-/// Set si_flags
-void nvim_stateitem_set_flags(stateitem_T *item, int flags)
-{
-  if (item) {
-    item->si_flags = flags;
-  }
-}
-
-/// Set si_seqnr
-void nvim_stateitem_set_seqnr(stateitem_T *item, int seqnr)
-{
-  if (item) {
-    item->si_seqnr = seqnr;
-  }
-}
-
-/// Set si_ends
-void nvim_stateitem_set_ends(stateitem_T *item, int ends)
-{
-  if (item) {
-    item->si_ends = ends ? 1 : 0;
-  }
-}
-
-/// Set si_id
-void nvim_stateitem_set_id(stateitem_T *item, int id)
-{
-  if (item) {
-    item->si_id = id;
-  }
-}
-
-/// Set si_trans_id
-void nvim_stateitem_set_trans_id(stateitem_T *item, int trans_id)
-{
-  if (item) {
-    item->si_trans_id = trans_id;
-  }
-}
-
-/// Set si_attr
-void nvim_stateitem_set_attr(stateitem_T *item, int attr)
-{
-  if (item) {
-    item->si_attr = attr;
-  }
-}
-
-/// Set si_cont_list
-void nvim_stateitem_set_cont_list(stateitem_T *item, int16_t *list)
-{
-  if (item) {
-    item->si_cont_list = list;
-  }
-}
-
 void nvim_syn_set_next_match_idx(int idx) { next_match_idx = idx; }
 void nvim_syn_set_next_match_col(int col) { next_match_col = col; }
 void nvim_syn_check_state_ends(void) { rs_check_state_ends(); }
@@ -1072,16 +994,6 @@ void nvim_syn_set_current_finished(int finished) { current_finished = finished ?
 int nvim_syn_id2attr_wrapper(int syn_id) { return syn_id2attr(syn_id); }
 
 void nvim_syn_call_syn_update_ends(int syncing) { rs_syn_update_ends(syncing ? 1 : 0); }
-
-int16_t *nvim_stateitem_get_next_list(stateitem_T *item) { return item ? item->si_next_list : NULL; }
-
-/// Set si_next_list for stateitem
-void nvim_stateitem_set_next_list(stateitem_T *item, int16_t *list)
-{
-  if (item) {
-    item->si_next_list = list;
-  }
-}
 
 int nvim_syn_is_id_list_all(int16_t *list) { return list == ID_LIST_ALL ? 1 : 0; }
 int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
@@ -1233,54 +1145,6 @@ int nvim_syn_get_pattern_syn_match_id(int idx)
 }
 
 int nvim_syn_is_current_state_empty(void) { return GA_EMPTY(&current_state) ? 1 : 0; }
-
-/// Bulk setter for stateitem_T position fields.
-/// Pass INT_MIN for any field that should not be modified.
-void nvim_stateitem_set_positions(stateitem_T *item,
-    int m_lnum, int m_startcol,
-    int m_end_lnum, int m_end_col,
-    int h_start_lnum, int h_start_col,
-    int h_end_lnum, int h_end_col,
-    int eoe_lnum, int eoe_col)
-{
-  if (!item) {
-    return;
-  }
-  if (m_lnum != INT_MIN) { item->si_m_lnum = m_lnum; }
-  if (m_startcol != INT_MIN) { item->si_m_startcol = m_startcol; }
-  if (m_end_lnum != INT_MIN) { item->si_m_endpos.lnum = (linenr_T)m_end_lnum; }
-  if (m_end_col != INT_MIN) { item->si_m_endpos.col = (colnr_T)m_end_col; }
-  if (h_start_lnum != INT_MIN) { item->si_h_startpos.lnum = (linenr_T)h_start_lnum; }
-  if (h_start_col != INT_MIN) { item->si_h_startpos.col = (colnr_T)h_start_col; }
-  if (h_end_lnum != INT_MIN) { item->si_h_endpos.lnum = (linenr_T)h_end_lnum; }
-  if (h_end_col != INT_MIN) { item->si_h_endpos.col = (colnr_T)h_end_col; }
-  if (eoe_lnum != INT_MIN) { item->si_eoe_pos.lnum = (linenr_T)eoe_lnum; }
-  if (eoe_col != INT_MIN) { item->si_eoe_pos.col = (colnr_T)eoe_col; }
-}
-
-/// Or si_flags with a value
-void nvim_stateitem_or_flags(stateitem_T *item, int flags)
-{
-  if (item) {
-    item->si_flags |= flags;
-  }
-}
-
-/// Set si_cchar
-void nvim_stateitem_set_cchar(stateitem_T *item, int cchar)
-{
-  if (item) {
-    item->si_cchar = cchar;
-  }
-}
-
-/// Set si_extmatch
-void nvim_stateitem_set_extmatch(stateitem_T *item, reg_extmatch_T *em)
-{
-  if (item) {
-    item->si_extmatch = em;
-  }
-}
 
 void nvim_syn_start_line(void) { rs_syn_start_line(); }
 
