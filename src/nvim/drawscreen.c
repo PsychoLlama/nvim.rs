@@ -943,38 +943,13 @@ int showmode(void)
   return length;
 }
 
-/// Position for a mode message.
-static void msg_pos_mode(void)
-{
-  msg_col = 0;
-  msg_row = Rows - 1;
-}
-
-
-// Clear the mode message.
-void clearmode(void)
-{
-  const int save_msg_row = msg_row;
-  const int save_msg_col = msg_col;
-
-  msg_ext_ui_flush();
-  msg_pos_mode();
-  if (reg_recording != 0) {
-    recording_mode(HLF_CM);
-  }
-  msg_clr_eos();
-  msg_ext_flush_showmode();
-
-  msg_col = save_msg_col;
-  msg_row = save_msg_row;
-}
-
+// These static helpers are still used by showmode().
+static void msg_pos_mode(void) { msg_col = 0; msg_row = Rows - 1; }
 static void recording_mode(int hl_id)
 {
   if (shortmess(SHM_RECORDING)) {
     return;
   }
-
   msg_puts_hl(_("recording"), hl_id, false);
   char s[4];
   snprintf(s, ARRAY_SIZE(s), " @%c", reg_recording);
@@ -2150,6 +2125,7 @@ void win_scroll_lines(win_T *wp, int row, int line_count)
 _Static_assert(HLF_FC == 29, "HLF_FC must be 29");
 _Static_assert(HLF_SC == 35, "HLF_SC must be 35");
 _Static_assert(HLF_N == 12, "HLF_N must be 12");
+_Static_assert(HLF_CM == 11, "HLF_CM must be 11");
 // FFI Accessors for Rust
 
 /// Check if cmdline mouse_used is set (for cmdline_number_prompt).
@@ -2165,9 +2141,6 @@ void nvim_set_vim_var_echospace(int val) { set_vim_var_nr(VV_ECHOSPACE, val); }
 
 _Static_assert(COL_RULER == 17, "COL_RULER must be 17");
 _Static_assert(SHOWCMD_COLS == 10, "SHOWCMD_COLS must be 10");
-
-/// Wrapper for clearmode() for Rust FFI.
-void nvim_clearmode(void) { clearmode(); }
 
 _Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");
 _Static_assert(STL_IN_TITLE == 2, "STL_IN_TITLE must be 2");

@@ -75,5 +75,7 @@ DLLEXPORT void redraw_buf_range_later(buf_T *buf, linenr_T first, linenr_T last)
 DLLEXPORT void redraw_buf_status_later(buf_T *buf);
 // Phase 4: win_draw_end now exported from Rust
 DLLEXPORT void win_draw_end(win_T *wp, schar_T c1, bool draw_margin, int startrow, int endrow, hlf_T hl);
+// Phase 4 (cont): clearmode now exported from Rust
+DLLEXPORT void clearmode(void);
 
 #include "drawscreen.h.generated.h"

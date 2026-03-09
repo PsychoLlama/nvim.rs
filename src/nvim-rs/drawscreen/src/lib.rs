@@ -67,6 +67,12 @@ extern "C" {
     static stl_syntax: c_int;
     /// p_ru (ruler) option.
     static p_ru: c_int;
+    /// reg_recording: current recording register (0 = not recording).
+    static reg_recording: c_int;
+    /// msg_col: current message column.
+    static mut msg_col: c_int;
+    /// msg_row: current message row.
+    static mut msg_row: c_int;
 }
 
 /// Opaque handle to C's buf_T.
@@ -1960,7 +1966,14 @@ pub extern "C" fn rs_comp_col() {
 extern "C" {
     fn nvim_get_global_busy() -> c_int;
     fn nvim_get_msg_silent() -> c_int;
-    fn nvim_clearmode();
+}
+
+extern "C" {
+    fn msg_ext_ui_flush();
+    fn msg_clr_eos();
+    fn msg_ext_flush_showmode();
+    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
+    fn shortmess(x: c_int) -> bool;
 }
 
 /// Check if mode display should be postponed.
@@ -1984,6 +1997,49 @@ pub extern "C" fn rs_skip_showmode() -> bool {
     }
 }
 
+// HLF_CM: highlight group for mode message (e.g. "-- INSERT --").
+// Value verified by _Static_assert in drawscreen.c.
+const HLF_CM: c_int = 11;
+// SHM_RECORDING: shortmess flag 'q' — suppress recording messages.
+const SHM_RECORDING: c_int = b'q' as c_int;
+
+/// Display recording message (equivalent of static `recording_mode()` in C).
+unsafe fn recording_mode_impl(hl_id: c_int) {
+    if shortmess(SHM_RECORDING) {
+        return;
+    }
+    msg_puts_hl(c"recording".as_ptr(), hl_id, false);
+    // " @X" where X is the register character (known to be ASCII 0-127)
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let s = [b' ', b'@', reg_recording as u8, 0u8];
+    msg_puts_hl(s.as_ptr().cast::<c_char>(), hl_id, false);
+}
+
+/// Clear the mode message.
+///
+/// Rust equivalent of `clearmode()` in drawscreen.c.
+#[unsafe(export_name = "clearmode")]
+pub extern "C" fn rs_clearmode() {
+    unsafe {
+        let save_msg_row = msg_row;
+        let save_msg_col = msg_col;
+
+        msg_ext_ui_flush();
+        // msg_pos_mode(): set msg_col=0, msg_row=Rows-1
+        msg_col = 0;
+        msg_row = Rows - 1;
+
+        if reg_recording != 0 {
+            recording_mode_impl(HLF_CM);
+        }
+        msg_clr_eos();
+        msg_ext_flush_showmode();
+
+        msg_col = save_msg_col;
+        msg_row = save_msg_row;
+    }
+}
+
 /// Delete mode message.
 ///
 /// Used when ESC is typed which is expected to end Insert mode
@@ -1996,7 +2052,7 @@ pub extern "C" fn rs_unshowmode(force: bool) {
         if !redrawing_impl() || (!force && nvim_char_avail() != 0 && !nvim_get_KeyTyped()) {
             nvim_set_redraw_cmdline(true); // delete mode later
         } else {
-            nvim_clearmode();
+            rs_clearmode();
         }
     }
 }
