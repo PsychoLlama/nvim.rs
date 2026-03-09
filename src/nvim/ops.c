@@ -2005,45 +2005,13 @@ void clear_oparg(oparg_T *oap)
   CLEAR_POINTER(oap);
 }
 
-/// Count bytes, words, chars in a line up to limit.
-/// Used by nvim_cpi_block_line_count.
-static varnumber_T line_count_info(char *line, varnumber_T *wc, varnumber_T *cc, varnumber_T limit,
-                                   int eol_size)
-{
-  varnumber_T i;
-  varnumber_T words = 0;
-  varnumber_T chars = 0;
-  bool is_word = false;
-
-  for (i = 0; i < limit && line[i] != NUL;) {
-    if (is_word) {
-      if (ascii_isspace(line[i])) {
-        words++;
-        is_word = false;
-      }
-    } else if (!ascii_isspace(line[i])) {
-      is_word = true;
-    }
-    chars++;
-    i += utfc_ptr2len(line + i);
-  }
-
-  if (is_word) {
-    words++;
-  }
-  *wc += words;
-
-  if (i < limit && line[i] == NUL) {
-    i += eol_size;
-    chars += eol_size;
-  }
-  *cc += chars;
-  return i;
-}
-
 // =============================================================================
 // C accessor functions for rs_cursor_pos_info (Phase 1)
 // =============================================================================
+
+/// Rust port of line_count_info (replaces the deleted static C version).
+extern varnumber_T nvim_rs_line_count_info(char *line, varnumber_T *wc, varnumber_T *cc,
+                                           varnumber_T limit, int eol_size);
 
 /// Struct matching Rust CpiLineCountResult (still needed by nvim_cpi_block_line_count)
 typedef struct {
@@ -2129,7 +2097,7 @@ void nvim_cpi_block_line_count(int lnum, int eol_size, void *out_ptr)
   varnumber_T wc = 0, cc = 0;
   varnumber_T bc = 0;
   if (bd.textstart != NULL) {
-    bc = line_count_info(bd.textstart, &wc, &cc, (varnumber_T)bd.textlen, eol_size);
+    bc = nvim_rs_line_count_info(bd.textstart, &wc, &cc, (varnumber_T)bd.textlen, eol_size);
   }
   out->byte_count = (int64_t)bc;
   out->word_count = (int64_t)wc;

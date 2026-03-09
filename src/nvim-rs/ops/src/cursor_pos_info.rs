@@ -221,6 +221,28 @@ unsafe fn line_count_info(
     i
 }
 
+/// C-callable export of `line_count_info` for use by `nvim_cpi_block_line_count` in ops.c.
+///
+/// This replaces the static C `line_count_info` which has been deleted from ops.c.
+///
+/// # Safety
+/// `line` must be a valid pointer to a NUL-terminated C string.
+#[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+pub unsafe extern "C" fn nvim_rs_line_count_info(
+    line: *const c_char,
+    wc: &mut i64,
+    cc: &mut i64,
+    limit: i64,
+    eol_size: c_int,
+) -> i64 {
+    line_count_info(line, wc, cc, limit, eol_size)
+}
+
 /// Count bytes/words/chars on a buffer line (Rust replacement for nvim_cpi_line_count_info).
 ///
 /// # Safety
