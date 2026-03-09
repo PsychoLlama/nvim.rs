@@ -11,6 +11,7 @@ pub mod backspace;
 pub mod completion;
 pub mod dispatch;
 pub mod editing;
+pub mod enter;
 pub mod helpers;
 pub mod insert;
 pub mod insertchar;

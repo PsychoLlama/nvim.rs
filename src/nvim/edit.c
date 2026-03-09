@@ -142,11 +142,12 @@ typedef struct {
   bool nomove;
 } InsertState;
 
-// Forward declarations for functions now implemented in Rust (dispatch.rs).
+// Forward declarations for functions now implemented in Rust (dispatch.rs / enter.rs).
 extern int insert_handle_key(InsertState *s);
 extern void insert_do_complete(InsertState *s);
 extern void insert_do_cindent(InsertState *s);
 extern void insert_handle_key_post(InsertState *s);
+extern void insert_enter(InsertState *s);
 
 #include "edit.c.generated.h"
 
@@ -2030,6 +2031,308 @@ void nvim_stuffReadbuffLen(const char *data, ptrdiff_t len)
 
 // nvim_emsg_noinstext is already defined in register.c
 
+// -- Phase 6: insert_enter accessors --
+
+/// Get restart_edit (accessor for Rust, Phase 6).
+/// Note: nvim_get_restart_edit is defined in cursor_shape.c; use this wrapper.
+int nvim_edit_get_restart_edit(void)
+{
+  return restart_edit;
+}
+
+/// Get stop_insert_mode (accessor for Rust).
+int nvim_edit_get_stop_insert_mode(void)
+{
+  return stop_insert_mode ? 1 : 0;
+}
+
+/// Set stop_insert_mode (accessor for Rust).
+void nvim_edit_set_stop_insert_mode(int val)
+{
+  stop_insert_mode = (val != 0);
+}
+
+/// Get where_paste_started.lnum (accessor for Rust).
+linenr_T nvim_edit_get_where_paste_started_lnum(void)
+{
+  return where_paste_started.lnum;
+}
+
+/// Set where_paste_started.lnum to 0 (accessor for Rust).
+void nvim_edit_clear_where_paste_started(void)
+{
+  where_paste_started.lnum = 0;
+}
+
+/// Set Insstart from where_paste_started or curwin->w_cursor (accessor for Rust).
+/// If where_paste_started.lnum != 0, use it; otherwise use curwin->w_cursor.
+/// If startln is nonzero, set Insstart.col = 0.
+void nvim_edit_init_Insstart(int startln)
+{
+  if (where_paste_started.lnum != 0) {
+    Insstart = where_paste_started;
+  } else {
+    Insstart = curwin->w_cursor;
+    if (startln) {
+      Insstart.col = 0;
+    }
+  }
+}
+
+/// Get did_ai (accessor for Rust).
+int nvim_edit_get_did_ai(void)
+{
+  return did_ai ? 1 : 0;
+}
+
+/// Get need_highlight_changed (accessor for Rust).
+int nvim_edit_get_need_highlight_changed(void)
+{
+  return need_highlight_changed ? 1 : 0;
+}
+
+/// Check if cursor is on a TAB or inline virtual text (accessor for Rust).
+int nvim_edit_cursor_on_tab_or_inline(void)
+{
+  return (gchar_cursor() == TAB || buf_meta_total(curbuf, kMTMetaInline) > 0) ? 1 : 0;
+}
+
+/// Invalidate WROW/WCOL/VIRTCOL in curwin->w_valid (accessor for Rust).
+void nvim_edit_invalidate_wrow_wcol_virtcol(void)
+{
+  curwin->w_valid &= ~(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
+}
+
+/// Get curbuf->b_p_iminsert (accessor for Rust).
+int nvim_edit_get_curbuf_b_p_iminsert(void)
+{
+  return curbuf->b_p_iminsert;
+}
+
+/// Set revins_on (accessor for Rust).
+void nvim_edit_set_revins_on(int val)
+{
+  revins_on = (val != 0);
+}
+
+/// Set need_start_insertmode (accessor for Rust).
+void nvim_edit_set_need_start_insertmode(int val)
+{
+  need_start_insertmode = (val != 0);
+}
+
+/// Get p_smd (showmode option) (accessor for Rust).
+int nvim_edit_get_p_smd(void)
+{
+  return p_smd;
+}
+
+/// Get msg_silent (accessor for Rust).
+int nvim_edit_get_msg_silent(void)
+{
+  return msg_silent;
+}
+
+/// Get old_indent (accessor for Rust).
+int nvim_edit_get_old_indent(void)
+{
+  return old_indent;
+}
+
+/// Set old_indent (accessor for Rust).
+void nvim_edit_set_old_indent(int val)
+{
+  old_indent = val;
+}
+
+/// Save curwin->w_cursor into out-params (accessor for Rust, Phase 6).
+void nvim_edit_save_cursor_pos(linenr_T *lnum_out, colnr_T *col_out, colnr_T *coladd_out)
+{
+  *lnum_out = curwin->w_cursor.lnum;
+  *col_out = curwin->w_cursor.col;
+  *coladd_out = curwin->w_cursor.coladd;
+}
+
+/// Restore curwin->w_cursor from saved values (accessor for Rust, Phase 6).
+void nvim_edit_restore_cursor_pos(linenr_T lnum, colnr_T col, colnr_T coladd)
+{
+  curwin->w_cursor.lnum = lnum;
+  curwin->w_cursor.col = col;
+  curwin->w_cursor.coladd = coladd;
+}
+
+/// Check if current cursor equals saved pos (accessor for Rust, Phase 6).
+int nvim_edit_cursor_equals_saved(linenr_T lnum, colnr_T col, colnr_T coladd)
+{
+  pos_T saved = { .lnum = lnum, .col = col, .coladd = coladd };
+  return equalpos(curwin->w_cursor, saved) ? 1 : 0;
+}
+
+/// Get *get_vim_var_str(VV_CHAR) == NUL (accessor for Rust).
+int nvim_edit_vv_char_is_empty(void)
+{
+  return (*get_vim_var_str(VV_CHAR) == NUL) ? 1 : 0;
+}
+
+/// Get curbuf->b_ml.ml_line_count (accessor for Rust).
+int nvim_edit_get_curbuf_ml_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
+}
+
+/// Set State to MODE_INSERT temporarily, call check_cursor_col, restore State.
+void nvim_edit_check_cursor_col_in_insert_mode(void)
+{
+  int save_state = State;
+  State = MODE_INSERT;
+  check_cursor_col(curwin);
+  State = save_state;
+}
+
+/// Call set_vim_var_string(VV_INSERTMODE, ptr, 1) where ptr depends on cmdchar.
+void nvim_edit_set_vv_insertmode(int cmdchar)
+{
+  const char *ptr = cmdchar == 'R' ? "r" : cmdchar == 'V' ? "v" : "i";
+  set_vim_var_string(VV_INSERTMODE, ptr, 1);
+}
+
+/// Call set_vim_var_string(VV_CHAR, NULL, -1) (accessor for Rust).
+void nvim_edit_clear_vv_char(void)
+{
+  set_vim_var_string(VV_CHAR, NULL, -1);
+}
+
+/// Call ins_apply_autocmds(EVENT_INSERTENTER) (accessor for Rust).
+void nvim_edit_ins_apply_insertenter(void)
+{
+  ins_apply_autocmds(EVENT_INSERTENTER);
+}
+
+/// Call ins_apply_autocmds(EVENT_INSERTLEAVE) (accessor for Rust).
+void nvim_edit_ins_apply_insertleave(void)
+{
+  ins_apply_autocmds(EVENT_INSERTLEAVE);
+}
+
+/// Get Insstart_textlen from linetabsize_str(get_cursor_line_ptr()) (accessor for Rust).
+void nvim_edit_init_Insstart_textlen(void)
+{
+  Insstart_textlen = linetabsize_str(get_cursor_line_ptr());
+  Insstart_blank_vcol = MAXCOL;
+}
+
+/// Get size of get_inserted() and free the result (for new_insert_skip).
+int nvim_edit_get_inserted_size(void)
+{
+  String inserted = get_inserted();
+  int sz = (int)inserted.size;
+  if (inserted.data != NULL) {
+    xfree(inserted.data);
+  }
+  return sz;
+}
+
+/// Update curbuf->b_last_changedtick if TextChangedI was triggered (accessor for Rust).
+void nvim_curbuf_sync_changedtick_after_insert(void)
+{
+  if (!char_avail() && curbuf->b_last_changedtick_i == buf_get_changedtick(curbuf)) {
+    curbuf->b_last_changedtick = buf_get_changedtick(curbuf);
+  }
+}
+
+/// Update o_lnum if ins_at_eol (accessor for Rust).
+void nvim_edit_update_o_lnum_if_at_eol(void)
+{
+  if (ins_at_eol) {
+    o_lnum = curwin->w_cursor.lnum;
+  }
+}
+
+/// Check restart_edit conditions and maybe advance cursor (accessor for Rust).
+/// Returns: 0=arrow_used=false path, 1=restart_edit path (arrow_used set from paste).
+int nvim_edit_handle_restart_edit_cursor(void)
+{
+  if (restart_edit != 0 && stuff_empty()) {
+    arrow_used = where_paste_started.lnum == 0;
+    restart_edit = 0;
+
+    validate_virtcol(curwin);
+    update_curswant();
+    const char *ptr;
+    if (((ins_at_eol && curwin->w_cursor.lnum == o_lnum)
+         || curwin->w_curswant > curwin->w_virtcol)
+        && *(ptr = get_cursor_line_ptr() + curwin->w_cursor.col) != NUL) {
+      if (ptr[1] == NUL) {
+        curwin->w_cursor.col++;
+      } else {
+        int i = utfc_ptr2len(ptr);
+        if (ptr[i] == NUL) {
+          curwin->w_cursor.col += i;
+        }
+      }
+    }
+    ins_at_eol = false;
+    return 1;
+  }
+  arrow_used = false;
+  return 0;
+}
+
+/// Call AppendNumberToRedobuff(n) (accessor for Rust).
+void nvim_edit_AppendNumberToRedobuff(int n)
+{
+  AppendNumberToRedobuff(n);
+}
+
+/// Call showmode() and return result (accessor for Rust).
+int nvim_edit_showmode(void)
+{
+  return showmode();
+}
+
+/// Call change_warning(curbuf, col) (accessor for Rust).
+void nvim_edit_change_warning(int col)
+{
+  change_warning(curbuf, col);
+}
+
+/// Call pum_check_clear() (accessor for Rust).
+void nvim_edit_pum_check_clear(void)
+{
+  pum_check_clear();
+}
+
+/// Call state_enter(&s->state) (accessor for Rust).
+void nvim_edit_state_enter(void *state)
+{
+  state_enter((VimState *)state);
+}
+
+/// Call ins_esc(&count, cmdchar, nomove) (accessor for Rust).
+int nvim_edit_ins_esc(int *count, int cmdchar, int nomove)
+{
+  return ins_esc(count, cmdchar, (bool)nomove) ? 1 : 0;
+}
+
+/// Call msg_check_for_delay(true) (accessor for Rust).
+void nvim_edit_msg_check_for_delay(void)
+{
+  msg_check_for_delay(true);
+}
+
+/// Call highlight_changed() (accessor for Rust).
+void nvim_edit_highlight_changed(void)
+{
+  highlight_changed();
+}
+
+/// Call ui_cursor_shape() and do_digraph(-1) (accessor for Rust).
+void nvim_edit_ui_cursor_shape_and_clear_digraph(void)
+{
+  ui_cursor_shape();
+  do_digraph(-1);
+}
+
 // Static asserts for Phase 5 constants
 _Static_assert(ABBR_OFF == 0x100, "ABBR_OFF mismatch");
 _Static_assert(OPENLINE_DO_COM == 0x02, "OPENLINE_DO_COM mismatch");
@@ -2056,232 +2359,9 @@ _Static_assert(kOptBoFlagCopy == 0x10, "kOptBoFlagCopy mismatch");
     } \
   } while (0)
 
-static void insert_enter(InsertState *s)
-{
-  s->did_backspace = true;
-  s->old_topfill = -1;
-  s->replaceState = MODE_REPLACE;
-  s->cmdchar_todo = s->cmdchar;
-  s->ins_just_started = true;
-  // Remember whether editing was restarted after CTRL-O
-  did_restart_edit = restart_edit;
-  // sleep before redrawing, needed for "CTRL-O :" that results in an
-  // error message
-  msg_check_for_delay(true);
-  // set Insstart_orig to Insstart
-  update_Insstart_orig = true;
-
-  rs_ins_compl_clear();        // clear stuff for CTRL-X mode
-
-  // Trigger InsertEnter autocommands.  Do not do this for "r<CR>" or "grx".
-  if (s->cmdchar != 'r' && s->cmdchar != 'v') {
-    pos_T save_cursor = curwin->w_cursor;
-
-    const char *const ptr = s->cmdchar == 'R' ? "r" : s->cmdchar == 'V' ? "v" : "i";
-    set_vim_var_string(VV_INSERTMODE, ptr, 1);
-    set_vim_var_string(VV_CHAR, NULL, -1);
-    ins_apply_autocmds(EVENT_INSERTENTER);
-
-    // Check for changed highlighting, e.g. for ModeMsg.
-    if (need_highlight_changed) {
-      highlight_changed();
-    }
-
-    // Make sure the cursor didn't move.  Do call check_cursor_col() in
-    // case the text was modified.  Since Insert mode was not started yet
-    // a call to check_cursor_col() may move the cursor, especially with
-    // the "A" command, thus set State to avoid that. Also check that the
-    // line number is still valid (lines may have been deleted).
-    // Do not restore if v:char was set to a non-empty string.
-    if (!equalpos(curwin->w_cursor, save_cursor)
-        && *get_vim_var_str(VV_CHAR) == NUL
-        && save_cursor.lnum <= curbuf->b_ml.ml_line_count) {
-      int save_state = State;
-
-      curwin->w_cursor = save_cursor;
-      State = MODE_INSERT;
-      check_cursor_col(curwin);
-      State = save_state;
-    }
-  }
-
-  // When doing a paste with the middle mouse button, Insstart is set to
-  // where the paste started.
-  if (where_paste_started.lnum != 0) {
-    Insstart = where_paste_started;
-  } else {
-    Insstart = curwin->w_cursor;
-    if (s->startln) {
-      Insstart.col = 0;
-    }
-  }
-
-  Insstart_textlen = linetabsize_str(get_cursor_line_ptr());
-  Insstart_blank_vcol = MAXCOL;
-
-  if (!did_ai) {
-    ai_col = 0;
-  }
-
-  if (s->cmdchar != NUL && restart_edit == 0) {
-    ResetRedobuff();
-    AppendNumberToRedobuff(s->count);
-    if (s->cmdchar == 'V' || s->cmdchar == 'v') {
-      // "gR" or "gr" command
-      AppendCharToRedobuff('g');
-      AppendCharToRedobuff((s->cmdchar == 'v') ? 'r' : 'R');
-    } else {
-      AppendCharToRedobuff(s->cmdchar);
-      if (s->cmdchar == 'g') {          // "gI" command
-        AppendCharToRedobuff('I');
-      } else if (s->cmdchar == 'r') {  // "r<CR>" command
-        s->count = 1;                  // insert only one <CR>
-      }
-    }
-  }
-
-  if (s->cmdchar == 'R') {
-    State = MODE_REPLACE;
-  } else if (s->cmdchar == 'V' || s->cmdchar == 'v') {
-    State = MODE_VREPLACE;
-    s->replaceState = MODE_VREPLACE;
-    orig_line_count = curbuf->b_ml.ml_line_count;
-    vr_lines_changed = 1;
-  } else {
-    State = MODE_INSERT;
-  }
-
-  may_trigger_modechanged();
-  stop_insert_mode = false;
-
-  // need to position cursor again when on a TAB and
-  // when on a char with inline virtual text
-  if (gchar_cursor() == TAB || buf_meta_total(curbuf, kMTMetaInline) > 0) {
-    curwin->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL);
-  }
-
-  // Enable langmap or IME, indicated by 'iminsert'.
-  // Note that IME may enabled/disabled without us noticing here, thus the
-  // 'iminsert' value may not reflect what is actually used.  It is updated
-  // when hitting <Esc>.
-  if (curbuf->b_p_iminsert == B_IMODE_LMAP) {
-    State |= MODE_LANGMAP;
-  }
-
-  setmouse();
-  rs_clear_showcmd();
-  // there is no reverse replace mode
-  revins_on = (State == MODE_INSERT && p_ri);
-  if (revins_on) {
-    undisplay_dollar();
-  }
-  revins_chars = 0;
-  revins_legal = 0;
-  revins_scol = -1;
-
-  // Handle restarting Insert mode.
-  // Don't do this for "CTRL-O ." (repeat an insert): we get here with
-  // restart_edit non-zero, and something in the stuff buffer.
-  if (restart_edit != 0 && stuff_empty()) {
-    // After a paste we consider text typed to be part of the insert for
-    // the pasted text. You can backspace over the pasted text too.
-    arrow_used = where_paste_started.lnum == 0;
-    restart_edit = 0;
-
-    // If the cursor was after the end-of-line before the CTRL-O and it is
-    // now at the end-of-line, put it after the end-of-line (this is not
-    // correct in very rare cases).
-    // Also do this if curswant is greater than the current virtual
-    // column.  Eg after "^O$" or "^O80|".
-    validate_virtcol(curwin);
-    update_curswant();
-    const char *ptr;
-    if (((ins_at_eol && curwin->w_cursor.lnum == o_lnum)
-         || curwin->w_curswant > curwin->w_virtcol)
-        && *(ptr = get_cursor_line_ptr() + curwin->w_cursor.col) != NUL) {
-      if (ptr[1] == NUL) {
-        curwin->w_cursor.col++;
-      } else {
-        s->i = utfc_ptr2len(ptr);
-        if (ptr[s->i] == NUL) {
-          curwin->w_cursor.col += s->i;
-        }
-      }
-    }
-    ins_at_eol = false;
-  } else {
-    arrow_used = false;
-  }
-
-  // we are in insert mode now, don't need to start it anymore
-  need_start_insertmode = false;
-
-  // Need to save the line for undo before inserting the first char.
-  ins_need_undo = true;
-
-  where_paste_started.lnum = 0;
-  can_cindent = true;
-  // The cursor line is not in a closed fold, unless restarting.
-  if (did_restart_edit == 0) {
-    rs_foldOpenCursor();
-  }
-
-  // If 'showmode' is set, show the current (insert/replace/..) mode.
-  // A warning message for changing a readonly file is given here, before
-  // actually changing anything.  It's put after the mode, if any.
-  s->i = 0;
-  if (p_smd && msg_silent == 0) {
-    s->i = showmode();
-  }
-
-  if (did_restart_edit == 0) {
-    change_warning(curbuf, s->i == 0 ? 0 : s->i + 1);
-  }
-
-  ui_cursor_shape();            // may show different cursor shape
-  do_digraph(-1);               // clear digraphs
-
-  // Get the current length of the redo buffer, those characters have to be
-  // skipped if we want to get to the inserted characters.
-  String inserted = get_inserted();
-  new_insert_skip = (int)inserted.size;
-  if (inserted.data != NULL) {
-    xfree(inserted.data);
-  }
-
-  old_indent = 0;
-
-  do {
-    state_enter(&s->state);
-    // If s->count != 0, `ins_esc` will prepare the redo buffer for reprocessing
-    // and return false, causing `state_enter` to be called again.
-  } while (!ins_esc(&s->count, s->cmdchar, s->nomove));
-
-  // Always update o_lnum, so that a "CTRL-O ." that adds a line
-  // still puts the cursor back after the inserted text.
-  if (ins_at_eol) {
-    o_lnum = curwin->w_cursor.lnum;
-  }
-
-  pum_check_clear();
-
-  rs_foldUpdateAfterInsert();
-  // When CTRL-C was typed got_int will be set, with the result
-  // that the autocommands won't be executed. When mapped got_int
-  // is not set, but let's keep the behavior the same.
-  if (s->cmdchar != 'r' && s->cmdchar != 'v' && s->c != Ctrl_C) {
-    ins_apply_autocmds(EVENT_INSERTLEAVE);
-  }
-  did_cursorhold = false;
-
-  // ins_redraw() triggers TextChangedI only when no characters
-  // are in the typeahead buffer, so reset curbuf->b_last_changedtick
-  // if the TextChangedI was not blocked by char_avail() (e.g. using :norm!)
-  // and the TextChangedI autocommand has been triggered.
-  if (!char_avail() && curbuf->b_last_changedtick_i == buf_get_changedtick(curbuf)) {
-    curbuf->b_last_changedtick = buf_get_changedtick(curbuf);
-  }
-}
+// insert_enter is now implemented in Rust (src/nvim-rs/edit/src/enter.rs).
+// The forward declaration is near the top of this file.
+// insert_enter body deleted: now implemented in Rust (src/nvim-rs/edit/src/enter.rs).
 
 static int insert_check(VimState *state)
 {

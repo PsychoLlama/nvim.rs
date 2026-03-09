@@ -37,25 +37,25 @@ pub struct VimState {
 /// Fields are accessed via pointer; the `state` and `ca` fields are opaque.
 #[repr(C)]
 pub struct InsertState {
-    state: VimState,
-    ca: *mut c_void, // cmdarg_T*, unused here
-    mincol: c_int,
-    cmdchar: c_int,
-    cmdchar_todo: c_int,
-    ins_just_started: bool,
-    startln: c_int,
-    count: c_int,
-    c: c_int,
-    lastc: c_int,
-    i: c_int,
-    did_backspace: bool,
-    line_is_white: bool,
-    old_topline: LinenrT,
-    old_topfill: c_int,
-    inserted_space: c_int,
-    replace_state: c_int,
-    did_restart_edit: c_int,
-    nomove: bool,
+    pub state: VimState,
+    pub ca: *mut c_void, // cmdarg_T*, unused here
+    pub mincol: c_int,
+    pub cmdchar: c_int,
+    pub cmdchar_todo: c_int,
+    pub ins_just_started: bool,
+    pub startln: c_int,
+    pub count: c_int,
+    pub c: c_int,
+    pub lastc: c_int,
+    pub i: c_int,
+    pub did_backspace: bool,
+    pub line_is_white: bool,
+    pub old_topline: LinenrT,
+    pub old_topfill: c_int,
+    pub inserted_space: c_int,
+    pub replace_state: c_int,
+    pub did_restart_edit: c_int,
+    pub nomove: bool,
 }
 
 // ============================================================================
