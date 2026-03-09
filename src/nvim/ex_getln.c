@@ -229,6 +229,8 @@ extern int rs_last_window(win_T *win);
 // Rust FFI declarations (window wrappers removed)
 extern int rs_global_stl_height(void);
 extern win_T *rs_lastwin_nofloating(void);
+// Phase 3: Rust-implemented functions replacing C static/non-static functions
+extern void correct_screencol(int idx, int cells, int *col);
 extern void rs_win_size_restore(garray_T *gap);
 extern void rs_win_size_save(garray_T *gap);
 extern void rs_clear_showcmd(void);
@@ -3101,16 +3103,7 @@ int cmd_screencol(int bytepos)
   return col;
 }
 
-/// Check if the character at "idx", which is "cells" wide, is a multi-byte
-/// character that doesn't fit, so that a ">" must be displayed.
-static void correct_screencol(int idx, int cells, int *col)
-{
-  if (utfc_ptr2len(ccline.cmdbuff + idx) > 1
-      && utf_ptr2cells(ccline.cmdbuff + idx) > 1
-      && (*col) % Columns + cells > Columns) {
-    (*col)++;
-  }
-}
+// correct_screencol() is implemented in Rust; declared at top of file.
 
 /// Get an Ex command line for the ":" command.
 ///
@@ -3977,46 +3970,6 @@ void redrawcmd(void)
   redrawing_cmdline = false;
 }
 
-void compute_cmdrow(void)
-{
-  if (exmode_active || msg_scrolled != 0) {
-    cmdline_row = Rows - 1;
-  } else {
-    win_T *wp = rs_lastwin_nofloating();
-    cmdline_row = wp->w_winrow + wp->w_height
-                  + wp->w_hsep_height + wp->w_status_height + rs_global_stl_height();
-  }
-  if (cmdline_row == Rows && p_ch > 0) {
-    cmdline_row--;
-  }
-  lines_left = cmdline_row;
-}
-
-void cursorcmd(void)
-{
-  if (cmd_silent || ui_has(kUICmdline)) {
-    return;
-  }
-
-  msg_row = cmdline_row + (ccline.cmdspos / Columns);
-  msg_col = ccline.cmdspos % Columns;
-  msg_row = MIN(msg_row, Rows - 1);
-
-  msg_cursor_goto(msg_row, msg_col);
-}
-
-void gotocmdline(bool clr)
-{
-  if (ui_has(kUICmdline)) {
-    return;
-  }
-  msg_start();
-  msg_col = 0;  // always start in column 0
-  if (clr) {  // clear the bottom line(s)
-    msg_clr_eos();  // will reset clear_cmdline
-  }
-  msg_cursor_goto(cmdline_row, 0);
-}
 
 // Check the word in front of the cursor for an abbreviation.
 // Called when the non-id character "c" has been entered.

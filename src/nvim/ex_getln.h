@@ -54,6 +54,11 @@ char *vim_strsave_fnameescape(const char *fname, int what);
 void escape_fname(char **pp);
 void tilde_replace(char *orig_pat, int num_files, char **files);
 
+// Phase 3: Rendering/UI functions implemented in Rust
+void compute_cmdrow(void);
+void cursorcmd(void);
+void gotocmdline(bool clr);
+
 #ifdef __cplusplus
 }
 #endif

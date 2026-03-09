@@ -367,6 +367,134 @@ pub unsafe extern "C" fn rs_get_rows() -> c_int {
 }
 
 // =============================================================================
+// Rendering/UI Function Migrations (Phase 3)
+// =============================================================================
+
+extern "C" {
+    // Window accessors
+    fn rs_lastwin_nofloating() -> *mut ();
+    fn rs_global_stl_height() -> c_int;
+    fn nvim_win_get_winrow(wp: *mut ()) -> c_int;
+    fn nvim_win_get_w_height(wp: *mut ()) -> c_int;
+    fn nvim_win_get_hsep_height(wp: *mut ()) -> c_int;
+    fn nvim_win_get_status_height(wp: *mut ()) -> c_int;
+
+    // Global state accessors
+    fn nvim_get_exmode_active() -> bool;
+    fn nvim_get_msg_scrolled() -> c_int;
+    fn nvim_get_p_ch() -> i64;
+    fn nvim_set_cmdline_row(val: c_int);
+    fn nvim_set_lines_left(val: c_int);
+    fn nvim_get_cmd_silent() -> c_int;
+    fn nvim_set_msg_row(val: c_int);
+    fn nvim_set_msg_col(val: c_int);
+    fn ui_has(what: c_int) -> c_int;
+    fn msg_cursor_goto(row: c_int, col: c_int);
+    fn msg_start();
+    fn msg_clr_eos();
+}
+
+/// `kUICmdline` constant (from `ui_defs.h`).
+const K_UI_CMDLINE: c_int = 32; // kUICmdline
+
+/// Direct C replacement for compute_cmdrow().
+///
+/// Computes the row position for the command line.
+///
+/// # Safety
+///
+/// Calls C functions to access global state.
+#[export_name = "compute_cmdrow"]
+pub unsafe extern "C" fn compute_cmdrow_rs() {
+    let rows = nvim_get_rows();
+    let new_row = if nvim_get_exmode_active() || nvim_get_msg_scrolled() != 0 {
+        rows - 1
+    } else {
+        let wp = rs_lastwin_nofloating();
+        let winrow = nvim_win_get_winrow(wp);
+        let height = nvim_win_get_w_height(wp);
+        let hsep = nvim_win_get_hsep_height(wp);
+        let status = nvim_win_get_status_height(wp);
+        let stl = rs_global_stl_height();
+        winrow + height + hsep + status + stl
+    };
+
+    let new_row = if new_row == rows && nvim_get_p_ch() > 0 {
+        new_row - 1
+    } else {
+        new_row
+    };
+
+    nvim_set_cmdline_row(new_row);
+    nvim_set_lines_left(new_row);
+}
+
+/// Direct C replacement for cursorcmd().
+///
+/// Positions cursor on the command line.
+///
+/// # Safety
+///
+/// Calls C functions to access and set global state.
+#[export_name = "cursorcmd"]
+pub unsafe extern "C" fn cursorcmd_rs() {
+    if nvim_get_cmd_silent() != 0 || ui_has(K_UI_CMDLINE) != 0 {
+        return;
+    }
+
+    let rows = nvim_get_rows();
+    let columns = nvim_get_columns();
+    let cmdline_row = nvim_get_cmdline_row();
+    let cmdspos = nvim_get_ccline_cmdspos();
+
+    let mut msg_row_val = cmdline_row + (cmdspos / columns);
+    let msg_col_val = cmdspos % columns;
+
+    if msg_row_val >= rows {
+        msg_row_val = rows - 1;
+    }
+
+    nvim_set_msg_row(msg_row_val);
+    nvim_set_msg_col(msg_col_val);
+    msg_cursor_goto(msg_row_val, msg_col_val);
+}
+
+/// Direct C replacement for gotocmdline().
+///
+/// Goes to the command line position.
+///
+/// # Safety
+///
+/// Calls C functions to access global state.
+#[export_name = "gotocmdline"]
+pub unsafe extern "C" fn gotocmdline_rs(clr: bool) {
+    if ui_has(K_UI_CMDLINE) != 0 {
+        return;
+    }
+    msg_start();
+    nvim_set_msg_col(0); // always start in column 0
+    if clr {
+        msg_clr_eos(); // will reset clear_cmdline
+    }
+    msg_cursor_goto(nvim_get_cmdline_row(), 0);
+}
+
+/// Direct C replacement for the static correct_screencol().
+///
+/// Adjusts column for double-wide multi-byte chars that don't fit.
+///
+/// # Safety
+///
+/// `idx` must be a valid byte offset into the command buffer.
+#[export_name = "correct_screencol"]
+pub unsafe extern "C" fn correct_screencol_export(idx: c_int, cells: c_int, col: *mut c_int) {
+    if col.is_null() {
+        return;
+    }
+    correct_screencol(idx, cells, &mut *col);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
