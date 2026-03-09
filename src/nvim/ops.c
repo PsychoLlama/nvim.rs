@@ -2392,22 +2392,6 @@ void nvim_cpi_block_line_count(int lnum, int eol_size, void *out_ptr)
 }
 
 /// Check if last line has no EOL (for byte count correction).
-int nvim_cpi_last_line_no_eol(void)
-{
-  return (!curbuf->b_p_eol && (curbuf->b_p_bin || !curbuf->b_p_fixeol)) ? 1 : 0;
-}
-
-/// Check if string at current position is shorter than len (for last-line EOL adjustment).
-int nvim_cpi_last_line_short(int lnum, int byte_count)
-{
-  (void)lnum;
-  (void)byte_count;
-  // The original C code checked: (int)strlen(s) < len
-  // This is a conservative approximation; in visual mode with the last line,
-  // the EOL adjustment happens when the line was fully consumed.
-  return 1;
-}
-
 
 /// Format and display the visual mode message.
 void nvim_cpi_format_visual_msg(int line_count_selected,

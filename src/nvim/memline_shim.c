@@ -2068,3 +2068,9 @@ int nvim_bomb_size(void) { return bomb_size(); }
 /// Show the "no lines in buffer" message — replaces nvim_cpi_show_empty_msg.
 void nvim_msg_no_lines(void) { msg(_(no_lines_msg), 0); }
 
+/// Returns curbuf->b_p_eol (whether buffer has trailing EOL).
+bool nvim_curbuf_get_b_p_eol(void) { return curbuf->b_p_eol; }
+
+/// Returns curbuf->b_p_fixeol (whether EOL should be fixed).
+bool nvim_curbuf_get_b_p_fixeol(void) { return curbuf->b_p_fixeol; }
+

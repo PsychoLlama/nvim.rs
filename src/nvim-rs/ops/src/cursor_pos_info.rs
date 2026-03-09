@@ -55,9 +55,10 @@ extern "C" {
     );
     fn nvim_cpi_block_line_count(lnum: c_int, eol_size: c_int, out: *mut c_void);
 
-    // Last line EOL adjustment
-    fn nvim_cpi_last_line_no_eol() -> c_int;
-    fn nvim_cpi_last_line_short(lnum: c_int, len: c_int) -> c_int;
+    // Last line EOL adjustment (nvim_cpi_last_line_no_eol absorbed below)
+    fn nvim_curbuf_get_b_p_eol() -> bool;
+    fn nvim_curbuf_get_b_p_bin() -> c_int;
+    fn nvim_curbuf_get_b_p_fixeol() -> bool;
 
     // Interrupt / breakcheck
     fn nvim_os_breakcheck();
@@ -103,6 +104,15 @@ extern "C" {
     // Low-level buffer line access
     fn nvim_ml_get(lnum: c_int) -> *const c_char;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
+}
+
+/// Inline replacement of `nvim_cpi_last_line_no_eol` (C function deleted).
+/// Returns true if the last line has no trailing EOL byte.
+///
+/// # Safety
+/// Reads from curbuf option fields via C shims.
+unsafe fn last_line_no_eol() -> bool {
+    !nvim_curbuf_get_b_p_eol() && (nvim_curbuf_get_b_p_bin() != 0 || !nvim_curbuf_get_b_p_fixeol())
 }
 
 /// `_Static_assert` constants are verified in the C accessor file.
@@ -298,11 +308,7 @@ unsafe fn count_lines(p: &CountParams) -> Option<Counts> {
             c.word_count_cursor += lcr.word_count;
             c.char_count_cursor += lcr.char_count;
 
-            #[allow(clippy::cast_possible_truncation)]
-            if lnum == p.line_count
-                && nvim_cpi_last_line_no_eol() != 0
-                && nvim_cpi_last_line_short(lnum, lcr.byte_count as c_int) != 0
-            {
+            if lnum == p.line_count && last_line_no_eol() {
                 c.byte_count_cursor -= i64::from(p.eol_size);
             }
         } else if !p.visual_active && lnum == p.cursor_lnum {
@@ -320,7 +326,7 @@ unsafe fn count_lines(p: &CountParams) -> Option<Counts> {
         c.char_count += lcr.char_count;
     }
 
-    if nvim_cpi_last_line_no_eol() != 0 {
+    if last_line_no_eol() {
         c.byte_count -= i64::from(p.eol_size);
     }
 
