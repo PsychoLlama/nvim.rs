@@ -197,8 +197,6 @@ extern "C" {
 
     // Redraw functions
     fn nvim_redraw_buf_status_later(buf: BufHandle);
-    fn nvim_set_redraw_tabline(val: bool);
-    fn nvim_set_need_maketitle(val: bool);
     fn nvim_set_redraw_cmdline(val: bool);
 
     // Other functions

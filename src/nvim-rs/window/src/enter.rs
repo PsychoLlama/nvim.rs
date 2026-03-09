@@ -38,6 +38,10 @@ const UPD_NOT_VALID: c_int = 40;
 // =============================================================================
 
 extern "C" {
+    static mut redraw_tabline: bool;
+}
+
+extern "C" {
     // Window validity
     fn rs_win_valid(wp: WinHandle) -> c_int;
 
@@ -107,9 +111,6 @@ extern "C" {
 
     // redraw_later(wp, type)
     fn nvim_redraw_later_wrapper(wp: WinHandle, type_: c_int);
-
-    // redraw_tabline flag
-    fn nvim_set_redraw_tabline(val: c_int);
 
     // restart_edit
     fn nvim_get_restart_edit_bool() -> c_int;
@@ -259,7 +260,7 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
         // Re-read curwin in case autocmds changed it
         let new_curwin = nvim_get_curwin();
         nvim_win_set_redr_status(new_curwin, 1);
-        nvim_set_redraw_tabline(1);
+        redraw_tabline = true;
 
         if nvim_get_restart_edit_bool() != 0 {
             nvim_redraw_later_wrapper(new_curwin, UPD_VALID);

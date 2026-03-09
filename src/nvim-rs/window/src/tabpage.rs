@@ -20,6 +20,10 @@ use crate::list::{
 // =============================================================================
 
 extern "C" {
+    static mut redraw_tabline: bool;
+}
+
+extern "C" {
     /// Get curtab.
     fn nvim_get_curtab() -> TabpageHandle;
 
@@ -31,9 +35,6 @@ extern "C" {
 
     /// Get tabpage_move_disallowed global.
     fn nvim_al_get_tabpage_move_disallowed() -> c_int;
-
-    /// Set redraw_tabline global.
-    fn nvim_set_redraw_tabline(val: c_int);
 
     /// Set tp_next field on a tabpage.
     fn nvim_tabpage_set_next(tp: TabpageHandle, next: TabpageHandle);
@@ -799,7 +800,7 @@ unsafe fn tabpage_move_impl(nr: c_int) {
     }
 
     // Signal that the tabline needs redrawing.
-    nvim_set_redraw_tabline(1);
+    redraw_tabline = true;
 }
 
 // =============================================================================

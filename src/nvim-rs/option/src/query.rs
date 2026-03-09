@@ -20,6 +20,11 @@ use crate::{BufHandle, OptValType, WinHandle};
 // =============================================================================
 
 extern "C" {
+    static mut redraw_tabline: bool;
+    static mut need_maketitle: bool;
+}
+
+extern "C" {
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // can_bs
@@ -45,10 +50,6 @@ extern "C" {
     // get_ve_flags
     fn nvim_get_ve_flags_global() -> c_uint;
     fn nvim_win_get_ve_flags(wp: WinHandle) -> c_uint;
-
-    // redraw_titles
-    fn nvim_callback_set_need_maketitle(value: c_int);
-    fn nvim_set_redraw_tabline(val: c_int);
 
     // vimrc_found
     fn nvim_option_vim_getenv(envname: *const c_char) -> *mut c_char;
@@ -180,8 +181,8 @@ pub unsafe extern "C" fn rs_get_ve_flags(wp: WinHandle) -> c_uint {
 /// Redraw the window title and/or tab page text later.
 #[no_mangle]
 pub unsafe extern "C" fn rs_redraw_titles() {
-    nvim_callback_set_need_maketitle(1);
-    nvim_set_redraw_tabline(1);
+    need_maketitle = true;
+    redraw_tabline = true;
 }
 
 /// Handle vimrc file discovery: set $envname if not already set.

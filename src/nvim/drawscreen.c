@@ -2173,9 +2173,6 @@ _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
 
 // Phase 2 accessors for comp_col()
 
-/// Get 'showcmd' option.
-int nvim_get_p_sc(void) { return p_sc; }
-
 /// Set v:echospace variable.
 void nvim_set_vim_var_echospace(int val) { set_vim_var_nr(VV_ECHOSPACE, val); }
 
@@ -2188,12 +2185,6 @@ _Static_assert(SHOWCMD_COLS == 10, "SHOWCMD_COLS must be 10");
 void nvim_clearmode(void) { clearmode(); }
 
 // Phase 4 accessors for redraw_statuslines() / redraw_custom_title_later()
-
-/// Set redraw_tabline flag.
-void nvim_set_redraw_tabline(int val) { redraw_tabline = (val != 0); }
-
-/// Set need_maketitle flag.
-void nvim_set_need_maketitle(int val) { need_maketitle = (val != 0); }
 
 /// Wrapper for win_check_ns_hl() for Rust FFI.
 void nvim_win_check_ns_hl(win_T *wp) { win_check_ns_hl(wp); }
@@ -2212,25 +2203,6 @@ void nvim_maketitle(void) { maketitle(); }
 
 _Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");
 _Static_assert(STL_IN_TITLE == 2, "STL_IN_TITLE must be 2");
-
-// Phase 9 accessors for maketitle() (Rust migration)
-/// Get p_titlelen option value.
-int nvim_get_p_titlelen(void) { return (int)p_titlelen; }
-/// Get p_titlestring option value.
-const char *nvim_get_p_titlestring(void) { return p_titlestring; }
-/// Get p_iconstring option value.
-const char *nvim_get_p_iconstring(void) { return p_iconstring; }
-/// Call trans_characters() on a buffer (for maketitle icon).
-void nvim_trans_characters(char *buf, size_t bufsize) { trans_characters(buf, bufsize); }
-/// Call ui_call_set_title() with a C string (NULL treated as empty string).
-void nvim_ui_call_set_title(const char *s) { ui_call_set_title(cstr_as_string(s ? s : "")); }
-/// Call ui_call_set_icon() with a C string (NULL treated as empty string).
-void nvim_ui_call_set_icon(const char *s) { ui_call_set_icon(cstr_as_string(s ? s : "")); }
-/// Get the end_off from utf_cp_bounds(str, ptr).
-int nvim_utf_cp_bounds_end_off(const char *str, const char *ptr)
-{
-  return utf_cp_bounds((char *)str, (char *)ptr).end_off;
-}
 _Static_assert(kOptTitlestring == 327, "kOptTitlestring mismatch");
 _Static_assert(kOptIconstring == 138, "kOptIconstring mismatch");
 

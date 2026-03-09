@@ -35,9 +35,12 @@ pub struct ScriptContext {
 type OptIndex = c_int;
 
 extern "C" {
+    static mut redraw_tabline: bool;
+}
+
+extern "C" {
     // check_redraw_for
     fn nvim_call_status_redraw_all();
-    fn nvim_set_redraw_tabline(val: c_int);
     fn nvim_call_changed_window_setting(win: WinHandle);
     fn nvim_call_redraw_later(win: WinHandle, redraw_type: c_int);
     fn nvim_call_redraw_buf_later(buf: BufHandle, redraw_type: c_int);
@@ -99,7 +102,7 @@ pub unsafe extern "C" fn rs_check_redraw_for(buf: BufHandle, win: WinHandle, fla
     }
 
     if (flags & OptFlags::REDR_TABL.0) != 0 || all {
-        nvim_set_redraw_tabline(1);
+        redraw_tabline = true;
     }
 
     if (flags & OptFlags::REDR_BUF.0) != 0 || (flags & OptFlags::REDR_WIN.0) != 0 || all {

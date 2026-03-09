@@ -20,6 +20,11 @@ extern "C" {
     static p_title: c_int;
     static stl_syntax: c_int;
     static p_ru: c_int;
+    static mut need_maketitle: bool;
+    static Columns: c_int;
+    static p_titlelen: i64;
+    static p_titlestring: *const c_char;
+    static p_iconstring: *const c_char;
 }
 
 // Buffer flags (from buffer_defs.h) — correct values matching C header.
@@ -97,11 +102,6 @@ extern "C" {
 
     // --- maketitle / resettitle / free_titles ---
     fn nvim_redrawing() -> c_int;
-    fn nvim_set_need_maketitle(val: c_int);
-    fn nvim_get_p_titlelen() -> c_int;
-    fn nvim_get_Columns() -> c_int;
-    fn nvim_get_p_titlestring() -> *const c_char;
-    fn nvim_get_p_iconstring() -> *const c_char;
     /// Call `rs_build_stl_str_hl_wrap` (the actual Rust impl of `build_stl_str_hl`).
     fn rs_build_stl_str_hl_wrap(
         wp: WinHandle,
@@ -270,11 +270,11 @@ pub unsafe fn maketitle_impl() {
     let mut buf = [0u8; IOSIZE];
 
     if nvim_redrawing() == 0 {
-        nvim_set_need_maketitle(1);
+        need_maketitle = true;
         return;
     }
 
-    nvim_set_need_maketitle(0);
+    need_maketitle = false;
 
     let opt_p_title = unsafe { p_title };
     let opt_p_icon = unsafe { p_icon };
@@ -290,15 +290,17 @@ pub unsafe fn maketitle_impl() {
     let curwin = nvim_get_curwin();
 
     if opt_p_title != 0 {
-        let titlelen = nvim_get_p_titlelen();
+        let titlelen = unsafe { p_titlelen };
         let maxlen: c_int = if titlelen > 0 {
-            (titlelen * nvim_get_Columns() / 100).max(10)
+            #[allow(clippy::cast_possible_truncation)]
+            let tl = titlelen as c_int;
+            (tl * unsafe { Columns } / 100).max(10)
         } else {
             0
         };
 
-        let p_titlestring = nvim_get_p_titlestring();
-        let titlestring_empty = p_titlestring.is_null() || *p_titlestring == 0;
+        let opt_titlestring = unsafe { p_titlestring };
+        let titlestring_empty = opt_titlestring.is_null() || *opt_titlestring == 0;
 
         if titlestring_empty {
             // Default title: "%t%( %M%)%( (%{expand(\"%:~:h\")})%)%a - Nvim"
@@ -323,7 +325,7 @@ pub unsafe fn maketitle_impl() {
                 curwin,
                 buf.as_mut_ptr().cast::<c_char>(),
                 IOSIZE,
-                p_titlestring.cast_mut(),
+                opt_titlestring.cast_mut(),
                 K_OPT_TITLESTRING,
                 0,
                 0,
@@ -335,7 +337,7 @@ pub unsafe fn maketitle_impl() {
             );
             title_str = buf.as_ptr().cast::<c_char>();
         } else {
-            title_str = p_titlestring;
+            title_str = opt_titlestring;
         }
     }
 
@@ -343,8 +345,8 @@ pub unsafe fn maketitle_impl() {
         value_change_via_accessor(title_str, nvim_buf_get_lasttitle, nvim_buf_set_lasttitle);
 
     if opt_p_icon != 0 {
-        let p_iconstring = nvim_get_p_iconstring();
-        let iconstring_empty = p_iconstring.is_null() || *p_iconstring == 0;
+        let opt_iconstring = unsafe { p_iconstring };
+        let iconstring_empty = opt_iconstring.is_null() || *opt_iconstring == 0;
 
         if iconstring_empty {
             let curbuf = nvim_get_curbuf();
@@ -368,7 +370,7 @@ pub unsafe fn maketitle_impl() {
                 curwin,
                 buf.as_mut_ptr().cast::<c_char>(),
                 IOSIZE,
-                p_iconstring.cast_mut(),
+                opt_iconstring.cast_mut(),
                 K_OPT_ICONSTRING,
                 0,
                 0,
@@ -379,7 +381,7 @@ pub unsafe fn maketitle_impl() {
                 std::ptr::null_mut(),
             );
         } else {
-            strcpy_to_buf(buf.as_mut_ptr().cast::<c_char>(), IOSIZE, p_iconstring);
+            strcpy_to_buf(buf.as_mut_ptr().cast::<c_char>(), IOSIZE, opt_iconstring);
         }
         icon_str = buf.as_ptr().cast::<c_char>();
     }

@@ -12,6 +12,11 @@ use crate::{BufHandle, BF_NEVERLOADED, BF_NEW, NUL};
 // C Accessor Functions (extern declarations)
 // =============================================================================
 
+extern "C" {
+    static mut redraw_tabline: bool;
+    static mut need_maketitle: bool;
+}
+
 #[allow(dead_code)]
 extern "C" {
     // Buffer field accessors
@@ -44,9 +49,6 @@ extern "C" {
     fn nvim_ml_setflags(buf: BufHandle);
     fn nvim_buf_inc_changedtick(buf: BufHandle);
     fn nvim_redraw_buf_status_later(buf: BufHandle);
-    fn nvim_set_redraw_tabline(val: bool);
-    fn nvim_set_need_maketitle(val: bool);
-
     // Memory functions
     fn nvim_xfree(ptr: *mut std::ffi::c_void);
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
@@ -174,8 +176,8 @@ fn unchanged_impl(buf: BufHandle, ff: bool, always_inc_changedtick: bool) {
                 save_file_ff_impl(buf);
             }
             nvim_redraw_buf_status_later(buf);
-            nvim_set_redraw_tabline(true);
-            nvim_set_need_maketitle(true); // set window title later
+            redraw_tabline = true;
+            need_maketitle = true; // set window title later
             nvim_buf_inc_changedtick(buf);
         } else if always_inc_changedtick {
             nvim_buf_inc_changedtick(buf);

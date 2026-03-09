@@ -2829,3 +2829,17 @@ int nvim_win_get_w_p_nu(win_T *wp) { return wp ? wp->w_p_nu : 0; }
 
 /// Get w_p_rnu option for a window (show relative line numbers).
 int nvim_win_get_w_p_rnu(win_T *wp) { return wp ? wp->w_p_rnu : 0; }
+
+// Moved from drawscreen.c — title/icon Rust FFI helpers
+
+/// Call trans_characters() on a buffer (for maketitle icon).
+void nvim_trans_characters(char *buf, size_t bufsize) { trans_characters(buf, (int)bufsize); }
+/// Call ui_call_set_title() with a C string (NULL treated as empty string).
+void nvim_ui_call_set_title(const char *s) { ui_call_set_title(cstr_as_string(s ? s : "")); }
+/// Call ui_call_set_icon() with a C string (NULL treated as empty string).
+void nvim_ui_call_set_icon(const char *s) { ui_call_set_icon(cstr_as_string(s ? s : "")); }
+/// Get the end_off from utf_cp_bounds(str, ptr).
+int nvim_utf_cp_bounds_end_off(const char *str, const char *ptr)
+{
+  return utf_cp_bounds((char *)str, (char *)ptr).end_off;
+}

@@ -116,7 +116,7 @@ const SHOWCMD_IGNORE: &[c_int] = &[
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_p_sc() -> c_int;
+    static p_sc: c_int;
     fn nvim_normal_showcmd_buf_ptr() -> *mut std::ffi::c_char;
 
     // Phase 2: display_showcmd accessors
@@ -284,7 +284,7 @@ unsafe fn clear_showcmd_visual_info() -> bool {
 #[no_mangle]
 pub extern "C" fn rs_clear_showcmd() {
     unsafe {
-        if nvim_get_p_sc() == 0 {
+        if p_sc == 0 {
             return;
         }
 
@@ -315,7 +315,7 @@ pub extern "C" fn rs_clear_showcmd() {
 /// Reads/writes the shared showcmd_buf and old_showcmd_buf C statics.
 #[no_mangle]
 pub unsafe extern "C" fn rs_push_showcmd() {
-    if nvim_get_p_sc() != 0 {
+    if p_sc != 0 {
         let src = nvim_normal_showcmd_buf_ptr().cast::<u8>();
         // SAFETY: Neovim is single-threaded; OLD_SHOWCMD_BUF is only
         // accessed here and in rs_pop_showcmd.
@@ -332,7 +332,7 @@ pub unsafe extern "C" fn rs_push_showcmd() {
 /// Reads/writes the shared showcmd_buf and old_showcmd_buf C statics.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pop_showcmd() {
-    if nvim_get_p_sc() == 0 {
+    if p_sc == 0 {
         return;
     }
     // SAFETY: Neovim is single-threaded; OLD_SHOWCMD_BUF is only
@@ -357,7 +357,7 @@ pub unsafe extern "C" fn rs_pop_showcmd() {
 /// Reads/writes the shared showcmd_buf C static and calls C helpers.
 #[no_mangle]
 pub unsafe extern "C" fn rs_add_to_showcmd(c: c_int) -> bool {
-    if nvim_get_p_sc() == 0 || nvim_get_msg_silent() != 0 {
+    if p_sc == 0 || nvim_get_msg_silent() != 0 {
         return false;
     }
 
@@ -454,7 +454,7 @@ pub unsafe extern "C" fn rs_add_to_showcmd(c: c_int) -> bool {
 /// Reads/writes the shared showcmd_buf C static and calls C helpers.
 #[no_mangle]
 pub unsafe extern "C" fn rs_del_from_showcmd(len: c_int) {
-    if nvim_get_p_sc() == 0 {
+    if p_sc == 0 {
         return;
     }
 

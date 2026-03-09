@@ -17,6 +17,10 @@ use crate::{BufHandle, TabpageHandle, WinHandle};
 // =============================================================================
 
 extern "C" {
+    static mut redraw_tabline: bool;
+}
+
+extern "C" {
     // --- Accessors ---
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_win_get_locked(wp: WinHandle) -> c_int;
@@ -44,7 +48,6 @@ extern "C" {
     fn nvim_internal_error_othertab();
     fn nvim_set_first_tabpage(tp: TabpageHandle);
     fn nvim_tabpage_set_next(tp: TabpageHandle, next: TabpageHandle);
-    fn nvim_set_redraw_tabline(val: c_int);
     fn rs_win_new_screen_rows();
     fn nvim_can_close_floating_windows(tp: TabpageHandle) -> c_int;
     fn nvim_win_set_buffer_raw(wp: WinHandle, buf: BufHandle);
@@ -314,7 +317,7 @@ pub extern "C" fn rs_close_othertab_remove_tabpage(
             nvim_tabpage_set_next(ptp, tp_next);
         }
 
-        nvim_set_redraw_tabline(1);
+        redraw_tabline = true;
         if h != rs_tabline_height() {
             rs_win_new_screen_rows();
         }

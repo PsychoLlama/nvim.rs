@@ -49,6 +49,10 @@ pub enum UpdateType {
 // C Function Declarations (External functions called by callbacks)
 // =============================================================================
 
+extern "C" {
+    static mut need_maketitle: bool;
+}
+
 #[allow(dead_code)] // FFI functions used when linked with C
 extern "C" {
     // Screen/redraw functions
@@ -66,9 +70,6 @@ extern "C" {
     fn nvim_option_get_hls() -> c_int;
     fn nvim_callback_get_p_titlelen() -> OptInt;
     fn nvim_callback_get_no_hlsearch() -> c_int;
-
-    // State setters
-    fn nvim_callback_set_need_maketitle(value: c_int);
 
     // Fold functions
     fn rs_newFoldLevel();
@@ -136,7 +137,9 @@ pub fn request_redraw_all(typ: UpdateType) {
 /// Request title update.
 #[inline]
 fn request_maketitle() {
-    unsafe { nvim_callback_set_need_maketitle(1) }
+    unsafe {
+        need_maketitle = true;
+    }
 }
 
 /// Check if screen is available for drawing.

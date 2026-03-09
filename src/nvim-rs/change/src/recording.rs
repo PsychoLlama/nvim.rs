@@ -11,6 +11,11 @@ use crate::{BufHandle, HLF_W, VV_WARNINGMSG};
 // C Accessor Functions (extern declarations)
 // =============================================================================
 
+extern "C" {
+    static mut redraw_tabline: bool;
+    static mut need_maketitle: bool;
+}
+
 #[allow(dead_code)]
 extern "C" {
     // Buffer field accessors
@@ -48,8 +53,6 @@ extern "C" {
 
     // Redraw functions
     fn nvim_redraw_buf_status_later(buf: BufHandle);
-    fn nvim_set_redraw_tabline(val: bool);
-    fn nvim_set_need_maketitle(val: bool);
     fn nvim_set_redraw_cmdline(val: bool);
 
     // Other functions
@@ -98,8 +101,8 @@ fn changed_internal_impl(buf: BufHandle) {
         nvim_buf_set_b_changed_invalid(buf, true);
         nvim_ml_setflags(buf);
         nvim_redraw_buf_status_later(buf);
-        nvim_set_redraw_tabline(true);
-        nvim_set_need_maketitle(true);
+        redraw_tabline = true;
+        need_maketitle = true;
     }
 }
 
