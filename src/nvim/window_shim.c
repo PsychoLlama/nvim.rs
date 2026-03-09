@@ -2798,3 +2798,15 @@ void nvim_validate_cursor_for_win(win_T *wp)
 {
   validate_cursor(wp);
 }
+
+/// Get w_view_width for a window (visible text column count).
+int nvim_win_get_w_view_width(win_T *wp) { return wp ? wp->w_view_width : 0; }
+
+/// Get w_scwidth for a window (sign column width in chars).
+int nvim_win_get_w_scwidth(win_T *wp) { return wp ? wp->w_scwidth : 0; }
+
+/// Get w_p_nu option for a window (show line numbers).
+int nvim_win_get_w_p_nu(win_T *wp) { return wp ? wp->w_p_nu : 0; }
+
+/// Get w_p_rnu option for a window (show relative line numbers).
+int nvim_win_get_w_p_rnu(win_T *wp) { return wp ? wp->w_p_rnu : 0; }

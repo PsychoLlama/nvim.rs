@@ -2147,55 +2147,9 @@ void win_scroll_lines(win_T *wp, int row, int line_count)
   }
 }
 
-/// Clear lines near the end of the window and mark the unused lines with "c1".
-/// When "draw_margin" is true, then draw the sign/fold/number columns.
-void win_draw_end(win_T *wp, schar_T c1, bool draw_margin, int startrow, int endrow, hlf_T hl)
-{
-  assert(hl >= 0 && hl < HLF_COUNT);
-  const int view_width = wp->w_view_width;
-  const int fdc = compute_foldcolumn(wp, 0);
-  const int scwidth = wp->w_scwidth;
-
-  for (int row = startrow; row < endrow; row++) {
-    grid_line_start(&wp->w_grid, row);
-
-    int n = 0;
-    if (draw_margin) {
-      // draw the fold column
-      if (fdc > 0) {
-        n = grid_line_fill(n, MIN(view_width, n + fdc),
-                           schar_from_ascii(' '), win_hl_attr(wp, HLF_FC));
-      }
-
-      // draw the sign column
-      if (scwidth > 0) {
-        n = grid_line_fill(n, MIN(view_width, n + scwidth * SIGN_WIDTH),
-                           schar_from_ascii(' '), win_hl_attr(wp, HLF_SC));
-      }
-
-      // draw the number column
-      if ((wp->w_p_nu || wp->w_p_rnu) && vim_strchr(p_cpo, CPO_NUMCOL) == NULL) {
-        int width = number_width(wp) + 1;
-        n = grid_line_fill(n, MIN(view_width, n + width),
-                           schar_from_ascii(' '), win_hl_attr(wp, HLF_N));
-      }
-    }
-
-    int attr = win_hl_attr(wp, (int)hl);
-
-    if (n < view_width) {
-      grid_line_put_schar(n, c1, attr);
-      n++;
-    }
-
-    grid_line_clear_end(n, view_width, win_bg_attr(wp), attr);
-
-    if (wp->w_p_rl) {
-      grid_line_mirror(view_width);
-    }
-    grid_line_flush();
-  }
-}
+_Static_assert(HLF_FC == 29, "HLF_FC must be 29");
+_Static_assert(HLF_SC == 35, "HLF_SC must be 35");
+_Static_assert(HLF_N == 12, "HLF_N must be 12");
 
 
 /// Get VIsual_active state (Rust FFI).

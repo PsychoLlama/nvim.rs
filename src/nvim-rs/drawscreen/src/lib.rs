@@ -2237,6 +2237,122 @@ pub extern "C" fn rs_end_search_hl() {
     }
 }
 
+// =============================================================================
+// Phase 4 (win_draw_end): Empty line drawing
+// =============================================================================
+
+extern "C" {
+    fn nvim_win_get_w_view_width(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_scwidth(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_p_nu(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_p_rnu(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_grid(wp: WinHandle) -> GridViewHandle;
+    fn win_bg_attr(wp: WinHandle) -> c_int;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    #[link_name = "rs_grid_line_clear_end"]
+    fn grid_line_clear_end(n: c_int, end: c_int, bg_attr: c_int, attr: c_int);
+    #[link_name = "rs_grid_line_mirror"]
+    fn grid_line_mirror(width: c_int);
+    #[link_name = "compute_foldcolumn"]
+    fn rs_compute_foldcolumn(wp: WinHandle, extra: c_int) -> c_int;
+    #[link_name = "number_width"]
+    fn rs_number_width(wp: WinHandle) -> c_int;
+}
+
+// p_cpo (cpoptions) global.
+extern "C" {
+    static p_cpo: *const c_char;
+}
+
+/// CPO_NUMCOL: 'number' column also used for text (== 'n').
+const CPO_NUMCOL: c_int = b'n' as c_int;
+/// HLF_FC: FoldColumn highlight.
+const HLF_FC: c_int = 29;
+/// HLF_SC: SignColumn highlight.
+const HLF_SC: c_int = 35;
+/// HLF_N: LineNr highlight.
+const HLF_N: c_int = 12;
+/// SIGN_WIDTH: display cells per sign.
+const SIGN_WIDTH: c_int = 2;
+/// Space schar (schar_from_ascii(' ') on little-endian).
+const SCHAR_SPACE: ScharT = b' ' as ScharT;
+
+/// Draw empty lines at the bottom of a window, marking unused lines with `c1`.
+/// When `draw_margin` is true, draw sign/fold/number columns.
+///
+/// Rust equivalent of `win_draw_end()` in drawscreen.c.
+#[unsafe(export_name = "win_draw_end")]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+pub extern "C" fn rs_win_draw_end(
+    wp: WinHandle,
+    c1: ScharT,
+    draw_margin: bool,
+    startrow: c_int,
+    endrow: c_int,
+    hl: c_int,
+) {
+    unsafe {
+        let view_width = nvim_win_get_w_view_width(wp);
+        let fdc = rs_compute_foldcolumn(wp, 0);
+        let scwidth = nvim_win_get_w_scwidth(wp);
+        let grid = nvim_win_get_w_grid(wp);
+
+        for row in startrow..endrow {
+            rs_grid_line_start(grid, row);
+
+            let mut n: c_int = 0;
+            if draw_margin {
+                // draw the fold column
+                if fdc > 0 {
+                    n = rs_grid_line_fill(
+                        n,
+                        (view_width).min(n + fdc),
+                        SCHAR_SPACE,
+                        nvim_win_hl_attr(wp, HLF_FC),
+                    );
+                }
+
+                // draw the sign column
+                if scwidth > 0 {
+                    n = rs_grid_line_fill(
+                        n,
+                        (view_width).min(n + scwidth * SIGN_WIDTH),
+                        SCHAR_SPACE,
+                        nvim_win_hl_attr(wp, HLF_SC),
+                    );
+                }
+
+                // draw the number column
+                if (nvim_win_get_w_p_nu(wp) != 0 || nvim_win_get_w_p_rnu(wp) != 0)
+                    && vim_strchr(p_cpo, CPO_NUMCOL).is_null()
+                {
+                    let width = rs_number_width(wp) + 1;
+                    n = rs_grid_line_fill(
+                        n,
+                        (view_width).min(n + width),
+                        SCHAR_SPACE,
+                        nvim_win_hl_attr(wp, HLF_N),
+                    );
+                }
+            }
+
+            let attr = nvim_win_hl_attr(wp, hl);
+
+            if n < view_width {
+                rs_grid_line_put_schar(n, c1, attr);
+                n += 1;
+            }
+
+            grid_line_clear_end(n, view_width, win_bg_attr(wp), attr);
+
+            if nvim_win_get_w_p_rl(wp) != 0 {
+                grid_line_mirror(view_width);
+            }
+            rs_grid_line_flush();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
