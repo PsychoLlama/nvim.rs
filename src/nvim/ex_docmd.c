@@ -258,6 +258,16 @@ extern void rs_win_setheight_win(int height, win_T *win);
 extern void rs_win_setwidth_win(int width, win_T *wp);
 extern int rs_get_vtopline(win_T *wp);
 
+// Phase 1 Rust FFI declarations (commands.rs)
+extern void rs_verify_command(const char *cmd);
+extern int rs_skip_cmd(const exarg_T *eap);
+extern void rs_msg_verbose_cmd(int32_t lnum, const char *cmd);
+extern int rs_is_other_file(int fnum, const char *ffname);
+extern void rs_ex_redir(exarg_T *eap);
+extern void rs_ex_normal(exarg_T *eap);
+extern void rs_ex_filetype(exarg_T *eap);
+extern void rs_ex_quit(exarg_T *eap);
+
 // Helper function to get first character of command name for Rust FFI
 // Returns 0 if cmdidx is out of bounds
 int cmdname_first_char(int cmdidx)
@@ -317,31 +327,7 @@ static void restore_dbg_stuff(struct dbg_stuff *dsp)
 /// ffname is a full path to where a buffer lives on-disk or would live on-disk.
 static bool is_other_file(int fnum, char *ffname)
 {
-  if (fnum != 0) {
-    if (fnum == curbuf->b_fnum) {
-      return false;
-    }
-
-    return true;
-  }
-
-  if (ffname == NULL) {
-    return true;
-  }
-
-  if (*ffname == NUL) {
-    return false;
-  }
-
-  if (!curbuf->file_id_valid
-      && curbuf->b_sfname != NULL
-      && *curbuf->b_sfname != NUL) {
-    // This occurs with unsaved buffers. In which case `ffname`
-    // actually corresponds to curbuf->b_sfname
-    return path_fnamecmp(ffname, curbuf->b_sfname) != 0;
-  }
-
-  return otherfile(ffname);
+  return (bool)rs_is_other_file(fnum, ffname);
 }
 
 /// Repeatedly get commands for Ex mode, until the ":vi" command is given.
@@ -421,20 +407,7 @@ void do_exmode(void)
 static void msg_verbose_cmd(linenr_T lnum, char *cmd)
   FUNC_ATTR_NONNULL_ALL
 {
-  no_wait_return++;
-  verbose_enter_scroll();
-
-  if (lnum == 0) {
-    smsg(0, _("Executing: %s"), cmd);
-  } else {
-    smsg(0, _("line %" PRIdLINENR ": %s"), lnum, cmd);
-  }
-  if (msg_silent == 0) {
-    msg_puts("\n");   // don't overwrite this
-  }
-
-  verbose_leave_scroll();
-  no_wait_return--;
+  rs_msg_verbose_cmd((int32_t)lnum, cmd);
 }
 
 static int cmdline_call_depth = 0;  ///< recursiveness
@@ -1711,103 +1684,7 @@ static void profile_cmd(const exarg_T *eap, cstack_T *cstack, LineGetter fgetlin
 
 static bool skip_cmd(const exarg_T *eap)
 {
-  // Skip the command when it's not going to be executed.
-  // The commands like :if, :endif, etc. always need to be executed.
-  // Also make an exception for commands that handle a trailing command
-  // themselves.
-  if (eap->skip) {
-    switch (eap->cmdidx) {
-    // commands that need evaluation
-    case CMD_while:
-    case CMD_endwhile:
-    case CMD_for:
-    case CMD_endfor:
-    case CMD_if:
-    case CMD_elseif:
-    case CMD_else:
-    case CMD_endif:
-    case CMD_try:
-    case CMD_catch:
-    case CMD_finally:
-    case CMD_endtry:
-    case CMD_function:
-      break;
-
-    // Commands that handle '|' themselves.  Check: A command should
-    // either have the EX_TRLBAR flag, appear in this list or appear in
-    // the list at ":help :bar".
-    case CMD_aboveleft:
-    case CMD_and:
-    case CMD_belowright:
-    case CMD_botright:
-    case CMD_browse:
-    case CMD_call:
-    case CMD_confirm:
-    case CMD_const:
-    case CMD_delfunction:
-    case CMD_djump:
-    case CMD_dlist:
-    case CMD_dsearch:
-    case CMD_dsplit:
-    case CMD_echo:
-    case CMD_echoerr:
-    case CMD_echomsg:
-    case CMD_echon:
-    case CMD_eval:
-    case CMD_execute:
-    case CMD_filter:
-    case CMD_help:
-    case CMD_hide:
-    case CMD_horizontal:
-    case CMD_ijump:
-    case CMD_ilist:
-    case CMD_isearch:
-    case CMD_isplit:
-    case CMD_keepalt:
-    case CMD_keepjumps:
-    case CMD_keepmarks:
-    case CMD_keeppatterns:
-    case CMD_leftabove:
-    case CMD_let:
-    case CMD_lockmarks:
-    case CMD_lockvar:
-    case CMD_lua:
-    case CMD_match:
-    case CMD_mzscheme:
-    case CMD_noautocmd:
-    case CMD_noswapfile:
-    case CMD_perl:
-    case CMD_psearch:
-    case CMD_python:
-    case CMD_py3:
-    case CMD_python3:
-    case CMD_pythonx:
-    case CMD_pyx:
-    case CMD_return:
-    case CMD_rightbelow:
-    case CMD_ruby:
-    case CMD_silent:
-    case CMD_smagic:
-    case CMD_snomagic:
-    case CMD_substitute:
-    case CMD_syntax:
-    case CMD_tab:
-    case CMD_tcl:
-    case CMD_throw:
-    case CMD_tilde:
-    case CMD_topleft:
-    case CMD_unlet:
-    case CMD_unlockvar:
-    case CMD_verbose:
-    case CMD_vertical:
-    case CMD_wincmd:
-      break;
-
-    default:
-      return true;
-    }
-  }
-  return false;
+  return (bool)rs_skip_cmd(eap);
 }
 
 /// Execute one Ex command.
@@ -3212,65 +3089,7 @@ bool before_quit_autocmds(win_T *wp, bool quit_all, bool forceit)
 /// ":{nr}quit": quit window {nr}
 static void ex_quit(exarg_T *eap)
 {
-  if (cmdwin_type != 0) {
-    cmdwin_result = Ctrl_C;
-    return;
-  }
-  // Don't quit while editing the command line.
-  if (text_locked()) {
-    text_locked_msg();
-    return;
-  }
-
-  win_T *wp;
-
-  if (eap->addr_count > 0) {
-    linenr_T wnr = eap->line2;
-
-    for (wp = firstwin; wp->w_next != NULL; wp = wp->w_next) {
-      if (--wnr <= 0) {
-        break;
-      }
-    }
-  } else {
-    wp = curwin;
-  }
-
-  // Refuse to quit when locked.
-  if (curbuf_locked()) {
-    return;
-  }
-
-  // Trigger QuitPre and maybe ExitPre
-  if (before_quit_autocmds(wp, false, eap->forceit)) {
-    return;
-  }
-
-  // If there is only one relevant window we will exit.
-  if (check_more(false, eap->forceit) == OK && rs_only_one_window()) {
-    exiting = true;
-  }
-  if ((!buf_hide(wp->w_buffer)
-       && check_changed(wp->w_buffer, (p_awa ? CCGD_AW : 0)
-                        | (eap->forceit ? CCGD_FORCEIT : 0)
-                        | CCGD_EXCMD))
-      || check_more(true, eap->forceit) == FAIL
-      || (rs_only_one_window() && check_changed_any(eap->forceit, true))) {
-    not_exiting();
-  } else {
-    // quit last window
-    // Note: rs_only_one_window() returns true, even so a help window is
-    // still open. In that case only quit, if no address has been
-    // specified. Example:
-    // :h|wincmd w|1q     - don't quit
-    // :h|wincmd w|q      - quit
-    if (rs_only_one_window() && (ONE_WINDOW || eap->addr_count == 0)) {
-      getout(0);
-    }
-    not_exiting();
-    // close window; may free buffer
-    win_close(wp, !buf_hide(wp->w_buffer) || eap->forceit, eap->forceit);
-  }
+  rs_ex_quit(eap);
 }
 
 /// ":cquit".
@@ -5101,84 +4920,7 @@ static void ex_later(exarg_T *eap)
 /// ":redir": start/stop redirection.
 static void ex_redir(exarg_T *eap)
 {
-  char *arg = eap->arg;
-
-  if (STRICMP(eap->arg, "END") == 0) {
-    close_redir();
-  } else {
-    if (*arg == '>') {
-      arg++;
-      char *mode;
-      if (*arg == '>') {
-        arg++;
-        mode = "a";
-      } else {
-        mode = "w";
-      }
-      arg = skipwhite(arg);
-
-      close_redir();
-
-      // Expand environment variables and "~/".
-      char *fname = expand_env_save(arg);
-      if (fname == NULL) {
-        return;
-      }
-
-      redir_fd = open_exfile(fname, eap->forceit, mode);
-      xfree(fname);
-    } else if (*arg == '@') {
-      // redirect to a register a-z (resp. A-Z for appending)
-      close_redir();
-      arg++;
-      if (valid_yank_reg(*arg, true) && *arg != '_') {
-        redir_reg = (uint8_t)(*arg++);
-        if (*arg == '>' && arg[1] == '>') {        // append
-          arg += 2;
-        } else {
-          // Can use both "@a" and "@a>".
-          if (*arg == '>') {
-            arg++;
-          }
-          // Make register empty when not using @A-@Z and the
-          // command is valid.
-          if (*arg == NUL && !isupper(redir_reg)) {
-            write_reg_contents(redir_reg, "", 0, false);
-          }
-        }
-      }
-      if (*arg != NUL) {
-        redir_reg = 0;
-        semsg(_(e_invarg2), eap->arg);
-      }
-    } else if (*arg == '=' && arg[1] == '>') {
-      bool append;
-
-      // redirect to a variable
-      close_redir();
-      arg += 2;
-
-      if (*arg == '>') {
-        arg++;
-        append = true;
-      } else {
-        append = false;
-      }
-
-      if (var_redir_start(skipwhite(arg), append) == OK) {
-        redir_vname = true;
-      }
-    } else {  // TODO(vim): redirect to a buffer
-      semsg(_(e_invarg2), eap->arg);
-    }
-  }
-
-  // Make sure redirection is not off.  Can happen for cmdline completion
-  // that indirectly invokes a command to catch its output.
-  if (redir_fd != NULL
-      || redir_reg || redir_vname) {
-    redir_off = false;
-  }
+  rs_ex_redir(eap);
 }
 
 /// ":redraw": force redraw
@@ -5414,82 +5156,7 @@ bool expr_map_locked(void)
 /// ":normal[!] {commands}": Execute normal mode commands.
 static void ex_normal(exarg_T *eap)
 {
-  if (curbuf->terminal && State & MODE_TERMINAL) {
-    emsg("Can't re-enter normal mode from terminal mode");
-    return;
-  }
-  char *arg = NULL;
-
-  if (expr_map_locked()) {
-    emsg(_(e_secure));
-    return;
-  }
-
-  if (ex_normal_busy >= p_mmd) {
-    emsg(_("E192: Recursive use of :normal too deep"));
-    return;
-  }
-
-  // vgetc() expects K_SPECIAL to have been escaped.  Don't do
-  // this for the K_SPECIAL leading byte, otherwise special keys will not
-  // work.
-  {
-    int len = 0;
-
-    // Count the number of characters to be escaped.
-    int l;
-    for (char *p = eap->arg; *p != NUL; p++) {
-      for (l = utfc_ptr2len(p) - 1; l > 0; l--) {
-        if (*++p == (char)K_SPECIAL) {  // trailbyte K_SPECIAL
-          len += 2;
-        }
-      }
-    }
-    if (len > 0) {
-      arg = xmalloc(strlen(eap->arg) + (size_t)len + 1);
-      len = 0;
-      for (char *p = eap->arg; *p != NUL; p++) {
-        arg[len++] = *p;
-        for (l = utfc_ptr2len(p) - 1; l > 0; l--) {
-          arg[len++] = *++p;
-          if (*p == (char)K_SPECIAL) {
-            arg[len++] = (char)KS_SPECIAL;
-            arg[len++] = KE_FILLER;
-          }
-        }
-        arg[len] = NUL;
-      }
-    }
-  }
-
-  ex_normal_busy++;
-  save_state_T save_state;
-  if (save_current_state(&save_state)) {
-    // Repeat the :normal command for each line in the range.  When no
-    // range given, execute it just once, without positioning the cursor
-    // first.
-    do {
-      if (eap->addr_count != 0) {
-        curwin->w_cursor.lnum = eap->line1++;
-        curwin->w_cursor.col = 0;
-        check_cursor_moved(curwin);
-      }
-
-      exec_normal_cmd((arg != NULL ? arg : eap->arg),
-                      eap->forceit ? REMAP_NONE : REMAP_YES, false);
-    } while (eap->addr_count > 0 && eap->line1 <= eap->line2 && !got_int);
-  }
-
-  // Might not return to the main loop when in an event handler.
-  update_topline_cursor();
-
-  restore_current_state(&save_state);
-
-  ex_normal_busy--;
-
-  setmouse();
-  ui_cursor_shape();  // may show different cursor shape
-  xfree(arg);
+  rs_ex_normal(eap);
 }
 
 /// ":startinsert", ":startreplace" and ":startgreplace"
@@ -6167,67 +5834,7 @@ static TriState filetype_indent = kNone;
 /// indent off: load indoff.vim
 static void ex_filetype(exarg_T *eap)
 {
-  if (*eap->arg == NUL) {
-    // Print current status.
-    smsg(0, "filetype detection:%s  plugin:%s  indent:%s",
-         filetype_detect == kTrue ? "ON" : "OFF",
-         filetype_plugin == kTrue ? (filetype_detect == kTrue ? "ON" : "(on)") : "OFF",
-         filetype_indent == kTrue ? (filetype_detect == kTrue ? "ON" : "(on)") : "OFF");
-    return;
-  }
-
-  char *arg = eap->arg;
-  bool plugin = false;
-  bool indent = false;
-
-  // Accept "plugin" and "indent" in any order.
-  while (true) {
-    if (strncmp(arg, "plugin", 6) == 0) {
-      plugin = true;
-      arg = skipwhite(arg + 6);
-      continue;
-    }
-    if (strncmp(arg, "indent", 6) == 0) {
-      indent = true;
-      arg = skipwhite(arg + 6);
-      continue;
-    }
-    break;
-  }
-  if (strcmp(arg, "on") == 0 || strcmp(arg, "detect") == 0) {
-    if (*arg == 'o' || filetype_detect != kTrue) {
-      source_runtime(FILETYPE_FILE, DIP_ALL);
-      filetype_detect = kTrue;
-      if (plugin) {
-        source_runtime(FTPLUGIN_FILE, DIP_ALL);
-        filetype_plugin = kTrue;
-      }
-      if (indent) {
-        source_runtime(INDENT_FILE, DIP_ALL);
-        filetype_indent = kTrue;
-      }
-    }
-    if (*arg == 'd') {
-      do_doautocmd("filetypedetect BufRead", true, NULL);
-      do_modelines(0);
-    }
-  } else if (strcmp(arg, "off") == 0) {
-    if (plugin || indent) {
-      if (plugin) {
-        source_runtime(FTPLUGOF_FILE, DIP_ALL);
-        filetype_plugin = kFalse;
-      }
-      if (indent) {
-        source_runtime(INDOFF_FILE, DIP_ALL);
-        filetype_indent = kFalse;
-      }
-    } else {
-      source_runtime(FTOFF_FILE, DIP_ALL);
-      filetype_detect = kFalse;
-    }
-  } else {
-    semsg(_(e_invarg2), arg);
-  }
+  rs_ex_filetype(eap);
 }
 
 /// Source ftplugin.vim and indent.vim to create the necessary FileType
@@ -6534,293 +6141,7 @@ static void ex_fclose(exarg_T *eap)
 
 void verify_command(char *cmd)
 {
-  if (strcmp("smile", cmd) != 0) {
-    return;  // acceptable non-existing command
-  }
-  int a = HLF_E;
-  msg(" #xxn`          #xnxx`        ,+x@##@Mz;`        .xxx"
-      "xxxxxxnz+,      znnnnnnnnnnnnnnnn.", a);
-  msg(" n###z          x####`      :x##########W+`      ,###"
-      "##########M;    W################.", a);
-  msg(" n####;         x####`    `z##############W:     ,###"
-      "#############   W################.", a);
-  msg(" n####W.        x####`   ,W#################+    ,###"
-      "##############  W################.", a);
-  msg(" n#####n        x####`   @###################    ,###"
-      "##############i W################.", a);
-  msg(" n######i       x####`  .#########@W@########*   ,###"
-      "##############W`W################.", a);
-  msg(" n######@.      x####`  x######W*.  `;n#######:  ,###"
-      "#x,,,,:*M######iW###@:,,,,,,,,,,,`", a);
-  msg(" n#######n      x####` *######+`       :M#####M  ,###"
-      "#n      `x#####xW###@`", a);
-  msg(" n########*     x####``@####@;          `x#####i ,###"
-      "#n       ,#####@W###@`", a);
-  msg(" n########@     x####`*#####i            `M####M ,###"
-      "#n        x#########@`", a);
-  msg(" n#########     x####`M####z              :#####:,###"
-      "#n        z#########@`", a);
-  msg(" n#########*    x####,#####.               n####+,###"
-      "#n        n#########@`", a);
-  msg(" n####@####@,   x####i####x                ;####x,###"
-      "#n       `W#####@####+++++++++++i", a);
-  msg(" n####*#####M`  x#########*                `####@,###"
-      "#n       i#####MW###############W", a);
-  msg(" n####.######+  x####z####;                 W####,###"
-      "#n      i@######W###############W", a);
-  msg(" n####.`W#####: x####n####:                 M####:###"
-      "#@nnnnnW#######,W###############W", a);
-  msg(" n####. :#####M`x####z####;                 W####,###"
-      "##############z W###############W", a);
-  msg(" n####.  #######x#########*                `####W,###"
-      "#############W` W###############W", a);
-  msg(" n####.  `M#####W####i####x                ;####x,###"
-      "############W,  W####+**********i", a);
-  msg(" n####.   ,##########,#####.               n####+,###"
-      "###########n.   W###@`", a);
-  msg(" n####.    ##########`M####z              :#####:,###"
-      "########Wz:     W###@`", a);
-  msg(" n####.    x#########`*#####i            `M####M ,###"
-      "#x.....`        W###@`", a);
-  msg(" n####.    ,@########``@####@;          `x#####i ,###"
-      "#n              W###@`", a);
-  msg(" n####.     *########` *#####@+`       ,M#####M  ,###"
-      "#n              W###@`", a);
-  msg(" n####.      x#######`  x######W*.  `;n######@:  ,###"
-      "#n              W###@,,,,,,,,,,,,`", a);
-  msg(" n####.      .@######`  .#########@W@########*   ,###"
-      "#n              W################,", a);
-  msg(" n####.       i######`   @###################    ,###"
-      "#n              W################,", a);
-  msg(" n####.        n#####`   ,W#################+    ,###"
-      "#n              W################,", a);
-  msg(" n####.        .@####`    .n##############W;     ,###"
-      "#n              W################,", a);
-  msg(" n####.         i####`      :x##########W+`      ,###"
-      "#n              W################,", a);
-  msg(" +nnnn`          +nnn`        ,+x@##@Mz;`        .nnn"
-      "n+              zxxxxxxxxxxxxxxxx.", a);
-  msg(" ", a);
-  msg("                                                     "
-      "                              ,+M@#Mi", a);
-  msg("                                 "
-      "                                                .z########", a);
-  msg("                                 "
-      "                                               i@#########i", a);
-  msg("                                 "
-      "                                             `############W`", a);
-  msg("                                 "
-      "                                            `n#############i", a);
-  msg("                                 "
-      "                                           `n##############n", a);
-  msg("     ``                          "
-      "                                           z###############@`", a);
-  msg("    `W@z,                        "
-      "                                          ##################,", a);
-  msg("    *#####`                      "
-      "                                         i############@x@###i", a);
-  msg("    ######M.                     "
-      "                                        :#############n`,W##+", a);
-  msg("    +######@:                    "
-      "                                       .W#########M@##+  *##z", a);
-  msg("    :#######@:                   "
-      "                                      `x########@#x###*  ,##n", a);
-  msg("    `@#######@;                  "
-      "                                      z#########M*@nW#i  .##x", a);
-  msg("     z########@i                 "
-      "                                     *###########WM#@#,  `##x", a);
-  msg("     i##########+                "
-      "                                    ;###########*n###@   `##x", a);
-  msg("     `@#MM#######x,              "
-      "                                   ,@#########zM,`z##M   `@#x", a);
-  msg("      n##M#W#######n.            "
-      "   `.:i*+#zzzz##+i:.`             ,W#########Wii,`n@#@` n@##n", a);
-  msg("      ;###@#x#######n         `,i"
-      "#nW@#####@@WWW@@####@Mzi.        ,W##########@z.. ;zM#+i####z", a);
-  msg("       x####nz########    .;#x@##"
-      "@Wn#*;,.`      ``,:*#x@##M+,    ;@########xz@WM+#` `n@#######", a);
-  msg("       ,@####M########xi#@##@Mzi,"
-      "`                     .+x###Mi:n##########Mz```.:i  *@######*", a);
-  msg("        *#####W#########ix+:`    "
-      "                         :n#############z:       `*.`M######i", a);
-  msg("        i#W##nW@+@##@#M@;        "
-      "                           ;W@@##########W,        i`x@#####,", a);
-  msg("        `@@n@Wn#@iMW*#*:         "
-      "                            `iz#z@######x.           M######`", a);
-  msg("         z##zM###x`*, .`         "
-      "                                 `iW#####W;:`        +#####M", a);
-  msg("         ,###nn##n`              "
-      "                                  ,#####x;`        ,;@######", a);
-  msg("          x###xz#.               "
-      "                                    in###+        `:######@.", a);
-  msg("          ;####n+                "
-      "                                    `Mnx##xi`   , zM#######", a);
-  msg("          `W####+                "
-      "i.                                   `.+x###@#. :n,z######:", a);
-  msg("           z####@`              ;"
-      "#:                                     .ii@###@;.*M*z####@`", a);
-  msg("           i####M         `   `i@"
-      "#,           ::                           +#n##@+@##W####n", a);
-  msg("           :####x    ,i. ##xzM###"
-      "@`     i.   .@@,                           .z####x#######*", a);
-  msg("           ,###W;   i##Wz########"
-      "#     :##   z##n                           ,@########x###:", a);
-  msg("            n##n   `W###########M"
-      "`;n,  i#x  ,###@i                           *W########W#@`", a);
-  msg("           .@##+  `x###########@."
-      " z#+ .M#W``x#####n`                         `;#######@z#x", a);
-  msg("           n###z :W############@ "
-      " z#*  @##xM#######@n;                        `########nW+", a);
-  msg("          ;####nW##############W "
-      ":@#* `@#############*                        :########z@i`", a);
-  msg("          M##################### "
-      "M##:  @#############@:                       *W########M#", a);
-  msg("         ;#####################i."
-      "##x`  W#############W,                       :n########zx", a);
-  msg("         x####################@.`"
-      "x;    @#############z.                       .@########W#", a);
-  msg("        ,######################` "
-      "      W###############x*,`                    W######zM#i", a);
-  msg("        #######################: "
-      "      z##################@x+*#zzi            `@#########.", a);
-  msg("        W########W#z#M#########; "
-      "      *##########################z            :@#######@`", a);
-  msg("       `@#######x`;#z ,x#######; "
-      "      z###########M###xnM@########*            :M######@", a);
-  msg("       i########, x#@`  z######; "
-      "      *##########i *#@`  `+########+`            n######.", a);
-  msg("       n#######@` M##,  `W#####. "
-      "      *#########z  ###;    z########M:           :W####n", a);
-  msg("       M#######M  n##.   x####x  "
-      "      `x########:  z##+    M#########@;           .n###+", a);
-  msg("       W#######@` :#W   `@####:  "
-      "       `@######W   i###   ;###########@.            n##n", a);
-  msg("       W########z` ,,  .x####z   "
-      "        @######@`  `W#;  `W############*            *###;", a);
-  msg("      `@#########Mi,:*n@####W`   "
-      "        W#######*   ..  `n#############i            i###x", a);
-  msg("      .#####################z    "
-      "       `@#######@*`    .x############n:`            ;####.", a);
-  msg("      :####################x`,,` "
-      "       `W#########@x#+#@#############i              ,####:", a);
-  msg("      ;###################x#@###x"
-      "i`      *############################:              `####i", a);
-  msg("      i##################+#######"
-      "#M,      x##########################@`               W###i", a);
-  msg("      *################@; @######"
-      "##@,     .W#########################@                x###:", a);
-  msg("      .+M#############z.  M######"
-      "###x      ,W########################@`               ####.", a);
-  msg("      *M*;z@########x:    :W#####"
-      "##i        .M########################i               i###:", a);
-  msg("      *##@z;#@####x:        :z###"
-      "@i          `########################x               .###;", a);
-  msg("      *#####n;#@##            ;##"
-      "*             ,x#####################@`               W##*", a);
-  msg("      *#######n;*            :M##"
-      "W*,             *W####################`               n##z", a);
-  msg("      i########@.         ,*n####"
-      "###M*`           `###################M                *##M", a);
-  msg("      i########n        `z#####@@"
-      "#####Wi            ,M################;                ,##@`", a);
-  msg("      ;WMWW@###*       .x##@ni.``"
-      ".:+zW##z`           `n##############z                  @##,", a);
-  msg("      .*++*i;;;.      .M#@+`     "
-      "     .##n            `x############x`                  n##i", a);
-  msg("      :########*      x#W,       "
-      "       *#+            *###########M`                   +##+", a);
-  msg("      ,#########     :#@:        "
-      "        ##:           #nzzzzzzzzzz.                    :##x", a);
-  msg("      .#####Wz+`     ##+         "
-      "        `MM`          .znnnnnnnnn.                     `@#@`", a);
-  msg("      `@@ni;*nMz`    @W`         "
-      "         :#+           .x#######n                       x##,", a);
-  msg("       i;z@#####,   .#*          "
-      "          z#:           ;;;*zW##;                       ###i", a);
-  msg("       z########:   :#;          "
-      "          `Wx          +###Wni;n.                       ;##z", a);
-  msg("       n########W:  .#*          "
-      "           ,#,        ;#######@+                        `@#M", a);
-  msg("      .###########n;.MM          "
-      "            n*        ;iM#######*                        x#@`", a);
-  msg("      :#############@;;          "
-      "            .n`      ,#W*iW#####W`                       +##,", a);
-  msg("      ,##############.           "
-      "             ix.    `x###M;#######                       ,##i", a);
-  msg("      .#############@`           "
-      "              x@n**#W######z;M###@.                       W##", a);
-  msg("      .##############W:          "
-      "              .x############@*;zW#;                       z#x", a);
-  msg("      ,###############@;         "
-      "               `##############@n*;.                       i#@", a);
-  msg("      ,#################i        "
-      "                 :n##############W`                       .##,", a);
-  msg("      ,###################`      "
-      "                   .+W##########W,                        `##i", a);
-  msg("      :###################@zi,`  "
-      "                      ;zM@@@WMn*`                          @#z", a);
-  msg("      :#######################@x+"
-      "*i;;:i#M,                 ``                               M#W", a);
-  msg("      ;##########################"
-      "######@x.                                                  n##,", a);
-  msg("      i#####################@W@@@"
-      "@Wxz*:`                                                    *##+", a);
-  msg("      *######################+```"
-      "                                                           :##M", a);
-  msg("      ########################M; "
-      "                                                           `@##,", a);
-  msg("      z#########################x"
-      ",                                                           z###", a);
-  msg("      n##########################"
-      "#n:                                                         ;##W`", a);
-  msg("      x##########################"
-      "###Mz#++##*                                                 `W##i", a);
-  msg("      M##########################"
-      "##########@`                                                 ###x", a);
-  msg("      W##########################"
-      "###########`                                                 .###,", a);
-  msg("      @##########################"
-      "##########M                                                   n##z", a);
-  msg("      @##################z*i@WMMM"
-      "x#x@#####,.                                                   :##@.", a);
-  msg("     `#####################@xi`  "
-      "   `::,*                                                       x##+", a);
-  msg("     .#####################@#M.  "
-      "                                                               ;##@`", a);
-  msg("     ,#####################:.    "
-      "                                                                M##i", a);
-  msg("     ;###################ni`     "
-      "                                                                i##M", a);
-  msg("     *#################W#`       "
-      "                                                                `W##,", a);
-  msg("     z#################@Wx+.     "
-      "                                                                 +###", a);
-  msg("     x######################z.   "
-      "                                                                 .@#@`", a);
-  msg("    `@#######################@;  "
-      "                                                                  z##;", a);
-  msg("    :##########################: "
-      "                                                                  :##z", a);
-  msg("    +#########################W# "
-      "                                                                   M#W", a);
-  msg("    W################@n+*i;:,`                                "
-      "                                      +##,", a);
-  msg("   :##################WMxz+,                                  "
-      "                                      ,##i", a);
-  msg("   n#######################W..,                               "
-      "                                       W##", a);
-  msg("  +#########################WW@+. .:.                         "
-      "                                       z#x", a);
-  msg(" `@#############################@@###:                        "
-      "                                       *#W", a);
-  msg(" #################################Wz:                         "
-      "                                       :#@", a);
-  msg(",@###############################i                            "
-      "                                       .##", a);
-  msg("n@@@@@@@#########################+                            "
-      "                                       `##", a);
-  msg("`      `.:.`.,:iii;;;;;;;;iii;;;:`       `.``                 "
-      "                                       `nW", a);
+  rs_verify_command(cmd);
 }
 
 /// Get argt of command with id
@@ -7734,3 +7055,72 @@ void nvim_docmd_check_cursor_col(void) { check_cursor_col(curwin); }
 
 /// Check IS_USER_CMDIDX(eap->cmdidx).
 int nvim_docmd_is_user_cmdidx(const exarg_T *eap) { return IS_USER_CMDIDX(eap->cmdidx); }
+
+// =========================================================================
+// Phase 1 accessor functions for Rust FFI
+// (commands.rs: verify_command, skip_cmd, ex_redir, ex_normal, ex_filetype,
+//  ex_quit, msg_verbose_cmd, is_other_file)
+// =========================================================================
+
+// eap accessors
+// Note: nvim_eap_get_forceit already exists in indent_ffi.c
+
+// Wrapper for static close_redir
+void nvim_docmd_close_redir(void) { close_redir(); }
+
+// redir_fd: lives in globals.h as FILE*, exposed as *mut c_void
+void *nvim_docmd_get_redir_fd(void) { return redir_fd; }
+void nvim_docmd_set_redir_fd(void *fd) { redir_fd = (FILE *)fd; }
+
+// redir_reg/vname setters (getters already in message.c)
+void nvim_docmd_set_redir_reg(int reg) { redir_reg = (uint8_t)reg; }
+void nvim_docmd_set_redir_vname(int val) { redir_vname = (bool)val; }
+
+// ex_normal globals
+int nvim_docmd_get_ex_normal_busy(void) { return ex_normal_busy; }
+void nvim_docmd_set_ex_normal_busy(int val) { ex_normal_busy = val; }
+int nvim_docmd_get_p_mmd(void) { return (int)p_mmd; }
+int nvim_docmd_get_got_int(void) { return got_int ? 1 : 0; }
+
+// Terminal-mode check for ex_normal
+int nvim_docmd_curbuf_has_terminal(void) { return curbuf->terminal != NULL ? 1 : 0; }
+int nvim_docmd_curwin_in_terminal_mode(void) { return (State & MODE_TERMINAL) ? 1 : 0; }
+
+// exiting setter
+void nvim_docmd_set_exiting(int val) { exiting = (bool)val; }
+
+// autowriteall option
+int nvim_docmd_get_p_awa(void) { return p_awa ? 1 : 0; }
+
+// Wrapper for static check_more
+int nvim_docmd_check_more(int message, int forceit) { return check_more((bool)message, (bool)forceit); }
+
+// ONE_WINDOW || eap->addr_count == 0 check for ex_quit
+int nvim_docmd_one_window_p(int addr_count)
+{
+  return (ONE_WINDOW || addr_count == 0) ? 1 : 0;
+}
+
+// filetype statics
+int nvim_docmd_get_filetype_detect(void) { return (int)filetype_detect; }
+void nvim_docmd_set_filetype_detect(int val) { filetype_detect = (TriState)val; }
+int nvim_docmd_get_filetype_plugin(void) { return (int)filetype_plugin; }
+void nvim_docmd_set_filetype_plugin(int val) { filetype_plugin = (TriState)val; }
+int nvim_docmd_get_filetype_indent(void) { return (int)filetype_indent; }
+void nvim_docmd_set_filetype_indent(int val) { filetype_indent = (TriState)val; }
+
+// Filetype runtime file name constants
+const char *nvim_docmd_get_filetype_file(void) { return FILETYPE_FILE; }
+const char *nvim_docmd_get_ftplugin_file(void) { return FTPLUGIN_FILE; }
+const char *nvim_docmd_get_indent_file(void) { return INDENT_FILE; }
+const char *nvim_docmd_get_ftplugof_file(void) { return FTPLUGOF_FILE; }
+const char *nvim_docmd_get_indoff_file(void) { return INDOFF_FILE; }
+const char *nvim_docmd_get_ftoff_file(void) { return FTOFF_FILE; }
+int nvim_docmd_get_dip_all(void) { return DIP_ALL; }
+
+// is_other_file helpers
+int nvim_docmd_curbuf_file_id_valid(void) { return curbuf->file_id_valid ? 1 : 0; }
+const char *nvim_docmd_get_curbuf_sfname(void) { return curbuf->b_sfname; }
+
+// e_invarg2 accessor (already in ex_docmd.c at line ~6369, named nvim_get_e_invarg2)
+// e_secure accessor (in option_shim.c as nvim_get_e_secure)
