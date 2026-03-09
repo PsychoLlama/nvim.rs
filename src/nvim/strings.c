@@ -69,54 +69,6 @@ static const char typename_float[] = N_("float");
 
 
 
-#if (!defined(HAVE_STRCASECMP) && !defined(HAVE_STRICMP))
-// Compare two strings, ignoring case, using current locale.
-// Doesn't work for multi-byte characters.
-// return 0 for match, < 0 for smaller, > 0 for bigger
-int vim_stricmp(const char *s1, const char *s2)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
-{
-  int i;
-
-  while (true) {
-    i = (int)TOLOWER_LOC((uint8_t)(*s1)) - (int)TOLOWER_LOC((uint8_t)(*s2));
-    if (i != 0) {
-      return i;                             // this character different
-    }
-    if (*s1 == NUL) {
-      break;                                // strings match until NUL
-    }
-    s1++;
-    s2++;
-  }
-  return 0;                                 // strings match
-}
-#endif
-
-#if (!defined(HAVE_STRNCASECMP) && !defined(HAVE_STRNICMP))
-// Compare two strings, for length "len", ignoring case, using current locale.
-// Doesn't work for multi-byte characters.
-// return 0 for match, < 0 for smaller, > 0 for bigger
-int vim_strnicmp(const char *s1, const char *s2, size_t len)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
-{
-  int i;
-
-  while (len > 0) {
-    i = (int)TOLOWER_LOC((uint8_t)(*s1)) - (int)TOLOWER_LOC((uint8_t)(*s2));
-    if (i != 0) {
-      return i;                             // this character different
-    }
-    if (*s1 == NUL) {
-      break;                                // strings match until NUL
-    }
-    s1++;
-    s2++;
-    len--;
-  }
-  return 0;                                 // strings match
-}
-#endif
 
 
 static const char *const e_printf =
@@ -1924,38 +1876,4 @@ String arena_printf(Arena *arena, const char *fmt, ...)
 }
 
 
-/// compare two keyvalue_T structs by case sensitive value
-int cmp_keyvalue_value(const void *a, const void *b)
-{
-  keyvalue_T *kv1 = (keyvalue_T *)a;
-  keyvalue_T *kv2 = (keyvalue_T *)b;
-
-  return strcmp(kv1->value, kv2->value);
-}
-
-/// compare two keyvalue_T structs by value with length
-int cmp_keyvalue_value_n(const void *a, const void *b)
-{
-  keyvalue_T *kv1 = (keyvalue_T *)a;
-  keyvalue_T *kv2 = (keyvalue_T *)b;
-
-  return strncmp(kv1->value, kv2->value, MAX(kv1->length, kv2->length));
-}
-
-/// compare two keyvalue_T structs by case insensitive value
-int cmp_keyvalue_value_i(const void *a, const void *b)
-{
-  keyvalue_T *kv1 = (keyvalue_T *)a;
-  keyvalue_T *kv2 = (keyvalue_T *)b;
-
-  return STRICMP(kv1->value, kv2->value);
-}
-
-/// compare two keyvalue_T structs by case insensitive value with length
-int cmp_keyvalue_value_ni(const void *a, const void *b)
-{
-  keyvalue_T *kv1 = (keyvalue_T *)a;
-  keyvalue_T *kv2 = (keyvalue_T *)b;
-
-  return STRNICMP(kv1->value, kv2->value, MAX(kv1->length, kv2->length));
-}
+// cmp_keyvalue_* comparison functions are implemented in Rust (strings crate)

@@ -59,6 +59,12 @@ char *strrep(const char *src, const char *what, const char *rep);
 char *vim_strsave_shellescape(const char *string, bool do_special, bool do_newline)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL;
 
+// Rust-implemented keyvalue comparators (exported via #[export_name])
+int cmp_keyvalue_value(const void *a, const void *b);
+int cmp_keyvalue_value_n(const void *a, const void *b);
+int cmp_keyvalue_value_i(const void *a, const void *b);
+int cmp_keyvalue_value_ni(const void *a, const void *b);
+
 // Rust-implemented VimL string functions (f_* exported via #[export_name])
 void f_byteidx(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void f_byteidxcomp(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);

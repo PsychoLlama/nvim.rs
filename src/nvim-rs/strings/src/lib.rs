@@ -1326,6 +1326,52 @@ pub unsafe extern "C" fn rs_strcase_save_export(orig: *const c_char, upper: bool
 }
 
 // =============================================================================
+// keyvalue_T comparators
+// =============================================================================
+
+/// C-compatible repr for keyvalue_T (from strings.h)
+#[repr(C)]
+pub struct KeyValue {
+    pub key: c_int,
+    pub value: *mut c_char,
+    pub length: usize,
+}
+
+/// Compare two keyvalue_T structs by case-sensitive value.
+#[export_name = "cmp_keyvalue_value"]
+pub unsafe extern "C" fn rs_cmp_keyvalue_value(a: *const KeyValue, b: *const KeyValue) -> c_int {
+    let kv1 = unsafe { &*a };
+    let kv2 = unsafe { &*b };
+    unsafe { libc::strcmp(kv1.value, kv2.value) }
+}
+
+/// Compare two keyvalue_T structs by value with length.
+#[export_name = "cmp_keyvalue_value_n"]
+pub unsafe extern "C" fn rs_cmp_keyvalue_value_n(a: *const KeyValue, b: *const KeyValue) -> c_int {
+    let kv1 = unsafe { &*a };
+    let kv2 = unsafe { &*b };
+    let len = kv1.length.max(kv2.length);
+    unsafe { libc::strncmp(kv1.value, kv2.value, len) }
+}
+
+/// Compare two keyvalue_T structs by case-insensitive value.
+#[export_name = "cmp_keyvalue_value_i"]
+pub unsafe extern "C" fn rs_cmp_keyvalue_value_i(a: *const KeyValue, b: *const KeyValue) -> c_int {
+    let kv1 = unsafe { &*a };
+    let kv2 = unsafe { &*b };
+    unsafe { libc::strcasecmp(kv1.value, kv2.value) }
+}
+
+/// Compare two keyvalue_T structs by case-insensitive value with length.
+#[export_name = "cmp_keyvalue_value_ni"]
+pub unsafe extern "C" fn rs_cmp_keyvalue_value_ni(a: *const KeyValue, b: *const KeyValue) -> c_int {
+    let kv1 = unsafe { &*a };
+    let kv2 = unsafe { &*b };
+    let len = kv1.length.max(kv2.length);
+    unsafe { libc::strncasecmp(kv1.value, kv2.value, len) }
+}
+
+// =============================================================================
 // Shell Escaping
 // =============================================================================
 
