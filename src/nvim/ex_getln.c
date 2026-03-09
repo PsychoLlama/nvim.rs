@@ -584,7 +584,7 @@ static void may_do_incsearch_highlighting(int firstc, int count, incsearch_state
 
   if (!do_incsearch_highlighting(firstc, &search_delim, s, &skiplen, &patlen)) {
     restore_last_search_pattern();
-    finish_incsearch_highlighting(false, s, true);
+    rs_finish_incsearch_highlighting(0, s, 1);
     return;
   }
 
@@ -770,13 +770,6 @@ static int may_add_char_to_search(int firstc, int *c, incsearch_state_T *s)
     }
   }
   return OK;
-}
-
-static void finish_incsearch_highlighting(bool gotesc, incsearch_state_T *s,
-                                          bool call_update_screen)
-{
-  // Delegate to Rust implementation
-  rs_finish_incsearch_highlighting(gotesc ? 1 : 0, s, call_update_screen ? 1 : 0);
 }
 
 /// Initialize the current command-line info.
@@ -1043,7 +1036,7 @@ static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear
   ccline.xpc = NULL;
   clear_cmdline_orig();
 
-  finish_incsearch_highlighting(s->gotesc, &s->is_state, false);
+  rs_finish_incsearch_highlighting(s->gotesc ? 1 : 0, &s->is_state, 0);
 
   if (ccline.cmdbuff != NULL) {
     // Put line in history buffer (":" and "=" only when it was typed).
