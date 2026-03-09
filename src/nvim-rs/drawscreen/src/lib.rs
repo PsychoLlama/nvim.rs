@@ -57,6 +57,8 @@ extern "C" {
     static mut need_maketitle: bool;
     /// redraw_mode flag (show mode in status line).
     static mut redraw_mode: c_int;
+    /// p_sc (showcmd) option.
+    static p_sc: c_int;
 }
 
 /// Opaque handle to C's buf_T.
@@ -142,11 +144,10 @@ extern "C" {
     fn nvim_char_avail() -> c_int;
     fn nvim_get_KeyTyped() -> bool;
     fn nvim_get_do_redraw() -> c_int;
-    fn nvim_get_Rows() -> c_int;
-    fn nvim_get_Columns() -> c_int;
     fn nvim_get_State() -> c_int;
     fn nvim_ui_has_messages() -> c_int;
     fn nvim_cmdline_mouse_used() -> c_int;
+    #[link_name = "rs_min_rows_for_all_tabpages"]
     fn nvim_min_rows_for_all_tabpages() -> c_int;
 }
 
@@ -1859,12 +1860,9 @@ pub extern "C" fn rs_redrawing() -> bool {
 #[unsafe(export_name = "check_screensize")]
 pub extern "C" fn rs_check_screensize() {
     unsafe {
-        let rows = nvim_get_Rows();
         let min_rows = nvim_min_rows_for_all_tabpages();
-        Rows = rows.clamp(min_rows, 1000);
-
-        let cols = nvim_get_Columns();
-        Columns = cols.clamp(MIN_COLUMNS, 10000);
+        Rows = Rows.clamp(min_rows, 1000);
+        Columns = Columns.clamp(MIN_COLUMNS, 10000);
     }
 }
 
@@ -1890,8 +1888,8 @@ pub extern "C" fn rs_cmdline_number_prompt() -> c_int {
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_p_sc() -> c_int;
-    fn nvim_last_stl_height() -> c_int;
+    #[link_name = "rs_last_stl_height"]
+    fn nvim_last_stl_height(morewin: c_int) -> c_int;
     fn nvim_set_vim_var_echospace(val: c_int);
 }
 
@@ -1909,8 +1907,8 @@ const SHOWCMD_COLS: c_int = 10;
 #[unsafe(export_name = "comp_col")]
 pub extern "C" fn rs_comp_col() {
     unsafe {
-        let last_has_status = nvim_last_stl_height() > 0;
-        let columns = nvim_get_Columns();
+        let last_has_status = nvim_last_stl_height(0) > 0;
+        let columns = Columns;
 
         let mut new_sc_col: c_int = 0;
         let mut new_ru_col: c_int = 0;
@@ -1924,7 +1922,7 @@ pub extern "C" fn rs_comp_col() {
         }
         #[allow(clippy::cast_possible_wrap)]
         let p_sloc_is_last = *p_sloc == b'l' as c_char;
-        if nvim_get_p_sc() != 0 && p_sloc_is_last {
+        if p_sc != 0 && p_sloc_is_last {
             new_sc_col += SHOWCMD_COLS;
             if nvim_get_p_ru() == 0 || last_has_status {
                 // no need for separating space

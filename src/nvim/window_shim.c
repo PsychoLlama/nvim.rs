@@ -51,6 +51,7 @@
 #include "nvim/mark.h"
 #include "nvim/mark_defs.h"
 #include "nvim/match.h"
+#include "nvim/mbyte.h"
 #include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
@@ -2729,4 +2730,71 @@ int nvim_redrawing(void)
 void nvim_win_scroll_lines(win_T *wp, int row, int line_count)
 {
   win_scroll_lines(wp, row, line_count);
+}
+
+// Drawscreen Phase 5/6 accessors for window cursor/fold fields
+
+extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
+
+/// Get w_p_cole option for a window.
+int nvim_win_get_w_p_cole(win_T *wp) { return wp ? wp->w_p_cole : 0; }
+
+/// Get w_p_cul option for a window.
+int nvim_win_get_w_p_cul(win_T *wp) { return wp ? wp->w_p_cul : 0; }
+
+/// Set w_cursorline for a window.
+void nvim_win_set_w_cursorline(win_T *wp, linenr_T val) { if (wp) { wp->w_cursorline = val; } }
+
+/// Call fold_info and write results to output fields. Returns fi_level.
+int nvim_fold_info(win_T *wp, linenr_T lnum, linenr_T *out_fi_lnum, linenr_T *out_fi_lines,
+                   foldinfo_T *out_foldinfo)
+{
+  foldinfo_T fi = rs_fold_info(wp, lnum);
+  if (out_foldinfo) {
+    *out_foldinfo = fi;
+  }
+  if (out_fi_lnum) {
+    *out_fi_lnum = fi.fi_lnum;
+  }
+  if (out_fi_lines) {
+    *out_fi_lines = fi.fi_lines;
+  }
+  return fi.fi_level;
+}
+
+/// Get w_wrow for a window.
+int nvim_win_get_w_wrow(win_T *wp) { return wp ? wp->w_wrow : 0; }
+
+/// Get w_wcol for a window.
+int nvim_win_get_w_wcol(win_T *wp) { return wp ? wp->w_wcol : 0; }
+
+/// Get w_p_rl option for a window.
+int nvim_win_get_w_p_rl(win_T *wp) { return wp ? wp->w_p_rl : 0; }
+
+/// Compute rightleft column adjustment for cursor positioning.
+/// Returns the adjusted column, accounting for double-wide chars.
+int nvim_win_rl_cursor_col(win_T *wp)
+{
+  if (!wp) { return 0; }
+  char *cursor = ml_get_buf(wp->w_buffer, wp->w_cursor.lnum) + wp->w_cursor.col;
+  int view_width = wp->w_view_width;
+  int wcol = wp->w_wcol;
+  return view_width - wcol - ((utf_ptr2cells(cursor) == 2
+                               && vim_isprintc(utf_ptr2char(cursor))) ? 2 : 1);
+}
+
+/// Combined grid_adjust + ui_grid_cursor_goto.
+/// Avoids exposing ScreenGrid pointer to Rust.
+void nvim_grid_adjust_cursor_goto(win_T *wp, int row, int col)
+{
+  ScreenGrid *grid = grid_adjust(&wp->w_grid, &row, &col);
+  if (grid) {
+    ui_grid_cursor_goto(grid->handle, row, col);
+  }
+}
+
+/// Wrapper for validate_cursor(wp) for Rust FFI.
+void nvim_validate_cursor_for_win(win_T *wp)
+{
+  validate_cursor(wp);
 }
