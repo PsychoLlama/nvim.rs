@@ -104,6 +104,12 @@ extern int rs_get_fio_flags(const char *name);
 extern char *rs_modname(const char *fname, const char *ext, int prepend_dot);
 extern int rs_vim_rename(const char *from, const char *to);
 extern int rs_vim_copyfile(const char *from, const char *to);
+// File pattern conversion (Phase 4)
+extern char *rs_file_pat_to_reg_pat(const char *pat, const char *pat_end, char *allow_dirs,
+                                    int no_bslash);
+extern bool rs_match_file_pat(const char *pattern, void **prog, const char *fname,
+                               const char *sfname, const char *tail, int allow_dirs);
+extern bool rs_match_file_list(const char *list, const char *sfname, const char *ffname);
 // Binary I/O (Phase 2)
 extern int rs_get2c(FILE *fd);
 extern int rs_get3c(FILE *fd);
@@ -3119,31 +3125,7 @@ char *vim_tempname(void)
 bool match_file_pat(char *pattern, regprog_T **prog, char *fname, char *sfname, char *tail,
                     int allow_dirs)
 {
-  regmatch_T regmatch;
-  bool result = false;
-
-  regmatch.rm_ic = p_fic;   // ignore case if 'fileignorecase' is set
-  regmatch.regprog = prog != NULL ? *prog : vim_regcomp(pattern, RE_MAGIC);
-
-  // Try for a match with the pattern with:
-  // 1. the full file name, when the pattern has a '/'.
-  // 2. the short file name, when the pattern has a '/'.
-  // 3. the tail of the file name, when the pattern has no '/'.
-  if (regmatch.regprog != NULL
-      && ((allow_dirs
-           && (vim_regexec(&regmatch, fname, 0)
-               || (sfname != NULL
-                   && vim_regexec(&regmatch, sfname, 0))))
-          || (!allow_dirs && vim_regexec(&regmatch, tail, 0)))) {
-    result = true;
-  }
-
-  if (prog != NULL) {
-    *prog = regmatch.regprog;
-  } else {
-    vim_regfree(regmatch.regprog);
-  }
-  return result;
+  return rs_match_file_pat(pattern, (void **)prog, fname, sfname, tail, allow_dirs);
 }
 
 /// Check if a file matches with a pattern in "list".
@@ -3158,215 +3140,31 @@ bool match_file_pat(char *pattern, regprog_T **prog, char *fname, char *sfname, 
 bool match_file_list(char *list, char *sfname, char *ffname)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1, 3)
 {
-  char *tail = path_tail(sfname);
+  return rs_match_file_list(list, sfname, ffname);
+}
 
-  // try all patterns in 'wildignore'
-  char *p = list;
-  while (*p) {
-    char buf[MAXPATHL];
-    copy_option_part(&p, buf, ARRAY_SIZE(buf), ",");
-    char allow_dirs;
-    char *regpat = file_pat_to_reg_pat(buf, NULL, &allow_dirs, false);
-    if (regpat == NULL) {
-      break;
-    }
-    bool match = match_file_pat(regpat, NULL, ffname, sfname, tail, (int)allow_dirs);
-    xfree(regpat);
-    if (match) {
-      return true;
-    }
-  }
-  return false;
+/// Emit E219 error for rs_file_pat_to_reg_pat.
+void nvim_fileio_emsg_missing_open_brace(void)
+{
+  emsg(_("E219: Missing {."));
+}
+
+/// Emit E220 error for rs_file_pat_to_reg_pat.
+void nvim_fileio_emsg_missing_close_brace(void)
+{
+  emsg(_("E220: Missing }."));
 }
 
 /// Convert the given pattern "pat" which has shell style wildcards in it, into
 /// a regular expression, and return the result in allocated memory.  If there
 /// is a directory path separator to be matched, then true is put in
 /// allow_dirs, otherwise false is put there -- webb.
-/// Handle backslashes before special characters, like "\*" and "\ ".
 ///
-/// @param pat_end     first char after pattern or NULL
-/// @param allow_dirs  Result passed back out in here
-/// @param no_bslash   Don't use a backward slash as pathsep
-///                    (only makes a difference when BACKSLASH_IN_FILENAME in defined)
-///
-/// @return            NULL on failure.
+/// @return  NULL on failure.
 char *file_pat_to_reg_pat(const char *pat, const char *pat_end, char *allow_dirs, int no_bslash)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  if (allow_dirs != NULL) {
-    *allow_dirs = false;
-  }
-
-  if (pat_end == NULL) {
-    pat_end = pat + strlen(pat);
-  }
-
-  if (pat_end == pat) {
-    return xstrdup("^$");
-  }
-
-  size_t size = 2;  // '^' at start, '$' at end.
-
-  for (const char *p = pat; p < pat_end; p++) {
-    switch (*p) {
-    case '*':
-    case '.':
-    case ',':
-    case '{':
-    case '}':
-    case '~':
-      size += 2;                // extra backslash
-      break;
-#ifdef BACKSLASH_IN_FILENAME
-    case '\\':
-    case '/':
-      size += 4;                // could become "[\/]"
-      break;
-#endif
-    default:
-      size++;
-      break;
-    }
-  }
-  char *reg_pat = xmalloc(size + 1);
-
-  size_t i = 0;
-
-  if (pat[0] == '*') {
-    while (pat[0] == '*' && pat < pat_end - 1) {
-      pat++;
-    }
-  } else {
-    reg_pat[i++] = '^';
-  }
-  const char *endp = pat_end - 1;
-  bool add_dollar = true;
-  if (endp >= pat && *endp == '*') {
-    while (endp - pat > 0 && *endp == '*') {
-      endp--;
-    }
-    add_dollar = false;
-  }
-  int nested = 0;
-  for (const char *p = pat; *p && nested >= 0 && p <= endp; p++) {
-    switch (*p) {
-    case '*':
-      reg_pat[i++] = '.';
-      reg_pat[i++] = '*';
-      while (p[1] == '*') {  // "**" matches like "*"
-        p++;
-      }
-      break;
-    case '.':
-    case '~':
-      reg_pat[i++] = '\\';
-      reg_pat[i++] = *p;
-      break;
-    case '?':
-      reg_pat[i++] = '.';
-      break;
-    case '\\':
-      if (p[1] == NUL) {
-        break;
-      }
-#ifdef BACKSLASH_IN_FILENAME
-      if (!no_bslash) {
-        // translate:
-        // "\x" to "\\x"  e.g., "dir\file"
-        // "\*" to "\\.*" e.g., "dir\*.c"
-        // "\?" to "\\."  e.g., "dir\??.c"
-        // "\+" to "\+"   e.g., "fileX\+.c"
-        if ((vim_isfilec((uint8_t)p[1]) || p[1] == '*' || p[1] == '?')
-            && p[1] != '+') {
-          reg_pat[i++] = '[';
-          reg_pat[i++] = '\\';
-          reg_pat[i++] = '/';
-          reg_pat[i++] = ']';
-          if (allow_dirs != NULL) {
-            *allow_dirs = true;
-          }
-          break;
-        }
-      }
-#endif
-      // Undo escaping from ExpandEscape():
-      // foo\?bar -> foo?bar
-      // foo\%bar -> foo%bar
-      // foo\,bar -> foo,bar
-      // foo\ bar -> foo bar
-      // Don't unescape \, * and others that are also special in a
-      // regexp.
-      // An escaped { must be unescaped since we use magic not
-      // verymagic.  Use "\\\{n,m\}"" to get "\{n,m}".
-      if (*++p == '?' && (!BACKSLASH_IN_FILENAME_BOOL || no_bslash)) {
-        reg_pat[i++] = '?';
-      } else if (*p == ',' || *p == '%' || *p == '#'
-                 || ascii_isspace(*p) || *p == '{' || *p == '}') {
-        reg_pat[i++] = *p;
-      } else if (*p == '\\' && p[1] == '\\' && p[2] == '{') {
-        reg_pat[i++] = '\\';
-        reg_pat[i++] = '{';
-        p += 2;
-      } else {
-        if (allow_dirs != NULL && vim_ispathsep(*p)
-            && (!BACKSLASH_IN_FILENAME_BOOL || (!no_bslash || *p != '\\'))) {
-          *allow_dirs = true;
-        }
-        reg_pat[i++] = '\\';
-        reg_pat[i++] = *p;
-      }
-      break;
-#ifdef BACKSLASH_IN_FILENAME
-    case '/':
-      reg_pat[i++] = '[';
-      reg_pat[i++] = '\\';
-      reg_pat[i++] = '/';
-      reg_pat[i++] = ']';
-      if (allow_dirs != NULL) {
-        *allow_dirs = true;
-      }
-      break;
-#endif
-    case '{':
-      reg_pat[i++] = '\\';
-      reg_pat[i++] = '(';
-      nested++;
-      break;
-    case '}':
-      reg_pat[i++] = '\\';
-      reg_pat[i++] = ')';
-      nested--;
-      break;
-    case ',':
-      if (nested) {
-        reg_pat[i++] = '\\';
-        reg_pat[i++] = '|';
-      } else {
-        reg_pat[i++] = ',';
-      }
-      break;
-    default:
-      if (allow_dirs != NULL && vim_ispathsep(*p)) {
-        *allow_dirs = true;
-      }
-      reg_pat[i++] = *p;
-      break;
-    }
-  }
-  if (add_dollar) {
-    reg_pat[i++] = '$';
-  }
-  reg_pat[i] = NUL;
-  if (nested != 0) {
-    if (nested < 0) {
-      emsg(_("E219: Missing {."));
-    } else {
-      emsg(_("E220: Missing }."));
-    }
-    XFREE_CLEAR(reg_pat);
-  }
-  return reg_pat;
+  return rs_file_pat_to_reg_pat(pat, pat_end, allow_dirs, no_bslash);
 }
 
 #if defined(EINTR)
