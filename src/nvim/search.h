@@ -161,6 +161,12 @@ int check_linecomment(const char *line);
 void get_search_pattern(SearchPattern *pat);
 void get_substitute_pattern(SearchPattern *pat);
 void set_search_pattern(SearchPattern pat);
+// Phase 5: struct-marshaling delegates replaced by Rust exports
+int searchit(win_T *win, buf_T *buf, pos_T *pos, pos_T *end_pos, Direction dir, char *pat, size_t patlen, int count, int options, int pat_use, searchit_arg_T *extra_arg);
+int do_search(oparg_T *oap, int dirc, int search_delim, char *pat, size_t patlen, int count, int options, searchit_arg_T *sia);
+int search_for_exact_line(buf_T *buf, pos_T *pos, Direction dir, char *pat);
+pos_T *findmatchlimit(oparg_T *oap, int initc, int flags, int64_t maxtravel);
+pos_T *findmatch(oparg_T *oap, int initc);
 // Phase 4: already-migrated logic functions
 int ignorecase(char *pat);
 int ignorecase_opt(char *pat, int ic_in, int scs);

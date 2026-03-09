@@ -128,6 +128,13 @@ extern void rs_cmdline_search_stat(int dirc, int pos_lnum, int pos_col, int pos_
                                    bool show_top_bot_msg, char *msgbuf, size_t msgbuflen,
                                    bool recompute, int maxcount, int timeout);
 
+// Rust FFI declaration for find_pattern_in_path
+extern void rs_find_pattern_in_path(const char *ptr, int dir, size_t len,
+                                    int whole, int skip_comments,
+                                    int type, int count, int action,
+                                    linenr_T start_lnum, linenr_T end_lnum,
+                                    int forceit, int silent);
+
 // Rust FFI declarations for pattern utilities
 extern int rs_ctrl_x_mode_not_default(void);
 extern int rs_compl_status_adding(void);
@@ -151,8 +158,6 @@ extern void rs_incsearch_state_restore(const void *state);
 // Rust FFI declarations for Phase 7 integration functions
 extern int rs_is_zero_width(const char *pattern, size_t patternlen, bool move,
                              int cur_lnum, int cur_col, int cur_coladd, int direction);
-extern int rs_search_for_exact_line(void *buf, int *pos_lnum, int *pos_col,
-                                     int dir, const char *pat);
 
 // Rust FFI declaration for Phase 8
 extern int rs_showmatch_find_match(int c, int *out_lnum, int *out_col, int *out_coladd);
@@ -603,87 +608,7 @@ char *last_search_pat(void)
 ///                   the index of the first matching
 ///                   subpattern plus one; one if there was none.
 
-// Rust implementation of searchit
-typedef struct {
-  int retval;
-  int pos_lnum;
-  int pos_col;
-  int pos_coladd;
-  int end_lnum;
-  int end_col;
-  int end_coladd;
-  int end_pos_set;
-  int sa_timed_out;
-  int sa_wrapped;
-} SearchitResult;
 
-extern int rs_do_search(void *oap, int dirc_in, int search_delim,
-                        char *pat_in, size_t patlen_in, int count,
-                        int search_options,
-                        int has_sia,
-                        linenr_T sa_stop_lnum, void *sa_tm,
-                        int *sa_timed_out_out, int *sa_wrapped_out);
-
-// Rust implementation of findmatchlimit
-typedef struct {
-  bool found;
-  linenr_T lnum;
-  colnr_T col;
-} RsFindMatchResult;
-
-extern RsFindMatchResult rs_findmatchlimit(void *oap, int initc, int flags, int64_t maxtravel);
-
-extern void rs_find_pattern_in_path(const char *ptr, int dir, size_t len,
-                                    int whole, int skip_comments,
-                                    int type, int count, int action,
-                                    linenr_T start_lnum, linenr_T end_lnum,
-                                    int forceit, int silent);
-
-extern int rs_searchit(void *win, void *buf,
-                       linenr_T pos_lnum, colnr_T pos_col, colnr_T pos_coladd,
-                       int has_end_pos, int dir,
-                       char *pat, size_t patlen,
-                       int count, int options, int pat_use,
-                       linenr_T sa_stop_lnum, void *sa_tm,
-                       int has_extra_arg,
-                       SearchitResult *result);
-
-int searchit(win_T *win, buf_T *buf, pos_T *pos, pos_T *end_pos, Direction dir, char *pat,
-             size_t patlen, int count, int options, int pat_use, searchit_arg_T *extra_arg)
-{
-  SearchitResult result;
-
-  int retval = rs_searchit(
-    win, buf,
-    pos->lnum, pos->col, pos->coladd,
-    end_pos != NULL ? 1 : 0,
-    (int)dir,
-    pat, patlen, count, options, pat_use,
-    extra_arg != NULL ? extra_arg->sa_stop_lnum : 0,
-    extra_arg != NULL ? (void *)extra_arg->sa_tm : NULL,
-    extra_arg != NULL ? 1 : 0,
-    &result);
-
-  // Copy results back
-  pos->lnum = result.pos_lnum;
-  pos->col = result.pos_col;
-  pos->coladd = result.pos_coladd;
-
-  if (end_pos != NULL && result.end_pos_set) {
-    end_pos->lnum = result.end_lnum;
-    end_pos->col = result.end_col;
-    end_pos->coladd = result.end_coladd;
-  }
-
-  if (extra_arg != NULL) {
-    extra_arg->sa_timed_out = result.sa_timed_out;
-    if (result.sa_wrapped) {
-      extra_arg->sa_wrapped = true;
-    }
-  }
-
-  return retval;
-}
 
 
 static void set_vv_searchforward(void)
@@ -691,68 +616,7 @@ static void set_vv_searchforward(void)
   set_vim_var_nr(VV_SEARCHFORWARD, spats[0].off.dir == '/');
 }
 
-/// Highest level string search function.
-/// Search for the 'count'th occurrence of pattern 'pat' in direction 'dirc'
-///
-/// Careful: If spats[0].off.line == true and spats[0].off.off == 0 this
-/// makes the movement linewise without moving the match position.
-///
-/// @param dirc          if 0: use previous dir.
-/// @param pat           NULL or empty : use previous string.
-/// @param options       if true and
-///                      SEARCH_REV   == true : go in reverse of previous dir.
-///                      SEARCH_ECHO  == true : echo the search command and handle options
-///                      SEARCH_MSG   == true : may give error message
-///                      SEARCH_OPT   == true : interpret optional flags
-///                      SEARCH_HIS   == true : put search pattern in history
-///                      SEARCH_NOOF  == true : don't add offset to position
-///                      SEARCH_MARK  == true : set previous context mark
-///                      SEARCH_KEEP  == true : keep previous search pattern
-///                      SEARCH_START == true : accept match at curpos itself
-///                      SEARCH_PEEK  == true : check for typed char, cancel search
-/// @param oap           can be NULL
-/// @param dirc          '/' or '?'
-/// @param search_delim  delimiter for search, e.g. '%' in s%regex%replacement
-/// @param sia           optional arguments or NULL
-///
-/// @return              0 for failure, 1 for found, 2 for found and line offset added.
-int do_search(oparg_T *oap, int dirc, int search_delim, char *pat, size_t patlen, int count,
-              int options, searchit_arg_T *sia)
-{
-  int has_sia = (sia != NULL) ? 1 : 0;
-  linenr_T sa_stop_lnum = sia ? sia->sa_stop_lnum : 0;
-  void *sa_tm = sia ? (void *)&sia->sa_tm : NULL;
-  int sa_timed_out = sia ? (sia->sa_timed_out ? 1 : 0) : 0;
-  int sa_wrapped = sia ? (sia->sa_wrapped ? 1 : 0) : 0;
 
-  int retval = rs_do_search(oap, dirc, search_delim, pat, patlen, count, options,
-                            has_sia, sa_stop_lnum, sa_tm,
-                            &sa_timed_out, &sa_wrapped);
-
-  if (sia) {
-    sia->sa_timed_out = sa_timed_out != 0;
-    sia->sa_wrapped = sa_wrapped != 0;
-  }
-
-  return retval;
-}
-
-// search_for_exact_line(buf, pos, dir, pat)
-//
-// Search for a line starting with the given pattern (ignoring leading
-// white-space), starting from pos and going in direction "dir". "pos" will
-// contain the position of the match found.    Blank lines match only if
-// ADDING is set.  If p_ic is set then the pattern must be in lowercase.
-// Return OK for success, or FAIL if no line found.
-int search_for_exact_line(buf_T *buf, pos_T *pos, Direction dir, char *pat)
-{
-  int lnum = pos->lnum;
-  int col = pos->col;
-  int result = rs_search_for_exact_line(buf, &lnum, &col, (int)dir, pat);
-  pos->lnum = lnum;
-  pos->col = col;
-  return result;
-}
 
 // Character Searches
 
@@ -763,13 +627,6 @@ int search_for_exact_line(buf_T *buf, pos_T *pos, Direction dir, char *pat)
 
 // "Other" Searches
 
-// findmatch - find the matching paren or brace
-//
-// Improvement over vi: Braces inside quotes are ignored.
-pos_T *findmatch(oparg_T *oap, int initc)
-{
-  return findmatchlimit(oap, initc, 0, 0);
-}
 
 // check_prevcol(), find_rawstring_end(), and find_mps_values() have been
 // migrated to Rust in search/src/matchparen.rs
@@ -792,18 +649,7 @@ pos_T *findmatch(oparg_T *oap, int initc)
 //
 // "oap" is only used to set oap->motion_type for a linewise motion, it can be
 // NULL
-pos_T *findmatchlimit(oparg_T *oap, int initc, int flags, int64_t maxtravel)
-{
-  static pos_T pos;
-  RsFindMatchResult result = rs_findmatchlimit(oap, initc, flags, maxtravel);
-  if (!result.found) {
-    return NULL;
-  }
-  pos.lnum = result.lnum;
-  pos.col = result.col;
-  pos.coladd = 0;
-  return &pos;
-}
+
 
 
 
@@ -896,8 +742,9 @@ int current_search(int count, bool forward)
   }
 
   // Is the pattern is zero-width?, this time, don't care about the direction
-  int zero_width = is_zero_width(spats[last_idx].pat, spats[last_idx].patlen,
-                                 true, &curwin->w_cursor, FORWARD);
+  int zero_width = rs_is_zero_width(spats[last_idx].pat, spats[last_idx].patlen,
+                                    true, curwin->w_cursor.lnum, curwin->w_cursor.col,
+                                    curwin->w_cursor.coladd, (int)FORWARD);
   if (zero_width == -1) {
     return FAIL;  // pattern not found
   }
@@ -1002,18 +849,6 @@ int current_search(int count, bool forward)
   return OK;
 }
 
-/// Check if the pattern is zero-width.
-/// If move is true, check from the beginning of the buffer,
-/// else from position "cur".
-/// "direction" is FORWARD or BACKWARD.
-/// Returns true, false or -1 for failure.
-static int is_zero_width(char *pattern, size_t patternlen, bool move, pos_T *cur,
-                         Direction direction)
-{
-  return rs_is_zero_width(pattern, patternlen, move,
-                           cur ? cur->lnum : 0, cur ? cur->col : 0,
-                           cur ? cur->coladd : 0, (int)direction);
-}
 
 
 /// Add the search count "[3/19]" to "msgbuf".

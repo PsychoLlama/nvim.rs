@@ -693,6 +693,26 @@ pub unsafe extern "C" fn rs_search_for_exact_line(
     FAIL
 }
 
+/// search_for_exact_line: C-ABI entry point accepting pos_T* directly.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[unsafe(export_name = "search_for_exact_line")]
+pub unsafe extern "C" fn search_for_exact_line_export(
+    buf: *mut c_void,
+    pos: *mut crate::searchit::PosT,
+    dir: c_int,
+    pat: *const c_char,
+) -> c_int {
+    let pos_ref = &mut *pos;
+    let mut lnum = pos_ref.lnum;
+    let mut col = pos_ref.col;
+    let result = rs_search_for_exact_line(buf, &mut lnum, &mut col, dir, pat);
+    pos_ref.lnum = lnum;
+    pos_ref.col = col;
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

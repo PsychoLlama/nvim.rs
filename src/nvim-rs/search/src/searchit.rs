@@ -693,6 +693,111 @@ pub unsafe extern "C" fn rs_searchit(
     submatch + 1
 }
 
+// =============================================================================
+// C struct types for direct export_name functions
+// =============================================================================
+
+/// pos_T layout matching the C struct.
+#[repr(C)]
+pub struct PosT {
+    pub lnum: i32,
+    pub col: i32,
+    pub coladd: i32,
+}
+
+/// searchit_arg_T layout matching the C struct.
+/// proftime_T* is opaque, so we use *mut c_void.
+#[repr(C)]
+pub struct SearchitArgT {
+    pub sa_stop_lnum: i32,
+    pub sa_tm: *mut c_void,
+    pub sa_timed_out: c_int,
+    pub sa_wrapped: c_int,
+}
+
+/// searchit: C-ABI entry point matching the original C function signature.
+///
+/// Accepts pos_T* and searchit_arg_T* directly and decomposes them for rs_searchit.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[unsafe(export_name = "searchit")]
+pub unsafe extern "C" fn searchit_export(
+    win: WinHandle,
+    buf: BufHandle,
+    pos: *mut PosT,
+    end_pos: *mut PosT,
+    dir: c_int,
+    pat: *mut c_char,
+    patlen: usize,
+    count: c_int,
+    options: c_int,
+    pat_use: c_int,
+    extra_arg: *mut SearchitArgT,
+) -> c_int {
+    let pos_ref = &mut *pos;
+    let has_end_pos = if end_pos.is_null() { 0 } else { 1 };
+    let (sa_stop_lnum, sa_tm, has_extra_arg) = if extra_arg.is_null() {
+        (0i32, std::ptr::null_mut(), 0)
+    } else {
+        let ea = &*extra_arg;
+        (ea.sa_stop_lnum, ea.sa_tm, 1)
+    };
+
+    let mut result = SearchitResult {
+        retval: 0,
+        pos_lnum: pos_ref.lnum,
+        pos_col: pos_ref.col,
+        pos_coladd: pos_ref.coladd,
+        end_lnum: 0,
+        end_col: 0,
+        end_coladd: 0,
+        end_pos_set: 0,
+        sa_timed_out: 0,
+        sa_wrapped: 0,
+    };
+
+    let retval = rs_searchit(
+        win,
+        buf,
+        pos_ref.lnum,
+        pos_ref.col,
+        pos_ref.coladd,
+        has_end_pos,
+        dir,
+        pat,
+        patlen,
+        count,
+        options,
+        pat_use,
+        sa_stop_lnum,
+        sa_tm,
+        has_extra_arg,
+        &mut result,
+    );
+
+    pos_ref.lnum = result.pos_lnum;
+    pos_ref.col = result.pos_col;
+    pos_ref.coladd = result.pos_coladd;
+
+    if !end_pos.is_null() && result.end_pos_set != 0 {
+        let ep = &mut *end_pos;
+        ep.lnum = result.end_lnum;
+        ep.col = result.end_col;
+        ep.coladd = result.end_coladd;
+    }
+
+    if !extra_arg.is_null() {
+        let ea = &mut *extra_arg;
+        ea.sa_timed_out = result.sa_timed_out;
+        if result.sa_wrapped != 0 {
+            ea.sa_wrapped = 1;
+        }
+    }
+
+    retval
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

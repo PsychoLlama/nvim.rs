@@ -505,6 +505,62 @@ pub unsafe extern "C" fn rs_do_search(
     retval
 }
 
+// =============================================================================
+// do_search: C-ABI entry point accepting searchit_arg_T*
+// =============================================================================
+
+/// do_search: C-ABI entry point matching the original C function signature.
+///
+/// Accepts oparg_T* and searchit_arg_T* directly and decomposes them.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[unsafe(export_name = "do_search")]
+pub unsafe extern "C" fn do_search_export(
+    oap: OapHandle,
+    dirc: c_int,
+    search_delim: c_int,
+    pat: *mut c_char,
+    patlen: usize,
+    count: c_int,
+    options: c_int,
+    sia: *mut crate::searchit::SearchitArgT,
+) -> c_int {
+    let has_sia = if sia.is_null() { 0 } else { 1 };
+    let (sa_stop_lnum, sa_tm, sa_timed_out_init, sa_wrapped_init) = if sia.is_null() {
+        (0i32, std::ptr::null_mut(), 0, 0)
+    } else {
+        let s = &*sia;
+        (s.sa_stop_lnum, s.sa_tm, s.sa_timed_out, s.sa_wrapped)
+    };
+
+    let mut sa_timed_out = sa_timed_out_init;
+    let mut sa_wrapped = sa_wrapped_init;
+
+    let retval = rs_do_search(
+        oap,
+        dirc,
+        search_delim,
+        pat,
+        patlen,
+        count,
+        options,
+        has_sia,
+        sa_stop_lnum,
+        sa_tm,
+        &mut sa_timed_out,
+        &mut sa_wrapped,
+    );
+
+    if !sia.is_null() {
+        let s = &mut *sia;
+        s.sa_timed_out = sa_timed_out;
+        s.sa_wrapped = sa_wrapped;
+    }
+
+    retval
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

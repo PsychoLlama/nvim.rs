@@ -897,6 +897,54 @@ pub unsafe extern "C" fn rs_showmatch_find_match(
     1 // visible match found
 }
 
+// =============================================================================
+// findmatchlimit / findmatch: C-ABI entry points matching original signatures
+// =============================================================================
+
+/// Static position storage for findmatchlimit return value.
+/// Matches the C pattern of returning &static_pos.
+static mut FINDMATCH_POS: crate::searchit::PosT = crate::searchit::PosT {
+    lnum: 0,
+    col: 0,
+    coladd: 0,
+};
+
+/// findmatchlimit: C-ABI entry point.
+///
+/// Returns pointer to a static PosT (matching C's static pos_T pattern),
+/// or NULL if not found.
+///
+/// # Safety
+/// oap must be a valid oparg_T pointer or NULL.
+#[unsafe(export_name = "findmatchlimit")]
+pub unsafe extern "C" fn findmatchlimit_export(
+    oap: OapHandle,
+    initc: c_int,
+    flags: c_int,
+    maxtravel: i64,
+) -> *mut crate::searchit::PosT {
+    let result = rs_findmatchlimit(oap, initc, flags, maxtravel);
+    if !result.found {
+        return std::ptr::null_mut();
+    }
+    FINDMATCH_POS.lnum = result.lnum;
+    FINDMATCH_POS.col = result.col;
+    FINDMATCH_POS.coladd = 0;
+    std::ptr::addr_of_mut!(FINDMATCH_POS)
+}
+
+/// findmatch: C-ABI entry point. Calls findmatchlimit(oap, initc, 0, 0).
+///
+/// # Safety
+/// oap must be a valid oparg_T pointer or NULL.
+#[unsafe(export_name = "findmatch")]
+pub unsafe extern "C" fn findmatch_export(
+    oap: OapHandle,
+    initc: c_int,
+) -> *mut crate::searchit::PosT {
+    findmatchlimit_export(oap, initc, 0, 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
