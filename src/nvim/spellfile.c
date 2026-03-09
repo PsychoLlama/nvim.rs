@@ -445,6 +445,38 @@ extern int rs_write_prefcond_section(uint8_t *buf, size_t buf_len,
                                      const uint8_t **strs, size_t count,
                                      size_t *written_out);
 
+// Phase 4: Dictionary and wordfile line parsers
+
+typedef struct {
+  uint16_t word_len;       // length of unescaped word written into word_buf
+  uint16_t affix_offset;   // byte offset in original line where affix starts (0xFFFF = absent)
+  uint16_t affix_len;      // length of affix string in original line
+} RsDicLineResult;
+
+extern int rs_parse_dic_line(const uint8_t *line, size_t line_len,
+                              uint8_t *word_buf, size_t word_buf_cap,
+                              RsDicLineResult *result_out);
+
+typedef struct {
+  uint8_t  directive[16];  // "encoding\0" or "regions\0" or empty for word lines
+  uint16_t word_len;       // word length (or directive value length)
+  uint16_t word_end_offset; // byte offset in line where word ends (before '/')
+  int      flags;          // WF_* flags (word lines only)
+  int      regionmask;     // region bitmask (word lines only)
+  uint8_t  region_count;   // for /regions= directives
+} RsWordfileLineResult;
+
+extern int rs_parse_wordfile_line(const uint8_t *line, size_t line_len,
+                                  int region_count,
+                                  RsWordfileLineResult *result_out);
+
+extern int rs_spell_add_word_format(const uint8_t *word, size_t word_len,
+                                    int what, uint8_t *buf_out, size_t buf_cap);
+
+extern bool rs_spell_find_duplicate_word(const uint8_t *file_content, size_t content_len,
+                                         const uint8_t *word, size_t word_len,
+                                         size_t *offset_out);
+
 // Phase B6: Affix file parsing infrastructure
 // The main spell_read_aff() function remains in C due to its complexity
 // (~738 LOC, text file parsing, encoding conversion, hash tables).
@@ -3285,9 +3317,9 @@ static int spell_read_dic(spellinfo_T *spin, char *fname, afffile_T *affile)
 {
   hashtab_T ht;
   char line[MAXLINELEN];
+  char word_buf[MAXLINELEN];    // Rust writes unescaped word here
   char store_afflist[MAXWLEN];
   char *pc;
-  char *w;
   int lnum = 1;
   int non_ascii = 0;
   int retval = OK;
@@ -3323,21 +3355,8 @@ static int spell_read_dic(spellinfo_T *spin, char *fname, afffile_T *affile)
   while (!vim_fgets(line, MAXLINELEN, fd) && !got_int) {
     line_breakcheck();
     lnum++;
-    if (line[0] == '#' || line[0] == '/') {
-      continue;         // comment line
-    }
-    // Remove CR, LF and white space from the end.  White space halfway through
-    // the word is kept to allow multi-word terms like "et al.".
-    int l = (int)strlen(line);
-    while (l > 0 && (uint8_t)line[l - 1] <= ' ') {
-      l--;
-    }
-    if (l == 0) {
-      continue;         // empty line
-    }
-    line[l] = NUL;
 
-    // Convert from "SET" to 'encoding' when needed.
+    // Convert from "SET" to 'encoding' when needed (before Rust parsing).
     if (spin->si_conv.vc_type != CONV_NONE) {
       pc = string_convert(&spin->si_conv, line, NULL);
       if (pc == NULL) {
@@ -3345,23 +3364,31 @@ static int spell_read_dic(spellinfo_T *spin, char *fname, afffile_T *affile)
              fname, lnum, line);
         continue;
       }
-      w = pc;
     } else {
       pc = NULL;
-      w = line;
+    }
+    const char *src_line = (pc != NULL) ? pc : line;
+    size_t src_len = strlen(src_line);
+
+    // Use Rust to: skip comments/empty lines, strip CR/LF, handle escapes,
+    // and split word from affix list.
+    RsDicLineResult rs_res;
+    int parse_ret = rs_parse_dic_line((const uint8_t *)src_line, src_len,
+                                      (uint8_t *)word_buf, sizeof(word_buf),
+                                      &rs_res);
+    if (parse_ret != 0) {
+      // 1 = skip (comment/empty), <0 = error
+      xfree(pc);
+      continue;
     }
 
-    // Truncate the word at the "/", set "afflist" to what follows.
-    // Replace "\/" by "/" and "\\" by "\".
+    word_buf[rs_res.word_len] = NUL;
+    char *w = word_buf;
+
+    // Reconstruct afflist pointer into src_line buffer.
     char *afflist = NULL;
-    for (char *p = w; *p != NUL; MB_PTR_ADV(p)) {
-      if (*p == '\\' && (p[1] == '\\' || p[1] == '/')) {
-        STRMOVE(p, p + 1);
-      } else if (*p == '/') {
-        *p = NUL;
-        afflist = p + 1;
-        break;
-      }
+    if (rs_res.affix_offset != 0xFFFF) {
+      afflist = (char *)src_line + rs_res.affix_offset;
     }
 
     // Skip non-ASCII words when "spin->si_ascii" is true.
@@ -3822,11 +3849,11 @@ static int store_aff_word(spellinfo_T *spin, char *word, char *afflist, afffile_
 }
 
 // Read a file with a list of words.
+// Uses Rust (rs_parse_wordfile_line) to parse each line.
 static int spell_read_wordfile(spellinfo_T *spin, char *fname)
 {
   linenr_T lnum = 0;
   char rline[MAXLINELEN];
-  char *line;
   char *pc = NULL;
   int retval = OK;
   bool did_word = false;
@@ -3847,22 +3874,7 @@ static int spell_read_wordfile(spellinfo_T *spin, char *fname)
     line_breakcheck();
     lnum++;
 
-    // Skip comment lines.
-    if (*rline == '#') {
-      continue;
-    }
-
-    // Remove CR, LF and white space from the end.
-    int l = (int)strlen(rline);
-    while (l > 0 && (uint8_t)rline[l - 1] <= ' ') {
-      l--;
-    }
-    if (l == 0) {
-      continue;         // empty or blank line
-    }
-    rline[l] = NUL;
-
-    // Convert from "/encoding={encoding}" to 'encoding' when needed.
+    // Convert encoding when needed (before parsing).
     xfree(pc);
     if (spin->si_conv.vc_type != CONV_NONE) {
       pc = string_convert(&spin->si_conv, rline, NULL);
@@ -3871,105 +3883,109 @@ static int spell_read_wordfile(spellinfo_T *spin, char *fname)
              fname, lnum, rline);
         continue;
       }
-      line = pc;
     } else {
       pc = NULL;
-      line = rline;
+    }
+    const char *line = (pc != NULL) ? pc : rline;
+    size_t line_len = strlen(line);
+
+    // Use Rust to classify and parse this line.
+    RsWordfileLineResult rs_res;
+    int parse_ret = rs_parse_wordfile_line((const uint8_t *)line, line_len,
+                                           spin->si_region_count, &rs_res);
+
+    if (parse_ret == 2) {
+      // Skip: comment or empty line.
+      continue;
     }
 
-    if (*line == '/') {
-      line++;
-      if (strncmp(line, "encoding=", 9) == 0) {
+    if (parse_ret == 1) {
+      // Directive line.
+      if (rs_res.directive[0] == 'e') {
+        // /encoding= directive
         if (spin->si_conv.vc_type != CONV_NONE) {
           smsg(0, _("Duplicate /encoding= line ignored in %s line %" PRIdLINENR ": %s"),
-               fname, lnum, line - 1);
+               fname, lnum, line);
         } else if (did_word) {
           smsg(0, _("/encoding= line after word ignored in %s line %" PRIdLINENR ": %s"),
-               fname, lnum, line - 1);
+               fname, lnum, line);
         } else {
-          // Setup for conversion to 'encoding'.
-          line += 9;
-          char *enc = enc_canonize(line);
+          // Value starts at word_end_offset in line buffer.
+          char *enc_val = (char *)(line + rs_res.word_end_offset);
+          char *enc = enc_canonize(enc_val);
           if (!spin->si_ascii
               && convert_setup(&spin->si_conv, enc, p_enc) == FAIL) {
             smsg(0, _("Conversion in %s not supported: from %s to %s"),
-                 fname, line, p_enc);
+                 fname, enc_val, p_enc);
           }
           xfree(enc);
           spin->si_conv.vc_fail = true;
         }
-        continue;
-      }
-
-      if (strncmp(line, "regions=", 8) == 0) {
+      } else if (rs_res.directive[0] == 'r') {
+        // /regions= directive
         if (spin->si_region_count > 1) {
           smsg(0, _("Duplicate /regions= line ignored in %s line %" PRIdLINENR ": %s"),
-               fname, lnum, line);
+               fname, lnum, line + 1);
         } else {
-          line += 8;
-          if (strlen(line) > MAXREGIONS * 2) {
+          const char *reg_val = line + rs_res.word_end_offset;
+          if (rs_res.word_len > MAXREGIONS * 2) {
             smsg(0, _("Too many regions in %s line %" PRIdLINENR ": %s"),
-                 fname, lnum, line);
+                 fname, lnum, reg_val);
           } else {
-            spin->si_region_count = (int)strlen(line) / 2;
-            STRCPY(spin->si_region_name, line);
-
+            spin->si_region_count = rs_res.region_count;
+            STRCPY(spin->si_region_name, reg_val);
             // Adjust the mask for a word valid in all regions.
             spin->si_region = (1 << spin->si_region_count) - 1;
           }
         }
-        continue;
+      } else {
+        // Unknown directive: Rust already returned 2 for these; shouldn't reach.
+        smsg(0, _("/ line ignored in %s line %" PRIdLINENR ": %s"),
+             fname, lnum, line);
       }
-
-      smsg(0, _("/ line ignored in %s line %" PRIdLINENR ": %s"),
-           fname, lnum, line - 1);
       continue;
     }
 
-    int flags = 0;
-    int regionmask = spin->si_region;
-
-    // Check for flags and region after a slash.
-    char *p = vim_strchr(line, '/');
-    if (p != NULL) {
-      *p++ = NUL;
-      while (*p != NUL) {
-        if (*p == '=') {                // keep-case word
-          flags |= WF_KEEPCAP | WF_FIXCAP;
-        } else if (*p == '!') {                  // Bad, bad, wicked word.
-          flags |= WF_BANNED;
-        } else if (*p == '?') {                  // Rare word.
-          flags |= WF_RARE;
-        } else if (ascii_isdigit((uint8_t)(*p))) {              // region number(s)
-          if ((flags & WF_REGION) == 0) {           // first one
-            regionmask = 0;
-          }
-          flags |= WF_REGION;
-
-          l = (uint8_t)(*p) - '0';
-          if (l == 0 || l > spin->si_region_count) {
-            smsg(0, _("Invalid region nr in %s line %" PRIdLINENR ": %s"),
-                 fname, lnum, p);
-            break;
-          }
-          regionmask |= 1 << (l - 1);
-        } else {
-          smsg(0, _("Unrecognized flags in %s line %" PRIdLINENR ": %s"),
-               fname, lnum, p);
-          break;
-        }
-        p++;
-      }
+    if (parse_ret == 3) {
+      // Invalid region number.
+      smsg(0, _("Invalid region nr in %s line %" PRIdLINENR ": %s"),
+           fname, lnum, line);
+      continue;
     }
 
+    if (parse_ret == 4) {
+      // Unrecognized flag.
+      smsg(0, _("Unrecognized flags in %s line %" PRIdLINENR ": %s"),
+           fname, lnum, line);
+      continue;
+    }
+
+    if (parse_ret != 0) {
+      // Other error: skip.
+      continue;
+    }
+
+    // Ordinary word line.
+    // NUL-terminate the word at word_end_offset.
+    char word_copy[MAXLINELEN];
+    size_t wlen = rs_res.word_len;
+    if (wlen >= sizeof(word_copy)) {
+      wlen = sizeof(word_copy) - 1;
+    }
+    memcpy(word_copy, line, wlen);
+    word_copy[wlen] = NUL;
+
+    int flags = rs_res.flags;
+    int regionmask = (flags & WF_REGION) ? rs_res.regionmask : spin->si_region;
+
     // Skip non-ASCII words when "spin->si_ascii" is true.
-    if (spin->si_ascii && has_non_ascii(line)) {
+    if (spin->si_ascii && has_non_ascii(word_copy)) {
       non_ascii++;
       continue;
     }
 
     // Normal word: store it.
-    if (store_word(spin, line, flags, regionmask, NULL, false) == FAIL) {
+    if (store_word(spin, word_copy, flags, regionmask, NULL, false) == FAIL) {
       retval = FAIL;
       break;
     }
@@ -5627,9 +5643,9 @@ void spell_add_word(char *word, int len, SpellAddType what, int idx, bool undo)
   FILE *fd = NULL;
   buf_T *buf = NULL;
   bool new_spf = false;
+  bool file_written = false;  // true when the .add file was modified
   char *fname;
   char *fnamebuf = NULL;
-  char line[MAXWLEN * 2];
   char *spf;
 
   if (!valid_spell_word(word, word + len)) {
@@ -5686,43 +5702,59 @@ void spell_add_word(char *word, int len, SpellAddType what, int idx, bool undo)
   }
 
   if (what == SPELL_ADD_BAD || undo) {
-    int fpos_next = 0;
-    int fpos = 0;
     // When the word appears as good word we need to remove that one,
     // since its flags sort before the one with WF_BANNED.
+    // Read the whole file into a buffer so Rust can find duplicates.
     fd = os_fopen(fname, "r");
     if (fd != NULL) {
-      while (!vim_fgets(line, MAXWLEN * 2, fd)) {
-        fpos = fpos_next;
-        fpos_next = (int)ftell(fd);
-        if (fpos_next < 0) {
-          break;  // should never happen
-        }
-        if (strncmp(word, line, (size_t)len) == 0
-            && (line[len] == '/' || (uint8_t)line[len] < ' ')) {
-          // Found duplicate word.  Remove it by writing a '#' at
-          // the start of the line.  Mixing reading and writing
-          // doesn't work for all systems, close the file first.
-          fclose(fd);
-          fd = os_fopen(fname, "r+");
-          if (fd == NULL) {
-            break;
-          }
-          if (fseek(fd, fpos, SEEK_SET) == 0) {
-            fputc('#', fd);
-            if (undo) {
-              home_replace(NULL, fname, NameBuff, MAXPATHL, true);
-              smsg(0, _("Word '%.*s' removed from %s"), len, word, NameBuff);
-            }
-          }
-          if (fseek(fd, fpos_next, SEEK_SET) != 0) {
-            PERROR(_("Seek error in spellfile"));
-            break;
-          }
-        }
-      }
-      if (fd != NULL) {
+      // Measure file size.
+      fseek(fd, 0, SEEK_END);
+      long fsize = ftell(fd);
+      rewind(fd);
+      if (fsize > 0) {
+        uint8_t *fbuf = xmalloc((size_t)fsize);
+        size_t nread = fread(fbuf, 1, (size_t)fsize, fd);
         fclose(fd);
+        fd = NULL;
+
+        // Scan for all matching lines and comment them out.
+        size_t scan_offset = 0;
+        while (scan_offset < nread) {
+          size_t match_offset = 0;
+          if (!rs_spell_find_duplicate_word(fbuf + scan_offset,
+                                            nread - scan_offset,
+                                            (const uint8_t *)word, (size_t)len,
+                                            &match_offset)) {
+            break;
+          }
+          size_t abs_offset = scan_offset + match_offset;
+
+          // Comment out the line by writing '#' at abs_offset.
+          fd = os_fopen(fname, "r+");
+          if (fd != NULL) {
+            if (fseek(fd, (long)abs_offset, SEEK_SET) == 0) {
+              fputc('#', fd);
+              file_written = true;
+              if (undo) {
+                home_replace(NULL, fname, NameBuff, MAXPATHL, true);
+                smsg(0, _("Word '%.*s' removed from %s"), len, word, NameBuff);
+              }
+            }
+            fclose(fd);
+            fd = NULL;
+          }
+
+          // Advance past this line.
+          size_t next = abs_offset;
+          while (next < nread && fbuf[next] != '\n') {
+            next++;
+          }
+          scan_offset = next + 1;
+        }
+        xfree(fbuf);
+      } else {
+        fclose(fd);
+        fd = NULL;
       }
     }
   }
@@ -5752,21 +5784,24 @@ void spell_add_word(char *word, int len, SpellAddType what, int idx, bool undo)
     if (fd == NULL) {
       semsg(_(e_notopen), fname);
     } else {
-      if (what == SPELL_ADD_BAD) {
-        fprintf(fd, "%.*s/!\n", len, word);
-      } else if (what == SPELL_ADD_RARE) {
-        fprintf(fd, "%.*s/?\n", len, word);
-      } else {
-        fprintf(fd, "%.*s\n", len, word);
+      // Use Rust to format the line to append.
+      uint8_t append_buf[MAXWLEN * 2 + 4];
+      int append_len = rs_spell_add_word_format((const uint8_t *)word, (size_t)len,
+                                                (int)what,
+                                                append_buf, sizeof(append_buf));
+      if (append_len > 0) {
+        fwrite(append_buf, 1, (size_t)append_len, fd);
+        file_written = true;
       }
       fclose(fd);
+      fd = NULL;
 
       home_replace(NULL, fname, NameBuff, MAXPATHL, true);
       smsg(0, _("Word '%.*s' added to %s"), len, word, NameBuff);
     }
   }
 
-  if (fd != NULL) {
+  if (file_written) {
     // Update the .add.spl file.
     mkspell(1, &fname, false, true, true);
 

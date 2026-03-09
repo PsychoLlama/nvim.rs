@@ -3414,6 +3414,386 @@ pub unsafe extern "C" fn rs_spell_load_state_get_error(state: *const SpellLoadSt
 }
 
 // =============================================================================
+// Dictionary / Wordfile / Add-word Parsing (Phase 4)
+// =============================================================================
+
+/// Result of parsing one line from a .dic dictionary file.
+///
+/// The `word` slice holds the word bytes (without trailing NUL).
+/// `word_len` is the length of the word.
+/// `affix_offset` is the byte offset within the original `line` buffer where
+/// the affix list starts (i.e. past the `/` separator), or `u16::MAX` when
+/// there is no affix list.
+/// `affix_len` is the length of the affix string in the original buffer.
+///
+/// Note: the escaped content is written back into a caller-supplied
+/// `word_buf` so that the C side never needs to allocate for parsing.
+#[repr(C)]
+pub struct DicLineResult {
+    /// Byte offset in the caller-supplied `word_buf` where word starts (always 0).
+    pub word_len: u16,
+    /// Byte offset in the original `line` buffer where the affix list starts,
+    /// or `0xFFFF` when absent.
+    pub affix_offset: u16,
+    /// Length of the affix string in the original `line` buffer.
+    pub affix_len: u16,
+}
+
+/// Parse one line from a .dic dictionary file.
+///
+/// The function:
+/// 1. Trims trailing CR/LF/whitespace.
+/// 2. Skips comment lines that start with `#` or `/`.
+/// 3. Processes escape sequences `\\` → `\` and `\/` → `/`.
+/// 4. Splits the word from its affix list at the first unescaped `/`.
+///
+/// On success returns `0` and fills `result_out` and `word_buf`.
+/// Returns `1` when the line is empty or a comment (caller should skip).
+/// Returns `-1` on error (NULL pointers, buffer too small).
+///
+/// # Safety
+/// All pointer parameters must be valid for their indicated lengths.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_dic_line(
+    line: *const u8,
+    line_len: usize,
+    word_buf: *mut u8,
+    word_buf_cap: usize,
+    result_out: *mut DicLineResult,
+) -> c_int {
+    if line.is_null() || word_buf.is_null() || result_out.is_null() {
+        return -1;
+    }
+
+    let src = std::slice::from_raw_parts(line, line_len);
+
+    // Trim trailing CR/LF/whitespace
+    let mut end = src.len();
+    while end > 0 && src[end - 1] <= b' ' {
+        end -= 1;
+    }
+    let src = &src[..end];
+
+    // Empty line or comment
+    if src.is_empty() || src[0] == b'#' || src[0] == b'/' {
+        return 1;
+    }
+
+    // Process escape sequences and find affix separator.
+    // Write unescaped word into word_buf.
+    let dst = std::slice::from_raw_parts_mut(word_buf, word_buf_cap);
+    let mut wi = 0usize; // write index into dst
+    let mut ri = 0usize; // read index into src
+    let mut affix_offset: u16 = 0xFFFF;
+    let mut affix_len: u16 = 0;
+
+    while ri < src.len() {
+        let c = src[ri];
+        if c == b'\\' && ri + 1 < src.len() && (src[ri + 1] == b'\\' || src[ri + 1] == b'/') {
+            // Escape sequence: consume two bytes, emit one
+            if wi >= word_buf_cap {
+                return -1;
+            }
+            dst[wi] = src[ri + 1];
+            wi += 1;
+            ri += 2;
+        } else if c == b'/' {
+            // Affix separator: record position and stop writing word
+            affix_offset = (ri + 1) as u16;
+            affix_len = (src.len().saturating_sub(ri + 1)) as u16;
+            break;
+        } else {
+            if wi >= word_buf_cap {
+                return -1;
+            }
+            dst[wi] = c;
+            wi += 1;
+            ri += 1;
+        }
+    }
+
+    *result_out = DicLineResult {
+        word_len: wi as u16,
+        affix_offset,
+        affix_len,
+    };
+    0
+}
+
+// ---- Wordfile line parsing --------------------------------------------------
+
+/// Flags returned from `rs_parse_wordfile_line`.
+/// These values must match the C-side `WF_*` constants.
+pub mod wordfile_flags {
+    /// Word with `!` flag: banned / bad word.
+    pub const WF_BANNED: i32 = 0x10;
+    /// Word with `?` flag: rare word.
+    pub const WF_RARE: i32 = 0x08;
+    /// Word with `=` flag: keep-case word (implies FIXCAP).
+    pub const WF_KEEPCAP: i32 = 0x80;
+    /// keep-case word, ALLCAP not allowed (set together with KEEPCAP).
+    pub const WF_FIXCAP: i32 = 0x40;
+    /// Word has a region restriction.
+    pub const WF_REGION: i32 = 0x01;
+}
+
+/// Result of parsing one line from a plain wordfile (.add / raw wordlist).
+#[repr(C)]
+pub struct WordfileLineResult {
+    /// NUL-terminated kind tag for directive lines.
+    /// `b"encoding\0"` or `b"regions\0"` when the line is a directive.
+    /// Empty (first byte NUL) for ordinary word lines.
+    pub directive: [u8; 16],
+    /// For directive lines: length of the value that follows in `directive_value`.
+    /// For word lines: length of the word (word starts at byte 0 of line buffer).
+    pub word_len: u16,
+    /// Byte offset in the original `line` buffer where the word ends (before `/flags`).
+    pub word_end_offset: u16,
+    /// Accumulated `WF_*` word flags (0 for directive lines).
+    pub flags: i32,
+    /// Accumulated region bitmask (0 = no region restriction parsed).
+    /// Caller must combine with `spin->si_region` when `WF_REGION` not set.
+    pub regionmask: i32,
+    /// For `/regions=` directive: the region count (number of 2-char pairs).
+    pub region_count: u8,
+}
+
+/// Parse one line from a plain wordfile (.add or raw word list).
+///
+/// Returns:
+/// - `0`: ordinary word line; `result_out.word_len` and `result_out.flags` are filled.
+/// - `1`: directive line (`/encoding=` or `/regions=`); `result_out.directive` is filled.
+/// - `2`: line should be skipped (comment, empty, unknown `/` directive).
+/// - `-1`: error (NULL pointer).
+///
+/// The function does **not** handle encoding conversion (stays in C); it only
+/// classifies and splits the line.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_wordfile_line(
+    line: *const u8,
+    line_len: usize,
+    region_count: i32,
+    result_out: *mut WordfileLineResult,
+) -> c_int {
+    if line.is_null() || result_out.is_null() {
+        return -1;
+    }
+
+    let src = std::slice::from_raw_parts(line, line_len);
+
+    // Trim trailing CR/LF/whitespace
+    let mut end = src.len();
+    while end > 0 && src[end - 1] <= b' ' {
+        end -= 1;
+    }
+    let src = &src[..end];
+
+    // Empty line
+    if src.is_empty() {
+        return 2;
+    }
+
+    // Comment line
+    if src[0] == b'#' {
+        return 2;
+    }
+
+    // Directive line: starts with '/'
+    if src[0] == b'/' {
+        let body = &src[1..];
+
+        let mut res = WordfileLineResult {
+            directive: [0u8; 16],
+            word_len: 0,
+            word_end_offset: 0,
+            flags: 0,
+            regionmask: 0,
+            region_count: 0,
+        };
+
+        if body.starts_with(b"encoding=") {
+            let tag = b"encoding";
+            res.directive[..tag.len()].copy_from_slice(tag);
+            // Value starts at byte 9 in body (after "encoding=")
+            res.word_len = (body.len() - 9) as u16;
+            res.word_end_offset = 10; // 1 (slash) + 9 ("encoding=")
+            *result_out = res;
+            return 1;
+        }
+
+        if body.starts_with(b"regions=") {
+            let tag = b"regions";
+            res.directive[..tag.len()].copy_from_slice(tag);
+            let value = &body[8..]; // after "regions="
+            res.word_len = value.len() as u16;
+            res.word_end_offset = 9; // 1 (slash) + 8 ("regions=")
+            res.region_count = (value.len() / 2) as u8;
+            *result_out = res;
+            return 1;
+        }
+
+        // Unknown directive: skip
+        return 2;
+    }
+
+    // Ordinary word line: find optional `/flags` suffix
+    let slash_pos = src.iter().position(|&b| b == b'/');
+    let word_end = slash_pos.unwrap_or(src.len());
+
+    let mut flags: i32 = 0;
+    let mut regionmask: i32 = 0;
+
+    if let Some(slash) = slash_pos {
+        let flag_bytes = &src[slash + 1..];
+        let mut i = 0;
+        while i < flag_bytes.len() {
+            let b = flag_bytes[i];
+            if b == b'=' {
+                flags |= wordfile_flags::WF_KEEPCAP | wordfile_flags::WF_FIXCAP;
+            } else if b == b'!' {
+                flags |= wordfile_flags::WF_BANNED;
+            } else if b == b'?' {
+                flags |= wordfile_flags::WF_RARE;
+            } else if b.is_ascii_digit() {
+                let digit = (b - b'0') as i32;
+                if digit == 0 || digit > region_count {
+                    // Invalid region: caller will emit error message.
+                    // Return code 3 so C can log and break.
+                    return 3;
+                }
+                if (flags & wordfile_flags::WF_REGION) == 0 {
+                    regionmask = 0; // first region digit clears default
+                }
+                flags |= wordfile_flags::WF_REGION;
+                regionmask |= 1 << (digit - 1);
+            } else {
+                // Unrecognized flag: caller will emit warning and break.
+                return 4;
+            }
+            i += 1;
+        }
+    }
+
+    *result_out = WordfileLineResult {
+        directive: [0u8; 16],
+        word_len: word_end as u16,
+        word_end_offset: word_end as u16,
+        flags,
+        regionmask,
+        region_count: 0,
+    };
+    0
+}
+
+// ---- spell_add_word helpers -------------------------------------------------
+
+/// Format the line to append to a `.add` spell file for `zg`/`zw`.
+///
+/// - `what == 0` (`SPELL_ADD_GOOD`): `"word\n"`
+/// - `what == 1` (`SPELL_ADD_BAD`):  `"word/!\n"`
+/// - `what == 2` (`SPELL_ADD_RARE`): `"word/?\n"`
+///
+/// Returns the number of bytes written into `buf_out`, or `-1` on error.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_add_word_format(
+    word: *const u8,
+    word_len: usize,
+    what: i32,
+    buf_out: *mut u8,
+    buf_cap: usize,
+) -> c_int {
+    if word.is_null() || buf_out.is_null() {
+        return -1;
+    }
+
+    let w = std::slice::from_raw_parts(word, word_len);
+    let dst = std::slice::from_raw_parts_mut(buf_out, buf_cap);
+
+    // Determine suffix: "" / "/!" / "/?"
+    let suffix: &[u8] = match what {
+        1 => b"/!",
+        2 => b"/?",
+        _ => b"",
+    };
+
+    let total = word_len + suffix.len() + 1; // +1 for '\n'
+    if total > buf_cap {
+        return -1;
+    }
+
+    dst[..word_len].copy_from_slice(w);
+    let mut pos = word_len;
+    dst[pos..pos + suffix.len()].copy_from_slice(suffix);
+    pos += suffix.len();
+    dst[pos] = b'\n';
+
+    c_int::try_from(total).unwrap_or(-1)
+}
+
+/// Search for a duplicate word in the content of a `.add` file.
+///
+/// The function scans `file_content` line by line looking for a line that
+/// starts with `word` (of length `word_len`) followed by either `/` or a
+/// byte `< ' '` (end of line), matching the C logic in `spell_add_word`.
+///
+/// On match, writes the byte offset of the *start of that line* into
+/// `*offset_out` and returns `true`.  Returns `false` when no match found.
+///
+/// # Safety
+/// All pointer parameters must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_find_duplicate_word(
+    file_content: *const u8,
+    content_len: usize,
+    word: *const u8,
+    word_len: usize,
+    offset_out: *mut usize,
+) -> bool {
+    if file_content.is_null() || word.is_null() || offset_out.is_null() {
+        return false;
+    }
+
+    let content = std::slice::from_raw_parts(file_content, content_len);
+    let w = std::slice::from_raw_parts(word, word_len);
+
+    let mut pos = 0usize;
+    while pos < content.len() {
+        let line_start = pos;
+
+        // Find end of line
+        let mut line_end = pos;
+        while line_end < content.len() && content[line_end] != b'\n' {
+            line_end += 1;
+        }
+
+        let line = &content[pos..line_end];
+
+        // Check if this line starts with the word followed by '/' or EOL
+        if line.len() >= word_len && &line[..word_len] == w {
+            let after = if word_len < line.len() {
+                line[word_len]
+            } else {
+                b'\n' // virtual newline at EOL
+            };
+            if after == b'/' || after < b' ' {
+                *offset_out = line_start;
+                return true;
+            }
+        }
+
+        pos = line_end + 1; // skip past '\n'
+    }
+
+    false
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
