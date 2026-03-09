@@ -255,14 +255,6 @@ extern int rs_cmdline_get_one_key(void);
 extern void rs_cmdline_set_one_key(int one_key);
 extern int rs_cmdline_get_hl_id(void);
 extern void rs_cmdline_set_hl_id(int hl_id);
-extern int rs_cmdline_get_xp_context(void);
-extern int rs_cmd_startcol(void);
-extern int rs_cmdline_charsize(int idx);
-extern int rs_cursor_screencol(void);
-extern int rs_is_password_mode(void);
-extern int rs_parse_search_delimiter(const char *pattern, size_t len);
-extern int rs_is_literal_pattern(const char *pattern, size_t len);
-extern int rs_has_word_boundary(const char *pattern, size_t len);
 extern int rs_cmdline_insert_char(int c, int overstrike);
 extern int rs_cmdline_delete_char_before(void);
 extern int rs_cmdline_delete_char_at(void);
@@ -338,21 +330,7 @@ extern int rs_should_draw(int cmdbuff_is_null, int start, int len, int cmdlen);
 
 // Phase 10: VimL API helpers from Rust
 extern int rs_clamp_cmdpos(int pos, int cmdlen);
-extern int rs_vim_pos_to_internal(int vim_pos);
-extern int rs_internal_pos_to_vim(int internal_pos);
-extern int rs_is_valid_cmdline_ptr(int ptr_is_null);
-extern int rs_calculate_new_cmdpos(int requested_pos, int cmdlen);
-extern int rs_is_valid_setcmdpos_arg(int pos);
 
-extern int rs_check_bracket_balance(const char *expr, size_t len);
-extern int rs_is_expr_likely_complete(const char *expr, size_t len);
-extern int rs_find_last_token_start(const char *expr, size_t len);
-extern int rs_fname_needs_leading_escape(const char *fname, size_t len);
-extern int rs_starts_with_tilde_slash(const char *path, size_t len);
-extern int rs_expand_fuzzy_supported(const void *xp);
-extern int rs_expand_get_context(const void *xp);
-extern int rs_expand_is_file_context(const void *xp);
-extern int rs_expand_uses_internal_matching(const void *xp);
 
 static handle_T cmdpreview_bufnr = 0;
 static int cmdpreview_ns = 0;
