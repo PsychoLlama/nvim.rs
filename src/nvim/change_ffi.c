@@ -283,6 +283,7 @@ bool nvim_curbuf_get_b_p_lisp(void) { return curbuf->b_p_lisp; }
 bool nvim_curbuf_get_b_p_pi(void) { return curbuf->b_p_pi; }
 void nvim_curbuf_set_b_p_pi(bool val) { curbuf->b_p_pi = val; }
 colnr_T nvim_curbuf_get_b_p_ts(void) { return curbuf->b_p_ts; }
+int64_t nvim_curbuf_get_b_p_sw(void) { return curbuf->b_p_sw; }
 const colnr_T *nvim_curbuf_get_b_p_vts_array(void) { return curbuf->b_p_vts_array; }
 const char *nvim_curbuf_get_b_p_inde_ptr(void) { return curbuf->b_p_inde; }
 char *nvim_curbuf_get_b_p_com(void) { return curbuf->b_p_com; }

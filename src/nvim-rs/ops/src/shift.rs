@@ -6,6 +6,22 @@
 
 use std::ffi::c_int;
 
+// Constants for shift_line
+const VREPLACE_FLAG: c_int = 0x200;
+const INDENT_SET: c_int = 1;
+const SIN_CHANGED: c_int = 1;
+
+extern "C" {
+    fn nvim_get_indent() -> c_int;
+    fn nvim_curbuf_get_b_p_sw() -> i64;
+    fn nvim_curbuf_get_b_p_ts() -> c_int;
+    fn nvim_curbuf_get_b_p_vts_array() -> *const c_int;
+    fn nvim_get_State() -> c_int;
+    fn nvim_change_indent(type_: c_int, amount: c_int, round: c_int, call_changed_bytes: bool);
+    fn nvim_set_indent(size: c_int, flags: c_int) -> bool;
+    fn trim_to_int(x: i64) -> c_int;
+}
+
 // =============================================================================
 // Variable Tabstop FFI Functions
 // =============================================================================
@@ -664,6 +680,50 @@ pub extern "C" fn rs_calc_shifted_line_len(
 #[no_mangle]
 pub extern "C" fn rs_should_skip_block_shift(is_short: c_int) -> c_int {
     c_int::from(should_skip_block_shift(is_short != 0))
+}
+
+/// Shift the current line `amount` shiftwidth(s) left or right.
+///
+/// Rules: If 'shiftwidth' != 0, use it; else if 'vartabstop' is defined,
+/// use vartabstop; else use 'tabstop'.
+///
+/// Ported from `shift_line()` in ops.c.
+///
+/// # Safety
+/// Accesses global curbuf state via C accessors.
+#[unsafe(export_name = "shift_line")]
+pub unsafe extern "C" fn rs_shift_line(
+    left: bool,
+    round: bool,
+    amount: c_int,
+    call_changed_bytes: c_int,
+) {
+    let sw_val = nvim_curbuf_get_b_p_sw();
+    let ts_val = i64::from(nvim_curbuf_get_b_p_ts());
+    let vts_array = nvim_curbuf_get_b_p_vts_array();
+    let current_indent = i64::from(nvim_get_indent());
+
+    let count: i64 = if sw_val != 0 {
+        calc_new_indent(left, round, i64::from(amount), sw_val, current_indent)
+    } else if vts_array.is_null() || unsafe { *vts_array } == 0 {
+        calc_new_indent(left, round, i64::from(amount), ts_val, current_indent)
+    } else {
+        calc_new_vts_indent(left, round, amount, current_indent, vts_array)
+    };
+
+    let count_int = trim_to_int(count);
+    if nvim_get_State() & VREPLACE_FLAG != 0 {
+        nvim_change_indent(INDENT_SET, count_int, 0, call_changed_bytes != 0);
+    } else {
+        nvim_set_indent(
+            count_int,
+            if call_changed_bytes != 0 {
+                SIN_CHANGED
+            } else {
+                0
+            },
+        );
+    }
 }
 
 #[cfg(test)]
