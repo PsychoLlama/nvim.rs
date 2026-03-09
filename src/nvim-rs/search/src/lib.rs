@@ -68,7 +68,7 @@ fn last_csearch_forward_impl() -> bool {
 /// FFI wrapper for `last_csearch_forward`.
 ///
 /// Returns non-zero if the last search direction was forward.
-#[no_mangle]
+#[unsafe(export_name = "last_csearch_forward")]
 pub extern "C" fn rs_last_csearch_forward() -> c_int {
     c_int::from(last_csearch_forward_impl())
 }
@@ -85,7 +85,7 @@ fn last_csearch_until_impl() -> c_int {
 /// FFI wrapper for `last_csearch_until`.
 ///
 /// Returns non-zero if the last search was a 't' command.
-#[no_mangle]
+#[unsafe(export_name = "last_csearch_until")]
 pub extern "C" fn rs_last_csearch_until() -> c_int {
     last_csearch_until_impl()
 }
@@ -97,7 +97,7 @@ pub extern "C" fn rs_last_csearch_until() -> c_int {
 /// # Safety
 ///
 /// Calls external C function to get pointer to static variable.
-#[no_mangle]
+#[unsafe(export_name = "last_csearch")]
 pub unsafe extern "C" fn rs_last_csearch() -> *const c_char {
     nvim_get_lastc_bytes()
 }
@@ -116,6 +116,12 @@ fn search_was_last_used_impl() -> bool {
 #[no_mangle]
 pub extern "C" fn rs_search_was_last_used() -> c_int {
     c_int::from(search_was_last_used_impl())
+}
+
+/// C ABI export for `search_was_last_used`, returning `bool` to match C callers.
+#[unsafe(export_name = "search_was_last_used")]
+pub extern "C" fn search_was_last_used_export() -> bool {
+    search_was_last_used_impl()
 }
 
 /// Check if during the previous call to `vim_regcomp` the EOL item "$" was found.

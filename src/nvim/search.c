@@ -116,24 +116,7 @@ static bool last_t_cmd = true;            // last search t_cmd
 static char lastc_bytes[MAX_SCHAR_SIZE + 1];
 
 // Rust FFI declarations for character search state
-extern int rs_last_csearch_forward(void);
-extern int rs_last_csearch_until(void);
-extern const char *rs_last_csearch(void);
-extern int rs_search_was_last_used(void);
-extern int rs_search_linewhite(int lnum);
 extern int rs_magic_isset(void);
-
-// Rust FFI declarations for ShaDa pattern get/set
-extern void rs_set_substitute_pattern_shada(const SearchPattern *pat);
-extern void rs_set_last_used_pattern(int is_substitute_pattern);
-
-// Rust FFI declarations for search_regcomp and pattern compilation
-extern int rs_search_regcomp(char *pat, size_t patlen, char **used_pat,
-                              int pat_save, int pat_use, int options,
-                              regmmatch_T *regmatch);
-
-// Rust FFI declarations for searchc()
-extern int rs_searchc(cmdarg_T *cap, bool t_cmd);
 
 // Rust FFI declarations for search statistics
 extern void rs_update_search_stat(int dirc, int pos_lnum, int pos_col, int pos_coladd,
@@ -437,11 +420,6 @@ typedef struct {
 /// @param regmatch  return: pattern and ignore-case flag
 ///
 /// @return          FAIL if failed, OK otherwise.
-int search_regcomp(char *pat, size_t patlen, char **used_pat, int pat_save, int pat_use,
-                   int options, regmmatch_T *regmatch)
-{
-  return rs_search_regcomp(pat, patlen, used_pat, pat_save, pat_use, options, regmatch);
-}
 
 /// Get search pattern used by search_regcomp().
 char *get_search_pat(void)
@@ -651,27 +629,11 @@ bool pat_has_uppercase(char *pat)
   return false;
 }
 
-extern const char *rs_last_csearch(void);
 
-const char *last_csearch(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_last_csearch();
-}
 
-extern int rs_last_csearch_forward(void);
 
-int last_csearch_forward(void)
-{
-  return rs_last_csearch_forward();
-}
 
-extern int rs_last_csearch_until(void);
 
-int last_csearch_until(void)
-{
-  return rs_last_csearch_until();
-}
 
 
 
@@ -865,11 +827,6 @@ int search_for_exact_line(buf_T *buf, pos_T *pos, Direction dir, char *pat)
 /// position of the character, otherwise move to just before the char.
 /// Do this "cap->count1" times.
 /// Return FAIL or OK.
-int searchc(cmdarg_T *cap, bool t_cmd)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_searchc(cap, t_cmd);
-}
 
 // "Other" Searches
 
@@ -1125,11 +1082,6 @@ static int is_zero_width(char *pattern, size_t patternlen, bool move, pos_T *cur
                            cur ? cur->coladd : 0, (int)direction);
 }
 
-/// @return  true if line 'lnum' is empty or has white chars only.
-bool linewhite(linenr_T lnum)
-{
-  return rs_search_linewhite(lnum);
-}
 
 /// Add the search count "[3/19]" to "msgbuf".
 /// See update_search_stat() for other arguments.
@@ -1969,26 +1921,8 @@ static void show_pat_in_path(char *line, int type, bool did_show, int action, FI
 
 
 
-/// Set last substitute pattern
-void set_substitute_pattern(const SearchPattern pat)
-{
-  rs_set_substitute_pattern_shada(&pat);
-}
 
-/// Set last used search pattern
-///
-/// @param[in]  is_substitute_pattern  If true set substitute pattern as last
-///                                    used. Otherwise sets search pattern.
-void set_last_used_pattern(const bool is_substitute_pattern)
-{
-  rs_set_last_used_pattern(is_substitute_pattern);
-}
 
-/// Returns true if search pattern was the last used one
-bool search_was_last_used(void)
-{
-  return rs_search_was_last_used() != 0;
-}
 
 // =============================================================================
 // Batch accessors for pattern save/restore (Phase 3)

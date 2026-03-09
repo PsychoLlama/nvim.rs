@@ -488,7 +488,7 @@ const FAIL: c_int = 0;
 /// # Safety
 ///
 /// `cap` must be a valid, non-null pointer to a `cmdarg_T`.
-#[no_mangle]
+#[unsafe(export_name = "searchc")]
 pub unsafe extern "C" fn rs_searchc(cap: *mut c_void, t_cmd_arg: bool) -> c_int {
     let mut c = nvim_cap_get_nchar(cap);
     let mut dir = nvim_cap_get_arg(cap);

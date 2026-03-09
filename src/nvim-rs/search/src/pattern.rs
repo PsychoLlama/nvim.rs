@@ -444,6 +444,15 @@ pub unsafe extern "C" fn set_search_pattern_export(pat: SearchPatternC) {
     rs_set_search_pattern_shada(&pat as *const SearchPatternC);
 }
 
+/// set_substitute_pattern: C ABI entry point taking SearchPattern by value.
+///
+/// # Safety
+/// `pat` must be a valid SearchPattern value.
+#[unsafe(export_name = "set_substitute_pattern")]
+pub unsafe extern "C" fn set_substitute_pattern_export(pat: SearchPatternC) {
+    rs_set_substitute_pattern_shada(&pat as *const SearchPatternC);
+}
+
 /// Set last substitute pattern (free old, memcpy in, clear off).
 ///
 /// # Safety
@@ -467,7 +476,7 @@ pub unsafe extern "C" fn rs_set_substitute_pattern_shada(pat: *const SearchPatte
 ///
 /// # Safety
 /// All pointer arguments must be valid.
-#[no_mangle]
+#[unsafe(export_name = "search_regcomp")]
 pub unsafe extern "C" fn rs_search_regcomp(
     pat: *mut c_char,
     patlen: usize,

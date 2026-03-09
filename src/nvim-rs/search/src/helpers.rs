@@ -708,6 +708,15 @@ pub unsafe extern "C" fn rs_search_linewhite(lnum: i32) -> c_int {
     c_int::from(linewhite(lnum))
 }
 
+/// C ABI export for `linewhite`, returning `bool` to match C callers.
+///
+/// # Safety
+/// Calls C accessor to get line content from curbuf.
+#[unsafe(export_name = "linewhite")]
+pub unsafe extern "C" fn linewhite_export(lnum: i32) -> bool {
+    linewhite(lnum)
+}
+
 // =============================================================================
 // Phase 7a: check_linecomment
 // =============================================================================

@@ -143,7 +143,7 @@ typedef struct {
 } FpipInitResult;
 
 // Functions implemented in Rust (src/nvim-rs/search/) via export_name
-// Phase 2: pure pass-through wrappers replaced by Rust exports
+// Phase 2+3: thin C wrappers replaced by Rust exports
 void save_search_patterns(void);
 void restore_search_patterns(void);
 void free_search_patterns(void);
@@ -161,5 +161,15 @@ int check_linecomment(const char *line);
 void get_search_pattern(SearchPattern *pat);
 void get_substitute_pattern(SearchPattern *pat);
 void set_search_pattern(SearchPattern pat);
+// Phase 3: return-value wrappers
+const char *last_csearch(void);
+int last_csearch_forward(void);
+int last_csearch_until(void);
+int searchc(cmdarg_T *cap, bool t_cmd);
+bool linewhite(linenr_T lnum);
+bool search_was_last_used(void);
+void set_last_used_pattern(bool is_substitute_pattern);
+void set_substitute_pattern(SearchPattern pat);
+int search_regcomp(char *pat, size_t patlen, char **used_pat, int pat_save, int pat_use, int options, regmmatch_T *regmatch);
 
 #include "search.h.generated.h"

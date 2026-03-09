@@ -443,6 +443,12 @@ pub extern "C" fn rs_set_last_used_pattern(is_substitute: c_int) {
     set_last_used_pattern(is_substitute != 0);
 }
 
+/// C ABI export for `set_last_used_pattern`, taking `bool` to match C callers.
+#[unsafe(export_name = "set_last_used_pattern")]
+pub extern "C" fn set_last_used_pattern_export(is_substitute: bool) {
+    set_last_used_pattern(is_substitute);
+}
+
 /// FFI: Resolve pattern index for substitute.
 #[no_mangle]
 pub extern "C" fn rs_subst_resolve_pattern_index(pat_use: c_int) -> c_int {
