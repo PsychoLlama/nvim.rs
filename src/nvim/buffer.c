@@ -310,11 +310,6 @@ int nvim_buf_get_b_p_ma(buf_T *buf)
   return buf->b_p_ma;
 }
 
-/// Get the b_p_lisp (lisp mode) field from a buffer.
-int nvim_buf_get_p_lisp(buf_T *buf)
-{
-  return buf ? buf->b_p_lisp : 0;
-}
 
 /// Set the b_p_ml (modeline) field on a buffer.
 void nvim_buf_set_b_p_ml(buf_T *buf, int val)
@@ -521,12 +516,6 @@ bool nvim_os_fileid(const char *path, void *file_id_out)
 bool nvim_os_fileid_equal(const void *a, const void *b)
 {
   return os_fileid_equal((const FileID *)a, (const FileID *)b);
-}
-
-/// Get the size of FileID struct (accessor for Rust).
-size_t nvim_sizeof_file_id(void)
-{
-  return sizeof(FileID);
 }
 
 // Rust uses a 16-byte buffer to hold FileID; assert this is sufficient.
@@ -3016,11 +3005,6 @@ const char *nvim_blfp_buflist_match(void *handle, buf_T *buf, bool ignore_case)
   return buflist_match((regmatch_T *)handle, buf, ignore_case);
 }
 
-/// Error message E92: Buffer N not found.
-void nvim_blfp_errmsg_e92(int64_t n)
-{
-  semsg(_("E92: Buffer %" PRId64 " not found"), n);
-}
 
 /// Error message E93: More than one match for <pattern>.
 void nvim_blfp_errmsg_e93(const char *pattern)
@@ -3499,123 +3483,18 @@ void buflist_slash_adjust(void)
 static char *lasttitle = NULL;
 static char *lasticon = NULL;
 
-/// Put the title name in the title bar and icon of the window.
-void maketitle(void)
-{
-  char *title_str = NULL;
-  char *icon_str = NULL;
-  char buf[IOSIZE];
+// Phase 9 accessors for maketitle() (Rust migration)
+/// Get lasttitle static variable.
+const char *nvim_buf_get_lasttitle(void) { return lasttitle; }
+/// Set lasttitle static variable (caller transfers ownership of s).
+void nvim_buf_set_lasttitle(char *s) { lasttitle = s; }
+/// Get lasticon static variable.
+const char *nvim_buf_get_lasticon(void) { return lasticon; }
+/// Set lasticon static variable (caller transfers ownership of s).
+void nvim_buf_set_lasticon(char *s) { lasticon = s; }
 
-  if (!redrawing()) {
-    // Postpone updating the title when 'lazyredraw' is set.
-    need_maketitle = true;
-    return;
-  }
-
-  need_maketitle = false;
-  if (!p_title && !p_icon && lasttitle == NULL && lasticon == NULL) {
-    return;  // nothing to do
-  }
-
-  if (p_title) {
-    int maxlen = 0;
-
-    if (p_titlelen > 0) {
-      maxlen = MAX((int)(p_titlelen * Columns / 100), 10);
-    }
-
-    if (*p_titlestring != NUL) {
-      if (stl_syntax & STL_IN_TITLE) {
-        build_stl_str_hl(curwin, buf, sizeof(buf), p_titlestring,
-                         kOptTitlestring, 0, 0, maxlen, NULL, NULL, NULL, NULL);
-        title_str = buf;
-      } else {
-        title_str = p_titlestring;
-      }
-    } else {
-      // Format: "fname + (path) (1 of 2) - Nvim".
-      char *default_titlestring = "%t%( %M%)%( (%{expand(\"%:~:h\")})%)%a - Nvim";
-      build_stl_str_hl(curwin, buf, sizeof(buf), default_titlestring,
-                       kOptTitlestring, 0, 0, maxlen, NULL, NULL, NULL, NULL);
-      title_str = buf;
-    }
-  }
-  bool mustset = value_change(title_str, &lasttitle);
-
-  if (p_icon) {
-    icon_str = buf;
-    if (*p_iconstring != NUL) {
-      if (stl_syntax & STL_IN_ICON) {
-        build_stl_str_hl(curwin, icon_str, sizeof(buf), p_iconstring,
-                         kOptIconstring, 0, 0, 0, NULL, NULL, NULL, NULL);
-      } else {
-        icon_str = p_iconstring;
-      }
-    } else {
-      char *name = buf_spname(curbuf);
-      if (name == NULL) {
-        name = path_tail(curbuf->b_ffname);
-      }
-      // Truncate name at 100 bytes.
-      int namelen = (int)strlen(name);
-      if (namelen > 100) {
-        namelen -= 100;
-        namelen += utf_cp_bounds(name, name + namelen).end_off;
-        name += namelen;
-      }
-      STRCPY(buf, name);
-      trans_characters(buf, sizeof(buf));
-    }
-  }
-
-  mustset |= value_change(icon_str, &lasticon);
-
-  if (mustset) {
-    resettitle();
-  }
-}
-
-/// Used for title and icon: Check if "str" differs from "*last".  Set "*last"
-/// from "str" if it does by freeing the old value of "*last" and duplicating
-/// "str".
-///
-/// @param          str   desired title string
-/// @param[in,out]  last  current title string
-///
-/// @return  true if resettitle() is to be called.
-static bool value_change(char *str, char **last)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if ((str == NULL) != (*last == NULL)
-      || (str != NULL && *last != NULL && strcmp(str, *last) != 0)) {
-    xfree(*last);
-    if (str == NULL) {
-      *last = NULL;
-      resettitle();
-    } else {
-      *last = xstrdup(str);
-      return true;
-    }
-  }
-  return false;
-}
-
-/// Set current window title
-void resettitle(void)
-{
-  ui_call_set_icon(cstr_as_string(lasticon));
-  ui_call_set_title(cstr_as_string(lasttitle));
-}
-
-#if defined(EXITFREE)
-void free_titles(void)
-{
-  xfree(lasttitle);
-  xfree(lasticon);
-}
-
-#endif
-
+// maketitle(), value_change(), resettitle(), free_titles() migrated to Rust
+// in src/nvim-rs/buffer/src/info.rs (Phase 9).
 
 /// Open a window for a number of buffers.
 void ex_buffer_all(exarg_T *eap)

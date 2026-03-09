@@ -174,6 +174,12 @@ static inline int ExpandBufnames(char *pat, int *num_file, char ***file, int opt
 int buflist_findpat(const char *pattern, const char *pattern_end, bool unlisted, bool diffmode,
                     bool curtab_only);
 
+// maketitle(), resettitle(), free_titles() are implemented in Rust
+// (src/nvim-rs/buffer/src/info.rs).
+void maketitle(void);
+void resettitle(void);
+void free_titles(void);
+
 /// Get b:changedtick value
 ///
 /// Faster then querying b:.
