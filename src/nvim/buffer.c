@@ -969,6 +969,55 @@ const char *nvim_fileinfo_line_fmt(void)
   return _("line %" PRId64 " of %" PRId64 " --%d%%-- col ");
 }
 
+// Phase 6 accessor functions for do_modelines / chk_modeline.
+
+/// Get p_mls (modelines option) value (accessor for Rust).
+int nvim_get_p_mls(void)
+{
+  return (int)p_mls;
+}
+
+/// Push a ETYPE_MODELINE entry onto the execution stack (accessor for Rust).
+void nvim_estack_push_modeline(linenr_T lnum)
+{
+  estack_push(ETYPE_MODELINE, "modelines", lnum);
+}
+
+/// Pop top entry from execution stack (accessor for Rust).
+void nvim_estack_pop(void)
+{
+  estack_pop();
+}
+
+/// Call do_set(s, OPT_MODELINE|OPT_LOCAL|flags) with modeline context saved/restored.
+/// This handles the secure and current_sctx save/restore internally.
+int nvim_modeline_do_set(char *s, linenr_T lnum, int flags)
+{
+  const int secure_save = secure;
+  const sctx_T save_current_sctx = current_sctx;
+  current_sctx.sc_sid = SID_MODELINE;
+  current_sctx.sc_seq = 0;
+  current_sctx.sc_lnum = lnum;
+  secure = 1;
+  int retval = do_set(s, OPT_MODELINE | OPT_LOCAL | flags);
+  secure = secure_save;
+  current_sctx = save_current_sctx;
+  return retval;
+}
+
+/// Wrapper for try_getdigits: parses digits at s, sets *vers, returns bytes consumed.
+/// Returns -1 on failure (no digits parsed).
+int nvim_try_getdigits(const char *s, int64_t *vers)
+{
+  char *p = (char *)s;
+  intmax_t v = 0;
+  if (!try_getdigits(&p, &v)) {
+    return -1;
+  }
+  *vers = (int64_t)v;
+  return (int)(p - s);
+}
+
 // Static assertions for constants used in Rust (Phase 1).
 _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch with Rust");
 _Static_assert(DOBUF_WIPE == 4, "DOBUF_WIPE mismatch with Rust");
@@ -4011,171 +4060,9 @@ void ex_buffer_all(exarg_T *eap)
   }
 }
 
-/// do_modelines() - process mode lines for the current file
-///
-/// @param flags
-///        OPT_WINONLY      only set options local to window
-///        OPT_NOWIN        don't set options local to window
-///
-/// Returns immediately if the "ml" option isn't set.
-void do_modelines(int flags)
-{
-  linenr_T lnum;
-  int nmlines;
-  static int entered = 0;
-
-  if (!curbuf->b_p_ml || (nmlines = (int)p_mls) == 0) {
-    return;
-  }
-
-  // Disallow recursive entry here.  Can happen when executing a modeline
-  // triggers an autocommand, which reloads modelines with a ":do".
-  if (entered) {
-    return;
-  }
-
-  entered++;
-  for (lnum = 1; curbuf->b_p_ml && lnum <= curbuf->b_ml.ml_line_count
-       && lnum <= nmlines; lnum++) {
-    if (chk_modeline(lnum, flags) == FAIL) {
-      nmlines = 0;
-    }
-  }
-
-  for (lnum = curbuf->b_ml.ml_line_count; curbuf->b_p_ml && lnum > 0
-       && lnum > nmlines && lnum > curbuf->b_ml.ml_line_count - nmlines;
-       lnum--) {
-    if (chk_modeline(lnum, flags) == FAIL) {
-      nmlines = 0;
-    }
-  }
-  entered--;
-}
-
-/// chk_modeline() - check a single line for a mode string
-/// Return FAIL if an error encountered.
-///
-/// @param flags  Same as for do_modelines().
-static int chk_modeline(linenr_T lnum, int flags)
-{
-  char *e;
-  int retval = OK;
-
-  int prev = -1;
-  char *s = ml_get(lnum);
-  char *line_end = s + ml_get_len(lnum);
-  for (; *s != NUL; s++) {
-    if (prev == -1 || ascii_isspace(prev)) {
-      if ((prev != -1 && strncmp(s, "ex:", 3) == 0)
-          || strncmp(s, "vi:", 3) == 0) {
-        break;
-      }
-      // Accept both "vim" and "Vim".
-      if ((s[0] == 'v' || s[0] == 'V') && s[1] == 'i' && s[2] == 'm') {
-        if (s[3] == '<' || s[3] == '=' || s[3] == '>') {
-          e = s + 4;
-        } else {
-          e = s + 3;
-        }
-        intmax_t vers;
-        if (!try_getdigits(&e, &vers)) {
-          continue;
-        }
-
-        const int vim_version = min_vim_version();
-        if (*e == ':'
-            && (s[0] != 'V'
-                || strncmp(skipwhite(e + 1), "set", 3) == 0)
-            && (s[3] == ':'
-                || (vim_version >= vers && isdigit((uint8_t)s[3]))
-                || (vim_version < vers && s[3] == '<')
-                || (vim_version > vers && s[3] == '>')
-                || (vim_version == vers && s[3] == '='))) {
-          break;
-        }
-      }
-    }
-    prev = (uint8_t)(*s);
-  }
-
-  if (!*s) {
-    return retval;
-  }
-
-  do {                                // skip over "ex:", "vi:" or "vim:"
-    s++;
-  } while (s[-1] != ':');
-
-  size_t len = (size_t)(line_end - s);  // remember the line length so we can restore
-                                        // 'line_end' after the copy
-  char *linecopy;  // local copy of any modeline found
-  s = linecopy = xstrnsave(s, len);     // copy the line, it will change
-
-  line_end = s + len;                   // restore 'line_end'
-
-  // prepare for emsg()
-  estack_push(ETYPE_MODELINE, "modelines", lnum);
-
-  bool end = false;
-  while (end == false) {
-    s = skipwhite(s);
-    if (*s == NUL) {
-      break;
-    }
-
-    // Find end of set command: ':' or end of line.
-    // Skip over "\:", replacing it with ":".
-    for (e = s; *e != ':' && *e != NUL; e++) {
-      if (e[0] == '\\' && e[1] == ':') {
-        memmove(e, e + 1, (size_t)(line_end - (e + 1)) + 1);    // +1 for NUL
-        line_end--;
-      }
-    }
-    if (*e == NUL) {
-      end = true;
-    }
-
-    // If there is a "set" command, require a terminating ':' and
-    // ignore the stuff after the ':'.
-    // "vi:set opt opt opt: foo" -- foo not interpreted
-    // "vi:opt opt opt: foo" -- foo interpreted
-    // Accept "se" for compatibility with Elvis.
-    if (strncmp(s, "set ", 4) == 0
-        || strncmp(s, "se ", 3) == 0) {
-      if (*e != ':') {                // no terminating ':'?
-        break;
-      }
-      end = true;
-      s += (*(s + 2) == ' ') ? 3 : 4;
-    }
-    *e = NUL;                         // truncate the set command
-
-    if (*s != NUL) {                  // skip over an empty "::"
-      const int secure_save = secure;
-      const sctx_T save_current_sctx = current_sctx;
-      current_sctx.sc_sid = SID_MODELINE;
-      current_sctx.sc_seq = 0;
-      current_sctx.sc_lnum = lnum;
-      // Make sure no risky things are executed as a side effect.
-      secure = 1;
-
-      retval = do_set(s, OPT_MODELINE | OPT_LOCAL | flags);
-
-      secure = secure_save;
-      current_sctx = save_current_sctx;
-      if (retval == FAIL) {                   // stop if error found
-        break;
-      }
-    }
-    s = (e == line_end) ? e : e + 1;  // advance to next part
-                                      // careful not to go off the end
-  }
-
-  estack_pop();
-  xfree(linecopy);
-
-  return retval;
-}
+// do_modelines() and chk_modeline() are implemented in Rust
+// (see src/nvim-rs/buffer/src/modeline.rs).
+// The C declaration is in buffer.h as a static inline wrapper.
 
 
 /// Read the file for "buf" again and check if the contents changed.

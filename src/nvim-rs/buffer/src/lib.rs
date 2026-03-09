@@ -11,6 +11,7 @@
 pub mod info;
 pub mod lifecycle;
 pub mod list;
+pub mod modeline;
 pub mod properties;
 pub mod state;
 

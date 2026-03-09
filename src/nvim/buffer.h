@@ -124,6 +124,7 @@ extern void rs_wipe_buffer(buf_T *buf, bool aucmd);
 extern void rs_buf_set_file_id(buf_T *buf);
 extern void rs_fname_expand(buf_T *buf, char **ffname, char **sfname);
 extern void rs_buflist_altfpos(win_T *win);
+extern void rs_do_modelines(int flags);
 
 // Inline wrappers: these replace the C wrapper functions deleted from buffer.c
 static inline bool buf_valid(buf_T *buf) { return rs_buf_valid(buf) != 0; }
@@ -166,6 +167,7 @@ static inline void wipe_buffer(buf_T *buf, bool aucmd) { rs_wipe_buffer(buf, auc
 static inline void buf_set_file_id(buf_T *buf) { rs_buf_set_file_id(buf); }
 static inline void fname_expand(buf_T *buf, char **ffname, char **sfname) { rs_fname_expand(buf, ffname, sfname); }
 static inline void buflist_altfpos(win_T *win) { rs_buflist_altfpos(win); }
+static inline void do_modelines(int flags) { rs_do_modelines(flags); }
 
 /// Get b:changedtick value
 ///
