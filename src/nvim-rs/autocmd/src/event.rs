@@ -1037,7 +1037,7 @@ pub unsafe extern "C" fn rs_event_name2nr(start: *const c_char) -> EventNameResu
 ///
 /// # Safety
 /// `data` must be valid for `size` bytes.
-#[no_mangle]
+#[unsafe(export_name = "event_name2nr_str")]
 pub unsafe extern "C" fn rs_event_name2nr_str(data: *const c_char, size: usize) -> c_int {
     nvim_event_name2nr(data, size)
 }
@@ -1096,7 +1096,7 @@ pub unsafe extern "C" fn rs_event_ignored(event: c_int, ei: *const c_char) -> c_
 ///
 /// # Safety
 /// `ei` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "check_ei")]
 pub unsafe extern "C" fn rs_check_ei(ei: *const c_char) -> c_int {
     let p_ei = nvim_get_p_ei();
     let win = ei != p_ei;
@@ -1139,7 +1139,7 @@ pub unsafe extern "C" fn rs_check_ei(ei: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `what` must be a valid NUL-terminated C string starting with ','.
-#[no_mangle]
+#[unsafe(export_name = "au_event_disable")]
 pub unsafe extern "C" fn rs_au_event_disable(what: *const c_char) -> *mut c_char {
     let p_ei = nvim_get_p_ei();
     let p_ei_len = c_strlen(p_ei);
@@ -1168,7 +1168,7 @@ pub unsafe extern "C" fn rs_au_event_disable(what: *const c_char) -> *mut c_char
 ///
 /// # Safety
 /// `old_ei` must be a value returned by `rs_au_event_disable`, or null.
-#[no_mangle]
+#[unsafe(export_name = "au_event_restore")]
 pub unsafe extern "C" fn rs_au_event_restore(old_ei: *mut c_char) {
     if !old_ei.is_null() {
         nvim_autocmd_set_option_eventignore(old_ei);

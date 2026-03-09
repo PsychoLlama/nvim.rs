@@ -416,7 +416,7 @@ pub extern "C" fn rs_is_valid_augroup_char(c: c_int) -> c_int {
 ///
 /// # Safety
 /// `name` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "augroup_find")]
 pub unsafe extern "C" fn rs_augroup_find(name: *const c_char) -> c_int {
     let existing_id = nvim_augroup_name_to_id(name);
     if existing_id == AUGROUP_DELETED {
@@ -435,7 +435,7 @@ pub unsafe extern "C" fn rs_augroup_find(name: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `name` must be a valid NUL-terminated C string, and must not be "end".
-#[no_mangle]
+#[unsafe(export_name = "augroup_add")]
 pub unsafe extern "C" fn rs_augroup_add(name: *const c_char) -> c_int {
     let existing_id = rs_augroup_find(name);
     if existing_id > 0 {
@@ -460,7 +460,7 @@ pub unsafe extern "C" fn rs_augroup_add(name: *const c_char) -> c_int {
 ///
 /// # Safety
 /// The returned pointer is valid as long as the group map entry exists.
-#[no_mangle]
+#[unsafe(export_name = "augroup_name")]
 pub unsafe extern "C" fn rs_augroup_name(mut group: c_int) -> *const c_char {
     if group == AUGROUP_DELETED {
         return nvim_get_deleted_augroup();

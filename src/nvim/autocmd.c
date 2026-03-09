@@ -78,19 +78,19 @@ extern win_T *rs_win_find_by_handle(int handle);
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
 
+// Rust functions still needed by remaining C wrappers/code
 extern int rs_is_autocmd_blocked(void);
-extern size_t rs_aucmd_pattern_length(const char *pat);
-extern const char *rs_aucmd_next_pattern(const char *pat, size_t patlen);
 extern int rs_aupat_is_buflocal(const char *pat, int patlen);
 extern const char *rs_event_nr2name(int event, int num_events);
 extern int rs_has_event(int event, int num_events);
 extern int rs_is_aucmd_win(win_T *win);
 extern int rs_has_cursorhold(void);
 extern int rs_trigger_cursorhold(void);
-extern int rs_aupat_get_buflocal_nr(const char *pat, int patlen);
-extern void rs_aupat_normalize_buflocal_pat(char *dest, const char *pat, int patlen,
-                                            int buflocal_nr);
 extern int rs_autocmd_supported(const char *event);
+extern int rs_augroup_exists(const char *name);
+extern bool rs_has_autocmd(int event, const char *sfname, int buf_fnum);
+extern char *rs_aucmd_handler_to_string(int event, size_t idx);
+extern void rs_aubuflocal_remove(int bufnr);
 
 // Phase 2: Event name resolution + EventIgnore
 typedef struct {
@@ -98,55 +98,15 @@ typedef struct {
   const char *end_ptr;
 } EventNameResult;
 extern EventNameResult rs_event_name2nr(const char *start);
-extern int rs_event_name2nr_str(const char *data, size_t size);
 extern int rs_event_ignored(int event, const char *ei);
-extern int rs_check_ei(const char *ei);
-extern char *rs_au_event_disable(const char *what);
-extern void rs_au_event_restore(char *old_ei);
-
-// Phase 3: Group management
-extern int rs_augroup_find(const char *name);
-extern int rs_augroup_add(const char *name);
-extern const char *rs_augroup_name(int group);
-extern int rs_augroup_exists(const char *name);
-
-// Phase 4: Autocmd deletion + cleanup
-extern void rs_aucmd_del_for_event_and_group(int event, int group);
-extern void rs_au_cleanup(void);
-extern void rs_aubuflocal_remove(int bufnr);
 
 // Phase 5: :augroup command + arg parsing
-extern void rs_do_augroup(char *arg, bool del_group);
 extern int rs_arg_augroup_get(const char **argp);
 extern const char *rs_arg_event_skip(const char *arg, bool have_group);
-extern bool rs_arg_autocmd_flag_get(bool *flag, const char **cmd_ptr, const char *pattern, int len);
-extern bool rs_check_nomodeline(const char **argp);
-
-// Phase 6: Display + Query
-extern void rs_au_show_for_event(int group, int event, const char *pat);
-extern void rs_au_show_for_all_events(int group, const char *pat);
-extern bool rs_has_autocmd(int event, const char *sfname, int buf_fnum);
-extern bool rs_au_exists(const char *arg);
-extern char *rs_aucmd_handler_to_string(int event, size_t idx);
 
 // Phase 7: :autocmd command + registration
-extern void rs_do_autocmd(void *eap, char *arg_in, int forceit);
-extern void rs_do_all_autocmd_events(const char *pat, bool once, int nested, char *cmd,
-                                     bool del, int group);
 extern int rs_do_autocmd_event(int event, const char *pat, bool once, int nested,
                                const char *cmd, bool del, int group);
-
-// Phase 8a: Simple wrappers + blocking
-extern void rs_block_autocmds(void);
-extern void rs_unblock_autocmds(void);
-extern bool rs_apply_autocmds(int event, char *fname, char *fname_io, bool force, void *buf);
-extern bool rs_apply_autocmds_exarg(int event, char *fname, char *fname_io, bool force,
-                                    void *buf, void *eap);
-extern bool rs_apply_autocmds_retval(int event, char *fname, char *fname_io, bool force,
-                                     void *buf, int *retval);
-
-// Phase 8e: Event triggers + doautocmd
-extern int rs_do_doautocmd(char *arg_start, bool do_msg, bool *did_something);
 
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
@@ -235,16 +195,6 @@ static inline const char *get_deleted_augroup(void) FUNC_ATTR_ALWAYS_INLINE
   return deleted_augroup;
 }
 
-static void au_show_for_all_events(int group, const char *pat)
-{
-  rs_au_show_for_all_events(group, pat);
-}
-
-static void au_show_for_event(int group, event_T event, const char *pat)
-{
-  rs_au_show_for_event(group, (int)event, pat);
-}
-
 // Delete autocommand.
 static void aucmd_del(AutoCmd *ac)
 {
@@ -264,18 +214,6 @@ static void aucmd_del(AutoCmd *ac)
   au_need_clean = true;
 }
 
-void aucmd_del_for_event_and_group(event_T event, int group)
-{
-  rs_aucmd_del_for_event_and_group((int)event, group);
-}
-
-/// Cleanup autocommands that have been deleted.
-/// This is only done when not executing autocommands.
-static void au_cleanup(void)
-{
-  rs_au_cleanup();
-}
-
 AutoCmdVec *au_get_autocmds_for_event(event_T event)
   FUNC_ATTR_PURE
 {
@@ -286,14 +224,6 @@ AutoCmdVec *au_get_autocmds_for_event(event_T event)
 void aubuflocal_remove(buf_T *buf)
 {
   rs_aubuflocal_remove(buf->b_fnum);
-}
-
-// Add an autocmd group name or return existing group matching name.
-// Return its ID.
-int augroup_add(const char *name)
-{
-  assert(STRICMP(name, "end") != 0);
-  return rs_augroup_add(name);
 }
 
 /// Delete the augroup that matches name.
@@ -348,23 +278,6 @@ void augroup_del(char *name, bool stupid_legacy_mode)
   au_cleanup();
 }
 
-/// Find the ID of an autocmd group name.
-///
-/// @param name augroup name
-///
-/// @return the ID or AUGROUP_ERROR (< 0) for error.
-int augroup_find(const char *name)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_augroup_find(name);
-}
-
-/// Gets the name for a particular group.
-char *augroup_name(int group)
-{
-  return (char *)rs_augroup_name(group);
-}
-
 /// Return true if augroup "name" exists.
 ///
 /// @param name augroup name
@@ -372,12 +285,6 @@ bool augroup_exists(const char *name)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return rs_augroup_exists(name) != 0;
-}
-
-/// ":augroup {name}".
-void do_augroup(char *arg, bool del_group)
-{
-  rs_do_augroup(arg, del_group);
 }
 
 #if defined(EXITFREE)
@@ -424,13 +331,6 @@ event_T event_name2nr(const char *start, char **end)
   return (event_T)result.event;
 }
 
-/// Return the event number for event name "str".
-/// Return NUM_EVENTS if the event name was not found.
-event_T event_name2nr_str(String str)
-{
-  return (event_T)rs_event_name2nr_str(str.data, str.size);
-}
-
 /// Return the name for event
 ///
 /// @param[in]  event  Event to return name for.
@@ -449,26 +349,6 @@ bool event_ignored(event_T event, char *ei)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return rs_event_ignored((int)event, ei) != 0;
-}
-
-/// Return OK when the contents of 'eventignore' or 'eventignorewin' is valid,
-/// FAIL otherwise.
-int check_ei(char *ei)
-{
-  return rs_check_ei(ei);
-}
-
-// Add "what" to 'eventignore' to skip loading syntax highlighting for every
-// buffer loaded into the window.  "what" must start with a comma.
-// Returns the old value of 'eventignore' in allocated memory.
-char *au_event_disable(char *what)
-{
-  return rs_au_event_disable(what);
-}
-
-void au_event_restore(char *old_ei)
-{
-  rs_au_event_restore(old_ei);
 }
 
 // Implements :autocmd.
@@ -503,16 +383,6 @@ void au_event_restore(char *old_ei)
 // :autocmd * *.c               show all autocommands for *.c files.
 //
 // Mostly a {group} argument can optionally appear before <event>.
-void do_autocmd(exarg_T *eap, char *arg_in, int forceit)
-{
-  rs_do_autocmd(eap, arg_in, forceit);
-}
-
-void do_all_autocmd_events(const char *pat, bool once, int nested, char *cmd, bool del, int group)
-{
-  rs_do_all_autocmd_events(pat, once, nested, cmd, del, group);
-}
-
 // do_autocmd() for one event.
 // Defines an autocmd (does not execute; cf. apply_autocmds_group).
 //
@@ -658,26 +528,6 @@ int autocmd_register(int64_t id, event_T event, const char *pat, int patlen, int
   return OK;
 }
 
-size_t aucmd_pattern_length(const char *pat)
-  FUNC_ATTR_PURE
-{
-  return rs_aucmd_pattern_length(pat);
-}
-
-const char *aucmd_next_pattern(const char *pat, size_t patlen)
-  FUNC_ATTR_PURE
-{
-  return rs_aucmd_next_pattern(pat, patlen);
-}
-
-/// Implementation of ":doautocmd [group] event [fname]".
-/// Return OK for success, FAIL for failure;
-///
-/// @param do_msg  give message for no matching autocmds?
-int do_doautocmd(char *arg_start, bool do_msg, bool *did_something)
-{
-  return rs_do_doautocmd(arg_start, do_msg, did_something);
-}
 
 // ":doautoall": execute autocommands for each loaded buffer.
 void ex_doautoall(exarg_T *eap)
@@ -731,17 +581,6 @@ void ex_doautoall(exarg_T *eap)
       do_modelines(0);
     }
   }
-}
-
-/// Check *argp for <nomodeline>.  When it is present return false, otherwise
-/// return true and advance *argp to after it. Thus do_modelines() should be
-/// called when true is returned.
-///
-/// @param[in,out] argp argument string
-bool check_nomodeline(char **argp)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_check_nomodeline((const char **)argp);
 }
 
 /// Prepare for executing autocommands for (hidden) buffer `buf`.
@@ -980,76 +819,6 @@ win_found:
   }
 }
 
-/// Execute autocommands for "event" and file name "fname".
-///
-/// @param event event that occurred
-/// @param fname filename, NULL or empty means use actual file name
-/// @param fname_io filename to use for <afile> on cmdline
-/// @param force When true, ignore autocmd_busy
-/// @param buf Buffer for <abuf>
-///
-/// @return true if some commands were executed.
-bool apply_autocmds(event_T event, char *fname, char *fname_io, bool force, buf_T *buf)
-{
-  return rs_apply_autocmds((int)event, fname, fname_io, force, buf);
-}
-
-/// Like apply_autocmds(), but with extra "eap" argument.  This takes care of
-/// setting v:filearg.
-///
-/// @param event event that occurred
-/// @param fname NULL or empty means use actual file name
-/// @param fname_io fname to use for <afile> on cmdline
-/// @param force When true, ignore autocmd_busy
-/// @param buf Buffer for <abuf>
-/// @param exarg Ex command arguments
-///
-/// @return true if some commands were executed.
-bool apply_autocmds_exarg(event_T event, char *fname, char *fname_io, bool force, buf_T *buf,
-                          exarg_T *eap)
-{
-  return rs_apply_autocmds_exarg((int)event, fname, fname_io, force, buf, eap);
-}
-
-/// Like apply_autocmds(), but handles the caller's retval.  If the script
-/// processing is being aborted or if retval is FAIL when inside a try
-/// conditional, no autocommands are executed.  If otherwise the autocommands
-/// cause the script to be aborted, retval is set to FAIL.
-///
-/// @param event event that occurred
-/// @param fname NULL or empty means use actual file name
-/// @param fname_io fname to use for <afile> on cmdline
-/// @param force When true, ignore autocmd_busy
-/// @param buf Buffer for <abuf>
-/// @param[in,out] retval caller's retval
-///
-/// @return true if some autocommands were executed
-bool apply_autocmds_retval(event_T event, char *fname, char *fname_io, bool force, buf_T *buf,
-                           int *retval)
-{
-  return rs_apply_autocmds_retval((int)event, fname, fname_io, force, buf, retval);
-}
-
-/// Return true if "event" autocommand is defined.
-///
-/// @param event the autocommand to check
-bool has_event(event_T event) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_has_event((int)event, NUM_EVENTS) != 0;
-}
-
-/// Return true when there is a CursorHold/CursorHoldI autocommand defined for
-/// the current mode.
-static bool has_cursorhold(void) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_has_cursorhold() != 0;
-}
-
-/// Return true if the CursorHold/CursorHoldI event can be triggered.
-bool trigger_cursorhold(void) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_trigger_cursorhold() != 0;
-}
 
 /// Execute autocommands for "event" and file name "fname".
 ///
@@ -1434,24 +1203,6 @@ BYPASS_AU:
   return retval;
 }
 
-// Block triggering autocommands until unblock_autocmd() is called.
-// Can be used recursively, so long as it's symmetric.
-void block_autocmds(void)
-{
-  rs_block_autocmds();
-}
-
-void unblock_autocmds(void)
-{
-  rs_unblock_autocmds();
-}
-
-bool is_autocmd_blocked(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_is_autocmd_blocked() != 0;
-}
-
 /// Find next matching autocommand.
 /// If next autocommand was not found, sets lastpat to NULL and cmdidx to SIZE_MAX on apc.
 static void aucmd_next(AutoPatCmd *apc)
@@ -1762,40 +1513,11 @@ bool autocmd_supported(const char *const event)
   return rs_autocmd_supported(event) != 0;
 }
 
-/// Return true if an autocommand is defined for a group, event and
-/// pattern:  The group can be omitted to accept any group.
-/// `event` and `pattern` can be omitted to accept any event and pattern.
-/// Buffer-local patterns <buffer> or <buffer=N> are accepted.
-/// Used for:
-///   exists("#Group") or
-///   exists("#Group#Event") or
-///   exists("#Group#Event#pat") or
-///   exists("#Event") or
-///   exists("#Event#pat")
-///
-/// @param arg autocommand string
-bool au_exists(const char *const arg)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_au_exists(arg);
-}
-
 // Checks if a pattern is buflocal
 bool aupat_is_buflocal(const char *pat, int patlen)
   FUNC_ATTR_PURE
 {
   return rs_aupat_is_buflocal(pat, patlen) != 0;
-}
-
-int aupat_get_buflocal_nr(const char *pat, int patlen)
-{
-  return rs_aupat_get_buflocal_nr(pat, patlen);
-}
-
-// normalize buffer pattern
-void aupat_normalize_buflocal_pat(char *dest, const char *pat, int patlen, int buflocal_nr)
-{
-  rs_aupat_normalize_buflocal_pat(dest, pat, patlen, buflocal_nr);
 }
 
 int autocmd_delete_event(int group, event_T event, const char *pat)
@@ -1854,12 +1576,6 @@ static char *arg_event_skip(char *arg, bool have_group)
 static int arg_augroup_get(char **argp)
 {
   return rs_arg_augroup_get((const char **)argp);
-}
-
-/// Handles grabbing arguments from `:autocmd` such as ++once and ++nested
-static bool arg_autocmd_flag_get(bool *flag, char **cmd_ptr, char *pattern, int len)
-{
-  return rs_arg_autocmd_flag_get(flag, (const char **)cmd_ptr, pattern, len);
 }
 
 /// When kFalse: VimSuspend should be triggered next.

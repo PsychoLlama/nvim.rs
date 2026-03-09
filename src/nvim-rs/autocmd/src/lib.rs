@@ -8,6 +8,7 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::must_use_candidate)]
 
 pub mod event;
 pub mod group;
@@ -173,9 +174,12 @@ extern "C" {
     fn nvim_autocmd_get_e217() -> *const c_char;
     fn nvim_autocmd_smsg_no_matching(arg_start: *const c_char);
 
-    // Rust functions from other modules (called via FFI)
+    // Rust functions from group module (exported under C names)
+    #[link_name = "augroup_find"]
     fn rs_augroup_find(name: *const c_char) -> c_int;
+    #[link_name = "augroup_add"]
     fn rs_augroup_add(name: *const c_char) -> c_int;
+    #[link_name = "augroup_name"]
     fn rs_augroup_name(group: c_int) -> *const c_char;
 }
 
@@ -217,6 +221,31 @@ pub unsafe extern "C" fn rs_has_event(event: c_int, num_events: c_int) -> c_int 
     } else {
         0
     }
+}
+
+/// Single-arg version of has_event exported under the C name `has_event`.
+/// Uses the global NUM_EVENTS constant.
+#[unsafe(export_name = "has_event")]
+pub unsafe extern "C" fn rs_has_event_c(event: c_int) -> c_int {
+    rs_has_event(event, NUM_EVENTS)
+}
+
+/// Exported as `is_autocmd_blocked` for C callers.
+#[unsafe(export_name = "is_autocmd_blocked")]
+pub unsafe extern "C" fn rs_is_autocmd_blocked_c() -> c_int {
+    rs_is_autocmd_blocked()
+}
+
+/// Exported as `trigger_cursorhold` for C callers.
+#[unsafe(export_name = "trigger_cursorhold")]
+pub unsafe extern "C" fn rs_trigger_cursorhold_c() -> c_int {
+    rs_trigger_cursorhold()
+}
+
+/// Exported as `has_cursorhold` for C callers.
+#[unsafe(export_name = "has_cursorhold")]
+pub unsafe extern "C" fn rs_has_cursorhold_c() -> c_int {
+    rs_has_cursorhold()
 }
 
 /// Internal helper to check if an event has autocommands.
@@ -291,7 +320,7 @@ pub unsafe extern "C" fn rs_is_aucmd_win(win: WinHandle) -> c_int {
 ///
 /// # Safety
 /// `pat` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "aucmd_pattern_length")]
 pub unsafe extern "C" fn rs_aucmd_pattern_length(pat: *const c_char) -> usize {
     if pat.is_null() {
         return 0;
@@ -359,7 +388,7 @@ pub unsafe extern "C" fn rs_aucmd_pattern_length(pat: *const c_char) -> usize {
 /// # Safety
 /// `pat` must be a valid pointer within a NUL-terminated C string, and
 /// `patlen` must not exceed the remaining length of the string.
-#[no_mangle]
+#[unsafe(export_name = "aucmd_next_pattern")]
 pub unsafe extern "C" fn rs_aucmd_next_pattern(pat: *const c_char, patlen: usize) -> *const c_char {
     let mut p = pat.add(patlen);
     if *p == b',' as c_char {
@@ -410,7 +439,7 @@ pub unsafe extern "C" fn rs_aupat_is_buflocal(pat: *const c_char, patlen: c_int)
 /// # Safety
 /// `pat` must be a valid pointer to at least `patlen` bytes.
 /// The pattern must be buffer-local (caller asserts this).
-#[no_mangle]
+#[unsafe(export_name = "aupat_get_buflocal_nr")]
 pub unsafe extern "C" fn rs_aupat_get_buflocal_nr(pat: *const c_char, patlen: c_int) -> c_int {
     let patlen = patlen as usize;
 
@@ -463,7 +492,7 @@ pub unsafe extern "C" fn rs_aupat_get_buflocal_nr(pat: *const c_char, patlen: c_
 /// # Safety
 /// `dest` must be a valid writable pointer to at least `BUFLOCAL_PAT_LEN` bytes.
 /// `pat` must be a valid pointer to at least `patlen` bytes.
-#[no_mangle]
+#[unsafe(export_name = "aupat_normalize_buflocal_pat")]
 pub unsafe extern "C" fn rs_aupat_normalize_buflocal_pat(
     dest: *mut c_char,
     _pat: *const c_char,
@@ -493,7 +522,7 @@ pub unsafe extern "C" fn rs_aupat_normalize_buflocal_pat(
 ///
 /// # Safety
 /// `event` must be a valid event number (0..NUM_EVENTS).
-#[no_mangle]
+#[unsafe(export_name = "aucmd_del_for_event_and_group")]
 pub unsafe extern "C" fn rs_aucmd_del_for_event_and_group(event: c_int, group: c_int) {
     let size = nvim_get_autocmds_count(event);
     for i in 0..size {
@@ -507,7 +536,7 @@ pub unsafe extern "C" fn rs_aucmd_del_for_event_and_group(event: c_int, group: c
 
 /// Cleanup autocommands that have been deleted.
 /// Only runs when not executing autocommands and cleanup is needed.
-#[no_mangle]
+#[unsafe(export_name = "au_cleanup")]
 pub unsafe extern "C" fn rs_au_cleanup() {
     if nvim_get_autocmd_busy() || nvim_get_au_need_clean() == 0 {
         return;
@@ -559,7 +588,7 @@ pub unsafe extern "C" fn rs_aubuflocal_remove(bufnr: c_int) {
 ///
 /// # Safety
 /// `arg` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "do_augroup")]
 pub unsafe extern "C" fn rs_do_augroup(arg: *mut c_char, del_group: bool) {
     if del_group {
         if *arg == 0 {
@@ -664,7 +693,7 @@ pub unsafe extern "C" fn rs_arg_event_skip(arg: *const c_char, have_group: bool)
 ///
 /// # Safety
 /// All pointers must be valid.
-#[no_mangle]
+#[unsafe(export_name = "arg_autocmd_flag_get")]
 pub unsafe extern "C" fn rs_arg_autocmd_flag_get(
     flag: *mut bool,
     cmd_ptr: *mut *const c_char,
@@ -702,7 +731,7 @@ pub unsafe extern "C" fn rs_arg_autocmd_flag_get(
 ///
 /// # Safety
 /// `argp` must be a valid pointer to a `*const c_char`.
-#[no_mangle]
+#[unsafe(export_name = "check_nomodeline")]
 pub unsafe extern "C" fn rs_check_nomodeline(argp: *mut *const c_char) -> bool {
     let arg = *argp;
     let marker = b"<nomodeline>";
@@ -795,7 +824,7 @@ unsafe fn c_strncmp(a: *const c_char, b: *const c_char, len: usize) -> bool {
 ///
 /// # Safety
 /// `pat` must be a valid NUL-terminated C string (or empty string).
-#[no_mangle]
+#[unsafe(export_name = "au_show_for_event")]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_au_show_for_event(group: c_int, event: c_int, pat: *const c_char) {
     // Return early if there are no autocmds for this event
@@ -1030,7 +1059,7 @@ unsafe fn format_desc_only(msg: *mut c_char, msglen: usize, desc: *const c_char)
 ///
 /// # Safety
 /// `pat` must be a valid NUL-terminated C string (or empty string).
-#[no_mangle]
+#[unsafe(export_name = "au_show_for_all_events")]
 pub unsafe extern "C" fn rs_au_show_for_all_events(group: c_int, pat: *const c_char) {
     for event in 0..NUM_EVENTS {
         rs_au_show_for_event(group, event, pat);
@@ -1072,7 +1101,7 @@ pub unsafe extern "C" fn rs_has_autocmd(
 ///
 /// # Safety
 /// `arg` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "au_exists")]
 pub unsafe extern "C" fn rs_au_exists(arg: *const c_char) -> bool {
     // Make a copy so we can modify '#' to NUL
     let arg_save = nvim_autocmd_xstrdup(arg);
@@ -1201,7 +1230,7 @@ unsafe fn strnicmp_prefix_8(s: *const c_char, prefix: &[u8; 8]) -> bool {
 ///
 /// # Safety
 /// `event` and `idx` must be valid.
-#[no_mangle]
+#[no_mangle] // keep rs_ name since it's internal
 pub unsafe extern "C" fn rs_aucmd_handler_to_string(event: c_int, idx: usize) -> *mut c_char {
     nvim_autocmd_get_handler_str(event, idx)
 }
@@ -1214,7 +1243,7 @@ pub unsafe extern "C" fn rs_aucmd_handler_to_string(event: c_int, idx: usize) ->
 ///
 /// # Safety
 /// `eap` must be a valid `exarg_T*`, `arg_in` must be a valid NUL-terminated mutable string.
-#[no_mangle]
+#[unsafe(export_name = "do_autocmd")]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_do_autocmd(eap: *mut c_void, arg_in: *mut c_char, forceit: c_int) {
     let mut arg = arg_in;
@@ -1342,7 +1371,7 @@ pub unsafe extern "C" fn rs_do_autocmd(eap: *mut c_void, arg_in: *mut c_char, fo
 ///
 /// # Safety
 /// All pointers must be valid NUL-terminated strings.
-#[no_mangle]
+#[unsafe(export_name = "do_all_autocmd_events")]
 pub unsafe extern "C" fn rs_do_all_autocmd_events(
     pat: *const c_char,
     once: bool,
@@ -1435,7 +1464,7 @@ pub unsafe extern "C" fn rs_do_autocmd_event(
 
 /// Block triggering autocommands until `unblock_autocmds` is called.
 /// Can be used recursively, so long as it's symmetric.
-#[no_mangle]
+#[unsafe(export_name = "block_autocmds")]
 pub unsafe extern "C" fn rs_block_autocmds() {
     // Remember the value of v:termresponse.
     if rs_is_autocmd_blocked() == 0 {
@@ -1446,7 +1475,7 @@ pub unsafe extern "C" fn rs_block_autocmds() {
 
 /// Unblock autocommands. When v:termresponse was set while autocommands
 /// were blocked, trigger the autocommands now.
-#[no_mangle]
+#[unsafe(export_name = "unblock_autocmds")]
 pub unsafe extern "C" fn rs_unblock_autocmds() {
     nvim_autocmd_dec_blocked();
 
@@ -1467,7 +1496,7 @@ pub unsafe extern "C" fn rs_unblock_autocmds() {
 }
 
 /// Execute autocommands for "event" and file name "fname".
-#[no_mangle]
+#[unsafe(export_name = "apply_autocmds")]
 pub unsafe extern "C" fn rs_apply_autocmds(
     event: c_int,
     fname: *mut c_char,
@@ -1488,7 +1517,7 @@ pub unsafe extern "C" fn rs_apply_autocmds(
 }
 
 /// Like `apply_autocmds`, but with extra "eap" argument.
-#[no_mangle]
+#[unsafe(export_name = "apply_autocmds_exarg")]
 pub unsafe extern "C" fn rs_apply_autocmds_exarg(
     event: c_int,
     fname: *mut c_char,
@@ -1514,7 +1543,7 @@ pub unsafe extern "C" fn rs_apply_autocmds_exarg(
 /// If the script processing is being aborted or if retval is FAIL when inside
 /// a try conditional, no autocommands are executed. If otherwise the
 /// autocommands cause the script to be aborted, retval is set to FAIL.
-#[no_mangle]
+#[unsafe(export_name = "apply_autocmds_retval")]
 pub unsafe extern "C" fn rs_apply_autocmds_retval(
     event: c_int,
     fname: *mut c_char,
@@ -1558,7 +1587,7 @@ fn ends_excmd(c: u8) -> bool {
 /// Execute `:doautocmd` — trigger autocommands for a given set of events.
 ///
 /// Returns OK for success, FAIL for failure.
-#[no_mangle]
+#[unsafe(export_name = "do_doautocmd")]
 pub unsafe extern "C" fn rs_do_doautocmd(
     arg_start: *mut c_char,
     do_msg: bool,

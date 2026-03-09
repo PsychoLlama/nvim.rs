@@ -69,3 +69,35 @@ enum { BUFLOCAL_PAT_LEN = 25, };
   for (event_T event = (event_T)0; (int)event < (int)NUM_EVENTS; event = (event_T)((int)event + 1))
 
 #include "autocmd.h.generated.h"
+
+// Declarations for functions now implemented in Rust (nvim-autocmd crate).
+// These replace the C thin wrappers that were deleted in Phase 1.
+void block_autocmds(void);
+void unblock_autocmds(void);
+bool apply_autocmds(event_T event, char *fname, char *fname_io, bool force, buf_T *buf);
+bool apply_autocmds_exarg(event_T event, char *fname, char *fname_io, bool force, buf_T *buf,
+                          exarg_T *eap);
+bool apply_autocmds_retval(event_T event, char *fname, char *fname_io, bool force, buf_T *buf,
+                            int *retval);
+int do_doautocmd(char *arg, bool do_msg, bool *did_something);
+int check_ei(const char *ei);
+char *au_event_disable(const char *what);
+void au_event_restore(char *old_ei);
+bool check_nomodeline(char **argp);
+bool au_exists(const char *const arg);
+void do_autocmd(exarg_T *eap, char *arg, int forceit);
+void do_augroup(char *arg, int del_group);
+int augroup_find(const char *name);
+int augroup_add(const char *name);
+const char *augroup_name(int id);
+void au_cleanup(void);
+size_t aucmd_pattern_length(const char *pat);
+const char *aucmd_next_pattern(const char *pat, size_t patlen);
+int aupat_get_buflocal_nr(const char *pat, int patlen);
+void aupat_normalize_buflocal_pat(char *dest, const char *pat, int patlen, int buflocal_nr);
+void aucmd_del_for_event_and_group(int event, int group);
+event_T event_name2nr_str(String str);
+int has_event(event_T event);
+int is_autocmd_blocked(void);
+int trigger_cursorhold(void);
+int has_cursorhold(void);
