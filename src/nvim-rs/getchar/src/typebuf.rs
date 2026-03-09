@@ -529,7 +529,7 @@ unsafe fn increment_typebuf_change_cnt() {
 ///
 /// # Safety
 /// Calls C accessor functions and performs pointer operations.
-#[no_mangle]
+#[export_name = "del_typebuf"]
 pub unsafe extern "C" fn rs_del_typebuf(len: c_int, offset: c_int) {
     if len == 0 {
         return;
@@ -917,6 +917,31 @@ pub unsafe extern "C" fn rs_ins_typebuf(
     }
 
     OK
+}
+
+/// `ins_typebuf(char*, int, int, bool, bool)` -- Phase 2 export replacing C implementation
+///
+/// Accepts C-ABI-compatible `bool` for `nottyped` and `silent`, delegating to
+/// `rs_ins_typebuf` which uses `c_int`.
+///
+/// # Safety
+/// `str` must be a valid NUL-terminated string pointer. Calls C accessor functions.
+#[must_use]
+#[export_name = "ins_typebuf"]
+pub unsafe extern "C" fn ins_typebuf_export(
+    str: *const u8,
+    noremap: c_int,
+    offset: c_int,
+    nottyped: bool,
+    silent: bool,
+) -> c_int {
+    rs_ins_typebuf(
+        str,
+        noremap,
+        offset,
+        c_int::from(nottyped),
+        c_int::from(silent),
+    )
 }
 
 // Remap constants matching C

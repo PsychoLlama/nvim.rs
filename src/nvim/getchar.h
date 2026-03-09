@@ -53,6 +53,8 @@ void stop_redo_ins(void);
 char *get_recorded(void);
 
 // Typeahead input state
+int ins_typebuf(char *str, int noremap, int offset, bool nottyped, bool silent);
+void del_typebuf(int len, int offset);
 void typeahead_noflush(int c);
 void beep_flush(void);
 void vungetc(int c);
