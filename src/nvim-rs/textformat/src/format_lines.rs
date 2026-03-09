@@ -99,6 +99,7 @@ extern "C" {
     fn rs_set_indent(amount: c_int, flags: c_int) -> bool;
     #[link_name = "get_lisp_indent"]
     fn rs_get_lisp_indent() -> c_int;
+    #[link_name = "cindent_on"]
     fn rs_cindent_on() -> bool;
 
     // Charset crate

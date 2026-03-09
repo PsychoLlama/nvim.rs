@@ -31,8 +31,6 @@
 #include "nvim/vim_defs.h"
 
 extern const char *rs_skip_to_option_part(const char *p);
-extern bool rs_cindent_on(void);
-extern bool rs_is_pos_in_string(const char *line, int col);
 extern bool rs_cin_iscase(const char *s, bool strict);
 
 /// C accessor for p_paste global option.
@@ -132,7 +130,6 @@ int nvim_cindent_get_indent_lnum(int lnum)
   return get_indent_lnum(lnum);
 }
 
-extern bool rs_cin_is_cinword(const char *line);
 extern void rs_parse_cino(const char *cino, int sw, CindentOptions *opts);
 
 /// C accessor for curbuf->b_p_cinsd (cinscopedecls option).
@@ -235,29 +232,10 @@ pos_T *find_start_comment(int ind_maxcomment)  // XXX
   return NULL;
 }
 
-/// @returns true if "line[col]" is inside a C string.
-int is_pos_in_string(const char *line, colnr_T col)
-{
-  return rs_is_pos_in_string(line, (int)col);
-}
-
 // Functions for C-indenting.
 // Most of this originally comes from Eric Fischer.
 
 // Below "XXX" means that this function may unlock the current line.
-
-/// @return  true if the string "line" starts with a word from 'cinwords'.
-bool cin_is_cinword(const char *line)
-{
-  return rs_cin_is_cinword(line);
-}
-
-/// Check that C-indenting is on.
-bool cindent_on(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_cindent_on();
-}
 
 /// Recognize a switch label: "case .*:" or "default:".
 ///

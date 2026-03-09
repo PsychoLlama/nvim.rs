@@ -56,3 +56,10 @@ typedef struct {
 } CindentOptions;
 
 #include "indent_c.h.generated.h"
+
+// Functions implemented in Rust (src/nvim-rs/indent_c/src/lib.rs and indent/src/lib.rs).
+// These are exported directly from Rust via #[export_name]; declarations kept here
+// so C callers don't need to change.
+int is_pos_in_string(const char *line, colnr_T col);
+bool cin_is_cinword(const char *line);
+bool cindent_on(void);

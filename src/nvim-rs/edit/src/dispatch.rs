@@ -1118,6 +1118,7 @@ extern "C" {
     fn nvim_edit_set_restart_edit(val: c_int);
     fn nvim_get_p_ari() -> c_int;
     fn rs_compl_status_local() -> c_int;
+    #[link_name = "cindent_on"]
     fn rs_cindent_on() -> bool;
     #[link_name = "xfree"]
     fn xfree_void(ptr: *mut c_void);

@@ -123,7 +123,7 @@ pub unsafe extern "C" fn rs_emsg_text_too_long() {
 ///
 /// # Safety
 /// Calls C accessor functions for global state.
-#[no_mangle]
+#[export_name = "cindent_on"]
 pub unsafe extern "C" fn rs_cindent_on() -> bool {
     nvim_get_p_paste() == 0
         && (nvim_curbuf_get_p_cin() != 0 || nvim_curbuf_get_inde_nonempty() != 0)

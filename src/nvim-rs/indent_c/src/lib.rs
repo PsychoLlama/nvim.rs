@@ -529,10 +529,11 @@ pub unsafe extern "C" fn rs_skip_string(p: *const c_char) -> *const c_char {
 /// # Safety
 /// - `line` must point to a valid null-terminated C string.
 /// - `col` must be a valid column within the line.
-#[no_mangle]
-pub unsafe extern "C" fn rs_is_pos_in_string(line: *const c_char, col: c_int) -> bool {
+#[export_name = "is_pos_in_string"]
+#[allow(clippy::must_use_candidate)]
+pub unsafe extern "C" fn rs_is_pos_in_string(line: *const c_char, col: c_int) -> c_int {
     if line.is_null() {
-        return false;
+        return 0;
     }
 
     let mut p = line;
@@ -542,7 +543,7 @@ pub unsafe extern "C" fn rs_is_pos_in_string(line: *const c_char, col: c_int) ->
             p = p.add(1);
         }
     }
-    (p.offset_from(line) as c_int) > col
+    c_int::from((p.offset_from(line) as c_int) > col)
 }
 
 // ============================================================================
@@ -2630,7 +2631,8 @@ pub unsafe extern "C" fn rs_cin_isinit(line: *const c_char) -> bool {
 ///
 /// # Safety
 /// `line` must be a valid null-terminated C string. Calls FFI accessors.
-#[no_mangle]
+#[export_name = "cin_is_cinword"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_cin_is_cinword(line: *const c_char) -> bool {
     if line.is_null() {
         return false;
@@ -2693,7 +2695,7 @@ pub unsafe extern "C" fn rs_find_start_comment(ind_maxcomment: c_int) -> FindMat
 
         // Check if the comment start is inside a string.
         let line = nvim_cindent_ml_get(result.lnum);
-        if !rs_is_pos_in_string(line, result.col) {
+        if rs_is_pos_in_string(line, result.col) == 0 {
             return result;
         }
 
@@ -2721,7 +2723,7 @@ pub unsafe extern "C" fn rs_find_start_rawstring(ind_maxcomment: c_int) -> FindM
         }
 
         let line = nvim_cindent_ml_get(result.lnum);
-        if !rs_is_pos_in_string(line, result.col) {
+        if rs_is_pos_in_string(line, result.col) == 0 {
             return result;
         }
 
