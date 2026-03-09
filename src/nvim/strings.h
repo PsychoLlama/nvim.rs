@@ -59,6 +59,31 @@ char *strrep(const char *src, const char *what, const char *rep);
 char *vim_strsave_shellescape(const char *string, bool do_special, bool do_newline)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL;
 
+// Rust-implemented VimL string functions (f_* exported via #[export_name])
+void f_byteidx(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_byteidxcomp(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_charidx(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_str2list(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_str2nr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_strgetchar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_stridx(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_string(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_strlen(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_strcharlen(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_strchars(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_strutf16len(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_strdisplaywidth(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_strwidth(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_strcharpart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_strpart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_strridx(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_strtrans(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_utf16idx(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_tolower(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_toupper(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_tr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_trim(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 /// Append string to string and return pointer to the next byte
 ///
 /// Unlike strcat, this one does *not* add NUL byte and returns pointer to the

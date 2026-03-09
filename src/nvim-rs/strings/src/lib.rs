@@ -23,6 +23,8 @@
 #![allow(clippy::borrow_as_ptr)]
 #![allow(clippy::items_after_statements)]
 
+pub mod viml;
+
 use std::ffi::{c_char, c_int};
 
 /// Convert ASCII uppercase to lowercase.
