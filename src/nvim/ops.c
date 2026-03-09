@@ -621,48 +621,12 @@ static void block_insert(oparg_T *oap, const char *s, size_t slen, bool b_insert
 // op_delete C accessors for Rust migration (Phase 4)
 // ===========================================================================
 
-/// Check if buffer ML_EMPTY.
-int nvim_opd_is_ml_empty(void)
-{
-  return (curbuf->b_ml.ml_flags & ML_EMPTY) ? 1 : 0;
-}
-
-/// Check if oap->empty.
-int nvim_opd_is_oap_empty(oparg_T *oap)
-{
-  return oap->empty ? 1 : 0;
-}
-
-/// u_save_cursor wrapper.
-int nvim_opd_u_save_cursor(void)
-{
-  return u_save_cursor();
-}
-
-/// Check if buffer is modifiable.
-int nvim_opd_is_modifiable(void)
-{
-  return MODIFIABLE(curbuf) ? 1 : 0;
-}
-
-/// Emit error message for non-modifiable buffer.
-void nvim_opd_emsg_modifiable(void)
-{
-  emsg(_(e_modifiable));
-}
-
 /// Setup visual select register.
 void nvim_opd_setup_visual_reg(oparg_T *oap)
 {
   if (VIsual_select && oap->is_VIsual) {
     oap->regname = VIsual_select_reg;
   }
-}
-
-/// Get motion type from oap.
-int nvim_opd_get_motion_type(oparg_T *oap)
-{
-  return (int)oap->motion_type;
 }
 
 /// Adjust multi-byte opend for delete.

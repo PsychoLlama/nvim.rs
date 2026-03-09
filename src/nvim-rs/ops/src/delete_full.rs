@@ -10,43 +10,25 @@ const K_MT_BLOCK_WISE: c_int = 2;
 const K_MT_LINE_WISE: c_int = 1;
 
 extern "C" {
-    // Early checks
-    fn nvim_opd_is_ml_empty() -> c_int;
-    fn nvim_opd_is_oap_empty(oap: *mut c_void) -> c_int;
-    fn nvim_opd_u_save_cursor() -> c_int;
-    fn nvim_opd_is_modifiable() -> c_int;
-    fn nvim_opd_emsg_modifiable();
+    // Generic buffer/undo accessors (reuse existing C shims)
+    fn nvim_curbuf_ml_empty() -> bool;
+    fn nvim_oap_get_empty(oap: *const c_void) -> c_int;
+    fn nvim_u_save_cursor() -> c_int;
+    fn nvim_curbuf_is_modifiable() -> bool;
+    fn nvim_emsg_modifiable();
+    fn nvim_oap_get_motion_type(oap: *const c_void) -> c_int;
+
+    // Complex ops: still delegated to C
     fn nvim_opd_mb_adjust_opend(oap: *mut c_void);
-    fn nvim_opd_get_motion_type(oap: *mut c_void) -> c_int;
-
-    // Visual select register
     fn nvim_opd_setup_visual_reg(oap: *mut c_void);
-
-    // Charwise-to-linewise promotion check
     fn nvim_opd_maybe_promote_to_linewise(oap: *mut c_void);
-
-    // Empty line check (returns 1 if should return OK, 2 if should goto setmarks)
     fn nvim_opd_check_empty_line(oap: *mut c_void) -> c_int;
-
-    // Yank/register handling
     fn nvim_opd_do_yank_and_registers(oap: *mut c_void) -> c_int;
-
-    // Block mode delete
     fn nvim_opd_block_delete(oap: *mut c_void) -> c_int;
-
-    // Linewise delete
     fn nvim_opd_linewise_delete(oap: *mut c_void) -> c_int;
-
-    // Charwise delete
     fn nvim_opd_charwise_delete(oap: *mut c_void) -> c_int;
-
-    // Finish: msgmore + setmarks
     fn nvim_opd_finish(oap: *mut c_void, old_lcount: c_int);
-
-    // Setmarks only (for goto setmarks case)
     fn nvim_opd_setmarks(oap: *mut c_void);
-
-    // Get old line count for msgmore
     fn nvim_opd_get_ml_line_count() -> c_int;
 }
 
@@ -57,16 +39,16 @@ extern "C" {
 /// - Accesses global state via C accessors
 #[unsafe(export_name = "op_delete")]
 pub unsafe extern "C" fn rs_op_delete(oap: *mut c_void) -> c_int {
-    if nvim_opd_is_ml_empty() != 0 {
+    if nvim_curbuf_ml_empty() {
         return OK;
     }
 
-    if nvim_opd_is_oap_empty(oap) != 0 {
-        return nvim_opd_u_save_cursor();
+    if nvim_oap_get_empty(oap) != 0 {
+        return nvim_u_save_cursor();
     }
 
-    if nvim_opd_is_modifiable() == 0 {
-        nvim_opd_emsg_modifiable();
+    if !nvim_curbuf_is_modifiable() {
+        nvim_emsg_modifiable();
         return FAIL;
     }
 
@@ -95,7 +77,7 @@ pub unsafe extern "C" fn rs_op_delete(oap: *mut c_void) -> c_int {
     // yank_result == 1 means proceed normally
 
     let old_lcount = nvim_opd_get_ml_line_count();
-    let motion_type = nvim_opd_get_motion_type(oap);
+    let motion_type = nvim_oap_get_motion_type(oap);
 
     let result = if motion_type == K_MT_BLOCK_WISE {
         nvim_opd_block_delete(oap)
