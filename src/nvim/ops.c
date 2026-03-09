@@ -172,22 +172,16 @@ void op_shift(oparg_T *oap, bool curs_top, int amount)
   changed_lines(curbuf, oap->start.lnum, 0, oap->end.lnum + 1, 0, true);
 }
 
-/// Return the tabstop width at the index of the variable tabstop array.  If an
-/// index greater than the length of the array is given, the last tabstop width
-/// in the array is returned.
+/// Return the tabstop width at the given index of the variable tabstop array.
 static int get_vts(const int *vts_array, int index)
 {
-  int ts;
-
   if (index < 1) {
-    ts = 0;
+    return 0;
   } else if (index <= vts_array[0]) {
-    ts = vts_array[index];
+    return vts_array[index];
   } else {
-    ts = vts_array[vts_array[0]];
+    return vts_array[vts_array[0]];
   }
-
-  return ts;
 }
 
 /// Return the sum of all the tabstops through the index-th.
@@ -195,34 +189,13 @@ static int get_vts_sum(const int *vts_array, int index)
 {
   int sum = 0;
   int i;
-
-  // Perform the summation for indices within the actual array.
   for (i = 1; i <= index && i <= vts_array[0]; i++) {
     sum += vts_array[i];
   }
-
-  // Add tabstops whose indices exceed the actual array.
   if (i <= index) {
     sum += vts_array[vts_array[0]] * (index - vts_array[0]);
   }
-
   return sum;
-}
-
-// =============================================================================
-// Rust FFI accessor functions for variable tabstops
-// =============================================================================
-
-/// FFI wrapper for get_vts - used by Rust shift module.
-int nvim_get_vts(const int *vts_array, int index)
-{
-  return get_vts(vts_array, index);
-}
-
-/// FFI wrapper for get_vts_sum - used by Rust shift module.
-int nvim_get_vts_sum(const int *vts_array, int index)
-{
-  return get_vts_sum(vts_array, index);
 }
 
 /// @param left    true if shift is to the left

@@ -10,13 +10,47 @@ use std::ffi::c_int;
 // Variable Tabstop FFI Functions
 // =============================================================================
 
-extern "C" {
-    /// Get the tabstop width at a given index in the vartabstop array.
-    /// If index > array length, returns the last tabstop width.
-    fn nvim_get_vts(vts_array: *const c_int, index: c_int) -> c_int;
+/// Get the tabstop width at a given index in the vartabstop array.
+///
+/// This is a Rust reimplementation of `get_vts` from ops.c.
+/// If `index < 1`, returns 0. If `index > array_len`, returns the last element.
+///
+/// # Safety
+/// `vts_array` must be non-null and valid; `vts_array[0]` is the length.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn get_vts(vts_array: *const c_int, index: c_int) -> c_int {
+    if index < 1 {
+        return 0;
+    }
+    let len = *vts_array; // vts_array[0] is the length
+    if index <= len {
+        *vts_array.add(index as usize)
+    } else {
+        *vts_array.add(len as usize)
+    }
+}
 
-    /// Get the sum of all tabstops through the index-th.
-    fn nvim_get_vts_sum(vts_array: *const c_int, index: c_int) -> c_int;
+/// Get the sum of all tabstops through the index-th.
+///
+/// This is a Rust reimplementation of `get_vts_sum` from ops.c.
+///
+/// # Safety
+/// `vts_array` must be non-null and valid; `vts_array[0]` is the length.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn get_vts_sum(vts_array: *const c_int, index: c_int) -> c_int {
+    let len = *vts_array; // vts_array[0] is the length
+    let mut sum: c_int = 0;
+    let mut i: c_int = 1;
+    // Sum entries within the actual array
+    while i <= index && i <= len {
+        sum += *vts_array.add(i as usize);
+        i += 1;
+    }
+    // Add repeated last entry for indices beyond the array
+    if i <= index {
+        sum += *vts_array.add(len as usize) * (index - len);
+    }
+    sum
 }
 
 // =============================================================================
@@ -112,7 +146,7 @@ pub unsafe fn calc_new_vts_indent(
     // Find the tabstop at or to the left of the current indent.
     loop {
         vtsi += 1;
-        ts = nvim_get_vts(vts_array, vtsi);
+        ts = get_vts(vts_array, vtsi);
         vts_indent += i64::from(ts);
         if vts_indent > current_indent {
             break;
@@ -127,21 +161,21 @@ pub unsafe fn calc_new_vts_indent(
     let indent = if round {
         if left {
             if offset == 0 {
-                i64::from(nvim_get_vts_sum(vts_array, vtsi - amount))
+                i64::from(get_vts_sum(vts_array, vtsi - amount))
             } else {
-                i64::from(nvim_get_vts_sum(vts_array, vtsi - (amount - 1)))
+                i64::from(get_vts_sum(vts_array, vtsi - (amount - 1)))
             }
         } else {
-            i64::from(nvim_get_vts_sum(vts_array, vtsi + amount))
+            i64::from(get_vts_sum(vts_array, vtsi + amount))
         }
     } else if left {
         if amount > vtsi {
             0
         } else {
-            i64::from(nvim_get_vts_sum(vts_array, vtsi - amount)) + offset
+            i64::from(get_vts_sum(vts_array, vtsi - amount)) + offset
         }
     } else {
-        i64::from(nvim_get_vts_sum(vts_array, vtsi + amount)) + offset
+        i64::from(get_vts_sum(vts_array, vtsi + amount)) + offset
     };
 
     indent.max(0)
