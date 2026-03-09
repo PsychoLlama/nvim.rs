@@ -17,6 +17,7 @@ pub mod mode;
 pub mod movement;
 pub mod replace;
 pub mod state;
+pub mod tab;
 pub mod undo;
 
 use std::ffi::{c_char, c_int};

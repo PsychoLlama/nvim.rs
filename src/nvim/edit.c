@@ -305,8 +305,8 @@ extern int rs_ins_start_select(int c);
 extern void rs_ins_ctrl_g(void);
 extern void rs_ins_shift(int c, int lastc);
 extern void rs_ins_del(void);
-// Editing module exports (Phase 5)
-extern int rs_ins_eol(int c);
+// Tab and EOL module exports (Phase 1)
+// ins_tab and ins_eol are now exported directly by Rust and declared in edit.h
 extern void rs_ins_ctrl_v(void);
 extern int rs_ins_copychar(linenr_T lnum);
 extern int rs_ins_ctrl_ey(int tc);
@@ -4368,235 +4368,8 @@ static void ins_pagedown(void)
   rs_ins_pagedown();
 }
 
-/// Handle TAB in Insert or Replace mode.
-///
-/// @return true when the TAB needs to be inserted like a normal character.
-static bool ins_tab(void)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  int temp;
-
-  if (Insstart_blank_vcol == MAXCOL && curwin->w_cursor.lnum == Insstart.lnum) {
-    Insstart_blank_vcol = get_nolist_virtcol();
-  }
-  if (echeck_abbr(TAB + ABBR_OFF)) {
-    return false;
-  }
-
-  bool ind = inindent(0);
-  if (ind) {
-    can_cindent = false;
-  }
-
-  // When nothing special, insert TAB like a normal character.
-  if (!curbuf->b_p_et
-      && !(
-           p_sta
-           && ind
-           // These five lines mean 'tabstop' != 'shiftwidth'
-           && ((tabstop_count(curbuf->b_p_vts_array) > 1)
-               || (tabstop_count(curbuf->b_p_vts_array) == 1
-                   && tabstop_first(curbuf->b_p_vts_array)
-                   != get_sw_value(curbuf))
-               || (tabstop_count(curbuf->b_p_vts_array) == 0
-                   && curbuf->b_p_ts != get_sw_value(curbuf))))
-      && tabstop_count(curbuf->b_p_vsts_array) == 0 && get_sts_value() == 0) {
-    return true;
-  }
-
-  if (stop_arrow() == FAIL) {
-    return true;
-  }
-
-  did_ai = false;
-  did_si = false;
-  can_si = false;
-  can_si_back = false;
-  AppendToRedobuff("\t");
-
-  if (p_sta && ind) {  // insert tab in indent, use 'shiftwidth'
-    temp = get_sw_value(curbuf);
-    temp -= get_nolist_virtcol() % temp;
-  } else if (tabstop_count(curbuf->b_p_vsts_array) > 0
-             || curbuf->b_p_sts != 0) {
-    // use 'softtabstop' when set
-    temp = tabstop_padding(get_nolist_virtcol(),
-                           get_sts_value(),
-                           curbuf->b_p_vsts_array);
-  } else {
-    // otherwise use 'tabstop'
-    temp = tabstop_padding(get_nolist_virtcol(),
-                           curbuf->b_p_ts,
-                           curbuf->b_p_vts_array);
-  }
-
-  // Insert the first space with ins_char().    It will delete one char in
-  // replace mode.  Insert the rest with ins_str(); it will not delete any
-  // chars.  For MODE_VREPLACE state, we use ins_char() for all characters.
-  ins_char(' ');
-  while (--temp > 0) {
-    if (State & VREPLACE_FLAG) {
-      ins_char(' ');
-    } else {
-      ins_str(S_LEN(" "));
-      if (State & REPLACE_FLAG) {            // no char replaced
-        replace_push_nul();
-      }
-    }
-  }
-
-  // When 'expandtab' not set: Replace spaces by TABs where possible.
-  if (!curbuf->b_p_et && (tabstop_count(curbuf->b_p_vsts_array) > 0
-                          || get_sts_value() > 0
-                          || (p_sta && ind))) {
-    char *ptr;
-    char *saved_line = NULL;         // init for GCC
-    pos_T pos;
-    pos_T *cursor;
-    colnr_T want_vcol, vcol;
-    int change_col = -1;
-    int save_list = curwin->w_p_list;
-
-    // Get the current line.  For MODE_VREPLACE state, don't make real
-    // changes yet, just work on a copy of the line.
-    if (State & VREPLACE_FLAG) {
-      pos = curwin->w_cursor;
-      cursor = &pos;
-      saved_line = xstrnsave(get_cursor_line_ptr(), (size_t)get_cursor_line_len());
-      ptr = saved_line + pos.col;
-    } else {
-      ptr = get_cursor_pos_ptr();
-      cursor = &curwin->w_cursor;
-    }
-
-    // When 'L' is not in 'cpoptions' a tab always takes up 'ts' spaces.
-    if (vim_strchr(p_cpo, CPO_LISTWM) == NULL) {
-      curwin->w_p_list = false;
-    }
-
-    // Find first white before the cursor
-    pos_T fpos = curwin->w_cursor;
-    while (fpos.col > 0 && ascii_iswhite(ptr[-1])) {
-      fpos.col--;
-      ptr--;
-    }
-
-    // In Replace mode, don't change characters before the insert point.
-    if ((State & REPLACE_FLAG)
-        && fpos.lnum == Insstart.lnum
-        && fpos.col < Insstart.col) {
-      ptr += Insstart.col - fpos.col;
-      fpos.col = Insstart.col;
-    }
-
-    // compute virtual column numbers of first white and cursor
-    getvcol(curwin, &fpos, &vcol, NULL, NULL);
-    getvcol(curwin, cursor, &want_vcol, NULL, NULL);
-
-    char *tab = "\t";
-    int32_t tab_v = (uint8_t)(*tab);
-
-    CharsizeArg csarg;
-    CSType cstype = init_charsize_arg(&csarg, curwin, 0, tab);
-
-    // Use as many TABs as possible.  Beware of 'breakindent', 'showbreak'
-    // and 'linebreak' adding extra virtual columns.
-    while (ascii_iswhite(*ptr)) {
-      int i = win_charsize(cstype, vcol, tab, tab_v, &csarg).width;
-      if (vcol + i > want_vcol) {
-        break;
-      }
-      if (*ptr != TAB) {
-        *ptr = TAB;
-        if (change_col < 0) {
-          change_col = fpos.col;            // Column of first change
-          // May have to adjust Insstart
-          if (fpos.lnum == Insstart.lnum && fpos.col < Insstart.col) {
-            Insstart.col = fpos.col;
-          }
-        }
-      }
-      fpos.col++;
-      ptr++;
-      vcol += i;
-    }
-
-    if (change_col >= 0) {
-      int repl_off = 0;
-      // Skip over the spaces we need.
-      cstype = init_charsize_arg(&csarg, curwin, 0, ptr);
-      while (vcol < want_vcol && *ptr == ' ') {
-        vcol += win_charsize(cstype, vcol, ptr, (uint8_t)(' '), &csarg).width;
-        ptr++;
-        repl_off++;
-      }
-
-      if (vcol > want_vcol) {
-        // Must have a char with 'showbreak' just before it.
-        ptr--;
-        repl_off--;
-      }
-      fpos.col += repl_off;
-
-      // Delete following spaces.
-      int i = cursor->col - fpos.col;
-      if (i > 0) {
-        if (!(State & VREPLACE_FLAG)) {
-          char *newp = xmalloc((size_t)(curbuf->b_ml.ml_line_len - i));
-          ptrdiff_t col = ptr - curbuf->b_ml.ml_line_ptr;
-          if (col > 0) {
-            memmove(newp, ptr - col, (size_t)col);
-          }
-          memmove(newp + col, ptr + i, (size_t)(curbuf->b_ml.ml_line_len - col - i));
-          if (curbuf->b_ml.ml_flags & (ML_LINE_DIRTY | ML_ALLOCATED)) {
-            xfree(curbuf->b_ml.ml_line_ptr);
-          }
-          curbuf->b_ml.ml_line_ptr = newp;
-          curbuf->b_ml.ml_line_len -= i;
-          curbuf->b_ml.ml_flags = (curbuf->b_ml.ml_flags | ML_LINE_DIRTY) & ~ML_EMPTY;
-          inserted_bytes(fpos.lnum, change_col,
-                         cursor->col - change_col, fpos.col - change_col);
-        } else {
-          STRMOVE(ptr, ptr + i);
-        }
-        // correct replace stack.
-        if ((State & REPLACE_FLAG) && !(State & VREPLACE_FLAG)) {
-          for (temp = i; --temp >= 0;) {
-            replace_join(repl_off);
-          }
-        }
-      }
-      cursor->col -= i;
-
-      // In MODE_VREPLACE state, we haven't changed anything yet.  Do it
-      // now by backspacing over the changed spacing and then inserting
-      // the new spacing.
-      if (State & VREPLACE_FLAG) {
-        // Backspace from real cursor to change_col
-        backspace_until_column(change_col);
-
-        // Insert each char in saved_line from changed_col to
-        // ptr-cursor
-        ins_bytes_len(saved_line + change_col, (size_t)(cursor->col - change_col));
-      }
-    }
-
-    if (State & VREPLACE_FLAG) {
-      xfree(saved_line);
-    }
-    curwin->w_p_list = save_list;
-  }
-
-  return false;
-}
-
-/// Handle CR or NL in insert mode.
-///
-/// @return false when it can't undo.
-bool ins_eol(int c)
-{
-  return rs_ins_eol(c) != 0;
-}
+// ins_tab is now implemented in Rust (src/nvim-rs/edit/src/tab.rs).
+// ins_eol delegates to Rust rs_ins_eol (symbol exported directly).
 
 // Handle digraph in insert mode.
 // Returns character still to be inserted, or NUL when nothing remaining to be
@@ -4697,3 +4470,190 @@ void nvim_set_dollar_vcol(colnr_T val)
 {
   dollar_vcol = val;
 }
+
+// =============================================================================
+// Phase 1: ins_tab accessors
+// (did_ai, did_si, can_si, can_si_back are in change_ffi.c)
+// =============================================================================
+
+// nvim_get_p_sta is in option_shim.c
+// nvim_curbuf_get_b_p_et is in option_shim.c
+
+/// Get curbuf->b_p_sts (accessor for Rust).
+long nvim_curbuf_get_b_p_sts(void)
+{
+  return (long)curbuf->b_p_sts;
+}
+
+/// Get tabstop_count(curbuf->b_p_vts_array) (accessor for Rust).
+int nvim_curbuf_tabstop_count_vts(void)
+{
+  return (int)tabstop_count(curbuf->b_p_vts_array);
+}
+
+/// Get tabstop_count(curbuf->b_p_vsts_array) (accessor for Rust).
+int nvim_curbuf_tabstop_count_vsts(void)
+{
+  return (int)tabstop_count(curbuf->b_p_vsts_array);
+}
+
+/// Get tabstop_first(curbuf->b_p_vts_array) (accessor for Rust).
+long nvim_curbuf_tabstop_first_vts(void)
+{
+  return (long)tabstop_first(curbuf->b_p_vts_array);
+}
+
+/// Get get_sw_value(curbuf) (accessor for Rust).
+long nvim_curbuf_get_sw_value(void)
+{
+  return get_sw_value(curbuf);
+}
+
+/// Get get_sts_value() (accessor for Rust).
+long nvim_get_sts_value(void)
+{
+  return get_sts_value();
+}
+
+/// Get tabstop_padding for softtabstop (accessor for Rust).
+int nvim_curbuf_tabstop_padding_sts(void)
+{
+  return tabstop_padding(get_nolist_virtcol(), get_sts_value(), curbuf->b_p_vsts_array);
+}
+
+/// Get tabstop_padding for tabstop (accessor for Rust).
+int nvim_curbuf_tabstop_padding_ts(void)
+{
+  return tabstop_padding(get_nolist_virtcol(), curbuf->b_p_ts, curbuf->b_p_vts_array);
+}
+
+/// Replace spaces with TABs in current line (helper for Rust ins_tab).
+///
+/// This handles the complex memory manipulation part of ins_tab:
+/// the space-to-TAB replacement optimization when 'expandtab' is off.
+/// Returns false when done.
+bool nvim_edit_ins_tab_replace_spaces(bool p_sta_val, bool ind)
+{
+  char *ptr;
+  char *saved_line = NULL;
+  pos_T pos;
+  pos_T *cursor;
+  colnr_T want_vcol, vcol;
+  int change_col = -1;
+  int temp = 0;
+  int save_list = curwin->w_p_list;
+
+  if (State & VREPLACE_FLAG) {
+    pos = curwin->w_cursor;
+    cursor = &pos;
+    saved_line = xstrnsave(get_cursor_line_ptr(), (size_t)get_cursor_line_len());
+    ptr = saved_line + pos.col;
+  } else {
+    ptr = get_cursor_pos_ptr();
+    cursor = &curwin->w_cursor;
+  }
+
+  if (vim_strchr(p_cpo, CPO_LISTWM) == NULL) {
+    curwin->w_p_list = false;
+  }
+
+  pos_T fpos = curwin->w_cursor;
+  while (fpos.col > 0 && ascii_iswhite(ptr[-1])) {
+    fpos.col--;
+    ptr--;
+  }
+
+  if ((State & REPLACE_FLAG)
+      && fpos.lnum == Insstart.lnum
+      && fpos.col < Insstart.col) {
+    ptr += Insstart.col - fpos.col;
+    fpos.col = Insstart.col;
+  }
+
+  getvcol(curwin, &fpos, &vcol, NULL, NULL);
+  getvcol(curwin, cursor, &want_vcol, NULL, NULL);
+
+  char *tab = "\t";
+  int32_t tab_v = (uint8_t)(*tab);
+
+  CharsizeArg csarg;
+  CSType cstype = init_charsize_arg(&csarg, curwin, 0, tab);
+
+  while (ascii_iswhite(*ptr)) {
+    int i = win_charsize(cstype, vcol, tab, tab_v, &csarg).width;
+    if (vcol + i > want_vcol) {
+      break;
+    }
+    if (*ptr != TAB) {
+      *ptr = TAB;
+      if (change_col < 0) {
+        change_col = fpos.col;
+        if (fpos.lnum == Insstart.lnum && fpos.col < Insstart.col) {
+          Insstart.col = fpos.col;
+        }
+      }
+    }
+    fpos.col++;
+    ptr++;
+    vcol += i;
+  }
+
+  if (change_col >= 0) {
+    int repl_off = 0;
+    cstype = init_charsize_arg(&csarg, curwin, 0, ptr);
+    while (vcol < want_vcol && *ptr == ' ') {
+      vcol += win_charsize(cstype, vcol, ptr, (uint8_t)(' '), &csarg).width;
+      ptr++;
+      repl_off++;
+    }
+
+    if (vcol > want_vcol) {
+      ptr--;
+      repl_off--;
+    }
+    fpos.col += repl_off;
+
+    int i = cursor->col - fpos.col;
+    if (i > 0) {
+      if (!(State & VREPLACE_FLAG)) {
+        char *newp = xmalloc((size_t)(curbuf->b_ml.ml_line_len - i));
+        ptrdiff_t col = ptr - curbuf->b_ml.ml_line_ptr;
+        if (col > 0) {
+          memmove(newp, ptr - col, (size_t)col);
+        }
+        memmove(newp + col, ptr + i, (size_t)(curbuf->b_ml.ml_line_len - col - i));
+        if (curbuf->b_ml.ml_flags & (ML_LINE_DIRTY | ML_ALLOCATED)) {
+          xfree(curbuf->b_ml.ml_line_ptr);
+        }
+        curbuf->b_ml.ml_line_ptr = newp;
+        curbuf->b_ml.ml_line_len -= i;
+        curbuf->b_ml.ml_flags = (curbuf->b_ml.ml_flags | ML_LINE_DIRTY) & ~ML_EMPTY;
+        inserted_bytes(fpos.lnum, change_col,
+                       cursor->col - change_col, fpos.col - change_col);
+      } else {
+        STRMOVE(ptr, ptr + i);
+      }
+      if ((State & REPLACE_FLAG) && !(State & VREPLACE_FLAG)) {
+        for (temp = i; --temp >= 0;) {
+          replace_join(repl_off);
+        }
+      }
+    }
+    cursor->col -= i;
+
+    if (State & VREPLACE_FLAG) {
+      backspace_until_column(change_col);
+      ins_bytes_len(saved_line + change_col, (size_t)(cursor->col - change_col));
+    }
+  }
+
+  if (State & VREPLACE_FLAG) {
+    xfree(saved_line);
+  }
+  curwin->w_p_list = save_list;
+  return false;
+}
+
+// Static asserts for Phase 1 (ins_tab)
+_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL mismatch");
+_Static_assert(ABBR_OFF == 0x100, "ABBR_OFF mismatch (Phase1)");

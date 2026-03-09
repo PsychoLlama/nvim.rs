@@ -129,9 +129,10 @@ struct NvimString {
 // ins_eol — delegated to C helper
 // ============================================================================
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_ins_eol(c: c_int) -> c_int {
-    nvim_edit_ins_eol(c)
+#[must_use]
+#[unsafe(export_name = "ins_eol")]
+pub unsafe extern "C" fn rs_ins_eol(c: c_int) -> bool {
+    nvim_edit_ins_eol(c) != 0
 }
 
 // ============================================================================
