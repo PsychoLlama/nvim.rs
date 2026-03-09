@@ -1447,6 +1447,59 @@ const K_F10: c_int = termcap2key(b'k' as c_int, b';' as c_int);
 const K_F11: c_int = termcap2key(b'F' as c_int, b'1' as c_int);
 const K_F12: c_int = termcap2key(b'F' as c_int, b'2' as c_int);
 
+// Function keys F13-F63 (TERMCAP2KEY('F', char))
+const K_F13: c_int = termcap2key(b'F' as c_int, b'3' as c_int);
+const K_F14: c_int = termcap2key(b'F' as c_int, b'4' as c_int);
+const K_F15: c_int = termcap2key(b'F' as c_int, b'5' as c_int);
+const K_F16: c_int = termcap2key(b'F' as c_int, b'6' as c_int);
+const K_F17: c_int = termcap2key(b'F' as c_int, b'7' as c_int);
+const K_F18: c_int = termcap2key(b'F' as c_int, b'8' as c_int);
+const K_F19: c_int = termcap2key(b'F' as c_int, b'9' as c_int);
+const K_F20: c_int = termcap2key(b'F' as c_int, b'A' as c_int);
+const K_F21: c_int = termcap2key(b'F' as c_int, b'B' as c_int);
+const K_F22: c_int = termcap2key(b'F' as c_int, b'C' as c_int);
+const K_F23: c_int = termcap2key(b'F' as c_int, b'D' as c_int);
+const K_F24: c_int = termcap2key(b'F' as c_int, b'E' as c_int);
+const K_F25: c_int = termcap2key(b'F' as c_int, b'F' as c_int);
+const K_F26: c_int = termcap2key(b'F' as c_int, b'G' as c_int);
+const K_F27: c_int = termcap2key(b'F' as c_int, b'H' as c_int);
+const K_F28: c_int = termcap2key(b'F' as c_int, b'I' as c_int);
+const K_F29: c_int = termcap2key(b'F' as c_int, b'J' as c_int);
+const K_F30: c_int = termcap2key(b'F' as c_int, b'K' as c_int);
+const K_F31: c_int = termcap2key(b'F' as c_int, b'L' as c_int);
+const K_F32: c_int = termcap2key(b'F' as c_int, b'M' as c_int);
+const K_F33: c_int = termcap2key(b'F' as c_int, b'N' as c_int);
+const K_F34: c_int = termcap2key(b'F' as c_int, b'O' as c_int);
+const K_F35: c_int = termcap2key(b'F' as c_int, b'P' as c_int);
+const K_F36: c_int = termcap2key(b'F' as c_int, b'Q' as c_int);
+const K_F37: c_int = termcap2key(b'F' as c_int, b'R' as c_int);
+const K_F38: c_int = termcap2key(b'F' as c_int, b'S' as c_int);
+const K_F39: c_int = termcap2key(b'F' as c_int, b'T' as c_int);
+const K_F40: c_int = termcap2key(b'F' as c_int, b'U' as c_int);
+const K_F41: c_int = termcap2key(b'F' as c_int, b'V' as c_int);
+const K_F42: c_int = termcap2key(b'F' as c_int, b'W' as c_int);
+const K_F43: c_int = termcap2key(b'F' as c_int, b'X' as c_int);
+const K_F44: c_int = termcap2key(b'F' as c_int, b'Y' as c_int);
+const K_F45: c_int = termcap2key(b'F' as c_int, b'Z' as c_int);
+const K_F46: c_int = termcap2key(b'F' as c_int, b'a' as c_int);
+const K_F47: c_int = termcap2key(b'F' as c_int, b'b' as c_int);
+const K_F48: c_int = termcap2key(b'F' as c_int, b'c' as c_int);
+const K_F49: c_int = termcap2key(b'F' as c_int, b'd' as c_int);
+const K_F50: c_int = termcap2key(b'F' as c_int, b'e' as c_int);
+const K_F51: c_int = termcap2key(b'F' as c_int, b'f' as c_int);
+const K_F52: c_int = termcap2key(b'F' as c_int, b'g' as c_int);
+const K_F53: c_int = termcap2key(b'F' as c_int, b'h' as c_int);
+const K_F54: c_int = termcap2key(b'F' as c_int, b'i' as c_int);
+const K_F55: c_int = termcap2key(b'F' as c_int, b'j' as c_int);
+const K_F56: c_int = termcap2key(b'F' as c_int, b'k' as c_int);
+const K_F57: c_int = termcap2key(b'F' as c_int, b'l' as c_int);
+const K_F58: c_int = termcap2key(b'F' as c_int, b'm' as c_int);
+const K_F59: c_int = termcap2key(b'F' as c_int, b'n' as c_int);
+const K_F60: c_int = termcap2key(b'F' as c_int, b'o' as c_int);
+const K_F61: c_int = termcap2key(b'F' as c_int, b'p' as c_int);
+const K_F62: c_int = termcap2key(b'F' as c_int, b'q' as c_int);
+const K_F63: c_int = termcap2key(b'F' as c_int, b'r' as c_int);
+
 // Shifted function keys (KS_EXTRA variants)
 const KE_S_UP: c_int = 4;
 const KE_S_DOWN: c_int = 5;
@@ -1615,7 +1668,7 @@ pub extern "C" fn rs_terminal_convert_key(key: c_int, nvim_mod_mask: c_int) -> V
         K_KMULTIPLY => VTERM_KEY_KP_MULT,
         K_KDIVIDE => VTERM_KEY_KP_DIVIDE,
 
-        // Function keys
+        // Function keys F1-F12 (with shift variants)
         K_S_F1 | K_F1 => vterm_key_function(1),
         K_S_F2 | K_F2 => vterm_key_function(2),
         K_S_F3 | K_F3 => vterm_key_function(3),
@@ -1628,6 +1681,59 @@ pub extern "C" fn rs_terminal_convert_key(key: c_int, nvim_mod_mask: c_int) -> V
         K_S_F10 | K_F10 => vterm_key_function(10),
         K_S_F11 | K_F11 => vterm_key_function(11),
         K_S_F12 | K_F12 => vterm_key_function(12),
+
+        // Function keys F13-F63 (no shift variants)
+        K_F13 => vterm_key_function(13),
+        K_F14 => vterm_key_function(14),
+        K_F15 => vterm_key_function(15),
+        K_F16 => vterm_key_function(16),
+        K_F17 => vterm_key_function(17),
+        K_F18 => vterm_key_function(18),
+        K_F19 => vterm_key_function(19),
+        K_F20 => vterm_key_function(20),
+        K_F21 => vterm_key_function(21),
+        K_F22 => vterm_key_function(22),
+        K_F23 => vterm_key_function(23),
+        K_F24 => vterm_key_function(24),
+        K_F25 => vterm_key_function(25),
+        K_F26 => vterm_key_function(26),
+        K_F27 => vterm_key_function(27),
+        K_F28 => vterm_key_function(28),
+        K_F29 => vterm_key_function(29),
+        K_F30 => vterm_key_function(30),
+        K_F31 => vterm_key_function(31),
+        K_F32 => vterm_key_function(32),
+        K_F33 => vterm_key_function(33),
+        K_F34 => vterm_key_function(34),
+        K_F35 => vterm_key_function(35),
+        K_F36 => vterm_key_function(36),
+        K_F37 => vterm_key_function(37),
+        K_F38 => vterm_key_function(38),
+        K_F39 => vterm_key_function(39),
+        K_F40 => vterm_key_function(40),
+        K_F41 => vterm_key_function(41),
+        K_F42 => vterm_key_function(42),
+        K_F43 => vterm_key_function(43),
+        K_F44 => vterm_key_function(44),
+        K_F45 => vterm_key_function(45),
+        K_F46 => vterm_key_function(46),
+        K_F47 => vterm_key_function(47),
+        K_F48 => vterm_key_function(48),
+        K_F49 => vterm_key_function(49),
+        K_F50 => vterm_key_function(50),
+        K_F51 => vterm_key_function(51),
+        K_F52 => vterm_key_function(52),
+        K_F53 => vterm_key_function(53),
+        K_F54 => vterm_key_function(54),
+        K_F55 => vterm_key_function(55),
+        K_F56 => vterm_key_function(56),
+        K_F57 => vterm_key_function(57),
+        K_F58 => vterm_key_function(58),
+        K_F59 => vterm_key_function(59),
+        K_F60 => vterm_key_function(60),
+        K_F61 => vterm_key_function(61),
+        K_F62 => vterm_key_function(62),
+        K_F63 => vterm_key_function(63),
 
         // Not a special key - return VTERM_KEY_NONE to indicate
         // the key should be sent as a character
