@@ -55,10 +55,39 @@ extern "C" {
 
     // buflist_findnr (implemented in Rust, re-exported)
     fn rs_buflist_findnr(nr: c_int) -> BufHandle;
+
+    // Error message emitters for do_buffer_ext navigation (implemented in buffer.c)
+    fn nvim_emsg_e84();
+    fn nvim_emsg_e85();
+    fn nvim_emsg_e87();
+    fn nvim_emsg_e88();
+    fn nvim_semsg_e_nobufnr(count: i64);
+
+    // Validation helpers for do_buffer_ext (implemented in ex_cmds_shim.c)
+    fn nvim_excmds_check_can_set_curbuf_forceit(forceit: c_int) -> c_int;
+    fn nvim_ecmd_emsg_closing_buffer();
 }
 
 // kOptJopFlagClean flag value (from option_vars.generated.h)
 const K_OPT_JOP_FLAG_CLEAN: c_uint = 0x04;
+
+// do_buffer_ext start values (from buffer.h dobuf_start_values)
+const DOBUF_CURRENT: c_int = 0;
+const DOBUF_FIRST: c_int = 1;
+const DOBUF_LAST: c_int = 2;
+const DOBUF_MOD: c_int = 3;
+
+// do_buffer_ext flags (from buffer.h dobuf_flags_value)
+const DOBUF_FORCEIT: c_int = 1;
+const DOBUF_SKIPHELP: c_int = 4;
+
+// do_buffer_ext action values (from buffer.h dobuf_action_values)
+const DOBUF_GOTO: c_int = 0;
+const DOBUF_SPLIT: c_int = 1;
+
+// Direction constants (from vim_defs.h)
+const FORWARD: c_int = 1;
+// BACKWARD = -1 but not used directly (we compare != FORWARD)
 
 // =============================================================================
 // Buffer Flags (from buffer_defs.h)
@@ -619,6 +648,157 @@ pub unsafe fn find_buffer_for_delete(buf_fnum: c_int, update_jumplist: *mut c_in
     result
 }
 
+/// Advance `buf` one step forward or backward, wrapping at list ends.
+unsafe fn nav_step(buf: BufHandle, dir: c_int) -> BufHandle {
+    if dir == FORWARD {
+        let next = nvim_buf_get_b_next(buf);
+        if next.is_null() {
+            nvim_get_firstbuf()
+        } else {
+            next
+        }
+    } else {
+        let prev = nvim_buf_get_prev(buf);
+        if prev.is_null() {
+            nvim_get_lastbuf()
+        } else {
+            prev
+        }
+    }
+}
+
+/// Find and validate the target buffer for a `do_buffer_ext` call.
+///
+/// Implements the navigation and pre-action validation logic from `do_buffer_ext`.
+/// Emits the appropriate error message on failure and returns a null handle.
+/// Returns the target buffer handle on success.
+///
+/// # Arguments
+/// - `action`: `DOBUF_GOTO`, `DOBUF_SPLIT`, `DOBUF_UNLOAD`, `DOBUF_DEL`, or `DOBUF_WIPE`
+/// - `start`: `DOBUF_FIRST`, `DOBUF_LAST`, `DOBUF_MOD`, or `DOBUF_CURRENT`
+/// - `dir`: `FORWARD` (1) or `BACKWARD` (-1)
+/// - `count`: buffer number (for `DOBUF_FIRST`) or number of steps
+/// - `flags`: `DOBUF_FORCEIT` and/or `DOBUF_SKIPHELP`
+/// - `unload`: whether the action unloads the buffer
+///
+/// # Safety
+/// Caller must ensure C runtime is live and globals are valid.
+unsafe fn find_and_validate_buffer(
+    action: c_int,
+    start: c_int,
+    dir: c_int,
+    count: c_int,
+    flags: c_int,
+    unload: bool,
+) -> BufHandle {
+    let null = BufHandle(std::ptr::null_mut());
+    // Determine starting buffer.
+    let mut buf: BufHandle = match start {
+        DOBUF_FIRST => nvim_get_firstbuf(),
+        DOBUF_LAST => nvim_get_lastbuf(),
+        _ => nvim_get_curbuf(),
+    };
+    let curbuf = nvim_get_curbuf();
+
+    if start == DOBUF_MOD {
+        // Find next modified buffer (wraps around).
+        let mut remaining = count;
+        while remaining > 0 {
+            loop {
+                let next = nvim_buf_get_b_next(buf);
+                buf = if next.is_null() {
+                    nvim_get_firstbuf()
+                } else {
+                    next
+                };
+                if buf == curbuf || nvim_buf_get_changed(buf) != 0 {
+                    break;
+                }
+            }
+            remaining -= 1;
+        }
+        if nvim_buf_get_changed(buf) == 0 {
+            nvim_emsg_e84();
+            return null;
+        }
+    } else if start == DOBUF_FIRST && count != 0 {
+        // Find buffer by number.
+        while !buf.is_null() && nvim_buf_get_fnum(buf) != count {
+            buf = nvim_buf_get_b_next(buf);
+        }
+    } else {
+        // Navigate count steps forward/backward through listed buffers.
+        let help_only = (flags & DOBUF_SKIPHELP) != 0 && nvim_buf_get_b_help(buf) != 0;
+        let mut bp = null;
+        let mut remaining = count;
+        // Mirrors the C while-loop in do_buffer_ext.
+        while remaining > 0
+            || (bp != buf
+                && !unload
+                && !(if help_only {
+                    nvim_buf_get_b_help(buf) != 0
+                } else {
+                    nvim_buf_get_b_p_bl(buf) != 0
+                }))
+        {
+            if bp.is_null() {
+                bp = buf;
+            }
+            buf = nav_step(buf, dir);
+            if unload
+                || (if help_only {
+                    nvim_buf_get_b_help(buf) != 0
+                } else {
+                    nvim_buf_get_b_p_bl(buf) != 0
+                        && ((flags & DOBUF_SKIPHELP) == 0 || nvim_buf_get_b_help(buf) == 0)
+                })
+            {
+                remaining -= 1;
+                bp = null;
+            }
+            if bp == buf {
+                nvim_emsg_e85();
+                return null;
+            }
+        }
+    }
+
+    // Could not find a buffer.
+    if buf.is_null() {
+        if start == DOBUF_FIRST {
+            if !unload {
+                nvim_semsg_e_nobufnr(i64::from(count));
+            }
+        } else if dir == FORWARD {
+            nvim_emsg_e87();
+        } else {
+            nvim_emsg_e88();
+        }
+        return null;
+    }
+
+    // Pre-action validation.
+    if action == DOBUF_GOTO && buf != curbuf {
+        let forceit = c_int::from((flags & DOBUF_FORCEIT) != 0);
+        if nvim_excmds_check_can_set_curbuf_forceit(forceit) == 0 {
+            return null;
+        }
+        if nvim_buf_get_locked_split(buf) != 0 {
+            nvim_ecmd_emsg_closing_buffer();
+            return null;
+        }
+    }
+
+    if (action == DOBUF_GOTO || action == DOBUF_SPLIT)
+        && (nvim_buf_get_flags(buf) & buf_flags::BF_DUMMY) != 0
+    {
+        nvim_semsg_e_nobufnr(i64::from(count));
+        return null;
+    }
+
+    buf
+}
+
 // =============================================================================
 // FFI Exports
 // =============================================================================
@@ -698,6 +878,25 @@ pub unsafe extern "C" fn rs_find_buffer_for_delete(
     update_jumplist: *mut c_int,
 ) -> BufHandle {
     find_buffer_for_delete(buf_fnum, update_jumplist)
+}
+
+/// Find and validate the target buffer for a `do_buffer_ext` call.
+///
+/// Implements the navigation logic and pre-action validation from `do_buffer_ext`.
+/// Emits the appropriate error message and returns null on failure.
+/// On success returns the target buffer handle.
+///
+/// Called from C `do_buffer_ext` to replace the navigation block.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_find_and_validate_buffer(
+    action: c_int,
+    start: c_int,
+    dir: c_int,
+    count: c_int,
+    flags: c_int,
+    unload: c_int,
+) -> BufHandle {
+    find_and_validate_buffer(action, start, dir, count, flags, unload != 0)
 }
 
 // =============================================================================

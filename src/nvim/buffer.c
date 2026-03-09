@@ -147,6 +147,8 @@ extern bool rs_otherfile_buf_4(buf_T *buf, char *ffname, void *file_id_p, bool f
 
 extern void rs_reset_VIsual_and_resel(void);
 extern buf_T *rs_find_buffer_for_delete(int buf_fnum, int *update_jumplist);
+extern buf_T *rs_find_and_validate_buffer(int action, int start, int dir, int count, int flags,
+                                          int unload);
 
 
 // Accessor functions for Rust opaque handle pattern.
@@ -490,6 +492,21 @@ const char *nvim_e382_msg(void)
 {
   return _("E382: Cannot write, 'buftype' option is set");
 }
+
+/// Emit E84 error message (accessor for Rust).
+void nvim_emsg_e84(void) { emsg(_("E84: No modified buffer found")); }
+
+/// Emit E85 error message (accessor for Rust).
+void nvim_emsg_e85(void) { emsg(_("E85: There is no listed buffer")); }
+
+/// Emit E87 error message (accessor for Rust).
+void nvim_emsg_e87(void) { emsg(_("E87: Cannot go beyond last buffer")); }
+
+/// Emit E88 error message (accessor for Rust).
+void nvim_emsg_e88(void) { emsg(_("E88: Cannot go before first buffer")); }
+
+/// Emit e_nobufnr error with a count (accessor for Rust).
+void nvim_semsg_e_nobufnr(int64_t count) { semsg(_(e_nobufnr), count); }
 
 /// Check if the memfile pointer is NULL for a buffer (accessor for Rust).
 int nvim_buf_get_ml_mfp_null(buf_T *buf)
@@ -2077,92 +2094,10 @@ static int do_buffer_ext(int action, int start, int dir, int count, int flags)
   bool unload = (action == DOBUF_UNLOAD || action == DOBUF_DEL
                  || action == DOBUF_WIPE);
 
-  switch (start) {
-  case DOBUF_FIRST:
-    buf = firstbuf; break;
-  case DOBUF_LAST:
-    buf = lastbuf;  break;
-  default:
-    buf = curbuf;   break;
-  }
-  if (start == DOBUF_MOD) {         // find next modified buffer
-    while (count-- > 0) {
-      do {
-        buf = buf->b_next;
-        if (buf == NULL) {
-          buf = firstbuf;
-        }
-      } while (buf != curbuf && !bufIsChanged(buf));
-    }
-    if (!bufIsChanged(buf)) {
-      emsg(_("E84: No modified buffer found"));
-      return FAIL;
-    }
-  } else if (start == DOBUF_FIRST && count) {  // find specified buffer number
-    while (buf != NULL && buf->b_fnum != count) {
-      buf = buf->b_next;
-    }
-  } else {
-    const bool help_only = (flags & DOBUF_SKIPHELP) != 0 && buf->b_help;
-
-    bp = NULL;
-    while (count > 0 || (bp != buf && !unload
-                         && !(help_only ? buf->b_help : buf->b_p_bl))) {
-      // remember the buffer where we start, we come back there when all
-      // buffers are unlisted.
-      if (bp == NULL) {
-        bp = buf;
-      }
-      buf = dir == FORWARD ? (buf->b_next != NULL ? buf->b_next : firstbuf)
-                           : (buf->b_prev != NULL ? buf->b_prev : lastbuf);
-      // Avoid non-help buffers if the starting point was a help buffer
-      // and vice-versa.
-      // Don't count unlisted buffers.
-      if (unload
-          || (help_only
-              ? buf->b_help
-              : (buf->b_p_bl && ((flags & DOBUF_SKIPHELP) == 0 || !buf->b_help)))) {
-        count--;
-        bp = NULL;              // use this buffer as new starting point
-      }
-      if (bp == buf) {
-        // back where we started, didn't find anything.
-        emsg(_("E85: There is no listed buffer"));
-        return FAIL;
-      }
-    }
-  }
-
-  if (buf == NULL) {        // could not find it
-    if (start == DOBUF_FIRST) {
-      // don't warn when deleting
-      if (!unload) {
-        semsg(_(e_nobufnr), (int64_t)count);
-      }
-    } else if (dir == FORWARD) {
-      emsg(_("E87: Cannot go beyond last buffer"));
-    } else {
-      emsg(_("E88: Cannot go before first buffer"));
-    }
-    return FAIL;
-  }
-
-  if (action == DOBUF_GOTO && buf != curbuf) {
-    if (!check_can_set_curbuf_forceit((flags & DOBUF_FORCEIT) != 0)) {
-      // disallow navigating to another buffer when 'winfixbuf' is applied
-      return FAIL;
-    }
-    if (buf->b_locked_split) {
-      // disallow navigating to a closing buffer, which like splitting,
-      // can result in more windows displaying it
-      emsg(_(e_cannot_switch_to_a_closing_buffer));
-      return FAIL;
-    }
-  }
-
-  if ((action == DOBUF_GOTO || action == DOBUF_SPLIT) && (buf->b_flags & BF_DUMMY)) {
-    // disallow navigating to the dummy buffer
-    semsg(_(e_nobufnr), count);
+  // Find and validate target buffer (navigation + pre-action checks).
+  // Migrated to Rust (src/nvim-rs/buffer/src/lifecycle.rs).
+  buf = rs_find_and_validate_buffer(action, start, dir, count, flags, (int)unload);
+  if (buf == NULL) {
     return FAIL;
   }
 
