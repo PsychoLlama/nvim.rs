@@ -140,9 +140,9 @@ pub unsafe extern "C" fn rs_vim_strnicmp(
 /// # Safety
 ///
 /// Both `s1` and `s2` must be valid null-terminated C strings, or NULL.
-#[no_mangle]
-pub unsafe extern "C" fn rs_striequal(s1: *const c_char, s2: *const c_char) -> c_int {
-    c_int::from(unsafe { rs_vim_stricmp(s1, s2) } == 0)
+#[export_name = "striequal"]
+pub unsafe extern "C" fn rs_striequal(s1: *const c_char, s2: *const c_char) -> bool {
+    unsafe { rs_vim_stricmp(s1, s2) == 0 }
 }
 
 /// Convert a string to uppercase in-place (ASCII only).
@@ -153,7 +153,7 @@ pub unsafe extern "C" fn rs_striequal(s1: *const c_char, s2: *const c_char) -> c
 /// # Safety
 ///
 /// `p` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "vim_strup"]
 pub unsafe extern "C" fn rs_vim_strup(p: *mut c_char) {
     if p.is_null() {
         return;
@@ -180,7 +180,7 @@ pub unsafe extern "C" fn rs_vim_strup(p: *mut c_char) {
 /// - `dst` and `src` must be valid, non-overlapping pointers.
 /// - `dst` must have enough space for `strlen(src) + 1` bytes.
 /// - `src` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "vim_strcpy_up"]
 pub unsafe extern "C" fn rs_vim_strcpy_up(dst: *mut c_char, src: *const c_char) {
     if dst.is_null() || src.is_null() {
         return;
@@ -211,7 +211,7 @@ pub unsafe extern "C" fn rs_vim_strcpy_up(dst: *mut c_char, src: *const c_char) 
 /// - `dst` and `src` must be valid, non-overlapping pointers.
 /// - `dst` must have enough space for `n + 1` bytes.
 /// - `src` must be a valid null-terminated C string or at least `n` bytes.
-#[no_mangle]
+#[export_name = "vim_strncpy_up"]
 pub unsafe extern "C" fn rs_vim_strncpy_up(dst: *mut c_char, src: *const c_char, n: usize) {
     if dst.is_null() || src.is_null() {
         if !dst.is_null() {
@@ -248,7 +248,7 @@ pub unsafe extern "C" fn rs_vim_strncpy_up(dst: *mut c_char, src: *const c_char,
 /// - `dst` and `src` must be valid, non-overlapping pointers.
 /// - `dst` must have enough space for `n` bytes.
 /// - `src` must point to at least `n` bytes.
-#[no_mangle]
+#[export_name = "vim_memcpy_up"]
 pub unsafe extern "C" fn rs_vim_memcpy_up(dst: *mut c_char, src: *const c_char, n: usize) {
     if dst.is_null() || src.is_null() || n == 0 {
         return;
@@ -280,7 +280,7 @@ pub unsafe extern "C" fn rs_vim_memcpy_up(dst: *mut c_char, src: *const c_char, 
 /// # Safety
 ///
 /// `ptr` must be a valid null-terminated mutable C string.
-#[no_mangle]
+#[export_name = "del_trailing_spaces"]
 pub unsafe extern "C" fn rs_del_trailing_spaces(ptr: *mut c_char) {
     if ptr.is_null() {
         return;
@@ -341,10 +341,10 @@ const MB_MAXBYTES: usize = 6;
 /// # Safety
 ///
 /// `string` must be a valid null-terminated C string, or NULL.
-#[no_mangle]
-pub unsafe extern "C" fn rs_vim_strchr(string: *const c_char, c: c_int) -> *const c_char {
+#[export_name = "vim_strchr"]
+pub unsafe extern "C" fn rs_vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
     if string.is_null() || c <= 0 {
-        return std::ptr::null();
+        return std::ptr::null_mut();
     }
 
     // For ASCII characters, use simple search
@@ -354,10 +354,10 @@ pub unsafe extern "C" fn rs_vim_strchr(string: *const c_char, c: c_int) -> *cons
         loop {
             let ch = unsafe { *p as u8 };
             if ch == 0 {
-                return std::ptr::null();
+                return std::ptr::null_mut();
             }
             if ch == target {
-                return p;
+                return p.cast_mut();
             }
             p = unsafe { p.add(1) };
         }
@@ -369,21 +369,21 @@ pub unsafe extern "C" fn rs_vim_strchr(string: *const c_char, c: c_int) -> *cons
     u8char[len] = 0; // null-terminate
 
     // Use libc strstr to find the UTF-8 sequence
-    libc::strstr(string, u8char.as_ptr() as *const c_char)
+    libc::strstr(string, u8char.as_ptr() as *const c_char) as *mut c_char
 }
 
 /// Check if a string contains a non-ASCII character (128 or higher).
 ///
-/// Returns 1 if the string contains non-ASCII, 0 otherwise.
-/// Returns 0 if the string is NULL.
+/// Returns true if the string contains non-ASCII, false otherwise.
+/// Returns false if the string is NULL.
 ///
 /// # Safety
 ///
 /// `s` must be a valid null-terminated C string, or NULL.
-#[no_mangle]
-pub unsafe extern "C" fn rs_has_non_ascii(s: *const c_char) -> c_int {
+#[export_name = "has_non_ascii"]
+pub unsafe extern "C" fn rs_has_non_ascii(s: *const c_char) -> bool {
     if s.is_null() {
-        return 0;
+        return false;
     }
 
     let mut p = s;
@@ -393,12 +393,12 @@ pub unsafe extern "C" fn rs_has_non_ascii(s: *const c_char) -> c_int {
             break;
         }
         if c >= 128 {
-            return 1;
+            return true;
         }
         p = unsafe { p.add(1) };
     }
 
-    0
+    false
 }
 
 /// Check if string contains non-ASCII characters (with length limit).
@@ -408,20 +408,20 @@ pub unsafe extern "C" fn rs_has_non_ascii(s: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `s` must be a valid pointer to at least `len` bytes.
-#[no_mangle]
-pub unsafe extern "C" fn rs_has_non_ascii_len(s: *const c_char, len: usize) -> c_int {
+#[export_name = "has_non_ascii_len"]
+pub unsafe extern "C" fn rs_has_non_ascii_len(s: *const c_char, len: usize) -> bool {
     if s.is_null() || len == 0 {
-        return 0;
+        return false;
     }
 
     let bytes = unsafe { std::slice::from_raw_parts(s as *const u8, len) };
     for &b in bytes {
         if b >= 128 {
-            return 1;
+            return true;
         }
     }
 
-    0
+    false
 }
 
 /// Concatenate two strings into a newly allocated buffer.
@@ -435,7 +435,7 @@ pub unsafe extern "C" fn rs_has_non_ascii_len(s: *const c_char, len: usize) -> c
 ///
 /// `s1` and `s2` must be valid null-terminated C strings, or NULL.
 /// The returned pointer must be freed with the appropriate allocator.
-#[no_mangle]
+#[export_name = "concat_str"]
 pub unsafe extern "C" fn rs_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char {
     let len1 = if s1.is_null() {
         0
@@ -478,7 +478,7 @@ pub unsafe extern "C" fn rs_concat_str(s1: *const c_char, s2: *const c_char) -> 
 ///
 /// `string` must be a valid null-terminated C string.
 /// The returned pointer must be freed by the caller.
-#[no_mangle]
+#[export_name = "vim_strsave_up"]
 pub unsafe extern "C" fn rs_vim_strsave_up(string: *const c_char) -> *mut c_char {
     if string.is_null() {
         return std::ptr::null_mut();
@@ -503,7 +503,7 @@ pub unsafe extern "C" fn rs_vim_strsave_up(string: *const c_char) -> *mut c_char
 ///
 /// `string` must be a valid null-terminated C string or at least `len` bytes.
 /// The returned pointer must be freed by the caller.
-#[no_mangle]
+#[export_name = "vim_strnsave_up"]
 pub unsafe extern "C" fn rs_vim_strnsave_up(string: *const c_char, len: usize) -> *mut c_char {
     if string.is_null() {
         return std::ptr::null_mut();
@@ -524,7 +524,7 @@ pub unsafe extern "C" fn rs_vim_strnsave_up(string: *const c_char, len: usize) -
 ///
 /// `files` must be a valid pointer to an array of at least `count` string pointers.
 /// Each string must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "sort_strings"]
 pub unsafe extern "C" fn rs_sort_strings(files: *mut *mut c_char, count: c_int) {
     if files.is_null() || count <= 0 {
         return;
@@ -911,7 +911,7 @@ extern "C" {
 ///
 /// `string` must be a valid pointer to at least `len` bytes.
 /// The returned pointer must be freed by the caller.
-#[no_mangle]
+#[export_name = "xstrnsave"]
 pub unsafe extern "C" fn rs_xstrnsave(string: *const c_char, len: usize) -> *mut c_char {
     if string.is_null() {
         return std::ptr::null_mut();
@@ -942,7 +942,7 @@ pub unsafe extern "C" fn rs_xstrnsave(string: *const c_char, len: usize) -> *mut
 ///
 /// `s` must be a valid null-terminated C string.
 /// The returned pointer must be freed by the caller.
-#[no_mangle]
+#[export_name = "reverse_text"]
 pub unsafe extern "C" fn rs_reverse_text(s: *const c_char) -> *mut c_char {
     if s.is_null() {
         return std::ptr::null_mut();
@@ -977,7 +977,7 @@ pub unsafe extern "C" fn rs_reverse_text(s: *const c_char) -> *mut c_char {
 ///
 /// All string parameters must be valid null-terminated C strings.
 /// The returned pointer must be freed by the caller.
-#[no_mangle]
+#[export_name = "strrep"]
 pub unsafe extern "C" fn rs_strrep(
     src: *const c_char,
     what: *const c_char,
@@ -1046,18 +1046,16 @@ pub unsafe extern "C" fn rs_strrep(
 ///
 /// All string parameters must be valid null-terminated C strings.
 /// The returned pointer must be freed by the caller.
-#[no_mangle]
+#[export_name = "vim_strsave_escaped_ext"]
 pub unsafe extern "C" fn rs_vim_strsave_escaped_ext(
     string: *const c_char,
     esc_chars: *const c_char,
     cc: c_char,
-    bsl: c_int,
+    bsl: bool,
 ) -> *mut c_char {
     if string.is_null() || esc_chars.is_null() {
         return std::ptr::null_mut();
     }
-
-    let bsl = bsl != 0;
 
     // First count the number of escape characters required
     let mut length: usize = 1; // count the trailing NUL
@@ -1112,12 +1110,12 @@ pub unsafe extern "C" fn rs_vim_strsave_escaped_ext(
 ///
 /// All string parameters must be valid null-terminated C strings.
 /// The returned pointer must be freed by the caller.
-#[no_mangle]
+#[export_name = "vim_strsave_escaped"]
 pub unsafe extern "C" fn rs_vim_strsave_escaped(
     string: *const c_char,
     esc_chars: *const c_char,
 ) -> *mut c_char {
-    rs_vim_strsave_escaped_ext(string, esc_chars, b'\\' as c_char, 0)
+    rs_vim_strsave_escaped_ext(string, esc_chars, b'\\' as c_char, false)
 }
 
 /// Save a copy of an unquoted string.
@@ -1131,7 +1129,7 @@ pub unsafe extern "C" fn rs_vim_strsave_escaped(
 ///
 /// `string` must be a valid pointer to at least `length` bytes.
 /// The returned pointer must be freed by the caller.
-#[no_mangle]
+#[export_name = "vim_strnsave_unquoted"]
 pub unsafe extern "C" fn rs_vim_strnsave_unquoted(
     string: *const c_char,
     length: usize,
@@ -1201,6 +1199,8 @@ extern "C" {
     fn rs_utf_ptr2char(p: *const c_char) -> c_int;
     fn rs_utf_char2len(c: c_int) -> c_int;
     fn rs_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn mb_toupper(c: c_int) -> c_int;
+    fn mb_tolower(c: c_int) -> c_int;
 }
 
 /// Type alias for case conversion function pointer.
@@ -1292,6 +1292,35 @@ pub unsafe extern "C" fn rs_strcase_save(
     // NUL-terminate the result
     *res.add(res_index) = 0;
     res
+}
+
+/// Compare two ASCII strings for length `len`, ignoring case, ignoring locale.
+///
+/// # Safety
+///
+/// Both `s1` and `s2` must be valid pointers to at least `len` bytes.
+#[export_name = "vim_strnicmp_asc"]
+pub unsafe extern "C" fn rs_vim_strnicmp_asc(
+    s1: *const c_char,
+    s2: *const c_char,
+    len: usize,
+) -> c_int {
+    unsafe { rs_vim_strnicmp(s1, s2, len) }
+}
+
+/// Make a copy of `orig` with all characters converted to upper or lower case.
+///
+/// When `upper` is true, converts to uppercase using `mb_toupper`.
+/// When `upper` is false, converts to lowercase using `mb_tolower`.
+///
+/// # Safety
+///
+/// `orig` must be a valid null-terminated C string.
+/// The returned pointer must be freed by the caller using xfree.
+#[export_name = "strcase_save"]
+pub unsafe extern "C" fn rs_strcase_save_export(orig: *const c_char, upper: bool) -> *mut c_char {
+    let case_fn: CaseConvertFn = if upper { mb_toupper } else { mb_tolower };
+    unsafe { rs_strcase_save(orig, case_fn) }
 }
 
 #[cfg(test)]
@@ -1558,9 +1587,9 @@ mod tests {
         let world = CString::new("World").unwrap();
 
         unsafe {
-            assert_eq!(rs_striequal(hello1.as_ptr(), hello2.as_ptr()), 1);
-            assert_eq!(rs_striequal(hello1.as_ptr(), world.as_ptr()), 0);
-            assert_eq!(rs_striequal(std::ptr::null(), std::ptr::null()), 1);
+            assert!(rs_striequal(hello1.as_ptr(), hello2.as_ptr()));
+            assert!(!rs_striequal(hello1.as_ptr(), world.as_ptr()));
+            assert!(rs_striequal(std::ptr::null(), std::ptr::null()));
         }
     }
 
@@ -1632,10 +1661,10 @@ mod tests {
         let empty = CString::new("").unwrap();
 
         unsafe {
-            assert_eq!(rs_has_non_ascii(ascii.as_ptr()), 0);
-            assert_eq!(rs_has_non_ascii(non_ascii.as_ptr()), 1);
-            assert_eq!(rs_has_non_ascii(empty.as_ptr()), 0);
-            assert_eq!(rs_has_non_ascii(std::ptr::null()), 0);
+            assert!(!rs_has_non_ascii(ascii.as_ptr()));
+            assert!(rs_has_non_ascii(non_ascii.as_ptr()));
+            assert!(!rs_has_non_ascii(empty.as_ptr()));
+            assert!(!rs_has_non_ascii(std::ptr::null()));
         }
     }
 
@@ -1646,19 +1675,19 @@ mod tests {
 
         unsafe {
             // First 5 bytes are ASCII only
-            assert_eq!(rs_has_non_ascii_len(data.as_ptr().cast(), 5), 0);
+            assert!(!rs_has_non_ascii_len(data.as_ptr().cast(), 5));
 
             // First 6 bytes include non-ASCII
-            assert_eq!(rs_has_non_ascii_len(data.as_ptr().cast(), 6), 1);
+            assert!(rs_has_non_ascii_len(data.as_ptr().cast(), 6));
 
             // Full string has non-ASCII
-            assert_eq!(rs_has_non_ascii_len(data.as_ptr().cast(), data.len()), 1);
+            assert!(rs_has_non_ascii_len(data.as_ptr().cast(), data.len()));
 
-            // Zero length returns 0
-            assert_eq!(rs_has_non_ascii_len(data.as_ptr().cast(), 0), 0);
+            // Zero length returns false
+            assert!(!rs_has_non_ascii_len(data.as_ptr().cast(), 0));
 
-            // NULL returns 0
-            assert_eq!(rs_has_non_ascii_len(std::ptr::null(), 10), 0);
+            // NULL returns false
+            assert!(!rs_has_non_ascii_len(std::ptr::null(), 10));
         }
     }
 

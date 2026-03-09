@@ -499,7 +499,7 @@ extern "C" {
     fn skiptowhite_esc(arg: *const c_char) -> *mut c_char;
     fn skipwhite(arg: *const c_char) -> *mut c_char;
     fn rs_ascii_iswhite(c: c_int) -> c_int;
-    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // Message functions
     fn msg_putchar(c: c_int);

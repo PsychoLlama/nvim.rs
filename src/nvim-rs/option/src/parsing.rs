@@ -11,8 +11,9 @@ use std::ffi::{c_char, c_int, c_uint};
 
 #[cfg(not(test))]
 extern "C" {
-    // From strings crate
-    fn rs_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    // From strings crate (vim_strchr exported via #[export_name])
+    #[link_name = "vim_strchr"]
+    fn rs_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn rs_vim_snprintf(str: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
 
     // From charset.c
@@ -28,19 +29,19 @@ extern "C" {
 
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
-unsafe fn rs_vim_strchr(s: *const c_char, c: c_int) -> *const c_char {
+unsafe fn rs_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char {
     if s.is_null() {
-        return std::ptr::null();
+        return std::ptr::null_mut();
     }
     let target = c as u8;
     let mut p = s;
     while *p != 0 {
         if (*p as u8) == target {
-            return p;
+            return p.cast_mut();
         }
         p = p.add(1);
     }
-    std::ptr::null()
+    std::ptr::null_mut()
 }
 
 // Note: rs_vim_snprintf and transchar are not mocked for tests because:

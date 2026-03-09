@@ -37,31 +37,9 @@
 
 #include "strings.c.generated.h"
 
-// Rust implementations - declarations
+// Used by vim_strsave_shellescape (will be removed in Phase 2)
 extern int rs_csh_like_shell(void);
 extern int rs_fish_like_shell(void);
-extern int rs_vim_stricmp(const char *s1, const char *s2);
-extern int rs_vim_strnicmp(const char *s1, const char *s2, size_t len);
-extern int rs_striequal(const char *s1, const char *s2);
-extern int rs_has_non_ascii(const char *s);
-extern int rs_has_non_ascii_len(const char *s, size_t len);
-extern void rs_sort_strings(char **files, int count);
-extern void rs_vim_strup(char *p);
-extern void rs_vim_strcpy_up(char *restrict dst, const char *restrict src);
-extern void rs_vim_strncpy_up(char *restrict dst, const char *restrict src, size_t n);
-extern void rs_vim_memcpy_up(char *restrict dst, const char *restrict src, size_t n);
-extern void rs_del_trailing_spaces(char *ptr);
-extern const char *rs_vim_strchr(const char *string, int c);
-extern char *rs_concat_str(const char *s1, const char *s2);
-extern char *rs_vim_strsave_up(const char *string);
-extern char *rs_vim_strnsave_up(const char *string, size_t len);
-extern char *rs_xstrnsave(const char *string, size_t len);
-extern char *rs_reverse_text(const char *s);
-extern char *rs_strrep(const char *src, const char *what, const char *rep);
-extern char *rs_vim_strsave_escaped(const char *string, const char *esc_chars);
-extern char *rs_vim_strsave_escaped_ext(const char *string, const char *esc_chars, char cc, int bsl);
-extern char *rs_vim_strnsave_unquoted(const char *string, size_t length);
-extern char *rs_strcase_save(const char *orig, int (*case_fn)(int));
 
 static const char e_cannot_mix_positional_and_non_positional_str[]
   = N_("E1500: Cannot mix positional and non-positional arguments: %s");
@@ -93,49 +71,6 @@ static const char typename_char[] = N_("char");
 static const char typename_string[] = N_("string");
 static const char typename_float[] = N_("float");
 
-/// Copy up to `len` bytes of `string` into newly allocated memory and
-/// terminate with a NUL. The allocated memory always has size `len + 1`, even
-/// when `string` is shorter.
-char *xstrnsave(const char *string, size_t len)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
-{
-  return rs_xstrnsave(string, len);
-}
-
-// Same as vim_strsave(), but any characters found in esc_chars are preceded
-// by a backslash.
-char *vim_strsave_escaped(const char *string, const char *esc_chars)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
-{
-  return rs_vim_strsave_escaped(string, esc_chars);
-}
-
-// Same as vim_strsave_escaped(), but when "bsl" is true also escape
-// characters where rem_backslash() would remove the backslash.
-// Escape the characters with "cc".
-char *vim_strsave_escaped_ext(const char *string, const char *esc_chars, char cc, bool bsl)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
-{
-  return rs_vim_strsave_escaped_ext(string, esc_chars, cc, bsl ? 1 : 0);
-}
-
-/// Save a copy of an unquoted string
-///
-/// Turns string like `a\bc"def\"ghi\\\n"jkl` into `a\bcdef"ghi\\njkl`, for use
-/// in shell_build_argv: the only purpose of backslash is making next character
-/// be treated literally inside the double quotes, if this character is
-/// backslash or quote.
-///
-/// @param[in]  string  String to copy.
-/// @param[in]  length  Length of the string to copy.
-///
-/// @return [allocated] Copy of the string.
-char *vim_strnsave_unquoted(const char *const string, const size_t length)
-  FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-  FUNC_ATTR_NONNULL_RET
-{
-  return rs_vim_strnsave_unquoted(string, length);
-}
 
 /// Escape "string" for use as a shell argument with system().
 /// This uses single quotes, except when we know we need to use double quotes
@@ -258,70 +193,6 @@ char *vim_strsave_shellescape(const char *string, bool do_special, bool do_newli
   return escaped_string;
 }
 
-// Like vim_strsave(), but make all characters uppercase.
-// This uses ASCII lower-to-upper case translation, language independent.
-char *vim_strsave_up(const char *string)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
-{
-  return rs_vim_strsave_up(string);
-}
-
-/// Like xstrnsave(), but make all characters uppercase.
-/// This uses ASCII lower-to-upper case translation, language independent.
-char *vim_strnsave_up(const char *string, size_t len)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
-{
-  return rs_vim_strnsave_up(string, len);
-}
-
-// ASCII lower-to-upper case translation, language independent.
-void vim_strup(char *p)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_vim_strup(p);
-}
-
-// strcpy plus vim_strup.
-void vim_strcpy_up(char *restrict dst, const char *restrict src)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_vim_strcpy_up(dst, src);
-}
-
-// strncpy (NUL-terminated) plus vim_strup.
-void vim_strncpy_up(char *restrict dst, const char *restrict src, size_t n)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_vim_strncpy_up(dst, src, n);
-}
-
-// memcpy (does not NUL-terminate) plus vim_strup.
-void vim_memcpy_up(char *restrict dst, const char *restrict src, size_t n)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_vim_memcpy_up(dst, src, n);
-}
-
-/// Make given string all upper-case or all lower-case
-///
-/// Handles multi-byte characters as good as possible.
-///
-/// @param[in]  orig  Input string.
-/// @param[in]  upper If true make uppercase, otherwise lowercase
-///
-/// @return [allocated] upper-cased string.
-char *strcase_save(const char *const orig, bool upper)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
-{
-  return rs_strcase_save(orig, upper ? mb_toupper : mb_tolower);
-}
-
-// delete spaces at the end of a string
-void del_trailing_spaces(char *ptr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_del_trailing_spaces(ptr);
-}
 
 #if (!defined(HAVE_STRCASECMP) && !defined(HAVE_STRICMP))
 // Compare two strings, ignoring case, using current locale.
@@ -372,65 +243,6 @@ int vim_strnicmp(const char *s1, const char *s2, size_t len)
 }
 #endif
 
-/// Case-insensitive `strequal`.
-bool striequal(const char *a, const char *b)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_striequal(a, b) != 0;
-}
-
-/// Compare two ASCII strings, for length "len", ignoring case, ignoring locale.
-///
-/// @return 0 for match, < 0 for smaller, > 0 for bigger
-int vim_strnicmp_asc(const char *s1, const char *s2, size_t len)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_vim_strnicmp(s1, s2, len);
-}
-
-/// strchr() version which handles multibyte strings
-///
-/// @param[in]  string  String to search in.
-/// @param[in]  c  Character to search for.
-///
-/// @return Pointer to the first byte of the found character in string or NULL
-///         if it was not found or character is invalid. NUL character is never
-///         found, use `strlen()` instead.
-char *vim_strchr(const char *const string, const int c)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return (char *)rs_vim_strchr(string, c);
-}
-
-// Sort an array of strings.
-
-void sort_strings(char **files, int count)
-{
-  rs_sort_strings(files, count);
-}
-
-// Return true if string "s" contains a non-ASCII character (128 or higher).
-// When "s" is NULL false is returned.
-bool has_non_ascii(const char *s)
-  FUNC_ATTR_PURE
-{
-  return rs_has_non_ascii(s) != 0;
-}
-
-/// Return true if string "s" contains a non-ASCII character (128 or higher).
-/// When "s" is NULL false is returned.
-bool has_non_ascii_len(const char *const s, const size_t len)
-  FUNC_ATTR_PURE
-{
-  return rs_has_non_ascii_len(s, len);
-}
-
-/// Concatenate two strings and return the result in allocated memory.
-char *concat_str(const char *restrict str1, const char *restrict str2)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
-{
-  return rs_concat_str(str1, str2);
-}
 
 static const char *const e_printf =
   N_("E766: Insufficient arguments for printf()");
@@ -680,7 +492,6 @@ int vim_vsnprintf(char *str, size_t str_m, const char *fmt, va_list ap)
 }
 
 /// Wrapper for vim_snprintf callable from Rust.
-/// This is a simple wrapper that forwards to vim_snprintf.
 int rs_vim_snprintf(char *str, size_t str_m, const char *fmt, ...)
 {
   va_list ap;
@@ -2237,27 +2048,6 @@ String arena_printf(Arena *arena, const char *fmt, ...)
   return cbuf_as_string(buf, (size_t)printed);
 }
 
-/// Reverse text into allocated memory.
-///
-/// @return  the allocated string.
-char *reverse_text(char *s)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
-{
-  return rs_reverse_text(s);
-}
-
-/// Replace all occurrences of "what" with "rep" in "src". If no replacement happens then NULL is
-/// returned otherwise return a newly allocated string.
-///
-/// @param[in] src  Source text
-/// @param[in] what Substring to replace
-/// @param[in] rep  Substring to replace with
-///
-/// @return [allocated] Copy of the string.
-char *strrep(const char *src, const char *what, const char *rep)
-{
-  return rs_strrep(src, what, rep);
-}
 
 /// Implementation of "byteidx()" and "byteidxcomp()" functions
 static void byteidx_common(typval_T *argvars, typval_T *rettv, bool comp)

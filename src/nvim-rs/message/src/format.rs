@@ -32,7 +32,7 @@ extern "C" {
     /// Get the 'shortmess' option string value
     fn nvim_option_get_shm() -> *const c_char;
     /// Search for character in string (returns pointer or NULL)
-    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     /// Get `exmode_active` flag
     fn nvim_get_exmode_active() -> bool;
     /// Get `msg_silent` count

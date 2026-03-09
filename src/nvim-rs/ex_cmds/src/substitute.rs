@@ -1274,7 +1274,7 @@ extern "C" {
     fn concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
     fn get_search_pat() -> *const c_char;
     fn skipwhite(p: *const c_char) -> *const c_char;
-    fn vim_strchr(string: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
     fn beginline(flags: c_int);
     fn changed_lines(
         buf: *mut crate::BufHandle,

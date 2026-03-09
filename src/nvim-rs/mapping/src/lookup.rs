@@ -37,7 +37,8 @@ extern "C" {
     fn nvim_buf_get_first_abbr(buf: BufHandle) -> MapblockHandle;
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_mapping_get_p_cpo() -> *const c_char;
-    fn rs_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    #[link_name = "vim_strchr"]
+    fn rs_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn replace_termcodes(
         from: *const c_char,
         from_len: usize,

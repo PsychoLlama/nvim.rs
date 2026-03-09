@@ -73,7 +73,7 @@ extern "C" {
     fn xmalloc(size: usize) -> *mut c_char;
     fn xfree(ptr: *mut c_char);
     fn strlen(s: *const c_char) -> usize;
-    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // makefoldset - curwin fold option varp pointers
     fn nvim_curwin_p_fdm_varp() -> *mut std::ffi::c_void;

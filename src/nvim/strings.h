@@ -24,6 +24,39 @@ typedef struct {
 #include "strings.h.generated.h"
 #include "strings.h.inline.generated.h"
 
+// Rust-implemented string functions (exported via #[export_name])
+char *xstrnsave(const char *string, size_t len)
+  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL;
+char *vim_strsave_escaped(const char *string, const char *esc_chars)
+  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL;
+char *vim_strsave_escaped_ext(const char *string, const char *esc_chars, char cc, bool bsl)
+  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL;
+char *vim_strnsave_unquoted(const char *string, size_t length)
+  FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET;
+char *vim_strsave_up(const char *string)
+  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL;
+char *vim_strnsave_up(const char *string, size_t len)
+  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL;
+void vim_strup(char *p) FUNC_ATTR_NONNULL_ALL;
+void vim_strcpy_up(char *restrict dst, const char *restrict src) FUNC_ATTR_NONNULL_ALL;
+void vim_strncpy_up(char *restrict dst, const char *restrict src, size_t n) FUNC_ATTR_NONNULL_ALL;
+void vim_memcpy_up(char *restrict dst, const char *restrict src, size_t n) FUNC_ATTR_NONNULL_ALL;
+char *strcase_save(const char *orig, bool upper)
+  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL;
+void del_trailing_spaces(char *ptr) FUNC_ATTR_NONNULL_ALL;
+bool striequal(const char *a, const char *b) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT;
+int vim_strnicmp_asc(const char *s1, const char *s2, size_t len)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT;
+char *vim_strchr(const char *string, int c)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT;
+void sort_strings(char **files, int count);
+bool has_non_ascii(const char *s) FUNC_ATTR_PURE;
+bool has_non_ascii_len(const char *s, size_t len) FUNC_ATTR_PURE;
+char *concat_str(const char *restrict str1, const char *restrict str2)
+  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL;
+char *reverse_text(char *s) FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET;
+char *strrep(const char *src, const char *what, const char *rep);
+
 /// Append string to string and return pointer to the next byte
 ///
 /// Unlike strcat, this one does *not* add NUL byte and returns pointer to the

@@ -24,19 +24,19 @@ extern "C" {
 
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation, dead_code)]
-unsafe fn rs_vim_strchr(s: *const c_char, c: c_int) -> *const c_char {
+unsafe fn rs_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char {
     if s.is_null() {
-        return std::ptr::null();
+        return std::ptr::null_mut();
     }
     let target = c as u8;
     let mut p = s;
     while *p != 0 {
         if (*p as u8) == target {
-            return p;
+            return p.cast_mut();
         }
         p = p.add(1);
     }
-    std::ptr::null()
+    std::ptr::null_mut()
 }
 
 // =============================================================================

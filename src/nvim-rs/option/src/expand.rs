@@ -576,8 +576,8 @@ extern "C" {
     // xp_pattern accessor
     fn nvim_xp_get_pattern(xp: *mut c_void) -> *mut c_char;
 
-    // vim_strchr: search for character in string (returns *const, cast to mut as needed)
-    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    // vim_strchr: search for character in string
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // vim_regexec: single-line regex match (regmatch_T* passed as *mut c_void)
     fn vim_regexec(rmp: *mut c_void, line: *const c_char, col: c_int) -> c_int;
@@ -658,10 +658,9 @@ pub unsafe extern "C" fn rs_expand_setting_subtract(
             let item = next_val;
 
             // Find next comma (skipping escaped commas "\,")
-            // vim_strchr returns *const, cast to *mut since we own the copy.
-            let mut comma = vim_strchr(next_val, c_int::from(b',')).cast_mut();
+            let mut comma = vim_strchr(next_val, c_int::from(b','));
             while !comma.is_null() && comma != next_val && *comma.offset(-1) == b'\\' as c_char {
-                comma = vim_strchr(comma.add(1), c_int::from(b',')).cast_mut();
+                comma = vim_strchr(comma.add(1), c_int::from(b','));
             }
 
             if comma.is_null() {

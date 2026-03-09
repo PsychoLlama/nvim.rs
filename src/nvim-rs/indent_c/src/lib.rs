@@ -148,7 +148,7 @@ extern "C" {
     // String functions
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn skiptowhite(p: *const c_char) -> *mut c_char;
-    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // Character classification
     fn vim_iswordc(c: c_int) -> c_int;

@@ -30,7 +30,8 @@ const CTRL_V: u8 = 0x16;
 extern "C" {
     #[link_name = "skipwhite"]
     fn rs_skipwhite(p: *const c_char) -> *const c_char;
-    fn rs_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    #[link_name = "vim_strchr"]
+    fn rs_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn nvim_mapping_get_p_cpo() -> *const c_char;
     fn replace_termcodes(
         from: *const c_char,

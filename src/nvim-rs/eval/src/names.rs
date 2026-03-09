@@ -29,7 +29,8 @@ extern "C" {
     fn rs_eval_isnamec(c: c_int) -> bool;
     fn rs_eval_isnamec1(c: c_int) -> bool;
     fn rs_eval_isdictc(c: c_int) -> bool;
-    fn rs_vim_strchr(string: *const c_char, c: c_int) -> *const c_char;
+    #[link_name = "vim_strchr"]
+    fn rs_vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
     #[link_name = "skipwhite"]
     fn rs_skipwhite(p: *const c_char) -> *const c_char;
     fn rs_utfc_ptr2len(p: *const c_char) -> c_int;

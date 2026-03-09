@@ -78,7 +78,7 @@ extern "C" {
     fn nvim_excmds_curwin_cursor_lnum() -> c_int;
     fn nvim_excmds_curwin_set_col_zero();
     fn rs_check_regexp_delim(c: c_int) -> c_int;
-    fn vim_strchr(string: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
 }
 
 /// BL_WHITE | BL_FIX flags for beginline()

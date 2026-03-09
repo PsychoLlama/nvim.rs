@@ -20,7 +20,7 @@ use crate::{BufHandle, OptValType, WinHandle};
 // =============================================================================
 
 extern "C" {
-    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // can_bs
     fn nvim_option_get_p_bs() -> *const c_char;

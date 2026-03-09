@@ -664,7 +664,7 @@ fn draw_sign_impl(nrcol: bool, wp: WinHandle, wlv: WlvHandle, sign_idx: c_int) {
 fn draw_lnum_col_impl(wp: WinHandle, wlv: WlvHandle) {
     unsafe {
         extern "C" {
-            fn vim_strchr(s: *const i8, c: c_int) -> *const i8;
+            fn vim_strchr(s: *const i8, c: c_int) -> *mut i8;
             fn nvim_get_p_cpo() -> *const i8;
             fn get_cursor_rel_lnum(wp: WinHandle, lnum: LinenrT) -> LinenrT;
         }

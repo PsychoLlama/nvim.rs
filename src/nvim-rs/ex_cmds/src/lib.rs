@@ -480,7 +480,7 @@ extern "C" {
     /// Wrapper for linetabsize_str (inline in C)
     pub fn nvim_linetabsize_str(s: *mut c_char) -> c_int;
     /// Find character in string
-    pub fn vim_strchr(string: *const c_char, c: c_int) -> *const c_char;
+    pub fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
 
     // ex_z accessors
     /// Check if there is only one window (ONE_WINDOW macro)

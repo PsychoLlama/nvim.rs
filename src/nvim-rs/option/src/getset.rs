@@ -21,7 +21,7 @@ extern "C" {
     fn xfree(ptr: *mut c_char);
     fn rs_ascii_iswhite(c: c_int) -> c_int;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
-    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 }
 
 // =============================================================================
