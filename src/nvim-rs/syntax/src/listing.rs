@@ -46,26 +46,13 @@ extern "C" {
         block: crate::types::SynBlockHandle,
         idx: c_int,
     ) -> crate::types::SynClusterHandle;
-    fn nvim_syncluster_get_name(cluster: crate::types::SynClusterHandle) -> *const c_char;
-    fn nvim_syncluster_get_list(cluster: crate::types::SynClusterHandle) -> *mut i16;
 
     // Pattern accessors (explicit block param)
     fn nvim_synblock_get_pattern_count(block: crate::types::SynBlockHandle) -> c_int;
     fn nvim_synblock_get_pattern(block: crate::types::SynBlockHandle, idx: c_int) -> SynPatHandle;
 
-    // Synpat field accessors
-    fn nvim_synpat_get_type(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_syncing(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_flags(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_syn_id(pat: SynPatHandle) -> i16;
-    fn nvim_synpat_get_syn_match_id(pat: SynPatHandle) -> i16;
-    fn nvim_synpat_get_sync_idx(pat: SynPatHandle) -> c_int;
-    fn nvim_synpat_get_pattern(pat: SynPatHandle) -> *const c_char;
-    fn nvim_synpat_get_off_flags(pat: SynPatHandle) -> i16;
+    // Synpat offset accessor (has C logic, kept as accessor)
     fn nvim_synpat_get_offset(pat: SynPatHandle, idx: c_int) -> c_int;
-    fn nvim_synpat_get_cont_list(pat: SynPatHandle) -> *mut i16;
-    fn nvim_synpat_get_next_list(pat: SynPatHandle) -> *mut i16;
-    fn nvim_synpat_get_cont_in_list(pat: SynPatHandle) -> *mut i16;
 
     // Keyword hashtable iteration
     fn nvim_synblock_get_keywtab(block: crate::types::SynBlockHandle) -> *mut c_void;
@@ -275,10 +262,10 @@ unsafe fn put_id_list(name: &[u8], list: *const i16, hl_id: c_int) {
             let scl_id = id - SYNID_CLUSTER;
             msg_putchar(b'@' as c_int);
             let cluster = nvim_synblock_get_cluster(nvim_syn_get_curwin_synblock(), scl_id);
-            let name_ptr = if cluster.is_null() {
+            let name_ptr: *const c_char = if cluster.is_null() {
                 std::ptr::null()
             } else {
-                nvim_syncluster_get_name(cluster)
+                (*cluster.as_ptr()).scl_name as *const c_char
             };
             if !name_ptr.is_null() {
                 msg_outtrans(name_ptr, 0, false);
@@ -306,7 +293,7 @@ unsafe fn put_pattern(
     last_matchgroup: &mut c_int,
 ) {
     // May need to output "matchgroup=group"
-    let syn_match_id = i32::from(nvim_synpat_get_syn_match_id(spp));
+    let syn_match_id = i32::from(unsafe { (*spp.as_ptr()).sp_syn_match_id });
     if *last_matchgroup != syn_match_id {
         *last_matchgroup = syn_match_id;
         nvim_msg_puts_hl_syn(c"matchgroup".as_ptr(), hl_id, false);
@@ -327,7 +314,7 @@ unsafe fn put_pattern(
     msg_putchar(c as c_int);
 
     // Find a separator char not in the pattern
-    let pattern = nvim_synpat_get_pattern(spp);
+    let pattern = unsafe { (*spp.as_ptr()).sp_pattern };
     let mut sep_idx = 0usize;
     if !pattern.is_null() {
         loop {
@@ -350,7 +337,7 @@ unsafe fn put_pattern(
     msg_putchar(sep as c_int);
 
     // Output any pattern offset options
-    let off_flags = i32::from(nvim_synpat_get_off_flags(spp));
+    let off_flags = i32::from(unsafe { (*spp.as_ptr()).sp_off_flags });
     let mut first = true;
     for (i, spo_name) in SPO_NAME_TAB.iter().enumerate() {
         let mask = 1i32 << i;
@@ -526,8 +513,8 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
             idx += 1;
             continue;
         }
-        let sp_syn_id = i32::from(nvim_synpat_get_syn_id(spp));
-        let sp_syncing = nvim_synpat_get_syncing(spp) != 0;
+        let sp_syn_id = i32::from(unsafe { (*spp.as_ptr()).sp_syn.id });
+        let sp_syncing = unsafe { (*spp.as_ptr()).sp_syncing };
         if sp_syn_id != id || sp_syncing != syncing {
             idx += 1;
             continue;
@@ -537,7 +524,7 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
         did_header = true;
         last_matchgroup = 0;
 
-        let sp_type = nvim_synpat_get_type(spp);
+        let sp_type = unsafe { (*spp.as_ptr()).sp_type } as i32;
         if sp_type == crate::types::SPTYPE_MATCH {
             put_pattern(b"match\0", b' ', spp, hl_id, &mut last_matchgroup);
             msg_putchar(b' ' as c_int);
@@ -545,7 +532,9 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
             // Collect start/skip/end patterns
             while idx < pat_count {
                 let cur = nvim_synblock_get_pattern(curwin_block, idx);
-                if cur.is_null() || nvim_synpat_get_type(cur) != crate::types::SPTYPE_START {
+                if cur.is_null()
+                    || unsafe { (*cur.as_ptr()).sp_type } as i32 != crate::types::SPTYPE_START
+                {
                     break;
                 }
                 put_pattern(b"start\0", b'=', cur, hl_id, &mut last_matchgroup);
@@ -553,14 +542,18 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
             }
             if idx < pat_count {
                 let cur = nvim_synblock_get_pattern(curwin_block, idx);
-                if !cur.is_null() && nvim_synpat_get_type(cur) == crate::types::SPTYPE_SKIP {
+                if !cur.is_null()
+                    && unsafe { (*cur.as_ptr()).sp_type } as i32 == crate::types::SPTYPE_SKIP
+                {
                     put_pattern(b"skip\0", b'=', cur, hl_id, &mut last_matchgroup);
                     idx += 1;
                 }
             }
             while idx < pat_count {
                 let cur = nvim_synblock_get_pattern(curwin_block, idx);
-                if cur.is_null() || nvim_synpat_get_type(cur) != crate::types::SPTYPE_END {
+                if cur.is_null()
+                    || unsafe { (*cur.as_ptr()).sp_type } as i32 != crate::types::SPTYPE_END
+                {
                     break;
                 }
                 put_pattern(b"end\0", b'=', cur, hl_id, &mut last_matchgroup);
@@ -570,20 +563,20 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
             msg_putchar(b' ' as c_int);
         }
 
-        let sp_flags = nvim_synpat_get_flags(spp);
+        let sp_flags = unsafe { (*spp.as_ptr()).sp_flags };
         syn_list_flags(NAMELIST1, sp_flags, hl_id);
 
-        let cont_list = nvim_synpat_get_cont_list(spp);
+        let cont_list = unsafe { (*spp.as_ptr()).sp_cont_list };
         if !cont_list.is_null() {
             put_id_list(b"contains\0", cont_list, hl_id);
         }
 
-        let cont_in_list = nvim_synpat_get_cont_in_list(spp);
+        let cont_in_list = unsafe { (*spp.as_ptr()).sp_syn.cont_in_list };
         if !cont_in_list.is_null() {
             put_id_list(b"containedin\0", cont_in_list, hl_id);
         }
 
-        let next_list = nvim_synpat_get_next_list(spp);
+        let next_list = unsafe { (*spp.as_ptr()).sp_next_list };
         if !next_list.is_null() {
             put_id_list(b"nextgroup\0", next_list, hl_id);
             syn_list_flags(NAMELIST2, sp_flags, hl_id);
@@ -596,12 +589,12 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
                 nvim_msg_puts_hl_syn(c"groupthere".as_ptr(), hl_id, false);
             }
             msg_putchar(b' ' as c_int);
-            let sync_idx = nvim_synpat_get_sync_idx(spp);
+            let sync_idx = unsafe { (*spp.as_ptr()).sp_sync_idx };
             if sync_idx >= 0 {
                 let sync_pat = nvim_synblock_get_pattern(curwin_block, sync_idx);
                 if !sync_pat.is_null() {
                     let group_name = nvim_syn_highlight_group_name(
-                        i32::from(nvim_synpat_get_syn_id(sync_pat)) - 1,
+                        i32::from(unsafe { (*sync_pat.as_ptr()).sp_syn.id }) - 1,
                     );
                     if !group_name.is_null() {
                         msg_outtrans(group_name, 0, false);
@@ -637,10 +630,10 @@ unsafe fn syn_list_cluster(id: c_int) {
     msg_putchar(b'\n' as c_int);
     let block = nvim_syn_get_curwin_synblock();
     let cluster = nvim_synblock_get_cluster(block, id);
-    let name = if cluster.is_null() {
+    let name: *const c_char = if cluster.is_null() {
         std::ptr::null()
     } else {
-        nvim_syncluster_get_name(cluster)
+        unsafe { (*cluster.as_ptr()).scl_name as *const c_char }
     };
     if !name.is_null() {
         msg_outtrans(name, 0, false);
@@ -653,7 +646,7 @@ unsafe fn syn_list_cluster(id: c_int) {
     let list = if cluster.is_null() {
         std::ptr::null_mut()
     } else {
-        nvim_syncluster_get_list(cluster)
+        unsafe { (*cluster.as_ptr()).scl_list }
     };
     if !list.is_null() && *list != 0 {
         put_id_list(b"cluster\0", list, HLF_D);
