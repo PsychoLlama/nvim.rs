@@ -29,18 +29,134 @@ type LinenrT = i32;
 /// Column number type.
 type ColnrT = i32;
 
-/// Opaque handle to winlinevars_T (line drawing state).
-#[repr(transparent)]
+/// A repr(C) kvec_t (generic, matches C kvec_t layout exactly).
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct WlvHandle(*mut c_void);
+pub struct KVec<T> {
+    pub size: usize,
+    pub capacity: usize,
+    pub items: *mut T,
+}
 
-impl WlvHandle {
-    /// Check if the handle is null.
+impl<T> KVec<T> {
+    /// Create an empty KVec (matches VIRTTEXT_EMPTY).
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn is_null(self) -> bool {
-        self.0.is_null()
+    pub const fn empty() -> Self {
+        Self {
+            size: 0,
+            capacity: 0,
+            items: std::ptr::null_mut(),
+        }
     }
+}
+
+/// VirtTextChunk - a single virtual text chunk (char *text, int hl_id).
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct VirtTextChunkC {
+    pub text: *mut c_char,
+    pub hl_id: c_int,
+}
+
+/// SignTextAttrs - a sign text attribute (schar_T text[2], int hl_id).
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SignTextAttrsC {
+    pub text: [ScharT; 2],
+    pub hl_id: c_int,
+}
+
+/// WinLineVars - the line drawing state struct, repr(C) matching winlinevars_T.
+///
+/// Field order and types must exactly match the C struct in drawline.c.
+#[repr(C)]
+pub struct WinLineVars {
+    /// line number to be drawn (const in C)
+    pub lnum: LinenrT,
+    /// fold info for this line (const in C)
+    pub foldinfo: FoldInfo,
+    /// first row in the window to be drawn (const in C)
+    pub startrow: c_int,
+    /// row in the window, excl w_winrow
+    pub row: c_int,
+    /// virtual column, before wrapping
+    pub vcol: ColnrT,
+    /// visual column on screen, after wrapping
+    pub col: c_int,
+    /// nonexistent columns added to "col" to force wrapping
+    pub boguscols: c_int,
+    /// bogus boguscols
+    pub old_boguscols: c_int,
+    /// offset for concealed characters
+    pub vcol_off_co: c_int,
+    /// offset relative start of line
+    pub off: c_int,
+    /// set when 'cursorline' active
+    pub cul_attr: c_int,
+    /// attribute for the whole line
+    pub line_attr: c_int,
+    /// low-priority attribute for the line
+    pub line_attr_lowprio: c_int,
+    /// line number attribute (sign numhl)
+    pub sign_num_attr: c_int,
+    /// previous line's number attribute (sign numhl)
+    pub prev_num_attr: c_int,
+    /// cursorline sign attribute (sign culhl)
+    pub sign_cul_attr: c_int,
+    /// start of inverting
+    pub fromcol: c_int,
+    /// end of inverting
+    pub tocol: c_int,
+    /// virtual column after showbreak
+    pub vcol_sbr: ColnrT,
+    /// overlong line, skipping first x chars
+    pub need_showbreak: bool,
+    /// attributes for next character
+    pub char_attr: c_int,
+    /// number of extra bytes
+    pub n_extra: c_int,
+    /// chars with special attr
+    pub n_attr: c_int,
+    /// string of extra chars
+    pub p_extra: *mut c_char,
+    /// attributes for p_extra
+    pub extra_attr: c_int,
+    /// extra chars, all the same
+    pub sc_extra: ScharT,
+    /// final char, mandatory if set
+    pub sc_final: ScharT,
+    /// n_extra set for inline virtual text
+    pub extra_for_extmark: bool,
+    /// must be as large as transchar_charbuf[] in charset.c
+    pub extra: [c_char; 11],
+    /// type of diff highlighting (hlf_T as c_int)
+    pub diff_hlf: c_int,
+    /// nr of virtual lines
+    pub n_virt_lines: c_int,
+    /// nr of virtual lines belonging to previous line
+    pub n_virt_below: c_int,
+    /// nr of filler lines to be drawn
+    pub filler_lines: c_int,
+    /// nr of filler lines still to do + 1
+    pub filler_todo: c_int,
+    /// sign attributes for the sign column (SIGN_SHOW_MAX = 9)
+    pub sattrs: [SignTextAttrsC; 9],
+    /// do consider wrapping in linebreak mode only after non whitespace
+    pub need_lbr: bool,
+    /// virtual inline text (VirtText kvec)
+    pub virt_inline: KVec<VirtTextChunkC>,
+    /// current position in virt_inline
+    pub virt_inline_i: usize,
+    /// hl_mode for virt_inline (HlMode as c_int)
+    pub virt_inline_hl_mode: c_int,
+    /// reset extra attr flag
+    pub reset_extra_attr: bool,
+    /// nr of cells to skip for w_leftcol or w_skipcol or concealing
+    pub skip_cells: c_int,
+    /// nr of skipped cells for virtual text
+    pub skipped_cells: c_int,
+    /// if not NULL, highlight colorcolumn using according columns array
+    pub color_cols: *mut c_int,
 }
 
 /// Fold info structure (matching C foldinfo_T).
@@ -127,22 +243,6 @@ extern "C" {
     fn nvim_get_linebuf_vcol() -> *mut ColnrT;
 
     // WLV accessor functions
-    fn nvim_wlv_get_lnum(wlv: WlvHandle) -> LinenrT;
-    fn nvim_wlv_get_foldinfo(wlv: WlvHandle) -> FoldInfo;
-    fn nvim_wlv_get_row(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_get_startrow(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_get_off(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_off(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_filler_lines(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_get_filler_todo(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_get_sign_num_attr(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_get_sign_cul_attr(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_get_prev_num_attr(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_prev_num_attr(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_n_virt_lines(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_get_n_virt_below(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_get_sattr_text(wlv: WlvHandle, sign_idx: c_int, char_idx: c_int) -> ScharT;
-    fn nvim_wlv_get_sattr_hl_id(wlv: WlvHandle, sign_idx: c_int) -> c_int;
 
     // Decoration function for sign numhl lookup
     fn decor_redraw_signs(
@@ -212,12 +312,6 @@ extern "C" {
     fn nvim_win_extmark_push(ns_id: u64, mark_id: u64, win_row: c_int, win_col: c_int);
 
     // Additional WLV accessors for handle_inline_virtual_text
-    fn nvim_wlv_set_virt_inline_i(wlv: WlvHandle, val: usize);
-    fn nvim_wlv_reset_virt_inline(wlv: WlvHandle);
-    fn nvim_wlv_get_virt_inline_ptr(wlv: WlvHandle) -> *mut c_void;
-    fn nvim_wlv_set_virt_inline(wlv: WlvHandle, vt: *mut c_void);
-    fn nvim_wlv_set_virt_inline_hl_mode(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_virt_inline_hl_mode(wlv: WlvHandle) -> c_int;
 
     // Additional DecorRange accessors for handle_inline_virtual_text
     fn nvim_decor_range_get_start_col(range: *mut c_void) -> c_int;
@@ -432,11 +526,11 @@ fn use_cursor_line_highlight_impl(wp: WinHandle, lnum: LinenrT) -> bool {
 }
 
 /// Fill cells with a character (draw_col_fill).
-fn draw_col_fill_impl(wlv: WlvHandle, fillchar: ScharT, width: c_int, attr: c_int) {
+fn draw_col_fill_impl(wlv: *mut WinLineVars, fillchar: ScharT, width: c_int, attr: c_int) {
     unsafe {
         let linebuf_char = nvim_get_linebuf_char();
         let linebuf_attr = nvim_get_linebuf_attr();
-        let mut off = nvim_wlv_get_off(wlv);
+        let mut off = (*wlv).off;
 
         for _ in 0..width {
             *linebuf_char.add(off as usize) = fillchar;
@@ -444,20 +538,20 @@ fn draw_col_fill_impl(wlv: WlvHandle, fillchar: ScharT, width: c_int, attr: c_in
             off += 1;
         }
 
-        nvim_wlv_set_off(wlv, off);
+        (*wlv).off = off;
     }
 }
 
 /// Return true if CursorLineNr highlight is to be used for the number column.
-fn use_cursor_line_nr_impl(wp: WinHandle, wlv: WlvHandle) -> bool {
+fn use_cursor_line_nr_impl(wp: WinHandle, wlv: *mut WinLineVars) -> bool {
     unsafe {
         let p_cul = nvim_win_get_p_cul(wp) != 0;
-        let lnum = nvim_wlv_get_lnum(wlv);
+        let lnum = (*wlv).lnum;
         let cursorline = nvim_win_get_cursorline(wp);
         let culopt_flags = nvim_win_get_p_culopt_flags(wp);
-        let row = nvim_wlv_get_row(wlv);
-        let startrow = nvim_wlv_get_startrow(wlv);
-        let filler_lines = nvim_wlv_get_filler_lines(wlv);
+        let row = (*wlv).row;
+        let startrow = (*wlv).startrow;
+        let filler_lines = (*wlv).filler_lines;
 
         p_cul
             && lnum == cursorline
@@ -469,19 +563,19 @@ fn use_cursor_line_nr_impl(wp: WinHandle, wlv: WlvHandle) -> bool {
 
 /// Return line number attribute, combining the appropriate LineNr* highlight
 /// with the highest priority sign numhl highlight, if any.
-fn get_line_number_attr_impl(wp: WinHandle, wlv: WlvHandle) -> c_int {
+fn get_line_number_attr_impl(wp: WinHandle, wlv: *mut WinLineVars) -> c_int {
     unsafe {
-        let mut numhl_attr = nvim_wlv_get_sign_num_attr(wlv);
+        let mut numhl_attr = (*wlv).sign_num_attr;
 
         // Get previous sign numhl for virt_lines belonging to the previous line.
-        let n_virt_lines = nvim_wlv_get_n_virt_lines(wlv);
-        let filler_todo = nvim_wlv_get_filler_todo(wlv);
-        let n_virt_below = nvim_wlv_get_n_virt_below(wlv);
+        let n_virt_lines = (*wlv).n_virt_lines;
+        let filler_todo = (*wlv).filler_todo;
+        let n_virt_below = (*wlv).n_virt_below;
 
         if (n_virt_lines - filler_todo) < n_virt_below {
-            let mut prev = nvim_wlv_get_prev_num_attr(wlv);
+            let mut prev = (*wlv).prev_num_attr;
             if prev == -1 {
-                let lnum = nvim_wlv_get_lnum(wlv);
+                let lnum = (*wlv).lnum;
                 let buf = nvim_win_get_buffer(wp);
                 decor_redraw_signs(
                     wp,
@@ -495,7 +589,7 @@ fn get_line_number_attr_impl(wp: WinHandle, wlv: WlvHandle) -> c_int {
                 if prev > 0 {
                     prev = syn_id2attr(prev);
                 }
-                nvim_wlv_set_prev_num_attr(wlv, prev);
+                (*wlv).prev_num_attr = prev;
             }
             numhl_attr = prev;
         }
@@ -505,7 +599,7 @@ fn get_line_number_attr_impl(wp: WinHandle, wlv: WlvHandle) -> c_int {
         }
 
         if nvim_win_get_p_rnu(wp) != 0 {
-            let lnum = nvim_wlv_get_lnum(wlv);
+            let lnum = (*wlv).lnum;
             let cursor_lnum = nvim_win_get_cursor_lnum(wp);
             if lnum < cursor_lnum {
                 return hl_combine_attr(nvim_win_hl_attr(wp, HLF_LNA), numhl_attr);
@@ -569,7 +663,7 @@ fn fill_foldcolumn_impl(
 }
 
 /// Setup for drawing the 'foldcolumn', if there is one.
-fn draw_foldcolumn_impl(wp: WinHandle, wlv: WlvHandle) {
+fn draw_foldcolumn_impl(wp: WinHandle, wlv: *mut WinLineVars) {
     unsafe {
         // compute_foldcolumn is rs_compute_foldcolumn in C
         extern "C" {
@@ -578,15 +672,15 @@ fn draw_foldcolumn_impl(wp: WinHandle, wlv: WlvHandle) {
 
         let fdc = rs_compute_foldcolumn(wp, 0);
         if fdc > 0 {
-            let lnum = nvim_wlv_get_lnum(wlv);
-            let foldinfo = nvim_wlv_get_foldinfo(wlv);
+            let lnum = (*wlv).lnum;
+            let foldinfo = (*wlv).foldinfo;
             let hlf = if use_cursor_line_highlight_impl(wp, lnum) {
                 HLF_CLF
             } else {
                 HLF_FC
             };
             let attr = nvim_win_hl_attr(wp, hlf);
-            let mut off = nvim_wlv_get_off(wlv);
+            let mut off = (*wlv).off;
             fill_foldcolumn_impl(
                 wp,
                 foldinfo,
@@ -597,16 +691,16 @@ fn draw_foldcolumn_impl(wp: WinHandle, wlv: WlvHandle) {
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
             );
-            nvim_wlv_set_off(wlv, off);
+            (*wlv).off = off;
         }
     }
 }
 
 /// Draw a sign in the sign or number column.
-fn draw_sign_impl(nrcol: bool, wp: WinHandle, wlv: WlvHandle, sign_idx: c_int) {
+fn draw_sign_impl(nrcol: bool, wp: WinHandle, wlv: *mut WinLineVars, sign_idx: c_int) {
     unsafe {
-        let lnum = nvim_wlv_get_lnum(wlv);
-        let sattr_text0 = nvim_wlv_get_sattr_text(wlv, sign_idx, 0);
+        let lnum = (*wlv).lnum;
+        let sattr_text0 = (*wlv).sattrs[sign_idx as usize].text[0];
         let scl_attr = nvim_win_hl_attr(
             wp,
             if use_cursor_line_highlight_impl(wp, lnum) {
@@ -616,10 +710,10 @@ fn draw_sign_impl(nrcol: bool, wp: WinHandle, wlv: WlvHandle, sign_idx: c_int) {
             },
         );
 
-        let row = nvim_wlv_get_row(wlv);
-        let startrow = nvim_wlv_get_startrow(wlv);
-        let filler_lines = nvim_wlv_get_filler_lines(wlv);
-        let filler_todo = nvim_wlv_get_filler_todo(wlv);
+        let row = (*wlv).row;
+        let startrow = (*wlv).startrow;
+        let filler_lines = (*wlv).filler_lines;
+        let filler_todo = (*wlv).filler_todo;
 
         if sattr_text0 != 0 && row == startrow + filler_lines && filler_todo <= 0 {
             let fill = if nrcol {
@@ -628,8 +722,8 @@ fn draw_sign_impl(nrcol: bool, wp: WinHandle, wlv: WlvHandle, sign_idx: c_int) {
                 SIGN_WIDTH
             };
 
-            let sign_cul_attr = nvim_wlv_get_sign_cul_attr(wlv);
-            let hl_id = nvim_wlv_get_sattr_hl_id(wlv, sign_idx);
+            let sign_cul_attr = (*wlv).sign_cul_attr;
+            let hl_id = (*wlv).sattrs[sign_idx as usize].hl_id;
             let mut attr = if sign_cul_attr != 0 {
                 sign_cul_attr
             } else if hl_id != 0 {
@@ -641,13 +735,13 @@ fn draw_sign_impl(nrcol: bool, wp: WinHandle, wlv: WlvHandle, sign_idx: c_int) {
 
             draw_col_fill_impl(wlv, rs_schar_from_char(c_int::from(b' ')), fill, attr);
 
-            let off = nvim_wlv_get_off(wlv);
+            let off = (*wlv).off;
             let sign_pos = off - SIGN_WIDTH - c_int::from(nrcol);
             debug_assert!(sign_pos >= 0);
 
             let linebuf_char = nvim_get_linebuf_char();
             *linebuf_char.add(sign_pos as usize) = sattr_text0;
-            *linebuf_char.add((sign_pos + 1) as usize) = nvim_wlv_get_sattr_text(wlv, sign_idx, 1);
+            *linebuf_char.add((sign_pos + 1) as usize) = (*wlv).sattrs[sign_idx as usize].text[1];
         } else {
             debug_assert!(!nrcol); // handled in draw_lnum_col()
             draw_col_fill_impl(
@@ -661,7 +755,7 @@ fn draw_sign_impl(nrcol: bool, wp: WinHandle, wlv: WlvHandle, sign_idx: c_int) {
 }
 
 /// Display the absolute or relative line number.
-fn draw_lnum_col_impl(wp: WinHandle, wlv: WlvHandle) {
+fn draw_lnum_col_impl(wp: WinHandle, wlv: *mut WinLineVars) {
     unsafe {
         extern "C" {
             fn vim_strchr(s: *const i8, c: c_int) -> *mut i8;
@@ -676,10 +770,10 @@ fn draw_lnum_col_impl(wp: WinHandle, wlv: WlvHandle) {
         let p_nu = nvim_win_get_p_nu(wp) != 0;
         let p_rnu = nvim_win_get_p_rnu(wp) != 0;
 
-        let row = nvim_wlv_get_row(wlv);
-        let startrow = nvim_wlv_get_startrow(wlv);
-        let filler_lines = nvim_wlv_get_filler_lines(wlv);
-        let lnum = nvim_wlv_get_lnum(wlv);
+        let row = (*wlv).row;
+        let startrow = (*wlv).startrow;
+        let filler_lines = (*wlv).filler_lines;
+        let lnum = (*wlv).lnum;
         let p_bri = nvim_win_get_p_bri(wp) != 0;
         let skipcol = nvim_win_get_skipcol(wp);
         let topline = nvim_win_get_topline(wp);
@@ -689,8 +783,8 @@ fn draw_lnum_col_impl(wp: WinHandle, wlv: WlvHandle) {
             && !((has_cpo_n && !p_bri) && skipcol > 0 && lnum == topline)
         {
             let minscwidth = nvim_win_get_minscwidth(wp);
-            let sattr_text0 = nvim_wlv_get_sattr_text(wlv, 0, 0);
-            let filler_todo = nvim_wlv_get_filler_todo(wlv);
+            let sattr_text0 = (*wlv).sattrs[0].text[0];
+            let filler_todo = (*wlv).filler_todo;
 
             if minscwidth == SCL_NUM
                 && sattr_text0 != 0
@@ -743,7 +837,7 @@ fn draw_lnum_col_impl(wp: WinHandle, wlv: WlvHandle) {
                     // Draw the line number using draw_col_buf logic
                     let linebuf_char = nvim_get_linebuf_char();
                     let linebuf_attr = nvim_get_linebuf_attr();
-                    let mut off = nvim_wlv_get_off(wlv);
+                    let mut off = (*wlv).off;
 
                     for i in 0..width {
                         let c = if (i as usize) < len {
@@ -756,7 +850,7 @@ fn draw_lnum_col_impl(wp: WinHandle, wlv: WlvHandle) {
                         off += 1;
                     }
 
-                    nvim_wlv_set_off(wlv, off);
+                    (*wlv).off = off;
                 } else {
                     draw_col_fill_impl(wlv, rs_schar_from_char(c_int::from(b' ')), width, attr);
                 }
@@ -767,30 +861,8 @@ fn draw_lnum_col_impl(wp: WinHandle, wlv: WlvHandle) {
 
 // New WLV accessor functions
 extern "C" {
-    fn nvim_wlv_get_color_cols(wlv: WlvHandle) -> *mut c_int;
-    fn nvim_wlv_set_color_cols(wlv: WlvHandle, val: *mut c_int);
-    fn nvim_wlv_get_vcol(wlv: WlvHandle) -> ColnrT;
-    fn nvim_wlv_set_vcol(wlv: WlvHandle, val: ColnrT);
-    fn nvim_wlv_get_vcol_off_co(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_get_col(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_col(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_boguscols(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_boguscols(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_old_boguscols(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_old_boguscols(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_cul_attr(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_cul_attr(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_line_attr(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_line_attr(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_line_attr_lowprio(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_line_attr_lowprio(wlv: WlvHandle, val: c_int);
 
     // Additional wlv accessors for win_line_start and fix_for_boguscols
-    fn nvim_wlv_get_n_extra(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_n_extra(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_set_vcol_off_co(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_need_lbr(wlv: WlvHandle) -> bool;
-    fn nvim_wlv_set_need_lbr(wlv: WlvHandle, val: bool);
 
     // HLF constants
     fn nvim_get_hlf_mc() -> c_int;
@@ -805,12 +877,8 @@ extern "C" {
     fn nvim_qf_current_entry(wp: WinHandle) -> LinenrT;
 
     // Diff highlight accessor
-    fn nvim_wlv_get_diff_hlf(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_diff_hlf(wlv: WlvHandle, val: c_int);
 
     // Reset extra attribute accessors
-    fn nvim_wlv_get_reset_extra_attr(wlv: WlvHandle) -> bool;
-    fn nvim_wlv_set_reset_extra_attr(wlv: WlvHandle, val: bool);
 
     // Highlight functions for set_line_attr_for_diff (Rust-exported)
     fn hl_get_underline() -> c_int;
@@ -820,24 +888,14 @@ extern "C" {
     fn nvim_get_breakindent_win_lnum(wp: WinHandle, lnum: LinenrT) -> c_int;
 
     // fromcol/tocol accessors
-    fn nvim_wlv_get_fromcol(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_fromcol(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_tocol(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_tocol(wlv: WlvHandle, val: c_int);
 
     // need_showbreak accessors
-    fn nvim_wlv_get_need_showbreak(wlv: WlvHandle) -> bool;
-    fn nvim_wlv_set_need_showbreak(wlv: WlvHandle, val: bool);
 
     // handle_showbreak_and_filler accessors (not yet declared above)
-    fn nvim_wlv_get_vcol_sbr(wlv: WlvHandle) -> ColnrT;
-    fn nvim_wlv_set_vcol_sbr(wlv: WlvHandle, val: ColnrT);
     fn nvim_win_get_fcs_diff(wp: WinHandle) -> ScharT;
     // rs_get_showbreak_value already declared above
 
     // has_more_inline_virt accessors
-    fn nvim_wlv_get_virt_inline_i(wlv: WlvHandle) -> usize;
-    fn nvim_wlv_get_virt_inline_size(wlv: WlvHandle) -> usize;
     fn nvim_decor_state_get_future_begin(state: *mut c_void) -> c_int;
     fn nvim_decor_state_get_ranges_count(state: *mut c_void) -> c_int;
     fn nvim_decor_state_get_range_by_idx(state: *mut c_void, idx: c_int) -> *mut c_void;
@@ -845,28 +903,12 @@ extern "C" {
     // nvim_decor_virt_text_get_width already declared above
 
     // handle_inline_virtual_text additional accessors (p_extra, sc_extra, etc.)
-    fn nvim_wlv_get_p_extra(wlv: WlvHandle) -> *mut c_char;
-    fn nvim_wlv_set_p_extra(wlv: WlvHandle, val: *mut c_char);
-    fn nvim_wlv_get_sc_extra(wlv: WlvHandle) -> ScharT;
-    fn nvim_wlv_set_sc_extra(wlv: WlvHandle, val: ScharT);
-    fn nvim_wlv_get_sc_final(wlv: WlvHandle) -> ScharT;
-    fn nvim_wlv_set_sc_final(wlv: WlvHandle, val: ScharT);
-    fn nvim_wlv_get_extra_attr(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_extra_attr(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_n_attr(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_n_attr(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_skip_cells(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_skip_cells(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_skipped_cells(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_skipped_cells(wlv: WlvHandle, val: c_int);
-    fn nvim_wlv_get_extra_for_extmark(wlv: WlvHandle) -> bool;
-    fn nvim_wlv_set_extra_for_extmark(wlv: WlvHandle, val: bool);
 }
 
 /// Advance wlv->color_cols past the current vcol.
-fn advance_color_col_impl(wlv: WlvHandle, vcol: c_int) {
+fn advance_color_col_impl(wlv: *mut WinLineVars, vcol: c_int) {
     unsafe {
-        let mut color_cols = nvim_wlv_get_color_cols(wlv);
+        let mut color_cols = (*wlv).color_cols;
         if color_cols.is_null() {
             return;
         }
@@ -876,9 +918,9 @@ fn advance_color_col_impl(wlv: WlvHandle, vcol: c_int) {
         }
 
         if *color_cols < 0 {
-            nvim_wlv_set_color_cols(wlv, std::ptr::null_mut());
+            (*wlv).color_cols = std::ptr::null_mut();
         } else {
-            nvim_wlv_set_color_cols(wlv, color_cols);
+            (*wlv).color_cols = color_cols;
         }
     }
 }
@@ -1016,49 +1058,49 @@ pub extern "C" fn rs_use_cursor_line_highlight(wp: WinHandle, lnum: LinenrT) -> 
 /// We make a compromise here (#7383):
 /// - low-priority CursorLine if fg is not set
 /// - high-priority ("same as Vim" priority) CursorLine if fg is set
-unsafe fn apply_cursorline_highlight_impl(wp: WinHandle, wlv: WlvHandle) {
+unsafe fn apply_cursorline_highlight_impl(wp: WinHandle, wlv: *mut WinLineVars) {
     let hlf_cul = nvim_get_hlf_cul();
     let cul_attr = nvim_win_hl_attr(wp, hlf_cul);
-    nvim_wlv_set_cul_attr(wlv, cul_attr);
+    (*wlv).cul_attr = cul_attr;
 
     let ae: HlAttrs = rs_syn_attr2entry(cul_attr);
 
     if ae.rgb_fg_color == -1 && ae.cterm_fg_color == 0 {
         // Low-priority CursorLine when fg is not set
-        nvim_wlv_set_line_attr_lowprio(wlv, cul_attr);
+        (*wlv).line_attr_lowprio = cul_attr;
     } else {
         // High-priority CursorLine when fg is set
         let state = nvim_get_state();
         let buf = nvim_win_get_w_buffer(wp);
-        let lnum = nvim_wlv_get_lnum(wlv);
+        let lnum = (*wlv).lnum;
 
         if (state & MODE_INSERT) == 0 && rs_bt_quickfix(buf) && nvim_qf_current_entry(wp) == lnum {
             // In quickfix window, combine with existing line_attr
-            let line_attr = nvim_wlv_get_line_attr(wlv);
-            nvim_wlv_set_line_attr(wlv, hl_combine_attr(cul_attr, line_attr));
+            let line_attr = (*wlv).line_attr;
+            (*wlv).line_attr = hl_combine_attr(cul_attr, line_attr);
         } else {
-            nvim_wlv_set_line_attr(wlv, cul_attr);
+            (*wlv).line_attr = cul_attr;
         }
     }
 }
 
 /// Apply cursorline highlight (FFI export).
 #[no_mangle]
-pub unsafe extern "C" fn rs_apply_cursorline_highlight(wp: WinHandle, wlv: WlvHandle) {
+pub unsafe extern "C" fn rs_apply_cursorline_highlight(wp: WinHandle, wlv: *mut WinLineVars) {
     apply_cursorline_highlight_impl(wp, wlv);
 }
 
 /// Set line attribute for diff mode highlight.
 ///
 /// Overlay CursorLine onto diff-mode highlight when applicable.
-unsafe fn set_line_attr_for_diff_impl(wp: WinHandle, wlv: WlvHandle) {
-    let diff_hlf = nvim_wlv_get_diff_hlf(wlv);
+unsafe fn set_line_attr_for_diff_impl(wp: WinHandle, wlv: *mut WinLineVars) {
+    let diff_hlf = (*wlv).diff_hlf;
     let line_attr = nvim_win_hl_attr(wp, diff_hlf);
-    nvim_wlv_set_line_attr(wlv, line_attr);
+    (*wlv).line_attr = line_attr;
 
-    let cul_attr = nvim_wlv_get_cul_attr(wlv);
+    let cul_attr = (*wlv).cul_attr;
     if cul_attr != 0 {
-        let line_attr_lowprio = nvim_wlv_get_line_attr_lowprio(wlv);
+        let line_attr_lowprio = (*wlv).line_attr_lowprio;
         let new_attr = if line_attr_lowprio != 0 {
             // Low-priority CursorLine: combine with underline
             let combined = hl_combine_attr(cul_attr, line_attr);
@@ -1067,45 +1109,45 @@ unsafe fn set_line_attr_for_diff_impl(wp: WinHandle, wlv: WlvHandle) {
             // High-priority CursorLine
             hl_combine_attr(line_attr, cul_attr)
         };
-        nvim_wlv_set_line_attr(wlv, new_attr);
+        (*wlv).line_attr = new_attr;
     }
 }
 
 /// Set line attribute for diff mode (FFI export).
 #[no_mangle]
-pub unsafe extern "C" fn rs_set_line_attr_for_diff(wp: WinHandle, wlv: WlvHandle) {
+pub unsafe extern "C" fn rs_set_line_attr_for_diff(wp: WinHandle, wlv: *mut WinLineVars) {
     set_line_attr_for_diff_impl(wp, wlv);
 }
 
 /// Handle breakindent: draw indent for wrapped text.
 ///
 /// If need_showbreak is set, breakindent also applies.
-unsafe fn handle_breakindent_impl(wp: WinHandle, wlv: WlvHandle) {
+unsafe fn handle_breakindent_impl(wp: WinHandle, wlv: *mut WinLineVars) {
     let p_bri = nvim_win_get_p_bri(wp);
-    let row = nvim_wlv_get_row(wlv);
-    let startrow = nvim_wlv_get_startrow(wlv);
-    let filler_lines = nvim_wlv_get_filler_lines(wlv);
-    let need_showbreak = nvim_wlv_get_need_showbreak(wlv);
+    let row = (*wlv).row;
+    let startrow = (*wlv).startrow;
+    let filler_lines = (*wlv).filler_lines;
+    let need_showbreak = (*wlv).need_showbreak;
 
     if p_bri != 0 && (row > startrow + filler_lines || need_showbreak) {
         let mut attr = 0;
-        let diff_hlf = nvim_wlv_get_diff_hlf(wlv);
+        let diff_hlf = (*wlv).diff_hlf;
         if diff_hlf != 0 {
             attr = nvim_win_hl_attr(wp, diff_hlf);
         }
 
-        let lnum = nvim_wlv_get_lnum(wlv);
+        let lnum = (*wlv).lnum;
         let mut num = nvim_get_breakindent_win_lnum(wp, lnum);
 
         if row == startrow {
             num -= rs_win_col_off2(wp);
-            let n_extra = nvim_wlv_get_n_extra(wlv);
+            let n_extra = (*wlv).n_extra;
             if n_extra < 0 {
                 num = 0;
             }
         }
 
-        let vcol_before = nvim_wlv_get_vcol(wlv);
+        let vcol_before = (*wlv).vcol;
         let hlf_mc = nvim_get_hlf_mc();
 
         let linebuf_char = nvim_get_linebuf_char();
@@ -1115,66 +1157,66 @@ unsafe fn handle_breakindent_impl(wp: WinHandle, wlv: WlvHandle) {
         let space_schar = rs_schar_from_char(c_int::from(b' '));
 
         for _ in 0..num {
-            let off = nvim_wlv_get_off(wlv);
+            let off = (*wlv).off;
             *linebuf_char.add(off as usize) = space_schar;
 
-            let vcol = nvim_wlv_get_vcol(wlv);
+            let vcol = (*wlv).vcol;
             advance_color_col_impl(wlv, vcol);
 
             let mut myattr = attr;
-            let color_cols = nvim_wlv_get_color_cols(wlv);
+            let color_cols = (*wlv).color_cols;
             if !color_cols.is_null() && vcol == *color_cols {
                 myattr = hl_combine_attr(nvim_win_hl_attr(wp, hlf_mc), myattr);
             }
 
             *linebuf_attr.add(off as usize) = myattr;
             *linebuf_vcol.add(off as usize) = vcol;
-            nvim_wlv_set_vcol(wlv, vcol + 1);
-            nvim_wlv_set_off(wlv, off + 1);
+            (*wlv).vcol = vcol + 1;
+            (*wlv).off = off + 1;
         }
 
         // Correct start of highlighted area for 'breakindent'
-        let fromcol = nvim_wlv_get_fromcol(wlv);
-        let vcol = nvim_wlv_get_vcol(wlv);
+        let fromcol = (*wlv).fromcol;
+        let vcol = (*wlv).vcol;
         if fromcol >= vcol_before && fromcol < vcol {
-            nvim_wlv_set_fromcol(wlv, vcol);
+            (*wlv).fromcol = vcol;
         }
 
         // Correct end of highlighted area for 'breakindent'
-        let tocol = nvim_wlv_get_tocol(wlv);
+        let tocol = (*wlv).tocol;
         if tocol == vcol_before {
-            nvim_wlv_set_tocol(wlv, vcol);
+            (*wlv).tocol = vcol;
         }
     }
 
     // Handle need_showbreak clearing
     let skipcol = nvim_win_get_skipcol(wp);
-    let startrow = nvim_wlv_get_startrow(wlv);
+    let startrow = (*wlv).startrow;
     let p_wrap = nvim_win_get_p_wrap(wp);
     let briopt_sbr = nvim_win_get_briopt_sbr(wp);
 
     if skipcol > 0 && startrow == 0 && p_wrap != 0 && briopt_sbr {
-        nvim_wlv_set_need_showbreak(wlv, false);
+        (*wlv).need_showbreak = false;
     }
 }
 
 /// Handle breakindent (FFI export).
 #[no_mangle]
-pub unsafe extern "C" fn rs_handle_breakindent(wp: WinHandle, wlv: WlvHandle) {
+pub unsafe extern "C" fn rs_handle_breakindent(wp: WinHandle, wlv: *mut WinLineVars) {
     handle_breakindent_impl(wp, wlv);
 }
 
 /// Handle showbreak and filler lines.
 ///
 /// Draws filler content for virtual lines and 'showbreak' string.
-unsafe fn handle_showbreak_and_filler_impl(wp: WinHandle, wlv: WlvHandle) {
+unsafe fn handle_showbreak_and_filler_impl(wp: WinHandle, wlv: *mut WinLineVars) {
     let view_width = nvim_win_get_view_width(wp);
-    let off = nvim_wlv_get_off(wlv);
+    let off = (*wlv).off;
     let remaining = view_width - off;
 
-    let filler_todo = nvim_wlv_get_filler_todo(wlv);
-    let filler_lines = nvim_wlv_get_filler_lines(wlv);
-    let n_virt_lines = nvim_wlv_get_n_virt_lines(wlv);
+    let filler_todo = (*wlv).filler_todo;
+    let filler_lines = (*wlv).filler_lines;
+    let n_virt_lines = (*wlv).n_virt_lines;
 
     if filler_todo > filler_lines - n_virt_lines {
         // Fill with spaces for virtual lines
@@ -1189,14 +1231,14 @@ unsafe fn handle_showbreak_and_filler_impl(wp: WinHandle, wlv: WlvHandle) {
 
     // Draw 'showbreak' at the start of each broken line
     let sbr = rs_get_showbreak_value(wp);
-    let need_showbreak = nvim_wlv_get_need_showbreak(wlv);
+    let need_showbreak = (*wlv).need_showbreak;
 
     if !sbr.is_null() && *sbr != 0 && need_showbreak {
         // Combine 'showbreak' with 'cursorline', prioritizing 'showbreak'
-        let cul_attr = nvim_wlv_get_cul_attr(wlv);
+        let cul_attr = (*wlv).cul_attr;
         let at_attr = nvim_win_hl_attr(wp, HLF_AT);
         let attr = hl_combine_attr(cul_attr, at_attr);
-        let vcol_before = nvim_wlv_get_vcol(wlv);
+        let vcol_before = (*wlv).vcol;
 
         // Get showbreak string length
         let mut sbr_len: usize = 0;
@@ -1207,36 +1249,36 @@ unsafe fn handle_showbreak_and_filler_impl(wp: WinHandle, wlv: WlvHandle) {
         }
         draw_col_buf_impl(wp, wlv, sbr, sbr_len, attr, std::ptr::null(), true);
 
-        let vcol = nvim_wlv_get_vcol(wlv);
-        nvim_wlv_set_vcol_sbr(wlv, vcol);
+        let vcol = (*wlv).vcol;
+        (*wlv).vcol_sbr = vcol;
 
         // Correct start of highlighted area for 'showbreak'
-        let fromcol = nvim_wlv_get_fromcol(wlv);
+        let fromcol = (*wlv).fromcol;
         if fromcol >= vcol_before && fromcol < vcol {
-            nvim_wlv_set_fromcol(wlv, vcol);
+            (*wlv).fromcol = vcol;
         }
 
         // Correct end of highlighted area for 'showbreak'
-        let tocol = nvim_wlv_get_tocol(wlv);
+        let tocol = (*wlv).tocol;
         if tocol == vcol_before {
-            nvim_wlv_set_tocol(wlv, vcol);
+            (*wlv).tocol = vcol;
         }
     }
 
     // Clear need_showbreak flag when appropriate
     let skipcol = nvim_win_get_skipcol(wp);
-    let startrow = nvim_wlv_get_startrow(wlv);
+    let startrow = (*wlv).startrow;
     let p_wrap = nvim_win_get_p_wrap(wp);
     let briopt_sbr = nvim_win_get_briopt_sbr(wp);
 
     if skipcol == 0 || startrow > 0 || p_wrap == 0 || !briopt_sbr {
-        nvim_wlv_set_need_showbreak(wlv, false);
+        (*wlv).need_showbreak = false;
     }
 }
 
 /// Handle showbreak and filler (FFI export).
 #[no_mangle]
-pub unsafe extern "C" fn rs_handle_showbreak_and_filler(wp: WinHandle, wlv: WlvHandle) {
+pub unsafe extern "C" fn rs_handle_showbreak_and_filler(wp: WinHandle, wlv: *mut WinLineVars) {
     handle_showbreak_and_filler_impl(wp, wlv);
 }
 
@@ -1244,10 +1286,10 @@ pub unsafe extern "C" fn rs_handle_showbreak_and_filler(wp: WinHandle, wlv: WlvH
 ///
 /// Returns true if there are more inline virtual text chunks to draw at or after
 /// the given column position `v`.
-unsafe fn has_more_inline_virt_impl(wlv: WlvHandle, v: isize) -> bool {
+unsafe fn has_more_inline_virt_impl(wlv: *mut WinLineVars, v: isize) -> bool {
     // Check if still inside current virt_inline
-    let virt_inline_i = nvim_wlv_get_virt_inline_i(wlv);
-    let virt_inline_size = nvim_wlv_get_virt_inline_size(wlv);
+    let virt_inline_i = (*wlv).virt_inline_i;
+    let virt_inline_size = (*wlv).virt_inline.size;
     if virt_inline_i < virt_inline_size {
         return true;
     }
@@ -1301,13 +1343,18 @@ unsafe fn has_more_inline_virt_impl(wlv: WlvHandle, v: isize) -> bool {
 
 /// Check for more inline virtual text (FFI export).
 #[no_mangle]
-pub unsafe extern "C" fn rs_has_more_inline_virt(wlv: WlvHandle, v: isize) -> bool {
+pub unsafe extern "C" fn rs_has_more_inline_virt(wlv: *mut WinLineVars, v: isize) -> bool {
     has_more_inline_virt_impl(wlv, v)
 }
 
 /// Fill cells with a character.
 #[no_mangle]
-pub extern "C" fn rs_draw_col_fill(wlv: WlvHandle, fillchar: ScharT, width: c_int, attr: c_int) {
+pub extern "C" fn rs_draw_col_fill(
+    wlv: *mut WinLineVars,
+    fillchar: ScharT,
+    width: c_int,
+    attr: c_int,
+) {
     draw_col_fill_impl(wlv, fillchar, width, attr);
 }
 
@@ -1328,37 +1375,37 @@ pub unsafe extern "C" fn rs_fill_foldcolumn(
 
 /// Draw fold column.
 #[no_mangle]
-pub extern "C" fn rs_draw_foldcolumn(wp: WinHandle, wlv: WlvHandle) {
+pub extern "C" fn rs_draw_foldcolumn(wp: WinHandle, wlv: *mut WinLineVars) {
     draw_foldcolumn_impl(wp, wlv);
 }
 
 /// Check if cursor line number highlight should be used.
 #[no_mangle]
-pub extern "C" fn rs_use_cursor_line_nr(wp: WinHandle, wlv: WlvHandle) -> bool {
+pub extern "C" fn rs_use_cursor_line_nr(wp: WinHandle, wlv: *mut WinLineVars) -> bool {
     use_cursor_line_nr_impl(wp, wlv)
 }
 
 /// Get line number attribute.
 #[no_mangle]
-pub extern "C" fn rs_get_line_number_attr(wp: WinHandle, wlv: WlvHandle) -> c_int {
+pub extern "C" fn rs_get_line_number_attr(wp: WinHandle, wlv: *mut WinLineVars) -> c_int {
     get_line_number_attr_impl(wp, wlv)
 }
 
 /// Draw sign in sign or number column.
 #[no_mangle]
-pub extern "C" fn rs_draw_sign(nrcol: bool, wp: WinHandle, wlv: WlvHandle, sign_idx: c_int) {
+pub extern "C" fn rs_draw_sign(nrcol: bool, wp: WinHandle, wlv: *mut WinLineVars, sign_idx: c_int) {
     draw_sign_impl(nrcol, wp, wlv, sign_idx);
 }
 
 /// Draw line number column.
 #[no_mangle]
-pub extern "C" fn rs_draw_lnum_col(wp: WinHandle, wlv: WlvHandle) {
+pub extern "C" fn rs_draw_lnum_col(wp: WinHandle, wlv: *mut WinLineVars) {
     draw_lnum_col_impl(wp, wlv);
 }
 
 /// Advance color_cols past current vcol.
 #[no_mangle]
-pub extern "C" fn rs_advance_color_col(wlv: WlvHandle, vcol: c_int) {
+pub extern "C" fn rs_advance_color_col(wlv: *mut WinLineVars, vcol: c_int) {
     advance_color_col_impl(wlv, vcol);
 }
 
@@ -1699,10 +1746,10 @@ pub unsafe extern "C" fn rs_draw_virt_text(
 /// # Safety
 /// - `wp` must be a valid window handle
 /// - `wlv` must be a valid winlinevars_T handle
-unsafe fn win_line_start_impl(wp: WinHandle, wlv: WlvHandle) {
-    nvim_wlv_set_col(wlv, 0);
-    nvim_wlv_set_off(wlv, 0);
-    nvim_wlv_set_need_lbr(wlv, false);
+unsafe fn win_line_start_impl(wp: WinHandle, wlv: *mut WinLineVars) {
+    (*wlv).col = 0;
+    (*wlv).off = 0;
+    (*wlv).need_lbr = false;
 
     let view_width = nvim_win_get_view_width(wp);
     let linebuf_char = nvim_get_linebuf_char();
@@ -1721,7 +1768,7 @@ unsafe fn win_line_start_impl(wp: WinHandle, wlv: WlvHandle) {
 
 /// FFI export for win_line_start.
 #[no_mangle]
-pub unsafe extern "C" fn rs_win_line_start(wp: WinHandle, wlv: WlvHandle) {
+pub unsafe extern "C" fn rs_win_line_start(wp: WinHandle, wlv: *mut WinLineVars) {
     win_line_start_impl(wp, wlv);
 }
 
@@ -1733,35 +1780,35 @@ pub unsafe extern "C" fn rs_win_line_start(wp: WinHandle, wlv: WlvHandle) {
 ///
 /// # Safety
 /// - `wlv` must be a valid winlinevars_T handle
-unsafe fn fix_for_boguscols_impl(wlv: WlvHandle) {
-    let vcol_off_co = nvim_wlv_get_vcol_off_co(wlv);
-    let boguscols = nvim_wlv_get_boguscols(wlv);
+unsafe fn fix_for_boguscols_impl(wlv: *mut WinLineVars) {
+    let vcol_off_co = (*wlv).vcol_off_co;
+    let boguscols = (*wlv).boguscols;
 
     // wlv->n_extra += wlv->vcol_off_co
-    let n_extra = nvim_wlv_get_n_extra(wlv);
-    nvim_wlv_set_n_extra(wlv, n_extra + vcol_off_co);
+    let n_extra = (*wlv).n_extra;
+    (*wlv).n_extra = n_extra + vcol_off_co;
 
     // wlv->vcol -= wlv->vcol_off_co
-    let vcol = nvim_wlv_get_vcol(wlv);
-    nvim_wlv_set_vcol(wlv, vcol - vcol_off_co as ColnrT);
+    let vcol = (*wlv).vcol;
+    (*wlv).vcol = vcol - vcol_off_co as ColnrT;
 
     // wlv->vcol_off_co = 0
-    nvim_wlv_set_vcol_off_co(wlv, 0);
+    (*wlv).vcol_off_co = 0;
 
     // wlv->col -= wlv->boguscols
-    let col = nvim_wlv_get_col(wlv);
-    nvim_wlv_set_col(wlv, col - boguscols);
+    let col = (*wlv).col;
+    (*wlv).col = col - boguscols;
 
     // wlv->old_boguscols = wlv->boguscols
-    nvim_wlv_set_old_boguscols(wlv, boguscols);
+    (*wlv).old_boguscols = boguscols;
 
     // wlv->boguscols = 0
-    nvim_wlv_set_boguscols(wlv, 0);
+    (*wlv).boguscols = 0;
 }
 
 /// FFI export for fix_for_boguscols.
 #[no_mangle]
-pub unsafe extern "C" fn rs_fix_for_boguscols(wlv: WlvHandle) {
+pub unsafe extern "C" fn rs_fix_for_boguscols(wlv: *mut WinLineVars) {
     fix_for_boguscols_impl(wlv);
 }
 
@@ -1788,7 +1835,7 @@ pub unsafe extern "C" fn rs_fix_for_boguscols(wlv: WlvHandle) {
 /// - text must point to len bytes of valid UTF-8
 unsafe fn draw_col_buf_impl(
     wp: WinHandle,
-    wlv: WlvHandle,
+    wlv: *mut WinLineVars,
     text: *const c_char,
     len: usize,
     attr: c_int,
@@ -1806,8 +1853,8 @@ unsafe fn draw_col_buf_impl(
     let text_end = text.add(len);
     let mut fold_vcol_ptr = fold_vcol;
 
-    while ptr < text_end && nvim_wlv_get_off(wlv) < view_width {
-        let off = nvim_wlv_get_off(wlv);
+    while ptr < text_end && (*wlv).off < view_width {
+        let off = (*wlv).off;
 
         // Call line_putchar to render the character
         let cells = line_putchar_impl(
@@ -1820,21 +1867,21 @@ unsafe fn draw_col_buf_impl(
 
         let mut myattr = attr;
         if inc_vcol {
-            advance_color_col_impl(wlv, nvim_wlv_get_vcol(wlv));
-            let color_cols = nvim_wlv_get_color_cols(wlv);
-            if !color_cols.is_null() && nvim_wlv_get_vcol(wlv) == *color_cols {
+            advance_color_col_impl(wlv, (*wlv).vcol);
+            let color_cols = (*wlv).color_cols;
+            if !color_cols.is_null() && (*wlv).vcol == *color_cols {
                 myattr = hl_combine_attr(nvim_win_hl_attr(wp, hlf_mc), myattr);
             }
         }
 
         // Fill in attr and vcol for each cell
         for _ in 0..cells {
-            let current_off = nvim_wlv_get_off(wlv);
+            let current_off = (*wlv).off;
             *linebuf_attr.add(current_off as usize) = myattr;
 
             let vcol_val = if inc_vcol {
-                let v = nvim_wlv_get_vcol(wlv);
-                nvim_wlv_set_vcol(wlv, v + 1);
+                let v = (*wlv).vcol;
+                (*wlv).vcol = v + 1;
                 v
             } else if !fold_vcol_ptr.is_null() {
                 let v = *fold_vcol_ptr;
@@ -1845,7 +1892,7 @@ unsafe fn draw_col_buf_impl(
             };
             *linebuf_vcol.add(current_off as usize) = vcol_val;
 
-            nvim_wlv_set_off(wlv, current_off + 1);
+            (*wlv).off = current_off + 1;
         }
     }
 }
@@ -1854,7 +1901,7 @@ unsafe fn draw_col_buf_impl(
 #[no_mangle]
 pub unsafe extern "C" fn rs_draw_col_buf(
     wp: WinHandle,
-    wlv: WlvHandle,
+    wlv: *mut WinLineVars,
     text: *const c_char,
     len: usize,
     attr: c_int,
@@ -1885,28 +1932,28 @@ const INT_MIN: c_int = c_int::MIN;
 #[allow(clippy::cast_possible_truncation)]
 unsafe fn handle_inline_virtual_text_impl(
     _wp: WinHandle,
-    wlv: WlvHandle,
+    wlv: *mut WinLineVars,
     v: isize,
     selected: bool,
 ) {
     loop {
-        let n_extra = nvim_wlv_get_n_extra(wlv);
+        let n_extra = (*wlv).n_extra;
         if n_extra != 0 {
             break;
         }
 
-        let virt_inline_i = nvim_wlv_get_virt_inline_i(wlv);
-        let virt_inline_size = nvim_wlv_get_virt_inline_size(wlv);
+        let virt_inline_i = (*wlv).virt_inline_i;
+        let virt_inline_size = (*wlv).virt_inline.size;
 
         if virt_inline_i >= virt_inline_size {
             // Need to find inline virtual text
-            nvim_wlv_reset_virt_inline(wlv);
-            nvim_wlv_set_virt_inline_i(wlv, 0);
+            (*wlv).virt_inline = KVec::empty();
+            (*wlv).virt_inline_i = 0;
 
             let state = nvim_get_decor_state();
             let end = nvim_decor_state_get_current_end(state);
             let row = nvim_decor_state_get_row(state);
-            let off = nvim_wlv_get_off(wlv);
+            let off = (*wlv).off;
 
             let mut found = false;
             for i in 0..end {
@@ -1944,8 +1991,12 @@ unsafe fn handle_inline_virtual_text_impl(
                     // Found matching inline virtual text
                     let virt_inline_data = nvim_decor_range_get_virt_inline_data(item);
                     let hl_mode = nvim_decor_range_get_virt_inline_hl_mode(item);
-                    nvim_wlv_set_virt_inline(wlv, virt_inline_data);
-                    nvim_wlv_set_virt_inline_hl_mode(wlv, hl_mode);
+                    (*wlv).virt_inline = if virt_inline_data.is_null() {
+                        KVec::empty()
+                    } else {
+                        *(virt_inline_data as *const KVec<VirtTextChunkC>)
+                    };
+                    (*wlv).virt_inline_hl_mode = hl_mode;
                     nvim_decor_range_set_draw_col(item, INT_MIN);
                     found = true;
                     break;
@@ -1958,12 +2009,14 @@ unsafe fn handle_inline_virtual_text_impl(
             }
         } else {
             // Already inside existing inline virtual text with multiple chunks
-            let virt_inline_ptr = nvim_wlv_get_virt_inline_ptr(wlv);
-            let mut pos = nvim_wlv_get_virt_inline_i(wlv);
+            let virt_inline_ptr =
+                std::ptr::from_mut::<KVec<VirtTextChunkC>>(&mut (*wlv).virt_inline)
+                    .cast::<c_void>();
+            let mut pos = (*wlv).virt_inline_i;
             let mut attr: c_int = 0;
 
             let text = nvim_next_virt_text_chunk(virt_inline_ptr, &mut pos, &mut attr);
-            nvim_wlv_set_virt_inline_i(wlv, pos);
+            (*wlv).virt_inline_i = pos;
 
             if text.is_null() {
                 continue;
@@ -1983,27 +2036,27 @@ unsafe fn handle_inline_virtual_text_impl(
                 continue;
             }
 
-            nvim_wlv_set_p_extra(wlv, text.cast_mut());
-            nvim_wlv_set_n_extra(wlv, text_len);
-            nvim_wlv_set_sc_extra(wlv, 0); // NUL
-            nvim_wlv_set_sc_final(wlv, 0); // NUL
-            nvim_wlv_set_extra_attr(wlv, attr);
+            (*wlv).p_extra = text.cast_mut();
+            (*wlv).n_extra = text_len;
+            (*wlv).sc_extra = 0; // NUL
+            (*wlv).sc_final = 0; // NUL
+            (*wlv).extra_attr = attr;
 
             let n_attr = rs_mb_charlen(text);
-            nvim_wlv_set_n_attr(wlv, n_attr);
+            (*wlv).n_attr = n_attr;
 
             // If the text didn't reach until the first window column we need to skip cells.
-            let skip_cells = nvim_wlv_get_skip_cells(wlv);
+            let skip_cells = (*wlv).skip_cells;
             if skip_cells > 0 {
-                let p_extra = nvim_wlv_get_p_extra(wlv);
+                let p_extra = (*wlv).p_extra;
                 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
                 let virt_text_width = rs_mb_string2cells(p_extra) as c_int;
 
                 if virt_text_width > skip_cells {
                     let mut skip_cells_remaining = skip_cells;
                     let mut p = p_extra;
-                    let mut n_extra_val = nvim_wlv_get_n_extra(wlv);
-                    let mut n_attr_val = nvim_wlv_get_n_attr(wlv);
+                    let mut n_extra_val = (*wlv).n_extra;
+                    let mut n_attr_val = (*wlv).n_attr;
 
                     // Skip cells in the text
                     while skip_cells_remaining > 0 {
@@ -2018,26 +2071,23 @@ unsafe fn handle_inline_virtual_text_impl(
                         n_attr_val -= 1;
                     }
 
-                    nvim_wlv_set_p_extra(wlv, p);
-                    nvim_wlv_set_n_extra(wlv, n_extra_val);
-                    nvim_wlv_set_n_attr(wlv, n_attr_val);
+                    (*wlv).p_extra = p;
+                    (*wlv).n_extra = n_extra_val;
+                    (*wlv).n_attr = n_attr_val;
 
                     // Skipped cells needed to be accounted for in vcol
-                    let skipped_cells = nvim_wlv_get_skipped_cells(wlv);
-                    nvim_wlv_set_skipped_cells(
-                        wlv,
-                        skipped_cells + skip_cells - skip_cells_remaining,
-                    );
-                    nvim_wlv_set_skip_cells(wlv, skip_cells_remaining);
+                    let skipped_cells = (*wlv).skipped_cells;
+                    (*wlv).skipped_cells = skipped_cells + skip_cells - skip_cells_remaining;
+                    (*wlv).skip_cells = skip_cells_remaining;
                 } else {
                     // The whole text is left of the window, drop it and advance to the next one
-                    nvim_wlv_set_skip_cells(wlv, skip_cells - virt_text_width);
+                    (*wlv).skip_cells = skip_cells - virt_text_width;
 
                     // Skipped cells needed to be accounted for in vcol
-                    let skipped_cells = nvim_wlv_get_skipped_cells(wlv);
-                    nvim_wlv_set_skipped_cells(wlv, skipped_cells + virt_text_width);
-                    nvim_wlv_set_n_attr(wlv, 0);
-                    nvim_wlv_set_n_extra(wlv, 0);
+                    let skipped_cells = (*wlv).skipped_cells;
+                    (*wlv).skipped_cells = skipped_cells + virt_text_width;
+                    (*wlv).n_attr = 0;
+                    (*wlv).n_extra = 0;
 
                     // Go to the start so the next virtual text chunk can be selected
                     continue;
@@ -2045,8 +2095,8 @@ unsafe fn handle_inline_virtual_text_impl(
             }
 
             // Assert n_extra > 0
-            debug_assert!(nvim_wlv_get_n_extra(wlv) > 0);
-            nvim_wlv_set_extra_for_extmark(wlv, true);
+            debug_assert!((*wlv).n_extra > 0);
+            (*wlv).extra_for_extmark = true;
         }
 
         // Break after successfully processing (either found new or processed existing)
@@ -2058,7 +2108,7 @@ unsafe fn handle_inline_virtual_text_impl(
 #[no_mangle]
 pub unsafe extern "C" fn rs_handle_inline_virtual_text(
     wp: WinHandle,
-    wlv: WlvHandle,
+    wlv: *mut WinLineVars,
     v: isize,
     selected: bool,
 ) {
@@ -2080,7 +2130,7 @@ const SLF_RIGHTLEFT: c_int = 1;
 #[allow(clippy::too_many_lines)]
 unsafe fn wlv_put_linebuf_impl(
     wp: WinHandle,
-    wlv: WlvHandle,
+    wlv: *mut WinLineVars,
     endcol: c_int,
     clear_end: bool,
     bg_attr: c_int,
@@ -2103,7 +2153,7 @@ unsafe fn wlv_put_linebuf_impl(
     }
 
     // Take care of putting "<<<" on the first line for 'smoothscroll'.
-    let wlv_row = nvim_wlv_get_row(wlv);
+    let wlv_row = (*wlv).row;
     let skipcol = nvim_win_get_skipcol(wp);
     let showbreak = rs_get_showbreak_value(wp);
     let p_nu = nvim_win_get_p_nu(wp);
@@ -2157,7 +2207,7 @@ unsafe fn wlv_put_linebuf_impl(
     let mut coloff: c_int = 0;
     let g = rs_grid_adjust(grid, &mut row_adjusted, &mut coloff);
 
-    let vcol = nvim_wlv_get_vcol(wlv);
+    let vcol = (*wlv).vcol;
     rs_grid_put_linebuf(
         g,
         row_adjusted,
@@ -2176,7 +2226,7 @@ unsafe fn wlv_put_linebuf_impl(
 #[no_mangle]
 pub unsafe extern "C" fn rs_wlv_put_linebuf(
     wp: WinHandle,
-    wlv: WlvHandle,
+    wlv: *mut WinLineVars,
     endcol: c_int,
     clear_end: bool,
     bg_attr: c_int,
@@ -2190,27 +2240,23 @@ pub unsafe extern "C" fn rs_wlv_put_linebuf(
 // ============================================================================
 
 // Additional WLV accessors for state management (char_attr exists in C)
-extern "C" {
-    fn nvim_wlv_get_char_attr(wlv: WlvHandle) -> c_int;
-    fn nvim_wlv_set_char_attr(wlv: WlvHandle, val: c_int);
-}
 
 /// Check if there are filler lines remaining to draw.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_has_filler_todo(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_filler_todo(wlv) > 0)
+pub unsafe extern "C" fn rs_wlv_has_filler_todo(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).filler_todo > 0)
 }
 
 /// Check if all filler lines have been drawn.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_filler_complete(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_filler_todo(wlv) == 0)
+pub unsafe extern "C" fn rs_wlv_filler_complete(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).filler_todo == 0)
 }
 
 /// Get the number of filler lines for diff display.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_filler_lines(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_filler_lines(wlv)
+pub unsafe extern "C" fn rs_wlv_get_filler_lines(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).filler_lines
 }
 
 /// Check if this is a virtual line (filler line within actual text).
@@ -2218,198 +2264,198 @@ pub unsafe extern "C" fn rs_wlv_get_filler_lines(wlv: WlvHandle) -> c_int {
 /// Returns true if filler_todo > filler_lines (i.e., drawing virtual lines
 /// that come before the diff filler lines).
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_is_virtual_line(wlv: WlvHandle) -> c_int {
-    let filler_todo = nvim_wlv_get_filler_todo(wlv);
-    let filler_lines = nvim_wlv_get_filler_lines(wlv);
+pub unsafe extern "C" fn rs_wlv_is_virtual_line(wlv: *mut WinLineVars) -> c_int {
+    let filler_todo = (*wlv).filler_todo;
+    let filler_lines = (*wlv).filler_lines;
     c_int::from(filler_todo > filler_lines)
 }
 
 /// Get the character attribute for the current cell.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_char_attr(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_char_attr(wlv)
+pub unsafe extern "C" fn rs_wlv_get_char_attr(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).char_attr
 }
 
 /// Set the character attribute for the current cell.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_char_attr(wlv: WlvHandle, attr: c_int) {
-    nvim_wlv_set_char_attr(wlv, attr);
+pub unsafe extern "C" fn rs_wlv_set_char_attr(wlv: *mut WinLineVars, attr: c_int) {
+    (*wlv).char_attr = attr;
 }
 
 /// Combine an attribute with the current character attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_combine_char_attr(wlv: WlvHandle, attr: c_int) {
-    let current = nvim_wlv_get_char_attr(wlv);
+pub unsafe extern "C" fn rs_wlv_combine_char_attr(wlv: *mut WinLineVars, attr: c_int) {
+    let current = (*wlv).char_attr;
     let combined = hl_combine_attr(current, attr);
-    nvim_wlv_set_char_attr(wlv, combined);
+    (*wlv).char_attr = combined;
 }
 
 /// Get the number of extra characters to display.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_n_extra(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_n_extra(wlv)
+pub unsafe extern "C" fn rs_wlv_get_n_extra(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).n_extra
 }
 
 /// Check if there are extra characters to display.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_has_n_extra(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_n_extra(wlv) > 0)
+pub unsafe extern "C" fn rs_wlv_has_n_extra(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).n_extra > 0)
 }
 
 /// Decrement the n_extra counter.
 ///
 /// Returns the new value after decrement.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_dec_n_extra(wlv: WlvHandle) -> c_int {
-    let current = nvim_wlv_get_n_extra(wlv);
+pub unsafe extern "C" fn rs_wlv_dec_n_extra(wlv: *mut WinLineVars) -> c_int {
+    let current = (*wlv).n_extra;
     let new_val = current - 1;
-    nvim_wlv_set_n_extra(wlv, new_val);
+    (*wlv).n_extra = new_val;
     new_val
 }
 
 /// Get the number of cells to skip.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_skip_cells(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_skip_cells(wlv)
+pub unsafe extern "C" fn rs_wlv_get_skip_cells(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).skip_cells
 }
 
 /// Set the number of cells to skip.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_skip_cells(wlv: WlvHandle, val: c_int) {
-    nvim_wlv_set_skip_cells(wlv, val);
+pub unsafe extern "C" fn rs_wlv_set_skip_cells(wlv: *mut WinLineVars, val: c_int) {
+    (*wlv).skip_cells = val;
 }
 
 /// Decrement the skip_cells counter.
 ///
 /// Returns the new value after decrement.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_dec_skip_cells(wlv: WlvHandle) -> c_int {
-    let current = nvim_wlv_get_skip_cells(wlv);
+pub unsafe extern "C" fn rs_wlv_dec_skip_cells(wlv: *mut WinLineVars) -> c_int {
+    let current = (*wlv).skip_cells;
     let new_val = if current > 0 { current - 1 } else { 0 };
-    nvim_wlv_set_skip_cells(wlv, new_val);
+    (*wlv).skip_cells = new_val;
     new_val
 }
 
 /// Check if we should skip the current cell.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_should_skip(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_skip_cells(wlv) > 0)
+pub unsafe extern "C" fn rs_wlv_should_skip(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).skip_cells > 0)
 }
 
 /// Get the number of attribute cells remaining.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_n_attr(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_n_attr(wlv)
+pub unsafe extern "C" fn rs_wlv_get_n_attr(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).n_attr
 }
 
 /// Set the number of attribute cells.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_n_attr(wlv: WlvHandle, val: c_int) {
-    nvim_wlv_set_n_attr(wlv, val);
+pub unsafe extern "C" fn rs_wlv_set_n_attr(wlv: *mut WinLineVars, val: c_int) {
+    (*wlv).n_attr = val;
 }
 
 /// Check if there are attribute cells remaining.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_has_n_attr(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_n_attr(wlv) > 0)
+pub unsafe extern "C" fn rs_wlv_has_n_attr(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).n_attr > 0)
 }
 
 /// Decrement the n_attr counter.
 ///
 /// Returns the new value after decrement.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_dec_n_attr(wlv: WlvHandle) -> c_int {
-    let current = nvim_wlv_get_n_attr(wlv);
+pub unsafe extern "C" fn rs_wlv_dec_n_attr(wlv: *mut WinLineVars) -> c_int {
+    let current = (*wlv).n_attr;
     let new_val = if current > 0 { current - 1 } else { 0 };
-    nvim_wlv_set_n_attr(wlv, new_val);
+    (*wlv).n_attr = new_val;
     new_val
 }
 
 /// Get the row number being drawn.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_row(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_row(wlv)
+pub unsafe extern "C" fn rs_wlv_get_row(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).row
 }
 
 /// Get the starting row for this line.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_startrow(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_startrow(wlv)
+pub unsafe extern "C" fn rs_wlv_get_startrow(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).startrow
 }
 
 /// Check if we are on the first row of a wrapped line.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_is_first_row(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_row(wlv) == nvim_wlv_get_startrow(wlv))
+pub unsafe extern "C" fn rs_wlv_is_first_row(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).row == (*wlv).startrow)
 }
 
 /// Get the line number being drawn.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_lnum(wlv: WlvHandle) -> LinenrT {
-    nvim_wlv_get_lnum(wlv)
+pub unsafe extern "C" fn rs_wlv_get_lnum(wlv: *mut WinLineVars) -> LinenrT {
+    (*wlv).lnum
 }
 
 /// Get the current column offset.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_off(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_off(wlv)
+pub unsafe extern "C" fn rs_wlv_get_off(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).off
 }
 
 /// Set the current column offset.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_off(wlv: WlvHandle, val: c_int) {
-    nvim_wlv_set_off(wlv, val);
+pub unsafe extern "C" fn rs_wlv_set_off(wlv: *mut WinLineVars, val: c_int) {
+    (*wlv).off = val;
 }
 
 /// Advance the column offset by a given amount.
 ///
 /// Returns the new offset value.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_advance_off(wlv: WlvHandle, delta: c_int) -> c_int {
-    let current = nvim_wlv_get_off(wlv);
+pub unsafe extern "C" fn rs_wlv_advance_off(wlv: *mut WinLineVars, delta: c_int) -> c_int {
+    let current = (*wlv).off;
     let new_val = current + delta;
-    nvim_wlv_set_off(wlv, new_val);
+    (*wlv).off = new_val;
     new_val
 }
 
 /// Get the fold info for the current line.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_fold_level(wlv: WlvHandle) -> c_int {
-    let fi = nvim_wlv_get_foldinfo(wlv);
+pub unsafe extern "C" fn rs_wlv_get_fold_level(wlv: *mut WinLineVars) -> c_int {
+    let fi = (*wlv).foldinfo;
     fi.fi_level
 }
 
 /// Check if the current line is folded.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_is_folded(wlv: WlvHandle) -> c_int {
-    let fi = nvim_wlv_get_foldinfo(wlv);
+pub unsafe extern "C" fn rs_wlv_is_folded(wlv: *mut WinLineVars) -> c_int {
+    let fi = (*wlv).foldinfo;
     c_int::from(fi.fi_lines > 0)
 }
 
 /// Get the number of lines in the current fold.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_fold_lines(wlv: WlvHandle) -> LinenrT {
-    let fi = nvim_wlv_get_foldinfo(wlv);
+pub unsafe extern "C" fn rs_wlv_get_fold_lines(wlv: *mut WinLineVars) -> LinenrT {
+    let fi = (*wlv).foldinfo;
     fi.fi_lines
 }
 
 /// Get the number of virtual lines above this line.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_n_virt_lines(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_n_virt_lines(wlv)
+pub unsafe extern "C" fn rs_wlv_get_n_virt_lines(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).n_virt_lines
 }
 
 /// Get the number of virtual lines below this line.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_n_virt_below(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_n_virt_below(wlv)
+pub unsafe extern "C" fn rs_wlv_get_n_virt_below(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).n_virt_below
 }
 
 /// Check if there are any virtual lines for this line.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_has_virt_lines(wlv: WlvHandle) -> c_int {
-    let above = nvim_wlv_get_n_virt_lines(wlv);
-    let below = nvim_wlv_get_n_virt_below(wlv);
+pub unsafe extern "C" fn rs_wlv_has_virt_lines(wlv: *mut WinLineVars) -> c_int {
+    let above = (*wlv).n_virt_lines;
+    let below = (*wlv).n_virt_below;
     c_int::from(above > 0 || below > 0)
 }
 
@@ -2419,225 +2465,225 @@ pub unsafe extern "C" fn rs_wlv_has_virt_lines(wlv: WlvHandle) -> c_int {
 
 /// Check if n_extra is set for inline virtual text (extmark).
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_is_extmark_extra(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_extra_for_extmark(wlv))
+pub unsafe extern "C" fn rs_wlv_is_extmark_extra(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).extra_for_extmark)
 }
 
 /// Set the extmark extra flag.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_extmark_extra(wlv: WlvHandle, val: c_int) {
-    nvim_wlv_set_extra_for_extmark(wlv, val != 0);
+pub unsafe extern "C" fn rs_wlv_set_extmark_extra(wlv: *mut WinLineVars, val: c_int) {
+    (*wlv).extra_for_extmark = val != 0;
 }
 
 /// Check if we should apply extmark attributes.
 ///
 /// Returns true if either there's no n_extra or it's not for extmark.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_apply_extmark_attr(wlv: WlvHandle) -> c_int {
-    let n_extra = nvim_wlv_get_n_extra(wlv);
-    let extra_for_extmark = nvim_wlv_get_extra_for_extmark(wlv);
+pub unsafe extern "C" fn rs_wlv_apply_extmark_attr(wlv: *mut WinLineVars) -> c_int {
+    let n_extra = (*wlv).n_extra;
+    let extra_for_extmark = (*wlv).extra_for_extmark;
     c_int::from(n_extra == 0 || !extra_for_extmark)
 }
 
 /// Get the virtual inline highlight mode.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_virt_inline_hl_mode(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_virt_inline_hl_mode(wlv)
+pub unsafe extern "C" fn rs_wlv_get_virt_inline_hl_mode(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).virt_inline_hl_mode
 }
 
 /// Set the virtual inline highlight mode.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_virt_inline_hl_mode(wlv: WlvHandle, mode: c_int) {
-    nvim_wlv_set_virt_inline_hl_mode(wlv, mode);
+pub unsafe extern "C" fn rs_wlv_set_virt_inline_hl_mode(wlv: *mut WinLineVars, mode: c_int) {
+    (*wlv).virt_inline_hl_mode = mode;
 }
 
 /// Check if the virtual inline highlight mode is replace.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_virt_inline_replaces(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_virt_inline_hl_mode(wlv) <= HL_MODE_REPLACE)
+pub unsafe extern "C" fn rs_wlv_virt_inline_replaces(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).virt_inline_hl_mode <= HL_MODE_REPLACE)
 }
 
 /// Get the number of skipped cells for virtual text.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_skipped_cells(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_skipped_cells(wlv)
+pub unsafe extern "C" fn rs_wlv_get_skipped_cells(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).skipped_cells
 }
 
 /// Set the number of skipped cells for virtual text.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_skipped_cells(wlv: WlvHandle, val: c_int) {
-    nvim_wlv_set_skipped_cells(wlv, val);
+pub unsafe extern "C" fn rs_wlv_set_skipped_cells(wlv: *mut WinLineVars, val: c_int) {
+    (*wlv).skipped_cells = val;
 }
 
 /// Add to the number of skipped cells.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_add_skipped_cells(wlv: WlvHandle, delta: c_int) -> c_int {
-    let current = nvim_wlv_get_skipped_cells(wlv);
+pub unsafe extern "C" fn rs_wlv_add_skipped_cells(wlv: *mut WinLineVars, delta: c_int) -> c_int {
+    let current = (*wlv).skipped_cells;
     let new_val = current + delta;
-    nvim_wlv_set_skipped_cells(wlv, new_val);
+    (*wlv).skipped_cells = new_val;
     new_val
 }
 
 /// Get the p_extra pointer (extra text to display).
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_p_extra(wlv: WlvHandle) -> *const c_char {
-    nvim_wlv_get_p_extra(wlv)
+pub unsafe extern "C" fn rs_wlv_get_p_extra(wlv: *mut WinLineVars) -> *const c_char {
+    (*wlv).p_extra
 }
 
 /// Set the p_extra pointer.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_p_extra(wlv: WlvHandle, ptr: *const c_char) {
-    nvim_wlv_set_p_extra(wlv, ptr.cast_mut());
+pub unsafe extern "C" fn rs_wlv_set_p_extra(wlv: *mut WinLineVars, ptr: *const c_char) {
+    (*wlv).p_extra = ptr.cast_mut();
 }
 
 /// Check if there's extra text to display.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_has_p_extra(wlv: WlvHandle) -> c_int {
-    let p = nvim_wlv_get_p_extra(wlv);
+pub unsafe extern "C" fn rs_wlv_has_p_extra(wlv: *mut WinLineVars) -> c_int {
+    let p = (*wlv).p_extra;
     c_int::from(!p.is_null())
 }
 
 /// Get the sc_extra character (repeated extra character).
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_sc_extra(wlv: WlvHandle) -> ScharT {
-    nvim_wlv_get_sc_extra(wlv)
+pub unsafe extern "C" fn rs_wlv_get_sc_extra(wlv: *mut WinLineVars) -> ScharT {
+    (*wlv).sc_extra
 }
 
 /// Set the sc_extra character.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_sc_extra(wlv: WlvHandle, c: ScharT) {
-    nvim_wlv_set_sc_extra(wlv, c);
+pub unsafe extern "C" fn rs_wlv_set_sc_extra(wlv: *mut WinLineVars, c: ScharT) {
+    (*wlv).sc_extra = c;
 }
 
 /// Get the sc_final character (terminating extra character).
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_sc_final(wlv: WlvHandle) -> ScharT {
-    nvim_wlv_get_sc_final(wlv)
+pub unsafe extern "C" fn rs_wlv_get_sc_final(wlv: *mut WinLineVars) -> ScharT {
+    (*wlv).sc_final
 }
 
 /// Set the sc_final character.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_sc_final(wlv: WlvHandle, c: ScharT) {
-    nvim_wlv_set_sc_final(wlv, c);
+pub unsafe extern "C" fn rs_wlv_set_sc_final(wlv: *mut WinLineVars, c: ScharT) {
+    (*wlv).sc_final = c;
 }
 
 /// Check if using repeated character for extra (sc_extra != NUL).
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_uses_sc_extra(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_sc_extra(wlv) != 0)
+pub unsafe extern "C" fn rs_wlv_uses_sc_extra(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).sc_extra != 0)
 }
 
 /// Clear the extra text state.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_clear_extra(wlv: WlvHandle) {
-    nvim_wlv_set_n_extra(wlv, 0);
-    nvim_wlv_set_p_extra(wlv, std::ptr::null_mut());
-    nvim_wlv_set_sc_extra(wlv, 0); // NUL
-    nvim_wlv_set_sc_final(wlv, 0); // NUL
-    nvim_wlv_set_extra_for_extmark(wlv, false);
+pub unsafe extern "C" fn rs_wlv_clear_extra(wlv: *mut WinLineVars) {
+    (*wlv).n_extra = 0;
+    (*wlv).p_extra = std::ptr::null_mut();
+    (*wlv).sc_extra = 0; // NUL
+    (*wlv).sc_final = 0; // NUL
+    (*wlv).extra_for_extmark = false;
 }
 
 /// Setup extra text from a string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_wlv_setup_extra(
-    wlv: WlvHandle,
+    wlv: *mut WinLineVars,
     text: *const c_char,
     len: c_int,
     attr: c_int,
     for_extmark: c_int,
 ) {
-    nvim_wlv_set_p_extra(wlv, text.cast_mut());
-    nvim_wlv_set_n_extra(wlv, len);
-    nvim_wlv_set_n_attr(wlv, len);
-    nvim_wlv_set_extra_attr(wlv, attr);
-    nvim_wlv_set_sc_extra(wlv, 0); // NUL
-    nvim_wlv_set_sc_final(wlv, 0); // NUL
-    nvim_wlv_set_extra_for_extmark(wlv, for_extmark != 0);
+    (*wlv).p_extra = text.cast_mut();
+    (*wlv).n_extra = len;
+    (*wlv).n_attr = len;
+    (*wlv).extra_attr = attr;
+    (*wlv).sc_extra = 0; // NUL
+    (*wlv).sc_final = 0; // NUL
+    (*wlv).extra_for_extmark = for_extmark != 0;
 }
 
 /// Setup extra text with a repeated character.
 #[no_mangle]
 pub unsafe extern "C" fn rs_wlv_setup_extra_schar(
-    wlv: WlvHandle,
+    wlv: *mut WinLineVars,
     sc: ScharT,
     count: c_int,
     attr: c_int,
 ) {
-    nvim_wlv_set_p_extra(wlv, std::ptr::null_mut());
-    nvim_wlv_set_n_extra(wlv, count);
-    nvim_wlv_set_n_attr(wlv, count);
-    nvim_wlv_set_extra_attr(wlv, attr);
-    nvim_wlv_set_sc_extra(wlv, sc);
-    nvim_wlv_set_sc_final(wlv, 0); // NUL
-    nvim_wlv_set_extra_for_extmark(wlv, false);
+    (*wlv).p_extra = std::ptr::null_mut();
+    (*wlv).n_extra = count;
+    (*wlv).n_attr = count;
+    (*wlv).extra_attr = attr;
+    (*wlv).sc_extra = sc;
+    (*wlv).sc_final = 0; // NUL
+    (*wlv).extra_for_extmark = false;
 }
 
 /// Get the extra attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_extra_attr(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_extra_attr(wlv)
+pub unsafe extern "C" fn rs_wlv_get_extra_attr(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).extra_attr
 }
 
 /// Set the extra attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_extra_attr(wlv: WlvHandle, attr: c_int) {
-    nvim_wlv_set_extra_attr(wlv, attr);
+pub unsafe extern "C" fn rs_wlv_set_extra_attr(wlv: *mut WinLineVars, attr: c_int) {
+    (*wlv).extra_attr = attr;
 }
 
 /// Get the vcol_off_co (conceal offset).
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_vcol_off_co(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_vcol_off_co(wlv)
+pub unsafe extern "C" fn rs_wlv_get_vcol_off_co(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).vcol_off_co
 }
 
 /// Set the vcol_off_co (conceal offset).
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_vcol_off_co(wlv: WlvHandle, val: c_int) {
-    nvim_wlv_set_vcol_off_co(wlv, val);
+pub unsafe extern "C" fn rs_wlv_set_vcol_off_co(wlv: *mut WinLineVars, val: c_int) {
+    (*wlv).vcol_off_co = val;
 }
 
 /// Increment the vcol_off_co.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_inc_vcol_off_co(wlv: WlvHandle) -> c_int {
-    let val = nvim_wlv_get_vcol_off_co(wlv) + 1;
-    nvim_wlv_set_vcol_off_co(wlv, val);
+pub unsafe extern "C" fn rs_wlv_inc_vcol_off_co(wlv: *mut WinLineVars) -> c_int {
+    let val = (*wlv).vcol_off_co + 1;
+    (*wlv).vcol_off_co = val;
     val
 }
 
 /// Get the bogus columns count.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_boguscols(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_boguscols(wlv)
+pub unsafe extern "C" fn rs_wlv_get_boguscols(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).boguscols
 }
 
 /// Set the bogus columns count.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_boguscols(wlv: WlvHandle, val: c_int) {
-    nvim_wlv_set_boguscols(wlv, val);
+pub unsafe extern "C" fn rs_wlv_set_boguscols(wlv: *mut WinLineVars, val: c_int) {
+    (*wlv).boguscols = val;
 }
 
 /// Get the old bogus columns count.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_old_boguscols(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_old_boguscols(wlv)
+pub unsafe extern "C" fn rs_wlv_get_old_boguscols(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).old_boguscols
 }
 
 /// Check if we need to handle bogus columns.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_has_boguscols(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_boguscols(wlv) > 0)
+pub unsafe extern "C" fn rs_wlv_has_boguscols(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).boguscols > 0)
 }
 
 /// Check if we need line break handling.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_needs_lbr(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_need_lbr(wlv))
+pub unsafe extern "C" fn rs_wlv_needs_lbr(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).need_lbr)
 }
 
 /// Set the line break needed flag.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_needs_lbr(wlv: WlvHandle, val: c_int) {
-    nvim_wlv_set_need_lbr(wlv, val != 0);
+pub unsafe extern "C" fn rs_wlv_set_needs_lbr(wlv: *mut WinLineVars, val: c_int) {
+    (*wlv).need_lbr = val != 0;
 }
 
 // ============================================================================
@@ -2646,63 +2692,63 @@ pub unsafe extern "C" fn rs_wlv_set_needs_lbr(wlv: WlvHandle, val: c_int) {
 
 /// Get the line attribute for the whole line.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_line_attr(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_line_attr(wlv)
+pub unsafe extern "C" fn rs_wlv_get_line_attr(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).line_attr
 }
 
 /// Set the line attribute for the whole line.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_line_attr(wlv: WlvHandle, attr: c_int) {
-    nvim_wlv_set_line_attr(wlv, attr);
+pub unsafe extern "C" fn rs_wlv_set_line_attr(wlv: *mut WinLineVars, attr: c_int) {
+    (*wlv).line_attr = attr;
 }
 
 /// Get the low-priority line attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_line_attr_lowprio(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_line_attr_lowprio(wlv)
+pub unsafe extern "C" fn rs_wlv_get_line_attr_lowprio(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).line_attr_lowprio
 }
 
 /// Set the low-priority line attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_line_attr_lowprio(wlv: WlvHandle, attr: c_int) {
-    nvim_wlv_set_line_attr_lowprio(wlv, attr);
+pub unsafe extern "C" fn rs_wlv_set_line_attr_lowprio(wlv: *mut WinLineVars, attr: c_int) {
+    (*wlv).line_attr_lowprio = attr;
 }
 
 /// Check if the line has a line attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_has_line_attr(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_line_attr(wlv) != 0 || nvim_wlv_get_line_attr_lowprio(wlv) != 0)
+pub unsafe extern "C" fn rs_wlv_has_line_attr(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).line_attr != 0 || (*wlv).line_attr_lowprio != 0)
 }
 
 /// Combine an attribute with the line attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_combine_line_attr(wlv: WlvHandle, attr: c_int) {
-    let current = nvim_wlv_get_line_attr(wlv);
+pub unsafe extern "C" fn rs_wlv_combine_line_attr(wlv: *mut WinLineVars, attr: c_int) {
+    let current = (*wlv).line_attr;
     let combined = hl_combine_attr(current, attr);
-    nvim_wlv_set_line_attr(wlv, combined);
+    (*wlv).line_attr = combined;
 }
 
 /// Combine an attribute with the low-priority line attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_combine_line_attr_lowprio(wlv: WlvHandle, attr: c_int) {
-    let current = nvim_wlv_get_line_attr_lowprio(wlv);
+pub unsafe extern "C" fn rs_wlv_combine_line_attr_lowprio(wlv: *mut WinLineVars, attr: c_int) {
+    let current = (*wlv).line_attr_lowprio;
     let combined = hl_combine_attr(current, attr);
-    nvim_wlv_set_line_attr_lowprio(wlv, combined);
+    (*wlv).line_attr_lowprio = combined;
 }
 
 /// Get the effective line attribute (combines line_attr and line_attr_lowprio).
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_effective_line_attr(wlv: WlvHandle) -> c_int {
-    let line_attr = nvim_wlv_get_line_attr(wlv);
-    let line_attr_lowprio = nvim_wlv_get_line_attr_lowprio(wlv);
+pub unsafe extern "C" fn rs_wlv_get_effective_line_attr(wlv: *mut WinLineVars) -> c_int {
+    let line_attr = (*wlv).line_attr;
+    let line_attr_lowprio = (*wlv).line_attr_lowprio;
     hl_combine_attr(line_attr_lowprio, line_attr)
 }
 
 /// Clear the line attributes.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_clear_line_attr(wlv: WlvHandle) {
-    nvim_wlv_set_line_attr(wlv, 0);
-    nvim_wlv_set_line_attr_lowprio(wlv, 0);
+pub unsafe extern "C" fn rs_wlv_clear_line_attr(wlv: *mut WinLineVars) {
+    (*wlv).line_attr = 0;
+    (*wlv).line_attr_lowprio = 0;
 }
 
 /// Combine multiple attributes.
@@ -2737,143 +2783,143 @@ pub extern "C" fn rs_attr_has_highlight(attr: c_int) -> c_int {
 
 /// Get the sign cul attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_sign_cul_attr(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_sign_cul_attr(wlv)
+pub unsafe extern "C" fn rs_wlv_get_sign_cul_attr(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).sign_cul_attr
 }
 
 /// Get the sign num attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_sign_num_attr(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_sign_num_attr(wlv)
+pub unsafe extern "C" fn rs_wlv_get_sign_num_attr(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).sign_num_attr
 }
 
 /// Check if there's a sign-related CursorLine attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_has_sign_cul_attr(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_sign_cul_attr(wlv) != 0)
+pub unsafe extern "C" fn rs_wlv_has_sign_cul_attr(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).sign_cul_attr != 0)
 }
 
 /// Check if there's a sign-related number attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_has_sign_num_attr(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_sign_num_attr(wlv) != 0)
+pub unsafe extern "C" fn rs_wlv_has_sign_num_attr(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).sign_num_attr != 0)
 }
 
 /// Get the CursorLine attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_cul_attr(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_cul_attr(wlv)
+pub unsafe extern "C" fn rs_wlv_get_cul_attr(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).cul_attr
 }
 
 /// Set the CursorLine attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_cul_attr(wlv: WlvHandle, attr: c_int) {
-    nvim_wlv_set_cul_attr(wlv, attr);
+pub unsafe extern "C" fn rs_wlv_set_cul_attr(wlv: *mut WinLineVars, attr: c_int) {
+    (*wlv).cul_attr = attr;
 }
 
 /// Check if there's a CursorLine attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_has_cul_attr(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_cul_attr(wlv) != 0)
+pub unsafe extern "C" fn rs_wlv_has_cul_attr(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).cul_attr != 0)
 }
 
 /// Get the diff highlight flag.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_diff_hlf(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_diff_hlf(wlv)
+pub unsafe extern "C" fn rs_wlv_get_diff_hlf(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).diff_hlf
 }
 
 /// Set the diff highlight flag.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_diff_hlf(wlv: WlvHandle, hlf: c_int) {
-    nvim_wlv_set_diff_hlf(wlv, hlf);
+pub unsafe extern "C" fn rs_wlv_set_diff_hlf(wlv: *mut WinLineVars, hlf: c_int) {
+    (*wlv).diff_hlf = hlf;
 }
 
 /// Check if this line has diff highlighting.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_has_diff(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_diff_hlf(wlv) != 0)
+pub unsafe extern "C" fn rs_wlv_has_diff(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).diff_hlf != 0)
 }
 
 /// Get the visual selection fromcol.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_fromcol(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_fromcol(wlv)
+pub unsafe extern "C" fn rs_wlv_get_fromcol(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).fromcol
 }
 
 /// Set the visual selection fromcol.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_fromcol(wlv: WlvHandle, col: c_int) {
-    nvim_wlv_set_fromcol(wlv, col);
+pub unsafe extern "C" fn rs_wlv_set_fromcol(wlv: *mut WinLineVars, col: c_int) {
+    (*wlv).fromcol = col;
 }
 
 /// Get the visual selection tocol.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_tocol(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_tocol(wlv)
+pub unsafe extern "C" fn rs_wlv_get_tocol(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).tocol
 }
 
 /// Set the visual selection tocol.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_tocol(wlv: WlvHandle, col: c_int) {
-    nvim_wlv_set_tocol(wlv, col);
+pub unsafe extern "C" fn rs_wlv_set_tocol(wlv: *mut WinLineVars, col: c_int) {
+    (*wlv).tocol = col;
 }
 
 /// Check if a column is within the visual selection range.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_in_visual_range(wlv: WlvHandle, col: c_int) -> c_int {
-    let fromcol = nvim_wlv_get_fromcol(wlv);
-    let tocol = nvim_wlv_get_tocol(wlv);
+pub unsafe extern "C" fn rs_wlv_in_visual_range(wlv: *mut WinLineVars, col: c_int) -> c_int {
+    let fromcol = (*wlv).fromcol;
+    let tocol = (*wlv).tocol;
     c_int::from(col >= fromcol && col < tocol)
 }
 
 /// Check if visual selection is active on this line.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_has_visual(wlv: WlvHandle) -> c_int {
-    let tocol = nvim_wlv_get_tocol(wlv);
+pub unsafe extern "C" fn rs_wlv_has_visual(wlv: *mut WinLineVars) -> c_int {
+    let tocol = (*wlv).tocol;
     c_int::from(tocol > 0)
 }
 
 /// Get the previous number attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_prev_num_attr(wlv: WlvHandle) -> c_int {
-    nvim_wlv_get_prev_num_attr(wlv)
+pub unsafe extern "C" fn rs_wlv_get_prev_num_attr(wlv: *mut WinLineVars) -> c_int {
+    (*wlv).prev_num_attr
 }
 
 /// Set the previous number attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_prev_num_attr(wlv: WlvHandle, attr: c_int) {
-    nvim_wlv_set_prev_num_attr(wlv, attr);
+pub unsafe extern "C" fn rs_wlv_set_prev_num_attr(wlv: *mut WinLineVars, attr: c_int) {
+    (*wlv).prev_num_attr = attr;
 }
 
 /// Check if the number attribute has changed.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_num_attr_changed(wlv: WlvHandle, attr: c_int) -> c_int {
-    c_int::from(nvim_wlv_get_prev_num_attr(wlv) != attr)
+pub unsafe extern "C" fn rs_wlv_num_attr_changed(wlv: *mut WinLineVars, attr: c_int) -> c_int {
+    c_int::from((*wlv).prev_num_attr != attr)
 }
 
 /// Check if should reset extra attribute.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_reset_extra_attr(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_reset_extra_attr(wlv))
+pub unsafe extern "C" fn rs_wlv_get_reset_extra_attr(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).reset_extra_attr)
 }
 
 /// Set the reset extra attribute flag.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_reset_extra_attr(wlv: WlvHandle, val: c_int) {
-    nvim_wlv_set_reset_extra_attr(wlv, val != 0);
+pub unsafe extern "C" fn rs_wlv_set_reset_extra_attr(wlv: *mut WinLineVars, val: c_int) {
+    (*wlv).reset_extra_attr = val != 0;
 }
 
 /// Check if showing showbreak.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_need_showbreak(wlv: WlvHandle) -> c_int {
-    c_int::from(nvim_wlv_get_need_showbreak(wlv))
+pub unsafe extern "C" fn rs_wlv_get_need_showbreak(wlv: *mut WinLineVars) -> c_int {
+    c_int::from((*wlv).need_showbreak)
 }
 
 /// Set the need showbreak flag.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_need_showbreak(wlv: WlvHandle, val: c_int) {
-    nvim_wlv_set_need_showbreak(wlv, val != 0);
+pub unsafe extern "C" fn rs_wlv_set_need_showbreak(wlv: *mut WinLineVars, val: c_int) {
+    (*wlv).need_showbreak = val != 0;
 }
 
 // ============================================================================
@@ -2882,49 +2928,49 @@ pub unsafe extern "C" fn rs_wlv_set_need_showbreak(wlv: WlvHandle, val: c_int) {
 
 /// Check if we're on the text row (not filler).
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_on_text_row(wlv: WlvHandle) -> c_int {
-    let filler_todo = nvim_wlv_get_filler_todo(wlv);
+pub unsafe extern "C" fn rs_wlv_on_text_row(wlv: *mut WinLineVars) -> c_int {
+    let filler_todo = (*wlv).filler_todo;
     c_int::from(filler_todo <= 0)
 }
 
 /// Get sign text character at position.
 #[no_mangle]
 pub unsafe extern "C" fn rs_wlv_get_sign_text(
-    wlv: WlvHandle,
+    wlv: *mut WinLineVars,
     sign_idx: c_int,
     pos: c_int,
 ) -> ScharT {
-    nvim_wlv_get_sattr_text(wlv, sign_idx, pos)
+    (*wlv).sattrs[sign_idx as usize].text[pos as usize]
 }
 
 /// Get sign highlight id.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_sign_hl_id(wlv: WlvHandle, sign_idx: c_int) -> c_int {
-    nvim_wlv_get_sattr_hl_id(wlv, sign_idx)
+pub unsafe extern "C" fn rs_wlv_get_sign_hl_id(wlv: *mut WinLineVars, sign_idx: c_int) -> c_int {
+    (*wlv).sattrs[sign_idx as usize].hl_id
 }
 
 /// Check if sign has text.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_sign_has_text(wlv: WlvHandle, sign_idx: c_int) -> c_int {
-    c_int::from(nvim_wlv_get_sattr_text(wlv, sign_idx, 0) != 0)
+pub unsafe extern "C" fn rs_wlv_sign_has_text(wlv: *mut WinLineVars, sign_idx: c_int) -> c_int {
+    c_int::from((*wlv).sattrs[sign_idx as usize].text[0] != 0)
 }
 
 /// Get the fold info for the current line.
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_foldinfo(wlv: WlvHandle) -> FoldInfo {
-    nvim_wlv_get_foldinfo(wlv)
+pub unsafe extern "C" fn rs_wlv_get_foldinfo(wlv: *mut WinLineVars) -> FoldInfo {
+    (*wlv).foldinfo
 }
 
 /// Get the vcol_sbr (showbreak vcol).
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_get_vcol_sbr(wlv: WlvHandle) -> ColnrT {
-    nvim_wlv_get_vcol_sbr(wlv)
+pub unsafe extern "C" fn rs_wlv_get_vcol_sbr(wlv: *mut WinLineVars) -> ColnrT {
+    (*wlv).vcol_sbr
 }
 
 /// Set the vcol_sbr (showbreak vcol).
 #[no_mangle]
-pub unsafe extern "C" fn rs_wlv_set_vcol_sbr(wlv: WlvHandle, val: ColnrT) {
-    nvim_wlv_set_vcol_sbr(wlv, val);
+pub unsafe extern "C" fn rs_wlv_set_vcol_sbr(wlv: *mut WinLineVars, val: ColnrT) {
+    (*wlv).vcol_sbr = val;
 }
 
 /// Get the window highlight attribute.
@@ -3198,11 +3244,9 @@ mod tests {
     }
 
     #[test]
-    fn test_wlv_handle_layout() {
-        assert_eq!(
-            std::mem::size_of::<WlvHandle>(),
-            std::mem::size_of::<*mut c_void>()
-        );
+    fn test_winlinevars_layout() {
+        // WinLineVars must be non-zero size
+        assert!(std::mem::size_of::<WinLineVars>() > 0);
     }
 
     #[test]
@@ -3259,9 +3303,11 @@ mod tests {
     }
 
     #[test]
-    fn test_wlv_handle_null() {
-        let handle = WlvHandle(std::ptr::null_mut());
-        assert!(handle.is_null());
+    fn test_kvecc_empty() {
+        let v: KVec<u8> = KVec::empty();
+        assert_eq!(v.size, 0);
+        assert_eq!(v.capacity, 0);
+        assert!(v.items.is_null());
     }
 
     #[test]
