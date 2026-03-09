@@ -3118,15 +3118,20 @@ extern "C" {
     // Buffer state
     fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
 
-    // Window/Buffer comparison
+    // Window comparison
     fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
-    fn nvim_curwin_buffer_eq(buf: *mut c_void) -> c_int;
 
     // Syntax state
-    fn nvim_syntax_present(wp: WinHandle) -> c_int;
+    fn syntax_present(wp: WinHandle) -> bool;
+
+    // Marktree size
+    fn nvim_buf_get_marktree_n_keys(buf: *mut c_void) -> c_int;
+
+    // Concealcursor option
+    fn nvim_win_get_p_cocu(wp: WinHandle) -> *const c_char;
 }
 
-/// Check if Visual mode is active and the window shows the curwin buffer.
+/// Check if Visual mode is active and the window is the current window.
 ///
 /// Returns 1 if Visual mode highlighting should be applied for this window.
 #[no_mangle]
@@ -3136,8 +3141,7 @@ pub unsafe extern "C" fn rs_should_apply_visual(wp: WinHandle) -> c_int {
         return 0;
     }
 
-    let buf = nvim_win_get_buffer(wp);
-    c_int::from(nvim_curwin_buffer_eq(buf) != 0)
+    nvim_win_is_curwin(wp)
 }
 
 /// Check if a line is the last line in the buffer.
@@ -3154,7 +3158,7 @@ pub unsafe extern "C" fn rs_is_last_line(buf: BufHandle, lnum: LinenrT) -> c_int
 /// Returns 1 if syntax highlighting should be processed.
 #[no_mangle]
 pub unsafe extern "C" fn rs_has_syntax(wp: WinHandle) -> c_int {
-    nvim_syntax_present(wp)
+    c_int::from(syntax_present(wp))
 }
 
 /// Calculate the effective highlight attribute for a character.
@@ -3194,16 +3198,14 @@ pub unsafe extern "C" fn rs_clamp_col_to_view(wp: WinHandle, col: c_int) -> c_in
 /// given the current virtual column.
 #[no_mangle]
 pub unsafe extern "C" fn rs_tab_cells(wp: WinHandle, vcol: c_int) -> c_int {
-    let tabstop = nvim_win_get_tabstop(wp);
+    let buf = nvim_win_get_w_buffer(wp);
+    // b_p_ts is OptInt (i64); clamp to c_int range (tabstop won't exceed that in practice).
+    #[allow(clippy::cast_possible_truncation)]
+    let tabstop = nvim_buf_get_p_ts(buf).min(i64::from(c_int::MAX)) as c_int;
     if tabstop == 0 {
         return 1;
     }
     tabstop - (vcol % tabstop)
-}
-
-// Tabstop accessor
-extern "C" {
-    fn nvim_win_get_tabstop(wp: WinHandle) -> c_int;
 }
 
 /// Check if the character should be concealed.
@@ -3220,16 +3222,14 @@ pub unsafe extern "C" fn rs_should_conceal(
     }
     if conceal_level >= 1 && on_cursor_line == 0 {
         // Level 1: conceal when not on cursor line (unless concealcursor is set)
-        let conceal_cursor = nvim_win_get_conceal_cursor(wp);
-        if conceal_cursor == 0 {
+        let cocu = nvim_win_get_p_cocu(wp);
+        // concealcursor is NUL or empty string when not set
+        let has_concealcursor = !cocu.is_null() && *cocu != 0;
+        if !has_concealcursor {
             return 1;
         }
     }
     0
-}
-
-extern "C" {
-    fn nvim_win_get_conceal_cursor(wp: WinHandle) -> c_int;
 }
 
 /// Check if we need to draw the end-of-line character.
@@ -3255,13 +3255,14 @@ pub unsafe extern "C" fn rs_get_eol_char(wp: WinHandle) -> ScharT {
 }
 
 /// Check if the line has virtual text that needs drawing.
+/// Returns nonzero if the buffer has any extmarks (marktree has entries).
 #[no_mangle]
-pub unsafe extern "C" fn rs_line_has_virt_text(wp: WinHandle, lnum: LinenrT) -> c_int {
-    nvim_line_has_virt_text(wp, lnum)
-}
-
-extern "C" {
-    fn nvim_line_has_virt_text(wp: WinHandle, lnum: LinenrT) -> c_int;
+pub unsafe extern "C" fn rs_line_has_virt_text(wp: WinHandle, _lnum: LinenrT) -> c_int {
+    let buf = nvim_win_get_buffer(wp);
+    if buf.is_null() {
+        return 0;
+    }
+    nvim_buf_get_marktree_n_keys(buf)
 }
 
 /// Calculate the column position for cursor column highlight.
