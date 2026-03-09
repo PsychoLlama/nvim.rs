@@ -23,8 +23,69 @@ pub use context::*;
 use libc::{c_char, c_int};
 use std::ffi::CStr;
 
-/// Opaque handle to `expand_T` (C struct).
-pub type ExpandHandle = *mut libc::c_void;
+// =============================================================================
+// expand_T repr(C) struct
+// =============================================================================
+
+/// Script context (matches `sctx_T`).
+/// Layout: `sc_sid:i32@0`, `sc_seq:i32@4`, `sc_lnum:i32@8`, pad:4@12, `sc_chan:u64@16` = 24 bytes.
+#[repr(C)]
+pub struct SctxT {
+    pub sc_sid: i32,
+    pub sc_seq: i32,
+    pub sc_lnum: i32,
+    _pad: i32,
+    pub sc_chan: u64,
+}
+
+/// Position in file or buffer (matches `pos_T`).
+/// Layout: lnum:i32@0, col:i32@4, coladd:i32@8 = 12 bytes.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct PosT {
+    pub lnum: i32,
+    pub col: i32,
+    pub coladd: i32,
+}
+
+/// Command-line expansion struct (matches `expand_T` from `cmdexpand_defs.h`).
+///
+/// Layout verified by `_Static_assert` in `cmdexpand.c`:
+/// - `sizeof(expand_T)` == 392
+/// - `xp_pattern`@0, `xp_context`@8, `xp_pattern_len`@16, `xp_prefix`@24
+/// - `xp_arg`@32, `xp_luaref`@40, `xp_script_ctx`@48, `xp_backslash`@72
+/// - `xp_shell`@76, `xp_numfiles`@80, `xp_col`@84, `xp_selected`@88
+/// - `xp_orig`@96, `xp_files`@104, `xp_line`@112, `xp_buf`@120
+/// - `xp_search_dir`@376, `xp_pre_incsearch_pos`@380
+#[repr(C)]
+pub struct ExpandT {
+    pub xp_pattern: *mut c_char, // offset 0
+    pub xp_context: c_int,       // offset 8
+    _pad1: i32,
+    pub xp_pattern_len: usize, // offset 16
+    pub xp_prefix: c_int,      // offset 24 (xp_prefix_T enum)
+    _pad2: i32,
+    pub xp_arg: *mut c_char, // offset 32
+    pub xp_luaref: c_int,    // offset 40 (LuaRef = int)
+    _pad3: i32,
+    pub xp_script_ctx: SctxT, // offset 48, 24 bytes
+    pub xp_backslash: c_int,  // offset 72
+    pub xp_shell: bool,       // offset 76 (Linux only, #ifndef BACKSLASH_IN_FILENAME)
+    _pad4: [u8; 3],
+    pub xp_numfiles: c_int, // offset 80
+    pub xp_col: c_int,      // offset 84
+    pub xp_selected: c_int, // offset 88
+    _pad5: i32,
+    pub xp_orig: *mut c_char,       // offset 96
+    pub xp_files: *mut *mut c_char, // offset 104
+    pub xp_line: *mut c_char,       // offset 112
+    pub xp_buf: [c_char; 256],      // offset 120
+    pub xp_search_dir: c_int,       // offset 376 (Direction enum)
+    pub xp_pre_incsearch_pos: PosT, // offset 380, 12 bytes = 392 total
+}
+
+/// Handle to `expand_T` (C struct).
+pub type ExpandHandle = *mut ExpandT;
 
 // =============================================================================
 // External C functions

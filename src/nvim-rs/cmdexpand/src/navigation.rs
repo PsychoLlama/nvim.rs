@@ -19,14 +19,6 @@ use crate::ExpandHandle;
 // =============================================================================
 
 extern "C" {
-    // expand_T field accessors
-    fn nvim_expand_get_numfiles(xp: ExpandHandle) -> c_int;
-    fn nvim_expand_get_selected(xp: ExpandHandle) -> c_int;
-    fn nvim_expand_set_selected(xp: ExpandHandle, selected: c_int);
-    fn nvim_expand_get_context(xp: ExpandHandle) -> c_int;
-    fn nvim_expand_get_orig(xp: ExpandHandle) -> *const c_char;
-    fn nvim_expand_get_files_item(xp: ExpandHandle, i: c_int) -> *const c_char;
-
     // Popup menu functions
     fn pum_get_height() -> c_int;
     fn pum_clear();
@@ -77,12 +69,9 @@ extern "C" {
     fn utf_ptr2char(p: *const c_char) -> c_int;
     fn mb_tolower(c: c_int) -> c_int;
 
-    // Phase 4: ExpandOne orchestrator
-    fn nvim_expand_get_prefix(xp: ExpandHandle) -> c_int;
-    fn nvim_expand_set_orig(xp: ExpandHandle, orig: *mut c_char);
+    // ExpandOne orchestrator helpers
     fn nvim_expand_free_old_matches(xp: ExpandHandle);
     fn nvim_get_got_int() -> c_int;
-    fn nvim_expand_get_files_item_len(xp: ExpandHandle, i: c_int) -> usize;
     fn nvim_cmdexpand_xstpcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut libc::c_void);
     fn xmalloc(size: usize) -> *mut c_char;
@@ -107,12 +96,12 @@ const K_OPT_BO_FLAG_WILDMODE: c_int = 0x0008_0000;
 /// `xp_numfiles > 0`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_get_next_or_prev_match(mode: c_int, xp: ExpandHandle) -> *mut c_char {
-    let numfiles = nvim_expand_get_numfiles(xp);
+    let numfiles = (*xp).xp_numfiles;
     if numfiles <= 0 {
         return std::ptr::null_mut();
     }
 
-    let mut findex = nvim_expand_get_selected(xp);
+    let mut findex = (*xp).xp_selected;
 
     if mode == WILD_PREV {
         if findex == -1 {
@@ -162,7 +151,7 @@ pub unsafe extern "C" fn rs_get_next_or_prev_match(mode: c_int, xp: ExpandHandle
 
     // Handle wrapping around
     if findex < 0 || findex >= numfiles {
-        if !nvim_expand_get_orig(xp).is_null() {
+        if !(*xp).xp_orig.is_null() {
             findex = -1;
         } else if findex < 0 {
             findex = numfiles - 1;
@@ -188,13 +177,14 @@ pub unsafe extern "C" fn rs_get_next_or_prev_match(mode: c_int, xp: ExpandHandle
         }
     }
 
-    nvim_expand_set_selected(xp, findex);
+    (*xp).xp_selected = findex;
 
     // Return the original text or the selected match
     if findex == -1 {
-        xstrdup(nvim_expand_get_orig(xp))
+        xstrdup((*xp).xp_orig)
     } else {
-        xstrdup(nvim_expand_get_files_item(xp, findex))
+        let files = (*xp).xp_files;
+        xstrdup(*files.add(findex as usize))
     }
 }
 
@@ -219,7 +209,7 @@ pub unsafe extern "C" fn rs_expand_one_start(
 ) -> *mut c_char {
     // Do the expansion.
     let result = nvim_cmdexpand_expand_from_context(xp, str_, options);
-    let numfiles = nvim_expand_get_numfiles(xp);
+    let numfiles = (*xp).xp_numfiles;
 
     if result == FAIL {
         // FNAME_ILLEGAL is not defined on Linux, skip that branch.
@@ -240,7 +230,7 @@ pub unsafe extern "C" fn rs_expand_one_start(
     if mode != WILD_ALL && mode != WILD_ALL_KEEP && mode != WILD_LONGEST {
         let non_suf_match = if numfiles > 0 {
             let mut nsm = numfiles;
-            let ctx = nvim_expand_get_context(xp);
+            let ctx = (*xp).xp_context;
             if (ctx == ExpandContext::Files.to_raw() || ctx == ExpandContext::Directories.to_raw())
                 && numfiles > 1
             {
@@ -266,7 +256,8 @@ pub unsafe extern "C" fn rs_expand_one_start(
         }
 
         if !(non_suf_match != 1 && mode == WILD_EXPAND_FREE) {
-            return xstrdup(nvim_expand_get_files_item(xp, 0));
+            let files = (*xp).xp_files;
+            return xstrdup(*files);
         }
     }
 
@@ -289,8 +280,9 @@ const FAIL: c_int = 0;
 /// `xp` must be a valid `expand_T` handle with at least one file match.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_find_longest_match(xp: ExpandHandle, options: c_int) -> *mut c_char {
-    let numfiles = nvim_expand_get_numfiles(xp);
-    let first_file = nvim_expand_get_files_item(xp, 0);
+    let numfiles = (*xp).xp_numfiles;
+    let files = (*xp).xp_files;
+    let first_file = *files;
 
     let mut len: usize = 0;
     loop {
@@ -302,7 +294,7 @@ pub unsafe extern "C" fn rs_find_longest_match(xp: ExpandHandle, options: c_int)
         let mb_len = utfc_ptr2len(first_file.add(len)) as usize;
         let c0 = utf_ptr2char(first_file.add(len));
 
-        let ctx = nvim_expand_get_context(xp);
+        let ctx = (*xp).xp_context;
         let use_icase = nvim_option_get_fic() != 0
             && (ctx == ExpandContext::Directories.to_raw()
                 || ctx == ExpandContext::Files.to_raw()
@@ -311,7 +303,7 @@ pub unsafe extern "C" fn rs_find_longest_match(xp: ExpandHandle, options: c_int)
 
         let mut all_match = true;
         for i in 1..numfiles {
-            let ci = utf_ptr2char(nvim_expand_get_files_item(xp, i).add(len));
+            let ci = utf_ptr2char((*files.add(i as usize)).add(len));
             if use_icase {
                 if mb_tolower(c0) != mb_tolower(ci) {
                     all_match = false;
@@ -376,23 +368,24 @@ pub unsafe extern "C" fn rs_expand_one(
     }
 
     if mode == WILD_CANCEL {
-        let orig_ptr = nvim_expand_get_orig(xp);
+        let orig_ptr = (*xp).xp_orig;
         if orig_ptr.is_null() {
             ss = xstrdup(c"".as_ptr());
         } else {
             ss = xstrdup(orig_ptr);
         }
     } else if mode == WILD_APPLY {
-        let selected = nvim_expand_get_selected(xp);
+        let selected = (*xp).xp_selected;
         if selected == -1 {
-            let orig_ptr = nvim_expand_get_orig(xp);
+            let orig_ptr = (*xp).xp_orig;
             if orig_ptr.is_null() {
                 ss = xstrdup(c"".as_ptr());
             } else {
                 ss = xstrdup(orig_ptr);
             }
         } else {
-            ss = xstrdup(nvim_expand_get_files_item(xp, selected));
+            let files = (*xp).xp_files;
+            ss = xstrdup(*files.add(selected as usize));
         }
     }
 
@@ -401,28 +394,28 @@ pub unsafe extern "C" fn rs_expand_one(
         nvim_expand_free_old_matches(xp);
     }
     let new_selected = if options & WILD_NOSELECT != 0 { -1 } else { 0 };
-    nvim_expand_set_selected(xp, new_selected);
+    (*xp).xp_selected = new_selected;
 
     if mode == WILD_FREE {
         return std::ptr::null_mut();
     }
 
-    if nvim_expand_get_numfiles(xp) == -1 && mode != WILD_APPLY && mode != WILD_CANCEL {
-        xfree(nvim_expand_get_orig(xp).cast_mut().cast::<libc::c_void>());
-        nvim_expand_set_orig(xp, orig);
+    if (*xp).xp_numfiles == -1 && mode != WILD_APPLY && mode != WILD_CANCEL {
+        xfree((*xp).xp_orig.cast::<libc::c_void>());
+        (*xp).xp_orig = orig;
         orig_saved = true;
 
         ss = rs_expand_one_start(mode, xp, str_, options);
     }
 
     // Find longest common part
-    if mode == WILD_LONGEST && nvim_expand_get_numfiles(xp) > 0 {
+    if mode == WILD_LONGEST && (*xp).xp_numfiles > 0 {
         ss = rs_find_longest_match(xp, options);
-        nvim_expand_set_selected(xp, -1); // next p_wc gets first one
+        (*xp).xp_selected = -1; // next p_wc gets first one
     }
 
     // Concatenate all matching names
-    if mode == WILD_ALL && nvim_expand_get_numfiles(xp) > 0 && nvim_get_got_int() == 0 {
+    if mode == WILD_ALL && (*xp).xp_numfiles > 0 && nvim_get_got_int() == 0 {
         ss = expand_one_concat_all(xp, options);
     }
 
@@ -444,9 +437,9 @@ pub unsafe extern "C" fn rs_expand_one(
 ///
 /// `xp` must be a valid `expand_T` handle with `xp_numfiles > 0`.
 unsafe fn expand_one_concat_all(xp: ExpandHandle, options: c_int) -> *mut c_char {
-    let numfiles = nvim_expand_get_numfiles(xp);
+    let numfiles = (*xp).xp_numfiles;
     let mut ss_size: usize = 0;
-    let prefix = nvim_expand_get_prefix(xp);
+    let prefix = (*xp).xp_prefix;
     let n = numfiles - 1;
 
     let prefix_str: *const c_char;
@@ -466,8 +459,9 @@ unsafe fn expand_one_concat_all(xp: ExpandHandle, options: c_int) -> *mut c_char
         c" ".as_ptr()
     };
 
+    let files = (*xp).xp_files;
     for i in 0..numfiles {
-        ss_size += nvim_expand_get_files_item_len(xp, i) + 1; // +1 for suffix
+        ss_size += libc::strlen(*files.add(i as usize)) + 1; // +1 for suffix
     }
     ss_size += 1; // +1 for NUL
 
@@ -478,7 +472,7 @@ unsafe fn expand_one_concat_all(xp: ExpandHandle, options: c_int) -> *mut c_char
         if i > 0 {
             ssp = nvim_cmdexpand_xstpcpy(ssp, prefix_str);
         }
-        ssp = nvim_cmdexpand_xstpcpy(ssp, nvim_expand_get_files_item(xp, i));
+        ssp = nvim_cmdexpand_xstpcpy(ssp, *files.add(i as usize));
         if i < n {
             ssp = nvim_cmdexpand_xstpcpy(ssp, suffix_str);
         }

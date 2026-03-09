@@ -13,13 +13,6 @@ use crate::ExpandHandle;
 // =============================================================================
 
 extern "C" {
-    // expand_T field setters
-    fn nvim_expand_set_context(xp: ExpandHandle, context: c_int);
-    fn nvim_expand_set_pattern(xp: ExpandHandle, pattern: *mut c_char);
-    fn nvim_expand_set_pattern_len(xp: ExpandHandle, len: usize);
-    fn nvim_expand_set_search_dir(xp: ExpandHandle, dir: c_int);
-    fn nvim_expand_set_shell(xp: ExpandHandle, shell: c_int);
-
     // String utility functions
     fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
     fn skipwhite(p: *const c_char) -> *mut c_char;
@@ -53,8 +46,6 @@ extern "C" {
     fn nvim_cmdexpand_set_breakpt_expand_what(val: c_int);
     fn nvim_cmdexpand_set_filetype_expand_what(val: c_int);
 
-    // expand_T pattern getter
-    fn nvim_cmdexpand_get_xp_pattern(xp: ExpandHandle) -> *mut c_char;
 }
 
 // =============================================================================
@@ -204,7 +195,7 @@ pub unsafe extern "C" fn rs_find_cmd_after_isearch_cmd(
                 return p;
             }
         }
-        nvim_expand_set_context(xp, ExpandContext::Nothing.to_raw());
+        (*xp).xp_context = ExpandContext::Nothing.to_raw();
     }
     std::ptr::null()
 }
@@ -225,11 +216,11 @@ pub unsafe extern "C" fn rs_set_context_in_argopt(
 ) -> *const c_char {
     let p = nvim_vim_strchr(arg, c_int::from(b'='));
     if p.is_null() {
-        nvim_expand_set_pattern(xp, arg.cast_mut());
+        (*xp).xp_pattern = arg.cast_mut();
     } else {
-        nvim_expand_set_pattern(xp, p.add(1).cast_mut());
+        (*xp).xp_pattern = p.add(1).cast_mut();
     }
-    nvim_expand_set_context(xp, ExpandContext::Argopt.to_raw());
+    (*xp).xp_context = ExpandContext::Argopt.to_raw();
     std::ptr::null()
 }
 
@@ -252,7 +243,7 @@ pub unsafe extern "C" fn rs_set_context_in_filter_cmd(
         p = rs_skip_vimgrep_pat(p.cast_mut(), std::ptr::null_mut(), std::ptr::null_mut());
     }
     if p.is_null() || *p == 0 {
-        nvim_expand_set_context(xp, ExpandContext::Nothing.to_raw());
+        (*xp).xp_context = ExpandContext::Nothing.to_raw();
         return std::ptr::null();
     }
     skipwhite(p)
@@ -278,7 +269,7 @@ pub unsafe extern "C" fn rs_set_context_in_match_cmd(
         set_context_in_echohl_cmd(xp, p);
         p = skipwhite(skiptowhite(p));
         if *p != 0 {
-            nvim_expand_set_context(xp, ExpandContext::Nothing.to_raw());
+            (*xp).xp_context = ExpandContext::Nothing.to_raw();
             p = skip_regexp(p.add(1).cast_mut(), c_int::from(*p as u8), rs_magic_isset());
         }
     }
@@ -308,12 +299,12 @@ pub unsafe extern "C" fn rs_set_context_in_unlet_cmd(
         a = p.add(1);
     }
 
-    nvim_expand_set_context(xp, ExpandContext::UserVars.to_raw());
-    nvim_expand_set_pattern(xp, a.cast_mut());
+    (*xp).xp_context = ExpandContext::UserVars.to_raw();
+    (*xp).xp_pattern = a.cast_mut();
 
     if *a as u8 == b'$' {
-        nvim_expand_set_context(xp, ExpandContext::EnvVars.to_raw());
-        nvim_expand_set_pattern(xp, a.add(1).cast_mut());
+        (*xp).xp_context = ExpandContext::EnvVars.to_raw();
+        (*xp).xp_pattern = a.add(1).cast_mut();
     }
 
     std::ptr::null()
@@ -335,8 +326,8 @@ pub unsafe extern "C" fn rs_set_context_in_lang_cmd(
 ) -> *const c_char {
     let p = skiptowhite(arg);
     if *p == 0 {
-        nvim_expand_set_context(xp, ExpandContext::Language.to_raw());
-        nvim_expand_set_pattern(xp, arg.cast_mut());
+        (*xp).xp_context = ExpandContext::Language.to_raw();
+        (*xp).xp_pattern = arg.cast_mut();
     } else {
         let len = p.offset_from(arg) as usize;
         let matches_keyword =
@@ -346,10 +337,10 @@ pub unsafe extern "C" fn rs_set_context_in_lang_cmd(
             || matches_keyword(b"time")
             || matches_keyword(b"collate")
         {
-            nvim_expand_set_context(xp, ExpandContext::Locales.to_raw());
-            nvim_expand_set_pattern(xp, skipwhite(p));
+            (*xp).xp_context = ExpandContext::Locales.to_raw();
+            (*xp).xp_pattern = skipwhite(p);
         } else {
-            nvim_expand_set_context(xp, ExpandContext::Nothing.to_raw());
+            (*xp).xp_context = ExpandContext::Nothing.to_raw();
         }
     }
     std::ptr::null()
@@ -370,8 +361,8 @@ pub unsafe extern "C" fn rs_set_context_in_breakadd_cmd(
     arg: *const c_char,
     breakpt_cmd_type: c_int,
 ) -> *const c_char {
-    nvim_expand_set_context(xp, ExpandContext::Breakpoint.to_raw());
-    nvim_expand_set_pattern(xp, arg.cast_mut());
+    (*xp).xp_context = ExpandContext::Breakpoint.to_raw();
+    (*xp).xp_pattern = arg.cast_mut();
 
     if breakpt_cmd_type == BREAKPT_CMD_ADD {
         nvim_cmdexpand_set_breakpt_expand_what(EXP_BREAKPT_ADD);
@@ -394,20 +385,20 @@ pub unsafe extern "C" fn rs_set_context_in_breakadd_cmd(
         if is_ascii_digit(*q as u8) {
             q = skipdigits(q);
             if *q as u8 != b' ' {
-                nvim_expand_set_context(xp, ExpandContext::Nothing.to_raw());
+                (*xp).xp_context = ExpandContext::Nothing.to_raw();
                 return std::ptr::null();
             }
             q = skipwhite(q);
         }
         if is_file {
-            nvim_expand_set_context(xp, ExpandContext::Files.to_raw());
+            (*xp).xp_context = ExpandContext::Files.to_raw();
         } else {
-            nvim_expand_set_context(xp, ExpandContext::UserFunc.to_raw());
+            (*xp).xp_context = ExpandContext::UserFunc.to_raw();
         }
-        nvim_expand_set_pattern(xp, q);
+        (*xp).xp_pattern = q;
     } else if libc::strncmp(p, c"expr ".as_ptr(), 5) == 0 {
-        nvim_expand_set_context(xp, ExpandContext::Expression.to_raw());
-        nvim_expand_set_pattern(xp, skipwhite(p.add(5)));
+        (*xp).xp_context = ExpandContext::Expression.to_raw();
+        (*xp).xp_pattern = skipwhite(p.add(5));
     }
 
     std::ptr::null()
@@ -427,16 +418,16 @@ pub unsafe extern "C" fn rs_set_context_in_scriptnames_cmd(
     xp: ExpandHandle,
     arg: *const c_char,
 ) -> *const c_char {
-    nvim_expand_set_context(xp, ExpandContext::Nothing.to_raw());
-    nvim_expand_set_pattern(xp, std::ptr::null_mut());
+    (*xp).xp_context = ExpandContext::Nothing.to_raw();
+    (*xp).xp_pattern = std::ptr::null_mut();
 
     let p = skipwhite(arg);
     if is_ascii_digit(*p as u8) {
         return std::ptr::null();
     }
 
-    nvim_expand_set_context(xp, ExpandContext::Scriptnames.to_raw());
-    nvim_expand_set_pattern(xp, p);
+    (*xp).xp_context = ExpandContext::Scriptnames.to_raw();
+    (*xp).xp_pattern = p;
 
     std::ptr::null()
 }
@@ -455,8 +446,8 @@ pub unsafe extern "C" fn rs_set_context_in_filetype_cmd(
     xp: ExpandHandle,
     arg: *const c_char,
 ) -> *const c_char {
-    nvim_expand_set_context(xp, ExpandContext::Filetypecmd.to_raw());
-    nvim_expand_set_pattern(xp, arg.cast_mut());
+    (*xp).xp_context = ExpandContext::Filetypecmd.to_raw();
+    (*xp).xp_pattern = arg.cast_mut();
     nvim_cmdexpand_set_filetype_expand_what(EXP_FILETYPECMD_ALL);
 
     let mut p = skipwhite(arg);
@@ -488,7 +479,7 @@ pub unsafe extern "C" fn rs_set_context_in_filetype_cmd(
         nvim_cmdexpand_set_filetype_expand_what(EXP_FILETYPECMD_PLUGIN);
     }
 
-    nvim_expand_set_pattern(xp, p);
+    (*xp).xp_pattern = p;
 
     std::ptr::null()
 }
@@ -517,10 +508,10 @@ pub unsafe extern "C" fn rs_set_context_with_pattern(xp: ExpandHandle) {
     }
 
     let cmdbuff = nvim_cmdexpand_get_cmdbuff();
-    nvim_expand_set_pattern(xp, cmdbuff.add(skiplen as usize));
-    nvim_expand_set_pattern_len(xp, (cmdpos - skiplen) as usize);
-    nvim_expand_set_context(xp, ExpandContext::PatternInBuf.to_raw());
-    nvim_expand_set_search_dir(xp, FORWARD);
+    (*xp).xp_pattern = cmdbuff.add(skiplen as usize);
+    (*xp).xp_pattern_len = (cmdpos - skiplen) as usize;
+    (*xp).xp_context = ExpandContext::PatternInBuf.to_raw();
+    (*xp).xp_search_dir = FORWARD;
 }
 
 // =============================================================================
@@ -545,7 +536,7 @@ pub unsafe extern "C" fn rs_set_context_for_wildcard_arg(
     let mut bow: *const c_char = std::ptr::null();
 
     let pattern_start = skipwhite(arg);
-    nvim_expand_set_pattern(xp, pattern_start);
+    (*xp).xp_pattern = pattern_start;
     let mut p: *const c_char = pattern_start;
 
     while *p != 0 {
@@ -554,7 +545,7 @@ pub unsafe extern "C" fn rs_set_context_for_wildcard_arg(
             p = p.add(1);
         } else if c == c_int::from(b'`') {
             if !in_quote {
-                nvim_expand_set_pattern(xp, p.cast_mut());
+                (*xp).xp_pattern = p.cast_mut();
                 bow = p.add(1);
             }
             in_quote = !in_quote;
@@ -575,7 +566,7 @@ pub unsafe extern "C" fn rs_set_context_for_wildcard_arg(
             if in_quote {
                 bow = p;
             } else {
-                nvim_expand_set_pattern(xp, p.cast_mut());
+                (*xp).xp_pattern = p.cast_mut();
             }
             p = p.wrapping_sub(len);
         }
@@ -585,22 +576,25 @@ pub unsafe extern "C" fn rs_set_context_for_wildcard_arg(
     // If we are still inside the quotes, and we passed a space, just
     // expand from there.
     if !bow.is_null() && in_quote {
-        nvim_expand_set_pattern(xp, bow.cast_mut());
+        (*xp).xp_pattern = bow.cast_mut();
     }
-    nvim_expand_set_context(xp, ExpandContext::Files.to_raw());
+    (*xp).xp_context = ExpandContext::Files.to_raw();
 
     // For a shell command more chars need to be escaped.
     if is_shell_cmd != 0 || *complp == ExpandContext::Shellcmdline.to_raw() {
+        // xp_shell only exists on non-Windows (BACKSLASH_IN_FILENAME not defined)
         #[cfg(not(windows))]
-        nvim_expand_set_shell(xp, 1);
+        {
+            (*xp).xp_shell = true;
+        }
         // When still after the command name expand executables.
-        if nvim_cmdexpand_get_xp_pattern(xp) == skipwhite(arg) {
-            nvim_expand_set_context(xp, ExpandContext::Shellcmd.to_raw());
+        if (*xp).xp_pattern == skipwhite(arg) {
+            (*xp).xp_context = ExpandContext::Shellcmd.to_raw();
         }
     }
 
     // Check for environment variable.
-    let pat = nvim_cmdexpand_get_xp_pattern(xp);
+    let pat = (*xp).xp_pattern;
     if *pat as u8 == b'$' {
         let mut q = pat.add(1);
         while *q != 0 {
@@ -610,8 +604,8 @@ pub unsafe extern "C" fn rs_set_context_for_wildcard_arg(
             q = q.add(1);
         }
         if *q == 0 {
-            nvim_expand_set_context(xp, ExpandContext::EnvVars.to_raw());
-            nvim_expand_set_pattern(xp, pat.add(1));
+            (*xp).xp_context = ExpandContext::EnvVars.to_raw();
+            (*xp).xp_pattern = pat.add(1);
             if *complp != ExpandContext::UserDefined.to_raw()
                 && *complp != ExpandContext::UserList.to_raw()
             {
@@ -621,15 +615,15 @@ pub unsafe extern "C" fn rs_set_context_for_wildcard_arg(
     }
 
     // Check for user names.
-    let pat = nvim_cmdexpand_get_xp_pattern(xp);
+    let pat = (*xp).xp_pattern;
     if *pat as u8 == b'~' {
         let mut q = pat.add(1);
         while *q != 0 && *q as u8 != b'/' {
             q = q.add(1);
         }
         if *q == 0 && q > pat.add(1) && match_user(pat.add(1)) >= 1 {
-            nvim_expand_set_context(xp, ExpandContext::User.to_raw());
-            nvim_expand_set_pattern(xp, pat.add(1));
+            (*xp).xp_context = ExpandContext::User.to_raw();
+            (*xp).xp_pattern = pat.add(1);
         }
     }
 }

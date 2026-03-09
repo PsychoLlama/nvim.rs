@@ -380,21 +380,6 @@ void nvim_expand_clear(expand_T *xp)
   }
 }
 
-/// Set xp_prefix (for Rust FFI).
-void nvim_expand_set_prefix(expand_T *xp, int prefix)
-{
-  if (xp) {
-    xp->xp_prefix = (xp_prefix_T)prefix;
-  }
-}
-
-/// Set xp_numfiles (for Rust FFI).
-void nvim_expand_set_numfiles(expand_T *xp, int numfiles)
-{
-  if (xp) {
-    xp->xp_numfiles = numfiles;
-  }
-}
 
 /// Free wild matches via FreeWild (for Rust FFI).
 void nvim_expand_free_wild(expand_T *xp)
@@ -422,20 +407,6 @@ void nvim_clear_cmdline_orig(void)
 // Phase 3: C accessors for match navigation
 // =============================================================================
 
-/// Get xp->xp_orig pointer (for Rust FFI).
-const char *nvim_expand_get_orig(const expand_T *xp)
-{
-  return xp ? xp->xp_orig : NULL;
-}
-
-/// Get xp->xp_files[i] (for Rust FFI).
-const char *nvim_expand_get_files_item(const expand_T *xp, int i)
-{
-  if (!xp || i < 0 || i >= xp->xp_numfiles || !xp->xp_files) {
-    return NULL;
-  }
-  return xp->xp_files[i];
-}
 
 /// Get compl_selected (for Rust FFI).
 int nvim_get_compl_selected(void)
@@ -519,17 +490,33 @@ void nvim_cmdexpand_emsg_toomany(void)
 // Static assert for kOptBoFlagWildmode used in rs_find_longest_match
 _Static_assert(kOptBoFlagWildmode == 0x80000, "kOptBoFlagWildmode mismatch");
 
+// Layout validation for expand_T repr(C) struct in Rust
+_Static_assert(sizeof(expand_T) == 392, "expand_T size mismatch");
+_Static_assert(offsetof(expand_T, xp_pattern) == 0, "xp_pattern offset mismatch");
+_Static_assert(offsetof(expand_T, xp_context) == 8, "xp_context offset mismatch");
+_Static_assert(offsetof(expand_T, xp_pattern_len) == 16, "xp_pattern_len offset mismatch");
+_Static_assert(offsetof(expand_T, xp_prefix) == 24, "xp_prefix offset mismatch");
+_Static_assert(offsetof(expand_T, xp_arg) == 32, "xp_arg offset mismatch");
+_Static_assert(offsetof(expand_T, xp_luaref) == 40, "xp_luaref offset mismatch");
+_Static_assert(offsetof(expand_T, xp_script_ctx) == 48, "xp_script_ctx offset mismatch");
+_Static_assert(offsetof(expand_T, xp_backslash) == 72, "xp_backslash offset mismatch");
+_Static_assert(offsetof(expand_T, xp_numfiles) == 80, "xp_numfiles offset mismatch");
+_Static_assert(offsetof(expand_T, xp_col) == 84, "xp_col offset mismatch");
+_Static_assert(offsetof(expand_T, xp_selected) == 88, "xp_selected offset mismatch");
+_Static_assert(offsetof(expand_T, xp_orig) == 96, "xp_orig offset mismatch");
+_Static_assert(offsetof(expand_T, xp_files) == 104, "xp_files offset mismatch");
+_Static_assert(offsetof(expand_T, xp_line) == 112, "xp_line offset mismatch");
+_Static_assert(offsetof(expand_T, xp_buf) == 120, "xp_buf offset mismatch");
+_Static_assert(offsetof(expand_T, xp_search_dir) == 376, "xp_search_dir offset mismatch");
+_Static_assert(offsetof(expand_T, xp_pre_incsearch_pos) == 380, "xp_pre_incsearch_pos offset mismatch");
+#ifndef BACKSLASH_IN_FILENAME
+_Static_assert(offsetof(expand_T, xp_shell) == 76, "xp_shell offset mismatch");
+#endif
+
 // =============================================================================
 // Phase 4: C accessors for ExpandOne orchestrator
 // =============================================================================
 
-/// Set xp->xp_orig (for Rust FFI). Takes ownership of the pointer.
-void nvim_expand_set_orig(expand_T *xp, char *orig)
-{
-  if (xp) {
-    xp->xp_orig = orig;
-  }
-}
 
 /// Free old wild matches, set numfiles=-1, clear orig, remove PUM if needed.
 /// Used in ExpandOne before starting a new expansion.
@@ -551,14 +538,6 @@ void nvim_expand_free_old_matches(expand_T *xp)
 
 // nvim_get_got_int already exists in ex_eval.c
 
-/// Get strlen of xp->xp_files[i] (for Rust FFI).
-size_t nvim_expand_get_files_item_len(const expand_T *xp, int i)
-{
-  if (!xp || i < 0 || i >= xp->xp_numfiles || !xp->xp_files) {
-    return 0;
-  }
-  return strlen(xp->xp_files[i]);
-}
 
 /// xstpcpy wrapper (for Rust FFI): copies src to dst, returns pointer past NUL.
 char *nvim_cmdexpand_xstpcpy(char *dst, const char *src)
@@ -601,29 +580,6 @@ void nvim_expand_set_pattern(expand_T *xp, char *pattern)
   }
 }
 
-/// Set xp->xp_pattern_len (for Rust FFI).
-void nvim_expand_set_pattern_len(expand_T *xp, size_t len)
-{
-  if (xp) {
-    xp->xp_pattern_len = len;
-  }
-}
-
-/// Set xp->xp_search_dir (for Rust FFI).
-void nvim_expand_set_search_dir(expand_T *xp, int dir)
-{
-  if (xp) {
-    xp->xp_search_dir = (Direction)dir;
-  }
-}
-
-/// Set xp->xp_shell (for Rust FFI).
-void nvim_expand_set_shell(expand_T *xp, int shell)
-{
-  if (xp) {
-    xp->xp_shell = shell != 0;
-  }
-}
 
 /// Get xp->xp_pattern (for Rust FFI).
 char *nvim_cmdexpand_get_xp_pattern(expand_T *xp)

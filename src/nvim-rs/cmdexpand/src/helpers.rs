@@ -13,12 +13,6 @@ use crate::ExpandHandle;
 // =============================================================================
 
 extern "C" {
-    fn nvim_expand_get_context(xp: ExpandHandle) -> c_int;
-    fn nvim_expand_get_backslash(xp: ExpandHandle) -> c_int;
-    fn nvim_expand_get_shell(xp: ExpandHandle) -> c_int;
-    fn nvim_expand_get_pattern(xp: ExpandHandle) -> *const c_char;
-    fn nvim_expand_set_backslash(xp: ExpandHandle, backslash: c_int);
-
     // C functions with int return to avoid bool ABI issues
     fn nvim_cmdexpand_vim_ispathsep(c: c_int) -> c_int;
     fn nvim_cmdexpand_rem_backslash(p: *const c_char) -> c_int;
@@ -35,15 +29,12 @@ extern "C" {
     fn nvim_path_tail(p: *const c_char) -> *const c_char;
     fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
 
-    // Phase 2: `expand_T` struct operations
+    // `expand_T` complex operations (kept in C due to macros)
     fn nvim_expand_clear(xp: ExpandHandle);
-    fn nvim_expand_set_prefix(xp: ExpandHandle, prefix: c_int);
-    fn nvim_expand_set_numfiles(xp: ExpandHandle, numfiles: c_int);
     fn nvim_expand_free_wild(xp: ExpandHandle);
     fn nvim_expand_clear_orig(xp: ExpandHandle);
-    fn nvim_expand_get_numfiles(xp: ExpandHandle) -> c_int;
 
-    // Phase 2: static `cmdline_orig` management
+    // Static `cmdline_orig` management
     fn nvim_clear_cmdline_orig();
 }
 
@@ -91,7 +82,7 @@ pub unsafe extern "C" fn rs_showmatches_gettail(s: *mut c_char, eager: c_int) ->
 /// `xp` must be a valid `expand_T` handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_expand_showtail(xp: ExpandHandle) -> c_int {
-    let ctx = nvim_expand_get_context(xp);
+    let ctx = (*xp).xp_context;
 
     // When not completing file names a "/" may mean something different.
     if ctx != ExpandContext::Files.to_raw()
@@ -101,7 +92,7 @@ pub unsafe extern "C" fn rs_expand_showtail(xp: ExpandHandle) -> c_int {
         return 0;
     }
 
-    let pattern = nvim_expand_get_pattern(xp);
+    let pattern = (*xp).xp_pattern;
     if pattern.is_null() {
         return 0;
     }
@@ -112,7 +103,7 @@ pub unsafe extern "C" fn rs_expand_showtail(xp: ExpandHandle) -> c_int {
         return 0;
     }
 
-    let mut s = pattern.cast_mut();
+    let mut s = pattern;
     while s.cast_const() < end {
         if nvim_cmdexpand_rem_backslash(s) != 0 {
             s = s.add(1);
@@ -144,9 +135,9 @@ pub unsafe extern "C" fn rs_wildescape(
     numfiles: c_int,
     files: *mut *mut c_char,
 ) {
-    let ctx = nvim_expand_get_context(xp);
-    let backslash = nvim_expand_get_backslash(xp);
-    let shell = nvim_expand_get_shell(xp);
+    let ctx = (*xp).xp_context;
+    let backslash = (*xp).xp_backslash;
+    let shell = c_int::from((*xp).xp_shell);
 
     let vse_what = if ctx == ExpandContext::Buffers.to_raw() {
         VSE_BUFFER
@@ -195,7 +186,7 @@ pub unsafe extern "C" fn rs_wildescape(
                 escape_fname(files.offset(i));
             }
         }
-        nvim_expand_set_backslash(xp, XP_BS_NONE);
+        (*xp).xp_backslash = XP_BS_NONE;
 
         // If the first file starts with a '+' escape it.
         if numfiles > 0 && *(*files.offset(0)) as u8 == b'+' {
@@ -253,9 +244,9 @@ pub unsafe extern "C" fn rs_expand_escape(
 #[unsafe(export_name = "ExpandInit")]
 pub unsafe extern "C" fn rs_expand_init(xp: ExpandHandle) {
     nvim_expand_clear(xp);
-    nvim_expand_set_backslash(xp, XP_BS_NONE);
-    nvim_expand_set_prefix(xp, XP_PREFIX_NONE);
-    nvim_expand_set_numfiles(xp, -1);
+    (*xp).xp_backslash = XP_BS_NONE;
+    (*xp).xp_prefix = XP_PREFIX_NONE;
+    (*xp).xp_numfiles = -1;
 }
 
 /// Cleanup an expand structure after use.
@@ -268,9 +259,9 @@ pub unsafe extern "C" fn rs_expand_init(xp: ExpandHandle) {
 /// `xp` must be a valid `expand_T` handle.
 #[unsafe(export_name = "ExpandCleanup")]
 pub unsafe extern "C" fn rs_expand_cleanup(xp: ExpandHandle) {
-    if nvim_expand_get_numfiles(xp) >= 0 {
+    if (*xp).xp_numfiles >= 0 {
         nvim_expand_free_wild(xp);
-        nvim_expand_set_numfiles(xp, -1);
+        (*xp).xp_numfiles = -1;
     }
     nvim_expand_clear_orig(xp);
 }
