@@ -95,18 +95,6 @@ extern int rs_match_add_pos(win_T *wp, const char *grp, int prio, int id,
                             const linenr_T *lnums, const colnr_T *cols,
                             const int *lens, int count);
 
-// prepare.rs - Highlight preparation and update
-extern int rs_prepare_search_hl_line(win_T *wp, linenr_T lnum, colnr_T mincol,
-                                     char **line, match_T *search_hl,
-                                     int *search_attr, int *search_attr_from_match);
-extern int rs_update_search_hl(win_T *wp, linenr_T lnum, colnr_T col, char **line,
-                               match_T *search_hl, int *has_match_conc, int *match_conc,
-                               int lcs_eol_todo, int *on_last_col,
-                               int *search_attr_from_match);
-
-// highlight.rs - Highlight helpers
-extern int rs_get_prevcol_hl_flag(win_T *wp, match_T *search_hl, colnr_T curcol);
-
 static const char *e_invalwindow = N_("E957: Invalid window number");
 
 // =============================================================================
@@ -929,48 +917,6 @@ cleanup:
 // Rust-exported symbols used by callers remaining in this file.
 extern int match_delete(win_T *wp, int id, bool perr);
 extern matchitem_T *get_match(win_T *wp, int id);
-
-/// Prepare for 'hlsearch' and match highlighting in one window line.
-///
-/// @return  true if there is such highlighting and set "search_attr" to the
-///          current highlight attribute.
-bool prepare_search_hl_line(win_T *wp, linenr_T lnum, colnr_T mincol, char **line,
-                            match_T *search_hl, int *search_attr, bool *search_attr_from_match)
-{
-  int search_attr_from_match_int = *search_attr_from_match ? 1 : 0;
-  int result = rs_prepare_search_hl_line(wp, lnum, mincol, line, search_hl,
-                                         search_attr, &search_attr_from_match_int);
-  *search_attr_from_match = search_attr_from_match_int != 0;
-  return result != 0;
-}
-
-/// For a position in a line: Check for start/end of 'hlsearch' and other
-/// matches.
-/// After end, check for start/end of next match.
-/// When another match, have to check for start again.
-/// Watch out for matching an empty string!
-/// "on_last_col" is set to true with non-zero search_attr and the next column
-/// is endcol.
-/// Return the updated search_attr.
-int update_search_hl(win_T *wp, linenr_T lnum, colnr_T col, char **line, match_T *search_hl,
-                     int *has_match_conc, int *match_conc, bool lcs_eol_todo, bool *on_last_col,
-                     bool *search_attr_from_match)
-{
-  int on_last_col_int = *on_last_col ? 1 : 0;
-  int search_attr_from_match_int = *search_attr_from_match ? 1 : 0;
-  int result = rs_update_search_hl(wp, lnum, col, line, search_hl,
-                                   has_match_conc, match_conc,
-                                   lcs_eol_todo ? 1 : 0, &on_last_col_int,
-                                   &search_attr_from_match_int);
-  *on_last_col = on_last_col_int != 0;
-  *search_attr_from_match = search_attr_from_match_int != 0;
-  return result;
-}
-
-bool get_prevcol_hl_flag(win_T *wp, match_T *search_hl, colnr_T curcol)
-{
-  return rs_get_prevcol_hl_flag(wp, search_hl, curcol) != 0;
-}
 
 static int matchadd_dict_arg(typval_T *tv, const char **conceal_char, win_T **win)
 {

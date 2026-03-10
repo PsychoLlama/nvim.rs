@@ -441,3 +441,73 @@ pub unsafe extern "C" fn rs_update_search_hl(
     }
     search_attr
 }
+
+// =============================================================================
+// Exported wrappers matching the exact C bool ABI
+// =============================================================================
+
+/// Exported entry point for `prepare_search_hl_line` matching C `bool` ABI.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+#[export_name = "prepare_search_hl_line"]
+pub unsafe extern "C" fn prepare_search_hl_line_export(
+    wp: *mut WinHandle,
+    lnum: i32,
+    mincol: i32,
+    line: *mut *mut u8,
+    search_hl: *mut MatchHlHandle,
+    search_attr: *mut c_int,
+    search_attr_from_match: *mut bool,
+) -> bool {
+    let mut search_attr_from_match_int = c_int::from(*search_attr_from_match);
+    let result = rs_prepare_search_hl_line(
+        wp,
+        lnum,
+        mincol,
+        line,
+        search_hl,
+        search_attr,
+        &raw mut search_attr_from_match_int,
+    );
+    *search_attr_from_match = search_attr_from_match_int != 0;
+    result != 0
+}
+
+/// Exported entry point for `update_search_hl` matching C `bool` ABI.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+#[export_name = "update_search_hl"]
+pub unsafe extern "C" fn update_search_hl_export(
+    wp: *mut WinHandle,
+    lnum: i32,
+    col: i32,
+    line: *mut *mut u8,
+    search_hl: *mut MatchHlHandle,
+    has_match_conc: *mut c_int,
+    match_conc: *mut c_int,
+    lcs_eol_todo: bool,
+    on_last_col: *mut bool,
+    search_attr_from_match: *mut bool,
+) -> c_int {
+    let mut on_last_col_int = c_int::from(*on_last_col);
+    let mut search_attr_from_match_int = c_int::from(*search_attr_from_match);
+    let result = rs_update_search_hl(
+        wp,
+        lnum,
+        col,
+        line,
+        search_hl,
+        has_match_conc,
+        match_conc,
+        c_int::from(lcs_eol_todo),
+        &raw mut on_last_col_int,
+        &raw mut search_attr_from_match_int,
+    );
+    *on_last_col = on_last_col_int != 0;
+    *search_attr_from_match = search_attr_from_match_int != 0;
+    result
+}

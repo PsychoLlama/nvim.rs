@@ -177,3 +177,21 @@ pub unsafe extern "C" fn rs_get_search_match_hl(
         }
     }
 }
+
+// =============================================================================
+// Exported wrapper matching the exact C bool ABI
+// =============================================================================
+
+/// Exported entry point for `get_prevcol_hl_flag` matching C `bool` return ABI.
+///
+/// # Safety
+///
+/// `wp` and `search_hl` must be valid pointers.
+#[export_name = "get_prevcol_hl_flag"]
+pub unsafe extern "C" fn get_prevcol_hl_flag_export(
+    wp: *mut WinHandle,
+    search_hl: *mut MatchHlHandle,
+    curcol: i32,
+) -> bool {
+    rs_get_prevcol_hl_flag(wp, search_hl, curcol) != 0
+}

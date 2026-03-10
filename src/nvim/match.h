@@ -13,3 +13,10 @@ extern void clear_matches(win_T *wp);
 extern void init_search_hl(win_T *wp, match_T *search_hl);
 extern void prepare_search_hl(win_T *wp, match_T *search_hl, linenr_T lnum);
 extern void get_search_match_hl(win_T *wp, match_T *search_hl, colnr_T col, int *char_attr);
+extern bool prepare_search_hl_line(win_T *wp, linenr_T lnum, colnr_T mincol, char **line,
+                                   match_T *search_hl, int *search_attr,
+                                   bool *search_attr_from_match);
+extern int update_search_hl(win_T *wp, linenr_T lnum, colnr_T col, char **line,
+                            match_T *search_hl, int *has_match_conc, int *match_conc,
+                            bool lcs_eol_todo, bool *on_last_col, bool *search_attr_from_match);
+extern bool get_prevcol_hl_flag(win_T *wp, match_T *search_hl, colnr_T curcol);
