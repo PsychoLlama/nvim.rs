@@ -179,9 +179,6 @@ extern "C" {
     // Vim variables
     fn nvim_stl_get_vim_var_nr(vv_idx: c_int) -> i64;
 
-    // Math / string helpers
-    fn nvim_stl_valid_flag(c: c_int) -> c_int;
-
     // Window accessors (direct link to window_shim.c where available)
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_win_buf_line_count(wp: WinHandle) -> c_int;
@@ -213,6 +210,7 @@ extern "C" {
     fn nvim_stl_stcp_get_sign_cul_id(stcp: StatuscolHandle) -> c_int;
     fn nvim_stl_stcp_get_sattr_hl_id(stcp: StatuscolHandle, idx: c_int) -> c_int;
     fn nvim_stl_stcp_sattr_has_text(stcp: StatuscolHandle, idx: c_int) -> c_int;
+    #[link_name = "nvim_syn_name2id_len_wrapper"]
     fn nvim_stl_syn_name2id_len(name: *const c_char, len: c_int) -> c_int;
 
     // Buffer field accessors
@@ -369,6 +367,54 @@ fn nvim_stl_calc_percentage(lnum: c_int, line_count: c_int) -> c_int {
         return 0;
     }
     (lnum * 100 + line_count / 2) / line_count
+}
+
+/// Check if a character is a valid STL flag (equivalent to STL_ALL membership).
+fn nvim_stl_valid_flag(c: c_int) -> c_int {
+    const STL_ALL: &[u8] = &[
+        STL_FILEPATH,
+        STL_FULLPATH,
+        STL_FILENAME,
+        STL_COLUMN,
+        STL_VIRTCOL,
+        STL_VIRTCOL_ALT,
+        STL_LINE,
+        STL_NUMLINES,
+        STL_BUFNO,
+        STL_KEYMAP,
+        STL_OFFSET,
+        STL_OFFSET_X,
+        STL_BYTEVAL,
+        STL_BYTEVAL_X,
+        STL_ROFLAG,
+        STL_ROFLAG_ALT,
+        STL_HELPFLAG,
+        STL_HELPFLAG_ALT,
+        STL_FILETYPE,
+        STL_FILETYPE_ALT,
+        STL_PREVIEWFLAG,
+        STL_PREVIEWFLAG_ALT,
+        STL_MODIFIED,
+        STL_MODIFIED_ALT,
+        STL_QUICKFIX,
+        STL_PERCENTAGE,
+        STL_ALTPERCENT,
+        STL_ARGLISTSTAT,
+        STL_PAGENUM,
+        STL_SHOWCMD,
+        STL_FOLDCOL,
+        STL_SIGNCOL,
+        STL_VIM_EXPR,
+        STL_SEPARATE,
+        STL_TRUNCMARK,
+        STL_USER_HL,
+        STL_HIGHLIGHT,
+        STL_TABPAGENR,
+        STL_TABCLOSENR,
+        STL_CLICK_FUNC,
+    ];
+    // c comes from (uint8_t)(*fmt_p), so it fits in u8
+    u8::try_from(c).map_or(0, |byte| c_int::from(STL_ALL.contains(&byte)))
 }
 
 // =============================================================================

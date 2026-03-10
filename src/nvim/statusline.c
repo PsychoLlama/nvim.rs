@@ -546,17 +546,7 @@ int nvim_stl_stcp_sattr_has_text(statuscol_T *stcp, int idx)
   return stcp->sattrs[idx].text[0] ? 1 : 0;
 }
 
-/// Get syn_name2id_len for a highlight group name.
-int nvim_stl_syn_name2id_len(const char *name, int len)
-{
-  return syn_name2id_len(name, (size_t)len);
-}
 
-/// Check if a character is in the STL_ALL set.
-int nvim_stl_valid_flag(int c)
-{
-  return vim_strchr(STL_ALL, (uint8_t)c) != NULL ? 1 : 0;
-}
 
 _Static_assert(kOptInvalid == -1, "kOptInvalid must be -1");
 _Static_assert(kOptStatuscolumn == 293, "kOptStatuscolumn");

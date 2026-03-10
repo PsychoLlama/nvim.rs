@@ -123,6 +123,7 @@ extern "C" {
     fn nvim_stl_HL_ATTR(hlf: c_int) -> c_int;
     static highlight_user: [c_int; 9];
     static highlight_stlnc: [c_int; 9];
+    #[link_name = "nvim_syn_name2id_len_wrapper"]
     fn nvim_stl_syn_name2id_len(name: *const c_char, len: c_int) -> c_int;
 
     // String operations (direct link to C/Rust implementations)
