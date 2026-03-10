@@ -1520,12 +1520,6 @@ bool aupat_is_buflocal(const char *pat, int patlen)
   return rs_aupat_is_buflocal(pat, patlen) != 0;
 }
 
-int autocmd_delete_event(int group, event_T event, const char *pat)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return do_autocmd_event(event, pat, false, false, "", true, group);
-}
-
 /// Deletes an autocmd by ID.
 /// Only autocmds created via the API have IDs associated with them. There
 /// is no way to delete a specific autocmd created via :autocmd
@@ -1627,32 +1621,6 @@ void do_autocmd_uienter(uint64_t chanid, bool attached)
   tv_dict_set_keys_readonly(dict);
   apply_autocmds(attached ? EVENT_UIENTER : EVENT_UILEAVE, NULL, NULL, false, curbuf);
   restore_v_event(dict, &save_v_event);
-
-  recursive = false;
-}
-
-// FocusGained
-
-void do_autocmd_focusgained(bool gained)
-{
-  static bool recursive = false;
-  static Timestamp last_time = 0;
-
-  if (recursive) {
-    return;  // disallow recursion
-  }
-  recursive = true;
-  apply_autocmds((gained ? EVENT_FOCUSGAINED : EVENT_FOCUSLOST), NULL, NULL, false, curbuf);
-
-  // When activated: Check if any file was modified outside of Vim.
-  // Only do this when not done within the last two seconds as:
-  // 1. Some filesystems have modification time granularity in seconds. Fat32
-  //    has a granularity of 2 seconds.
-  // 2. We could get multiple notifications in a row.
-  if (gained && last_time + (Timestamp)2000 < os_now()) {
-    check_timestamps(true);
-    last_time = os_now();
-  }
 
   recursive = false;
 }

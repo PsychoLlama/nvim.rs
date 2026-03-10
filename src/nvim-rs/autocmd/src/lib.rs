@@ -30,6 +30,8 @@ const MODE_INSERT: c_int = 0x10;
 // Event constants from auevents_enum.generated.h
 const EVENT_CURSORHOLD: c_int = 37;
 const EVENT_CURSORHOLDI: c_int = 38;
+const EVENT_FOCUSGAINED: c_int = 66;
+const EVENT_FOCUSLOST: c_int = 67;
 const EVENT_TERMRESPONSE: c_int = 120;
 const NUM_EVENTS: c_int = 141;
 
@@ -192,6 +194,10 @@ extern "C" {
     // Phase 8e: Event triggers + doautocmd accessors
     fn nvim_autocmd_get_e217() -> *const c_char;
     fn nvim_autocmd_smsg_no_matching(arg_start: *const c_char);
+
+    // Phase 3: Event trigger helpers
+    fn check_timestamps(focus: c_int);
+    fn os_now() -> u64;
 
     // Rust functions from group module (exported under C names)
     #[link_name = "augroup_find"]
@@ -1666,6 +1672,50 @@ pub unsafe extern "C" fn rs_do_doautocmd(
     } else {
         OK
     }
+}
+
+// Phase 3: Migrated event trigger functions
+
+/// Static state for do_autocmd_focusgained.
+static FOCUS_RECURSIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static FOCUS_LAST_TIME: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Trigger FocusGained or FocusLost autocommand, and check timestamps when gaining focus.
+///
+/// # Safety
+/// Calls into C. Must be called from the main Neovim thread.
+#[unsafe(export_name = "do_autocmd_focusgained")]
+pub unsafe extern "C" fn rs_do_autocmd_focusgained(gained: bool) {
+    use std::sync::atomic::Ordering;
+
+    if FOCUS_RECURSIVE.load(Ordering::Relaxed) {
+        return; // disallow recursion
+    }
+    FOCUS_RECURSIVE.store(true, Ordering::Relaxed);
+
+    let event = if gained {
+        EVENT_FOCUSGAINED
+    } else {
+        EVENT_FOCUSLOST
+    };
+    rs_apply_autocmds(
+        event,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        false,
+        nvim_autocmd_get_curbuf_ptr(),
+    );
+
+    if gained {
+        let last = FOCUS_LAST_TIME.load(Ordering::Relaxed);
+        let now = os_now();
+        if last + 2000 < now {
+            check_timestamps(1);
+            FOCUS_LAST_TIME.store(os_now(), Ordering::Relaxed);
+        }
+    }
+
+    FOCUS_RECURSIVE.store(false, Ordering::Relaxed);
 }
 
 #[cfg(test)]

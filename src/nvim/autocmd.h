@@ -101,3 +101,4 @@ int has_event(event_T event);
 int is_autocmd_blocked(void);
 int trigger_cursorhold(void);
 int has_cursorhold(void);
+void do_autocmd_focusgained(bool gained);
