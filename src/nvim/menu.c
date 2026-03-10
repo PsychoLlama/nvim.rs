@@ -175,11 +175,6 @@ bool menu_get(char *const path_name, int modes, list_T *list)
   return true;
 }
 
-// Used when expanding menu names.
-static vimmenu_T *expand_menu = NULL;
-static int expand_modes = 0x0;
-static int expand_emenu;                // true for ":emenu" command
-
 /// Returns the \ref MENU_MODES specified by menu command `cmd`.
 ///  (eg :menu! returns MENU_CMDLINE_MODE | MENU_INSERT_MODE)
 ///
@@ -523,37 +518,6 @@ void nvim_menu_xp_set_context(expand_T *xp, int ctx)
 void nvim_menu_xp_set_pattern(expand_T *xp, char *pattern)
 {
   xp->xp_pattern = pattern;
-}
-
-// Static variable accessors for expand_menu, expand_modes, expand_emenu
-vimmenu_T *nvim_menu_get_expand_menu(void)
-{
-  return expand_menu;
-}
-
-void nvim_menu_set_expand_menu(vimmenu_T *menu)
-{
-  expand_menu = menu;
-}
-
-int nvim_menu_get_expand_modes(void)
-{
-  return expand_modes;
-}
-
-void nvim_menu_set_expand_modes(int modes)
-{
-  expand_modes = modes;
-}
-
-int nvim_menu_get_expand_emenu(void)
-{
-  return expand_emenu;
-}
-
-void nvim_menu_set_expand_emenu(int v)
-{
-  expand_emenu = v;
 }
 
 // menutrans_ga accessors

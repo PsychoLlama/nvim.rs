@@ -26,18 +26,15 @@ const CTRL_V: u8 = 0x16;
 /// Buffer length for get_menu_names tbuffer.
 const TBUFFER_LEN: usize = 256;
 
+// Rust statics for menu expansion (moved from C in Phase 5)
+static mut EXPAND_MENU: VimMenuHandle = VimMenuHandle::null_const();
+static mut EXPAND_MODES: c_int = 0;
+static mut EXPAND_EMENU: c_int = 0;
+
 extern "C" {
     // expand_T field accessors (expand_T remains opaque for now)
     fn nvim_menu_xp_set_context(xp: *mut c_void, ctx: c_int);
     fn nvim_menu_xp_set_pattern(xp: *mut c_void, pattern: *mut c_char);
-
-    // Static variable accessors (expand statics still in C, Phase 5 will move them)
-    fn nvim_menu_get_expand_menu() -> VimMenuHandle;
-    fn nvim_menu_set_expand_menu(menu: VimMenuHandle);
-    fn nvim_menu_get_expand_modes() -> c_int;
-    fn nvim_menu_set_expand_modes(modes: c_int);
-    fn nvim_menu_get_expand_emenu() -> c_int;
-    fn nvim_menu_set_expand_emenu(v: c_int);
 
     // Root menu global (in C)
     static mut root_menu: *mut VimMenu;
@@ -127,7 +124,7 @@ pub unsafe extern "C" fn rs_set_context_in_menu_cmd(
     let cmd1 = unsafe { *cmd.add(1) } as u8;
     let expand_menus = !((cmd0 == b't' && cmd1 == b'e') || cmd0 == b'p');
     unsafe {
-        nvim_menu_set_expand_emenu(if cmd0 == b'e' { 1 } else { 0 });
+        EXPAND_EMENU = if cmd0 == b'e' { 1 } else { 0 };
     }
 
     if expand_menus && ascii_iswhite(unsafe { *q } as u8) {
@@ -140,9 +137,9 @@ pub unsafe extern "C" fn rs_set_context_in_menu_cmd(
         let modes = result.modes;
         let unmenu = result.unmenu;
         if !unmenu {
-            unsafe { nvim_menu_set_expand_modes(MENU_ALL_MODES) };
+            unsafe { EXPAND_MODES = MENU_ALL_MODES };
         } else {
-            unsafe { nvim_menu_set_expand_modes(modes) };
+            unsafe { EXPAND_MODES = modes };
         }
 
         let mut menu = VimMenuHandle::from_ptr(unsafe { root_menu });
@@ -161,7 +158,7 @@ pub unsafe extern "C" fn rs_set_context_in_menu_cmd(
                 if unsafe { rs_menu_name_equal(name, menu) } {
                     // Found menu
                     if (unsafe { *next } != 0 && menu.children().is_null())
-                        || ((menu.modes() & unsafe { nvim_menu_get_expand_modes() }) == 0)
+                        || ((menu.modes() & unsafe { EXPAND_MODES }) == 0)
                     {
                         unsafe { xfree(path_name as *mut c_void) };
                         return ptr::null_mut();
@@ -186,7 +183,7 @@ pub unsafe extern "C" fn rs_set_context_in_menu_cmd(
         };
         unsafe { nvim_menu_xp_set_context(xp, ctx) };
         unsafe { nvim_menu_xp_set_pattern(xp, after_dot) };
-        unsafe { nvim_menu_set_expand_menu(menu) };
+        unsafe { EXPAND_MENU = menu };
     } else {
         // We're in the mapping part
         unsafe { nvim_menu_xp_set_context(xp, EXPAND_NOTHING) };
@@ -211,7 +208,7 @@ pub unsafe extern "C" fn rs_get_menu_name(_xp: *mut c_void, idx: c_int) -> *mut 
 
     if idx == 0 {
         unsafe {
-            MENU = nvim_menu_get_expand_menu();
+            MENU = EXPAND_MENU;
             SHOULD_ADVANCE = false;
         }
     }
@@ -236,7 +233,7 @@ pub unsafe extern "C" fn rs_get_menu_name(_xp: *mut c_void, idx: c_int) -> *mut 
         return ptr::null_mut();
     }
 
-    let expand_modes = unsafe { nvim_menu_get_expand_modes() };
+    let expand_modes = unsafe { EXPAND_MODES };
     let str_ptr;
 
     if (menu.modes() & expand_modes) != 0 {
@@ -279,12 +276,12 @@ pub unsafe extern "C" fn rs_get_menu_names(_xp: *mut c_void, idx: c_int) -> *mut
 
     if idx == 0 {
         unsafe {
-            MENU = nvim_menu_get_expand_menu();
+            MENU = EXPAND_MENU;
             SHOULD_ADVANCE = false;
         }
     }
 
-    let expand_emenu = unsafe { nvim_menu_get_expand_emenu() } != 0;
+    let expand_emenu = unsafe { EXPAND_EMENU } != 0;
 
     // Skip Browse-style entries, popup menus and separators.
     loop {
@@ -310,7 +307,7 @@ pub unsafe extern "C" fn rs_get_menu_names(_xp: *mut c_void, idx: c_int) -> *mut
         return ptr::null_mut();
     }
 
-    let expand_modes = unsafe { nvim_menu_get_expand_modes() };
+    let expand_modes = unsafe { EXPAND_MODES };
     let str_ptr;
 
     if (menu.modes() & expand_modes) != 0 {
