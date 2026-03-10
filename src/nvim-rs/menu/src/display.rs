@@ -19,7 +19,7 @@ const REMAP_NONE: c_int = -1;
 const REMAP_SCRIPT: c_int = -2;
 
 extern "C" {
-    fn nvim_menu_get_got_int() -> c_int;
+    static got_int: c_int;
     static mut root_menu: *mut VimMenu;
 
     // Message output functions (already exist in C)
@@ -94,7 +94,7 @@ pub unsafe extern "C" fn rs_show_menus_recursive(menu: VimMenuHandle, modes: c_i
 
     if !menu.is_null() {
         unsafe { msg_putchar(b'\n' as c_int) };
-        if unsafe { nvim_menu_get_got_int() } != 0 {
+        if unsafe { got_int } != 0 {
             return;
         }
         for _ in 0..depth {
@@ -114,7 +114,7 @@ pub unsafe extern "C" fn rs_show_menus_recursive(menu: VimMenuHandle, modes: c_i
         for bit in 0..MENU_MODES {
             if (menu.modes() & modes & (1 << bit)) != 0 {
                 unsafe { msg_putchar(b'\n' as c_int) };
-                if unsafe { nvim_menu_get_got_int() } != 0 {
+                if unsafe { got_int } != 0 {
                     return;
                 }
                 for _ in 0..(depth + 2) {
@@ -166,7 +166,7 @@ pub unsafe extern "C" fn rs_show_menus_recursive(menu: VimMenuHandle, modes: c_i
 
         // recursively show all children. Skip PopUp[nvoci].
         let mut child = start_menu;
-        while !child.is_null() && unsafe { nvim_menu_get_got_int() } == 0 {
+        while !child.is_null() && unsafe { got_int } == 0 {
             if !unsafe { rs_menu_is_hidden(child.dname()) } {
                 unsafe { rs_show_menus_recursive(child, modes, actual_depth + 1) };
             }

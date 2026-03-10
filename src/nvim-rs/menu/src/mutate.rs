@@ -10,6 +10,7 @@ use crate::classify::{rs_menu_is_menubar, rs_menu_is_separator};
 use crate::handle::VimMenuHandle;
 use crate::menu_modes::{MENU_ALL_MODES, MENU_INDEX_TIP, MENU_MODES, MENU_TIP_MODE};
 use crate::path::{rs_menu_name_equal, rs_menu_name_skip, rs_menu_text, MenuTextResult};
+use crate::translate::rs_menutrans_lookup;
 use crate::vim_menu::VimMenu;
 
 // C return codes
@@ -51,11 +52,10 @@ extern "C" {
     fn strlen(s: *const c_char) -> usize;
     fn xcalloc(count: usize, size: usize) -> *mut c_void;
 
-    // Translation
-    fn nvim_menutrans_lookup(name: *mut c_char, len: c_int) -> *mut c_char;
+    // Translation - call Rust directly rather than bouncing through C
 
     // Global state
-    fn nvim_menu_get_sys_menu() -> bool;
+    static sys_menu: bool;
 
     // Root menu global (still in C)
     static mut root_menu: *mut VimMenu;
@@ -322,7 +322,7 @@ pub unsafe extern "C" fn rs_add_menu_path(
     while unsafe { *name } != 0 {
         // Get name of this element in the menu hierarchy
         let next_name = unsafe { rs_menu_name_skip(name) };
-        let map_to = unsafe { nvim_menutrans_lookup(name, strlen(name) as c_int) };
+        let map_to = unsafe { rs_menutrans_lookup(name, strlen(name) as c_int) };
         if !map_to.is_null() {
             en_name = name;
             name = map_to;
@@ -351,7 +351,7 @@ pub unsafe extern "C" fn rs_add_menu_path(
                 || unsafe { rs_menu_name_equal(dname, menu) }
             {
                 if unsafe { *next_name } == 0 && !menu.children().is_null() {
-                    if !unsafe { nvim_menu_get_sys_menu() } {
+                    if !unsafe { sys_menu } {
                         unsafe {
                             emsg(nvim_gettext(E330_MENU_PATH_MUST_NOT_LEAD_TO_SUBMENU));
                         }
@@ -365,7 +365,7 @@ pub unsafe extern "C" fn rs_add_menu_path(
                     );
                 }
                 if unsafe { *next_name } != 0 && menu.children().is_null() {
-                    if !unsafe { nvim_menu_get_sys_menu() } {
+                    if !unsafe { sys_menu } {
                         unsafe { emsg(nvim_gettext(E_NOTSUBMENU)) };
                     }
                     unsafe { xfree(dname as *mut c_void) };
@@ -472,7 +472,7 @@ pub unsafe extern "C" fn rs_add_menu_path(
     // Only add system menu items which have not been defined yet.
     let amenu = ((modes & (MENU_NORMAL_MODE | MENU_INSERT_MODE))
         == (MENU_NORMAL_MODE | MENU_INSERT_MODE)) as c_int;
-    if unsafe { nvim_menu_get_sys_menu() } {
+    if unsafe { sys_menu } {
         modes &= !old_modes;
     }
 

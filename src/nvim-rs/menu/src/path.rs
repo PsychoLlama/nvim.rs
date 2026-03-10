@@ -260,7 +260,7 @@ pub unsafe extern "C" fn rs_menu_namelen(name: *const c_char) -> c_int {
 const CTRL_V: u8 = 22;
 
 extern "C" {
-    fn nvim_menu_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn strlen(s: *const c_char) -> usize;
 }
 
@@ -301,7 +301,7 @@ pub unsafe extern "C" fn rs_menu_name_skip(name: *mut c_char) -> *mut c_char {
             }
         }
         // Advance by multibyte character length
-        let char_len = unsafe { nvim_menu_utfc_ptr2len(p) };
+        let char_len = unsafe { utfc_ptr2len(p) };
         p = unsafe { p.add(char_len as usize) };
     }
 
@@ -373,7 +373,7 @@ pub unsafe extern "C" fn rs_menu_unescape_name(name: *mut c_char) {
             }
         }
         // Advance by multibyte character length
-        let char_len = unsafe { nvim_menu_utfc_ptr2len(p) };
+        let char_len = unsafe { utfc_ptr2len(p) };
         p = unsafe { p.add(char_len as usize) };
     }
 }

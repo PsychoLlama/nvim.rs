@@ -92,7 +92,7 @@ extern "C" {
 
     // Global state - direct access
     static p_cpo: *const c_char;
-    fn nvim_menu_get_curbuf() -> *mut c_void;
+    static curbuf: *mut c_void;
 
     // Multibyte
     fn utfc_ptr2len(p: *const c_char) -> c_int;
@@ -463,7 +463,7 @@ pub unsafe extern "C" fn rs_show_popupmenu() {
             mode.as_ptr() as *const c_char,
             std::ptr::null(),
             false,
-            nvim_menu_get_curbuf(),
+            curbuf,
         );
     }
 
