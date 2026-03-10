@@ -185,68 +185,41 @@ void nvim_set_got_click(bool val)
   got_click = val;
 }
 
-/// Call click definition function for column "col" in the "click_defs" array for button
-/// "which_button".
-static void call_click_def_func(StlClickDefinition *click_defs, int col, int which_button)
+/// Bridge for Rust-computed click arguments to VimL function call.
+/// Builds typval_T args from pre-computed strings and calls the VimL callback.
+void nvim_call_stl_click_func(StlClickDefinition *click_defs, int col,
+                               int click_count, const char *button_str,
+                               const char *modifier_str)
 {
   typval_T argv[] = {
     {
       .v_lock = VAR_FIXED,
       .v_type = VAR_NUMBER,
-      .vval = {
-        .v_number = (varnumber_T)click_defs[col].tabnr
-      },
+      .vval = { .v_number = (varnumber_T)click_defs[col].tabnr },
     },
     {
       .v_lock = VAR_FIXED,
       .v_type = VAR_NUMBER,
-      .vval = {
-        .v_number = ((mod_mask & MOD_MASK_MULTI_CLICK) == MOD_MASK_4CLICK
-                     ? 4
-                     : ((mod_mask & MOD_MASK_MULTI_CLICK) == MOD_MASK_3CLICK
-                        ? 3
-                        : ((mod_mask & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK
-                           ? 2
-                           : 1)))
-      },
+      .vval = { .v_number = click_count },
     },
     {
       .v_lock = VAR_FIXED,
       .v_type = VAR_STRING,
-      .vval = {
-        .v_string = (which_button == MOUSE_LEFT
-                     ? "l"
-                     : (which_button == MOUSE_RIGHT
-                        ? "r"
-                        : (which_button == MOUSE_MIDDLE
-                           ? "m"
-                           : (which_button == MOUSE_X1
-                              ? "x1"
-                              : (which_button == MOUSE_X2
-                                 ? "x2"
-                                 : "?")))))
-      },
+      .vval = { .v_string = (char *)button_str },
     },
     {
       .v_lock = VAR_FIXED,
       .v_type = VAR_STRING,
-      .vval = {
-        .v_string = (char[]) {
-          (char)(mod_mask & MOD_MASK_SHIFT ? 's' : ' '),
-          (char)(mod_mask & MOD_MASK_CTRL ? 'c' : ' '),
-          (char)(mod_mask & MOD_MASK_ALT ? 'a' : ' '),
-          (char)(mod_mask & MOD_MASK_META ? 'm' : ' '),
-          NUL
-        }
-      },
-    }
+      .vval = { .v_string = (char *)modifier_str },
+    },
   };
   typval_T rettv;
   call_vim_function(click_defs[col].func, ARRAY_SIZE(argv), argv, &rettv);
   tv_clear(&rettv);
-  // Make sure next click does not register as drag when callback absorbs the release event.
-  got_click = false;
 }
+
+/// Rust wrapper: call the click definition function for the given column.
+extern void rs_call_click_def_func(StlClickDefinition *click_defs, int col, int which_button);
 
 /// C accessor: perform the popup menu logic that depends on visual mode,
 /// jump_to_mouse, getvcols/getvcol, and UI flush.
@@ -542,7 +515,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
           rs_mouse_tab_close(tabnr);
           break;
         case kStlClickFuncRun:
-          call_click_def_func(tab_page_click_defs, mouse_col, which_button);
+          rs_call_click_def_func(tab_page_click_defs, mouse_col, which_button);
           break;
         }
       }
@@ -673,7 +646,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
         }
         break;
       case kStlClickFuncRun:
-        call_click_def_func(click_defs, click_col, which_button);
+        rs_call_click_def_func(click_defs, click_col, which_button);
         break;
       default:
         assert(false && "winbar, statusline and statuscolumn only support %@ for clicks");

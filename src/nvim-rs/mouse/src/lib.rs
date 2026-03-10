@@ -1532,6 +1532,105 @@ pub unsafe extern "C" fn rs_nv_mouse(cap: CmdargHandle) {
 }
 
 // =============================================================================
+// Phase 3 — call_click_def_func
+// =============================================================================
+
+/// Shift modifier mask
+const MOD_MASK_SHIFT: c_int = 0x02;
+/// Ctrl modifier mask
+const MOD_MASK_CTRL: c_int = 0x04;
+/// Meta modifier mask (distinct from Alt)
+const MOD_MASK_META: c_int = 0x10;
+
+/// Opaque handle for `StlClickDefinition *` (statusline/winbar/tabline click defs).
+type StlClickDefinitionHandle = *mut std::ffi::c_void;
+
+extern "C" {
+    /// C bridge: build `typval_T` args and call the `VimL` click callback.
+    ///
+    /// Takes pre-computed `click_count`, `button_str`, and `modifier_str`
+    /// so that typval construction stays in C.
+    fn nvim_call_stl_click_func(
+        click_defs: StlClickDefinitionHandle,
+        col: c_int,
+        click_count: c_int,
+        button_str: *const c_char,
+        modifier_str: *const c_char,
+    );
+}
+
+/// Call the `VimL` function registered for a statusline/winbar/tabline click.
+///
+/// Computes the click count, button string, and modifier string from the
+/// current `mod_mask` global and the given `which_button`, then delegates to
+/// the C helper `nvim_call_stl_click_func` for the actual `call_vim_function`
+/// invocation (which requires `typval_T` construction that stays in C).
+///
+/// After the callback returns, `got_click` is cleared so that the next click
+/// is not mistakenly treated as a drag.
+///
+/// # Safety
+/// `click_defs` must be a valid pointer into the click-definition array for
+/// the relevant UI element, and `col` must be a valid index into that array.
+#[no_mangle]
+pub unsafe extern "C" fn rs_call_click_def_func(
+    click_defs: StlClickDefinitionHandle,
+    col: c_int,
+    which_button: c_int,
+) {
+    let mod_mask = nvim_get_mod_mask();
+
+    // Click count from multi-click mask bits.
+    let click_count = rs_get_click_count(mod_mask);
+
+    // Button string: single char for l/r/m, two chars for x1/x2.
+    let button_str: &[u8] = match which_button {
+        MOUSE_LEFT => b"l\0",
+        MOUSE_RIGHT => b"r\0",
+        MOUSE_MIDDLE => b"m\0",
+        MOUSE_X1 => b"x1\0",
+        MOUSE_X2 => b"x2\0",
+        _ => b"?\0",
+    };
+
+    // Modifier string: four chars (s/c/a/m) followed by NUL.
+    let modifier_str: [u8; 5] = [
+        if (mod_mask & MOD_MASK_SHIFT) != 0 {
+            b's'
+        } else {
+            b' '
+        },
+        if (mod_mask & MOD_MASK_CTRL) != 0 {
+            b'c'
+        } else {
+            b' '
+        },
+        if (mod_mask & MOD_MASK_ALT) != 0 {
+            b'a'
+        } else {
+            b' '
+        },
+        if (mod_mask & MOD_MASK_META) != 0 {
+            b'm'
+        } else {
+            b' '
+        },
+        0u8, // NUL terminator
+    ];
+
+    nvim_call_stl_click_func(
+        click_defs,
+        col,
+        click_count,
+        button_str.as_ptr().cast::<c_char>(),
+        modifier_str.as_ptr().cast::<c_char>(),
+    );
+
+    // Ensure the next click is not treated as a drag.
+    nvim_set_got_click(false);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
