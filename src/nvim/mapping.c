@@ -1369,84 +1369,7 @@ ArrayOf(Dict) keymap_array(String mode, buf_T *buf, Arena *arena)
 // Rust FFI accessor functions
 // =============================================================================
 
-// Field accessors for mapblock_T (used by Rust via FFI)
-
-mapblock_T *nvim_mapblock_get_next(mapblock_T *mp)
-{
-  return mp ? mp->m_next : NULL;
-}
-
-mapblock_T *nvim_mapblock_get_alt(mapblock_T *mp)
-{
-  return mp ? mp->m_alt : NULL;
-}
-
-const char *nvim_mapblock_get_keys(mapblock_T *mp)
-{
-  return mp ? mp->m_keys : NULL;
-}
-
-const char *nvim_mapblock_get_str(mapblock_T *mp)
-{
-  return mp ? mp->m_str : NULL;
-}
-
-const char *nvim_mapblock_get_orig_str(mapblock_T *mp)
-{
-  return mp ? mp->m_orig_str : NULL;
-}
-
-int nvim_mapblock_get_keylen(mapblock_T *mp)
-{
-  return mp ? mp->m_keylen : 0;
-}
-
-int nvim_mapblock_get_mode(mapblock_T *mp)
-{
-  return mp ? mp->m_mode : 0;
-}
-
-int nvim_mapblock_get_simplified(mapblock_T *mp)
-{
-  return mp ? mp->m_simplified : 0;
-}
-
-int nvim_mapblock_get_noremap(mapblock_T *mp)
-{
-  return mp ? mp->m_noremap : 0;
-}
-
-int nvim_mapblock_is_silent(mapblock_T *mp)
-{
-  return mp ? mp->m_silent : 0;
-}
-
-int nvim_mapblock_is_nowait(mapblock_T *mp)
-{
-  return mp ? mp->m_nowait : 0;
-}
-
-int nvim_mapblock_is_expr(mapblock_T *mp)
-{
-  return mp ? mp->m_expr : 0;
-}
-
-LuaRef nvim_mapblock_get_luaref(mapblock_T *mp)
-{
-  return mp ? mp->m_luaref : LUA_NOREF;
-}
-
-const char *nvim_mapblock_get_desc(mapblock_T *mp)
-{
-  return mp ? mp->m_desc : NULL;
-}
-
-int nvim_mapblock_get_replace_keycodes(mapblock_T *mp)
-{
-  return mp ? mp->m_replace_keycodes : 0;
-}
-
-// Hash table accessors
+// Hash table accessors (mapblock_T fields now accessed directly via Rust #[repr(C)])
 
 mapblock_T *nvim_get_maphash_entry(int index)
 {
@@ -1493,6 +1416,42 @@ _Static_assert(offsetof(struct map_arguments, rhs_lua) == 152,
                "MapArguments.rhs_lua offset mismatch");
 _Static_assert(offsetof(struct map_arguments, desc) == 176,
                "MapArguments.desc offset mismatch");
+
+// Static assertions for mapblock_T layout (Rust MapblockT #[repr(C)] must match)
+_Static_assert(sizeof(mapblock_T) == 104,
+               "mapblock_T size mismatch with Rust MapblockT");
+_Static_assert(offsetof(mapblock_T, m_next) == 0,
+               "mapblock_T.m_next offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_alt) == 8,
+               "mapblock_T.m_alt offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_keys) == 16,
+               "mapblock_T.m_keys offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_str) == 24,
+               "mapblock_T.m_str offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_orig_str) == 32,
+               "mapblock_T.m_orig_str offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_luaref) == 40,
+               "mapblock_T.m_luaref offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_keylen) == 44,
+               "mapblock_T.m_keylen offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_mode) == 48,
+               "mapblock_T.m_mode offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_simplified) == 52,
+               "mapblock_T.m_simplified offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_noremap) == 56,
+               "mapblock_T.m_noremap offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_silent) == 60,
+               "mapblock_T.m_silent offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_nowait) == 61,
+               "mapblock_T.m_nowait offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_expr) == 62,
+               "mapblock_T.m_expr offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_script_ctx) == 64,
+               "mapblock_T.m_script_ctx offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_desc) == 88,
+               "mapblock_T.m_desc offset mismatch");
+_Static_assert(offsetof(mapblock_T, m_replace_keycodes) == 96,
+               "mapblock_T.m_replace_keycodes offset mismatch");
 
 // Langmap C accessors for Rust
 

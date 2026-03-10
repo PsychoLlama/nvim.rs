@@ -42,9 +42,6 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_mapping_get_p_cpo() -> *const c_char;
 
-    fn nvim_mapblock_get_str(mp: MapblockHandle) -> *const c_char;
-    fn nvim_mapblock_get_luaref(mp: MapblockHandle) -> c_int;
-
     fn rs_get_map_mode(cmdp: *mut *mut c_char, forceit: c_int) -> c_int;
     fn rs_translate_mapping(str_in: *const c_char, cpo_val: *const c_char) -> *mut c_char;
 
@@ -419,13 +416,13 @@ pub unsafe extern "C" fn rs_makemap_should_skip(mp: MapblockHandle) -> c_int {
     }
 
     // Skip Lua mappings
-    let luaref = nvim_mapblock_get_luaref(mp);
+    let luaref = (*mp).m_luaref;
     if luaref != LUA_NOREF {
         return 1;
     }
 
     // Skip mappings containing <SNR>
-    let str_ptr = nvim_mapblock_get_str(mp);
+    let str_ptr = (*mp).m_str;
     if !str_ptr.is_null() {
         let mut p = str_ptr.cast::<u8>();
         while *p != NUL {
@@ -452,7 +449,7 @@ pub unsafe extern "C" fn rs_makemap_should_skip(mp: MapblockHandle) -> c_int {
 /// `mp` must be a valid mapblock handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_makemap_needs_cpo(mp: MapblockHandle) -> c_int {
-    let str_ptr = nvim_mapblock_get_str(mp);
+    let str_ptr = (*mp).m_str;
     let keys_ptr = mapblock_keys(mp);
 
     // If m_str is empty (NUL), will use <Nop> — needs cpo

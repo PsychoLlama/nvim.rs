@@ -82,7 +82,7 @@ pub unsafe extern "C" fn rs_find_matching_abbr(ptr: *const c_char, len: c_int) -
     // If buffer-local list is empty, start with global
     if mp.is_null() {
         mp = mp2;
-        mp2 = MapblockHandle::null();
+        mp2 = std::ptr::null_mut();
     }
 
     while !mp.is_null() {
@@ -118,13 +118,13 @@ pub unsafe extern "C" fn rs_find_matching_abbr(ptr: *const c_char, len: c_int) -
         let next = mapblock_next(mp);
         if next.is_null() && !mp2.is_null() {
             mp = mp2;
-            mp2 = MapblockHandle::null();
+            mp2 = std::ptr::null_mut();
         } else {
             mp = next;
         }
     }
 
-    MapblockHandle::null()
+    std::ptr::null_mut()
 }
 
 /// Check if a C string contains K_SPECIAL byte.

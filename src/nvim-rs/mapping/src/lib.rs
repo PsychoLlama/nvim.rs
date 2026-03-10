@@ -12,6 +12,7 @@
 #![allow(clippy::cast_possible_wrap)] // Intentional for FFI
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions can't be const
 #![allow(clippy::must_use_candidate)] // Internal helper functions
+#![allow(clippy::not_unsafe_ptr_arg_deref)] // Safe wrappers that null-check before deref
 
 pub mod abbrev;
 pub mod args;
@@ -23,7 +24,7 @@ pub mod langmap;
 pub mod lookup;
 pub mod mutate;
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int};
 
 // =============================================================================
 // Constants
@@ -49,54 +50,80 @@ pub const MODE_TERMINAL: c_int = 0x80;
 pub const MAP_ALL_MODES: c_int = 0xff;
 
 // =============================================================================
-// Opaque Handles
+// C-compatible structs
 // =============================================================================
 
-/// Opaque handle to a mapping block (`mapblock_T*`).
+/// Script context (`sctx_T`). Must match the C layout exactly.
 ///
-/// This is an opaque pointer type - Rust code should not attempt to
-/// dereference or inspect the contents. All field access is done
-/// through C accessor functions.
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MapblockHandle(*mut c_void);
-
-impl MapblockHandle {
-    /// Create a new mapblock handle from a raw pointer.
-    ///
-    /// # Safety
-    /// The pointer must be a valid `mapblock_T*` or null.
-    #[inline]
-    pub const unsafe fn from_ptr(ptr: *mut c_void) -> Self {
-        Self(ptr)
-    }
-
-    /// Get the raw pointer.
-    #[inline]
-    #[must_use]
-    pub const fn as_ptr(self) -> *mut c_void {
-        self.0
-    }
-
-    /// Create a null handle.
-    #[inline]
-    #[must_use]
-    pub const fn null() -> Self {
-        Self(std::ptr::null_mut())
-    }
-
-    /// Check if the handle is null.
-    #[inline]
-    #[must_use]
-    pub const fn is_null(self) -> bool {
-        self.0.is_null()
-    }
+/// Layout (24 bytes):
+/// - `sc_sid`:  offset 0, i32 (scid_T = int)
+/// - `sc_seq`:  offset 4, i32
+/// - `sc_lnum`: offset 8, i32 (linenr_T = i32)
+/// - padding:   offset 12, 4 bytes
+/// - `sc_chan`: offset 16, u64
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SctxT {
+    pub sc_sid: c_int,
+    pub sc_seq: c_int,
+    pub sc_lnum: c_int,
+    _pad: c_int,
+    pub sc_chan: u64,
 }
+
+/// A mapping block (`mapblock_T`). Must match the C layout exactly.
+///
+/// Layout (104 bytes):
+/// - `m_next`:            offset 0, pointer
+/// - `m_alt`:             offset 8, pointer
+/// - `m_keys`:            offset 16, pointer
+/// - `m_str`:             offset 24, pointer
+/// - `m_orig_str`:        offset 32, pointer
+/// - `m_luaref`:          offset 40, i32
+/// - `m_keylen`:          offset 44, i32
+/// - `m_mode`:            offset 48, i32
+/// - `m_simplified`:      offset 52, i32
+/// - `m_noremap`:         offset 56, i32
+/// - `m_silent`:          offset 60, i8 (char)
+/// - `m_nowait`:          offset 61, i8 (char)
+/// - `m_expr`:            offset 62, i8 (char)
+/// - padding:             offset 63, 1 byte
+/// - `m_script_ctx`:      offset 64, SctxT (24 bytes)
+/// - `m_desc`:            offset 88, pointer
+/// - `m_replace_keycodes`:offset 96, bool (1 byte)
+/// - padding:             offset 97-103, 7 bytes
+#[repr(C)]
+pub struct MapblockT {
+    pub m_next: *mut MapblockT,
+    pub m_alt: *mut MapblockT,
+    pub m_keys: *mut c_char,
+    pub m_str: *mut c_char,
+    pub m_orig_str: *mut c_char,
+    pub m_luaref: c_int,
+    pub m_keylen: c_int,
+    pub m_mode: c_int,
+    pub m_simplified: c_int,
+    pub m_noremap: c_int,
+    pub m_silent: c_char,
+    pub m_nowait: c_char,
+    pub m_expr: c_char,
+    _pad_before_ctx: c_char,
+    pub m_script_ctx: SctxT,
+    pub m_desc: *mut c_char,
+    pub m_replace_keycodes: bool,
+    _pad_end: [c_char; 7],
+}
+
+/// Handle to a mapping block (`mapblock_T*`).
+///
+/// This is a raw pointer to the C `mapblock_T` struct. All field
+/// access via direct dereference — always check for null first.
+pub type MapblockHandle = *mut MapblockT;
 
 /// Opaque handle to a Neovim buffer (`buf_T*`).
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BufHandle(*mut c_void);
+pub struct BufHandle(*mut std::ffi::c_void);
 
 impl BufHandle {
     /// Check if the handle is null.
@@ -112,28 +139,11 @@ impl BufHandle {
 // =============================================================================
 
 extern "C" {
-    // Field accessors for MapblockHandle
-    fn nvim_mapblock_get_next(mp: MapblockHandle) -> MapblockHandle;
-    fn nvim_mapblock_get_alt(mp: MapblockHandle) -> MapblockHandle;
-    fn nvim_mapblock_get_keys(mp: MapblockHandle) -> *const c_char;
-    fn nvim_mapblock_get_str(mp: MapblockHandle) -> *const c_char;
-    fn nvim_mapblock_get_orig_str(mp: MapblockHandle) -> *const c_char;
-    fn nvim_mapblock_get_keylen(mp: MapblockHandle) -> c_int;
-    fn nvim_mapblock_get_mode(mp: MapblockHandle) -> c_int;
-    fn nvim_mapblock_get_simplified(mp: MapblockHandle) -> c_int;
-    fn nvim_mapblock_get_noremap(mp: MapblockHandle) -> c_int;
-    fn nvim_mapblock_is_silent(mp: MapblockHandle) -> c_int;
-    fn nvim_mapblock_is_nowait(mp: MapblockHandle) -> c_int;
-    fn nvim_mapblock_is_expr(mp: MapblockHandle) -> c_int;
-    fn nvim_mapblock_get_luaref(mp: MapblockHandle) -> c_int;
-    fn nvim_mapblock_get_desc(mp: MapblockHandle) -> *const c_char;
-    fn nvim_mapblock_get_replace_keycodes(mp: MapblockHandle) -> c_int;
-
-    // Hash table accessors
-    fn nvim_get_maphash_entry(index: c_int) -> MapblockHandle;
-    fn nvim_get_first_abbr() -> MapblockHandle;
-    fn nvim_buf_get_maphash_entry(buf: BufHandle, index: c_int) -> MapblockHandle;
-    fn nvim_buf_get_first_abbr(buf: BufHandle) -> MapblockHandle;
+    // Hash table accessors (access C-internal statics maphash[] and first_abbr)
+    pub fn nvim_get_maphash_entry(index: c_int) -> MapblockHandle;
+    pub fn nvim_get_first_abbr() -> MapblockHandle;
+    pub fn nvim_buf_get_maphash_entry(buf: BufHandle, index: c_int) -> MapblockHandle;
+    pub fn nvim_buf_get_first_abbr(buf: BufHandle) -> MapblockHandle;
 
     // Global state
     fn nvim_get_curbuf() -> BufHandle;
@@ -383,7 +393,7 @@ pub extern "C" fn rs_get_buf_maphash_list(
 }
 
 // =============================================================================
-// Mapblock field accessors (safe wrappers)
+// Mapblock field accessors (safe wrappers using direct field access)
 // =============================================================================
 
 /// Get the next mapblock in the list.
@@ -393,7 +403,7 @@ pub fn mapblock_next(mp: MapblockHandle) -> MapblockHandle {
         return mp;
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_get_next(mp) }
+    unsafe { (*mp).m_next }
 }
 
 /// Get the alternate mapblock (for simplified key mappings).
@@ -403,7 +413,7 @@ pub fn mapblock_alt(mp: MapblockHandle) -> MapblockHandle {
         return mp;
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_get_alt(mp) }
+    unsafe { (*mp).m_alt }
 }
 
 /// Get the keys (LHS) of the mapping.
@@ -413,7 +423,7 @@ pub fn mapblock_keys(mp: MapblockHandle) -> *const c_char {
         return std::ptr::null();
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_get_keys(mp) }
+    unsafe { (*mp).m_keys }
 }
 
 /// Get the mapping string (RHS) of the mapping.
@@ -423,7 +433,7 @@ pub fn mapblock_str(mp: MapblockHandle) -> *const c_char {
         return std::ptr::null();
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_get_str(mp) }
+    unsafe { (*mp).m_str }
 }
 
 /// Get the original RHS string of the mapping.
@@ -433,7 +443,7 @@ pub fn mapblock_orig_str(mp: MapblockHandle) -> *const c_char {
         return std::ptr::null();
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_get_orig_str(mp) }
+    unsafe { (*mp).m_orig_str }
 }
 
 /// Get the key length of the mapping.
@@ -443,7 +453,7 @@ pub fn mapblock_keylen(mp: MapblockHandle) -> c_int {
         return 0;
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_get_keylen(mp) }
+    unsafe { (*mp).m_keylen }
 }
 
 /// Get the mode bits of the mapping.
@@ -453,7 +463,7 @@ pub fn mapblock_mode(mp: MapblockHandle) -> c_int {
         return 0;
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_get_mode(mp) }
+    unsafe { (*mp).m_mode }
 }
 
 /// Check if the mapping was simplified.
@@ -463,7 +473,7 @@ pub fn mapblock_simplified(mp: MapblockHandle) -> bool {
         return false;
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_get_simplified(mp) != 0 }
+    unsafe { (*mp).m_simplified != 0 }
 }
 
 /// Get the noremap value of the mapping.
@@ -473,7 +483,7 @@ pub fn mapblock_noremap(mp: MapblockHandle) -> c_int {
         return 0;
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_get_noremap(mp) }
+    unsafe { (*mp).m_noremap }
 }
 
 /// Check if the mapping is silent.
@@ -483,7 +493,7 @@ pub fn mapblock_silent(mp: MapblockHandle) -> bool {
         return false;
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_is_silent(mp) != 0 }
+    unsafe { (*mp).m_silent != 0 }
 }
 
 /// Check if the mapping has nowait flag.
@@ -493,7 +503,7 @@ pub fn mapblock_nowait(mp: MapblockHandle) -> bool {
         return false;
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_is_nowait(mp) != 0 }
+    unsafe { (*mp).m_nowait != 0 }
 }
 
 /// Check if the mapping is an expression.
@@ -503,7 +513,7 @@ pub fn mapblock_expr(mp: MapblockHandle) -> bool {
         return false;
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_is_expr(mp) != 0 }
+    unsafe { (*mp).m_expr != 0 }
 }
 
 /// Get the Lua reference of the mapping (or LUA_NOREF).
@@ -513,7 +523,7 @@ pub fn mapblock_luaref(mp: MapblockHandle) -> c_int {
         return -1; // LUA_NOREF
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_get_luaref(mp) }
+    unsafe { (*mp).m_luaref }
 }
 
 /// Get the description of the mapping.
@@ -523,7 +533,7 @@ pub fn mapblock_desc(mp: MapblockHandle) -> *const c_char {
         return std::ptr::null();
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_get_desc(mp) }
+    unsafe { (*mp).m_desc }
 }
 
 /// Check if the mapping should replace keycodes in expression result.
@@ -533,7 +543,7 @@ pub fn mapblock_replace_keycodes(mp: MapblockHandle) -> bool {
         return false;
     }
     // SAFETY: We check for null above.
-    unsafe { nvim_mapblock_get_replace_keycodes(mp) != 0 }
+    unsafe { (*mp).m_replace_keycodes }
 }
 
 // =============================================================================
@@ -1007,15 +1017,12 @@ mod tests {
 
     #[test]
     fn test_mapblock_handle_null() {
-        // Test handle construction and null check
-        // (Note: Testing accessor functions requires C library linkage,
-        //  which is verified in integration tests)
-        let null_handle = MapblockHandle(std::ptr::null_mut());
+        // MapblockHandle is now a raw pointer type alias.
+        let null_handle: MapblockHandle = std::ptr::null_mut();
         assert!(null_handle.is_null());
 
-        let non_null = unsafe { MapblockHandle::from_ptr(std::ptr::dangling_mut::<c_void>()) };
+        let non_null: MapblockHandle = std::ptr::dangling_mut::<MapblockT>();
         assert!(!non_null.is_null());
-        assert_eq!(non_null.as_ptr(), std::ptr::dangling_mut::<c_void>());
     }
 
     #[test]
@@ -1023,7 +1030,7 @@ mod tests {
         let null_handle = BufHandle(std::ptr::null_mut());
         assert!(null_handle.is_null());
 
-        let non_null = BufHandle(std::ptr::dangling_mut::<c_void>());
+        let non_null = BufHandle(std::ptr::dangling_mut::<std::ffi::c_void>());
         assert!(!non_null.is_null());
     }
 

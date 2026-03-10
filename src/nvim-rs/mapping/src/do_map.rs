@@ -202,10 +202,7 @@ pub unsafe extern "C" fn rs_buf_do_map(
     let is_abbr = is_abbrev != 0;
     let is_buf_local = (*args).buffer;
 
-    let mut mp_result: [MapblockHandle; 2] = [
-        MapblockHandle(std::ptr::null_mut()),
-        MapblockHandle(std::ptr::null_mut()),
-    ];
+    let mut mp_result: [MapblockHandle; 2] = [std::ptr::null_mut(), std::ptr::null_mut()];
 
     let mut unmap_lhs_only = false;
     let mut maptype = maptype_in;
