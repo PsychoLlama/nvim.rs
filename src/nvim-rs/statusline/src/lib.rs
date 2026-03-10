@@ -2070,7 +2070,13 @@ type HlrecPtrPtr = *mut c_void;
 // Phase 1 C accessors
 extern "C" {
     fn nvim_stl_get_trans_bufname(buf: BufHandle);
-    fn nvim_stl_win_redr_custom(wp: WinHandle);
+    #[link_name = "rs_win_redr_custom"]
+    fn nvim_stl_win_redr_custom_direct(
+        wp: WinHandle,
+        draw_winbar: bool,
+        draw_ruler: bool,
+        ui_event: bool,
+    );
     fn nvim_stl_set_vv_lnum(lnum: i64);
     fn nvim_stl_set_vv_relnum(relnum: i64);
     fn nvim_stl_win_get_p_stc(wp: WinHandle) -> *const c_char;
@@ -2139,7 +2145,7 @@ pub unsafe extern "C" fn rs_redraw_custom_statusline(wp: WinHandle) {
         return;
     }
 
-    nvim_stl_win_redr_custom(wp);
+    nvim_stl_win_redr_custom_direct(wp, false, false, false);
 
     ENTERED.with(|e| e.set(false));
 }
@@ -2245,7 +2251,6 @@ extern "C" {
     fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
     fn nvim_stl_get_p_wbr() -> *const c_char;
     fn nvim_win_get_p_wbr(wp: WinHandle) -> *const c_char;
-    fn nvim_stl_win_redr_custom_winbar(wp: WinHandle);
 }
 
 /// HLF_C constant - window split separators highlight group.
@@ -2357,7 +2362,7 @@ pub unsafe extern "C" fn rs_win_redr_winbar(wp: WinHandle) {
         let has_win_wbr = !w_p_wbr.is_null() && *w_p_wbr != 0;
 
         if has_global_wbr || has_win_wbr {
-            nvim_stl_win_redr_custom_winbar(wp);
+            nvim_stl_win_redr_custom_direct(wp, true, false, false);
         }
     }
 

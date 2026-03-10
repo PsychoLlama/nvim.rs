@@ -78,7 +78,6 @@ extern "C" {
     fn nvim_stl_get_showcmd(buf: *mut c_char, buflen: c_int) -> c_int;
     fn nvim_stl_get_keymap(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
     fn nvim_stl_get_qf_info(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
-    fn nvim_stl_get_page_num() -> c_int;
 }
 
 /// Context for evaluating statusline items.
@@ -203,12 +202,10 @@ pub fn eval_flag(flag: StlFlag, ctx: &EvalContext) -> EvalResult {
         // Argument list status
         StlFlag::ArgListStat => eval_arglist_status(ctx.wp),
 
-        // Page number (printing)
-        StlFlag::PageNum => unsafe {
-            EvalResult::Number {
-                value: nvim_stl_get_page_num(),
-                base: NumberBase::Decimal,
-            }
+        // Page number (printing) - always 0 (not applicable for screen display)
+        StlFlag::PageNum => EvalResult::Number {
+            value: 0,
+            base: NumberBase::Decimal,
         },
 
         // Byte offset items

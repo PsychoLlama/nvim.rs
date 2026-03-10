@@ -139,6 +139,7 @@ extern "C" {
     );
     #[link_name = "path_tail"]
     fn nvim_stl_path_tail(s: *const c_char) -> *const c_char;
+    #[link_name = "rs_get_fileformat"]
     fn nvim_stl_get_fileformat(buf: BufHandle) -> c_int;
     #[link_name = "utf_ptr2char"]
     fn nvim_stl_utf_ptr2char(s: *const c_char) -> c_int;
@@ -165,22 +166,6 @@ extern "C" {
     #[link_name = "xmemdupz"]
     fn nvim_stl_xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
 
-    // Number formatting (snprintf wrappers)
-    fn nvim_stl_snprintf_int(
-        buf: *mut c_char,
-        buflen: usize,
-        fmt: *const c_char,
-        minwid: c_int,
-        num: c_int,
-    ) -> c_int;
-    fn nvim_stl_snprintf_sci(
-        buf: *mut c_char,
-        buflen: usize,
-        fmt: *const c_char,
-        num: c_int,
-        exponent: c_int,
-    ) -> c_int;
-
     // Position / arg list
     fn nvim_stl_get_rel_pos(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
     fn nvim_stl_append_arg_number(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
@@ -193,7 +178,6 @@ extern "C" {
     fn nvim_stl_get_vim_var_nr(vv_idx: c_int) -> i64;
 
     // Math / string helpers
-    fn nvim_stl_calc_percentage(lnum: c_int, line_count: c_int) -> c_int;
     fn nvim_stl_valid_flag(c: c_int) -> c_int;
 
     // Window accessors
@@ -272,6 +256,112 @@ unsafe fn nvim_stl_str_all_digits(s: *const c_char) -> c_int {
         p = p.add(1);
     }
     1
+}
+
+/// Format an integer with optional minimum width into a buffer.
+/// Replacement for `nvim_stl_snprintf_int` (was `vim_snprintf_safelen(buf, buflen, fmt, minwid, num)`).
+/// `fmt` encodes: optional `-` prefix, `%`, optional `0`, `*`, then `d` or `X`.
+///
+/// # Safety
+/// `buf` must be valid for `buflen` bytes.
+#[allow(clippy::cast_possible_truncation)]
+unsafe fn nvim_stl_snprintf_int(
+    buf: *mut c_char,
+    buflen: usize,
+    fmt: *const c_char,
+    minwid: c_int,
+    num: c_int,
+) -> c_int {
+    use std::io::Write;
+    if buflen == 0 {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf as *mut u8, buflen);
+    let mut cursor = std::io::Cursor::new(&mut slice[..]);
+
+    // Parse fmt: optional `-`, `%`, optional `0`, `*`, base specifier
+    let fmt_bytes = {
+        let mut len = 0;
+        while *fmt.add(len) != 0 {
+            len += 1;
+        }
+        std::slice::from_raw_parts(fmt as *const u8, len)
+    };
+
+    let left_align = fmt_bytes.first() == Some(&b'-');
+    let zero_pad = fmt_bytes.contains(&b'0');
+    let hex = fmt_bytes.last() == Some(&b'X');
+
+    let abs_width = minwid.unsigned_abs() as usize;
+    let _ = if hex {
+        let s = if zero_pad {
+            format!("{num:0>abs_width$X}")
+        } else if left_align {
+            format!("{num:<abs_width$X}")
+        } else {
+            format!("{num:>abs_width$X}")
+        };
+        write!(cursor, "{s}")
+    } else {
+        let s = if zero_pad {
+            format!("{num:0>abs_width$}")
+        } else if left_align {
+            format!("{num:<abs_width$}")
+        } else {
+            format!("{num:>abs_width$}")
+        };
+        write!(cursor, "{s}")
+    };
+    cursor.position() as c_int
+}
+
+/// Format scientific notation number into a buffer.
+/// Replacement for `nvim_stl_snprintf_sci` (was `vim_snprintf_safelen(buf, buflen, fmt, 0, num, exponent)`).
+/// Produces output like `"123>4"` (num>exponent).
+///
+/// # Safety
+/// `buf` must be valid for `buflen` bytes.
+#[allow(clippy::cast_possible_truncation)] // cursor.position() fits in c_int (buffer ≤ 20 bytes)
+unsafe fn nvim_stl_snprintf_sci(
+    buf: *mut c_char,
+    buflen: usize,
+    fmt: *const c_char,
+    num: c_int,
+    exponent: c_int,
+) -> c_int {
+    use std::io::Write;
+    if buflen == 0 {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf as *mut u8, buflen);
+    let mut cursor = std::io::Cursor::new(&mut slice[..]);
+
+    // Parse fmt: optional `0`, `*`, base, `>`, `%`, base
+    // The format is always built as: [%-?][0?][*]<base>>[%]<base>
+    // Output: <num_formatted>><exponent_formatted>
+    let fmt_bytes = {
+        let mut len = 0;
+        while *fmt.add(len) != 0 {
+            len += 1;
+        }
+        std::slice::from_raw_parts(fmt as *const u8, len)
+    };
+    let hex = fmt_bytes.last() == Some(&b'X');
+    let _ = if hex {
+        write!(cursor, "{num:X}>{exponent:X}")
+    } else {
+        write!(cursor, "{num}>{exponent}")
+    };
+    cursor.position() as c_int
+}
+
+/// Calculate percentage position in a file.
+/// Replacement for `nvim_stl_calc_percentage` (was `calc_percentage(lnum, line_count)`).
+fn nvim_stl_calc_percentage(lnum: c_int, line_count: c_int) -> c_int {
+    if line_count == 0 {
+        return 0;
+    }
+    (lnum * 100 + line_count / 2) / line_count
 }
 
 // =============================================================================

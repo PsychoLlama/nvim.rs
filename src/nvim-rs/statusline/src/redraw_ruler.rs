@@ -51,6 +51,7 @@ extern "C" {
 
     // Global state
     fn nvim_stl_get_curwin() -> WinHandle;
+    #[link_name = "rs_lastwin_nofloating"]
     fn nvim_stl_lastwin_nofloating() -> WinHandle;
     #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
@@ -67,6 +68,7 @@ extern "C" {
     fn nvim_win_get_buffer(wp: WinHandle) -> *mut std::ffi::c_void;
 
     // Fill character / highlight
+    #[link_name = "fillchar_status"]
     fn nvim_stl_fillchar_status(group: *mut c_int, wp: WinHandle) -> ScharT;
     #[link_name = "rs_schar_from_ascii"]
     fn nvim_stl_schar_from_ascii_char(c: c_char) -> ScharT;

@@ -52,14 +52,7 @@
 #include "nvim/window.h"
 
 // Rust FFI declarations
-extern void rs_ui_ext_tabline_update(void);
-extern win_T *rs_lastwin_nofloating(void);
-extern int rs_tabline_height(void);
 extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
-extern int rs_get_fileformat(buf_T *buf);
-
-// Rust-provided symbols (formerly static C functions, now globally exported by Rust)
-extern void win_redr_custom(win_T *wp, bool draw_winbar, bool draw_ruler, bool ui_event);
 
 // ============================================================================
 // Statusline Accessor Functions (for Rust FFI)
@@ -176,11 +169,6 @@ int nvim_stl_get_keymap(win_T *wp, char *buf, int buflen)
   return len > 0 ? len : 0;
 }
 
-/// Get page number for printing.
-int nvim_stl_get_page_num(void)
-{
-  return 0;  // Not applicable for screen display
-}
 
 /// Get quickfix info for statusline.
 int nvim_stl_get_qf_info(win_T *wp, char *buf, int buflen)
@@ -216,11 +204,6 @@ void nvim_stl_get_trans_bufname(buf_T *buf)
   trans_characters(NameBuff, MAXPATHL);
 }
 
-/// Call win_redr_custom(wp, false, false, false) for redraw_custom_statusline.
-void nvim_stl_win_redr_custom(win_T *wp)
-{
-  win_redr_custom(wp, false, false, false);
-}
 
 /// Set v:lnum variable.
 void nvim_stl_set_vv_lnum(int64_t lnum)
@@ -369,11 +352,6 @@ void nvim_stl_home_replace_trans(buf_T *buf, const char *src, char *dst, int dst
   trans_characters(dst, dstlen);
 }
 
-/// Get file format of buffer (returns EOL_* value).
-int nvim_stl_get_fileformat(buf_T *buf)
-{
-  return rs_get_fileformat(buf);
-}
 
 /// Get cursor line text pointer and length.
 /// Returns pointer to line text, sets *len_out to length.
@@ -470,17 +448,6 @@ int nvim_stl_win_get_clamped_lnum(win_T *wp)
 }
 
 
-/// vim_snprintf into a buffer with a given format and integer.
-int nvim_stl_snprintf_int(char *buf, size_t buflen, const char *fmt, int minwid, int num)
-{
-  return (int)vim_snprintf_safelen(buf, buflen, fmt, minwid, num);
-}
-
-/// vim_snprintf for scientific notation (with extra exponent arg).
-int nvim_stl_snprintf_sci(char *buf, size_t buflen, const char *fmt, int num, int exponent)
-{
-  return (int)vim_snprintf_safelen(buf, buflen, fmt, 0, num, exponent);
-}
 
 /// Get the relative position string ("Top", "Bot", "All", or "NN%").
 int nvim_stl_get_rel_pos(win_T *wp, char *buf, int buflen)
@@ -517,11 +484,6 @@ int64_t nvim_stl_get_vim_var_nr(int vv_idx)
   return get_vim_var_nr(vv_idx);
 }
 
-/// Get calc_percentage (from statusline.c).
-int nvim_stl_calc_percentage(int lnum, int line_count)
-{
-  return calc_percentage(lnum, line_count);
-}
 
 /// Get wp->w_virtcol.
 int nvim_stl_win_get_w_virtcol(win_T *wp)
@@ -666,11 +628,6 @@ _Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL");
 
 // Phase 2 accessors for Rust FFI
 
-/// Call win_redr_custom(wp, true, false, false) for winbar rendering.
-void nvim_stl_win_redr_custom_winbar(win_T *wp)
-{
-  win_redr_custom(wp, true, false, false);
-}
 
 /// Check if wildmenu is showing and UI does not have kUIWildmenu.
 /// Returns true if statusline redraw should be blocked.
@@ -781,8 +738,6 @@ char *nvim_stl_get_p_ruf(void) { return p_ruf; }
 /// Get wp->w_p_wbr (window-local winbar option).
 char *nvim_stl_win_get_p_wbr(win_T *wp) { return wp->w_p_wbr; }
 
-/// Call fillchar_status (returns fill character and sets HLF group).
-schar_T nvim_stl_fillchar_status(int *group, win_T *wp) { return fillchar_status((hlf_T *)group, wp); }
 
 
 /// Call grid_adjust for a window's grid_alloc. Returns the grid handle.
@@ -864,23 +819,6 @@ void nvim_stl_ui_call_msg_ruler_content(int *attrs, const char **texts, size_t *
 /// Get win_T *curwin.
 win_T *nvim_stl_get_curwin(void) { return curwin; }
 
-/// Call stl_clear_click_defs (wrapper).
-void nvim_stl_clear_click_defs_wrap(void *defs, size_t size)
-{
-  stl_clear_click_defs((StlClickDefinition *)defs, size);
-}
-
-/// Call stl_alloc_click_defs. Returns new pointer, updates size.
-void *nvim_stl_alloc_click_defs_wrap(void *cdp, int width, size_t *size)
-{
-  return stl_alloc_click_defs((StlClickDefinition *)cdp, width, size);
-}
-
-/// Call stl_fill_click_defs.
-void nvim_stl_fill_click_defs_wrap(void *defs, void *recs, const char *buf, int width, bool tabline)
-{
-  stl_fill_click_defs((StlClickDefinition *)defs, (StlClickRecord *)recs, buf, width, tabline);
-}
 
 /// Get tab_page_click_defs pointer.
 void *nvim_stl_get_tab_page_click_defs(void) { return tab_page_click_defs; }
@@ -906,8 +844,6 @@ void nvim_stl_win_set_p_crb(win_T *wp, int val) { wp->w_p_crb = val; }
 /// Get p_ru (ruler option).
 int nvim_stl_get_p_ru(void) { return p_ru ? 1 : 0; }
 
-/// Get rs_lastwin_nofloating().
-win_T *nvim_stl_lastwin_nofloating(void) { return rs_lastwin_nofloating(); }
 
 /// Check if ui_has(kUIMessages).
 int nvim_stl_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
@@ -986,8 +922,6 @@ void nvim_stl_set_redraw_tabline(int val) { redraw_tabline = val ? true : false;
 /// Check ui_has(kUITabline).
 int nvim_stl_ui_has_tabline(void) { return ui_has(kUITabline) ? 1 : 0; }
 
-/// Get rs_tabline_height().
-int nvim_stl_tabline_height(void) { return rs_tabline_height(); }
 
 /// Start grid line on default_gridview at given row.
 void nvim_stl_default_grid_line_start(int row)
@@ -1106,11 +1040,6 @@ int nvim_stl_tab_info_get_name_len(void *ptr) { return ((TabInfo *)ptr)->name_le
 /// Get size of TabInfo struct for Rust array iteration.
 size_t nvim_stl_tab_info_size(void) { return sizeof(TabInfo); }
 
-/// Call ui_ext_tabline_update (wrapper for Rust).
-void nvim_stl_ui_ext_tabline_update(void)
-{
-  rs_ui_ext_tabline_update();
-}
 
 _Static_assert(HLF_T == 23, "HLF_T must be 23");
 _Static_assert(HLF_TP == 52, "HLF_TP must be 52");

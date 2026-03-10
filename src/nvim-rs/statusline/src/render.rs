@@ -60,9 +60,6 @@ extern "C" {
     // Byte value at cursor
     fn nvim_stl_get_byte_value(wp: WinHandle) -> c_int;
 
-    // Page number (for printing)
-    fn nvim_stl_get_page_num() -> c_int;
-
 }
 
 /// Rendering context for the statusline.
@@ -621,11 +618,8 @@ fn eval_item(flag: StlFlag, ctx: &RenderContext, buf: &mut [u8]) -> (String, boo
                 }
             }
 
-            // Page number (printing)
-            StlFlag::PageNum => {
-                let page = nvim_stl_get_page_num();
-                (format!("{page}"), true, false)
-            }
+            // Page number (printing) - always 0 (not applicable for screen display)
+            StlFlag::PageNum => (String::from("0"), true, false),
 
             // Showcmd
             StlFlag::ShowCmd => {

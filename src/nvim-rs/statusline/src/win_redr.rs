@@ -75,6 +75,7 @@ extern "C" {
     fn nvim_stl_win_get_p_wbr(wp: WinHandle) -> *mut c_char;
 
     // Fill character
+    #[link_name = "fillchar_status"]
     fn nvim_stl_fillchar_status(group: *mut c_int, wp: WinHandle) -> ScharT;
     #[link_name = "rs_schar_from_ascii"]
     fn nvim_stl_schar_from_ascii_char(c: c_char) -> ScharT;
@@ -118,13 +119,16 @@ extern "C" {
     #[link_name = "xfree"]
     fn nvim_stl_xfree(ptr: *mut c_void);
 
-    // Click definitions
+    // Click definitions (direct link to Rust exports)
+    #[link_name = "stl_clear_click_defs"]
     fn nvim_stl_clear_click_defs_wrap(defs: ClickDefsHandle, size: usize);
+    #[link_name = "stl_alloc_click_defs"]
     fn nvim_stl_alloc_click_defs_wrap(
         cdp: ClickDefsHandle,
         width: c_int,
         size: *mut usize,
     ) -> ClickDefsHandle;
+    #[link_name = "stl_fill_click_defs"]
     fn nvim_stl_fill_click_defs_wrap(
         defs: ClickDefsHandle,
         recs: StlClickRecordPtr,

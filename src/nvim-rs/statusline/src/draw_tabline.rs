@@ -52,6 +52,7 @@ extern "C" {
     fn nvim_stl_default_grid_chars_null() -> c_int;
     fn nvim_stl_set_redraw_tabline(val: c_int);
     fn nvim_stl_ui_has_tabline() -> c_int;
+    #[link_name = "rs_tabline_height"]
     fn nvim_stl_tabline_height() -> c_int;
     fn nvim_stl_get_Columns() -> c_int;
     fn nvim_stl_get_p_tal() -> *mut c_char;
@@ -61,6 +62,7 @@ extern "C" {
 
     // Click defs
     fn nvim_stl_get_tab_page_click_defs_size() -> usize;
+    #[link_name = "stl_clear_click_defs"]
     fn nvim_stl_clear_click_defs_wrap(defs: *mut c_void, size: usize);
     fn nvim_stl_get_tab_page_click_defs() -> *mut c_void;
     fn nvim_stl_set_tab_click_def(col: c_int, click_type: c_int, tabnr: c_int);
