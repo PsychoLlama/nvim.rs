@@ -200,6 +200,17 @@ pub unsafe extern "C" fn rs_sign_buffer_has_signs(buf: SignBufHandle) -> bool {
     (hl + text) > 0
 }
 
+/// buf_has_signs — public C API replacement.
+///
+/// This replaces the `buf_has_signs(const buf_T *buf)` function in sign.c.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle or null.
+#[unsafe(export_name = "buf_has_signs")]
+pub unsafe extern "C" fn rs_buf_has_signs_export(buf: SignBufHandle) -> bool {
+    rs_sign_buffer_has_signs(buf)
+}
+
 /// Get the namespace filter for a group name.
 ///
 /// # Safety
@@ -323,6 +334,17 @@ pub unsafe extern "C" fn rs_sign_list_by_name(name: *const c_char) {
         return;
     }
     nvim_sign_list_by_name_impl(name);
+}
+
+/// Get the display name for a placed sign — static C wrapper replacement.
+///
+/// This replaces `sign_get_name(DecorSignHighlight *sh)` in sign.c.
+///
+/// # Safety
+/// `sh` must be a valid DecorSignHighlight handle.
+#[unsafe(export_name = "sign_get_name")]
+pub unsafe extern "C" fn rs_sign_get_name_wrapper(sh: DecorSignHighlightHandle) -> *const c_char {
+    rs_sign_get_display_name(sh)
 }
 
 // =============================================================================

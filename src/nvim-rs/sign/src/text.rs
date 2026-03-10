@@ -5,7 +5,7 @@
 //! - Initializing sign text from user input
 //! - UTF-8 cell width handling for sign display
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::SIGN_WIDTH;
 
@@ -73,10 +73,7 @@ pub unsafe fn describe_sign_text_impl(buf: &mut [u8], sign_text: &[ScharT; SIGN_
     pos
 }
 
-/// FFI export: Describe sign text to buffer.
-///
-/// Converts sign text (array of schar_T) to a NUL-terminated UTF-8 string.
-/// Returns the number of bytes written (not including NUL).
+/// Internal: Describe sign text to buffer with explicit length.
 ///
 /// # Safety
 /// - `buf` must be valid for writing at least `buflen` bytes
@@ -106,6 +103,24 @@ pub unsafe extern "C" fn rs_describe_sign_text(
     }
 
     len
+}
+
+/// FFI export: Describe sign text to buffer (2-arg C API).
+///
+/// Replaces the C `describe_sign_text(buf, sign_text)` wrapper.
+/// `buf` must be at least `SIGN_WIDTH * MAX_SCHAR_SIZE` bytes.
+///
+/// # Safety
+/// - `buf` must be valid for writing SIGN_WIDTH * MAX_SCHAR_SIZE bytes
+/// - `sign_text` must be a valid pointer to SIGN_WIDTH schar_T values
+#[unsafe(export_name = "describe_sign_text")]
+pub unsafe extern "C" fn rs_describe_sign_text_c_api(
+    buf: *mut c_char,
+    sign_text: *const ScharT,
+) -> usize {
+    // MAX_SCHAR_SIZE = 21 (max UTF-8 bytes per char), SIGN_WIDTH = 2
+    const BUF_LEN: usize = 2 * 21;
+    rs_describe_sign_text(buf, BUF_LEN, sign_text)
 }
 
 // =============================================================================
@@ -247,6 +262,42 @@ pub unsafe extern "C" fn rs_init_sign_text(
         SignTextResult::Ok => 0,      // OK
         SignTextResult::Invalid => 1, // FAIL
     }
+}
+
+/// Public C API: init_sign_text(sign_T *sp, schar_T *sign_text, char *text)
+///
+/// Replaces the C wrapper in sign.c. When `sp` is non-null (called from :sign
+/// define), backslash-escapes are removed and E239 is emitted on failure.
+/// When `sp` is null (called from nvim_buf_set_extmark), no backslash
+/// processing and no error message.
+///
+/// Returns OK (1) on success, FAIL (0) on error (Neovim C convention).
+///
+/// # Safety
+/// - `sp` must be null or a valid sign_T pointer (opaque — only null-check matters)
+/// - `sign_text` must be valid for writing SIGN_WIDTH schar_T values
+/// - `text` must be a valid NUL-terminated C string or null
+#[unsafe(export_name = "init_sign_text")]
+pub unsafe extern "C" fn rs_init_sign_text_c_api(
+    sp: *mut c_void,
+    sign_text: *mut ScharT,
+    text: *mut c_char,
+) -> c_int {
+    extern "C" {
+        fn semsg(s: *const c_char, ...);
+    }
+
+    let remove_backslash = !sp.is_null();
+    // rs_init_sign_text returns 0=success, non-zero=failure (internal convention)
+    let result = rs_init_sign_text(sign_text, text, c_int::from(remove_backslash));
+    if result != 0 && remove_backslash {
+        // E239 format string with gettext marker — use static C string
+        static E239_FMT: &[u8] = b"E239: Invalid sign text: %s\0";
+        semsg(E239_FMT.as_ptr().cast(), text);
+    }
+    // Convert to Neovim OK/FAIL: OK=1, FAIL=0
+    // OK=1 (success), FAIL=0 (error): Neovim C convention
+    c_int::from(result == 0)
 }
 
 // =============================================================================

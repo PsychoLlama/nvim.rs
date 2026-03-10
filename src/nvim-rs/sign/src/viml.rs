@@ -437,7 +437,7 @@ extern "C" {
 /// # Safety
 ///
 /// `sp` must be a valid sign handle.
-#[no_mangle]
+#[unsafe(export_name = "sign_get_info_dict")]
 pub unsafe extern "C" fn rs_sign_get_info_dict(sp: SignHandle) -> *mut c_void {
     if sp.is_null() {
         return std::ptr::null_mut();
@@ -452,7 +452,7 @@ pub unsafe extern "C" fn rs_sign_get_info_dict(sp: SignHandle) -> *mut c_void {
 /// # Safety
 ///
 /// `mark_ptr` must be a valid pointer to an MTKey.
-#[no_mangle]
+#[unsafe(export_name = "sign_get_placed_info_dict")]
 pub unsafe extern "C" fn rs_sign_get_placed_info_dict(mark_ptr: MTKeyHandle) -> *mut c_void {
     if mark_ptr.is_null() {
         return std::ptr::null_mut();
@@ -467,7 +467,7 @@ pub unsafe extern "C" fn rs_sign_get_placed_info_dict(mark_ptr: MTKeyHandle) -> 
 /// # Safety
 ///
 /// `buf` must be a valid buffer handle.
-#[no_mangle]
+#[unsafe(export_name = "get_buffer_signs")]
 pub unsafe extern "C" fn rs_get_buffer_signs(buf: SignBufHandle) -> *mut c_void {
     if buf.is_null() {
         return std::ptr::null_mut();
@@ -483,7 +483,7 @@ pub unsafe extern "C" fn rs_get_buffer_signs(buf: SignBufHandle) -> *mut c_void 
 ///
 /// `buf` must be a valid buffer handle. `retlist` must be a valid list handle.
 /// `group` must be null or a valid C string.
-#[no_mangle]
+#[unsafe(export_name = "sign_get_placed_in_buf")]
 pub unsafe extern "C" fn rs_sign_get_placed_in_buf(
     buf: SignBufHandle,
     lnum: LinenrT,
@@ -506,7 +506,7 @@ pub unsafe extern "C" fn rs_sign_get_placed_in_buf(
 ///
 /// `buf` must be a valid buffer handle or null. `retlist` must be a valid list.
 /// `group` must be null or a valid C string.
-#[no_mangle]
+#[unsafe(export_name = "sign_get_placed")]
 pub unsafe extern "C" fn rs_sign_get_placed(
     buf: SignBufHandle,
     lnum: LinenrT,
@@ -527,7 +527,7 @@ pub unsafe extern "C" fn rs_sign_get_placed(
 /// # Safety
 ///
 /// `name` must be null or a valid C string. `dict` must be a valid dict handle.
-#[no_mangle]
+#[unsafe(export_name = "sign_define_from_dict")]
 pub unsafe extern "C" fn rs_sign_define_from_dict(name: *mut c_char, dict: *mut c_void) -> c_int {
     nvim_sign_define_from_dict_impl(name, dict)
 }
@@ -539,7 +539,7 @@ pub unsafe extern "C" fn rs_sign_define_from_dict(name: *mut c_char, dict: *mut 
 /// # Safety
 ///
 /// `l` must be a valid list handle. `retlist` must be a valid list handle.
-#[no_mangle]
+#[unsafe(export_name = "sign_define_multiple")]
 pub unsafe extern "C" fn rs_sign_define_multiple(l: *mut c_void, retlist: *mut c_void) {
     if l.is_null() || retlist.is_null() {
         return;
@@ -554,7 +554,7 @@ pub unsafe extern "C" fn rs_sign_define_multiple(l: *mut c_void, retlist: *mut c
 /// # Safety
 ///
 /// All typval pointers must be valid. `dict` must be a valid dict handle or null.
-#[no_mangle]
+#[unsafe(export_name = "sign_place_from_dict")]
 pub unsafe extern "C" fn rs_sign_place_from_dict(
     id_tv: *mut c_void,
     group_tv: *mut c_void,
@@ -572,7 +572,7 @@ pub unsafe extern "C" fn rs_sign_place_from_dict(
 /// # Safety
 ///
 /// `group_tv` must be a valid typval pointer. `dict` must be a valid dict handle.
-#[no_mangle]
+#[unsafe(export_name = "sign_unplace_from_dict")]
 pub unsafe extern "C" fn rs_sign_unplace_from_dict(
     group_tv: *mut c_void,
     dict: *mut c_void,
@@ -587,7 +587,7 @@ pub unsafe extern "C" fn rs_sign_unplace_from_dict(
 /// # Safety
 ///
 /// `l` must be a valid list handle. `retlist` must be a valid list handle.
-#[no_mangle]
+#[unsafe(export_name = "sign_undefine_multiple")]
 pub unsafe extern "C" fn rs_sign_undefine_multiple(l: *mut c_void, retlist: *mut c_void) {
     if l.is_null() || retlist.is_null() {
         return;
@@ -604,7 +604,7 @@ pub unsafe extern "C" fn rs_sign_undefine_multiple(l: *mut c_void, retlist: *mut
 /// # Safety
 ///
 /// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
-#[no_mangle]
+#[unsafe(export_name = "f_sign_define")]
 pub unsafe extern "C" fn rs_f_sign_define(
     argvars: *mut c_void,
     rettv: *mut c_void,
@@ -618,7 +618,7 @@ pub unsafe extern "C" fn rs_f_sign_define(
 /// # Safety
 ///
 /// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
-#[no_mangle]
+#[unsafe(export_name = "f_sign_getdefined")]
 pub unsafe extern "C" fn rs_f_sign_getdefined(
     argvars: *mut c_void,
     rettv: *mut c_void,
@@ -632,7 +632,7 @@ pub unsafe extern "C" fn rs_f_sign_getdefined(
 /// # Safety
 ///
 /// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
-#[no_mangle]
+#[unsafe(export_name = "f_sign_getplaced")]
 pub unsafe extern "C" fn rs_f_sign_getplaced(
     argvars: *mut c_void,
     rettv: *mut c_void,
@@ -646,7 +646,7 @@ pub unsafe extern "C" fn rs_f_sign_getplaced(
 /// # Safety
 ///
 /// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
-#[no_mangle]
+#[unsafe(export_name = "f_sign_jump")]
 pub unsafe extern "C" fn rs_f_sign_jump(
     argvars: *mut c_void,
     rettv: *mut c_void,
@@ -660,7 +660,7 @@ pub unsafe extern "C" fn rs_f_sign_jump(
 /// # Safety
 ///
 /// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
-#[no_mangle]
+#[unsafe(export_name = "f_sign_place")]
 pub unsafe extern "C" fn rs_f_sign_place(
     argvars: *mut c_void,
     rettv: *mut c_void,
@@ -674,7 +674,7 @@ pub unsafe extern "C" fn rs_f_sign_place(
 /// # Safety
 ///
 /// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
-#[no_mangle]
+#[unsafe(export_name = "f_sign_placelist")]
 pub unsafe extern "C" fn rs_f_sign_placelist(
     argvars: *mut c_void,
     rettv: *mut c_void,
@@ -688,7 +688,7 @@ pub unsafe extern "C" fn rs_f_sign_placelist(
 /// # Safety
 ///
 /// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
-#[no_mangle]
+#[unsafe(export_name = "f_sign_undefine")]
 pub unsafe extern "C" fn rs_f_sign_undefine(
     argvars: *mut c_void,
     rettv: *mut c_void,
@@ -702,7 +702,7 @@ pub unsafe extern "C" fn rs_f_sign_undefine(
 /// # Safety
 ///
 /// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
-#[no_mangle]
+#[unsafe(export_name = "f_sign_unplace")]
 pub unsafe extern "C" fn rs_f_sign_unplace(
     argvars: *mut c_void,
     rettv: *mut c_void,
@@ -716,7 +716,7 @@ pub unsafe extern "C" fn rs_f_sign_unplace(
 /// # Safety
 ///
 /// `argvars`, `rettv`, and `fptr` must be valid pointers to their respective types.
-#[no_mangle]
+#[unsafe(export_name = "f_sign_unplacelist")]
 pub unsafe extern "C" fn rs_f_sign_unplacelist(
     argvars: *mut c_void,
     rettv: *mut c_void,

@@ -391,6 +391,38 @@ pub unsafe extern "C" fn rs_group_get_ns(
     }
 }
 
+/// C-level group_get_ns: convert a group name to a namespace filter using
+/// the C nvim_namespace_lookup function.
+///
+/// This replaces the static C wrapper `group_get_ns()` in sign.c.
+///
+/// # Safety
+/// `group` must be null or a valid null-terminated C string.
+#[unsafe(export_name = "group_get_ns")]
+pub unsafe extern "C" fn rs_group_get_ns_export(group: *const c_char) -> i64 {
+    extern "C" {
+        fn nvim_namespace_lookup(name: *const c_char) -> c_int;
+    }
+
+    if group.is_null() {
+        return NS_GLOBAL;
+    }
+
+    let group_cstr = CStr::from_ptr(group);
+    let group_bytes = group_cstr.to_bytes();
+
+    if group_bytes == b"*" {
+        return NS_ALL;
+    }
+
+    let ns = nvim_namespace_lookup(group);
+    if ns != 0 {
+        i64::from(ns)
+    } else {
+        NS_INVALID
+    }
+}
+
 // =============================================================================
 // Sign Row Comparison
 // =============================================================================

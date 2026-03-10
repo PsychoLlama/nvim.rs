@@ -55,70 +55,31 @@
 extern void rs_foldOpenCursor(void);
 
 // Rust FFI declarations
+extern int rs_sign_row_cmp(int row1, int row2);
 extern int rs_sign_cmd_idx(const char *cmd);
 extern int rs_sign_item_cmp(int priority1, uint32_t id1, uint32_t add_id1,
                             int priority2, uint32_t id2, uint32_t add_id2);
-extern int rs_sign_name_valid(const char *name);
-extern int rs_sign_priority_valid(int prio);
 extern int rs_sign_effective_priority(int prio);
-extern int rs_sign_row_cmp(int row1, int row2);
-extern bool rs_sign_id_valid(int id);
-extern int rs_sign_clamp_lnum(int lnum, int max_line);
-extern bool rs_sign_lnum_valid(int lnum);
 extern int64_t rs_group_get_ns(const char *group, int (*ns_lookup)(const char *));
 extern const char *rs_sign_get_display_name(DecorSignHighlight *sh);
 extern bool rs_sign_buffer_has_signs(const buf_T *buf);
-extern size_t rs_describe_sign_text(char *buf, size_t buflen, const schar_T *sign_text);
-extern int rs_init_sign_text(schar_T *sign_text, const char *text, int remove_backslash);
 extern void rs_buf_set_sign(buf_T *buf, uint32_t *id, const char *group, int prio, linenr_T lnum,
                             sign_T *sp);
 extern linenr_T rs_buf_mod_sign(buf_T *buf, uint32_t *id, const char *group, int prio, sign_T *sp);
 extern int rs_buf_findsign(buf_T *buf, int id, const char *group);
 extern int rs_buf_delete_signs(buf_T *buf, const char *group, int id, linenr_T atlnum);
+extern void rs_sign_list_placed(buf_T *rbuf, const char *group);
+extern void rs_sign_list_defined(sign_T *sp);
+extern void rs_sign_list_by_name(const char *name);
 extern int rs_sign_define_by_name(const char *name, const char *icon, const char *text,
                                   const char *linehl, const char *texthl,
                                   const char *culhl, const char *numhl, int prio);
 extern int rs_sign_undefine_by_name(const char *name);
-extern void rs_free_signs(void);
+extern size_t rs_describe_sign_text(char *buf, size_t buf_len, schar_T *sign_text);
 extern int rs_sign_place(uint32_t *id, const char *group, const char *name, buf_T *buf,
                          linenr_T lnum, int prio);
 extern int rs_sign_unplace(buf_T *buf, int id, const char *group, linenr_T atlnum);
 extern linenr_T rs_sign_jump(int id, const char *group, buf_T *buf);
-extern void rs_sign_list_placed(buf_T *rbuf, const char *group);
-extern void rs_sign_list_defined(sign_T *sp);
-extern void rs_sign_list_by_name(const char *name);
-extern void rs_sign_define_cmd(char *name, char *cmdline);
-extern void rs_sign_place_cmd(buf_T *buf, linenr_T lnum, char *name, int id, char *group,
-                               int prio);
-extern void rs_sign_unplace_cmd(buf_T *buf, linenr_T lnum, const char *name, int id, char *group);
-extern void rs_sign_jump_cmd(buf_T *buf, linenr_T lnum, const char *name, int id, char *group);
-extern int rs_parse_sign_cmd_args(int cmd, char *arg, char **name, int *id, char **group,
-                                   int *prio, buf_T **buf, linenr_T *lnum);
-extern void rs_ex_sign(void *eap);
-extern char *rs_get_sign_name(void *xp, int idx);
-extern void rs_set_context_in_sign_cmd(void *xp, char *arg);
-extern void *rs_sign_get_info_dict(sign_T *sp);
-extern void *rs_sign_get_placed_info_dict(void *mark_ptr);
-extern void *rs_get_buffer_signs(buf_T *buf);
-extern void rs_sign_get_placed_in_buf(buf_T *buf, linenr_T lnum, int sign_id, const char *group,
-                                       void *retlist);
-extern void rs_sign_get_placed(buf_T *buf, linenr_T lnum, int id, const char *group,
-                                void *retlist);
-extern int rs_sign_define_from_dict(char *name, void *dict);
-extern void rs_sign_define_multiple(void *l, void *retlist);
-extern int rs_sign_place_from_dict(void *id_tv, void *group_tv, void *name_tv, void *buf_tv,
-                                    void *dict);
-extern int rs_sign_unplace_from_dict(void *group_tv, void *dict);
-extern void rs_sign_undefine_multiple(void *l, void *retlist);
-extern void rs_f_sign_define(void *argvars, void *rettv, void *fptr);
-extern void rs_f_sign_getdefined(void *argvars, void *rettv, void *fptr);
-extern void rs_f_sign_getplaced(void *argvars, void *rettv, void *fptr);
-extern void rs_f_sign_jump(void *argvars, void *rettv, void *fptr);
-extern void rs_f_sign_place(void *argvars, void *rettv, void *fptr);
-extern void rs_f_sign_placelist(void *argvars, void *rettv, void *fptr);
-extern void rs_f_sign_undefine(void *argvars, void *rettv, void *fptr);
-extern void rs_f_sign_unplace(void *argvars, void *rettv, void *fptr);
-extern void rs_f_sign_unplacelist(void *argvars, void *rettv, void *fptr);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
@@ -146,36 +107,6 @@ static int nvim_namespace_lookup_fn(const char *name)
   return map_get(String, int)(&namespace_ids, cstr_as_string(name));
 }
 
-// Convert the supplied "group" to a namespace filter
-static int64_t group_get_ns(const char *group)
-{
-  return rs_group_get_ns(group, nvim_namespace_lookup_fn);
-}
-
-static const char *sign_get_name(DecorSignHighlight *sh)
-{
-  return rs_sign_get_display_name(sh);
-}
-
-/// Create or update a sign extmark.
-static void buf_set_sign(buf_T *buf, uint32_t *id, char *group, int prio, linenr_T lnum, sign_T *sp)
-{
-  rs_buf_set_sign(buf, id, group, prio, lnum, sp);
-}
-
-/// For an existing, placed sign with "id", modify the sign, group or priority.
-/// Returns the line number of the sign, or zero if the sign is not found.
-static linenr_T buf_mod_sign(buf_T *buf, uint32_t *id, char *group, int prio, sign_T *sp)
-{
-  return rs_buf_mod_sign(buf, id, group, prio, sp);
-}
-
-/// Find the line number of the sign with the requested id in group 'group'.
-static int buf_findsign(buf_T *buf, int id, char *group)
-{
-  return rs_buf_findsign(buf, id, group);
-}
-
 /// qsort() function to sort signs by line number, priority, id and recency.
 static int sign_row_cmp(const void *p1, const void *p2)
 {
@@ -197,177 +128,6 @@ static int sign_row_cmp(const void *p1, const void *p2)
   return sign_item_cmp(&si1, &si2);
 }
 
-/// Delete the specified sign(s)
-static int buf_delete_signs(buf_T *buf, char *group, int id, linenr_T atlnum)
-{
-  return rs_buf_delete_signs(buf, group, id, atlnum);
-}
-
-bool buf_has_signs(const buf_T *buf)
-{
-  return rs_sign_buffer_has_signs((const buf_T *)buf);
-}
-
-/// List placed signs for "rbuf".  If "rbuf" is NULL do it for all buffers.
-static void sign_list_placed(buf_T *rbuf, char *group)
-{
-  rs_sign_list_placed(rbuf, group);
-}
-
-/// Find index of a ":sign" subcmd from its name.
-/// "*end_cmd" must be writable.
-///
-/// @param begin_cmd  begin of sign subcmd
-/// @param end_cmd  just after sign subcmd
-static int sign_cmd_idx(char *begin_cmd, char *end_cmd)
-{
-  char save = *end_cmd;
-  *end_cmd = NUL;
-  int idx = rs_sign_cmd_idx(begin_cmd);
-  *end_cmd = save;
-  return idx;
-}
-
-/// buf must be SIGN_WIDTH * MAX_SCHAR_SIZE (no extra +1 needed)
-size_t describe_sign_text(char *buf, schar_T *sign_text)
-{
-  return rs_describe_sign_text(buf, SIGN_WIDTH * MAX_SCHAR_SIZE, sign_text);
-}
-
-/// Initialize the "text" for a new sign and store in "sign_text".
-/// "sp" is NULL for signs added through nvim_buf_set_extmark().
-int init_sign_text(sign_T *sp, schar_T *sign_text, char *text)
-{
-  // sp != NULL means: remove backslashes (sign define cmd) and emit error on failure
-  int result = rs_init_sign_text(sign_text, text, sp != NULL ? 1 : 0);
-  if (result != 0 && sp != NULL) {
-    semsg(_("E239: Invalid sign text: %s"), text);
-  }
-  return result == 0 ? OK : FAIL;
-}
-
-/// Define a new sign or update an existing sign
-static int sign_define_by_name(char *name, char *icon, char *text, char *linehl, char *texthl,
-                               char *culhl, char *numhl, int prio)
-{
-  return rs_sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio);
-}
-
-/// Free the sign specified by 'name'.
-static int sign_undefine_by_name(const char *name)
-{
-  int result = rs_sign_undefine_by_name(name);
-  if (result == FAIL) {
-    semsg(_("E155: Unknown sign: %s"), name);
-  }
-  return result;
-}
-
-/// List one sign.
-static void sign_list_defined(sign_T *sp)
-{
-  rs_sign_list_defined(sp);
-}
-
-/// List the signs matching 'name'
-static void sign_list_by_name(char *name)
-{
-  rs_sign_list_by_name(name);
-}
-
-/// Place a sign at the specified file location or update a sign.
-static int sign_place(uint32_t *id, char *group, char *name, buf_T *buf, linenr_T lnum, int prio)
-{
-  return rs_sign_place(id, group, name, buf, lnum, prio);
-}
-
-/// Unplace the specified sign for a single or all buffers
-static int sign_unplace(buf_T *buf, int id, char *group, linenr_T atlnum)
-{
-  return rs_sign_unplace(buf, id, group, atlnum);
-}
-
-/// Jump to a sign.
-static linenr_T sign_jump(int id, char *group, buf_T *buf)
-{
-  return rs_sign_jump(id, group, buf);
-}
-
-/// ":sign define {name} ..." command
-static void sign_define_cmd(char *name, char *cmdline)
-{
-  rs_sign_define_cmd(name, cmdline);
-}
-
-/// ":sign place" command
-static void sign_place_cmd(buf_T *buf, linenr_T lnum, char *name, int id, char *group, int prio)
-{
-  rs_sign_place_cmd(buf, lnum, name, id, group, prio);
-}
-
-/// ":sign unplace" command
-static void sign_unplace_cmd(buf_T *buf, linenr_T lnum, const char *name, int id, char *group)
-{
-  rs_sign_unplace_cmd(buf, lnum, name, id, group);
-}
-
-/// Jump to a placed sign commands
-static void sign_jump_cmd(buf_T *buf, linenr_T lnum, const char *name, int id, char *group)
-{
-  rs_sign_jump_cmd(buf, lnum, name, id, group);
-}
-
-/// Parse the command line arguments for the ":sign place", ":sign unplace" and
-/// ":sign jump" commands.
-static int parse_sign_cmd_args(int cmd, char *arg, char **name, int *id, char **group, int *prio,
-                               buf_T **buf, linenr_T *lnum)
-{
-  return rs_parse_sign_cmd_args(cmd, arg, name, id, group, prio, buf, lnum);
-}
-
-/// ":sign" command
-void ex_sign(exarg_T *eap)
-{
-  rs_ex_sign(eap);
-}
-
-/// Get dictionary of information for a defined sign "sp"
-static dict_T *sign_get_info_dict(sign_T *sp)
-{
-  return rs_sign_get_info_dict(sp);
-}
-
-/// Get dictionary of information for placed sign "mark"
-static dict_T *sign_get_placed_info_dict(MTKey mark)
-{
-  return rs_sign_get_placed_info_dict(&mark);
-}
-
-/// Returns information about signs placed in a buffer as list of dicts.
-list_T *get_buffer_signs(buf_T *buf)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_get_buffer_signs(buf);
-}
-
-/// @return  information about all the signs placed in a buffer
-static void sign_get_placed_in_buf(buf_T *buf, linenr_T lnum, int sign_id, const char *group,
-                                   list_T *retlist)
-{
-  rs_sign_get_placed_in_buf(buf, lnum, sign_id, group, retlist);
-}
-
-/// Get a list of signs placed in buffer 'buf'.
-static void sign_get_placed(buf_T *buf, linenr_T lnum, int id, const char *group, list_T *retlist)
-{
-  rs_sign_get_placed(buf, lnum, id, group, retlist);
-}
-
-void free_signs(void)
-{
-  rs_free_signs();
-}
-
 static enum {
   EXP_SUBCMD,   // expand :sign sub-commands
   EXP_DEFINE,   // expand :sign define {name} args
@@ -377,103 +137,6 @@ static enum {
   EXP_SIGN_NAMES,   // expand with name of placed signs
   EXP_SIGN_GROUPS,  // expand with name of placed sign groups
 } expand_what;
-
-/// Function given to ExpandGeneric() to obtain the sign command expansion.
-char *get_sign_name(expand_T *xp, int idx)
-{
-  return rs_get_sign_name(xp, idx);
-}
-
-/// Handle command line completion for :sign command.
-void set_context_in_sign_cmd(expand_T *xp, char *arg)
-{
-  rs_set_context_in_sign_cmd(xp, arg);
-}
-
-/// Define a sign from dict
-static int sign_define_from_dict(char *name, dict_T *dict)
-{
-  return rs_sign_define_from_dict(name, dict);
-}
-
-/// Define multiple signs
-static void sign_define_multiple(list_T *l, list_T *retlist)
-{
-  rs_sign_define_multiple(l, retlist);
-}
-
-/// "sign_define()" function
-void f_sign_define(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_sign_define(argvars, rettv, &fptr);
-}
-
-/// "sign_getdefined()" function
-void f_sign_getdefined(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_sign_getdefined(argvars, rettv, &fptr);
-}
-
-/// "sign_getplaced()" function
-void f_sign_getplaced(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_sign_getplaced(argvars, rettv, &fptr);
-}
-
-/// "sign_jump()" function
-void f_sign_jump(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_sign_jump(argvars, rettv, &fptr);
-}
-
-/// Place a sign from dict
-static int sign_place_from_dict(typval_T *id_tv, typval_T *group_tv, typval_T *name_tv,
-                                typval_T *buf_tv, dict_T *dict)
-{
-  return rs_sign_place_from_dict(id_tv, group_tv, name_tv, buf_tv, dict);
-}
-
-/// "sign_place()" function
-void f_sign_place(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_sign_place(argvars, rettv, &fptr);
-}
-
-/// "sign_placelist()" function
-void f_sign_placelist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_sign_placelist(argvars, rettv, &fptr);
-}
-
-/// Undefine multiple signs
-static void sign_undefine_multiple(list_T *l, list_T *retlist)
-{
-  rs_sign_undefine_multiple(l, retlist);
-}
-
-/// "sign_undefine()" function
-void f_sign_undefine(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_sign_undefine(argvars, rettv, &fptr);
-}
-
-/// Unplace a sign from dict
-static int sign_unplace_from_dict(typval_T *group_tv, dict_T *dict)
-{
-  return rs_sign_unplace_from_dict(group_tv, dict);
-}
-
-/// "sign_unplace()" function
-void f_sign_unplace(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_sign_unplace(argvars, rettv, &fptr);
-}
-
-/// "sign_unplacelist()" function
-void f_sign_unplacelist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_sign_unplacelist(argvars, rettv, &fptr);
-}
 
 // =============================================================================
 // Accessor functions for Rust sign crate
@@ -644,7 +307,7 @@ int nvim_sign_define_by_name_impl(const char *name, const char *icon, const char
         sh->cursorline_hl_id = (*sp)->sn_cul_hl;
         if (!did_redraw) {
           FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-            if (buf_has_signs(wp->w_buffer)) {
+            if (rs_sign_buffer_has_signs(wp->w_buffer)) {
               redraw_buf_later(wp->w_buffer, UPD_NOT_VALID);
             }
           }
@@ -690,9 +353,9 @@ int nvim_sign_place_impl(uint32_t *id, char *group, char *name, buf_T *buf, line
   prio = rs_sign_effective_priority(prio == -1 && sp->sn_priority != -1 ? sp->sn_priority : prio);
 
   if (lnum > 0) {
-    buf_set_sign(buf, id, group, prio, lnum, sp);
+    rs_buf_set_sign(buf, id, group, prio, lnum, sp);
   } else {
-    lnum = buf_mod_sign(buf, id, group, prio, sp);
+    lnum = rs_buf_mod_sign(buf, id, group, prio, sp);
   }
   if (lnum <= 0) {
     semsg(_("E885: Not possible to change sign %s"), name);
@@ -705,16 +368,16 @@ int nvim_sign_place_impl(uint32_t *id, char *group, char *name, buf_T *buf, line
 /// Unplace sign(s) from a single buffer — composite accessor.
 int nvim_sign_unplace_inner_impl(buf_T *buf, int id, char *group, linenr_T atlnum)
 {
-  if (!buf_has_signs(buf)) {
+  if (!rs_sign_buffer_has_signs(buf)) {
     return FAIL;
   }
 
   if (id == 0 || atlnum > 0 || (group != NULL && *group == '*')) {
-    if (!buf_delete_signs(buf, group, id, atlnum)) {
+    if (!rs_buf_delete_signs(buf, group, id, atlnum)) {
       return FAIL;
     }
   } else {
-    int64_t ns = group_get_ns(group);
+    int64_t ns = rs_group_get_ns(group, nvim_namespace_lookup_fn);
     if (ns < 0 || !extmark_del_id(buf, (uint32_t)ns, (uint32_t)id)) {
       return FAIL;
     }
@@ -743,7 +406,7 @@ int nvim_sign_unplace_impl(buf_T *buf, int id, char *group, linenr_T atlnum)
 /// Returns lnum on success, -1 on failure. Error messages stay in C.
 linenr_T nvim_sign_jump_impl(int id, char *group, buf_T *buf)
 {
-  linenr_T lnum = buf_findsign(buf, id, group);
+  linenr_T lnum = rs_buf_findsign(buf, id, group);
 
   if (lnum <= 0) {
     semsg(_("E157: Invalid sign ID: %" PRId32), id);
@@ -853,13 +516,13 @@ void nvim_sign_list_placed_impl(buf_T *rbuf, const char *group)
   char namebuf[MSG_BUF_LEN];
   char groupbuf[MSG_BUF_LEN];
   buf_T *buf = rbuf ? rbuf : firstbuf;
-  int64_t ns = group_get_ns(group);
+  int64_t ns = rs_group_get_ns(group, nvim_namespace_lookup_fn);
 
   msg_puts_title(_("\n--- Signs ---"));
   msg_putchar('\n');
 
   while (buf != NULL && !got_int) {
-    if (buf_has_signs(buf)) {
+    if (rs_sign_buffer_has_signs(buf)) {
       vim_snprintf(lbuf, MSG_BUF_LEN, _("Signs for %s:"), buf->b_fname);
       msg_puts_hl(lbuf, HLF_D, false);
       msg_putchar('\n');
@@ -889,7 +552,7 @@ void nvim_sign_list_placed_impl(buf_T *rbuf, const char *group)
 
           DecorSignHighlight *sh = decor_find_sign(mt_decor(mark));
           if (sh->sign_name != NULL) {
-            vim_snprintf(namebuf, MSG_BUF_LEN, _("  name=%s"), sign_get_name(sh));
+            vim_snprintf(namebuf, MSG_BUF_LEN, _("  name=%s"), rs_sign_get_display_name(sh));
           }
           if (mark.ns != 0) {
             vim_snprintf(groupbuf, MSG_BUF_LEN, _("  group=%s"), describe_ns((int)mark.ns, ""));
@@ -923,7 +586,7 @@ void nvim_sign_list_defined_impl(sign_T *sp)
   if (sp->sn_text[0]) {
     msg_puts(" text=");
     char buf[SIGN_WIDTH * MAX_SCHAR_SIZE];
-    describe_sign_text(buf, sp->sn_text);
+    rs_describe_sign_text(buf, SIGN_WIDTH * MAX_SCHAR_SIZE, sp->sn_text);
     msg_outtrans(buf, 0, false);
   }
   if (sp->sn_priority > 0) {
@@ -998,7 +661,7 @@ void nvim_sign_define_cmd_impl(char *name, char *cmdline)
     *cmdline++ = NUL;
   }
 
-  sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio);
+  rs_sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio);
 }
 
 /// ":sign place" command — composite accessor.
@@ -1008,7 +671,7 @@ void nvim_sign_place_cmd_impl(buf_T *buf, linenr_T lnum, char *name, int id, cha
     if (lnum >= 0 || name != NULL || (group != NULL && *group == NUL)) {
       emsg(_(e_invarg));
     } else {
-      sign_list_placed(buf, group);
+      rs_sign_list_placed(buf, group);
     }
   } else {
     if (name == NULL || buf == NULL || (group != NULL && *group == NUL)) {
@@ -1016,7 +679,7 @@ void nvim_sign_place_cmd_impl(buf_T *buf, linenr_T lnum, char *name, int id, cha
       return;
     }
     uint32_t uid = (uint32_t)id;
-    sign_place(&uid, group, name, buf, lnum, prio);
+    rs_sign_place(&uid, group, name, buf, lnum, prio);
   }
 }
 
@@ -1033,7 +696,7 @@ void nvim_sign_unplace_cmd_impl(buf_T *buf, linenr_T lnum, const char *name, int
     buf = curwin->w_buffer;
   }
 
-  if (!sign_unplace(buf, MAX(0, id), group, lnum) && lnum > 0) {
+  if (!rs_sign_unplace(buf, MAX(0, id), group, lnum) && lnum > 0) {
     emsg(_("E159: Missing sign number"));
   }
 }
@@ -1051,7 +714,7 @@ void nvim_sign_jump_cmd_impl(buf_T *buf, linenr_T lnum, const char *name, int id
     return;
   }
 
-  sign_jump(id, group, buf);
+  rs_sign_jump(id, group, buf);
 }
 
 /// Parse command line arguments — composite accessor.
@@ -1148,7 +811,10 @@ void nvim_ex_sign_impl(exarg_T *eap)
 
   // Parse the subcommand.
   char *p = skiptowhite(arg);
-  int idx = sign_cmd_idx(arg, p);
+  char save_p = *p;
+  *p = NUL;
+  int idx = rs_sign_cmd_idx(arg);
+  *p = save_p;
   if (idx == SIGNCMD_LAST) {
     semsg(_("E160: Unknown sign command: %s"), arg);
     return;
@@ -1161,7 +827,7 @@ void nvim_ex_sign_impl(exarg_T *eap)
       // ":sign list": list all defined signs
       sign_T *sp;
       map_foreach_value(&sign_map, sp, {
-        sign_list_defined(sp);
+        rs_sign_list_defined(sp);
       });
     } else if (*arg == NUL) {
       emsg(_("E156: Missing sign name"));
@@ -1177,13 +843,15 @@ void nvim_ex_sign_impl(exarg_T *eap)
       }
 
       if (idx == SIGNCMD_DEFINE) {
-        sign_define_cmd(arg, p);
+        nvim_sign_define_cmd_impl(arg, p);
       } else if (idx == SIGNCMD_LIST) {
         // ":sign list {name}"
-        sign_list_by_name(arg);
+        rs_sign_list_by_name(arg);
       } else {
         // ":sign undefine {name}"
-        sign_undefine_by_name(arg);
+        if (rs_sign_undefine_by_name(arg) == FAIL) {
+          semsg(_("E155: Unknown sign: %s"), arg);
+        }
       }
 
       return;
@@ -1197,16 +865,16 @@ void nvim_ex_sign_impl(exarg_T *eap)
     buf_T *buf = NULL;
 
     // Parse command line arguments
-    if (parse_sign_cmd_args(idx, arg, &name, &id, &group, &prio, &buf, &lnum) == FAIL) {
+    if (nvim_parse_sign_cmd_args_impl(idx, arg, &name, &id, &group, &prio, &buf, &lnum) == FAIL) {
       return;
     }
 
     if (idx == SIGNCMD_PLACE) {
-      sign_place_cmd(buf, lnum, name, id, group, prio);
+      nvim_sign_place_cmd_impl(buf, lnum, name, id, group, prio);
     } else if (idx == SIGNCMD_UNPLACE) {
-      sign_unplace_cmd(buf, lnum, name, id, group);
+      nvim_sign_unplace_cmd_impl(buf, lnum, name, id, group);
     } else if (idx == SIGNCMD_JUMP) {
-      sign_jump_cmd(buf, lnum, name, id, group);
+      nvim_sign_jump_cmd_impl(buf, lnum, name, id, group);
     }
   }
 }
@@ -1348,7 +1016,10 @@ void nvim_set_context_in_sign_cmd_impl(expand_T *xp, char *arg)
     return;
   }
 
-  int cmd_idx = sign_cmd_idx(arg, end_subcmd);
+  char save_end = *end_subcmd;
+  *end_subcmd = NUL;
+  int cmd_idx = rs_sign_cmd_idx(arg);
+  *end_subcmd = save_end;
   char *begin_subcmd_args = skipwhite(end_subcmd);
 
   // Loop until reaching last argument.
@@ -1444,7 +1115,7 @@ dict_T *nvim_sign_get_info_dict_impl(sign_T *sp)
   }
   if (sp->sn_text[0]) {
     char buf[SIGN_WIDTH * MAX_SCHAR_SIZE];
-    describe_sign_text(buf, sp->sn_text);
+    rs_describe_sign_text(buf, SIGN_WIDTH * MAX_SCHAR_SIZE, sp->sn_text);
     tv_dict_add_str(d, S_LEN("text"), buf);
   }
   if (sp->sn_priority > 0) {
@@ -1468,7 +1139,7 @@ dict_T *nvim_sign_get_placed_info_dict_impl(MTKey *mark)
 
   DecorSignHighlight *sh = decor_find_sign(mt_decor(*mark));
 
-  tv_dict_add_str(d, S_LEN("name"), sign_get_name(sh));
+  tv_dict_add_str(d, S_LEN("name"), rs_sign_get_display_name(sh));
   tv_dict_add_nr(d,  S_LEN("id"), (int)mark->id);
   tv_dict_add_str(d, S_LEN("group"), describe_ns((int)mark->ns, ""));
   tv_dict_add_nr(d,  S_LEN("lnum"), mark->pos.row + 1);
@@ -1506,8 +1177,8 @@ void nvim_sign_get_placed_in_buf_impl(buf_T *buf, linenr_T lnum, int sign_id, co
   list_T *l = tv_list_alloc(kListLenMayKnow);
   tv_dict_add_list(d, S_LEN("signs"), l);
 
-  int64_t ns = group_get_ns(group);
-  if (!buf_has_signs(buf) || ns < 0) {
+  int64_t ns = rs_group_get_ns(group, nvim_namespace_lookup_fn);
+  if (!rs_sign_buffer_has_signs(buf) || ns < 0) {
     return;
   }
 
@@ -1550,7 +1221,7 @@ void nvim_sign_get_placed_impl(buf_T *buf, linenr_T lnum, int id, const char *gr
     nvim_sign_get_placed_in_buf_impl(buf, lnum, id, group, retlist);
   } else {
     FOR_ALL_BUFFERS(cbuf) {
-      if (buf_has_signs(cbuf)) {
+      if (rs_sign_buffer_has_signs(cbuf)) {
         nvim_sign_get_placed_in_buf_impl(cbuf, 0, id, group, retlist);
       }
     }
@@ -1585,7 +1256,7 @@ int nvim_sign_define_from_dict_impl(char *name, dict_T *dict)
     prio = (int)tv_dict_get_number_def(dict, "priority", -1);
   }
 
-  return sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) - 1;
+  return rs_sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) - 1;
 }
 
 /// Define multiple signs — composite accessor.
@@ -1693,7 +1364,7 @@ int nvim_sign_place_from_dict_impl(typval_T *id_tv, typval_T *group_tv, typval_T
   }
 
   uint32_t uid = (uint32_t)id;
-  if (sign_place(&uid, group, name, buf, lnum, prio) == OK) {
+  if (rs_sign_place(&uid, group, name, buf, lnum, prio) == OK) {
     return (int)uid;
   }
 
@@ -1728,7 +1399,7 @@ int nvim_sign_unplace_from_dict_impl(typval_T *group_tv, dict_T *dict)
     }
   }
 
-  return sign_unplace(buf, id, group, 0) - 1;
+  return rs_sign_unplace(buf, id, group, 0) - 1;
 }
 
 /// Undefine multiple signs — composite accessor.
@@ -1737,7 +1408,7 @@ void nvim_sign_undefine_multiple_impl(list_T *l, list_T *retlist)
   TV_LIST_ITER_CONST(l, li, {
     int retval = -1;
     char *name = (char *)tv_get_string_chk(TV_LIST_ITEM_TV(li));
-    if (name != NULL && (sign_undefine_by_name(name) == OK)) {
+    if (name != NULL && (rs_sign_undefine_by_name(name) == OK)) {
       retval = 0;
     }
     tv_list_append_number(retlist, retval);
@@ -1749,7 +1420,7 @@ void nvim_f_sign_define_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *f
 {
   if (argvars[0].v_type == VAR_LIST && argvars[1].v_type == VAR_UNKNOWN) {
     tv_list_alloc_ret(rettv, kListLenMayKnow);
-    sign_define_multiple(argvars[0].vval.v_list, rettv->vval.v_list);
+    nvim_sign_define_multiple_impl(argvars[0].vval.v_list, rettv->vval.v_list);
     return;
   }
 
@@ -1765,7 +1436,7 @@ void nvim_f_sign_define_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *f
   }
 
   dict_T *d = argvars[1].v_type == VAR_DICT ? argvars[1].vval.v_dict : NULL;
-  rettv->vval.v_number = sign_define_from_dict(name, d);
+  rettv->vval.v_number = nvim_sign_define_from_dict_impl(name, d);
 }
 
 /// f_sign_getdefined — composite accessor.
@@ -1776,12 +1447,12 @@ void nvim_f_sign_getdefined_impl(typval_T *argvars, typval_T *rettv, EvalFuncDat
   if (argvars[0].v_type == VAR_UNKNOWN) {
     sign_T *sp;
     map_foreach_value(&sign_map, sp, {
-      tv_list_append_dict(rettv->vval.v_list, sign_get_info_dict(sp));
+      tv_list_append_dict(rettv->vval.v_list, nvim_sign_get_info_dict_impl(sp));
     });
   } else {
     sign_T *sp = pmap_get(cstr_t)(&sign_map, tv_get_string(&argvars[0]));
     if (sp != NULL) {
-      tv_list_append_dict(rettv->vval.v_list, sign_get_info_dict(sp));
+      tv_list_append_dict(rettv->vval.v_list, nvim_sign_get_info_dict_impl(sp));
     }
   }
 }
@@ -1833,7 +1504,7 @@ void nvim_f_sign_getplaced_impl(typval_T *argvars, typval_T *rettv, EvalFuncData
     }
   }
 
-  sign_get_placed(buf, lnum, sign_id, group, rettv->vval.v_list);
+  nvim_sign_get_placed_impl(buf, lnum, sign_id, group, rettv->vval.v_list);
 }
 
 /// f_sign_jump — composite accessor.
@@ -1864,7 +1535,7 @@ void nvim_f_sign_jump_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fpt
     return;
   }
 
-  rettv->vval.v_number = sign_jump(id, group, buf);
+  rettv->vval.v_number = nvim_sign_jump_impl(id, group, buf);
 }
 
 /// f_sign_place — composite accessor.
@@ -1881,8 +1552,8 @@ void nvim_f_sign_place_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *fp
     dict = argvars[4].vval.v_dict;
   }
 
-  rettv->vval.v_number = sign_place_from_dict(&argvars[0], &argvars[1],
-                                              &argvars[2], &argvars[3], dict);
+  rettv->vval.v_number = nvim_sign_place_from_dict_impl(&argvars[0], &argvars[1],
+                                                       &argvars[2], &argvars[3], dict);
 }
 
 /// f_sign_placelist — composite accessor.
@@ -1898,7 +1569,8 @@ void nvim_f_sign_placelist_impl(typval_T *argvars, typval_T *rettv, EvalFuncData
   TV_LIST_ITER_CONST(argvars[0].vval.v_list, li, {
     int sign_id = -1;
     if (TV_LIST_ITEM_TV(li)->v_type == VAR_DICT) {
-      sign_id = sign_place_from_dict(NULL, NULL, NULL, NULL, TV_LIST_ITEM_TV(li)->vval.v_dict);
+      sign_id = nvim_sign_place_from_dict_impl(NULL, NULL, NULL, NULL,
+                                              TV_LIST_ITEM_TV(li)->vval.v_dict);
     } else {
       emsg(_(e_dictreq));
     }
@@ -1911,14 +1583,14 @@ void nvim_f_sign_undefine_impl(typval_T *argvars, typval_T *rettv, EvalFuncData 
 {
   if (argvars[0].v_type == VAR_LIST && argvars[1].v_type == VAR_UNKNOWN) {
     tv_list_alloc_ret(rettv, kListLenMayKnow);
-    sign_undefine_multiple(argvars[0].vval.v_list, rettv->vval.v_list);
+    nvim_sign_undefine_multiple_impl(argvars[0].vval.v_list, rettv->vval.v_list);
     return;
   }
 
   rettv->vval.v_number = -1;
 
   if (argvars[0].v_type == VAR_UNKNOWN) {
-    free_signs();
+    nvim_sign_free_all_impl();
     rettv->vval.v_number = 0;
   } else {
     const char *name = tv_get_string_chk(&argvars[0]);
@@ -1926,7 +1598,7 @@ void nvim_f_sign_undefine_impl(typval_T *argvars, typval_T *rettv, EvalFuncData 
       return;
     }
 
-    if (sign_undefine_by_name(name) == OK) {
+    if (rs_sign_undefine_by_name(name) == OK) {
       rettv->vval.v_number = 0;
     }
   }
@@ -1948,7 +1620,7 @@ void nvim_f_sign_unplace_impl(typval_T *argvars, typval_T *rettv, EvalFuncData *
     dict = argvars[1].vval.v_dict;
   }
 
-  rettv->vval.v_number = sign_unplace_from_dict(&argvars[0], dict);
+  rettv->vval.v_number = nvim_sign_unplace_from_dict_impl(&argvars[0], dict);
 }
 
 /// f_sign_unplacelist — composite accessor.
@@ -1964,7 +1636,7 @@ void nvim_f_sign_unplacelist_impl(typval_T *argvars, typval_T *rettv, EvalFuncDa
   TV_LIST_ITER_CONST(argvars[0].vval.v_list, li, {
     int retval = -1;
     if (TV_LIST_ITEM_TV(li)->v_type == VAR_DICT) {
-      retval = sign_unplace_from_dict(NULL, TV_LIST_ITEM_TV(li)->vval.v_dict);
+      retval = nvim_sign_unplace_from_dict_impl(NULL, TV_LIST_ITEM_TV(li)->vval.v_dict);
     } else {
       emsg(_(e_dictreq));
     }

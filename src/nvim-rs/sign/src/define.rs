@@ -525,11 +525,31 @@ pub unsafe extern "C" fn rs_sign_undefine_by_name(name: *const c_char) -> c_int 
     nvim_sign_undefine_by_name_impl(name)
 }
 
+/// Undefine a sign by name with E155 error message on failure.
+///
+/// This replaces `sign_undefine_by_name()` in sign.c.
+///
+/// # Safety
+/// `name` must be a valid null-terminated C string.
+#[unsafe(export_name = "sign_undefine_by_name")]
+pub unsafe extern "C" fn rs_sign_undefine_by_name_wrapper(name: *const c_char) -> c_int {
+    extern "C" {
+        fn semsg(s: *const c_char, ...);
+    }
+    let result = nvim_sign_undefine_by_name_impl(name);
+    if result == 0 {
+        // FAIL — emit E155
+        static E155_FMT: &[u8] = b"E155: Unknown sign: %s\0";
+        semsg(E155_FMT.as_ptr().cast(), name);
+    }
+    result
+}
+
 /// Free all sign definitions.
 ///
 /// # Safety
 /// Must be called during cleanup only.
-#[no_mangle]
+#[unsafe(export_name = "free_signs")]
 pub unsafe extern "C" fn rs_free_signs() {
     nvim_sign_free_all_impl();
 }

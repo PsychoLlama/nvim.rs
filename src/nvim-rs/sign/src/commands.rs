@@ -498,7 +498,7 @@ pub extern "C" fn rs_sign_list_format(
 /// # Safety
 ///
 /// `name` and `cmdline` must be valid, writable C strings.
-#[no_mangle]
+#[unsafe(export_name = "sign_define_cmd")]
 pub unsafe extern "C" fn rs_sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
     nvim_sign_define_cmd_impl(name, cmdline);
 }
@@ -508,7 +508,7 @@ pub unsafe extern "C" fn rs_sign_define_cmd(name: *mut c_char, cmdline: *mut c_c
 /// # Safety
 ///
 /// All pointer arguments must be valid or null.
-#[no_mangle]
+#[unsafe(export_name = "sign_place_cmd")]
 pub unsafe extern "C" fn rs_sign_place_cmd(
     buf: SignBufHandle,
     lnum: LinenrT,
@@ -525,7 +525,7 @@ pub unsafe extern "C" fn rs_sign_place_cmd(
 /// # Safety
 ///
 /// All pointer arguments must be valid or null.
-#[no_mangle]
+#[unsafe(export_name = "sign_unplace_cmd")]
 pub unsafe extern "C" fn rs_sign_unplace_cmd(
     buf: SignBufHandle,
     lnum: LinenrT,
@@ -541,7 +541,7 @@ pub unsafe extern "C" fn rs_sign_unplace_cmd(
 /// # Safety
 ///
 /// All pointer arguments must be valid or null.
-#[no_mangle]
+#[unsafe(export_name = "sign_jump_cmd")]
 pub unsafe extern "C" fn rs_sign_jump_cmd(
     buf: SignBufHandle,
     lnum: LinenrT,
@@ -557,7 +557,7 @@ pub unsafe extern "C" fn rs_sign_jump_cmd(
 /// # Safety
 ///
 /// All pointer arguments must be valid.
-#[no_mangle]
+#[unsafe(export_name = "parse_sign_cmd_args")]
 pub unsafe extern "C" fn rs_parse_sign_cmd_args(
     cmd: c_int,
     arg: *mut c_char,
@@ -576,7 +576,7 @@ pub unsafe extern "C" fn rs_parse_sign_cmd_args(
 /// # Safety
 ///
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "ex_sign")]
 pub unsafe extern "C" fn rs_ex_sign(eap: *mut c_void) {
     if eap.is_null() {
         return;
@@ -593,7 +593,7 @@ pub unsafe extern "C" fn rs_ex_sign(eap: *mut c_void) {
 /// # Safety
 ///
 /// `xp` must be a valid expand_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "get_sign_name")]
 pub unsafe extern "C" fn rs_get_sign_name(xp: *mut c_void, idx: c_int) -> *mut c_char {
     nvim_get_sign_name_impl(xp, idx)
 }
@@ -604,7 +604,7 @@ pub unsafe extern "C" fn rs_get_sign_name(xp: *mut c_void, idx: c_int) -> *mut c
 ///
 /// `xp` must be a valid expand_T pointer.
 /// `arg` must be a valid, writable C string.
-#[no_mangle]
+#[unsafe(export_name = "set_context_in_sign_cmd")]
 pub unsafe extern "C" fn rs_set_context_in_sign_cmd(xp: *mut c_void, arg: *mut c_char) {
     if xp.is_null() || arg.is_null() {
         return;
