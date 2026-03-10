@@ -119,7 +119,7 @@ unsafe fn insert_at_head(buf: BufHandle, new_hash: c_int, local: bool, mp: Mapbl
 ///
 /// # Safety
 /// `buf` must be a valid buffer handle.
-#[no_mangle]
+#[export_name = "map_clear_mode"]
 pub unsafe extern "C" fn rs_map_clear_mode(buf: BufHandle, mode: c_int, local: c_int, abbr: c_int) {
     let is_local = local != 0;
     let is_abbr = abbr != 0;

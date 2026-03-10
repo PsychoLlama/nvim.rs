@@ -15,6 +15,23 @@
 
 #include "mapping.h.generated.h"
 
+// Declarations for functions migrated to Rust (via #[export_name]).
+// These were previously auto-generated from mapping.c definitions.
+// NOTE: bool parameters are declared as int to match Rust c_int ABI.
+
+void map_mode_to_chars(int mode, char *buf);
+int do_map(int maptype, char *arg, int mode, int is_abbrev);
+void map_clear_mode(buf_T *buf, int mode, int local, int abbr);
+int map_to_exists(const char *str, const char *modechars, int abbr);
+int map_to_exists_mode(const char *rhs, int mode, int abbr);
+char *set_context_in_map_cmd(expand_T *xp, char *cmd, char *arg, int forceit, int isabbrev,
+                             int isunmap, int cmdidx);
+int ExpandMappings(char *pat, regmatch_T *regmatch, int *numMatches, char ***matches);
+char *check_map(char *keys, int mode, int exact, int ign_mod, int abbr, mapblock_T **mp_ptr,
+                int *local_ptr, int *rhs_lua);
+int langmap_adjust_mb(int c);
+void langmap_init(void);
+
 /// Used for the first argument of do_map()
 enum {
   MAPTYPE_MAP       = 0,

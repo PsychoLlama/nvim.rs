@@ -660,7 +660,7 @@ unsafe fn process_matching_entries(
 ///
 /// # Safety
 /// `arg` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[export_name = "do_map"]
 pub unsafe extern "C" fn rs_do_map(
     maptype: c_int,
     arg: *mut c_char,

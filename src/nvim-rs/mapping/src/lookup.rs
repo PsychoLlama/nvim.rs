@@ -92,7 +92,7 @@ const fn is_special(c: c_int) -> bool {
 ///
 /// # Safety
 /// All pointer parameters must be valid. `keys` must be NUL-terminated.
-#[no_mangle]
+#[export_name = "check_map"]
 pub unsafe extern "C" fn rs_check_map(
     keys: *mut c_char,
     mode: c_int,
@@ -180,7 +180,7 @@ pub unsafe extern "C" fn rs_check_map(
 ///
 /// # Safety
 /// `str` and `modechars` must be valid NUL-terminated C strings.
-#[no_mangle]
+#[export_name = "map_to_exists"]
 pub unsafe extern "C" fn rs_map_to_exists_str(
     str: *const c_char,
     modechars: *const c_char,

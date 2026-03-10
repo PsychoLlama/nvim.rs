@@ -190,7 +190,7 @@ pub extern "C" fn rs_map_hash(mode: c_int, c1: c_int) -> c_int {
 ///
 /// # Safety
 /// The buffer must be at least 7 bytes long.
-#[no_mangle]
+#[export_name = "map_mode_to_chars"]
 pub unsafe extern "C" fn rs_map_mode_to_chars(mode: c_int, buf: *mut c_char) {
     if buf.is_null() {
         return;
@@ -694,7 +694,7 @@ unsafe fn c_strstr(haystack: *const c_char, needle: *const c_char) -> bool {
 ///
 /// # Safety
 /// `rhs` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[export_name = "map_to_exists_mode"]
 pub unsafe extern "C" fn rs_map_to_exists_mode(
     rhs: *const c_char,
     mode: c_int,

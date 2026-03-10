@@ -82,7 +82,7 @@ fn langmap_set_entry(from: c_int, to: c_int) {
 ///
 /// # Safety
 /// Accesses the global `LANGMAP_ENTRIES` vector (single-threaded).
-#[no_mangle]
+#[export_name = "langmap_adjust_mb"]
 pub unsafe extern "C" fn rs_langmap_adjust_mb(c: c_int) -> c_int {
     let entries = &LANGMAP_ENTRIES;
 
@@ -99,7 +99,7 @@ pub unsafe extern "C" fn rs_langmap_adjust_mb(c: c_int) -> c_int {
 /// # Safety
 /// Accesses the C global `langmap_mapchar[]` via accessors and the
 /// Rust global `LANGMAP_ENTRIES`.
-#[no_mangle]
+#[export_name = "langmap_init"]
 pub unsafe extern "C" fn rs_langmap_init() {
     // Initialize ASCII identity mapping
     for i in 0..256 {

@@ -96,7 +96,7 @@ extern "C" {
 /// # Safety
 /// `xp`, `cmd`, and `arg` must be valid pointers. `cmd` and `arg` must be
 /// NUL-terminated C strings.
-#[no_mangle]
+#[export_name = "set_context_in_map_cmd"]
 pub unsafe extern "C" fn rs_set_context_in_map_cmd(
     xp: *mut c_char,
     cmd: *mut c_char,
@@ -190,7 +190,7 @@ static MODIFIER_KEYWORDS: [&[u8]; 7] = [
 /// # Safety
 /// All pointer parameters must be valid. `pat` must be NUL-terminated.
 /// `regmatch` must be a valid `regmatch_T*` (passed opaquely).
-#[no_mangle]
+#[export_name = "ExpandMappings"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_expand_mappings(
     pat: *mut c_char,

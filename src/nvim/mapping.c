@@ -60,23 +60,10 @@
 #include "nvim/vim_defs.h"
 
 // Rust FFI declarations
-extern int rs_map_to_exists_mode(const char *rhs, int mode, int abbr);
-extern int rs_get_map_mode_string(const char *mode_string, int abbr);
-extern void rs_map_mode_to_chars(int mode, char *buf);
-extern int rs_langmap_adjust_mb(int c);
-extern void rs_langmap_init(void);
 extern int rs_langmap_parse(const char *langmap_str, char *errbuf, size_t errbuflen);
-extern int rs_get_map_mode(char **cmdp, int forceit);
-extern char *rs_check_map(char *keys, int mode, int exact, int ign_mod, int abbr,
-                          mapblock_T **mp_ptr, int *local_ptr, int *rhs_lua);
-extern int rs_map_to_exists_str(const char *str, const char *modechars, int abbr);
-extern char *rs_translate_mapping(const char *str_in, const char *cpo_val);
-extern void rs_map_clear_mode(buf_T *buf, int mode, int local, int abbr);
 extern void rs_do_mapclear(char *cmdp, char *arg, int forceit, int abbr);
-extern char *rs_set_context_in_map_cmd(void *xp, char *cmd, char *arg,
-                                        int forceit, int isabbrev, int isunmap, int cmdidx);
-extern int rs_expand_mappings(char *pat, void *regmatch,
-                               int *numMatches, char ***matches);
+extern int rs_get_map_mode(char **cmdp, int forceit);
+extern int rs_get_map_mode_string(const char *mode_string, int abbr);
 extern int rs_makemap_should_skip(mapblock_T *mp);
 extern int rs_makemap_needs_cpo(mapblock_T *mp);
 extern int rs_get_maptype(int cmdchar);
@@ -160,7 +147,6 @@ extern void rs_set_maparg_rhs(const char *orig_rhs, size_t orig_rhs_len,
                                LuaRef rhs_lua, int sid, const char *cpo_val,
                                MapArguments *mapargs);
 extern int rs_buf_do_map(int maptype, MapArguments *args, int mode, int is_abbrev, buf_T *buf);
-extern int rs_do_map(int maptype, char *arg, int mode, int is_abbrev);
 
 #define MAP_ARGUMENTS_INIT { false, false, false, false, false, false, false, false, \
                              { 0 }, 0, { 0 }, 0, NULL, 0, LUA_NOREF, false, NULL, 0, NULL }
@@ -210,14 +196,6 @@ static void mapblock_free(mapblock_T **mpp)
   xfree(mp);
 }
 
-/// put characters to represent the map mode in a string buffer
-///
-/// @param[out] buf must be at least 7 bytes (including NUL)
-void map_mode_to_chars(int mode, char *buf)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_map_mode_to_chars(mode, buf);
-}
 
 /// @param local  true for buffer-local map
 static void showmap(mapblock_T *mp, bool local)
@@ -287,32 +265,6 @@ static void showmap(mapblock_T *mp, bool local)
   msg_clr_eos();
 }
 
-// Argument parsing — now implemented in Rust (src/nvim-rs/mapping/src/args.rs).
-// These thin C wrappers delegate to the Rust implementations.
-
-/// Replace termcodes in the given LHS and RHS and store the results into mapargs.
-static bool set_maparg_lhs_rhs(const char *const orig_lhs, const size_t orig_lhs_len,
-                               const char *const orig_rhs, const size_t orig_rhs_len,
-                               const LuaRef rhs_lua, const char *const cpo_val,
-                               MapArguments *const mapargs)
-{
-  return rs_set_maparg_lhs_rhs(orig_lhs, orig_lhs_len, orig_rhs, orig_rhs_len,
-                               rhs_lua, cpo_val, mapargs) != 0;
-}
-
-/// @see set_maparg_lhs_rhs
-static void set_maparg_rhs(const char *const orig_rhs, const size_t orig_rhs_len,
-                           const LuaRef rhs_lua, const scid_T sid, const char *const cpo_val,
-                           MapArguments *const mapargs)
-{
-  rs_set_maparg_rhs(orig_rhs, orig_rhs_len, rhs_lua, sid, cpo_val, mapargs);
-}
-
-/// Parse a string of |:map-arguments| into a MapArguments struct.
-static int str_to_mapargs(const char *strargs, bool is_unmap, MapArguments *mapargs)
-{
-  return rs_str_to_mapargs(strargs, is_unmap ? 1 : 0, mapargs);
-}
 
 /// @param args  "rhs", "rhs_lua", "orig_rhs", "expr", "silent", "nowait",
 ///              "replace_keycodes" and "desc" fields are used.
@@ -367,176 +319,13 @@ static mapblock_T *map_add(buf_T *buf, mapblock_T **map_table, mapblock_T **abbr
   return mp;
 }
 
-/// Sets or removes a mapping or abbreviation in buffer `buf`.
-///
-/// @param maptype    @see do_map
-/// @param args  Fully parsed and "preprocessed" arguments for the
-///              (un)map/abbrev command. Termcodes should have already been
-///              replaced; whitespace, `<` and `>` signs, etc. in {lhs} and
-///              {rhs} are assumed to be literal components of the mapping.
-/// @param mode       @see do_map
-/// @param is_abbrev  @see do_map
-/// @param buf        Target Buffer
-static int buf_do_map(int maptype, MapArguments *args, int mode, bool is_abbrev, buf_T *buf)
-{
-  return rs_buf_do_map(maptype, args, mode, is_abbrev ? 1 : 0, buf);
-}
 
-/// Set or remove a mapping or an abbreviation in the current buffer, OR
-/// display (matching) mappings/abbreviations.
-///
-/// ```vim
-/// map[!]                          " show all key mappings
-/// map[!] {lhs}                    " show key mapping for {lhs}
-/// map[!] {lhs} {rhs}              " set key mapping for {lhs} to {rhs}
-/// noremap[!] {lhs} {rhs}          " same, but no remapping for {rhs}
-/// unmap[!] {lhs}                  " remove key mapping for {lhs}
-/// abbr                            " show all abbreviations
-/// abbr {lhs}                      " show abbreviations for {lhs}
-/// abbr {lhs} {rhs}                " set abbreviation for {lhs} to {rhs}
-/// noreabbr {lhs} {rhs}            " same, but no remapping for {rhs}
-/// unabbr {lhs}                    " remove abbreviation for {lhs}
-///
-/// for :map   mode is MODE_NORMAL | MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING
-/// for :map!  mode is MODE_INSERT | MODE_CMDLINE
-/// for :cmap  mode is MODE_CMDLINE
-/// for :imap  mode is MODE_INSERT
-/// for :lmap  mode is MODE_LANGMAP
-/// for :nmap  mode is MODE_NORMAL
-/// for :vmap  mode is MODE_VISUAL | MODE_SELECT
-/// for :xmap  mode is MODE_VISUAL
-/// for :smap  mode is MODE_SELECT
-/// for :omap  mode is MODE_OP_PENDING
-/// for :tmap  mode is MODE_TERMINAL
-///
-/// for :abbr  mode is MODE_INSERT | MODE_CMDLINE
-/// for :iabbr mode is MODE_INSERT
-/// for :cabbr mode is MODE_CMDLINE
-/// ```
-///
-/// @param maptype  MAPTYPE_MAP for |:map| or |:abbr|
-///                 MAPTYPE_UNMAP for |:unmap| or |:unabbr|
-///                 MAPTYPE_NOREMAP for |:noremap| or |:noreabbr|
-///                 MAPTYPE_UNMAP_LHS is like MAPTYPE_UNMAP, but doesn't try to match
-///                 with {rhs} if there is no match with {lhs}.
-/// @param arg      C-string containing the arguments of the map/abbrev
-///                 command, i.e. everything except the initial `:[X][nore]map`.
-///                 - Cannot be a read-only string; it will be modified.
-/// @param mode   Bitflags representing the mode in which to set the mapping.
-///               See @ref get_map_mode.
-/// @param is_abbrev  True if setting an abbreviation, false otherwise.
-///
-/// @return 0 on success. On failure, will return one of the following:
-///         - 1 for invalid arguments
-///         - 2 for no match
-///         - 4 for out of mem (deprecated, WON'T HAPPEN)
-///         - 5 for entry not unique
-///         - 6 for buflocal unique entry conflicts with global entry
-///
-int do_map(int maptype, char *arg, int mode, bool is_abbrev)
-{
-  return rs_do_map(maptype, arg, mode, is_abbrev ? 1 : 0);
-}
 
-/// Get the mapping mode from the command name.
-/// Now implemented in Rust (rs_get_map_mode).
-static int get_map_mode(char **cmdp, bool forceit)
-{
-  return rs_get_map_mode(cmdp, forceit ? 1 : 0);
-}
-
-/// Clear all mappings (":mapclear") or abbreviations (":abclear").
-/// "abbr" should be false for mappings, true for abbreviations.
-/// This function used to be called map_clear().
-static void do_mapclear(char *cmdp, char *arg, int forceit, int abbr)
-{
-  rs_do_mapclear(cmdp, arg, forceit, abbr);
-}
-
-/// Clear all mappings in "mode".
-void map_clear_mode(buf_T *buf, int mode, bool local, bool abbr)
-{
-  rs_map_clear_mode(buf, mode, local ? 1 : 0, abbr ? 1 : 0);
-}
-
-/// Check if a map exists that has given string in the rhs
-///
-/// Also checks mappings local to the current buffer.
-///
-/// @param[in]  str  String which mapping must have in the rhs. Termcap codes
-///                  are recognized in this argument.
-/// @param[in]  modechars  Mode(s) in which mappings are checked.
-/// @param[in]  abbr  true if checking abbreviations in place of mappings.
-///
-/// @return true if there is at least one mapping with given parameters.
-bool map_to_exists(const char *const str, const char *const modechars, const bool abbr)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_map_to_exists_str(str, modechars, abbr ? 1 : 0) != 0;
-}
-
-/// Check if a map exists that has given string in the rhs
-///
-/// Also checks mappings local to the current buffer.
-///
-/// @param[in]  rhs  String which mapping must have in the rhs. Termcap codes
-///                  are recognized in this argument.
-/// @param[in]  mode  Mode(s) in which mappings are checked.
-/// @param[in]  abbr  true if checking abbreviations in place of mappings.
-///
-/// @return true if there is at least one mapping with given parameters.
-bool map_to_exists_mode(const char *const rhs, const int mode, const bool abbr)
-{
-  // Delegate to Rust implementation
-  return rs_map_to_exists_mode(rhs, mode, abbr ? 1 : 0) != 0;
-}
 
 /// Used below when expanding mapping/abbreviation names.
 static int expand_mapmodes = 0;
 static bool expand_isabbrev = false;
 static bool expand_buffer = false;
-
-/// Translate an internal mapping/abbreviation representation into the
-/// corresponding external one recognized by :map/:abbrev commands.
-///
-/// This function is called when expanding mappings/abbreviations on the
-/// command-line.
-///
-/// It uses a growarray to build the translation string since the latter can be
-/// wider than the original description. The caller has to free the string
-/// afterwards.
-///
-/// @param[in] cpo_val  See param docs for @ref replace_termcodes.
-///
-/// @return  NULL when there is a problem.
-static char *translate_mapping(const char *const str_in, const char *const cpo_val)
-{
-  return rs_translate_mapping(str_in, cpo_val);
-}
-
-/// Work out what to complete when doing command line completion of mapping
-/// or abbreviation names.
-///
-/// @param forceit  true if '!' given
-/// @param isabbrev  true if abbreviation
-/// @param isunmap  true if unmap/unabbrev command
-char *set_context_in_map_cmd(expand_T *xp, char *cmd, char *arg, bool forceit, bool isabbrev,
-                             bool isunmap, cmdidx_T cmdidx)
-{
-  return rs_set_context_in_map_cmd(xp, cmd, arg,
-                                   forceit ? 1 : 0,
-                                   isabbrev ? 1 : 0,
-                                   isunmap ? 1 : 0,
-                                   (int)cmdidx);
-}
-
-/// Find all mapping/abbreviation names that match regexp "regmatch".
-/// For command line expansion of ":[un]map" and ":[un]abbrev" in all modes.
-/// @return OK if matches found, FAIL otherwise.
-int ExpandMappings(char *pat, regmatch_T *regmatch, int *numMatches, char ***matches)
-{
-  return rs_expand_mappings(pat, regmatch, numMatches, matches);
-}
 
 // Check for an abbreviation.
 // Cursor is at ptr[col].
@@ -946,20 +735,6 @@ int put_escstr(FILE *fd, const char *strstart, int what)
   return OK;
 }
 
-/// Check the string "keys" against the lhs of all mappings.
-/// Return pointer to rhs of mapping (mapblock->m_str).
-/// NULL when no mapping found.
-///
-/// @param exact  require exact match
-/// @param ign_mod  ignore preceding modifier
-/// @param abbr  do abbreviations
-/// @param mp_ptr  return: pointer to mapblock or NULL
-/// @param local_ptr  return: buffer-local mapping or NULL
-char *check_map(char *keys, int mode, int exact, int ign_mod, int abbr, mapblock_T **mp_ptr,
-                int *local_ptr, int *rhs_lua)
-{
-  return rs_check_map(keys, mode, exact, ign_mod, abbr, mp_ptr, local_ptr, rhs_lua);
-}
 
 /// "hasmapto()" function
 void f_hasmapto(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -1080,7 +855,7 @@ static void get_maparg(typval_T *argvars, typval_T *rettv, int exact)
   char *alt_keys_buf = NULL;
   bool did_simplify = false;
   const int flags = REPTERM_FROM_PART | REPTERM_DO_LT;
-  const int mode = get_map_mode((char **)&which, 0);
+  const int mode = rs_get_map_mode((char **)&which, 0);
 
   char *keys_simplified = replace_termcodes(keys, strlen(keys), &keys_buf, 0,
                                             flags, &did_simplify, p_cpo);
@@ -1126,14 +901,6 @@ static void get_maparg(typval_T *argvars, typval_T *rettv, int exact)
   xfree(alt_keys_buf);
 }
 
-/// Get the mapping mode from the mode string.
-/// It may contain multiple characters, eg "nox", or "!", or ' '
-/// Return 0 if there is an error.
-static int get_map_mode_string(const char *const mode_string, const bool abbr)
-{
-  // Delegate to Rust implementation
-  return rs_get_map_mode_string(mode_string, abbr ? 1 : 0);
-}
 
 /// "mapset()" function
 void f_mapset(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -1165,7 +932,7 @@ void f_mapset(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     }
     d = argvars[2].vval.v_dict;
   }
-  const int mode = get_map_mode_string(which, is_abbr);
+  const int mode = rs_get_map_mode_string(which, is_abbr);
   if (mode == 0) {
     semsg(_(e_illegal_map_mode_string_str), which);
     return;
@@ -1209,16 +976,16 @@ void f_mapset(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   bool buffer = tv_dict_get_number(d, "buffer") != 0;
   // mode from the dict is not used
 
-  set_maparg_rhs(orig_rhs, strlen(orig_rhs), rhs_lua, sid, p_cpo, &args);
+  rs_set_maparg_rhs(orig_rhs, strlen(orig_rhs), rhs_lua, sid, p_cpo, &args);
 
   mapblock_T **map_table = buffer ? curbuf->b_maphash : maphash;
   mapblock_T **abbr_table = buffer ? &curbuf->b_first_abbr : &first_abbr;
 
   // Delete any existing mapping for this lhs and mode.
   MapArguments unmap_args = MAP_ARGUMENTS_INIT;
-  set_maparg_lhs_rhs(lhs, strlen(lhs), "", 0, LUA_NOREF, p_cpo, &unmap_args);
+  rs_set_maparg_lhs_rhs(lhs, strlen(lhs), "", 0, LUA_NOREF, p_cpo, &unmap_args);
   unmap_args.buffer = buffer;
-  buf_do_map(MAPTYPE_UNMAP_LHS, &unmap_args, mode, is_abbr, curbuf);
+  rs_buf_do_map(MAPTYPE_UNMAP_LHS, &unmap_args, mode, is_abbr ? 1 : 0, curbuf);
   xfree(unmap_args.rhs);
   xfree(unmap_args.orig_rhs);
 
@@ -1307,32 +1074,19 @@ void f_mapcheck(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// @param lhs  C-string containing the lhs of the mapping
 /// @param rhs  C-string containing the rhs of the mapping
 /// @param mode  Bitflags representing the mode in which to set the mapping.
-///              See @ref get_map_mode.
+///              See @ref rs_get_map_mode.
 /// @param buffer  If true, make a buffer-local mapping for curbuf
 void add_map(char *lhs, char *rhs, int mode, bool buffer)
 {
   MapArguments args = MAP_ARGUMENTS_INIT;
-  set_maparg_lhs_rhs(lhs, strlen(lhs), rhs, strlen(rhs), LUA_NOREF, p_cpo, &args);
+  rs_set_maparg_lhs_rhs(lhs, strlen(lhs), rhs, strlen(rhs), LUA_NOREF, p_cpo, &args);
   args.buffer = buffer;
 
-  buf_do_map(MAPTYPE_NOREMAP, &args, mode, false, curbuf);
+  rs_buf_do_map(MAPTYPE_NOREMAP, &args, mode, 0, curbuf);
   xfree(args.rhs);
   xfree(args.orig_rhs);
 }
 
-// Langmap subsystem — now implemented in Rust (src/nvim-rs/mapping/src/langmap.rs).
-// These thin C wrappers delegate to the Rust implementations.
-
-/// Apply 'langmap' to multi-byte character "c" and return the result.
-int langmap_adjust_mb(int c)
-{
-  return rs_langmap_adjust_mb(c);
-}
-
-void langmap_init(void)
-{
-  rs_langmap_init();
-}
 
 /// Called when langmap option is set; the language map can be
 /// changed at any time!
@@ -1348,11 +1102,11 @@ const char *did_set_langmap(optset_T *args)
 static void do_exmap(exarg_T *eap, int isabbrev)
 {
   char *cmdp = eap->cmd;
-  int mode = get_map_mode(&cmdp, eap->forceit || isabbrev);
+  int mode = rs_get_map_mode(&cmdp, eap->forceit || isabbrev);
 
   int maptype = rs_get_maptype(*cmdp);
   MapArguments parsed_args;
-  int result = str_to_mapargs(eap->arg, maptype == MAPTYPE_UNMAP, &parsed_args);
+  int result = rs_str_to_mapargs(eap->arg, maptype == MAPTYPE_UNMAP ? 1 : 0, &parsed_args);
   switch (result) {
   case 0:
     break;
@@ -1361,10 +1115,10 @@ static void do_exmap(exarg_T *eap, int isabbrev)
     goto free_rhs;
     break;
   default:
-    assert(false && "Unknown return code from str_to_mapargs!");
+    assert(false && "Unknown return code from rs_str_to_mapargs!");
     goto free_rhs;
   }
-  switch (buf_do_map(maptype, &parsed_args, mode, isabbrev, curbuf)) {
+  switch (rs_buf_do_map(maptype, &parsed_args, mode, isabbrev, curbuf)) {
   case 1:
     emsg(_(e_invarg));
     break;
@@ -1413,13 +1167,13 @@ void ex_unmap(exarg_T *eap)
 /// ":mapclear" and friends.
 void ex_mapclear(exarg_T *eap)
 {
-  do_mapclear(eap->cmd, eap->arg, eap->forceit, false);
+  rs_do_mapclear(eap->cmd, eap->arg, eap->forceit, false);
 }
 
 /// ":abclear" and friends.
 void ex_abclear(exarg_T *eap)
 {
-  do_mapclear(eap->cmd, eap->arg, true, true);
+  rs_do_mapclear(eap->cmd, eap->arg, true, true);
 }
 
 /// Set, tweak, or remove a mapping in a mode. Acts as the implementation for
@@ -1469,9 +1223,9 @@ void modify_keymap(uint64_t channel_id, Buffer buffer, bool is_unmap, String mod
     goto fail_and_free;
   }
 
-  if (!set_maparg_lhs_rhs(lhs.data, lhs.size,
-                          rhs.data, rhs.size, lua_funcref,
-                          p_cpo, &parsed_args)) {
+  if (!rs_set_maparg_lhs_rhs(lhs.data, lhs.size,
+                             rhs.data, rhs.size, lua_funcref,
+                             p_cpo, &parsed_args)) {
     api_set_error(err, kErrorTypeValidation,  "LHS exceeds maximum map length: %s", lhs.data);
     goto fail_and_free;
   }
@@ -1484,7 +1238,7 @@ void modify_keymap(uint64_t channel_id, Buffer buffer, bool is_unmap, String mod
   char *p = mode.size > 0 ? mode.data : "m";
   bool forceit = *p == '!';
   // integer value of the mapping mode, to be passed to do_map()
-  int mode_val = get_map_mode(&p, forceit);
+  int mode_val = rs_get_map_mode(&p, forceit);
   if (forceit) {
     assert(p == mode.data);
     p++;
@@ -1523,7 +1277,7 @@ void modify_keymap(uint64_t channel_id, Buffer buffer, bool is_unmap, String mod
     goto fail_and_free;
   }
 
-  // buf_do_map() reads noremap/unmap as its own argument.
+  // rs_buf_do_map() reads noremap/unmap as its own argument.
   int maptype_val = MAPTYPE_MAP;
   if (is_unmap) {
     maptype_val = MAPTYPE_UNMAP;
@@ -1531,7 +1285,7 @@ void modify_keymap(uint64_t channel_id, Buffer buffer, bool is_unmap, String mod
     maptype_val = MAPTYPE_NOREMAP;
   }
 
-  switch (buf_do_map(maptype_val, &parsed_args, mode_val, is_abbrev, target_buf)) {
+  switch (rs_buf_do_map(maptype_val, &parsed_args, mode_val, is_abbrev ? 1 : 0, target_buf)) {
   case 0:
     break;
   case 1:
@@ -1578,7 +1332,7 @@ ArrayOf(Dict) keymap_array(String mode, buf_T *buf, Arena *arena)
   char *p = mode.size > 0 ? mode.data : "m";
   bool forceit = *p == '!';
   // Convert the string mode to the integer mode stored within each mapblock.
-  int int_mode = get_map_mode(&p, forceit);
+  int int_mode = rs_get_map_mode(&p, forceit);
   if (forceit) {
     assert(p == mode.data);
     p++;
