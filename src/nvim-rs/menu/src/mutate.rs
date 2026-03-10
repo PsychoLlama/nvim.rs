@@ -10,9 +10,7 @@ use crate::classify::{rs_menu_is_menubar, rs_menu_is_separator};
 use crate::handle::VimMenuHandle;
 use crate::menu_modes::{MENU_ALL_MODES, MENU_INDEX_TIP, MENU_MODES, MENU_TIP_MODE};
 use crate::path::{rs_menu_name_equal, rs_menu_name_skip, rs_menu_text, MenuTextResult};
-
-/// Opaque handle to a `vimmenu_T**` pointer.
-type VimMenuPtrHandle = *mut c_void;
+use crate::vim_menu::VimMenu;
 
 // C return codes
 const OK: c_int = 1;
@@ -51,42 +49,16 @@ extern "C" {
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_xmalloc(size: usize) -> *mut c_void;
     fn strlen(s: *const c_char) -> usize;
-
-    // Menu field setters
-    fn nvim_menu_set_modes(m: VimMenuHandle, v: c_int);
-    fn nvim_menu_set_enabled(m: VimMenuHandle, v: c_int);
-    fn nvim_menu_set_name(m: VimMenuHandle, v: *mut c_char);
-    fn nvim_menu_set_dname(m: VimMenuHandle, v: *mut c_char);
-    fn nvim_menu_set_en_name(m: VimMenuHandle, v: *mut c_char);
-    fn nvim_menu_set_en_dname(m: VimMenuHandle, v: *mut c_char);
-    fn nvim_menu_set_priority(m: VimMenuHandle, v: c_int);
-    fn nvim_menu_set_mnemonic(m: VimMenuHandle, v: c_int);
-    fn nvim_menu_set_actext(m: VimMenuHandle, v: *mut c_char);
-    fn nvim_menu_set_next(m: VimMenuHandle, v: VimMenuHandle);
-    fn nvim_menu_set_parent(m: VimMenuHandle, v: VimMenuHandle);
-    fn nvim_menu_set_string(m: VimMenuHandle, idx: c_int, v: *mut c_char);
-    fn nvim_menu_set_noremap(m: VimMenuHandle, idx: c_int, v: c_int);
-    fn nvim_menu_set_silent(m: VimMenuHandle, idx: c_int, v: bool);
-
-    // Alloc/free
-    fn nvim_menu_alloc() -> VimMenuHandle;
-    fn nvim_menu_free_struct(m: VimMenuHandle);
-
-    // Pointer-to-pointer operations
-    fn nvim_menu_root_menu_ptr() -> VimMenuPtrHandle;
-    fn nvim_menu_children_ptr(m: VimMenuHandle) -> VimMenuPtrHandle;
-    fn nvim_menu_next_ptr(m: VimMenuHandle) -> VimMenuPtrHandle;
-    fn nvim_menu_ptr_read(p: VimMenuPtrHandle) -> VimMenuHandle;
-    fn nvim_menu_ptr_write(p: VimMenuPtrHandle, v: VimMenuHandle);
-
-    // Array field getters
-    fn nvim_menu_get_string(menu: VimMenuHandle, idx: c_int) -> *const c_char;
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
 
     // Translation
     fn nvim_menutrans_lookup(name: *mut c_char, len: c_int) -> *mut c_char;
 
     // Global state
     fn nvim_menu_get_sys_menu() -> bool;
+
+    // Root menu global (still in C)
+    static mut root_menu: *mut VimMenu;
 }
 
 /// Free the menu->strings[idx], checking if the string is shared.
@@ -104,16 +76,16 @@ pub unsafe extern "C" fn rs_free_menu_string(menu: VimMenuHandle, idx: c_int) {
         return;
     }
 
-    let target = unsafe { nvim_menu_get_string(menu, idx) };
+    let m = unsafe { &mut *menu.as_ptr() };
+    let target = m.strings[idx as usize];
     if target.is_null() {
         return;
     }
 
     // Count how many slots point to the same string
     let mut count = 0;
-    for i in 0..MENU_MODES {
-        let s = unsafe { nvim_menu_get_string(menu, i) };
-        if s == target {
+    for i in 0..MENU_MODES as usize {
+        if m.strings[i] == target {
             count += 1;
         }
     }
@@ -121,7 +93,7 @@ pub unsafe extern "C" fn rs_free_menu_string(menu: VimMenuHandle, idx: c_int) {
     if count == 1 {
         unsafe { xfree(target as *mut c_void) };
     }
-    unsafe { nvim_menu_set_string(menu, idx, std::ptr::null_mut()) };
+    m.strings[idx as usize] = std::ptr::null_mut();
 }
 
 /// Free the given menu structure and remove it from the linked list.
@@ -131,31 +103,34 @@ pub unsafe extern "C" fn rs_free_menu_string(menu: VimMenuHandle, idx: c_int) {
 /// # Safety
 /// `menup` must be a valid `vimmenu_T**` pointer.
 #[no_mangle]
-pub unsafe extern "C" fn rs_free_menu(menup: VimMenuPtrHandle) {
-    let menu = unsafe { nvim_menu_ptr_read(menup) };
-    if menu.is_null() {
+pub unsafe extern "C" fn rs_free_menu(menup: *mut *mut VimMenu) {
+    let menu_ptr = unsafe { *menup };
+    if menu_ptr.is_null() {
         return;
     }
 
+    let menu = unsafe { &mut *menu_ptr };
+
     // Unlink from list: *menup = menu->next
-    unsafe { nvim_menu_ptr_write(menup, menu.next()) };
+    unsafe { *menup = menu.next };
 
     // Free all string fields
     unsafe {
-        xfree(menu.name() as *mut c_void);
-        xfree(menu.dname() as *mut c_void);
-        xfree(menu.en_name() as *mut c_void);
-        xfree(menu.en_dname() as *mut c_void);
-        xfree(menu.actext() as *mut c_void);
+        xfree(menu.name as *mut c_void);
+        xfree(menu.dname as *mut c_void);
+        xfree(menu.en_name as *mut c_void);
+        xfree(menu.en_dname as *mut c_void);
+        xfree(menu.actext as *mut c_void);
     }
 
     // Free per-mode strings
+    let handle = VimMenuHandle::from_ptr(menu_ptr);
     for i in 0..MENU_MODES {
-        unsafe { rs_free_menu_string(menu, i) };
+        unsafe { rs_free_menu_string(handle, i) };
     }
 
     // Free the struct itself
-    unsafe { nvim_menu_free_struct(menu) };
+    unsafe { xfree(menu_ptr as *mut c_void) };
 }
 
 /// Recursively enable or disable menus by name.
@@ -193,9 +168,9 @@ pub unsafe extern "C" fn rs_menu_enable_recurse(
                     return FAIL;
                 }
             } else if enable != 0 {
-                unsafe { nvim_menu_set_enabled(cur, cur.enabled() | modes) };
+                unsafe { (*cur.as_ptr()).enabled |= modes };
             } else {
-                unsafe { nvim_menu_set_enabled(cur, cur.enabled() & !modes) };
+                unsafe { (*cur.as_ptr()).enabled &= !modes };
             }
 
             // When name is empty, we are doing all menu items for the given
@@ -226,12 +201,12 @@ pub unsafe extern "C" fn rs_menu_enable_recurse(
 /// `menup` must be a valid `vimmenu_T**` pointer. `name` is modified by `menu_name_skip`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_remove_menu(
-    menup: VimMenuPtrHandle,
+    menup: *mut *mut VimMenu,
     name: *mut c_char,
     modes: c_int,
     silent: bool,
 ) -> c_int {
-    if unsafe { nvim_menu_ptr_read(menup) }.is_null() {
+    if unsafe { (*menup).is_null() } {
         return OK; // Got to bottom of hierarchy
     }
 
@@ -239,13 +214,15 @@ pub unsafe extern "C" fn rs_remove_menu(
     let p = unsafe { rs_menu_name_skip(name) };
 
     let mut cur_menup = menup;
-    let mut menu;
+    let mut menu_ptr;
 
     loop {
-        menu = unsafe { nvim_menu_ptr_read(cur_menup) };
-        if menu.is_null() {
+        menu_ptr = unsafe { *cur_menup };
+        if menu_ptr.is_null() {
             break;
         }
+
+        let menu = VimMenuHandle::from_ptr(menu_ptr);
 
         if unsafe { *name } == 0 || unsafe { rs_menu_name_equal(name, menu) } {
             if unsafe { *p } != 0 && menu.children().is_null() {
@@ -255,7 +232,7 @@ pub unsafe extern "C" fn rs_remove_menu(
                 return FAIL;
             }
             if (menu.modes() & modes) != 0 {
-                let children_ptr = unsafe { nvim_menu_children_ptr(menu) };
+                let children_ptr = unsafe { &mut (*menu_ptr).children as *mut *mut VimMenu };
                 if unsafe { rs_remove_menu(children_ptr, p, modes, silent) } == FAIL {
                     return FAIL;
                 }
@@ -271,22 +248,22 @@ pub unsafe extern "C" fn rs_remove_menu(
             }
 
             // Remove the menu item for the given mode[s]
-            unsafe { nvim_menu_set_modes(menu, menu.modes() & !modes) };
+            unsafe { (*menu_ptr).modes &= !modes };
             if (modes & MENU_TIP_MODE) != 0 {
                 unsafe { rs_free_menu_string(menu, MENU_INDEX_TIP) };
             }
             if (menu.modes() & MENU_ALL_MODES) == 0 {
                 unsafe { rs_free_menu(cur_menup) };
             } else {
-                cur_menup = unsafe { nvim_menu_next_ptr(menu) };
+                cur_menup = unsafe { &mut (*menu_ptr).next as *mut *mut VimMenu };
             }
         } else {
-            cur_menup = unsafe { nvim_menu_next_ptr(menu) };
+            cur_menup = unsafe { &mut (*menu_ptr).next as *mut *mut VimMenu };
         }
     }
 
     if unsafe { *name } != 0 {
-        if menu.is_null() {
+        if menu_ptr.is_null() {
             if !silent {
                 unsafe { semsg(nvim_gettext(E_NOMENU), name) };
             }
@@ -294,10 +271,11 @@ pub unsafe extern "C" fn rs_remove_menu(
         }
 
         // Recalculate modes for menu based on the new updated children
-        unsafe { nvim_menu_set_modes(menu, menu.modes() & !modes) };
+        let menu = VimMenuHandle::from_ptr(menu_ptr);
+        unsafe { (*menu_ptr).modes &= !modes };
         let mut child = menu.children();
         while !child.is_null() {
-            unsafe { nvim_menu_set_modes(menu, menu.modes() | child.modes()) };
+            unsafe { (*menu_ptr).modes |= child.modes() };
             child = child.next();
         }
         if (modes & MENU_TIP_MODE) != 0 {
@@ -305,7 +283,7 @@ pub unsafe extern "C" fn rs_remove_menu(
         }
         if (menu.modes() & MENU_ALL_MODES) == 0 {
             // The menu item is no longer valid in ANY mode, so delete it
-            unsafe { nvim_menu_ptr_write(cur_menup, menu) };
+            unsafe { *cur_menup = menu_ptr };
             unsafe { rs_free_menu(cur_menup) };
         }
     }
@@ -328,7 +306,7 @@ pub unsafe extern "C" fn rs_add_menu_path(
 ) -> c_int {
     let mut modes = menuarg.modes();
     let mut menu = VimMenuHandle::null();
-    let mut lower_pri: VimMenuPtrHandle;
+    let mut lower_pri: *mut *mut VimMenu;
     let mut dname: *mut c_char;
     let mut pri_idx: usize = 0;
     let mut old_modes: c_int = 0;
@@ -336,7 +314,7 @@ pub unsafe extern "C" fn rs_add_menu_path(
 
     // Make a copy so we can stuff around with it, since it could be const
     let path_name = unsafe { xstrdup(menu_path) };
-    let root_menu_ptr = unsafe { nvim_menu_root_menu_ptr() };
+    let root_menu_ptr = &raw mut root_menu;
     let mut menup = root_menu_ptr;
     let mut parent = VimMenuHandle::null();
     let mut name = path_name;
@@ -367,7 +345,7 @@ pub unsafe extern "C" fn rs_add_menu_path(
 
         // See if it's already there
         lower_pri = menup;
-        menu = unsafe { nvim_menu_ptr_read(menup) };
+        menu = VimMenuHandle::from_ptr(unsafe { *menup });
         while !menu.is_null() {
             if unsafe { rs_menu_name_equal(name, menu) }
                 || unsafe { rs_menu_name_equal(dname, menu) }
@@ -400,7 +378,7 @@ pub unsafe extern "C" fn rs_add_menu_path(
                 }
                 break;
             }
-            menup = unsafe { nvim_menu_next_ptr(menu) };
+            menup = unsafe { &mut (*menu.as_ptr()).next as *mut *mut VimMenu };
 
             // Count menus, to find where this one needs to be inserted
             if (!parent.is_null() || unsafe { rs_menu_is_menubar(menu.name()) })
@@ -425,47 +403,48 @@ pub unsafe extern "C" fn rs_add_menu_path(
             }
 
             // Not already there, so let's add it
-            menu = unsafe { nvim_menu_alloc() };
+            let new_ptr = unsafe { xcalloc(1, std::mem::size_of::<VimMenu>()) } as *mut VimMenu;
+            menu = unsafe { VimMenuHandle::from_ptr(new_ptr) };
 
             unsafe {
-                nvim_menu_set_modes(menu, modes);
-                nvim_menu_set_enabled(menu, MENU_ALL_MODES);
-                nvim_menu_set_name(menu, xstrdup(name));
+                (*new_ptr).modes = modes;
+                (*new_ptr).enabled = MENU_ALL_MODES;
+                (*new_ptr).name = xstrdup(name);
             }
 
             // separate mnemonic and accelerator text from actual menu name
             let mt: MenuTextResult = unsafe { rs_menu_text(name) };
             unsafe {
-                nvim_menu_set_dname(menu, mt.text);
-                nvim_menu_set_mnemonic(menu, mt.mnemonic);
-                nvim_menu_set_actext(menu, mt.actext);
+                (*new_ptr).dname = mt.text;
+                (*new_ptr).mnemonic = mt.mnemonic;
+                (*new_ptr).actext = mt.actext;
             }
 
             if !en_name.is_null() {
                 unsafe {
-                    nvim_menu_set_en_name(menu, xstrdup(en_name));
+                    (*new_ptr).en_name = xstrdup(en_name);
                 }
                 let en_mt: MenuTextResult = unsafe { rs_menu_text(en_name) };
                 unsafe {
-                    nvim_menu_set_en_dname(menu, en_mt.text);
+                    (*new_ptr).en_dname = en_mt.text;
                     xfree(en_mt.actext as *mut c_void);
                 }
             } else {
                 unsafe {
-                    nvim_menu_set_en_name(menu, std::ptr::null_mut());
-                    nvim_menu_set_en_dname(menu, std::ptr::null_mut());
+                    (*new_ptr).en_name = std::ptr::null_mut();
+                    (*new_ptr).en_dname = std::ptr::null_mut();
                 }
             }
 
             unsafe {
-                nvim_menu_set_priority(menu, *pri_tab.add(pri_idx));
-                nvim_menu_set_parent(menu, parent);
+                (*new_ptr).priority = *pri_tab.add(pri_idx);
+                (*new_ptr).parent = parent.as_ptr();
             }
 
             // Add after menu that has lower priority
             unsafe {
-                nvim_menu_set_next(menu, nvim_menu_ptr_read(lower_pri));
-                nvim_menu_ptr_write(lower_pri, menu);
+                (*new_ptr).next = *lower_pri;
+                *lower_pri = new_ptr;
             }
 
             old_modes = 0;
@@ -475,12 +454,12 @@ pub unsafe extern "C" fn rs_add_menu_path(
             // If this menu option was previously only available in other
             // modes, then make sure it's available for this one now
             unsafe {
-                nvim_menu_set_modes(menu, menu.modes() | modes);
-                nvim_menu_set_enabled(menu, menu.enabled() | modes);
+                (*menu.as_ptr()).modes |= modes;
+                (*menu.as_ptr()).enabled |= modes;
             }
         }
 
-        menup = unsafe { nvim_menu_children_ptr(menu) };
+        menup = unsafe { &mut (*menu.as_ptr()).children as *mut *mut VimMenu };
         parent = menu;
         name = next_name;
         unsafe { xfree(dname as *mut c_void) };
@@ -561,25 +540,19 @@ pub unsafe extern "C" fn rs_add_menu_path(
                             *s.add(len + 2) = 0;
                         }
                     }
-                    unsafe { nvim_menu_set_string(menu, i, s as *mut c_char) };
+                    unsafe { (*menu.as_ptr()).strings[i as usize] = s as *mut c_char };
                 } else {
-                    unsafe { nvim_menu_set_string(menu, i, p) };
+                    unsafe { (*menu.as_ptr()).strings[i as usize] = p };
                 }
+                // menuarg->noremap[0] and menuarg->silent[0] directly
                 unsafe {
-                    // menuarg->noremap[0]
-                    nvim_menu_set_noremap(menu, i, nvim_menu_get_noremap_0(menuarg));
-                    // menuarg->silent[0]
-                    nvim_menu_set_silent(menu, i, nvim_menu_get_silent_0(menuarg));
+                    (*menu.as_ptr()).noremap[i as usize] = (*menuarg.as_ptr()).noremap[0];
+                    (*menu.as_ptr()).silent[i as usize] = (*menuarg.as_ptr()).silent[0];
                 }
             }
         }
     }
     OK
-}
-
-extern "C" {
-    fn nvim_menu_get_noremap_0(menuarg: VimMenuHandle) -> c_int;
-    fn nvim_menu_get_silent_0(menuarg: VimMenuHandle) -> bool;
 }
 
 /// Helper for add_menu_path error cleanup.
@@ -589,7 +562,7 @@ unsafe fn add_menu_path_erret(
     path_name: *mut c_char,
     dname: *mut c_char,
     mut parent: VimMenuHandle,
-    root_menu_ptr: VimMenuPtrHandle,
+    root_menu_ptr: *mut *mut VimMenu,
 ) -> c_int {
     unsafe {
         xfree(path_name as *mut c_void);
@@ -598,22 +571,22 @@ unsafe fn add_menu_path_erret(
 
     // Delete any empty submenu we added before discovering the error
     while !parent.is_null() && parent.children().is_null() {
-        let menup = if parent.parent().is_null() {
+        let menup: *mut *mut VimMenu = if parent.parent().is_null() {
             root_menu_ptr
         } else {
-            unsafe { nvim_menu_children_ptr(parent.parent()) }
+            unsafe { &mut (*parent.parent().as_ptr()).children as *mut *mut VimMenu }
         };
 
         // Walk the list to find parent
         let mut cur = menup;
         loop {
-            let m = unsafe { nvim_menu_ptr_read(cur) };
-            if m.is_null() || m == parent {
+            let m = unsafe { *cur };
+            if m.is_null() || m == parent.as_ptr() {
                 break;
             }
-            cur = unsafe { nvim_menu_next_ptr(m) };
+            cur = unsafe { &mut (*m).next as *mut *mut VimMenu };
         }
-        if unsafe { nvim_menu_ptr_read(cur) }.is_null() {
+        if unsafe { (*cur).is_null() } {
             // safety check
             break;
         }

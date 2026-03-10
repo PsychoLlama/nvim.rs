@@ -8,6 +8,7 @@ use std::ffi::{c_char, c_int, c_void, CStr};
 
 use crate::handle::VimMenuHandle;
 use crate::path::{rs_menu_name_equal, rs_menu_name_skip};
+use crate::vim_menu::VimMenu;
 
 /// Result of a menu search operation.
 #[repr(C)]
@@ -181,7 +182,7 @@ const E337_MENU_NOT_FOUND: *const c_char = c"E337: Menu not found - check menu n
 extern "C" {
     fn emsg(s: *const c_char) -> bool;
     fn semsg(s: *const c_char, ...) -> bool;
-    fn nvim_menu_get_root_menu() -> VimMenuHandle;
+    static mut root_menu: *mut VimMenu;
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut c_void);
     fn nvim_gettext(s: *const c_char) -> *const c_char;
@@ -260,7 +261,7 @@ pub unsafe extern "C" fn rs_menu_getbyname(name_arg: *const c_char) -> VimMenuHa
     }
 
     let saved_name = unsafe { xstrdup(name_arg) };
-    let mut menu = unsafe { nvim_menu_get_root_menu() };
+    let mut menu = VimMenuHandle::from_ptr(unsafe { root_menu });
     let mut name = saved_name;
     let mut gave_emsg = false;
 
@@ -315,7 +316,7 @@ pub unsafe extern "C" fn rs_menu_find(path_name: *const c_char) -> VimMenuHandle
         return VimMenuHandle::null();
     }
 
-    let mut menu = unsafe { nvim_menu_get_root_menu() };
+    let mut menu = VimMenuHandle::from_ptr(unsafe { root_menu });
     let saved_name = unsafe { xstrdup(path_name) };
     let mut name = saved_name;
 

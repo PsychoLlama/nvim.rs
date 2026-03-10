@@ -9,6 +9,7 @@ use std::ptr::{self, addr_of_mut};
 
 use crate::handle::VimMenuHandle;
 use crate::menu_modes::MENU_ALL_MODES;
+use crate::vim_menu::VimMenu;
 
 /// EXPAND_UNSUCCESSFUL from cmdexpand_defs.h
 const EXPAND_UNSUCCESSFUL: c_int = -2;
@@ -26,11 +27,11 @@ const CTRL_V: u8 = 0x16;
 const TBUFFER_LEN: usize = 256;
 
 extern "C" {
-    // expand_T field accessors
+    // expand_T field accessors (expand_T remains opaque for now)
     fn nvim_menu_xp_set_context(xp: *mut c_void, ctx: c_int);
     fn nvim_menu_xp_set_pattern(xp: *mut c_void, pattern: *mut c_char);
 
-    // Static variable accessors
+    // Static variable accessors (expand statics still in C, Phase 5 will move them)
     fn nvim_menu_get_expand_menu() -> VimMenuHandle;
     fn nvim_menu_set_expand_menu(menu: VimMenuHandle);
     fn nvim_menu_get_expand_modes() -> c_int;
@@ -38,8 +39,8 @@ extern "C" {
     fn nvim_menu_get_expand_emenu() -> c_int;
     fn nvim_menu_set_expand_emenu(v: c_int);
 
-    // Root menu
-    fn nvim_menu_get_root_menu() -> VimMenuHandle;
+    // Root menu global (in C)
+    static mut root_menu: *mut VimMenu;
 
     // Already-ported functions
     fn rs_menu_name_equal(name: *const c_char, menu: VimMenuHandle) -> bool;
@@ -146,7 +147,7 @@ pub unsafe extern "C" fn rs_set_context_in_menu_cmd(
             unsafe { nvim_menu_set_expand_modes(modes) };
         }
 
-        let mut menu = unsafe { nvim_menu_get_root_menu() };
+        let mut menu = VimMenuHandle::from_ptr(unsafe { root_menu });
         let mut path_name: *mut c_char = ptr::null_mut();
 
         if after_dot > after_dot_init {

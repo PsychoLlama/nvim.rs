@@ -8,6 +8,7 @@ use std::ffi::{c_char, c_int};
 use crate::handle::VimMenuHandle;
 use crate::hidden::rs_menu_is_hidden;
 use crate::menu_modes::MENU_MODES;
+use crate::vim_menu::VimMenu;
 
 /// Highlight group IDs (from highlight_defs.h).
 const HLF_D: c_int = 5; // directories in CTRL-D listing
@@ -18,11 +19,8 @@ const REMAP_NONE: c_int = -1;
 const REMAP_SCRIPT: c_int = -2;
 
 extern "C" {
-    fn nvim_menu_get_root_menu() -> VimMenuHandle;
     fn nvim_menu_get_got_int() -> c_int;
-    fn nvim_menu_get_string(menu: VimMenuHandle, idx: c_int) -> *const c_char;
-    fn nvim_menu_get_noremap(menu: VimMenuHandle, idx: c_int) -> c_int;
-    fn nvim_menu_get_silent(menu: VimMenuHandle, idx: c_int) -> bool;
+    static mut root_menu: *mut VimMenu;
 
     // Message output functions (already exist in C)
     fn msg_putchar(c: c_int);
@@ -66,7 +64,7 @@ pub unsafe extern "C" fn rs_show_menus(path_name: *mut c_char, modes: c_int) -> 
 
     if !path_name.is_null() && unsafe { *path_name } != 0 {
         // First, find the (sub)menu with the given name
-        let root = unsafe { nvim_menu_get_root_menu() };
+        let root = VimMenuHandle::from_ptr(unsafe { root_menu });
         menu = unsafe { rs_find_menu(root, path_name, modes) };
         if menu.is_null() {
             return FAIL;
@@ -112,6 +110,7 @@ pub unsafe extern "C" fn rs_show_menus_recursive(menu: VimMenuHandle, modes: c_i
 
     if !menu.is_null() && menu.children().is_null() {
         // Leaf menu: show mappings for each mode
+        let m = unsafe { &*menu.as_ptr() };
         for bit in 0..MENU_MODES {
             if (menu.modes() & modes & (1 << bit)) != 0 {
                 unsafe { msg_putchar(b'\n' as c_int) };
@@ -123,7 +122,7 @@ pub unsafe extern "C" fn rs_show_menus_recursive(menu: VimMenuHandle, modes: c_i
                 }
                 unsafe { msg_puts(MENU_MODE_CHARS[bit as usize]) };
 
-                let noremap = unsafe { nvim_menu_get_noremap(menu, bit) };
+                let noremap = m.noremap[bit as usize];
                 if noremap == REMAP_NONE {
                     unsafe { msg_putchar(b'*' as c_int) };
                 } else if noremap == REMAP_SCRIPT {
@@ -132,7 +131,7 @@ pub unsafe extern "C" fn rs_show_menus_recursive(menu: VimMenuHandle, modes: c_i
                     unsafe { msg_putchar(b' ' as c_int) };
                 }
 
-                if unsafe { nvim_menu_get_silent(menu, bit) } {
+                if m.silent[bit as usize] {
                     unsafe { msg_putchar(b's' as c_int) };
                 } else {
                     unsafe { msg_putchar(b' ' as c_int) };
@@ -145,7 +144,7 @@ pub unsafe extern "C" fn rs_show_menus_recursive(menu: VimMenuHandle, modes: c_i
                 }
                 unsafe { msg_puts(c" ".as_ptr()) };
 
-                let str_ptr = unsafe { nvim_menu_get_string(menu, bit) };
+                let str_ptr = m.strings[bit as usize];
                 if !str_ptr.is_null() && unsafe { *str_ptr } == 0 {
                     unsafe { msg_puts_hl(c"<Nop>".as_ptr(), HLF_8, false) };
                 } else if !str_ptr.is_null() {
@@ -158,7 +157,7 @@ pub unsafe extern "C" fn rs_show_menus_recursive(menu: VimMenuHandle, modes: c_i
         let start_menu;
         let actual_depth;
         if menu.is_null() {
-            start_menu = unsafe { nvim_menu_get_root_menu() };
+            start_menu = VimMenuHandle::from_ptr(unsafe { root_menu });
             actual_depth = depth - 1;
         } else {
             start_menu = menu.children();

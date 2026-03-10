@@ -1,27 +1,28 @@
-//! Opaque handle types for menu structures.
+//! Typed handle for the `vimmenu_T` struct.
 //!
-//! This module provides the `VimMenuHandle` type, which is an opaque pointer
-//! to a `vimmenu_T` structure in C. All field access is done through C
-//! accessor functions declared in this module.
+//! `VimMenuHandle` is a thin newtype over `*mut VimMenu` so that field
+//! access goes directly through the `#[repr(C)]` struct rather than
+//! bouncing through C accessor functions.
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int};
 
-/// Opaque handle to a Neovim menu (`vimmenu_T*`).
+use crate::vim_menu::VimMenu;
+
+/// Handle to a Neovim menu (`vimmenu_T*`).
 ///
-/// This is an opaque pointer type - Rust code should not attempt to
-/// dereference or inspect the contents. All field access is done
-/// through C accessor functions.
+/// This is a typed pointer – Rust code may dereference it directly
+/// because `VimMenu` is `#[repr(C)]` and mirrors `vimmenu_T` exactly.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct VimMenuHandle(*mut c_void);
+pub struct VimMenuHandle(*mut VimMenu);
 
 impl VimMenuHandle {
-    /// Create a new menu handle from a raw pointer.
+    /// Create a new menu handle from a raw `VimMenu` pointer.
     ///
     /// # Safety
     /// The pointer must be a valid `vimmenu_T*` or null.
     #[inline]
-    pub const unsafe fn from_ptr(ptr: *mut c_void) -> Self {
+    pub const unsafe fn from_ptr(ptr: *mut VimMenu) -> Self {
         Self(ptr)
     }
 
@@ -39,10 +40,10 @@ impl VimMenuHandle {
         Self(std::ptr::null_mut())
     }
 
-    /// Get the raw pointer.
+    /// Get the raw `VimMenu` pointer.
     #[inline]
     #[must_use]
-    pub const fn as_ptr(self) -> *mut c_void {
+    pub const fn as_ptr(self) -> *mut VimMenu {
         self.0
     }
 
@@ -54,7 +55,7 @@ impl VimMenuHandle {
     }
 
     // ========================================================================
-    // Field accessors using C functions
+    // Field accessors – direct field dereference via #[repr(C)] VimMenu
     // ========================================================================
 
     /// Get the menu's modes field.
@@ -63,7 +64,7 @@ impl VimMenuHandle {
         if self.is_null() {
             return 0;
         }
-        unsafe { nvim_menu_get_modes(self) }
+        unsafe { (*self.0).modes }
     }
 
     /// Get the menu's enabled field.
@@ -72,7 +73,7 @@ impl VimMenuHandle {
         if self.is_null() {
             return 0;
         }
-        unsafe { nvim_menu_get_enabled(self) }
+        unsafe { (*self.0).enabled }
     }
 
     /// Get the menu's name field.
@@ -81,7 +82,7 @@ impl VimMenuHandle {
         if self.is_null() {
             return std::ptr::null();
         }
-        unsafe { nvim_menu_get_name(self) }
+        unsafe { (*self.0).name }
     }
 
     /// Get the menu's dname (display name) field.
@@ -90,7 +91,7 @@ impl VimMenuHandle {
         if self.is_null() {
             return std::ptr::null();
         }
-        unsafe { nvim_menu_get_dname(self) }
+        unsafe { (*self.0).dname }
     }
 
     /// Get the menu's en_name (English name) field.
@@ -99,7 +100,7 @@ impl VimMenuHandle {
         if self.is_null() {
             return std::ptr::null();
         }
-        unsafe { nvim_menu_get_en_name(self) }
+        unsafe { (*self.0).en_name }
     }
 
     /// Get the menu's en_dname (English display name) field.
@@ -108,7 +109,7 @@ impl VimMenuHandle {
         if self.is_null() {
             return std::ptr::null();
         }
-        unsafe { nvim_menu_get_en_dname(self) }
+        unsafe { (*self.0).en_dname }
     }
 
     /// Get the menu's priority field.
@@ -117,34 +118,7 @@ impl VimMenuHandle {
         if self.is_null() {
             return 0;
         }
-        unsafe { nvim_menu_get_priority(self) }
-    }
-
-    /// Get the menu's children field.
-    #[inline]
-    pub fn children(self) -> VimMenuHandle {
-        if self.is_null() {
-            return VimMenuHandle::null();
-        }
-        unsafe { nvim_menu_get_children(self) }
-    }
-
-    /// Get the menu's parent field.
-    #[inline]
-    pub fn parent(self) -> VimMenuHandle {
-        if self.is_null() {
-            return VimMenuHandle::null();
-        }
-        unsafe { nvim_menu_get_parent(self) }
-    }
-
-    /// Get the menu's next sibling field.
-    #[inline]
-    pub fn next(self) -> VimMenuHandle {
-        if self.is_null() {
-            return VimMenuHandle::null();
-        }
-        unsafe { nvim_menu_get_next(self) }
+        unsafe { (*self.0).priority }
     }
 
     /// Get the menu's mnemonic field.
@@ -153,7 +127,7 @@ impl VimMenuHandle {
         if self.is_null() {
             return 0;
         }
-        unsafe { nvim_menu_get_mnemonic(self) }
+        unsafe { (*self.0).mnemonic }
     }
 
     /// Get the menu's actext (accelerator text) field.
@@ -162,50 +136,35 @@ impl VimMenuHandle {
         if self.is_null() {
             return std::ptr::null();
         }
-        unsafe { nvim_menu_get_actext(self) }
+        unsafe { (*self.0).actext }
     }
-}
 
-// ============================================================================
-// C accessor function declarations
-// ============================================================================
+    /// Get the menu's children field.
+    #[inline]
+    pub fn children(self) -> VimMenuHandle {
+        if self.is_null() {
+            return VimMenuHandle::null();
+        }
+        VimMenuHandle(unsafe { (*self.0).children })
+    }
 
-extern "C" {
-    /// Get the modes field from a menu.
-    fn nvim_menu_get_modes(menu: VimMenuHandle) -> c_int;
+    /// Get the menu's parent field.
+    #[inline]
+    pub fn parent(self) -> VimMenuHandle {
+        if self.is_null() {
+            return VimMenuHandle::null();
+        }
+        VimMenuHandle(unsafe { (*self.0).parent })
+    }
 
-    /// Get the enabled field from a menu.
-    fn nvim_menu_get_enabled(menu: VimMenuHandle) -> c_int;
-
-    /// Get the name field from a menu.
-    fn nvim_menu_get_name(menu: VimMenuHandle) -> *const c_char;
-
-    /// Get the dname (display name) field from a menu.
-    fn nvim_menu_get_dname(menu: VimMenuHandle) -> *const c_char;
-
-    /// Get the en_name (English name) field from a menu.
-    fn nvim_menu_get_en_name(menu: VimMenuHandle) -> *const c_char;
-
-    /// Get the en_dname (English display name) field from a menu.
-    fn nvim_menu_get_en_dname(menu: VimMenuHandle) -> *const c_char;
-
-    /// Get the priority field from a menu.
-    fn nvim_menu_get_priority(menu: VimMenuHandle) -> c_int;
-
-    /// Get the children field from a menu.
-    fn nvim_menu_get_children(menu: VimMenuHandle) -> VimMenuHandle;
-
-    /// Get the parent field from a menu.
-    fn nvim_menu_get_parent(menu: VimMenuHandle) -> VimMenuHandle;
-
-    /// Get the next sibling field from a menu.
-    fn nvim_menu_get_next(menu: VimMenuHandle) -> VimMenuHandle;
-
-    /// Get the mnemonic field from a menu.
-    fn nvim_menu_get_mnemonic(menu: VimMenuHandle) -> c_int;
-
-    /// Get the actext (accelerator text) field from a menu.
-    fn nvim_menu_get_actext(menu: VimMenuHandle) -> *const c_char;
+    /// Get the menu's next sibling field.
+    #[inline]
+    pub fn next(self) -> VimMenuHandle {
+        if self.is_null() {
+            return VimMenuHandle::null();
+        }
+        VimMenuHandle(unsafe { (*self.0).next })
+    }
 }
 
 #[cfg(test)]
@@ -219,16 +178,19 @@ mod tests {
         assert_eq!(handle.as_ptr(), std::ptr::null_mut());
     }
 
-    // Note: Accessor tests require linking with the C library,
-    // so they are tested via integration tests, not unit tests.
-    // The accessor methods have null checks and return safe defaults for null handles.
-
     #[test]
-    fn test_from_ptr() {
-        let dummy: c_int = 42;
-        let ptr = &dummy as *const c_int as *mut c_void;
-        let handle = unsafe { VimMenuHandle::from_ptr(ptr) };
-        assert!(!handle.is_null());
-        assert_eq!(handle.as_ptr(), ptr);
+    fn test_null_handle_field_defaults() {
+        let handle = VimMenuHandle::null();
+        assert_eq!(handle.modes(), 0);
+        assert_eq!(handle.enabled(), 0);
+        assert!(handle.name().is_null());
+        assert!(handle.dname().is_null());
+        assert!(handle.en_name().is_null());
+        assert!(handle.en_dname().is_null());
+        assert_eq!(handle.priority(), 0);
+        assert!(handle.actext().is_null());
+        assert!(handle.children().is_null());
+        assert!(handle.parent().is_null());
+        assert!(handle.next().is_null());
     }
 }

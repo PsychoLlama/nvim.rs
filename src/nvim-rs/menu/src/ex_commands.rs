@@ -19,11 +19,10 @@ use crate::menu_modes::{
 use crate::mutate::{rs_menu_enable_recurse, rs_remove_menu};
 use crate::path::rs_menu_translate_tab_and_shift;
 use crate::popup::rs_popup_mode_name;
+use crate::vim_menu::VimMenu;
 
 /// Opaque handle to `exarg_T*`.
 type ExArgHandle = *mut c_void;
-/// Opaque handle to `vimmenu_T**`.
-type VimMenuPtrHandle = *mut c_void;
 
 /// REMAP values.
 const REMAP_SCRIPT: c_int = -2;
@@ -50,7 +49,7 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
     fn strlen(s: *const c_char) -> usize;
 
-    // ExArg accessors
+    // ExArg accessors (exarg_T stays opaque for now)
     fn nvim_menu_eap_get_cmd(eap: ExArgHandle) -> *const c_char;
     fn nvim_menu_eap_get_arg(eap: ExArgHandle) -> *mut c_char;
     fn nvim_menu_eap_get_forceit(eap: ExArgHandle) -> bool;
@@ -76,32 +75,27 @@ extern "C" {
 
     // UI and autocmd
     fn ui_call_update_menu();
-    fn nvim_menu_apply_autocmds(event: c_int, pat: *const c_char, buf: *mut c_void) -> bool;
-    fn nvim_menu_pum_show_popupmenu(menu: VimMenuHandle);
+    fn apply_autocmds(
+        event: c_int,
+        pat: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
+    fn pum_show_popupmenu(menu: *mut VimMenu);
 
     // Execute menu (stays in C)
     fn execute_menu(eap: ExArgHandle, menu: VimMenuHandle, mode_idx: c_int);
 
-    // Menu tree access
-    fn nvim_menu_root_menu_ptr() -> VimMenuPtrHandle;
-    fn nvim_menu_ptr_read(p: VimMenuPtrHandle) -> VimMenuHandle;
+    // Root menu global (in C)
+    static mut root_menu: *mut VimMenu;
 
-    // Global state
-    fn nvim_menu_get_p_cpo() -> *const c_char;
+    // Global state - direct access
+    static p_cpo: *const c_char;
     fn nvim_menu_get_curbuf() -> *mut c_void;
 
     // Multibyte
-    fn nvim_menu_utfc_ptr2len(p: *const c_char) -> c_int;
-
-    /// Wrapper to call add_menu_path with a temporary menuarg.
-    fn nvim_menu_call_add_menu_path(
-        menu_path: *const c_char,
-        modes: c_int,
-        noremap: c_int,
-        silent: bool,
-        pri_tab: *const c_int,
-        call_data: *const c_char,
-    );
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
 }
 
 /// Helper: check if byte is ASCII whitespace.
@@ -176,7 +170,7 @@ pub unsafe extern "C" fn rs_ex_menu(eap: ExArgHandle) {
                 }
             }
             // MB_PTR_ADV
-            let len = unsafe { nvim_menu_utfc_ptr2len(arg) };
+            let len = unsafe { utfc_ptr2len(arg) };
             arg = unsafe { arg.add(len.max(1) as usize) };
         }
         if unsafe { *arg } != 0 {
@@ -260,7 +254,7 @@ pub unsafe extern "C" fn rs_ex_menu(eap: ExArgHandle) {
         return;
     }
 
-    let root_menu_ptr = unsafe { nvim_menu_root_menu_ptr() };
+    let root_menu_ptr = &raw mut root_menu;
 
     if enable != K_NONE {
         // Change sensitivity of the menu.
@@ -276,7 +270,7 @@ pub unsafe extern "C" fn rs_ex_menu(eap: ExArgHandle) {
                     let popup_p = unsafe { rs_popup_mode_name(path as *const c_char, mode_i) };
                     unsafe {
                         rs_menu_enable_recurse(
-                            nvim_menu_ptr_read(root_menu_ptr),
+                            VimMenuHandle::from_ptr(*root_menu_ptr),
                             popup_p,
                             MENU_ALL_MODES,
                             enable,
@@ -287,7 +281,7 @@ pub unsafe extern "C" fn rs_ex_menu(eap: ExArgHandle) {
             }
         }
         unsafe {
-            rs_menu_enable_recurse(nvim_menu_ptr_read(root_menu_ptr), path, modes, enable);
+            rs_menu_enable_recurse(VimMenuHandle::from_ptr(*root_menu_ptr), path, modes, enable);
         }
     } else if unmenu {
         // Delete menu(s).
@@ -331,22 +325,39 @@ pub unsafe extern "C" fn rs_ex_menu(eap: ExArgHandle) {
                     0,
                     REPTERM_DO_LT,
                     std::ptr::null_mut(),
-                    nvim_menu_get_p_cpo(),
+                    p_cpo,
                 )
             };
         }
 
-        // We pass a temporary menuarg struct via a C wrapper
+        // Build a temporary menuarg and call rs_add_menu_path directly
+        let mut menuarg = VimMenu {
+            modes,
+            enabled: 0,
+            name: std::ptr::null_mut(),
+            dname: std::ptr::null_mut(),
+            en_name: std::ptr::null_mut(),
+            en_dname: std::ptr::null_mut(),
+            mnemonic: 0,
+            actext: std::ptr::null_mut(),
+            priority: 0,
+            strings: [std::ptr::null_mut(); 8],
+            noremap: [
+                noremap, noremap, noremap, noremap, noremap, noremap, noremap, noremap,
+            ],
+            silent: [silent; 8],
+            children: std::ptr::null_mut(),
+            parent: std::ptr::null_mut(),
+            next: std::ptr::null_mut(),
+        };
         unsafe {
-            nvim_menu_call_add_menu_path(
+            crate::mutate::rs_add_menu_path(
                 menu_path,
-                modes,
-                noremap,
-                silent,
+                VimMenuHandle::from_ptr(&mut menuarg as *mut VimMenu),
                 pri_tab.as_ptr(),
                 actual_map_to,
-            );
-        }
+            )
+        };
 
         // For the PopUp menu, add a menu for each mode separately.
         if unsafe { rs_menu_is_popup(menu_path as *const c_char) } {
@@ -354,12 +365,27 @@ pub unsafe extern "C" fn rs_ex_menu(eap: ExArgHandle) {
                 if (modes & (1 << mode_i)) != 0 {
                     let popup_p = unsafe { rs_popup_mode_name(menu_path as *const c_char, mode_i) };
                     // Include all modes, to make ":amenu" work
+                    let mut popup_menuarg = VimMenu {
+                        modes,
+                        enabled: 0,
+                        name: std::ptr::null_mut(),
+                        dname: std::ptr::null_mut(),
+                        en_name: std::ptr::null_mut(),
+                        en_dname: std::ptr::null_mut(),
+                        mnemonic: 0,
+                        actext: std::ptr::null_mut(),
+                        priority: 0,
+                        strings: [std::ptr::null_mut(); 8],
+                        noremap: [noremap; 8],
+                        silent: [silent; 8],
+                        children: std::ptr::null_mut(),
+                        parent: std::ptr::null_mut(),
+                        next: std::ptr::null_mut(),
+                    };
                     unsafe {
-                        nvim_menu_call_add_menu_path(
+                        crate::mutate::rs_add_menu_path(
                             popup_p,
-                            modes,
-                            noremap,
-                            silent,
+                            VimMenuHandle::from_ptr(&mut popup_menuarg as *mut VimMenu),
                             pri_tab.as_ptr(),
                             actual_map_to,
                         );
@@ -432,16 +458,17 @@ pub unsafe extern "C" fn rs_show_popupmenu() {
     let mode_len = mode.len();
 
     unsafe {
-        nvim_menu_apply_autocmds(
+        apply_autocmds(
             EVENT_MENUPOPUP,
             mode.as_ptr() as *const c_char,
+            std::ptr::null(),
+            false,
             nvim_menu_get_curbuf(),
         );
     }
 
     // Walk root_menu looking for "PopUp" + mode
-    let root_ptr = unsafe { nvim_menu_root_menu_ptr() };
-    let mut menu = unsafe { nvim_menu_ptr_read(root_ptr) };
+    let mut menu = VimMenuHandle::from_ptr(unsafe { root_menu });
     while !menu.is_null() {
         let name = menu.name();
         if !name.is_null()
@@ -458,5 +485,5 @@ pub unsafe extern "C" fn rs_show_popupmenu() {
         return;
     }
 
-    unsafe { nvim_menu_pum_show_popupmenu(menu) };
+    unsafe { pum_show_popupmenu(menu.as_ptr()) };
 }

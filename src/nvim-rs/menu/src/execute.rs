@@ -123,10 +123,10 @@ pub extern "C" fn rs_menu_mode_name(mode_idx: c_int) -> *const std::ffi::c_char 
 
 // C globals for mode detection
 extern "C" {
-    fn nvim_menu_get_global_state() -> c_int;
-    fn nvim_menu_get_visual_active() -> bool;
-    fn nvim_menu_get_visual_select() -> bool;
-    fn nvim_menu_get_finish_op() -> bool;
+    static State: c_int;
+    static VIsual_active: bool;
+    static VIsual_select: bool;
+    static finish_op: bool;
 }
 
 /// Mode flags from state_defs.h
@@ -149,13 +149,13 @@ mod mode_flags {
 /// This is the Rust implementation of C `get_menu_mode()`.
 #[no_mangle]
 pub extern "C" fn rs_get_menu_mode() -> c_int {
-    let state = unsafe { nvim_menu_get_global_state() };
+    let state = unsafe { State };
 
     if (state & mode_flags::MODE_TERMINAL) != 0 {
         return MENU_INDEX_TERMINAL;
     }
-    if unsafe { nvim_menu_get_visual_active() } {
-        if unsafe { nvim_menu_get_visual_select() } {
+    if unsafe { VIsual_active } {
+        if unsafe { VIsual_select } {
             return MENU_INDEX_SELECT;
         }
         return MENU_INDEX_VISUAL;
@@ -169,7 +169,7 @@ pub extern "C" fn rs_get_menu_mode() -> c_int {
     {
         return MENU_INDEX_CMDLINE;
     }
-    if unsafe { nvim_menu_get_finish_op() } {
+    if unsafe { finish_op } {
         return MENU_INDEX_OP_PENDING;
     }
     if (state & mode_flags::MODE_NORMAL) != 0 {
