@@ -944,16 +944,6 @@ static int matchadd_dict_arg(typval_T *tv, const char **conceal_char, win_T **wi
   return OK;
 }
 
-/// "clearmatches()" function
-void f_clearmatches(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  win_T *win = get_optional_window(argvars, 0);
-
-  if (win != NULL) {
-    clear_matches(win);
-  }
-}
-
 /// "getmatches()" function
 void f_getmatches(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -1221,18 +1211,6 @@ void f_matcharg(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
       tv_list_append_string(rettv->vval.v_list, NULL, 0);
       tv_list_append_string(rettv->vval.v_list, NULL, 0);
     }
-  }
-}
-
-/// "matchdelete()" function
-void f_matchdelete(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  win_T *win = get_optional_window(argvars, 1);
-  if (win == NULL) {
-    rettv->vval.v_number = -1;
-  } else {
-    rettv->vval.v_number = match_delete(win,
-                                        (int)tv_get_number(&argvars[0]), true);
   }
 }
 

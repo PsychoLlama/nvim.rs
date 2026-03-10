@@ -266,6 +266,71 @@ pub extern "C" fn rs_match_cmd_line_to_id(line: i64) -> c_int {
 }
 
 // =============================================================================
+// VimL f_* function implementations
+// =============================================================================
+
+/// Opaque handle to a `win_T`
+#[repr(C)]
+struct WinHandle {
+    _opaque: [u8; 0],
+}
+
+/// Opaque pointer to `typval_T`
+type TypvalPtr = *mut std::ffi::c_void;
+
+/// `EvalFuncData` (unused callback data, 8-byte union passed by value as pointer)
+type EvalFuncData = *mut std::ffi::c_void;
+
+extern "C" {
+    fn get_optional_window(argvars: TypvalPtr, idx: c_int) -> *mut WinHandle;
+    fn nvim_tv_get_number(tv: TypvalPtr) -> i64;
+    fn nvim_tv_set_number(tv: TypvalPtr, n: i64);
+    fn clear_matches(wp: *mut WinHandle);
+    fn match_delete(wp: *mut WinHandle, id: c_int, perr: bool) -> c_int;
+}
+
+/// `clearmatches()` `VimL` function.
+///
+/// # Safety
+///
+/// `argvars` and `rettv` must be valid `typval_T *` pointers.
+#[export_name = "f_clearmatches"]
+pub unsafe extern "C" fn rs_f_clearmatches(
+    argvars: TypvalPtr,
+    _rettv: TypvalPtr,
+    _fptr: EvalFuncData,
+) {
+    let win = get_optional_window(argvars, 0);
+    if !win.is_null() {
+        clear_matches(win);
+    }
+}
+
+/// `matchdelete()` `VimL` function.
+///
+/// # Safety
+///
+/// `argvars` and `rettv` must be valid `typval_T *` pointers. `argvars` must
+/// point to an array of at least 2 elements (argvars[0] = id, argvars[1] = win).
+#[export_name = "f_matchdelete"]
+pub unsafe extern "C" fn rs_f_matchdelete(
+    argvars: TypvalPtr,
+    rettv: TypvalPtr,
+    _fptr: EvalFuncData,
+) {
+    // get_optional_window(argvars, 1) internally indexes into argvars[1]
+    let win = get_optional_window(argvars, 1);
+    if win.is_null() {
+        nvim_tv_set_number(rettv, -1);
+    } else {
+        // tv_get_number(&argvars[0]) -- argvars points to argvars[0]
+        let id = nvim_tv_get_number(argvars) as c_int;
+        let result = match_delete(win, id, true);
+        nvim_tv_set_number(rettv, i64::from(result));
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

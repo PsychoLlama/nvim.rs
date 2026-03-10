@@ -20,3 +20,5 @@ extern int update_search_hl(win_T *wp, linenr_T lnum, colnr_T col, char **line,
                             match_T *search_hl, int *has_match_conc, int *match_conc,
                             bool lcs_eol_todo, bool *on_last_col, bool *search_attr_from_match);
 extern bool get_prevcol_hl_flag(win_T *wp, match_T *search_hl, colnr_T curcol);
+extern void f_clearmatches(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_matchdelete(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
