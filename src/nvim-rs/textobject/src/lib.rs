@@ -631,6 +631,9 @@ extern "C" {
     /// Get VIsual position lnum.
     fn nvim_textobj_get_VIsual_lnum() -> c_int;
 
+    /// Get VIsual position col.
+    fn nvim_textobj_get_VIsual_col() -> c_int;
+
     /// Get VIsual_mode.
     fn nvim_textobj_get_VIsual_mode() -> c_int;
 
@@ -2280,6 +2283,351 @@ unsafe fn in_html_tag_impl(end_tag: bool) -> bool {
 
     nvim_textobj_free_pos(pos);
     lc != i32::from(b'/')
+}
+
+// =============================================================================
+// Quote Text Object (current_quote)
+// =============================================================================
+
+extern "C" {
+    /// Decrement a position. Returns -1 at start, 1 at line start, 0 otherwise.
+    #[link_name = "dec"]
+    fn c_dec(pos: PosHandle) -> c_int;
+}
+
+/// Find quote text object under cursor.
+///
+/// Handles `i"`, `a"`, `i'`, `a'`, etc.
+///
+/// # Safety
+/// - `oap` must be a valid oparg_T pointer.
+/// - `escape` must be a valid pointer to a NUL-terminated string, or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_current_quote(
+    oap: OapHandle,
+    count: c_int,
+    include: bool,
+    quotechar: c_int,
+    escape: *const std::ffi::c_char,
+) -> bool {
+    current_quote_impl(oap, count, include, quotechar, escape)
+}
+
+/// State for Visual mode adjustments needed in abort_search cleanup.
+struct QuoteAbortState {
+    did_exclusive_adj: bool,
+    restore_vis_bef: bool,
+}
+
+/// Undo the exclusive-selection adjustment made at the start of current_quote.
+///
+/// # Safety
+/// Calls C accessor functions which must be valid.
+unsafe fn current_quote_abort(abort_state: &QuoteAbortState) {
+    if nvim_textobj_get_VIsual_active() && nvim_textobj_get_p_sel_first() == i32::from(b'e') {
+        if abort_state.did_exclusive_adj {
+            nvim_textobj_inc_cursor();
+        }
+        if abort_state.restore_vis_bef {
+            // Swap cursor and VIsual back
+            let cur_lnum = nvim_textobj_get_cursor_lnum();
+            let cur_col = nvim_textobj_get_cursor_col();
+            let vis_lnum = nvim_textobj_get_VIsual_lnum();
+            let vis_col = nvim_textobj_get_VIsual_col();
+            nvim_textobj_set_cursor_pos(vis_lnum, vis_col);
+            nvim_textobj_set_VIsual(cur_lnum, cur_col);
+        }
+    }
+}
+
+/// Implementation of current_quote.
+#[allow(
+    clippy::too_many_lines,
+    clippy::cognitive_complexity,
+    unused_assignments
+)]
+unsafe fn current_quote_impl(
+    oap: OapHandle,
+    count: c_int,
+    include: bool,
+    quotechar: c_int,
+    escape: *const std::ffi::c_char,
+) -> bool {
+    let line = nvim_textobj_get_cursor_line_ptr();
+    let mut col_end: c_int = 0;
+    let mut col_start = nvim_textobj_get_cursor_col();
+    let mut inclusive = false;
+    let mut vis_empty = true; // Visual selection <= 1 char
+    let mut vis_bef_curs = false; // Visual starts before cursor
+    let mut did_exclusive_adj = false; // adjusted pos for 'selection'
+    let mut inside_quotes = false; // Looks like "i'" done before
+    let mut selected_quote = false; // Has quote inside selection
+
+    let mut abort_state = QuoteAbortState {
+        did_exclusive_adj: false,
+        restore_vis_bef: false,
+    };
+
+    // When 'selection' is "exclusive" move the cursor to where it would be
+    // with 'selection' "inclusive", so that the logic is the same for both.
+    // The cursor then is moved forward after adjusting the area.
+    if nvim_textobj_get_VIsual_active() {
+        // this only works within one line
+        if nvim_textobj_get_VIsual_lnum() != nvim_textobj_get_cursor_lnum() {
+            return false;
+        }
+
+        // vis_bef_curs means "VIsual starts before cursor", i.e., VIsual < cursor
+        // nvim_textobj_lt_VIsual_cursor returns lt(VIsual, cursor)
+        vis_bef_curs = nvim_textobj_lt_VIsual_cursor();
+        vis_empty = nvim_textobj_equalpos_cursor_VIsual();
+        if nvim_textobj_get_p_sel_first() == i32::from(b'e') {
+            if vis_bef_curs {
+                nvim_textobj_dec_cursor();
+                did_exclusive_adj = true;
+                abort_state.did_exclusive_adj = true;
+            } else if !vis_empty {
+                // dec(&VIsual)
+                let vis_ptr = nvim_textobj_get_VIsual_ptr();
+                c_dec(vis_ptr);
+                did_exclusive_adj = true;
+                abort_state.did_exclusive_adj = true;
+            }
+            vis_empty = nvim_textobj_equalpos_cursor_VIsual();
+            if !vis_bef_curs && !vis_empty {
+                // VIsual needs to be start of Visual selection.
+                let cur_lnum = nvim_textobj_get_cursor_lnum();
+                let cur_col = nvim_textobj_get_cursor_col();
+                let vis_lnum = nvim_textobj_get_VIsual_lnum();
+                let vis_col = nvim_textobj_get_VIsual_col();
+                nvim_textobj_set_cursor_pos(vis_lnum, vis_col);
+                nvim_textobj_set_VIsual(cur_lnum, cur_col);
+                vis_bef_curs = true;
+                abort_state.restore_vis_bef = true;
+            }
+        }
+    }
+
+    if !vis_empty {
+        // Check if the existing selection exactly spans the text inside quotes.
+        if vis_bef_curs {
+            let vis_col = nvim_textobj_get_VIsual_col();
+            inside_quotes = vis_col > 0
+                && char_to_int(*line.offset((vis_col - 1) as isize)) == quotechar
+                && char_to_int(*line.offset(col_start as isize)) != NUL
+                && char_to_int(*line.offset((col_start + 1) as isize)) == quotechar;
+            let i = vis_col;
+            col_end = col_start;
+            // Find out if we have a quote in the selection.
+            let mut j = i;
+            while j <= col_end {
+                if char_to_int(*line.offset(j as isize)) == NUL {
+                    break;
+                }
+                if char_to_int(*line.offset(j as isize)) == quotechar {
+                    selected_quote = true;
+                    break;
+                }
+                j += 1;
+            }
+        } else {
+            inside_quotes = col_start > 0
+                && char_to_int(*line.offset((col_start - 1) as isize)) == quotechar
+                && char_to_int(*line.offset(nvim_textobj_get_VIsual_col() as isize)) != NUL
+                && char_to_int(*line.offset((nvim_textobj_get_VIsual_col() + 1) as isize))
+                    == quotechar;
+            let i = col_start;
+            col_end = nvim_textobj_get_VIsual_col();
+            // Find out if we have a quote in the selection.
+            let mut j = i;
+            while j <= col_end {
+                if char_to_int(*line.offset(j as isize)) == NUL {
+                    break;
+                }
+                if char_to_int(*line.offset(j as isize)) == quotechar {
+                    selected_quote = true;
+                    break;
+                }
+                j += 1;
+            }
+        }
+    }
+    // col_end is set to 0 above; when vis_empty is true the col_end value is not used
+    // before being assigned in subsequent branches.
+
+    if !vis_empty && char_to_int(*line.offset(col_start as isize)) == quotechar {
+        // Already selecting something and on a quote character. Find the
+        // next quoted string.
+        if vis_bef_curs {
+            // Assume we are on a closing quote: move to after the next opening quote.
+            col_start = rs_find_next_quote(line, col_start + 1, quotechar, std::ptr::null());
+            if col_start < 0 {
+                current_quote_abort(&abort_state);
+                return false;
+            }
+            col_end = rs_find_next_quote(line, col_start + 1, quotechar, escape);
+            if col_end < 0 {
+                // We were on a starting quote perhaps?
+                col_end = col_start;
+                col_start = nvim_textobj_get_cursor_col();
+            }
+        } else {
+            col_end = rs_find_prev_quote(line, col_start, quotechar, std::ptr::null());
+            if char_to_int(*line.offset(col_end as isize)) != quotechar {
+                current_quote_abort(&abort_state);
+                return false;
+            }
+            col_start = rs_find_prev_quote(line, col_end, quotechar, escape);
+            if char_to_int(*line.offset(col_start as isize)) != quotechar {
+                // We were on an ending quote perhaps?
+                col_start = col_end;
+                col_end = nvim_textobj_get_cursor_col();
+            }
+        }
+    } else if char_to_int(*line.offset(col_start as isize)) == quotechar || !vis_empty {
+        let first_col = if vis_empty {
+            col_start
+        } else if vis_bef_curs {
+            rs_find_next_quote(line, col_start, quotechar, std::ptr::null())
+        } else {
+            rs_find_prev_quote(line, col_start, quotechar, std::ptr::null())
+        };
+        // The cursor is on a quote, we don't know if it's the opening or
+        // closing quote. Search from the start of the line to find out.
+        col_start = 0;
+        loop {
+            // Find open quote character.
+            col_start = rs_find_next_quote(line, col_start, quotechar, std::ptr::null());
+            if col_start < 0 || col_start > first_col {
+                current_quote_abort(&abort_state);
+                return false;
+            }
+            // Find close quote character.
+            col_end = rs_find_next_quote(line, col_start + 1, quotechar, escape);
+            if col_end < 0 {
+                current_quote_abort(&abort_state);
+                return false;
+            }
+            // If cursor is between start and end quote, it is the target text object.
+            if col_start <= first_col && first_col <= col_end {
+                break;
+            }
+            col_start = col_end + 1;
+        }
+    } else {
+        // Search backward for a starting quote.
+        col_start = rs_find_prev_quote(line, col_start, quotechar, escape);
+        if char_to_int(*line.offset(col_start as isize)) != quotechar {
+            // No quote before the cursor, look after the cursor.
+            col_start = rs_find_next_quote(line, col_start, quotechar, std::ptr::null());
+            if col_start < 0 {
+                current_quote_abort(&abort_state);
+                return false;
+            }
+        }
+
+        // Find close quote character.
+        col_end = rs_find_next_quote(line, col_start + 1, quotechar, escape);
+        if col_end < 0 {
+            current_quote_abort(&abort_state);
+            return false;
+        }
+    }
+
+    // When "include" is true, include spaces after closing quote or before
+    // the starting quote.
+    if include {
+        if nvim_textobj_ascii_iswhite(char_to_int(*line.offset((col_end + 1) as isize))) {
+            while nvim_textobj_ascii_iswhite(char_to_int(*line.offset((col_end + 1) as isize))) {
+                col_end += 1;
+            }
+        } else {
+            while col_start > 0
+                && nvim_textobj_ascii_iswhite(char_to_int(*line.offset((col_start - 1) as isize)))
+            {
+                col_start -= 1;
+            }
+        }
+    }
+
+    // Set start position. After vi" another i" must include the ".
+    // For v2i" include the quotes.
+    if !include && count < 2 && (vis_empty || !inside_quotes) {
+        col_start += 1;
+    }
+    nvim_textobj_set_cursor_col(col_start);
+
+    if nvim_textobj_get_VIsual_active() {
+        // Set the start of the Visual area when the Visual area was empty, we
+        // were just inside quotes or the Visual area didn't start at a quote
+        // and didn't include a quote.
+        let vis_col = nvim_textobj_get_VIsual_col();
+        if vis_empty
+            || (vis_bef_curs
+                && !selected_quote
+                && (inside_quotes
+                    || (char_to_int(*line.offset(vis_col as isize)) != quotechar
+                        && (vis_col == 0
+                            || char_to_int(*line.offset((vis_col - 1) as isize)) != quotechar))))
+        {
+            nvim_textobj_set_VIsual_from_cursor();
+            nvim_textobj_redraw_curbuf_later(UPD_INVERTED);
+        }
+    } else {
+        nvim_textobj_set_oap_start_from_cursor(oap);
+        nvim_textobj_set_oap_motion_type(oap, MT_CHAR_WISE);
+    }
+
+    // Set end position.
+    nvim_textobj_set_cursor_col(col_end);
+    if (include
+        || count > 1
+        // After vi" another i" must include the ".
+        || (!vis_empty && inside_quotes))
+        && nvim_textobj_inc_cursor() == 2
+    {
+        inclusive = true;
+    }
+
+    if nvim_textobj_get_VIsual_active() {
+        if vis_empty || vis_bef_curs {
+            // decrement cursor when 'selection' is not exclusive
+            if nvim_textobj_get_p_sel_first() != i32::from(b'e') {
+                nvim_textobj_dec_cursor();
+            }
+        } else {
+            // Cursor is at start of Visual area.  Set the end of the Visual
+            // area when it was just inside quotes or it didn't end at a quote.
+            let vis_col = nvim_textobj_get_VIsual_col();
+            if inside_quotes
+                || (!selected_quote
+                    && char_to_int(*line.offset(vis_col as isize)) != quotechar
+                    && (char_to_int(*line.offset(vis_col as isize)) == NUL
+                        || char_to_int(*line.offset((vis_col + 1) as isize)) != quotechar))
+            {
+                nvim_textobj_dec_cursor();
+                nvim_textobj_set_VIsual_from_cursor();
+            }
+            nvim_textobj_set_cursor_col(col_start);
+        }
+        if nvim_textobj_get_VIsual_mode() == i32::from(b'V') {
+            nvim_textobj_set_VIsual_mode(i32::from(b'v'));
+            nvim_textobj_set_redraw_cmdline(true);
+        }
+    } else {
+        // Set inclusive and other oap's flags.
+        nvim_textobj_set_oap_inclusive(oap, inclusive);
+    }
+
+    // All done - the abort_state is not needed
+    let _ = did_exclusive_adj; // used in abort path only
+    true
+}
+
+// Additional extern declarations for current_quote
+extern "C" {
+    /// Set oap->start from cursor position.
+    fn nvim_textobj_set_oap_start_from_cursor(oap: OapHandle);
 }
 
 // =============================================================================
