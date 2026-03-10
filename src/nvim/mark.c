@@ -796,28 +796,10 @@ static void fname2fnum(xfmark_T *fm)
 // Check all file marks for a name that matches the file name in buf.
 // May replace the name with an fnum.
 // Used for marks that come from the .shada file.
+extern void rs_fmarks_check_names(buf_T *buf);
 void fmarks_check_names(buf_T *buf)
 {
-  char *name = buf->b_ffname;
-
-  if (buf->b_ffname == NULL) {
-    return;
-  }
-
-  for (int i = 0; i < NGLOBALMARKS; i++) {
-    fmarks_check_one(&namedfm[i], name, buf);
-  }
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    for (int i = 0; i < wp->w_jumplistlen; i++) {
-      fmarks_check_one(&wp->w_jumplist[i], name, buf);
-    }
-  }
-}
-
-static void fmarks_check_one(xfmark_T *fm, char *name, buf_T *buf)
-{
-  rs_fmarks_check_one(fm, name, buf);
+  rs_fmarks_check_names(buf);
 }
 
 /// Check the position in @a fm is valid.

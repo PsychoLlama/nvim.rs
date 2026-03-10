@@ -84,6 +84,7 @@ extern "C" {
     fn nvim_mark_buflist_findnr(fnum: c_int) -> BufHandle;
     fn nvim_mark_bt_prompt(buf: BufHandle) -> c_int;
     fn nvim_mark_fname2fnum(xfm: *mut XfmarkT);
+    fn nvim_buf_get_ffname(buf: BufHandle) -> *const c_char;
 
     // Phase 4: Global state
     fn nvim_mark_get_global_busy() -> c_int;
@@ -4649,6 +4650,39 @@ pub unsafe extern "C" fn rs_fm_getname(
         return nvim_mark_mark_line(&raw mut (*fmark).mark, lead_len);
     }
     nvim_mark_buflist_nr2name((*fmark).fnum, 0, 1)
+}
+
+/// Check all file marks for a name that matches the file name in buf.
+///
+/// Iterates global marks (namedfm) and all windows in the current tabpage's
+/// jumplist, calling rs_fmarks_check_one on each entry.
+/// This is the Rust implementation of the C `fmarks_check_names` function.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fmarks_check_names(buf: BufHandle) {
+    let name = nvim_buf_get_ffname(buf);
+    if name.is_null() {
+        return;
+    }
+
+    // Check global marks (namedfm[0..NGLOBALMARKS])
+    let namedfm = nvim_mark_get_namedfm();
+    for i in 0..NGLOBALMARKS {
+        rs_fmarks_check_one(namedfm.offset(i as isize), name, buf);
+    }
+
+    // Check jumplist of all windows in the current tabpage
+    let curtab = nvim_mark_get_curtab();
+    let mut win = nvim_mark_tabpage_firstwin(curtab);
+    while !win.is_null() {
+        let jumplistlen = nvim_mark_win_get_jumplistlen(win);
+        for i in 0..jumplistlen {
+            rs_fmarks_check_one(nvim_mark_win_get_jumplist_entry(win, i), name, buf);
+        }
+        win = nvim_mark_win_get_next(win);
+    }
 }
 
 /// Set named mark "c" to position "pos".
