@@ -52,8 +52,6 @@
 #include "nvim/window.h"
 
 #include "mouse.c.generated.h"
-extern int rs_win_valid(win_T *win);
-
 // Rust FFI declarations (window wrappers removed)
 extern int rs_win_fdccol_count(win_T *wp);
 extern int rs_global_stl_height(void);
@@ -172,7 +170,6 @@ extern bool rs_do_mousescroll_horiz(colnr_T leftcol);
 extern void rs_mouse_check_grid(colnr_T *vcolp, int *flagsp);
 extern int rs_get_fpos_of_mouse(pos_T *mpos);
 extern int rs_do_popup(int which_button, int m_pos_flag, pos_T m_pos);
-extern void rs_nv_scroll_line(cmdarg_T *cap);
 
 static bool got_click = false;  // got a click some time back
 
@@ -962,80 +959,6 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
   return moved;
 }
 
-/// C accessor: perform ins_mouse logic that deeply accesses insert mode state.
-void nvim_ins_mouse_impl(int c)
-{
-  win_T *old_curwin = curwin;
-
-  undisplay_dollar();
-  pos_T tpos = curwin->w_cursor;
-  if (do_mouse(NULL, c, BACKWARD, 1, 0)) {
-    win_T *new_curwin = curwin;
-
-    if (curwin != old_curwin && rs_win_valid(old_curwin)) {
-      // Mouse took us to another window.  We need to go back to the
-      // previous one to stop insert there properly.
-      curwin = old_curwin;
-      curbuf = curwin->w_buffer;
-      if (bt_prompt(curbuf)) {
-        // Restart Insert mode when re-entering the prompt buffer.
-        curbuf->b_prompt_insert = 'A';
-      }
-    }
-    start_arrow(curwin == old_curwin ? &tpos : NULL);
-    if (curwin != new_curwin && rs_win_valid(new_curwin)) {
-      curwin = new_curwin;
-      curbuf = curwin->w_buffer;
-    }
-    set_can_cindent(true);
-  }
-
-  // redraw status lines (in case another window became active)
-  redraw_statuslines();
-}
-
-/// Common mouse wheel scrolling, shared between Insert mode and NV modes.
-/// Default action is to scroll mouse_vert_step lines (or mouse_hor_step columns
-/// depending on the scroll direction) or one page when Shift or Ctrl is used.
-/// Direction is indicated by "cap->arg":
-///    K_MOUSEUP    - MSCR_UP
-///    K_MOUSEDOWN  - MSCR_DOWN
-///    K_MOUSELEFT  - MSCR_LEFT
-///    K_MOUSERIGHT - MSCR_RIGHT
-/// "curwin" may have been changed to the window that should be scrolled and
-/// differ from the window that actually has focus.
-/// C accessor: perform the actual scroll logic.
-/// Accesses cmdarg_T fields, mod_mask, State, pagescroll, nv_scroll_line.
-void nvim_do_mousescroll_impl(cmdarg_T *cap)
-{
-  bool shift_or_ctrl = mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL);
-
-  if (cap->arg == MSCR_UP || cap->arg == MSCR_DOWN) {
-    // Vertical scrolling
-    if ((State & MODE_NORMAL) && shift_or_ctrl) {
-      // whole page up or down
-      pagescroll(cap->arg ? FORWARD : BACKWARD, 1, false);
-    } else {
-      if (shift_or_ctrl) {
-        // whole page up or down
-        cap->count1 = curwin->w_botline - curwin->w_topline;
-      } else {
-        cap->count1 = (int)p_mousescroll_vert;
-      }
-      if (cap->count1 > 0) {
-        cap->count0 = cap->count1;
-        rs_nv_scroll_line(cap);
-      }
-    }
-  } else {
-    // Horizontal scrolling
-    int step = shift_or_ctrl ? curwin->w_view_width : (int)p_mousescroll_hor;
-    colnr_T leftcol = curwin->w_leftcol + (cap->arg == MSCR_RIGHT ? -step : +step);
-    leftcol = MAX(leftcol, 0);
-    rs_do_mousescroll_horiz(leftcol);
-  }
-}
-
 /// Implementation for scrolling in Insert mode in direction "dir", which is one
 /// of the MSCR_ values.
 /// C accessor: perform ins_mousescroll logic that constructs cmdarg_T
@@ -1123,6 +1046,45 @@ void nvim_set_dragwin(win_T *wp)
 bool nvim_is_dragging(void)
 {
   return dragwin != NULL;
+}
+
+// =============================================================================
+// Phase 2 accessors: needed for Rust migration of _impl functions
+// =============================================================================
+
+/// Get `p_mousescroll_vert` (vertical mouse scroll step).
+int nvim_get_p_mousescroll_vert(void)
+{
+  return (int)p_mousescroll_vert;
+}
+
+/// Get `p_mousescroll_hor` (horizontal mouse scroll step).
+int nvim_get_p_mousescroll_hor(void)
+{
+  return (int)p_mousescroll_hor;
+}
+
+/// Wrapper for pagescroll().
+/// @param dir   FORWARD (1) or BACKWARD (0)
+int nvim_mouse_pagescroll(int dir, int count, int half)
+{
+  return pagescroll(dir, count, half != 0);
+}
+
+// Saved cursor for ins_mouse_impl start_arrow pattern.
+static pos_T mouse_saved_tpos;
+
+/// Save curwin->w_cursor for later use with start_arrow.
+void nvim_mouse_save_tpos(void)
+{
+  mouse_saved_tpos = curwin->w_cursor;
+}
+
+/// Call start_arrow(&mouse_saved_tpos) or start_arrow(NULL).
+/// @param use_tpos  true to pass &mouse_saved_tpos, false to pass NULL.
+void nvim_mouse_start_arrow(bool use_tpos)
+{
+  start_arrow(use_tpos ? &mouse_saved_tpos : NULL);
 }
 
 /// Move the cursor to the specified row and column on the screen.
@@ -1506,42 +1468,6 @@ foldclick:;
   count |= mouse_fold_flags;
 
   return count;
-}
-
-/// Normal and Visual modes implementation for scrolling in direction
-/// "cap->arg", which is one of the MSCR_ values.
-/// C accessor: perform nv_mousescroll logic that accesses curwin/curbuf
-/// and cmdarg_T.
-void nvim_nv_mousescroll_impl(cmdarg_T *cap)
-{
-  win_T *const old_curwin = curwin;
-
-  if (mouse_row >= 0 && mouse_col >= 0) {
-    // Find the window at the mouse pointer coordinates.
-    // NOTE: Must restore "curwin" to "old_curwin" before returning!
-    int grid = mouse_grid;
-    int row = mouse_row;
-    int col = mouse_col;
-    curwin = mouse_find_win_inner(&grid, &row, &col);
-    if (curwin == NULL) {
-      curwin = old_curwin;
-      return;
-    }
-    curbuf = curwin->w_buffer;
-  }
-
-  // Call the common mouse scroll function shared with other modes.
-  do_mousescroll(cap);
-
-  curwin->w_redr_status = true;
-  curwin = old_curwin;
-  curbuf = curwin->w_buffer;
-}
-
-/// C accessor: nv_mouse logic accessing cmdarg_T fields.
-void nvim_nv_mouse_impl(cmdarg_T *cap)
-{
-  do_mouse(cap->oap, cap->cmdchar, BACKWARD, cap->count1, 0);
 }
 
 /// C accessor: resolve grid handle to window and adjust row/col.

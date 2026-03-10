@@ -1129,17 +1129,84 @@ extern "C" {
     /// C accessor: popup menu logic.
     fn nvim_do_popup_impl(which_button: c_int, m_pos_flag: c_int, m_pos: PosT) -> c_int;
 
-    /// C accessor: `ins_mouse` logic.
-    fn nvim_ins_mouse_impl(c: c_int);
-
-    /// C accessor: `do_mousescroll` logic.
-    fn nvim_do_mousescroll_impl(cap: CmdargHandle);
-
-    /// C accessor: `nv_mousescroll` logic.
-    fn nvim_nv_mousescroll_impl(cap: CmdargHandle);
-
     /// C accessor: `ins_mousescroll` logic.
     fn nvim_ins_mousescroll_impl(dir: c_int);
+
+    // --- Phase 2 accessors ---
+
+    /// Set `curwin`.
+    fn nvim_set_curwin(wp: WinHandle);
+
+    /// Set `curbuf` (`buf_T*`).
+    fn nvim_set_curbuf(buf: *mut std::ffi::c_void);
+
+    /// Get `w_buffer` from a window.
+    fn nvim_win_get_w_buffer(wp: WinHandle) -> *mut std::ffi::c_void;
+
+    /// Set `w_redr_status` field.
+    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
+
+    /// Get `mod_mask` global.
+    fn nvim_get_mod_mask() -> c_int;
+
+    /// Get `State` global.
+    fn nvim_get_state() -> c_int;
+
+    /// Get `p_mousescroll_vert` option.
+    fn nvim_get_p_mousescroll_vert() -> c_int;
+
+    /// Get `p_mousescroll_hor` option.
+    fn nvim_get_p_mousescroll_hor() -> c_int;
+
+    /// Call `pagescroll(dir, count, half != 0)`.
+    fn nvim_mouse_pagescroll(dir: c_int, count: c_int, half: c_int) -> c_int;
+
+    /// Get `cap->oap` field.
+    fn nvim_cap_get_oap(cap: CmdargHandle) -> OpargHandle;
+
+    /// Get `cap->cmdchar` field.
+    fn nvim_cap_get_cmdchar(cap: CmdargHandle) -> c_int;
+
+    /// Get `cap->count1` field.
+    fn nvim_cap_get_count1(cap: CmdargHandle) -> c_int;
+
+    /// Set `cap->count1` field.
+    fn nvim_cap_set_count1(cap: CmdargHandle, val: c_int);
+
+    /// Set `cap->count0` field.
+    fn nvim_cap_set_count0(cap: CmdargHandle, val: c_int);
+
+    /// Get `cap->arg` field.
+    fn nvim_cap_get_arg(cap: CmdargHandle) -> c_int;
+
+    /// Call `undisplay_dollar()`.
+    #[link_name = "nvim_textfmt_undisplay_dollar"]
+    fn nvim_undisplay_dollar();
+
+    /// Save `curwin->w_cursor` to `mouse_saved_tpos`.
+    fn nvim_mouse_save_tpos();
+
+    /// Call `start_arrow(&mouse_saved_tpos)` or `start_arrow(NULL)`.
+    fn nvim_mouse_start_arrow(use_tpos: bool);
+
+    /// Call `set_can_cindent(val)`.
+    fn nvim_set_can_cindent(val: c_int);
+
+    /// Call `redraw_statuslines()`.
+    #[link_name = "nvim_redraw_statuslines_call"]
+    fn nvim_mouse_redraw_statuslines();
+
+    /// Check if a window's buffer is a prompt buffer.
+    fn nvim_win_bt_prompt(wp: WinHandle) -> c_int;
+
+    /// Set `buf->b_prompt_insert` field.
+    fn nvim_buf_set_prompt_insert(buf: *mut std::ffi::c_void, val: c_int);
+
+    /// Check if a window pointer is valid.
+    fn rs_win_valid(win: WinHandle) -> c_int;
+
+    /// Call `rs_nv_scroll_line(cap)`.
+    fn rs_nv_scroll_line(cap: CmdargHandle);
 }
 
 /// Check the mouse click grid for virtual column and fold flags.
@@ -1257,25 +1324,135 @@ pub unsafe extern "C" fn rs_do_popup(which_button: c_int, m_pos_flag: c_int, m_p
 /// Requires valid window and insert mode state.
 #[export_name = "ins_mouse"]
 pub unsafe extern "C" fn rs_ins_mouse(c: c_int) {
-    nvim_ins_mouse_impl(c);
+    let old_curwin = nvim_get_curwin();
+
+    nvim_undisplay_dollar();
+    // Save curwin->w_cursor as tpos before do_mouse changes it.
+    nvim_mouse_save_tpos();
+
+    if rs_do_mouse(std::ptr::null_mut(), c, -1 /* BACKWARD */, 1, false) {
+        let new_curwin = nvim_get_curwin();
+
+        if nvim_get_curwin() != old_curwin && rs_win_valid(old_curwin) != 0 {
+            // Mouse took us to another window. Go back to the previous one
+            // to stop insert there properly.
+            nvim_set_curwin(old_curwin);
+            let old_buf = nvim_win_get_w_buffer(old_curwin);
+            nvim_set_curbuf(old_buf);
+            if nvim_win_bt_prompt(old_curwin) != 0 {
+                // Restart Insert mode when re-entering the prompt buffer.
+                nvim_buf_set_prompt_insert(old_buf, c_int::from(b'A'));
+            }
+        }
+        let same_window = nvim_get_curwin() == old_curwin;
+        nvim_mouse_start_arrow(same_window);
+        if nvim_get_curwin() != new_curwin && rs_win_valid(new_curwin) != 0 {
+            nvim_set_curwin(new_curwin);
+            nvim_set_curbuf(nvim_win_get_w_buffer(new_curwin));
+        }
+        nvim_set_can_cindent(1);
+    }
+
+    // Redraw status lines (in case another window became active).
+    nvim_mouse_redraw_statuslines();
 }
 
+// MODE_NORMAL value from state_defs.h
+const MODE_NORMAL: c_int = 0x01;
+// FORWARD/BACKWARD directions
+const FORWARD: c_int = 1;
+// BACKWARD is -1 (same as MSCR_LEFT = -1, different from MSCR_UP = 1)
+// Defined explicitly here to match C's BACKWARD constant
+const BACKWARD_DIR: c_int = 0; // pagescroll BACKWARD is 0 in C
+
 /// Common mouse wheel scrolling for Normal/Visual modes.
+///
+/// Scroll direction is from `cap->arg`:
+/// - `MSCR_UP` / `MSCR_DOWN`: vertical scroll
+/// - `MSCR_LEFT` / `MSCR_RIGHT`: horizontal scroll
 ///
 /// # Safety
 /// `cap` must be a valid `cmdarg_T` pointer.
 #[export_name = "do_mousescroll"]
 pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
-    nvim_do_mousescroll_impl(cap);
+    let mod_mask = nvim_get_mod_mask();
+    // MOD_MASK_SHIFT = 0x02, MOD_MASK_CTRL = 0x04
+    let shift_or_ctrl = (mod_mask & (0x02 | 0x04)) != 0;
+    let cap_arg = nvim_cap_get_arg(cap);
+    let curwin = nvim_get_curwin();
+
+    if cap_arg == MSCR_UP || cap_arg == MSCR_DOWN {
+        // Vertical scrolling
+        let state = nvim_get_state();
+        if (state & MODE_NORMAL) != 0 && shift_or_ctrl {
+            // Whole page up or down
+            let dir = if cap_arg != 0 { FORWARD } else { BACKWARD_DIR };
+            nvim_mouse_pagescroll(dir, 1, 0);
+        } else {
+            let count = if shift_or_ctrl {
+                // Whole page up or down: botline - topline
+                nvim_win_get_botline(curwin) - nvim_win_get_topline(curwin)
+            } else {
+                nvim_get_p_mousescroll_vert()
+            };
+            if count > 0 {
+                nvim_cap_set_count1(cap, count);
+                nvim_cap_set_count0(cap, count);
+                rs_nv_scroll_line(cap);
+            }
+        }
+    } else {
+        // Horizontal scrolling
+        let step = if shift_or_ctrl {
+            nvim_win_get_view_width(curwin)
+        } else {
+            nvim_get_p_mousescroll_hor()
+        };
+        let leftcol =
+            nvim_win_get_leftcol(curwin) + if cap_arg == MSCR_RIGHT { -step } else { step };
+        let leftcol = if leftcol < 0 { 0 } else { leftcol };
+        rs_do_mousescroll_horiz(leftcol);
+    }
 }
 
 /// Normal/Visual mode mouse scroll handler.
+///
+/// Finds the window at the mouse position, scrolls it, then restores `curwin`.
 ///
 /// # Safety
 /// `cap` must be a valid `cmdarg_T` pointer.
 #[export_name = "nv_mousescroll"]
 pub unsafe extern "C" fn rs_nv_mousescroll(cap: CmdargHandle) {
-    nvim_nv_mousescroll_impl(cap);
+    let old_curwin = nvim_get_curwin();
+
+    let mouse_row = nvim_get_mouse_row();
+    let mouse_col = nvim_get_mouse_col();
+    if mouse_row >= 0 && mouse_col >= 0 {
+        // Find the window at the mouse pointer coordinates.
+        // NOTE: Must restore curwin to old_curwin before returning!
+        let mut grid = nvim_get_mouse_grid();
+        let mut row = mouse_row;
+        let mut col = mouse_col;
+        let wp = rs_mouse_find_win_inner(
+            std::ptr::addr_of_mut!(grid),
+            std::ptr::addr_of_mut!(row),
+            std::ptr::addr_of_mut!(col),
+        );
+        if wp.is_null() {
+            nvim_set_curwin(old_curwin);
+            return;
+        }
+        nvim_set_curwin(wp);
+        nvim_set_curbuf(nvim_win_get_w_buffer(wp));
+    }
+
+    // Call the common mouse scroll function shared with other modes.
+    rs_do_mousescroll(cap);
+
+    let curwin = nvim_get_curwin();
+    nvim_win_set_redr_status(curwin, 1);
+    nvim_set_curwin(old_curwin);
+    nvim_set_curbuf(nvim_win_get_w_buffer(old_curwin));
 }
 
 /// Insert mode mouse scroll handler.
@@ -1325,9 +1502,6 @@ extern "C" {
         count: c_int,
         fixindent: bool,
     ) -> bool;
-
-    /// C accessor: `nv_mouse` logic accessing `cmdarg_T` fields.
-    fn nvim_nv_mouse_impl(cap: CmdargHandle);
 }
 
 /// Do the appropriate action for the current mouse click in the current mode.
@@ -1351,7 +1525,10 @@ pub unsafe extern "C" fn rs_do_mouse(
 /// `cap` must be a valid `cmdarg_T` pointer.
 #[export_name = "nv_mouse"]
 pub unsafe extern "C" fn rs_nv_mouse(cap: CmdargHandle) {
-    nvim_nv_mouse_impl(cap);
+    let oap = nvim_cap_get_oap(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    let count1 = nvim_cap_get_count1(cap);
+    rs_do_mouse(oap, cmdchar, -1 /* BACKWARD */, count1, false);
 }
 
 // =============================================================================
