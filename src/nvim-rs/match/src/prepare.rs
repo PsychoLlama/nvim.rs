@@ -106,7 +106,7 @@ const SEARCH_HL_PRIORITY: c_int = 0;
 /// # Safety
 ///
 /// All pointers must be valid.
-#[unsafe(no_mangle)]
+#[export_name = "prepare_search_hl"]
 pub unsafe extern "C" fn rs_prepare_search_hl(
     wp: *mut WinHandle,
     search_hl: *mut MatchHlHandle,

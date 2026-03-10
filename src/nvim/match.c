@@ -87,19 +87,15 @@ extern int64_t rs_match_range_include_line_bot(int64_t current_bot, int64_t lnum
 extern int rs_match_range_is_valid(int64_t top, int64_t bot);
 extern int rs_match_range_contains(int64_t top, int64_t bot, int64_t lnum);
 
-// core.rs - Core match management (Phase 1)
+// core.rs - Core match management
 extern int rs_match_add(win_T *wp, const char *grp, const char *pat,
                         int prio, int id, const char *conceal_char);
 extern int rs_match_add_pos(win_T *wp, const char *grp, int prio, int id,
                             const char *conceal_char,
                             const linenr_T *lnums, const colnr_T *cols,
                             const int *lens, int count);
-extern int rs_match_delete(win_T *wp, int id, int perr);
-extern void rs_clear_matches(win_T *wp);
-extern matchitem_T *rs_get_match(win_T *wp, int id);
 
-// prepare.rs - Highlight preparation and update (Phase 5)
-extern void rs_prepare_search_hl(win_T *wp, match_T *search_hl, linenr_T lnum);
+// prepare.rs - Highlight preparation and update
 extern int rs_prepare_search_hl_line(win_T *wp, linenr_T lnum, colnr_T mincol,
                                      char **line, match_T *search_hl,
                                      int *search_attr, int *search_attr_from_match);
@@ -108,19 +104,8 @@ extern int rs_update_search_hl(win_T *wp, linenr_T lnum, colnr_T col, char **lin
                                int lcs_eol_todo, int *on_last_col,
                                int *search_attr_from_match);
 
-// search.rs - Core search engine (Phase 4)
-extern void rs_init_search_hl(win_T *wp, match_T *search_hl);
-extern void rs_next_search_hl(win_T *win, match_T *search_hl, match_T *shl,
-                              linenr_T lnum, colnr_T mincol, matchitem_T *cur);
-
-// search_pos.rs - Position match search (Phase 3)
-extern int rs_next_search_hl_pos(match_T *shl, linenr_T lnum,
-                                 matchitem_T *match, colnr_T mincol);
-
-// highlight.rs - Highlight helpers (Phase 2)
-extern void rs_check_cur_search_hl(win_T *wp, match_T *shl);
+// highlight.rs - Highlight helpers
 extern int rs_get_prevcol_hl_flag(win_T *wp, match_T *search_hl, colnr_T curcol);
-extern void rs_get_search_match_hl(win_T *wp, match_T *search_hl, colnr_T col, int *char_attr);
 
 static const char *e_invalwindow = N_("E957: Invalid window number");
 
@@ -845,8 +830,6 @@ int nvim_get_UPD_VALID(void)
   return UPD_VALID;
 }
 
-#define SEARCH_HL_PRIORITY 0
-
 /// Add match to the match list of window "wp".
 /// If "pat" is not NULL the pattern will be highlighted with the group "grp"
 /// with priority "prio".
@@ -943,66 +926,9 @@ cleanup:
   return result;
 }
 
-/// Delete match with ID 'id' in the match list of window 'wp'.
-///
-/// @param perr  print error messages if true.
-static int match_delete(win_T *wp, int id, bool perr)
-{
-  return rs_match_delete(wp, id, (int)perr);
-}
-
-/// Delete all matches in the match list of window 'wp'.
-void clear_matches(win_T *wp)
-{
-  rs_clear_matches(wp);
-}
-
-/// Get match from ID 'id' in window 'wp'.
-/// Return NULL if match not found.
-static matchitem_T *get_match(win_T *wp, int id)
-{
-  return rs_get_match(wp, id);
-}
-
-/// Init for calling prepare_search_hl().
-void init_search_hl(win_T *wp, match_T *search_hl)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_init_search_hl(wp, search_hl);
-}
-
-/// @param shl       points to a match. Fill on match.
-/// @param posmatch  match item with positions
-/// @param mincol    minimal column for a match
-///
-/// @return one on match, otherwise return zero.
-static int next_search_hl_pos(match_T *shl, linenr_T lnum, matchitem_T *match, colnr_T mincol)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_next_search_hl_pos(shl, lnum, match, mincol);
-}
-
-/// Search for a next 'hlsearch' or match.
-static void next_search_hl(win_T *win, match_T *search_hl, match_T *shl, linenr_T lnum,
-                           colnr_T mincol, matchitem_T *cur)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  rs_next_search_hl(win, search_hl, shl, lnum, mincol, cur);
-}
-
-/// Advance to the match in window "wp" line "lnum" or past it.
-void prepare_search_hl(win_T *wp, match_T *search_hl, linenr_T lnum)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_prepare_search_hl(wp, search_hl, lnum);
-}
-
-/// Update "shl->has_cursor" based on the match in "shl" and the cursor
-/// position.
-static void check_cur_search_hl(win_T *wp, match_T *shl)
-{
-  rs_check_cur_search_hl(wp, shl);
-}
+// Rust-exported symbols used by callers remaining in this file.
+extern int match_delete(win_T *wp, int id, bool perr);
+extern matchitem_T *get_match(win_T *wp, int id);
 
 /// Prepare for 'hlsearch' and match highlighting in one window line.
 ///
@@ -1044,13 +970,6 @@ int update_search_hl(win_T *wp, linenr_T lnum, colnr_T col, char **line, match_T
 bool get_prevcol_hl_flag(win_T *wp, match_T *search_hl, colnr_T curcol)
 {
   return rs_get_prevcol_hl_flag(wp, search_hl, curcol) != 0;
-}
-
-/// Get highlighting for the char after the text in "char_attr" from 'hlsearch'
-/// or match highlighting.
-void get_search_match_hl(win_T *wp, match_T *search_hl, colnr_T col, int *char_attr)
-{
-  rs_get_search_match_hl(wp, search_hl, col, char_attr);
 }
 
 static int matchadd_dict_arg(typval_T *tv, const char **conceal_char, win_T **win)

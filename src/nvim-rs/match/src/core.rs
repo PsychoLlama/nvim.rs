@@ -383,6 +383,23 @@ pub unsafe extern "C" fn rs_match_delete(wp: *mut WinHandle, id: c_int, perr: c_
 }
 
 // =============================================================================
+// match_delete (exported entry point with bool ABI)
+// =============================================================================
+
+/// Delete a match by ID from the window's match list.
+///
+/// This is the exported C entry point. It accepts `bool perr` (C `_Bool`)
+/// matching the callers' ABI, and delegates to `rs_match_delete`.
+///
+/// # Safety
+///
+/// `wp` must be a valid pointer to a `win_T`.
+#[export_name = "match_delete"]
+pub unsafe extern "C" fn match_delete_export(wp: *mut WinHandle, id: c_int, perr: bool) -> c_int {
+    rs_match_delete(wp, id, c_int::from(perr))
+}
+
+// =============================================================================
 // clear_matches
 // =============================================================================
 
@@ -391,7 +408,7 @@ pub unsafe extern "C" fn rs_match_delete(wp: *mut WinHandle, id: c_int, perr: c_
 /// # Safety
 ///
 /// `wp` must be a valid pointer to a `win_T`.
-#[unsafe(no_mangle)]
+#[export_name = "clear_matches"]
 pub unsafe extern "C" fn rs_clear_matches(wp: *mut WinHandle) {
     loop {
         let head = nvim_match_get_head(wp);
@@ -416,7 +433,7 @@ pub unsafe extern "C" fn rs_clear_matches(wp: *mut WinHandle) {
 /// # Safety
 ///
 /// `wp` must be a valid pointer to a `win_T`.
-#[unsafe(no_mangle)]
+#[export_name = "get_match"]
 pub unsafe extern "C" fn rs_get_match(wp: *mut WinHandle, id: c_int) -> *mut MatchItemHandle {
     let mut cur = nvim_match_get_head(wp);
     while !cur.is_null() {

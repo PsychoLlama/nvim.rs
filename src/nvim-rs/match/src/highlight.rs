@@ -147,7 +147,7 @@ pub unsafe extern "C" fn rs_get_prevcol_hl_flag(
 /// # Safety
 ///
 /// `wp`, `search_hl`, and `char_attr` must be valid pointers.
-#[unsafe(no_mangle)]
+#[export_name = "get_search_match_hl"]
 pub unsafe extern "C" fn rs_get_search_match_hl(
     wp: *mut WinHandle,
     search_hl: *mut MatchHlHandle,

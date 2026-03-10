@@ -114,7 +114,7 @@ extern "C" {
 /// # Safety
 ///
 /// `wp` and `search_hl` must be valid pointers.
-#[unsafe(no_mangle)]
+#[export_name = "init_search_hl"]
 pub unsafe extern "C" fn rs_init_search_hl(wp: *mut WinHandle, search_hl: *mut MatchHlHandle) {
     let buf = nvim_match_win_get_buffer(wp);
     let p_rdt = nvim_match_get_p_rdt();
