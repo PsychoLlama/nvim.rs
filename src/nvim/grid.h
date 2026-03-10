@@ -47,3 +47,41 @@ enum {
 #endif
 
 #include "grid.h.generated.h"
+
+// Declarations for functions now implemented in Rust via #[export_name].
+// These were previously generated from C wrappers in grid.c.
+schar_T schar_from_str(const char *str);
+schar_T schar_from_buf(const char *buf, size_t len);
+schar_T schar_from_char(int c);
+bool schar_cache_clear_if_full(void);
+void schar_cache_clear(void);
+bool schar_high(schar_T sc);
+size_t schar_get(char *buf_out, schar_T sc);
+size_t schar_get_adv(char **buf_out, schar_T sc);
+size_t schar_len(schar_T sc);
+int schar_cells(schar_T sc);
+int schar_get_first_codepoint(schar_T sc);
+char schar_get_ascii(schar_T sc);
+void line_do_arabic_shape(schar_T *buf, int cols);
+ScreenGrid *grid_adjust(GridView *grid, int *row_off, int *col_off);
+void grid_clear_line(ScreenGrid *grid, size_t off, int width, bool valid);
+void grid_invalidate(ScreenGrid *grid);
+schar_T grid_getchar(ScreenGrid *grid, int row, int col, int *attrp);
+void grid_line_start(GridView *view, int row);
+void screengrid_line_start(ScreenGrid *grid, int row, int col);
+schar_T grid_line_getchar(int col, int *attr);
+void grid_line_put_schar(int col, schar_T schar, int attr);
+int grid_line_puts(int col, const char *text, int textlen, int attr);
+int grid_line_fill(int start_col, int end_col, schar_T sc, int attr);
+void grid_line_clear_end(int start_col, int end_col, int bg_attr, int clear_attr);
+void grid_line_cursor_goto(int col);
+void grid_line_mirror(int width);
+void linebuf_mirror(int *firstp, int *lastp, int *clearp, int width);
+void grid_line_flush(void);
+void grid_line_flush_if_valid_row(void);
+void grid_clear(GridView *grid, int start_row, int end_row, int start_col, int end_col, int attr);
+void grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int endcol, int clear_width,
+                      int bg_attr, int clear_attr, colnr_T last_vcol, int flags);
+void grid_ins_lines(ScreenGrid *grid, int row, int line_count, int end, int col, int width);
+void grid_del_lines(ScreenGrid *grid, int row, int line_count, int end, int col, int width);
+void grid_assign_handle(ScreenGrid *grid);

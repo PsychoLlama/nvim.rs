@@ -37,92 +37,8 @@
 
 #include "grid.c.generated.h"
 
-// Rust implementations of schar functions
-extern bool rs_schar_high(schar_T sc);
-extern char rs_schar_get_ascii(schar_T sc);
-extern schar_T rs_schar_from_char(int c);
-extern schar_T rs_schar_from_str(const char *str);
-extern schar_T rs_schar_from_buf(const char *buf, size_t len);
-extern size_t rs_schar_get(char *buf_out, schar_T sc);
-extern size_t rs_schar_get_adv(char **buf_out, schar_T sc);
-extern size_t rs_schar_len(schar_T sc);
-extern int rs_schar_cells(schar_T sc);
-extern int rs_schar_get_first_codepoint(schar_T sc);
-extern bool rs_schar_cache_clear_if_full(void);
-extern void rs_schar_cache_clear(void);
-// Rust implementations of grid_line functions
-extern void rs_grid_line_put_schar(int col, schar_T schar, int attr);
-extern int rs_grid_line_puts(int col, const char *text, int textlen, int attr);
-extern int rs_grid_line_fill(int start_col, int end_col, schar_T sc, int attr);
-extern void rs_grid_line_clear_end(int start_col, int end_col, int bg_attr, int clear_attr);
-extern void rs_grid_line_cursor_goto(int col);
-extern void rs_grid_line_flush(void);
-extern void rs_grid_line_flush_if_valid_row(void);
-extern void rs_grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int endcol,
-                                int clear_width, int bg_attr, int clear_attr, colnr_T last_vcol,
-                                int flags);
-extern void rs_line_do_arabic_shape(schar_T *buf, int cols);
-// Grid operations
-extern ScreenGrid *rs_grid_adjust(GridView *view, int *row_off, int *col_off);
-extern void rs_grid_clear_line(ScreenGrid *grid, size_t off, int width, bool valid);
-extern void rs_grid_invalidate(ScreenGrid *grid);
-extern schar_T rs_grid_getchar(ScreenGrid *grid, int row, int col, int *attrp);
-extern void rs_grid_clear(GridView *grid, int start_row, int end_row, int start_col, int end_col,
-                          int attr);
-// Grid scrolling
-extern void rs_grid_ins_lines(ScreenGrid *grid, int row, int line_count, int end, int col,
-                              int width);
-extern void rs_grid_del_lines(ScreenGrid *grid, int row, int line_count, int end, int col,
-                              int width);
-// Grid line start/getchar/mirror
-extern void rs_screengrid_line_start(ScreenGrid *grid, int row, int col);
-extern void rs_grid_line_start(GridView *view, int row);
-extern schar_T rs_grid_line_getchar(int col, int *attr);
-extern void rs_linebuf_mirror(int *firstp, int *lastp, int *clearp, int width);
-extern void rs_grid_line_mirror(int width);
-// Grid handle assignment and border text
-extern void rs_grid_assign_handle(ScreenGrid *grid);
+// Grid helper functions (Phase 135) - still needed as rs_* in C
 extern int rs_get_bordertext_col(int total_col, int text_width, int align);
-// Grid helper functions (Phase 135)
-extern schar_T rs_schar_from_ascii(int c);
-extern int rs_slf_is_rightleft(int flags);
-extern int rs_slf_is_wrap(int flags);
-extern int rs_slf_is_inc_vcol(int flags);
-extern int rs_slf_rightleft(void);
-extern int rs_slf_wrap(void);
-extern int rs_slf_inc_vcol(void);
-extern int rs_slf_combine(int rightleft, int wrap, int inc_vcol);
-extern size_t rs_grid_cell_count(int rows, int cols);
-extern size_t rs_grid_line_offset(int row, int cols);
-extern int rs_grid_row_valid(int row, int rows);
-extern int rs_grid_col_valid(int col, int cols);
-extern int rs_grid_pos_valid(int row, int col, int rows, int cols);
-extern int rs_grid_clamp_col(int col, int cols);
-extern int rs_grid_clamp_row(int row, int rows);
-extern int rs_schar_is_nul(schar_T sc);
-extern int rs_schar_is_space(schar_T sc);
-extern schar_T rs_schar_space(void);
-extern schar_T rs_schar_gt(void);
-extern schar_T rs_schar_lt(void);
-extern schar_T rs_schar_tilde(void);
-extern schar_T rs_schar_at(void);
-extern int rs_sattr_is_invalid(int attr);
-extern int rs_sattr_invalid(void);
-extern int rs_sattr_default(void);
-extern int rs_colnr_invalid(void);
-extern int rs_colnr_is_invalid(int col);
-extern int rs_grid_copy_len(int old_cols, int new_cols);
-extern int rs_grid_should_copy(int new_row, int old_rows, int old_chars_not_null);
-extern int rs_grid_align_is_left(int align);
-extern int rs_grid_align_is_center(int align);
-extern int rs_grid_align_is_right(int align);
-extern int rs_grid_align_left_val(void);
-extern int rs_grid_align_center_val(void);
-extern int rs_grid_align_right_val(void);
-extern int rs_rdb_is_nodelta(unsigned int flags);
-extern int rs_rdb_is_invalid(unsigned int flags);
-extern unsigned int rs_rdb_flag_nodelta(void);
-extern unsigned int rs_rdb_flag_invalid(void);
 
 // temporary buffer for rendering a single screenline, so it can be
 // compared with previous contents to calculate smallest delta.
@@ -336,14 +252,6 @@ unsigned int nvim_get_rdb_flags(void)
   return rdb_flags;
 }
 
-/// Wrapper for grid_put_linebuf (called from Rust)
-void nvim_grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int endcol,
-                           int clear_width, int bg_attr, int clear_attr, int last_vcol, int flags)
-{
-  grid_put_linebuf(grid, row, coloff, col, endcol, clear_width, bg_attr, clear_attr,
-                   (colnr_T)last_vcol, flags);
-}
-
 // ScreenGrid array accessors
 schar_T *nvim_screengrid_get_chars(ScreenGrid *grid)
 {
@@ -537,12 +445,6 @@ int nvim_gridview_get_col_offset(GridView *view)
   return view->col_offset;
 }
 
-// Function wrappers
-void nvim_line_do_arabic_shape(schar_T *buf, int cols)
-{
-  line_do_arabic_shape(buf, cols);
-}
-
 void nvim_ui_line(ScreenGrid *grid, int row, bool invalid_row, int startcol, int endcol,
                   int clearcol, int clearattr, bool wrap)
 {
@@ -555,255 +457,7 @@ void nvim_ui_call_grid_scroll(handle_T handle, int top, int bot, int left, int r
   ui_call_grid_scroll(handle, top, bot, left, right, rows, cols);
 }
 
-/// Determine if dedicated window grid should be used or the default_grid
-///
-/// If UI did not request multigrid support, draw all windows on the
-/// default_grid.
-///
-/// NB: this function can only been used with window grids in a context where
-/// win_grid_alloc already has been called!
-///
-/// If the default_grid is used, adjust window relative positions to global
-/// screen positions.
-ScreenGrid *grid_adjust(GridView *grid, int *row_off, int *col_off)
-{
-  return rs_grid_adjust(grid, row_off, col_off);
-}
 
-schar_T schar_from_str(const char *str)
-{
-  return rs_schar_from_str(str);
-}
-
-/// @param buf need not be NUL terminated, but may not contain embedded NULs.
-///
-/// caller must ensure len < MAX_SCHAR_SIZE (not =, as NUL needs a byte)
-schar_T schar_from_buf(const char *buf, size_t len)
-{
-  return rs_schar_from_buf(buf, len);
-}
-
-/// Check if cache is full, and if it is, clear it.
-///
-/// This should normally only be called in update_screen()
-///
-/// @return true if cache was clered, and all your screen buffers now are hosed
-/// and you need to use UPD_CLEAR
-bool schar_cache_clear_if_full(void)
-{
-  return rs_schar_cache_clear_if_full();
-}
-
-void schar_cache_clear(void)
-{
-  rs_schar_cache_clear();
-}
-
-bool schar_high(schar_T sc)
-{
-  return rs_schar_high(sc);
-}
-
-/// sets final NUL
-size_t schar_get(char *buf_out, schar_T sc)
-{
-  return rs_schar_get(buf_out, sc);
-}
-
-/// advance buf_out. do NOT set final NUL
-size_t schar_get_adv(char **buf_out, schar_T sc)
-{
-  return rs_schar_get_adv(buf_out, sc);
-}
-
-size_t schar_len(schar_T sc)
-{
-  return rs_schar_len(sc);
-}
-
-int schar_cells(schar_T sc)
-{
-  return rs_schar_cells(sc);
-}
-
-int schar_get_first_codepoint(schar_T sc)
-{
-  return rs_schar_get_first_codepoint(sc);
-}
-
-/// @return ascii char or NUL if not ascii
-char schar_get_ascii(schar_T sc)
-{
-  return rs_schar_get_ascii(sc);
-}
-
-void line_do_arabic_shape(schar_T *buf, int cols)
-{
-  rs_line_do_arabic_shape(buf, cols);
-}
-
-/// clear a line in the grid starting at "off" until "width" characters
-/// are cleared.
-void grid_clear_line(ScreenGrid *grid, size_t off, int width, bool valid)
-{
-  rs_grid_clear_line(grid, off, width, valid);
-}
-
-void grid_invalidate(ScreenGrid *grid)
-{
-  rs_grid_invalidate(grid);
-}
-
-static bool grid_invalid_row(ScreenGrid *grid, int row)
-{
-  return grid->attrs[grid->line_offset[row]] < 0;
-}
-
-/// Get a single character directly from grid.chars
-///
-/// @param[out] attrp  set to the character's attribute (optional)
-schar_T grid_getchar(ScreenGrid *grid, int row, int col, int *attrp)
-{
-  return rs_grid_getchar(grid, row, col, attrp);
-}
-
-static ScreenGrid *grid_line_grid = NULL;
-static int grid_line_row = -1;
-static int grid_line_coloff = 0;
-static int grid_line_maxcol = 0;
-static int grid_line_first = INT_MAX;
-static int grid_line_last = 0;
-static int grid_line_clear_to = 0;
-static int grid_line_bg_attr = 0;
-static int grid_line_clear_attr = 0;
-static int grid_line_flags = 0;
-
-/// Start a group of grid_line_puts calls that builds a single grid line.
-///
-/// Must be matched with a grid_line_flush call before moving to
-/// another line.
-void grid_line_start(GridView *view, int row)
-{
-  rs_grid_line_start(view, row);
-}
-
-void screengrid_line_start(ScreenGrid *grid, int row, int col)
-{
-  rs_screengrid_line_start(grid, row, col);
-}
-
-/// Get present char from current rendered screen line
-///
-/// This indicates what already is on screen, not the pending render buffer.
-///
-/// @return char or space if out of bounds
-schar_T grid_line_getchar(int col, int *attr)
-{
-  return rs_grid_line_getchar(col, attr);
-}
-
-void grid_line_put_schar(int col, schar_T schar, int attr)
-{
-  rs_grid_line_put_schar(col, schar, attr);
-}
-
-/// Put string "text" at "col" position relative to the grid line from the
-/// recent grid_line_start() call.
-///
-/// @param textlen length of string or -1 to use strlen(text)
-/// Note: only outputs within one row!
-///
-/// @return number of grid cells used
-int grid_line_puts(int col, const char *text, int textlen, int attr)
-{
-  return rs_grid_line_puts(col, text, textlen, attr);
-}
-
-int grid_line_fill(int start_col, int end_col, schar_T sc, int attr)
-{
-  return rs_grid_line_fill(start_col, end_col, sc, attr);
-}
-
-/// @param bg_attr     applies to both the buffered line and the columns to clear
-/// @param clear_attr  applies only to the columns to clear
-void grid_line_clear_end(int start_col, int end_col, int bg_attr, int clear_attr)
-{
-  rs_grid_line_clear_end(start_col, end_col, bg_attr, clear_attr);
-}
-
-/// move the cursor to a position in a currently rendered line.
-void grid_line_cursor_goto(int col)
-{
-  rs_grid_line_cursor_goto(col);
-}
-
-void grid_line_mirror(int width)
-{
-  rs_grid_line_mirror(width);
-}
-
-void linebuf_mirror(int *firstp, int *lastp, int *clearp, int width)
-{
-  rs_linebuf_mirror(firstp, lastp, clearp, width);
-}
-
-/// End a group of grid_line_puts calls and send the screen buffer to the UI layer.
-void grid_line_flush(void)
-{
-  rs_grid_line_flush();
-}
-
-/// flush grid line but only if on a valid row
-///
-/// This is a stopgap until message.c has been refactored to behave
-void grid_line_flush_if_valid_row(void)
-{
-  rs_grid_line_flush_if_valid_row();
-}
-
-void grid_clear(GridView *grid, int start_row, int end_row, int start_col, int end_col, int attr)
-{
-  rs_grid_clear(grid, start_row, end_row, start_col, end_col, attr);
-}
-
-/// Check whether the given character needs redrawing:
-/// - the (first byte of the) character is different
-/// - the attributes are different
-/// - the character is multi-byte and the next byte is different
-/// - the character is two cells wide and the second cell differs.
-static int grid_char_needs_redraw(ScreenGrid *grid, int col, size_t off_to, int cols)
-{
-  return (cols > 0
-          && ((linebuf_char[col] != grid->chars[off_to]
-               || linebuf_attr[col] != grid->attrs[off_to]
-               || (cols > 1 && linebuf_char[col + 1] == 0
-                   && linebuf_char[col + 1] != grid->chars[off_to + 1]))
-              || exmode_active  // TODO(bfredl): what in the actual fuck
-              || rdb_flags & kOptRdbFlagNodelta));
-}
-
-/// Move one buffered line to the window grid, but only the characters that
-/// have actually changed.  Handle insert/delete character.
-///
-/// @param coloff  gives the first column on the grid for this line.
-/// @param endcol  gives the columns where valid characters are.
-/// @param clear_width  see SLF_RIGHTLEFT.
-/// @param clear_attr   combined with "bg_attr" for the columns to clear.
-/// @param flags  can have bits:
-/// - SLF_RIGHTLEFT  rightleft text, like a window with 'rightleft' option set:
-///   - When false, clear columns "endcol" to "clear_width".
-///   - When true, clear columns "col" to "endcol".
-/// - SLF_WRAP  hint to UI that "row" contains a line wrapped into the next row.
-/// - SLF_INC_VCOL:
-///   - When false, use "last_vcol" for grid->vcols[] of the columns to clear.
-///   - When true, use an increasing sequence starting from "last_vcol + 1" for
-///     grid->vcols[] of the columns to clear.
-void grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int endcol, int clear_width,
-                      int bg_attr, int clear_attr, colnr_T last_vcol, int flags)
-{
-  rs_grid_put_linebuf(grid, row, coloff, col, endcol, clear_width, bg_attr, clear_attr, last_vcol,
-                      flags);
-}
 
 void grid_alloc(ScreenGrid *grid, int rows, int columns, bool copy, bool valid)
 {
@@ -955,32 +609,6 @@ void win_grid_alloc(win_T *wp)
   }
 }
 
-/// assign a handle to the grid. The grid need not be allocated.
-void grid_assign_handle(ScreenGrid *grid)
-{
-  rs_grid_assign_handle(grid);
-}
-
-/// insert lines on the screen and move the existing lines down
-/// 'line_count' is the number of lines to be inserted.
-/// 'end' is the line after the scrolled part. Normally it is Rows.
-/// 'col' is the column from with we start inserting.
-//
-/// 'row', 'col' and 'end' are relative to the start of the region.
-void grid_ins_lines(ScreenGrid *grid, int row, int line_count, int end, int col, int width)
-{
-  rs_grid_ins_lines(grid, row, line_count, end, col, width);
-}
-
-/// delete lines on the screen and move lines up.
-/// 'end' is the line after the scrolled part. Normally it is Rows.
-/// When scrolling region used 'off' is the offset from the top for the region.
-/// 'row' and 'end' are relative to the start of the region.
-void grid_del_lines(ScreenGrid *grid, int row, int line_count, int end, int col, int width)
-{
-  rs_grid_del_lines(grid, row, line_count, end, col, width);
-}
-
 static void grid_draw_bordertext(VirtText vt, int col, int winbl, const int *hl_attr,
                                  BorderTextType bt)
 {
@@ -996,11 +624,6 @@ static void grid_draw_bordertext(VirtText vt, int col, int winbl, const int *hl_
     attr = hl_apply_winblend(winbl, attr);
     col += grid_line_puts(col, text, -1, attr);
   }
-}
-
-static int get_bordertext_col(int total_col, int text_width, AlignTextPos align)
-{
-  return rs_get_bordertext_col(total_col, text_width, (int)align);
 }
 
 /// draw border on floating window grid
@@ -1034,7 +657,7 @@ void grid_draw_border(ScreenGrid *grid, WinConfig *config, int *adj, int winbl, 
     }
 
     if (config->title) {
-      int title_col = get_bordertext_col(icol, config->title_width, config->title_pos);
+      int title_col = rs_get_bordertext_col(icol, config->title_width, (int)config->title_pos);
       grid_draw_bordertext(config->title_chunks, title_col, winbl, hl_attr, kBorderTextTitle);
     }
     if (adj[1]) {
@@ -1069,7 +692,7 @@ void grid_draw_border(ScreenGrid *grid, WinConfig *config, int *adj, int winbl, 
     }
 
     if (config->footer) {
-      int footer_col = get_bordertext_col(icol, config->footer_width, config->footer_pos);
+      int footer_col = rs_get_bordertext_col(icol, config->footer_width, (int)config->footer_pos);
       grid_draw_bordertext(config->footer_chunks, footer_col, winbl, hl_attr, kBorderTextFooter);
     }
     if (adj[1]) {
@@ -1077,16 +700,6 @@ void grid_draw_border(ScreenGrid *grid, WinConfig *config, int *adj, int winbl, 
     }
     grid_line_flush();
   }
-}
-
-static void linecopy(ScreenGrid *grid, int to, int from, int col, int width)
-{
-  unsigned off_to = (unsigned)(grid->line_offset[to] + (size_t)col);
-  unsigned off_from = (unsigned)(grid->line_offset[from] + (size_t)col);
-
-  memmove(grid->chars + off_to, grid->chars + off_from, (size_t)width * sizeof(schar_T));
-  memmove(grid->attrs + off_to, grid->attrs + off_from, (size_t)width * sizeof(sattr_T));
-  memmove(grid->vcols + off_to, grid->vcols + off_from, (size_t)width * sizeof(colnr_T));
 }
 
 win_T *get_win_by_grid_handle(handle_T handle)
@@ -1099,8 +712,3 @@ win_T *get_win_by_grid_handle(handle_T handle)
   return NULL;
 }
 
-/// Put a unicode character in a screen cell.
-schar_T schar_from_char(int c)
-{
-  return rs_schar_from_char(c);
-}

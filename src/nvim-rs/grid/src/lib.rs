@@ -180,6 +180,11 @@ pub extern "C" fn rs_schar_high(sc: ScharT) -> bool {
     schar_high_impl(sc)
 }
 
+#[no_mangle]
+pub extern "C" fn schar_high(sc: ScharT) -> bool {
+    schar_high_impl(sc)
+}
+
 /// Get ASCII character from an schar, or NUL if not ASCII.
 ///
 /// Returns the ASCII character if the schar represents a single ASCII byte,
@@ -217,6 +222,11 @@ pub extern "C" fn rs_schar_get_ascii(sc: ScharT) -> i8 {
     schar_get_ascii_impl(sc)
 }
 
+#[no_mangle]
+pub extern "C" fn schar_get_ascii(sc: ScharT) -> i8 {
+    schar_get_ascii_impl(sc)
+}
+
 /// Put a unicode character in a screen cell.
 ///
 /// Converts a Unicode codepoint to an `schar_T` by encoding it as UTF-8
@@ -241,6 +251,11 @@ fn schar_from_char_impl(c: c_int) -> ScharT {
 /// Put a unicode character in a screen cell.
 #[no_mangle]
 pub extern "C" fn rs_schar_from_char(c: c_int) -> ScharT {
+    schar_from_char_impl(c)
+}
+
+#[no_mangle]
+pub extern "C" fn schar_from_char(c: c_int) -> ScharT {
     schar_from_char_impl(c)
 }
 
@@ -364,6 +379,11 @@ pub extern "C" fn rs_schar_from_str(str_ptr: *const c_char) -> ScharT {
     schar_from_str_impl(str_ptr)
 }
 
+#[no_mangle]
+pub extern "C" fn schar_from_str(str_ptr: *const c_char) -> ScharT {
+    schar_from_str_impl(str_ptr)
+}
+
 /// FFI wrapper for `schar_from_buf`.
 ///
 /// Convert a byte buffer to an `schar_T`.
@@ -382,6 +402,11 @@ pub unsafe extern "C" fn rs_schar_from_buf(buf: *const c_char, len: usize) -> Sc
     // SAFETY: caller guarantees buf is valid for len bytes
     let bytes = std::slice::from_raw_parts(buf.cast::<u8>(), len);
     schar_from_buf_impl(bytes)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn schar_from_buf(buf: *const c_char, len: usize) -> ScharT {
+    rs_schar_from_buf(buf, len)
 }
 
 /// Check if cache is full, and if so, clear it.
@@ -405,7 +430,7 @@ fn schar_cache_clear_if_full_impl() -> bool {
 ///
 /// Check if cache is full, and if so, clear it.
 /// Returns true if cache was cleared.
-#[no_mangle]
+#[export_name = "schar_cache_clear_if_full"]
 pub extern "C" fn rs_schar_cache_clear_if_full() -> bool {
     schar_cache_clear_if_full_impl()
 }
@@ -436,7 +461,7 @@ fn schar_cache_clear_impl() {
 /// FFI wrapper for `schar_cache_clear`.
 ///
 /// Clear the glyph cache completely.
-#[no_mangle]
+#[export_name = "schar_cache_clear"]
 pub extern "C" fn rs_schar_cache_clear() {
     schar_cache_clear_impl();
 }
@@ -463,6 +488,11 @@ pub unsafe extern "C" fn rs_schar_get(buf_out: *mut c_char, sc: ScharT) -> usize
     len
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn schar_get(buf_out: *mut c_char, sc: ScharT) -> usize {
+    rs_schar_get(buf_out, sc)
+}
+
 /// FFI wrapper for `schar_get_adv`.
 ///
 /// Convert an `schar_T` to UTF-8 bytes, advancing the buffer pointer.
@@ -471,7 +501,7 @@ pub unsafe extern "C" fn rs_schar_get(buf_out: *mut c_char, sc: ScharT) -> usize
 /// # Safety
 /// - `buf_out` must point to a valid `*mut c_char` pointer
 /// - The pointed-to buffer must be valid for writing at least `MAX_SCHAR_SIZE` bytes
-#[no_mangle]
+#[export_name = "schar_get_adv"]
 pub unsafe extern "C" fn rs_schar_get_adv(buf_out: *mut *mut c_char, sc: ScharT) -> usize {
     debug_assert!(!buf_out.is_null());
     debug_assert!(!(*buf_out).is_null());
@@ -504,7 +534,7 @@ fn schar_len_impl(sc: ScharT) -> usize {
 /// FFI wrapper for `schar_len`.
 ///
 /// Get the byte length of an schar's UTF-8 content.
-#[no_mangle]
+#[export_name = "schar_len"]
 pub extern "C" fn rs_schar_len(sc: ScharT) -> usize {
     schar_len_impl(sc)
 }
@@ -542,7 +572,7 @@ fn schar_cells_impl(sc: ScharT) -> c_int {
 /// FFI wrapper for `schar_cells`.
 ///
 /// Get the display width (in cells) of an schar.
-#[no_mangle]
+#[export_name = "schar_cells"]
 pub extern "C" fn rs_schar_cells(sc: ScharT) -> c_int {
     schar_cells_impl(sc)
 }
@@ -563,6 +593,11 @@ fn schar_get_first_codepoint_impl(sc: ScharT) -> c_int {
 /// Get the first Unicode codepoint from an schar.
 #[no_mangle]
 pub extern "C" fn rs_schar_get_first_codepoint(sc: ScharT) -> c_int {
+    schar_get_first_codepoint_impl(sc)
+}
+
+#[no_mangle]
+pub extern "C" fn schar_get_first_codepoint(sc: ScharT) -> c_int {
     schar_get_first_codepoint_impl(sc)
 }
 
@@ -634,8 +669,6 @@ extern "C" {
     fn nvim_get_p_arshape() -> c_int;
     fn nvim_get_p_tbidi() -> c_int;
 
-    // Function wrappers
-    fn nvim_line_do_arabic_shape(buf: *mut ScharT, cols: c_int);
     fn nvim_ui_line(
         grid: *mut std::ffi::c_void,
         row: c_int,
@@ -682,6 +715,11 @@ pub unsafe extern "C" fn rs_grid_line_put_schar(col: c_int, schar: ScharT, attr:
     nvim_set_grid_line_last(last.max(col + 1));
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn grid_line_put_schar(col: c_int, schar: ScharT, attr: c_int) {
+    rs_grid_line_put_schar(col, schar, attr);
+}
+
 /// Fill a range of columns with a single schar.
 ///
 /// # Safety
@@ -721,6 +759,16 @@ pub unsafe extern "C" fn rs_grid_line_fill(
     end_col
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn grid_line_fill(
+    start_col: c_int,
+    end_col: c_int,
+    sc: ScharT,
+    attr: c_int,
+) -> c_int {
+    rs_grid_line_fill(start_col, end_col, sc, attr)
+}
+
 /// Put a string of text at a column position.
 ///
 /// Handles multibyte characters, double-width characters, and truncation.
@@ -731,7 +779,7 @@ pub unsafe extern "C" fn rs_grid_line_fill(
 /// `text` must be a valid pointer to UTF-8 bytes.
 /// If `textlen >= 0`, at most `textlen` bytes are read.
 /// If `textlen < 0`, the text must be NUL-terminated.
-#[no_mangle]
+#[export_name = "grid_line_puts"]
 pub unsafe extern "C" fn rs_grid_line_puts(
     mut col: c_int,
     text: *const c_char,
@@ -969,11 +1017,21 @@ pub unsafe extern "C" fn rs_grid_line_clear_end(
     nvim_set_grid_line_clear_attr(clear_attr);
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn grid_line_clear_end(
+    start_col: c_int,
+    end_col: c_int,
+    bg_attr: c_int,
+    clear_attr: c_int,
+) {
+    rs_grid_line_clear_end(start_col, end_col, bg_attr, clear_attr);
+}
+
 /// Move the cursor to a position in the currently rendered line.
 ///
 /// # Safety
 /// Must be called after `grid_line_start()` and before `grid_line_flush()`.
-#[no_mangle]
+#[export_name = "grid_line_cursor_goto"]
 pub unsafe extern "C" fn rs_grid_line_cursor_goto(col: c_int) {
     let grid = nvim_get_grid_line_grid();
     let handle = nvim_screengrid_get_handle(grid);
@@ -1029,6 +1087,11 @@ pub unsafe extern "C" fn rs_grid_line_flush() {
     );
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn grid_line_flush() {
+    rs_grid_line_flush();
+}
+
 /// Flush grid line but only if on a valid row.
 ///
 /// This is a stopgap until message.c has been refactored to behave.
@@ -1036,7 +1099,7 @@ pub unsafe extern "C" fn rs_grid_line_flush() {
 ///
 /// # Safety
 /// Must be called after `grid_line_start()`.
-#[no_mangle]
+#[export_name = "grid_line_flush_if_valid_row"]
 pub unsafe extern "C" fn rs_grid_line_flush_if_valid_row() {
     let grid = nvim_get_grid_line_grid();
     let row = nvim_get_grid_line_row();
@@ -1200,7 +1263,7 @@ pub unsafe extern "C" fn rs_grid_put_linebuf(
 
     // Apply Arabic shaping if enabled
     if nvim_get_p_arshape() != 0 && nvim_get_p_tbidi() == 0 && endcol > col {
-        nvim_line_do_arabic_shape(linebuf_char.offset(col as isize), endcol - col);
+        rs_line_do_arabic_shape(linebuf_char.offset(col as isize), endcol - col);
     }
 
     // Combine background attribute with line attributes
@@ -1406,6 +1469,34 @@ pub unsafe extern "C" fn rs_grid_put_linebuf(
     }
 }
 
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn grid_put_linebuf(
+    grid: *mut std::ffi::c_void,
+    row: c_int,
+    coloff: c_int,
+    col: c_int,
+    endcol: c_int,
+    clear_width: c_int,
+    bg_attr: c_int,
+    clear_attr: c_int,
+    last_vcol: ColnrT,
+    flags: c_int,
+) {
+    rs_grid_put_linebuf(
+        grid,
+        row,
+        coloff,
+        col,
+        endcol,
+        clear_width,
+        bg_attr,
+        clear_attr,
+        last_vcol,
+        flags,
+    );
+}
+
 // =============================================================================
 // Phase 33: Arabic Shaping
 // =============================================================================
@@ -1466,7 +1557,7 @@ fn schar_get_first_two_codepoints(sc: ScharT) -> (c_int, c_int) {
 ///
 /// # Safety
 /// - `buf` must be a valid pointer to `cols` schar_T elements
-#[no_mangle]
+#[export_name = "line_do_arabic_shape"]
 pub unsafe extern "C" fn rs_line_do_arabic_shape(buf: *mut ScharT, cols: c_int) {
     if buf.is_null() || cols <= 0 {
         return;
@@ -1600,10 +1691,19 @@ pub unsafe extern "C" fn rs_grid_adjust(
     nvim_gridview_get_target(view)
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn grid_adjust(
+    view: GridViewPtr,
+    row_off: *mut c_int,
+    col_off: *mut c_int,
+) -> *mut std::ffi::c_void {
+    rs_grid_adjust(view, row_off, col_off)
+}
+
 /// Clear a line in the grid starting at "off" until "width" characters are cleared.
 ///
 /// This is the Rust equivalent of C's `grid_clear_line()`.
-#[no_mangle]
+#[export_name = "grid_clear_line"]
 pub unsafe extern "C" fn rs_grid_clear_line(
     grid: *mut std::ffi::c_void,
     off: usize,
@@ -1635,7 +1735,7 @@ pub unsafe extern "C" fn rs_grid_clear_line(
 /// Invalidate all rows in a grid by setting all attrs to -1.
 ///
 /// This is the Rust equivalent of C's `grid_invalidate()`.
-#[no_mangle]
+#[export_name = "grid_invalidate"]
 pub unsafe extern "C" fn rs_grid_invalidate(grid: *mut std::ffi::c_void) {
     let attrs = nvim_screengrid_get_attrs(grid);
     let rows = nvim_screengrid_get_rows(grid);
@@ -1657,7 +1757,7 @@ pub unsafe extern "C" fn rs_grid_invalidate(grid: *mut std::ffi::c_void) {
 /// @param row   Row index
 /// @param col   Column index
 /// @param attrp Optional pointer to receive the character's attribute
-#[no_mangle]
+#[export_name = "grid_getchar"]
 pub unsafe extern "C" fn rs_grid_getchar(
     grid: *mut std::ffi::c_void,
     row: c_int,
@@ -1698,7 +1798,7 @@ extern "C" {
 ///
 /// This is the Rust equivalent of C's `grid_clear()`.
 /// Clears from start_row to end_row, start_col to end_col with given attribute.
-#[no_mangle]
+#[export_name = "grid_clear"]
 pub unsafe extern "C" fn rs_grid_clear(
     view: GridViewPtr,
     start_row: c_int,
@@ -1789,7 +1889,7 @@ unsafe fn linecopy_impl(
 ///
 /// This is the Rust equivalent of C's `grid_ins_lines()`.
 /// Shifts lines down and clears the inserted lines at the top.
-#[no_mangle]
+#[export_name = "grid_ins_lines"]
 pub unsafe extern "C" fn rs_grid_ins_lines(
     grid: *mut std::ffi::c_void,
     row: c_int,
@@ -1851,7 +1951,7 @@ pub unsafe extern "C" fn rs_grid_ins_lines(
 ///
 /// This is the Rust equivalent of C's `grid_del_lines()`.
 /// Shifts lines up and clears the deleted lines at the bottom.
-#[no_mangle]
+#[export_name = "grid_del_lines"]
 pub unsafe extern "C" fn rs_grid_del_lines(
     grid: *mut std::ffi::c_void,
     row: c_int,
@@ -1923,7 +2023,7 @@ const K_OPT_RDB_FLAG_INVALID_P37: c_uint = 0x04;
 ///
 /// # Safety
 /// - `grid` must be a valid ScreenGrid pointer
-#[no_mangle]
+#[export_name = "screengrid_line_start"]
 pub unsafe extern "C" fn rs_screengrid_line_start(
     grid: *mut std::ffi::c_void,
     row: c_int,
@@ -1985,6 +2085,11 @@ pub unsafe extern "C" fn rs_grid_line_start(view: *mut std::ffi::c_void, row: c_
     rs_screengrid_line_start(grid, adjusted_row, col);
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn grid_line_start(view: *mut std::ffi::c_void, row: c_int) {
+    rs_grid_line_start(view, row);
+}
+
 /// Get present char from current rendered screen line.
 ///
 /// This is the Rust equivalent of C's `grid_line_getchar()`.
@@ -1994,7 +2099,7 @@ pub unsafe extern "C" fn rs_grid_line_start(view: *mut std::ffi::c_void, row: c_
 /// Must be called after `grid_line_start()`.
 ///
 /// @return char or space if out of bounds
-#[no_mangle]
+#[export_name = "grid_line_getchar"]
 pub unsafe extern "C" fn rs_grid_line_getchar(col: c_int, attr: *mut c_int) -> ScharT {
     let maxcol = nvim_get_grid_line_maxcol();
 
@@ -2103,6 +2208,16 @@ pub unsafe extern "C" fn rs_linebuf_mirror(
     *lastp = width - last;
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn linebuf_mirror(
+    firstp: *mut c_int,
+    lastp: *mut c_int,
+    clearp: *mut c_int,
+    width: c_int,
+) {
+    rs_linebuf_mirror(firstp, lastp, clearp, width);
+}
+
 /// Mirror the current grid line for right-to-left text display.
 ///
 /// This is the Rust equivalent of C's `grid_line_mirror()`.
@@ -2141,6 +2256,11 @@ pub unsafe extern "C" fn rs_grid_line_mirror(width: c_int) {
     nvim_set_grid_line_flags(flags | SLF_RIGHTLEFT);
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn grid_line_mirror(width: c_int) {
+    rs_grid_line_mirror(width);
+}
+
 // =============================================================================
 // Phase 39: Grid Handle Assignment and Border Text Alignment
 // =============================================================================
@@ -2175,7 +2295,7 @@ extern "C" {
 ///
 /// # Safety
 /// `grid` must be a valid ScreenGrid pointer.
-#[no_mangle]
+#[export_name = "grid_assign_handle"]
 pub unsafe extern "C" fn rs_grid_assign_handle(grid: *mut std::ffi::c_void) {
     let handle_ptr = nvim_screengrid_get_handle_ptr(grid);
     if handle_ptr.is_null() {
