@@ -7,6 +7,7 @@ use std::ffi::{c_char, c_int, c_void};
 
 use crate::decor::{range_end_before, DECOR_ID_INVALID, KSH_CONCEAL, KSH_SPELL_OFF, KSH_SPELL_ON};
 use crate::range::DecorVtHandle;
+use crate::types::DecorVirtText;
 use crate::{
     DecorKind, DecorRangeHandle, DecorStateHandle, ScharT, VirtTextPos, WinHandle,
     DRAW_COL_JUST_ADDED, DRAW_COL_UNSET, KVT_IS_LINES, KVT_LINES_ABOVE,
@@ -22,42 +23,10 @@ pub struct BufHandle(*mut c_void);
 // =============================================================================
 
 extern "C" {
-    // DecorState accessors
-    fn nvim_decor_state_get_row(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_set_eol_col(state: DecorStateHandle, val: c_int);
-    fn nvim_decor_state_get_current_end(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_get_future_begin(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_get_ranges_count(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_get_range_by_idx(state: DecorStateHandle, idx: c_int) -> DecorRangeHandle;
-    fn nvim_decor_state_get_range(state: DecorStateHandle, idx: c_int) -> DecorRangeHandle;
-
-    // Phase 1 accessors
+    // Complex C functions that remain in C (marktree, kvec operations)
     fn nvim_decor_state_win_has_buffer(state: DecorStateHandle, buf: BufHandle) -> c_int;
-    fn nvim_decor_state_set_itr_valid(state: DecorStateHandle, val: c_int);
-    fn nvim_decor_state_set_win(state: DecorStateHandle, win: WinHandle);
     fn nvim_decor_state_destroy_slots(state: DecorStateHandle);
     fn nvim_decor_state_destroy_ranges_i(state: DecorStateHandle);
-
-    // DecorRange accessors
-    fn nvim_decor_range_get_start_row(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_get_kind(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_get_draw_col(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_has_virt_pos(range: DecorRangeHandle) -> bool;
-    fn nvim_decor_range_get_virt_pos_kind(range: DecorRangeHandle) -> c_int;
-
-    // DecorRange virt_text accessors
-    fn nvim_decor_range_get_virt_text(range: DecorRangeHandle) -> crate::DecorVirtTextHandle;
-    fn nvim_decor_virt_text_get_width(vt: crate::DecorVirtTextHandle) -> c_int;
-
-    // Phase 3 accessors
-    fn nvim_decor_state_set_row(state: DecorStateHandle, val: c_int);
-    fn nvim_decor_state_set_col_until(state: DecorStateHandle, val: c_int);
-    fn nvim_decor_state_set_current_end(state: DecorStateHandle, val: c_int);
-    fn nvim_decor_state_set_future_begin(state: DecorStateHandle, val: c_int);
-    fn nvim_decor_state_set_new_range_ordering(state: DecorStateHandle, val: c_int);
-    fn nvim_decor_state_set_free_slot_i(state: DecorStateHandle, val: c_int);
-    fn nvim_decor_state_set_slots_size(state: DecorStateHandle, val: c_int);
-    fn nvim_decor_state_set_ranges_i_size(state: DecorStateHandle, val: c_int);
     fn nvim_decor_state_ranges_i_memmove(
         state: DecorStateHandle,
         dst_idx: c_int,
@@ -69,12 +38,9 @@ extern "C" {
     fn nvim_decor_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_decor_state_itr_current_row(state: DecorStateHandle) -> c_int;
     fn nvim_decor_state_itr_get(state: DecorStateHandle, buf: BufHandle, row: c_int, col: c_int);
-    fn nvim_decor_state_get_itr_valid(state: DecorStateHandle) -> c_int;
-
-    // C functions for decor operations
     fn decor_redraw_start(wp: WinHandle, top_row: c_int, state: DecorStateHandle) -> bool;
 
-    // Phase 5: Redraw Dispatch accessors
+    // Phase 5: Redraw Dispatch
     fn nvim_redraw_buf_line_later(buf: BufHandle, lnum: c_int, redraw: bool);
     fn nvim_changed_lines_invalidate_buf(
         buf: BufHandle,
@@ -117,7 +83,7 @@ pub extern "C" fn rs_decor_state_invalidate(state: DecorStateHandle, buf: BufHan
         return;
     }
     if unsafe { nvim_decor_state_win_has_buffer(state, buf) } != 0 {
-        unsafe { nvim_decor_state_set_itr_valid(state, 0) };
+        unsafe { (*state).itr_valid = false };
     }
 }
 
@@ -129,7 +95,7 @@ pub extern "C" fn rs_decor_redraw_end(state: DecorStateHandle) {
     if state.is_null() {
         return;
     }
-    unsafe { nvim_decor_state_set_win(state, WinHandle(std::ptr::null_mut())) };
+    unsafe { (*state).win = std::ptr::null_mut() };
 }
 
 /// Free the memory used by DecorState's kvecs.
@@ -231,24 +197,25 @@ pub extern "C" fn rs_decor_redraw_reset(wp: WinHandle, state: DecorStateHandle) 
     }
 
     unsafe {
-        nvim_decor_state_set_row(state, -1);
-        nvim_decor_state_set_win(state, wp);
+        let s = &mut *state;
+        s.row = -1;
+        s.win = wp.0;
 
-        let current_end = nvim_decor_state_get_current_end(state);
-        let future_begin = nvim_decor_state_get_future_begin(state);
-        let ranges_count = nvim_decor_state_get_ranges_count(state);
+        let current_end = s.current_end;
+        let future_begin = s.future_begin;
+        let ranges_count = s.ranges_i.size as c_int;
 
         // Free owned ranges in [0, current_end) and [future_begin, count)
         nvim_decor_state_free_owned_ranges(state, 0, current_end);
         nvim_decor_state_free_owned_ranges(state, future_begin, ranges_count);
 
         // Reset kvec sizes and state fields
-        nvim_decor_state_set_slots_size(state, 0);
-        nvim_decor_state_set_ranges_i_size(state, 0);
-        nvim_decor_state_set_free_slot_i(state, -1);
-        nvim_decor_state_set_current_end(state, 0);
-        nvim_decor_state_set_future_begin(state, 0);
-        nvim_decor_state_set_new_range_ordering(state, 0);
+        (*state).slots.size = 0;
+        (*state).ranges_i.size = 0;
+        (*state).free_slot_i = -1;
+        (*state).current_end = 0;
+        (*state).future_begin = 0;
+        (*state).new_range_ordering = 0;
 
         let buf = nvim_decor_win_get_buffer(wp);
         nvim_buf_get_marktree_n_keys(buf) != 0
@@ -268,9 +235,9 @@ pub extern "C" fn rs_decor_state_pack(state: DecorStateHandle) {
     }
 
     unsafe {
-        let mut count = nvim_decor_state_get_ranges_count(state);
-        let cur_end = nvim_decor_state_get_current_end(state);
-        let mut fut_beg = nvim_decor_state_get_future_begin(state);
+        let mut count = (*state).ranges_i.size as c_int;
+        let cur_end = (*state).current_end;
+        let mut fut_beg = (*state).future_begin;
 
         // Move future ranges to start right after current ranges.
         // Otherwise future ranges will grow forward indefinitely.
@@ -284,8 +251,8 @@ pub extern "C" fn rs_decor_state_pack(state: DecorStateHandle) {
             fut_beg = cur_end;
         }
 
-        nvim_decor_state_set_ranges_i_size(state, count);
-        nvim_decor_state_set_future_begin(state, fut_beg);
+        (*state).ranges_i.size = count as usize;
+        (*state).future_begin = fut_beg;
     }
 }
 
@@ -304,18 +271,18 @@ pub extern "C" fn rs_decor_redraw_line(wp: WinHandle, row: c_int, state: DecorSt
     unsafe {
         rs_decor_state_pack(state);
 
-        let cur_row = nvim_decor_state_get_row(state);
+        let cur_row = (*state).row;
         if cur_row == -1 {
             decor_redraw_start(wp, row, state);
-        } else if nvim_decor_state_get_itr_valid(state) == 0 {
+        } else if !(*state).itr_valid {
             let buf = nvim_decor_win_get_buffer(wp);
             nvim_decor_state_itr_get(state, buf, row, 0);
-            nvim_decor_state_set_itr_valid(state, 1);
+            (*state).itr_valid = true;
         }
 
-        nvim_decor_state_set_row(state, row);
-        nvim_decor_state_set_col_until(state, -1);
-        nvim_decor_state_set_eol_col(state, -1);
+        (*state).row = row;
+        (*state).col_until = -1;
+        (*state).eol_col = -1;
     }
 }
 
@@ -331,9 +298,10 @@ pub extern "C" fn rs_decor_has_more_decorations(state: DecorStateHandle, row: c_
     }
 
     unsafe {
-        let current_end = nvim_decor_state_get_current_end(state);
-        let future_begin = nvim_decor_state_get_future_begin(state);
-        let ranges_count = nvim_decor_state_get_ranges_count(state);
+        let s = &*state;
+        let current_end = s.current_end;
+        let future_begin = s.future_begin;
+        let ranges_count = s.ranges_i.size as c_int;
 
         if current_end != 0 || future_begin != ranges_count {
             return true;
@@ -502,13 +470,11 @@ pub unsafe extern "C" fn rs_buf_decor_remove(
 
     // Optionally free
     if do_free && ext {
-        // Call rs_decor_free which is already implemented
-        rs_decor_free(1, vt, sh_idx);
+        // rs_decor_free takes *mut DecorVirtText; cast from opaque handle
+        // DecorVtHandle is repr(transparent) over *mut c_void; transmute to typed ptr
+        let vt_ptr: *mut DecorVirtText = std::mem::transmute(vt);
+        crate::decor::rs_decor_free(1, vt_ptr, sh_idx);
     }
-}
-
-extern "C" {
-    fn rs_decor_free(ext: c_int, vt: DecorVtHandle, sh_idx: u32);
 }
 
 /// Calculate EOL virtual text widths for the current row.
@@ -530,46 +496,43 @@ pub unsafe extern "C" fn rs_calc_eol_virt_widths(
         return;
     }
 
-    let current_end = unsafe { nvim_decor_state_get_current_end(state) };
+    let current_end = unsafe { (*state).current_end };
     let mut total: c_int = 0;
     let mut right: c_int = 0;
 
     for i in 0..current_end {
-        let range = unsafe { nvim_decor_state_get_range(state, i) };
+        let range = unsafe { crate::decor_state_get_range(state, i) };
         if range.is_null() {
             continue;
         }
 
-        let start_row = unsafe { nvim_decor_range_get_start_row(range) };
+        let start_row = unsafe { (*range).start_row };
         if start_row != row {
             continue;
         }
 
-        if !unsafe { nvim_decor_range_has_virt_pos(range) } {
+        if !unsafe { crate::decor_range_has_virt_pos(range) } {
             continue;
         }
 
-        let draw_col = unsafe { nvim_decor_range_get_draw_col(range) };
+        let draw_col = unsafe { (*range).draw_col };
         if draw_col != DRAW_COL_UNSET {
             continue;
         }
 
-        let pos_kind = unsafe { nvim_decor_range_get_virt_pos_kind(range) };
-        let pos = VirtTextPos::from_c_int(pos_kind);
-
-        let kind_raw = unsafe { nvim_decor_range_get_kind(range) };
-        let kind = DecorKind::from_c_int(kind_raw);
+        let pos = unsafe { crate::decor_range_virt_pos_kind(range) };
+        let kind = unsafe { crate::decor_range_kind(range) };
 
         if kind != Some(DecorKind::VirtText) {
             continue;
         }
 
-        let vt = unsafe { nvim_decor_range_get_virt_text(range) };
+        let vt = unsafe { crate::decor_range_virt_text(range) };
         if vt.is_null() {
             continue;
         }
 
-        let width = unsafe { nvim_decor_virt_text_get_width(vt) };
+        let width = unsafe { (*vt).width };
 
         match pos {
             Some(VirtTextPos::EndOfLine) => {
@@ -606,16 +569,16 @@ pub extern "C" fn rs_decor_row_has_virt_pos(state: DecorStateHandle, row: c_int)
         return 0;
     }
 
-    let current_end = unsafe { nvim_decor_state_get_current_end(state) };
+    let current_end = unsafe { (*state).current_end };
 
     for i in 0..current_end {
-        let range = unsafe { nvim_decor_state_get_range(state, i) };
+        let range = unsafe { crate::decor_state_get_range(state, i) };
         if range.is_null() {
             continue;
         }
 
-        let start_row = unsafe { nvim_decor_range_get_start_row(range) };
-        if start_row == row && unsafe { nvim_decor_range_has_virt_pos(range) } {
+        let start_row = unsafe { (*range).start_row };
+        if start_row == row && unsafe { crate::decor_range_has_virt_pos(range) } {
             return 1;
         }
     }
@@ -635,27 +598,26 @@ pub extern "C" fn rs_count_virt_at_pos(
     }
 
     let target_pos = VirtTextPos::from_c_int(pos_type);
-    let current_end = unsafe { nvim_decor_state_get_current_end(state) };
+    let current_end = unsafe { (*state).current_end };
     let mut count: c_int = 0;
 
     for i in 0..current_end {
-        let range = unsafe { nvim_decor_state_get_range(state, i) };
+        let range = unsafe { crate::decor_state_get_range(state, i) };
         if range.is_null() {
             continue;
         }
 
-        let start_row = unsafe { nvim_decor_range_get_start_row(range) };
+        let start_row = unsafe { (*range).start_row };
         if start_row != row {
             continue;
         }
 
-        let kind_raw = unsafe { nvim_decor_range_get_kind(range) };
-        if DecorKind::from_c_int(kind_raw) != Some(DecorKind::VirtText) {
+        if unsafe { crate::decor_range_kind(range) } != Some(DecorKind::VirtText) {
             continue;
         }
 
-        let pos_kind = unsafe { nvim_decor_range_get_virt_pos_kind(range) };
-        if VirtTextPos::from_c_int(pos_kind) == target_pos {
+        let pos_kind = unsafe { crate::decor_range_virt_pos_kind(range) };
+        if pos_kind == target_pos {
             count += 1;
         }
     }
@@ -677,31 +639,30 @@ pub extern "C" fn rs_next_pending_virt_text(
     }
 
     let target_pos = VirtTextPos::from_c_int(pos_type);
-    let current_end = unsafe { nvim_decor_state_get_current_end(state) };
+    let current_end = unsafe { (*state).current_end };
 
     for i in 0..current_end {
-        let range = unsafe { nvim_decor_state_get_range(state, i) };
+        let range = unsafe { crate::decor_state_get_range(state, i) };
         if range.is_null() {
             continue;
         }
 
-        let start_row = unsafe { nvim_decor_range_get_start_row(range) };
+        let start_row = unsafe { (*range).start_row };
         if start_row != row {
             continue;
         }
 
-        let draw_col = unsafe { nvim_decor_range_get_draw_col(range) };
+        let draw_col = unsafe { (*range).draw_col };
         if draw_col != DRAW_COL_UNSET && draw_col != DRAW_COL_JUST_ADDED {
             continue;
         }
 
-        let kind_raw = unsafe { nvim_decor_range_get_kind(range) };
-        if DecorKind::from_c_int(kind_raw) != Some(DecorKind::VirtText) {
+        if unsafe { crate::decor_range_kind(range) } != Some(DecorKind::VirtText) {
             continue;
         }
 
-        let pos_kind = unsafe { nvim_decor_range_get_virt_pos_kind(range) };
-        if VirtTextPos::from_c_int(pos_kind) == target_pos {
+        let pos_kind = unsafe { crate::decor_range_virt_pos_kind(range) };
+        if pos_kind == target_pos {
             return i;
         }
     }
@@ -779,7 +740,7 @@ pub extern "C" fn rs_range_iterator_active(state: DecorStateHandle) -> RangeIter
     if state.is_null() {
         return RangeIterator::default();
     }
-    let current_end = unsafe { nvim_decor_state_get_current_end(state) };
+    let current_end = unsafe { (*state).current_end };
     RangeIterator::active(current_end)
 }
 
@@ -789,7 +750,7 @@ pub extern "C" fn rs_range_iterator_for_row(state: DecorStateHandle, row: c_int)
     if state.is_null() {
         return RangeIterator::default();
     }
-    let current_end = unsafe { nvim_decor_state_get_current_end(state) };
+    let current_end = unsafe { (*state).current_end };
     RangeIterator::for_row(current_end, row)
 }
 
@@ -817,9 +778,9 @@ pub extern "C" fn rs_range_iterator_current(
     iter: RangeIterator,
 ) -> DecorRangeHandle {
     if state.is_null() || !iter.has_next() {
-        return DecorRangeHandle(std::ptr::null_mut());
+        return std::ptr::null_mut();
     }
-    unsafe { nvim_decor_state_get_range(state, iter.index) }
+    unsafe { crate::decor_state_get_range(state, iter.index) }
 }
 
 // =============================================================================
@@ -925,7 +886,7 @@ pub unsafe extern "C" fn rs_decor_redraw_col_impl(
     let fut_beg = adv.fut_beg;
     let count = adv.count;
 
-    let row = nvim_decor_state_get_row(state);
+    let row = (*state).row;
 
     // Part 2: Attribute computation loop
     let mut new_cur_end: c_int = 0;

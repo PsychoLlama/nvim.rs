@@ -6,9 +6,8 @@
 use std::ffi::{c_int, c_void};
 
 use crate::{
-    DecorKind, DecorRangeHandle, DecorStateHandle, DecorVirtTextHandle, VirtTextPos,
-    DRAW_COL_DISABLED, DRAW_COL_JUST_ADDED, DRAW_COL_PENDING, DRAW_COL_UNSET, KVT_HIDE,
-    KVT_IS_LINES,
+    DecorKind, DecorRangeHandle, DecorStateHandle, DecorVirtText, VirtTextPos, DRAW_COL_DISABLED,
+    DRAW_COL_JUST_ADDED, DRAW_COL_PENDING, DRAW_COL_UNSET, KVT_HIDE, KVT_IS_LINES,
 };
 
 // =============================================================================
@@ -108,25 +107,6 @@ pub const KEXTMARK_VIRT_LINES: u16 = 8;
 // =============================================================================
 
 extern "C" {
-    // DecorRange accessors
-    fn nvim_decor_range_get_kind(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_get_draw_col(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_set_draw_col(range: DecorRangeHandle, val: c_int);
-    fn nvim_decor_range_get_start_row(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_get_start_col(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_get_virt_text(range: DecorRangeHandle) -> DecorVirtTextHandle;
-    fn nvim_decor_range_get_virt_pos_kind(range: DecorRangeHandle) -> c_int;
-
-    // DecorVirtText accessors
-    fn nvim_decor_virt_text_get_flags(vt: DecorVirtTextHandle) -> c_int;
-    fn nvim_decor_virt_text_get_pos(vt: DecorVirtTextHandle) -> c_int;
-    fn nvim_decor_virt_text_get_width(vt: DecorVirtTextHandle) -> c_int;
-
-    // DecorState accessors
-    fn nvim_decor_state_get_row(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_get_current_end(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_get_range(state: DecorStateHandle, idx: c_int) -> DecorRangeHandle;
-
     // Highlight functions
     fn syn_id2attr(hl_id: c_int) -> c_int;
 
@@ -143,21 +123,13 @@ extern "C" {
     fn nvim_set_to_free_virt(val: *mut c_void);
     fn nvim_get_to_free_sh() -> u32;
     fn nvim_set_to_free_sh(val: u32);
-    fn nvim_decor_state_get_running_provider() -> c_int;
-    fn nvim_decor_vt_get_next(vt: *mut c_void) -> *mut c_void;
-    fn nvim_decor_vt_set_next(vt: *mut c_void, next: *mut c_void);
-    fn nvim_decor_vt_get_flags(vt: *mut c_void) -> u8;
     fn nvim_clear_virttext(vt: *mut c_void);
     fn nvim_clear_virtlines(vt: *mut c_void);
-    fn nvim_decor_vt_get_virt_text_data(vt: *mut c_void) -> *mut c_void;
-    fn nvim_decor_vt_get_virt_lines_data(vt: *mut c_void) -> *mut c_void;
     fn nvim_decor_items_get_flags(idx: u32) -> u16;
     fn nvim_decor_items_set_flags(idx: u32, flags: u16);
     fn nvim_decor_items_set_next(idx: u32, next: u32);
     fn nvim_decor_items_clear_sign_name(idx: u32);
     fn nvim_decor_items_clear_url(idx: u32);
-    fn nvim_decor_vt_copy_to(dst: *mut c_void, src: *const c_void, size: usize);
-    fn nvim_decor_state_set_win(state: DecorStateHandle, win: *mut c_void);
 }
 
 // =============================================================================
@@ -380,18 +352,15 @@ pub extern "C" fn rs_decor_init_draw_col(
         return DRAW_COL_UNSET;
     }
 
-    let kind_raw = unsafe { nvim_decor_range_get_kind(range) };
-    let kind = DecorKind::from_c_int(kind_raw).unwrap_or(DecorKind::Highlight);
-
-    let pos_raw = unsafe { nvim_decor_range_get_virt_pos_kind(range) };
-    let pos = VirtTextPos::from_c_int(pos_raw).unwrap_or(VirtTextPos::EndOfLine);
+    let kind = unsafe { crate::decor_range_kind(range) }.unwrap_or(DecorKind::Highlight);
+    let pos = unsafe { crate::decor_range_virt_pos_kind(range) }.unwrap_or(VirtTextPos::EndOfLine);
 
     let vt_flags = if kind == DecorKind::VirtText {
-        let vt = unsafe { nvim_decor_range_get_virt_text(range) };
+        let vt = unsafe { crate::decor_range_virt_text(range) };
         if vt.is_null() {
             0
         } else {
-            unsafe { nvim_decor_virt_text_get_flags(vt) }
+            unsafe { crate::virt_text_flags(vt) }
         }
     } else {
         0
@@ -433,42 +402,40 @@ pub extern "C" fn rs_calc_eol_right_width(
         return 0;
     }
 
-    let current_end = unsafe { nvim_decor_state_get_current_end(state) };
-    let state_row = unsafe { nvim_decor_state_get_row(state) };
+    let current_end = unsafe { crate::decor_state_current_end(state) };
+    let state_row = unsafe { crate::decor_state_row(state) };
 
     let mut total_width: c_int = 0;
 
     for i in from_idx..current_end {
-        let range = unsafe { nvim_decor_state_get_range(state, i) };
+        let range = unsafe { crate::decor_state_get_range(state, i) };
         if range.is_null() {
             continue;
         }
 
-        let start_row = unsafe { nvim_decor_range_get_start_row(range) };
+        let start_row = unsafe { crate::decor_range_start_row(range) };
         if start_row != state_row && start_row != row {
             continue;
         }
 
-        let draw_col = unsafe { nvim_decor_range_get_draw_col(range) };
+        let draw_col = unsafe { crate::decor_range_draw_col(range) };
         if draw_col != DRAW_COL_UNSET {
             continue;
         }
 
-        let kind_raw = unsafe { nvim_decor_range_get_kind(range) };
-        let kind = DecorKind::from_c_int(kind_raw);
+        let kind = unsafe { crate::decor_range_kind(range) };
         if kind != Some(DecorKind::VirtText) {
             continue;
         }
 
-        let pos_raw = unsafe { nvim_decor_range_get_virt_pos_kind(range) };
-        let pos = VirtTextPos::from_c_int(pos_raw);
+        let pos = unsafe { crate::decor_range_virt_pos_kind(range) };
         if pos != Some(VirtTextPos::EndOfLineRightAlign) {
             continue;
         }
 
-        let vt = unsafe { nvim_decor_range_get_virt_text(range) };
+        let vt = unsafe { crate::decor_range_virt_text(range) };
         if !vt.is_null() {
-            let width = unsafe { nvim_decor_virt_text_get_width(vt) };
+            let width = unsafe { crate::virt_text_width(vt) };
             // Add 1 for spacing between entries
             total_width += width + 1;
         }
@@ -981,16 +948,15 @@ pub extern "C" fn rs_decor_put_sh(item: DecorSignHighlight) -> u32 {
 /// Rust implementation of `decor_put_vt()`.
 ///
 /// # Safety
-/// `vt_data` must point to a valid `DecorVirtText` of `vt_size` bytes.
+/// `vt_data` must point to a valid `DecorVirtText`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_decor_put_vt(
-    vt_data: *const c_void,
-    vt_size: usize,
-    next: *mut c_void,
-) -> *mut c_void {
-    let alloc = nvim_xmalloc_decor_virt_text();
-    nvim_decor_vt_copy_to(alloc, vt_data, vt_size);
-    nvim_decor_vt_set_next(alloc, next);
+    vt_data: *const DecorVirtText,
+    next: *mut DecorVirtText,
+) -> *mut DecorVirtText {
+    let alloc = nvim_xmalloc_decor_virt_text().cast::<DecorVirtText>();
+    std::ptr::copy_nonoverlapping(vt_data, alloc, 1);
+    (*alloc).next = next;
     alloc
 }
 
@@ -1031,19 +997,17 @@ pub unsafe extern "C" fn rs_clear_virtlines(lines: *mut c_void) {
 /// # Safety
 /// `vt` must point to a valid `DecorVirtText` linked list or be null.
 #[no_mangle]
-pub unsafe extern "C" fn rs_decor_free_inner(mut vt: *mut c_void, first_idx: u32) {
+pub unsafe extern "C" fn rs_decor_free_inner(mut vt: *mut DecorVirtText, first_idx: u32) {
     // Walk and free DecorVirtText linked list
     while !vt.is_null() {
-        let flags = nvim_decor_vt_get_flags(vt);
-        if flags & KVT_IS_LINES != 0 {
-            let lines_data = nvim_decor_vt_get_virt_lines_data(vt);
-            nvim_clear_virtlines(lines_data);
+        let vt_ref = &*vt;
+        if vt_ref.flags & KVT_IS_LINES != 0 {
+            nvim_clear_virtlines(std::ptr::addr_of_mut!((*vt).data.virt_lines).cast::<c_void>());
         } else {
-            let text_data = nvim_decor_vt_get_virt_text_data(vt);
-            nvim_clear_virttext(text_data);
+            nvim_clear_virttext(std::ptr::addr_of_mut!((*vt).data.virt_text).cast::<c_void>());
         }
-        let next = nvim_decor_vt_get_next(vt);
-        nvim_xfree_ptr(vt);
+        let next = vt_ref.next;
+        nvim_xfree_ptr(vt.cast::<c_void>());
         vt = next;
     }
 
@@ -1076,21 +1040,22 @@ pub unsafe extern "C" fn rs_decor_free_inner(mut vt: *mut c_void, first_idx: u32
 /// # Safety
 /// `vt_ptr` must point to a valid `DecorVirtText` linked list or be null.
 #[no_mangle]
-pub unsafe extern "C" fn rs_decor_free(ext: c_int, vt_ptr: *mut c_void, sh_idx: u32) {
+pub unsafe extern "C" fn rs_decor_free(ext: c_int, vt_ptr: *mut DecorVirtText, sh_idx: u32) {
     if ext == 0 {
         return;
     }
 
-    if nvim_decor_state_get_running_provider() != 0 {
+    let state = crate::get_decor_state();
+    if (*state).running_decor_provider {
         // Defer deletion: append to to_free linked lists
         let mut vt = vt_ptr;
         let original_vt = vt_ptr;
         while !vt.is_null() {
-            let next = nvim_decor_vt_get_next(vt);
+            let next = (*vt).next;
             if next.is_null() {
-                let to_free = nvim_get_to_free_virt();
-                nvim_decor_vt_set_next(vt, to_free);
-                nvim_set_to_free_virt(original_vt);
+                let to_free = nvim_get_to_free_virt().cast::<DecorVirtText>();
+                (*vt).next = to_free;
+                nvim_set_to_free_virt(original_vt.cast::<c_void>());
                 break;
             }
             vt = next;
@@ -1121,15 +1086,15 @@ pub unsafe extern "C" fn rs_decor_free(ext: c_int, vt_ptr: *mut c_void, sh_idx: 
 pub extern "C" fn rs_decor_check_to_be_deleted() {
     // Safety: accessing globals through C accessors
     unsafe {
-        let to_free_virt = nvim_get_to_free_virt();
+        let to_free_virt = nvim_get_to_free_virt().cast::<DecorVirtText>();
         let to_free_sh = nvim_get_to_free_sh();
         rs_decor_free_inner(to_free_virt, to_free_sh);
+        nvim_set_to_free_virt(std::ptr::null_mut());
+        nvim_set_to_free_sh(DECOR_ID_INVALID);
+        // Also clear the win pointer (original C code does this)
+        let state = crate::get_decor_state();
+        (*state).win = std::ptr::null_mut();
     }
-    unsafe { nvim_set_to_free_virt(std::ptr::null_mut()) };
-    unsafe { nvim_set_to_free_sh(DECOR_ID_INVALID) };
-    // Also clear the win pointer (original C code does this)
-    let state = crate::get_decor_state();
-    unsafe { nvim_decor_state_set_win(state, std::ptr::null_mut()) };
 }
 
 // =============================================================================

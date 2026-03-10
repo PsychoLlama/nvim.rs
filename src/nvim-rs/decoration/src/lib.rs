@@ -14,6 +14,8 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::match_same_arms)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(dead_code)]
 
 pub mod cache;
@@ -22,59 +24,35 @@ pub mod invoke;
 pub mod provider;
 pub mod range;
 pub mod redraw;
+pub mod types;
 
 use std::ffi::{c_char, c_int, c_void};
+
+pub use types::{DecorRange, DecorSignHighlight, DecorState, DecorVirtText, KVec};
 
 /// schar_T is stored as a u32.
 pub type ScharT = u32;
 
-/// Opaque handle to DecorState.
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
-pub struct DecorStateHandle(*mut c_void);
+// ============================================================================
+// Type aliases replacing opaque handles
+// ============================================================================
 
-impl DecorStateHandle {
-    /// Check if the handle is null.
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn is_null(self) -> bool {
-        self.0.is_null()
-    }
-}
+/// Typed pointer to DecorState (replaces DecorStateHandle).
+pub type DecorStateHandle = *mut DecorState;
 
-/// Opaque handle to DecorRange.
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
-pub struct DecorRangeHandle(*mut c_void);
+/// Typed pointer to DecorRange (replaces DecorRangeHandle).
+pub type DecorRangeHandle = *mut DecorRange;
 
-impl DecorRangeHandle {
-    /// Check if the handle is null.
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn is_null(self) -> bool {
-        self.0.is_null()
-    }
-}
+/// Typed pointer to DecorVirtText (replaces DecorVirtTextHandle).
+pub type DecorVirtTextHandle = *mut DecorVirtText;
 
-/// Opaque handle to DecorVirtText.
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
-pub struct DecorVirtTextHandle(*mut c_void);
-
-impl DecorVirtTextHandle {
-    /// Check if the handle is null.
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn is_null(self) -> bool {
-        self.0.is_null()
-    }
-}
-
-/// Opaque handle to VirtText (kvec_t(VirtTextChunk)).
+/// Opaque handle to VirtText (kvec_t(VirtTextChunk)) -- kept opaque
+/// since we still use C for next_virt_text_chunk iteration.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct VirtTextHandle(*mut c_void);
 
 impl VirtTextHandle {
-    /// Check if the handle is null.
-    #[allow(clippy::missing_const_for_fn)]
     pub fn is_null(self) -> bool {
         self.0.is_null()
     }
@@ -86,8 +64,6 @@ impl VirtTextHandle {
 pub struct WinHandle(*mut c_void);
 
 impl WinHandle {
-    /// Check if the handle is null.
-    #[allow(clippy::missing_const_for_fn)]
     pub fn is_null(self) -> bool {
         self.0.is_null()
     }
@@ -181,270 +157,419 @@ pub const KVT_LINES_ABOVE: u8 = 4;
 pub const KVT_REPEAT_LINEBREAK: u8 = 8;
 
 // ============================================================================
-// C accessor functions for DecorState
+// C functions we still need (non-accessor)
 // ============================================================================
 
 extern "C" {
-    // DecorState accessors
+    /// Get the global decor_state pointer.
     fn nvim_get_decor_state() -> DecorStateHandle;
-    fn nvim_decor_state_get_row(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_get_eol_col(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_set_eol_col(state: DecorStateHandle, val: c_int);
-    fn nvim_decor_state_get_current_end(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_get_current(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_get_col_until(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_get_conceal(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_get_conceal_char(state: DecorStateHandle) -> ScharT;
-    fn nvim_decor_state_get_conceal_attr(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_get_spell(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_get_win(state: DecorStateHandle) -> WinHandle;
-    fn nvim_decor_state_get_top_row(state: DecorStateHandle) -> c_int;
-    fn nvim_decor_state_get_range(state: DecorStateHandle, idx: c_int) -> DecorRangeHandle;
 
-    // DecorRange accessors
-    fn nvim_decor_range_get_start_row(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_get_start_col(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_get_end_row(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_get_end_col(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_get_draw_col(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_set_draw_col(range: DecorRangeHandle, val: c_int);
-    fn nvim_decor_range_get_kind(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_get_attr_id(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_get_priority(range: DecorRangeHandle) -> u32;
-    fn nvim_decor_range_has_virt_pos(range: DecorRangeHandle) -> bool;
-    fn nvim_decor_range_get_virt_pos_kind(range: DecorRangeHandle) -> c_int;
-    fn nvim_decor_range_get_virt_text(range: DecorRangeHandle) -> DecorVirtTextHandle;
-
-    // DecorVirtText accessors
-    fn nvim_decor_virt_text_get_hl_mode(vt: DecorVirtTextHandle) -> c_int;
-    fn nvim_decor_virt_text_get_pos(vt: DecorVirtTextHandle) -> c_int;
-    fn nvim_decor_virt_text_get_width(vt: DecorVirtTextHandle) -> c_int;
-    fn nvim_decor_virt_text_get_col(vt: DecorVirtTextHandle) -> c_int;
-    fn nvim_decor_virt_text_get_flags(vt: DecorVirtTextHandle) -> c_int;
-    fn nvim_decor_virt_text_get_chunk_count(vt: DecorVirtTextHandle) -> usize;
-    fn nvim_decor_virt_text_get_chunk_text(vt: DecorVirtTextHandle, idx: usize) -> *const c_char;
-    fn nvim_decor_virt_text_get_chunk_hl_id(vt: DecorVirtTextHandle, idx: usize) -> c_int;
-    fn nvim_decor_virt_text_get_virt_text(vt: DecorVirtTextHandle) -> VirtTextHandle;
-
-    // VirtText iteration
+    // VirtText iteration -- kept in C (complex kvec logic)
     fn nvim_next_virt_text_chunk(
         vt: VirtTextHandle,
         pos: *mut usize,
         attr: *mut c_int,
     ) -> *const c_char;
 
-    // UIWatched accessors
-    fn nvim_decor_range_get_ui_ns_id(range: DecorRangeHandle) -> u64;
-    fn nvim_decor_range_get_ui_mark_id(range: DecorRangeHandle) -> u32;
-
     // win_extmark_arr push
     fn nvim_win_extmark_push(ns_id: u64, mark_id: u64, win_row: c_int, win_col: c_int);
-
-    // High-level iteration helpers for draw_virt_text
-    fn nvim_decor_state_get_active_range(state: DecorStateHandle, i: c_int) -> DecorRangeHandle;
-    fn nvim_decor_state_get_eol_right_width(state: DecorStateHandle, from_idx: c_int) -> c_int;
 }
 
 // ============================================================================
-// DecorState wrapper functions
+// Direct field access helpers for DecorState
 // ============================================================================
 
-/// Get the global decor_state.
+/// Get the global decor_state pointer.
 pub fn get_decor_state() -> DecorStateHandle {
     unsafe { nvim_get_decor_state() }
 }
 
 /// Get the current row from decor_state.
-pub fn decor_state_row(state: DecorStateHandle) -> c_int {
-    unsafe { nvim_decor_state_get_row(state) }
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_row(state: DecorStateHandle) -> c_int {
+    (*state).row
 }
 
 /// Get the EOL column from decor_state.
-pub fn decor_state_eol_col(state: DecorStateHandle) -> c_int {
-    unsafe { nvim_decor_state_get_eol_col(state) }
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_eol_col(state: DecorStateHandle) -> c_int {
+    (*state).eol_col
 }
 
 /// Set the EOL column in decor_state.
-pub fn decor_state_set_eol_col(state: DecorStateHandle, val: c_int) {
-    unsafe { nvim_decor_state_set_eol_col(state, val) }
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_set_eol_col(state: DecorStateHandle, val: c_int) {
+    (*state).eol_col = val;
 }
 
 /// Get the current_end from decor_state (number of active ranges).
-pub fn decor_state_current_end(state: DecorStateHandle) -> c_int {
-    unsafe { nvim_decor_state_get_current_end(state) }
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_current_end(state: DecorStateHandle) -> c_int {
+    (*state).current_end
 }
 
 /// Get the current attr from decor_state.
-pub fn decor_state_current(state: DecorStateHandle) -> c_int {
-    unsafe { nvim_decor_state_get_current(state) }
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_current(state: DecorStateHandle) -> c_int {
+    (*state).current
 }
 
 /// Get the col_until from decor_state.
-pub fn decor_state_col_until(state: DecorStateHandle) -> c_int {
-    unsafe { nvim_decor_state_get_col_until(state) }
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_col_until(state: DecorStateHandle) -> c_int {
+    (*state).col_until
 }
 
 /// Get the conceal from decor_state.
-pub fn decor_state_conceal(state: DecorStateHandle) -> c_int {
-    unsafe { nvim_decor_state_get_conceal(state) }
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_conceal(state: DecorStateHandle) -> c_int {
+    (*state).conceal
 }
 
 /// Get the conceal_char from decor_state.
-pub fn decor_state_conceal_char(state: DecorStateHandle) -> ScharT {
-    unsafe { nvim_decor_state_get_conceal_char(state) }
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_conceal_char(state: DecorStateHandle) -> ScharT {
+    (*state).conceal_char
 }
 
 /// Get the conceal_attr from decor_state.
-pub fn decor_state_conceal_attr(state: DecorStateHandle) -> c_int {
-    unsafe { nvim_decor_state_get_conceal_attr(state) }
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_conceal_attr(state: DecorStateHandle) -> c_int {
+    (*state).conceal_attr
 }
 
 /// Get the spell from decor_state.
-pub fn decor_state_spell(state: DecorStateHandle) -> c_int {
-    unsafe { nvim_decor_state_get_spell(state) }
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_spell(state: DecorStateHandle) -> c_int {
+    (*state).spell
 }
 
-/// Get the window from decor_state.
-pub fn decor_state_win(state: DecorStateHandle) -> WinHandle {
-    unsafe { nvim_decor_state_get_win(state) }
+/// Get the window from decor_state (as raw pointer).
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_win(state: DecorStateHandle) -> WinHandle {
+    WinHandle((*state).win)
 }
 
 /// Get the top_row from decor_state.
-pub fn decor_state_top_row(state: DecorStateHandle) -> c_int {
-    unsafe { nvim_decor_state_get_top_row(state) }
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_top_row(state: DecorStateHandle) -> c_int {
+    (*state).top_row
 }
 
-/// Get a DecorRange by index.
-pub fn decor_state_get_range(state: DecorStateHandle, idx: c_int) -> DecorRangeHandle {
-    unsafe { nvim_decor_state_get_range(state, idx) }
+/// Get a DecorRange by active-range index (0..current_end).
+///
+/// Returns null if `idx` is out of bounds.
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_get_range(state: DecorStateHandle, idx: c_int) -> DecorRangeHandle {
+    let state = &*state;
+    if idx < 0 || idx >= state.current_end {
+        return std::ptr::null_mut();
+    }
+    let slot_idx = *state.ranges_i.get_unchecked(idx as usize);
+    // DecorRangeSlot is a union; the range field is at offset 0.
+    // Cast the slot pointer directly to *mut DecorRange.
+    state
+        .slots
+        .get_unchecked(slot_idx as usize)
+        .cast::<types::DecorRange>()
+}
+
+/// Get a DecorRange by ranges_i array index (0..ranges_i.size).
+///
+/// Returns null if `idx` is out of bounds.
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_get_range_by_idx(
+    state: DecorStateHandle,
+    idx: c_int,
+) -> DecorRangeHandle {
+    let state = &*state;
+    if idx < 0 || idx >= state.ranges_i.size as c_int {
+        return std::ptr::null_mut();
+    }
+    let slot_idx = *state.ranges_i.get_unchecked(idx as usize);
+    state
+        .slots
+        .get_unchecked(slot_idx as usize)
+        .cast::<types::DecorRange>()
 }
 
 // ============================================================================
-// DecorRange wrapper functions
+// Direct field access helpers for DecorRange
 // ============================================================================
 
 /// Get the start_row from a DecorRange.
-pub fn decor_range_start_row(range: DecorRangeHandle) -> c_int {
-    unsafe { nvim_decor_range_get_start_row(range) }
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_start_row(range: DecorRangeHandle) -> c_int {
+    (*range).start_row
 }
 
 /// Get the start_col from a DecorRange.
-pub fn decor_range_start_col(range: DecorRangeHandle) -> c_int {
-    unsafe { nvim_decor_range_get_start_col(range) }
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_start_col(range: DecorRangeHandle) -> c_int {
+    (*range).start_col
 }
 
 /// Get the end_row from a DecorRange.
-pub fn decor_range_end_row(range: DecorRangeHandle) -> c_int {
-    unsafe { nvim_decor_range_get_end_row(range) }
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_end_row(range: DecorRangeHandle) -> c_int {
+    (*range).end_row
 }
 
 /// Get the end_col from a DecorRange.
-pub fn decor_range_end_col(range: DecorRangeHandle) -> c_int {
-    unsafe { nvim_decor_range_get_end_col(range) }
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_end_col(range: DecorRangeHandle) -> c_int {
+    (*range).end_col
 }
 
 /// Get the draw_col from a DecorRange.
-pub fn decor_range_draw_col(range: DecorRangeHandle) -> c_int {
-    unsafe { nvim_decor_range_get_draw_col(range) }
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_draw_col(range: DecorRangeHandle) -> c_int {
+    (*range).draw_col
 }
 
 /// Set the draw_col in a DecorRange.
-pub fn decor_range_set_draw_col(range: DecorRangeHandle, val: c_int) {
-    unsafe { nvim_decor_range_set_draw_col(range, val) }
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_set_draw_col(range: DecorRangeHandle, val: c_int) {
+    (*range).draw_col = val;
 }
 
 /// Get the kind from a DecorRange.
-pub fn decor_range_kind(range: DecorRangeHandle) -> Option<DecorKind> {
-    DecorKind::from_c_int(unsafe { nvim_decor_range_get_kind(range) })
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_kind(range: DecorRangeHandle) -> Option<DecorKind> {
+    DecorKind::from_c_int(c_int::from((*range).kind))
 }
 
 /// Get the attr_id from a DecorRange.
-pub fn decor_range_attr_id(range: DecorRangeHandle) -> c_int {
-    unsafe { nvim_decor_range_get_attr_id(range) }
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_attr_id(range: DecorRangeHandle) -> c_int {
+    (*range).attr_id
 }
 
 /// Get the priority from a DecorRange.
-pub fn decor_range_priority(range: DecorRangeHandle) -> u32 {
-    unsafe { nvim_decor_range_get_priority(range) }
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_priority(range: DecorRangeHandle) -> u32 {
+    (*range).priority_internal
 }
 
-/// Check if a DecorRange has virtual text position.
-pub fn decor_range_has_virt_pos(range: DecorRangeHandle) -> bool {
-    unsafe { nvim_decor_range_has_virt_pos(range) }
+/// Check if a DecorRange has virtual text position (VirtText or UIWatched kind).
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_has_virt_pos(range: DecorRangeHandle) -> bool {
+    let kind = (*range).kind;
+    kind == DecorKind::VirtText as u8 || kind == DecorKind::UIWatched as u8
 }
 
 /// Get the virtual text position kind from a DecorRange.
-pub fn decor_range_virt_pos_kind(range: DecorRangeHandle) -> Option<VirtTextPos> {
-    VirtTextPos::from_c_int(unsafe { nvim_decor_range_get_virt_pos_kind(range) })
+///
+/// Returns VirtTextPos::EndOfLine if not a virtual text / UI watched range.
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_virt_pos_kind(range: DecorRangeHandle) -> Option<VirtTextPos> {
+    let r = &*range;
+    if r.kind == DecorKind::VirtText as u8 {
+        let vt = r.data.vt;
+        if !vt.is_null() {
+            return VirtTextPos::from_c_int((*vt).pos);
+        }
+    } else if r.kind == DecorKind::UIWatched as u8 {
+        return VirtTextPos::from_c_int(r.data.ui.pos);
+    }
+    Some(VirtTextPos::EndOfLine)
 }
 
-/// Get the DecorVirtText from a DecorRange.
-pub fn decor_range_virt_text(range: DecorRangeHandle) -> DecorVirtTextHandle {
-    unsafe { nvim_decor_range_get_virt_text(range) }
-}
-
-// ============================================================================
-// DecorVirtText wrapper functions
-// ============================================================================
-
-/// Get the hl_mode from a DecorVirtText.
-pub fn virt_text_hl_mode(vt: DecorVirtTextHandle) -> Option<HlMode> {
-    HlMode::from_c_int(unsafe { nvim_decor_virt_text_get_hl_mode(vt) })
-}
-
-/// Get the pos from a DecorVirtText.
-pub fn virt_text_pos(vt: DecorVirtTextHandle) -> Option<VirtTextPos> {
-    VirtTextPos::from_c_int(unsafe { nvim_decor_virt_text_get_pos(vt) })
-}
-
-/// Get the width from a DecorVirtText.
-pub fn virt_text_width(vt: DecorVirtTextHandle) -> c_int {
-    unsafe { nvim_decor_virt_text_get_width(vt) }
-}
-
-/// Get the col from a DecorVirtText.
-pub fn virt_text_col(vt: DecorVirtTextHandle) -> c_int {
-    unsafe { nvim_decor_virt_text_get_col(vt) }
-}
-
-/// Get the flags from a DecorVirtText.
-pub fn virt_text_flags(vt: DecorVirtTextHandle) -> c_int {
-    unsafe { nvim_decor_virt_text_get_flags(vt) }
-}
-
-/// Get the number of chunks in a VirtText.
-pub fn virt_text_chunk_count(vt: DecorVirtTextHandle) -> usize {
-    unsafe { nvim_decor_virt_text_get_chunk_count(vt) }
-}
-
-/// Get a chunk text from a VirtText by index.
-/// Returns None if index is out of bounds or text is null.
-pub fn virt_text_chunk_text(vt: DecorVirtTextHandle, idx: usize) -> Option<*const c_char> {
-    let ptr = unsafe { nvim_decor_virt_text_get_chunk_text(vt, idx) };
-    if ptr.is_null() {
-        None
+/// Get the DecorVirtText pointer from a DecorRange (for VirtText kind).
+///
+/// Returns null if range is not VirtText kind.
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_virt_text(range: DecorRangeHandle) -> DecorVirtTextHandle {
+    let r = &*range;
+    if r.kind == DecorKind::VirtText as u8 {
+        r.data.vt
     } else {
-        Some(ptr)
+        std::ptr::null_mut()
     }
 }
 
-/// Get a chunk hl_id from a VirtText by index.
-pub fn virt_text_chunk_hl_id(vt: DecorVirtTextHandle, idx: usize) -> c_int {
-    unsafe { nvim_decor_virt_text_get_chunk_hl_id(vt, idx) }
+/// Get the ns_id from a UIWatched DecorRange.
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_ui_ns_id(range: DecorRangeHandle) -> u64 {
+    let r = &*range;
+    if r.kind == DecorKind::UIWatched as u8 {
+        u64::from(r.data.ui.ns_id)
+    } else {
+        0
+    }
 }
 
-/// Get the VirtText handle from a DecorVirtText.
-pub fn virt_text_get_virt_text(vt: DecorVirtTextHandle) -> VirtTextHandle {
-    unsafe { nvim_decor_virt_text_get_virt_text(vt) }
+/// Get the mark_id from a UIWatched DecorRange.
+///
+/// # Safety
+/// `range` must be a valid non-null pointer.
+pub unsafe fn decor_range_ui_mark_id(range: DecorRangeHandle) -> u32 {
+    let r = &*range;
+    if r.kind == DecorKind::UIWatched as u8 {
+        r.data.ui.mark_id
+    } else {
+        0
+    }
+}
+
+// ============================================================================
+// Direct field access helpers for DecorVirtText
+// ============================================================================
+
+/// Get the hl_mode from a DecorVirtText.
+///
+/// # Safety
+/// `vt` must be a valid non-null pointer.
+pub unsafe fn virt_text_hl_mode(vt: DecorVirtTextHandle) -> Option<HlMode> {
+    HlMode::from_c_int(c_int::from((*vt).hl_mode))
+}
+
+/// Get the pos from a DecorVirtText.
+///
+/// # Safety
+/// `vt` must be a valid non-null pointer.
+pub unsafe fn virt_text_pos(vt: DecorVirtTextHandle) -> Option<VirtTextPos> {
+    VirtTextPos::from_c_int((*vt).pos)
+}
+
+/// Get the width from a DecorVirtText.
+///
+/// # Safety
+/// `vt` must be a valid non-null pointer.
+pub unsafe fn virt_text_width(vt: DecorVirtTextHandle) -> c_int {
+    (*vt).width
+}
+
+/// Get the col from a DecorVirtText.
+///
+/// # Safety
+/// `vt` must be a valid non-null pointer.
+pub unsafe fn virt_text_col(vt: DecorVirtTextHandle) -> c_int {
+    (*vt).col
+}
+
+/// Get the flags from a DecorVirtText.
+///
+/// # Safety
+/// `vt` must be a valid non-null pointer.
+pub unsafe fn virt_text_flags(vt: DecorVirtTextHandle) -> c_int {
+    c_int::from((*vt).flags)
+}
+
+/// Get the number of chunks in a VirtText inside DecorVirtText.
+///
+/// # Safety
+/// `vt` must be a valid non-null pointer.
+pub unsafe fn virt_text_chunk_count(vt: DecorVirtTextHandle) -> usize {
+    std::ptr::addr_of!((*vt).data.virt_text).read().size
+}
+
+/// Get a chunk text from a VirtText inside DecorVirtText by index.
+///
+/// # Safety
+/// `vt` must be a valid non-null pointer.
+pub unsafe fn virt_text_chunk_text(vt: DecorVirtTextHandle, idx: usize) -> Option<*const c_char> {
+    let vt_ref = &*vt;
+    let kvec = &vt_ref.data.virt_text;
+    if idx >= kvec.size {
+        return None;
+    }
+    let chunk = kvec.get_unchecked(idx);
+    let text = (*chunk).text.cast_const();
+    if text.is_null() {
+        None
+    } else {
+        Some(text)
+    }
+}
+
+/// Get a chunk hl_id from a VirtText inside DecorVirtText by index.
+///
+/// # Safety
+/// `vt` must be a valid non-null pointer.
+pub unsafe fn virt_text_chunk_hl_id(vt: DecorVirtTextHandle, idx: usize) -> c_int {
+    let vt_ref = &*vt;
+    let kvec = &vt_ref.data.virt_text;
+    if idx >= kvec.size {
+        return 0;
+    }
+    let chunk = kvec.get_unchecked(idx);
+    (*chunk).hl_id
+}
+
+/// Get a VirtTextHandle pointing to the virt_text data inside DecorVirtText.
+/// (Still used for nvim_next_virt_text_chunk C calls.)
+///
+/// # Safety
+/// `vt` must be a valid non-null pointer.
+pub unsafe fn virt_text_get_virt_text(vt: DecorVirtTextHandle) -> VirtTextHandle {
+    let vt_ref = &*vt;
+    VirtTextHandle(
+        std::ptr::addr_of!(vt_ref.data.virt_text)
+            .cast_mut()
+            .cast::<c_void>(),
+    )
 }
 
 // ============================================================================
 // VirtText iteration wrapper functions
 // ============================================================================
 
-/// Iterator for VirtText chunks.
-/// Returns the next text chunk or None if no more chunks.
-/// Updates pos and attr through the C function.
+/// Iterator for VirtText chunks via C helper.
 ///
 /// # Safety
 /// pos and attr must be valid pointers.
@@ -462,20 +587,6 @@ pub unsafe fn next_virt_text_chunk(
 }
 
 // ============================================================================
-// UIWatched accessor wrapper functions
-// ============================================================================
-
-/// Get the ns_id from a UIWatched DecorRange.
-pub fn decor_range_ui_ns_id(range: DecorRangeHandle) -> u64 {
-    unsafe { nvim_decor_range_get_ui_ns_id(range) }
-}
-
-/// Get the mark_id from a UIWatched DecorRange.
-pub fn decor_range_ui_mark_id(range: DecorRangeHandle) -> u32 {
-    unsafe { nvim_decor_range_get_ui_mark_id(range) }
-}
-
-// ============================================================================
 // win_extmark_arr wrapper functions
 // ============================================================================
 
@@ -485,17 +596,70 @@ pub fn win_extmark_push(ns_id: u64, mark_id: u64, win_row: c_int, win_col: c_int
 }
 
 // ============================================================================
-// High-level iteration wrappers for draw_virt_text
+// High-level iteration helpers for draw_virt_text
+// (Implemented in Rust using direct struct access -- no C accessor needed)
 // ============================================================================
 
-/// Get an active DecorRange by iteration index.
-pub fn decor_state_get_active_range(state: DecorStateHandle, i: c_int) -> DecorRangeHandle {
-    unsafe { nvim_decor_state_get_active_range(state, i) }
+/// Get an active DecorRange by ranges_i array index (unrestricted, not just current_end).
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_get_active_range(state: DecorStateHandle, i: c_int) -> DecorRangeHandle {
+    let state_ref = &*state;
+    if i < 0 || i >= state_ref.ranges_i.size as c_int {
+        return std::ptr::null_mut();
+    }
+    let slot_idx = *state_ref.ranges_i.get_unchecked(i as usize);
+    state_ref
+        .slots
+        .get_unchecked(slot_idx as usize)
+        .cast::<types::DecorRange>()
 }
 
-/// Get the total width of EOL right-aligned virtual text.
-pub fn decor_state_get_eol_right_width(state: DecorStateHandle, from_idx: c_int) -> c_int {
-    unsafe { nvim_decor_state_get_eol_right_width(state, from_idx) }
+/// Get the total width of EOL right-aligned virtual text from index i onwards.
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+pub unsafe fn decor_state_get_eol_right_width(state: DecorStateHandle, from_idx: c_int) -> c_int {
+    let state_ref = &*state;
+    let mut total_width: c_int = 0;
+    let count = state_ref.ranges_i.size as c_int;
+
+    for j in from_idx..state_ref.current_end.min(count) {
+        let slot_idx = *state_ref.ranges_i.get_unchecked(j as usize);
+        let r_ptr = state_ref
+            .slots
+            .get_unchecked(slot_idx as usize)
+            .cast::<types::DecorRange>();
+        let r = &*r_ptr;
+
+        if r.start_row != state_ref.row {
+            continue;
+        }
+        if !decor_range_has_virt_pos(r_ptr) {
+            continue;
+        }
+        if r.draw_col != DRAW_COL_UNSET {
+            continue;
+        }
+        // Check if EOL right aligned
+        let pos_kind = decor_range_virt_pos_kind(r_ptr);
+        if pos_kind != Some(VirtTextPos::EndOfLineRightAlign) {
+            continue;
+        }
+        if r.kind == DecorKind::VirtText as u8 {
+            let vt = r.data.vt;
+            if !vt.is_null() {
+                total_width += (*vt).width + 1;
+            }
+        }
+    }
+
+    if total_width > 0 {
+        total_width -= 1;
+    }
+
+    total_width
 }
 
 // ============================================================================
@@ -503,30 +667,23 @@ pub fn decor_state_get_eol_right_width(state: DecorStateHandle, from_idx: c_int)
 // ============================================================================
 
 /// Check if a DecorRange has a virtual position (virtual text or ui_watched).
-/// This is the Rust implementation of decor_virt_pos().
+/// Rust implementation of decor_virt_pos().
 #[no_mangle]
-pub extern "C" fn rs_decor_virt_pos(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_decor_virt_pos(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return 0;
     }
-    let kind = decor_range_kind(range);
-    c_int::from(kind == Some(DecorKind::VirtText) || kind == Some(DecorKind::UIWatched))
+    c_int::from(decor_range_has_virt_pos(range))
 }
 
 /// Get the virtual text position kind from a DecorRange.
-/// This is the Rust implementation of decor_virt_pos_kind().
-/// Returns VirtTextPos enum value.
+/// Rust implementation of decor_virt_pos_kind().
 #[no_mangle]
-pub extern "C" fn rs_decor_virt_pos_kind(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_decor_virt_pos_kind(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return VirtTextPos::EndOfLine as c_int;
     }
-    let kind = decor_range_kind(range);
-    if kind == Some(DecorKind::VirtText) || kind == Some(DecorKind::UIWatched) {
-        unsafe { nvim_decor_range_get_virt_pos_kind(range) }
-    } else {
-        VirtTextPos::EndOfLine as c_int
-    }
+    decor_range_virt_pos_kind(range).map_or(VirtTextPos::EndOfLine as c_int, |p| p as c_int)
 }
 
 // ============================================================================
@@ -534,10 +691,8 @@ pub extern "C" fn rs_decor_virt_pos_kind(range: DecorRangeHandle) -> c_int {
 // ============================================================================
 
 /// Check if concealment is active in the current decoration state.
-///
-/// Returns true if decor_state.conceal > 0.
 #[no_mangle]
-pub extern "C" fn rs_conceal_check(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_conceal_check(state: DecorStateHandle) -> c_int {
     if state.is_null() {
         return 0;
     }
@@ -545,10 +700,8 @@ pub extern "C" fn rs_conceal_check(state: DecorStateHandle) -> c_int {
 }
 
 /// Check if concealment should show a replacement character.
-///
-/// Returns true if conceal level allows showing a character (level 1 or 2).
 #[no_mangle]
-pub extern "C" fn rs_conceal_shows_char(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_conceal_shows_char(state: DecorStateHandle) -> c_int {
     if state.is_null() {
         return 0;
     }
@@ -557,10 +710,8 @@ pub extern "C" fn rs_conceal_shows_char(state: DecorStateHandle) -> c_int {
 }
 
 /// Check if concealment is full (completely hides text).
-///
-/// Returns true if conceal level is 3 (full concealment).
 #[no_mangle]
-pub extern "C" fn rs_conceal_is_full(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_conceal_is_full(state: DecorStateHandle) -> c_int {
     if state.is_null() {
         return 0;
     }
@@ -568,10 +719,8 @@ pub extern "C" fn rs_conceal_is_full(state: DecorStateHandle) -> c_int {
 }
 
 /// Get the conceal character if one is set.
-///
-/// Returns the conceal_char from decor_state, or 0 if no character is set.
 #[no_mangle]
-pub extern "C" fn rs_get_conceal_char(state: DecorStateHandle) -> ScharT {
+pub unsafe extern "C" fn rs_get_conceal_char(state: DecorStateHandle) -> ScharT {
     if state.is_null() {
         return 0;
     }
@@ -579,10 +728,8 @@ pub extern "C" fn rs_get_conceal_char(state: DecorStateHandle) -> ScharT {
 }
 
 /// Get the conceal attribute if one is set.
-///
-/// Returns the conceal_attr from decor_state, or 0 if no attribute is set.
 #[no_mangle]
-pub extern "C" fn rs_get_conceal_attr(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_get_conceal_attr(state: DecorStateHandle) -> c_int {
     if state.is_null() {
         return 0;
     }
@@ -590,10 +737,8 @@ pub extern "C" fn rs_get_conceal_attr(state: DecorStateHandle) -> c_int {
 }
 
 /// Check if decoration has a custom conceal character.
-///
-/// Returns true if decor_state has a non-zero conceal_char.
 #[no_mangle]
-pub extern "C" fn rs_has_conceal_char(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_has_conceal_char(state: DecorStateHandle) -> c_int {
     if state.is_null() {
         return 0;
     }
@@ -601,10 +746,8 @@ pub extern "C" fn rs_has_conceal_char(state: DecorStateHandle) -> c_int {
 }
 
 /// Check if decoration has a custom conceal attribute.
-///
-/// Returns true if decor_state has a non-zero conceal_attr.
 #[no_mangle]
-pub extern "C" fn rs_has_conceal_attr(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_has_conceal_attr(state: DecorStateHandle) -> c_int {
     if state.is_null() {
         return 0;
     }
@@ -612,19 +755,17 @@ pub extern "C" fn rs_has_conceal_attr(state: DecorStateHandle) -> c_int {
 }
 
 /// Get the spell state from decoration.
-///
-/// Returns the spell tristate: -1 = inherit, 0 = spell off, 1 = spell on.
 #[no_mangle]
-pub extern "C" fn rs_get_decor_spell(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_get_decor_spell(state: DecorStateHandle) -> c_int {
     if state.is_null() {
-        return -1; // Inherit
+        return -1;
     }
     decor_state_spell(state)
 }
 
 /// Check if decoration forces spell checking on.
 #[no_mangle]
-pub extern "C" fn rs_decor_spell_on(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_decor_spell_on(state: DecorStateHandle) -> c_int {
     if state.is_null() {
         return 0;
     }
@@ -633,7 +774,7 @@ pub extern "C" fn rs_decor_spell_on(state: DecorStateHandle) -> c_int {
 
 /// Check if decoration forces spell checking off.
 #[no_mangle]
-pub extern "C" fn rs_decor_spell_off(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_decor_spell_off(state: DecorStateHandle) -> c_int {
     if state.is_null() {
         return 0;
     }
@@ -641,10 +782,8 @@ pub extern "C" fn rs_decor_spell_off(state: DecorStateHandle) -> c_int {
 }
 
 /// Get decoration attributes for a specific column.
-///
-/// Returns the col_until value indicating how far the current decoration extends.
 #[no_mangle]
-pub extern "C" fn rs_get_decor_col_until(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_get_decor_col_until(state: DecorStateHandle) -> c_int {
     if state.is_null() {
         return 0;
     }
@@ -652,10 +791,8 @@ pub extern "C" fn rs_get_decor_col_until(state: DecorStateHandle) -> c_int {
 }
 
 /// Check if we're past the decoration column extent.
-///
-/// Returns true if `col >= col_until`, meaning decoration needs refresh.
 #[no_mangle]
-pub extern "C" fn rs_decor_needs_refresh(state: DecorStateHandle, col: c_int) -> c_int {
+pub unsafe extern "C" fn rs_decor_needs_refresh(state: DecorStateHandle, col: c_int) -> c_int {
     if state.is_null() {
         return 1;
     }
@@ -664,7 +801,7 @@ pub extern "C" fn rs_decor_needs_refresh(state: DecorStateHandle, col: c_int) ->
 
 /// Get the current decoration row.
 #[no_mangle]
-pub extern "C" fn rs_get_decor_row(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_get_decor_row(state: DecorStateHandle) -> c_int {
     if state.is_null() {
         return -1;
     }
@@ -673,7 +810,7 @@ pub extern "C" fn rs_get_decor_row(state: DecorStateHandle) -> c_int {
 
 /// Check if decoration state is on a specific row.
 #[no_mangle]
-pub extern "C" fn rs_decor_on_row(state: DecorStateHandle, row: c_int) -> c_int {
+pub unsafe extern "C" fn rs_decor_on_row(state: DecorStateHandle, row: c_int) -> c_int {
     if state.is_null() {
         return 0;
     }
@@ -682,7 +819,7 @@ pub extern "C" fn rs_decor_on_row(state: DecorStateHandle, row: c_int) -> c_int 
 
 /// Get the number of active decoration ranges.
 #[no_mangle]
-pub extern "C" fn rs_get_active_decor_count(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_get_active_decor_count(state: DecorStateHandle) -> c_int {
     if state.is_null() {
         return 0;
     }
@@ -691,7 +828,7 @@ pub extern "C" fn rs_get_active_decor_count(state: DecorStateHandle) -> c_int {
 
 /// Check if there are any active decorations.
 #[no_mangle]
-pub extern "C" fn rs_has_active_decor(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_has_active_decor(state: DecorStateHandle) -> c_int {
     if state.is_null() {
         return 0;
     }
@@ -700,7 +837,7 @@ pub extern "C" fn rs_has_active_decor(state: DecorStateHandle) -> c_int {
 
 /// Get the current decoration attribute ID.
 #[no_mangle]
-pub extern "C" fn rs_get_decor_attr(state: DecorStateHandle) -> c_int {
+pub unsafe extern "C" fn rs_get_decor_attr(state: DecorStateHandle) -> c_int {
     if state.is_null() {
         return 0;
     }
@@ -709,7 +846,7 @@ pub extern "C" fn rs_get_decor_attr(state: DecorStateHandle) -> c_int {
 
 /// Check if decoration range is for the current row.
 #[no_mangle]
-pub extern "C" fn rs_decor_range_on_row(range: DecorRangeHandle, row: c_int) -> c_int {
+pub unsafe extern "C" fn rs_decor_range_on_row(range: DecorRangeHandle, row: c_int) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -718,7 +855,7 @@ pub extern "C" fn rs_decor_range_on_row(range: DecorRangeHandle, row: c_int) -> 
 
 /// Check if decoration range starts at or before a column.
 #[no_mangle]
-pub extern "C" fn rs_decor_range_starts_by(range: DecorRangeHandle, col: c_int) -> c_int {
+pub unsafe extern "C" fn rs_decor_range_starts_by(range: DecorRangeHandle, col: c_int) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -727,7 +864,7 @@ pub extern "C" fn rs_decor_range_starts_by(range: DecorRangeHandle, col: c_int) 
 
 /// Check if decoration range ends after a column.
 #[no_mangle]
-pub extern "C" fn rs_decor_range_ends_after(range: DecorRangeHandle, col: c_int) -> c_int {
+pub unsafe extern "C" fn rs_decor_range_ends_after(range: DecorRangeHandle, col: c_int) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -736,7 +873,7 @@ pub extern "C" fn rs_decor_range_ends_after(range: DecorRangeHandle, col: c_int)
 
 /// Check if a column is within a decoration range (on same row).
 #[no_mangle]
-pub extern "C" fn rs_decor_range_contains_col(range: DecorRangeHandle, col: c_int) -> c_int {
+pub unsafe extern "C" fn rs_decor_range_contains_col(range: DecorRangeHandle, col: c_int) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -747,7 +884,7 @@ pub extern "C" fn rs_decor_range_contains_col(range: DecorRangeHandle, col: c_in
 
 /// Get the decoration range priority.
 #[no_mangle]
-pub extern "C" fn rs_get_decor_priority(range: DecorRangeHandle) -> u32 {
+pub unsafe extern "C" fn rs_get_decor_priority(range: DecorRangeHandle) -> u32 {
     if range.is_null() {
         return 0;
     }
@@ -756,7 +893,7 @@ pub extern "C" fn rs_get_decor_priority(range: DecorRangeHandle) -> u32 {
 
 /// Get the decoration range attribute ID.
 #[no_mangle]
-pub extern "C" fn rs_get_decor_range_attr(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_get_decor_range_attr(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -765,7 +902,7 @@ pub extern "C" fn rs_get_decor_range_attr(range: DecorRangeHandle) -> c_int {
 
 /// Check if decoration range is a highlight type.
 #[no_mangle]
-pub extern "C" fn rs_decor_range_is_highlight(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_decor_range_is_highlight(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -774,7 +911,7 @@ pub extern "C" fn rs_decor_range_is_highlight(range: DecorRangeHandle) -> c_int 
 
 /// Check if decoration range is a sign type.
 #[no_mangle]
-pub extern "C" fn rs_decor_range_is_sign(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_decor_range_is_sign(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -783,7 +920,7 @@ pub extern "C" fn rs_decor_range_is_sign(range: DecorRangeHandle) -> c_int {
 
 /// Check if decoration range is a virtual text type.
 #[no_mangle]
-pub extern "C" fn rs_decor_range_is_virt_text(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_decor_range_is_virt_text(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -792,7 +929,7 @@ pub extern "C" fn rs_decor_range_is_virt_text(range: DecorRangeHandle) -> c_int 
 
 /// Check if decoration range is a virtual lines type.
 #[no_mangle]
-pub extern "C" fn rs_decor_range_is_virt_lines(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_decor_range_is_virt_lines(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -801,7 +938,7 @@ pub extern "C" fn rs_decor_range_is_virt_lines(range: DecorRangeHandle) -> c_int
 
 /// Check if decoration range is UI watched.
 #[no_mangle]
-pub extern "C" fn rs_decor_range_is_ui_watched(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_decor_range_is_ui_watched(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -809,10 +946,8 @@ pub extern "C" fn rs_decor_range_is_ui_watched(range: DecorRangeHandle) -> c_int
 }
 
 /// Get virtual text width from a decoration range.
-///
-/// Returns 0 if the range is not a virtual text type.
 #[no_mangle]
-pub extern "C" fn rs_get_virt_text_width(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_get_virt_text_width(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -824,10 +959,8 @@ pub extern "C" fn rs_get_virt_text_width(range: DecorRangeHandle) -> c_int {
 }
 
 /// Get virtual text highlight mode from a decoration range.
-///
-/// Returns HlMode::Unknown (0) if not a virtual text type.
 #[no_mangle]
-pub extern "C" fn rs_get_virt_hl_mode(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_get_virt_hl_mode(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return HlMode::Unknown as c_int;
     }
@@ -839,10 +972,8 @@ pub extern "C" fn rs_get_virt_hl_mode(range: DecorRangeHandle) -> c_int {
 }
 
 /// Get virtual text position from a decoration range.
-///
-/// Returns VirtTextPos::EndOfLine (0) if not a virtual text type.
 #[no_mangle]
-pub extern "C" fn rs_get_virt_pos(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_get_virt_pos(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return VirtTextPos::EndOfLine as c_int;
     }
@@ -855,7 +986,7 @@ pub extern "C" fn rs_get_virt_pos(range: DecorRangeHandle) -> c_int {
 
 /// Check if virtual text is inline.
 #[no_mangle]
-pub extern "C" fn rs_virt_is_inline(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_virt_is_inline(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -868,7 +999,7 @@ pub extern "C" fn rs_virt_is_inline(range: DecorRangeHandle) -> c_int {
 
 /// Check if virtual text is overlay.
 #[no_mangle]
-pub extern "C" fn rs_virt_is_overlay(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_virt_is_overlay(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -881,7 +1012,7 @@ pub extern "C" fn rs_virt_is_overlay(range: DecorRangeHandle) -> c_int {
 
 /// Check if virtual text is right-aligned.
 #[no_mangle]
-pub extern "C" fn rs_virt_is_right_align(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_virt_is_right_align(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -894,7 +1025,7 @@ pub extern "C" fn rs_virt_is_right_align(range: DecorRangeHandle) -> c_int {
 
 /// Check if virtual text is at end of line.
 #[no_mangle]
-pub extern "C" fn rs_virt_is_eol(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_virt_is_eol(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -910,7 +1041,7 @@ pub extern "C" fn rs_virt_is_eol(range: DecorRangeHandle) -> c_int {
 
 /// Get virtual text flags from a decoration range.
 #[no_mangle]
-pub extern "C" fn rs_get_virt_flags(range: DecorRangeHandle) -> c_int {
+pub unsafe extern "C" fn rs_get_virt_flags(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return 0;
     }
@@ -981,7 +1112,6 @@ mod tests {
 
     #[test]
     fn test_draw_col_constants() {
-        // Verify DRAW_COL constants have expected values
         assert_eq!(DRAW_COL_UNSET, -1);
         assert_eq!(DRAW_COL_PENDING, -3);
         assert_eq!(DRAW_COL_JUST_ADDED, -10);
@@ -990,12 +1120,10 @@ mod tests {
 
     #[test]
     fn test_kvt_flag_constants() {
-        // Verify KVT flag constants have expected bit values
         assert_eq!(KVT_IS_LINES, 1);
         assert_eq!(KVT_HIDE, 2);
         assert_eq!(KVT_LINES_ABOVE, 4);
         assert_eq!(KVT_REPEAT_LINEBREAK, 8);
-        // Flags should be distinct powers of 2
         assert_eq!(KVT_IS_LINES & KVT_HIDE, 0);
         assert_eq!(KVT_HIDE & KVT_LINES_ABOVE, 0);
         assert_eq!(KVT_LINES_ABOVE & KVT_REPEAT_LINEBREAK, 0);
@@ -1003,14 +1131,13 @@ mod tests {
 
     #[test]
     fn test_handle_null_checks() {
-        // Test that null handle detection works
-        let null_decor = DecorStateHandle(std::ptr::null_mut());
-        let null_range = DecorRangeHandle(std::ptr::null_mut());
-        let null_virt = DecorVirtTextHandle(std::ptr::null_mut());
+        let null_state: DecorStateHandle = std::ptr::null_mut();
+        let null_range: DecorRangeHandle = std::ptr::null_mut();
+        let null_virt: DecorVirtTextHandle = std::ptr::null_mut();
         let null_vt = VirtTextHandle(std::ptr::null_mut());
         let null_win = WinHandle(std::ptr::null_mut());
 
-        assert!(null_decor.is_null());
+        assert!(null_state.is_null());
         assert!(null_range.is_null());
         assert!(null_virt.is_null());
         assert!(null_vt.is_null());
@@ -1019,7 +1146,6 @@ mod tests {
 
     #[test]
     fn test_handle_sizes() {
-        // All handles should be pointer-sized
         let ptr_size = std::mem::size_of::<*mut c_void>();
         assert_eq!(std::mem::size_of::<DecorStateHandle>(), ptr_size);
         assert_eq!(std::mem::size_of::<DecorRangeHandle>(), ptr_size);
@@ -1030,10 +1156,8 @@ mod tests {
 
     #[test]
     fn test_kvt_flags_combinable() {
-        // KVT flags should be combinable
         let combined = KVT_IS_LINES | KVT_HIDE | KVT_LINES_ABOVE | KVT_REPEAT_LINEBREAK;
         assert_eq!(combined, 0b1111);
-        // Individual flags should be extractable
         assert_ne!(combined & KVT_IS_LINES, 0);
         assert_ne!(combined & KVT_HIDE, 0);
         assert_ne!(combined & KVT_LINES_ABOVE, 0);
@@ -1042,11 +1166,11 @@ mod tests {
 
     #[test]
     fn test_draw_col_ordering() {
-        // DRAW_COL constants should have relative ordering for comparisons
         let disabled = DRAW_COL_DISABLED;
         let just_added = DRAW_COL_JUST_ADDED;
         let pending = DRAW_COL_PENDING;
         let unset = DRAW_COL_UNSET;
+        // Disabled is most negative
         assert!(disabled < just_added);
         assert!(just_added < pending);
         assert!(pending < unset);

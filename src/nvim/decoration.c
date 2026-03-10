@@ -95,11 +95,11 @@ extern void rs_decor_state_free(void *state);
 
 // Rust implementations for Phase 2
 extern uint32_t rs_decor_put_sh(DecorSignHighlight item);
-extern void *rs_decor_put_vt(void *vt_data, size_t vt_size, void *next);
+extern void *rs_decor_put_vt(DecorVirtText *vt_data, DecorVirtText *next);
 extern void rs_clear_virttext(void *text);
 extern void rs_clear_virtlines(void *lines);
-extern void rs_decor_free_inner(void *vt, uint32_t first_idx);
-extern void rs_decor_free(int ext, void *vt, uint32_t sh_idx);
+extern void rs_decor_free_inner(DecorVirtText *vt, uint32_t first_idx);
+extern void rs_decor_free(int ext, DecorVirtText *vt, uint32_t sh_idx);
 extern void rs_decor_check_to_be_deleted(void);
 
 // Rust implementations for Phase 3
@@ -228,7 +228,7 @@ uint32_t decor_put_sh(DecorSignHighlight item)
 
 DecorVirtText *decor_put_vt(DecorVirtText vt, DecorVirtText *next)
 {
-  return rs_decor_put_vt(&vt, sizeof(vt), next);
+  return rs_decor_put_vt(&vt, next);
 }
 
 DecorSignHighlight decor_sh_from_inline(DecorHighlightInline item)
@@ -1041,27 +1041,6 @@ int nvim_decor_state_win_has_buffer(void *state_ptr, buf_T *buf)
   return (state->win && state->win->w_buffer == buf) ? 1 : 0;
 }
 
-/// Set decor_state.itr_valid.
-void nvim_decor_state_set_itr_valid(void *state_ptr, int val)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  state->itr_valid = val != 0;
-}
-
-/// Get decor_state.itr_valid.
-int nvim_decor_state_get_itr_valid(void *state_ptr)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  return state->itr_valid ? 1 : 0;
-}
-
-/// Set decor_state.win to NULL.
-void nvim_decor_state_set_win(void *state_ptr, void *win)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  state->win = (win_T *)win;
-}
-
 /// Destroy decor_state.slots kvec.
 void nvim_decor_state_destroy_slots(void *state_ptr)
 {
@@ -1166,33 +1145,6 @@ void nvim_set_to_free_sh(uint32_t val)
   to_free_sh = val;
 }
 
-/// Get running_decor_provider flag from global decor_state.
-int nvim_decor_state_get_running_provider(void)
-{
-  return decor_state.running_decor_provider ? 1 : 0;
-}
-
-/// Get next pointer from a DecorVirtText.
-void *nvim_decor_vt_get_next(void *vt_ptr)
-{
-  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
-  return vt->next;
-}
-
-/// Set next pointer on a DecorVirtText.
-void nvim_decor_vt_set_next(void *vt_ptr, void *next)
-{
-  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
-  vt->next = (DecorVirtText *)next;
-}
-
-/// Get flags from a DecorVirtText.
-uint8_t nvim_decor_vt_get_flags(void *vt_ptr)
-{
-  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
-  return vt->flags;
-}
-
 /// Clear VirtText (free chunks + destroy kvec). Does the actual work.
 void nvim_clear_virttext(void *vt_ptr)
 {
@@ -1213,20 +1165,6 @@ void nvim_clear_virtlines(void *vt_ptr)
   }
   kv_destroy(*lines);
   *lines = (VirtLines)KV_INITIAL_VALUE;
-}
-
-/// Get pointer to virt_text data inside DecorVirtText.
-void *nvim_decor_vt_get_virt_text_data(void *vt_ptr)
-{
-  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
-  return &vt->data.virt_text;
-}
-
-/// Get pointer to virt_lines data inside DecorVirtText.
-void *nvim_decor_vt_get_virt_lines_data(void *vt_ptr)
-{
-  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
-  return &vt->data.virt_lines;
 }
 
 /// Get flags from decor_items[idx].
@@ -1257,72 +1195,6 @@ void nvim_decor_items_clear_sign_name(uint32_t idx)
 void nvim_decor_items_clear_url(uint32_t idx)
 {
   XFREE_CLEAR(kv_A(decor_items, idx).url);
-}
-
-/// Copy a DecorVirtText struct to heap-allocated memory.
-void nvim_decor_vt_copy_to(void *dst, void *src, size_t size)
-{
-  memcpy(dst, src, size);
-}
-
-// ============================================================================
-// Phase 3: DecorState Reset and Line Setup accessors
-// ============================================================================
-
-/// Set decor_state.row.
-void nvim_decor_state_set_row(void *state_ptr, int val)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  state->row = val;
-}
-
-/// Set decor_state.col_until.
-void nvim_decor_state_set_col_until(void *state_ptr, int val)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  state->col_until = val;
-}
-
-/// Set decor_state.current_end.
-void nvim_decor_state_set_current_end(void *state_ptr, int val)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  state->current_end = val;
-}
-
-/// Set decor_state.future_begin.
-void nvim_decor_state_set_future_begin(void *state_ptr, int val)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  state->future_begin = val;
-}
-
-/// Set decor_state.new_range_ordering.
-void nvim_decor_state_set_new_range_ordering(void *state_ptr, int val)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  state->new_range_ordering = val;
-}
-
-/// Set decor_state.free_slot_i.
-void nvim_decor_state_set_free_slot_i(void *state_ptr, int val)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  state->free_slot_i = val;
-}
-
-/// Set kv_size(decor_state.slots).
-void nvim_decor_state_set_slots_size(void *state_ptr, int val)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  kv_size(state->slots) = (size_t)val;
-}
-
-/// Set kv_size(decor_state.ranges_i).
-void nvim_decor_state_set_ranges_i_size(void *state_ptr, int val)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  kv_size(state->ranges_i) = (size_t)val;
 }
 
 /// Memmove within decor_state.ranges_i.items.
@@ -1699,18 +1571,6 @@ int nvim_decor_state_get_top_row(void *state_ptr)
 {
   DecorState *state = (DecorState *)state_ptr;
   return state->top_row;
-}
-
-/// Get a DecorRange by index from ranges_i and slots.
-/// Returns NULL if index is out of bounds.
-void *nvim_decor_state_get_range(void *state_ptr, int idx)
-{
-  DecorState *state = (DecorState *)state_ptr;
-  if (idx < 0 || idx >= state->current_end) {
-    return NULL;
-  }
-  int slot_idx = kv_A(state->ranges_i, idx);
-  return &kv_A(state->slots, slot_idx).range;
 }
 
 /// Get the start_row from a DecorRange.
