@@ -3881,6 +3881,123 @@ pub unsafe extern "C" fn rs_enc_canon_props(name: *const c_char) -> c_int {
     0
 }
 
+// ── Case conversion ──────────────────────────────────────────────────────────
+
+// casemap option flags (from build/src/nvim/auto/option_vars.generated.h)
+const K_OPT_CMP_FLAG_INTERNAL: u32 = 0x01;
+const K_OPT_CMP_FLAG_KEEPASCII: u32 = 0x02;
+
+extern "C" {
+    /// Global `cmp_flags` for 'casemap' option (unsigned int in C).
+    static cmp_flags: u32;
+    /// Wide-character locale-sensitive toupper (from libc/wctype.h).
+    fn towupper(wc: u32) -> u32;
+    /// Wide-character locale-sensitive tolower (from libc/wctype.h).
+    fn towlower(wc: u32) -> u32;
+}
+
+/// ASCII-only toupper: only converts a-z to A-Z, leaves others unchanged.
+#[inline]
+fn ascii_toupper(c: c_int) -> c_int {
+    if c >= i32::from(b'a') && c <= i32::from(b'z') {
+        c - 32
+    } else {
+        c
+    }
+}
+
+/// ASCII-only tolower: only converts A-Z to a-z, leaves others unchanged.
+#[inline]
+fn ascii_tolower(c: c_int) -> c_int {
+    if c >= i32::from(b'A') && c <= i32::from(b'Z') {
+        c + 32
+    } else {
+        c
+    }
+}
+
+/// Return the upper-case equivalent of a UCS-4 character. Use simple case folding.
+///
+/// Mirrors C `mb_toupper`.
+fn mb_toupper_impl(a: c_int) -> c_int {
+    // SAFETY: cmp_flags is a C global initialized before use.
+    let flags = unsafe { cmp_flags };
+
+    // If 'casemap' contains "keepascii" use ASCII style toupper().
+    if a < 128 && (flags & K_OPT_CMP_FLAG_KEEPASCII) != 0 {
+        return ascii_toupper(a);
+    }
+
+    if (flags & K_OPT_CMP_FLAG_INTERNAL) == 0 {
+        // SAFETY: towupper is a pure C library function.
+        return unsafe { towupper(a as u32) } as c_int;
+    }
+
+    // For characters below 128 use locale sensitive toupper().
+    if a < 128 {
+        // SAFETY: libc toupper is safe for 0..=127.
+        return unsafe { libc::toupper(a) };
+    }
+
+    nvim_utf8proc::toupper(a)
+}
+
+/// Return the lower-case equivalent of a UCS-4 character. Use simple case folding.
+///
+/// Mirrors C `mb_tolower`.
+fn mb_tolower_impl(a: c_int) -> c_int {
+    // SAFETY: cmp_flags is a C global initialized before use.
+    let flags = unsafe { cmp_flags };
+
+    // If 'casemap' contains "keepascii" use ASCII style tolower().
+    if a < 128 && (flags & K_OPT_CMP_FLAG_KEEPASCII) != 0 {
+        return ascii_tolower(a);
+    }
+
+    if (flags & K_OPT_CMP_FLAG_INTERNAL) == 0 {
+        // SAFETY: towlower is a pure C library function.
+        return unsafe { towlower(a as u32) } as c_int;
+    }
+
+    // For characters below 128 use locale sensitive tolower().
+    if a < 128 {
+        // SAFETY: libc tolower is safe for 0..=127.
+        return unsafe { libc::tolower(a) };
+    }
+
+    nvim_utf8proc::tolower(a)
+}
+
+/// FFI export: uppercase a UCS-4 character.
+#[unsafe(export_name = "mb_toupper")]
+pub extern "C" fn rs_mb_toupper(a: c_int) -> c_int {
+    mb_toupper_impl(a)
+}
+
+/// FFI export: lowercase a UCS-4 character.
+#[unsafe(export_name = "mb_tolower")]
+pub extern "C" fn rs_mb_tolower(a: c_int) -> c_int {
+    mb_tolower_impl(a)
+}
+
+/// FFI export: return true if `a` is a lowercase character.
+#[unsafe(export_name = "mb_islower")]
+pub extern "C" fn rs_mb_islower(a: c_int) -> bool {
+    mb_toupper_impl(a) != a
+}
+
+/// FFI export: return true if `a` is an uppercase character.
+#[unsafe(export_name = "mb_isupper")]
+pub extern "C" fn rs_mb_isupper(a: c_int) -> bool {
+    mb_tolower_impl(a) != a
+}
+
+/// FFI export: return true if `a` is an alphabetic character.
+#[unsafe(export_name = "mb_isalpha")]
+pub extern "C" fn rs_mb_isalpha(a: c_int) -> bool {
+    mb_toupper_impl(a) != a || mb_tolower_impl(a) != a
+}
+
 #[cfg(test)]
 mod utfc_tests {
     use super::*;

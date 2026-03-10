@@ -416,69 +416,6 @@ static schar_T schar_from_buf_first(const char *buf, size_t len, bool first_comp
 
 
 
-// Vim's own character class functions.  These exist because many library
-// islower()/toupper() etc. do not work properly: they crash when used with
-// invalid values or can't handle latin1 when the locale is C.
-// Speed is most important here.
-
-/// Return the upper-case equivalent of "a", which is a UCS-4 character.  Use
-/// simple case folding.
-int mb_toupper(int a)
-{
-  // If 'casemap' contains "keepascii" use ASCII style toupper().
-  if (a < 128 && (cmp_flags & kOptCmpFlagKeepascii)) {
-    return TOUPPER_ASC(a);
-  }
-
-  if (!(cmp_flags & kOptCmpFlagInternal)) {
-    return (int)towupper((wint_t)a);
-  }
-
-  // For characters below 128 use locale sensitive toupper().
-  if (a < 128) {
-    return TOUPPER_LOC(a);
-  }
-
-  return utf8proc_toupper(a);
-}
-
-bool mb_islower(int a)
-{
-  return mb_toupper(a) != a;
-}
-
-/// Return the lower-case equivalent of "a", which is a UCS-4 character.  Use
-/// simple case folding.
-int mb_tolower(int a)
-{
-  // If 'casemap' contains "keepascii" use ASCII style tolower().
-  if (a < 128 && (cmp_flags & kOptCmpFlagKeepascii)) {
-    return TOLOWER_ASC(a);
-  }
-
-  if (!(cmp_flags & kOptCmpFlagInternal)) {
-    return (int)towlower((wint_t)a);
-  }
-
-  // For characters below 128 use locale sensitive tolower().
-  if (a < 128) {
-    return TOLOWER_LOC(a);
-  }
-
-  return utf8proc_tolower(a);
-}
-
-bool mb_isupper(int a)
-{
-  return mb_tolower(a) != a;
-}
-
-/// Accessor for Rust FFI: check if character is uppercase.
-int nvim_mb_isupper(int c)
-{
-  return mb_isupper(c) ? 1 : 0;
-}
-
 /// Accessor for Rust FFI: get UTF character from byte pointer.
 int nvim_utf_ptr2char(const char *p)
 {
@@ -489,12 +426,6 @@ int nvim_utf_ptr2char(const char *p)
 int nvim_utfc_ptr2len(const char *p)
 {
   return utfc_ptr2len(p);
-}
-
-bool mb_isalpha(int a)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return mb_islower(a) || mb_isupper(a);
 }
 
 

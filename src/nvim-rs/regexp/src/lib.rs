@@ -3288,8 +3288,8 @@ extern "C" {
     fn vim_isIDc(c: c_int) -> c_int;
     fn vim_isfilec(c: c_int) -> c_int;
     fn vim_isprintc(c: c_int) -> c_int;
-    fn mb_islower(c: c_int) -> c_int;
-    fn mb_isupper(c: c_int) -> c_int;
+    fn mb_islower(c: c_int) -> bool;
+    fn mb_isupper(c: c_int) -> bool;
 
     // Error helpers for regatom
 
@@ -3427,7 +3427,7 @@ unsafe fn emit_posix_class(c_class: c_int, regparse_ptr: *mut *mut c_char) {
         }
         x if x == CLASS_LOWER => {
             for cu in 1..=255 {
-                if mb_islower(cu) != 0 && cu != 170 && cu != 186 {
+                if mb_islower(cu) && cu != 170 && cu != 186 {
                     rs_regmbc(cu);
                 }
             }
@@ -3454,7 +3454,7 @@ unsafe fn emit_posix_class(c_class: c_int, regparse_ptr: *mut *mut c_char) {
         }
         x if x == CLASS_UPPER => {
             for cu in 1..=255 {
-                if mb_isupper(cu) != 0 {
+                if mb_isupper(cu) {
                     rs_regmbc(cu);
                 }
             }
@@ -5419,7 +5419,6 @@ extern "C" {
     // Error/utility
     fn nvim_regexp_call_profile_passed_limit(tm: *const c_void) -> c_int;
     // got_int: reuse existing nvim_regexp_get_got_int (declared above)
-    fn nvim_mb_isupper(c: c_int) -> c_int;
 
     // mb_get_class_tab
     fn nvim_regexp_call_mb_get_class_tab(p: *mut u8) -> c_int;
@@ -6342,7 +6341,7 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         if op(next) == EXACTLY {
                             rst.nextb = c_int::from(*operand(next));
                             if REX.reg_ic as c_int != 0 {
-                                if nvim_mb_isupper(rst.nextb) != 0 {
+                                if mb_isupper(rst.nextb) {
                                     rst.nextb_ic = mb_tolower(rst.nextb);
                                 } else {
                                     rst.nextb_ic = mb_toupper(rst.nextb);
@@ -10843,7 +10842,7 @@ pub unsafe extern "C" fn rs_check_char_class(cls: c_int, c: c_int) -> c_int {
             }
         }
         NFA_CLASS_LOWER => {
-            if mb_islower(c) != 0 && c != 170 && c != 186 {
+            if mb_islower(c) && c != 170 && c != 186 {
                 return OK;
             }
         }
@@ -10863,7 +10862,7 @@ pub unsafe extern "C" fn rs_check_char_class(cls: c_int, c: c_int) -> c_int {
             }
         }
         NFA_CLASS_UPPER => {
-            if mb_isupper(c) != 0 {
+            if mb_isupper(c) {
                 return OK;
             }
         }

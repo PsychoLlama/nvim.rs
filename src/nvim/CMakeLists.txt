@@ -37,8 +37,7 @@ find_package(UTF8proc REQUIRED)
 target_link_libraries(main_lib INTERFACE
   iconv
   lpeg
-  treesitter
-  utf8proc)
+  treesitter)
 target_link_libraries(nlua0 PUBLIC lpeg)
 
 if(ENABLE_LIBINTL)
@@ -69,7 +68,8 @@ if(RUST_NVIM_LIB)
   # Use --whole-archive to include all Rust symbols even if not immediately referenced.
   # This is needed because of circular C<->Rust dependencies: funcs.c -> rs_f_*, Rust -> nvim_*
   if(NOT MSVC AND NOT APPLE)
-    target_link_libraries(main_lib INTERFACE -Wl,--whole-archive ${RUST_NVIM_LIB} -Wl,--no-whole-archive pthread dl m)
+    # utf8proc must come after libnvim_rs.a because Rust code calls utf8proc_* directly.
+    target_link_libraries(main_lib INTERFACE -Wl,--whole-archive ${RUST_NVIM_LIB} -Wl,--no-whole-archive utf8proc pthread dl m)
   elseif(APPLE)
     target_link_libraries(main_lib INTERFACE -Wl,-force_load,${RUST_NVIM_LIB} pthread dl m)
   else()

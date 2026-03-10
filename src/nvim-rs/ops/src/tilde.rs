@@ -16,8 +16,8 @@ use crate::types::{MotionType, OpType};
 // =============================================================================
 
 extern "C" {
-    fn mb_islower(c: c_int) -> c_int;
-    fn mb_isupper(c: c_int) -> c_int;
+    fn mb_islower(c: c_int) -> bool;
+    fn mb_isupper(c: c_int) -> bool;
     fn mb_toupper(c: c_int) -> c_int;
     fn mb_tolower(c: c_int) -> c_int;
 }
@@ -53,8 +53,8 @@ pub fn swap_char(op_type: OpType, c: c_int) -> c_int {
     }
 
     // SAFETY: These are safe FFI calls to character classification functions
-    let is_lower = unsafe { mb_islower(c) != 0 };
-    let is_upper = unsafe { mb_isupper(c) != 0 };
+    let is_lower = unsafe { mb_islower(c) };
+    let is_upper = unsafe { mb_isupper(c) };
 
     if is_lower {
         match op_type {

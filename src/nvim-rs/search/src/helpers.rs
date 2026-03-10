@@ -507,7 +507,7 @@ extern "C" {
 // External C functions for pattern analysis
 extern "C" {
     /// Check if character is uppercase (multibyte aware).
-    fn nvim_mb_isupper(c: c_int) -> c_int;
+    fn mb_isupper(c: c_int) -> bool;
 
     /// Get UTF character from byte pointer.
     fn nvim_utf_ptr2char(p: *const std::ffi::c_char) -> c_int;
@@ -577,7 +577,7 @@ pub unsafe fn pat_has_uppercase(pat: *const std::ffi::c_char) -> bool {
         if l > 1 {
             // Multi-byte character
             let c = nvim_utf_ptr2char(p);
-            if nvim_mb_isupper(c) != 0 {
+            if mb_isupper(c) {
                 return true;
             }
             p = p.add(l as usize);
@@ -607,7 +607,7 @@ pub unsafe fn pat_has_uppercase(pat: *const std::ffi::c_char) -> bool {
         } else {
             // Single byte character - check if uppercase
             let c = *p as u8;
-            if nvim_mb_isupper(c_int::from(c)) != 0 {
+            if mb_isupper(c_int::from(c)) {
                 return true;
             }
             p = p.add(1);

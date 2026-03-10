@@ -108,6 +108,11 @@ extern int enc_canon_props(const char *name);
 extern int mb_off_next(const char *base, const char *p);
 
 extern int rs_utf_is_trail_byte(int byte);
+extern int mb_toupper(int a);
+extern int mb_tolower(int a);
+extern bool mb_islower(int a);
+extern bool mb_isupper(int a);
+extern bool mb_isalpha(int a);
 
 /// Check whether a given UTF-8 byte is a trailing byte (10xx.xxxx).
 
