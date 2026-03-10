@@ -53,6 +53,60 @@ extern const uint8_t utf8len_tab[256];
 #define MB_PTR_BACK(s, p) \
   (p -= utf_head_off((char *)(s), (char *)(p) - 1) + 1)
 
+// Declarations for functions implemented in Rust (src/nvim-rs/mbyte/).
+// These were previously thin C wrappers; the Rust implementations are now
+// exported directly under the canonical C names via #[unsafe(export_name)].
+extern int32_t utf_ptr2CharInfo_impl(const uint8_t *p, uintptr_t len);
+extern int utf_char2len(int c);
+extern int mb_char2len(int c);
+extern int utf_char2bytes(int c, char *buf);
+extern int utf_byte2len(int b);
+extern int utf_ptr2char(const char *p);
+extern int utf_ptr2len(const char *p);
+extern int utf_ptr2len_len(const char *p, int size);
+extern bool utf_valid_string(const char *s, const char *end);
+extern bool utf_eat_space(int cc);
+extern bool utf_allow_break_before(int cc);
+extern bool utf_allow_break_after(int cc);
+extern bool utf_allow_break(int cc, int ncc);
+extern int mb_charlen(const char *str);
+extern int mb_charlen_len(const char *str, int len);
+extern size_t mb_string2cells(const char *str);
+extern size_t mb_string2cells_len(const char *str, size_t size);
+extern bool utf_printable(int c);
+extern bool utf_iscomposing_legacy(int c);
+extern bool utf_iscomposing_first(int c);
+extern int utf_fold(int a);
+extern int utf_strnicmp(const char *s1, const char *s2, size_t n1, size_t n2);
+extern int mb_strnicmp(const char *s1, const char *s2, size_t nn);
+extern int mb_stricmp(const char *s1, const char *s2);
+extern int mb_strcmp_ic(bool ic, const char *s1, const char *s2);
+extern bool utf_ambiguous_width(const char *p);
+extern int cw_value(int c);
+extern int utf_char2cells(int c);
+extern int utf_ptr2cells(const char *p);
+extern int utf_ptr2cells_len(const char *p, int size);
+extern CharBoundsOff utf_cp_bounds_len(const char *base, const char *p_in, int p_len);
+extern CharBoundsOff utf_cp_bounds(const char *base, const char *p_in);
+extern void remove_bom(char *s);
+extern int utf_class_tab(int c, const uint64_t *chartab);
+extern int utf_class(int c);
+extern int mb_get_class_tab(const char *p, const uint64_t *chartab);
+extern int mb_get_class(const char *p);
+extern void mb_utflen(const char *s, size_t len, size_t *codepoints, size_t *codeunits);
+extern ssize_t mb_utf_index_to_bytes(const char *s, size_t len, size_t index,
+                                     bool use_utf16_units);
+extern int mb_cptr2char_adv(const char **pp);
+extern char *enc_skip(char *p);
+extern bool utf_composinglike(const char *p1, const char *p2, int *state);
+extern bool utf_iscomposing(int c1, int c2, int *state);
+extern int utfc_ptr2len(const char *p);
+extern int utfc_ptr2len_len(const char *p, int size);
+extern int utf_head_off(const char *base, const char *p);
+extern int bomb_size(void);
+extern int enc_canon_props(const char *name);
+extern int mb_off_next(const char *base, const char *p);
+
 extern int rs_utf_is_trail_byte(int byte);
 
 /// Check whether a given UTF-8 byte is a trailing byte (10xx.xxxx).

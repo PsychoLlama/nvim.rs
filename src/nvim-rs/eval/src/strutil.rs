@@ -19,8 +19,8 @@ use std::ffi::{c_char, c_int, c_void};
 const VARNUMBER_MAX: i64 = i64::MAX;
 
 extern "C" {
-    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
-    fn rs_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn xmemdupz(data: *const c_void, len: usize) -> *mut c_char;
 }
 
@@ -249,14 +249,14 @@ unsafe fn char_idx2byte(s: *const c_char, str_len: usize, idx: i64) -> isize {
 
     if nchar >= 0 {
         while nchar > 0 && nbyte < str_len {
-            nbyte += rs_utfc_ptr2len(s.add(nbyte)) as usize;
+            nbyte += utfc_ptr2len(s.add(nbyte)) as usize;
             nchar -= 1;
         }
     } else {
         nbyte = str_len;
         while nchar < 0 && nbyte > 0 {
             nbyte -= 1;
-            nbyte -= rs_utf_head_off(s, s.add(nbyte)) as usize;
+            nbyte -= utf_head_off(s, s.add(nbyte)) as usize;
             nchar += 1;
         }
         if nchar < 0 {
@@ -290,7 +290,7 @@ pub unsafe extern "C" fn rs_char_from_string(s: *const c_char, index: i64) -> *m
         let mut clen: i64 = 0;
         let mut nbyte: usize = 0;
         while nbyte < slen {
-            nbyte += rs_utfc_ptr2len(s.add(nbyte)) as usize;
+            nbyte += utfc_ptr2len(s.add(nbyte)) as usize;
             clen += 1;
         }
         nchar = clen + index;
@@ -301,7 +301,7 @@ pub unsafe extern "C" fn rs_char_from_string(s: *const c_char, index: i64) -> *m
 
     let mut nbyte: usize = 0;
     while nchar > 0 && nbyte < slen {
-        nbyte += rs_utfc_ptr2len(s.add(nbyte)) as usize;
+        nbyte += utfc_ptr2len(s.add(nbyte)) as usize;
         nchar -= 1;
     }
     if nbyte >= slen {
@@ -309,7 +309,7 @@ pub unsafe extern "C" fn rs_char_from_string(s: *const c_char, index: i64) -> *m
     }
     xmemdupz(
         s.add(nbyte).cast::<c_void>(),
-        rs_utfc_ptr2len(s.add(nbyte)) as usize,
+        utfc_ptr2len(s.add(nbyte)) as usize,
     )
 }
 
@@ -346,7 +346,7 @@ pub unsafe extern "C" fn rs_string_slice(
         let mut eb = char_idx2byte(s, slen, last);
         if !exclusive && eb >= 0 && eb < slen as isize {
             // end index is inclusive
-            eb += rs_utfc_ptr2len(s.add(eb as usize)) as isize;
+            eb += utfc_ptr2len(s.add(eb as usize)) as isize;
         }
         eb
     };

@@ -3672,7 +3672,7 @@ extern "C" {
     fn nvim_win_ml_get_buf(wp: WinHandle, lnum: LinenrT) -> *const std::ffi::c_char;
 
     /// Get the UTF-8 head byte offset.
-    fn rs_utf_head_off(base: *const std::ffi::c_char, p: *const std::ffi::c_char) -> c_int;
+    fn utf_head_off(base: *const std::ffi::c_char, p: *const std::ffi::c_char) -> c_int;
 
     /// Get virtual columns for a position (getvcol wrapper).
     fn nvim_getvcol(
@@ -3893,7 +3893,7 @@ pub unsafe extern "C" fn rs_virtcol2col(wp: WinHandle, lnum: LinenrT, vcol: c_in
             return 0;
         }
         // Move to the first byte of the last char (MB_PTR_BACK equivalent)
-        let head_off = rs_utf_head_off(line, p.sub(1));
+        let head_off = utf_head_off(line, p.sub(1));
         let new_p = p.sub((head_off + 1) as usize);
         return (new_p.offset_from(line) + 1) as c_int;
     }

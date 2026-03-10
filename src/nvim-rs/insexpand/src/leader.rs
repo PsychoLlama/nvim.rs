@@ -22,8 +22,8 @@ extern "C" {
     fn nvim_get_compl_col() -> c_int;
 
     // UTF-8 functions
-    fn rs_utfc_ptr2len(ptr: *const c_char) -> c_int;
-    fn rs_mb_get_class(ptr: *const c_char) -> c_int;
+    fn utfc_ptr2len(ptr: *const c_char) -> c_int;
+    fn mb_get_class(ptr: *const c_char) -> c_int;
 }
 
 // ASCII constants
@@ -60,8 +60,8 @@ unsafe fn leader_get_len() -> usize {
 #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_leader_find_word_start(mut ptr: *mut c_char) -> *mut c_char {
     // Skip characters that are not part of a word (class <= 1)
-    while *ptr != 0 && *ptr != b'\n' as c_char && rs_mb_get_class(ptr) <= 1 {
-        ptr = ptr.add(rs_utfc_ptr2len(ptr) as usize);
+    while *ptr != 0 && *ptr != b'\n' as c_char && mb_get_class(ptr) <= 1 {
+        ptr = ptr.add(utfc_ptr2len(ptr) as usize);
     }
     ptr
 }
@@ -72,11 +72,11 @@ pub unsafe extern "C" fn rs_leader_find_word_start(mut ptr: *mut c_char) -> *mut
 #[no_mangle]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_leader_find_word_end(mut ptr: *mut c_char) -> *mut c_char {
-    let start_class = rs_mb_get_class(ptr);
+    let start_class = mb_get_class(ptr);
     if start_class > 1 {
         while *ptr != 0 {
-            ptr = ptr.add(rs_utfc_ptr2len(ptr) as usize);
-            if rs_mb_get_class(ptr) != start_class {
+            ptr = ptr.add(utfc_ptr2len(ptr) as usize);
+            if mb_get_class(ptr) != start_class {
                 break;
             }
         }
@@ -726,8 +726,8 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
         }
 
         // MB_PTR_ADV: advance by utfc_ptr2len bytes
-        p = p.add(rs_utfc_ptr2len(p) as usize);
-        s = s.add(rs_utfc_ptr2len(s) as usize);
+        p = p.add(utfc_ptr2len(p) as usize);
+        s = s.add(utfc_ptr2len(s) as usize);
     }
 
     if *p != 0 {

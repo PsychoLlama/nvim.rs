@@ -24,7 +24,7 @@ extern "C" {
     fn rs_char2cells(c: c_int) -> c_int;
 
     /// Get the byte length of a UTF-8 character including composing characters
-    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
 
     /// Convert a UTF-8 string to schar_T, also returns first codepoint
     fn rs_utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> ScharT;
@@ -374,7 +374,7 @@ pub unsafe extern "C" fn rs_get_encoded_char_adv(p: *mut *const c_char) -> Schar
     }
 
     // Regular UTF-8 character
-    let clen = rs_utfc_ptr2len(s);
+    let clen = utfc_ptr2len(s);
     let mut firstc: c_int = 0;
     let c = rs_utfc_ptr2schar(s, &mut firstc);
 

@@ -77,7 +77,7 @@ extern "C" {
     fn rs_ins_compl_delete(new_leader: c_int);
     fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
     fn rs_get_compl_len() -> c_int;
-    fn rs_utfc_ptr2len(ptr: *const c_char) -> c_int;
+    fn utfc_ptr2len(ptr: *const c_char) -> c_int;
     fn rs_ins_compl_leader() -> *const c_char;
     fn rs_ins_compl_leader_len() -> usize;
     fn rs_ctrl_x_mode_whole_line() -> c_int;
@@ -342,7 +342,7 @@ pub unsafe extern "C" fn rs_fuzzy_longest_match() {
         let mut j: c_int = 0;
 
         while j < prefix_len && *cp != 0 && *pp != 0 {
-            let char_len = rs_utfc_ptr2len(pp) as usize;
+            let char_len = utfc_ptr2len(pp) as usize;
             // Compare char_len bytes at pp vs cp
             let mut eq = true;
             for k in 0..char_len {
@@ -355,8 +355,8 @@ pub unsafe extern "C" fn rs_fuzzy_longest_match() {
                 break;
             }
             // MB_PTR_ADV equivalent
-            pp = pp.add(rs_utfc_ptr2len(pp) as usize);
-            cp = cp.add(rs_utfc_ptr2len(cp) as usize);
+            pp = pp.add(utfc_ptr2len(pp) as usize);
+            cp = cp.add(utfc_ptr2len(cp) as usize);
             j += 1;
         }
 

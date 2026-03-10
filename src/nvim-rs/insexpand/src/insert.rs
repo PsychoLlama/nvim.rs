@@ -31,7 +31,7 @@ extern "C" {
     fn nvim_get_compl_cont_status() -> c_int;
 
     // UTF-8 functions
-    fn rs_utfc_ptr2len(ptr: *const c_char) -> c_int;
+    fn utfc_ptr2len(ptr: *const c_char) -> c_int;
 }
 
 // Continuation status flags
@@ -207,8 +207,8 @@ pub unsafe extern "C" fn rs_ins_compl_delete(new_leader: c_int) {
                 let c1 = *orig_ptr;
                 let c2 = *leader_ptr;
                 if c1 == 0 || c2 == 0 || c1 != c2 {
-                    let orig_len = rs_utfc_ptr2len(orig_ptr);
-                    let leader_len = rs_utfc_ptr2len(leader_ptr);
+                    let orig_len = utfc_ptr2len(orig_ptr);
+                    let leader_len = utfc_ptr2len(leader_ptr);
                     if orig_len != leader_len {
                         break;
                     }

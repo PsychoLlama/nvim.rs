@@ -124,7 +124,6 @@ const TAB: u8 = b'\t';
 
 // Re-use existing Rust implementations from mbyte and charset crates
 use nvim_charset::rs_vim_iswordc;
-use nvim_mbyte::{rs_mb_get_class, rs_utf_ptr2len};
 
 // =============================================================================
 // Type aliases for C types
@@ -246,8 +245,8 @@ pub unsafe extern "C" fn rs_get_mouse_class(p: *const c_char) -> c_int {
 
     // Check for multi-byte character
     let first_byte = *p.cast::<u8>();
-    if rs_utf_ptr2len(p) > 1 {
-        return rs_mb_get_class(p);
+    if utf_ptr2len(p) > 1 {
+        return mb_get_class(p);
     }
 
     // Single-byte character checks
@@ -290,11 +289,17 @@ pub unsafe extern "C" fn rs_mouse_model_popup(p_mousem: *const c_char) -> bool {
 // =============================================================================
 
 extern "C" {
-    /// Get length of UTF-8 character at pointer
-    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    /// Get length of UTF-8 character at pointer (including composing chars)
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+
+    /// Get length of UTF-8 character at pointer (not including composing chars)
+    fn utf_ptr2len(p: *const c_char) -> c_int;
+
+    /// Get character class of multibyte character
+    fn mb_get_class(p: *const c_char) -> c_int;
 
     /// Get offset to start of UTF-8 character
-    fn rs_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
 }
 
 // =============================================================================
@@ -323,7 +328,7 @@ pub unsafe extern "C" fn rs_find_start_of_word(line: *const c_char, col: c_int) 
         // Move back one character
         let mut new_col = pos_col - 1;
         // Adjust for multi-byte character start
-        new_col -= rs_utf_head_off(line, line.add(new_col as usize));
+        new_col -= utf_head_off(line, line.add(new_col as usize));
 
         // Check if character class changed
         if rs_get_mouse_class(line.add(new_col as usize)) != cclass {
@@ -360,14 +365,14 @@ pub unsafe extern "C" fn rs_find_end_of_word(
     // For exclusive selection, adjust start position if col > 0
     if sel_exclusive && pos_col > 0 {
         pos_col -= 1;
-        pos_col -= rs_utf_head_off(line, line.add(pos_col as usize));
+        pos_col -= utf_head_off(line, line.add(pos_col as usize));
     }
 
     let cclass = rs_get_mouse_class(line.add(pos_col as usize));
 
     // Scan forward while same character class
     while *line.add(pos_col as usize) != 0 {
-        let next_col = pos_col + rs_utfc_ptr2len(line.add(pos_col as usize));
+        let next_col = pos_col + utfc_ptr2len(line.add(pos_col as usize));
         if rs_get_mouse_class(line.add(next_col as usize)) != cclass {
             // For exclusive selection, move past the last character
             if sel_exclusive {
@@ -908,7 +913,7 @@ pub unsafe extern "C" fn rs_scroll_line_len(lnum: linenr_T) -> c_int {
     let mut p = line;
     loop {
         let numchar = rs_win_chartabsize(curwin, p, col);
-        let len = rs_utfc_ptr2len(p);
+        let len = utfc_ptr2len(p);
         p = p.offset(len as isize);
         if *p == 0 {
             // Don't count the last character

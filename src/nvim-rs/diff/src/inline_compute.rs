@@ -119,7 +119,7 @@ extern "C" {
     fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     fn skipwhite(p: *const c_char) -> *const c_char;
 
-    fn rs_mb_get_class_tab(p: *const c_char, chartab: *const u64) -> c_int;
+    fn mb_get_class_tab(p: *const c_char, chartab: *const u64) -> c_int;
 }
 
 // ============================================================================
@@ -262,7 +262,7 @@ unsafe fn tokenize_line(
 
         let new_in_keyword = (diff_flags & DIFF_INLINE_WORD) != 0
             && !chartab_ptr.is_null()
-            && rs_mb_get_class_tab(s, chartab_ptr) == 2;
+            && mb_get_class_tab(s, chartab_ptr) == 2;
 
         // Close the current keyword token when transitioning out of keyword
         if in_keyword && !new_in_keyword {

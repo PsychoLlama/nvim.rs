@@ -20,7 +20,7 @@ extern "C" {
 
 // External C/Rust functions for UTF-8 handling
 extern "C" {
-    fn rs_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     fn mb_cptr2char_adv(pp: *mut *const c_char) -> c_int;
 }
 
@@ -49,7 +49,7 @@ fn digraph_get_for_viml(char1: u8, char2: u8) -> c_int {
 /// Number of bytes written (not including NUL terminator).
 #[inline]
 fn char_to_utf8(code: c_int, buf: &mut [u8; 7]) -> usize {
-    let len = unsafe { rs_utf_char2bytes(code, buf.as_mut_ptr().cast::<c_char>()) };
+    let len = unsafe { utf_char2bytes(code, buf.as_mut_ptr().cast::<c_char>()) };
     #[allow(clippy::cast_sign_loss)]
     let len_usize = len as usize;
     if len_usize < buf.len() {

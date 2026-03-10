@@ -264,8 +264,8 @@ extern "C" {
     fn nvim_buf_get_p_vts_array(buf: BufHandle) -> *mut c_int;
 
     // UTF-8 functions from mbyte
-    fn rs_utf_ptr2cells(p: *const c_char) -> c_int;
-    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utf_ptr2cells(p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
 
     // schar functions from grid (rs_schar_from_char already declared above)
     fn rs_utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> ScharT;
@@ -321,8 +321,8 @@ extern "C" {
     fn nvim_decor_range_get_virt_inline_hl_mode(range: *mut c_void) -> c_int;
 
     // Multibyte functions from mbyte crate
-    fn rs_mb_charlen(s: *const c_char) -> c_int;
-    fn rs_mb_string2cells(s: *const c_char) -> usize;
+    fn mb_charlen(s: *const c_char) -> c_int;
+    fn mb_string2cells(s: *const c_char) -> usize;
 
     // wlv_put_linebuf accessors
     fn nvim_win_get_w_grid(wp: WinHandle) -> *mut c_void;
@@ -947,8 +947,8 @@ unsafe fn line_putchar_impl(
     debug_assert!(*dest != 0, "dest[0] must not be 0");
 
     let p = *pp;
-    let mut cells = rs_utf_ptr2cells(p);
-    let c_len = rs_utfc_ptr2len(p);
+    let mut cells = utf_ptr2cells(p);
+    let c_len = utfc_ptr2len(p);
 
     debug_assert!(maxcells > 0, "maxcells must be > 0");
     if cells > maxcells {
@@ -1542,13 +1542,13 @@ unsafe fn draw_virt_text_item_impl(
 
         // Skip cells in the text
         while skip_cells > 0 && *virt_str != NUL {
-            let c_len = rs_utfc_ptr2len(virt_str);
+            let c_len = utfc_ptr2len(virt_str);
             let cells = if *virt_str == TAB {
                 let ts = nvim_buf_get_p_ts(buf);
                 let vts = nvim_buf_get_p_vts_array(buf);
                 rs_tabstop_padding(vcol, ts, vts)
             } else {
-                rs_utf_ptr2cells(virt_str)
+                utf_ptr2cells(virt_str)
             };
             skip_cells -= cells;
             vcol += cells;
@@ -2105,7 +2105,7 @@ unsafe fn handle_inline_virtual_text_impl(
             (*wlv).sc_final = 0; // NUL
             (*wlv).extra_attr = attr;
 
-            let n_attr = rs_mb_charlen(text);
+            let n_attr = mb_charlen(text);
             (*wlv).n_attr = n_attr;
 
             // If the text didn't reach until the first window column we need to skip cells.
@@ -2113,7 +2113,7 @@ unsafe fn handle_inline_virtual_text_impl(
             if skip_cells > 0 {
                 let p_extra = (*wlv).p_extra;
                 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-                let virt_text_width = rs_mb_string2cells(p_extra) as c_int;
+                let virt_text_width = mb_string2cells(p_extra) as c_int;
 
                 if virt_text_width > skip_cells {
                     let mut skip_cells_remaining = skip_cells;
@@ -2123,11 +2123,11 @@ unsafe fn handle_inline_virtual_text_impl(
 
                     // Skip cells in the text
                     while skip_cells_remaining > 0 {
-                        let cells = rs_utf_ptr2cells(p);
+                        let cells = utf_ptr2cells(p);
                         if cells > skip_cells_remaining {
                             break;
                         }
-                        let c_len = rs_utfc_ptr2len(p);
+                        let c_len = utfc_ptr2len(p);
                         skip_cells_remaining -= cells;
                         p = p.add(c_len as usize);
                         n_extra_val -= c_len;

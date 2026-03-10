@@ -2164,7 +2164,7 @@ extern "C" {
     /// Return the byte length of the multibyte character at p.
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     /// Encode a Unicode codepoint to UTF-8 bytes; returns bytes written.
-    fn rs_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     /// Find a special key sequence like <C-W>; returns key code or 0.
     fn find_special_key(
         srcp: *mut *const c_char,
@@ -2487,7 +2487,7 @@ pub unsafe fn eval_string_impl(
                             *end = nr as c_char;
                             end = end.add(1);
                         } else {
-                            let written = rs_utf_char2bytes(nr, end);
+                            let written = utf_char2bytes(nr, end);
                             end = end.add(written as usize);
                         }
                     }

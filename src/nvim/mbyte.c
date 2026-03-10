@@ -86,56 +86,6 @@ struct interval {
 #include "mbyte.c.generated.h"
 // uncrustify:on
 
-// Rust implementations - declarations
-extern int rs_utf_char2len(int c);
-extern int rs_utf_char2bytes(int c, char *buf);
-extern int rs_utf_byte2len(int b);
-extern int rs_utf_ptr2char(const char *p);
-extern int rs_utf_ptr2len(const char *p);
-extern int rs_utf_ptr2len_len(const char *p, int size);
-extern int rs_utf_valid_string(const char *s, const char *end);
-extern int rs_utf_eat_space(int cc);
-extern int rs_utf_allow_break_before(int cc);
-extern int rs_utf_allow_break_after(int cc);
-extern int rs_utf_allow_break(int cc, int ncc);
-extern int rs_utf_printable(int c);
-extern int rs_utf_iscomposing_legacy(int c);
-extern int rs_utf_iscomposing_first(int c);
-extern int rs_utf_fold(int a);
-extern int rs_utf_ambiguous_width(const char *p);
-extern int rs_mb_charlen(const char *str);
-extern int rs_mb_charlen_len(const char *str, int len);
-extern size_t rs_mb_string2cells(const char *str);
-extern size_t rs_mb_string2cells_len(const char *str, size_t size);
-extern void rs_remove_bom(char *s);
-extern int rs_utf_class_tab(int c, const uint64_t *chartab);
-extern int rs_utf_class(int c);
-extern int rs_mb_get_class_tab(const char *p, const uint64_t *chartab);
-extern int rs_mb_get_class(const char *p);
-extern int rs_mb_cptr2char_adv(const char **pp);
-extern void rs_mb_utflen(const char *s, size_t len, size_t *codepoints, size_t *codeunits);
-extern ssize_t rs_mb_utf_index_to_bytes(const char *s, size_t len, size_t index, bool use_utf16_units);
-extern int rs_utf_strnicmp(const char *s1, const char *s2, size_t n1, size_t n2);
-extern int rs_mb_strnicmp(const char *s1, const char *s2, size_t nn);
-extern int rs_mb_stricmp(const char *s1, const char *s2);
-extern int rs_mb_strcmp_ic(bool ic, const char *s1, const char *s2);
-extern char *rs_enc_skip(char *p);
-extern bool rs_utf_composinglike(const char *p1, const char *p2, GraphemeState *state);
-extern bool rs_utf_iscomposing(int c1, int c2, GraphemeState *state);
-extern int rs_utfc_ptr2len(const char *p);
-extern int rs_utfc_ptr2len_len(const char *p, int size);
-extern int rs_utf_head_off(const char *base, const char *p);
-extern int rs_mb_off_next(const char *base, const char *p);
-extern int32_t rs_utf_ptr2CharInfo_impl(const uint8_t *p, size_t len);
-extern int rs_bomb_size(void);
-
-// Rust struct for codepoint boundary offsets
-typedef struct {
-  int8_t begin_off;  // Offset to the first byte of the codepoint
-  int8_t end_off;    // Offset to one past the end byte of the codepoint
-} RsCharBoundsOff;
-extern RsCharBoundsOff rs_utf_cp_bounds_len(const char *base, const char *p_in, int p_len);
-extern RsCharBoundsOff rs_utf_cp_bounds(const char *base, const char *p_in);
 
 static const char e_list_item_nr_is_not_list[]
   = N_("E1109: List item %d is not a List");
@@ -172,50 +122,6 @@ const char *nvim_curbuf_get_b_p_fenc(void)
   return curbuf->b_p_fenc;
 }
 
-// To speed up BYTELEN(); keep a lookup table to quickly get the length in
-// bytes of a UTF-8 character from the first byte of a UTF-8 string.  Bytes
-// which are illegal when used as the first byte have a 1.  The NUL byte has
-// length 1.
-const uint8_t utf8len_tab[] = {
-  // ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9 ?A ?B ?C ?D ?E ?F
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 0?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 1?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 2?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 3?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 4?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 5?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 6?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 7?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 8?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 9?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // A?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // B?
-  2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,  // C?
-  2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,  // D?
-  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,  // E?
-  4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 1, 1,  // F?
-};
-
-// Like utf8len_tab above, but using a zero for illegal lead bytes.
-const uint8_t utf8len_tab_zero[] = {
-  // ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9 ?A ?B ?C ?D ?E ?F
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 0?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 1?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 2?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 3?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 4?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 5?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 6?
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // 7?
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 8?
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 9?
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // A?
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // B?
-  2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,  // C?
-  2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,  // D?
-  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,  // E?
-  4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 0, 0,  // F?
-};
 
 // Canonical encoding names and their properties.
 // "iso-8859-n" is handled by enc_canonize() directly.
@@ -434,187 +340,7 @@ static int enc_canon_search(const char *name)
   return -1;
 }
 
-extern int rs_enc_canon_props(const char *name);
 
-// Find canonical encoding "name" in the list and return its properties.
-// Returns 0 if not found.
-int enc_canon_props(const char *name)
-  FUNC_ATTR_PURE
-{
-  return rs_enc_canon_props(name);
-}
-
-// Return the size of the BOM for the current buffer:
-// 0 - no BOM
-// 2 - UCS-2 or UTF-16 BOM
-// 4 - UCS-4 BOM
-// 3 - UTF-8 BOM
-int bomb_size(void)
-  FUNC_ATTR_PURE
-{
-  return rs_bomb_size();
-}
-
-// Remove all BOM from "s" by moving remaining text.
-void remove_bom(char *s)
-{
-  rs_remove_bom(s);
-}
-
-/// Get class of pointer:
-/// 0 for blank or NUL
-/// 1 for punctuation
-/// 2 for an alphanumeric word character
-/// >2 for other word characters, including CJK and emoji
-int mb_get_class(const char *p)
-  FUNC_ATTR_PURE
-{
-  return rs_mb_get_class(p);
-}
-
-int mb_get_class_tab(const char *p, const uint64_t *const chartab)
-  FUNC_ATTR_PURE
-{
-  return rs_mb_get_class_tab(p, chartab);
-}
-
-static bool prop_is_emojilike(const utf8proc_property_t *prop)
-{
-  return prop->boundclass == UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC
-         || prop->boundclass == UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR;
-}
-
-extern int rs_utf_char2cells(int c);
-extern int rs_utf_ptr2cells(const char *p);
-extern int rs_utf_ptr2cells_len(const char *p, int size);
-
-/// For UTF-8 character "c" return 2 for a double-width character, 1 for others.
-/// Returns 4 or 6 for an unprintable character.
-/// Is only correct for characters >= 0x80.
-/// When p_ambw is "double", return 2 for a character with East Asian Width
-/// class 'A'(mbiguous).
-int utf_char2cells(int c)
-{
-  return rs_utf_char2cells(c);
-}
-
-/// Return the number of display cells character at "*p" occupies.
-/// This doesn't take care of unprintable characters, use ptr2cells() for that.
-int utf_ptr2cells(const char *p_in)
-{
-  return rs_utf_ptr2cells(p_in);
-}
-
-/// Convert a UTF-8 byte sequence to a character number.
-/// Doesn't handle ascii! only multibyte and illegal sequences. ASCII (including NUL)
-/// are treated like illegal sequences.
-///
-/// @param[in]  p      String to convert.
-/// @param[in]  len    Length of the character in bytes, 0 or 1 if illegal.
-///
-/// @return Unicode codepoint. A negative value when the sequence is illegal (or
-///         ASCII, including NUL).
-int32_t utf_ptr2CharInfo_impl(uint8_t const *p, uintptr_t const len)
-  FUNC_ATTR_PURE FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_utf_ptr2CharInfo_impl(p, len);
-}
-
-/// Like utf_ptr2cells(), but limit string length to "size".
-/// For an empty string or truncated character returns 1.
-int utf_ptr2cells_len(const char *p, int size)
-{
-  return rs_utf_ptr2cells_len(p, size);
-}
-
-/// Calculate the number of cells occupied by string `str`.
-///
-/// @param str The source string, may not be NULL, must be a NUL-terminated
-///            string.
-/// @return The number of cells occupied by string `str`
-size_t mb_string2cells(const char *str)
-{
-  return rs_mb_string2cells(str);
-}
-
-/// Get the number of cells occupied by string `str` with maximum length `size`
-///
-/// @param str The source string, may not be NULL, must be a NUL-terminated
-///            string.
-/// @param size maximum length of string. It will terminate on earlier NUL.
-/// @return The number of cells occupied by string `str`
-size_t mb_string2cells_len(const char *str, size_t size)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_mb_string2cells_len(str, size);
-}
-
-/// Convert a UTF-8 byte sequence to a character number.
-///
-/// If the sequence is illegal or truncated by a NUL then the first byte is
-/// returned.
-/// For an overlong sequence this may return zero.
-/// Does not include composing characters for obvious reasons.
-///
-/// @param[in]  p_in  String to convert.
-///
-/// @return Unicode codepoint or byte value.
-int utf_ptr2char(const char *const p_in)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_utf_ptr2char(p_in);
-}
-
-// Convert a UTF-8 byte sequence to a wide character.
-// String is assumed to be terminated by NUL or after "n" bytes, whichever
-// comes first.
-// The function is safe in the sense that it never accesses memory beyond the
-// first "n" bytes of "s".
-//
-// On success, returns decoded codepoint, advances "s" to the beginning of
-// next character and decreases "n" accordingly.
-//
-// If end of string was reached, returns 0 and, if "n" > 0, advances "s" past
-// NUL byte.
-//
-// If byte sequence is illegal or incomplete, returns -1 and does not advance
-// "s".
-static int utf_safe_read_char_adv(const char **s, size_t *n)
-{
-  if (*n == 0) {  // end of buffer
-    return 0;
-  }
-
-  uint8_t k = utf8len_tab_zero[(uint8_t)(**s)];
-
-  if (k == 1) {
-    // ASCII character or NUL
-    (*n)--;
-    return (uint8_t)(*(*s)++);
-  }
-
-  if (k <= *n) {
-    // We have a multibyte sequence and it isn't truncated by buffer
-    // limits so utf_ptr2char() is safe to use. Or the first byte is
-    // illegal (k=0), and it's also safe to use utf_ptr2char().
-    int c = utf_ptr2char(*s);
-
-    // On failure, utf_ptr2char() returns the first byte, so here we
-    // check equality with the first byte. The only non-ASCII character
-    // which equals the first byte of its own UTF-8 representation is
-    // U+00C3 (UTF-8: 0xC3 0x83), so need to check that special case too.
-    // It's safe even if n=1, else we would have k=2 > n.
-    if (c != (int)((uint8_t)(**s)) || (c == 0xC3 && (uint8_t)(*s)[1] == 0x83)) {
-      // byte sequence was successfully decoded
-      *s += k;
-      *n -= k;
-      return c;
-    }
-  }
-
-  // byte sequence is incomplete or illegal
-  return -1;
-}
 
 // Get character at **pp and advance *pp to the next character.
 // Note: composing characters are skipped!
@@ -623,52 +349,6 @@ int mb_ptr2char_adv(const char **const pp)
   int c = utf_ptr2char(*pp);
   *pp += utfc_ptr2len(*pp);
   return c;
-}
-
-// Get character at **pp and advance *pp to the next character.
-// Note: composing characters are returned as separate characters.
-int mb_cptr2char_adv(const char **pp)
-{
-  return rs_mb_cptr2char_adv(pp);
-}
-
-/// When "c" is the first char of a string, determine if it needs to be prefixed
-/// by a space byte to be drawn correctly, and not merge with the space left of
-/// the string.
-bool utf_iscomposing_first(int c)
-{
-  return rs_utf_iscomposing_first(c);
-}
-
-/// Check if the character pointed to by "p2" is a composing character when it
-/// comes after "p1".
-///
-/// We use the definition in UAX#29 as implemented by utf8proc with the following
-/// exceptions:
-///
-/// - ASCII chars always begin a new cluster. This is a long assumed invariant
-///   in the code base and very useful for performance (we can exit early for ASCII
-///   all over the place, branch predictor go brrr in ASCII-only text).
-///   As of Unicode 15.1 this will only break BOUNDCLASS_UREPEND followed by ASCII,
-///   which should be exceedingly rare (these PREPEND chars are expected to be
-///   followed by multibyte chars within the same script family)
-///
-/// - When 'arabicshape' is active, some pairs of arabic letters "ab" is replaced with
-///   "c" taking one single cell, which behaves like a cluster.
-///
-/// @param "state" should be set to GRAPHEME_STATE_INIT before first call
-///        it is allowed to be null, but will then not handle some longer
-///        sequences, like ZWJ based emoji
-bool utf_composinglike(const char *p1, const char *p2, GraphemeState *state)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  return rs_utf_composinglike(p1, p2, state);
-}
-
-/// same as utf_composinglike but operating on UCS-4 values
-bool utf_iscomposing(int c1, int c2, GraphemeState *state)
-{
-  return rs_utf_iscomposing(c1, c2, state);
 }
 
 /// Get the screen char at the beginning of a string
@@ -734,171 +414,7 @@ static schar_T schar_from_buf_first(const char *buf, size_t len, bool first_comp
   }
 }
 
-/// Get the length of a UTF-8 byte sequence representing a single codepoint
-///
-/// @param[in]  p  UTF-8 string.
-///
-/// @return Sequence length, 0 for empty string and 1 for non-UTF-8 byte
-///         sequence.
-int utf_ptr2len(const char *const p_in)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_utf_ptr2len(p_in);
-}
 
-// Return length of UTF-8 character, obtained from the first byte.
-// "b" must be between 0 and 255!
-// Returns 1 for an invalid first byte value.
-int utf_byte2len(int b)
-{
-  return rs_utf_byte2len(b);
-}
-
-// Get the length of UTF-8 byte sequence "p[size]".  Does not include any
-// following composing characters.
-// Returns 1 for "".
-// Returns 1 for an illegal byte sequence (also in incomplete byte seq.).
-// Returns number > "size" for an incomplete byte sequence.
-// Never returns zero.
-int utf_ptr2len_len(const char *p, int size)
-{
-  return rs_utf_ptr2len_len(p, size);
-}
-
-/// Return the number of bytes occupied by a UTF-8 character in a string.
-/// This includes following composing characters.
-/// Returns zero for NUL.
-int utfc_ptr2len(const char *const p)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_utfc_ptr2len(p);
-}
-
-/// Return the number of bytes the UTF-8 encoding of the character at "p[size]"
-/// takes.  This includes following composing characters.
-/// Returns 0 for an empty string.
-/// Returns 1 for an illegal char or an incomplete byte sequence.
-int utfc_ptr2len_len(const char *p, int size)
-{
-  return rs_utfc_ptr2len_len(p, size);
-}
-
-/// Determine how many bytes certain unicode codepoint will occupy
-int utf_char2len(const int c)
-{
-  return rs_utf_char2len(c);
-}
-
-/// Alias for utf_char2len (legacy name, used by Rust FFI)
-int mb_char2len(const int c)
-{
-  return utf_char2len(c);
-}
-
-/// Convert Unicode character to UTF-8 string
-///
-/// @param c         character to convert to UTF-8 string in \p buf
-/// @param[out] buf  UTF-8 string generated from \p c, does not add \0
-///                  must have room for at least 6 bytes
-/// @return Number of bytes (1-6).
-int utf_char2bytes(const int c, char *const buf)
-{
-  return rs_utf_char2bytes(c, buf);
-}
-
-/// Return true if "c" is a legacy composing UTF-8 character.
-///
-/// This is deprecated in favour of utf_composinglike() which uses the modern
-/// stateful algorithm to determine grapheme clusters. Still available
-/// to support some legacy code which hasn't been refactored yet.
-///
-/// To check if a char would combine with a preceding space, use
-/// utf_iscomposing_first() instead.
-///
-/// Based on code from Markus Kuhn.
-/// Returns false for negative values.
-bool utf_iscomposing_legacy(int c)
-{
-  return rs_utf_iscomposing_legacy(c);
-}
-
-#ifdef __SSE2__
-
-# include <emmintrin.h>
-
-// Return true for characters that can be displayed in a normal way.
-// Only for characters of 0x100 and above!
-bool utf_printable(int c)
-  FUNC_ATTR_CONST
-{
-  return rs_utf_printable(c);
-}
-
-#else
-
-// Return true if "c" is in "table".
-static bool intable(const struct interval *table, size_t n_items, int c)
-  FUNC_ATTR_CONST
-{
-  assert(n_items > 0);
-  // first quick check for Latin1 etc. characters
-  if (c < table[0].first) {
-    return false;
-  }
-
-  assert(n_items <= SIZE_MAX / 2);
-  // binary search in table
-  size_t bot = 0;
-  size_t top = n_items;
-  do {
-    size_t mid = (bot + top) >> 1;
-    if (table[mid].last < c) {
-      bot = mid + 1;
-    } else if (table[mid].first > c) {
-      top = mid;
-    } else {
-      return true;
-    }
-  } while (top > bot);
-  return false;
-}
-
-// Return true for characters that can be displayed in a normal way.
-// Only for characters of 0x100 and above!
-bool utf_printable(int c)
-  FUNC_ATTR_CONST
-{
-  return rs_utf_printable(c);
-}
-
-#endif
-
-// Get class of a Unicode character.
-// 0: white space
-// 1: punctuation
-// 2 or bigger: some class of word character.
-int utf_class(const int c)
-{
-  return rs_utf_class(c);
-}
-
-int utf_class_tab(const int c, const uint64_t *const chartab)
-  FUNC_ATTR_PURE
-{
-  return rs_utf_class_tab(c, chartab);
-}
-
-bool utf_ambiguous_width(const char *p)
-{
-  return rs_utf_ambiguous_width(p) != 0;
-}
-
-// Return the folded-case equivalent of "a", which is a UCS-4 character.  Uses
-// full case folding.
-int utf_fold(int a)
-{
-  return rs_utf_fold(a);
-}
 
 // Vim's own character class functions.  These exist because many library
 // islower()/toupper() etc. do not work properly: they crash when used with
@@ -981,10 +497,6 @@ bool mb_isalpha(int a)
   return mb_islower(a) || mb_isupper(a);
 }
 
-int utf_strnicmp(const char *s1, const char *s2, size_t n1, size_t n2)
-{
-  return rs_utf_strnicmp(s1, s2, n1, n2);
-}
 
 #ifdef MSWIN
 # ifndef CP_UTF8
@@ -1076,58 +588,6 @@ int utf16_to_utf8(const wchar_t *utf16, int utf16len, char **utf8)
 
 #endif
 
-/// Measure the length of a string in corresponding UTF-32 and UTF-16 units.
-///
-/// Invalid UTF-8 bytes, or embedded surrogates, count as one code point/unit
-/// each.
-///
-/// The out parameters are incremented. This is used to measure the size of
-/// a buffer region consisting of multiple line segments.
-///
-/// @param s the string
-/// @param len maximum length (an earlier NUL terminates)
-/// @param[out] codepoints incremented with UTF-32 code point size
-/// @param[out] codeunits incremented with UTF-16 code unit size
-void mb_utflen(const char *s, size_t len, size_t *codepoints, size_t *codeunits)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_mb_utflen(s, len, codepoints, codeunits);
-}
-
-ssize_t mb_utf_index_to_bytes(const char *s, size_t len, size_t index, bool use_utf16_units)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_mb_utf_index_to_bytes(s, len, index, use_utf16_units);
-}
-
-/// Version of strnicmp() that handles multi-byte characters.
-/// Needed for Big5, Shift-JIS and UTF-8 encoding.  Other DBCS encodings can
-/// probably use strnicmp(), because there are no ASCII characters in the
-/// second byte.
-///
-/// @return  zero if s1 and s2 are equal (ignoring case), the difference between
-///          two characters otherwise.
-int mb_strnicmp(const char *s1, const char *s2, const size_t nn)
-{
-  return rs_mb_strnicmp(s1, s2, nn);
-}
-
-/// Compare strings case-insensitively
-///
-/// @note We need to call mb_stricmp() even when we aren't dealing with
-///       a multi-byte encoding because mb_stricmp() takes care of all ASCII and
-///       non-ascii encodings, including characters with umlauts in latin1,
-///       etc., while STRICMP() only handles the system locale version, which
-///       often does not handle non-ascii properly.
-///
-/// @param[in]  s1  First string to compare, not more then #MAXCOL characters.
-/// @param[in]  s2  Second string to compare, not more then #MAXCOL characters.
-///
-/// @return 0 if strings are equal, <0 if s1 < s2, >0 if s1 > s2.
-int mb_stricmp(const char *s1, const char *s2)
-{
-  return rs_mb_stricmp(s1, s2);
-}
 
 // "g8": show bytes of the UTF-8 char under the cursor.  Doesn't matter what
 // 'encoding' has been set to.
@@ -1186,15 +646,6 @@ static bool always_break_two(int bc1, int bc2)
                   || bc1 == UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC)));
 }
 
-/// Return offset from "p" to the start of a character, including composing characters.
-/// "base" must be the start of the string, which must be NUL terminated.
-/// If "p" points to the NUL at the end of the string return 0.
-/// Returns 0 when already at the first byte of a character.
-int utf_head_off(const char *base_in, const char *p_in)
-{
-  return rs_utf_head_off(base_in, p_in);
-}
-
 /// Assumes caller already handles ascii. see `utfc_next`
 StrCharInfo utfc_next_impl(StrCharInfo cur)
 {
@@ -1224,34 +675,6 @@ StrCharInfo utfc_next_impl(StrCharInfo cur)
   }
 }
 
-// Whether space is NOT allowed before/after 'c'.
-bool utf_eat_space(int cc)
-  FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_utf_eat_space(cc) != 0;
-}
-
-// Whether line break is allowed before "cc".
-bool utf_allow_break_before(int cc)
-  FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_utf_allow_break_before(cc) != 0;
-}
-
-// Whether line break is allowed after "cc".
-bool utf_allow_break_after(int cc)
-  FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_utf_allow_break_after(cc) != 0;
-}
-
-// Whether line break is allowed between "cc" and "ncc".
-bool utf_allow_break(int cc, int ncc)
-  FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_utf_allow_break(cc, ncc);
-}
-
 /// Copy a character, advancing the pointers
 ///
 /// @param[in,out]  fp  Source of the character to copy.
@@ -1263,38 +686,6 @@ void mb_copy_char(const char **const fp, char **const tp)
   memmove(*tp, *fp, l);
   *tp += l;
   *fp += l;
-}
-
-/// Return the offset from "p" to the first byte of a character.  When "p" is
-/// at the start of a character 0 is returned, otherwise the offset to the next
-/// character.  Can start anywhere in a stream of bytes.
-int mb_off_next(const char *base, const char *p)
-{
-  return rs_mb_off_next(base, p);
-}
-
-/// Returns the offset in bytes from "p_in" to the first and one-past-end bytes
-/// of the codepoint it points to.
-/// "p_in" can point anywhere in a stream of bytes.
-/// "p_len" limits number of bytes after "p_in".
-/// Note: Counts individual codepoints of composed characters separately.
-CharBoundsOff utf_cp_bounds_len(char const *base, char const *p_in, int p_len)
-  FUNC_ATTR_PURE FUNC_ATTR_NONNULL_ALL
-{
-  RsCharBoundsOff rs_result = rs_utf_cp_bounds_len(base, p_in, p_len);
-  return (CharBoundsOff){ .begin_off = rs_result.begin_off, .end_off = rs_result.end_off };
-}
-
-/// Returns the offset in bytes from "p_in" to the first and one-past-end bytes
-/// of the codepoint it points to.
-/// "p_in" can point anywhere in a stream of bytes.
-/// Stream must be NUL-terminated.
-/// Note: Counts individual codepoints of composed characters separately.
-CharBoundsOff utf_cp_bounds(char const *base, char const *p_in)
-  FUNC_ATTR_PURE FUNC_ATTR_NONNULL_ALL
-{
-  RsCharBoundsOff rs_result = rs_utf_cp_bounds(base, p_in);
-  return (CharBoundsOff){ .begin_off = rs_result.begin_off, .end_off = rs_result.end_off };
 }
 
 // Find the next illegal byte sequence.
@@ -1360,13 +751,6 @@ theend:
   convert_setup(&vimconv, NULL, NULL);
 }
 
-/// @return  true if string "s" is a valid utf-8 string.
-/// When "end" is NULL stop at the first NUL.  Otherwise stop at "end".
-bool utf_valid_string(const char *s, const char *end)
-{
-  return rs_utf_valid_string(s, end) != 0;
-}
-
 // If the cursor moves on an trail byte, set the cursor on the lead byte.
 // Thus it moves left if necessary.
 void mb_adjust_cursor(void)
@@ -1427,19 +811,6 @@ char *mb_prevptr(char *line, char *p)
   return p;
 }
 
-/// Return the character length of "str".  Each multi-byte character (with
-/// following composing characters) counts as one.
-int mb_charlen(const char *str)
-{
-  return rs_mb_charlen(str);
-}
-
-/// Like mb_charlen() but for a string with specified length.
-int mb_charlen_len(const char *str, int len)
-{
-  return rs_mb_charlen_len(str, len);
-}
-
 /// Try to unescape a multibyte character
 ///
 /// Used for the rhs and lhs of the mappings.
@@ -1485,12 +856,6 @@ const char *mb_unescape(const char **const pp)
     }
   }
   return NULL;
-}
-
-/// Skip the Vim specific head of a 'encoding' name.
-char *enc_skip(char *p)
-{
-  return rs_enc_skip(p);
 }
 
 /// Find the canonical name for encoding "enc".
@@ -2028,16 +1393,6 @@ typedef struct {
 cw_interval_T *cw_table = NULL;
 size_t cw_table_size = 0;
 
-extern int rs_cw_value(int c);
-
-/// Return the value of the cellwidth table for the character `c`.
-///
-/// @param c The source character.
-/// @return 1 or 2 when `c` is in the cellwidth table, 0 if not.
-int cw_value(int c)
-{
-  return rs_cw_value(c);
-}
 
 static int tv_nr_compare(const void *a1, const void *a2)
 {
@@ -2200,13 +1555,3 @@ char *get_encoding_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
   return (char *)enc_canon_table[idx].name;
 }
 
-/// Compare strings
-///
-/// @param[in]  ic  True if case is to be ignored.
-///
-/// @return 0 if s1 == s2, <0 if s1 < s2, >0 if s1 > s2.
-int mb_strcmp_ic(bool ic, const char *s1, const char *s2)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_mb_strcmp_ic(ic, s1, s2);
-}

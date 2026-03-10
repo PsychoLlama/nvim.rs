@@ -427,8 +427,8 @@ extern "C" {
     // Character width and length functions (from mbyte crate)
     #[link_name = "ptr2cells"]
     fn rs_ptr2cells(p: *const c_char) -> c_int;
-    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
-    fn rs_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
 
     // Character translation
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: c_int) -> c_int;
@@ -501,7 +501,7 @@ pub unsafe extern "C" fn rs_trunc_string(
         *buf.offset(e as isize) = *s.offset(e as isize);
 
         // Handle multi-byte characters
-        let char_len = rs_utfc_ptr2len(s.offset(e as isize));
+        let char_len = utfc_ptr2len(s.offset(e as isize));
         for _ in 1..char_len {
             e += 1;
             if e >= buflen {
@@ -524,7 +524,7 @@ pub unsafe extern "C" fn rs_trunc_string(
 
     loop {
         // Move back to start of previous character
-        let head_off = rs_utf_head_off(s, s.offset((half_end - 1) as isize));
+        let head_off = utf_head_off(s, s.offset((half_end - 1) as isize));
         half_end = half_end - head_off - 1;
 
         let n = rs_ptr2cells(s.offset(half_end as isize));

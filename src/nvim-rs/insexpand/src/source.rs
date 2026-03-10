@@ -21,7 +21,7 @@ extern "C" {
     fn os_hrtime() -> u64;
 
     // Multibyte helpers
-    fn rs_utfc_ptr2len(ptr: *const c_char) -> c_int;
+    fn utfc_ptr2len(ptr: *const c_char) -> c_int;
 
     // Mode and option checks (from lib.rs / search crate)
     fn rs_ctrl_x_mode_dictionary() -> c_int;
@@ -164,7 +164,7 @@ pub unsafe extern "C" fn rs_quote_meta(dest: *mut c_char, src: *mut c_char, len:
         }
 
         // Copy remaining bytes of a multibyte character.
-        let mb_len = rs_utfc_ptr2len(src) - 1;
+        let mb_len = utfc_ptr2len(src) - 1;
         if mb_len > 0 && remaining >= mb_len {
             let mut i = 0;
             while i < mb_len {

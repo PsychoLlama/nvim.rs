@@ -21,7 +21,7 @@ extern "C" {
     fn nvim_get_compl_orig_text_size() -> usize;
 
     // UTF-8 functions
-    fn rs_utfc_ptr2len(ptr: *const c_char) -> c_int;
+    fn utfc_ptr2len(ptr: *const c_char) -> c_int;
 }
 
 // CTRL-X mode constants
@@ -56,7 +56,7 @@ pub unsafe extern "C" fn rs_refresh_count_chars(ptr: *const c_char, len: usize) 
     let end = len;
 
     while pos < end {
-        let char_len = rs_utfc_ptr2len(ptr.add(pos));
+        let char_len = utfc_ptr2len(ptr.add(pos));
         if char_len <= 0 {
             break;
         }

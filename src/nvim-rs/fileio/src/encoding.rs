@@ -43,7 +43,7 @@ pub const ENC_MACROMAN: c_int = 0x800;
 
 extern "C" {
     /// Get encoding properties from the mbyte crate.
-    fn rs_enc_canon_props(name: *const c_char) -> c_int;
+    fn enc_canon_props(name: *const c_char) -> c_int;
     /// Get the current 'encoding' option value.
     fn nvim_get_p_enc() -> *const c_char;
 }
@@ -131,7 +131,7 @@ pub unsafe extern "C" fn rs_get_fio_flags(name: *const c_char) -> c_int {
         name
     };
 
-    let prop = unsafe { rs_enc_canon_props(effective_name) };
+    let prop = unsafe { enc_canon_props(effective_name) };
     get_fio_flags_from_props(prop)
 }
 

@@ -135,7 +135,7 @@ extern "C" {
     fn eval_to_string(expr: *mut c_char, want_retval: bool, in_sandbox: bool) -> *mut c_char;
 
     // Multibyte
-    fn rs_mb_string2cells_len(str: *const c_char, size: usize) -> usize;
+    fn mb_string2cells_len(str: *const c_char, size: usize) -> usize;
     fn mb_string2cells(str: *const c_char) -> usize;
     fn utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int;
     fn utf_ptr2len_len(p: *const c_char, size: c_int) -> c_int;
@@ -585,7 +585,7 @@ pub unsafe extern "C" fn rs_update_yankreg_width(reg: *mut YankReg) {
     let mut maxlen: usize = 0;
     for i in 0..r.y_size {
         let s = &*r.y_array.add(i);
-        let rowlen = rs_mb_string2cells_len(s.data, s.size);
+        let rowlen = mb_string2cells_len(s.data, s.size);
         maxlen = maxlen.max(rowlen);
     }
     let new_width = if maxlen > 0 { (maxlen - 1) as c_int } else { 0 };

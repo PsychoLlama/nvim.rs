@@ -899,7 +899,7 @@ pub unsafe extern "C" fn rs_xstrlcat(dst: *mut c_char, src: *const c_char, dsize
 
 // External FFI functions from other Rust crates
 extern "C" {
-    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
     #[link_name = "rem_backslash"]
     fn rs_rem_backslash(s: *const c_char) -> bool;
 }
@@ -960,7 +960,7 @@ pub unsafe extern "C" fn rs_reverse_text(s: *const c_char) -> *mut c_char {
     let mut rev_i = len;
 
     while s_i < len {
-        let mb_len = rs_utfc_ptr2len(s.add(s_i)) as usize;
+        let mb_len = utfc_ptr2len(s.add(s_i)) as usize;
         rev_i -= mb_len;
         std::ptr::copy_nonoverlapping(s.add(s_i), rev.add(rev_i), mb_len);
         s_i += mb_len;
@@ -1063,7 +1063,7 @@ pub unsafe extern "C" fn rs_vim_strsave_escaped_ext(
     let mut length: usize = 1; // count the trailing NUL
     let mut p = string;
     while *p != 0 {
-        let l = rs_utfc_ptr2len(p) as usize;
+        let l = utfc_ptr2len(p) as usize;
         if l > 1 {
             length += l; // count a multibyte char
             p = p.add(l);
@@ -1084,7 +1084,7 @@ pub unsafe extern "C" fn rs_vim_strsave_escaped_ext(
     let mut p2 = escaped_string;
     p = string;
     while *p != 0 {
-        let l = rs_utfc_ptr2len(p) as usize;
+        let l = utfc_ptr2len(p) as usize;
         if l > 1 {
             std::ptr::copy_nonoverlapping(p, p2, l);
             p2 = p2.add(l);
@@ -1197,10 +1197,10 @@ pub unsafe extern "C" fn rs_vim_strnsave_unquoted(
 
 // FFI declarations for mbyte functions
 extern "C" {
-    fn rs_utf_ptr2len(p: *const c_char) -> c_int;
-    fn rs_utf_ptr2char(p: *const c_char) -> c_int;
-    fn rs_utf_char2len(c: c_int) -> c_int;
-    fn rs_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn utf_ptr2len(p: *const c_char) -> c_int;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn utf_char2len(c: c_int) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     fn mb_toupper(c: c_int) -> c_int;
     fn mb_tolower(c: c_int) -> c_int;
 }
@@ -1253,8 +1253,8 @@ pub unsafe extern "C" fn rs_strcase_save(
 
     while *p != 0 {
         // Get UTF-8 character length and codepoint
-        let char_len = rs_utf_ptr2len(p) as usize;
-        let codepoint = rs_utf_ptr2char(p);
+        let char_len = utf_ptr2len(p) as usize;
+        let codepoint = utf_ptr2char(p);
 
         // Handle invalid sequences: use byte value directly
         let c = if char_len == 0 || codepoint < 0 {
@@ -1267,7 +1267,7 @@ pub unsafe extern "C" fn rs_strcase_save(
         let converted_char = case_fn(c);
 
         // Get byte length of new character
-        let converted_len = rs_utf_char2len(converted_char) as usize;
+        let converted_len = utf_char2len(converted_char) as usize;
 
         // Check if we need more space
         if res_index + converted_len > res_capacity {
@@ -1283,7 +1283,7 @@ pub unsafe extern "C" fn rs_strcase_save(
         }
 
         // Write the converted character
-        rs_utf_char2bytes(converted_char, res.add(res_index));
+        utf_char2bytes(converted_char, res.add(res_index));
         res_index += converted_len;
 
         // Move to next character
@@ -1431,7 +1431,7 @@ pub unsafe extern "C" fn rs_vim_strsave_shellescape(
                 length += 1; // insert backslash
             }
             // Advance by UTF-8 char length
-            let char_len = rs_utfc_ptr2len(p);
+            let char_len = utfc_ptr2len(p);
             let advance = if char_len > 0 { char_len as usize } else { 1 };
             p = p.add(advance);
         }

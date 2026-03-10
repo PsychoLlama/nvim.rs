@@ -485,8 +485,8 @@ pub unsafe extern "C" fn rs_ins_compl_accept_char(c: c_int) -> c_int {
 // =============================================================================
 
 extern "C" {
-    fn rs_mb_get_class(p: *const c_char) -> c_int;
-    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn mb_get_class(p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
 }
 
 /// Find the start of the next word.
@@ -495,8 +495,8 @@ extern "C" {
 #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_find_word_start(mut ptr: *mut c_char) -> *mut c_char {
     // while (*ptr != NUL && *ptr != '\n' && mb_get_class(ptr) <= 1)
-    while *ptr != 0 && *ptr != b'\n' as c_char && rs_mb_get_class(ptr) <= 1 {
-        ptr = ptr.add(rs_utfc_ptr2len(ptr) as usize);
+    while *ptr != 0 && *ptr != b'\n' as c_char && mb_get_class(ptr) <= 1 {
+        ptr = ptr.add(utfc_ptr2len(ptr) as usize);
     }
     ptr
 }
@@ -506,11 +506,11 @@ pub unsafe extern "C" fn rs_find_word_start(mut ptr: *mut c_char) -> *mut c_char
 #[no_mangle]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_find_word_end(mut ptr: *mut c_char) -> *mut c_char {
-    let start_class = rs_mb_get_class(ptr);
+    let start_class = mb_get_class(ptr);
     if start_class > 1 {
         while *ptr != 0 {
-            ptr = ptr.add(rs_utfc_ptr2len(ptr) as usize);
-            if rs_mb_get_class(ptr) != start_class {
+            ptr = ptr.add(utfc_ptr2len(ptr) as usize);
+            if mb_get_class(ptr) != start_class {
                 break;
             }
         }

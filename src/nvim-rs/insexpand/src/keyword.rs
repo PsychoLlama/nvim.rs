@@ -17,8 +17,8 @@ extern "C" {
     fn nvim_get_compl_length() -> c_int;
 
     // UTF-8 and character class functions
-    fn rs_utfc_ptr2len(ptr: *const c_char) -> c_int;
-    fn rs_mb_get_class(ptr: *const c_char) -> c_int;
+    fn utfc_ptr2len(ptr: *const c_char) -> c_int;
+    fn mb_get_class(ptr: *const c_char) -> c_int;
 }
 
 // CTRL-X mode constants
@@ -59,7 +59,7 @@ pub unsafe extern "C" fn rs_keyword_word_is_long_enough(
     let mut p = ptr;
 
     while p < end {
-        let char_len = rs_utfc_ptr2len(p);
+        let char_len = utfc_ptr2len(p);
         if char_len <= 0 {
             break;
         }
@@ -83,8 +83,8 @@ pub unsafe extern "C" fn rs_keyword_skip_non_word(mut ptr: *mut c_char) -> *mut 
         return ptr;
     }
 
-    while *ptr != 0 && rs_mb_get_class(ptr) <= 1 {
-        let char_len = rs_utfc_ptr2len(ptr);
+    while *ptr != 0 && mb_get_class(ptr) <= 1 {
+        let char_len = utfc_ptr2len(ptr);
         if char_len <= 0 {
             break;
         }
@@ -104,18 +104,18 @@ pub unsafe extern "C" fn rs_keyword_skip_word(mut ptr: *mut c_char) -> *mut c_ch
         return ptr;
     }
 
-    let start_class = rs_mb_get_class(ptr);
+    let start_class = mb_get_class(ptr);
     if start_class <= 1 {
         return ptr; // Not in a word
     }
 
     while *ptr != 0 {
-        let char_len = rs_utfc_ptr2len(ptr);
+        let char_len = utfc_ptr2len(ptr);
         if char_len <= 0 {
             break;
         }
         ptr = ptr.add(char_len as usize);
-        if rs_mb_get_class(ptr) != start_class {
+        if mb_get_class(ptr) != start_class {
             break;
         }
     }
@@ -136,7 +136,7 @@ pub unsafe extern "C" fn rs_keyword_count_chars(ptr: *const c_char, len: c_int) 
     let end = len as usize;
 
     while pos < end {
-        let char_len = rs_utfc_ptr2len(ptr.add(pos));
+        let char_len = utfc_ptr2len(ptr.add(pos));
         if char_len <= 0 {
             break;
         }

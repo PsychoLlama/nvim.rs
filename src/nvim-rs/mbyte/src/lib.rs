@@ -42,6 +42,7 @@ pub const MB_MAXBYTES: usize = 6;
 
 /// Lookup table for UTF-8 byte sequence length based on first byte.
 /// Bytes 0x80-0xBF (continuation bytes) and 0xFE-0xFF (invalid) return 1.
+#[unsafe(export_name = "utf8len_tab")]
 #[rustfmt::skip]
 pub static UTF8LEN_TAB: [u8; 256] = [
     //  ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9 ?A ?B ?C ?D ?E ?F
@@ -64,6 +65,7 @@ pub static UTF8LEN_TAB: [u8; 256] = [
 ];
 
 /// Lookup table for UTF-8 byte sequence length, with 0 for continuation/invalid bytes.
+#[unsafe(export_name = "utf8len_tab_zero")]
 #[rustfmt::skip]
 pub static UTF8LEN_TAB_ZERO: [u8; 256] = [
     //  ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9 ?A ?B ?C ?D ?E ?F
@@ -324,7 +326,8 @@ pub fn utf_ptr2charinfo_impl(p: &[u8], len: usize) -> i32 {
 ///
 /// # Safety
 /// - `p` must be a valid pointer to at least `len` bytes (and at least 2 bytes).
-#[no_mangle]
+#[allow(non_snake_case)]
+#[unsafe(export_name = "utf_ptr2CharInfo_impl")]
 pub unsafe extern "C" fn rs_utf_ptr2CharInfo_impl(p: *const u8, len: usize) -> i32 {
     if p.is_null() {
         return -1;
@@ -432,8 +435,14 @@ pub fn utf_valid_string(s: &[u8], len: Option<usize>) -> bool {
 /// # Safety
 ///
 /// This function is safe to call with any `c_int` value.
-#[no_mangle]
+#[unsafe(export_name = "utf_char2len")]
 pub extern "C" fn rs_utf_char2len(c: c_int) -> c_int {
+    utf_char2len(c) as c_int
+}
+
+// Also export as mb_char2len (alias for utf_char2len)
+#[unsafe(export_name = "mb_char2len")]
+pub extern "C" fn rs_mb_char2len(c: c_int) -> c_int {
     utf_char2len(c) as c_int
 }
 
@@ -442,7 +451,7 @@ pub extern "C" fn rs_utf_char2len(c: c_int) -> c_int {
 /// # Safety
 ///
 /// `buf` must be a valid pointer to at least 6 bytes.
-#[no_mangle]
+#[unsafe(export_name = "utf_char2bytes")]
 pub unsafe extern "C" fn rs_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int {
     if buf.is_null() {
         return 0;
@@ -456,7 +465,7 @@ pub unsafe extern "C" fn rs_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int 
 /// # Safety
 ///
 /// This function is safe to call with any `c_int` value (0-255 used, others return 1).
-#[no_mangle]
+#[unsafe(export_name = "utf_byte2len")]
 pub extern "C" fn rs_utf_byte2len(b: c_int) -> c_int {
     if b < 0 || b > 255 {
         1
@@ -489,7 +498,7 @@ pub extern "C" fn rs_utf_is_trail_byte(byte: c_int) -> c_int {
 /// # Safety
 ///
 /// `p` must be a valid pointer to a null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "utf_ptr2char")]
 pub unsafe extern "C" fn rs_utf_ptr2char(p: *const c_char) -> c_int {
     if p.is_null() {
         return 0;
@@ -517,7 +526,7 @@ pub unsafe extern "C" fn rs_utf_ptr2char(p: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `p` must be a valid pointer to a null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "utf_ptr2len")]
 pub unsafe extern "C" fn rs_utf_ptr2len(p: *const c_char) -> c_int {
     if p.is_null() {
         return 0;
@@ -545,7 +554,7 @@ pub unsafe extern "C" fn rs_utf_ptr2len(p: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `p` must be a valid pointer to at least `size` bytes.
-#[no_mangle]
+#[unsafe(export_name = "utf_ptr2len_len")]
 pub unsafe extern "C" fn rs_utf_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
     if p.is_null() || size <= 0 {
         return 1;
@@ -561,7 +570,7 @@ pub unsafe extern "C" fn rs_utf_ptr2len_len(p: *const c_char, size: c_int) -> c_
 ///
 /// `s` must be a valid pointer to a string. If `end` is not null, the string
 /// must have at least `end - s` bytes. If `end` is null, `s` must be null-terminated.
-#[no_mangle]
+#[unsafe(export_name = "utf_valid_string")]
 pub unsafe extern "C" fn rs_utf_valid_string(s: *const c_char, end: *const c_char) -> c_int {
     if s.is_null() {
         return 1; // NULL is considered valid (matches C behavior)
@@ -700,19 +709,19 @@ pub fn utf_allow_break_after(cc: i32) -> bool {
 // FFI wrappers for line breaking functions
 
 /// Whether space is NOT allowed before/after 'c'.
-#[no_mangle]
+#[unsafe(export_name = "utf_eat_space")]
 pub extern "C" fn rs_utf_eat_space(cc: c_int) -> c_int {
     c_int::from(utf_eat_space(cc))
 }
 
 /// Whether line break is allowed before "cc".
-#[no_mangle]
+#[unsafe(export_name = "utf_allow_break_before")]
 pub extern "C" fn rs_utf_allow_break_before(cc: c_int) -> c_int {
     c_int::from(utf_allow_break_before(cc))
 }
 
 /// Whether line break is allowed after "cc".
-#[no_mangle]
+#[unsafe(export_name = "utf_allow_break_after")]
 pub extern "C" fn rs_utf_allow_break_after(cc: c_int) -> c_int {
     c_int::from(utf_allow_break_after(cc))
 }
@@ -733,7 +742,7 @@ pub fn utf_allow_break(cc: i32, ncc: i32) -> bool {
 }
 
 /// Whether line break is allowed between "cc" and "ncc".
-#[no_mangle]
+#[unsafe(export_name = "utf_allow_break")]
 pub extern "C" fn rs_utf_allow_break(cc: c_int, ncc: c_int) -> c_int {
     c_int::from(utf_allow_break(cc, ncc))
 }
@@ -742,7 +751,7 @@ pub extern "C" fn rs_utf_allow_break(cc: c_int, ncc: c_int) -> c_int {
 /// Composing characters are not counted separately.
 ///
 /// Uses the native Rust utfc_ptr2len implementation.
-#[no_mangle]
+#[unsafe(export_name = "mb_charlen")]
 pub unsafe extern "C" fn rs_mb_charlen(str: *const c_char) -> c_int {
     if str.is_null() {
         return 0;
@@ -774,7 +783,7 @@ pub unsafe extern "C" fn rs_mb_charlen(str: *const c_char) -> c_int {
 /// Composing characters are not counted separately.
 ///
 /// Uses the native Rust utfc_ptr2len_len implementation.
-#[no_mangle]
+#[unsafe(export_name = "mb_charlen_len")]
 pub unsafe extern "C" fn rs_mb_charlen_len(str: *const c_char, len: c_int) -> c_int {
     if str.is_null() || len <= 0 {
         return 0;
@@ -794,7 +803,7 @@ pub unsafe extern "C" fn rs_mb_charlen_len(str: *const c_char, len: c_int) -> c_
 
 /// Return the number of cells occupied by a string.
 /// Uses utf_ptr2cells and native Rust utfc_ptr2len.
-#[no_mangle]
+#[unsafe(export_name = "mb_string2cells")]
 pub unsafe extern "C" fn rs_mb_string2cells(str: *const c_char) -> usize {
     if str.is_null() {
         return 0;
@@ -824,7 +833,7 @@ pub unsafe extern "C" fn rs_mb_string2cells(str: *const c_char) -> usize {
 
 /// Return the number of cells occupied by a string with maximum length.
 /// Uses utf_ptr2cells and native Rust utfc_ptr2len_len.
-#[no_mangle]
+#[unsafe(export_name = "mb_string2cells_len")]
 pub unsafe extern "C" fn rs_mb_string2cells_len(str: *const c_char, size: usize) -> usize {
     if str.is_null() || size == 0 {
         return 0;
@@ -892,7 +901,7 @@ pub fn utf_printable(c: i32) -> bool {
 
 /// Return true for characters that can be displayed in a normal way.
 /// FFI wrapper for `utf_printable`.
-#[no_mangle]
+#[unsafe(export_name = "utf_printable")]
 pub extern "C" fn rs_utf_printable(c: c_int) -> c_int {
     c_int::from(utf_printable(c))
 }
@@ -912,7 +921,7 @@ pub fn utf_iscomposing_legacy(c: i32) -> bool {
 }
 
 /// FFI wrapper for `utf_iscomposing_legacy`.
-#[no_mangle]
+#[unsafe(export_name = "utf_iscomposing_legacy")]
 pub extern "C" fn rs_utf_iscomposing_legacy(c: c_int) -> c_int {
     c_int::from(utf_iscomposing_legacy(c))
 }
@@ -930,7 +939,7 @@ pub fn utf_iscomposing_first(c: i32) -> bool {
 }
 
 /// FFI wrapper for `utf_iscomposing_first`.
-#[no_mangle]
+#[unsafe(export_name = "utf_iscomposing_first")]
 pub extern "C" fn rs_utf_iscomposing_first(c: c_int) -> c_int {
     c_int::from(utf_iscomposing_first(c))
 }
@@ -952,7 +961,7 @@ pub fn utf_fold(a: i32) -> i32 {
 }
 
 /// FFI wrapper for `utf_fold`.
-#[no_mangle]
+#[unsafe(export_name = "utf_fold")]
 pub extern "C" fn rs_utf_fold(a: c_int) -> c_int {
     utf_fold(a)
 }
@@ -1111,7 +1120,7 @@ pub fn utf_strnicmp(s1: &[u8], s2: &[u8]) -> i32 {
 ///
 /// - s1 must be valid for reads of n1 bytes
 /// - s2 must be valid for reads of n2 bytes
-#[no_mangle]
+#[unsafe(export_name = "utf_strnicmp")]
 pub unsafe extern "C" fn rs_utf_strnicmp(
     s1: *const c_char,
     s2: *const c_char,
@@ -1135,7 +1144,7 @@ pub unsafe extern "C" fn rs_utf_strnicmp(
 ///
 /// - s1 must be valid for reads of nn bytes
 /// - s2 must be valid for reads of nn bytes
-#[no_mangle]
+#[unsafe(export_name = "mb_strnicmp")]
 pub unsafe extern "C" fn rs_mb_strnicmp(s1: *const c_char, s2: *const c_char, nn: usize) -> c_int {
     rs_utf_strnicmp(s1, s2, nn, nn)
 }
@@ -1151,7 +1160,7 @@ const MAXCOL: usize = 0x7fff_ffff;
 /// # Safety
 ///
 /// - s1 and s2 must be valid null-terminated strings
-#[no_mangle]
+#[unsafe(export_name = "mb_stricmp")]
 pub unsafe extern "C" fn rs_mb_stricmp(s1: *const c_char, s2: *const c_char) -> c_int {
     rs_mb_strnicmp(s1, s2, MAXCOL)
 }
@@ -1165,7 +1174,7 @@ pub unsafe extern "C" fn rs_mb_stricmp(s1: *const c_char, s2: *const c_char) -> 
 /// # Safety
 ///
 /// - s1 and s2 must be valid null-terminated strings
-#[no_mangle]
+#[unsafe(export_name = "mb_strcmp_ic")]
 pub unsafe extern "C" fn rs_mb_strcmp_ic(ic: bool, s1: *const c_char, s2: *const c_char) -> c_int {
     if ic {
         rs_mb_stricmp(s1, s2)
@@ -1221,7 +1230,7 @@ pub fn utf_ambiguous_width(p: &[u8]) -> bool {
 /// # Safety
 ///
 /// `p` must be a valid pointer to a null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "utf_ambiguous_width")]
 pub unsafe extern "C" fn rs_utf_ambiguous_width(p: *const c_char) -> c_int {
     if p.is_null() {
         return 0;
@@ -1320,7 +1329,7 @@ pub fn cw_value(c: i32) -> i32 {
 }
 
 /// FFI wrapper for `cw_value`.
-#[no_mangle]
+#[unsafe(export_name = "cw_value")]
 pub extern "C" fn rs_cw_value(c: c_int) -> c_int {
     cw_value(c)
 }
@@ -1401,7 +1410,7 @@ pub fn utf_char2cells(c: i32) -> i32 {
 }
 
 /// FFI wrapper for `utf_char2cells`.
-#[no_mangle]
+#[unsafe(export_name = "utf_char2cells")]
 pub extern "C" fn rs_utf_char2cells(c: c_int) -> c_int {
     utf_char2cells(c)
 }
@@ -1566,7 +1575,7 @@ pub fn utf_ptr2cells(p: &[u8]) -> i32 {
 /// # Safety
 ///
 /// `p` must be a valid pointer to a null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "utf_ptr2cells")]
 pub unsafe extern "C" fn rs_utf_ptr2cells(p: *const c_char) -> c_int {
     if p.is_null() {
         return 1;
@@ -1702,7 +1711,7 @@ pub fn utf_cp_bounds(base: &[u8], p_offset: usize) -> CharBoundsOff {
 /// - `base` must be a valid pointer
 /// - `p_in` must point into the memory starting at `base`
 /// - `p_len` must not exceed the remaining bytes after `p_in`
-#[no_mangle]
+#[unsafe(export_name = "utf_cp_bounds_len")]
 pub unsafe extern "C" fn rs_utf_cp_bounds_len(
     base: *const c_char,
     p_in: *const c_char,
@@ -1733,7 +1742,7 @@ pub unsafe extern "C" fn rs_utf_cp_bounds_len(
 ///
 /// - `base` must be a valid pointer to a NUL-terminated string
 /// - `p_in` must point into the memory starting at `base`
-#[no_mangle]
+#[unsafe(export_name = "utf_cp_bounds")]
 pub unsafe extern "C" fn rs_utf_cp_bounds(
     base: *const c_char,
     p_in: *const c_char,
@@ -1785,7 +1794,7 @@ const BOM_0: u8 = 0xEF;
 const BOM_1: u8 = 0xBB;
 const BOM_2: u8 = 0xBF;
 
-#[no_mangle]
+#[unsafe(export_name = "remove_bom")]
 pub unsafe extern "C" fn rs_remove_bom(s: *mut c_char) {
     if s.is_null() {
         return;
@@ -1980,7 +1989,7 @@ pub fn utf_class_tab_impl(c: i32, chartab: &[u64; 4]) -> i32 {
 /// # Safety
 ///
 /// - `chartab` must be a valid pointer to a `[u64; 4]` array
-#[no_mangle]
+#[unsafe(export_name = "utf_class_tab")]
 pub unsafe extern "C" fn rs_utf_class_tab(c: c_int, chartab: *const u64) -> c_int {
     if chartab.is_null() {
         // If no chartab, use default behavior (treat as punctuation for Latin1)
@@ -2000,7 +2009,7 @@ pub unsafe extern "C" fn rs_utf_class_tab(c: c_int, chartab: *const u64) -> c_in
 /// FFI wrapper for `utf_class`.
 ///
 /// Get class of a Unicode character using current buffer's chartab.
-#[no_mangle]
+#[unsafe(export_name = "utf_class")]
 pub unsafe extern "C" fn rs_utf_class(c: c_int) -> c_int {
     // Get current buffer and its chartab
     let curbuf = nvim_get_curbuf();
@@ -2073,7 +2082,7 @@ pub fn mb_get_class_tab_impl(p: &[u8], chartab: &[u64; 4]) -> i32 {
 ///
 /// - `p` must be a valid pointer to a NUL-terminated or sufficiently long UTF-8 string
 /// - `chartab` must be a valid pointer to a `[u64; 4]` array
-#[no_mangle]
+#[unsafe(export_name = "mb_get_class_tab")]
 pub unsafe extern "C" fn rs_mb_get_class_tab(p: *const c_char, chartab: *const u64) -> c_int {
     if p.is_null() || chartab.is_null() {
         return 0;
@@ -2108,7 +2117,7 @@ pub unsafe extern "C" fn rs_mb_get_class_tab(p: *const c_char, chartab: *const u
 /// # Safety
 ///
 /// - `p` must be a valid pointer to a NUL-terminated or sufficiently long UTF-8 string
-#[no_mangle]
+#[unsafe(export_name = "mb_get_class")]
 pub unsafe extern "C" fn rs_mb_get_class(p: *const c_char) -> c_int {
     if p.is_null() {
         return 0;
@@ -2172,7 +2181,7 @@ pub fn mb_utflen(s: &[u8], codepoints: &mut usize, codeunits: &mut usize) {
 /// # Safety
 /// `s` must be a valid pointer to `len` bytes. `codepoints` and `codeunits`
 /// must be valid pointers to writable usize values.
-#[no_mangle]
+#[unsafe(export_name = "mb_utflen")]
 pub unsafe extern "C" fn rs_mb_utflen(
     s: *const c_char,
     len: usize,
@@ -2228,7 +2237,7 @@ pub fn mb_utf_index_to_bytes(s: &[u8], index: usize, use_utf16_units: bool) -> i
 ///
 /// # Safety
 /// `s` must be a valid pointer to `len` bytes.
-#[no_mangle]
+#[unsafe(export_name = "mb_utf_index_to_bytes")]
 pub unsafe extern "C" fn rs_mb_utf_index_to_bytes(
     s: *const c_char,
     len: usize,
@@ -2323,7 +2332,7 @@ pub fn utf_ptr2cells_len(p: &[u8], size: usize) -> i32 {
 /// # Safety
 ///
 /// `p` must be a valid pointer to at least `size` bytes.
-#[no_mangle]
+#[unsafe(export_name = "utf_ptr2cells_len")]
 pub unsafe extern "C" fn rs_utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int {
     if p.is_null() || size <= 0 {
         return 1;
@@ -2362,7 +2371,7 @@ pub fn mb_cptr2char_adv(p: &[u8]) -> (i32, usize) {
 /// # Safety
 /// - `pp` must be a valid pointer to a pointer to a NUL-terminated string
 /// - The pointer pointed to by `pp` will be advanced
-#[no_mangle]
+#[unsafe(export_name = "mb_cptr2char_adv")]
 pub unsafe extern "C" fn rs_mb_cptr2char_adv(pp: *mut *const c_char) -> c_int {
     if pp.is_null() {
         return 0;
@@ -2410,7 +2419,7 @@ pub unsafe extern "C" fn rs_mb_cptr2char_adv(pp: *mut *const c_char) -> c_int {
 /// # Safety
 ///
 /// `p` must be a valid pointer to a NUL-terminated string.
-#[no_mangle]
+#[unsafe(export_name = "enc_skip")]
 pub unsafe extern "C" fn rs_enc_skip(p: *mut c_char) -> *mut c_char {
     if p.is_null() {
         return p;
@@ -3182,19 +3191,19 @@ pub fn utf_iscomposing(c1: i32, c2: i32, state: &mut i32) -> bool {
 /// # Safety
 /// - `p1` and `p2` must be valid pointers to UTF-8 strings
 /// - `state` must be a valid pointer to an i32
-#[no_mangle]
+#[unsafe(export_name = "utf_composinglike")]
 pub unsafe extern "C" fn rs_utf_composinglike(
     p1: *const c_char,
     p2: *const c_char,
     state: *mut i32,
-) -> bool {
+) -> c_int {
     if p1.is_null() || p2.is_null() || state.is_null() {
-        return false;
+        return 0;
     }
 
     // Quick check: if p2 points to ASCII, it's definitely not composing
     if (*(p2 as *const u8)) < 0x80 {
-        return false;
+        return 0;
     }
 
     // Create slices from pointers (6 bytes is max UTF-8 char length)
@@ -3204,14 +3213,14 @@ pub unsafe extern "C" fn rs_utf_composinglike(
     let first = utf_ptr2char(slice1);
     let second = utf_ptr2char(slice2);
 
-    utf_composinglike(first, second, &mut *state)
+    c_int::from(utf_composinglike(first, second, &mut *state))
 }
 
 /// C-compatible wrapper for `utf_iscomposing`.
 ///
 /// # Safety
 /// - `state` must be a valid pointer to an i32
-#[no_mangle]
+#[unsafe(export_name = "utf_iscomposing")]
 pub unsafe extern "C" fn rs_utf_iscomposing(c1: c_int, c2: c_int, state: *mut i32) -> bool {
     if state.is_null() {
         return false;
@@ -3349,7 +3358,7 @@ pub fn utfc_ptr2len_len(p: &[u8], size: usize) -> usize {
 ///
 /// # Safety
 /// - `p` must be a valid pointer to a NUL-terminated UTF-8 string
-#[no_mangle]
+#[unsafe(export_name = "utfc_ptr2len")]
 pub unsafe extern "C" fn rs_utfc_ptr2len(p: *const c_char) -> c_int {
     if p.is_null() {
         return 0;
@@ -3379,7 +3388,7 @@ pub unsafe extern "C" fn rs_utfc_ptr2len(p: *const c_char) -> c_int {
 ///
 /// # Safety
 /// - `p` must be a valid pointer with at least `size` bytes
-#[no_mangle]
+#[unsafe(export_name = "utfc_ptr2len_len")]
 pub unsafe extern "C" fn rs_utfc_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
     if p.is_null() || size <= 0 {
         return 0;
@@ -3644,7 +3653,7 @@ pub fn utf_head_off(base: &[u8], p_offset: usize) -> usize {
 /// # Safety
 /// - `base` and `p` must be valid pointers within the same allocated memory region
 /// - Memory from `base` to at least `p + MB_MAXBYTES` must be accessible
-#[no_mangle]
+#[unsafe(export_name = "utf_head_off")]
 pub unsafe extern "C" fn rs_utf_head_off(base: *const c_char, p: *const c_char) -> c_int {
     if base.is_null() || p.is_null() || p < base {
         return 0;
@@ -3693,7 +3702,7 @@ extern "C" {
 ///
 /// # Safety
 /// This function accesses global state (curbuf) through C accessor functions.
-#[no_mangle]
+#[unsafe(export_name = "bomb_size")]
 pub unsafe extern "C" fn rs_bomb_size() -> c_int {
     // Check if bomb option is set and binary mode is not enabled
     if nvim_curbuf_get_b_p_bomb() == 0 || nvim_curbuf_get_b_p_bin() != 0 {
@@ -3844,7 +3853,7 @@ fn enc_canon_search(name: &[u8]) -> c_int {
 /// Find canonical encoding "name" in the list and return its properties.
 ///
 /// Returns 0 if not found.
-#[no_mangle]
+#[unsafe(export_name = "enc_canon_props")]
 pub unsafe extern "C" fn rs_enc_canon_props(name: *const c_char) -> c_int {
     if name.is_null() {
         return 0;
@@ -4013,7 +4022,7 @@ pub fn mb_off_next(base: &[u8], p_offset: usize) -> usize {
 /// # Safety
 /// - `base` and `p` must be valid pointers
 /// - `p` must point to a position within or at the end of the string starting at `base`
-#[no_mangle]
+#[unsafe(export_name = "mb_off_next")]
 pub unsafe extern "C" fn rs_mb_off_next(base: *const c_char, p: *const c_char) -> c_int {
     if base.is_null() || p.is_null() || p < base {
         return 0;

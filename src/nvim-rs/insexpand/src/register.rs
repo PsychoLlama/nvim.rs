@@ -46,7 +46,7 @@ extern "C" {
     // Word boundary helpers (from insexpand_shim.c)
     fn rs_find_word_start(ptr: *mut c_char) -> *mut c_char;
     fn rs_find_word_end(ptr: *mut c_char) -> *mut c_char;
-    fn rs_utfc_ptr2len(ptr: *const c_char) -> c_int;
+    fn utfc_ptr2len(ptr: *const c_char) -> c_int;
 
     // get_register_name is rs_get_register_name (from nvim-rs/register crate)
     fn rs_get_register_name(num: c_int) -> c_int;
@@ -156,7 +156,7 @@ pub unsafe extern "C" fn rs_get_register_completion() {
 
                     // word_end must be > p
                     let word_end = if word_end <= p {
-                        p.add(rs_utfc_ptr2len(p) as usize)
+                        p.add(utfc_ptr2len(p) as usize)
                     } else {
                         word_end
                     };
@@ -188,7 +188,7 @@ pub unsafe extern "C" fn rs_get_register_completion() {
 
                     // Safety: avoid infinite loop if advance didn't happen
                     if p <= old_p {
-                        p = old_p.add(rs_utfc_ptr2len(old_p) as usize);
+                        p = old_p.add(utfc_ptr2len(old_p) as usize);
                     }
                 }
             }

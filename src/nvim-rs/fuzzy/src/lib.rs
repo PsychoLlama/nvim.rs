@@ -685,7 +685,7 @@ extern "C" {
     fn ga_init(gap: *mut GArray, itemsize: c_int, growsize: c_int);
     fn ga_clear(gap: *mut GArray);
     fn ga_grow(gap: *mut GArray, n: c_int);
-    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn rs_find_word_start(ptr: *mut c_char) -> *mut c_char;
     fn rs_find_word_end(ptr: *mut c_char) -> *mut c_char;
     fn rs_find_line_end(ptr: *mut c_char) -> *mut c_char;
@@ -871,7 +871,7 @@ pub unsafe extern "C" fn rs_fuzzy_match_str_with_pos(
             j += 1;
         }
         // Advance by one UTF-8 character (MB_PTR_ADV equivalent)
-        let char_len = rs_utfc_ptr2len(p);
+        let char_len = utfc_ptr2len(p);
         p = p.add(if char_len > 0 { char_len as usize } else { 1 });
     }
 
@@ -887,7 +887,7 @@ const FORWARD: c_int = 1;
 
 /// Advance a pointer by one UTF-8 character (`MB_PTR_ADV` equivalent).
 unsafe fn mb_ptr_adv(p: *mut c_char) -> *mut c_char {
-    let len = rs_utfc_ptr2len(p);
+    let len = utfc_ptr2len(p);
     p.add(if len > 0 { len as usize } else { 1 })
 }
 

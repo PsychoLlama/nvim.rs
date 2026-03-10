@@ -29,7 +29,7 @@ extern "C" {
     fn rs_getexactdigraph(char1: c_int, char2: c_int, meta_char: c_int) -> c_int;
 
     /// Convert character to UTF-8.
-    fn rs_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
 
     /// Check if a character is a composing character that should be displayed
     /// with a preceding space.
@@ -204,7 +204,7 @@ pub unsafe extern "C" fn rs_digraph_format_entry(
     }
 
     // Write UTF-8 result character
-    let utf8_len = unsafe { rs_utf_char2bytes(result, buf.add(pos)) };
+    let utf8_len = unsafe { utf_char2bytes(result, buf.add(pos)) };
     if utf8_len > 0 {
         pos += utf8_len as usize;
     }
@@ -515,7 +515,7 @@ pub unsafe extern "C" fn rs_digraph_format_result(result: c_int, buf: *mut c_cha
         return 0;
     }
 
-    let len = unsafe { rs_utf_char2bytes(result, buf) };
+    let len = unsafe { utf_char2bytes(result, buf) };
 
     // NUL terminate
     #[allow(clippy::cast_sign_loss)]
@@ -627,7 +627,7 @@ pub unsafe extern "C" fn rs_printdigraph(
         pos += 1;
     }
 
-    let utf8_len = unsafe { rs_utf_char2bytes(result, charbuf.as_mut_ptr().add(pos)) };
+    let utf8_len = unsafe { utf_char2bytes(result, charbuf.as_mut_ptr().add(pos)) };
     #[allow(clippy::cast_sign_loss)]
     if utf8_len > 0 {
         pos += utf8_len as usize;

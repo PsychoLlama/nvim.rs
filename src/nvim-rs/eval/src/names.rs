@@ -33,7 +33,7 @@ extern "C" {
     fn rs_vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
     #[link_name = "skipwhite"]
     fn rs_skipwhite(p: *const c_char) -> *const c_char;
-    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
 }
 
 /// Advance pointer by one multi-byte character (at least 1 byte).
@@ -43,7 +43,7 @@ extern "C" {
 /// `p` must point to a valid null-terminated C string.
 #[inline]
 unsafe fn mb_ptr_adv(p: *const c_char) -> *const c_char {
-    let len = rs_utfc_ptr2len(p);
+    let len = utfc_ptr2len(p);
     p.add(if len > 0 { len as usize } else { 1 })
 }
 

@@ -17,8 +17,8 @@ extern "C" {
     fn nvim_get_compl_interrupted() -> c_int;
 
     // UTF-8 functions
-    fn rs_utfc_ptr2len(ptr: *const c_char) -> c_int;
-    fn rs_mb_get_class(ptr: *const c_char) -> c_int;
+    fn utfc_ptr2len(ptr: *const c_char) -> c_int;
+    fn mb_get_class(ptr: *const c_char) -> c_int;
 }
 
 // CTRL-X mode constants
@@ -34,8 +34,8 @@ const CTRL_X_THESAURUS: c_int = 10 + CTRL_X_WANT_IDENT;
 #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_dict_find_word_start(mut ptr: *mut c_char) -> *mut c_char {
     // Skip whitespace and punctuation (class <= 1)
-    while *ptr != 0 && *ptr != b'\n' as c_char && rs_mb_get_class(ptr) <= 1 {
-        ptr = ptr.add(rs_utfc_ptr2len(ptr) as usize);
+    while *ptr != 0 && *ptr != b'\n' as c_char && mb_get_class(ptr) <= 1 {
+        ptr = ptr.add(utfc_ptr2len(ptr) as usize);
     }
     ptr
 }
@@ -49,11 +49,11 @@ pub unsafe extern "C" fn rs_dict_find_word_start(mut ptr: *mut c_char) -> *mut c
 #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_dict_find_word_end(mut ptr: *mut c_char) -> *mut c_char {
     while *ptr != 0 {
-        let len = rs_utfc_ptr2len(ptr);
+        let len = utfc_ptr2len(ptr);
         // For multi-byte characters, continue regardless of class
         if len > 1 {
             ptr = ptr.add(len as usize);
-        } else if rs_mb_get_class(ptr) <= 1 {
+        } else if mb_get_class(ptr) <= 1 {
             // Single-byte non-word character - stop here
             break;
         } else {

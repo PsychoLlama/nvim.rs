@@ -29,7 +29,7 @@ const RE_STRING: c_int = 2;
 type BufHandle = *mut c_void;
 
 extern "C" {
-    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
 
     // Buffer accessors (defined in eval.c)
     fn nvim_eval_buf_ml_valid(buf: BufHandle) -> c_int;
@@ -102,7 +102,7 @@ pub unsafe extern "C" fn rs_buf_byteidx_to_charidx(
     let mut t = str;
     let mut count: c_int = 0;
     while *t != 0 && t <= str.add(byteidx as usize) {
-        t = t.add(rs_utfc_ptr2len(t) as usize);
+        t = t.add(utfc_ptr2len(t) as usize);
         count += 1;
     }
 
@@ -145,7 +145,7 @@ pub unsafe extern "C" fn rs_buf_charidx_to_byteidx(
     let mut t = str;
     charidx -= 1;
     while *t != 0 && charidx > 0 {
-        t = t.add(rs_utfc_ptr2len(t) as usize);
+        t = t.add(utfc_ptr2len(t) as usize);
         charidx -= 1;
     }
 

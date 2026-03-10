@@ -2162,11 +2162,10 @@ pub unsafe extern "C" fn rs_buf_init_chartab(buf: *mut std::ffi::c_void, global:
 
 // FFI declarations for mbyte and chartab functions
 extern "C" {
-    fn rs_utf_ptr2len(p: *const c_char) -> c_int;
-    fn rs_utf_ptr2char(p: *const c_char) -> c_int;
-    fn rs_utf_char2len(c: c_int) -> c_int;
-    fn rs_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
-    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utf_ptr2len(p: *const c_char) -> c_int;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn utf_char2len(c: c_int) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     fn nvim_charset_is_initialized() -> c_int;
 }
 
@@ -2319,7 +2318,7 @@ pub unsafe extern "C" fn rs_trans_characters(buf: *mut c_char, bufsize: c_int) {
     let mut pos = buf;
 
     while *pos != 0 {
-        let trs_len = rs_utfc_ptr2len(pos);
+        let trs_len = utfc_ptr2len(pos);
 
         if trs_len > 1 {
             // Multi-byte character - assume doesn't need translation
@@ -2375,7 +2374,7 @@ pub unsafe extern "C" fn rs_transstr_buf(
     let buf_e = buf.add(buflen - 1);
 
     while (slen < 0 || (p.offset_from(s)) < slen) && *p != 0 && buf_p < buf_e {
-        let l = rs_utfc_ptr2len(p) as usize;
+        let l = utfc_ptr2len(p) as usize;
 
         if l > 1 {
             // Multi-byte character
@@ -2383,7 +2382,7 @@ pub unsafe extern "C" fn rs_transstr_buf(
                 break; // Exceeded buffer size
             }
 
-            let c = rs_utf_ptr2char(p);
+            let c = utf_ptr2char(p);
             if nvim_mbyte::utf_printable(c) {
                 // Printable - copy as-is
                 std::ptr::copy_nonoverlapping(p, buf_p, l);
@@ -2392,7 +2391,7 @@ pub unsafe extern "C" fn rs_transstr_buf(
                 // Non-printable - convert each codepoint to hex
                 let mut off = 0usize;
                 while off < l {
-                    let cp = rs_utf_ptr2char(p.add(off));
+                    let cp = utf_ptr2char(p.add(off));
                     let mut hexbuf = [0u8; 9];
                     let hexlen = rs_transchar_hex(hexbuf.as_mut_ptr().cast(), cp) as usize;
                     if buf_p.add(hexlen) > buf_e {
@@ -2400,7 +2399,7 @@ pub unsafe extern "C" fn rs_transstr_buf(
                     }
                     std::ptr::copy_nonoverlapping(hexbuf.as_ptr().cast(), buf_p, hexlen);
                     buf_p = buf_p.add(hexlen);
-                    let cp_len = rs_utf_ptr2len(p.add(off)) as usize;
+                    let cp_len = utf_ptr2len(p.add(off)) as usize;
                     off += cp_len;
                 }
             }
@@ -2516,13 +2515,13 @@ pub unsafe extern "C" fn rs_str_foldcase(
     let mut i = 0usize;
     while i < len && *data.add(i) != 0 {
         let p = data.add(i);
-        let c = rs_utf_ptr2char(p);
-        let olen = rs_utf_ptr2len(p) as usize;
+        let c = utf_ptr2char(p);
+        let olen = utf_ptr2len(p) as usize;
         let lc = tolower_fn(c);
 
         // Only replace when it's a valid sequence (ASCII or multi-byte) and changed
         if ((c < 0x80) || (olen > 1)) && (c != lc) {
-            let nlen = rs_utf_char2len(lc) as usize;
+            let nlen = utf_char2len(lc) as usize;
 
             // If byte length changes, need to shift following characters
             if olen != nlen {
@@ -2545,7 +2544,7 @@ pub unsafe extern "C" fn rs_str_foldcase(
                         // Fixed buffer: check if we have space
                         if len + nlen - olen >= capacity {
                             // Out of space, keep old character
-                            i += rs_utfc_ptr2len(data.add(i)) as usize;
+                            i += utfc_ptr2len(data.add(i)) as usize;
                             continue;
                         }
                     }
@@ -2560,11 +2559,11 @@ pub unsafe extern "C" fn rs_str_foldcase(
             }
 
             // Write the lowercase character
-            rs_utf_char2bytes(lc, data.add(i));
+            utf_char2bytes(lc, data.add(i));
         }
 
         // Skip to next multi-byte character
-        i += rs_utfc_ptr2len(data.add(i)) as usize;
+        i += utfc_ptr2len(data.add(i)) as usize;
     }
 
     data
