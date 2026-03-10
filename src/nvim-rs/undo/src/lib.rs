@@ -447,9 +447,11 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
 
     // Memory functions
+    #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut c_void);
 
     // Allocation functions
+    #[link_name = "xcalloc"]
     fn nvim_xcalloc(count: usize, size: usize) -> *mut c_void;
     fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
 
@@ -512,11 +514,13 @@ extern "C" {
 
     // Infrastructure for future migration (u_savecommon, etc.)
     fn nvim_ml_get_buf_copy(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
+    #[link_name = "fast_breakcheck"]
     fn nvim_fast_breakcheck();
     fn nvim_undo_got_int() -> bool;
     fn nvim_time_now() -> TimeT;
     fn nvim_get_curwin_cursor(lnum: *mut LinenrT, col: *mut ColnrT, coladd: *mut ColnrT);
     fn nvim_curwin_virtual_active() -> bool;
+    #[link_name = "getviscol"]
     fn nvim_getviscol() -> ColnrT;
 
     // u_savecommon infrastructure
@@ -553,33 +557,52 @@ extern "C" {
     // ==========================================================================
 
     // File operations
+    #[link_name = "fclose"]
     fn nvim_undo_fclose(fp: FileHandle) -> c_int;
+    #[link_name = "fwrite"]
     fn nvim_undo_fwrite(ptr: *const c_void, size: usize, count: usize, fp: FileHandle) -> usize;
+    #[link_name = "fread"]
     fn nvim_undo_fread(ptr: *mut c_void, size: usize, count: usize, fp: FileHandle) -> usize;
+    #[link_name = "fflush"]
     fn nvim_undo_fflush(fp: FileHandle) -> c_int;
+    #[link_name = "getc"]
     fn nvim_undo_fgetc(fp: FileHandle) -> c_int;
 
     // File I/O helpers (reading from C file handle)
+    #[link_name = "get2c"]
     fn nvim_undo_get2c(fp: FileHandle) -> c_int;
+    #[link_name = "get4c"]
     fn nvim_undo_get4c(fp: FileHandle) -> c_int;
+    #[link_name = "get8ctime"]
     fn nvim_undo_get8ctime(fp: FileHandle) -> TimeT;
 
     // Buffer file path accessors
     fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
 
     // File system operations
+    #[link_name = "os_path_exists"]
     fn nvim_os_path_exists(path: *const c_char) -> bool;
+    #[link_name = "os_remove"]
     fn nvim_os_remove(path: *const c_char) -> c_int;
+    #[link_name = "os_open"]
     fn nvim_os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int;
+    #[link_name = "os_close"]
     fn nvim_os_close(fd: c_int) -> c_int;
+    #[link_name = "os_getperm"]
     fn nvim_os_getperm(path: *const c_char) -> c_int;
+    #[link_name = "os_setperm"]
     fn nvim_os_setperm(path: *const c_char, perm: c_int) -> c_int;
+    #[link_name = "os_fsync"]
     fn nvim_os_fsync(fd: c_int) -> c_int;
+    #[link_name = "fdopen"]
     fn nvim_fdopen(fd: c_int, mode: *const c_char) -> FileHandle;
+    #[link_name = "fileno"]
     fn nvim_fileno(fp: FileHandle) -> c_int;
 
     // Message functions for undo file I/O
+    #[link_name = "verbose_enter"]
     fn nvim_undo_verbose_enter();
+    #[link_name = "verbose_leave"]
     fn nvim_undo_verbose_leave();
     fn nvim_undo_semsg(msg: *const c_char, arg: *const c_char);
 
@@ -591,11 +614,15 @@ extern "C" {
 
     // Buffer line count and line accessors for hash computation
     fn nvim_buf_get_b_ml_line_count(buf: BufHandle) -> LinenrT;
+    #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf_line(buf: BufHandle, lnum: LinenrT) -> *const c_char;
 
     // ACL operations (Unix)
+    #[link_name = "os_get_acl"]
     fn nvim_os_get_acl(path: *const c_char) -> *mut c_void;
+    #[link_name = "os_set_acl"]
     fn nvim_os_set_acl(path: *const c_char, acl: *mut c_void);
+    #[link_name = "os_free_acl"]
     fn nvim_os_free_acl(acl: *mut c_void);
 
     // File info for Unix ownership checks
@@ -607,6 +634,7 @@ extern "C" {
     ) -> c_int;
 
     // Read helper for errno handling
+    #[link_name = "read_eintr"]
     fn nvim_read_eintr(fd: c_int, buf: *mut c_void, count: usize) -> isize;
 
     // Global lastmark accessor
@@ -626,19 +654,24 @@ extern "C" {
     fn nvim_ml_replace_lnum(lnum: LinenrT, line: *const c_char, copy: bool) -> c_int;
 
     /// Block/unblock autocommands
+    #[link_name = "block_autocmds"]
     fn nvim_block_autocmds();
+    #[link_name = "unblock_autocmds"]
     fn nvim_unblock_autocmds();
 
     /// Set pc mark for jump list
+    #[link_name = "setpcmark"]
     fn nvim_undo_setpcmark();
 
     /// Check cursor line number validity and adjust if needed
+    #[link_name = "check_cursor_lnum"]
     fn nvim_undo_check_cursor_lnum(win: WinHandle);
 
     /// Mark adjust for undo
     fn nvim_undo_mark_adjust(top: LinenrT, bot: LinenrT, amount: LinenrT, amount_after: LinenrT);
 
     /// Changed lines notification
+    #[link_name = "changed_lines"]
     fn nvim_undo_changed_lines(
         buf: BufHandle,
         top: LinenrT,
@@ -649,21 +682,26 @@ extern "C" {
     );
 
     /// Mark buffer as changed
+    #[link_name = "changed"]
     fn nvim_buf_changed(buf: BufHandle);
 
     /// Mark buffer as unchanged
+    #[link_name = "unchanged"]
     fn nvim_buf_unchanged(buf: BufHandle, ff: bool, always_strstruc: bool);
 
     /// Check spell for window
+    #[link_name = "spell_check_window"]
     fn nvim_spell_check_window(win: WinHandle) -> bool;
 
     /// Redraw window line
+    #[link_name = "redrawWinline"]
     fn nvim_redrawWinline(win: WinHandle, lnum: LinenrT);
 
     /// Apply extmark undo
     fn nvim_extmark_apply_undo(uhp: UHeaderHandle, idx: usize, undo: bool);
 
     /// Buffer updates unload
+    #[link_name = "buf_updates_unload"]
     fn nvim_buf_updates_unload(buf: BufHandle, force: bool);
 
     /// Current window handle accessor
@@ -764,6 +802,7 @@ extern "C" {
     fn nvim_iemsg_undo_line_numbers_wrong();
 
     /// xmalloc wrapper
+    #[link_name = "xmalloc"]
     fn nvim_xmalloc(size: usize) -> *mut c_void;
 
     // ==========================================================================
@@ -3483,6 +3522,7 @@ pub unsafe extern "C" fn rs_uep_get_line_count(uep: UEntryHandle) -> LinenrT {
 
 // Additional C functions needed for string allocation
 extern "C" {
+    #[link_name = "xmallocz"]
     fn nvim_xmallocz(size: usize) -> *mut c_void;
 }
 
@@ -5039,11 +5079,15 @@ pub struct GArrayHandle(*mut c_void);
 // Additional FFI declarations for ex_undolist
 extern "C" {
     fn nvim_undo_msg_simple(msg: *const c_char);
+    #[link_name = "msg_start"]
     fn nvim_msg_start();
     fn nvim_msg_end();
     fn nvim_undo_msg_puts_hl_title(msg: *const c_char);
+    #[link_name = "msg_putchar"]
     fn nvim_undo_msg_putchar(c: c_int);
+    #[link_name = "msg_puts"]
     fn nvim_undo_msg_puts(msg: *const c_char);
+    #[link_name = "xstrdup"]
     fn nvim_undo_xstrdup(s: *const c_char) -> *mut c_char;
 }
 
