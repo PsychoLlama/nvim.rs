@@ -516,78 +516,10 @@ void clear_fmark(fmark_T *const fm, const Timestamp timestamp)
 // Set named mark "c" to position "pos".
 // When "c" is upper case use file "fnum".
 // Returns OK on success, FAIL if bad name given.
+extern int rs_setmark_pos(int c, pos_T *pos, int fnum, const fmarkv_T *view_pt);
 int setmark_pos(int c, pos_T *pos, int fnum, fmarkv_T *view_pt)
 {
-  fmarkv_T view = view_pt != NULL ? *view_pt : (fmarkv_T)INIT_FMARKV;
-
-  // Check for a special key (may cause islower() to crash).
-  if (c < 0) {
-    return FAIL;
-  }
-
-  if (rs_mark_is_jump_mark(c)) {
-    if (pos == &curwin->w_cursor) {
-      setpcmark();
-      // keep it even when the cursor doesn't move
-      curwin->w_prev_pcmark = curwin->w_pcmark;
-    } else {
-      curwin->w_pcmark = *pos;
-    }
-    return OK;
-  }
-
-  // Can't set a mark in a non-existent buffer.
-  buf_T *buf = buflist_findnr(fnum);
-  if (buf == NULL) {
-    return FAIL;
-  }
-
-  if (rs_mark_is_last_cursor(c)) {
-    RESET_FMARK(&buf->b_last_cursor, *pos, buf->b_fnum, view);
-    return OK;
-  }
-
-  // Allow setting '[ and '] for an autocommand that simulates reading a
-  // file.
-  if (rs_mark_is_sentence(c)) {
-    if (c == '[') {
-      buf->b_op_start = *pos;
-    } else {
-      buf->b_op_end = *pos;
-    }
-    return OK;
-  }
-
-  if (rs_mark_is_visual(c)) {
-    if (c == '<') {
-      buf->b_visual.vi_start = *pos;
-    } else {
-      buf->b_visual.vi_end = *pos;
-    }
-    if (buf->b_visual.vi_mode == NUL) {
-      // Visual_mode has not yet been set, use a sane default.
-      buf->b_visual.vi_mode = 'v';
-    }
-    return OK;
-  }
-
-  if (c == ':' && bt_prompt(buf)) {
-    RESET_FMARK(&buf->b_prompt_start, *pos, buf->b_fnum, view);
-    return OK;
-  }
-
-  int local_idx = rs_mark_local_index(c);
-  if (rs_mark_is_valid_named(c)) {
-    RESET_FMARK(buf->b_namedm + local_idx, *pos, fnum, view);
-    return OK;
-  }
-
-  int global_idx = rs_mark_global_index(c);
-  if (global_idx >= 0) {
-    RESET_XFMARK(namedfm + global_idx, *pos, fnum, view, NULL);
-    return OK;
-  }
-  return FAIL;
+  return rs_setmark_pos(c, pos, fnum, view_pt);
 }
 
 /// Remove every jump list entry referring to a given buffer.

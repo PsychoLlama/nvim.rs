@@ -63,6 +63,7 @@ extern "C" {
     fn nvim_mark_buf_get_visual_start(buf: BufHandle) -> PosT;
     fn nvim_mark_buf_get_visual_end(buf: BufHandle) -> PosT;
     fn nvim_mark_buf_get_visual_mode(buf: BufHandle) -> c_int;
+    fn nvim_mark_buf_set_visual_mode(buf: BufHandle, mode: c_int);
     fn nvim_mark_buf_get_prompt_start(buf: BufHandle) -> *mut FmarkT;
     fn nvim_mark_buf_get_changelist(buf: BufHandle, idx: c_int) -> *mut FmarkT;
     fn nvim_mark_buf_get_changelistlen(buf: BufHandle) -> c_int;
@@ -4648,6 +4649,154 @@ pub unsafe extern "C" fn rs_fm_getname(
         return nvim_mark_mark_line(&raw mut (*fmark).mark, lead_len);
     }
     nvim_mark_buflist_nr2name((*fmark).fnum, 0, 1)
+}
+
+/// Set named mark "c" to position "pos".
+///
+/// When "c" is upper case use file "fnum".
+/// Returns OK (0) on success, FAIL (1) if bad name given.
+///
+/// This is the Rust implementation of the C `setmark_pos` function.
+///
+/// # Safety
+/// - `pos` must be a valid non-null pointer to a PosT.
+/// - `view_pt` may be null (treated as no view).
+#[no_mangle]
+pub unsafe extern "C" fn rs_setmark_pos(
+    c: c_int,
+    pos: *mut PosT,
+    fnum: c_int,
+    view_pt: *const FmarkvT,
+) -> c_int {
+    const OK: c_int = 0;
+    const FAIL: c_int = 1;
+    const NUL: c_int = 0;
+
+    // Dereference the view or use the default (MAXLNUM = no view).
+    let view = if view_pt.is_null() {
+        FmarkvT {
+            topline_offset: MAXLNUM,
+        }
+    } else {
+        *view_pt
+    };
+
+    // Check for a special key (may cause islower() to crash).
+    if c < 0 {
+        return FAIL;
+    }
+
+    let curwin = nvim_mark_get_curwin();
+
+    if rs_mark_is_jump_mark(c) {
+        // Compare pointer to see if pos is &curwin->w_cursor
+        let cursor_ptr = nvim_mark_win_get_cursor_ptr(curwin);
+        if pos == cursor_ptr {
+            // setpcmark() then keep prev_pcmark
+            nvim_mark_setpcmark();
+            let pcmark = nvim_mark_win_get_pcmark_ptr(curwin);
+            let prev_pcmark = nvim_mark_win_get_prev_pcmark_ptr(curwin);
+            *prev_pcmark = *pcmark;
+        } else {
+            let pcmark = nvim_mark_win_get_pcmark_ptr(curwin);
+            *pcmark = *pos;
+        }
+        return OK;
+    }
+
+    // Can't set a mark in a non-existent buffer.
+    let buf = nvim_mark_buflist_findnr(fnum);
+    if buf.is_null() {
+        return FAIL;
+    }
+
+    if rs_mark_is_last_cursor(c) {
+        let last_cursor = nvim_mark_buf_get_last_cursor(buf);
+        // RESET_FMARK: free old, set new
+        rs_free_fmark(*last_cursor);
+        let buf_fnum = nvim_buf_get_fnum(buf);
+        *last_cursor = FmarkT {
+            mark: *pos,
+            fnum: buf_fnum,
+            timestamp: nvim_mark_os_time(),
+            view,
+            additional_data: std::ptr::null_mut(),
+        };
+        return OK;
+    }
+
+    // Allow setting '[ and '] for an autocommand that simulates reading a file.
+    if rs_mark_is_sentence(c) {
+        let op_ptr = if c == c_int::from(b'[') {
+            nvim_mark_buf_get_op_start(buf)
+        } else {
+            nvim_mark_buf_get_op_end(buf)
+        };
+        *op_ptr = *pos;
+        return OK;
+    }
+
+    if rs_mark_is_visual(c) {
+        let vis_ptr = if c == c_int::from(b'<') {
+            nvim_mark_buf_get_visual_start_ptr(buf)
+        } else {
+            nvim_mark_buf_get_visual_end_ptr(buf)
+        };
+        *vis_ptr = *pos;
+        if nvim_mark_buf_get_visual_mode(buf) == NUL {
+            // Visual_mode has not yet been set, use a sane default.
+            nvim_mark_buf_set_visual_mode(buf, c_int::from(b'v'));
+        }
+        return OK;
+    }
+
+    if c == c_int::from(b':') && nvim_mark_bt_prompt(buf) != 0 {
+        let prompt_start = nvim_mark_buf_get_prompt_start(buf);
+        let buf_fnum = nvim_buf_get_fnum(buf);
+        rs_free_fmark(*prompt_start);
+        *prompt_start = FmarkT {
+            mark: *pos,
+            fnum: buf_fnum,
+            timestamp: nvim_mark_os_time(),
+            view,
+            additional_data: std::ptr::null_mut(),
+        };
+        return OK;
+    }
+
+    let local_idx = rs_mark_local_index(c);
+    if rs_mark_is_valid_named(c) {
+        let fm_ptr = nvim_mark_buf_get_namedm(buf, local_idx);
+        rs_free_fmark(*fm_ptr);
+        *fm_ptr = FmarkT {
+            mark: *pos,
+            fnum,
+            timestamp: nvim_mark_os_time(),
+            view,
+            additional_data: std::ptr::null_mut(),
+        };
+        return OK;
+    }
+
+    let global_idx = rs_mark_global_index(c);
+    if global_idx >= 0 {
+        let namedfm = nvim_mark_get_namedfm();
+        let xfm_ptr = namedfm.offset(global_idx as isize);
+        rs_free_xfmark(*xfm_ptr);
+        *xfm_ptr = XfmarkT {
+            fmark: FmarkT {
+                mark: *pos,
+                fnum,
+                timestamp: nvim_mark_os_time(),
+                view,
+                additional_data: std::ptr::null_mut(),
+            },
+            fname: std::ptr::null_mut(),
+        };
+        return OK;
+    }
+
+    FAIL
 }
 
 // =============================================================================
