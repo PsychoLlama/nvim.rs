@@ -76,24 +76,10 @@ extern int rs_pum_undisplay(int immediate);
 extern int rs_pum_border_width(void);
 extern int rs_pum_get_height(void);
 
-typedef struct {
-  int first;
-  int second;
-  int third;
-} PumAlignOrder;
-extern PumAlignOrder rs_pum_get_current_align_order(void);
-
 extern int rs_win_valid(win_T *win);
 extern int rs_valid_tabpage(tabpage_T *tpc);
-extern const char *rs_pum_get_item(const pumitem_T *array, int index, int item_type);
-extern int rs_pum_user_attr_combine(const pumitem_T *array, int idx, int item_type, int attr);
 
-typedef struct {
-  int base_width;
-  int kind_width;
-  int extra_width;
-} PumSizeResult;
-extern PumSizeResult rs_pum_compute_size(const pumitem_T *array);
+extern void rs_pum_compute_size(const pumitem_T *array);
 
 typedef struct {
   int row;
@@ -607,7 +593,6 @@ void nvim_pum_redraw_later_win(win_T *wp, int type)
 _Static_assert(kFloatAnchorSouth == 2, "kFloatAnchorSouth must be 2");
 
 // Phase 5 accessors: show_popupmenu helpers
-static void pum_compute_size(void);
 
 /// Get get_menu_mode_flag().
 int nvim_pum_get_menu_mode_flag(void)
@@ -652,12 +637,6 @@ void nvim_pum_free_items(pumitem_T *array, int count)
 int nvim_pum_array_is_null(void)
 {
   return PUM_STATE.array == NULL ? 1 : 0;
-}
-
-/// Call pum_compute_size (forward-declared static helper).
-void nvim_pum_call_compute_size(void)
-{
-  pum_compute_size();
 }
 
 /// Get curwin->w_p_rl.
@@ -1381,9 +1360,6 @@ void nvim_pum_find_pvwin_rows(int *above_row_out, int *below_row_out)
   }
 }
 
-// nvim_pum_compute_vp, nvim_pum_compute_hp, nvim_pum_set_grid_zindex_for_mode:
-// defined after pum_compute_vertical_placement / pum_compute_horizontal_placement
-
 // Phase 8 static assertions
 _Static_assert(DEFAULT_GRID_HANDLE == 1, "DEFAULT_GRID_HANDLE must be 1");
 _Static_assert(kZIndexPopupMenu == 100, "kZIndexPopupMenu must be 100");
@@ -1412,19 +1388,11 @@ _Static_assert(MODE_CMDLINE == 0x08, "MODE_CMDLINE must be 0x08");
 
 #define PUM_DEF_HEIGHT 10
 
-static void pum_compute_size(void)
+/// Compute vertical placement for popup menu (writes PUM_STATE.row, .height, .above).
+void nvim_pum_compute_vp(int size, int pum_win_row, int above_row, int below_row,
+                         int border_width)
 {
-  PumSizeResult result = rs_pum_compute_size(PUM_STATE.array);
-  PUM_STATE.base_width = result.base_width;
-  PUM_STATE.kind_width = result.kind_width;
-  PUM_STATE.extra_width = result.extra_width;
-}
-
-/// Calculate vertical placement for popup menu.
-/// Sets pum_row and pum_height based on available space.
-static void pum_compute_vertical_placement(int size, win_T *target_win, int pum_win_row,
-                                           int above_row, int below_row, int pum_border_size)
-{
+  win_T *target_win = (State & MODE_CMDLINE) ? cmdline_win : curwin;
   int is_cmdline = (State & MODE_CMDLINE) != 0;
   int has_target_win = target_win != NULL;
   int context_above = 0;
@@ -1432,23 +1400,22 @@ static void pum_compute_vertical_placement(int size, win_T *target_win, int pum_
 
   if (has_target_win) {
     context_above = target_win->w_wrow - target_win->w_cline_row;
-    // Need to call validate_cheight before reading cline_height
     validate_cheight(target_win);
     context_below = target_win->w_cline_row + target_win->w_cline_height - target_win->w_wrow;
   }
 
   PumVerticalResult result = rs_pum_compute_vertical(
-      size, pum_win_row, above_row, below_row, pum_border_size,
+      size, pum_win_row, above_row, below_row, border_width,
       cmdline_row, is_cmdline, has_target_win, context_above, context_below);
   PUM_STATE.row = result.row;
   PUM_STATE.height = result.height;
   PUM_STATE.above = result.above;
 }
 
-/// Calculate horizontal placement for popup menu. Sets pum_col and pum_width
-/// based on cursor position and available space.
-static void pum_compute_horizontal_placement(win_T *target_win, int cursor_col)
+/// Compute horizontal placement for popup menu (writes PUM_STATE.col, .width).
+void nvim_pum_compute_hp(int cursor_col)
 {
+  win_T *target_win = (State & MODE_CMDLINE) ? cmdline_win : curwin;
   int max_col = MAX(Columns, target_win ? (target_win->w_wincol + target_win->w_view_width) : 0);
   PumHorizontalResult result = rs_pum_compute_horizontal(
       cursor_col, max_col, PUM_STATE.rl, PUM_STATE.scrollbar,
@@ -1457,31 +1424,10 @@ static void pum_compute_horizontal_placement(win_T *target_win, int cursor_col)
   PUM_STATE.width = result.width;
 }
 
-/// Wrapper for pum_compute_vertical_placement (Phase 8 accessor).
-void nvim_pum_compute_vp(int size, int pum_win_row, int above_row, int below_row,
-                         int border_width)
-{
-  win_T *target_win = (State & MODE_CMDLINE) ? cmdline_win : curwin;
-  pum_compute_vertical_placement(size, target_win, pum_win_row, above_row, below_row,
-                                 border_width);
-}
-
-/// Wrapper for pum_compute_horizontal_placement (Phase 8 accessor).
-void nvim_pum_compute_hp(int cursor_col)
-{
-  win_T *target_win = (State & MODE_CMDLINE) ? cmdline_win : curwin;
-  pum_compute_horizontal_placement(target_win, cursor_col);
-}
-
 /// Set grid zindex based on current mode (Phase 8 accessor).
 void nvim_pum_set_grid_zindex_for_mode(void)
 {
   pum_grid.zindex = (State & MODE_CMDLINE) ? kZIndexCmdlinePopupMenu : kZIndexPopupMenu;
-}
-
-static inline int pum_border_width(void)
-{
-  return rs_pum_border_width();
 }
 
 /// Show the popup menu with items "array[size]".
@@ -1505,24 +1451,6 @@ void pum_display(pumitem_T *array, int size, int selected, bool array_changed, i
 
 // nvim_pum_compute_text_attrs_impl: migrated to Rust (render.rs)
 // nvim_pum_grid_puts_with_attrs_impl: migrated to Rust (render.rs)
-
-static inline void pum_align_order(int *order)
-{
-  PumAlignOrder result = rs_pum_get_current_align_order();
-  order[0] = result.first;
-  order[1] = result.second;
-  order[2] = result.third;
-}
-
-static inline char *pum_get_item(int index, int type)
-{
-  return (char *)rs_pum_get_item(PUM_STATE.array, index, type);
-}
-
-static inline int pum_user_attr_combine(int idx, int type, int attr)
-{
-  return rs_pum_user_attr_combine(PUM_STATE.array, idx, type, attr);
-}
 
 /// Redraw the popup menu, using "pum_first" and "pum_selected".
 void pum_redraw(void)

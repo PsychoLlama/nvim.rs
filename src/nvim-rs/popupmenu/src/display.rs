@@ -377,8 +377,6 @@ extern "C" {
     );
     /// Compute horizontal placement (writes `PUM_STATE.col`, `.width`).
     fn nvim_pum_compute_hp(cursor_col: c_int);
-    /// Compute item widths (writes `PUM_STATE.base_width`, `.kind_width`, `.extra_width`).
-    fn nvim_pum_call_compute_size();
     /// Set grid zindex based on current mode.
     fn nvim_pum_set_grid_zindex_for_mode();
     /// Get curwin->w_p_rl.
@@ -391,6 +389,8 @@ extern "C" {
     fn rs_pum_redraw();
     /// Get border width from Rust.
     fn rs_pum_border_width() -> c_int;
+    /// Compute item widths and write to `PUM_STATE` (Rust function via extern "C").
+    fn rs_pum_compute_size(array: *const crate::item::PumItemArray);
 }
 
 /// Result of geometry computation from C.
@@ -626,7 +626,7 @@ pub unsafe extern "C" fn rs_pum_display(
         }
 
         // Compute item widths (writes PUM_STATE.base_width, .kind_width, .extra_width)
-        nvim_pum_call_compute_size();
+        rs_pum_compute_size(PUM_STATE.array);
 
         // If there are more items than room we need a scrollbar
         let pum_height = PUM_STATE.height;

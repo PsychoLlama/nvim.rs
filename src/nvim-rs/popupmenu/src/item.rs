@@ -5,7 +5,6 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::placement::PumSizeResult;
 use crate::PUM_STATE;
 
 /// Completion item type for abbreviation/text.
@@ -230,8 +229,9 @@ pub unsafe extern "C" fn rs_pum_item_is_empty(
 
 /// Compute the widths of the widest match, kind, and extra text.
 ///
-/// Iterates over all items in the popup menu array and measures
-/// each field's display width using `vim_strsize`.
+/// Writes results directly to `PUM_STATE.base_width`, `.kind_width`,
+/// `.extra_width`. Iterates over all items in the popup menu array and
+/// measures each field's display width using `vim_strsize`.
 ///
 /// # Arguments
 /// * `array` - Pointer to the popup menu item array
@@ -240,7 +240,7 @@ pub unsafe extern "C" fn rs_pum_item_is_empty(
 /// The caller must ensure `array` is a valid pointer to a `pumitem_T` array
 /// with at least `pum_size` elements.
 #[no_mangle]
-pub unsafe extern "C" fn rs_pum_compute_size(array: *const PumItemArray) -> PumSizeResult {
+pub unsafe extern "C" fn rs_pum_compute_size(array: *const PumItemArray) {
     let size = PUM_STATE.size;
     let mut base_width: c_int = 0;
     let mut kind_width: c_int = 0;
@@ -270,11 +270,9 @@ pub unsafe extern "C" fn rs_pum_compute_size(array: *const PumItemArray) -> PumS
         }
     }
 
-    PumSizeResult {
-        base_width,
-        kind_width,
-        extra_width,
-    }
+    PUM_STATE.base_width = base_width;
+    PUM_STATE.kind_width = kind_width;
+    PUM_STATE.extra_width = extra_width;
 }
 
 #[cfg(test)]

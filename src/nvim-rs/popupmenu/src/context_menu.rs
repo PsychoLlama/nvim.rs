@@ -318,8 +318,8 @@ extern "C" {
     fn nvim_pum_free_items(array: *mut crate::item::PumItemArray, count: c_int);
     /// Check if `pum_array` is NULL.
     fn nvim_pum_array_is_null() -> c_int;
-    /// Call `pum_compute_size()`.
-    fn nvim_pum_call_compute_size();
+    /// Compute item widths and write to `PUM_STATE` (Rust function via extern "C").
+    fn rs_pum_compute_size(array: *const crate::item::PumItemArray);
     /// Get `curwin->w_p_rl`.
     fn nvim_pum_curwin_get_p_rl() -> c_int;
     /// Position popup at mouse.
@@ -453,7 +453,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     }
 
     PUM_STATE.array = array;
-    nvim_pum_call_compute_size();
+    rs_pum_compute_size(PUM_STATE.array);
     PUM_STATE.scrollbar = 0;
     PUM_STATE.height = count;
     PUM_STATE.rl = nvim_pum_curwin_get_p_rl();
