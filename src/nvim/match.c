@@ -43,51 +43,7 @@
 // Rust FFI declarations
 // =============================================================================
 
-// add.rs - Match addition validation
-extern int rs_match_is_reserved_id(int id);
-extern int rs_match_is_valid_matchadd_id(int id);
-extern int rs_match_is_valid_matchaddpos_id(int id);
-extern int rs_match_id_exists(win_T *wp, int id);
-extern matchitem_T *rs_match_find_insert_point(win_T *wp, int priority);
-extern int rs_match_should_insert_at_head(win_T *wp, int priority);
-extern int rs_match_validate_add(win_T *wp, const char *group, const char *pattern,
-                                 int id, int for_matchadd, int *out_id, int *out_next_id);
-extern int rs_match_add_error_empty_group(void);
-extern int rs_match_add_error_empty_pattern(void);
-extern int rs_match_add_error_invalid_id(void);
-extern int rs_match_add_error_id_taken(void);
-extern int rs_match_add_error_id_reserved(void);
-
-// delete.rs - Match deletion
-extern int rs_match_validate_delete_id(int id);
-extern matchitem_T *rs_match_find_by_id(win_T *wp, int id);
-extern matchitem_T *rs_match_find_for_delete(win_T *wp, int id,
-                                             matchitem_T **out_prev, int *out_at_head);
-extern int rs_match_validate_delete(win_T *wp, int id);
-extern int rs_match_delete_error_invalid_id(void);
-extern int rs_match_delete_error_not_found(void);
-
-// lookup.rs - Match queries
-extern matchitem_T *rs_match_get_by_id(win_T *wp, int id);
-extern int rs_match_get_info_by_id(win_T *wp, int id, int *out_priority, int *out_hlg_id,
-                                   int *out_has_pattern, int *out_has_positions, int *out_pos_count);
-extern int rs_match_count(win_T *wp);
-extern int rs_match_has_matches(win_T *wp);
-extern matchitem_T *rs_match_get_first(win_T *wp);
-extern matchitem_T *rs_match_get_next(matchitem_T *m);
-
-// position.rs - Position validation
-extern int rs_match_validate_number_position(int64_t lnum);
-extern int rs_match_validate_list_position(int64_t lnum, int col, int len, int list_len);
-extern int rs_match_position_overlaps_range(int64_t lnum, int64_t range_top, int64_t range_bot);
-
-// range.rs - Line range calculations
-extern int64_t rs_match_range_include_line_top(int64_t current_top, int64_t lnum);
-extern int64_t rs_match_range_include_line_bot(int64_t current_bot, int64_t lnum);
-extern int rs_match_range_is_valid(int64_t top, int64_t bot);
-extern int rs_match_range_contains(int64_t top, int64_t bot, int64_t lnum);
-
-// core.rs - Core match management
+// core.rs - Core match management (called from match_add)
 extern int rs_match_add(win_T *wp, const char *grp, const char *pat,
                         int prio, int id, const char *conceal_char);
 extern int rs_match_add_pos(win_T *wp, const char *grp, int prio, int id,
