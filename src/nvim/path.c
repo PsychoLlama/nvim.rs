@@ -42,45 +42,9 @@ enum {
 # undef gen_expand_wildcards
 #endif
 
-// Rust implementations - declarations (Phase 2+ functions still wrapped in C)
-extern int rs_vim_ispathsep(int c);
-extern int rs_vim_ispathsep_nocolon(int c);
-extern int rs_vim_ispathlistsep(int c);
-extern int rs_is_path_head(const char *path);
-extern int rs_path_is_absolute(const char *path);
-extern int rs_path_has_drive_letter(const char *p, size_t path_len);
-extern int rs_vim_isAbsName(const char *name);
-extern int rs_path_has_wildcard(const char *p);
-extern int rs_path_has_exp_wildcard(const char *p);
-extern int rs_add_pathsep(char *p);
-extern int rs_path_with_extension(const char *path, const char *extension);
-extern void rs_shorten_dir_len(char *str, int trim_len);
-extern void rs_shorten_dir(char *str);
+// Rust implementations still needed by C code
 extern int rs_pstrcmp(const void *a, const void *b);
-extern int rs_vim_backtick(const char *p);
-extern int rs_has_env_var(const char *p);
-extern void rs_FreeWild(int count, char **files);
-extern int rs_dir_of_file_exists(char *fname);
-extern char *rs_do_concat_fnames(char *fname1, size_t len1, const char *fname2, size_t len2, int sep);
-extern char *rs_concat_fnames(const char *fname1, const char *fname2, int sep);
-extern char *rs_concat_fnames_realloc(char *fname1, const char *fname2, int sep);
-extern int rs_path_to_absolute(const char *fname, char *buf, size_t len, int force);
-extern int rs_vim_FullName(const char *fname, char *buf, size_t len, int force);
-extern char *rs_FullName_save(const char *fname, int force);
 extern char *rs_fix_fname(const char *fname);
-extern int rs_same_directory(const char *f1, const char *f2);
-extern void rs_slash_adjust(char *p);
-extern void rs_path_fix_case(char *name);
-extern int rs_match_suffix(const char *fname);
-extern void rs_path_guess_exepath(const char *argv0, char *buf, size_t bufsize);
-extern int rs_find_previous_pathsep(const char *path, char **psep);
-extern int rs_is_unique(const char *maybe_unique, const void *gap, int i);
-extern int rs_has_special_wildchar(const char *p, int flags);
-extern const char *rs_get_path_cutoff(const char *fname, const void *gap);
-extern const char *rs_scandir_next_with_dots(void *dir);
-extern void rs_addfile(void *gap, const char *f, int flags);
-extern size_t rs_path_expand(void *gap, const char *path, int flags);
-extern size_t rs_do_path_expand(void *gap, const char *path, size_t wildoff, int flags, int didstar);
 
 // Forward declarations (defined below, after #include "path.c.generated.h")
 static int pstrcmp(const void *a, const void *b);
@@ -434,224 +398,11 @@ _Static_assert(RE_NOBREAK == 16, "RE_NOBREAK");
 
 #include "path.c.generated.h"
 
-/// Returns true if path begins with characters denoting the head of a path
-/// (e.g. '/' on linux and 'D:' on windows).
-/// @param path The path to be checked.
-/// @return
-///   - True if path begins with a path head
-///   - False otherwise
-bool is_path_head(const char *path)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_is_path_head(path) != 0;
-}
-
-/// @return true if 'c' is a path separator.
-/// Note that for MS-Windows this includes the colon.
-bool vim_ispathsep(int c)
-{
-  return rs_vim_ispathsep(c) != 0;
-}
-
-// Like vim_ispathsep(c), but exclude the colon for MS-Windows.
-bool vim_ispathsep_nocolon(int c)
-{
-  return rs_vim_ispathsep_nocolon(c) != 0;
-}
-
-/// @return true if 'c' is a path list separator.
-bool vim_ispathlistsep(int c)
-{
-  return rs_vim_ispathlistsep(c) != 0;
-}
-
-/// Shorten the path of a file from "~/foo/../.bar/fname" to "~/f/../.b/fname"
-/// "trim_len" specifies how many characters to keep for each directory.
-/// Must be 1 or more.
-/// It's done in-place.
-void shorten_dir_len(char *str, int trim_len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_shorten_dir_len(str, trim_len);
-}
-
-/// Shorten the path of a file from "~/foo/../.bar/fname" to "~/f/../.b/fname"
-/// It's done in-place.
-void shorten_dir(char *str)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_shorten_dir(str);
-}
-
-/// Return true if the directory of "fname" exists, false otherwise.
-/// Also returns true if there is no directory name.
-/// "fname" must be writable!.
-bool dir_of_file_exists(char *fname)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_dir_of_file_exists(fname) != 0;
-}
-
-/// Append fname2 to fname1
-///
-/// @param[in]  fname1  First fname to append to.
-/// @param[in]  len1    Length of fname1.
-/// @param[in]  fname2  Second part of the file name.
-/// @param[in]  len2    Length of fname2.
-/// @param[in]  sep     If true and fname1 does not end with a path separator,
-///                     add a path separator before fname2.
-///
-/// @return fname1
-static inline char *do_concat_fnames(char *fname1, const size_t len1, const char *fname2,
-                                     const size_t len2, const bool sep)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
-{
-  return rs_do_concat_fnames(fname1, len1, fname2, len2, sep ? 1 : 0);
-}
-
-/// Concatenate file names fname1 and fname2 into allocated memory.
-///
-/// Only add a '/' or '\\' when 'sep' is true and it is necessary.
-///
-/// @param fname1 is the first part of the path or filename
-/// @param fname2 is the second half of the path or filename
-/// @param sep    is a flag to indicate a path separator should be added
-///               if necessary
-/// @return [allocated] Concatenation of fname1 and fname2.
-char *concat_fnames(const char *fname1, const char *fname2, bool sep)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
-{
-  return rs_concat_fnames(fname1, fname2, sep ? 1 : 0);
-}
-
-/// Concatenate file names fname1 and fname2
-///
-/// Like concat_fnames(), but in place of allocating new memory it reallocates
-/// fname1. For this reason fname1 must be allocated with xmalloc, and can no
-/// longer be used after running concat_fnames_realloc.
-///
-/// @param fname1 is the first part of the path or filename
-/// @param fname2 is the second half of the path or filename
-/// @param sep    is a flag to indicate a path separator should be added
-///               if necessary
-/// @return [allocated] Concatenation of fname1 and fname2.
-char *concat_fnames_realloc(char *fname1, const char *fname2, bool sep)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
-{
-  return rs_concat_fnames_realloc(fname1, fname2, sep ? 1 : 0);
-}
-
-/// Adds a path separator to a filename, unless it already ends in one.
-///
-/// @return `true` if the path separator was added or already existed.
-///         `false` if the filename is too long.
-bool add_pathsep(char *p)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_add_pathsep(p) != 0;
-}
-
-/// Get an allocated copy of the full path to a file.
-///
-/// @param fname is the filename to save
-/// @param force is a flag to expand `fname` even if it looks absolute
-///
-/// @return [allocated] Copy of absolute path to `fname` or NULL when
-///                     `fname` is NULL.
-char *FullName_save(const char *fname, bool force)
-  FUNC_ATTR_MALLOC
-{
-  return rs_FullName_save(fname, force ? 1 : 0);
-}
-
-/// Checks if a path has a wildcard character including '~', unless at the end.
-/// @param p  The path to expand.
-/// @returns Unix: True if it contains one of "?[{`'$".
-/// @returns Windows: True if it contains one of "*?$[".
-bool path_has_wildcard(const char *p)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_path_has_wildcard(p) != 0;
-}
-
 static int pstrcmp(const void *a, const void *b)
 {
   return rs_pstrcmp(a, b);
 }
 
-/// Checks if a path has a character path_expand can expand.
-/// @param p  The path to expand.
-/// @returns Unix: True if it contains one of *?[{.
-/// @returns Windows: True if it contains one of *?[.
-bool path_has_exp_wildcard(const char *p)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_path_has_exp_wildcard(p) != 0;
-}
-
-/// Recursively expands one path component into all matching files and/or
-/// directories. Handles "*", "?", "[a-z]", "**", etc.
-/// @remark "**" in `path` requests recursive expansion.
-///
-/// @param[out] gap  The matches found.
-/// @param path     The path to search.
-/// @param flags    Flags for regexp expansion.
-///   - EW_ICASE: Ignore case.
-///   - EW_NOERROR: Silence error messages.
-///   - EW_NOTWILD: Add matches literally.
-/// @returns the number of matches found.
-static size_t path_expand(garray_T *gap, const char *path, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_path_expand(gap, path, flags);
-}
-
-
-/// Returns true if "maybe_unique" is unique wrt other_paths in "gap".
-/// "maybe_unique" is the end portion of "((char **)gap->ga_data)[i]".
-static bool is_unique(char *maybe_unique, garray_T *gap, int i)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_is_unique(maybe_unique, gap, i) != 0;
-}
-
-/// Split the 'path' option into an array of strings in garray_T.  Relative
-/// paths are expanded to their equivalent fullpath.  This includes the "."
-/// (relative to current buffer directory) and empty path (relative to current
-/// directory) notations.
-///
-/// @param path_option  p_path or p_cdpath
-///
-/// TODO(vim): handle upward search (;) and path limiter (**N) notations by
-/// expanding each into their equivalent path(s).
-static void expand_path_option(char *curdir, char *path_option, garray_T *gap)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_expand_path_option(curdir, path_option, gap);
-}
-
-// Returns a pointer to the file or directory name in "fname" that matches the
-// longest path in "ga"p, or NULL if there is no match. For example:
-//
-//    path: /foo/bar/baz
-//   fname: /foo/bar/baz/quux.txt
-// returns:              ^this
-static char *get_path_cutoff(char *fname, garray_T *gap)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return (char *)rs_get_path_cutoff(fname, gap);
-}
-
-/// Sorts, removes duplicates and modifies all the fullpath names in "gap" so
-/// that they are unique with respect to each other while conserving the part
-/// that matches the pattern. Beware, this is at least O(n^2) wrt "gap->ga_len".
-///
-/// @param path_option  p_path or p_cdpath
-static void uniquefy_paths(garray_T *gap, char *pattern, char *path_option)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_uniquefy_paths(gap, pattern, path_option);
-}
 
 /// Calls globpath() with 'path' values for the given pattern and stores the
 /// result in "gap".
@@ -669,9 +420,9 @@ static int expand_in_path(garray_T *const gap, char *const pattern, const int fl
 
   ga_init(&path_ga, (int)sizeof(char *), 1);
   if (flags & EW_CDPATH) {
-    expand_path_option(curdir, p_cdpath, &path_ga);
+    rs_expand_path_option(curdir, p_cdpath, &path_ga);
   } else {
-    expand_path_option(curdir, path_option, &path_ga);
+    rs_expand_path_option(curdir, path_option, &path_ga);
   }
   xfree(curdir);
   if (GA_EMPTY(&path_ga)) {
@@ -692,38 +443,6 @@ static int expand_in_path(garray_T *const gap, char *const pattern, const int fl
   xfree(paths);
 
   return gap->ga_len;
-}
-
-/// Return true if "p" contains what looks like an environment variable.
-/// Allowing for escaping.
-static bool has_env_var(char *p)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_has_env_var(p) != 0;
-}
-
-#ifdef SPECIAL_WILDCHAR
-
-// Return true if "p" contains a special wildcard character, one that Vim
-// cannot expand, requires using a shell.
-static bool has_special_wildchar(char *p, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_has_special_wildchar(p, flags) != 0;
-}
-#endif
-
-/// Free the list of files returned by expand_wildcards() or other expansion functions.
-void FreeWild(int count, char **files)
-{
-  rs_FreeWild(count, files);
-}
-
-/// @return  true if we can expand this backtick thing here.
-static bool vim_backtick(char *p)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_vim_backtick(p) != 0;
 }
 
 /// Expand an item in `backticks` by executing it as a command.
@@ -776,68 +495,6 @@ static int expand_backtick(garray_T *gap, char *pat, int flags)
   return cnt;
 }
 
-#ifdef BACKSLASH_IN_FILENAME
-/// Replace all slashes by backslashes.
-void slash_adjust(char *p)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_slash_adjust(p);
-}
-#endif
-
-/// Add a file to a file list.  Accepted flags:
-/// EW_DIR      add directories
-/// EW_FILE     add files
-/// EW_EXEC     add executable files
-/// EW_NOTFOUND add even when it doesn't exist
-/// EW_ADDSLASH add slash after directory name
-/// EW_ALLLINKS add symlink also when the referred file does not exist
-///
-/// @param f  filename
-void addfile(garray_T *gap, char *f, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_addfile(gap, f, flags);
-}
-
-/// Checks for a Windows drive letter ("C:/") at the start of the path.
-///
-/// @see https://url.spec.whatwg.org/#start-with-a-windows-drive-letter
-bool path_has_drive_letter(const char *p, size_t path_len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_path_has_drive_letter(p, path_len) != 0;
-}
-
-bool path_with_extension(const char *path, const char *extension)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_path_with_extension(path, extension) != 0;
-}
-
-/// Return true if "name" is a full (absolute) path name or URL.
-bool vim_isAbsName(const char *name)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_vim_isAbsName(name) != 0;
-}
-
-/// Save absolute file name to "buf[len]".
-///
-/// @param      fname filename to evaluate
-/// @param[out] buf   contains `fname` absolute path, or:
-///                   - truncated `fname` if longer than `len`
-///                   - unmodified `fname` if absolute path fails or is a URL
-/// @param      len   length of `buf`
-/// @param      force flag to force expanding even if the path is absolute
-///
-/// @return           FAIL for failure, OK otherwise
-int vim_FullName(const char *fname, char *buf, size_t len, bool force)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  return rs_vim_FullName(fname, buf, len, force ? 1 : 0);
-}
-
 /// Get the full resolved path for `fname`
 ///
 /// Even filenames that appear to be absolute based on starting from
@@ -851,24 +508,6 @@ int vim_FullName(const char *fname, char *buf, size_t len, bool force)
 char *fix_fname(const char *fname)
 {
   return rs_fix_fname(fname);
-}
-
-/// Set the case of the file name, if it already exists.  This will cause the
-/// file name to remain exactly the same.
-/// Only required for file systems where case is ignored and preserved.
-// TODO(SplinterOfChaos): Could also be used when mounting case-insensitive
-// file systems.
-void path_fix_case(char *name)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_path_fix_case(name);
-}
-
-/// Return true if file names "f1" and "f2" are in the same directory.
-/// "f1" may be a short name, "f2" must be a full path.
-bool same_directory(char *f1, char *f2)
-{
-  return rs_same_directory(f1, f2) != 0;
 }
 
 /// Try to find a shortname by comparing the fullname with `dir_name`.
@@ -931,31 +570,3 @@ int expand_wildcards_eval(char **pat, int *num_file, char ***file, int flags)
   return ret;
 }
 
-/// Check if file `fname` is a full (absolute) path.
-///
-/// @return `true` if "fname" is absolute.
-bool path_is_absolute(const char *fname)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_path_is_absolute(fname) != 0;
-}
-
-/// @return  true if "fname" matches with an entry in 'suffixes'.
-bool match_suffix(char *fname)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_match_suffix(fname) != 0;
-}
-
-/// Builds a full path from an invocation name `argv0`, based on heuristics.
-///
-/// @param[in]  argv0     Name by which Nvim was invoked.
-/// @param[out] buf       Guessed full path to `argv0`.
-/// @param[in]  bufsize   Size of `buf`.
-///
-/// @see os_exepath
-void path_guess_exepath(const char *argv0, char *buf, size_t bufsize)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_path_guess_exepath(argv0, buf, bufsize);
-}

@@ -55,42 +55,42 @@ fn is_pathsep(c: u8) -> bool {
 ///
 /// On Unix, only '/' is a separator.
 /// On Windows, '/', '\', and ':' are separators.
-#[no_mangle]
-pub extern "C" fn rs_vim_ispathsep(c: c_int) -> c_int {
+#[unsafe(export_name = "vim_ispathsep")]
+pub extern "C" fn rs_vim_ispathsep(c: c_int) -> bool {
     #[cfg(unix)]
     {
-        c_int::from(c == b'/' as c_int)
+        c == b'/' as c_int
     }
 
     #[cfg(windows)]
     {
-        c_int::from(c == b':' as c_int || c == b'/' as c_int || c == b'\\' as c_int)
+        c == b':' as c_int || c == b'/' as c_int || c == b'\\' as c_int
     }
 
     #[cfg(not(any(unix, windows)))]
     {
-        c_int::from(c == b'/' as c_int)
+        c == b'/' as c_int
     }
 }
 
 /// Check if a character is a path separator, excluding colon.
 ///
 /// Like `rs_vim_ispathsep`, but excludes ':' on Windows.
-#[no_mangle]
-pub extern "C" fn rs_vim_ispathsep_nocolon(c: c_int) -> c_int {
+#[unsafe(export_name = "vim_ispathsep_nocolon")]
+pub extern "C" fn rs_vim_ispathsep_nocolon(c: c_int) -> bool {
     #[cfg(unix)]
     {
-        c_int::from(c == b'/' as c_int)
+        c == b'/' as c_int
     }
 
     #[cfg(windows)]
     {
-        c_int::from(c == b'/' as c_int || c == b'\\' as c_int)
+        c == b'/' as c_int || c == b'\\' as c_int
     }
 
     #[cfg(not(any(unix, windows)))]
     {
-        c_int::from(c == b'/' as c_int)
+        c == b'/' as c_int
     }
 }
 
@@ -98,16 +98,16 @@ pub extern "C" fn rs_vim_ispathsep_nocolon(c: c_int) -> c_int {
 ///
 /// On Unix, ':' is the separator (e.g., in $PATH).
 /// On Windows, ';' is the separator.
-#[no_mangle]
-pub extern "C" fn rs_vim_ispathlistsep(c: c_int) -> c_int {
+#[unsafe(export_name = "vim_ispathlistsep")]
+pub extern "C" fn rs_vim_ispathlistsep(c: c_int) -> bool {
     #[cfg(unix)]
     {
-        c_int::from(c == b':' as c_int)
+        c == b':' as c_int
     }
 
     #[cfg(not(unix))]
     {
-        c_int::from(c == b';' as c_int)
+        c == b';' as c_int
     }
 }
 
@@ -135,23 +135,23 @@ pub extern "C" fn rs_path_head_length() -> c_int {
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_is_path_head(path: *const c_char) -> c_int {
+#[unsafe(export_name = "is_path_head")]
+pub unsafe extern "C" fn rs_is_path_head(path: *const c_char) -> bool {
     if path.is_null() {
-        return 0;
+        return false;
     }
 
     #[cfg(windows)]
     {
         let c0 = *path as u8;
         let c1 = *path.add(1) as u8;
-        c_int::from(c0.is_ascii_alphabetic() && c1 == b':')
+        c0.is_ascii_alphabetic() && c1 == b':'
     }
 
     #[cfg(not(windows))]
     {
         // On Unix, check if path starts with a path separator
-        c_int::from(rs_vim_ispathsep(*path as c_int) != 0)
+        rs_vim_ispathsep(*path as c_int)
     }
 }
 
@@ -175,13 +175,13 @@ pub unsafe extern "C" fn rs_get_past_head(path: *const c_char) -> *mut c_char {
     #[cfg(windows)]
     {
         // May skip "c:"
-        if rs_is_path_head(path) != 0 {
+        if rs_is_path_head(path) {
             retval = path.add(2);
         }
     }
 
     // Skip past path separators
-    while rs_vim_ispathsep(*retval as c_int) != 0 {
+    while rs_vim_ispathsep(*retval as c_int) {
         retval = retval.add(1);
     }
 
@@ -197,10 +197,10 @@ pub unsafe extern "C" fn rs_get_past_head(path: *const c_char) -> *mut c_char {
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string, or NULL.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_is_absolute(path: *const c_char) -> c_int {
+#[unsafe(export_name = "path_is_absolute")]
+pub unsafe extern "C" fn rs_path_is_absolute(path: *const c_char) -> bool {
     if path.is_null() {
-        return 0;
+        return false;
     }
 
     let first = *path as u8;
@@ -208,14 +208,14 @@ pub unsafe extern "C" fn rs_path_is_absolute(path: *const c_char) -> c_int {
     #[cfg(unix)]
     {
         // UNIX: starts with '/' or '~'
-        c_int::from(first == b'/' || first == b'~')
+        first == b'/' || first == b'~'
     }
 
     #[cfg(windows)]
     {
         // Empty string is not absolute
         if first == 0 {
-            return 0;
+            return false;
         }
         // Check for drive letter (e.g., "C:\") - must have path separator after colon
         if first.is_ascii_alphabetic() {
@@ -224,24 +224,24 @@ pub unsafe extern "C" fn rs_path_is_absolute(path: *const c_char) -> c_int {
                 let third = *path.add(2) as u8;
                 // Use vim_ispathsep_nocolon semantics (/ or \)
                 if third == b'/' || third == b'\\' {
-                    return 1;
+                    return true;
                 }
             }
         }
         // Check for UNC path (e.g., "\\server" or "//server")
         // Must have two identical separators
-        if (first == b'\\' || first == b'/') {
+        if first == b'\\' || first == b'/' {
             let second = *path.add(1) as u8;
             if first == second {
-                return 1;
+                return true;
             }
         }
-        0
+        false
     }
 
     #[cfg(not(any(unix, windows)))]
     {
-        c_int::from(first == b'/' || first == b'~')
+        first == b'/' || first == b'~'
     }
 }
 
@@ -355,10 +355,10 @@ pub unsafe extern "C" fn rs_path_is_url(p: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `p` must be a valid pointer to at least `path_len` bytes.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_has_drive_letter(p: *const c_char, path_len: usize) -> c_int {
+#[unsafe(export_name = "path_has_drive_letter")]
+pub unsafe extern "C" fn rs_path_has_drive_letter(p: *const c_char, path_len: usize) -> bool {
     if p.is_null() || path_len < 2 {
-        return 0;
+        return false;
     }
 
     let c0 = *p as u8;
@@ -366,22 +366,22 @@ pub unsafe extern "C" fn rs_path_has_drive_letter(p: *const c_char, path_len: us
 
     // First char must be alpha
     if !c0.is_ascii_alphabetic() {
-        return 0;
+        return false;
     }
 
     // Second char must be ':' or '|'
     if c1 != b':' && c1 != b'|' {
-        return 0;
+        return false;
     }
 
     // If only 2 chars, that's a valid drive letter
     if path_len == 2 {
-        return 1;
+        return true;
     }
 
     // Third char must be '/', '\', '?', or '#'
     let c2 = *p.add(2) as u8;
-    c_int::from(c2 == b'/' || c2 == b'\\' || c2 == b'?' || c2 == b'#')
+    c2 == b'/' || c2 == b'\\' || c2 == b'?' || c2 == b'#'
 }
 
 /// Check if a path starts with a URL scheme.
@@ -420,7 +420,7 @@ pub unsafe extern "C" fn rs_path_with_url(fname: *const c_char) -> c_int {
         p = p.add(1);
     }
 
-    if rs_path_has_drive_letter(fname, len) != 0 {
+    if rs_path_has_drive_letter(fname, len) {
         return 0;
     }
 
@@ -455,12 +455,13 @@ pub unsafe extern "C" fn rs_path_with_url(fname: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `name` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_vim_isAbsName(name: *const c_char) -> c_int {
+#[unsafe(export_name = "vim_isAbsName")]
+#[allow(non_snake_case)]
+pub unsafe extern "C" fn rs_vim_isAbsName(name: *const c_char) -> bool {
     if name.is_null() {
-        return 0;
+        return false;
     }
-    c_int::from(rs_path_with_url(name) != 0 || rs_path_is_absolute(name) != 0)
+    rs_path_with_url(name) != 0 || rs_path_is_absolute(name)
 }
 
 // ============================================================================
@@ -571,10 +572,10 @@ mod tests {
     fn test_ispathsep() {
         #[cfg(unix)]
         {
-            assert_eq!(rs_vim_ispathsep(b'/' as c_int), 1);
-            assert_eq!(rs_vim_ispathsep(b'\\' as c_int), 0);
-            assert_eq!(rs_vim_ispathsep(b':' as c_int), 0);
-            assert_eq!(rs_vim_ispathsep(b'a' as c_int), 0);
+            assert!(rs_vim_ispathsep(b'/' as c_int));
+            assert!(!rs_vim_ispathsep(b'\\' as c_int));
+            assert!(!rs_vim_ispathsep(b':' as c_int));
+            assert!(!rs_vim_ispathsep(b'a' as c_int));
         }
     }
 
@@ -582,8 +583,8 @@ mod tests {
     fn test_ispathsep_nocolon() {
         #[cfg(unix)]
         {
-            assert_eq!(rs_vim_ispathsep_nocolon(b'/' as c_int), 1);
-            assert_eq!(rs_vim_ispathsep_nocolon(b':' as c_int), 0);
+            assert!(rs_vim_ispathsep_nocolon(b'/' as c_int));
+            assert!(!rs_vim_ispathsep_nocolon(b':' as c_int));
         }
     }
 
@@ -591,8 +592,8 @@ mod tests {
     fn test_ispathlistsep() {
         #[cfg(unix)]
         {
-            assert_eq!(rs_vim_ispathlistsep(b':' as c_int), 1);
-            assert_eq!(rs_vim_ispathlistsep(b';' as c_int), 0);
+            assert!(rs_vim_ispathlistsep(b':' as c_int));
+            assert!(!rs_vim_ispathlistsep(b';' as c_int));
         }
     }
 
@@ -609,16 +610,16 @@ mod tests {
         #[cfg(unix)]
         {
             let abs = CString::new("/home/user").unwrap();
-            assert_eq!(unsafe { rs_path_is_absolute(abs.as_ptr()) }, 1);
+            assert!(unsafe { rs_path_is_absolute(abs.as_ptr()) });
 
             let tilde = CString::new("~/documents").unwrap();
-            assert_eq!(unsafe { rs_path_is_absolute(tilde.as_ptr()) }, 1);
+            assert!(unsafe { rs_path_is_absolute(tilde.as_ptr()) });
 
             let rel = CString::new("home/user").unwrap();
-            assert_eq!(unsafe { rs_path_is_absolute(rel.as_ptr()) }, 0);
+            assert!(!unsafe { rs_path_is_absolute(rel.as_ptr()) });
 
             let dot = CString::new("./file").unwrap();
-            assert_eq!(unsafe { rs_path_is_absolute(dot.as_ptr()) }, 0);
+            assert!(!unsafe { rs_path_is_absolute(dot.as_ptr()) });
         }
     }
 
@@ -666,25 +667,25 @@ mod tests {
         {
             // On Unix, path head starts with '/'
             let root = CString::new("/home/user").unwrap();
-            assert_eq!(unsafe { rs_is_path_head(root.as_ptr()) }, 1);
+            assert!(unsafe { rs_is_path_head(root.as_ptr()) });
 
             let slash = CString::new("/").unwrap();
-            assert_eq!(unsafe { rs_is_path_head(slash.as_ptr()) }, 1);
+            assert!(unsafe { rs_is_path_head(slash.as_ptr()) });
 
             let rel = CString::new("home/user").unwrap();
-            assert_eq!(unsafe { rs_is_path_head(rel.as_ptr()) }, 0);
+            assert!(!unsafe { rs_is_path_head(rel.as_ptr()) });
 
             let dot = CString::new("./file").unwrap();
-            assert_eq!(unsafe { rs_is_path_head(dot.as_ptr()) }, 0);
+            assert!(!unsafe { rs_is_path_head(dot.as_ptr()) });
 
             let tilde = CString::new("~/file").unwrap();
-            assert_eq!(unsafe { rs_is_path_head(tilde.as_ptr()) }, 0);
+            assert!(!unsafe { rs_is_path_head(tilde.as_ptr()) });
 
             let empty = CString::new("").unwrap();
-            assert_eq!(unsafe { rs_is_path_head(empty.as_ptr()) }, 0);
+            assert!(!unsafe { rs_is_path_head(empty.as_ptr()) });
 
             // NULL returns 0
-            assert_eq!(unsafe { rs_is_path_head(std::ptr::null()) }, 0);
+            assert!(!unsafe { rs_is_path_head(std::ptr::null()) });
         }
     }
 
@@ -735,39 +736,39 @@ mod tests {
         {
             // Absolute paths
             let abs = CString::new("/home/user").unwrap();
-            assert_eq!(unsafe { rs_vim_isAbsName(abs.as_ptr()) }, 1);
+            assert!(unsafe { rs_vim_isAbsName(abs.as_ptr()) });
 
             let tilde = CString::new("~/documents").unwrap();
-            assert_eq!(unsafe { rs_vim_isAbsName(tilde.as_ptr()) }, 1);
+            assert!(unsafe { rs_vim_isAbsName(tilde.as_ptr()) });
 
             // URLs
             let http = CString::new("http://example.com").unwrap();
-            assert_eq!(unsafe { rs_vim_isAbsName(http.as_ptr()) }, 1);
+            assert!(unsafe { rs_vim_isAbsName(http.as_ptr()) });
 
             let https = CString::new("https://example.com").unwrap();
-            assert_eq!(unsafe { rs_vim_isAbsName(https.as_ptr()) }, 1);
+            assert!(unsafe { rs_vim_isAbsName(https.as_ptr()) });
 
             let file = CString::new("file:///path").unwrap();
-            assert_eq!(unsafe { rs_vim_isAbsName(file.as_ptr()) }, 1);
+            assert!(unsafe { rs_vim_isAbsName(file.as_ptr()) });
 
             // Relative paths (not absolute, not URL)
             let rel = CString::new("home/user").unwrap();
-            assert_eq!(unsafe { rs_vim_isAbsName(rel.as_ptr()) }, 0);
+            assert!(!unsafe { rs_vim_isAbsName(rel.as_ptr()) });
 
             let dot = CString::new("./file").unwrap();
-            assert_eq!(unsafe { rs_vim_isAbsName(dot.as_ptr()) }, 0);
+            assert!(!unsafe { rs_vim_isAbsName(dot.as_ptr()) });
 
             let dotdot = CString::new("../file").unwrap();
-            assert_eq!(unsafe { rs_vim_isAbsName(dotdot.as_ptr()) }, 0);
+            assert!(!unsafe { rs_vim_isAbsName(dotdot.as_ptr()) });
 
             let file_only = CString::new("file.txt").unwrap();
-            assert_eq!(unsafe { rs_vim_isAbsName(file_only.as_ptr()) }, 0);
+            assert!(!unsafe { rs_vim_isAbsName(file_only.as_ptr()) });
 
             // Empty and NULL
             let empty = CString::new("").unwrap();
-            assert_eq!(unsafe { rs_vim_isAbsName(empty.as_ptr()) }, 0);
+            assert!(!unsafe { rs_vim_isAbsName(empty.as_ptr()) });
 
-            assert_eq!(unsafe { rs_vim_isAbsName(std::ptr::null()) }, 0);
+            assert!(!unsafe { rs_vim_isAbsName(std::ptr::null()) });
         }
     }
 
@@ -1058,7 +1059,7 @@ pub unsafe extern "C" fn rs_gettail_dir(fname: *const c_char) -> *const c_char {
     let mut p = fname;
 
     while *p != 0 {
-        if rs_vim_ispathsep(*p as c_int) != 0 {
+        if rs_vim_ispathsep(*p as c_int) {
             if look_for_sep {
                 next_dir_end = p;
                 look_for_sep = false;
@@ -1098,7 +1099,7 @@ pub unsafe extern "C" fn rs_path_next_component(fname: *const c_char) -> *const 
 
     let mut p = fname;
     // Skip until we find a path separator or end of string
-    while *p != 0 && rs_vim_ispathsep(*p as c_int) == 0 {
+    while *p != 0 && !rs_vim_ispathsep(*p as c_int) {
         // MB_PTR_ADV: advance by UTF-8 character length
         let slice = std::slice::from_raw_parts(p as *const u8, 8);
         let len = nvim_mbyte::utfc_ptr2len(slice);
@@ -1243,7 +1244,7 @@ pub unsafe extern "C" fn rs_invocation_path_tail(
     let mut p = tail;
 
     while *p != 0 && *p != b' ' as c_char {
-        let was_sep = rs_vim_ispathsep_nocolon(*p as c_int) != 0;
+        let was_sep = rs_vim_ispathsep_nocolon(*p as c_int);
         // MB_PTR_ADV: advance by UTF-8 character length
         let slice = std::slice::from_raw_parts(p as *const u8, 8);
         let char_len = nvim_mbyte::utfc_ptr2len(slice);
@@ -1274,15 +1275,15 @@ pub unsafe extern "C" fn rs_invocation_path_tail(
 ///
 /// # Safety
 /// - `p` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_has_wildcard(p: *const c_char) -> c_int {
+#[unsafe(export_name = "path_has_wildcard")]
+pub unsafe extern "C" fn rs_path_has_wildcard(p: *const c_char) -> bool {
     #[cfg(unix)]
     const WILDCARDS: &[u8] = b"*?[{`'$\0";
     #[cfg(not(unix))]
     const WILDCARDS: &[u8] = b"?*$[`\0";
 
     if p.is_null() {
-        return 0;
+        return false;
     }
 
     let mut ptr = p;
@@ -1303,11 +1304,11 @@ pub unsafe extern "C" fn rs_path_has_wildcard(p: *const c_char) -> c_int {
         let c = *ptr as u8;
         // Check if character is in wildcards list
         if WILDCARDS[..WILDCARDS.len() - 1].contains(&c) {
-            return 1;
+            return true;
         }
         // Check for ~ not at end
         if c == b'~' && *ptr.add(1) != 0 {
-            return 1;
+            return true;
         }
 
         // MB_PTR_ADV
@@ -1316,7 +1317,7 @@ pub unsafe extern "C" fn rs_path_has_wildcard(p: *const c_char) -> c_int {
         ptr = ptr.add(char_len);
     }
 
-    0
+    false
 }
 
 // ============================================================================
@@ -1331,15 +1332,15 @@ pub unsafe extern "C" fn rs_path_has_wildcard(p: *const c_char) -> c_int {
 ///
 /// # Safety
 /// - `p` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_has_exp_wildcard(p: *const c_char) -> c_int {
+#[unsafe(export_name = "path_has_exp_wildcard")]
+pub unsafe extern "C" fn rs_path_has_exp_wildcard(p: *const c_char) -> bool {
     #[cfg(unix)]
     const WILDCARDS: &[u8] = b"*?[{\0";
     #[cfg(not(unix))]
     const WILDCARDS: &[u8] = b"*?[\0";
 
     if p.is_null() {
-        return 0;
+        return false;
     }
 
     let mut ptr = p;
@@ -1360,7 +1361,7 @@ pub unsafe extern "C" fn rs_path_has_exp_wildcard(p: *const c_char) -> c_int {
         let c = *ptr as u8;
         // Check if character is in wildcards list
         if WILDCARDS[..WILDCARDS.len() - 1].contains(&c) {
-            return 1;
+            return true;
         }
 
         // MB_PTR_ADV
@@ -1369,7 +1370,7 @@ pub unsafe extern "C" fn rs_path_has_exp_wildcard(p: *const c_char) -> c_int {
         ptr = ptr.add(char_len);
     }
 
-    0
+    false
 }
 
 // ============================================================================
@@ -1452,10 +1453,10 @@ pub unsafe extern "C" fn rs_pathcmp(
 
         if !chars_match && !both_pathsep {
             // Characters don't match
-            if rs_vim_ispathsep(char1) != 0 {
+            if rs_vim_ispathsep(char1) {
                 return -1;
             }
-            if rs_vim_ispathsep(char2) != 0 {
+            if rs_vim_ispathsep(char2) {
                 return 1;
             }
             return if fic {
@@ -1546,50 +1547,50 @@ mod wildcard_tests {
     #[test]
     fn test_path_has_wildcard_star() {
         let path = CString::new("*.txt").unwrap();
-        assert_eq!(unsafe { rs_path_has_wildcard(path.as_ptr()) }, 1);
+        assert!(unsafe { rs_path_has_wildcard(path.as_ptr()) });
     }
 
     #[test]
     fn test_path_has_wildcard_question() {
         let path = CString::new("file?.txt").unwrap();
-        assert_eq!(unsafe { rs_path_has_wildcard(path.as_ptr()) }, 1);
+        assert!(unsafe { rs_path_has_wildcard(path.as_ptr()) });
     }
 
     #[test]
     fn test_path_has_wildcard_bracket() {
         let path = CString::new("file[0-9].txt").unwrap();
-        assert_eq!(unsafe { rs_path_has_wildcard(path.as_ptr()) }, 1);
+        assert!(unsafe { rs_path_has_wildcard(path.as_ptr()) });
     }
 
     #[test]
     fn test_path_has_wildcard_tilde_not_at_end() {
         let path = CString::new("~/documents").unwrap();
-        assert_eq!(unsafe { rs_path_has_wildcard(path.as_ptr()) }, 1);
+        assert!(unsafe { rs_path_has_wildcard(path.as_ptr()) });
     }
 
     #[test]
     fn test_path_has_wildcard_tilde_at_end() {
         let path = CString::new("backup~").unwrap();
         // Tilde at end should NOT trigger wildcard
-        assert_eq!(unsafe { rs_path_has_wildcard(path.as_ptr()) }, 0);
+        assert!(!unsafe { rs_path_has_wildcard(path.as_ptr()) });
     }
 
     #[test]
     fn test_path_has_wildcard_none() {
         let path = CString::new("/home/user/file.txt").unwrap();
-        assert_eq!(unsafe { rs_path_has_wildcard(path.as_ptr()) }, 0);
+        assert!(!unsafe { rs_path_has_wildcard(path.as_ptr()) });
     }
 
     #[test]
     fn test_path_has_exp_wildcard_star() {
         let path = CString::new("*.txt").unwrap();
-        assert_eq!(unsafe { rs_path_has_exp_wildcard(path.as_ptr()) }, 1);
+        assert!(unsafe { rs_path_has_exp_wildcard(path.as_ptr()) });
     }
 
     #[test]
     fn test_path_has_exp_wildcard_none() {
         let path = CString::new("/home/user/file.txt").unwrap();
-        assert_eq!(unsafe { rs_path_has_exp_wildcard(path.as_ptr()) }, 0);
+        assert!(!unsafe { rs_path_has_exp_wildcard(path.as_ptr()) });
     }
 
     #[test]
@@ -1597,7 +1598,7 @@ mod wildcard_tests {
     fn test_path_has_exp_wildcard_brace() {
         // Brace is only a wildcard on Unix
         let path = CString::new("file{a,b}.txt").unwrap();
-        assert_eq!(unsafe { rs_path_has_exp_wildcard(path.as_ptr()) }, 1);
+        assert!(unsafe { rs_path_has_exp_wildcard(path.as_ptr()) });
     }
 }
 
@@ -1727,28 +1728,28 @@ const MAXPATHL: usize = 4096;
 /// # Returns
 /// - 1 (true) if the path separator was added or already existed.
 /// - 0 (false) if the filename is too long.
-#[no_mangle]
-pub unsafe extern "C" fn rs_add_pathsep(p: *mut c_char) -> c_int {
+#[unsafe(export_name = "add_pathsep")]
+pub unsafe extern "C" fn rs_add_pathsep(p: *mut c_char) -> bool {
     if p.is_null() {
-        return 0;
+        return false;
     }
 
     // Get the length of the string
     let len = libc::strlen(p);
     if len == 0 {
-        return 1; // Empty string - nothing to do (matches C behavior)
+        return true; // Empty string - nothing to do (matches C behavior)
     }
 
     // Check if already ends with a path separator
     if rs_after_pathsep(p, p.add(len)) != 0 {
-        return 1; // Already has separator
+        return true; // Already has separator
     }
 
     // Check if there's enough space (need room for separator + NUL)
     // pathsep_len is 1 on Unix (just '/'), could be different on Windows
     let pathsep_len = 1;
     if len > MAXPATHL - pathsep_len - 1 {
-        return 0; // No space for trailing slash
+        return false; // No space for trailing slash
     }
 
     // Add the path separator
@@ -1768,7 +1769,7 @@ pub unsafe extern "C" fn rs_add_pathsep(p: *mut c_char) -> c_int {
     // Add NUL terminator
     *p.add(len + 1) = 0;
 
-    1
+    true
 }
 
 // ============================================================================
@@ -1815,7 +1816,7 @@ pub unsafe extern "C" fn rs_append_path(
     let mut write_pos = current_length;
 
     // Combine the path segments, separated by a slash
-    if current_length > 0 && rs_vim_ispathsep_nocolon(*path.add(current_length - 1) as c_int) == 0 {
+    if current_length > 0 && !rs_vim_ispathsep_nocolon(*path.add(current_length - 1) as c_int) {
         // Need to add a separator
         // +1 for the separator, +1 for the NUL at the end
         if current_length + 1 + 1 > max_len {
@@ -1865,25 +1866,25 @@ pub unsafe extern "C" fn rs_append_path(
 /// # Returns
 /// - 1 (true) if path ends with the given extension
 /// - 0 (false) otherwise
-#[no_mangle]
+#[unsafe(export_name = "path_with_extension")]
 pub unsafe extern "C" fn rs_path_with_extension(
     path: *const c_char,
     extension: *const c_char,
-) -> c_int {
+) -> bool {
     if path.is_null() || extension.is_null() {
-        return 0;
+        return false;
     }
 
     // Find the last '.' in path
     let last_dot = libc::strrchr(path, b'.' as c_int);
     if last_dot.is_null() {
-        return 0;
+        return false;
     }
 
     // Compare extension (skip the dot)
     let fic = nvim_option_get_fic() != 0;
     let ext_start = last_dot.add(1);
-    c_int::from(nvim_mbyte::rs_mb_strcmp_ic(fic, ext_start, extension) == 0)
+    nvim_mbyte::rs_mb_strcmp_ic(fic, ext_start, extension) == 0
 }
 
 // ============================================================================
@@ -1922,7 +1923,7 @@ pub unsafe extern "C" fn rs_path_shorten_fname(
     }
 
     // If dir_name is a path head, full_path can always be made relative.
-    if len == rs_path_head_length() as usize && rs_is_path_head(dir_name) != 0 {
+    if len == rs_path_head_length() as usize && rs_is_path_head(dir_name) {
         return full_path.add(len);
     }
 
@@ -1931,7 +1932,7 @@ pub unsafe extern "C" fn rs_path_shorten_fname(
     // If *p is not pointing to a path separator, this means that full_path's
     // last directory name is longer than *dir_name's last directory, so they
     // don't actually match.
-    if rs_vim_ispathsep(*p as c_int) == 0 {
+    if !rs_vim_ispathsep(*p as c_int) {
         return std::ptr::null_mut();
     }
 
@@ -1949,7 +1950,7 @@ pub unsafe extern "C" fn rs_path_shorten_fname(
 ///
 /// # Safety
 /// - `str` must be a valid pointer to a mutable, null-terminated C string
-#[no_mangle]
+#[unsafe(export_name = "shorten_dir_len")]
 pub unsafe extern "C" fn rs_shorten_dir_len(str: *mut c_char, trim_len: c_int) {
     if str.is_null() {
         return;
@@ -1969,7 +1970,7 @@ pub unsafe extern "C" fn rs_shorten_dir_len(str: *mut c_char, trim_len: c_int) {
             if *s == 0 {
                 break;
             }
-        } else if rs_vim_ispathsep(*s as c_int) != 0 {
+        } else if rs_vim_ispathsep(*s as c_int) {
             // Copy '/' and next char
             *d = *s;
             d = d.add(1);
@@ -2007,7 +2008,7 @@ pub unsafe extern "C" fn rs_shorten_dir_len(str: *mut c_char, trim_len: c_int) {
 ///
 /// # Safety
 /// - `str` must be a valid pointer to a mutable, null-terminated C string
-#[no_mangle]
+#[unsafe(export_name = "shorten_dir")]
 pub unsafe extern "C" fn rs_shorten_dir(str: *mut c_char) {
     rs_shorten_dir_len(str, 1);
 }
@@ -2024,7 +2025,7 @@ mod add_pathsep_tests {
             buf[i] = b as i8;
         }
         let result = unsafe { rs_add_pathsep(buf.as_mut_ptr()) };
-        assert_eq!(result, 1);
+        assert!(result);
         let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
         assert_eq!(result_str.to_str().unwrap(), "/home/user/");
     }
@@ -2037,7 +2038,7 @@ mod add_pathsep_tests {
             buf[i] = b as i8;
         }
         let result = unsafe { rs_add_pathsep(buf.as_mut_ptr()) };
-        assert_eq!(result, 1);
+        assert!(result);
         let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
         assert_eq!(result_str.to_str().unwrap(), "/home/user/");
     }
@@ -2047,7 +2048,7 @@ mod add_pathsep_tests {
         let mut buf = [0i8; 100];
         buf[0] = 0;
         let result = unsafe { rs_add_pathsep(buf.as_mut_ptr()) };
-        assert_eq!(result, 1);
+        assert!(result);
     }
 }
 
@@ -2339,7 +2340,8 @@ pub unsafe extern "C" fn rs_has_env_var(p: *const c_char) -> c_int {
 /// # Safety
 /// `files` must be a valid pointer to an array of `count` allocated C strings,
 /// or NULL. Each string and the array itself are freed.
-#[no_mangle]
+#[unsafe(export_name = "FreeWild")]
+#[allow(non_snake_case)]
 pub unsafe extern "C" fn rs_FreeWild(count: c_int, files: *mut *mut c_char) {
     if count <= 0 || files.is_null() {
         return;
@@ -2358,18 +2360,18 @@ pub unsafe extern "C" fn rs_FreeWild(count: c_int, files: *mut *mut c_char) {
 ///
 /// # Safety
 /// `fname` must be a valid pointer to a mutable, null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_dir_of_file_exists(fname: *mut c_char) -> c_int {
+#[unsafe(export_name = "dir_of_file_exists")]
+pub unsafe extern "C" fn rs_dir_of_file_exists(fname: *mut c_char) -> bool {
     if fname.is_null() {
-        return 0;
+        return false;
     }
     let p = rs_path_tail_with_sep(fname);
     if p == fname {
-        return 1; // no directory name
+        return true; // no directory name
     }
     let saved = *p;
     *p = 0; // NUL-terminate at separator
-    let retval = nvim_path_os_isdir(fname);
+    let retval = nvim_path_os_isdir(fname) != 0;
     *p = saved;
     retval
 }
@@ -2387,12 +2389,12 @@ pub unsafe extern "C" fn rs_do_concat_fnames(
     len1: usize,
     fname2: *const c_char,
     len2: usize,
-    sep: c_int,
+    sep: bool,
 ) -> *mut c_char {
     if fname1.is_null() || fname2.is_null() {
         return fname1;
     }
-    if sep != 0 && *fname1 != 0 && rs_after_pathsep(fname1, fname1.add(len1)) == 0 {
+    if sep && *fname1 != 0 && rs_after_pathsep(fname1, fname1.add(len1)) == 0 {
         // Insert path separator
         #[cfg(unix)]
         {
@@ -2424,11 +2426,11 @@ pub unsafe extern "C" fn rs_do_concat_fnames(
 /// # Safety
 /// `fname1` and `fname2` must be valid null-terminated C strings.
 /// Returns an allocated string that must be freed by the caller.
-#[no_mangle]
+#[unsafe(export_name = "concat_fnames")]
 pub unsafe extern "C" fn rs_concat_fnames(
     fname1: *const c_char,
     fname2: *const c_char,
-    sep: c_int,
+    sep: bool,
 ) -> *mut c_char {
     if fname1.is_null() || fname2.is_null() {
         return std::ptr::null_mut();
@@ -2447,11 +2449,11 @@ pub unsafe extern "C" fn rs_concat_fnames(
 ///
 /// # Safety
 /// `fname1` must have been allocated with xmalloc. `fname2` must be valid.
-#[no_mangle]
+#[unsafe(export_name = "concat_fnames_realloc")]
 pub unsafe extern "C" fn rs_concat_fnames_realloc(
     fname1: *mut c_char,
     fname2: *const c_char,
-    sep: c_int,
+    sep: bool,
 ) -> *mut c_char {
     if fname1.is_null() || fname2.is_null() {
         return fname1;
@@ -2540,7 +2542,7 @@ mod phase1_tests {
                 buf[i] = b as i8;
             }
             let fname2 = CString::new("user").unwrap();
-            let result = rs_do_concat_fnames(buf.as_mut_ptr(), 5, fname2.as_ptr(), 4, 1);
+            let result = rs_do_concat_fnames(buf.as_mut_ptr(), 5, fname2.as_ptr(), 4, true);
             let result_str = std::ffi::CStr::from_ptr(result);
             assert_eq!(result_str.to_str().unwrap(), "/home/user");
 
@@ -2550,7 +2552,7 @@ mod phase1_tests {
             for (i, &b) in src2.iter().enumerate() {
                 buf2[i] = b as i8;
             }
-            let result2 = rs_do_concat_fnames(buf2.as_mut_ptr(), 6, fname2.as_ptr(), 4, 1);
+            let result2 = rs_do_concat_fnames(buf2.as_mut_ptr(), 6, fname2.as_ptr(), 4, true);
             let result_str2 = std::ffi::CStr::from_ptr(result2);
             assert_eq!(result_str2.to_str().unwrap(), "/home/user");
 
@@ -2560,7 +2562,7 @@ mod phase1_tests {
             for (i, &b) in src3.iter().enumerate() {
                 buf3[i] = b as i8;
             }
-            let result3 = rs_do_concat_fnames(buf3.as_mut_ptr(), 5, fname2.as_ptr(), 4, 0);
+            let result3 = rs_do_concat_fnames(buf3.as_mut_ptr(), 5, fname2.as_ptr(), 4, false);
             let result_str3 = std::ffi::CStr::from_ptr(result3);
             assert_eq!(result_str3.to_str().unwrap(), "/homeuser");
         }
@@ -2646,7 +2648,7 @@ pub unsafe extern "C" fn rs_path_full_dir_name(
     }
 
     // Path does not exist (yet). For a full path fail.
-    if rs_path_is_absolute(directory) != 0 {
+    if rs_path_is_absolute(directory) {
         return FAIL;
     }
 
@@ -2687,7 +2689,7 @@ pub unsafe extern "C" fn rs_path_to_absolute(
     let mut end_of_path = fname;
 
     // Expand if forced or not an absolute path
-    if force != 0 || rs_path_is_absolute(fname) == 0 {
+    if force != 0 || !rs_path_is_absolute(fname) {
         let mut p = libc::strrchr(fname, b'/' as c_int);
 
         #[cfg(windows)]
@@ -2706,8 +2708,7 @@ pub unsafe extern "C" fn rs_path_to_absolute(
             *relative_directory = 0;
         } else {
             // For "/path/dir/.." include the "/.."
-            if rs_vim_ispathsep_nocolon(*p as c_int) != 0
-                && libc::strcmp(p.add(1), c"..".as_ptr()) == 0
+            if rs_vim_ispathsep_nocolon(*p as c_int) && libc::strcmp(p.add(1), c"..".as_ptr()) == 0
             {
                 p = p.add(3);
             }
@@ -2718,7 +2719,7 @@ pub unsafe extern "C" fn rs_path_to_absolute(
                 offset + 1,
             );
             *relative_directory.add(offset + 1) = 0;
-            end_of_path = if rs_vim_ispathsep_nocolon(*p as c_int) != 0 {
+            end_of_path = if rs_vim_ispathsep_nocolon(*p as c_int) {
                 p.add(1)
             } else {
                 p.cast_const()
@@ -2738,12 +2739,13 @@ pub unsafe extern "C" fn rs_path_to_absolute(
 ///
 /// # Safety
 /// `buf` must have at least `len` bytes. `fname` may be NULL.
-#[no_mangle]
+#[unsafe(export_name = "vim_FullName")]
+#[allow(non_snake_case)]
 pub unsafe extern "C" fn rs_vim_FullName(
     fname: *const c_char,
     buf: *mut c_char,
     len: usize,
-    force: c_int,
+    force: bool,
 ) -> c_int {
     *buf = 0;
     if fname.is_null() {
@@ -2764,7 +2766,7 @@ pub unsafe extern "C" fn rs_vim_FullName(
         return OK;
     }
 
-    let rv = rs_path_to_absolute(fname, buf, len, force);
+    let rv = rs_path_to_absolute(fname, buf, len, force as c_int);
     if rv == FAIL {
         nvim_path_xstrlcpy(buf, fname, len); // something failed; use the filename
     }
@@ -2779,8 +2781,9 @@ pub unsafe extern "C" fn rs_vim_FullName(
 ///
 /// # Safety
 /// `fname` may be NULL. Returns an allocated string or NULL.
-#[no_mangle]
-pub unsafe extern "C" fn rs_FullName_save(fname: *const c_char, force: c_int) -> *mut c_char {
+#[unsafe(export_name = "FullName_save")]
+#[allow(non_snake_case)]
+pub unsafe extern "C" fn rs_FullName_save(fname: *const c_char, force: bool) -> *mut c_char {
     if fname.is_null() {
         return std::ptr::null_mut();
     }
@@ -2802,8 +2805,8 @@ pub unsafe extern "C" fn rs_save_abs_path(name: *const c_char) -> *mut c_char {
     if name.is_null() {
         return std::ptr::null_mut();
     }
-    if rs_path_is_absolute(name) == 0 {
-        return rs_FullName_save(name, 1);
+    if !rs_path_is_absolute(name) {
+        return rs_FullName_save(name, true);
     }
     nvim_path_xstrdup(name)
 }
@@ -2822,16 +2825,16 @@ pub unsafe extern "C" fn rs_fix_fname(fname: *const c_char) -> *mut c_char {
 
     #[cfg(unix)]
     {
-        rs_FullName_save(fname, 1)
+        rs_FullName_save(fname, true)
     }
 
     #[cfg(not(unix))]
     {
-        if rs_vim_isAbsName(fname) == 0
+        if !rs_vim_isAbsName(fname)
             || !libc::strstr(fname, b"..\0".as_ptr() as *const c_char).is_null()
             || !libc::strstr(fname, b"//\0".as_ptr() as *const c_char).is_null()
         {
-            return rs_FullName_save(fname, 0);
+            return rs_FullName_save(fname, false);
         }
         // xstrdup + path_fix_case would go here for Windows
         nvim_path_xstrdup(fname)
@@ -2843,22 +2846,22 @@ pub unsafe extern "C" fn rs_fix_fname(fname: *const c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `f1` and `f2` may be NULL.
-#[no_mangle]
-pub unsafe extern "C" fn rs_same_directory(f1: *const c_char, f2: *const c_char) -> c_int {
+#[unsafe(export_name = "same_directory")]
+pub unsafe extern "C" fn rs_same_directory(f1: *const c_char, f2: *const c_char) -> bool {
     if f1.is_null() || f2.is_null() {
-        return 0;
+        return false;
     }
 
     let mut ffname = [0i8; MAXPATHL];
-    rs_vim_FullName(f1, ffname.as_mut_ptr(), MAXPATHL, 0);
+    rs_vim_FullName(f1, ffname.as_mut_ptr(), MAXPATHL, false);
     let t1 = rs_path_tail_with_sep(ffname.as_ptr());
     let t2 = rs_path_tail_with_sep(f2);
     let len1 = (t1 as usize) - (ffname.as_ptr() as usize);
     let len2 = (t2 as usize) - (f2 as usize);
     if len1 != len2 {
-        return 0;
+        return false;
     }
-    c_int::from(rs_pathcmp(ffname.as_ptr(), f2, len1 as c_int) == 0)
+    rs_pathcmp(ffname.as_ptr(), f2, len1 as c_int) == 0
 }
 
 /// Try to find a shortname by comparing the fullname with the current directory.
@@ -2889,7 +2892,7 @@ pub unsafe extern "C" fn rs_path_try_shorten_fname(full_path: *mut c_char) -> *m
 ///
 /// # Safety
 /// `p` must be a valid pointer to a mutable, null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "slash_adjust")]
 pub unsafe extern "C" fn rs_slash_adjust(p: *mut c_char) {
     if p.is_null() {
         return;
@@ -3017,8 +3020,8 @@ pub unsafe extern "C" fn rs_path_full_compare(
     if !id_ok_1 && !id_ok_2 {
         // If os_fileid() doesn't work, may compare the names.
         if checkname {
-            rs_vim_FullName(exp1.as_ptr(), full1.as_mut_ptr(), MAXPATHL, 0);
-            rs_vim_FullName(s2, full2.as_mut_ptr(), MAXPATHL, 0);
+            rs_vim_FullName(exp1.as_ptr(), full1.as_mut_ptr(), MAXPATHL, false);
+            rs_vim_FullName(s2, full2.as_mut_ptr(), MAXPATHL, false);
             if rs_path_fnamecmp(full1.as_ptr(), full2.as_ptr()) == 0 {
                 return K_EQUAL_FILE_NAMES;
             }
@@ -3045,7 +3048,7 @@ pub unsafe extern "C" fn rs_path_full_compare(
 ///
 /// # Safety
 /// `name` must be a valid pointer to a mutable, null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "path_fix_case")]
 pub unsafe extern "C" fn rs_path_fix_case(name: *mut c_char) {
     if name.is_null() || *name == 0 {
         return;
@@ -3132,10 +3135,10 @@ const MAXSUFLEN: usize = 30;
 ///
 /// # Safety
 /// `fname` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_match_suffix(fname: *const c_char) -> c_int {
+#[unsafe(export_name = "match_suffix")]
+pub unsafe extern "C" fn rs_match_suffix(fname: *const c_char) -> bool {
     if fname.is_null() {
-        return 0;
+        return false;
     }
 
     let fnamelen = libc::strlen(fname);
@@ -3167,7 +3170,7 @@ pub unsafe extern "C" fn rs_match_suffix(fname: *const c_char) -> c_int {
             setsuflen = 0;
         }
     }
-    c_int::from(setsuflen != 0)
+    setsuflen != 0
 }
 
 // ============================================================================
@@ -3182,7 +3185,7 @@ pub unsafe extern "C" fn rs_match_suffix(fname: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `argv0` and `buf` must be valid. `buf` must have at least `bufsize` bytes.
-#[no_mangle]
+#[unsafe(export_name = "path_guess_exepath")]
 pub unsafe extern "C" fn rs_path_guess_exepath(
     argv0: *const c_char,
     buf: *mut c_char,
@@ -3194,7 +3197,7 @@ pub unsafe extern "C" fn rs_path_guess_exepath(
 
     let path = nvim_path_os_getenv(c"PATH".as_ptr());
 
-    if path.is_null() || rs_path_is_absolute(argv0) != 0 {
+    if path.is_null() || rs_path_is_absolute(argv0) {
         nvim_path_xstrlcpy(buf, argv0, bufsize);
     } else if *argv0 as u8 == b'.' || !libc::strchr(argv0, b'/' as c_int).is_null() {
         // Relative to CWD.
@@ -3262,13 +3265,13 @@ pub unsafe extern "C" fn rs_find_previous_pathsep(
     }
 
     // Skip the current separator.
-    if *psep > path.cast_mut() && rs_vim_ispathsep(*(*psep) as c_int) != 0 {
+    if *psep > path.cast_mut() && rs_vim_ispathsep(*(*psep) as c_int) {
         *psep = (*psep).sub(1);
     }
 
     // Find the previous separator.
     while *psep > path.cast_mut() {
-        if rs_vim_ispathsep(*(*psep) as c_int) != 0 {
+        if rs_vim_ispathsep(*(*psep) as c_int) {
             return OK;
         }
         // MB_PTR_BACK(path, *psep): p -= utf_head_off(s, p-1) + 1
@@ -3323,7 +3326,7 @@ pub unsafe extern "C" fn rs_is_unique(
         }
         let rival = other.add(other_path_len - candidate_len);
         if rs_path_fnamecmp(maybe_unique, rival) == 0
-            && (rival == other || rs_vim_ispathsep(*rival.sub(1) as c_int) != 0)
+            && (rival == other || rs_vim_ispathsep(*rival.sub(1) as c_int))
         {
             return 0; // match found
         }
@@ -3449,8 +3452,8 @@ pub unsafe extern "C" fn rs_get_path_cutoff(
             #[cfg(not(windows))]
             let chars_match = fc == pc;
             #[cfg(windows)]
-            let chars_match = fc == pc
-                || (rs_vim_ispathsep(fc as c_int) != 0 && rs_vim_ispathsep(pc as c_int) != 0);
+            let chars_match =
+                fc == pc || (rs_vim_ispathsep(fc as c_int) && rs_vim_ispathsep(pc as c_int));
 
             if !chars_match || fc == 0 || pc == 0 {
                 break;
@@ -3466,7 +3469,7 @@ pub unsafe extern "C" fn rs_get_path_cutoff(
 
     // Skip to the file or directory name (past path separators).
     if !cutoff.is_null() {
-        while rs_vim_ispathsep(*cutoff as c_int) != 0 {
+        while rs_vim_ispathsep(*cutoff as c_int) {
             // MB_PTR_ADV
             let slice = std::slice::from_raw_parts(cutoff as *const u8, 8);
             let char_len = nvim_mbyte::utfc_ptr2len(slice);
@@ -3527,7 +3530,7 @@ pub unsafe extern "C" fn rs_scandir_next_with_dots(dir: *mut c_void) -> *const c
 /// # Safety
 /// `gap` must be a valid pointer to a `garray_T` of `char *`.
 /// `f` must be a valid null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "addfile")]
 pub unsafe extern "C" fn rs_addfile(gap: *mut c_void, f: *const c_char, flags: c_int) {
     if gap.is_null() || f.is_null() {
         return;
@@ -3617,11 +3620,11 @@ pub unsafe extern "C" fn rs_simplify_filename(filename: *mut c_char) -> usize {
         }
     }
 
-    if rs_vim_ispathsep(*p as c_int) != 0 {
+    if rs_vim_ispathsep(*p as c_int) {
         relative = false;
         loop {
             p = p.add(1);
-            if rs_vim_ispathsep(*p as c_int) == 0 {
+            if !rs_vim_ispathsep(*p as c_int) {
                 break;
             }
         }
@@ -3655,15 +3658,13 @@ pub unsafe extern "C" fn rs_simplify_filename(filename: *mut c_char) -> usize {
     loop {
         // At this point "p" is pointing to the char following a single "/"
         // or "p" is at the "start" of the (absolute or relative) path name.
-        if rs_vim_ispathsep(*p as c_int) != 0 {
+        if rs_vim_ispathsep(*p as c_int) {
             // Remove duplicate "/"
             let src = p.add(1);
             let move_len = (p_end as usize - src as usize) + 1;
             std::ptr::copy(src as *const u8, p as *mut u8, move_len);
             p_end = p_end.sub(1);
-        } else if *p == b'.' as c_char
-            && (rs_vim_ispathsep(*p.add(1) as c_int) != 0 || *p.add(1) == 0)
-        {
+        } else if *p == b'.' as c_char && (rs_vim_ispathsep(*p.add(1) as c_int) || *p.add(1) == 0) {
             if p == start && relative {
                 // keep single "." or leading "./"
                 p = p.add(1 + usize::from(*p.add(1) != 0));
@@ -3674,7 +3675,7 @@ pub unsafe extern "C" fn rs_simplify_filename(filename: *mut c_char) -> usize {
                 // of an absolute path name.
                 let mut tail = p.add(1);
                 if *p.add(1) != 0 {
-                    while rs_vim_ispathsep(*tail as c_int) != 0 {
+                    while rs_vim_ispathsep(*tail as c_int) {
                         // MB_PTR_ADV(tail)
                         let slice = std::slice::from_raw_parts(tail as *const u8, 8);
                         let char_len = nvim_mbyte::utfc_ptr2len(slice);
@@ -3689,11 +3690,11 @@ pub unsafe extern "C" fn rs_simplify_filename(filename: *mut c_char) -> usize {
             }
         } else if *p == b'.' as c_char
             && *p.add(1) == b'.' as c_char
-            && (rs_vim_ispathsep(*p.add(2) as c_int) != 0 || *p.add(2) == 0)
+            && (rs_vim_ispathsep(*p.add(2) as c_int) || *p.add(2) == 0)
         {
             // Skip to after ".." or "../" or "..///".
             let mut tail = p.add(2);
-            while rs_vim_ispathsep(*tail as c_int) != 0 {
+            while rs_vim_ispathsep(*tail as c_int) {
                 // MB_PTR_ADV(tail)
                 let slice = std::slice::from_raw_parts(tail as *const u8, 8);
                 let char_len = nvim_mbyte::utfc_ptr2len(slice);
@@ -3982,7 +3983,7 @@ pub unsafe extern "C" fn rs_do_path_expand(
             *p = *path_end;
             p = p.add(1);
             path_end = path_end.add(1);
-        } else if rs_vim_ispathsep_nocolon(*path_end as c_int) != 0 {
+        } else if rs_vim_ispathsep_nocolon(*path_end as c_int) {
             if !e.is_null() {
                 break;
             }
@@ -4158,7 +4159,7 @@ pub unsafe extern "C" fn rs_do_path_expand(
             // Append remaining path_end.
             copy_cstr(buf.add(len), buflen - len, path_end);
 
-            if rs_path_has_exp_wildcard(path_end) != 0 {
+            if rs_path_has_exp_wildcard(path_end) {
                 // Handle more wildcards.
                 if STARDEPTH < 100 {
                     STARDEPTH += 1;
@@ -4307,7 +4308,7 @@ pub unsafe extern "C" fn rs_expand_path_option(
         let buflen = nvim_path_copy_option_part(&raw mut opt_ptr, buf, MAXPATHL, c" ,".as_ptr());
         let mut final_buflen = buflen;
 
-        if *buf as u8 == b'.' && (*buf.add(1) == 0 || rs_vim_ispathsep(*buf.add(1) as c_int) != 0) {
+        if *buf as u8 == b'.' && (*buf.add(1) == 0 || rs_vim_ispathsep(*buf.add(1) as c_int)) {
             // Relative to current buffer:
             let ffname = nvim_path_curbuf_ffname();
             if ffname.is_null() {
@@ -4334,7 +4335,7 @@ pub unsafe extern "C" fn rs_expand_path_option(
             final_buflen = curdirlen;
         } else if rs_path_with_url(buf) != 0 {
             continue;
-        } else if rs_path_is_absolute(buf) == 0 {
+        } else if !rs_path_is_absolute(buf) {
             // Expand relative path to full path equivalent.
             if curdirlen == 0 {
                 curdirlen = libc::strlen(curdir);
@@ -4435,7 +4436,7 @@ pub unsafe extern "C" fn rs_uniquefy_paths(
 
         if *pattern as u8 == b'*'
             && *pattern.add(1) as u8 == b'*'
-            && rs_vim_ispathsep_nocolon(*pattern.add(2) as c_int) != 0
+            && rs_vim_ispathsep_nocolon(*pattern.add(2) as c_int)
             && !path_cutoff.is_null()
             && nvim_path_match_pattern(reghandle, path_cutoff) != 0
             && rs_is_unique(path_cutoff, gap, i) != 0
@@ -4461,7 +4462,7 @@ pub unsafe extern "C" fn rs_uniquefy_paths(
             }
         }
 
-        if rs_path_is_absolute(path) != 0 {
+        if rs_path_is_absolute(path) {
             let short_name = rs_path_shorten_fname(path, curdir);
             if !short_name.is_null() && short_name as usize > path as usize + 1 {
                 format_relative(path, MAXPATHL, short_name);
@@ -4621,14 +4622,13 @@ pub unsafe extern "C" fn rs_gen_expand_wildcards(
 
             // If there are wildcards or case-insensitive expansion is
             // required: Expand file names and add each match to the list.
-            if rs_path_has_exp_wildcard(p) != 0 || (flags & EW_ICASE) != 0 {
+            if rs_path_has_exp_wildcard(p) || (flags & EW_ICASE) != 0 {
                 GEN_EXPAND_RECURSIVE = false;
                 if (flags & (EW_PATH | EW_CDPATH)) != 0
-                    && rs_path_is_absolute(p) == 0
+                    && !rs_path_is_absolute(p)
                     && !(*p as u8 == b'.'
-                        && (rs_vim_ispathsep(*p.add(1) as c_int) != 0
-                            || (*p.add(1) as u8 == b'.'
-                                && rs_vim_ispathsep(*p.add(2) as c_int) != 0)))
+                        && (rs_vim_ispathsep(*p.add(1) as c_int)
+                            || (*p.add(1) as u8 == b'.' && rs_vim_ispathsep(*p.add(2) as c_int))))
                 {
                     // :find completion where 'path' is used.
                     add_pat = nvim_path_expand_in_path(ga, p, flags);
@@ -4718,7 +4718,7 @@ pub unsafe extern "C" fn rs_expand_wildcards(
         let mut i: c_int = 0;
         while i < *num_files {
             let cur_name = *(*files).add(i as usize);
-            let full_name = rs_FullName_save(cur_name, 0);
+            let full_name = rs_FullName_save(cur_name, false);
             if !full_name.is_null() && nvim_path_match_file_list(p_wig, cur_name, full_name) != 0 {
                 // Remove this matching file from the list.
                 nvim_path_xfree(cur_name);
@@ -4741,7 +4741,7 @@ pub unsafe extern "C" fn rs_expand_wildcards(
     if *num_files > 1 && nvim_path_get_got_int() == 0 {
         let mut non_suf_match: c_int = 0;
         for i in 0..*num_files {
-            if rs_match_suffix(*(*files).add(i as usize)) == 0 {
+            if !rs_match_suffix(*(*files).add(i as usize)) {
                 // Move the name without matching suffix to the front.
                 let p = *(*files).add(i as usize);
                 let mut j = i;

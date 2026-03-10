@@ -126,7 +126,8 @@ extern "C" {
     fn rs_vim_isIDc(c: c_int) -> bool;
     #[link_name = "vim_isfilec"]
     fn rs_vim_isfilec(c: c_int) -> bool;
-    fn rs_vim_ispathsep(c: c_int) -> c_int;
+    #[link_name = "vim_ispathsep"]
+    fn vim_ispathsep(c: c_int) -> bool;
     #[link_name = "vim_isprintc"]
     fn rs_vim_isprintc(c: c_int) -> bool;
     fn rs_ascii_iswhite(c: c_int) -> c_int;
@@ -465,7 +466,7 @@ pub unsafe extern "C" fn rs_ins_compl_accept_char(c: c_int) -> c_int {
             // When expanding file name only accept file name chars. But not
             // path separators, so that "proto/<Tab>" expands files in
             // "proto", not "proto/" as a whole
-            c_int::from(rs_vim_isfilec(c) && rs_vim_ispathsep(c) == 0)
+            c_int::from(rs_vim_isfilec(c) && !vim_ispathsep(c))
         }
         CTRL_X_CMDLINE | CTRL_X_CMDLINE_CTRL_X | CTRL_X_OMNI => {
             // Command line and Omni completion can work with just about any

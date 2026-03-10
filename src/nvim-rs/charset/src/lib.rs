@@ -1489,7 +1489,8 @@ pub unsafe extern "C" fn rs_backslash_halve_save(p: *const c_char) -> *mut c_cha
 
 // External reference to path_has_wildcard (already in Rust)
 extern "C" {
-    fn rs_path_has_wildcard(p: *const c_char) -> c_int;
+    #[link_name = "path_has_wildcard"]
+    fn path_has_wildcard(p: *const c_char) -> bool;
 }
 
 /// Check if a character is a valid file character or a wildcard.
@@ -1515,7 +1516,7 @@ pub unsafe extern "C" fn rs_vim_isfilec_or_wc(c: c_int) -> bool {
 
     // Check for wildcard characters
     let buf: [c_char; 2] = [c as c_char, 0];
-    if rs_path_has_wildcard(buf.as_ptr()) != 0 {
+    if path_has_wildcard(buf.as_ptr()) {
         return true;
     }
 

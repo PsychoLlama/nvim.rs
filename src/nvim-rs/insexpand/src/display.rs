@@ -36,8 +36,9 @@ extern "C" {
         score: c_int,
     ) -> c_int;
 
-    // FreeWild (from path crate, exported as rs_FreeWild)
-    fn rs_FreeWild(count: c_int, files: *mut *mut c_char);
+    // FreeWild (from path crate)
+    #[link_name = "FreeWild"]
+    fn FreeWild(count: c_int, files: *mut *mut c_char);
 
     // Spell back-to-bad-word (already wraps spell_back_to_badword with emsg_off)
     fn nvim_spell_back_safe();
@@ -76,7 +77,7 @@ pub unsafe extern "C" fn rs_show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) 
 ///
 /// Rust port of the C `ins_compl_add_matches()` function.
 /// Iterates the matches array calling nvim_ins_compl_add_simple for each,
-/// then frees the array with rs_FreeWild.
+/// then frees the array with FreeWild.
 ///
 /// # Safety
 /// `matches` must be a valid array of `num_matches` NUL-terminated strings
@@ -104,7 +105,7 @@ pub unsafe extern "C" fn rs_ins_compl_add_matches(
         i += 1;
     }
 
-    rs_FreeWild(num_matches, matches);
+    FreeWild(num_matches, matches);
 }
 
 /// Move cursor to the previous badly-spelled word when starting spell completion.

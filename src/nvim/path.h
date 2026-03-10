@@ -65,5 +65,31 @@ int append_path(char *path, const char *to_append, size_t max_len);
 char *save_abs_path(const char *name);
 char *path_try_shorten_fname(char *full_path);
 char *path_shorten_fname(char *full_path, char *dir_name);
+// Phase 2: bool-returning and void functions exported from Rust
+bool is_path_head(const char *path);
+bool vim_ispathsep(int c);
+bool vim_ispathsep_nocolon(int c);
+bool vim_ispathlistsep(int c);
+void shorten_dir_len(char *str, int trim_len);
+void shorten_dir(char *str);
+bool dir_of_file_exists(char *fname);
+char *concat_fnames(const char *fname1, const char *fname2, bool sep);
+char *concat_fnames_realloc(char *fname1, const char *fname2, bool sep);
+bool add_pathsep(char *p);
+char *FullName_save(const char *fname, bool force);
+bool path_has_wildcard(const char *p);
+bool path_has_exp_wildcard(const char *p);
+void FreeWild(int count, char **files);
+void addfile(garray_T *gap, char *f, int flags);
+bool path_has_drive_letter(const char *p, size_t path_len);
+bool path_with_extension(const char *path, const char *extension);
+bool vim_isAbsName(const char *name);
+int vim_FullName(const char *fname, char *buf, size_t len, bool force);
+void path_fix_case(char *name);
+bool same_directory(char *f1, char *f2);
+bool path_is_absolute(const char *fname);
+bool match_suffix(char *fname);
+void path_guess_exepath(const char *argv0, char *buf, size_t bufsize);
+void slash_adjust(char *p);
 
 #include "path.h.generated.h"

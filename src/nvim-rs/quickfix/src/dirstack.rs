@@ -36,7 +36,8 @@ extern "C" {
     fn rs_os_path_exists(path: *const c_char) -> c_int;
 
     // From path crate
-    fn rs_vim_isAbsName(name: *const c_char) -> c_int;
+    #[link_name = "vim_isAbsName"]
+    fn vim_isAbsName(name: *const c_char) -> bool;
 }
 
 // =============================================================================
@@ -99,7 +100,7 @@ pub unsafe fn push_dir_raw(
     *stackptr = ds_new;
 
     // Determine how to store the directory name
-    if rs_vim_isAbsName(dirbuf) != 0
+    if vim_isAbsName(dirbuf)
         || (*stackptr).is_null()
         || (*(*stackptr)).next.is_null()
         || is_file_stack

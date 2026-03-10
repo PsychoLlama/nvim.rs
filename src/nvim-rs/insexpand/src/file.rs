@@ -442,7 +442,8 @@ extern "C" {
 
     // xmalloc / FreeWild
     fn nvim_xmalloc(size: usize) -> *mut u8;
-    fn rs_FreeWild(count: c_int, files: *mut *mut c_char);
+    #[link_name = "FreeWild"]
+    fn FreeWild(count: c_int, files: *mut *mut c_char);
 }
 
 // Constants matching C definitions
@@ -591,9 +592,9 @@ pub unsafe extern "C" fn rs_get_next_filename_completion() {
                 }
             }
 
-            rs_FreeWild(num_matches, matches);
+            FreeWild(num_matches, matches);
         } else if fuzzy_leader_len > 0 {
-            rs_FreeWild(num_matches, matches);
+            FreeWild(num_matches, matches);
         }
 
         if nvim_get_compl_num_bests() > 0 && nvim_get_compl_get_longest() != 0 {
