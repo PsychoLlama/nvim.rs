@@ -123,79 +123,8 @@ const char *nvim_curbuf_get_b_p_fenc(void)
 }
 
 
-// Get character at **pp and advance *pp to the next character.
-// Note: composing characters are skipped!
-int mb_ptr2char_adv(const char **const pp)
-{
-  int c = utf_ptr2char(*pp);
-  *pp += utfc_ptr2len(*pp);
-  return c;
-}
-
-/// Get the screen char at the beginning of a string
-///
-/// Caller is expected to check for things like unprintable chars etc
-/// If first char in string is a composing char, prepend a space to display it correctly.
-///
-/// If "p" starts with an invalid sequence, zero is returned.
-///
-/// @param[out] firstc (required) The first codepoint of the screen char,
-///                    or the first byte of an invalid sequence
-///
-/// @return the char
-schar_T utfc_ptr2schar(const char *p, int *firstc)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int c = utf_ptr2char(p);
-  *firstc = c;  // NOT optional, you are gonna need it
-  bool first_compose = utf_iscomposing_first(c);
-  size_t maxlen = MAX_SCHAR_SIZE - 1 - first_compose;
-  size_t len = (size_t)utfc_ptr2len_len(p, (int)maxlen);
-
-  if (len == 1 && (uint8_t)(*p) >= 0x80) {
-    return 0;  // invalid sequence
-  }
-
-  return schar_from_buf_first(p, len, first_compose);
-}
-
-/// Get the screen char from a char with a known length
-///
-/// Like utfc_ptr2schar but use no more than p[maxlen].
-schar_T utfc_ptrlen2schar(const char *p, int len, int *firstc)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if ((len == 1 && (uint8_t)(*p) >= 0x80) || len == 0) {
-    // invalid or truncated sequence
-    *firstc = (uint8_t)(*p);
-    return 0;
-  }
-
-  int c = utf_ptr2char(p);
-  *firstc = c;
-  bool first_compose = utf_iscomposing_first(c);
-  int maxlen = MAX_SCHAR_SIZE - 1 - first_compose;
-  if (len > maxlen) {
-    len = utfc_ptr2len_len(p, maxlen);
-  }
-
-  return schar_from_buf_first(p, (size_t)len, first_compose);
-}
-
-/// Caller must ensure there is space for `first_compose`
-static schar_T schar_from_buf_first(const char *buf, size_t len, bool first_compose)
-{
-  if (first_compose) {
-    char cbuf[MAX_SCHAR_SIZE];
-    cbuf[0] = ' ';
-    memcpy(cbuf + 1, buf, len);
-    return schar_from_buf(cbuf, len + 1);
-  } else {
-    return schar_from_buf(buf, len);
-  }
-}
-
-
+// mb_ptr2char_adv, utfc_ptr2schar, utfc_ptrlen2schar, schar_from_buf_first
+// are implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
 
 /// Accessor for Rust FFI: get UTF character from byte pointer.
 int nvim_utf_ptr2char(const char *p)
@@ -338,67 +267,7 @@ void show_utf8(void)
   msg(IObuff, 0);
 }
 
-/// @return true if boundclass bc always starts a new cluster regardless of what's before
-/// false negatives are allowed (perf cost, not correctness)
-static bool always_break(int bc)
-{
-  return (bc == UTF8PROC_BOUNDCLASS_CONTROL);
-}
-
-/// @return true if bc2 always starts a cluster after bc1
-/// false negatives are allowed (perf cost, not correctness)
-static bool always_break_two(int bc1, int bc2)
-{
-  // don't check for UTF8PROC_BOUNDCLASS_CONTROL for bc2 as it either has been checked by
-  // "always_break" on first iteration or when it was bc1 in the previous iteration
-  return ((bc1 != UTF8PROC_BOUNDCLASS_PREPEND && bc2 == UTF8PROC_BOUNDCLASS_OTHER)
-          || (bc1 >= UTF8PROC_BOUNDCLASS_CR && bc1 <= UTF8PROC_BOUNDCLASS_CONTROL)
-          || (bc2 == UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC
-              && (bc1 == UTF8PROC_BOUNDCLASS_OTHER
-                  || bc1 == UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC)));
-}
-
-/// Assumes caller already handles ascii. see `utfc_next`
-StrCharInfo utfc_next_impl(StrCharInfo cur)
-{
-  int32_t prev_code = cur.chr.value;
-  uint8_t *next = (uint8_t *)(cur.ptr + cur.chr.len);
-  GraphemeState state = GRAPHEME_STATE_INIT;
-  assert(*next >= 0x80);
-
-  while (true) {
-    uint8_t const next_len = utf8len_tab[*next];
-    int32_t const next_code = utf_ptr2CharInfo_impl(next, (uintptr_t)next_len);
-    if (!utf_iscomposing(prev_code, next_code, &state)) {
-      return (StrCharInfo){
-        .ptr = (char *)next,
-        .chr = (CharInfo){ .value = next_code, .len = (next_code < 0 ? 1 : next_len) },
-      };
-    }
-
-    prev_code = next_code;
-    next += next_len;
-    if (EXPECT(*next < 0x80U, true)) {
-      return (StrCharInfo){
-        .ptr = (char *)next,
-        .chr = (CharInfo){ .value = *next, .len = 1 },
-      };
-    }
-  }
-}
-
-/// Copy a character, advancing the pointers
-///
-/// @param[in,out]  fp  Source of the character to copy.
-/// @param[in,out]  tp  Destination to copy to.
-void mb_copy_char(const char **const fp, char **const tp)
-{
-  const size_t l = (size_t)utfc_ptr2len(*fp);
-
-  memmove(*tp, *fp, l);
-  *tp += l;
-  *fp += l;
-}
+// utfc_next_impl, mb_copy_char are implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
 
 // Find the next illegal byte sequence.
 void utf_find_illegal(void)
@@ -512,63 +381,7 @@ void mb_check_adjust_col(void *win_)
   }
 }
 
-/// @param line  start of the string
-///
-/// @return      a pointer to the character before "*p", if there is one.
-char *mb_prevptr(char *line, char *p)
-{
-  if (p > line) {
-    MB_PTR_BACK(line, p);
-  }
-  return p;
-}
-
-/// Try to unescape a multibyte character
-///
-/// Used for the rhs and lhs of the mappings.
-///
-/// @param[in,out]  pp  String to unescape. Is advanced to just after the bytes
-///                     that form a multibyte character.
-///
-/// @return Unescaped string if it is a multibyte character, NULL if no
-///         multibyte character was found. Returns a static buffer, always one
-///         and the same.
-const char *mb_unescape(const char **const pp)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  static char buf[6];
-  size_t buf_idx = 0;
-  uint8_t *str = (uint8_t *)(*pp);
-
-  // Must translate K_SPECIAL KS_SPECIAL KE_FILLER to K_SPECIAL.
-  // Maximum length of a utf-8 character is 4 bytes.
-  for (size_t str_idx = 0; str[str_idx] != NUL && buf_idx < 4; str_idx++) {
-    if (str[str_idx] == K_SPECIAL
-        && str[str_idx + 1] == KS_SPECIAL
-        && str[str_idx + 2] == KE_FILLER) {
-      buf[buf_idx++] = (char)K_SPECIAL;
-      str_idx += 2;
-    } else if (str[str_idx] == K_SPECIAL) {
-      break;  // A special key can't be a multibyte char.
-    } else {
-      buf[buf_idx++] = (char)str[str_idx];
-    }
-    buf[buf_idx] = NUL;
-
-    // Return a multi-byte character if it's found.  An illegal sequence
-    // will result in a 1 here.
-    if (utf_ptr2len(buf) > 1) {
-      *pp = (const char *)str + str_idx + 1;
-      return buf;
-    }
-
-    // Bail out quickly for ASCII.
-    if ((uint8_t)buf[0] < 128) {
-      break;
-    }
-  }
-  return NULL;
-}
+// mb_prevptr, mb_unescape are implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
 
 // enc_canonize and enc_alias_search are implemented in Rust.
 

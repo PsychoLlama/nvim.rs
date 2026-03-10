@@ -106,6 +106,13 @@ extern int utf_head_off(const char *base, const char *p);
 extern int bomb_size(void);
 extern int enc_canon_props(const char *name);
 extern int mb_off_next(const char *base, const char *p);
+extern int mb_ptr2char_adv(const char **pp);
+extern void mb_copy_char(const char **fp, char **tp);
+extern char *mb_prevptr(char *line, char *p);
+extern const char *mb_unescape(const char **pp);
+extern StrCharInfo utfc_next_impl(StrCharInfo cur);
+extern schar_T utfc_ptr2schar(const char *p, int *firstc);
+extern schar_T utfc_ptrlen2schar(const char *p, int len, int *firstc);
 
 extern int rs_utf_is_trail_byte(int byte);
 extern char *enc_canonize(char *enc);

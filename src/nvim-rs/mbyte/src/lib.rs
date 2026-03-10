@@ -4240,6 +4240,240 @@ pub unsafe extern "C" fn rs_get_encoding_name(
     ENC_CANON_TABLE[idx].name.as_ptr().cast()
 }
 
+// ============================================================================
+// Phase 4: Pure logic helpers
+// ============================================================================
+
+/// `CharInfo` mirrors the C struct `CharInfo { int32_t value; int len; }`.
+#[repr(C)]
+pub struct CharInfo {
+    pub value: i32,
+    pub len: c_int,
+}
+
+/// `StrCharInfo` mirrors the C struct `StrCharInfo { char *ptr; CharInfo chr; }`.
+#[repr(C)]
+pub struct StrCharInfo {
+    pub ptr: *mut c_char,
+    pub chr: CharInfo,
+}
+
+/// Maximum bytes for a screen char (matches `MAX_SCHAR_SIZE` = 32).
+const MAX_SCHAR_SIZE: usize = 32;
+
+/// Screen character type (`schar_T` = `uint32_t`).
+type ScharT = u32;
+
+extern "C" {
+    /// `schar_from_buf` in grid.c: encode a byte buffer as a screen char.
+    fn schar_from_buf(buf: *const c_char, len: usize) -> ScharT;
+}
+
+/// Advance past the current character including composing chars.
+/// Assumes the caller already handled ASCII (first byte < 0x80).
+/// Mirrors C `utfc_next_impl`.
+///
+/// # Safety
+/// `cur.ptr` must point into a valid NUL-terminated UTF-8 string.
+/// The byte at `cur.ptr + cur.chr.len` must be >= 0x80 (caller guarantees this).
+#[unsafe(export_name = "utfc_next_impl")]
+pub unsafe extern "C" fn rs_utfc_next_impl(cur: StrCharInfo) -> StrCharInfo {
+    let mut prev_code = cur.chr.value;
+    let mut next = (cur.ptr as *const u8).add(cur.chr.len as usize);
+    let mut state: i32 = 0; // GRAPHEME_STATE_INIT
+                            // Caller guarantees *next >= 0x80
+    loop {
+        let next_len = UTF8LEN_TAB[*next as usize] as usize;
+        let next_code = utf_ptr2charinfo_impl(std::slice::from_raw_parts(next, next_len), next_len);
+        if !utf_iscomposing(prev_code, next_code, &mut state) {
+            let len = if next_code < 0 { 1 } else { next_len as c_int };
+            return StrCharInfo {
+                ptr: next as *mut c_char,
+                chr: CharInfo {
+                    value: next_code,
+                    len,
+                },
+            };
+        }
+        prev_code = next_code;
+        next = next.add(next_len);
+        if *next < 0x80 {
+            return StrCharInfo {
+                ptr: next as *mut c_char,
+                chr: CharInfo {
+                    value: *next as i32,
+                    len: 1,
+                },
+            };
+        }
+    }
+}
+
+/// Get char and advance `*pp` to the next character (composing chars skipped).
+/// Mirrors C `mb_ptr2char_adv`.
+///
+/// # Safety
+/// `pp` must be non-null and point to a valid NUL-terminated UTF-8 string.
+#[unsafe(export_name = "mb_ptr2char_adv")]
+pub unsafe extern "C" fn rs_mb_ptr2char_adv(pp: *mut *const c_char) -> c_int {
+    let p = *pp;
+    let c = rs_utf_ptr2char(p);
+    let len = rs_utfc_ptr2len(p);
+    *pp = p.add(len as usize);
+    c
+}
+
+/// Copy a character, advancing both pointers.
+/// Mirrors C `mb_copy_char`.
+///
+/// # Safety
+/// `fp` and `tp` must be non-null; the source must be a valid UTF-8 string.
+#[unsafe(export_name = "mb_copy_char")]
+pub unsafe extern "C" fn rs_mb_copy_char(fp: *mut *const c_char, tp: *mut *mut c_char) {
+    let l = rs_utfc_ptr2len(*fp) as usize;
+    std::ptr::copy(*fp as *const u8, *tp as *mut u8, l);
+    *tp = (*tp).add(l);
+    *fp = (*fp).add(l);
+}
+
+/// Return a pointer to the character before `p`, or `line` if already at start.
+/// Mirrors C `mb_prevptr`.
+///
+/// # Safety
+/// `line` and `p` must be valid pointers into the same buffer, `line <= p`.
+#[unsafe(export_name = "mb_prevptr")]
+pub unsafe extern "C" fn rs_mb_prevptr(line: *mut c_char, mut p: *mut c_char) -> *mut c_char {
+    if p > line {
+        // MB_PTR_BACK: p -= utf_head_off(line, p-1) + 1
+        let off = rs_utf_head_off(line, p.sub(1)) as usize;
+        p = p.sub(off + 1);
+    }
+    p
+}
+
+/// Prepend a space when `first_compose` is true, then encode as a screen char.
+/// `buf` need not be NUL-terminated. `len` bytes from `buf` are used.
+/// Mirrors C `schar_from_buf_first` (static helper).
+///
+/// # Safety
+/// `buf` must point to at least `len` valid bytes.
+unsafe fn schar_from_buf_first_rs(buf: *const c_char, len: usize, first_compose: bool) -> ScharT {
+    if first_compose {
+        let mut cbuf = [0u8; MAX_SCHAR_SIZE];
+        cbuf[0] = b' ';
+        std::ptr::copy_nonoverlapping(buf as *const u8, cbuf.as_mut_ptr().add(1), len);
+        schar_from_buf(cbuf.as_ptr().cast(), len + 1)
+    } else {
+        schar_from_buf(buf, len)
+    }
+}
+
+/// Get the screen char at the beginning of a string.
+///
+/// If the first char is a composing char, prepends a space.
+/// Returns 0 for an invalid sequence.
+/// Sets `*firstc` to the first codepoint.
+/// Mirrors C `utfc_ptr2schar`.
+///
+/// # Safety
+/// `p` and `firstc` must be non-null; `p` points to a valid UTF-8 string.
+#[unsafe(export_name = "utfc_ptr2schar")]
+pub unsafe extern "C" fn rs_utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> ScharT {
+    let c = rs_utf_ptr2char(p);
+    *firstc = c;
+    let first_compose = rs_utf_iscomposing_first(c) != 0;
+    let maxlen = (MAX_SCHAR_SIZE - 1 - usize::from(first_compose)) as c_int;
+    let len = rs_utfc_ptr2len_len(p, maxlen) as usize;
+    if len == 1 && *(p as *const u8) >= 0x80 {
+        return 0; // invalid sequence
+    }
+    schar_from_buf_first_rs(p, len, first_compose)
+}
+
+/// Get the screen char from a char with a known length.
+/// Like `utfc_ptr2schar` but uses no more than `p[len]` bytes.
+/// Mirrors C `utfc_ptrlen2schar`.
+///
+/// # Safety
+/// `p` and `firstc` must be non-null; `p` points to at least `len` valid bytes.
+#[unsafe(export_name = "utfc_ptrlen2schar")]
+pub unsafe extern "C" fn rs_utfc_ptrlen2schar(
+    p: *const c_char,
+    mut len: c_int,
+    firstc: *mut c_int,
+) -> ScharT {
+    if (len == 1 && *(p as *const u8) >= 0x80) || len == 0 {
+        *firstc = *(p as *const u8) as c_int;
+        return 0;
+    }
+    let c = rs_utf_ptr2char(p);
+    *firstc = c;
+    let first_compose = rs_utf_iscomposing_first(c) != 0;
+    let maxlen = (MAX_SCHAR_SIZE - 1 - usize::from(first_compose)) as c_int;
+    if len > maxlen {
+        len = rs_utfc_ptr2len_len(p, maxlen);
+    }
+    schar_from_buf_first_rs(p, len as usize, first_compose)
+}
+
+/// Try to unescape a multibyte character from a key mapping string.
+///
+/// Returns a pointer to a static buffer if a multibyte char was found, else NULL.
+/// Advances `*pp` past the consumed bytes.
+/// Mirrors C `mb_unescape`.
+///
+/// # Safety
+/// `pp` must be non-null and point to a valid NUL-terminated string.
+#[unsafe(export_name = "mb_unescape")]
+pub unsafe extern "C" fn rs_mb_unescape(pp: *mut *const c_char) -> *const c_char {
+    const K_SPECIAL: u8 = 0x80;
+    const KS_SPECIAL: u8 = 254;
+    const KE_FILLER: u8 = b'X';
+
+    static mut MB_UNESCAPE_BUF: [u8; 6] = [0u8; 6];
+
+    let buf = &raw mut MB_UNESCAPE_BUF;
+    let mut buf_idx: usize = 0;
+    let str_ptr = *pp as *const u8;
+
+    let mut str_idx: usize = 0;
+    loop {
+        if *str_ptr.add(str_idx) == 0 || buf_idx >= 4 {
+            break;
+        }
+        let b = *str_ptr.add(str_idx);
+        if b == K_SPECIAL
+            && *str_ptr.add(str_idx + 1) == KS_SPECIAL
+            && *str_ptr.add(str_idx + 2) == KE_FILLER
+        {
+            (*buf)[buf_idx] = K_SPECIAL;
+            buf_idx += 1;
+            str_idx += 2;
+        } else if b == K_SPECIAL {
+            break; // special key can't be multibyte char
+        } else {
+            (*buf)[buf_idx] = b;
+            buf_idx += 1;
+        }
+        (*buf)[buf_idx] = 0;
+
+        // Return a multi-byte char if found (utf_ptr2len > 1)
+        let buf_len = rs_utf_ptr2len((*buf).as_ptr().cast());
+        if buf_len > 1 {
+            *pp = str_ptr.add(str_idx + 1).cast();
+            return (*buf).as_ptr().cast();
+        }
+
+        // Bail out for ASCII
+        if (*buf)[0] < 128 {
+            break;
+        }
+
+        str_idx += 1;
+    }
+    std::ptr::null()
+}
+
 #[cfg(test)]
 mod utfc_tests {
     use super::*;
