@@ -338,18 +338,6 @@ void clear_virtlines(VirtLines *lines)
   *lines = (VirtLines)KV_INITIAL_VALUE;
 }
 
-void decor_check_invalid_glyphs(void)
-{
-  for (size_t i = 0; i < kv_size(decor_items); i++) {
-    DecorSignHighlight *it = &kv_A(decor_items, i);
-    int width = rs_sh_is_sign(it->flags) ? SIGN_WIDTH : (rs_sh_is_conceal(it->flags) ? 1 : 0);
-    for (int j = 0; j < width; j++) {
-      if (schar_high(it->text[j])) {
-        it->text[j] = schar_from_char(schar_get_first_codepoint(it->text[j]));
-      }
-    }
-  }
-}
 
 /// Get the next chunk of a virtual text item.
 ///

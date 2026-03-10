@@ -129,12 +129,6 @@ extern unsigned int rs_rdb_flag_invalid(void);
 // Per-cell attributes
 static size_t linebuf_size = 0;
 
-/// C accessor for Rust to call decor_check_invalid_glyphs()
-void nvim_decor_check_invalid_glyphs(void)
-{
-  decor_check_invalid_glyphs();
-}
-
 /// C accessor for Rust to call check_chars_options()
 /// @return 0 on success, non-zero on error
 int nvim_check_chars_options(void)

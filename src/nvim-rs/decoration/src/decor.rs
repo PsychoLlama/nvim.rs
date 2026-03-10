@@ -6,8 +6,9 @@
 use std::ffi::{c_int, c_void};
 
 use crate::{
-    DecorKind, DecorRangeHandle, DecorStateHandle, DecorVirtText, VirtTextPos, DRAW_COL_DISABLED,
-    DRAW_COL_JUST_ADDED, DRAW_COL_PENDING, DRAW_COL_UNSET, KVT_HIDE, KVT_IS_LINES,
+    DecorKind, DecorRangeHandle, DecorStateHandle, DecorVirtText, ScharT, VirtTextPos,
+    DRAW_COL_DISABLED, DRAW_COL_JUST_ADDED, DRAW_COL_PENDING, DRAW_COL_UNSET, KVT_HIDE,
+    KVT_IS_LINES,
 };
 
 // =============================================================================
@@ -130,6 +131,10 @@ extern "C" {
     fn nvim_decor_items_set_next(idx: u32, next: u32);
     fn nvim_decor_items_clear_sign_name(idx: u32);
     fn nvim_decor_items_clear_url(idx: u32);
+    // schar helpers from grid crate
+    fn rs_schar_high(sc: ScharT) -> bool;
+    fn rs_schar_get_first_codepoint(sc: ScharT) -> c_int;
+    fn rs_schar_from_char(c: c_int) -> ScharT;
 }
 
 // =============================================================================
@@ -1076,6 +1081,32 @@ pub unsafe extern "C" fn rs_decor_free(ext: c_int, vt_ptr: *mut DecorVirtText, s
     } else {
         // Safe to delete right now
         rs_decor_free_inner(vt_ptr, sh_idx);
+    }
+}
+
+/// Check all sign/conceal glyphs in decor_items for invalid multi-byte characters.
+///
+/// After a font change, some glyphs may no longer be valid. This function
+/// replaces any multi-byte characters with their first codepoint.
+///
+/// Rust implementation of `decor_check_invalid_glyphs()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_decor_check_invalid_glyphs() {
+    let count = nvim_decor_items_size();
+    for idx in 0..count {
+        let item = &mut *nvim_decor_items_get_ptr(idx).cast::<crate::types::DecorSignHighlight>();
+        let is_sign = rs_sh_is_sign(item.flags) != 0;
+        let is_conceal = rs_sh_is_conceal(item.flags) != 0;
+        let width: usize = match (is_sign, is_conceal) {
+            (true, _) => SIGN_WIDTH,
+            (false, true) => 1,
+            (false, false) => 0,
+        };
+        for j in 0..width {
+            if rs_schar_high(item.text[j]) {
+                item.text[j] = rs_schar_from_char(rs_schar_get_first_codepoint(item.text[j]));
+            }
+        }
     }
 }
 

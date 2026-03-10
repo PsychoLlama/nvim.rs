@@ -143,8 +143,8 @@ static GLYPH_CACHE: LazyLock<Mutex<GlyphCache>> = LazyLock::new(|| Mutex::new(Gl
 
 // FFI declarations for C callback functions
 extern "C" {
-    /// Called when glyph cache is cleared to invalidate decoration glyphs.
-    fn nvim_decor_check_invalid_glyphs();
+    /// Rust implementation of decor_check_invalid_glyphs (in decoration crate).
+    fn rs_decor_check_invalid_glyphs();
 
     /// Called when glyph cache is cleared to regenerate char options.
     /// Returns non-zero on error (which should never happen).
@@ -415,7 +415,7 @@ fn schar_cache_clear_impl() {
     // Call C callbacks before clearing
     // SAFETY: these C functions have no safety requirements
     unsafe {
-        nvim_decor_check_invalid_glyphs();
+        rs_decor_check_invalid_glyphs();
     }
 
     // Clear the cache
