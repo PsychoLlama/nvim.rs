@@ -914,82 +914,22 @@ void nvim_uhp_set_save_nr(u_header_T *uhp, int val)
   uhp->uh_save_nr = val;
 }
 
-// u_entry_T field accessors
-u_entry_T *nvim_uep_get_next(u_entry_T *uep)
-{
-  return uep->ue_next;
-}
-
-linenr_T nvim_uep_get_top(u_entry_T *uep)
-{
-  return uep->ue_top;
-}
-
-linenr_T nvim_uep_get_bot(u_entry_T *uep)
-{
-  return uep->ue_bot;
-}
-
-linenr_T nvim_uep_get_lcount(u_entry_T *uep)
-{
-  return uep->ue_lcount;
-}
-
-linenr_T nvim_uep_get_size(u_entry_T *uep)
-{
-  return uep->ue_size;
-}
-
-char **nvim_uep_get_array(u_entry_T *uep)
-{
-  return uep->ue_array;
-}
-
-void nvim_uep_set_next(u_entry_T *uep, u_entry_T *val)
-{
-  uep->ue_next = val;
-}
-
-void nvim_uep_set_top(u_entry_T *uep, linenr_T val)
-{
-  uep->ue_top = val;
-}
-
-void nvim_uep_set_bot(u_entry_T *uep, linenr_T val)
-{
-  uep->ue_bot = val;
-}
-
-void nvim_uep_set_lcount(u_entry_T *uep, linenr_T val)
-{
-  uep->ue_lcount = val;
-}
-
-void nvim_uep_set_size(u_entry_T *uep, linenr_T val)
-{
-  uep->ue_size = val;
-}
-
-void nvim_uep_set_array(u_entry_T *uep, char **val)
-{
-  uep->ue_array = val;
-}
-
-char *nvim_uep_get_array_element(u_entry_T *uep, linenr_T idx)
-{
-  return uep->ue_array[idx];
-}
-
-void nvim_uep_set_array_element(u_entry_T *uep, linenr_T idx, char *val)
-{
-  uep->ue_array[idx] = val;
-}
-
-// Memory allocation - return pointer for Rust to use with xfree
-u_entry_T *nvim_alloc_u_entry(void)
-{
-  return xcalloc(1, sizeof(u_entry_T));
-}
+// Static assertions for u_entry_T layout verification (Phase 1).
+// These verify field offsets so the Rust repr(C) UEntry struct stays in sync.
+_Static_assert(offsetof(u_entry_T, ue_next) == 0,
+               "ue_next must be first field in u_entry_T");
+_Static_assert(offsetof(u_entry_T, ue_top) == 8,
+               "ue_top offset mismatch in u_entry_T (expected 8 on 64-bit)");
+_Static_assert(offsetof(u_entry_T, ue_bot) == 12,
+               "ue_bot offset mismatch in u_entry_T");
+_Static_assert(offsetof(u_entry_T, ue_lcount) == 16,
+               "ue_lcount offset mismatch in u_entry_T");
+_Static_assert(offsetof(u_entry_T, ue_array) == 24,
+               "ue_array offset mismatch in u_entry_T (pointer after padding)");
+_Static_assert(offsetof(u_entry_T, ue_size) == 32,
+               "ue_size offset mismatch in u_entry_T");
+_Static_assert(sizeof(u_entry_T) == 40,
+               "u_entry_T size mismatch: expected 40 bytes on 64-bit");
 
 u_header_T *nvim_alloc_u_header(void)
 {
@@ -1255,16 +1195,6 @@ void nvim_uhp_set_cursor_vcol(u_header_T *uhp, colnr_T vcol)
   uhp->uh_cursor_vcol = vcol;
 }
 
-// Allocate and copy line array element
-void nvim_uep_alloc_array(u_entry_T *uep, linenr_T size)
-{
-  uep->ue_array = xmalloc(sizeof(char *) * (size_t)size);
-}
-
-void nvim_uep_set_array_from_buf(u_entry_T *uep, linenr_T idx, buf_T *buf, linenr_T lnum)
-{
-  uep->ue_array[idx] = xstrdup(ml_get_buf(buf, lnum));
-}
 
 // Error message wrapper
 void nvim_emsg_line_count_changed(void)
@@ -1284,11 +1214,6 @@ void nvim_set_undo_undoes_false(void)
   undo_undoes = false;
 }
 
-// Compare buffer line with ue_array element, returns true if different
-bool nvim_uep_compare_line_with_array(u_entry_T *uep, linenr_T idx, buf_T *buf, linenr_T lnum)
-{
-  return strcmp(ml_get_buf(buf, lnum), uep->ue_array[idx]) != 0;
-}
 
 // Clear uh_cursor position
 void nvim_uhp_clear_cursor(u_header_T *uhp)

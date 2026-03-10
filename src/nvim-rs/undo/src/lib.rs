@@ -44,10 +44,45 @@ pub struct BufHandle(*mut c_void);
 #[derive(Clone, Copy)]
 pub struct UHeaderHandle(*mut c_void);
 
-/// Opaque handle to u_entry_T.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct UEntryHandle(*mut c_void);
+/// repr(C) struct matching u_entry_T (without U_DEBUG field).
+///
+/// # Layout
+///
+/// Matches the C `u_entry_T` struct layout exactly. The U_DEBUG `ue_magic` field
+/// is excluded (it is only present when `U_DEBUG` is defined in C).
+#[repr(C)]
+pub struct UEntry {
+    /// Pointer to next entry in list.
+    pub ue_next: *mut UEntry,
+    /// Number of line above undo block.
+    pub ue_top: LinenrT,
+    /// Number of line below undo block.
+    pub ue_bot: LinenrT,
+    /// Line count when u_save called.
+    pub ue_lcount: LinenrT,
+    /// Array of lines in undo block.
+    pub ue_array: *mut *mut c_char,
+    /// Number of lines in ue_array.
+    pub ue_size: LinenrT,
+}
+
+/// Type alias for u_entry_T pointer (replaces opaque UEntryHandle).
+pub type UEntryHandle = *mut UEntry;
+
+/// Compile-time check that UEntry has the expected 64-bit layout.
+#[cfg(target_pointer_width = "64")]
+const _: () = {
+    assert!(
+        std::mem::size_of::<UEntry>() == 40,
+        "UEntry size must be 40 bytes on 64-bit"
+    );
+    assert!(std::mem::offset_of!(UEntry, ue_next) == 0);
+    assert!(std::mem::offset_of!(UEntry, ue_top) == 8);
+    assert!(std::mem::offset_of!(UEntry, ue_bot) == 12);
+    assert!(std::mem::offset_of!(UEntry, ue_lcount) == 16);
+    assert!(std::mem::offset_of!(UEntry, ue_array) == 24);
+    assert!(std::mem::offset_of!(UEntry, ue_size) == 32);
+};
 
 /// Opaque handle to win_T.
 #[repr(transparent)]
@@ -172,8 +207,8 @@ extern "C" {
     fn nvim_uhp_get_alt_prev(uhp: UHeaderHandle) -> UHeaderHandle;
     fn nvim_uhp_get_seq(uhp: UHeaderHandle) -> c_int;
     fn nvim_uhp_get_walk(uhp: UHeaderHandle) -> c_int;
-    fn nvim_uhp_get_entry(uhp: UHeaderHandle) -> UEntryHandle;
-    fn nvim_uhp_get_getbot_entry(uhp: UHeaderHandle) -> UEntryHandle;
+    fn nvim_uhp_get_entry(uhp: UHeaderHandle) -> *mut UEntry;
+    fn nvim_uhp_get_getbot_entry(uhp: UHeaderHandle) -> *mut UEntry;
     fn nvim_uhp_get_time(uhp: UHeaderHandle) -> TimeT;
     fn nvim_uhp_get_flags(uhp: UHeaderHandle) -> c_int;
     fn nvim_uhp_get_save_nr(uhp: UHeaderHandle) -> c_int;
@@ -184,34 +219,15 @@ extern "C" {
     fn nvim_uhp_set_alt_prev(uhp: UHeaderHandle, val: UHeaderHandle);
     fn nvim_uhp_set_seq(uhp: UHeaderHandle, val: c_int);
     fn nvim_uhp_set_walk(uhp: UHeaderHandle, val: c_int);
-    fn nvim_uhp_set_entry(uhp: UHeaderHandle, val: UEntryHandle);
-    fn nvim_uhp_set_getbot_entry(uhp: UHeaderHandle, val: UEntryHandle);
+    fn nvim_uhp_set_entry(uhp: UHeaderHandle, val: *mut UEntry);
+    fn nvim_uhp_set_getbot_entry(uhp: UHeaderHandle, val: *mut UEntry);
     fn nvim_uhp_set_time(uhp: UHeaderHandle, val: TimeT);
     fn nvim_uhp_set_flags(uhp: UHeaderHandle, val: c_int);
     fn nvim_uhp_set_save_nr(uhp: UHeaderHandle, val: c_int);
 
-    // u_entry_T field accessors
-    fn nvim_uep_get_next(uep: UEntryHandle) -> UEntryHandle;
-    fn nvim_uep_get_top(uep: UEntryHandle) -> LinenrT;
-    fn nvim_uep_get_bot(uep: UEntryHandle) -> LinenrT;
-    fn nvim_uep_get_lcount(uep: UEntryHandle) -> LinenrT;
-    fn nvim_uep_get_size(uep: UEntryHandle) -> LinenrT;
-    fn nvim_uep_get_array(uep: UEntryHandle) -> *mut *mut c_char;
-
-    fn nvim_uep_set_next(uep: UEntryHandle, val: UEntryHandle);
-    fn nvim_uep_set_top(uep: UEntryHandle, val: LinenrT);
-    fn nvim_uep_set_bot(uep: UEntryHandle, val: LinenrT);
-    fn nvim_uep_set_lcount(uep: UEntryHandle, val: LinenrT);
-    fn nvim_uep_set_size(uep: UEntryHandle, val: LinenrT);
-    fn nvim_uep_set_array(uep: UEntryHandle, val: *mut *mut c_char);
-
-    // u_entry_T array element accessors
-    fn nvim_uep_get_array_element(uep: UEntryHandle, idx: LinenrT) -> *mut c_char;
-    fn nvim_uep_set_array_element(uep: UEntryHandle, idx: LinenrT, val: *mut c_char);
-
     // Allocation functions
-    fn nvim_alloc_u_entry() -> UEntryHandle;
     fn nvim_alloc_u_header() -> UHeaderHandle;
+    fn nvim_xcalloc(count: usize, size: usize) -> *mut c_void;
 
     // Extmark vector destruction
     fn nvim_uhp_destroy_extmark(uhp: UHeaderHandle);
@@ -289,19 +305,11 @@ extern "C" {
     fn nvim_uhp_copy_marks_visual(buf: BufHandle, uhp: UHeaderHandle);
     fn nvim_uhp_set_cursor(uhp: UHeaderHandle, lnum: LinenrT, col: ColnrT, coladd: ColnrT);
     fn nvim_uhp_set_cursor_vcol(uhp: UHeaderHandle, vcol: ColnrT);
-    fn nvim_uep_alloc_array(uep: UEntryHandle, size: LinenrT);
-    fn nvim_uep_set_array_from_buf(uep: UEntryHandle, idx: LinenrT, buf: BufHandle, lnum: LinenrT);
     fn nvim_emsg_line_count_changed();
     fn nvim_buf_is_curbuf(buf: BufHandle) -> bool;
     fn nvim_set_undo_undoes_false();
 
     // u_find_first_changed infrastructure
-    fn nvim_uep_compare_line_with_array(
-        uep: UEntryHandle,
-        idx: LinenrT,
-        buf: BufHandle,
-        lnum: LinenrT,
-    ) -> bool;
     fn nvim_uhp_clear_cursor(uhp: UHeaderHandle);
     fn nvim_uhp_set_cursor_lnum_only(uhp: UHeaderHandle, lnum: LinenrT);
 
@@ -815,16 +823,15 @@ pub unsafe extern "C" fn rs_u_freeentry(uep: UEntryHandle, mut n: c_int) {
     // Free array elements from n-1 down to 0
     while n > 0 {
         n -= 1;
-        let elem = nvim_uep_get_array_element(uep, LinenrT::from(n));
+        let elem = *(*uep).ue_array.offset(n as isize);
         nvim_xfree(elem as *mut c_void);
     }
 
     // Free the array itself
-    let array = nvim_uep_get_array(uep);
-    nvim_xfree(array as *mut c_void);
+    nvim_xfree((*uep).ue_array as *mut c_void);
 
     // Free the entry struct
-    nvim_xfree(uep.0);
+    nvim_xfree(uep as *mut c_void);
 }
 
 /// Free all the undo entries for one header and the header itself.
@@ -856,9 +863,9 @@ pub unsafe extern "C" fn rs_u_freeentries(
 
     // Free all entries in the list
     let mut uep = nvim_uhp_get_entry(uhp);
-    while !uep.0.is_null() {
-        let nuep = nvim_uep_get_next(uep);
-        let size = nvim_uep_get_size(uep);
+    while !uep.is_null() {
+        let nuep = (*uep).ue_next;
+        let size = (*uep).ue_size;
         rs_u_freeentry(uep, size as c_int);
         uep = nuep;
     }
@@ -973,13 +980,13 @@ pub unsafe extern "C" fn rs_u_get_headentry(buf: BufHandle) -> UEntryHandle {
     let newhead = nvim_buf_get_b_u_newhead(buf);
     if newhead.0.is_null() {
         nvim_iemsg_undo_list_corrupt();
-        return UEntryHandle(std::ptr::null_mut());
+        return ptr::null_mut();
     }
 
     let entry = nvim_uhp_get_entry(newhead);
-    if entry.0.is_null() {
+    if entry.is_null() {
         nvim_iemsg_undo_list_corrupt();
-        return UEntryHandle(std::ptr::null_mut());
+        return ptr::null_mut();
     }
 
     entry
@@ -995,22 +1002,22 @@ pub unsafe extern "C" fn rs_u_get_headentry(buf: BufHandle) -> UEntryHandle {
 pub unsafe extern "C" fn rs_u_getbot(buf: BufHandle) {
     // Check for corrupt undo list
     let check = rs_u_get_headentry(buf);
-    if check.0.is_null() {
+    if check.is_null() {
         return;
     }
 
     let newhead = nvim_buf_get_b_u_newhead(buf);
     let uep = nvim_uhp_get_getbot_entry(newhead);
-    if !uep.0.is_null() {
+    if !uep.is_null() {
         // The new ue_bot is computed from the number of lines that has been
         // inserted (0 - deleted) since calling u_save. This is equal to the
         // old line count subtracted from the current line count.
         let ml_line_count = nvim_buf_get_ml_line_count(buf);
-        let ue_lcount = nvim_uep_get_lcount(uep);
+        let ue_lcount = (*uep).ue_lcount;
         let extra = ml_line_count - ue_lcount;
 
-        let ue_top = nvim_uep_get_top(uep);
-        let ue_size = nvim_uep_get_size(uep);
+        let ue_top = (*uep).ue_top;
+        let ue_size = (*uep).ue_size;
         let mut ue_bot = ue_top + ue_size + 1 + extra;
 
         if ue_bot < 1 || ue_bot > ml_line_count {
@@ -1020,8 +1027,8 @@ pub unsafe extern "C" fn rs_u_getbot(buf: BufHandle) {
             ue_bot = ue_top + 1;
         }
 
-        nvim_uep_set_bot(uep, ue_bot);
-        nvim_uhp_set_getbot_entry(newhead, UEntryHandle(std::ptr::null_mut()));
+        (*uep).ue_bot = ue_bot;
+        nvim_uhp_set_getbot_entry(newhead, ptr::null_mut());
     }
 
     nvim_buf_set_b_u_synced(buf, true);
@@ -1155,9 +1162,9 @@ pub unsafe extern "C" fn rs_u_update_save_nr(buf: BufHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_u_free_uhp(uhp: UHeaderHandle) {
     let mut uep = nvim_uhp_get_entry(uhp);
-    while !uep.0.is_null() {
-        let nuep = nvim_uep_get_next(uep);
-        let size = nvim_uep_get_size(uep);
+    while !uep.is_null() {
+        let nuep = (*uep).ue_next;
+        let size = (*uep).ue_size;
         rs_u_freeentry(uep, size as c_int);
         uep = nuep;
     }
@@ -1395,12 +1402,12 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     nvim_undoredo_init_op_marks(buf);
 
-    let mut newlist = UEntryHandle(ptr::null_mut());
+    let mut newlist: *mut UEntry = ptr::null_mut();
     let mut uep = nvim_uhp_get_entry(curhead);
 
-    while !uep.0.is_null() {
-        let top = nvim_uep_get_top(uep);
-        let mut bot = nvim_uep_get_bot(uep);
+    while !uep.is_null() {
+        let top = (*uep).ue_top;
+        let mut bot = (*uep).ue_bot;
         let line_count = nvim_buf_get_ml_line_count(buf);
 
         if bot == 0 {
@@ -1416,7 +1423,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
         }
 
         let oldsize = bot - top - 1; // number of lines before undo
-        let newsize = nvim_uep_get_size(uep); // number of lines after undo
+        let newsize = (*uep).ue_size; // number of lines after undo
 
         // Decide about the cursor position, depending on what text changed.
         if top < newlnum {
@@ -1428,15 +1435,15 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
                 // Use the first line that actually changed.
                 let mut i: LinenrT = 0;
                 while i < newsize && i < oldsize {
-                    let array_line = nvim_uep_get_array_element(uep, i);
+                    let array_line = *(*uep).ue_array.offset(i as isize);
                     let buf_line = nvim_undoredo_ml_get(top + 1 + i);
                     if libc::strcmp(array_line, buf_line) != 0 {
                         break;
                     }
                     i += 1;
                 }
-                let next_uep = nvim_uep_get_next(uep);
-                if i == newsize && newlnum == MAXLNUM && next_uep.0.is_null() {
+                let next_uep = (*uep).ue_next;
+                if i == newsize && newlnum == MAXLNUM && next_uep.is_null() {
                     newlnum = top;
                     new_curpos_lnum = newlnum + 1;
                 } else if i < newsize {
@@ -1479,18 +1486,17 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
             let mut i: LinenrT = 0;
             let mut lnum = top;
             while i < newsize {
+                let line = *(*uep).ue_array.offset(i as isize);
                 if empty_buffer && lnum == 0 {
-                    let line = nvim_uep_get_array_element(uep, i);
                     nvim_ml_replace_lnum(1, line, true);
                 } else {
-                    let line = nvim_uep_get_array_element(uep, i);
                     nvim_ml_append_flags(lnum, line, 0, 0);
                 }
-                nvim_xfree(nvim_uep_get_array_element(uep, i) as *mut c_void);
+                nvim_xfree(*(*uep).ue_array.offset(i as isize) as *mut c_void);
                 i += 1;
                 lnum += 1;
             }
-            nvim_xfree(nvim_uep_get_array(uep) as *mut c_void);
+            nvim_xfree((*uep).ue_array as *mut c_void);
         }
 
         // Adjust marks
@@ -1530,13 +1536,13 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 
         nvim_set_u_newcount(nvim_get_u_newcount() + newsize as c_int);
         nvim_set_u_oldcount(nvim_get_u_oldcount() + oldsize as c_int);
-        nvim_uep_set_size(uep, oldsize);
-        nvim_uep_set_array(uep, newarray);
-        nvim_uep_set_bot(uep, top + newsize + 1);
+        (*uep).ue_size = oldsize;
+        (*uep).ue_array = newarray;
+        (*uep).ue_bot = top + newsize + 1;
 
         // insert this entry in front of the new entry list
-        let nuep = nvim_uep_get_next(uep);
-        nvim_uep_set_next(uep, newlist);
+        let nuep = (*uep).ue_next;
+        (*uep).ue_next = newlist;
         newlist = uep;
         uep = nuep;
     }
@@ -1885,8 +1891,8 @@ pub unsafe extern "C" fn rs_u_savecommon(
         nvim_buf_set_b_u_time_cur(buf, now + 1);
 
         nvim_uhp_set_walk(uhp, 0);
-        nvim_uhp_set_entry(uhp, UEntryHandle(std::ptr::null_mut()));
-        nvim_uhp_set_getbot_entry(uhp, UEntryHandle(std::ptr::null_mut()));
+        nvim_uhp_set_entry(uhp, ptr::null_mut());
+        nvim_uhp_set_getbot_entry(uhp, ptr::null_mut());
 
         // Save cursor position
         let mut lnum: LinenrT = 0;
@@ -1928,23 +1934,23 @@ pub unsafe extern "C" fn rs_u_savecommon(
         // When saving a single line, check if we can reuse existing entry
         if size == 1 {
             let mut uep = rs_u_get_headentry(buf);
-            let mut prev_uep = UEntryHandle(std::ptr::null_mut());
+            let mut prev_uep: *mut UEntry = ptr::null_mut();
 
             for _ in 0..10 {
-                if uep.0.is_null() {
+                if uep.is_null() {
                     break;
                 }
 
                 let newhead = nvim_buf_get_b_u_newhead(buf);
                 let getbot_entry = nvim_uhp_get_getbot_entry(newhead);
-                let ue_top = nvim_uep_get_top(uep);
-                let ue_size = nvim_uep_get_size(uep);
-                let ue_bot = nvim_uep_get_bot(uep);
-                let ue_lcount = nvim_uep_get_lcount(uep);
+                let ue_top = (*uep).ue_top;
+                let ue_size = (*uep).ue_size;
+                let ue_bot = (*uep).ue_bot;
+                let ue_lcount = (*uep).ue_lcount;
                 let line_count = nvim_buf_get_ml_line_count(buf);
 
                 // Check if lines have been inserted/deleted
-                let reuse_blocked = if getbot_entry.0 != uep.0 {
+                let reuse_blocked = if getbot_entry != uep {
                     ue_top + ue_size + 1 != (if ue_bot == 0 { line_count + 1 } else { ue_bot })
                 } else {
                     ue_lcount != line_count
@@ -1958,27 +1964,27 @@ pub unsafe extern "C" fn rs_u_savecommon(
 
                 // If it's the same line we can skip saving it again
                 if ue_size == 1 && ue_top == top {
-                    if !prev_uep.0.is_null() {
+                    if !prev_uep.is_null() {
                         // Move the found entry to become the last entry
                         rs_u_getbot(buf);
                         nvim_buf_set_b_u_synced(buf, false);
 
-                        let uep_next = nvim_uep_get_next(uep);
-                        nvim_uep_set_next(prev_uep, uep_next);
+                        let uep_next = (*uep).ue_next;
+                        (*prev_uep).ue_next = uep_next;
 
                         let newhead = nvim_buf_get_b_u_newhead(buf);
                         let entry = nvim_uhp_get_entry(newhead);
-                        nvim_uep_set_next(uep, entry);
+                        (*uep).ue_next = entry;
                         nvim_uhp_set_entry(newhead, uep);
                     }
 
                     // The executed command may change the line count
                     if newbot != 0 {
-                        nvim_uep_set_bot(uep, newbot);
+                        (*uep).ue_bot = newbot;
                     } else if bot > line_count {
-                        nvim_uep_set_bot(uep, 0);
+                        (*uep).ue_bot = 0;
                     } else {
-                        nvim_uep_set_lcount(uep, line_count);
+                        (*uep).ue_lcount = line_count;
                         let newhead = nvim_buf_get_b_u_newhead(buf);
                         nvim_uhp_set_getbot_entry(newhead, uep);
                     }
@@ -1986,7 +1992,7 @@ pub unsafe extern "C" fn rs_u_savecommon(
                 }
 
                 prev_uep = uep;
-                uep = nvim_uep_get_next(uep);
+                uep = (*uep).ue_next;
             }
         }
 
@@ -1995,24 +2001,25 @@ pub unsafe extern "C" fn rs_u_savecommon(
     }
 
     // Add lines in front of entry list
-    let uep = nvim_alloc_u_entry();
+    let uep = nvim_xcalloc(1, std::mem::size_of::<UEntry>()) as *mut UEntry;
 
-    nvim_uep_set_size(uep, size);
-    nvim_uep_set_top(uep, top);
+    (*uep).ue_size = size;
+    (*uep).ue_top = top;
 
     let line_count = nvim_buf_get_ml_line_count(buf);
     if newbot != 0 {
-        nvim_uep_set_bot(uep, newbot);
+        (*uep).ue_bot = newbot;
     } else if bot > line_count {
-        nvim_uep_set_bot(uep, 0);
+        (*uep).ue_bot = 0;
     } else {
-        nvim_uep_set_lcount(uep, line_count);
+        (*uep).ue_lcount = line_count;
         let newhead = nvim_buf_get_b_u_newhead(buf);
         nvim_uhp_set_getbot_entry(newhead, uep);
     }
 
     if size > 0 {
-        nvim_uep_alloc_array(uep, size);
+        (*uep).ue_array =
+            nvim_xmalloc(std::mem::size_of::<*mut c_char>() * size as usize) as *mut *mut c_char;
         let mut lnum = top + 1;
         for i in 0..size {
             nvim_fast_breakcheck();
@@ -2020,16 +2027,16 @@ pub unsafe extern "C" fn rs_u_savecommon(
                 rs_u_freeentry(uep, i as c_int);
                 return FAIL;
             }
-            nvim_uep_set_array_from_buf(uep, i, buf, lnum);
+            *(*uep).ue_array.offset(i as isize) = nvim_ml_get_buf_copy(buf, lnum);
             lnum += 1;
         }
     } else {
-        nvim_uep_set_array(uep, std::ptr::null_mut());
+        (*uep).ue_array = ptr::null_mut();
     }
 
     let newhead = nvim_buf_get_b_u_newhead(buf);
     let entry = nvim_uhp_get_entry(newhead);
-    nvim_uep_set_next(uep, entry);
+    (*uep).ue_next = entry;
     nvim_uhp_set_entry(newhead, uep);
 
     if reload {
@@ -2153,18 +2160,20 @@ pub unsafe extern "C" fn rs_u_find_first_changed() {
 
     // Check that the last undo block was for the whole file
     let uep = nvim_uhp_get_entry(uhp);
-    if nvim_uep_get_top(uep) != 0 || nvim_uep_get_bot(uep) != 0 {
+    if (*uep).ue_top != 0 || (*uep).ue_bot != 0 {
         return;
     }
 
     let line_count = nvim_buf_get_ml_line_count(curbuf);
-    let ue_size = nvim_uep_get_size(uep);
+    let ue_size = (*uep).ue_size;
 
     // Find the first line that differs
     let mut lnum: LinenrT = 1;
     while lnum < line_count && lnum <= ue_size {
         // Compare buffer line at lnum with ue_array[lnum - 1]
-        if nvim_uep_compare_line_with_array(uep, lnum - 1, curbuf, lnum) {
+        let buf_line = nvim_ml_get_buf_line(curbuf, lnum);
+        let arr_line = *(*uep).ue_array.offset((lnum - 1) as isize);
+        if libc::strcmp(arr_line, buf_line) != 0 {
             nvim_uhp_clear_cursor(uhp);
             nvim_uhp_set_cursor_lnum_only(uhp, lnum);
             return;
@@ -2916,9 +2925,9 @@ pub unsafe extern "C" fn rs_undo_count_entries(uhp: UHeaderHandle) -> c_int {
     let mut count: c_int = 0;
     let mut uep = nvim_uhp_get_entry(uhp);
 
-    while !uep.0.is_null() {
+    while !uep.is_null() {
         count += 1;
-        uep = nvim_uep_get_next(uep);
+        uep = (*uep).ue_next;
     }
 
     count
@@ -3178,7 +3187,7 @@ pub extern "C" fn rs_uhp_is_null(uhp: UHeaderHandle) -> bool {
 /// Check if an undo entry is NULL.
 #[no_mangle]
 pub extern "C" fn rs_uep_is_null(uep: UEntryHandle) -> bool {
-    uep.0.is_null()
+    uep.is_null()
 }
 
 // =============================================================================
@@ -3192,7 +3201,7 @@ pub extern "C" fn rs_uep_is_null(uep: UEntryHandle) -> bool {
 /// The `uep` handle must be a valid pointer to a u_entry_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uep_get_top(uep: UEntryHandle) -> LinenrT {
-    nvim_uep_get_top(uep)
+    (*uep).ue_top
 }
 
 /// Get the bottom line number from an undo entry.
@@ -3202,7 +3211,7 @@ pub unsafe extern "C" fn rs_uep_get_top(uep: UEntryHandle) -> LinenrT {
 /// The `uep` handle must be a valid pointer to a u_entry_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uep_get_bot(uep: UEntryHandle) -> LinenrT {
-    nvim_uep_get_bot(uep)
+    (*uep).ue_bot
 }
 
 /// Get the line count from an undo entry.
@@ -3212,7 +3221,7 @@ pub unsafe extern "C" fn rs_uep_get_bot(uep: UEntryHandle) -> LinenrT {
 /// The `uep` handle must be a valid pointer to a u_entry_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uep_get_lcount(uep: UEntryHandle) -> LinenrT {
-    nvim_uep_get_lcount(uep)
+    (*uep).ue_lcount
 }
 
 /// Get the size (number of lines) from an undo entry.
@@ -3222,7 +3231,7 @@ pub unsafe extern "C" fn rs_uep_get_lcount(uep: UEntryHandle) -> LinenrT {
 /// The `uep` handle must be a valid pointer to a u_entry_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uep_get_size(uep: UEntryHandle) -> LinenrT {
-    nvim_uep_get_size(uep)
+    (*uep).ue_size
 }
 
 /// Get the next entry in the list.
@@ -3232,7 +3241,7 @@ pub unsafe extern "C" fn rs_uep_get_size(uep: UEntryHandle) -> LinenrT {
 /// The `uep` handle must be a valid pointer to a u_entry_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uep_get_next(uep: UEntryHandle) -> UEntryHandle {
-    nvim_uep_get_next(uep)
+    (*uep).ue_next
 }
 
 /// Get a line from the undo entry's array.
@@ -3243,7 +3252,7 @@ pub unsafe extern "C" fn rs_uep_get_next(uep: UEntryHandle) -> UEntryHandle {
 /// The index must be valid (0 <= idx < size).
 #[no_mangle]
 pub unsafe extern "C" fn rs_uep_get_line(uep: UEntryHandle, idx: LinenrT) -> *const c_char {
-    nvim_uep_get_array_element(uep, idx)
+    *(*uep).ue_array.offset(idx as isize)
 }
 
 /// Get the number of lines affected by an undo entry.
@@ -3254,8 +3263,8 @@ pub unsafe extern "C" fn rs_uep_get_line(uep: UEntryHandle, idx: LinenrT) -> *co
 /// The `uep` handle must be a valid pointer to a u_entry_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uep_get_line_count(uep: UEntryHandle) -> LinenrT {
-    let top = nvim_uep_get_top(uep);
-    let bot = nvim_uep_get_bot(uep);
+    let top = (*uep).ue_top;
+    let bot = (*uep).ue_bot;
     if bot == 0 {
         // Bot of 0 means end of buffer
         0
@@ -3525,24 +3534,24 @@ unsafe fn put_header_ptr_by_seq(fp: FileHandle, seq: c_int) -> bool {
 #[allow(dead_code)]
 unsafe fn serialize_uep(fp: FileHandle, uep: UEntryHandle) -> bool {
     // Write entry header fields
-    if !undo_write_4(fp, nvim_uep_get_top(uep) as i32) {
+    if !undo_write_4(fp, (*uep).ue_top) {
         return false;
     }
-    if !undo_write_4(fp, nvim_uep_get_bot(uep) as i32) {
+    if !undo_write_4(fp, (*uep).ue_bot) {
         return false;
     }
-    if !undo_write_4(fp, nvim_uep_get_lcount(uep) as i32) {
+    if !undo_write_4(fp, (*uep).ue_lcount) {
         return false;
     }
 
-    let size = nvim_uep_get_size(uep);
-    if !undo_write_4(fp, size as i32) {
+    let size = (*uep).ue_size;
+    if !undo_write_4(fp, size) {
         return false;
     }
 
     // Write each line in the array
     for i in 0..size {
-        let line = nvim_uep_get_array_element(uep, i);
+        let line = *(*uep).ue_array.offset(i as isize);
         let len = if line.is_null() {
             0
         } else {
@@ -3659,14 +3668,14 @@ unsafe fn serialize_uhp(fp: FileHandle, uhp: UHeaderHandle) -> bool {
 
     // Write all undo entries
     let mut uep = nvim_uhp_get_entry(uhp);
-    while !uep.0.is_null() {
+    while !uep.is_null() {
         if !undo_write_2(fp, UF_ENTRY_MAGIC) {
             return false;
         }
         if !serialize_uep(fp, uep) {
             return false;
         }
-        uep = nvim_uep_get_next(uep);
+        uep = (*uep).ue_next;
     }
 
     // Write entry end magic
@@ -4279,14 +4288,14 @@ unsafe fn unserialize_extmark(fp: FileHandle, uhp: UHeaderHandle) -> bool {
 ///
 /// - `fp` must be a valid file handle
 unsafe fn unserialize_uep(fp: FileHandle, file_name: *const c_char) -> (UEntryHandle, bool) {
-    let uep = nvim_alloc_u_entry();
-    // Fields are zero-initialized by xcalloc in nvim_alloc_u_entry
+    let uep = nvim_xcalloc(1, std::mem::size_of::<UEntry>()) as *mut UEntry;
+    // Fields are zero-initialized by xcalloc
 
-    nvim_uep_set_top(uep, undo_read_4c(fp));
-    nvim_uep_set_bot(uep, undo_read_4c(fp));
-    nvim_uep_set_lcount(uep, undo_read_4c(fp));
+    (*uep).ue_top = undo_read_4c(fp);
+    (*uep).ue_bot = undo_read_4c(fp);
+    (*uep).ue_lcount = undo_read_4c(fp);
     let size = undo_read_4c(fp);
-    nvim_uep_set_size(uep, size);
+    (*uep).ue_size = size;
 
     if size > 0 {
         let ptr_size = std::mem::size_of::<*mut c_char>();
@@ -4294,7 +4303,7 @@ unsafe fn unserialize_uep(fp: FileHandle, file_name: *const c_char) -> (UEntryHa
             let array = nvim_xmallocz(ptr_size * size as usize) as *mut *mut c_char;
             // Zero out the array
             ptr::write_bytes(array, 0, size as usize);
-            nvim_uep_set_array(uep, array);
+            (*uep).ue_array = array;
 
             for i in 0..size as usize {
                 let line_len = undo_read_4c(fp);
@@ -4385,7 +4394,7 @@ unsafe fn unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHa
     }
 
     // Read the uep list
-    let mut last_uep = UEntryHandle(ptr::null_mut());
+    let mut last_uep: *mut UEntry = ptr::null_mut();
     loop {
         let c = undo_read_2c(fp);
         if c != UF_ENTRY_MAGIC as c_int {
@@ -4397,13 +4406,13 @@ unsafe fn unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHa
             break;
         }
         let (uep, error) = unserialize_uep(fp, file_name);
-        if last_uep.0.is_null() {
+        if last_uep.is_null() {
             nvim_uhp_set_entry(uhp, uep);
         } else {
-            nvim_uep_set_next(last_uep, uep);
+            (*last_uep).ue_next = uep;
         }
         last_uep = uep;
-        if uep.0.is_null() || error {
+        if uep.is_null() || error {
             nvim_u_free_uhp(uhp);
             return UHeaderHandle(ptr::null_mut());
         }
@@ -5190,7 +5199,7 @@ mod tests {
     #[test]
     fn test_null_handle_checks() {
         assert!(rs_uhp_is_null(UHeaderHandle(std::ptr::null_mut())));
-        assert!(rs_uep_is_null(UEntryHandle(std::ptr::null_mut())));
+        assert!(rs_uep_is_null(ptr::null_mut()));
     }
 
     #[test]
@@ -5305,10 +5314,10 @@ mod tests {
 
     #[test]
     fn test_uentry_handle_repr() {
-        // UEntryHandle should be repr(transparent) over a pointer
-        let ptr: *mut c_void = 0xabcd as *mut c_void;
-        let handle = UEntryHandle(ptr);
-        assert_eq!(handle.0, ptr);
+        // UEntryHandle is now *mut UEntry - a raw pointer type
+        let ptr: *mut UEntry = 0xabcd as *mut UEntry;
+        let handle: UEntryHandle = ptr;
+        assert_eq!(handle, ptr);
     }
 
     // =========================================================================
