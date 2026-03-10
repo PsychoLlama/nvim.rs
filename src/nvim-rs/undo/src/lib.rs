@@ -438,7 +438,9 @@ extern "C" {
     // Buffer state accessors
     fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
     fn nvim_bt_dontwrite(buf: BufHandle) -> bool;
+    #[link_name = "rs_bt_prompt"]
     fn nvim_bt_prompt(buf: BufHandle) -> bool;
+    #[link_name = "file_ff_differs"]
     fn nvim_file_ff_differs(buf: BufHandle, strict: bool) -> bool;
 
     // Global buffer iteration
@@ -793,9 +795,11 @@ extern "C" {
     fn nvim_undoredo_adjust_cursor(curhead: UHeaderHandle);
 
     /// Get ml_get result as non-allocating pointer for strcmp
+    #[link_name = "ml_get"]
     fn nvim_undoredo_ml_get(lnum: LinenrT) -> *const c_char;
 
     /// buf_updates_changedtick wrapper
+    #[link_name = "buf_updates_changedtick"]
     fn nvim_undoredo_buf_updates_changedtick(buf: BufHandle);
 
     /// E438 error message wrapper
@@ -842,6 +846,7 @@ extern "C" {
     ) -> usize;
 
     /// Check if path is a directory
+    #[link_name = "os_isdir"]
     fn nvim_undo_os_isdir(path: *const c_char) -> bool;
 
     /// Create directory recursively
@@ -854,9 +859,11 @@ extern "C" {
     fn nvim_undo_path_tail_offset(path: *const c_char) -> usize;
 
     /// vim_ispathsep check
+    #[link_name = "vim_ispathsep"]
     fn nvim_undo_vim_ispathsep(c: c_int) -> bool;
 
     /// Multibyte pointer char length
+    #[link_name = "utfc_ptr2len"]
     fn nvim_undo_mb_ptr_len(ptr: *const c_char) -> c_int;
 
     /// concat_fnames wrapper
@@ -4430,6 +4437,7 @@ extern "C" {
     fn nvim_undo_corruption_error(what: *const c_char, file_name: *const c_char);
     fn nvim_undo_file_changed_warning();
     fn nvim_undo_finished_reading(file_name: *const c_char);
+    #[link_name = "os_fopen"]
     fn nvim_os_fopen(path: *const c_char, mode: *const c_char) -> FileHandle;
     fn nvim_undo_check_owner(orig_name: *const c_char, file_name: *const c_char) -> bool;
 
@@ -5256,9 +5264,13 @@ impl DictHandle {
 // FFI declarations for typval construction
 extern "C" {
     fn nvim_tv_list_alloc() -> ListHandle;
+    #[link_name = "tv_dict_alloc"]
     fn nvim_tv_dict_alloc() -> DictHandle;
+    #[link_name = "tv_list_append_dict"]
     fn nvim_tv_list_append_dict(list: ListHandle, dict: DictHandle);
+    #[link_name = "tv_dict_add_nr"]
     fn nvim_tv_dict_add_nr(dict: DictHandle, key: *const c_char, key_len: usize, nr: i64);
+    #[link_name = "tv_dict_add_list"]
     fn nvim_tv_dict_add_list(
         dict: DictHandle,
         key: *const c_char,

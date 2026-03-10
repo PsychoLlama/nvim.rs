@@ -782,15 +782,6 @@ bool nvim_bt_dontwrite(buf_T *buf)
   return bt_dontwrite(buf);
 }
 
-bool nvim_bt_prompt(buf_T *buf)
-{
-  return bt_prompt(buf);
-}
-
-bool nvim_file_ff_differs(buf_T *buf, bool strict)
-{
-  return file_ff_differs(buf, strict);
-}
 
 // Global buffer iteration
 buf_T *nvim_get_firstbuf(void)
@@ -1232,8 +1223,6 @@ void nvim_set_lastmark(int val)
 // Undo File I/O FFI Functions
 // ============================================================================
 
-// (nvim_os_open/close/getperm/setperm/fsync/get2c/get4c/get8ctime deleted: undo crate uses #[link_name])
-
 // File system operations still needed by other Rust crates (memline, quickfix)
 bool nvim_os_path_exists(const char *path)
 {
@@ -1245,7 +1234,6 @@ int nvim_os_remove(const char *path)
   return os_remove(path);
 }
 
-// (nvim_undo_verbose_enter/leave deleted: undo crate uses #[link_name = "verbose_enter"])
 // Message functions for undo file I/O
 
 void nvim_undo_smsg(const char *msg, const char *arg)
@@ -1290,10 +1278,6 @@ linenr_T nvim_buf_get_b_ml_line_count(buf_T *buf)
 {
   return buf->b_ml.ml_line_count;
 }
-
-// (nvim_ml_get_buf_line deleted: undo crate uses #[link_name = "ml_get_buf"])
-
-// (nvim_os_get_acl/set_acl/free_acl deleted: undo crate uses #[link_name = "os_get_acl"])
 
 // File info for Unix ownership checks
 #ifdef UNIX
@@ -1340,9 +1324,6 @@ int nvim_undo_set_file_group(int fd, const char *orig_path, const char *undo_pat
   return perm;
 }
 #endif
-
-// (nvim_read_eintr deleted: undo crate uses #[link_name = "read_eintr"])
-// (nvim_undo_xmallocz deleted: undo crate uses #[link_name = "xmallocz"])
 
 // ============================================================================
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
@@ -1432,11 +1413,6 @@ void nvim_undo_file_changed_warning(void)
 void nvim_undo_finished_reading(const char *file_name)
 {
   smsg(0, _("Finished reading undo file %s"), file_name);
-}
-
-FILE *nvim_os_fopen(const char *path, const char *mode)
-{
-  return os_fopen(path, mode);
 }
 
 bool nvim_undo_check_owner(const char *orig_name, const char *file_name)
@@ -1592,18 +1568,6 @@ void nvim_undoredo_adjust_cursor(u_header_T *curhead)
   check_cursor(curwin);
 }
 
-// Get ml_get result as non-allocating pointer for strcmp
-const char *nvim_undoredo_ml_get(linenr_T lnum)
-{
-  return ml_get(lnum);
-}
-
-// buf_updates_changedtick wrapper
-void nvim_undoredo_buf_updates_changedtick(buf_T *buf)
-{
-  buf_updates_changedtick(buf);
-}
-
 // ============================================================================
 // Phase 4: u_undo_end + helpers FFI
 // ============================================================================
@@ -1667,12 +1631,6 @@ size_t nvim_undo_copy_option_part(const char **dirp, char *buf, size_t maxlen)
   return copy_option_part((char **)dirp, buf, maxlen, ",");
 }
 
-// Check if path is a directory
-bool nvim_undo_os_isdir(const char *path)
-{
-  return os_isdir(path);
-}
-
 // Create directory recursively. Returns 0 on success, error code on failure.
 // On failure, *failed_dir is set to the directory that failed.
 int nvim_undo_mkdir_recurse(const char *dir, char **failed_dir)
@@ -1691,18 +1649,6 @@ void nvim_undo_semsg_mkdir(const char *failed_dir, int err)
 size_t nvim_undo_path_tail_offset(const char *path)
 {
   return (size_t)(path_tail(path) - path);
-}
-
-// Check vim_ispathsep
-bool nvim_undo_vim_ispathsep(int c)
-{
-  return vim_ispathsep(c);
-}
-
-// Multibyte pointer advance: returns number of bytes for the char at ptr
-int nvim_undo_mb_ptr_len(const char *ptr)
-{
-  return utfc_ptr2len(ptr);
 }
 
 // concat_fnames wrapper
@@ -1741,10 +1687,6 @@ void nvim_undo_msg_puts_hl_title(const char *s)
   msg_puts_hl(s, HLF_T, false);
 }
 
-// (nvim_undo_msg_putchar deleted: undo crate uses #[link_name = "msg_putchar"])
-// (nvim_undo_msg_puts deleted: undo crate uses #[link_name = "msg_puts"])
-// (nvim_undo_xstrdup deleted: undo crate uses #[link_name = "xstrdup"])
-
 // ============================================================================
 // Phase 5: VimL function FFI wrappers
 // ============================================================================
@@ -1754,6 +1696,7 @@ list_T *nvim_tv_list_alloc(void)
   return tv_list_alloc(kListLenMayKnow);
 }
 
+// VimL typval wrappers (still needed by eval crate without #[link_name])
 dict_T *nvim_tv_dict_alloc(void)
 {
   return tv_dict_alloc();
@@ -1795,12 +1738,6 @@ int nvim_ml_delete_flags(linenr_T lnum, int flags)
   return ml_delete_flags(lnum, flags);
 }
 
-/// Append line after 'lnum' in current buffer. Returns OK/FAIL.
-int nvim_ml_append_lnum(linenr_T lnum, const char *line, colnr_T len, bool newfile)
-{
-  return ml_append(lnum, (char *)line, len, newfile);
-}
-
 /// Append line with flags. Returns OK/FAIL.
 int nvim_ml_append_flags(linenr_T lnum, const char *line, colnr_T len, int flags)
 {
@@ -1824,18 +1761,11 @@ void nvim_unblock_autocmds(void)
   unblock_autocmds();
 }
 
-// (nvim_undo_setpcmark deleted: undo crate uses #[link_name = "setpcmark"])
-// (nvim_undo_check_cursor_lnum deleted: undo crate uses #[link_name = "check_cursor_lnum"])
-
 /// Mark adjust for undo
 void nvim_undo_mark_adjust(linenr_T top, linenr_T bot, linenr_T amount, linenr_T amount_after)
 {
   mark_adjust(top, bot, amount, amount_after, kExtmarkNOOP);
 }
-
-// (nvim_undo_changed_lines deleted: undo crate uses #[link_name = "changed_lines"])
-// (nvim_buf_changed deleted: undo crate uses #[link_name = "changed"])
-// (nvim_buf_unchanged deleted: undo crate uses #[link_name = "unchanged"])
 
 /// Check spell for window
 bool nvim_spell_check_window(win_T *win)
@@ -1856,8 +1786,6 @@ void nvim_extmark_apply_undo(u_header_T *uhp, size_t idx, bool undo)
     extmark_apply_undo(kv_A(uhp->uh_extmark, idx), undo);
   }
 }
-
-// (nvim_buf_updates_unload deleted: undo crate uses #[link_name = "buf_updates_unload"])
 
 /// Check position validity
 void nvim_check_pos(buf_T *buf, pos_T *pos)
