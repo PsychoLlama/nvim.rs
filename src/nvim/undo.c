@@ -1101,12 +1101,6 @@ bool nvim_buf_is_curbuf(buf_T *buf)
   return buf == curbuf;
 }
 
-// Get/set undo_undoes global
-void nvim_set_undo_undoes_false(void)
-{
-  undo_undoes = false;
-}
-
 
 // Get b_u_line_colnr
 colnr_T nvim_buf_get_b_u_line_colnr(buf_T *buf)
@@ -1774,12 +1768,6 @@ void nvim_undo_end_smsg(int64_t count, const char *msgstr, bool did_undo,
             timebuf);
 }
 
-// get_undolevel accessor
-int64_t nvim_get_undolevel_value(buf_T *buf)
-{
-  return (int64_t)get_undolevel(buf);
-}
-
 // ============================================================================
 // Phase 5: u_get_undo_file_name FFI Helpers
 // ============================================================================
@@ -1896,18 +1884,6 @@ void nvim_undo_msg_puts(const char *s)
 char *nvim_undo_xstrdup(const char *s)
 {
   return xstrdup(s);
-}
-
-void nvim_undolist_format_entry(u_header_T *uhp, int changes, char *buf, size_t buf_size)
-{
-  vim_snprintf(buf, buf_size, "%6d %7d  ", uhp->uh_seq, changes);
-  undo_fmt_time(buf + strlen(buf), buf_size - strlen(buf), uhp->uh_time);
-  if (uhp->uh_save_nr > 0) {
-    while (strlen(buf) < 33) {
-      xstrlcat(buf, " ", buf_size);
-    }
-    vim_snprintf_add(buf, buf_size, "  %3d", uhp->uh_save_nr);
-  }
 }
 
 // ============================================================================

@@ -525,7 +525,6 @@ extern "C" {
     fn nvim_uhp_copy_marks_visual(buf: BufHandle, uhp: UHeaderHandle);
     fn nvim_emsg_line_count_changed();
     fn nvim_buf_is_curbuf(buf: BufHandle) -> bool;
-    fn nvim_set_undo_undoes_false();
 
     // u_find_first_changed infrastructure (cursor now accessed via direct field access)
 
@@ -815,9 +814,6 @@ extern "C" {
         seq: i64,
         timebuf: *const c_char,
     );
-
-    /// get_undolevel accessor
-    fn nvim_get_undolevel_value(buf: BufHandle) -> i64;
 
     // ==========================================================================
     // Phase 5: u_get_undo_file_name FFI helpers
@@ -2281,7 +2277,7 @@ pub unsafe extern "C" fn rs_u_savecommon(
     }
 
     nvim_buf_set_b_u_synced(buf, false);
-    nvim_set_undo_undoes_false();
+    nvim_set_undo_undoes(false);
 
     OK
 }
@@ -5080,12 +5076,6 @@ extern "C" {
     fn nvim_undo_msg_puts_hl_title(msg: *const c_char);
     fn nvim_undo_msg_putchar(c: c_int);
     fn nvim_undo_msg_puts(msg: *const c_char);
-    fn nvim_undolist_format_entry(
-        uhp: UHeaderHandle,
-        changes: c_int,
-        buf: *mut c_char,
-        buf_size: usize,
-    );
     fn nvim_undo_xstrdup(s: *const c_char) -> *mut c_char;
 }
 
@@ -5118,9 +5108,37 @@ pub unsafe extern "C" fn rs_ex_undolist(_eap: ExargHandle) {
         let prev = (*uhp).uh_prev.ptr;
 
         if prev.is_null() && (*uhp).uh_walk != nomark && (*uhp).uh_walk != mark {
-            // Format the entry
-            let entry_buf: [c_char; 256] = [0; 256];
-            nvim_undolist_format_entry(uhp, changes, entry_buf.as_ptr() as *mut c_char, 256);
+            // Format the entry (inlined from nvim_undolist_format_entry)
+            let mut entry_buf: [c_char; 256] = [0; 256];
+            let buf_ptr = entry_buf.as_mut_ptr();
+            let buf_size: usize = 256;
+            libc::snprintf(
+                buf_ptr,
+                buf_size,
+                c"%6d %7d  ".as_ptr(),
+                (*uhp).uh_seq,
+                changes,
+            );
+            let cur_len = libc::strlen(buf_ptr);
+            rs_undo_fmt_time(buf_ptr.add(cur_len), buf_size - cur_len, (*uhp).uh_time);
+            if (*uhp).uh_save_nr > 0 {
+                // Pad to length 33
+                while libc::strlen(buf_ptr) < 33 {
+                    let pos = libc::strlen(buf_ptr);
+                    if pos + 1 >= buf_size {
+                        break;
+                    }
+                    *buf_ptr.add(pos) = b' ' as c_char;
+                    *buf_ptr.add(pos + 1) = 0;
+                }
+                let cur_len = libc::strlen(buf_ptr);
+                libc::snprintf(
+                    buf_ptr.add(cur_len),
+                    buf_size - cur_len,
+                    c"  %3d".as_ptr(),
+                    (*uhp).uh_save_nr,
+                );
+            }
             let entry_str = nvim_undo_xstrdup(entry_buf.as_ptr());
             let seq = (*uhp).uh_seq;
             entries.push((entry_str, seq));
