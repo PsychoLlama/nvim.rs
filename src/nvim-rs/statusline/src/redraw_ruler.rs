@@ -68,14 +68,19 @@ extern "C" {
 
     // Fill character / highlight
     fn nvim_stl_fillchar_status(group: *mut c_int, wp: WinHandle) -> ScharT;
+    #[link_name = "rs_schar_from_ascii"]
     fn nvim_stl_schar_from_ascii_char(c: c_char) -> ScharT;
     fn nvim_stl_win_hl_attr(wp: WinHandle, hlf: c_int) -> c_int;
     fn nvim_stl_HL_ATTR(hlf: c_int) -> c_int;
 
-    // String operations
-    fn nvim_stl_schar_get(buf: *mut c_char, c: ScharT) -> c_int;
+    // String operations (direct link to Rust/C implementations)
+    #[link_name = "schar_get"]
+    fn nvim_stl_schar_get(buf: *mut c_char, c: ScharT) -> usize;
+    #[link_name = "vim_strsize"]
     fn nvim_stl_vim_strsize(s: *const c_char) -> c_int;
+    #[link_name = "utfc_ptr2len"]
     fn nvim_stl_utfc_ptr2len(s: *const c_char) -> c_int;
+    #[link_name = "ptr2cells"]
     fn nvim_stl_ptr2cells(s: *const c_char) -> c_int;
 
     // Relative position (C wrapper that calls get_rel_pos)
@@ -263,7 +268,7 @@ pub unsafe fn redraw_ruler() {
         while this_ru_col + n1 < width && RULER_BUF_LEN > bufferlen + (rel_poslen as usize) + 1 {
             let written =
                 nvim_stl_schar_get(buffer[bufferlen..].as_mut_ptr().cast::<c_char>(), fillchar);
-            bufferlen += written as usize;
+            bufferlen += written;
             n1 += 1;
         }
         // Append rel_pos

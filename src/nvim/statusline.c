@@ -356,51 +356,6 @@ int nvim_stl_was_set_insecurely(win_T *wp, int opt_idx, int opt_scope)
   return was_set_insecurely(wp, (OptIndex)opt_idx, opt_scope) ? 1 : 0;
 }
 
-/// Get the display width of a string (multibyte-aware).
-int nvim_stl_vim_strsize(const char *s)
-{
-  if (s == NULL) {
-    return 0;
-  }
-  return (int)vim_strsize(s);
-}
-
-/// Get display width of character at pointer.
-int nvim_stl_ptr2cells(const char *s)
-{
-  if (s == NULL) {
-    return 0;
-  }
-  return ptr2cells(s);
-}
-
-/// Get byte length of UTF-8 character at pointer.
-int nvim_stl_utfc_ptr2len(const char *s)
-{
-  if (s == NULL) {
-    return 0;
-  }
-  return utfc_ptr2len(s);
-}
-
-/// Get byte length of a schar_T.
-int nvim_stl_schar_len(schar_T c)
-{
-  return (int)schar_len(c);
-}
-
-/// Write a schar_T to a buffer and return bytes written.
-int nvim_stl_schar_get(char *buf, schar_T c)
-{
-  return (int)schar_get(buf, c);
-}
-
-/// Create schar_T from an ASCII char.
-schar_T nvim_stl_schar_from_ascii(char c)
-{
-  return schar_from_ascii(c);
-}
-
 /// Get buf_spname result, or NULL.
 const char *nvim_stl_buf_spname(buf_T *buf)
 {
@@ -414,22 +369,10 @@ void nvim_stl_home_replace_trans(buf_T *buf, const char *src, char *dst, int dst
   trans_characters(dst, dstlen);
 }
 
-/// Get the tail (filename only) from a path.
-const char *nvim_stl_path_tail(const char *s)
-{
-  return path_tail(s);
-}
-
 /// Get file format of buffer (returns EOL_* value).
 int nvim_stl_get_fileformat(buf_T *buf)
 {
   return rs_get_fileformat(buf);
-}
-
-/// Get utf_ptr2char at the given pointer.
-int nvim_stl_utf_ptr2char(const char *s)
-{
-  return utf_ptr2char(s);
 }
 
 /// Get cursor line text pointer and length.
@@ -526,23 +469,6 @@ int nvim_stl_win_get_clamped_lnum(win_T *wp)
   return (int)lnum;
 }
 
-/// Free a C-allocated string (for eval results).
-void nvim_stl_xfree(void *ptr)
-{
-  xfree(ptr);
-}
-
-/// Duplicate a string into C heap (for click func commands).
-char *nvim_stl_xmemdupz(const char *s, size_t len)
-{
-  return xmemdupz(s, len);
-}
-
-/// Check if all characters in string are digits.
-int nvim_stl_str_all_digits(const char *s)
-{
-  return (*skipdigits(s) == NUL) ? 1 : 0;
-}
 
 /// vim_snprintf into a buffer with a given format and integer.
 int nvim_stl_snprintf_int(char *buf, size_t buflen, const char *fmt, int minwid, int num)
@@ -858,8 +784,6 @@ char *nvim_stl_win_get_p_wbr(win_T *wp) { return wp->w_p_wbr; }
 /// Call fillchar_status (returns fill character and sets HLF group).
 schar_T nvim_stl_fillchar_status(int *group, win_T *wp) { return fillchar_status((hlf_T *)group, wp); }
 
-/// Call schar_from_ascii.
-schar_T nvim_stl_schar_from_ascii_char(char c) { return schar_from_ascii(c); }
 
 /// Call grid_adjust for a window's grid_alloc. Returns the grid handle.
 /// Updates row and col through pointers.
@@ -909,11 +833,6 @@ void nvim_stl_grid_line_flush(void)
 /// Call win_hl_attr.
 int nvim_stl_win_hl_attr(win_T *wp, int hlf) { return win_hl_attr(wp, hlf); }
 
-/// Call hl_combine_attr.
-int nvim_stl_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
-
-/// Call syn_id2attr.
-int nvim_stl_syn_id2attr(int id) { return syn_id2attr(id); }
 
 /// Get HL_ATTR value.
 int nvim_stl_HL_ATTR(int hlf) { return HL_ATTR((hlf_T)hlf); }
@@ -924,14 +843,6 @@ int nvim_stl_highlight_user_arr(int index) { return highlight_user[index]; }
 /// Get highlight_stlnc array element.
 int nvim_stl_highlight_stlnc_arr(int index) { return highlight_stlnc[index]; }
 
-/// Call transstr_buf. Returns number of bytes written.
-size_t nvim_stl_transstr_buf(const char *s, int len, char *buf, size_t buflen)
-{
-  return transstr_buf(s, len, buf, buflen, true);
-}
-
-/// Call xstrdup.
-char *nvim_stl_xstrdup(const char *s) { return xstrdup(s); }
 
 /// Build a UI msg_ruler content chunk and call ui_call_msg_ruler.
 /// Takes arrays of (attr, text, tsize, group) tuples.

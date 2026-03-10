@@ -115,15 +115,21 @@ extern "C" {
     fn nvim_stl_eval_fmt_expr(wp: WinHandle, expr: *mut c_char, use_sandbox: bool) -> *mut c_char;
     fn nvim_stl_was_set_insecurely(wp: WinHandle, opt_idx: c_int, opt_scope: c_int) -> c_int;
 
-    // String operations
+    // String operations (direct link to Rust/C implementations)
+    #[link_name = "vim_strsize"]
     fn nvim_stl_vim_strsize(s: *const c_char) -> c_int;
+    #[link_name = "ptr2cells"]
     fn nvim_stl_ptr2cells(s: *const c_char) -> c_int;
+    #[link_name = "utfc_ptr2len"]
     fn nvim_stl_utfc_ptr2len(s: *const c_char) -> c_int;
-    fn nvim_stl_schar_len(c: ScharT) -> c_int;
-    fn nvim_stl_schar_get(buf: *mut c_char, c: ScharT) -> c_int;
+    #[link_name = "schar_len"]
+    fn nvim_stl_schar_len(c: ScharT) -> usize;
+    #[link_name = "schar_get"]
+    fn nvim_stl_schar_get(buf: *mut c_char, c: ScharT) -> usize;
+    #[link_name = "rs_schar_from_ascii"]
     fn nvim_stl_schar_from_ascii(c: c_char) -> ScharT;
 
-    // Buffer / path
+    // Buffer / path (direct link to Rust/C implementations)
     fn nvim_stl_buf_spname(buf: BufHandle) -> *const c_char;
     fn nvim_stl_home_replace_trans(
         buf: BufHandle,
@@ -131,8 +137,10 @@ extern "C" {
         dst: *mut c_char,
         dstlen: c_int,
     );
+    #[link_name = "path_tail"]
     fn nvim_stl_path_tail(s: *const c_char) -> *const c_char;
     fn nvim_stl_get_fileformat(buf: BufHandle) -> c_int;
+    #[link_name = "utf_ptr2char"]
     fn nvim_stl_utf_ptr2char(s: *const c_char) -> c_int;
 
     // Cursor / line
@@ -151,8 +159,10 @@ extern "C" {
     fn nvim_stl_get_State() -> c_int;
     fn nvim_stl_buf_ml_empty(buf: BufHandle) -> c_int;
 
-    // Memory
+    // Memory (direct link to C implementations)
+    #[link_name = "xfree"]
     fn nvim_stl_xfree(ptr: *mut c_void);
+    #[link_name = "xmemdupz"]
     fn nvim_stl_xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
 
     // Number formatting (snprintf wrappers)
@@ -184,7 +194,6 @@ extern "C" {
 
     // Math / string helpers
     fn nvim_stl_calc_percentage(lnum: c_int, line_count: c_int) -> c_int;
-    fn nvim_stl_str_all_digits(s: *const c_char) -> c_int;
     fn nvim_stl_valid_flag(c: c_int) -> c_int;
 
     // Window accessors
@@ -245,6 +254,25 @@ extern "C" {
 
 // MAXPATHL - max path length
 const MAXPATHL: c_int = 4096;
+
+/// Check if all characters in a C string are ASCII digits.
+/// Replacement for the deleted `nvim_stl_str_all_digits` C accessor.
+///
+/// # Safety
+/// `s` must be a valid null-terminated C string.
+unsafe fn nvim_stl_str_all_digits(s: *const c_char) -> c_int {
+    if s.is_null() {
+        return 0;
+    }
+    let mut p = s;
+    while *p != 0 {
+        if !(*p as u8).is_ascii_digit() {
+            return 0;
+        }
+        p = p.add(1);
+    }
+    1
+}
 
 // =============================================================================
 // Item structure (matching C stl_item_t)
@@ -327,7 +355,7 @@ thread_local! {
 #[inline]
 unsafe fn schar_get_adv(pp: &mut *mut c_char, fillchar: ScharT) {
     let n = nvim_stl_schar_get(*pp, fillchar);
-    *pp = (*pp).add(n as usize);
+    *pp = (*pp).add(n);
 }
 
 // =============================================================================
@@ -1490,7 +1518,7 @@ pub unsafe fn build_stl_str_hl(
                 } else {
                     standard_spaces
                 };
-                let dislocation = dislocation_cells * nvim_stl_schar_len(fillchar);
+                let dislocation = dislocation_cells * nvim_stl_schar_len(fillchar) as c_int;
 
                 let sep_idx = STL_SEPARATOR_LOCATIONS.with(|s| s.borrow()[l as usize]);
                 let start = STL_ITEMS.with(|items| items.borrow()[sep_idx as usize].start);

@@ -40,9 +40,11 @@ extern "C" {
     // Highlight
     fn nvim_stl_HL_ATTR(hlf: c_int) -> c_int;
     fn nvim_stl_win_hl_attr(wp: WinHandle, hlf: c_int) -> c_int;
+    #[link_name = "hl_combine_attr"]
     fn nvim_stl_hl_combine_attr(a: c_int, b: c_int) -> c_int;
 
     // Character
+    #[link_name = "rs_schar_from_ascii"]
     fn nvim_stl_schar_from_ascii_char(c: c_char) -> ScharT;
 
     // Global state
@@ -74,9 +76,12 @@ extern "C" {
     fn nvim_stl_tab_info_get_name(ptr: *mut c_void) -> *const c_char;
     fn nvim_stl_tab_info_get_name_len(ptr: *mut c_void) -> c_int;
 
-    // String
+    // String (direct link to Rust/C implementations)
+    #[link_name = "vim_strsize"]
     fn nvim_stl_vim_strsize(s: *const c_char) -> c_int;
+    #[link_name = "ptr2cells"]
     fn nvim_stl_ptr2cells(s: *const c_char) -> c_int;
+    #[link_name = "utfc_ptr2len"]
     fn nvim_stl_utfc_ptr2len(s: *const c_char) -> c_int;
 
     // Tabwidth calc (from Rust)
@@ -86,7 +91,8 @@ extern "C" {
     fn rs_ui_ext_tabline_update();
     fn rs_win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool, ui_event: bool);
 
-    // Memory
+    // Memory (direct link to C)
+    #[link_name = "xfree"]
     fn nvim_stl_xfree(ptr: *mut c_void);
 }
 
