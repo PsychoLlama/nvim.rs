@@ -5,6 +5,8 @@
 
 use std::ffi::{c_char, c_int, c_ulong};
 
+use crate::PUM_STATE;
+
 /// Highlight group IDs used in popup menu rendering.
 pub mod hlf {
     use std::ffi::c_int;
@@ -319,8 +321,6 @@ extern "C" {
         textlen: c_int,
         attr: c_int,
     ) -> c_int;
-    /// Get `pum_rl` state.
-    fn nvim_get_pum_rl() -> c_int;
     /// Free memory allocated by C.
     fn nvim_xfree(ptr: *mut u8);
     /// Get C strlen.
@@ -463,7 +463,7 @@ pub unsafe extern "C" fn rs_pum_grid_puts_with_attrs(
     let col_start = col;
     let mut col = col;
     let mut ptr = text.cast::<u8>();
-    let pum_rl = nvim_get_pum_rl() != 0;
+    let pum_rl = PUM_STATE.rl != 0;
 
     while *ptr != 0 && (textlen < 0 || (ptr as isize - text as isize) < textlen as isize) {
         let char_len = utfc_ptr2len(ptr);

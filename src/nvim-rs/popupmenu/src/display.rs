@@ -5,34 +5,12 @@
 
 use std::ffi::{c_int, c_void};
 
-// C accessor functions for display state.
+use crate::PUM_STATE;
+
+// External functions needed (not PumState fields)
 extern "C" {
-    /// Get the `pum_is_visible` static variable.
-    fn nvim_get_pum_is_visible() -> c_int;
-    /// Set the `pum_is_visible` static variable.
-    fn nvim_set_pum_is_visible(val: c_int);
-    /// Get the `pum_is_drawn` static variable.
-    fn nvim_get_pum_is_drawn() -> c_int;
-    /// Set the `pum_is_drawn` static variable.
-    fn nvim_set_pum_is_drawn(val: c_int);
-    /// Get the `pum_external` static variable.
-    fn nvim_get_pum_external() -> c_int;
-    /// Set the `pum_external` static variable.
-    fn nvim_set_pum_external(val: c_int);
-    /// Get the `pum_invalid` static variable.
-    fn nvim_get_pum_invalid() -> c_int;
-    /// Set the `pum_invalid` static variable.
-    fn nvim_set_pum_invalid(val: c_int);
-    /// Set the `must_redraw_pum` static variable.
+    /// Set the `must_redraw_pum` global variable.
     fn nvim_set_must_redraw_pum(val: c_int);
-    /// Get the `pum_size` static variable (number of items).
-    fn nvim_get_pum_size() -> c_int;
-    /// Set the `pum_first` static variable.
-    fn nvim_set_pum_first(val: c_int);
-    /// Clear the `pum_array` pointer (set to NULL).
-    fn nvim_clear_pum_array();
-    /// Set the `pum_rl` static variable.
-    fn nvim_set_pum_rl(val: c_int);
 }
 
 // External UI functions.
@@ -77,24 +55,6 @@ extern "C" {
     );
 }
 
-// Pum position state accessors (used by ui_flush).
-extern "C" {
-    /// Get the `pum_above` static variable.
-    fn nvim_get_pum_above() -> c_int;
-    /// Get the `pum_height` static variable.
-    fn nvim_get_pum_height() -> c_int;
-    /// Get the `pum_row` static variable.
-    fn nvim_get_pum_row() -> c_int;
-    /// Get the `pum_left_col` static variable.
-    fn nvim_get_pum_left_col() -> c_int;
-    /// Get the `pum_win_row_offset` static variable.
-    fn nvim_get_pum_win_row_offset() -> c_int;
-    /// Get the `pum_win_col_offset` static variable.
-    fn nvim_get_pum_win_col_offset() -> c_int;
-    /// Get the `pum_anchor_grid` static variable.
-    fn nvim_get_pum_anchor_grid() -> c_int;
-}
-
 /// UI capability for popup menu (kUIPopupmenu = 1).
 const K_UI_POPUPMENU: c_int = 1;
 /// UI capability for wildmenu (kUIWildmenu = 3).
@@ -134,7 +94,7 @@ pub unsafe extern "C" fn rs_pum_determine_display_mode(
         let has_wildmenu = ui_has(K_UI_WILDMENU);
         c_int::from(has_popupmenu || (is_cmdline && has_wildmenu))
     } else {
-        nvim_get_pum_external()
+        PUM_STATE.external
     };
 
     // RL only applies in non-cmdline mode
@@ -152,8 +112,8 @@ pub unsafe extern "C" fn rs_pum_determine_display_mode(
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_mark_visible() {
-    nvim_set_pum_is_visible(1);
-    nvim_set_pum_is_drawn(1);
+    PUM_STATE.is_visible = 1;
+    PUM_STATE.is_drawn = 1;
 }
 
 /// Set the external mode and RL flags for display.
@@ -166,8 +126,8 @@ pub unsafe extern "C" fn rs_pum_mark_visible() {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_set_display_mode(external: c_int, rl: c_int) {
-    nvim_set_pum_external(external);
-    nvim_set_pum_rl(rl);
+    PUM_STATE.external = external;
+    PUM_STATE.rl = rl;
 }
 
 /// Undisplay the popup menu.
@@ -184,8 +144,8 @@ pub unsafe extern "C" fn rs_pum_set_display_mode(external: c_int, rl: c_int) {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_undisplay(immediate: c_int) -> c_int {
-    nvim_set_pum_is_visible(0);
-    nvim_clear_pum_array();
+    PUM_STATE.is_visible = 0;
+    PUM_STATE.array = std::ptr::null_mut();
     nvim_set_must_redraw_pum(0);
 
     // Return whether caller should call pum_check_clear
@@ -200,7 +160,7 @@ pub unsafe extern "C" fn rs_pum_undisplay(immediate: c_int) -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_should_clear() -> c_int {
-    c_int::from(nvim_get_pum_is_visible() == 0 && nvim_get_pum_is_drawn() != 0)
+    c_int::from(PUM_STATE.is_visible == 0 && PUM_STATE.is_drawn != 0)
 }
 
 /// Mark the popup as cleared from display.
@@ -211,8 +171,8 @@ pub unsafe extern "C" fn rs_pum_should_clear() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_mark_cleared() {
-    nvim_set_pum_is_drawn(0);
-    nvim_set_pum_external(0);
+    PUM_STATE.is_drawn = 0;
+    PUM_STATE.external = 0;
 }
 
 /// Clear the popup menu scroll position.
@@ -223,7 +183,7 @@ pub unsafe extern "C" fn rs_pum_mark_cleared() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_clear_scroll() {
-    nvim_set_pum_first(0);
+    PUM_STATE.first = 0;
 }
 
 /// Mark the popup menu as invalid (needs redraw).
@@ -234,7 +194,7 @@ pub unsafe extern "C" fn rs_pum_clear_scroll() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_invalidate() {
-    nvim_set_pum_invalid(1);
+    PUM_STATE.invalid = 1;
 }
 
 /// Check if the popup menu is marked invalid.
@@ -245,7 +205,7 @@ pub unsafe extern "C" fn rs_pum_invalidate() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_is_invalid() -> c_int {
-    nvim_get_pum_invalid()
+    PUM_STATE.invalid
 }
 
 /// Clear the invalid flag.
@@ -256,7 +216,7 @@ pub unsafe extern "C" fn rs_pum_is_invalid() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_clear_invalid() {
-    nvim_set_pum_invalid(0);
+    PUM_STATE.invalid = 0;
 }
 
 /// Result for external UI item selection.
@@ -290,8 +250,8 @@ pub unsafe extern "C" fn rs_pum_validate_ext_select(
     insert: c_int,
     finish: c_int,
 ) -> PumExtSelectResult {
-    let pum_size = nvim_get_pum_size();
-    let is_visible = nvim_get_pum_is_visible() != 0;
+    let pum_size = PUM_STATE.size;
+    let is_visible = PUM_STATE.is_visible != 0;
 
     // Check if selection is valid
     if !is_visible || item < -1 || item >= pum_size {
@@ -319,7 +279,7 @@ pub unsafe extern "C" fn rs_pum_validate_ext_select(
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_is_external() -> c_int {
-    nvim_get_pum_external()
+    PUM_STATE.external
 }
 
 /// Check if the popup needs a scrollbar.
@@ -345,7 +305,7 @@ pub const extern "C" fn rs_pum_display_needs_scrollbar(height: c_int, size: c_in
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_should_return_external() -> c_int {
-    nvim_get_pum_external()
+    PUM_STATE.external
 }
 
 /// Check if there is enough room to display the popup.
@@ -407,7 +367,7 @@ extern "C" {
     fn nvim_pum_ext_select(selected: c_int);
     /// Find preview window and compute above/below row adjustments.
     fn nvim_pum_find_pvwin_rows(above_row_out: *mut c_int, below_row_out: *mut c_int);
-    /// Compute vertical placement (sets `pum_row`, `pum_height`, `pum_above`).
+    /// Compute vertical placement (writes `PUM_STATE.row`, `.height`, `.above`).
     fn nvim_pum_compute_vp(
         size: c_int,
         pum_win_row: c_int,
@@ -415,34 +375,16 @@ extern "C" {
         below_row: c_int,
         border_width: c_int,
     );
-    /// Compute horizontal placement (sets `pum_col`, `pum_width`).
+    /// Compute horizontal placement (writes `PUM_STATE.col`, `.width`).
     fn nvim_pum_compute_hp(cursor_col: c_int);
-    /// Compute item widths (sets `pum_base_width`, `pum_kind_width`, `pum_extra_width`).
+    /// Compute item widths (writes `PUM_STATE.base_width`, `.kind_width`, `.extra_width`).
     fn nvim_pum_call_compute_size();
-    /// Set `pum_array` pointer.
-    fn nvim_set_pum_array(array: *mut crate::item::PumItemArray);
-    /// Set `pum_size`.
-    fn nvim_set_pum_size(val: c_int);
-    /// Set `pum_scrollbar`.
-    fn nvim_set_pum_scrollbar(val: c_int);
-    /// Get `pum_col`.
-    fn nvim_get_pum_col() -> c_int;
-    /// Set `pum_col`.
-    fn nvim_set_pum_col(val: c_int);
-    /// Get `pum_width`.
-    fn nvim_get_pum_width() -> c_int;
-    /// Get `Columns`.
-    fn nvim_get_Columns() -> c_int;
-    /// Set `pum_win_row_offset`.
-    fn nvim_set_pum_win_row_offset(val: c_int);
-    /// Set `pum_win_col_offset`.
-    fn nvim_set_pum_win_col_offset(val: c_int);
-    /// Set `pum_anchor_grid`.
-    fn nvim_set_pum_anchor_grid(val: c_int);
     /// Set grid zindex based on current mode.
     fn nvim_pum_set_grid_zindex_for_mode();
     /// Get curwin->w_p_rl.
     fn nvim_pum_curwin_get_p_rl() -> c_int;
+    /// Get `Columns`.
+    fn nvim_get_Columns() -> c_int;
     /// Set selected item (Rust function via extern "C").
     fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int;
     /// Redraw popup menu (Rust function via extern "C").
@@ -499,11 +441,11 @@ pub unsafe extern "C" fn rs_pum_recompose() {
 /// Calls C accessor and UI functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_check_clear() {
-    let is_visible = nvim_get_pum_is_visible() != 0;
-    let is_drawn = nvim_get_pum_is_drawn() != 0;
+    let is_visible = PUM_STATE.is_visible != 0;
+    let is_drawn = PUM_STATE.is_drawn != 0;
 
     if !is_visible && is_drawn {
-        let is_external = nvim_get_pum_external() != 0;
+        let is_external = PUM_STATE.external != 0;
         if is_external {
             nvim_pum_ui_call_popupmenu_hide();
         } else {
@@ -514,8 +456,8 @@ pub unsafe extern "C" fn rs_pum_check_clear() {
             }
             nvim_pum_grid_free();
         }
-        nvim_set_pum_is_drawn(0);
-        nvim_set_pum_external(0);
+        PUM_STATE.is_drawn = 0;
+        PUM_STATE.external = 0;
 
         let wp = nvim_pum_win_float_find_preview();
         if !wp.is_null() {
@@ -535,25 +477,25 @@ pub unsafe extern "C" fn rs_pum_check_clear() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_ui_flush() {
     let has_multigrid = ui_has(K_UI_MULTIGRID);
-    let is_drawn = nvim_get_pum_is_drawn() != 0;
-    let is_external = nvim_get_pum_external() != 0;
+    let is_drawn = PUM_STATE.is_drawn != 0;
+    let is_external = PUM_STATE.external != 0;
     let handle = nvim_pum_grid_get_handle();
     let pending = nvim_pum_grid_get_pending_comp_index_update() != 0;
 
     if has_multigrid && is_drawn && !is_external && handle != 0 && pending {
-        let pum_above = nvim_get_pum_above() != 0;
-        let pum_height = nvim_get_pum_height();
+        let pum_above = PUM_STATE.above != 0;
+        let pum_height = PUM_STATE.height;
         let anchor = if pum_above {
             c"SW".as_ptr()
         } else {
             c"NW".as_ptr()
         };
         let row_off = if pum_above { -pum_height } else { 0 };
-        let pum_row = nvim_get_pum_row();
-        let pum_left_col = nvim_get_pum_left_col();
-        let win_row_offset = nvim_get_pum_win_row_offset();
-        let win_col_offset = nvim_get_pum_win_col_offset();
-        let anchor_grid = nvim_get_pum_anchor_grid();
+        let pum_row = PUM_STATE.row;
+        let pum_left_col = PUM_STATE.left_col;
+        let win_row_offset = PUM_STATE.win_row_offset;
+        let win_col_offset = PUM_STATE.win_col_offset;
+        let anchor_grid = PUM_STATE.anchor_grid;
         let zindex = nvim_pum_grid_get_zindex();
         let comp_index = nvim_pum_grid_get_comp_index();
         let comp_row = nvim_pum_grid_get_comp_row();
@@ -602,39 +544,37 @@ pub unsafe extern "C" fn rs_pum_display(
     let mut redo_count: c_int = 0;
 
     // Determine display mode (external/rl) only when not already visible
-    let is_visible = nvim_get_pum_is_visible();
+    let is_visible = PUM_STATE.is_visible;
     let state = nvim_get_State();
     let is_cmdline = (state & MODE_CMDLINE) != 0;
 
     if is_visible == 0 {
         let has_popupmenu = ui_has(K_UI_POPUPMENU);
         let has_wildmenu = ui_has(K_UI_WILDMENU);
-        let external = c_int::from(has_popupmenu || (is_cmdline && has_wildmenu));
-        nvim_set_pum_external(external);
+        PUM_STATE.external = c_int::from(has_popupmenu || (is_cmdline && has_wildmenu));
     }
 
     let curwin_rl = nvim_pum_curwin_get_p_rl();
-    let rl = if is_cmdline { 0 } else { curwin_rl };
-    nvim_set_pum_rl(rl);
+    PUM_STATE.rl = if is_cmdline { 0 } else { curwin_rl };
 
     let border_width = rs_pum_border_width();
 
     loop {
         // Mark as visible early to avoid must_redraw when 'cursorcolumn' is on
-        nvim_set_pum_is_visible(1);
-        nvim_set_pum_is_drawn(1);
+        PUM_STATE.is_visible = 1;
+        PUM_STATE.is_drawn = 1;
         nvim_pum_validate_cursor_col();
 
         // Compute geometry from C (handles target_win, cmdline_win, grid offsets)
         let geom = nvim_pum_compute_geometry(cmd_startcol);
-        nvim_set_pum_win_row_offset(geom.win_row_offset);
-        nvim_set_pum_win_col_offset(geom.win_col_offset);
-        nvim_set_pum_anchor_grid(geom.anchor_grid);
+        PUM_STATE.win_row_offset = geom.win_row_offset;
+        PUM_STATE.win_col_offset = geom.win_col_offset;
+        PUM_STATE.anchor_grid = geom.anchor_grid;
 
         let pum_win_row = geom.pum_win_row;
         let cursor_col = geom.cursor_col;
 
-        if nvim_get_pum_external() != 0 {
+        if PUM_STATE.external != 0 {
             if array_changed != 0 {
                 nvim_pum_ext_show(
                     array,
@@ -668,39 +608,39 @@ pub unsafe extern "C" fn rs_pum_display(
             below_row = pvwin_below;
         }
 
-        // Compute vertical placement (sets pum_row, pum_height, pum_above)
+        // Compute vertical placement (writes PUM_STATE.row, .height, .above)
         nvim_pum_compute_vp(size, pum_win_row, above_row, below_row, border_width);
 
         // Don't display when we only have room for one line
-        let pum_height = nvim_get_pum_height();
+        let pum_height = PUM_STATE.height;
         if border_width == 0 && (pum_height < 1 || (pum_height == 1 && size > 1)) {
             return;
         }
 
         // Set array and size
-        nvim_set_pum_array(array);
-        nvim_set_pum_size(size);
+        PUM_STATE.array = array;
+        PUM_STATE.size = size;
 
-        if nvim_get_pum_external() != 0 {
+        if PUM_STATE.external != 0 {
             return;
         }
 
-        // Compute item widths
+        // Compute item widths (writes PUM_STATE.base_width, .kind_width, .extra_width)
         nvim_pum_call_compute_size();
 
         // If there are more items than room we need a scrollbar
-        let pum_height = nvim_get_pum_height();
-        nvim_set_pum_scrollbar(c_int::from(pum_height < size));
+        let pum_height = PUM_STATE.height;
+        PUM_STATE.scrollbar = c_int::from(pum_height < size);
 
-        // Compute horizontal placement (sets pum_col, pum_width)
+        // Compute horizontal placement (writes PUM_STATE.col, .width)
         nvim_pum_compute_hp(cursor_col);
 
         // Adjust for border overflow
-        let pum_col = nvim_get_pum_col();
-        let pum_width = nvim_get_pum_width();
+        let pum_col = PUM_STATE.col;
+        let pum_width = PUM_STATE.width;
         let columns = nvim_get_Columns();
         if pum_col + border_width + pum_width > columns {
-            nvim_set_pum_col(pum_col - border_width);
+            PUM_STATE.col = pum_col - border_width;
         }
 
         // Set selected item and redraw. If the window size changed need to

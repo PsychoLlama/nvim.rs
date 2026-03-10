@@ -5,25 +5,7 @@
 
 use std::ffi::c_int;
 
-// External C functions for redraw operations
-extern "C" {
-    /// Get `pum_first` static variable (index of top visible item).
-    fn nvim_get_pum_first() -> c_int;
-    /// Set `pum_first` static variable.
-    fn nvim_set_pum_first(val: c_int);
-    /// Get `pum_height` static variable.
-    fn nvim_get_pum_height() -> c_int;
-    /// Get `pum_size` static variable.
-    fn nvim_get_pum_size() -> c_int;
-    /// Get `pum_selected` static variable.
-    fn nvim_get_pum_selected() -> c_int;
-    /// Get `pum_base_width` static variable.
-    fn nvim_get_pum_base_width() -> c_int;
-    /// Get `pum_kind_width` static variable.
-    fn nvim_get_pum_kind_width() -> c_int;
-    /// Get `pum_extra_width` static variable.
-    fn nvim_get_pum_extra_width() -> c_int;
-}
+use crate::PUM_STATE;
 
 /// Result of grid width calculation.
 #[repr(C)]
@@ -121,13 +103,13 @@ pub const extern "C" fn rs_pum_grid_width_rtl(
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_clamp_first() {
-    let pum_size = nvim_get_pum_size();
-    let pum_height = nvim_get_pum_height();
-    let pum_first = nvim_get_pum_first();
+    let pum_size = PUM_STATE.size;
+    let pum_height = PUM_STATE.height;
+    let pum_first = PUM_STATE.first;
 
     let scroll_range = pum_size - pum_height;
     if pum_first > scroll_range {
-        nvim_set_pum_first(scroll_range);
+        PUM_STATE.first = scroll_range;
     }
 }
 
@@ -137,7 +119,7 @@ pub unsafe extern "C" fn rs_pum_clamp_first() {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_scroll_range() -> c_int {
-    nvim_get_pum_size() - nvim_get_pum_height()
+    PUM_STATE.size - PUM_STATE.height
 }
 
 /// Thumb position and height result.
@@ -156,9 +138,9 @@ pub struct PumThumbInfo {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_compute_thumb_from_state() -> PumThumbInfo {
-    let pum_first = nvim_get_pum_first();
-    let pum_height = nvim_get_pum_height();
-    let pum_size = nvim_get_pum_size();
+    let pum_first = PUM_STATE.first;
+    let pum_height = PUM_STATE.height;
+    let pum_size = PUM_STATE.size;
 
     if pum_size <= pum_height {
         return PumThumbInfo {
@@ -209,7 +191,7 @@ pub const extern "C" fn rs_pum_row_in_thumb(
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_row_to_item(row: c_int) -> c_int {
-    row + nvim_get_pum_first()
+    row + PUM_STATE.first
 }
 
 /// Check if a given item index is selected.
@@ -223,7 +205,7 @@ pub unsafe extern "C" fn rs_pum_row_to_item(row: c_int) -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_item_is_selected(item_idx: c_int) -> c_int {
-    (item_idx == nvim_get_pum_selected()) as c_int
+    (item_idx == PUM_STATE.selected) as c_int
 }
 
 /// Column widths for popup menu rendering.
@@ -245,9 +227,9 @@ pub struct PumColumnWidths {
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_get_column_widths() -> PumColumnWidths {
     PumColumnWidths {
-        base_width: nvim_get_pum_base_width(),
-        kind_width: nvim_get_pum_kind_width(),
-        extra_width: nvim_get_pum_extra_width(),
+        base_width: PUM_STATE.base_width,
+        kind_width: PUM_STATE.kind_width,
+        extra_width: PUM_STATE.extra_width,
     }
 }
 
@@ -277,8 +259,8 @@ pub struct PumRowState {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_init_row_state(row: c_int, col_off: c_int) -> PumRowState {
-    let item_idx = row + nvim_get_pum_first();
-    let is_selected = (item_idx == nvim_get_pum_selected()) as c_int;
+    let item_idx = row + PUM_STATE.first;
+    let is_selected = (item_idx == PUM_STATE.selected) as c_int;
 
     PumRowState {
         item_idx,
@@ -477,14 +459,6 @@ const TAB: u8 = 0x09;
 // C accessor functions for Phase 6 redraw.
 #[allow(dead_code)]
 extern "C" {
-    // State accessors used in redraw (not already declared above)
-    fn nvim_get_pum_rl() -> c_int;
-    fn nvim_get_pum_width() -> c_int;
-    fn nvim_get_pum_col() -> c_int;
-    fn nvim_get_pum_scrollbar() -> c_int;
-    fn nvim_get_pum_row() -> c_int;
-    fn nvim_get_pum_above() -> c_int;
-
     // Grid operations
     fn nvim_pum_screengrid_line_start(row: c_int, col: c_int);
     fn nvim_pum_grid_line_fill(start: c_int, end: c_int, fillchar: ScharT, attr: c_int);
@@ -513,14 +487,7 @@ extern "C" {
     ) -> c_int;
 
     // State accessors
-    fn nvim_set_pum_invalid_val(val: c_int);
     fn nvim_set_must_redraw_pum(val: c_int);
-    fn nvim_set_pum_left_col(val: c_int);
-    fn nvim_set_pum_right_col(val: c_int);
-    fn nvim_get_pum_anchor_grid() -> c_int;
-    fn nvim_get_pum_win_row_offset() -> c_int;
-    fn nvim_get_pum_win_col_offset() -> c_int;
-    fn nvim_get_pum_invalid() -> c_int;
 
     // Text/string operations
     fn nvim_pum_curwin_end_col() -> c_int;
@@ -556,9 +523,6 @@ extern "C" {
     fn nvim_pum_border_cfg_scrollbar_attr(cfg: *mut c_void) -> c_int;
     fn nvim_pum_border_draw(cfg: *mut c_void);
     fn nvim_pum_border_cfg_free(cfg: *mut c_void);
-
-    // Item/array accessors
-    fn nvim_get_pum_array() -> *const PumItemArray;
 
     // These are Rust #[no_mangle] functions callable via C linkage
     fn rs_pum_get_item(array: *const PumItemArray, index: c_int, item_type: c_int)
@@ -605,15 +569,15 @@ extern "C" {
     clippy::collapsible_else_if
 )]
 pub unsafe extern "C" fn rs_pum_redraw() {
-    let pum_rl = nvim_get_pum_rl() != 0;
-    let pum_width = nvim_get_pum_width();
-    let pum_col = nvim_get_pum_col();
-    let pum_height = nvim_get_pum_height();
-    let pum_size = nvim_get_pum_size();
-    let pum_scrollbar = nvim_get_pum_scrollbar();
-    let pum_row = nvim_get_pum_row();
-    let pum_above = nvim_get_pum_above() != 0;
-    let pum_selected = nvim_get_pum_selected();
+    let pum_rl = PUM_STATE.rl != 0;
+    let pum_width = PUM_STATE.width;
+    let pum_col = PUM_STATE.col;
+    let pum_height = PUM_STATE.height;
+    let pum_size = PUM_STATE.size;
+    let pum_scrollbar = PUM_STATE.scrollbar;
+    let pum_row = PUM_STATE.row;
+    let pum_above = PUM_STATE.above != 0;
+    let pum_selected = PUM_STATE.selected;
 
     let mut row = 0;
     let attr_scroll = nvim_curwin_hl_attr(hlf::HLF_PSB);
@@ -665,9 +629,9 @@ pub unsafe extern "C" fn rs_pum_redraw() {
 
     nvim_pum_grid_assign_handle();
 
-    nvim_set_pum_left_col(pum_col - col_off);
+    PUM_STATE.left_col = pum_col - col_off;
     let pum_left_col = pum_col - col_off;
-    nvim_set_pum_right_col(pum_left_col + grid_width);
+    PUM_STATE.right_col = pum_left_col + grid_width;
 
     let moved = nvim_pum_ui_comp_put_grid(
         pum_row,
@@ -675,8 +639,8 @@ pub unsafe extern "C" fn rs_pum_redraw() {
         pum_height + border_width,
         grid_width + border_width,
     ) != 0;
-    let invalid_grid = moved || nvim_get_pum_invalid() != 0;
-    nvim_set_pum_invalid_val(0);
+    let invalid_grid = moved || PUM_STATE.invalid != 0;
+    PUM_STATE.invalid = 0;
     nvim_set_must_redraw_pum(0);
 
     if nvim_pum_grid_has_chars() == 0
@@ -696,9 +660,9 @@ pub unsafe extern "C" fn rs_pum_redraw() {
     if nvim_pum_ui_has_multigrid() != 0 {
         let anchor: &[u8] = if pum_above { b"SW\0" } else { b"NW\0" };
         let row_off = if pum_above { -pum_height } else { 0 };
-        let anchor_grid = nvim_get_pum_anchor_grid();
-        let win_row_offset = nvim_get_pum_win_row_offset();
-        let win_col_offset = nvim_get_pum_win_col_offset();
+        let anchor_grid = PUM_STATE.anchor_grid;
+        let win_row_offset = PUM_STATE.win_row_offset;
+        let win_col_offset = PUM_STATE.win_col_offset;
         nvim_pum_ui_call_win_float_pos_grid(
             anchor.as_ptr().cast(),
             anchor_grid,
@@ -722,10 +686,10 @@ pub unsafe extern "C" fn rs_pum_redraw() {
 
     // Never display more than we have
     let pum_first = {
-        let f = nvim_get_pum_first();
+        let f = PUM_STATE.first;
         let clamped = if f > scroll_range { scroll_range } else { f };
         if clamped != f {
-            nvim_set_pum_first(clamped);
+            PUM_STATE.first = clamped;
         }
         clamped
     };
@@ -740,7 +704,7 @@ pub unsafe extern "C" fn rs_pum_redraw() {
         thumb_pos = (pum_first * (pum_height - thumb_height) + scroll_range / 2) / scroll_range;
     }
 
-    let pum_array = nvim_get_pum_array();
+    let pum_array = PUM_STATE.array.cast_const();
 
     // Main row rendering loop
     for i in 0..pum_height {
@@ -773,9 +737,9 @@ pub unsafe extern "C" fn rs_pum_redraw() {
         let align_order = crate::item::rs_pum_get_current_align_order();
         let order = [align_order.first, align_order.second, align_order.third];
         let items_width_array = [
-            nvim_get_pum_base_width(),
-            nvim_get_pum_kind_width(),
-            nvim_get_pum_extra_width(),
+            PUM_STATE.base_width,
+            PUM_STATE.kind_width,
+            PUM_STATE.extra_width,
         ];
         let basic_width = items_width_array[order[0] as usize];
         let last_isabbr = order[2] == CPT_ABBR;

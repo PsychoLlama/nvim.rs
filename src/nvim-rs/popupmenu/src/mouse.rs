@@ -5,29 +5,7 @@
 
 use std::ffi::c_int;
 
-// C accessor functions for mouse state.
-extern "C" {
-    /// Get the `pum_row` static variable.
-    fn nvim_get_pum_row() -> c_int;
-    /// Get the `pum_width` static variable.
-    fn nvim_get_pum_width() -> c_int;
-    /// Get the `pum_height` static variable.
-    fn nvim_get_pum_height() -> c_int;
-    /// Get the `pum_scrollbar` static variable.
-    fn nvim_get_pum_scrollbar() -> c_int;
-    /// Get the `pum_rl` static variable.
-    fn nvim_get_pum_rl() -> c_int;
-    /// Get the `pum_left_col` static variable.
-    fn nvim_get_pum_left_col() -> c_int;
-    /// Get the `pum_right_col` static variable.
-    fn nvim_get_pum_right_col() -> c_int;
-    /// Get the `pum_win_row_offset` static variable.
-    fn nvim_get_pum_win_row_offset() -> c_int;
-    /// Get the `pum_win_col_offset` static variable.
-    fn nvim_get_pum_win_col_offset() -> c_int;
-    /// Get the `pum_anchor_grid` static variable.
-    fn nvim_get_pum_anchor_grid() -> c_int;
-}
+use crate::PUM_STATE;
 
 /// Result of mouse position check within popup menu.
 #[repr(C)]
@@ -60,15 +38,15 @@ pub unsafe extern "C" fn rs_pum_check_mouse_pos(
     col: c_int,
     pum_grid_handle: c_int,
 ) -> PumMousePos {
-    let pum_row = nvim_get_pum_row();
-    let pum_height = nvim_get_pum_height();
-    let pum_left_col = nvim_get_pum_left_col();
-    let pum_right_col = nvim_get_pum_right_col();
-    let pum_anchor_grid = nvim_get_pum_anchor_grid();
-    let pum_win_row_offset = nvim_get_pum_win_row_offset();
-    let pum_win_col_offset = nvim_get_pum_win_col_offset();
-    let pum_scrollbar = nvim_get_pum_scrollbar();
-    let pum_rl = nvim_get_pum_rl() != 0;
+    let pum_row = PUM_STATE.row;
+    let pum_height = PUM_STATE.height;
+    let pum_left_col = PUM_STATE.left_col;
+    let pum_right_col = PUM_STATE.right_col;
+    let pum_anchor_grid = PUM_STATE.anchor_grid;
+    let pum_win_row_offset = PUM_STATE.win_row_offset;
+    let pum_win_col_offset = PUM_STATE.win_col_offset;
+    let pum_scrollbar = PUM_STATE.scrollbar;
+    let pum_rl = PUM_STATE.rl != 0;
 
     // If clicking directly on the pum grid
     if pum_grid_handle != 0 && grid == pum_grid_handle {
@@ -76,7 +54,7 @@ pub unsafe extern "C" fn rs_pum_check_mouse_pos(
             if pum_rl {
                 (col == 0) as c_int
             } else {
-                let pum_width = nvim_get_pum_width();
+                let pum_width = PUM_STATE.width;
                 (col >= pum_width) as c_int
             }
         } else {
@@ -349,8 +327,6 @@ extern "C" {
     fn nvim_get_mouse_col() -> c_int;
     /// Get `pum_grid.handle`.
     fn nvim_pum_grid_get_handle() -> c_int;
-    /// Set `pum_selected`.
-    fn nvim_set_pum_selected(val: c_int);
     /// Check if `pum_array[idx].pum_text` is non-empty.
     fn nvim_pum_array_item_is_nonempty(idx: c_int) -> c_int;
     /// Find window from outer grid coords, returning adjusted grid/row/col.
@@ -374,26 +350,6 @@ extern "C" {
     fn nvim_get_Columns() -> c_int;
     /// Get window info by grid handle.
     fn nvim_pum_get_win_by_grid(grid: c_int) -> PumWinInfo;
-    /// Set `pum_win_row_offset`.
-    fn nvim_set_pum_win_row_offset(val: c_int);
-    /// Set `pum_win_col_offset`.
-    fn nvim_set_pum_win_col_offset(val: c_int);
-    /// Set `pum_anchor_grid`.
-    fn nvim_set_pum_anchor_grid(val: c_int);
-    /// Set `pum_row`.
-    fn nvim_set_pum_row(val: c_int);
-    /// Set `pum_above`.
-    fn nvim_set_pum_above(val: c_int);
-    /// Set `pum_col`.
-    fn nvim_set_pum_col(val: c_int);
-    /// Set `pum_width`.
-    fn nvim_set_pum_width(val: c_int);
-    /// Set `pum_height`.
-    fn nvim_set_pum_height(val: c_int);
-    /// Get `pum_size`.
-    fn nvim_get_pum_size() -> c_int;
-    /// Get `pum_base_width`.
-    fn nvim_get_pum_base_width() -> c_int;
     /// Check if UI has multigrid.
     fn nvim_ui_has_multigrid() -> c_int;
 }
@@ -425,8 +381,8 @@ pub unsafe extern "C" fn rs_pum_position_at_mouse(min_width: c_int) {
     let mut grid = nvim_get_mouse_grid();
     let mut row = nvim_get_mouse_row();
     let mut col = nvim_get_mouse_col();
-    nvim_set_pum_win_row_offset(0);
-    nvim_set_pum_win_col_offset(0);
+    PUM_STATE.win_row_offset = 0;
+    PUM_STATE.win_col_offset = 0;
 
     if nvim_ui_has_multigrid() != 0 && grid == 0 {
         let result = nvim_pum_mouse_find_win_outer(grid, row, col);
@@ -439,8 +395,8 @@ pub unsafe extern "C" fn rs_pum_position_at_mouse(min_width: c_int) {
         if wp.valid != 0 {
             row += wp.winrow;
             col += wp.wincol;
-            nvim_set_pum_win_row_offset(wp.winrow);
-            nvim_set_pum_win_col_offset(wp.wincol);
+            PUM_STATE.win_row_offset = wp.winrow;
+            PUM_STATE.win_col_offset = wp.wincol;
 
             if wp.view_height > 0 || wp.view_width > 0 {
                 max_row = max(max_row - wp.winrow, wp.winrow + wp.view_height);
@@ -452,38 +408,38 @@ pub unsafe extern "C" fn rs_pum_position_at_mouse(min_width: c_int) {
     let pum_grid_handle = nvim_pum_grid_get_handle();
     if pum_grid_handle != 0 && grid == pum_grid_handle {
         // Repositioning the menu by right-clicking on itself
-        row += nvim_get_pum_row();
-        col += nvim_get_pum_left_col();
+        row += PUM_STATE.row;
+        col += PUM_STATE.left_col;
     } else {
-        nvim_set_pum_anchor_grid(grid);
+        PUM_STATE.anchor_grid = grid;
     }
 
-    let pum_size = nvim_get_pum_size();
-    let mut pum_height = nvim_get_pum_height();
+    let pum_size = PUM_STATE.size;
+    let mut pum_height = PUM_STATE.height;
 
     if max_row - row > pum_size || max_row - row > row - min_row {
         // Enough space below the mouse row, or more space below than above
-        nvim_set_pum_above(0);
+        PUM_STATE.above = 0;
         let pum_row = row + 1;
-        nvim_set_pum_row(pum_row);
+        PUM_STATE.row = pum_row;
         if pum_height > max_row - pum_row {
             pum_height = max_row - pum_row;
-            nvim_set_pum_height(pum_height);
+            PUM_STATE.height = pum_height;
         }
     } else {
         // Show above the mouse row
-        nvim_set_pum_above(1);
+        PUM_STATE.above = 1;
         let mut pum_row = row - pum_size;
         if pum_row < min_row {
             pum_height += pum_row - min_row;
-            nvim_set_pum_height(pum_height);
+            PUM_STATE.height = pum_height;
             pum_row = min_row;
         }
-        nvim_set_pum_row(pum_row);
+        PUM_STATE.row = pum_row;
     }
 
-    let pum_rl = nvim_get_pum_rl() != 0;
-    let pum_base_width = nvim_get_pum_base_width();
+    let pum_rl = PUM_STATE.rl != 0;
+    let pum_base_width = PUM_STATE.base_width;
 
     let (pum_col, pum_width) = if pum_rl {
         let pum_col = if col - min_col + 1 >= pum_base_width || col - min_col + 1 > min_width {
@@ -501,8 +457,8 @@ pub unsafe extern "C" fn rs_pum_position_at_mouse(min_width: c_int) {
         (pum_col, max_col - pum_col)
     };
 
-    nvim_set_pum_col(pum_col);
-    nvim_set_pum_width(min(pum_width, pum_base_width + 1));
+    PUM_STATE.col = pum_col;
+    PUM_STATE.width = min(pum_width, pum_base_width + 1);
 }
 
 const fn min(a: c_int, b: c_int) -> c_int {
@@ -544,32 +500,32 @@ pub unsafe extern "C" fn rs_pum_select_mouse_pos() {
 
     let pum_grid_handle = nvim_pum_grid_get_handle();
     if grid == pum_grid_handle {
-        nvim_set_pum_selected(row);
+        PUM_STATE.selected = row;
         return;
     }
 
-    let pum_anchor_grid = nvim_get_pum_anchor_grid();
-    let pum_left_col = nvim_get_pum_left_col();
-    let pum_right_col = nvim_get_pum_right_col();
-    let pum_win_col_offset = nvim_get_pum_win_col_offset();
+    let pum_anchor_grid = PUM_STATE.anchor_grid;
+    let pum_left_col = PUM_STATE.left_col;
+    let pum_right_col = PUM_STATE.right_col;
+    let pum_win_col_offset = PUM_STATE.win_col_offset;
 
     if grid != pum_anchor_grid
         || col < pum_left_col - pum_win_col_offset
         || col >= pum_right_col - pum_win_col_offset
     {
-        nvim_set_pum_selected(-1);
+        PUM_STATE.selected = -1;
         return;
     }
 
-    let pum_row = nvim_get_pum_row();
-    let pum_win_row_offset = nvim_get_pum_win_row_offset();
-    let pum_height = nvim_get_pum_height();
+    let pum_row = PUM_STATE.row;
+    let pum_win_row_offset = PUM_STATE.win_row_offset;
+    let pum_height = PUM_STATE.height;
     let idx = row - (pum_row - pum_win_row_offset);
 
     if idx < 0 || idx >= pum_height {
-        nvim_set_pum_selected(-1);
+        PUM_STATE.selected = -1;
     } else if nvim_pum_array_item_is_nonempty(idx) != 0 {
-        nvim_set_pum_selected(idx);
+        PUM_STATE.selected = idx;
     }
 }
 

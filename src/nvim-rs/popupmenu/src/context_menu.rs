@@ -5,27 +5,7 @@
 
 use std::ffi::c_int;
 
-// C accessor functions for context menu state.
-extern "C" {
-    /// Get the `pum_row` static variable.
-    fn nvim_get_pum_row() -> c_int;
-    /// Get the `pum_height` static variable.
-    fn nvim_get_pum_height() -> c_int;
-    /// Get the `pum_above` static variable.
-    fn nvim_get_pum_above() -> c_int;
-    /// Get the `pum_left_col` static variable.
-    fn nvim_get_pum_left_col() -> c_int;
-    /// Get the `pum_is_drawn` static variable.
-    fn nvim_get_pum_is_drawn() -> c_int;
-    /// Get the `pum_external` static variable.
-    fn nvim_get_pum_external() -> c_int;
-    /// Get the `pum_anchor_grid` static variable.
-    fn nvim_get_pum_anchor_grid() -> c_int;
-    /// Get the `pum_win_row_offset` static variable.
-    fn nvim_get_pum_win_row_offset() -> c_int;
-    /// Get the `pum_win_col_offset` static variable.
-    fn nvim_get_pum_win_col_offset() -> c_int;
-}
+use crate::PUM_STATE;
 
 /// Result of UI flush position calculation.
 #[repr(C)]
@@ -62,8 +42,8 @@ pub unsafe extern "C" fn rs_pum_calc_flush_pos(
     has_multigrid: c_int,
 ) -> PumFlushPos {
     // Check if flush is needed
-    let is_drawn = nvim_get_pum_is_drawn() != 0;
-    let is_external = nvim_get_pum_external() != 0;
+    let is_drawn = PUM_STATE.is_drawn != 0;
+    let is_external = PUM_STATE.external != 0;
     let has_handle = grid_handle != 0;
     let is_pending = pending_update != 0;
     let is_multigrid = has_multigrid != 0;
@@ -78,12 +58,12 @@ pub unsafe extern "C" fn rs_pum_calc_flush_pos(
         };
     }
 
-    let pum_above = nvim_get_pum_above() != 0;
-    let pum_height = nvim_get_pum_height();
-    let pum_row = nvim_get_pum_row();
-    let pum_left_col = nvim_get_pum_left_col();
-    let win_row_offset = nvim_get_pum_win_row_offset();
-    let win_col_offset = nvim_get_pum_win_col_offset();
+    let pum_above = PUM_STATE.above != 0;
+    let pum_height = PUM_STATE.height;
+    let pum_row = PUM_STATE.row;
+    let pum_left_col = PUM_STATE.left_col;
+    let win_row_offset = PUM_STATE.win_row_offset;
+    let win_col_offset = PUM_STATE.win_col_offset;
 
     let row_off = if pum_above { -pum_height } else { 0 };
     let row = pum_row - row_off - win_row_offset;
@@ -104,7 +84,7 @@ pub unsafe extern "C" fn rs_pum_calc_flush_pos(
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_get_anchor_grid() -> c_int {
-    nvim_get_pum_anchor_grid()
+    PUM_STATE.anchor_grid
 }
 
 /// Calculate mouse position for context menu at cursor.
@@ -273,8 +253,6 @@ extern "C" {
     fn nvim_pum_menu_matches_mode(menu: *mut VimMenuHandle, mode: c_int) -> c_int;
     /// Execute a menu item (`CLEAR_FIELD(ea); execute_menu(&ea, mp, -1)`).
     fn nvim_pum_execute_menu_item(menu: *mut VimMenuHandle);
-    /// Get the `pum_selected` static variable.
-    fn nvim_get_pum_selected() -> c_int;
 }
 
 // C accessor functions for make_popup.
@@ -322,8 +300,6 @@ const K_UI_MULTIGRID: c_int = 6;
 extern "C" {
     /// Call `pum_undisplay(true)`.
     fn nvim_pum_call_undisplay();
-    /// Set `pum_size`.
-    fn nvim_set_pum_size(val: c_int);
     /// Get menu mode flag.
     fn nvim_pum_get_menu_mode_flag() -> c_int;
     /// Check if menu item is a separator.
@@ -340,34 +316,18 @@ extern "C" {
     );
     /// Free `pumitem_T` array and its text.
     fn nvim_pum_free_items(array: *mut crate::item::PumItemArray, count: c_int);
-    /// Set `pum_array` pointer.
-    fn nvim_set_pum_array(array: *mut crate::item::PumItemArray);
     /// Check if `pum_array` is NULL.
     fn nvim_pum_array_is_null() -> c_int;
     /// Call `pum_compute_size()`.
     fn nvim_pum_call_compute_size();
-    /// Set `pum_scrollbar`.
-    fn nvim_set_pum_scrollbar(val: c_int);
-    /// Set `pum_height`.
-    fn nvim_set_pum_height(val: c_int);
-    /// Set `pum_rl`.
-    fn nvim_set_pum_rl(val: c_int);
     /// Get `curwin->w_p_rl`.
     fn nvim_pum_curwin_get_p_rl() -> c_int;
     /// Position popup at mouse.
     fn rs_pum_position_at_mouse(min_width: c_int);
-    /// Set `pum_selected`.
-    fn nvim_set_pum_selected(val: c_int);
-    /// Set `pum_first`.
-    fn nvim_set_pum_first(val: c_int);
     /// Get `p_mousemev`.
     fn nvim_pum_get_p_mousemev() -> c_int;
     /// Set mousemoveevent UI option.
     fn nvim_pum_ui_set_mousemoveevent(val: c_int);
-    /// Set `pum_is_visible`.
-    fn nvim_set_pum_is_visible(val: c_int);
-    /// Set `pum_is_drawn`.
-    fn nvim_set_pum_is_drawn(val: c_int);
     /// Set `pum_grid.zindex` to `kZIndexCmdlinePopupMenu`.
     fn nvim_pum_grid_set_zindex_cmdline();
     /// Redraw popup menu.
@@ -414,8 +374,6 @@ extern "C" {
     fn nvim_key_K_LEFTMOUSE_NM() -> c_int;
     /// Get key constant `K_RIGHTRELEASE`.
     fn nvim_key_K_RIGHTRELEASE() -> c_int;
-    /// Get `pum_size`.
-    fn nvim_get_pum_size() -> c_int;
 }
 
 /// Execute the currently selected popup menu item.
@@ -428,7 +386,7 @@ extern "C" {
 /// Calls C accessor functions. `menu` must be a valid `vimmenu_T` pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_execute_menu(menu: *mut VimMenuHandle, mode: c_int) {
-    let pum_selected = nvim_get_pum_selected();
+    let pum_selected = PUM_STATE.selected;
     let mut idx = 0;
     let mut mp = nvim_pum_menu_children(menu);
     while !mp.is_null() {
@@ -456,7 +414,7 @@ pub unsafe extern "C" fn rs_pum_execute_menu(menu: *mut VimMenuHandle, mode: c_i
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     nvim_pum_call_undisplay();
-    nvim_set_pum_size(0);
+    PUM_STATE.size = 0;
     let mode = nvim_pum_get_menu_mode_flag();
 
     // Count matching menu items
@@ -468,7 +426,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
         }
         mp = nvim_pum_menu_next(mp);
     }
-    nvim_set_pum_size(count);
+    PUM_STATE.size = count;
 
     if count <= 0 {
         nvim_pum_emsg_menu_mode();
@@ -494,15 +452,15 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
         mp = nvim_pum_menu_next(mp);
     }
 
-    nvim_set_pum_array(array);
+    PUM_STATE.array = array;
     nvim_pum_call_compute_size();
-    nvim_set_pum_scrollbar(0);
-    nvim_set_pum_height(count);
-    nvim_set_pum_rl(nvim_pum_curwin_get_p_rl());
+    PUM_STATE.scrollbar = 0;
+    PUM_STATE.height = count;
+    PUM_STATE.rl = nvim_pum_curwin_get_p_rl();
     rs_pum_position_at_mouse(20);
 
-    nvim_set_pum_selected(-1);
-    nvim_set_pum_first(0);
+    PUM_STATE.selected = -1;
+    PUM_STATE.first = 0;
     let mousemev_was_off = nvim_pum_get_p_mousemev() == 0;
     if mousemev_was_off {
         nvim_pum_ui_set_mousemoveevent(1);
@@ -526,8 +484,8 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     let key_k_rightrelease = nvim_key_K_RIGHTRELEASE();
 
     loop {
-        nvim_set_pum_is_visible(1);
-        nvim_set_pum_is_drawn(1);
+        PUM_STATE.is_visible = 1;
+        PUM_STATE.is_drawn = 1;
         nvim_pum_grid_set_zindex_cmdline();
         rs_pum_redraw();
         nvim_pum_setcursor_mayforce();
@@ -543,25 +501,25 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
             break;
         } else if c == i32::from(b'k') || c == key_k_up || c == key_k_mouseup {
             // Cursor up: select previous item
-            let mut sel = nvim_get_pum_selected();
+            let mut sel = PUM_STATE.selected;
             while sel > 0 {
                 sel -= 1;
                 if nvim_pum_array_item_text_char(sel) != 0 {
                     break;
                 }
             }
-            nvim_set_pum_selected(sel);
+            PUM_STATE.selected = sel;
         } else if c == i32::from(b'j') || c == key_k_down || c == key_k_mousedown {
             // Cursor down: select next item
-            let pum_size = nvim_get_pum_size();
-            let mut sel = nvim_get_pum_selected();
+            let pum_size = PUM_STATE.size;
+            let mut sel = PUM_STATE.selected;
             while sel < pum_size - 1 {
                 sel += 1;
                 if nvim_pum_array_item_text_char(sel) != 0 {
                     break;
                 }
             }
-            nvim_set_pum_selected(sel);
+            PUM_STATE.selected = sel;
         } else if c == key_k_rightmouse {
             // Right mouse: reposition the menu
             nvim_pum_vungetc(c);
@@ -572,7 +530,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
         } else if c == key_k_leftmouse || c == key_k_leftmouse_nm || c == key_k_rightrelease {
             // Mouse click: select and maybe close
             rs_pum_select_mouse_pos();
-            if nvim_get_pum_selected() >= 0 {
+            if PUM_STATE.selected >= 0 {
                 rs_pum_execute_menu(menu, mode);
                 break;
             }

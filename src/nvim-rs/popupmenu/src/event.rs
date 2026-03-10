@@ -5,23 +5,7 @@
 
 use std::ffi::{c_char, c_int};
 
-// C accessor functions for popup state.
-extern "C" {
-    /// Get the `pum_row` static variable.
-    fn nvim_get_pum_row() -> c_int;
-    /// Get the `pum_col` static variable.
-    fn nvim_get_pum_col() -> c_int;
-    /// Get the `pum_width` static variable.
-    fn nvim_get_pum_width() -> c_int;
-    /// Get the `pum_height` static variable.
-    fn nvim_get_pum_height() -> c_int;
-    /// Get the `pum_size` static variable.
-    fn nvim_get_pum_size() -> c_int;
-    /// Get the `pum_scrollbar` static variable.
-    fn nvim_get_pum_scrollbar() -> c_int;
-    /// Get the `pum_is_visible` static variable.
-    fn nvim_get_pum_is_visible() -> c_int;
-}
+use crate::PUM_STATE;
 
 /// Result from `ui_pum_get_pos` wrapper.
 #[repr(C)]
@@ -80,7 +64,7 @@ pub struct PumEventInfo {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_get_event_info() -> PumEventInfo {
-    if nvim_get_pum_is_visible() == 0 {
+    if PUM_STATE.is_visible == 0 {
         return PumEventInfo {
             visible: 0,
             width: 0,
@@ -94,12 +78,12 @@ pub unsafe extern "C" fn rs_pum_get_event_info() -> PumEventInfo {
 
     PumEventInfo {
         visible: 1,
-        width: nvim_get_pum_width(),
-        height: nvim_get_pum_height(),
-        row: nvim_get_pum_row(),
-        col: nvim_get_pum_col(),
-        size: nvim_get_pum_size(),
-        scrollbar: nvim_get_pum_scrollbar(),
+        width: PUM_STATE.width,
+        height: PUM_STATE.height,
+        row: PUM_STATE.row,
+        col: PUM_STATE.col,
+        size: PUM_STATE.size,
+        scrollbar: PUM_STATE.scrollbar,
     }
 }
 
@@ -111,7 +95,7 @@ pub unsafe extern "C" fn rs_pum_get_event_info() -> PumEventInfo {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_event_visible() -> c_int {
-    nvim_get_pum_is_visible()
+    PUM_STATE.is_visible
 }
 
 /// External UI item selection request.
@@ -215,7 +199,7 @@ pub struct DictHandle {
 /// Calls C accessor functions. `dict` must be a valid `dict_T` pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_set_event_info(dict: *mut DictHandle) {
-    if nvim_get_pum_is_visible() == 0 {
+    if PUM_STATE.is_visible == 0 {
         return;
     }
 
@@ -225,10 +209,10 @@ pub unsafe extern "C" fn rs_pum_set_event_info(dict: *mut DictHandle) {
         (pos.width, pos.height, pos.row, pos.col)
     } else {
         (
-            f64::from(nvim_get_pum_width()),
-            f64::from(nvim_get_pum_height()),
-            f64::from(nvim_get_pum_row()),
-            f64::from(nvim_get_pum_col()),
+            f64::from(PUM_STATE.width),
+            f64::from(PUM_STATE.height),
+            f64::from(PUM_STATE.row),
+            f64::from(PUM_STATE.col),
         )
     };
 
@@ -236,8 +220,8 @@ pub unsafe extern "C" fn rs_pum_set_event_info(dict: *mut DictHandle) {
     nvim_pum_dict_add_float(dict, c"width".as_ptr(), 5, w);
     nvim_pum_dict_add_float(dict, c"row".as_ptr(), 3, r);
     nvim_pum_dict_add_float(dict, c"col".as_ptr(), 3, c);
-    nvim_pum_dict_add_nr(dict, c"size".as_ptr(), 4, nvim_get_pum_size());
-    nvim_pum_dict_add_bool(dict, c"scrollbar".as_ptr(), 9, nvim_get_pum_scrollbar());
+    nvim_pum_dict_add_nr(dict, c"size".as_ptr(), 4, PUM_STATE.size);
+    nvim_pum_dict_add_bool(dict, c"scrollbar".as_ptr(), 9, PUM_STATE.scrollbar);
 }
 
 #[cfg(test)]

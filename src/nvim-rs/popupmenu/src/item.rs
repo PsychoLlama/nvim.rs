@@ -6,6 +6,7 @@
 use std::ffi::{c_char, c_int};
 
 use crate::placement::PumSizeResult;
+use crate::PUM_STATE;
 
 /// Completion item type for abbreviation/text.
 pub const CPT_ABBR: c_int = 0;
@@ -42,8 +43,6 @@ extern "C" {
     fn nvim_get_cia_flags() -> c_int;
     /// Compute the display width of a string.
     fn vim_strsize(s: *const c_char) -> c_int;
-    /// Get the `pum_size` (number of items).
-    fn nvim_get_pum_size() -> c_int;
 }
 
 // Static string constants for border comparison
@@ -242,7 +241,7 @@ pub unsafe extern "C" fn rs_pum_item_is_empty(
 /// with at least `pum_size` elements.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_compute_size(array: *const PumItemArray) -> PumSizeResult {
-    let size = nvim_get_pum_size();
+    let size = PUM_STATE.size;
     let mut base_width: c_int = 0;
     let mut kind_width: c_int = 0;
     let mut extra_width: c_int = 0;

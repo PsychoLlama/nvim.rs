@@ -6,11 +6,10 @@
 use std::ffi::{c_char, c_int};
 
 use crate::display::{BufHandle, WinHandle};
+use crate::PUM_STATE;
 
 // C accessor functions for preview window operations.
 extern "C" {
-    /// Get `pum_is_visible`.
-    fn nvim_get_pum_is_visible() -> c_int;
     /// Check if selected item matches current completion selection.
     fn nvim_pum_compl_match_curr_select(selected: c_int) -> c_int;
     /// Block autocmds.
@@ -48,16 +47,6 @@ extern "C" {
 
 // C accessor functions for adjust_info_position.
 extern "C" {
-    /// Get `pum_col`.
-    fn nvim_get_pum_col() -> c_int;
-    /// Get `pum_width`.
-    fn nvim_get_pum_width() -> c_int;
-    /// Get `pum_scrollbar`.
-    fn nvim_get_pum_scrollbar() -> c_int;
-    /// Get `pum_above`.
-    fn nvim_get_pum_above() -> c_int;
-    /// Get `pum_row`.
-    fn nvim_get_pum_row() -> c_int;
     /// Get `Columns`.
     fn nvim_get_Columns() -> c_int;
     /// Get `Rows`.
@@ -113,12 +102,12 @@ pub unsafe extern "C" fn rs_pum_preview_set_text(
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_adjust_info_position(wp: *mut WinHandle, width: c_int) {
     let border_width = rs_pum_border_width();
-    let pum_col = nvim_get_pum_col();
-    let pum_width = nvim_get_pum_width();
-    let pum_scrollbar = nvim_get_pum_scrollbar();
+    let pum_col = PUM_STATE.col;
+    let pum_width = PUM_STATE.width;
+    let pum_scrollbar = PUM_STATE.scrollbar;
     let columns = nvim_get_Columns();
-    let pum_above = nvim_get_pum_above() != 0;
-    let pum_row = nvim_get_pum_row();
+    let pum_above = PUM_STATE.above != 0;
+    let pum_row = PUM_STATE.row;
 
     let mut col = pum_col + pum_width + 1 + border_width;
     if border_width < 0 {
@@ -164,7 +153,7 @@ pub unsafe extern "C" fn rs_pum_adjust_info_position(wp: *mut WinHandle, width: 
 /// `info` must be a valid C string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_set_info(selected: c_int, info: *mut c_char) -> *mut WinHandle {
-    if nvim_get_pum_is_visible() == 0 || nvim_pum_compl_match_curr_select(selected) == 0 {
+    if PUM_STATE.is_visible == 0 || nvim_pum_compl_match_curr_select(selected) == 0 {
         return std::ptr::null_mut();
     }
 

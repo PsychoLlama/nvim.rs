@@ -7,6 +7,7 @@
 use std::ffi::{c_char, c_int, c_uint};
 
 use crate::display::{BufHandle, WinHandle};
+use crate::PUM_STATE;
 
 /// Opaque handle to a `tabpage_T`.
 #[repr(C)]
@@ -16,15 +17,6 @@ pub struct TabHandle {
 
 // C accessor functions for selection/preview operations.
 extern "C" {
-    // State accessors
-    fn nvim_get_pum_selected() -> c_int;
-    fn nvim_set_pum_selected(val: c_int);
-    fn nvim_get_pum_first() -> c_int;
-    fn nvim_set_pum_first(val: c_int);
-    fn nvim_get_pum_height() -> c_int;
-    fn nvim_get_pum_size() -> c_int;
-    fn nvim_set_pum_is_visible(val: c_int);
-
     // COT flags
     fn nvim_pum_get_cot_flags() -> c_uint;
 
@@ -142,12 +134,12 @@ const OK: c_int = 1;
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
     let mut resized = false;
-    let prev_selected = nvim_get_pum_selected();
+    let prev_selected = PUM_STATE.selected;
 
-    nvim_set_pum_selected(n);
+    PUM_STATE.selected = n;
     let pum_selected = n;
-    let pum_height = nvim_get_pum_height();
-    let pum_size = nvim_get_pum_size();
+    let pum_height = PUM_STATE.height;
+    let pum_size = PUM_STATE.size;
     let cur_cot_flags = nvim_pum_get_cot_flags();
     let use_float = (cur_cot_flags & K_OPT_COT_FLAG_POPUP) != 0;
 
@@ -162,9 +154,9 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
 
     if pum_selected >= 0 && pum_selected < pum_size {
         // Compute new scroll position using the existing pure Rust function
-        let pum_first = nvim_get_pum_first();
+        let pum_first = PUM_STATE.first;
         let new_first = rs_pum_compute_scroll(pum_selected, pum_first, pum_height, pum_size);
-        nvim_set_pum_first(new_first);
+        PUM_STATE.first = new_first;
 
         // Show extra info in the preview window if there is something and
         // 'completeopt' contains "preview" or "popup".
@@ -314,9 +306,9 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
 
                         // Update the screen before drawing the popup menu.
                         // Enable updating the status lines.
-                        nvim_set_pum_is_visible(0);
+                        PUM_STATE.is_visible = 0;
                         nvim_pum_update_screen();
-                        nvim_set_pum_is_visible(1);
+                        PUM_STATE.is_visible = 1;
 
                         if !resized && nvim_pum_win_valid(curwin_save) != 0 {
                             nvim_pum_no_u_sync_inc();
@@ -326,9 +318,9 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
 
                         // May need to update the screen again when there are
                         // autocommands involved.
-                        nvim_set_pum_is_visible(0);
+                        PUM_STATE.is_visible = 0;
                         nvim_pum_update_screen();
-                        nvim_set_pum_is_visible(1);
+                        PUM_STATE.is_visible = 1;
                     }
                 }
             }

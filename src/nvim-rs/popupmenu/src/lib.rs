@@ -40,70 +40,112 @@ pub mod selection;
 
 use std::ffi::c_int;
 
+use item::PumItemArray;
+
 /// Default popup menu height.
 const PUM_DEF_HEIGHT: c_int = 10;
 
-// C accessor functions for popup menu state.
-#[allow(dead_code)]
+/// Popup menu state, owned by Rust and exported to C via `#[no_mangle]`.
+///
+/// All fields that are bool in C are represented as `c_int` here for
+/// ABI compatibility (the C accessors all used `int` types).
+///
+/// # Safety
+/// Only accessed from the main thread; no concurrent mutation.
+#[repr(C)]
+pub struct PumState {
+    /// Pointer to the items array (managed by C allocator).
+    pub array: *mut PumItemArray,
+    /// Number of items in `array`.
+    pub size: c_int,
+    /// Index of selected item, or -1 for none.
+    pub selected: c_int,
+    /// Index of first visible item.
+    pub first: c_int,
+    /// Number of visible items (height).
+    pub height: c_int,
+    /// Width of popup menu items.
+    pub width: c_int,
+    /// Width of base text (abbr) column.
+    pub base_width: c_int,
+    /// Width of kind column.
+    pub kind_width: c_int,
+    /// Width of extra/menu column.
+    pub extra_width: c_int,
+    /// 1 if scrollbar is present, else 0.
+    pub scrollbar: c_int,
+    /// 1 if popup is drawn right-to-left, else 0.
+    pub rl: c_int,
+    /// Grid handle where position is anchored.
+    pub anchor_grid: c_int,
+    /// Top row of popup.
+    pub row: c_int,
+    /// Left column (or right column in RTL mode).
+    pub col: c_int,
+    /// Row offset to convert to window-relative coords.
+    pub win_row_offset: c_int,
+    /// Column offset to convert to window-relative coords.
+    pub win_col_offset: c_int,
+    /// Left column before padding or scrollbar.
+    pub left_col: c_int,
+    /// Right column after padding or scrollbar.
+    pub right_col: c_int,
+    /// 1 if popup is drawn above cursor, else 0.
+    pub above: c_int,
+    /// 1 if popup is visible, else 0.
+    pub is_visible: c_int,
+    /// 1 if popup is drawn on screen, else 0.
+    pub is_drawn: c_int,
+    /// 1 if popup is external (handled by UI), else 0.
+    pub external: c_int,
+    /// 1 if screen was cleared (needs redraw), else 0.
+    pub invalid: c_int,
+}
+
+// SAFETY: PumState is only accessed from the main thread.
+unsafe impl Sync for PumState {}
+
+/// Global popup menu state, exported to C.
+///
+/// C code accesses this as `extern PumState PUM_STATE`.
+#[no_mangle]
+pub static mut PUM_STATE: PumState = PumState {
+    array: std::ptr::null_mut(),
+    size: 0,
+    selected: 0,
+    first: 0,
+    height: 0,
+    width: 0,
+    base_width: 0,
+    kind_width: 0,
+    extra_width: 0,
+    scrollbar: 0,
+    rl: 0,
+    anchor_grid: 0,
+    row: 0,
+    col: 0,
+    win_row_offset: 0,
+    win_col_offset: 0,
+    left_col: 0,
+    right_col: 0,
+    above: 0,
+    is_visible: 0,
+    is_drawn: 0,
+    external: 0,
+    invalid: 0,
+};
+
+// Global accessors still needed (not part of PumState)
 extern "C" {
-    /// Get the `pum_is_visible` static variable.
-    fn nvim_get_pum_is_visible() -> c_int;
-    /// Get the `pum_external` static variable.
-    fn nvim_get_pum_external() -> c_int;
-    /// Get the `pum_height` static variable.
-    fn nvim_get_pum_height() -> c_int;
-    /// Set the `pum_height` static variable.
-    fn nvim_set_pum_height(val: c_int);
     /// Get the UI popup menu height (iterates over UIs).
     fn ui_pum_get_height() -> c_int;
-    /// Get the `pum_size` static variable (number of items).
-    fn nvim_get_pum_size() -> c_int;
-    /// Get the `pum_selected` static variable (selected index or -1).
-    fn nvim_get_pum_selected() -> c_int;
-    /// Set the `pum_selected` static variable.
-    fn nvim_set_pum_selected(val: c_int);
-    /// Get the `pum_first` static variable (index of top item).
-    fn nvim_get_pum_first() -> c_int;
-    /// Set the `pum_first` static variable.
-    fn nvim_set_pum_first(val: c_int);
-    /// Get the `pum_width` static variable.
-    fn nvim_get_pum_width() -> c_int;
-    /// Set the `pum_width` static variable.
-    fn nvim_set_pum_width(val: c_int);
-    /// Get the `pum_row` static variable.
-    fn nvim_get_pum_row() -> c_int;
-    /// Set the `pum_row` static variable.
-    fn nvim_set_pum_row(val: c_int);
-    /// Get the `pum_col` static variable.
-    fn nvim_get_pum_col() -> c_int;
-    /// Set the `pum_col` static variable.
-    fn nvim_set_pum_col(val: c_int);
-    /// Get the `pum_scrollbar` static variable.
-    fn nvim_get_pum_scrollbar() -> c_int;
-    /// Set the `pum_scrollbar` static variable.
-    fn nvim_set_pum_scrollbar(val: c_int);
-    /// Get the `pum_base_width` static variable.
-    fn nvim_get_pum_base_width() -> c_int;
-    /// Set the `pum_base_width` static variable.
-    fn nvim_set_pum_base_width(val: c_int);
-    /// Get the `pum_kind_width` static variable.
-    fn nvim_get_pum_kind_width() -> c_int;
-    /// Set the `pum_kind_width` static variable.
-    fn nvim_set_pum_kind_width(val: c_int);
-    /// Get the `pum_extra_width` static variable.
-    fn nvim_get_pum_extra_width() -> c_int;
-    /// Set the `pum_extra_width` static variable.
-    fn nvim_set_pum_extra_width(val: c_int);
-    /// Get the `pum_above` static variable.
-    fn nvim_get_pum_above() -> c_int;
-    /// Set the `pum_above` static variable.
-    fn nvim_set_pum_above(val: c_int);
-    /// Get the `pum_rl` static variable (right-to-left).
-    fn nvim_get_pum_rl() -> c_int;
-    /// Set the `pum_rl` static variable.
-    fn nvim_set_pum_rl(val: c_int);
-
-    // pum_want struct accessors
+    /// Get the 'pumheight' option value.
+    fn nvim_get_p_ph() -> i64;
+    /// Get the 'pumwidth' option value.
+    fn nvim_get_p_pw() -> i64;
+    /// Get the 'pummaxwidth' option value.
+    fn nvim_get_p_pmw() -> i64;
+    // pum_want accessors (pum_want stays in C)
     /// Set the `pum_want.active` field.
     fn nvim_set_pum_want_active(val: c_int);
     /// Set the `pum_want.item` field.
@@ -112,27 +154,15 @@ extern "C" {
     fn nvim_set_pum_want_insert(val: c_int);
     /// Set the `pum_want.finish` field.
     fn nvim_set_pum_want_finish(val: c_int);
-
-    // Global accessors
-    /// Get the global Columns value.
-    fn nvim_get_Columns() -> c_int;
-    /// Get the global `cmdline_row` value.
-    fn nvim_get_cmdline_row() -> c_int;
-    /// Get the 'pumheight' option value.
-    fn nvim_get_p_ph() -> i64;
-    /// Get the 'pumwidth' option value.
-    fn nvim_get_p_pw() -> i64;
-    /// Get the 'pummaxwidth' option value.
-    fn nvim_get_p_pmw() -> i64;
 }
 
 /// Check if the popup menu is displayed.
 ///
 /// # Safety
-/// Calls C accessor function for `pum_is_visible`.
+/// Reads `PUM_STATE.is_visible`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_visible() -> c_int {
-    nvim_get_pum_is_visible()
+    PUM_STATE.is_visible
 }
 
 /// Check if the popup menu is displayed and drawn on the grid.
@@ -140,10 +170,10 @@ pub unsafe extern "C" fn rs_pum_visible() -> c_int {
 /// Returns true if visible and not external.
 ///
 /// # Safety
-/// Calls C accessor functions for `pum_is_visible` and `pum_external`.
+/// Reads `PUM_STATE`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_drawn() -> c_int {
-    c_int::from(nvim_get_pum_is_visible() != 0 && nvim_get_pum_external() == 0)
+    c_int::from(PUM_STATE.is_visible != 0 && PUM_STATE.external == 0)
 }
 
 /// Gets the height of the popup menu.
@@ -152,16 +182,16 @@ pub unsafe extern "C" fn rs_pum_drawn() -> c_int {
 /// If the popup is external and a UI provides a height, returns that instead.
 ///
 /// # Safety
-/// Calls C accessor functions and `ui_pum_get_height`.
+/// Reads `PUM_STATE` and calls `ui_pum_get_height`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_get_height() -> c_int {
-    if nvim_get_pum_external() != 0 {
+    if PUM_STATE.external != 0 {
         let ui_height = ui_pum_get_height();
         if ui_height != 0 {
             return ui_height;
         }
     }
-    nvim_get_pum_height()
+    PUM_STATE.height
 }
 
 /// Result of vertical placement calculation.
@@ -837,10 +867,10 @@ pub const extern "C" fn rs_pum_compute_thumb(
 /// Currently only resets the offset to the first displayed item (`pum_first = 0`).
 ///
 /// # Safety
-/// Calls C accessor function to set `pum_first`.
+/// Writes `PUM_STATE.first`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_clear() {
-    nvim_set_pum_first(0);
+    PUM_STATE.first = 0;
 }
 
 /// Select an item in the popup menu for external UI.
@@ -855,7 +885,7 @@ pub unsafe extern "C" fn rs_pum_clear() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_ext_select_item(item: c_int, insert: c_int, finish: c_int) {
     // Check if visible and item is in valid range
-    if nvim_get_pum_is_visible() == 0 || item < -1 || item >= nvim_get_pum_size() {
+    if PUM_STATE.is_visible == 0 || item < -1 || item >= PUM_STATE.size {
         return;
     }
     nvim_set_pum_want_active(1);

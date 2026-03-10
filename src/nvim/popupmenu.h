@@ -69,4 +69,34 @@ EXTERN struct {
   bool finish;
 } pum_want;
 
+/// Popup menu state owned by Rust.
+/// Field layout must match `PumState` in src/nvim-rs/popupmenu/src/lib.rs.
+typedef struct {
+  pumitem_T *array;
+  int size;
+  int selected;
+  int first;
+  int height;
+  int width;
+  int base_width;
+  int kind_width;
+  int extra_width;
+  int scrollbar;
+  int rl;
+  int anchor_grid;
+  int row;
+  int col;
+  int win_row_offset;
+  int win_col_offset;
+  int left_col;
+  int right_col;
+  int above;
+  int is_visible;
+  int is_drawn;
+  int external;
+  int invalid;
+} PumState;
+
+extern PumState PUM_STATE;
+
 #include "popupmenu.h.generated.h"
