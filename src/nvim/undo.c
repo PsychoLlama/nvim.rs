@@ -803,117 +803,6 @@ buf_T *nvim_buf_get_next(buf_T *buf)
   return buf->b_next;
 }
 
-// u_header_T field accessors
-u_header_T *nvim_uhp_get_next(u_header_T *uhp)
-{
-  return uhp->uh_next.ptr;
-}
-
-u_header_T *nvim_uhp_get_prev(u_header_T *uhp)
-{
-  return uhp->uh_prev.ptr;
-}
-
-u_header_T *nvim_uhp_get_alt_next(u_header_T *uhp)
-{
-  return uhp->uh_alt_next.ptr;
-}
-
-u_header_T *nvim_uhp_get_alt_prev(u_header_T *uhp)
-{
-  return uhp->uh_alt_prev.ptr;
-}
-
-int nvim_uhp_get_seq(u_header_T *uhp)
-{
-  return uhp->uh_seq;
-}
-
-int nvim_uhp_get_walk(u_header_T *uhp)
-{
-  return uhp->uh_walk;
-}
-
-u_entry_T *nvim_uhp_get_entry(u_header_T *uhp)
-{
-  return uhp->uh_entry;
-}
-
-u_entry_T *nvim_uhp_get_getbot_entry(u_header_T *uhp)
-{
-  return uhp->uh_getbot_entry;
-}
-
-time_t nvim_uhp_get_time(u_header_T *uhp)
-{
-  return uhp->uh_time;
-}
-
-int nvim_uhp_get_flags(u_header_T *uhp)
-{
-  return uhp->uh_flags;
-}
-
-int nvim_uhp_get_save_nr(u_header_T *uhp)
-{
-  return uhp->uh_save_nr;
-}
-
-void nvim_uhp_set_next(u_header_T *uhp, u_header_T *val)
-{
-  uhp->uh_next.ptr = val;
-}
-
-void nvim_uhp_set_prev(u_header_T *uhp, u_header_T *val)
-{
-  uhp->uh_prev.ptr = val;
-}
-
-void nvim_uhp_set_alt_next(u_header_T *uhp, u_header_T *val)
-{
-  uhp->uh_alt_next.ptr = val;
-}
-
-void nvim_uhp_set_alt_prev(u_header_T *uhp, u_header_T *val)
-{
-  uhp->uh_alt_prev.ptr = val;
-}
-
-void nvim_uhp_set_seq(u_header_T *uhp, int val)
-{
-  uhp->uh_seq = val;
-}
-
-void nvim_uhp_set_walk(u_header_T *uhp, int val)
-{
-  uhp->uh_walk = val;
-}
-
-void nvim_uhp_set_entry(u_header_T *uhp, u_entry_T *val)
-{
-  uhp->uh_entry = val;
-}
-
-void nvim_uhp_set_getbot_entry(u_header_T *uhp, u_entry_T *val)
-{
-  uhp->uh_getbot_entry = val;
-}
-
-void nvim_uhp_set_time(u_header_T *uhp, time_t val)
-{
-  uhp->uh_time = val;
-}
-
-void nvim_uhp_set_flags(u_header_T *uhp, int val)
-{
-  uhp->uh_flags = val;
-}
-
-void nvim_uhp_set_save_nr(u_header_T *uhp, int val)
-{
-  uhp->uh_save_nr = val;
-}
-
 // Static assertions for u_entry_T layout verification (Phase 1).
 // These verify field offsets so the Rust repr(C) UEntry struct stays in sync.
 _Static_assert(offsetof(u_entry_T, ue_next) == 0,
@@ -931,16 +820,39 @@ _Static_assert(offsetof(u_entry_T, ue_size) == 32,
 _Static_assert(sizeof(u_entry_T) == 40,
                "u_entry_T size mismatch: expected 40 bytes on 64-bit");
 
-u_header_T *nvim_alloc_u_header(void)
-{
-  return xcalloc(1, sizeof(u_header_T));
-}
-
-// Destroy extmark vector in u_header_T (replaces kv_destroy macro)
-void nvim_uhp_destroy_extmark(u_header_T *uhp)
-{
-  kv_destroy(uhp->uh_extmark);
-}
+// Static assertions for Phase 2+3: fmark_T, visualinfo_T, u_header_T layout
+// These verify that the Rust repr(C) structs match the C struct layouts.
+_Static_assert(sizeof(pos_T) == 12, "pos_T size mismatch");
+_Static_assert(offsetof(pos_T, lnum) == 0, "pos_T.lnum offset mismatch");
+_Static_assert(offsetof(pos_T, col) == 4, "pos_T.col offset mismatch");
+_Static_assert(offsetof(pos_T, coladd) == 8, "pos_T.coladd offset mismatch");
+_Static_assert(sizeof(fmark_T) == 40, "fmark_T size mismatch");
+_Static_assert(offsetof(fmark_T, mark) == 0, "fmark_T.mark offset mismatch");
+_Static_assert(offsetof(fmark_T, fnum) == 12, "fmark_T.fnum offset mismatch");
+_Static_assert(offsetof(fmark_T, timestamp) == 16, "fmark_T.timestamp offset mismatch");
+_Static_assert(offsetof(fmark_T, view) == 24, "fmark_T.view offset mismatch");
+_Static_assert(offsetof(fmark_T, additional_data) == 32, "fmark_T.additional_data offset mismatch");
+_Static_assert(sizeof(visualinfo_T) == 32, "visualinfo_T size mismatch");
+_Static_assert(offsetof(visualinfo_T, vi_start) == 0, "visualinfo_T.vi_start offset mismatch");
+_Static_assert(offsetof(visualinfo_T, vi_end) == 12, "visualinfo_T.vi_end offset mismatch");
+_Static_assert(offsetof(visualinfo_T, vi_mode) == 24, "visualinfo_T.vi_mode offset mismatch");
+_Static_assert(offsetof(visualinfo_T, vi_curswant) == 28, "visualinfo_T.vi_curswant offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_next) == 0, "u_header_T.uh_next offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_prev) == 8, "u_header_T.uh_prev offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_alt_next) == 16, "u_header_T.uh_alt_next offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_alt_prev) == 24, "u_header_T.uh_alt_prev offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_seq) == 32, "u_header_T.uh_seq offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_walk) == 36, "u_header_T.uh_walk offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_entry) == 40, "u_header_T.uh_entry offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_getbot_entry) == 48, "u_header_T.uh_getbot_entry offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_cursor) == 56, "u_header_T.uh_cursor offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_cursor_vcol) == 68, "u_header_T.uh_cursor_vcol offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_flags) == 72, "u_header_T.uh_flags offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_namedm) == 80, "u_header_T.uh_namedm offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_extmark) == 1120, "u_header_T.uh_extmark offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_visual) == 1144, "u_header_T.uh_visual offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_time) == 1176, "u_header_T.uh_time offset mismatch");
+_Static_assert(offsetof(u_header_T, uh_save_nr) == 1184, "u_header_T.uh_save_nr offset mismatch");
 
 // Error message wrappers
 void nvim_iemsg_undo_list_corrupt(void)
@@ -1168,31 +1080,12 @@ void nvim_buf_set_b_u_time_cur(buf_T *buf, time_t val)
   buf->b_u_time_cur = val;
 }
 
-// Initialize extmark vector in undo header
-void nvim_uhp_init_extmark(u_header_T *uhp)
-{
-  kv_init(uhp->uh_extmark);
-}
-
 // Copy marks and visual from buffer to undo header
 void nvim_uhp_copy_marks_visual(buf_T *buf, u_header_T *uhp)
 {
   zero_fmark_additional_data(buf->b_namedm);
   memmove(uhp->uh_namedm, buf->b_namedm, sizeof(buf->b_namedm[0]) * NMARKS);
   uhp->uh_visual = buf->b_visual;
-}
-
-// Set undo header cursor position
-void nvim_uhp_set_cursor(u_header_T *uhp, linenr_T lnum, colnr_T col, colnr_T coladd)
-{
-  uhp->uh_cursor.lnum = lnum;
-  uhp->uh_cursor.col = col;
-  uhp->uh_cursor.coladd = coladd;
-}
-
-void nvim_uhp_set_cursor_vcol(u_header_T *uhp, colnr_T vcol)
-{
-  uhp->uh_cursor_vcol = vcol;
 }
 
 
@@ -1214,18 +1107,6 @@ void nvim_set_undo_undoes_false(void)
   undo_undoes = false;
 }
 
-
-// Clear uh_cursor position
-void nvim_uhp_clear_cursor(u_header_T *uhp)
-{
-  clearpos(&(uhp->uh_cursor));
-}
-
-// Set uh_cursor.lnum only
-void nvim_uhp_set_cursor_lnum_only(u_header_T *uhp, linenr_T lnum)
-{
-  uhp->uh_cursor.lnum = lnum;
-}
 
 // Get b_u_line_colnr
 colnr_T nvim_buf_get_b_u_line_colnr(buf_T *buf)
@@ -1583,145 +1464,6 @@ ssize_t nvim_read_eintr(int fd, void *buf, size_t count)
   return read_eintr(fd, buf, count);
 }
 
-// Extmark serialization
-size_t nvim_uhp_get_extmark_count(u_header_T *uhp)
-{
-  return kv_size(uhp->uh_extmark);
-}
-
-int nvim_uhp_get_extmark_type(u_header_T *uhp, size_t idx)
-{
-  if (idx >= kv_size(uhp->uh_extmark)) {
-    return -1;
-  }
-  return (int)kv_A(uhp->uh_extmark, idx).type;
-}
-
-void nvim_uhp_get_extmark_data(u_header_T *uhp, size_t idx, uint8_t *buf, size_t size)
-{
-  if (idx >= kv_size(uhp->uh_extmark)) {
-    memset(buf, 0, size);
-    return;
-  }
-  ExtmarkUndoObject *extup = &kv_A(uhp->uh_extmark, idx);
-  if (extup->type == kExtmarkSplice) {
-    size_t copy_size = MIN(size, sizeof(ExtmarkSplice));
-    memcpy(buf, &extup->data.splice, copy_size);
-  } else if (extup->type == kExtmarkMove) {
-    size_t copy_size = MIN(size, sizeof(ExtmarkMove));
-    memcpy(buf, &extup->data.move, copy_size);
-  } else {
-    memset(buf, 0, size);
-  }
-}
-
-// Named mark and visual info serialization
-linenr_T nvim_uhp_get_namedm_lnum(u_header_T *uhp, int idx)
-{
-  if (idx < 0 || idx >= NMARKS) {
-    return 0;
-  }
-  return uhp->uh_namedm[idx].mark.lnum;
-}
-
-colnr_T nvim_uhp_get_namedm_col(u_header_T *uhp, int idx)
-{
-  if (idx < 0 || idx >= NMARKS) {
-    return 0;
-  }
-  return uhp->uh_namedm[idx].mark.col;
-}
-
-colnr_T nvim_uhp_get_namedm_coladd(u_header_T *uhp, int idx)
-{
-  if (idx < 0 || idx >= NMARKS) {
-    return 0;
-  }
-  return uhp->uh_namedm[idx].mark.coladd;
-}
-
-linenr_T nvim_uhp_get_visual_start_lnum(u_header_T *uhp)
-{
-  return uhp->uh_visual.vi_start.lnum;
-}
-
-colnr_T nvim_uhp_get_visual_start_col(u_header_T *uhp)
-{
-  return uhp->uh_visual.vi_start.col;
-}
-
-colnr_T nvim_uhp_get_visual_start_coladd(u_header_T *uhp)
-{
-  return uhp->uh_visual.vi_start.coladd;
-}
-
-linenr_T nvim_uhp_get_visual_end_lnum(u_header_T *uhp)
-{
-  return uhp->uh_visual.vi_end.lnum;
-}
-
-colnr_T nvim_uhp_get_visual_end_col(u_header_T *uhp)
-{
-  return uhp->uh_visual.vi_end.col;
-}
-
-colnr_T nvim_uhp_get_visual_end_coladd(u_header_T *uhp)
-{
-  return uhp->uh_visual.vi_end.coladd;
-}
-
-int nvim_uhp_get_visual_mode(u_header_T *uhp)
-{
-  return uhp->uh_visual.vi_mode;
-}
-
-colnr_T nvim_uhp_get_visual_curswant(u_header_T *uhp)
-{
-  return uhp->uh_visual.vi_curswant;
-}
-
-// Cursor position from header
-linenr_T nvim_uhp_get_cursor_lnum(u_header_T *uhp)
-{
-  return uhp->uh_cursor.lnum;
-}
-
-colnr_T nvim_uhp_get_cursor_col(u_header_T *uhp)
-{
-  return uhp->uh_cursor.col;
-}
-
-colnr_T nvim_uhp_get_cursor_coladd(u_header_T *uhp)
-{
-  return uhp->uh_cursor.coladd;
-}
-
-colnr_T nvim_uhp_get_cursor_vcol(u_header_T *uhp)
-{
-  return uhp->uh_cursor_vcol;
-}
-
-// Sequence number accessors for serialization
-int nvim_uhp_get_next_seq(u_header_T *uhp)
-{
-  return uhp->uh_next.ptr ? uhp->uh_next.ptr->uh_seq : 0;
-}
-
-int nvim_uhp_get_prev_seq(u_header_T *uhp)
-{
-  return uhp->uh_prev.ptr ? uhp->uh_prev.ptr->uh_seq : 0;
-}
-
-int nvim_uhp_get_alt_next_seq(u_header_T *uhp)
-{
-  return uhp->uh_alt_next.ptr ? uhp->uh_alt_next.ptr->uh_seq : 0;
-}
-
-int nvim_uhp_get_alt_prev_seq(u_header_T *uhp)
-{
-  return uhp->uh_alt_prev.ptr ? uhp->uh_alt_prev.ptr->uh_seq : 0;
-}
-
 // Allocate memory with zero terminator
 void *nvim_undo_xmallocz(size_t size)
 {
@@ -1846,105 +1588,6 @@ bool nvim_undo_check_owner(const char *orig_name, const char *file_name)
   }
 #endif
   return true;
-}
-
-int nvim_uhp_get_next_seq_for_swizzle(u_header_T *uhp)
-{
-  return uhp->uh_next.seq;
-}
-
-int nvim_uhp_get_prev_seq_for_swizzle(u_header_T *uhp)
-{
-  return uhp->uh_prev.seq;
-}
-
-int nvim_uhp_get_alt_next_seq_for_swizzle(u_header_T *uhp)
-{
-  return uhp->uh_alt_next.seq;
-}
-
-int nvim_uhp_get_alt_prev_seq_for_swizzle(u_header_T *uhp)
-{
-  return uhp->uh_alt_prev.seq;
-}
-
-// Set seq values for swizzle (deserialization)
-void nvim_uhp_set_next_seq(u_header_T *uhp, int seq)
-{
-  uhp->uh_next.seq = seq;
-}
-
-void nvim_uhp_set_prev_seq(u_header_T *uhp, int seq)
-{
-  uhp->uh_prev.seq = seq;
-}
-
-void nvim_uhp_set_alt_next_seq(u_header_T *uhp, int seq)
-{
-  uhp->uh_alt_next.seq = seq;
-}
-
-void nvim_uhp_set_alt_prev_seq(u_header_T *uhp, int seq)
-{
-  uhp->uh_alt_prev.seq = seq;
-}
-
-// Set a named mark in the undo header
-void nvim_uhp_set_namedm(u_header_T *uhp, int idx, linenr_T lnum, colnr_T col,
-                          colnr_T coladd, Timestamp timestamp, int fnum)
-{
-  uhp->uh_namedm[idx].mark.lnum = lnum;
-  uhp->uh_namedm[idx].mark.col = col;
-  uhp->uh_namedm[idx].mark.coladd = coladd;
-  uhp->uh_namedm[idx].timestamp = timestamp;
-  uhp->uh_namedm[idx].fnum = fnum;
-}
-
-// Set visual info in the undo header
-void nvim_uhp_set_visual(u_header_T *uhp,
-                         linenr_T start_lnum, colnr_T start_col, colnr_T start_coladd,
-                         linenr_T end_lnum, colnr_T end_col, colnr_T end_coladd,
-                         int mode, colnr_T curswant)
-{
-  uhp->uh_visual.vi_start.lnum = start_lnum;
-  uhp->uh_visual.vi_start.col = start_col;
-  uhp->uh_visual.vi_start.coladd = start_coladd;
-  uhp->uh_visual.vi_end.lnum = end_lnum;
-  uhp->uh_visual.vi_end.col = end_col;
-  uhp->uh_visual.vi_end.coladd = end_coladd;
-  uhp->uh_visual.vi_mode = mode;
-  uhp->uh_visual.vi_curswant = curswant;
-}
-
-// Push an extmark splice onto the undo header's extmark kvec
-void nvim_uhp_push_extmark_splice(u_header_T *uhp, const uint8_t *data, size_t size)
-{
-  ExtmarkUndoObject extup;
-  extup.type = kExtmarkSplice;
-  size_t copy_size = MIN(size, sizeof(ExtmarkSplice));
-  memcpy(&extup.data.splice, data, copy_size);
-  kv_push(uhp->uh_extmark, extup);
-}
-
-// Push an extmark move onto the undo header's extmark kvec
-void nvim_uhp_push_extmark_move(u_header_T *uhp, const uint8_t *data, size_t size)
-{
-  ExtmarkUndoObject extup;
-  extup.type = kExtmarkMove;
-  size_t copy_size = MIN(size, sizeof(ExtmarkMove));
-  memcpy(&extup.data.move, data, copy_size);
-  kv_push(uhp->uh_extmark, extup);
-}
-
-// Get sizeof(ExtmarkSplice) and sizeof(ExtmarkMove) for Rust
-size_t nvim_sizeof_extmark_splice(void)
-{
-  return sizeof(ExtmarkSplice);
-}
-
-size_t nvim_sizeof_extmark_move(void)
-{
-  return sizeof(ExtmarkMove);
 }
 
 // ============================================================================

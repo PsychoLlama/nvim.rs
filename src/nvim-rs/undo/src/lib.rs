@@ -39,10 +39,255 @@ use nvim_encoding::sha256::Sha256Context;
 #[derive(Clone, Copy)]
 pub struct BufHandle(*mut c_void);
 
-/// Opaque handle to u_header_T.
-#[repr(transparent)]
+/// repr(C) struct matching pos_T (position in file or buffer).
+#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct UHeaderHandle(*mut c_void);
+pub struct PosT {
+    /// Line number.
+    pub lnum: LinenrT,
+    /// Column number.
+    pub col: c_int,
+    /// Column addition (for virtual characters).
+    pub coladd: c_int,
+}
+
+/// repr(C) struct matching fmarkv_T (view in which a mark was created).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FmarkV {
+    /// Lines from mark lnum to top of window; MAXLNUM = no view.
+    pub topline_offset: LinenrT,
+}
+
+/// repr(C) struct matching fmark_T (single local mark).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FmarkT {
+    /// Cursor position.
+    pub mark: PosT,
+    /// File number.
+    pub fnum: c_int,
+    /// Timestamp when this mark was last set.
+    pub timestamp: u64,
+    /// View the mark was created on.
+    pub view: FmarkV,
+    // Padding: 4 bytes implicit between view and additional_data
+    /// Additional data from ShaDa file (opaque).
+    pub additional_data: *mut c_void,
+}
+
+/// repr(C) struct matching visualinfo_T (Visual area info).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct VisualInfoT {
+    /// Start position of last VIsual.
+    pub vi_start: PosT,
+    /// End position of last VIsual.
+    pub vi_end: PosT,
+    /// VIsual_mode of last VIsual.
+    pub vi_mode: c_int,
+    /// MAXCOL from w_curswant.
+    pub vi_curswant: c_int,
+}
+
+/// repr(C) union matching the uh_next/prev/alt_next/alt_prev union in u_header_T.
+///
+/// At runtime, `.ptr` is used for linked-list traversal.
+/// During file serialization/deserialization, `.seq` holds sequence numbers.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union UhLink {
+    /// Pointer to linked header (runtime use).
+    pub ptr: *mut UHeader,
+    /// Sequence number (serialization use).
+    pub seq: c_int,
+}
+
+/// repr(C) struct matching kvec_t(T) generic kvec layout.
+///
+/// The kvec macro expands to `struct { size_t size; size_t capacity; T *items; }`.
+#[repr(C)]
+pub struct KVec<T> {
+    pub size: usize,
+    pub capacity: usize,
+    pub items: *mut T,
+}
+
+/// C enum matching UndoObjectType.
+pub type UndoObjectType = c_int;
+pub const K_EXTMARK_SPLICE: UndoObjectType = 0; // kExtmarkSplice
+pub const K_EXTMARK_MOVE: UndoObjectType = 1; // kExtmarkMove
+pub const K_EXTMARK_UPDATE: UndoObjectType = 2; // kExtmarkUpdate
+pub const K_EXTMARK_SAVEPOS: UndoObjectType = 3; // kExtmarkSavePos
+pub const K_EXTMARK_CLEAR: UndoObjectType = 4; // kExtmarkClear
+
+/// repr(C) struct matching ExtmarkSplice.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ExtmarkSplice {
+    pub start_row: c_int,
+    pub start_col: c_int,
+    pub old_row: c_int,
+    pub old_col: c_int,
+    pub new_row: c_int,
+    pub new_col: c_int,
+    pub start_byte: i64, // bcount_t = ptrdiff_t = i64 on 64-bit
+    pub old_byte: i64,
+    pub new_byte: i64,
+}
+
+/// repr(C) struct matching ExtmarkMove.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ExtmarkMove {
+    pub start_row: c_int,
+    pub start_col: c_int,
+    pub extent_row: c_int,
+    pub extent_col: c_int,
+    pub new_row: c_int,
+    pub new_col: c_int,
+    pub start_byte: i64,
+    pub extent_byte: i64,
+    pub new_byte: i64,
+}
+
+/// repr(C) struct matching ExtmarkSavePos.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ExtmarkSavePos {
+    pub mark: u64,
+    pub old_row: c_int,
+    pub old_col: c_int,
+    pub invalidated: bool,
+    // 7 bytes padding
+}
+
+/// repr(C) union matching the data union in ExtmarkUndoObject.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union ExtmarkUndoObjectData {
+    pub splice: ExtmarkSplice,
+    pub mover: ExtmarkMove, // 'move' is a Rust keyword
+    pub savepos: ExtmarkSavePos,
+}
+
+/// repr(C) struct matching ExtmarkUndoObject (struct undo_object in C).
+#[repr(C)]
+pub struct ExtmarkUndoObject {
+    pub kind: UndoObjectType,
+    // 4 bytes padding to align data union to 8
+    pub data: ExtmarkUndoObjectData,
+}
+
+/// repr(C) struct matching u_header_T (undo header).
+///
+/// # Layout (64-bit)
+///
+/// Matches the C `u_header_T` struct layout exactly. The U_DEBUG `uh_magic`
+/// field is excluded (only present when `U_DEBUG` is defined in C).
+#[repr(C)]
+pub struct UHeader {
+    /// Next header in undo list (runtime: ptr; serialization: seq).
+    pub uh_next: UhLink,
+    /// Previous header in undo list.
+    pub uh_prev: UhLink,
+    /// Next header for alternate redo branch.
+    pub uh_alt_next: UhLink,
+    /// Previous header for alternate redo branch.
+    pub uh_alt_prev: UhLink,
+    /// Sequence number (higher = newer undo).
+    pub uh_seq: c_int,
+    /// Used by undo_time().
+    pub uh_walk: c_int,
+    /// Pointer to first entry.
+    pub uh_entry: *mut UEntry,
+    /// Pointer to where ue_bot must be set.
+    pub uh_getbot_entry: *mut UEntry,
+    /// Cursor position before saving.
+    pub uh_cursor: PosT,
+    /// Cursor virtual column.
+    pub uh_cursor_vcol: c_int,
+    /// Flags (UH_CHANGED, UH_EMPTYBUF, UH_RELOAD).
+    pub uh_flags: c_int,
+    /// Named marks before undo/after redo.
+    pub uh_namedm: [FmarkT; 26], // NMARKS = 26
+    /// Info to move extmarks.
+    pub uh_extmark: KVec<ExtmarkUndoObject>,
+    /// Visual areas before undo/after redo.
+    pub uh_visual: VisualInfoT,
+    /// Timestamp when the change was made.
+    pub uh_time: TimeT,
+    /// Set when the file was saved after changes in this block.
+    pub uh_save_nr: c_int,
+}
+
+/// Type alias for u_header_T pointer (replaces opaque UHeaderHandle).
+pub type UHeaderHandle = *mut UHeader;
+
+/// Compile-time layout checks for new repr(C) types (64-bit only).
+#[cfg(target_pointer_width = "64")]
+const _: () = {
+    // pos_T: linenr_T(4) + colnr_T(4) + colnr_T(4) = 12 bytes
+    assert!(std::mem::size_of::<PosT>() == 12);
+    assert!(std::mem::offset_of!(PosT, lnum) == 0);
+    assert!(std::mem::offset_of!(PosT, col) == 4);
+    assert!(std::mem::offset_of!(PosT, coladd) == 8);
+
+    // fmarkv_T: linenr_T(4) = 4 bytes
+    assert!(std::mem::size_of::<FmarkV>() == 4);
+
+    // fmark_T: pos_T(12) + int(4) + u64(8) + fmarkv_T(4) + pad(4) + ptr(8) = 40 bytes
+    assert!(std::mem::size_of::<FmarkT>() == 40);
+    assert!(std::mem::offset_of!(FmarkT, mark) == 0);
+    assert!(std::mem::offset_of!(FmarkT, fnum) == 12);
+    assert!(std::mem::offset_of!(FmarkT, timestamp) == 16);
+    assert!(std::mem::offset_of!(FmarkT, view) == 24);
+    assert!(std::mem::offset_of!(FmarkT, additional_data) == 32);
+
+    // visualinfo_T: pos_T(12) + pos_T(12) + int(4) + int(4) = 32 bytes
+    assert!(std::mem::size_of::<VisualInfoT>() == 32);
+    assert!(std::mem::offset_of!(VisualInfoT, vi_start) == 0);
+    assert!(std::mem::offset_of!(VisualInfoT, vi_end) == 12);
+    assert!(std::mem::offset_of!(VisualInfoT, vi_mode) == 24);
+    assert!(std::mem::offset_of!(VisualInfoT, vi_curswant) == 28);
+
+    // UhLink union: max(ptr=8, seq=4) = 8 bytes (ptr alignment dominates)
+    assert!(std::mem::size_of::<UhLink>() == 8);
+
+    // ExtmarkSplice: 6 ints(24) + 3 i64(24) = 48 bytes
+    assert!(std::mem::size_of::<ExtmarkSplice>() == 48);
+
+    // ExtmarkMove: same as ExtmarkSplice
+    assert!(std::mem::size_of::<ExtmarkMove>() == 48);
+
+    // ExtmarkSavePos: u64(8) + int(4) + int(4) + bool(1) + pad(7) = 24 bytes
+    assert!(std::mem::size_of::<ExtmarkSavePos>() == 24);
+
+    // ExtmarkUndoObject: int(4) + pad(4) + union(48) = 56 bytes
+    assert!(std::mem::size_of::<ExtmarkUndoObject>() == 56);
+    assert!(std::mem::offset_of!(ExtmarkUndoObject, kind) == 0);
+
+    // u_header_T layout (64-bit):
+    // 4 x UhLink(8) = 32, uh_seq+uh_walk = 8, 2 x ptr(8) = 16,
+    // cursor(12)+cursor_vcol(4)+flags(4) = 20, pad(4),
+    // namedm[26](40*26=1040), extmark(24), visual(32), time(8), save_nr(4) + pad(4)
+    assert!(std::mem::offset_of!(UHeader, uh_next) == 0);
+    assert!(std::mem::offset_of!(UHeader, uh_prev) == 8);
+    assert!(std::mem::offset_of!(UHeader, uh_alt_next) == 16);
+    assert!(std::mem::offset_of!(UHeader, uh_alt_prev) == 24);
+    assert!(std::mem::offset_of!(UHeader, uh_seq) == 32);
+    assert!(std::mem::offset_of!(UHeader, uh_walk) == 36);
+    assert!(std::mem::offset_of!(UHeader, uh_entry) == 40);
+    assert!(std::mem::offset_of!(UHeader, uh_getbot_entry) == 48);
+    assert!(std::mem::offset_of!(UHeader, uh_cursor) == 56);
+    assert!(std::mem::offset_of!(UHeader, uh_cursor_vcol) == 68);
+    assert!(std::mem::offset_of!(UHeader, uh_flags) == 72);
+    assert!(std::mem::offset_of!(UHeader, uh_namedm) == 80);
+    assert!(std::mem::offset_of!(UHeader, uh_extmark) == 1120);
+    assert!(std::mem::offset_of!(UHeader, uh_visual) == 1144);
+    assert!(std::mem::offset_of!(UHeader, uh_time) == 1176);
+    assert!(std::mem::offset_of!(UHeader, uh_save_nr) == 1184);
+};
 
 /// repr(C) struct matching u_entry_T (without U_DEBUG field).
 ///
@@ -200,37 +445,9 @@ extern "C" {
     // Memory functions
     fn nvim_xfree(ptr: *mut c_void);
 
-    // u_header_T field accessors
-    fn nvim_uhp_get_next(uhp: UHeaderHandle) -> UHeaderHandle;
-    fn nvim_uhp_get_prev(uhp: UHeaderHandle) -> UHeaderHandle;
-    fn nvim_uhp_get_alt_next(uhp: UHeaderHandle) -> UHeaderHandle;
-    fn nvim_uhp_get_alt_prev(uhp: UHeaderHandle) -> UHeaderHandle;
-    fn nvim_uhp_get_seq(uhp: UHeaderHandle) -> c_int;
-    fn nvim_uhp_get_walk(uhp: UHeaderHandle) -> c_int;
-    fn nvim_uhp_get_entry(uhp: UHeaderHandle) -> *mut UEntry;
-    fn nvim_uhp_get_getbot_entry(uhp: UHeaderHandle) -> *mut UEntry;
-    fn nvim_uhp_get_time(uhp: UHeaderHandle) -> TimeT;
-    fn nvim_uhp_get_flags(uhp: UHeaderHandle) -> c_int;
-    fn nvim_uhp_get_save_nr(uhp: UHeaderHandle) -> c_int;
-
-    fn nvim_uhp_set_next(uhp: UHeaderHandle, val: UHeaderHandle);
-    fn nvim_uhp_set_prev(uhp: UHeaderHandle, val: UHeaderHandle);
-    fn nvim_uhp_set_alt_next(uhp: UHeaderHandle, val: UHeaderHandle);
-    fn nvim_uhp_set_alt_prev(uhp: UHeaderHandle, val: UHeaderHandle);
-    fn nvim_uhp_set_seq(uhp: UHeaderHandle, val: c_int);
-    fn nvim_uhp_set_walk(uhp: UHeaderHandle, val: c_int);
-    fn nvim_uhp_set_entry(uhp: UHeaderHandle, val: *mut UEntry);
-    fn nvim_uhp_set_getbot_entry(uhp: UHeaderHandle, val: *mut UEntry);
-    fn nvim_uhp_set_time(uhp: UHeaderHandle, val: TimeT);
-    fn nvim_uhp_set_flags(uhp: UHeaderHandle, val: c_int);
-    fn nvim_uhp_set_save_nr(uhp: UHeaderHandle, val: c_int);
-
     // Allocation functions
-    fn nvim_alloc_u_header() -> UHeaderHandle;
     fn nvim_xcalloc(count: usize, size: usize) -> *mut c_void;
-
-    // Extmark vector destruction
-    fn nvim_uhp_destroy_extmark(uhp: UHeaderHandle);
+    fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
 
     // Buffer memline accessor
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
@@ -301,17 +518,12 @@ extern "C" {
     // u_savecommon infrastructure
     fn nvim_buf_set_b_new_change(buf: BufHandle, val: bool);
     fn nvim_buf_set_b_u_time_cur(buf: BufHandle, val: TimeT);
-    fn nvim_uhp_init_extmark(uhp: UHeaderHandle);
     fn nvim_uhp_copy_marks_visual(buf: BufHandle, uhp: UHeaderHandle);
-    fn nvim_uhp_set_cursor(uhp: UHeaderHandle, lnum: LinenrT, col: ColnrT, coladd: ColnrT);
-    fn nvim_uhp_set_cursor_vcol(uhp: UHeaderHandle, vcol: ColnrT);
     fn nvim_emsg_line_count_changed();
     fn nvim_buf_is_curbuf(buf: BufHandle) -> bool;
     fn nvim_set_undo_undoes_false();
 
-    // u_find_first_changed infrastructure
-    fn nvim_uhp_clear_cursor(uhp: UHeaderHandle);
-    fn nvim_uhp_set_cursor_lnum_only(uhp: UHeaderHandle, lnum: LinenrT);
+    // u_find_first_changed infrastructure (cursor now accessed via direct field access)
 
     // u_undoline accessors
     fn nvim_buf_get_b_u_line_colnr(buf: BufHandle) -> ColnrT;
@@ -402,36 +614,6 @@ extern "C" {
 
     // Read helper for errno handling
     fn nvim_read_eintr(fd: c_int, buf: *mut c_void, count: usize) -> isize;
-
-    // Extmark serialization
-    fn nvim_uhp_get_extmark_count(uhp: UHeaderHandle) -> usize;
-    fn nvim_uhp_get_extmark_type(uhp: UHeaderHandle, idx: usize) -> c_int;
-    fn nvim_uhp_get_extmark_data(uhp: UHeaderHandle, idx: usize, buf: *mut c_uchar, size: usize);
-
-    // Named mark and visual info serialization
-    fn nvim_uhp_get_namedm_lnum(uhp: UHeaderHandle, idx: c_int) -> LinenrT;
-    fn nvim_uhp_get_namedm_col(uhp: UHeaderHandle, idx: c_int) -> ColnrT;
-    fn nvim_uhp_get_namedm_coladd(uhp: UHeaderHandle, idx: c_int) -> ColnrT;
-    fn nvim_uhp_get_visual_start_lnum(uhp: UHeaderHandle) -> LinenrT;
-    fn nvim_uhp_get_visual_start_col(uhp: UHeaderHandle) -> ColnrT;
-    fn nvim_uhp_get_visual_start_coladd(uhp: UHeaderHandle) -> ColnrT;
-    fn nvim_uhp_get_visual_end_lnum(uhp: UHeaderHandle) -> LinenrT;
-    fn nvim_uhp_get_visual_end_col(uhp: UHeaderHandle) -> ColnrT;
-    fn nvim_uhp_get_visual_end_coladd(uhp: UHeaderHandle) -> ColnrT;
-    fn nvim_uhp_get_visual_mode(uhp: UHeaderHandle) -> c_int;
-    fn nvim_uhp_get_visual_curswant(uhp: UHeaderHandle) -> ColnrT;
-
-    // Cursor position from header
-    fn nvim_uhp_get_cursor_lnum(uhp: UHeaderHandle) -> LinenrT;
-    fn nvim_uhp_get_cursor_col(uhp: UHeaderHandle) -> ColnrT;
-    fn nvim_uhp_get_cursor_coladd(uhp: UHeaderHandle) -> ColnrT;
-    fn nvim_uhp_get_cursor_vcol(uhp: UHeaderHandle) -> ColnrT;
-
-    // Sequence number accessors for serialization
-    fn nvim_uhp_get_next_seq(uhp: UHeaderHandle) -> c_int;
-    fn nvim_uhp_get_prev_seq(uhp: UHeaderHandle) -> c_int;
-    fn nvim_uhp_get_alt_next_seq(uhp: UHeaderHandle) -> c_int;
-    fn nvim_uhp_get_alt_prev_seq(uhp: UHeaderHandle) -> c_int;
 
     // Global lastmark accessor
     fn nvim_get_lastmark() -> c_int;
@@ -758,9 +940,9 @@ pub unsafe extern "C" fn rs_curbufIsChanged() -> bool {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_u_clearall(buf: BufHandle) {
-    nvim_buf_set_b_u_newhead(buf, UHeaderHandle(std::ptr::null_mut()));
-    nvim_buf_set_b_u_oldhead(buf, UHeaderHandle(std::ptr::null_mut()));
-    nvim_buf_set_b_u_curhead(buf, UHeaderHandle(std::ptr::null_mut()));
+    nvim_buf_set_b_u_newhead(buf, std::ptr::null_mut());
+    nvim_buf_set_b_u_oldhead(buf, std::ptr::null_mut());
+    nvim_buf_set_b_u_curhead(buf, std::ptr::null_mut());
     nvim_buf_set_b_u_synced(buf, true);
     nvim_buf_set_b_u_numhead(buf, 0);
     nvim_buf_set_b_u_line_ptr(buf, std::ptr::null_mut());
@@ -848,21 +1030,21 @@ pub unsafe extern "C" fn rs_u_freeentries(
 ) {
     // Check for pointers to the header that become invalid now.
     let curhead = nvim_buf_get_b_u_curhead(buf);
-    if curhead.0 == uhp.0 {
-        nvim_buf_set_b_u_curhead(buf, UHeaderHandle(std::ptr::null_mut()));
+    if curhead == uhp {
+        nvim_buf_set_b_u_curhead(buf, std::ptr::null_mut());
     }
 
     let newhead = nvim_buf_get_b_u_newhead(buf);
-    if newhead.0 == uhp.0 {
-        nvim_buf_set_b_u_newhead(buf, UHeaderHandle(std::ptr::null_mut()));
+    if newhead == uhp {
+        nvim_buf_set_b_u_newhead(buf, std::ptr::null_mut());
     }
 
-    if !uhpp.is_null() && (*uhpp).0 == uhp.0 {
-        *uhpp = UHeaderHandle(std::ptr::null_mut());
+    if !uhpp.is_null() && *uhpp == uhp {
+        *uhpp = std::ptr::null_mut();
     }
 
     // Free all entries in the list
-    let mut uep = nvim_uhp_get_entry(uhp);
+    let mut uep = (*uhp).uh_entry;
     while !uep.is_null() {
         let nuep = (*uep).ue_next;
         let size = (*uep).ue_size;
@@ -871,10 +1053,13 @@ pub unsafe extern "C" fn rs_u_freeentries(
     }
 
     // Destroy the extmark vector
-    nvim_uhp_destroy_extmark(uhp);
+    nvim_xfree((*uhp).uh_extmark.items as *mut c_void);
+    (*uhp).uh_extmark.items = std::ptr::null_mut();
+    (*uhp).uh_extmark.size = 0;
+    (*uhp).uh_extmark.capacity = 0;
 
     // Free the header struct
-    nvim_xfree(uhp.0);
+    nvim_xfree(uhp as *mut c_void);
 
     // Decrement header count
     let numhead = nvim_buf_get_b_u_numhead(buf);
@@ -894,33 +1079,33 @@ pub unsafe extern "C" fn rs_u_freeheader(
 ) {
     // When there is an alternate redo list free that branch completely,
     // because we can never go there.
-    let alt_next = nvim_uhp_get_alt_next(uhp);
-    if !alt_next.0.is_null() {
+    let alt_next = (*uhp).uh_alt_next.ptr;
+    if !alt_next.is_null() {
         rs_u_freebranch(buf, alt_next, uhpp);
     }
 
-    let alt_prev = nvim_uhp_get_alt_prev(uhp);
-    if !alt_prev.0.is_null() {
-        nvim_uhp_set_alt_next(alt_prev, UHeaderHandle(std::ptr::null_mut()));
+    let alt_prev = (*uhp).uh_alt_prev.ptr;
+    if !alt_prev.is_null() {
+        (*alt_prev).uh_alt_next.ptr = std::ptr::null_mut();
     }
 
     // Update the links in the list to remove the header.
-    let uh_next = nvim_uhp_get_next(uhp);
-    let uh_prev = nvim_uhp_get_prev(uhp);
+    let uh_next = (*uhp).uh_next.ptr;
+    let uh_prev = (*uhp).uh_prev.ptr;
 
-    if uh_next.0.is_null() {
+    if uh_next.is_null() {
         nvim_buf_set_b_u_oldhead(buf, uh_prev);
     } else {
-        nvim_uhp_set_prev(uh_next, uh_prev);
+        (*uh_next).uh_prev.ptr = uh_prev;
     }
 
-    if uh_prev.0.is_null() {
+    if uh_prev.is_null() {
         nvim_buf_set_b_u_newhead(buf, uh_next);
     } else {
         let mut uhap = uh_prev;
-        while !uhap.0.is_null() {
-            nvim_uhp_set_next(uhap, uh_next);
-            uhap = nvim_uhp_get_alt_next(uhap);
+        while !uhap.is_null() {
+            (*uhap).uh_next.ptr = uh_next;
+            uhap = (*uhap).uh_alt_next.ptr;
         }
     }
 
@@ -941,10 +1126,10 @@ pub unsafe extern "C" fn rs_u_freebranch(
     // If this is the top branch we may need to use u_freeheader() to update
     // all the pointers.
     let oldhead = nvim_buf_get_b_u_oldhead(buf);
-    if uhp.0 == oldhead.0 {
+    if uhp == oldhead {
         loop {
             let current_oldhead = nvim_buf_get_b_u_oldhead(buf);
-            if current_oldhead.0.is_null() {
+            if current_oldhead.is_null() {
                 break;
             }
             rs_u_freeheader(buf, current_oldhead, uhpp);
@@ -952,19 +1137,19 @@ pub unsafe extern "C" fn rs_u_freebranch(
         return;
     }
 
-    let alt_prev = nvim_uhp_get_alt_prev(uhp);
-    if !alt_prev.0.is_null() {
-        nvim_uhp_set_alt_next(alt_prev, UHeaderHandle(std::ptr::null_mut()));
+    let alt_prev = (*uhp).uh_alt_prev.ptr;
+    if !alt_prev.is_null() {
+        (*alt_prev).uh_alt_next.ptr = std::ptr::null_mut();
     }
 
     let mut next = uhp;
-    while !next.0.is_null() {
+    while !next.is_null() {
         let tofree = next;
-        let alt_next = nvim_uhp_get_alt_next(tofree);
-        if !alt_next.0.is_null() {
+        let alt_next = (*tofree).uh_alt_next.ptr;
+        if !alt_next.is_null() {
             rs_u_freebranch(buf, alt_next, uhpp); // recursive
         }
-        next = nvim_uhp_get_prev(tofree);
+        next = (*tofree).uh_prev.ptr;
         rs_u_freeentries(buf, tofree, uhpp);
     }
 }
@@ -978,12 +1163,12 @@ pub unsafe extern "C" fn rs_u_freebranch(
 #[no_mangle]
 pub unsafe extern "C" fn rs_u_get_headentry(buf: BufHandle) -> UEntryHandle {
     let newhead = nvim_buf_get_b_u_newhead(buf);
-    if newhead.0.is_null() {
+    if newhead.is_null() {
         nvim_iemsg_undo_list_corrupt();
         return ptr::null_mut();
     }
 
-    let entry = nvim_uhp_get_entry(newhead);
+    let entry = (*newhead).uh_entry;
     if entry.is_null() {
         nvim_iemsg_undo_list_corrupt();
         return ptr::null_mut();
@@ -1007,7 +1192,7 @@ pub unsafe extern "C" fn rs_u_getbot(buf: BufHandle) {
     }
 
     let newhead = nvim_buf_get_b_u_newhead(buf);
-    let uep = nvim_uhp_get_getbot_entry(newhead);
+    let uep = (*newhead).uh_getbot_entry;
     if !uep.is_null() {
         // The new ue_bot is computed from the number of lines that has been
         // inserted (0 - deleted) since calling u_save. This is equal to the
@@ -1028,7 +1213,7 @@ pub unsafe extern "C" fn rs_u_getbot(buf: BufHandle) {
         }
 
         (*uep).ue_bot = ue_bot;
-        nvim_uhp_set_getbot_entry(newhead, ptr::null_mut());
+        (*newhead).uh_getbot_entry = ptr::null_mut();
     }
 
     nvim_buf_set_b_u_synced(buf, true);
@@ -1043,7 +1228,7 @@ pub unsafe extern "C" fn rs_u_getbot(buf: BufHandle) {
 pub unsafe extern "C" fn rs_u_blockfree(buf: BufHandle) {
     loop {
         let oldhead = nvim_buf_get_b_u_oldhead(buf);
-        if oldhead.0.is_null() {
+        if oldhead.is_null() {
             break;
         }
         rs_u_freeheader(buf, oldhead, std::ptr::null_mut());
@@ -1077,7 +1262,7 @@ pub unsafe extern "C" fn rs_u_sync(force: bool) {
     } else {
         // Compute ue_bot of previous u_save
         rs_u_getbot(buf);
-        nvim_buf_set_b_u_curhead(buf, UHeaderHandle(std::ptr::null_mut()));
+        nvim_buf_set_b_u_curhead(buf, std::ptr::null_mut());
     }
 }
 
@@ -1100,19 +1285,19 @@ pub unsafe extern "C" fn rs_u_clearallandblockfree(buf: BufHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_u_unch_branch(uhp: UHeaderHandle) {
     let mut uh = uhp;
-    while !uh.0.is_null() {
+    while !uh.is_null() {
         // Set UH_CHANGED flag
-        let flags = nvim_uhp_get_flags(uh);
-        nvim_uhp_set_flags(uh, flags | UH_CHANGED);
+        let flags = (*uh).uh_flags;
+        (*uh).uh_flags = flags | UH_CHANGED;
 
         // Recurse into alternate branch if present
-        let alt_next = nvim_uhp_get_alt_next(uh);
-        if !alt_next.0.is_null() {
+        let alt_next = (*uh).uh_alt_next.ptr;
+        if !alt_next.is_null() {
             rs_u_unch_branch(alt_next);
         }
 
         // Move to previous header
-        uh = nvim_uhp_get_prev(uh);
+        uh = (*uh).uh_prev.ptr;
     }
 }
 
@@ -1142,14 +1327,14 @@ pub unsafe extern "C" fn rs_u_update_save_nr(buf: BufHandle) {
     nvim_buf_set_b_u_save_nr_cur(buf, save_nr_last);
 
     let curhead = nvim_buf_get_b_u_curhead(buf);
-    let uhp = if !curhead.0.is_null() {
-        nvim_uhp_get_next(curhead)
+    let uhp = if !curhead.is_null() {
+        (*curhead).uh_next.ptr
     } else {
         nvim_buf_get_b_u_newhead(buf)
     };
 
-    if !uhp.0.is_null() {
-        nvim_uhp_set_save_nr(uhp, save_nr_last);
+    if !uhp.is_null() {
+        (*uhp).uh_save_nr = save_nr_last;
     }
 }
 
@@ -1161,14 +1346,14 @@ pub unsafe extern "C" fn rs_u_update_save_nr(buf: BufHandle) {
 /// The `uhp` handle must be a valid pointer to a u_header_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_u_free_uhp(uhp: UHeaderHandle) {
-    let mut uep = nvim_uhp_get_entry(uhp);
+    let mut uep = (*uhp).uh_entry;
     while !uep.is_null() {
         let nuep = (*uep).ue_next;
         let size = (*uep).ue_size;
         rs_u_freeentry(uep, size as c_int);
         uep = nuep;
     }
-    nvim_xfree(uhp.0);
+    nvim_xfree(uhp as *mut c_void);
 }
 
 /// Helper function to check if expression mapping is locked.
@@ -1224,13 +1409,13 @@ pub unsafe extern "C" fn rs_ex_undojoin() {
 
     // Nothing changed before
     let newhead = nvim_buf_get_b_u_newhead(buf);
-    if newhead.0.is_null() {
+    if newhead.is_null() {
         return;
     }
 
     // Not allowed after undo
     let curhead = nvim_buf_get_b_u_curhead(buf);
-    if !curhead.0.is_null() {
+    if !curhead.is_null() {
         nvim_emsg_undojoin_after_undo();
         return;
     }
@@ -1310,7 +1495,7 @@ pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bo
     rs_u_doit(count, true, do_buf_event);
 
     let curhead = nvim_buf_get_b_u_curhead(buf);
-    if curhead.0.is_null() {
+    if curhead.is_null() {
         // nothing was undone
         return false;
     }
@@ -1319,44 +1504,44 @@ pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bo
     // set the redo header to the next alternative branch (if any)
     // otherwise we will be in the leaf state
     let to_forget = curhead;
-    let uh_next = nvim_uhp_get_next(to_forget);
+    let uh_next = (*to_forget).uh_next.ptr;
     nvim_buf_set_b_u_newhead(buf, uh_next);
 
-    let alt_next = nvim_uhp_get_alt_next(to_forget);
+    let alt_next = (*to_forget).uh_alt_next.ptr;
     nvim_buf_set_b_u_curhead(buf, alt_next);
 
-    if !alt_next.0.is_null() {
-        nvim_uhp_set_alt_next(to_forget, UHeaderHandle(std::ptr::null_mut()));
-        let alt_prev = nvim_uhp_get_alt_prev(to_forget);
-        nvim_uhp_set_alt_prev(alt_next, alt_prev);
+    if !alt_next.is_null() {
+        (*to_forget).uh_alt_next.ptr = std::ptr::null_mut();
+        let alt_prev = (*to_forget).uh_alt_prev.ptr;
+        (*alt_next).uh_alt_prev.ptr = alt_prev;
 
-        let alt_next_next = nvim_uhp_get_next(alt_next);
-        if !alt_next_next.0.is_null() {
-            nvim_buf_set_b_u_seq_cur(buf, nvim_uhp_get_seq(alt_next_next));
+        let alt_next_next = (*alt_next).uh_next.ptr;
+        if !alt_next_next.is_null() {
+            nvim_buf_set_b_u_seq_cur(buf, (*alt_next_next).uh_seq);
         } else {
             nvim_buf_set_b_u_seq_cur(buf, 0);
         }
     } else {
         let newhead = nvim_buf_get_b_u_newhead(buf);
-        if !newhead.0.is_null() {
-            nvim_buf_set_b_u_seq_cur(buf, nvim_uhp_get_seq(newhead));
+        if !newhead.is_null() {
+            nvim_buf_set_b_u_seq_cur(buf, (*newhead).uh_seq);
         }
     }
 
-    let alt_prev = nvim_uhp_get_alt_prev(to_forget);
-    if !alt_prev.0.is_null() {
+    let alt_prev = (*to_forget).uh_alt_prev.ptr;
+    if !alt_prev.is_null() {
         let new_curhead = nvim_buf_get_b_u_curhead(buf);
-        nvim_uhp_set_alt_next(alt_prev, new_curhead);
+        (*alt_prev).uh_alt_next.ptr = new_curhead;
     }
 
     let newhead = nvim_buf_get_b_u_newhead(buf);
-    if !newhead.0.is_null() {
+    if !newhead.is_null() {
         let new_curhead = nvim_buf_get_b_u_curhead(buf);
-        nvim_uhp_set_prev(newhead, new_curhead);
+        (*newhead).uh_prev.ptr = new_curhead;
     }
 
     let seq_last = nvim_buf_get_b_u_seq_last(buf);
-    let to_forget_seq = nvim_uhp_get_seq(to_forget);
+    let to_forget_seq = (*to_forget).uh_seq;
     if seq_last == to_forget_seq {
         nvim_buf_set_b_u_seq_last(buf, seq_last - 1);
     }
@@ -1385,7 +1570,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     // invalid till the end.
     nvim_block_autocmds();
 
-    let old_flags = nvim_uhp_get_flags(curhead);
+    let old_flags = (*curhead).uh_flags;
     let new_flags = nvim_undoredo_compute_new_flags(buf, curhead);
     nvim_undo_setpcmark();
 
@@ -1403,7 +1588,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     nvim_undoredo_init_op_marks(buf);
 
     let mut newlist: *mut UEntry = ptr::null_mut();
-    let mut uep = nvim_uhp_get_entry(curhead);
+    let mut uep = (*curhead).uh_entry;
 
     while !uep.is_null() {
         let top = (*uep).ue_top;
@@ -1427,7 +1612,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 
         // Decide about the cursor position, depending on what text changed.
         if top < newlnum {
-            let cursor_lnum = nvim_uhp_get_cursor_lnum(curhead);
+            let cursor_lnum = (*curhead).uh_cursor.lnum;
             if cursor_lnum >= top && cursor_lnum <= top + newsize + 1 {
                 new_curpos_lnum = cursor_lnum;
                 newlnum = new_curpos_lnum - 1;
@@ -1557,8 +1742,8 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     nvim_undo_win_set_cursor_pos(win, new_curpos_lnum, 0, 0);
     nvim_undo_check_cursor_lnum(win);
 
-    nvim_uhp_set_entry(curhead, newlist);
-    nvim_uhp_set_flags(curhead, new_flags);
+    (*curhead).uh_entry = newlist;
+    (*curhead).uh_flags = new_flags;
     nvim_undoredo_set_ml_empty(buf, old_flags);
 
     if old_flags & UH_CHANGED != 0 {
@@ -1697,20 +1882,20 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
 
         if undo_undoes {
             let curhead = nvim_buf_get_b_u_curhead(buf);
-            if curhead.0.is_null() {
+            if curhead.is_null() {
                 // first undo
                 let newhead = nvim_buf_get_b_u_newhead(buf);
                 nvim_buf_set_b_u_curhead(buf, newhead);
             } else if nvim_get_undolevel(buf) > 0 {
                 // multi level undo - get next undo
-                let next = nvim_uhp_get_next(curhead);
+                let next = (*curhead).uh_next.ptr;
                 nvim_buf_set_b_u_curhead(buf, next);
             }
 
             // nothing to undo
             let curhead = nvim_buf_get_b_u_curhead(buf);
             let numhead = nvim_buf_get_b_u_numhead(buf);
-            if numhead == 0 || curhead.0.is_null() {
+            if numhead == 0 || curhead.is_null() {
                 // stick curbuf->b_u_curhead at end
                 let oldhead = nvim_buf_get_b_u_oldhead(buf);
                 nvim_buf_set_b_u_curhead(buf, oldhead);
@@ -1725,7 +1910,7 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
             u_undoredo(true, do_buf_event);
         } else {
             let curhead = nvim_buf_get_b_u_curhead(buf);
-            if curhead.0.is_null() || nvim_get_undolevel(buf) <= 0 {
+            if curhead.is_null() || nvim_get_undolevel(buf) <= 0 {
                 // nothing to redo
                 nvim_beep_flush();
                 if count == startcount - 1 {
@@ -1740,8 +1925,8 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
             // Advance for next redo. Set "newhead" when at the end of the
             // redoable changes.
             let curhead = nvim_buf_get_b_u_curhead(buf);
-            let prev = nvim_uhp_get_prev(curhead);
-            if prev.0.is_null() {
+            let prev = (*curhead).uh_prev.ptr;
+            if prev.is_null() {
                 nvim_buf_set_b_u_newhead(buf, curhead);
             }
             nvim_buf_set_b_u_curhead(buf, prev);
@@ -1797,42 +1982,44 @@ pub unsafe extern "C" fn rs_u_savecommon(
         let uhp: UHeaderHandle;
         if nvim_get_undolevel(buf) >= 0 {
             // Make a new header entry
-            uhp = nvim_alloc_u_header();
-            nvim_uhp_init_extmark(uhp);
+            uhp = nvim_xcalloc(1, std::mem::size_of::<UHeader>()) as *mut UHeader;
+            (*uhp).uh_extmark.items = std::ptr::null_mut();
+            (*uhp).uh_extmark.size = 0;
+            (*uhp).uh_extmark.capacity = 0;
         } else {
-            uhp = UHeaderHandle(std::ptr::null_mut());
+            uhp = std::ptr::null_mut();
         }
 
         // If we undid more than we redid, move the entry lists before and
         // including curbuf->b_u_curhead to an alternate branch
         let mut old_curhead = nvim_buf_get_b_u_curhead(buf);
-        if !old_curhead.0.is_null() {
-            let next = nvim_uhp_get_next(old_curhead);
+        if !old_curhead.is_null() {
+            let next = (*old_curhead).uh_next.ptr;
             nvim_buf_set_b_u_newhead(buf, next);
-            nvim_buf_set_b_u_curhead(buf, UHeaderHandle(std::ptr::null_mut()));
+            nvim_buf_set_b_u_curhead(buf, std::ptr::null_mut());
         }
 
         // Free headers to keep the size right
         while nvim_buf_get_b_u_numhead(buf) as i64 > nvim_get_undolevel(buf) {
             let oldhead = nvim_buf_get_b_u_oldhead(buf);
-            if oldhead.0.is_null() {
+            if oldhead.is_null() {
                 break;
             }
 
-            if oldhead.0 == old_curhead.0 {
+            if oldhead == old_curhead {
                 // Can't reconnect the branch, delete all of it
                 rs_u_freebranch(buf, oldhead, &mut old_curhead as *mut UHeaderHandle);
             } else {
-                let alt_next = nvim_uhp_get_alt_next(oldhead);
-                if alt_next.0.is_null() {
+                let alt_next = (*oldhead).uh_alt_next.ptr;
+                if alt_next.is_null() {
                     // There is no branch, only free one header
                     rs_u_freeheader(buf, oldhead, &mut old_curhead as *mut UHeaderHandle);
                 } else {
                     // Free the oldest alternate branch as a whole
                     let mut uhfree = oldhead;
                     loop {
-                        let next_alt = nvim_uhp_get_alt_next(uhfree);
-                        if next_alt.0.is_null() {
+                        let next_alt = (*uhfree).uh_alt_next.ptr;
+                        if next_alt.is_null() {
                             break;
                         }
                         uhfree = next_alt;
@@ -1842,9 +2029,9 @@ pub unsafe extern "C" fn rs_u_savecommon(
             }
         }
 
-        if uhp.0.is_null() {
+        if uhp.is_null() {
             // No undo at all
-            if !old_curhead.0.is_null() {
+            if !old_curhead.is_null() {
                 rs_u_freebranch(buf, old_curhead, std::ptr::null_mut());
             }
             nvim_buf_set_b_u_synced(buf, false);
@@ -1852,74 +2039,76 @@ pub unsafe extern "C" fn rs_u_savecommon(
         }
 
         // Set up the new header
-        nvim_uhp_set_prev(uhp, UHeaderHandle(std::ptr::null_mut()));
+        (*uhp).uh_prev.ptr = std::ptr::null_mut();
         let newhead = nvim_buf_get_b_u_newhead(buf);
-        nvim_uhp_set_next(uhp, newhead);
-        nvim_uhp_set_alt_next(uhp, old_curhead);
+        (*uhp).uh_next.ptr = newhead;
+        (*uhp).uh_alt_next.ptr = old_curhead;
 
-        if !old_curhead.0.is_null() {
-            let alt_prev = nvim_uhp_get_alt_prev(old_curhead);
-            nvim_uhp_set_alt_prev(uhp, alt_prev);
+        if !old_curhead.is_null() {
+            let alt_prev = (*old_curhead).uh_alt_prev.ptr;
+            (*uhp).uh_alt_prev.ptr = alt_prev;
 
-            if !alt_prev.0.is_null() {
-                nvim_uhp_set_alt_next(alt_prev, uhp);
+            if !alt_prev.is_null() {
+                (*alt_prev).uh_alt_next.ptr = uhp;
             }
 
-            nvim_uhp_set_alt_prev(old_curhead, uhp);
+            (*old_curhead).uh_alt_prev.ptr = uhp;
 
             let oldhead = nvim_buf_get_b_u_oldhead(buf);
-            if oldhead.0 == old_curhead.0 {
+            if oldhead == old_curhead {
                 nvim_buf_set_b_u_oldhead(buf, uhp);
             }
         } else {
-            nvim_uhp_set_alt_prev(uhp, UHeaderHandle(std::ptr::null_mut()));
+            (*uhp).uh_alt_prev.ptr = std::ptr::null_mut();
         }
 
-        if !newhead.0.is_null() {
-            nvim_uhp_set_prev(newhead, uhp);
+        if !newhead.is_null() {
+            (*newhead).uh_prev.ptr = uhp;
         }
 
         // Set sequence numbers and time
         let seq_last = nvim_buf_get_b_u_seq_last(buf);
         nvim_buf_set_b_u_seq_last(buf, seq_last + 1);
-        nvim_uhp_set_seq(uhp, seq_last + 1);
+        (*uhp).uh_seq = seq_last + 1;
         nvim_buf_set_b_u_seq_cur(buf, seq_last + 1);
 
         let now = nvim_time_now();
-        nvim_uhp_set_time(uhp, now);
-        nvim_uhp_set_save_nr(uhp, 0);
+        (*uhp).uh_time = now;
+        (*uhp).uh_save_nr = 0;
         nvim_buf_set_b_u_time_cur(buf, now + 1);
 
-        nvim_uhp_set_walk(uhp, 0);
-        nvim_uhp_set_entry(uhp, ptr::null_mut());
-        nvim_uhp_set_getbot_entry(uhp, ptr::null_mut());
+        (*uhp).uh_walk = 0;
+        (*uhp).uh_entry = ptr::null_mut();
+        (*uhp).uh_getbot_entry = ptr::null_mut();
 
         // Save cursor position
         let mut lnum: LinenrT = 0;
         let mut col: ColnrT = 0;
         let mut coladd: ColnrT = 0;
         nvim_get_curwin_cursor(&mut lnum, &mut col, &mut coladd);
-        nvim_uhp_set_cursor(uhp, lnum, col, coladd);
+        (*uhp).uh_cursor.lnum = lnum;
+        (*uhp).uh_cursor.col = col;
+        (*uhp).uh_cursor.coladd = coladd;
 
         if nvim_curwin_virtual_active() && coladd > 0 {
-            nvim_uhp_set_cursor_vcol(uhp, nvim_getviscol());
+            (*uhp).uh_cursor_vcol = nvim_getviscol();
         } else {
-            nvim_uhp_set_cursor_vcol(uhp, -1);
+            (*uhp).uh_cursor_vcol = -1;
         }
 
         // Save changed and buffer empty flag
         let changed = nvim_buf_get_b_changed(buf);
         let ml_empty = nvim_buf_ml_is_empty(buf);
         let flags = (if changed { 1 } else { 0 }) + (if ml_empty { 2 } else { 0 });
-        nvim_uhp_set_flags(uhp, flags);
+        (*uhp).uh_flags = flags;
 
-        // Save named marks and Visual marks
+        // Save named marks and Visual marks (calls zero_fmark_additional_data and memmove)
         nvim_uhp_copy_marks_visual(buf, uhp);
 
         nvim_buf_set_b_u_newhead(buf, uhp);
 
         let oldhead = nvim_buf_get_b_u_oldhead(buf);
-        if oldhead.0.is_null() {
+        if oldhead.is_null() {
             nvim_buf_set_b_u_oldhead(buf, uhp);
         }
 
@@ -1942,7 +2131,7 @@ pub unsafe extern "C" fn rs_u_savecommon(
                 }
 
                 let newhead = nvim_buf_get_b_u_newhead(buf);
-                let getbot_entry = nvim_uhp_get_getbot_entry(newhead);
+                let getbot_entry = (*newhead).uh_getbot_entry;
                 let ue_top = (*uep).ue_top;
                 let ue_size = (*uep).ue_size;
                 let ue_bot = (*uep).ue_bot;
@@ -1973,9 +2162,9 @@ pub unsafe extern "C" fn rs_u_savecommon(
                         (*prev_uep).ue_next = uep_next;
 
                         let newhead = nvim_buf_get_b_u_newhead(buf);
-                        let entry = nvim_uhp_get_entry(newhead);
+                        let entry = (*newhead).uh_entry;
                         (*uep).ue_next = entry;
-                        nvim_uhp_set_entry(newhead, uep);
+                        (*newhead).uh_entry = uep;
                     }
 
                     // The executed command may change the line count
@@ -1986,7 +2175,7 @@ pub unsafe extern "C" fn rs_u_savecommon(
                     } else {
                         (*uep).ue_lcount = line_count;
                         let newhead = nvim_buf_get_b_u_newhead(buf);
-                        nvim_uhp_set_getbot_entry(newhead, uep);
+                        (*newhead).uh_getbot_entry = uep;
                     }
                     return OK;
                 }
@@ -2014,7 +2203,7 @@ pub unsafe extern "C" fn rs_u_savecommon(
     } else {
         (*uep).ue_lcount = line_count;
         let newhead = nvim_buf_get_b_u_newhead(buf);
-        nvim_uhp_set_getbot_entry(newhead, uep);
+        (*newhead).uh_getbot_entry = uep;
     }
 
     if size > 0 {
@@ -2035,16 +2224,16 @@ pub unsafe extern "C" fn rs_u_savecommon(
     }
 
     let newhead = nvim_buf_get_b_u_newhead(buf);
-    let entry = nvim_uhp_get_entry(newhead);
+    let entry = (*newhead).uh_entry;
     (*uep).ue_next = entry;
-    nvim_uhp_set_entry(newhead, uep);
+    (*newhead).uh_entry = uep;
 
     if reload {
         // Buffer was reloaded, notify text change subscribers
         let curbuf = nvim_get_curbuf();
         let curbuf_newhead = nvim_buf_get_b_u_newhead(curbuf);
-        let flags = nvim_uhp_get_flags(curbuf_newhead);
-        nvim_uhp_set_flags(curbuf_newhead, flags | 4); // UH_RELOAD = 4
+        let flags = (*curbuf_newhead).uh_flags;
+        (*curbuf_newhead).uh_flags = flags | 4; // UH_RELOAD = 4
     }
 
     nvim_buf_set_b_u_synced(buf, false);
@@ -2154,12 +2343,12 @@ pub unsafe extern "C" fn rs_u_find_first_changed() {
     let uhp = nvim_buf_get_b_u_newhead(curbuf);
 
     // If curhead is set or newhead is null, return early
-    if !nvim_buf_get_b_u_curhead(curbuf).0.is_null() || uhp.0.is_null() {
+    if !nvim_buf_get_b_u_curhead(curbuf).is_null() || uhp.is_null() {
         return; // undid something in an autocmd?
     }
 
     // Check that the last undo block was for the whole file
-    let uep = nvim_uhp_get_entry(uhp);
+    let uep = (*uhp).uh_entry;
     if (*uep).ue_top != 0 || (*uep).ue_bot != 0 {
         return;
     }
@@ -2174,8 +2363,10 @@ pub unsafe extern "C" fn rs_u_find_first_changed() {
         let buf_line = nvim_ml_get_buf_line(curbuf, lnum);
         let arr_line = *(*uep).ue_array.offset((lnum - 1) as isize);
         if libc::strcmp(arr_line, buf_line) != 0 {
-            nvim_uhp_clear_cursor(uhp);
-            nvim_uhp_set_cursor_lnum_only(uhp, lnum);
+            (*uhp).uh_cursor.lnum = 0;
+            (*uhp).uh_cursor.col = 0;
+            (*uhp).uh_cursor.coladd = 0;
+            (*uhp).uh_cursor.lnum = lnum;
             return;
         }
         lnum += 1;
@@ -2183,8 +2374,10 @@ pub unsafe extern "C" fn rs_u_find_first_changed() {
 
     // Lines added or deleted at the end, put cursor there
     if line_count != ue_size {
-        nvim_uhp_clear_cursor(uhp);
-        nvim_uhp_set_cursor_lnum_only(uhp, lnum);
+        (*uhp).uh_cursor.lnum = 0;
+        (*uhp).uh_cursor.col = 0;
+        (*uhp).uh_cursor.coladd = 0;
+        (*uhp).uh_cursor.lnum = lnum;
     }
 }
 
@@ -2235,17 +2428,17 @@ pub unsafe extern "C" fn rs_u_undoline() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_u_force_get_undo_header(buf: BufHandle) -> UHeaderHandle {
     let mut uhp = nvim_buf_get_b_u_curhead(buf);
-    if uhp.0.is_null() {
+    if uhp.is_null() {
         uhp = nvim_buf_get_b_u_newhead(buf);
     }
 
     // Create the first undo header for the buffer
-    if uhp.0.is_null() {
+    if uhp.is_null() {
         // Args are tricky: this means replace empty range by empty range
         rs_u_savecommon(buf, 0, 1, 1, true);
 
         uhp = nvim_buf_get_b_u_curhead(buf);
-        if uhp.0.is_null() {
+        if uhp.is_null() {
             uhp = nvim_buf_get_b_u_newhead(buf);
             // If undolevel > 0 and still no header, abort
             // (This shouldn't happen in normal operation)
@@ -2313,13 +2506,13 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
             // the last write, count that as moving one file-write, so
             // that ":earlier 1f" undoes all changes since the last save.
             let curhead = nvim_buf_get_b_u_curhead(buf);
-            let uhp = if !curhead.0.is_null() {
-                nvim_uhp_get_next(curhead)
+            let uhp = if !curhead.is_null() {
+                (*curhead).uh_next.ptr
             } else {
                 nvim_buf_get_b_u_newhead(buf)
             };
 
-            if !uhp.0.is_null() && nvim_uhp_get_save_nr(uhp) != 0 {
+            if !uhp.is_null() && (*uhp).uh_save_nr != 0 {
                 // "uh_save_nr" was set in the last block, that means
                 // there were no changes since the last write
                 t = save_nr_cur + step;
@@ -2414,21 +2607,21 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
         let nomark = nvim_inc_lastmark();
 
         let curhead = nvim_buf_get_b_u_curhead(buf);
-        let mut uhp = if curhead.0.is_null() {
+        let mut uhp = if curhead.is_null() {
             // at leaf of the tree
             nvim_buf_get_b_u_newhead(buf)
         } else {
             curhead
         };
 
-        while !uhp.0.is_null() {
-            nvim_uhp_set_walk(uhp, mark);
+        while !uhp.is_null() {
+            (*uhp).uh_walk = mark;
             let val = if dosec {
-                nvim_uhp_get_time(uhp) as c_int
+                (*uhp).uh_time as c_int
             } else if dofile {
-                nvim_uhp_get_save_nr(uhp)
+                (*uhp).uh_save_nr
             } else {
-                nvim_uhp_get_seq(uhp)
+                (*uhp).uh_seq
             };
 
             if round == 1 && !(dofile && val == 0) {
@@ -2436,7 +2629,7 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
                 // It must be at least in the right direction (checked with
                 // "b_u_seq_cur"). When the timestamp is equal find the
                 // highest/lowest sequence number.
-                let uh_seq = nvim_uhp_get_seq(uhp);
+                let uh_seq = (*uhp).uh_seq;
                 let seq_cur = nvim_buf_get_b_u_seq_cur(buf);
                 let in_right_direction = if step < 0 {
                     uh_seq <= seq_cur
@@ -2478,55 +2671,52 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
             // Quit searching when we found a match. But when searching for a
             // time we need to continue looking for the best uh_seq.
             if target == val && !dosec {
-                target = nvim_uhp_get_seq(uhp);
+                target = (*uhp).uh_seq;
                 break;
             }
 
             // go down in the tree if we haven't been there
-            let prev = nvim_uhp_get_prev(uhp);
-            if !prev.0.is_null()
-                && nvim_uhp_get_walk(prev) != nomark
-                && nvim_uhp_get_walk(prev) != mark
-            {
+            let prev = (*uhp).uh_prev.ptr;
+            if !prev.is_null() && (*prev).uh_walk != nomark && (*prev).uh_walk != mark {
                 uhp = prev;
             } else {
-                let alt_next = nvim_uhp_get_alt_next(uhp);
-                if !alt_next.0.is_null()
-                    && nvim_uhp_get_walk(alt_next) != nomark
-                    && nvim_uhp_get_walk(alt_next) != mark
+                let alt_next = (*uhp).uh_alt_next.ptr;
+                if !alt_next.is_null()
+                    && (*alt_next).uh_walk != nomark
+                    && (*alt_next).uh_walk != mark
                 {
                     // go to alternate branch if we haven't been there
                     uhp = alt_next;
                 } else {
-                    let next = nvim_uhp_get_next(uhp);
-                    let alt_prev = nvim_uhp_get_alt_prev(uhp);
-                    if !next.0.is_null()
-                        && alt_prev.0.is_null()
-                        && nvim_uhp_get_walk(next) != nomark
-                        && nvim_uhp_get_walk(next) != mark
+                    let next = (*uhp).uh_next.ptr;
+                    let alt_prev = (*uhp).uh_alt_prev.ptr;
+                    if !next.is_null()
+                        && alt_prev.is_null()
+                        && (*next).uh_walk != nomark
+                        && (*next).uh_walk != mark
                     {
                         // go up in the tree if we haven't been there and we are at the
                         // start of alternate branches
                         // If still at the start we don't go through this change.
                         let curhead = nvim_buf_get_b_u_curhead(buf);
-                        if uhp.0 == curhead.0 {
-                            nvim_uhp_set_walk(uhp, nomark);
+                        if uhp == curhead {
+                            (*uhp).uh_walk = nomark;
                         }
                         uhp = next;
                     } else {
                         // need to backtrack; mark this node as useless
-                        nvim_uhp_set_walk(uhp, nomark);
-                        if !alt_prev.0.is_null() {
+                        (*uhp).uh_walk = nomark;
+                        if !alt_prev.is_null() {
                             uhp = alt_prev;
                         } else {
-                            uhp = nvim_uhp_get_next(uhp);
+                            uhp = (*uhp).uh_next.ptr;
                         }
                     }
                 }
             }
         }
 
-        if !uhp.0.is_null() {
+        if !uhp.is_null() {
             // found it
             break;
         }
@@ -2585,15 +2775,15 @@ unsafe fn undo_time_to_target(
         nvim_change_warning_curbuf();
 
         let curhead = nvim_buf_get_b_u_curhead(buf);
-        let uhp = if curhead.0.is_null() {
+        let uhp = if curhead.is_null() {
             nvim_buf_get_b_u_newhead(buf)
         } else {
-            nvim_uhp_get_next(curhead)
+            (*curhead).uh_next.ptr
         };
 
-        if uhp.0.is_null()
-            || (target > 0 && nvim_uhp_get_walk(uhp) != mark)
-            || (nvim_uhp_get_seq(uhp) == target && !above)
+        if uhp.is_null()
+            || (target > 0 && (*uhp).uh_walk != mark)
+            || ((*uhp).uh_seq == target && !above)
         {
             break;
         }
@@ -2601,7 +2791,7 @@ unsafe fn undo_time_to_target(
         nvim_buf_set_b_u_curhead(buf, uhp);
         u_undoredo(true, true);
         if target > 0 {
-            nvim_uhp_set_walk(uhp, nomark); // don't go back down here
+            (*uhp).uh_walk = nomark; // don't go back down here
         }
     }
 
@@ -2613,68 +2803,68 @@ unsafe fn undo_time_to_target(
             nvim_change_warning_curbuf();
 
             let mut uhp = nvim_buf_get_b_u_curhead(buf);
-            if uhp.0.is_null() {
+            if uhp.is_null() {
                 break;
             }
 
             // Go back to the first branch with a mark.
-            let mut alt_prev = nvim_uhp_get_alt_prev(uhp);
-            while !alt_prev.0.is_null() && nvim_uhp_get_walk(alt_prev) == mark {
+            let mut alt_prev = (*uhp).uh_alt_prev.ptr;
+            while !alt_prev.is_null() && (*alt_prev).uh_walk == mark {
                 uhp = alt_prev;
-                alt_prev = nvim_uhp_get_alt_prev(uhp);
+                alt_prev = (*uhp).uh_alt_prev.ptr;
             }
 
             // Find the last branch with a mark, that's the one.
             let mut last = uhp;
-            let mut alt_next = nvim_uhp_get_alt_next(last);
-            while !alt_next.0.is_null() && nvim_uhp_get_walk(alt_next) == mark {
+            let mut alt_next = (*last).uh_alt_next.ptr;
+            while !alt_next.is_null() && (*alt_next).uh_walk == mark {
                 last = alt_next;
-                alt_next = nvim_uhp_get_alt_next(last);
+                alt_next = (*last).uh_alt_next.ptr;
             }
 
-            if last.0 != uhp.0 {
+            if last != uhp {
                 // Make the used branch the first entry in the list of
                 // alternatives to make "u" and CTRL-R take this branch.
                 let mut first = uhp;
-                let mut first_alt_prev = nvim_uhp_get_alt_prev(first);
-                while !first_alt_prev.0.is_null() {
+                let mut first_alt_prev = (*first).uh_alt_prev.ptr;
+                while !first_alt_prev.is_null() {
                     first = first_alt_prev;
-                    first_alt_prev = nvim_uhp_get_alt_prev(first);
+                    first_alt_prev = (*first).uh_alt_prev.ptr;
                 }
 
-                let last_alt_next = nvim_uhp_get_alt_next(last);
-                if !last_alt_next.0.is_null() {
-                    let last_alt_prev = nvim_uhp_get_alt_prev(last);
-                    nvim_uhp_set_alt_prev(last_alt_next, last_alt_prev);
+                let last_alt_next = (*last).uh_alt_next.ptr;
+                if !last_alt_next.is_null() {
+                    let last_alt_prev = (*last).uh_alt_prev.ptr;
+                    (*last_alt_next).uh_alt_prev.ptr = last_alt_prev;
                 }
 
-                let last_alt_prev = nvim_uhp_get_alt_prev(last);
-                nvim_uhp_set_alt_next(last_alt_prev, nvim_uhp_get_alt_next(last));
-                nvim_uhp_set_alt_prev(last, UHeaderHandle(std::ptr::null_mut()));
-                nvim_uhp_set_alt_next(last, first);
-                nvim_uhp_set_alt_prev(first, last);
+                let last_alt_prev = (*last).uh_alt_prev.ptr;
+                (*last_alt_prev).uh_alt_next.ptr = (*last).uh_alt_next.ptr;
+                (*last).uh_alt_prev.ptr = std::ptr::null_mut();
+                (*last).uh_alt_next.ptr = first;
+                (*first).uh_alt_prev.ptr = last;
 
                 let oldhead = nvim_buf_get_b_u_oldhead(buf);
-                if oldhead.0 == first.0 {
+                if oldhead == first {
                     nvim_buf_set_b_u_oldhead(buf, last);
                 }
 
                 uhp = last;
-                let next = nvim_uhp_get_next(uhp);
-                if !next.0.is_null() {
-                    nvim_uhp_set_prev(next, uhp);
+                let next = (*uhp).uh_next.ptr;
+                if !next.is_null() {
+                    (*next).uh_prev.ptr = uhp;
                 }
             }
 
             nvim_buf_set_b_u_curhead(buf, uhp);
 
-            if nvim_uhp_get_walk(uhp) != mark {
+            if (*uhp).uh_walk != mark {
                 break; // must have reached the target
             }
 
             // Stop when going backwards in time and didn't find the exact
             // header we were looking for.
-            if nvim_uhp_get_seq(uhp) == target && above {
+            if (*uhp).uh_seq == target && above {
                 nvim_buf_set_b_u_seq_cur(buf, target - 1);
                 break;
             }
@@ -2683,20 +2873,20 @@ unsafe fn undo_time_to_target(
 
             // Advance "curhead" to below the header we last used. If it
             // becomes NULL then we need to set "newhead" to this leaf.
-            let prev = nvim_uhp_get_prev(uhp);
-            if prev.0.is_null() {
+            let prev = (*uhp).uh_prev.ptr;
+            if prev.is_null() {
                 nvim_buf_set_b_u_newhead(buf, uhp);
             }
             nvim_buf_set_b_u_curhead(buf, prev);
             *did_undo = false;
 
-            if nvim_uhp_get_seq(uhp) == target {
+            if (*uhp).uh_seq == target {
                 // found it!
                 break;
             }
 
-            let prev = nvim_uhp_get_prev(uhp);
-            if prev.0.is_null() || nvim_uhp_get_walk(prev) != mark {
+            let prev = (*uhp).uh_prev.ptr;
+            if prev.is_null() || (*prev).uh_walk != mark {
                 // Need to redo more but can't find it...
                 nvim_internal_error_undo_time();
                 break;
@@ -2803,15 +2993,15 @@ pub unsafe extern "C" fn rs_undo_tree_count(buf: BufHandle) -> c_int {
     let mut count: c_int = 0;
     let mut uhp = nvim_buf_get_b_u_oldhead(buf);
 
-    while !uhp.0.is_null() {
+    while !uhp.is_null() {
         count += 1;
         // Count alternate branches
-        let mut alt = nvim_uhp_get_alt_next(uhp);
-        while !alt.0.is_null() {
+        let mut alt = (*uhp).uh_alt_next.ptr;
+        while !alt.is_null() {
             count += rs_undo_branch_count(alt);
-            alt = nvim_uhp_get_alt_next(alt);
+            alt = (*alt).uh_alt_next.ptr;
         }
-        uhp = nvim_uhp_get_prev(uhp);
+        uhp = (*uhp).uh_prev.ptr;
     }
 
     count
@@ -2824,22 +3014,22 @@ pub unsafe extern "C" fn rs_undo_tree_count(buf: BufHandle) -> c_int {
 /// The `uhp` handle must be a valid pointer to a u_header_T or NULL.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_branch_count(uhp: UHeaderHandle) -> c_int {
-    if uhp.0.is_null() {
+    if uhp.is_null() {
         return 0;
     }
 
     let mut count: c_int = 1;
-    let mut current = nvim_uhp_get_prev(uhp);
+    let mut current = (*uhp).uh_prev.ptr;
 
-    while !current.0.is_null() {
+    while !current.is_null() {
         count += 1;
         // Count alternate branches
-        let mut alt = nvim_uhp_get_alt_next(current);
-        while !alt.0.is_null() {
+        let mut alt = (*current).uh_alt_next.ptr;
+        while !alt.is_null() {
             count += rs_undo_branch_count(alt);
-            alt = nvim_uhp_get_alt_next(alt);
+            alt = (*alt).uh_alt_next.ptr;
         }
-        current = nvim_uhp_get_prev(current);
+        current = (*current).uh_prev.ptr;
     }
 
     count
@@ -2854,25 +3044,25 @@ pub unsafe extern "C" fn rs_undo_branch_count(uhp: UHeaderHandle) -> c_int {
 pub unsafe extern "C" fn rs_undo_find_seq(buf: BufHandle, seq: c_int) -> UHeaderHandle {
     let mut uhp = nvim_buf_get_b_u_newhead(buf);
 
-    while !uhp.0.is_null() {
-        if nvim_uhp_get_seq(uhp) == seq {
+    while !uhp.is_null() {
+        if (*uhp).uh_seq == seq {
             return uhp;
         }
 
         // Check alternate branches
-        let mut alt = nvim_uhp_get_alt_next(uhp);
-        while !alt.0.is_null() {
+        let mut alt = (*uhp).uh_alt_next.ptr;
+        while !alt.is_null() {
             let found = rs_undo_find_seq_in_branch(alt, seq);
-            if !found.0.is_null() {
+            if !found.is_null() {
                 return found;
             }
-            alt = nvim_uhp_get_alt_next(alt);
+            alt = (*alt).uh_alt_next.ptr;
         }
 
-        uhp = nvim_uhp_get_next(uhp);
+        uhp = (*uhp).uh_next.ptr;
     }
 
-    UHeaderHandle(std::ptr::null_mut())
+    std::ptr::null_mut()
 }
 
 /// Find sequence number in a branch (recursive helper).
@@ -2881,34 +3071,34 @@ pub unsafe extern "C" fn rs_undo_find_seq(buf: BufHandle, seq: c_int) -> UHeader
 ///
 /// The `uhp` handle must be a valid pointer to a u_header_T or NULL.
 unsafe fn rs_undo_find_seq_in_branch(uhp: UHeaderHandle, seq: c_int) -> UHeaderHandle {
-    if uhp.0.is_null() {
-        return UHeaderHandle(std::ptr::null_mut());
+    if uhp.is_null() {
+        return std::ptr::null_mut();
     }
 
-    if nvim_uhp_get_seq(uhp) == seq {
+    if (*uhp).uh_seq == seq {
         return uhp;
     }
 
-    let mut current = nvim_uhp_get_prev(uhp);
-    while !current.0.is_null() {
-        if nvim_uhp_get_seq(current) == seq {
+    let mut current = (*uhp).uh_prev.ptr;
+    while !current.is_null() {
+        if (*current).uh_seq == seq {
             return current;
         }
 
         // Check alternate branches
-        let mut alt = nvim_uhp_get_alt_next(current);
-        while !alt.0.is_null() {
+        let mut alt = (*current).uh_alt_next.ptr;
+        while !alt.is_null() {
             let found = rs_undo_find_seq_in_branch(alt, seq);
-            if !found.0.is_null() {
+            if !found.is_null() {
                 return found;
             }
-            alt = nvim_uhp_get_alt_next(alt);
+            alt = (*alt).uh_alt_next.ptr;
         }
 
-        current = nvim_uhp_get_prev(current);
+        current = (*current).uh_prev.ptr;
     }
 
-    UHeaderHandle(std::ptr::null_mut())
+    std::ptr::null_mut()
 }
 
 /// Count the number of undo entries in a header.
@@ -2918,12 +3108,12 @@ unsafe fn rs_undo_find_seq_in_branch(uhp: UHeaderHandle, seq: c_int) -> UHeaderH
 /// The `uhp` handle must be a valid pointer to a u_header_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_count_entries(uhp: UHeaderHandle) -> c_int {
-    if uhp.0.is_null() {
+    if uhp.is_null() {
         return 0;
     }
 
     let mut count: c_int = 0;
-    let mut uep = nvim_uhp_get_entry(uhp);
+    let mut uep = (*uhp).uh_entry;
 
     while !uep.is_null() {
         count += 1;
@@ -2951,7 +3141,7 @@ pub unsafe extern "C" fn rs_undo_get_tree_depth(buf: BufHandle) -> c_int {
 /// The `uhp` handle must be a valid pointer to a u_header_T or NULL.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_get_branch_depth(uhp: UHeaderHandle) -> c_int {
-    if uhp.0.is_null() {
+    if uhp.is_null() {
         return 0;
     }
 
@@ -2960,20 +3150,20 @@ pub unsafe extern "C" fn rs_undo_get_branch_depth(uhp: UHeaderHandle) -> c_int {
     // Check this branch
     let mut current = uhp;
     let mut depth: c_int = 0;
-    while !current.0.is_null() {
+    while !current.is_null() {
         depth += 1;
 
         // Check alternate branches
-        let mut alt = nvim_uhp_get_alt_next(current);
-        while !alt.0.is_null() {
+        let mut alt = (*current).uh_alt_next.ptr;
+        while !alt.is_null() {
             let alt_depth = rs_undo_get_branch_depth(alt);
             if depth + alt_depth > max_depth {
                 max_depth = depth + alt_depth;
             }
-            alt = nvim_uhp_get_alt_next(alt);
+            alt = (*alt).uh_alt_next.ptr;
         }
 
-        current = nvim_uhp_get_prev(current);
+        current = (*current).uh_prev.ptr;
     }
 
     if depth > max_depth {
@@ -2995,10 +3185,10 @@ pub unsafe extern "C" fn rs_undo_can_undo(buf: BufHandle) -> bool {
 
     // Can undo if curhead is NULL (first undo) and newhead exists
     // or if curhead exists and has a next header
-    if curhead.0.is_null() {
-        !newhead.0.is_null()
+    if curhead.is_null() {
+        !newhead.is_null()
     } else {
-        !nvim_uhp_get_next(curhead).0.is_null()
+        !(*curhead).uh_next.ptr.is_null()
     }
 }
 
@@ -3011,7 +3201,7 @@ pub unsafe extern "C" fn rs_undo_can_undo(buf: BufHandle) -> bool {
 pub unsafe extern "C" fn rs_undo_can_redo(buf: BufHandle) -> bool {
     let curhead = nvim_buf_get_b_u_curhead(buf);
     // Can redo if curhead exists (there's something to redo)
-    !curhead.0.is_null()
+    !curhead.is_null()
 }
 
 /// Get the current undo sequence number.
@@ -3095,7 +3285,7 @@ pub unsafe extern "C" fn rs_undo_is_synced(buf: BufHandle) -> bool {
 /// The `uhp` handle must be a valid pointer to a u_header_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uhp_get_seq(uhp: UHeaderHandle) -> c_int {
-    nvim_uhp_get_seq(uhp)
+    (*uhp).uh_seq
 }
 
 /// Get the time from an undo header.
@@ -3105,7 +3295,7 @@ pub unsafe extern "C" fn rs_uhp_get_seq(uhp: UHeaderHandle) -> c_int {
 /// The `uhp` handle must be a valid pointer to a u_header_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uhp_get_time(uhp: UHeaderHandle) -> TimeT {
-    nvim_uhp_get_time(uhp)
+    (*uhp).uh_time
 }
 
 /// Get the flags from an undo header.
@@ -3115,7 +3305,7 @@ pub unsafe extern "C" fn rs_uhp_get_time(uhp: UHeaderHandle) -> TimeT {
 /// The `uhp` handle must be a valid pointer to a u_header_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uhp_get_flags(uhp: UHeaderHandle) -> c_int {
-    nvim_uhp_get_flags(uhp)
+    (*uhp).uh_flags
 }
 
 /// Get the save number from an undo header.
@@ -3125,7 +3315,7 @@ pub unsafe extern "C" fn rs_uhp_get_flags(uhp: UHeaderHandle) -> c_int {
 /// The `uhp` handle must be a valid pointer to a u_header_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uhp_get_save_nr(uhp: UHeaderHandle) -> c_int {
-    nvim_uhp_get_save_nr(uhp)
+    (*uhp).uh_save_nr
 }
 
 /// Get the next header in the list.
@@ -3135,7 +3325,7 @@ pub unsafe extern "C" fn rs_uhp_get_save_nr(uhp: UHeaderHandle) -> c_int {
 /// The `uhp` handle must be a valid pointer to a u_header_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uhp_get_next(uhp: UHeaderHandle) -> UHeaderHandle {
-    nvim_uhp_get_next(uhp)
+    (*uhp).uh_next.ptr
 }
 
 /// Get the previous header in the list.
@@ -3145,7 +3335,7 @@ pub unsafe extern "C" fn rs_uhp_get_next(uhp: UHeaderHandle) -> UHeaderHandle {
 /// The `uhp` handle must be a valid pointer to a u_header_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uhp_get_prev(uhp: UHeaderHandle) -> UHeaderHandle {
-    nvim_uhp_get_prev(uhp)
+    (*uhp).uh_prev.ptr
 }
 
 /// Get the next alternate header.
@@ -3155,7 +3345,7 @@ pub unsafe extern "C" fn rs_uhp_get_prev(uhp: UHeaderHandle) -> UHeaderHandle {
 /// The `uhp` handle must be a valid pointer to a u_header_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uhp_get_alt_next(uhp: UHeaderHandle) -> UHeaderHandle {
-    nvim_uhp_get_alt_next(uhp)
+    (*uhp).uh_alt_next.ptr
 }
 
 /// Get the previous alternate header.
@@ -3165,7 +3355,7 @@ pub unsafe extern "C" fn rs_uhp_get_alt_next(uhp: UHeaderHandle) -> UHeaderHandl
 /// The `uhp` handle must be a valid pointer to a u_header_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uhp_get_alt_prev(uhp: UHeaderHandle) -> UHeaderHandle {
-    nvim_uhp_get_alt_prev(uhp)
+    (*uhp).uh_alt_prev.ptr
 }
 
 /// Get the first entry in an undo header.
@@ -3175,13 +3365,13 @@ pub unsafe extern "C" fn rs_uhp_get_alt_prev(uhp: UHeaderHandle) -> UHeaderHandl
 /// The `uhp` handle must be a valid pointer to a u_header_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_uhp_get_entry(uhp: UHeaderHandle) -> UEntryHandle {
-    nvim_uhp_get_entry(uhp)
+    (*uhp).uh_entry
 }
 
 /// Check if an undo header is NULL.
 #[no_mangle]
 pub extern "C" fn rs_uhp_is_null(uhp: UHeaderHandle) -> bool {
-    uhp.0.is_null()
+    uhp.is_null()
 }
 
 /// Check if an undo entry is NULL.
@@ -3470,21 +3660,21 @@ unsafe fn serialize_visualinfo(fp: FileHandle, uhp: UHeaderHandle) -> bool {
     // vi_start
     serialize_pos(
         fp,
-        nvim_uhp_get_visual_start_lnum(uhp),
-        nvim_uhp_get_visual_start_col(uhp),
-        nvim_uhp_get_visual_start_coladd(uhp),
+        (*uhp).uh_visual.vi_start.lnum,
+        (*uhp).uh_visual.vi_start.col,
+        (*uhp).uh_visual.vi_start.coladd,
     ) &&
     // vi_end
     serialize_pos(
         fp,
-        nvim_uhp_get_visual_end_lnum(uhp),
-        nvim_uhp_get_visual_end_col(uhp),
-        nvim_uhp_get_visual_end_coladd(uhp),
+        (*uhp).uh_visual.vi_end.lnum,
+        (*uhp).uh_visual.vi_end.col,
+        (*uhp).uh_visual.vi_end.coladd,
     ) &&
     // vi_mode
-    undo_write_4(fp, nvim_uhp_get_visual_mode(uhp)) &&
+    undo_write_4(fp, (*uhp).uh_visual.vi_mode) &&
     // vi_curswant
-    undo_write_4(fp, nvim_uhp_get_visual_curswant(uhp))
+    undo_write_4(fp, (*uhp).uh_visual.vi_curswant)
 }
 
 /// Write the header pointer as a sequence number.
@@ -3499,10 +3689,10 @@ unsafe fn serialize_visualinfo(fp: FileHandle, uhp: UHeaderHandle) -> bool {
 #[allow(dead_code)]
 #[inline]
 unsafe fn put_header_ptr(fp: FileHandle, uhp: UHeaderHandle) -> bool {
-    let seq = if uhp.0.is_null() {
+    let seq = if uhp.is_null() {
         0
     } else {
-        nvim_uhp_get_seq(uhp) as u64
+        (*uhp).uh_seq as u64
     };
     undo_write_bytes(fp, seq, 4)
 }
@@ -3588,41 +3778,61 @@ unsafe fn serialize_uhp(fp: FileHandle, uhp: UHeaderHandle) -> bool {
     }
 
     // Write header pointers as sequence numbers
-    if !put_header_ptr_by_seq(fp, nvim_uhp_get_next_seq(uhp)) {
+    let next_seq = if (*uhp).uh_next.ptr.is_null() {
+        0
+    } else {
+        (*(*uhp).uh_next.ptr).uh_seq
+    };
+    if !put_header_ptr_by_seq(fp, next_seq) {
         return false;
     }
-    if !put_header_ptr_by_seq(fp, nvim_uhp_get_prev_seq(uhp)) {
+    let prev_seq = if (*uhp).uh_prev.ptr.is_null() {
+        0
+    } else {
+        (*(*uhp).uh_prev.ptr).uh_seq
+    };
+    if !put_header_ptr_by_seq(fp, prev_seq) {
         return false;
     }
-    if !put_header_ptr_by_seq(fp, nvim_uhp_get_alt_next_seq(uhp)) {
+    let alt_next_seq = if (*uhp).uh_alt_next.ptr.is_null() {
+        0
+    } else {
+        (*(*uhp).uh_alt_next.ptr).uh_seq
+    };
+    if !put_header_ptr_by_seq(fp, alt_next_seq) {
         return false;
     }
-    if !put_header_ptr_by_seq(fp, nvim_uhp_get_alt_prev_seq(uhp)) {
+    let alt_prev_seq = if (*uhp).uh_alt_prev.ptr.is_null() {
+        0
+    } else {
+        (*(*uhp).uh_alt_prev.ptr).uh_seq
+    };
+    if !put_header_ptr_by_seq(fp, alt_prev_seq) {
         return false;
     }
 
     // Write sequence number
-    if !undo_write_4(fp, nvim_uhp_get_seq(uhp)) {
+    if !undo_write_4(fp, (*uhp).uh_seq) {
         return false;
     }
 
     // Write cursor position
     if !serialize_pos(
         fp,
-        nvim_uhp_get_cursor_lnum(uhp),
-        nvim_uhp_get_cursor_col(uhp),
-        nvim_uhp_get_cursor_coladd(uhp),
+        (*uhp).uh_cursor.lnum,
+        (*uhp).uh_cursor.col,
+        (*uhp).uh_cursor.coladd,
     ) {
         return false;
     }
 
     // Write cursor vcol
-    if !undo_write_4(fp, nvim_uhp_get_cursor_vcol(uhp)) {
+    if !undo_write_4(fp, (*uhp).uh_cursor_vcol) {
         return false;
     }
 
     // Write flags (2 bytes)
-    if !undo_write_2(fp, nvim_uhp_get_flags(uhp) as u16) {
+    if !undo_write_2(fp, (*uhp).uh_flags as u16) {
         return false;
     }
 
@@ -3630,9 +3840,9 @@ unsafe fn serialize_uhp(fp: FileHandle, uhp: UHeaderHandle) -> bool {
     for i in 0..NMARKS as c_int {
         if !serialize_pos(
             fp,
-            nvim_uhp_get_namedm_lnum(uhp, i),
-            nvim_uhp_get_namedm_col(uhp, i),
-            nvim_uhp_get_namedm_coladd(uhp, i),
+            (*uhp).uh_namedm[i as usize].mark.lnum,
+            (*uhp).uh_namedm[i as usize].mark.col,
+            (*uhp).uh_namedm[i as usize].mark.coladd,
         ) {
             return false;
         }
@@ -3644,7 +3854,7 @@ unsafe fn serialize_uhp(fp: FileHandle, uhp: UHeaderHandle) -> bool {
     }
 
     // Write time (8 bytes)
-    if !undo_write_time(fp, nvim_uhp_get_time(uhp)) {
+    if !undo_write_time(fp, (*uhp).uh_time) {
         return false;
     }
 
@@ -3657,7 +3867,7 @@ unsafe fn serialize_uhp(fp: FileHandle, uhp: UHeaderHandle) -> bool {
         // field id
         return false;
     }
-    if !undo_write_4(fp, nvim_uhp_get_save_nr(uhp)) {
+    if !undo_write_4(fp, (*uhp).uh_save_nr) {
         return false;
     }
 
@@ -3667,7 +3877,7 @@ unsafe fn serialize_uhp(fp: FileHandle, uhp: UHeaderHandle) -> bool {
     }
 
     // Write all undo entries
-    let mut uep = nvim_uhp_get_entry(uhp);
+    let mut uep = (*uhp).uh_entry;
     while !uep.is_null() {
         if !undo_write_2(fp, UF_ENTRY_MAGIC) {
             return false;
@@ -3684,23 +3894,31 @@ unsafe fn serialize_uhp(fp: FileHandle, uhp: UHeaderHandle) -> bool {
     }
 
     // Write all extmark undo objects
-    let extmark_count = nvim_uhp_get_extmark_count(uhp);
+    let extmark_count = (*uhp).uh_extmark.size;
     for i in 0..extmark_count {
-        let ext_type = nvim_uhp_get_extmark_type(uhp, i);
-        // Only serialize splice and move types
-        if ext_type == 1 || ext_type == 2 {
-            // kExtmarkSplice = 1, kExtmarkMove = 2
+        let obj = &*(*uhp).uh_extmark.items.add(i);
+        let ext_type = obj.kind;
+        // Only serialize splice and move types (kExtmarkSplice=0, kExtmarkMove=1)
+        if ext_type == K_EXTMARK_SPLICE || ext_type == K_EXTMARK_MOVE {
             if !undo_write_2(fp, UF_ENTRY_MAGIC) {
                 return false;
             }
             if !undo_write_4(fp, ext_type) {
                 return false;
             }
-            // Get the extmark data and write it
-            let mut buf = [0u8; 128]; // Large enough for ExtmarkSplice or ExtmarkMove
-            let size = if ext_type == 1 { 72 } else { 48 }; // Approximate sizes
-            nvim_uhp_get_extmark_data(uhp, i, buf.as_mut_ptr(), size);
-            if !undo_write(fp, buf.as_ptr(), size) {
+            // Write the raw data bytes for splice or move
+            let (ptr, size) = if ext_type == K_EXTMARK_SPLICE {
+                (
+                    std::ptr::addr_of!(obj.data.splice) as *const u8,
+                    std::mem::size_of::<ExtmarkSplice>(),
+                )
+            } else {
+                (
+                    std::ptr::addr_of!(obj.data.mover) as *const u8,
+                    std::mem::size_of::<ExtmarkMove>(),
+                )
+            };
+            if !undo_write(fp, ptr, size) {
                 return false;
             }
         }
@@ -4084,10 +4302,10 @@ pub unsafe extern "C" fn rs_u_write_undo(
     // Iteratively serialize UHPs and their UEPs from the top down.
     let mark = nvim_inc_lastmark();
     let mut uhp = nvim_buf_get_b_u_oldhead(buf);
-    while !uhp.0.is_null() {
+    while !uhp.is_null() {
         // Serialize current UHP if we haven't seen it
-        if nvim_uhp_get_walk(uhp) != mark {
-            nvim_uhp_set_walk(uhp, mark);
+        if (*uhp).uh_walk != mark {
+            (*uhp).uh_walk = mark;
             if !serialize_uhp(fp, uhp) {
                 nvim_undo_fclose(fp);
                 nvim_undo_write_error(file_name);
@@ -4099,22 +4317,22 @@ pub unsafe extern "C" fn rs_u_write_undo(
         }
 
         // Now walk through the tree - algorithm from undo_time().
-        let prev = nvim_uhp_get_prev(uhp);
-        if !prev.0.is_null() && nvim_uhp_get_walk(prev) != mark {
+        let prev = (*uhp).uh_prev.ptr;
+        if !prev.is_null() && (*prev).uh_walk != mark {
             uhp = prev;
         } else {
-            let alt_next = nvim_uhp_get_alt_next(uhp);
-            if !alt_next.0.is_null() && nvim_uhp_get_walk(alt_next) != mark {
+            let alt_next = (*uhp).uh_alt_next.ptr;
+            if !alt_next.is_null() && (*alt_next).uh_walk != mark {
                 uhp = alt_next;
             } else {
-                let next = nvim_uhp_get_next(uhp);
-                let alt_prev = nvim_uhp_get_alt_prev(uhp);
-                if !next.0.is_null() && alt_prev.0.is_null() && nvim_uhp_get_walk(next) != mark {
+                let next = (*uhp).uh_next.ptr;
+                let alt_prev = (*uhp).uh_alt_prev.ptr;
+                if !next.is_null() && alt_prev.is_null() && (*next).uh_walk != mark {
                     uhp = next;
-                } else if !alt_prev.0.is_null() {
+                } else if !alt_prev.is_null() {
                     uhp = alt_prev;
                 } else {
-                    uhp = nvim_uhp_get_next(uhp);
+                    uhp = (*uhp).uh_next.ptr;
                 }
             }
         }
@@ -4167,41 +4385,6 @@ extern "C" {
     fn nvim_u_free_uhp(uhp: UHeaderHandle);
     fn nvim_undo_check_owner(orig_name: *const c_char, file_name: *const c_char) -> bool;
 
-    // Get uh_seq from a header in seq mode (for pointer swizzling)
-    fn nvim_uhp_get_next_seq_for_swizzle(uhp: UHeaderHandle) -> c_int;
-    fn nvim_uhp_get_prev_seq_for_swizzle(uhp: UHeaderHandle) -> c_int;
-    fn nvim_uhp_get_alt_next_seq_for_swizzle(uhp: UHeaderHandle) -> c_int;
-    fn nvim_uhp_get_alt_prev_seq_for_swizzle(uhp: UHeaderHandle) -> c_int;
-
-    // Deserialization setters
-    fn nvim_uhp_set_next_seq(uhp: UHeaderHandle, seq: c_int);
-    fn nvim_uhp_set_prev_seq(uhp: UHeaderHandle, seq: c_int);
-    fn nvim_uhp_set_alt_next_seq(uhp: UHeaderHandle, seq: c_int);
-    fn nvim_uhp_set_alt_prev_seq(uhp: UHeaderHandle, seq: c_int);
-    fn nvim_uhp_set_namedm(
-        uhp: UHeaderHandle,
-        idx: c_int,
-        lnum: LinenrT,
-        col: ColnrT,
-        coladd: ColnrT,
-        timestamp: u64,
-        fnum: c_int,
-    );
-    fn nvim_uhp_set_visual(
-        uhp: UHeaderHandle,
-        start_lnum: LinenrT,
-        start_col: ColnrT,
-        start_coladd: ColnrT,
-        end_lnum: LinenrT,
-        end_col: ColnrT,
-        end_coladd: ColnrT,
-        mode: c_int,
-        curswant: ColnrT,
-    );
-    fn nvim_uhp_push_extmark_splice(uhp: UHeaderHandle, data: *const u8, size: usize);
-    fn nvim_uhp_push_extmark_move(uhp: UHeaderHandle, data: *const u8, size: usize);
-    fn nvim_sizeof_extmark_splice() -> usize;
-    fn nvim_sizeof_extmark_move() -> usize;
 }
 
 // =============================================================================
@@ -4232,17 +4415,14 @@ unsafe fn unserialize_visualinfo(fp: FileHandle, uhp: UHeaderHandle) {
     let (end_lnum, end_col, end_coladd) = unserialize_pos(fp);
     let mode = undo_read_4c(fp);
     let curswant = undo_read_4c(fp);
-    nvim_uhp_set_visual(
-        uhp,
-        start_lnum,
-        start_col,
-        start_coladd,
-        end_lnum,
-        end_col,
-        end_coladd,
-        mode,
-        curswant,
-    );
+    (*uhp).uh_visual.vi_start.lnum = start_lnum;
+    (*uhp).uh_visual.vi_start.col = start_col;
+    (*uhp).uh_visual.vi_start.coladd = start_coladd;
+    (*uhp).uh_visual.vi_end.lnum = end_lnum;
+    (*uhp).uh_visual.vi_end.col = end_col;
+    (*uhp).uh_visual.vi_end.coladd = end_coladd;
+    (*uhp).uh_visual.vi_mode = mode;
+    (*uhp).uh_visual.vi_curswant = curswant;
 }
 
 /// Deserialize an extmark undo object from the undo file.
@@ -4252,28 +4432,59 @@ unsafe fn unserialize_visualinfo(fp: FileHandle, uhp: UHeaderHandle) {
 ///
 /// - `fp` must be a valid file handle
 /// - `uhp` must be a valid undo header handle
+unsafe fn kv_push_extmark(uhp: *mut UHeader, obj: ExtmarkUndoObject) {
+    let kv = &mut (*uhp).uh_extmark;
+    if kv.size == kv.capacity {
+        // kv_resize_full: double capacity (or start with 8)
+        let new_cap = if kv.capacity == 0 { 8 } else { kv.capacity * 2 };
+        kv.items = xrealloc(
+            kv.items as *mut c_void,
+            new_cap * std::mem::size_of::<ExtmarkUndoObject>(),
+        ) as *mut ExtmarkUndoObject;
+        kv.capacity = new_cap;
+    }
+    *kv.items.add(kv.size) = obj;
+    kv.size += 1;
+}
+
 unsafe fn unserialize_extmark(fp: FileHandle, uhp: UHeaderHandle) -> bool {
     let ext_type = undo_read_4c(fp);
 
     // kExtmarkSplice = 0
-    if ext_type == 0 {
-        let size = nvim_sizeof_extmark_splice();
-        let mut buf = vec![0u8; size];
-        if !undo_read(fp, buf.as_mut_ptr(), size) {
+    if ext_type == K_EXTMARK_SPLICE {
+        let size = std::mem::size_of::<ExtmarkSplice>();
+        let mut splice = std::mem::MaybeUninit::<ExtmarkSplice>::uninit();
+        if !undo_read(fp, splice.as_mut_ptr() as *mut u8, size) {
             return false;
         }
-        nvim_uhp_push_extmark_splice(uhp, buf.as_ptr(), size);
+        kv_push_extmark(
+            uhp,
+            ExtmarkUndoObject {
+                kind: K_EXTMARK_SPLICE,
+                data: ExtmarkUndoObjectData {
+                    splice: splice.assume_init(),
+                },
+            },
+        );
         return true;
     }
 
     // kExtmarkMove = 1
-    if ext_type == 1 {
-        let size = nvim_sizeof_extmark_move();
-        let mut buf = vec![0u8; size];
-        if !undo_read(fp, buf.as_mut_ptr(), size) {
+    if ext_type == K_EXTMARK_MOVE {
+        let size = std::mem::size_of::<ExtmarkMove>();
+        let mut mover = std::mem::MaybeUninit::<ExtmarkMove>::uninit();
+        if !undo_read(fp, mover.as_mut_ptr() as *mut u8, size) {
             return false;
         }
-        nvim_uhp_push_extmark_move(uhp, buf.as_ptr(), size);
+        kv_push_extmark(
+            uhp,
+            ExtmarkUndoObject {
+                kind: K_EXTMARK_MOVE,
+                data: ExtmarkUndoObjectData {
+                    mover: mover.assume_init(),
+                },
+            },
+        );
         return true;
     }
 
@@ -4332,41 +4543,48 @@ unsafe fn unserialize_uep(fp: FileHandle, file_name: *const c_char) -> (UEntryHa
 /// - `fp` must be a valid file handle
 /// - `file_name` must be a valid C string
 unsafe fn unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHandle {
-    let uhp = nvim_alloc_u_header();
-    // Fields are zero-initialized by xcalloc in nvim_alloc_u_header
+    let uhp = nvim_xcalloc(1, std::mem::size_of::<UHeader>()) as *mut UHeader;
+    // Fields are zero-initialized by xcalloc
 
     // Read sequence numbers for pointer swizzling
-    nvim_uhp_set_next_seq(uhp, undo_read_4c(fp));
-    nvim_uhp_set_prev_seq(uhp, undo_read_4c(fp));
-    nvim_uhp_set_alt_next_seq(uhp, undo_read_4c(fp));
-    nvim_uhp_set_alt_prev_seq(uhp, undo_read_4c(fp));
+    (*uhp).uh_next.seq = undo_read_4c(fp);
+    (*uhp).uh_prev.seq = undo_read_4c(fp);
+    (*uhp).uh_alt_next.seq = undo_read_4c(fp);
+    (*uhp).uh_alt_prev.seq = undo_read_4c(fp);
 
     let seq = undo_read_4c(fp);
-    nvim_uhp_set_seq(uhp, seq);
+    (*uhp).uh_seq = seq;
     if seq <= 0 {
         nvim_undo_corruption_error(c"uh_seq".as_ptr(), file_name);
-        nvim_xfree(uhp.0);
-        return UHeaderHandle(ptr::null_mut());
+        nvim_xfree(uhp as *mut c_void);
+        return ptr::null_mut();
     }
 
     // Read cursor position
     let (cursor_lnum, cursor_col, cursor_coladd) = unserialize_pos(fp);
-    nvim_uhp_set_cursor(uhp, cursor_lnum, cursor_col, cursor_coladd);
-    nvim_uhp_set_cursor_vcol(uhp, undo_read_4c(fp));
-    nvim_uhp_set_flags(uhp, undo_read_2c(fp));
+    (*uhp).uh_cursor.lnum = cursor_lnum;
+    (*uhp).uh_cursor.col = cursor_col;
+    (*uhp).uh_cursor.coladd = cursor_coladd;
+    (*uhp).uh_cursor_vcol = undo_read_4c(fp);
+    (*uhp).uh_flags = undo_read_2c(fp);
 
     // Read named marks
     let cur_timestamp = nvim_undo_os_time() as u64;
     for i in 0..NMARKS as c_int {
         let (lnum, col, coladd) = unserialize_pos(fp);
-        nvim_uhp_set_namedm(uhp, i, lnum, col, coladd, cur_timestamp, 0);
+        let idx = i as usize;
+        (*uhp).uh_namedm[idx].mark.lnum = lnum;
+        (*uhp).uh_namedm[idx].mark.col = col;
+        (*uhp).uh_namedm[idx].mark.coladd = coladd;
+        (*uhp).uh_namedm[idx].timestamp = cur_timestamp;
+        (*uhp).uh_namedm[idx].fnum = 0;
     }
 
     // Read visual info
     unserialize_visualinfo(fp, uhp);
 
     // Read time
-    nvim_uhp_set_time(uhp, undo_read_time(fp));
+    (*uhp).uh_time = undo_read_time(fp);
 
     // Read optional fields
     loop {
@@ -4375,14 +4593,14 @@ unsafe fn unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHa
             // EOF
             nvim_undo_corruption_error(c"truncated".as_ptr(), file_name);
             nvim_u_free_uhp(uhp);
-            return UHeaderHandle(ptr::null_mut());
+            return ptr::null_mut();
         }
         if len == 0 {
             break;
         }
         let what = undo_read_byte(fp);
         if what == UHP_SAVE_NR as c_int {
-            nvim_uhp_set_save_nr(uhp, undo_read_4c(fp));
+            (*uhp).uh_save_nr = undo_read_4c(fp);
         } else {
             // Skip unknown field
             let mut remaining = len;
@@ -4401,40 +4619,48 @@ unsafe fn unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHa
             if c != UF_ENTRY_END_MAGIC as c_int {
                 nvim_undo_corruption_error(c"entry end".as_ptr(), file_name);
                 nvim_u_free_uhp(uhp);
-                return UHeaderHandle(ptr::null_mut());
+                return ptr::null_mut();
             }
             break;
         }
         let (uep, error) = unserialize_uep(fp, file_name);
         if last_uep.is_null() {
-            nvim_uhp_set_entry(uhp, uep);
+            (*uhp).uh_entry = uep;
         } else {
             (*last_uep).ue_next = uep;
         }
         last_uep = uep;
         if uep.is_null() || error {
             nvim_u_free_uhp(uhp);
-            return UHeaderHandle(ptr::null_mut());
+            return ptr::null_mut();
         }
     }
 
     // Read extmark undo information
-    nvim_uhp_init_extmark(uhp);
+    (*uhp).uh_extmark.items = std::ptr::null_mut();
+    (*uhp).uh_extmark.size = 0;
+    (*uhp).uh_extmark.capacity = 0;
     loop {
         let c = undo_read_2c(fp);
         if c != UF_ENTRY_MAGIC as c_int {
             if c != UF_ENTRY_END_MAGIC as c_int {
                 nvim_undo_corruption_error(c"entry end".as_ptr(), file_name);
-                nvim_uhp_destroy_extmark(uhp);
+                nvim_xfree((*uhp).uh_extmark.items as *mut c_void);
+                (*uhp).uh_extmark.items = std::ptr::null_mut();
+                (*uhp).uh_extmark.size = 0;
+                (*uhp).uh_extmark.capacity = 0;
                 nvim_u_free_uhp(uhp);
-                return UHeaderHandle(ptr::null_mut());
+                return ptr::null_mut();
             }
             break;
         }
         if !unserialize_extmark(fp, uhp) {
-            nvim_uhp_destroy_extmark(uhp);
+            nvim_xfree((*uhp).uh_extmark.items as *mut c_void);
+            (*uhp).uh_extmark.items = std::ptr::null_mut();
+            (*uhp).uh_extmark.size = 0;
+            (*uhp).uh_extmark.capacity = 0;
             nvim_u_free_uhp(uhp);
-            return UHeaderHandle(ptr::null_mut());
+            return ptr::null_mut();
         }
     }
 
@@ -4630,7 +4856,7 @@ pub unsafe extern "C" fn rs_u_read_undo(
         }
 
         let uhp = unserialize_uhp(fp, file_name);
-        if uhp.0.is_null() {
+        if uhp.is_null() {
             cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
             return;
         }
@@ -4651,16 +4877,16 @@ pub unsafe extern "C" fn rs_u_read_undo(
 
     for i in 0..num_head {
         let uhp = *uhp_table.add(i as usize);
-        if uhp.0.is_null() {
+        if uhp.is_null() {
             continue;
         }
 
         // Check for duplicate sequence numbers
-        let this_seq = nvim_uhp_get_seq(uhp);
+        let this_seq = (*uhp).uh_seq;
         for j in 0..num_head {
             if i != j {
                 let other = *uhp_table.add(j as usize);
-                if !other.0.is_null() && nvim_uhp_get_seq(other) == this_seq {
+                if !other.is_null() && (*other).uh_seq == this_seq {
                     nvim_undo_corruption_error(c"duplicate uh_seq".as_ptr(), file_name);
                     cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
                     return;
@@ -4669,41 +4895,41 @@ pub unsafe extern "C" fn rs_u_read_undo(
         }
 
         // Swizzle uh_next
-        let next_seq = nvim_uhp_get_next_seq_for_swizzle(uhp);
+        let next_seq = (*uhp).uh_next.seq;
         for j in 0..num_head {
             let candidate = *uhp_table.add(j as usize);
-            if !candidate.0.is_null() && nvim_uhp_get_seq(candidate) == next_seq {
-                nvim_uhp_set_next(uhp, candidate);
+            if !candidate.is_null() && (*candidate).uh_seq == next_seq {
+                (*uhp).uh_next.ptr = candidate;
                 break;
             }
         }
 
         // Swizzle uh_prev
-        let prev_seq = nvim_uhp_get_prev_seq_for_swizzle(uhp);
+        let prev_seq = (*uhp).uh_prev.seq;
         for j in 0..num_head {
             let candidate = *uhp_table.add(j as usize);
-            if !candidate.0.is_null() && nvim_uhp_get_seq(candidate) == prev_seq {
-                nvim_uhp_set_prev(uhp, candidate);
+            if !candidate.is_null() && (*candidate).uh_seq == prev_seq {
+                (*uhp).uh_prev.ptr = candidate;
                 break;
             }
         }
 
         // Swizzle uh_alt_next
-        let alt_next_seq = nvim_uhp_get_alt_next_seq_for_swizzle(uhp);
+        let alt_next_seq = (*uhp).uh_alt_next.seq;
         for j in 0..num_head {
             let candidate = *uhp_table.add(j as usize);
-            if !candidate.0.is_null() && nvim_uhp_get_seq(candidate) == alt_next_seq {
-                nvim_uhp_set_alt_next(uhp, candidate);
+            if !candidate.is_null() && (*candidate).uh_seq == alt_next_seq {
+                (*uhp).uh_alt_next.ptr = candidate;
                 break;
             }
         }
 
         // Swizzle uh_alt_prev
-        let alt_prev_seq = nvim_uhp_get_alt_prev_seq_for_swizzle(uhp);
+        let alt_prev_seq = (*uhp).uh_alt_prev.seq;
         for j in 0..num_head {
             let candidate = *uhp_table.add(j as usize);
-            if !candidate.0.is_null() && nvim_uhp_get_seq(candidate) == alt_prev_seq {
-                nvim_uhp_set_alt_prev(uhp, candidate);
+            if !candidate.is_null() && (*candidate).uh_seq == alt_prev_seq {
+                (*uhp).uh_alt_prev.ptr = candidate;
                 break;
             }
         }
@@ -4725,17 +4951,17 @@ pub unsafe extern "C" fn rs_u_read_undo(
     nvim_u_blockfree(buf);
 
     let oldhead = if old_idx < 0 {
-        UHeaderHandle(ptr::null_mut())
+        ptr::null_mut()
     } else {
         *uhp_table.add(old_idx as usize)
     };
     let newhead = if new_idx < 0 {
-        UHeaderHandle(ptr::null_mut())
+        ptr::null_mut()
     } else {
         *uhp_table.add(new_idx as usize)
     };
     let curhead = if cur_idx < 0 {
-        UHeaderHandle(ptr::null_mut())
+        ptr::null_mut()
     } else {
         *uhp_table.add(cur_idx as usize)
     };
@@ -4779,7 +5005,7 @@ unsafe fn cleanup_read_error(
     if !uhp_table.is_null() {
         for i in 0..num_read_uhps {
             let uhp = *uhp_table.add(i as usize);
-            if !uhp.0.is_null() {
+            if !uhp.is_null() {
                 nvim_u_free_uhp(uhp);
             }
         }
@@ -4844,40 +5070,36 @@ pub unsafe extern "C" fn rs_ex_undolist(_eap: ExargHandle) {
     let mut entries: Vec<(*mut c_char, c_int)> = Vec::new();
 
     let mut uhp = nvim_buf_get_b_u_oldhead(buf);
-    while !uhp.0.is_null() {
-        let prev = nvim_uhp_get_prev(uhp);
+    while !uhp.is_null() {
+        let prev = (*uhp).uh_prev.ptr;
 
-        if prev.0.is_null() && nvim_uhp_get_walk(uhp) != nomark && nvim_uhp_get_walk(uhp) != mark {
+        if prev.is_null() && (*uhp).uh_walk != nomark && (*uhp).uh_walk != mark {
             // Format the entry
             let entry_buf: [c_char; 256] = [0; 256];
             nvim_undolist_format_entry(uhp, changes, entry_buf.as_ptr() as *mut c_char, 256);
             let entry_str = nvim_undo_xstrdup(entry_buf.as_ptr());
-            let seq = nvim_uhp_get_seq(uhp);
+            let seq = (*uhp).uh_seq;
             entries.push((entry_str, seq));
         }
 
-        nvim_uhp_set_walk(uhp, mark);
+        (*uhp).uh_walk = mark;
 
         // go down in the tree if we haven't been there
-        if !prev.0.is_null() && nvim_uhp_get_walk(prev) != nomark && nvim_uhp_get_walk(prev) != mark
-        {
+        if !prev.is_null() && (*prev).uh_walk != nomark && (*prev).uh_walk != mark {
             uhp = prev;
             changes += 1;
         } else {
-            let alt_next = nvim_uhp_get_alt_next(uhp);
-            if !alt_next.0.is_null()
-                && nvim_uhp_get_walk(alt_next) != nomark
-                && nvim_uhp_get_walk(alt_next) != mark
-            {
+            let alt_next = (*uhp).uh_alt_next.ptr;
+            if !alt_next.is_null() && (*alt_next).uh_walk != nomark && (*alt_next).uh_walk != mark {
                 // go to alternate branch if we haven't been there
                 uhp = alt_next;
             } else {
-                let next = nvim_uhp_get_next(uhp);
-                let alt_prev = nvim_uhp_get_alt_prev(uhp);
-                if !next.0.is_null()
-                    && alt_prev.0.is_null()
-                    && nvim_uhp_get_walk(next) != nomark
-                    && nvim_uhp_get_walk(next) != mark
+                let next = (*uhp).uh_next.ptr;
+                let alt_prev = (*uhp).uh_alt_prev.ptr;
+                if !next.is_null()
+                    && alt_prev.is_null()
+                    && (*next).uh_walk != nomark
+                    && (*next).uh_walk != mark
                 {
                     // go up in the tree if we haven't been there and we are at the
                     // start of alternate branches
@@ -4885,8 +5107,8 @@ pub unsafe extern "C" fn rs_ex_undolist(_eap: ExargHandle) {
                     changes -= 1;
                 } else {
                     // need to backtrack; mark this node as done
-                    nvim_uhp_set_walk(uhp, nomark);
-                    if !alt_prev.0.is_null() {
+                    (*uhp).uh_walk = nomark;
+                    if !alt_prev.is_null() {
                         uhp = alt_prev;
                     } else {
                         uhp = next;
@@ -4987,36 +5209,36 @@ pub unsafe extern "C" fn rs_u_eval_tree(buf: BufHandle, first_uhp: UHeaderHandle
     let curhead = nvim_buf_get_b_u_curhead(buf);
 
     let mut uhp = first_uhp;
-    while !uhp.0.is_null() {
+    while !uhp.is_null() {
         let dict = nvim_tv_dict_alloc();
 
         // Add seq
-        let seq = nvim_uhp_get_seq(uhp) as i64;
+        let seq = (*uhp).uh_seq as i64;
         nvim_tv_dict_add_nr(dict, c"seq".as_ptr(), 3, seq);
 
         // Add time
-        let time = nvim_uhp_get_time(uhp);
+        let time = (*uhp).uh_time;
         nvim_tv_dict_add_nr(dict, c"time".as_ptr(), 4, time);
 
         // Add newhead marker if applicable
-        if uhp.0 == newhead.0 {
+        if uhp == newhead {
             nvim_tv_dict_add_nr(dict, c"newhead".as_ptr(), 7, 1);
         }
 
         // Add curhead marker if applicable
-        if uhp.0 == curhead.0 {
+        if uhp == curhead {
             nvim_tv_dict_add_nr(dict, c"curhead".as_ptr(), 7, 1);
         }
 
         // Add save number if > 0
-        let save_nr = nvim_uhp_get_save_nr(uhp);
+        let save_nr = (*uhp).uh_save_nr;
         if save_nr > 0 {
             nvim_tv_dict_add_nr(dict, c"save".as_ptr(), 4, save_nr as i64);
         }
 
         // Recurse for alternate branches
-        let alt_next = nvim_uhp_get_alt_next(uhp);
-        if !alt_next.0.is_null() {
+        let alt_next = (*uhp).uh_alt_next.ptr;
+        if !alt_next.is_null() {
             let alt_list = rs_u_eval_tree(buf, alt_next);
             nvim_tv_dict_add_list(dict, c"alt".as_ptr(), 3, alt_list);
         }
@@ -5024,7 +5246,7 @@ pub unsafe extern "C" fn rs_u_eval_tree(buf: BufHandle, first_uhp: UHeaderHandle
         nvim_tv_list_append_dict(list, dict);
 
         // Move to previous entry
-        uhp = nvim_uhp_get_prev(uhp);
+        uhp = (*uhp).uh_prev.ptr;
     }
 
     list
@@ -5198,7 +5420,7 @@ mod tests {
 
     #[test]
     fn test_null_handle_checks() {
-        assert!(rs_uhp_is_null(UHeaderHandle(std::ptr::null_mut())));
+        assert!(rs_uhp_is_null(std::ptr::null_mut()));
         assert!(rs_uep_is_null(ptr::null_mut()));
     }
 
@@ -5306,10 +5528,10 @@ mod tests {
 
     #[test]
     fn test_uheader_handle_repr() {
-        // UHeaderHandle should be repr(transparent) over a pointer
-        let ptr: *mut c_void = 0x5678 as *mut c_void;
-        let handle = UHeaderHandle(ptr);
-        assert_eq!(handle.0, ptr);
+        // UHeaderHandle is now *mut UHeader - a raw pointer type
+        let ptr: *mut UHeader = 0x5678 as *mut UHeader;
+        let handle: UHeaderHandle = ptr;
+        assert_eq!(handle, ptr);
     }
 
     #[test]
