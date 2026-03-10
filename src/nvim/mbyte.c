@@ -33,12 +33,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <utf8proc.h>
 #include <uv.h>
-#include <wctype.h>
 
 #include "auto/config.h"
-#include "nvim/arabic.h"
 #include "nvim/ascii_defs.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/charset.h"
@@ -53,7 +50,6 @@
 #include "nvim/globals.h"
 #include "nvim/grid.h"
 #include "nvim/iconv_defs.h"
-#include "nvim/keycodes.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mark.h"
 #include "nvim/mbyte.h"
@@ -70,17 +66,6 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
-typedef struct {
-  int rangeStart;
-  int rangeEnd;
-  int step;
-  int offset;
-} convertStruct;
-
-struct interval {
-  int first;
-  int last;
-};
 
 // uncrustify:off
 #include "mbyte.c.generated.h"
