@@ -40,4 +40,30 @@ typedef enum file_comparison {
   kEqualFileNames = 7,  ///< Both don't exist and file names are same.
 } FileComparison;
 
+// Functions implemented in Rust (src/nvim-rs/path/src/lib.rs).
+// These were formerly thin C wrappers; now exported directly via #[export_name].
+#include <stdbool.h>
+FileComparison path_full_compare(char *s1, char *s2, bool checkname, bool expandenv);
+char *path_tail(const char *fname);
+char *path_tail_with_sep(char *fname);
+const char *invocation_path_tail(const char *invocation, size_t *len);
+const char *path_next_component(const char *fname);
+int path_head_length(void);
+char *get_past_head(const char *path);
+int path_fnamecmp(const char *fname1, const char *fname2);
+int path_fnamencmp(const char *fname1, const char *fname2, size_t len);
+const char *gettail_dir(const char *fname);
+int after_pathsep(const char *b, const char *p);
+int pathcmp(const char *p, const char *q, int maxlen);
+int path_is_url(const char *p);
+int path_with_url(const char *fname);
+int gen_expand_wildcards(int num_pat, char **pat, int *num_file, char ***file, int flags);
+int expand_wildcards(int num_pat, char **pat, int *num_files, char ***files, int flags);
+size_t simplify_filename(char *filename);
+int path_full_dir_name(char *directory, char *buffer, size_t len);
+int append_path(char *path, const char *to_append, size_t max_len);
+char *save_abs_path(const char *name);
+char *path_try_shorten_fname(char *full_path);
+char *path_shorten_fname(char *full_path, char *dir_name);
+
 #include "path.h.generated.h"

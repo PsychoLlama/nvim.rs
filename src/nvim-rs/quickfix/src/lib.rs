@@ -2174,7 +2174,7 @@ extern "C" {
     // Phase 16: fix_fname migration accessors
     fn rs_fix_fname(fname: *const c_char) -> *mut c_char;
     fn nvim_buf_get_b_ffname(buf: *mut c_void) -> *const c_char;
-    fn rs_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+    fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
     fn nvim_path_try_shorten_fname(full: *const c_char) -> *mut c_char;
 
     // Phase 1: Core List Lifecycle accessors
@@ -2234,7 +2234,7 @@ pub unsafe extern "C" fn rs_qf_fix_fname(fname: *const c_char, bufnum: c_int) ->
     let buf = nvim_buflist_findnr_ptr(bufnum);
     if !buf.is_null() {
         let ffname = nvim_buf_get_b_ffname(buf);
-        if !ffname.is_null() && rs_path_fnamecmp(fullname, ffname) != 0 {
+        if !ffname.is_null() && path_fnamecmp(fullname, ffname) != 0 {
             let p = nvim_path_try_shorten_fname(fullname);
             if !p.is_null() {
                 let result = nvim_qf_xstrdup(p);

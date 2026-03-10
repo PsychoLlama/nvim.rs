@@ -114,7 +114,7 @@ pub extern "C" fn rs_vim_ispathlistsep(c: c_int) -> c_int {
 /// Get the length of the path head.
 ///
 /// Returns 3 on Windows (for "C:\"), 1 otherwise (for "/").
-#[no_mangle]
+#[unsafe(export_name = "path_head_length")]
 pub extern "C" fn rs_path_head_length() -> c_int {
     #[cfg(windows)]
     {
@@ -164,10 +164,10 @@ pub unsafe extern "C" fn rs_is_path_head(path: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_past_head(path: *const c_char) -> *const c_char {
+#[unsafe(export_name = "get_past_head")]
+pub unsafe extern "C" fn rs_get_past_head(path: *const c_char) -> *mut c_char {
     if path.is_null() {
-        return path;
+        return path.cast_mut();
     }
 
     let mut retval = path;
@@ -185,7 +185,7 @@ pub unsafe extern "C" fn rs_get_past_head(path: *const c_char) -> *const c_char 
         retval = retval.add(1);
     }
 
-    retval
+    retval.cast_mut()
 }
 
 /// Check if a path is absolute.
@@ -254,12 +254,12 @@ pub unsafe extern "C" fn rs_path_is_absolute(path: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `fname` must be a valid null-terminated C string, or NULL.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_tail(fname: *const c_char) -> *const c_char {
+#[unsafe(export_name = "path_tail")]
+pub unsafe extern "C" fn rs_path_tail(fname: *const c_char) -> *mut c_char {
     static EMPTY: &[u8] = b"\0";
 
     if fname.is_null() {
-        return EMPTY.as_ptr().cast();
+        return EMPTY.as_ptr().cast_mut().cast();
     }
 
     let mut p = fname;
@@ -309,7 +309,7 @@ pub unsafe extern "C" fn rs_path_tail(fname: *const c_char) -> *const c_char {
         }
     }
 
-    tail
+    tail.cast_mut()
 }
 
 // Return values for path_is_url
@@ -324,7 +324,7 @@ const URL_BACKSLASH: c_int = 2;
 /// # Safety
 ///
 /// `p` must be a valid null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "path_is_url")]
 pub unsafe extern "C" fn rs_path_is_url(p: *const c_char) -> c_int {
     if p.is_null() {
         return 0;
@@ -398,7 +398,7 @@ pub unsafe extern "C" fn rs_path_has_drive_letter(p: *const c_char, path_len: us
 /// # Safety
 ///
 /// `fname` must be a valid null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "path_with_url")]
 pub unsafe extern "C" fn rs_path_with_url(fname: *const c_char) -> c_int {
     if fname.is_null() {
         return 0;
@@ -824,7 +824,7 @@ pub fn after_pathsep(base: &[u8], p_offset: usize) -> bool {
 /// # Safety
 /// - `b` and `p` must be valid pointers
 /// - `p` must point to a position within or at the end of the string starting at `b`
-#[no_mangle]
+#[unsafe(export_name = "after_pathsep")]
 pub unsafe extern "C" fn rs_after_pathsep(b: *const c_char, p: *const c_char) -> c_int {
     if b.is_null() || p.is_null() || p < b {
         return 0;
@@ -909,7 +909,7 @@ extern "C" {
 ///
 /// # Returns
 /// 0 if they are equal, non-zero otherwise.
-#[no_mangle]
+#[unsafe(export_name = "path_fnamecmp")]
 pub unsafe extern "C" fn rs_path_fnamecmp(fname1: *const c_char, fname2: *const c_char) -> c_int {
     if fname1.is_null() || fname2.is_null() {
         if fname1.is_null() && fname2.is_null() {
@@ -960,7 +960,7 @@ pub unsafe extern "C" fn rs_path_fnamecmp(fname1: *const c_char, fname2: *const 
 ///
 /// # Returns
 /// 0 if they are equal, non-zero otherwise.
-#[no_mangle]
+#[unsafe(export_name = "path_fnamencmp")]
 pub unsafe extern "C" fn rs_path_fnamencmp(
     fname1: *const c_char,
     fname2: *const c_char,
@@ -1046,7 +1046,7 @@ pub unsafe extern "C" fn rs_path_fnamencmp(
 ///
 /// # Safety
 /// - `fname` must be a valid null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "gettail_dir")]
 pub unsafe extern "C" fn rs_gettail_dir(fname: *const c_char) -> *const c_char {
     if fname.is_null() {
         return fname;
@@ -1090,7 +1090,7 @@ pub unsafe extern "C" fn rs_gettail_dir(fname: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// - `fname` must be a valid null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "path_next_component")]
 pub unsafe extern "C" fn rs_path_next_component(fname: *const c_char) -> *const c_char {
     if fname.is_null() {
         return fname;
@@ -1124,10 +1124,10 @@ pub unsafe extern "C" fn rs_path_next_component(fname: *const c_char) -> *const 
 ///
 /// # Safety
 /// - `fname` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_path_tail_with_sep(fname: *const c_char) -> *const c_char {
+#[unsafe(export_name = "path_tail_with_sep")]
+pub unsafe extern "C" fn rs_path_tail_with_sep(fname: *const c_char) -> *mut c_char {
     if fname.is_null() {
-        return fname;
+        return fname.cast_mut();
     }
 
     // Don't remove the '/' from "c:/file".
@@ -1198,7 +1198,7 @@ mod path_tail_with_sep_tests {
         let path = CString::new("file.txt").unwrap();
         let result = unsafe { rs_path_tail_with_sep(path.as_ptr()) };
         // Should return original pointer
-        assert_eq!(result, path.as_ptr());
+        assert_eq!(result, path.as_ptr().cast_mut());
     }
 
     #[test]
@@ -1227,7 +1227,7 @@ mod path_tail_with_sep_tests {
 /// # Safety
 /// - `invocation` must be a valid null-terminated C string.
 /// - `len` may be null, otherwise must be a valid pointer.
-#[no_mangle]
+#[unsafe(export_name = "invocation_path_tail")]
 pub unsafe extern "C" fn rs_invocation_path_tail(
     invocation: *const c_char,
     len: *mut usize,
@@ -1389,7 +1389,7 @@ pub unsafe extern "C" fn rs_path_has_exp_wildcard(p: *const c_char) -> c_int {
 ///
 /// # Safety
 /// - `p` and `q` must be valid null-terminated C strings.
-#[no_mangle]
+#[unsafe(export_name = "pathcmp")]
 pub unsafe extern "C" fn rs_pathcmp(
     path1: *const c_char,
     path2: *const c_char,
@@ -1787,7 +1787,7 @@ pub unsafe extern "C" fn rs_add_pathsep(p: *mut c_char) -> c_int {
 /// # Returns
 /// - 1 (OK) on success
 /// - 0 (FAIL) if not enough space
-#[no_mangle]
+#[unsafe(export_name = "append_path")]
 pub unsafe extern "C" fn rs_append_path(
     path: *mut c_char,
     to_append: *const c_char,
@@ -1899,7 +1899,7 @@ pub unsafe extern "C" fn rs_path_with_extension(
 /// # Returns
 /// - Pointer into `full_path` if shortened.
 /// - NULL if no shorter name is possible or if `full_path` is NULL.
-#[no_mangle]
+#[unsafe(export_name = "path_shorten_fname")]
 pub unsafe extern "C" fn rs_path_shorten_fname(
     full_path: *mut c_char,
     dir_name: *mut c_char,
@@ -1962,7 +1962,7 @@ pub unsafe extern "C" fn rs_shorten_dir_len(str: *mut c_char, trim_len: c_int) {
     let mut s = str;
 
     loop {
-        if s >= tail.cast_mut() {
+        if s >= tail {
             // Copy the whole tail
             *d = *s;
             d = d.add(1);
@@ -2363,7 +2363,7 @@ pub unsafe extern "C" fn rs_dir_of_file_exists(fname: *mut c_char) -> c_int {
     if fname.is_null() {
         return 0;
     }
-    let p = rs_path_tail_with_sep(fname).cast_mut();
+    let p = rs_path_tail_with_sep(fname);
     if p == fname {
         return 1; // no directory name
     }
@@ -2625,7 +2625,7 @@ extern "C" {
 ///
 /// # Safety
 /// All pointers must be valid. `buffer` must have at least `len` bytes.
-#[no_mangle]
+#[unsafe(export_name = "path_full_dir_name")]
 pub unsafe extern "C" fn rs_path_full_dir_name(
     directory: *const c_char,
     buffer: *mut c_char,
@@ -2797,7 +2797,7 @@ pub unsafe extern "C" fn rs_FullName_save(fname: *const c_char, force: c_int) ->
 ///
 /// # Safety
 /// `name` must be a valid null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "save_abs_path")]
 pub unsafe extern "C" fn rs_save_abs_path(name: *const c_char) -> *mut c_char {
     if name.is_null() {
         return std::ptr::null_mut();
@@ -2865,7 +2865,7 @@ pub unsafe extern "C" fn rs_same_directory(f1: *const c_char, f2: *const c_char)
 ///
 /// # Safety
 /// `full_path` may be NULL.
-#[no_mangle]
+#[unsafe(export_name = "path_try_shorten_fname")]
 pub unsafe extern "C" fn rs_path_try_shorten_fname(full_path: *mut c_char) -> *mut c_char {
     if full_path.is_null() {
         return full_path;
@@ -2992,12 +2992,12 @@ extern "C" {
 ///
 /// # Safety
 /// `s1` and `s2` must be valid null-terminated C strings.
-#[no_mangle]
+#[unsafe(export_name = "path_full_compare")]
 pub unsafe extern "C" fn rs_path_full_compare(
-    s1: *const c_char,
-    s2: *const c_char,
-    checkname: c_int,
-    expandenv: c_int,
+    s1: *mut c_char,
+    s2: *mut c_char,
+    checkname: bool,
+    expandenv: bool,
 ) -> c_int {
     let mut exp1 = [0i8; MAXPATHL];
     let mut full1 = [0i8; MAXPATHL];
@@ -3005,7 +3005,7 @@ pub unsafe extern "C" fn rs_path_full_compare(
     let mut file_id_1: FileIdBuf = [0u8; FILE_ID_SIZE];
     let mut file_id_2: FileIdBuf = [0u8; FILE_ID_SIZE];
 
-    if expandenv != 0 {
+    if expandenv {
         nvim_path_expand_env(s1, exp1.as_mut_ptr(), MAXPATHL);
     } else {
         nvim_path_xstrlcpy(exp1.as_mut_ptr(), s1, MAXPATHL);
@@ -3016,7 +3016,7 @@ pub unsafe extern "C" fn rs_path_full_compare(
 
     if !id_ok_1 && !id_ok_2 {
         // If os_fileid() doesn't work, may compare the names.
-        if checkname != 0 {
+        if checkname {
             rs_vim_FullName(exp1.as_ptr(), full1.as_mut_ptr(), MAXPATHL, 0);
             rs_vim_FullName(s2, full2.as_mut_ptr(), MAXPATHL, 0);
             if rs_path_fnamecmp(full1.as_ptr(), full2.as_ptr()) == 0 {
@@ -3600,7 +3600,7 @@ extern "C" {
 ///
 /// # Safety
 /// `filename` must be a valid, writable, NUL-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "simplify_filename")]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_simplify_filename(filename: *mut c_char) -> usize {
     let mut components: i32 = 0;
@@ -4534,7 +4534,7 @@ static mut GEN_EXPAND_RECURSIVE: bool = false;
 /// # Safety
 /// All pointer arguments must be valid. `pat` must point to an array of
 /// `num_pat` valid C strings.
-#[no_mangle]
+#[unsafe(export_name = "gen_expand_wildcards")]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_gen_expand_wildcards(
     num_pat: c_int,
@@ -4697,7 +4697,7 @@ pub unsafe extern "C" fn rs_gen_expand_wildcards(
 /// # Safety
 /// All pointer arguments must be valid. `pat` must point to an array of
 /// `num_pat` valid C strings.
-#[no_mangle]
+#[unsafe(export_name = "expand_wildcards")]
 pub unsafe extern "C" fn rs_expand_wildcards(
     num_pat: c_int,
     pat: *mut *mut c_char,
