@@ -2452,6 +2452,81 @@ unsafe fn col_adjust(
     }
 }
 
+/// Thin wrapper: mark_adjust calls rs_mark_adjust_buf with curbuf and adjust_folds=true.
+///
+/// # Safety
+/// All pointers must be valid.
+#[export_name = "mark_adjust"]
+pub unsafe extern "C" fn rs_mark_adjust(
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+    op: c_int,
+) {
+    rs_mark_adjust_buf(
+        nvim_mark_get_curbuf(),
+        line1,
+        line2,
+        amount,
+        amount_after,
+        1,
+        0,
+        op,
+    );
+}
+
+/// Thin wrapper: mark_adjust_nofold calls rs_mark_adjust_buf with curbuf and adjust_folds=false.
+///
+/// # Safety
+/// All pointers must be valid.
+#[export_name = "mark_adjust_nofold"]
+pub unsafe extern "C" fn rs_mark_adjust_nofold(
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+    op: c_int,
+) {
+    rs_mark_adjust_buf(
+        nvim_mark_get_curbuf(),
+        line1,
+        line2,
+        amount,
+        amount_after,
+        0,
+        0,
+        op,
+    );
+}
+
+/// Thin wrapper: mark_adjust_buf delegates to rs_mark_adjust_buf with type casts.
+///
+/// # Safety
+/// `buf` must be a valid buffer pointer.
+#[export_name = "mark_adjust_buf"]
+pub unsafe extern "C" fn rs_mark_adjust_buf_wrapper(
+    buf: BufHandle,
+    line1: LinenrT,
+    line2: LinenrT,
+    amount: LinenrT,
+    amount_after: LinenrT,
+    adjust_folds: c_int,
+    mode: c_int,
+    op: c_int,
+) {
+    rs_mark_adjust_buf(
+        buf,
+        line1,
+        line2,
+        amount,
+        amount_after,
+        adjust_folds,
+        mode,
+        op,
+    );
+}
+
 /// Adjust marks between line1 and line2 (inclusive) to move amount lines.
 ///
 /// Called from many places to adjust all marks when lines are inserted/deleted.
@@ -2746,7 +2821,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
 ///
 /// # Safety
 /// All buffer/window pointers must be valid.
-#[no_mangle]
+#[export_name = "mark_col_adjust"]
 pub unsafe extern "C" fn rs_mark_col_adjust_all(
     lnum: LinenrT,
     mincol: ColnrT,

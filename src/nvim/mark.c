@@ -970,48 +970,6 @@ void ex_changes(exarg_T *eap)
   }
 }
 
-// Adjust marks between "line1" and "line2" (inclusive) to move "amount" lines.
-// Must be called before changed_*(), appended_lines() or deleted_lines().
-// May be called before or after changing the text.
-// When deleting lines "line1" to "line2", use an "amount" of MAXLNUM: The
-// marks within this range are made invalid.
-// If "amount_after" is non-zero adjust marks after "line2".
-// Example: Delete lines 34 and 35: mark_adjust(34, 35, MAXLNUM, -2);
-// Example: Insert two lines below 55: mark_adjust(56, MAXLNUM, 2, 0);
-//                                 or: mark_adjust(56, 55, MAXLNUM, 2);
-void mark_adjust(linenr_T line1, linenr_T line2, linenr_T amount, linenr_T amount_after,
-                 ExtmarkOp op)
-{
-  mark_adjust_buf(curbuf, line1, line2, amount, amount_after, true, kMarkAdjustNormal, op);
-}
-
-// mark_adjust_nofold() does the same as mark_adjust() but without adjusting
-// folds in any way. Folds must be adjusted manually by the caller.
-// This is only useful when folds need to be moved in a way different to
-// calling foldMarkAdjust() with arguments line1, line2, amount, amount_after,
-// for an example of why this may be necessary, see do_move().
-void mark_adjust_nofold(linenr_T line1, linenr_T line2, linenr_T amount, linenr_T amount_after,
-                        ExtmarkOp op)
-{
-  mark_adjust_buf(curbuf, line1, line2, amount, amount_after, false, kMarkAdjustNormal, op);
-}
-
-void mark_adjust_buf(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amount,
-                     linenr_T amount_after, bool adjust_folds, MarkAdjustMode mode, ExtmarkOp op)
-{
-  rs_mark_adjust_buf(buf, line1, line2, amount, amount_after, (int)adjust_folds, (int)mode, (int)op);
-}
-
-// Adjust marks in line "lnum" at column "mincol" and further: add
-// "lnum_amount" to the line number and add "col_amount" to the column
-// position.
-// "spaces_removed" is the number of spaces that were removed, matters when the
-// cursor is inside them.
-void mark_col_adjust(linenr_T lnum, colnr_T mincol, linenr_T lnum_amount, colnr_T col_amount,
-                     int spaces_removed)
-{
-  rs_mark_col_adjust_all(lnum, mincol, lnum_amount, col_amount, spaces_removed);
-}
 
 // When deleting lines, this may create duplicate marks in the
 // jumplist. They will be removed here for the specified window.

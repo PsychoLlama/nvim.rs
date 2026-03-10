@@ -41,6 +41,15 @@ extern void copy_jumplist(win_T *from, win_T *to);
 extern void free_jumplist(win_T *wp);
 extern void set_last_cursor(win_T *win);
 extern void mark_mb_adjustpos(buf_T *buf, pos_T *lp);
+extern void mark_adjust(linenr_T line1, linenr_T line2, linenr_T amount, linenr_T amount_after,
+                        ExtmarkOp op);
+extern void mark_adjust_nofold(linenr_T line1, linenr_T line2, linenr_T amount,
+                               linenr_T amount_after, ExtmarkOp op);
+extern void mark_adjust_buf(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amount,
+                            linenr_T amount_after, bool adjust_folds, MarkAdjustMode mode,
+                            ExtmarkOp op);
+extern void mark_col_adjust(linenr_T lnum, colnr_T mincol, linenr_T lnum_amount,
+                            colnr_T col_amount, int spaces_removed);
 
 /// Convert mark name to the offset
 static inline int mark_global_index(const char name)
