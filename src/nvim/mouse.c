@@ -52,16 +52,13 @@
 #include "nvim/window.h"
 
 #include "mouse.c.generated.h"
-// Rust FFI declarations (window wrappers removed)
+// Rust FFI declarations (functions implemented in src/nvim-rs/mouse/)
 extern int rs_win_fdccol_count(win_T *wp);
 extern int rs_global_stl_height(void);
 extern void rs_win_drag_status_line(win_T *dragwin, int offset);
 extern void rs_win_drag_vsep_line(win_T *dragwin, int offset);
-
 extern int rs_get_scrolloff_value(win_T *wp);
 extern void rs_setFoldRepeat(linenr_T lnum, int count, bool do_open);
-
-// Rust implementations
 extern int rs_get_mouse_class(const char *p);
 extern bool rs_mouse_model_popup(const char *p_mousem);
 extern int rs_find_start_of_word(const char *line, int col);
@@ -162,7 +159,6 @@ static void find_end_of_word(pos_T *pos)
   pos->col = rs_find_end_of_word(line, pos->col, *p_sel == 'e');
 }
 
-// Rust implementations
 extern void rs_set_mouse_topline(win_T *wp);
 extern void rs_move_tab_to_mouse(void);
 extern void rs_mouse_tab_close(int c1);
@@ -170,6 +166,7 @@ extern bool rs_do_mousescroll_horiz(colnr_T leftcol);
 extern void rs_mouse_check_grid(colnr_T *vcolp, int *flagsp);
 extern int rs_get_fpos_of_mouse(pos_T *mpos);
 extern int rs_do_popup(int which_button, int m_pos_flag, pos_T m_pos);
+extern void rs_call_click_def_func(StlClickDefinition *click_defs, int col, int which_button);
 
 static bool got_click = false;  // got a click some time back
 
@@ -217,9 +214,6 @@ void nvim_call_stl_click_func(StlClickDefinition *click_defs, int col,
   call_vim_function(click_defs[col].func, ARRAY_SIZE(argv), argv, &rettv);
   tv_clear(&rettv);
 }
-
-/// Rust wrapper: call the click definition function for the given column.
-extern void rs_call_click_def_func(StlClickDefinition *click_defs, int col, int which_button);
 
 /// C accessor: perform the popup menu logic that depends on visual mode,
 /// jump_to_mouse, getvcols/getvcol, and UI flush.
