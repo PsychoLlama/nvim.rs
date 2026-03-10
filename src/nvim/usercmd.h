@@ -60,5 +60,7 @@ void ex_delcommand(exarg_T *eap);
 size_t add_win_cmd_modifiers(char *buf, const cmdmod_T *cmod, bool *multi_mods);
 size_t uc_mods(char *buf, const cmdmod_T *cmod, bool quote);
 int do_ucmd(exarg_T *eap, bool preview);
+bool uc_split_args_iter(const char *arg, size_t arglen, size_t *end, char *buf, size_t *len);
+size_t uc_nargs_upper_bound(const char *arg, size_t arglen);
 
 #include "usercmd.h.generated.h"

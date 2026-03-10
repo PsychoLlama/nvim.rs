@@ -887,10 +887,10 @@ pub extern "C" fn rs_usercmd_parse_result_error(pos: c_int) -> ParseResult {
 // FFI Exports — Phase 2
 // =============================================================================
 
-/// FFI export: Count upper bound of arguments in a string.
+/// Direct export replacing C `uc_nargs_upper_bound`.
 ///
 /// `arg` is a pointer to the argument string, `arglen` is the byte length.
-#[no_mangle]
+#[export_name = "uc_nargs_upper_bound"]
 pub unsafe extern "C" fn rs_uc_nargs_upper_bound(arg: *const c_char, arglen: usize) -> usize {
     if arg.is_null() || arglen == 0 {
         return 0;
@@ -899,24 +899,24 @@ pub unsafe extern "C" fn rs_uc_nargs_upper_bound(arg: *const c_char, arglen: usi
     uc_nargs_upper_bound(slice)
 }
 
-/// FFI export: Iterate over split arguments.
+/// Direct export replacing C `uc_split_args_iter`.
 ///
-/// Returns 1 when iteration is complete (no more args), 0 when there are more.
+/// Returns true when iteration is complete (no more args), false when there are more.
 /// Writes the unescaped argument into `buf` and its length into `*len`.
 /// `*end` tracks the iteration position across calls.
-#[no_mangle]
+#[export_name = "uc_split_args_iter"]
 pub unsafe extern "C" fn rs_uc_split_args_iter(
     arg: *const c_char,
     arglen: usize,
     end: *mut usize,
     buf: *mut c_char,
     len: *mut usize,
-) -> c_int {
+) -> bool {
     if arg.is_null() || arglen == 0 {
         if !len.is_null() {
             unsafe { *len = 0 };
         }
-        return 1; // done
+        return true; // done
     }
     let arg_slice = unsafe { std::slice::from_raw_parts(arg.cast::<u8>(), arglen) };
     let end_ref = unsafe { &mut *end };
@@ -935,7 +935,7 @@ pub unsafe extern "C" fn rs_uc_split_args_iter(
         unsafe { *len = out_len };
     }
 
-    c_int::from(done)
+    done
 }
 
 /// FFI export: Parse address type argument.
