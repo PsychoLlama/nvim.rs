@@ -325,7 +325,7 @@ extern "C" {
 /// # Safety
 /// - `click_defs` must be a valid pointer or null.
 /// - `click_defs_size` must be the actual size of the array.
-#[no_mangle]
+#[export_name = "stl_clear_click_defs"]
 pub unsafe extern "C" fn rs_stl_clear_click_defs(
     click_defs: *mut ClickDefinition,
     click_defs_size: usize,
@@ -354,7 +354,7 @@ pub unsafe extern "C" fn rs_stl_clear_click_defs(
 ///
 /// # Panics
 /// May panic if the allocation layout overflows.
-#[no_mangle]
+#[export_name = "stl_alloc_click_defs"]
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -552,7 +552,7 @@ impl TablineBuilder {
 ///
 /// # Panics
 /// Panics if `len` exceeds `width` (internal consistency check).
-#[no_mangle]
+#[export_name = "stl_fill_click_defs"]
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_stl_fill_click_defs(
     click_defs: *mut ClickDefinition,

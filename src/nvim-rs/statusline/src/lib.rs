@@ -312,7 +312,7 @@ fn col_print_impl(buf: &mut [u8], col: c_int, vcol: c_int) -> c_int {
 ///
 /// # Safety
 /// `wp` must be a valid window handle or null.
-#[no_mangle]
+#[export_name = "stl_connected"]
 pub extern "C" fn rs_stl_connected(wp: WinHandle) -> c_int {
     c_int::from(stl_connected_impl(wp))
 }
@@ -322,7 +322,7 @@ pub extern "C" fn rs_stl_connected(wp: WinHandle) -> c_int {
 /// # Safety
 /// `wp` must be a valid window handle.
 /// `group` must be a valid pointer to an hlf_T value.
-#[no_mangle]
+#[export_name = "fillchar_status"]
 pub unsafe extern "C" fn rs_fillchar_status(group: *mut c_int, wp: WinHandle) -> ScharT {
     let (fillchar, grp) = fillchar_status_impl(wp);
     if !group.is_null() {
@@ -2104,7 +2104,7 @@ const MAXPATHL: usize = 4096;
 ///
 /// # Safety
 /// `buf` must be a valid buffer handle.
-#[no_mangle]
+#[export_name = "get_trans_bufname"]
 pub unsafe extern "C" fn rs_get_trans_bufname(buf: BufHandle) {
     nvim_stl_get_trans_bufname(buf);
 }
@@ -2116,7 +2116,7 @@ pub unsafe extern "C" fn rs_get_trans_bufname(buf: BufHandle) {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "redraw_custom_statusline"]
 pub unsafe extern "C" fn rs_redraw_custom_statusline(wp: WinHandle) {
     use std::cell::Cell;
 
@@ -2155,7 +2155,7 @@ pub unsafe extern "C" fn rs_redraw_custom_statusline(wp: WinHandle) {
 /// - `lnum` and `relnum` must be valid line numbers (relnum can be -1).
 /// - `buf` must be a valid pointer to a buffer of at least MAXPATHL bytes.
 /// - `stcp` must be a valid pointer to a statuscol_T struct.
-#[no_mangle]
+#[export_name = "build_statuscol_str"]
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_build_statuscol_str(
     wp: WinHandle,
@@ -2258,7 +2258,7 @@ const HLF_C: c_int = 21;
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "win_redr_status"]
 pub unsafe extern "C" fn rs_win_redr_status(wp: WinHandle) {
     use std::cell::Cell;
 
@@ -2327,7 +2327,7 @@ pub unsafe extern "C" fn rs_win_redr_status(wp: WinHandle) {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "win_redr_winbar"]
 pub unsafe extern "C" fn rs_win_redr_winbar(wp: WinHandle) {
     use std::cell::Cell;
 
@@ -2389,7 +2389,7 @@ extern "C" {
 ///
 /// # Safety
 /// Accesses global C state.
-#[no_mangle]
+#[export_name = "redraw_ruler"]
 pub unsafe extern "C" fn rs_redraw_ruler() {
     redraw_ruler::redraw_ruler();
 }
@@ -2452,7 +2452,7 @@ pub unsafe extern "C" fn rs_ui_ext_tabline_update() {
 ///
 /// # Safety
 /// Accesses global C state (grid, tabs, click defs).
-#[no_mangle]
+#[export_name = "draw_tabline"]
 pub unsafe extern "C" fn rs_draw_tabline() {
     draw_tabline::draw_tabline();
 }
@@ -2512,6 +2512,53 @@ pub unsafe extern "C" fn rs_build_stl_str_hl_wrap(
     stcp: StatuscolHandle,
 ) -> c_int {
     stl_build::build_stl_str_hl(
+        wp, out, outlen, fmt, opt_idx, opt_scope, fillchar, maxwidth, hltab, hltab_len, tabtab,
+        stcp,
+    )
+}
+
+// =============================================================================
+// Phase 1: C-named symbol exports
+// These provide the canonical C symbol names for thin-wrapper functions
+// that were deleted from statusline.c.  The rs_* names are kept for any
+// other Rust crates that call them directly.
+// =============================================================================
+
+/// C export: `win_redr_custom` -- replaces the deleted C static.
+///
+/// # Safety
+/// - `wp` may be null (for tabline rendering).
+#[export_name = "win_redr_custom"]
+pub unsafe extern "C" fn win_redr_custom_export(
+    wp: WinHandle,
+    draw_winbar: bool,
+    draw_ruler: bool,
+    ui_event: bool,
+) {
+    rs_win_redr_custom(wp, draw_winbar, draw_ruler, ui_event);
+}
+
+/// C export: `build_stl_str_hl` -- replaces the deleted C thin wrapper.
+///
+/// # Safety
+/// All pointer parameters follow the same constraints as `rs_build_stl_str_hl_wrap`.
+#[allow(clippy::too_many_arguments)]
+#[export_name = "build_stl_str_hl"]
+pub unsafe extern "C" fn build_stl_str_hl_export(
+    wp: WinHandle,
+    out: *mut c_char,
+    outlen: usize,
+    fmt: *mut c_char,
+    opt_idx: c_int,
+    opt_scope: c_int,
+    fillchar: ScharT,
+    maxwidth: c_int,
+    hltab: *mut *mut c_void,
+    hltab_len: *mut usize,
+    tabtab: *mut *mut c_void,
+    stcp: StatuscolHandle,
+) -> c_int {
+    rs_build_stl_str_hl_wrap(
         wp, out, outlen, fmt, opt_idx, opt_scope, fillchar, maxwidth, hltab, hltab_len, tabtab,
         stcp,
     )

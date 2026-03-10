@@ -51,185 +51,15 @@
 #include "nvim/undo.h"
 #include "nvim/window.h"
 
-// Rust FFI declarations (window wrappers removed)
+// Rust FFI declarations
+extern void rs_ui_ext_tabline_update(void);
 extern win_T *rs_lastwin_nofloating(void);
 extern int rs_tabline_height(void);
-
-// Rust FFI declarations (memline crate)
 extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
-
-// Rust implementations
 extern int rs_get_fileformat(buf_T *buf);
-extern int rs_stl_connected(win_T *wp);
-extern schar_T rs_fillchar_status(int *group, win_T *wp);
-extern int rs_tabwidth_calc(int columns, int tabcount);
-extern void rs_stl_clear_click_defs(StlClickDefinition *click_defs, size_t click_defs_size);
-extern StlClickDefinition *rs_stl_alloc_click_defs(StlClickDefinition *cdp, int width, size_t *size);
-extern void rs_stl_fill_click_defs(StlClickDefinition *click_defs, StlClickRecord *click_recs,
-                                   const char *buf, int width, bool tabline);
-// Phase 1 Rust implementations
-extern void rs_get_trans_bufname(buf_T *buf);
-extern void rs_redraw_custom_statusline(win_T *wp);
-extern int rs_build_statuscol_str(win_T *wp, linenr_T lnum, linenr_T relnum, char *buf,
-                                  statuscol_T *stcp);
-// Phase 2 Rust implementations
-extern void rs_win_redr_status(win_T *wp);
-extern void rs_win_redr_winbar(win_T *wp);
-// Phase 3 Rust implementations
-extern void rs_redraw_ruler(void);
-extern void rs_ui_ext_tabline_update(void);
-// Phase 4 Rust implementation
-extern void rs_draw_tabline(void);
-// Phase 5 Rust implementation
-extern void rs_win_redr_custom(win_T *wp, bool draw_winbar, bool draw_ruler, bool ui_event);
-// Phase 6 Rust implementation
-extern int rs_build_stl_str_hl_wrap(win_T *wp, char *out, size_t outlen, char *fmt, int opt_idx,
-                                     int opt_scope, schar_T fillchar, int maxwidth,
-                                     stl_hlrec_t **hltab, size_t *hltab_len,
-                                     StlClickRecord **tabtab, statuscol_T *stcp);
 
-// Determines how deeply nested %{} blocks will be evaluated in statusline.
-#define MAX_STL_EVAL_DEPTH 100
-
-/// Enumeration specifying the valid numeric bases that can
-/// be used when printing numbers in the status line.
-typedef enum {
-  kNumBaseDecimal = 10,
-  kNumBaseHexadecimal = 16,
-} NumberBase;
-
-/// Redraw the status line of window `wp`.
-///
-/// If inversion is possible we use it. Else '=' characters are used.
-void win_redr_status(win_T *wp)
-{
-  rs_win_redr_status(wp);
-}
-
-void get_trans_bufname(buf_T *buf)
-{
-  rs_get_trans_bufname(buf);
-}
-
-/// Only call if (wp->w_vsep_width != 0).
-///
-/// @return  true if the status line of window "wp" is connected to the status
-/// line of the window right of it.  If not, then it's a vertical separator.
-bool stl_connected(win_T *wp)
-{
-  return rs_stl_connected(wp);
-}
-
-/// Clear status line, window bar or tab page line click definition table
-///
-/// @param[out]  tpcd  Table to clear.
-/// @param[in]  tpcd_size  Size of the table.
-void stl_clear_click_defs(StlClickDefinition *const click_defs, const size_t click_defs_size)
-{
-  rs_stl_clear_click_defs(click_defs, click_defs_size);
-}
-
-/// Allocate or resize the click definitions array if needed.
-StlClickDefinition *stl_alloc_click_defs(StlClickDefinition *cdp, int width, size_t *size)
-{
-  return rs_stl_alloc_click_defs(cdp, width, size);
-}
-
-/// Fill the click definitions array if needed.
-void stl_fill_click_defs(StlClickDefinition *click_defs, StlClickRecord *click_recs,
-                         const char *buf, int width, bool tabline)
-{
-  rs_stl_fill_click_defs(click_defs, click_recs, buf, width, tabline);
-}
-
-/// Redraw the status line, window bar, ruler or tabline.
-/// @param wp  target window, NULL for 'tabline'
-/// @param draw_winbar  redraw 'winbar'
-/// @param draw_ruler  redraw 'rulerformat'
-/// @param ui_event  emit UI-event instead of drawing
-static void win_redr_custom(win_T *wp, bool draw_winbar, bool draw_ruler, bool ui_event)
-{
-  rs_win_redr_custom(wp, draw_winbar, draw_ruler, ui_event);
-}
-
-void win_redr_winbar(win_T *wp)
-{
-  rs_win_redr_winbar(wp);
-}
-
-void redraw_ruler(void)
-{
-  rs_redraw_ruler();
-}
-
-/// Get the character to use in a status line.  Get its attributes in "*attr".
-schar_T fillchar_status(hlf_T *group, win_T *wp)
-{
-  return rs_fillchar_status((int *)group, wp);
-}
-
-/// Redraw the status line according to 'statusline' and take care of any
-/// errors encountered.
-void redraw_custom_statusline(win_T *wp)
-{
-  rs_redraw_custom_statusline(wp);
-}
-
-static void ui_ext_tabline_update(void)
-{
-  rs_ui_ext_tabline_update();
-}
-
-/// Draw the tab pages line at the top of the Vim window.
-void draw_tabline(void)
-{
-  rs_draw_tabline();
-}
-
-/// Build the 'statuscolumn' string for line "lnum". When "relnum" == -1,
-/// the v:lnum and v:relnum variables don't have to be updated.
-///
-/// @return  The width of the built status column string for line "lnum"
-int build_statuscol_str(win_T *wp, linenr_T lnum, linenr_T relnum, char *buf, statuscol_T *stcp)
-{
-  return rs_build_statuscol_str(wp, lnum, relnum, buf, stcp);
-}
-
-/// Build a string from the status line items in "fmt".
-/// Return length of string in screen cells.
-///
-/// Normally works for window "wp", except when working for 'tabline' then it
-/// is "curwin".
-///
-/// Items are drawn interspersed with the text that surrounds it
-/// Specials: %-<wid>(xxx%) => group, %= => separation marker, %< => truncation
-/// Item: %-<minwid>.<maxwid><itemch> All but <itemch> are optional
-///
-/// If maxwidth is not zero, the string will be filled at any middle marker
-/// or truncated if too long, fillchar is used for all whitespace.
-///
-/// @param wp  The window to build a statusline for
-/// @param out  The output buffer to write the statusline to
-///             Note: This should not be NameBuff
-/// @param outlen  The length of the output buffer
-/// @param fmt  The statusline format string
-/// @param opt_idx  Index of the option corresponding to "fmt"
-/// @param opt_scope  The scope corresponding to "opt_idx"
-/// @param fillchar  Character to use when filling empty space in the statusline
-/// @param maxwidth  The maximum width to make the statusline
-/// @param hltab  HL attributes (can be NULL)
-/// @param tabtab  Tab clicks definition (can be NULL)
-/// @param stcp  Status column attributes (can be NULL)
-///
-/// @return  The final width of the statusline
-int build_stl_str_hl(win_T *wp, char *out, size_t outlen, char *fmt, OptIndex opt_idx,
-                     int opt_scope, schar_T fillchar, int maxwidth, stl_hlrec_t **hltab,
-                     size_t *hltab_len, StlClickRecord **tabtab, statuscol_T *stcp)
-{
-  return rs_build_stl_str_hl_wrap(wp, out, outlen, fmt, (int)opt_idx, opt_scope, fillchar, maxwidth,
-                                  hltab, hltab_len, tabtab, stcp);
-}
-
+// Rust-provided symbols (formerly static C functions, now globally exported by Rust)
+extern void win_redr_custom(win_T *wp, bool draw_winbar, bool draw_ruler, bool ui_event);
 
 // ============================================================================
 // Statusline Accessor Functions (for Rust FFI)
@@ -389,7 +219,7 @@ void nvim_stl_get_trans_bufname(buf_T *buf)
 /// Call win_redr_custom(wp, false, false, false) for redraw_custom_statusline.
 void nvim_stl_win_redr_custom(win_T *wp)
 {
-  rs_win_redr_custom(wp, false, false, false);
+  win_redr_custom(wp, false, false, false);
 }
 
 /// Set v:lnum variable.
@@ -418,8 +248,8 @@ int nvim_stl_build_stl_str_hl(win_T *wp, char *buf, int buflen, const char *stc,
 {
   // build_stl_str_hl requires a mutable copy of the format string
   char *stc_copy = xstrdup(stc);
-  int width = rs_build_stl_str_hl_wrap(wp, buf, (size_t)buflen, stc_copy, (int)kOptStatuscolumn,
-                                      OPT_LOCAL, 0, maxwidth, hlrec, NULL, clickrec, stcp);
+  int width = build_stl_str_hl(wp, buf, (size_t)buflen, stc_copy, (OptIndex)kOptStatuscolumn,
+                                OPT_LOCAL, 0, maxwidth, hlrec, NULL, clickrec, stcp);
   xfree(stc_copy);
   return width;
 }
@@ -913,7 +743,7 @@ _Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL");
 /// Call win_redr_custom(wp, true, false, false) for winbar rendering.
 void nvim_stl_win_redr_custom_winbar(win_T *wp)
 {
-  rs_win_redr_custom(wp, true, false, false);
+  win_redr_custom(wp, true, false, false);
 }
 
 /// Check if wildmenu is showing and UI does not have kUIWildmenu.
@@ -1368,7 +1198,7 @@ size_t nvim_stl_tab_info_size(void) { return sizeof(TabInfo); }
 /// Call ui_ext_tabline_update (wrapper for Rust).
 void nvim_stl_ui_ext_tabline_update(void)
 {
-  ui_ext_tabline_update();
+  rs_ui_ext_tabline_update();
 }
 
 _Static_assert(HLF_T == 23, "HLF_T must be 23");
