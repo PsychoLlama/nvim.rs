@@ -54,10 +54,6 @@
 // Rust FFI declarations
 extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
 
-// ============================================================================
-// Statusline Accessor Functions (for Rust FFI)
-// ============================================================================
-
 /// Evaluate an expression for the statusline.
 /// Returns the length of the result string.
 int nvim_stl_eval_expr(win_T *wp, const char *expr, int expr_len, char *out, int out_len)
@@ -191,8 +187,6 @@ int nvim_stl_get_qf_info(win_T *wp, char *buf, int buflen)
   return 0;
 }
 
-// Phase 1 accessors for Rust FFI
-
 /// Fill NameBuff with the translated buffer name via buf_spname/home_replace/trans_characters.
 void nvim_stl_get_trans_bufname(buf_T *buf)
 {
@@ -274,10 +268,6 @@ stl_hlrec_t **nvim_stl_stcp_get_hlrec_ptr(statuscol_T *stcp)
 }
 
 
-
-_Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL must be 0x02");
-
-// Phase 6 accessors: build_stl_str_hl format parsing support
 
 /// Evaluate a VimL expression for the statusline with full context switching.
 /// Sets g:actual_curbuf, g:actual_curwin, switches curwin/curbuf, saves VIsual_active.
@@ -572,9 +562,6 @@ _Static_assert(HLF_WBRNC == 66, "HLF_WBRNC");
 _Static_assert(HLF_MSG == 63, "HLF_MSG");
 _Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL");
 
-// Phase 2 accessors for Rust FFI
-
-
 /// Check if wildmenu is showing and UI does not have kUIWildmenu.
 /// Returns true if statusline redraw should be blocked.
 int nvim_stl_wildmenu_blocking(void)
@@ -602,8 +589,6 @@ const char *nvim_stl_get_p_stl(void)
 
 _Static_assert(kUIWildmenu == 3, "kUIWildmenu must be 3");
 _Static_assert(HLF_C == 21, "HLF_C must be 21");
-
-// Phase 3 accessors for Rust FFI
 
 /// Accessor: build arena-based API objects from flat arrays and emit
 /// ui_call_tabline_update.  Called from Rust rs_ui_ext_tabline_update().
@@ -712,8 +697,6 @@ void nvim_stl_win_set_winbar_click_defs(win_T *wp, void *defs) { wp->w_winbar_cl
 void nvim_stl_win_set_winbar_click_defs_size(win_T *wp, size_t size) { wp->w_winbar_click_defs_size = size; }
 
 
-// Phase 4 accessors for redraw_ruler Rust FFI
-
 /// Get p_ru (ruler option).
 int nvim_stl_get_p_ru(void) { return p_ru ? 1 : 0; }
 
@@ -755,11 +738,9 @@ void nvim_stl_msg_grid_line_start(int row)
   grid_line_start(&msg_grid_adj, row);
 }
 
-_Static_assert(MODE_INSERT == 0x10, "MODE_INSERT must be 0x10");
 _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY must be 0x01");
 _Static_assert(kUIMessages == 4, "kUIMessages must be 4");
 
-// Phase 5 accessors for draw_tabline Rust FFI
 
 
 /// Set redraw_tabline flag.
@@ -883,7 +864,6 @@ size_t nvim_stl_tab_info_size(void) { return sizeof(TabInfo); }
 _Static_assert(HLF_T == 23, "HLF_T must be 23");
 _Static_assert(HLF_TP == 52, "HLF_TP must be 52");
 _Static_assert(HLF_TPS == 53, "HLF_TPS must be 53");
-_Static_assert(HLF_TPF == 54, "HLF_TPF must be 54");
 _Static_assert(kStlClickTabSwitch == 1, "kStlClickTabSwitch must be 1");
 _Static_assert(kStlClickTabClose == 2, "kStlClickTabClose must be 2");
 _Static_assert(kUITabline == 2, "kUITabline must be 2");
