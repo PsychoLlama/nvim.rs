@@ -22,7 +22,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::define::EX_XFILE;
-use crate::{AddrType, ExpandHandle};
+use crate::{ucmds, AddrType, ExpandHandle, UcmdT};
 
 // =============================================================================
 // EXPAND_* Constants — match cmdexpand_defs.h exactly
@@ -600,19 +600,11 @@ extern "C" {
     /// Does MB_PTR_ADV(*pp)
     fn nvim_uc_MB_PTR_ADV(pp: *mut *const c_char);
 
-    // garray operations for user commands
+    // garray operations for user commands (prevwin_curwin buffer requires C accessor)
     /// Returns prevwin_curwin()->w_buffer->b_ucmds.ga_len
     fn nvim_uc_prevwin_curwin_buf_ucmds_len() -> c_int;
     /// Returns USER_CMD_GA(&prevwin_curwin()->w_buffer->b_ucmds, i)
-    fn nvim_uc_prevwin_curwin_buf_ucmd_ga(i: c_int) -> *mut c_void;
-    /// Returns ucmds.ga_len
-    fn nvim_uc_get_ucmds_len() -> c_int;
-    /// Returns USER_CMD(idx) (global ucmds array)
-    fn nvim_uc_user_cmd_global(idx: c_int) -> *mut c_void;
-
-    // ucmd_T field getters
-    /// Returns cmd->uc_name
-    fn nvim_uc_cmd_get_name(cmd: *const c_void) -> *const c_char;
+    fn nvim_uc_prevwin_curwin_buf_ucmd_ga(i: c_int) -> *mut UcmdT;
 }
 
 // =============================================================================
@@ -773,23 +765,26 @@ unsafe fn get_user_commands_impl(idx: c_int) -> *mut c_char {
     let buf_len = nvim_uc_prevwin_curwin_buf_ucmds_len();
 
     if idx < buf_len {
-        return nvim_uc_cmd_get_name(nvim_uc_prevwin_curwin_buf_ucmd_ga(idx)) as *mut c_char;
+        let cmd = nvim_uc_prevwin_curwin_buf_ucmd_ga(idx);
+        return unsafe { (*cmd).uc_name };
     }
 
     let adjusted = idx - buf_len;
-    let ucmds_len = nvim_uc_get_ucmds_len();
+    let ucmds_len = unsafe { ucmds.ga_len };
     if adjusted < ucmds_len {
-        let name = nvim_uc_cmd_get_name(nvim_uc_user_cmd_global(adjusted));
+        let cmd = unsafe { ucmds.ga_data.cast::<UcmdT>().add(adjusted as usize) };
+        let name = unsafe { (*cmd).uc_name };
 
         // Check if global command is overruled by buffer-local one
         for i in 0..buf_len {
-            let buf_cmd_name = nvim_uc_cmd_get_name(nvim_uc_prevwin_curwin_buf_ucmd_ga(i));
-            if strcmp_c(name, buf_cmd_name) == 0 {
+            let buf_cmd = nvim_uc_prevwin_curwin_buf_ucmd_ga(i);
+            let buf_cmd_name = unsafe { (*buf_cmd).uc_name as *const c_char };
+            if strcmp_c(name as *const c_char, buf_cmd_name) == 0 {
                 // global command is overruled by buffer-local one
                 return c"".as_ptr() as *mut c_char;
             }
         }
-        return name as *mut c_char;
+        return name;
     }
     std::ptr::null_mut()
 }
@@ -798,13 +793,15 @@ unsafe fn get_user_commands_impl(idx: c_int) -> *mut c_char {
 ///
 /// Gets command name by index and cmdidx (CMD_USER or CMD_USER_BUF).
 unsafe fn get_user_command_name_impl(idx: c_int, cmdidx: c_int) -> *mut c_char {
-    if cmdidx == CMD_USER && idx < nvim_uc_get_ucmds_len() {
-        return nvim_uc_cmd_get_name(nvim_uc_user_cmd_global(idx)) as *mut c_char;
+    if cmdidx == CMD_USER && idx < unsafe { ucmds.ga_len } {
+        let cmd = unsafe { ucmds.ga_data.cast::<UcmdT>().add(idx as usize) };
+        return unsafe { (*cmd).uc_name };
     }
     if cmdidx == CMD_USER_BUF {
         let buf_len = nvim_uc_prevwin_curwin_buf_ucmds_len();
         if idx < buf_len {
-            return nvim_uc_cmd_get_name(nvim_uc_prevwin_curwin_buf_ucmd_ga(idx)) as *mut c_char;
+            let cmd = nvim_uc_prevwin_curwin_buf_ucmd_ga(idx);
+            return unsafe { (*cmd).uc_name };
         }
     }
     std::ptr::null_mut()

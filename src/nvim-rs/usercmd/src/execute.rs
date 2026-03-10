@@ -19,7 +19,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::define::EX_NOSPC;
-use crate::{CmdmodHandle, ExargHandle, UcmdHandle};
+use crate::{ucmds, CmdmodHandle, ExargHandle, UcmdT};
 
 /// Line number type
 type LinenrT = i32;
@@ -498,10 +498,6 @@ extern "C" {
     fn nvim_uc_eap_get_arglens(eap: ExargHandle) -> *const usize;
     /// Get eap->argc (size_t)
     fn nvim_uc_eap_get_argc(eap: ExargHandle) -> usize;
-
-    // ucmd_T accessors
-    /// Get cmd->uc_def (int64_t)
-    fn nvim_uc_cmd_get_def(cmd: UcmdHandle) -> i64;
 
     // Multibyte helpers
     /// utfc_ptr2len(p) — byte length of a UTF-8 character
@@ -1143,7 +1139,7 @@ unsafe fn uc_check_code_impl(
     code: *mut c_char,
     len: usize,
     buf: *mut c_char,
-    cmd: UcmdHandle,
+    cmd: *mut UcmdT,
     eap: ExargHandle,
     split_buf: *mut *mut c_char,
     split_len: *mut usize,
@@ -1348,7 +1344,7 @@ unsafe fn expand_bang(buf: *mut c_char, eap: ExargHandle, quote: c_int) -> usize
 /// All pointers must be valid.
 unsafe fn expand_numeric(
     buf: *mut c_char,
-    cmd: UcmdHandle,
+    cmd: *mut UcmdT,
     eap: ExargHandle,
     code_type: CodeType,
     quote: c_int,
@@ -1362,7 +1358,7 @@ unsafe fn expand_numeric(
                 if nvim_uc_eap_get_addr_count(eap) > 0 {
                     i64::from(nvim_uc_eap_get_line2(eap))
                 } else {
-                    nvim_uc_cmd_get_def(cmd)
+                    (*cmd).uc_def
                 }
             }
             _ => 0,
@@ -1473,7 +1469,7 @@ pub unsafe extern "C" fn rs_uc_check_code(
     code: *mut c_char,
     len: usize,
     buf: *mut c_char,
-    cmd: UcmdHandle,
+    cmd: *mut UcmdT,
     eap: ExargHandle,
     split_buf: *mut *mut c_char,
     split_len: *mut usize,
@@ -1497,27 +1493,15 @@ extern "C" {
     fn nvim_uc_eap_get_cmdidx(eap: ExargHandle) -> c_int;
     /// Get eap->useridx (int)
     fn nvim_uc_eap_get_useridx(eap: ExargHandle) -> c_int;
-    /// Returns USER_CMD(idx) — global ucmds entry
-    fn nvim_uc_user_cmd(idx: c_int) -> UcmdHandle;
     /// Returns USER_CMD_GA(&prevwin_curwin()->w_buffer->b_ucmds, idx)
-    fn nvim_uc_prevwin_curwin_buf_ucmd(idx: c_int) -> UcmdHandle;
-    /// Get cmd->uc_preview_luaref
-    fn nvim_uc_cmd_get_preview_luaref(cmd: UcmdHandle) -> c_int;
-    /// Get cmd->uc_luaref
-    fn nvim_uc_cmd_get_luaref(cmd: UcmdHandle) -> c_int;
-    /// Get cmd->uc_rep (const char *)
-    fn nvim_uc_cmd_get_rep(cmd: UcmdHandle) -> *mut c_char;
-    /// Get cmd->uc_argt (uint32_t)
-    fn nvim_uc_cmd_get_argt(cmd: UcmdHandle) -> u32;
+    fn nvim_uc_prevwin_curwin_buf_ucmd(idx: c_int) -> *mut UcmdT;
     /// Calls nlua_do_ucmd(cmd, eap, preview != 0)
-    fn nvim_uc_nlua_do_ucmd(cmd: UcmdHandle, eap: ExargHandle, preview: c_int) -> c_int;
+    fn nvim_uc_nlua_do_ucmd(cmd: *mut UcmdT, eap: ExargHandle, preview: c_int) -> c_int;
     /// vim_strchr(p, c)
     #[link_name = "vim_strchr"]
     fn nvim_uc_vim_strchr(p: *const c_char, c: c_int) -> *mut c_char;
     /// Calls do_cmdline with sctx save/restore — kept: complex wrapper
     fn nvim_uc_do_cmdline_with_sctx(buf: *mut c_char, eap: ExargHandle, argt: u32, sc_sid: c_int);
-    /// Get cmd->uc_script_ctx.sc_sid — kept: field access
-    fn nvim_uc_cmd_get_sc_sid(cmd: *const c_void) -> c_int;
     /// xfree(ptr)
     #[link_name = "xfree"]
     fn nvim_uc_xfree(ptr: *mut c_void);
@@ -1543,28 +1527,29 @@ unsafe fn do_ucmd_impl(eap: ExargHandle, preview: bool) -> c_int {
     // Look up the command
     let cmdidx = nvim_uc_eap_get_cmdidx(eap);
     let useridx = nvim_uc_eap_get_useridx(eap);
-    let cmd = if cmdidx == CMD_USER {
-        nvim_uc_user_cmd(useridx)
+    let cmd: *mut UcmdT = if cmdidx == CMD_USER {
+        // USER_CMD(idx) = ucmds.ga_data.cast::<UcmdT>().add(idx)
+        unsafe { ucmds.ga_data.cast::<UcmdT>().add(useridx as usize) }
     } else {
         nvim_uc_prevwin_curwin_buf_ucmd(useridx)
     };
 
     // Preview path
     if preview {
-        debug_assert!(nvim_uc_cmd_get_preview_luaref(cmd) > 0);
+        debug_assert!(unsafe { (*cmd).uc_preview_luaref } > 0);
         return nvim_uc_nlua_do_ucmd(cmd, eap, 1);
     }
 
     // Lua callback path
-    if nvim_uc_cmd_get_luaref(cmd) > 0 {
+    if unsafe { (*cmd).uc_luaref } > 0 {
         nvim_uc_nlua_do_ucmd(cmd, eap, 0);
         return 0;
     }
 
     // Save argt and sc_sid before the two-pass loop, since after do_cmdline
     // the cmd pointer may become invalid.
-    let argt = nvim_uc_cmd_get_argt(cmd);
-    let sc_sid = nvim_uc_cmd_get_sc_sid(cmd.cast_const());
+    let argt = unsafe { (*cmd).uc_argt };
+    let sc_sid = unsafe { (*cmd).uc_script_ctx.sc_sid };
 
     let mut split_len: usize = 0;
     let mut split_buf: *mut c_char = std::ptr::null_mut();
@@ -1573,7 +1558,7 @@ unsafe fn do_ucmd_impl(eap: ExargHandle, preview: bool) -> c_int {
     // First round: buf is NULL, compute length, allocate buf.
     // Second round: copy result into buf.
     let mut buf: *mut c_char = std::ptr::null_mut();
-    let uc_rep = nvim_uc_cmd_get_rep(cmd);
+    let uc_rep = unsafe { (*cmd).uc_rep };
 
     loop {
         let mut p: *mut c_char = uc_rep;

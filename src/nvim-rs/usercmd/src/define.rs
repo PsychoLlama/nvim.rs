@@ -23,9 +23,13 @@
 #![allow(clippy::explicit_iter_loop)]
 
 use std::ffi::{c_char, c_int, c_void, CStr};
+use std::mem::size_of;
 
 use crate::complete::ADDR_TYPE_COMPLETE;
-use crate::{AddrType, ExargHandle, ExpandHandle, GarrayHandle};
+use crate::{
+    api_free_luaref, ga_init, last_set_msg, ucmds, AddrType, ExargHandle, ExpandHandle,
+    GarrayHandle, GarrayT, UcmdT,
+};
 
 // =============================================================================
 // UC_* Constants — from usercmd.h
@@ -494,102 +498,94 @@ const LUA_NOREF: c_int = -2;
 // =============================================================================
 
 extern "C" {
-    // garray operations
+    // garray operations (curbuf access requires C accessors for buffer struct)
     /// Returns &curbuf->b_ucmds (GarrayHandle)
     fn nvim_uc_get_curbuf_ucmds() -> GarrayHandle;
-    /// Returns &ucmds (GarrayHandle)
-    fn nvim_uc_get_ucmds() -> GarrayHandle;
-    /// Returns gap->ga_len
-    fn nvim_uc_ga_get_len(gap: GarrayHandle) -> c_int;
-    /// Returns gap->ga_itemsize
-    fn nvim_uc_ga_get_itemsize(gap: GarrayHandle) -> c_int;
-    /// Sets gap->ga_len = len
-    fn nvim_uc_ga_set_len(gap: GarrayHandle, len: c_int);
-    /// ga_init(gap, sizeof(ucmd_T), 4)
-    fn nvim_uc_ga_init_ucmd(gap: GarrayHandle);
+
     /// ga_grow(gap, n)
     #[link_name = "ga_grow"]
-    fn nvim_uc_ga_grow(gap: GarrayHandle, n: c_int);
+    fn nvim_uc_ga_grow(gap: *mut GarrayT, n: c_int);
     /// ga_clear(gap)
     #[link_name = "ga_clear"]
-    fn nvim_uc_ga_clear(gap: GarrayHandle);
+    fn nvim_uc_ga_clear(gap: *mut GarrayT);
 
-    // ucmd_T element access
-    /// Returns USER_CMD_GA(gap, i) as opaque pointer
-    fn nvim_uc_ga_get_cmd(gap: GarrayHandle, i: c_int) -> *mut c_void;
-    /// memmove(cmd+1, cmd, (gap->ga_len - i) * sizeof(ucmd_T))
-    fn nvim_uc_cmd_memmove_down(gap: GarrayHandle, i: c_int);
-
-    // ucmd_T field getters
-    /// Returns cmd->uc_name
-    fn nvim_uc_cmd_get_name(cmd: *const c_void) -> *const c_char;
-    /// Returns cmd->uc_script_ctx.sc_sid
-    fn nvim_uc_cmd_get_sc_sid(cmd: *const c_void) -> c_int;
-    /// Returns cmd->uc_script_ctx.sc_seq
-    fn nvim_uc_cmd_get_sc_seq(cmd: *const c_void) -> c_int;
-
-    // ucmd_T field setters
-    /// Sets cmd->uc_name = name
-    fn nvim_uc_cmd_set_name(cmd: *mut c_void, name: *mut c_char);
-    /// Sets cmd->uc_rep = rep
-    fn nvim_uc_cmd_set_rep(cmd: *mut c_void, rep: *mut c_char);
-    /// Sets cmd->uc_argt = argt
-    fn nvim_uc_cmd_set_argt(cmd: *mut c_void, argt: u32);
-    /// Sets cmd->uc_def = def
-    fn nvim_uc_cmd_set_def(cmd: *mut c_void, def: i64);
-    /// Sets cmd->uc_compl = compl
-    fn nvim_uc_cmd_set_compl(cmd: *mut c_void, compl_val: c_int);
-    /// Sets cmd->uc_compl_arg = arg
-    fn nvim_uc_cmd_set_compl_arg(cmd: *mut c_void, arg: *mut c_char);
-    /// Sets cmd->uc_addr_type = addr_type
-    fn nvim_uc_cmd_set_addr_type(cmd: *mut c_void, addr_type: c_int);
-    /// Sets cmd->uc_luaref = luaref
-    fn nvim_uc_cmd_set_luaref(cmd: *mut c_void, luaref: c_int);
-    /// Sets cmd->uc_compl_luaref = luaref
-    fn nvim_uc_cmd_set_compl_luaref(cmd: *mut c_void, luaref: c_int);
-    /// Sets cmd->uc_preview_luaref = luaref
-    fn nvim_uc_cmd_set_preview_luaref(cmd: *mut c_void, luaref: c_int);
+    // ucmd_T script ctx (kept: uses SOURCING_LNUM macro, cannot call from Rust)
     /// Sets cmd->uc_script_ctx = current_sctx; sc_lnum += SOURCING_LNUM;
     /// nlua_set_sctx(&cmd->uc_script_ctx)
-    fn nvim_uc_cmd_set_script_ctx(cmd: *mut c_void);
-
-    // ucmd_T field cleanup (XFREE_CLEAR / NLUA_CLEAR_REF on individual fields)
-    /// XFREE_CLEAR(cmd->uc_rep)
-    fn nvim_uc_cmd_free_rep(cmd: *mut c_void);
-    /// XFREE_CLEAR(cmd->uc_compl_arg)
-    fn nvim_uc_cmd_free_compl_arg(cmd: *mut c_void);
-    /// NLUA_CLEAR_REF(cmd->uc_luaref)
-    fn nvim_uc_cmd_clear_luaref(cmd: *mut c_void);
-    /// NLUA_CLEAR_REF(cmd->uc_compl_luaref)
-    fn nvim_uc_cmd_clear_compl_luaref(cmd: *mut c_void);
-    /// NLUA_CLEAR_REF(cmd->uc_preview_luaref)
-    fn nvim_uc_cmd_clear_preview_luaref(cmd: *mut c_void);
-
-    // Whole-struct cleanup
-    /// Calls free_ucmd(cmd) — frees all fields of a ucmd_T
-    fn nvim_uc_free_ucmd(cmd: *mut c_void);
+    fn nvim_uc_cmd_set_script_ctx(cmd: *mut UcmdT);
 
     // Memory operations
     /// xfree(ptr)
     #[link_name = "xfree"]
     fn nvim_uc_xfree(ptr: *mut c_void);
-    /// NLUA_CLEAR_REF(ref) — kept: wraps a macro
-    fn nvim_uc_nlua_clear_ref(luaref: c_int);
     /// replace_termcodes — kept: complex call with fixed args
     fn nvim_uc_replace_termcodes(rep: *const c_char, replen: usize) -> *mut c_char;
     /// xstrnsave(s, len)
     #[link_name = "xstrnsave"]
     fn nvim_uc_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 
-    // Global state
-    /// Returns current_sctx.sc_sid
-    fn nvim_uc_get_current_sctx_sid() -> c_int;
-    /// Returns current_sctx.sc_seq
-    fn nvim_uc_get_current_sctx_seq() -> c_int;
-
-    // Error reporting — already exists from Phase 2
+    // Error reporting
     /// semsg(_(fmt), arg)
     fn nvim_uc_semsg_1(fmt: *const c_char, arg: *const c_char);
+}
+
+// =============================================================================
+// Direct field-access helpers replacing C accessors (Phase 3)
+// =============================================================================
+
+/// Get a pointer to the global ucmds garray.
+fn get_ucmds_ptr() -> *mut GarrayT {
+    std::ptr::addr_of_mut!(ucmds)
+}
+
+/// Get a pointer to element i in garray (like USER_CMD_GA macro).
+unsafe fn ga_get_cmd(gap: *mut GarrayT, i: c_int) -> *mut UcmdT {
+    unsafe { (*gap).ga_data.cast::<UcmdT>().add(i as usize) }
+}
+
+/// memmove(cmd+1, cmd, (ga_len - i) * sizeof(UcmdT)) — shift entries down.
+unsafe fn cmd_memmove_down(gap: *mut GarrayT, i: c_int) {
+    let cmd = unsafe { ga_get_cmd(gap, i) };
+    let remaining = unsafe { (*gap).ga_len - i } as usize;
+    unsafe { std::ptr::copy(cmd, cmd.add(1), remaining) };
+}
+
+/// memmove(cmd, cmd+1, (ga_len - i) * sizeof(UcmdT)) — shift entries up.
+unsafe fn cmd_memmove_up(gap: *mut GarrayT, i: c_int) {
+    let cmd = unsafe { ga_get_cmd(gap, i) };
+    let remaining = unsafe { (*gap).ga_len - i } as usize;
+    unsafe { std::ptr::copy(cmd.add(1), cmd, remaining) };
+}
+
+/// Free a field using XFREE_CLEAR semantics (xfree + set to null).
+unsafe fn xfree_clear(ptr: *mut *mut c_char) {
+    unsafe {
+        nvim_uc_xfree((*ptr).cast::<c_void>());
+        *ptr = std::ptr::null_mut();
+    }
+}
+
+/// Clear a lua ref field using NLUA_CLEAR_REF semantics.
+unsafe fn nlua_clear_ref(field: *mut c_int) {
+    unsafe {
+        let val = *field;
+        if val != LUA_NOREF {
+            api_free_luaref(val);
+            *field = LUA_NOREF;
+        }
+    }
+}
+
+/// Free all fields of a ucmd_T entry (replaces nvim_uc_free_ucmd).
+unsafe fn free_ucmd_fields(cmd: *mut UcmdT) {
+    unsafe {
+        xfree_clear(&raw mut (*cmd).uc_name);
+        xfree_clear(&raw mut (*cmd).uc_rep);
+        xfree_clear(&raw mut (*cmd).uc_compl_arg);
+        nlua_clear_ref(&raw mut (*cmd).uc_compl_luaref);
+        nlua_clear_ref(&raw mut (*cmd).uc_luaref);
+        nlua_clear_ref(&raw mut (*cmd).uc_preview_luaref);
+    }
 }
 
 // =============================================================================
@@ -603,16 +599,16 @@ extern "C" {
 /// - If cmp < 0: name sorts before index
 /// - If cmp > 0: name sorts after all entries (index == len)
 unsafe fn find_cmd_index(
-    gap: GarrayHandle,
+    gap: *mut GarrayT,
     name: *const c_char,
     name_len: usize,
 ) -> (c_int, c_int) {
-    let ga_len = nvim_uc_ga_get_len(gap);
+    let ga_len = unsafe { (*gap).ga_len };
     let mut cmp: c_int = 1;
 
     for i in 0..ga_len {
-        let cmd = nvim_uc_ga_get_cmd(gap, i);
-        let cmd_name = nvim_uc_cmd_get_name(cmd);
+        let cmd = unsafe { ga_get_cmd(gap, i) };
+        let cmd_name = unsafe { (*cmd).uc_name as *const c_char };
         let cmd_name_cstr = CStr::from_ptr(cmd_name);
         let cmd_name_bytes = cmd_name_cstr.to_bytes();
         let cmd_name_len = cmd_name_bytes.len();
@@ -678,14 +674,14 @@ unsafe fn uc_add_command_impl(
     // (returns xstrdup(rep) if replace_termcodes returns NULL)
 
     // Get the appropriate garray (buffer-local or global)
-    let gap = if (flags & UC_BUFFER) != 0 {
-        let gap = nvim_uc_get_curbuf_ucmds();
-        if nvim_uc_ga_get_itemsize(gap) == 0 {
-            nvim_uc_ga_init_ucmd(gap);
+    let gap: *mut GarrayT = if (flags & UC_BUFFER) != 0 {
+        let gap = nvim_uc_get_curbuf_ucmds().cast::<GarrayT>();
+        if unsafe { (*gap).ga_itemsize } == 0 {
+            unsafe { ga_init(gap, size_of::<UcmdT>() as c_int, 4) };
         }
         gap
     } else {
-        nvim_uc_get_ucmds()
+        get_ucmds_ptr()
     };
 
     // Search for the command in the sorted array
@@ -693,66 +689,72 @@ unsafe fn uc_add_command_impl(
 
     if cmp == 0 {
         // Exact match found — check if we can replace
-        let cmd = nvim_uc_ga_get_cmd(gap, i);
+        let cmd = unsafe { ga_get_cmd(gap, i) };
 
-        if force == 0
-            && (nvim_uc_cmd_get_sc_sid(cmd) != nvim_uc_get_current_sctx_sid()
-                || nvim_uc_cmd_get_sc_seq(cmd) == nvim_uc_get_current_sctx_seq())
-        {
-            // Cannot replace: emit error and clean up
-            nvim_uc_semsg_1(
-                c"E174: Command already exists: add ! to replace it: %s".as_ptr(),
-                name,
-            );
-            // Cleanup on failure
-            nvim_uc_xfree(rep_buf.cast::<c_void>());
-            nvim_uc_xfree(compl_arg.cast::<c_void>());
-            if luaref != LUA_NOREF {
-                nvim_uc_nlua_clear_ref(luaref);
+        if force == 0 {
+            let sc_sid = unsafe { (*cmd).uc_script_ctx.sc_sid };
+            let sc_seq = unsafe { (*cmd).uc_script_ctx.sc_seq };
+            let cur_sid = unsafe { ucmds_current_sctx_sid() };
+            let cur_seq = unsafe { ucmds_current_sctx_seq() };
+            if sc_sid != cur_sid || sc_seq == cur_seq {
+                // Cannot replace: emit error and clean up
+                nvim_uc_semsg_1(
+                    c"E174: Command already exists: add ! to replace it: %s".as_ptr(),
+                    name,
+                );
+                // Cleanup on failure
+                nvim_uc_xfree(rep_buf.cast::<c_void>());
+                nvim_uc_xfree(compl_arg.cast::<c_void>());
+                if luaref != LUA_NOREF {
+                    unsafe { api_free_luaref(luaref) };
+                }
+                if compl_luaref != LUA_NOREF {
+                    unsafe { api_free_luaref(compl_luaref) };
+                }
+                if preview_luaref != LUA_NOREF {
+                    unsafe { api_free_luaref(preview_luaref) };
+                }
+                return C_FAIL;
             }
-            if compl_luaref != LUA_NOREF {
-                nvim_uc_nlua_clear_ref(compl_luaref);
-            }
-            if preview_luaref != LUA_NOREF {
-                nvim_uc_nlua_clear_ref(preview_luaref);
-            }
-            return C_FAIL;
         }
 
         // Replace existing: free old fields
-        nvim_uc_cmd_free_rep(cmd);
-        nvim_uc_cmd_free_compl_arg(cmd);
-        nvim_uc_cmd_clear_luaref(cmd);
-        nvim_uc_cmd_clear_compl_luaref(cmd);
-        nvim_uc_cmd_clear_preview_luaref(cmd);
+        unsafe {
+            xfree_clear(&raw mut (*cmd).uc_rep);
+            xfree_clear(&raw mut (*cmd).uc_compl_arg);
+            nlua_clear_ref(&raw mut (*cmd).uc_luaref);
+            nlua_clear_ref(&raw mut (*cmd).uc_compl_luaref);
+            nlua_clear_ref(&raw mut (*cmd).uc_preview_luaref);
+        }
     }
 
-    let cmd = if cmp != 0 {
+    let cmd: *mut UcmdT = if cmp != 0 {
         // Insert new command at position i
-        nvim_uc_ga_grow(gap, 1);
-        let p = nvim_uc_xstrnsave(name, name_len);
+        unsafe { nvim_uc_ga_grow(gap, 1) };
+        let p = unsafe { nvim_uc_xstrnsave(name, name_len) };
         // memmove existing entries down to make room
-        nvim_uc_cmd_memmove_down(gap, i);
-        let ga_len = nvim_uc_ga_get_len(gap);
-        nvim_uc_ga_set_len(gap, ga_len + 1);
-        let cmd = nvim_uc_ga_get_cmd(gap, i);
-        nvim_uc_cmd_set_name(cmd, p);
+        unsafe { cmd_memmove_down(gap, i) };
+        unsafe { (*gap).ga_len += 1 };
+        let cmd = unsafe { ga_get_cmd(gap, i) };
+        unsafe { (*cmd).uc_name = p };
         cmd
     } else {
-        nvim_uc_ga_get_cmd(gap, i)
+        unsafe { ga_get_cmd(gap, i) }
     };
 
-    // Set all fields
-    nvim_uc_cmd_set_rep(cmd, rep_buf);
-    nvim_uc_cmd_set_argt(cmd, argt);
-    nvim_uc_cmd_set_def(cmd, def);
-    nvim_uc_cmd_set_compl(cmd, context);
-    nvim_uc_cmd_set_script_ctx(cmd);
-    nvim_uc_cmd_set_compl_arg(cmd, compl_arg);
-    nvim_uc_cmd_set_compl_luaref(cmd, compl_luaref);
-    nvim_uc_cmd_set_preview_luaref(cmd, preview_luaref);
-    nvim_uc_cmd_set_addr_type(cmd, addr_type);
-    nvim_uc_cmd_set_luaref(cmd, luaref);
+    // Set all fields directly
+    unsafe {
+        (*cmd).uc_rep = rep_buf;
+        (*cmd).uc_argt = argt;
+        (*cmd).uc_def = def;
+        (*cmd).uc_compl = context;
+        nvim_uc_cmd_set_script_ctx(cmd);
+        (*cmd).uc_compl_arg = compl_arg;
+        (*cmd).uc_compl_luaref = compl_luaref;
+        (*cmd).uc_preview_luaref = preview_luaref;
+        (*cmd).uc_addr_type = addr_type;
+        (*cmd).uc_luaref = luaref;
+    }
 
     C_OK
 }
@@ -762,8 +764,8 @@ unsafe fn uc_add_command_impl(
 /// # Safety
 ///
 /// `cmd` must point to a valid ucmd_T.
-unsafe fn free_ucmd_impl(cmd: *mut c_void) {
-    nvim_uc_free_ucmd(cmd);
+unsafe fn free_ucmd_impl(cmd: *mut UcmdT) {
+    unsafe { free_ucmd_fields(cmd) };
 }
 
 /// Clear all user commands in a garray.
@@ -773,13 +775,28 @@ unsafe fn free_ucmd_impl(cmd: *mut c_void) {
 /// # Safety
 ///
 /// `gap` must point to a valid garray_T containing ucmd_T elements.
-unsafe fn uc_clear_impl(gap: GarrayHandle) {
-    let ga_len = nvim_uc_ga_get_len(gap);
+unsafe fn uc_clear_impl(gap: *mut GarrayT) {
+    let ga_len = unsafe { (*gap).ga_len };
     for i in 0..ga_len {
-        let cmd = nvim_uc_ga_get_cmd(gap, i);
-        nvim_uc_free_ucmd(cmd);
+        let cmd = unsafe { ga_get_cmd(gap, i) };
+        unsafe { free_ucmd_fields(cmd) };
     }
-    nvim_uc_ga_clear(gap);
+    unsafe { nvim_uc_ga_clear(gap) };
+}
+
+/// Get current_sctx.sc_sid directly from the global.
+unsafe fn ucmds_current_sctx_sid() -> c_int {
+    unsafe { ucmds_get_current_sctx_impl().sc_sid }
+}
+
+/// Get current_sctx.sc_seq directly from the global.
+unsafe fn ucmds_current_sctx_seq() -> c_int {
+    unsafe { ucmds_get_current_sctx_impl().sc_seq }
+}
+
+/// Read current_sctx from the global.
+unsafe fn ucmds_get_current_sctx_impl() -> crate::SctxT {
+    unsafe { std::ptr::read(std::ptr::addr_of!(crate::current_sctx)) }
 }
 
 // =============================================================================
@@ -827,16 +844,16 @@ pub unsafe extern "C" fn rs_uc_add_command(
 ///
 /// Direct replacement for C `free_ucmd`.
 #[export_name = "free_ucmd"]
-pub unsafe extern "C" fn rs_free_ucmd(cmd: *mut c_void) {
-    free_ucmd_impl(cmd);
+pub unsafe extern "C" fn rs_free_ucmd(cmd: *mut UcmdT) {
+    unsafe { free_ucmd_impl(cmd) };
 }
 
 /// FFI export: Clear all user commands in a garray.
 ///
 /// Direct replacement for C `uc_clear`.
 #[export_name = "uc_clear"]
-pub unsafe extern "C" fn rs_uc_clear(gap: GarrayHandle) {
-    uc_clear_impl(gap);
+pub unsafe extern "C" fn rs_uc_clear(gap: *mut GarrayT) {
+    unsafe { uc_clear_impl(gap) };
 }
 
 // =============================================================================
@@ -859,10 +876,6 @@ extern "C" {
     fn nvim_uc_skipwhite(p: *const c_char) -> *mut c_char;
     /// ends_excmd(c) — kept: wraps a macro
     fn nvim_uc_ends_excmd(c: c_int) -> c_int;
-
-    // Deletion helper
-    /// memmove(cmd, cmd+1, (ga_len - i) * sizeof(ucmd_T)) — shift entries up
-    fn nvim_uc_cmd_memmove_up(gap: GarrayHandle, i: c_int);
 
     // curbuf null check
     /// Returns 1 if curbuf is NULL, 0 otherwise
@@ -1027,11 +1040,11 @@ unsafe fn ex_command_impl(eap: ExargHandle) {
 ///
 /// `_eap` must be a valid ExargHandle (unused but required by signature).
 unsafe fn ex_comclear_impl(_eap: ExargHandle) {
-    let ucmds = nvim_uc_get_ucmds();
-    uc_clear_impl(ucmds);
+    let ucmds_g = get_ucmds_ptr();
+    unsafe { uc_clear_impl(ucmds_g) };
     if nvim_uc_curbuf_is_null() == 0 {
-        let buf_ucmds = nvim_uc_get_curbuf_ucmds();
-        uc_clear_impl(buf_ucmds);
+        let buf_ucmds = nvim_uc_get_curbuf_ucmds().cast::<GarrayT>();
+        unsafe { uc_clear_impl(buf_ucmds) };
     }
 }
 
@@ -1043,7 +1056,7 @@ unsafe fn ex_comclear_impl(_eap: ExargHandle) {
 ///
 /// `eap` must be a valid ExargHandle (pointer to exarg_T).
 unsafe fn ex_delcommand_impl(eap: ExargHandle) {
-    let mut cmd: *mut c_void = std::ptr::null_mut();
+    let mut cmd: *mut UcmdT = std::ptr::null_mut();
     let mut res: c_int = -1;
     let mut arg: *const c_char = nvim_uc_eap_get_arg(eap);
     let mut buffer_only = false;
@@ -1056,21 +1069,21 @@ unsafe fn ex_delcommand_impl(eap: ExargHandle) {
             let after = arg_slice.get(7).copied().unwrap_or(0);
             if after == b' ' || after == b'\t' {
                 buffer_only = true;
-                arg = nvim_uc_skipwhite(unsafe { arg.add(7) });
+                arg = unsafe { nvim_uc_skipwhite(arg.add(7)) };
             }
         }
     }
 
-    let ucmds_ptr = nvim_uc_get_ucmds();
-    let mut gap = nvim_uc_get_curbuf_ucmds();
+    let ucmds_ptr = get_ucmds_ptr();
+    let mut gap = nvim_uc_get_curbuf_ucmds().cast::<GarrayT>();
     let mut i: c_int;
 
     loop {
-        let ga_len = nvim_uc_ga_get_len(gap);
+        let ga_len = unsafe { (*gap).ga_len };
         i = 0;
         while i < ga_len {
-            cmd = nvim_uc_ga_get_cmd(gap, i);
-            let cmd_name = nvim_uc_cmd_get_name(cmd);
+            cmd = unsafe { ga_get_cmd(gap, i) };
+            let cmd_name = unsafe { (*cmd).uc_name as *const c_char };
             res = strcmp_c(arg, cmd_name);
             if res <= 0 {
                 break;
@@ -1097,13 +1110,13 @@ unsafe fn ex_delcommand_impl(eap: ExargHandle) {
         return;
     }
 
-    nvim_uc_free_ucmd(cmd);
+    unsafe { free_ucmd_fields(cmd) };
 
-    let ga_len = nvim_uc_ga_get_len(gap);
-    nvim_uc_ga_set_len(gap, ga_len - 1);
+    let ga_len = unsafe { (*gap).ga_len };
+    unsafe { (*gap).ga_len = ga_len - 1 };
 
     if i < ga_len - 1 {
-        nvim_uc_cmd_memmove_up(gap, i);
+        unsafe { cmd_memmove_up(gap, i) };
     }
 }
 
@@ -1193,18 +1206,10 @@ extern "C" {
     fn nvim_uc_eap_set_addr_type(eap: ExargHandle, addr_type: c_int);
     /// Returns eap->cmd
     fn nvim_uc_eap_get_cmd(eap: ExargHandle) -> *const c_char;
-    /// Returns cmd->uc_compl
-    fn nvim_uc_cmd_get_compl(cmd: *const c_void) -> c_int;
-    /// Returns (int)cmd->uc_addr_type
-    fn nvim_uc_cmd_get_addr_type(cmd: *const c_void) -> c_int;
-    /// Returns cmd->uc_compl_luaref
-    fn nvim_uc_cmd_get_compl_luaref(cmd: *const c_void) -> c_int;
-    /// Returns cmd->uc_compl_arg
-    fn nvim_uc_cmd_get_compl_arg(cmd: *const c_void) -> *const c_char;
-    /// Returns ascii_isdigit(c) ? 1 : 0
+    /// Returns ascii_isdigit(c) ? 1 : 0 (kept: ascii_isdigit is a macro)
     fn nvim_uc_ascii_isdigit(c: c_int) -> c_int;
 
-    // --- expand_T (xp) accessors ---
+    // --- expand_T (xp) accessors (kept: ExpandT not defined as repr(C) in Rust) ---
     /// Sets xp->xp_context = context
     fn nvim_uc_xp_set_context(xp: ExpandHandle, context: c_int);
     /// Sets xp->xp_luaref = luaref
@@ -1212,7 +1217,7 @@ extern "C" {
     /// Sets xp->xp_arg = arg
     fn nvim_uc_xp_set_arg(xp: ExpandHandle, arg: *mut c_char);
     /// Sets xp->xp_script_ctx from cmd->uc_script_ctx + SOURCING_LNUM
-    fn nvim_uc_xp_set_script_ctx(xp: ExpandHandle, cmd: *const c_void);
+    fn nvim_uc_xp_set_script_ctx(xp: ExpandHandle, cmd: *const UcmdT);
 
     // --- uc_list accessors ---
     /// msg_ext_set_kind(kind)
@@ -1254,16 +1259,6 @@ extern "C" {
     fn nvim_uc_get_IOSIZE() -> usize;
     /// Returns nlua_funcref_str(luaref, NULL) — caller must xfree
     fn nvim_uc_nlua_funcref_str(luaref: c_int) -> *mut c_char;
-    /// Calls last_set_msg(cmd->uc_script_ctx)
-    fn nvim_uc_last_set_msg(cmd: *const c_void);
-    /// Returns cmd->uc_luaref
-    fn nvim_uc_cmd_get_luaref(cmd: *mut c_void) -> c_int;
-    /// Returns cmd->uc_rep
-    fn nvim_uc_cmd_get_rep(cmd: *mut c_void) -> *mut c_char;
-    /// Returns cmd->uc_argt
-    fn nvim_uc_cmd_get_argt(cmd: *mut c_void) -> u32;
-    /// Returns cmd->uc_def (as int64_t)
-    fn nvim_uc_cmd_get_def(cmd: *mut c_void) -> i64;
 
     // --- Completion type lookup (already migrated to Rust) ---
     /// get_command_complete — returns the name for an EXPAND_* value (exported from complete.rs)
@@ -1298,15 +1293,15 @@ unsafe fn find_ucmd_impl(
     let mut possible = false;
     let mut amb_local = false;
 
-    let ucmds = nvim_uc_get_ucmds();
+    let ucmds_g = get_ucmds_ptr();
     // Look for buffer-local user commands first, then global ones.
-    let mut gap = nvim_uc_prevwin_curwin_buf_ucmds();
+    let mut gap = nvim_uc_prevwin_curwin_buf_ucmds().cast::<GarrayT>();
     loop {
-        let ga_len = nvim_uc_ga_get_len(gap);
+        let ga_len = unsafe { (*gap).ga_len };
         let mut j = 0;
         while j < ga_len {
-            let uc = nvim_uc_ga_get_cmd(gap, j);
-            let uc_name = nvim_uc_cmd_get_name(uc);
+            let uc = unsafe { ga_get_cmd(gap, j) };
+            let uc_name = unsafe { (*uc).uc_name as *const c_char };
             let mut cp = eap_cmd;
             let mut np = uc_name;
             let mut k: c_int = 0;
@@ -1326,7 +1321,7 @@ unsafe fn find_ucmd_impl(
                 // But not if a buffer-local command wasn't a full match and
                 // a global command is a full match.
                 if k == len && found && unsafe { *np } != 0 {
-                    if gap == ucmds {
+                    if gap == ucmds_g {
                         return std::ptr::null_mut();
                     }
                     amb_local = true;
@@ -1339,21 +1334,21 @@ unsafe fn find_ucmd_impl(
                         possible = true;
                     }
 
-                    if gap == ucmds {
+                    if gap == ucmds_g {
                         nvim_uc_eap_set_cmdidx(eap, CMD_USER);
                     } else {
                         nvim_uc_eap_set_cmdidx(eap, CMD_USER_BUF);
                     }
-                    nvim_uc_eap_set_argt(eap, nvim_uc_cmd_get_argt(uc));
+                    nvim_uc_eap_set_argt(eap, unsafe { (*uc).uc_argt });
                     nvim_uc_eap_set_useridx(eap, j);
-                    nvim_uc_eap_set_addr_type(eap, nvim_uc_cmd_get_addr_type(uc));
+                    nvim_uc_eap_set_addr_type(eap, unsafe { (*uc).uc_addr_type });
 
                     if !complp.is_null() {
-                        unsafe { *complp = nvim_uc_cmd_get_compl(uc) };
+                        unsafe { *complp = (*uc).uc_compl };
                     }
                     if !xp.is_null() {
-                        nvim_uc_xp_set_luaref(xp, nvim_uc_cmd_get_compl_luaref(uc));
-                        nvim_uc_xp_set_arg(xp, nvim_uc_cmd_get_compl_arg(uc) as *mut c_char);
+                        nvim_uc_xp_set_luaref(xp, unsafe { (*uc).uc_compl_luaref });
+                        nvim_uc_xp_set_arg(xp, unsafe { (*uc).uc_compl_arg });
                         nvim_uc_xp_set_script_ctx(xp, uc);
                     }
                     // Do not search for further abbreviations if this is an exact match.
@@ -1371,10 +1366,10 @@ unsafe fn find_ucmd_impl(
         }
 
         // Stop if we found a full match or searched all.
-        if j < ga_len || gap == ucmds {
+        if j < ga_len || gap == ucmds_g {
             break;
         }
-        gap = ucmds;
+        gap = ucmds_g;
     }
 
     // Only found ambiguous matches.
@@ -1409,16 +1404,16 @@ unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
 
     nvim_uc_msg_ext_set_kind(c"list_cmd".as_ptr());
 
-    let ucmds = nvim_uc_get_ucmds();
+    let ucmds_g = get_ucmds_ptr();
     // In cmdwin, the alternative buffer should be used.
-    let mut gap = nvim_uc_prevwin_curwin_buf_ucmds();
+    let mut gap = nvim_uc_prevwin_curwin_buf_ucmds().cast::<GarrayT>();
     loop {
-        let ga_len = nvim_uc_ga_get_len(gap);
+        let ga_len = unsafe { (*gap).ga_len };
         let mut i = 0;
         while i < ga_len {
-            let cmd = nvim_uc_ga_get_cmd(gap, i);
-            let a = nvim_uc_cmd_get_argt(cmd);
-            let cmd_name = nvim_uc_cmd_get_name(cmd);
+            let cmd = unsafe { ga_get_cmd(gap, i) };
+            let a = unsafe { (*cmd).uc_argt };
+            let cmd_name = unsafe { (*cmd).uc_name as *const c_char };
 
             // Skip commands which don't match the requested prefix and
             // commands filtered out.
@@ -1449,7 +1444,7 @@ unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
                 nvim_uc_msg_putchar(b'"' as c_int);
                 flag_len -= 1;
             }
-            if gap != ucmds {
+            if gap != ucmds_g {
                 nvim_uc_msg_putchar(b'b' as c_int);
                 flag_len -= 1;
             }
@@ -1509,7 +1504,7 @@ unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
             if (a & (EX_RANGE | EX_COUNT)) != 0 {
                 if (a & EX_COUNT) != 0 {
                     // -count=N
-                    let def_val = nvim_uc_cmd_get_def(cmd);
+                    let def_val = unsafe { (*cmd).uc_def };
                     let formatted = format!("{def_val}c");
                     let bytes = formatted.as_bytes();
                     let copy_len = bytes.len().min(iosize - pos - 1);
@@ -1524,9 +1519,9 @@ unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
                 } else if (a & EX_DFLALL) != 0 {
                     unsafe { *iobuff.add(pos) = b'%' as c_char };
                     pos += 1;
-                } else if nvim_uc_cmd_get_def(cmd) >= 0 {
+                } else if unsafe { (*cmd).uc_def } >= 0 {
                     // -range=N
-                    let def_val = nvim_uc_cmd_get_def(cmd);
+                    let def_val = unsafe { (*cmd).uc_def };
                     let formatted = format!("{def_val}");
                     let bytes = formatted.as_bytes();
                     let copy_len = bytes.len().min(iosize - pos - 1);
@@ -1554,7 +1549,7 @@ unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
             }
 
             // Address Type
-            let cmd_addr_type = nvim_uc_cmd_get_addr_type(cmd);
+            let cmd_addr_type = unsafe { (*cmd).uc_addr_type };
             for entry in ADDR_TYPE_COMPLETE.iter() {
                 if entry.expand == AddrType::None {
                     break;
@@ -1585,7 +1580,7 @@ unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
             }
 
             // Completion
-            let cmd_compl_val = nvim_uc_cmd_get_compl(cmd);
+            let cmd_compl_val = unsafe { (*cmd).uc_compl };
             let cmd_compl = rs_get_command_complete(cmd_compl_val);
             if !cmd_compl.is_null() {
                 let compl_len = strlen_safe(cmd_compl);
@@ -1614,19 +1609,19 @@ unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
             nvim_uc_msg_outtrans(iobuff, 0, false);
 
             // Lua function reference
-            let luaref = nvim_uc_cmd_get_luaref(cmd);
+            let luaref = unsafe { (*cmd).uc_luaref };
             if luaref != LUA_NOREF {
                 let fn_str = nvim_uc_nlua_funcref_str(luaref);
                 nvim_uc_msg_puts_hl(fn_str, HLF_8, false);
                 nvim_uc_xfree(fn_str.cast::<c_void>());
                 // put the description on a new line
-                let rep = nvim_uc_cmd_get_rep(cmd);
+                let rep = unsafe { (*cmd).uc_rep };
                 if !rep.is_null() && unsafe { *rep } != 0 {
                     nvim_uc_msg_puts(c"\n                                               ".as_ptr());
                 }
             }
 
-            let rep = nvim_uc_cmd_get_rep(cmd);
+            let rep = unsafe { (*cmd).uc_rep };
             let maxlen = if name_len == 0 {
                 nvim_uc_get_Columns() - 47
             } else {
@@ -1634,7 +1629,7 @@ unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
             };
             nvim_uc_msg_outtrans_special(rep, false, maxlen);
             if nvim_uc_get_p_verbose() > 0 {
-                nvim_uc_last_set_msg(cmd);
+                unsafe { last_set_msg((*cmd).uc_script_ctx) };
             }
             nvim_uc_line_breakcheck();
             if nvim_uc_got_int() != 0 {
@@ -1642,10 +1637,10 @@ unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
             }
             i += 1;
         }
-        if gap == ucmds || i < ga_len {
+        if gap == ucmds_g || i < ga_len {
             break;
         }
-        gap = ucmds;
+        gap = ucmds_g;
     }
 
     if !found {

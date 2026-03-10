@@ -12,7 +12,7 @@ pub mod define;
 pub mod execute;
 pub mod parse;
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
 
 // Re-export key types
 pub use complete::CompleteType;
@@ -28,14 +28,87 @@ pub use parse::{ParseResult, Token, TokenType};
 pub type ExargHandle = *mut c_void;
 /// Opaque handle to expand_T
 pub type ExpandHandle = *mut c_void;
-/// Opaque handle to garray_T
+/// Opaque handle to garray_T (opaque, for passing to C)
 pub type GarrayHandle = *mut c_void;
-/// Opaque handle to ucmd_T
+/// Opaque handle to ucmd_T (opaque, for passing to C)
 pub type UcmdHandle = *mut c_void;
 /// Opaque handle to buf_T
 pub type BufHandle = *mut c_void;
 /// Opaque handle to cmdmod_T
 pub type CmdmodHandle = *mut c_void;
+
+// =============================================================================
+// repr(C) Struct Definitions
+// =============================================================================
+
+/// Script context — matches `sctx_T` in C (eval/typval_defs.h).
+/// Layout: sc_sid:i32@0, sc_seq:i32@4, sc_lnum:i32@8, _pad:i32@12, sc_chan:u64@16 = 24 bytes.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SctxT {
+    pub sc_sid: c_int,
+    pub sc_seq: c_int,
+    pub sc_lnum: c_int,
+    _pad: c_int,
+    pub sc_chan: u64,
+}
+
+/// Growing array — matches `garray_T` in C (garray_defs.h).
+/// Layout: ga_len:i32@0, ga_maxlen:i32@4, ga_itemsize:i32@8, ga_growsize:i32@12, ga_data:ptr@16 = 24 bytes.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GarrayT {
+    pub ga_len: c_int,
+    pub ga_maxlen: c_int,
+    pub ga_itemsize: c_int,
+    pub ga_growsize: c_int,
+    pub ga_data: *mut c_void,
+}
+
+/// User command entry — matches `ucmd_T` in C (usercmd.h).
+/// Layout verified against C struct (see size assertion in tests).
+#[repr(C)]
+pub struct UcmdT {
+    pub uc_name: *mut c_char,
+    pub uc_argt: u32,
+    _pad_argt: u32,
+    pub uc_rep: *mut c_char,
+    pub uc_def: i64,
+    pub uc_compl: c_int,
+    pub uc_addr_type: c_int,
+    pub uc_script_ctx: SctxT,
+    pub uc_compl_arg: *mut c_char,
+    pub uc_compl_luaref: c_int,
+    pub uc_preview_luaref: c_int,
+    pub uc_luaref: c_int,
+    _pad_end: c_int,
+}
+
+// =============================================================================
+// Global State Access
+// =============================================================================
+
+extern "C" {
+    /// Global user commands array (ucmds in C)
+    pub static mut ucmds: GarrayT;
+    /// Current script context (current_sctx in C)
+    pub static mut current_sctx: SctxT;
+    /// api_free_luaref — free a Lua reference (used in NLUA_CLEAR_REF logic)
+    #[link_name = "api_free_luaref"]
+    pub fn api_free_luaref(luaref: c_int);
+    /// ga_init — initialize a garray_T
+    #[link_name = "ga_init"]
+    pub fn ga_init(gap: *mut GarrayT, itemsize: c_int, growsize: c_int);
+    /// nlua_set_sctx — set nlua script context
+    #[link_name = "nlua_set_sctx"]
+    pub fn nlua_set_sctx(sctx: *mut SctxT);
+    /// last_set_msg — display "Last set from" message
+    #[link_name = "last_set_msg"]
+    pub fn last_set_msg(sctx: SctxT);
+}
+
+/// LUA_NOREF constant (matches C LUA_NOREF = -2)
+pub const LUA_NOREF: c_int = -2;
 
 // =============================================================================
 // Constants
