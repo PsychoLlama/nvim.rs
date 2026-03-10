@@ -346,54 +346,21 @@ int nvim_pum_array_item_is_nonempty(int idx)
 }
 
 // Phase 2 accessors: curwin geometry for make_popup
-int nvim_pum_curwin_grid_row_offset(void)
+/// Batch curwin geometry accessor (replaces 10 individual nvim_pum_curwin_* functions).
+PumCurwinGeometry nvim_pum_get_curwin_geometry(void)
 {
-  return curwin->w_grid.row_offset;
-}
-
-int nvim_pum_curwin_grid_col_offset(void)
-{
-  return curwin->w_grid.col_offset;
-}
-
-int nvim_pum_curwin_wrow(void)
-{
-  return curwin->w_wrow;
-}
-
-int nvim_pum_curwin_wcol(void)
-{
-  return curwin->w_wcol;
-}
-
-int nvim_pum_curwin_p_rl(void)
-{
-  return curwin->w_p_rl;
-}
-
-int nvim_pum_curwin_view_width(void)
-{
-  return curwin->w_view_width;
-}
-
-int nvim_pum_curwin_winrow(void)
-{
-  return curwin->w_winrow;
-}
-
-int nvim_pum_curwin_wincol(void)
-{
-  return curwin->w_wincol;
-}
-
-int nvim_pum_curwin_grid_target_handle(void)
-{
-  return curwin->w_grid.target->handle;
-}
-
-int nvim_pum_curwin_grid_target_is_default(void)
-{
-  return curwin->w_grid.target == &default_grid;
+  return (PumCurwinGeometry) {
+    .row_offset = curwin->w_grid.row_offset,
+    .col_offset = curwin->w_grid.col_offset,
+    .wrow = curwin->w_wrow,
+    .wcol = curwin->w_wcol,
+    .p_rl = curwin->w_p_rl,
+    .view_width = curwin->w_view_width,
+    .winrow = curwin->w_winrow,
+    .wincol = curwin->w_wincol,
+    .grid_target_handle = curwin->w_grid.target->handle,
+    .grid_target_is_default = (curwin->w_grid.target == &default_grid) ? 1 : 0,
+  };
 }
 
 void *nvim_pum_menu_find(const char *path_name)
@@ -673,22 +640,27 @@ void nvim_pum_grid_set_zindex_cmdline(void)
   pum_grid.zindex = kZIndexCmdlinePopupMenu;
 }
 
-/// Key constant accessors.
-int nvim_key_ESC(void) { return ESC; }
-int nvim_key_Ctrl_C(void) { return Ctrl_C; }
-int nvim_key_CAR(void) { return CAR; }
-int nvim_key_NL(void) { return NL; }
-int nvim_key_K_UP(void) { return K_UP; }
-int nvim_key_K_DOWN(void) { return K_DOWN; }
-int nvim_key_K_MOUSEUP(void) { return K_MOUSEUP; }
-int nvim_key_K_MOUSEDOWN(void) { return K_MOUSEDOWN; }
-int nvim_key_K_RIGHTMOUSE(void) { return K_RIGHTMOUSE; }
-int nvim_key_K_LEFTDRAG(void) { return K_LEFTDRAG; }
-int nvim_key_K_RIGHTDRAG(void) { return K_RIGHTDRAG; }
-int nvim_key_K_MOUSEMOVE(void) { return K_MOUSEMOVE; }
-int nvim_key_K_LEFTMOUSE(void) { return K_LEFTMOUSE; }
-int nvim_key_K_LEFTMOUSE_NM(void) { return K_LEFTMOUSE_NM; }
-int nvim_key_K_RIGHTRELEASE(void) { return K_RIGHTRELEASE; }
+/// Batch key constant accessor (replaces 15 individual nvim_key_* functions).
+PumKeyConstants nvim_pum_get_key_constants(void)
+{
+  return (PumKeyConstants) {
+    .key_esc = ESC,
+    .key_ctrl_c = Ctrl_C,
+    .key_car = CAR,
+    .key_nl = NL,
+    .key_k_up = K_UP,
+    .key_k_down = K_DOWN,
+    .key_k_mouseup = K_MOUSEUP,
+    .key_k_mousedown = K_MOUSEDOWN,
+    .key_k_rightmouse = K_RIGHTMOUSE,
+    .key_k_leftdrag = K_LEFTDRAG,
+    .key_k_rightdrag = K_RIGHTDRAG,
+    .key_k_mousemove = K_MOUSEMOVE,
+    .key_k_leftmouse = K_LEFTMOUSE,
+    .key_k_leftmouse_nm = K_LEFTMOUSE_NM,
+    .key_k_rightrelease = K_RIGHTRELEASE,
+  };
+}
 
 /// Get pum_array[idx].pum_text[0] (first character, NUL check).
 int nvim_pum_array_item_text_char(int idx)

@@ -7,6 +7,48 @@ use std::ffi::c_int;
 
 use crate::PUM_STATE;
 
+/// Batch key constants for popup menu key handling.
+///
+/// Filled by `nvim_pum_get_key_constants()`. Layout must match
+/// `PumKeyConstants` in `popupmenu.h`.
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct PumKeyConstants {
+    key_esc: c_int,
+    key_ctrl_c: c_int,
+    key_car: c_int,
+    key_nl: c_int,
+    key_k_up: c_int,
+    key_k_down: c_int,
+    key_k_mouseup: c_int,
+    key_k_mousedown: c_int,
+    key_k_rightmouse: c_int,
+    key_k_leftdrag: c_int,
+    key_k_rightdrag: c_int,
+    key_k_mousemove: c_int,
+    key_k_leftmouse: c_int,
+    key_k_leftmouse_nm: c_int,
+    key_k_rightrelease: c_int,
+}
+
+/// Batch curwin geometry for popup menu positioning.
+///
+/// Filled by `nvim_pum_get_curwin_geometry()`. Layout must match
+/// `PumCurwinGeometry` in `popupmenu.h`.
+#[repr(C)]
+struct PumCurwinGeometry {
+    row_offset: c_int,
+    col_offset: c_int,
+    wrow: c_int,
+    wcol: c_int,
+    p_rl: c_int,
+    view_width: c_int,
+    winrow: c_int,
+    wincol: c_int,
+    grid_target_handle: c_int,
+    grid_target_is_default: c_int,
+}
+
 /// Result of UI flush position calculation.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -269,26 +311,8 @@ extern "C" {
     fn nvim_get_mouse_col() -> c_int;
     /// Set `mouse_col`.
     fn nvim_set_mouse_col(val: c_int);
-    /// Get `curwin->w_grid.row_offset`.
-    fn nvim_pum_curwin_grid_row_offset() -> c_int;
-    /// Get `curwin->w_grid.col_offset`.
-    fn nvim_pum_curwin_grid_col_offset() -> c_int;
-    /// Get `curwin->w_wrow`.
-    fn nvim_pum_curwin_wrow() -> c_int;
-    /// Get `curwin->w_wcol`.
-    fn nvim_pum_curwin_wcol() -> c_int;
-    /// Get `curwin->w_p_rl`.
-    fn nvim_pum_curwin_p_rl() -> c_int;
-    /// Get `curwin->w_view_width`.
-    fn nvim_pum_curwin_view_width() -> c_int;
-    /// Get `curwin->w_winrow`.
-    fn nvim_pum_curwin_winrow() -> c_int;
-    /// Get `curwin->w_wincol`.
-    fn nvim_pum_curwin_wincol() -> c_int;
-    /// Get `curwin->w_grid.target->handle`.
-    fn nvim_pum_curwin_grid_target_handle() -> c_int;
-    /// Check if `curwin->w_grid.target == &default_grid`.
-    fn nvim_pum_curwin_grid_target_is_default() -> c_int;
+    /// Batch curwin geometry accessor.
+    fn nvim_pum_get_curwin_geometry() -> PumCurwinGeometry;
     /// Find menu by path name (returns NULL if not found).
     fn nvim_pum_menu_find(path_name: *const std::ffi::c_char) -> *mut VimMenuHandle;
 }
@@ -342,36 +366,8 @@ extern "C" {
     fn nvim_pum_array_item_text_char(idx: c_int) -> c_int;
     /// Emit error for wrong menu mode.
     fn nvim_pum_emsg_menu_mode();
-    /// Get key constant ESC.
-    fn nvim_key_ESC() -> c_int;
-    /// Get key constant `Ctrl_C`.
-    fn nvim_key_Ctrl_C() -> c_int;
-    /// Get key constant CAR.
-    fn nvim_key_CAR() -> c_int;
-    /// Get key constant NL.
-    fn nvim_key_NL() -> c_int;
-    /// Get key constant `K_UP`.
-    fn nvim_key_K_UP() -> c_int;
-    /// Get key constant `K_DOWN`.
-    fn nvim_key_K_DOWN() -> c_int;
-    /// Get key constant `K_MOUSEUP`.
-    fn nvim_key_K_MOUSEUP() -> c_int;
-    /// Get key constant `K_MOUSEDOWN`.
-    fn nvim_key_K_MOUSEDOWN() -> c_int;
-    /// Get key constant `K_RIGHTMOUSE`.
-    fn nvim_key_K_RIGHTMOUSE() -> c_int;
-    /// Get key constant `K_LEFTDRAG`.
-    fn nvim_key_K_LEFTDRAG() -> c_int;
-    /// Get key constant `K_RIGHTDRAG`.
-    fn nvim_key_K_RIGHTDRAG() -> c_int;
-    /// Get key constant `K_MOUSEMOVE`.
-    fn nvim_key_K_MOUSEMOVE() -> c_int;
-    /// Get key constant `K_LEFTMOUSE`.
-    fn nvim_key_K_LEFTMOUSE() -> c_int;
-    /// Get key constant `K_LEFTMOUSE_NM`.
-    fn nvim_key_K_LEFTMOUSE_NM() -> c_int;
-    /// Get key constant `K_RIGHTRELEASE`.
-    fn nvim_key_K_RIGHTRELEASE() -> c_int;
+    /// Batch key constants accessor.
+    fn nvim_pum_get_key_constants() -> PumKeyConstants;
 }
 
 /// Execute the currently selected popup menu item.
@@ -464,22 +460,23 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
         nvim_pum_ui_set_mousemoveevent(1);
     }
 
-    // Cache key constants
-    let key_esc = nvim_key_ESC();
-    let key_ctrl_c = nvim_key_Ctrl_C();
-    let key_car = nvim_key_CAR();
-    let key_nl = nvim_key_NL();
-    let key_k_up = nvim_key_K_UP();
-    let key_k_down = nvim_key_K_DOWN();
-    let key_k_mouseup = nvim_key_K_MOUSEUP();
-    let key_k_mousedown = nvim_key_K_MOUSEDOWN();
-    let key_k_rightmouse = nvim_key_K_RIGHTMOUSE();
-    let key_k_leftdrag = nvim_key_K_LEFTDRAG();
-    let key_k_rightdrag = nvim_key_K_RIGHTDRAG();
-    let key_k_mousemove = nvim_key_K_MOUSEMOVE();
-    let key_k_leftmouse = nvim_key_K_LEFTMOUSE();
-    let key_k_leftmouse_nm = nvim_key_K_LEFTMOUSE_NM();
-    let key_k_rightrelease = nvim_key_K_RIGHTRELEASE();
+    // Cache key constants via batch accessor
+    let keys = nvim_pum_get_key_constants();
+    let key_esc = keys.key_esc;
+    let key_ctrl_c = keys.key_ctrl_c;
+    let key_car = keys.key_car;
+    let key_nl = keys.key_nl;
+    let key_k_up = keys.key_k_up;
+    let key_k_down = keys.key_k_down;
+    let key_k_mouseup = keys.key_k_mouseup;
+    let key_k_mousedown = keys.key_k_mousedown;
+    let key_k_rightmouse = keys.key_k_rightmouse;
+    let key_k_leftdrag = keys.key_k_leftdrag;
+    let key_k_rightdrag = keys.key_k_rightdrag;
+    let key_k_mousemove = keys.key_k_mousemove;
+    let key_k_leftmouse = keys.key_k_leftmouse;
+    let key_k_leftmouse_nm = keys.key_k_leftmouse_nm;
+    let key_k_rightrelease = keys.key_k_rightrelease;
 
     loop {
         PUM_STATE.is_visible = 1;
@@ -560,22 +557,25 @@ pub unsafe extern "C" fn rs_pum_make_popup(
 ) {
     if use_mouse_pos == 0 {
         // Set mouse position at the cursor so the menu pops up there.
-        let row_offset = nvim_pum_curwin_grid_row_offset();
-        let col_offset = nvim_pum_curwin_grid_col_offset();
-        let wrow = nvim_pum_curwin_wrow();
-        let wcol = nvim_pum_curwin_wcol();
-        let p_rl = nvim_pum_curwin_p_rl() != 0;
-        let view_width = nvim_pum_curwin_view_width();
+        let cw = nvim_pum_get_curwin_geometry();
+        let p_rl = cw.p_rl != 0;
 
-        nvim_set_mouse_row(row_offset + wrow);
-        nvim_set_mouse_col(col_offset + if p_rl { view_width - wcol - 1 } else { wcol });
+        nvim_set_mouse_row(cw.row_offset + cw.wrow);
+        nvim_set_mouse_col(
+            cw.col_offset
+                + if p_rl {
+                    cw.view_width - cw.wcol - 1
+                } else {
+                    cw.wcol
+                },
+        );
 
         if ui_has(K_UI_MULTIGRID) {
-            nvim_set_mouse_grid(nvim_pum_curwin_grid_target_handle());
-        } else if nvim_pum_curwin_grid_target_is_default() == 0 {
+            nvim_set_mouse_grid(cw.grid_target_handle);
+        } else if cw.grid_target_is_default == 0 {
             nvim_set_mouse_grid(0);
-            nvim_set_mouse_row(nvim_get_mouse_row() + nvim_pum_curwin_winrow());
-            nvim_set_mouse_col(nvim_get_mouse_col() + nvim_pum_curwin_wincol());
+            nvim_set_mouse_row(nvim_get_mouse_row() + cw.winrow);
+            nvim_set_mouse_col(nvim_get_mouse_col() + cw.wincol);
         }
     }
 
