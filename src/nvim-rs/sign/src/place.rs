@@ -15,9 +15,6 @@ extern "C" {
     // Sign map lookup
     fn nvim_sign_map_get(name: *const c_char) -> SignHandle;
 
-    // Sign properties
-    fn nvim_sign_get_priority(sp: SignHandle) -> c_int;
-
     // Namespace operations
     fn nvim_namespace_lookup(name: *const c_char) -> c_int;
     fn nvim_sign_create_namespace_cstr(name: *const c_char) -> c_int;
@@ -125,7 +122,7 @@ pub unsafe extern "C" fn rs_sign_get_effective_priority(prio: c_int, name: *cons
         return SIGN_DEF_PRIO;
     }
 
-    let sign_prio = nvim_sign_get_priority(sp);
+    let sign_prio = (*sp).sn_priority;
     if sign_prio == -1 {
         SIGN_DEF_PRIO
     } else {

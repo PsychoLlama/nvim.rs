@@ -19,9 +19,6 @@ extern "C" {
     /// Get sign by name from the sign map
     fn nvim_sign_map_get(name: *const c_char) -> SignHandle;
 
-    /// Get sign priority
-    fn nvim_sign_get_priority(sp: SignHandle) -> c_int;
-
     // Composite C accessors for high-level operations
     fn nvim_sign_place_impl(
         id: *mut u32,
@@ -97,7 +94,7 @@ pub unsafe extern "C" fn rs_sign_place_prepare(
 ) -> SignPlaceOpParams {
     // Default error result
     let error_result = SignPlaceOpParams {
-        sp: SignHandle::null(),
+        sp: std::ptr::null_mut(),
         priority: SIGN_DEF_PRIO,
         is_new_placement: false,
     };
@@ -122,7 +119,7 @@ pub unsafe extern "C" fn rs_sign_place_prepare(
     }
 
     // Calculate effective priority
-    let sign_prio = nvim_sign_get_priority(sp);
+    let sign_prio = (*sp).sn_priority;
     let effective_prio = if prio == -1 && sign_prio != -1 {
         if sign_prio == -1 {
             SIGN_DEF_PRIO
@@ -326,7 +323,7 @@ impl Default for SignPlaceExecParams {
             id: 0,
             lnum: 0,
             priority: SIGN_DEF_PRIO,
-            sp: SignHandle::null(),
+            sp: std::ptr::null_mut(),
         }
     }
 }

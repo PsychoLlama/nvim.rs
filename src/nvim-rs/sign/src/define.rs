@@ -12,15 +12,6 @@ use crate::{DecorSignHighlightHandle, SignHandle, SIGN_DEF_PRIO};
 // =============================================================================
 
 extern "C" {
-    // Sign definition accessors
-    fn nvim_sign_get_name(sp: SignHandle) -> *const c_char;
-    fn nvim_sign_get_icon(sp: SignHandle) -> *const c_char;
-    fn nvim_sign_get_text_hl(sp: SignHandle) -> c_int;
-    fn nvim_sign_get_line_hl(sp: SignHandle) -> c_int;
-    fn nvim_sign_get_num_hl(sp: SignHandle) -> c_int;
-    fn nvim_sign_get_cul_hl(sp: SignHandle) -> c_int;
-    fn nvim_sign_get_priority(sp: SignHandle) -> c_int;
-
     // Sign map operations
     fn nvim_sign_map_get(name: *const c_char) -> SignHandle;
     fn nvim_sign_map_has(name: *const c_char) -> c_int;
@@ -53,7 +44,7 @@ pub unsafe extern "C" fn rs_sign_is_defined(name: *const c_char) -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn rs_sign_get_by_name(name: *const c_char) -> SignHandle {
     if name.is_null() {
-        return SignHandle::null();
+        return std::ptr::null_mut();
     }
     nvim_sign_map_get(name)
 }
@@ -72,7 +63,7 @@ pub unsafe extern "C" fn rs_sign_def_get_name(sp: SignHandle) -> *const c_char {
     if sp.is_null() {
         return std::ptr::null();
     }
-    nvim_sign_get_name(sp)
+    (*sp).sn_name
 }
 
 /// Get the icon path of a sign definition.
@@ -87,7 +78,7 @@ pub unsafe extern "C" fn rs_sign_def_get_icon(sp: SignHandle) -> *const c_char {
     if sp.is_null() {
         return std::ptr::null();
     }
-    nvim_sign_get_icon(sp)
+    (*sp).sn_icon
 }
 
 /// Get the text highlight ID of a sign definition.
@@ -100,7 +91,7 @@ pub unsafe extern "C" fn rs_sign_def_get_text_hl(sp: SignHandle) -> c_int {
     if sp.is_null() {
         return 0;
     }
-    nvim_sign_get_text_hl(sp)
+    (*sp).sn_text_hl
 }
 
 /// Get the line highlight ID of a sign definition.
@@ -113,7 +104,7 @@ pub unsafe extern "C" fn rs_sign_def_get_line_hl(sp: SignHandle) -> c_int {
     if sp.is_null() {
         return 0;
     }
-    nvim_sign_get_line_hl(sp)
+    (*sp).sn_line_hl
 }
 
 /// Get the number column highlight ID of a sign definition.
@@ -126,7 +117,7 @@ pub unsafe extern "C" fn rs_sign_def_get_num_hl(sp: SignHandle) -> c_int {
     if sp.is_null() {
         return 0;
     }
-    nvim_sign_get_num_hl(sp)
+    (*sp).sn_num_hl
 }
 
 /// Get the cursorline highlight ID of a sign definition.
@@ -139,7 +130,7 @@ pub unsafe extern "C" fn rs_sign_def_get_cul_hl(sp: SignHandle) -> c_int {
     if sp.is_null() {
         return 0;
     }
-    nvim_sign_get_cul_hl(sp)
+    (*sp).sn_cul_hl
 }
 
 /// Get the priority of a sign definition.
@@ -154,7 +145,7 @@ pub unsafe extern "C" fn rs_sign_def_get_priority(sp: SignHandle) -> c_int {
     if sp.is_null() {
         return SIGN_DEF_PRIO;
     }
-    let prio = nvim_sign_get_priority(sp);
+    let prio = (*sp).sn_priority;
     if prio == -1 {
         SIGN_DEF_PRIO
     } else {
@@ -174,10 +165,7 @@ pub unsafe extern "C" fn rs_sign_def_has_highlight(sp: SignHandle) -> bool {
     if sp.is_null() {
         return false;
     }
-    nvim_sign_get_text_hl(sp) > 0
-        || nvim_sign_get_line_hl(sp) > 0
-        || nvim_sign_get_num_hl(sp) > 0
-        || nvim_sign_get_cul_hl(sp) > 0
+    (*sp).sn_text_hl > 0 || (*sp).sn_line_hl > 0 || (*sp).sn_num_hl > 0 || (*sp).sn_cul_hl > 0
 }
 
 // =============================================================================
@@ -564,7 +552,7 @@ mod tests {
 
     #[test]
     fn test_sign_handle_null() {
-        let handle = SignHandle::null();
+        let handle: SignHandle = std::ptr::null_mut();
         assert!(handle.is_null());
     }
 

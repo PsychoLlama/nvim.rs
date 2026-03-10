@@ -82,27 +82,44 @@ pub const NS_ALL: i64 = u32::MAX as i64;
 pub const NS_INVALID: i64 = -1;
 
 // =============================================================================
+// sign_T repr(C) struct — matches sign_defs.h exactly
+// =============================================================================
+
+/// Rust mirror of C's `sign_T` struct from `sign_defs.h`.
+///
+/// Layout (on 64-bit platforms):
+/// ```text
+/// char    *sn_name;          // +0  (8 bytes)
+/// char    *sn_icon;          // +8  (8 bytes)
+/// schar_T  sn_text[2];       // +16 (8 bytes, 2×u32)
+/// int      sn_line_hl;       // +24 (4 bytes)
+/// int      sn_text_hl;       // +28 (4 bytes)
+/// int      sn_cul_hl;        // +32 (4 bytes)
+/// int      sn_num_hl;        // +36 (4 bytes)
+/// int      sn_priority;      // +40 (4 bytes)
+/// ```
+///
+/// # Safety
+/// This struct must exactly match the C layout. Any change to `sign_T`
+/// in `sign_defs.h` must be reflected here.
+#[repr(C)]
+pub struct SignT {
+    pub sn_name: *mut c_char,
+    pub sn_icon: *mut c_char,
+    pub sn_text: [ScharT; SIGN_WIDTH],
+    pub sn_line_hl: c_int,
+    pub sn_text_hl: c_int,
+    pub sn_cul_hl: c_int,
+    pub sn_num_hl: c_int,
+    pub sn_priority: c_int,
+}
+
+// =============================================================================
 // Opaque Handles
 // =============================================================================
 
-/// Opaque handle to C's sign_T structure
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug)]
-pub struct SignHandle(*mut c_void);
-
-impl SignHandle {
-    /// Check if the handle is null
-    #[inline]
-    pub const fn is_null(self) -> bool {
-        self.0.is_null()
-    }
-
-    /// Create a null handle
-    #[inline]
-    pub const fn null() -> Self {
-        Self(std::ptr::null_mut())
-    }
-}
+/// Handle to C's sign_T structure (typed pointer for direct field access)
+pub type SignHandle = *mut SignT;
 
 /// Opaque handle to C's buf_T structure (for sign operations)
 #[repr(transparent)]
@@ -207,15 +224,6 @@ pub type LinenrT = i32;
 
 #[allow(dead_code)]
 extern "C" {
-    // sign_T accessors
-    fn nvim_sign_get_name(sp: SignHandle) -> *const c_char;
-    fn nvim_sign_get_icon(sp: SignHandle) -> *const c_char;
-    fn nvim_sign_get_text_hl(sp: SignHandle) -> c_int;
-    fn nvim_sign_get_line_hl(sp: SignHandle) -> c_int;
-    fn nvim_sign_get_num_hl(sp: SignHandle) -> c_int;
-    fn nvim_sign_get_cul_hl(sp: SignHandle) -> c_int;
-    fn nvim_sign_get_priority(sp: SignHandle) -> c_int;
-
     // DecorSignHighlight accessors
     fn nvim_decor_sh_get_flags(sh: DecorSignHighlightHandle) -> u16;
     fn nvim_decor_sh_get_priority(sh: DecorSignHighlightHandle) -> u16;
@@ -723,7 +731,7 @@ mod tests {
 
     #[test]
     fn test_sign_handle_null() {
-        let handle = SignHandle::null();
+        let handle: SignHandle = std::ptr::null_mut();
         assert!(handle.is_null());
     }
 

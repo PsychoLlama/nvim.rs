@@ -160,47 +160,6 @@ int nvim_sign_map_has(const char *name)
   return map_has(cstr_t, &sign_map, name) ? 1 : 0;
 }
 
-/// Get sign text highlight ID
-int nvim_sign_get_text_hl(sign_T *sp)
-{
-  return sp ? sp->sn_text_hl : 0;
-}
-
-/// Get sign line highlight ID
-int nvim_sign_get_line_hl(sign_T *sp)
-{
-  return sp ? sp->sn_line_hl : 0;
-}
-
-/// Get sign number highlight ID
-int nvim_sign_get_num_hl(sign_T *sp)
-{
-  return sp ? sp->sn_num_hl : 0;
-}
-
-/// Get sign cursorline highlight ID
-int nvim_sign_get_cul_hl(sign_T *sp)
-{
-  return sp ? sp->sn_cul_hl : 0;
-}
-
-/// Get sign icon
-char *nvim_sign_get_icon(sign_T *sp)
-{
-  return sp ? sp->sn_icon : NULL;
-}
-
-/// Get sign name
-char *nvim_sign_get_name(sign_T *sp)
-{
-  return sp ? sp->sn_name : NULL;
-}
-
-/// Get sign priority
-int nvim_sign_get_priority(sign_T *sp)
-{
-  return sp ? sp->sn_priority : -1;
-}
 
 /// Build a DecorSignHighlight from sign properties and place/update an extmark.
 /// This composite accessor keeps complex struct construction on the C side.

@@ -21,27 +21,6 @@ extern "C" {
     /// Check if sign exists in the map
     fn nvim_sign_map_has(name: *const c_char) -> c_int;
 
-    /// Get sign name from sign handle
-    fn nvim_sign_get_name(sp: SignHandle) -> *const c_char;
-
-    /// Get sign icon path
-    fn nvim_sign_get_icon(sp: SignHandle) -> *const c_char;
-
-    /// Get sign priority
-    fn nvim_sign_get_priority(sp: SignHandle) -> c_int;
-
-    /// Get sign text highlight ID
-    fn nvim_sign_get_text_hl(sp: SignHandle) -> c_int;
-
-    /// Get sign line highlight ID
-    fn nvim_sign_get_line_hl(sp: SignHandle) -> c_int;
-
-    /// Get sign number highlight ID
-    fn nvim_sign_get_num_hl(sp: SignHandle) -> c_int;
-
-    /// Get sign cursorline highlight ID
-    fn nvim_sign_get_cul_hl(sp: SignHandle) -> c_int;
-
     /// Namespace lookup by name
     fn nvim_namespace_lookup(name: *const c_char) -> c_int;
 
@@ -122,13 +101,13 @@ pub unsafe extern "C" fn rs_sign_get_properties(sp: SignHandle) -> SignPropertie
     }
 
     SignProperties {
-        name: nvim_sign_get_name(sp),
-        icon: nvim_sign_get_icon(sp),
-        priority: nvim_sign_get_priority(sp),
-        text_hl: nvim_sign_get_text_hl(sp),
-        line_hl: nvim_sign_get_line_hl(sp),
-        num_hl: nvim_sign_get_num_hl(sp),
-        cul_hl: nvim_sign_get_cul_hl(sp),
+        name: (*sp).sn_name,
+        icon: (*sp).sn_icon,
+        priority: (*sp).sn_priority,
+        text_hl: (*sp).sn_text_hl,
+        line_hl: (*sp).sn_line_hl,
+        num_hl: (*sp).sn_num_hl,
+        cul_hl: (*sp).sn_cul_hl,
     }
 }
 
@@ -155,7 +134,7 @@ pub unsafe extern "C" fn rs_sign_has_icon(sp: SignHandle) -> c_int {
     if sp.is_null() {
         return 0;
     }
-    let icon = nvim_sign_get_icon(sp);
+    let icon = (*sp).sn_icon;
     c_int::from(!icon.is_null() && *icon != 0)
 }
 
