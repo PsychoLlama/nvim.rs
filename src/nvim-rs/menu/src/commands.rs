@@ -144,7 +144,7 @@ fn default_modes(forceit: bool) -> c_int {
 /// Get the string representation of menu modes.
 ///
 /// This is the opposite of `get_menu_cmd_modes`.
-#[no_mangle]
+#[export_name = "get_menu_mode_str"]
 pub extern "C" fn rs_get_menu_mode_str(modes: c_int) -> *const c_char {
     const AMENU_MODES: c_int = MENU_INSERT_MODE
         | MENU_CMDLINE_MODE

@@ -121,7 +121,7 @@ unsafe fn stricmp_nop(s: *const c_char) -> bool {
 ///
 /// # Safety
 /// `eap` must be a valid `exarg_T*` pointer.
-#[no_mangle]
+#[export_name = "ex_menu"]
 pub unsafe extern "C" fn rs_ex_menu(eap: ExArgHandle) {
     let mut pri_tab: [c_int; MENUDEPTH + 1] = [0; MENUDEPTH + 1];
     let mut enable: c_int = K_NONE; // TriState
@@ -407,7 +407,7 @@ pub unsafe extern "C" fn rs_ex_menu(eap: ExArgHandle) {
 ///
 /// # Safety
 /// `eap` must be a valid `exarg_T*` pointer.
-#[no_mangle]
+#[export_name = "ex_emenu"]
 pub unsafe extern "C" fn rs_ex_emenu(eap: ExArgHandle) {
     let mut arg = unsafe { nvim_menu_eap_get_arg(eap) };
     let mut mode_idx: c_int = MENU_INDEX_INVALID;
@@ -447,7 +447,7 @@ const MENU_MODE_CHARS_POPUP: [&[u8]; 8] = [b"n", b"v", b"s", b"o", b"i", b"c", b
 ///
 /// # Safety
 /// Accesses global state (root_menu, curbuf).
-#[no_mangle]
+#[export_name = "show_popupmenu"]
 pub unsafe extern "C" fn rs_show_popupmenu() {
     let menu_mode = rs_get_menu_mode();
     if menu_mode == MENU_INDEX_INVALID {

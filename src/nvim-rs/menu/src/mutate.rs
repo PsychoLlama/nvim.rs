@@ -70,7 +70,7 @@ extern "C" {
 ///
 /// # Safety
 /// The `menu` handle must be valid or null.
-#[no_mangle]
+#[export_name = "free_menu_string"]
 pub unsafe extern "C" fn rs_free_menu_string(menu: VimMenuHandle, idx: c_int) {
     if menu.is_null() || !(0..MENU_MODES).contains(&idx) {
         return;
@@ -102,7 +102,7 @@ pub unsafe extern "C" fn rs_free_menu_string(menu: VimMenuHandle, idx: c_int) {
 ///
 /// # Safety
 /// `menup` must be a valid `vimmenu_T**` pointer.
-#[no_mangle]
+#[export_name = "free_menu"]
 pub unsafe extern "C" fn rs_free_menu(menup: *mut *mut VimMenu) {
     let menu_ptr = unsafe { *menup };
     if menu_ptr.is_null() {
@@ -139,7 +139,7 @@ pub unsafe extern "C" fn rs_free_menu(menup: *mut *mut VimMenu) {
 ///
 /// # Safety
 /// All pointers must be valid. `name` is modified by `menu_name_skip`.
-#[no_mangle]
+#[export_name = "menu_enable_recurse"]
 pub unsafe extern "C" fn rs_menu_enable_recurse(
     menu: VimMenuHandle,
     name: *mut c_char,
@@ -199,7 +199,7 @@ pub unsafe extern "C" fn rs_menu_enable_recurse(
 ///
 /// # Safety
 /// `menup` must be a valid `vimmenu_T**` pointer. `name` is modified by `menu_name_skip`.
-#[no_mangle]
+#[export_name = "remove_menu"]
 pub unsafe extern "C" fn rs_remove_menu(
     menup: *mut *mut VimMenu,
     name: *mut c_char,
@@ -297,7 +297,7 @@ pub unsafe extern "C" fn rs_remove_menu(
 ///
 /// # Safety
 /// All pointers must be valid.
-#[no_mangle]
+#[export_name = "add_menu_path"]
 pub unsafe extern "C" fn rs_add_menu_path(
     menu_path: *const c_char,
     menuarg: VimMenuHandle,

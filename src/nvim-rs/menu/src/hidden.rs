@@ -25,7 +25,7 @@ use crate::MNU_HIDDEN_CHAR;
 ///
 /// # Safety
 /// The `name` pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "menu_is_hidden"]
 pub unsafe extern "C" fn rs_menu_is_hidden(name: *const c_char) -> bool {
     if name.is_null() {
         return false;

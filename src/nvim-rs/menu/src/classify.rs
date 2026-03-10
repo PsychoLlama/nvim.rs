@@ -17,7 +17,7 @@ use crate::MNU_HIDDEN_CHAR;
 ///
 /// # Safety
 /// The `name` pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "menu_is_winbar"]
 pub unsafe extern "C" fn rs_menu_is_winbar(name: *const c_char) -> bool {
     if name.is_null() {
         return false;
@@ -31,7 +31,7 @@ pub unsafe extern "C" fn rs_menu_is_winbar(name: *const c_char) -> bool {
 ///
 /// # Safety
 /// The `name` pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "menu_is_popup"]
 pub unsafe extern "C" fn rs_menu_is_popup(name: *const c_char) -> bool {
     if name.is_null() {
         return false;
@@ -45,7 +45,7 @@ pub unsafe extern "C" fn rs_menu_is_popup(name: *const c_char) -> bool {
 ///
 /// # Safety
 /// The `name` pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "menu_is_toolbar"]
 pub unsafe extern "C" fn rs_menu_is_toolbar(name: *const c_char) -> bool {
     if name.is_null() {
         return false;
@@ -59,7 +59,7 @@ pub unsafe extern "C" fn rs_menu_is_toolbar(name: *const c_char) -> bool {
 ///
 /// # Safety
 /// The `name` pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "menu_is_menubar"]
 pub unsafe extern "C" fn rs_menu_is_menubar(name: *const c_char) -> bool {
     if name.is_null() {
         return false;
@@ -84,7 +84,7 @@ pub unsafe extern "C" fn rs_menu_is_menubar(name: *const c_char) -> bool {
 ///
 /// # Safety
 /// The `name` pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "menu_is_separator"]
 pub unsafe extern "C" fn rs_menu_is_separator(name: *const c_char) -> bool {
     if name.is_null() {
         return false;

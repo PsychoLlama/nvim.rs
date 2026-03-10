@@ -219,7 +219,7 @@ pub unsafe extern "C" fn rs_popup_mode_name_len(name: *const c_char, mode_idx: c
 ///
 /// # Safety
 /// The `name` pointer must be valid and point to a null-terminated C string.
-#[no_mangle]
+#[export_name = "popup_mode_name"]
 pub unsafe extern "C" fn rs_popup_mode_name(name: *const c_char, idx: c_int) -> *mut c_char {
     if name.is_null() || !is_valid_mode_index(idx) {
         return std::ptr::null_mut();

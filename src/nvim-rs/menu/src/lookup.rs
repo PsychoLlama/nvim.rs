@@ -197,7 +197,7 @@ extern "C" {
 ///
 /// # Safety
 /// All pointers must be valid. `name` is modified in-place by `menu_name_skip`.
-#[no_mangle]
+#[export_name = "find_menu"]
 pub unsafe extern "C" fn rs_find_menu(
     menu: VimMenuHandle,
     name: *mut c_char,
@@ -254,7 +254,7 @@ pub unsafe extern "C" fn rs_find_menu(
 ///
 /// # Safety
 /// `name_arg` must be a valid pointer to a NUL-terminated C string.
-#[no_mangle]
+#[export_name = "menu_getbyname"]
 pub unsafe extern "C" fn rs_menu_getbyname(name_arg: *const c_char) -> VimMenuHandle {
     if name_arg.is_null() {
         return VimMenuHandle::null();
@@ -310,7 +310,7 @@ pub unsafe extern "C" fn rs_menu_getbyname(name_arg: *const c_char) -> VimMenuHa
 ///
 /// # Safety
 /// `path_name` must be a valid pointer to a NUL-terminated C string.
-#[no_mangle]
+#[export_name = "menu_find"]
 pub unsafe extern "C" fn rs_menu_find(path_name: *const c_char) -> VimMenuHandle {
     if path_name.is_null() {
         return VimMenuHandle::null();

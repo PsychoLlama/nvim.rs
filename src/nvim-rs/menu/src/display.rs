@@ -32,8 +32,9 @@ extern "C" {
     fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
 
     fn nvim_gettext(s: *const c_char) -> *const c_char;
-    fn rs_find_menu(menu: VimMenuHandle, name: *mut c_char, modes: c_int) -> VimMenuHandle;
 }
+
+use crate::lookup::rs_find_menu;
 
 /// The menu_mode_chars static strings for display.
 const MENU_MODE_CHARS: [*const c_char; 8] = [
@@ -58,7 +59,7 @@ const FAIL: c_int = 0;
 ///
 /// # Safety
 /// `path_name` must be a valid pointer to a mutable NUL-terminated C string.
-#[no_mangle]
+#[export_name = "show_menus"]
 pub unsafe extern "C" fn rs_show_menus(path_name: *mut c_char, modes: c_int) -> c_int {
     let mut menu = VimMenuHandle::null();
 
@@ -86,7 +87,7 @@ pub unsafe extern "C" fn rs_show_menus(path_name: *mut c_char, modes: c_int) -> 
 ///
 /// # Safety
 /// `menu` must be a valid menu handle or null.
-#[no_mangle]
+#[export_name = "show_menus_recursive"]
 pub unsafe extern "C" fn rs_show_menus_recursive(menu: VimMenuHandle, modes: c_int, depth: c_int) {
     if !menu.is_null() && (menu.modes() & modes) == 0 {
         return;

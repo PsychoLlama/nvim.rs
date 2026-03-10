@@ -42,18 +42,16 @@ extern "C" {
     // Root menu global (in C)
     static mut root_menu: *mut VimMenu;
 
-    // Already-ported functions
-    fn rs_menu_name_equal(name: *const c_char, menu: VimMenuHandle) -> bool;
-    fn rs_menu_name_skip(name: *mut c_char) -> *mut c_char;
-    fn rs_menu_is_hidden(name: *const c_char) -> bool;
-    fn rs_menu_is_separator(name: *const c_char) -> bool;
-    fn rs_get_menu_cmd_modes(cmd: *const c_char, forceit: bool) -> crate::commands::MenuCmdResult;
-
     // Memory
     fn xfree(ptr: *mut c_void);
     fn xmalloc(size: usize) -> *mut c_void;
     fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize;
 }
+
+use crate::classify::rs_menu_is_separator;
+use crate::commands::rs_get_menu_cmd_modes;
+use crate::hidden::rs_menu_is_hidden;
+use crate::path::{rs_menu_name_equal, rs_menu_name_skip};
 
 /// Check if a byte is ASCII whitespace (space or tab, matching Neovim's ascii_iswhite).
 fn ascii_iswhite(c: u8) -> bool {
@@ -73,7 +71,7 @@ fn ascii_isdigit(c: u8) -> bool {
 /// - `xp` must be a valid pointer to an `expand_T` structure.
 /// - `cmd` must be a valid pointer to a NUL-terminated C string.
 /// - `arg` must be a valid pointer to a mutable NUL-terminated C string.
-#[no_mangle]
+#[export_name = "set_context_in_menu_cmd"]
 pub unsafe extern "C" fn rs_set_context_in_menu_cmd(
     xp: *mut c_void,
     cmd: *const c_char,
@@ -205,7 +203,7 @@ pub unsafe extern "C" fn rs_set_context_in_menu_cmd(
 ///
 /// # Safety
 /// `xp` must be a valid pointer to an `expand_T` structure.
-#[no_mangle]
+#[export_name = "get_menu_name"]
 pub unsafe extern "C" fn rs_get_menu_name(_xp: *mut c_void, idx: c_int) -> *mut c_char {
     // Static state for iteration. Neovim is single-threaded.
     static mut MENU: VimMenuHandle = VimMenuHandle::null_const();
@@ -272,7 +270,7 @@ pub unsafe extern "C" fn rs_get_menu_name(_xp: *mut c_void, idx: c_int) -> *mut 
 ///
 /// # Safety
 /// `xp` must be a valid pointer to an `expand_T` structure.
-#[no_mangle]
+#[export_name = "get_menu_names"]
 pub unsafe extern "C" fn rs_get_menu_names(_xp: *mut c_void, idx: c_int) -> *mut c_char {
     // Static state for iteration. Neovim is single-threaded.
     static mut MENU: VimMenuHandle = VimMenuHandle::null_const();

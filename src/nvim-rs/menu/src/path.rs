@@ -56,7 +56,7 @@ fn menu_namecmp(name: &[u8], mname: &[u8]) -> bool {
 ///
 /// # Safety
 /// All pointers from the menu handle must be valid.
-#[no_mangle]
+#[export_name = "menu_name_equal"]
 pub unsafe extern "C" fn rs_menu_name_equal(name: *const c_char, menu: VimMenuHandle) -> bool {
     if name.is_null() || menu.is_null() {
         return false;
@@ -277,7 +277,7 @@ extern "C" {
 ///
 /// # Safety
 /// `name` must be a valid pointer to a mutable NUL-terminated C string.
-#[no_mangle]
+#[export_name = "menu_name_skip"]
 pub unsafe extern "C" fn rs_menu_name_skip(name: *mut c_char) -> *mut c_char {
     if name.is_null() {
         return name;
@@ -326,7 +326,7 @@ pub unsafe extern "C" fn rs_menu_name_skip(name: *mut c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `p` must be a valid pointer to a NUL-terminated C string.
-#[no_mangle]
+#[export_name = "menu_skip_part"]
 pub unsafe extern "C" fn rs_menu_skip_part(p: *const c_char) -> *const c_char {
     if p.is_null() {
         return p;
@@ -356,7 +356,7 @@ pub unsafe extern "C" fn rs_menu_skip_part(p: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// `name` must be a valid pointer to a mutable NUL-terminated C string.
-#[no_mangle]
+#[export_name = "menu_unescape_name"]
 pub unsafe extern "C" fn rs_menu_unescape_name(name: *mut c_char) {
     if name.is_null() {
         return;
@@ -387,7 +387,7 @@ pub unsafe extern "C" fn rs_menu_unescape_name(name: *mut c_char) {
 ///
 /// # Safety
 /// `arg_start` must be a valid pointer to a mutable NUL-terminated C string.
-#[no_mangle]
+#[export_name = "menu_translate_tab_and_shift"]
 pub unsafe extern "C" fn rs_menu_translate_tab_and_shift(arg_start: *mut c_char) -> *mut c_char {
     if arg_start.is_null() {
         return arg_start;

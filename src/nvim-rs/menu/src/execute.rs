@@ -147,7 +147,7 @@ mod mode_flags {
 /// Returns a MENU_INDEX_* value corresponding to the current mode.
 ///
 /// This is the Rust implementation of C `get_menu_mode()`.
-#[no_mangle]
+#[export_name = "get_menu_mode"]
 pub extern "C" fn rs_get_menu_mode() -> c_int {
     let state = unsafe { State };
 
@@ -187,7 +187,7 @@ pub extern "C" fn rs_get_menu_mode() -> c_int {
 /// Returns `1 << get_menu_mode()`, or 0 if the mode is invalid.
 ///
 /// This is the Rust implementation of C `get_menu_mode_flag()`.
-#[no_mangle]
+#[export_name = "get_menu_mode_flag"]
 pub extern "C" fn rs_get_menu_mode_flag() -> c_int {
     let mode = rs_get_menu_mode();
     if mode == MENU_INDEX_INVALID {

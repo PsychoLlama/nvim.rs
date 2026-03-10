@@ -31,13 +31,11 @@ extern "C" {
 
     // Error reporting
     fn nvim_menu_emsg_invarg();
-
-    // Already-ported menu functions (same crate, but called via extern "C")
-    fn rs_menu_skip_part(p: *const c_char) -> *const c_char;
-    fn rs_menu_translate_tab_and_shift(arg_start: *mut c_char) -> *mut c_char;
-    fn rs_menu_unescape_name(name: *mut c_char);
-    fn rs_menu_text(str: *const c_char) -> crate::path::MenuTextResult;
 }
+
+use crate::path::{
+    rs_menu_skip_part, rs_menu_text, rs_menu_translate_tab_and_shift, rs_menu_unescape_name,
+};
 
 /// Handle the `:menutranslate` command.
 ///
@@ -45,7 +43,7 @@ extern "C" {
 ///
 /// # Safety
 /// `eap` must be a valid pointer to an `exarg_T` structure.
-#[no_mangle]
+#[export_name = "ex_menutranslate"]
 pub unsafe extern "C" fn rs_ex_menutranslate(eap: *mut c_void) {
     let arg = unsafe { nvim_menu_eap_get_arg(eap) };
 
@@ -107,7 +105,7 @@ pub unsafe extern "C" fn rs_ex_menutranslate(eap: *mut c_void) {
 /// # Safety
 /// `name` must be a valid pointer to a mutable NUL-terminated C string.
 /// The function temporarily modifies `name[len]` and restores it.
-#[no_mangle]
+#[export_name = "menutrans_lookup"]
 pub unsafe extern "C" fn rs_menutrans_lookup(name: *mut c_char, len: c_int) -> *mut c_char {
     let count = unsafe { nvim_menu_menutrans_ga_len() };
 
