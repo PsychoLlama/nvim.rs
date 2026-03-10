@@ -7,6 +7,7 @@
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::must_use_candidate)] // export_name FFI functions don't need #[must_use]
 
 use std::ffi::c_int;
 
@@ -217,7 +218,7 @@ const MAXCOL: c_int = 0x7FFF_FFFF;
 ///
 /// # Safety
 /// Calls into C accessor functions which must be valid.
-#[no_mangle]
+#[export_name = "fwd_word"]
 pub unsafe extern "C" fn rs_fwd_word(count: c_int, bigword: bool, eol: bool) -> c_int {
     fwd_word_impl(count, bigword, eol)
 }
@@ -297,7 +298,7 @@ fn fwd_word_impl(mut count: c_int, bigword: bool, eol: bool) -> c_int {
 ///
 /// # Safety
 /// Calls into C accessor functions which must be valid.
-#[no_mangle]
+#[export_name = "bck_word"]
 pub unsafe extern "C" fn rs_bck_word(count: c_int, bigword: bool, stop: bool) -> c_int {
     bck_word_impl(count, bigword, stop)
 }
@@ -368,7 +369,7 @@ fn bck_word_impl(mut count: c_int, bigword: bool, mut stop: bool) -> c_int {
 ///
 /// # Safety
 /// Calls into C accessor functions which must be valid.
-#[no_mangle]
+#[export_name = "end_word"]
 pub unsafe extern "C" fn rs_end_word(
     count: c_int,
     bigword: bool,
@@ -451,7 +452,7 @@ fn end_word_impl(mut count: c_int, bigword: bool, mut stop: bool, empty: bool) -
 ///
 /// # Safety
 /// Calls into C accessor functions which must be valid.
-#[no_mangle]
+#[export_name = "bckend_word"]
 pub unsafe extern "C" fn rs_bckend_word(count: c_int, bigword: bool, eol: bool) -> c_int {
     bckend_word_impl(count, bigword, eol)
 }
@@ -698,7 +699,7 @@ extern "C" {
 ///
 /// # Safety
 /// - `oap` must be a valid pointer to an oparg_T structure.
-#[no_mangle]
+#[export_name = "current_word"]
 pub unsafe extern "C" fn rs_current_word(
     oap: OapHandle,
     count: c_int,
@@ -985,7 +986,8 @@ unsafe fn inmacro_impl(opt: *const std::ffi::c_char, s: *const std::ffi::c_char)
 ///
 /// # Safety
 /// Calls C accessor functions which must be valid.
-#[no_mangle]
+#[export_name = "startPS"]
+#[allow(non_snake_case)]
 pub unsafe extern "C" fn rs_startPS(lnum: c_int, para: c_int, both: bool) -> bool {
     startps_impl(lnum, para, both)
 }
@@ -1022,7 +1024,7 @@ unsafe fn startps_impl(lnum: c_int, para: c_int, both: bool) -> bool {
 /// # Safety
 /// - `pincl` must be a valid pointer.
 /// - Calls C accessor functions which must be valid.
-#[no_mangle]
+#[export_name = "findpar"]
 pub unsafe extern "C" fn rs_findpar(
     pincl: *mut bool,
     dir: c_int,
@@ -1126,7 +1128,7 @@ unsafe fn findpar_impl(
 /// # Safety
 /// - `oap` must be a valid pointer.
 /// - Calls C accessor functions which must be valid.
-#[no_mangle]
+#[export_name = "current_par"]
 pub unsafe extern "C" fn rs_current_par(
     oap: OapHandle,
     count: c_int,
@@ -1386,7 +1388,7 @@ extern "C" {
 ///
 /// # Safety
 /// Calls C accessor functions which must be valid.
-#[no_mangle]
+#[export_name = "findsent"]
 pub unsafe extern "C" fn rs_findsent(dir: c_int, count: c_int) -> c_int {
     findsent_impl(dir, count)
 }
@@ -1692,7 +1694,7 @@ unsafe fn findsent_forward_impl(mut count: c_int, mut at_start_sent: bool) {
 ///
 /// # Safety
 /// - `oap` must be a valid oparg_T pointer.
-#[no_mangle]
+#[export_name = "current_sent"]
 pub unsafe extern "C" fn rs_current_sent(oap: OapHandle, count: c_int, include: bool) -> c_int {
     current_sent_impl(oap, count, include)
 }
@@ -1933,7 +1935,7 @@ extern "C" {
 ///
 /// # Safety
 /// - `oap` must be a valid oparg_T pointer.
-#[no_mangle]
+#[export_name = "current_block"]
 pub unsafe extern "C" fn rs_current_block(
     oap: OapHandle,
     count: c_int,

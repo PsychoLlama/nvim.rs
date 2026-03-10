@@ -3294,8 +3294,10 @@ extern "C" {
         quotechar: c_int,
     ) -> bool;
 
-    // Rust text object functions (from textobject crate)
+    // Text object functions (now exported directly from textobject crate)
+    #[link_name = "current_word"]
     fn rs_current_word(oap: OapHandle, count: c_int, include: bool, bigword: bool) -> c_int;
+    #[link_name = "current_block"]
     fn rs_current_block(
         oap: OapHandle,
         count: c_int,
@@ -3303,7 +3305,9 @@ extern "C" {
         what: c_int,
         other: c_int,
     ) -> c_int;
+    #[link_name = "current_par"]
     fn rs_current_par(oap: OapHandle, count: c_int, include: bool, par_type: c_int) -> c_int;
+    #[link_name = "current_sent"]
     fn rs_current_sent(oap: OapHandle, count: c_int, include: bool) -> c_int;
 
     // cursor crate
