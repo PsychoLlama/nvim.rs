@@ -508,8 +508,10 @@ extern "C" {
     /// ga_init(gap, sizeof(ucmd_T), 4)
     fn nvim_uc_ga_init_ucmd(gap: GarrayHandle);
     /// ga_grow(gap, n)
+    #[link_name = "ga_grow"]
     fn nvim_uc_ga_grow(gap: GarrayHandle, n: c_int);
     /// ga_clear(gap)
+    #[link_name = "ga_clear"]
     fn nvim_uc_ga_clear(gap: GarrayHandle);
 
     // ucmd_T element access
@@ -569,13 +571,14 @@ extern "C" {
 
     // Memory operations
     /// xfree(ptr)
+    #[link_name = "xfree"]
     fn nvim_uc_xfree(ptr: *mut c_void);
-    /// NLUA_CLEAR_REF(ref) — for standalone LuaRef values (not in a struct)
+    /// NLUA_CLEAR_REF(ref) — kept: wraps a macro
     fn nvim_uc_nlua_clear_ref(luaref: c_int);
-    /// replace_termcodes(rep, replen, &buf, 0, 0, NULL, p_cpo) then
-    /// returns buf (or xstrdup(rep) if buf is NULL). Caller owns result.
+    /// replace_termcodes — kept: complex call with fixed args
     fn nvim_uc_replace_termcodes(rep: *const c_char, replen: usize) -> *mut c_char;
-    /// xstrnsave(s, len) — already exists from Phase 2
+    /// xstrnsave(s, len)
+    #[link_name = "xstrnsave"]
     fn nvim_uc_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 
     // Global state
@@ -848,11 +851,13 @@ extern "C" {
     fn nvim_uc_eap_get_forceit(eap: ExargHandle) -> c_int;
 
     // String navigation helpers
-    /// Returns skiptowhite(p) — pointer to first whitespace
+    /// skiptowhite(p) — pointer to first whitespace
+    #[link_name = "skiptowhite"]
     fn nvim_uc_skiptowhite(p: *const c_char) -> *mut c_char;
-    /// Returns skipwhite(p) — pointer past whitespace
+    /// skipwhite(p) — pointer past whitespace
+    #[link_name = "skipwhite"]
     fn nvim_uc_skipwhite(p: *const c_char) -> *mut c_char;
-    /// Returns ends_excmd(c) — 1 if c ends an ex command, 0 otherwise
+    /// ends_excmd(c) — kept: wraps a macro
     fn nvim_uc_ends_excmd(c: c_int) -> c_int;
 
     // Deletion helper
@@ -1210,28 +1215,35 @@ extern "C" {
     fn nvim_uc_xp_set_script_ctx(xp: ExpandHandle, cmd: *const c_void);
 
     // --- uc_list accessors ---
-    /// Calls msg_ext_set_kind(kind)
+    /// msg_ext_set_kind(kind)
+    #[link_name = "msg_ext_set_kind"]
     fn nvim_uc_msg_ext_set_kind(kind: *const c_char);
-    /// Calls msg_puts_title(_(s))
+    /// msg_puts_title(_(s)) — kept: applies gettext
     fn nvim_uc_msg_puts_title(s: *const c_char);
-    /// Calls msg_putchar(c)
+    /// msg_putchar(c)
+    #[link_name = "msg_putchar"]
     fn nvim_uc_msg_putchar(c: c_int);
-    /// Calls msg_puts(s)
+    /// msg_puts(s) — kept: might be a macro
     fn nvim_uc_msg_puts(s: *const c_char);
-    /// Calls msg_outtrans(s, attr, keep != 0)
-    fn nvim_uc_msg_outtrans(s: *const c_char, attr: c_int, keep: c_int);
-    /// Calls msg_outtrans_special(s, from_part != 0, maxlen)
-    fn nvim_uc_msg_outtrans_special(s: *const c_char, from_part: c_int, maxlen: c_int);
-    /// Calls msg_puts_hl(s, attr, keep != 0)
-    fn nvim_uc_msg_puts_hl(s: *const c_char, attr: c_int, keep: c_int);
-    /// Calls msg(_(s), attr)
+    /// msg_outtrans(s, attr, hist) — C takes bool hist
+    #[link_name = "msg_outtrans"]
+    fn nvim_uc_msg_outtrans(s: *const c_char, attr: c_int, keep: bool);
+    /// msg_outtrans_special(s, from, maxlen) — C takes bool from
+    #[link_name = "msg_outtrans_special"]
+    fn nvim_uc_msg_outtrans_special(s: *const c_char, from_part: bool, maxlen: c_int);
+    /// msg_puts_hl(s, hl_id, hist) — C takes bool hist
+    #[link_name = "msg_puts_hl"]
+    fn nvim_uc_msg_puts_hl(s: *const c_char, attr: c_int, keep: bool);
+    /// msg(_(s), attr) — kept: applies gettext
     fn nvim_uc_msg(s: *const c_char, attr: c_int);
-    /// Returns got_int
+    /// Returns got_int (kept: global variable access)
     fn nvim_uc_got_int() -> c_int;
-    /// Calls line_breakcheck()
+    /// line_breakcheck()
+    #[link_name = "line_breakcheck"]
     fn nvim_uc_line_breakcheck();
-    /// Returns message_filtered(msg) ? 1 : 0
-    fn nvim_uc_message_filtered(msg: *const c_char) -> c_int;
+    /// message_filtered(msg) — C returns bool
+    #[link_name = "message_filtered"]
+    fn nvim_uc_message_filtered(msg: *const c_char) -> bool;
     /// Returns p_verbose
     fn nvim_uc_get_p_verbose() -> c_int;
     /// Returns Columns
@@ -1410,7 +1422,7 @@ unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
 
             // Skip commands which don't match the requested prefix and
             // commands filtered out.
-            if !strncmp_eq(name, cmd_name, name_len) || nvim_uc_message_filtered(cmd_name) != 0 {
+            if !strncmp_eq(name, cmd_name, name_len) || nvim_uc_message_filtered(cmd_name) {
                 i += 1;
                 continue;
             }
@@ -1451,7 +1463,7 @@ unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
                 nvim_uc_msg_puts(unsafe { SPACES4.as_ptr().add(4 - flag_len) }.cast::<c_char>());
             }
 
-            nvim_uc_msg_outtrans(cmd_name, HLF_D, 0);
+            nvim_uc_msg_outtrans(cmd_name, HLF_D, false);
             let name_slen = strlen_safe(cmd_name);
             let mut col_len: usize = name_slen + 4;
 
@@ -1599,13 +1611,13 @@ unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
 
             // NUL-terminate
             unsafe { *iobuff.add(pos) = 0 };
-            nvim_uc_msg_outtrans(iobuff, 0, 0);
+            nvim_uc_msg_outtrans(iobuff, 0, false);
 
             // Lua function reference
             let luaref = nvim_uc_cmd_get_luaref(cmd);
             if luaref != LUA_NOREF {
                 let fn_str = nvim_uc_nlua_funcref_str(luaref);
-                nvim_uc_msg_puts_hl(fn_str, HLF_8, 0);
+                nvim_uc_msg_puts_hl(fn_str, HLF_8, false);
                 nvim_uc_xfree(fn_str.cast::<c_void>());
                 // put the description on a new line
                 let rep = nvim_uc_cmd_get_rep(cmd);
@@ -1620,7 +1632,7 @@ unsafe fn uc_list_impl(name: *const c_char, name_len: usize) {
             } else {
                 0
             };
-            nvim_uc_msg_outtrans_special(rep, 0, maxlen);
+            nvim_uc_msg_outtrans_special(rep, false, maxlen);
             if nvim_uc_get_p_verbose() > 0 {
                 nvim_uc_last_set_msg(cmd);
             }

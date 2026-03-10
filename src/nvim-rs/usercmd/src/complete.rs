@@ -571,8 +571,10 @@ const CMD_SIZE: c_int = 556;
 extern "C" {
     // String navigation helpers
     /// Returns skiptowhite(p) — pointer to first whitespace
+    #[link_name = "skiptowhite"]
     fn nvim_uc_skiptowhite(p: *const c_char) -> *mut c_char;
     /// Returns skipwhite(p) — pointer past whitespace
+    #[link_name = "skipwhite"]
     fn nvim_uc_skipwhite(p: *const c_char) -> *mut c_char;
 
     // expand_T (xp) accessors

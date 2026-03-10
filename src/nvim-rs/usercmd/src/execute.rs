@@ -504,14 +504,17 @@ extern "C" {
     fn nvim_uc_cmd_get_def(cmd: UcmdHandle) -> i64;
 
     // Multibyte helpers
-    /// Get the byte length of a UTF-8 character
+    /// utfc_ptr2len(p) — byte length of a UTF-8 character
+    #[link_name = "utfc_ptr2len"]
     fn nvim_uc_utfc_ptr2len(p: *const c_char) -> c_int;
-    /// Copy one multi-byte character from *pp to *qq, advancing both
+    /// mb_copy_char(pp, qq) — copy one multi-byte char, advance both pointers
+    #[link_name = "mb_copy_char"]
     fn nvim_uc_mb_copy_char(pp: *mut *const c_char, qq: *mut *mut c_char);
 
     // Memory allocation
-    /// Allocate memory via xmalloc
-    fn nvim_uc_xmalloc(size: usize) -> *mut c_char;
+    /// xmalloc(size) — returns *mut c_void (same as C void *)
+    #[link_name = "xmalloc"]
+    fn nvim_uc_xmalloc(size: usize) -> *mut c_void;
 
     // Global cmdmod pointer
     /// Get pointer to global cmdmod struct
@@ -1021,7 +1024,7 @@ unsafe fn uc_split_args_impl(
     }
 
     // Allocate and fill
-    let buf = unsafe { nvim_uc_xmalloc(len + 1) };
+    let buf: *mut c_char = unsafe { nvim_uc_xmalloc(len + 1).cast::<c_char>() };
     let mut q = buf;
 
     unsafe {
@@ -1508,13 +1511,15 @@ extern "C" {
     fn nvim_uc_cmd_get_argt(cmd: UcmdHandle) -> u32;
     /// Calls nlua_do_ucmd(cmd, eap, preview != 0)
     fn nvim_uc_nlua_do_ucmd(cmd: UcmdHandle, eap: ExargHandle, preview: c_int) -> c_int;
-    /// Returns vim_strchr(p, c)
+    /// vim_strchr(p, c)
+    #[link_name = "vim_strchr"]
     fn nvim_uc_vim_strchr(p: *const c_char, c: c_int) -> *mut c_char;
-    /// Calls do_cmdline with sctx save/restore
+    /// Calls do_cmdline with sctx save/restore — kept: complex wrapper
     fn nvim_uc_do_cmdline_with_sctx(buf: *mut c_char, eap: ExargHandle, argt: u32, sc_sid: c_int);
-    /// Get cmd->uc_script_ctx.sc_sid
+    /// Get cmd->uc_script_ctx.sc_sid — kept: field access
     fn nvim_uc_cmd_get_sc_sid(cmd: *const c_void) -> c_int;
     /// xfree(ptr)
+    #[link_name = "xfree"]
     fn nvim_uc_xfree(ptr: *mut c_void);
 }
 
@@ -1660,7 +1665,7 @@ unsafe fn do_ucmd_impl(eap: ExargHandle, preview: bool) -> c_int {
 
         // Add trailing characters length
         totlen += c_strlen(p);
-        buf = nvim_uc_xmalloc(totlen + 1);
+        buf = nvim_uc_xmalloc(totlen + 1).cast::<c_char>();
     }
 
     // Execute the command line with sctx save/restore handled in C

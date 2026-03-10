@@ -155,15 +155,6 @@ void nvim_uc_semsg_1(const char *fmt, const char *arg)
   semsg(_(fmt), arg);
 }
 
-int nvim_uc_getdigits_int(char **pp, int strict, int def)
-{
-  return getdigits_int(pp, strict != 0, def);
-}
-
-char *nvim_uc_xstrnsave(const char *s, size_t len)
-{
-  return xstrnsave(s, len);
-}
 
 
 // C accessor functions called by Rust (Phase 3)
@@ -249,20 +240,6 @@ int64_t nvim_uc_cmd_get_def(const void *cmd)
   return ((const ucmd_T *)cmd)->uc_def;
 }
 
-int nvim_uc_utfc_ptr2len(const char *p)
-{
-  return utfc_ptr2len(p);
-}
-
-void nvim_uc_mb_copy_char(const char **pp, char **qq)
-{
-  mb_copy_char(pp, qq);
-}
-
-char *nvim_uc_xmalloc(size_t size)
-{
-  return xmalloc(size);
-}
 
 const void *nvim_uc_get_cmdmod(void)
 {
@@ -301,15 +278,6 @@ void nvim_uc_ga_init_ucmd(void *gap)
   ga_init((garray_T *)gap, (int)sizeof(ucmd_T), 4);
 }
 
-void nvim_uc_ga_grow(void *gap, int n)
-{
-  ga_grow((garray_T *)gap, n);
-}
-
-void nvim_uc_ga_clear(void *gap)
-{
-  ga_clear((garray_T *)gap);
-}
 
 void *nvim_uc_ga_get_cmd(void *gap, int i)
 {
@@ -430,10 +398,6 @@ void nvim_uc_free_ucmd(void *cmd)
   NLUA_CLEAR_REF(((ucmd_T *)cmd)->uc_preview_luaref);
 }
 
-void nvim_uc_xfree(void *ptr)
-{
-  xfree(ptr);
-}
 
 void nvim_uc_nlua_clear_ref(int ref_val)
 {
@@ -462,15 +426,6 @@ int nvim_uc_get_current_sctx_seq(void)
 
 
 // C accessor functions called by Rust (Phase 6)
-char *nvim_uc_skiptowhite(const char *p)
-{
-  return skiptowhite(p);
-}
-
-char *nvim_uc_skipwhite(const char *p)
-{
-  return skipwhite(p);
-}
 
 int nvim_uc_ends_excmd(int c)
 {
@@ -672,10 +627,6 @@ int nvim_uc_nlua_do_ucmd(void *cmd, void *eap, int preview)
   return nlua_do_ucmd((ucmd_T *)cmd, (exarg_T *)eap, preview != 0);
 }
 
-char *nvim_uc_vim_strchr(const char *p, int c)
-{
-  return vim_strchr(p, c);
-}
 
 void nvim_uc_do_cmdline_with_sctx(char *buf, void *eap, uint32_t argt, int sc_sid)
 {
@@ -782,40 +733,18 @@ void nvim_uc_xp_set_pattern(void *xp, char *pattern)
 
 // --- uc_list accessors ---
 
-void nvim_uc_msg_ext_set_kind(const char *kind)
-{
-  msg_ext_set_kind(kind);
-}
 
 void nvim_uc_msg_puts_title(const char *s)
 {
   msg_puts_title(_(s));
 }
 
-void nvim_uc_msg_putchar(int c)
-{
-  msg_putchar(c);
-}
 
 void nvim_uc_msg_puts(const char *s)
 {
   msg_puts(s);
 }
 
-void nvim_uc_msg_outtrans(const char *s, int attr, int keep)
-{
-  msg_outtrans(s, attr, keep != 0);
-}
-
-void nvim_uc_msg_outtrans_special(const char *s, int from_part, int maxlen)
-{
-  msg_outtrans_special(s, from_part != 0, maxlen);
-}
-
-void nvim_uc_msg_puts_hl(const char *s, int attr, int keep)
-{
-  msg_puts_hl(s, attr, keep != 0);
-}
 
 void nvim_uc_msg(const char *s, int attr)
 {
@@ -827,15 +756,7 @@ int nvim_uc_got_int(void)
   return got_int;
 }
 
-void nvim_uc_line_breakcheck(void)
-{
-  line_breakcheck();
-}
 
-int nvim_uc_message_filtered(const char *msg_str)
-{
-  return message_filtered(msg_str) ? 1 : 0;
-}
 
 int nvim_uc_get_p_verbose(void)
 {

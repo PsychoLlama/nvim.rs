@@ -396,13 +396,15 @@ pub fn quotes_balanced(s: &[u8]) -> bool {
 // =============================================================================
 
 extern "C" {
-    /// Call emsg() in C with a translatable message
+    /// Call emsg() in C with a translatable message (kept: applies gettext)
     fn nvim_uc_emsg(msg: *const c_char);
-    /// Call semsg() in C with one format argument
+    /// Call semsg() in C with one format argument (kept: applies gettext)
     fn nvim_uc_semsg_1(fmt: *const c_char, arg1: *const c_char);
-    /// Call getdigits_int() in C — parses digits from *pp, advances *pp
+    /// getdigits_int() — parses digits from *pp, advances *pp
+    #[link_name = "getdigits_int"]
     fn nvim_uc_getdigits_int(pp: *mut *mut c_char, maxlen: c_int, def: c_int) -> c_int;
-    /// Call xstrnsave() in C — allocates a copy of the string
+    /// xstrnsave() — allocates a copy of the string
+    #[link_name = "xstrnsave"]
     fn nvim_uc_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 }
 
