@@ -35,34 +35,48 @@ thread_local! {
 // =============================================================================
 
 extern "C" {
-    // Window accessors
+    // Window accessors (direct link to window_shim.c)
+    #[link_name = "nvim_win_get_status_height"]
     fn nvim_stl_win_get_status_height(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_wincol"]
     fn nvim_stl_win_get_wincol(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_virtcol"]
     fn nvim_stl_win_get_w_virtcol(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_cursor_col"]
     fn nvim_stl_win_get_cursor_col(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_cursor_lnum"]
     fn nvim_stl_win_get_cursor_lnum(wp: WinHandle) -> c_int;
     fn nvim_stl_win_cursor_invalid(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_p_list"]
     fn nvim_stl_win_get_p_list(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_set_p_list"]
     fn nvim_stl_win_set_p_list(wp: WinHandle, val: c_int);
+    #[link_name = "nvim_win_get_lcs_tab1"]
     fn nvim_stl_win_get_lcs_tab1(wp: WinHandle) -> c_int;
     fn nvim_stl_getvvcol_cursor(wp: WinHandle) -> c_int;
     fn nvim_stl_ml_get_buf_first_char(wp: WinHandle) -> c_int;
 
     // Global state
+    #[link_name = "nvim_get_curwin"]
     fn nvim_stl_get_curwin() -> WinHandle;
     #[link_name = "rs_lastwin_nofloating"]
     fn nvim_stl_lastwin_nofloating() -> WinHandle;
     #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
     fn nvim_stl_get_p_ru() -> c_int;
+    #[link_name = "nvim_get_p_ch"]
     fn nvim_stl_get_p_ch() -> i64;
     fn nvim_stl_get_p_ruf() -> *mut c_char;
+    #[link_name = "nvim_get_Columns"]
     fn nvim_stl_get_Columns() -> c_int;
+    #[link_name = "nvim_get_Rows"]
     fn nvim_stl_get_Rows() -> c_int;
     fn nvim_stl_get_ru_col() -> c_int;
+    #[link_name = "nvim_get_State"]
     fn nvim_stl_get_State() -> c_int;
     fn nvim_stl_edit_submode_not_null() -> c_int;
+    #[link_name = "nvim_ui_has_messages"]
     fn nvim_stl_ui_has_messages() -> c_int;
     fn nvim_stl_buf_ml_empty(buf: *mut std::ffi::c_void) -> c_int;
     fn nvim_win_get_buffer(wp: WinHandle) -> *mut std::ffi::c_void;
@@ -90,18 +104,24 @@ extern "C" {
 
     // Grid operations
     fn nvim_stl_msg_grid_line_start(row: c_int);
+    #[link_name = "grid_line_puts"]
     fn nvim_stl_grid_line_puts(
         col: c_int,
         text: *const c_char,
         textlen: c_int,
         attr: c_int,
     ) -> c_int;
-    fn nvim_stl_grid_line_fill(start: c_int, end: c_int, fillchar: ScharT, attr: c_int);
+    #[link_name = "grid_line_fill"]
+    fn nvim_stl_grid_line_fill(start: c_int, end: c_int, fillchar: ScharT, attr: c_int) -> c_int;
+    #[link_name = "grid_line_flush"]
     fn nvim_stl_grid_line_flush();
 
     // Message area
+    #[link_name = "nvim_set_msg_col"]
     fn nvim_stl_set_msg_col(col: c_int);
+    #[link_name = "nvim_set_msg_row"]
     fn nvim_stl_set_msg_row(row: c_int);
+    #[link_name = "nvim_msg_clr_eos"]
     fn nvim_stl_msg_clr_eos();
 
     // UI events

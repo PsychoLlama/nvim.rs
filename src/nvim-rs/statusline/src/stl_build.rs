@@ -155,8 +155,10 @@ extern "C" {
     fn nvim_stl_get_redraw_not_allowed() -> c_int;
     fn nvim_stl_get_KeyTyped() -> c_int;
     fn nvim_stl_set_KeyTyped(val: c_int);
+    #[link_name = "nvim_get_did_emsg"]
     fn nvim_stl_get_did_emsg() -> c_int;
     fn nvim_stl_set_option_empty(opt_idx: c_int, opt_scope: c_int);
+    #[link_name = "nvim_get_State"]
     fn nvim_stl_get_State() -> c_int;
     fn nvim_stl_buf_ml_empty(buf: BufHandle) -> c_int;
 
@@ -180,14 +182,19 @@ extern "C" {
     // Math / string helpers
     fn nvim_stl_valid_flag(c: c_int) -> c_int;
 
-    // Window accessors
+    // Window accessors (direct link to window_shim.c where available)
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_win_buf_line_count(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_virtcol"]
     fn nvim_stl_win_get_w_virtcol(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_cursor_col"]
     fn nvim_stl_win_get_cursor_col(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_p_nu"]
     fn nvim_stl_win_get_p_nu(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_p_rnu"]
     fn nvim_stl_win_get_p_rnu(wp: WinHandle) -> c_int;
     fn nvim_stl_win_get_maxscwidth(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_scwidth"]
     fn nvim_stl_win_get_scwidth(wp: WinHandle) -> c_int;
 
     // Statuscolumn accessors

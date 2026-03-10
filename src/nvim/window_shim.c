@@ -358,6 +358,7 @@ int64_t nvim_get_p_pw(void) { return p_pw; }
 int64_t nvim_get_p_pmw(void) { return p_pmw; }
 int nvim_win_get_p_diff(win_T *wp) { return wp->w_p_diff; }
 int nvim_win_get_p_crb(win_T *wp) { return wp->w_p_crb; }
+void nvim_win_set_p_crb(win_T *wp, int val) { wp->w_p_crb = val; }
 void nvim_set_curwin(win_T *wp) { curwin = wp; }
 void nvim_set_curbuf(buf_T *buf) { curbuf = buf; }
 int nvim_win_buf_meta_total_lines(win_T *wp) { return buf_meta_total(wp->w_buffer, kMTMetaLines) > 0; }

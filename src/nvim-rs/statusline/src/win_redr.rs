@@ -46,22 +46,34 @@ type ClickDefsHandle = *mut c_void;
 // =============================================================================
 
 extern "C" {
-    // Window layout
+    // Window layout (direct link to window_shim.c accessors)
+    #[link_name = "nvim_win_get_floating"]
     fn nvim_stl_win_get_floating(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_status_height"]
     fn nvim_stl_win_get_status_height(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_winrow_off"]
     fn nvim_stl_win_get_winrow_off(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_wincol_off"]
     fn nvim_stl_win_get_wincol_off(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_view_height"]
     fn nvim_stl_win_get_view_height(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_view_width"]
     fn nvim_stl_win_get_view_width(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_endrow"]
     fn nvim_stl_W_ENDROW(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_wincol"]
     fn nvim_stl_win_get_wincol(wp: WinHandle) -> c_int;
     fn nvim_stl_win_get_fcs_wbr(wp: WinHandle) -> ScharT;
 
     // Global state
+    #[link_name = "nvim_get_Columns"]
     fn nvim_stl_get_Columns() -> c_int;
+    #[link_name = "nvim_get_Rows"]
     fn nvim_stl_get_Rows() -> c_int;
+    #[link_name = "nvim_get_p_ch"]
     fn nvim_stl_get_p_ch() -> i64;
     fn nvim_stl_get_ru_col() -> c_int;
+    #[link_name = "nvim_get_curwin"]
     fn nvim_stl_get_curwin() -> WinHandle;
     #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
@@ -72,7 +84,8 @@ extern "C" {
     fn nvim_stl_get_p_stl() -> *const c_char;
     fn nvim_stl_win_get_p_stl(wp: WinHandle) -> *const c_char;
     fn nvim_stl_get_p_wbr() -> *const c_char;
-    fn nvim_stl_win_get_p_wbr(wp: WinHandle) -> *mut c_char;
+    #[link_name = "nvim_win_get_p_wbr"]
+    fn nvim_stl_win_get_p_wbr(wp: WinHandle) -> *const c_char;
 
     // Fill character
     #[link_name = "fillchar_status"]
@@ -83,16 +96,22 @@ extern "C" {
     // Grid operations
     fn nvim_stl_grid_adjust_win(wp: WinHandle, row: *mut c_int, col: *mut c_int) -> GridHandle;
     fn nvim_stl_grid_adjust_msg(row: *mut c_int, col: *mut c_int) -> GridHandle;
+    #[link_name = "nvim_get_default_grid"]
     fn nvim_stl_get_default_grid() -> GridHandle;
+    #[link_name = "nvim_win_get_grid_alloc"]
     fn nvim_stl_win_get_grid_alloc(wp: WinHandle) -> GridHandle;
+    #[link_name = "screengrid_line_start"]
     fn nvim_stl_screengrid_line_start(grid: GridHandle, row: c_int, col: c_int);
+    #[link_name = "grid_line_puts"]
     fn nvim_stl_grid_line_puts(
         col: c_int,
         text: *const c_char,
         textlen: c_int,
         attr: c_int,
     ) -> c_int;
-    fn nvim_stl_grid_line_fill(start: c_int, end: c_int, fillchar: ScharT, attr: c_int);
+    #[link_name = "grid_line_fill"]
+    fn nvim_stl_grid_line_fill(start: c_int, end: c_int, fillchar: ScharT, attr: c_int) -> c_int;
+    #[link_name = "grid_line_flush"]
     fn nvim_stl_grid_line_flush();
 
     // Highlight
@@ -102,8 +121,8 @@ extern "C" {
     #[link_name = "syn_id2attr"]
     fn nvim_stl_syn_id2attr(id: c_int) -> c_int;
     fn nvim_stl_HL_ATTR(hlf: c_int) -> c_int;
-    fn nvim_stl_highlight_user_arr(index: c_int) -> c_int;
-    fn nvim_stl_highlight_stlnc_arr(index: c_int) -> c_int;
+    static highlight_user: [c_int; 9];
+    static highlight_stlnc: [c_int; 9];
     fn nvim_stl_syn_name2id_len(name: *const c_char, len: c_int) -> c_int;
 
     // String operations (direct link to C/Rust implementations)
@@ -152,7 +171,9 @@ extern "C" {
     fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
 
     // Cursorbind
+    #[link_name = "nvim_win_get_p_crb"]
     fn nvim_stl_win_get_p_crb(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_set_p_crb"]
     fn nvim_stl_win_set_p_crb(wp: WinHandle, val: c_int);
 
     // UI events
@@ -313,7 +334,7 @@ pub unsafe fn win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool
         let w_p_wbr = nvim_stl_win_get_p_wbr(wp);
         let p_wbr = nvim_stl_get_p_wbr();
         if !w_p_wbr.is_null() && *w_p_wbr != NUL as c_char {
-            stl = w_p_wbr;
+            stl = w_p_wbr as *mut c_char;
             opt_scope = OPT_LOCAL;
         } else {
             stl = p_wbr as *mut c_char;
@@ -566,9 +587,9 @@ unsafe fn draw_result(
             let use_stlnc =
                 !wp.is_null() && wp != curwin && nvim_stl_win_get_status_height(wp) != 0;
             let user_attr = if use_stlnc {
-                nvim_stl_highlight_stlnc_arr(userhl - 1)
+                highlight_stlnc[(userhl - 1) as usize]
             } else {
-                nvim_stl_highlight_user_arr(userhl - 1)
+                highlight_user[(userhl - 1) as usize]
             };
             // Build "User" + digit name for syn_name2id
             let mut userbuf = [0u8; 6];

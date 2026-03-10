@@ -27,14 +27,18 @@ const K_STL_CLICK_TAB_CLOSE: c_int = 2;
 extern "C" {
     // Grid operations
     fn nvim_stl_default_grid_line_start(row: c_int);
+    #[link_name = "grid_line_put_schar"]
     fn nvim_stl_grid_line_put_schar(col: c_int, c: ScharT, attr: c_int);
+    #[link_name = "grid_line_puts"]
     fn nvim_stl_grid_line_puts(
         col: c_int,
         text: *const c_char,
         textlen: c_int,
         attr: c_int,
     ) -> c_int;
-    fn nvim_stl_grid_line_fill(start: c_int, end: c_int, fillchar: ScharT, attr: c_int);
+    #[link_name = "grid_line_fill"]
+    fn nvim_stl_grid_line_fill(start: c_int, end: c_int, fillchar: ScharT, attr: c_int) -> c_int;
+    #[link_name = "grid_line_flush"]
     fn nvim_stl_grid_line_flush();
 
     // Highlight
@@ -48,12 +52,16 @@ extern "C" {
     fn nvim_stl_schar_from_ascii_char(c: c_char) -> ScharT;
 
     // Global state
+    #[link_name = "nvim_option_get_t_colors"]
     fn nvim_stl_get_t_colors() -> c_int;
-    fn nvim_stl_default_grid_chars_null() -> c_int;
+    #[link_name = "nvim_get_default_grid_has_chars"]
+    fn nvim_stl_default_grid_has_chars() -> c_int;
     fn nvim_stl_set_redraw_tabline(val: c_int);
+    #[link_name = "nvim_ui_has_tabline"]
     fn nvim_stl_ui_has_tabline() -> c_int;
     #[link_name = "rs_tabline_height"]
     fn nvim_stl_tabline_height() -> c_int;
+    #[link_name = "nvim_get_Columns"]
     fn nvim_stl_get_Columns() -> c_int;
     fn nvim_stl_get_p_tal() -> *mut c_char;
     fn nvim_stl_get_p_sc() -> c_int;
@@ -111,7 +119,7 @@ pub unsafe fn draw_tabline() {
     let attr_fill = nvim_stl_HL_ATTR(HLF_TPF);
     let use_sep_chars = nvim_stl_get_t_colors() < 8;
 
-    if nvim_stl_default_grid_chars_null() != 0 {
+    if nvim_stl_default_grid_has_chars() == 0 {
         return;
     }
     nvim_stl_set_redraw_tabline(0);

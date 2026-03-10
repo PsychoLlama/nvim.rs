@@ -273,11 +273,7 @@ stl_hlrec_t **nvim_stl_stcp_get_hlrec_ptr(statuscol_T *stcp)
   return &stcp->hlrec;
 }
 
-/// Get wp->w_topline.
-int nvim_stl_win_get_topline(win_T *wp)
-{
-  return wp->w_topline;
-}
+
 
 _Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL must be 0x02");
 
@@ -413,11 +409,6 @@ void nvim_stl_set_KeyTyped(int val)
   KeyTyped = val ? true : false;
 }
 
-/// Get did_emsg counter.
-int nvim_stl_get_did_emsg(void)
-{
-  return did_emsg;
-}
 
 /// Set an option to empty string on error (SID_ERROR).
 void nvim_stl_set_option_empty(int opt_idx, int opt_scope)
@@ -425,11 +416,6 @@ void nvim_stl_set_option_empty(int opt_idx, int opt_scope)
   set_option_direct((OptIndex)opt_idx, STATIC_CSTR_AS_OPTVAL(""), opt_scope, SID_ERROR);
 }
 
-/// Get the State variable (mode flags).
-int nvim_stl_get_State(void)
-{
-  return State;
-}
 
 /// Get the ML_EMPTY flag for a buffer.
 int nvim_stl_buf_ml_empty(buf_T *buf)
@@ -485,40 +471,10 @@ int64_t nvim_stl_get_vim_var_nr(int vv_idx)
 }
 
 
-/// Get wp->w_virtcol.
-int nvim_stl_win_get_w_virtcol(win_T *wp)
-{
-  return (int)wp->w_virtcol;
-}
-
-/// Get wp->w_cursor.col.
-int nvim_stl_win_get_cursor_col(win_T *wp)
-{
-  return (int)wp->w_cursor.col;
-}
-
-/// Get wp->w_p_nu (number option).
-int nvim_stl_win_get_p_nu(win_T *wp)
-{
-  return wp->w_p_nu ? 1 : 0;
-}
-
-/// Get wp->w_p_rnu (relativenumber option).
-int nvim_stl_win_get_p_rnu(win_T *wp)
-{
-  return wp->w_p_rnu ? 1 : 0;
-}
-
 /// Get wp->w_maxscwidth (sign column setting).
 int nvim_stl_win_get_maxscwidth(win_T *wp)
 {
   return (int)wp->w_maxscwidth;
-}
-
-/// Get wp->w_scwidth (sign column width).
-int nvim_stl_win_get_scwidth(win_T *wp)
-{
-  return (int)wp->w_scwidth;
 }
 
 /// Get stcp->sattrs[0].text[0] != 0 (has sign text).
@@ -688,43 +644,10 @@ void nvim_stl_emit_tabline_update(int *tab_handles, const char **tab_names,
   arena_mem_free(arena_finish(&arena));
 }
 
-// Phase 5 accessors for Rust FFI (win_redr_custom)
-
-/// Get window floating flag.
-int nvim_stl_win_get_floating(win_T *wp) { return wp->w_floating; }
-
-/// Get window status height.
-int nvim_stl_win_get_status_height(win_T *wp) { return wp->w_status_height; }
-
-/// Get window row offset.
-int nvim_stl_win_get_winrow_off(win_T *wp) { return wp->w_winrow_off; }
-
-/// Get window column offset.
-int nvim_stl_win_get_wincol_off(win_T *wp) { return wp->w_wincol_off; }
-
-/// Get window view height.
-int nvim_stl_win_get_view_height(win_T *wp) { return wp->w_view_height; }
-
-/// Get window view width.
-int nvim_stl_win_get_view_width(win_T *wp) { return wp->w_view_width; }
-
-/// Get W_ENDROW(wp) (last row of window).
-int nvim_stl_W_ENDROW(win_T *wp) { return W_ENDROW(wp); }
-
-/// Get window wincol.
-int nvim_stl_win_get_wincol(win_T *wp) { return wp->w_wincol; }
 
 /// Get window winbar fill character (w_p_fcs_chars.wbr).
 schar_T nvim_stl_win_get_fcs_wbr(win_T *wp) { return wp->w_p_fcs_chars.wbr; }
 
-/// Get global Columns.
-int nvim_stl_get_Columns(void) { return Columns; }
-
-/// Get global Rows.
-int nvim_stl_get_Rows(void) { return Rows; }
-
-/// Get global p_ch (cmdheight).
-int64_t nvim_stl_get_p_ch(void) { return p_ch; }
 
 /// Get global ru_col.
 int nvim_stl_get_ru_col(void) { return ru_col; }
@@ -735,8 +658,6 @@ char *nvim_stl_get_p_tal(void) { return p_tal; }
 /// Get global p_ruf (ruler format option).
 char *nvim_stl_get_p_ruf(void) { return p_ruf; }
 
-/// Get wp->w_p_wbr (window-local winbar option).
-char *nvim_stl_win_get_p_wbr(win_T *wp) { return wp->w_p_wbr; }
 
 
 
@@ -755,35 +676,7 @@ void *nvim_stl_grid_adjust_msg(int *row, int *col)
   return grid;
 }
 
-/// Get pointer to default_grid.
-void *nvim_stl_get_default_grid(void) { return &default_grid; }
 
-/// Get pointer to w_grid_alloc.
-void *nvim_stl_win_get_grid_alloc(win_T *wp) { return &wp->w_grid_alloc; }
-
-/// Call screengrid_line_start.
-void nvim_stl_screengrid_line_start(void *grid, int row, int col)
-{
-  screengrid_line_start((ScreenGrid *)grid, row, col);
-}
-
-/// Call grid_line_puts. Returns number of columns written.
-int nvim_stl_grid_line_puts(int col, const char *text, int textlen, int attr)
-{
-  return grid_line_puts(col, text, textlen, attr);
-}
-
-/// Call grid_line_fill.
-void nvim_stl_grid_line_fill(int start, int end, schar_T fillchar, int attr)
-{
-  grid_line_fill(start, end, fillchar, attr);
-}
-
-/// Call grid_line_flush.
-void nvim_stl_grid_line_flush(void)
-{
-  grid_line_flush();
-}
 
 /// Call win_hl_attr.
 int nvim_stl_win_hl_attr(win_T *wp, int hlf) { return win_hl_attr(wp, hlf); }
@@ -792,11 +685,6 @@ int nvim_stl_win_hl_attr(win_T *wp, int hlf) { return win_hl_attr(wp, hlf); }
 /// Get HL_ATTR value.
 int nvim_stl_HL_ATTR(int hlf) { return HL_ATTR((hlf_T)hlf); }
 
-/// Get highlight_user array element.
-int nvim_stl_highlight_user_arr(int index) { return highlight_user[index]; }
-
-/// Get highlight_stlnc array element.
-int nvim_stl_highlight_stlnc_arr(int index) { return highlight_stlnc[index]; }
 
 
 /// Build a UI msg_ruler content chunk and call ui_call_msg_ruler.
@@ -816,8 +704,6 @@ void nvim_stl_ui_call_msg_ruler_content(int *attrs, const char **texts, size_t *
   api_free_array(content);
 }
 
-/// Get win_T *curwin.
-win_T *nvim_stl_get_curwin(void) { return curwin; }
 
 
 /// Get tab_page_click_defs pointer.
@@ -835,9 +721,6 @@ size_t nvim_stl_win_get_winbar_click_defs_size(win_T *wp) { return wp->w_winbar_
 void nvim_stl_win_set_winbar_click_defs(win_T *wp, void *defs) { wp->w_winbar_click_defs = defs; }
 void nvim_stl_win_set_winbar_click_defs_size(win_T *wp, size_t size) { wp->w_winbar_click_defs_size = size; }
 
-/// Get/set win_T->w_p_crb.
-int nvim_stl_win_get_p_crb(win_T *wp) { return wp->w_p_crb; }
-void nvim_stl_win_set_p_crb(win_T *wp, int val) { wp->w_p_crb = val; }
 
 // Phase 4 accessors for redraw_ruler Rust FFI
 
@@ -845,32 +728,15 @@ void nvim_stl_win_set_p_crb(win_T *wp, int val) { wp->w_p_crb = val; }
 int nvim_stl_get_p_ru(void) { return p_ru ? 1 : 0; }
 
 
-/// Check if ui_has(kUIMessages).
-int nvim_stl_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
 
 /// Call ui_call_msg_ruler with empty array (to clear ruler).
 void nvim_stl_ui_call_msg_ruler_empty(void) { ui_call_msg_ruler((Array)ARRAY_DICT_INIT); }
 
-/// Set msg_col.
-void nvim_stl_set_msg_col(int col) { msg_col = col; }
 
-/// Set msg_row.
-void nvim_stl_set_msg_row(int row) { msg_row = row; }
-
-/// Call msg_clr_eos().
-void nvim_stl_msg_clr_eos(void) { msg_clr_eos(); }
 
 /// Get edit_submode != NULL (check if in edit submode).
 int nvim_stl_edit_submode_not_null(void) { return edit_submode != NULL ? 1 : 0; }
 
-/// Get wp->w_p_list.
-int nvim_stl_win_get_p_list(win_T *wp) { return wp->w_p_list ? 1 : 0; }
-
-/// Set wp->w_p_list.
-void nvim_stl_win_set_p_list(win_T *wp, int val) { wp->w_p_list = val ? true : false; }
-
-/// Get wp->w_p_lcs_chars.tab1.
-int nvim_stl_win_get_lcs_tab1(win_T *wp) { return (int)wp->w_p_lcs_chars.tab1; }
 
 /// Call getvvcol and return the cursor virtual column.
 int nvim_stl_getvvcol_cursor(win_T *wp)
@@ -886,11 +752,6 @@ int nvim_stl_ml_get_buf_first_char(win_T *wp)
   return (int)(uint8_t)(*ml_get_buf(wp->w_buffer, wp->w_cursor.lnum));
 }
 
-/// Get wp->w_cursor.lnum.
-int nvim_stl_win_get_cursor_lnum(win_T *wp)
-{
-  return (int)wp->w_cursor.lnum;
-}
 
 /// Check if cursor lnum > line count (invalid position).
 int nvim_stl_win_cursor_invalid(win_T *wp)
@@ -910,17 +771,10 @@ _Static_assert(kUIMessages == 4, "kUIMessages must be 4");
 
 // Phase 5 accessors for draw_tabline Rust FFI
 
-/// Get t_colors.
-int nvim_stl_get_t_colors(void) { return t_colors; }
-
-/// Check if default_grid.chars is NULL.
-int nvim_stl_default_grid_chars_null(void) { return default_grid.chars == NULL ? 1 : 0; }
 
 /// Set redraw_tabline flag.
 void nvim_stl_set_redraw_tabline(int val) { redraw_tabline = val ? true : false; }
 
-/// Check ui_has(kUITabline).
-int nvim_stl_ui_has_tabline(void) { return ui_has(kUITabline) ? 1 : 0; }
 
 
 /// Start grid line on default_gridview at given row.
@@ -929,11 +783,6 @@ void nvim_stl_default_grid_line_start(int row)
   grid_line_start(&default_gridview, row);
 }
 
-/// Put single schar at column.
-void nvim_stl_grid_line_put_schar(int col, schar_T c, int attr)
-{
-  grid_line_put_schar(col, c, attr);
-}
 
 /// Get tab_page_click_defs_size.
 size_t nvim_stl_get_tab_page_click_defs_size(void) { return tab_page_click_defs_size; }
