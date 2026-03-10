@@ -6,6 +6,7 @@
 //! and `put_escstr` logic (escape key codes for file output).
 
 use std::ffi::{c_char, c_int};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use crate::{
     mapblock_keys, mapblock_mode, mapblock_next, mapblock_noremap, mapblock_simplified, BufHandle,
@@ -30,9 +31,35 @@ const REMAP_SCRIPT: c_int = -2;
 const EXPAND_NOTHING: c_int = 0;
 const EXPAND_MAPPINGS: c_int = 17;
 
+// CMD enum values (stable; verified by _Static_assert in usercmd.c)
+const CMD_MAP: c_int = 274;
+const CMD_UNMAP: c_int = 499;
+
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+// =============================================================================
+// Expand state (moved from C statics in mapping.c)
+// =============================================================================
+
+static EXPAND_MAPMODES: AtomicI32 = AtomicI32::new(0);
+static EXPAND_ISABBREV: AtomicBool = AtomicBool::new(false);
+static EXPAND_BUFFER: AtomicBool = AtomicBool::new(false);
+
 // =============================================================================
 // FFI declarations
 // =============================================================================
+
+/// fuzmatch_str_T: {idx: i32, _pad: i32, str: *mut c_char, score: i32, _pad2: i32}
+/// sizeof == 24, verified by _Static_assert in fuzzy.c
+#[repr(C)]
+struct FuzmatchStr {
+    idx: c_int,
+    _pad: c_int,
+    str_: *mut c_char,
+    score: c_int,
+    _pad2: c_int,
+}
 
 extern "C" {
     fn nvim_get_maphash_entry(index: c_int) -> MapblockHandle;
@@ -45,40 +72,32 @@ extern "C" {
     fn rs_get_map_mode(cmdp: *mut *mut c_char, forceit: c_int) -> c_int;
     fn rs_translate_mapping(str_in: *const c_char, cpo_val: *const c_char) -> *mut c_char;
 
-    // Completion infrastructure — called from ExpandMappings
-    fn nvim_mapping_vim_regexec(regmatch: *mut c_char, s: *const c_char) -> c_int;
-    fn nvim_mapping_fuzzy_match_str(s: *const c_char, pat: *const c_char) -> c_int;
-    fn nvim_mapping_cmdline_fuzzy_complete(pat: *const c_char) -> c_int;
-    fn nvim_mapping_ga_append_str(ga: *mut c_char, s: *const c_char);
-    fn nvim_mapping_ga_append_fuzmatch(ga: *mut c_char, s: *const c_char, score: c_int);
-    fn nvim_mapping_expand_finish(
-        ga: *mut c_char,
-        fuzzy: c_int,
-        num_matches: *mut c_int,
-        matches: *mut *mut *mut c_char,
-    ) -> c_int;
-    fn nvim_mapping_ga_init_str(ga: *mut c_char);
-    fn nvim_mapping_ga_init_fuzmatch(ga: *mut c_char);
-
     // expand_T field accessors (from cmdexpand.c)
     fn nvim_expand_set_context(xp: *mut c_char, context: c_int);
     fn nvim_expand_set_pattern(xp: *mut c_char, pattern: *mut c_char);
 
-    // Global statics for expand state
-    fn nvim_mapping_set_expand_mapmodes(val: c_int);
-    fn nvim_mapping_set_expand_isabbrev(val: c_int);
-    fn nvim_mapping_set_expand_buffer(val: c_int);
-    fn nvim_mapping_get_expand_mapmodes() -> c_int;
-    fn nvim_mapping_get_expand_isabbrev() -> c_int;
-    fn nvim_mapping_get_expand_buffer() -> c_int;
-
-    fn nvim_mapping_get_cmd_map() -> c_int;
-    fn nvim_mapping_get_cmd_unmap() -> c_int;
-
     fn xfree(ptr: *mut c_char);
+    fn xstrdup(str_: *const c_char) -> *mut c_char;
+    fn xmalloc(size: usize) -> *mut std::ffi::c_void;
 
-    // String helpers
-    fn nvim_mapping_skipwhite(p: *const c_char) -> *mut c_char;
+    // Direct C library calls (replacing nvim_mapping_* wrappers)
+    #[link_name = "skipwhite"]
+    fn skipwhite(p: *const c_char) -> *const c_char;
+    #[link_name = "vim_regexec"]
+    fn vim_regexec(rmp: *mut c_char, line: *const c_char, col: c_int) -> bool;
+    #[link_name = "fuzzy_match_str"]
+    fn fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
+    #[link_name = "cmdline_fuzzy_complete"]
+    fn cmdline_fuzzy_complete(fuzzystr: *const c_char) -> bool;
+    #[link_name = "sort_strings"]
+    fn sort_strings(files: *mut *mut c_char, count: c_int);
+    #[link_name = "fuzzymatches_to_strmatches"]
+    fn fuzzymatches_to_strmatches(
+        fuzmatch: *mut FuzmatchStr,
+        matches: *mut *mut *mut c_char,
+        count: c_int,
+        funcsort: bool,
+    );
 }
 
 // =============================================================================
@@ -103,10 +122,7 @@ pub unsafe extern "C" fn rs_set_context_in_map_cmd(
     isunmap: c_int,
     cmdidx: c_int,
 ) -> *mut c_char {
-    let cmd_map = nvim_mapping_get_cmd_map();
-    let cmd_unmap = nvim_mapping_get_cmd_unmap();
-
-    if forceit != 0 && cmdidx != cmd_map && cmdidx != cmd_unmap {
+    if forceit != 0 && cmdidx != CMD_MAP && cmdidx != CMD_UNMAP {
         nvim_expand_set_context(xp, EXPAND_NOTHING);
     } else {
         let mode = if isunmap != 0 {
@@ -122,45 +138,45 @@ pub unsafe extern "C" fn rs_set_context_in_map_cmd(
             }
             m
         };
-        nvim_mapping_set_expand_mapmodes(mode);
-        nvim_mapping_set_expand_isabbrev(isabbrev);
+        EXPAND_MAPMODES.store(mode, Ordering::Relaxed);
+        EXPAND_ISABBREV.store(isabbrev != 0, Ordering::Relaxed);
         nvim_expand_set_context(xp, EXPAND_MAPPINGS);
-        nvim_mapping_set_expand_buffer(0);
+        EXPAND_BUFFER.store(false, Ordering::Relaxed);
 
-        let mut p = arg;
+        let mut p: *const c_char = arg;
         loop {
             if libc::strncmp(p, c"<buffer>".as_ptr(), 8) == 0 {
-                nvim_mapping_set_expand_buffer(1);
-                p = nvim_mapping_skipwhite(p.add(8));
+                EXPAND_BUFFER.store(true, Ordering::Relaxed);
+                p = skipwhite(p.add(8));
                 continue;
             }
             if libc::strncmp(p, c"<unique>".as_ptr(), 8) == 0 {
-                p = nvim_mapping_skipwhite(p.add(8));
+                p = skipwhite(p.add(8));
                 continue;
             }
             if libc::strncmp(p, c"<nowait>".as_ptr(), 8) == 0 {
-                p = nvim_mapping_skipwhite(p.add(8));
+                p = skipwhite(p.add(8));
                 continue;
             }
             if libc::strncmp(p, c"<silent>".as_ptr(), 8) == 0 {
-                p = nvim_mapping_skipwhite(p.add(8));
+                p = skipwhite(p.add(8));
                 continue;
             }
             if libc::strncmp(p, c"<special>".as_ptr(), 9) == 0 {
-                p = nvim_mapping_skipwhite(p.add(9));
+                p = skipwhite(p.add(9));
                 continue;
             }
             if libc::strncmp(p, c"<script>".as_ptr(), 8) == 0 {
-                p = nvim_mapping_skipwhite(p.add(8));
+                p = skipwhite(p.add(8));
                 continue;
             }
             if libc::strncmp(p, c"<expr>".as_ptr(), 6) == 0 {
-                p = nvim_mapping_skipwhite(p.add(6));
+                p = skipwhite(p.add(6));
                 continue;
             }
             break;
         }
-        nvim_expand_set_pattern(xp, p);
+        nvim_expand_set_pattern(xp, p.cast_mut());
     }
 
     std::ptr::null_mut()
@@ -195,55 +211,45 @@ pub unsafe extern "C" fn rs_expand_mappings(
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> c_int {
-    let fuzzy = nvim_mapping_cmdline_fuzzy_complete(pat) != 0;
+    let fuzzy = cmdline_fuzzy_complete(pat);
 
     *num_matches = 0;
     *matches = std::ptr::null_mut();
 
-    // garray_T is 20 bytes on 64-bit, allocate on stack as opaque blob
-    let mut ga_storage = [0u8; 64]; // generous for garray_T
-    let ga = ga_storage.as_mut_ptr().cast::<c_char>();
+    let expand_buffer = EXPAND_BUFFER.load(Ordering::Relaxed);
+    let expand_isabbrev = EXPAND_ISABBREV.load(Ordering::Relaxed);
+    let expand_mapmodes = EXPAND_MAPMODES.load(Ordering::Relaxed);
 
-    if fuzzy {
-        nvim_mapping_ga_init_fuzmatch(ga);
-    } else {
-        nvim_mapping_ga_init_str(ga);
-    }
+    // Collect string matches or fuzzy matches into Rust Vecs.
+    let mut str_matches: Vec<*mut c_char> = Vec::new();
+    let mut fuz_matches: Vec<FuzmatchStr> = Vec::new();
 
-    let expand_buffer = nvim_mapping_get_expand_buffer() != 0;
-    let expand_isabbrev = nvim_mapping_get_expand_isabbrev() != 0;
-    let expand_mapmodes = nvim_mapping_get_expand_mapmodes();
-
-    // First search in map modifier arguments
+    // First: map modifier keyword completions
     for (i, keyword) in MODIFIER_KEYWORDS.iter().enumerate() {
         // Skip <buffer> if already used
         if i == 4 && expand_buffer {
             continue;
         }
-
         let p = keyword.as_ptr().cast::<c_char>();
-
-        let (is_match, score) = if fuzzy {
-            let s = nvim_mapping_fuzzy_match_str(p, pat);
-            (s != i32::MIN, s)
-        } else {
-            (nvim_mapping_vim_regexec(regmatch, p) != 0, 0)
-        };
-
-        if !is_match {
-            continue;
-        }
-
         if fuzzy {
-            nvim_mapping_ga_append_fuzmatch(ga, p, score);
-        } else {
-            nvim_mapping_ga_append_str(ga, p);
+            let score = fuzzy_match_str(p.cast_mut(), pat);
+            if score != i32::MIN {
+                fuz_matches.push(FuzmatchStr {
+                    idx: fuz_matches.len() as c_int,
+                    _pad: 0,
+                    str_: xstrdup(p),
+                    score,
+                    _pad2: 0,
+                });
+            }
+        } else if vim_regexec(regmatch, p, 0) {
+            str_matches.push(xstrdup(p));
         }
     }
 
     // Search through mapping hash lists
     let curbuf = nvim_get_curbuf();
-    for hash in 0..256 {
+    for hash in 0..256i32 {
         let mp = if expand_isabbrev {
             if hash > 0 {
                 break;
@@ -269,24 +275,19 @@ pub unsafe extern "C" fn rs_expand_mappings(
                 continue;
             }
 
-            let (is_match, score) = if fuzzy {
-                let s = nvim_mapping_fuzzy_match_str(p, pat);
-                (s != i32::MIN, s)
-            } else {
-                (nvim_mapping_vim_regexec(regmatch, p) != 0, 0)
-            };
-
-            if !is_match {
-                xfree(p);
-                cur = mapblock_next(cur);
-                continue;
-            }
-
-            // Both paths take ownership via xstrdup inside the ga_append wrappers
             if fuzzy {
-                nvim_mapping_ga_append_fuzmatch(ga, p, score);
-            } else {
-                nvim_mapping_ga_append_str(ga, p);
+                let score = fuzzy_match_str(p, pat);
+                if score != i32::MIN {
+                    fuz_matches.push(FuzmatchStr {
+                        idx: fuz_matches.len() as c_int,
+                        _pad: 0,
+                        str_: xstrdup(p),
+                        score,
+                        _pad2: 0,
+                    });
+                }
+            } else if vim_regexec(regmatch, p, 0) {
+                str_matches.push(xstrdup(p));
             }
             xfree(p);
 
@@ -294,8 +295,51 @@ pub unsafe extern "C" fn rs_expand_mappings(
         }
     }
 
-    // Finish: sort, dedup, and set output pointers
-    nvim_mapping_expand_finish(ga, c_int::from(fuzzy), num_matches, matches)
+    // Finish: sort, dedup, set output.
+    if fuzzy {
+        if fuz_matches.is_empty() {
+            return FAIL;
+        }
+        let count = fuz_matches.len() as c_int;
+        fuzzymatches_to_strmatches(fuz_matches.as_mut_ptr(), matches, count, false);
+        *num_matches = count;
+    } else {
+        if str_matches.is_empty() {
+            return FAIL;
+        }
+        let mut count = str_matches.len() as c_int;
+        // Sort
+        sort_strings(str_matches.as_mut_ptr(), count);
+        // Dedup
+        let mut i = 0usize;
+        let mut j = 1usize;
+        while j < str_matches.len() {
+            if libc::strcmp(str_matches[i], str_matches[j]) != 0 {
+                i += 1;
+                str_matches[i] = str_matches[j];
+            } else {
+                xfree(str_matches[j]);
+                count -= 1;
+            }
+            j += 1;
+        }
+        str_matches.truncate(count as usize);
+
+        // Allocate a C-owned array so the caller can xfree it.
+        let arr =
+            xmalloc(str_matches.len() * std::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
+        for (k, s) in str_matches.iter().enumerate() {
+            *arr.add(k) = *s;
+        }
+        *matches = arr;
+        *num_matches = count;
+    }
+
+    if *num_matches == 0 {
+        FAIL
+    } else {
+        OK
+    }
 }
 
 // =============================================================================
