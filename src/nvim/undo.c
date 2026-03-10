@@ -1232,12 +1232,6 @@ void nvim_set_lastmark(int val)
 // Undo File I/O FFI Functions
 // ============================================================================
 
-// File operations
-FILE *nvim_undo_fopen(const char *path, const char *mode)
-{
-  return os_fopen(path, mode);
-}
-
 int nvim_undo_fclose(FILE *fp)
 {
   return fclose(fp);

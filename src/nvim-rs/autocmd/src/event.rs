@@ -16,8 +16,11 @@ extern "C" {
     fn nvim_event_name2nr(start: *const c_char, len: usize) -> c_int;
     fn nvim_get_event_sign(event: c_int) -> c_int;
     fn nvim_get_p_ei() -> *const c_char;
+    #[link_name = "xmemdupz"]
     fn nvim_autocmd_xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
+    #[link_name = "xstrnsave"]
     fn nvim_autocmd_xstrnsave(src: *const c_char, len: usize) -> *mut c_char;
+    #[link_name = "xfree"]
     fn nvim_autocmd_xfree(ptr: *mut c_char);
     fn nvim_autocmd_set_option_eventignore(val: *const c_char);
 }

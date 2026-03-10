@@ -553,7 +553,6 @@ extern "C" {
     // ==========================================================================
 
     // File operations
-    fn nvim_undo_fopen(path: *const c_char, mode: *const c_char) -> FileHandle;
     fn nvim_undo_fclose(fp: FileHandle) -> c_int;
     fn nvim_undo_fwrite(ptr: *const c_void, size: usize, count: usize, fp: FileHandle) -> usize;
     fn nvim_undo_fread(ptr: *mut c_void, size: usize, count: usize, fp: FileHandle) -> usize;
@@ -582,10 +581,7 @@ extern "C" {
     // Message functions for undo file I/O
     fn nvim_undo_verbose_enter();
     fn nvim_undo_verbose_leave();
-    fn nvim_undo_smsg(msg: *const c_char, arg: *const c_char);
     fn nvim_undo_semsg(msg: *const c_char, arg: *const c_char);
-    fn nvim_undo_give_warning(msg: *const c_char, serious: bool);
-    fn nvim_undo_verb_msg(msg: *const c_char);
 
     // Option accessors
     fn nvim_get_p_verbose() -> c_int;
@@ -603,7 +599,6 @@ extern "C" {
     fn nvim_os_free_acl(acl: *mut c_void);
 
     // File info for Unix ownership checks
-    fn nvim_undo_check_file_owner(orig_path: *const c_char, undo_path: *const c_char) -> bool;
     fn nvim_undo_set_file_group(
         fd: c_int,
         orig_path: *const c_char,
@@ -615,8 +610,6 @@ extern "C" {
     fn nvim_read_eintr(fd: c_int, buf: *mut c_void, count: usize) -> isize;
 
     // Global lastmark accessor
-    fn nvim_get_lastmark() -> c_int;
-    fn nvim_set_lastmark(val: c_int);
 
     // ==========================================================================
     // Phase 2: Core Undo Operations FFI (memline manipulation)
@@ -624,13 +617,6 @@ extern "C" {
 
     /// Delete line 'lnum' in buffer. Returns OK/FAIL.
     fn nvim_ml_delete_lnum(lnum: LinenrT) -> c_int;
-
-    /// Delete line 'lnum' in buffer with flags. Returns OK/FAIL.
-    fn nvim_ml_delete_flags(lnum: LinenrT, flags: c_int) -> c_int;
-
-    /// Append line after 'lnum' in current buffer. Returns OK/FAIL.
-    fn nvim_ml_append_lnum(lnum: LinenrT, line: *const c_char, len: ColnrT, newfile: bool)
-        -> c_int;
 
     /// Append line with flags. Returns OK/FAIL.
     fn nvim_ml_append_flags(lnum: LinenrT, line: *const c_char, len: ColnrT, flags: c_int)
@@ -680,12 +666,6 @@ extern "C" {
     /// Buffer updates unload
     fn nvim_buf_updates_unload(buf: BufHandle, force: bool);
 
-    /// Check position validity
-    fn nvim_check_pos(buf: BufHandle, pos: *mut c_void);
-
-    /// Buffer is empty check
-    fn nvim_buf_is_empty(buf: BufHandle) -> bool;
-
     /// Current window handle accessor
     fn nvim_undo_get_curwin() -> WinHandle;
 
@@ -715,12 +695,6 @@ extern "C" {
 
     /// Fold open cursor
     fn nvim_undo_foldOpenCursor();
-
-    /// Check VIsual_active
-    fn nvim_undo_get_visual_active() -> bool;
-
-    /// Get VIsual position
-    fn nvim_undo_get_visual_pos(lnum: *mut LinenrT, col: *mut ColnrT, coladd: *mut ColnrT);
 
     // ==========================================================================
     // Phase 3: u_undoredo FFI helpers
