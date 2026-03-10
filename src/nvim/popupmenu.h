@@ -99,4 +99,20 @@ typedef struct {
 
 extern PumState PUM_STATE;
 
+// Functions migrated to Rust via #[export_name] -- no longer in popupmenu.c
+// but exported directly by the Rust static library.
+bool pum_visible(void);
+bool pum_drawn(void);
+void pum_redraw(void);
+void pum_check_clear(void);
+void pum_clear(void);
+void pum_invalidate(void);
+void pum_recompose(void);
+int pum_get_height(void);
+void pum_set_event_info(dict_T *dict);
+void pum_show_popupmenu(vimmenu_T *menu);
+void pum_make_popup(const char *path_name, int use_mouse_pos);
+void pum_ui_flush(void);
+win_T *pum_set_info(int selected, char *info);
+
 #include "popupmenu.h.generated.h"

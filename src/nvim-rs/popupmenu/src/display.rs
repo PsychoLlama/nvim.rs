@@ -192,7 +192,7 @@ pub unsafe extern "C" fn rs_pum_clear_scroll() {
 ///
 /// # Safety
 /// Calls C accessor function.
-#[no_mangle]
+#[export_name = "pum_invalidate"]
 pub unsafe extern "C" fn rs_pum_invalidate() {
     PUM_STATE.invalid = 1;
 }
@@ -385,8 +385,6 @@ extern "C" {
     fn nvim_get_Columns() -> c_int;
     /// Set selected item (Rust function via extern "C").
     fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int;
-    /// Redraw popup menu (Rust function via extern "C").
-    fn rs_pum_redraw();
     /// Get border width from Rust.
     fn rs_pum_border_width() -> c_int;
     /// Compute item widths and write to `PUM_STATE` (Rust function via extern "C").
@@ -425,7 +423,7 @@ pub struct WinHandle {
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
+#[export_name = "pum_recompose"]
 pub unsafe extern "C" fn rs_pum_recompose() {
     let grid = nvim_pum_get_grid_ptr();
     ui_comp_compose_grid(grid);
@@ -439,7 +437,7 @@ pub unsafe extern "C" fn rs_pum_recompose() {
 ///
 /// # Safety
 /// Calls C accessor and UI functions.
-#[no_mangle]
+#[export_name = "pum_check_clear"]
 pub unsafe extern "C" fn rs_pum_check_clear() {
     let is_visible = PUM_STATE.is_visible != 0;
     let is_drawn = PUM_STATE.is_drawn != 0;
@@ -474,7 +472,7 @@ pub unsafe extern "C" fn rs_pum_check_clear() {
 ///
 /// # Safety
 /// Calls C accessor functions and UI call wrappers.
-#[no_mangle]
+#[export_name = "pum_ui_flush"]
 pub unsafe extern "C" fn rs_pum_ui_flush() {
     let has_multigrid = ui_has(K_UI_MULTIGRID);
     let is_drawn = PUM_STATE.is_drawn != 0;
@@ -653,7 +651,7 @@ pub unsafe extern "C" fn rs_pum_display(
     }
 
     nvim_pum_set_grid_zindex_for_mode();
-    rs_pum_redraw();
+    crate::redraw::rs_pum_redraw();
 }
 
 #[cfg(test)]

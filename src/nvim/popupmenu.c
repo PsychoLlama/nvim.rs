@@ -67,14 +67,9 @@ extern const char *rs_ins_compl_leader(void);
 extern int rs_compl_match_curr_select(int selected);
 extern unsigned rs_get_cot_flags(void);
 extern void rs_win_setheight(int height);
-extern int rs_pum_visible(void);
-extern int rs_pum_drawn(void);
-extern void rs_pum_clear(void);
 extern void rs_pum_ext_select_item(int item, int insert, int finish);
-extern void rs_pum_invalidate(void);
 extern int rs_pum_undisplay(int immediate);
 extern int rs_pum_border_width(void);
-extern int rs_pum_get_height(void);
 
 extern int rs_win_valid(win_T *win);
 extern int rs_valid_tabpage(tabpage_T *tpc);
@@ -100,23 +95,14 @@ extern PumHorizontalResult rs_pum_compute_horizontal(int cursor_col, int max_col
                                                      int pum_scrollbar, int pum_base_width,
                                                      int pum_kind_width, int pum_extra_width);
 
-extern void rs_pum_recompose(void);
-extern void rs_pum_check_clear(void);
-extern void rs_pum_set_event_info(dict_T *dict);
-extern void rs_pum_ui_flush(void);
 extern int *rs_pum_compute_text_attrs(char *text, int hlf, int user_hlattr);
 extern void rs_pum_grid_puts_with_attrs(int col, int cells, const char *text,
                                         int textlen, const int *attrs);
 extern void rs_pum_preview_set_text(buf_T *buf, char *info, linenr_T *lnum, int *max_width);
 extern void rs_pum_adjust_info_position(win_T *wp, int width);
-extern win_T *rs_pum_set_info(int selected, char *info);
 extern void rs_pum_position_at_mouse(int min_width);
 extern void rs_pum_select_mouse_pos(void);
 extern void rs_pum_execute_menu(vimmenu_T *menu, int mode);
-extern void rs_pum_show_popupmenu(vimmenu_T *menu);
-extern void rs_pum_make_popup(const char *path_name, int use_mouse_pos);
-extern void rs_pum_redraw(void);
-extern int rs_pum_set_selected(int n, int repeat);
 extern void rs_pum_display(pumitem_T *array, int size, int selected, int array_changed,
                             int cmd_startcol);
 
@@ -1447,16 +1433,12 @@ void pum_display(pumitem_T *array, int size, int selected, bool array_changed, i
   rs_pum_display(array, size, selected, (int)array_changed, cmd_startcol);
 }
 
+// pum_redraw: migrated to Rust (redraw.rs) via #[export_name]
+
 // nvim_pum_display_impl: migrated to Rust (display.rs)
 
 // nvim_pum_compute_text_attrs_impl: migrated to Rust (render.rs)
 // nvim_pum_grid_puts_with_attrs_impl: migrated to Rust (render.rs)
-
-/// Redraw the popup menu, using "pum_first" and "pum_selected".
-void pum_redraw(void)
-{
-  rs_pum_redraw();
-}
 
 // nvim_pum_redraw_impl: migrated to Rust (redraw.rs)
 
@@ -1509,31 +1491,9 @@ void nvim_pum_preview_set_text_impl(buf_T *buf, char *info, linenr_T *lnum, int 
 }
 
 // nvim_pum_adjust_info_position_impl: migrated to Rust (preview.rs)
-// nvim_pum_set_info_impl: migrated to Rust (preview.rs)
+// pum_set_info: migrated to Rust (preview.rs) via #[export_name]
 
-win_T *pum_set_info(int selected, char *info)
-{
-  return rs_pum_set_info(selected, info);
-}
-
-/// Set the index of the currently selected item.  The menu will scroll when
-/// necessary.  When "n" is out of range don't scroll.
-/// This may be repeated when the preview window is used:
-/// "repeat" == 0: open preview window normally
-/// "repeat" == 1: open preview window but don't set the size
-/// "repeat" == 2: don't open preview window
-///
-/// @param n
-/// @param repeat
-///
-/// @returns true when the window was resized and the location of the popup
-/// menu must be recomputed.
-static bool pum_set_selected(int n, int repeat)
-{
-  return rs_pum_set_selected(n, repeat) != 0;
-}
-
-// nvim_pum_set_selected_impl: migrated to Rust (selection.rs)
+// pum_set_selected: migrated to Rust (selection.rs)
 
 /// Undisplay the popup menu (later).
 void pum_undisplay(bool immediate)
@@ -1543,64 +1503,21 @@ void pum_undisplay(bool immediate)
   }
 }
 
-// nvim_pum_check_clear_impl: migrated to Rust (display.rs)
-
-void pum_check_clear(void)
-{
-  rs_pum_check_clear();
-}
-
-/// Clear the popup menu.  Currently only resets the offset to the first
-/// displayed item.
-void pum_clear(void)
-{
-  rs_pum_clear();
-}
-
-/// @return true if the popup menu is displayed.
-bool pum_visible(void)
-{
-  return rs_pum_visible() != 0;
-}
-
-/// @return true if the popup menu is displayed and drawn on the grid.
-bool pum_drawn(void)
-{
-  return rs_pum_drawn() != 0;
-}
-
-/// Screen was cleared, need to redraw next time
-void pum_invalidate(void)
-{
-  rs_pum_invalidate();
-}
-
-// nvim_pum_recompose_impl: migrated to Rust (display.rs)
-
-void pum_recompose(void)
-{
-  rs_pum_recompose();
-}
+// pum_check_clear: migrated to Rust (display.rs) via #[export_name]
+// pum_clear: migrated to Rust (lib.rs) via #[export_name]
+// pum_visible: migrated to Rust (lib.rs) via #[export_name]
+// pum_drawn: migrated to Rust (lib.rs) via #[export_name]
+// pum_invalidate: migrated to Rust (display.rs) via #[export_name]
+// pum_recompose: migrated to Rust (display.rs) via #[export_name]
+// pum_get_height: migrated to Rust (lib.rs) via #[export_name]
+// pum_set_event_info: migrated to Rust (event.rs) via #[export_name]
+// pum_show_popupmenu: migrated to Rust (context_menu.rs) via #[export_name]
+// pum_make_popup: migrated to Rust (context_menu.rs) via #[export_name]
+// pum_ui_flush: migrated to Rust (display.rs) via #[export_name]
 
 void pum_ext_select_item(int item, bool insert, bool finish)
 {
   rs_pum_ext_select_item(item, insert ? 1 : 0, finish ? 1 : 0);
-}
-
-/// Gets the height of the menu.
-///
-/// @return the height of the popup menu, the number of entries visible.
-/// Only valid when pum_visible() returns true!
-int pum_get_height(void)
-{
-  return rs_pum_get_height();
-}
-
-// nvim_pum_set_event_info_impl: migrated to Rust (event.rs)
-
-void pum_set_event_info(dict_T *dict)
-{
-  rs_pum_set_event_info(dict);
 }
 
 // nvim_pum_position_at_mouse_impl: migrated to Rust (mouse.rs)
@@ -1615,19 +1532,4 @@ void pum_set_event_info(dict_T *dict)
 
 // nvim_pum_make_popup_impl: migrated to Rust (context_menu.rs)
 
-void pum_show_popupmenu(vimmenu_T *menu)
-{
-  rs_pum_show_popupmenu(menu);
-}
-
-void pum_make_popup(const char *path_name, int use_mouse_pos)
-{
-  rs_pum_make_popup(path_name, use_mouse_pos);
-}
-
 // nvim_pum_ui_flush_impl: migrated to Rust (display.rs)
-
-void pum_ui_flush(void)
-{
-  rs_pum_ui_flush();
-}

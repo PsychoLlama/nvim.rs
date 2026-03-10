@@ -330,8 +330,6 @@ extern "C" {
     fn nvim_pum_ui_set_mousemoveevent(val: c_int);
     /// Set `pum_grid.zindex` to `kZIndexCmdlinePopupMenu`.
     fn nvim_pum_grid_set_zindex_cmdline();
-    /// Redraw popup menu.
-    fn rs_pum_redraw();
     /// Call `setcursor_mayforce(curwin, true)`.
     fn nvim_pum_setcursor_mayforce();
     /// Call `vgetc()`.
@@ -410,7 +408,7 @@ pub unsafe extern "C" fn rs_pum_execute_menu(menu: *mut VimMenuHandle, mode: c_i
 ///
 /// # Safety
 /// Calls C accessor functions. `menu` must be a valid `vimmenu_T` pointer.
-#[no_mangle]
+#[export_name = "pum_show_popupmenu"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     nvim_pum_call_undisplay();
@@ -487,7 +485,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
         PUM_STATE.is_visible = 1;
         PUM_STATE.is_drawn = 1;
         nvim_pum_grid_set_zindex_cmdline();
-        rs_pum_redraw();
+        crate::redraw::rs_pum_redraw();
         nvim_pum_setcursor_mayforce();
 
         let c = nvim_pum_vgetc();
@@ -555,7 +553,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
 ///
 /// # Safety
 /// Calls C accessor functions. `path_name` must be a valid C string.
-#[no_mangle]
+#[export_name = "pum_make_popup"]
 pub unsafe extern "C" fn rs_pum_make_popup(
     path_name: *const std::ffi::c_char,
     use_mouse_pos: c_int,

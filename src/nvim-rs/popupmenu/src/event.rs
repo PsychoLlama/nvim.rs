@@ -197,7 +197,7 @@ pub struct DictHandle {
 ///
 /// # Safety
 /// Calls C accessor functions. `dict` must be a valid `dict_T` pointer.
-#[no_mangle]
+#[export_name = "pum_set_event_info"]
 pub unsafe extern "C" fn rs_pum_set_event_info(dict: *mut DictHandle) {
     if PUM_STATE.is_visible == 0 {
         return;

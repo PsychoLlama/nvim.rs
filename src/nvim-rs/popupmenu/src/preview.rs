@@ -151,7 +151,7 @@ pub unsafe extern "C" fn rs_pum_adjust_info_position(wp: *mut WinHandle, width: 
 ///
 /// # Safety
 /// `info` must be a valid C string.
-#[no_mangle]
+#[export_name = "pum_set_info"]
 pub unsafe extern "C" fn rs_pum_set_info(selected: c_int, info: *mut c_char) -> *mut WinHandle {
     if PUM_STATE.is_visible == 0 || nvim_pum_compl_match_curr_select(selected) == 0 {
         return std::ptr::null_mut();

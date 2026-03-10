@@ -556,7 +556,7 @@ extern "C" {
 ///
 /// # Safety
 /// Calls numerous C accessor and grid functions.
-#[no_mangle]
+#[export_name = "pum_redraw"]
 #[allow(
     clippy::too_many_lines,
     clippy::cognitive_complexity,

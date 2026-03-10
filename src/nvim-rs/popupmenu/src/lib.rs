@@ -160,9 +160,10 @@ extern "C" {
 ///
 /// # Safety
 /// Reads `PUM_STATE.is_visible`.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_visible() -> c_int {
-    PUM_STATE.is_visible
+#[export_name = "pum_visible"]
+#[allow(clippy::must_use_candidate)]
+pub unsafe extern "C" fn rs_pum_visible() -> bool {
+    PUM_STATE.is_visible != 0
 }
 
 /// Check if the popup menu is displayed and drawn on the grid.
@@ -171,9 +172,10 @@ pub unsafe extern "C" fn rs_pum_visible() -> c_int {
 ///
 /// # Safety
 /// Reads `PUM_STATE`.
-#[no_mangle]
-pub unsafe extern "C" fn rs_pum_drawn() -> c_int {
-    c_int::from(PUM_STATE.is_visible != 0 && PUM_STATE.external == 0)
+#[export_name = "pum_drawn"]
+#[allow(clippy::must_use_candidate)]
+pub unsafe extern "C" fn rs_pum_drawn() -> bool {
+    PUM_STATE.is_visible != 0 && PUM_STATE.external == 0
 }
 
 /// Gets the height of the popup menu.
@@ -183,7 +185,8 @@ pub unsafe extern "C" fn rs_pum_drawn() -> c_int {
 ///
 /// # Safety
 /// Reads `PUM_STATE` and calls `ui_pum_get_height`.
-#[no_mangle]
+#[export_name = "pum_get_height"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_pum_get_height() -> c_int {
     if PUM_STATE.external != 0 {
         let ui_height = ui_pum_get_height();
@@ -868,7 +871,7 @@ pub const extern "C" fn rs_pum_compute_thumb(
 ///
 /// # Safety
 /// Writes `PUM_STATE.first`.
-#[no_mangle]
+#[export_name = "pum_clear"]
 pub unsafe extern "C" fn rs_pum_clear() {
     PUM_STATE.first = 0;
 }
