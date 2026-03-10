@@ -1594,14 +1594,6 @@ bool nvim_undo_check_owner(const char *orig_name, const char *file_name)
 // Phase 3: u_undoredo FFI Helpers
 // ============================================================================
 
-// Compute new_flags for undo/redo based on current buffer state
-int nvim_undoredo_compute_new_flags(buf_T *buf, u_header_T *curhead)
-{
-  return (buf->b_changed ? UH_CHANGED : 0)
-         | ((buf->b_ml.ml_flags & ML_EMPTY) ? UH_EMPTYBUF : 0)
-         | (curhead->uh_flags & UH_RELOAD);
-}
-
 // Save named marks and visual info from buffer before undo/redo.
 // Clears additional_data, saves namedm to uhp_saved_namedm[],
 // and saves visual info. Returns opaque handle to saved state.
@@ -1700,23 +1692,6 @@ void nvim_undoredo_clamp_op_marks(buf_T *buf)
   buf->b_op_end.lnum = MIN(buf->b_op_end.lnum, buf->b_ml.ml_line_count);
 }
 
-// Apply extmarks for undo/redo
-void nvim_undoredo_apply_extmarks(u_header_T *curhead, bool undo)
-{
-  if (undo) {
-    for (int i = (int)kv_size(curhead->uh_extmark) - 1; i > -1; i--) {
-      extmark_apply_undo(kv_A(curhead->uh_extmark, i), undo);
-    }
-  } else {
-    for (int i = 0; i < (int)kv_size(curhead->uh_extmark); i++) {
-      extmark_apply_undo(kv_A(curhead->uh_extmark, i), undo);
-    }
-  }
-  if (curhead->uh_flags & UH_RELOAD) {
-    buf_updates_unload(curbuf, true);
-  }
-}
-
 // Set ML_EMPTY flag if needed
 void nvim_undoredo_set_ml_empty(buf_T *buf, int old_flags)
 {
@@ -1753,18 +1728,6 @@ void nvim_undoredo_adjust_cursor(u_header_T *curhead)
   check_cursor(curwin);
 }
 
-// Opaque handle for saved named marks
-void *nvim_alloc_saved_marks(void)
-{
-  return xmalloc(sizeof(fmark_T) * NMARKS + sizeof(visualinfo_T));
-}
-
-// Return byte offset of visualinfo_T within saved marks buffer
-size_t nvim_saved_marks_visual_offset(void)
-{
-  return sizeof(fmark_T) * NMARKS;
-}
-
 // Get ml_get result as non-allocating pointer for strcmp
 const char *nvim_undoredo_ml_get(linenr_T lnum)
 {
@@ -1777,77 +1740,9 @@ void nvim_undoredo_buf_updates_changedtick(buf_T *buf)
   buf_updates_changedtick(buf);
 }
 
-// Update sequence current and save_nr for undo/redo
-void nvim_undoredo_update_seq(buf_T *buf, u_header_T *curhead, bool undo)
-{
-  buf->b_u_seq_cur = curhead->uh_seq;
-  if (undo) {
-    buf->b_u_seq_cur = curhead->uh_next.ptr
-                       ? curhead->uh_next.ptr->uh_seq : 0;
-  }
-  if (curhead->uh_save_nr != 0) {
-    if (undo) {
-      buf->b_u_save_nr_cur = curhead->uh_save_nr - 1;
-    } else {
-      buf->b_u_save_nr_cur = curhead->uh_save_nr;
-    }
-  }
-  buf->b_u_time_cur = curhead->uh_time;
-}
-
 // ============================================================================
 // Phase 4: u_undo_end + helpers FFI
 // ============================================================================
-
-// Get the uh_seq for the message header pointer in u_undo_end.
-// Returns 0 if uhp is NULL, uhp->uh_seq otherwise.
-// Also sets *did_undo_out to the adjusted did_undo flag.
-int nvim_undo_end_get_uhp_seq(buf_T *buf, bool did_undo, bool absolute,
-                               bool *did_undo_out)
-{
-  u_header_T *uhp;
-  if (buf->b_u_curhead != NULL) {
-    if (absolute && buf->b_u_curhead->uh_next.ptr != NULL) {
-      uhp = buf->b_u_curhead->uh_next.ptr;
-      did_undo = false;
-    } else if (did_undo) {
-      uhp = buf->b_u_curhead;
-    } else {
-      uhp = buf->b_u_curhead->uh_next.ptr;
-    }
-  } else {
-    uhp = buf->b_u_newhead;
-  }
-  *did_undo_out = did_undo;
-  if (uhp == NULL) {
-    return 0;
-  }
-  return uhp->uh_seq;
-}
-
-// Format the time for the undo message into the provided buffer.
-// Returns uhp->uh_time or 0 if uhp is NULL.
-void nvim_undo_end_fmt_time(buf_T *buf, bool did_undo, bool absolute,
-                             char *timebuf, size_t buflen)
-{
-  u_header_T *uhp;
-  if (buf->b_u_curhead != NULL) {
-    if (absolute && buf->b_u_curhead->uh_next.ptr != NULL) {
-      uhp = buf->b_u_curhead->uh_next.ptr;
-    } else if (did_undo) {
-      uhp = buf->b_u_curhead;
-    } else {
-      uhp = buf->b_u_curhead->uh_next.ptr;
-    }
-  } else {
-    uhp = buf->b_u_newhead;
-  }
-  if (uhp == NULL) {
-    timebuf[0] = NUL;
-  } else {
-    undo_fmt_time(timebuf, buflen, uhp->uh_time);
-  }
-}
 
 // Redraw conceal for all windows showing this buffer
 void nvim_undo_end_redraw_conceal(buf_T *buf)
@@ -1877,12 +1772,6 @@ void nvim_undo_end_smsg(int64_t count, const char *msgstr, bool did_undo,
             did_undo ? _("before") : _("after"),
             seq,
             timebuf);
-}
-
-// ML_EMPTY flag check for u_undo_end
-bool nvim_undo_end_ml_empty(buf_T *buf)
-{
-  return (buf->b_ml.ml_flags & ML_EMPTY) != 0;
 }
 
 // get_undolevel accessor
