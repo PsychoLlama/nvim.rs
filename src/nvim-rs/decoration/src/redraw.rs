@@ -7,7 +7,7 @@ use std::ffi::{c_char, c_int, c_void};
 
 use crate::decor::{range_end_before, DECOR_ID_INVALID, KSH_CONCEAL, KSH_SPELL_OFF, KSH_SPELL_ON};
 use crate::range::DecorVtHandle;
-use crate::types::DecorVirtText;
+use crate::types::{DecorRange, DecorRangeSlot, DecorVirtText, KVec};
 use crate::{
     DecorKind, DecorRangeHandle, DecorStateHandle, ScharT, VirtTextPos, WinHandle,
     DRAW_COL_JUST_ADDED, DRAW_COL_UNSET, KVT_IS_LINES, KVT_LINES_ABOVE,
@@ -27,18 +27,18 @@ extern "C" {
     fn nvim_decor_state_win_has_buffer(state: DecorStateHandle, buf: BufHandle) -> c_int;
     fn nvim_decor_state_destroy_slots(state: DecorStateHandle);
     fn nvim_decor_state_destroy_ranges_i(state: DecorStateHandle);
-    fn nvim_decor_state_ranges_i_memmove(
-        state: DecorStateHandle,
-        dst_idx: c_int,
-        src_idx: c_int,
-        count: c_int,
-    );
-    fn nvim_decor_state_free_owned_ranges(state: DecorStateHandle, beg: c_int, end: c_int);
     fn nvim_buf_get_marktree_n_keys(buf: BufHandle) -> c_int;
     fn nvim_decor_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_decor_state_itr_current_row(state: DecorStateHandle) -> c_int;
     fn nvim_decor_state_itr_get(state: DecorStateHandle, buf: BufHandle, row: c_int, col: c_int);
     fn decor_redraw_start(wp: WinHandle, top_row: c_int, state: DecorStateHandle) -> bool;
+
+    // Memory management (shared with decor.rs)
+    fn nvim_xfree_ptr(ptr: *mut c_void);
+    fn nvim_clear_virttext(vt: *mut c_void);
+
+    // Decoration helpers called by decor_init_draw_col chain
+    fn decor_init_draw_col(win_col: c_int, hidden: bool, item: *mut DecorRange);
 
     // Phase 5: Redraw Dispatch
     fn nvim_redraw_buf_line_later(buf: BufHandle, lnum: c_int, redraw: bool);
@@ -206,8 +206,8 @@ pub extern "C" fn rs_decor_redraw_reset(wp: WinHandle, state: DecorStateHandle) 
         let ranges_count = s.ranges_i.size as c_int;
 
         // Free owned ranges in [0, current_end) and [future_begin, count)
-        nvim_decor_state_free_owned_ranges(state, 0, current_end);
-        nvim_decor_state_free_owned_ranges(state, future_begin, ranges_count);
+        free_owned_ranges(state, 0, current_end);
+        free_owned_ranges(state, future_begin, ranges_count);
 
         // Reset kvec sizes and state fields
         (*state).slots.size = 0;
@@ -246,7 +246,13 @@ pub extern "C" fn rs_decor_state_pack(state: DecorStateHandle) {
             fut_beg = cur_end;
         } else if fut_beg != cur_end {
             let move_count = count - fut_beg;
-            nvim_decor_state_ranges_i_memmove(state, cur_end, fut_beg, move_count);
+            // Move future ranges to start right after current ranges (memmove semantics)
+            let items = (*state).ranges_i.items;
+            std::ptr::copy(
+                items.add(fut_beg as usize),
+                items.add(cur_end as usize),
+                move_count as usize,
+            );
             count = cur_end + move_count;
             fut_beg = cur_end;
         }
@@ -827,39 +833,184 @@ extern "C" {
         state: DecorStateHandle,
     ) -> DecorColAdvanceResult;
 
-    fn nvim_decor_state_get_range_flat(state: DecorStateHandle, i: c_int) -> DecorRangeFlatView;
+    #[link_name = "hl_combine_attr"]
+    fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
 
-    fn nvim_decor_col_retire_range(state: DecorStateHandle, slot_index: c_int);
-
-    fn nvim_decor_state_set_ranges_i_at(state: DecorStateHandle, pos: c_int, value: c_int);
-
-    fn nvim_decor_col_update_state(
-        state: DecorStateHandle,
-        col_until: c_int,
-        cur_end: c_int,
-        fut_beg: c_int,
-        count: c_int,
-        attr: c_int,
-        conceal: c_int,
-        conceal_char: ScharT,
-        conceal_attr: c_int,
-        spell: c_int,
-    );
-
-    fn nvim_decor_hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
-    fn nvim_hl_add_url(attr: c_int, url: *const c_char) -> c_int;
-    fn nvim_decor_col_init_draw_col(
-        state: DecorStateHandle,
-        slot_index: c_int,
-        win_col: c_int,
-        hidden: bool,
-    );
+    #[link_name = "hl_add_url"]
+    fn hl_add_url(attr: c_int, url: *const c_char) -> c_int;
 }
 
 /// TriState values matching C enum: kNone = -1, kFalse = 0, kTrue = 1
 const KNONE: c_int = -1;
 const KTRUE: c_int = 1;
 const KFALSE: c_int = 0;
+
+// =============================================================================
+// Phase 2: Compound helper implementations in Rust
+// =============================================================================
+
+/// Get the slot pointer for a given slot index.
+///
+/// # Safety
+/// `state` must be valid and `slot_index` must be in bounds.
+unsafe fn get_slot_range(slots: *mut KVec<DecorRangeSlot>, slot_index: c_int) -> *mut DecorRange {
+    (*slots)
+        .get_unchecked(slot_index as usize)
+        .cast::<DecorRange>()
+}
+
+/// Retire a range: free owned data and return slot to freelist.
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+unsafe fn retire_range(state: DecorStateHandle, slot_index: c_int) {
+    let s = &mut *state;
+    let r_ptr = get_slot_range(std::ptr::addr_of_mut!(s.slots), slot_index);
+    let r = &*r_ptr; // create reference to avoid implicit autoref of union fields
+
+    if r.owned {
+        let kind = r.kind;
+        if kind == DecorKind::VirtText as u8 || kind == DecorKind::VirtLines as u8 {
+            let vt = r.data.vt;
+            if !vt.is_null() {
+                // Clear the virt_text data then free the allocation
+                let vt_data_ptr = std::ptr::addr_of_mut!((*vt).data.virt_text).cast::<c_void>();
+                nvim_clear_virttext(vt_data_ptr);
+                nvim_xfree_ptr(vt.cast::<c_void>());
+            }
+        } else if kind == DecorKind::Highlight as u8 {
+            let url = r.data.sh.url;
+            if !url.is_null() {
+                nvim_xfree_ptr(url.cast_mut().cast::<c_void>());
+            }
+        }
+    }
+
+    // Return slot to freelist
+    let slot = &mut *r_ptr.cast::<DecorRangeSlot>();
+    slot.next_free_i = s.free_slot_i;
+    s.free_slot_i = slot_index;
+}
+
+/// Free owned ranges in the given index range [beg, end).
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+unsafe fn free_owned_ranges(state: DecorStateHandle, beg: c_int, end: c_int) {
+    let s = &*state;
+    for i in beg..end {
+        let slot_index = *s.ranges_i.get_unchecked(i as usize);
+        let slot = s
+            .slots
+            .get_unchecked(slot_index as usize)
+            .cast::<DecorRange>();
+        let r = &*slot;
+        if r.owned && r.kind == DecorKind::VirtText as u8 {
+            let vt = r.data.vt;
+            if !vt.is_null() {
+                let vt_data_ptr = std::ptr::addr_of!((*vt).data.virt_text)
+                    .cast_mut()
+                    .cast::<c_void>();
+                nvim_clear_virttext(vt_data_ptr);
+                nvim_xfree_ptr(vt.cast::<c_void>());
+            }
+        }
+    }
+}
+
+/// Get a flat view of the i-th active range (by ranges_i index).
+///
+/// # Safety
+/// `state` must be valid and `i` must be in `[0, current_end)`.
+unsafe fn get_range_flat(state: DecorStateHandle, i: c_int) -> DecorRangeFlatView {
+    let s = &*state;
+    let slot_index = *s.ranges_i.get_unchecked(i as usize);
+    let slot = s
+        .slots
+        .get_unchecked(slot_index as usize)
+        .cast::<DecorRange>();
+    let r = &*slot;
+
+    let is_hl = r.kind == DecorKind::Highlight as u8;
+    let (sh_flags, sh_text0, sh_url) = if is_hl {
+        // Explicit reference to union field to avoid implicit autoref lint
+        let sh = &r.data.sh;
+        (sh.flags, sh.text[0], sh.url)
+    } else {
+        (0u16, 0u32, std::ptr::null())
+    };
+
+    let has_virt_pos = r.kind == DecorKind::VirtText as u8 || r.kind == DecorKind::UIWatched as u8;
+
+    DecorRangeFlatView {
+        start_row: r.start_row,
+        start_col: r.start_col,
+        end_row: r.end_row,
+        end_col: r.end_col,
+        attr_id: r.attr_id,
+        draw_col: r.draw_col,
+        ordering: r.ordering,
+        priority_internal: r.priority_internal,
+        kind: r.kind,
+        owned: r.owned,
+        sh_flags,
+        sh_text0,
+        sh_url,
+        has_virt_pos,
+        slot_index,
+    }
+}
+
+/// Write back an index into the ranges_i array.
+///
+/// # Safety
+/// `state` must be valid and `pos` must be in bounds.
+unsafe fn set_ranges_i_at(state: DecorStateHandle, pos: c_int, value: c_int) {
+    *(*state).ranges_i.get_unchecked(pos as usize) = value;
+}
+
+/// Initialize draw_col for a range at the given slot_index.
+///
+/// # Safety
+/// `state` must be valid and `slot_index` must be in bounds.
+unsafe fn col_init_draw_col(
+    state: DecorStateHandle,
+    slot_index: c_int,
+    win_col: c_int,
+    hidden: bool,
+) {
+    let s = &mut *state;
+    let r = get_slot_range(std::ptr::addr_of_mut!(s.slots), slot_index);
+    decor_init_draw_col(win_col, hidden, r);
+}
+
+/// Update DecorState output fields after attribute computation.
+///
+/// # Safety
+/// `state` must be a valid non-null pointer.
+unsafe fn col_update_state(
+    state: DecorStateHandle,
+    col_until: c_int,
+    cur_end: c_int,
+    fut_beg: c_int,
+    count: c_int,
+    attr: c_int,
+    conceal: c_int,
+    conceal_char: ScharT,
+    conceal_attr: c_int,
+    spell: c_int,
+) {
+    let s = &mut *state;
+    s.ranges_i.size = count as usize;
+    s.future_begin = fut_beg;
+    s.current_end = cur_end;
+    s.col_until = col_until;
+    s.current = attr;
+    s.conceal = conceal;
+    s.conceal_char = conceal_char;
+    s.conceal_attr = conceal_attr;
+    s.spell = spell;
+}
 
 /// Core column rendering implementation.
 ///
@@ -897,7 +1048,7 @@ pub unsafe extern "C" fn rs_decor_redraw_col_impl(
     let mut spell: c_int = KNONE;
 
     for i in 0..cur_end {
-        let v = nvim_decor_state_get_range_flat(state, i);
+        let v = get_range_flat(state, i);
 
         let keep;
         if range_end_before(v.end_row, v.end_col, row, col) {
@@ -910,7 +1061,7 @@ pub unsafe extern "C" fn rs_decor_redraw_col_impl(
             }
 
             if v.attr_id > 0 {
-                attr = nvim_decor_hl_combine_attr(attr, v.attr_id);
+                attr = hl_combine_attr(attr, v.attr_id);
             }
 
             if v.kind == DecorKind::Highlight as u8 && (v.sh_flags & KSH_CONCEAL != 0) {
@@ -930,7 +1081,7 @@ pub unsafe extern "C" fn rs_decor_redraw_col_impl(
                     spell = KFALSE;
                 }
                 if !v.sh_url.is_null() {
-                    attr = nvim_hl_add_url(attr, v.sh_url);
+                    attr = hl_add_url(attr, v.sh_url);
                 }
             }
         }
@@ -940,14 +1091,14 @@ pub unsafe extern "C" fn rs_decor_redraw_col_impl(
             && v.has_virt_pos
             && v.draw_col == DRAW_COL_JUST_ADDED
         {
-            nvim_decor_col_init_draw_col(state, v.slot_index, win_col, hidden);
+            col_init_draw_col(state, v.slot_index, win_col, hidden);
         }
 
         if keep {
-            nvim_decor_state_set_ranges_i_at(state, new_cur_end, v.slot_index);
+            set_ranges_i_at(state, new_cur_end, v.slot_index);
             new_cur_end += 1;
         } else {
-            nvim_decor_col_retire_range(state, v.slot_index);
+            retire_range(state, v.slot_index);
         }
     }
 
@@ -960,8 +1111,8 @@ pub unsafe extern "C" fn rs_decor_redraw_col_impl(
         final_count = final_cur_end;
     }
 
-    // Part 3: Update state
-    nvim_decor_col_update_state(
+    // Part 3: Update state directly
+    col_update_state(
         state,
         col_until,
         final_cur_end,

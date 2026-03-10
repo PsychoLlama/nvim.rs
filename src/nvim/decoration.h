@@ -112,24 +112,6 @@ typedef struct {
   int count;
 } DecorColAdvanceResult;
 
-/// Flat view of a DecorRange for batch FFI access.
-typedef struct {
-  int start_row;
-  int start_col;
-  int end_row;
-  int end_col;
-  int attr_id;
-  int draw_col;
-  int ordering;
-  uint32_t priority_internal;
-  uint8_t kind;
-  bool owned;
-  uint16_t sh_flags;
-  schar_T sh_text0;
-  const char *sh_url;
-  bool has_virt_pos;
-  int slot_index;
-} DecorRangeFlatView;
 
 #include "decoration.h.generated.h"
 #include "decoration.h.inline.generated.h"
