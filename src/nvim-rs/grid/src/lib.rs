@@ -614,7 +614,116 @@ type ColnrT = i32;
 /// Type alias for handle (matches C's `handle_T` which is `int`).
 type HandleT = c_int;
 
-// C accessor functions for line buffer arrays and grid line state
+// =============================================================================
+// Grid line state: Rust-owned statics (Phase 2)
+// These replace the C static variables in grid.c that were accessed via
+// nvim_get/set_grid_line_* C accessor functions.
+// =============================================================================
+
+/// Current grid being rendered
+static mut GRID_LINE_GRID: *mut std::ffi::c_void = std::ptr::null_mut();
+/// Current row being rendered (-1 = none)
+static mut GRID_LINE_ROW: c_int = -1;
+/// Column offset of the current grid view
+static mut GRID_LINE_COLOFF: c_int = 0;
+/// Maximum column for the current line
+static mut GRID_LINE_MAXCOL: c_int = 0;
+/// First dirty column (initialized to linebuf_size, set to i32::MAX equivalent)
+static mut GRID_LINE_FIRST: c_int = i32::MAX;
+/// Last dirty column
+static mut GRID_LINE_LAST: c_int = 0;
+/// Column to clear to
+static mut GRID_LINE_CLEAR_TO: c_int = 0;
+/// Background attribute
+static mut GRID_LINE_BG_ATTR: c_int = 0;
+/// Clear attribute
+static mut GRID_LINE_CLEAR_ATTR: c_int = 0;
+/// Line flags (SLF_*)
+static mut GRID_LINE_FLAGS: c_int = 0;
+
+// Inline accessors replacing nvim_get/set_grid_line_* C functions
+#[inline]
+unsafe fn nvim_get_grid_line_grid() -> *mut std::ffi::c_void {
+    GRID_LINE_GRID
+}
+#[inline]
+unsafe fn nvim_set_grid_line_grid(grid: *mut std::ffi::c_void) {
+    GRID_LINE_GRID = grid;
+}
+#[inline]
+unsafe fn nvim_get_grid_line_row() -> c_int {
+    GRID_LINE_ROW
+}
+#[inline]
+unsafe fn nvim_set_grid_line_row(row: c_int) {
+    GRID_LINE_ROW = row;
+}
+#[inline]
+unsafe fn nvim_get_grid_line_coloff() -> c_int {
+    GRID_LINE_COLOFF
+}
+#[inline]
+unsafe fn nvim_set_grid_line_coloff(coloff: c_int) {
+    GRID_LINE_COLOFF = coloff;
+}
+#[inline]
+unsafe fn nvim_get_grid_line_maxcol() -> c_int {
+    GRID_LINE_MAXCOL
+}
+#[inline]
+unsafe fn nvim_set_grid_line_maxcol(maxcol: c_int) {
+    GRID_LINE_MAXCOL = maxcol;
+}
+#[inline]
+unsafe fn nvim_get_grid_line_first() -> c_int {
+    GRID_LINE_FIRST
+}
+#[inline]
+unsafe fn nvim_set_grid_line_first(first: c_int) {
+    GRID_LINE_FIRST = first;
+}
+#[inline]
+unsafe fn nvim_get_grid_line_last() -> c_int {
+    GRID_LINE_LAST
+}
+#[inline]
+unsafe fn nvim_set_grid_line_last(last: c_int) {
+    GRID_LINE_LAST = last;
+}
+#[inline]
+unsafe fn nvim_get_grid_line_clear_to() -> c_int {
+    GRID_LINE_CLEAR_TO
+}
+#[inline]
+unsafe fn nvim_set_grid_line_clear_to(clear_to: c_int) {
+    GRID_LINE_CLEAR_TO = clear_to;
+}
+#[inline]
+unsafe fn nvim_get_grid_line_bg_attr() -> c_int {
+    GRID_LINE_BG_ATTR
+}
+#[inline]
+unsafe fn nvim_set_grid_line_bg_attr(bg_attr: c_int) {
+    GRID_LINE_BG_ATTR = bg_attr;
+}
+#[inline]
+unsafe fn nvim_get_grid_line_clear_attr() -> c_int {
+    GRID_LINE_CLEAR_ATTR
+}
+#[inline]
+unsafe fn nvim_set_grid_line_clear_attr(clear_attr: c_int) {
+    GRID_LINE_CLEAR_ATTR = clear_attr;
+}
+#[inline]
+unsafe fn nvim_get_grid_line_flags() -> c_int {
+    GRID_LINE_FLAGS
+}
+#[inline]
+unsafe fn nvim_set_grid_line_flags(flags: c_int) {
+    GRID_LINE_FLAGS = flags;
+}
+
+// C accessor functions for line buffer arrays
 extern "C" {
     // Line buffer accessors
     fn nvim_get_linebuf_char() -> *mut ScharT;
@@ -622,32 +731,12 @@ extern "C" {
     fn nvim_get_linebuf_vcol() -> *mut ColnrT;
     fn nvim_get_linebuf_size() -> usize;
 
-    // Grid line state accessors
-    fn nvim_get_grid_line_grid() -> *mut std::ffi::c_void;
-    fn nvim_get_grid_line_row() -> c_int;
-    fn nvim_get_grid_line_maxcol() -> c_int;
-    fn nvim_get_grid_line_first() -> c_int;
-    fn nvim_set_grid_line_first(first: c_int);
-    fn nvim_get_grid_line_last() -> c_int;
-    fn nvim_set_grid_line_last(last: c_int);
-    fn nvim_get_grid_line_clear_to() -> c_int;
-    fn nvim_set_grid_line_clear_to(clear_to: c_int);
-    fn nvim_set_grid_line_bg_attr(bg_attr: c_int);
-    fn nvim_set_grid_line_clear_attr(clear_attr: c_int);
-
     // UI function
     fn nvim_ui_grid_cursor_goto(grid_handle: HandleT, row: c_int, col: c_int);
 
     // ScreenGrid field accessor (we need the handle field)
     fn nvim_screengrid_get_handle(grid: *mut std::ffi::c_void) -> HandleT;
     fn nvim_screengrid_get_rows(grid: *mut std::ffi::c_void) -> c_int;
-
-    // For grid_line_flush
-    fn nvim_get_grid_line_coloff() -> c_int;
-    fn nvim_get_grid_line_bg_attr() -> c_int;
-    fn nvim_get_grid_line_clear_attr() -> c_int;
-    fn nvim_get_grid_line_flags() -> c_int;
-    fn nvim_set_grid_line_grid(grid: *mut std::ffi::c_void);
 
     // rdb_flags global
     fn nvim_get_rdb_flags() -> c_uint;
@@ -1789,11 +1878,6 @@ pub unsafe extern "C" fn rs_grid_getchar(
     *chars.add(off)
 }
 
-// Additional extern declarations for grid_clear
-extern "C" {
-    fn nvim_set_grid_line_row(row: c_int);
-}
-
 /// Clear a rectangular region of a grid.
 ///
 /// This is the Rust equivalent of C's `grid_clear()`.
@@ -1840,9 +1924,6 @@ pub unsafe extern "C" fn rs_grid_clear(
 // Additional C accessors for Phase 37
 extern "C" {
     fn nvim_get_full_screen() -> bool;
-    fn nvim_set_grid_line_coloff(coloff: c_int);
-    fn nvim_set_grid_line_maxcol(maxcol: c_int);
-    fn nvim_set_grid_line_flags(flags: c_int);
     fn nvim_get_linebuf_scratch() -> *mut c_char;
 }
 
