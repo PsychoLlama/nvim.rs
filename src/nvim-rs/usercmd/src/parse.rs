@@ -939,7 +939,7 @@ pub unsafe extern "C" fn rs_uc_split_args_iter(
 /// FFI export: Parse address type argument.
 ///
 /// Returns OK (1) on success, FAIL (0) on error.
-#[no_mangle]
+#[export_name = "parse_addr_type_arg"]
 pub unsafe extern "C" fn rs_parse_addr_type_arg(
     value: *const c_char,
     vallen: c_int,
@@ -954,7 +954,7 @@ pub unsafe extern "C" fn rs_parse_addr_type_arg(
 /// FFI export: Parse completion argument.
 ///
 /// Returns OK (1) on success, FAIL (0) on error.
-#[no_mangle]
+#[export_name = "parse_compl_arg"]
 pub unsafe extern "C" fn rs_parse_compl_arg(
     value: *const c_char,
     vallen: c_int,
@@ -971,7 +971,7 @@ pub unsafe extern "C" fn rs_parse_compl_arg(
 /// FFI export: Scan a single attribute for `:command` definition.
 ///
 /// Returns OK (1) on success, FAIL (0) on error.
-#[no_mangle]
+#[export_name = "uc_scan_attr"]
 pub unsafe extern "C" fn rs_uc_scan_attr(
     attr: *mut c_char,
     len: usize,

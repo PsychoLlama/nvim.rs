@@ -448,7 +448,7 @@ pub fn uc_validate_name(name: &[u8]) -> isize {
 /// Takes a NUL-terminated C string. Returns a pointer past the valid name
 /// prefix, or NULL if the name is invalid. Matches the C `uc_validate_name`
 /// signature exactly.
-#[no_mangle]
+#[export_name = "uc_validate_name"]
 pub unsafe extern "C" fn rs_uc_validate_name(name: *const c_char) -> *const c_char {
     if name.is_null() {
         return std::ptr::null();
@@ -786,7 +786,8 @@ unsafe fn uc_clear_impl(gap: GarrayHandle) {
 /// FFI export: Create or replace a user command.
 ///
 /// Direct replacement for C `uc_add_command`.
-#[no_mangle]
+/// C signature has `bool force` (1 byte), so we accept `bool` here.
+#[export_name = "uc_add_command"]
 pub unsafe extern "C" fn rs_uc_add_command(
     name: *mut c_char,
     name_len: usize,
@@ -800,7 +801,7 @@ pub unsafe extern "C" fn rs_uc_add_command(
     preview_luaref: c_int,
     addr_type: c_int,
     luaref: c_int,
-    force: c_int,
+    force: bool,
 ) -> c_int {
     uc_add_command_impl(
         name,
@@ -815,14 +816,14 @@ pub unsafe extern "C" fn rs_uc_add_command(
         preview_luaref,
         addr_type,
         luaref,
-        force,
+        c_int::from(force),
     )
 }
 
 /// FFI export: Free all fields of a single ucmd_T.
 ///
 /// Direct replacement for C `free_ucmd`.
-#[no_mangle]
+#[export_name = "free_ucmd"]
 pub unsafe extern "C" fn rs_free_ucmd(cmd: *mut c_void) {
     free_ucmd_impl(cmd);
 }
@@ -830,7 +831,7 @@ pub unsafe extern "C" fn rs_free_ucmd(cmd: *mut c_void) {
 /// FFI export: Clear all user commands in a garray.
 ///
 /// Direct replacement for C `uc_clear`.
-#[no_mangle]
+#[export_name = "uc_clear"]
 pub unsafe extern "C" fn rs_uc_clear(gap: GarrayHandle) {
     uc_clear_impl(gap);
 }
@@ -870,7 +871,8 @@ extern "C" {
 
 // Already-migrated Rust functions called via extern "C" (same crate, different module)
 extern "C" {
-    /// rs_uc_scan_attr — in parse.rs
+    /// uc_scan_attr — in parse.rs (exported as "uc_scan_attr")
+    #[link_name = "uc_scan_attr"]
     fn rs_uc_scan_attr(
         attr: *mut c_char,
         len: usize,
@@ -1136,7 +1138,7 @@ unsafe fn strcmp_c(a: *const c_char, b: *const c_char) -> c_int {
 /// FFI export: `:command` handler.
 ///
 /// Direct replacement for C `ex_command`.
-#[no_mangle]
+#[export_name = "ex_command"]
 pub unsafe extern "C" fn rs_ex_command(eap: ExargHandle) {
     ex_command_impl(eap);
 }
@@ -1144,7 +1146,7 @@ pub unsafe extern "C" fn rs_ex_command(eap: ExargHandle) {
 /// FFI export: `:comclear` handler.
 ///
 /// Direct replacement for C `ex_comclear`.
-#[no_mangle]
+#[export_name = "ex_comclear"]
 pub unsafe extern "C" fn rs_ex_comclear(eap: ExargHandle) {
     ex_comclear_impl(eap);
 }
@@ -1152,7 +1154,7 @@ pub unsafe extern "C" fn rs_ex_comclear(eap: ExargHandle) {
 /// FFI export: `:delcommand` handler.
 ///
 /// Direct replacement for C `ex_delcommand`.
-#[no_mangle]
+#[export_name = "ex_delcommand"]
 pub unsafe extern "C" fn rs_ex_delcommand(eap: ExargHandle) {
     ex_delcommand_impl(eap);
 }
@@ -1252,7 +1254,8 @@ extern "C" {
     fn nvim_uc_cmd_get_def(cmd: *mut c_void) -> i64;
 
     // --- Completion type lookup (already migrated to Rust) ---
-    /// rs_get_command_complete — returns the name for an EXPAND_* value
+    /// get_command_complete — returns the name for an EXPAND_* value (exported from complete.rs)
+    #[link_name = "get_command_complete"]
     fn rs_get_command_complete(arg: c_int) -> *const c_char;
 }
 
@@ -1657,7 +1660,7 @@ unsafe fn strncmp_eq(a: *const c_char, b: *const c_char, n: usize) -> bool {
 /// FFI export: find_ucmd.
 ///
 /// Direct replacement for C `find_ucmd`.
-#[no_mangle]
+#[export_name = "find_ucmd"]
 pub unsafe extern "C" fn rs_find_ucmd(
     eap: ExargHandle,
     p: *mut c_char,
@@ -1671,7 +1674,7 @@ pub unsafe extern "C" fn rs_find_ucmd(
 /// FFI export: uc_list.
 ///
 /// Direct replacement for C `uc_list`.
-#[no_mangle]
+#[export_name = "uc_list"]
 pub unsafe extern "C" fn rs_uc_list(name: *const c_char, name_len: usize) {
     uc_list_impl(name, name_len);
 }

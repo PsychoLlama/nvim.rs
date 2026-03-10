@@ -41,6 +41,10 @@
 // Rust FFI declarations (window wrappers removed)
 extern int rs_tabpage_index(tabpage_T *ftp);
 
+// Forward declarations for Rust-exported functions used within this file
+// (formerly static C functions, now globally exported by Rust)
+extern char *get_command_complete(int arg);
+
 garray_T ucmds = { 0, 0, sizeof(ucmd_T), 4, NULL };
 
 // ============================================================================
@@ -139,22 +143,6 @@ _Static_assert(EXPAND_USER_ADDR_TYPE == 43, "EXPAND_USER_ADDR_TYPE");
 _Static_assert(EXPAND_SHELLCMDLINE == 57, "EXPAND_SHELLCMDLINE");
 _Static_assert(EXPAND_LUA == 63, "EXPAND_LUA");
 
-// Rust FFI declarations (Phase 1: static data tables & trivial lookups)
-extern const char *rs_get_command_complete(int arg);
-extern const char *rs_get_user_cmd_complete(int idx);
-extern int rs_cmdcomplete_type_to_str(int expand, const char *compl_arg, char *buf, size_t buflen);
-extern int rs_usercmd_str_to_type(const char *complete_str);
-extern const char *rs_get_user_cmd_addr_type(int idx);
-extern const char *rs_get_user_cmd_flags(int idx);
-extern const char *rs_get_user_cmd_nargs(int idx);
-
-// Rust FFI declarations (Phase 2: argument parsing)
-extern const char *rs_uc_validate_name(const char *name);
-extern int rs_parse_addr_type_arg(const char *value, int vallen, int *addr_type_arg);
-extern int rs_parse_compl_arg(const char *value, int vallen, int *complp, uint32_t *argt,
-                              char **compl_arg);
-extern int rs_uc_scan_attr(char *attr, size_t len, uint32_t *argt, int *def, int *flags,
-                           int *complp, char **compl_arg, int *addr_type_arg);
 
 // C accessor functions called by Rust (Phase 2)
 void nvim_uc_emsg(const char *msg)
@@ -177,9 +165,6 @@ char *nvim_uc_xstrnsave(const char *s, size_t len)
   return xstrnsave(s, len);
 }
 
-// Rust FFI declarations (Phase 3: modifier string generation)
-extern size_t rs_add_win_cmd_modifiers(char *buf, const void *cmod, int *multi_mods);
-extern size_t rs_uc_mods(char *buf, const void *cmod, int quote);
 
 // C accessor functions called by Rust (Phase 3)
 int nvim_uc_cmod_get_split(const void *cmod)
@@ -207,11 +192,6 @@ int nvim_uc_tabpage_index_curtab(void)
   return rs_tabpage_index(curtab);
 }
 
-// Rust FFI declarations (Phase 4: argument expansion)
-extern char *rs_uc_split_args(const char *arg, char **args, const size_t *arglens, size_t argc,
-                              size_t *lenp);
-extern size_t rs_uc_check_code(char *code, size_t len, char *buf, void *cmd, void *eap,
-                               char **split_buf, size_t *split_len);
 
 // C accessor functions called by Rust (Phase 4)
 const char *nvim_uc_eap_get_arg(const void *eap)
@@ -289,13 +269,6 @@ const void *nvim_uc_get_cmdmod(void)
   return &cmdmod;
 }
 
-// Rust FFI declarations (Phase 5: command definition management)
-extern int rs_uc_add_command(char *name, size_t name_len, const char *rep,
-                             uint32_t argt, int64_t def, int flags, int context,
-                             char *compl_arg, int compl_luaref, int preview_luaref,
-                             int addr_type, int luaref, int force);
-extern void rs_free_ucmd(void *cmd);
-extern void rs_uc_clear(void *gap);
 
 // C accessor functions called by Rust (Phase 5)
 void *nvim_uc_get_curbuf_ucmds(void)
@@ -487,10 +460,6 @@ int nvim_uc_get_current_sctx_seq(void)
   return current_sctx.sc_seq;
 }
 
-// Rust FFI declarations (Phase 6: ex command handlers)
-extern void rs_ex_command(void *eap);
-extern void rs_ex_comclear(void *eap);
-extern void rs_ex_delcommand(void *eap);
 
 // C accessor functions called by Rust (Phase 6)
 char *nvim_uc_skiptowhite(const char *p)
@@ -590,16 +559,6 @@ static struct {
   { ADDR_NONE, NULL, NULL }
 };
 
-// Rust FFI declarations (Phase 8: find_ucmd, uc_list, completion)
-extern char *rs_find_ucmd(void *eap, char *p, int *full, void *xp, int *complp);
-extern const char *rs_set_context_in_user_cmd(void *xp, const char *arg_in);
-extern const char *rs_set_context_in_user_cmdarg(const char *cmd, const char *arg,
-                                                  uint32_t argt, int context,
-                                                  void *xp, int forceit);
-extern char *rs_expand_user_command_name(int idx);
-extern char *rs_get_user_commands(void *xp, int idx);
-extern char *rs_get_user_command_name(int idx, int cmdidx);
-extern void rs_uc_list(const char *name, size_t name_len);
 
 // Phase 8 static assertions
 _Static_assert(CMD_map == 274, "CMD_map");
@@ -607,187 +566,6 @@ _Static_assert(CMD_SIZE == 556, "CMD_SIZE");
 _Static_assert(HLF_D == 5, "HLF_D");
 _Static_assert(HLF_8 == 1, "HLF_8");
 
-/// Search for a user command that matches "eap->cmd".
-/// Return cmdidx in "eap->cmdidx", flags in "eap->argt", idx in "eap->useridx".
-/// Return a pointer to just after the command.
-/// Return NULL if there is no matching command.
-///
-/// @param *p      end of the command (possibly including count)
-/// @param full    set to true for a full match
-/// @param xp      used for completion, NULL otherwise
-/// @param complp  completion flags or NULL
-char *find_ucmd(exarg_T *eap, char *p, int *full, expand_T *xp, int *complp)
-{
-  return rs_find_ucmd(eap, p, full, xp, complp);
-}
-
-/// Set completion context for :command
-const char *set_context_in_user_cmd(expand_T *xp, const char *arg_in)
-{
-  return rs_set_context_in_user_cmd(xp, arg_in);
-}
-
-/// Set the completion context for the argument of a user defined command.
-const char *set_context_in_user_cmdarg(const char *cmd FUNC_ATTR_UNUSED, const char *arg,
-                                       uint32_t argt, int context, expand_T *xp, bool forceit)
-{
-  return rs_set_context_in_user_cmdarg(cmd, arg, argt, context, xp, forceit ? 1 : 0);
-}
-
-char *expand_user_command_name(int idx)
-{
-  return rs_expand_user_command_name(idx);
-}
-
-/// Function given to ExpandGeneric() to obtain the list of user command names.
-char *get_user_commands(expand_T *xp FUNC_ATTR_UNUSED, int idx)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_get_user_commands(xp, idx);
-}
-
-/// Get the name of user command "idx".  "cmdidx" can be CMD_USER or
-/// CMD_USER_BUF.
-///
-/// @return  NULL if the command is not found.
-char *get_user_command_name(int idx, int cmdidx)
-{
-  return rs_get_user_command_name(idx, cmdidx);
-}
-
-/// Function given to ExpandGeneric() to obtain the list of user address type names.
-char *get_user_cmd_addr_type(expand_T *xp, int idx)
-{
-  return (char *)rs_get_user_cmd_addr_type(idx);
-}
-
-/// Function given to ExpandGeneric() to obtain the list of user command
-/// attributes.
-char *get_user_cmd_flags(expand_T *xp, int idx)
-{
-  return (char *)rs_get_user_cmd_flags(idx);
-}
-
-/// Function given to ExpandGeneric() to obtain the list of values for -nargs.
-char *get_user_cmd_nargs(expand_T *xp, int idx)
-{
-  return (char *)rs_get_user_cmd_nargs(idx);
-}
-
-static char *get_command_complete(int arg)
-{
-  return (char *)rs_get_command_complete(arg);
-}
-
-/// Function given to ExpandGeneric() to obtain the list of values for -complete.
-char *get_user_cmd_complete(expand_T *xp, int idx)
-{
-  return (char *)rs_get_user_cmd_complete(idx);
-}
-
-/// Get the name of completion type "expand" as an allocated string.
-/// "compl_arg" is the function name for "custom" and "customlist" types.
-/// Returns NULL if no completion is available.
-char *cmdcomplete_type_to_str(int expand, const char *compl_arg)
-{
-  // Query length from Rust
-  int len = rs_cmdcomplete_type_to_str(expand, compl_arg, NULL, 0);
-  if (len < 0) {
-    return NULL;
-  }
-  char *buf = xmalloc((size_t)len + 1);
-  rs_cmdcomplete_type_to_str(expand, compl_arg, buf, (size_t)len + 1);
-  return buf;
-}
-
-int cmdcomplete_str_to_type(const char *complete_str)
-{
-  return rs_usercmd_str_to_type(complete_str);
-}
-
-static void uc_list(char *name, size_t name_len)
-{
-  rs_uc_list(name, name_len);
-}
-
-/// Parse address type argument
-int parse_addr_type_arg(char *value, int vallen, cmd_addr_T *addr_type_arg)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_parse_addr_type_arg(value, vallen, (int *)addr_type_arg);
-}
-
-/// Parse a completion argument "value[vallen]".
-/// The detected completion goes in "*complp", argument type in "*argt".
-/// When there is an argument, for function and user defined completion, it's
-/// copied to allocated memory and stored in "*compl_arg".
-///
-/// @return  FAIL if something is wrong.
-int parse_compl_arg(const char *value, int vallen, int *complp, uint32_t *argt, char **compl_arg)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_parse_compl_arg(value, vallen, complp, argt, compl_arg);
-}
-
-static int uc_scan_attr(char *attr, size_t len, uint32_t *argt, int *def, int *flags, int *complp,
-                        char **compl_arg, cmd_addr_T *addr_type_arg)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_uc_scan_attr(attr, len, argt, def, flags, complp, compl_arg, (int *)addr_type_arg);
-}
-
-/// Check for a valid user command name
-///
-/// If the given {name} is valid, then a pointer to the end of the valid name is returned.
-/// Otherwise, returns NULL.
-char *uc_validate_name(char *name)
-{
-  return (char *)rs_uc_validate_name(name);
-}
-
-/// Create a new user command {name}, if one doesn't already exist.
-///
-/// This function takes ownership of compl_arg, compl_luaref, and luaref.
-///
-/// @return  OK if the command is created, FAIL otherwise.
-int uc_add_command(char *name, size_t name_len, const char *rep, uint32_t argt, int64_t def,
-                   int flags, int context, char *compl_arg, LuaRef compl_luaref,
-                   LuaRef preview_luaref, cmd_addr_T addr_type, LuaRef luaref, bool force)
-  FUNC_ATTR_NONNULL_ARG(1, 3)
-{
-  return rs_uc_add_command(name, name_len, rep, argt, def, flags, context,
-                           compl_arg, compl_luaref, preview_luaref,
-                           (int)addr_type, luaref, force ? 1 : 0);
-}
-
-/// ":command ..."
-void ex_command(exarg_T *eap)
-{
-  rs_ex_command(eap);
-}
-
-/// ":comclear"
-/// Clear all user commands, global and for current buffer.
-void ex_comclear(exarg_T *eap)
-{
-  rs_ex_comclear(eap);
-}
-
-void free_ucmd(ucmd_T *cmd)
-{
-  rs_free_ucmd(cmd);
-}
-
-/// Clear all user commands for "gap".
-void uc_clear(garray_T *gap)
-{
-  rs_uc_clear(gap);
-}
-
-void ex_delcommand(exarg_T *eap)
-{
-  rs_ex_delcommand(eap);
-}
 
 /// Split a string by unescaped whitespace (space & tab), used for f-args on Lua commands callback.
 /// Similar to uc_split_args(), but does not allocate, add quotes, add commas and is an iterator.
@@ -846,51 +624,7 @@ size_t uc_nargs_upper_bound(const char *arg, size_t arglen)
   return nargs;
 }
 
-/// split and quote args for <f-args>
-static char *uc_split_args(const char *arg, char **args, const size_t *arglens, size_t argc,
-                           size_t *lenp)
-{
-  return rs_uc_split_args(arg, args, arglens, argc, lenp);
-}
 
-/// Add modifiers from "cmod->cmod_split" to "buf".  Set "multi_mods" when one
-/// was added.
-///
-/// @return the number of bytes added
-size_t add_win_cmd_modifiers(char *buf, const cmdmod_T *cmod, bool *multi_mods)
-{
-  int mm = *multi_mods ? 1 : 0;
-  size_t result = rs_add_win_cmd_modifiers(buf, cmod, &mm);
-  *multi_mods = mm != 0;
-  return result;
-}
-
-/// Generate text for the "cmod" command modifiers.
-/// If "buf" is NULL just return the length.
-size_t uc_mods(char *buf, const cmdmod_T *cmod, bool quote)
-{
-  return rs_uc_mods(buf, cmod, quote ? 1 : 0);
-}
-
-/// Check for a <> code in a user command.
-///
-/// @param code       points to the '<'.  "len" the length of the <> (inclusive).
-/// @param buf        is where the result is to be added.
-/// @param cmd        the user command we're expanding
-/// @param eap        ex arguments
-/// @param split_buf  points to a buffer used for splitting, caller should free it.
-/// @param split_len  is the length of what "split_buf" contains.
-///
-/// @return           the length of the replacement, which has been added to "buf".
-///                   Return -1 if there was no match, and only the "<" has been copied.
-static size_t uc_check_code(char *code, size_t len, char *buf, ucmd_T *cmd, exarg_T *eap,
-                            char **split_buf, size_t *split_len)
-{
-  return rs_uc_check_code(code, len, buf, cmd, eap, split_buf, split_len);
-}
-
-// Rust FFI declarations (Phase 7: do_ucmd)
-extern int rs_do_ucmd(void *eap, int preview);
 
 // C accessor functions called by Rust (Phase 7)
 int nvim_uc_eap_get_cmdidx(const void *eap)
@@ -1173,10 +907,6 @@ void *nvim_uc_user_cmd_global(int idx)
   return USER_CMD(idx);
 }
 
-int do_ucmd(exarg_T *eap, bool preview)
-{
-  return rs_do_ucmd(eap, preview ? 1 : 0);
-}
 
 /// Gets a map of maps describing user-commands defined for buffer `buf` or
 /// defined globally if `buf` is NULL.

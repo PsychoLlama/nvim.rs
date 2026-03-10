@@ -752,28 +752,29 @@ fn format_c_int(n: c_int, buf: &mut [u8; 20]) -> &[u8] {
 
 /// FFI export: Generate window-split modifier string.
 ///
-/// Mirrors C `add_win_cmd_modifiers(buf, cmod, multi_mods)`.
-/// `multi_mods_ptr` points to a C `int` used as a bool (0/1).
-#[no_mangle]
+/// Replaces C `add_win_cmd_modifiers(buf, cmod, multi_mods)`.
+/// C signature has `bool *multi_mods` (pointer to 1-byte bool).
+#[export_name = "add_win_cmd_modifiers"]
 pub extern "C" fn rs_add_win_cmd_modifiers(
     buf: *mut c_char,
     cmod: CmdmodHandle,
-    multi_mods_ptr: *mut c_int,
+    multi_mods_ptr: *mut bool,
 ) -> usize {
-    let mut multi_mods = unsafe { *multi_mods_ptr != 0 };
+    let mut multi_mods = unsafe { *multi_mods_ptr };
     let result = add_win_cmd_modifiers_impl(buf, cmod, &mut multi_mods);
     unsafe {
-        *multi_mods_ptr = c_int::from(multi_mods);
+        *multi_mods_ptr = multi_mods;
     }
     result
 }
 
 /// FFI export: Generate full modifier string for `<mods>` expansion.
 ///
-/// Mirrors C `uc_mods(buf, cmod, quote)`.
-#[no_mangle]
-pub extern "C" fn rs_uc_mods(buf: *mut c_char, cmod: CmdmodHandle, quote: c_int) -> usize {
-    uc_mods_impl(buf, cmod, quote != 0)
+/// Replaces C `uc_mods(buf, cmod, quote)`.
+/// C signature has `bool quote`.
+#[export_name = "uc_mods"]
+pub extern "C" fn rs_uc_mods(buf: *mut c_char, cmod: CmdmodHandle, quote: bool) -> usize {
+    uc_mods_impl(buf, cmod, quote)
 }
 
 /// FFI export: Check if modifiers is silent
@@ -1449,8 +1450,8 @@ fn format_i64(n: i64, buf: &mut [u8; 20]) -> &[u8] {
 
 /// FFI export: Split and quote args for `<f-args>`.
 ///
-/// Mirrors C `uc_split_args(arg, args, arglens, argc, lenp)`.
-#[no_mangle]
+/// Replaces C static `uc_split_args(arg, args, arglens, argc, lenp)`.
+#[export_name = "uc_split_args"]
 pub unsafe extern "C" fn rs_uc_split_args(
     arg: *const c_char,
     args: *const *const c_char,
@@ -1463,8 +1464,8 @@ pub unsafe extern "C" fn rs_uc_split_args(
 
 /// FFI export: Expand `<>` codes in user commands.
 ///
-/// Mirrors C `uc_check_code(code, len, buf, cmd, eap, split_buf, split_len)`.
-#[no_mangle]
+/// Replaces C static `uc_check_code(code, len, buf, cmd, eap, split_buf, split_len)`.
+#[export_name = "uc_check_code"]
 pub unsafe extern "C" fn rs_uc_check_code(
     code: *mut c_char,
     len: usize,
@@ -1680,9 +1681,10 @@ unsafe fn do_ucmd_impl(eap: ExargHandle, preview: bool) -> c_int {
 /// FFI export: Execute a user command.
 ///
 /// Direct replacement for C `do_ucmd(eap, preview)`.
-#[no_mangle]
-pub unsafe extern "C" fn rs_do_ucmd(eap: ExargHandle, preview: c_int) -> c_int {
-    do_ucmd_impl(eap, preview != 0)
+/// C signature has `bool preview` (1 byte).
+#[export_name = "do_ucmd"]
+pub unsafe extern "C" fn rs_do_ucmd(eap: ExargHandle, preview: bool) -> c_int {
+    do_ucmd_impl(eap, preview)
 }
 
 // =============================================================================

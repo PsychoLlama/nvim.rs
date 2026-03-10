@@ -341,7 +341,7 @@ impl Default for CompleteType {
 ///
 /// Returns NULL for out-of-range or unset entries.
 /// Mirrors C `get_command_complete`.
-#[no_mangle]
+#[export_name = "get_command_complete"]
 pub extern "C" fn rs_get_command_complete(arg: c_int) -> *const c_char {
     get_command_complete(arg).map_or(std::ptr::null(), |s| s.as_ptr().cast::<c_char>())
 }
@@ -351,7 +351,7 @@ pub extern "C" fn rs_get_command_complete(arg: c_int) -> *const c_char {
 /// Returns NULL if idx is out of range.
 /// Skips entries that are NULL or EXPAND_USER_LUA (shown as `"<Lua function>"`).
 /// Mirrors C `get_user_cmd_complete`.
-#[no_mangle]
+#[export_name = "get_user_cmd_complete"]
 pub extern "C" fn rs_get_user_cmd_complete(idx: c_int) -> *const c_char {
     if idx < 0 || idx >= EXPAND_COUNT as c_int {
         return std::ptr::null();
@@ -366,8 +366,7 @@ pub extern "C" fn rs_get_user_cmd_complete(idx: c_int) -> *const c_char {
 /// Convert an EXPAND_* value + compl_arg to a string in the provided buffer.
 ///
 /// Returns the length written (or needed if buf is NULL), or -1 on error.
-/// Mirrors C `cmdcomplete_type_to_str`.
-#[no_mangle]
+/// Internal helper used by both Rust tests and the public FFI export.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn rs_cmdcomplete_type_to_str(
     expand: c_int,
@@ -426,11 +425,35 @@ pub extern "C" fn rs_cmdcomplete_type_to_str(
     name_len as c_int
 }
 
+extern "C" {
+    #[link_name = "xmalloc"]
+    fn c_xmalloc(size: usize) -> *mut c_void;
+}
+
+/// Get completion type as an allocated C string.
+///
+/// "compl_arg" is the function name for "custom" and "customlist" types.
+/// Returns NULL if no completion is available. Replaces C `cmdcomplete_type_to_str`.
+#[export_name = "cmdcomplete_type_to_str"]
+pub unsafe extern "C" fn cmdcomplete_type_to_str_export(
+    expand: c_int,
+    compl_arg: *const c_char,
+) -> *mut c_char {
+    // Query length from helper
+    let len = rs_cmdcomplete_type_to_str(expand, compl_arg, std::ptr::null_mut(), 0);
+    if len < 0 {
+        return std::ptr::null_mut();
+    }
+    let buf: *mut c_char = unsafe { c_xmalloc((len as usize) + 1).cast::<c_char>() };
+    rs_cmdcomplete_type_to_str(expand, compl_arg, buf, (len as usize) + 1);
+    buf
+}
+
 /// Convert a completion string to its EXPAND_* value.
 ///
 /// Returns EXPAND_NOTHING if not found.
 /// Mirrors C `cmdcomplete_str_to_type`.
-#[no_mangle]
+#[export_name = "cmdcomplete_str_to_type"]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn rs_usercmd_str_to_type(complete_str: *const c_char) -> c_int {
     if complete_str.is_null() {
@@ -463,7 +486,7 @@ pub extern "C" fn rs_usercmd_str_to_type(complete_str: *const c_char) -> c_int {
 /// Get addr type name by index (ExpandGeneric callback).
 /// Returns NULL if idx is past the table (sentinel has NULL name).
 /// Mirrors C `get_user_cmd_addr_type`.
-#[no_mangle]
+#[export_name = "get_user_cmd_addr_type"]
 pub extern "C" fn rs_get_user_cmd_addr_type(idx: c_int) -> *const c_char {
     if idx < 0 {
         return std::ptr::null();
@@ -482,7 +505,7 @@ pub extern "C" fn rs_get_user_cmd_addr_type(idx: c_int) -> *const c_char {
 /// Get flag name by index (ExpandGeneric callback).
 /// Returns NULL if idx is out of range.
 /// Mirrors C `get_user_cmd_flags`.
-#[no_mangle]
+#[export_name = "get_user_cmd_flags"]
 pub extern "C" fn rs_get_user_cmd_flags(idx: c_int) -> *const c_char {
     if idx < 0 {
         return std::ptr::null();
@@ -497,7 +520,7 @@ pub extern "C" fn rs_get_user_cmd_flags(idx: c_int) -> *const c_char {
 /// Get nargs value by index (ExpandGeneric callback).
 /// Returns NULL if idx is out of range.
 /// Mirrors C `get_user_cmd_nargs`.
-#[no_mangle]
+#[export_name = "get_user_cmd_nargs"]
 pub extern "C" fn rs_get_user_cmd_nargs(idx: c_int) -> *const c_char {
     if idx < 0 {
         return std::ptr::null();
@@ -807,7 +830,7 @@ unsafe fn strcmp_c(a: *const c_char, b: *const c_char) -> c_int {
 // =============================================================================
 
 /// FFI export: set_context_in_user_cmd.
-#[no_mangle]
+#[export_name = "set_context_in_user_cmd"]
 pub unsafe extern "C" fn rs_set_context_in_user_cmd(
     xp: ExpandHandle,
     arg_in: *const c_char,
@@ -816,32 +839,33 @@ pub unsafe extern "C" fn rs_set_context_in_user_cmd(
 }
 
 /// FFI export: set_context_in_user_cmdarg.
-#[no_mangle]
+/// C signature: `(const char *cmd, const char *arg, uint32_t argt, int context, expand_T *xp, bool forceit)`
+#[export_name = "set_context_in_user_cmdarg"]
 pub unsafe extern "C" fn rs_set_context_in_user_cmdarg(
     cmd: *const c_char,
     arg: *const c_char,
     argt: u32,
     context: c_int,
     xp: ExpandHandle,
-    forceit: c_int,
+    forceit: bool,
 ) -> *const c_char {
-    set_context_in_user_cmdarg_impl(cmd, arg, argt, context, xp, forceit)
+    set_context_in_user_cmdarg_impl(cmd, arg, argt, context, xp, c_int::from(forceit))
 }
 
 /// FFI export: expand_user_command_name.
-#[no_mangle]
+#[export_name = "expand_user_command_name"]
 pub unsafe extern "C" fn rs_expand_user_command_name(idx: c_int) -> *mut c_char {
     expand_user_command_name_impl(idx)
 }
 
 /// FFI export: get_user_commands.
-#[no_mangle]
+#[export_name = "get_user_commands"]
 pub unsafe extern "C" fn rs_get_user_commands(_xp: ExpandHandle, idx: c_int) -> *mut c_char {
     get_user_commands_impl(idx)
 }
 
 /// FFI export: get_user_command_name.
-#[no_mangle]
+#[export_name = "get_user_command_name"]
 pub unsafe extern "C" fn rs_get_user_command_name(idx: c_int, cmdidx: c_int) -> *mut c_char {
     get_user_command_name_impl(idx, cmdidx)
 }

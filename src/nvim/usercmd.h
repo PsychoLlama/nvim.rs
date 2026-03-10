@@ -31,4 +31,34 @@ extern garray_T ucmds;
 #define USER_CMD(i) (&((ucmd_T *)(ucmds.ga_data))[i])
 #define USER_CMD_GA(gap, i) (&((ucmd_T *)((gap)->ga_data))[i])
 
+// Declarations for Rust-exported functions (formerly C functions)
+#include <stdbool.h>
+char *find_ucmd(exarg_T *eap, char *p, int *full, expand_T *xp, int *complp);
+const char *set_context_in_user_cmd(expand_T *xp, const char *arg_in);
+const char *set_context_in_user_cmdarg(const char *cmd, const char *arg, uint32_t argt,
+                                       int context, expand_T *xp, bool forceit);
+char *expand_user_command_name(int idx);
+char *get_user_commands(expand_T *xp, int idx);
+char *get_user_command_name(int idx, int cmdidx);
+char *get_user_cmd_addr_type(expand_T *xp, int idx);
+char *get_user_cmd_flags(expand_T *xp, int idx);
+char *get_user_cmd_nargs(expand_T *xp, int idx);
+char *get_user_cmd_complete(expand_T *xp, int idx);
+char *cmdcomplete_type_to_str(int expand, const char *compl_arg);
+int cmdcomplete_str_to_type(const char *complete_str);
+int parse_addr_type_arg(char *value, int vallen, cmd_addr_T *addr_type_arg);
+int parse_compl_arg(const char *value, int vallen, int *complp, uint32_t *argt, char **compl_arg);
+char *uc_validate_name(char *name);
+int uc_add_command(char *name, size_t name_len, const char *rep, uint32_t argt, int64_t def,
+                   int flags, int context, char *compl_arg, LuaRef compl_luaref,
+                   LuaRef preview_luaref, cmd_addr_T addr_type, LuaRef luaref, bool force);
+void ex_command(exarg_T *eap);
+void ex_comclear(exarg_T *eap);
+void free_ucmd(ucmd_T *cmd);
+void uc_clear(garray_T *gap);
+void ex_delcommand(exarg_T *eap);
+size_t add_win_cmd_modifiers(char *buf, const cmdmod_T *cmod, bool *multi_mods);
+size_t uc_mods(char *buf, const cmdmod_T *cmod, bool quote);
+int do_ucmd(exarg_T *eap, bool preview);
+
 #include "usercmd.h.generated.h"
