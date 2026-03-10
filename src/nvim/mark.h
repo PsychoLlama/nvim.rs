@@ -26,6 +26,22 @@ extern bool rs_mark_is_sentence(int name);
 extern int rs_pos_is_valid(pos_T pos);
 extern int rs_pos_in_range(pos_T pos, int line_count);
 
+// Functions implemented in Rust (exported under their C names via #[export_name])
+extern void free_fmark(fmark_T fm);
+extern void free_xfmark(xfmark_T fm);
+extern void clear_fmark(fmark_T *fm, Timestamp timestamp);
+extern void mark_jumplist_forget_file(win_T *wp, int fnum);
+extern void mark_forget_file(win_T *wp, int fnum);
+extern fmark_T *get_changelist(buf_T *buf, win_T *win, int count);
+extern fmark_T *mark_get_motion(buf_T *buf, win_T *win, int name);
+extern fmark_T *mark_get_visual(buf_T *buf, int name);
+extern fmark_T *pos_to_mark(buf_T *buf, fmark_T *fmp, pos_T pos);
+extern void clrallmarks(buf_T *buf, Timestamp timestamp);
+extern void copy_jumplist(win_T *from, win_T *to);
+extern void free_jumplist(win_T *wp);
+extern void set_last_cursor(win_T *win);
+extern void mark_mb_adjustpos(buf_T *buf, pos_T *lp);
+
 /// Convert mark name to the offset
 static inline int mark_global_index(const char name)
   FUNC_ATTR_CONST

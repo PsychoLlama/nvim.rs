@@ -2167,7 +2167,7 @@ pub unsafe extern "C" fn rs_get_jumplist(
 ///
 /// # Safety
 /// `buf` and `win` must be valid pointers.
-#[no_mangle]
+#[export_name = "get_changelist"]
 pub unsafe extern "C" fn rs_get_changelist(
     buf: BufHandle,
     win: WinHandle,
@@ -2286,7 +2286,7 @@ pub unsafe extern "C" fn rs_cleanup_jumplist(wp: WinHandle, loadfiles: c_int) {
 ///
 /// # Safety
 /// `wp` must be a valid window pointer.
-#[no_mangle]
+#[export_name = "mark_jumplist_forget_file"]
 pub unsafe extern "C" fn rs_mark_jumplist_forget_file(wp: WinHandle, fnum: c_int) {
     let mut i = nvim_mark_win_get_jumplistlen(wp) - 1;
     while i >= 0 {
@@ -2313,7 +2313,7 @@ pub unsafe extern "C" fn rs_mark_jumplist_forget_file(wp: WinHandle, fnum: c_int
 ///
 /// # Safety
 /// `wp` must be a valid window pointer.
-#[no_mangle]
+#[export_name = "mark_forget_file"]
 pub unsafe extern "C" fn rs_mark_forget_file(wp: WinHandle, fnum: c_int) {
     rs_mark_jumplist_forget_file(wp, fnum);
 
@@ -3075,7 +3075,7 @@ pub unsafe extern "C" fn rs_ex_delmarks(arg: *const c_char, forceit: c_int, curb
 ///
 /// # Safety
 /// `buf` and `lp` must be valid pointers.
-#[no_mangle]
+#[export_name = "mark_mb_adjustpos"]
 pub unsafe extern "C" fn rs_mark_mb_adjustpos(buf: BufHandle, lp: *mut PosT) {
     if (*lp).col > 0 || (*lp).coladd > 1 {
         let line = nvim_mark_ml_get_buf(buf, (*lp).lnum);
@@ -3102,7 +3102,7 @@ pub unsafe extern "C" fn rs_mark_mb_adjustpos(buf: BufHandle, lp: *mut PosT) {
 ///
 /// # Safety
 /// `buf` and `win` must be valid handles.
-#[no_mangle]
+#[export_name = "mark_get_motion"]
 pub unsafe extern "C" fn rs_mark_get_motion(
     buf: BufHandle,
     win: WinHandle,
@@ -4120,7 +4120,7 @@ pub extern "C" fn rs_marks_should_show(_mark_char: c_int, filter_len: c_int) -> 
 
 /// Free the additional_data pointer of an fmark_T.
 /// C equivalent: `xfree(fm.additional_data)`
-#[no_mangle]
+#[export_name = "free_fmark"]
 pub extern "C" fn rs_free_fmark(fm: FmarkT) {
     if !fm.additional_data.is_null() {
         unsafe {
@@ -4131,7 +4131,7 @@ pub extern "C" fn rs_free_fmark(fm: FmarkT) {
 
 /// Free an xfmark_T: free fname and additional_data.
 /// C equivalent: `xfree(fm.fname); free_fmark(fm.fmark)`
-#[no_mangle]
+#[export_name = "free_xfmark"]
 pub extern "C" fn rs_free_xfmark(fm: XfmarkT) {
     if !fm.fname.is_null() {
         unsafe {
@@ -4146,7 +4146,7 @@ pub extern "C" fn rs_free_xfmark(fm: XfmarkT) {
 ///
 /// # Safety
 /// `fm` must be a valid, non-null pointer to an `FmarkT`.
-#[no_mangle]
+#[export_name = "clear_fmark"]
 pub unsafe extern "C" fn rs_clear_fmark(fm: *mut FmarkT, timestamp: Timestamp) {
     rs_free_fmark(*fm);
     *fm = FmarkT::default();
@@ -4160,7 +4160,7 @@ pub unsafe extern "C" fn rs_clear_fmark(fm: *mut FmarkT, timestamp: Timestamp) {
 ///
 /// # Safety
 /// `buf` must be a valid buffer handle. If `fmp` is non-null, it must point to a valid `FmarkT`.
-#[no_mangle]
+#[export_name = "pos_to_mark"]
 pub unsafe extern "C" fn rs_pos_to_mark(
     buf: BufHandle,
     fmp: *mut FmarkT,
@@ -4259,7 +4259,7 @@ pub unsafe extern "C" fn rs_fmarks_check_one(
 ///
 /// # Safety
 /// `win` must be a valid window handle.
-#[no_mangle]
+#[export_name = "set_last_cursor"]
 pub unsafe extern "C" fn rs_set_last_cursor(win: WinHandle) {
     let buf = nvim_mark_win_get_buffer(win);
     if !buf.is_null() {
@@ -4284,7 +4284,7 @@ pub unsafe extern "C" fn rs_set_last_cursor(win: WinHandle) {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "free_jumplist"]
 pub unsafe extern "C" fn rs_free_jumplist(wp: WinHandle) {
     let len = nvim_mark_win_get_jumplistlen(wp);
     for i in 0..len {
@@ -4326,7 +4326,7 @@ pub unsafe extern "C" fn rs_free_all_marks() {
 ///
 /// # Safety
 /// Both `from` and `to` must be valid window handles.
-#[no_mangle]
+#[export_name = "copy_jumplist"]
 pub unsafe extern "C" fn rs_copy_jumplist(from: WinHandle, to: WinHandle) {
     let len = nvim_mark_win_get_jumplistlen(from);
     for i in 0..len {
@@ -4485,7 +4485,7 @@ pub unsafe extern "C" fn rs_mark_get_local(
 ///
 /// # Safety
 /// `buf` must be a valid buffer handle.
-#[no_mangle]
+#[export_name = "mark_get_visual"]
 pub unsafe extern "C" fn rs_mark_get_visual(buf: BufHandle, name: c_int) -> *mut FmarkT {
     if name != c_int::from(b'<') && name != c_int::from(b'>') {
         return std::ptr::null_mut();
@@ -4611,7 +4611,7 @@ pub unsafe extern "C" fn rs_mark_set_local(
 ///
 /// # Safety
 /// `buf` must be a valid buffer handle.
-#[no_mangle]
+#[export_name = "clrallmarks"]
 pub unsafe extern "C" fn rs_clrallmarks(buf: BufHandle, timestamp: Timestamp) {
     for i in 0..NMARKS {
         let fm = nvim_mark_buf_get_namedm(buf, i);

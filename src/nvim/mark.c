@@ -494,24 +494,6 @@ int setmark(int c)
   return setmark_pos(c, &curwin->w_cursor, curbuf->b_fnum, &view);
 }
 
-/// Free fmark_T item
-void free_fmark(fmark_T fm)
-{
-  rs_free_fmark(fm);
-}
-
-/// Free xfmark_T item
-void free_xfmark(xfmark_T fm)
-{
-  rs_free_xfmark(fm);
-}
-
-/// Free and clear fmark_T item
-void clear_fmark(fmark_T *const fm, const Timestamp timestamp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_clear_fmark(fm, timestamp);
-}
 
 // Set named mark "c" to position "pos".
 // When "c" is upper case use file "fnum".
@@ -522,19 +504,6 @@ int setmark_pos(int c, pos_T *pos, int fnum, fmarkv_T *view_pt)
   return rs_setmark_pos(c, pos, fnum, view_pt);
 }
 
-/// Remove every jump list entry referring to a given buffer.
-/// This function will also adjust the current jump list index.
-void mark_jumplist_forget_file(win_T *wp, int fnum)
-{
-  rs_mark_jumplist_forget_file(wp, fnum);
-}
-
-/// Delete every entry referring to file "fnum" from both the jumplist and the
-/// tag stack.
-void mark_forget_file(win_T *wp, int fnum)
-{
-  rs_mark_forget_file(wp, fnum);
-}
 
 // Set the previous context mark to the current position and add it to the
 // jump list.
@@ -558,11 +527,6 @@ fmark_T *get_jumplist(win_T *win, int count)
   return rs_get_jumplist(win, curbuf, count);
 }
 
-/// Get mark in "count" position in the |changelist| relative to the current index.
-fmark_T *get_changelist(buf_T *buf, win_T *win, int count)
-{
-  return rs_get_changelist(buf, win, count);
-}
 
 /// Get a named mark.
 ///
@@ -613,49 +577,6 @@ fmark_T *mark_get_local(buf_T *buf, win_T *win, int name)
   return rs_mark_get_local(buf, win, name, curbuf);
 }
 
-/// Get marks that are actually motions but return them as marks
-///
-/// Gets the following motions as marks: '{', '}', '(', ')'
-/// @param name  name of the mark
-/// @param win  window to retrieve the cursor to calculate the mark.
-/// @param buf  buf to wrap motion marks with it's buffer number (fm->fnum).
-///
-/// @return[static] Mark.
-fmark_T *mark_get_motion(buf_T *buf, win_T *win, int name)
-{
-  return rs_mark_get_motion(buf, win, name);
-}
-
-/// Get visual marks '<', '>'
-///
-/// This marks are different to normal marks:
-/// 1. Never adjusted.
-/// 2. Different behavior depending on editor state (visual mode).
-/// 3. Not saved in shada.
-/// 4. Re-ordered when defined in reverse.
-/// @param buf  Buffer to get the mark from.
-/// @param name  Mark name '<' or '>'.
-///
-/// @return[static]  Mark
-fmark_T *mark_get_visual(buf_T *buf, int name)
-{
-  return rs_mark_get_visual(buf, name);
-}
-
-/// Wrap a pos_T into an fmark_T, used to abstract marks handling.
-///
-/// Pass an fmp if multiple c
-/// @note  view fields are set to 0.
-/// @param buf  for fmark->fnum.
-/// @param pos  for fmark->mark.
-/// @param fmp pointer to save the mark.
-///
-/// @return[static] Mark with the given information.
-fmark_T *pos_to_mark(buf_T *buf, fmark_T *fmp, pos_T pos)
-  FUNC_ATTR_NONNULL_RET
-{
-  return rs_pos_to_mark(buf, fmp, pos);
-}
 
 /// Attempt to switch to the buffer of the given global mark
 ///
@@ -830,16 +751,6 @@ bool mark_check_line_bounds(buf_T *buf, fmark_T *fm, const char **errormsg)
   return rs_mark_check_line_bounds(buf, fm->mark.lnum, errormsg, _(e_markinval)) != 0;
 }
 
-/// Clear all marks and change list in the given buffer
-///
-/// Used mainly when trashing the entire buffer during ":e" type commands.
-///
-/// @param[out]  buf  Buffer to clear marks in.
-void clrallmarks(buf_T *const buf, const Timestamp timestamp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_clrallmarks(buf, timestamp);
-}
 
 // Get name of file from a filemark.
 // When it's in the current buffer, return the text at the mark.
@@ -1111,11 +1022,6 @@ void cleanup_jumplist(win_T *wp, bool loadfiles)
   rs_cleanup_jumplist(wp, (int)loadfiles);
 }
 
-// Copy the jumplist from window "from" to window "to".
-void copy_jumplist(win_T *from, win_T *to)
-{
-  rs_copy_jumplist(from, to);
-}
 
 /// Iterate over jumplist items
 ///
@@ -1289,35 +1195,12 @@ bool mark_set_local(const char name, buf_T *const buf, const fmark_T fm, const b
   return rs_mark_set_local((int)name, buf, fm, update ? 1 : 0) != 0;
 }
 
-// Free items in the jumplist of window "wp".
-void free_jumplist(win_T *wp)
-{
-  rs_free_jumplist(wp);
-}
-
-void set_last_cursor(win_T *win)
-{
-  rs_set_last_cursor(win);
-}
-
 #if defined(EXITFREE)
 void free_all_marks(void)
 {
   rs_free_all_marks();
 }
 #endif
-
-/// Adjust position to point to the first byte of a multi-byte character
-///
-/// If it points to a tail byte it is move backwards to the head byte.
-///
-/// @param[in]  buf  Buffer to adjust position in.
-/// @param[out]  lp  Position to adjust.
-void mark_mb_adjustpos(buf_T *buf, pos_T *lp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_mark_mb_adjustpos(buf, lp);
-}
 
 // Add information about mark 'mname' to list 'l'
 static int add_mark(list_T *l, const char *mname, const pos_T *pos, int bufnr, const char *fname)
