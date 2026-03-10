@@ -11,45 +11,369 @@ use crate::{LinenrT, SignBufHandle, SignCmd, SIGN_DEF_PRIO};
 // =============================================================================
 
 extern "C" {
-    // Composite accessors for ex command handling
-    fn nvim_sign_define_cmd_impl(name: *mut c_char, cmdline: *mut c_char);
-    fn nvim_sign_place_cmd_impl(
-        buf: SignBufHandle,
-        lnum: LinenrT,
-        name: *mut c_char,
-        id: c_int,
-        group: *mut c_char,
-        prio: c_int,
-    );
-    fn nvim_sign_unplace_cmd_impl(
-        buf: SignBufHandle,
-        lnum: LinenrT,
-        name: *const c_char,
-        id: c_int,
-        group: *mut c_char,
-    );
-    fn nvim_sign_jump_cmd_impl(
-        buf: SignBufHandle,
-        lnum: LinenrT,
-        name: *const c_char,
-        id: c_int,
-        group: *mut c_char,
-    );
-    fn nvim_parse_sign_cmd_args_impl(
-        cmd: c_int,
-        arg: *mut c_char,
-        name: *mut *mut c_char,
-        id: *mut c_int,
-        group: *mut *mut c_char,
-        prio: *mut c_int,
-        buf: *mut SignBufHandle,
-        lnum: *mut LinenrT,
-    ) -> c_int;
     fn nvim_ex_sign_impl(eap: *mut c_void);
 
     // Command completion composite accessors
     fn nvim_get_sign_name_impl(xp: *mut c_void, idx: c_int) -> *mut c_char;
     fn nvim_set_context_in_sign_cmd_impl(xp: *mut c_void, arg: *mut c_char);
+
+    // String utilities (Rust exports, linked as C symbols)
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    #[link_name = "skiptowhite_esc"]
+    fn skiptowhite_esc_fn(p: *const c_char) -> *mut c_char;
+    fn semsg(fmt: *const c_char, ...);
+    fn emsg(msg: *const c_char) -> c_int;
+
+    // Buffer list lookups
+    fn nvim_buflist_findname_exp(ptr: *const c_char) -> SignBufHandle;
+    fn rs_buflist_findnr(nr: c_int) -> SignBufHandle;
+
+    // Current window accessors
+    fn nvim_get_curwin_cursor_lnum() -> c_int;
+    fn nvim_curwin_get_buffer() -> SignBufHandle;
+
+    // Sign operations (Rust exports, used here)
+    fn rs_sign_list_placed(buf: SignBufHandle, group: *const c_char);
+    fn rs_sign_place(
+        id: *mut u32,
+        group: *const c_char,
+        name: *const c_char,
+        buf: SignBufHandle,
+        lnum: LinenrT,
+        prio: c_int,
+    ) -> c_int;
+    fn rs_sign_unplace(
+        buf: SignBufHandle,
+        id: c_int,
+        group: *const c_char,
+        atlnum: LinenrT,
+    ) -> c_int;
+    fn rs_sign_jump(id: c_int, group: *const c_char, buf: SignBufHandle) -> LinenrT;
+    fn rs_sign_define_by_name(
+        name: *const c_char,
+        icon: *const c_char,
+        text: *const c_char,
+        linehl: *const c_char,
+        texthl: *const c_char,
+        culhl: *const c_char,
+        numhl: *const c_char,
+        prio: c_int,
+    ) -> c_int;
+
+    // getdigits_int: advances pointer through digits, returns parsed int
+    fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
+}
+
+// Error message constants
+static E_INVARG: &[u8] = b"E474: Invalid argument\0";
+static E_INVARG2: &[u8] = b"E475: Invalid value for argument %s\0";
+static E_ARGREQ: &[u8] = b"E471: Argument required\0";
+static E_INVALID_BUFFER_NAME: &[u8] = b"E158: Invalid buffer name: %s\0";
+static E_TRAILING: &[u8] = b"E488: Trailing characters: %s\0";
+static E_MISSING_SIGN: &[u8] = b"E159: Missing sign number\0";
+
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+// =============================================================================
+// Phase 4: Migrated composite accessor implementations
+// =============================================================================
+
+/// ":sign define {name} ..." implementation — migrated from C.
+///
+/// # Safety
+/// `name` and `cmdline` must be valid, writable C strings.
+unsafe fn sign_define_cmd_impl(name: *mut c_char, cmdline: *mut c_char) {
+    let mut icon: *const c_char = std::ptr::null();
+    let mut text: *const c_char = std::ptr::null();
+    let mut linehl: *const c_char = std::ptr::null();
+    let mut texthl: *const c_char = std::ptr::null();
+    let mut culhl: *const c_char = std::ptr::null();
+    let mut numhl: *const c_char = std::ptr::null();
+    let mut prio: c_int = -1;
+
+    let mut cmdline = cmdline;
+    loop {
+        let arg = skipwhite(cmdline);
+        if *arg == 0 {
+            break;
+        }
+        cmdline = skiptowhite_esc_fn(arg);
+
+        // NUL-terminate the current token if not at end
+        let at_end = *cmdline == 0;
+        if !at_end {
+            *cmdline = 0;
+            cmdline = cmdline.add(1);
+        }
+
+        // Match prefix and extract value
+        let arg_bytes = arg.cast::<u8>();
+        if starts_with_bytes(arg_bytes, b"icon=") {
+            icon = arg.add(5);
+        } else if starts_with_bytes(arg_bytes, b"text=") {
+            text = arg.add(5);
+        } else if starts_with_bytes(arg_bytes, b"linehl=") {
+            linehl = arg.add(7);
+        } else if starts_with_bytes(arg_bytes, b"texthl=") {
+            texthl = arg.add(7);
+        } else if starts_with_bytes(arg_bytes, b"culhl=") {
+            culhl = arg.add(6);
+        } else if starts_with_bytes(arg_bytes, b"numhl=") {
+            numhl = arg.add(6);
+        } else if starts_with_bytes(arg_bytes, b"priority=") {
+            let val_ptr = arg.add(9);
+            prio = atoi_ptr(val_ptr);
+        } else {
+            semsg(E_INVARG2.as_ptr().cast(), arg);
+            return;
+        }
+
+        if at_end {
+            break;
+        }
+    }
+
+    rs_sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio);
+}
+
+/// ":sign place" implementation — migrated from C.
+///
+/// # Safety
+/// All pointer arguments must be valid or null.
+unsafe fn sign_place_cmd_impl(
+    buf: SignBufHandle,
+    lnum: LinenrT,
+    name: *mut c_char,
+    id: c_int,
+    group: *mut c_char,
+    prio: c_int,
+) {
+    if id <= 0 {
+        if lnum >= 0 || !name.is_null() || (!group.is_null() && *group == 0) {
+            emsg(E_INVARG.as_ptr().cast());
+        } else {
+            rs_sign_list_placed(buf, group);
+        }
+    } else {
+        if name.is_null() || buf.is_null() || (!group.is_null() && *group == 0) {
+            emsg(E_INVARG.as_ptr().cast());
+            return;
+        }
+        #[allow(clippy::cast_sign_loss)]
+        let mut uid = id as u32;
+        rs_sign_place(std::ptr::addr_of_mut!(uid), group, name, buf, lnum, prio);
+    }
+}
+
+/// ":sign unplace" implementation — migrated from C.
+///
+/// # Safety
+/// All pointer arguments must be valid or null.
+unsafe fn sign_unplace_cmd_impl(
+    mut buf: SignBufHandle,
+    lnum: LinenrT,
+    name: *const c_char,
+    mut id: c_int,
+    group: *mut c_char,
+) {
+    if lnum >= 0 || !name.is_null() || (!group.is_null() && *group == 0) {
+        emsg(E_INVARG.as_ptr().cast());
+        return;
+    }
+
+    let mut atlnum: LinenrT = 0;
+    if id == -1 {
+        atlnum = nvim_get_curwin_cursor_lnum();
+        buf = nvim_curwin_get_buffer();
+        id = 0;
+    }
+
+    if rs_sign_unplace(buf, id.max(0), group, atlnum) == 0 && atlnum > 0 {
+        emsg(E_MISSING_SIGN.as_ptr().cast());
+    }
+}
+
+/// ":sign jump" implementation — migrated from C.
+///
+/// # Safety
+/// All pointer arguments must be valid or null.
+unsafe fn sign_jump_cmd_impl(
+    buf: SignBufHandle,
+    lnum: LinenrT,
+    name: *const c_char,
+    id: c_int,
+    group: *mut c_char,
+) {
+    if name.is_null() && group.is_null() && id == -1 {
+        emsg(E_ARGREQ.as_ptr().cast());
+        return;
+    }
+
+    if buf.is_null() || (!group.is_null() && *group == 0) || lnum >= 0 || !name.is_null() {
+        emsg(E_INVARG.as_ptr().cast());
+        return;
+    }
+
+    rs_sign_jump(id, group, buf);
+}
+
+/// Parse sign command arguments — migrated from C.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[allow(clippy::too_many_arguments)]
+unsafe fn parse_sign_cmd_args_impl(
+    cmd: c_int,
+    arg: *mut c_char,
+    name: *mut *mut c_char,
+    id: *mut c_int,
+    group: *mut *mut c_char,
+    prio: *mut c_int,
+    buf: *mut SignBufHandle,
+    lnum: *mut LinenrT,
+) -> c_int {
+    let arg1 = arg;
+    let mut arg = arg;
+    let mut filename: *mut c_char = std::ptr::null_mut();
+    let mut lnum_arg = false;
+
+    // First arg could be placed sign id (digits)
+    if ascii_isdigit(*arg.cast::<u8>()) {
+        let parsed = getdigits_int(std::ptr::addr_of_mut!(arg), true, 0);
+        if !ascii_iswhite(*arg.cast::<u8>()) && *arg != 0 {
+            // Not a pure number token - reset
+            *id = -1;
+            arg = arg1;
+        } else {
+            *id = parsed;
+            arg = skipwhite(arg);
+        }
+    }
+
+    while *arg != 0 {
+        let arg_bytes = arg.cast::<u8>();
+        if starts_with_bytes(arg_bytes, b"line=") {
+            arg = arg.add(5);
+            *lnum = atoi_ptr(arg);
+            arg = skiptowhite_fn(arg);
+            lnum_arg = true;
+        } else if starts_with_bytes(arg_bytes, b"*") && cmd == SignCmd::Unplace as c_int {
+            if *id != -1 {
+                emsg(E_INVARG.as_ptr().cast());
+                return FAIL;
+            }
+            *id = -2;
+            arg = skiptowhite_fn(arg.add(1));
+        } else if starts_with_bytes(arg_bytes, b"name=") {
+            arg = arg.add(5);
+            let namep = arg;
+            arg = skiptowhite_fn(arg);
+            if *arg != 0 {
+                *arg = 0;
+                arg = arg.add(1);
+            }
+            // Strip leading zeros (but keep "0")
+            let mut p = namep;
+            while *p.cast::<u8>() == b'0' && *p.add(1) != 0 {
+                p = p.add(1);
+            }
+            *name = p;
+        } else if starts_with_bytes(arg_bytes, b"group=") {
+            arg = arg.add(6);
+            *group = arg;
+            arg = skiptowhite_fn(arg);
+            if *arg != 0 {
+                *arg = 0;
+                arg = arg.add(1);
+            }
+        } else if starts_with_bytes(arg_bytes, b"priority=") {
+            arg = arg.add(9);
+            *prio = atoi_ptr(arg);
+            arg = skiptowhite_fn(arg);
+        } else if starts_with_bytes(arg_bytes, b"file=") {
+            arg = arg.add(5);
+            filename = arg;
+            *buf = nvim_buflist_findname_exp(arg);
+            break;
+        } else if starts_with_bytes(arg_bytes, b"buffer=") {
+            arg = arg.add(7);
+            filename = arg;
+            *buf = rs_buflist_findnr(getdigits_int(std::ptr::addr_of_mut!(arg), true, 0));
+            let after = skipwhite(arg);
+            if *after != 0 {
+                semsg(E_TRAILING.as_ptr().cast(), arg);
+            }
+            break;
+        } else {
+            emsg(E_INVARG.as_ptr().cast());
+            return FAIL;
+        }
+        arg = skipwhite(arg);
+    }
+
+    if !filename.is_null() && (*buf).is_null() {
+        semsg(E_INVALID_BUFFER_NAME.as_ptr().cast(), filename);
+        return FAIL;
+    }
+
+    // If no filename for sign place (with lnum) or sign jump, use current buffer
+    if filename.is_null()
+        && ((cmd == SignCmd::Place as c_int && lnum_arg) || cmd == SignCmd::Jump as c_int)
+    {
+        *buf = nvim_curwin_get_buffer();
+    }
+
+    OK
+}
+
+// =============================================================================
+// Private helpers
+// =============================================================================
+
+/// Check if a C byte string starts with a given prefix.
+#[inline]
+unsafe fn starts_with_bytes(s: *const u8, prefix: &[u8]) -> bool {
+    for (i, &b) in prefix.iter().enumerate() {
+        if *s.add(i) != b {
+            return false;
+        }
+    }
+    true
+}
+
+/// Simple atoi — parse decimal integer from null-terminated string.
+#[inline]
+unsafe fn atoi_ptr(s: *const c_char) -> c_int {
+    let mut result: c_int = 0;
+    let mut p = s.cast::<u8>();
+    while ascii_isdigit(*p) {
+        result = result * 10 + c_int::from(*p - b'0');
+        p = p.add(1);
+    }
+    result
+}
+
+/// Check if a byte is an ASCII digit.
+#[inline]
+fn ascii_isdigit(c: u8) -> bool {
+    c.is_ascii_digit()
+}
+
+/// Check if a byte is ASCII whitespace.
+#[inline]
+fn ascii_iswhite(c: u8) -> bool {
+    c == b' ' || c == b'\t'
+}
+
+/// Skip non-whitespace bytes (simple version, no escape handling).
+#[inline]
+unsafe fn skiptowhite_fn(p: *const c_char) -> *mut c_char {
+    let mut p = p as *mut u8;
+    while *p != 0 && !ascii_iswhite(*p) {
+        p = p.add(1);
+    }
+    p.cast::<c_char>()
 }
 
 // =============================================================================
@@ -500,7 +824,7 @@ pub extern "C" fn rs_sign_list_format(
 /// `name` and `cmdline` must be valid, writable C strings.
 #[unsafe(export_name = "sign_define_cmd")]
 pub unsafe extern "C" fn rs_sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
-    nvim_sign_define_cmd_impl(name, cmdline);
+    sign_define_cmd_impl(name, cmdline);
 }
 
 /// ":sign place" command.
@@ -517,7 +841,7 @@ pub unsafe extern "C" fn rs_sign_place_cmd(
     group: *mut c_char,
     prio: c_int,
 ) {
-    nvim_sign_place_cmd_impl(buf, lnum, name, id, group, prio);
+    sign_place_cmd_impl(buf, lnum, name, id, group, prio);
 }
 
 /// ":sign unplace" command.
@@ -533,7 +857,7 @@ pub unsafe extern "C" fn rs_sign_unplace_cmd(
     id: c_int,
     group: *mut c_char,
 ) {
-    nvim_sign_unplace_cmd_impl(buf, lnum, name, id, group);
+    sign_unplace_cmd_impl(buf, lnum, name, id, group);
 }
 
 /// ":sign jump" command.
@@ -549,7 +873,7 @@ pub unsafe extern "C" fn rs_sign_jump_cmd(
     id: c_int,
     group: *mut c_char,
 ) {
-    nvim_sign_jump_cmd_impl(buf, lnum, name, id, group);
+    sign_jump_cmd_impl(buf, lnum, name, id, group);
 }
 
 /// Parse command line arguments for ":sign place/unplace/jump".
@@ -568,7 +892,7 @@ pub unsafe extern "C" fn rs_parse_sign_cmd_args(
     buf: *mut SignBufHandle,
     lnum: *mut LinenrT,
 ) -> c_int {
-    nvim_parse_sign_cmd_args_impl(cmd, arg, name, id, group, prio, buf, lnum)
+    parse_sign_cmd_args_impl(cmd, arg, name, id, group, prio, buf, lnum)
 }
 
 /// ":sign" command — top-level dispatcher.
