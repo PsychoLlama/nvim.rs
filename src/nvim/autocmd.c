@@ -79,13 +79,9 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
 
 // Rust functions still needed by remaining C wrappers/code
-extern int rs_is_autocmd_blocked(void);
 extern int rs_aupat_is_buflocal(const char *pat, int patlen);
 extern const char *rs_event_nr2name(int event, int num_events);
-extern int rs_has_event(int event, int num_events);
 extern int rs_is_aucmd_win(win_T *win);
-extern int rs_has_cursorhold(void);
-extern int rs_trigger_cursorhold(void);
 extern int rs_autocmd_supported(const char *event);
 extern int rs_augroup_exists(const char *name);
 extern bool rs_has_autocmd(int event, const char *sfname, int buf_fnum);
@@ -102,7 +98,6 @@ extern int rs_event_ignored(int event, const char *ei);
 
 // Phase 5: :augroup command + arg parsing
 extern int rs_arg_augroup_get(const char **argp);
-extern const char *rs_arg_event_skip(const char *arg, bool have_group);
 
 // Phase 7: :autocmd command + registration
 extern int rs_do_autocmd_event(int event, const char *pat, bool once, int nested,
@@ -1555,13 +1550,6 @@ static char *aucmd_handler_to_string(AutoCmd *ac)
 }
 
 // Arg Parsing Functions
-
-/// Scan over the events.  "*" stands for all events.
-/// true when group name was found
-static char *arg_event_skip(char *arg, bool have_group)
-{
-  return (char *)rs_arg_event_skip(arg, have_group);
-}
 
 // Find the group ID in a ":autocmd" or ":doautocmd" argument.
 // The "argp" argument is advanced to the following argument.
