@@ -1367,7 +1367,7 @@ bool nvim_get_p_fs(void)
   return p_fs;
 }
 
-// u_sync wrapper
+// u_sync wrapper (still called from ex_cmds and window Rust crates)
 void nvim_u_sync(bool force)
 {
   u_sync(force);
@@ -1398,12 +1398,6 @@ void nvim_os_set_acl(const char *path, vim_acl_T acl)
 void nvim_os_free_acl(vim_acl_T acl)
 {
   os_free_acl(acl);
-}
-
-// Hash computation wrapper
-void nvim_u_compute_hash(buf_T *buf, uint8_t *hash)
-{
-  u_compute_hash(buf, hash);
 }
 
 // File info for Unix ownership checks
@@ -1557,16 +1551,6 @@ void nvim_undo_finished_reading(const char *file_name)
 FILE *nvim_os_fopen(const char *path, const char *mode)
 {
   return os_fopen(path, mode);
-}
-
-void nvim_u_blockfree(buf_T *buf)
-{
-  u_blockfree(buf);
-}
-
-void nvim_u_free_uhp(u_header_T *uhp)
-{
-  u_free_uhp(uhp);
 }
 
 bool nvim_undo_check_owner(const char *orig_name, const char *file_name)

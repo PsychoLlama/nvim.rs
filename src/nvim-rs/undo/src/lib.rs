@@ -29,7 +29,7 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::must_use_candidate)]
 
-use std::ffi::{c_char, c_int, c_uchar, c_void, CStr};
+use std::ffi::{c_char, c_int, c_void, CStr};
 use std::ptr;
 
 use nvim_encoding::sha256::Sha256Context;
@@ -592,7 +592,6 @@ extern "C" {
     fn nvim_get_p_fs() -> bool;
 
     // u_sync wrapper
-    fn nvim_u_sync(force: bool);
 
     // Buffer line count and line accessors for hash computation
     fn nvim_buf_get_b_ml_line_count(buf: BufHandle) -> LinenrT;
@@ -602,9 +601,6 @@ extern "C" {
     fn nvim_os_get_acl(path: *const c_char) -> *mut c_void;
     fn nvim_os_set_acl(path: *const c_char, acl: *mut c_void);
     fn nvim_os_free_acl(acl: *mut c_void);
-
-    // Hash computation
-    fn nvim_u_compute_hash(buf: BufHandle, hash: *mut c_uchar);
 
     // File info for Unix ownership checks
     fn nvim_undo_check_file_owner(orig_path: *const c_char, undo_path: *const c_char) -> bool;
@@ -4327,7 +4323,7 @@ pub unsafe extern "C" fn rs_u_write_undo(
     }
 
     // Undo must be synced.
-    nvim_u_sync(true);
+    rs_u_sync(true);
 
     // Write the header.
     if !serialize_header(fp, buf, hash) {
@@ -4421,8 +4417,6 @@ extern "C" {
     fn nvim_undo_file_changed_warning();
     fn nvim_undo_finished_reading(file_name: *const c_char);
     fn nvim_os_fopen(path: *const c_char, mode: *const c_char) -> FileHandle;
-    fn nvim_u_blockfree(buf: BufHandle);
-    fn nvim_u_free_uhp(uhp: UHeaderHandle);
     fn nvim_undo_check_owner(orig_name: *const c_char, file_name: *const c_char) -> bool;
 
 }
@@ -4632,7 +4626,7 @@ unsafe fn unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHa
         if len == -1 {
             // EOF
             nvim_undo_corruption_error(c"truncated".as_ptr(), file_name);
-            nvim_u_free_uhp(uhp);
+            rs_u_free_uhp(uhp);
             return ptr::null_mut();
         }
         if len == 0 {
@@ -4658,7 +4652,7 @@ unsafe fn unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHa
         if c != UF_ENTRY_MAGIC as c_int {
             if c != UF_ENTRY_END_MAGIC as c_int {
                 nvim_undo_corruption_error(c"entry end".as_ptr(), file_name);
-                nvim_u_free_uhp(uhp);
+                rs_u_free_uhp(uhp);
                 return ptr::null_mut();
             }
             break;
@@ -4671,7 +4665,7 @@ unsafe fn unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHa
         }
         last_uep = uep;
         if uep.is_null() || error {
-            nvim_u_free_uhp(uhp);
+            rs_u_free_uhp(uhp);
             return ptr::null_mut();
         }
     }
@@ -4689,7 +4683,7 @@ unsafe fn unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHa
                 (*uhp).uh_extmark.items = std::ptr::null_mut();
                 (*uhp).uh_extmark.size = 0;
                 (*uhp).uh_extmark.capacity = 0;
-                nvim_u_free_uhp(uhp);
+                rs_u_free_uhp(uhp);
                 return ptr::null_mut();
             }
             break;
@@ -4699,7 +4693,7 @@ unsafe fn unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHa
             (*uhp).uh_extmark.items = std::ptr::null_mut();
             (*uhp).uh_extmark.size = 0;
             (*uhp).uh_extmark.capacity = 0;
-            nvim_u_free_uhp(uhp);
+            rs_u_free_uhp(uhp);
             return ptr::null_mut();
         }
     }
@@ -4988,7 +4982,7 @@ pub unsafe extern "C" fn rs_u_read_undo(
 
     // Now that we have read the undo info successfully, free the current undo
     // info and use the info from the file.
-    nvim_u_blockfree(buf);
+    rs_u_blockfree(buf);
 
     let oldhead = if old_idx < 0 {
         ptr::null_mut()
@@ -5046,7 +5040,7 @@ unsafe fn cleanup_read_error(
         for i in 0..num_read_uhps {
             let uhp = *uhp_table.add(i as usize);
             if !uhp.is_null() {
-                nvim_u_free_uhp(uhp);
+                rs_u_free_uhp(uhp);
             }
         }
         nvim_xfree(uhp_table as *mut c_void);
