@@ -75,6 +75,7 @@ pub mod path;
 pub mod popup;
 pub mod translate;
 pub mod traverse;
+pub mod vim_menu;
 
 // Re-exports for convenience
 pub use classify::{

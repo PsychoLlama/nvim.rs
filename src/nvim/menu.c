@@ -1244,3 +1244,23 @@ _Static_assert(EXPAND_MENUS == 11, "EXPAND_MENUS must be 11");
 _Static_assert(EXPAND_MENUNAMES == 21, "EXPAND_MENUNAMES must be 21");
 _Static_assert(EXPAND_UNSUCCESSFUL == -2, "EXPAND_UNSUCCESSFUL must be -2");
 _Static_assert(EXPAND_NOTHING == 0, "EXPAND_NOTHING must be 0");
+
+// Phase 1: Layout validation for Rust VimMenu #[repr(C)] struct.
+// These asserts ensure the Rust struct matches vimmenu_T exactly.
+#include <stddef.h>
+_Static_assert(sizeof(vimmenu_T) == 192, "vimmenu_T size");
+_Static_assert(offsetof(vimmenu_T, modes)    == 0,   "modes offset");
+_Static_assert(offsetof(vimmenu_T, enabled)  == 4,   "enabled offset");
+_Static_assert(offsetof(vimmenu_T, name)     == 8,   "name offset");
+_Static_assert(offsetof(vimmenu_T, dname)    == 16,  "dname offset");
+_Static_assert(offsetof(vimmenu_T, en_name)  == 24,  "en_name offset");
+_Static_assert(offsetof(vimmenu_T, en_dname) == 32,  "en_dname offset");
+_Static_assert(offsetof(vimmenu_T, mnemonic) == 40,  "mnemonic offset");
+_Static_assert(offsetof(vimmenu_T, actext)   == 48,  "actext offset");
+_Static_assert(offsetof(vimmenu_T, priority) == 56,  "priority offset");
+_Static_assert(offsetof(vimmenu_T, strings)  == 64,  "strings offset");
+_Static_assert(offsetof(vimmenu_T, noremap)  == 128, "noremap offset");
+_Static_assert(offsetof(vimmenu_T, silent)   == 160, "silent offset");
+_Static_assert(offsetof(vimmenu_T, children) == 168, "children offset");
+_Static_assert(offsetof(vimmenu_T, parent)   == 176, "parent offset");
+_Static_assert(offsetof(vimmenu_T, next)     == 184, "next offset");
