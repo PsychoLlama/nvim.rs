@@ -767,7 +767,8 @@ pub extern "C" fn rs_handle_x_keys(key: c_int) -> c_int {
 }
 
 /// Return true if "c" is a mouse key.
-#[no_mangle]
+#[must_use]
+#[export_name = "is_mouse_key"]
 pub extern "C" fn rs_is_mouse_key(c: c_int) -> bool {
     matches!(
         c,

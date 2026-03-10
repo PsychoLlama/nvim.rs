@@ -50,4 +50,24 @@ enum {
   MSCR_RIGHT = -2,
 };
 
+// Functions now implemented in Rust (src/nvim-rs/mouse) and exported via #[export_name].
+// Declarations are here since they no longer appear in mouse.h.generated.h.
+#include "nvim/buffer_defs.h"   // IWYU pragma: keep (win_T, oparg_T)
+#include "nvim/pos_defs.h"      // IWYU pragma: keep (linenr_T, colnr_T)
+
+DLLEXPORT bool do_mouse(oparg_T *oap, int c, int dir, int count, bool fixindent);
+DLLEXPORT void ins_mouse(int c);
+DLLEXPORT void do_mousescroll(cmdarg_T *cap);
+DLLEXPORT void ins_mousescroll(int dir);
+DLLEXPORT bool is_mouse_key(int c);
+DLLEXPORT int jump_to_mouse(int flags, bool *inclusive, int which_button);
+DLLEXPORT void nv_mousescroll(cmdarg_T *cap);
+DLLEXPORT void nv_mouse(cmdarg_T *cap);
+DLLEXPORT bool mouse_comp_pos(win_T *win, int *rowp, int *colp, linenr_T *lnump);
+DLLEXPORT win_T *mouse_find_win_inner(int *gridp, int *rowp, int *colp);
+DLLEXPORT win_T *mouse_find_win_outer(int *gridp, int *rowp, int *colp);
+DLLEXPORT colnr_T vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp);
+DLLEXPORT void setmouse(void);
+DLLEXPORT void reset_dragwin(void);
+
 #include "mouse.h.generated.h"

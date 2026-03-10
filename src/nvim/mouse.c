@@ -149,16 +149,6 @@ void nvim_ui_check_mouse(void)
   ui_check_mouse();
 }
 
-/// Get class of a character for selection: same class means same word.
-/// 0: blank
-/// 1: punctuation groups
-/// 2: normal word character
-/// >2: multi-byte word character.
-static int get_mouse_class(char *p)
-{
-  return rs_get_mouse_class(p);
-}
-
 /// Move "pos" back to the start of the word it's in.
 static void find_start_of_word(pos_T *pos)
 {
@@ -176,41 +166,13 @@ static void find_end_of_word(pos_T *pos)
 
 // Rust implementations
 extern void rs_set_mouse_topline(win_T *wp);
-extern void rs_setmouse(void);
 extern void rs_move_tab_to_mouse(void);
 extern void rs_mouse_tab_close(int c1);
-extern colnr_T rs_scroll_line_len(linenr_T lnum);
-extern linenr_T rs_find_longest_lnum(void);
 extern bool rs_do_mousescroll_horiz(colnr_T leftcol);
-extern bool rs_mouse_comp_pos(win_T *win, int *rowp, int *colp, linenr_T *lnump);
-extern colnr_T rs_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp);
-extern win_T *rs_mouse_find_win_inner(int *gridp, int *rowp, int *colp);
-extern win_T *rs_mouse_find_win_outer(int *gridp, int *rowp, int *colp);
 extern void rs_mouse_check_grid(colnr_T *vcolp, int *flagsp);
 extern int rs_get_fpos_of_mouse(pos_T *mpos);
 extern int rs_do_popup(int which_button, int m_pos_flag, pos_T m_pos);
-extern void rs_do_mousescroll(cmdarg_T *cap);
-extern void rs_nv_mousescroll(cmdarg_T *cap);
 extern void rs_nv_scroll_line(cmdarg_T *cap);
-extern void rs_ins_mouse(int c);
-extern void rs_ins_mousescroll(int dir);
-extern int rs_jump_to_mouse(int flags, bool *inclusive, int which_button);
-extern bool rs_do_mouse(oparg_T *oap, int c, int dir, int count, bool fixindent);
-extern void rs_nv_mouse(cmdarg_T *cap);
-
-/// Move the current tab to tab in same column as mouse or to end of the
-/// tabline if there is no tab there.
-static void move_tab_to_mouse(void)
-{
-  rs_move_tab_to_mouse();
-}
-/// Close the current or specified tab page.
-///
-/// @param c1  tabpage number, or 999 for the current tabpage
-static void mouse_tab_close(int c1)
-{
-  rs_mouse_tab_close(c1);
-}
 
 static bool got_click = false;  // got a click some time back
 
@@ -287,19 +249,6 @@ static void call_click_def_func(StlClickDefinition *click_defs, int col, int whi
   tv_clear(&rettv);
   // Make sure next click does not register as drag when callback absorbs the release event.
   got_click = false;
-}
-
-/// Translate window coordinates to buffer position without any side effects.
-/// Returns IN_BUFFER and sets "mpos->col" to the column when in buffer text.
-/// The column is one for the first column.
-static int get_fpos_of_mouse(pos_T *mpos)
-{
-  return rs_get_fpos_of_mouse(mpos);
-}
-
-static int do_popup(int which_button, int m_pos_flag, pos_T m_pos)
-{
-  return rs_do_popup(which_button, m_pos_flag, m_pos);
 }
 
 /// C accessor: perform the popup menu logic that depends on visual mode,
@@ -391,11 +340,6 @@ int nvim_do_popup_impl(int which_button, int m_pos_flag, pos_T m_pos)
 /// @param fixindent  PUT_FIXINDENT if fixing indent necessary
 ///
 /// @return           true if start_arrow() should be called for edit mode.
-bool do_mouse(oparg_T *oap, int c, int dir, int count, bool fixindent)
-{
-  return rs_do_mouse(oap, c, dir, count, fixindent);
-}
-
 /// C accessor: the actual do_mouse logic — 619 lines touching nearly every subsystem.
 bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
 {
@@ -481,10 +425,10 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
           || (mod_mask & MOD_MASK_MULTI_CLICK)
           || which_button == MOUSE_MIDDLE)
       && !((mod_mask & (MOD_MASK_SHIFT|MOD_MASK_ALT))
-           && mouse_model_popup()
+           && rs_mouse_model_popup((const char *)p_mousem)
            && which_button == MOUSE_LEFT)
       && !((mod_mask & MOD_MASK_ALT)
-           && !mouse_model_popup()
+           && !rs_mouse_model_popup((const char *)p_mousem)
            && which_button == MOUSE_RIGHT)) {
     return false;
   }
@@ -564,7 +508,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
     if (mouse_grid <= 1 && mouse_row == 0 && firstwin->w_winrow > 0) {
       if (is_drag) {
         if (in_tab_line) {
-          move_tab_to_mouse();
+          rs_move_tab_to_mouse();
         }
         return false;
       }
@@ -598,7 +542,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
           }
           FALLTHROUGH;
         case kStlClickTabClose:
-          mouse_tab_close(tabnr);
+          rs_mouse_tab_close(tabnr);
           break;
         case kStlClickFuncRun:
           call_click_def_func(tab_page_click_defs, mouse_col, which_button);
@@ -607,7 +551,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
       }
       return true;
     } else if (is_drag && in_tab_line) {
-      move_tab_to_mouse();
+      rs_move_tab_to_mouse();
       return false;
     }
   }
@@ -618,8 +562,8 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
   // right button up   -> pop-up menu
   // shift-left button -> right button
   // alt-left button   -> alt-right button
-  if (mouse_model_popup()) {
-    m_pos_flag = get_fpos_of_mouse(&m_pos);
+  if (rs_mouse_model_popup((const char *)p_mousem)) {
+    m_pos_flag = rs_get_fpos_of_mouse(&m_pos);
     if (!(m_pos_flag & (IN_STATUS_LINE|MOUSE_WINBAR|MOUSE_STATUSCOL))
         && which_button == MOUSE_RIGHT && !(mod_mask & (MOD_MASK_SHIFT|MOD_MASK_CTRL))) {
       if (!is_click) {
@@ -627,7 +571,7 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
         // menu on the button down event.
         return false;
       }
-      return (do_popup(which_button, m_pos_flag, m_pos) & CURSOR_MOVED);
+      return (rs_do_popup(which_button, m_pos_flag, m_pos) & CURSOR_MOVED);
     }
     // Only do this translation when mouse is over the buffer text
     if (!(m_pos_flag & (IN_STATUS_LINE|MOUSE_WINBAR|MOUSE_STATUSCOL))
@@ -726,9 +670,9 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
       case kStlClickDisabled:
         // If there is no click definition, still open the popupmenu for a
         // statuscolumn click like a click in the sign/number column does.
-        if (in_statuscol && mouse_model_popup()
+        if (in_statuscol && rs_mouse_model_popup((const char *)p_mousem)
             && which_button == MOUSE_RIGHT && !(mod_mask & (MOD_MASK_SHIFT|MOD_MASK_CTRL))) {
-          do_popup(which_button, m_pos_flag, m_pos);
+          rs_do_popup(which_button, m_pos_flag, m_pos);
         }
         break;
       case kStlClickFuncRun:
@@ -1018,11 +962,6 @@ bool nvim_do_mouse_impl(oparg_T *oap, int c, int dir, int count, bool fixindent)
   return moved;
 }
 
-void ins_mouse(int c)
-{
-  rs_ins_mouse(c);
-}
-
 /// C accessor: perform ins_mouse logic that deeply accesses insert mode state.
 void nvim_ins_mouse_impl(int c)
 {
@@ -1065,11 +1004,6 @@ void nvim_ins_mouse_impl(int c)
 ///    K_MOUSERIGHT - MSCR_RIGHT
 /// "curwin" may have been changed to the window that should be scrolled and
 /// differ from the window that actually has focus.
-void do_mousescroll(cmdarg_T *cap)
-{
-  rs_do_mousescroll(cap);
-}
-
 /// C accessor: perform the actual scroll logic.
 /// Accesses cmdarg_T fields, mod_mask, State, pagescroll, nv_scroll_line.
 void nvim_do_mousescroll_impl(cmdarg_T *cap)
@@ -1098,17 +1032,12 @@ void nvim_do_mousescroll_impl(cmdarg_T *cap)
     int step = shift_or_ctrl ? curwin->w_view_width : (int)p_mousescroll_hor;
     colnr_T leftcol = curwin->w_leftcol + (cap->arg == MSCR_RIGHT ? -step : +step);
     leftcol = MAX(leftcol, 0);
-    do_mousescroll_horiz(leftcol);
+    rs_do_mousescroll_horiz(leftcol);
   }
 }
 
 /// Implementation for scrolling in Insert mode in direction "dir", which is one
 /// of the MSCR_ values.
-void ins_mousescroll(int dir)
-{
-  rs_ins_mousescroll(dir);
-}
-
 /// C accessor: perform ins_mousescroll logic that constructs cmdarg_T
 /// and accesses insert mode state.
 void nvim_ins_mousescroll_impl(int dir)
@@ -1176,21 +1105,6 @@ void nvim_ins_mousescroll_impl(int dir)
   }
 }
 
-// Rust implementation of is_mouse_key
-extern bool rs_is_mouse_key(int c);
-
-/// Return true if "c" is a mouse key.
-bool is_mouse_key(int c)
-{
-  return rs_is_mouse_key(c);
-}
-
-/// @return  true when 'mousemodel' is set to "popup" or "popup_setpos".
-static bool mouse_model_popup(void)
-{
-  return rs_mouse_model_popup((const char *)p_mousem);
-}
-
 static win_T *dragwin = NULL;  ///< window being dragged
 
 /// Get the window being dragged.
@@ -1209,12 +1123,6 @@ void nvim_set_dragwin(win_T *wp)
 bool nvim_is_dragging(void)
 {
   return dragwin != NULL;
-}
-
-/// Reset the window being dragged.  To be called when switching tab page.
-void reset_dragwin(void)
-{
-  dragwin = NULL;
 }
 
 /// Move the cursor to the specified row and column on the screen.
@@ -1244,11 +1152,6 @@ void reset_dragwin(void)
 ///
 /// @param inclusive  used for inclusive operator, can be NULL
 /// @param which_button  MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE
-int jump_to_mouse(int flags, bool *inclusive, int which_button)
-{
-  return rs_jump_to_mouse(flags, inclusive, which_button);
-}
-
 /// C accessor: the actual jump_to_mouse logic with all static state and
 /// deep access to curwin, VIsual, grid layout, fold/topline management.
 int nvim_jump_to_mouse_impl(int flags, bool *inclusive, int which_button)
@@ -1425,7 +1328,7 @@ retnomove:
     }
     // set topline, to be able to check for double click ourselves
     if (curwin != old_curwin) {
-      set_mouse_topline(curwin);
+      rs_set_mouse_topline(curwin);
     }
     if (status_line_offset) {                       // In (or below) status line
       // Don't use start_arrow() if we're in the same window
@@ -1558,7 +1461,7 @@ retnomove:
 foldclick:;
   colnr_T col_from_screen = -1;
   int mouse_fold_flags = 0;
-  mouse_check_grid(&col_from_screen, &mouse_fold_flags);
+  rs_mouse_check_grid(&col_from_screen, &mouse_fold_flags);
 
   // compute the position in the buffer line from the posn on the screen
   if (mouse_comp_pos(curwin, &row, &col, &curwin->w_cursor.lnum)) {
@@ -1605,20 +1508,8 @@ foldclick:;
   return count;
 }
 
-/// Make a horizontal scroll to "leftcol".
-/// @return true if the cursor moved, false otherwise.
-static bool do_mousescroll_horiz(colnr_T leftcol)
-{
-  return rs_do_mousescroll_horiz(leftcol);
-}
-
 /// Normal and Visual modes implementation for scrolling in direction
 /// "cap->arg", which is one of the MSCR_ values.
-void nv_mousescroll(cmdarg_T *cap)
-{
-  rs_nv_mousescroll(cap);
-}
-
 /// C accessor: perform nv_mousescroll logic that accesses curwin/curbuf
 /// and cmdarg_T.
 void nvim_nv_mousescroll_impl(cmdarg_T *cap)
@@ -1647,42 +1538,10 @@ void nvim_nv_mousescroll_impl(cmdarg_T *cap)
   curbuf = curwin->w_buffer;
 }
 
-/// Mouse clicks and drags.
-void nv_mouse(cmdarg_T *cap)
-{
-  rs_nv_mouse(cap);
-}
-
 /// C accessor: nv_mouse logic accessing cmdarg_T fields.
 void nvim_nv_mouse_impl(cmdarg_T *cap)
 {
   do_mouse(cap->oap, cap->cmdchar, BACKWARD, cap->count1, 0);
-}
-
-/// Compute the buffer line position from the screen position "rowp" / "colp" in
-/// window "win".
-/// Returns true if the position is below the last line.
-bool mouse_comp_pos(win_T *win, int *rowp, int *colp, linenr_T *lnump)
-{
-  return rs_mouse_comp_pos(win, rowp, colp, lnump);
-}
-
-/// Find the window at "grid" position "*rowp" and "*colp".  The positions are
-/// updated to become relative to the top-left of the window inner area.
-///
-/// @return NULL when something is wrong.
-win_T *mouse_find_win_inner(int *gridp, int *rowp, int *colp)
-{
-  return rs_mouse_find_win_inner(gridp, rowp, colp);
-}
-
-/// Find the window at "grid" position "*rowp" and "*colp".  The positions are
-/// updated to become relative to the top-left of the window.
-///
-/// @return NULL when something is wrong.
-win_T *mouse_find_win_outer(int *gridp, int *rowp, int *colp)
-{
-  return rs_mouse_find_win_outer(gridp, rowp, colp);
 }
 
 /// C accessor: resolve grid handle to window and adjust row/col.
@@ -1790,50 +1649,6 @@ colnr_T nvim_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
     *coladdp = vcol - cur_vcol;
   }
   return (colnr_T)(ci.ptr - line);
-}
-
-extern colnr_T rs_vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp);
-
-/// Convert a virtual (screen) column to a character column.
-/// The first column is zero.
-colnr_T vcol2col(win_T *wp, linenr_T lnum, colnr_T vcol, colnr_T *coladdp)
-  FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_vcol2col(wp, lnum, vcol, coladdp);
-}
-
-/// Set UI mouse depending on current mode and 'mouse'.
-///
-/// Emits mouse_on/mouse_off UI event (unless 'mouse' is empty).
-void setmouse(void)
-{
-  rs_setmouse();
-}
-
-// Set orig_topline.  Used when jumping to another window, so that a double
-// click still works.
-static void set_mouse_topline(win_T *wp)
-{
-  rs_set_mouse_topline(wp);
-}
-
-/// Return length of line "lnum" for horizontal scrolling.
-static colnr_T scroll_line_len(linenr_T lnum)
-{
-  return rs_scroll_line_len(lnum);
-}
-
-/// Find longest visible line number.
-static linenr_T find_longest_lnum(void)
-{
-  return rs_find_longest_lnum();
-}
-
-/// Check clicked cell on its grid
-static void mouse_check_grid(colnr_T *vcolp, int *flagsp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_mouse_check_grid(vcolp, flagsp);
 }
 
 /// C accessor: perform grid-based vcol/flags lookup for mouse click.

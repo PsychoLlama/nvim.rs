@@ -620,10 +620,17 @@ pub unsafe extern "C" fn rs_set_mouse_topline(wp: WinHandle) {
 /// Set UI mouse depending on current mode and 'mouse'.
 ///
 /// Emits `mouse_on`/`mouse_off` UI event (unless 'mouse' is empty).
-#[no_mangle]
+#[export_name = "setmouse"]
 pub unsafe extern "C" fn rs_setmouse() {
     nvim_ui_cursor_shape();
     nvim_ui_check_mouse();
+}
+
+/// Reset the window being dragged to NULL.
+/// Called when switching tab page.
+#[export_name = "reset_dragwin"]
+pub unsafe extern "C" fn rs_reset_dragwin() {
+    nvim_set_dragwin(std::ptr::null_mut());
 }
 
 /// Move the current tab to the tab in the same column as the mouse,
@@ -722,7 +729,7 @@ extern "C" {
 ///
 /// # Safety
 /// `wp` must be a valid window handle.
-#[no_mangle]
+#[export_name = "vcol2col"]
 pub unsafe extern "C" fn rs_vcol2col(
     wp: WinHandle,
     lnum: linenr_T,
@@ -742,7 +749,7 @@ pub unsafe extern "C" fn rs_vcol2col(
 ///
 /// # Safety
 /// All pointers must be valid. `win` must be a valid window handle.
-#[no_mangle]
+#[export_name = "mouse_comp_pos"]
 pub unsafe extern "C" fn rs_mouse_comp_pos(
     win: WinHandle,
     rowp: *mut c_int,
@@ -1042,7 +1049,7 @@ extern "C" {
 ///
 /// # Safety
 /// All pointers must be valid.
-#[no_mangle]
+#[export_name = "mouse_find_win_inner"]
 pub unsafe extern "C" fn rs_mouse_find_win_inner(
     gridp: *mut c_int,
     rowp: *mut c_int,
@@ -1069,7 +1076,7 @@ pub unsafe extern "C" fn rs_mouse_find_win_inner(
 ///
 /// # Safety
 /// All pointers must be valid.
-#[no_mangle]
+#[export_name = "mouse_find_win_outer"]
 pub unsafe extern "C" fn rs_mouse_find_win_outer(
     gridp: *mut c_int,
     rowp: *mut c_int,
@@ -1248,7 +1255,7 @@ pub unsafe extern "C" fn rs_do_popup(which_button: c_int, m_pos_flag: c_int, m_p
 ///
 /// # Safety
 /// Requires valid window and insert mode state.
-#[no_mangle]
+#[export_name = "ins_mouse"]
 pub unsafe extern "C" fn rs_ins_mouse(c: c_int) {
     nvim_ins_mouse_impl(c);
 }
@@ -1257,7 +1264,7 @@ pub unsafe extern "C" fn rs_ins_mouse(c: c_int) {
 ///
 /// # Safety
 /// `cap` must be a valid `cmdarg_T` pointer.
-#[no_mangle]
+#[export_name = "do_mousescroll"]
 pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
     nvim_do_mousescroll_impl(cap);
 }
@@ -1266,7 +1273,7 @@ pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
 ///
 /// # Safety
 /// `cap` must be a valid `cmdarg_T` pointer.
-#[no_mangle]
+#[export_name = "nv_mousescroll"]
 pub unsafe extern "C" fn rs_nv_mousescroll(cap: CmdargHandle) {
     nvim_nv_mousescroll_impl(cap);
 }
@@ -1275,7 +1282,7 @@ pub unsafe extern "C" fn rs_nv_mousescroll(cap: CmdargHandle) {
 ///
 /// # Safety
 /// Requires valid window and insert mode state.
-#[no_mangle]
+#[export_name = "ins_mousescroll"]
 pub unsafe extern "C" fn rs_ins_mousescroll(dir: c_int) {
     nvim_ins_mousescroll_impl(dir);
 }
@@ -1296,7 +1303,7 @@ extern "C" {
 ///
 /// # Safety
 /// `inclusive` may be null. Otherwise must be a valid pointer.
-#[no_mangle]
+#[export_name = "jump_to_mouse"]
 pub unsafe extern "C" fn rs_jump_to_mouse(
     flags: c_int,
     inclusive: *mut bool,
@@ -1327,7 +1334,7 @@ extern "C" {
 ///
 /// # Safety
 /// `oap` may be null. Otherwise must be a valid `oparg_T` pointer.
-#[no_mangle]
+#[export_name = "do_mouse"]
 pub unsafe extern "C" fn rs_do_mouse(
     oap: OpargHandle,
     c: c_int,
@@ -1342,7 +1349,7 @@ pub unsafe extern "C" fn rs_do_mouse(
 ///
 /// # Safety
 /// `cap` must be a valid `cmdarg_T` pointer.
-#[no_mangle]
+#[export_name = "nv_mouse"]
 pub unsafe extern "C" fn rs_nv_mouse(cap: CmdargHandle) {
     nvim_nv_mouse_impl(cap);
 }
