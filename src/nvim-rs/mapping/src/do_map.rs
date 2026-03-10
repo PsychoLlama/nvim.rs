@@ -8,7 +8,7 @@ use std::ffi::{c_char, c_int};
 use crate::args::MapArguments;
 use crate::{
     map_hash, mapblock_keylen, mapblock_keys, mapblock_mode, mapblock_next, mapblock_simplified,
-    mapblock_str, BufHandle, MapblockHandle, MAXMAPLEN,
+    BufHandle, MapblockHandle, MAXMAPLEN,
 };
 
 // =============================================================================
@@ -63,8 +63,6 @@ extern "C" {
         mode: c_int,
         simplified: c_int,
     );
-    fn nvim_mapblock_set_alt(a: MapblockHandle, b: MapblockHandle);
-    fn nvim_mapargs_take_ownership(args: *mut MapArguments);
 
     fn nvim_get_got_int() -> c_int;
     fn nvim_mapping_set_no_abbr(val: c_int);
@@ -82,23 +80,7 @@ extern "C" {
     #[link_name = "skipwhite"]
     fn rs_skipwhite(p: *const c_char) -> *const c_char;
 
-    fn nvim_mapblock_set_mode(mp: MapblockHandle, mode: c_int);
-    fn nvim_mapblock_get_str_len(mp: MapblockHandle) -> c_int;
-
-    fn nvim_mapblock_free_in_list(
-        buf: BufHandle,
-        hash: c_int,
-        is_abbr: c_int,
-        is_buf_local: c_int,
-        mp: MapblockHandle,
-    ) -> MapblockHandle;
-    fn nvim_mapblock_rehash(
-        buf: BufHandle,
-        is_buf_local: c_int,
-        old_hash: c_int,
-        new_hash: c_int,
-        mp: MapblockHandle,
-    );
+    fn xfree(ptr: *mut c_char);
 
     // For do_map
     fn rs_str_to_mapargs(
@@ -106,7 +88,14 @@ extern "C" {
         is_unmap: c_int,
         mapargs: *mut MapArguments,
     ) -> c_int;
-    fn xfree(ptr: *mut c_char);
+}
+
+extern "C" {
+    fn nvim_set_maphash_entry(index: c_int, mp: MapblockHandle);
+    fn nvim_set_first_abbr(mp: MapblockHandle);
+    fn nvim_buf_set_maphash_entry(buf: BufHandle, index: c_int, mp: MapblockHandle);
+    fn nvim_buf_set_first_abbr(buf: BufHandle, mp: MapblockHandle);
+    fn api_free_luaref(ref_: c_int);
 }
 
 // =============================================================================
@@ -121,6 +110,174 @@ fn got_int() -> bool {
 #[inline]
 fn ascii_iswhite(c: u8) -> bool {
     c == b' ' || c == b'\t'
+}
+
+/// Free a mapblock. Mirrors the C `mapblock_free` logic.
+///
+/// # Safety
+/// `mp` must be a valid non-null mapblock pointer.
+unsafe fn mapblock_free(mp: MapblockHandle) {
+    if mp.is_null() {
+        return;
+    }
+    xfree((*mp).m_keys);
+    if (*mp).m_alt.is_null() {
+        if (*mp).m_luaref != -2 {
+            // LUA_NOREF = -2
+            api_free_luaref((*mp).m_luaref);
+            (*mp).m_luaref = -2;
+        }
+        xfree((*mp).m_str);
+        xfree((*mp).m_orig_str);
+        xfree((*mp).m_desc);
+    } else {
+        (*(*mp).m_alt).m_alt = std::ptr::null_mut();
+    }
+    xfree(mp.cast::<c_char>());
+}
+
+/// Link `mp` into a hash/abbr list head or set abbr pointer.
+///
+/// # Safety
+/// All handles must be valid or null.
+unsafe fn set_list_head(
+    buf: BufHandle,
+    hash: c_int,
+    is_abbr: bool,
+    is_local: bool,
+    mp: MapblockHandle,
+) {
+    if is_abbr {
+        if is_local {
+            nvim_buf_set_first_abbr(buf, mp);
+        } else {
+            nvim_set_first_abbr(mp);
+        }
+    } else if is_local {
+        nvim_buf_set_maphash_entry(buf, hash, mp);
+    } else {
+        nvim_set_maphash_entry(hash, mp);
+    }
+}
+
+/// Unlink `target` from list and return the next node.
+/// Then free the target.
+///
+/// # Safety
+/// All handles must be valid.
+unsafe fn free_from_list(
+    buf: BufHandle,
+    hash: c_int,
+    is_abbr: bool,
+    is_buf_local: bool,
+    target: MapblockHandle,
+) -> MapblockHandle {
+    let next = (*target).m_next;
+
+    // Get list head
+    let head = if is_abbr {
+        if is_buf_local {
+            nvim_buf_get_first_abbr(buf)
+        } else {
+            nvim_get_first_abbr()
+        }
+    } else if is_buf_local {
+        nvim_buf_get_maphash_entry(buf, hash)
+    } else {
+        nvim_get_maphash_entry(hash)
+    };
+
+    if head == target {
+        set_list_head(buf, hash, is_abbr, is_buf_local, next);
+    } else {
+        let mut prev = head;
+        while !prev.is_null() {
+            if (*prev).m_next == target {
+                (*prev).m_next = next;
+                break;
+            }
+            prev = (*prev).m_next;
+        }
+    }
+
+    mapblock_free(target);
+    next
+}
+
+/// Move mapblock from one hash bucket to another.
+///
+/// # Safety
+/// All handles must be valid.
+unsafe fn rehash_mapblock(
+    buf: BufHandle,
+    is_buf_local: bool,
+    old_hash: c_int,
+    new_hash: c_int,
+    mp: MapblockHandle,
+) {
+    // Unlink from old bucket
+    let old_head = if is_buf_local {
+        nvim_buf_get_maphash_entry(buf, old_hash)
+    } else {
+        nvim_get_maphash_entry(old_hash)
+    };
+
+    if old_head == mp {
+        if is_buf_local {
+            nvim_buf_set_maphash_entry(buf, old_hash, (*mp).m_next);
+        } else {
+            nvim_set_maphash_entry(old_hash, (*mp).m_next);
+        }
+    } else {
+        let mut prev = old_head;
+        while !prev.is_null() {
+            if (*prev).m_next == mp {
+                (*prev).m_next = (*mp).m_next;
+                break;
+            }
+            prev = (*prev).m_next;
+        }
+    }
+
+    // Insert at head of new bucket
+    let new_head = if is_buf_local {
+        nvim_buf_get_maphash_entry(buf, new_hash)
+    } else {
+        nvim_get_maphash_entry(new_hash)
+    };
+    (*mp).m_next = new_head;
+    if is_buf_local {
+        nvim_buf_set_maphash_entry(buf, new_hash, mp);
+    } else {
+        nvim_set_maphash_entry(new_hash, mp);
+    }
+}
+
+/// Nullify args ownership fields so cleanup won't free memory owned by mapblocks.
+///
+/// # Safety
+/// `args` must be a valid non-null pointer.
+unsafe fn mapargs_take_ownership(args: *mut MapArguments) {
+    if args.is_null() {
+        return;
+    }
+    (*args).rhs = std::ptr::null_mut();
+    (*args).orig_rhs = std::ptr::null_mut();
+    (*args).rhs_lua = LUA_NOREF;
+    (*args).desc = std::ptr::null_mut();
+}
+
+/// Set two mapblocks as alternates of each other.
+///
+/// # Safety
+/// `a` and `b` must be valid non-null mapblock pointers.
+unsafe fn mapblock_set_alt(a: MapblockHandle, b: MapblockHandle) {
+    if !a.is_null() {
+        (*a).m_alt = b;
+    }
+    if !b.is_null() {
+        (*b).m_alt = a;
+    }
 }
 
 /// Get the head of a hash/abbr list (global or buffer-local).
@@ -352,7 +509,7 @@ pub unsafe extern "C" fn rs_buf_do_map(
 
     // Link alternates
     if !mp_result[0].is_null() && !mp_result[1].is_null() {
-        nvim_mapblock_set_alt(mp_result[0], mp_result[1]);
+        mapblock_set_alt(mp_result[0], mp_result[1]);
     }
 
     finish(args, &mp_result, 0)
@@ -383,7 +540,7 @@ unsafe fn get_lhs_for_keyround(
 /// Clean up and return from buf_do_map.
 unsafe fn finish(args: *mut MapArguments, mp_result: &[MapblockHandle; 2], retval: c_int) -> c_int {
     if !mp_result[0].is_null() || !mp_result[1].is_null() {
-        nvim_mapargs_take_ownership(args);
+        mapargs_take_ownership(args);
     }
     retval
 }
@@ -548,7 +705,13 @@ unsafe fn process_matching_entries(
                 // Do we have a match?
                 let (n, p) = if round != 0 {
                     // Second round: try unmap "rhs" string
-                    (nvim_mapblock_get_str_len(mp), mapblock_str(mp))
+                    let s = (*mp).m_str;
+                    let slen = if s.is_null() {
+                        0
+                    } else {
+                        libc::strlen(s.cast()) as c_int
+                    };
+                    (slen, s.cast_const())
                 } else {
                     (mapblock_keylen(mp), mapblock_keys(mp))
                 };
@@ -579,7 +742,7 @@ unsafe fn process_matching_entries(
                         break;
                     }
                     // Reset the indicated mode bits.
-                    nvim_mapblock_set_mode(mp, mapblock_mode(mp) & !mode);
+                    (*mp).m_mode = mapblock_mode(mp) & !mode;
                     *did_it = true;
                 } else if !has_rhs {
                     // Show matching entry
@@ -600,7 +763,7 @@ unsafe fn process_matching_entries(
                     return Some(5); // entry not unique
                 } else {
                     // New rhs for existing entry
-                    nvim_mapblock_set_mode(mp, mapblock_mode(mp) & !mode);
+                    (*mp).m_mode = mapblock_mode(mp) & !mode;
                     if mapblock_mode(mp) == 0 && !*did_it {
                         // Reuse entry
                         nvim_mapblock_reuse(
@@ -617,13 +780,7 @@ unsafe fn process_matching_entries(
 
                 // Check if entry should be deleted (mode == 0)
                 if mapblock_mode(mp) == 0 {
-                    mp = nvim_mapblock_free_in_list(
-                        buf,
-                        hash,
-                        c_int::from(is_abbr),
-                        c_int::from(is_buf_local),
-                        mp,
-                    );
+                    mp = free_from_list(buf, hash, is_abbr, is_buf_local, mp);
                     continue;
                 }
 
@@ -633,7 +790,7 @@ unsafe fn process_matching_entries(
                     let first_char = if keys.is_null() { 0u8 } else { *keys as u8 };
                     let new_hash = map_hash(mapblock_mode(mp), first_char);
                     if new_hash != hash {
-                        nvim_mapblock_rehash(buf, c_int::from(is_buf_local), hash, new_hash, mp);
+                        rehash_mapblock(buf, is_buf_local, hash, new_hash, mp);
                         // After rehash, the current position in the old hash
                         // list has been updated. Re-read the head.
                         mp = get_list_head(buf, hash, is_abbr, is_buf_local);

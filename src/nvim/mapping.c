@@ -1513,41 +1513,8 @@ void nvim_buf_set_first_abbr(buf_T *buf, mapblock_T *mp)
   }
 }
 
-void nvim_mapblock_set_next(mapblock_T *mp, mapblock_T *next)
-{
-  if (mp) {
-    mp->m_next = next;
-  }
-}
-
-void nvim_mapblock_set_mode(mapblock_T *mp, int mode)
-{
-  if (mp) {
-    mp->m_mode = mode;
-  }
-}
-
-/// Free a mapblock and advance the pointer to the next entry.
-/// This is a C-side helper because it calls xfree and NLUA_CLEAR_REF.
-void nvim_mapblock_free(mapblock_T *mp)
-{
-  if (!mp) {
-    return;
-  }
-  xfree(mp->m_keys);
-  if (mp->m_alt != NULL) {
-    mp->m_alt->m_alt = NULL;
-  } else {
-    NLUA_CLEAR_REF(mp->m_luaref);
-    xfree(mp->m_str);
-    xfree(mp->m_orig_str);
-    xfree(mp->m_desc);
-  }
-  xfree(mp);
-}
-
 // =========================================================================
-// Phase 6 C accessors for buf_do_map / do_map Rust migration
+// Remaining C accessors for buf_do_map / do_map Rust migration
 // =========================================================================
 
 /// Wrapper for showmap() callable from Rust.
@@ -1603,31 +1570,6 @@ void nvim_mapblock_reuse(mapblock_T *mp, void *args_ptr,
   mp->m_desc = args->desc;
 }
 
-/// Link two mapblocks as alternates of each other.
-void nvim_mapblock_set_alt(mapblock_T *a, mapblock_T *b)
-{
-  if (a) {
-    a->m_alt = b;
-  }
-  if (b) {
-    b->m_alt = a;
-  }
-}
-
-/// Nullify args ownership fields (rhs, orig_rhs, rhs_lua, desc) so that
-/// do_map's cleanup won't free memory now owned by the mapblock.
-void nvim_mapargs_take_ownership(void *args_ptr)
-{
-  MapArguments *args = (MapArguments *)args_ptr;
-  if (!args) {
-    return;
-  }
-  args->rhs = NULL;
-  args->orig_rhs = NULL;
-  args->rhs_lua = LUA_NOREF;
-  args->desc = NULL;
-}
-
 // nvim_get_got_int, nvim_get_mapped_ctrl_c, nvim_set_mapped_ctrl_c,
 // nvim_msg_start already defined in other files — reuse those.
 
@@ -1671,69 +1613,6 @@ void nvim_mapping_msg_no_mapping(int is_abbr)
 int nvim_vim_iswordp(const char *p)
 {
   return vim_iswordp(p);
-}
-
-/// Get strlen(mp->m_str) for round-2 unmap matching.
-int nvim_mapblock_get_str_len(mapblock_T *mp)
-{
-  return mp ? (int)strlen(mp->m_str) : 0;
-}
-
-/// Check if map_table for this operation is buffer-local.
-/// Used to determine "local" display flag in showmap.
-int nvim_mapping_is_buf_maphash(buf_T *buf, int is_buf_local)
-{
-  // In the C code: map_table != maphash  means buffer-local
-  // is_buf_local directly tells us this
-  return is_buf_local;
-}
-
-/// Wrapper for mapblock_free() using pointer-to-pointer pattern.
-/// Unlinks from the specified list and frees.
-/// Returns the new current node (*mpp after deletion).
-mapblock_T *nvim_mapblock_free_in_list(buf_T *buf, int hash, int is_abbr,
-                                       int is_buf_local, mapblock_T *mp)
-{
-  // Find the pointer-to-pointer that points to mp
-  mapblock_T **mpp;
-  if (is_abbr) {
-    mpp = is_buf_local ? &buf->b_first_abbr : &first_abbr;
-  } else {
-    mapblock_T **mt = is_buf_local ? buf->b_maphash : maphash;
-    mpp = &mt[hash];
-  }
-
-  // Walk to find the entry
-  while (*mpp != NULL) {
-    if (*mpp == mp) {
-      mapblock_free(mpp);
-      return *mpp;  // mpp now points to the next entry
-    }
-    mpp = &((*mpp)->m_next);
-  }
-  return NULL;
-}
-
-/// Move a mapblock from one hash bucket to another.
-/// Unlinks from old bucket and inserts at head of new bucket.
-void nvim_mapblock_rehash(buf_T *buf, int is_buf_local,
-                          int old_hash, int new_hash, mapblock_T *mp)
-{
-  mapblock_T **mt = is_buf_local ? buf->b_maphash : maphash;
-
-  // Unlink from old hash bucket
-  mapblock_T **mpp = &mt[old_hash];
-  while (*mpp != NULL) {
-    if (*mpp == mp) {
-      *mpp = mp->m_next;
-      break;
-    }
-    mpp = &((*mpp)->m_next);
-  }
-
-  // Insert at head of new hash bucket
-  mp->m_next = mt[new_hash];
-  mt[new_hash] = mp;
 }
 
 /// Format a langmap error message into the provided buffer.

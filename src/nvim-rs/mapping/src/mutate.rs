@@ -23,12 +23,36 @@ extern "C" {
     fn nvim_buf_set_maphash_entry(buf: BufHandle, index: c_int, mp: MapblockHandle);
     fn nvim_buf_set_first_abbr(buf: BufHandle, mp: MapblockHandle);
 
-    fn nvim_mapblock_set_next(mp: MapblockHandle, next: MapblockHandle);
-    fn nvim_mapblock_set_mode(mp: MapblockHandle, mode: c_int);
-    fn nvim_mapblock_free(mp: MapblockHandle);
+    fn xfree(ptr: *mut c_char);
+    #[link_name = "api_free_luaref"]
+    fn api_free_luaref(ref_: c_int);
 
     fn rs_get_map_mode(cmdp: *mut *mut c_char, forceit: c_int) -> c_int;
     fn nvim_mapping_emsg_invarg();
+}
+
+/// Free a mapblock. Mirrors the C `mapblock_free` logic.
+///
+/// # Safety
+/// `mp` must be a valid non-null mapblock pointer.
+unsafe fn mapblock_free(mp: MapblockHandle) {
+    if mp.is_null() {
+        return;
+    }
+    xfree((*mp).m_keys);
+    if (*mp).m_alt.is_null() {
+        if (*mp).m_luaref != -2 {
+            // LUA_NOREF = -2
+            api_free_luaref((*mp).m_luaref);
+            (*mp).m_luaref = -2;
+        }
+        xfree((*mp).m_str);
+        xfree((*mp).m_orig_str);
+        xfree((*mp).m_desc);
+    } else {
+        (*(*mp).m_alt).m_alt = std::ptr::null_mut();
+    }
+    xfree(mp.cast::<c_char>());
 }
 
 // =============================================================================
@@ -88,7 +112,7 @@ unsafe fn unlink_from_list(
     while !prev.is_null() {
         let next = mapblock_next(prev);
         if next == target {
-            nvim_mapblock_set_next(prev, mapblock_next(target));
+            (*prev).m_next = mapblock_next(target);
             return;
         }
         prev = next;
@@ -102,7 +126,7 @@ unsafe fn insert_at_head(buf: BufHandle, new_hash: c_int, local: bool, mp: Mapbl
     } else {
         nvim_get_maphash_entry(new_hash)
     };
-    nvim_mapblock_set_next(mp, old_head);
+    (*mp).m_next = old_head;
     if local {
         nvim_buf_set_maphash_entry(buf, new_hash, mp);
     } else {
@@ -147,10 +171,10 @@ pub unsafe extern "C" fn rs_map_clear_mode(buf: BufHandle, mode: c_int, local: c
             if new_mode == 0 {
                 // Entry should be fully removed and freed.
                 unlink_from_list(buf, hash, is_abbr, is_local, mp);
-                nvim_mapblock_free(mp);
+                mapblock_free(mp);
             } else {
                 // Update mode bits.
-                nvim_mapblock_set_mode(mp, new_mode);
+                (*mp).m_mode = new_mode;
 
                 // Check if entry needs to move to a different hash bucket.
                 if !is_abbr {
