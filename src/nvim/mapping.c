@@ -167,17 +167,6 @@ static const char e_illegal_map_mode_string_str[]
   = N_("E1276: Illegal map mode string: '%s'");
 
 /// Get the start of the hashed map list for "state" and first character "c".
-mapblock_T *get_maphash_list(int state, int c)
-{
-  return maphash[MAP_HASH(state, c)];
-}
-
-/// Get the buffer-local hashed map list for "state" and first character "c".
-mapblock_T *get_buf_maphash_list(int state, int c)
-{
-  return curbuf->b_maphash[MAP_HASH(state, c)];
-}
-
 /// Delete one entry from the abbrlist or maphash[].
 /// "mpp" is a pointer to the m_next field of the PREVIOUS entry!
 static void mapblock_free(mapblock_T **mpp)
@@ -1076,18 +1065,6 @@ void f_mapcheck(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// @param mode  Bitflags representing the mode in which to set the mapping.
 ///              See @ref rs_get_map_mode.
 /// @param buffer  If true, make a buffer-local mapping for curbuf
-void add_map(char *lhs, char *rhs, int mode, bool buffer)
-{
-  MapArguments args = MAP_ARGUMENTS_INIT;
-  rs_set_maparg_lhs_rhs(lhs, strlen(lhs), rhs, strlen(rhs), LUA_NOREF, p_cpo, &args);
-  args.buffer = buffer;
-
-  rs_buf_do_map(MAPTYPE_NOREMAP, &args, mode, 0, curbuf);
-  xfree(args.rhs);
-  xfree(args.orig_rhs);
-}
-
-
 /// Called when langmap option is set; the language map can be
 /// changed at any time!
 const char *did_set_langmap(optset_T *args)

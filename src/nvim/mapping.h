@@ -19,6 +19,9 @@
 // These were previously auto-generated from mapping.c definitions.
 // NOTE: bool parameters are declared as int to match Rust c_int ABI.
 
+mapblock_T *get_maphash_list(int state, int c);
+mapblock_T *get_buf_maphash_list(int state, int c);
+void add_map(char *lhs, char *rhs, int mode, int buffer);
 void map_mode_to_chars(int mode, char *buf);
 int do_map(int maptype, char *arg, int mode, int is_abbrev);
 void map_clear_mode(buf_T *buf, int mode, int local, int abbr);

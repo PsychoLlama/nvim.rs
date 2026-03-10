@@ -96,6 +96,16 @@ extern "C" {
     fn nvim_buf_set_maphash_entry(buf: BufHandle, index: c_int, mp: MapblockHandle);
     fn nvim_buf_set_first_abbr(buf: BufHandle, mp: MapblockHandle);
     fn api_free_luaref(ref_: c_int);
+    fn nvim_mapping_get_p_cpo() -> *const c_char;
+    fn rs_set_maparg_lhs_rhs(
+        orig_lhs: *const c_char,
+        orig_lhs_len: usize,
+        orig_rhs: *const c_char,
+        orig_rhs_len: usize,
+        rhs_lua: c_int,
+        cpo_val: *const c_char,
+        mapargs: *mut MapArguments,
+    ) -> c_int;
 }
 
 // =============================================================================
@@ -842,4 +852,39 @@ pub unsafe extern "C" fn rs_do_map(
     xfree(parsed_args.rhs);
     xfree(parsed_args.orig_rhs);
     retval
+}
+
+// =============================================================================
+// add_map
+// =============================================================================
+
+/// Create a mapping without the `:map` command user interface.
+///
+/// # Safety
+/// `lhs` and `rhs` must be valid NUL-terminated C strings.
+#[export_name = "add_map"]
+pub unsafe extern "C" fn rs_add_map(
+    lhs: *mut c_char,
+    rhs: *mut c_char,
+    mode: c_int,
+    buffer: c_int,
+) {
+    let mut args: MapArguments = std::mem::zeroed();
+    args.rhs_lua = LUA_NOREF;
+    let p_cpo = nvim_mapping_get_p_cpo();
+    rs_set_maparg_lhs_rhs(
+        lhs,
+        libc::strlen(lhs.cast()),
+        rhs,
+        libc::strlen(rhs.cast()),
+        LUA_NOREF,
+        p_cpo,
+        &raw mut args,
+    );
+    args.buffer = buffer != 0;
+
+    let buf = nvim_get_curbuf();
+    rs_buf_do_map(MAPTYPE_NOREMAP, &raw mut args, mode, 0, buf);
+    xfree(args.rhs);
+    xfree(args.orig_rhs);
 }

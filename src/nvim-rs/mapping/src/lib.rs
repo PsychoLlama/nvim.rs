@@ -359,11 +359,31 @@ pub unsafe extern "C" fn rs_get_map_mode(cmdp: *mut *mut c_char, forceit: c_int)
 ///
 /// # Returns
 /// The first mapblock in the hash bucket, or null if empty.
-#[no_mangle]
+#[export_name = "get_maphash_list"]
 pub extern "C" fn rs_get_maphash_list(state: c_int, c: c_int) -> MapblockHandle {
     let hash = map_hash(state, c as u8);
     // SAFETY: We trust the C accessor function to return a valid handle.
     unsafe { nvim_get_maphash_entry(hash) }
+}
+
+/// Get the buffer-local hashed map list for "state" and first character "c".
+///
+/// Uses `curbuf` implicitly, matching the C `get_buf_maphash_list` signature.
+///
+/// # Arguments
+/// * `state` - The mode bits
+/// * `c` - The first character of the mapping's LHS
+///
+/// # Returns
+/// The first mapblock in the buffer-local hash bucket, or null if empty.
+#[export_name = "get_buf_maphash_list"]
+pub extern "C" fn rs_get_buf_maphash_list_c(state: c_int, c: c_int) -> MapblockHandle {
+    let hash = map_hash(state, c as u8);
+    // SAFETY: We trust the C accessor function to return a valid handle.
+    unsafe {
+        let curbuf = nvim_get_curbuf();
+        nvim_buf_get_maphash_entry(curbuf, hash)
+    }
 }
 
 /// Get the buffer-local hashed map list for "state" and first character "c".
