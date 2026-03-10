@@ -3998,6 +3998,248 @@ pub extern "C" fn rs_mb_isalpha(a: c_int) -> bool {
     mb_toupper_impl(a) != a || mb_tolower_impl(a) != a
 }
 
+// ── Encoding canonicalization ─────────────────────────────────────────────────
+
+extern "C" {
+    /// C memory allocator: xmalloc(size) -> ptr.
+    fn xmalloc(size: usize) -> *mut c_char;
+    /// C string duplicator: xstrdup(s) -> allocated copy.
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    /// C memory freer.
+    fn xfree(p: *mut c_char);
+    /// Global `fenc_default` encoding string.
+    static fenc_default: *const c_char;
+}
+
+/// Alias entry: alias name -> canonical index.
+struct EncAliasEntry {
+    name: &'static str,
+    canon: usize,
+}
+
+/// Canonical indices (match the position in ENC_CANON_TABLE).
+const IDX_LATIN_1: usize = 0;
+const IDX_ISO_2: usize = 1;
+const IDX_ISO_3: usize = 2;
+const IDX_ISO_4: usize = 3;
+const IDX_ISO_5: usize = 4;
+const IDX_ISO_6: usize = 5;
+const IDX_ISO_7: usize = 6;
+const IDX_ISO_8: usize = 7;
+const IDX_ISO_9: usize = 8;
+const IDX_ISO_10: usize = 9;
+const IDX_ISO_11: usize = 10;
+const IDX_ISO_13: usize = 11;
+const IDX_ISO_14: usize = 12;
+const IDX_ISO_15: usize = 13;
+const IDX_UTF8: usize = 16;
+const IDX_UCS2: usize = 17;
+const IDX_UCS2LE: usize = 18;
+const IDX_UTF16: usize = 19;
+const IDX_UTF16LE: usize = 20;
+const IDX_UCS4: usize = 21;
+const IDX_UCS4LE: usize = 22;
+const IDX_EUC_JP: usize = 24;
+const IDX_SJIS: usize = 25;
+const IDX_EUC_KR: usize = 26;
+const IDX_EUC_CN: usize = 27;
+const IDX_EUC_TW: usize = 28;
+const IDX_BIG5: usize = 29;
+const IDX_CP932: usize = 45;
+const IDX_CP936: usize = 46;
+const IDX_CP949: usize = 47;
+const IDX_CP950: usize = 48;
+const IDX_MACROMAN: usize = 57;
+
+#[rustfmt::skip]
+static ENC_ALIAS_TABLE: &[EncAliasEntry] = &[
+    EncAliasEntry { name: "ansi",       canon: IDX_LATIN_1 },
+    EncAliasEntry { name: "iso-8859-1", canon: IDX_LATIN_1 },
+    EncAliasEntry { name: "latin2",     canon: IDX_ISO_2 },
+    EncAliasEntry { name: "latin3",     canon: IDX_ISO_3 },
+    EncAliasEntry { name: "latin4",     canon: IDX_ISO_4 },
+    EncAliasEntry { name: "cyrillic",   canon: IDX_ISO_5 },
+    EncAliasEntry { name: "arabic",     canon: IDX_ISO_6 },
+    EncAliasEntry { name: "greek",      canon: IDX_ISO_7 },
+    EncAliasEntry { name: "hebrew",     canon: IDX_ISO_8 },
+    EncAliasEntry { name: "latin5",     canon: IDX_ISO_9 },
+    EncAliasEntry { name: "turkish",    canon: IDX_ISO_9 },
+    EncAliasEntry { name: "latin6",     canon: IDX_ISO_10 },
+    EncAliasEntry { name: "nordic",     canon: IDX_ISO_10 },
+    EncAliasEntry { name: "thai",       canon: IDX_ISO_11 },
+    EncAliasEntry { name: "latin7",     canon: IDX_ISO_13 },
+    EncAliasEntry { name: "latin8",     canon: IDX_ISO_14 },
+    EncAliasEntry { name: "latin9",     canon: IDX_ISO_15 },
+    EncAliasEntry { name: "utf8",       canon: IDX_UTF8 },
+    EncAliasEntry { name: "unicode",    canon: IDX_UCS2 },
+    EncAliasEntry { name: "ucs2",       canon: IDX_UCS2 },
+    EncAliasEntry { name: "ucs2be",     canon: IDX_UCS2 },
+    EncAliasEntry { name: "ucs-2be",    canon: IDX_UCS2 },
+    EncAliasEntry { name: "ucs2le",     canon: IDX_UCS2LE },
+    EncAliasEntry { name: "utf16",      canon: IDX_UTF16 },
+    EncAliasEntry { name: "utf16be",    canon: IDX_UTF16 },
+    EncAliasEntry { name: "utf-16be",   canon: IDX_UTF16 },
+    EncAliasEntry { name: "utf16le",    canon: IDX_UTF16LE },
+    EncAliasEntry { name: "ucs4",       canon: IDX_UCS4 },
+    EncAliasEntry { name: "ucs4be",     canon: IDX_UCS4 },
+    EncAliasEntry { name: "ucs-4be",    canon: IDX_UCS4 },
+    EncAliasEntry { name: "ucs4le",     canon: IDX_UCS4LE },
+    EncAliasEntry { name: "utf32",      canon: IDX_UCS4 },
+    EncAliasEntry { name: "utf-32",     canon: IDX_UCS4 },
+    EncAliasEntry { name: "utf32be",    canon: IDX_UCS4 },
+    EncAliasEntry { name: "utf-32be",   canon: IDX_UCS4 },
+    EncAliasEntry { name: "utf32le",    canon: IDX_UCS4LE },
+    EncAliasEntry { name: "utf-32le",   canon: IDX_UCS4LE },
+    EncAliasEntry { name: "932",        canon: IDX_CP932 },
+    EncAliasEntry { name: "949",        canon: IDX_CP949 },
+    EncAliasEntry { name: "936",        canon: IDX_CP936 },
+    EncAliasEntry { name: "gbk",        canon: IDX_CP936 },
+    EncAliasEntry { name: "950",        canon: IDX_CP950 },
+    EncAliasEntry { name: "eucjp",      canon: IDX_EUC_JP },
+    EncAliasEntry { name: "unix-jis",   canon: IDX_EUC_JP },
+    EncAliasEntry { name: "ujis",       canon: IDX_EUC_JP },
+    EncAliasEntry { name: "shift-jis",  canon: IDX_SJIS },
+    EncAliasEntry { name: "pck",        canon: IDX_SJIS },
+    EncAliasEntry { name: "euckr",      canon: IDX_EUC_KR },
+    EncAliasEntry { name: "5601",       canon: IDX_EUC_KR },
+    EncAliasEntry { name: "euccn",      canon: IDX_EUC_CN },
+    EncAliasEntry { name: "gb2312",     canon: IDX_EUC_CN },
+    EncAliasEntry { name: "euctw",      canon: IDX_EUC_TW },
+    EncAliasEntry { name: "japan",      canon: IDX_EUC_JP },
+    EncAliasEntry { name: "korea",      canon: IDX_EUC_KR },
+    EncAliasEntry { name: "prc",        canon: IDX_EUC_CN },
+    EncAliasEntry { name: "zh-cn",      canon: IDX_EUC_CN },
+    EncAliasEntry { name: "chinese",    canon: IDX_EUC_CN },
+    EncAliasEntry { name: "zh-tw",      canon: IDX_EUC_TW },
+    EncAliasEntry { name: "taiwan",     canon: IDX_EUC_TW },
+    EncAliasEntry { name: "cp950",      canon: IDX_BIG5 },
+    EncAliasEntry { name: "950",        canon: IDX_BIG5 },
+    EncAliasEntry { name: "mac",        canon: IDX_MACROMAN },
+    EncAliasEntry { name: "mac-roman",  canon: IDX_MACROMAN },
+];
+
+/// Search for an encoding alias of `name`. Returns the canonical index or -1.
+fn enc_alias_search_rs(name: &str) -> c_int {
+    for entry in ENC_ALIAS_TABLE {
+        if entry.name == name {
+            return entry.canon as c_int;
+        }
+    }
+    -1
+}
+
+/// In-place memmove: move `strlen(src)+1` bytes from src to dst.
+///
+/// # Safety
+/// - `src` and `dst` must be valid pointers within the same allocated buffer.
+#[inline]
+unsafe fn strmove(dst: *mut c_char, src: *mut c_char) {
+    let len = libc::strlen(src) + 1;
+    std::ptr::copy(src, dst, len);
+}
+
+/// Canonicalize an encoding name.
+///
+/// Mirrors C `enc_canonize`. The caller must `xfree` the returned string.
+///
+/// # Safety
+/// - `enc` must be a valid non-null C string.
+#[unsafe(export_name = "enc_canonize")]
+pub unsafe extern "C" fn rs_enc_canonize(enc: *const c_char) -> *mut c_char {
+    // SAFETY: enc is a valid C string per precondition.
+    let enc_cstr = std::ffi::CStr::from_ptr(enc);
+    let enc_bytes = enc_cstr.to_bytes();
+
+    // Handle "default" → fenc_default.
+    if enc_bytes == b"default" {
+        return xstrdup(fenc_default);
+    }
+
+    // Copy enc to an allocated buffer with room for two extra '-' characters.
+    // SAFETY: xmalloc never returns null (aborts on OOM).
+    let r: *mut c_char = xmalloc(enc_bytes.len() + 3);
+
+    // Make it all lower case and replace '_' with '-'.
+    for (i, &byte) in enc_bytes.iter().enumerate() {
+        let out = if byte == b'_' {
+            b'-'
+        } else {
+            byte.to_ascii_lowercase()
+        };
+        *r.add(i) = out as c_char;
+    }
+    *r.add(enc_bytes.len()) = 0; // NUL terminate
+
+    // Skip "2byte-" and "8bit-" prefixes.
+    // SAFETY: r is a valid NUL-terminated string.
+    let p: *mut c_char = rs_enc_skip(r);
+
+    // Change "microsoft-cp" to "cp".
+    if libc::strncmp(p, c"microsoft-cp".as_ptr(), 12) == 0 {
+        strmove(p, p.add(10));
+    }
+
+    // "iso8859" -> "iso-8859"
+    if libc::strncmp(p, c"iso8859".as_ptr(), 7) == 0 {
+        strmove(p.add(4), p.add(3));
+        *p.add(3) = b'-' as c_char;
+    }
+
+    // "iso-8859n" -> "iso-8859-n"
+    if libc::strncmp(p, c"iso-8859".as_ptr(), 8) == 0 && *p.add(8) != b'-' as c_char {
+        strmove(p.add(9), p.add(8));
+        *p.add(8) = b'-' as c_char;
+    }
+
+    // "latin-N" -> "latinN"
+    if libc::strncmp(p, c"latin-".as_ptr(), 6) == 0 {
+        strmove(p.add(5), p.add(6));
+    }
+
+    // Check if canonical name or alias.
+    let p_cstr = std::ffi::CStr::from_ptr(p);
+    let p_str = match p_cstr.to_str() {
+        Ok(s) => s,
+        Err(_) => return r, // non-UTF-8: return as-is
+    };
+
+    if enc_canon_search(p_str.as_bytes()) >= 0 {
+        // canonical name can be used unmodified; if p != r, move to front
+        if p != r {
+            strmove(r, p);
+        }
+    } else {
+        let alias_idx = enc_alias_search_rs(p_str);
+        if alias_idx >= 0 {
+            // alias recognized: replace with canonical name
+            let canon_name = ENC_CANON_TABLE[alias_idx as usize].name;
+            xfree(r);
+            let cstring = std::ffi::CString::new(canon_name).unwrap_or_default();
+            return xstrdup(cstring.as_ptr());
+        }
+    }
+    r
+}
+
+/// Return the name of a canonical encoding by index (for tab-completion).
+///
+/// Mirrors C `get_encoding_name`. `xp` is unused.
+///
+/// # Safety
+/// - Returns a pointer to static data; do not free.
+#[allow(non_snake_case)]
+#[unsafe(export_name = "get_encoding_name")]
+pub unsafe extern "C" fn rs_get_encoding_name(
+    _xp: *mut std::ffi::c_void,
+    idx: c_int,
+) -> *const c_char {
+    let idx = idx as usize;
+    if idx >= ENC_CANON_TABLE.len() {
+        return std::ptr::null();
+    }
+    ENC_CANON_TABLE[idx].name.as_ptr().cast()
+}
+
 #[cfg(test)]
 mod utfc_tests {
     use super::*;

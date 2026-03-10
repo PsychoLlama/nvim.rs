@@ -108,6 +108,8 @@ extern int enc_canon_props(const char *name);
 extern int mb_off_next(const char *base, const char *p);
 
 extern int rs_utf_is_trail_byte(int byte);
+extern char *enc_canonize(char *enc);
+extern char *get_encoding_name(expand_T *xp, int idx);
 extern int mb_toupper(int a);
 extern int mb_tolower(int a);
 extern bool mb_islower(int a);
