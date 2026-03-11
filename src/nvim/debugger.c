@@ -69,51 +69,6 @@ static garray_T prof_ga = { 0, 0, sizeof(struct debuggy), 4, NULL };
 #define DBG_EXPR        3
 
 // =============================================================================
-// Static assertions for constants used in Rust
-// =============================================================================
-
-_Static_assert(DBG_FUNC == 1, "DBG_FUNC mismatch");
-_Static_assert(DBG_FILE == 2, "DBG_FILE mismatch");
-_Static_assert(DBG_EXPR == 3, "DBG_EXPR mismatch");
-_Static_assert(OK == 1, "OK mismatch");
-_Static_assert(FAIL == 0, "FAIL mismatch");
-_Static_assert(K_SPECIAL == 0x80, "K_SPECIAL mismatch");
-_Static_assert(KS_EXTRA == 253, "KS_EXTRA mismatch");
-_Static_assert(KE_SNR == 82, "KE_SNR mismatch");
-_Static_assert(ESTACK_NONE == 0, "ESTACK_NONE mismatch");
-_Static_assert(EXPAND_NOTHING == 0, "EXPAND_NOTHING mismatch");
-_Static_assert(MODE_NORMAL == 0x01, "MODE_NORMAL mismatch");
-_Static_assert(NUL == 0, "NUL mismatch");
-_Static_assert(RE_MAGIC == 1, "RE_MAGIC mismatch");
-_Static_assert(RE_STRING == 2, "RE_STRING mismatch");
-_Static_assert(UPD_NOT_VALID == 40, "UPD_NOT_VALID mismatch");
-_Static_assert(DOCMD_VERBOSE == 0x01, "DOCMD_VERBOSE mismatch");
-_Static_assert(DOCMD_EXCRESET == 0x10, "DOCMD_EXCRESET mismatch");
-_Static_assert(CMD_profile == 331, "CMD_profile mismatch");
-_Static_assert(CMD_profdel == 332, "CMD_profdel mismatch");
-_Static_assert(CMD_breakdel == 36, "CMD_breakdel mismatch");
-_Static_assert(CMD_breakadd == 35, "CMD_breakadd mismatch");
-_Static_assert(EXPR_IS == 9, "EXPR_IS mismatch");
-
-// =============================================================================
-// Rust function declarations
-// =============================================================================
-
-extern void rs_do_debug(char *cmd);
-extern void rs_ex_debug(exarg_T *eap);
-extern void rs_ex_debuggreedy(exarg_T *eap);
-extern void rs_dbg_check_breakpoint(exarg_T *eap);
-extern bool rs_dbg_check_skipped(exarg_T *eap);
-extern void rs_ex_breakadd(exarg_T *eap);
-extern void rs_ex_breakdel(exarg_T *eap);
-extern void rs_ex_breaklist(exarg_T *eap);
-extern linenr_T rs_dbg_find_breakpoint(bool file, char *fname, linenr_T after);
-extern bool rs_has_profiling(bool file, char *fname, bool *fp);
-extern void rs_dbg_breakpoint(char *name, linenr_T lnum);
-extern void rs_update_has_expr_breakpoint(void);
-extern int rs_typval_compare(typval_T *typ1, typval_T *typ2, int expr_type, int ic);
-
-// =============================================================================
 // C accessor functions for Rust to call back into
 // =============================================================================
 
@@ -410,11 +365,6 @@ typval_T *nvim_dbg_eval_expr(const char *name)
   return eval_expr((char *)name, NULL);
 }
 
-int nvim_dbg_typval_compare(typval_T *tv1, typval_T *tv2, int ctype, bool ic)
-{
-  return rs_typval_compare(tv1, tv2, ctype, (int)ic);
-}
-
 int64_t nvim_dbg_typval_get_v_number(typval_T *tv)
 {
   return (int64_t)tv->vval.v_number;
@@ -489,61 +439,3 @@ void nvim_dbg_home_replace(const char *name, char *buf, int buflen)
   home_replace(NULL, name, buf, buflen, true);
 }
 
-// =============================================================================
-// Thin wrappers delegating to Rust
-// =============================================================================
-
-void do_debug(char *cmd)
-{
-  rs_do_debug(cmd);
-}
-
-void ex_debug(exarg_T *eap)
-{
-  rs_ex_debug(eap);
-}
-
-void ex_debuggreedy(exarg_T *eap)
-{
-  rs_ex_debuggreedy(eap);
-}
-
-void dbg_check_breakpoint(exarg_T *eap)
-{
-  rs_dbg_check_breakpoint(eap);
-}
-
-bool dbg_check_skipped(exarg_T *eap)
-{
-  return rs_dbg_check_skipped(eap);
-}
-
-void ex_breakadd(exarg_T *eap)
-{
-  rs_ex_breakadd(eap);
-}
-
-void ex_breakdel(exarg_T *eap)
-{
-  rs_ex_breakdel(eap);
-}
-
-void ex_breaklist(exarg_T *eap)
-{
-  rs_ex_breaklist(eap);
-}
-
-linenr_T dbg_find_breakpoint(bool file, char *fname, linenr_T after)
-{
-  return rs_dbg_find_breakpoint(file, fname, after);
-}
-
-bool has_profiling(bool file, char *fname, bool *fp)
-{
-  return rs_has_profiling(file, fname, fp);
-}
-
-void dbg_breakpoint(char *name, linenr_T lnum)
-{
-  rs_dbg_breakpoint(name, lnum);
-}

@@ -209,11 +209,12 @@ extern "C" {
 
     // --- Eval wrappers ---
     fn nvim_dbg_eval_expr(name: *const c_char) -> TypvalHandle;
+    #[link_name = "rs_typval_compare"]
     fn nvim_dbg_typval_compare(
         tv1: TypvalHandle,
         tv2: TypvalHandle,
         ctype: c_int,
-        ic: bool,
+        ic: c_int,
     ) -> c_int;
     fn nvim_dbg_typval_get_v_number(tv: TypvalHandle) -> i64;
     fn nvim_dbg_typval_tostring(tv: TypvalHandle) -> *mut c_char;
@@ -336,7 +337,7 @@ unsafe fn char_at(p: *const c_char) -> u8 {
 // =============================================================================
 
 /// Called when a breakpoint was encountered.
-#[no_mangle]
+#[export_name = "dbg_breakpoint"]
 pub unsafe extern "C" fn rs_dbg_breakpoint(name: *mut c_char, lnum: i32) {
     let state = &raw mut STATE;
     unsafe {
@@ -346,7 +347,7 @@ pub unsafe extern "C" fn rs_dbg_breakpoint(name: *mut c_char, lnum: i32) {
 }
 
 /// ":debuggreedy" command
-#[no_mangle]
+#[export_name = "ex_debuggreedy"]
 pub unsafe extern "C" fn rs_ex_debuggreedy(eap: *const ExArgHandle) {
     let state = &raw mut STATE;
     unsafe {
@@ -359,7 +360,7 @@ pub unsafe extern "C" fn rs_ex_debuggreedy(eap: *const ExArgHandle) {
 }
 
 /// ":debug" command
-#[no_mangle]
+#[export_name = "ex_debug"]
 pub unsafe extern "C" fn rs_ex_debug(eap: *const ExArgHandle) {
     unsafe {
         let save = debug_break_level;
@@ -499,7 +500,7 @@ unsafe fn do_showbacktrace(cmd: *const c_char) {
 
 /// Go to debug mode when a breakpoint was encountered or "ex_nesting_level" is
 /// at or below the break level. Called from do_one_cmd() before executing a command.
-#[no_mangle]
+#[export_name = "dbg_check_breakpoint"]
 pub unsafe extern "C" fn rs_dbg_check_breakpoint(eap: *const ExArgHandle) {
     let state = &raw mut STATE;
     unsafe {
@@ -545,7 +546,7 @@ pub unsafe extern "C" fn rs_dbg_check_breakpoint(eap: *const ExArgHandle) {
 
 /// Go to debug mode if skipped by dbg_check_breakpoint() because eap->skip was set.
 /// Returns true when the debug mode is entered this time.
-#[no_mangle]
+#[export_name = "dbg_check_skipped"]
 pub unsafe extern "C" fn rs_dbg_check_skipped(eap: *const ExArgHandle) -> bool {
     let state = &raw mut STATE;
     unsafe {
@@ -683,7 +684,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, gap: *mut GapHandle) -> c_int {
 // =============================================================================
 
 /// ":breakadd". Also used for ":profile".
-#[no_mangle]
+#[export_name = "ex_breakadd"]
 pub unsafe extern "C" fn rs_ex_breakadd(eap: *const ExArgHandle) {
     let state = &raw mut STATE;
     unsafe {
@@ -739,7 +740,7 @@ pub unsafe extern "C" fn rs_ex_breakadd(eap: *const ExArgHandle) {
 }
 
 /// ":breakdel" and ":profdel"
-#[no_mangle]
+#[export_name = "ex_breakdel"]
 pub unsafe extern "C" fn rs_ex_breakdel(eap: *const ExArgHandle) {
     unsafe {
         let mut todel: c_int = -1;
@@ -827,7 +828,7 @@ pub unsafe extern "C" fn rs_ex_breakdel(eap: *const ExArgHandle) {
 }
 
 /// ":breaklist"
-#[no_mangle]
+#[export_name = "ex_breaklist"]
 pub unsafe extern "C" fn rs_ex_breaklist(_eap: *const ExArgHandle) {
     unsafe {
         let gap = nvim_dbg_get_breakp_gap();
@@ -942,7 +943,7 @@ unsafe fn debuggy_find(
                         (*state).debug_newval = nvim_dbg_typval_tostring(nvim_dbg_get_val(gap, i));
                         line = true;
                     } else {
-                        if nvim_dbg_typval_compare(tv, bp_val, EXPR_IS, false) == OK
+                        if nvim_dbg_typval_compare(tv, bp_val, EXPR_IS, 0) == OK
                             && nvim_dbg_typval_get_v_number(tv) == 0
                         {
                             line = true;
@@ -987,7 +988,7 @@ unsafe fn debuggy_find(
 
 /// Find a breakpoint for a function or sourced file.
 /// Returns line number at which to break; zero when no matching breakpoint.
-#[no_mangle]
+#[export_name = "dbg_find_breakpoint"]
 pub unsafe extern "C" fn rs_dbg_find_breakpoint(file: bool, fname: *mut c_char, after: i32) -> i32 {
     unsafe {
         debuggy_find(
@@ -1001,7 +1002,7 @@ pub unsafe extern "C" fn rs_dbg_find_breakpoint(file: bool, fname: *mut c_char, 
 }
 
 /// Returns true if profiling is on for a function or sourced file.
-#[no_mangle]
+#[export_name = "has_profiling"]
 pub unsafe extern "C" fn rs_has_profiling(file: bool, fname: *mut c_char, fp: *mut bool) -> bool {
     unsafe { debuggy_find(file, fname, 0, nvim_dbg_get_prof_gap(), fp) != 0 }
 }
@@ -1011,7 +1012,7 @@ pub unsafe extern "C" fn rs_has_profiling(file: bool, fname: *mut c_char, fp: *m
 // =============================================================================
 
 /// Debug mode. Repeatedly get Ex commands, until told to continue normal execution.
-#[no_mangle]
+#[export_name = "do_debug"]
 pub unsafe extern "C" fn rs_do_debug(cmd: *mut c_char) {
     let state = &raw mut STATE;
     unsafe {
