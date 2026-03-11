@@ -169,10 +169,6 @@ enum {
   SCORE_LIMITMAX = 350,   // for spell_edit_score_limit()
 };
 
-// for spell_edit_score_limit() we need to know the minimum value of
-// SCORE_ICASE, SCORE_SWAP, SCORE_DEL, SCORE_SIMILAR and SCORE_INS
-#define SCORE_EDIT_MIN  SCORE_SIMILAR
-
 /// For finding suggestions: At each node in the tree these states are tried:
 typedef enum {
   STATE_START = 0,  ///< At start of node check for NUL bytes (goodword
@@ -250,10 +246,6 @@ enum {
 static int spell_suggest_timeout = 5000;
 
 #include "spellsuggest.c.generated.h"
-
-/// Returns true when the sequence of flags in "compflags" plus "flag" can
-/// possibly form a valid compounded word.  This also checks the COMPOUNDRULE
-/// lines if they don't contain wildcards.
 
 // values for sps_flags
 enum {
@@ -2478,9 +2470,6 @@ badword:
   }
 }
 
-/// Find word "word" in fold-case tree for "slang" and return the word number.
-/// Returns true if "c1" and "c2" are similar characters according to the MAP
-/// lines in the .aff file.
 /// Adds a suggestion to the list of suggestions.
 /// For a suggestion that is already in the list the lowest score is remembered.
 ///
