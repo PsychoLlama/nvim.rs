@@ -484,61 +484,9 @@ int32_t nvim_dbg_getdigits_int32(char **pp)
   return getdigits_int32(pp, true, 0);
 }
 
-// =============================================================================
-// Path/file wrappers
-// =============================================================================
-
-char *nvim_dbg_expand_env_save(const char *p)
-{
-  return expand_env_save((char *)p);
-}
-
-char *nvim_dbg_fix_fname(const char *p)
-{
-  return fix_fname((char *)p);
-}
-
 void nvim_dbg_home_replace(const char *name, char *buf, int buflen)
 {
   home_replace(NULL, name, buf, buflen, true);
-}
-
-char *nvim_dbg_file_pat_to_reg_pat(const char *pat)
-{
-  return file_pat_to_reg_pat((char *)pat, NULL, NULL, false);
-}
-
-// =============================================================================
-// Regex wrappers
-// =============================================================================
-
-regprog_T *nvim_dbg_vim_regcomp(const char *pat, int flags)
-{
-  return vim_regcomp((char *)pat, flags);
-}
-
-void nvim_dbg_vim_regfree(regprog_T *prog)
-{
-  vim_regfree(prog);
-}
-
-bool nvim_dbg_vim_regexec_prog(regprog_T **prog_ptr, const char *name)
-{
-  return vim_regexec_prog(prog_ptr, false, (char *)name, 0);
-}
-
-// =============================================================================
-// Screen/misc wrappers
-// =============================================================================
-
-void nvim_dbg_redraw_all_later(int typ)
-{
-  redraw_all_later(typ);
-}
-
-char *nvim_dbg_estack_sfile(int which)
-{
-  return estack_sfile((estack_arg_T)which);
 }
 
 // =============================================================================

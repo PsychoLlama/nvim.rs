@@ -245,18 +245,36 @@ extern "C" {
     fn strncmp(a: *const c_char, b: *const c_char, n: usize) -> c_int;
 
     // --- Path/file wrappers ---
-    fn nvim_dbg_expand_env_save(p: *const c_char) -> *mut c_char;
+    #[link_name = "expand_env_save"]
+    fn nvim_dbg_expand_env_save(p: *mut c_char) -> *mut c_char;
+    #[link_name = "fix_fname"]
     fn nvim_dbg_fix_fname(p: *const c_char) -> *mut c_char;
     fn nvim_dbg_home_replace(name: *const c_char, buf: *mut c_char, buflen: c_int);
-    fn nvim_dbg_file_pat_to_reg_pat(pat: *const c_char) -> *mut c_char;
+    #[link_name = "file_pat_to_reg_pat"]
+    fn file_pat_to_reg_pat(
+        pat: *const c_char,
+        pat_end: *const c_char,
+        allow_dirs: *mut c_char,
+        no_bslash: c_int,
+    ) -> *mut c_char;
 
     // --- Regex wrappers ---
-    fn nvim_dbg_vim_regcomp(pat: *const c_char, flags: c_int) -> RegprogHandle;
+    #[link_name = "vim_regcomp"]
+    fn nvim_dbg_vim_regcomp(pat: *mut c_char, flags: c_int) -> RegprogHandle;
+    #[link_name = "vim_regfree"]
     fn nvim_dbg_vim_regfree(prog: RegprogHandle);
-    fn nvim_dbg_vim_regexec_prog(prog_ptr: *mut RegprogHandle, name: *const c_char) -> bool;
+    #[link_name = "vim_regexec_prog"]
+    fn vim_regexec_prog(
+        prog: *mut RegprogHandle,
+        ignore_case: bool,
+        line: *const c_char,
+        col: i32,
+    ) -> bool;
 
     // --- Screen/misc wrappers ---
+    #[link_name = "redraw_all_later"]
     fn nvim_dbg_redraw_all_later(typ: c_int);
+    #[link_name = "estack_sfile"]
     fn nvim_dbg_estack_sfile(which: c_int) -> *mut c_char;
 
 }
@@ -683,7 +701,7 @@ pub unsafe extern "C" fn rs_ex_breakadd(eap: *const ExArgHandle) {
 
         if nvim_dbg_get_type(gap, idx) != DBG_EXPR {
             let name = nvim_dbg_get_name(gap, idx);
-            let pat = nvim_dbg_file_pat_to_reg_pat(name);
+            let pat = file_pat_to_reg_pat(name, ptr::null(), ptr::null_mut(), 0);
             if !pat.is_null() {
                 let prog = nvim_dbg_vim_regcomp(pat, RE_MAGIC + RE_STRING);
                 nvim_dbg_set_prog(gap, idx, prog);
@@ -898,7 +916,7 @@ unsafe fn debuggy_find(
                 let prev_got_int = got_int;
                 got_int = false;
                 let mut prog = nvim_dbg_get_prog(gap, i);
-                if nvim_dbg_vim_regexec_prog(&mut prog, name) {
+                if vim_regexec_prog(&mut prog, false, name, 0) {
                     // Update prog in case vim_regexec_prog changed it
                     nvim_dbg_set_prog(gap, i, prog);
                     lnum = nvim_dbg_get_lnum(gap, i);
