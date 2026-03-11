@@ -16,6 +16,18 @@
 EXTERN Array noargs INIT(= ARRAY_DICT_INIT);
 // uncrustify:on
 
+// Rust-exported replacements for C thin wrappers (via #[export_name])
+#ifndef DLLEXPORT
+#  ifdef MSWIN
+#    define DLLEXPORT __declspec(dllexport)
+#  else
+#    define DLLEXPORT
+#  endif
+#endif
+DLLEXPORT bool ui_has(UIExtension ext);
+DLLEXPORT int ui_current_row(void);
+DLLEXPORT int ui_current_col(void);
+
 // vim.ui_attach() namespace of currently executed callback.
 EXTERN uint32_t ui_event_ns_id INIT( = 0);
 EXTERN MultiQueue *resize_events INIT( = NULL);

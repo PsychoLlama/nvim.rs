@@ -523,20 +523,6 @@ void ui_mode_info_set(void)
 int nvim_get_ui_cursor_row(void) { return cursor_row; }
 int nvim_get_ui_cursor_col(void) { return cursor_col; }
 
-// Rust implementations
-extern int rs_ui_current_row(void);
-extern int rs_ui_current_col(void);
-
-int ui_current_row(void)
-{
-  return rs_ui_current_row();
-}
-
-int ui_current_col(void)
-{
-  return rs_ui_current_col();
-}
-
 void ui_flush(void)
 {
   assert(!ui_client_channel_id);
@@ -679,15 +665,6 @@ void ui_cursor_shape(void)
 
 // C accessor for ui_ext array (used by Rust)
 int nvim_get_ui_ext(int ext) { return ui_ext[ext] ? 1 : 0; }
-
-// Rust implementation
-extern int rs_ui_has(int ext);
-
-/// Returns true if the given UI extension is enabled.
-bool ui_has(UIExtension ext)
-{
-  return rs_ui_has((int)ext) != 0;
-}
 
 Array ui_array(Arena *arena)
 {
@@ -838,111 +815,9 @@ void ui_remove_cb(uint32_t ns_id, bool checkerr)
   }
 }
 
-// =============================================================================
-// Accessor functions for Rust FFI (nvim-ui crate)
-// =============================================================================
-
-/// Get number of active UIs
+/// Get number of active UIs (used by Rust FFI)
 size_t nvim_ui_active(void)
 {
   return ui_count;
 }
 
-/// Get RemoteUI width
-int nvim_remote_ui_get_width(RemoteUI *ui)
-{
-  return ui->width;
-}
-
-/// Get RemoteUI height
-int nvim_remote_ui_get_height(RemoteUI *ui)
-{
-  return ui->height;
-}
-
-/// Check if RemoteUI uses RGB colors
-int nvim_remote_ui_is_rgb(RemoteUI *ui)
-{
-  return ui->rgb ? 1 : 0;
-}
-
-/// Check if RemoteUI has override mode
-int nvim_remote_ui_is_override(RemoteUI *ui)
-{
-  return ui->override ? 1 : 0;
-}
-
-/// Check if RemoteUI is composed
-int nvim_remote_ui_is_composed(RemoteUI *ui)
-{
-  return ui->composed ? 1 : 0;
-}
-
-/// Get RemoteUI extension support
-int nvim_remote_ui_get_ext(RemoteUI *ui, int ext)
-{
-  if (ext < 0 || ext >= kUIExtCount) {
-    return 0;
-  }
-  return ui->ui_ext[ext] ? 1 : 0;
-}
-
-/// Get RemoteUI channel ID
-uint64_t nvim_remote_ui_get_channel_id(RemoteUI *ui)
-{
-  return ui->channel_id;
-}
-
-/// Check if RemoteUI has stdin TTY
-int nvim_remote_ui_is_stdin_tty(RemoteUI *ui)
-{
-  return ui->stdin_tty ? 1 : 0;
-}
-
-/// Check if RemoteUI has stdout TTY
-int nvim_remote_ui_is_stdout_tty(RemoteUI *ui)
-{
-  return ui->stdout_tty ? 1 : 0;
-}
-
-/// Get terminal colors count
-int nvim_remote_ui_get_term_colors(RemoteUI *ui)
-{
-  return ui->term_colors;
-}
-
-/// Get popup menu lines count
-int nvim_remote_ui_get_pum_nlines(RemoteUI *ui)
-{
-  return ui->pum_nlines;
-}
-
-/// Check if RemoteUI reports pum position
-int nvim_remote_ui_is_pum_pos(RemoteUI *ui)
-{
-  return ui->pum_pos ? 1 : 0;
-}
-
-/// Get RemoteUI cursor row
-int64_t nvim_remote_ui_get_cursor_row(RemoteUI *ui)
-{
-  return ui->cursor_row;
-}
-
-/// Get RemoteUI cursor column
-int64_t nvim_remote_ui_get_cursor_col(RemoteUI *ui)
-{
-  return ui->cursor_col;
-}
-
-/// Get RemoteUI highlight ID
-int nvim_remote_ui_get_hl_id(RemoteUI *ui)
-{
-  return ui->hl_id;
-}
-
-/// Check if RemoteUI has incomplete event
-int nvim_remote_ui_has_incomplete_event(RemoteUI *ui)
-{
-  return ui->incomplete_event ? 1 : 0;
-}

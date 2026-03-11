@@ -2527,7 +2527,7 @@ extern "C" {
 ///
 /// # Safety
 /// Calls C accessor function for cursor state.
-#[no_mangle]
+#[export_name = "ui_current_row"]
 pub unsafe extern "C" fn rs_ui_current_row() -> c_int {
     nvim_get_ui_cursor_row()
 }
@@ -2536,7 +2536,7 @@ pub unsafe extern "C" fn rs_ui_current_row() -> c_int {
 ///
 /// # Safety
 /// Calls C accessor function for cursor state.
-#[no_mangle]
+#[export_name = "ui_current_col"]
 pub unsafe extern "C" fn rs_ui_current_col() -> c_int {
     nvim_get_ui_cursor_col()
 }
@@ -2550,7 +2550,7 @@ extern "C" {
 ///
 /// # Safety
 /// Calls C accessor function for UI extension state.
-#[no_mangle]
+#[export_name = "ui_has"]
 pub unsafe extern "C" fn rs_ui_has(ext: c_int) -> c_int {
     nvim_get_ui_ext(ext)
 }
