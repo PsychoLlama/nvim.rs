@@ -158,8 +158,6 @@ static const char e_illegal_character_after_chr[]
   = N_("E535: Illegal character after <%c>");
 static const char e_comma_required[]
   = N_("E536: Comma required");
-static const char e_backupext_and_patchmode_are_equal[]
-  = N_("E589: 'backupext' and 'patchmode' are equal");
 static const char e_showbreak_contains_unprintable_or_wide_character[]
   = N_("E595: 'showbreak' contains unprintable or wide character");
 static const char e_wrong_number_of_characters_for_field_str[]
@@ -559,32 +557,7 @@ const char *did_set_background(optset_T *args)
 }
 
 
-/// The 'backupext' or the 'patchmode' option is changed.
-const char *did_set_backupext_or_patchmode(optset_T *args FUNC_ATTR_UNUSED)
-{
-  if (strcmp(*p_bex == '.' ? p_bex + 1 : p_bex,
-             *p_pm == '.' ? p_pm + 1 : p_pm) == 0) {
-    return e_backupext_and_patchmode_are_equal;
-  }
 
-  return NULL;
-}
-
-/// The 'breakat' option is changed.
-const char *did_set_breakat(optset_T *args FUNC_ATTR_UNUSED)
-{
-  for (int i = 0; i < 256; i++) {
-    breakat_flags[i] = false;
-  }
-
-  if (p_breakat != NULL) {
-    for (char *p = p_breakat; *p; p++) {
-      breakat_flags[(uint8_t)(*p)] = true;
-    }
-  }
-
-  return NULL;
-}
 
 /// The 'buftype' option is changed.
 const char *did_set_buftype(optset_T *args)
@@ -1145,20 +1118,6 @@ const char *did_set_helpfile(optset_T *args FUNC_ATTR_UNUSED)
   return NULL;
 }
 
-/// The 'helplang' option is changed.
-const char *did_set_helplang(optset_T *args FUNC_ATTR_UNUSED)
-{
-  // Check for "", "ab", "ab,cd", etc.
-  for (char *s = p_hlg; *s != NUL; s += 3) {
-    if (s[1] == NUL || ((s[2] != ',' || s[3] == NUL) && s[2] != NUL)) {
-      return e_invarg;
-    }
-    if (s[2] == NUL) {
-      break;
-    }
-  }
-  return NULL;
-}
 
 /// The 'highlight' option is changed.
 const char *did_set_highlight(optset_T *args)
@@ -1296,70 +1255,6 @@ int expand_set_mouse(optexpand_T *args, int *numMatches, char ***matches)
   return expand_set_opt_listflag(args, MOUSE_ALL, numMatches, matches);
 }
 
-/// Handle setting 'mousescroll'.
-/// @return error message, NULL if it's OK.
-const char *did_set_mousescroll(optset_T *args FUNC_ATTR_UNUSED)
-{
-  OptInt vertical = -1;
-  OptInt horizontal = -1;
-
-  char *string = p_mousescroll;
-
-  while (true) {
-    char *end = vim_strchr(string, ',');
-    size_t length = end ? (size_t)(end - string) : strlen(string);
-
-    // Both "ver:" and "hor:" are 4 bytes long.
-    // They should be followed by at least one digit.
-    if (length <= 4) {
-      return e_invarg;
-    }
-
-    OptInt *direction;
-
-    if (memcmp(string, "ver:", 4) == 0) {
-      direction = &vertical;
-    } else if (memcmp(string, "hor:", 4) == 0) {
-      direction = &horizontal;
-    } else {
-      return e_invarg;
-    }
-
-    // If the direction has already been set, this is a duplicate.
-    if (*direction != -1) {
-      return e_invarg;
-    }
-
-    // Verify that only digits follow the colon.
-    for (size_t i = 4; i < length; i++) {
-      if (!ascii_isdigit(string[i])) {
-        return N_("E5080: Digit expected");
-      }
-    }
-
-    string += 4;
-    *direction = getdigits_int(&string, false, -1);
-
-    // Num options are generally kept within the signed int range.
-    // We know this number won't be negative because we've already checked for
-    // a minus sign. We'll allow 0 as a means of disabling mouse scrolling.
-    if (*direction == -1) {
-      return e_invarg;
-    }
-
-    if (!end) {
-      break;
-    }
-
-    string = end + 1;
-  }
-
-  // If a direction wasn't set, fallback to the default value.
-  p_mousescroll_vert = (vertical == -1) ? MOUSESCROLL_VERT_DFLT : vertical;
-  p_mousescroll_hor = (horizontal == -1) ? MOUSESCROLL_HOR_DFLT : horizontal;
-
-  return NULL;
-}
 
 /// One of the '*expr' options is changed:, 'diffexpr', 'foldexpr', 'foldtext',
 /// 'formatexpr', 'includeexpr', 'indentexpr', 'patchexpr' and 'charconvert'.

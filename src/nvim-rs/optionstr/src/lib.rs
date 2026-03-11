@@ -17,6 +17,7 @@
 use std::ffi::{c_char, c_int};
 
 mod chars;
+mod didset;
 mod flags;
 mod listval;
 mod validate;
