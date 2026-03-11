@@ -86,6 +86,14 @@ extern "C" {
     static mut IObuff: [c_char; 1025];
 }
 
+// Phase 4 additional C functions
+extern "C" {
+    fn cleanup_conditionals(cstack: *mut CstackT, searched_cond: c_int, inclusive: c_int) -> c_int;
+    fn get_return_cmd(rettv: *mut c_void) -> *mut c_char;
+    fn concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
+    fn gettext(s: *const c_char) -> *const c_char;
+}
+
 // C functions callable from Rust
 extern "C" {
     fn handle_did_throw();
@@ -103,7 +111,6 @@ extern "C" {
     fn internal_error(s: *const c_char);
     fn verbose_enter();
     fn verbose_leave();
-    fn report_pending(action: c_int, pending: c_int, value: *mut c_void);
     fn estack_sfile(which: c_int) -> *mut c_char; // estack_arg_T is c_int
     fn stacktrace_create() -> *mut c_void; // returns list_T *
     fn tv_list_unref(list: *mut c_void);
@@ -119,6 +126,7 @@ extern "C" {
 extern "C" {
     static e_str_not_inside_function: *const c_char;
     static e_outofmem: *const c_char;
+    static e_interr: *const c_char;
 }
 
 // VimVarIndex constants matching eval_defs.h VimVarIndex enum
@@ -130,6 +138,25 @@ const VV_STACKTRACE: c_int = 125;
 
 // CSF_ flag constants matching ex_eval_defs.h
 const CSF_FOR: c_int = 0x0010;
+const CSF_TRY: c_int = 0x0100;
+const CSF_THROWN: c_int = 0x0800;
+const CSF_CAUGHT: c_int = 0x1000;
+const CSF_ACTIVE: c_int = 0x0002;
+
+// CSTP_ pending type constants matching ex_eval_defs.h
+const CSTP_NONE: c_int = 0;
+const CSTP_ERROR: c_int = 1;
+const CSTP_INTERRUPT: c_int = 2;
+const CSTP_THROW: c_int = 4;
+const CSTP_BREAK: c_int = 8;
+const CSTP_CONTINUE: c_int = 16;
+const CSTP_RETURN: c_int = 24;
+const CSTP_FINISH: c_int = 32;
+
+// RP_ constants for report_pending
+const RP_MAKE: c_int = 0;
+const RP_RESUME: c_int = 1;
+const RP_DISCARD: c_int = 2;
 
 // ESTACK_NONE constant from runtime_defs.h
 const ESTACK_NONE: c_int = 0;
@@ -139,9 +166,6 @@ const OK: c_int = 1;
 
 // Rust-owned static replacing the C file-local `static bool cause_abort`
 static mut CAUSE_ABORT: bool = false;
-
-// RP_ constants for report_pending
-const RP_MAKE: c_int = 0;
 
 /// FAIL constant from vim_defs.h
 const FAIL: c_int = 0;
@@ -202,6 +226,14 @@ pub struct ExceptionStateT {
     pub estate_need_rethrow: bool,
     pub estate_trylevel: c_int,
     pub estate_did_emsg: c_int,
+}
+
+/// Representation of cleanup_T matching C layout (sizeof=16).
+#[repr(C)]
+pub struct CleanupT {
+    pub pending: c_int,
+    _padding: [u8; 4],
+    pub exception: *mut ExceptT,
 }
 
 /// Save the current exception state in "estate".
@@ -694,6 +726,364 @@ pub unsafe extern "C" fn rewind_conditionals(
             free_for_info((*cstack).cs_forinfo[i]);
         }
         (*cstack).cs_idx -= 1;
+    }
+}
+
+/// Report information about something pending in a finally clause.
+/// "action" tells whether something is made pending/resumed/discarded.
+#[export_name = "report_pending"]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn report_pending(action: c_int, pending: c_int, value: *mut c_void) {
+    let action_mesg: *const c_char = match action {
+        RP_MAKE => gettext(c"%s made pending".as_ptr()),
+        RP_RESUME => gettext(c"%s resumed".as_ptr()),
+        _ => gettext(c"%s discarded".as_ptr()),
+    };
+
+    if pending == CSTP_NONE {
+        return;
+    }
+
+    let s: *mut c_char;
+    let mut free_s = false;
+    // mesg may be replaced for CSTP_THROW case
+    let mut mesg: *mut c_char = action_mesg.cast_mut();
+    let mut free_mesg = false;
+
+    match pending {
+        CSTP_CONTINUE => s = c":continue".as_ptr().cast_mut(),
+        CSTP_BREAK => s = c":break".as_ptr().cast_mut(),
+        CSTP_FINISH => s = c":finish".as_ptr().cast_mut(),
+        CSTP_RETURN => {
+            s = get_return_cmd(value);
+            free_s = true;
+        }
+        _ => {
+            if pending & CSTP_THROW != 0 {
+                vim_snprintf(
+                    (&raw mut IObuff).cast::<c_char>(),
+                    1025,
+                    action_mesg,
+                    gettext(c"Exception".as_ptr()),
+                );
+                mesg = concat_str((&raw const IObuff).cast::<c_char>(), c": %s".as_ptr());
+                free_mesg = true;
+                s = (*value.cast::<ExceptT>()).value;
+            } else if pending & CSTP_ERROR != 0 && pending & CSTP_INTERRUPT != 0 {
+                s = gettext(c"Error and interrupt".as_ptr()).cast_mut();
+            } else if pending & CSTP_ERROR != 0 {
+                s = gettext(c"Error".as_ptr()).cast_mut();
+            } else {
+                s = gettext(c"Interrupt".as_ptr()).cast_mut();
+            }
+        }
+    }
+
+    let save_msg_silent = msg_silent;
+    if debug_break_level > 0 {
+        msg_silent = 0;
+    }
+    no_wait_return += 1;
+    msg_scroll = 1;
+    smsg(0, mesg, s);
+    msg_puts(c"\n".as_ptr());
+    cmdline_row = msg_row;
+    no_wait_return -= 1;
+    if debug_break_level > 0 {
+        msg_silent = save_msg_silent;
+    }
+
+    if free_s {
+        xfree(s.cast::<c_void>());
+    }
+    if free_mesg {
+        xfree(mesg.cast::<c_void>());
+    }
+}
+
+/// report_resume_pending: report something pending in a finally clause being resumed.
+#[no_mangle]
+pub unsafe extern "C" fn report_resume_pending(pending: c_int, value: *mut c_void) {
+    if p_verbose >= 14 || debug_break_level > 0 {
+        if debug_break_level <= 0 {
+            verbose_enter();
+        }
+        report_pending(RP_RESUME, pending, value);
+        if debug_break_level <= 0 {
+            verbose_leave();
+        }
+    }
+}
+
+/// report_discard_pending: report something pending in a finally clause being discarded.
+#[no_mangle]
+pub unsafe extern "C" fn report_discard_pending(pending: c_int, value: *mut c_void) {
+    if p_verbose >= 14 || debug_break_level > 0 {
+        if debug_break_level <= 0 {
+            verbose_enter();
+        }
+        report_pending(RP_DISCARD, pending, value);
+        if debug_break_level <= 0 {
+            verbose_leave();
+        }
+    }
+}
+
+/// Throw the current exception through the specified cstack.
+#[export_name = "do_throw"]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn do_throw(cstack: *mut CstackT) {
+    let idx = cleanup_conditionals(cstack, 0, 0);
+    if idx >= 0 {
+        let i = idx as usize;
+        if (*cstack).cs_flags[i] & CSF_CAUGHT == 0 {
+            if (*cstack).cs_flags[i] & CSF_ACTIVE != 0 {
+                (*cstack).cs_flags[i] |= CSF_THROWN;
+            } else {
+                (*cstack).cs_flags[i] &= !CSF_THROWN;
+            }
+        }
+        (*cstack).cs_flags[i] &= !CSF_ACTIVE;
+        (*cstack).cs_pend.csp_ex[i] = current_exception;
+    }
+    did_throw = true;
+}
+
+/// Cause a throw of an error exception if appropriate.
+///
+/// Returns true if the error message should not be displayed by emsg().
+/// Sets *ignore if the emsg() call should be ignored completely.
+#[export_name = "cause_errthrow"]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn cause_errthrow(
+    mesg: *const c_char,
+    multiline: bool,
+    severe: bool,
+    ignore: *mut bool,
+) -> bool {
+    // Do nothing when suppress_errthrow is set.
+    if suppress_errthrow {
+        return false;
+    }
+
+    // If emsg() has not been called previously, temporarily reset force_abort.
+    if did_emsg == 0 {
+        rs_set_cause_abort(force_abort);
+        force_abort = false;
+    }
+
+    // If no try conditional is active and no exception is being thrown, do nothing.
+    if ((trylevel == 0 && !rs_get_cause_abort()) || emsg_silent != 0) && !did_throw {
+        return false;
+    }
+
+    // Ignore interrupt message when inside a try conditional.
+    if mesg == e_interr {
+        *ignore = true;
+        return true;
+    }
+
+    // Ensure that all commands in nested function calls and sourced files are aborted.
+    rs_set_cause_abort(true);
+
+    // Discard exception currently being thrown to prevent it from being caught.
+    if did_throw {
+        // When discarding an interrupt exception, reset got_int.
+        if (*current_exception.cast::<ExceptT>()).type_ == ExceptTypeT::EtInterrupt {
+            got_int = false;
+        }
+        discard_current_exception();
+    }
+
+    // Prepare the throw of an error exception.
+    if !msg_list.is_null() {
+        // Cast msg_list to the correct type (*mut *mut MsglistT).
+        let msg_list_typed = msg_list.cast::<*mut MsglistT>();
+
+        // Find the tail of the list, maintaining a pointer to the last ->next field.
+        let mut plist: *mut *mut MsglistT = msg_list_typed;
+        while !(*plist).is_null() {
+            plist = &raw mut (**plist).next;
+        }
+
+        let elem = xmalloc(std::mem::size_of::<MsglistT>()).cast::<MsglistT>();
+        (*elem).msg = xstrdup(mesg);
+        (*elem).multiline = multiline;
+        (*elem).next = std::ptr::null_mut();
+        (*elem).throw_msg = std::ptr::null_mut();
+        *plist = elem;
+
+        let is_first = plist == msg_list_typed;
+        if is_first || severe {
+            let tmsg = (*elem).msg;
+            // Skip the extra "Vim " prefix for message "E458".
+            #[allow(clippy::cast_possible_wrap)]
+            if libc_strncmp(tmsg, c"Vim E".as_ptr(), 5) == 0
+                && ascii_isdigit(c_int::from(*tmsg.add(5)))
+                && ascii_isdigit(c_int::from(*tmsg.add(6)))
+                && ascii_isdigit(c_int::from(*tmsg.add(7)))
+                && *tmsg.add(8) == b':' as i8
+                && *tmsg.add(9) == b' ' as i8
+            {
+                (*(*msg_list_typed)).throw_msg = tmsg.add(4);
+            } else {
+                (*(*msg_list_typed)).throw_msg = tmsg;
+            }
+        }
+
+        // Get the source name and lnum now, it may change before reaching do_errthrow().
+        (*elem).sfile = estack_sfile(ESTACK_NONE);
+        (*elem).slnum = nvim_get_sourcing_lnum_direct();
+    }
+    true
+}
+
+/// Throw the message specified in cause_errthrow() as an error exception.
+#[export_name = "do_errthrow"]
+pub unsafe extern "C" fn do_errthrow(cstack: *mut CstackT, cmdname: *mut c_char) {
+    // Ensure all commands in nested function calls/sourced files are aborted.
+    if rs_get_cause_abort() {
+        rs_set_cause_abort(false);
+        force_abort = true;
+    }
+
+    // If no exception is to be thrown, do nothing.
+    if msg_list.is_null() || (*msg_list).is_null() {
+        return;
+    }
+
+    if throw_exception(*msg_list, ExceptTypeT::EtError, cmdname) == FAIL {
+        free_msglist((*msg_list).cast::<MsglistT>());
+    } else if !cstack.is_null() {
+        do_throw(cstack);
+    } else {
+        need_rethrow = true;
+    }
+    *msg_list = std::ptr::null_mut();
+}
+
+/// Replace the current exception by an interrupt exception if appropriate.
+///
+/// Returns true if the current exception is discarded.
+#[export_name = "do_intthrow"]
+pub unsafe extern "C" fn do_intthrow(cstack: *mut CstackT) -> bool {
+    // If no interrupt occurred or no try conditional is active and no exception
+    // is being thrown, do nothing.
+    if !got_int || (trylevel == 0 && !did_throw) {
+        return false;
+    }
+
+    // Throw an interrupt exception, so that everything will be aborted
+    // (except for executing finally clauses), until the interrupt exception
+    // is caught. If an interrupt exception is already being thrown, do nothing.
+    if did_throw {
+        if (*current_exception.cast::<ExceptT>()).type_ == ExceptTypeT::EtInterrupt {
+            return false;
+        }
+        // An interrupt exception replaces any user or error exception.
+        discard_current_exception();
+    }
+    if throw_exception(
+        c"Vim:Interrupt".as_ptr().cast::<c_void>().cast_mut(),
+        ExceptTypeT::EtInterrupt,
+        std::ptr::null_mut(),
+    ) != FAIL
+    {
+        do_throw(cstack);
+    }
+
+    true
+}
+
+/// Save exception state for cleanup autocommand execution.
+#[export_name = "enter_cleanup"]
+pub unsafe extern "C" fn enter_cleanup(csp: *mut CleanupT) {
+    if did_emsg != 0 || got_int || did_throw || need_rethrow {
+        let throw_pending = if did_throw || need_rethrow {
+            CSTP_THROW
+        } else {
+            0
+        };
+        (*csp).pending = (if did_emsg != 0 { CSTP_ERROR } else { 0 })
+            | (if got_int { CSTP_INTERRUPT } else { 0 })
+            | throw_pending;
+
+        if did_throw || need_rethrow {
+            (*csp).exception = current_exception.cast::<ExceptT>();
+            current_exception = std::ptr::null_mut();
+        } else {
+            (*csp).exception = std::ptr::null_mut();
+            if did_emsg != 0 {
+                force_abort |= rs_get_cause_abort();
+                rs_set_cause_abort(false);
+            }
+        }
+        did_emsg = 0;
+        got_int = false;
+        did_throw = false;
+        need_rethrow = false;
+
+        // Report if required by the 'verbose' option or when debugging.
+        report_make_pending_impl((*csp).pending, (*csp).exception.cast::<c_void>());
+    } else {
+        (*csp).pending = CSTP_NONE;
+        (*csp).exception = std::ptr::null_mut();
+    }
+}
+
+/// Restore exception state after cleanup autocommand execution.
+#[export_name = "leave_cleanup"]
+pub unsafe extern "C" fn leave_cleanup(csp: *mut CleanupT) {
+    let pending = (*csp).pending;
+
+    if pending == CSTP_NONE {
+        return;
+    }
+
+    // If there was an aborting error, interrupt, or uncaught exception after
+    // enter_cleanup(), discard what has been made pending.
+    if aborting_impl() || need_rethrow {
+        if pending & CSTP_THROW != 0 {
+            // Cancel the pending exception (includes report).
+            discard_exception((*csp).exception, false);
+        } else {
+            report_discard_pending(pending, std::ptr::null_mut());
+        }
+
+        // If an error was about to be converted to an exception, free the message list.
+        if !msg_list.is_null() {
+            free_global_msglist_impl();
+        }
+    } else {
+        // Restore the pending error/interrupt/exception state.
+        if pending & CSTP_THROW != 0 {
+            current_exception = (*csp).exception.cast::<c_void>();
+        } else if pending & CSTP_ERROR != 0 {
+            // Let cause_abort take the part of force_abort.
+            rs_set_cause_abort(force_abort);
+            force_abort = false;
+        }
+
+        // Restore the pending values of did_emsg, got_int, and did_throw.
+        if pending & CSTP_ERROR != 0 {
+            did_emsg = 1;
+        }
+        if pending & CSTP_INTERRUPT != 0 {
+            got_int = true;
+        }
+        if pending & CSTP_THROW != 0 {
+            need_rethrow = true; // did_throw will be set by do_one_cmd()
+        }
+
+        // Report if required by the 'verbose' option or when debugging.
+        report_resume_pending(
+            pending,
+            if pending & CSTP_THROW != 0 {
+                current_exception
+            } else {
+                std::ptr::null_mut()
+            },
+        );
     }
 }
 
