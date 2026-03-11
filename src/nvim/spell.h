@@ -28,4 +28,11 @@ typedef enum {
   SMT_RARE,     ///< Move to "rare" words only
 } smt_T;
 
+// Functions implemented in Rust (nvim-spell crate) and exported via #[export_name].
+bool spell_valid_case(int wordflags, int treeflags);
+bool byte_in_str(const uint8_t *str, int n);
+void clear_spell_chartab(spelltab_T *sp);
+bool valid_spelllang(const char *val);
+bool valid_spellfile(const char *val);
+
 #include "spell.h.generated.h"

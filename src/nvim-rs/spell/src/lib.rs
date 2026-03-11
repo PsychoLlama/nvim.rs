@@ -584,10 +584,8 @@ fn clear_spell_chartab_impl(sp: SpelltabHandle) {
     }
 }
 
-/// FFI wrapper for `clear_spell_chartab`.
-///
 /// Initialize the chartab used for spelling for ASCII.
-#[no_mangle]
+#[export_name = "clear_spell_chartab"]
 pub extern "C" fn rs_clear_spell_chartab(sp: SpelltabHandle) {
     clear_spell_chartab_impl(sp);
 }
@@ -1141,10 +1139,9 @@ const fn spell_valid_case_impl(wordflags: c_int, treeflags: c_int) -> bool {
             && ((treeflags & WF_ONECAP) == 0 || (wordflags & WF_ONECAP) != 0))
 }
 
-/// FFI wrapper for `spell_valid_case`.
-///
 /// Check if the word flags match the tree flags for valid case handling.
-#[no_mangle]
+#[must_use]
+#[export_name = "spell_valid_case"]
 #[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 pub extern "C" fn rs_spell_valid_case(wordflags: c_int, treeflags: c_int) -> bool {
     spell_valid_case_impl(wordflags, treeflags)
@@ -1178,10 +1175,9 @@ fn byte_in_str_impl(str: *const u8, n: c_int) -> bool {
     false
 }
 
-/// FFI wrapper for `byte_in_str`.
-///
 /// Check if byte `n` appears in string `str`.
-#[no_mangle]
+#[must_use]
+#[export_name = "byte_in_str"]
 #[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 pub extern "C" fn rs_byte_in_str(str: *const u8, n: c_int) -> bool {
     byte_in_str_impl(str, n)
@@ -1198,7 +1194,8 @@ const SPELLLANG_ALLOWED: &[u8] = b".-_,@";
 /// # Safety
 ///
 /// `val` must be a valid null-terminated C string.
-#[no_mangle]
+#[must_use]
+#[export_name = "valid_spelllang"]
 pub unsafe extern "C" fn rs_valid_spelllang(val: *const c_char) -> bool {
     if val.is_null() {
         return true;
@@ -1226,7 +1223,8 @@ pub unsafe extern "C" fn rs_valid_spelllang(val: *const c_char) -> bool {
 /// # Safety
 ///
 /// `val` must be a valid null-terminated C string.
-#[no_mangle]
+#[must_use]
+#[export_name = "valid_spellfile"]
 pub unsafe extern "C" fn rs_valid_spellfile(val: *const c_char) -> bool {
     if val.is_null() {
         return true;

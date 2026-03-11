@@ -193,12 +193,8 @@ extern int rs_ins_compl_interrupted(void);
 extern void rs_optval_free(OptVal o);
 
 // Rust implementations of spell functions
-extern bool rs_spell_valid_case(int wordflags, int treeflags);
-extern bool rs_byte_in_str(const uint8_t *str, int n);
-extern bool rs_valid_spelllang(const char *val);
-extern bool rs_valid_spellfile(const char *val);
 extern bool rs_spell_mb_isword_class(int cl, bool cjk);
-extern void rs_clear_spell_chartab(spelltab_T *sp);
+extern int rs_find_region(const char *rp, const char *region);
 
 // Static assertions to validate Rust repr(C) struct layout matches C struct layout.
 // These catch layout mismatches at compile time before they cause silent bugs.
@@ -1249,15 +1245,6 @@ static int fold_more(matchinf_T *mip)
   return flen;
 }
 
-/// Checks case flags for a word. Returns true, if the word has the requested
-/// case.
-///
-/// @param wordflags Flags for the checked word.
-/// @param treeflags Flags for the word in the spell tree.
-bool spell_valid_case(int wordflags, int treeflags)
-{
-  return rs_spell_valid_case(wordflags, treeflags);
-}
 
 /// Return true if spell checking is enabled for "wp".
 bool spell_check_window(win_T *wp)
@@ -1850,12 +1837,6 @@ void count_common_word(slang_T *lp, char *word, int len, uint8_t count)
   }
 }
 
-// Returns true if byte "n" appears in "str".
-// Like strchr() but independent of locale.
-bool byte_in_str(uint8_t *str, int n)
-{
-  return rs_byte_in_str(str, n);
-}
 
 // Truncate "slang->sl_syllable" at the first slash and put the following items
 // in "slang->sl_syl_items".
@@ -2061,7 +2042,7 @@ char *parse_spelllang(win_T *wp)
         int region_mask = REGION_ALL;
         if (!filename && region != NULL) {
           // find region in sl_regions
-          int c = find_region(slang->sl_regions, region);
+          int c = rs_find_region(slang->sl_regions, region);
           if (c == REGION_ALL) {
             if (slang->sl_add) {
               if (*slang->sl_regions != NUL) {
@@ -2158,7 +2139,7 @@ char *parse_spelllang(win_T *wp)
       int region_mask = REGION_ALL;
       if (use_region != NULL && !dont_use_region) {
         // find region in sl_regions
-        int c = find_region(slang->sl_regions, use_region);
+        int c = rs_find_region(slang->sl_regions, use_region);
         if (c != REGION_ALL) {
           region_mask = 1 << c;
         } else if (*slang->sl_regions != NUL) {
@@ -2267,16 +2248,6 @@ static void use_midword(slang_T *lp, win_T *wp)
   }
 }
 
-// Find the region "region[2]" in "rp" (points to "sl_regions").
-// Each region is simply stored as the two characters of its name.
-// Returns the index if found (first is 0), REGION_ALL if not found.
-// Rust implementation
-extern int rs_find_region(const char *rp, const char *region);
-
-static int find_region(const char *rp, const char *region)
-{
-  return rs_find_region(rp, region);
-}
 
 /// Return case type of word:
 /// w word       0
@@ -2419,11 +2390,6 @@ void close_spellbuf(buf_T *buf)
   xfree(buf);
 }
 
-// Init the chartab used for spelling for ASCII.
-void clear_spell_chartab(spelltab_T *sp)
-{
-  rs_clear_spell_chartab(sp);
-}
 
 // Init the chartab used for spelling. Called once while starting up.
 // The default is to use isalpha(), but the spell file should define the word
@@ -2475,7 +2441,7 @@ bool spell_iswordp(const char *p, const win_T *wp)
 
   int c = utf_ptr2char(s);
   if (c > 255) {
-    return spell_mb_isword_class(mb_get_class(s), wp);
+    return rs_spell_mb_isword_class(mb_get_class(s), wp->w_s->b_cjk != 0);
   }
   return spelltab.st_isw[c];
 }
@@ -2486,20 +2452,11 @@ bool spell_iswordp_nmw(const char *p, win_T *wp)
 {
   int c = utf_ptr2char(p);
   if (c > 255) {
-    return spell_mb_isword_class(mb_get_class(p), wp);
+    return rs_spell_mb_isword_class(mb_get_class(p), wp->w_s->b_cjk != 0);
   }
   return spelltab.st_isw[c];
 }
 
-// Returns true if word class indicates a word character.
-// Only for characters above 255.
-// Unicode subscript and superscript are not considered word characters.
-// See also utf_class() in mbyte.c.
-static bool spell_mb_isword_class(int cl, const win_T *wp)
-  FUNC_ATTR_PURE FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_spell_mb_isword_class(cl, wp->w_s->b_cjk != 0);
-}
 
 // Returns true if "p" points to a word character.
 // Wide version of spell_iswordp().
@@ -2518,7 +2475,7 @@ static bool spell_iswordp_w(const int *p, const win_T *wp)
   }
 
   if (*s > 255) {
-    return spell_mb_isword_class(utf_class(*s), wp);
+    return rs_spell_mb_isword_class(utf_class(*s), wp->w_s->b_cjk != 0);
   }
   return spelltab.st_isw[*s];
 }
@@ -3636,19 +3593,6 @@ int expand_spelling(linenr_T lnum, char *pat, char ***matchp)
   return ga.ga_len;
 }
 
-/// @return  true if "val" is a valid 'spelllang' value.
-bool valid_spelllang(const char *val)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_valid_spelllang(val);
-}
-
-/// @return  true if "val" is a valid 'spellfile' value.
-bool valid_spellfile(const char *val)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_valid_spellfile(val);
-}
 
 const char *did_set_spell_option(void)
 {

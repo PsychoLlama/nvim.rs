@@ -291,8 +291,6 @@ extern bool rs_check_spell_magic(const uint8_t *buf);
 extern int rs_read_be_u16(const uint8_t *buf, size_t len, size_t offset);
 extern int rs_read_be_u24(const uint8_t *buf, size_t len, size_t offset);
 extern int rs_read_be_u32(const uint8_t *buf, size_t len, size_t offset);
-extern bool rs_valid_spelllang(const char *val);
-extern bool rs_valid_spellfile(const char *val);
 extern int rs_find_region(const char *rp, const char *region);
 extern bool rs_valid_spell_word(const uint8_t *word, const uint8_t *end);
 extern int rs_tree_count_words(const uint8_t *byts, int32_t *idxs, int len);
@@ -3219,13 +3217,13 @@ static bool spell_check_magic(const uint8_t *buf)
 /// Validate a spell language name. Rust implementation.
 bool spellfile_valid_lang(const char *val)
 {
-  return rs_valid_spelllang(val);
+  return valid_spelllang(val);
 }
 
 /// Validate a spell file name. Rust implementation.
 bool spellfile_valid_name(const char *val)
 {
-  return rs_valid_spellfile(val);
+  return valid_spellfile(val);
 }
 
 /// Find region index in region string. Rust implementation.
