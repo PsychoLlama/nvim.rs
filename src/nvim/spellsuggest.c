@@ -873,8 +873,6 @@ static void suggest_try_special(suginfo_T *su)
   }
 }
 
-#define PROF_STORE(state)
-
 /// Try finding suggestions by adding/removing/swapping letters.
 static void suggest_try_change(suginfo_T *su)
 {
@@ -2034,7 +2032,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
   }
 }
 
-/// Go one level deeper in the tree.
 /// Compute the sound-a-like score for suggestions in su->su_ga and add them to
 /// su->su_sga.
 static void score_comp_sal(suginfo_T *su)
