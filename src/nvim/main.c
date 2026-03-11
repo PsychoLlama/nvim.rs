@@ -159,6 +159,19 @@ extern void rs_mainerr(const char *msg1, const char *msg2, const char *msg3) FUN
 extern int rs_get_number_arg(const char *p, int *idx, int def);
 extern void rs_check_swap_exists_action(void);
 
+// Rust implementations (Phase 2: init and config)
+extern void rs_init_params(mparm_T *paramp, int argc, char **argv);
+extern void rs_init_startuptime(const mparm_T *paramp);
+extern void rs_check_and_set_isatty(mparm_T *paramp);
+extern void rs_init_path(const char *exename);
+extern char *rs_get_fname(mparm_T *parmp, char *cwd);
+extern void rs_set_window_layout(mparm_T *paramp);
+extern int rs_execute_env(char *env);
+extern void rs_source_startup_scripts(const mparm_T *parmp);
+
+// Expose GARGLIST[idx] name to Rust
+char *nvim_garglist_name(int idx) { return alist_name(&GARGLIST[idx]); }
+
 Loop main_loop;
 
 char *nvim_argv0 = NULL;
@@ -1508,87 +1521,36 @@ scripterror:
   TIME_MSG("parsing arguments");
 }
 
-// Many variables are in "params" so that we can pass them to invoked
-// functions without a lot of arguments.  "argc" and "argv" are also
-// copied, so that they can be changed.
 static void init_params(mparm_T *paramp, int argc, char **argv)
 {
-  CLEAR_POINTER(paramp);
-  paramp->argc = argc;
-  paramp->argv = argv;
-  paramp->use_debug_break_level = -1;
-  paramp->window_count = -1;
-  paramp->listen_addr = NULL;
-  paramp->server_addr = NULL;
-  paramp->remote = 0;
-  paramp->luaf = NULL;
-  paramp->lua_arg0 = -1;
+  rs_init_params(paramp, argc, argv);
 }
 
-/// Initialize global startuptime file if "--startuptime" passed as an argument.
 static void init_startuptime(mparm_T *paramp)
 {
-  bool is_embed = false;
-  for (int i = 1; i < paramp->argc - 1; i++) {
-    if (STRICMP(paramp->argv[i], "--embed") == 0) {
-      is_embed = true;
-      break;
-    }
-  }
-  for (int i = 1; i < paramp->argc - 1; i++) {
-    if (STRICMP(paramp->argv[i], "--startuptime") == 0) {
-      time_init(paramp->argv[i + 1], is_embed ? "Embedded" : "Primary (or UI client)");
-      time_start("--- NVIM STARTING ---");
-      break;
-    }
-  }
+  rs_init_startuptime(paramp);
 }
 
 static void check_and_set_isatty(mparm_T *paramp)
 {
-  stdin_isatty = os_isatty(STDIN_FILENO);
-  stdout_isatty = os_isatty(STDOUT_FILENO);
-  stderr_isatty = os_isatty(STDERR_FILENO);
+  rs_check_and_set_isatty(paramp);
   TIME_MSG("window checked");
 }
 
-// Sets v:progname and v:progpath. Also modifies $PATH on Windows.
 static void init_path(const char *exename)
   FUNC_ATTR_NONNULL_ALL
 {
-  char exepath[MAXPATHL] = { 0 };
-  size_t exepathlen = MAXPATHL;
-  // Make v:progpath absolute.
-  if (os_exepath(exepath, &exepathlen) != 0) {
-    // Fall back to argv[0]. Missing procfs? #6734
-    path_guess_exepath(exename, exepath, sizeof(exepath));
-  }
-  set_vim_var_string(VV_PROGPATH, exepath, -1);
-  set_vim_var_string(VV_PROGNAME, path_tail(exename), -1);
-
-#ifdef MSWIN
-  // Append the process start directory to $PATH, so that ":!foo" finds tools
-  // shipped with Windows package. This also mimics SearchPath().
-  os_setenv_append_path(exepath);
-#endif
+  rs_init_path(exename);
 }
 
-/// Get filename from command line, if any.
 static char *get_fname(mparm_T *parmp, char *cwd)
 {
-  return alist_name(&GARGLIST[0]);
+  return rs_get_fname(parmp, cwd);
 }
 
-// Decide about window layout for diff mode after reading vimrc.
 static void set_window_layout(mparm_T *paramp)
 {
-  if (paramp->diff_mode && paramp->window_layout == 0) {
-    if (rs_diffopt_horizontal()) {
-      paramp->window_layout = WIN_HOR;             // use horizontal split
-    } else {
-      paramp->window_layout = WIN_VER;             // use vertical split
-    }
-  }
+  rs_set_window_layout(paramp);
 }
 
 // "-q errorfile": Load the error file now.
@@ -1973,222 +1935,20 @@ static void exe_commands(mparm_T *parmp)
   TIME_MSG("executing command arguments");
 }
 
-/// Source system-wide vimrc if built with one defined
-///
-/// Does one of the following things, stops after whichever succeeds:
-///
-/// 1. Source system vimrc file from $XDG_CONFIG_DIRS/nvim/sysinit.vim
-/// 2. Source system vimrc file from $VIM
-static void do_system_initialization(void)
-{
-  char *const config_dirs = stdpaths_get_xdg_var(kXDGConfigDirs);
-  if (config_dirs != NULL) {
-    const void *iter = NULL;
-    const char path_tail[] = {
-      'n', 'v', 'i', 'm', PATHSEP,
-      's', 'y', 's', 'i', 'n', 'i', 't', '.', 'v', 'i', 'm', NUL
-    };
-    do {
-      const char *dir;
-      size_t dir_len;
-      iter = vim_env_iter(':', config_dirs, iter, &dir, &dir_len);
-      if (dir == NULL || dir_len == 0) {
-        break;
-      }
-      char *vimrc = xmalloc(dir_len + sizeof(path_tail) + 1);
-      memcpy(vimrc, dir, dir_len);
-      if (vimrc[dir_len - 1] != PATHSEP) {
-        vimrc[dir_len] = PATHSEP;
-        dir_len += 1;
-      }
-      memcpy(vimrc + dir_len, path_tail, sizeof(path_tail));
-      if (do_source(vimrc, false, DOSO_NONE, NULL) != FAIL) {
-        xfree(vimrc);
-        xfree(config_dirs);
-        return;
-      }
-      xfree(vimrc);
-    } while (iter != NULL);
-    xfree(config_dirs);
-  }
 
-#ifdef SYS_VIMRC_FILE
-  // Get system wide defaults, if the file name is defined.
-  do_source(SYS_VIMRC_FILE, false, DOSO_NONE, NULL);
-#endif
-}
 
-/// Source vimrc or do other user initialization
-///
-/// Does one of the following things, stops after whichever succeeds:
-///
-/// 1. Execution of VIMINIT environment variable.
-/// 2. Sourcing user vimrc file ($XDG_CONFIG_HOME/nvim/init.vim).
-/// 3. Sourcing other vimrc files ($XDG_CONFIG_DIRS[1]/nvim/init.vim, …).
-/// 4. Execution of EXINIT environment variable.
-///
-/// @return True if it is needed to attempt to source exrc file according to
-///         'exrc' option definition.
-static bool do_user_initialization(void)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  bool do_exrc = p_exrc;
-  if (execute_env("VIMINIT") == OK) {
-    do_exrc = p_exrc;
-    return do_exrc;
-  }
 
-  char *init_lua_path = stdpaths_user_conf_subpath("init.lua");
-  char *user_vimrc = stdpaths_user_conf_subpath("init.vim");
-
-  // init.lua
-  if (os_path_exists(init_lua_path)
-      && do_source(init_lua_path, true, DOSO_VIMRC, NULL)) {
-    if (os_path_exists(user_vimrc)) {
-      semsg(_("E5422: Conflicting configs: \"%s\" \"%s\""), init_lua_path,
-            user_vimrc);
-    }
-
-    xfree(user_vimrc);
-    xfree(init_lua_path);
-    do_exrc = p_exrc;
-    return do_exrc;
-  }
-  xfree(init_lua_path);
-
-  // init.vim
-  if (do_source(user_vimrc, true, DOSO_VIMRC, NULL) != FAIL) {
-    do_exrc = p_exrc;
-    if (do_exrc) {
-      do_exrc = (path_full_compare(VIMRC_FILE, user_vimrc, false, true) != kEqualFiles);
-    }
-    xfree(user_vimrc);
-    return do_exrc;
-  }
-  xfree(user_vimrc);
-
-  char *const config_dirs = stdpaths_get_xdg_var(kXDGConfigDirs);
-  if (config_dirs != NULL) {
-    const void *iter = NULL;
-    do {
-      const char *dir;
-      size_t dir_len;
-      iter = vim_env_iter(':', config_dirs, iter, &dir, &dir_len);
-      if (dir == NULL || dir_len == 0) {
-        break;
-      }
-      const char path_tail[] = { 'n', 'v', 'i', 'm', PATHSEP,
-                                 'i', 'n', 'i', 't', '.', 'v', 'i', 'm', NUL };
-      char *vimrc = xmalloc(dir_len + sizeof(path_tail) + 1);
-      memmove(vimrc, dir, dir_len);
-      vimrc[dir_len] = PATHSEP;
-      memmove(vimrc + dir_len + 1, path_tail, sizeof(path_tail));
-      if (do_source(vimrc, true, DOSO_VIMRC, NULL) != FAIL) {
-        do_exrc = p_exrc;
-        if (do_exrc) {
-          do_exrc = (path_full_compare(VIMRC_FILE, vimrc, false, true) != kEqualFiles);
-        }
-        xfree(vimrc);
-        xfree(config_dirs);
-        return do_exrc;
-      }
-      xfree(vimrc);
-    } while (iter != NULL);
-    xfree(config_dirs);
-  }
-
-  if (execute_env("EXINIT") == OK) {
-    do_exrc = p_exrc;
-    return do_exrc;
-  }
-  return do_exrc;
-}
-
-// Read initialization commands from ".nvim.lua", ".nvimrc", or ".exrc" in
-// current directory.  This is only done if the 'exrc' option is set.
-// Only do this if VIMRC_FILE is not the same as vimrc file sourced in
-// do_user_initialization.
-static void do_exrc_initialization(void)
-{
-  char *str;
-
-  if (os_path_exists(VIMRC_LUA_FILE)) {
-    str = nlua_read_secure(VIMRC_LUA_FILE);
-    if (str != NULL) {
-      Error err = ERROR_INIT;
-      nlua_exec(cstr_as_string(str), "@"VIMRC_LUA_FILE, (Array)ARRAY_DICT_INIT, kRetNilBool, NULL,
-                &err);
-      xfree(str);
-      if (ERROR_SET(&err)) {
-        semsg("Error in %s:", VIMRC_LUA_FILE);
-        semsg_multiline("emsg", err.msg);
-        api_clear_error(&err);
-      }
-    }
-  } else if (os_path_exists(VIMRC_FILE)) {
-    str = nlua_read_secure(VIMRC_FILE);
-    if (str != NULL) {
-      do_source_str(str, VIMRC_FILE);
-      xfree(str);
-    }
-  } else if (os_path_exists(EXRC_FILE)) {
-    str = nlua_read_secure(EXRC_FILE);
-    if (str != NULL) {
-      do_source_str(str, EXRC_FILE);
-      xfree(str);
-    }
-  }
-}
-
-/// Source startup scripts
 static void source_startup_scripts(const mparm_T *const parmp)
   FUNC_ATTR_NONNULL_ALL
 {
-  // If -u given, use only the initializations from that file and nothing else.
-  if (parmp->use_vimrc != NULL) {
-    if (strequal(parmp->use_vimrc, "NONE") || strequal(parmp->use_vimrc, "NORC")) {
-      // Do nothing.
-    } else {
-      if (do_source(parmp->use_vimrc, false, DOSO_NONE, NULL) != OK) {
-        semsg(_(e_cannot_read_from_str_2), parmp->use_vimrc);
-      }
-    }
-  } else if (!silent_mode) {
-    do_system_initialization();
-
-    if (do_user_initialization()) {
-      do_exrc_initialization();
-    }
-  }
+  rs_source_startup_scripts(parmp);
   TIME_MSG("sourcing vimrc file(s)");
 }
 
-/// Get an environment variable, and execute it as Ex commands.
-///
-/// @param env         environment variable to execute
-///
-/// @return FAIL if the environment variable was not executed,
-///         OK otherwise.
 static int execute_env(char *env)
   FUNC_ATTR_NONNULL_ALL
 {
-  char *initstr = os_getenv(env);
-  if (initstr == NULL) {
-    return FAIL;
-  }
-
-  estack_push(ETYPE_ENV, env, 0);
-  const sctx_T save_current_sctx = current_sctx;
-  current_sctx.sc_sid = SID_ENV;
-  current_sctx.sc_seq = 0;
-  current_sctx.sc_lnum = 0;
-  do_cmdline_cmd(initstr);
-
-  estack_pop();
-  current_sctx = save_current_sctx;
-
-  xfree(initstr);
-  return OK;
+  return rs_execute_env(env);
 }
 
 static void mainerr(const char *msg1, const char *msg2, const char *msg3)
