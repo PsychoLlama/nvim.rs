@@ -1837,9 +1837,6 @@ static int normal_execute(VimState *state, int key) { return rs_normal_execute((
 /// Get did_throw global.
 bool nvim_get_did_throw_direct(void) { return did_throw; }
 
-/// discard_current_exception wrapper.
-void nvim_discard_current_exception_wrapper(void) { discard_current_exception(); }
-
 /// Set quit_more global.
 void nvim_set_quit_more(bool val) { quit_more = val; }
 

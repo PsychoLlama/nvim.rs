@@ -121,7 +121,7 @@ extern "C" {
     fn nvim_set_need_fileinfo(val: c_int); // defined in message.c
 
     // Function wrappers
-    fn nvim_discard_current_exception_wrapper();
+    fn discard_current_exception();
     fn nvim_state_no_longer_safe();
     fn nvim_setcursor_wrapper();
     fn nvim_update_topline_call();
@@ -488,7 +488,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
     // At the toplevel there is no exception handling. Discard any that
     // may be hanging around (e.g. from "interrupt" at the debug prompt).
     if nvim_get_did_throw_direct() && nvim_get_ex_normal_busy() == 0 {
-        nvim_discard_current_exception_wrapper();
+        discard_current_exception();
     }
 
     if !nvim_get_exmode_active() {
