@@ -969,10 +969,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
   int repextra = 0;                 // extra bytes in fword[] from REP item
   slang_T *slang = lp->lp_slang;
   bool goodword_ends;
-#ifdef DEBUG_TRIEWALK
-  // Stores the name of the change made at each level.
-  uint8_t changename[MAXWLEN][80];
-#endif
   int breakcheckcount = 1000;
 
   // Go through the whole case-fold tree, try changes at each node.
@@ -1054,9 +1050,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
           int flags = badword_captype(su->su_badptr, su->su_badptr + n);
           su->su_badflags = badword_captype(su->su_badptr + n,
                                             su->su_badptr + su->su_badlen);
-#ifdef DEBUG_TRIEWALK
-          sprintf(changename[depth], "prefix");  // NOLINT(runtime/printf)
-#endif
           go_deeper(stack, depth, 0);
           depth++;
           sp = &stack[depth];
@@ -1279,17 +1272,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
           && sp->ts_fidx >= sp->ts_fidxtry
           && compound_ok) {
         // The badword also ends: add suggestions.
-#ifdef DEBUG_TRIEWALK
-        if (soundfold && strcmp(preword, "smwrd") == 0) {
-          int j;
-
-          // print the stack of changes that brought us here
-          smsg(0, "------ %s -------", fword);
-          for (j = 0; j < depth; j++) {
-            smsg(0, "%s", changename[j]);
-          }
-        }
-#endif
         if (soundfold) {
           // For soundfolded words we need to find the original
           // words, the edit distance and then add them.
@@ -1434,15 +1416,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
 
           if (TRY_DEEPER(su, stack, depth, newscore)) {
             go_deeper(stack, depth, newscore);
-#ifdef DEBUG_TRIEWALK
-            if (!try_compound && !fword_ends) {
-              sprintf(changename[depth], "%.*s-%s: split",  // NOLINT(runtime/printf)
-                      sp->ts_twordlen, tword, fword + sp->ts_fidx);
-            } else {
-              sprintf(changename[depth], "%.*s-%s: compound",  // NOLINT(runtime/printf)
-                      sp->ts_twordlen, tword, fword + sp->ts_fidx);
-            }
-#endif
             // Save things to be restored at STATE_SPLITUNDO.
             sp->ts_save_badflags = (uint8_t)su->su_badflags;
             sp->ts_state = STATE_SPLITUNDO;
@@ -1569,17 +1542,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
                      || c != (uint8_t)fword[sp->ts_delidx])))
             && TRY_DEEPER(su, stack, depth, newscore)) {
           go_deeper(stack, depth, newscore);
-#ifdef DEBUG_TRIEWALK
-          if (newscore > 0) {
-            sprintf(changename[depth], "%.*s-%s: subst %c to %c",  // NOLINT(runtime/printf)
-                    sp->ts_twordlen, tword, fword + sp->ts_fidx,
-                    fword[sp->ts_fidx], c);
-          } else {
-            sprintf(changename[depth], "%.*s-%s: accept %c",  // NOLINT(runtime/printf)
-                    sp->ts_twordlen, tword, fword + sp->ts_fidx,
-                    fword[sp->ts_fidx]);
-          }
-#endif
           depth++;
           sp = &stack[depth];
           if (fword[sp->ts_fidx] != NUL) {
@@ -1677,11 +1639,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
       if (fword[sp->ts_fidx] != NUL
           && TRY_DEEPER(su, stack, depth, newscore)) {
         go_deeper(stack, depth, newscore);
-#ifdef DEBUG_TRIEWALK
-        sprintf(changename[depth], "%.*s-%s: delete %c",  // NOLINT(runtime/printf)
-                sp->ts_twordlen, tword, fword + sp->ts_fidx,
-                fword[sp->ts_fidx]);
-#endif
         depth++;
 
         // Remember what character we deleted, so that we can avoid
@@ -1763,11 +1720,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
       if (c != (uint8_t)fword[sp->ts_fidx]
           && TRY_DEEPER(su, stack, depth, newscore)) {
         go_deeper(stack, depth, newscore);
-#ifdef DEBUG_TRIEWALK
-        sprintf(changename[depth], "%.*s-%s: insert %c",  // NOLINT(runtime/printf)
-                sp->ts_twordlen, tword, fword + sp->ts_fidx,
-                c);
-#endif
         depth++;
         sp = &stack[depth];
         tword[sp->ts_twordlen++] = (char)c;
@@ -1837,12 +1789,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
       }
       if (TRY_DEEPER(su, stack, depth, SCORE_SWAP)) {
         go_deeper(stack, depth, SCORE_SWAP);
-#ifdef DEBUG_TRIEWALK
-        snprintf(changename[depth], sizeof(changename[0]),
-                 "%.*s-%s: swap %c and %c",
-                 sp->ts_twordlen, tword, fword + sp->ts_fidx,
-                 c, c2);
-#endif
         sp->ts_state = STATE_UNSWAP;
         depth++;
         fl = utf_char2len(c2);
@@ -1891,11 +1837,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
       }
       if (TRY_DEEPER(su, stack, depth, SCORE_SWAP3)) {
         go_deeper(stack, depth, SCORE_SWAP3);
-#ifdef DEBUG_TRIEWALK
-        sprintf(changename[depth], "%.*s-%s: swap3 %c and %c",  // NOLINT(runtime/printf)
-                sp->ts_twordlen, tword, fword + sp->ts_fidx,
-                c, c3);
-#endif
         sp->ts_state = STATE_UNSWAP3;
         depth++;
         tl = utf_char2len(c3);
@@ -1932,12 +1873,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
       // "fword" here, it's changed back afterwards at STATE_UNROT3L.
       if (TRY_DEEPER(su, stack, depth, SCORE_SWAP3)) {
         go_deeper(stack, depth, SCORE_SWAP3);
-#ifdef DEBUG_TRIEWALK
-        p = fword + sp->ts_fidx;
-        sprintf(changename[depth], "%.*s-%s: rotate left %c%c%c",  // NOLINT(runtime/printf)
-                sp->ts_twordlen, tword, fword + sp->ts_fidx,
-                p[0], p[1], p[2]);
-#endif
         sp->ts_state = STATE_UNROT3L;
         depth++;
         p = fword + sp->ts_fidx;
@@ -1967,12 +1902,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
       // here, it's changed back afterwards at STATE_UNROT3R.
       if (TRY_DEEPER(su, stack, depth, SCORE_SWAP3)) {
         go_deeper(stack, depth, SCORE_SWAP3);
-#ifdef DEBUG_TRIEWALK
-        p = fword + sp->ts_fidx;
-        sprintf(changename[depth], "%.*s-%s: rotate right %c%c%c",  // NOLINT(runtime/printf)
-                sp->ts_twordlen, tword, fword + sp->ts_fidx,
-                p[0], p[1], p[2]);
-#endif
         sp->ts_state = STATE_UNROT3R;
         depth++;
         p = fword + sp->ts_fidx;
@@ -2047,11 +1976,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
         if (strncmp(ftp->ft_from, p, strlen(ftp->ft_from)) == 0
             && TRY_DEEPER(su, stack, depth, SCORE_REP)) {
           go_deeper(stack, depth, SCORE_REP);
-#ifdef DEBUG_TRIEWALK
-          sprintf(changename[depth], "%.*s-%s: replace %s with %s",  // NOLINT(runtime/printf)
-                  sp->ts_twordlen, tword, fword + sp->ts_fidx,
-                  ftp->ft_from, ftp->ft_to);
-#endif
           // Need to undo this afterwards.
           sp->ts_state = STATE_REP_UNDO;
 
