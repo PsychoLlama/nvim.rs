@@ -7,78 +7,59 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::assertions_on_constants)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::too_long_first_doc_paragraph)]
 
 use std::os::raw::c_int;
 
-// C accessors for global exception state variables
+// Direct access to C globals for exception state variables
 extern "C" {
-    fn nvim_get_force_abort() -> c_int;
-    fn nvim_get_did_emsg() -> c_int;
-    fn nvim_get_got_int() -> c_int;
-    fn nvim_get_did_throw() -> c_int;
-    fn nvim_get_trylevel() -> c_int;
-    fn nvim_get_emsg_silent() -> c_int;
+    static mut force_abort: bool;
+    static mut did_emsg: c_int;
+    static mut got_int: bool;
+    static mut did_throw: bool;
+    static mut trylevel: c_int;
+    static mut emsg_silent: c_int;
+    // cause_abort is file-local in C; accessed via nvim_get_cause_abort for now
     fn nvim_get_cause_abort() -> c_int;
-    fn nvim_set_force_abort(val: c_int);
 }
 
 /// FAIL constant from vim_defs.h
 const FAIL: c_int = 0;
 
-/// Check if a function with the "abort" flag should not be considered
-/// ended on an error.
-///
-/// Returns the value of the global `force_abort` variable.
-#[no_mangle]
-pub unsafe extern "C" fn rs_aborted_in_try() -> c_int {
-    nvim_get_force_abort()
+/// Returns true if a function with the "abort" flag should not be considered
+/// ended on an error. Parsing commands is continued in order to find finally
+/// clauses to be executed, and some errors in skipped commands are still reported.
+#[export_name = "aborted_in_try"]
+pub unsafe extern "C" fn aborted_in_try_impl() -> bool {
+    force_abort
 }
 
-/// Check if execution should be aborted.
+/// Returns true when immediately aborting on error, or when an interrupt
+/// occurred or an exception was thrown but not caught.
 ///
-/// Returns true if:
-/// - An error message was shown AND `force_abort` is set, OR
-/// - An interrupt occurred (`got_int`), OR
-/// - An exception was thrown but not caught (`did_throw`)
-///
-/// This is the Rust equivalent of `aborting()` in `ex_eval.c`.
-#[no_mangle]
-pub unsafe extern "C" fn rs_aborting() -> c_int {
-    let did_emsg = nvim_get_did_emsg() != 0;
-    let force_abort = nvim_get_force_abort() != 0;
-    let got_int = nvim_get_got_int() != 0;
-    let did_throw = nvim_get_did_throw() != 0;
-
-    c_int::from((did_emsg && force_abort) || got_int || did_throw)
+/// Use for ":{range}call" to check whether an aborted function that does not
+/// handle a range itself should be called again for the next line in the range.
+#[export_name = "aborting"]
+pub unsafe extern "C" fn aborting_impl() -> bool {
+    (did_emsg != 0 && force_abort) || got_int || did_throw
 }
 
-/// Check if a command with a subcommand resulting in `retcode` should
+/// Returns true if a command with a subcommand resulting in `retcode` should
 /// abort the script processing.
-///
-/// Returns true if:
-/// - `retcode` == FAIL AND `trylevel` != 0 AND `emsg_silent` == 0, OR
-/// - `aborting()` returns true
-///
-/// This is the Rust equivalent of `should_abort()` in `ex_eval.c`.
-#[no_mangle]
-pub unsafe extern "C" fn rs_should_abort(retcode: c_int) -> c_int {
-    let trylevel = nvim_get_trylevel();
-    let emsg_silent = nvim_get_emsg_silent();
-
-    let fail_condition = retcode == FAIL && trylevel != 0 && emsg_silent == 0;
-    let aborting = rs_aborting() != 0;
-
-    c_int::from(fail_condition || aborting)
+#[export_name = "should_abort"]
+pub unsafe extern "C" fn should_abort_impl(retcode: c_int) -> bool {
+    (retcode == FAIL && trylevel != 0 && emsg_silent == 0) || aborting_impl()
 }
 
-/// Update `force_abort` if `cause_abort` is set.
+/// Updates `force_abort` if `cause_abort` is set.
 ///
 /// This is necessary to restore "force_abort" even before the throw point
 /// for the error message has been reached.
-#[no_mangle]
-pub unsafe extern "C" fn rs_update_force_abort() {
+#[export_name = "update_force_abort"]
+pub unsafe extern "C" fn update_force_abort_impl() {
     if nvim_get_cause_abort() != 0 {
-        nvim_set_force_abort(1);
+        force_abort = true;
     }
 }
 

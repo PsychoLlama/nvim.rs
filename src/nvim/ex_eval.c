@@ -36,11 +36,6 @@
 
 #include "ex_eval.c.generated.h"
 
-extern int rs_aborted_in_try(void);
-extern int rs_aborting(void);
-extern int rs_should_abort(int retcode);
-extern void rs_update_force_abort(void);
-
 static const char e_multiple_else[] = N_("E583: Multiple :else");
 static const char e_multiple_finally[] = N_("E607: Multiple :finally");
 
@@ -102,51 +97,6 @@ static void discard_pending_return(typval_T *p)
 // error messages on parsing errors during the expression evaluation are given
 // (even if a try conditional is active).
 static bool cause_abort = false;
-
-/// @return  true when immediately aborting on error, or when an interrupt
-///          occurred or an exception was thrown but not caught.
-///
-/// Use for ":{range}call" to check whether an aborted function that does not
-/// handle a range itself should be called again for the next line in the range.
-/// Also used for cancelling expression evaluation after a function call caused
-/// an immediate abort.  Note that the first emsg() call temporarily resets
-/// "force_abort" until the throw point for error messages has been reached.
-/// That is, during cancellation of an expression evaluation after an aborting
-/// function call or due to a parsing error, aborting() always returns the same
-/// value. "got_int" is also set by calling interrupt().
-bool aborting(void)
-{
-  return rs_aborting() != 0;
-}
-
-/// The value of "force_abort" is temporarily reset by the first emsg() call
-/// during an expression evaluation, and "cause_abort" is used instead.  It might
-/// be necessary to restore "force_abort" even before the throw point for the
-/// error message has been reached.  update_force_abort() should be called then.
-/// Update force_abort if cause_abort is set. Rust implementation.
-void update_force_abort(void)
-{
-  rs_update_force_abort();
-}
-
-/// @return  true if a command with a subcommand resulting in "retcode" should
-/// abort the script processing.  Can be used to suppress an autocommand after
-/// execution of a failing subcommand as long as the error message has not been
-/// displayed and actually caused the abortion.
-bool should_abort(int retcode)
-{
-  return rs_should_abort(retcode) != 0;
-}
-
-/// @return  true if a function with the "abort" flag should not be considered
-/// ended on an error.  This means that parsing commands is continued in order
-/// to find finally clauses to be executed, and that some errors in skipped
-/// commands are still reported.
-bool aborted_in_try(void)
-  FUNC_ATTR_PURE
-{
-  return rs_aborted_in_try() != 0;
-}
 
 /// cause_errthrow(): Cause a throw of an error exception if appropriate.
 ///
