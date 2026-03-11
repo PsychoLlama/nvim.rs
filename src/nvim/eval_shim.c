@@ -2303,3 +2303,9 @@ int nvim_channel_is_not_proc(Channel *chan)
   return (chan != NULL && chan->streamtype != kChannelStreamProc) ? 1 : 0;
 }
 
+/// Find channel by ID (accessor for Rust FFI - used by eval/src/job.rs).
+Channel *nvim_find_channel(uint64_t id)
+{
+  return find_channel(id);
+}
+
