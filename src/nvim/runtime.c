@@ -923,7 +923,7 @@ static int gen_expand_wildcards_and_cb(int num_pat, char **pats, int flags, bool
 ///
 /// @param fname the package path
 /// @param is_pack whether the added dir is a "pack/*/start/*/" style package
-static int add_pack_dir_to_rtp(char *fname, bool is_pack)
+int add_pack_dir_to_rtp(char *fname, bool is_pack)
 {
   char *afterdir = NULL;
   int retval = FAIL;
@@ -1005,7 +1005,7 @@ static int add_pack_dir_to_rtp(char *fname, bool is_pack)
   // check if rtp/pack/name/start/name/after exists
   afterdir = concat_fnames(fname, "after", true);
   size_t afterlen = 0;
-  if (is_pack ? pack_has_entries(afterdir) : os_isdir(afterdir)) {
+  if (is_pack ? rs_pack_has_entries(afterdir) : os_isdir(afterdir)) {
     afterlen = strlen(afterdir) + 1;  // add one for comma
   }
 
@@ -1068,148 +1068,11 @@ theend:
   return retval;
 }
 
-/// Load scripts in "plugin" directory of the package.
-/// For opt packages, also load scripts in "ftdetect" (start packages already
-/// load these from filetype.lua)
-static int load_pack_plugin(bool opt, char *fname)
-{
-  return rs_load_pack_plugin(opt, fname);
-}
-
-// used for "cookie" of add_pack_plugin()
-static int APP_ADD_DIR;
-static int APP_LOAD;
-static int APP_BOTH;
-
-// =============================================================================
-// Phase 6: Cookie and callback accessors for Rust package management
-// =============================================================================
-
-/// Get &APP_ADD_DIR cookie.
-void *nvim_rt_pkg_get_app_add_dir(void)
-{
-  return &APP_ADD_DIR;
-}
-
-/// Get &APP_LOAD cookie.
-void *nvim_rt_pkg_get_app_load(void)
-{
-  return &APP_LOAD;
-}
-
-/// Get &APP_BOTH cookie.
-void *nvim_rt_pkg_get_app_both(void)
-{
-  return &APP_BOTH;
-}
-
-/// Get the add_pack_start_dir callback as a function pointer.
-DoInRuntimepathCB nvim_rt_pkg_get_cb_add_pack_start_dir(void)
-{
-  return add_pack_start_dir;
-}
-
-/// Get the add_start_pack_plugins callback as a function pointer.
-DoInRuntimepathCB nvim_rt_pkg_get_cb_add_start_pack_plugins(void)
-{
-  return add_start_pack_plugins;
-}
-
-/// Get the add_opt_pack_plugins callback as a function pointer.
-DoInRuntimepathCB nvim_rt_pkg_get_cb_add_opt_pack_plugins(void)
-{
-  return add_opt_pack_plugins;
-}
-
-static void add_pack_plugins(bool opt, int num_fnames, char **fnames, bool all, void *cookie)
-{
-  bool did_one = false;
-
-  if (cookie != &APP_LOAD) {
-    char buf[MAXPATHL];
-    for (int i = 0; i < num_fnames; i++) {
-      bool found = false;
-
-      const char *p = p_rtp;
-      while (*p != NUL) {
-        copy_option_part((char **)&p, buf, MAXPATHL, ",");
-        if (path_fnamecmp(buf, fnames[i]) == 0) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        // directory is not yet in 'runtimepath', add it
-        if (add_pack_dir_to_rtp(fnames[i], false) == FAIL) {
-          return;
-        }
-      }
-      did_one = true;
-      if (!all) {
-        break;
-      }
-    }
-  }
-
-  if (!all && did_one) {
-    return;
-  }
-
-  if (cookie != &APP_ADD_DIR) {
-    for (int i = 0; i < num_fnames; i++) {
-      load_pack_plugin(opt, fnames[i]);
-      if (!all) {
-        break;
-      }
-    }
-  }
-}
-
-static bool add_start_pack_plugins(int num_fnames, char **fnames, bool all, void *cookie)
-{
-  add_pack_plugins(false, num_fnames, fnames, all, cookie);
-  return num_fnames > 0;
-}
-
-static bool add_opt_pack_plugins(int num_fnames, char **fnames, bool all, void *cookie)
-{
-  add_pack_plugins(true, num_fnames, fnames, all, cookie);
-  return num_fnames > 0;
-}
 
 /// Add all packages in the "start" directory to 'runtimepath'.
 void add_pack_start_dirs(void)
 {
   rs_add_pack_start_dirs();
-}
-
-static bool pack_has_entries(char *buf)
-{
-  return rs_pack_has_entries(buf);
-}
-
-static bool add_pack_start_dir(int num_fnames, char **fnames, bool all, void *cookie)
-{
-  static char buf[MAXPATHL];
-  for (int i = 0; i < num_fnames; i++) {
-    char *(start_pat[]) = { "/start/*", "/pack/*/start/*" };  // NOLINT
-    for (int j = 0; j < 2; j++) {
-      if (strlen(fnames[i]) + strlen(start_pat[j]) + 1 > MAXPATHL) {
-        continue;
-      }
-      xstrlcpy(buf, fnames[i], MAXPATHL);
-      xstrlcat(buf, start_pat[j], sizeof buf);
-      if (pack_has_entries(buf)) {
-        add_pack_dir_to_rtp(buf, true);
-      }
-    }
-
-    if (!all) {
-      break;
-    }
-  }
-
-  return num_fnames > 1;
 }
 
 /// Load plugins from all packages in the "start" directory.

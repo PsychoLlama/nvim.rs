@@ -57,5 +57,6 @@ bool script_autoload(const char *name, size_t name_len, bool reload);
 void free_scriptnames(void);
 void free_autoload_scriptnames(void);
 void scriptnames_slash_adjust(void);
+int add_pack_dir_to_rtp(char *fname, bool is_pack);
 
 #include "runtime.h.generated.h"

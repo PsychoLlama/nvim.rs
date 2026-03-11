@@ -32,6 +32,23 @@ extern "C" {
         cookie: *mut c_void,
     ) -> c_int;
 
+    // add_pack_dir_to_rtp: still C until Phase 3
+    fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> c_int;
+
+    // path_fnamecmp: compare two paths (platform-correct)
+    fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+
+    // copy_option_part: advance pointer through comma-separated value
+    fn copy_option_part(
+        option: *mut *mut c_char,
+        buf: *mut c_char,
+        maxlen: usize,
+        sep_chars: *const c_char,
+    );
+
+    // MAXPATHL value
+    fn nvim_rt_maxpathl() -> c_int;
+
     // Global options
     static p_pp: *mut c_char; // packpath
     static p_rtp: *mut c_char; // runtimepath
@@ -41,6 +58,8 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, maxlen: usize) -> usize;
+    fn xstrlcat(dst: *mut c_char, src: *const c_char, maxlen: usize) -> usize;
 
     // Package management accessors (in runtime_ffi.c)
     fn nvim_rt_pkg_get_did_source_packages() -> bool;
@@ -57,19 +76,6 @@ extern "C" {
     fn nvim_rt_pkg_eval_to_number(expr: *mut c_char) -> i64;
     fn nvim_rt_pkg_do_cmdline_cmd(cmd: *const c_char);
     fn nvim_rt_pkg_time_msg(msg: *const c_char);
-
-    // Cookie accessors (in runtime.c, because APP_* are static there)
-    fn nvim_rt_pkg_get_app_add_dir() -> *mut c_void;
-    fn nvim_rt_pkg_get_app_load() -> *mut c_void;
-    fn nvim_rt_pkg_get_app_both() -> *mut c_void;
-
-    // C callback function pointer getters (in runtime.c)
-    fn nvim_rt_pkg_get_cb_add_pack_start_dir(
-    ) -> Option<unsafe extern "C" fn(c_int, *mut *mut c_char, bool, *mut c_void) -> bool>;
-    fn nvim_rt_pkg_get_cb_add_start_pack_plugins(
-    ) -> Option<unsafe extern "C" fn(c_int, *mut *mut c_char, bool, *mut c_void) -> bool>;
-    fn nvim_rt_pkg_get_cb_add_opt_pack_plugins(
-    ) -> Option<unsafe extern "C" fn(c_int, *mut *mut c_char, bool, *mut c_void) -> bool>;
 
     // exarg_T field accessors (already in runtime_ffi.c)
     fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
@@ -261,6 +267,158 @@ pub fn rs_plugin_dir_count() -> usize {
 }
 
 // =============================================================================
+// Phase 2: Callback cookie sentinels (moved from C static vars)
+// =============================================================================
+
+/// Sentinel cookie: add directory to runtimepath only (do not load).
+static APP_ADD_DIR: u8 = 0;
+/// Sentinel cookie: load plugins only (do not add to runtimepath).
+static APP_LOAD: u8 = 0;
+/// Sentinel cookie: both add to runtimepath and load plugins.
+static APP_BOTH: u8 = 0;
+
+/// Helper: compare cookie against APP_ADD_DIR sentinel.
+unsafe fn cookie_is_app_add_dir(cookie: *mut c_void) -> bool {
+    cookie == (&raw const APP_ADD_DIR).cast_mut().cast()
+}
+
+/// Helper: compare cookie against APP_LOAD sentinel.
+unsafe fn cookie_is_app_load(cookie: *mut c_void) -> bool {
+    cookie == (&raw const APP_LOAD).cast_mut().cast()
+}
+
+// =============================================================================
+// Phase 2: Pack callback functions (migrated from C)
+// =============================================================================
+
+/// Core pack plugin loading logic.
+///
+/// If cookie != APP_LOAD: add each fname to runtimepath if not already there.
+/// If cookie != APP_ADD_DIR: load the plugin for each fname.
+unsafe fn rs_add_pack_plugins_impl(
+    opt: bool,
+    num_fnames: c_int,
+    fnames: *mut *mut c_char,
+    all: bool,
+    cookie: *mut c_void,
+) {
+    let mut did_one = false;
+    let maxpathl = nvim_rt_maxpathl() as usize;
+
+    if !cookie_is_app_load(cookie) {
+        let buf = xmallocz(maxpathl).cast::<c_char>();
+        let mut i = 0;
+        while i < num_fnames {
+            let fname = *fnames.add(i as usize);
+            let mut found = false;
+
+            // Scan p_rtp for fname
+            let mut p = p_rtp;
+            while *p != 0 {
+                copy_option_part(&raw mut p, buf, maxpathl, c",".as_ptr());
+                if path_fnamecmp(buf, fname) == 0 {
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found {
+                // directory is not yet in 'runtimepath', add it
+                if add_pack_dir_to_rtp(fname, false) == FAIL {
+                    xfree(buf.cast());
+                    return;
+                }
+            }
+            did_one = true;
+            if !all {
+                break;
+            }
+            i += 1;
+        }
+        xfree(buf.cast());
+        if !all && did_one {
+            return;
+        }
+    }
+
+    if !cookie_is_app_add_dir(cookie) {
+        let mut i = 0;
+        while i < num_fnames {
+            let fname = *fnames.add(i as usize);
+            rs_load_pack_plugin(opt, fname);
+            if !all {
+                break;
+            }
+            i += 1;
+        }
+    }
+}
+
+/// Callback for start packages: add dir to rtp and optionally load plugins.
+#[export_name = "add_start_pack_plugins"]
+pub unsafe extern "C" fn rs_add_start_pack_plugins(
+    num_fnames: c_int,
+    fnames: *mut *mut c_char,
+    all: bool,
+    cookie: *mut c_void,
+) -> bool {
+    rs_add_pack_plugins_impl(false, num_fnames, fnames, all, cookie);
+    num_fnames > 0
+}
+
+/// Callback for opt packages: add dir to rtp and optionally load plugins.
+#[export_name = "add_opt_pack_plugins"]
+pub unsafe extern "C" fn rs_add_opt_pack_plugins(
+    num_fnames: c_int,
+    fnames: *mut *mut c_char,
+    all: bool,
+    cookie: *mut c_void,
+) -> bool {
+    rs_add_pack_plugins_impl(true, num_fnames, fnames, all, cookie);
+    num_fnames > 0
+}
+
+/// Callback for directory enumeration: adds start dirs to rtp.
+#[export_name = "add_pack_start_dir"]
+pub unsafe extern "C" fn rs_add_pack_start_dir(
+    num_fnames: c_int,
+    fnames: *mut *mut c_char,
+    all: bool,
+    _cookie: *mut c_void,
+) -> bool {
+    let maxpathl = nvim_rt_maxpathl() as usize;
+    let buf = xmallocz(maxpathl).cast::<c_char>();
+
+    let start_pats = [c"/start/*".as_ptr(), c"/pack/*/start/*".as_ptr()];
+
+    let mut i = 0;
+    while i < num_fnames {
+        let fname = *fnames.add(i as usize);
+        let fname_len = strlen(fname);
+
+        for pat in &start_pats {
+            let pat_len = strlen(*pat);
+            if fname_len + pat_len + 1 > maxpathl {
+                continue;
+            }
+            xstrlcpy(buf, fname, maxpathl);
+            xstrlcat(buf, *pat, maxpathl);
+            if rs_pack_has_entries(buf) {
+                add_pack_dir_to_rtp(buf, true);
+            }
+        }
+
+        if !all {
+            break;
+        }
+        i += 1;
+    }
+
+    xfree(buf.cast());
+    num_fnames > 1
+}
+
+// =============================================================================
 // Phase 6: Migrated Package Management Functions
 // =============================================================================
 
@@ -349,13 +507,12 @@ pub unsafe extern "C" fn rs_load_pack_plugin(opt: bool, fname: *mut c_char) -> c
 /// Accesses global C state (p_pp, callbacks).
 #[no_mangle]
 pub unsafe extern "C" fn rs_add_pack_start_dirs() {
-    let cb = nvim_rt_pkg_get_cb_add_pack_start_dir();
     do_in_path(
         p_pp,
         c"".as_ptr(),
         ptr::null_mut(),
         dip::ALL + dip::DIR,
-        cb,
+        Some(rs_add_pack_start_dir),
         ptr::null_mut(),
     );
 }
@@ -369,15 +526,14 @@ pub unsafe extern "C" fn rs_add_pack_start_dirs() {
 pub unsafe extern "C" fn rs_load_start_packages() {
     nvim_rt_pkg_set_did_source_packages(true);
 
-    let cb = nvim_rt_pkg_get_cb_add_start_pack_plugins();
-    let app_load = nvim_rt_pkg_get_app_load();
+    let app_load = (&raw const APP_LOAD).cast_mut().cast::<c_void>();
 
     do_in_path(
         p_pp,
         c"".as_ptr(),
         c"pack/*/start/*".as_ptr().cast_mut(),
         dip::ALL + dip::DIR,
-        cb,
+        Some(rs_add_start_pack_plugins),
         app_load,
     );
     do_in_path(
@@ -385,7 +541,7 @@ pub unsafe extern "C" fn rs_load_start_packages() {
         c"".as_ptr(),
         c"start/*".as_ptr().cast_mut(),
         dip::ALL + dip::DIR,
-        cb,
+        Some(rs_add_start_pack_plugins),
         app_load,
     );
 }
@@ -463,14 +619,11 @@ pub unsafe extern "C" fn rs_ex_packadd(eap: *mut c_void) {
     let len = 13 + arg_len + 5;
     let pat = xmallocz(len).cast::<c_char>();
 
-    let cookie = if forceit {
-        nvim_rt_pkg_get_app_add_dir()
+    let cookie: *mut c_void = if forceit {
+        (&raw const APP_ADD_DIR).cast_mut().cast()
     } else {
-        nvim_rt_pkg_get_app_both()
+        (&raw const APP_BOTH).cast_mut().cast()
     };
-
-    let cb_start = nvim_rt_pkg_get_cb_add_start_pack_plugins();
-    let cb_opt = nvim_rt_pkg_get_cb_add_opt_pack_plugins();
 
     // Only look under "start" when loading packages wasn't done yet.
     if !nvim_rt_pkg_get_did_source_packages() {
@@ -481,7 +634,7 @@ pub unsafe extern "C" fn rs_ex_packadd(eap: *mut c_void) {
             c"".as_ptr(),
             pat,
             dip::ALL + dip::DIR,
-            cb_start,
+            Some(rs_add_start_pack_plugins),
             cookie,
         );
     }
@@ -495,7 +648,7 @@ pub unsafe extern "C" fn rs_ex_packadd(eap: *mut c_void) {
         c"".as_ptr(),
         pat,
         dip::ALL + dip::DIR + err_flag,
-        cb_opt,
+        Some(rs_add_opt_pack_plugins),
         cookie,
     );
 
