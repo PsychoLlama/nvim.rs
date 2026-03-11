@@ -1916,6 +1916,29 @@ pub unsafe extern "C" fn rs_find_keepcap_word(
 }
 
 // =============================================================================
+// Phase 5: go_deeper
+// =============================================================================
+
+/// Advance one level in the trie walk stack.
+///
+/// Copies the current frame to depth+1, then sets state=START, curi=1, flags=0,
+/// and adjusts score by score_add.  Mirrors C `go_deeper()`.
+///
+/// # Safety
+/// `stack` must point to at least `depth + 2` valid TryState entries.
+#[export_name = "go_deeper"]
+pub unsafe extern "C" fn rs_go_deeper_export(stack: *mut TryState, depth: c_int, score_add: c_int) {
+    let depth = depth as usize;
+    // Full struct copy (mirrors `stack[depth+1] = stack[depth]` in C)
+    std::ptr::copy_nonoverlapping(stack.add(depth), stack.add(depth + 1), 1);
+    let next = &mut *stack.add(depth + 1);
+    next.state = TrieWalkState::Start;
+    next.score += score_add;
+    next.curi = 1;
+    next.flags = 0;
+}
+
+// =============================================================================
 // Phase 4: can_be_compound, score_wordcount_adj, badword_captype
 // =============================================================================
 

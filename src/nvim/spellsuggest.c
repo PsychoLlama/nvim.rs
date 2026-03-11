@@ -231,6 +231,7 @@ typedef struct {
 } trystate_T;
 
 extern bool can_be_compound(trystate_T *sp, slang_T *slang, uint8_t *compflags, int flag);
+extern void go_deeper(trystate_T *stack, int depth, int score_add);
 
 // values for ts_isdiff
 enum {
@@ -2208,15 +2209,6 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
 }
 
 /// Go one level deeper in the tree.
-static void go_deeper(trystate_T *stack, int depth, int score_add)
-{
-  stack[depth + 1] = stack[depth];
-  stack[depth + 1].ts_state = STATE_START;
-  stack[depth + 1].ts_score = stack[depth].ts_score + score_add;
-  stack[depth + 1].ts_curi = 1;         // start just after length byte
-  stack[depth + 1].ts_flags = 0;
-}
-
 /// Compute the sound-a-like score for suggestions in su->su_ga and add them to
 /// su->su_sga.
 static void score_comp_sal(suginfo_T *su)
