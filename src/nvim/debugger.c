@@ -479,54 +479,9 @@ void nvim_dbg_restore_typeahead(void *handle)
 // String/memory wrappers
 // =============================================================================
 
-char *nvim_dbg_xstrdup(const char *s)
-{
-  return xstrdup(s);
-}
-
-void nvim_dbg_xfree(void *p)
-{
-  xfree(p);
-}
-
-void *nvim_dbg_xmalloc(size_t size)
-{
-  return xmalloc(size);
-}
-
-char *nvim_dbg_skipwhite(const char *p)
-{
-  return skipwhite(p);
-}
-
-bool nvim_dbg_ascii_isdigit(int c)
-{
-  return ascii_isdigit(c);
-}
-
 int32_t nvim_dbg_getdigits_int32(char **pp)
 {
   return getdigits_int32(pp, true, 0);
-}
-
-size_t nvim_dbg_strlen(const char *s)
-{
-  return strlen(s);
-}
-
-int nvim_dbg_strcmp(const char *a, const char *b)
-{
-  return strcmp(a, b);
-}
-
-int nvim_dbg_strncmp(const char *a, const char *b, size_t n)
-{
-  return strncmp(a, b, n);
-}
-
-char *nvim_dbg_strstr(const char *a, const char *b)
-{
-  return strstr(a, b);
 }
 
 // =============================================================================
@@ -584,11 +539,6 @@ void nvim_dbg_redraw_all_later(int typ)
 char *nvim_dbg_estack_sfile(int which)
 {
   return estack_sfile((estack_arg_T)which);
-}
-
-bool nvim_dbg_ascii_isalpha(int c)
-{
-  return ASCII_ISALPHA(c);
 }
 
 // =============================================================================

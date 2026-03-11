@@ -229,17 +229,20 @@ extern "C" {
     fn nvim_dbg_save_typeahead() -> TypeaheadHandle;
     fn nvim_dbg_restore_typeahead(handle: TypeaheadHandle);
 
-    // --- String/memory wrappers ---
+    // --- String/memory ---
+    #[link_name = "xstrdup"]
     fn nvim_dbg_xstrdup(s: *const c_char) -> *mut c_char;
+    #[link_name = "xfree"]
     fn nvim_dbg_xfree(p: *mut c_void);
+    #[link_name = "xmalloc"]
     fn nvim_dbg_xmalloc(size: usize) -> *mut c_void;
+    #[link_name = "skipwhite"]
     fn nvim_dbg_skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_dbg_ascii_isdigit(c: c_int) -> bool;
     fn nvim_dbg_getdigits_int32(pp: *mut *mut c_char) -> i32;
-    fn nvim_dbg_strlen(s: *const c_char) -> usize;
-    fn nvim_dbg_strcmp(a: *const c_char, b: *const c_char) -> c_int;
-    fn nvim_dbg_strstr(a: *const c_char, b: *const c_char) -> *mut c_char;
-    fn nvim_dbg_strncmp(a: *const c_char, b: *const c_char, n: usize) -> c_int;
+    fn strlen(s: *const c_char) -> usize;
+    fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
+    fn strstr(a: *const c_char, b: *const c_char) -> *mut c_char;
+    fn strncmp(a: *const c_char, b: *const c_char, n: usize) -> c_int;
 
     // --- Path/file wrappers ---
     fn nvim_dbg_expand_env_save(p: *const c_char) -> *mut c_char;
@@ -255,7 +258,6 @@ extern "C" {
     // --- Screen/misc wrappers ---
     fn nvim_dbg_redraw_all_later(typ: c_int);
     fn nvim_dbg_estack_sfile(which: c_int) -> *mut c_char;
-    fn nvim_dbg_ascii_isalpha(c: c_int) -> bool;
 
 }
 
@@ -442,7 +444,7 @@ unsafe fn do_showbacktrace(cmd: *const c_char) {
             let mut cur = sname;
             let dotdot = c"..".as_ptr();
             while !got_int {
-                let next = nvim_dbg_strstr(cur, dotdot);
+                let next = strstr(cur, dotdot);
                 if !next.is_null() {
                     // Temporarily NUL-terminate at ".."
                     *(next as *mut c_char) = NUL;
@@ -576,18 +578,18 @@ unsafe fn dbg_parsearg(arg: *mut c_char, gap: *mut GapHandle) -> c_int {
         let idx = nvim_dbg_gap_len(gap);
 
         // Find "func" or "file"
-        if nvim_dbg_strncmp(p, c"func".as_ptr(), 4) == 0 {
+        if strncmp(p, c"func".as_ptr(), 4) == 0 {
             nvim_dbg_set_type(gap, idx, DBG_FUNC);
-        } else if nvim_dbg_strncmp(p, c"file".as_ptr(), 4) == 0 {
+        } else if strncmp(p, c"file".as_ptr(), 4) == 0 {
             nvim_dbg_set_type(gap, idx, DBG_FILE);
-        } else if !is_prof && nvim_dbg_strncmp(p, c"here".as_ptr(), 4) == 0 {
+        } else if !is_prof && strncmp(p, c"here".as_ptr(), 4) == 0 {
             if nvim_dbg_curbuf_ffname().is_null() {
                 nvim_dbg_emsg_noname();
                 return FAIL;
             }
             nvim_dbg_set_type(gap, idx, DBG_FILE);
             here = true;
-        } else if !is_prof && nvim_dbg_strncmp(p, c"expr".as_ptr(), 4) == 0 {
+        } else if !is_prof && strncmp(p, c"expr".as_ptr(), 4) == 0 {
             nvim_dbg_set_type(gap, idx, DBG_EXPR);
         } else {
             nvim_dbg_semsg_invarg(p);
@@ -598,7 +600,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, gap: *mut GapHandle) -> c_int {
         // Find optional line number
         if here {
             nvim_dbg_set_lnum(gap, idx, nvim_dbg_curwin_cursor_lnum());
-        } else if !is_prof && nvim_dbg_ascii_isdigit(*p as c_int) {
+        } else if !is_prof && (*p as u8).is_ascii_digit() {
             let mut pp = p;
             let lnum = nvim_dbg_getdigits_int32(&mut pp);
             nvim_dbg_set_lnum(gap, idx, lnum);
@@ -611,7 +613,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, gap: *mut GapHandle) -> c_int {
         let bp_type = nvim_dbg_get_type(gap, idx);
         if (!here && is_nul(p))
             || (here && !is_nul(p))
-            || (bp_type == DBG_FUNC && !nvim_dbg_strstr(p, c"()".as_ptr()).is_null())
+            || (bp_type == DBG_FUNC && !strstr(p, c"()".as_ptr()).is_null())
         {
             nvim_dbg_semsg_invarg(arg);
             return FAIL;
@@ -619,7 +621,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, gap: *mut GapHandle) -> c_int {
 
         if bp_type == DBG_FUNC {
             // Strip "g:" prefix
-            let name = if nvim_dbg_strncmp(p, c"g:".as_ptr(), 2) == 0 {
+            let name = if strncmp(p, c"g:".as_ptr(), 2) == 0 {
                 nvim_dbg_xstrdup(p.add(2))
             } else {
                 nvim_dbg_xstrdup(p)
@@ -732,7 +734,7 @@ pub unsafe extern "C" fn rs_ex_breakdel(eap: *const ExArgHandle) {
         }
 
         let arg = nvim_dbg_eap_get_arg(eap);
-        if nvim_dbg_ascii_isdigit(*arg as c_int) {
+        if (*arg as u8).is_ascii_digit() {
             // ":breakdel {nr}"
             let nr = atoi(arg);
             let len = nvim_dbg_gap_len(gap);
@@ -756,8 +758,7 @@ pub unsafe extern "C" fn rs_ex_breakdel(eap: *const ExArgHandle) {
                 let parse_type = nvim_dbg_get_type(gap, parse_idx);
                 let i_type = nvim_dbg_get_type(gap, i);
                 if parse_type == i_type
-                    && nvim_dbg_strcmp(nvim_dbg_get_name(gap, parse_idx), nvim_dbg_get_name(gap, i))
-                        == 0
+                    && strcmp(nvim_dbg_get_name(gap, parse_idx), nvim_dbg_get_name(gap, i)) == 0
                     && (nvim_dbg_get_lnum(gap, parse_idx) == nvim_dbg_get_lnum(gap, i)
                         || (nvim_dbg_get_lnum(gap, parse_idx) == 0
                             && (best_lnum == 0 || nvim_dbg_get_lnum(gap, i) < best_lnum)))
@@ -868,7 +869,7 @@ unsafe fn debuggy_find(
         // Replace K_SNR in function name with "<SNR>".
         let mut name_allocated = false;
         if !file && char_at(fname) == K_SPECIAL {
-            let fname_len = nvim_dbg_strlen(fname);
+            let fname_len = strlen(fname);
             let new_name = nvim_dbg_xmalloc(fname_len + 3) as *mut c_char;
             // Copy "<SNR>"
             let snr = c"<SNR>".as_ptr();
@@ -1150,7 +1151,7 @@ pub unsafe extern "C" fn rs_do_debug(cmd: *mut c_char) {
                             p = p.add(1);
                             t = t.add(1);
                         }
-                        if nvim_dbg_ascii_isalpha(*p as c_int) && (*state).last_cmd != CMD_FRAME {
+                        if (*p as u8).is_ascii_alphabetic() && (*state).last_cmd != CMD_FRAME {
                             (*state).last_cmd = 0;
                         }
                     }
