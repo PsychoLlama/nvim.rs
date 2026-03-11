@@ -1907,6 +1907,522 @@ pub unsafe extern "C" fn rs_spell_cat_line(buf: *mut c_char, line: *const c_char
 }
 
 // =============================================================================
+// Phase 4: Soundfold Functions
+// =============================================================================
+
+/// SAL item structure matching C salitem_T layout.
+/// Fields: sm_lead, sm_leadlen, sm_oneof, sm_rules, sm_to, sm_lead_w, sm_oneof_w, sm_to_w
+#[repr(C)]
+pub struct SalitemT {
+    pub sm_lead: *mut c_char,
+    pub sm_leadlen: c_int,
+    _pad: [u8; 4], // padding between sm_leadlen (i32) and sm_oneof (*ptr)
+    pub sm_oneof: *mut c_char,
+    pub sm_rules: *mut c_char,
+    pub sm_to: *mut c_char,
+    pub sm_lead_w: *mut c_int,
+    pub sm_oneof_w: *mut c_int,
+    pub sm_to_w: *mut c_int,
+}
+
+extern "C" {
+    // C spell functions needed by soundfold
+    fn spell_casefold(
+        wp: *const c_void,
+        str_: *const c_char,
+        len: c_int,
+        buf: *mut c_char,
+        buflen: c_int,
+    ) -> c_int;
+    fn xstrdup(str_: *const c_char) -> *mut c_char;
+    fn rs_ascii_isdigit(c: c_int) -> c_int;
+    fn rs_ascii_iswhite(c: c_int) -> c_int;
+    fn strstr(haystack: *const c_char, needle: *const c_char) -> *mut c_char;
+    fn strlen(s: *const c_char) -> usize;
+
+    // Window accessors for eval_soundfold
+    fn nvim_win_get_p_spell(wp: *const c_void) -> c_int;
+    fn nvim_win_get_b_p_spl(wp: *const c_void) -> *const c_char;
+    fn nvim_win_get_b_langp(wp: *const c_void) -> *const GArrayRaw;
+}
+
+/// GA_EMPTY: returns true if the garray has no entries.
+#[inline]
+fn ga_empty(ga: *const GArrayRaw) -> bool {
+    unsafe { (*ga).ga_len == 0 }
+}
+
+/// LANGP_ENTRY: get pointer to langp_T at index i from garray.
+///
+/// # Safety
+/// ga must be a valid non-null pointer to a GArrayRaw for langp_T, and i < ga_len.
+#[inline]
+#[allow(clippy::cast_sign_loss)]
+unsafe fn langp_entry(ga: *const GArrayRaw, i: c_int) -> *const LangpT {
+    let data = (*ga).ga_data.cast::<LangpT>();
+    data.add(i as usize)
+}
+
+/// Perform sound folding of "inword" into "res[MAXWLEN]" using SOFOFROM/SOFOTO.
+///
+/// # Safety
+/// slang, inword, res must be valid pointers.
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_lossless)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn spell_soundfold_sofo(slang: *mut SlangRaw, inword: *const c_char, res: *mut c_char) {
+    let mut ri: c_int = 0;
+    let mut prevc: c_int = 0;
+
+    let mut s = inword;
+    while *(s as *const u8) != 0 {
+        let mut c = mb_cptr2char_adv(std::ptr::addr_of_mut!(s));
+        if utf_class(c) == 0 {
+            c = b' ' as c_int;
+        } else if c < 256 {
+            c = (*slang).sl_sal_first[c as usize];
+        } else {
+            let ip_ptr = *((*slang)
+                .sl_sal
+                .ga_data
+                .cast::<*mut c_int>()
+                .add(c as usize & 0xff));
+            if ip_ptr.is_null() {
+                c = 0; // NUL
+            } else {
+                let mut ip = ip_ptr;
+                loop {
+                    if *ip == 0 {
+                        c = 0;
+                        break;
+                    }
+                    if *ip == c {
+                        c = *ip.add(1);
+                        break;
+                    }
+                    ip = ip.add(2);
+                }
+            }
+        }
+
+        if c != 0 && c != prevc {
+            ri += utf_char2bytes(c, res.add(ri as usize));
+            if ri + 4 > MAXWLEN as c_int {
+                // MB_MAXBYTES == 4
+                break;
+            }
+            prevc = c;
+        }
+    }
+    *(res.add(ri as usize)) = 0;
+}
+
+/// Turn "inword" into its sound-a-like equivalent using SAL items.
+/// Multi-byte version. Implements the Aspell phonet algorithm.
+///
+/// # Safety
+/// slang, inword, res must be valid pointers.
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_lossless)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::many_single_char_names)]
+unsafe fn spell_soundfold_wsal(slang: *mut SlangRaw, inword: *const c_char, res: *mut c_char) {
+    let mut word = [0i32; MAXWLEN + 1];
+    let mut did_white = false;
+
+    // Convert multi-byte string to wide-char array.
+    let mut wordlen: usize = 0;
+    let mut s = inword;
+    while *(s as *const u8) != 0 {
+        let t = s;
+        let mut c = mb_cptr2char_adv(std::ptr::addr_of_mut!(s));
+        if (*slang).sl_rem_accents {
+            if utf_class(c) == 0 {
+                if did_white {
+                    continue;
+                }
+                c = b' ' as c_int;
+                did_white = true;
+            } else {
+                did_white = false;
+                if !rs_spell_iswordp_nmw(t, curwin_global) {
+                    continue;
+                }
+            }
+        }
+        if wordlen < MAXWLEN {
+            word[wordlen] = c;
+            wordlen += 1;
+        }
+    }
+    word[wordlen] = 0;
+
+    let smp = (*slang).sl_sal.ga_data as *mut SalitemT;
+    let mut wres = [0i32; MAXWLEN + 1];
+    let mut k: c_int = 0;
+    let mut p0: c_int = -333;
+    let mut i: usize = 0;
+    let mut reslen: usize = 0;
+    let mut z: c_int = 0;
+
+    loop {
+        let c = word[i];
+        if c == 0 {
+            break;
+        }
+        let mut n = (*slang).sl_sal_first[(c & 0xff) as usize];
+        let mut z0: c_int = 0;
+
+        if n >= 0 {
+            // Check all rules with same index byte.
+            loop {
+                let ws = (*smp.add(n as usize)).sm_lead_w;
+                if ws.is_null() || (*ws & 0xff) != (c & 0xff) || *ws == 0 {
+                    break;
+                }
+                // Quickly skip entries that don't match the word.
+                if c != *ws {
+                    n += 1;
+                    continue;
+                }
+                k = (*smp.add(n as usize)).sm_leadlen;
+                if k > 1 {
+                    if word[i + 1] != *ws.add(1) {
+                        n += 1;
+                        continue;
+                    }
+                    if k > 2 {
+                        let mut j = 2;
+                        while j < k {
+                            if word[i + j as usize] != *ws.add(j as usize) {
+                                break;
+                            }
+                            j += 1;
+                        }
+                        if j < k {
+                            n += 1;
+                            continue;
+                        }
+                    }
+                }
+
+                let pf = (*smp.add(n as usize)).sm_oneof_w;
+                if !pf.is_null() {
+                    // Check for match with one of the chars in sm_oneof.
+                    let mut pf_iter = pf;
+                    while *pf_iter != 0 && *pf_iter != word[i + k as usize] {
+                        pf_iter = pf_iter.add(1);
+                    }
+                    if *pf_iter == 0 {
+                        n += 1;
+                        continue;
+                    }
+                    k += 1;
+                }
+
+                let s_rules = (*smp.add(n as usize)).sm_rules;
+                let mut pri: c_int = 5;
+
+                p0 = *(s_rules as *const u8) as c_int;
+                let mut k0 = k;
+                let mut sr = s_rules;
+                while *sr == b'-' as c_char && k > 1 {
+                    k -= 1;
+                    sr = sr.add(1);
+                }
+                if *sr == b'<' as c_char {
+                    sr = sr.add(1);
+                }
+                if rs_ascii_isdigit(*sr as c_int) != 0 {
+                    pri = (*sr as u8 - b'0') as c_int;
+                    sr = sr.add(1);
+                }
+                if *sr == b'^' as c_char && *sr.add(1) == b'^' as c_char {
+                    sr = sr.add(1);
+                }
+
+                let match_rule = if *sr == 0 {
+                    true
+                } else if *sr == b'^' as c_char {
+                    (i == 0
+                        || !(word[i - 1] == b' ' as c_int
+                            || rs_spell_iswordp_w(word[i - 1..].as_ptr(), curwin_global)))
+                        && (*sr.add(1) != b'$' as c_char
+                            || !rs_spell_iswordp_w(word[i + k0 as usize..].as_ptr(), curwin_global))
+                } else if *sr == b'$' as c_char && i > 0 {
+                    rs_spell_iswordp_w(word[i - 1..].as_ptr(), curwin_global)
+                        && !rs_spell_iswordp_w(word[i + k0 as usize..].as_ptr(), curwin_global)
+                } else {
+                    false
+                };
+
+                if match_rule {
+                    // search for followup rules
+                    let c0 = word[i + k as usize - 1];
+                    let mut n0 = (*slang).sl_sal_first[(c0 & 0xff) as usize];
+
+                    if (*slang).sl_followup
+                        && k > 1
+                        && n0 >= 0
+                        && p0 != b'-' as c_int
+                        && word[i + k as usize] != 0
+                    {
+                        // Test follow-up rule for word[i + k]
+                        'followup: loop {
+                            let ws2 = (*smp.add(n0 as usize)).sm_lead_w;
+                            if ws2.is_null() || (*ws2 & 0xff) != (c0 & 0xff) {
+                                break 'followup;
+                            }
+                            if c0 != *ws2 {
+                                n0 += 1;
+                                continue;
+                            }
+                            k0 = (*smp.add(n0 as usize)).sm_leadlen;
+                            if k0 > 1 {
+                                if word[i + k as usize] != *ws2.add(1) {
+                                    n0 += 1;
+                                    continue;
+                                }
+                                if k0 > 2 {
+                                    let mut pf2 = word[i + k as usize + 1..].as_ptr();
+                                    let mut j = 2;
+                                    while j < k0 {
+                                        if *pf2 != *ws2.add(j as usize) {
+                                            break;
+                                        }
+                                        pf2 = pf2.add(1);
+                                        j += 1;
+                                    }
+                                    if j < k0 {
+                                        n0 += 1;
+                                        continue;
+                                    }
+                                }
+                            }
+                            k0 += k - 1;
+
+                            let pf2 = (*smp.add(n0 as usize)).sm_oneof_w;
+                            if !pf2.is_null() {
+                                let mut pf2_iter = pf2;
+                                while *pf2_iter != 0 && *pf2_iter != word[i + k0 as usize] {
+                                    pf2_iter = pf2_iter.add(1);
+                                }
+                                if *pf2_iter == 0 {
+                                    n0 += 1;
+                                    continue;
+                                }
+                                k0 += 1;
+                            }
+
+                            p0 = 5;
+                            let sr2 = (*smp.add(n0 as usize)).sm_rules;
+                            let mut sr2_iter = sr2;
+                            while *sr2_iter == b'-' as c_char {
+                                sr2_iter = sr2_iter.add(1);
+                            }
+                            if *sr2_iter == b'<' as c_char {
+                                sr2_iter = sr2_iter.add(1);
+                            }
+                            if rs_ascii_isdigit(*sr2_iter as c_int) != 0 {
+                                p0 = (*sr2_iter as u8 - b'0') as c_int;
+                                sr2_iter = sr2_iter.add(1);
+                            }
+
+                            let fu_match = if *sr2_iter == 0 {
+                                true
+                            } else if *sr2_iter == b'$' as c_char {
+                                !rs_spell_iswordp_w(word[i + k0 as usize..].as_ptr(), curwin_global)
+                            } else {
+                                false
+                            };
+
+                            if fu_match {
+                                if k0 == k {
+                                    n0 += 1;
+                                    continue;
+                                }
+                                if p0 < pri {
+                                    n0 += 1;
+                                    continue;
+                                }
+                                break 'followup;
+                            }
+                            n0 += 1;
+                        }
+
+                        let ws_check = (*smp.add(n0 as usize)).sm_lead_w;
+                        if !ws_check.is_null() && p0 >= pri && (*ws_check & 0xff) == (c0 & 0xff) {
+                            n += 1;
+                            continue;
+                        }
+                    }
+
+                    // replace string
+                    let mut ws_to = (*smp.add(n as usize)).sm_to_w;
+                    let sr_final = (*smp.add(n as usize)).sm_rules;
+                    p0 = c_int::from(!vim_strchr(sr_final, b'<' as c_int).is_null());
+                    if p0 == 1 && z == 0 {
+                        // rule with '<' is used
+                        if reslen > 0
+                            && !ws_to.is_null()
+                            && *ws_to != 0
+                            && (wres[reslen - 1] == c || wres[reslen - 1] == *ws_to)
+                        {
+                            reslen -= 1;
+                        }
+                        z0 = 1;
+                        z = 1;
+                        k0 = 0;
+                        if !ws_to.is_null() {
+                            while *ws_to != 0 && word[i + k0 as usize] != 0 {
+                                word[i + k0 as usize] = *ws_to;
+                                k0 += 1;
+                                ws_to = ws_to.add(1);
+                            }
+                        }
+                        if k > k0 {
+                            let src = word[i + k as usize..].as_ptr();
+                            let dst = word[i + k0 as usize..].as_mut_ptr();
+                            let remaining = wordlen - (i + k as usize) + 1;
+                            std::ptr::copy(src, dst, remaining);
+                        }
+                        // new "actual letter"
+                        // (loop will re-read word[i])
+                    } else {
+                        // no '<' rule used
+                        i += (k - 1) as usize;
+                        z = 0;
+                        if !ws_to.is_null() {
+                            while *ws_to != 0 && *ws_to.add(1) != 0 && reslen < MAXWLEN {
+                                if reslen == 0 || wres[reslen - 1] != *ws_to {
+                                    wres[reslen] = *ws_to;
+                                    reslen += 1;
+                                }
+                                ws_to = ws_to.add(1);
+                            }
+                        }
+                        // new "actual letter"
+                        let new_c = if ws_to.is_null() { 0i32 } else { *ws_to };
+                        if !strstr(sr_final, c"^^".as_ptr()).is_null() {
+                            if new_c != 0 && reslen < MAXWLEN {
+                                wres[reslen] = new_c;
+                                reslen += 1;
+                            }
+                            // memmove(word, word + i + 1, sizeof(int) * (wordlen - (i+1) + 1))
+                            let count = wordlen - i; // wordlen - (i+1) + 1 = wordlen - i
+                            let src = word[i + 1..].as_ptr();
+                            std::ptr::copy(src, word.as_mut_ptr(), count);
+                            i = 0;
+                            z0 = 1;
+                        }
+                        // NOTE: the C code does not write new_c to wres here for the non-^^ case
+                        // because c will be updated below from word[i] or from new_c via break
+                    }
+                    break;
+                }
+                n += 1;
+            }
+        } else if rs_ascii_iswhite(c) != 0 {
+            // c = ' ', k = 1
+            k = 1;
+        }
+
+        if z0 == 0 {
+            if k != 0
+                && p0 == 0
+                && reslen < MAXWLEN
+                && c != 0
+                && (!(*slang).sl_collapse || reslen == 0 || wres[reslen - 1] != c)
+            {
+                wres[reslen] = c;
+                reslen += 1;
+            }
+            i += 1;
+            z = 0;
+            k = 0;
+        }
+    }
+
+    // Convert wide characters in wres to multi-byte string in res.
+    let mut l: usize = 0;
+    for &wc in &wres[..reslen] {
+        l += utf_char2bytes(wc, res.add(l)) as usize;
+        if l + 4 > MAXWLEN {
+            // MB_MAXBYTES == 4
+            break;
+        }
+    }
+    *(res.add(l)) = 0;
+}
+
+/// Turn "inword" into its sound-a-like equivalent in "res[MAXWLEN]".
+///
+/// # Safety
+/// slang, inword, res must be valid non-null pointers.
+#[export_name = "spell_soundfold"]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_spell_soundfold(
+    slang: *mut SlangRaw,
+    inword: *mut c_char,
+    folded: bool,
+    res: *mut c_char,
+) {
+    if (*slang).sl_sofo {
+        spell_soundfold_sofo(slang, inword, res);
+    } else {
+        let mut fword = [0u8; MAXWLEN + 4];
+        let word: *const c_char = if folded {
+            inword
+        } else {
+            spell_casefold(
+                curwin_global,
+                inword,
+                strlen(inword) as c_int,
+                fword.as_mut_ptr().cast::<c_char>(),
+                MAXWLEN as c_int,
+            );
+            fword.as_ptr().cast::<c_char>()
+        };
+        spell_soundfold_wsal(slang, word, res);
+    }
+}
+
+/// Turn "word" into its sound-a-like equivalent.
+/// Returns an allocated string, or copy of word if no soundfold language found.
+///
+/// # Safety
+/// word must be a valid non-null C string.
+#[export_name = "eval_soundfold"]
+pub unsafe extern "C" fn rs_eval_soundfold(word: *const c_char) -> *mut c_char {
+    if nvim_win_get_p_spell(curwin_global) != 0 {
+        let spl = nvim_win_get_b_p_spl(curwin_global);
+        if !spl.is_null() && *spl.cast::<u8>() != 0 {
+            let langp_ga = nvim_win_get_b_langp(curwin_global);
+            let langp_len = (*langp_ga).ga_len;
+            for lpi in 0..langp_len {
+                let lp = langp_entry(langp_ga, lpi);
+                let slang = (*lp).lp_slang;
+                if !slang.is_null() && !ga_empty(std::ptr::addr_of!((*slang).sl_sal)) {
+                    let mut sound = [0u8; MAXWLEN + 4];
+                    rs_spell_soundfold(
+                        slang,
+                        word.cast_mut(),
+                        false,
+                        sound.as_mut_ptr().cast::<c_char>(),
+                    );
+                    return xstrdup(sound.as_ptr().cast::<c_char>());
+                }
+            }
+        }
+    }
+    xstrdup(word)
+}
+
+// =============================================================================
 // Word Tree Functions
 // =============================================================================
 

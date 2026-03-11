@@ -2877,6 +2877,7 @@ void nvim_set_vim_var_echospace(int val) { set_vim_var_nr(VV_ECHOSPACE, val); }
 bool nvim_win_get_b_cjk(const win_T *wp) { return wp->w_s->b_cjk != 0; }
 const bool *nvim_win_get_b_spell_ismw(const win_T *wp) { return wp->w_s->b_spell_ismw; }
 const char *nvim_win_get_b_spell_ismw_mb(const win_T *wp) { return wp->w_s->b_spell_ismw_mb; }
+const garray_T *nvim_win_get_b_langp(const win_T *wp) { return &wp->w_s->b_langp; }
 
 // Compile-time constant checks for Rust FFI (constants used in buffer/info crate)
 _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");

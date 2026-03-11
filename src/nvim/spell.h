@@ -42,5 +42,7 @@ void allcap_copy(const char *word, char *wcopy);
 int nofold_len(char *fword, int flen, char *word);
 void make_case_word(char *fword, char *cword, int flags);
 void spell_cat_line(char *buf, char *line, int maxlen);
+void spell_soundfold(slang_T *slang, char *inword, bool folded, char *res);
+char *eval_soundfold(const char *word);
 
 #include "spell.h.generated.h"
