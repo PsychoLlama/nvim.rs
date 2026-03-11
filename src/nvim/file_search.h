@@ -52,6 +52,11 @@ DLLEXPORT char *file_name_in_line(char *line, int col, int options, int count,
                                   char *rel_fname, linenr_T *file_lnum);
 DLLEXPORT char *find_file_name_in_path(char *ptr, size_t len, int options, long count,
                                        char *rel_fname);
+DLLEXPORT void *vim_findfile_init(char *path, char *filename, size_t filenamelen,
+                                  char *stopdirs, int level, int free_visited,
+                                  int find_what, void *search_ctx_arg, int tagfile,
+                                  char *rel_fname);
+DLLEXPORT char *vim_findfile(void *search_ctx_arg);
 DLLEXPORT void vim_findfile_cleanup(void *ctx);
 DLLEXPORT char *vim_findfile_stopdir(char *buf);
 DLLEXPORT int vim_chdirfile(char *fname, CdCause cause);

@@ -718,7 +718,7 @@ unsafe fn ff_path_in_stoplist(
 ///
 /// # Safety
 /// All pointer parameters must be valid or NULL.
-#[no_mangle]
+#[export_name = "vim_findfile_init"]
 pub unsafe extern "C" fn rs_vim_findfile_init(
     path: *mut c_char,
     filename: *const c_char,
@@ -1125,7 +1125,7 @@ const EW_NOTWILD: c_int = 0x0200;
 /// The search algorithm is depth first.
 ///
 /// Returns a pointer to an allocated file name or NULL if nothing found.
-#[no_mangle]
+#[export_name = "vim_findfile"]
 pub unsafe extern "C" fn rs_vim_findfile(search_ctx_arg: *mut libc::c_void) -> *mut c_char {
     if search_ctx_arg.is_null() {
         return ptr::null_mut();
