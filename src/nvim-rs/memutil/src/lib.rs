@@ -31,10 +31,11 @@ pub unsafe extern "C" fn rs_xstrnlen(s: *const c_char, n: usize) -> usize {
 /// a pointer to the NUL terminator if not found.
 ///
 /// Like `strchr` but never returns NULL.
-#[no_mangle]
-pub unsafe extern "C" fn rs_xstrchrnul(str: *const c_char, c: c_char) -> *const c_char {
+#[export_name = "xstrchrnul"]
+#[must_use]
+pub unsafe extern "C" fn rs_xstrchrnul(str: *const c_char, c: c_char) -> *mut c_char {
     if str.is_null() {
-        return str;
+        return str.cast_mut();
     }
 
     let mut p = str;
@@ -43,7 +44,7 @@ pub unsafe extern "C" fn rs_xstrchrnul(str: *const c_char, c: c_char) -> *const 
     loop {
         let byte = *p as u8;
         if byte == c_byte || byte == 0 {
-            return p;
+            return p.cast_mut();
         }
         p = p.add(1);
     }
@@ -53,25 +54,27 @@ pub unsafe extern "C" fn rs_xstrchrnul(str: *const c_char, c: c_char) -> *const 
 /// one past the end if not found.
 ///
 /// Like `memscan` in Linux kernel.
-#[no_mangle]
-pub unsafe extern "C" fn rs_xmemscan(addr: *const u8, c: c_char, size: usize) -> *const u8 {
+#[export_name = "xmemscan"]
+#[must_use]
+pub unsafe extern "C" fn rs_xmemscan(addr: *const u8, c: c_char, size: usize) -> *mut u8 {
     if addr.is_null() || size == 0 {
-        return addr;
+        return addr.cast_mut();
     }
 
     let bytes = std::slice::from_raw_parts(addr, size);
     let c_byte = c as u8;
 
     match bytes.iter().position(|&b| b == c_byte) {
-        Some(pos) => addr.add(pos),
-        None => addr.add(size),
+        Some(pos) => addr.add(pos).cast_mut(),
+        None => addr.add(size).cast_mut(),
     }
 }
 
 /// Count occurrences of character `c` in NUL-terminated string `str`.
 ///
 /// Warning: `c` must not be NUL.
-#[no_mangle]
+#[export_name = "strcnt"]
+#[must_use]
 pub unsafe extern "C" fn rs_strcnt(str: *const c_char, c: c_char) -> usize {
     if str.is_null() {
         return 0;
@@ -96,7 +99,8 @@ pub unsafe extern "C" fn rs_strcnt(str: *const c_char, c: c_char) -> usize {
 }
 
 /// Count occurrences of byte `c` in memory buffer `data` of length `len`.
-#[no_mangle]
+#[export_name = "memcnt"]
+#[must_use]
 pub unsafe extern "C" fn rs_memcnt(data: *const u8, c: c_char, len: usize) -> usize {
     if data.is_null() || len == 0 {
         return 0;
@@ -111,24 +115,26 @@ pub unsafe extern "C" fn rs_memcnt(data: *const u8, c: c_char, len: usize) -> us
 /// Reverse memchr - find the last occurrence of byte `c` in memory.
 ///
 /// Returns NULL if not found.
-#[no_mangle]
-pub unsafe extern "C" fn rs_xmemrchr(src: *const u8, c: u8, len: usize) -> *const u8 {
+#[export_name = "xmemrchr"]
+#[must_use]
+pub unsafe extern "C" fn rs_xmemrchr(src: *const u8, c: u8, len: usize) -> *mut u8 {
     if src.is_null() || len == 0 {
-        return std::ptr::null();
+        return std::ptr::null_mut();
     }
 
     let bytes = std::slice::from_raw_parts(src, len);
 
     match bytes.iter().rposition(|&b| b == c) {
-        Some(pos) => src.add(pos),
-        None => std::ptr::null(),
+        Some(pos) => src.add(pos).cast_mut(),
+        None => std::ptr::null_mut(),
     }
 }
 
 /// Null-safe string equality check.
 ///
 /// Returns true if both are NULL, or both are non-NULL and equal.
-#[no_mangle]
+#[export_name = "strequal"]
+#[must_use]
 pub unsafe extern "C" fn rs_strequal(a: *const c_char, b: *const c_char) -> bool {
     if a.is_null() && b.is_null() {
         return true;
@@ -160,7 +166,8 @@ pub unsafe extern "C" fn rs_strequal(a: *const c_char, b: *const c_char) -> bool
 /// Null-safe bounded string equality check.
 ///
 /// Returns true if both are NULL, or both are non-NULL and equal up to `n` bytes.
-#[no_mangle]
+#[export_name = "strnequal"]
+#[must_use]
 pub unsafe extern "C" fn rs_strnequal(a: *const c_char, b: *const c_char, n: usize) -> bool {
     if a.is_null() && b.is_null() {
         return true;
@@ -363,7 +370,7 @@ mod tests {
 
             // Empty size returns addr unchanged
             let p = rs_xmemscan(data.as_ptr(), b'h' as c_char, 0);
-            assert_eq!(p, data.as_ptr());
+            assert_eq!(p, data.as_ptr().cast_mut());
 
             // Null pointer returns null
             let p = rs_xmemscan(std::ptr::null(), b'h' as c_char, 10);

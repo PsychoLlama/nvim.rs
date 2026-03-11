@@ -46,8 +46,9 @@ extern "C" {
     /// Return win->w_p_winhl (the current winhighlight option string).
     fn nvim_win_get_p_winhl(win: crate::WinHandle) -> *const c_char;
 
-    /// Return rs_xstrchrnul(p, c): points to c or to the NUL terminator.
-    fn rs_xstrchrnul(p: *const c_char, c: c_char) -> *const c_char;
+    /// Find first occurrence of c in p, or NUL terminator.
+    #[link_name = "xstrchrnul"]
+    fn rs_xstrchrnul(p: *const c_char, c: c_char) -> *mut c_char;
 }
 
 // =============================================================================

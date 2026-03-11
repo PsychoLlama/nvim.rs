@@ -59,14 +59,6 @@ MemRealloc mem_realloc = &realloc;
 // Rust FFI declarations (tag module)
 extern void rs_free_tag_stuff(void);
 
-extern size_t rs_xstrnlen(const char *s, size_t n);
-extern char *rs_xstrchrnul(const char *str, char c);
-extern void *rs_xmemscan(const void *addr, char c, size_t size);
-extern size_t rs_strcnt(const char *str, char c);
-extern size_t rs_memcnt(const void *data, char c, size_t len);
-extern void *rs_xmemrchr(const void *src, uint8_t c, size_t len);
-extern bool rs_strequal(const char *a, const char *b);
-extern bool rs_strnequal(const char *a, const char *b, size_t n);
 extern void rs_time_to_bytes(int64_t time_, uint8_t *buf);
 extern size_t rs_arena_align_offset(uint64_t off);
 extern void rs_strchrsub(char *str, char c, char x);
@@ -284,33 +276,6 @@ size_t xstrnlen(const char *s, size_t n)
 }
 #endif
 
-/// A version of strchr() that returns a pointer to the terminating NUL if it
-/// doesn't find `c`.
-///
-/// @param str The string to search.
-/// @param c   The char to look for.
-/// @returns a pointer to the first instance of `c`, or to the NUL terminator
-///          if not found.
-char *xstrchrnul(const char *str, char c)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
-{
-  return (char *)rs_xstrchrnul(str, c);
-}
-
-/// A version of memchr() that returns a pointer one past the end
-/// if it doesn't find `c`.
-///
-/// @param addr The address of the memory object.
-/// @param c    The char to look for.
-/// @param size The size of the memory object.
-/// @returns a pointer to the first instance of `c`, or one past the end if not
-///          found.
-void *xmemscan(const void *addr, char c, size_t size)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
-{
-  return (void *)rs_xmemscan(addr, c, size);
-}
-
 /// Replaces every instance of `c` with `x`.
 ///
 /// @warning Will read past `str + strlen(str)` if `c == NUL`.
@@ -335,31 +300,6 @@ void memchrsub(void *data, char c, char x, size_t len)
   FUNC_ATTR_NONNULL_ALL
 {
   rs_memchrsub(data, c, x, len);
-}
-
-/// Counts the number of occurrences of `c` in `str`.
-///
-/// @warning Unsafe if `c == NUL`.
-///
-/// @param str Pointer to the string to search.
-/// @param c   The byte to search for.
-/// @returns the number of occurrences of `c` in `str`.
-size_t strcnt(const char *str, char c)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
-{
-  return rs_strcnt(str, c);
-}
-
-/// Counts the number of occurrences of byte `c` in `data[len]`.
-///
-/// @param data Pointer to the data to search.
-/// @param c    The byte to search for.
-/// @param len  The length of `data`.
-/// @returns the number of occurrences of `c` in `data[len]`.
-size_t memcnt(const void *data, char c, size_t len)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
-{
-  return rs_memcnt(data, c, len);
 }
 
 /// Copies the string pointed to by src (including the terminating NUL
@@ -467,20 +407,6 @@ char *xstrdupnul(const char *const str)
   return xstrdup(str);
 }
 
-/// A version of memchr that starts the search at `src + len`.
-///
-/// Based on glibc's memrchr.
-///
-/// @param src The source memory object.
-/// @param c   The byte to search for.
-/// @param len The length of the memory object.
-/// @returns a pointer to the found byte in src[len], or NULL.
-void *xmemrchr(const void *src, uint8_t c, size_t len)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
-{
-  return (void *)rs_xmemrchr(src, c, len);
-}
-
 /// strndup() wrapper
 ///
 /// @see {xmalloc}
@@ -505,20 +431,6 @@ void *xmemdup(const void *data, size_t len)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
   return memcpy(xmalloc(len), data, len);
-}
-
-/// Returns true if strings `a` and `b` are equal. Arguments may be NULL.
-bool strequal(const char *a, const char *b)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_strequal(a, b);
-}
-
-/// Returns true if first `n` characters of strings `a` and `b` are equal. Arguments may be NULL.
-bool strnequal(const char *a, const char *b, size_t n)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_strnequal(a, b, n);
 }
 
 /// Writes time_t to "buf[8]".

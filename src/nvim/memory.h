@@ -52,6 +52,15 @@ EXTERN size_t arena_alloc_count INIT( = 0);
 
 #include "memory.h.generated.h"
 
+// Rust-provided replacements for deleted C wrapper functions (Phase 1)
+extern char *xstrchrnul(const char *str, char c);
+extern void *xmemscan(const void *addr, char c, size_t size);
+extern size_t strcnt(const char *str, char c);
+extern size_t memcnt(const void *data, char c, size_t len);
+extern void *xmemrchr(const void *src, uint8_t c, size_t len);
+extern bool strequal(const char *a, const char *b);
+extern bool strnequal(const char *a, const char *b, size_t n);
+
 #define XFREE_CLEAR(ptr) \
   do { \
     /* Take the address to avoid double evaluation. #1375 */ \
