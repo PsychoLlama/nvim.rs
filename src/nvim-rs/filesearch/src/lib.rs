@@ -1095,7 +1095,7 @@ pub unsafe extern "C" fn rs_vim_findfile_free_visited(search_ctx_arg: *mut libc:
 }
 
 /// Clean up the given search context. Can handle NULL.
-#[no_mangle]
+#[export_name = "vim_findfile_cleanup"]
 pub unsafe extern "C" fn rs_vim_findfile_cleanup(ctx: *mut libc::c_void) {
     if ctx.is_null() {
         return;
@@ -1579,7 +1579,7 @@ pub unsafe extern "C" fn rs_vim_findfile(search_ctx_arg: *mut libc::c_void) -> *
 }
 
 /// Return the stopdir string. Check that ';' is not escaped.
-#[no_mangle]
+#[export_name = "vim_findfile_stopdir"]
 pub unsafe extern "C" fn rs_vim_findfile_stopdir(buf: *mut c_char) -> *mut c_char {
     if buf.is_null() {
         return ptr::null_mut();
@@ -1775,7 +1775,7 @@ pub unsafe extern "C" fn rs_do_autocmd_dirchanged(
 ///
 /// # Safety
 /// `fname` must be a valid C string pointer.
-#[no_mangle]
+#[export_name = "vim_chdirfile"]
 pub unsafe extern "C" fn rs_vim_chdirfile(fname: *mut c_char, cause: c_int) -> c_int {
     if fname.is_null() {
         return FAIL;
@@ -1846,7 +1846,7 @@ pub unsafe extern "C" fn rs_vim_chdirfile(fname: *mut c_char, cause: c_int) -> c
 ///
 /// # Safety
 /// `new_dir` must be a valid C string pointer.
-#[no_mangle]
+#[export_name = "vim_chdir"]
 pub unsafe extern "C" fn rs_vim_chdir(new_dir: *mut c_char) -> c_int {
     if new_dir.is_null() {
         return -1;
@@ -1890,7 +1890,7 @@ pub unsafe extern "C" fn rs_vim_chdir(new_dir: *mut c_char) -> c_int {
 
 /// Free the static findfile expand buffer.
 /// Called during EXITFREE cleanup.
-#[no_mangle]
+#[export_name = "free_findfile"]
 pub extern "C" fn rs_free_findfile() {
     // The ff_expand_buffer is static in C; this function is a no-op in Rust
     // since we allocate buffers on the stack or dynamically free them.
@@ -1919,7 +1919,7 @@ unsafe fn translate(msgid: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// All pointer parameters must be valid or NULL.
-#[no_mangle]
+#[export_name = "find_file_in_path"]
 pub unsafe extern "C" fn rs_find_file_in_path(
     ptr: *mut c_char,
     len: usize,
@@ -1958,7 +1958,7 @@ pub unsafe extern "C" fn rs_find_file_in_path(
 ///
 /// # Safety
 /// All pointer parameters must be valid or NULL.
-#[no_mangle]
+#[export_name = "find_directory_in_path"]
 pub unsafe extern "C" fn rs_find_directory_in_path(
     ptr: *mut c_char,
     len: usize,
@@ -1985,7 +1985,7 @@ pub unsafe extern "C" fn rs_find_directory_in_path(
 ///
 /// # Safety
 /// All pointer parameters must be valid or NULL.
-#[no_mangle]
+#[export_name = "find_file_in_path_option"]
 pub unsafe extern "C" fn rs_find_file_in_path_option(
     ptr: *mut c_char,
     len: usize,
@@ -2214,11 +2214,8 @@ pub unsafe extern "C" fn rs_find_file_in_path_option(
 ///
 /// # Safety
 /// Must be called from the main thread with valid vim state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_grab_file_name(
-    count: c_int,
-    file_lnum: *mut libc::c_long,
-) -> *mut c_char {
+#[export_name = "grab_file_name"]
+pub unsafe extern "C" fn rs_grab_file_name(count: c_int, file_lnum: *mut i32) -> *mut c_char {
     let options = FNAME_MESS | FNAME_EXP | FNAME_REL | FNAME_UNESC;
 
     if VIsual_active_get() != 0 {
@@ -2239,7 +2236,7 @@ pub unsafe extern "C" fn rs_grab_file_name(
             && libc::isdigit(*ptr.add(len + 1) as c_int) != 0
         {
             let mut p = ptr.add(len + 1);
-            *file_lnum = getdigits_int32(std::ptr::addr_of_mut!(p), false, 0) as libc::c_long;
+            *file_lnum = getdigits_int32(std::ptr::addr_of_mut!(p), false, 0);
         }
 
         let curbuf_ffname = nvim_curbuf_get_ffname();
@@ -2260,11 +2257,11 @@ pub unsafe extern "C" fn rs_grab_file_name(
 ///
 /// # Safety
 /// Must be called from the main thread with valid vim state.
-#[no_mangle]
+#[export_name = "file_name_at_cursor"]
 pub unsafe extern "C" fn rs_file_name_at_cursor(
     options: c_int,
     count: c_int,
-    file_lnum: *mut libc::c_long,
+    file_lnum: *mut i32,
 ) -> *mut c_char {
     let cursor_col = nvim_curwin_get_cursor_col();
     let curbuf_ffname = nvim_curbuf_get_ffname();
@@ -2272,7 +2269,7 @@ pub unsafe extern "C" fn rs_file_name_at_cursor(
         get_cursor_line_ptr(),
         cursor_col,
         options,
-        count as libc::c_long,
+        count,
         curbuf_ffname.cast_mut(),
         file_lnum,
     )
@@ -2282,14 +2279,14 @@ pub unsafe extern "C" fn rs_file_name_at_cursor(
 ///
 /// # Safety
 /// line must be a valid C string.
-#[no_mangle]
+#[export_name = "file_name_in_line"]
 pub unsafe extern "C" fn rs_file_name_in_line(
     line: *mut c_char,
     col: c_int,
     options: c_int,
-    count: libc::c_long,
+    count: c_int,
     rel_fname: *mut c_char,
-    file_lnum: *mut libc::c_long,
+    file_lnum: *mut i32,
 ) -> *mut c_char {
     // Search forward for what could be the start of a file name
     let mut ptr = line.add(col as usize);
@@ -2386,19 +2383,19 @@ pub unsafe extern "C" fn rs_file_name_in_line(
             }
             p = skipwhite(p);
             if libc::isdigit(*p as c_int) != 0 {
-                *file_lnum = getdigits_long(std::ptr::addr_of_mut!(p), false, 0);
+                *file_lnum = getdigits_long(std::ptr::addr_of_mut!(p), false, 0) as i32;
             }
         }
     }
 
-    rs_find_file_name_in_path(ptr, len, options, count, rel_fname)
+    rs_find_file_name_in_path(ptr, len, options, count as libc::c_long, rel_fname)
 }
 
 /// Return the name of the file ptr[len] in 'path'.
 ///
 /// # Safety
 /// ptr must be a valid pointer to at least len bytes.
-#[no_mangle]
+#[export_name = "find_file_name_in_path"]
 pub unsafe extern "C" fn rs_find_file_name_in_path(
     mut ptr: *mut c_char,
     mut len: usize,
