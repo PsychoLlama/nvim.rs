@@ -43,25 +43,6 @@
 
 #include "extmark.c.generated.h"
 
-// Rust FFI declaration for extmark_get helper
-extern void rs_extmark_get(buf_T *buf, uint32_t ns_id, int l_row, colnr_T l_col,
-                            int u_row, colnr_T u_col, int64_t amount, ExtmarkType type_filter,
-                            bool overlap, ExtmarkInfoArray *array);
-
-/// @return  the position of marks between a range,
-///          marks found at the start or end index will be included.
-///
-/// if upper_lnum or upper_col are negative the buffer
-/// will be searched to the start, or end
-/// amount = amount of marks to find or INT64_MAX for all
-ExtmarkInfoArray extmark_get(buf_T *buf, uint32_t ns_id, int l_row, colnr_T l_col, int u_row,
-                             colnr_T u_col, int64_t amount, ExtmarkType type_filter, bool overlap)
-{
-  ExtmarkInfoArray array = KV_INITIAL_VALUE;
-  rs_extmark_get(buf, ns_id, l_row, l_col, u_row, u_col, amount, type_filter, overlap, &array);
-  return array;
-}
-
 // ============================================================================
 // Global Accessor Functions (for Rust FFI)
 // ============================================================================

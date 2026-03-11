@@ -169,6 +169,41 @@ impl UndoHeaderHandle {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExtmarkInfoArrayHandle(*mut c_void);
 
+/// `ExtmarkInfoArray` matching `kvec_t(MTPair)` layout (`{ size, capacity, items }`).
+///
+/// Returned by value from `extmark_get` to match the C ABI.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ExtmarkInfoArray {
+    pub size: usize,
+    pub capacity: usize,
+    pub items: *mut MTPair,
+}
+
+impl Default for ExtmarkInfoArray {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExtmarkInfoArray {
+    /// Create an empty array (mirrors `KV_INITIAL_VALUE`).
+    #[inline]
+    pub const fn new() -> Self {
+        Self {
+            size: 0,
+            capacity: 0,
+            items: std::ptr::null_mut(),
+        }
+    }
+
+    /// Return a pointer to self usable as an `ExtmarkInfoArrayHandle`.
+    #[inline]
+    fn as_handle(&mut self) -> ExtmarkInfoArrayHandle {
+        ExtmarkInfoArrayHandle(std::ptr::from_mut(self).cast::<c_void>())
+    }
+}
+
 // ============================================================================
 // Data Structures (for FFI boundary)
 // ============================================================================
@@ -941,11 +976,11 @@ fn push_mark(array: ExtmarkInfoArrayHandle, ns_id: u32, type_filter: c_int, mark
     unsafe { nvim_extmark_array_push(array, mark) };
 }
 
-/// Get extmarks in a range, populating the given array.
+/// Get extmarks in a range and return the result array.
 ///
 /// Implements the overlap and regular iteration paths, filtering by namespace
-/// and decoration type.
-#[no_mangle]
+/// and decoration type.  Exported as `extmark_get` to replace the C wrapper.
+#[export_name = "extmark_get"]
 pub extern "C" fn rs_extmark_get(
     buf: BufHandle,
     ns_id: u32,
@@ -956,8 +991,8 @@ pub extern "C" fn rs_extmark_get(
     amount: i64,
     type_filter: c_int,
     overlap: bool,
-    array: ExtmarkInfoArrayHandle,
-) {
+) -> ExtmarkInfoArray {
+    let mut array = ExtmarkInfoArray::new();
     let tree = unsafe { nvim_buf_get_marktree(buf) };
     let itr = unsafe { nvim_marktree_itr_alloc() };
 
@@ -965,19 +1000,19 @@ pub extern "C" fn rs_extmark_get(
         // Find all marks overlapping the start position
         if !unsafe { nvim_marktree_itr_get_overlap(tree, l_row, l_col, itr) } {
             unsafe { nvim_marktree_itr_free(itr) };
-            return;
+            return array;
         }
 
         let mut pair = MTPair::zero();
         while unsafe { nvim_marktree_itr_step_overlap(tree, itr, &raw mut pair) } {
-            push_mark(array, ns_id, type_filter, pair);
+            push_mark(array.as_handle(), ns_id, type_filter, pair);
         }
     } else {
         // Find all marks beginning at the start position
         unsafe { nvim_marktree_itr_get_ext_simple(tree, l_row, l_col, itr) };
     }
 
-    while unsafe { nvim_extmark_array_size(array) } < amount {
+    while unsafe { nvim_extmark_array_size(array.as_handle()) } < amount {
         let mark = unsafe { nvim_marktree_itr_current(itr) };
         if mark.pos.row < 0
             || (mark.pos.row > u_row || (mark.pos.row == u_row && mark.pos.col > u_col))
@@ -986,12 +1021,18 @@ pub extern "C" fn rs_extmark_get(
         }
         if !mt_end(mark) {
             let end = unsafe { nvim_marktree_get_alt(tree, mark, MarkTreeIterHandle::null()) };
-            push_mark(array, ns_id, type_filter, MTPair::from_keys(mark, end));
+            push_mark(
+                array.as_handle(),
+                ns_id,
+                type_filter,
+                MTPair::from_keys(mark, end),
+            );
         }
         unsafe { nvim_marktree_itr_next(tree, itr) };
     }
 
     unsafe { nvim_marktree_itr_free(itr) };
+    array
 }
 
 /// Lookup an extmark by ID and return the mark pair.

@@ -80,6 +80,9 @@ struct undo_object {
 };
 
 // Rust-exported extmark functions (via #[export_name])
+extern ExtmarkInfoArray extmark_get(buf_T *buf, uint32_t ns_id, int l_row, colnr_T l_col,
+                                    int u_row, colnr_T u_col, int64_t amount,
+                                    ExtmarkType type_filter, bool overlap);
 extern void extmark_set(buf_T *buf, uint32_t ns_id, uint32_t *idp, int row, colnr_T col,
                         int end_row, colnr_T end_col, DecorInline decor, uint16_t decor_flags,
                         bool right_gravity, bool end_right_gravity, bool no_undo,
