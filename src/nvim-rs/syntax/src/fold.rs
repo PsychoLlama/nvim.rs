@@ -293,6 +293,7 @@ extern "C" {
     fn nvim_syn_get_current_col() -> c_int;
     fn nvim_syn_set_current_col(col: c_int);
 
+    #[link_name = "syntax_start"]
     fn rs_syntax_start(wp: WinHandle, lnum: c_int);
     fn rs_syn_current_attr_impl(
         syncing: c_int,
@@ -352,7 +353,7 @@ unsafe fn syn_get_foldlevel_impl(wp: WinHandle, lnum: c_int) -> c_int {
 }
 
 /// Exported entry point for syn_get_foldlevel.
-#[no_mangle]
+#[export_name = "syn_get_foldlevel"]
 pub unsafe extern "C" fn rs_syn_get_foldlevel_impl(wp: WinHandle, lnum: c_int) -> c_int {
     syn_get_foldlevel_impl(wp, lnum)
 }

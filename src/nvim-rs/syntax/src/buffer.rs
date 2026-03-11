@@ -688,8 +688,14 @@ pub unsafe extern "C" fn rs_syntax_check_changed(lnum: c_int) -> c_int {
     syntax_check_changed_impl(lnum)
 }
 
+/// C-ABI export: syntax_check_changed returns bool.
+#[export_name = "syntax_check_changed"]
+pub unsafe extern "C" fn syntax_check_changed_export(lnum: c_int) -> bool {
+    syntax_check_changed_impl(lnum) != 0
+}
+
 /// End parsing at a given line for a window.
-#[no_mangle]
+#[export_name = "syntax_end_parsing"]
 pub unsafe extern "C" fn rs_syntax_end_parsing_impl(wp: WinHandle, lnum: c_int) {
     syntax_end_parsing_impl(wp, lnum)
 }

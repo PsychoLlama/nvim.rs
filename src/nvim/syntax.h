@@ -35,4 +35,4 @@ enum {
 extern const char *const highlight_init_cmdline[];
 
 #include "syntax_accessors.h.generated.h"
-#include "syntax_bridge.h.generated.h"
+#include "nvim/syntax_bridge.h"

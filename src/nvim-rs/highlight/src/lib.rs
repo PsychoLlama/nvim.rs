@@ -6679,7 +6679,7 @@ pub unsafe extern "C" fn rs_hl_get_attr_by_id(
 ///
 /// # Safety
 /// Calls external C function to access static variable.
-#[no_mangle]
+#[export_name = "syn_get_sub_char"]
 pub unsafe extern "C" fn rs_syn_get_sub_char() -> c_int {
     nvim_syn_get_current_sub_char()
 }

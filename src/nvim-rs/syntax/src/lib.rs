@@ -2385,7 +2385,7 @@ pub unsafe extern "C" fn rs_stateitem_set_cchar(item: StateItemHandle, cchar: c_
 ///
 /// # Safety
 /// This function accesses C global state and must be called from the main thread.
-#[no_mangle]
+#[export_name = "syntax_start"]
 pub unsafe extern "C" fn rs_syntax_start(wp: WinHandle, lnum: c_int) {
     crate::buffer::start_syntax(wp, lnum);
 }
@@ -2449,6 +2449,23 @@ pub unsafe extern "C" fn rs_get_syntax_attr(
     let result = highlight::get_syntax_attr(col, keep_state != 0);
     if !can_spell.is_null() {
         *can_spell = if result.can_spell { 1 } else { 0 };
+    }
+    result.attr
+}
+
+/// C-ABI export: get_syntax_attr with bool* can_spell parameter.
+///
+/// # Safety
+/// Must be called after syntax_start for the current window/line.
+#[export_name = "get_syntax_attr"]
+pub unsafe extern "C" fn get_syntax_attr_export(
+    col: c_int,
+    can_spell: *mut bool,
+    keep_state: c_int,
+) -> c_int {
+    let result = highlight::get_syntax_attr(col, keep_state != 0);
+    if !can_spell.is_null() {
+        *can_spell = result.can_spell;
     }
     result.attr
 }

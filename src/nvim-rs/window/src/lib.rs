@@ -2960,6 +2960,13 @@ pub extern "C" fn rs_syntax_present(win: WinHandle) -> c_int {
     c_int::from(syntax_present_impl(win))
 }
 
+/// C-ABI export: syntax_present returns bool.
+#[must_use]
+#[export_name = "syntax_present"]
+pub extern "C" fn syntax_present_export(win: WinHandle) -> bool {
+    syntax_present_impl(win)
+}
+
 // =============================================================================
 // Window Navigation Functions
 // =============================================================================
