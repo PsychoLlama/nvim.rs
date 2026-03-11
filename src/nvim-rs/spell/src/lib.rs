@@ -51,13 +51,128 @@ pub use check::{CaseType, SpellResult, WordLookupResult};
 use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
-// Opaque Handle Types
+// repr(C) Struct Definitions matching C layout exactly
 // =============================================================================
 
-/// Opaque handle to a spell language (slang_T)
+/// Growing array structure matching C garray_T layout.
+/// sizeof(garray_T) = 24 bytes on 64-bit.
+#[repr(C)]
+pub struct GArrayRaw {
+    pub ga_len: c_int,
+    pub ga_maxlen: c_int,
+    pub ga_itemsize: c_int,
+    pub ga_growsize: c_int,
+    pub ga_data: *mut c_void,
+}
+
+/// Hashtable item matching C hashitem_T layout.
+/// sizeof(hashitem_T) = 16 bytes on 64-bit.
+#[repr(C)]
+pub struct HashitemRaw {
+    pub hi_hash: usize,
+    pub hi_key: *mut c_char,
+}
+
+/// Hashtable structure matching C hashtab_T layout.
+/// sizeof(hashtab_T) = 296 bytes on 64-bit.
+/// HT_INIT_SIZE = 16 items inline.
+#[repr(C)]
+pub struct HashtabRaw {
+    pub ht_mask: usize,
+    pub ht_used: usize,
+    pub ht_filled: usize,
+    pub ht_changed: c_int,
+    pub ht_locked: c_int,
+    pub ht_array: *mut HashitemRaw,
+    pub ht_smallarray: [HashitemRaw; 16],
+}
+
+/// Spell character table matching C spelltab_T layout.
+/// sizeof(spelltab_T) = 1024 bytes.
+#[repr(C)]
+pub struct SpelltabT {
+    pub st_isw: [bool; 256],
+    pub st_isu: [bool; 256],
+    pub st_fold: [u8; 256],
+    pub st_upper: [u8; 256],
+}
+
+/// Language pointer entry matching C langp_T layout.
+#[repr(C)]
+pub struct LangpT {
+    pub lp_slang: *mut SlangRaw,
+    pub lp_sallang: *mut SlangRaw,
+    pub lp_replang: *mut SlangRaw,
+    pub lp_region: c_int,
+}
+
+/// Spell language structure matching C slang_T layout.
+/// sizeof(slang_T) = 4344 bytes on 64-bit.
+///
+/// Fields after sl_nocompoundsugs (sug file info, map hash, sounddone)
+/// are not accessed from Rust and are represented as padding.
+#[repr(C)]
+pub struct SlangRaw {
+    pub sl_next: *mut SlangRaw,        // offset 0
+    pub sl_name: *mut c_char,          // offset 8
+    pub sl_fname: *mut c_char,         // offset 16
+    pub sl_add: bool,                  // offset 24
+    _pad0: [u8; 7],                    // padding 25..31
+    pub sl_fbyts: *mut u8,             // offset 32
+    pub sl_fbyts_len: c_int,           // offset 40
+    _pad1: [u8; 4],                    // padding 44..47
+    pub sl_fidxs: *mut c_int,          // offset 48
+    pub sl_kbyts: *mut u8,             // offset 56
+    pub sl_kidxs: *mut c_int,          // offset 64
+    pub sl_pbyts: *mut u8,             // offset 72
+    pub sl_pidxs: *mut c_int,          // offset 80
+    pub sl_info: *mut c_char,          // offset 88
+    pub sl_regions: [c_char; 17],      // offset 96 (MAXREGIONS*2+1 = 17)
+    _pad2: [u8; 7],                    // padding 113..119
+    pub sl_midword: *mut c_char,       // offset 120
+    pub sl_wordcount: HashtabRaw,      // offset 128 (size 296)
+    pub sl_compmax: c_int,             // offset 424
+    pub sl_compminlen: c_int,          // offset 428
+    pub sl_compsylmax: c_int,          // offset 432
+    pub sl_compoptions: c_int,         // offset 436
+    pub sl_comppat: GArrayRaw,         // offset 440 (size 24)
+    pub sl_compprog: *mut c_void,      // offset 464
+    pub sl_comprules: *mut u8,         // offset 472
+    pub sl_compstartflags: *mut u8,    // offset 480
+    pub sl_compallflags: *mut u8,      // offset 488
+    pub sl_nobreak: bool,              // offset 496
+    _pad3: [u8; 7],                    // padding 497..503
+    pub sl_syllable: *mut c_char,      // offset 504
+    pub sl_syl_items: GArrayRaw,       // offset 512 (size 24)
+    pub sl_prefixcnt: c_int,           // offset 536
+    _pad4: [u8; 4],                    // padding 540..543
+    pub sl_prefprog: *mut *mut c_void, // offset 544
+    pub sl_rep: GArrayRaw,             // offset 552 (size 24)
+    pub sl_rep_first: [i16; 256],      // offset 576 (size 512)
+    pub sl_sal: GArrayRaw,             // offset 1088 (size 24)
+    pub sl_sal_first: [c_int; 256],    // offset 1112 (size 1024)
+    pub sl_followup: bool,             // offset 2136
+    pub sl_collapse: bool,             // offset 2137
+    pub sl_rem_accents: bool,          // offset 2138
+    pub sl_sofo: bool,                 // offset 2139
+    _pad5: [u8; 4],                    // padding 2140..2143
+    pub sl_repsal: GArrayRaw,          // offset 2144 (size 24)
+    pub sl_repsal_first: [i16; 256],   // offset 2168 (size 512)
+    pub sl_nosplitsugs: bool,          // offset 2680
+    pub sl_nocompoundsugs: bool,       // offset 2681
+    // Remaining fields (sug file info, map hash, sounddone): padding only
+    _tail: [u8; 1662], // 4344 - 2682 = 1662 bytes
+}
+
+// =============================================================================
+// Handle Types (pointer-to-struct wrappers)
+// =============================================================================
+
+/// Handle to a spell language (slang_T).
+/// Transparent wrapper around *mut SlangRaw for FFI compatibility.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub struct SlangHandle(*mut c_void);
+pub struct SlangHandle(*mut SlangRaw);
 
 impl SlangHandle {
     /// Creates a null handle
@@ -73,13 +188,13 @@ impl SlangHandle {
     }
 }
 
-/// Opaque handle to a language pointer entry (langp_T)
+/// Handle to a language pointer entry (langp_T).
 ///
 /// Used for entries in the buffer's b_langp array which maps
 /// spell languages to slang_T structures.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub struct LangpHandle(*mut c_void);
+pub struct LangpHandle(*mut LangpT);
 
 impl LangpHandle {
     /// Creates a null handle
@@ -95,10 +210,10 @@ impl LangpHandle {
     }
 }
 
-/// Opaque handle to spell table (spelltab_T)
+/// Handle to the global spell character table (spelltab_T).
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub struct SpelltabHandle(*mut c_void);
+pub struct SpelltabHandle(*mut SpelltabT);
 
 impl SpelltabHandle {
     /// Creates a null handle
@@ -118,354 +233,298 @@ impl SpelltabHandle {
 pub type SalfirstT = c_int;
 
 // =============================================================================
-// C Accessor Declarations
+// C globals accessed directly via link_name
 // =============================================================================
 
 extern "C" {
-    // slang_T word tree accessors
-    fn nvim_slang_get_fbyts(slang: SlangHandle) -> *mut u8;
-    fn nvim_slang_get_fidxs(slang: SlangHandle) -> *mut IdxT;
-    fn nvim_slang_get_kbyts(slang: SlangHandle) -> *mut u8;
-    fn nvim_slang_get_kidxs(slang: SlangHandle) -> *mut IdxT;
-    fn nvim_slang_get_pbyts(slang: SlangHandle) -> *mut u8;
-    fn nvim_slang_get_pidxs(slang: SlangHandle) -> *mut IdxT;
+    /// The first loaded spell language (C global: first_lang)
+    #[link_name = "first_lang"]
+    static first_lang_global: *mut SlangRaw;
 
-    // slang_T compound word settings
-    fn nvim_slang_get_compmax(slang: SlangHandle) -> c_int;
-    fn nvim_slang_get_compminlen(slang: SlangHandle) -> c_int;
-    fn nvim_slang_get_compsylmax(slang: SlangHandle) -> c_int;
-    fn nvim_slang_get_nobreak(slang: SlangHandle) -> bool;
-
-    // slang_T sound folding settings
-    fn nvim_slang_get_sofo(slang: SlangHandle) -> bool;
-    fn nvim_slang_get_rem_accents(slang: SlangHandle) -> bool;
-    fn nvim_slang_get_followup(slang: SlangHandle) -> bool;
-    fn nvim_slang_get_collapse(slang: SlangHandle) -> bool;
-    fn nvim_slang_get_sal_first(slang: SlangHandle) -> *mut SalfirstT;
-    fn nvim_slang_get_regions(slang: SlangHandle) -> *const c_char;
-
-    // slang_T metadata accessors
-    fn nvim_slang_get_name(slang: SlangHandle) -> *const c_char;
-    fn nvim_slang_get_fname(slang: SlangHandle) -> *const c_char;
-    fn nvim_slang_get_add(slang: SlangHandle) -> bool;
-    fn nvim_slang_get_next(slang: SlangHandle) -> SlangHandle;
-
-    // slang_T compound options and regex
-    fn nvim_slang_get_compoptions(slang: SlangHandle) -> c_int;
-    fn nvim_slang_get_compprog(slang: SlangHandle) -> *mut c_void;
-    fn nvim_slang_get_prefprog(slang: SlangHandle) -> *mut *mut c_void;
-    fn nvim_slang_get_prefixcnt(slang: SlangHandle) -> c_int;
-    fn nvim_slang_get_comprules(slang: SlangHandle) -> *mut u8;
-    fn nvim_slang_get_compstartflags(slang: SlangHandle) -> *mut u8;
-    fn nvim_slang_get_compallflags(slang: SlangHandle) -> *mut u8;
-
-    // slang_T REP/REPSAL accessors (returns garray_T*)
-    fn nvim_slang_get_rep(slang: SlangHandle) -> *mut c_void;
-    fn nvim_slang_get_rep_first(slang: SlangHandle) -> *mut i16;
-    fn nvim_slang_get_repsal(slang: SlangHandle) -> *mut c_void;
-    fn nvim_slang_get_repsal_first(slang: SlangHandle) -> *mut i16;
-    fn nvim_slang_get_comppat(slang: SlangHandle) -> *mut c_void;
-
-    // slang_T string accessors
-    fn nvim_slang_get_syllable(slang: SlangHandle) -> *mut c_char;
-    fn nvim_slang_get_midword(slang: SlangHandle) -> *mut c_char;
-
-    // slang_T list accessors
-    fn nvim_get_first_lang() -> SlangHandle;
-
-    // langp_T accessors
-    fn nvim_langp_get_slang(langp: LangpHandle) -> SlangHandle;
-    fn nvim_langp_get_sallang(langp: LangpHandle) -> SlangHandle;
-    fn nvim_langp_get_replang(langp: LangpHandle) -> SlangHandle;
-    fn nvim_langp_get_region(langp: LangpHandle) -> c_int;
-
-    // spelltab_T accessors
-    fn nvim_get_spelltab() -> SpelltabHandle;
-    fn nvim_spelltab_get_isw(sp: SpelltabHandle) -> *mut bool;
-    fn nvim_spelltab_get_isu(sp: SpelltabHandle) -> *mut bool;
-    fn nvim_spelltab_get_fold(sp: SpelltabHandle) -> *mut u8;
-    fn nvim_spelltab_get_upper(sp: SpelltabHandle) -> *mut u8;
+    /// The global spell character table (C global: spelltab)
+    #[link_name = "spelltab"]
+    static spelltab_global: SpelltabT;
 }
 
 // =============================================================================
-// Safe Wrappers for slang_T Accessors
+// Safe Wrappers for slang_T fields (direct struct access)
 // =============================================================================
 
 impl SlangHandle {
     /// Get case-folded word bytes array
     #[must_use]
     pub fn fbyts(self) -> *mut u8 {
-        unsafe { nvim_slang_get_fbyts(self) }
+        unsafe { (*self.0).sl_fbyts }
     }
 
     /// Get case-folded word indexes array
     #[must_use]
     pub fn fidxs(self) -> *mut IdxT {
-        unsafe { nvim_slang_get_fidxs(self) }
+        unsafe { (*self.0).sl_fidxs }
     }
 
     /// Get keep-case word bytes array
     #[must_use]
     pub fn kbyts(self) -> *mut u8 {
-        unsafe { nvim_slang_get_kbyts(self) }
+        unsafe { (*self.0).sl_kbyts }
     }
 
     /// Get keep-case word indexes array
     #[must_use]
     pub fn kidxs(self) -> *mut IdxT {
-        unsafe { nvim_slang_get_kidxs(self) }
+        unsafe { (*self.0).sl_kidxs }
     }
 
     /// Get prefix tree bytes array
     #[must_use]
     pub fn pbyts(self) -> *mut u8 {
-        unsafe { nvim_slang_get_pbyts(self) }
+        unsafe { (*self.0).sl_pbyts }
     }
 
     /// Get prefix tree indexes array
     #[must_use]
     pub fn pidxs(self) -> *mut IdxT {
-        unsafe { nvim_slang_get_pidxs(self) }
+        unsafe { (*self.0).sl_pidxs }
     }
 
     /// Get maximum compound word count
     #[must_use]
     pub fn compmax(self) -> c_int {
-        unsafe { nvim_slang_get_compmax(self) }
+        unsafe { (*self.0).sl_compmax }
     }
 
     /// Get minimum compound word length
     #[must_use]
     pub fn compminlen(self) -> c_int {
-        unsafe { nvim_slang_get_compminlen(self) }
+        unsafe { (*self.0).sl_compminlen }
     }
 
     /// Get maximum compound syllables
     #[must_use]
     pub fn compsylmax(self) -> c_int {
-        unsafe { nvim_slang_get_compsylmax(self) }
+        unsafe { (*self.0).sl_compsylmax }
     }
 
     /// Get nobreak flag (no spaces between words)
     #[must_use]
     pub fn nobreak(self) -> bool {
-        unsafe { nvim_slang_get_nobreak(self) }
+        unsafe { (*self.0).sl_nobreak }
     }
 
     /// Get SOFOFROM/SOFOTO mode flag
     #[must_use]
     pub fn sofo(self) -> bool {
-        unsafe { nvim_slang_get_sofo(self) }
+        unsafe { (*self.0).sl_sofo }
     }
 
     /// Get remove accents flag
     #[must_use]
     pub fn rem_accents(self) -> bool {
-        unsafe { nvim_slang_get_rem_accents(self) }
+        unsafe { (*self.0).sl_rem_accents }
     }
 
     /// Get SAL followup flag
     #[must_use]
     pub fn followup(self) -> bool {
-        unsafe { nvim_slang_get_followup(self) }
+        unsafe { (*self.0).sl_followup }
     }
 
     /// Get SAL collapse flag
     #[must_use]
     pub fn collapse(self) -> bool {
-        unsafe { nvim_slang_get_collapse(self) }
+        unsafe { (*self.0).sl_collapse }
     }
 
     /// Get SAL first lookup table
     #[must_use]
     pub fn sal_first(self) -> *mut SalfirstT {
-        unsafe { nvim_slang_get_sal_first(self) }
+        unsafe { (*self.0).sl_sal_first.as_mut_ptr() }
     }
 
     /// Get regions string
     #[must_use]
     pub fn regions(self) -> *const c_char {
-        unsafe { nvim_slang_get_regions(self) }
+        unsafe { (*self.0).sl_regions.as_ptr() }
     }
 
     /// Get language name (e.g., "en", "en.rare", "nl")
     #[must_use]
     pub fn name(self) -> *const c_char {
-        unsafe { nvim_slang_get_name(self) }
+        unsafe { (*self.0).sl_name }
     }
 
     /// Get file name of the .spl file
     #[must_use]
     pub fn fname(self) -> *const c_char {
-        unsafe { nvim_slang_get_fname(self) }
+        unsafe { (*self.0).sl_fname }
     }
 
     /// Get whether this is an .add file
     #[must_use]
     pub fn is_add(self) -> bool {
-        unsafe { nvim_slang_get_add(self) }
+        unsafe { (*self.0).sl_add }
     }
 
     /// Get next language in the linked list
     #[must_use]
     pub fn next(self) -> Self {
-        unsafe { nvim_slang_get_next(self) }
+        Self(unsafe { (*self.0).sl_next })
     }
 
     /// Get the first loaded spell language
     #[must_use]
     pub fn first() -> Self {
-        unsafe { nvim_get_first_lang() }
+        Self(unsafe { first_lang_global })
     }
 
     /// Get compound options flags (COMP_* values)
     #[must_use]
     pub fn compoptions(self) -> c_int {
-        unsafe { nvim_slang_get_compoptions(self) }
+        unsafe { (*self.0).sl_compoptions }
     }
 
     /// Get compiled compound regex program
     #[must_use]
     pub fn compprog(self) -> *mut c_void {
-        unsafe { nvim_slang_get_compprog(self) }
+        unsafe { (*self.0).sl_compprog }
     }
 
     /// Get prefix condition regex programs array
     #[must_use]
     pub fn prefprog(self) -> *mut *mut c_void {
-        unsafe { nvim_slang_get_prefprog(self) }
+        unsafe { (*self.0).sl_prefprog }
     }
 
     /// Get prefix condition count
     #[must_use]
     pub fn prefixcnt(self) -> c_int {
-        unsafe { nvim_slang_get_prefixcnt(self) }
+        unsafe { (*self.0).sl_prefixcnt }
     }
 
     /// Get compound rules (all COMPOUNDRULE concatenated)
     #[must_use]
     pub fn comprules(self) -> *mut u8 {
-        unsafe { nvim_slang_get_comprules(self) }
+        unsafe { (*self.0).sl_comprules }
     }
 
     /// Get compound start flags (flags for first compound word)
     #[must_use]
     pub fn compstartflags(self) -> *mut u8 {
-        unsafe { nvim_slang_get_compstartflags(self) }
+        unsafe { (*self.0).sl_compstartflags }
     }
 
     /// Get compound all flags (all flags for compound words)
     #[must_use]
     pub fn compallflags(self) -> *mut u8 {
-        unsafe { nvim_slang_get_compallflags(self) }
+        unsafe { (*self.0).sl_compallflags }
     }
 
     /// Get REP items array (garray_T*)
     #[must_use]
     pub fn rep(self) -> *mut c_void {
-        unsafe { nvim_slang_get_rep(self) }
+        unsafe { std::ptr::addr_of_mut!((*self.0).sl_rep).cast::<c_void>() }
     }
 
     /// Get REP first lookup table
     #[must_use]
     pub fn rep_first(self) -> *mut i16 {
-        unsafe { nvim_slang_get_rep_first(self) }
+        unsafe { (*self.0).sl_rep_first.as_mut_ptr() }
     }
 
     /// Get REPSAL items array (garray_T*)
     #[must_use]
     pub fn repsal(self) -> *mut c_void {
-        unsafe { nvim_slang_get_repsal(self) }
+        unsafe { std::ptr::addr_of_mut!((*self.0).sl_repsal).cast::<c_void>() }
     }
 
     /// Get REPSAL first lookup table
     #[must_use]
     pub fn repsal_first(self) -> *mut i16 {
-        unsafe { nvim_slang_get_repsal_first(self) }
+        unsafe { (*self.0).sl_repsal_first.as_mut_ptr() }
     }
 
     /// Get compound patterns array (garray_T*)
     #[must_use]
     pub fn comppat(self) -> *mut c_void {
-        unsafe { nvim_slang_get_comppat(self) }
+        unsafe { std::ptr::addr_of_mut!((*self.0).sl_comppat).cast::<c_void>() }
     }
 
     /// Get syllable pattern string
     #[must_use]
     pub fn syllable(self) -> *mut c_char {
-        unsafe { nvim_slang_get_syllable(self) }
+        unsafe { (*self.0).sl_syllable }
     }
 
     /// Get midword characters string
     #[must_use]
     pub fn midword(self) -> *mut c_char {
-        unsafe { nvim_slang_get_midword(self) }
+        unsafe { (*self.0).sl_midword }
     }
 }
 
 // =============================================================================
-// Safe Wrappers for langp_T Accessors
+// Safe Wrappers for langp_T fields (direct struct access)
 // =============================================================================
 
 impl LangpHandle {
     /// Get the associated slang_T handle
     #[must_use]
     pub fn slang(self) -> SlangHandle {
-        unsafe { nvim_langp_get_slang(self) }
+        SlangHandle(unsafe { (*self.0).lp_slang })
     }
 
     /// Get the sound-alike language for this entry
     #[must_use]
     pub fn sallang(self) -> SlangHandle {
-        unsafe { nvim_langp_get_sallang(self) }
+        SlangHandle(unsafe { (*self.0).lp_sallang })
     }
 
     /// Get the REP items language for this entry
     #[must_use]
     pub fn replang(self) -> SlangHandle {
-        unsafe { nvim_langp_get_replang(self) }
+        SlangHandle(unsafe { (*self.0).lp_replang })
     }
 
     /// Get the region bitmask (or REGION_ALL)
     #[must_use]
     pub fn region(self) -> c_int {
-        unsafe { nvim_langp_get_region(self) }
+        unsafe { (*self.0).lp_region }
     }
 }
 
 // =============================================================================
-// Safe Wrappers for spelltab_T Accessors
+// Safe Wrappers for spelltab_T fields (direct struct access)
 // =============================================================================
 
 impl SpelltabHandle {
     /// Get the global spelltab
     #[must_use]
     pub fn global() -> Self {
-        unsafe { nvim_get_spelltab() }
+        Self(std::ptr::addr_of!(spelltab_global).cast_mut())
     }
 
     /// Get is-word flags array (256 entries)
     #[must_use]
     pub fn isw(self) -> *mut bool {
-        unsafe { nvim_spelltab_get_isw(self) }
+        unsafe { (*self.0).st_isw.as_mut_ptr() }
     }
 
     /// Get is-uppercase flags array (256 entries)
     #[must_use]
     pub fn isu(self) -> *mut bool {
-        unsafe { nvim_spelltab_get_isu(self) }
+        unsafe { (*self.0).st_isu.as_mut_ptr() }
     }
 
     /// Get fold (lowercase) mapping array (256 entries)
     #[must_use]
     pub fn fold(self) -> *mut u8 {
-        unsafe { nvim_spelltab_get_fold(self) }
+        unsafe { (*self.0).st_fold.as_mut_ptr() }
     }
 
     /// Get uppercase mapping array (256 entries)
     #[must_use]
     pub fn upper(self) -> *mut u8 {
-        unsafe { nvim_spelltab_get_upper(self) }
+        unsafe { (*self.0).st_upper.as_mut_ptr() }
     }
 }
 
