@@ -5,7 +5,7 @@
 //! through `nvim_dbg_*` accessor functions declared in `extern "C"`.
 
 use std::ffi::{c_char, c_int, c_void};
-use std::ptr;
+use std::ptr::{self, addr_of_mut};
 
 extern "C" {
     fn atoi(s: *const c_char) -> c_int;
@@ -171,52 +171,6 @@ extern "C" {
     fn nvim_dbg_gap_remove_at(gap: *mut GapHandle, idx: c_int);
 
     // --- Global variable accessors ---
-    fn nvim_dbg_get_debug_break_level() -> c_int;
-    fn nvim_dbg_set_debug_break_level(val: c_int);
-    fn nvim_dbg_get_debug_did_msg() -> bool;
-    fn nvim_dbg_set_debug_did_msg(val: bool);
-    fn nvim_dbg_get_debug_tick() -> c_int;
-    fn nvim_dbg_set_debug_tick(val: c_int);
-    fn nvim_dbg_get_debug_backtrace_level() -> c_int;
-    fn nvim_dbg_set_debug_backtrace_level(val: c_int);
-    fn nvim_dbg_get_debug_mode() -> bool;
-    fn nvim_dbg_set_debug_mode(val: bool);
-
-    fn nvim_dbg_get_msg_scroll() -> c_int;
-    fn nvim_dbg_set_msg_scroll(val: c_int);
-    fn nvim_dbg_get_State() -> c_int;
-    fn nvim_dbg_set_State(val: c_int);
-    fn nvim_dbg_get_did_emsg() -> bool;
-    fn nvim_dbg_set_did_emsg(val: bool);
-    fn nvim_dbg_get_cmd_silent() -> bool;
-    fn nvim_dbg_set_cmd_silent(val: bool);
-    fn nvim_dbg_get_msg_silent() -> c_int;
-    fn nvim_dbg_set_msg_silent(val: c_int);
-    fn nvim_dbg_get_emsg_silent() -> c_int;
-    fn nvim_dbg_set_emsg_silent(val: c_int);
-    fn nvim_dbg_get_emsg_off() -> c_int;
-    fn nvim_dbg_set_emsg_off(val: c_int);
-    fn nvim_dbg_get_redir_off() -> bool;
-    fn nvim_dbg_set_redir_off(val: bool);
-    fn nvim_dbg_get_RedrawingDisabled() -> c_int;
-    fn nvim_dbg_set_RedrawingDisabled(val: c_int);
-    fn nvim_dbg_get_no_wait_return() -> c_int;
-    fn nvim_dbg_set_no_wait_return(val: c_int);
-    fn nvim_dbg_get_need_wait_return() -> bool;
-    fn nvim_dbg_set_need_wait_return(val: bool);
-    fn nvim_dbg_get_ex_normal_busy() -> c_int;
-    fn nvim_dbg_set_ex_normal_busy(val: c_int);
-    fn nvim_dbg_get_ignore_script() -> c_int;
-    fn nvim_dbg_set_ignore_script(val: c_int);
-    fn nvim_dbg_get_lines_left() -> c_int;
-    fn nvim_dbg_set_lines_left(val: c_int);
-    fn nvim_dbg_get_Rows() -> c_int;
-    fn nvim_dbg_get_cmdline_row() -> c_int;
-    fn nvim_dbg_set_cmdline_row(val: c_int);
-    fn nvim_dbg_get_msg_row() -> c_int;
-    fn nvim_dbg_get_ex_nesting_level() -> c_int;
-    fn nvim_dbg_get_got_int() -> bool;
-    fn nvim_dbg_set_got_int(val: bool);
     fn nvim_dbg_get_sourcing_lnum() -> i64;
 
     // --- Buffer/window accessors ---
@@ -303,10 +257,45 @@ extern "C" {
     fn nvim_dbg_estack_sfile(which: c_int) -> *mut c_char;
     fn nvim_dbg_ascii_isalpha(c: c_int) -> bool;
 
-    // --- NameBuff access ---
-    fn nvim_dbg_get_namebuff() -> *mut c_char;
-    fn nvim_dbg_get_maxpathl() -> c_int;
 }
+
+// =============================================================================
+// Global variable extern statics (direct access, no accessor wrappers)
+// =============================================================================
+
+extern "C" {
+    static mut debug_break_level: c_int;
+    static mut debug_did_msg: bool;
+    static mut debug_tick: c_int;
+    static mut debug_backtrace_level: c_int;
+    static mut debug_mode: bool;
+    static mut msg_scroll: c_int;
+    #[link_name = "State"]
+    static mut vim_State: c_int;
+    static mut did_emsg: c_int;
+    static mut cmd_silent: bool;
+    static mut msg_silent: c_int;
+    static mut emsg_silent: c_int;
+    static mut emsg_off: c_int;
+    static mut redir_off: bool;
+    #[link_name = "RedrawingDisabled"]
+    static mut redrawing_disabled: c_int;
+    static mut no_wait_return: c_int;
+    static mut need_wait_return: bool;
+    static mut ex_normal_busy: c_int;
+    static mut ignore_script: bool;
+    static mut lines_left: c_int;
+    #[link_name = "Rows"]
+    static mut vim_Rows: c_int;
+    static mut cmdline_row: c_int;
+    static mut msg_row: c_int;
+    static mut ex_nesting_level: c_int;
+    static mut got_int: bool;
+    static mut NameBuff: [std::ffi::c_char; 4096];
+}
+
+// Compile-time constant for MAXPATHL (verified against C's MAXPATHL = 4096)
+const MAXPATHL: c_int = 4096;
 
 // =============================================================================
 // Helper functions
@@ -353,10 +342,10 @@ pub unsafe extern "C" fn rs_ex_debuggreedy(eap: *const ExArgHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_debug(eap: *const ExArgHandle) {
     unsafe {
-        let save = nvim_dbg_get_debug_break_level();
-        nvim_dbg_set_debug_break_level(9999);
+        let save = debug_break_level;
+        debug_break_level = 9999;
         nvim_dbg_do_cmdline_cmd(nvim_dbg_eap_get_arg(eap));
-        nvim_dbg_set_debug_break_level(save);
+        debug_break_level = save;
     }
 }
 
@@ -387,10 +376,10 @@ unsafe fn do_setdebugtracelevel(arg: *const c_char) {
         let level = atoi(arg);
         let first = *arg;
         if first == b'+' as c_char || level < 0 {
-            let cur = nvim_dbg_get_debug_backtrace_level();
-            nvim_dbg_set_debug_backtrace_level(cur + level);
+            let cur = debug_backtrace_level;
+            debug_backtrace_level = cur + level;
         } else {
-            nvim_dbg_set_debug_backtrace_level(level);
+            debug_backtrace_level = level;
         }
         do_checkbacktracelevel();
     }
@@ -399,15 +388,15 @@ unsafe fn do_setdebugtracelevel(arg: *const c_char) {
 /// Check backtrace level bounds.
 unsafe fn do_checkbacktracelevel() {
     unsafe {
-        let bt_level = nvim_dbg_get_debug_backtrace_level();
+        let bt_level = debug_backtrace_level;
         if bt_level < 0 {
-            nvim_dbg_set_debug_backtrace_level(0);
+            debug_backtrace_level = 0;
             nvim_dbg_msg_frame_zero();
         } else {
             let sname = nvim_dbg_estack_sfile(ESTACK_NONE);
             let max = get_maxbacktrace_level(sname);
             if bt_level > max {
-                nvim_dbg_set_debug_backtrace_level(max);
+                debug_backtrace_level = max;
                 nvim_dbg_smsg_frame_highest(max);
             }
             nvim_dbg_xfree(sname as *mut c_void);
@@ -452,13 +441,13 @@ unsafe fn do_showbacktrace(cmd: *const c_char) {
             let mut i: c_int = 0;
             let mut cur = sname;
             let dotdot = c"..".as_ptr();
-            while !nvim_dbg_get_got_int() {
+            while !got_int {
                 let next = nvim_dbg_strstr(cur, dotdot);
                 if !next.is_null() {
                     // Temporarily NUL-terminate at ".."
                     *(next as *mut c_char) = NUL;
                 }
-                let bt_level = nvim_dbg_get_debug_backtrace_level();
+                let bt_level = debug_backtrace_level;
                 if i == max - bt_level {
                     nvim_dbg_smsg_frame_arrow(max - i, cur);
                 } else {
@@ -523,7 +512,7 @@ pub unsafe extern "C" fn rs_dbg_check_breakpoint(eap: *const ExArgHandle) {
                 (*state).debug_skipped_name = (*state).debug_breakpoint_name;
                 (*state).debug_breakpoint_name = ptr::null_mut();
             }
-        } else if nvim_dbg_get_ex_nesting_level() <= nvim_dbg_get_debug_break_level() {
+        } else if ex_nesting_level <= debug_break_level {
             if nvim_dbg_eap_get_skip(eap) == 0 {
                 rs_do_debug(nvim_dbg_eap_get_cmd(eap));
             } else {
@@ -544,15 +533,15 @@ pub unsafe extern "C" fn rs_dbg_check_skipped(eap: *const ExArgHandle) -> bool {
             return false;
         }
         // Save the value of got_int and reset it.
-        let prev_got_int = nvim_dbg_get_got_int();
-        nvim_dbg_set_got_int(false);
+        let prev_got_int = got_int;
+        got_int = false;
         (*state).debug_breakpoint_name = (*state).debug_skipped_name;
         // eap->skip is true
         nvim_dbg_eap_set_skip(eap, 0);
         rs_dbg_check_breakpoint(eap);
         nvim_dbg_eap_set_skip(eap, 1);
-        let cur_got_int = nvim_dbg_get_got_int();
-        nvim_dbg_set_got_int(cur_got_int | prev_got_int);
+        let cur_got_int = got_int;
+        got_int = cur_got_int | prev_got_int;
         true
     }
 }
@@ -565,10 +554,10 @@ pub unsafe extern "C" fn rs_dbg_check_skipped(eap: *const ExArgHandle) -> bool {
 unsafe fn eval_expr_no_emsg(gap: *mut GapHandle, idx: c_int) -> TypvalHandle {
     unsafe {
         let name = nvim_dbg_get_name(gap, idx);
-        let save = nvim_dbg_get_emsg_off();
-        nvim_dbg_set_emsg_off(save + 1);
+        let save = emsg_off;
+        emsg_off = save + 1;
         let tv = nvim_dbg_eval_expr(name);
-        nvim_dbg_set_emsg_off(save);
+        emsg_off = save;
         tv
     }
 }
@@ -707,8 +696,8 @@ pub unsafe extern "C" fn rs_ex_breakadd(eap: *const ExArgHandle) {
                 if nvim_dbg_eap_get_cmdidx(eap) != CMD_PROFILE {
                     (*state).last_breakp += 1;
                     nvim_dbg_set_nr(gap, idx, (*state).last_breakp);
-                    let tick = nvim_dbg_get_debug_tick();
-                    nvim_dbg_set_debug_tick(tick + 1);
+                    let tick = debug_tick;
+                    debug_tick = tick + 1;
                 }
                 let len = nvim_dbg_gap_len(gap);
                 nvim_dbg_gap_set_len(gap, len + 1);
@@ -719,8 +708,8 @@ pub unsafe extern "C" fn rs_ex_breakadd(eap: *const ExArgHandle) {
             nvim_dbg_set_nr(gap, idx, (*state).last_breakp);
             let len = nvim_dbg_gap_len(gap);
             nvim_dbg_gap_set_len(gap, len + 1);
-            let tick = nvim_dbg_get_debug_tick();
-            nvim_dbg_set_debug_tick(tick + 1);
+            let tick = debug_tick;
+            debug_tick = tick + 1;
             let breakp_gap = nvim_dbg_get_breakp_gap();
             if gap == breakp_gap {
                 (*state).has_expr_breakpoint = true;
@@ -799,8 +788,8 @@ pub unsafe extern "C" fn rs_ex_breakdel(eap: *const ExArgHandle) {
                 nvim_dbg_gap_remove_at(gap, todel);
             }
             if nvim_dbg_eap_get_cmdidx(eap) == CMD_BREAKDEL {
-                let tick = nvim_dbg_get_debug_tick();
-                nvim_dbg_set_debug_tick(tick + 1);
+                let tick = debug_tick;
+                debug_tick = tick + 1;
             }
             if !del_all {
                 break;
@@ -834,8 +823,8 @@ pub unsafe extern "C" fn rs_ex_breaklist(_eap: *const ExArgHandle) {
             if bp_type == DBG_FILE {
                 nvim_dbg_home_replace(
                     nvim_dbg_get_name(gap, i),
-                    nvim_dbg_get_namebuff(),
-                    nvim_dbg_get_maxpathl(),
+                    addr_of_mut!(NameBuff).cast::<c_char>(),
+                    MAXPATHL,
                 );
             }
             if bp_type != DBG_EXPR {
@@ -844,7 +833,7 @@ pub unsafe extern "C" fn rs_ex_breaklist(_eap: *const ExArgHandle) {
                 if bp_type == DBG_FUNC {
                     nvim_dbg_smsg_bp_func(nr, nvim_dbg_get_name(gap, i), lnum);
                 } else {
-                    nvim_dbg_smsg_bp_file(nr, nvim_dbg_get_namebuff(), lnum);
+                    nvim_dbg_smsg_bp_file(nr, addr_of_mut!(NameBuff).cast::<c_char>(), lnum);
                 }
             } else {
                 let nr = nvim_dbg_get_nr(gap, i);
@@ -905,8 +894,8 @@ unsafe fn debuggy_find(
                         && (lnum == 0 || nvim_dbg_get_lnum(gap, i) < lnum)))
             {
                 // Save got_int, don't want previous interruption to cancel matching
-                let prev_got_int = nvim_dbg_get_got_int();
-                nvim_dbg_set_got_int(false);
+                let prev_got_int = got_int;
+                got_int = false;
                 let mut prog = nvim_dbg_get_prog(gap, i);
                 if nvim_dbg_vim_regexec_prog(&mut prog, name) {
                     // Update prog in case vim_regexec_prog changed it
@@ -918,8 +907,8 @@ unsafe fn debuggy_find(
                 } else {
                     nvim_dbg_set_prog(gap, i, prog);
                 }
-                let cur_got_int = nvim_dbg_get_got_int();
-                nvim_dbg_set_got_int(cur_got_int | prev_got_int);
+                let cur_got_int = got_int;
+                got_int = cur_got_int | prev_got_int;
             } else if bp_type == DBG_EXPR {
                 let mut line = false;
 
@@ -1007,31 +996,31 @@ pub unsafe extern "C" fn rs_has_profiling(file: bool, fname: *mut c_char, fp: *m
 pub unsafe extern "C" fn rs_do_debug(cmd: *mut c_char) {
     let state = &raw mut STATE;
     unsafe {
-        let save_msg_scroll = nvim_dbg_get_msg_scroll();
-        let save_state = nvim_dbg_get_State();
-        let save_did_emsg = nvim_dbg_get_did_emsg();
-        let save_cmd_silent = nvim_dbg_get_cmd_silent();
-        let save_msg_silent = nvim_dbg_get_msg_silent();
-        let save_emsg_silent = nvim_dbg_get_emsg_silent();
-        let save_redir_off = nvim_dbg_get_redir_off();
+        let save_msg_scroll = msg_scroll;
+        let save_state = vim_State;
+        let save_did_emsg = did_emsg;
+        let save_cmd_silent = cmd_silent;
+        let save_msg_silent = msg_silent;
+        let save_emsg_silent = emsg_silent;
+        let save_redir_off = redir_off;
         let mut typeahead_saved = false;
         let mut save_ignore_script: c_int = 0;
         let mut cmdline: *mut c_char = ptr::null_mut();
         let mut p: *mut c_char;
         let mut tail: *const c_char;
 
-        nvim_dbg_set_RedrawingDisabled(nvim_dbg_get_RedrawingDisabled() + 1);
-        nvim_dbg_set_no_wait_return(nvim_dbg_get_no_wait_return() + 1);
-        nvim_dbg_set_did_emsg(false);
-        nvim_dbg_set_cmd_silent(false);
-        nvim_dbg_set_msg_silent(0);
-        nvim_dbg_set_emsg_silent(0);
-        nvim_dbg_set_redir_off(true);
+        redrawing_disabled = redrawing_disabled + 1;
+        no_wait_return = no_wait_return + 1;
+        did_emsg = 0;
+        cmd_silent = false;
+        msg_silent = 0;
+        emsg_silent = 0;
+        redir_off = true;
 
-        nvim_dbg_set_State(MODE_NORMAL);
-        nvim_dbg_set_debug_mode(true);
+        vim_State = MODE_NORMAL;
+        debug_mode = true;
 
-        if !nvim_dbg_get_debug_did_msg() {
+        if !debug_did_msg {
             nvim_dbg_msg_entering_debug();
         }
         if !(*state).debug_oldval.is_null() {
@@ -1060,34 +1049,34 @@ pub unsafe extern "C" fn rs_do_debug(cmd: *mut c_char) {
         let mut typeahead_handle: TypeaheadHandle = ptr::null_mut();
 
         loop {
-            nvim_dbg_set_msg_scroll(1);
-            nvim_dbg_set_need_wait_return(false);
+            msg_scroll = 1;
+            need_wait_return = false;
 
-            let save_ex_normal_busy = nvim_dbg_get_ex_normal_busy();
-            nvim_dbg_set_ex_normal_busy(0);
+            let save_ex_normal_busy = ex_normal_busy;
+            ex_normal_busy = 0;
             if !(*state).debug_greedy {
                 typeahead_handle = nvim_dbg_save_typeahead();
                 typeahead_saved = true;
-                save_ignore_script = nvim_dbg_get_ignore_script();
-                nvim_dbg_set_ignore_script(1);
+                save_ignore_script = ignore_script as c_int;
+                ignore_script = true;
             }
 
             // Don't debug any function call, e.g. from an expression mapping
-            let n = nvim_dbg_get_debug_break_level();
-            nvim_dbg_set_debug_break_level(-1);
+            let n = debug_break_level;
+            debug_break_level = -1;
 
             nvim_dbg_xfree(cmdline as *mut c_void);
             cmdline = nvim_dbg_getcmdline_prompt();
 
-            nvim_dbg_set_debug_break_level(n);
+            debug_break_level = n;
             if typeahead_saved {
                 nvim_dbg_restore_typeahead(typeahead_handle);
-                nvim_dbg_set_ignore_script(save_ignore_script);
+                ignore_script = save_ignore_script != 0;
                 typeahead_saved = false;
             }
-            nvim_dbg_set_ex_normal_busy(save_ex_normal_busy);
+            ex_normal_busy = save_ex_normal_busy;
 
-            nvim_dbg_set_cmdline_row(nvim_dbg_get_msg_row());
+            cmdline_row = msg_row;
             nvim_dbg_msg_starthere();
 
             if !cmdline.is_null() {
@@ -1171,24 +1160,24 @@ pub unsafe extern "C" fn rs_do_debug(cmd: *mut c_char) {
                     // Execute debug command
                     match (*state).last_cmd {
                         CMD_CONT => {
-                            nvim_dbg_set_debug_break_level(-1);
+                            debug_break_level = -1;
                         }
                         CMD_NEXT => {
-                            nvim_dbg_set_debug_break_level(nvim_dbg_get_ex_nesting_level());
+                            debug_break_level = ex_nesting_level;
                         }
                         CMD_STEP => {
-                            nvim_dbg_set_debug_break_level(9999);
+                            debug_break_level = 9999;
                         }
                         CMD_FINISH => {
-                            nvim_dbg_set_debug_break_level(nvim_dbg_get_ex_nesting_level() - 1);
+                            debug_break_level = ex_nesting_level - 1;
                         }
                         CMD_QUIT => {
-                            nvim_dbg_set_got_int(true);
-                            nvim_dbg_set_debug_break_level(-1);
+                            got_int = true;
+                            debug_break_level = -1;
                         }
                         CMD_INTERRUPT => {
-                            nvim_dbg_set_got_int(true);
-                            nvim_dbg_set_debug_break_level(9999);
+                            got_int = true;
+                            debug_break_level = 9999;
                             // Do not repeat ">interrupt" cmd, continue stepping.
                             (*state).last_cmd = CMD_STEP;
                         }
@@ -1206,52 +1195,52 @@ pub unsafe extern "C" fn rs_do_debug(cmd: *mut c_char) {
                             continue;
                         }
                         CMD_UP => {
-                            let bt = nvim_dbg_get_debug_backtrace_level();
-                            nvim_dbg_set_debug_backtrace_level(bt + 1);
+                            let bt = debug_backtrace_level;
+                            debug_backtrace_level = bt + 1;
                             do_checkbacktracelevel();
                             continue;
                         }
                         CMD_DOWN => {
-                            let bt = nvim_dbg_get_debug_backtrace_level();
-                            nvim_dbg_set_debug_backtrace_level(bt - 1);
+                            let bt = debug_backtrace_level;
+                            debug_backtrace_level = bt - 1;
                             do_checkbacktracelevel();
                             continue;
                         }
                         _ => {}
                     }
                     // Going out reset backtrace_level
-                    nvim_dbg_set_debug_backtrace_level(0);
+                    debug_backtrace_level = 0;
                     break;
                 }
 
                 // don't debug this command
-                let n = nvim_dbg_get_debug_break_level();
-                nvim_dbg_set_debug_break_level(-1);
+                let n = debug_break_level;
+                debug_break_level = -1;
                 nvim_dbg_do_cmdline(cmdline);
-                nvim_dbg_set_debug_break_level(n);
+                debug_break_level = n;
             }
-            let rows = nvim_dbg_get_Rows();
-            nvim_dbg_set_lines_left(rows - 1);
+            let rows = vim_Rows;
+            lines_left = rows - 1;
         }
         nvim_dbg_xfree(cmdline as *mut c_void);
 
-        nvim_dbg_set_RedrawingDisabled(nvim_dbg_get_RedrawingDisabled() - 1);
-        nvim_dbg_set_no_wait_return(nvim_dbg_get_no_wait_return() - 1);
+        redrawing_disabled = redrawing_disabled - 1;
+        no_wait_return = no_wait_return - 1;
         nvim_dbg_redraw_all_later(UPD_NOT_VALID);
-        nvim_dbg_set_need_wait_return(false);
-        nvim_dbg_set_msg_scroll(save_msg_scroll);
-        let rows = nvim_dbg_get_Rows();
-        nvim_dbg_set_lines_left(rows - 1);
-        nvim_dbg_set_State(save_state);
-        nvim_dbg_set_debug_mode(false);
-        nvim_dbg_set_did_emsg(save_did_emsg);
-        nvim_dbg_set_cmd_silent(save_cmd_silent);
-        nvim_dbg_set_msg_silent(save_msg_silent);
-        nvim_dbg_set_emsg_silent(save_emsg_silent);
-        nvim_dbg_set_redir_off(save_redir_off);
+        need_wait_return = false;
+        msg_scroll = save_msg_scroll;
+        let rows = vim_Rows;
+        lines_left = rows - 1;
+        vim_State = save_state;
+        debug_mode = false;
+        did_emsg = save_did_emsg;
+        cmd_silent = save_cmd_silent;
+        msg_silent = save_msg_silent;
+        emsg_silent = save_emsg_silent;
+        redir_off = save_redir_off;
 
         // Only print the message again when typing a command before coming back here.
-        nvim_dbg_set_debug_did_msg(true);
+        debug_did_msg = true;
     }
 }
 
