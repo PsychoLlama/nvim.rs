@@ -153,7 +153,7 @@ pub unsafe extern "C" fn rs_source_callback(
 ///
 /// # Safety
 /// This function calls C functions that manipulate pointers.
-#[no_mangle]
+#[export_name = "gen_expand_wildcards_and_cb"]
 pub unsafe extern "C" fn rs_gen_expand_wildcards_and_cb(
     num_pat: c_int,
     pats: *mut *mut c_char,
@@ -194,7 +194,7 @@ pub unsafe extern "C" fn rs_gen_expand_wildcards_and_cb(
 ///
 /// # Safety
 /// This function calls C functions that manipulate pointers.
-#[no_mangle]
+#[export_name = "do_in_path_and_pp"]
 pub unsafe extern "C" fn rs_do_in_path_and_pp(
     path: *mut c_char,
     name: *mut c_char,
@@ -257,7 +257,7 @@ pub unsafe extern "C" fn rs_do_in_path_and_pp(
 ///
 /// # Safety
 /// This function calls C functions that manipulate pointers.
-#[no_mangle]
+#[export_name = "do_in_runtimepath"]
 pub unsafe extern "C" fn rs_do_in_runtimepath(
     name: *mut c_char,
     flags: c_int,
@@ -301,7 +301,7 @@ pub unsafe extern "C" fn rs_do_in_runtimepath(
 ///
 /// # Safety
 /// This function calls C functions that manipulate pointers.
-#[no_mangle]
+#[export_name = "source_runtime"]
 pub unsafe extern "C" fn rs_source_runtime(name: *mut c_char, flags: c_int) -> c_int {
     rs_do_in_runtimepath(name, flags, Some(rs_source_callback), ptr::null_mut())
 }
@@ -310,7 +310,7 @@ pub unsafe extern "C" fn rs_source_runtime(name: *mut c_char, flags: c_int) -> c
 ///
 /// # Safety
 /// This function calls C functions that manipulate pointers.
-#[no_mangle]
+#[export_name = "source_runtime_vim_lua"]
 pub unsafe extern "C" fn rs_source_runtime_vim_lua(name: *mut c_char, flags: c_int) -> c_int {
     rs_do_in_runtimepath(
         name,
@@ -326,7 +326,7 @@ pub unsafe extern "C" fn rs_source_runtime_vim_lua(name: *mut c_char, flags: c_i
 ///
 /// # Safety
 /// This function calls C functions that manipulate pointers.
-#[no_mangle]
+#[export_name = "source_in_path_vim_lua"]
 pub unsafe extern "C" fn rs_source_in_path_vim_lua(
     path: *mut c_char,
     name: *mut c_char,

@@ -49,7 +49,7 @@ extern "C" {
 /// Initialize runtime search path system.
 ///
 /// Called once during startup to initialize the mutex.
-#[no_mangle]
+#[export_name = "runtime_init"]
 pub unsafe extern "C" fn rs_runtime_init() {
     nvim_rt_sp_mutex_init();
 }

@@ -102,33 +102,11 @@ typedef kvec_t(char *) CharVec;
 
 #include "runtime.c.generated.h"
 
-// Rust FFI forward declarations (Phase 5)
+// Rust FFI forward declarations
 extern int rs_get_copyID(void);
 extern bool rs_source_callback_vim_lua(int num_fnames, char **fnames, bool all, void *cookie);
 extern bool rs_source_callback(int num_fnames, char **fnames, bool all, void *cookie);
-extern int rs_gen_expand_wildcards_and_cb(int num_pat, char **pats, int flags, bool all,
-                                           DoInRuntimepathCB callback, void *cookie);
-extern int rs_do_in_path_and_pp(char *path, char *name, int flags,
-                                  DoInRuntimepathCB callback, void *cookie);
-extern int rs_do_in_runtimepath(char *name, int flags,
-                                  DoInRuntimepathCB callback, void *cookie);
-extern int rs_source_runtime(char *name, int flags);
-extern int rs_source_runtime_vim_lua(char *name, int flags);
-extern int rs_source_in_path_vim_lua(char *path, char *name, int flags);
-
-// Rust FFI forward declarations (Phase 6 - Package management)
-extern bool rs_pack_has_entries(char *buf);
-extern int rs_load_pack_plugin(bool opt, char *fname);
-extern void rs_add_pack_start_dirs(void);
-extern void rs_load_start_packages(void);
-extern void rs_ex_packloadall(void *eap);
-extern void rs_load_plugins(void);
-extern void rs_ex_packadd(void *eap);
-
-// Rust FFI forward declarations (Phase 8 - Runtime command functions)
 extern int rs_get_runtime_cmd_flags(char **argp, size_t where_len);
-extern void rs_ex_runtime(void *eap);
-extern void rs_set_context_in_runtime_cmd(void *xp, const char *arg);
 
 garray_T exestack = { 0, 0, sizeof(estack_T), 50, NULL };
 garray_T script_items = { 0, 0, sizeof(scriptitem_T *), 20, NULL };
@@ -236,10 +214,10 @@ void nvim_rt_ga_loaded_append(char *name)
   GA_APPEND(char *, &ga_loaded, name);
 }
 
-/// do_in_runtimepath wrapper that passes source_callback (static function).
+/// do_in_runtimepath wrapper that passes rs_source_callback.
 int nvim_rt_do_in_runtimepath_source(const char *name, int flags, void *cookie)
 {
-  return do_in_runtimepath((char *)name, flags, source_callback, cookie);
+  return do_in_runtimepath((char *)name, flags, rs_source_callback, cookie);
 }
 
 /// Initialize the execution stack.
@@ -293,8 +271,7 @@ static RuntimeSearchPath runtime_search_path;
 static RuntimeSearchPath runtime_search_path_thread;
 static uv_mutex_t runtime_search_path_mutex;
 
-// Rust implementations of search path management functions (Phase 4)
-extern void rs_runtime_init(void);
+// Rust implementations of search path management functions
 extern const char *rs_did_set_runtimepackpath(optset_T *args);
 extern void rs_runtime_search_path_validate(void);
 extern void rs_runtime_search_path_get_cached(int *ref);
@@ -376,43 +353,6 @@ void nvim_rt_sp_copy_to_thread(void)
   runtime_search_path_thread = copy_runtime_search_path(runtime_search_path);
 }
 
-void runtime_init(void)
-{
-  rs_runtime_init();
-}
-
-/// Get DIP_ flags from the [where] argument of a :runtime command.
-/// "*argp" is advanced to after the [where] argument.
-static int get_runtime_cmd_flags(char **argp, size_t where_len)
-{
-  return rs_get_runtime_cmd_flags(argp, where_len);
-}
-
-/// ":runtime [where] {name}"
-void ex_runtime(exarg_T *eap)
-{
-  rs_ex_runtime(eap);
-}
-
-
-/// Set the completion context for the :runtime command.
-void set_context_in_runtime_cmd(expand_T *xp, const char *arg)
-{
-  rs_set_context_in_runtime_cmd(xp, arg);
-}
-
-/// Source all .vim and .lua files in "fnames" with .vim files being sourced first.
-static bool source_callback_vim_lua(int num_fnames, char **fnames, bool all, void *cookie)
-{
-  return rs_source_callback_vim_lua(num_fnames, fnames, all, cookie);
-}
-
-/// Source all files in "fnames" with .vim files sourced first, .lua files
-/// sourced second, and any remaining files sourced last.
-static bool source_callback(int num_fnames, char **fnames, bool all, void *cookie)
-{
-  return rs_source_callback(num_fnames, fnames, all, cookie);
-}
 
 /// Find the patterns in "name" in all directories in "path" and invoke
 /// "callback(fname, cookie)".
@@ -707,10 +647,6 @@ done:
 /// If "name" is NULL calls callback for each entry in "path". Cookie is
 /// passed by reference in this case, setting it to NULL indicates that callback
 /// has done its job.
-int do_in_path_and_pp(char *path, char *name, int flags, DoInRuntimepathCB callback, void *cookie)
-{
-  return rs_do_in_path_and_pp(path, name, flags, callback, cookie);
-}
 
 static void push_path(RuntimeSearchPath *search_path, Set(String) *rtp_used, char *entry,
                       bool after)
@@ -855,86 +791,6 @@ static void runtime_search_path_free(RuntimeSearchPath path)
 void runtime_search_path_validate(void)
 {
   rs_runtime_search_path_validate();
-}
-
-/// Just like do_in_path_and_pp(), using 'runtimepath' for "path".
-int do_in_runtimepath(char *name, int flags, DoInRuntimepathCB callback, void *cookie)
-{
-  return rs_do_in_runtimepath(name, flags, callback, cookie);
-}
-
-/// Source the file "name" from all directories in 'runtimepath'.
-/// "name" can contain wildcards.
-/// When "flags" has DIP_ALL: source all files, otherwise only the first one.
-///
-/// return FAIL when no file could be sourced, OK otherwise.
-int source_runtime(char *name, int flags)
-{
-  return rs_source_runtime(name, flags);
-}
-
-/// Just like source_runtime(), but only source vim and lua files
-int source_runtime_vim_lua(char *name, int flags)
-{
-  return rs_source_runtime_vim_lua(name, flags);
-}
-
-/// Just like source_runtime(), but:
-/// - use "path" instead of 'runtimepath'.
-/// - only source .vim and .lua files
-int source_in_path_vim_lua(char *path, char *name, int flags)
-{
-  return rs_source_in_path_vim_lua(path, name, flags);
-}
-
-/// Expand wildcards in "pats" and invoke callback matches.
-///
-/// @param      num_pat  is number of input patterns.
-/// @param      patx     is an array of pointers to input patterns.
-/// @param      flags    is a combination of EW_* flags used in
-///                      expand_wildcards().
-/// @param      all      invoke callback on all matches or just one
-/// @param      callback called for each match.
-/// @param      cookie   context for callback
-///
-/// @returns             OK when some files were found, FAIL otherwise.
-static int gen_expand_wildcards_and_cb(int num_pat, char **pats, int flags, bool all,
-                                       DoInRuntimepathCB callback, void *cookie)
-{
-  return rs_gen_expand_wildcards_and_cb(num_pat, pats, flags, all, callback, cookie);
-}
-
-
-
-/// Add all packages in the "start" directory to 'runtimepath'.
-void add_pack_start_dirs(void)
-{
-  rs_add_pack_start_dirs();
-}
-
-/// Load plugins from all packages in the "start" directory.
-void load_start_packages(void)
-{
-  rs_load_start_packages();
-}
-
-// ":packloadall"
-// Find plugins in the package directories and source them.
-void ex_packloadall(exarg_T *eap)
-{
-  rs_ex_packloadall(eap);
-}
-
-/// Read all the plugin files at startup
-void load_plugins(void)
-{
-  rs_load_plugins();
-}
-
-/// ":packadd[!] {name}"
-void ex_packadd(exarg_T *eap)
-{
-  rs_ex_packadd(eap);
 }
 
 

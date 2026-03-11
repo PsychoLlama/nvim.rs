@@ -7,6 +7,7 @@ use std::sync::atomic::Ordering;
 
 use crate::dip;
 use crate::expand::RUNTIME_EXPAND_FLAGS;
+use crate::pathsearch::rs_source_runtime;
 
 // =============================================================================
 // Command Types
@@ -174,8 +175,7 @@ extern "C" {
     // expand_T accessor (in runtime_ffi.c)
     fn nvim_rt_cmd_expand_set_context(xp: *mut c_void, context: c_int, pattern: *const c_char);
 
-    // source_runtime is already in Rust (pathsearch.rs)
-    fn rs_source_runtime(name: *mut c_char, flags: c_int) -> c_int;
+    // (rs_source_runtime is in pathsearch.rs — call directly below)
 }
 
 /// Get DIP_ flags from the [where] argument of a :runtime command.
@@ -218,7 +218,7 @@ pub unsafe extern "C" fn rs_get_runtime_cmd_flags(
 ///
 /// # Safety
 /// `eap` must be a valid pointer to an exarg_T.
-#[no_mangle]
+#[export_name = "ex_runtime"]
 pub unsafe extern "C" fn rs_ex_runtime(eap: *mut c_void) {
     let mut arg = nvim_rt_exarg_get_arg(eap);
     let forceit = nvim_rt_pkg_exarg_get_forceit(eap);
@@ -235,7 +235,7 @@ pub unsafe extern "C" fn rs_ex_runtime(eap: *mut c_void) {
 /// # Safety
 /// `xp` must be a valid pointer to an expand_T.
 /// `arg` must be a valid pointer to a NUL-terminated string.
-#[no_mangle]
+#[export_name = "set_context_in_runtime_cmd"]
 pub unsafe extern "C" fn rs_set_context_in_runtime_cmd(xp: *mut c_void, arg: *const c_char) {
     let mut arg = arg.cast_mut();
     let p = rs_skiptowhite(arg);

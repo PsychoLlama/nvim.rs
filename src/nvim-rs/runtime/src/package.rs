@@ -97,28 +97,10 @@ extern "C" {
     fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
 }
 
-// Already in pathsearch.rs but we call them through the re-exported names
-extern "C" {
-    fn rs_gen_expand_wildcards_and_cb(
-        num_pat: c_int,
-        pats: *mut *mut c_char,
-        flags: c_int,
-        all: bool,
-        callback: Option<unsafe extern "C" fn(c_int, *mut *mut c_char, bool, *mut c_void) -> bool>,
-        cookie: *mut c_void,
-    ) -> c_int;
-
-    fn rs_source_callback_vim_lua(
-        num_fnames: c_int,
-        fnames: *mut *mut c_char,
-        all: bool,
-        cookie: *mut c_void,
-    ) -> bool;
-
-    fn rs_source_in_path_vim_lua(path: *mut c_char, name: *mut c_char, flags: c_int) -> c_int;
-
-    fn rs_source_runtime_vim_lua(name: *mut c_char, flags: c_int) -> c_int;
-}
+use crate::pathsearch::{
+    rs_gen_expand_wildcards_and_cb, rs_source_callback_vim_lua, rs_source_in_path_vim_lua,
+    rs_source_runtime_vim_lua,
+};
 
 // =============================================================================
 // Constants
@@ -637,7 +619,7 @@ pub unsafe extern "C" fn rs_add_pack_start_dir(
 /// # Safety
 ///
 /// `buf` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "pack_has_entries"]
 pub unsafe extern "C" fn rs_pack_has_entries(buf: *mut c_char) -> bool {
     let mut num_files: c_int = 0;
     let mut files: *mut *mut c_char = ptr::null_mut();
@@ -657,7 +639,7 @@ pub unsafe extern "C" fn rs_pack_has_entries(buf: *mut c_char) -> bool {
 /// # Safety
 ///
 /// `fname` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "load_pack_plugin"]
 #[allow(clippy::similar_names)]
 pub unsafe extern "C" fn rs_load_pack_plugin(opt: bool, fname: *mut c_char) -> c_int {
     let ffname = nvim_rt_pkg_fix_fname(fname);
@@ -713,7 +695,7 @@ pub unsafe extern "C" fn rs_load_pack_plugin(opt: bool, fname: *mut c_char) -> c
 /// # Safety
 ///
 /// Accesses global C state (p_pp, callbacks).
-#[no_mangle]
+#[export_name = "add_pack_start_dirs"]
 pub unsafe extern "C" fn rs_add_pack_start_dirs() {
     do_in_path(
         p_pp,
@@ -730,7 +712,7 @@ pub unsafe extern "C" fn rs_add_pack_start_dirs() {
 /// # Safety
 ///
 /// Accesses global C state.
-#[no_mangle]
+#[export_name = "load_start_packages"]
 pub unsafe extern "C" fn rs_load_start_packages() {
     nvim_rt_pkg_set_did_source_packages(true);
 
@@ -759,7 +741,7 @@ pub unsafe extern "C" fn rs_load_start_packages() {
 /// # Safety
 ///
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[export_name = "ex_packloadall"]
 pub unsafe extern "C" fn rs_ex_packloadall(eap: *mut c_void) {
     let did_source = nvim_rt_pkg_get_did_source_packages();
     let forceit = nvim_rt_pkg_exarg_get_forceit(eap);
@@ -778,7 +760,7 @@ pub unsafe extern "C" fn rs_ex_packloadall(eap: *mut c_void) {
 /// # Safety
 ///
 /// Accesses global C state (p_lpl, p_rtp, did_source_packages).
-#[no_mangle]
+#[export_name = "load_plugins"]
 pub unsafe extern "C" fn rs_load_plugins() {
     if !nvim_rt_pkg_get_p_lpl() {
         return;
@@ -815,7 +797,7 @@ pub unsafe extern "C" fn rs_load_plugins() {
 /// # Safety
 ///
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[export_name = "ex_packadd"]
 pub unsafe extern "C" fn rs_ex_packadd(eap: *mut c_void) {
     let mut res = OK;
 

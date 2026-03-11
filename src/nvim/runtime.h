@@ -61,5 +61,21 @@ int add_pack_dir_to_rtp(char *fname, bool is_pack);
 int ExpandRTDir(char *pat, int flags, int *num_file, char ***file, char *dirnames[]);
 int expand_runtime_cmd(char *pat, int *numMatches, char ***matches);
 int ExpandPackAddDir(char *pat, int *num_file, char ***file);
+void runtime_init(void);
+int do_in_path_and_pp(char *path, char *name, int flags, DoInRuntimepathCB callback, void *cookie);
+int do_in_runtimepath(char *name, int flags, DoInRuntimepathCB callback, void *cookie);
+int source_runtime(char *name, int flags);
+int source_runtime_vim_lua(char *name, int flags);
+int source_in_path_vim_lua(char *path, char *name, int flags);
+int gen_expand_wildcards_and_cb(int num_pat, char **pats, int flags, bool all, DoInRuntimepathCB callback, void *cookie);
+void add_pack_start_dirs(void);
+void load_start_packages(void);
+void ex_packloadall(exarg_T *eap);
+void load_plugins(void);
+void ex_packadd(exarg_T *eap);
+bool pack_has_entries(char *buf);
+int load_pack_plugin(bool opt, char *fname);
+void ex_runtime(exarg_T *eap);
+void set_context_in_runtime_cmd(expand_T *xp, const char *arg);
 
 #include "runtime.h.generated.h"
