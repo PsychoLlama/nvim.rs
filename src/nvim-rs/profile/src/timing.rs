@@ -21,7 +21,7 @@ static mut PROF_WAIT_TIME: Proftime = 0;
 /// # Safety
 ///
 /// Calls external C function `os_hrtime`.
-#[no_mangle]
+#[export_name = "profile_start"]
 pub unsafe extern "C" fn rs_profile_start() -> Proftime {
     os_hrtime()
 }
@@ -31,7 +31,7 @@ pub unsafe extern "C" fn rs_profile_start() -> Proftime {
 /// # Safety
 ///
 /// Calls external C function `os_hrtime`.
-#[no_mangle]
+#[export_name = "profile_end"]
 pub unsafe extern "C" fn rs_profile_end(tm: Proftime) -> Proftime {
     crate::rs_profile_sub(os_hrtime(), tm)
 }
@@ -45,7 +45,7 @@ pub unsafe extern "C" fn rs_profile_end(tm: Proftime) -> Proftime {
 ///
 /// Returns pointer to a static buffer. Caller must not free or use
 /// concurrently.
-#[no_mangle]
+#[export_name = "profile_msg"]
 pub unsafe extern "C" fn rs_profile_msg(tm: Proftime) -> *const c_char {
     static mut BUF: [u8; 50] = [0u8; 50];
     let val = crate::rs_profile_signed(tm) as f64 / 1_000_000_000.0;
@@ -66,7 +66,7 @@ pub unsafe extern "C" fn rs_profile_msg(tm: Proftime) -> *const c_char {
 /// # Safety
 ///
 /// Calls external C function `os_hrtime`.
-#[no_mangle]
+#[export_name = "profile_setlimit"]
 pub unsafe extern "C" fn rs_profile_setlimit(msec: i64) -> Proftime {
     if msec <= 0 {
         return crate::rs_profile_zero();
@@ -84,7 +84,7 @@ pub unsafe extern "C" fn rs_profile_setlimit(msec: i64) -> Proftime {
 /// # Safety
 ///
 /// Calls external C function `os_hrtime`.
-#[no_mangle]
+#[export_name = "profile_passed_limit"]
 pub unsafe extern "C" fn rs_profile_passed_limit(tm: Proftime) -> bool {
     if tm == 0 {
         return false;
@@ -97,7 +97,7 @@ pub unsafe extern "C" fn rs_profile_passed_limit(tm: Proftime) -> bool {
 /// # Safety
 ///
 /// Accesses mutable static. Single-threaded profiling context only.
-#[no_mangle]
+#[export_name = "profile_set_wait"]
 pub unsafe extern "C" fn rs_profile_set_wait(wait: Proftime) {
     let ptr = std::ptr::addr_of_mut!(PROF_WAIT_TIME);
     ptr.write(wait);

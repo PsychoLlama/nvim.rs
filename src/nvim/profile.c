@@ -36,14 +36,6 @@
 #include "profile.c.generated.h"
 
 // Rust implementations of profile functions
-// Phase 1: timing wrappers
-extern proftime_T rs_profile_start(void);
-extern proftime_T rs_profile_end(proftime_T tm);
-extern const char *rs_profile_msg(proftime_T tm);
-extern proftime_T rs_profile_setlimit(int64_t msec);
-extern bool rs_profile_passed_limit(proftime_T tm);
-extern void rs_profile_set_wait(proftime_T wait);
-extern proftime_T rs_profile_get_wait_time(void);
 // Phase 2: input/wait profiling
 extern void rs_prof_input_start(void);
 extern void rs_prof_input_end(void);
@@ -69,13 +61,6 @@ extern void rs_time_start(const char *message);
 extern void rs_time_msg(const char *mesg, const proftime_T *start);
 extern void rs_time_init(const char *fname, const char *proc_name);
 extern void rs_time_finish(void);
-// Phase 7: command handling, state management, dump
-extern void rs_ex_profile(exarg_T *eap);
-extern const char *rs_get_profile_name(expand_T *xp, int idx);
-extern void rs_set_context_in_profile_cmd(expand_T *xp, const char *arg);
-extern void rs_profile_reset(void);
-extern void rs_profile_dump(void);
-
 /// Struct used in sn_prl_ga for every line of a script.
 typedef struct {
   int snp_count;                ///< nr of times line was executed
@@ -86,79 +71,6 @@ typedef struct {
 #define PRL_ITEM(si, idx)     (((sn_prl_T *)(si)->sn_prl_ga.ga_data)[(idx)])
 
 static char *startuptime_buf = NULL;  // --startuptime buffer
-
-/// Gets the current time.
-///
-/// @return the current time
-proftime_T profile_start(void) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_profile_start();
-}
-
-/// Computes the time elapsed.
-///
-/// @return Elapsed time from `tm` until now.
-proftime_T profile_end(proftime_T tm) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_profile_end(tm);
-}
-
-/// Gets a string representing time `tm`.
-///
-/// @warning Do not modify or free this string, not multithread-safe.
-///
-/// @param tm Time
-/// @return Static string representing `tm` in the form "seconds.microseconds".
-const char *profile_msg(proftime_T tm) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_profile_msg(tm);
-}
-
-/// Gets the time `msec` into the future.
-///
-/// @param msec milliseconds, the maximum number of milliseconds is
-///             (2^63 / 10^6) - 1 = 9.223372e+12.
-/// @return if msec > 0, returns the time msec past now. Otherwise returns
-///         the zero time.
-proftime_T profile_setlimit(int64_t msec) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_profile_setlimit(msec);
-}
-
-/// Checks if current time has passed `tm`.
-///
-/// @return true if the current time is past `tm`, false if not or if the
-///         timer was not set.
-bool profile_passed_limit(proftime_T tm) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_profile_passed_limit(tm);
-}
-
-/// Reset all profiling information.
-void profile_reset(void)
-{
-  rs_profile_reset();
-}
-
-/// ":profile cmd args"
-void ex_profile(exarg_T *eap)
-{
-  rs_ex_profile(eap);
-}
-
-/// Function given to ExpandGeneric() to obtain the profile command
-/// specific expansion.
-char *get_profile_name(expand_T *xp, int idx)
-  FUNC_ATTR_PURE
-{
-  return (char *)rs_get_profile_name(xp, idx);
-}
-
-/// Handle command line completion for :profile command.
-void set_context_in_profile_cmd(expand_T *xp, const char *arg)
-{
-  rs_set_context_in_profile_cmd(xp, arg);
-}
 
 /// Called when starting to wait for the user to type a character.
 void prof_input_start(void)
@@ -444,12 +356,6 @@ static void script_dump_profile(FILE *fd)
   }
 }
 
-/// Dump the profiling info.
-void profile_dump(void)
-{
-  rs_profile_dump();
-}
-
 /// Called when starting to read a script line.
 /// "sourcing_lnum" must be correct!
 /// When skipping lines it may not actually be executed, but we won't find out
@@ -518,12 +424,6 @@ void time_init(const char *fname, const char *proc_name)
 void time_finish(void)
 {
   rs_time_finish();
-}
-
-// C accessor for Rust — now delegates to the Rust-owned state
-proftime_T nvim_get_prof_wait_time(void)
-{
-  return rs_profile_get_wait_time();
 }
 
 // C accessors for Phase 2

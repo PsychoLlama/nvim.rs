@@ -84,7 +84,7 @@ const PEXP_SUBCMD: c_int = 0;
 /// # Safety
 ///
 /// `eap` must be a valid `exarg_T *`.
-#[no_mangle]
+#[export_name = "ex_profile"]
 pub unsafe extern "C" fn rs_ex_profile(eap: ExargHandle) {
     let arg = nvim_profile_eap_get_arg(eap);
     let e = nvim_profile_skiptowhite(arg);
@@ -139,7 +139,7 @@ pub unsafe extern "C" fn rs_ex_profile(eap: ExargHandle) {
 /// # Safety
 ///
 /// `xp` is unused. `idx` must be a valid index.
-#[no_mangle]
+#[export_name = "get_profile_name"]
 pub unsafe extern "C" fn rs_get_profile_name(_xp: ExpandHandle, idx: c_int) -> *const c_char {
     let what = std::ptr::addr_of!(PEXPAND_WHAT).read();
     if what == PEXP_SUBCMD {
@@ -156,7 +156,7 @@ pub unsafe extern "C" fn rs_get_profile_name(_xp: ExpandHandle, idx: c_int) -> *
 /// # Safety
 ///
 /// `xp` must be a valid `expand_T *`. `arg` must be a valid C string.
-#[no_mangle]
+#[export_name = "set_context_in_profile_cmd"]
 pub unsafe extern "C" fn rs_set_context_in_profile_cmd(xp: ExpandHandle, arg: *const c_char) {
     nvim_profile_xp_set_context(xp, nvim_profile_get_expand_profile());
     std::ptr::addr_of_mut!(PEXPAND_WHAT).write(PEXP_SUBCMD);
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn rs_set_context_in_profile_cmd(xp: ExpandHandle, arg: *c
 /// # Safety
 ///
 /// Accesses C global data structures via FFI.
-#[no_mangle]
+#[export_name = "profile_reset"]
 pub unsafe extern "C" fn rs_profile_reset() {
     nvim_profile_reset_scripts();
     nvim_profile_reset_funcs();
@@ -207,7 +207,7 @@ pub unsafe extern "C" fn rs_profile_reset() {
 /// # Safety
 ///
 /// Accesses profile_fname static and C file I/O.
-#[no_mangle]
+#[export_name = "profile_dump"]
 pub unsafe extern "C" fn rs_profile_dump() {
     let fname = std::ptr::addr_of!(PROFILE_FNAME).read();
     if fname.is_null() {

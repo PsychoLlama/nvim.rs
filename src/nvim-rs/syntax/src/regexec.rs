@@ -40,9 +40,9 @@ extern "C" {
     fn nvim_syn_get_b_syn_slow() -> c_int;
     fn nvim_syn_set_b_syn_slow(val: c_int);
 
-    // Profiling (from profile crate, #[no_mangle] exported)
-    fn rs_profile_start() -> u64;
-    fn rs_profile_end(tm: u64) -> u64;
+    // Profiling (from profile crate, exported via #[export_name])
+    fn profile_start() -> u64;
+    fn profile_end(tm: u64) -> u64;
 
     // Timing update: updates syn_time_T fields (total, slowest, count, match)
     fn nvim_syn_time_update(st_ptr: *mut c_void, elapsed: u64, matched: c_int);
@@ -99,7 +99,7 @@ unsafe fn syn_regexec_impl(
 ) -> Option<(i32, i32, i32, i32)> {
     let syn_time_on = nvim_syn_get_syn_time_on() != 0;
 
-    let pt = if syn_time_on { rs_profile_start() } else { 0 };
+    let pt = if syn_time_on { profile_start() } else { 0 };
 
     let mut s_lnum: c_int = 0;
     let mut s_col: c_int = 0;
@@ -124,7 +124,7 @@ unsafe fn syn_regexec_impl(
     *out_regprog = new_regprog;
 
     if syn_time_on && !st_ptr.is_null() {
-        let elapsed = rs_profile_end(pt);
+        let elapsed = profile_end(pt);
         nvim_syn_time_update(st_ptr, elapsed, (r > 0) as c_int);
     }
 

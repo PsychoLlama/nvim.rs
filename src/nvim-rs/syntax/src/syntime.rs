@@ -41,7 +41,7 @@ extern "C" {
     fn profile_add(tm1: Proftime, tm2: Proftime) -> Proftime;
     fn profile_divide(tm: Proftime, count: c_int) -> Proftime;
     fn profile_cmp(tm1: Proftime, tm2: Proftime) -> c_int;
-    fn rs_profile_msg(tm: Proftime) -> *const c_char;
+    fn profile_msg(tm: Proftime) -> *const c_char;
 
     // Highlight group name
     fn nvim_syn_highlight_group_name(idx: c_int) -> *mut c_char;
@@ -210,7 +210,7 @@ unsafe fn syntime_report_impl() {
             break;
         }
 
-        msg_puts(rs_profile_msg(entry.total));
+        msg_puts(profile_msg(entry.total));
         msg_puts(MSG_SPACE.as_ptr().cast());
         msg_advance(13);
         msg_outnum(entry.count);
@@ -219,10 +219,10 @@ unsafe fn syntime_report_impl() {
         msg_outnum(entry.match_count);
         msg_puts(MSG_SPACE.as_ptr().cast());
         msg_advance(26);
-        msg_puts(rs_profile_msg(entry.slowest));
+        msg_puts(profile_msg(entry.slowest));
         msg_puts(MSG_SPACE.as_ptr().cast());
         msg_advance(38);
-        msg_puts(rs_profile_msg(entry.average));
+        msg_puts(profile_msg(entry.average));
         msg_puts(MSG_SPACE.as_ptr().cast());
         msg_advance(50);
         let group_name = nvim_syn_highlight_group_name((entry.id as c_int) - 1);
@@ -249,7 +249,7 @@ unsafe fn syntime_report_impl() {
 
     if nvim_syn_get_got_int() == 0 {
         msg_puts(MSG_NEWLINE.as_ptr().cast());
-        msg_puts(rs_profile_msg(total_total));
+        msg_puts(profile_msg(total_total));
         msg_advance(13);
         msg_outnum(total_count);
         msg_puts(MSG_NEWLINE.as_ptr().cast());
