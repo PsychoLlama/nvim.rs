@@ -1,7 +1,7 @@
 //! System memory functions
 
 /// Get the total system physical memory in KiB.
-#[no_mangle]
+#[export_name = "os_get_total_mem_kib"]
 pub extern "C" fn rs_os_get_total_mem_kib() -> u64 {
     #[cfg(target_os = "linux")]
     {
