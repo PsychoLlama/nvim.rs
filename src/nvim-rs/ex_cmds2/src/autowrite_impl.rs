@@ -69,7 +69,6 @@ extern "C" {
     fn nvim_ex2_msg(s: *const c_char, attr: c_int);
     fn nvim_ex2_no_write_message();
     fn nvim_ex2_no_write_message_nobang(buf: *mut BufHandle);
-    fn nvim_ex2_dialog_changed(buf: *mut BufHandle, checkall: bool);
     fn nvim_ex2_emsg(s: *const c_char) -> bool;
     fn nvim_ex2_gettext(s: *const c_char) -> *const c_char;
 }
@@ -175,7 +174,8 @@ unsafe fn check_changed_impl(buf: *mut BufHandle, flags: c_int) -> bool {
                 unsafe { nvim_ex2_bufref_free(bufref) };
                 return false;
             }
-            unsafe { nvim_ex2_dialog_changed(buf, count > 1) };
+            // Call dialog_changed directly (Rust-to-Rust, avoids circular C delegation)
+            unsafe { crate::dialog::rs_dialog_changed(buf, count > 1) };
             if !unsafe { nvim_ex2_bufref_valid(bufref) } {
                 unsafe { nvim_ex2_bufref_free(bufref) };
                 return false;
@@ -201,7 +201,7 @@ unsafe fn check_changed_impl(buf: *mut BufHandle, flags: c_int) -> bool {
 // ---------------------------------------------------------------------------
 
 /// Port of `check_fname`
-#[no_mangle]
+#[export_name = "check_fname"]
 pub unsafe extern "C" fn rs_check_fname() -> c_int {
     let curbuf = unsafe { nvim_ex2_get_curbuf() };
     if unsafe { nvim_ex2_buf_get_ffname(curbuf) }.is_null() {
@@ -214,19 +214,19 @@ pub unsafe extern "C" fn rs_check_fname() -> c_int {
 }
 
 /// Port of `buf_write_all`
-#[no_mangle]
+#[export_name = "buf_write_all"]
 pub unsafe extern "C" fn rs_buf_write_all(buf: *mut BufHandle, forceit: bool) -> c_int {
     unsafe { buf_write_all_impl(buf, forceit) }
 }
 
 /// Port of `autowrite`
-#[no_mangle]
+#[export_name = "autowrite"]
 pub unsafe extern "C" fn rs_autowrite(buf: *mut BufHandle, forceit: bool) -> c_int {
     unsafe { autowrite_impl(buf, forceit) }
 }
 
 /// Port of `autowrite_all`
-#[no_mangle]
+#[export_name = "autowrite_all"]
 pub unsafe extern "C" fn rs_autowrite_all() {
     if !(unsafe { nvim_ex2_get_p_aw() } || unsafe { nvim_ex2_get_p_awa() })
         || !unsafe { nvim_ex2_get_p_write() }
@@ -253,7 +253,7 @@ pub unsafe extern "C" fn rs_autowrite_all() {
 }
 
 /// Port of `can_abandon`
-#[no_mangle]
+#[export_name = "can_abandon"]
 pub unsafe extern "C" fn rs_can_abandon(buf: *mut BufHandle, forceit: bool) -> bool {
     unsafe {
         nvim_ex2_buf_hide(buf)
@@ -265,7 +265,7 @@ pub unsafe extern "C" fn rs_can_abandon(buf: *mut BufHandle, forceit: bool) -> b
 }
 
 /// Port of `check_changed`
-#[no_mangle]
+#[export_name = "check_changed"]
 pub unsafe extern "C" fn rs_check_changed(buf: *mut BufHandle, flags: c_int) -> bool {
     unsafe { check_changed_impl(buf, flags) }
 }

@@ -55,15 +55,16 @@ extern "C" {
 
 // Rust-internal: write all lines in a buffer
 unsafe fn buf_write_all(buf: *mut BufHandle, forceit: bool) -> c_int {
-    // Call the already-exported Rust function
+    // Call the Rust implementation exported as "buf_write_all"
     extern "C" {
-        fn rs_buf_write_all(buf: *mut BufHandle, forceit: bool) -> c_int;
+        #[link_name = "buf_write_all"]
+        fn buf_write_all_fn(buf: *mut BufHandle, forceit: bool) -> c_int;
     }
-    unsafe { rs_buf_write_all(buf, forceit) }
+    unsafe { buf_write_all_fn(buf, forceit) }
 }
 
 /// Port of `dialog_close_terminal`
-#[no_mangle]
+#[export_name = "dialog_close_terminal"]
 pub unsafe extern "C" fn rs_dialog_close_terminal(buf: *mut BufHandle) -> bool {
     let mut buff = [0u8; DIALOG_MSG_SIZE];
 
@@ -90,7 +91,7 @@ pub unsafe extern "C" fn rs_dialog_close_terminal(buf: *mut BufHandle) -> bool {
 }
 
 /// Port of `dialog_changed`
-#[no_mangle]
+#[export_name = "dialog_changed"]
 pub unsafe extern "C" fn rs_dialog_changed(buf: *mut BufHandle, checkall: bool) {
     let mut buff = [0u8; DIALOG_MSG_SIZE];
 

@@ -39,7 +39,8 @@ extern "C" {
     fn nvim_ex2_get_p_awa() -> bool;
     fn nvim_ex2_get_p_confirm() -> bool;
 
-    // --- check_changed (already in Rust) ---
+    // --- check_changed (already in Rust, exported as "check_changed") ---
+    #[link_name = "check_changed"]
     fn rs_check_changed(buf: *mut BufHandle, flags: c_int) -> bool;
 
     // --- new accessors for check_changed_any ---
@@ -84,7 +85,7 @@ fn bufnum_add(bufnrs: &mut Vec<c_int>, nr: c_int) {
 
 /// Port of `check_changed_any`
 #[allow(clippy::too_many_lines)]
-#[no_mangle]
+#[export_name = "check_changed_any"]
 pub unsafe extern "C" fn rs_check_changed_any(hidden: bool, unload: bool) -> bool {
     let mut ret = false;
 
@@ -263,7 +264,7 @@ pub unsafe extern "C" fn rs_check_changed_any(hidden: bool, unload: bool) -> boo
 }
 
 /// Port of `ex_checktime`
-#[no_mangle]
+#[export_name = "ex_checktime"]
 pub unsafe extern "C" fn rs_ex_checktime(eap: *mut ExArgHandle) {
     let save = unsafe { nvim_ex2_get_no_check_timestamps() };
 

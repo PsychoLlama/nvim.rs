@@ -27,6 +27,7 @@ extern "C" {
     fn nvim_ex2_tp_next(tp: *mut TabHandle) -> *mut TabHandle;
     fn nvim_ex2_get_curwin() -> *mut WinHandle;
 
+    #[link_name = "check_changed"]
     fn rs_check_changed(buf: *mut BufHandle, flags: c_int) -> bool;
 
     // --- listdo-specific accessors ---
@@ -111,7 +112,7 @@ const DOCMD_NOWAIT: c_int = 0x02;
 /// Port of `ex_listdo`
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::missing_panics_doc)]
-#[no_mangle]
+#[export_name = "ex_listdo"]
 pub unsafe extern "C" fn rs_ex_listdo(eap: *mut ExArgHandle) {
     let cmdidx = unsafe { nvim_ex2_eap_get_cmdidx(eap) };
     let cmd_windo = unsafe { nvim_ex2_get_cmd_windo() };

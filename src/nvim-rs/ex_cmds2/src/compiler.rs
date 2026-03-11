@@ -30,7 +30,7 @@ extern "C" {
 }
 
 /// Port of `ex_compiler`
-#[no_mangle]
+#[export_name = "ex_compiler"]
 pub unsafe extern "C" fn rs_ex_compiler(eap: *mut ExArgHandle) {
     let arg = unsafe { nvim_ex2_eap_get_arg(eap) };
 

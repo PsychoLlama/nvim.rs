@@ -27,6 +27,7 @@ extern "C" {
     fn nvim_ex2_win_get_buffer(win: *mut WinHandle) -> *mut BufHandle;
     fn nvim_ex2_goto_tabpage_win(tp: *mut TabHandle, wp: *mut WinHandle);
 
+    #[link_name = "check_changed"]
     fn rs_check_changed(buf: *mut BufHandle, flags: c_int) -> bool;
 
     // --- drop-specific accessors ---
@@ -64,7 +65,7 @@ const CCGD_AW: c_int = 1;
 const CCGD_EXCMD: c_int = 16;
 
 /// Port of `ex_drop`
-#[no_mangle]
+#[export_name = "ex_drop"]
 pub unsafe extern "C" fn rs_ex_drop(eap: *mut ExArgHandle) {
     let mut split = false;
 

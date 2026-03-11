@@ -111,50 +111,50 @@ unsafe fn script_host_do_range(name: *const c_char, eap: *mut ExArgHandle) {
 }
 
 // ---------------------------------------------------------------------------
-// Exported `rs_*` functions — called from C thin wrappers
+// Exported functions — directly exported as their C names via export_name
 // ---------------------------------------------------------------------------
 
-#[no_mangle]
+#[export_name = "ex_ruby"]
 pub unsafe extern "C" fn rs_ex_ruby(eap: *mut ExArgHandle) {
     unsafe { script_host_execute(b"ruby\0".as_ptr().cast(), eap) };
 }
 
-#[no_mangle]
+#[export_name = "ex_rubyfile"]
 pub unsafe extern "C" fn rs_ex_rubyfile(eap: *mut ExArgHandle) {
     unsafe { script_host_execute_file(b"ruby\0".as_ptr().cast(), eap) };
 }
 
-#[no_mangle]
+#[export_name = "ex_rubydo"]
 pub unsafe extern "C" fn rs_ex_rubydo(eap: *mut ExArgHandle) {
     unsafe { script_host_do_range(b"ruby\0".as_ptr().cast(), eap) };
 }
 
-#[no_mangle]
+#[export_name = "ex_python3"]
 pub unsafe extern "C" fn rs_ex_python3(eap: *mut ExArgHandle) {
     unsafe { script_host_execute(b"python3\0".as_ptr().cast(), eap) };
 }
 
-#[no_mangle]
+#[export_name = "ex_py3file"]
 pub unsafe extern "C" fn rs_ex_py3file(eap: *mut ExArgHandle) {
     unsafe { script_host_execute_file(b"python3\0".as_ptr().cast(), eap) };
 }
 
-#[no_mangle]
+#[export_name = "ex_pydo3"]
 pub unsafe extern "C" fn rs_ex_pydo3(eap: *mut ExArgHandle) {
     unsafe { script_host_do_range(b"python3\0".as_ptr().cast(), eap) };
 }
 
-#[no_mangle]
+#[export_name = "ex_perl"]
 pub unsafe extern "C" fn rs_ex_perl(eap: *mut ExArgHandle) {
     unsafe { script_host_execute(b"perl\0".as_ptr().cast(), eap) };
 }
 
-#[no_mangle]
+#[export_name = "ex_perlfile"]
 pub unsafe extern "C" fn rs_ex_perlfile(eap: *mut ExArgHandle) {
     unsafe { script_host_execute_file(b"perl\0".as_ptr().cast(), eap) };
 }
 
-#[no_mangle]
+#[export_name = "ex_perldo"]
 pub unsafe extern "C" fn rs_ex_perldo(eap: *mut ExArgHandle) {
     unsafe { script_host_do_range(b"perl\0".as_ptr().cast(), eap) };
 }

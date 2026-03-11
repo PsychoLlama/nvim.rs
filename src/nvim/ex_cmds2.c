@@ -25,6 +25,10 @@
 // Phase 12: rs_eval_call_provider replaces the C eval_call_provider wrapper
 extern void rs_eval_call_provider(const char *provider, const char *method,
                                   list_T *arguments, bool discard, typval_T *out_rettv);
+
+// Rust-implemented win/tabpage validity checkers (exported as rs_* symbols)
+extern int rs_win_valid(win_T *win);
+extern int rs_valid_tabpage(tabpage_T *tpc);
 #include "nvim/ex_cmds.h"
 #include "nvim/ex_cmds2.h"
 #include "nvim/ex_cmds_defs.h"
@@ -75,54 +79,6 @@ _Static_assert(VIM_CANCEL == 4, "VIM_CANCEL mismatch");
 _Static_assert(VIM_ALL == 5, "VIM_ALL mismatch");
 _Static_assert(VIM_DISCARDALL == 6, "VIM_DISCARDALL mismatch");
 
-// =============================================================================
-// Rust extern declarations — script host functions
-// =============================================================================
-
-extern void rs_ex_ruby(exarg_T *eap);
-extern void rs_ex_rubyfile(exarg_T *eap);
-extern void rs_ex_rubydo(exarg_T *eap);
-extern void rs_ex_python3(exarg_T *eap);
-extern void rs_ex_py3file(exarg_T *eap);
-extern void rs_ex_pydo3(exarg_T *eap);
-extern void rs_ex_perl(exarg_T *eap);
-extern void rs_ex_perlfile(exarg_T *eap);
-extern void rs_ex_perldo(exarg_T *eap);
-extern int rs_win_valid(win_T *win);
-extern int rs_valid_tabpage(tabpage_T *tpc);
-
-// =============================================================================
-// Rust extern declarations — autowrite / buffer check functions
-// =============================================================================
-
-extern int rs_check_fname(void);
-extern int rs_buf_write_all(buf_T *buf, bool forceit);
-extern int rs_autowrite(buf_T *buf, bool forceit);
-extern void rs_autowrite_all(void);
-extern bool rs_can_abandon(buf_T *buf, bool forceit);
-extern bool rs_check_changed(buf_T *buf, int flags);
-
-// =============================================================================
-// Rust extern declarations — dialog functions
-// =============================================================================
-
-extern bool rs_dialog_close_terminal(buf_T *buf);
-extern void rs_dialog_changed(buf_T *buf, bool checkall);
-
-// =============================================================================
-// Rust extern declarations — check_changed_any / ex_checktime
-// =============================================================================
-
-extern bool rs_check_changed_any(bool hidden, bool unload);
-extern void rs_ex_checktime(exarg_T *eap);
-
-// =============================================================================
-// Rust extern declarations — compiler / drop
-// =============================================================================
-
-extern void rs_ex_compiler(exarg_T *eap);
-extern void rs_ex_drop(exarg_T *eap);
-extern void rs_ex_listdo(exarg_T *eap);
 
 // =============================================================================
 // C accessor functions for Rust (script host)
@@ -312,11 +268,6 @@ void nvim_ex2_no_write_message(void)
 void nvim_ex2_no_write_message_nobang(buf_T *buf)
 {
   no_write_message_nobang(buf);
-}
-
-void nvim_ex2_dialog_changed(buf_T *buf, bool checkall)
-{
-  dialog_changed(buf, checkall);
 }
 
 bool nvim_ex2_emsg(const char *s)
@@ -973,154 +924,3 @@ void nvim_ex2_listdo_restore_syntax(char *save_ei)
   }
 }
 
-void ex_ruby(exarg_T *eap)
-{
-  rs_ex_ruby(eap);
-}
-
-void ex_rubyfile(exarg_T *eap)
-{
-  rs_ex_rubyfile(eap);
-}
-
-void ex_rubydo(exarg_T *eap)
-{
-  rs_ex_rubydo(eap);
-}
-
-void ex_python3(exarg_T *eap)
-{
-  rs_ex_python3(eap);
-}
-
-void ex_py3file(exarg_T *eap)
-{
-  rs_ex_py3file(eap);
-}
-
-void ex_pydo3(exarg_T *eap)
-{
-  rs_ex_pydo3(eap);
-}
-
-void ex_perl(exarg_T *eap)
-{
-  rs_ex_perl(eap);
-}
-
-void ex_perlfile(exarg_T *eap)
-{
-  rs_ex_perlfile(eap);
-}
-
-void ex_perldo(exarg_T *eap)
-{
-  rs_ex_perldo(eap);
-}
-
-/// If 'autowrite' option set, try to write the file.
-/// Careful: autocommands may make "buf" invalid!
-///
-/// @return FAIL for failure, OK otherwise
-int autowrite(buf_T *buf, bool forceit)
-{
-  return rs_autowrite(buf, forceit);
-}
-
-/// Flush all buffers, except the ones that are readonly or are never written.
-void autowrite_all(void)
-{
-  rs_autowrite_all();
-}
-
-/// @return  true if buffer was changed and cannot be abandoned.
-/// For flags use the CCGD_ values.
-bool check_changed(buf_T *buf, int flags)
-{
-  return rs_check_changed(buf, flags);
-}
-
-/// Ask the user what to do when abandoning a changed buffer.
-/// Must check 'write' option first!
-///
-/// @param buf
-/// @param checkall may abandon all changed buffers
-void dialog_changed(buf_T *buf, bool checkall)
-{
-  rs_dialog_changed(buf, checkall);
-}
-
-/// Ask the user whether to close the terminal buffer or not.
-///
-/// @param buf The terminal buffer.
-/// @return bool Whether to close the buffer or not.
-bool dialog_close_terminal(buf_T *buf)
-{
-  return rs_dialog_close_terminal(buf);
-}
-
-/// @return true if the buffer "buf" can be abandoned, either by making it
-/// hidden, autowriting it or unloading it.
-bool can_abandon(buf_T *buf, bool forceit)
-{
-  return rs_can_abandon(buf, forceit);
-}
-
-// add_bufnum moved to Rust (Vec-based instead of xmalloc array)
-
-/// Check if any buffer was changed and cannot be abandoned.
-/// That changed buffer becomes the current buffer.
-/// When "unload" is true the current buffer is unloaded instead of making it
-/// hidden.  This is used for ":q!".
-///
-/// @param[in] hidden specifies whether to check only hidden buffers.
-/// @param[in] unload specifies whether to unload, instead of hide, the buffer.
-///
-/// @returns          true if any buffer is changed and cannot be abandoned
-bool check_changed_any(bool hidden, bool unload)
-{
-  return rs_check_changed_any(hidden, unload);
-}
-
-/// @return  FAIL if there is no file name, OK if there is one.
-///          Give error message for FAIL.
-int check_fname(void)
-{
-  return rs_check_fname();
-}
-
-/// Flush the contents of a buffer, unless it has no file name.
-///
-/// @return  FAIL for failure, OK otherwise
-int buf_write_all(buf_T *buf, bool forceit)
-{
-  return rs_buf_write_all(buf, forceit);
-}
-
-/// ":argdo", ":windo", ":bufdo", ":tabdo", ":cdo", ":ldo", ":cfdo" and ":lfdo"
-void ex_listdo(exarg_T *eap)
-{
-  rs_ex_listdo(eap);
-}
-
-/// ":compiler[!] {name}"
-void ex_compiler(exarg_T *eap)
-{
-  rs_ex_compiler(eap);
-}
-
-/// ":checktime [buffer]"
-void ex_checktime(exarg_T *eap)
-{
-  rs_ex_checktime(eap);
-}
-
-// script_host_execute, script_host_execute_file, script_host_do_range
-// moved to Rust: src/nvim-rs/ex_cmds2/src/script_host.rs
-
-/// ":drop"
-/// Opens the first argument in a window, and the argument list is redefined.
-void ex_drop(exarg_T *eap)
-{
-  rs_ex_drop(eap);
-}
