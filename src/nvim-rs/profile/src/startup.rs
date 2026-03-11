@@ -49,7 +49,7 @@ unsafe fn time_diff(then: Proftime, now: Proftime, fd: FileHandle) {
 /// # Safety
 ///
 /// `rel` and `start` must be valid pointers.
-#[no_mangle]
+#[export_name = "time_push"]
 pub unsafe extern "C" fn rs_time_push(rel: *mut Proftime, start: *mut Proftime) {
     let now = crate::timing::rs_profile_start();
     let prev = std::ptr::addr_of!(G_PREV_TIME).read();
@@ -65,7 +65,7 @@ pub unsafe extern "C" fn rs_time_push(rel: *mut Proftime, start: *mut Proftime) 
 /// # Safety
 ///
 /// Accesses mutable static.
-#[no_mangle]
+#[export_name = "time_pop"]
 pub unsafe extern "C" fn rs_time_pop(tp: Proftime) {
     let ptr = std::ptr::addr_of_mut!(G_PREV_TIME);
     ptr.write(ptr.read().wrapping_sub(tp));
@@ -76,7 +76,7 @@ pub unsafe extern "C" fn rs_time_pop(tp: Proftime) {
 /// # Safety
 ///
 /// `message` must be a valid C string.
-#[no_mangle]
+#[export_name = "time_start"]
 pub unsafe extern "C" fn rs_time_start(message: *const c_char) {
     let fd = nvim_profile_get_time_fd();
     if fd.is_null() {
@@ -105,7 +105,7 @@ pub unsafe extern "C" fn rs_time_start(message: *const c_char) {
 /// # Safety
 ///
 /// `mesg` must be a valid C string. `start` may be null.
-#[no_mangle]
+#[export_name = "time_msg"]
 pub unsafe extern "C" fn rs_time_msg(mesg: *const c_char, start: *const Proftime) {
     let fd = nvim_profile_get_time_fd();
     if fd.is_null() {
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn rs_time_msg(mesg: *const c_char, start: *const Proftime
 /// # Safety
 ///
 /// `fname` and `proc_name` must be valid C strings.
-#[no_mangle]
+#[export_name = "time_init"]
 pub unsafe extern "C" fn rs_time_init(fname: *const c_char, proc_name: *const c_char) {
     let bufsize: usize = 8192;
     let fd = nvim_profile_fopen(fname, c"a".as_ptr());
@@ -197,7 +197,7 @@ pub unsafe extern "C" fn rs_time_init(fname: *const c_char, proc_name: *const c_
 /// # Safety
 ///
 /// Accesses global time_fd and startuptime_buf.
-#[no_mangle]
+#[export_name = "time_finish"]
 pub unsafe extern "C" fn rs_time_finish() {
     let fd = nvim_profile_get_time_fd();
     if fd.is_null() {

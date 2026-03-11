@@ -35,32 +35,6 @@
 
 #include "profile.c.generated.h"
 
-// Rust implementations of profile functions
-// Phase 2: input/wait profiling
-extern void rs_prof_input_start(void);
-extern void rs_prof_input_end(void);
-extern bool rs_prof_def_func(void);
-// Phase 3: function line profiling
-extern void rs_func_line_start(void *cookie);
-extern void rs_func_line_exec(void *cookie);
-extern void rs_func_line_end(void *cookie);
-extern void rs_func_do_profile(ufunc_T *fp);
-// Phase 4: script line profiling
-extern void rs_script_line_start(void);
-extern void rs_script_line_exec(void);
-extern void rs_script_line_end(void);
-extern void rs_script_prof_save(proftime_T *tm);
-extern void rs_script_prof_restore(const proftime_T *tm);
-// Phase 5: child profiling
-extern void rs_prof_child_enter(proftime_T *tm);
-extern void rs_prof_child_exit(proftime_T *tm);
-// Phase 6: startup timing
-extern void rs_time_push(proftime_T *rel, proftime_T *start);
-extern void rs_time_pop(proftime_T tp);
-extern void rs_time_start(const char *message);
-extern void rs_time_msg(const char *mesg, const proftime_T *start);
-extern void rs_time_init(const char *fname, const char *proc_name);
-extern void rs_time_finish(void);
 /// Struct used in sn_prl_ga for every line of a script.
 typedef struct {
   int snp_count;                ///< nr of times line was executed
@@ -71,26 +45,6 @@ typedef struct {
 #define PRL_ITEM(si, idx)     (((sn_prl_T *)(si)->sn_prl_ga.ga_data)[(idx)])
 
 static char *startuptime_buf = NULL;  // --startuptime buffer
-
-/// Called when starting to wait for the user to type a character.
-void prof_input_start(void)
-{
-  rs_prof_input_start();
-}
-
-/// Called when finished waiting for the user to type a character.
-void prof_input_end(void)
-{
-  rs_prof_input_end();
-}
-
-/// @return  true when a function defined in the current script should be
-///          profiled.
-bool prof_def_func(void)
-  FUNC_ATTR_PURE
-{
-  return rs_prof_def_func();
-}
 
 /// Print the count and times for one function or function line.
 ///
@@ -147,52 +101,6 @@ static int prof_self_cmp(const void *s1, const void *s2)
   ufunc_T *p1 = *(ufunc_T **)s1;
   ufunc_T *p2 = *(ufunc_T **)s2;
   return profile_cmp(p1->uf_tm_self, p2->uf_tm_self);
-}
-
-/// Start profiling function "fp".
-void func_do_profile(ufunc_T *fp)
-{
-  rs_func_do_profile(fp);
-}
-
-/// Prepare profiling for entering a child or something else that is not
-/// counted for the script/function itself.
-/// Should always be called in pair with prof_child_exit().
-///
-/// @param tm  place to store waittime
-void prof_child_enter(proftime_T *tm)
-{
-  rs_prof_child_enter(tm);
-}
-
-/// Take care of time spent in a child.
-/// Should always be called after prof_child_enter().
-///
-/// @param tm  where waittime was stored
-void prof_child_exit(proftime_T *tm)
-{
-  rs_prof_child_exit(tm);
-}
-
-/// Called when starting to read a function line.
-/// "sourcing_lnum" must be correct!
-/// When skipping lines it may not actually be executed, but we won't find out
-/// until later and we need to store the time now.
-void func_line_start(void *cookie)
-{
-  rs_func_line_start(cookie);
-}
-
-/// Called when actually executing a function line.
-void func_line_exec(void *cookie)
-{
-  rs_func_line_exec(cookie);
-}
-
-/// Called when done with a function line.
-void func_line_end(void *cookie)
-{
-  rs_func_line_end(cookie);
 }
 
 /// Dump the profiling results for all functions in file "fd".
@@ -277,20 +185,6 @@ void profile_init(scriptitem_T *si)
   si->sn_pr_nest = 0;
 }
 
-/// Save time when starting to invoke another script or function.
-///
-/// @param tm  place to store wait time
-void script_prof_save(proftime_T *tm)
-{
-  rs_script_prof_save(tm);
-}
-
-/// Count time spent in children after invoking another script or function.
-void script_prof_restore(const proftime_T *tm)
-{
-  rs_script_prof_restore(tm);
-}
-
 /// Dump the profiling results for all scripts in file "fd".
 static void script_dump_profile(FILE *fd)
 {
@@ -354,76 +248,6 @@ static void script_dump_profile(FILE *fd)
       fprintf(fd, "\n");
     }
   }
-}
-
-/// Called when starting to read a script line.
-/// "sourcing_lnum" must be correct!
-/// When skipping lines it may not actually be executed, but we won't find out
-/// until later and we need to store the time now.
-void script_line_start(void)
-{
-  rs_script_line_start();
-}
-
-/// Called when actually executing a function line.
-void script_line_exec(void)
-{
-  rs_script_line_exec();
-}
-
-/// Called when done with a function line.
-void script_line_end(void)
-{
-  rs_script_line_end();
-}
-
-/// Saves the previous time before doing something that could nest.
-///
-/// @param[out] rel to the time elapsed so far
-/// @param[out] start the current time
-void time_push(proftime_T *rel, proftime_T *start)
-{
-  rs_time_push(rel, start);
-}
-
-/// Computes the prev time after doing something that could nest.
-///
-/// @param tp the time to subtract
-void time_pop(proftime_T tp)
-{
-  rs_time_pop(tp);
-}
-
-/// Initializes the startuptime code.
-///
-/// @param message the message that will be displayed
-void time_start(const char *message)
-{
-  rs_time_start(message);
-}
-
-/// Prints out timing info.
-///
-/// @param mesg the message to display next to the timing information
-/// @param start only for do_source: start time
-void time_msg(const char *mesg, const proftime_T *start)
-{
-  rs_time_msg(mesg, start);
-}
-
-/// Initializes the `time_fd` stream for the --startuptime report.
-///
-/// @param fname startuptime report file path
-/// @param proc_name name of the current Nvim process to write in the report.
-void time_init(const char *fname, const char *proc_name)
-{
-  rs_time_init(fname, proc_name);
-}
-
-/// Flushes the startuptimes to disk for the current process
-void time_finish(void)
-{
-  rs_time_finish();
 }
 
 // C accessors for Phase 2

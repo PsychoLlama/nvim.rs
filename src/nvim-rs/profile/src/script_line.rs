@@ -58,7 +58,7 @@ unsafe fn script_id_valid(sid: c_int) -> bool {
 /// # Safety
 ///
 /// Calls FFI functions to access C globals and script item fields.
-#[no_mangle]
+#[export_name = "script_line_start"]
 pub unsafe extern "C" fn rs_script_line_start() {
     let sid = nvim_get_current_sctx_sid();
     if !script_id_valid(sid) {
@@ -103,7 +103,7 @@ pub unsafe extern "C" fn rs_script_line_start() {
 /// # Safety
 ///
 /// Calls FFI functions to access C globals and script item fields.
-#[no_mangle]
+#[export_name = "script_line_exec"]
 pub unsafe extern "C" fn rs_script_line_exec() {
     let sid = nvim_get_current_sctx_sid();
     if !script_id_valid(sid) {
@@ -120,7 +120,7 @@ pub unsafe extern "C" fn rs_script_line_exec() {
 /// # Safety
 ///
 /// Calls FFI functions to access C globals and script item fields.
-#[no_mangle]
+#[export_name = "script_line_end"]
 pub unsafe extern "C" fn rs_script_line_end() {
     let sid = nvim_get_current_sctx_sid();
     if !script_id_valid(sid) {
@@ -161,7 +161,7 @@ pub unsafe extern "C" fn rs_script_line_end() {
 /// # Safety
 ///
 /// `tm` must be a valid pointer to a `proftime_T`.
-#[no_mangle]
+#[export_name = "script_prof_save"]
 pub unsafe extern "C" fn rs_script_prof_save(tm: *mut Proftime) {
     let sid = nvim_get_current_sctx_sid();
     if script_id_valid(sid) && nvim_si_get_prof_on(sid) != 0 {
@@ -179,7 +179,7 @@ pub unsafe extern "C" fn rs_script_prof_save(tm: *mut Proftime) {
 /// # Safety
 ///
 /// `tm` must be a valid pointer to a `proftime_T`.
-#[no_mangle]
+#[export_name = "script_prof_restore"]
 pub unsafe extern "C" fn rs_script_prof_restore(tm: *const Proftime) {
     let sid = nvim_get_current_sctx_sid();
     if !script_id_valid(sid) {

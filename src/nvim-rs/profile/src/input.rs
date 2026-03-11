@@ -22,7 +22,7 @@ static mut WAIT_TIME: Proftime = 0;
 /// # Safety
 ///
 /// Calls FFI functions and accesses mutable static.
-#[no_mangle]
+#[export_name = "prof_input_start"]
 pub unsafe extern "C" fn rs_prof_input_start() {
     let ptr = std::ptr::addr_of_mut!(WAIT_TIME);
     ptr.write(crate::timing::rs_profile_start());
@@ -33,7 +33,7 @@ pub unsafe extern "C" fn rs_prof_input_start() {
 /// # Safety
 ///
 /// Calls FFI functions and accesses mutable static.
-#[no_mangle]
+#[export_name = "prof_input_end"]
 pub unsafe extern "C" fn rs_prof_input_end() {
     let ptr = std::ptr::addr_of_mut!(WAIT_TIME);
     let wt = crate::timing::rs_profile_end(ptr.read());
@@ -48,7 +48,7 @@ pub unsafe extern "C" fn rs_prof_input_end() {
 /// # Safety
 ///
 /// Calls FFI functions to access C globals.
-#[no_mangle]
+#[export_name = "prof_def_func"]
 pub unsafe extern "C" fn rs_prof_def_func() -> bool {
     let sid = nvim_get_current_sctx_sid();
     if sid > 0 && sid <= nvim_get_script_items_len() {

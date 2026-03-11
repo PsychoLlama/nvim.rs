@@ -27,7 +27,7 @@ extern "C" {
 /// # Safety
 ///
 /// `tm` must be a valid pointer to a `proftime_T`.
-#[no_mangle]
+#[export_name = "prof_child_enter"]
 pub unsafe extern "C" fn rs_prof_child_enter(tm: *mut Proftime) {
     let fc = nvim_get_current_funccal();
 
@@ -47,7 +47,7 @@ pub unsafe extern "C" fn rs_prof_child_enter(tm: *mut Proftime) {
 /// # Safety
 ///
 /// `tm` must be a valid pointer to a `proftime_T`.
-#[no_mangle]
+#[export_name = "prof_child_exit"]
 pub unsafe extern "C" fn rs_prof_child_exit(tm: *mut Proftime) {
     let fc = nvim_get_current_funccal();
 

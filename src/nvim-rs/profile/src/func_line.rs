@@ -49,7 +49,7 @@ extern "C" {
 /// # Safety
 ///
 /// `cookie` must be a valid `funccall_T *` pointer.
-#[no_mangle]
+#[export_name = "func_line_start"]
 pub unsafe extern "C" fn rs_func_line_start(cookie: FuncCallHandle) {
     let fp = nvim_fc_get_func(cookie);
 
@@ -81,7 +81,7 @@ pub unsafe extern "C" fn rs_func_line_start(cookie: FuncCallHandle) {
 /// # Safety
 ///
 /// `cookie` must be a valid `funccall_T *` pointer.
-#[no_mangle]
+#[export_name = "func_line_exec"]
 pub unsafe extern "C" fn rs_func_line_exec(cookie: FuncCallHandle) {
     let fp = nvim_fc_get_func(cookie);
 
@@ -95,7 +95,7 @@ pub unsafe extern "C" fn rs_func_line_exec(cookie: FuncCallHandle) {
 /// # Safety
 ///
 /// `cookie` must be a valid `funccall_T *` pointer.
-#[no_mangle]
+#[export_name = "func_line_end"]
 pub unsafe extern "C" fn rs_func_line_end(cookie: FuncCallHandle) {
     let fp = nvim_fc_get_func(cookie);
 
@@ -132,7 +132,7 @@ pub unsafe extern "C" fn rs_func_line_end(cookie: FuncCallHandle) {
 /// # Safety
 ///
 /// `fp` must be a valid `ufunc_T *` pointer.
-#[no_mangle]
+#[export_name = "func_do_profile"]
 pub unsafe extern "C" fn rs_func_do_profile(fp: UFuncHandle) {
     let mut len = nvim_ufunc_get_lines_len(fp);
 

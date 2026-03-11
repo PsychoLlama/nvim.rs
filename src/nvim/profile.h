@@ -37,5 +37,26 @@ extern void profile_dump(void);
 extern void ex_profile(exarg_T *eap);
 extern char *get_profile_name(expand_T *xp, int idx);
 extern void set_context_in_profile_cmd(expand_T *xp, const char *arg);
+// Phase 3: input, function line, script line, child, startup
+extern void prof_input_start(void);
+extern void prof_input_end(void);
+extern bool prof_def_func(void);
+extern void func_line_start(void *cookie);
+extern void func_line_exec(void *cookie);
+extern void func_line_end(void *cookie);
+extern void func_do_profile(ufunc_T *fp);
+extern void prof_child_enter(proftime_T *tm);
+extern void prof_child_exit(proftime_T *tm);
+extern void script_line_start(void);
+extern void script_line_exec(void);
+extern void script_line_end(void);
+extern void script_prof_save(proftime_T *tm);
+extern void script_prof_restore(const proftime_T *tm);
+extern void time_push(proftime_T *rel, proftime_T *start);
+extern void time_pop(proftime_T tp);
+extern void time_start(const char *message);
+extern void time_msg(const char *mesg, const proftime_T *start);
+extern void time_init(const char *fname, const char *proc_name);
+extern void time_finish(void);
 
 #include "profile.h.generated.h"
