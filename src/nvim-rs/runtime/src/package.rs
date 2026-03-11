@@ -32,10 +32,7 @@ extern "C" {
         cookie: *mut c_void,
     ) -> c_int;
 
-    // add_pack_dir_to_rtp: still C until Phase 3
-    fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> c_int;
-
-    // path_fnamecmp: compare two paths (platform-correct)
+    // path_fnamecmp: compare two paths (platform-correct; no add_pack_dir_to_rtp here, it's Rust now)
     fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
 
     // copy_option_part: advance pointer through comma-separated value
@@ -48,6 +45,25 @@ extern "C" {
 
     // MAXPATHL value
     fn nvim_rt_maxpathl() -> c_int;
+
+    // Phase 3: add_pack_dir_to_rtp helpers
+    fn nvim_rt_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn nvim_rt_vim_ispathsep_nocolon(c: c_int) -> bool;
+    fn nvim_rt_vim_ispathsep(c: c_int) -> bool;
+    fn nvim_rt_os_isdir(name: *const c_char) -> bool;
+    fn nvim_rt_add_pathsep(p: *mut c_char);
+    fn nvim_rt_path_fnamencmp(a: *const c_char, b: *const c_char, n: usize) -> c_int;
+    fn nvim_rt_concat_fnames(
+        fname1: *const c_char,
+        fname2: *const c_char,
+        sep: bool,
+    ) -> *mut c_char;
+    fn nvim_rt_try_malloc(n: usize) -> *mut c_void;
+    fn nvim_rt_set_runtimepath(new_rtp: *const c_char);
+    fn nvim_rt_get_past_head(path: *const c_char) -> *mut c_char;
+    fn nvim_rt_fix_fname(fname: *const c_char) -> *mut c_char;
+    fn strstr(haystack: *const c_char, needle: *const c_char) -> *mut c_char;
+    fn memmove(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void;
 
     // Global options
     static p_pp: *mut c_char; // packpath
@@ -267,6 +283,198 @@ pub fn rs_plugin_dir_count() -> usize {
 }
 
 // =============================================================================
+// Phase 3: add_pack_dir_to_rtp (migrated from C)
+// =============================================================================
+
+/// Add the package directory `fname` to 'runtimepath'.
+///
+/// `is_pack`: true if this is a "pack/*/start/*/" style package (uses pack_has_entries
+/// to check for "after" dir), false otherwise (uses os_isdir).
+///
+/// # Safety
+///
+/// `fname` must be a valid null-terminated C string.
+#[allow(clippy::too_many_lines)]
+#[export_name = "add_pack_dir_to_rtp"]
+pub unsafe extern "C" fn rs_add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> c_int {
+    // Find the path separator positions: walk from get_past_head
+    // to find the 4 deepest separators.
+    let p_start = nvim_rt_get_past_head(fname);
+    let mut p1 = p_start;
+    let mut p2 = p_start;
+    let mut p3 = p_start;
+    let mut p4 = p_start;
+
+    let mut p = p_start;
+    while *p != 0 {
+        if nvim_rt_vim_ispathsep_nocolon(c_int::from(*p)) {
+            p4 = p3;
+            p3 = p2;
+            p2 = p1;
+            p1 = p;
+        }
+        let adv = nvim_rt_utfc_ptr2len(p);
+        p = p.add(adv as usize);
+    }
+    // suppress unused variable warnings for p1-p3 (used for rolling window)
+    let _ = (p1, p2, p3);
+
+    // p4++ to append pathsep for symlink expansion
+    p4 = p4.add(1);
+    let c = *p4;
+    *p4 = 0; // NUL-terminate temporarily
+    let fixed_fname = nvim_rt_fix_fname(fname);
+    *p4 = c; // restore
+
+    if fixed_fname.is_null() {
+        return FAIL;
+    }
+
+    // Find insertion point in p_rtp
+    let fname_len = strlen(fixed_fname);
+    let maxpathl = nvim_rt_maxpathl() as usize;
+    let buf = xmallocz(maxpathl).cast::<c_char>();
+
+    let mut insp: *const c_char = ptr::null();
+    let mut after_insp: *const c_char = ptr::null();
+    let mut found_insp = false; // true when insp has been set
+    let mut entry: *mut c_char = p_rtp;
+
+    while *entry != 0 {
+        let cur_entry: *const c_char = entry;
+        copy_option_part(&raw mut entry, buf, maxpathl, c",".as_ptr());
+
+        // Check if this entry is an "after" directory
+        let pa = strstr(buf, c"after".as_ptr());
+        let is_after = !pa.is_null()
+            && pa > buf
+            && nvim_rt_vim_ispathsep(c_int::from(*pa.sub(1)))
+            && (nvim_rt_vim_ispathsep(c_int::from(*pa.add(5)))
+                || *pa.add(5) == 0
+                || *pa.add(5) == b',' as c_char);
+
+        if is_after {
+            if !found_insp {
+                // Did not find fixed_fname before first "after" dir; insert before it
+                insp = cur_entry;
+                found_insp = true;
+            }
+            after_insp = cur_entry;
+            break;
+        }
+
+        if !found_insp {
+            // Add separator to buf, then fix_fname for comparison
+            nvim_rt_add_pathsep(buf);
+            let rtp_fixed = nvim_rt_fix_fname(buf);
+            if rtp_fixed.is_null() {
+                xfree(buf.cast());
+                xfree(fixed_fname.cast());
+                return FAIL;
+            }
+            if nvim_rt_path_fnamencmp(rtp_fixed, fixed_fname, fname_len) == 0 {
+                // Insert fixed_fname after this entry (and comma)
+                insp = entry;
+                found_insp = true;
+            }
+            xfree(rtp_fixed.cast());
+        }
+    }
+
+    xfree(buf.cast());
+
+    if !found_insp {
+        // Both fname and "after" not found; append at end
+        insp = p_rtp.add(strlen(p_rtp));
+    }
+
+    // Check if rtp/pack/name/start/name/after exists
+    let afterdir = nvim_rt_concat_fnames(fname, c"after".as_ptr(), true);
+    let after_exists = if is_pack {
+        rs_pack_has_entries(afterdir)
+    } else {
+        nvim_rt_os_isdir(afterdir)
+    };
+    let afterlen = if after_exists {
+        strlen(afterdir) + 1
+    } else {
+        0
+    }; // +1 for comma
+
+    let oldlen = strlen(p_rtp);
+    let addlen = strlen(fname) + 1; // +1 for comma
+    let new_rtp_capacity = oldlen + addlen + afterlen + 1; // +1 for NUL
+    let new_rtp = nvim_rt_try_malloc(new_rtp_capacity).cast::<c_char>();
+    if new_rtp.is_null() {
+        xfree(fixed_fname.cast());
+        xfree(afterdir.cast());
+        return FAIL;
+    }
+
+    // Build new_rtp: {keep},{fname}
+    let keep = insp as usize - p_rtp as usize;
+    memmove(new_rtp.cast(), p_rtp.cast(), keep);
+    let mut new_rtp_len = keep;
+
+    if *insp == 0 {
+        *new_rtp.add(new_rtp_len) = b',' as c_char; // comma before
+        new_rtp_len += 1;
+    }
+    memmove(new_rtp.add(new_rtp_len).cast(), fname.cast(), addlen - 1);
+    new_rtp_len += addlen - 1;
+    if *insp != 0 {
+        *new_rtp.add(new_rtp_len) = b',' as c_char; // comma after
+        new_rtp_len += 1;
+    }
+
+    if afterlen > 0 && !after_insp.is_null() {
+        let keep_after = after_insp as usize - p_rtp as usize;
+        memmove(
+            new_rtp.add(new_rtp_len).cast(),
+            p_rtp.add(keep).cast(),
+            keep_after - keep,
+        );
+        new_rtp_len += keep_after - keep;
+        memmove(
+            new_rtp.add(new_rtp_len).cast(),
+            afterdir.cast(),
+            afterlen - 1,
+        );
+        new_rtp_len += afterlen - 1;
+        *new_rtp.add(new_rtp_len) = b',' as c_char;
+        new_rtp_len += 1;
+        if p_rtp.add(keep_after).cast::<u8>().read() != 0 {
+            memmove(
+                new_rtp.add(new_rtp_len).cast(),
+                p_rtp.add(keep_after).cast(),
+                oldlen - keep_after + 1,
+            );
+        } else {
+            *new_rtp.add(new_rtp_len) = 0;
+        }
+    } else if p_rtp.add(keep).cast::<u8>().read() != 0 {
+        memmove(
+            new_rtp.add(new_rtp_len).cast(),
+            p_rtp.add(keep).cast(),
+            oldlen - keep + 1,
+        );
+    } else {
+        *new_rtp.add(new_rtp_len) = 0;
+    }
+
+    if afterlen > 0 && after_insp.is_null() {
+        xstrlcat(new_rtp, c",".as_ptr(), new_rtp_capacity);
+        xstrlcat(new_rtp, afterdir, new_rtp_capacity);
+    }
+
+    nvim_rt_set_runtimepath(new_rtp);
+    xfree(new_rtp.cast());
+    xfree(fixed_fname.cast());
+    xfree(afterdir.cast());
+    OK
+}
+
+// =============================================================================
 // Phase 2: Callback cookie sentinels (moved from C static vars)
 // =============================================================================
 
@@ -324,7 +532,7 @@ unsafe fn rs_add_pack_plugins_impl(
 
             if !found {
                 // directory is not yet in 'runtimepath', add it
-                if add_pack_dir_to_rtp(fname, false) == FAIL {
+                if rs_add_pack_dir_to_rtp(fname, false) == FAIL {
                     xfree(buf.cast());
                     return;
                 }
@@ -404,7 +612,7 @@ pub unsafe extern "C" fn rs_add_pack_start_dir(
             xstrlcpy(buf, fname, maxpathl);
             xstrlcat(buf, *pat, maxpathl);
             if rs_pack_has_entries(buf) {
-                add_pack_dir_to_rtp(buf, true);
+                rs_add_pack_dir_to_rtp(buf, true);
             }
         }
 

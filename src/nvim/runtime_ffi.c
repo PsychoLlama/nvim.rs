@@ -31,6 +31,9 @@
 #include "nvim/os/fs.h"
 #include "nvim/os/os.h"
 #include "nvim/option_vars.h"
+#include "nvim/mbyte.h"
+#include "nvim/option.h"
+#include "nvim/option_defs.h"
 #include "nvim/path.h"
 #include "nvim/pos_defs.h"
 #include "nvim/profile.h"
@@ -946,4 +949,62 @@ void nvim_rt_cmd_expand_set_context(void *xp, int context, const char *pattern)
 {
   ((expand_T *)xp)->xp_context = context;
   ((expand_T *)xp)->xp_pattern = (char *)pattern;
+}
+
+// =============================================================================
+// Phase 3: add_pack_dir_to_rtp migration helpers
+// =============================================================================
+
+/// Advance pointer by one multibyte character (MB_PTR_ADV).
+int nvim_rt_utfc_ptr2len(const char *p)
+{
+  return utfc_ptr2len(p);
+}
+
+/// Check if character is a path separator (not colon).
+bool nvim_rt_vim_ispathsep_nocolon(int c)
+{
+  return vim_ispathsep_nocolon(c);
+}
+
+/// Add a path separator to the end of the path if not present.
+void nvim_rt_add_pathsep(char *p)
+{
+  add_pathsep(p);
+}
+
+/// Compare first n bytes of filenames (path-aware).
+int nvim_rt_path_fnamencmp(const char *a, const char *b, size_t n)
+{
+  return path_fnamencmp(a, b, n);
+}
+
+/// Concatenate two path components into an allocated string.
+char *nvim_rt_concat_fnames(const char *fname1, const char *fname2, bool sep)
+{
+  return concat_fnames((char *)fname1, fname2, sep);
+}
+
+/// try_malloc: malloc that returns NULL on failure.
+void *nvim_rt_try_malloc(size_t n)
+{
+  return try_malloc(n);
+}
+
+/// Set the 'runtimepath' option to a new value.
+void nvim_rt_set_runtimepath(const char *new_rtp)
+{
+  set_option_value_give_err(kOptRuntimepath, CSTR_AS_OPTVAL(new_rtp), 0);
+}
+
+/// get_past_head: skip drive letter/UNC prefix on Windows, identity on Unix.
+char *nvim_rt_get_past_head(const char *path)
+{
+  return get_past_head((char *)path);
+}
+
+/// fix_fname: canonicalize path (resolve symlinks, etc).
+char *nvim_rt_fix_fname(const char *fname)
+{
+  return fix_fname((char *)fname);
 }
